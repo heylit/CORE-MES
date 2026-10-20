@@ -12,7 +12,7 @@ import type { EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts'
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { kararSayaclari, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kararSayaclari, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { isler } from './isler.ts';
 import { belgeSil, belgeYaz, belgeler } from './servis.ts';
@@ -94,6 +94,10 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   }
 
   const emirOku = async (id: number) => (await istek<EmirAyrintiCevabi>(yonetici, 'GET', `/uretim-emirleri/${id}`)).govde.emir;
+  // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; sağlamı ölçen testler önce ilk parçayı onaylar.
+  // Onay bekleyeni olduğu gibi sağlama geçirir: iki kez yazılan sayım onaydan sonra da iki kez görünür.
+  const ilkParcaOnay = (emirId: number) => vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, emirId, 'onay'));
+  const onayliSaglam = async (emirId: number) => { await ilkParcaOnay(emirId); return (await emirOku(emirId)).canli?.saglam; };
   const ekle = (cerez: string, tur: string, satir: Record<string, unknown>) =>
     istek<{ eklenen: number }>(cerez, 'POST', `/arkon/kayitlar/${tur}/ekle`, { satirlar: [satir], kaynak: 'y1' });
   const yansima = async (cid: string): Promise<Yansima | null> => vt().tek<Yansima>(
@@ -139,9 +143,10 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   test('Arkon olay ve sayımı TMI komutuna eşlenir: başlat, sağlam sayım ve düzeltme, hurda, duraklat, devam, durdur (TMI kodlu neden), bitir', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
+    const ilkSaglam = sayim(emir, 'good', 5);
     const adimlar: [string, Record<string, unknown>, (e: Awaited<ReturnType<typeof emirOku>>) => void][] = [
       ['events', olay(emir, 'running'), (e) => assert.equal(e.durum, 'basladi')],
-      ['counts', sayim(emir, 'good', 5), (e) => assert.equal(e.canli?.saglam, 5)],
+      ['counts', ilkSaglam, (e) => assert.equal(e.canli?.saglam, 5)],
       ['counts', sayim(emir, 'good', -1), (e) => assert.equal(e.canli?.saglam, 4)],
       ['counts', sayim(emir, 'scrap', 2, { reason: hurdaKodu }), (e) => assert.equal(e.canli?.hurda, 2)],
       // Hurda -1 (kart #1194): nedensiz eksi hurda TMI'de son hurdanın nedeniyle düzeltmedir.
@@ -157,6 +162,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
       const y = await yansima(String(satir['cid']));
       assert.deepEqual(y, { sonuc: 'yazildi', neden: null, emir_id: emir }, `${tur} ${JSON.stringify(satir)}`);
+      if (satir === ilkSaglam) await ilkParcaOnay(emir);
       dogrula(await emirOku(emir));
     }
   });
@@ -173,7 +179,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
     const ms = (z: Date | string | number | null | undefined) => (z == null ? null : new Date(z).getTime());
     assert.equal(ms((await vt().tek<{ baslama: Date }>('SELECT baslama FROM uretim_emri WHERE id = $1', [emir]))?.baslama), ms(t1), 'başlama tabletin anı');
-    assert.equal(ms((await vt().tek<{ zaman: Date }>("SELECT zaman FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'saglam'", [emir]))?.zaman), ms(t2), 'sayım tabletin anı');
+    assert.equal(ms((await vt().tek<{ zaman: Date }>("SELECT zaman FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'karar_bekliyor'", [emir]))?.zaman), ms(t2), 'sayım tabletin anı (327 a: onaysız emirde karar bekler)');
     assert.equal(ms((await vt().tek<{ zaman: Date }>("SELECT max(zaman) AS zaman FROM uretim_olayi WHERE emir_id = $1", [emir]))?.zaman), ms(t3), 'duraklatma tabletin anı');
     // Emrin son anından (t3) eski kayıt: TMI reddederdi; sayım kaybolmasın diye sunucu saatiyle yazılır.
     const once = Date.now();
@@ -221,25 +227,26 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await ekle(operator, 'events', olay(emir, 'running', { machine: istasyonKodu }))).durum, 200);
     await yaz(sayim(emir, 'good', 1));
     await yaz(sayim(emir, 'good', 3));
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 3, red: 0 });
+    // 327 a: ilk sayım da karar bekler; onaya dek hiçbir adet sağlam değildir.
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 });
     const karar = async (k: 'onay' | 'ret') => {
       const c = await istek(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${emir}/karar`, { karar: k });
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
     };
     await numune('rq-fai-1', 'rejected', false);
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 3, red: 0 }, 'Arkon numune reddi karar değildir');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 }, 'Arkon numune reddi karar değildir');
     await numune('rq-fai-2', 'approved', true);
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 3, red: 0 }, 'Arkon numune onayı karar değildir');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 }, 'Arkon numune onayı karar değildir');
     await yaz(sayim(emir, 'good', 1));
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 4, red: 0 }, 'ölçüler kapansa da Kalite Merkezi kararına dek bekler');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 5, red: 0 }, 'ölçüler kapansa da Kalite Merkezi kararına dek bekler');
     await karar('ret');
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 0, red: 4 }, 'ret');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 0, red: 5 }, 'ret');
     await yaz(sayim(emir, 'good', 2));
-    assert.deepEqual(await sayaclar(), { saglam: 1, kararBekliyor: 2, red: 4 }, 'ret sonrası sayım yine bekler (136 a)');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 2, red: 5 }, 'ret sonrası sayım yine bekler (136 a)');
     await karar('onay');
-    assert.deepEqual(await sayaclar(), { saglam: 3, kararBekliyor: 0, red: 4 }, 'onay');
+    assert.deepEqual(await sayaclar(), { saglam: 2, kararBekliyor: 0, red: 5 }, 'onay');
     await yaz(sayim(emir, 'good', 2, { tmiKararBekliyor: 2 }));
-    assert.deepEqual(await sayaclar(), { saglam: 5, kararBekliyor: 0, red: 4 }, 'onaydan sonra sağlam; istemcinin alanı sayılmaz');
+    assert.deepEqual(await sayaclar(), { saglam: 4, kararBekliyor: 0, red: 5 }, 'onaydan sonra sağlam; istemcinin alanı sayılmaz');
   });
 
   test('denetim #12: yeniden ilk parça kararından sonra ikinci sağlam reddedilir; Arkon numunesi kapatmaz, kararın ardından gelen Kalite Merkezi onayı kapatır', async () => {
@@ -441,6 +448,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const basla = olay(emir, 'running');
     assert.equal((await ekle(operator, 'events', basla)).durum, 200);
     for (const k of [basla, s1, s2]) assert.equal((await yansima(String(k['cid'])))?.sonuc, 'yazildi', String(k['cid']));
+    await ilkParcaOnay(emir);
     const e = await emirOku(emir);
     assert.deepEqual([e.durum, e.canli?.saglam, e.canli?.hurda], ['basladi', 3, 1]);
   });
@@ -488,7 +496,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await ekle(operator, 'events', dur)).durum, 200);
     for (const k of [basla, arti, eksi, dur]) assert.equal((await yansima(String(k['cid'])))?.sonuc, 'yazildi', String(k['cid']));
     const e = await emirOku(emir);
-    assert.deepEqual([e.durum, e.canli?.saglam], ['basladi', 1]);
+    assert.deepEqual([e.durum, e.canli?.saglam], ['basladi', 0], 'ilk parça onayına kadar sağlam yok');
+    assert.equal(await onayliSaglam(emir), 1);
   });
 
   test('TMI\'ye yazılamayanlar listesi (#243): arkon.yansima-oku ile yazılan dışındaki yansımalar, emir ve neden (kişi yok); süzgeç ve sayfa; işlemsiz kişiye 403', async () => {
@@ -661,7 +670,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const s = sayim(emir, 'good', 2);
     assert.equal((await ekle(operator, 'counts', s)).govde.eklenen, 1);
     assert.equal((await ekle(operator, 'counts', s)).govde.eklenen, 0);
-    assert.equal((await emirOku(emir)).canli?.saglam, 2);
+    assert.equal(await onayliSaglam(emir), 2);
     const e = olay(emir, 'paused');
     assert.equal((await ekle(operator, 'events', e)).govde.eklenen, 1);
     assert.equal((await ekle(operator, 'events', e)).govde.eklenen, 0);
@@ -718,7 +727,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await denemeyeHazirla();
     assert.equal(await tetikle(), 'tamam');
     assert.deepEqual((await yansimaAyrinti(String(tetik['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 123);
+    assert.equal(await onayliSaglam(emir), 123);
     await denemeyeHazirla();
     await tetikle();
     assert.equal((await emirOku(emir)).canli?.saglam, 123, 'ikinci kez yazılmaz');
@@ -744,7 +753,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     for (const x of turlar) assert.notEqual(x, 'bekliyor');
     for (const x of istekler) assert.equal(x.durum, 200);
     assert.equal((await yansimaAyrinti(String(bekleyen['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 124);
+    assert.equal(await onayliSaglam(emir), 124);
   });
 
   test('sıra korunur: bekleyen başlat varken sonraki sayım önce yazılmaz; hata kalkınca ikisi sırayla yazılır', async () => {
@@ -769,6 +778,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await tetikle();
     assert.equal((await yansimaAyrinti(String(baslat['cid'])))?.sonuc, 'yazildi');
     assert.equal((await yansimaAyrinti(String(sayimi['cid'])))?.sonuc, 'yazildi');
+    await ilkParcaOnay(emir);
     const e = await emirOku(emir);
     assert.deepEqual([e.durum, e.canli?.saglam], ['basladi', 9]);
   });
@@ -832,7 +842,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       await ikinci.close();
     }
     assert.equal((await yansimaAyrinti(String(bekleyen['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 125);
+    assert.equal(await onayliSaglam(emir), 125);
   });
 
   test('veri kapsamı, Arkon katmanı: kısıtlı operatör başka iş merkezinin emrine yazamaz (403, Arkon kaydı da yok); kendi emri yazılır', async () => {
@@ -1021,7 +1031,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       for (const x of c) assert.equal(x.durum, 200, `tur ${tur}: ${JSON.stringify(x.govde)}`);
     }
     for (const c of cidler) assert.equal(await kayitSayisi(c), 1, c);
-    assert.equal((await emirOku(emir)).canli?.saglam, 36);
+    assert.equal(await onayliSaglam(emir), 36);
     assert.equal(await bekleyenSayisi(emir), 0);
   });
 
@@ -1038,7 +1048,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     });
     await tetikle();
     assert.equal((await yansima(String(s['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 3);
+    assert.equal(await onayliSaglam(emir), 3);
   });
 
   // A11 (bağlamada kapanacak): emir başına bekleme 2 sn; istek başına toplam bütçe yoksa üç kilitli emir isteği 6 sn bekletir.
@@ -1076,7 +1086,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
     await tetikle();
     assert.equal((await yansima(String(s['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 7);
+    assert.equal(await onayliSaglam(emir), 7);
   });
 
   test('noktadan önceki okuma hatası isteği düşürmez: Arkon kaydı yazılır, yansıma "bekliyor" (deneme 1); hata kalkınca işlenir', async () => {
@@ -1113,7 +1123,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await denemeyeHazirla();
     await tetikle();
     assert.equal((await yansima(String(s['cid'])))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 4);
+    assert.equal(await onayliSaglam(emir), 4);
   });
 
   test('iki isteğin kilitleri ters sırada istemesi kilitlenme yapmaz: kilitler emir kimliğine göre artan sırada alınır (10 tur)', async () => {
@@ -1136,8 +1146,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       await denemeyeHazirla();
       await tetikle();
     }
-    assert.equal((await emirOku(e1)).canli?.saglam, toplam);
-    assert.equal((await emirOku(e2)).canli?.saglam, toplam);
+    assert.equal(await onayliSaglam(e1), toplam);
+    assert.equal(await onayliSaglam(e2), toplam);
     assert.equal(await bekleyenSayisi(e1) + (await bekleyenSayisi(e2)), 0);
   });
 
@@ -1162,7 +1172,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await vt().sorgu("UPDATE arkon_tmi_yansima SET son_deneme = now() - interval '2 hours' WHERE emir_id = $1 AND sonuc = 'bekliyor'", [son]);
     await tetikle();
     assert.equal(await bekleyenSayisi(son), 0);
-    assert.equal((await emirOku(son)).canli?.saglam, 141);
+    assert.equal(await onayliSaglam(son), 141);
     for (const e of takilanlar) assert.equal(await bekleyenSayisi(e), 1);
   });
 
@@ -1181,7 +1191,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await bekleyenSayisi(baska), 1, 'istek başka emrin birikmişini işledi');
     assert.equal(await tetikle(), 'tamam');
     assert.equal(await bekleyenSayisi(baska), 0);
-    assert.equal((await emirOku(baska)).canli?.saglam, 161);
+    assert.equal(await onayliSaglam(baska), 161);
   });
 
   test('KD-006: arka plan turu dış hatayı yutmaz, zamanlayıcıya düşer', async () => {
@@ -1280,7 +1290,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       assert.equal(y?.sonuc, 'hatali');
       assert.ok((y?.neden ?? '').length > 0);
       assert.equal((await yansima(String(sonraki['cid'])))?.sonuc, 'yazildi');
-      assert.equal((await emirOku(emir)).canli?.saglam, 7);
+      assert.equal(await onayliSaglam(emir), 7);
       // hatalı satır yeniden denenmez
       await denemeyeHazirla();
       await tetikle();
@@ -1353,8 +1363,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(ikinci.durum, 409, 'yazılmış satır yeniden kuyruğa alınmaz');
     await denemeyeHazirla();
     await tetikle();
-    assert.equal((await emirOku(emir)).canli?.saglam, 161, 'emirde tek sayım');
     assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_sayimi WHERE emir_id = $1 AND adet = 161', [emir]))?.n, 1);
+    assert.equal(await onayliSaglam(emir), 161, 'emirde tek sayım');
   });
 
   test('yeniden deneme eşzamanlı iki istekte tek kez yürür: biri 200, öteki 409; emirde tek sayım', async () => {
@@ -1369,7 +1379,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
     const cevaplar = await Promise.all([yenidenDene(cerez, String(s['cid'])), yenidenDene(cerez, String(s['cid']))]);
     assert.deepEqual(cevaplar.map((c) => c.durum).sort(), [200, 409], JSON.stringify(cevaplar.map((c) => c.govde)));
-    assert.equal((await emirOku(emir)).canli?.saglam, 162);
+    assert.equal(await onayliSaglam(emir), 162);
   });
 
   test('yeniden deneme izni ve ret: işlemsiz kişi 403; yalnız "hatali" alınır (reddedildi, bekliyor, eşlenemedi 409); bulunmayan 404', async () => {
@@ -1458,7 +1468,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await yansimaAyrinti(String(yabanci['cid'])))?.sonuc, 'hatali');
     assert.equal((await emirOku(baskasi)).canli?.saglam, 0);
     assert.equal((await yenidenDene(kisitli, String(kendi['cid']))).govde.sonuc, 'yazildi');
-    assert.equal((await emirOku(benim)).canli?.saglam, 164);
+    assert.equal(await onayliSaglam(benim), 164);
   });
 
   describe('toplu istek', () => {
@@ -1471,7 +1481,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       await ekle(operator, 'events', olay(calisan, 'running'));
       const s = sayim(calisan, 'good', 4);
       assert.equal((await toplu(operator, 'counts', [s, s])).govde.eklenen, 1);
-      assert.equal((await emirOku(calisan)).canli?.saglam, 4);
+      assert.equal(await onayliSaglam(calisan), 4);
       await yeniIstasyon();
       const planli = await emirAc();
       const iyi = sayim(calisan, 'good', 1);
@@ -1499,7 +1509,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
           await Promise.all(satirlar.map(async (s) => (await yansima(String(s['cid'])))?.sonuc)),
           ['yazildi', 'bekliyor', 'bekliyor'],
         );
-        assert.equal((await emirOku(emir)).canli?.saglam, 5);
+        assert.equal(await onayliSaglam(emir), 5);
       } finally {
         await kaldir();
       }
@@ -1567,7 +1577,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const son = await iz(c);
     assert.equal(son?.sonuc, 'yazildi');
     assert.ok((son?.son_deneme?.getTime() ?? 0) >= once.getTime() - 1000, 'yazım zamanı satırda');
-    assert.equal((await emirOku(emir)).canli?.saglam, 171);
+    assert.equal(await onayliSaglam(emir), 171);
     await denemeyeHazirla();
     await turKos();
     assert.equal((await emirOku(emir)).canli?.saglam, 171, 'ikinci kez yazılmaz');
@@ -1584,7 +1594,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await emirOku(emir)).canli?.saglam, 0);
     await turKos();
     assert.equal((await yansima(c))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 172);
+    assert.equal(await onayliSaglam(emir), 172);
   });
 
   test('arka plan işinde iz bırakmayan yazım olmaz: satırın sonucu yazılamazsa TMI komutu da geri alınır; iz yazılınca komut kalır', async () => {
@@ -1603,7 +1613,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
     await turKos();
     assert.equal((await yansima(c))?.sonuc, 'yazildi');
-    assert.equal((await emirOku(emir)).canli?.saglam, 173);
+    assert.equal(await onayliSaglam(emir), 173);
   });
   // AR-BI-2 (kart #1194): TMI'de emir bitince terminal sayımı artırıp azaltabiliyordu; paket biten emri söyler.
   test('AR-BI-2: TMI\'de biten emrin paketi listede ve tek okumada tmi.bitti taşır, açık emrinki taşımaz; okunan sürümle yazım çakışmasız yazılır', async () => {
@@ -2199,6 +2209,8 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       const y = await yansima(satir.cid);
       assert.equal(y?.sonuc, 'yazildi', JSON.stringify(y));
       assert.equal(y?.emir_id, r.emirId);
+      // İkinci adıma giren adet ilk adımın sağlamıdır; sağlam ilk parça onayıyla oluşur.
+      if (tur === 'counts') await ilkParcaOnay(r.emirId);
     }
     const s = ieSayim(ie2!, 'good', 3, { machine: r.ikinci });
     assert.equal((await ekle(operator, 'counts', s)).durum, 200);
