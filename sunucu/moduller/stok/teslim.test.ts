@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirIptalEt, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, emirIptalEt, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, cikisYap, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
 import { emirlerinNetSarfi, emirMalzemeFisleri, istasyonKonumlari, malzemeStokDurumlari, numuneTeslimi } from './disari.ts';
@@ -597,6 +597,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal((await hazirla(a.id)).hazir, true, 'teslim alınınca hazır');
     await terminal('/baslat');
     await terminal('/sayim', { tur: 'saglam', adet: 4 });
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; kapanış adedi onaylı sayımla ölçülür.
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, kisiler.get('yonetici')!, e, 'onay'));
     const ka2 = ka ?? await istasyonKonumu(a.id);
     assert.deepEqual([await sayi(hm, kabul), await sayi(hm, ka2), await sayi(hm, ka2, s10), await sayi(ym, ka2)], [75, 15, 10, 0], 'ilk adım: emrin 25 kg HM\'si istasyona çekildi; 4 x 2,5 kg OP 10 statüsüne çevrilir; ürün girmez');
     const durum = (await o().vt.tx((db) => malzemeStokDurumlari(db, [hm]))).get(hm);
