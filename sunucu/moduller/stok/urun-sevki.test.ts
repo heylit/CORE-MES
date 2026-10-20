@@ -15,7 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { SevkIsDurumu, UrunSevkSatiri } from '../sevkiyat/disari.ts';
-import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { urunSevkiYansit } from './disari.ts';
 
@@ -102,6 +102,8 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(id, 'baslat')).durum, 200);
     assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: saglam })).durum, 200);
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; sevk serbest parçayla ölçülür.
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     assert.equal((await terminal(id, 'bitir', {})).durum, 200);
     return id;
   }
