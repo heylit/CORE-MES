@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, fasonEksikGonderimSayisi, uretimGirisi } from './servis.ts';
 
@@ -103,6 +103,8 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     terminGun: kaynak?.tur === 'fason' ? 5 : null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   });
   const kullanici = (ad: string): Kullanici => kullanicilar.get(ad)!;
+  // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; fasona gidecek adet onaydan sonra sayılır.
+  const ilkParcaOnay = (id: number) => o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
   const terminal = (id: number, yol: string, govde?: unknown) => istek<{ mesaj?: string }>('operator', 'POST', `/uretim-emirleri/${id}/${yol}`, govde);
   const fason = (id: number, isEmriId: number, yol: string, govde?: unknown) =>
     istek<{ hareketId: number; mesaj?: string }>('depo', 'POST', `/adimli-emirler/${id}/is-emirleri/${isEmriId}/${yol}`, govde);
@@ -142,6 +144,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(id, 'baslat')).durum, 200);
     assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 9 })).durum, 200);
+    await ilkParcaOnay(id);
     assert.equal((await terminal(id, 'bitir', {})).durum, 200);
     // Girdisiz rotada ara adımın sayımı stok yazmaz; fasona gidecek parça istasyona üretim girişiyle konur.
     const konum = (await o().sahip.tek<{ id: number }>('SELECT k.id FROM stok_konum k JOIN makine m ON m.istasyon_id = k.istasyon_id WHERE m.id = $1', [m1]))!.id;
@@ -315,6 +318,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       const b1 = await terminal(id, 'baslat');
       assert.equal(b1.durum, 200, JSON.stringify(b1.govde));
       assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+      await ilkParcaOnay(id);
       assert.equal((await terminal(id, 'bitir', {})).durum, 200);
       assert.equal(await hmBakiye(k1, s10), 10, '4 adet x 2,5: OP 10 statüsü');
 
@@ -376,6 +380,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: hm, miktar: '20', konumId: k1 }] })).durum, 200);
       assert.equal((await terminal(id, 'baslat')).durum, 200);
       assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 5 })).durum, 200);
+      await ilkParcaOnay(id);
       assert.equal((await terminal(id, 'bitir', {})).durum, 200);
       assert.equal((await fason(id, isEmriIdleri[1]!, 'fason-gidis', { adet: 5 })).durum, 200);
       const sip = await hizmetSiparisi(f.firmaId);
