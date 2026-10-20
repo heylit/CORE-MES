@@ -92,3 +92,12 @@
 - 326 a geçmiş ucu en çok 50 sürümün tam gövdesini döner; gömülü fotoğraf (`data:`) cevabı büyütebilir, istemci onları "(dosya)" diye gösterir. Sunucuda özetleme ya da bayt sınırı gerekirse ayrı karar.
 - 325/326 betik testi paketteki bağlanma noktalarını (`const vToday={`, `function historyFor(`) metin olarak sayar; paket değişirse test bunu yakalar, davranış testi gerçek tarayıcıyla yapılmadı.
 
+## Ölçü aletleri tek kaynak: Kalibrasyon (kart 329 a, kullanıcı onayı 20.10.2026)
+Paket dosyası (`uygulama/paket.ts`) değişmedi; her şey köprü (`kopru.ts`) ve eklenen betikle (`acilis.ts` `OLCU_ALETI_BETIGI`) yapılır.
+- Ölçüm cihazı listesi (`dev`) Kalibrasyondan salt okunur gelir (GET `/kalite-merkezi/olcu-aletleri`, 15 sn'de bir yoklanır). Ekleme, düzenleme, kalibrasyon kaydı ve silme kapalıdır; köprü `dev` yazma/silme isteklerini 403 ile reddeder, ekranda Kalibrasyon sayfasına giden düğme vardır.
+- Eski `dev` kayıtları tabloda durur, SİLİNMEZ. Kodu Kalibrasyondaki bir aletle eşleşenin (büyük harf, kırpılmış) eski kimliği korunur, yani ölçüm cihazı bağları bozulmaz; eşleşmeyen eski kayıt ekranda gösterilmez. Yeni aletler `kal-<alet kimliği>` kimliğiyle gelir; K85/K88 denetimleri bu kimliği sunucuda çözer.
+- Karşılığı olmayan alanlar (marka, seri, çözünürlük, sorumlu, laboratuvar, kabul) BOŞ gelir; sıfır ya da uydurma değer yok.
+- VARSAYIM (geri alma ucuz, tek ifade): periyot gün/30 ay olarak taşınır, yuvarlanmaz; ekranda gün olarak gösterilir (`periyotGun`). Vade ve durum Kalibrasyon kuralındandır (`kalibrasyonDurumu`); K85/K88 kuralları ve testleri aynı kaldı.
+- Cihaz geçmişi penceresinde sertifika eki bölümü (yazma yolu) gösterilmez; ekler Kalibrasyonda tutulmaz. Kalıcı yol: Kalibrasyona dosya eki (ayrı karar).
+- Yoklama yenilemesi: liste değişince 4 sn'lik eşleme akışıyla ekrana yansır; en çok ~15 sn gecikme.
+

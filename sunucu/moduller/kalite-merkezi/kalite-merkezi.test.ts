@@ -443,6 +443,53 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     await yaz(c.kal, 'insp', 'insp_k85_nitel', { no: 'MUA-K85N', chars: [{ ...kar('', 'Uygun'), tip: 'Nitel' }, kar('dev_k85_dolmus', '')] });
   });
 
+  // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; cihaz listesi ondan salt okunur gelir, eski `dev` kayıtları silinmez.
+  test('329 a ölçü aletleri: liste Kalibrasyon kayıtlarını verir, okuma yetkisi ister; eski dev kayıtları ve ölçüm bağları durur', async () => {
+    await ret(403, 'YETKI_YOK', c.opr, 'GET', '/kalite-merkezi/olcu-aletleri');
+    await ret(401, 'OTURUM_YOK', '', 'GET', '/kalite-merkezi/olcu-aletleri');
+    const bugun = tesisGunu(Date.now());
+    const ikiYilOnce = `${Number(bugun.slice(0, 4)) - 2}${bugun.slice(4)}`;
+    const { turler: [tur] } = await tamam<{ turler: { id: number }[] }>(c.yon, 'GET', '/olcu-aleti-turleri');
+    const alet = (no: string, ek: Record<string, unknown>) => tamam<{ id: number }>(c.yon, 'POST', '/olcu-aletleri', { no, turId: tur!.id, periyotGun: 90, ...ek });
+    const bagli = await alet('L329-1', { ad: 'Kumpas 150', yer: 'CNC-1', olcmeAraligi: '0-150', ilkKalibrasyon: { tarih: bugun, sonuc: 'uygun', sertifikaNo: 'SRT-1' } });
+    const yeni = await alet('L329-2', { ilkKalibrasyon: { tarih: bugun, sonuc: 'uygun' } });
+    const dolmus = await alet('L329-3', { ilkKalibrasyon: { tarih: ikiYilOnce, sonuc: 'uygun' } });
+    // Eski kayıtlar: biri alete kodla bağlanır, öteki Kalibrasyonda yok.
+    const eski = await yaz(c.kal, 'dev', 'dev_l329_bagli', { kod: 'l329-1 ', ad: 'Eski ad', marka: 'Eski marka', sonKal: bugun, periyot: 12 });
+    await yaz(c.kal, 'dev', 'dev_l329_yetim', { kod: 'L329-YOK', ad: 'Eski mastar', sonKal: bugun, periyot: 12 });
+
+    const liste = (await tamam<{ cihazlar: { kimlik: string; govde: Record<string, unknown> }[] }>(c.kal, 'GET', '/kalite-merkezi/olcu-aletleri')).cihazlar;
+    const bul = (kimlik: string) => liste.find((l) => l.kimlik === kimlik)?.govde;
+    assert.equal(bul('dev_l329_bagli')?.['kod'], 'L329-1', 'eski kimlik korunur, değerler Kalibrasyondandır');
+    assert.deepEqual(
+      [bul('dev_l329_bagli')?.['ad'], bul('dev_l329_bagli')?.['lokasyon'], bul('dev_l329_bagli')?.['aralik'], bul('dev_l329_bagli')?.['sertifika'], bul('dev_l329_bagli')?.['marka']],
+      ['Kumpas 150', 'CNC-1', '0-150', 'SRT-1', undefined],
+    );
+    assert.equal(bul('dev_l329_bagli')?.['periyot'], 3, '90 gün / 30');
+    assert.equal(bul(`kal-${yeni.id}`)?.['kod'], 'L329-2');
+    assert.equal(bul(`kal-${yeni.id}`)?.['ad'], '', 'karşılığı olmayan alan boş');
+    assert.equal(bul(`kal-${dolmus.id}`)?.['sonKal'], ikiYilOnce);
+    assert.equal(bul('dev_l329_yetim')?.['sonKal'], '', 'Kalibrasyonda karşılığı olmayan eski cihaz kanıtsız');
+    assert.equal(bul('dev_l329_yetim')?.['ad'], 'Eski mastar', 'eski kayıt silinmez');
+    assert.equal(liste.some((l) => l.kimlik === `kal-${bagli.id}`), false, 'bağlanan alet iki kez listelenmez');
+
+    // Eski kayıtlar olduğu gibi duruyor.
+    const kayitlar = await akis(c.kal);
+    assert.deepEqual(govdesi(kayitlar, 'dev', 'dev_l329_bagli'), [{ kod: 'l329-1 ', ad: 'Eski ad', marka: 'Eski marka', sonKal: bugun, periyot: 12 }]);
+    assert.ok(eski.surum > 0);
+
+    // Ölçüm cihazı kimliğiyle bağlıdır: eski kimlik de, kal- kimliği de Kalibrasyonun kararıyla yazılır.
+    const kar = (cihaz: string) => ({ balon: 1, ad: 'Çap', tip: 'Değişken', nominal: '10', alt: '0.1', ust: '0.1', olcum: '10.01', cihaz });
+    const yol = (kimlik: string) => `/kalite-merkezi/kayitlar/insp/${kimlik}/yaz`;
+    await yaz(c.kal, 'insp', 'insp_l329_eski', { no: 'MUA-L329A', chars: [kar('dev_l329_bagli')] });
+    await yaz(c.kal, 'insp', 'insp_l329_yeni', { no: 'MUA-L329B', chars: [kar(`kal-${yeni.id}`)] });
+    for (const cihaz of [`kal-${dolmus.id}`, 'kal-999999', 'dev_l329_yetim']) {
+      const r = await istek(c.kal, 'POST', yol('insp_l329_red'), { govde: { no: 'MUA-L329R', chars: [kar(cihaz)] }, surum: null });
+      assert.equal(r.statusCode, 400, `${cihaz}: ${r.body}`);
+      assert.deepEqual((r.json() as { ayrinti: unknown }).ayrinti, { cihazlar: [cihaz] });
+    }
+  });
+
   // Kullanıcı kararı 16.10.2026 ("Gövdesiz"): kaydın içeriği ve fotoğrafı denetim defterine kopyalanmaz; kim, ne zaman, hangi kayıt kalır.
   test('denetim: yazma ve geri yükleme satırı kişi, kayıt ve sürümü taşır; kaydın içeriği deftere girmez', async () => {
     const gizli = `FOTO-${'x'.repeat(2000)}`;

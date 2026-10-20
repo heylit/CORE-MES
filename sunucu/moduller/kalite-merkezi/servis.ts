@@ -8,7 +8,7 @@ import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmDegisiklikCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
@@ -17,7 +17,7 @@ import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuc
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
-  TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, karantinaIstegi, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
+  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, karantinaIstegi, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import type { KalibrasyonHazirligi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -99,16 +99,27 @@ export async function onayGeriAl(db: Db, kullanici: Kullanici, kimlik: string, b
 async function olcumCihazlariniDenetle(db: Db, koleksiyon: string, onceki: Govde | null, govde: Govde): Promise<void> {
   const ids = yeniOlcumCihazlari(koleksiyon, onceki, govde);
   if (ids.length === 0) return;
-  const durumlar = await aletDurumlari(db);
+  const aletler = await aletlerVeKayitlari(db, 0);
+  const durumlar = aletDurumlari(aletler);
   const gecersiz: string[] = [];
   for (const id of ids) {
-    if (!cihazGecerliMi(await sorgular.kayitGovdesi(db, CIHAZ_KOLEKSIYONU, id), durumlar)) gecersiz.push(id);
+    if (!cihazGecerliMi(await cihazKaydi(db, id, aletler), durumlar)) gecersiz.push(id);
   }
   if (gecersiz.length > 0) throw dogrulama(ILETILER.gecersizCihaz, GECERSIZ_CIHAZ_ALANI, { cihazlar: gecersiz });
 }
 
-async function aletDurumlari(db: Db): Promise<Map<string, AletDurumu>> {
-  return new Map((await aletlerVeKayitlari(db, 0)).map((a) => [a.no, a.durum]));
+const aletDurumlari = (aletler: readonly { no: string; durum: AletDurumu }[]): Map<string, AletDurumu> => new Map(aletler.map((a) => [a.no, a.durum]));
+
+// 329 a: `kal-<alet>` kimlikli cihazın kaydı yoktur, Kalibrasyondaki aletten kurulur; öteki kimlikler uygulamanın eski `dev` kaydıdır.
+async function cihazKaydi(db: Db, kimlik: string, aletler: readonly { id: number; no: string }[]): Promise<Govde | null> {
+  const aletId = kalibrasyonAletKimligi(kimlik);
+  return aletId === null ? sorgular.kayitGovdesi(db, CIHAZ_KOLEKSIYONU, kimlik) : kalibrasyonCihazi(aletler, aletId);
+}
+
+// 329 a: uygulamanın cihaz listesi. Ölçü aletlerinin tek kaynağı Kalibrasyondur; eski `dev` kayıtları silinmez (kimlikleri ölçümlerde durur).
+export async function olcuAletleri(db: Db): Promise<KmOlcuAletleriCevabi> {
+  const aletler = await aletlerVeKayitlari(db, OLCU_ALETI_KAYIT_ADEDI);
+  return { cihazlar: olcuAletleriListesi(aletler, await sorgular.koleksiyonKayitlari(db, CIHAZ_KOLEKSIYONU)) };
 }
 
 // KM-K88: emir başına kalibrasyon hazırlığı; istenen her emir haritada olur, bilinmeyen emir cihazsız sayılır.
@@ -122,8 +133,14 @@ export async function kalibrasyonHazirlikDurumlari(db: Db, emirIdler: readonly n
     return [id, no === undefined ? [] : emirCihazlari(muayeneler.filter((m) => m.emirNo === no).map((m) => m.govde))];
   }));
   const tumCihazlar = [...new Set([...emirBasina.values()].flat())];
-  const cihazlar = new Map((await sorgular.kayitGovdeleri(db, CIHAZ_KOLEKSIYONU, tumCihazlar)).map((c) => [c.kimlik, c.govde]));
-  const durumlar = tumCihazlar.length === 0 ? new Map<string, AletDurumu>() : await aletDurumlari(db);
+  const cihazlar = new Map((await sorgular.kayitGovdeleri(db, CIHAZ_KOLEKSIYONU, tumCihazlar.filter((id) => kalibrasyonAletKimligi(id) === null))).map((c) => [c.kimlik, c.govde]));
+  const aletler = tumCihazlar.length === 0 ? [] : await aletlerVeKayitlari(db, 0);
+  for (const id of tumCihazlar) {
+    const aletId = kalibrasyonAletKimligi(id);
+    const cihaz = aletId === null ? null : kalibrasyonCihazi(aletler, aletId);
+    if (cihaz !== null) cihazlar.set(id, cihaz);
+  }
+  const durumlar = aletDurumlari(aletler);
   return new Map([...emirBasina].map(([id, ids]) => [id, kalibrasyonHazirligi(ids, cihazlar, durumlar)]));
 }
 

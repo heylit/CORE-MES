@@ -183,6 +183,67 @@ export function cihazGecerliMi(cihaz: Record<string, unknown> | null, aletDuruml
   return durum === 'gecerli' || durum === 'yaklasan';
 }
 
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür. Uygulamanın cihaz listesi (`dev`) ondan salt okunur gelir; eski `dev`
+// kayıtları silinmez. Ölçüm kaydı cihazı kimliğiyle tutar: aynı kodlu eski kaydın kimliği korunur, yeni aletin kimliği `kal-<alet>`tir.
+export interface OlcuAleti {
+  id: number; no: string; tur: string; ad: string | null; olcmeAraligi: string | null; yer: string | null; periyotGun: number;
+  kullanimDisi: boolean; sonKalibrasyon: string | null;
+  kayitlar: readonly { tarih: string; sonuc: 'uygun' | 'uygunsuz'; sertifikaNo: string | null; aciklama: string | null }[];
+}
+export interface CihazKaydi { kimlik: string; govde: Record<string, unknown> }
+
+export const OLCU_ALETI_KAYIT_ADEDI = 20;
+const KALIBRASYON_KIMLIGI = /^kal-([1-9]\d{0,9})$/;
+export const kalibrasyonKimligi = (aletId: number): string => `kal-${String(aletId)}`;
+export function kalibrasyonAletKimligi(kimlik: string): number | null {
+  const e = KALIBRASYON_KIMLIGI.exec(kimlik);
+  return e === null ? null : Number(e[1]);
+}
+
+// Kalibrasyonda karşılığı olmayan alanlar (marka, seri, çözünürlük, laboratuvar, izlenebilirlik) hiç yazılmaz; metin alanları
+// boş metindir, sıfır ya da uydurma değer yazılmaz. Periyot ay olarak gün / 30'dur ve yuvarlanmaz; durum `periyotGun` ile hesaplanır.
+export function olcuAletiGovdesi(a: OlcuAleti): Record<string, unknown> {
+  const sonUygun = [...a.kayitlar].reverse().find((k) => k.sonuc === 'uygun' && k.tarih === a.sonKalibrasyon);
+  return {
+    kod: a.no,
+    ad: a.ad ?? '',
+    tip: a.tur,
+    lokasyon: a.yer ?? '',
+    aralik: a.olcmeAraligi ?? '',
+    sonKal: a.sonKalibrasyon ?? '',
+    periyot: a.periyotGun / 30,
+    periyotGun: a.periyotGun,
+    sertifika: sonUygun?.sertifikaNo ?? '',
+    kullanimDisi: a.kullanimDisi,
+    gecmis: a.kayitlar.map((k) => ({ tarih: k.tarih, sonuc: k.sonuc === 'uygun' ? 'Uygun' : 'Uygun değil', sertifika: k.sertifikaNo ?? '', not: k.aciklama ?? '' })),
+    kalibrasyondan: true,
+  };
+}
+
+// Her alet bir cihazdır; aletle eşleşmeyen eski kayıt kimliğiyle kalır ama kalibrasyon bilgisi boşaltılır (sunucu da onu geçersiz sayar).
+export function olcuAletleriListesi(aletler: readonly OlcuAleti[], eskiler: readonly CihazKaydi[]): CihazKaydi[] {
+  const sirali = [...eskiler].sort((x, y) => (x.kimlik < y.kimlik ? -1 : x.kimlik > y.kimlik ? 1 : 0));
+  const kodlar = new Map<string, string>();
+  for (const e of sirali) {
+    const kod = metin(e.govde['kod']).toUpperCase();
+    if (kod !== '' && !kodlar.has(kod)) kodlar.set(kod, e.kimlik);
+  }
+  const baglanan = new Set<string>();
+  const liste = aletler.map((a) => {
+    const eski = kodlar.get(a.no.toUpperCase());
+    if (eski !== undefined) baglanan.add(eski);
+    return { kimlik: eski ?? kalibrasyonKimligi(a.id), govde: olcuAletiGovdesi(a) };
+  });
+  for (const e of sirali) if (!baglanan.has(e.kimlik)) liste.push({ kimlik: e.kimlik, govde: { ...e.govde, sonKal: '', kalibrasyondaYok: true } });
+  return liste;
+}
+
+// `kal-` kimlikli cihazın kaydı yoktur; Kalibrasyondaki aletin numarasından kurulur (cihazGecerliMi kodla eşler).
+export function kalibrasyonCihazi(aletler: readonly Pick<OlcuAleti, 'id' | 'no'>[], aletId: number): Record<string, unknown> | null {
+  const alet = aletler.find((a) => a.id === aletId);
+  return alet === undefined ? null : { kod: alet.no };
+}
+
 interface Karakteristik { ad?: unknown; balon?: unknown; cihaz?: unknown; olcum?: unknown; olcumler?: unknown }
 const karakteristikler = (govde: Record<string, unknown> | null): Karakteristik[] =>
   Array.isArray(govde?.chars) ? govde.chars.filter((c): c is Karakteristik => c !== null && typeof c === 'object') : [];

@@ -247,6 +247,16 @@ describe('7. devStatus: cihaz kalibrasyon durumu', () => {
     const r = h.devStatus(d);
     expect([r.t, r.next, r.k]).toEqual([durum, sonraki, k]);
   });
+  // 329 a: Kalibrasyondan gelen cihazın periyodu gündür (`periyotGun`); ay dönüşümü (`periyot` = gün / 30) vadeyi kaydırmaz.
+  it.each([
+    [{ sonKal: '2026-10-01', periyotGun: 90, periyot: 3 }, 'Geçerli', '2026-12-30', 76],
+    [{ sonKal: '2026-10-01', periyotGun: 100, periyot: 100 / 30 }, 'Geçerli', '2027-01-09', 86],
+    [{ sonKal: '2026-09-01', periyotGun: 40, periyot: 40 / 30 }, 'Süresi doldu', '2026-10-11', -4],
+    [{ sonKal: '2026-09-20', periyotGun: 40, periyot: 40 / 30 }, 'Yaklaşıyor', '2026-10-30', 15],
+  ] as const)('periyot gün: %j', (d, durum, sonraki, k) => {
+    const r = h.devStatus(d);
+    expect([r.t, r.next, r.k]).toEqual([durum, sonraki, k]);
+  });
   it('kayıt yok, kullanım dışı, periyot varsayılanı 12 ay', () => {
     expect(h.devStatus({ periyot: 12 }).t).toBe('Kayıt yok');
     expect(h.devStatus({ kullanimDisi: true, sonKal: '2026-01-01' }).t).toBe('Kullanım dışı');

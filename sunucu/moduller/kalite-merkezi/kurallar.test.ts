@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { KM_DOSYA_SINIRI, cihazGecerliMi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
+import { KM_DOSYA_SINIRI, cihazGecerliMi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -158,5 +158,79 @@ describe('Kalite Merkezi kuralları', () => {
     assert.deepEqual(karantinaIstegi('ncr', n('L-1', ''), n('L-2', '')), { lotNo: 'L-2', emirNo: null }, 'lot değişti');
     assert.deepEqual(karantinaIstegi('ncr', n('L-1', '', 'Kapalı'), n('L-1', '')), { lotNo: 'L-1', emirNo: null }, 'yeniden açıldı');
     assert.equal(karantinaIstegi('insp', null, n('L-1', 'E-7')), null, 'başka koleksiyon');
+  });
+
+  // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; uygulamanın cihaz listesi ondan gelir, eski `dev` kayıtları silinmez.
+  describe('329 a ölçü aleti listesi (Kalibrasyon -> cihaz kaydı)', () => {
+    const alet = (id: number, no: string, ek: Record<string, unknown> = {}) => ({
+      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null, kayitlar: [], ...ek,
+    });
+
+    test('kimlik biçimi: kal-<alet kimliği>; yalnız bu biçim alet kimliği sayılır', () => {
+      assert.equal(kalibrasyonAletKimligi('kal-12'), 12);
+      for (const k of ['kal-0', 'kal-', 'kal-1a', 'KAL-1', 'dev_1', ' kal-1', 'kal-01', '']) assert.equal(kalibrasyonAletKimligi(k), null, k);
+    });
+
+    test('alanlar Kalibrasyon\'dan gelir; karşılığı olmayanlar boş kalır, sıfır ya da uydurma değer yazılmaz', () => {
+      const [satir] = olcuAletleriListesi([alet(3, 'OC-3', {
+        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01',
+        kayitlar: [
+          { tarih: '2025-03-01', sonuc: 'uygun', sertifikaNo: 'S-1', aciklama: null },
+          { tarih: '2026-03-01', sonuc: 'uygun', sertifikaNo: 'S-2', aciklama: 'sapma yok' },
+        ],
+      })], []);
+      assert.equal(satir?.kimlik, 'kal-3');
+      assert.deepEqual(satir?.govde, {
+        kod: 'OC-3', ad: 'Dış çap', tip: 'Mikrometre', lokasyon: 'CNC-2', aralik: '0-25 mm', sonKal: '2026-03-01',
+        periyot: 365 / 30, periyotGun: 365, sertifika: 'S-2', kullanimDisi: false, kalibrasyondan: true,
+        gecmis: [
+          { tarih: '2025-03-01', sonuc: 'Uygun', sertifika: 'S-1', not: '' },
+          { tarih: '2026-03-01', sonuc: 'Uygun', sertifika: 'S-2', not: 'sapma yok' },
+        ],
+      });
+      const bos = olcuAletleriListesi([alet(4, 'OC-4')], [])[0]?.govde;
+      assert.deepEqual([bos?.['ad'], bos?.['lokasyon'], bos?.['aralik'], bos?.['sonKal'], bos?.['sertifika'], bos?.['gecmis']], ['', '', '', '', '', []]);
+      for (const alan of ['marka', 'seri', 'cozunurluk', 'lab', 'izlenebilirlik', 'periyotGerekce']) assert.equal(alan in (bos ?? {}), false, alan);
+    });
+
+    test('periyot gün / 30 olarak yuvarlanmadan gelir; sertifika son uygun kayıttandır, uygunsuz kayıt sonuç olarak taşınır', () => {
+      const g = olcuAletleriListesi([alet(5, 'OC-5', {
+        periyotGun: 100, sonKalibrasyon: '2026-01-10', kullanimDisi: true,
+        kayitlar: [
+          { tarih: '2026-01-10', sonuc: 'uygun', sertifikaNo: 'S-U', aciklama: null },
+          { tarih: '2026-02-01', sonuc: 'uygunsuz', sertifikaNo: 'S-X', aciklama: 'kırık' },
+        ],
+      })], [])[0]?.govde;
+      assert.equal(g?.['periyot'], 100 / 30);
+      assert.equal(g?.['sertifika'], 'S-U');
+      assert.equal(g?.['kullanimDisi'], true);
+      assert.deepEqual((g?.['gecmis'] as { sonuc: string }[]).map((k) => k.sonuc), ['Uygun', 'Uygun değil']);
+    });
+
+    test('aynı kodlu eski dev kaydının kimliği korunur (ölçüm bağı kırılmaz); kod kırpılır ve büyük harfe çevrilir', () => {
+      const eski = [{ kimlik: 'd_9', govde: { kod: ' oc-1 ', ad: 'Eski kumpas', marka: 'Eski marka' } }];
+      const liste = olcuAletleriListesi([alet(1, 'OC-1'), alet(2, 'OC-2')], eski);
+      assert.deepEqual(liste.map((l) => l.kimlik), ['d_9', 'kal-2']);
+      assert.equal(liste[0]?.govde['marka'], undefined, 'eski alan görünmez');
+      assert.equal(liste[0]?.govde['ad'], '');
+    });
+
+    test('Kalibrasyon\'da karşılığı olmayan eski dev kaydı silinmez: kimliğiyle kalır, kalibrasyon bilgisi boşaltılır (kanıtsız)', () => {
+      const eski = [{ kimlik: 'd_7', govde: { kod: 'ESKI-1', ad: 'Eski mastar', sonKal: '2026-09-01', periyot: 12, kullanimDisi: false, marka: 'X' } }];
+      const liste = olcuAletleriListesi([alet(1, 'OC-1')], eski);
+      assert.deepEqual(liste.map((l) => l.kimlik), ['kal-1', 'd_7']);
+      assert.deepEqual(liste[1]?.govde, { kod: 'ESKI-1', ad: 'Eski mastar', sonKal: '', periyot: 12, kullanimDisi: false, marka: 'X', kalibrasyondaYok: true });
+    });
+
+    test('aynı kodlu iki eski kayıttan ilki (kimliğe göre) alete bağlanır, öteki eşsiz eski kayıt olarak kalır', () => {
+      const eski = [{ kimlik: 'd_b', govde: { kod: 'OC-1' } }, { kimlik: 'd_a', govde: { kod: 'OC-1' } }];
+      assert.deepEqual(olcuAletleriListesi([alet(1, 'OC-1')], eski).map((l) => l.kimlik), ['d_a', 'd_b']);
+    });
+
+    test('kal- kimlikli cihaz Kalibrasyon\'daki aletin numarasıyla doğrulanır; olmayan alet kayıtsızdır', () => {
+      const aletler = [alet(1, 'OC-1'), alet(2, 'OC-2')];
+      assert.deepEqual(kalibrasyonCihazi(aletler, 2), { kod: 'OC-2' });
+      assert.equal(kalibrasyonCihazi(aletler, 9), null);
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import type {
-  KmDegisiklikCevabi, KmGecmisCevabi, KmGeriYukleCevabi, KmIlkParcaBekleyenCevabi, KmIlkParcaCevabi, KmIlkParcaGovdesi, KmGeriYukleGovdesi, KmKarantinaKonumlariCevabi, KmKarantinaPartileriCevabi, KmOnayGeriAlGovdesi, KmOnaylaGovdesi, KmOnayReddiAlani, KmSilGovdesi,
+  KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmGecmisCevabi, KmGeriYukleCevabi, KmIlkParcaBekleyenCevabi, KmIlkParcaCevabi, KmIlkParcaGovdesi, KmGeriYukleGovdesi, KmKarantinaKonumlariCevabi, KmKarantinaPartileriCevabi, KmOnayGeriAlGovdesi, KmOnaylaGovdesi, KmOnayReddiAlani, KmSilGovdesi,
   KmOnaylaCevabi, KmSurumCevabi, KmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
@@ -89,8 +89,34 @@ export interface Kopru {
   isle: (istek: ApiIstegi) => Promise<ApiCevabi>;
 }
 
-export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu): Kopru {
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür. Uygulamanın cihaz listesi (`dev`) akıştan değil oradan gelir ve
+// salt okunurdur; liste en çok bu aralıkta bir istenir, aradaki eşitlemeler yalnız değişeni gönderir.
+export const OLCU_ALETI_ARALIGI_MS = 15_000;
+export const OLCU_ALETI_YAZMA_RED = 'Ölçü aletleri Kalibrasyon sayfasından yönetilir.';
+const CIHAZ_KOLEKSIYONU = 'dev';
+
+export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => number = Date.now): Kopru {
   const haller = new Map<string, KayitHali>();
+  let gonderilenCihazlar = new Map<string, string>();
+  let cihazAni: number | null = null;
+  // İlk eşitlemede liste okunamazsa hata verir: boş liste gerçekmiş gibi görünmesin. Sonrakilerde akış yine de gelir.
+  async function cihazDegisiklikleri(ilk: boolean): Promise<{ col: string; id: string; data: Record<string, unknown> | null }[]> {
+    if (!ilk && cihazAni !== null && simdi() - cihazAni < OLCU_ALETI_ARALIGI_MS) return [];
+    let liste: KmOlcuAletleriCevabi['cihazlar'];
+    try {
+      liste = (await istemci.get<KmOlcuAletleriCevabi>('/kalite-merkezi/olcu-aletleri')).cihazlar;
+    } catch (e) {
+      if (ilk) throw e;
+      return [];
+    }
+    cihazAni = simdi();
+    if (ilk) gonderilenCihazlar = new Map();
+    const yeni = new Map(liste.map((c) => [c.kimlik, JSON.stringify(c.govde)]));
+    const degisenler = liste.filter((c) => gonderilenCihazlar.get(c.kimlik) !== yeni.get(c.kimlik)).map((c) => ({ col: CIHAZ_KOLEKSIYONU, id: c.kimlik, data: c.govde }));
+    const silinenler = [...gonderilenCihazlar.keys()].filter((k) => !yeni.has(k)).map((k) => ({ col: CIHAZ_KOLEKSIYONU, id: k, data: null }));
+    gonderilenCihazlar = yeni;
+    return [...degisenler, ...silinenler];
+  }
   const anahtar = (koleksiyon: string, kimlik: string): string => `${koleksiyon}\u0000${kimlik}`;
   // Akış ve yazma cevapları sırasız gelebilir: yalnız daha yeni sürüm eskisinin yerine geçer.
   function hatirla(koleksiyon: string, kimlik: string, hal: KayitHali): void {
@@ -139,9 +165,12 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu): Kopru {
     if (ilk === 'ping' && g.yontem === 'GET') return tamam({ kaliteMerkezi: true, surum: 1 });
     if (ilk === 'sync' && g.yontem === 'GET') {
       const sonra = Number(url.searchParams.get('since') ?? '0');
-      const a = await istemci.get<KmDegisiklikCevabi>(`/kalite-merkezi/degisiklikler?sonra=${Number.isInteger(sonra) && sonra > 0 ? sonra : 0}`);
+      const baslangic = Number.isInteger(sonra) && sonra > 0 ? sonra : 0;
+      const a = await istemci.get<KmDegisiklikCevabi>(`/kalite-merkezi/degisiklikler?sonra=${baslangic}`);
+      const cihazlar = await cihazDegisiklikleri(baslangic === 0);
       for (const d of a.degisiklikler) hatirla(d.koleksiyon, d.kimlik, { surum: d.surum, dolu: d.govde !== null, guncelleme: guncellemesi(d.govde) });
-      return tamam({ version: a.surum, changes: a.degisiklikler.map((d) => ({ col: d.koleksiyon, id: d.kimlik, data: d.govde })) });
+      const akis = a.degisiklikler.filter((d) => d.koleksiyon !== CIHAZ_KOLEKSIYONU).map((d) => ({ col: d.koleksiyon, id: d.kimlik, data: d.govde }));
+      return tamam({ version: a.surum, changes: [...akis, ...cihazlar] });
     }
     // NCR kapanışında serbest bırakılacak konum seçimi (partinin önceki konumu bilinmediğinde; KARANTINA_HEDEF_BETIGI).
     if (ilk === 'karantina-konumlari' && ikinci === undefined && g.yontem === 'GET') {
@@ -163,6 +192,9 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu): Kopru {
     // Kaydın salt okunur geçmişi (326 a): değişiklik geçmişi penceresine eklenen "Önceki sürümler" bölümü.
     if (ilk === 'gecmis' && ikinci !== undefined && ucuncu !== undefined && p.length === 4 && g.yontem === 'GET') {
       return tamam(await istemci.get<KmGecmisCevabi>(`/kalite-merkezi/kayitlar/${parca(ikinci)}/${parca(ucuncu)}/gecmis`));
+    }
+    if (ilk === 'doc' && ikinci === CIHAZ_KOLEKSIYONU && ucuncu !== undefined && p.length === 4 && (g.yontem === 'PUT' || g.yontem === 'DELETE')) {
+      return ret(403, OLCU_ALETI_YAZMA_RED);
     }
     if (ilk === 'doc' && ikinci !== undefined && ucuncu !== undefined && p.length === 4) {
       const yol = `/kalite-merkezi/kayitlar/${parca(ikinci)}/${parca(ucuncu)}`;

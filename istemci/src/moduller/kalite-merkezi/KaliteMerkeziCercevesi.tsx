@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { KmKimlikCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { DurumKutusu, YalitilmisCerceve, useBildirim } from '../../ortak/arayuz/index.ts';
 import { useYalitilmisGorunum } from '../../ortak/rota/cerceve-gorunumu.ts';
@@ -22,6 +23,11 @@ async function dosyaOku(yol: string): Promise<Blob | null> {
 
 interface Istek { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown }
 
+// 329 a: ölçü aletleri Kalibrasyonda yönetilir; uygulamanın ekleme ve düzenleme yolları kullanıcıyı oraya gönderir. Çerçeve adres
+// veremez: yalnız bu tek hedefe gidilir.
+export const KALIBRASYON_YOLU = '/kalibrasyon';
+export const kalibrasyonaGitIstegiMi = (m: Istek | null): boolean => m !== null && m.kanal === VERI_KANALI && m.yon === 'istek' && m.tip === 'kalibrasyona-git';
+
 // Kalite Merkezi değiştirilmeden yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); menü kabuktadır
 // (ikinci menü). Uygulamanın yerel sunucuya attığı istekler köprüyle TMI uçlarına gider.
 export function KaliteMerkeziCercevesi() {
@@ -32,6 +38,7 @@ export function KaliteMerkeziCercevesi() {
   const [hata, setHata] = useState<string | null>(null);
   const okur = oturum.data?.islemler.includes('kalite-merkezi.oku') === true;
   const gorunumIletisi = useYalitilmisGorunum(KOK);
+  const gezin = useNavigate();
 
   useEffect(() => {
     let bitti = false;
@@ -66,6 +73,7 @@ export function KaliteMerkeziCercevesi() {
   const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
     if (gorunumIletisi(veri, yanitla)) return;
     const m = veri as Istek | null;
+    if (kalibrasyonaGitIstegiMi(m)) { void gezin(KALIBRASYON_YOLU); return; }
     if (!m || m.kanal !== VERI_KANALI || m.yon !== 'istek' || m.tip !== 'api' || typeof m.id !== 'number') return;
     const g = m.veri as Partial<ApiIstegi> | null;
     if (!g || typeof g.adres !== 'string' || typeof g.yontem !== 'string') return;

@@ -201,4 +201,20 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     await yaz('insp', 'insp_k88_2', { no: 'MUA-K88-2', emir: no, chars: [{ ad: 'Boy', cihaz: 'dev_k88_2' }] });
     assert.deepEqual((await okur()).get(emir), { durum: 'yok', zaman: null, secildi: true }, 'süresi dolmuş alet');
   });
+
+  // 329 a: Kalibrasyondan gelen `kal-<alet>` kimlikli cihazın kaydı yoktur; hazırlık kapısı aleti Kalibrasyondan okur.
+  test('329 a kalibrasyon hazırlığı: kal- kimlikli cihaz Kalibrasyondaki alet durumuyla değerlendirilir; olmayan alet hazır değil', async () => {
+    const emir = await baslamisEmir();
+    const no = (await o().vt.tx((db) => emirNolari(db, [emir]))).get(emir)!;
+    const tur = (await o().sahip.tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'"))!.id;
+    const alet = await o().sahip.tek<{ id: number }>('INSERT INTO olcu_aleti (no, tur_id, periyot_gun) VALUES ($1, $2, 365) RETURNING id', ['K329-1', tur]);
+    await o().sahip.sorgu("INSERT INTO kalibrasyon_kaydi (alet_id, tarih, kisi_id, sonuc) VALUES ($1, current_date, $2, 'uygun')", [alet!.id, yoneticiId]);
+    const yaz = (kimlik: string, cihaz: string) =>
+      o().vt.tx((db) => sorgular.yaz(db, 'insp', kimlik, { no: kimlik, emir: no, chars: [{ ad: 'Çap', cihaz }] }, yoneticiId));
+    await yaz('insp_k329_a', `kal-${alet!.id}`);
+    const okur = () => o().vt.tx((db) => kalibrasyonHazirlikDurumlari(db, [emir]));
+    assert.deepEqual((await okur()).get(emir), { durum: 'tamam', zaman: null, secildi: true });
+    await yaz('insp_k329_b', 'kal-999999');
+    assert.deepEqual((await okur()).get(emir), { durum: 'yok', zaman: null, secildi: true }, 'olmayan alet');
+  });
 });

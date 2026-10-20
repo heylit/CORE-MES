@@ -102,7 +102,12 @@ export const kmGecmisCevabi = z.object({
   })),
 });
 
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür; uygulamanın cihaz listesi (`dev`) buradan salt okunur gelir. Her satır
+// uygulamanın cihaz kaydı biçimindedir; kimlik, varsa aynı kodlu eski `dev` kaydının kimliğidir (ölçümlerin bağı kırılmaz).
+export const kmOlcuAletleriCevabi = z.object({ cihazlar: z.array(z.object({ kimlik: z.string(), govde })) });
+
 export type KmDegisiklikCevabi = z.output<typeof kmDegisiklikCevabi>;
+export type KmOlcuAletleriCevabi = z.output<typeof kmOlcuAletleriCevabi>;
 export type KmYazGovdesi = z.input<typeof kmYazGovdesi>;
 export type KmSilGovdesi = z.input<typeof kmSilGovdesi>;
 export type KmOnaylaGovdesi = z.input<typeof kmOnaylaGovdesi>;
