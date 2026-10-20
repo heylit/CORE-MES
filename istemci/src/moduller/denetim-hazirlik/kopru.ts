@@ -1,5 +1,5 @@
 import type {
-  BelgeCevabi, EkCevabi, EkIcerikCevabi, KilitCevabi, KisilerCevabi, OdaCevabi, SorguCevabi,
+  BelgeCevabi, EkCevabi, EkIcerikCevabi, KilitCevabi, KisilerCevabi, OdaCevabi, OlcuAletleriCevabi, SorguCevabi,
 } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { KurumCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
@@ -58,6 +58,8 @@ export function kopruKur(): KopruIsleyici {
         if (!/^[0-9a-f]{32}$/.test(id)) throw new Error('Geçersiz kimlik.');
         return api.get<EkIcerikCevabi>(`/denetim-hazirlik/ekler/${id}`);
       }
+      case 'olcu-aletleri':
+        return api.get<OlcuAletleriCevabi>('/denetim-hazirlik/olcu-aletleri');
       default:
         throw new Error(`Bilinmeyen istek: ${tip}`);
     }

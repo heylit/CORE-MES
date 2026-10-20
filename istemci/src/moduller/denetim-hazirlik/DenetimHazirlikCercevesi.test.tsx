@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { BenCevabi, OlcuAletleriCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
 import { sayfaKur, yerelDegerler, YEREL } from './DenetimHazirlikCercevesi.tsx';
@@ -30,6 +30,7 @@ function sunucuKur(kullanici: Kullanici, kurulumGerekli = false): string[] {
     }
     if (yontem === 'POST' && yol === '/denetim-hazirlik/kurulum') { kuruldu = true; return json(200, { kurulan: 1 }); }
     if (yontem === 'GET' && yol.startsWith('/denetim-hazirlik/sorgu')) return json(200, { belgeler: [], damga: 0 } satisfies SorguCevabi);
+    if (yontem === 'GET' && yol === '/denetim-hazirlik/olcu-aletleri') return json(200, { aletler: [] } satisfies OlcuAletleriCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;

@@ -233,6 +233,28 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: { deger: '1' } })).statusCode, 200);
     assert.equal((await yaz(ikinciYazar, { yol: ortak, kip: 'tam', veri: { deger: '2' } })).statusCode, 200);
   });
+  // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; prototipin cihaz listesi ondan salt okunur gelir.
+  test('329 a ölçü aletleri: liste Kalibrasyon kayıtlarını verir; okuma yetkisi ister, yazma ucu yok', async () => {
+    assert.equal((await istek(yetkisiz, 'GET', '/denetim-hazirlik/olcu-aletleri')).statusCode, 403);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/denetim-hazirlik/olcu-aletleri' })).statusCode, 401);
+    const bugun = ((await vt().tek<{ g: string }>('SELECT current_date::text AS g'))!).g;
+    const turler = (await istek(yonetici, 'GET', '/olcu-aleti-turleri')).json() as { turler: { id: number }[] };
+    const olustur = await istek(yonetici, 'POST', '/olcu-aletleri', {
+      no: 'dh329-1', turId: turler.turler[0]!.id, periyotGun: 90, yer: 'CNC-1', olcmeAraligi: '0-150',
+      ilkKalibrasyon: { tarih: bugun, sonuc: 'uygun', sertifikaNo: 'SRT-329', aciklama: 'sapma yok' },
+    });
+    assert.equal(olustur.statusCode, 200, olustur.body);
+    const kimlik = (olustur.json() as { id: number }).id;
+    const liste = await istek(okur, 'GET', '/denetim-hazirlik/olcu-aletleri');
+    assert.equal(liste.statusCode, 200, liste.body);
+    const satir = (liste.json() as { aletler: { id: string; [a: string]: unknown }[] }).aletler.find((a) => a.id === `kal-${String(kimlik)}`);
+    assert.ok(satir, 'alet listede');
+    assert.deepEqual([satir.no, satir.yer, satir.aralik, satir.per, satir.last, satir.cert, satir.res, satir.st], ['DH329-1', 'CNC-1', '0-150', 3, bugun, 'SRT-329', 'uygun', 'aktif']);
+    assert.equal(typeof satir.nx, 'string');
+    assert.notEqual(satir.nx, '', 'vade Kalibrasyondan gelir');
+    for (const alan of ['marka', 'seri', 'coz', 'sorumlu', 'lab', 'kabul']) assert.equal(alan in satir, false, alan);
+    assert.equal((await istek(okur, 'POST', '/denetim-hazirlik/olcu-aletleri', {})).statusCode, 404, 'yazma ucu yok');
+  });
   test('BD-14 (312 b): kişi ve emir bağları yabancı anahtar; boş şemada doğrulanmış', async () => {
     const satirlar = await vt().sorgu<{ ad: string }>(
       `SELECT c.conrelid::regclass || '.' || a.attname || ' ' || c.confrelid::regclass || ' ' || c.convalidated AS ad

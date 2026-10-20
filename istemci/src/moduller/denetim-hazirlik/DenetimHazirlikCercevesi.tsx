@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import { useNavigate } from 'react-router-dom';
+import type { BenCevabi, OlcuAletleriCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { DurumKutusu, YalitilmisCerceve } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -9,6 +10,7 @@ import { anahtarParcasi, cerceveBetigi, yerelKoku } from './cerceve-kopru.ts';
 import type { CerceveAyari } from './cerceve-kopru.ts';
 import { ekBetikler } from './ek-betikler.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
+import { OLCU_ALETI_YOLU, olcuAletiBetigi } from './olcu-aleti.ts';
 import { gomuluYaziStili } from './yazi-tipleri.ts';
 import './denetim-hazirlik.css';
 
@@ -21,6 +23,8 @@ export const KOK = '/denetim-hazirlik';
 const KANAL = 'denetim-hazirlik';
 // Sunucu sınırıyla aynı (paylasilan/sozlesme/denetim-hazirlik.ts AZAMI_EK_BAYT); istemci sözleşmeyi değer olarak ithal etmez.
 const AZAMI_EK_BAYT = 700 * 1024;
+// Prototipin tüm durumu bu yerel depo anahtarında durur (ek-betikler.ts ve prototipteki KEY ile aynı).
+const OLCU_ALETI_DEPO_ANAHTARI = 'kalite-denetim-v4';
 const OKUMA_ISLEMLERI = ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz'];
 
 // Prototipin yerel deposu: kapsam ve kalıcı tutulan anahtar önekleri.
@@ -52,7 +56,11 @@ export function yerelDegerler(cevap: SorguCevabi): CerceveAyari['yerel']['degerl
   return sonuc;
 }
 
-interface Hazirlik { ben: BenCevabi; yerel: CerceveAyari['yerel']['degerler'] }
+interface Hazirlik { ben: BenCevabi; yerel: CerceveAyari['yerel']['degerler']; aletler: OlcuAletleriCevabi['aletler'] }
+
+// 329 a: ölçü aletleri Kalibrasyonda yönetilir; çerçeve adres veremez, yalnız bu tek hedefe gidilir.
+export const KALIBRASYON_YOLU = OLCU_ALETI_YOLU;
+export const kalibrasyonaGitIstegiMi = (m: { kanal?: unknown; yon?: unknown; tip?: unknown } | null): boolean => m !== null && m.kanal === KANAL && m.yon === 'istek' && m.tip === 'kalibrasyona-git';
 
 export function DenetimHazirlikCercevesi() {
   const oturum = useOturum();
@@ -64,6 +72,7 @@ export function DenetimHazirlikCercevesi() {
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
   const gorunumIletisi = useYalitilmisGorunum(KOK);
+  const gezin = useNavigate();
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
 
@@ -92,7 +101,8 @@ export function DenetimHazirlikCercevesi() {
           const kok = yerelKoku({ kisi: ben.kisi, yerel: { ...YEREL, degerler: {} } });
           yerel = yerelDegerler(await api.get<SorguCevabi>(`/denetim-hazirlik/sorgu?koleksiyon=${encodeURIComponent(kok)}`));
         }
-        if (!bitti) setHazirlik({ ben, yerel });
+        const { aletler } = await api.get<OlcuAletleriCevabi>('/denetim-hazirlik/olcu-aletleri');
+        if (!bitti) setHazirlik({ ben, yerel, aletler });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'Denetim Hazırlığı açılamadı.'));
       }
@@ -105,7 +115,7 @@ export function DenetimHazirlikCercevesi() {
   const [ilkTema] = useState(tema);
   const sayfa = useMemo(() => {
     if (prototip === null || yaziStili === null || ekBetik === null || hazirlik === null) return null;
-    const { ben, yerel } = hazirlik;
+    const { ben, yerel, aletler } = hazirlik;
     return sayfaKur(prototip, cerceveBetigi({
       kanal: KANAL,
       kisi: ben.kisi,
@@ -117,7 +127,7 @@ export function DenetimHazirlikCercevesi() {
       // Açık her sekme sürekli istek atar; değişiklik damgası 10 sn gecikmeyle de yeter.
       yoklamaMs: 10_000,
       azamiEkBayt: AZAMI_EK_BAYT,
-    }) + ekBetik, yaziStili);
+    }) + ekBetik + olcuAletiBetigi({ kanal: KANAL, depoAnahtari: OLCU_ALETI_DEPO_ANAHTARI, yoklamaMs: 20_000, aletler }), yaziStili);
   }, [prototip, yaziStili, ekBetik, hazirlik, ilkTema]);
   const isle = useMemo(() => kopruKur(), []);
 
@@ -125,6 +135,7 @@ export function DenetimHazirlikCercevesi() {
   const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
     if (gorunumIletisi(veri, yanitla)) return;
     const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown } | null;
+    if (kalibrasyonaGitIstegiMi(m)) { void gezin(KALIBRASYON_YOLU); return; }
     if (!m || m.kanal !== KANAL || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
     const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: KANAL, yon: 'yanit', id: m.id, ...govde }); };
     isle(m.tip, m.veri).then(

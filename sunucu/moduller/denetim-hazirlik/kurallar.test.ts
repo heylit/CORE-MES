@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, sorgula, sonParca, ustYolu,
+  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -74,5 +74,46 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 7, 7), true);
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 8, 7), false);
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 8, null), false);
+  });
+
+  // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; prototipin cihaz listesi ondan salt okunur gelir.
+  describe('329 a ölçü aleti listesi (Kalibrasyon -> prototip cihaz kaydı)', () => {
+    const alet = (id: number, no: string, ek: Record<string, unknown> = {}) => ({
+      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null, vade: null, kayitlar: [], ...ek,
+    });
+
+    test('alanlar Kalibrasyondandır; vade elle girilen sonraki tarih alanına yazılır, böylece durum Kalibrasyonla aynı çıkar', () => {
+      const [a] = olcuAletleriKaydi([alet(3, 'OC-3', {
+        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01', vade: '2027-03-01',
+        kayitlar: [
+          { tarih: '2025-03-01', sonuc: 'uygun', sertifikaNo: 'S-1', aciklama: null },
+          { tarih: '2026-03-01', sonuc: 'uygun', sertifikaNo: 'S-2', aciklama: 'sapma yok' },
+        ],
+      })]);
+      assert.deepEqual(a, {
+        id: 'kal-3', no: 'OC-3', ad: 'Dış çap', yer: 'CNC-2', aralik: '0-25 mm', periyotGun: 365, per: 365 / 30, last: '2026-03-01', nx: '2027-03-01',
+        st: 'aktif', res: 'uygun', cert: 'S-2',
+        hist: [
+          { date: '2026-03-01', res: 'uygun', lab: '', cert: 'S-2', note: 'sapma yok' },
+          { date: '2025-03-01', res: 'uygun', lab: '', cert: 'S-1', note: '' },
+        ],
+      });
+    });
+
+    test('karşılığı olmayan alan boş kalır: ad yoksa türü, öteki metinler boş; kaydı olmayan aletin tarihleri ve sonucu boştur', () => {
+      const [a] = olcuAletleriKaydi([alet(4, 'OC-4')]);
+      assert.deepEqual([a?.ad, a?.yer, a?.aralik, a?.last, a?.nx, a?.res, a?.cert, a?.hist], ['Kumpas', '', '', '', '', '', '', []]);
+      for (const alan of ['marka', 'seri', 'coz', 'sorumlu', 'lab', 'kabul', 'tur']) assert.equal(alan in (a ?? {}), false, alan);
+    });
+
+    test('uygunsuz sonuç "red" olur; kullanım dışı alet pasif görünür; periyot gün / 30 yuvarlanmaz', () => {
+      const [a] = olcuAletleriKaydi([alet(5, 'OC-5', {
+        periyotGun: 100, kullanimDisi: true, sonKalibrasyon: '2026-01-10', vade: '2026-04-20',
+        kayitlar: [{ tarih: '2026-01-10', sonuc: 'uygun', sertifikaNo: null, aciklama: null }, { tarih: '2026-02-01', sonuc: 'uygunsuz', sertifikaNo: 'S-X', aciklama: 'kırık' }],
+      })]);
+      assert.equal(a?.per, 100 / 30);
+      assert.deepEqual([a?.st, a?.res, a?.cert], ['disi', 'red', 'S-X']);
+      assert.deepEqual(a?.hist.map((h) => h.res), ['red', 'uygun']);
+    });
   });
 });

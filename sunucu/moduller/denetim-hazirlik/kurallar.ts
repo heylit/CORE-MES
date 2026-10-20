@@ -1,5 +1,5 @@
 import { AZAMI_SINIR } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
-import type { Filtre, Sira } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { Filtre, OlcuAletleriCevabi, Sira } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 
 // Belge deposunun kuralları: yol, kişiye özel alan, birleştirme, sorgu, kilit, oda. Saf; veritabanı ve saat yok.
 
@@ -133,4 +133,38 @@ export function baslangicBelgeleri(kisi: KurucuKisi, simdiMs: number): Baslangic
   void kisi;
   void simdiMs;
   return [];
+}
+
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür; prototipin kalibrasyon sekmesindeki cihaz listesi ondan salt okunur
+// gelir. Kalibrasyonda karşılığı olmayan alanlar (marka, seri, çözünürlük, sorumlu, laboratuvar, kabul, kalibrasyon türü) hiç
+// gönderilmez. Vade, prototipin "elle girilen sonraki tarih" alanına yazılır: durum Kalibrasyonun hesabıyla aynı çıkar.
+export interface OlcuAleti {
+  id: number; no: string; tur: string; ad: string | null; olcmeAraligi: string | null; yer: string | null; periyotGun: number;
+  kullanimDisi: boolean; sonKalibrasyon: string | null; vade: string | null;
+  kayitlar: readonly { tarih: string; sonuc: 'uygun' | 'uygunsuz'; sertifikaNo: string | null; aciklama: string | null }[];
+}
+export const OLCU_ALETI_KAYIT_ADEDI = 20;
+
+export function olcuAletleriKaydi(aletler: readonly OlcuAleti[]): OlcuAletleriCevabi['aletler'] {
+  return aletler.map((a) => {
+    // Kayıtlar eskiden yeniye gelir; prototipin geçmişi yeniden eskiye tutulur.
+    const hist = [...a.kayitlar].reverse().map((k) => ({
+      date: k.tarih, res: k.sonuc === 'uygun' ? 'uygun' as const : 'red' as const, lab: '', cert: k.sertifikaNo ?? '', note: k.aciklama ?? '',
+    }));
+    return {
+      id: `kal-${String(a.id)}`,
+      no: a.no,
+      ad: a.ad ?? a.tur,
+      yer: a.yer ?? '',
+      aralik: a.olcmeAraligi ?? '',
+      periyotGun: a.periyotGun,
+      per: a.periyotGun / 30,
+      last: a.sonKalibrasyon ?? '',
+      nx: a.vade ?? '',
+      st: a.kullanimDisi ? 'disi' as const : 'aktif' as const,
+      res: hist[0]?.res ?? '',
+      cert: hist[0]?.cert ?? '',
+      hist,
+    };
+  });
 }

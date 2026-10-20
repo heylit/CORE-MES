@@ -116,3 +116,24 @@ export type OdaCevabi = z.output<typeof odaCevabi>;
 export type EkCevabi = z.output<typeof ekCevabi>;
 export type EkIcerikCevabi = z.output<typeof ekIcerikCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;
+
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür; prototipin kalibrasyon sekmesindeki cihaz listesi (`kal.devs`) buradan
+// salt okunur gelir. Alanlar prototipin cihaz kaydıdır; Kalibrasyon'da karşılığı olmayanlar (marka, seri, çözünürlük, sorumlu,
+// laboratuvar, kabul) hiç gönderilmez. `per` ay cinsindendir (gün / 30, yuvarlanmaz); durum `last` ve `nx` ile hesaplanır.
+export const olcuAletiSemasi = z.object({
+  id: z.string(),
+  no: z.string(),
+  ad: z.string(),
+  yer: z.string(),
+  aralik: z.string(),
+  periyotGun: z.number().int(),
+  per: z.number(),
+  last: z.string(),
+  nx: z.string(),
+  st: z.enum(['aktif', 'disi']),
+  res: z.enum(['', 'uygun', 'red']),
+  cert: z.string(),
+  hist: z.array(z.object({ date: z.string(), res: z.enum(['uygun', 'red']), lab: z.string(), cert: z.string(), note: z.string() })),
+});
+export const olcuAletleriCevabi = z.object({ aletler: z.array(olcuAletiSemasi) });
+export type OlcuAletleriCevabi = z.output<typeof olcuAletleriCevabi>;
