@@ -18,7 +18,7 @@ import { emirlerinSevkDurumu, emirlerinSevkleri, sevkIsiOzeti, siparisinSevkleri
 import type { UrunSevkiOlayi } from './disari.ts';
 import * as servis from './servis.ts';
 import { izgaraKaynagi } from './test-agi.ts';
-import { fasonDonusuKaydet, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { fasonDonusuKaydet, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -92,6 +92,8 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     terminGun: kaynak?.tur === 'fason' ? 5 : null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   });
   const kullanici = (ad: string): Kullanici => kullanicilar.get(ad)!;
+  // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; sevk ve fason serbest parçayla ölçülür.
+  const ilkParcaOnay = (id: number) => o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
   const terminal = (id: number, yol: string, govde?: unknown) => istek<{ mesaj?: string }>('operator', 'POST', `/uretim-emirleri/${id}/${yol}`, govde);
   const fason = (id: number, isEmriId: number, yol: string, govde?: unknown) =>
     istek<{ hareketId: number; mesaj?: string }>('depo', 'POST', `/adimli-emirler/${id}/is-emirleri/${isEmriId}/${yol}`, govde);
@@ -137,6 +139,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(id, 'baslat')).durum, 200);
     assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 9 })).durum, 200);
+    await ilkParcaOnay(id);
     assert.equal((await terminal(id, 'bitir', {})).durum, 200);
     return { id, fasonIsEmriId: isEmriIdleri[1]! };
   }
@@ -222,6 +225,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(emirId, 'baslat')).durum, 200);
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 6 })).durum, 200);
+    await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
     const b = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
     assert.equal(b.adet, '6.0000');
@@ -301,6 +305,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(emirId, 'baslat')).durum, 200);
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 3 })).durum, 200);
+    await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
     const b = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
     const musteri = (await o().sahip.tek<{ id: number }>(
@@ -325,6 +330,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(emirId, 'baslat')).durum, 200);
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 2 })).durum, 200);
+    await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
     const b = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
     const musteri = (await o().sahip.tek<{ id: number }>(
@@ -351,6 +357,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(emirId, 'baslat')).durum, 200);
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 1 })).durum, 200);
+    await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
     const b = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
     const firmaId = (await o().sahip.tek<{ id: number }>(
@@ -392,6 +399,7 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     }));
     assert.equal((await terminal(emirId, 'baslat')).durum, 200);
     assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 5 })).durum, 200);
+    await ilkParcaOnay(emirId);
     assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
     const kok = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
 
