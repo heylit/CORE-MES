@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirBaslat, emirSayim, komutOnbellegiyle } from './disari.ts';
+import { emirBaslat, emirSayim, kararliSayimiSonuclandir, komutOnbellegiyle } from './disari.ts';
 import type { Emir } from './disari.ts';
 import { KAPSAM_DISI } from './kurallar.ts';
 import { emirAc } from './servis.ts';
@@ -85,6 +85,13 @@ describe('uretim-emirleri komut önbelleği (gerçek PostgreSQL)', () => {
     // Bir istasyonda tek emir çalışır: iki eş emir iki istasyonda.
     const a = await baslamisEmir((await istasyonKur()).istasyonId);
     const b = await baslamisEmir((await istasyonKur()).istasyonId);
+    // 327 a: ilk sayım karar bekler; ölçülen sayımlar ilk parçası onaylanmış emirde aynı yoldan gider.
+    for (const id of [a, b]) {
+      await vt().tx(async (db) => {
+        await emirSayim(db, operator, id, { tur: 'saglam', adet: 1 });
+        await kararliSayimiSonuclandir(db, yoneticiId, id, 'onay');
+      });
+    }
     await vt().tx(async (db) => {
       const s = sayan(db);
       const disarida: number[] = [];
@@ -115,8 +122,9 @@ describe('uretim-emirleri komut önbelleği (gerçek PostgreSQL)', () => {
     const satirlar = await vt().sorgu<{ emir_id: number; adet: number }>(
       'SELECT emir_id, adet FROM uretim_sayimi WHERE emir_id = ANY($1::int[]) ORDER BY id', [[a, b]],
     );
-    assert.deepEqual(satirlar.filter((r) => r.emir_id === a).map((r) => r.adet), [3, 2, -1]);
-    assert.deepEqual(satirlar.filter((r) => r.emir_id === b).map((r) => r.adet), [3, 2, -1]);
+    // İlk üç satır ilk parça sayımı ve onayıdır (karar bekliyor 1, -1; sağlam 1).
+    assert.deepEqual(satirlar.filter((r) => r.emir_id === a).map((r) => r.adet), [1, -1, 1, 3, 2, -1]);
+    assert.deepEqual(satirlar.filter((r) => r.emir_id === b).map((r) => r.adet), [1, -1, 1, 3, 2, -1]);
   });
 
   test('kapsam dışında kısıt her komutta tazedir; kapsam bitince önbellek düşer', async () => {

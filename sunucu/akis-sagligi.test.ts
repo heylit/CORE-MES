@@ -368,6 +368,8 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
         const c = tamam(await ekle(tur, s));
         assert.deepEqual(c.reddedilen, [], `${tur} ${String(s['cid'])}`);
       }
+      // İlk parça onayına kadar sağlam kararda bekler ve sonraki adıma geçmez (327 a); onayı kalite verir.
+      if (i === 0) tamam(await yaz('kalite', `/kalite-merkezi/ilk-parca/${S.emir}/karar`, { karar: 'onay' }));
     }
     assert.deepEqual((await sorunlular()).map((y) => y.kayit.cid), ['deneme-0']);
 
@@ -389,13 +391,13 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.deepEqual(h.filter((x) => x.malzemeId === S.hm && x.tur === 'cikis').map((x) => Number(x.miktar)), [10]);
   });
 
-  test('10 kalite: karar bekleyen parça sevke çıkamaz; varsayılan akışta ilk parça kararı istenmez', async () => {
+  test('10 kalite: karar bekleyen parça sevke çıkamaz; ilk parça onaylı mamul serbest girer', async () => {
     const oz = tamam(await oku<{ acikUygunsuzluk: number }>('kalite', '/kalite-merkezi/ozet'));
     assert.equal(oz.acikUygunsuzluk, 0);
     tamam(await oku('kalite', '/kalite-merkezi/degisiklikler'));
-    // Bulgu 12: ilk parça kararı istenmedi, karantinada parti oluşmadı; bütün mamul serbest.
+    // Bulgu 12 kapandı (327 a): ilk parça kararı istenir; 9'da onaylandığı için bütün mamul serbest.
     const kaliteler = (await malzeme(S.mm)).bakiyeler.filter((b) => Number(b.miktar) !== 0).map((b) => b.kaliteDurumu);
-    bilinenKusur(12, ['serbest'], kaliteler);
+    assert.deepEqual(kaliteler, ['serbest']);
     const c = await yaz('depo', '/stok/cikis', { malzemeId: S.mm, konumId: S.mmKonum, miktar: '1', cikisNedeni: 'sevk', kaliteDurumu: 'karar_bekliyor', aciklama: null });
     assert.equal(c.durum, 422, JSON.stringify(c.govde));
     assert.equal(c.govde.kod, 'GECERSIZ');

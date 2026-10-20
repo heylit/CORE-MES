@@ -57,10 +57,11 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     return uretimEmriId;
   }
 
-  // Sağlam sayım son adımda mamulü emrin partisiyle istasyona serbest girer.
+  // Sağlam sayım son adımda mamulü emrin partisiyle istasyona serbest girer; ilk parça onayına kadar kararda bekler (327 a).
   async function stokluEmir(adet: number): Promise<{ id: number; no: string; lot: string }> {
     const id = await baslamisEmir();
     await o().vt.tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet }));
+    await o().vt.tx((db) => servis.ilkParcaKarari(db, yoneticiId, id, 'onay'));
     const no = (await o().vt.tx((db) => emirNolari(db, [id]))).get(id)!;
     const lot = (await o().vt.tek<{ lot: string }>('SELECT lot_no AS lot FROM stok_parti WHERE uretim_emri_id = $1', [id]))!.lot;
     return { id, no, lot };
@@ -216,6 +217,8 @@ describe('Kalite Merkezi NCR karantinası (gerçek PostgreSQL)', () => {
     await o().vt.tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 2 }, { kararBekliyor: true }));
     await o().vt.tx((db) => servis.ilkParcaKarari(db, yoneticiId, id, 'ret'));
     await o().vt.tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 3 }));
+    // Ret sonrası sayım da onaya kadar kararda bekler (327 a); yeniden deneme onaylanır.
+    await o().vt.tx((db) => servis.ilkParcaKarari(db, yoneticiId, id, 'onay'));
     const no = (await o().vt.tx((db) => emirNolari(db, [id]))).get(id)!;
     assert.deepEqual(await kalite(id), [['red', '2.000'], ['serbest', '3.000']]);
     const n = await ncr('ncr_s8', { emir: no, lot: '' });

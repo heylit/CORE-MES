@@ -16,7 +16,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  KOMUT_ISLEMI, acikEmirler, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirOzeti, emirSayim,
+  KOMUT_ISLEMI, acikEmirler, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirOzeti, emirSayim, kararliSayimiSonuclandir,
 } from '../uretim-emirleri/disari.ts';
 
 // Arkon'un uretim-emirleri/disari.ts'ten kullandığı her şeyin sözleşmesi (servis.ts yansıma akışı ve taslak paket).
@@ -158,7 +158,9 @@ describe('arkon <- uretim-emirleri/disari.ts sözleşmesi (gerçek PostgreSQL)',
     const id = await emirAc((await istasyonKur()).istasyonId);
     const k = uretici();
     assert.equal((await calistir((db) => emirBaslat(db, k, id))).emir.durum, 'basladi');
-    assert.equal((await calistir((db) => emirSayim(db, k, id, { tur: 'saglam', adet: 5 }))).emir.canli?.saglam, 5);
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; onayla sağlama geçer.
+    assert.equal((await calistir((db) => emirSayim(db, k, id, { tur: 'saglam', adet: 5 }))).emir.canli?.saglam, 0);
+    assert.equal((await calistir((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'))).emir.canli?.saglam, 5);
     assert.equal((await calistir((db) => emirSayim(db, k, id, { tur: 'saglam', adet: -1 }))).emir.canli?.saglam, 4);
     assert.equal((await calistir((db) => emirSayim(db, k, id, { tur: 'hurda', adet: 2, hurdaNedeniId }))).emir.canli?.hurda, 2);
     assert.equal((await calistir((db) => emirDuraklat(db, k, id))).emir.canli?.calisma, 'durakli');

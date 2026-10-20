@@ -174,18 +174,26 @@ export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: num
   return { isEmriId: satir?.isEmriId ?? null };
 }
 
+// 327 a: emirde hiç sağlam satırı yoksa ilk parça onaylanmamıştır; ret sonrası sayılan da yeniden karar bekler (136 a).
+export async function ilkParcaOnaysiz(db: Db, emirId: number): Promise<boolean> {
+  const satir = await db.tek<{ yok: boolean }>(
+    `SELECT NOT EXISTS (SELECT 1 FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'saglam') AS yok`, [emirId],
+  );
+  return satir?.yok ?? false;
+}
+
 // Karar bekleyen adet iş emri ve istasyon başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş emrine gider.
-export interface KararGrubu { isEmriId: number | null; istasyonId: number; adet: number }
+export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; adet: number }
 
 export function kararBekleyenGruplari(db: Db, emirId: number): Promise<KararGrubu[]> {
   return db.sorgu<KararGrubu>(
-    `SELECT is_emri_id AS "isEmriId", istasyon_id AS "istasyonId", sum(adet)::int AS adet FROM uretim_sayimi
-      WHERE emir_id = $1 AND tur = 'karar_bekliyor' GROUP BY is_emri_id, istasyon_id HAVING sum(adet) <> 0 ORDER BY min(id)`,
+    `SELECT is_emri_id AS "isEmriId", istasyon_id AS "istasyonId", kisi_id AS "kisiId", sum(adet)::int AS adet FROM uretim_sayimi
+      WHERE emir_id = $1 AND tur = 'karar_bekliyor' GROUP BY is_emri_id, istasyon_id, kisi_id HAVING sum(adet) <> 0 ORDER BY min(id)`,
     [emirId],
   );
 }
 
-// Kararın iki satırı aynı iş emrine yazılır (terminal değil, karar bekleyenin yazıldığı iş emri).
+// Kararın iki satırı aynı iş emrine ve sayan kişiye yazılır (terminal ya da kararı veren değil): üretim sayanın kalır (348 a).
 export function kararSatirlariEkle(
   db: Db, emirId: number, isEmriId: number | null, kisiId: number, istasyonId: number, tur: 'saglam' | 'red', adet: number, an: string,
 ): Promise<unknown> {

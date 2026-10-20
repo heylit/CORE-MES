@@ -17,7 +17,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  acikEmir, acikEmirler, aralikAdetleri, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
+  acikEmir, acikEmirler, aralikAdetleri, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
@@ -55,6 +55,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam;
   };
+  // 327 a: ilk sağlam sayım kalite kararını bekler; sağlam akışı ölçen testler önce ilk parçayı onaylar.
+  const ilkParcaOnay = (id: number) => o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
   const kim = (ad: string): Kullanici => {
     const k = kullanicilar.get(ad);
     if (k === undefined) throw new Error(`kişi yok: ${ad}`);
@@ -223,6 +225,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ayr1 = await istek<{ adimlar: { ad: string }[] }>('operator', 'GET', `/uretim-emirleri/${id}`);
     assert.deepEqual(ayr1.govde.adimlar.map((a) => a.ad), ['Çapak al'], 'kontrol listesi çalışan iş emrinindir');
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 9 })).durum, 200);
+    await ilkParcaOnay(id);
     const bitir1 = await terminal(`/${id}/bitir`, {});
     assert.equal(bitir1.durum, 200, JSON.stringify(bitir1.govde));
     emirCevabi.parse(bitir1.govde);
@@ -328,7 +331,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(akis.olaylar.find((x) => x.isEmriId === ie1)?.istasyonId, ist1);
     assert.equal(akis.olaylar.find((x) => x.isEmriId === ie3)?.istasyonId, ist3);
     assert.ok(akis.olaylar.every((x, i, d) => i === 0 || d[i - 1]!.zaman <= x.zaman), 'olaylar zaman sırasında');
-    assert.deepEqual(akis.sayimlar[0] && [akis.sayimlar[0].isEmriId, akis.sayimlar[0].tur, akis.sayimlar[0].adet, akis.sayimlar[0].duzeltme], [ie1, 'saglam', 9, false]);
+    assert.deepEqual(akis.sayimlar[0] && [akis.sayimlar[0].isEmriId, akis.sayimlar[0].tur, akis.sayimlar[0].adet, akis.sayimlar[0].duzeltme], [ie1, 'saglam', 9, true], 'ilk sayım kalite onayıyla sağlama geçer');
     assert.equal(akis.sayimlar.filter((x) => x.isEmriId === ie3 && x.tur === 'saglam').reduce((t, x) => t + x.adet, 0), 7);
     assert.deepEqual(akis.fason.map((x) => [x.isEmriId, x.yon, x.adet, x.hurdaAdet]),
       [[ie2, 'gidis', 5, null], [ie2, 'gidis', 4, null], [ie2, 'donus', 4, 1], [ie2, 'donus', 4, 0]]);
@@ -354,7 +357,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     assert.equal((await terminal(`/${id}/ayar`)).govde.mesaj, AYAR_PLANLI_DEGIL);
-    for (const adet of [1, 1, 3, 1]) assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet })).durum, 200);
+    // İlk parça onayı düzeltme satırıdır ve diziyi keser: dizi onaydan sonraki 1'erlerle ölçülür.
+    assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1 })).durum, 200);
+    await ilkParcaOnay(id);
+    for (const adet of [1, 1, 1, 3, 1]) assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet })).durum, 200);
     assert.equal((await terminal(`/${id}/duraklat`)).durum, 200);
     const canli = (await istek<{ emir: Emir }>('operator', 'GET', `/uretim-emirleri/${id}`)).govde.emir.canli;
     assert.equal(canli?.calisma, 'durakli', 'çalışma hâli ayardan değil son duruş olayından türer');
@@ -365,7 +371,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const c = await ozet(ie1);
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     sureOzetiCevabi.parse(c.govde);
-    assert.deepEqual([c.govde.saglam, c.govde.hurda], [6, 0]);
+    assert.deepEqual([c.govde.saglam, c.govde.hurda], [8, 0]);
     assert.ok(c.govde.hazirlikDk !== null && c.govde.hazirlikDk >= 0);
     assert.ok(c.govde.brutBirimDk !== null && c.govde.netBirimDk !== null && c.govde.netBirimDk <= c.govde.brutBirimDk);
     assert.equal(c.govde.tekliAraliklarDk.length, 2, 'toplu sayım diziyi keser, ardındaki ilk 1\'lik aralık sayılmaz');
@@ -496,6 +502,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: await makineKur(ist1) }), adim(2, { tur: 'makine', id: await makineKur(ist2) })], { adet: 10 });
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 12 })).durum, 200, 'ilk adım emir adedini aşabilir');
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -8 })).durum, 200);
     assert.equal((await terminal(`/${id}/bitir`, {})).durum, 200);
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
@@ -1119,6 +1126,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const bit = new Date(Date.now() + 3_600_000).toISOString();
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 4 })).durum, 200);
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'hurda', adet: 2, hurdaNedeniId: neden })).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'hurda', adet: -1, hurdaNedeniId: neden })).durum, 200);
 
@@ -1268,6 +1276,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const op = (yol: string, govde?: unknown) => istek<Hata>('pano_op', 'POST', `/uretim-emirleri/${id}${yol}`, govde, randomUUID());
     assert.equal((await op('/baslat')).durum, 200);
     assert.equal((await op('/sayim', { tur: 'saglam', adet: 5 })).durum, 200);
+    await ilkParcaOnay(id);
     assert.equal((await op('/sayim', { tur: 'saglam', adet: 2 })).durum, 200);
     assert.equal((await op('/sayim', { tur: 'saglam', adet: -1 })).durum, 200);
     assert.equal((await ozet('pano_op')).bugunSaglam, 6, 'düzeltme net adede girer');
@@ -1320,6 +1329,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     let a = await asama();
     assert.deepEqual([a.planda, a.uretimde], [a0.planda, a0.uretimde + 1]);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 4 })).durum, 200);
+    await ilkParcaOnay(id);
     const neden = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('PN-D1', 'Panel duruşu', 'plansiz', 961) RETURNING id"))!.id;
     assert.equal((await terminal(`/${id}/durdur`, { durusNedeniId: neden })).durum, 200);
@@ -1599,6 +1609,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const isEmri = (await o().vt.tek<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND sira = 1', [id]))!.id;
     assert.deepEqual((await canli())?.isEmri, { id: isEmri, opNo: 10, ad: 'Adım 1', makineId: makine });
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 2 })).durum, 200);
+    await ilkParcaOnay(id);
     const neden = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('HR-D1', 'Harita duruşu', 'plansiz', 962) RETURNING id"))!.id;
     assert.equal((await terminal(`/${id}/durdur`, { durusNedeniId: neden })).durum, 200);
@@ -1606,7 +1617,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
 
     const tumu = await olaylar(baslangic === undefined ? '' : `?sonra=${encodeURIComponent(baslangic)}`);
     const bu = tumu.filter((x) => x.emir.id === id);
-    assert.deepEqual(bu.map((x) => x.olay), ['durdur', 'saglam', 'baslat'], 'yeniden eskiye');
+    assert.deepEqual(bu.map((x) => x.olay), ['durdur', 'duzeltme', 'baslat'], 'yeniden eskiye; ilk parça onayla sağlama geçer');
     assert.deepEqual(bu[0]?.durusNedeni, { id: neden, ad: 'Harita duruşu' });
     assert.equal(bu[1]?.adet, 2);
     for (const x of bu) {
@@ -1640,6 +1651,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 19 })).durum, 200);
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'hurda', adet: 1, hurdaNedeniId: neden })).durum, 200);
     assert.equal((await terminal(`/${id}/bitir`, {})).durum, 200);
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);

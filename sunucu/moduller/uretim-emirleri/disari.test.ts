@@ -11,7 +11,9 @@ import { uc, uclariKaydet } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirOzeti, emirSayim } from './disari.ts';
+import {
+  KOMUT_ISLEMI, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirHurdalari, emirIdleri, emirOzeti, emirSayim, kararliSayimiSonuclandir,
+} from './disari.ts';
 import { BASLAMAMIS_EMIR, KAPSAM_DISI } from './kurallar.ts';
 import { emirAc } from './servis.ts';
 import { uclar } from './uclar.ts';
@@ -82,6 +84,9 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     return hata;
   };
 
+  // 327 a: ilk sağlam sayım karar bekler; sağlamı sınayan test ilk parçayı onaylar.
+  const ilkParcaOnay = (db: Db, emirId: number) => kararliSayimiSonuclandir(db, yoneticiId, emirId, 'onay');
+
   before(async () => {
     ortam = await testVeritabaniKur('ue_disari');
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: 'dogru-parola-1' }));
@@ -106,6 +111,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
       // Yazı henüz onaylanmadı: başka bağlantı emri planlı görür.
       assert.equal(await durum(emir.id), 'planli');
       await emirSayim(db, operator, emir.id, { tur: 'saglam', adet: 3 });
+      await ilkParcaOnay(db, emir.id);
       await emirDuraklat(db, operator, emir.id);
       await emirDevam(db, operator, emir.id);
       await emirDurdur(db, operator, emir.id, durusId);
@@ -161,7 +167,8 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     await assert.rejects(
       vt().tx(async (db) => {
         await emirBaslat(db, operator, emir.id);
-        const c = await emirSayim(db, operator, emir.id, { tur: 'saglam', adet: 4 });
+        await emirSayim(db, operator, emir.id, { tur: 'saglam', adet: 4 });
+        const c = await ilkParcaOnay(db, emir.id);
         // Önce yazının gerçekten yapıldığı görülür; yoksa aşağıdaki yokluk boş yere geçerdi.
         assert.equal(c.emir.canli?.saglam, 4);
         throw new DisIsReddi('üst modül vazgeçti');
@@ -185,7 +192,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
       assert.equal(await satirSayisi('uretim_sayimi', emir.id), 0);
 
       await sahip().sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisitli.id, emir.isMerkeziId]);
-      await vt().tx((db) => emirSayim(db, kisitli, emir.id, { tur: 'saglam', adet: 1 }));
+      await vt().tx(async (db) => { await emirSayim(db, kisitli, emir.id, { tur: 'saglam', adet: 1 }); await ilkParcaOnay(db, emir.id); });
       assert.equal(await saglamToplami(emir.id), 1);
     } finally {
       await sahip().sorgu('DELETE FROM kisi_is_merkezi WHERE kisi_id = $1', [kisitli.id]);
@@ -199,6 +206,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
       await emirBaslat(db, operator, kendi.id);
       const ic = await kayitNoktasi(db, () => emirSayim(db, operator, planli.id, { tur: 'saglam', adet: 1 }));
       await emirSayim(db, operator, kendi.id, { tur: 'saglam', adet: 5 });
+      await ilkParcaOnay(db, kendi.id);
       return ic;
     });
     assert.equal(sonuc.tamam, false);
@@ -280,6 +288,7 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
       isle: async ({ db, kullanici }) => {
         kosma += 1;
         await emirSayim(db, kullanici, kendi.id, { tur: 'saglam', adet: 3 });
+        await ilkParcaOnay(db, kendi.id);
         const alt = await kayitNoktasi(db, () => emirSayim(db, kullanici, planli.id, { tur: 'saglam', adet: 1 }));
         await emirSayim(db, kullanici, kendi.id, { tur: 'saglam', adet: 4 });
         return { reddedildi: !alt.tamam, neden: alt.tamam ? null : alt.hata.message };
