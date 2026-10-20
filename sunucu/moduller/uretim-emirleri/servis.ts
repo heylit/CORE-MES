@@ -456,10 +456,20 @@ export async function emirBitir(db: Db, kisiId: number, id: number, saglamAdet: 
   const calisan = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
   if (calisan !== null) await birlesmeAdimiBiterMi(db, id, calisan);
   const mevcut = await saglamToplami(db, id);
-  const kapanis = saglamAdet ?? mevcut;
-  await adimGirdisiniDenetle(db, emir, kapanis - mevcut);
+  // 327 a: karar bekleyen varken verilen adet onunla birlikte sayılandır; fark karar bekleyene yazılır,
+  // kapanış onaylı sağlamdır ve onay bekleyeni sonradan ekler (çift sayım olmaz).
+  const bekleyen = (await sayaclar(db, id)).kararBekliyor;
+  const onayBekler = saglamAdet !== undefined && bekleyen > 0;
+  const sayilan = onayBekler ? mevcut + bekleyen : mevcut;
+  const fark = (saglamAdet ?? sayilan) - sayilan;
+  // Eksi fark önce karar bekleyeni, artanı sağlamı düşer: karar bekleyen sıfırın altına inmez.
+  const bekleyeneFark = onayBekler ? Math.max(fark, -bekleyen) : 0;
+  const saglamaFark = fark - bekleyeneFark;
+  const kapanis = mevcut + saglamaFark;
+  await adimGirdisiniDenetle(db, emir, fark);
   const an = await komutAni(db, id);
-  if (kapanis !== mevcut) await saglamYaz(db, emir, kisiId, istasyonId, kapanis - mevcut, true, an);
+  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true);
+  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an);
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an);
   await sorgular.emrinKatilimlariniKapat(db, id, an);
@@ -506,9 +516,9 @@ export async function emirSayim(
 ): Promise<{ emir: Emir }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
-  // Sorgu her sağlam sayımda atılır: komut başına okuma sayısı adedin işaretine göre değişmez.
+  // Onaysız emirde sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
   const kararBekliyor = govde.tur === 'saglam'
-    && (secenek.kararBekliyor === true || ((await sorgular.ilkParcaOnaysiz(db, id)) && govde.adet > 0));
+    && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   let hurdaNedeniId: number | null = null;

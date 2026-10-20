@@ -1329,6 +1329,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     let a = await asama();
     assert.deepEqual([a.planda, a.uretimde], [a0.planda, a0.uretimde + 1]);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 4 })).durum, 200);
+    await ilkParcaOnay(id);
     const neden = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('PN-D1', 'Panel duruşu', 'plansiz', 961) RETURNING id"))!.id;
     assert.equal((await terminal(`/${id}/durdur`, { durusNedeniId: neden })).durum, 200);
