@@ -1,0 +1,12 @@
+/* TMI içinde yerleşim: Satın Alma Merkezi içerik alanının tamamını kaplar ve kendi kaydırma kutusu olur (önizlemedeki gibi).
+   Prototipin kendi menü sütunu yok: ikinci menüyü kabuk çizer. */
+.sa-kok { margin: calc(-1 * var(--b-5)); height: calc(100% + 2 * var(--b-5)); overflow: auto; }
+.sa-kok .app { min-height: 100%; grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 767px) {
+  .sa-kok { margin: calc(-1 * var(--b-4)); height: calc(100% + 2 * var(--b-4)); }
+}
+
+/* Paylaştırma, "Karşılaştır ve karar ver" içinde açık durur (kullanıcı kararı); başlığı bölüm içi alt başlıktır. */
+.sa-kok .sa-paylastir { margin-top: 18px; scroll-margin-top: 12px; }
+.sa-kok .sa-paylastir-h { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.sa-kok .sa-paylastir-h h3 { margin: 0; font-size: 17px; }

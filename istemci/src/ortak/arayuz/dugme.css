@@ -1,0 +1,18 @@
+.tc-dugme {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--b-2);
+  min-height: var(--dokunma); padding: 0 var(--b-4);
+  border-radius: var(--yari-2); border: 1px solid var(--edge2);
+  background: var(--panel2); color: var(--ink);
+  font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.tc-dugme:active { transform: scale(var(--hareket-kucul)); }
+.tc-dugme:disabled { opacity: .4; cursor: not-allowed; }
+.tc-dugme-ana { min-height: var(--dokunma-ana); font-size: var(--yazi-l); }
+.tc-dugme-birincil { background: var(--hazard); color: var(--on-hazard); border-color: transparent; }
+.tc-dugme-tehlike { background: var(--stop); color: var(--on-sig); border-color: transparent; }
+.tc-dugme-doner {
+  width: var(--b-4); height: var(--b-4); border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: tc-don .8s linear infinite;
+}
+@keyframes tc-don { to { transform: rotate(360deg); } }

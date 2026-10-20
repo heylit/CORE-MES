@@ -1,0 +1,50 @@
+/* Görünüm sekmesi: seçenekler kart ızgarası; seçili kart sarı kenarlıdır. Telefonda tek sütun. */
+.tc-gorunum-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--pano-kart-enaz), 1fr)); gap: var(--b-3); }
+.tc-gorunum-kart {
+  display: grid; gap: var(--b-2); align-content: start; padding: var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-gorunum-kart[data-secili] { border-color: var(--hazard); box-shadow: 0 0 0 1px var(--hazard); }
+.tc-gorunum-kart > .tc-dugme { justify-self: start; }
+.tc-gorunum-sec {
+  display: grid; gap: var(--b-2); padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer;
+}
+.tc-gorunum-sec:disabled { cursor: progress; }
+.tc-gorunum-sec:focus-visible { outline: 2px solid var(--hazard); outline-offset: var(--b-1); border-radius: var(--yari-1); }
+.tc-gorunum-ad { display: flex; align-items: center; gap: var(--b-2); font-weight: 800; }
+.tc-gorunum-aciklama { font-size: var(--yazi-s); color: var(--muted); }
+.tc-gorunum-simge {
+  display: grid; place-items: center; width: var(--dokunma); height: var(--dokunma);
+  border-radius: var(--yari-2); background: var(--panel-solid); color: var(--hazard-ink);
+}
+
+/* Açılış süresi kaydırıcısı: kart genişliğinde, telefonda tam satır. */
+.tc-gorunum-sure { display: grid; gap: var(--b-1); margin-bottom: var(--b-3); }
+.tc-gorunum-sure input { width: 100%; min-height: var(--dokunma); accent-color: var(--hazard); }
+
+/* Önizleme taslağı: başlık şeridi ve üç satır, kartın seviyesiyle sırayla girer. */
+.tc-gorunum-onizleme {
+  position: relative; overflow: hidden; display: grid; gap: var(--b-1); padding: var(--b-2);
+  height: calc(var(--dokunma) * 2.4); border-radius: var(--yari-1); background: var(--panel-solid); border: 1px solid var(--edge);
+}
+.tc-gorunum-baslik, .tc-gorunum-satir { display: block; border-radius: var(--b-1); background: var(--edge2); }
+.tc-gorunum-baslik { width: 45%; background: var(--hazard); opacity: .8; }
+.tc-gorunum-satir { animation: tc-sayfa-gir var(--hareket-sure) var(--hareket-egri) both; }
+.tc-gorunum-satir:nth-of-type(2) { animation-delay: var(--hareket-sira); }
+.tc-gorunum-satir:nth-of-type(3) { animation-delay: calc(var(--hareket-sira) * 2); }
+.tc-gorunum-satir:nth-of-type(4) { animation-delay: calc(var(--hareket-sira) * 3); }
+.tc-gorunum-baslik { animation: tc-baslik-gir var(--hareket-sure) var(--hareket-egri) both; }
+.tc-gorunum-onizleme[data-hareket="sade"] .tc-gorunum-baslik { animation: none; }
+.tc-gorunum-onizleme[data-hareket="ultra"] { perspective: 600px; }
+.tc-gorunum-onizleme[data-hareket="ultra"] .tc-gorunum-satir { animation-name: tc-sayfa-ultra; transform-origin: 50% 0; }
+.tc-gorunum-tarama { display: none; position: absolute; inset: 0; pointer-events: none; }
+.tc-gorunum-onizleme:is([data-hareket="cesur"], [data-hareket="ultra"]) .tc-gorunum-tarama { display: block; }
+.tc-gorunum-tarama::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; opacity: 0;
+  background: var(--hazard); box-shadow: 0 0 var(--b-3) var(--hazard);
+  animation: tc-tara calc(var(--hareket-sure) + 100ms) cubic-bezier(.5, 0, .2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-gorunum-onizleme * , .tc-gorunum-tarama::before { animation: none; }
+}

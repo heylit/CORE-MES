@@ -1,0 +1,322 @@
+import { z } from 'zod';
+import { IS_EMRI_TURLERI } from './uretim-emirleri.ts';
+
+const KIMLIK = z.number().int().positive().max(2_147_483_647);
+const zaman = z.string();
+const tarih = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG olmalı.');
+export const kaynakGirdisi = z.object({ tur: z.enum(['makine', 'kisi']), id: KIMLIK });
+
+export const PLAN_KURALLARI = ['oncelik', 'edd', 'cr', 'spt', 'fifo'] as const;
+export const KURAL_ADI: Record<(typeof PLAN_KURALLARI)[number], string> = {
+  oncelik: 'Öncelik, sonra teslim', edd: 'En erken teslim (EDD)', cr: 'Kritik oran (CR)', spt: 'En kısa iş (SPT)', fifo: 'İlk gelen önce (FIFO)',
+};
+// PL-07 ve ikinci tarama: sıralama kuralı, yön, tampon, dondurulmuş bölge, personel kısıtı, taslak emirlerin plana girmesi.
+export const planAyari = z.object({
+  kural: z.enum(PLAN_KURALLARI),
+  yon: z.enum(['ileri', 'geri']),
+  tamponGun: z.number().min(0, 'Tampon 0-30 gün olmalı.').max(30, 'Tampon 0-30 gün olmalı.')
+    .refine((v) => Math.round(v * 10) === v * 10, 'Tampon en çok bir ondalık olmalı.'),
+  dondurmaGun: z.number().int('Dondurma tam gün olmalı.').min(0, 'Dondurma 0-30 gün olmalı.').max(30, 'Dondurma 0-30 gün olmalı.'),
+  personelKisiti: z.boolean(),
+  taslakEmirler: z.boolean(),
+});
+
+export const planKaynagi = z.object({
+  tur: z.enum(['makine', 'kisi']), id: KIMLIK, kod: z.string().nullable(), ad: z.string(), aktif: z.boolean(),
+  istasyon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+});
+const isOzeti = {
+  isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), opNo: z.number().int(),
+  ad: z.string(), adet: z.number().int(), teslim: z.string().nullable(), durum: z.enum(['planli', 'basladi', 'bitti', 'iptal']),
+  // Bölünmüş alt partide üst emir (kart #262); ekran alt partiyi üstün altında dal gösterir.
+  ustEmirId: KIMLIK.nullable(),
+  // Rotadan gelen adım 'rota'dır; kola konan rework, tamir ya da ek adım kartta türüyle etiketlenir.
+  tur: z.enum(IS_EMRI_TURLERI),
+};
+// Elle bölme (kart #1572): bölünmüş işin parçaları; her parça kendi makinesinde ya da kişisinde ayrı yerleşir. Yerleşimin kendi kaynağı ve
+// saatleri zarftır (ilk parçanın kaynağı, ilk başlangıç, son bitiş). Bölünmemiş işte alan yoktur.
+export const planParcasi = z.object({
+  no: z.number().int().positive(), adet: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, elleKaynak: z.boolean(),
+});
+// Yerleşim iş emri kimliğiyle anılır (canlıda ve taslakta aynı); eşzamanlılık taslağın sürümüyle denetlenir.
+export const planYerlesimi = z.object({
+  ...isOzeti, kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, kilitli: z.boolean(), dondurulmus: z.boolean(),
+  elleSira: z.number().int().nullable(), uyarilar: z.array(z.string()),
+  // Makineyi planlamacı elle seçti (toptan hesap taşımaz).
+  elleKaynak: z.boolean().optional(),
+  parcalar: z.array(planParcasi).optional(),
+});
+export const planGostergeleri = z.object({
+  emirSayisi: z.number().int(), isEmriSayisi: z.number().int(), yerlesen: z.number().int(), geciken: z.number().int(),
+  zamanindaYuzde: z.number().nullable(), ortAtolyeGun: z.number().nullable(),
+  darbogaz: z.object({ istasyonId: KIMLIK, ad: z.string(), dolulukYuzde: z.number() }).nullable(),
+  enDoluKaynak: z.object({ ad: z.string(), dolulukYuzde: z.number() }).nullable(),
+  // Personelin sınırladığı gün: istasyon plan ayarı (operatör ihtiyacı) gelince; o zamana dek null.
+  personelGun: z.number().int().nullable(),
+  // 6c, planın TL toplamı (203 a): yerleşen emirlerin gecikme, ceza, finansman ve kâr riski. Yalnız siparisler.fiyat-oku (180) görür;
+  // görmeyene null. Ekranlar okumaya başlayana dek isteğe bağlı.
+  maliyetTl: z.number().nullable().optional(),
+});
+// Taslak (P6): planlamacının kendi senaryosu; bütün planlama işlemleri buna yazılır.
+export const taslakOzeti = z.object({
+  id: KIMLIK, ad: z.string(), surum: z.number().int(), tabanPlanSurumu: z.number().int(), canliDegisti: z.boolean(), degisiklikSayisi: z.number().int(),
+  benim: z.boolean(),
+});
+export const planEmri = z.object({
+  uretimEmriId: KIMLIK, emirNo: z.string(), urunKodu: z.string(), urunAdi: z.string(), adet: z.number().int(), teslim: z.string().nullable(),
+  ustEmirId: KIMLIK.nullable(),
+  // Emir önceliği (1 acil - 4 düşük); yalnız hızlı denemenin benzettiği emirde null olabilir.
+  oncelik: z.number().int().nullable(), baslangic: zaman.nullable(), bitis: zaman.nullable(), tamponGun: z.number().nullable(), engelli: z.boolean(), isSayisi: z.number().int(),
+  yerlesen: z.number().int(),
+});
+export const planCevabi = z.object({
+  surum: z.number().int(),
+  simdi: zaman,
+  ayar: planAyari,
+  taslak: taslakOzeti.nullable(),
+  // Canlıdayken yapılan değişiklik yeni taslağa alındıysa true (ekran "Değişikliğin bir taslağa alındı" der).
+  taslakAcildi: z.boolean(),
+  gunler: z.array(tarih),
+  kaynaklar: z.array(planKaynagi),
+  yerlesimler: z.array(planYerlesimi),
+  yerlesmemis: z.array(z.object({
+    ...isOzeti, kaynak: kaynakGirdisi.nullable(), neden: z.string(),
+    // Bölünmüş ama motorun yerleştiremediği iş (kart #1572): bölme planlamacı kaldırana dek durur.
+    bolme: z.array(z.object({ no: z.number().int().positive(), adet: z.number().int().positive() })).optional(),
+  })),
+  emirler: z.array(planEmri),
+  // Matris: istasyon x gün dolu dakika ve kapasite (takvim gelene kadar kaynak sayısı x 24 saat).
+  istasyonYuku: z.array(z.object({ istasyonId: KIMLIK, kod: z.string(), ad: z.string(), dolu: z.array(z.number()), kapasite: z.array(z.number()) })),
+  // PL-09: iş merkezi x gün kişi-dakika ihtiyacı ve kapasitesi; kısıtla bağlı kişisi olan iş merkezleri.
+  personelYuku: z.array(z.object({ isMerkeziId: KIMLIK, kod: z.string(), ad: z.string(), ihtiyac: z.array(z.number()), kapasite: z.array(z.number()) })),
+  gostergeler: planGostergeleri,
+  uyarilar: z.array(z.string()),
+  // Düşen elle sıralar (kullanıcı kararı 16.10.2026): adımın rota istasyonu değişti, adım fasona alındı ya da rotadan kalktı. Aynı
+  // istasyonda yalnız makine değişince elle sıra korunur. İstasyon adı kod ya da ad; fason ve kalkan adımda yeni istasyon null. Sunucu
+  // her okumada doldurur; isteğe bağlılık yalnız eski ekran örnekleri içindir.
+  elleSiraDusenler: z.array(z.object({
+    // Rotadan kalkan adımın iş emri silindiği için emir no ve op no bilinmez (null).
+    isEmriId: KIMLIK, emirNo: z.string().nullable(), opNo: z.number().int().nullable(), neden: z.enum(['istasyon', 'fason', 'rotadan-kalkti']),
+    eskiIstasyon: z.string().nullable(), yeniIstasyon: z.string().nullable(),
+  })).optional(),
+});
+
+const tarihZaman = z.string().datetime({ offset: true, message: 'Başlangıç ISO tarih-saat olmalı.' });
+// Taslak verilmezse kullanıcıya yeni taslak açılır (P6); verilirse okunan sürüm denetlenir.
+const taslakGirdisi = z.object({ id: KIMLIK, surum: KIMLIK }).nullable();
+export const taslakGovdesi = z.object({ taslak: taslakGirdisi });
+// Ekranın okuduğu canlı plan sürümü (GET /plan/surum): verilirse ve plan arada canlıya alındıysa yazma eski sürüm diye reddedilir. Eski
+// ekranlar göndermediği için isteğe bağlıdır.
+const okunanPlanSurumu = z.number().int().nonnegative().optional();
+export const yerlestirGovdesi = taslakGovdesi.extend({
+  planSurumu: okunanPlanSurumu, isEmriId: KIMLIK, kaynak: kaynakGirdisi, baslangic: tarihZaman, sureDk: z.number().positive().max(1_000_000).optional(),
+});
+export const tasiGovdesi = taslakGovdesi.extend({ kaynak: kaynakGirdisi, baslangic: tarihZaman, planSurumu: okunanPlanSurumu });
+export const siralaGovdesi = taslakGovdesi.extend({ kaynak: kaynakGirdisi, isEmriIdleri: z.array(KIMLIK).min(1).max(500) });
+export const ayarGovdesi = taslakGovdesi.extend({ ayar: planAyari });
+export const kuyrukGovdesi = taslakGovdesi.extend({ kaynak: kaynakGirdisi });
+export const isEmriParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const planSorgusu = z.object({ taslak: z.coerce.number().int().positive().optional() });
+// Başka ekran (Üretim Emirleri) iş emirlerinin canlı plandaki yerini okur (kart #522); boş liste boş cevap, taslak görünmez.
+export const canliYerlesimSorgusu = z.object({
+  isEmirleri: z.string().regex(/^(\d{1,10}(,\d{1,10}){0,499})?$/, 'İş emri kimlikleri virgülle ayrılmış sayılar olmalı (en çok 500).')
+    .transform((t) => [...new Set(t.split(',').filter(Boolean).map(Number))]).pipe(z.array(KIMLIK)),
+});
+export const canliYerlesimCevabi = z.object({
+  planSurumu: z.number().int(),
+  yerlesimler: z.array(z.object({
+    isEmriId: KIMLIK, kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, kilitli: z.boolean(), dondurulmus: z.boolean(), elleSira: z.number().int().nullable(),
+    // Bölünmüş iş (kart #1572): Terminal her parçayı ayrı iş gösterir.
+    parcalar: z.array(planParcasi).optional(),
+  })),
+});
+
+// 220 a: motorun yerleşimi, yazılmadan (Reçete ve Rota > Plan ekranı bunu çizer). Sabit (kilitli, dondurulmuş, başlamış) işler yerinde,
+// öteki işler motorun bugünkü ayarıyla; vardiya takvimi ve elle sıra dahil. Okuma kaynağıdır: plan sayfasını açan herkes aynı yerleşimi görür.
+export const motorYerlesimiCevabi = z.object({
+  hesaplanma: zaman,
+  ayar: z.object({ kural: z.enum(PLAN_KURALLARI), yon: z.enum(['ileri', 'geri']), tamponGun: z.number() }),
+  yerlesimler: z.array(z.object({
+    isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), kaynak: kaynakGirdisi, kaynakAdi: z.string().nullable(),
+    baslangic: zaman, bitis: zaman, sabit: z.boolean(),
+    parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman })).optional(),
+  })),
+  yerlesmeyen: z.array(z.object({ isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
+  // Ekranın planRun opts.yerlesim girişi (Reçete ve Rota, #1860): anahtar canlı kuyruktaki gibi `emirNo|opNo`, bölünmüş işte parça başına
+  // `emirNo|opNo~parçaNo`; değer makine (kişi kaynağında null) ve ISO başlangıç.
+  ekranYerlesimi: z.record(z.string(), z.array(z.object({ makineId: KIMLIK.nullable(), baslangic: zaman }))),
+  // 307 a: motorun kullanıcıya söylemesi gereken genel durumlar (ör. personel kısıtı açık ama personel tanımsız); yoksa boş dizi.
+  uyarilar: z.array(z.string()),
+});
+
+export const karsilastirmaCevabi = z.object({
+  secenekler: z.array(z.object({
+    kural: z.enum(PLAN_KURALLARI), sonBitis: zaman.nullable(), geciken: z.number().int(), darbogaz: z.string().nullable(), etkilenenEmir: z.number().int(),
+    maliyetTl: z.number().nullable().optional(),
+  })),
+});
+
+// Emir önizlemesi (prototip previewNewOrder): yeni emir yazılmadan önce plana etkisi; hiçbir şey kaydedilmez.
+// Okuma kaynağıdır (GET): girdiler sorgu dizgesinde; boş tarih verilmez.
+export const onizleSorgusu = z.object({
+  taslak: z.coerce.number().int().positive().optional(), revizyonId: z.coerce.number().int().positive(),
+  adet: z.coerce.number().int().positive('Adet sıfırdan büyük olmalı.').max(1_000_000),
+  oncelik: z.coerce.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.'), baslangic: tarih.optional(), teslim: tarih.optional(),
+});
+const onizlemeOzeti = z.object({
+  zamanindaYuzde: z.number().nullable(), geciken: z.number().int(), ortAtolyeGun: z.number().nullable(), sonBitis: zaman.nullable(),
+  darbogaz: z.object({ ad: z.string(), dolulukYuzde: z.number() }).nullable(),
+});
+export const onizlemeCevabi = z.object({
+  // Önerilen teslim: plan bitişi artı tampon (takvim gelene kadar takvim günü).
+  odak: z.object({ baslangic: zaman.nullable(), bitis: zaman.nullable(), teslim: tarih.nullable(), onerilenTeslim: tarih.nullable(), isSayisi: z.number().int(), yerlesen: z.number().int() }),
+  once: onizlemeOzeti,
+  sonra: onizlemeOzeti,
+  etkilenenEmirler: z.array(z.object({ emirNo: z.string(), once: zaman.nullable(), sonra: zaman.nullable(), teslim: tarih.nullable(), gecikiyor: z.boolean(), yeni: z.boolean() })),
+  istasyonYuku: z.array(z.object({ ad: z.string(), onceYuzde: z.number().nullable(), sonraYuzde: z.number().nullable() })),
+  yeniUyarilar: z.array(z.string()),
+});
+
+export const HIZLI_DENEMELER = ['acil', 'ariza', 'gun', 'oncelik'] as const;
+export const senaryoDegisikligi = z.object({ id: KIMLIK, tur: z.string(), ozet: z.string(), yazma: zaman });
+export const senaryolarCevabi = z.object({
+  canli: planGostergeleri, canliSurum: z.number().int(),
+  senaryolar: z.array(z.object({
+    id: KIMLIK, ad: z.string(), aciklama: z.string().nullable(), durum: z.enum(['acik', 'canliya_alindi', 'vazgecildi']), acan: z.string().nullable(),
+    benim: z.boolean(), acilma: zaman, surum: z.number().int(), tabanPlanSurumu: z.number().int(), canliDegisti: z.boolean(),
+    gostergeler: planGostergeleri.nullable(), degisiklikler: z.array(senaryoDegisikligi),
+    // Canlıya göre etkisi: tarihi değişen emirler, yükü değişen istasyonlar, senaryoda yeni uyarılar.
+    etki: z.object({
+      tarihiDegisenEmirler: z.array(z.object({ emirNo: z.string(), canli: zaman.nullable(), senaryo: zaman.nullable() })),
+      yukuDegisenIstasyonlar: z.array(z.object({ ad: z.string(), canliYuzde: z.number().nullable(), senaryoYuzde: z.number().nullable() })),
+      yeniUyarilar: z.array(z.string()),
+    }).nullable(),
+    // Canlıya alınamayan (sahibi modülün komutu bağlanınca yazılacak) değişiklikler.
+    bekleyenler: z.array(z.string()),
+  })),
+});
+export const senaryoGovdesi = z.object({ ad: z.string().trim().min(1, 'Senaryoya ad ver.').max(80), aciklama: z.string().trim().max(500).nullish() });
+export const senaryoBilgiGovdesi = senaryoGovdesi.extend({ surum: KIMLIK });
+export const senaryoSurumGovdesi = z.object({ surum: KIMLIK });
+export const hizliGovdesi = senaryoSurumGovdesi.extend({ tur: z.enum(HIZLI_DENEMELER) });
+// Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
+export const canliyaAlGovdesi = z.object({
+  surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
+  acilMusteriler: z.array(z.object({ degisiklikId: KIMLIK, firmaId: KIMLIK })).max(50).default([]),
+});
+export const musteriSecenekleriSorgusu = z.object({ ara: z.string().max(100).default('') });
+export const musteriSecenekleriCevabi = z.object({ firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })) });
+export type MusteriSecenekleriCevabi = z.output<typeof musteriSecenekleriCevabi>;
+// Reçete ve Rota'nın tarayıcıdaki motorunun hesapladığı kuyruk sırası, atama ve dondurma plana yazılır (kart #1186). İş emri (emirNo, opNo) ile
+// anılır; süreleri ve saatleri plan modülü kaynağın verimi ve takvimiyle kendisi kurar (kuyruk `baslangic`ten arka arkaya dizilir).
+// Yalnız kişinin taslağına yazılır; ayar `/plan/ayar` ile, yayın taslağın "canlıya al"ı ile olur (plan değiştiren yollar teke iner, Y1-Y3).
+// `elle`: planlamacı bu işi kuyrukta elle yerine koydu; yalnız o iş elle sıra alır, ötekiler toptan hesapta kurala göre yeniden dizilir.
+// Göndermeyen eski ekranın bütün işleri eskisi gibi elle sayılır.
+// `elleKaynak`: planlamacı bu işin makinesini elle seçti; toptan hesap işi başka makineye taşımaz, yalnız saatini ayarlar.
+// `parca`: elle bölünen işin parçası (kart #1572); bütün parçaları aynı yazımda, adetleri toplamı adım adedi. Parçasız yazılan iş birleşir.
+export const kuyrukYazIsi = z.object({
+  emirNo: z.string().trim().min(1).max(60), opNo: z.number().int().positive().max(100_000), dondurulmus: z.boolean(), elle: z.boolean().default(true),
+  elleKaynak: z.boolean().default(false),
+  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000) }).optional(),
+});
+export const kuyrukYazKuyrugu = z.object({ kaynak: kaynakGirdisi, baslangic: tarihZaman, isler: z.array(kuyrukYazIsi).min(1).max(500) });
+export const kuyrukYazGovdesi = z.object({
+  kuyruklar: z.array(kuyrukYazKuyrugu).min(1, 'Yazılacak kuyruk yok.').max(200),
+  planSurumu: okunanPlanSurumu,
+  // Verilirse kişinin açık taslağına (okunan sürümde) yazılır; verilmezse yeni taslak açılır (stüdyo aynı taslakta kalır).
+  taslak: taslakGirdisi.optional(),
+});
+export const kuyrukYazCevabi = z.object({
+  taslak: KIMLIK, canli: z.boolean(),
+  // Yazılan iş sayısı; atlanan: başlamış ya da bitmiş, kilitli ya da dondurulmuş iş (plan modülünün durumu geçerlidir).
+  yazilan: z.number().int(), atlanan: z.number().int(),
+});
+// Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya
+// alınmamış değişikliği gösterir. Kuyruk yalnız planlanacak iş emirlerinindir, başlangıç sırasıyla; anahtar `emirNo|opNo`. sabit: kilitli ya da
+// dondurulmuş (Reçete ve Rota'nın yazması onu taşımaz).
+export const planCanliOzeti = z.object({
+  planSurumu: z.number().int(),
+  sonCanliyaAlma: z.object({ zaman, kisi: z.string().nullable() }).nullable(),
+  // elle: iş canlıda elle sıralı ve elle sıra düşmemiş (rota istasyonu aynı); ekran qorder'ını açılışta buradan kurar (plan ekranı verisi kararı, 16.10.2026).
+  // baslangic, bitis: işin canlı plandaki saati (K1, kullanıcı kararı 16.10.2026: canlı planın saatini sunucu kurar; ekran "PLAN CANLI"
+  // durumunda çubukları bu saatlerle çizer). Sunucu her zaman doldurur; isteğe bağlılık yalnız eski ekran örnekleri içindir.
+  kuyruklar: z.array(z.object({
+    makineId: KIMLIK, isler: z.array(z.object({
+      anahtar: z.string(), dondurulmus: z.boolean(), sabit: z.boolean(), elle: z.boolean().optional(), elleKaynak: z.boolean().optional(), baslangic: zaman.optional(), bitis: zaman.optional(),
+      // Bölünmüş işin parçası (kart #1572): aynı anahtar her parçası için kendi makinesinin kuyruğunda ayrı görünür.
+      parca: z.object({ no: z.number().int().positive(), adet: z.number().int().positive() }).optional(),
+    })),
+  })),
+  // Planlanacak bütün iş emirlerinin anahtarı: ekran, sunucuda karşılığı olmayan adımı (emir açıldıktan sonra rotaya eklenen) yazmaz.
+  planlanacak: z.array(z.string()),
+  // Planlanacak işlerin adım adedi (anahtar -> adet): elle bölmede parça adetlerinin toplamı buna eşit olmalı (kart #1572).
+  adetler: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  // Canlıda bölmesi duran ama motorun yerleştiremediği işler (kart #1572): ekran bölmeyi ve "yerleştirilemedi" uyarısını gösterir.
+  yersizBolmeler: z.array(z.object({
+    anahtar: z.string(), parcalar: z.array(z.object({ no: z.number().int().positive(), adet: z.number().int().positive() })),
+  })).optional(),
+});
+// Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
+export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true });
+export const senaryoParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const degisiklikParametresi = z.object({ id: z.coerce.number().int().positive(), degisiklikId: z.coerce.number().int().positive() });
+
+// Bedel ayarı (209 a): gecikme bedelinin tabanı (TL/saat), finansman ve kâr riski oranları (%/gün, finansman boşsa bedele girmez) ve öncelik
+// sınıfı eşikleri (ortanca bedelin katı).
+// Öncelik çarpanları (195 a: Yüksek, Normal, Düşük) ve müşteri sınıfı çarpanları (265 a: A, B, C) da buradadır (denetim #21). Yazarken
+// verilmeyen çarpan değişmez: çarpanları göstermeyen ekran eski gövdeyle yazabilsin.
+const carpan = z.number().gt(0).max(5);
+export const bedelAyari = z.object({
+  tabanBedelSaat: z.number().positive(), finansmanOraniGun: z.number().min(0).max(5).nullable(), karRiskiOraniGun: z.number().min(0).max(5),
+  yuksekEsigi: z.number().gt(1), dusukEsigi: z.number().gt(0).lt(1),
+  yuksekCarpani: carpan, normalCarpani: carpan, dusukCarpani: carpan, sinifACarpani: carpan, sinifBCarpani: carpan, sinifCCarpani: carpan,
+});
+export const bedelAyariGovdesi = bedelAyari.partial({
+  yuksekCarpani: true, normalCarpani: true, dusukCarpani: true, sinifACarpani: true, sinifBCarpani: true, sinifCCarpani: true,
+});
+
+// Elle çarpan (195 a): siparişin gecikme bedelini gerekçeyle çarpar; 0,5-2 plan.yaz, 3'e kadar siparisler.onayla (sunucu denetler).
+export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;
+export const siparisParametresi = z.object({ id: z.coerce.number().int().positive().max(2_147_483_647) });
+export const siparisCarpaniGovdesi = z.object({
+  carpan: z.number().min(ELLE_CARPAN.enAz, 'Çarpan 0,5-3 olmalı.').max(ELLE_CARPAN.enCok, 'Çarpan 0,5-3 olmalı.')
+    .refine((v) => Math.round(v * 100) === v * 100, 'Çarpan en çok iki ondalık olmalı.'),
+  gerekce: z.string().trim().min(1, 'Gerekçe yaz.').max(500),
+});
+const siparisCarpani = z.object({ carpan: z.number(), gerekce: z.string(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), zaman });
+// Geçmiş yeniden eskiye; geçerli çarpan ilk satırdır, kayıt yoksa null.
+export const siparisCarpaniCevabi = z.object({ siparisId: KIMLIK, gecerli: siparisCarpani.nullable(), gecmis: z.array(siparisCarpani) });
+// 306 a: siparişin plandaki emirlerinin gecikme bedeli (TL/saat) ve öncelik bandı; sınırlar bütün plan emirlerinin ortancasından: bedel
+// yuksekSiniri ve üstü Yüksek, dusukSiniri ve altı Düşük. Planda emri olmayan siparişte bant null.
+export const siparisBandiCevabi = z.object({
+  siparisId: KIMLIK,
+  bant: z.object({
+    yuksekSiniri: z.number(), dusukSiniri: z.number(),
+    emirler: z.array(z.object({ uretimEmriId: KIMLIK, emirNo: z.string(), bedel: z.number(), sinif: z.enum(['yuksek', 'normal', 'dusuk']) })),
+  }).nullable(),
+});
+
+export type SiparisBandiCevabi = z.output<typeof siparisBandiCevabi>;
+export type PlanCanliOzeti = z.output<typeof planCanliOzeti>;
+export type PlanSurumCevabi = z.output<typeof planSurumCevabi>;
+export type KuyrukYazGovdesi = z.output<typeof kuyrukYazGovdesi>;
+export type KuyrukYazCevabi = z.output<typeof kuyrukYazCevabi>;
+export type PlanAyari = z.output<typeof planAyari>;
+export type PlanCevabi = z.output<typeof planCevabi>;
+export type PlanYerlesimi = z.output<typeof planYerlesimi>;
+export type PlanParcasi = z.output<typeof planParcasi>;
+export type PlanKaynagi = z.output<typeof planKaynagi>;
+export type PlanEmri = z.output<typeof planEmri>;
+export type PlanGostergeleri = z.output<typeof planGostergeleri>;
+export type SenaryolarCevabi = z.output<typeof senaryolarCevabi>;
+export type MotorYerlesimiCevabi = z.output<typeof motorYerlesimiCevabi>;
+export type KarsilastirmaCevabi = z.output<typeof karsilastirmaCevabi>;
+export type KaynakGirdisi = z.input<typeof kaynakGirdisi>;
+export type TaslakGirdisi = z.input<typeof taslakGirdisi>;
+export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;
+export type OnizleSorgusu = z.input<typeof onizleSorgusu>;
+export type CanliYerlesimCevabi = z.output<typeof canliYerlesimCevabi>;
+export type BedelAyari = z.output<typeof bedelAyari>;
+export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
+export type SiparisCarpaniCevabi = z.output<typeof siparisCarpaniCevabi>;
+export type HizliDeneme = (typeof HIZLI_DENEMELER)[number];

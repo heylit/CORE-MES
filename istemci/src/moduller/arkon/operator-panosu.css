@@ -1,0 +1,4 @@
+.tc-op-pano { display: grid; gap: var(--b-4); }
+.tc-op-pano-gec { justify-self: stretch; justify-content: center; text-decoration: none; }
+.tc-op-pano-izgara { display: grid; gap: var(--b-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); }
+.tc-op-pano-izgara > * { min-width: 0; }

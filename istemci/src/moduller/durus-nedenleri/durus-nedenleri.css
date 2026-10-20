@@ -1,0 +1,2 @@
+.tc-nedenler-liste { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-neden-ad { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }

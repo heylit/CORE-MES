@@ -1,0 +1,839 @@
+// Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
+import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
+import { ELLE_KONUM_TURLERI, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+
+// ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
+const MIKTAR = /^(-)?(\d+)(?:\.(\d{1,3}))?$/;
+export function binde(metin: string): bigint {
+  const p = MIKTAR.exec(metin.trim());
+  if (!p) throw new Error(`Miktar biçimi geçersiz: ${metin}`);
+  const deger = BigInt(p[2] ?? '0') * 1000n + BigInt((p[3] ?? '').padEnd(3, '0'));
+  return p[1] ? -deger : deger;
+}
+export function bindenMetin(b: bigint): string {
+  const eksi = b < 0n;
+  const m = eksi ? -b : b;
+  const tam = m / 1000n;
+  const kalan = (m % 1000n).toString().padStart(3, '0').replace(/0+$/, '');
+  return `${eksi ? '-' : ''}${tam}${kalan ? `.${kalan}` : ''}`;
+}
+
+// ---- Raf adresi (DEP-14) ------------------------------------------------------------------------------------------
+export type Numaralama = 'sirali' | 'tek' | 'cift';
+// k: 0'dan başlayan bölme sırası. Tek ve çift numaralama aynı koridorun iki yüzüdür.
+export function bolmeNo(numaralama: Numaralama, ilkBolme: number, k: number): number {
+  if (numaralama === 'tek') return 2 * k + 1;
+  if (numaralama === 'cift') return 2 * k + 2;
+  return ilkBolme + k;
+}
+const iki = (n: number): string => String(n).padStart(2, '0');
+export const gozKodu = (rafKod: string, bolme: number, kat: number): string => `${rafKod}-${iki(bolme)}-${iki(kat)}`;
+export interface RafOlcusu { kod: string; numaralama: Numaralama; ilkBolme: number; bolmeSayisi: number; katSayisi: number }
+export function rafGozleri(r: RafOlcusu): { bolmeNo: number; katNo: number; kod: string }[] {
+  const gozler: { bolmeNo: number; katNo: number; kod: string }[] = [];
+  for (let k = 0; k < r.bolmeSayisi; k++) {
+    const b = bolmeNo(r.numaralama, r.ilkBolme, k);
+    for (let kat = 1; kat <= r.katSayisi; kat++) gozler.push({ bolmeNo: b, katNo: kat, kod: gozKodu(r.kod, b, kat) });
+  }
+  return gozler;
+}
+
+// ---- Yeterlilik ve onaylı eksi (DEP-02, DEP-03, DEP-04) ------------------------------------------------------------
+export type DusumKarari = { tur: 'yaz'; onayliEksi: false } | { tur: 'yaz'; onayliEksi: true } | { tur: 'onay-gerekli'; mevcut: string };
+export function dusumKarari(mevcut: string, istenen: string, eksiOnay: boolean): DusumKarari {
+  if (binde(mevcut) >= binde(istenen)) return { tur: 'yaz', onayliEksi: false };
+  return eksiOnay ? { tur: 'yaz', onayliEksi: true } : { tur: 'onay-gerekli', mevcut };
+}
+
+// ---- Çıkış önerisi: en eski giriş önce (DEP-05, DEP-06, DEP-07, DEP-08) --------------------------------------------
+export interface OneriSatiri { bakiyeId: number; konumId: number; konumKod: string; konumTur: string; partiId: number | null; partiEtiketi: string | null; miktar: string; ilkGiris: string }
+// Ayrılmış yer: hurda, karantina ve sevkiyat kutusundaki stok kimseye ayrılmaz, üretime ve çıkışa önerilmez (karar 108 a).
+export const AYRILMIS_KONUM_TURLERI = ['hurda', 'karantina', 'sevkiyat'] as const satisfies readonly KonumTuru[];
+// Kullanılabilir stok (rezerve, öneri, kritik seviye) yalnız serbest ve şartlı kalitedir; karar bekleyen ve red parça üretimde uyarıyla
+// ilerler ama rezerveye girmez (134 a, 135).
+export const KULLANILABILIR_KALITE = ['serbest', 'sartli'] as const satisfies readonly KaliteDurumu[];
+// Güncel stok değeri yalnız kullanılabilir stoktan çıkar (228 a; Satın alma'nın kg stok değeriyle aynı tanım): raf, kabul ve zemin
+// konumunda, statüsüz, kalitesi kullanılabilir bakiye. Geri kalanı kendi satırında değerlenir, toplam ayrıca görünür.
+export const KULLANILABILIR_KONUM_TURLERI = ['raf_gozu', 'kabul', 'depo_zemini'] as const satisfies readonly KonumTuru[];
+export const DEGER_GRUPLARI = ['kullanilabilir', 'kalite', 'hurda', 'fason', 'yolda', 'diger'] as const;
+export type DegerGrubu = (typeof DEGER_GRUPLARI)[number];
+// Fason kutusu, üretim çıkışı, istasyon ve ayrılmış yerler öneriye kaynak olmaz; eksi bakiye öneri değildir.
+const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', ...AYRILMIS_KONUM_TURLERI] satisfies KonumTuru[]);
+export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string) {
+  const uygun = satirlar
+    .filter((s) => !ONERI_DISI.has(s.konumTur) && binde(s.miktar) > 0n)
+    .sort((a, b) => Date.parse(a.ilkGiris) - Date.parse(b.ilkGiris) || a.bakiyeId - b.bakiyeId);
+  const mevcut = uygun.reduce((t, s) => t + binde(s.miktar), 0n);
+  if (uygun.length === 0) return { veriYetersiz: true, yeterli: false, mevcut: '0', oneriler: [] };
+  let kalan = binde(istenen);
+  const oneriler: { bakiyeId: number; konumId: number; konumKod: string; partiId: number | null; partiEtiketi: string | null; miktar: string }[] = [];
+  for (const s of uygun) {
+    if (kalan <= 0n) break;
+    const al = binde(s.miktar) < kalan ? binde(s.miktar) : kalan;
+    oneriler.push({ bakiyeId: s.bakiyeId, konumId: s.konumId, konumKod: s.konumKod, partiId: s.partiId, partiEtiketi: s.partiEtiketi, miktar: bindenMetin(al) });
+    kalan -= al;
+  }
+  return { veriYetersiz: false, yeterli: kalan <= 0n, mevcut: bindenMetin(mevcut), oneriler };
+}
+
+// ---- Emir tamamlama (EK "Stok ve tamamlama"; ilk sistemde "Tamamla ve stokta") ----------------------------------
+// Brüt ihtiyaç dört ondalıkla gelir; malzeme başına toplanır ve stoğun üç ondalığına yukarı yuvarlanır (eksik düşülmez).
+const DORT_ONDALIK = /^(\d+)(?:\.(\d{1,4}))?$/;
+export function ihtiyacToplami(satirlar: readonly { malzemeId: number; brut: string }[]): Map<number, bigint> {
+  const onBinde = new Map<number, bigint>();
+  for (const s of satirlar) {
+    const p = DORT_ONDALIK.exec(s.brut.trim());
+    if (!p) throw new Error(`Brüt ihtiyaç biçimi geçersiz: ${s.brut}`);
+    const d = BigInt(p[1] ?? '0') * 10000n + BigInt((p[2] ?? '').padEnd(4, '0'));
+    onBinde.set(s.malzemeId, (onBinde.get(s.malzemeId) ?? 0n) + d);
+  }
+  return new Map([...onBinde].map(([id, d]) => [id, (d + 9n) / 10n]));
+}
+// Emre verilmiş net sarf brütten düşülür; fazla verilmişse kalan sıfırdır (artanın iadesi ayrı iştir).
+export const kalanSarf = (brut: bigint, verilen: bigint): bigint => (brut > verilen ? brut - verilen : 0n);
+// Engel sırası: emir bitmeden stok tamamlanmaz; eksik varsa ilk sistemdeki gibi reddedilir; yapılacak bir şey yoksa ikinci kez yazılmaz.
+export function tamamlamaEngeli(d: { durum: string; eksikVar: boolean; yapilacakVar: boolean }): string | null {
+  if (d.durum !== 'bitti') return 'Emir bitmedi; stokta tamamlama bitmiş emirde yapılır.';
+  if (d.eksikVar) return 'Eksik malzeme var; önce eksikleri teslim alın.';
+  if (!d.yapilacakVar) return 'Bu emir stokta zaten tamamlandı.';
+  return null;
+}
+
+// Malzeme isteği yalnız ileri gider: açık (ya da stok yok) hazırlanır; açık, stok yok ya da hazırlanan teslim edilir ya da iptal
+// edilir. Kapanan değişmez.
+export type IstekGecisi = 'hazirla' | 'teslim' | 'iptal';
+export const ISTEK_GECIS_KAYNAKLARI: Record<IstekGecisi, readonly MalzemeIstegiDurumu[]> = {
+  hazirla: ['acik', 'stok_yok'],
+  teslim: ['acik', 'stok_yok', 'hazirlaniyor'],
+  iptal: ['acik', 'stok_yok', 'hazirlaniyor'],
+};
+export function istekGecisEngeli(durum: MalzemeIstegiDurumu, gecis: IstekGecisi): string | null {
+  if (ISTEK_GECIS_KAYNAKLARI[gecis].includes(durum)) return null;
+  if (durum === 'teslim') return 'İstek teslim edildi; değiştirilemez.';
+  if (durum === 'iptal') return 'İstek iptal edildi; değiştirilemez.';
+  return 'İstek zaten hazırlanıyor.';
+}
+
+// ---- Parti seçimi (DEP-23, DEP-24) ---------------------------------------------------------------------------------
+// istenen: undefined = sistem seçsin; null = partisiz satır; sayı = kişinin seçtiği parti.
+export type PartiSecimi = { tur: 'tamam'; partiId: number | null; secim: 'kisi' | 'tek_parti' | null } | { tur: 'secim-gerekli'; partiler: (number | null)[] };
+export function partiSec(gozdekiPartiler: readonly (number | null)[], istenen: number | null | undefined): PartiSecimi {
+  if (istenen !== undefined) return { tur: 'tamam', partiId: istenen, secim: istenen === null ? null : 'kisi' };
+  const farkli = [...new Set(gozdekiPartiler)];
+  if (farkli.length === 0) return { tur: 'tamam', partiId: null, secim: null };
+  if (farkli.length === 1) { const p = farkli[0] ?? null; return { tur: 'tamam', partiId: p, secim: p === null ? null : 'tek_parti' }; }
+  return { tur: 'secim-gerekli', partiler: farkli };
+}
+
+// ---- Parti zorunluluğu karttaki türe göre (DEP-20, DEP-48, DEP-49) --------------------------------------------------
+export type MalzemeTuru = KatalogTuru;
+// Hizmet stoklanmaz (kullanıcı kararı MH1 a): depoya giriş, bakiye ve parti yazılmaz.
+export const stoklanirMi = (tur: string): boolean => tur !== 'hizmet';
+export type GirisKaynagi = 'mal_kabul' | 'uretim';
+// 'lot': tedarikçi parti/döküm no isteğe bağlıdır; girilmezse yeni lot açılır (kullanıcı kararı 13.10.2026, #1018).
+// Sarf da lot alır; gözde birden çok lot varsa çıkışta lot seçilir (kullanıcı kararı 13.10.2026, #1018).
+export type PartiGereksinimi = 'lot' | 'yok' | 'emir';
+export function partiGereksinimi(tur: MalzemeTuru, kaynak: GirisKaynagi): PartiGereksinimi {
+  if (tur === 'demirbas') return 'yok';
+  if (kaynak === 'uretim') return 'emir';
+  return 'lot';
+}
+export interface PartiBilgisi { tedarikciPartiNo?: string | null | undefined; dokumNo?: string | null | undefined; sertifikaNo?: string | null | undefined }
+export const partiDolu = (p: PartiBilgisi | null | undefined): boolean => Boolean(p && (p.tedarikciPartiNo || p.dokumNo));
+// Hata iletisi ya da null (geçer).
+export function partiDenetimi(tur: MalzemeTuru, kaynak: GirisKaynagi, verilen: { parti?: PartiBilgisi | null | undefined; partiId?: number | undefined }): string | null {
+  const g = partiGereksinimi(tur, kaynak);
+  const var_ = partiDolu(verilen.parti) || verilen.partiId !== undefined;
+  const sadeceSertifika = !partiDolu(verilen.parti) && Boolean(verilen.parti?.sertifikaNo) && verilen.partiId === undefined;
+  if (sadeceSertifika && g !== 'lot') return 'Sertifika no tek başına parti açmaz; tedarikçi parti no ya da döküm no girin.';
+  if (g === 'yok' && (var_ || sadeceSertifika)) return 'Demirbaş parti almaz.';
+  return null;
+}
+
+// ---- Taşıma: ilk giriş ikisinin eskisi (DEP-09) ------------------------------------------------------------------------
+export const ilkGirisBirlesik = (a: string, b: string): string => (Date.parse(a) <= Date.parse(b) ? a : b);
+
+// ---- Ambalaj adedi miktarla orantılı azalır, kesir yukarı yuvarlanır (DEP-27) ----------------------------------------
+export function kalanAmbalajAdedi(adet: number | null, eskiMiktar: string, yeniMiktar: string): number | null {
+  if (adet === null) return null;
+  const eski = binde(eskiMiktar);
+  const yeni = binde(yeniMiktar);
+  if (eski <= 0n || yeni <= 0n) return null;
+  if (yeni >= eski) return adet;
+  const pay = BigInt(adet) * yeni;
+  return Number((pay + eski - 1n) / eski);
+}
+
+// ---- Kritik durum (DEP-28): tanımsızsa sayı uydurulmaz ---------------------------------------------------------------
+export type StokDurumu = 'yeterli' | 'kritik' | 'eksi' | 'tanimsiz';
+export function stokDurumu(toplam: string, kritikSeviye: string | null): StokDurumu {
+  if (binde(toplam) < 0n) return 'eksi';
+  if (kritikSeviye === null) return 'tanimsiz';
+  return binde(toplam) <= binde(kritikSeviye) ? 'kritik' : 'yeterli';
+}
+
+// ---- Sayım bekleyen göz (DEP-15): süre tanımlı değilse kural çalışmaz -------------------------------------------------
+const GUN_MS = 86_400_000;
+export function sayimBekliyorMu(sonSayim: string | null, simdi: string, sureGun: number | null): boolean | null {
+  if (sureGun === null) return null;
+  if (sonSayim === null) return true;
+  return Date.parse(simdi) - Date.parse(sonSayim) > sureGun * GUN_MS;
+}
+
+// ---- Sayım farkı (DEP-16) ----------------------------------------------------------------------------------------------
+export type SayimFarki = { tur: 'yok' } | { tur: 'sayim_fazla' | 'sayim_eksik'; miktar: string };
+export function sayimFarki(sistem: string, sayilan: string): SayimFarki {
+  const fark = binde(sayilan) - binde(sistem);
+  if (fark === 0n) return { tur: 'yok' };
+  return fark > 0n ? { tur: 'sayim_fazla', miktar: bindenMetin(fark) } : { tur: 'sayim_eksik', miktar: bindenMetin(-fark) };
+}
+
+// ---- Geri alma (DEP-17, DEP-18, DEP-19, DEP-53) -------------------------------------------------------------------------
+export interface GeriAlinacak { tur: string; geriAlindi: boolean; malKabulSatiriMi: boolean; disCagriMi: boolean }
+export function geriAlmaEngeli(h: GeriAlinacak): string | null {
+  if (h.tur === 'geri_alma') return 'Geri alma hareketi geri alınmaz.';
+  if (h.geriAlindi) return 'Bu hareket zaten geri alındı.';
+  if (h.malKabulSatiriMi) return 'Mal kabul hareketi tek başına geri alınmaz; belgeyi düzeltin.';
+  if (h.disCagriMi) return 'Otomatik hareket yalnız onu yazan çağrıyla geri alınır.';
+  return null;
+}
+// Kalite durumunu yalnız Kalite Merkezi yazar (229 a): kaliteyi değiştiren hareket onun kararıdır, stok geri almasıyla çevrilmez (denetim #16).
+export function kaliteKarariHareketiMi(h: { kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null }): boolean {
+  return h.kaynakKaliteDurumu !== null && h.hedefKaliteDurumu !== null && h.kaynakKaliteDurumu !== h.hedefKaliteDurumu;
+}
+// Geri almanın yönü: kaynak ve hedef yer değiştirir.
+export function tersYon(kaynak: number | null, hedef: number | null): { kaynak: number | null; hedef: number | null } {
+  return { kaynak: hedef, hedef: kaynak };
+}
+
+// ---- Logo irsaliye eşleşmesi (DEP-39) ------------------------------------------------------------------------------------
+export type LogoEslesme = 'irsaliye_bekleniyor' | 'eslesti' | 'fark_var';
+export function logoEslesmeDurumu(sayilan: string, irsaliyeMiktari: string | null): LogoEslesme {
+  if (irsaliyeMiktari === null) return 'irsaliye_bekleniyor';
+  return binde(sayilan) === binde(irsaliyeMiktari) ? 'eslesti' : 'fark_var';
+}
+
+// ---- Logo'ya giden hareket ve ambar (DEP-50, DEP-51) ----------------------------------------------------------------------
+export const logoyaGiderMi = (h: { tur: string; cikisNedeni: string | null; girisKaynagi: string | null }): boolean =>
+  (h.tur === 'cikis' && h.cikisNedeni === 'uretime_sarf') || (h.tur === 'giris' && h.girisKaynagi === 'uretim');
+export type AmbarCozumu = { tur: 'tamam'; ambarNo: number } | { tur: 'karsilik-yok' };
+export const logoAmbari = (depoAmbarNo: number | null): AmbarCozumu => (depoAmbarNo === null ? { tur: 'karsilik-yok' } : { tur: 'tamam', ambarNo: depoAmbarNo });
+
+// ---- Mal kabul göz önerisi (DEP-34) -----------------------------------------------------------------------------------------
+export interface GozAdayi { konumId: number; kod: string; katNo: number | null; bos: boolean; buMalzemeVar: boolean }
+// Önce malzemenin bulunduğu göz, sonra boş göz (kolay erişilen kat: 2, 1, 3, 4...); ikisi de yoksa null ("veri yetersiz").
+export function malKabulGozOnerisi(adaylar: readonly GozAdayi[]): GozAdayi | null {
+  const var_ = adaylar.find((a) => a.buMalzemeVar);
+  if (var_) return var_;
+  const katPuani = (k: number | null): number => (k === 2 ? 0 : k === 1 ? 1 : k ?? 99);
+  const bos = adaylar.filter((a) => a.bos).sort((a, b) => katPuani(a.katNo) - katPuani(b.katNo) || a.kod.localeCompare(b.kod));
+  return bos[0] ?? null;
+}
+
+// ---- Mal kabul düzeltmesi (DEP-53) ----------------------------------------------------------------------------------------
+// Belge değişmez: düzeltme yeni belgedir ve eski belgenin bütün satırlarını aynı işlemde ters çevirir. Bir belge bir kez
+// düzeltilir; düzeltme belgesi de ayrıca düzeltilebilir (zincir). Eski satırların Logo durumu değişmez.
+export function duzeltmeEngeli(b: { duzeltildi: boolean }): string | null {
+  return b.duzeltildi ? 'Bu belge zaten düzeltildi; son düzeltme belgesini düzeltin.' : null;
+}
+
+// Sipariş bağı (SH1 a): yalnız satın alma kabulünün satırı siparişe bağlanır; teslim bilgisini satın alma bu bağla tutar.
+// Kalanı aşan miktar reddedilmez: depo saydığını yazar, fazlası siparişte "fazla teslim" görünür (kullanıcı kararı).
+export function siparisBagiEngeli(tur: string, siparisSatirId: number | null): string | null {
+  return siparisSatirId !== null && tur !== 'satin_alma' ? 'Sipariş satırı yalnız satın alma kabulünde seçilir.' : null;
+}
+// Mal kabul satırının türü (K-080 c, DEP-58): sipariş satırı hizmet kartınınsa satır fasondan dönüştür (kartı dönen malzeme,
+// giden fason konumundan düşer) ya da satırın kartı da hizmetse saf hizmettir (stok yazmaz, yalnız teslim). Fason bilgisi
+// yalnız hizmet siparişinde anlamlıdır; saf hizmette konum ve parti yoktur.
+export type MalKabulSatirTuru = 'stok' | 'fason' | 'hizmet';
+export interface MalKabulSatirBilgisi {
+  malzemeTuru: string; siparisMalzemeTuru: string | null; siparisVar: boolean; fasonVar: boolean; konumVar: boolean; partiVar: boolean;
+}
+export function malKabulSatirTuru(b: MalKabulSatirBilgisi): { tur: MalKabulSatirTuru } | { hata: string; alan: 'malzemeId' | 'siparisSatirId' | 'fason' } {
+  if (!stoklanirMi(b.malzemeTuru)) {
+    if (!b.siparisVar) return { hata: 'Hizmet stoklanmaz; hizmet satırı yalnız hizmet sipariş satırıyla teslim alınır.', alan: 'siparisSatirId' };
+    if (b.fasonVar) return { hata: 'Fason dönüşünde satırın kartı dönen malzemedir, hizmet kartı değil.', alan: 'malzemeId' };
+    if (b.konumVar || b.partiVar) return { hata: 'Malzemesiz hizmet stoğa girmez; konum ve parti girilmez.', alan: 'malzemeId' };
+    return { tur: 'hizmet' };
+  }
+  if (b.siparisMalzemeTuru !== null && !stoklanirMi(b.siparisMalzemeTuru)) {
+    return b.fasonVar ? { tur: 'fason' } : { hata: 'Hizmet siparişinde malzeme döndüyse giden malzemeyi ve fason konumunu seçin; dönmediyse satırın kartı hizmet kartıdır.', alan: 'fason' };
+  }
+  if (b.fasonVar) return { hata: 'Fason dönüşü yalnız hizmet sipariş satırıyla yazılır.', alan: 'fason' };
+  return { tur: 'stok' };
+}
+
+// Teslim, satın almada sipariş satırının kartına düşer: başka kartın satırına bağlanan kabul, stokta bir kartı artırıp
+// satın almada başka kartın siparişini kapatırdı. Kartsız (katalogsuz) kalemin karşılaştıracak kartı yoktur.
+export function siparisMalzemeEngeli(malzemeId: number, siparisMalzemeNo: number | null): string | null {
+  return siparisMalzemeNo !== null && siparisMalzemeNo !== malzemeId ? 'Sipariş satırı başka bir malzeme kartına ait; bu kartın sipariş satırını seçin.' : null;
+}
+
+// ---- Toplama rotası (DEP-42): önce rafsız konumlar (kabul, zemin), sonra raf kodu sırası; koridorda yılan düzeni
+// (sıradaki her ikinci rafta bölmeler geriye), göz içinde kat yukarı.
+export interface RotaDurak { konumKod: string; rafKod: string | null; bolmeNo: number | null; katNo: number | null }
+export function rotaSirala<T extends RotaDurak>(duraklar: readonly T[]): T[] {
+  const raflar = [...new Set(duraklar.flatMap((d) => (d.rafKod === null ? [] : [d.rafKod])))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const yon = (raf: string): number => (raflar.indexOf(raf) % 2 === 0 ? 1 : -1);
+  return [...duraklar].sort((a, b) => {
+    if ((a.rafKod === null) !== (b.rafKod === null)) return a.rafKod === null ? -1 : 1;
+    if (a.rafKod === null || b.rafKod === null) return a.konumKod.localeCompare(b.konumKod, 'tr');
+    if (a.rafKod !== b.rafKod) return raflar.indexOf(a.rafKod) - raflar.indexOf(b.rafKod);
+    const db = ((a.bolmeNo ?? 0) - (b.bolmeNo ?? 0)) * yon(a.rafKod);
+    return db !== 0 ? db : (a.katNo ?? 0) - (b.katNo ?? 0);
+  });
+}
+
+// ---- Parti etiketi (ekranda) --------------------------------------------------------------------------------------------
+// Lot numarası önce gelir (#1018); tedarikçi parti, döküm no ya da emir yanında okunur.
+// Emir numarası bilinmiyorsa kimlik gösterilir (numara uydurulmaz).
+export function partiEtiketi(p: { lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; uretimEmriId: number | null } | null, emirNo: string | null = null): string | null {
+  if (!p) return null;
+  const kaynak = p.uretimEmriId !== null ? [emirNo !== null ? `Emir ${emirNo}` : `Emir #${p.uretimEmriId}`] : [p.tedarikciPartiNo, p.dokumNo ? `döküm ${p.dokumNo}` : null];
+  return [p.lotNo, ...kaynak].filter(Boolean).join(' · ') || null;
+}
+
+// ---- Statülü stok (#1108, STK-S1, STK-S4) -----------------------------------------------------------------------------------
+// Statü yalnız hareketle değişir: değişim aynı statüye olmaz, statüdeki mevcuttan fazlası taşınmaz (statülü stok eksiye düşmez).
+export function statuDegisimiEngeli(kaynakStatuId: number | null, hedefStatuId: number | null, mevcut: string, miktar: string): string | null {
+  if (kaynakStatuId === hedefStatuId) return 'Kaynak ve hedef statü aynı.';
+  if (binde(mevcut) < binde(miktar)) return `Statüde yeterli stok yok. Mevcut: ${bindenMetin(binde(mevcut))}.`;
+  return null;
+}
+// Toplam stoğun statü kırılımı: önce serbest, sonra statü kimliği sırası. Bekleme süresi statüye girişten sayılır: satırın
+// ilk girişi o statüdeki en eski giriştir (statü değişiminde yeni satır değişim anıyla açılır).
+export function statuKirilimi(b: readonly { statuId: number | null; miktar: string; ilkGiris: string }[]): { statuId: number | null; miktar: string; ilkGiris: string }[] {
+  const t = new Map<number | null, { miktar: bigint; ilkGiris: string }>();
+  for (const x of b) {
+    const o = t.get(x.statuId);
+    t.set(x.statuId, { miktar: (o?.miktar ?? 0n) + binde(x.miktar), ilkGiris: o && Date.parse(o.ilkGiris) <= Date.parse(x.ilkGiris) ? o.ilkGiris : x.ilkGiris });
+  }
+  return [...t].filter(([, v]) => v.miktar !== 0n).sort(([a], [c]) => (a ?? 0) - (c ?? 0)).map(([statuId, v]) => ({ statuId, miktar: bindenMetin(v.miktar), ilkGiris: v.ilkGiris }));
+}
+
+// ---- Stok değeri (kullanıcı kararı 12.10.2026, #544: ağırlıklı ortalama alış fiyatı) ------------------------------------------
+// Değer = her kartın pozitif toplamı x birim fiyat (TRY; servis ağırlıklı ortalama alış fiyatını verir). Fiyatı (ya da TRY karşılığı) olmayan stoklu kart değere katılmaz,
+// sayılır; hiç fiyatlı kart yoksa değer null (sıfır uydurulmaz). Hesap tam sayıyla: miktar binde, fiyat on binde, sonuç kuruşa yarım yukarı.
+const FIYAT = /^(\d+)(?:\.(\d+))?$/;
+function onBinde(fiyat: string): bigint {
+  const p = FIYAT.exec(fiyat.trim());
+  if (!p) throw new Error(`Fiyat biçimi geçersiz: ${fiyat}`);
+  const ondalik = (p[2] ?? '').padEnd(5, '0');
+  const kesik = BigInt(p[1]!) * 10000n + BigInt(ondalik.slice(0, 4));
+  return Number(ondalik[4]) >= 5 ? kesik + 1n : kesik;
+}
+export function stokDegeri(toplamlar: readonly { malzemeId: number; toplam: string }[], tryFiyat: ReadonlyMap<number, string | null>): { deger: string | null; fiyatsizKart: number } {
+  let toplam = 0n, fiyatli = 0, fiyatsizKart = 0;
+  for (const t of toplamlar) {
+    const m = binde(t.toplam);
+    if (m <= 0n) continue;
+    const f = tryFiyat.get(t.malzemeId) ?? null;
+    if (f === null) { fiyatsizKart += 1; continue; }
+    fiyatli += 1;
+    toplam += m * onBinde(f);
+  }
+  if (fiyatli === 0) return { deger: null, fiyatsizKart };
+  const kurus = (toplam + 50000n) / 100000n;
+  return { deger: `${kurus / 100n}.${(kurus % 100n).toString().padStart(2, '0')}`, fiyatsizKart };
+}
+
+// ---- Fabrika Haritası eşlemesi (kart #686, #711) -----------------------------------------------------------------------------
+// Harita raf, göz ve alanın tek kaynağıdır; stok konumu yerin stok tarafıdır. Yalnız depo seçilmiş bölümün (aktif stok deposu
+// bağlı) gözü ve stok alanı konum olur; üretim bölümünün rafı stok sayılmaz. Haritadan açılan göz konumunun kodu göz adresidir ve
+// adres değişince izler; stok rafından gelen konum basılı etiketi korumak için kodunu tutar. Stoğu olan konum kapatılmaz.
+// Fason, ara alan (bekleme) ve hurda fabrikanın her yerinde olur (kart #1304): depo olmayan bölümde de konum açılır ve ANA depoya
+// bağlanır. Alanın türü değişince konumun türü izler; stoklu konumun türü ve deposu değişmez (kullanılabilir stok kendiliğinden
+// değişmesin), bildirilir.
+// Haritadaki bütün kutular stok barındırır (QR teslim, karar 97): oda, cam oda, bölge, karantina, sevkiyat ve palet de konum olur;
+// karantina ve sevkiyat ayrılmış yerdir (AYRILMIS_KONUM_TURLERI). Yürüyüş yolu yer değil geçittir, konum olmaz.
+export const HARITA_ALAN_TURLERI = ['kabul', 'uretim_cikisi', 'depo_zemini', 'fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] as const;
+const FABRIKA_GENELI = new Set<string>(['fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] satisfies HaritaAlanTuru[]);
+export type HaritaAlanTuru = (typeof HARITA_ALAN_TURLERI)[number];
+export interface HaritaGozu { id: number; adres: string; salonId: number; salonKodu: string; bolme: number; kat: number; rafAktif: boolean }
+export interface HaritaAlani { id: number; salonId: number; tur: string; ad: string }
+export interface HaritaDeposu { id: number; kod: string; salonId: number | null; aktif: boolean }
+export interface HaritaKonumu { id: number; kod: string; tur: string; depoId: number; aktif: boolean; rafId: number | null; gozId: number | null; alanId: number | null; satirSayisi: number }
+export interface YeniHaritaKonumu { depoId: number; salonId: number; kod: string; tur: 'raf_gozu' | HaritaAlanTuru; bolme: number | null; kat: number | null; ad: string | null; gozId: number | null; alanId: number | null; aktif: boolean }
+export interface HaritaPlani {
+  ekle: YeniHaritaKonumu[];
+  guncelle: { id: number; kod: string; aktif: boolean }[];
+  turDegisimi: { id: number; tur: HaritaAlanTuru; depoId: number }[];
+  kapat: number[];
+  atlanan: string[];
+}
+export const haritaAlaniMi = (tur: string): tur is HaritaAlanTuru => (HARITA_ALAN_TURLERI as readonly string[]).includes(tur);
+
+// Depo kodu bölüm kodundan (en çok 10 büyük harf ya da rakam); doluysa sonuna sıra eklenir.
+export function depoKoduOner(salonKodu: string, kullanilan: ReadonlySet<string>): string {
+  const taban = salonKodu.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'DEPO';
+  if (!kullanilan.has(taban)) return taban;
+  for (let n = 2; ; n++) {
+    const kod = taban.slice(0, 10 - String(n).length) + String(n);
+    if (!kullanilan.has(kod)) return kod;
+  }
+}
+
+export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonly HaritaAlani[]; depolar: readonly HaritaDeposu[]; konumlar: readonly HaritaKonumu[]; kodlar: ReadonlySet<string> }): HaritaPlani {
+  const plan: HaritaPlani = { ekle: [], guncelle: [], turDegisimi: [], kapat: [], atlanan: [] };
+  const kodlar = new Set(g.kodlar);
+  const bolumDeposu = new Map(g.depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.id] as const] : [])));
+  const depolu = new Set(bolumDeposu.keys());
+  const anaDepo = g.depolar.find((d) => d.kod === 'ANA' && d.aktif)?.id ?? null;
+  const gozKonumu = new Map(g.konumlar.flatMap((k) => (k.gozId === null ? [] : [[k.gozId, k] as const])));
+  const alanKonumu = new Map(g.konumlar.flatMap((k) => (k.alanId === null ? [] : [[k.alanId, k] as const])));
+  const kapanacak = new Set<HaritaKonumu>();
+
+  for (const z of g.gozler) {
+    const k = gozKonumu.get(z.id);
+    if (!depolu.has(z.salonId)) { if (k) kapanacak.add(k); continue; }
+    if (!k) {
+      if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); continue; }
+      kodlar.add(z.adres);
+      plan.ekle.push({ depoId: bolumDeposu.get(z.salonId)!, salonId: z.salonId, kod: z.adres, tur: 'raf_gozu', bolme: z.bolme, kat: z.kat, ad: null, gozId: z.id, alanId: null, aktif: z.rafAktif });
+      continue;
+    }
+    let kod = k.kod;
+    if (k.rafId === null && k.kod !== z.adres) {
+      if (kodlar.has(z.adres)) plan.atlanan.push(z.adres);
+      else { kodlar.delete(k.kod); kodlar.add(z.adres); kod = z.adres; }
+    }
+    // Pasif rafın stoklu gözü açık kalır (bakiye pasif konumda duramaz) ve bildirilir; stok taşınınca sonraki eşleme kapatır.
+    let aktif = z.rafAktif;
+    if (!aktif && k.aktif && k.satirSayisi > 0) { aktif = true; plan.atlanan.push(kod); }
+    if (kod !== k.kod || k.aktif !== aktif) plan.guncelle.push({ id: k.id, kod, aktif });
+  }
+
+  for (const a of g.alanlar) {
+    const k = alanKonumu.get(a.id);
+    const depoId = !haritaAlaniMi(a.tur) ? null : bolumDeposu.get(a.salonId) ?? (FABRIKA_GENELI.has(a.tur) ? anaDepo : null);
+    if (depoId === null || !haritaAlaniMi(a.tur)) { if (k) kapanacak.add(k); continue; }
+    if (k) {
+      if (!k.aktif) plan.guncelle.push({ id: k.id, kod: k.kod, aktif: true });
+      if (k.tur === a.tur && k.depoId === depoId) continue;
+      if (k.satirSayisi > 0) plan.atlanan.push(k.kod);
+      else plan.turDegisimi.push({ id: k.id, tur: a.tur, depoId });
+      continue;
+    }
+    const kod = `ALAN-${a.id}`;
+    if (kodlar.has(kod)) { plan.atlanan.push(kod); continue; }
+    kodlar.add(kod);
+    plan.ekle.push({ depoId, salonId: a.salonId, kod, tur: a.tur, bolme: null, kat: null, ad: a.ad.slice(0, 60), gozId: null, alanId: a.id, aktif: true });
+  }
+
+  // Haritadan açılmış, gözü silinmiş konum ya da depo olmayan bölümdeki konum: stoğu yoksa kapanır, varsa kalır ve bildirilir.
+  for (const k of g.konumlar) if (k.rafId === null && k.gozId === null && k.alanId === null) kapanacak.add(k);
+  for (const k of kapanacak) {
+    if (!k.aktif) continue;
+    if (k.satirSayisi > 0) plan.atlanan.push(k.kod);
+    else plan.kapat.push(k.id);
+  }
+  return plan;
+}
+
+// DEP-62 (kart #1304): türü yalnız elle açılan konumda değişir. Haritaya bağlı konumun türü alanın türünden gelir; stoklu konumun
+// türü değişmez (kullanılabilir stok yalnız taşımayla değişsin); sabit konum (KABUL, URETIM) kendi türünde kalır.
+export function konumTurDegisimEngeli(k: { kod: string; tur: KonumTuru; haritaGozId: number | null; haritaAlanId: number | null; satirSayisi: number }, yeni: KonumTuru): string | null {
+  if (k.tur === yeni) return null;
+  if (k.haritaGozId !== null || k.haritaAlanId !== null) return 'Bu konum Fabrika Haritası\'na bağlı; türü haritada alanın türünden gelir.';
+  if (!(ELLE_KONUM_TURLERI as readonly string[]).includes(k.tur) || ['KABUL', 'URETIM'].includes(k.kod)) return 'Bu konumun türü değiştirilemez.';
+  if (k.satirSayisi > 0) return 'Konumda stok var; türü değiştirmeden önce stoğu taşıyın.';
+  return null;
+}
+
+// ---- Malzeme · Teslim (kart #1208) ------------------------------------------------------------------------------------------
+// STK-T1: istek açılışta depo konumlarındaki stok (serbest ve statülü) istenenden azsa "stok yok" durumunda açılır; depo ve satın
+// alma görür, istek yine karşılanabilir.
+export const istekAcilisDurumu = (depodaki: string, istenen: string): 'acik' | 'stok_yok' => (binde(depodaki) >= binde(istenen) ? 'acik' : 'stok_yok');
+// STK-T2: teslim yalnız yoldayken kapanır (teslim alınır, reddedilir ya da iptal edilir); kapanan değişmez.
+export function teslimKapanisEngeli(durum: TeslimDurumu): string | null {
+  if (durum === 'yolda') return null;
+  if (durum === 'teslim') return 'Teslim alındı; değiştirilemez.';
+  if (durum === 'red') return 'Teslim reddedildi; değiştirilemez.';
+  return 'Teslim iptal edildi; değiştirilemez.';
+}
+// STK-T3: teslimi yalnız gönderen iptal eder. STK-T4: istasyona geleni o istasyonun kapsamındaki kişi, istasyon olmayan konuma
+// (depo) geleni depo işlemi olan alır ya da reddeder; gönderen kendi gönderdiğini teslim almaz.
+export type TeslimAlani = { tur: 'istasyon'; kapsamda: boolean } | { tur: 'depo'; depoIslemi: boolean };
+// STK-T8 (299 b): kişiye yazılan teslimi yalnız o kişi alır ya da reddeder.
+export function teslimAlmaEngeli(gonderenBenMi: boolean, alan: TeslimAlani, baskasinaGeliyor = false): string | null {
+  if (gonderenBenMi) return 'Kendi gönderdiğiniz teslimi alamazsınız; karşı taraf alır.';
+  if (baskasinaGeliyor) return 'Bu teslim başka bir kişiye geliyor.';
+  if (alan.tur === 'istasyon' ? !alan.kapsamda : !alan.depoIslemi) return 'Bu teslim size gelmiyor.';
+  return null;
+}
+
+// STK-T5: isteğe bağlı teslimi depo gönderir; istek kapanmamış, malzemesi aynı ve hedefi isteğin istasyonudur.
+// İstasyonsuz istek kişiye teslim edilir; stok konumu olmadığı için teslimle değil istekteki "teslim edildi" ile kapanır.
+// STK-H3: istek yolda bir teslimle karşılanıyorsa ikinci teslim açılmaz; açık bir hazırlık listesindeyse liste karşılar.
+export function istekliTeslimEngeli(
+  istek: { durum: MalzemeIstegiDurumu; malzemeId: number; istasyonId: number | null; toplamaNo?: string | null; toplamaDurumu?: string | null },
+  teslim: { malzemeId: number; hedefIstasyonId: number | null; depoIslemi: boolean; yoldaVar?: boolean },
+): string | null {
+  if (!teslim.depoIslemi) return 'İsteği yalnız depo karşılar.';
+  if (!ISTEK_GECIS_KAYNAKLARI.teslim.includes(istek.durum)) return 'İstek kapandı; teslim bağlanamaz.';
+  if (teslim.yoldaVar) return 'Bu istek için yolda bir teslim var; istasyon alınca ya da reddedince yenisi gönderilir.';
+  const liste = istekListeEngeli(istek);
+  if (liste) return liste;
+  if (istek.malzemeId !== teslim.malzemeId) return 'Teslim edilen malzeme istenenle aynı değil.';
+  if (istek.istasyonId === null) return 'İstasyonsuz istek kişiye teslim edilir; istekte "Teslim et" ile kapatın.';
+  if (istek.istasyonId !== teslim.hedefIstasyonId) return 'Teslim isteğin istasyonuna gider.';
+  return null;
+}
+// STK-T7: "nereden" kendiliğinden dolar: kişinin açık işinin istasyonu kapsamındaysa o; açık işi yoksa kapsamında tek istasyon
+// varsa o; ikisi de değilse kişi seçer.
+export function buradakiIstasyon(acikIstasyonId: number | null, kapsamdakiler: readonly number[]): number | null {
+  if (acikIstasyonId !== null && kapsamdakiler.includes(acikIstasyonId)) return acikIstasyonId;
+  return kapsamdakiler.length === 1 ? kapsamdakiler[0]! : null;
+}
+// İstenenden fazla teslim edilebilir (kullanıcı kararı "Uyarıyla izin", kart #1413); kayda yazılacak not, fazla değilse null.
+export function istenenFazlaNotu(istenen: string, verilen: string): string | null {
+  return binde(verilen) > binde(istenen) ? `istenenden fazla (istenen ${bindenMetin(binde(istenen))})` : null;
+}
+// STK-T6: teslim alan gönderilenden fazlasını alamaz; kaynakta alınan kadar yoksa teslim alınamaz. Eksiye düşmeyi alan
+// onaylayamaz: kaynağın sahibi gönderen olduğundan teslimi o iptal edip düzeltir.
+export function teslimAlimMiktariEngeli(gonderilen: string, alinan: string, kaynakta: string): string | null {
+  if (binde(alinan) > binde(gonderilen)) return `Gönderilenden (${bindenMetin(binde(gonderilen))}) fazla alınamaz.`;
+  if (binde(alinan) > binde(kaynakta)) return `Kaynakta yeterli stok yok (mevcut ${bindenMetin(binde(kaynakta))}); gönderen teslimi iptal edip düzeltmeli.`;
+  return null;
+}
+// Kısmi karşılanan isteğin kalanı (kart #1410, kullanıcı kararı "Kalanla açık"): istek karşılananla kapanır, kalan yeni istekle açık kalır.
+export function istekKalani(istenen: string, karsilanan: string): string | null {
+  const k = binde(istenen) - binde(karsilanan);
+  return k > 0n ? bindenMetin(k) : null;
+}
+// Yoldaki teslim kaynağında ayrılmıştır (kart #1410): gönderilen ya da kullanılan miktar bakiyeden yoldakiler düşülünce kalanı aşamaz;
+// yoksa aynı parça iki kez gönderilir ve hata ancak alan teslim alırken çıkar.
+export function serbestMiktarEngeli(bakiye: string, yolda: string, miktar: string, eylem: string): string | null {
+  const serbest = binde(bakiye) - binde(yolda);
+  if (binde(miktar) <= serbest) return null;
+  const s = bindenMetin(serbest > 0n ? serbest : 0n);
+  return binde(yolda) > 0n ? `Burada ${s} serbest var (${bindenMetin(binde(yolda))} yolda); fazlası ${eylem}.` : `Burada ${s} var; fazlası ${eylem}.`;
+}
+
+// ---- Üretim sayımının stoğa yansıması (kart #1289) ------------------------------------------------------------------------------
+export interface IstasyonEmirBakiyesi { partiId: number; statuId: number | null; kaliteDurumu?: KaliteDurumu; miktar: string; ayrilan: string }
+export interface SayimYansimaPlani {
+  // Aynı konumda statü dönüşümü (kaynak → hedef); kalite durumu da dönüşebilir (miras, 138 a).
+  donusumler: { partiId: number; kaynakStatuId: number | null; hedefStatuId: number | null; kaynakKalite: KaliteDurumu; hedefKalite: KaliteDurumu; miktar: bigint }[];
+  // Emrin partisine yeni üretim girişi (yalnız artışta).
+  giris: bigint;
+  // Azalışta dönüşümle karşılanmayan, üretim girişi geri alınarak düşülecek miktar (parti ve kalite durumu başına).
+  geriAlinacaklar: { partiId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: bigint }[];
+}
+const serbest = (b: IstasyonEmirBakiyesi): bigint => { const k = binde(b.miktar) - binde(b.ayrilan); return k > 0n ? k : 0n; };
+// 138 a: girdiden ürüne en kötü kalite durumu geçer (red > karar_bekliyor > sartli > serbest).
+const KALITE_SIRASI: readonly KaliteDurumu[] = ['serbest', 'sartli', 'karar_bekliyor', 'red'];
+export function enKotuKalite(...durumlar: readonly KaliteDurumu[]): KaliteDurumu {
+  return durumlar.reduce<KaliteDurumu>((a, b) => (KALITE_SIRASI.indexOf(b) > KALITE_SIRASI.indexOf(a) ? b : a), 'serbest');
+}
+// STK-U1: sağlam artışı önce istasyondaki emrin başka statüdeki (önceki adımdan gelen) parçasını adımın statüsüne çevirir; yoldaki
+// teslime ayrılan çevrilmez. Kalan yeni üretim girişidir (ilk adımda girdi parça yoktur). Çevrilen parça sayımın ve kendi kalite
+// durumunun kötüsünü alır (karar bekleyen sayım, 131 b; miras, 138 a).
+export function sayimArtisPlani(artis: bigint, hedefStatuId: number | null, bakiyeler: readonly IstasyonEmirBakiyesi[], kalite: KaliteDurumu = 'serbest'): SayimYansimaPlani {
+  let kalan = artis;
+  const donusumler: SayimYansimaPlani['donusumler'] = [];
+  for (const b of bakiyeler) {
+    if (kalan <= 0n) break;
+    if (b.statuId === hedefStatuId) continue;
+    const al = serbest(b) < kalan ? serbest(b) : kalan;
+    if (al <= 0n) continue;
+    const kaynakKalite = b.kaliteDurumu ?? 'serbest';
+    donusumler.push({ partiId: b.partiId, kaynakStatuId: b.statuId, hedefStatuId, kaynakKalite, hedefKalite: enKotuKalite(kalite, kaynakKalite), miktar: al });
+    kalan -= al;
+  }
+  return { donusumler, giris: kalan, geriAlinacaklar: [] };
+}
+// STK-U2: sağlam azalışı yalnız adımın statüsünde istasyonda kalan ve yoldaki teslime ayrılmamış miktardan düşülür; teslim edilen
+// (yoldaki ya da alınan) sayı kilitlidir, fazlası reddedilir (null). Düşüş önce o partideki dönüşümü geri çevirir, kalanı üretim
+// girişinden geri alınır. Önce sayımın kalite durumundaki parça düşülür (karar bekleyen düzeltme karar bekleyenden); kalite geri çevrilmez.
+export function sayimAzalisPlani(
+  azalis: bigint, hedefStatuId: number | null, bakiyeler: readonly IstasyonEmirBakiyesi[],
+  donusumler: readonly { partiId: number; oncekiStatuId: number | null; miktar: string }[], kalite: KaliteDurumu = 'serbest',
+): SayimYansimaPlani | null {
+  const adimdaki = bakiyeler.filter((b) => b.statuId === hedefStatuId);
+  adimdaki.sort((a, b) => Number((b.kaliteDurumu ?? 'serbest') === kalite) - Number((a.kaliteDurumu ?? 'serbest') === kalite));
+  if (adimdaki.reduce((t, b) => t + serbest(b), 0n) < azalis) return null;
+  const geri = new Map(donusumler.map((d) => [`${d.partiId}:${String(d.oncekiStatuId)}`, binde(d.miktar)]));
+  const plan: SayimYansimaPlani = { donusumler: [], giris: 0n, geriAlinacaklar: [] };
+  let kalan = azalis;
+  for (const b of adimdaki) {
+    if (kalan <= 0n) break;
+    const k = b.kaliteDurumu ?? 'serbest';
+    let al = serbest(b) < kalan ? serbest(b) : kalan;
+    kalan -= al;
+    for (const d of donusumler) {
+      if (al <= 0n) break;
+      if (d.partiId !== b.partiId) continue;
+      const anahtar = `${d.partiId}:${String(d.oncekiStatuId)}`;
+      const acik = geri.get(anahtar) ?? 0n;
+      const cevir = acik < al ? acik : al;
+      if (cevir <= 0n) continue;
+      plan.donusumler.push({ partiId: b.partiId, kaynakStatuId: hedefStatuId, hedefStatuId: d.oncekiStatuId, kaynakKalite: k, hedefKalite: k, miktar: cevir });
+      geri.set(anahtar, acik - cevir);
+      al -= cevir;
+    }
+    if (al > 0n) plan.geriAlinacaklar.push({ partiId: b.partiId, statuId: hedefStatuId, kaliteDurumu: k, miktar: al });
+  }
+  return plan;
+}
+
+// ---- Hazırlık (toplama ve istek birleşik) ----------------------------------------------------------------------------------
+// STK-H1: açık hazırlık listesindeki istek tek başına teslim edilmez ve başka listeye girmez.
+export function istekListeEngeli(istek: { toplamaNo?: string | null; toplamaDurumu?: string | null }): string | null {
+  return istek.toplamaDurumu === 'topluyor' ? `İstek ${istek.toplamaNo ?? 'bir'} hazırlık listesinde; liste karşılar.` : null;
+}
+// STK-H2: adımda planlanandan az toplanabilir (kısmi), fazlası toplanmaz; sıfır toplanmaz.
+export function adimMiktarEngeli(planlanan: string, toplanan: string): string | null {
+  const t = binde(toplanan);
+  if (t <= 0n) return 'Toplanan miktar sıfırdan büyük olmalı.';
+  if (t > binde(planlanan)) return `Bu gözden en çok ${bindenMetin(binde(planlanan))} toplanır; fazlası için yeni liste açın.`;
+  return null;
+}
+// STK-H4: liste bitince toplanan miktar, aynı malzemenin istekleri arasında açılış sırasıyla dağıtılır; bir isteğe istediğinden
+// fazlası yazılmaz. Hiç karşılanamayan istek açık kalır (listeden çıkar, yeniden listelenebilir).
+export function istekKarsilamalari(istekler: readonly { id: number; malzemeId: number; miktar: string }[], toplanan: ReadonlyMap<number, string>): Map<number, string> {
+  const kalan = new Map([...toplanan].map(([m, t]) => [m, binde(t)]));
+  const sonuc = new Map<number, string>();
+  for (const i of istekler) {
+    const eldeki = kalan.get(i.malzemeId) ?? 0n;
+    const verilen = eldeki < binde(i.miktar) ? eldeki : binde(i.miktar);
+    if (verilen <= 0n) continue;
+    sonuc.set(i.id, bindenMetin(verilen));
+    kalan.set(i.malzemeId, eldeki - verilen);
+  }
+  return sonuc;
+}
+
+// ---- İstasyon sepeti: sonraki istasyon (kart #1353) ---------------------------------------------------------------------------
+// Parçanın bulunduğu adım, rotada bu istasyondaki adımlardan statüsü parçanınkiyle eşleşendir; statüsüz parça son işlenmiş hâldir
+// (istasyondaki son adım). Sonraki istasyon, ondan sonraki ilk farklı istasyondur; aynı istasyondaki ardışık adım teslim istemez.
+export interface SepetAdimi { sira: number; opNo: number; istasyonId: number | null; statuId: number | null }
+export type SonrakiIstasyon = { istasyonId: number; opNo: number } | { yok: 'son-adim' | 'fason' | 'rota-disi' };
+export function sonrakiIstasyon(adimlar: readonly SepetAdimi[], buradakiIstasyonId: number, parcaStatuId: number | null): SonrakiIstasyon {
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira || a.opNo - b.opNo);
+  const burada = sirali.flatMap((a, i) => (a.istasyonId === buradakiIstasyonId ? [i] : []));
+  if (burada.length === 0) return { yok: 'rota-disi' };
+  const eslesen = parcaStatuId === null ? burada.at(-1)! : burada.find((i) => sirali[i]!.statuId === parcaStatuId);
+  if (eslesen === undefined) return { yok: 'rota-disi' };
+  const sonraki = sirali.slice(eslesen + 1).find((a) => a.istasyonId !== buradakiIstasyonId);
+  if (sonraki === undefined) return { yok: 'son-adim' };
+  return sonraki.istasyonId === null ? { yok: 'fason' } : { istasyonId: sonraki.istasyonId, opNo: sonraki.opNo };
+}
+
+// ---- Terminal üretim girişi: adımın girdisi ve çıktısı ------------------------------------------------------------------------
+// Bir adet için reçete miktarı (dört ondalık) x adet (binde); stoğun üç ondalığına yukarı yuvarlanır (eksik düşülmez).
+export function adetMiktari(adetBinde: bigint, birimMiktar: string): bigint {
+  return onBindeCarp(adetBinde, onBindeOku(birimMiktar));
+}
+function onBindeOku(birimMiktar: string): bigint {
+  const p = DORT_ONDALIK.exec(birimMiktar.trim());
+  if (!p) throw new Error(`Reçete miktarı biçimi geçersiz: ${birimMiktar}`);
+  return BigInt(p[1] ?? '0') * 10000n + BigInt((p[2] ?? '').padEnd(4, '0'));
+}
+const onBindeCarp = (adetBinde: bigint, onBinde: bigint): bigint => (adetBinde * onBinde + 9999n) / 10000n;
+
+// Başlatmadan önce adımın girdileri (kart #1289): istasyonda en az bir adetlik girdi yoksa eksiktir. İstenecek, emrin bütün adedi
+// için gereken miktarın istasyondakinden fazlasıdır. Aynı malzeme adımda iki kez yazılmışsa miktarları toplanır.
+export interface BaslatmaEksigi { malzemeId: number; gereken: bigint; istasyonda: bigint; istenecek: bigint }
+export function baslatmaEksikleri(
+  girdiler: readonly { malzemeNo: number; miktar: string }[], istasyonda: ReadonlyMap<number, bigint>, adetBinde: bigint,
+): BaslatmaEksigi[] {
+  // Toplam, bir adetin yuvarlanmış miktarından değil reçetenin dört ondalığından çarpılır: 1000 x 0,0004 kg 1 kg değil 0,4 kg'dır.
+  const birim = new Map<number, bigint>();
+  for (const g of girdiler) birim.set(g.malzemeNo, (birim.get(g.malzemeNo) ?? 0n) + onBindeOku(g.miktar));
+  const eksikler: BaslatmaEksigi[] = [];
+  for (const [malzemeId, onBinde] of birim) {
+    const gereken = onBindeCarp(1000n, onBinde);
+    const mevcut = istasyonda.get(malzemeId) ?? 0n;
+    if (gereken <= 0n || mevcut >= gereken) continue;
+    const toplam = onBindeCarp(adetBinde, onBinde);
+    eksikler.push({ malzemeId, gereken, istasyonda: mevcut, istenecek: toplam > mevcut ? toplam - mevcut : gereken - mevcut });
+  }
+  return eksikler;
+}
+
+// Sayım farkının stoğa planı. Adım taşınan malzemeyi (statü kuralı: ilk adımın ilk girdisi; çıktılı adımdan sonra o adımın çıktısı)
+// üç biçimde işler: ara adımda aynı malzeme kalır, önceki statüden adımın statüsüne çevrilir; çıktılı adımda (adım çıktısı dolu) taşınan
+// düşülür, çıktı kartı girer; son adımda taşınan düşülür, emrin ürünü (ya da adımın çıktısı) girer. Adımın öteki girdileri üretime
+// sarftır. İlk adımda taşınan malzeme adımın girdisidir: ara adımsa sarf değil çevirmedir, öteki hâllerde girdi olarak düşülür.
+// Çıktı statüsüz girer; çıktılı adımdan sonraki adım taşınanı statüsüzden alır.
+export interface UretimAdimPlani {
+  // tasinan: önceki adımlardan gelen parça; statüsüz olsa da istasyonda ya da üretim çıkışında bulunabilir.
+  sarflar: { malzemeId: number; statuId: number | null; miktar: bigint; tasinan?: true }[];
+  cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
+  // malzemeId null: emrin ürünü.
+  giris: { malzemeId: number | null; miktar: bigint } | null;
+}
+export function uretimAdimPlani(g: {
+  adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
+  cikti: number | null; girdiler: readonly { malzemeNo: number; miktar: string }[]; tasinan: { malzemeNo: number; miktar: string };
+}): UretimAdimPlani {
+  const cevirmeli = !g.sonAdim && g.cikti === null;
+  const sarflar: UretimAdimPlani['sarflar'] = [];
+  let tasinanGirdide = false;
+  for (const x of g.girdiler) {
+    if (g.ilkAdim && !tasinanGirdide && x.malzemeNo === g.tasinan.malzemeNo) {
+      tasinanGirdide = true;
+      if (cevirmeli) continue;
+    }
+    sarflar.push({ malzemeId: x.malzemeNo, statuId: null, miktar: adetMiktari(g.adet, x.miktar) });
+  }
+  const tasinanMiktari = adetMiktari(g.adet, g.tasinan.miktar);
+  const kaynak = g.ilkAdim || g.oncekiCiktili ? null : g.oncekiStatuId;
+  let cevirme: UretimAdimPlani['cevirme'] = null;
+  if (cevirmeli) {
+    if (kaynak !== g.statuId && (!g.ilkAdim || tasinanGirdide)) {
+      cevirme = { malzemeId: g.tasinan.malzemeNo, kaynakStatuId: kaynak, hedefStatuId: g.statuId, miktar: tasinanMiktari, ...(g.ilkAdim ? {} : { tasinan: true as const }) };
+    }
+  } else if (!g.ilkAdim) {
+    sarflar.push({ malzemeId: g.tasinan.malzemeNo, statuId: kaynak, miktar: tasinanMiktari, tasinan: true });
+  }
+  const giris = g.sonAdim ? { malzemeId: g.cikti, miktar: g.adet } : g.cikti === null ? null : { malzemeId: g.cikti, miktar: g.adet };
+  return { sarflar, cevirme, giris };
+}
+
+// Denetim #1: emre elle sarf edilen statüsüz girdi sayımda yeniden düşülmez. Sayımın istediğinden, emrin ihtiyacını aşan kısım elle
+// verilenden mahsup edilir (en çok elle verilen kadar): toplam düşüm ihtiyacı aşmaz. İhtiyaç bilinmiyorsa mahsup yoktur. Elle verilen
+// emrin sonuna sayılır: önce gelen sayım depodan düşebilir, emir bitince toplam doğrudur.
+export function elleSarfMahsubu(g: { istenen: bigint; elle: bigint; net: bigint; ihtiyac: bigint | null }): bigint {
+  if (g.ihtiyac === null || g.elle <= 0n) return 0n;
+  const fazla = g.net + g.istenen - g.ihtiyac;
+  const m = fazla < g.elle ? fazla : g.elle;
+  return m <= 0n ? 0n : m < g.istenen ? m : g.istenen;
+}
+
+// Bulunan kaynaklardan sırayla istenen kadar alınır; yetmezse bulunan kadarı (eksik tamamlamada görünür).
+export function kaynaklardanAl<T extends { serbest: string }>(kaynaklar: readonly T[], istenen: bigint): (T & { miktar: bigint })[] {
+  const alinan: (T & { miktar: bigint })[] = [];
+  let kalan = istenen;
+  for (const k of kaynaklar) {
+    if (kalan <= 0n) break;
+    const s = binde(k.serbest);
+    if (s <= 0n) continue;
+    const al = s < kalan ? s : kalan;
+    alinan.push({ ...k, miktar: al });
+    kalan -= al;
+  }
+  return alinan;
+}
+
+// Sayımın girdisi kaynak sırasıyla alınır; serbest olmayan (karar bekleyen, red) istasyondaki parça rezerve dışıdır ve uyarıyla
+// kullanılır (135), serbestten yalnız emrin kullanabileceği kadarı (serbestHakki) alınır.
+export function girdiSec<T extends { serbest: string; kaliteDurumu: KaliteDurumu }>(kaynaklar: readonly T[], istenen: bigint, serbestHakki: bigint): (T & { miktar: bigint })[] {
+  const alinan: (T & { miktar: bigint })[] = [];
+  let kalan = istenen;
+  let hak = serbestHakki;
+  for (const k of kaynaklar) {
+    if (kalan <= 0n) break;
+    let s = binde(k.serbest);
+    if (k.kaliteDurumu === 'serbest' && s > hak) s = hak;
+    if (s <= 0n) continue;
+    const al = s < kalan ? s : kalan;
+    alinan.push({ ...k, miktar: al });
+    kalan -= al;
+    if (k.kaliteDurumu === 'serbest') hak -= al;
+  }
+  return alinan;
+}
+
+// Rezerve sınırı: emir statüdeki toplamdan başka emirlere ayrılanı kullanamaz; istenen bunun üstündeyse kalan kadarı.
+export function rezerveSiniri(toplam: bigint, digerlerine: bigint, istenen: bigint): bigint {
+  const serbest = toplam - digerlerine;
+  if (serbest <= 0n) return 0n;
+  return istenen < serbest ? istenen : serbest;
+}
+
+// Fason gönderimi eksik gitti mi: istasyonda yeterli parça yoksa olan kadar taşınır (reddedilmez); beklenenden az taşınmışsa eksiktir.
+export const fasonGonderimiEksikMi = (beklenen: bigint, tasinan: bigint): boolean => beklenen > 0n && tasinan < beklenen;
+
+// 94 a: eski etiketin QR'ı eski kodu taşır; kodu değişip açık kalan konum yeniden basılır, kapanan konuma etiket gerekmez.
+export function koduDegisenler(
+  onceki: readonly { id: number; kod: string }[],
+  sonraki: readonly { id: number; kod: string; tur: KonumTuru; ad: string | null; bolmeNo: number | null; katNo: number | null; aktif: boolean }[],
+): KoduDegisenKonum[] {
+  const eski = new Map(onceki.map((k) => [k.id, k.kod]));
+  return sonraki.flatMap((k) => {
+    const eskiKod = eski.get(k.id);
+    return eskiKod === undefined || eskiKod === k.kod || !k.aktif ? []
+      : [{ konumId: k.id, eskiKod, yeniKod: k.kod, tur: k.tur, ad: k.ad, bolmeNo: k.bolmeNo, katNo: k.katNo }];
+  }).sort((a, b) => a.yeniKod.localeCompare(b.yeniKod, 'tr'));
+}
+
+// 147 b: red parça sevke uyarıyla çıkar ve sevk kaydına "red" notu düşer; karar bekleyen parça sevke çıkamaz. Öbür çıkışlarda (sarf, fire,
+// numune) karar bekleyen ve red parça uyarıyla düşer (135). Serbest ve şartlıda uyarı yok.
+export function cikisKaliteKarari(kalite: KaliteDurumu, cikisNedeni: string): { engel: string } | { uyari: string; not: string | null } | null {
+  if (kalite === 'serbest' || kalite === 'sartli') return null;
+  if (cikisNedeni === 'sevk') {
+    return kalite === 'karar_bekliyor' ? { engel: 'Karar bekleyen parça sevke çıkamaz; kalite kararını bekleyin.' }
+      : { uyari: 'Red parça sevke çıktı; sevk kaydına "red" notu düştü.', not: 'Red parça' };
+  }
+  return { uyari: kalite === 'red' ? 'Red parça düşüldü.' : 'Karar bekleyen parça düşüldü.', not: null };
+}
+// Denetim #15 (229 a, 147 b): karantinadaki parça depoda yalnız imha edilir; hurdaya taşınır ya da fire nedeniyle çıkar. Serbest bırakma
+// Kalite Merkezi'nin kararıyla olur (stok/disari karantinadanBirak). Karantinaya taşıma serbesttir.
+export const KARANTINA_ENGELI = 'Karantinadaki parça yalnız hurdaya taşınır ya da fire nedeniyle çıkar; serbest bırakma Kalite Merkezi kararıyla olur.';
+export function karantinaEngeli(kaynakTuru: KonumTuru, g: { cikisNedeni: string } | { hedefTuru: KonumTuru }): string | null {
+  if (kaynakTuru !== 'karantina') return null;
+  return ('cikisNedeni' in g ? g.cikisNedeni === 'fire' : g.hedefTuru === 'hurda') ? null : KARANTINA_ENGELI;
+}
+export function kaliteDegisimiEngeli(kaynak: KaliteDurumu, hedef: KaliteDurumu, mevcut: string, miktar: string): string | null {
+  if (kaynak === hedef) return 'Kaynak ve hedef kalite durumu aynı.';
+  if (binde(mevcut) < binde(miktar)) return `Bu kalite durumunda yeterli stok yok. Mevcut: ${bindenMetin(binde(mevcut))}.`;
+  return null;
+}
+
+// ---- Ürün sevki (235 a) -------------------------------------------------------------------------------------------------------------
+// Sevkiyat işinin durum değişimi stokta adımlara açılır: yola çıkan iş ürünü müşterinin Yolda konumuna taşır, teslim Yolda'dan çıkış
+// yazar; geri dönüşler bunların geri almasıdır. Havuzda ile planlandı stokta aynıdır. Atlanan ara durum (havuzdan teslime) iki adımdır.
+export type UrunSevkAdimi = 'yola_cik' | 'teslim' | 'teslim_geri' | 'yola_geri';
+const SEVK_SEVIYESI = { havuzda: 0, planlandi: 0, yolda: 1, tamamlandi: 2 } as const;
+export function urunSevkAdimlari(onceki: keyof typeof SEVK_SEVIYESI, yeni: keyof typeof SEVK_SEVIYESI): UrunSevkAdimi[] {
+  const a = SEVK_SEVIYESI[onceki], b = SEVK_SEVIYESI[yeni];
+  const adimlar: UrunSevkAdimi[] = [];
+  for (let s = a; s < b; s += 1) adimlar.push(s === 0 ? 'yola_cik' : 'teslim');
+  for (let s = a; s > b; s -= 1) adimlar.push(s === 2 ? 'teslim_geri' : 'yola_geri');
+  return adimlar;
+}
+
+// Sevkiyatın adedi dört haneli ondalıktır (numeric); stok binde tutar. Sondaki sıfırlar atılır, binde sığmayan kesir null'dur.
+export function sevkAdediBinde(adet: string): bigint | null {
+  const p = /^(\d+)(?:\.(\d+))?$/.exec(adet.trim());
+  if (!p) return null;
+  const kesir = (p[2] ?? '').replace(/0+$/, '');
+  return kesir.length > 3 ? null : binde(kesir === '' ? p[1]! : `${p[1]!}.${kesir}`);
+}
+
+// 147 b: karar bekleyen ve karantinadaki parça sevk edilmez; red parça uyarıyla çıkar. Bakiyeler verilen sırayla (öncelik çağıranda)
+// tüketilir; yolda teslime ayrılan dokunulmaz. Yetmezse eksik ve engellenen (kalite yüzünden alınamayan) miktar döner.
+export interface SevkBakiyesi { konumId: number; konumTuru: KonumTuru; partiId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string; ayrilan: string }
+export function sevkKaynaklariSec(bakiyeler: readonly SevkBakiyesi[], istenen: bigint): { secim: (SevkBakiyesi & { alinan: bigint })[]; eksik: bigint; engelli: bigint } {
+  const secim: (SevkBakiyesi & { alinan: bigint })[] = [];
+  let kalan = istenen, engelli = 0n;
+  for (const b of bakiyeler) {
+    const serbest = binde(b.miktar) - binde(b.ayrilan);
+    if (serbest <= 0n) continue;
+    if (b.kaliteDurumu === 'karar_bekliyor' || b.konumTuru === 'karantina') { engelli += serbest; continue; }
+    if (kalan === 0n) continue;
+    const alinan = serbest < kalan ? serbest : kalan;
+    secim.push({ ...b, alinan });
+    kalan -= alinan;
+  }
+  return { secim, eksik: kalan, engelli };
+}
+
+// ---- Kişi kodu (299 b): teslim alacak kişinin gösterdiği, sunucu anahtarıyla imzalı ve kısa süre geçerli kod ------------------
+// Biçim KSI-<kişi>-<son>-<imza>; son, geçerliliğin bittiği an (saniye, 36 tabanında). İmzayı servis hesaplar, burada biçim ve süre.
+// Süre, gönderenin miktarı yazıp göndermesine yetecek kadardır; ekran kodu süre dolmadan yeniler.
+export const KISI_KODU_SURESI_SN = 120;
+export const kisiKoduGovdesi = (kisiId: number, sonSn: number): string => `KSI-${kisiId}-${sonSn.toString(36).toUpperCase()}`;
+export function kisiKoduAyristir(ham: string): { govde: string; kisiId: number; sonSn: number; imza: string } | null {
+  const p = /^KSI-(\d{1,9})-([0-9A-Z]{1,10})-([0-9a-f]{32})$/i.exec(ham.trim());
+  if (!p) return null;
+  const kisiId = Number(p[1]), sonSn = parseInt(p[2]!, 36);
+  return { govde: kisiKoduGovdesi(kisiId, sonSn), kisiId, sonSn, imza: p[3]!.toLowerCase() };
+}
+export function kisiKoduEngeli(sonSn: number, simdiSn: number, imzaDogru: boolean): string | null {
+  if (!imzaDogru || sonSn > simdiSn + KISI_KODU_SURESI_SN) return 'Kişi kodu geçersiz; karşıdakinden ekrandaki kodu yeniden göstermesini isteyin.';
+  if (sonSn < simdiSn) return 'Kişi kodunun süresi geçti; karşıdakinden ekrandaki yeni kodu göstermesini isteyin.';
+  return null;
+}

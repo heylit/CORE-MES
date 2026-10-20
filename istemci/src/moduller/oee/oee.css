@@ -1,0 +1,7 @@
+.tc-oee { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-oee-suzgec { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); }
+.tc-oee-tarihler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-oee-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); max-width: 80ch; }
+.tc-oee-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 8)), 1fr)); gap: var(--b-2); }
+.tc-oee-ad { overflow-wrap: anywhere; }
+.tc-oee-adet { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--b-1); }

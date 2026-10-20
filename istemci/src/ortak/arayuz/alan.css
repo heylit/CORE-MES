@@ -1,0 +1,25 @@
+.tc-alan { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-alan-etiket { font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
+.tc-alan-zorunlu { color: var(--stop); }
+.tc-alan-kutu {
+  width: 100%; min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink);
+}
+.tc-alan-kutu::placeholder { color: var(--faint); }
+.tc-alan-kutu:disabled { opacity: .5; cursor: not-allowed; }
+.tc-alan-cok { padding: var(--b-2) var(--b-3); resize: vertical; }
+.tc-alan-alt { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-alan-hatali .tc-alan-kutu { border-color: var(--stop); }
+.tc-alan-hatali .tc-alan-alt { color: var(--stop); font-weight: 700; }
+
+.tc-isaret { display: inline-flex; align-items: center; gap: var(--b-3); min-height: var(--dokunma); cursor: pointer; }
+.tc-isaret input { width: var(--b-5); height: var(--b-5); flex: none; accent-color: var(--hazard); }
+.tc-isaret:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+
+/* Form düzeni: geniş ekranda iki sütun, telefonda tek sütun. */
+.tc-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-4); }
+.tc-form-tam { grid-column: 1 / -1; }
+@media (max-width: 767px) {
+  .tc-form { grid-template-columns: minmax(0, 1fr); }
+}

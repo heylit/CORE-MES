@@ -1,0 +1,15 @@
+/* "Ne oldu?" paneli: finanstaki olay seçicinin düzeni (sol kenarı vurgulu olay kartları, grup başlıkları). */
+.tc-is-paneli-alt { margin: 0 0 var(--b-3); color: var(--muted); font-size: var(--yazi-s); }
+.tc-is-paneli-grup + .tc-is-paneli-grup { margin-top: var(--b-5); }
+.tc-is-paneli-grup-ad { margin: 0 0 var(--b-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-is-paneli-liste { display: grid; gap: var(--b-2); list-style: none; margin: 0; padding: 0; }
+.tc-is-paneli-olay {
+  display: flex; align-items: flex-start; gap: var(--b-3); inline-size: 100%;
+  min-block-size: var(--dokunma); padding: var(--b-3) var(--b-4);
+  border: 1px solid var(--edge2); border-inline-start: var(--b-1) solid var(--sig); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.tc-is-paneli-olay > .tc-simge { flex: none; margin-top: var(--pay-ince); color: var(--sig); }
+.tc-is-paneli-olay:hover, .tc-is-paneli-olay:focus-visible { border-color: var(--sig); }
+.tc-is-paneli-metin { display: flex; flex-direction: column; gap: var(--pay-ince); min-width: 0; overflow-wrap: anywhere; }
+.tc-is-paneli-metin > span { color: var(--muted); font-size: var(--yazi-s); }

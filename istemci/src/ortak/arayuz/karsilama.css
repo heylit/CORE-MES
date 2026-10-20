@@ -1,0 +1,57 @@
+.tc-karsilama-perde {
+  position: fixed; inset: 0; z-index: var(--z-katman);
+  display: flex; align-items: center; justify-content: center; padding: var(--b-4);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: var(--bulanik-perde);
+}
+.tc-karsilama {
+  display: flex; flex-direction: column; align-items: center; gap: var(--b-3);
+  width: 100%; max-width: var(--pencere-genis); min-width: 0;
+  padding: var(--b-6) var(--b-5) var(--b-5);
+  text-align: center; overflow-wrap: anywhere;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--hazard) 22%, transparent), transparent 70%),
+    var(--panel-solid);
+  border: 1px solid var(--edge2); border-radius: var(--yari-4);
+  box-shadow: var(--shadow);
+  animation: tc-karsilama-gir .5s cubic-bezier(.2, .8, .2, 1);
+}
+.tc-karsilama:focus { outline: none; }
+.tc-karsilama-gorsel { width: 100%; max-width: calc(var(--damga) + var(--b-6)); height: auto; overflow: visible; }
+.tc-karsilama-gunes { fill: var(--hazard); }
+.tc-karsilama-isinlar line { stroke: var(--hazard); stroke-width: 4; stroke-linecap: round; }
+.tc-karsilama-isinlar { animation: tc-karsilama-isil 2.4s ease-in-out infinite alternate; }
+.tc-karsilama-disli path { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; }
+.tc-karsilama-disli { transform-box: fill-box; transform-origin: center; animation: tc-karsilama-don 14s linear infinite; }
+.tc-karsilama-disli-ters { animation-direction: reverse; animation-duration: 10s; }
+.tc-karsilama[data-donem="gece"] {
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--done) 30%, transparent), transparent 70%),
+    var(--panel-solid);
+}
+.tc-karsilama-ay { fill: var(--hazard); filter: drop-shadow(0 0 var(--isik) color-mix(in srgb, var(--hazard) 45%, transparent)); }
+.tc-karsilama-yildizlar path { fill: var(--bp); animation: tc-karsilama-parilda 2.6s ease-in-out infinite alternate; }
+.tc-karsilama-yildizlar path:nth-child(2n) { animation-delay: .7s; }
+.tc-karsilama-yildizlar path:nth-child(3n) { animation-delay: 1.4s; }
+.tc-karsilama-ufuk { stroke: var(--edge2); stroke-width: 2; stroke-linecap: round; }
+.tc-karsilama-tarih { margin: 0; font-size: var(--yazi-s); color: var(--muted); text-transform: capitalize; }
+.tc-karsilama-metin { margin: 0; font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.15; color: var(--ink); }
+.tc-karsilama-ad {
+  display: inline-flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3);
+  font-size: var(--yazi-l); font-weight: 700; color: var(--hazard-ink);
+}
+
+@keyframes tc-karsilama-gir { from { opacity: 0; transform: translateY(var(--b-4)) scale(.97); } }
+@keyframes tc-karsilama-don { to { transform: rotate(360deg); } }
+@keyframes tc-karsilama-parilda { from { opacity: .25; } to { opacity: 1; } }
+@keyframes tc-karsilama-isil { from { opacity: .45; } to { opacity: 1; } }
+
+@media (max-width: 479px) {
+  .tc-karsilama { padding: var(--b-5) var(--b-4) var(--b-4); }
+  .tc-karsilama-metin { font-size: var(--yazi-xl); }
+  .tc-karsilama > .tc-dugme { align-self: stretch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-karsilama, .tc-karsilama-isinlar, .tc-karsilama-disli, .tc-karsilama-yildizlar path { animation: none; }
+}

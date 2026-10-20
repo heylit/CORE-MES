@@ -1,0 +1,128 @@
+/* Giriş iki yüzdür: solda atölye çizim masası (her temada koyu, data-theme), sağda form. Telefonda çizim masası üstte
+   ince bir şerittir ve yalnız marka ile sloganı taşır: form ilk ekranda kalır. */
+.tc-giris {
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; justify-items: center; gap: var(--b-5);
+  min-height: 100%; padding: 0 0 var(--b-5); background: var(--bg);
+}
+
+.tc-giris-tanitim {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: grid; width: 100%; padding: var(--b-5) var(--b-4);
+  color: var(--ink); background-color: var(--bp-bg);
+  /* Çizim masası ızgarası: ince ve kalın kareler. */
+  background-image:
+    linear-gradient(var(--bp-dim2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bp-dim2) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--bp-dim2) 50%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--bp-dim2) 50%, transparent) 1px, transparent 1px);
+  background-size: calc(var(--b-6) * 4) calc(var(--b-6) * 4), calc(var(--b-6) * 4) calc(var(--b-6) * 4), var(--b-6) var(--b-6), var(--b-6) var(--b-6);
+}
+/* Köşedeki sarı ışık: markanın rengi çizimin üstüne düşer. */
+.tc-giris-tanitim::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--hazard) 18%, transparent), transparent 60%);
+}
+.tc-giris-tanitim-ic { display: grid; gap: var(--b-2); width: 100%; max-width: var(--bildirim-genis); justify-self: center; }
+.tc-giris-tanitim-ic > * { animation: tc-giris-yuksel .6s cubic-bezier(.2, .8, .2, 1) both; }
+.tc-giris-tanitim-ic > :nth-child(2) { animation-delay: .08s; }
+.tc-giris-tanitim-ic > :nth-child(3) { animation-delay: .16s; }
+.tc-giris-tanitim-ic > :nth-child(4) { animation-delay: .24s; }
+.tc-giris-tanitim-ic > :nth-child(5) { animation-delay: .32s; }
+
+.tc-giris-marka { display: flex; align-items: center; gap: var(--b-3); }
+.tc-giris-isaret {
+  display: grid; place-items: center; min-width: var(--dokunma); height: var(--dokunma); padding: 0 var(--b-2);
+  border-radius: var(--yari-2); background: var(--hazard); color: var(--on-hazard); font-weight: 800;
+  box-shadow: 0 0 var(--isik-genis) color-mix(in srgb, var(--hazard) 35%, transparent);
+}
+.tc-giris-ad { font-size: var(--yazi-xl); font-weight: 800; letter-spacing: .14em; }
+.tc-giris-slogan { color: var(--bp); font-weight: 600; }
+/* Telefonda tanıtım yalnız marka ve slogandır. */
+.tc-giris-baslik-buyuk, .tc-giris-ozellikler, .tc-giris-not, .tc-giris-cizim { display: none; }
+
+/* Çizim: ham parça kesik çizgi, takım yolu sarı çizilir, cep ve delikler ardından belirir. */
+.tc-giris-cizim { position: absolute; z-index: -1; pointer-events: none; overflow: visible; }
+.tc-giris-cizim :is(rect, path, circle, line) { fill: none; vector-effect: non-scaling-stroke; }
+.tc-giris-cizim-ham { stroke: var(--bp-dim); stroke-width: 1; stroke-dasharray: 6 6; }
+.tc-giris-cizim-yol {
+  stroke: var(--hazard); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 var(--b-1) color-mix(in srgb, var(--hazard) 60%, transparent));
+  animation: tc-giris-ciz 9s linear infinite;
+}
+.tc-giris-cizim-cep, .tc-giris-cizim-delik circle { stroke: var(--bp); stroke-width: 1.5; animation: tc-giris-belir 9s ease-in-out infinite; }
+.tc-giris-cizim-takim circle { stroke: var(--ink); stroke-width: 2; fill: color-mix(in srgb, var(--hazard) 40%, transparent); }
+.tc-giris-cizim-takim line { stroke: var(--ink); stroke-width: 1; opacity: .6; }
+.tc-giris-cizim-olcu line { stroke: var(--bp-dim); stroke-width: 1; }
+.tc-giris-cizim-olcu text { fill: var(--bp-dim); font-size: var(--yazi-xs); text-anchor: middle; }
+
+/* Kutu sabittir, logo içine sığar (oran korunur); formun üstünde ortalanır. */
+.tc-giris-kurum-logo { align-self: center; max-width: 100%; height: calc(var(--dokunma) * 1.5); object-fit: contain; }
+
+.tc-giris-kart {
+  display: flex; flex-direction: column; gap: var(--b-4);
+  width: 100%; max-width: var(--bildirim-genis); padding: var(--b-5);
+  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
+}
+.tc-giris-ust { display: grid; gap: var(--b-1); }
+.tc-giris-baslik { font-size: var(--yazi-l); font-weight: 800; }
+.tc-giris-aciklama { font-size: var(--yazi-s); color: var(--muted); }
+.tc-giris-kisi {
+  display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border-radius: var(--yari-2); background: var(--panel2); font-weight: 700;
+}
+
+.tc-giris-pin {
+  text-align: center; font-family: var(--font-mono); font-size: var(--yazi-xl); letter-spacing: .5em;
+}
+.tc-giris-pin[data-etkin] { border-color: var(--hazard); }
+
+.tc-giris-tuslar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-giris-tus {
+  display: grid; place-items: center; min-height: var(--dokunma-ana);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+  font-size: var(--yazi-xl); font-weight: 700; cursor: pointer;
+}
+.tc-giris-tus:hover { border-color: var(--hazard); }
+.tc-giris-tus:active { background: var(--panel-solid); }
+
+.tc-giris-alt { display: grid; justify-items: center; gap: var(--b-2); text-align: center; }
+.tc-giris-baglanti {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 0; background: none; color: var(--ink); font-weight: 700; cursor: pointer;
+}
+.tc-giris-baglanti:hover { color: var(--hazard-ink); }
+.tc-giris-ipucu { font-size: var(--yazi-xs); color: var(--faint); }
+
+.tc-giris-kart { align-self: center; width: calc(100% - var(--b-4) * 2); animation: tc-giris-yuksel .6s .12s cubic-bezier(.2, .8, .2, 1) both; }
+
+@media (min-width: 1024px) {
+  .tc-giris {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: center;
+    gap: var(--b-6); padding: 0 var(--b-6) 0 0;
+  }
+  .tc-giris-tanitim { align-self: stretch; align-content: end; min-height: 100%; padding: var(--b-6) calc(var(--b-6) * 2); }
+  .tc-giris-tanitim-ic { justify-self: start; max-width: var(--pencere-genis); gap: var(--b-4); }
+  .tc-giris-kart { justify-self: center; width: 100%; }
+  .tc-giris-ad { font-size: var(--yazi-baslik); }
+  .tc-giris-baslik-buyuk { display: block; font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.1; text-wrap: balance; }
+  .tc-giris-ozellikler { display: grid; gap: var(--b-3); margin: 0; padding: 0; list-style: none; }
+  .tc-giris-ozellikler li { display: flex; align-items: center; gap: var(--b-3); color: var(--muted); }
+  .tc-giris-ozellik-simge {
+    display: grid; place-items: center; flex: none; width: var(--dokunma); height: var(--dokunma);
+    border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--hazard-ink);
+  }
+  .tc-giris-not { display: flex; align-items: center; gap: var(--b-2); padding-top: var(--b-3); border-top: 1px solid var(--edge); font-size: var(--yazi-xs); color: var(--faint); }
+  .tc-giris-surum { margin-left: auto; }
+  .tc-giris-cizim { display: block; top: var(--b-6); right: var(--b-6); width: 64%; max-width: var(--pencere-genis); opacity: .9; }
+}
+
+@keyframes tc-giris-yuksel { from { opacity: 0; transform: translateY(var(--b-3)); } }
+@keyframes tc-giris-ciz { 70%, 100% { stroke-dashoffset: 0; } }
+@keyframes tc-giris-belir { 0%, 55% { opacity: 0; } 75%, 92% { opacity: 1; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-giris-tanitim-ic > *, .tc-giris-kart, .tc-giris-cizim-yol, .tc-giris-cizim-cep, .tc-giris-cizim-delik circle { animation: none; }
+  .tc-giris-cizim-yol { stroke-dashoffset: 0; }
+  .tc-giris-cizim-takim { display: none; }
+}

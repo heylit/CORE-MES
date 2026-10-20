@@ -1,0 +1,256 @@
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { Sayfa } from '#paylasilan/sayfalar.ts';
+import { menudeGorunur } from '#paylasilan/sayfalar.ts';
+import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
+import { ara, aramaDizini, sadelestir } from '../rota/arama-dizini.ts';
+import type { IkinciMenu } from '../rota/ikinci-menu.ts';
+import type { SimgeAdi } from '../tasarim/simgeler.ts';
+import { useKayitAramasi, type KayitKaynagi } from '../veri/kayit-aramasi.ts';
+import { Simge } from './Simge.tsx';
+import './arama.css';
+
+interface Ozellikler {
+  sayfalar: readonly Sayfa[];
+  menuler: readonly IkinciMenu[];
+  islemler: readonly string[];
+  // Kişinin görmediği, yalnız kayıtlarını arayabildiği sayfalar: sayfa olarak listelenmez, kayıt kaynağı olur.
+  aramaSayfalari?: readonly Sayfa[];
+}
+
+interface Satir {
+  anahtar: string;
+  tur: 'sayfa' | 'madde' | 'kayit';
+  baslik: string;
+  ust: string | null;
+  ad: string;
+  grup: string | null;
+  aciklama: string | null;
+  yol: string;
+  simge: SimgeAdi;
+}
+
+const SAYFASIZ: readonly Sayfa[] = [];
+
+const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt' };
+
+// Eşleşen parçalar arama dizininin kuralıyla bulunur (Türkçe harf ve büyük-küçük farkı yok): "okut" "Okut"u, "cek" "Çek"i işaretler.
+// Harf harf sadeleştirilir ki işaretin yeri özgün metindeki yerle aynı kalsın.
+function isaretle(metin: string, sorgu: string): ReactNode {
+  const sozcukler = sadelestir(sorgu).split(' ').filter((s) => s !== '');
+  if (sozcukler.length === 0) return metin;
+  const sade = Array.from(metin.split(''), (h) => {
+    if (/\s/.test(h)) return ' ';
+    const k = sadelestir(h);
+    return k.length === 1 ? k : h;
+  }).join('');
+  const isaretli = new Array<boolean>(metin.length).fill(false);
+  for (const s of sozcukler) {
+    for (let i = sade.indexOf(s); i !== -1; i = sade.indexOf(s, i + 1)) isaretli.fill(true, i, i + s.length);
+  }
+  const parcalar: ReactNode[] = [];
+  let bas = 0;
+  for (let i = 1; i <= metin.length; i += 1) {
+    if (i < metin.length && isaretli[i] === isaretli[bas]) continue;
+    const parca = metin.slice(bas, i);
+    parcalar.push(isaretli[bas] ? <mark key={bas} className="tc-arama-isaret">{parca}</mark> : parca);
+    bas = i;
+  }
+  return parcalar;
+}
+
+function Onizleme({ satir }: { satir: Satir | null }) {
+  return (
+    <aside className="tc-arama-onizleme" aria-label="Önizleme" onMouseDown={(o) => { o.preventDefault(); }}>
+      {satir === null
+        ? <p className="tc-arama-onizleme-bos">Yazdıkça sayfalar, menü maddeleri ve kayıtlar süzülür.</p>
+        : (
+          <div className="tc-arama-onizleme-ic" key={satir.anahtar}>
+            <span className="tc-arama-onizleme-simge"><Simge ad={satir.simge} boyut="b" /></span>
+            <p className="tc-arama-onizleme-baslik">{satir.baslik}</p>
+            <dl className="tc-arama-onizleme-bilgi">
+              <dt>Tür</dt><dd>{TUR_ADI[satir.tur]}</dd>
+              {satir.ust !== null && <><dt>Yer</dt><dd>{satir.grup === null ? satir.ust : `${satir.ust} › ${satir.grup}`}</dd></>}
+              {satir.tur === 'kayit' && satir.grup !== null && <><dt>Modül</dt><dd>{satir.grup}</dd></>}
+              {satir.aciklama !== null && <><dt>Açıklama</dt><dd>{satir.aciklama}</dd></>}
+              <dt>Adres</dt><dd className="mono">{satir.yol}</dd>
+            </dl>
+          </div>
+        )}
+      <p className="tc-arama-onizleme-tuslar">
+        <kbd className="mono">↑</kbd><kbd className="mono">↓</kbd> gezin <kbd className="mono">Enter</kbd> aç <kbd className="mono">Esc</kbd> kapat
+      </p>
+    </aside>
+  );
+}
+
+// Arama ucu bildiren ve kişinin gördüğü (ya da yalnız arayabildiği) sayfalar; yetkiyi yine uç denetler.
+function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: SimgeAdi })[] {
+  return sayfalar.filter(menudeGorunur).flatMap((s) => {
+    const uc = (s as Pick<SayfaTanimi, 'aramaUcu'>).aramaUcu;
+    return uc === undefined ? [] : [{ uc, ad: s.baslik, simge: s.simge }];
+  });
+}
+
+// Üst çubuktaki arama (Ctrl K). Önce sayfa ve menü maddeleri (sunucuya gitmeden), altında arama ucu olan modüllerin kayıtları. Çerçeveli modülün içindeki tuşlar modülündür: tuş çerçevenin belgesine gider, buraya ulaşmaz.
+// Açılınca kutu ortada komut paleti olur, arkası perdelenir; geniş ekranda sağda seçili sonucun önizlemesi durur. Kutu DOM'da
+// üst çubukta kalır (yalnız görünüşü taşınır): odak, tuş ve ekran okuyucu düzeni kapalı kutuyla aynıdır.
+// Telefonda yalnız simge düğmesi görünür; dokununca palet ekranın üstünde açılır.
+export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ }: Ozellikler) {
+  const gezin = useNavigate();
+  const [sorgu, sorguYaz] = useState('');
+  const [acik, acikYaz] = useState(false);
+  const [secili, seciliYaz] = useState(0);
+  const kutu = useRef<HTMLInputElement>(null);
+  const kap = useRef<HTMLDivElement>(null);
+  const kimlik = useId();
+  const listeKimlik = `${kimlik}-liste`;
+  const dizin = useMemo(() => aramaDizini(sayfalar, menuler, islemler), [sayfalar, menuler, islemler]);
+  const sayfaSonuclari = useMemo(() => ara(dizin, sorgu), [dizin, sorgu]);
+  const kaynaklar = useMemo(() => kayitKaynaklari([...sayfalar, ...aramaSayfalari]), [sayfalar, aramaSayfalari]);
+  const kayitlar = useKayitAramasi(kaynaklar, acik ? sorgu : '');
+  const sonuclar = useMemo<Satir[]>(() => [
+    ...sayfaSonuclari.map((s): Satir => ({
+      anahtar: s.anahtar, tur: s.ust === null ? 'sayfa' : 'madde', baslik: s.baslik, ust: s.ust,
+      ad: s.ust === null ? s.baslik : `${s.ust} › ${s.baslik}`, grup: s.grup, aciklama: null, yol: s.yol, simge: s.simge,
+    })),
+    ...kayitlar.sonuclar.map((k): Satir => ({
+      anahtar: k.anahtar, tur: 'kayit', baslik: k.baslik, ust: null, ad: k.baslik, grup: k.kaynak, aciklama: k.aciklama, yol: k.yol,
+      simge: kaynaklar.find((y) => y.ad === k.kaynak)?.simge ?? 'search',
+    })),
+  ], [sayfaSonuclari, kayitlar.sonuclar, kaynaklar]);
+  const etiket = kaynaklar.length > 0 ? 'Sayfa ya da kayıt ara' : 'Sayfa ya da menü ara';
+  const listeAcik = acik && sorgu.trim() !== '';
+
+  // Modülün kendi Ctrl K'sı (stokta ve satın almada kendi araması) önce gelir. Kabuk tuşu en önce (yakalama evresinde)
+  // görür ve tarayıcının kendi Ctrl K'sını hemen durdurur; modülün dinleyicisi tuşu işlerse (preventDefault çağırırsa)
+  // bunu öğrenmek için çağrı sayılır. Olay bitince modül işlememişse kabuğun kutusu açılır.
+  useEffect(() => {
+    const tus = (o: globalThis.KeyboardEvent) => {
+      if (!(o.ctrlKey || o.metaKey) || o.altKey || o.key.toLocaleLowerCase('tr') !== 'k') return;
+      const durdur = o.preventDefault.bind(o);
+      let modulAldi = false;
+      Object.defineProperty(o, 'preventDefault', { configurable: true, value: () => { modulAldi = true; durdur(); } });
+      durdur();
+      window.setTimeout(() => {
+        if (modulAldi) return;
+        acikYaz(true);
+        kutu.current?.focus();
+        kutu.current?.select();
+      }, 0);
+    };
+    window.addEventListener('keydown', tus, true);
+    return () => { window.removeEventListener('keydown', tus, true); };
+  }, []);
+
+  const kapat = () => { acikYaz(false); sorguYaz(''); seciliYaz(0); };
+  const git = (yol: string) => {
+    kapat();
+    kutu.current?.blur();
+    void gezin(yol);
+  };
+  const tusla = (o: KeyboardEvent<HTMLInputElement>) => {
+    if (o.key === 'Escape') {
+      o.preventDefault();
+      kapat();
+      kutu.current?.blur();
+      return;
+    }
+    if (!listeAcik || sonuclar.length === 0) return;
+    if (o.key === 'ArrowDown' || o.key === 'ArrowUp') {
+      o.preventDefault();
+      const son = sonuclar.length - 1;
+      seciliYaz((s) => (o.key === 'ArrowDown' ? (s >= son ? 0 : s + 1) : (s <= 0 ? son : s - 1)));
+    } else if (o.key === 'Enter') {
+      o.preventDefault();
+      const hedef = sonuclar[Math.min(secili, sonuclar.length - 1)];
+      if (hedef) git(hedef.yol);
+    }
+  };
+  const seciliSira = Math.min(secili, sonuclar.length - 1);
+  const seciliKimlik = listeAcik && sonuclar.length > 0 ? `${listeKimlik}-${seciliSira}` : undefined;
+  const seciliSatir = listeAcik ? sonuclar[seciliSira] ?? null : null;
+  // Klavyeyle gezilen satır görünür alanda kalsın; liste kendi içinde kayar.
+  useEffect(() => {
+    if (seciliKimlik === undefined) return;
+    document.getElementById(seciliKimlik)?.scrollIntoView?.({ block: 'nearest' });
+  }, [seciliKimlik]);
+
+  return (
+    <div
+      ref={kap}
+      className="tc-arama"
+      data-acik={acik ? '' : undefined}
+      onBlur={(o) => { if (!kap.current?.contains(o.relatedTarget as Node | null)) { acikYaz(false); } }}
+    >
+      <button
+        type="button"
+        className="tc-kabuk-tema tc-arama-dugme"
+        aria-label="Ara"
+        onClick={() => { acikYaz(true); requestAnimationFrame(() => { kutu.current?.focus(); }); }}
+      >
+        <Simge ad="search" />
+      </button>
+      {acik && (
+        <div
+          className="tc-arama-perde"
+          aria-hidden="true"
+          onMouseDown={(o) => { o.preventDefault(); acikYaz(false); kutu.current?.blur(); }}
+        />
+      )}
+      <div className="tc-arama-palet">
+        <label className="tc-arama-kutu">
+          <Simge ad="search" boyut="k" />
+          <input
+            ref={kutu}
+            type="search"
+            role="combobox"
+            aria-label={etiket}
+            aria-expanded={listeAcik}
+            aria-controls={listeKimlik}
+            aria-autocomplete="list"
+            aria-activedescendant={seciliKimlik}
+            placeholder={etiket}
+            autoComplete="off"
+            spellCheck={false}
+            value={sorgu}
+            onChange={(o) => { sorguYaz(o.target.value); seciliYaz(0); acikYaz(true); }}
+            onFocus={() => { acikYaz(true); }}
+            onKeyDown={tusla}
+          />
+          <kbd className="tc-arama-tus mono" aria-hidden="true">Ctrl K</kbd>
+          <button type="button" className="tc-arama-kapat" aria-label="Aramayı kapat" onClick={() => { kapat(); kutu.current?.blur(); }}>
+            <Simge ad="x" boyut="k" />
+          </button>
+        </label>
+        <div id={listeKimlik} role="listbox" aria-label="Arama sonuçları" className="tc-arama-liste" hidden={!listeAcik}>
+          {listeAcik && sonuclar.length === 0 && !kayitlar.suruyor && <p className="tc-arama-bos">Sonuç yok</p>}
+          {listeAcik && sonuclar.map((s, sira) => (
+            <div
+              key={s.anahtar}
+              id={`${listeKimlik}-${sira}`}
+              role="option"
+              aria-selected={sira === seciliSira}
+              // İşaret parçaları ekran okuyucuda sözcüğü bölmesin: ad işaretsiz metinden kurulur.
+              aria-label={[s.ad, s.aciklama, s.grup].filter((p) => p !== null).join(' ')}
+              className="tc-arama-sonuc"
+              // Tıklama girişten odağı almadan önce seçilsin: kutu kapanmadan gidilir.
+              onMouseDown={(o) => { o.preventDefault(); }}
+              onClick={() => { git(s.yol); }}
+              onMouseEnter={() => { seciliYaz(sira); }}
+            >
+              <Simge ad={s.simge} boyut="k" />
+              <span className="tc-arama-ad">
+                {isaretle(s.ad, sorgu)}
+                {s.aciklama !== null && <span className="tc-arama-aciklama">{s.aciklama}</span>}
+              </span>
+              {s.grup !== null && <span className="tc-arama-grup">{s.grup}</span>}
+            </div>
+          ))}
+          {listeAcik && kayitlar.suruyor && <p className="tc-arama-bos" role="status">Kayıtlar aranıyor</p>}
+        </div>
+        {acik && <Onizleme satir={seciliSatir} />}
+      </div>
+    </div>
+  );
+}

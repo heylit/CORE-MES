@@ -1,0 +1,42 @@
+.tc-yetki-aciklama { margin: 0 0 var(--b-3); font-size: var(--yazi-s); color: var(--muted); }
+.tc-yetki-arac { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); margin-bottom: var(--b-3); }
+.tc-yetki-arac > :first-child { flex: 1 1 var(--pano-kart-enaz); min-width: 0; }
+.tc-yetki-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+/* Rol sütunları yan yana kalır, kap yatay kayar, işlem sütunu sabit durur. */
+.tc-yetki-kap { position: relative; overflow-x: auto; min-width: 0; max-width: 100%; }
+.tc-yetki { border-collapse: separate; border-spacing: 0; font-size: var(--yazi-s); }
+.tc-yetki th, .tc-yetki td { padding: var(--b-2) var(--b-3); border-bottom: 1px solid var(--edge); text-align: center; }
+.tc-yetki thead th {
+  font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  border-bottom-color: var(--edge2); white-space: nowrap;
+}
+.tc-yetki th[scope="row"], .tc-yetki th[scope="rowgroup"], .tc-yetki thead th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--panel-solid); text-align: left;
+}
+.tc-yetki th[scope="row"] { font-weight: 400; padding-left: var(--b-6); }
+/* İşlem adı bir iki satırda kalsın; telefonda kap yatay kayar. */
+.tc-yetki th:first-child { min-width: var(--pano-kart-enaz); }
+.tc-yetki-ad { display: block; }
+.tc-yetki-kod { display: block; font-size: var(--yazi-xs); color: var(--muted); }
+
+.tc-yetki-grup > * { background: var(--panel-solid); }
+.tc-yetki-grup td { font-family: var(--font-mono); color: var(--muted); }
+.tc-yetki-grup td[data-durum="tam"] { color: var(--run); font-weight: 700; }
+.tc-yetki-grup td[data-durum="kismi"] { color: var(--ink); }
+.tc-yetki-ac {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0;
+  border: 0; background: none; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; text-align: left;
+}
+.tc-yetki-ac svg { transition: transform .15s; }
+.tc-yetki-grup[data-acik] .tc-yetki-ac svg { transform: rotate(90deg); }
+.tc-yetki-var { display: inline-flex; color: var(--run); }
+.tc-yetki-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Düzenlenebilir hücre: bütün hücre basılır, boşken de kutusu görünür ki basılabilir olduğu anlaşılsın. */
+.tc-yetki-hucre {
+  display: inline-flex; align-items: center; justify-content: center; min-width: var(--dokunma); min-height: var(--dokunma);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); background: none; color: var(--ink); cursor: pointer;
+}
+.tc-yetki-hucre[aria-pressed="true"] { border-color: var(--run); }
+.tc-yetki-hucre:disabled { cursor: progress; }
+.tc-yetki-hucre[data-bekliyor] { opacity: .5; }

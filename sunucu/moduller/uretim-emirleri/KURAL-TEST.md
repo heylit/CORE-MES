@@ -1,0 +1,58 @@
+# Kural -> test (uretim-emirleri, iş emri)
+
+K: `is-emri-kurallar.test.ts` (saf), U: `is-emri.test.ts` (gerçek PostgreSQL), G: `is-emri-goc.test.ts`. Bugünkü kuralların testleri değişmedi (`kurallar.test.ts`, `uretim-emirleri.test.ts`, `disari.test.ts`).
+
+| Kural | Madde | Test (izinli ve reddedilen) | Kısıt |
+|---|---|---|---|
+| UE-01 | Emir kullanımdaki mamul ya da yarı mamul kartına, iş emirleriyle açılır | U açma; U açma reddi (hammadde, yetkisiz) | uretim_emri_malzeme, uretim_emri_rotali |
+| UE-02 | Emirlere uygula: başlamış korunur, bekleyen güncellenir ya da çıkar, yeni eklenir | K güvenli uygulama; U emirlere uygula | uretim_emirleri_is_emri_sira_tekil |
+| UE-03 | Fason: süre yok, termin günü var; operatör başlatmaz; gidiş/dönüş ayrı satır; toplamlar aşılmaz; hepsi dönmeden tamamlanmaz | K fason*; U terminal, fason sırası | fason_suresiz, termin_fasonda, fason_hareketi_* |
+| UE-04 | Sıradaki iş emri bitmemiş ilk iş emridir; terminal onu işler | K sıradaki; U terminal | yok |
+| UE-05 | Tek kaynak; fasonda termin; akışlıda devir | K iş emirleri; U açma reddi | tek_kaynak, devir_tutarli |
+| UE-06 | Yalnız hiç iş emri başlamamış taslak ya da planlı emir iptal edilir (yeni ve eski uç) | K iptal; U plana al ve iptal | yok |
+| UE-07 | Talimat sürümü ve kontrol listesi iş emrinde sabitlenir | U açma (kontrol listesi), U terminal | emir_adimi_sira_benzersiz |
+| UE-08 | İş emri bitince emir sıradakinin istasyonunda planlı; sayaç iş emri başına sıfırdan | U terminal | yok |
+| UE-10 | Kaynak yalnız bekleyen, fason olmayan iş emrinde değişir; sıradakiyse emir o istasyona düşer; eski sürüm 409 | K kaynak; U kaynak; U plan | yok |
+| S1 | Plana al yalnız taslakta | K plana al; U plana al | uretim_emri_durum_alanlari |
+| P6 | Plan bilgisi açık emirde; teslim başlangıçtan önce olamaz | K teslim, açık emir; U plan | uretim_emri_teslim_sirasi |
+| UE15 | Okuma sayfa ya da işlemle; girişsiz 401 | U okuma yetkisi | yok |
+| Göç | Eski emirler arşive; planlı/başlamış iptal; arşiv değişmez | G | uretim_emirleri_arsiv_degismez, uretim_emri_arsiv_adimsiz |
+| UE-B (bölme) | Parti, kalanı başlamamış emirde bölünür (UE-PB1); adet elde kalandan az; alt parti kalan adımları (aday, bileşen, kontrol listesi) taşır, bölünen adım atamasız | K parti bölme; U parti bölme ve birleştirme | uretim_emri_bolunme_tutarli, uretim_emri_kendine_bagli_degil, uretim_emri_bolunen_rotali |
+| UE-B (birleştirme) | Alt parti üst emrine ya da aynı adımdan bölünmüş kardeşine, ikisi aynı adımda beklerken birleşir; kaynak iptal olur, adedi hedefe geçer, katıldığı emir kaynakta tutulur | K parti birleştirme; U parti bölme ve birleştirme | uretim_emri_birlesen_iptal |
+| UE-B (malzeme) | Alt partinin adedi üst emrin bölünmeden önceki adımlarında sayılır; bölme ve birleştirme toplam ihtiyacı değiştirmez | K malzeme ihtiyacı alt parti; U parti bölme ve birleştirme | yok |
+| UE-PB1-3 | Bölme önceki adımlar bitmeden de yapılır (bölünen adım ve sonrası başlamamış); elde kalan: önceki adım bitmemişse emir adedi, bitmişse sağlam + birleşen gelen - aynı sıradan bölünen; kol, üstün bölünme adımından önceki adım bitmeden başlamaz | K parti bölme; U parti kolu (KOL_ONCEKI_BITMEDI, gelenle 9 bölünür) | yok |
+| UE-PB4 | Ek adım (rework, tamir, ek) yalnız kola, başlamamış adımın önüne ya da sona girer; op tekil ve aralıkta; rota adımı ve başlamış ek adım çıkmaz | K UE-PB4 ek adım; U ek adım ve akışlı birleşme (kök 409, op 400, rota 409, başlamış 409) | uretim_emirleri_is_emri_tur, uretim_emirleri_is_emri_ek_aciklama_ekte |
+| UE-PB5 | Elle birleştirme: kalan adımlar op ile karşılaştırılır, bitmemiş ek adımlı kol reddedilir | K UE-PB5 (parti birleştirme); U ek adım ve akışlı birleşme (BIRLESTIRME_EK_ADIM) | yok |
+| UE-PB6, 6a, 6c | Birleşme adımı bekleyen ise kol gelmeden başlamaz, akışlı ise başlar; ikisinde de kol gelmeden bitmez; kolun son adımı bitince kol üste katılır, adedi üste geçer | K UE-PB6, 6a, UE-PB2; U parti kolu, U ek adım ve akışlı birleşme | uretim_emri_birlesen_iptal |
+| UE-PB7 | Birleşme adımında elde kalan, kolun getirdiği sağlamı sayar; hurda kolun iş emirlerinde kalır | K parti bölme (birlesenGelen); U parti kolu | yok |
+| UE-PB8 | Birleşme planı yalnız kolda, bölünme adımından sonraki ve üstte başlamamış adımda; konunca kol o adımdan sonrasını bırakır, kalkınca geri alır | K UE-PB8 birleşme planı; U parti kolu (400 ve 409 ayakları) | uretim_emri_birlesme_kolda, uretim_emri_birlesme_op_pozitif |
+| UE-PB9 | Malzeme: kolun adedi üstün bölünmeden önceki ve birleşmeden sonraki adımlarında sayılır; toplam ihtiyaç değişmez | K UE-PB9 malzeme | yok |
+| UE-PB10 | Kol uçları bölmeyle aynı işlem, sürüm ve istek kimliği | U ek adım ve akışlı birleşme (403, 409, 400) | yok |
+| UE-ET1 | Emir türü açarken seçilir, verilmezse seri; listede olmayan tür reddedilir; kol üstün türünü alır ya da bölerken seçilen türü alır | U emir türü | uretim_emri_emir_turu |
+| UE-N1 | Yeni emir numarası "Numara kuralları" ayarından (firma, proje, parça, yıl, ay, sayaç; boş alan düşer); numara verilmeyen eklemede eski biçim (UE-); kol üst no + /n (katılan kol da sayılır); var olan numaralar değişmez | K UE-N1, U proje ve numara, U parti kolu, G emir no göçü | uretim_emri_no_bicimi, uretim_emri_no_benzersiz |
+| UE-P1 | Emir yalnız aktif projeyle açılır ya da projesiz; kol üstün projesini taşır | U proje ve numara | uretim_emri_proje |
+| UE-S1 | Ayar yalnız planlı işte, iş başına bir kez başlar; fason ya da kaynaksız sıradaki işte yoktur; başlatma ayarı kapatır, çalışma hâline dokunmaz | K ayar; U ayar ve süre özeti | uretim_olayi_olay_degeri |
+| UE-S2 | Birim süre: brüt başlattan (bitmişte bitişe) ÷ (sağlam + hurda); net duraklama ve duruş düşülmüş; sayım ya da başlama yoksa null | K brüt, sayım yok, net; U ayar ve süre özeti | yok |
+| UE-S3 | Hazırlık başlatmadan önceki son ayardan; ayar yoksa null | K hazırlık; U ayar ve süre özeti | yok |
+| UE-S4 | Tekli dizi art arda 1'er sayımlardır (ilk aralık başlattan); toplu ve düzeltme keser, ardındaki ilk aralık sayılmaz; aralıktan duruş düşülür | K tekli dizi; U ayar ve süre özeti | yok |
+| UE-R1 | Refakat kartı emir başına tek; QR yalnız kimlik (`UE:<id>`); okuma yetkisi olan basar, olmayan alamaz; iptal edilmiş emirde basılmaz; alt parti üst emri gösterir | K refakat kartı; U refakat kartı; istemci `RefakatKarti.test.tsx` | yok |
+| UE-Y1 | Panel serileri: günlük sağlam/hurda (N gün, kayıtsız gün yok), duruş nedeni başına süre (zamanca sonraki olaya kadar), özet aşama sayıları; liste okuyamayan alamaz; boş veritabanında boş seri | U panel; `panel.test.ts` boş seri; U ana sayfa özeti | yok |
+| UE-HD-1 | Hurda düzeltmesi (kart #1194): eksi hurda düzeltme satırıdır, neden verilmezse son hurdanın nedeni; toplam hurda sıfırın altına inmez | `uretim-emirleri.test.ts` "UE-HD-1" (izinli -1, reddedilen hurdasız -1 ve toplamı aşan -2 409); "veritabanı kısıtları" | uretim_sayimi_hurda_duzeltmesi_eksidir, uretim_sayimi_hurda_nedenli |
+| UE-RE-1 | Rotasız emir ayara bağlıdır (kullanıcı kararı 14.10.2026): `uretim-emirleri.rotasiz-emir` kapalıyken `POST /uretim-emirleri` 409, açıkken (varsayılan) açılır | `uretim-emirleri.test.ts` "UE-RE-1" | sistem ayarı |
+| UE-RE-2 | Rotasız emrin iptali sürümle yazılır: eski sürüm 409, sürümsüz gövde 400; aynı sürümle eşzamanlı iki iptalde biri kazanır | `uretim-emirleri.test.ts` "iptal sürümle yazılır", "yarış: aynı sürümle iki iptal" | uretim_emri.surum |
+| UE-RE-3 | Emrin ayrıntısı (`GET /uretim-emirleri/:id`) emri gören işlemlerden biriyle okunur: sayfa.uretim-emirleri, sayfa.rota, uretim-emirleri.yaz, uretim-emirleri.fason, plan.yaz, terminal.uret | `uretim-emirleri.test.ts` "yetki: emrin ayrıntısını" | uç yetkisi |
+| UE-OZ-1 | Kişinin özeti (kart #1295, Arkon okur): kişinin penceredeki işleri (sayım ya da katılım), net hurda nedenleri, iş emri birim süresiyle standart süre ve iş emri plan bilgisi (bitmiş dahil); kaydı olmayan pencere boş döner, sıfır uydurulmaz | `is-emri.test.ts` "kişinin özeti" | - |
+| UE-SO-1 | Sağlam sayım olayı (kart #1289): sağlam giriş, düzeltme (sayım, sayım-ayarla, bitirme farkı; Arkon aynı uçlardan) yazıldıktan sonra aynı işlemde `saglamSayimDinle` ile kaydolan dinleyicilere verilir (emir, iş emri, istasyon, kişi, ondalık metin fark); hurda ve sıfır fark verilmez; dinleyicinin reddi sayımı geri alır; dinleyici yokken sayım bugünkü gibidir | `uretim-emirleri.test.ts` "sağlam sayım olayı"; `is-emri.test.ts` "sağlam sayım olayı" | işlem (transaction) |
+| UE-SO-2 | Hurda sayım olayı: hurda ve geri alması (eksi) yazıldıktan sonra aynı işlemde `hurdaSayimDinle` ile kaydolan dinleyicilere verilir (emir, iş emri, istasyon, kişi, hurda nedeni, ondalık metin fark); sağlam bu olaya gitmez; dinleyicinin reddi sayımı geri alır | `uretim-emirleri.test.ts` "hurda sayım olayı" | işlem (transaction) |
+| UE-RA-0 | Malzemeli rotasız emir (kullanıcı kararı 14.10.2026, "Malzemeli"): ayar açıkken `POST /adimli-emirler/rotasiz` emri rota seçmeden, adımsız açar; ayar kapalıysa 409; yalnız mamul ya da yarı mamul | `is-emri.test.ts` "UE-RA-0..3" | `uretim_emri_rota_malzemeli` (rota varsa malzeme var) |
+| UE-RA-1 | Rotasız emre adım eklenir (`adim-ekle`, istek kimliği zorunlu): yer ve op kuralı kola konan ek adımınki, birleşme sınırı yok; bileşen aktif olmalı, ticari mal ve hizmet olmaz, aynı malzeme iki kez olmaz; adım türü `ek`, açıklaması operatöre gider | `is-emri.test.ts` "UE-RA-0..3"; `is-emri-kurallar.test.ts` "UE-RA-1..3", "UE-RA-1 bileşen" | iş emri kısıtları |
+| UE-RA-2 | Yalnız bekleyen adım düzenlenir; verilmeyen alan kalır, `bilesenler` verilirse listenin yerine geçer | aynı testler | - |
+| UE-RA-3 | Yalnız bekleyen adım silinir; rotasız emir son adımı da silinip adımsız kalabilir. Rotalı emirde üç komut da 409 "Rotalı emrin adımları rotadan gelir." | aynı testler | - |
+| UE-M1 | Makinede aynı anda tek iş (makinesiz işte istasyon yeri); seçilmezse iş emrinin makinesi; seçilen makine istasyonda ve çalışır; duraklatma, durdurma, bitirme yeri bırakır; dolu cevabı kim ve hangi iş; devralma kullanım kimliğiyle, öteki iş duraklar | K makine kilidi; U makinede tek iş, devralma, yarışlar; U makine kilidi (iş emirli) | uretim_emirleri_makine_kullanimi_makinede_tek, _istasyonda_tek, _kapanis |
+| UE-K1 | Aynı işe katılım: istasyon ekibindeki kişi çalışan işe katılır, başka çalışan varsa uyarı; kişi başına tek açık çalışma; kendi çalışmasını duraklatır, ayrılır; emrin duraklatılması ve bitmesi herkesi çıkarır; adet işin toplamına eklenir | U katılım | uretim_emirleri_katilim_kiside_tek_acik, _kapanis_butun |
+| UE-Y2 | Canlı emirde çalışan iş emri (op no, ad, makine), adımlar arasında null; son olaylar bütün emirlerde yeniden eskiye, `sonra` sonrası, makine ve iş emriyle; liste okuyamayan alamaz; boş veritabanında boş akış | U fabrika haritası; `panel.test.ts` boş akış | yok |
+
+| UE-URY | Açık emirde yalnız başlamamış ve fasona gönderimi olmayan adım içeriye ya da fasona alınır; fasonda firma (aktif, fason işaretli) ve termin 1-365 zorunlu, içeride verilmez; rota değişmez; geri alınca önceki makine ve süreler döner; her değişim kişi ve zamanla yalnız eklenir | `uretim-yeri.test.ts` (saf kural, izinli ve reddedilen uç), `UretimYerleri.test.tsx` | uretim_emirleri_is_emri_fason_suresiz, _fason_istasyonsuz, _termin_fasonda; uretim_emirleri_uretim_yeri_degisimi_fason_terminli, _degismez |
+| UE20 | Karar 86 b: iş başlatmada (terminal, makine devralma, Arkon) başlatan kişinin o istasyonda geçerli yetkinliği yoksa ya da süresi dolduysa 403 ve emir değişmez; yönetici bayraklı kişi muaftır; işe katılma denetlenmez (ekip üyeliği ister) | `kurallar.ts` `baslatmaYetkinlikIhlali`; `uretim-emirleri.test.ts` UE20 (yetkinsiz red, yetkin başlatır, süresi dolan red) | yok |
+
+Bağsız kural: yok.

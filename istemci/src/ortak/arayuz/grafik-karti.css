@@ -1,0 +1,33 @@
+.tc-grafik-karti {
+  display: flex; flex-direction: column; gap: var(--b-2); min-width: 0;
+  padding: var(--b-4) var(--b-5);
+  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
+  color: var(--ink); text-decoration: none;
+}
+a.tc-grafik-karti:hover { border-color: var(--edge2); }
+a.tc-grafik-karti:focus-visible { outline: 2px solid var(--grafik); outline-offset: 2px; }
+.tc-grafik-ust { display: flex; align-items: center; gap: var(--b-3); min-width: 0; }
+.tc-grafik-simge {
+  flex: none; display: grid; place-items: center; width: var(--dokunma); height: var(--dokunma);
+  border-radius: var(--yari-2); color: var(--grafik); background: color-mix(in srgb, var(--grafik) 14%, transparent);
+}
+.tc-grafik-baslik { flex: 1; min-width: 0; font-size: var(--yazi-s); font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
+.tc-grafik-son { flex: none; font-size: var(--yazi-l); font-weight: 700; color: var(--ink); }
+.tc-grafik-git { flex: none; color: var(--faint); }
+/* Yükseklik sabit, genişlik kartla birlikte: çizgi kalınlığı ölçekten bağımsız kalır (vector-effect). */
+.tc-grafik-cizim { display: block; width: 100%; height: calc(var(--b-6) * 3); overflow: visible; }
+.tc-grafik-taban { stroke: var(--edge2); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.tc-grafik-cubuk { fill: var(--grafik); }
+.tc-grafik-egri {
+  fill: none; stroke: var(--grafik); stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke;
+}
+.tc-grafik-hedef { fill: transparent; }
+.tc-grafik-hedef:hover + .tc-grafik-cubuk, g:hover > .tc-grafik-cubuk { opacity: .8; }
+.tc-grafik-durum {
+  display: grid; place-items: center; height: calc(var(--b-6) * 3);
+  font-size: var(--yazi-m); font-weight: 600; color: var(--faint);
+}
+.tc-grafik-eksen { display: flex; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-grafik-alt { font-size: var(--yazi-xs); color: var(--muted); overflow-wrap: anywhere; }
+.tc-grafik-tablo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -1,0 +1,169 @@
+/* Arkon MES · tema değişkenleri
+ * data-theme="dark|light" → renkler · data-durum="sirada|ayar|calisiyor|durakli|durdu|bitti" → --sig (makine durum rengi) */
+@property --sig { syntax: '<color>'; inherits: true; initial-value: #9aa4b2; }
+
+:root, [data-theme="dark"] {
+  --bg: #06080b; --bg2: #0b0e13;
+  --panel: rgba(18, 22, 29, .62); --panel-solid: #12161d; --panel2: rgba(255,255,255,.035);
+  --edge: rgba(255,255,255,.08); --edge2: rgba(255,255,255,.16); --hi: rgba(255,255,255,.06);
+  --grid: rgba(255,255,255,.035);
+  --ink: #f2f4f7; --muted: #929cab; --faint: #5d6675;
+  --hazard: #ffd23f; --on-hazard: #161100; --hazard-ink: #ffd23f;
+  --run: #3cf0a8; --hold: #ffa94d; --stop: #ff5c7a; --done: #7fb2ff; --idle: #9aa4b2;
+  /* Grafik serisi: durum renklerinden ayrı; panele karşı 3:1 ve renk körlüğü denetiminden geçer. */
+  --grafik: #4a90dc;
+  /* İkinci seri (iki serili çubuk): birinciyle renk körlüğü denetiminden geçer, durum renklerinden ayrıdır. */
+  --grafik-2: #d55181;
+  --on-sig: #05080a;
+  --bp: #cfe3ff; --bp-dim: rgba(207,227,255,.38); --bp-dim2: rgba(207,227,255,.14); --bp-bg: #070c14;
+  --shadow: 0 30px 60px -30px rgba(0,0,0,.8);
+  --aura-strength: 26%;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --bg: #e9e6df; --bg2: #f2f0eb;
+  --panel: rgba(255, 255, 255, .66); --panel-solid: #fbfaf7; --panel2: rgba(20,23,28,.04);
+  --edge: rgba(20,23,28,.09); --edge2: rgba(20,23,28,.2); --hi: rgba(255,255,255,.9);
+  --grid: rgba(20,23,28,.05);
+  --ink: #14171c; --muted: #545c68; --faint: #8a919c;
+  --hazard: #f7c600; --on-hazard: #161100; --hazard-ink: #7a5a00;
+  --run: #0b8a55; --hold: #b55600; --stop: #c81e40; --done: #1f5fd0; --idle: #5a6372;
+  --grafik: #2a6fb8;
+  --grafik-2: #c4407a;
+  --on-sig: #ffffff;
+  --bp: #12305e; --bp-dim: rgba(18,48,94,.42); --bp-dim2: rgba(18,48,94,.12); --bp-bg: #f4f1ea;
+  --shadow: 0 30px 60px -34px rgba(40,30,10,.35);
+  --aura-strength: 30%;
+  color-scheme: light;
+}
+:root { transition: --sig .9s ease; }
+
+/* Hareket dili (Sistem Ayarları, kabuk.hareket): kök öğedeki data-hareket süreleri, kaymayı ve eğriyi verir.
+   Performans modu kökü sadeye çeker; işletim sisteminde hareket azaltılmışsa süreler sıfıra iner.
+   Geçiş hızı (kabuk.gecis-hizi) süreleri çarpanla kısaltır ya da uzatır; çarpan aynı öğede ya da üstünde tanımlıdır. */
+:root, [data-gecis-hizi="normal"] { --hareket-carpan: 1; }
+[data-gecis-hizi="hizli"] { --hareket-carpan: .6; }
+[data-gecis-hizi="yavas"] { --hareket-carpan: 1.8; }
+:root, [data-hareket="orta"] {
+  --hareket-sure: calc(180ms * var(--hareket-carpan)); --hareket-panel: calc(200ms * var(--hareket-carpan)); --hareket-kayma: 6px; --hareket-sira: 22ms; --hareket-kucul: .97;
+  --hareket-egri: cubic-bezier(.2, .8, .2, 1); --hareket-egri-panel: cubic-bezier(.2, .8, .2, 1);
+}
+[data-hareket="kapali"] {
+  --hareket-sure: 0ms; --hareket-panel: 0ms; --hareket-kayma: 0px; --hareket-sira: 0ms; --hareket-kucul: 1;
+}
+[data-hareket="sade"] {
+  --hareket-sure: calc(120ms * var(--hareket-carpan)); --hareket-panel: calc(160ms * var(--hareket-carpan)); --hareket-kayma: 0px; --hareket-sira: 0ms; --hareket-kucul: 1;
+  --hareket-egri: ease-out; --hareket-egri-panel: ease-out;
+}
+[data-hareket="cesur"] {
+  --hareket-sure: calc(240ms * var(--hareket-carpan)); --hareket-panel: calc(260ms * var(--hareket-carpan)); --hareket-kayma: 10px; --hareket-sira: 30ms; --hareket-kucul: .95;
+  --hareket-egri: cubic-bezier(.2, .9, .1, 1); --hareket-egri-panel: cubic-bezier(.2, 1.25, .35, 1);
+}
+[data-hareket="ultra"] {
+  --hareket-sure: calc(300ms * var(--hareket-carpan)); --hareket-panel: calc(300ms * var(--hareket-carpan)); --hareket-kayma: 14px; --hareket-sira: 34ms; --hareket-kucul: .95;
+  --hareket-egri: cubic-bezier(.2, .9, .1, 1); --hareket-egri-panel: cubic-bezier(.2, 1.25, .35, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root, :root[data-hareket] { --hareket-sure: 1ms; --hareket-panel: 1ms; --hareket-kayma: 0px; --hareket-sira: 0ms; --hareket-kucul: 1; }
+}
+
+/* Açılış gösterisinin malzeme renkleri: kızgın metal, lazer, çelik, yakut prob. Temadan bağımsızdır. */
+:root {
+  --acilis-uc: #ffffff; --acilis-yanik: #1e140a; --acilis-isin: #fff0c8; --acilis-kor: #ff8a2a;
+  --acilis-kivilcim: #fff6c8; --acilis-kivilcim-2: #ff9a3a; --acilis-sicak: #ff6a1a;
+  --acilis-celik-1: #8d949c; --acilis-celik-2: #c9ced4; --acilis-celik-3: #7c838b;
+  --acilis-erimis-1: #fff3b0; --acilis-erimis-2: #ffb020; --acilis-erimis-3: #e0400a; --acilis-yakut: #d4264a;
+}
+
+/* TMI CORE V2 olcek degiskenleri */
+:root {
+  --b-1: 4px; --b-2: 8px; --b-3: 12px; --b-4: 16px; --b-5: 24px; --b-6: 32px;
+  --yari-1: 8px; --yari-2: 14px; --yari-3: 22px; --yari-tam: 999px;
+  --yazi-xs: 12px; --yazi-s: 14px; --yazi-m: 16px; --yazi-l: 18px; --yazi-xl: 24px; --yazi-baslik: 28px;
+  --dokunma: 44px; --dokunma-ana: 56px;
+  --menu-genis: 248px; --menu-sabit: 200px; --menu-satir: 36px; --menu-serit: 72px; --ikinci-sutun: 200px; --alt-cubuk: 64px; --ust-cubuk: 56px;
+  --ikinci-vurgu: 4px; --arama-genis: 360px; --pano-kart-enaz: 240px;
+  --pencere-genis: 520px; --cekmece-genis: 440px; --bildirim-genis: 380px;
+  --acilir-enaz: 200px; --acilir-encok: 320px;
+  --z-kabuk: 10; --z-ust: 20; --z-katman: 40; --z-bildirim: 60; --z-acilis: 70;
+  --font-ana: 'Archivo', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Terminal parcalari: durum adlari, buyuk kose, cam bulanikligi, kiosk olculeri */
+[data-durum="sirada"]    { --sig: var(--idle); --sig-yazi: var(--idle); }
+[data-durum="ayar"]      { --sig: var(--hazard); --sig-yazi: var(--hazard-ink); }
+[data-durum="calisiyor"] { --sig: var(--run); --sig-yazi: var(--run); }
+[data-durum="durakli"]   { --sig: var(--hold); --sig-yazi: var(--hold); }
+[data-durum="durdu"]     { --sig: var(--stop); --sig-yazi: var(--stop); }
+[data-durum="bitti"]     { --sig: var(--done); --sig-yazi: var(--done); }
+:root {
+  --parlak: #ffffff;
+  --yari-4: 26px; --yari-5: 32px;
+  --yazi-2xl: 34px; --yazi-3xl: 52px;
+  --dokunma-tus: 74px;
+  --orb-1: 64px; --orb-2: 84px; --orb-3: 112px; --orb-hale: 8px;
+  --simge-orb: 32px; --simge-orb-ana: 46px; --simge-damga: 110px;
+  --kadran-enaz: 200px; --kadran-encok: 420px; --kadran-dusey-pay: 540px;
+  --halka-mini: 52px; --damga: 220px; --damga-dar: 160px;
+  --tus-pencere-genis: 380px; --kuyruk-genis: 300px;
+  --sutun-dar: .9fr; --sutun-genis: 1.6fr;
+  --bulanik-cam: blur(22px) saturate(1.25); --bulanik-kart: blur(16px);
+  --bulanik-perde: blur(18px) saturate(.9); --bulanik-ozet: blur(24px);
+  --isik: 14px; --isik-genis: 60px;
+  --kadran-cekirdek-pay: 23%;
+  --nokta: 6px; --pay-ince: 2px; --kayma: 3px;
+  --z-ozet: 50;
+}
+
+/* Sahne ve plan ekranlarinin olculeri (borc 119, atolye istegi 7.3): degerler atolyenin onayli gorunumundekidir.
+   Ekran boyu (vh), kap orani (%), cizgi kalinligi, kesik desen (SVG stroke-dasharray), saydamlik, harf araligi ve
+   dokunma boyunun katlari. Sure-kisa hareket ayarina bagli degildir: --hareket-sure ayarla 1-300ms arasi degisir. */
+:root {
+  --ekran-boy-40: 40vh; --ekran-boy-50: 50vh; --ekran-boy-52: 52vh; --ekran-boy-60: 60vh; --ekran-boy-62: 62vh; --ekran-boy-70: 70vh;
+  --oran-46: 46%; --oran-55: 55%; --oran-62: 62%; --oran-70: 70%;
+  --cizgi-ince: 1px; --cizgi-orta: 1.5px; --cizgi: 2px; --cizgi-kalin: 2.5px;
+  --kesik-uzun: 6 4; --kesik-orta: 5 3; --kesik-kisa: 4 3; --kesik-nokta: 2 1;
+  --saydam-08: .08; --saydam-10: .1; --saydam-14: .14; --saydam-18: .18; --saydam-20: .2; --saydam-28: .28; --saydam-45: .45;
+  --saydam-50: .5; --saydam-55: .55; --saydam-70: .7; --saydam-75: .75; --saydam-85: .85; --saydam-92: .92;
+  --harf-aralik-02: .02em; --harf-aralik-06: .06em; --harf-aralik-10: .1em; --harf-aralik-14: .14em;
+  --dokunma-x14: calc(var(--dokunma) * 1.4); --dokunma-x16: calc(var(--dokunma) * 1.6); --dokunma-x18: calc(var(--dokunma) * 1.8);
+  --dokunma-x20: calc(var(--dokunma) * 2); --dokunma-x24: calc(var(--dokunma) * 2.4);
+  --harita-kucuk-en: calc(var(--orb-3) * 2); --harita-kucuk-boy: calc(var(--orb-3) * 1.5); --harita-kucuk-en-dar: calc(var(--orb-3) * 1.25);
+  /* Sahne icindeki ust ust katmanlar (tur cubugu) ve uygulama cercevesinin ustunde, pencerelerin altinda tam ekran sahne. */
+  --z-sahne: 3; --z-sahne-ust: calc(var(--z-ust) + 5);
+  --sure-kisa: 120ms;
+}
+
+/* Atolye haritasi: iki boyutlu plan ve sahne arka plani (temaya gore) */
+:root, [data-theme="dark"] {
+  --sahne-arka: #0b1117; --sahne-duvar: #59606a; --sahne-cam: #8fc3e6; --sahne-raf: #2a5d9f; --sahne-ahsap: #b48a5a;
+  --sahne-yol: #e0b233; --sahne-bolge: #e0b233; --sahne-karantina: #e0533a; --sahne-sevkiyat: #3aa35f; --sahne-oda: #6d9fc6;
+  --plan-zemin: #151b22; --plan-izgara: rgba(220,228,234,.08); --plan-izgara-kalin: rgba(220,228,234,.18);
+}
+[data-theme="light"] {
+  --sahne-arka: #dce2e7; --sahne-duvar: #c9ced4; --sahne-cam: #7fb6da; --sahne-raf: #1d4d8a; --sahne-ahsap: #b48a5a;
+  --sahne-yol: #e0b233; --sahne-bolge: #e0b233; --sahne-karantina: #cc3d33; --sahne-sevkiyat: #23945a; --sahne-oda: #5aa2d4;
+  --plan-zemin: #e9ecee; --plan-izgara: rgba(24,34,44,.05); --plan-izgara-kalin: rgba(24,34,44,.16);
+}
+/* Atolye 3B sahne malzemeleri: fiziksel nesnenin rengi temaya gore degismez (zemin, makine, raf) */
+:root {
+  --sahne3b-zemin: #a3a49f; --sahne3b-derz: #262624; --sahne3b-leke: #48463e; --sahne3b-yag: #28241c; --sahne3b-beton: #9fa19e;
+  --sahne3b-duvar: #d2d6d8; --sahne3b-supurgelik: #9a9d9b; --sahne3b-kapi: #b9bec2; --sahne3b-pencere: #cfe2ef; --sahne3b-pencere-isik: #b9d3e6;
+  --sahne3b-panel: #d3d7da; --sahne3b-boya: #c9cdcf; --sahne3b-boya-orta: #aab0b5; --sahne3b-koyu: #2b3136; --sahne3b-siyah: #151719;
+  --sahne3b-celik: #b9bfc4; --sahne3b-celik-koyu: #70767b; --sahne3b-alu: #d3d8dc; --sahne3b-krom: #e8ecef; --sahne3b-galv: #a9b0b5;
+  --sahne3b-vurgu: #2b6a96; --sahne3b-mavi: #21507f; --sahne3b-sari: #e3b21e; --sahne3b-turuncu: #d9661e; --sahne3b-kirmizi: #c42d23;
+  --sahne3b-kolon: #5d6a76; --sahne3b-raf: #1d4d8a; --sahne3b-raf-kiris: #e0661b; --sahne3b-ahsap: #b38757; --sahne3b-karton: #a98559;
+  --sahne3b-ahsap-ust: #c49a68; --sahne3b-kaucuk: #1b1c1e; --sahne3b-ic: #c4c9cc; --sahne3b-kutu: #1d4a8f; --sahne3b-kutu-gri: #6d7479;
+  --sahne3b-granit: #2a2c2e; --sahne3b-granit-acik: #6b6d70; --sahne3b-cam: #b8ccd8; --sahne3b-cam-lazer: #d4661b; --sahne3b-cam-oda: #cfe0ea;
+  --sahne3b-isik: #fff1dc; --sahne3b-gok: #eef3f8; --sahne3b-yer: #5f5a52; --sahne3b-ortam: #5f6368; --sahne3b-ortam-zemin: #4a4b4c;
+  --sahne3b-lamba: #fff7e7; --sahne3b-gun: #b9d8ff;
+  --sahne3b-andon-yesil: #24e05f; --sahne3b-andon-sari: #ffae00; --sahne3b-andon-kirmizi: #ff2a18;
+  --sahne3b-andon-yesil-sonuk: #1b3a24; --sahne3b-andon-sari-sonuk: #4a3a12; --sahne3b-andon-kirmizi-sonuk: #4a1a15;
+  --sahne3b-ekran: #0b1520; --sahne3b-ekran-yazi: #cfe0ee; --sahne3b-ekran-soluk: #8fa5b8; --sahne3b-ekran-cubuk: #1e2f40;
+  --sahne3b-ekran-ilerleme: #6faedc; --sahne3b-ekran-alarm: #ff5a4f; --sahne3b-ekran-calisiyor: #23945a; --sahne3b-ekran-durakli: #c98a12;
+  --sahne3b-ekran-durdu: #cc3d33; --sahne3b-ekran-bekliyor: #7d8c9b;
+  --sahne3b-rota: #3d8fd6; --sahne3b-kivilcim: #ff8a3a; --sahne3b-kivilcim-hale: #ffb060;
+  --sahne3b-cizgi: #e0b11d; --sahne3b-bolge-kirmizi: #d8352a; --sahne3b-bolge-yesil: #2f9e5f; --sahne3b-bolge-mavi: #2b6a96;
+  --sahne3b-tarama: #1d1d1b; --sahne3b-ok: #f4f4ee; --sahne3b-oda-yazi: #283038;
+}

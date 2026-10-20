@@ -1,0 +1,35 @@
+.sa-talep { display: grid; gap: var(--b-4); }
+.sa-talep-not { color: var(--muted); font-size: var(--yazi-s); }
+.sa-talep-hata { color: var(--hazard); font-size: var(--yazi-s); }
+.sa-talep-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.sa-talep-kalem { display: grid; gap: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); padding: var(--b-4); min-width: 0; }
+.sa-talep-ara, .sa-talep-serbest { display: grid; gap: var(--b-2); min-width: 0; }
+.sa-talep-tur { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.sa-talep-acilir { position: relative; min-width: 0; }
+.sa-talep-sonuc {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: var(--z-katman);
+  display: flex; flex-direction: column; gap: var(--pay-ince); margin-top: var(--b-1); padding: var(--b-1);
+  max-height: min(60dvh, 22rem); overflow-y: auto;
+  background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
+}
+.sa-talep-sonuc[hidden] { display: none; }
+.sa-talep-sonuc > .sa-talep-not { padding: var(--b-2) var(--b-3); }
+.sa-talep-secenek {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: baseline;
+  min-height: var(--dokunma); padding: var(--b-1) var(--b-3); border-radius: var(--yari-1); color: var(--ink); cursor: pointer; overflow-wrap: anywhere;
+}
+.sa-talep-secenek > .sa-talep-not { grid-column: 2; }
+.sa-talep-secenek[aria-selected="true"] { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.sa-talep-secenek-ad { font-weight: 600; min-width: 0; }
+.sa-talep-secili { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.sa-talep-miktar, .sa-talep-alt { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr); }
+.sa-talep-bag { color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.sa-talep-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-3); }
+.sa-talep-satir { display: grid; gap: var(--b-1); padding-bottom: var(--b-3); border-bottom: 1px solid var(--edge); min-width: 0; overflow-wrap: anywhere; }
+.sa-talep-satir:last-child { border-bottom: 0; padding-bottom: 0; }
+.sa-talep-satir-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.sa-talep-no { font-family: var(--font-mono); font-size: var(--yazi-s); }
+@media (min-width: 600px) {
+  .sa-talep-miktar { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .sa-talep-alt { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+}

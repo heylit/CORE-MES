@@ -1,0 +1,30 @@
+.tc-bildirimler {
+  position: fixed; z-index: var(--z-bildirim); right: var(--b-5); bottom: var(--b-5);
+  display: flex; flex-direction: column; gap: var(--b-2);
+  width: 100%; max-width: var(--bildirim-genis); pointer-events: none;
+}
+.tc-bildirim {
+  --c: var(--done);
+  display: flex; align-items: center; gap: var(--b-3); pointer-events: auto;
+  padding: var(--b-2) var(--b-2) var(--b-2) var(--b-4);
+  background: var(--panel-solid); color: var(--ink);
+  border: 1px solid var(--edge2); border-left: var(--b-1) solid var(--c); border-radius: var(--yari-2);
+  box-shadow: var(--shadow);
+}
+.tc-bildirim > .tc-simge { color: var(--c); }
+.tc-bildirim-tamam { --c: var(--run); }
+.tc-bildirim-hata { --c: var(--stop); }
+.tc-bildirim-mesaj { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.tc-bildirim-kapat {
+  display: grid; place-items: center; flex: none;
+  width: var(--dokunma); height: var(--dokunma);
+  border: 0; border-radius: var(--yari-1); background: transparent; color: var(--muted); cursor: pointer;
+}
+
+/* Telefonda alt gezinme çubuğunun üstünde, tam genişlikte durur. */
+@media (max-width: 767px) {
+  .tc-bildirimler {
+    left: var(--b-3); right: var(--b-3); bottom: calc(var(--alt-cubuk) + var(--b-3));
+    width: auto; max-width: none;
+  }
+}

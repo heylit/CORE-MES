@@ -1,0 +1,11 @@
+.tc-sekmeler {
+  display: flex; gap: var(--b-1); min-width: 0; overflow-x: auto;
+  border-bottom: 1px solid var(--edge2); scrollbar-width: none;
+}
+.tc-sekme {
+  display: inline-flex; align-items: center; gap: var(--b-2); flex: none;
+  min-height: var(--dokunma); padding: 0 var(--b-4);
+  border: 0; border-bottom: 3px solid transparent; background: transparent;
+  color: var(--muted); font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.tc-sekme[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--hazard); }

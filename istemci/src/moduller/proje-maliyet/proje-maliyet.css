@@ -1,0 +1,9 @@
+.tc-pm { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-pm-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 8)), 1fr)); gap: var(--b-2); }
+.tc-pm-grafikler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 12)), 1fr)); gap: var(--b-2); }
+.tc-pm-uyarilar { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pm-uyari { display: flex; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-s); }
+.tc-pm-risk { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-pm-risk-deger { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-pm-risk-etiket { color: var(--muted); font-size: var(--yazi-s); }
+.tc-pm-risk-git { margin-inline-start: auto; }

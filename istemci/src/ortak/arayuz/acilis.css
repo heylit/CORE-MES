@@ -1,0 +1,30 @@
+/* Açılış gösterisi: ekranı kaplar, tuvalde logo işlenir; bitince büyüyüp bulanıklaşarak çekilir, kabuk derinlikten öne gelir. */
+.tc-acilis-gosterisi {
+  position: fixed; inset: 0; z-index: var(--z-acilis); cursor: pointer; background: var(--bg);
+}
+.tc-acilis-gosterisi[data-cikiyor] { pointer-events: none; animation: tc-acilis-cik .38s ease-in both; }
+.tc-acilis-tuval { display: block; width: 100%; height: 100%; }
+.tc-acilis-kod {
+  position: absolute; left: var(--b-4); bottom: var(--b-4); right: calc(var(--b-6) * 5);
+  font-size: var(--yazi-xs); letter-spacing: .04em; color: var(--hazard-ink);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.tc-acilis-atla { position: absolute; right: var(--b-4); bottom: var(--b-4); font-size: var(--yazi-xs); color: var(--muted); }
+
+@keyframes tc-acilis-cik { to { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
+
+/* Kabuk gösterinin arkasından öne gelir; cesur ve ultrada derinlikten, ötekilerde yalnız solarak. */
+[data-acilis-bitti] :is(.tc-kabuk-menu, .tc-kabuk-ust, .tc-kabuk-icerik) { animation: tc-acilis-sol .4s ease-out; }
+:is([data-hareket="cesur"], [data-hareket="ultra"])[data-acilis-bitti] :is(.tc-kabuk-menu, .tc-kabuk-ust, .tc-kabuk-icerik) {
+  animation: tc-acilis-derinlik .52s var(--hareket-egri);
+}
+[data-acilis-bitti] .tc-kabuk-ust { animation-delay: .06s; }
+[data-acilis-bitti] .tc-kabuk-icerik { animation-delay: .12s; }
+
+@keyframes tc-acilis-sol { from { opacity: 0; } }
+@keyframes tc-acilis-derinlik { from { opacity: 0; transform: translateY(var(--b-5)) scale(.96); filter: blur(6px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-acilis-gosterisi { display: none; }
+  [data-acilis-bitti] :is(.tc-kabuk-menu, .tc-kabuk-ust, .tc-kabuk-icerik) { animation: none; }
+}

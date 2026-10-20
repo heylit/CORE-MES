@@ -1,0 +1,23 @@
+export const anahtarlar = {
+  hepsi: ['istasyonlar'] as const,
+  isMerkezleri: ['istasyonlar', 'is-merkezleri'] as const,
+  aktifIsMerkezleri: ['istasyonlar', 'is-merkezleri', 'aktif'] as const,
+  istasyonlar: ['istasyonlar', 'istasyonlar'] as const,
+  makineler: ['istasyonlar', 'makineler'] as const,
+  operasyonTipleri: ['istasyonlar', 'operasyon-tipleri'] as const,
+  secim: ['istasyonlar', 'secim'] as const,
+  ekipler: ['istasyonlar', 'ekipler'] as const,
+  kisiSecenekleri: ['istasyonlar', 'kisi-secenekleri'] as const,
+  atamalar: (tur: string, hedefId: number) => ['istasyonlar', 'atamalar', tur, hedefId] as const,
+  iptaller: (tur: string, hedefId: number, kisiId: number, baslangic: string) =>
+    ['istasyonlar', 'atama-iptalleri', tur, hedefId, kisiId, baslangic] as const,
+  kisiKisiti: (kisiId: number) => ['istasyonlar', 'kisi-kisiti', kisiId] as const,
+  istasyonKisileri: ['istasyonlar', 'istasyon-kisileri'] as const,
+  makineKisileri: ['istasyonlar', 'makine-kisileri'] as const,
+  ekipUyeleri: ['istasyonlar', 'ekip-uyeleri'] as const,
+  planAyarlari: ['istasyonlar', 'plan-ayarlari'] as const,
+  makineDurumlari: ['istasyonlar', 'makine-durumlari'] as const,
+  yetkinlikler: ['istasyonlar', 'yetkinlikler'] as const,
+  panoOzeti: ['istasyonlar', 'pano-ozeti'] as const,
+  rotaKullanimi: ['istasyonlar', 'rota-kullanimi'] as const,
+};

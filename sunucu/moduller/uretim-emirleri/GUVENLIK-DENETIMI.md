@@ -1,0 +1,22 @@
+# Güvenlik denetimi (uretim-emirleri, kart #262)
+
+- Her yeni yazma ucu bir işlem ister (`uretim-emirleri.yaz`); dışa açık komutlar işlemi kendisi arar (üst modülün ucunda aranan işlem bu komutun
+  değildir): açma ve yenileme `uretim-emirleri.yaz | rota.emre-kopyala`, kaynak `uretim-emirleri.yaz | plan.yaz | plan.canliya-al` (kullanıcı kararı; yalnız canlıya alma işlemi olan kişi kaynak yazar, emir açamaz: U plan), plan bilgisi, plana alma, iptal
+  `uretim-emirleri.yaz | plan.canliya-al`. Fason gidiş, dönüş ve tamamlama `uretim-emirleri.fason` ister (depo, müdür, planlama_proje); depo adımlı emri bu işlemle okur, operatör reddedilir. Reddedilen kişi testleri: U açma reddi, U plan, U fason sırası, U kaynak.
+- Okuma uçları sayfa ya da işlem ister (`biri`); işlemsiz oturum 403, girişsiz 401 (U okuma yetkisi).
+- Terminal komutlarında iş merkezi kapsamı değişmedi; iş emirli emirde kapsam çalışan iş emrinin istasyonundandır.
+- Fason gidiş, dönüş ve tamamlama istek kimliği ister (yinelenen istek ikinci kez yazmaz; U terminal).
+- Sürüm denetimi: plana al, iptal, kaynak (eski sürüm 409).
+- Parti bölme ve birleştirme (`POST /adimli-emirler/:id/bol`, `/birlestir`): `uretim-emirleri.yaz` (servis ayrıca `plan.canliya-al` kabul eder,
+  plana al gibi); istek kimliği zorunlu, sürüm denetimli (birleştirmede iki emrin sürümü); iki emir küçük kimlikten başlayarak kilitlenir.
+  Operatör 403 (U parti bölme ve birleştirme). Rol satırı eklenmedi.
+- Parti kolu uçları (`POST /adimli-emirler/:id/ek-adim`, `/ek-adim-kaldir`, `/birlesme-plani`): bölmeyle aynı yetki (PB-K6):
+  `uretim-emirleri.yaz`, servis ayrıca `plan.canliya-al` kabul eder. Ek adım ve birleşme planı istek kimliği ister (yinelenirse ikinci
+  adım ya da ikinci kopya açılmaz); hepsi sürüm denetimli. Kolun üste katılması üstü önce kilitler (bölme ve birleştirmeyle aynı sıra).
+  Operatör 403, eski sürüm 409, istek kimliksiz 400 (U ek adım ve akışlı birleşme). Rol satırı eklenmedi.
+- Fason hareketi ve arşiv yalnız eklenir (tetikleyici). Veri kaybı: göç arşive kopyalamadan değiştirmez; sayı tutmazsa durur (G).
+- Genel arama (`GET /uretim-emirleri/ara`, kart #1221): `biri: ADIMLI_OKUMA_ISLEMLERI` (emir listesiyle aynı); sorgu 2-60 harf, en çok 5 satır, `%` ve `_` joker değil. İzinli ve reddeden test `arama/arama.test.ts` (işlemsiz 403, oturumsuz 401, kısa sorgu 400).
+- İş başlatma (karar 86 b, UE20): kapsam denetiminden sonra başlatanın istasyonda geçerli yetkinliği aranır (`istasyonlar/disari.ts` `yetkinMi`, tesis günüyle); yoksa 403 ve emir, defter değişmez. Bayraklı kişi muaftır. `emirBaslat` tek yer olduğu için terminal, makine devralma ve Arkon başlatması aynı denetimden geçer. Yetkinlik iş merkezi kapsamını genişlettiği için yetkin kişi kısıtsız merkezde de başlatır (değişmedi).
+- Gerçek veri, dış çağrı, yeni paket yok.
+- Üretim yeri (`POST /adimli-emirler/:id/uretim-yeri`, `GET /adimli-emirler/fason-firmalari`): `uretim-emirleri.yaz`; var olan işleme bağlı, rol satırı eklenmedi. Emir satırı kilitlenir, sürüm denetlenir; yazma koşullu (bekleyen ve fason hareketsiz) olduğu için yarışta başlamış adım değişmez. Kişi ve zaman sunucudan, değişim defteri yalnız eklenir. Operatör 403, eski sürüm 409, başlamış adım 409, fason olmayan firma ve eksik alan reddedilir (`uretim-yeri.test.ts`).
+- Ana sayfa emir özeti (`GET /adimli-emirler/ozet`): `biri: ADIMLI_OKUMA_ISLEMLERI` (emir listesiyle aynı); yalnız sayılar, okuma yan etkisiz. Sayılar listenin gösterdiği durumla (`gorunenDurum`) sayılır, biten arşiv dışıdır (soru 68 a). İzinli ve reddeden test `is-emri.test.ts` "adımlı emir özeti" (listeden sayılanla aynı; operatör 403, oturumsuz 401); saf kural `kurallar.test.ts` `adimliOzetSay`.

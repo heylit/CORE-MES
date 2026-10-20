@@ -1,0 +1,28 @@
+.tc-akis { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-akis-bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-2) var(--b-4); }
+.tc-akis-baslik { margin: 0; font-size: var(--yazi-xl); }
+.tc-akis-alt { color: var(--muted); font-size: var(--yazi-s); }
+.tc-akis-olculer { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 5), 1fr)); gap: var(--b-3); }
+.tc-akis-damgalar { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-5); margin: 0; font-size: var(--yazi-s); }
+.tc-akis-damgalar div { display: flex; flex-direction: column; }
+.tc-akis-damgalar dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-akis-damgalar dd { margin: 0; font-family: var(--font-mono); }
+.tc-akis-serit { display: flex; flex-direction: column; gap: var(--b-1); overflow-x: auto; min-width: 0; }
+.tc-akis-serit-satir { display: grid; grid-template-columns: minmax(calc(var(--b-6) * 3), 1fr) minmax(calc(var(--b-6) * 9), 5fr); gap: var(--b-2); align-items: center; }
+.tc-akis-serit-ad { display: flex; flex-direction: column; min-width: 0; }
+.tc-akis-serit-ad b, .tc-akis-serit-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-akis-serit-ad small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-akis-serit-iz { width: 100%; height: var(--b-5); border: 1px solid var(--edge); border-radius: var(--b-1); }
+.tc-akis-serit-eksen { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--yazi-xs); font-family: var(--font-mono); }
+.tc-akis-bolum-bekleme { fill: var(--idle); }
+.tc-akis-bolum-hazirlik { fill: var(--hazard); }
+.tc-akis-bolum-isleme { fill: var(--run); }
+.tc-akis-bolum-duraklama { fill: var(--hold); }
+.tc-akis-bolum-durus { fill: var(--stop); }
+.tc-akis-bolum-fason { fill: var(--grafik-2); }
+.tc-akis-bolum-sevk { fill: var(--done); }
+.tc-akis-bolum-acik { opacity: .55; }
+.tc-akis-lejant { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-akis-lejant span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-akis-lejant svg { width: var(--b-3); height: var(--b-2); }
+.tc-akis-not { color: var(--muted); font-size: var(--yazi-xs); margin: 0; }

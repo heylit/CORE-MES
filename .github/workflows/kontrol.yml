@@ -1,0 +1,318 @@
+name: kontrol
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'kurulum/**'
+      - 'belgeler/**'
+  pull_request:
+
+# Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda her commit kendi grubundadır, hiçbir koşu iptal edilmez ya da
+# bekleyen koşunun yerini almaz: kırmızıda bozan birleşme tek commit'e iner.
+concurrency:
+  group: kontrol-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TMIV2_ORTAM: test
+  TMIV2_PORT: 4100
+  TMIV2_PG_HOST: 127.0.0.1
+  TMIV2_PG_PORT: 5432
+  TMIV2_PG_USER: tmiv2_uygulama
+  TMIV2_PG_PASSWORD: tmiv2-uygulama
+  TMIV2_PG_GOC_USER: tmiv2_goc
+  TMIV2_PG_GOC_PASSWORD: tmiv2-goc
+  # Testler yalnız test veritabanına bağlanır; asıl veritabanı adı ondan farklı olmak zorundadır.
+  TMIV2_PG_DATABASE: tmiv2
+  TMIV2_PG_TEST_DATABASE: tmiv2_test
+  TMIV2_PG_BAGLANTI_SURE_MS: 5000
+  TMIV2_PG_SORGU_SURE_MS: 10000
+  TMIV2_PG_OKUMA_SURE_MS: 5000
+  TMIV2_PG_HAVUZ: 10
+  TMIV2_PG_KILIT_SURE_MS: 5000
+  TMIV2_PG_BOS_TX_SURE_MS: 30000
+  # Ölçüm (#25): 3 dosyada 201 sn, 8 dosyada 154 sn. Yerel koşu varsayılanda kalır.
+  TMIV2_TEST_ESZAMANLI: 8
+
+# Tek iş 21 dakika sürüyordu; işler ayrı makinelerde aynı anda koşar (#1219). Dal korumasının beklediği `kontrol` en sondaki
+# toplayıcı iştir: bir iş bile yeşil değilse kırmızı biter. Çekme isteğinde `kapsam` işinin atladığı test işi "atlandı"
+# sayılır; ana dala gönderimde her iş koşar.
+jobs:
+  # Değişen dosyalara göre hangi ağır işlerin koşacağı. Bilinmeyen her yol (paylasilan, araclar, paketler, yapılandırma,
+  # iş akışı) her şeyi koşturur. Sunucu testleri arkon/web ve istemci/src'den dosya ithal eder: ithal edilen istemci
+  # klasörleri koddan okunur, elle liste tutulmaz.
+  kapsam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sunucu: ${{ steps.sec.outputs.sunucu }}
+      istemci: ${{ steps.sec.outputs.istemci }}
+      ekran: ${{ steps.sec.outputs.ekran }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: sec
+        shell: bash
+        env:
+          OLAY: ${{ github.event_name }}
+        run: |
+          if [ "$OLAY" != "pull_request" ]; then
+            printf 'sunucu=true\nistemci=true\nekran=true\n' >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          sunucu=false; istemci=false; ekran=false
+          # Süreç ikamesindeki hata yutulur ve testler sessizce atlanırdı: liste önce alınır, alınamazsa iş düşer.
+          degisenler=$(git diff --name-only HEAD^1 HEAD)
+          sunucunun_istemcisi=$(grep -rhoE "(\.\./)+istemci/src/[A-Za-z0-9_./-]+\.tsx?" sunucu araclar paylasilan --include=*.ts \
+            | sed -E 's#^(\.\./)+##' | xargs -r -n1 dirname | sort -u || true)
+          while IFS= read -r yol; do
+            [ -z "$yol" ] && continue
+            case "$yol" in
+              belgeler/*|kurulum/*) ;;
+              */*) case "$yol" in
+                     ekran-testleri/*) ekran=true ;;
+                     sunucu/*) sunucu=true; ekran=true ;;
+                     arkon/*) sunucu=true; istemci=true; ekran=true ;;
+                     istemci/*) istemci=true; ekran=true
+                       for klasor in $sunucunun_istemcisi; do
+                         case "$yol" in "$klasor"/*) sunucu=true ;; esac
+                       done ;;
+                     *) sunucu=true; istemci=true; ekran=true ;;
+                   esac ;;
+              *.md) ;;
+              *) sunucu=true; istemci=true; ekran=true ;;
+            esac
+            echo "$yol"
+          done <<< "$degisenler"
+          printf 'sunucu=%s\nistemci=%s\nekran=%s\n' "$sunucu" "$istemci" "$ekran" | tee -a "$GITHUB_OUTPUT"
+
+  tip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run tip
+
+  denetim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Göç damgası denetimi birleştirme commit'inin ilk ebeveynine bakar.
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run sinir
+      # Modülsüz sınır denetimi göç damgasına bakmaz. Değişenler birleştirme commit'inin ilk ebeveyninden, son göç ana
+      # dalın güncel ucundan alınır; eski damgalı göç birleşirse kurulu sistemde göç durur.
+      # Var olan göç değişmezdir: değişen ya da silinen göç kurulu sistemde göç koşusunu durdurur; aynı adım yakalar.
+      - name: Göç damgası ve var olan göç (yeni göçler ana daldaki son göçten sonra mı, var olan göç değişmiş mi)
+        if: github.event_name == 'pull_request'
+        env:
+          TABAN: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "+refs/heads/$TABAN:refs/remotes/origin/$TABAN"
+          node araclar/goc-damgasi.ts HEAD^1 "origin/$TABAN"
+      # Ana dala gönderimde de: istek eski tabanla yeşil kalmış olabilir. Birleştirme commit'inin ilk ebeveyni gönderimden
+      # önceki ana daldır; hem değişimin hem son göçün tabanı odur.
+      - name: Göç damgası ve var olan göç (ana dala gönderim)
+        if: github.event_name == 'push'
+        run: node araclar/goc-damgasi.ts HEAD^1 HEAD^1
+      - run: npm run lint
+      - run: npm run derle:istemci
+
+  istemci-test:
+    needs: kapsam
+    if: needs.kapsam.outputs.istemci == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        parca: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:istemci -- --shard=${{ matrix.parca }}/2
+
+  sunucu-test:
+    needs: kapsam
+    if: needs.kapsam.outputs.sunucu == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        parca: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:18
+        # Süper kullanıcı yalnız kurulum ve taşıma denemesi adımlarında kullanılır; testler iki rolle koşar.
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tmiv2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TMIV2_TEST_PARCA: ${{ matrix.parca }}/4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Atılacak test sunucusu: diske yazma beklenmez. Tek işte koşu süresinin önemli kısmı art arda gelen WAL denetim
+      # noktalarında geçiyordu. Ayarlar yeniden yüklemeyle geçerli olur; testlerin gördüğü davranış değişmez.
+      - name: Test sunucusunu diske yazmayı beklemeyecek biçimde ayarla
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
+            -c "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" -c "ALTER SYSTEM SET max_wal_size = '4GB'" \
+            -c "SELECT pg_reload_conf()"
+      - name: Veritabanı kullanıcılarını aç (iki kez - betik yeniden koşulabilir olmalı)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for tur in 1 2; do
+            psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_TEST_DATABASE" \
+              -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+          done
+      - name: Taşıma denemesi (süper kullanıcının kurduğu veritabanında taşıma, doğrulama, geri alma)
+        if: matrix.parca == 1
+        env:
+          VT_SUPER_USER: postgres
+          VT_SUPER_PASSWORD: postgres
+        run: bash araclar/vt/tasima-denemesi.sh
+      - run: npm run test:sunucu
+
+  # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
+  # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
+  ekran:
+    needs: kapsam
+    if: needs.kapsam.outputs.ekran == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tmiv2
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      TMIV2_EKRAN_TARAYICI: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Kurulu tarayıcı
+        run: '"$TMIV2_EKRAN_TARAYICI" --version'
+      - name: Veritabanı kullanıcılarını aç
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_DATABASE" \
+            -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+      - run: npm run goc
+      - run: npm run ekran:hazirla
+      - run: npm run derle:istemci
+      - run: npm run ekran
+      - name: Düşen testlerin görüntü ve izleri
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ekran-sonuc
+          path: /tmp/tmiv2-ekran/sonuc
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Uygulama kurumda Windows'ta çalışır: bekçi, yedek ve güncelleyici orada da denenir. Yalnız işletme betiklerinin testleri
+  # koşar; atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce atlanırsa iş yine yeşil görünür.
+  # PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
+  windows:
+    needs: kapsam
+    if: needs.kapsam.outputs.sunucu == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: PostgreSQL hizmetini aç
+        shell: pwsh
+        run: |
+          $hizmet = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          if (-not $hizmet) { throw 'Çalıştırıcıda PostgreSQL hizmeti yok' }
+          Set-Service -Name $hizmet.Name -StartupType Manual
+          Start-Service -Name $hizmet.Name
+      - name: Test veritabanını ve kullanıcılarını aç
+        env:
+          PGPASSWORD: root
+        run: |
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
+            -c "CREATE DATABASE $TMIV2_PG_TEST_DATABASE"
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_TEST_DATABASE" \
+            -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+      - name: İşletme betiklerinin testleri
+        run: |
+          node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test --test-reporter=tap \
+            araclar/bekci.test.ts araclar/guncelleyici.test.ts araclar/yedek.test.ts 2>&1 | tee test-cikti.txt
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -qx '# skipped 0' test-cikti.txt && grep -qx '# todo 0' test-cikti.txt \
+            || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
+
+  kontrol:
+    if: always()
+    needs: [kapsam, tip, denetim, istemci-test, sunucu-test, ekran, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Bütün işler yeşil
+        env:
+          SONUCLAR: ${{ toJSON(needs) }}
+        run: |
+          echo "$SONUCLAR" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # Atlanan iş yalnız kapsam yeşilse kabul edilir; kapsam düşerse ona bağlı işler de atlanır.
+          echo "$SONUCLAR" | jq -e '.kapsam.result == "success" and .tip.result == "success" and .denetim.result == "success"
+            and all(.[]; .result == "success" or .result == "skipped")' > /dev/null

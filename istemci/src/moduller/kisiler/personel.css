@@ -1,0 +1,40 @@
+.tc-personel-roller { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; }
+.tc-personel-liste { display: flex; flex-direction: column; gap: var(--b-2); margin: 0 0 var(--b-5); padding: 0; list-style: none; }
+.tc-personel-satir {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  min-height: var(--dokunma); padding: var(--b-1) 0; border-bottom: 1px solid var(--edge);
+}
+.tc-personel-satir:last-child { border-bottom: 0; }
+.tc-personel-rol { min-width: 0; overflow-wrap: anywhere; }
+.tc-personel-ekle { display: flex; align-items: flex-end; gap: var(--b-3); }
+.tc-personel-ekle > :first-child { flex: 1; min-width: 0; }
+.tc-personel-not { color: var(--muted); margin: 0; }
+
+@media (max-width: 479px) {
+  .tc-personel-ekle { flex-direction: column; align-items: stretch; }
+}
+.tc-personel-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+.tc-personel-form { display: flex; flex-direction: column; gap: var(--b-4); }
+.tc-personel-satir-islem { display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+[data-kip="kart"] .tc-personel-satir-islem { flex-wrap: wrap; min-width: 0; }
+.tc-personel-satir-islem .tc-dugme { padding: 0; min-width: var(--dokunma); }
+.tc-personel-ad { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-personel-alt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-personel-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-personel-matris-kap { position: relative; overflow-x: auto; min-width: 0; max-width: 100%; margin-top: var(--b-3); }
+.tc-personel-matris { border-collapse: separate; border-spacing: 0; font-size: var(--yazi-s); }
+.tc-personel-matris th, .tc-personel-matris td { padding: var(--b-2) var(--b-3); border-bottom: 1px solid var(--edge); text-align: center; }
+.tc-personel-matris thead th {
+  font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  border-bottom-color: var(--edge2); white-space: nowrap;
+}
+.tc-personel-matris th[scope="row"], .tc-personel-matris thead th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--panel-solid); text-align: left; white-space: nowrap;
+}
+.tc-personel-matris th[scope="row"] { font-weight: 400; }
+.tc-personel-matris-grup th {
+  padding-top: var(--b-4); text-align: left; font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.tc-personel-matris-grup th > span { display: inline-block; position: sticky; left: var(--b-3); }
+.tc-personel-var { display: inline-flex; color: var(--run); }

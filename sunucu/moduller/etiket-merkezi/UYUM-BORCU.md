@@ -1,0 +1,22 @@
+# UYUM BORCU: etiket-merkezi
+
+Sınıflar: TUTAN, ETKİLEYEN, SONRA.
+
+## Bağlamada kapanacak
+1. ETKİLEYEN: altı kaynağın hepsi gerçek kayıttan basılır: konum, lot ve mal kabul (stok `konumAdlari`, `lotEtiketleri`), istasyon (stok `istasyonKonumlari` + istasyonlar `istasyonAdlari`), refakat kartı (uretim-emirleri `refakatKarti`), malzeme (malzemeler `malzemeOzetleri`, 269 a). Mal kabul seçimi kabulün bütün lotlarını basar (270 a); ekranda çip lottur, tek lot çıkarılamaz. Ekrandaki adet uyarısı seçili kabul sayısıyla hesaplanır; lot sayısıyla sınırı sunucu denetler (400).
+2. ETKİLEYEN: sahip ekranlar `/etiket-merkezi?tur=<konum|lot|istasyon|refakat|malzeme|mal-kabul>&id=…` adresini açacak (sahiplerin işi); emir ayrıntısındaki "Refakat kartı bas" bugün uretim-emirleri'nin kendi tarayıcı baskısını açar.
+3. ETKİLEYEN: refakat kartı etiketinde işlem tablosu ve "Bitti" kutuları yok; işlem sırası tek metin alanında (`adimlar`) satır satır kırılır, sığmayan kesilir (EM-17). İptal emir seçimde varsa bütün baskı 409 ile durur (emrin kendi kuralı).
+
+15. SONRA: lot etiketi malzeme türü adını basar (271 a, "Kart 1001 · Hammadde"); tür adları `kurallar.ts`'te stok ekranındakinin kopyasıdır. Ortak tür adı sözlüğü çekirdek isteği (CEKIRDEK-ISTEKLERI 4).
+
+## Sonra
+5. SONRA: şablon tasarım ekranı ve kullanıcı şablonu tablosu.
+6. ETKİLEYEN: önizlemede harf genişliği tahmindir (`HARF_ORANI`); yazıcıdaki satır kırılımı farklı olabilir. Deneme etiketiyle doğrulanacak.
+7. SONRA: QR çizimi istemcide dördüncü kez yazıldı (`Onizleme.tsx`); ortak QR bileşeni çekirdek isteği.
+8. SONRA: ana menü simgesi `book` geçici; uygun "yazıcı" simgesi ortak sette yok (çekirdek isteği).
+9. ETKİLEYEN: doğrudan baskı deneme etiketi ve seçili kayıtlar (altı kaynak) için açık (EM-11).
+12. ETKİLEYEN: konum etiketinde ad ve yer boş (stok yalnız kod veriyor); 94 a için yeterli.
+13. SONRA: kalıcı "yeniden basılmalı" rozeti yok (koordinatör kararı, 19.10); uyarı yalnız stokun kod değiştirdiği anda. Basılan konumlar `etiket_merkezi_baski_kaydi`'nda tutulur.
+14. ETKİLEYEN: deftere yalnız dosya yazıcısı seçilerek yapılan indirme yazılır ("indirildi"); önizlemedeki düğme "Önizleme için indir (<dosya>, deftere yazılmaz)" adını taşır (koordinatör kararı b, 19.10).
+10. ETKİLEYEN: "gönderildi" yazıcının bağlantıyı kabul ettiğini gösterir; etiketin çıktığını göstermez (yazıcıdan durum okunmaz).
+11. SONRA: Argox OS-214 USB'de (100): doğrudan baskı yok, dosya indirilir. PPLB komutları cihazda doğrulanmadı.

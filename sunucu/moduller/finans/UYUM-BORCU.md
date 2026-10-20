@@ -1,0 +1,64 @@
+# finans: uyum borcu
+
+## Kullanıma açmadan önce
+
+Yok. Kayıt formları maddesi kapandı (dal 246-finans-form): ortak arayüz kartı #172 (FC, birleşme 6d42c4f) `allow-forms` iznini getirdi, finans çerçevesi izni istiyor. Tarayıcıda (Chromium, 08.10.2026, DOĞRULANDI) sekiz formun gönder düğmesine tıklandı, dokuz gönderimin hepsi sunucuya yazdı (2xx): ilk kurulum, hesap, firma, KDV, kur, satış (akış), belge düzeltme, alınan çek (akış), çek düzeltme. Kanıt paylaşılan klasörde `tur4-raporlar/finans-form/` (betik, çıktı, ekran görüntüleri).
+
+## Sunucuda zorunlu olup eksik kalan
+
+Yok. Para kuralları (belge, ödeme, dağıtım, mahsup, çek, hesap, virman), durum geçişleri ve kimin yapabileceği, kesinleşmiş kaydın değişmezliği, sürüm, kayıt zamanı ve kişi, tekrar koruması, silme yasağı ve pasif firma/hesap kuralları sunucuda ve veritabanı tetikleyicilerindedir (KURAL-TEST.md).
+
+## Ekranda kalan kurallar ve hesaplar
+
+| Konu | Dosya | Neden |
+|---|---|---|
+| Analizler (nakit tahmini, Monte Carlo, satış tahmini, Markov, risk notu, Altman/DuPont, anomali, danışman, sağlık skoru) | `cerceve/finans.html` | Prototipin analiz motoru; sunucuda zamanlanmış iş yok. Skor sunucuya yazılır ama tarayıcıda hesaplanır. |
+| FNS-34, FNS-36, FNS-52, FNS-57, FNS-58 | `cerceve/finans.html` | Gösterim ve öneri kuralları (kâr/zarar dışı tutma, vergi ekranı, varsayılan önerisi, güncel kurla değerleme, kur farkı satırı). |
+| Tevkifatlı belgede prototipin KDV ekranları etkin oranla hesaplar | `cerceve/finans.html` (tam kip dönüştürücüsü) | Prototip KDV'yi tutar x oran olarak tutar; belgenin sunucudaki toplamı doğru, KDV ekranındaki tevkifat ayrımı yaklaşıktır. |
+| KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): borç değil; sunucu her dağıtım satırını ayrıca denetliyor, ekrandaki yalnız öneri. Dağıtım planı (en eski vadeden başlayarak) | tam kip katmanı | Sunucu her satırın sınırını ayrıca denetler. |
+
+## Ekran (yol A, kullanıcı kararı: ekran olduğu gibi)
+
+| Konu | Dosya | Neden |
+|---|---|---|
+| Kendi bileşenleri, kendi CSS'i, tasarım değişkeni dışı renk ve ölçü, satır içi stil | `cerceve/finans.html` | Prototip çerçevede olduğu gibi açılır. |
+| Kendi yazı tipleri ve grafik kitaplığı | `cerceve/yazi/`, `yazi-tipleri.ts`, chart.js 4.4.1 | Görünüm; yerel, dış servis yok (K-8). |
+| `.html`, `.woff2`, `.txt` dosya türü | `cerceve/` | CEKIRDEK-ISTEKLERI.md bölüm 4. |
+| Yalıtılmış çerçeve (`YalitilmisCerceve`: betik, indirme, form, yazdırma; opak köken) | `FinansCercevesi.tsx` | Karar FN3; koruma içerik politikası, ortak bileşenin `form-action 'none'`'u ve köprünün kaynak denetimi. |
+| Veri köprüsü kanalı `finans` modüle özel; görünüm eşlemesi standart sözleşme | `kopru.ts`, `cerceve/finans.html` | Ortak bir veri köprüsü kalıbı yok. |
+| Prototipin tek dosyalık sürümündeki saklama kodu dosyada durur | `cerceve/finans.html` | Gömülü kipte boş işleve çevrilir, hiç çalışmaz; içerik politikası bağlantıyı kapatır. |
+| Gömülü kipte kapalı: kendi menüsü, alt çubuk, tema düğmesi, örnek veri (dosyadan çıkarıldı), "Geri al" (K-6), JSON içe/dışa aktarma, verileri silme | `cerceve/finans.html` | Menü kabukta; silme yok, iptal var. |
+| Kurulum sihirbazı sadeleşti: şirket, eşik, kasa ve banka hesabı. Açık alacak, borç ve çekler sonra "Kayıt gir" ile firmaya bağlı girilir | tam kip katmanı | Firma bağlantısı ve hesap modeli. |
+| "Maaş, SGK, vergi, kredi" akışında "Diğer" seçeneği yok | tam kip katmanı | Faturasız belge yalnız izinli kategorilerde (FNS-2); faturalı gider "Alış yaptım" ile girilir. |
+| Toplu aktarım yalnız açık belge açar; "ödendi" satırların ödemesi ayrıca girilir | tam kip katmanı | Ödeme bir hesaba yazılmalıdır (K-4). |
+| Firmalar listesinde rakam sütunu olarak açık alacak ve açık borç; risk notu, gecikme ve çek sütunları firma kartının hesap bölümünde | tam kip katmanı | Firma listesi firma uçlarından gelir (FNS-48); rakamlar finans verisinden eklenir. |
+| Düzeltme penceresinde tevkifatlı ya da dövizli belgenin tutar/KDV alanı değişmez | tam kip katmanı | Bu belgeler iptal edilip yeniden girilir. |
+| Dövizli düzenli ödeme "ödendi" yapılamaz | servis | Kur gerekir; belge olarak girilir. |
+
+## Denetim düzeltmelerinin ekrana etkisi (dal 246-finans-denetim; ekrana dokunulmadı)
+
+1. B-004: ödeme iptal edilince açıklama artık değişmez, neden `iptal_nedeni` sütununa yazılır. Okuma sözleşmesinde `iptalNedeni` var (akış D); ekran iptal nedenini henüz göstermiyor, eskiden açıklamanın yerinde görünüyordu.
+2. B-009: mahsubun kuru `finans_mahsup.capraz_kur` sütununda; okuma sözleşmesinde `caprazKur` var (akış D), ekran göstermiyor.
+3. KAPANDI (akış D): çapraz kur payı `finans_ayar.capraz_kur_payi`'de (varsayılan 20); ayar okuma ve güncellemede `caprazKurPayi`, ekranda Ayarlar > Kurlar'da alan. Tarayıcıda (10.10.2026, DOĞRULANDI) pay 30 yapıldı, sunucu 30.00 döndü.
+4. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): Logo bağlantı kodu kullanıcı isteyene kadar kapsam dışı; Logo işi açılınca yeniden açılır. FK2: Logo'dan okunacak faturalarda KDV ve toplam Logo'nun değeridir; satır bazında yuvarlama yüzünden tek oranla tam oluşmayabilir. Logo bağlantısı işinde bu belgeler için KDV tutarı hesaplanmaz, Logo'dan gelen değer saklanır (bugün `kdv_tutari` ve `toplam` üretilen sütun; bağlantıda değişecek).
+5. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bilgi notu, borç değil; ihtiyaç doğarsa ayrı karar. FK2: tek belgede birden çok KDV oranı desteklenmiyor; ihtiyaç doğarsa ayrı karar.
+6. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bilgi notu, borç değil. B-003 ve B-008/B-009: yeni ret iletileri sunucudan gelir ve ekranın kendi bildiriminde görünür (tek oranla oluşamayan düzenli ödeme toplamı; günün kurundan %20'den çok sapan çapraz kur).
+
+## Bağlamada kapanacak (Aşama 1 oturtması, 08.10.2026, dal 246-finans)
+
+1. KAPANDI (dal 246-finans-form): görünüm sözleşmesi ortak `useYalitilmisGorunum` (`istemci/src/ortak/rota/cerceve-gorunumu.ts`, FC #328) ile işliyor; modül içindeki `gorunum-koprusu.ts` silindi.
+2. KAPANDI (bağla tur 1, akış C, dal 246-finans-tedarik-bagi): `disari.ts` toplu `firmaOzetleri(db, idler)` veriyor (tek sorgu; pasif de döner; olmayan kimlik haritada yok). Özet telefon, e-posta, il ve sürümü de taşır; adlar sözleşmedeki gibi (`ePosta`, `il`), satın alma kendi adına çevirir. "Yetkili" satın almada kalır (FN4).
+3. KAPANDI (borç #155, 15.10.2026): satın alma firmayı `musteri-tedarikci/disari.ts` `firmaAra` ve `firmaOzeti` ile okuyor, finansın `firmaVarMi`/`firmaAra`'sını çağırmıyor (`satin-alma/servis.ts` ithal satırı). Önceki not: imza farkı satın alma tarafında kapanır (gelen esastır): `firmaVarMi` `{ var, aktif }` döner (satın alma boolean bekliyor), `firmaAra` seçenek nesnesi alır ve `kod` da döner (satın alma `(db, metin)` çağırıyor).
+4. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): satın alma güncel kuru finanstan okuyor (`satin-alma/servis.ts` "SA3 a: güncel kur finanstan", `kurlar(db, bugun)`, `kurGetir(db, kaynak.paraBirimi, kaynak.tarih)`, `../finans/disari.ts` ithali). Finans tarafı KAPANDI (aynı dal): `kurGetir(db, paraBirimi, tarih)` o güne kadar girilmiş son kuru tarihiyle döner, TRY 1, kur yoksa `null`; `kurlar(db, tarih)` hepsini döner. Kalan satın almada: `satin_alma_kur` güncel kur kaynağı olmaktan çıkar; teklif ve siparişte o gün kullanılan kur saklanmaya devam eder; finansta kur yoksa satın alma kullanıcıdan kur ister ve kendi kaydına yazar, `finans_kur`'a yazmaz (SA3 a).
+5. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): karar FN5, iki bütçe ayrı kalır; borç değil. Bütçe (karar FN5): satın almanın departman yıllık bütçesi (`satin_alma_birim.yillik_butce`) ile `finans_butce` ayrı kavramdır, ayrı kalır.
+6. KAPANDI (dal 246-finans-defter-farki, FNS-61): düzeltme ve iptal komutları çekirdeğin `denetimEki`'siyle değişen her alanın önceki ve yeni değerini (`kayit`, `alan`, `onceki`, `yeni`) deftere bırakıyor; sürüm ve kayıt zamanı yazılmaz, uzun metin 200 bayta kısaltılır. Kalan: toplu içe aktarma deftere yalnız boyut ve özet yazıyor (`denetimOzeti` kullanılmıyor; FNS-41, FNS-50 gereği gövde girmez).
+7. KAPANDI (kart #223, göç `20261009053000_kisiler_finans_islemleri.sql`, kullanıcı kararı RC1 R8-R12): finans işlemleri rollere verildi, matris `kurulum/yetki-matrisi.md`. Muhasebe ve finans okur, yazar, yönetir; müdür rakamları ve firma kartını okur; satın alma ve planlama firma kartını okur ve yazar, rakam görmez; depo firma kartını yalnız okur. Okuma uçları tek veri işlemiyle (`finans.oku`, `finans.firma-oku`); `yetki: { biri: [...] }` kalıbı gerekmedi.
+8. KAPANDI (borç #157): göçler yeni damgayla geldi (`20261008132200_finans_firma.sql`, `20261008132300_finans_cekirdek.sql`; içerik aynı); teslim belgeleri (FARK, NOTLAR, UYGULA, ON-PAKET) artık yeni adları anar.
+9. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): 16.10.2026 kararı "YAPILMAYACAK". Menü sırası: finans ve Denetim Kaydı Yönetim grubunda aynı sırada (5); eşitlik yolla çözülür (Denetim, Finans, Sistem Ayarları).
+10. Yalıtılmış çerçevede prototipin tema tercihi ve öteki `localStorage` kayıtları bellek içi depoda durur, sayfa yenilenince kaybolur (tema kabuktan gelir).
+11. KAPANDI (dal 246-finans-form): formlar gönderiliyor. Ortak `YalitilmisCerceve` `allow-forms` iznini veriyor ve belge başına `form-action 'none'` koyuyor (FC #328); finans izni istiyor. Tarayıcıda sekiz form kaydetti (yukarıda "Kullanıma açmadan önce"). Öncesi: izin yokken sunucuya istek gitmiyordu (0), izinle gidiyordu (1).
+12. KAPANDI (dal 246-finans-cekmece-formu, kullanıcı onayı 09.10.2026): çekmece formunun kimliği `ekCekmece`, düğmesi ona bağlı; sayfadaki `ekForm` (KDV, kur, kurulum) ayrı kaldı. Önce: KDV ya da Kurlar sekmesi açıkken çekmece düğmesi sayfadaki formu gönderiyordu, çekmece kaydedilemiyordu. Tarayıcıda (09.10.2026, DOĞRULANDI) iki sekmede virman kaydetti; bütün çekmeceler (hesap, avans, mahsup, ciro, çek sonucu, virman) ve sayfa formları yeniden 200. Kanıt `tur4-raporlar/finans-form/r8/borc12/`.
+13. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): satın alma faizi finanstan okuyor (`satin-alma/servis.ts` `const finansFaizi = await faizler(db, bugun)`, `aylikFaiz(finansFaizi.get(...)?.aylikYuzde, k.aylikFaizYuzdesi)`). Faiz (kullanıcı isteği 12.10.2026): faizin sahibi finanstır; `finans_faiz` tarihli ve yalnız eklenir, `disari.ts` `faizGetir(db, paraBirimi, tarih)` ve `faizler(db, tarih)` verir. Satın almanın `satin_alma_kur.aylik_faiz_yuzdesi` alanı tarihsiz ve üzerine yazılır; bağlamada satın alma faizi finanstan okur (BASKA-MODUL-ISTEKLERI "Satın almaya istek: faiz"). O zamana kadar iki kaynak ayrı kalır, finans satın almaya yazmaz.
+14. Sabit kıymet (kullanıcı isteği 12.10.2026; yabancı anahtar 312 b ile geldi): `finans_sabit_kiymet.makine_id` istasyonlar `makine (id)`'ye bağlı, boş olabilir; yeni kayıtta kodun karşılığından yazılır, karşılığı olmayan kodda ve eski satırlarda boş. `makine_kodu`'nun kaldırılması ayrı soru. Kalan: ekranda makine seçimi istasyonlar `disari.ts`'inden gelir. Makine saat maliyeti için amortisman okunmaz (211 a: makine saati yalnız doğrudan gider, amortisman ve kira genel gider oranında); `makineAmortismani` bugün hiçbir modülde çağrılmıyor (19.10.2026, DOĞRULANDI: `grep makineAmortismani` yalnız finans).
+15. KAPANDI (borç B15, 17.10.2026 onayı): beklenen ödemeler nakit planına, vade takvimine ve ana sayfaya "tahmini" ayrı satır olarak girer; vadesi geçen plan satırı tahmine girmez ("Gecikmiş, kontrol edin"), firmaya ödenip faturaya dağıtılmamış para o firmanın avans satırlarından düşülür, siparişe bağlanmamış alış faturası "Bağlanmamış fatura var" uyarısıyla gösterilir (tutar düşülmez). Önceki not: Siparişten beklenen ödeme (kart #1124, bağlamada kapanacak): Nakit planı ekranının altında "Siparişten beklenen ödemeler" listesi var (vade, tedarikçi, sipariş no, ödeme şekli, tutar). Nakit tahmini, vade takvimi ve ana sayfa "yaklaşan ödeme" sayısı bu satırları saymıyor (tutar KDV hariç tahmindir). Sipariş no plan yazılırken kopyalanır; plan yazıldıktan sonra sipariş no değişirse yeni plan yazımına kadar eski no görünür.
+16. İade faturası (260 a, bağlamada kapanacak): iade ters yönlü belge olduğundan müşteriye para iadesi bugün ödeme ekranından açılamaz (satış firması gider ödemesine uygun değil, FNS-51); iade asıl faturayla mahsupla kapatılır. Sevk bağı Sevkiyat'ın `sevkIsiOzeti`'yle denetlenir (FNS-68). Ekranda (273 a) iade iki olaydan girer; sevk satış formunda siparişten sonra seçilir (302 a, `GET /finans/satis-sevkleri`, Sevkiyat `siparisinSevkleri`).

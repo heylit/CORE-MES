@@ -1,0 +1,21 @@
+/* Çerçeve ikinci menünün yanındaki alanı boşluksuz doldurur; kaydırmayı ve 3B sahneyi prototip yönetir. */
+.tc-cnc-kurulum { display: grid; height: 100%; min-height: 0; }
+.tc-cnc-kurulum-cerceve { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
+.tc-cnc-kurulum-durum { padding: var(--b-5); }
+/* Toplu aktarım: menü çerçeveli olduğundan kabuk boşluk vermez, sayfa kendi boşluğunu verir. */
+.tc-cnc-aktarim { position: relative; display: grid; align-content: start; gap: var(--b-3); padding: var(--b-4); height: 100%; overflow-y: auto; }
+.tc-cnc-aktarim-ust { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--b-3); }
+.tc-cnc-aktarim-ust h1 { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); }
+.tc-cnc-aktarim-ipucu { margin: var(--b-1) 0 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-cnc-aktarim-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-cnc-aktarim-satir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: var(--b-2) var(--b-3); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); }
+.tc-cnc-aktarim-sonuc { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-cnc-aktarim-sonuc[data-ton="tamam"] { color: var(--run); }
+.tc-cnc-aktarim-sonuc[data-ton="hata"] { color: var(--stop); }
+/* Model üretimi için açılan prototip görünmez; ekranda yer kaplamaz, tıklanmaz. */
+.tc-cnc-aktarim-cerceve { position: absolute; inset-inline-start: 0; inset-block-start: 0; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; }
+@media (max-width: 767px) {
+  .tc-cnc-aktarim { padding: var(--b-3); }
+  .tc-cnc-aktarim-satir { grid-template-columns: minmax(0, 1fr); }
+}
+.tc-cnc-aktarim-sonuc a, .tc-cnc-aktarim-ipucu a { color: inherit; font-weight: 600; text-decoration: underline; }

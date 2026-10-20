@@ -1,0 +1,2 @@
+- Kod değişmez (tetikleyici): üretim emri numarası kodu metin olarak taşır; değişen kod eski emirleri bulunamaz yapardı.
+- Firma seçici kendi ucumuzda (`/projeler/firma-secenekleri`, `projeler.yaz`): proje yazan kişiye finans işlemi vermemek için.

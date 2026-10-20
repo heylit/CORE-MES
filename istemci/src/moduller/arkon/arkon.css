@@ -1,0 +1,12 @@
+/* Arkon çerçevesi ikinci menünün yanındaki alanı boşluksuz doldurur; kaydırmayı Arkon yapar. */
+.tc-arkon { display: grid; height: 100%; min-height: 0; }
+/* Başka sayfanın içinde (Sistem Ayarları) yüksekliği verecek kap yoktur; Arkon ayarları kendi içinde kayar. */
+.tc-arkon-gomulu { block-size: min(80vh, 56rem); min-block-size: 28rem; }
+.tc-arkon-cerceve { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
+.tc-arkon-durum { padding: var(--b-5); }
+.tc-arkon-yansima { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-arkon-yansima-durum { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-arkon-devral { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }
+.tc-arkon-devral p { margin: 0; }
+.tc-arkon-devral-not { font-size: var(--yazi-s); color: var(--muted); }
+.tc-arkon-gizlenenler { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); color: var(--muted); }

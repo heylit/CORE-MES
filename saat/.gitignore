@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+*.apk
+*.jks
+*.keystore
+# Kurum kok sertifikasi depoya girmez (kart #2045); derlemedeki kopyasi build/ altindadir.
+*.crt
+*.cer
+*.pem
+*.der

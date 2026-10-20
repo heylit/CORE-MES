@@ -1,0 +1,12 @@
+.tc-sayfalama {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--b-2) var(--b-4); margin-top: var(--b-3);
+}
+.tc-sayfalama-ozet { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-sayfalama-dugmeler { display: flex; align-items: center; gap: var(--b-2); margin-left: auto; }
+.tc-sayfalama .tc-sayfalama-dugme { min-width: var(--dokunma); padding: 0; }
+.tc-sayfalama .tc-sayfalama-dugme[aria-disabled="true"] { opacity: .4; cursor: not-allowed; transform: none; }
+.tc-sayfalama-yer {
+  min-width: var(--dokunma); padding: 0 var(--b-1); text-align: center; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--yazi-s); color: var(--muted);
+}

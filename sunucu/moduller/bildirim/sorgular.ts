@@ -1,0 +1,101 @@
+import type { Db } from '#cekirdek/db.ts';
+import type { Dilim } from '#cekirdek/liste.ts';
+import { zamanMetni } from '#cekirdek/zaman.ts';
+import type { Bildirim, BildirimListeDurumu, BildirimOnemi } from '#paylasilan/sozlesme/bildirim.ts';
+
+const SECIM = `id, tur, onem, baslik, metin, yol, kaynak_modul AS "kaynakModul", tekrar_sayisi AS "tekrarSayisi",
+  ${zamanMetni('olusturuldu')} AS olusturuldu, ${zamanMetni('okundu')} AS okundu, ${zamanMetni('arsivlendi')} AS arsivlendi`;
+
+export interface YeniBildirim {
+  kisiId: number;
+  tur: string;
+  onem: BildirimOnemi;
+  baslik: string;
+  metin: string | null;
+  yol: string | null;
+  kaynakModul: string;
+  tekilAnahtar: string | null;
+}
+
+// Okunmamış aynı tekil anahtar varsa yeni satır açılmaz: sayaç artar, metin ve zaman tazelenir (zilde yeniden üste çıkar).
+export async function bildirimYaz(db: Db, b: YeniBildirim): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (kisi_id, tekil_anahtar) WHERE tekil_anahtar IS NOT NULL AND okundu IS NULL AND arsivlendi IS NULL
+     DO UPDATE SET tekrar_sayisi = bildirim_kaydi.tekrar_sayisi + 1, baslik = EXCLUDED.baslik, metin = EXCLUDED.metin,
+       yol = EXCLUDED.yol, onem = EXCLUDED.onem, olusturuldu = now()`,
+    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar],
+  );
+}
+
+const DURUM_KOSULU: Record<BildirimListeDurumu, string> = {
+  gelen: 'arsivlendi IS NULL',
+  okunmamis: 'arsivlendi IS NULL AND okundu IS NULL',
+  onemli: "arsivlendi IS NULL AND onem <> 'bilgi'",
+  arsiv: 'arsivlendi IS NOT NULL',
+};
+
+export async function kisininBildirimSayisi(db: Db, kisiId: number, durum: BildirimListeDurumu): Promise<number> {
+  const r = await db.tek<{ toplam: number }>(
+    `SELECT count(*)::int AS toplam FROM bildirim_kaydi WHERE kisi_id = $1 AND ${DURUM_KOSULU[durum]}`,
+    [kisiId],
+  );
+  return r?.toplam ?? 0;
+}
+
+export function kisininBildirimleri(db: Db, kisiId: number, durum: BildirimListeDurumu, dilim: Dilim): Promise<Bildirim[]> {
+  const sira = durum === 'arsiv' ? 'arsivlendi DESC, id DESC' : 'olusturuldu DESC, id DESC';
+  return db.sorgu<Bildirim>(
+    `SELECT ${SECIM} FROM bildirim_kaydi WHERE kisi_id = $1 AND ${DURUM_KOSULU[durum]} ORDER BY ${sira} LIMIT $2 OFFSET $3`,
+    [kisiId, dilim.sinir, dilim.atla],
+  );
+}
+
+export async function kisininSayaci(db: Db, kisiId: number): Promise<{ okunmamis: number; acilVar: boolean }> {
+  const r = await db.tek<{ okunmamis: number; acilVar: boolean }>(
+    `SELECT count(*)::int AS okunmamis, coalesce(bool_or(onem = 'acil'), false) AS "acilVar"
+       FROM bildirim_kaydi WHERE kisi_id = $1 AND okundu IS NULL AND arsivlendi IS NULL`,
+    [kisiId],
+  );
+  return r ?? { okunmamis: 0, acilVar: false };
+}
+
+// Yalnız kişinin kendi satırı: başkasının kimliği "bulunamadı"dan ayırt edilmez.
+export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<Bildirim | null> {
+  return db.tek<Bildirim>(
+    `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()) WHERE id = $1 AND kisi_id = $2 RETURNING ${SECIM}`,
+    [id, kisiId],
+  );
+}
+
+export async function tumunuOkunduIsaretle(db: Db, kisiId: number): Promise<number> {
+  const r = await db.sorgu<{ id: number }>(
+    'UPDATE bildirim_kaydi SET okundu = now() WHERE kisi_id = $1 AND okundu IS NULL AND arsivlendi IS NULL RETURNING id',
+    [kisiId],
+  );
+  return r.length;
+}
+
+// Arşive kaldırılan okunmuş da sayılır (açılmadan kaldırılan haber zilde kalmasın).
+export function arsivle(db: Db, kisiId: number, id: number): Promise<Bildirim | null> {
+  return db.tek<Bildirim>(
+    `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()), arsivlendi = coalesce(arsivlendi, now())
+      WHERE id = $1 AND kisi_id = $2 RETURNING ${SECIM}`,
+    [id, kisiId],
+  );
+}
+
+export interface TercihSatiri { tur: string; mesaj: boolean; eposta: boolean }
+
+export function kisininTercihleri(db: Db, kisiId: number): Promise<TercihSatiri[]> {
+  return db.sorgu<TercihSatiri>('SELECT tur, mesaj, eposta FROM bildirim_tercihi WHERE kisi_id = $1', [kisiId]);
+}
+
+export async function tercihYaz(db: Db, kisiId: number, t: TercihSatiri): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO bildirim_tercihi (kisi_id, tur, mesaj, eposta) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (kisi_id, tur) DO UPDATE SET mesaj = EXCLUDED.mesaj, eposta = EXCLUDED.eposta, guncellendi = now()`,
+    [kisiId, t.tur, t.mesaj, t.eposta],
+  );
+}

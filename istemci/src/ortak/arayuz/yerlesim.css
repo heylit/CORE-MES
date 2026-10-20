@@ -1,0 +1,30 @@
+.tc-cam {
+  min-width: 0; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
+  -webkit-backdrop-filter: var(--bulanik-cam); backdrop-filter: var(--bulanik-cam);
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
+}
+.tc-cam-duz { padding: var(--b-4); }
+.tc-cam-sahne {
+  container: sahne / inline-size;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: var(--b-4);
+  padding: var(--b-4);
+}
+/* Çift sınıf: geniş ekrandaki düz bölme boşluğunu da geçer. */
+.tc-cam.tc-cam-siki { gap: var(--b-2); padding: var(--b-3); }
+
+.tc-terminal { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
+.tc-terminal-sutun { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; min-height: 0; }
+.tc-terminal-orta { order: -1; }
+
+@media (min-width: 768px) {
+  .tc-cam { border-radius: var(--yari-4); }
+  .tc-cam-duz { padding: var(--b-5); }
+}
+@media (min-width: 1280px) {
+  .tc-terminal { grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr); align-items: start; }
+  .tc-terminal-uclu { grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr) minmax(0, 1.08fr); }
+  .tc-terminal-uclu.tc-terminal-orta-genis {
+    grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)) minmax(0, 1fr);
+  }
+  .tc-terminal-orta { order: 0; }
+}

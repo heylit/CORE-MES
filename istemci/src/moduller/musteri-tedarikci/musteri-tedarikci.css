@@ -1,0 +1,31 @@
+.tc-mt { display: grid; gap: var(--b-5); min-width: 0; }
+.tc-mt-islemler { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+.tc-mt-arac { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: end; gap: var(--b-3); margin-bottom: var(--b-4); }
+.tc-mt-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }
+.tc-mt-yok { color: var(--muted); }
+.tc-mt-konum { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--run); }
+.tc-mt-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.tc-mt-ayrinti { display: grid; gap: var(--b-5); min-width: 0; }
+.tc-mt-rozetler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-mt-ozellikler { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3) var(--b-4); margin: 0; }
+.tc-mt-ozellik { min-width: 0; }
+.tc-mt-ozellik dt { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tc-mt-ozellik dd { margin: var(--b-1) 0 0; overflow-wrap: anywhere; }
+.tc-mt-bolum-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); margin-bottom: var(--b-3); }
+.tc-mt-bolum-baslik { margin: 0 0 var(--b-3); font-size: var(--yazi-xl); }
+.tc-mt-bolum-ust .tc-mt-bolum-baslik { margin: 0; }
+.tc-mt-satir-islem { display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+[data-kip="kart"] .tc-mt-satir-islem { flex-wrap: wrap; min-width: 0; }
+.tc-mt-satir-islem .tc-dugme { padding: 0; min-width: var(--dokunma); }
+
+.tc-mt-form { display: grid; gap: var(--b-5); min-width: 0; }
+.tc-mt-bolum { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-mt-ikili { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3); }
+.tc-mt-uclu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-3); }
+.tc-mt-konum-giris { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-mt-hata { margin: 0; color: var(--stop); font-weight: 700; }
+
+@media (max-width: 479px) {
+  .tc-mt-arac, .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
+}

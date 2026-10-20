@@ -1,0 +1,13 @@
+.tc-prj-icerik { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-prj-suzgec { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: flex-end; }
+.tc-prj-suzgec > * { min-width: 0; }
+.tc-prj-hata { color: var(--stop); font-weight: 700; }
+.tc-prj-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-prj-baslik { margin: 0; font-size: var(--yazi-l); font-weight: 700; overflow-wrap: anywhere; }
+.tc-prj-bas-sag { margin-left: auto; display: flex; gap: var(--b-3); }
+.tc-prj-bilgi {
+  display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: var(--b-3) var(--b-5); margin: 0;
+}
+.tc-prj-bilgi dt { color: var(--muted); }
+.tc-prj-bilgi dd { margin: 0; overflow-wrap: anywhere; }

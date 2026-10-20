@@ -1,0 +1,4 @@
+.sa-fason-grafik { display: grid; gap: var(--b-3); margin-bottom: var(--b-4); min-width: 0; }
+.sa-fason-suzgec { display: flex; flex-wrap: wrap; gap: var(--b-3); }
+.sa-fason-suzgec > * { flex: 1 1 var(--pano-kart-enaz); min-width: 0; }
+.sa-fason-kartlar { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); }

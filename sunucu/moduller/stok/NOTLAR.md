@@ -1,0 +1,25 @@
+# stok notları
+
+- Bakiye (malzeme, konum, parti) ekseninde tek satır; defter (`stok_hareketi`) yalnız eklenir. İkisinin eşitliğini `sorgular.bakiyeDefterFarki` ölçer (DEP-11, akış testinin son testi).
+- Miktar sayıya çevrilmez: kurallar binde tam sayıyla (`binde`, `bindenMetin`) hesaplar; numeric(14,3) üç ondalık taşır.
+- Bakiyeli konumun pasife alınması bileşik yabancı anahtarla durur (`stok_bakiye_aktif_konumda`: `konum_aktif` sabit true sütunu, `stok_konum (id, aktif)`). Servis denetimi yok; eşzamanlı mal kabul + pasife alma yarışını da kısıt yakalar.
+- Raf gözü silinmez (geçmiş hareket gösterir); daralan rafın gözü pasife alınır, raf kodu değişince göz kodu yenilenir, kimlik aynı kalır.
+- Yetersiz düşüm `ONAY_GEREKLI` + `ayrinti.mevcut` döner; aynı komut `eksiOnay: true` ile yinelenir. Yeterliyken onay yok sayılır (DEP-04).
+- Parti seçimi: `partiId` verilmezse gözdeki tek parti; birden çoksa 400 ve `ayrinti.partiler`. `null` partisiz satırdır (parti bilinmiyor; uydurulmaz).
+- Mal kabul belgesi ve satırı tetikleyiciyle korunur: belge hiç, satır yalnız Logo alanlarında değişir. Düzeltme yeni belgedir (`duzeltilen_id`, bir kez).
+- Yabancı anahtar ihlali (yabancı parti, olmayan üretim emri) çekirdekte 409 BAGIMLI_KAYIT olur; ileti `ESLEME`dedir. Ön paketteki 422 bu yüzden 409 yazıldı.
+- Malzeme özeti `malzemeler/disari.ts`ten: alanlar `id, kimlik, kod, tur, ad, onayDurumu`. Birim kartta yok; ekran birim göstermez. Ad yoksa kod gösterilir.
+- Malzeme listesi satır başına `malzemeOzeti` çağırır (sayfa en çok 200). `malzemeOzetleri` gelince tek sorguya iner (UYUM-BORCU).
+- Sayım süresi ayarı yok (ayar türü yalnız boolean): iş kutusu `sayimBekleyen: null` döner ve ekran bunu söyler; varsayılan sayı yok.
+- Üretim girişi ve sarf elle: otomatik kaynak (TMI üretim kaydı) hazır değil, operatör sayımı Arkon'da. Dış çağrı tabloları ve `stokGirisi`/`stokCikisi` sonraki sürümde.
+- İş merkezi kapsamı (DEP-36) yazılmadı: `uretim-emirleri` dışa açık dosyası yok. Gelince `cikisYap` içinde bakiye kilidinden sonra `kapsamDisiysaReddet`.
+- Sayaç ucu sayıyı yetkiye göre süzer: `mal-kabul` sayısı yalnız `stok.giris` olana; sayılamayan maddeler null.
+- Ekran başlığı `h2`: kabuk sayfa başlığını `h1` basar (App testi tek `h1` ister).
+- Vazgeçilen yol: konumu metin koduyla anahtarlamak (kod değişince bakiye taşımak gerekirdi); bakiyeyi yalnız defterden hesaplamak (parti seçimi her seferinde toplam ister).
+- Test: `npm run test:modul` Linux'ta sunucu testlerini bulmuyor (çekirdek Ç6); geçici: `node --import ./araclar/ortam-yukle-goc.ts --test sunucu/moduller/stok/*.test.ts`.
+- Ambalaj kataloğu (ölçüler) yalnız istemcide (`ambalaj.ts`): sunucu ölçü kodunu ve özel ölçüyü saklar. Sığma ve matris doluluğu ekran hesabıdır, kural değildir.
+- Panel ucu (`/stok/panel`) iş kutusunun gösterge ve özet bölümlerini tek istekte verir; stok değeri yok (maliyet stokta tutulmaz).
+- 3B depo modülde (kullanıcı kararı); çekirdek ortak 3B parçası gelince ona taşınır (Ç3). Renkler tasarım değişkenlerinden okunur; yerleşim hesabı saf (`depo3b-yerlesim.ts`).
+- Toplama: adım toplanınca o gözden çıkış (sevk) yazılır ve liste sürümü artar; iki kişi aynı listeyi yürütürse eski sürüm 409 alır.
+- Yerleşim önizlemedeki eksende: raf (x, z) ilk bölmenin kenar ortası, bölmeler -z, derinlik x, açı saat yönünün tersine. Düzenleyici ve 3B aynı saf modülü kullanır (`yerlesim.ts`).
+- Raf düzenlenince göz kimliği korunur: kod değişirse kod yenilenir, numaralama değişirse bölme no bölme sırasıyla geçer (iki adım, geçici +100000); göz kodu tekilliği bu sırada ertelenir ve hemen geri açılır.

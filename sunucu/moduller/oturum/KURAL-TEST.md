@@ -1,0 +1,30 @@
+# Kural ve test eşlemesi: oturum
+
+Test adları dosyalardan okundu; uç başına ayrıntı `GUVENLIK-DENETIMI.md`.
+
+| Kural | İzinli test | Reddedilen test |
+|---|---|---|
+| Doğru parola oturum açar; çerez HttpOnly, anahtar yalnız özetle saklanır | oturum.test.ts "doğru parola oturum açar: ..." | oturum.test.ts "oturumsuz istekte kullanıcı null döner; uydurma ya da bozuk çerez kimlik vermez" |
+| Yanlış parola ve olmayan ad aynı cevabı alır; deneme kaydedilir | oturum.test.ts "doğru giriş hatalı deneme sayacını sıfırlar: ..." | oturum.test.ts "yanlış parola ve olmayan kullanıcı aynı cevabı alır; ..." |
+| Hatalı denemede bekleme ikiye katlanır, en çok 60 sn | kurallar.test.ts "bekleme her hatalı denemede ikiye katlanır: ..." , "kalan bekleme son hatalı denemeden beri ..." | oturum.test.ts "hatalı denemeden sonra bekleme dolmadan doğru parola da reddedilir ...", "bekleme 60 sn üst sınırını aşmaz: ..." |
+| Bekleme ad + cihaz çiftine özel; adın varlığını ele vermez | oturum.test.ts "bekleme kullanıcı adı ve cihaz çiftine özeldir: ..." ; kurallar.test.ts "kilit anahtarı çifte özeldir: ..." | oturum.test.ts "bekleme reddi kullanıcı adının var olup olmadığını ele vermez: ..." |
+| Aynı çiftten süren deneme varken 429, parolaya bakılmaz | oturum.test.ts "süren deneme varken aynı çiftten gelen 20 istek ...: ... başka kullanıcı ve başka çift etkilenmez" | aynı test; "aynı çiftten 20 eşzamanlı deneme beklemeyi atlatamaz ..."; "deneme kilidi şemaya özeldir: ..." |
+| Saat verilmezse veritabanı saati | oturum.test.ts "saat verilmeyince veritabanı saati kullanılır: ..." | aynı test: taze hatalı seri bekletir |
+| Oturum 12 saat hareketsizlikte ve 30 günde biter; pasif kişi giremez | cerezsiz.test.ts "geçerli çerez kullanıcıyı döndürür; ..." | oturum.test.ts "12 saat hareketsiz kalan ve 30 günü dolan oturum geçersizdir", "pasife alınan kişi giremez ve açık oturumu düşer" |
+| Çerezsiz istek veritabanına gitmez; veritabanı yokken çerezli istek 503 | cerezsiz.test.ts "çerezsiz istek veritabanı sağlamken de aynı cevabı verir, ..." | cerezsiz.test.ts "çerezsiz istek veritabanı erişilemezken de 200 ve null verir, ...", "geçersiz çerez null verir; veritabanı erişilemezken 503" |
+| Çıkış oturumu kapatır, çerezi siler | oturum.test.ts "çıkış oturumu kapatır ve çerezi siler" | oturum.test.ts "çıkış başkasının oturumunu kapatamaz" |
+| Yetki rollerin birleşimi; kayıtsız işlem geçmez; onaylı matris | oturum.test.ts "kişinin yetkisi rollerinin birleşimidir; ...", "onaylı matris: ...", "bütün işlemler bayraklı rol ..." | oturum.test.ts "müdür onaylı sayfalarını görür, ...: kişi yazamaz, ...; sistem ayrıntısı müdüre 403", "emir açma ve terminalde üretim işlemleri: ... öteki rol 403" |
+| Kendi parolası doğru eski parolayla değişir; o anki oturum kalır, öbürleri kapanır | hesabim-parola.test.ts "oturum ister; doğru eski parolayla değişir, ...", "o anki oturum kalır, ..." | hesabim-parola.test.ts "yanlış eski parola reddedilir ve parola değişmez; ...", "yanlış eski parola girişteki beklemeyi başlatır: ...", "giriş hatası da aynı sayaca yazar: ..." |
+| Oturumları toplu kapatma; hariç tutulan kalır | oturum-kapatma.test.ts "biri hariç kapatma: ..." | oturum-kapatma.test.ts "hepsini kapatma: ... başkasının oturumu kalır" |
+| Deneme kaydı değişmez; 30 günden eski satır silinir | oturum.test.ts "30 günden eski deneme kaydı ... silinir", "temizlik saklama süresi dolmamış satıra dokunmaz: ..." | goc.test.ts "dolu tabloda uygulanır, ...; UPDATE ve TRUNCATE reddedilir, DELETE yalnız 30 günden eski satırda ..." |
+| Giriş komutu denetime parolasız düşer; kayıt değişmez | oturum.test.ts "denetim: giriş komutu parolasız kaydedilir; ..." | aynı test: değiştirme ve silme reddedilir |
+| Giriş bilgisi yarım olamaz; kullanıcı adı tekil; girişli kişinin rolü olur | oturum.test.ts "girişi olan kişinin en az bir rolü olur: ..." | oturum.test.ts "veritabanı kısıtları: giriş bilgisi yarım olamaz, ..." |
+| Ada bütün cihazlardan 10 hatalı deneme adı 15 dk kilitler; başarı ve kilit seriyi sıfırlar | kurallar.test.ts "hesap 10. hatalı denemede kilitlenir, 9'da kilitlenmez; ..."; hesap-kilidi.test.ts "ayrı cihazlardan 9 hatalı deneme kilitlemez; ..." | hesap-kilidi.test.ts aynı test: 10. denemeden sonra doğru PIN ve parola 401, deneme kaydedilmez |
+| Kilit hesabın varlığını ele vermez | hesap-kilidi.test.ts "kilit olmayan adın cevabıyla aynıdır: ..." | aynı test: olmayan ad da kilitlenir, cevap birebir aynı |
+| Kilitliyken PIN belirleme ve kendi parola değişimi sırra bakılmadan reddedilir | hesap-kilidi.test.ts "kilitliyken doğru geçici PIN ...": kilit açılınca geçici PIN geçerli | aynı test: 401, PIN ve parola değişmez |
+| Kilit 15 dk sonra kendiliğinden biter | hesap-kilidi.test.ts "kilit 15 dk sonra kendiliğinden biter; ...": süre dolunca girer, eski seri yeniden kilitlemez | aynı test: 14 dk 59 sn'de hâlâ kilitli |
+| Kilitleri rol yöneten görür ve açar; açan ve an sunucudan | hesap-kilidi.test.ts "kilitler listesi ve açma rol yönetenindir: ..." | aynı test: operatöre 403, oturumsuz 401, ikinci açma 404 |
+| Kilit kaydı silinmez; yalnız bir kez açılır | hesap-kilidi.test.ts "kilit kaydı silinmez, ...": açma kabul | aynı test: DELETE, TRUNCATE, ikinci açma, başka sütun değişimi ve yarım açma reddedilir |
+| Güvenlik izlemesine okumalar: deneme özeti ad + cihaz çiftine göre, pencere dışı sayılmaz; açık oturum süreleri girişle aynı | guvenlik-okumalari.test.ts "özet ad ve cihaz çiftine göre sayar; ...", "saatlik dağılım ...", "deneme listesi en yeniden eskiye; ...", "açık oturumlar: ..." | aynı testler: pencere dışı deneme, kapanmış ve süresi dolmuş oturum sayılmaz; arama joker karakteri düz metin sayar |
+| Tek oturumu kapatma; isteği yapanın kendi oturumu bu yoldan kapanmaz | guvenlik-okumalari.test.ts "tek oturumu kapatma: ..." | aynı test: "kendi" ve "yok" sonuçları |
+| Güvenlik izlemesine kilit okumaları: etkin liste ve sayı, son kilitler ada göre; açma açan kişiyle | guvenlik-okumalari.test.ts "hesap kilitleri: ..." | aynı test: açılmış, süresi dolmuş ve pencere dışı kilit sayılmaz; ikinci açma 404 |

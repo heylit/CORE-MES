@@ -1,0 +1,10 @@
+/* Rota sayfasının içerik alanı. İkinci menüyü kabuk çizer (ROTA_IKINCI_MENU); modül kendi menüsünü çizmez. */
+.tc-merkez { display: block; min-width: 0; }
+
+/* Hızlı git (Ctrl / Cmd + K): prototipin palet listesi. */
+.tc-pal-liste { display: flex; flex-direction: column; gap: var(--pay-ince); margin-top: var(--b-2); max-height: 50vh; overflow: auto; }
+.tc-pal-oge { display: grid; grid-template-columns: 6.5rem 1fr auto; gap: var(--b-2); align-items: center; text-align: left; background: transparent; border: 0; border-radius: var(--yari-1); padding: var(--b-2) var(--b-3); cursor: pointer; color: var(--ink); min-height: var(--dokunma); }
+.tc-pal-oge:hover, .tc-pal-oge[aria-selected='true'] { background: var(--panel2); }
+.tc-pal-oge small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pal-tur { font-size: var(--yazi-xs); color: var(--muted); text-transform: uppercase; }
+@media (max-width: 767px) { .tc-pal-oge { grid-template-columns: 1fr; } }

@@ -1,0 +1,23 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #kok { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-ana); font-size: var(--yazi-m); line-height: 1.45;
+  overflow-x: hidden; -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 3px solid var(--hazard); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+/* Ekranda yer tutmayan, ekran okuyucuya kalan ad (gorunur etiketi olmayan alan). */
+.tc-gizli-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Sahne etiket katmani: tuvalin ustunde, tiklamayi tuvale birakir. Etiketin yerini cizen motor her karede yalniz --x, --y
+   (kap icinde piksel) ve istege bagli --g (en cok genislik) degiskenini yazar; stil satiri yazmaz. Ustte etiket noktanin
+   tam ustunde ortalanir. */
+.tc-sahne-etiketler { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tc-sahne-etiket {
+  position: absolute; left: 0; top: 0; transform: translate(var(--x, 0px), var(--y, 0px)); will-change: transform;
+  max-width: var(--g, none); pointer-events: auto;
+}
+.tc-sahne-etiket-ustte { transform: translate(var(--x, 0px), var(--y, 0px)) translate(-50%, -100%); }

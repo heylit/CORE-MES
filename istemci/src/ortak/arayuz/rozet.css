@@ -1,0 +1,13 @@
+.tc-rozet {
+  --c: var(--done);
+  display: inline-flex; align-items: center; gap: var(--b-2);
+  padding: var(--b-1) var(--b-3); border-radius: var(--yari-tam);
+  font-size: var(--yazi-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  white-space: nowrap; overflow-wrap: normal; min-width: 0;
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.tc-rozet i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.tc-rozet-tamam { --c: var(--run); }
+.tc-rozet-uyari { --c: var(--hold); }
+.tc-rozet-hata { --c: var(--stop); }
+.tc-rozet-pasif { --c: var(--idle); }

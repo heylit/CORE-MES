@@ -1,0 +1,777 @@
+{
+ "takvim": { "baslangicTarihi": "2030-03-04", "vardiyaBaslangicDk": 480, "vardiyaBitisDk": 960, "calismaGunleri": [0, 1, 2, 3, 4], "gunSayisi": 84 },
+ "istasyonlar": [
+  { "kod": "IS-1", "makine": 1 },
+  { "kod": "IS-2", "makine": 1 },
+  { "kod": "IS-3", "makine": 2 }
+ ],
+ "senaryolar": [
+  {
+   "ad": "tek-makine-sirali",
+   "aciklama": "Tek emir, uc adim ayni makinede; bekleyen bagimlilik.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 6 },
+      { "seq": 30, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 2 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E1/20", "E1/30"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E1/20": "IS-1/1", "E1/30": "IS-1/1" },
+    "sureDk": { "E1/10": 50, "E1/20": 70, "E1/30": 30 },
+    "mutlak": { "E1/10": [480, 530], "E1/20": [530, 600], "E1/30": [600, 630] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E1/20", "E1/30"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E1/20": "IS-1/1", "E1/30": "IS-1/1" },
+    "sureDk": { "E1/10": 50, "E1/20": 70, "E1/30": 30 },
+    "mutlak": { "E1/10": [480, 530], "E1/20": [530, 600], "E1/30": [600, 630] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "iki-emir-oncelik-teslim",
+   "aciklama": "Uc emir iki makinede; sunucu teslimi erken once, esitse oncelik (196 a), tarayici oncelik 1 once; E3 rotasi ters sirada.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 5,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 9,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 8 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 3 }
+     ]
+    },
+    {
+     "no": "E3",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 3,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 2 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E3/20", "E2/10"], "IS-2/1": ["E3/10", "E1/20", "E2/20"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E3/10": "IS-2/1", "E1/20": "IS-2/1", "E3/20": "IS-1/1", "E2/10": "IS-1/1", "E2/20": "IS-2/1" },
+    "sureDk": { "E1/10": 50, "E3/10": 50, "E1/20": 60, "E3/20": 30, "E2/10": 90, "E2/20": 40 },
+    "mutlak": { "E1/10": [480, 530], "E3/10": [480, 530], "E1/20": [530, 590], "E3/20": [530, 560], "E2/10": [560, 650], "E2/20": [650, 690] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E3/20", "E1/10"], "IS-2/1": ["E3/10", "E2/20", "E1/20"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E3/10": "IS-2/1", "E2/20": "IS-2/1", "E3/20": "IS-1/1", "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E2/10": 90, "E3/10": 50, "E2/20": 40, "E3/20": 30, "E1/10": 50, "E1/20": 60 },
+    "mutlak": { "E2/10": [480, 570], "E3/10": [480, 530], "E2/20": [570, 610], "E3/20": [570, 600], "E1/10": [600, 650], "E1/20": [650, 710] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": ["kaynakSirasi[IS-1/1]", "kaynakSirasi[IS-2/1]", "mutlak[E1/10]", "mutlak[E1/20]", "mutlak[E2/10]", "mutlak[E2/20]", "mutlak[E3/20]"]
+  },
+  {
+   "ad": "fason-terminli-adim",
+   "aciklama": "E1'in ortasinda 2 gun fason; fason atolye makinesini tutmaz, E2 o aralikta makineyi kullanir.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 12,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "fasonGun": 2 },
+      { "seq": 30, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 4 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 12,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 20 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E2/10"], "IS-2/1": ["E1/30"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E2/10": "IS-1/1", "E1/30": "IS-2/1" },
+    "sureDk": { "E1/10": 50, "E2/10": 210, "E1/30": 50 },
+    "mutlak": { "E1/10": [480, 530], "E2/10": [530, 740], "E1/30": [3410, 3460] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E2/10"], "IS-2/1": ["E1/30"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E2/10": "IS-1/1", "E1/30": "IS-2/1" },
+    "sureDk": { "E1/10": 50, "E2/10": 210, "E1/30": 50 },
+    "mutlak": { "E1/10": [480, 530], "E2/10": [530, 740], "E1/30": [3410, 3460] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "iki-makineye-dagilan",
+   "aciklama": "Iki makineli istasyonda dort tek adimli emir; en erken bitireni secer, vardiya gunlere tasar.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-3", "hazirlikDk": 20, "cevrimDk": 58 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-3", "hazirlikDk": 20, "cevrimDk": 28 }
+     ]
+    },
+    {
+     "no": "E3",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-3", "hazirlikDk": 20, "cevrimDk": 40 }
+     ]
+    },
+    {
+     "no": "E4",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-3", "hazirlikDk": 20, "cevrimDk": 10 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-3/1": ["E1/10", "E4/10"], "IS-3/2": ["E2/10", "E3/10"] },
+    "isKaynak": { "E1/10": "IS-3/1", "E2/10": "IS-3/2", "E3/10": "IS-3/2", "E4/10": "IS-3/1" },
+    "sureDk": { "E1/10": 600, "E2/10": 300, "E3/10": 420, "E4/10": 120 },
+    "mutlak": { "E1/10": [480, 2040], "E2/10": [480, 780], "E3/10": [780, 2160], "E4/10": [2040, 2160] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-3/1": ["E1/10", "E4/10"], "IS-3/2": ["E2/10", "E3/10"] },
+    "isKaynak": { "E1/10": "IS-3/1", "E2/10": "IS-3/2", "E3/10": "IS-3/2", "E4/10": "IS-3/1" },
+    "sureDk": { "E1/10": 600, "E2/10": 300, "E3/10": 420, "E4/10": 120 },
+    "mutlak": { "E1/10": [480, 2040], "E2/10": [480, 780], "E3/10": [780, 2160], "E4/10": [2040, 2160] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "geri-yon",
+   "aciklama": "Geri planlama, 2 gun tampon; emir teslimden tampon kadar once bitecek gibi baslar. Karar (kullanici, Fark 2): saatine kadar hesap; tarayicinin gun basina yuvarlamasi gecisle kalkar. Karar K2 (16.10.2026): sunucu geriye vardiya takvimiyle sayar, gece ve hafta sonu dusulur (E1 tampondan once biter).",
+   "ayar": { "kural": "oncelik", "yon": "geri", "tamponGun": 2 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 14,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 12 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 10 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 9,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 6 },
+      { "seq": 20, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-2/1": ["E2/10", "E1/20"], "IS-1/1": ["E2/20", "E1/10"] },
+    "isKaynak": { "E2/10": "IS-2/1", "E2/20": "IS-1/1", "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E2/10": 70, "E2/20": 50, "E1/10": 130, "E1/20": 110 },
+    "mutlak": { "E2/10": [10920, 10990], "E2/20": [10990, 11040], "E1/10": [16560, 16690], "E1/20": [16690, 16800] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-2/1": ["E2/10", "E1/20"], "IS-1/1": ["E2/20", "E1/10"] },
+    "isKaynak": { "E2/10": "IS-2/1", "E2/20": "IS-1/1", "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E2/10": 70, "E2/20": 50, "E1/10": 130, "E1/20": 110 },
+    "mutlak": { "E2/10": [10560, 10630], "E2/20": [10630, 10680], "E1/10": [20640, 20770], "E1/20": [20770, 20880] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": [
+    "mutlak[E1/10]",
+    "mutlak[E1/20]",
+    "mutlak[E2/10]",
+    "mutlak[E2/20]"
+   ]
+  },
+  {
+   "ad": "kural-edd",
+   "aciklama": "Tek makinede dort emir (60, 300, 150, 900 dk); en erken teslim kurali. Oncelik sirasi E1,E2,E3,E4 iken EDD E2,E3,E4,E1 vermeli.",
+   "ayar": { "kural": "edd", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 9,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 3,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 29 }
+     ]
+    },
+    {
+     "no": "E3",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 6,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 14 }
+     ]
+    },
+    {
+     "no": "E4",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 7,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 89 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E3/10", "E4/10", "E1/10"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E3/10": "IS-1/1", "E4/10": "IS-1/1", "E1/10": "IS-1/1" },
+    "sureDk": { "E2/10": 300, "E3/10": 150, "E4/10": 900, "E1/10": 60 },
+    "mutlak": { "E2/10": [480, 780], "E3/10": [780, 930], "E4/10": [930, 3750], "E1/10": [3750, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E3/10", "E4/10", "E1/10"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E3/10": "IS-1/1", "E4/10": "IS-1/1", "E1/10": "IS-1/1" },
+    "sureDk": { "E2/10": 300, "E3/10": 150, "E4/10": 900, "E1/10": 60 },
+    "mutlak": { "E2/10": [480, 780], "E3/10": [780, 930], "E4/10": [930, 3750], "E1/10": [3750, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "kural-spt",
+   "aciklama": "Ayni dort emir; en kisa is kurali (beklenen E1,E3,E2,E4).",
+   "ayar": { "kural": "spt", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 9,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 3,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 29 }
+     ]
+    },
+    {
+     "no": "E3",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 6,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 14 }
+     ]
+    },
+    {
+     "no": "E4",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 7,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 89 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E3/10", "E2/10", "E4/10"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E3/10": "IS-1/1", "E2/10": "IS-1/1", "E4/10": "IS-1/1" },
+    "sureDk": { "E1/10": 60, "E3/10": 150, "E2/10": 300, "E4/10": 900 },
+    "mutlak": { "E1/10": [480, 540], "E3/10": [540, 690], "E2/10": [690, 1950], "E4/10": [1950, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E3/10", "E2/10", "E4/10"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E3/10": "IS-1/1", "E2/10": "IS-1/1", "E4/10": "IS-1/1" },
+    "sureDk": { "E1/10": 60, "E3/10": 150, "E2/10": 300, "E4/10": 900 },
+    "mutlak": { "E1/10": [480, 540], "E3/10": [540, 690], "E2/10": [690, 1950], "E4/10": [1950, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "kural-cr",
+   "aciklama": "Ayni dort emir; kritik oran kurali (sunucu formulune gore beklenen E4,E2,E3,E1).",
+   "ayar": { "kural": "cr", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 9,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 0,
+     "teslimGun": 3,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 29 }
+     ]
+    },
+    {
+     "no": "E3",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 6,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 14 }
+     ]
+    },
+    {
+     "no": "E4",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 7,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 89 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E4/10", "E2/10", "E3/10", "E1/10"] },
+    "isKaynak": { "E4/10": "IS-1/1", "E2/10": "IS-1/1", "E3/10": "IS-1/1", "E1/10": "IS-1/1" },
+    "sureDk": { "E4/10": 900, "E2/10": 300, "E3/10": 150, "E1/10": 60 },
+    "mutlak": { "E4/10": [480, 2340], "E2/10": [2340, 3600], "E3/10": [3600, 3750], "E1/10": [3750, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E4/10", "E2/10", "E3/10", "E1/10"] },
+    "isKaynak": { "E4/10": "IS-1/1", "E2/10": "IS-1/1", "E3/10": "IS-1/1", "E1/10": "IS-1/1" },
+    "sureDk": { "E4/10": 900, "E2/10": 300, "E3/10": 150, "E1/10": 60 },
+    "mutlak": { "E4/10": [480, 2340], "E2/10": [2340, 3600], "E3/10": [3600, 3750], "E1/10": [3750, 3810] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": []
+  },
+  {
+   "ad": "hafta-sonu-baslangic-uzun-is",
+   "aciklama": "Emir cumartesi baslar, uzun is vardiya ve hafta sonu boyunca tasar; ikinci emir pazartesi baslar.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 2,
+     "baslangicGun": 5,
+     "teslimGun": 12,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 30, "cevrimDk": 100 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 20 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 7,
+     "teslimGun": 12,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 50 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E1/10"], "IS-2/1": ["E1/20"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E2/10": 510, "E1/10": 1030, "E1/20": 210 },
+    "mutlak": { "E2/10": [10560, 12030], "E1/10": [12030, 14980], "E1/20": [14980, 15190] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10", "E2/10"], "IS-2/1": ["E1/20"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E1/20": "IS-2/1", "E2/10": "IS-1/1" },
+    "sureDk": { "E1/10": 1030, "E1/20": 210, "E2/10": 510 },
+    "mutlak": { "E1/10": [10560, 13510], "E1/20": [13510, 13720], "E2/10": [13510, 14980] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "beklenenFark": [
+    "kaynakSirasi[IS-1/1]",
+    "mutlak[E1/10]",
+    "mutlak[E1/20]",
+    "mutlak[E2/10]"
+   ]
+  }
+ ],
+ "genisleme": [
+  {
+   "ad": "akisli-devir",
+   "aciklama": "Akisli ikinci adim: 2 adetlik devir partisi gelince baslar, oncul bitmeden bitemez.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 6 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 4, "bagimlilik": "akisli", "devirAdet": 2 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10"], "IS-2/1": ["E1/20"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E1/10": 70, "E1/20": 50 },
+    "mutlak": { "E1/10": [480, 550], "E1/20": [502, 558] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "verim",
+   "aciklama": "IS-1 verimi %80: isleme verime bolunur, ayar bolunmez.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "verimYuzde": { "IS-1": 80 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "istasyon": "IS-2", "hazirlikDk": 10, "cevrimDk": 2 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10"], "IS-2/1": ["E1/20"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E1/20": "IS-2/1" },
+    "sureDk": { "E1/10": 60, "E1/20": 30 },
+    "mutlak": { "E1/10": [480, 540], "E1/20": [540, 570] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "tatil",
+   "aciklama": "Ikinci gun tatil: 600 dakikalik is ilk gun 480 dakika, kalan ucuncu gun.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "tatilGunleri": [1],
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 100,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 0, "cevrimDk": 6 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10"] },
+    "isKaynak": { "E1/10": "IS-1/1" },
+    "sureDk": { "E1/10": 600 },
+    "mutlak": { "E1/10": [480, 3480] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "elle-sira",
+   "aciklama": "Elle sirasi olan dusuk oncelikli emir once.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 1,
+     "baslangicGun": 0,
+     "teslimGun": 3,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "elleSira": 1,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E1/10"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E1/10": "IS-1/1" },
+    "sureDk": { "E2/10": 60, "E1/10": 60 },
+    "mutlak": { "E2/10": [480, 540], "E1/10": [540, 600] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "kilit-dondurma",
+   "aciklama": "Baska emrin kilitli isi IS-1'i ogleye kadar tutar; E1'in dondurulmus ilk adimi ikinci gunde kalir, ikinci adimi onu bekler.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "sabitler": [
+    { "kod": "K1/10", "kaynak": "IS-1/1", "basDk": 480, "bitDk": 720 },
+    { "kod": "E1/10", "kaynak": "IS-2/1", "basDk": 1920, "bitDk": 1980 }
+   ],
+   "emirler": [
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 0, "cevrimDk": 6 }
+     ]
+    },
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-2", "hazirlikDk": 0, "cevrimDk": 6 },
+      { "seq": 20, "istasyon": "IS-1", "hazirlikDk": 0, "cevrimDk": 3 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E2/10", "E1/20"], "IS-2/1": ["E1/10"] },
+    "isKaynak": { "E2/10": "IS-1/1", "E1/10": "IS-2/1", "E1/20": "IS-1/1" },
+    "sureDk": { "E2/10": 60, "E1/10": 60, "E1/20": 30 },
+    "mutlak": { "E2/10": [720, 780], "E1/10": [1920, 1980], "E1/20": [1980, 2010] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "elle-bolme",
+   "aciklama": "20 adet iki 10'luk parcaya bolunur: iki makinede ayri ayari oder; sonraki adim ikisini bekler.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 20,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-3", "hazirlikDk": 10, "cevrimDk": 3, "parcaAdetleri": [10, 10] },
+      { "seq": 20, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 2 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-3/1": ["E1/10"], "IS-3/2": ["E1/10"], "IS-1/1": ["E1/20"] },
+    "isKaynak": { "E1/10": "IS-3/2", "E1/20": "IS-1/1" },
+    "sureDk": { "E1/10": 80, "E1/20": 50 },
+    "mutlak": { "E1/10": [480, 520], "E1/20": [520, 570] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "alternatif-istasyon",
+   "aciklama": "IS-1 dolu: alternatifi IS-2 olan ikinci emir oraya gider.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 5, "alternatifler": ["IS-2"] }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10"], "IS-2/1": ["E2/10"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E2/10": "IS-2/1" },
+    "sureDk": { "E1/10": 60, "E2/10": 60 },
+    "mutlak": { "E1/10": [480, 540], "E2/10": [480, 540] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  },
+  {
+   "ad": "kisi-kaynagi",
+   "aciklama": "Ikinci adim kisi kaynaginda (capak alma): makineden bagimsiz, oncul bitince baslar.",
+   "ayar": { "kural": "oncelik", "yon": "ileri", "tamponGun": 0 },
+   "kisiler": ["K-1"],
+   "emirler": [
+    {
+     "no": "E1",
+     "adet": 10,
+     "oncelik": 3,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "istasyon": "IS-1", "hazirlikDk": 10, "cevrimDk": 4 },
+      { "seq": 20, "kisi": "K-1", "hazirlikDk": 0, "cevrimDk": 3 }
+     ]
+    },
+    {
+     "no": "E2",
+     "adet": 10,
+     "oncelik": 4,
+     "baslangicGun": 0,
+     "teslimGun": 10,
+     "adimlar": [
+      { "seq": 10, "kisi": "K-1", "hazirlikDk": 0, "cevrimDk": 5 }
+     ]
+    }
+   ],
+   "sunucuAltin": {
+    "kaynakSirasi": { "IS-1/1": ["E1/10"], "K-1": ["E2/10", "E1/20"] },
+    "isKaynak": { "E1/10": "IS-1/1", "E2/10": "K-1", "E1/20": "K-1" },
+    "sureDk": { "E1/10": 50, "E2/10": 50, "E1/20": 30 },
+    "mutlak": { "E1/10": [480, 530], "E2/10": [480, 530], "E1/20": [530, 560] },
+    "ihlal": [],
+    "yerlesmeyen": []
+   },
+   "tarayiciAltin": null,
+   "beklenenFark": null
+  }
+ ]
+}

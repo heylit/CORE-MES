@@ -1,0 +1,20 @@
+# Uyum borcu (vardiya)
+
+## Bağlamada kapanacak
+
+| No | Borç | Ekrana dokunur | Kapanış |
+|---|---|---|---|
+| KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): Arkon vardiya ve tatili `vardiya/disari.ts`'ten okur (`arkon/servis.ts:169` `vardiyaTanimlari`, `:170` `takvimGunleri`). Kalan: vardiya devri V-B8'de. V-B1 | Arkon vardiya (`shifts`) ve vardiya devrini kendi kv belgesinde tutuyor | Evet | Aşama 2: Arkon vardiya `disari.ts`'inden okur |
+| V-B2 | Rota Kaynaklar > Vardiyalar sekmesi kendi sözleşme kopyasıyla (`beklenen/vardiya.ts`) çalışıyor; sürüm ve istek kimliği göndermediği için orada vardiya ekleme ve güncelleme 400 alır (matris, tatil, okuma çalışır) | Evet | Kapandı (#833): Kaynaklar sekmesi VardiyaDuzeni'ni kullanıyor; istek kimliği ve sürüm testi rota tarafında. |
+| KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): sunucu plan motoru takvimi okur (`plan/servis.ts:19` ithal, `:116` `calismaTakvimleri`). V-B3 | Plan takvimi okumuyor (plan P-B3, P-B20) | Evet | plan isteği |
+| V-B4 | Kişinin iş merkezi istasyon atamalarından türetiliyor (VR-08, VARSAYIM 1) | Hayır | T2 kişinin iş merkezini verirse |
+| V-B5 | Okuma uçları kapsamla süzülmüyor (VARSAYIM 5) | Hayır | Kısmen kapandı (karar 140 a, 19.10.2026): kişi takvimi VR-27 ile süzülür. Kalan: `/gunluk-mesai` (sayfa.mesai, idari_isler dahil) kişinin o gün planlı çalışmasını verir, izinli kişi 0 dakikayla görünür; makine, istasyon ve iş merkezi takvimi kapsamsız |
+| V-B6 | Çalışma takvimi ekranı yalnız iş merkezi ve personel seçer; istasyon ve makine uçta var, seçim listesi istasyonlar okuması ister | Evet | Kapandı (#834): kaynak listesine istasyon (`/istasyonlar/secim`) ve aktif makine (`/makineler`) eklendi; makine listesini okuma yetkisi olmayanda yalnız makine seçenekleri eksik kalır |
+| V-B7 | Günlük Mesai sayfası (`/mesai`) yer tutucu; mesai bu turda yok (karar 1-a) | Evet | Bayat: mesai ekranı dolu (FARK.md:50); kapandı (#834) |
+| V-B8 | Vardiya devri bu modülde yok (sabit kimlik: personel-vardiya) | Hayır | Ayrı kart |
+| KAPANDI (borç turu 19.10.2026): `ekran-testleri/sayfalar.spec.ts` bölümü 360, 768 ve 1280 genişlikte açar; başlık görünür, konsol ve API hatası yok, yatay taşma yok, üst çubuk çakışmıyor (yerelde 36/36 yeşil). İşlevin elle denemesi Aşama 2 kabulündedir. V-B9 | 360, 768 ve 1280 genişlik tarayıcıda denenmedi (yatay kaydırmalı tablo, sarılan satırlar) | Evet | Kısmen kapandı (#834): dar ekran CSS kuralları ve çalışma takvimi tablosu kaydırılabilir kapta; tarayıcıda denenmedi, kabulde |
+| KAPANDI (borç turu 19.10.2026): `ekran-testleri/sayfalar.spec.ts` bölümü 360, 768 ve 1280 genişlikte açar; başlık görünür, konsol ve API hatası yok, yatay taşma yok, üst çubuk çakışmıyor (yerelde 36/36 yeşil). İşlevin elle denemesi Aşama 2 kabulündedir. V-B10 | Planlı duruş ekranı 360, 768 ve 1280 genişlikte tarayıcıda denenmedi (vitest ile davranış) | Evet | Kısmen kapandı (#834): dar ekran CSS incelemesi (tablo kaydırılabilir kapta, düğmeler sarar); tarayıcıda denenmedi, kabulde |
+| V-B11 | Arkon'un kendi yazdığı duruş belgesi sunucuda başlık (boşsa neden), dakika yuvarlaması ve kişi alanıyla yeniden üretilir; yazan tablet bir sonraki okumaya dek kendi gövdesini görür (VARSAYIM) | Hayır | Aşama 2 akış kabulü |
+| V-B13 | Örnek düzende ikinci vardiya eklenemezse düzen yarım kalır; hata bildirilir, kalan vardiya elle eklenir (sunucuda tek istekle iki vardiya yok) | Hayır | Gerekirse toplu ekleme ucu (sözleşme isteği) |
+| KAPANDI (borç turu 19.10.2026): `ekran-testleri/sayfalar.spec.ts` bölümü 360, 768 ve 1280 genişlikte açar; başlık görünür, konsol ve API hatası yok, yatay taşma yok, üst çubuk çakışmıyor (yerelde 36/36 yeşil). İşlevin elle denemesi Aşama 2 kabulündedir. V-B14 | Fazla mesai ekranı 360, 768 ve 1280 genişlikte tarayıcıda denenmedi (vitest ile davranış; kişi listesi sarılan satırlar) | Evet | Kabulde |
+| V-B15 | İzin okuması kişi kaynağı başına bir sorgu (`kisininIzinleri`); çok kişili plan okumasında İK'ya toplu aralık okuması istenebilir | Hayır | Gerekirse İK'ya küçük ek |

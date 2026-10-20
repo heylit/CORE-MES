@@ -1,0 +1,40 @@
+/* Kabuğun hareket dili: süre, kayma ve eğri kökteki data-hareket seviyesinden gelir (tokens.css). Sayfa değişince kabuk
+   data-gecis'i yeniden koyar; içerik bir kez girer. Cesur ve ultrada içerikten tek bir sarı tarama çizgisi (takım yolu) geçer.
+   Dolgu yoktur (fill-mode none): bitince içerikte dönüşüm kalmaz, sabit konumlu pencereler etkilenmez. */
+.tc-kabuk[data-gecis] .tc-kabuk-icerik { animation: tc-sayfa-gir var(--hareket-sure) var(--hareket-egri); }
+@keyframes tc-sayfa-gir { from { opacity: 0; transform: translateY(var(--hareket-kayma)); } }
+
+[data-hareket="ultra"] .tc-kabuk[data-gecis] .tc-kabuk-icerik { animation-name: tc-sayfa-ultra; transform-origin: 50% 0; }
+@keyframes tc-sayfa-ultra {
+  from { opacity: 0; transform: perspective(1200px) rotateX(9deg) translateY(calc(var(--hareket-kayma) + var(--b-1))) scale(.97); filter: blur(5px); }
+}
+
+.tc-kabuk-tarama { display: none; grid-area: icerik; position: relative; z-index: 1; overflow: hidden; pointer-events: none; }
+:is([data-hareket="cesur"], [data-hareket="ultra"]) .tc-kabuk-tarama { display: block; }
+.tc-kabuk-tarama::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; opacity: 0;
+  background: var(--hazard); box-shadow: 0 0 var(--b-3) var(--hazard);
+}
+.tc-kabuk[data-gecis] .tc-kabuk-tarama::before { animation: tc-tara calc(var(--hareket-sure) + 100ms) cubic-bezier(.5, 0, .2, 1); }
+@keyframes tc-tara { 0% { left: 0; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+
+/* Başlık sayfayla birlikte hafifçe iner. */
+.tc-kabuk[data-gecis] .tc-kabuk-baslik { animation: tc-baslik-gir var(--hareket-sure) var(--hareket-egri); }
+@keyframes tc-baslik-gir { from { opacity: 0; transform: translateY(calc(var(--hareket-kayma) * -.6)); } }
+
+[data-hareket="sade"] .tc-kabuk[data-gecis] .tc-kabuk-baslik { animation: none; }
+
+/* Hareket dili kapalı: hiçbir geçiş, animasyon ve cam bulanıklığı yok (Sistem Ayarları'ndaki önizleme kartları hariç). */
+:root[data-hareket="kapali"] :not(.tc-gorunum-onizleme, .tc-gorunum-onizleme *),
+:root[data-hareket="kapali"] :not(.tc-gorunum-onizleme, .tc-gorunum-onizleme *)::before,
+:root[data-hareket="kapali"] :not(.tc-gorunum-onizleme, .tc-gorunum-onizleme *)::after {
+  animation: none !important; transition: none !important; backdrop-filter: none !important;
+}
+
+/* Performans modu: cam bulanıklığı ve süren süs animasyonları kapanır; yükleniyor dönmesi gibi bilgi veren hareket kalır. */
+[data-performans] * { backdrop-filter: none !important; }
+[data-performans] :is(.tc-karsilama-isinlar, .tc-karsilama-disli, .tc-karsilama-yildizlar path, .tc-ozet-perde *) { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-kabuk[data-gecis] :is(.tc-kabuk-icerik, .tc-kabuk-baslik), .tc-kabuk-tarama::before { animation: none; }
+}

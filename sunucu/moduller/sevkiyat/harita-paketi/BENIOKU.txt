@@ -1,0 +1,25 @@
+TMI CORE - Sevkiyat harita veri paketi (Ankara)
+================================================
+
+Icerik
+  harita.json  - harita cizimi (bolgeler, yollar, yer adlari)
+  yol.json     - yol agi (sure ve rota hesabi icin)
+  arama.json   - adres ve yer arama dizini (yoksa arama kapali, gerisi calisir)
+  Kapsam: boylam 32.35 - 33.15, enlem 39.72 - 40.20
+
+Kurulum
+  Paket depoyla gelir; ayar gerekmez. Sunucu bu klasoru varsayilan olarak okur.
+  Baska bolge icin: ayni uc dosyayi bir klasore koyun, .env dosyasina
+    TMIV2_HARITA_DIZINI=C:/TMI/harita
+  satirini ekleyin (Windows'ta ileri egik cizgi) ve sunucuyu yeniden baslatin; degisken bu klasorun yerini alir.
+
+Notlar
+  - Dosyalar ilk istekte bir kez okunur. Dosyayi degistirirseniz sunucuyu yeniden baslatin.
+  - Klasor yanlissa ya da dosya okunamazsa sayfa "Harita paketi bu sunucuda yuklu degil" der.
+  - Sevkiyat noktalari kapsam icinde (Ankara) olmalidir.
+
+Lisans
+  Harita verisi (c) OpenStreetMap katkicilari, Open Database License (ODbL) 1.0.
+  https://www.openstreetmap.org/copyright
+  Ekranda bu atif gorunur ("(c) OpenStreetMap katkicilari").
+  Bu klasordeki veri ODbL altindadir; deponun geri kalanindaki kodun lisansini degistirmez.

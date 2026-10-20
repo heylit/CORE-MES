@@ -1,0 +1,25 @@
+.tc-etk-duzen { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
+.tc-etk-liste { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-etk-satir { display: flex; flex-direction: column; gap: var(--b-1); inline-size: 100%; min-block-size: var(--dokunma); padding: var(--b-2) var(--b-3); border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel); color: var(--ink); text-align: start; cursor: pointer; font: inherit; }
+.tc-etk-satir[aria-pressed='true'] { border-color: var(--hazard); }
+.tc-etk-satir-alt { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); color: var(--muted); }
+.tc-etk-cikti { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-etk-secimler { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: var(--b-3); align-items: end; }
+.tc-etk-kagit-alani { display: flex; justify-content: center; padding: var(--b-3); border: thin dashed var(--edge2); border-radius: var(--yari-1); }
+.tc-etk-onizleme { inline-size: 100%; max-inline-size: 32rem; block-size: auto; }
+.tc-etk-kagit { fill: var(--panel-solid); }
+.tc-etk-dolu { fill: var(--ink); }
+.tc-etk-cizgi { fill: none; stroke: var(--ink); }
+.tc-etk-yazi { fill: var(--ink); font-family: var(--font-ana); }
+.tc-etk-kalin { font-weight: 700; }
+.tc-etk-not { margin: 0; color: var(--muted); }
+.tc-etk-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-etk-komut pre { max-block-size: 40vh; overflow: auto; margin: 0; padding: var(--b-2); font-family: var(--font-mono); white-space: pre; }
+.tc-etk-form, .tc-etk-gonder { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-etk-hata { margin: 0; color: var(--stop); }
+.tc-etk-kayitlar { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-etk-ciplar { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-etk-cip { display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--b-1) var(--b-2); border: thin solid var(--edge); border-radius: var(--yari-tam); font-family: var(--font-mono); }
+.tc-etk-cip-sil { min-inline-size: var(--dokunma); min-block-size: var(--dokunma); border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; }
+.tc-etk-baglanti { padding: 0; border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: inherit; }
+@media (min-width: 768px) { .tc-etk-duzen { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); } }

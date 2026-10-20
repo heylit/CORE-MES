@@ -1,0 +1,44 @@
+/* Şirket özeti grafikleri: kabuk grafik-karti.css'tedir; burada yalnız çizimler. */
+.tc-grafik-durum[data-bos] { font-size: var(--yazi-s); text-align: center; }
+
+.tc-cubuk-listesi {
+  display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2);
+  margin: 0; padding: 0; list-style: none; font-size: var(--yazi-xs);
+}
+/* Satırlar tek ızgarayı paylaşır: değer sütunu genişlese de bütün çubuklar aynı yerden başlar. */
+.tc-cubuk-satir { --c: var(--grafik); display: contents; }
+.tc-cubuk-satir[data-ton="uyari"] { --c: var(--hold); }
+.tc-cubuk-satir[data-ton="hata"] { --c: var(--stop); }
+.tc-cubuk-etiket { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-cubuk-iz { display: block; width: 100%; height: var(--b-3); overflow: visible; }
+.tc-cubuk-dolgu { fill: var(--c); }
+.tc-cubuk-deger { color: var(--ink); text-align: end; }
+
+.tc-parca-cubugu { display: block; width: 100%; height: var(--b-5); border-radius: var(--yari-1); }
+.tc-parca { fill: var(--sig); }
+.tc-parca-ara { stroke: var(--panel-solid); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.tc-parca-gosterge { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-parca-gosterge li { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-parca-gosterge .mono { color: var(--ink); }
+.tc-parca-isaret, .tc-grafik-isaret { width: var(--b-2); height: var(--b-2); border-radius: var(--pay-ince); background: var(--sig); }
+
+.tc-grafik-cubuk.tc-grafik-ikinci { fill: var(--grafik-2); }
+.tc-grafik-gosterge { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-grafik-gosterge > span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-grafik-isaret { background: var(--grafik); }
+.tc-grafik-isaret.tc-grafik-ikinci { background: var(--grafik-2); }
+
+/* Akış: adımlar sığdığı kadar yan yana, telefonda alt alta; ok bir sonraki adımın başındadır. */
+.tc-akis { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-akis-adim { flex: 1 1 calc(var(--pano-kart-enaz) / 2); display: flex; align-items: stretch; gap: var(--b-1); min-width: 0; }
+.tc-akis-ok { display: grid; place-items: center; color: var(--faint); }
+.tc-akis-kutu {
+  flex: 1; display: flex; flex-direction: column; gap: var(--b-1); min-width: 0;
+  padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2);
+}
+.tc-akis-adim[data-dikkat] .tc-akis-kutu { border-color: var(--hold); }
+.tc-akis-adim[data-dikkat] .tc-akis-sayi { color: var(--hold); }
+.tc-akis-etiket { font-size: var(--yazi-xs); color: var(--muted); overflow-wrap: anywhere; }
+.tc-akis-sayi { font-size: var(--yazi-l); font-weight: 700; color: var(--ink); }
+.tc-akis-sayi[data-bos] { color: var(--faint); }
+.tc-akis-alt { font-size: var(--yazi-xs); color: var(--faint); overflow-wrap: anywhere; }

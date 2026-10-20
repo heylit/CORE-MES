@@ -1,0 +1,3 @@
+.tc-kalici-ekran { display: contents; }
+.tc-kalici-ekran[hidden] { display: none; }
+.tc-acilis { display: grid; place-items: center; min-height: 100%; padding: var(--b-4); }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="uygulama_adi">TMI Saat</string>
+    <string name="karo_istasyonlar">TMI İstasyonlarım</string>
+    <string name="karo_uyarilar">TMI Uyarılar</string>
+    <string name="kadran_adi">TMI Kadran</string>
+</resources>

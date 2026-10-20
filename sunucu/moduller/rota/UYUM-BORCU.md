@@ -1,0 +1,64 @@
+# Uyum borcu (rota) - bağlamada kapanacak
+
+| No | Borç | Kapanış |
+|---|---|---|
+| B1 | KAPANDI (bağlama A, R1): servis operasyon tiplerini istasyonlar `operasyonTipleri` ile okur (kısaltma boşsa kod gösterilir); `rota_adimi.operasyon_tipi_id` -> `istasyonlar_operasyon_tipi(id)` yabancı anahtarı (`rota_adimi_operasyon_tipi_bagi`; göç önce kataloğa bağlanamayan adımları sayar, varsa durur). Standart taslak #464'ten beri `rota_standart_adim` tablosundan tipi kimlikle okur; kod eşlemi yalnız göçün tek seferlik dolumunda | - |
+| B2 | KAPANDI (bağlama A, R3): kişinin istasyonu `istasyonKisiAtamalari`'ndan; seçim (en büyük yüzde, eşitlikte küçük istasyon kimliği) `kurallar.ts` `kisiIstasyonlari` (IR5 b) | - |
+| B3 | KAPANDI (bağlama A, R7): seçici ve Malzemeler bölümü malzemelerin `malzemeAra`'sını kullanır (metin kod, ad ya da kart no; sayfalı); bilinmeyen tür süzgeci boş sonuç verir; test teslimdeki hâline döndü | - |
+| B4 | `malzeme_katalog_karti (no, tur)` tekili yok; tür servisçe denetlenir, `malzeme_turu` kopyadır. Malzemeler #364 tekili vermedi (DOĞRULANDI: göçlerde yok) | Malzemeler tekili verince bileşik FK göçü (R9) |
+| B5 | KAPANDI (bağlama A, R8): ürün özetindeki birim malzemelerin özetinden (`malzemeOzetleri`, toplu); kartta birim yoksa boş | - |
+| B6 | KAPANDI (T4 B, #415): emre kopyalama uretim-emirleri `uretimEmriAc` ile; `baglanti.ts` kalktı; RT-66/68 izinli durumu her adımı bir iş emri olarak ölçer | - |
+| B7 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): işlem, ayar ve ikinci menü toplayıcılarda (`paylasilan/islemler.ts` `...ROTA_ISLEMLERI`, `paylasilan/ayarlar.ts` `...ROTA_AYARLARI`, `paylasilan/sayfalar.ts` `ROTA_IKINCI_MENU`). Toplayıcılara ekleme (işlem, ayar, ikinci menü) çekirdekte | CEKIRDEK-ISTEKLERI 1-3 |
+| B8 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `rota.yaz` planlamaya (göç `20261015180508_kisiler_rota_canli_kalite_merkezi.sql` `('planlama_proje', 'rota.yaz')`), `rota.onayla` müdüre (göç `20261016063817_kisiler_mudur_rota_onayla.sql`) verildi. Rol x işlem satırları yok; rotayı kimse yazamaz | Kullanıcı onayıyla ayrı göç (CEKIRDEK-ISTEKLERI 4) |
+| B9 | Rota sayfasında plan, emir, kaynak, operasyon bölümleri başka modüllerin verisini gösterir (K2). T4'te plan ve uretim-emirleri-adimli kopyaları kalktı (gerçek sözleşme); `beklenen/istasyonlar-plan.ts` #439'da, `beklenen/vardiya.ts` #441'de kalktı; kopya kalmadı. KAPANDI | - |
+| B10 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): madde kendisi "borç değil, not"; kalıcı davranış. Ekranda geri al, kaydetmede silinmiş adımı yeni OP numarasıyla geri getirir (numara yeniden verilmez kuralı) | Kalıcı davranış; borç değil, not |
+
+## Aşama 1 oturtma bulguları (bağlamada kapanacak)
+
+Kaynak: tanı raporu `tur4-raporlar/rota-tani.md`. Ekrana dokunanlar ayrıca işaretli; hiçbiri Aşama 1'de düzeltilmedi.
+
+| No | Borç | Ekrana dokunur | Kapanış |
+|---|---|---|---|
+| B11 | Okuma uçları (10 GET) `yetki: 'oturum'`; ADR 0007 kalıbı `yetki: { biri: [...] }` (ör. `sayfa.rota`). Bugün her oturum rotayı okur | Hayır | Bağlamada rol matrisiyle |
+| B12 | KAPANDI (bağlama A, R5): eski sürüm `eskiSurum()` ile (neden `eski-surum`), revizyon ve talimatta | Hayır | - |
+| B13 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Reçete ve Rota'da dilim yetkisi "Modül yetkisi" (`recete-rota/NOTLAR.md`). Eski metin: Yazma KAPANDI (bağlama A, R4): iş merkezi ve istasyon güncellemesi sürüm gönderir, istasyonun sorumlusu ve kapasite kaynağı korunur. Kalan: okuma uçları (`/istasyonlar`, `/makineler`, `/operasyon-tipleri`) `sayfa.istasyonlar` ya da `istasyonlar.yaz` ister; yalnız rota sayfası olan 403 alır | Evet | Rol turunda (B21) |
+| B14 | KAPANDI (bağlama A, R2): Operasyonlar bölümü istasyonlar kataloğu sözleşmesiyle okur; güncelleme ad, grup ve sürüm gönderir, kod #460'tan beri düzenlenir (istasyonlar ucu kod alır). Yeni operasyon grup `TAL` (talaşlı imalat) ile açılır, grup İstasyonlar ekranında değişir (VARSAYIM; geri alma: tek satır) | Evet | - |
+| B15 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Bölümler Reçete ve Rota'da (M3). Eski metin: Rota sayfası başka modüllerin bölümlerini taşıyor: Operatör ekranı (Arkon), Stok (stok), Kaynaklar ve Operasyonlar (istasyonlar), Malzemeler (malzemeler), Üretim emirleri (uretim-emirleri), Plan, Plan stüdyosu, Kanban (plan) | Evet | Karar RT3 a: teslimdeki gibi; bağlamada bölüm bölüm |
+| B16 | Malzemelerde `kayit.bom[]` ve `kayit.ops[]` rotanın reçete ve operasyon sırasıyla aynı kavram (karar RT1 a: sahibi rota) | Hayır (rota) | Bağlamada malzemelerdeki kopya kalkar |
+| B17 | KAPANDI (#441): Kaynaklar > Vardiyalar vardiya modülünün `VardiyaDuzeni` ekranıdır (sürüm ve istek kimliğiyle yazar); Personel'de kişinin vardiyası seçilir | - | - |
+| B18 | KAPANDI (bağlama A, R6): fonksiyonlar `rota_revizyon_kilitli`, `rota_icerik_kilitli`, `rota_revizyon_bosaltilmaz` adını aldı (yalnız ad göçü) | Hayır | - |
+| B19 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): madde kendisi "Not; borç değil". Yabancı anahtarlar `malzeme_katalog_karti(no)`, `makine`, `kisi` Aşama 1 göçünde geldi (var olan tablolar, sabit kimlikler) | Hayır | Not; borç değil |
+| B20 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Eski metin: Ekranda bazı kaldır düğmeleri metin karakteri (✕), simge değil | Evet | Bağlamada görünüm turu |
+| B21 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `sayfa.rota` rollerde (göç `20261006092612_kisiler_roller.sql` `('planlamaci', 'sayfa.rota')`, `('mudur', 'sayfa.rota')` vb.), `rota.yaz` ve `rota.onayla` B8'deki göçlerle verildi. Rota sayfası ve işlemleri Aşama 1'de yalnız yöneticide (rol x işlem yok, B8) | Hayır | Rol matrisi, kullanıcı onayıyla |
+
+## Fason adım (karar "FASON ROTA ADIMIDIR"; FS1 a, FS2 a, FS3 b, FS4 a)
+
+Yazılan: adımın kaynağı fason firma olabilir (`rota_adimi.fason_firma_id` -> `finans_firma`, tek kaynak kısıtı üç sütunlu), fason adımda süre yok, termin takvim günü (`termin_gun`, 1-365). Firma aktif ve fason işaretli olmalı (kaydette ret, onayda yeniden). Fason her operasyon tipinde seçilir; dakika toplamına girmez, termin `ozet.fasonTerminGunu`. Aday kaynak fason olmaz.
+
+| No | Borç | Ekrana dokunur | Kapanış |
+|---|---|---|---|
+| B22 | F4: adımın alınan hizmet kartı (`hizmet_karti_no`) yok; malzemelerde `hizmet` türü yok (DOĞRULANDI: `KATALOG_TURLERI`) | Evet | Hizmet türü (MH1) girince ayrı göç: sütun, FK, tür ve yön denetimi |
+| B23 | KAPANDI (F7, kullanıcı onayı a): adım panelinde "Fason firmalar" grubu, fason adımda termin ve (kapalı) hizmet kartı alanı, süre ve makine kullanımı gizli; kart ve özet termini gösterir | Evet | - |
+| B24 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): fason süzgeci musteri-tedarikci `firmaAra`'da; rota tek çağrıyla kullanıyor (`servis.ts` `firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true })`). F8: finans `firmaAra`'da fason süzgeci yok; seçenekler ilk 200 firmayı arayıp özetlerinden fason ve aktif olanları süzer (`servis.ts` `fasonFirmalar`) | Hayır | Finansa istek; süzgeç gelince tek çağrı |
+| B25 | KAPANDI (T4 B, #415): fason adım iş emrine `kaynak: fason` ve `terminGun` ile gider | Hayır | - |
+| B26 | KAPANDI (T4 B, #415): plan fason iş emirlerini listeye almaz (uretim-emirleri `planlanacakIsEmirleri` dışarıda bırakır) | Hayır | - |
+
+## T4 (kart #415) bulguları
+
+| No | Borç | Ekrana dokunur | Kapanış |
+|---|---|---|---|
+| B27 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Emir düzenleme Reçete ve Rota'da (#1185). Eski metin: Yeni emir formu öncelik, başlangıç, açıklama ve taslak seçimiyle KAPANDI (#417 sonrası). Kalan: emir kartında başlangıç ve teslim satır içinde düzenlenmez | Evet | uretim-emirleri düzenleme komutu gelince |
+| B28 | KAPANDI (#459): "rota değişti" rozeti, "Rev N akışta aç" ve "Emirlere uygula (yürürlükteki rota)" rotada: künye `GET /rota/revizyon-kunyeleri`, komut `POST /rota/emirler/:id/yururlukteki-rotayi-uygula` uretim-emirleri `isEmirleriniYenile` ile (güvenli kip) | Evet | - |
+| B29 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Emir kartı Reçete ve Rota'da (#1185). Eski metin: Kısmen kapandı (#444): emir kartında "Stok ve tamamlama" (bitmiş emir, stok giriş ve çıkış yetkisi; kullanıcı kararı: yalnız müdür). "Eksikleri teslim al" mal kabule emirle gider (stok kararı a, #445). Kalan: "Malzeme ihtiyacı", "Yan ürün ve hurda" | Evet | uretim-emirleri ve stok uçları gelince |
+| B30 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Eski metin: Şemadan "Üretim emri oluştur", "Önce planda dene", hızlı ekle kutusu, "Statülü kart aç" yok | Evet | Aşama 2 (emir önizlemesi ve statüler gelince) |
+| B31 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. B13 ile aynı. Eski metin: Stok bölümü Stok Merkezi uçlarını okur; okuma `sayfa.stok` ya da `stok.*` ister, yalnız rota sayfası olan kullanıcı 403 alır | Evet | Rol turunda; stoka istek |
+| B32 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Statüler stokta ve Reçete ve Rota stok sekmesinde. Eski metin: Stokta statüler ("+ Statü", statülü stok, "Statü atlat", süreçteki malzeme) ve "Kartı aç ve ekle" yok; ekran bunu açıkça söyler | Evet | Stok modülü statüleri verince |
+| B33 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Eski metin: Menü sayaçlarında Malzemeler kart sayısı ve Üretim emirleri açık emir sayısı yok; Ürün ve rotalar tonu (onayda uyarı, taslak bilgi) ayrılmıyor | Evet | Çekirdek istek (ton) ve malzemeler/uretim-emirleri sayaç fonksiyonu |
+| B34 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Eski metin: CSV indirme rota istemcisinde yerel yardımcı (S4 b, yalnız liste ekranları); ortak parça değil | Hayır | Çekirdek istek |
+| B35 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Eski metin: "Adımlara uygula" (katalog değerlerini adımlara) yok | Evet | #409 birleşince |
+| B36 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. Kanban eski plan ekranı olarak kalır; akıbeti B41 kontrolünde. Eski metin: Kanbanda "Tamamlananları göster" ve durum panosunda sürükleyerek durum değiştirme yok (durum terminalin) | Evet | Arkon / uretim-emirleri durum komutu |
+| B37 | KAPANDI (#262): plan cevabı iş ve emir satırında `ustEmirId` taşır; çizelge ve emir planı alt partiyi üstün altında dal, Kanban kartı "Parti · UE-x" gösterir | - | - |
+| B38 | Terminalden gerçekleşen süre (#1043): `rota_gerceklesen_sure` `kaynak = terminal` (öneri) ve `kabul` satırları yazılmıyor; iş emri süre özeti uretim-emirlerinde (#1045) gelince rota okur, "kabul et" ucu eklenir | Evet | Bağlama A7a |
+| B39 | Sunucudaki plan iş emri kopyasındaki süreyi okuyor; gerçekleşen süreyi `adimEtkinSureleri` ile okuması bağlamada (#1043) | Hayır | Bağlama B1 |
+| B40 | İş emri kopyasında (`uretim_emirleri_is_emri`) işlem ve değişim ayrımı yok; toplam birim süre gider (#1043, VARSAYIM: plan için yeterli) | Hayır | Gerekirse A8 ile ayrı göç (uretim-emirleri) |
+| B41 | Kontrol (kullanıcı kararı 17.10.2026, borç R11): rota tanım adresleri (`/rota`, `/rota/:urunId`, `/rota/operasyonlar`, `/rota/sablonlar`) ve ana sayfadaki rota kartları Reçete ve Rota'nın "Ürün ve rotalar" görünümüne (`/recete-rota/schema`) gider; `RotaEkrani`, `OperasyonlarEkrani`, `SablonlarEkrani` dosyaları duruyor. Eski Plan, Plan stüdyosu ve Kanban (`/rota/plan`, `/rota/plan-studyosu`, `/rota/kanban`) sunucu plan motorunun ekranı olarak kalır | Evet | Tek plan motoru kararında yeniden bakılır: eski plan ekranları kalkar ya da kalır, kullanılmayan tanım ekranı dosyaları silinir |

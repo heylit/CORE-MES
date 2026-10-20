@@ -1,0 +1,4 @@
+/* Kalite Merkezi çerçevesi ikinci menünün yanındaki alanı boşluksuz doldurur; kaydırmayı uygulama yapar. */
+.tc-km { display: grid; height: 100%; min-height: 0; }
+.tc-km-cerceve { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
+.tc-km-durum { padding: var(--b-5); }

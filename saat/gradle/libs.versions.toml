@@ -1,0 +1,32 @@
+# Surumler sabittir (kart #1633, kullanici onayi madde 22). Yeni kutuphane kullanici onayiyla eklenir.
+[versions]
+agp = "8.7.3"
+kotlin = "2.0.21"
+activity-compose = "1.9.3"
+wear-compose = "1.4.0"
+compose-ui = "1.7.6"
+okhttp = "4.12.0"
+# Karolar: kullanici onayi soru 294 a (yalniz tiles ve protolayout ile zorunlu bagimliliklari).
+wear-tiles = "1.4.1"
+wear-protolayout = "1.2.1"
+# Kadran: kullanici onayi soru 340 a (yalniz watchface ve zorunlu bagimliliklari).
+wear-watchface = "1.2.1"
+junit = "4.13.2"
+
+[libraries]
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+wear-compose-material = { module = "androidx.wear.compose:compose-material", version.ref = "wear-compose" }
+wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wear-compose" }
+wear-compose-navigation = { module = "androidx.wear.compose:compose-navigation", version.ref = "wear-compose" }
+compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose-ui" }
+wear-tiles = { module = "androidx.wear.tiles:tiles", version.ref = "wear-tiles" }
+wear-protolayout = { module = "androidx.wear.protolayout:protolayout", version.ref = "wear-protolayout" }
+wear-watchface = { module = "androidx.wear.watchface:watchface", version.ref = "wear-watchface" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

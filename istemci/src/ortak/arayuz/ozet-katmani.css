@@ -1,0 +1,46 @@
+.tc-ozet-perde {
+  position: fixed; inset: 0; z-index: var(--z-ozet); display: grid; place-items: center; padding: var(--b-4); overflow-y: auto;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: var(--bulanik-ozet); backdrop-filter: var(--bulanik-ozet);
+  animation: tc-ozet-belir .3s;
+}
+.tc-ozet { display: grid; justify-items: center; gap: var(--b-4); width: 100%; min-width: 0; text-align: center; }
+.tc-ozet-damga {
+  position: relative; display: grid; place-items: center; width: var(--damga-dar); height: var(--damga-dar); border-radius: 50%;
+  border: 4px solid var(--done); color: var(--done);
+  box-shadow: 0 0 var(--isik-genis) calc(var(--isik) * -1) var(--done);
+  animation: tc-ozet-damga .6s cubic-bezier(.2, 1.6, .3, 1);
+}
+.tc-ozet-damga::before {
+  content: ''; position: absolute; inset: var(--b-3); border-radius: 50%;
+  border: 2px dashed color-mix(in srgb, var(--done) 60%, transparent); animation: tc-ozet-don 20s linear infinite;
+}
+.tc-ozet-damga .tc-simge { width: calc(var(--simge-damga) * .7); height: calc(var(--simge-damga) * .7); }
+.tc-ozet-ust { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--done); }
+.tc-ozet-baslik {
+  font-stretch: 125%; font-weight: 800; font-size: var(--yazi-2xl); line-height: 1; letter-spacing: -.01em; overflow-wrap: anywhere;
+}
+.tc-ozet-satirlar { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--b-4) var(--b-5); margin: 0; color: var(--muted); }
+.tc-ozet-satirlar dd {
+  margin: 0; font-stretch: 115%; font-size: var(--yazi-xl); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.tc-ozet-satirlar dd.tc-ozet-tonlu { color: var(--sig-yazi, var(--sig)); }
+.tc-ozet-eylemler { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--b-3); margin-top: var(--b-2); width: 100%; }
+@keyframes tc-ozet-belir { from { opacity: 0; } }
+@keyframes tc-ozet-damga { from { transform: scale(2.4) rotate(-20deg); opacity: 0; } }
+@keyframes tc-ozet-don { to { transform: rotate(360deg); } }
+
+@media (max-width: 767px) {
+  .tc-ozet-eylemler > * { flex: 1; }
+}
+@media (min-width: 768px) {
+  .tc-ozet { gap: var(--b-5); }
+  .tc-ozet-damga { width: var(--damga); height: var(--damga); }
+  .tc-ozet-damga .tc-simge { width: var(--simge-damga); height: var(--simge-damga); }
+  .tc-ozet-baslik { font-size: var(--yazi-3xl); }
+  .tc-ozet-satirlar { gap: var(--b-6); }
+  .tc-ozet-satirlar dd { font-size: var(--yazi-2xl); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ozet-perde, .tc-ozet-damga, .tc-ozet-damga::before { animation: none; }
+}

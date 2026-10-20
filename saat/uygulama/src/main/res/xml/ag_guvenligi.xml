@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sifresiz HTTP kapali. Kurum ici sertifika saate kullanici sertifikasi olarak yuklendiyse ona da guvenilir
+     (canli ortam HTTPS vekilinin arkasindadir; kurulum/canli.md). Kullanici sertifikasi yuklenemeyen saat icin
+     -PkurumKok ile derlenir; o derleme bu dosyadan ag_guvenligi_kurum.xml'i uretir (uygulama/build.gradle.kts). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

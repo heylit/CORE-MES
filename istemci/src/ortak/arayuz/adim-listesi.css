@@ -1,0 +1,32 @@
+.tc-adimlar { display: grid; gap: var(--b-2); align-content: start; min-width: 0; }
+.tc-adimlar-ust { display: flex; align-items: center; gap: var(--b-4); margin-bottom: var(--b-2); min-width: 0; }
+.tc-adimlar-baslik { margin: 0; font-stretch: 112%; font-size: var(--yazi-xl); overflow-wrap: anywhere; }
+.tc-adimlar-sayac {
+  font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tc-adim {
+  display: grid; grid-template-columns: var(--dokunma) minmax(0, 1fr); gap: var(--b-3); align-items: center;
+  min-height: var(--dokunma-tus); padding: var(--b-2) var(--b-3); border-radius: var(--yari-3);
+  border: 1px solid transparent; background: none; color: var(--ink); text-align: left; cursor: pointer;
+  touch-action: manipulation; transition: background .2s, border-color .2s;
+}
+.tc-adim:hover:not([aria-disabled="true"]) { background: var(--panel2); border-color: var(--edge); }
+.tc-adim[aria-disabled="true"] { cursor: default; }
+.tc-adim-kutu {
+  display: grid; place-items: center; width: var(--dokunma); height: var(--dokunma); border-radius: var(--yari-2);
+  border: 2px solid var(--edge2); color: transparent; transition: transform .25s, background .25s, border-color .25s;
+}
+.tc-adim-tamam .tc-adim-kutu {
+  background: var(--run); border-color: var(--run); color: var(--on-sig);
+  box-shadow: 0 0 var(--isik) calc(var(--pay-ince) * -1) var(--run); transform: rotate(-6deg);
+}
+.tc-adim-metin { display: grid; gap: var(--pay-ince); min-width: 0; }
+.tc-adim-metin b { font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.tc-adim-tamam .tc-adim-metin b { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+.tc-adim-metin small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-adim-metin .tc-adim-not { font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-adim, .tc-adim-kutu { transition: none; }
+}

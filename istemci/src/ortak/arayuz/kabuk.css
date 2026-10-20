@@ -1,0 +1,202 @@
+/* Menüler açılıp kapanmaz (kullanıcı kararı, kart #172). 1024 ve üstü: ana menü solda sabit ve yazılı; 768-1023: ana menü
+   yalnız simge şeridi, ad ipucunda. İkinci menü (data-ikinci) 1024 ve üstünde ana menünün yanında sütundur, altında başlığın
+   altında sekme şerididir: yatay tablette şerit sığmıyordu (soru 242). Çerçeveli sayfada her genişlikte şerittir: çerçevedeki
+   ön yüz kendi kırılımlarıyla çizilir, sütunun aldığı genişlik onu dar düzene düşürür (Arkon terminali 980 altında).
+   Telefon (<768) ayrı düzendir: ana menü yerine alt çubuk. */
+/* Bağlantı şeridi kabuğun üstünde akıştadır; kabuk kalan yüksekliği alır. */
+.tc-kabuk-cati { display: flex; flex-direction: column; height: 100%; min-width: 0; }
+.tc-kabuk {
+  display: grid; flex: 1; min-height: 0; min-width: 0;
+  grid-template-columns: var(--menu-sabit) minmax(0, 1fr);
+  grid-template-rows: var(--ust-cubuk) minmax(0, 1fr);
+  grid-template-areas: "menu ust" "menu icerik";
+}
+.tc-kabuk[data-ikinci] {
+  grid-template-rows: var(--ust-cubuk) auto minmax(0, 1fr);
+  grid-template-areas: "menu ust" "menu ikinci" "menu icerik";
+}
+@media (min-width: 1024px) {
+  .tc-kabuk[data-ikinci]:not([data-cerceveli]) {
+    grid-template-columns: var(--menu-sabit) var(--ikinci-sutun) minmax(0, 1fr);
+    grid-template-rows: var(--ust-cubuk) minmax(0, 1fr);
+    grid-template-areas: "menu ust ust" "menu ikinci icerik";
+  }
+}
+.tc-kabuk-menu {
+  grid-area: menu; display: flex; flex-direction: column; gap: var(--b-3);
+  padding: var(--b-3) var(--b-2); overflow-y: auto;
+  background: var(--panel-solid); border-right: 1px solid var(--edge);
+}
+.tc-kabuk-marka { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); font-weight: 800; }
+.tc-kabuk-marka-isaret {
+  display: grid; place-items: center; min-width: var(--dokunma); height: var(--dokunma);
+  border-radius: var(--yari-2); background: var(--hazard); color: var(--on-hazard); font-weight: 800;
+}
+.tc-kabuk-marka-metin { flex: none; font-size: var(--yazi-l); letter-spacing: .12em; white-space: nowrap; }
+/* Yüklenen logo kendi oranında, boşluk bırakmadan çizilir; yazı logonun alt kenarına oturur, çünkü logolarda yazı işareti
+   genellikle alttadır (üstte tescil işareti ya da simge olur) ve ortalanınca CORE yukarıda kalıyordu. */
+.tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: baseline; }
+.tc-kabuk-marka-logo {
+  flex: none; display: block; width: auto; height: auto;
+  max-width: calc(var(--dokunma) * 2); max-height: var(--dokunma);
+}
+.tc-kabuk-surum { margin-top: calc(-1 * var(--b-2)); padding: 0 var(--b-1); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-kabuk-grup { display: flex; flex-direction: column; gap: 0; }
+.tc-kabuk-grup-ad {
+  padding: 0 var(--b-3); font-size: var(--yazi-xs); font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.tc-kabuk-bag {
+  display: flex; align-items: center; gap: var(--b-3);
+  min-height: var(--dokunma); padding: var(--b-1) var(--b-3);
+  border: 0; border-radius: var(--yari-2); background: transparent;
+  color: var(--ink); font-weight: 600; cursor: pointer; min-width: 0;
+}
+.tc-kabuk-bag-acik { background: var(--hazard); color: var(--on-hazard); }
+/* Sabit ana menü sıkıdır: yirmiye yakın sayfa kaydırmadan sığsın diye satır ve yazı bir boy küçük. */
+.tc-kabuk-menu .tc-kabuk-bag { gap: var(--b-2); min-height: var(--menu-satir); padding: var(--pay-ince) var(--b-2); font-size: var(--yazi-s); }
+/* Uzun sayfa adı kesilmez, ikinci satıra iner; üçüncü satır gerektiren ad üç noktayla biter. */
+.tc-kabuk-bag-metin {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; line-height: 1.2; min-width: 0;
+}
+
+.tc-kabuk-ust {
+  grid-area: ust; position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: 0 var(--b-5); border-bottom: 1px solid var(--edge); background: var(--bg2);
+}
+.tc-kabuk-baslik { flex: 1 1 auto; font-size: var(--yazi-xl); font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-kabuk-hesap { display: contents; }
+.tc-kabuk-hesap > .tc-menu-dugme {
+  display: inline-flex; flex: 0 1 auto; align-items: center; gap: var(--b-2); min-width: 0; max-inline-size: var(--acilir-enaz); height: var(--dokunma);
+  padding-inline: var(--b-1) var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2);
+  color: var(--ink); font-weight: 600; text-decoration: none;
+}
+.tc-kabuk-hesap > .tc-menu-dugme:hover { border-color: var(--hazard); }
+.tc-kabuk-kisi-avatar {
+  display: grid; place-items: center; flex: none; inline-size: var(--b-6); block-size: var(--b-6);
+  border-radius: var(--yari-tam); background: var(--hazard); color: var(--on-hazard); font-size: var(--yazi-xs); font-weight: 800;
+}
+.tc-kabuk-kisi-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Geniş olmayan ekranda sayfa başlığına yer kalsın: ad gizlenir, baş harfli düğme kalır (adı title ve aria-label taşır).
+   Baş harfli düğme daralmaz: daralırsa baş harf yanındaki düğmenin üstüne taşar. */
+@media (max-width: 1439px) {
+  .tc-kabuk-hesap > .tc-menu-dugme { flex: none; padding-inline: var(--b-1); }
+  .tc-kabuk-kisi-ad { display: none; }
+}
+.tc-kabuk-tema {
+  display: grid; place-items: center; flex: none;
+  width: var(--dokunma); height: var(--dokunma);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+/* Yer daralınca önce arama kutusu daralır (dokunma boyuna kadar), sonra başlık: başlık kendi genişliğiyle başlar. */
+@media (min-width: 768px) {
+  .tc-kabuk-ust > .tc-arama { flex-shrink: 10000; min-inline-size: var(--dokunma); }
+}
+/* Tablette arama kutusu simge boyuna iner; kısayol ipucu kutudan taşıp yandaki düğmenin üstüne biner. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tc-kabuk-ust > .tc-arama .tc-arama-tus { display: none; }
+}
+.tc-kabuk-gezi { display: flex; align-items: center; gap: var(--b-1); flex: none; }
+.tc-kabuk-tema:disabled { opacity: .4; cursor: default; }
+.tc-kabuk-tema[aria-pressed="true"] { color: var(--hazard-ink); border-color: var(--hazard); }
+/* Konumlu: ekran okuyucuya ayrılan gizli öğeler (mutlak konumlu tablo başlığı gibi) içerik alanında kalır. Konumsuzken
+   belgeyi uzatıyordu; telefonda sayfanın kendisi kayıyor, alt menü ve üst çubuk onunla birlikte gidiyordu. */
+.tc-kabuk-icerik { grid-area: icerik; position: relative; overflow: auto; padding: var(--b-5); min-width: 0; }
+.tc-kabuk-alt { display: none; }
+.tc-kabuk-tum { display: none; }
+
+/* Tablet: ana menü yalnız simgeler; adlar erişilebilir ad ve ipucu olarak kalır. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tc-kabuk { grid-template-columns: var(--menu-serit) minmax(0, 1fr); }
+  .tc-kabuk-menu { align-items: center; }
+  .tc-kabuk-menu :is(.tc-kabuk-grup-ad, .tc-kabuk-bag-metin, .tc-kabuk-marka-metin, .tc-kabuk-surum) { display: none; }
+  .tc-kabuk-marka-logo { max-width: var(--dokunma); }
+  .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: center; }
+  .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
+  .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+}
+/* Çerçeveli modül: içerik alanını çerçeve doldurur, kaydırmayı o yapar. */
+.tc-kabuk-icerik[data-cerceveli] { padding: 0; overflow: hidden; }
+
+/* 1280'in altında sayfa başlığına yer kalmıyordu (ad "Fi..." diye kesiliyordu): Yardım ve Hesap menüsü maddesi olan modül
+   düğmeleri de Hesap menüsünden açılır. Sarmalayıcı kutu çizmez; penceresi gövdeye açıldığından gizliyken de görünür. */
+.tc-kabuk-hesapta { display: contents; }
+@media (min-width: 768px) and (max-width: 1279px) {
+  .tc-kabuk-ayri, .tc-kabuk-hesapta { display: none; }
+}
+/* Geniş ekranda sık kullanılan düğmenin adı simgesinin yanında yazılır; dar ekranda ad ipucu ve erişilebilir ad olarak kalır. */
+.tc-kabuk-dugme-ad { display: none; }
+@media (min-width: 1440px) {
+  .tc-kabuk-tema:has(> .tc-kabuk-dugme-ad) { display: inline-flex; gap: var(--b-2); width: auto; padding-inline: var(--b-2) var(--b-3); font-weight: 600; }
+  .tc-kabuk-dugme-ad { display: inline; white-space: nowrap; }
+}
+/* Tablette ileri ve son yerler de kalkar (Geri kalır). */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .tc-kabuk-ileri, .tc-kabuk-yerler { display: none; }
+}
+/* 1280'in altında zil ve modül düğmeleriyle çubuk dolar: uzun başlık kesilmez, telefondaki gibi iki satıra iner. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .tc-kabuk-baslik {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    white-space: normal; font-size: var(--yazi-l); line-height: 1.15;
+  }
+}
+
+@media (max-width: 767px) {
+  .tc-kabuk {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) var(--alt-cubuk);
+    grid-template-areas: "ust" "icerik" "alt";
+  }
+  .tc-kabuk[data-ikinci] {
+    grid-template-rows: auto auto minmax(0, 1fr) var(--alt-cubuk);
+    grid-template-areas: "ust" "ikinci" "icerik" "alt";
+  }
+  .tc-kabuk-menu { display: none; }
+  /* Telefonda düğmeler başlığa yer bırakmıyordu (360'ta ad hiç görünmüyordu): başlık düğmelerin altında kendi ince satırına iner. */
+  .tc-kabuk-ust {
+    flex-wrap: wrap; justify-content: flex-start; align-content: flex-start; row-gap: 0;
+    min-height: var(--ust-cubuk); padding: calc((var(--ust-cubuk) - var(--dokunma)) / 2) var(--b-3) 0;
+  }
+  .tc-kabuk-ust > .tc-arama { margin-inline-start: auto; }
+  /* Çerçeveli sayfada Tam ekran düğmesi de vardır; 360'ta yedi düğme ancak dar aralıkla sığar. */
+  .tc-kabuk:has(.tc-kabuk-icerik[data-cerceveli]) .tc-kabuk-ust { gap: var(--b-1); }
+  /* Ad kendi satırında; sığmazsa üç noktayla kesilmez, alt satıra iner (borç #322). */
+  .tc-kabuk-baslik {
+    order: 1; flex: 1 0 100%; padding-bottom: var(--b-2);
+    font-size: var(--yazi-l); line-height: 1.2;
+    white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+  }
+  /* Telefonda yalnız Geri kalır: ileri ve son yerler başlığın yerini almasın; telefonun geri hareketi aynı sıradadır. */
+  .tc-kabuk-ayri, .tc-kabuk-ileri, .tc-kabuk-yerler { display: none; }
+  .tc-kabuk-icerik { padding: var(--b-4); }
+  .tc-kabuk-icerik[data-cerceveli] { padding: 0; }
+  .tc-kabuk-alt {
+    grid-area: alt; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--edge); background: var(--panel-solid);
+  }
+  .tc-kabuk-alt .tc-kabuk-bag {
+    flex-direction: column; justify-content: center; gap: var(--b-1);
+    padding: var(--b-1); font-size: var(--yazi-xs); border-radius: 0; text-align: center;
+  }
+  .tc-kabuk-tum {
+    position: fixed; inset: 0; z-index: var(--z-katman);
+    display: flex; flex-direction: column; gap: var(--b-4);
+    padding: var(--b-4); overflow-y: auto; background: var(--bg);
+  }
+  .tc-kabuk-tum-kisi { display: flex; align-items: center; gap: var(--b-2); padding: 0 var(--b-3); color: var(--muted); font-weight: 600; }
+  .tc-kabuk-tum-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
+}
+
+/* Tam ekran (çerçeveli sayfa): ana menü, ikinci menü ve alt gezinme gizlenir; çerçeve genişliğin tamamını alır.
+   Üst çubuk kalır: çıkış düğmesi orada görünür. Tam ekran yalnız menülü sayfadadır; seçici dar sütun kuralından
+   güçlüdür ve medya sorgularından sonra durur, her genişlikte geçerlidir. */
+.tc-kabuk[data-ikinci][data-tam-ekran] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--ust-cubuk) minmax(0, 1fr);
+  grid-template-areas: "ust" "icerik";
+}
+.tc-kabuk[data-ikinci][data-tam-ekran] :is(.tc-kabuk-menu, .tc-ikinci-kap, .tc-kabuk-alt) { display: none; }

@@ -1,0 +1,25 @@
+.tc-pano { display: flex; flex-direction: column; gap: var(--b-6); min-width: 0; }
+.tc-pano-bolum { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-pano-baslik { font-size: var(--yazi-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+/* Sayı kartları sığdığı kadar yan yana, telefonda tek sütun. Alt sınıra bir boşluk eklenir: 1280'de dört dar sütun
+   başlığı ve açıklamayı iki üç satıra kırar, satır yükseklikleri dengesizleşir; üç sütunda çoğu tek satırda kalır. */
+.tc-pano-izgara { display: grid; gap: var(--b-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--pano-kart-enaz) + var(--b-6))), 1fr)); align-items: stretch; }
+.tc-pano-izgara > * { min-width: 0; display: grid; }
+.tc-pano-izgara > .tc-ana-sayfa-genis { grid-column: 1 / -1; }
+
+.tc-ana-sayfa { display: grid; gap: var(--b-4); grid-template-columns: minmax(0, 1fr); align-items: start; }
+.tc-ana-sayfa > * { min-width: 0; }
+/* 1024'ün altında içerik iki kartı formuyla taşıyacak genişlikte değil. */
+@media (min-width: 1024px) {
+  .tc-ana-sayfa { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-ana-sayfa-genis { grid-column: 1 / -1; }
+}
+
+/* Gizlenen sıfır kartı çizili kalır; ızgaranın "display: grid" kuralı hidden'ı ezmesin. */
+.tc-pano [hidden] { display: none; }
+.tc-pano-karsilama { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-pano-selam { font-size: var(--yazi-xl); font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+.tc-pano-tarih { font-size: var(--yazi-s); color: var(--muted); }
+.tc-pano-bos { display: flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-pano-bos svg { color: var(--run); }
+.tc-pano-tumu { align-self: flex-start; }

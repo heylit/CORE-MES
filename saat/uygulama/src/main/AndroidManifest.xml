@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Istasyon etiketi yalniz okunur (297 a); NFC olmayan saatte menu satiri gorunmez. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <!-- Kadran (340 a): sistem kadrani arka planda calistirir. -->
+    <uses-permission android:name="com.google.android.permission.PROVIDE_BACKGROUND" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Yedekleme kapali: belirtec bulut yedegine ya da baska cihaza gecmez. -->
+    <application
+        android:allowBackup="false"
+        android:label="@string/uygulama_adi"
+        android:networkSecurityConfig="${agGuvenligi}"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <!-- Telefonsuz calisir: Wear OS'ta telefon uygulamasi gerekmez. -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+
+        <activity
+            android:name=".AnaEtkinlik"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Karolar (ornekteki "karo"): uygulamayi acmadan istasyonlar ve uyarilar. -->
+        <service
+            android:name=".karo.IstasyonKarosu"
+            android:exported="true"
+            android:label="@string/karo_istasyonlar"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".karo.UyariKarosu"
+            android:exported="true"
+            android:label="@string/karo_uyarilar"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+        </service>
+        <!-- TMI kadrani: saat, dikkat isteyen istasyonlar, acik emirlerin toplam ilerleme halkasi. Dokununca Tezgahlar 3B acilir. -->
+        <service
+            android:name=".kadran.TmiKadrani"
+            android:exported="true"
+            android:label="@string/kadran_adi"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+                <category android:name="com.google.android.wearable.watchface.category.WATCH_FACE" />
+            </intent-filter>
+            <meta-data
+                android:name="com.google.android.wearable.watchface.preview"
+                android:resource="@drawable/kadran_onizleme" />
+            <meta-data
+                android:name="com.google.android.wearable.watchface.preview_circular"
+                android:resource="@drawable/kadran_onizleme" />
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/kadran" />
+        </service>
+    </application>
+</manifest>

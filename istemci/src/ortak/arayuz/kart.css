@@ -1,0 +1,16 @@
+.tc-kart {
+  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
+  padding: var(--b-5); min-width: 0;
+}
+.tc-kart-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); margin-bottom: var(--b-4); }
+.tc-kart-baslik { font-size: var(--yazi-l); font-weight: 700; }
+/* Sarmalayıcılar yerleşime girmez: ek içerik verilmeyen kartın başlığı ve sağ içeriği eskisi gibi doğrudan dizilir. */
+.tc-kart-bas, .tc-kart-sag { display: contents; }
+
+/* Ek içerikli başlık: sığmayan parça alt satıra iner, hiçbiri kartın dışına taşmaz. */
+.tc-kart-ust-zengin { flex-wrap: wrap; }
+.tc-kart-ust-zengin .tc-kart-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-kart-ust-zengin .tc-kart-baslik { min-width: 0; overflow-wrap: anywhere; }
+.tc-kart-ek { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-kart-ust-zengin .tc-kart-sag { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); min-width: 0; margin-left: auto; }

@@ -1,0 +1,36 @@
+.tc-dugme.tc-menu-dugme-simge { width: var(--dokunma); padding: 0; flex: none; }
+.tc-menu-dugme[aria-expanded="true"] { anchor-name: --tc-menu; border-color: var(--hazard-ink); }
+
+/* Düğmenin altında, sağ kenarı düğmeyle hizalı açılır; sığmayınca tarayıcı yukarı ve/veya öbür yana çevirir. */
+.tc-menu {
+  position: fixed; z-index: var(--z-katman);
+  position-anchor: --tc-menu; position-area: bottom span-left;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  display: flex; flex-direction: column; gap: var(--pay-ince);
+  min-width: var(--acilir-enaz); max-width: min(var(--acilir-encok), calc(100vw - 2 * var(--b-3)));
+  max-height: calc(100dvh - 2 * var(--b-3)); overflow-y: auto;
+  margin: var(--b-1) 0; padding: var(--b-1);
+  background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  box-shadow: var(--shadow);
+}
+.tc-menu:focus { outline: none; }
+.tc-menu-oge {
+  display: flex; align-items: center; gap: var(--b-3);
+  min-height: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: 0; border-radius: var(--yari-1); background: none; color: var(--ink);
+  font-weight: 700; text-align: left; cursor: pointer;
+}
+.tc-menu-oge .tc-simge { color: var(--hazard-ink); }
+.tc-menu-oge:hover, .tc-menu-oge:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.tc-menu-oge:focus-visible { outline-offset: calc(-1 * var(--kayma)); }
+.tc-menu-oge-tehlike, .tc-menu-oge-tehlike .tc-simge { color: var(--stop); }
+.tc-menu-oge[aria-disabled="true"] { cursor: not-allowed; }
+.tc-menu-oge[aria-disabled="true"], .tc-menu-oge[aria-disabled="true"] .tc-simge { color: var(--faint); }
+.tc-menu-oge[aria-disabled="true"]:hover { background: none; }
+.tc-menu-metin { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-menu-neden { font-size: var(--yazi-xs); font-weight: 400; color: var(--muted); }
+
+/* Çapalı konumlamayı bilmeyen tarayıcıda menü ekranın altına oturur: ölçüm gerektirmez, hiçbir kenardan taşmaz. */
+@supports not (position-area: bottom) {
+  .tc-menu { inset: auto var(--b-3) var(--b-3); max-width: none; margin: 0; }
+}

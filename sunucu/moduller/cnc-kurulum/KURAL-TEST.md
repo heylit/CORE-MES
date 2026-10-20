@@ -1,0 +1,26 @@
+# cnc-kurulum: kural ve test eşlemesi
+
+Dosyalar: `sunucu/moduller/cnc-kurulum/kurallar.test.ts` (saf, 4), `sunucu/moduller/cnc-kurulum/cnc-kurulum.test.ts` (gerçek PostgreSQL, 10),
+`istemci/src/moduller/cnc-kurulum/CncKurulumCercevesi.test.tsx` (5), `istemci/src/moduller/cnc-kurulum/cerceve-kopru.test.ts` (7). Hepsi koşuldu, yeşil.
+
+| Kural | Kısıt / yer | Test |
+|---|---|---|
+| CK-1 Anahtar prototipin önekiyle başlar; başka anahtar ve yol karakteri reddedilir | sözleşme + `cnc_kurulum_kayit_anahtar_bicimi` | `CK-K4`, `CK-05` |
+| CK-2 Yazma yalnız beklenen sürümde; null yalnız kayıt yokken; tutmazsa 409, kayıt değişmez | servis (satır kilidi) | `CK-K1`, `CK-02` |
+| CK-3 Aynı anda iki ilk yazmadan yalnız biri geçer | birincil anahtar + `ON CONFLICT DO NOTHING` | `CK-03` |
+| CK-4 Metin biçimi dizedir; U+0000 reddedilir (400, 500 değil); değerin JSON metni 1 MB'ı (UTF-8 bayt) aşarsa 413 | servis + `cnc_kurulum_kayit_metin_dize` | `CK-K2`, `CK-K3`, `CK-K3b`, `CK-04`, `CK-04b` |
+| CK-5 Silme sürüm ister | servis | `CK-06` |
+| CK-6 Okuma sayfa, oku ya da yaz; yazma ve silme yalnız yaz | uç yetkisi | `CK-07`, `CK-08` |
+| CK-7 Yazma deftere gövdesiz girer (anahtar, biçim, beklenen sürüm) | uç (`denetim: 'govdesiz'`) | `CK-09` |
+| CK-8 Başka modül durumu yalnız `disari.ts` ile, salt okunur alır | `disari.ts` | `CK-10` |
+| CK-9 Köprü önekli anahtarı beklemeden sonra, ayrıştırılmış ve sürümüyle yazar; öteki anahtar bellekte kalır | köprü | `KK-01`, `KK-02` |
+| CK-10 Anahtar başına tek yazma yoldadır; sonraki yazma dönen sürümle gider | köprü | `KK-03` |
+| CK-11 Çatışmada bir kez uyarır ve durur; 1 MB üstü gönderilmez, bir kez uyarır; ağ hatasında yeniden dener | köprü | `KK-04`, `KK-05` |
+| CK-12 Yazma işlemi yoksa değişiklik bellekte kalır | köprü + `ben.yazabilir` | `KK-06` |
+| CK-13 Çerçeve dışarıya istek atamaz; köprü prototipten önce koşar; kayıt metni betiği kapatamaz | içerik politikası + `cerceveBetigi` | `prototipi içerik politikasıyla...`, `sayfaKur...`, `KK-07` |
+| CK-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `sayfayı görmeyen kişiye yetki iletisi gösterir, uçlara gitmez` |
+| CK-15 Toplu aktarım (kart #1196): çerçeve toplu kipte düğme koymaz, kayıt yazmaz, listeyi yollar, istenen makineyi üretir | köprü | `KK-12`, `KP-04`, `KP-05`, `TA-02`, `TA-03` |
+| CK-16 Eşleştirilen model yayınlanır ve istasyona bağlanır; yayınlama yetkisi yoksa taslak kalır; Çizim Merkezi'ne yazamayan sayfayı açamaz | ekran + Çizim Merkezi uçları (`cizimler.yayinla`, `cizimler.yaz`, CZ-14) | `MA-04`, `MA-05`, `TA-01`, `TA-04` |
+| CK-17 STEP okuyucusu (WASM) açılışta yüklenmez; ilk STEP açılışında bir kez yüklenir, ikincide yeniden yüklenmez; yükleme hatası anlaşılır iletiyle döner | köprü | `PRT-01`, `SO-01`, `SO-02`, `SO-03`, `SO-04`, `KK-15` |
+
+Prototipin kendi iş kuralları (kesme verisi, stok hesabı, takım ömrü, hazırlık sırası) ekranda kalır (UYUM-BORCU.md); bunlar için sunucu testi yoktur.

@@ -1,0 +1,22 @@
+# Güvenlik denetimi: oturum (uç başına; Aşama 1 tur 2 durumu, hesap kilidi 14.10.2026)
+
+Zaman veritabanı saatinden (testte uç fabrikasına verilen saat). Kişi çerezdeki anahtarın özetinden çözülür; anahtar saklanmaz.
+Çerez HttpOnly. Giriş komutu denetim kaydına parolasız düşer. Veri kapsamı, sürüm ve istek kimliği bu modülde uygulanmaz
+(oturum açma her seferinde yeni kayıttır; tekrar zararsızdır).
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| GET /oturum | `acik`, txDisi | çerezsiz istek veritabanına gitmez; geçerli çerez kullanıcıyı verir; 12 saat hareketsiz ya da 30 günü dolan oturum geçersiz; pasif kişinin oturumu düşer | `geçerli çerez kullanıcıyı döndürür; ...`, `çerezsiz istek veritabanı sağlamken de aynı cevabı verir, ...` | `oturumsuz istekte kullanıcı null döner; uydurma ya da bozuk çerez kimlik vermez`, `12 saat hareketsiz kalan ve 30 günü dolan oturum geçersizdir`, `geçersiz çerez null verir; ...` |
+| POST /oturum/giris | `acik` | yanlış parola ve olmayan ad aynı cevap; hatalı denemede artan bekleme (1, 2, 4... en çok 60 sn), ad + cihaz çiftine özel; aynı çiftten süren deneme varken 429, parolaya bakmadan ve yazmadan; ada bütün cihazlardan 10 hatalı deneme adı 15 dk kilitler, kilitliyken doğru sır da sırra bakılmadan ve kayıt yazılmadan 401 (olmayan ad aynı cevap); pasif kişi giremez | `doğru parola oturum açar: çerez HttpOnly, anahtarın yalnız özeti saklanır`, `doğru giriş hatalı deneme sayacını sıfırlar: ...` | `yanlış parola ve olmayan kullanıcı aynı cevabı alır; ...`, `hatalı denemeden sonra bekleme dolmadan doğru parola da reddedilir ...`, `bekleme reddi kullanıcı adının var olup olmadığını ele vermez: ...`, `süren deneme varken aynı çiftten gelen 20 istek beklemeden 429 alır: ...`, `pasife alınan kişi giremez ve açık oturumu düşer`, `ayrı cihazlardan 9 hatalı deneme kilitlemez; 10. denemeden sonra doğru PIN de ...` (hesap-kilidi.test.ts), `kilit olmayan adın cevabıyla aynıdır: ...`, `kilit 15 dk sonra kendiliğinden biter; ...` |
+| POST /oturum/pin-belirle | `acik` | girişle aynı bekleme, sayaç ve hesap kilidi; kilitliyken doğru geçici PIN de reddedilir, PIN yazılmaz | kisiler/pin.test.ts; `kilitliyken doğru geçici PIN ile PIN belirleme ...` (kilit açılınca geçici PIN geçerli) | `kilitliyken doğru geçici PIN ile PIN belirleme ve doğru eski parolayla parola değişimi reddedilir` |
+| GET /oturum/kilitler | `kisiler.rol-yonet` | yalnız etkin (açılmamış, süresi dolmamış) kilitler; sayfalı | `kilitler listesi ve açma rol yönetenindir: ...` | aynı test: operatöre 403, oturumsuz 401 |
+| POST /oturum/kilitler/:id/ac | `kisiler.rol-yonet` | açan kişi ve an sunucudan; aynı addaki etkin kilitlerin hepsi açılır; etkin kilit yoksa 404 (yineleme zararsız, tekrar koruması yok); kayıt denetime tam düşer | `kilitler listesi ve açma rol yönetenindir: ...` | aynı test: operatöre 403 ve kilit kalır; ikinci açma ve olmayan kimlik 404 |
+| POST /hesabim/parola-degistir | `oturum` | doğru eski parola ister; yanlış eski parola girişteki beklemeyi ve hesap kilidi sayacını besler; kilitliyken doğru eski parola da 401; o anki oturum kalır, öbürleri kapanır | `oturum ister; doğru eski parolayla değişir, yeni parola geçerli olur`, `o anki oturum kalır, kişinin öbür oturumları kapanır; ...` | `yanlış eski parola reddedilir ve parola değişmez; kısa yeni parola sayılmaz`, `yanlış eski parola girişteki beklemeyi başlatır: ...` |
+| POST /oturum/cikis | `acik` | oturumu kapatır, çerezi siler; çerezsiz istek zararsız | `çıkış oturumu kapatır ve çerezi siler` | çalıştırılmadı: ayrı ret testi yok (uç kimlik istemez; başkasının oturumunu kapatmak için onun anahtarı gerekir) |
+
+Veritabanı korumaları: `denetim: giriş komutu parolasız kaydedilir; kayıt değiştirilemez ve silinemez`, `dolu tabloda uygulanır, satırlar kalır;
+UPDATE ve TRUNCATE reddedilir, DELETE yalnız 30 günden eski satırda kabul edilir` (`goc.test.ts`), `kilit kaydı silinmez, boşaltılmaz; yalnız bir kez açılır ve başka sütunu değişmez` (`hesap-kilidi.test.ts`), `veritabanı kısıtları: giriş bilgisi yarım olamaz, ...`.
+
+## Yalnız ekranda kalan kurallar
+
+Yok. Giriş ekranı bekleme süresini sunucunun cevabından gösterir; bekleme sunucuda tutulur.

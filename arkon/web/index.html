@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="tr" data-theme="dark" data-state="queued">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06080b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Üretim Hazırlık</title>
+</head>
+<body>
+<div id="root"></div>
+<!-- Ağır kütüphaneler (PDF, 3B, OCR, QR) ihtiyaç anında bu yollardan yüklenir (public/). Tek dosya derlemesinde içeri gömülür. -->
+<!-- TMI içinde açıldıysa veri bağlantısını TMI kurar (istemci/src/moduller/arkon/baglanti.ts); tek başına açılınca etkisizdir. Köprü en üste kadar aranır:
+     önizleme Arkon'u Arkon'un içinde ikinci çerçevede açar. -->
+<script>try { for (var w = window; w.parent && w.parent !== w;) { w = w.parent; if (w.__tmiArkonBagla) { w.__tmiArkonBagla(window); break; } } } catch (e) {}</script>
+<script>
+window.ARKON_FILES = {
+  "pdfjs": {
+    "path": "vendor/pdfjs/pdf.min.js"
+  },
+  "pdfworker": {
+    "path": "vendor/pdfjs/pdf.worker.min.js"
+  },
+  "three": {
+    "path": "vendor/three/three.min.js"
+  },
+  "orbit": {
+    "path": "vendor/three/OrbitControls.js"
+  },
+  "occt": {
+    "path": "vendor/occt/occt-import-js.js"
+  },
+  "occtcalisan": {
+    "path": "vendor/occt/step-calisan.js"
+  },
+  "tesscore": {
+    "path": "vendor/tesseract/tesseract-core-simd-lstm.js"
+  },
+  "jsqr": {
+    "path": "vendor/qr/jsQR.js"
+  },
+  "qrgen": {
+    "path": "vendor/qr/qrcode.js"
+  },
+  "occtwasm": {
+    "path": "vendor/occt/occt-import-js.wasm"
+  },
+  "tesswasm": {
+    "path": "vendor/tesseract/tesseract-core-simd-lstm.wasm"
+  },
+  "tesseng": {
+    "path": "vendor/tesseract/eng.traineddata.gz",
+    "gz": true
+  }
+};
+</script>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+.tc-ackapa {
+  display: inline-flex; align-items: center; gap: var(--b-3); flex: none;
+  min-height: var(--dokunma); padding: 0; border: 0; background: none;
+  color: var(--ink); font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.tc-ackapa:disabled { opacity: .5; cursor: not-allowed; }
+.tc-ackapa-ray {
+  position: relative; flex: none; width: var(--dokunma); height: var(--b-5);
+  border: 1px solid var(--edge2); border-radius: var(--yari-tam); background: var(--panel2);
+}
+.tc-ackapa-top {
+  position: absolute; top: 50%; left: var(--b-1); width: var(--b-4); height: var(--b-4);
+  border-radius: 50%; background: var(--muted); transform: translateY(-50%);
+  transition: left .15s ease;
+}
+.tc-ackapa[aria-checked="true"] .tc-ackapa-ray { background: var(--run); border-color: transparent; }
+.tc-ackapa[aria-checked="true"] .tc-ackapa-top { left: calc(100% - var(--b-4) - var(--b-1)); background: var(--on-sig); }

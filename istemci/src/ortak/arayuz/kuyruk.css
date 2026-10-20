@@ -1,0 +1,53 @@
+.tc-durum-rozet {
+  --c: var(--sig);
+  display: inline-flex; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-3); border-radius: var(--yari-tam);
+  font-size: var(--yazi-xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+  color: var(--sig-yazi, var(--c)); background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.tc-durum-rozet i { flex: none; width: var(--nokta); height: var(--nokta); border-radius: 50%; background: var(--c); }
+
+.tc-kuyruk { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; min-height: 0; }
+.tc-kuyruk-ust { display: flex; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-2) 0; }
+.tc-kuyruk-baslik { font-stretch: 112%; font-size: var(--yazi-m); font-weight: 700; }
+.tc-kuyruk-sayac {
+  margin-left: auto; font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.tc-kuyruk-liste { display: grid; gap: var(--b-3); align-content: start; min-height: 0; padding: var(--pay-ince); }
+.tc-kuyruk-kart {
+  position: relative; display: grid; grid-template-columns: var(--halka-mini) minmax(0, 1fr); gap: var(--b-3); align-items: center;
+  min-width: 0; padding: var(--b-4); text-align: left; border-radius: var(--yari-3); cursor: pointer; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--edge);
+  -webkit-backdrop-filter: var(--bulanik-kart); backdrop-filter: var(--bulanik-kart);
+  transition: transform .15s, border-color .2s, background .2s;
+}
+.tc-kuyruk-kart-halkasiz { grid-template-columns: minmax(0, 1fr); }
+.tc-kuyruk-kart:hover { transform: translateX(var(--kayma)); border-color: var(--edge2); }
+.tc-kuyruk-kart-secili {
+  border-color: color-mix(in srgb, var(--hazard) 70%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--hazard) 14%, var(--panel)), var(--panel));
+}
+.tc-kuyruk-kart-secili::before {
+  content: ''; position: absolute; left: -1px; top: var(--b-4); bottom: var(--b-4); width: var(--b-1); border-radius: var(--b-1);
+  background: var(--hazard); box-shadow: 0 0 var(--isik) var(--hazard);
+}
+.tc-kuyruk-govde, .tc-kuyruk-no, .tc-kuyruk-parca { display: block; min-width: 0; }
+.tc-kuyruk-no { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-kuyruk-parca { font-weight: 700; font-size: var(--yazi-l); line-height: 1.25; margin: var(--pay-ince) 0; overflow-wrap: anywhere; }
+.tc-kuyruk-ayrinti { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-kuyruk-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-top: var(--b-2); }
+.tc-kuyruk-halka { position: relative; display: block; width: var(--halka-mini); height: var(--halka-mini); }
+.tc-kuyruk-halka svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.tc-kuyruk-halka span {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: var(--yazi-xs); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.tc-kuyruk-halka-yol { stroke: var(--edge2); }
+.tc-kuyruk-halka-yay { stroke: var(--sig); transition: stroke-dashoffset .6s; }
+
+@media (min-width: 1280px) {
+  .tc-kuyruk-liste { overflow-y: auto; scrollbar-width: thin; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-kuyruk-kart, .tc-kuyruk-halka-yay { transition: none; }
+  .tc-kuyruk-kart:hover { transform: none; }
+}

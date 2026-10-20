@@ -1,0 +1,51 @@
+.tc-perde {
+  position: fixed; inset: 0; z-index: var(--z-katman);
+  display: flex; align-items: center; justify-content: center; padding: var(--b-5);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+.tc-perde:has(.tc-pencere-yan) { justify-content: flex-end; align-items: stretch; padding: 0; }
+.tc-pencere {
+  display: flex; flex-direction: column; min-width: 0; max-height: 100%;
+  width: 100%; max-width: var(--pencere-genis);
+  background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-3);
+  box-shadow: var(--shadow);
+}
+.tc-pencere-yan { max-width: var(--cekmece-genis); border-radius: 0; border-width: 0 0 0 1px; }
+/* Tam ekran: bütün görüntü, köşesiz ve çerçevesiz; üst satır (başlık ya da araç çubuğu) ve gövde. Gövde kendi düzenini kurar. */
+.tc-perde:has(.tc-pencere-tam) { align-items: stretch; justify-content: stretch; padding: 0; }
+.tc-pencere-tam {
+  display: grid; grid-template-rows: auto minmax(0, 1fr); max-width: none; height: 100%;
+  background: var(--bg); color: var(--ink); border: 0; border-radius: 0; box-shadow: none;
+}
+.tc-pencere-tam:focus { outline: none; }
+.tc-pencere-tam > .tc-pencere-govde { min-height: 0; padding: 0; }
+.tc-pencere-tam:has(> .tc-pencere-alt) { grid-template-rows: auto minmax(0, 1fr) auto; }
+.tc-pencere-ust {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-4) var(--b-5); border-bottom: 1px solid var(--edge);
+}
+.tc-pencere-baslik { font-size: var(--yazi-l); font-weight: 800; min-width: 0; overflow-wrap: anywhere; }
+.tc-pencere-kapat {
+  display: grid; place-items: center; flex: none;
+  width: var(--dokunma); height: var(--dokunma);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.tc-pencere-govde { flex: 1; min-height: 0; overflow-y: auto; padding: var(--b-5); }
+.tc-pencere-alt {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-3);
+  padding: var(--b-4) var(--b-5); border-top: 1px solid var(--edge);
+}
+
+@media (max-width: 767px) {
+  .tc-perde { align-items: flex-end; padding: 0; }
+  .tc-pencere { max-width: none; border-radius: var(--yari-3) var(--yari-3) 0 0; border-width: 1px 0 0; }
+  .tc-pencere-yan { height: 100%; border-radius: 0; border-width: 0; }
+  .tc-pencere-tam { height: 100%; border-radius: 0; border-width: 0; }
+  .tc-pencere-ust, .tc-pencere-alt { padding: var(--b-3) var(--b-4); }
+  .tc-pencere-govde { padding: var(--b-4); }
+  .tc-pencere-tam > .tc-pencere-govde { padding: 0; }
+  .tc-pencere-alt > * { flex: 1; }
+}
+
+.tc-pencere-ileti { font-weight: 600; color: var(--ink); }

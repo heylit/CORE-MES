@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kadran seciminde gorunen sade onizleme: siyah zemin, yesil uretim halkasi, sari TMI cizgisi. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <path android:fillColor="#FF000000" android:pathData="M96,0a96,96 0,1 1,0 192a96,96 0,1 1,0 -192z" />
+    <path android:strokeColor="#FF1D222A" android:strokeWidth="6" android:pathData="M96,8a88,88 0,1 1,0 176a88,88 0,1 1,0 -176z" />
+    <path android:strokeColor="#FF3CF0A8" android:strokeWidth="6" android:strokeLineCap="round" android:pathData="M96,8a88,88 0,0 1,83.7 115" />
+    <path android:fillColor="#FFFFD23F" android:pathData="M80,40h32v6h-32z" />
+    <path android:fillColor="#FFF2F4F7" android:pathData="M56,70h80v28h-80z" />
+    <path android:fillColor="#FFFF5C7A" android:pathData="M60,118a4,4 0,1 1,0 8a4,4 0,1 1,0 -8z" />
+    <path android:fillColor="#FF929CAB" android:pathData="M70,119h60v6h-60z" />
+    <path android:fillColor="#FF3CF0A8" android:pathData="M60,134a4,4 0,1 1,0 8a4,4 0,1 1,0 -8z" />
+    <path android:fillColor="#FF929CAB" android:pathData="M70,135h60v6h-60z" />
+</vector>

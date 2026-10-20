@@ -1,0 +1,29 @@
+/* Arkon MES · giriş noktası
+   Sıra önemlidir: veri katmanı ve hesap kütüphaneleri önce, arayüz modülleri bölüm sırasıyla, açılış (baslat) en son. */
+import './styles/fonts.css';
+import './styles/style.css';
+import './data/store';
+import './core/tol';
+import './core/stepdraw';
+import './app/temel';
+import './app/bilesenler';
+import './app/yukleyici';
+import './app/ortak-ayarlar';
+import './app/pdf';
+import './app/pdf-okuma';
+import './app/ocr';
+import './app/balon-yerlesimi';
+import './app/model-3b';
+import './app/teknik-resim';
+import './app/operator-parcalar';
+import './app/operator';
+import './app/kurallar';
+import './app/istasyonlar';
+import './app/hazirlik';
+import './app/kalite';
+import './app/cizim-studyosu';
+import './app/giris-ayarlar-spc';
+import './app/pano-planlama';
+import './app/bakim-raporlar';
+import './app/ayarlar-uretim';
+import './app/baslat';

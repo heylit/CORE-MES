@@ -1,0 +1,9 @@
+.tc-denetim { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-denetim-suzgec { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); }
+.tc-denetim-suzgec > * { flex: 1 1 auto; min-width: 0; }
+.tc-denetim-ayrinti { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-denetim-ozet { display: grid; grid-template-columns: max-content 1fr; gap: var(--b-2) var(--b-4); margin: 0; }
+.tc-denetim-ozet dt { color: var(--muted); }
+.tc-denetim-ozet dd { margin: 0; overflow-wrap: anywhere; }
+.tc-denetim-icerik { margin: 0; padding: var(--b-3); background: var(--panel2); border: 1px solid var(--edge); border-radius: var(--yari-2); font-family: var(--font-mono); font-size: var(--yazi-s); white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-denetim-uyari { display: flex; align-items: center; gap: var(--b-2); margin: 0; color: var(--muted); }
