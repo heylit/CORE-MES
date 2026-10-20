@@ -13,7 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { gunEkle } from './kurallar.ts';
 import { anomaliGunuKaydet, anomaliler } from './servis.ts';
 
@@ -231,6 +231,8 @@ describe('arkon üretim anomalisi (gerçek PostgreSQL)', () => {
     const ie = await isEmriKur(o.makineler[0]!, { birimSureDk: '2', bas: 8, bit: 12 });
     assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${ie.emirId}/baslat`)).durum, 200);
     assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${ie.emirId}/sayim`, { tur: 'saglam', adet: 45 })).durum, 200);
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler.
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, ie.emirId, 'onay'));
     const eksik = await hesapla();
     const ist = eksik.istasyonlar.find((i) => i.istasyonId === o.istasyonId)!;
     assert.deepEqual([ist.beklenen, ist.uretilen, ist.oran, ist.adetEksik], [60, 45, 0.75, true]);
