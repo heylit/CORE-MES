@@ -2,9 +2,11 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
-import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, OlcuAletleriCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
+  OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
   KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, sonParca, sorgula, ustYolu,
 } from './kurallar.ts';
 import type { OdaKaydi, Veri } from './kurallar.ts';
@@ -82,6 +84,11 @@ export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sa
   }
   const kilit = await sorgular.kilitYaz(db, g.yol, g.sahip, g.sureMs);
   return { alindi: true, surum: kilit.surum, bitis: kilit.bitis };
+}
+
+// 329 a: prototipin kalibrasyon sekmesindeki cihaz listesi; ölçü aletlerinin tek kaynağı Kalibrasyondur.
+export async function olcuAletleri(db: Db): Promise<OlcuAletleriCevabi> {
+  return { aletler: olcuAletleriKaydi(await aletlerVeKayitlari(db, OLCU_ALETI_KAYIT_ADEDI)) };
 }
 
 export async function damga(db: Db): Promise<{ damga: number }> {

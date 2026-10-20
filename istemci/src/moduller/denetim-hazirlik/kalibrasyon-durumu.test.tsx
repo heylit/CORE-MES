@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { BenCevabi, OlcuAletleriCevabi, SorguCevabi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { kalibrasyonKuraliBetigi } from '../kalibrasyon/disari.ts';
 import { rotalar } from './rotalar.tsx';
@@ -23,6 +23,7 @@ async function sunulanSayfa(): Promise<string> {
       return json(200, { kisi: { id: KISI.id, ad: KISI.ad }, yazabilir: true, yonetici: false, kurulumGerekli: false } satisfies BenCevabi);
     }
     if (yontem === 'GET' && yol.startsWith('/denetim-hazirlik/sorgu')) return json(200, { belgeler: [], damga: 0 } satisfies SorguCevabi);
+    if (yontem === 'GET' && yol === '/denetim-hazirlik/olcu-aletleri') return json(200, { aletler: [] } satisfies OlcuAletleriCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -54,7 +55,7 @@ function islev(satirlar: string[], ad: string): string {
 
 interface Cihaz { st: string; last: string; per: number; nx: string }
 interface Durum { k: string; t: string; dd: number | null }
-interface Hesap { kNext(d: Cihaz): string; kStat(d: Cihaz): Durum }
+interface Hesap { kNext(d: Cihaz): string; kStat(d: Cihaz): Durum; kTableHtml(devs: Record<string, unknown>[]): string }
 
 let h: Hesap;
 beforeAll(async () => {
@@ -65,7 +66,14 @@ beforeAll(async () => {
   const satirlar = sayfa.split('\n');
   const KDUR = satirlar.find((s) => s.startsWith('var KDUR='));
   if (!KDUR) throw new Error('Sayfadan ayıklanamadı: KDUR');
-  const kod = ['const window={};', kalibrasyonKuraliBetigi(), KDUR, ...['pad', 'isoOf', 'todayISO', 'kKural', 'kNext', 'kStat'].map((ad) => islev(satirlar, ad)), 'return {kNext,kStat};'];
+  const KSON = satirlar.find((s) => s.startsWith('var KSON='));
+  if (!KSON) throw new Error('Sayfadan ayıklanamadı: KSON');
+  const tablo = ['esc', 'ic', 'fmtDate', 'dBetween', 'KL', 'kCycle', 'kList', 'kChip', 'kBar', 'kToolbar', 'kTableHtml'].map((ad) => islev(satirlar, ad));
+  const kod = [
+    'let state={kal:{devs:[],view:"tablo",filter:"all",q:""}};', 'const window={};', kalibrasyonKuraliBetigi(), KDUR, KSON,
+    ...['pad', 'isoOf', 'todayISO', 'kKural', 'kNext', 'kStat'].map((ad) => islev(satirlar, ad)), ...tablo,
+    'return {kNext,kStat,kTableHtml:function(devs){state={kal:{devs:devs,view:"tablo",filter:"all",q:""}};return kTableHtml();}};',
+  ];
   h = new Function(kod.join('\n'))() as Hesap;
 });
 afterAll(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -84,6 +92,20 @@ describe('Denetim Hazırlığı kalibrasyon durumu (kStat)', () => {
     expect(h.kNext(cihaz({ last: '2026-08-31', per: 1 }))).toBe('2026-09-30');
     expect(h.kNext(cihaz({ last: '2025-01-01', nx: '2026-10-20' }))).toBe('2026-10-20');
     expect(h.kNext(cihaz({}))).toBe('');
+  });
+
+  // 329 a: liste Kalibrasyondan gelir; metinler prototipin çiziminde kaçışlanır (cihaz kaydı olcu-aleti.ts'nin ürettiği biçimdedir).
+  it('XSS: Kalibrasyondan gelen cihaz metinleri tabloda kaçışlanır', () => {
+    const zarar = '<img src=x onerror=alert(1)>';
+    const html = h.kTableHtml([{
+      id: 'kal-1', no: zarar, ad: zarar, marka: '', seri: '', aralik: zarar, coz: '', yer: zarar, sorumlu: '', lab: '', cert: zarar, kabul: '', note: '',
+      st: 'aktif', res: 'uygun', per: 3, last: '2026-10-01', nx: '2026-12-30', tur: 'dis', hist: [],
+    }]);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img src=x');
+    const kap = document.createElement('div');
+    kap.innerHTML = html;
+    expect(kap.querySelector('img')).toBeNull();
   });
 
   it.each([

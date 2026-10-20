@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   belgeCevabi, belgeParametresi, benCevabi, damgaCevabi, ekCevabi, ekIcerikCevabi, ekParametresi, ekYukleGovdesi, kilitCevabi, kilitGovdesi,
-  kisilerCevabi, kurulumCevabi, odaCevabi, odaParametresi, silCevabi, silGovdesi, sorguCevabi, sorguParametresi, yazGovdesi,
+  kisilerCevabi, kurulumCevabi, odaCevabi, odaParametresi, olcuAletleriCevabi, silCevabi, silGovdesi, sorguCevabi, sorguParametresi, yazGovdesi,
 } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
-import { belgeOku, belgeSil, belgeYaz, ben, damga, ekOku, ekYukle, kilitle, kisiler, kurulum, odaGuncelle, sorgu } from './servis.ts';
+import { belgeOku, belgeSil, belgeYaz, ben, damga, ekOku, ekYukle, kilitle, kisiler, kurulum, odaGuncelle, olcuAletleri, sorgu } from './servis.ts';
 
 // Çerçevedeki prototipin depo çağrıları bu uçlara gelir (istemci/src/moduller/denetim-hazirlik/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -16,6 +16,14 @@ export const uclar = [
     yetki: { biri: ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz'] },
     cevap: benCevabi,
     isle: ({ db, kullanici }) => ben(db, kullanici),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/denetim-hazirlik/olcu-aletleri',
+    // 329 a: cihaz listesinin kaynağı Kalibrasyondur; modülün okuma işlemleriyle açılır, yazma ucu yoktur.
+    yetki: OKUMA,
+    cevap: olcuAletleriCevabi,
+    isle: ({ db }) => olcuAletleri(db),
   }),
   uc({
     yontem: 'GET',
