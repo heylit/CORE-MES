@@ -891,6 +891,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'POST', `/stok/teslimler/${t.govde.teslim.id}/teslim-al`, { surum: t.govde.teslim.surum, alinan: '8' })).durum, 200);
     await terminal('/baslat');
     await terminal('/sayim', { tur: 'saglam', adet: 4 });
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; adım çıktısı onaylı sayımla ölçülür.
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, kisiler.get('yonetici')!, e, 'onay'));
     const ka = (await istasyonKonumu(a.id))!;
     assert.deepEqual([await sayi(hm, kabul), await sayi(hm, ka), await sayi(hm, ka, s10)], [92, 0, 8], 'ilk adım: istasyondaki HM OP 10 statüsüne');
     await terminal('/bitir', { saglamAdet: 4 });
