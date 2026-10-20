@@ -140,7 +140,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2]
+        parca: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -148,7 +148,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run test:istemci -- --shard=${{ matrix.parca }}/2
+      - run: npm run test:istemci -- --shard=${{ matrix.parca }}/3
 
   sunucu-test:
     needs: kapsam
@@ -158,7 +158,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4]
+        parca: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:18
@@ -175,7 +175,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      TMIV2_TEST_PARCA: ${{ matrix.parca }}/4
+      TMIV2_TEST_PARCA: ${{ matrix.parca }}/6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
