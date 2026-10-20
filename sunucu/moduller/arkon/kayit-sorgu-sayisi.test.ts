@@ -15,6 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { kararliSayimiSonuclandir } from '../uretim-emirleri/disari.ts';
 import { kayitEkle } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -109,6 +110,9 @@ describe('arkon kayıt ekleme satır başına sorgu sayısı (gerçek PostgreSQL
     calisanEmir = await emirAc('SQ-1');
     bekleyenEmir = await emirAc('SQ-2');
     await istek('POST', '/arkon/kayitlar/events/ekle', { satirlar: [{ cid: 'sq-basla', pkgId: `tmi-ue-${calisanEmir}`, state: 'running' }], kaynak: 'sq' });
+    // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; ölçüm onaylı emrin olağan sayımını ölçer.
+    await istek('POST', '/arkon/kayitlar/counts/ekle', { satirlar: [sayim('sq-ilk')], kaynak: 'sq' });
+    await ortam.vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, calisanEmir, 'onay'));
   });
 
   after(async () => {
@@ -123,7 +127,7 @@ describe('arkon kayıt ekleme satır başına sorgu sayısı (gerçek PostgreSQL
     assert.deepEqual(yirmi.cevap, { eklenen: 20, reddedilen: [], uyarilar: [] });
     assert.deepEqual(yirmi.yansimalar, [{ sonuc: 'yazildi', neden: null, adet: 20 }]);
     const emir = (await istek<EmirAyrintiCevabi>('GET', `/uretim-emirleri/${calisanEmir}`)).emir;
-    assert.equal(emir.canli?.saglam, 21);
+    assert.equal(emir.canli?.saglam, 22, 'kurulumdaki onaylı ilk parça dahil');
     assert.ok(satirBasina <= SATIR_BASINA_SINIR, `ek satır başına ${satirBasina} sorgu (1 satır ${bir.sorgu}, 20 satır ${yirmi.sorgu})`);
   });
 
