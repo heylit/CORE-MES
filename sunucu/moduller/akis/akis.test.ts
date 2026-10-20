@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { fasonDonusuKaydet, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { fasonDonusuKaydet, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -141,6 +141,8 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
 
     assert.equal((await terminal(id, 'baslat')).durum, 200);
     assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 10 })).durum, 200);
+    // İlk parça onayına kadar sağlam adet kararda bekler (327 a); fasona onaylı adet gider.
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     assert.equal((await terminal(id, 'bitir', {})).durum, 200);
     const g = await fason(id, isEmriIdleri[1]!, 'fason-gidis', { adet: 10 });
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
