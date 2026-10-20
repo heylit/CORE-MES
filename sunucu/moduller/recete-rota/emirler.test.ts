@@ -13,7 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { emirleriCevir } from './kurallar.ts';
 import type { EmirKaydi } from './kurallar.ts';
@@ -177,6 +177,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.equal(s.opProg[adimAnahtari(1)], undefined, 'sayım gelmeden ilerleme yok');
 
     assert.equal((await terminal('/sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     s = await siparis(id);
     assert.equal(s.opProg[adimAnahtari(1)], 4);
 
