@@ -504,8 +504,11 @@ export async function terminalSayimi(db: Db, kisiId: number, id: number, govde: 
 export async function emirSayim(
   db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean } = {},
 ): Promise<{ emir: Emir }> {
-  const kararBekliyor = govde.tur === 'saglam' && secenek.kararBekliyor === true;
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
+  // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
+  // Sorgu her sağlam sayımda atılır: komut başına okuma sayısı adedin işaretine göre değişmez.
+  const kararBekliyor = govde.tur === 'saglam'
+    && (secenek.kararBekliyor === true || ((await sorgular.ilkParcaOnaysiz(db, id)) && govde.adet > 0));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   let hurdaNedeniId: number | null = null;
@@ -549,12 +552,17 @@ export async function kararliSayimiSonuclandir(
   await kilitliEmir(db, id);
   const gruplar = await sorgular.kararBekleyenGruplari(db, id);
   const an = await sorgular.anAl(db);
-  let toplam = 0;
+  const isEmriAdetleri = new Map<number | null, number>();
   for (const g of gruplar) {
-    await sorgular.kararSatirlariEkle(db, id, g.isEmriId, kisiId, g.istasyonId, karar === 'onay' ? 'saglam' : 'red', g.adet, an);
-    if (karar === 'onay') await sorgular.bitmisSaglamaEkle(db, id, g.isEmriId, g.adet);
-    await kaliteKarariBildir(db, { uretimEmriId: id, isEmriId: g.isEmriId, kisiId, karar, adet: g.adet });
-    toplam += g.adet;
+    await sorgular.kararSatirlariEkle(db, id, g.isEmriId, g.kisiId, g.istasyonId, karar === 'onay' ? 'saglam' : 'red', g.adet, an);
+    isEmriAdetleri.set(g.isEmriId, (isEmriAdetleri.get(g.isEmriId) ?? 0) + g.adet);
+  }
+  let toplam = 0;
+  for (const [isEmriId, adet] of isEmriAdetleri) {
+    if (adet === 0) continue;
+    if (karar === 'onay') await sorgular.bitmisSaglamaEkle(db, id, isEmriId, adet);
+    await kaliteKarariBildir(db, { uretimEmriId: id, isEmriId, kisiId, karar, adet });
+    toplam += adet;
   }
   return { ...(await emirdenCevap(db, id)), adet: toplam };
 }
@@ -574,7 +582,7 @@ export async function emirSayimAyarla(db: Db, kisiId: number, id: number, saglam
   const fark = saglam - (await saglamToplami(db, id));
   // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
   await adimGirdisiniDenetle(db, emir, fark);
-  const bekleyen = fark > 0 && (await sayaclar(db, id)).kararBekliyor > 0;
+  const bekleyen = fark > 0 && ((await sayaclar(db, id)).kararBekliyor > 0 || (await sorgular.ilkParcaOnaysiz(db, id)));
   if (fark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen);
   return emirdenCevap(db, id);
 }
