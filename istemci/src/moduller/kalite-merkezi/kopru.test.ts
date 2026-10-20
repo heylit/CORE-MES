@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import type { KmDegisiklikCevabi, KmSurumCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmSurumCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
 import { DOSYA_PARCASI, belgeParcalari, kopruKur, type DosyaOkuyucu, type Istemci } from './kopru.ts';
@@ -9,16 +9,21 @@ const AKIS = {
   surum: 7,
   degisiklikler: [
     { koleksiyon: 'ncr', kimlik: 'ncr_1', govde: { no: 'NCR-1', guncelleme: '2026-10-14T08:00:00.000Z' }, surum: 5 },
-    { koleksiyon: 'dev', kimlik: 'd_1', govde: null, surum: 7 },
+    { koleksiyon: 'sup', kimlik: 's_1', govde: null, surum: 6 },
+    { koleksiyon: 'dev', kimlik: 'd_1', govde: { kod: 'ESKI' }, surum: 7 },
   ],
 } satisfies KmDegisiklikCevabi;
 
-function kur(ek: { post?: (yol: string, govde: unknown) => unknown; dosyaOku?: DosyaOkuyucu } = {}) {
-  const get = vi.fn(async (_yol: string) => AKIS);
+const OLCU_ALETI_YOLU = '/kalite-merkezi/olcu-aletleri';
+const cihaz = (kimlik: string, kod: string): KmOlcuAletleriCevabi['cihazlar'][number] => ({ kimlik, govde: { kod, sonKal: '2026-10-01', kalibrasyondan: true } });
+
+function kur(ek: { post?: (yol: string, govde: unknown) => unknown; dosyaOku?: DosyaOkuyucu; cihazlar?: () => KmOlcuAletleriCevabi['cihazlar'] } = {}) {
+  const get = vi.fn(async (yol: string): Promise<unknown> => (yol === OLCU_ALETI_YOLU ? { cihazlar: ek.cihazlar ? ek.cihazlar() : [] } : AKIS));
   const post = vi.fn(async (yol: string, govde?: unknown) => (ek.post ? ek.post(yol, govde) : ({ surum: 9 } satisfies KmSurumCevabi)));
   const dosyaOku = vi.fn(ek.dosyaOku ?? (async () => null));
-  const kopru = kopruKur({ get, post } as unknown as Istemci, dosyaOku);
-  return { kopru, get, post, dosyaOku };
+  let an = 1_000_000;
+  const kopru = kopruKur({ get, post } as unknown as Istemci, dosyaOku, () => an);
+  return { kopru, get, post, dosyaOku, ilerle: (ms: number) => { an += ms; } };
 }
 const sha = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
 
@@ -30,10 +35,67 @@ describe('Kalite Merkezi köprüsü (uygulamanın yerel sunucu sözleşmesi -> T
     expect(get).toHaveBeenCalledWith('/kalite-merkezi/degisiklikler?sonra=5');
     expect(c).toEqual({
       durum: 200,
-      json: { version: 7, changes: [{ col: 'ncr', id: 'ncr_1', data: { no: 'NCR-1', guncelleme: '2026-10-14T08:00:00.000Z' } }, { col: 'dev', id: 'd_1', data: null }] },
+      // Cihaz (dev) değişiklikleri akıştan değil Kalibrasyondan gelir (329 a): akıştaki dev satırı atılır.
+      json: { version: 7, changes: [{ col: 'ncr', id: 'ncr_1', data: { no: 'NCR-1', guncelleme: '2026-10-14T08:00:00.000Z' } }, { col: 'sup', id: 's_1', data: null }] },
     });
     await kopru.isle({ adres: 'api/sync?since=abc', yontem: 'GET', govde: null });
-    expect(get).toHaveBeenLastCalledWith('/kalite-merkezi/degisiklikler?sonra=0');
+    expect(get).toHaveBeenCalledWith('/kalite-merkezi/degisiklikler?sonra=0');
+  });
+
+  // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; uygulamanın cihaz listesi (dev) ondan salt okunur gelir.
+  describe('ölçü aleti listesi (329 a)', () => {
+    const sync = (k: ReturnType<typeof kur>, since = 0) => k.kopru.isle({ adres: `api/sync?since=${String(since)}`, yontem: 'GET', govde: null });
+    const devler = (c: Awaited<ReturnType<typeof sync>>) => (c.json as { changes: { col: string; id: string; data: unknown }[] }).changes.filter((d) => d.col === 'dev');
+
+    it('ilk eşitleme Kalibrasyon cihazlarının hepsini dev kaydı olarak verir; akıştaki dev satırı (eski kayıt) listeye karışmaz', async () => {
+      const k = kur({ cihazlar: () => [cihaz('d_9', 'OC-1'), cihaz('kal-4', 'OC-2')] });
+      const c = await sync(k);
+      expect(devler(c)).toEqual([
+        { col: 'dev', id: 'd_9', data: cihaz('d_9', 'OC-1').govde },
+        { col: 'dev', id: 'kal-4', data: cihaz('kal-4', 'OC-2').govde },
+      ]);
+      expect(k.get).toHaveBeenCalledWith(OLCU_ALETI_YOLU);
+    });
+
+    it('sonraki eşitlemeler 15 saniye içinde listeyi yeniden istemez ve değişiklik göndermez; sonra yalnız değişeni ve silineni gönderir', async () => {
+      let liste = [cihaz('kal-1', 'OC-1'), cihaz('kal-2', 'OC-2')];
+      const k = kur({ cihazlar: () => liste });
+      await sync(k);
+      liste = [cihaz('kal-1', 'OC-1'), cihaz('kal-2', 'OC-2')];
+      k.ilerle(14_000);
+      expect(devler(await sync(k, 7))).toEqual([]);
+      expect(k.get.mock.calls.filter(([y]) => y === OLCU_ALETI_YOLU)).toHaveLength(1);
+      liste = [{ kimlik: 'kal-1', govde: { kod: 'OC-1', sonKal: '2026-10-19', kalibrasyondan: true } }];
+      k.ilerle(2_000);
+      expect(devler(await sync(k, 7))).toEqual([
+        { col: 'dev', id: 'kal-1', data: { kod: 'OC-1', sonKal: '2026-10-19', kalibrasyondan: true } },
+        { col: 'dev', id: 'kal-2', data: null },
+      ]);
+      k.ilerle(16_000);
+      expect(devler(await sync(k, 7))).toEqual([]);
+    });
+
+    it('ilk eşitlemede liste okunamazsa hata döner (boş liste gerçekmiş gibi gösterilmez); sonrakinde akış yine de gelir', async () => {
+      const k = kur({ cihazlar: () => { throw new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }); } });
+      expect((await sync(k)).durum).toBe(403);
+      const ikinci = kur({ cihazlar: () => [cihaz('kal-1', 'OC-1')] });
+      await sync(ikinci);
+      ikinci.ilerle(20_000);
+      ikinci.get.mockImplementation(async (yol: string) => { if (yol === OLCU_ALETI_YOLU) throw new Error('ağ'); return AKIS; });
+      const c = await sync(ikinci, 7);
+      expect(c.durum).toBe(200);
+      expect(devler(c)).toEqual([]);
+    });
+
+    it('cihaz kaydı yazma ve silme reddedilir (Kalibrasyon sayfasından yönetilir); sunucuya hiçbir şey gitmez, öteki koleksiyon yazılır', async () => {
+      const k = kur();
+      for (const yontem of ['PUT', 'DELETE']) {
+        const c = await k.kopru.isle({ adres: 'api/doc/dev/kal-1', yontem, govde: JSON.stringify({ kod: 'X' }) });
+        expect(c).toEqual({ durum: 403, json: { hata: 'Ölçü aletleri Kalibrasyon sayfasından yönetilir.' } });
+      }
+      expect(k.post).not.toHaveBeenCalled();
+      expect((await k.kopru.isle({ adres: 'api/doc/ncr/ncr_1', yontem: 'PUT', govde: JSON.stringify({ no: 'N' }) })).durum).toBe(200);
+    });
   });
 
   it('kayıt yazma ve silme kayıt uçlarına gider; gövde metin olarak gelir ve nesne olarak gider; bilinmeyen kayıt null sürümle gider', async () => {
@@ -60,8 +122,8 @@ describe('Kalite Merkezi köprüsü (uygulamanın yerel sunucu sözleşmesi -> T
     await kopru.isle({ adres: 'api/doc/ncr/ncr_1', yontem: 'PUT', govde: JSON.stringify({ no: 'NCR-1' }) });
     expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/kayitlar/ncr/ncr_1/yaz', { govde: { no: 'NCR-1' }, surum: null });
     // Akışta silinmiş görünen kayıt da yok sayılır.
-    await kopru.isle({ adres: 'api/doc/dev/d_1', yontem: 'PUT', govde: JSON.stringify({ kod: 'C1' }) });
-    expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/kayitlar/dev/d_1/yaz', { govde: { kod: 'C1' }, surum: null });
+    await kopru.isle({ adres: 'api/doc/sup/s_1', yontem: 'PUT', govde: JSON.stringify({ kod: 'C1' }) });
+    expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/kayitlar/sup/s_1/yaz', { govde: { kod: 'C1' }, surum: null });
   });
 
   it('form açıldıktan sonra kayıt değiştiyse (taban eski) yazma gönderilmez, çakışma iletisi döner; taban günceldeyse yazılır', async () => {

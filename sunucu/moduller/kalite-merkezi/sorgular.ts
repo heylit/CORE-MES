@@ -167,6 +167,14 @@ export function kayitGovdeleri(db: Db, koleksiyon: string, kimlikler: readonly s
   );
 }
 
+// Koleksiyonun dolu kayıtları (silinmişlerin gövdesi null'dır, gelmez).
+export function koleksiyonKayitlari(db: Db, koleksiyon: string): Promise<{ kimlik: string; govde: Record<string, unknown> }[]> {
+  return db.sorgu(
+    'SELECT kimlik, govde FROM kalite_merkezi_belge WHERE koleksiyon = $1 AND govde IS NOT NULL ORDER BY kimlik',
+    [koleksiyon],
+  );
+}
+
 // Karantina defterinin bütün satırları, yazan NCR'nin bugünkü gövdesiyle (silinmiş NCR'de null).
 export async function karantinaDefteri(db: Db): Promise<{ hareketId: number; ncrKimlik: string; govde: Record<string, unknown> | null }[]> {
   const satirlar = await db.sorgu<{ hareketId: number; ncrKimlik: string; govde: Record<string, unknown> | null }>(

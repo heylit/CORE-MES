@@ -430,3 +430,58 @@ export const GECMIS_BETIGI = String.raw`(function () {
     return r;
   };
 })();`;
+
+// 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon modülüdür. Ölçüm cihazları listesi oradan salt okunur gelir (köprü); uygulamanın
+// cihaz ekleme, düzenleme, kalibrasyon kaydı ve silme yolları kapanır ve kullanıcı Kalibrasyon sayfasına yönlenir. Cihaz kaydını
+// yazan tek yol bu dört işlevdir (formlar, hızlı ekleme, komut paleti ve görev listesi hep onları çağırır); köprü ayrıca cihaz
+// yazmasını reddeder. Kalibrasyonda gün tutulan periyot listede gün olarak gösterilir. Sertifika eki cihaz kaydına yazıldığı için
+// geçmiş penceresinde ek bölümü gösterilmez.
+export const OLCU_ALETI_BETIGI = String.raw`(function () {
+  var A = window.__TMI_KM || {};
+  var UST = window.parent;
+  var sira = 1000000;
+  function git() {
+    sira += 1;
+    UST.postMessage({ kanal: 'tmi-kalite-merkezi', yon: 'istek', id: sira, tip: 'kalibrasyona-git' }, A.koken);
+  }
+  window.tmiKalibrasyonaGit = git;
+  function yonlendir() {
+    toast('Ölçü aletleri Kalibrasyon sayfasından yönetilir.', 'bad');
+    git();
+  }
+  openDev = yonlendir;
+  openCalRec = yonlendir;
+  var asilSil = delRec;
+  delRec = function (col) {
+    if (col === 'dev') { yonlendir(); return; }
+    return asilSil.apply(this, arguments);
+  };
+  var asilGecmis = devHistory;
+  devHistory = function () {
+    var r = asilGecmis.apply(this, arguments);
+    var ek = document.querySelector('#modal .attw');
+    if (ek && ek.parentNode) ek.parentNode.removeChild(ek);
+    return r;
+  };
+  var DUGME = '<button class="btn" onclick="tmiKalibrasyonaGit()">Kalibrasyon sayfası</button>';
+  var NOT = '<div class="note" id="tmiKalibrasyonNotu">Ölçü aletleri <b>Kalibrasyon</b> modülünden gelir ve burada yalnız görüntülenir. ' +
+    'Ekleme, düzenleme ve kalibrasyon kaydı için <button type="button" class="link" onclick="tmiKalibrasyonaGit()">Kalibrasyon sayfasına gidin</button>.</div>';
+  var asilHtml = vDev.html;
+  vDev.html = function () {
+    var h = asilHtml.apply(this, arguments);
+    h = h.split('<button class="btn" onclick="openDev()">Cihaz ekle</button>').join(DUGME);
+    h = h.replace(/<button class="link" onclick="openCalRec\('[^']*'\)">Kalibrasyon kaydet<\/button> ?/g, '')
+      .replace(/<button class="link" onclick="openDev\(devById\('[^']*'\)\)">Düzenle<\/button> ?/g, '')
+      .replace(/<button class="link bad" onclick="delRec\('dev'[^>]*>Sil<\/button>/g, '');
+    (S.dev || []).forEach(function (d) {
+      var gun = Number(d.periyotGun);
+      if (!(gun > 0)) return;
+      var bas = h.indexOf('data-open="dev:' + d._id + '"');
+      if (bas < 0) return;
+      var son = h.indexOf('</tr>', bas);
+      h = h.slice(0, bas) + h.slice(bas, son).replace(/>[0-9.]+ ay<\/span>/, '>' + gun + ' gün</span>') + h.slice(son);
+    });
+    var yer = h.indexOf('<section class="panel"');
+    return yer < 0 ? NOT + h : h.slice(0, yer) + NOT + h.slice(yer);
+  };
+})();`;

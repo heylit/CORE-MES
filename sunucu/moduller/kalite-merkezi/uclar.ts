@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import type { Uc } from '#cekirdek/uc.ts';
 import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
-  kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmYazGovdesi,
+  kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 
@@ -16,6 +16,14 @@ export const uclar: Uc[] = [
     sorgu: kmDegisiklikSorgusu,
     cevap: kmDegisiklikCevabi,
     isle: ({ db, sorgu }) => servis.degisiklikler(db, sorgu.sonra),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/olcu-aletleri',
+    // 329 a: cihaz listesinin kaynağı Kalibrasyondur; uygulamanın okuma işlemiyle açılır, yazma ucu yoktur.
+    yetki: 'kalite-merkezi.oku',
+    cevap: kmOlcuAletleriCevabi,
+    isle: ({ db }) => servis.olcuAletleri(db),
   }),
   uc({
     yontem: 'GET',
