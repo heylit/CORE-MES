@@ -14,13 +14,17 @@ import type { AcilDeneme, AcilMusteri, EmirSecimi } from './kopru.ts';
 import { EmirProjeSecimi } from './EmirProjeSecimi.tsx';
 import { AcilMusteriSecimi } from './AcilMusteriSecimi.tsx';
 import { gomuluYaziStili } from './yazi-tipleri.ts';
+import { PLANLAMA_ISLEMI, planlamaYoluMu } from './planlama-menusu.ts';
 import './recete-rota.css';
 
 // Reçete ve Rota Motoru prototipi olduğu gibi yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); veri
 // yalnız köprüyle TMI uçlarına gider (cerceve-kopru.ts çerçevede, kopru.ts kabukta).
 // İçerik politikası dışarıya her isteği, form gönderimini ve taban adres değişimini kapatır (dış servis yok). Yazı tipi
 // yalnız gömülü veriden: opak kökenden TMI adresine yazı tipi isteğini tarayıcı reddeder.
-const POLITIKA = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; worker-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+// Planlama motoru sayfanın kendi kurduğu iş parçacığında (blob:) koşar; iş parçacığı bu politikayı devralır, dışarı istek yine kapalıdır.
+const POLITIKA = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; worker-src blob:; frame-src 'none'; form-action 'none'; base-uri 'none'";
+// Planlama çerçevesi ayrıca 'wasm-unsafe-eval' ister: HiGHS WebAssembly'dir (361 b); ikili kabuktan gelir, ağ yine kapalıdır.
+export const PLANLAMA_POLITIKASI = POLITIKA.replace("script-src 'unsafe-inline'", "script-src 'unsafe-inline' 'wasm-unsafe-eval'");
 export const KOK = '/recete-rota';
 const KANAL = 'recete-rota';
 // Çerçevenin gidebileceği sayfalar: malzeme yalnız Malzemeler ve Hizmetler'de açılır; istasyonun plan ayarı ve makine durumu İstasyonlar'da,
@@ -39,7 +43,10 @@ const CATISMA = 'Reçete ve rota kayıtları başka bir kişi tarafından deği�
 const BUYUK = 'Reçete ve rota kaydı 1 MB sınırını aştı ve sunucuya yazılamadı. Eski emirleri ya da plan stüdyosu senaryolarını silip yeniden deneyin.';
 // Cihaza özel anahtarlar: operatör ekranının istasyon, makine ve kişi seçimi ("bu cihazda hatırlanır") ve plan
 // stüdyosu tanıtımının görüldüğü. Ortak kayda giderlerse iki tablet birbirinin seçimini ezer ve sürüm çatışmasıyla yazma durur.
-export const CIHAZ_ANAHTARLARI: readonly string[] = [`${ONEK}:op`, `${ONEK}:studio:intro`];
+// Planlama çerçevesinin ekran tercihleri (açık sayfa, yakınlık, raf, menü, tema) de cihazdadır.
+export const PLANLAMA_ANAHTARI = `${ONEK}:planlama`;
+export const CIHAZ_ANAHTARLARI: readonly string[] = [`${ONEK}:op`, `${ONEK}:studio:intro`,
+  ...['-ui4', '-mz', '-tk', '-br', '-nb', '-tema'].map((ek) => PLANLAMA_ANAHTARI + ek)];
 const KAYIT_YAZISI = 'TMI\'de kayıtlı';
 const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
 const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
@@ -62,14 +69,22 @@ export const ONAY_DUGMELERI: readonly string[] = [
 // ayarlarının Düzenle yazısı. Senaryonun canlıya alması doğrudan `plan.canliya-al` ister. Yetkisiz kişi 403 almak için basmasın (plan akışı H6).
 export const PLAN_YAZMA_DUGMELERI: readonly string[] = ['[data-act="planYaz"]', '#planCfg .cfg-ed'];
 export const SENARYO_CANLIYA_ALMA_DUGMELERI: readonly string[] = ['[data-act="publishScenario"]'];
+// Planlama çerçevesinde denemenin veri araçları: örnek veri yüklemek, içe aktarmak ve sıfırlamak ana tablonun (Reçete ve Rota kaydı)
+// üstüne yazar. Uygulamada veri yalnız Reçete ve Rota bölümlerinden girer.
+export const PLANLAMA_VERI_ARACLARI: readonly string[] = ['[data-act="set-yukle"]', '[data-act="iceri-ac"]', '[data-act="sifirla"]'];
+// Çerçeve değişirken (Reçete ve Rota <-> planlama) eski çerçevenin bekleyen yazması sunucuya varsın: yeni çerçeve kaydı sonra okur.
+const GECIS_MS = BEKLEME_MS + 1500;
+type Tur = 'recete-rota' | 'planlama';
 
 // Prototipin dış yazı tipi bağlantıları sayfadan çıkarılır (politika zaten kapatır; konsol hatası kalmasın), yerine gömülü
 // yazı tipi gelir. Köprü ve politika belgenin başına, prototip betiklerinden önce konur.
-export function sayfaKur(prototip: string, betik: string, yaziStili: string): string {
+// `sonStil` prototipin stillerinden sonra gelir (tema uyumu, rr-tema.css).
+export function sayfaKur(prototip: string, betik: string, yaziStili: string, sonStil = '', politika = POLITIKA): string {
   const temiz = prototip.replace(/<link\b[^>]*fonts\.(?:googleapis|gstatic)\.com[^>]*>\s*/gi, '');
-  const bas = `<meta http-equiv="Content-Security-Policy" content="${POLITIKA}">\n<style>${yaziStili}</style>\n${betik}\n`;
+  const bas = `<meta http-equiv="Content-Security-Policy" content="${politika}">\n<style>${yaziStili}</style>\n${betik}\n`;
   // Değiştirme işlevle yapılır: metindeki $ dizileri değiştirme kalıbı olarak yorumlanmasın.
-  return temiz.replace(/<head>/i, () => `<head>\n${bas}`);
+  const sayfa = temiz.replace(/<head>/i, () => `<head>\n${bas}`);
+  return sonStil === '' ? sayfa : sayfa.replace(/<\/head>/i, () => `<style>${sonStil}</style>\n</head>`);
 }
 
 // Kayıtlar prototipin yazdığı metne geri çevrilir: json biçimi yeniden metne, metin biçimi olduğu gibi.
@@ -83,19 +98,36 @@ export function yerelDegerler(cevap: KayitlarCevabi): CerceveAyari['degerler'] {
   return sonuc;
 }
 
-interface Hazirlik { ben: BenCevabi; degerler: CerceveAyari['degerler'] }
+interface Hazirlik { tur: Tur; ben: BenCevabi; degerler: CerceveAyari['degerler'] }
+interface Prototip { sayfa: string; yaziStili: string; sonStil: string }
+
+// Reçete ve Rota prototipi ile planlama sayfası ayrı parça olarak, yalnız açılınca yüklenir.
+async function prototipYukle(tur: Tur): Promise<Prototip> {
+  if (tur === 'planlama') {
+    const [m, p] = await Promise.all([import('./cerceve/planlama-modulu.html?raw'), import('./planlama-sayfasi.ts')]);
+    return { sayfa: p.planlamaSayfasiKur(m.default), yaziStili: await p.planlamaYaziStili(), sonStil: '' };
+  }
+  // Tema uyumu uygulamanın yazı tipini de ister (rr-tema.css --font-ana).
+  const [m, tema, p, yazi] = await Promise.all([
+    import('./cerceve/recete-rota-motoru.html?raw'), import('./rr-tema.ts'), import('./planlama-sayfasi.ts'), gomuluYaziStili(),
+  ]);
+  return { sayfa: m.default, yaziStili: `${yazi}\n${await p.planlamaYaziStili()}`, sonStil: tema.RR_TEMA_STILI };
+}
 
 export function ReceteRotaCercevesi() {
   const oturum = useOturum();
   const { tema } = useTema();
-  const [prototip, setPrototip] = useState<string | null>(null);
-  const [yaziStili, setYaziStili] = useState<string | null>(null);
+  const { pathname } = useLocation();
+  const istenenTur: Tur = planlamaYoluMu(pathname) ? 'planlama' : 'recete-rota';
+  // Açık çerçevenin türü; adres öteki türe geçince eski çerçeve GECIS_MS ve yoldaki kayıt yazmaları bitene kadar durur.
+  const [tur, setTur] = useState<Tur>(istenenTur);
+  const yoldakiYazma = useRef(0);
+  const [prototip, setPrototip] = useState<Prototip | null>(null);
   const [hazirlik, setHazirlik] = useState<Hazirlik | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
   const gorunumIletisi = useYalitilmisGorunum(KOK);
   const git = useNavigate();
-  const { pathname } = useLocation();
   // Okuma yetkisi olmayan rolde prototip planı boş listelerle çizer ve sahte değer gösterir (plan akışı H4): kabuk o sekmelerde
   // çerçeveyi gizler (köprü sürer) ve nedenini söyler.
   const [planVerisiYok, setPlanVerisiYok] = useState(false);
@@ -104,22 +136,34 @@ export function ReceteRotaCercevesi() {
   const [motorUyarilari, setMotorUyarilari] = useState<readonly string[]>([]);
   const uyariGorunur = !planGizli && motorUyarilari.length > 0 && PLAN_SEKMELERI.test(pathname);
   const kullanici = oturum.data;
-  const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
+  // Planlama sayfası ayrıca planlama işlemini ister (353 a); işlemi olmayana çerçeve kurulmaz, kayıt okunmaz.
+  const girebilir = (kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false)
+    && (istenenTur !== 'planlama' || (kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false));
   const onaylayabilir = kullanici?.islemler.includes('rota.onayla') ?? false;
   const planYazabilir = kullanici?.islemler.includes('plan.yaz') ?? false;
   const canliyaAlabilir = kullanici?.islemler.includes('plan.canliya-al') ?? false;
   const bedelAyariOkunur = kullanici?.islemler.some((i) => BEDEL_OKUMA_ISLEMLERI.includes(i)) ?? false;
 
-  // Prototip (yaklaşık 480 KB) yalnız bu ekran açılınca ayrı parça olarak yüklenir.
+  useEffect(() => {
+    if (istenenTur === tur) return undefined;
+    let bekleme = 0;
+    const gec = (): void => {
+      if (yoldakiYazma.current > 0) { bekleme = window.setTimeout(gec, 250); return; }
+      setPrototip(null); setHazirlik(null); setTur(istenenTur);
+    };
+    bekleme = window.setTimeout(gec, GECIS_MS);
+    return () => { window.clearTimeout(bekleme); };
+  }, [istenenTur, tur]);
+
+  // Prototip (Reçete ve Rota yaklaşık 480 KB, planlama yaklaşık 2,3 MB) yalnız bu ekran açılınca ayrı parça olarak yüklenir.
   useEffect(() => {
     let bitti = false;
-    void import('./cerceve/recete-rota-motoru.html?raw').then(
-      (m) => { if (!bitti) setPrototip(m.default); },
+    prototipYukle(tur).then(
+      (p) => { if (!bitti) setPrototip(p); },
       () => { if (!bitti) setHata('Reçete ve Rota yüklenemedi. Sayfayı yenileyin.'); },
     );
-    void gomuluYaziStili().then((stil) => { if (!bitti) setYaziStili(stil); });
     return () => { bitti = true; };
-  }, []);
+  }, [tur]);
 
   // Kimlik ve kayıtlar çerçeve kurulmadan önce okunur: prototip yerel deposunu açılışta eşzamanlı okur.
   useEffect(() => {
@@ -131,20 +175,21 @@ export function ReceteRotaCercevesi() {
           api.get<BenCevabi>('/recete-rota/ben'),
           api.get<KayitlarCevabi>('/recete-rota/kayitlar'),
         ]);
-        if (!bitti) setHazirlik({ ben, degerler: yerelDegerler(kayitlar) });
+        if (!bitti) setHazirlik({ tur, ben, degerler: yerelDegerler(kayitlar) });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'Reçete ve Rota açılamadı.'));
       }
     })();
     return () => { bitti = true; };
-  }, [kullanici, girebilir, deneme]);
+  }, [kullanici, girebilir, deneme, tur]);
 
   // Sayfa bir kez kurulur: yeniden kurulum çerçeveyi yeniden yükler ve açılıştaki kayıtlar eskimiş olur. Tema yalnız açılışta
   // geçer.
   const [ilkTema] = useState(tema);
   const sayfa = useMemo(() => {
-    if (prototip === null || yaziStili === null || hazirlik === null) return null;
-    return sayfaKur(prototip, cerceveBetigi({
+    if (prototip === null || hazirlik === null || hazirlik.tur !== tur) return null;
+    const planlama = tur === 'planlama';
+    return sayfaKur(prototip.sayfa, cerceveBetigi({
       kanal: KANAL,
       yazabilir: hazirlik.ben.yazabilir,
       onek: ONEK,
@@ -163,14 +208,15 @@ export function ReceteRotaCercevesi() {
       reddIletisi: RET,
       kaydedilmediYazisi: KAYDEDILMEDI,
       zamanAsimiMs: ZAMAN_ASIMI_MS,
-      gizliSeciciler: [
+      gizliSeciciler: planlama ? PLANLAMA_VERI_ARACLARI : [
         ...(onaylayabilir ? [] : ONAY_DUGMELERI),
         ...(planYazabilir ? [] : PLAN_YAZMA_DUGMELERI),
         ...(canliyaAlabilir ? [] : SENARYO_CANLIYA_ALMA_DUGMELERI),
       ],
       bedelAyariOkunur,
-    }), yaziStili);
-  }, [prototip, yaziStili, hazirlik, ilkTema, onaylayabilir, planYazabilir, canliyaAlabilir, bedelAyariOkunur]);
+      highsOkunur: planlama,
+    }), prototip.yaziStili, prototip.sonStil, planlama ? PLANLAMA_POLITIKASI : undefined);
+  }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, canliyaAlabilir, bedelAyariOkunur]);
   const kartTaslakAcabilir = kullanici?.islemler.includes('rota.yaz') ?? false;
   const bedelAyariYazabilir = kullanici?.islemler.includes('plan.bedel-ayari') ?? false;
   // Emir açılışında proje seçimi (224): köprü pencereyi sorar, cevabı bekler. Pencere başka bir istek gelince açık kalırsa önceki
@@ -183,8 +229,11 @@ export function ReceteRotaCercevesi() {
   const acilRef = useRef(acil);
   acilRef.current = acil;
   const { bildir } = useBildirim();
+  const acikTur = useRef(tur);
+  acikTur.current = tur;
   const isle = useMemo(() => kopruKur(CIHAZ_ANAHTARLARI, {
     kartTaslakAcabilir,
+    highsVerilir: () => acikTur.current === 'planlama',
     bedelAyariYazabilir,
     motorDurumu: (okunamadi) => { if (okunamadi) bildir('hata', MOTOR_OKUNAMADI); },
     planVerisi: setPlanVerisiYok,
@@ -215,7 +264,9 @@ export function ReceteRotaCercevesi() {
     }
     if (!m || m.kanal !== KANAL || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
     const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: KANAL, yon: 'yanit', id: m.id, ...govde }); };
-    isle(m.tip, m.veri).then(
+    const kayit = m.tip === 'kayit-yaz' || m.tip === 'kayit-sil';
+    if (kayit) yoldakiYazma.current += 1;
+    isle(m.tip, m.veri).finally(() => { if (kayit) yoldakiYazma.current -= 1; }).then(
       (sonuc) => { yanit({ ok: true, veri: sonuc }); },
       (e: unknown) => { yanit({ ok: false, ...kopruHatasi(e) }); },
     );
@@ -232,17 +283,21 @@ export function ReceteRotaCercevesi() {
     );
   }
   if (sayfa === null) return <div className="tc-recete-rota-durum"><DurumKutusu durum="yukleniyor" /></div>;
+  // Geçişte eski çerçeve aynı yerde gizli durur (yeniden kurulmaz): bekleyen yazması kabuğa ulaşsın.
+  const gecis = istenenTur !== tur;
   return (
     <div className="tc-recete-rota">
-      {planGizli && <div className="tc-recete-rota-durum"><DurumKutusu durum="hata" mesaj={PLAN_VERISI_YOK} /></div>}
-      {uyariGorunur && (
+      {gecis && <div className="tc-recete-rota-durum"><DurumKutusu durum="yukleniyor" /></div>}
+      {!gecis && planGizli && <div className="tc-recete-rota-durum"><DurumKutusu durum="hata" mesaj={PLAN_VERISI_YOK} /></div>}
+      {!gecis && uyariGorunur && (
         <ul className="tc-rr-uyari" role="status" aria-label="Plan motoru uyarıları">
           {motorUyarilari.map((u) => <li key={u}><Simge ad="alert" />{u}</li>)}
         </ul>
       )}
-      <div className="tc-recete-rota-alan" hidden={planGizli}>
+      <div className="tc-recete-rota-alan" hidden={gecis || planGizli}>
         <YalitilmisCerceve
-          baslik="Reçete ve Rota"
+          key={tur}
+          baslik={tur === 'planlama' ? 'Planlama' : 'Reçete ve Rota'}
           sinif="tc-recete-rota-cerceve"
           sayfa={sayfa}
           iletiGeldi={iletiGeldi}

@@ -28,3 +28,20 @@ Emir türü ve bölme `uretim-emirleri` ile ikinci kopyadır; bağlamada kapanac
 Ana anahtarda tutulmayanlar (309 b): `wcs`, `stations`, `machines`, `people`, `emirler`, `cal.shifts`, `cal.holidays` ve `settings` içinde `rule`, `dir`, `buffer`, `freezeDays`, `peopleLimit`. Ekran bunları açılışta sahiplerinden okuyup olduğu gibi değiştirir; sunucu yazarken ayıklar. `items`, `routes`, `routeRevs` kalır: kartsız kalem, adımın çıktı kartı ve statüleri, yerel revizyon yalnız burada durur. Senaryo anahtarları olduğu gibi yazılır.
 
 Kişi sütunu: `recete_rota_kayit.guncelleyen_kisi_id`, kisi tablosuna yabancı anahtarla bağlı (312 b; eski satırlar denetlenmez).
+
+## Planlama (teslim 20.10.2026)
+Ana kayıttaki planlama alanları (`plan` alt nesneleri; Reçete ve Rota'nın tanım bölümlerinde düzenlenir):
+
+| Kavram | Nerede (alan) | Olası sahibi |
+|---|---|---|
+| makine planlama değerleri | `machines[].plan`: `verim`, `opOran`, `ucret`, `isiksiz` | istasyonlar |
+| ayarcı | `people[].plan.ayar` | kisiler |
+| fason firma ve kapasitesi | `plan.fasoncular[]`: `id` (FS-...), `ad`, `kapasite`, `sureGun`, `cikisSaat`, `cikisGunleri`; adımda `fasonId` | musteri-tedarikci (firma), planlama (kapasite) |
+| aparat | `plan.aparatlar[]`: `id`, `ad`, `adet`; adımda `plan.aparat` | istasyonlar / takım-aparat |
+| ayar ailesi ve ayar matrisi | adımda `plan.aile`; `plan.ayarMatrisi[]`: `den`, `ye`, `dk` | rota |
+| parti ve kasa | adımda `minLot` (Qmin), `plan.kasa` | rota |
+| malzeme tedarik ve muayene süresi | `items[].plan.tedarikGun`, `muayeneGun` | malzemeler / satın alma |
+| canlı plan | `tmiCanli`: `{id, surum, ad, kim, zaman, yerlesim}`, yerleşim "emir no\|OP no" -> [{makineId, baslangic}] | uretim-emirleri (canlı plan) |
+
+Ayrı anahtar: `recete-rota-motoru-v1:planlama`, planlama modülünün bütün durumu (senaryolar, siparişler ve çarpanları, maliyet ve gider tabloları, mesai, fason, malzeme ve yıllık plan, kullanıcının çözüm ayarları). Kavramlar orada da tekrar eder: sipariş (müşteri, termin, gelir, ceza), kişi, makine, firma, para birimi (₺). Ölçülen boyut: küçük sette 36 998 bayt, orta sette 87 146 bayt (kanıt `cerceve-dene`); büyük set ölçülmedi.
+Cihazda kalanlar (sunucuya gitmez): `recete-rota-motoru-v1:planlama-ui4`, `-mz`, `-tk`, `-br`, `-nb`, `-tema` (ekran tercihleri).

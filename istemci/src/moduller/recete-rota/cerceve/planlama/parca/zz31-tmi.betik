@@ -1,0 +1,73 @@
+/* ---------- TMI içinde ----------
+   Uygulamada bu sayfa yalıtılmış çerçevededir (opak köken). Reçete ve Rota bu sayfanın içinde açılamaz: yalıtılmış çerçevenin içindeki
+   çerçeve ayrı opak kökendir, birbirinin penceresine ve deposuna erişemez. Reçete ve Rota bölümleri kabuğun öteki çerçevesidir; iki
+   çerçevenin ortak verisi aynı kayıttır (recete-rota-motoru-v1) ve kabuk çerçeve değişirken kaydı yeniden okur.
+   Deneme verisi yoktur: çalışma o kayıttan kurulur. Kayıt yoksa boş kayıttan; uydurma veri ana tabloya yazılmaz. */
+const TMI_ICINDE = typeof window.tmi === 'object' && window.tmi !== null && typeof window.tmiGorunum === 'object' && window.tmiGorunum !== null;
+/* Aşama 1: işlemler yalnız yöneticidedir; denemenin rolü kabuğun yetkisinin yerine geçmez, sunucu yazmayı yine kendi yetkisiyle denetler. */
+const TMI_KULLANICI = 'u5';
+/* İkinci menü anahtarı -> sayfa; listede olmayan sayfa kendi adıyla bildirilir (kabuk menüde olmayanı yok sayar). */
+const TMI_MENU = { plan: 'tahta', studio: 'patolye', kanban: 'tahta' };
+const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
+const TMI_BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
+
+/* Kayda planlama sayfası hiç yazmadıysa (yeni kurulum, ya da kaydı yalnız Reçete ve Rota yazdı) planın başlangıcı ve takvimi yoktur,
+   açılış durur. Plan bugünden başlar; takvim boş kalır (vardiya ve çalışma günü uydurulmaz, sayfa kapasite yok der). İlk değişiklikle
+   kayda yazılır; bunlarsız saklanmış çalışma da açılışta onarılır. */
+function tmiTabanKur(D) {
+  if (!D.meta) {
+    const b = new Date();
+    D.meta = { ad: 'Reçete ve Rota kaydı', baslangic: `${b.getFullYear()}-${String(b.getMonth() + 1).padStart(2, '0')}-${String(b.getDate()).padStart(2, '0')}` };
+  }
+  if (!Array.isArray(D.vardiyalar)) D.vardiyalar = [];
+  if (!D.calismaGunleri || typeof D.calismaGunleri !== 'object') D.calismaGunleri = {};
+  if (!Array.isArray(D.tatiller)) D.tatiller = [];
+}
+
+if (TMI_ICINDE) {
+  const yk0 = yukle;
+  yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
+  const yc0 = yeniCalisma;
+  yeniCalisma = function () {
+    const st = rrOku();
+    let D;
+    try { D = rrDenemeyeCevir(st && st.items ? st : TMI_BOS_KAYIT); } catch (e) { console.error(e); D = rrDenemeyeCevir(TMI_BOS_KAYIT); }
+    /* 1650 kararının varsayılanı (zz-karar-1650) kurulurken konur: açılıştaki göç ana tabloya kullanıcı bir şey değiştirmeden yazmasın */
+    if (D.planDenge == null) D.planDenge = 25;
+    tmiTabanKur(D);
+    VERI.tmi = { veri: D, ariza: [] };
+    const s = yc0('tmi');
+    delete VERI.tmi;
+    s.kullanici = TMI_KULLANICI;
+    /* kayıt okunmuş sayılır: ilk kayıtta çalışma kaydın üstüne yazılmaz, yalnız sonraki değişiklik yazılır */
+    s.rrSavedAt = st && st.savedAt ? st.savedAt : 0;
+    return s;
+  };
+  /* HiGHS'ı kabuk verir (highs paketi, 361 b): betik ve wasm ikilisi kabuktan gelir; çerçeve dışarıdan bir şey yüklemez */
+  hsKaynak = typeof window.tmi.highs === 'function'
+    ? () => window.tmi.highs()
+    : () => Promise.reject(new Error('HiGHS bu çerçevede açık değil'));
+  /* iç içe çerçeve kurulmaz; Reçete ve Rota sayfası istenince kabuğa bildirilir, kabuk öteki çerçeveyi açar */
+  rrYerlestir = function () { if (RR.el) RR.el.hidden = true; };
+  const g = window.tmiGorunum;
+  let sonBildirilen = null;
+  /* görünüm sayfanın betikleri arasında, açılıştan önce de gelebilir: açılış çizimine bırakılır (açılış kendi tercihini okumadan önce
+     uygulanırsa tercih onu ezer) */
+  let bekleyen = null;
+  const uygula = ad => {
+    sonBildirilen = ad;
+    const sayfa = TMI_MENU[ad] || (SAYFA_AD[ad] && !rrMi(ad) ? ad : null);
+    if (!sayfa || U.sayfa === sayfa) return false;
+    U.sayfa = sayfa; return true;
+  };
+  g.kaydet(ad => { if (!S) bekleyen = ad; else if (uygula(ad)) render(); return ad; });
+  const r0 = render;
+  render = function () {
+    if (S && bekleyen !== null) { const ad = bekleyen; bekleyen = null; uygula(ad); }
+    if (S && S.kullanici !== TMI_KULLANICI) S.kullanici = TMI_KULLANICI;
+    const x = r0.apply(this, arguments);
+    const ad = rrMi(U.sayfa) ? U.sayfa.slice(3) : (TMI_SAYFA_ANAHTAR[U.sayfa] || U.sayfa);
+    if (ad !== sonBildirilen && !(TMI_MENU[sonBildirilen] === U.sayfa)) { sonBildirilen = ad; g.bildir(ad); }
+    return x;
+  };
+}

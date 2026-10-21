@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Reçete ve Rota Motoru</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#E7E5E0; --panel:#F7F6F3; --panel2:#EEECE7; --ink:#14213D; --muted:#59627A; --line:#CBC8C0;
@@ -577,6 +574,9 @@ td.short{color:var(--bad);font-weight:600} td.plus{color:var(--ok);font-weight:6
 .pcard.off{opacity:.55}
 .pgrid{display:grid;grid-template-columns:6rem minmax(10rem,1fr) 8rem minmax(9rem,12rem) minmax(9rem,12rem) 6rem auto;gap:8px;align-items:end}
 .pgrid .f>span:first-child{position:static;width:auto;height:auto;clip:auto;font-size:.72rem;color:var(--muted);font-weight:600}
+.plan-ek{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:8px;align-items:end;margin:4px 0 10px}
+.plan-ek .f>span:first-child{position:static;width:auto;height:auto;clip:auto;font-size:.72rem;color:var(--muted);font-weight:600}
+.plan-ek .gunler{display:flex;flex-wrap:wrap;gap:6px 14px}.plan-ek .gun-alan{grid-column:1/-1}
 .skills{grid-column:2/3;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .chip.sk{padding:4px 10px;font-size:.8rem}
 .chip.sk.on{background:var(--ok);color:#fff;border-color:var(--ok)}
@@ -2287,7 +2287,8 @@ function simulate(rootId, qty, hz, useStock){
 }
 let simCache = null, planCache = null;
 const runSim = (useStock=st.settings.useStock) => { const k = String(useStock); if (!simCache || simCache.k!==k) simCache = {k, r:simulate(st.settings.orderItem, st.settings.orderQty, horizon(), useStock)}; return simCache.r; };
-const curPlan = () => { if (!planCache) planCache = planRun(activeOrders(), {useStock:true, yerlesim: !ui.studio && BAGLI.durum ? BAGLI.durum.planYerlesim : null}); return planCache; };
+/* Sunucuya bağlı değilken canlı yerleşim kaydın tmiCanli alanındadır: planlama modülü canlıya alınca yazar. */
+const curPlan = () => { if (!planCache) planCache = planRun(activeOrders(), {useStock:true, yerlesim: ui.studio ? null : BAGLI.durum ? BAGLI.durum.planYerlesim : (st.tmiCanli && st.tmiCanli.yerlesim) || null}); return planCache; };
 function invalidate(){ simCache = null; planCache = null; }
 function cardState(e, P){
   if (e.done) return "tamam"; if (e.status==="calisiyor") return "calisiyor";
@@ -2663,6 +2664,7 @@ function itemCard(it, opts={}){
     ${produced(it.id) ? fld("Malzeme maliyeti", `<span class="calc strong" style="text-align:left" data-d="mc:${it.id}">${money(matCost(it.id))}</span>`) : fld("Birim maliyet (₺)", maliyetInp("malzeme",`i:${it.id}:cost`,"item",it.id,it.cost,{num:1,label:"Birim maliyet"}))}
     ${fld("Eldeki stok", inp(`i:${it.id}:stock`,"item",it.id,"stock",it.stock,{num:1,label:"Eldeki stok"}))}
     ${fld("Minimum stok", inp(`i:${it.id}:min`,"item",it.id,"min",it.min,{num:1,label:"Minimum stok"}))}
+    ${it.type==="ham"?planp("item",it.id,"tedarikGun","Tedarik (gün)",(it.plan||{}).tedarikGun)+planp("item",it.id,"muayeneGun","Giriş muayenesi (gün)",(it.plan||{}).muayeneGun):""}
   </div>`;
 }
 function inspItem(s){
@@ -2754,6 +2756,7 @@ function inspStep(s){
       ${fld("Paralel adet", inp(`s:${sta.id}:count`,"station",sta.id,"count",sta.count,{num:1,label:"Paralel istasyon adedi"}))}
     </div>
     ${w?`<h4 style="margin-top:14px">${esc(w.code)} ${esc(w.name)} vardiya düzeni</h4>${weekMatrix([w], true)}`:""}</div>`:""}
+    ${planAdim(step)}
     <div class="isec btnrow">
       <button class="btn" data-act="mvStep" data-id="${step.id}" data-dir="-1" ${idx===0?"disabled":""}>↑ Yukarı</button>
       <button class="btn" data-act="mvStep" data-id="${step.id}" data-dir="1" ${last?"disabled":""}>↓ Aşağı</button>
@@ -3239,7 +3242,7 @@ function resOverview(){
 function tabRes(){
   const sub = ui.resTab || "overview";
   const c = st.cal, hol = c.holidays.slice().sort();
-  const tabs = [["overview","Genel bakış"],["shifts","Vardiyalar"],["wcs","İş merkezleri ve istasyonlar"],["machines","Makineler "+st.machines.length],["people","Personel "+st.people.length]];
+  const tabs = [["overview","Genel bakış"],["shifts","Vardiyalar"],["wcs","İş merkezleri ve istasyonlar"],["machines","Makineler "+st.machines.length],["people","Personel "+st.people.length],["plan","Fason ve aparat"]];
   let body = "";
   const B = kaynakBagli();
   if (B && KB.yok.istasyon && ["overview","wcs","machines"].includes(sub)) body = kaynakYokPaneli("istasyon");
@@ -3288,6 +3291,7 @@ function tabRes(){
     </div>`; }).join("")}
     ${!st.wcs.length?`<p class="empty">İş merkezi yok. Kesimhane, kaynakhane, montaj gibi bölümlerini ekle.</p>`:""}
     <div class="btnrow"><button class="btn primary" data-act="addWc">+ İş merkezi</button></div>`;
+  else if (sub==="plan") body = resPlanEk();
   else if (sub==="machines") body = resMachines();
   else body = resPeople();
   return `<section class="sec">
@@ -4153,7 +4157,7 @@ function resMachines(){
               ${fld("Not", inp(`mc:${m.id}:note`,"machine",m.id,"note",m.note||"",{label:"Not",ph:"Bakım notu"}))}
               ${fld("Şu an", `<span class="calc sol">${run?`${esc(order(run.orderId).no)} ${esc(run.abbr)}`:"Boşta"}</span>`)}
               <div class="acts">${delBtn("machine",m.id)}</div>
-            </div>`; }).join("")}</div>`:""}
+            </div>${planMakine(m)}`; }).join("")}</div>`:""}
         </div>`; }).join("")}
     </div>`; }).join("")}`;
 }
@@ -4180,6 +4184,7 @@ function resPeople(){
             ${fld("Vardiya", B && !kbHafta() ? (p.shiftId ? KB_BG : `<span class="calc sol" title="Kişiye Vardiya sayfasında vardiya atanmadı">${g.w?"İstasyonun vardiyası":"–"}</span>`) : sel(`pp:${p.id}:sh`,"person",p.id,"shiftId",(B?`<option value="">İstasyonun vardiyası</option>`:"")+st.cal.shifts.map(sh=>`<option value="${sh.id}" ${sh.id===p.shiftId?"selected":""}>${esc(sh.name)} ${esc(sh.start)}–${esc(sh.end)}</option>`).join(""),{label:"Vardiya"}))}
             ${fld("₺ / saat", maliyetInp("kisi",`pp:${p.id}:cost`,"person",p.id,p.cost,{num:1,label:"Saatlik ücret"}))}
             ${B?"":`<label class="check" style="min-height:0"><input type="checkbox" data-s="person" data-id="${p.id}" data-f="active" data-b="1" data-r="1" ${p.active!==false?"checked":""}> Aktif</label>`}
+            ${planp("person",p.id,"ayar","Ayarcı",(p.plan||{}).ayar,"bool")}
           </div>
           <div class="skills"><span class="lbl" style="margin:0">Yetkinlik</span>
             ${own.map(s=>{ const on = (p.skills||[]).includes(s.id); return `<button class="chip sk ${on?"on":""}" aria-pressed="${on}" data-act="toggleSkill" data-id="${p.id}" data-st="${s.id}">${esc(s.code)} ${esc(s.name)}</button>`; }).join("")}
@@ -4190,6 +4195,71 @@ function resPeople(){
         </div>`; }).join("") || `<p class="hint">Bu iş merkezinde personel yok.</p>`}
     </div>`).join("")}`;
 }
+
+/* ================= Planlama parametreleri =================
+   Planlama motorunun okuduğu ve bu ekranda karşılığı olmayan alanlar (verim, ışıksız, ayarcı, aile, aparat, kasa, tedarik ve muayene günü,
+   fason kapasitesi ve çıkış günleri) kaydın "plan" alt nesnesinde durur; planlama modülü bu kaydı ana veri olarak okur.
+   Boş bırakılan isteğe bağlı alan kayıttan çıkar; zorunlu alan boşsa eski değer kalır (sıfır uydurulmaz). */
+const PLAN_GUN = [["pzt","Pzt"],["sal","Sal"],["car","Çar"],["per","Per"],["cum","Cum"],["cmt","Cmt"],["paz","Paz"]];
+function planHedef(o, id){
+  const ust = st.plan = st.plan || {};
+  if (o==="machine") { const x = machine(id); return x ? (x.plan = x.plan || {}) : null; }
+  if (o==="person") { const x = person(id); return x ? (x.plan = x.plan || {}) : null; }
+  if (o==="item") { const x = item(id); return x ? (x.plan = x.plan || {}) : null; }
+  if (o==="step") { const x = findStep(id); return x ? (x.step.plan = x.step.plan || {}) : null; }
+  if (o==="fason") return (ust.fasoncular || []).find(x=>x.id===id) || null;
+  if (o==="aparat") return (ust.aparatlar || []).find(x=>x.id===id) || null;
+  if (o==="matris") return (ust.ayarMatrisi || [])[+id] || null;
+  return null;
+}
+function planp(o, id, f, label, val, t="num", ek={}){
+  const ortak = `data-s="planp" data-o="${o}" data-id="${esc(id)}" data-f="${f}" data-t="${t}" ${ek.bos?'data-bos="1"':""}`;
+  if (t==="bool") return `<label class="check" style="min-height:0"><input type="checkbox" ${ortak} ${val?"checked":""}> ${esc(label)}</label>`;
+  if (t==="sec") return fld(esc(label), `<select ${ortak} aria-label="${esc(label)}">${ek.secenek||""}</select>`);
+  return fld(esc(label), `<input ${t==="num"?'class="num" inputmode="decimal"':""} ${ortak} value="${esc(t==="num"?nv(val):(val??""))}" aria-label="${esc(label)}" ${ek.ph?`placeholder="${esc(ek.ph)}"`:""} ${ek.liste?`list="${ek.liste}"`:""}>`);
+}
+function planpDegisti(el){
+  const {o, id, f, t} = el.dataset; const h = planHedef(o, id); if (!h) return;
+  const ham = String(el.value).trim();
+  if (t==="bool") h[f] = el.checked;
+  else if (t==="gun") { const l = new Set(h[f] || []); if (el.checked) l.add(el.dataset.g); else l.delete(el.dataset.g); h[f] = PLAN_GUN.map(x=>x[0]).filter(g=>l.has(g)); }
+  else if (ham==="" && el.dataset.bos) delete h[f];
+  else if (ham==="") { toast("Bu alan boş bırakılamaz; eski değer kaldı."); render(); return; }
+  else if (t==="num") { if (!/^[0-9]+([.,][0-9]+)?$/.test(ham)) { toast("Sıfır ya da sıfırdan büyük bir sayı girin; eski değer kaldı."); render(); return; } h[f] = num(ham); }
+  else h[f] = ham;
+  save(); queueRender();
+}
+function planMakine(m){ const p = m.plan || {};
+  return `<div class="plan-ek" aria-label="${esc(m.code)} planlama değerleri">
+    ${planp("machine",m.id,"verim","Verim (1 = tam)",p.verim)}
+    ${planp("machine",m.id,"opOran","Operatör oranı",p.opOran)}
+    ${planp("machine",m.id,"ucret","₺ / saat (plan)",p.ucret)}
+    ${planp("machine",m.id,"isiksiz","Işıksız çalışır",p.isiksiz,"bool")}
+  </div>`; }
+function planAdim(step){ const p = step.plan || {}, U = st.plan || {};
+  const aileler = [...new Set(Object.values(st.routes).flatMap(r=>(r.steps||[]).map(x=>(x.plan||{}).aile)).filter(Boolean))];
+  const mat = (U.ayarMatrisi || []).map((x,i)=>({x,i})).filter(({x})=>p.aile && (x.den===p.aile || x.ye===p.aile));
+  const aparat = (U.aparatlar || []);
+  return `<div class="isec"><h4>Planlama</h4><div class="ig">
+    ${planp("step",step.id,"aile","Ayar ailesi",p.aile,"text",{bos:true,ph:"aile yok",liste:"plan-aileler"})}<datalist id="plan-aileler">${aileler.map(a=>`<option value="${esc(a)}">`).join("")}</datalist>
+    ${aparat.length?planp("step",step.id,"aparat","Aparat",p.aparat,"sec",{bos:true,secenek:`<option value="">Aparat yok</option>`+aparat.map(a=>`<option value="${esc(a.id)}" ${a.id===p.aparat?"selected":""}>${esc(a.ad)}</option>`).join("")}):""}
+    ${fld("En küçük parti (Qmin)", inp(`p:${step.id}:ml`,"step",step.id,"minLot",step.minLot,{num:1,label:"En küçük parti"}))}
+    ${planp("step",step.id,"kasa","Kasa (adet)",p.kasa,"num",{bos:true,ph:"ürünün kasası"})}
+  </div>
+  <p class="hint kucuk">Örtüşme ve aktarma adedi yukarıdaki "Önceki adımla ilişki" bölümündedir: Örtülü, planlamada örtüşebilir demektir.</p>
+  ${p.aile?`<details style="margin-top:8px"><summary>Ayar matrisi: ${esc(p.aile)} (${mat.length} geçiş)</summary>${mat.length?`<div class="ig" style="margin-top:8px">${mat.map(({x,i})=>planp("matris",String(i),"dk",`${x.den} → ${x.ye} (dk)`,x.dk)).join("")}</div>`:`<p class="hint">Bu aile için matriste geçiş yok; ailenin ayarı adımın kendi hazırlık süresidir.</p>`}</details>`:""}
+  </div>`; }
+function resPlanEk(){ const U = st.plan || {};
+  const fas = U.fasoncular || [], ap = U.aparatlar || [];
+  return `<p class="hint">Planlamanın okuduğu dış kaynaklar: fason firmanın aynı anda alabildiği iş sayısı ve sevk günleri, aparatların adedi. Aparat, rota adımının Planlama bölümünden adıma bağlanır.</p>
+    <div class="panel"><h3>Fason firmalar (${fas.length})</h3>${fas.length?fas.map(f=>`<div class="plan-ek" aria-label="${esc(f.ad)}">
+      ${fld("Firma", `<span class="calc sol">${esc(f.ad)}</span>`)}
+      ${planp("fason",f.id,"kapasite","Kapasite (iş)",f.kapasite)}
+      ${planp("fason",f.id,"sureGun","Süre (gün)",f.sureGun)}
+      ${planp("fason",f.id,"cikisSaat","Çıkış saati",f.cikisSaat)}
+      ${fld("Çıkış günleri", `<span class="gunler">${PLAN_GUN.map(([g,l])=>`<label class="check" style="min-height:0"><input type="checkbox" data-s="planp" data-o="fason" data-id="${esc(f.id)}" data-f="cikisGunleri" data-t="gun" data-g="${g}" ${(f.cikisGunleri||[]).includes(g)?"checked":""}> ${l}</label>`).join("")}</span>`, "gun-alan")}
+    </div>`).join(""):`<p class="hint">Fason firma yok.</p>`}</div>
+    <div class="panel"><h3>Aparatlar (${ap.length})</h3>${ap.length?`<div class="plan-ek">${ap.map(a=>planp("aparat",a.id,"adet",a.ad+" (adet)",a.adet)).join("")}</div>`:`<p class="hint">Aparat yok.</p>`}</div>`; }
 
 /* ================= Değişiklik önizleme ================= */
 function withState(tmp, fn){ const saved = st; st = tmp; invalidate(); try { return fn(); } finally { st = saved; invalidate(); } }
@@ -5287,6 +5357,7 @@ function queueRender(){ if (renderQueued) return; renderQueued = true; requestAn
 /* ================= Değişiklikler ================= */
 document.addEventListener("change", e=>{
   const el = e.target; if (!st || !el.dataset || !el.dataset.s) return;
+  if (el.dataset.s==="planp") { planpDegisti(el); return; }
   if (maliyetDegisti(el)) return;
   if (kaynakDegisti(el)) return;
   if (el.dataset.s==="gsure" || el.dataset.s==="gtaban") { guarded("change:"+el.dataset.s, ()=>gercekDegisti(el)); return; }

@@ -20,6 +20,26 @@
 | KAPANDI (19.10.2026, yapılmış): ipucu `.hint.kucuk`, katalog başlığı `.grid.head .sag` sınıfıyla; görünüm aynı (`Sureler.test.tsx` "UYUM-BORCU süre stilleri"). Süreler için eklenen satır içi stiller | Kart #1044: adım panelindeki "Çevrim = işlem + değişim" ipucu (`style="font-size:.82rem"`) ve operasyon kataloğu başlığındaki "Değişim dk", "Değişim %" hücreleri (`style="text-align:right"`) prototipin kendi kalıbıyla satır içi yazıldı. Süreler sekmesinin kendisi sınıf kullanır. | Görünüm borcu, bağlamada kapanacak: sınıfa çevrilir (prototip `.hint.sm`, `.grid.head .n`). |
 
 
+## Bağlamada kapanacak: planlama (teslim 20.10.2026)
+| Kural / konu | İstisna | Nasıl uyumlanır |
+|---|---|---|
+| Rol ve yetki | Planlama çerçevesinde rol her zaman yönetici (`u5`, `zz31-tmi.betik`); denemenin rol seçicisi ve kendi yan menüsü görünür. Planlama sayfaları `recete-rota.planlama-oku` ile görünür ve açılır (353 a; işlem göçle hiçbir role verilmez, yalnız yönetici); eskiden `plan.oku` ile Plan sekmesini gören roller (planlama, müdür, vardiya sorumlusu, CAM, kalite, bakım) Aşama 1'de planı görmez. Denetim yalnız istemcidedir: kayıt okuma ucu (`GET /recete-rota/kayitlar`) `:planlama` anahtarını da `recete-rota.oku` ile verir. | Aşama 2: rol ortak yetki matrisinden; çerçevenin rol seçicisi kalkar; `:planlama` anahtarının okuması ve yazması sunucuda planlama işlemini ister. |
+| Deneme metni | Alt bilgi "Deneme sayfası ... bütün veri uydurmadır" uygulamada da görünür; uygulamada veri kayıttandır. | Görünüm: metin TMI içinde gizlenir ya da değişir. |
+| Canlı plan yalnız kayıtta | "Canlıya al" `st.tmiCanli`'ya yazar; sunucu planı, Arkon ve terminal güncellenmez. | Aşama 2: uretim-emirleri canlı plan uçları (BASKA-MODUL-ISTEKLERI). Canlıya alma 391 cevabı gelmeden yapılmaz: sunucu motoru çalışan adımın kalanını kalan adetten (`plan/servis.ts` `gerceklesenler`), çerçeve motoru geçen süreden (`engine.betik` sabitler) hesaplar; çerçeve planı sunucu planı olursa adet tabanlıdan süre tabanlıya geri düşülür. |
+| İki motor | Reçete ve Rota'nın kendi plan hesabı (`planRun`) ve planlama motoru (`engine`) ayrı; Reçete ve Rota'nın emir tarihleri canlı plandan farklı (t163). Reçete ve Rota'nın Plan, Stüdyo, Kanban sekmelerine menüden gidilmez; 307 a ve 304 a o sekmelerde kaldı. Karar 356 b: eski motor gizli kalır. | Aşama 2: eski motor kalkar, Reçete ve Rota canlı planı okur (356 b). |
+| Çözücüler | HiGHS: 361 b ile girdi (`highs` 1.15.3 paketi; kabuk istek üzerine verir, `wasm-unsafe-eval` yalnız planlama çerçevesinde). CP-SAT yok; seçilirse çalışmaz. Denemenin yerel çözücü servisi yoklaması (`h-cozuculer`) çerçevede bağlantı kapalı olduğundan sonuçsuz. | HiGHS kararı (SORULACAKLAR); sunucu motoru kararıyla birlikte. |
+| Planlama takvimi ve kaynakları | Kayda planlama sayfası hiç yazmadıysa (yeni kurulum, ya da kaydı yalnız Reçete ve Rota yazdı) kayıtta plan başlangıcı, vardiya ve çalışma günü yoktu ve sayfa açılışta duruyordu (ekran testi, CORE-MES#6). Oturtmada geçici karşılık: plan bugünden başlar, takvim boş kalır (`zz31-tmi.betik` `tmiTabanKur`; vardiya ve gün uydurulmaz). Tezgâh, personel ve takvim sunucuya ait alanlardır, kayda yazılmaz; çerçeve yalnız kaydı okuduğu için örnek veriyle de (`npm run ornek-veri`, elle, canlıda reddeder; 374 c) sipariş ve rota dolu, tezgâh ve personel 0 gelir, plan kapasitesiz çizilir. Örnek veri kendiliğinden yüklenmez. | Aşama 2: takvim vardiya modülünden, tezgâh istasyonlardan, personel kisilerden okunur. |
+| Çerçeve geçişi | Reçete ve Rota bölümü ile planlama sayfası arasında geçişte bekleme (bekleme süresi + 1,5 sn) ve 2,3 MB sayfanın yeniden kurulması. | Tek çerçeve ya da sunucu motoru ile kalkar. |
+| Kayıt boyutu | Planlama durumu ayrı anahtarda; büyük set ölçülmedi. 1 MB uyarısı yalıtılmış çerçevede görünür mü denenmedi (VARSAYIM: görünmez). | Ölçülür; aşarsa alan başına kayıt. |
+| Tanıtım ve kılavuz anahtarları | Denemenin kılavuz tercihi önek dışı anahtarda (`pm-at-kilavuz-v1`): köprü onları yazmaz, sayfa yenilenince yeniden görünür. | Önekli anahtara alınır. |
+| Kendi renkleri | `modul.stil`'de 30 onaltılık renk (`--is-*` iş renkleri dahil). | Ortak seri renkleri (CEKIRDEK-ISTEKLERI 4). |
+| Satır içi stil | Reçete ve Rota'ya eklenen planlama alanlarında satır içi stil: `margin-top:8px` (2), `min-height:0` (2), prototipin kendi kalıbıyla. | Sınıfa çevrilir. |
+| Gömülü kütüphaneler | KAPANDI (362 a, 20.10.2026): beş gömülü kütüphane çıkarıldı; tur, ipucu konumu, Gantt sürüklemesi ve sıralama kendi kodumuz (`parca/v-arac.betik`). | - |
+| Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
+| Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
+| İkinci menü | KAPANDI (20.10.2026): çekirdek yaması menüyü `ONERILEN_IKINCI_MENU` ile aynı yapar (`planlama-derle.test.ts` denetler). | - |
+| KAPANDI (359 a): aynı adlı tezgâhlar ayrı kaynak kalır, teke indirilmez. Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"). Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Kalır. |
+
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.

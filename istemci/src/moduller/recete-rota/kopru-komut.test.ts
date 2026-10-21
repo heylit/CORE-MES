@@ -13,6 +13,10 @@ import { ApiHatasi } from '../../ortak/veri/api.ts';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
+// HiGHS paketinin yüklenmesi tarayıcıya özgüdür (wasm adresi); köprü testinde yerine sahte kaynak konur.
+const HIGHS = { betik: 'async function Module() {}', wasm: new ArrayBuffer(8) };
+vi.mock('./highs.ts', () => ({ highsYukle: () => Promise.resolve(HIGHS) }));
+
 // Sahiplerin gerçek istek şemaları: köprünün kurduğu gövde bunlarla sınanır (uygulama kodu şemayı değer olarak ithal etmez, test eder).
 
 
@@ -83,6 +87,15 @@ describe('köprü komutları', () => {
     }
     const adsiz = await isle('komut', { govde: {} }).then(() => null, sorun);
     expect(adsiz?.durum).toBe(400);
+    expect(istekler).toEqual([]);
+  });
+
+  it('KOM-02d: HiGHS yalnız açık çerçeve planlamayken verilir (361 b); sunucuya istek gitmez', async () => {
+    const istekler = sunucuKur(() => json(500, {}));
+    expect(await kopruKur([], { highsVerilir: () => true })('highs-oku', {})).toBe(HIGHS);
+    for (const isle of [kopruKur(), kopruKur([], { highsVerilir: () => false })]) {
+      expect(await isle('highs-oku', {}).then(() => null, (e: unknown) => kopruHatasi(e))).toEqual({ hata: 'Geçersiz istek: HiGHS bu çerçevede açık değil.', durum: 400 });
+    }
     expect(istekler).toEqual([]);
   });
 

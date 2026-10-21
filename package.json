@@ -74,6 +74,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^10.12.0",
     "exceljs": "4.4.0",
+    "highs": "1.15.3",
     "jsdom": "^25.0.1",
     "jsqr": "1.4.0",
     "occt-import-js": "0.0.23",

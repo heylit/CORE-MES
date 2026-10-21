@@ -68,13 +68,18 @@ test('Satın Alma grubu menüde Stok ile Kalite arasındadır; tek sayfadır, b�
   );
 });
 
-// 280 a: plan ve stüdyo maddeleri planı görme işlemine bağlıdır; sayfaya giren ama planı göremeyen rol bu maddeleri görmez.
-test('Reçete ve Rota ikinci menüsünde Plan ve Plan stüdyosu plan.oku ister, öteki maddeler sayfa işlemini', () => {
+// 353 a: planlama maddeleri (eski Plan ve Plan stüdyosu dahil) yalnız planlama sayfalarını görme işlemini ister; o işlemi
+// göç hiçbir role vermez, yönetici bütün işlemleri aldığı için yalnız o görür. Öteki maddeler sayfa işlemini ister.
+test('Reçete ve Rota ikinci menüsünde planlama maddeleri recete-rota.planlama-oku ister, öteki maddeler sayfa işlemini', () => {
   const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
   assert.ok(menu);
+  const planlama = menu.gruplar.find((g) => g.baslik === 'Planlama')?.maddeler ?? [];
+  assert.deepEqual(planlama.map((m) => m.anahtar),
+    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'sevkiyat']);
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
-  assert.deepEqual(maddeler.filter((m) => m.islem === 'plan.oku').map((m) => m.anahtar), ['plan', 'studio']);
-  assert.ok(maddeler.filter((m) => m.islem !== 'plan.oku').every((m) => m.islem === 'sayfa.recete-rota'));
+  assert.deepEqual(maddeler.filter((m) => m.islem === 'recete-rota.planlama-oku'), planlama);
+  assert.ok(maddeler.filter((m) => m.islem !== 'recete-rota.planlama-oku').every((m) => m.islem === 'sayfa.recete-rota'));
+  assert.ok(maddeler.every((m) => m.veya === undefined));
 });
 
 test('İK ikinci menüsünde PDKS aktar maddesi yalnız nizamiye.pdks-aktar ister (341 a); öteki maddeler ik.oku', () => {

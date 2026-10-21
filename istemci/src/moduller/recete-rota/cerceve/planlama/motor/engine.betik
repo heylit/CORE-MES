@@ -1,0 +1,708 @@
+/* ================= Plan motoru v2: çekirdek ================= */
+const SL=0.25, HDAYS=63, NS=HDAYS*24/SL;
+const GUN=['pzt','sal','car','per','cum','cmt','paz'];
+const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
+const PW={1:4,2:2,3:1};
+const W0={amac:'sirali',rule:'atcs',alpha:.3,ceza:150,cezaPuan:10,ayarPuan:2,mu:15,lam:400,famK:.3,mat:'uyari',dondurma:4,
+  k1:2,k2:.6,otoKabul:false,mesaiHafta:8,lnsMs:2000,iyiMs:3000,tampon:true,tamponZ:1.28,acilPay:.05,otoDegisim:6,mcN:40,mcSigma:.15,mcAriza:true,l2Ms:1500};
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+/* ---- zaman ---- */
+function baseMs(D){const [y,m,d]=D.meta.baslangic.split('-').map(Number);return Date.UTC(y,m-1,d);}
+function parseT(D,s){if(s==null||s==='')return null;if(typeof s==='number')return s;
+  const m=String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/);if(!m)return null;
+  return (Date.UTC(+m[1],m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0)-baseMs(D))/3600000;}
+function fmtDT(D,t){if(t==null||!isFinite(t))return '—';const dt=new Date(baseMs(D)+t*3600000);
+  const p=n=>String(n).padStart(2,'0');return `${p(dt.getUTCDate())}.${p(dt.getUTCMonth()+1)} ${GUN_AD[GUN[(dt.getUTCDay()+6)%7]]} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
+function isoT(D,t){const dt=new Date(baseMs(D)+t*3600000);const p=n=>String(n).padStart(2,'0');return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth()+1)}-${p(dt.getUTCDate())} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
+function wdOf(D,d){const dt=new Date(baseMs(D)+d*86400000);return GUN[(dt.getUTCDay()+6)%7];}
+const hm=s=>{const [h,m]=String(s).split(':').map(Number);return h+(m||0)/60;};
+
+/* ---- pencereler ---- */
+function merge(W){W.sort((a,b)=>a[0]-b[0]);const o=[];for(const w of W){if(w[1]<=w[0])continue;if(o.length&&w[0]<=o[o.length-1][1]+1e-9)o[o.length-1][1]=Math.max(o[o.length-1][1],w[1]);else o.push([w[0],w[1]]);}return o;}
+function subtract(W,D){if(!D.length)return W;const o=[];for(const [a,b] of W){let segs=[[a,b]];for(const [c,d] of D){const n=[];for(const [x,y] of segs){if(d<=x||c>=y){n.push([x,y]);continue;}if(c>x)n.push([x,c]);if(d<y)n.push([d,y]);}segs=n;}o.push(...segs);}return o;}
+function wi(W,t){let lo=0,hi=W.length;while(lo<hi){const m=(lo+hi)>>1;if(W[m][1]<=t+1e-9)lo=m+1;else hi=m;}return lo;}
+function openAt(W,t){const i=wi(W,t);return i<W.length?Math.max(W[i][0],t):Infinity;}
+function adv(W,t,d){if(d<=1e-9)return t;let i=wi(W,t),cur=t;while(i<W.length){const a=Math.max(W[i][0],cur),b=W[i][1];const take=Math.min(d,b-a);if(take>0){d-=take;cur=a+take;}if(d<=1e-9)return cur;i++;}return Infinity;}
+function workIn(W,a,b){let s=0;for(let i=wi(W,a);i<W.length&&W[i][0]<b;i++)s+=Math.max(0,Math.min(b,W[i][1])-Math.max(a,W[i][0]));return s;}
+function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.max(0,Math.ceil(a/SL-1e-9)),k1=Math.min(NS,Math.floor(b/SL+1e-9));for(let k=k0;k<k1;k++)m[k]=1;}return m;}
+
+/* ---- derleme: takvim, havuz, işlemler ---- */
+function compile(st){
+  const D=st.D,A=D.ayarlar;
+  const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit)}]));
+  const tatil=new Set((D.tatiller||[]).map(s=>Math.floor(parseT(D,s)/24)));
+  const days=[];for(let d=0;d<HDAYS;d++){const wd=wdOf(D,d);days.push({wd,tatil:tatil.has(d),vard:tatil.has(d)?[]:(D.calismaGunleri[wd]||[])});}
+  const inst=(d,sid)=>{const v=vs[sid];if(!v)return null;const a=d*24+v.bas;let b=d*24+v.bit;if(b<=a)b+=24;return [a,b];};
+  const ek=st.ekMesai||[];
+  const M={};
+  for(const m of D.tezgahlar){
+    const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
+    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(w);}
+    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(w);}
+    sw=merge(sw);
+    let rw=sw;
+    if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(days[d].vard.length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
+    const dn=(st.down||[]).filter(x=>x.m===m.id).map(x=>[x.from,x.to]);
+    sw=subtract(sw,dn);rw=subtract(rw,dn);
+    const pay=st.w.tampon?Math.min(.35,(m.arizaGun>0?(+m.onarimSaat||0)/(m.arizaGun*24):0)+(+st.w.acilPay||0)):0;
+    M[m.id]={...m,sw,rw,smask:mask(sw),rmask:mask(rw),opOran:m.opOran==null?1:+m.opOran,verim:m.verim||1,pay};
+  }
+  const capTot=new Float32Array(NS),capAyar=new Float32Array(NS),capG={};
+  const grups=new Set(D.tezgahlar.map(m=>m.grup));grups.forEach(g=>capG[g]=new Float32Array(NS));
+  const devam=new Set((D.devamsizlik||[]).map(x=>x.personel+'@'+Math.floor(parseT(D,x.gun)/24)));
+  const addW=(arr,w,n)=>{const k0=Math.max(0,Math.ceil(w[0]/SL-1e-9)),k1=Math.min(NS,Math.floor(w[1]/SL+1e-9));for(let k=k0;k<k1;k++)arr[k]+=n;};
+  for(const p of D.personel){
+    for(let d=0;d<HDAYS;d++){
+      const works=days[d].vard.includes(p.vardiya);
+      if(!works||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(!w)continue;
+      const gs=(p.gruplar||[]).filter(g=>capG[g]);
+      if(gs.length){addW(capTot,w,1);for(const g of gs)addW(capG[g],w,1);}
+      if(p.ayar)addW(capAyar,w,1);
+    }
+  }
+  for(const e of ek){const w=inst(e.gun,e.vardiya);if(!w)continue;const g=M[e.m]&&M[e.m].grup;addW(capTot,w,1);if(g)addW(capG[g],w,1);addW(capAyar,w,1);}
+  for(const c of st.eksik||[]){const w=inst(c.gun,c.vardiya);if(!w)continue;
+    if(c.grup==='ayar')addW(capAyar,w,-c.n);else{addW(capTot,w,-c.n);if(capG[c.grup])addW(capG[c.grup],w,-c.n);}}
+  const genW=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard){const w=inst(d,sid);if(w)genW.push(w);}
+  const gen=merge(genW);
+  const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
+  const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));
+  // işlemler
+  const ops=[],jobs={};
+  const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
+  for(const j of D.siparisler){const u=urun[j.urun];if(!u)continue;
+    const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
+    jobs[j.id]={...j,due,rel,ops:[]};
+    for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
+      const tb=Math.max(1,Math.min(j.adet,o.transfer||Math.ceil(j.adet*(A.transferOran||.25))));
+      const c=[];
+      if(o.fason){c.push({m:'@'+o.fason,fas:1});}
+      else for(const t of o.tezgahlar||[]){const mm=M[t.id];if(!mm)continue;const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
+        c.push({m:t.id,run:j.adet*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
+      if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
+      const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
+      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
+        program:o.program!==false,fai:!!o.fai,adet:j.adet,x};
+      ops.push(op);jobs[j.id].ops.push(op);}
+  }
+  const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
+  for(const jid in jobs){const j=jobs[jid];let v=0;for(const o of j.ops){const m=o.c.filter(c=>!c.fas);if(m.length){const p=Math.min(...m.map(c=>c.run*(1-(c.pay||0))));v+=(o.sig*p)**2;}
+      else{const f=FS[(o.c[0]||{m:'@'}).m.slice(1)];if(f&&f.sapmaGun)v+=(f.sapmaGun*24)**2;}}
+    j.buf=st.w.tampon?(+st.w.tamponZ||0)*Math.sqrt(v):0;j.dueB=j.due==null?null:j.due-j.buf;}
+  const succ={};for(const o of ops)for(const [p,t] of o.pr)(succ[p]=succ[p]||[]).push([o.id,t]);
+  // malzeme
+  const mat=matAlloc(st,jobs);
+  // program
+  const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
+  return {st,D,A,M,days,gen,capTot,capAyar,capG,FS,AP,ops,byId,jobs,succ,mat,progRel};
+}
+function matAlloc(st,jobs){
+  // etkin geliş = söz tarihi + tedarikçinin ortalama gecikmesi + giriş muayenesi (+ olay gecikmesi, risk sapması)
+  const D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m])),ted=Object.fromEntries((D.tedarikciler||[]).map(t=>[t.id,t]));
+  const sup={},po=[];for(const m of D.malzemeler||[])sup[m.kod]=[{t:-1e9,q:+m.stok||0,kalan:+m.stok||0,k:'stok'}];
+  (D.satinalma||[]).forEach((p,i)=>{const soz=parseT(D,p.gelis),td=ted[p.tedarikci],m=mats[p.kod];
+    const gec=(td&&+td.ortGecikmeGun||0)*24+((st.tedSapma||{})[p.tedarikci]||0)+((st.saGecik||{})[p.kod]||0),mu=(m&&+m.muayeneGun||0)*24;
+    const x={t:soz==null?1e9:Math.max(soz+gec,soz)+mu,q:+p.miktar||0,kalan:+p.miktar||0,k:'sa',i,soz,gec,mu,jobs:[]};po.push(x);(sup[p.kod]=sup[p.kod]||[]).push(x);});
+  for(const k in sup)sup[k].sort((a,b)=>a.t-b.t);
+  const res={},summ={};
+  const order=Object.values(jobs).sort((a,b)=>(a.oncelik-b.oncelik)||((a.due==null?1e9:a.due)-(b.due==null?1e9:b.due)));
+  for(const j of order){let ready=st.now;const det=[];
+    for(const r of j.malzeme||[]){const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
+      for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod});}
+      const eksikQ=rem>1e-9?rem:0;const tt=eksikQ?null:Math.max(t,st.now);
+      const kaynak=eksikQ?'eksik':tt<=st.now+1e-9?'stok':'satın alma';
+      det.push({kod:r.kod,need,t:tt,kaynak,eksikQ,use,ad:mats[r.kod]?mats[r.kod].ad:r.kod,birim:mats[r.kod]?mats[r.kod].birim:''});
+      ready=tt==null?Infinity:Math.max(ready,tt);
+      const sa=(sup[r.kod]||[]).filter(x=>x.k==='sa').reduce((a,x)=>a+x.q,0);
+      summ[r.kod]=summ[r.kod]||{need:0,stok:mats[r.kod]?+mats[r.kod].stok||0:0,sa};summ[r.kod].need+=need;}
+    let fiyat=0;for(const r of j.malzeme||[]){const m=mats[r.kod];if(!m||m.birimFiyat==null){fiyat=null;break;}fiyat+=m.birimFiyat*r.miktar*j.adet;}
+    res[j.id]={ready,det,fiyat};}
+  return {res,summ,po};
+}
+/* plandan satın almaya: gerekli tarih, hızlandır, ertele; siparişi olmayan eksik için en geç sipariş tarihi */
+function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m]));
+  // plan: ilk işlemin planlanan başlangıcı; enGec: siparişi geciktirmeden en geç başlangıç (başlangıç + bolluk)
+  // enGec yaklaşık: siparişin kendi bolluğu (termin − plan bitişi) kadar geç gelebilir; tezgâh sırası yok sayılır
+  const first=jid=>{const j=cx.jobs[jid];let s=Infinity,C=-Infinity;for(const o of j.ops){const r=plan.ops[o.id];if(!r)continue;C=Math.max(C,r.C);if(!o.pr.length&&!r.done&&!(r.S<st.now-1e-9))s=Math.min(s,r.S);}
+    const fl=j.due==null||!isFinite(C)?0:Math.max(0,j.due-C);return {s,l:s+fl};};
+  const ERT=10*24,out=[];
+  for(const x of cx.mat.po){const p=D.satinalma[x.i];const js=x.jobs.map(u=>({...u,...first(u.j)})).filter(u=>isFinite(u.s));
+    const pl=js.length?Math.min(...js.map(u=>u.s))-x.mu:null,lt=js.length?Math.min(...js.map(u=>u.l))-x.mu:null;const dock=x.soz==null?null:x.soz+x.gec;
+    let durum='bağlı iş yok';if(pl!=null&&dock!=null)durum=dock>lt+1e-9?'hızlandır':dock>pl+1e-9?'plan önce istiyor':dock<pl-ERT?'ertelenebilir':'uygun';
+    out.push({tur:'sa',kod:p.kod,miktar:+p.miktar||0,tedarikci:p.tedarikci||'',soz:x.soz,etkin:dock,plan:pl,enGec:lt,fark:lt!=null&&dock!=null?(lt-dock)/24:null,durum,jobs:js.map(u=>u.j)});}
+  for(const jid in cx.mat.res)for(const d of cx.mat.res[jid].det)if(d.eksikQ>0){const f=first(jid),m=mats[d.kod]||{};const mu=(+m.muayeneGun||0)*24;const lt=isFinite(f.l)?f.l-mu:null;
+    const tg=m.tedarikGun==null?null:+m.tedarikGun;out.push({tur:'eksik',kod:d.kod,miktar:d.eksikQ,plan:isFinite(f.s)?f.s-mu:null,enGec:lt,siparisEnGec:lt!=null&&tg!=null?lt-tg*24:null,durum:'sipariş yok',jobs:[jid]});}
+  return out;}
+/* ---- kaynak kullanımı ---- */
+function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
+function k0(t){return Math.max(0,Math.floor(t/SL+1e-9));}
+function k1(t){return Math.min(NS,Math.ceil(t/SL-1e-9));}
+function checkUse(cx,u,M,r,apId){
+  // dönüş: -1 uygun; yoksa sorunlu slot ve tür
+  if(r.su>0){for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
+  const d=M.opOran;
+  if(d>0){const G=u.g[M.grup],cG=cx.capG[M.grup];
+    for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;
+      if(u.tot[k]+d>cx.capTot[k]+1e-6)return {k,t:'personel',kalici:cx.capTot[k]<d};
+      if(G&&G[k]+d>cG[k]+1e-6)return {k,t:'yetkin',kalici:cG[k]<d};}}
+  if(apId&&u.ap[apId]){const cap=+cx.AP[apId].adet||1;for(let k=k0(r.S);k<k1(r.C);k++)if(u.ap[apId][k]+1>cap+1e-6)return {k,t:'aparat',kalici:false};}
+  return null;
+}
+function addUse(cx,u,M,r,apId,sign=1){
+  if(r.su>0)for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k])u.ayar[k]+=sign;
+  const d=M.opOran;if(d>0){const G=u.g[M.grup];for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;u.tot[k]+=d*sign;if(G)G[k]+=d*sign;}}
+  if(apId&&u.ap[apId])for(let k=k0(r.S);k<k1(r.C);k++)u.ap[apId][k]+=sign;
+}
+
+/* ---- tek işlem zamanlaması ---- */
+function predBound(o,cx,ctx){
+  const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
+  let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
+  if(j.rel!=null&&j.rel>s){s=j.rel;why={t:'serbest'};}
+  if(!o.pr.length){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
+  if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
+  const tas=+A.tasimaSaat||0;
+  for(const [pid,ty] of o.pr){const p=P[pid];if(!p)return null;
+    if(ty==='o'&&!p.fas){const t=p.lot1+tas;if(t>s){s=t;why={t:'rota',r:pid,o:1};}if(p.C+tas>fin){fin=p.C+tas;finRef=pid;}}
+    else{const t=p.C+(p.fas?0:tas);if(t>s){s=t;why={t:'rota',r:pid};}}}
+  const lk=st.locks[o.id];if(lk&&lk.S>s){s=lk.S;why={t:'kilit'};}
+  return {s,why,fin,finRef};
+}
+function tFason(o,c,cx,ctx,b){
+  const f=cx.FS[c.m.slice(1)];if(!f)return null;let r=b.s,why=b.why;
+  const lots=ctx.fas[f.id]||[];
+  for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
+    const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;
+    const ret=ex+(+f.sureGun||1)*24;const n=lots.filter(l=>l[0]<ret&&l[1]>ex).length;
+    if(n>=(+f.kapasite||1)){why={t:'fason-kap'};continue;}
+    if(ex>r+1e-9&&why.t!=='fason-kap')why={t:'fason-cikis',r:f.id};
+    const minH=Math.min(...o.c.filter(x=>!x.fas).map(x=>x.run),Infinity);
+    const cost=c.opt?(isFinite(minH)&&f.saatFiyat!=null?minH*f.saatFiyat:null):(f.fiyat!=null?f.fiyat*o.adet:null);
+    return {id:o.id,job:o.job,m:c.m,fas:1,S:ex,Su:ex,C:ret,lot1:ret,su:0,run:ret-ex,cost,why};}
+  return null;
+}
+function tMach(o,c,cx,ctx,b,fast){
+  const st=cx.st,w=st.w,M=cx.M[c.m];if(!M)return null;
+  let s=b.s,why=b.why;
+  if(ctx.av[c.m]>s){s=ctx.av[c.m];why={t:'tezgah',r:ctx.lastId[c.m]};}
+  const lf=ctx.lastFam[c.m];
+  const famHit=!!o.aile&&lf===o.aile;
+  let su=c.su;
+  const mx=cx.D.ayarMatrisi;
+  if(lf!=null&&o.aile&&mx){const e=mx.find(x=>x.den===lf&&x.ye===o.aile);if(e)su=(+e.dk)/60;else if(famHit)su=c.su*w.famK;}
+  else if(famHit)su=c.su*w.famK;
+  if(o.fai)su+=c.cyc+(+cx.A.faiSaat||0);
+  const run=o.fai?Math.max(0,c.run-c.cyc):c.run;
+  const lastLot=Math.min(run,c.tbRun);
+  const W0=su>0?M.sw:M.rw;const s_in=s;
+  for(let it=0;it<600;it++){
+    s=openAt(W0,s);if(!isFinite(s))return null;
+    const Su=adv(M.sw,s,su);if(!isFinite(Su))return null;
+    const C=adv(M.rw,Su,run);if(!isFinite(C))return null;
+    if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
+    const r={S:s,Su,C,su};
+    const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat);
+    if(bad){let k=bad.k+1;
+      if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
+      s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
+    const lot1=adv(M.rw,Su,Math.min(run,c.tbRun));
+    const cost=M.ucret==null?null:(run*(1-M.pay)*M.ucret+su*(M.ucret+(+cx.A.ayarciUcret||0)));
+    const dl=(st.down||[]).filter(d=>d.m===c.m);
+    const downHit=dl.some(d=>d.from<C-1e-9&&d.to>s+1e-9)||dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9&&s>s_in+1e-9);
+    if(s>s_in+1e-9&&dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9))why={t:'ariza',r:c.m};
+    return {id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit};
+  }
+  return null;
+}
+function timing(o,c,cx,ctx,fast){const b=predBound(o,cx,ctx);if(!b)return null;return c.fas?tFason(o,c,cx,ctx,b):tMach(o,c,cx,ctx,b,fast);}
+function commit(cx,ctx,r){
+  ctx.P[r.id]=r;
+  if(r.fas){(ctx.fas[r.m.slice(1)]=ctx.fas[r.m.slice(1)]||[]).push([r.S,r.C]);return;}
+  const M=cx.M[r.m];ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;ctx.av[r.m]=Math.max(ctx.av[r.m]||0,r.C);ctx.lastFam[r.m]=cx.byId[r.id].aile;ctx.lastId[r.m]=r.id;
+  addUse(cx,ctx.u,M,r,cx.byId[r.id].aparat);
+}
+function candM(o,st,opt,base){
+  if(st.locks[o.id])return o.c.filter(c=>c.m===st.locks[o.id].m);
+  if(st.pref[o.id])return o.c.filter(c=>c.m===st.pref[o.id]);
+  const b=base&&base.ops[o.id];
+  return o.c.filter(c=>!c.opt||(b&&(b.m===c.m||(opt.fasonM&&b.m===opt.fasonM))));
+}
+function remH(cx,ctx,j){let h=0;for(const o of j.ops)if(!ctx.P[o.id]){const m=o.c.filter(c=>!c.fas).map(c=>c.su+c.run);h+=m.length?Math.min(...m):24;}return h;}
+function prio(r,cx,ctx,opt){
+  const st=cx.st,w=st.w,j=cx.jobs[r.job],p=Math.max(.25,r.su+r.run),pw=PW[j.oncelik]||1;let v;
+  const due=j.dueB==null?j.due:j.dueB;
+  if(w.rule==='edd')v=1e4-(due||0)/10;
+  else if(w.rule==='kar'){const g=j.gelir==null?1e5:j.gelir;v=(g/1e5)*pw/Math.max(1,remH(cx,ctx,j));}
+  else if(w.rule==='cr'){const rem=remH(cx,ctx,j);v=1e3/Math.max(.05,((due||1e4)-r.S)/Math.max(1,rem)+1);}
+  else{const rem=remH(cx,ctx,j);const sl=Math.max(0,(due||1e4)-rem-r.S);const g=1;
+    v=(g*pw/p)*Math.exp(-sl/(w.k1*ctx.pbar))*Math.exp(-r.su/(w.k2*ctx.sbar));}
+  if(opt.noise)v*=Math.exp(opt.noise*ctx.rnd.n());
+  if(st.boost[j.id])v+=1e6;
+  if(opt.boostOps&&opt.boostOps[r.id])v+=1e5;
+  return v;
+}
+function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  return {u,n:()=>{let x=0;for(let i=0;i<6;i++)x+=u();return (x-3)/Math.SQRT2;}};}
+
+function schedule(st,mode,base,opt={}){
+  const cx=opt.cx||compile(st);
+  const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},rnd:rng(opt.seed||7),fail:[]};
+  const all=cx.ops.filter(o=>o.c.length);let ps=0,ss=0,n=0;for(const o of all){const c=o.c.find(x=>!x.fas);if(c){ps+=c.su+c.run;ss+=c.su;n++;}}
+  ctx.pbar=n?ps/n:4;ctx.sbar=n?Math.max(.1,ss/n):.5;
+  const now=st.now,frz=now+(st.w.dondurma||0);
+  const g=st.gercek||{};
+  // sabitler: gerçekleşen, başlamış, dondurulmuş
+  const pins=[];
+  for(const o of cx.ops){const b=base&&base.ops[o.id],a=g[o.id];
+    if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
+      let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
+      if(a.C!=null){r.C=a.C;r.Su=Math.min(a.C,src.Su!=null?a.S+(src.Su-src.S):a.S);r.lot1=Math.min(r.C,src.lot1||r.C);r.done=1;}
+      else if(M){r.Su=adv(M.sw,a.S,src.su||0);r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);}
+      pins.push(r);continue;}
+    if(!b)continue;
+    if(b.C<=now+1e-9){pins.push({...b,pin:1,done:1});continue;}
+    const hit=!b.fas&&(st.down||[]).some(d=>d.m===b.m&&d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
+    if(b.S<now-1e-9){
+      if(hit&&!b.fas){const M=cx.M[b.m];const Su=adv(M.sw,b.S,b.su);const C=adv(M.rw,Su,b.run);pins.push({...b,Su,C,lot1:Math.min(C,b.lot1),pin:1,kesik:1});}
+      else pins.push({...b,pin:1});continue;}
+    if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
+  }
+  pins.sort((a,b)=>a.S-b.S).forEach(r=>commit(cx,ctx,r));
+  const U=new Set(cx.ops.filter(o=>!ctx.P[o.id]&&o.c.length).map(o=>o.id));
+  const ready=o=>o.pr.every(([p])=>ctx.P[p]);
+  if((mode==='sabit'||mode==='sabit-mc')&&base){
+    const seq={};Object.values(base.ops).filter(b=>U.has(b.id)).sort((a,b)=>a.S-b.S).forEach(b=>{(seq[b.m]=seq[b.m]||[]).push(b.id);});
+    // hazır olanlar arasından başvuru planında en erken başlayan önce işlenir: personel ve aparat gibi ortak kaynaklar
+    // başvurudaki sırayla dağıtılır, plan kendini aynen yeniden üretir
+    const key=id=>base.ops[id].S;
+    // liste kipinde tezgâh sırası bağlayıcı değil, öncelik sırasıdır: hazır olmayan iş kuyruğu tıkamaz
+    const lst=!!opt.liste;
+    // hamle kipinde (elle taşıma ve önizleme) öncülünü, örneğin fason dönüşünü bekleyen iş tezgâhı boş bekletmez: bir kez ertelenir
+    // (bek: başlayabileceği saat), tezgâh o saate kadar arkadaki işlerle dolar; o saati aşacak iş gelince sıra yine anahtarındır,
+    // başka aday kalmayınca en erken başlayabilecek ertelenmiş iş serbest kalır. Arama (lns) bunu kullanmaz: sırayı kendisi kurar.
+    const hk=lst&&!!opt.bekletme;
+    const bek={},ertelendi=new Set(),bosAn=m=>ctx.av[m]==null?st.now:ctx.av[m];
+    for(;;){let bm=null,bi=-1,bk=Infinity;
+      for(const m in seq){const q=seq[m];if(!q.length)continue;
+        if(m[0]==='@'||lst){for(let i=0;i<q.length;i++){const k=key(q[i]);if(hk&&bek[q[i]]>bosAn(m)+1e-6)continue;if(k<bk&&ready(cx.byId[q[i]])){bk=k;bm=m;bi=i;}if(lst&&k>=bk)break;}continue;}
+        const k=key(q[0]);if(k<bk&&ready(cx.byId[q[0]])){bk=k;bm=m;bi=0;}}
+      if(bm==null){let en=null;for(const id in bek)if(en==null||bek[id]<bek[en])en=id;if(en==null)break;delete bek[en];continue;}
+      const q=seq[bm];let o=cx.byId[q[bi]],c=o.c.find(x=>x.m===bm),r=c&&timing(o,c,cx,ctx);
+      if(hk&&r&&!c.fas&&bm[0]!=='@'){
+        if(!ertelendi.has(o.id)&&r.S>bosAn(bm)+1e-6&&q.some((id,i)=>i!==bi&&!ertelendi.has(id))){ertelendi.add(o.id);bek[o.id]=r.S;continue;}
+        const d=q.find(id=>id!==o.id&&bek[id]!=null&&key(id)<key(o.id)&&r.C>bek[id]+1e-6&&ready(cx.byId[id]));
+        if(d){delete bek[d];bi=q.indexOf(d);o=cx.byId[d];c=o.c.find(x=>x.m===bm);r=c&&timing(o,c,cx,ctx);}
+        else delete bek[o.id];
+      }
+      if(r)commit(cx,ctx,r);else ctx.fail.push(o.id);U.delete(o.id);q.splice(bi,1);}
+  }
+  let guard=0;
+  const evalOp=(o,fast)=>{let best=null;const alts=[];
+    for(const c of candM(o,st,opt,base)){let r;
+      if(fast&&!c.fas){const key=o.id+'|'+c.m,ce=ctx.cache[key];if(ce&&ce.v===(ctx.ver[c.m]||0))r=ce.r;else{r=timing(o,c,cx,ctx,true);ctx.cache[key]={v:ctx.ver[c.m]||0,r};}}
+      else r=timing(o,c,cx,ctx,false);
+      if(!r)continue;
+      const chg=base&&base.ops[o.id]&&base.ops[o.id].m!==c.m?st.w.lam:0;
+      const J=(1-st.w.alpha)*r.C*1000+st.w.alpha*(r.cost==null?0:r.cost)+chg;alts.push({m:c.m,S:r.S,C:r.C,cost:r.cost,J});
+      if(!best||J<best.J)best={...r,J};}
+    if(best)best.alts=alts;return best;};
+  while(U.size&&guard++<20000){
+    const rd=[];for(const id of U){const o=cx.byId[id];if(ready(o))rd.push(o);}
+    if(!rd.length)break;
+    const ev=[];
+    for(const o of rd){const r=evalOp(o,true);if(!r){const f=evalOp(o,false);if(!f){ctx.fail.push(o.id);U.delete(o.id);continue;}ev.push(f);}else ev.push(r);}
+    if(!ev.length)continue;
+    let tmin=Infinity;for(const r of ev)if(r.C<tmin)tmin=r.C;
+    let conf=ev.filter(r=>r.S<tmin-1e-9);if(!conf.length)conf=ev;
+    let bi=null,bv=-Infinity;for(const r of conf){const v=prio(r,cx,ctx,opt);if(v>bv){bv=v;bi=r;}}
+    const fin=evalOp(cx.byId[bi.id],false);
+    if(!fin){ctx.fail.push(bi.id);U.delete(bi.id);continue;}
+    fin.idx=bv;commit(cx,ctx,fin);U.delete(fin.id);
+  }
+  for(const id of U)ctx.fail.push(id);
+  const plan={ops:ctx.P,fail:[...new Set(ctx.fail)],mode,downIds:(st.down||[]).map(d=>d.id)};
+  if(!opt.noSlack)slack(plan,cx);
+  plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
+  return plan;
+}
+function machNext(plan){const n={},p={},by={};for(const r of Object.values(plan.ops))if(!r.fas)(by[r.m]=by[r.m]||[]).push(r);
+  for(const m in by){const a=by[m].sort((x,y)=>x.S-y.S);for(let i=0;i<a.length-1;i++){n[a[i].id]=a[i+1].id;p[a[i+1].id]=a[i].id;}}return {n,p};}
+function slack(plan,cx){
+  const {n}=machNext(plan),LS={},A=cx.A,tas=+A.tasimaSaat||0;
+  const arr=Object.values(plan.ops).sort((a,b)=>b.S-a.S);
+  for(const o of arr){const j=cx.jobs[o.job],d=o.C-o.S;let ls=(j.due==null?1e9:j.due)-d;
+    for(const [sid,ty] of cx.succ[o.id]||[]){const s=plan.ops[sid];if(!s||LS[sid]==null)continue;
+      if(ty==='b'||o.fas||s.fas)ls=Math.min(ls,LS[sid]-tas-d);
+      else{ls=Math.min(ls,LS[sid]-tas-(o.lot1-o.S));ls=Math.min(ls,LS[sid]+(s.C-s.S)-tas-(s.C-Math.max(s.Su,s.C-(s.C-s.Su)*.25))-d);}}
+    const q=n[o.id];if(q&&LS[q]!=null)ls=Math.min(ls,LS[q]-d);
+    LS[o.id]=ls;o.sl=ls-o.S;}
+}
+
+/* ---- değerlendirme ---- */
+function evaluate(plan,st,ref,fast){
+  const cx=plan.cx||compile(st),w=st.w,J={},A=cx.A;
+  let Z=0,rev=0,cost=0,pen=0,hold=0,onT=0,late=0,sumT=0,wT=0,suH=0,suN=0,famN=0,Cmax=st.now,chg=0,fas=0,unk=0,warn=[],score=0,wB=0,bufN=0;
+  for(const jid in cx.jobs){const j=cx.jobs[jid];let C=-Infinity,mc=0,sc=0,fc=0,miss=[],nOps=0,nIn=0;
+    for(const o of j.ops){nOps++;const r=plan.ops[o.id];if(!r)continue;nIn++;C=Math.max(C,r.C);
+      if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
+      else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
+      suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
+      if(!fast&&!o.pr.length&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
+    const comp=nIn===nOps;if(!comp)C=Infinity;
+    const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
+    const pw=PW[j.oncelik]||1;
+    let p=null;if(T!=null)p=j.cezaGun!=null?T/24*j.cezaGun:T*w.ceza*pw;
+    const mf=cx.mat.res[jid]?cx.mat.res[jid].fiyat:null;if(mf==null&&(j.malzeme||[]).length)miss.push('malzeme fiyatı');
+    if(j.gelir==null)miss.push('gelir');
+    const h=E*w.mu;
+    let kar=null;if(!miss.length&&p!=null)kar=j.gelir-(mf||0)-mc-sc-fc-p-h;
+    J[jid]={id:jid,C,T,E,buf:j.buf,dueB:j.dueB,mc,sc,fc,mf,p,h,kar,miss:[...new Set(miss)],comp};
+    if(T!=null&&T<=1e-6&&comp)onT++;else{late++;}
+    if(T!=null){sumT+=T;wT+=T*pw;}
+    const B=j.dueB==null||!isFinite(C)?0:Math.max(0,C-j.dueB);wB+=B*pw;if(j.buf>0&&B>1e-6)bufN++;
+    if(isFinite(C))Cmax=Math.max(Cmax,C);
+    if(kar==null)unk++;else{rev+=j.gelir;pen+=p;hold+=h;}
+    cost+=(mf||0)+mc+sc+fc;
+  }
+  // değişiklik: tezgâhı ya da tezgâhtaki önceki işi değişen, ya da bir vardiyadan (8 sa) fazla kayan işlem; küçük saat kayması iş listesini değiştirmez
+  if(ref){const prev=pl=>{const by={},pv={};for(const id in pl.ops){const r=pl.ops[id];if(r.fas||!ref.ops[id]||!plan.ops[id])continue;(by[r.m]=by[r.m]||[]).push(r);}
+      for(const m in by){by[m].sort((a,b)=>a.S-b.S);by[m].forEach((r,i)=>pv[r.id]=i?by[m][i-1].id:null);}return pv;};
+    const p0=prev(ref),p1=prev(plan);
+    for(const id in plan.ops){const r=plan.ops[id],b=ref.ops[id];if(!b||r.pin)continue;if(b.m!==r.m||(!r.fas&&p0[id]!==p1[id])||Math.abs(b.S-r.S)>8)chg++;}}
+  let mesaiH=0;for(const e of st.ekMesai||[]){const v=cx.D.vardiyalar.find(x=>x.id===e.vardiya);if(v){let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;mesaiH+=h;}}
+  const mesaiTL=mesaiH*(+A.mesaiUcret||0);
+  const stab=chg*w.lam;
+  let idle=0;const util={};
+  if(!fast)for(const m in cx.M){const M=cx.M[m];const a=Object.values(plan.ops).filter(r=>r.m===m).sort((x,y)=>x.S-y.S);
+    let busy=0;for(const r of a)busy+=workIn(M.rw,Math.max(r.S,st.now),Math.max(r.C,st.now));
+    const open=workIn(M.rw,st.now,Math.max(Cmax,st.now+1));util[m]={busy,open,u:open?busy/open:0,n:a.length};
+    for(let i=1;i<a.length;i++){const g0=Math.max(a[i-1].C,st.now),g1=a[i].S;if(g1>g0)idle+=workIn(M.rw,g0,g1);}}
+  // sıralı amaç: 1 ağırlıklı gecikme, 2 değişiklik, 3 ayar süresi, 4 bilinen TL maliyet
+  // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir
+  const tl=cost+mesaiTL;const lex=[wT,wB,chg,suH,tl];Z=-wT;
+  for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
+  return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
+}
+
+const LEX_EPS=[.5,.5,0,.25,1];
+const LEX_AD=['ağırlıklı gecikme','tampon ihlali','değişiklik sayısı','ayar süresi','bilinen maliyet'];
+function cmpEv(a,b){for(let i=0;i<5;i++){const d=b.lex[i]-a.lex[i];if(Math.abs(d)>LEX_EPS[i])return d>0?1:-1;}return 0;}
+function lexWhy(a,b){for(let i=0;i<5;i++){const d=b.lex[i]-a.lex[i];if(Math.abs(d)>LEX_EPS[i])return i;}return -1;}
+/* ---- alt sınır: kapasite yokken en erken bitiş (takvim, taşıma, fason çıkış günleri ve süresiyle) ---- */
+// alt sınırda ayar en kısa hâliyle sayılır: aile eşleşmesi ya da ayar matrisi ayarı kısaltabilir
+function suMin(o,c,cx){let su=c.su;if(o.aile){su=Math.min(su,c.su*cx.st.w.famK);for(const e of cx.D.ayarMatrisi||[])if(e.ye===o.aile)su=Math.min(su,(+e.dk)/60);}return su;}
+function lowerBound(st,cx){
+  cx=cx||compile(st);const LB={},tas=+cx.A.tasimaSaat||0;const done={};
+  const order=[];const vis={};const visit=o=>{if(vis[o.id])return;vis[o.id]=1;for(const [p] of o.pr)visit(cx.byId[p]);order.push(o);};cx.ops.forEach(visit);
+  const g=st.gercek||{};
+  for(const o of order){let s=st.now;const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
+    for(const [p,t] of o.pr){const q=done[p];if(q==null){s=Infinity;break;}s=Math.max(s,q.f+(t==='o'?-(q.f-q.l1):0)+(cx.byId[p].c.some(c=>c.fas)?0:tas));}
+    let best=Infinity,l1=Infinity;
+    if(g[o.id]&&g[o.id].C!=null){best=g[o.id].C;l1=best;}
+    else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
+      // başlamış işlemin yalnız kalan süresi sayılır
+      if(M){const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);l1=best;}else{best=st.now;l1=best;}}
+    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=v;l1=v;}}continue;}
+      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
+    done[o.id]={f:best,l1};const jl=LB[o.job]||0;LB[o.job]=Math.max(jl,best);}
+  let wT=0;for(const jid in cx.jobs){const j=cx.jobs[jid];if(j.due!=null&&isFinite(LB[jid]))wT+=Math.max(0,LB[jid]-j.due)*(PW[j.oncelik]||1);}
+  return {C:LB,wT};
+}
+
+/* ---- Monte Carlo: sıra sabit, süreler ve arızalar rastgele ---- */
+function monteCarlo(st,plan,N,sigma,ariza,seed=11){
+  const R=rng(seed),res={},jobs=Object.keys(plan.cx.jobs);jobs.forEach(j=>res[j]={on:0,C:[],mal:0});
+  const t0=Date.now();
+  for(let i=0;i<N;i++){
+    const s2=clone({...st,plan:undefined});s2.sapma={...(st.sapma||{})};s2.w={...s2.w,tampon:false};
+    for(const id in plan.ops){if(plan.ops[id].pin)continue;const f=Math.exp(sigma*R.n()-sigma*sigma/2);s2.sapma[id]=(s2.sapma[id]||1)*f;}
+    s2.tedSapma={};for(const t of st.D.tedarikciler||[])if(+t.sapmaGun>0)s2.tedSapma[t.id]=+t.sapmaGun*24*R.n();
+    if(ariza){s2.down=(s2.down||[]).slice();for(const m of st.D.tezgahlar){if(!m.arizaGun)continue;
+      let t=st.now;for(let k=0;k<20;k++){t+=-Math.log(1-R.u())*m.arizaGun*24;if(t>st.now+21*24)break;const dur=Math.max(1,-Math.log(1-R.u())*(m.onarimSaat||4));s2.down.push({id:'mc'+i+m.id+k,m:m.id,from:t,to:t+dur});}}}
+    const base={...plan,downIds:(s2.down||[]).map(d=>d.id)};
+    const p=schedule(s2,'sabit-mc',base,{noSlack:true,noFreeze:true});
+    const e=evaluate(p,s2,null);
+    const mw=new Set(e.warn.filter(w=>w.t==='malzeme').map(w=>w.j));
+    for(const j of jobs){const x=e.J[j];if(x.T!=null&&x.T<=1e-6&&x.comp)res[j].on++;res[j].C.push(x.C);if(mw.has(j))res[j].mal++;}
+  }
+  const out={};for(const j of jobs){const c=res[j].C.filter(isFinite).sort((a,b)=>a-b);out[j]={p:res[j].on/N,pMal:res[j].mal/N,p50:c[Math.floor(c.length*.5)],p90:c[Math.floor(c.length*.9)]};}
+  return {jobs:out,ms:Date.now()-t0,N};
+}
+
+/* ---- yerel arama: öncül çekmeli boşluk doldurma ve gürültülü yeniden kurma ---- */
+function ancestors(cx,plan,id,acc){for(const [p] of cx.byId[id].pr){const r=plan.ops[p];if(r&&!r.pin&&!acc[p]){acc[p]=1;ancestors(cx,plan,p,acc);}}return acc;}
+function fill(st,base,opt,budgetMs,alts){
+  const t0=Date.now();const cx=compile(st);
+  let bo={},plan=null,E=null;const log=[];let tries=0;
+  for(const o of [opt,...(alts||[])]){const p=schedule(st,'dagit',base,{...o,cx}),e=evaluate(p,st,base);if(!E||cmpEv(e,E)>0){E=e;plan=p;opt=o;}}
+  for(let round=0;round<8&&Date.now()-t0<budgetMs;round++){
+    const gaps=[];
+    for(const m in cx.M){const M=cx.M[m];const a=Object.values(plan.ops).filter(r=>r.m===m).sort((x,y)=>x.S-y.S);
+      for(let i=1;i<a.length;i++){const g0=Math.max(a[i-1].C,st.now),g1=a[i].S;const len=g1>g0?workIn(M.rw,g0,g1):0;
+        if(len>=1)gaps.push({m,g0,g1,len,later:a.slice(i,i+3).filter(r=>!r.pin)});}}
+    gaps.sort((a,b)=>b.len-a.len);
+    let best=null;
+    for(const g of gaps.slice(0,8)){if(Date.now()-t0>budgetMs)break;for(const q of g.later){if(bo[q.id])continue;
+      const set=ancestors(cx,plan,q.id,{[q.id]:1});const bo2={...bo,...set};tries++;
+      const p2=schedule(st,'dagit',base,{...opt,cx,boostOps:bo2});const e2=evaluate(p2,st,base);
+      if(cmpEv(e2,E)>0&&(!best||cmpEv(e2,best.e)>0))best={e:e2,plan:p2,bo:bo2,g,q:q.id,pre:Object.keys(set).filter(x=>x!==q.id&&plan.ops[x]&&plan.ops[x].m!==g.m)};}}
+    if(!best)break;log.push({m:best.g.m,g0:best.g.g0,q:best.q,pre:best.pre,by:lexWhy(best.e,E),dW:E.wT-best.e.wT,dSu:E.suH-best.e.suH,dTL:E.tl-best.e.tl});bo=best.bo;plan=best.plan;E=best.e;}
+  return {plan,log,tries,ms:Date.now()-t0};
+}
+function improve(st,base,opt,budgetMs){
+  const t0=Date.now();const cx=compile(st);let best=schedule(st,'dagit',base,{...opt,cx}),be=evaluate(best,st,base);const e0=be,curve=[be.wT];let it=0,seed=101;
+  while(Date.now()-t0<budgetMs){it++;const p=schedule(st,'dagit',base,{...opt,cx,noise:.35,seed:seed++});const e=evaluate(p,st,base);if(cmpEv(e,be)>0){be=e;best=p;}curve.push(be.wT);}
+  return {plan:best,it,e0,e:be,ms:Date.now()-t0,curve};
+}
+
+/* ---- dereceler ---- */
+function degree(plan,id,memo={}){if(id in memo)return memo[id];memo[id]=null;const r=plan.ops[id];if(!r||r.pin)return null;const w=r.why||{};let d=null;
+  if(w.t==='ariza'||r.downHit)d=1;
+  else if((w.t==='rota'||w.t==='tezgah')&&w.r&&plan.ops[w.r]){const q=degree(plan,w.r,memo);if(q!=null)d=q+(plan.ops[w.r].m!==r.m?1:0);}
+  return memo[id]=d;}
+
+/* ---- olaylar ---- */
+function urunMalzeme(D,urun){const j=D.siparisler.find(x=>x.urun===urun&&(x.malzeme||[]).length);return j?clone(j.malzeme):[];}
+function applyEvent(st,ev){
+  const D=st.D;st.seq=(st.seq||0)+1;
+  if(ev.tip==='ariza'){const from=ev.bas!=null?(typeof ev.bas==='number'?ev.bas:parseT(D,ev.bas)):st.now;const to=from+(+ev.saat||8);
+    st.down.push({id:'d'+st.seq,m:ev.m,from,to,neden:ev.neden||'arıza'});return {label:`${ev.m} duruşu ${fmtDT(D,from)} - ${fmtDT(D,to)}`,fasonM:ev.m,kind:'ariza',m:ev.m,from,to};}
+  if(ev.tip==='acil'){let n=901;while(D.siparisler.some(j=>j.id==='SP-'+n))n++;const id='SP-'+n;const u=D.urunler.find(x=>x.id===ev.urun);
+    D.siparisler.push({id,ad:(u?u.ad:ev.urun)+' (acil)',urun:ev.urun,adet:+ev.adet,termin:ev.termin,oncelik:+ev.oncelik||1,gelir:ev.gelir==null||ev.gelir===''?null:+ev.gelir,cezaGun:ev.cezaGun==null||ev.cezaGun===''?null:+ev.cezaGun,serbest:null,malzeme:urunMalzeme(D,ev.urun)});
+    return {label:`Acil sipariş ${id}: ${ev.adet} adet ${u?u.ad:''}, termin ${ev.termin}`,kind:'acil',jobs:[id]};}
+  if(ev.tip==='malzeme'){st.saGecik=st.saGecik||{};st.saGecik[ev.kod]=(st.saGecik[ev.kod]||0)+(+ev.gun)*24;return {label:`${ev.kod} satın alması ${ev.gun} gün gecikti`,kind:'malzeme',kod:ev.kod};}
+  if(ev.tip==='eksik'){const gun=typeof ev.gun==='number'?ev.gun:Math.floor(parseT(D,ev.gun)/24);st.eksik.push({gun,vardiya:ev.vardiya,grup:ev.grup,n:+ev.n});
+    return {label:`${fmtDT(D,gun*24).slice(0,9)} ${ev.vardiya}: ${ev.n} ${ev.grup==='ayar'?'ayarcı':ev.grup+' personeli'} eksik`,kind:'eksik',gun,vardiya:ev.vardiya,grup:ev.grup};}
+  if(ev.tip==='sure'){st.sapma=st.sapma||{};let n=0;for(const j of D.siparisler)if(j.urun===ev.urun){const id=j.id+'.'+ev.k;if(!(st.plan&&st.plan.ops[id]&&st.plan.ops[id].S<st.now)){st.sapma[id]=+ev.oran;n++;}}
+    return {label:`${ev.urun} ${ev.k} süresi ×${ev.oran} (${n} sipariş)`,kind:'sure'};}
+  if(ev.tip==='sureOp'){st.sapma=st.sapma||{};st.sapma[ev.id]=+ev.oran;return {label:`${ev.id} süresi ×${ev.oran}`,kind:'sure',jobs:[ev.id.split('.').slice(0,-1).join('.')]};}
+  if(ev.tip==='fason'){const f=D.fasoncular.find(x=>x.id===ev.f);if(f)f.sureGun=(+f.sureGun||1)+(+ev.gun);return {label:`${ev.f} teslim süresi +${ev.gun} gün`,kind:'fason',f:ev.f};}
+  if(ev.tip==='mesai'){st.ekMesai.push({m:ev.m,gun:ev.gun,vardiya:ev.vardiya});return {label:`${ev.m} fazla mesai`,kind:'mesai'};}
+  return {label:'?'};
+}
+function jobOf(id){return id.slice(0,id.lastIndexOf('.'));}
+function hitJobs(base,info,st){const h=new Set(info.jobs||[]);
+  if(info.kind==='ariza')for(const r of Object.values(base.ops))if(r.m===info.m&&r.S<info.to&&r.C>info.from)h.add(r.job);
+  if(info.kind==='malzeme')for(const j of st.D.siparisler)if((j.malzeme||[]).some(x=>x.kod===info.kod))h.add(j.id);
+  if(info.kind==='fason')for(const r of Object.values(base.ops))if(r.m==='@'+info.f&&!r.pin)h.add(r.job);
+  if(info.kind==='sure')for(const id in st.sapma||{})h.add(jobOf(id));
+  if(info.kind==='eksik'){const D=st.D,v=D.vardiyalar.find(x=>x.id===info.vardiya);if(v){const a=info.gun*24+hm(v.bas);let b=info.gun*24+hm(v.bit);if(b<=a)b+=24;
+    const g=new Set(D.tezgahlar.filter(m=>info.grup==='ayar'||m.grup===info.grup).map(m=>m.id));
+    for(const r of Object.values(base.ops))if(!r.fas&&g.has(r.m)&&(info.grup==='ayar'?r.su>0&&r.S<b&&r.Su>a:r.S<b&&r.C>a))h.add(r.job);}}
+  return h;}
+function autoK(st,plan){const cx=plan.cx||compile(st);const ds=Object.values(cx.jobs).map(j=>j.due).filter(x=>x!=null);if(!ds.length)return null;
+  let C=st.now;for(const r of Object.values(plan.ops))C=Math.max(C,r.C);const Ch=Math.max(1,C-st.now);
+  let ps=0,ss=0,n=0;for(const o of cx.ops){const c=o.c.find(x=>!x.fas);if(c){ps+=c.run+c.su;ss+=c.su;n++;}}
+  const dbar=ds.reduce((a,b)=>a+b,0)/ds.length-st.now;const tau=Math.max(0,Math.min(1,1-dbar/Ch));const R=Math.max(0,(Math.max(...ds)-Math.min(...ds))/Ch);const eta=n?ss/Math.max(1e-6,ps-ss):.1;
+  const k1=R<=.5?4.5+R:6-2*R;const k2=Math.max(.1,tau/(2*Math.sqrt(Math.max(1e-6,eta))));return {tau,R,eta,k1,k2};}
+function propose(st,base,ev,opts={}){
+  const t0=Date.now();
+  const mk=()=>{const c={...clone({...st,plan:undefined}),plan:base};return c;};
+  const cand=mk();const info=Array.isArray(ev)?ev.map(e=>applyEvent(cand,e)):[applyEvent(cand,ev)];
+  const inf=info[info.length-1];const hitAll=new Set();for(const x of info)for(const j of hitJobs(base,x,cand))hitAll.add(j);const label=info.map(x=>x.label).join('; ');
+  const fasonM=info.find(x=>x.fasonM)?info.find(x=>x.fasonM).fasonM:null;
+  const cx=compile(cand);const list=[];
+  list.push({id:'bekle',ad:'Bekle (sağa kaydır)',ac:'Tezgâh ve sıra korunur, saatler kayar. Saf yayılım.',plan:schedule(cand,'sabit',base,{cx})});
+  list.push({id:'yeniden',ad:'Yeniden yerleştir',ac:'Dondurulmuş bölge dışındaki işler kurala göre yeniden dağılır; değişiklik λ ile cezalanır.',plan:schedule(cand,'dagit',base,{cx})});
+  if(fasonM)list.push({id:'fason',ad:'Yeniden yerleştir ve fason',ac:`${fasonM} işlerinden fasona uygun olanlar dışarı verilebilir.`,plan:schedule(cand,'dagit',base,{cx,fasonM})});
+  const f=fill(cand,base,{},opts.budget||st.w.l2Ms||1500,fasonM?[{fasonM}]:[]);
+  list.push({id:'doldur',ad:'Yeniden yerleştir ve boşluk doldur',ac:'Boş kalacak tezgâhtaki sonraki iş, öncülleriyle birlikte öne çekilir; yalnız Z\'yi artıranlar kabul edilir.',plan:f.plan,log:f.log});
+  // fazla mesai: gecikmeli işlerin geç biten işlemlerinin tezgâhına, o günün gecesi ya da ertesi tatil gününün sabahı
+  const B=list.reduce((a,x)=>cmpEv(evaluate(x.plan,cand,base),evaluate(a.plan,cand,base))>0?x:a).plan;const ev0=evaluate(B,cand,base);const cnt={},days={};
+  for(const r of Object.values(B.ops)){if(r.fas||r.pin)continue;const x=ev0.J[r.job];if(!x||!(x.T>0)||!(r.sl<0))continue;
+    const pw=PW[cx.jobs[r.job].oncelik]||1;cnt[r.m]=(cnt[r.m]||0)+Math.min(x.T,r.C-r.S)*pw;(days[r.m]=days[r.m]||new Set()).add(Math.floor(Math.max(r.S,cand.now)/24));}
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
+  // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 ise eski sınırla yalnız gösterilir
+  const vH=id=>{const v=cand.D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;};
+  const butH=+st.w.mesaiHafta||0,wk={};for(const e of cand.ekMesai||[]){const k=Math.floor(e.gun/7);wk[k]=(wk[k]||0)+vH(e.vardiya);}
+  const fits=(gun,vid)=>{if(butH<=0)return true;const k=Math.floor(gun/7);if((wk[k]||0)+vH(vid)>butH+1e-9)return false;wk[k]=(wk[k]||0)+vH(vid);return true;};
+  if(top.length&&cand.D.vardiyalar.some(v=>v.id==='V3')){const c2=clone({...cand,plan:undefined});c2.plan=base;const added=[];
+    const v1=cand.D.vardiyalar[0].id;
+    for(const m of top){let n=0;for(const d of [...days[m]].sort((a,b)=>a-b)){if(n>=4)break;
+      const own=(cx.M[m].vardiyalar||[]);const ok=x=>!own.length||own.includes(x);
+      if(cx.days[d].vard.length&&!cx.days[d].vard.includes('V3')&&ok('V3')&&fits(d,'V3')){c2.ekMesai.push({m,gun:d,vardiya:'V3'});added.push(m+' '+fmtDT(cand.D,d*24).slice(0,9)+' gece');n++;}
+      const e=d+1;if(e<HDAYS&&!cx.days[e].vard.length&&fits(e,v1)){c2.ekMesai.push({m,gun:e,vardiya:v1});added.push(m+' '+fmtDT(cand.D,e*24).slice(0,9)+' sabah');n++;}}}
+    if(added.length){const p=fill(c2,base,{},Math.min(800,opts.budget||800),fasonM?[{fasonM}]:[]).plan;
+    list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret} TL/sa); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
+  list.forEach(x=>{x.st=x.st||cand;x.ev=evaluate(x.plan,x.st,base);});
+  // fazla mesai yalnız haftalık bütçe tanımlıysa önerilir; bütçe 0 ise gösterilir
+  const ok=x=>(+st.w.mesaiHafta>0)||x.id!=='mesai';
+  // değişiklik bütçesi: her bütçe için o sınırın içinde kalan en iyi plan, parça parça yeniden kurmayla aranır
+  const pool=list.filter(ok),butce=[];
+  if(!opts.noButce&&pool.length){const ms=opts.lnsMs!=null?opts.lnsMs:(+st.w.lnsMs||1000);
+    const top=pool.reduce((a,b)=>cmpEv(b.ev,a.ev)>0?b:a);const S0=top.st;
+    const Li=lns(S0,top.plan,base,{ms:ms*.2,seed:7});let prev={plan:Li.plan,e:Li.e,from:top};
+    const mk=(k,plan,from,extra)=>{const nm=k===Infinity?'Sınırsız değişiklik':`En çok ${k} değişiklik`;
+      list.push({id:'b'+k,ad:nm,butce:k,from:from.ad,ac:`"${from.ad}" seçeneğinden başlanır; ${extra}`,plan,st:from.st,mesai:from.mesai});const x=list[list.length-1];x.ev=evaluate(x.plan,x.st,base);butce.push(x);return x;};
+    const inf=mk(Infinity,Li.plan,top,'gecikmiş siparişler ve tezgâh sıraları parça parça yeniden kurulur.');
+    // sıkı bütçeler geniş bütçenin sonucundan başlar, kazancı en az olan siparişlerin değişiklikleri geri alınır
+    for(const k of [15,5]){let cand=null;
+      const fit=pool.filter(x=>x.ev.chg<=k);const fb=fit.length?fit.reduce((a,b)=>cmpEv(b.ev,a.ev)>0?b:a):null;
+      if(prev.e.chg>k){const lo=pool.reduce((a,b)=>b.ev.chg<a.ev.chg||(b.ev.chg===a.ev.chg&&cmpEv(b.ev,a.ev)>0)?b:a);
+        if(lo.ev.chg<=k){const r=forwardTo(lo.st,lo.plan,prev.plan,base,k,ms*.3);const L=lns(lo.st,r.plan,base,{ms:ms*.1,maxChg:k,seed:k});cand={plan:L.plan,e:L.e,from:lo,lo};}}
+      else cand=prev;
+      if(fb&&(!cand||cmpEv(evaluate(fb.plan,fb.st,base),cand.e)>0))cand={plan:fb.plan,e:fb.ev,from:fb};
+      if(!cand){const mn=pool.reduce((a,b)=>b.ev.chg<a.ev.chg||(b.ev.chg===a.ev.chg&&cmpEv(b.ev,a.ev)>0)?b:a);cand={plan:mn.plan,e:mn.ev,from:mn};}
+      mk(k,cand.plan,cand.from,cand.lo?`"${cand.lo.ad}" planına, en iyi planın değişiklik başına en çok kazandıran siparişlerin yeni yerleşimi tek tek eklenir; ${k} değişiklikte durulur.`:'bu seçenek zaten sınırın içinde.');prev=cand;}
+    butce.reverse();}
+  // aynı sonucu veren seçenek listeden çıkar: planlamacıya fark yaratmayan seçim sunulmaz
+  for(let i=list.length-1;i>0;i--){const a=list[i];if(a.butce!=null)continue;const same=list.slice(0,i).find(b=>cmpEv(a.ev,b.ev)===0&&b.ev.chg===a.ev.chg);
+    if(same){same.ayni=(same.ayni||[]).concat(a.ad);list.splice(i,1);}}
+  const before=evaluate(base,st,null);
+  // fazla mesai politika izni yoksa önerilmez, yalnız gösterilir
+  let best=list.findIndex(ok);list.forEach((x,i)=>{if(ok(x)&&cmpEv(x.ev,list[best].ev)>0)best=i;});
+  // önerilenin ikinciye karşı hangi ölçütte öne geçtiği
+  let runner=null;list.forEach((x,i)=>{if(i!==best&&ok(x)&&(runner==null||cmpEv(x.ev,list[runner].ev)>0))runner=i;});
+  const robust={by:runner==null?-1:lexWhy(list[best].ev,list[runner].ev),runner};
+  return {label,cand,list,best,sel:best,before,hit:hitAll,robust,butce:butce.map(x=>list.indexOf(x)),ms:Date.now()-t0,info};
+}
+
+/* ---- işlem başına kapasitesiz en erken başlama (parça parça yeniden kurmada hedef) ---- */
+function lbHeadsTails(st,cx){
+  const tas=+cx.A.tasimaSaat||0,g=st.gercek||{};
+  const order=[];const vis={};const visit=o=>{if(vis[o.id])return;vis[o.id]=1;for(const [p] of o.pr)visit(cx.byId[p]);order.push(o);};cx.ops.forEach(visit);
+  const head={},fin={},l1={},pmin={},lastLot={};
+  for(const o of order){const ms=o.c.filter(c=>!c.fas);
+    pmin[o.id]=ms.length&&!o.c.some(c=>c.fas)?Math.min(...ms.map(c=>c.run)):0;
+    lastLot[o.id]=ms.length&&!o.c.some(c=>c.fas)?Math.min(...ms.map(c=>Math.min(c.run,c.tbRun))):0;
+    let s=st.now;const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
+    for(const [p,t] of o.pr){if(fin[p]==null||!isFinite(fin[p])){s=Infinity;break;}const pf=cx.byId[p].c.some(c=>c.fas);s=Math.max(s,(t==='o'&&cx.byId[p].c.some(c=>!c.fas)?l1[p]:fin[p])+(pf?0:tas));}
+    head[o.id]=s;
+    let best=Infinity,b1=Infinity;
+    if(g[o.id]&&g[o.id].C!=null){best=b1=g[o.id].C;}
+    else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
+      if(M){const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}else best=b1=st.now;}
+    else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=b1=v;}}continue;}
+      const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;b1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
+    fin[o.id]=best;l1[o.id]=b1;}
+  const tail={};
+  for(let i=order.length-1;i>=0;i--){const o=order[i];let q=0;
+    for(const [sid,t] of cx.succ[o.id]||[]){const so=cx.byId[sid];let ps;
+      if(so.c.some(c=>c.fas&&!c.opt)){const f=cx.FS[so.c[0].m.slice(1)];ps=f?(+f.sureGun||1)*24:0;}
+      else ps=t==='o'&&!o.c.some(c=>c.fas)?lastLot[sid]:pmin[sid];
+      q=Math.max(q,(o.c.some(c=>c.fas)?0:tas)+ps+(tail[sid]||0));}
+    tail[o.id]=q;}
+  return {head,tail,pmin,fin};
+}
+// fason kapasitesi yok sayılır, çıkış günü ve saati sayılır: gerçek dönüş bundan erken olamaz
+function fasonEarliest(cx,f,r){if(!isFinite(r))return Infinity;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
+  const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;return ex+(+f.sureGun||1)*24;}return Infinity;}
+
+/* ---- değişiklik bütçesine indirme: sipariş sipariş başvuru planına geri dönülür ---- */
+function revertTo(st,plan,ref,k,budget){
+  const t0=Date.now(),cx=plan.cx||compile(st),frz=st.now+(st.w.dondurma||0);let cur=plan,E=evaluate(cur,st,ref,true);const failN=(plan.fail||[]).length;
+  const changed=pl=>{const by={};for(const id in pl.ops){const r=pl.ops[id],b=ref.ops[id];if(!b||r.pin||r.fas||r.act||r.done||r.S<frz-1e-9)continue;if(b.m!==r.m||Math.abs(b.S-r.S)>.5)(by[r.job]=by[r.job]||[]).push(id);}return by;};
+  const modsOf=(by,jid)=>by[jid].filter(id=>cx.byId[id].c.some(c=>c.m===ref.ops[id].m)).map(id=>[id,ref.ops[id].m,ref.ops[id].S]);
+  for(let pass=0;E.chg>k&&Date.now()-t0<budget;pass++){const by=changed(cur);const rk=[];
+    for(const jid in by){if(Date.now()-t0>budget)break;const mods=modsOf(by,jid);if(!mods.length)continue;
+      const p=lnsDecode(st,cur,mods,cx,false),e=evaluate(p,st,ref,true);if((p.fail||[]).length>failN)continue;const dc=E.chg-e.chg;if(dc<=0)continue;rk.push({jid,v:(e.wT-E.wT)/dc});}
+    rk.sort((a,b)=>a.v-b.v);let moved=false;
+    for(const x of rk){if(E.chg<=k||Date.now()-t0>budget)break;const by2=changed(cur);if(!by2[x.jid])continue;
+      const p=lnsDecode(st,cur,modsOf(by2,x.jid),cx,false),e=evaluate(p,st,ref,true);if((p.fail||[]).length>failN||e.chg>=E.chg)continue;cur=p;E=e;moved=true;}
+    if(!moved)break;}
+  slack(cur,cx);return {plan:cur,e:evaluate(cur,st,ref)};
+}
+
+/* ---- değişiklik bütçesine çıkma: en az değişen plandan başlanır, en iyi planın sipariş başına yerleşimleri
+   değişiklik başına kazanca göre tek tek eklenir ---- */
+function forwardTo(st,startPlan,topPlan,ref,k,budget){
+  const t0=Date.now(),cx=startPlan.cx||compile(st),frz=st.now+(st.w.dondurma||0);let cur=startPlan,E=evaluate(cur,st,ref,true);const failN=(startPlan.fail||[]).length;
+  const jobs=new Set();for(const id in topPlan.ops){const r=topPlan.ops[id],q=cur.ops[id];if(r.fas||r.pin||r.act||r.done||r.S<frz-1e-9)continue;if(!q||q.m!==r.m||Math.abs(q.S-r.S)>.5)jobs.add(r.job);}
+  const modsOf=jid=>cx.jobs[jid].ops.map(o=>topPlan.ops[o.id]).filter(r=>r&&!r.pin&&!r.act&&!r.done&&r.S>=frz-1e-9&&(!cur.ops[r.id]||!cur.ops[r.id].pin)).map(r=>[r.id,r.m,r.S]);
+  const rk=[];for(const jid of jobs){if(Date.now()-t0>budget)break;const m=modsOf(jid);if(!m.length)continue;const p=lnsDecode(st,cur,m,cx,false),e=evaluate(p,st,ref,true);
+    if((p.fail||[]).length>failN||e.chg>k||cmpEv(e,E)<=0)continue;rk.push({jid,v:(E.wT-e.wT)/Math.max(1,e.chg-E.chg)});}
+  rk.sort((a,b)=>b.v-a.v);
+  for(const x of rk){if(Date.now()-t0>budget)break;const p=lnsDecode(st,cur,modsOf(x.jid),cx,false),e=evaluate(p,st,ref,true);
+    if((p.fail||[]).length>failN||e.chg>k||cmpEv(e,E)<=0)continue;cur=p;E=e;}
+  slack(cur,cx);return {plan:cur,e:evaluate(cur,st,ref)};
+}
+
+/* ---- parça parça yeniden kurma (büyük komşuluk araması) ----
+   Plan tezgâh başına sıra olarak tutulur; sabit kipteki çözücü sırayı takvim ve kaynaklarla gerçek plana çevirir.
+   Her turda bir parça sökülür (gecikmiş bir işin kritik işlemi ya da bir tezgâhta ardışık üç-dört işlem),
+   o parçanın bütün yerleşimleri denenir, en iyisi kabul edilir. Dondurulmuş ve başlamış işler sökülmez. */
+function lnsDecode(st,cur,mods,cx,free,bekletme){
+  const ops={...cur.ops};for(const [id,m,key] of mods)ops[id]={...ops[id],m,S:key};
+  // sıra anahtarları dondurma sınırının ötesine sıralı yayılır: anahtar yalnız tezgâhtaki sırayı taşır
+  const frz=st.now+(free?0:(st.w.dondurma||0));const mid=new Set(mods.map(x=>x[0]));const mv=Object.values(ops).filter(r=>!r.act&&!r.done&&(free||!r.pin)&&(r.S>=frz-1e-9||mid.has(r.id))).sort((a,b)=>a.S-b.S);
+  mv.forEach((r,i)=>{ops[r.id]={...r,S:frz+1+i*1e-3};});
+  const fake={...cur,ops,downIds:(st.down||[]).map(d=>d.id)};
+  // başvuru planı yoksa dondurma da yoktur
+  const o={cx,noFreeze:!!free,noSlack:true,liste:true};const a=schedule(st,'sabit',fake,o);if(!bekletme)return a;
+  // erteleme kaynak ve ayar sırasını da değiştirir; taşınmamış plan kendini aynen üretsin diye iki çözümden iyisi alınır
+  const b=schedule(st,'sabit',fake,{...o,bekletme:true});
+  return (b.fail||[]).length<=(a.fail||[]).length&&cmpEv(evaluate(b,st,null,true),evaluate(a,st,null,true))>0?b:a;
+}
+function lns(st,start,ref,opt={}){
+  const t0=Date.now(),cx=start.cx||compile(st),budget=opt.ms||1500,maxChg=opt.maxChg==null?Infinity:opt.maxChg;
+  const R=rng(opt.seed||17),free=opt.free!=null?!!opt.free:!ref,frz=free?st.now:st.now+(st.w.dondurma||0);
+  let cur=start,E=evaluate(cur,st,ref),failN=(cur.fail||[]).length;const E0=E;let dec=0,acc=0;const log=[];
+  const ok=(p,e)=>(p.fail||[]).length<=failN&&e.chg<=maxChg;
+  { const p=lnsDecode(st,cur,[],cx,free),e=evaluate(p,st,ref);dec++;if(ok(p,e)&&cmpEv(e,E)>=0){slack(p,cx);cur=p;E=e;} }
+  const movable=r=>r&&!r.act&&!r.done&&(free||!r.pin)&&!r.fas&&r.S>=frz-1e-9&&!st.locks[r.id];
+  let stale=0;const tried=new Set();const HT=lbHeadsTails(st,cx);
+  const machQ=pl=>{const byM={};for(const r of Object.values(pl.ops))if(!r.fas)(byM[r.m]=byM[r.m]||[]).push(r);for(const m in byM)byM[m].sort((a,b)=>a.S-b.S);return byM;};
+  const zincirMods=(pl,jid,variant)=>{const byM=machQ(pl),mods=[];
+    for(const o of cx.jobs[jid].ops){const r=pl.ops[o.id];
+      // fason adımının sırası da öne alınır: yoksa eski sırasında bekler, ardındaki tezgâh kuyruğu tıkanır
+      if(r&&r.fas&&!r.pin&&!r.act&&!r.done&&r.S>=frz-1e-9){mods.push([o.id,r.m,Math.max(frz,HT.head[o.id])]);continue;}
+      if(!movable(r))continue;
+      let m=r.m;if(variant!=='ayni'){const ms=o.c.filter(c=>!c.fas&&!c.opt&&(!st.pref[o.id]||st.pref[o.id]===c.m));if(ms.length){const f=ms.reduce((a,b)=>b.run+b.su<a.run+a.su?b:a);if(variant==='hizli'||R.u()<.5)m=f.m;}}
+      const tgt=Math.max(frz,HT.head[o.id]);const q=(byM[m]||[]).filter(z=>z.id!==o.id);let i=q.findIndex(z=>z.S>=tgt-1e-9);if(i<0)i=q.length;
+      while(i>0&&!movable(q[i-1])&&q[i-1].S>=tgt)i--;
+      const lo=i>0?Math.max(q[i-1].S,frz):frz,hi=i<q.length?q[i].S:lo+48;mods.push([o.id,m,i<q.length?Math.min(hi-1e-3,Math.max(lo,tgt)):Math.max(lo,tgt)+1e-3]);}
+    return mods;};
+  while(Date.now()-t0<budget&&stale<40){
+    const byM={};for(const r of Object.values(cur.ops))if(!r.fas)(byM[r.m]=byM[r.m]||[]).push(r);for(const m in byM)byM[m].sort((a,b)=>a.S-b.S);
+    const late=Object.values(E.J).filter(x=>x.T>0);
+    const crit=Object.values(cur.ops).filter(r=>movable(r)&&E.J[r.job]&&E.J[r.job].T>0&&r.sl!=null&&r.sl<=.5);
+    const cands=[];const key=(q,i)=>{const a=q[i-1],b=q[i];const lo=a?Math.max(a.S,frz):frz,hi=b?b.S:lo+48;return (lo+hi)/2;};
+    const lateJ=late.map(x=>x.id).filter(id=>cx.jobs[id].ops.some(o=>movable(cur.ops[o.id])));
+    // ilk tur: gecikmiş siparişler ağırlıklı gecikme sırasıyla tek tek zincir olarak öne alınır
+    const sweep=lateJ.filter(id=>!tried.has(id)).sort((a,b)=>E.J[b].T*(PW[cx.jobs[b].oncelik]||1)-E.J[a].T*(PW[cx.jobs[a].oncelik]||1));
+    const ru=R.u();const kind=sweep.length?'zincir':lateJ.length&&ru<.35?'zincir':crit.length&&ru<.75?'one':'pencere';
+    let x=null,tag='';
+    if(kind==='zincir'){
+      // gecikmiş siparişin bütün işlemleri kapasitesiz en erken başlama anlarının hemen önüne alınır
+      let tot=0;const wv=lateJ.map(id=>{const v=(E.J[id].T||0)*(PW[cx.jobs[id].oncelik]||1)+.01;tot+=v;return v;});let u=R.u()*tot,jid=lateJ[0];
+      for(let i=0;i<lateJ.length;i++){u-=wv[i];if(u<=0){jid=lateJ[i];break;}}
+      if(sweep.length){jid=sweep[0];tried.add(jid);}
+      tag='zincir '+jid;x={id:jid};
+      for(const variant of ['ayni','hizli','karisik','karisik','karisik','karisik']){const mods=zincirMods(cur,jid,variant);if(mods.length)cands.push(mods);}
+    } else if(kind==='one'&&crit.length){
+      // ağırlıklı gecikmeye göre seç
+      let tot=0;const wv=crit.map(r=>{const v=(E.J[r.job].T||0)*(PW[cx.jobs[r.job].oncelik]||1)+.01;tot+=v;return v;});
+      let u=R.u()*tot;for(let i=0;i<crit.length;i++){u-=wv[i];if(u<=0){x=crit[i];break;}}x=x||crit[0];tag='öne al';
+      const o=cx.byId[x.id];
+      for(const c of o.c){if(c.fas||(st.pref[o.id]&&st.pref[o.id]!==c.m))continue;
+        const q=(byM[c.m]||[]).filter(r=>r.id!==x.id);let pos=q.findIndex(r=>r.S>x.S);if(pos<0)pos=q.length;
+        for(let i=pos;i>=Math.max(0,pos-7);i--){if(q[i]&&!movable(q[i])&&i<pos)break;if(c.m===x.m&&i===pos)continue;cands.push([[x.id,c.m,key(q,i)]]);}}
+    } else {
+      const ms=Object.keys(byM).filter(m=>byM[m].filter(movable).length>=3);if(!ms.length)break;
+      const prefer=ms.filter(m=>byM[m].some(r=>movable(r)&&E.J[r.job]&&E.J[r.job].T>0));
+      const m=(prefer.length&&R.u()<.8?prefer:ms)[Math.floor(R.u()*(prefer.length&&R.u()<.8?prefer:ms).length)]||ms[0];
+      const q=byM[m];const idx=q.map((r,i)=>movable(r)?i:-1).filter(i=>i>=0);
+      const L=Math.min(4,idx.length);const st0=idx[Math.floor(R.u()*(idx.length-L+1))];
+      const win=[];for(let i=st0;i<q.length&&win.length<L;i++){if(!movable(q[i]))break;win.push(q[i]);}
+      if(win.length<2){stale++;continue;}tag='pencere '+m;x=win[0];
+      const keys=win.map(r=>r.S);
+      const perm=a=>a.length<=1?[a]:a.flatMap((v,i)=>perm(a.slice(0,i).concat(a.slice(i+1))).map(p=>[v,...p]));
+      for(const p of perm(win.map((_,i)=>i))){if(p.every((v,i)=>v===i))continue;cands.push(p.map((v,i)=>[win[v].id,m,keys[i]]));}
+    }
+    let best=null;
+    for(const mods of cands){if(Date.now()-t0>budget)break;const p=lnsDecode(st,cur,mods,cx,free);dec++;const e=evaluate(p,st,ref,true);
+      if(ok(p,e)&&cmpEv(e,E)>0&&(!best||cmpEv(e,best.e)>0))best={p,e,mods};
+      // ikinci derece: hedef sipariş kazandı ama başkaları geciktiyse, yeni gecikenler de zincirle öne alınır
+      else if(kind==='zincir'&&x&&e.J[x.id]&&E.J[x.id]&&e.J[x.id].T<E.J[x.id].T-.5){
+        const l2=Object.values(e.J).filter(z=>z.T>0&&z.id!==x.id&&(!E.J[z.id]||z.T>E.J[z.id].T+.5)).sort((a,b)=>b.T*(PW[cx.jobs[b.id].oncelik]||1)-a.T*(PW[cx.jobs[a.id].oncelik]||1)).slice(0,3);
+        let p2=p,e2=e;
+        for(const z of l2){let bz=null;for(const v of ['ayni','hizli']){if(Date.now()-t0>budget)break;const m2=zincirMods(p2,z.id,v);if(!m2.length)continue;const p3=lnsDecode(st,p2,m2,cx,free);dec++;const e3=evaluate(p3,st,ref,true);if(cmpEv(e3,e2)>0&&(!bz||cmpEv(e3,bz.e)>0))bz={p:p3,e:e3};}
+          if(bz){p2=bz.p;e2=bz.e;}}
+        if(ok(p2,e2)&&cmpEv(e2,E)>0&&(!best||cmpEv(e2,best.e)>0))best={p:p2,e:e2,mods};}}
+    if(best){log.push({tur:tag,id:x&&x.id,by:lexWhy(best.e,E),dW:E.wT-best.e.wT,dChg:best.e.chg-E.chg,dSu:E.suH-best.e.suH});cur=best.p;slack(cur,cx);E=best.e;acc++;stale=0;if(kind==='zincir')tried.clear();}else stale++;
+  }
+  return {plan:cur,e:evaluate(cur,st,ref),e0:E0,dec,acc,log,ms:Date.now()-t0};
+}
+

@@ -1,0 +1,10 @@
+/* ---------- bildirim ---------- */
+function bildir(mesaj, tur = '', eylem) {
+  const el = document.createElement('div');
+  el.className = 'tc-bildirim' + (tur ? ' tc-bildirim-' + tur : '');
+  el.setAttribute('role', tur === 'hata' ? 'alert' : 'status');
+  el.innerHTML = `${ic(tur === 'hata' ? 'alert' : tur === 'tamam' ? 'check' : 'bell', 'k')}<span class="tc-bildirim-mesaj">${esc(mesaj)}</span>${eylem ? `<button type="button" class="tc-dugme tc-dugme-kucuk" data-act="${eylem.act}">${esc(eylem.metin)}</button>` : ''}<button type="button" class="tc-bildirim-kapat" data-act="bildirim-kapat" aria-label="Kapat">${ic('x', 'k')}</button>`;
+  bildirimler.appendChild(el);
+  while (bildirimler.children.length > 2) bildirimler.firstChild.remove();
+  setTimeout(() => el.remove(), eylem ? 8000 : 4500);
+}

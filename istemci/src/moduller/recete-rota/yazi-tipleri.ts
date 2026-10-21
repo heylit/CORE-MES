@@ -51,12 +51,19 @@ function base64(veri: Uint8Array): string {
 export async function gomuluYaziStili(): Promise<string> {
   let stil = yaziTipiStili();
   await Promise.all(YAZI_TIPLERI.map(async (y) => {
-    try {
-      const cevap = await fetch(y.adres);
-      if (!cevap.ok) return;
-      const veri = base64(new Uint8Array(await cevap.arrayBuffer()));
-      stil = stil.replace(`url(${y.adres})`, `url(data:font/woff2;base64,${veri})`);
-    } catch { /* yedek yazı tipi */ }
+    const veri = await veriAdresi(y.adres);
+    if (veri !== null) stil = stil.replace(`url(${y.adres})`, `url(${veri})`);
   }));
   return stil;
+}
+
+// Yazı tipi dosyası veri adresi olarak; okunamazsa null (yedek yazı tipi).
+export async function veriAdresi(adres: string): Promise<string | null> {
+  try {
+    const cevap = await fetch(adres);
+    if (!cevap.ok) return null;
+    return `data:font/woff2;base64,${base64(new Uint8Array(await cevap.arrayBuffer()))}`;
+  } catch {
+    return null;
+  }
 }

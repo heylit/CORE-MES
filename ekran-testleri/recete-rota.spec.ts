@@ -41,11 +41,29 @@ test('ikinci menüden bölümler arasında geçilir', async ({ page, ag, ac }) =
   await cerceve(page);
   const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   // Bağlantı adı bekleyen iş sayısını da taşır ("Plan 2"); bağlantı adresinden bulunur.
-  for (const yol of ['/recete-rota/plan', '/recete-rota/kanban', '/recete-rota/schema']) {
+  for (const yol of ['/recete-rota/plan', '/recete-rota/studio', '/recete-rota/schema']) {
     await menu.locator(`a[href="${yol}"]`).filter({ visible: true }).first().click();
     await expect(page).toHaveURL((u) => u.pathname === yol);
+    // Plan ve atölye planlama çerçevesindedir (kanban yalnız eski adrestir, menüde yoktur): geçişte eski çerçeve bekleyen
+    // yazması bitene kadar gizli durur, sonra yenisi kurulur; görünen çerçeve beklenir.
+    await expect(page.locator('main iframe').first()).toBeVisible({ timeout: 30_000 });
     const f = await cerceve(page);
     await expect(f.locator('main').first()).toBeVisible();
   }
   expect(ag.hatalar).toEqual([]);
+});
+
+test.describe('planlama işlemi olmayan', () => {
+  test.use({ hesap: 'ornek.planlama' });
+
+  test('planlama sayfası açılmaz, menüde görünmez (353 a)', async ({ page, ac }) => {
+    await ac('/recete-rota/plan');
+    await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await ac('/recete-rota/schema');
+    await cerceve(page);
+    const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+    await expect(menu.locator('a[href="/recete-rota/schema"]').first()).toBeAttached();
+    await expect(menu.locator('a[href="/recete-rota/plan"]')).toHaveCount(0);
+  });
 });

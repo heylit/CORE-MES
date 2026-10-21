@@ -1,0 +1,282 @@
+/* ---------- Merkez: plan, veri ve kısıtlar tek ekranda ----------
+   Atölye resmi ortadadır; sağda seçime göre komuta paneli, altta raf. Raftaki her sekme aynı planın başka bir okumasıdır:
+   siparişler, tezgâh kuyrukları, rota, kısıt ve veri, senaryolar, "ne neyi etkiliyor". Hepsi aynı seçimi ve aynı sepeti
+   paylaşır: birinde seçilen ötekilerde de seçilidir, birinde yapılan hamle hepsinde aynı anda görünür. Rafın başındaki etki
+   şeridi her zaman bir tabana göre farkı söyler: karşılaştırılan senaryo, sepetin başı ya da yayınlanan plan. */
+const MZ = { kisit: {}, grup: null, isk: null, ayr: null };
+const MZ_RAF = [['siparis', 'Siparişler', 'list'], ['kuyruk', 'Kuyruklar', 'sort'], ['rota', 'Rota', 'next'], ['kisit', 'Kısıt ve veri', 'gear'], ['senaryo', 'Senaryolar', 'layers'], ['hesap', 'Hesaplar', 'chart'], ['etki', 'Ne neyi etkiliyor', 'scan']];
+/* kısıt kataloğundaki kalem, ağdaki bekleme türüyle eşlenir; ağdan kısıta geçilir */
+const MZ_TUR_AD = { tezgah: 'Tezgâh dolu', personel: 'Operatör', ayarci: 'Ayarcı', aparat: 'Aparat', fasonBek: 'Fason sırası', ariza: 'Arıza, bakım' };
+const MZ_TUR_KISIT = { personel: 'personel', ayarci: 'ayarci', aparat: 'aparat', fasonBek: 'fasonKap', ariza: 'ariza' };
+(function () { try { const x = JSON.parse(localStorage.getItem(ANAHTAR + '-mz') || 'null'); if (x) { U.mzRaf = x.raf; U.mzRafAcik = x.acik; U.mzRafH = x.h || null; } } catch (e) { /* tarayıcı belleği kapalı olabilir */ } })();
+function mzKaydet() { try { localStorage.setItem(ANAHTAR + '-mz', JSON.stringify({ raf: U.mzRaf, acik: U.mzRafAcik, h: U.mzRafH })); } catch (e) { /* yok */ } }
+const mzAcik = () => U.mzRafAcik ?? innerWidth >= 900;
+
+/* tahta açılınca önce merkez gelir; eski görünümler sekmelerde durur */
+const mzMercekEski = mercekAl;
+mercekAl = function () { return !U.tbAg && !U.mercek ? 'resim' : mzMercekEski(); };
+{ const i = MERCEKLER.findIndex(x => x[0] === 'resim'); if (i >= 0) { const [r] = MERCEKLER.splice(i, 1); MERCEKLER.unshift(['resim', 'Merkez', 'target']); } }
+
+function mzTaban() {
+  if (U.mzKarsi) { const s = S.senaryolar.find(x => x.id === U.mzKarsi); if (s && s.plan && s.plan.ops) return { p: s.plan, ad: s.ad, sen: s.id }; U.mzKarsi = null; }
+  if (U.hamle && !U.taslak) return { p: S.plan, ad: 'şu anki plan' };
+  const a = U.taslak ? U.taslak.adimlar : []; if (a.length) return { p: a[0].once.plan, ad: 'sepetin başı' };
+  const c = canliSen(); if (c && c.plan && c.plan.ops) return { p: c.plan, ad: 'yayınlanan plan' };
+  return null;
+}
+const mzRefEski = rsRef;
+rsRef = function () { if (U.rsFark && U.mzKarsi) { const t = mzTaban(); if (t && t.sen) return { p: t.p, ad: t.ad }; } return mzRefEski(); };
+/* siparişin bitişi tabana göre: artı geç, eksi erken */
+function mzFarkJ(p, ref) {
+  const m = {}; if (!ref) return m;
+  for (const j in p.J || {}) { const a = ref.J && ref.J[j] ? ref.J[j].C : null, b = p.J[j].C; if (a == null || b == null || !isFinite(a) || !isFinite(b)) continue; if (Math.abs(b - a) > 0.05) m[j] = b - a; }
+  return m;
+}
+/* bütün siparişlerin bitiş zinciri bir kez ayrıştırılır; raf, ağ ve tablo aynı sonucu okur */
+function mzAyrisim() {
+  const p = gosterilen(); if (MZ.ayr && MZ.ayr.p === p && MZ.ayr.dv === S.dataVer) return MZ.ayr;
+  const cx = cxAl(); const m = {};
+  for (const x of S.D.siparisler) { if (x.havuz || !p.J || !p.J[x.id]) continue; try { const a = ayristir(p, cx, x.id); if (a && a.tam) m[x.id] = a; } catch (e) { /* adımı plansız sipariş */ } }
+  MZ.ayr = { p, dv: S.dataVer, m }; return MZ.ayr;
+}
+
+/* ---------- etki şeridi ---------- */
+function mzEtki() {
+  const p = gosterilen(); const t = mzTaban(); const o = p.ozet || {};
+  if (!t) return `<p class="pm-mz-etki" role="status">${ic('eye', 'k')}<span>Henüz değişiklik yok. Bir hamle yapınca etkisi burada ve resimde aynı anda görünür.</span></p>`;
+  const o0 = t.p.ozet || {}; const fj = mzFarkJ(p, t.p); const deg = rsDegisenler(p, t.p);
+  const tz = new Set([...deg].map(id => p.ops[id].m)); const er = Object.values(fj).filter(d => d < 0).length, gc = Object.values(fj).filter(d => d > 0).length;
+  return `<div class="pm-mz-etki" role="status"><span class="pm-mz-taban">${ic('eye', 'k')}<small>Karşı</small><b>${esc(t.ad)}</b>${U.mzKarsi ? dugme('', 'mz-karsi', { kucuk: true, hayalet: true, simge: 'x', ad: 'Karşılaştırmayı bırak', veri: `data-v="${esc(U.mzKarsi)}"` }) : ''}</span>
+    <span class="pm-mz-olcu"><small>Gecikme</small><b class="mono">${saat(o0.wT)} → ${saat(o.wT)}</b>${fark(o.wT, o0.wT)}</span>
+    <span class="pm-mz-olcu"><small>Geciken</small><b class="mono">${o0.late ?? '—'} → ${o.late ?? '—'}</b>${fark(o.late, o0.late, 0)}</span>
+    <span class="pm-mz-olcu"><small>Yer değişen</small><b class="mono">${deg.size} iş · ${tz.size} tezgâh</b></span>
+    ${!deg.size && Math.abs((o.wT || 0) - (o0.wT || 0)) > 0.05 ? `<span class="pm-mz-not" title="Ağırlıklı gecikme öncelik ağırlığıyla hesaplanır">${ic('help', 'k')}İşler yerinde; fark öncelik ağırlığından</span>` : ''}
+    <button type="button" class="pm-mz-olcu" data-act="mz-degisen" ${er + gc ? '' : 'disabled'}><small>Bitişi değişen</small><b class="mono"><span class="pm-fark-iyi">${er} erken</span> · <span class="pm-fark-kotu">${gc} geç</span></b></button></div>`;
+}
+
+/* ---------- raf ---------- */
+function mzRaf(p) {
+  const acik = mzAcik(); const sek = MZ_RAF.some(x => x[0] === U.mzRaf) ? U.mzRaf : 'siparis';
+  const sayi0 = { siparis: Object.values(p.J || {}).filter(J => J.T > 0.05).length || '', kisit: S.kapali.length || '', senaryo: S.senaryolar.length || '' };
+  const govde = !acik ? '' : sek === 'siparis' ? mzSiparis(p) : sek === 'kuyruk' ? mzKuyruk(p) : sek === 'rota' ? mzRota(p) : sek === 'kisit' ? mzKisit() : sek === 'senaryo' ? mzSenaryo(p) : sek === 'hesap' ? mzHesap(p) : mzAg(p);
+  const h = acik && U.mzRafH ? ` style="height:${Math.round(U.mzRafH)}px"` : '';
+  return `<section class="pm-mz-raf" ${acik ? 'data-acik' : ''}${h} aria-label="Raf: planın bütün okumaları">
+    ${acik ? '<div class="pm-mz-tut" role="separator" aria-orientation="horizontal" aria-label="Raf yüksekliği: sürükleyin ya da ok tuşlarıyla değiştirin" tabindex="0"></div>' : ''}
+    <header class="pm-mz-bas"><div class="pm-mz-sekme" role="tablist" aria-label="Raf">${MZ_RAF.map(([id, ad, sm]) => `<button type="button" role="tab" data-act="mz-raf" data-v="${id}" aria-selected="${acik && sek === id}" title="${esc(ad)}">${ic(sm, 'k')}<span>${esc(ad)}</span>${sayi0[id] ? `<i class="pm-at-sayi" ${id === 'siparis' || id === 'kisit' ? 'data-ton="hata"' : ''}>${sayi0[id]}</i>` : ''}</button>`).join('')}</div>
+      ${dugme('', 'mz-raf-ac', { kucuk: true, hayalet: true, simge: acik ? 'down' : 'up', ad: acik ? 'Rafı kapat' : 'Rafı aç' })}
+      ${mzEtki()}</header>
+    ${acik ? `<div class="pm-mz-govde" data-sekme="${sek}">${govde}</div>` : ''}</section>`;
+}
+
+/* 1. siparişler: hepsi tek tabloda, seçince resim ve panel o siparişe gider */
+function mzSiparis(p) {
+  const t = mzTaban(); const fj = mzFarkJ(p, t && t.p); const A = mzAyrisim().m; const cxj = cxAl().jobs; const sj = atSecJob(); const yaz = yetkili('plan.yaz');
+  const sz = U.mzSipF || 'hepsi'; const sr = U.mzSipS || 'gecikme';
+  let l = S.D.siparisler.filter(x => !x.havuz && p.J && p.J[x.id]);
+  if (sz === 'gec') l = l.filter(x => p.J[x.id].T > 0.05); else if (sz === 'degisen') l = l.filter(x => fj[x.id]);
+  const due = x => (cxj[x.id] || {}).due ?? Infinity;
+  l.sort(sr === 'termin' ? (a, b) => due(a) - due(b) : sr === 'oncelik' ? (a, b) => a.oncelik - b.oncelik || due(a) - due(b) : sr === 'bitis' ? (a, b) => (p.J[a.id].C ?? 1e9) - (p.J[b.id].C ?? 1e9) : (a, b) => (p.J[b.id].T || 0) - (p.J[a.id].T || 0) || due(a) - due(b));
+  const belirleyen = j => { const a = A[j]; if (!a) return '—'; const k = a.kaynak.slice().sort((x, y) => y[2] - x[2])[0];
+    if (k && k[2] >= 0.5) return `<button type="button" class="pm-at-link mono" ${k[0] === 'tezgah' ? `data-mz-m="${esc(k[1])}"` : ''} data-act="${k[0] === 'tezgah' ? 'at-git-tez' : 'mz-raf'}" data-v="${esc(k[0] === 'tezgah' ? k[1] : 'etki')}" title="Bitişini en çok bu bekletiyor">${esc(k[1])}</button> <small class="mono">${saat(k[2])}</small>`;
+    const c = Object.keys(a.seg).sort((x, y) => a.seg[y] - a.seg[x])[0]; return c ? `<small>${esc(KAT[c][0])}</small>` : '—'; };
+  const sat = l.map(x => { const J = p.J[x.id]; const d = fj[x.id]; const gec = J.T > 0.05; const dd = due(x);
+    return `<tr data-mz-j="${esc(x.id)}" ${sj === x.id ? 'data-secili' : ''} ${gec ? 'data-gec' : ''}><td><button type="button" class="pm-mz-sip" data-act="at-sip" data-v="${esc(x.id)}"><span class="pm-at-nokta" style="background:${esc(atIsRenk(x.id))}"></span><b class="mono">${esc(x.id)}</b></button></td>
+      <td><small>${esc(urunAd(x.urun))}</small></td>
+      <td><select class="pm-mz-sec" data-chg="mz-oncelik" data-v="${esc(x.id)}" aria-label="${esc(x.id)} önceliği" ${yaz ? '' : 'disabled'}>${[1, 2, 3].map(v => `<option value="${v}" ${x.oncelik === v ? 'selected' : ''}>${ONCELIK[v]}</option>`).join('')}</select></td>
+      <td class="mono">${isFinite(dd) ? esc(fmtDT(S.D, dd)) : '—'}</td><td class="mono">${J.C != null && isFinite(J.C) ? esc(fmtDT(S.D, J.C)) : '—'}</td>
+      <td>${gec ? `<span class="pm-mz-gec">${esc(gecMetin(J.T))} geç</span>` : '<span class="pm-mz-tamam">yetişiyor</span>'}</td>
+      <td class="mono">${d ? `<span class="${d < 0 ? 'pm-fark-iyi' : 'pm-fark-kotu'}">${d < 0 ? '−' : '+'}${saat(Math.abs(d))}</span>` : ''}</td>
+      <td>${belirleyen(x.id)}</td>
+      <td>${dugme('', 'at-onal', { kucuk: true, hayalet: true, simge: 'flag', ad: `${x.id} öne al`, yetki: 'plan.yaz', veri: `data-v="${esc(x.id)}"` })}</td></tr>`; }).join('');
+  return `<div class="pm-mz-arac"><div class="pm-seg" role="group" aria-label="Süz">${[['hepsi', 'Hepsi'], ['gec', 'Geç'], ['degisen', 'Bitişi değişen']].map(([v, ad]) => `<button type="button" data-act="mz-sip-f" data-v="${v}" aria-pressed="${sz === v}">${ad}</button>`).join('')}</div>
+      <label class="pm-mz-sirala"><span>Sırala</span><select class="pm-mz-sec" data-chg="mz-sip-s">${[['gecikme', 'Gecikme'], ['termin', 'Termin'], ['bitis', 'Bitiş'], ['oncelik', 'Öncelik']].map(([v, ad]) => `<option value="${v}" ${sr === v ? 'selected' : ''}>${ad}</option>`).join('')}</select></label>
+      <small class="pm-kucuk">${l.length} sipariş. Öncelik değişince motor yeniden dizer; etkisi şeritte ve resimde görünür.</small></div>
+    <div class="pm-mz-tablo"><table><thead><tr><th>Sipariş</th><th>Ürün</th><th>Öncelik</th><th>Termin</th><th>Bitiş</th><th>Durum</th><th>Fark</th><th>Bitişi belirleyen</th><th><span class="tc-gizli-etiket">Hamle</span></th></tr></thead><tbody>${sat || '<tr><td colspan="9" class="pm-kucuk">Bu süzgeçte sipariş yok.</td></tr>'}</tbody></table></div>`;
+}
+
+/* 2. kuyruklar: bir tezgâh grubunun sıraları yan yana; kart sürüklenince sıra ya da tezgâh değişir */
+function mzGruplar() { const g = []; for (const m of S.D.tezgahlar) if (m.grup && !g.includes(m.grup)) g.push(m.grup); return g; }
+function mzGrupSec(p) {
+  const gl = mzGruplar(); const tg = m => (S.D.tezgahlar.find(x => x.id === m) || {}).grup;
+  const op = U.gySec && p.ops[U.gySec]; const g = (op && tg(op.m)) || (U.rsTez && tg(U.rsTez)) || MZ.grup;
+  if (g && gl.includes(g)) return g;
+  /* kendiliğinden seçilen grup, sırası değişebilsin diye en az iki tezgâhlı en yüklü gruptur */
+  const n = x => S.D.tezgahlar.filter(m => m.grup === x).length; const yuk = {}; for (const id in p.ops) { const r = p.ops[id]; const x = tg(r.m); if (x && isFinite(r.S)) yuk[x] = (yuk[x] || 0) + (r.C - r.S); }
+  return gl.slice().sort((a, b) => (n(b) > 1) - (n(a) > 1) || (yuk[b] || 0) - (yuk[a] || 0))[0];
+}
+function mzKuyrukListe(p, m, now) { return Object.values(p.ops).filter(r => r.m === m && isFinite(r.S) && !r.done && r.C > now).sort((a, b) => a.S - b.S); }
+function mzKuyruk(p) {
+  const g = mzGrupSec(p); const now = rsSimdi(); const t = rsT(); const s = atSahne(); const cx = cxAl(); const sj = atSecJob(); const yaz = yetkili('plan.yaz');
+  const tez = S.D.tezgahlar.filter(m => m.grup === g).map(m => m.id);
+  const kol = tez.map(m => { const l = mzKuyrukListe(p, m, now); const st = s.ist[m] ? atDurum(s, m, t) : { dur: 'bos' }; const d = (s.dol[m] || [])[0];
+    const kart = l.slice(0, 14).map(r => { const o = cx.byId[r.id] || {}; const kl = S.locks[r.id]; const cal = r.S <= now; const gec = p.J[r.job] && p.J[r.job].T > 0.05;
+      return `<li data-id="${esc(r.id)}" data-mz-j="${esc(r.job)}" ${kl || cal ? 'data-sabit' : ''} ${U.gySec === r.id ? 'data-secili' : sj === r.job ? 'data-is' : ''} style="--c:${esc(atIsRenk(r.job))}"><button type="button" data-act="km-is" data-v="${esc(r.id)}"><span><b class="mono">${esc(r.id)}</b><small class="mono">${esc(fmtDT(S.D, r.S).slice(6))}</small></span><small>${esc(o.ad || '')} · ${saat(r.C - r.S)}</small></button>${cal ? `<span class="pm-mz-rozet" title="Şu an işleniyor">${ic('play', 'k')}</span>` : kl ? `<span class="pm-mz-rozet" title="Sabit">${ic('lock', 'k')}</span>` : gec ? '<span class="pm-mz-rozet" data-ton="hata" title="Siparişi geç">!</span>' : ''}</li>`; }).join('');
+    return `<section class="pm-mz-kol" data-m="${esc(m)}" ${U.rsTez === m ? 'data-secili' : ''}><header><button type="button" data-act="at-git-tez" data-v="${esc(m)}" data-mz-m="${esc(m)}"><i class="pm-mz-dur" data-dur="${st.dur}"></i><b class="mono">${esc(m)}</b></button><small class="mono" ${d > 0.97 ? 'data-ton="hata"' : ''}>${d == null ? 'kapalı' : 'bugün %' + Math.round(d * 100)}</small><small class="mono">${l.length} iş</small></header>
+      <ol class="pm-mz-kart" data-m="${esc(m)}" aria-label="${esc(m)} kuyruğu">${kart || '<li class="pm-kucuk" data-bos>Sırada iş yok.</li>'}</ol>${l.length > 14 ? `<small class="pm-kucuk">+${l.length - 14} iş daha</small>` : ''}</section>`; }).join('');
+  return `<div class="pm-mz-arac"><div class="pm-seg" role="group" aria-label="Tezgâh grubu">${mzGruplar().map(x => `<button type="button" data-act="mz-grup" data-v="${esc(x)}" aria-pressed="${x === g}">${esc(x)}</button>`).join('')}</div>
+      <small class="pm-kucuk">${yaz ? 'Kartı tutup aynı sütunda sıralayın ya da başka tezgâha bırakın; motor saatleri yeniden hesaplar. Çalışan ve sabit iş yerinden oynamaz.' : 'Sırayı değiştirme yetkiniz yok; yalnız görürsünüz.'}</small></div>
+    <div class="pm-mz-kolonlar">${kol}</div>`;
+}
+function mzKuyrukBagla() {
+  if (!yetkili('plan.yaz')) return;
+  for (const el of document.querySelectorAll('.pm-mz-kart')) { if (el.dataset.bagli) continue; el.dataset.bagli = '1';
+    pmSirala(el, { grup: 'mz-kuyruk', animasyon: V20_AZ() ? 0 : 150, suzgec: '[data-sabit], [data-bos]', hayalet: 'pm-v20-hayalet', gecikme: 120,
+      gecebilir: e => !(e.related && e.related.hasAttribute('data-sabit') && e.willInsertAfter === false && !e.related.nextElementSibling), bitince: mzKuyrukBirak }); }
+}
+function mzKuyrukBirak(e) {
+  const id = e.item.dataset.id; const p = S.plan; const r = p.ops[id]; if (!r) return;
+  const m0 = e.from.dataset.m, m1 = e.to.dataset.m; const now = rsSimdi();
+  if (m0 === m1) {
+    if (e.oldIndex === e.newIndex) return;
+    const ilk = mzKuyrukListe(p, m0, now).slice(0, 14).map(x => x.id); const ids = [...e.to.children].map(x => x.dataset.id).filter(Boolean);
+    const yuva = ilk.map(x => p.ops[x].S).sort((a, b) => a - b);
+    const mods = ids.map((x, i) => [x, m0, yuva[i] + i * 1e-4]).filter(([x]) => !S.locks[x] && p.ops[x].S > now);
+    hamleDene(mods, `${m0} kuyruğu elle sıralandı`, [], [], {}); return;
+  }
+  const sonra = e.item.nextElementSibling && e.item.nextElementSibling.dataset.id; const once = e.item.previousElementSibling && e.item.previousElementSibling.dataset.id;
+  const t = sonra && p.ops[sonra] ? p.ops[sonra].S : once && p.ops[once] ? p.ops[once].C : now;
+  U.gySec = id; U.secJob = r.job; gyTasi(id, m1, Math.max(now, t));
+}
+
+/* 3. rota: seçili siparişin adımları, her adımın yapabilen tezgâhları ve süreleri; tezgâh çipi taşımadır */
+function mzRota(p) {
+  const sj = atSecJob() || (U.mzRotaJ && p.J[U.mzRotaJ] ? U.mzRotaJ : null); const cx = cxAl(); const now = rsSimdi(); const yaz = yetkili('plan.yaz');
+  const secim = `<label class="pm-mz-sirala"><span>Sipariş</span><select class="pm-mz-sec" data-chg="mz-rota-j">${sj ? '' : '<option value="">Seçin</option>'}${S.D.siparisler.filter(x => !x.havuz && p.J && p.J[x.id]).map(x => `<option value="${esc(x.id)}" ${x.id === sj ? 'selected' : ''}>${esc(x.id)} · ${esc(urunAd(x.urun))}</option>`).join('')}</select></label>`;
+  if (!sj || !cx.jobs[sj]) return `<div class="pm-mz-arac">${secim}<small class="pm-kucuk">Resimde, tabloda ya da kuyrukta bir sipariş seçin; rotası burada adım adım açılır.</small></div>`;
+  const j = cx.jobs[sj]; const sp = S.D.siparisler.find(x => x.id === sj) || {}; const ayni = S.D.siparisler.filter(x => !x.havuz && x.urun === sp.urun && x.id !== sj);
+  const adim = j.ops.map((o, i) => { const r = p.ops[o.id] || {}; const bitti = r.done || (isFinite(r.C) && r.C <= now); const cal = isFinite(r.S) && r.S <= now && r.C > now;
+    const cips = o.c.map(c => { const bu = c.m === r.m; const ad = c.m[0] === '@' ? c.m.slice(1) + ' (fason)' : c.m;
+      return `<li data-mz-m="${esc(c.m)}" ${bu ? 'data-bu' : ''}>${bu || bitti || cal || !yaz ? `<span class="mono">${esc(ad)}</span>` : `<button type="button" class="mono" data-act="mz-tasi" data-v="${esc(c.m)}" data-id="${esc(o.id)}" title="Bu adımı ${esc(ad)} tezgâhına taşı">${esc(ad)}</button>`}<small class="mono">${c.fas ? 'fason' : `${saat(c.run)}${c.su ? ' + ayar ' + saat(c.su) : ''}`}</small></li>`; }).join('');
+    return `<li class="pm-mz-adim" ${bitti ? 'data-bitti' : cal ? 'data-simdi' : ''} ${U.gySec === o.id ? 'data-secili' : ''}><header><b class="mono">${i + 1}</b><button type="button" class="pm-at-link" data-act="km-is" data-v="${esc(o.id)}">${esc(o.ad || o.k)}</button>${S.locks[o.id] ? ic('lock', 'k') : ''}</header>
+      <small class="mono">${isFinite(r.S) ? `${esc(fmtDT(S.D, r.S).slice(6))} → ${esc(fmtDT(S.D, r.C).slice(6))}` : 'planlanmadı'}</small><ul>${cips}</ul></li>`; }).join(`<li class="pm-mz-ok" aria-hidden="true">${ic('chev-right', 'k')}</li>`);
+  return `<div class="pm-mz-arac">${secim}<small class="pm-kucuk">Koyu çip adımın şu anki tezgâhı. Başka çipe basınca adım oraya taşınır; etkisi şeritte görünür. Rota verisinin kendisi Rotalar sayfasında değişir.</small>${dugme('Rotalar', 'git', { kucuk: true, hayalet: true, simge: 'edit', veri: 'data-v="rotalar"' })}</div>
+    <ol class="pm-mz-rota" aria-label="${esc(sj)} rotası">${adim}</ol>
+    ${ayni.length ? `<p class="pm-kucuk">Aynı ürün: ${ayni.slice(0, 8).map(x => `<button type="button" class="pm-at-link mono" data-act="at-sip" data-v="${esc(x.id)}">${esc(x.id)}</button>`).join(', ')}</p>` : ''}`;
+}
+
+/* 4. kısıt ve veri: motorun saydığı kurallar, takvimdeki açık ve kapalı pencereler, ayarlar; her biri kaldıraçtır */
+function mzKisitOlc(id) {
+  if (!S.plan || calisan) return;
+  try { const st = stOf([id]); const cx = compile(st); const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); const p = kisaArama(st, cx, p0, 600); const k = planKaydi(p, st, null);
+    MZ.kisit[id] = { dv: S.dataVer, wT: k.ozet.wT, late: k.ozet.late }; }
+  catch (e) { MZ.kisit[id] = { dv: S.dataVer, hata: String(e.message || e) }; }
+  render();
+}
+function mzKisit() {
+  const yazP = yetkili('plan.yaz'), yazV = yetkili('veri.yaz'); const o = S.plan.ozet; const bedel = S.bedel && S.bedel.dataVer === S.dataVer ? S.bedel : null;
+  const satir = k => { const kapali = S.kapali.includes(k.id); const m = MZ.kisit[k.id] && MZ.kisit[k.id].dv === S.dataVer ? MZ.kisit[k.id] : null; const b = bedel && bedel.liste.find(x => x.id === k.id);
+    const sonuc = m ? (m.hata ? '<small class="pm-kucuk">hesaplanamadı</small>' : `<small class="mono">kalksaydı gecikme ${saat(o.wT)} → <b>${saat(m.wT)}</b> ${fark(m.wT, o.wT)} · geciken ${m.late}</small>`) : b ? `<small class="mono">bedeli ${saat(b.dW)}</small>` : '';
+    return `<li ${kapali ? 'data-kapali' : ''} ${U.mzKisitVurgu === k.id ? 'data-secili' : ''}><label class="pm-anahtar"><input type="checkbox" role="switch" data-chg="kisit" data-v="${k.id}" ${kapali ? '' : 'checked'} ${yazP ? '' : 'disabled'}><i aria-hidden="true"></i><span class="tc-gizli-etiket">${kapali ? 'Kapalı' : 'Açık'}</span></label>
+      <span><b>${esc(k.ad)}</b>${sonuc}</span>${kapali ? '' : dugme('Etkisi', 'mz-kisit-olc', { kucuk: true, hayalet: true, simge: 'target', yetki: 'plan.yaz', ad: `${k.ad} kalksaydı`, veri: `data-v="${k.id}"` })}</li>`; };
+  const prm = KATALOG.flatMap(g => g.l).flatMap(k => (k.p || []).map(x => paramHtml(x, x[0] === 'ayarlar' ? yazV : yazP))).join('');
+  const ar = S.down.slice().sort((a, b) => a.from - b.from).slice(0, 8).map(d => `<li data-mz-m="${esc(d.m)}"><button type="button" class="pm-at-link mono" data-act="at-git-tez" data-v="${esc(d.m)}">${esc(d.m)}</button><small class="mono">${esc(fmtDT(S.D, d.from))} → ${esc(fmtDT(S.D, d.to).slice(6))}</small></li>`).join('');
+  const em = S.ekMesai.slice(0, 8).map(x => `<li><button type="button" class="pm-at-link mono" data-act="at-git-tez" data-v="${esc(x.m)}">${esc(x.m)}</button><small class="mono">${esc(fmtDT(S.D, x.gun * 24).slice(0, 9))} ${esc(x.vardiya)}</small></li>`).join('');
+  return `${planGuncel() ? '' : `<p class="pm-mz-bayat">${ic('alert', 'k')}<span>Veri değişti; resimdeki plan eski veriyle kurulu.</span>${dugme('Planı yeniden kur', 'coz', { kucuk: true, birincil: true, simge: 'play', yetki: 'plan.yaz' })}</p>`}
+    <div class="pm-mz-izgara">
+    <section class="pm-mz-blok"><h4>${ic('gear', 'k')}Motorun saydığı kurallar</h4><p class="pm-kucuk">Anahtar kuralı açar ya da kapatır (plan yeniden kurulur). "Etkisi" kuralı kaldırmadan, kalksaydı ne olurdu diye kısa bir arama yapar; yaklaşıktır.</p>
+      <ul class="pm-mz-kisitlar">${GEVSEK_IDS.map(id => KATALOG_DUZ[id]).map(satir).join('')}</ul>
+      <div class="pm-dugmeler">${dugme(bedel ? 'Bedelleri yeniden hesapla' : 'Hepsinin bedelini hesapla', 'bedel', { kucuk: true, simge: 'chart', yetki: 'plan.yaz' })}${dugme('Bütün kısıtlar', 'git', { kucuk: true, hayalet: true, simge: 'edit', veri: 'data-v="kisitlar"' })}</div></section>
+    <section class="pm-mz-blok"><h4>${ic('wrench', 'k')}Takvim: arıza ve ek mesai</h4>
+      <ul class="pm-mz-liste">${ar || '<li class="pm-kucuk">Bilinen arıza yok.</li>'}</ul><ul class="pm-mz-liste">${em || '<li class="pm-kucuk">Ek mesai yok.</li>'}</ul>
+      <div class="pm-dugmeler">${U.rsTez && U.rsTez[0] !== '@' ? dugme(`${U.rsTez} için 4 sa arıza dene`, 'mz-ariza', { kucuk: true, simge: 'wrench', yetki: 'plan.yaz', veri: `data-v="${esc(U.rsTez)}"` }) : '<small class="pm-kucuk">Arıza denemek için resimde bir tezgâh seçin.</small>'}${dugme('Takvim', 'git', { kucuk: true, hayalet: true, simge: 'edit', veri: 'data-v="takvim"' })}</div></section>
+    <section class="pm-mz-blok"><h4>${ic('ruler', 'k')}Ayarlar</h4><div class="pm-paramlar">${prm}</div><p class="pm-kucuk">Ayar değişince plan eskir; "Planı yeniden kur" ile yeni ayarla kurulur.</p></section></div>`;
+}
+
+/* 5. senaryolar: kaydet, karşılaştır (resim ve şerit o senaryoya göre farkı gösterir), aç */
+function mzSenaryo(p) {
+  const yaz = yetkili('plan.yaz'); const o = p.ozet || {};
+  const l = S.senaryolar.slice().reverse().map(s => { const so = s.ozet || (s.plan && s.plan.ozet) || {}; const k = U.mzKarsi === s.id;
+    return `<li ${k ? 'data-secili' : ''}><span><b>${esc(s.ad)}</b><small>${esc(s.yazar || '')} · ${esc(zamanYaz(s.zaman))}${s.id === S.canli ? ' · yayında' : s.durum === 'onay' ? ' · onayda' : ''}</small></span>
+      <span class="mono">gecikme ${saat(so.wT)} <small>şu anki ${fark(o.wT, so.wT) || 'aynı'}</small></span><span class="mono">geciken ${so.late ?? '—'}</span>
+      <span class="pm-km-hamleler">${s.plan && s.plan.ops ? dugme(k ? 'Karşılaştırmayı bırak' : 'Karşılaştır', 'mz-karsi', { kucuk: true, birincil: !k, simge: 'eye', veri: `data-v="${esc(s.id)}"` }) : ''}${dugme('Aç', 'sen-ac', { kucuk: true, hayalet: true, yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` })}</span></li>`; }).join('');
+  return `<div class="pm-mz-arac">${yaz ? `<form class="pm-mz-form" data-form="senaryo-kaydet" novalidate><input class="tc-alan-kutu" name="ad" placeholder="Senaryo adı" aria-label="Senaryo adı"><button type="submit" class="tc-dugme tc-dugme-kucuk tc-dugme-birincil" ${planGuncel() ? '' : 'disabled title="Güncel plan gerekir"'}>${ic('flag', 'k')}<span>Şu anki planı kaydet</span></button></form>` : ''}
+      <small class="pm-kucuk">Karşılaştır: resim o senaryodan farklı yerleri işaretler, şerit farkı sayar. Aç: çalışma o senaryoya döner.</small></div>
+    <ul class="pm-mz-senaryo">${l || '<li class="pm-kucuk">Kayıtlı senaryo yok. Bir değişiklik deneyip "Şu anki planı kaydet" deyin; sonra başka bir yol deneyip ikisini karşılaştırın.</li>'}</ul>`;
+}
+
+/* 6. ne neyi etkiliyor: bekleme türü → kaynak → geç sipariş. Bağın kalınlığı beklenen saat. */
+function mzAg(p) {
+  const A = mzAyrisim().m; const sj = atSecJob();
+  const gec = S.D.siparisler.filter(x => !x.havuz && p.J && p.J[x.id] && p.J[x.id].T > 0.05 && A[x.id]).sort((a, b) => p.J[b.id].T - p.J[a.id].T).slice(0, 10).map(x => x.id);
+  if (!gec.length) return '<p class="pm-kucuk">Geç sipariş yok; bekleten kaynak da yok.</p>';
+  const kay = {}, tur = {}, bag = [];
+  for (const j of gec) for (const [k, ad, v] of A[j].kaynak) { if (v < 0.25) continue; const e = kay[ad] = kay[ad] || { ad, k, v: 0 }; e.v += v; tur[k] = (tur[k] || 0) + v; bag.push({ k, ad, j, v }); }
+  const kl = Object.values(kay).sort((a, b) => b.v - a.v).slice(0, 9); const ks = new Set(kl.map(x => x.ad)); const tl = Object.keys(tur).filter(k => kl.some(x => x.k === k)).sort((a, b) => tur[b] - tur[a]);
+  const W = 760, H = Math.max(220, 34 * Math.max(gec.length, kl.length) + 30), x0 = 130, x1 = 420, x2 = 600;
+  const yer = (l, i) => 24 + (i + 0.5) * ((H - 30) / l.length); const en = Math.max(...kl.map(x => x.v), 1); const ka = v => Math.max(1.5, 14 * v / en);
+  const yT = Object.fromEntries(tl.map((k, i) => [k, yer(tl, i)])), yK = Object.fromEntries(kl.map((x, i) => [x.ad, yer(kl, i)])), yJ = Object.fromEntries(gec.map((j, i) => [j, yer(gec, i)]));
+  const yol = (xa, ya, xb, yb) => `M${xa},${ya} C${(xa + xb) / 2},${ya} ${(xa + xb) / 2},${yb} ${xb},${yb}`;
+  const tk = tl.flatMap(k => kl.filter(x => x.k === k).map(x => `<path class="pm-mz-bag" data-a="t:${esc(k)}" data-b="k:${esc(x.ad)}" d="${yol(x0, yT[k], x1, yK[x.ad])}" stroke-width="${ka(x.v)}" style="--c:${KAT[k][1]}"><title>${esc(MZ_TUR_AD[k] || KAT[k][0])} · ${esc(x.ad)}: ${saat(x.v)}</title></path>`)).join('');
+  const kj = bag.filter(b => ks.has(b.ad)).map(b => `<path class="pm-mz-bag" data-a="k:${esc(b.ad)}" data-b="j:${esc(b.j)}" ${sj === b.j ? 'data-sec' : ''} d="${yol(x1, yK[b.ad], x2, yJ[b.j])}" stroke-width="${ka(b.v)}" style="--c:${KAT[b.k][1]}"><title>${esc(b.ad)} → ${esc(b.j)}: ${saat(b.v)} bekletti</title></path>`).join('');
+  const dugum = (x, y, ad, alt, act, v, n, sag) => `<g class="pm-mz-dugum" data-n="${esc(n)}" ${n[0] === 'j' ? `data-mz-j="${esc(v)}"` : act === 'at-git-tez' ? `data-mz-m="${esc(v)}"` : ''} data-act="${act}" data-v="${esc(v)}" tabindex="0" role="button" aria-label="${esc(ad)} ${esc(alt)}" ${n === 'j:' + sj ? 'data-sec' : ''}><circle cx="${x}" cy="${y}" r="5"></circle><text x="${sag ? x + 10 : x - 10}" y="${y + 4}" text-anchor="${sag ? 'start' : 'end'}">${esc(ad)}<tspan class="pm-mz-alt" dx="6">${esc(alt)}</tspan></text></g>`;
+  const svg = tl.map(k => dugum(x0, yT[k], MZ_TUR_AD[k] || KAT[k][0], saat(tur[k]), MZ_TUR_KISIT[k] ? 'mz-kisit-git' : 'mz-raf', MZ_TUR_KISIT[k] || 'kisit', 't:' + k)).join('')
+    + kl.map(x => dugum(x1, yK[x.ad], x.ad, saat(x.v), x.k === 'tezgah' || x.k === 'ariza' ? 'at-git-tez' : 'mz-raf', x.k === 'tezgah' ? x.ad : x.k === 'ariza' ? x.ad.replace('Arıza · ', '') : 'kisit', 'k:' + x.ad)).join('')
+    + gec.map(j => dugum(x2, yJ[j], j, gecMetin(p.J[j].T) + ' geç', 'at-sip', j, 'j:' + j, true)).join('');
+  const bas = kl[0]; const bt = tl[0];
+  return `<div class="pm-mz-arac"><p class="pm-mz-yorum">${ic('chart', 'k')}<span>En çok <b>${esc(bas.ad)}</b> bekletiyor (${saat(bas.v)}); bekleme türlerinde başta <b>${esc((MZ_TUR_AD[bt] || KAT[bt][0]).toLocaleLowerCase('tr-TR'))}</b> var. Düğüme basınca resim ve panel oraya gider; tür düğümü ilgili kısıtı açar.</span></p></div>
+    <div class="pm-mz-ag-kap"><svg class="pm-mz-ag" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bekleme türü, kaynak ve geç sipariş arasındaki bağlar"><text class="pm-mz-kolad" x="${x0}" y="14" text-anchor="end">Bekleme türü</text><text class="pm-mz-kolad" x="${x1}" y="14" text-anchor="middle">Kaynak</text><text class="pm-mz-kolad" x="${x2}" y="14">Geç sipariş</text>${tk}${kj}${svg}</svg></div>`;
+}
+/* düğümün üstüne gelince yalnız ona bağlı yollar parlar */
+document.addEventListener('pointerover', e => {
+  const g = e.target.closest && e.target.closest('.pm-mz-dugum'); const svg = e.target.closest && e.target.closest('.pm-mz-ag'); if (!svg) return;
+  const n = g ? g.dataset.n : null; svg.toggleAttribute('data-hl', !!n);
+  const yak = new Set(n ? [n] : []); if (n) for (const b of svg.querySelectorAll('.pm-mz-bag')) if (b.dataset.a === n || b.dataset.b === n) { yak.add(b.dataset.a); yak.add(b.dataset.b); }
+  for (const b of svg.querySelectorAll('.pm-mz-bag')) b.toggleAttribute('data-yak', !!n && (b.dataset.a === n || b.dataset.b === n || (n[0] === 't' && yak.has(b.dataset.a))));
+  for (const d of svg.querySelectorAll('.pm-mz-dugum')) d.toggleAttribute('data-yak', yak.has(d.dataset.n));
+});
+
+/* raf yüksekliği tutamakla değişir; resim her karede kendi boyunu okuduğu için sürüklerken de uyar */
+function mzRafBoy(h) { const at = document.getElementById('pm-at'); const enc = at ? at.clientHeight - 160 : 600; return Math.max(150, Math.min(enc, h)); }
+document.addEventListener('pointerdown', e => {
+  const t = e.target.closest && e.target.closest('.pm-mz-tut'); if (!t) return; e.preventDefault();
+  const raf = t.parentElement; const y0 = e.clientY, h0 = raf.offsetHeight; t.setPointerCapture(e.pointerId);
+  const hareket = ev => { raf.style.height = mzRafBoy(h0 + y0 - ev.clientY) + 'px'; atTetikle(); };
+  const bit = () => { t.removeEventListener('pointermove', hareket); U.mzRafH = raf.offsetHeight; mzKaydet(); AT.kam = null; render(); };
+  t.addEventListener('pointermove', hareket); t.addEventListener('pointerup', bit, { once: true }); t.addEventListener('pointercancel', bit, { once: true });
+});
+document.addEventListener('keydown', e => {
+  const t = e.target.closest && e.target.closest('.pm-mz-tut'); if (!t || !['ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault();
+  U.mzRafH = mzRafBoy(t.parentElement.offsetHeight + (e.key === 'ArrowUp' ? 32 : -32)); mzKaydet(); AT.kam = null; render(); const y = document.querySelector('.pm-mz-tut'); if (y) y.focus();
+});
+/* merkezde komuta paneli resmin yanında kendi sütunundadır; resmin üstüne binmez */
+const mzPanelWEski = atPanelW;
+atPanelW = function () { return innerWidth >= 900 ? 0 : mzPanelWEski(); };
+
+/* ---------- bağlama ---------- */
+const mzAtEski = sAtolye;
+sAtolye = function (p) { const h = mzAtEski(p); const i = h.lastIndexOf('</div>'); return h.slice(0, i) + mzRaf(p) + h.slice(i); };
+document.addEventListener('change', e => {
+  const el = e.target; const c = el.dataset && el.dataset.chg; if (!c || !c.startsWith('mz-')) return;
+  if (c === 'mz-oncelik') kmOncelik(el.dataset.v, +el.value);
+  else if (c === 'mz-sip-s') { U.mzSipS = el.value; render(); }
+  else if (c === 'mz-rota-j') { U.mzRotaJ = el.value || null; if (el.value) { U.secJob = el.value; U.gySec = null; U.rsTez = null; } render(); }
+});
+const mzTekEski = tekEylem;
+tekEylem = function (act, v, el, e) {
+  switch (act) {
+    case 'mz-raf': { const acik = mzAcik(); if (acik && U.mzRaf === v) U.mzRafAcik = false; else { U.mzRaf = v; U.mzRafAcik = true; } mzKaydet(); render(); return true; }
+    case 'mz-raf-ac': U.mzRafAcik = !mzAcik(); mzKaydet(); render(); return true;
+    case 'mz-sip-f': U.mzSipF = v; render(); return true;
+    case 'mz-degisen': U.mzRaf = 'siparis'; U.mzRafAcik = true; U.mzSipF = 'degisen'; mzKaydet(); render(); return true;
+    case 'mz-grup': MZ.grup = v; U.rsTez = null; U.gySec = null; render(); return true;
+    case 'mz-tasi': { const id = el.dataset.id; const r = S.plan.ops[id]; if (!r) return true; U.gySec = id; U.secJob = r.job; gyTasi(id, v, Math.max(rsSimdi(), r.S)); return true; }
+    case 'mz-kisit-olc': mzKisitOlc(v); return true;
+    case 'mz-kisit-git': U.mzRaf = 'kisit'; U.mzRafAcik = true; U.mzKisitVurgu = v; mzKaydet(); render(); setTimeout(() => { const li = document.querySelector('.pm-mz-kisitlar li[data-secili]'); if (li) li.scrollIntoView({ block: 'nearest' }); }, 30); return true;
+    case 'mz-ariza': FB.zaman = rsT(); fbArizaDene(v, 4); return true;
+    case 'mz-karsi': if (U.mzKarsi === v) { U.mzKarsi = null; U.rsFark = false; } else { U.mzKarsi = v; U.rsFark = true; } render(); return true;
+  }
+  return mzTekEski(act, v, el, e);
+};
+/* raf yeniden çizilince kaydırma yeri korunur; kuyruk kartları sürüklenebilir olur */
+const mzRenderEski = render;
+render = function () {
+  const g = document.querySelector('.pm-mz-govde'); const k = document.querySelector('.pm-mz-kolonlar'); const tb = document.querySelector('.pm-mz-tablo');
+  const yer = g ? { s: g.dataset.sekme, g: g.scrollTop, k: k ? k.scrollLeft : 0, t: tb ? tb.scrollLeft : 0 } : null;
+  AT.hoverJ = null;
+  /* merkezde sol sepet paneli açılmaz: sepetin özeti komuta panelinin altında ve raf şeridinde durur */
+  if (U.sayfa === 'tahta' && mercekAl() === 'resim' && U.rsKip !== 'pano' && !U.solElle) { U.solElle = true; U.sol = null; }
+  mzRenderEski();
+  const g2 = document.querySelector('.pm-mz-govde');
+  if (g2 && yer && yer.s === g2.dataset.sekme) { g2.scrollTop = yer.g; const k2 = document.querySelector('.pm-mz-kolonlar'); if (k2) k2.scrollLeft = yer.k; const t2 = document.querySelector('.pm-mz-tablo'); if (t2) t2.scrollLeft = yer.t; }
+  if (document.querySelector('.pm-mz-kart')) mzKuyrukBagla();
+};

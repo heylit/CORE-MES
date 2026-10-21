@@ -1,5 +1,68 @@
 # recete-rota: fark
 
+## Teslim 20.10.2026: planlama modülü ve Reçete ve Rota planlama alanları
+Taban: `main` b7781052. Kaynak: deneme v89 (planlama modülü ve onun içindeki Reçete ve Rota). Sunucuda, göçte, `paylasilan`'da, `istemci/src/ortak`'ta değişiklik yok; gerekenler `CEKIRDEK-ISTEKLERI.md`'de.
+
+### Eklenen (hepsi `istemci/src/moduller/recete-rota/`)
+- `cerceve/planlama/`: planlama modülünün kaynakları. `parca/*.betik` (88 parça; 87'si denemenin parçaları, `zz31-tmi.betik` yeni), `motor/` (`engine`, `kisitlar`, `mip`), `lib/` (driver, fu-core, fu-dom, interact, sortable; lisansları yanında), `stil/modul.stil`.
+  Uzantı `.betik`/`.stil`: parçalar tek başına ayrıştırılamaz (eslint), modül stilinde 30 onaltılık renk var (stylelint); derlenmiş sayfa denetlenir.
+- `planlama-derle.ts`: kaynakları `cerceve/planlama-modulu.html`'e birleştirir (`node istemci/src/moduller/recete-rota/planlama-derle.ts`). Örnek veri, HiGHS, CP-SAT önerisi ve iç içe Reçete ve Rota girmez.
+- `cerceve/planlama-modulu.html` (üretilmiş, 2,29 MB): depoda tutulur; test kaynaklarla aynı olduğunu denetler.
+- `planlama-sayfasi.ts`: ortak stil, simgeler ve uygulama yazı tiplerini sayfadaki iki yer tutucuya açılışta koyar.
+- `planlama-menusu.ts`: planlama yolları (13 anahtar) ve önerilen ikinci menü (`ONERILEN_IKINCI_MENU`; uygulanması çekirdek isteği).
+- `rr-tema.ts`, `cerceve/rr-tema.css`: Reçete ve Rota çerçevesine TMI tasarım değişkenleri ve denemenin teması (prototipin kendi stilinden sonra).
+- Testler: `planlama-derle.test.ts`, `PlanlamaCercevesi.test.tsx`.
+
+### Değişen
+- `cerceve/recete-rota-motoru.html`: denemedeki hâli (77 satır eklendi, 3 değişti). Tanım bölümlerine planlama alanları: Kaynaklar > Makineler (verim, operatör oranı, ₺/saat plan, ışıksız), Personel (ayarcı), yeni "Fason ve aparat" alt sekmesi, rota adımı paneline "Planlama" bölümü (ayar ailesi, aparat, Qmin, kasa, ayar matrisi), ham malzeme kartına tedarik ve giriş muayenesi günü. Hepsi kaydın `plan` alt nesnelerinde. `curPlan` sunucuya bağlı değilken canlı yerleşimi `st.tmiCanli`'dan okur.
+- `ReceteRotaCercevesi.tsx`: iki çerçeve. Planlama yolları planlama çerçevesini, ötekiler Reçete ve Rota çerçevesini açar; ikisinin ortak verisi aynı kayıttır. Geçişte eski çerçeve gizli bekler (bekleme süresi + 1,5 sn ve yoldaki yazma bitene kadar), sonra kayıt yeniden okunur. İçerik politikasına `worker-src blob:` (motor ayrı iş parçacığında; bağlantı yine kapalı).
+- `rotalar.tsx`: 13 planlama yolu. `yazi-tipleri.ts`: `veriAdresi` ayrıldı (iki çerçeve kullanır).
+- `MotorUyarilari.test.tsx`, `PlanVerisi.test.tsx`: çerçeve başlığı iki çerçeveden biri.
+
+### Prototipe göre (planlama modülü)
+- Deneme verisi yok: çalışma `recete-rota-motoru-v1` kaydından kurulur; kayıt yoksa boş kayıttan. Planlama durumu `recete-rota-motoru-v1:planlama` anahtarında (anahtar biçimine uyar, sunucuya yazılır).
+- İç içe Reçete ve Rota açılmaz (yalıtılmış çerçevede iç çerçeve ayrı opak kökendir, erişemez; DOĞRULANDI, Chromium denemesi); Reçete ve Rota sayfası istenince kabuk öteki çerçeveyi açar.
+- Rol her zaman yönetici (`u5`): Aşama 1'de işlemler yalnız yöneticide; sunucu yazmayı kendi yetkisiyle denetler.
+- 1650 kararının varsayılanı (`planDenge` 25) kurulurken konur: açılışta ana tabloya yazılmaz (DOĞRULANDI, kanıt `cerceve-dene`: açılış ve çözüm sonrası kayıt sürümü 1).
+- Motor davranışça aynı: depodaki parçalar denemenin `app.js`'ini bayt bayt verir (zz31 ve ANAHTAR satırı hariç); aynı durumda motor imzası denemeninkiyle aynı (küçük 89326187, orta 6d6268bb).
+
+### Bu modül şunları varsaydı
+1. Planlama çerçevesinde rol yöneticidir (Aşama 1); bağlamada ortak yetki matrisinden gelir.
+2. Planlama sayfaları `plan.oku` işlemiyle görünür; yeni işlem açılmadı (soru SORULACAKLAR'da).
+3. Kanban ikinci menüde yok, Plan tahtasına yönlenir.
+4. "Canlıya al" yalnız kayda (`tmiCanli`) yazar; sunucu planı, Arkon ve terminal güncellenmez.
+5. HiGHS ve CP-SAT yok; seçilirse çalışmaz. Varsayılan motor sayfanın kendi motorudur (`engine`).
+6. Planlama ekran tercihleri (`:planlama-ui4`, `-mz`, `-tk`, `-br`, `-nb`, `-tema`) cihazdadır.
+7. Denemenin veri araçları (set yükle, içeri al, sıfırla) gizli.
+8. Reçete ve Rota'nın kendi Plan, Stüdyo ve Kanban sekmeleri menüden erişilmez; yolları planlama çerçevesine gider.
+9. Planlama durumu için şema değişikliği gerekmez (anahtar `recete_rota_kayit`'ta).
+10. Tekrar eden tezgâhlar teke indirilmedi (onay bekliyor).
+
+### Planlama alanları (FARK-taslak)
+Kayıt, planlama modülünün ana verisidir. Motorun okuduğu ve bu ekranda karşılığı olmayan alanlar kaydın `plan` alt nesnesinde durur. `normalize()` ve `save()` varlık alanlarını silmez; `plan` alt nesnesi korunur (DOĞRULANDI: t161, normalize'dan geçen kayıt kayıpsız döndü).
+
+| Bölüm | Alan | Neden |
+|---|---|---|
+| Kaynaklar > Makineler | Verim (1 = tam), Operatör oranı, ₺ / saat (plan), Işıksız çalışır (`machine.plan.verim`, `opOran`, `ucret`, `isiksiz`) | Motor makine hızını, gözetimsiz çalışmayı ve personel ihtiyacını bu alanlardan okur. |
+| Kaynaklar > Personel | Ayarcı (`person.plan.ayar`) | Ayarı yalnız ayarcı yapar; ayar kısıtı bu işaretle kurulur. |
+| Kaynaklar > Fason ve aparat (yeni alt sekme) | Fason kapasite, süre (gün), çıkış saati, çıkış günleri (`st.plan.fasoncular`) ve aparat adedi (`st.plan.aparatlar`) | Fason sevki günlere ve kapasiteye bağlıdır; aparat sayısı aynı anda çalışabilecek adımı sınırlar. |
+| Ürün ve rotalar > adım paneli > Planlama (yeni bölüm) | Ayar ailesi, Aparat, En küçük parti (Qmin, adımın `minLot` alanı), Kasa (adet), ayar matrisi bağlantısı | Ayar süresi aile geçişine göre matristen gelir; parti bölme Qmin ve kasaya uyar. |
+| Ürün ve rotalar > adım paneli > Önceki adımla ilişki | Anlam: "Örtülü" planlamada örtüşebilir, aktarma adedi `depQty` | Var olan alan kullanıldı; yeni alan açılmadı. |
+| Malzemeler > malzeme kartı | Tedarik (gün), Giriş muayenesi (gün) (`item.plan.tedarikGun`, `muayeneGun`) | Malzeme hazır olma tarihi bu iki süreyle hesaplanır. |
+| Değişiklik dinleyicisi | `data-s="planp"` girişleri `planpDegisti()` ile `plan` alt nesnesine yazar | Tek giriş noktası; boş bırakılan isteğe bağlı alan çıkar, zorunlu alan boşsa eski değer kalır. |
+
+Varsayımlar (öneriyle ilerlendi): planlama çalışan rotayı (`st.routes`) okur, revizyon onayı planlamayı beklemez (geri alma maliyeti orta, okuma tek fonksiyonda); vardiya molaları planlamaya geçmez; rotanın ilk adımındaki hammadde girdisi bilgi amaçlıdır; makinenin "Durum" alanı ve kişinin "Aktif" işareti planlamaya geçmez.
+
+Fason adım ve canlı plan:
+- Fason adım çerçevede istasyonsuz, `fasonId`'li adım olarak kurulur (`fasonId` = fasoncu kodu, `terminGun` = fasoncunun süresi); beş sette "planlanamıyor" adım 0 (t161 imzaları değişmedi).
+- Fasoncu adı çerçevede "Fason firma #FS-..." görünür: firma listesi bağlı sunucudan gelir (`BAGLI.durum.fasonFirms`). Bağlamada firma kartına bağlanır.
+- Canlıya alınan plan kayda `tmiCanli` olarak yazılır: `{id, surum, ad, kim, zaman, yerlesim}`, yerlesim "emir no|OP no" -> [{makineId, baslangic}]. Reçete ve Rota bunu sunucu yerleşimiyle aynı yoldan okur (`curPlan`). Elle sıra (`qorder`) ve elle makine (`assign`) yazılmaz.
+- Yerleşim çerçeve motoru için en erken başlangıçtır; küçük sette 129 işin hepsi canlıdaki makinesinde, bir kısmı canlı saatten sonra başlıyor (sayı koşu saatine bağlı: denemede ve bu teslimde 20.10'da 103), 8 çiftin makine sırası değişiyor (t163). Reçete ve Rota'nın emir tarihleri canlı plandan farklıdır; tek motor kararına kadar böyle kalır.
+
+### Oturtmada korunacak depo farkı (koordinatör notu, 20.10)
+ÜE 327 a PR'ı (#2161) girerse `sunucu/moduller/recete-rota/emirler.test.ts` değişir: :16 import'a `kararliSayimiSonuclandir`, :179 sonrasına `await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));`. Neden: sağlam sayım Kalite Merkezi onayına kadar "karar bekliyor". Bu teslim `emirler.test.ts`'ye dokunmaz; oturtulurken o fark ezilmez.
+
+## Önceki teslim (13.10.2026)
 Depoda karşılığı olmayan yeni modül; menüde eski Rota'nın yerini alır. Depodaki `rota` modülünün dosyası silinmez; yalnız sayfası menüde gizlenir (`paylasilan/sayfalar/rota.ts`, yamada). Taban: `main` 3cbc270.
 
 ## Neden

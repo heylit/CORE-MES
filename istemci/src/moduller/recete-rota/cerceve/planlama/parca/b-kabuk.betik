@@ -1,0 +1,211 @@
+/* ---------- ekranlar ----------
+   Üç ekran: Plan (çalışma), Veri ve kısıtlar, Geçmiş. Eski sayfa kimlikleri görünüm kimliği olarak kalır;
+   böylece "masaya git" gibi bütün bağlar yeni düzende de doğru yere açılır. */
+const EKRANLAR = [
+  ['plan', 'Plan', 'gantt', [['bugun', 'Bugün', 'check'], ['tahta', 'Tahta', 'dash'], ['studyo', 'Nasıl hesaplandı', 'chart']]],
+  ['veri', 'Veri ve kısıtlar', 'layers', [['siparisler', 'Siparişler', 'list'], ['kisitlar', 'Kısıtlar', 'target'], ['tezgahlar', 'Tezgâhlar', 'cpu'], ['rotalar', 'Ürün ve rota', 'layers'], ['takvim', 'Takvim', 'clock'], ['personel', 'Personel', 'user'], ['malzeme', 'Malzeme', 'box'], ['fason', 'Fason ve aparat', 'truck'], ['ayar', 'Ayar matrisi', 'grid'], ['denetim', 'Veri denetimi', 'scan']]],
+  ['gecmis', 'Geçmiş', 'book', [['senaryolar', 'Senaryolar', 'flag'], ['iz', 'Değişiklik izi', 'book']]],
+];
+const HESAP_GOR = [['studyo', 'Karar zinciri', 'list'], ['analiz', 'Süre nereye gitti', 'chart'], ['cozuculer', 'Çözücüler', 'cpu']];
+/* Zaman, Kuyruk, Matris ve 3B artık tahtanın mercekleridir; eski sayfa kimlikleri tahtada o merceği açar */
+const MERCEK_SAYFA = { masa: 'zaman', kuyruk: 'kuyruk', matris: 'matris', akis3b: '3b' };
+const SAYFA_AD = Object.fromEntries([...EKRANLAR.flatMap(e => e[3].map(([id, ad]) => [id, ad])), ...HESAP_GOR.map(([id, ad]) => [id, ad]), ['masa', 'Zaman'], ['kuyruk', 'Kuyruk'], ['matris', 'Matris'], ['akis3b', '3B atölye']]);
+const EKRAN_OF = Object.fromEntries([...EKRANLAR.flatMap(e => e[3].map(([id]) => [id, e[0]])), ['analiz', 'plan'], ['cozuculer', 'plan'], ...Object.keys(MERCEK_SAYFA).map(id => [id, 'plan'])]);
+function ekranlar() {
+  if (kim().rol === 'operator') return [['plan', 'Kuyruğum', 'play', [['kuyruk', 'Kuyruğum', 'play'], ['masa', 'Zaman', 'gantt']]]];
+  return EKRANLAR;
+}
+const ekranAl = () => EKRAN_OF[U.sayfa] || 'plan';
+/* SAYFALAR eski çağrılar için kalır: bir ekranın görünümleri tek grup olarak verilir */
+function sayfaListesi() { return ekranlar().map(([, ad, , l]) => ({ grup: ad, liste: l })); }
+
+/* ---------- kabuk ---------- */
+function render() {
+  if (typeof taslakIsle === 'function' && taslakIsle()) return;
+  const icerik = document.getElementById('icerik');
+  const kaydir = icerik ? icerik.scrollTop : 0;
+  const g = document.querySelector('.pm-gantt');
+  const gk = g ? [g.scrollLeft, g.scrollTop] : null;
+  const ek = ekranlar();
+  if (!ek.some(e => e[3].some(([id]) => id === U.sayfa) || (e[0] === 'plan' && EKRAN_OF[U.sayfa] === 'plan' && kim().rol !== 'operator'))) U.sayfa = ek[0][3][0][0];
+  const u = kim();
+  kok.innerHTML = `<div class="tc-kabuk-cati"><div class="tc-kabuk" data-ikinci>
+    <nav class="tc-kabuk-menu" aria-label="Ana menü">${anaMenu()}</nav>
+    <header class="tc-kabuk-ust">${ustCubuk(u)}</header>
+    <div class="tc-ikinci-kap"><nav class="tc-ikinci" aria-label="Planlama ekranları">${ikinciMenu(ek)}</nav></div>
+    <main class="tc-kabuk-icerik" id="icerik">${sayfaHtml()}</main>
+    <nav class="tc-kabuk-alt" aria-label="Alt menü">${altCubuk(ek)}</nav>
+  </div></div>${U.ilerleme ? ilerlemeHtml() : ''}`;
+  const yeni = document.getElementById('icerik'); if (yeni) yeni.scrollTop = kaydir;
+  const g2 = document.querySelector('.pm-gantt');
+  if (g2 && gk && U.gKoru) { g2.scrollLeft = gk[0]; g2.scrollTop = gk[1]; }
+  U.gKoru = true;
+  ikinciKur(0);
+  katmanCiz();
+  if (typeof agBagla === 'function') agBagla();
+  if (typeof kanbanBagla === 'function') kanbanBagla();
+  if (typeof fbYuzenKur === 'function') fbYuzenKur();
+  if (typeof fbBagla === 'function') fbBagla();
+  if (typeof tbkBoyut === 'function') tbkBoyut();
+  if (typeof tahtaBagla === 'function') tahtaBagla();
+  if (U.studyo && typeof stBagla === 'function') stBagla();
+  if (U.tbAg && U.agGun != null && typeof gyBagla === 'function') gyBagla();
+}
+/* İkinci menü, uygulamanın IkinciMenu davranışıyla: kenardaki okta beklemek sürekli kaydırır, tıklamak bir sayfa atlatır,
+   tekerlek yana çevrilir. Sayfa yeniden çizildiğinde şeridin yeri korunur; sayfa değişince etkin madde görünür olur. */
+const KAYMA_HIZI = 0.6, SAYFA_ORANI = 0.75, SATIR_PIKSELI = 40;
+let ikinciSonSayfa = null, ikinciElle = false, ikinciKayma = null;
+const ikinciSinir = el => Math.max(0, el.scrollWidth - el.clientWidth);
+const ikinciKaydir = (el, h) => { el.scrollLeft = Math.min(ikinciSinir(el), Math.max(0, h)); };
+function ikinciOlc() {
+  const el = document.querySelector('.tc-ikinci'), kap = el && el.parentElement; if (!kap) return;
+  kap.toggleAttribute('data-sol', el.scrollLeft > 1); kap.toggleAttribute('data-sag', el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+}
+function ikinciKur(x) {
+  const el = document.querySelector('.tc-ikinci'); if (!el) return;
+  el.scrollLeft = x;
+  if (ikinciSonSayfa !== U.sayfa) { ikinciSonSayfa = U.sayfa; ikinciElle = false; }
+  if (!ikinciElle) { const o = el.querySelector('[aria-current="page"]'); if (o && o.scrollIntoView) { const kx = document.getElementById('icerik'); const ky = kx ? kx.scrollTop : 0; o.scrollIntoView({ block: 'nearest', inline: 'nearest' }); if (kx) kx.scrollTop = ky; } }
+  el.addEventListener('scroll', ikinciOlc, { passive: true });
+  el.addEventListener('wheel', o => {
+    ikinciElle = true;
+    if (o.ctrlKey || Math.abs(o.deltaX) >= Math.abs(o.deltaY)) return;
+    const c = o.deltaMode === 1 ? SATIR_PIKSELI : o.deltaMode === 2 ? el.clientWidth : 1; const once = el.scrollLeft;
+    ikinciKaydir(el, once + o.deltaY * c); if (el.scrollLeft !== once) o.preventDefault();
+  }, { passive: false });
+  el.addEventListener('pointerdown', () => { ikinciElle = true; }, { passive: true });
+  for (const ok of el.parentElement.querySelectorAll('.tc-ikinci-ok')) {
+    ok.addEventListener('pointerenter', o => { if (o.pointerType === 'mouse') ikinciKenar(+ok.dataset.ok); });
+    ok.addEventListener('pointerleave', ikinciDur);
+  }
+  ikinciOlc(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(ikinciOlc);
+}
+function ikinciDur() { if (ikinciKayma !== null) cancelAnimationFrame(ikinciKayma); ikinciKayma = null; }
+function ikinciKenar(yon) {
+  ikinciElle = true; ikinciDur(); let onceki = null;
+  const adim = z => { const el = document.querySelector('.tc-ikinci'); const g = onceki === null ? 0 : z - onceki; onceki = z; if (!el) { ikinciKayma = null; return; }
+    ikinciKaydir(el, el.scrollLeft + yon * KAYMA_HIZI * g);
+    const uc = yon > 0 ? el.scrollLeft >= ikinciSinir(el) - 1 : el.scrollLeft <= 1; ikinciKayma = uc ? null : requestAnimationFrame(adim); };
+  ikinciKayma = requestAnimationFrame(adim);
+}
+function ikinciSayfa(yon) {
+  const el = document.querySelector('.tc-ikinci'); if (!el) return; ikinciElle = true; ikinciDur();
+  const kalan = yon > 0 ? ikinciSinir(el) - el.scrollLeft : el.scrollLeft;
+  ikinciKaydir(el, el.scrollLeft + yon * (kalan < el.clientWidth ? kalan : el.clientWidth * SAYFA_ORANI));
+}
+function anaMenu() {
+  const bag = (ad, simge, acik, kapali) => `<a class="tc-kabuk-bag${acik ? ' tc-kabuk-bag-acik' : ''}" ${kapali ? 'aria-disabled="true" title="Bu denemede kapalı"' : 'aria-current="page"'} href="#" data-act="${kapali ? 'yok' : 'git'}" data-v="masa">${ic(simge, 'k')}<span class="tc-kabuk-bag-metin">${ad}</span></a>`;
+  return `<div class="tc-kabuk-marka"><span class="tc-kabuk-marka-isaret">TMI</span><span class="tc-kabuk-marka-metin">CORE</span></div>
+  <div class="tc-kabuk-surum">V2 · deneme</div>
+  <div class="tc-kabuk-grup"><div class="tc-kabuk-grup-ad">Üretim</div>${bag('Üretim emirleri', 'list', 0, 1)}${bag('İstasyonlar', 'cpu', 0, 1)}${bag('Reçete ve Rota', 'layers', 0, 1)}</div>
+  <div class="tc-kabuk-grup"><div class="tc-kabuk-grup-ad">Planlama</div>${bag('Planlama motoru', 'gantt', 1, 0)}</div>
+  <p class="pm-deneme">Deneme sayfası. Uygulamaya bağlı değil; bütün veri uydurmadır.</p>`;
+}
+const KIP_AD = { sifir: 'Sıfırdan kur', iyilestir: 'Mevcut planı iyileştir', onar: 'Canlıya göre onar', oneri: 'Çözücü önerisi', ekip: 'Ekip: motor + HiGHS' };
+function ustCubuk(u) {
+  const guncel = planGuncel();
+  const durum = !S.plan ? rozet('Plan yok', 'pasif') : U.hamle ? rozet('Önizleme', 'uyari') : guncel ? rozet('Plan güncel', 'tamam') : rozet('Veri değişti', 'uyari');
+  const ad = (ekranlar().find(e => e[0] === ekranAl()) || [, 'Planlama'])[1];
+  const yaz = yetkili('plan.yaz');
+  const olay = yaz && S.plan ? `<button type="button" class="tc-dugme" data-act="olay-ac" ${calisan ? 'disabled' : ''}>${ic('alert', 'k')}<span class="pm-ust-metin">Olay ekle</span></button>` : '';
+  const coz = yaz
+    ? `<span class="pm-coz-kap"><span class="pm-bolunmus"><button type="button" class="tc-dugme tc-dugme-birincil${S.plan && !guncel ? ' pm-nabiz' : ''}" data-act="${S.plan ? 'ekip' : 'coz'}" data-v="${S.plan ? '' : 'sifir'}" ${calisan ? 'disabled' : ''}>${ic('play', 'k')}<span class="pm-ust-metin">${calisan ? 'Çözülüyor' : S.plan ? 'Planı iyileştir' : 'Planı kur'}</span></button><button type="button" class="tc-dugme tc-dugme-birincil pm-bolunmus-ok" data-act="coz-ac" aria-expanded="${U.cozAcik}" aria-label="Çözüm seçenekleri" ${calisan ? 'disabled' : ''}>${ic('down', 'k')}</button></span>${U.cozAcik ? cozMenusu() : ''}</span>` : '';
+  return `<h1 class="tc-kabuk-baslik">${esc(ad)}</h1>
+  <div class="pm-ust-sag"><span class="pm-durum">${durum}</span>${olay}${coz}
+  <button type="button" class="tc-kabuk-tema" data-act="tema" aria-label="Tema değiştir" title="Tema">${ic(temaKoyu() ? 'sun' : 'moon', 'k')}</button>
+  <div class="tc-kabuk-hesap pm-hesap"><button type="button" class="tc-menu-dugme" data-act="menu" aria-expanded="${U.menu}" title="${esc(u.ad)} · ${esc(ROL_AD[u.rol])}"><span class="tc-kabuk-kisi-avatar">${esc(u.ad.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü ]/g, '').split(' ').filter(Boolean).map(x => x[0]).join('').slice(0, 2).toLocaleUpperCase('tr-TR'))}</span><span class="tc-kabuk-kisi-ad">${esc(u.ad)}</span></button>
+  ${U.menu ? `<div class="pm-acilir" role="menu"><div class="pm-acilir-baslik">Kullanıcı değiştir (deneme)</div>${KULLANICILAR.map(k => `<button type="button" role="menuitem" data-act="kullanici" data-v="${k.id}" aria-current="${k.id === u.id}">${ic('user', 'k')}<span>${esc(k.ad)}<small>${esc(ROL_AD[k.rol])} · ${(YETKI[k.rol] || []).length ? esc(YETKI[k.rol].join(', ')) : 'yalnız okur'}</small></span></button>`).join('')}</div>` : ''}</div></div>`;
+}
+function cozMenusu() {
+  const canli = canliSen();
+  const kipler = [
+    ['ekip', 'Tek akış, tek sonuç: motor planı kurar; HiGHS ek mesai önerir; motor her öneriyi bütün kısıtlarla ölçer, yalnız iyileştireni alır; HiGHS sonunda alt sınırla denetler. Kilitler korunur, sonuç önizlenir.', true],
+    ['sifir', 'Kural tabanlı ilk planı kurar, kalan sürede iyileştirir. Kilitler korunur; elle sıralar korunmaz.', true],
+    ['iyilestir', 'Bu planı başlangıç alır. Elle yaptığınız sıralar ve kilitler korunur; motor yalnız daha iyisini kabul eder.', !!S.plan],
+    ['onar', `Canlı planı yeni veriyle yeniden kurar; dondurma ufkunu korur, en çok ${S.param.maxChg} işi değiştirir.`, !!(canli && canli.plan)],
+  ];
+  const kip = kipler.find(k => k[0] === U.kipCoz && k[2]) ? U.kipCoz : 'sifir';
+  return `<div class="pm-acilir pm-coz-menu" role="dialog" aria-label="Çözüm seçenekleri"><div class="pm-acilir-baslik">Motor nasıl çözsün</div>
+  ${kipler.map(([k, aciklama, acik]) => `<label class="pm-kip"${acik ? '' : ' aria-disabled="true"'}><input type="radio" name="kip" value="${k}" data-chg="kip-coz" ${k === kip ? 'checked' : ''} ${acik ? '' : 'disabled'}><span><b>${KIP_AD[k]}</b><small>${esc(acik ? aciklama : k === 'onar' ? 'Canlı plan yok. Önce bir senaryoyu canlıya alın.' : 'Önce plan kurun.')}</small></span></label>`).join('')}
+  <div class="pm-coz-alt"><label class="tc-alan"><span class="tc-alan-etiket">Süre</span><select class="tc-alan-kutu" data-chg="sure">${[5, 10, 20, 40].map(s => `<option value="${s}"${+S.w.sure === s ? ' selected' : ''}>${s} sn</option>`).join('')}</select></label>
+  <label class="tc-alan"><span class="tc-alan-etiket">Değişiklik bütçesi</span><input class="tc-alan-kutu" type="number" min="0" max="500" value="${S.param.maxChg}" data-chg="param" data-yer="param" data-k="maxChg" aria-label="Canlıya göre en çok değişecek iş"></label></div>
+  ${S.kapali.length ? `<p class="pm-kucuk pm-uyari-metin">${ic('alert', 'k')} ${S.kapali.length} kısıt kapalı; plan onları saymaz.</p>` : ''}
+  <button type="button" class="tc-dugme tc-dugme-birincil" data-act="coz" data-v="${kip}">${ic('play', 'k')}Başlat</button></div>`;
+}
+/* İkinci menüde yalnız üç ekran; görünüm seçimi ekranın içindedir. Sayaçlar dikkat isteyen şeyi gösterir. */
+function ikinciMenu(ek) {
+  const sayac = id => {
+    if (id === 'plan') { const n = S.plan ? sorunlar(gosterilen()).filter(x => x.ton === 'hata' || x.ton === 'uyari').length : 0; return n || null; }
+    if (id === 'veri') { const n = denetimBulgulari().length + S.kapali.length; return n || null; }
+    if (id === 'gecmis') return S.senaryolar.length || null;
+    return null;
+  };
+  const etkin = ekranAl();
+  return `<div class="tc-ikinci-grup" role="group" aria-label="Ekranlar">${ek.map(([id, ad, simge, l]) => {
+    const n = sayac(id); const hedef = id === etkin ? U.sayfa : (U.son && U.son[id]) || l[0][0];
+    return `<a href="#${hedef}" class="tc-ikinci-madde${etkin === id ? ' tc-ikinci-madde-etkin' : ''}" data-act="git" data-v="${hedef}" ${etkin === id ? 'aria-current="page"' : ''}>${ic(simge, 'k')}<span class="tc-ikinci-madde-ad">${ad}</span>${n != null ? `<span class="tc-ikinci-sayi">${n}</span>` : ''}</a>`;
+  }).join('')}</div>`;
+}
+function altCubuk(ek) {
+  const etkin = ekranAl();
+  return ek.map(([id, ad, simge, l]) => { const hedef = (U.son && U.son[id]) || l[0][0]; return `<a href="#${hedef}" class="tc-kabuk-bag${etkin === id ? ' tc-kabuk-bag-acik' : ''}" data-act="git" data-v="${hedef}">${ic(simge, 'k')}<span>${ad}</span></a>`; }).join('');
+}
+function temaKoyu() {
+  const t = document.documentElement.getAttribute('data-theme');
+  if (t) return t === 'dark';
+  return !window.matchMedia('(prefers-color-scheme: light)').matches;
+}
+function ilerlemeHtml() {
+  const p = U.ilerleme;
+  if (p.ekip) { const i = EKIP_ADIM.findIndex(x => x[0] === p.id); return `<div class="pm-ilerleme" role="status"><div class="pm-sira"><strong class="pm-sira-ara">${ic('cpu', 'k')} Ekip çözüyor: ${esc(p.adim[p.id].rol)} · ${esc(p.adim[p.id].is)}</strong><span class="mono">${i + 1} / ${EKIP_ADIM.length}</span>${dugme('Durdur', 'durdur', { kucuk: true })}</div>
+  <div class="pm-ilerleme-yol"><div class="pm-ilerleme-dolu" style="--o:${((i + 0.5) / EKIP_ADIM.length) * 100}%"></div></div><div class="pm-alt">${esc(p.adim[p.id].not || '')}</div></div>`; }
+  if (p.bedel) return `<div class="pm-ilerleme" role="status"><div class="pm-sira"><strong class="pm-sira-ara">${ic('target', 'k')} Kısıt bedeli hesaplanıyor</strong><span class="mono">${p.i} / ${p.n}</span>${dugme('Durdur', 'durdur', { kucuk: true })}</div>
+  <div class="pm-ilerleme-yol"><div class="pm-ilerleme-dolu" style="--o:${p.n ? (p.i / p.n) * 100 : 0}%"></div></div><div class="pm-alt">${esc(p.ad || 'Temel plan')}: kısıt kapatılıp aynı motorla yeniden kuruluyor.</div></div>`;
+  if (p.olay) return `<div class="pm-ilerleme" role="status"><div class="pm-sira"><strong class="pm-sira-ara">${ic('cpu', 'k')} Motor olayın etkisini derinleştiriyor</strong><span class="mono">${sayi(p.sn, 1)} sn</span>${dugme('Durdur', 'durdur', { kucuk: true })}</div><div class="pm-alt">Önizleme hazır; motor daha iyi bir toparlama arıyor. Şu an gecikme <b class="mono">${saat(p.wT)}</b>.</div></div>`;
+  const o = Math.min(100, (p.sn / (+S.w.sure || 10)) * 100);
+  return `<div class="pm-ilerleme" role="status"><div class="pm-sira"><strong class="pm-sira-ara">${ic('cpu', 'k')} ${esc(KIP_AD[p.kip] || 'Motor çözüyor')}</strong><span class="mono">${sayi(p.sn, 1)} / ${S.w.sure} sn</span>${dugme('Durdur', 'durdur', { kucuk: true })}</div>
+  <div class="pm-ilerleme-yol"><div class="pm-ilerleme-dolu" style="--o:${o}%"></div></div>
+  <div class="pm-alt">Ağırlıklı gecikme <b class="mono">${saat(p.wT)}</b> (başlangıç ${saat(p.ilk)}) · geciken ${p.late}/${p.n} · alt sınır ${saat(p.lb)}${p.adim != null ? ` · ${p.adim} iyileştirme kabul edildi` : ''}</div></div>`;
+}
+
+const GORUNUM = { tahta: sTahta, studyo: sStudyo, masa: sMasa, analiz: sAnaliz, siparisler: sSiparisler, kuyruk: sKanban, matris: sMatris, akis3b: s3B, kisitlar: sKisitlar, cozuculer: sCozuculer, tezgahlar: sTezgahlar, rotalar: sRotalar, takvim: sTakvim, personel: sPersonel, malzeme: sMalzeme, fason: sFason, ayar: sAyar, denetim: sDenetim, senaryolar: sSenaryolar, iz: sIz };
+function sayfaHtml() {
+  try {
+    U.son = U.son || {}; U.son[ekranAl()] = U.sayfa;
+    if (kim().rol !== 'operator' && MERCEK_SAYFA[U.sayfa]) { U.mercek = MERCEK_SAYFA[U.sayfa]; U.tbAg = false; U.agGun = null; U.sayfa = 'tahta'; U.son.plan = 'tahta'; }
+    if (U.sayfa === 'bugun') return `<div class="pm-sayfa pm-sayfa-bugun">${sBugun()}</div>`;
+    if (U.sayfa === 'tahta' && S.plan) return `<div class="pm-sayfa pm-sayfa-tahta">${sTahta()}</div>`;
+    if (ekranAl() === 'plan') return `<div class="pm-sayfa pm-sayfa-plan">${planEkrani()}</div>`;
+    const e = ekranlar().find(x => x[0] === ekranAl());
+    const sekme = `<div class="pm-ekran-sekme" role="tablist" aria-label="${esc(e[1])}">${e[3].map(([id, ad, sm]) => `<button type="button" role="tab" data-act="git" data-v="${id}" aria-selected="${U.sayfa === id}">${ic(sm, 'k')}<span>${ad}</span></button>`).join('')}</div>`;
+    return `<div class="pm-sayfa">${sekme}${seritler()}${GORUNUM[U.sayfa]()}</div>`;
+  } catch (e) {
+    console.error(e);
+    return `<div class="pm-serit" data-ton="hata">${ic('alert', 'k')}<span class="pm-serit-metin">Sayfa çizilemedi: ${esc(e.message)}</span></div>`;
+  }
+}
+function kapaliAdlar() { return S.kapali.map(k => (KATALOG_DUZ[k] || { ad: k }).ad); }
+function seritler() {
+  const out = [];
+  const canli = canliSen();
+  if (canli && ['senaryolar'].includes(U.sayfa) && !U.hamle) out.push(`<div class="pm-serit" data-ton="tamam">${ic('flag', 'k')}<span class="pm-serit-metin">Canlı plan: <b>${esc(canli.ad)}</b> · sürüm ${S.canliSurum} · ${esc(canli.canliKim || canli.yazar)} aldı, ${zamanYaz(canli.canliZaman || canli.zaman)}</span>${U.sayfa !== 'senaryolar' ? dugme('Senaryolar', 'git', { kucuk: true, veri: 'data-v="senaryolar"' }) : ''}</div>`);
+  if (S.kapali.length && ['kisitlar'].includes(U.sayfa)) out.push(`<div class="pm-serit" data-ton="hata">${ic('alert', 'k')}<span class="pm-serit-metin"><b>Kapalı kısıt:</b> ${esc(kapaliAdlar().join(', '))}. Motor bunları saymadan çözer; plan gerçekte uygulanamayabilir. Kaynak yükünde aşımlar kırmızı görünür.</span>${U.sayfa !== 'kisitlar' ? dugme('Kısıtlar', 'git', { kucuk: true, veri: 'data-v="kisitlar"' }) : dugme('Hepsini aç', 'kisit-hepsi', { kucuk: true, yetki: 'plan.yaz' })}</div>`);
+  if (U.hamle && ekranAl() === 'plan') out.push(`<div class="pm-serit" data-ton="uyari">${ic('target', 'k')}<span class="pm-serit-metin"><b>Önizleme:</b> ${esc(U.hamle.ad)}. Motor aynı kısıtlarla yeniden hesapladı; plan henüz değişmedi.</span><span class="pm-dugmeler">${dugme('Vazgeç', 'hamle-vazgec', { kucuk: true })}${dugme('Uygula', 'hamle-uygula', { kucuk: true, birincil: true, simge: 'check' })}</span></div>`);
+  if (false) out.push(`<div class="pm-serit" data-ton="uyari">${ic('alert', 'k')}<span class="pm-serit-metin">Plan çözüldükten sonra veri ya da kısıt değişti. Gösterilen plan eski veriyle hesaplandı.</span>${dugme('Yeniden çöz', 'coz-ac', { kucuk: true, birincil: true, yetki: 'plan.yaz' })}</div>`);
+  if (kim().rol === 'mudur' && U.sayfa === 'masa') out.push(`<div class="pm-serit">${ic('lock', 'k')}<span class="pm-serit-metin">Üretim müdürü planı okur, kilitler ve senaryoyu canlıya alır; işleri taşımaz, ana veriyi değiştirmez.</span></div>`);
+  if (kim().rol === 'operator' && U.sayfa === 'masa') out.push(`<div class="pm-serit">${ic('lock', 'k')}<span class="pm-serit-metin">Bu görünüm yalnız okunur.</span></div>`);
+  return out.join('');
+}
+window.addEventListener('resize', ikinciOlc);
+/* Grafik ipucu: [data-ipucu] taşıyan her işaretin üstünde tek bir kutu; fare ve odak ile. */
+function ipucuGoster(el) {
+  let k = document.getElementById('pm-ipucu');
+  if (!k) { k = document.createElement('div'); k.id = 'pm-ipucu'; k.className = 'pm-ipucu'; k.setAttribute('role', 'tooltip'); document.body.appendChild(k); }
+  if (!el) { k.hidden = true; return; }
+  k.textContent = el.dataset.ipucu; k.hidden = false;
+  const r = el.getBoundingClientRect(), w = k.offsetWidth, h = k.offsetHeight;
+  const x = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2)); const y = r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8;
+  k.style.setProperty('--x', `${x}px`); k.style.setProperty('--y', `${y}px`);
+}
+document.addEventListener('mouseover', e => { const el = e.target.closest && e.target.closest('[data-ipucu]'); ipucuGoster(el || null); });
+document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-ipucu]'); ipucuGoster(el || null); });

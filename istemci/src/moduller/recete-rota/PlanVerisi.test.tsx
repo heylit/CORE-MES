@@ -22,8 +22,9 @@ function sunucu(liste: unknown[] | null): void {
   }));
 }
 
+// Plan sayfaları planlama çerçevesindedir (planlama-menusu.ts); kabuğun buradaki davranışı iki çerçevede aynıdır.
 async function durumOkut(): Promise<HTMLElement> {
-  const cerceve = await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 });
+  const cerceve = await screen.findByTitle(/^(?:Reçete ve Rota|Planlama)$/, {}, { timeout: 20000 });
   const pencere = (cerceve as HTMLIFrameElement).contentWindow as Window;
   act(() => {
     window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'recete-rota', yon: 'istek', id: 1, tip: 'durum-oku', veri: {} }, origin: 'null', source: pencere }));

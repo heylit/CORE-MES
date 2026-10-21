@@ -1,0 +1,222 @@
+/* ---------- Kendi araçlarımız: konumlama, tanıtım turu, sürükleme, sürükleyerek sıralama ----------
+   Dışarıdan kütüphane gömülmez (362 a). Hepsi tarayıcının kendi işaretçi olaylarıyla çalışır; dokunmatik, fare ve kalem aynı yoldan geçer. */
+
+/* Kutuyu referansın üstüne ya da altına koyar; sığmazsa öbür yana döner, ekran kenarından taşmaz. Konum ekrana göredir (position: fixed). */
+function pmKonumla(ref, kutu, { yer = 'top', aralik = 8, kenar = 8 } = {}) {
+  const r = ref.getBoundingClientRect(); const w = kutu.offsetWidth, h = kutu.offsetHeight;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+  const [yan, hiza] = yer.split('-');
+  const ust = r.top - aralik - h, alt = r.bottom + aralik;
+  let y = yan === 'top' ? ust : alt;
+  if (yan === 'top' && ust < kenar && vh - r.bottom > r.top) y = alt;
+  if (yan === 'bottom' && alt + h > vh - kenar && r.top > vh - r.bottom) y = ust;
+  let x = hiza === 'start' ? r.left : r.left + r.width / 2 - w / 2;
+  x = Math.max(kenar, Math.min(x, vw - w - kenar));
+  y = Math.max(kenar, Math.min(y, vh - h - kenar));
+  kutu.style.left = Math.round(x) + 'px'; kutu.style.top = Math.round(y) + 'px';
+  return { x, y };
+}
+
+/* İşaretçi kenara yaklaşınca en yakın kayan kutuyu (yoksa pencereyi) kaydırır; her karede kaydırılan miktarı geri bildirir. */
+function pmKenarKaydir(baslangic, bildir) {
+  const BOY = 40, HIZ = 14; let x = 0, y = 0, kare = 0;
+  const kayan = (el, yon) => {
+    for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      const s = getComputedStyle(e); const o = yon === 'x' ? s.overflowX : s.overflowY;
+      if (/(auto|scroll)/.test(o) && (yon === 'x' ? e.scrollWidth > e.clientWidth : e.scrollHeight > e.clientHeight)) return e;
+    }
+    return null;
+  };
+  const kutuX = kayan(baslangic, 'x'), kutuY = kayan(baslangic, 'y');
+  const sinir = el => el ? el.getBoundingClientRect() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+  const hiz = (p, a, b) => p < a + BOY ? -HIZ * (1 - Math.max(0, p - a) / BOY) : p > b - BOY ? HIZ * (1 - Math.max(0, b - p) / BOY) : 0;
+  const adim = () => {
+    kare = 0; const bx = sinir(kutuX), by = sinir(kutuY);
+    const vx = hiz(x, bx.left, bx.right), vy = hiz(y, by.top, by.bottom); if (!vx && !vy) return;
+    const ox = kutuX ? kutuX.scrollLeft : scrollX, oy = kutuY ? kutuY.scrollTop : scrollY;
+    if (kutuX) kutuX.scrollLeft += vx; else scrollBy(vx, 0);
+    if (kutuY) kutuY.scrollTop += vy; else scrollBy(0, vy);
+    const dx = (kutuX ? kutuX.scrollLeft : scrollX) - ox, dy = (kutuY ? kutuY.scrollTop : scrollY) - oy;
+    if (dx || dy) bildir(dx, dy);
+    kare = requestAnimationFrame(adim);
+  };
+  return {
+    guncelle(px, py) { x = px; y = py; if (!kare) kare = requestAnimationFrame(adim); },
+    bitir() { cancelAnimationFrame(kare); kare = 0; },
+  };
+}
+
+/* Sürüklemenin sonundaki tıklama, tutulan öğeyi seçmesin */
+let PM_TIK_YUT = 0;
+document.addEventListener('click', e => { if (Date.now() - PM_TIK_YUT < 300) { e.stopPropagation(); e.preventDefault(); } PM_TIK_YUT = 0; }, true);
+const PM_KAYMA = 4;
+/* İşaretçi olayları sayfa kaydırmasını durduramaz; sürükleme başladıktan sonra dokunmatik kaydırmayı dokunma olayı durdurur,
+   yoksa tarayıcı kaydırmaya geçip sürüklemeyi keser. */
+let PM_SURUKLENIYOR = false;
+document.addEventListener('touchmove', e => { if (PM_SURUKLENIYOR && e.cancelable) e.preventDefault(); }, { passive: false });
+
+/* Seçiciye uyan öğeyi sürükler. Dokunmatikte basılı tutunca başlar (sayfa kaydırmasıyla karışmasın); farede birkaç piksel kıpırdayınca.
+   Olay: { hedef, dx, dy, x, y, durdur() }; dx, dy son olaydan bu yana kayma (kenar kaydırması dahil). */
+function pmSurukle(secici, { tutma = 0, kenarKaydir = true, basla, tasi, birak } = {}) {
+  document.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    const hedef = e.target.closest && e.target.closest(secici); if (!hedef) return;
+    const dokunma = e.pointerType !== 'mouse';
+    let sx = e.clientX, sy = e.clientY, lx = sx, ly = sy, basladi = false, bitti = false, zaman = 0, kaydir = null;
+    const olay = (dx, dy, x, y) => ({ hedef, dx, dy, x, y, durdur() { kapat(false); } });
+    const baslat = () => {
+      basladi = true; PM_SURUKLENIYOR = true; let dur = false; basla(Object.assign(olay(0, 0, lx, ly), { durdur() { dur = true; } }));
+      if (dur) { kapat(false); return; }
+      if (kenarKaydir) kaydir = pmKenarKaydir(hedef, (dx, dy) => { if (!bitti) tasi(olay(dx, dy, lx, ly)); });
+    };
+    const hareket = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      const dx = ev.clientX - lx, dy = ev.clientY - ly; lx = ev.clientX; ly = ev.clientY;
+      if (!basladi) {
+        if (Math.hypot(lx - sx, ly - sy) < PM_KAYMA) return;
+        if (tutma && dokunma) { kapat(false); return; }
+        baslat(); if (bitti) return;
+      }
+      ev.preventDefault(); tasi(olay(dx, dy, lx, ly)); if (kaydir) kaydir.guncelle(lx, ly);
+    };
+    const son = ev => { if (ev.pointerId === e.pointerId) kapat(ev.type === 'pointerup'); };
+    function kapat(birakildi) {
+      if (bitti) return; bitti = true; clearTimeout(zaman); if (kaydir) kaydir.bitir();
+      removeEventListener('pointermove', hareket); removeEventListener('pointerup', son); removeEventListener('pointercancel', son);
+      if (basladi) { PM_SURUKLENIYOR = false; PM_TIK_YUT = Date.now(); birak(Object.assign(olay(0, 0, lx, ly), { birakildi })); }
+    }
+    addEventListener('pointermove', hareket, { passive: false }); addEventListener('pointerup', son); addEventListener('pointercancel', son);
+    if (tutma && dokunma) zaman = setTimeout(() => { if (!bitti && !basladi) baslat(); }, tutma);
+  });
+}
+
+/* Listenin doğrudan çocuklarını sürükleyerek sıralar; aynı gruptaki listeler arasında taşır.
+   ayar: grup, tutamac (seçici), suzgec (taşınamayan öğe), hayalet (sınıf), gecikme (yalnız dokunmatik, ms), animasyon (ms),
+   gecebilir({ surukenen, related, willInsertAfter, from, to }) false dönerse oraya konmaz, bitince({ item, from, to, oldIndex, newIndex }). */
+function pmSirala(liste, ayar = {}) {
+  const { tutamac, suzgec, hayalet, gecikme = 0, animasyon = 150, gecebilir, bitince } = ayar;
+  liste.pmSirala = ayar;
+  const ucanMi = el => el.classList.contains('pm-sirala-ucan');
+  const ogeler = l => [...l.children].filter(c => !ucanMi(c));
+  const cocuk = (l, el) => { for (let e = el; e && e !== l; e = e.parentElement) if (e.parentElement === l) return ucanMi(e) ? null : e; return null; };
+  const hedefListe = el => {
+    for (let e = el; e; e = e.parentElement) if (e.pmSirala && (e === liste || (ayar.grup && e.pmSirala.grup === ayar.grup))) return e;
+    return null;
+  };
+  const kaydir = (l, degistir) => {
+    const ms = animasyon && !matchMedia('(prefers-reduced-motion: reduce)').matches ? animasyon : 0;
+    const once = ms ? new Map(ogeler(l).map(c => [c, c.getBoundingClientRect().top])) : null;
+    degistir();
+    if (!ms) return;
+    for (const c of ogeler(l)) {
+      const t0 = once.get(c); if (t0 == null || c.dataset.pmSiralaTutulan != null) continue;
+      const d = t0 - c.getBoundingClientRect().top; if (!d) continue;
+      c.animate([{ transform: `translateY(${d}px)` }, { transform: 'none' }], { duration: ms, easing: 'ease' });
+    }
+  };
+  liste.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    const oge = cocuk(liste, e.target); if (!oge) return;
+    if (suzgec && oge.matches(suzgec)) return;
+    if (tutamac && !(e.target.closest(tutamac) && oge.contains(e.target.closest(tutamac)))) return;
+    const dokunma = e.pointerType !== 'mouse';
+    const sx = e.clientX, sy = e.clientY; let lx = sx, ly = sy, basladi = false, bitti = false, zaman = 0, ucan = null, kenar = null, dx0 = 0, dy0 = 0;
+    const oldIndex = ogeler(liste).indexOf(oge);
+    const yerlestir = () => {
+      const alt = document.elementFromPoint(lx, ly); const l = alt && hedefListe(alt); if (!l) return;
+      const komsu = cocuk(l, alt);
+      if (komsu === oge) return;
+      let sonraya; let related = komsu;
+      if (komsu) { const r = komsu.getBoundingClientRect(); sonraya = ly > r.top + r.height / 2; }
+      else { const t = ogeler(l).filter(c => c !== oge); related = t[t.length - 1] || null; sonraya = true; }
+      if (gecebilir && related && gecebilir({ surukenen: oge, related, willInsertAfter: sonraya, from: liste, to: l }) === false) return;
+      const once = sonraya ? (related ? related.nextElementSibling : null) : related;
+      if (once && ucanMi(once)) return;
+      if (oge.parentElement === l && (once === oge || oge.nextElementSibling === once)) return;
+      kaydir(l, () => l.insertBefore(oge, once));
+    };
+    const baslat = () => {
+      basladi = true; PM_SURUKLENIYOR = true; const r = oge.getBoundingClientRect(); dx0 = sx - r.left; dy0 = sy - r.top;
+      ucan = oge.cloneNode(true); ucan.removeAttribute('id'); ucan.classList.add('pm-sirala-ucan'); ucan.setAttribute('aria-hidden', 'true');
+      ucan.style.width = r.width + 'px'; ucan.style.height = r.height + 'px'; ucan.style.left = (lx - dx0) + 'px'; ucan.style.top = (ly - dy0) + 'px';
+      liste.appendChild(ucan);
+      oge.dataset.pmSiralaTutulan = ''; if (hayalet) oge.classList.add(hayalet);
+      kenar = pmKenarKaydir(liste, () => { if (!bitti) yerlestir(); });
+    };
+    const hareket = ev => {
+      if (ev.pointerId !== e.pointerId) return; lx = ev.clientX; ly = ev.clientY;
+      if (!basladi) {
+        if (Math.hypot(lx - sx, ly - sy) < PM_KAYMA) return;
+        if (gecikme && dokunma) { kapat(); return; }
+        baslat();
+      }
+      ev.preventDefault(); ucan.style.left = (lx - dx0) + 'px'; ucan.style.top = (ly - dy0) + 'px'; yerlestir(); kenar.guncelle(lx, ly);
+    };
+    const son = ev => { if (ev.pointerId === e.pointerId) kapat(); };
+    function kapat() {
+      if (bitti) return; bitti = true; clearTimeout(zaman);
+      removeEventListener('pointermove', hareket); removeEventListener('pointerup', son); removeEventListener('pointercancel', son);
+      if (!basladi) return;
+      PM_SURUKLENIYOR = false; kenar.bitir(); ucan.remove(); delete oge.dataset.pmSiralaTutulan; if (hayalet) oge.classList.remove(hayalet); PM_TIK_YUT = Date.now();
+      const to = oge.parentElement; if (!oge.isConnected || !to) return;
+      if (bitince) bitince({ item: oge, from: liste, to, oldIndex, newIndex: ogeler(to).indexOf(oge) });
+    }
+    addEventListener('pointermove', hareket, { passive: false }); addEventListener('pointerup', son); addEventListener('pointercancel', son);
+    if (gecikme && dokunma) zaman = setTimeout(() => { if (!bitti && !basladi) baslat(); }, gecikme);
+  });
+}
+
+/* Tanıtım turu: öğeyi vurgular, yanında başlık, açıklama, ilerleme ve düğmeler. Öğesiz adım ortada açılır.
+   Esc ya da dışarı tıklama kapatır; oklar ileri, geri. adimlar: [{ el: seçici ya da null, baslik, metin }] */
+function pmTur(adimlar, { bitince } = {}) {
+  if (!adimlar.length) return;
+  if (pmTur.kapat) pmTur.kapat();
+  const onceki = document.activeElement; let i = 0;
+  const perde = document.createElement('div'); perde.className = 'pm-tur-perde';
+  const vurgu = document.createElement('div'); vurgu.className = 'pm-tur-vurgu';
+  const kutu = document.createElement('div'); kutu.className = 'pm-tur'; kutu.setAttribute('role', 'dialog'); kutu.setAttribute('aria-modal', 'true'); kutu.setAttribute('aria-labelledby', 'pm-tur-baslik');
+  document.body.append(perde, vurgu, kutu);
+  const hedef = () => adimlar[i].el ? document.querySelector(adimlar[i].el) : null;
+  const yerlestir = () => {
+    const el = hedef();
+    if (el) {
+      const r = el.getBoundingClientRect(); const p = 6; vurgu.hidden = false; perde.dataset.delik = '';
+      Object.assign(vurgu.style, { left: (r.left - p) + 'px', top: (r.top - p) + 'px', width: (r.width + 2 * p) + 'px', height: (r.height + 2 * p) + 'px' });
+      pmKonumla(vurgu, kutu, { yer: 'bottom', aralik: 10, kenar: 12 });
+    } else {
+      vurgu.hidden = true; delete perde.dataset.delik;
+      kutu.style.left = Math.round((document.documentElement.clientWidth - kutu.offsetWidth) / 2) + 'px';
+      kutu.style.top = Math.round((document.documentElement.clientHeight - kutu.offsetHeight) / 2) + 'px';
+    }
+  };
+  const goster = () => {
+    const a = adimlar[i]; const son = i === adimlar.length - 1;
+    kutu.innerHTML = `<header><b id="pm-tur-baslik">${esc(a.baslik)}</b><button type="button" class="pm-tur-kapat" data-tur="kapat" aria-label="Turu kapat">${ic('x', 'k')}</button></header>
+      <p>${esc(a.metin)}</p>
+      <footer><small class="mono">${i + 1} / ${adimlar.length}</small><span><button type="button" data-tur="geri" ${i ? '' : 'disabled'}>Geri</button><button type="button" data-tur="ileri" data-birincil>${son ? 'Bitti' : 'İleri'}</button></span></footer>`;
+    const el = hedef(); if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    yerlestir(); kutu.querySelector('[data-tur="ileri"]').focus();
+  };
+  const git = d => { const k = i + d; if (k < 0) return; if (k >= adimlar.length) { kapat(); return; } i = k; goster(); };
+  const tus = e => {
+    if (e.key === 'Escape') { e.preventDefault(); kapat(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); git(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); git(-1); }
+    else if (e.key === 'Tab') {
+      const d = [...kutu.querySelectorAll('button:not([disabled])')]; const k = d.indexOf(document.activeElement);
+      e.preventDefault(); d[(k + (e.shiftKey ? d.length - 1 : 1)) % d.length].focus();
+    }
+  };
+  const yenile = () => yerlestir();
+  function kapat() {
+    if (pmTur.kapat === kapat) pmTur.kapat = null;
+    document.removeEventListener('keydown', tus, true); removeEventListener('resize', yenile); removeEventListener('scroll', yenile, true);
+    perde.remove(); vurgu.remove(); kutu.remove();
+    if (onceki && onceki.isConnected && onceki.focus) onceki.focus();
+    if (bitince) bitince();
+  }
+  kutu.addEventListener('click', e => { const b = e.target.closest('[data-tur]'); if (!b) return; const t = b.dataset.tur; if (t === 'kapat') kapat(); else git(t === 'ileri' ? 1 : -1); });
+  perde.addEventListener('click', kapat);
+  document.addEventListener('keydown', tus, true); addEventListener('resize', yenile); addEventListener('scroll', yenile, true);
+  pmTur.kapat = kapat; goster();
+}

@@ -23,6 +23,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'cnc-kurulum.takim-degistir': 'Takım değişimini ve kullanımını kaydetme',
   'recete-rota.oku': 'Reçete ve rota kayıtlarını görme',
   'recete-rota.yaz': 'Reçete ve rota kayıtlarını düzenleme',
+  'recete-rota.planlama-oku': 'Planlama sayfalarını görme',
   'ayarlar.yaz': 'Sistem ayarlarını değiştirme',
   'ayarlar.guncelleme-yukle': 'Güncelleme paketi yükleme',
   'ayarlar.yedek-indir': 'Veritabanı yedeği alma ve indirme',

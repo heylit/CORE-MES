@@ -382,7 +382,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.vardiya_sorumlusu?.push('sayfa.istasyonlar', 'istasyonlar.makine-durumu');
   MATRIS.mudur?.push('istasyonlar.makine-durumu', 'uretim-emirleri.hazirlik-muaf');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
-    'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
+    'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet', 'recete-rota.planlama-oku'];
 
   const girisIslemleri = async (kullaniciAdi: string): Promise<string[]> => {
     const cevap = await giris(kullaniciAdi, PAROLA);

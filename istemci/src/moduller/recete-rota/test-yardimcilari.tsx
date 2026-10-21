@@ -9,7 +9,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 
 // Kişi adları uydurmadır.
-export const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'plan.oku'] };
+export const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'plan.oku', 'recete-rota.planlama-oku'] };
 export const YETKISIZ: Kullanici = { id: 6, ad: 'Deneme Yetkisiz', islemler: ['sayfa.ayarlar'] };
 // Kart #1372: rotanın ilk adımına giren zorunludur; prototip örneklerinin ilk adımı bu hammaddeyi tüketir (stoğu yeter, maliyeti var: uyarı vermez).
 export const HAM = { id: 'h0', code: 'HM-000', name: 'Deneme hammadde', type: 'ham', unit: 'kg', cost: 1, stock: 100000, min: 0 };
