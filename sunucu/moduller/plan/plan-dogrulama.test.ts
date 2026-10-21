@@ -2,7 +2,7 @@ import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { canliOzeti } from './disari.ts';
+import { calisanAdimlar, canliOzeti } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde seçilen makine ve makine ayrımı (393 d)', () => {
@@ -47,6 +47,44 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
       const canli = await planOku();
       assert.equal(yer(canli, i2!).baslangic, y2.baslangic, 'canlıya geçti');
       assert.equal(yer(canli, i3!).baslangic, y3.baslangic, 'canlıya geçti');
+    } finally {
+      await isEmriDurumu(i1!, 'bekliyor');
+    }
+  });
+
+  test('391 a: calisanAdimlar çalışan adımın kalanını planın gerçekleşen hesabıyla verir; çalışmayan adım yok', async () => {
+    const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-DG4', ad: 'Deneme kalan', istasyonId: istasyonB });
+    const kaynak = { tur: 'makine' as const, id: m.id };
+    const [i1, i2] = await isEmirleriAc([yeniAdim({ kaynak }), yeniAdim({ kaynak })]);
+    const anahtar = async (id: number) => (await vt().tx((db) => db.tek<{ a: string }>(
+      "SELECT e.emir_no || '|' || i.op_no AS a FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = $1", [id])))!.a;
+    const a1 = await anahtar(i1!), a2 = await anahtar(i2!);
+    const oku = async () => (await vt().tx((db) => calisanAdimlar(db))).filter((x) => x.anahtar === a1 || x.anahtar === a2);
+    assert.deepEqual(await oku(), [], 'başlamamış emirde çalışan adım yok');
+    // Test 1 ile aynı veri: 2 saattir çalışıyor, 10'un 9'u sayıldı; kalan 1 x 2 dk (ayar düşülür).
+    const { sayim } = (await vt().tx(async (db) => {
+      await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now() - interval '2 hours' WHERE id = $1", [i1]);
+      return db.tek<{ sayim: string }>(
+        `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
+         SELECT uretim_emri_id, id, $2, $3, 'saglam', 9, now() FROM uretim_emirleri_is_emri WHERE id = $1 RETURNING to_json(zaman) #>> '{}' AS sayim`,
+        [i1, operatorId, istasyonB]);
+    }))!;
+    try {
+      const [x, ...fazla] = await oku();
+      assert.equal(fazla.length, 0, 'bekleyen 2. adım yok');
+      assert.equal(x!.anahtar, a1);
+      assert.equal(x!.makineId, m.id, 'fiili makine yoksa planın makinesi');
+      assert.equal(x!.kalanDk, 2);
+      assert.equal(x!.kalanVerimliDk, 2, 'ayarsız istasyon verimi yüzde 100');
+      assert.equal(x!.sayimAni, new Date(sayim).toISOString());
+      assert.ok(x!.baslangic && Math.abs(Date.parse(x!.baslangic) - (Date.now() - 2 * 3600_000)) < 60_000);
+      // Verim yüzde 50: kalan işleme iki katı sürer (ayar parça sayıldığı için düşmüş).
+      await ortam!.sahip.sorgu('INSERT INTO istasyonlar_plan_ayari (istasyon_id, verim_yuzde, operator_ihtiyaci, degistiren_kisi_id) VALUES ($1, 50, 1, $2)', [istasyonB, yoneticiId]);
+      try {
+        assert.equal((await oku())[0]!.kalanVerimliDk, 4);
+      } finally {
+        await ortam!.sahip.sorgu('DELETE FROM istasyonlar_plan_ayari WHERE istasyon_id = $1', [istasyonB]);
+      }
     } finally {
       await isEmriDurumu(i1!, 'bekliyor');
     }

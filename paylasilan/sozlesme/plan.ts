@@ -218,6 +218,8 @@ export const kuyrukYazIsi = z.object({
   emirNo: z.string().trim().min(1).max(60), opNo: z.number().int().positive().max(100_000), dondurulmus: z.boolean(), elle: z.boolean().default(true),
   elleKaynak: z.boolean().default(false),
   parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000) }).optional(),
+  // ADR 0018: tarayıcının önizlediği saat; sunucu motoru kayıtlıyken cevabın motorFarki'si bununla karşılaştırır.
+  onizleme: z.object({ baslangic: tarihZaman, bitis: tarihZaman }).optional(),
 });
 export const kuyrukYazKuyrugu = z.object({ kaynak: kaynakGirdisi, baslangic: tarihZaman, isler: z.array(kuyrukYazIsi).min(1).max(500) });
 export const kuyrukYazGovdesi = z.object({
@@ -226,11 +228,18 @@ export const kuyrukYazGovdesi = z.object({
   // Verilirse kişinin açık taslağına (okunan sürümde) yazılır; verilmezse yeni taslak açılır (stüdyo aynı taslakta kalır).
   taslak: taslakGirdisi.optional(),
 });
+// ADR 0018 (son söz sunucuda): sunucu motoru önizlemeden 1 dakikadan çok ayrılan işler; anahtar `emirNo|opNo`. Önizleme yoksa null.
+export const motorFarki = z.array(z.object({
+  anahtar: z.string(), onizleme: z.object({ baslangic: zaman, bitis: zaman }).nullable(), sunucu: z.object({ baslangic: zaman, bitis: zaman }),
+}));
 export const kuyrukYazCevabi = z.object({
   taslak: KIMLIK, canli: z.boolean(),
   // Yazılan iş sayısı; atlanan: başlamış ya da bitmiş, kilitli ya da dondurulmuş iş (plan modülünün durumu geçerlidir).
   yazilan: z.number().int(), atlanan: z.number().int(),
+  // Yalnız sunucu motoru kayıtlıyken (ADR 0018).
+  motorFarki: motorFarki.optional(),
 });
+export const canliyaAlCevabi = senaryolarCevabi.extend({ motorFarki: motorFarki.optional() });
 // Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya
 // alınmamış değişikliği gösterir. Kuyruk yalnız planlanacak iş emirlerinindir, başlangıç sırasıyla; anahtar `emirNo|opNo`. sabit: kilitli ya da
 // dondurulmuş (Reçete ve Rota'nın yazması onu taşımaz).
@@ -301,6 +310,8 @@ export type PlanCanliOzeti = z.output<typeof planCanliOzeti>;
 export type PlanSurumCevabi = z.output<typeof planSurumCevabi>;
 export type KuyrukYazGovdesi = z.output<typeof kuyrukYazGovdesi>;
 export type KuyrukYazCevabi = z.output<typeof kuyrukYazCevabi>;
+export type MotorFarki = z.output<typeof motorFarki>;
+export type CanliyaAlCevabi = z.output<typeof canliyaAlCevabi>;
 export type PlanAyari = z.output<typeof planAyari>;
 export type PlanCevabi = z.output<typeof planCevabi>;
 export type PlanYerlesimi = z.output<typeof planYerlesimi>;

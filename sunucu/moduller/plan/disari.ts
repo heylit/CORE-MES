@@ -5,9 +5,15 @@ import type { Db } from '#cekirdek/db.ts';
 import type { PlanAyari } from '#paylasilan/sozlesme/plan.ts';
 import { ayarOku, bedelAyariOku } from './sorgular.ts';
 import {
-  malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
+  malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
+  type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
 } from './servis.ts';
-export { canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
+export { calisanAdimlar, canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
+export type { CalisanAdim } from './servis.ts';
+
+// ADR 0018: ortak plan motoru (Reçete ve Rota) asıl plana yazan komutlarda saatleri verir; bağı kablolama.ts kurar, kayıtsızken Motor A.
+export const planMotoruCozucusu = (cozucu: PlanMotoruCozucusu | null): void => planMotoruCozucusuKaydet(cozucu);
+export type { PlanMotoruCozucusu, PlanMotoruIstegi };
 export type { Kaynak } from './kurallar.ts';
 export type { YerlesimSatiri } from './sorgular.ts';
 
