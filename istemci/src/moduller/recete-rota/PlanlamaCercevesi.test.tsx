@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 import { YAZAR, ac, sunucuKur, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
+import { PLANLAMA_ISLEMI } from './planlama-menusu.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); yazmaDinleyiciKapat(); });
 
@@ -39,6 +40,20 @@ describe('planlama çerçevesi', () => {
     expect(belge).toContain('[data-act=\\"iceri-ac\\"]');
     expect(belge).not.toContain('[data-act=\\"revApprove\\"]');
   }, 30000);
+
+  // 353 a: planlama sayfaları yalnız planlama işlemiyle açılır; Reçete ve Rota yazarı bölümleri görür, planlamayı görmez.
+  it('planlama işlemi olmayan Reçete ve Rota yazarına planlama çerçevesi kurulmaz, kayıt okunmaz; Reçete ve Rota bölümü açılır', async () => {
+    const yazar = { ...YAZAR, islemler: YAZAR.islemler.filter((i) => i !== PLANLAMA_ISLEMI) };
+    const istekler = sunucuKur(yazar, [KAYIT]);
+    ac('/recete-rota/terminler');
+    expect(await screen.findByText('Bu bölümü görme yetkiniz yok.', {}, { timeout: 20000 })).toBeTruthy();
+    expect(screen.queryByTitle('Planlama')).toBeNull();
+    expect(istekler).not.toContain('GET /recete-rota/kayitlar');
+    cleanup();
+    sunucuKur(yazar, [KAYIT]);
+    ac('/recete-rota/schema');
+    expect(await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 })).toBeTruthy();
+  }, 40000);
 
   it('Reçete ve Rota bölümünden planlama sayfasına geçişte eski çerçeve bekler, sonra kayıt yeniden okunup planlama açılır', async () => {
     const istekler = sunucuKur(YAZAR, [KAYIT]);

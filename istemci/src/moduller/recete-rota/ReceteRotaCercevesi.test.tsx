@@ -261,7 +261,7 @@ describe('ReceteRotaCercevesi', () => {
       expect(rozet('Ürün ve rotalar')).toBe('1');
       expect(rozet('Operasyonlar')).toBe('1');
       expect(rozet('Malzemeler')).toBe('3');
-      expect(rozet('Plan')).toBe('1');
+      expect(rozet('Planlama motoru')).toBe('1');
     }, 40000);
 
     it('plan hesaplanmadıysa geç sayısı yoktur (null); hesaplanmışsa başka sekmede de korunur', async () => {

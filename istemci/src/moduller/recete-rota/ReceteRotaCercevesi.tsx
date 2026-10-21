@@ -14,7 +14,7 @@ import type { AcilDeneme, AcilMusteri, EmirSecimi } from './kopru.ts';
 import { EmirProjeSecimi } from './EmirProjeSecimi.tsx';
 import { AcilMusteriSecimi } from './AcilMusteriSecimi.tsx';
 import { gomuluYaziStili } from './yazi-tipleri.ts';
-import { planlamaYoluMu } from './planlama-menusu.ts';
+import { PLANLAMA_ISLEMI, planlamaYoluMu } from './planlama-menusu.ts';
 import './recete-rota.css';
 
 // Reçete ve Rota Motoru prototipi olduğu gibi yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); veri
@@ -134,7 +134,9 @@ export function ReceteRotaCercevesi() {
   const [motorUyarilari, setMotorUyarilari] = useState<readonly string[]>([]);
   const uyariGorunur = !planGizli && motorUyarilari.length > 0 && PLAN_SEKMELERI.test(pathname);
   const kullanici = oturum.data;
-  const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
+  // Planlama sayfası ayrıca planlama işlemini ister (353 a); işlemi olmayana çerçeve kurulmaz, kayıt okunmaz.
+  const girebilir = (kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false)
+    && (istenenTur !== 'planlama' || (kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false));
   const onaylayabilir = kullanici?.islemler.includes('rota.onayla') ?? false;
   const planYazabilir = kullanici?.islemler.includes('plan.yaz') ?? false;
   const canliyaAlabilir = kullanici?.islemler.includes('plan.canliya-al') ?? false;

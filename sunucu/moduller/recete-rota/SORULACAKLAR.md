@@ -1,5 +1,7 @@
 # recete-rota: sorulacaklar (teslim 20.10.2026)
 
+Cevaplar (20.10.2026, kullanıcı): 353 a (yetki genişletme onaylı), 356 b, 357 a (prototip değişikliği onaylı), 359 a. Açık: 354 (motorun yeri; ölçüm istendi, karar gelene kadar tarayıcıda), 355 b (HiGHS girsin; paket onayı yazılı gelmedi, paket eklenmedi), 358 b (gömülü kütüphaneler çıkarılıp yeniden yazılsın; iş büyüklüğü bildirilecek, başlanmadı). Google Fonts satırları dosyadan silindi (öneri a).
+
 Numarasızdır; numarayı koordinatör verir. Her madde cevap gelene kadar öneriyle ilerler; geri alması pahalı olanlar ("sorulur" kademesi) işaretli.
 Cevapta doldurulmamış yer tutucu ya da silinmemiş seçenek onay sayılmaz.
 

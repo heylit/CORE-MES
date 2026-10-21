@@ -23,10 +23,10 @@
 ## Bağlamada kapanacak: planlama (teslim 20.10.2026)
 | Kural / konu | İstisna | Nasıl uyumlanır |
 |---|---|---|
-| Rol ve yetki | Planlama çerçevesinde rol her zaman yönetici (`u5`, `zz31-tmi.betik`); denemenin rol seçicisi ve kendi yan menüsü görünür. Planlama sayfaları `plan.oku` ile görünür, Aşama 1 kuralı (işlemler yalnız yöneticide) bu işlemle sağlanmaz. | Aşama 2: rol ortak yetki matrisinden; çerçevenin rol seçicisi kalkar. Yalnız yönetici kararı SORULACAKLAR'da. |
+| Rol ve yetki | Planlama çerçevesinde rol her zaman yönetici (`u5`, `zz31-tmi.betik`); denemenin rol seçicisi ve kendi yan menüsü görünür. Planlama sayfaları `recete-rota.planlama-oku` ile görünür ve açılır (353 a; işlem göçle hiçbir role verilmez, yalnız yönetici); eskiden `plan.oku` ile Plan sekmesini gören roller (planlama, müdür, vardiya sorumlusu, CAM, kalite, bakım) Aşama 1'de planı görmez. Denetim yalnız istemcidedir: kayıt okuma ucu (`GET /recete-rota/kayitlar`) `:planlama` anahtarını da `recete-rota.oku` ile verir. | Aşama 2: rol ortak yetki matrisinden; çerçevenin rol seçicisi kalkar; `:planlama` anahtarının okuması ve yazması sunucuda planlama işlemini ister. |
 | Deneme metni | Alt bilgi "Deneme sayfası ... bütün veri uydurmadır" uygulamada da görünür; uygulamada veri kayıttandır. | Görünüm: metin TMI içinde gizlenir ya da değişir. |
 | Canlı plan yalnız kayıtta | "Canlıya al" `st.tmiCanli`'ya yazar; sunucu planı, Arkon ve terminal güncellenmez. | Aşama 2: uretim-emirleri canlı plan uçları (BASKA-MODUL-ISTEKLERI). |
-| İki motor | Reçete ve Rota'nın kendi plan hesabı (`planRun`) ve planlama motoru (`engine`) ayrı; Reçete ve Rota'nın emir tarihleri canlı plandan farklı (t163). Reçete ve Rota'nın Plan, Stüdyo, Kanban sekmelerine menüden gidilmez; 307 a ve 304 a o sekmelerde kaldı. | Tek motor kararı (SORULACAKLAR). |
+| İki motor | Reçete ve Rota'nın kendi plan hesabı (`planRun`) ve planlama motoru (`engine`) ayrı; Reçete ve Rota'nın emir tarihleri canlı plandan farklı (t163). Reçete ve Rota'nın Plan, Stüdyo, Kanban sekmelerine menüden gidilmez; 307 a ve 304 a o sekmelerde kaldı. Karar 356 b: eski motor gizli kalır. | Aşama 2: eski motor kalkar, Reçete ve Rota canlı planı okur (356 b). |
 | Çözücüler | HiGHS ve CP-SAT pakette yok; seçilirse çalışmaz. Denemenin yerel çözücü servisi yoklaması (`h-cozuculer`) çerçevede bağlantı kapalı olduğundan sonuçsuz. | HiGHS kararı (SORULACAKLAR); sunucu motoru kararıyla birlikte. |
 | Çerçeve geçişi | Reçete ve Rota bölümü ile planlama sayfası arasında geçişte bekleme (bekleme süresi + 1,5 sn) ve 2,3 MB sayfanın yeniden kurulması. | Tek çerçeve ya da sunucu motoru ile kalkar. |
 | Kayıt boyutu | Planlama durumu ayrı anahtarda; büyük set ölçülmedi. 1 MB uyarısı yalıtılmış çerçevede görünür mü denenmedi (VARSAYIM: görünmez). | Ölçülür; aşarsa alan başına kayıt. |
@@ -36,8 +36,8 @@
 | Gömülü kütüphaneler | driver, interact, sortable ve iki yardımcı paket değil, kaynak olarak gömülü (lisansları `cerceve/planlama/lib/`). | Paket olarak girmesi yeni bağımlılık kararıdır. |
 | Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
 | Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
-| İkinci menü | Yeni planlama sayfaları menüde değil, `paylasilan` yaması girene kadar. | CEKIRDEK-ISTEKLERI 1. |
-| Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"); teke indirilmedi. Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Onay bekliyor (SORULACAKLAR). |
+| İkinci menü | KAPANDI (20.10.2026): çekirdek yaması menüyü `ONERILEN_IKINCI_MENU` ile aynı yapar (`planlama-derle.test.ts` denetler). | - |
+| KAPANDI (359 a): aynı adlı tezgâhlar ayrı kaynak kalır, teke indirilmez. Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"). Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Kalır. |
 
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
