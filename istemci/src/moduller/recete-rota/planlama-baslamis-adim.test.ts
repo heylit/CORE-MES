@@ -21,7 +21,6 @@ function duzenek(kayit: Nesne, okumalar: Array<{ durum: Nesne; ek: null }>): Duz
     let S = null; let U = { sayfa: 'tahta', hamle: null }; const bildirimler = [];
     const RR = { el: null }; const SAYFA_AD = {}; const VERI = {}; let hsKaynak = null; let rrYerlestir = null; let calisan = null;
     const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
-    const GUNLER = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
     const sayi = (x, n) => Number(x).toFixed(n); const saat = x => sayi(x, 1) + ' sa'; const esc = x => String(x); const ic = a => '[' + a + ']';
     const dugme = (ad, act) => '<button data-act="' + act + '">' + ad + '</button>'; const yetkili = () => true;
     function bildir(m) { bildirimler.push(m); }

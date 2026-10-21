@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planlamaParcasi } from './planlama-derle.ts';
+import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
 
 // Çalışma kaydı (recete-rota-motoru-v1:planlama) bütün kullanıcılarda ortaktır ve sürümle yazılır: açılışta yazan sayfa, aynı anda
 // açan ikinci kişiye çakışma (409) uyarısı verir ve onun bütün sonraki kayıtlarını durdurur. Açılış yalnız okur; taşınan varsayılan
@@ -25,6 +25,7 @@ describe('planlama sayfasını açmak yazmaz', () => {
       function bildir() {} function iz() {} function render() {}
       function kaydet() { yazma++; }
       function yukle() { return null; }
+      ${planlamaMotoru()}
       ${planlamaParcasi('zz27-rr-veri')}
       return { kur: () => { S = { D: rrDenemeyeCevir(${JSON.stringify(KAYIT)}), dataVer: 1, plan: null }; }, cek: () => rrCek(), S: () => S, yazma: () => yazma };`;
     const depo = new Map<string, string>([['recete-rota-motoru-v1', JSON.stringify(KAYIT)]]);

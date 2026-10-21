@@ -146,6 +146,36 @@ export async function canliyaYaz(db: Db, senaryoId: number, isEmriIdleri: readon
   );
 }
 
+// Taban plan (33 a): canlıya alınan adımın ilk canlı yeri. Canlıya almayla aynı işlemde, canlı plan sürümü kilitliyken yazılır;
+// tabanı olan adım atlanır (benzersiz kısıt eşzamanlı ikinci yazmayı da durdurur).
+export const tabanYaz = (db: Db, senaryoId: number, adimlar: readonly { isEmriId: number; uretimEmriId: number }[], kisiId: number) =>
+  db.sorgu(
+    `INSERT INTO plan_taban (is_emri_id, uretim_emri_id, makine_id, kisi_id, baslangic, bitis, plan_surumu, senaryo_id, yazan_kisi_id)
+     SELECT y.is_emri_id, a.uretim_emri_id, y.makine_id, y.kisi_id, y.baslangic, y.bitis, (SELECT surum FROM plan_durumu), $1, $4
+       FROM plan_yerlesimi y JOIN unnest($2::int[], $3::int[]) AS a(is_emri_id, uretim_emri_id) ON a.is_emri_id = y.is_emri_id
+      ORDER BY y.is_emri_id
+     ON CONFLICT ON CONSTRAINT plan_taban_is_emri_tek DO NOTHING`,
+    [senaryoId, adimlar.map((a) => a.isEmriId), adimlar.map((a) => a.uretimEmriId), kisiId],
+  );
+
+export interface TabanSatiri {
+  isEmriId: number; uretimEmriId: number; kaynak: Kaynak; baslangic: string; bitis: string; planSurumu: number; senaryoId: number;
+  yazanKisiId: number; zaman: string;
+}
+export async function tabanOku(db: Db, g: { uretimEmriIdleri?: readonly number[]; isEmriIdleri?: readonly number[] }): Promise<TabanSatiri[]> {
+  if (g.uretimEmriIdleri === undefined && g.isEmriIdleri === undefined) return [];
+  const r = await db.sorgu<Omit<TabanSatiri, 'kaynak'> & { makineId: number | null; kisiId: number | null }>(
+    `SELECT is_emri_id AS "isEmriId", uretim_emri_id AS "uretimEmriId", makine_id AS "makineId", kisi_id AS "kisiId",
+            to_json(baslangic) #>> '{}' AS baslangic, to_json(bitis) #>> '{}' AS bitis, plan_surumu AS "planSurumu", senaryo_id AS "senaryoId",
+            yazan_kisi_id AS "yazanKisiId", to_json(zaman) #>> '{}' AS zaman
+       FROM plan_taban
+      WHERE ($1::int[] IS NULL OR uretim_emri_id = ANY($1::int[])) AND ($2::int[] IS NULL OR is_emri_id = ANY($2::int[]))
+      ORDER BY uretim_emri_id, baslangic, is_emri_id`,
+    [g.uretimEmriIdleri === undefined ? null : [...g.uretimEmriIdleri], g.isEmriIdleri === undefined ? null : [...g.isEmriIdleri]],
+  );
+  return r.map(({ makineId, kisiId, ...x }) => ({ ...x, kaynak: kaynakOf(makineId, kisiId) }));
+}
+
 /* ---------------- ayar ---------------- */
 
 const AYAR = `kural, yon, tampon_gun::float AS "tamponGun", dondurma_gun AS "dondurmaGun", personel_kisiti AS "personelKisiti",

@@ -17,7 +17,6 @@ const YETKI = {
   yonetici: ['veri.yaz', 'plan.yaz', 'plan.kilitle', 'plan.canliya-al'],
 };
 const ONCELIK = { 1: 'Yüksek', 2: 'Normal', 3: 'Düşük' };
-const GUNLER = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
 const NEDEN = {
   simdi: 'Plan başlangıcında hazırdı; ilk boş anda başladı.',
   serbest: 'Siparişin serbest bırakılma anını bekledi.',

@@ -35,6 +35,7 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | Verim | İşin süresi yerleştiği makinenin istasyon verimine bölünür (kişide %100); ayarı olmayan istasyon %100; elle yerleştirme ve taşıma hedef kaynağın verimiyle, elle girilen süre olduğu gibi | K Verim; U istasyonlar eki (#439) | yok |
 | Makine durumu | Arızalı ya da bakımdaki makine plana iş almaz; var olan yerleşim "kullanımda değil" uyarısı taşır | U istasyonlar eki (#439) | yok |
 | S3 | Kişi, rotadaki makinenin istasyonunda yetkin değilse uyarı (kayıt geçer); yetkinliği tanımlanmamış kişide uyarı yok | U istasyonlar eki (#439) | yok |
+| TB-01 | Taban plan (33 a): canlıya almayla aynı işlemde adımın ilk canlı yeri yazılır, hiç değişmez; adım başına tek satır; eşzamanlı canlıya almada önce alınanın; yetkisiz ya da vazgeçilen taslak yazmaz | U 33-1..33-5 (`plan-taban.test.ts`) | plan_taban_is_emri_tek, plan_taban_tek_kaynak, plan_taban_sure, plan_taban_degismez, plan_taban_bosaltilmaz |
 
 Bağı ertelenen kural: PL-06 (paralel bölme, P-B18); PL-09'un motoru erteletmesi (P-B19).
 

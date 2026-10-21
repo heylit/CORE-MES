@@ -15,7 +15,7 @@ Test: U = `sunucu/moduller/plan/plan-*.test.ts` (gerçek PostgreSQL; ortak kurul
 | POST /plan/kuyruk/sirala | plan.yaz | Plan sürümü; yerleşimler o kaynakta; kilitli ve başlamış değil; çakışma | U kuyruk testi | U kuyruk testi (başka kaynak 400) |
 | POST /plan/senaryolar | plan.studyo | Tekrar korumalı; canlının kopyası; taban plan sürümü | U P4 | U P4 (operatör 403) |
 | POST /plan/senaryolar/:id/oner, /tasi, /vazgec | plan.studyo | Açık senaryo; taşıma kuralları (aktif, kapsam, başlamış, kilitli, çakışma) senaryo içinde; canlı değişmez | U P4 | U P4 (canlı değişmedi doğrulaması) |
-| POST /plan/senaryolar/:id/canliya-al | plan.canliya-al | Canlı plan değiştiyse açık onay (409); kapsam; her kaynak aktif; başlamış işler canlıdaki hâliyle; kaynak iş emrine yazılır | U P4 (müdür, onaylı) | U P4 (onaysız 409, operatör 403) |
+| POST /plan/senaryolar/:id/canliya-al | plan.canliya-al | Canlı plan değiştiyse açık onay (409); kapsam; her kaynak aktif; başlamış işler canlıdaki hâliyle; kaynak iş emrine yazılır; taban plan aynı işlemde, kişi ve zaman sunucudan, yalnız eklenir (33 a) | U P4 (müdür, onaylı); U 33-1, 33-4 | U P4 (onaysız 409, operatör 403); U 33-3 (değiştirme, silme, ikinci satır), 33-5 (operatör 403, vazgeçilen) |
 
 Kullanıcı metni (senaryo adı, iş adı) React metni olarak basılır; HTML/SVG yorumlanmaz (çizelgede SVG yalnız sayılarla çizilir).
 

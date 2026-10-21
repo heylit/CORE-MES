@@ -3,7 +3,7 @@
 // canlıya alana kadar `canliSira`da görünmez.
 import type { Db } from '#cekirdek/db.ts';
 import type { PlanAyari } from '#paylasilan/sozlesme/plan.ts';
-import { ayarOku, bedelAyariOku } from './sorgular.ts';
+import { ayarOku, bedelAyariOku, tabanOku, type TabanSatiri } from './sorgular.ts';
 import {
   malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
@@ -36,3 +36,9 @@ export type { MusteriSinifiCozucusu };
 // 227 a: kâr riski oranının tek kaynağı plan bedel ayarıdır (müdür, 210 a); Proje maliyet buradan okur.
 export const karRiskiOraniGun = async (db: Db): Promise<number> => (await bedelAyariOku(db)).karRiskiOraniGun;
 export { acilSiparisOnaylandi } from './servis.ts';
+
+// 33 a: taban plan, adımın ilk canlıya alınan yeri; hiç değişmez. Reçete ve Rota plan ile gerçekleşen sekmesine okur. Emrin ilk planı
+// en küçük plan sürümlü satırlarıdır; sonradan plana giren adımın satırı kendi ilk canlı sürümünü taşır. Tabanı olmayan adım listede yoktur.
+export const tabanPlani = (db: Db, g: { uretimEmriIdleri?: readonly number[]; isEmriIdleri?: readonly number[] }): Promise<TabanSatiri[]> =>
+  tabanOku(db, g);
+export type { TabanSatiri };

@@ -9,153 +9,18 @@ const TMI_KULLANICI = 'u5';
 /* İkinci menü anahtarı -> sayfa; listede olmayan sayfa kendi adıyla bildirilir (kabuk menüde olmayanı yok sayar). */
 const TMI_MENU = { plan: 'tahta', studio: 'patolye', kanban: 'tahta' };
 const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
-const TMI_BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
-
-/* Kayda planlama sayfası hiç yazmadıysa (yeni kurulum, ya da kaydı yalnız Reçete ve Rota yazdı) planın başlangıcı ve takvimi yoktur,
-   açılış durur. Plan bugünden başlar; takvim boş kalır (vardiya ve çalışma günü uydurulmaz, sayfa kapasite yok der). İlk değişiklikle
-   kayda yazılır; bunlarsız saklanmış çalışma da açılışta onarılır. */
-function tmiTabanKur(D) {
-  if (!D.meta) {
-    const b = new Date();
-    D.meta = { ad: 'Reçete ve Rota kaydı', baslangic: `${b.getFullYear()}-${String(b.getMonth() + 1).padStart(2, '0')}-${String(b.getDate()).padStart(2, '0')}` };
-  }
-  if (!Array.isArray(D.vardiyalar)) D.vardiyalar = [];
-  if (!D.calismaGunleri || typeof D.calismaGunleri !== 'object') D.calismaGunleri = {};
-  if (!Array.isArray(D.tatiller)) D.tatiller = [];
-}
-
-/* Tezgâh, istasyon, kişi ve takvimin sahibi İstasyonlar, Kişiler ve Vardiya'dır; sunucu bunları ana kayda yazmaz (bagliDilimleriAyikla),
-   Reçete ve Rota çerçevesi kaynak okumasından birleştirir (kaynakUygula). Bu sayfa da aynı okumayla kaydı tamamlar; biçim o çerçevenin
-   kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
-   merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
-   Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
-function tmiKaynakIle(st, kaynak, D) {
-  const d = kaynak.durum, ek = kaynak.ek || {}, tk = ek.takvim || null;
-  const o = Object.assign({}, st);
-  const eski = (dizi, id) => { const x = D && (D[dizi] || []).find(y => String(y.id) === id); return x ? rrKopya(x) : null; };
-  const maliyet = (tur, id) => { const g = d.maliyet && d.maliyet[tur] && d.maliyet[tur][id]; return g && g.paraBirimi === 'TRY' ? Number(g.birimMaliyet) : null; };
-  if (d.cal) {
-    o.cal = Object.assign({}, st.cal || {}, {
-      shifts: d.cal.shifts.map(v => ({ id: v.id, name: v.name, start: v.start, end: v.end, breaks: v.breaks.map((b, i) => ({ id: v.id + '~' + i, name: 'Mola', start: b.start, end: b.end })) })),
-      holidays: d.cal.holidays.slice(),
-    });
-  }
-  if (Array.isArray(d.wcs)) {
-    const merkezler = d.wcs.filter(w => w.aktif !== false);
-    const sira = id => ((d.cal && d.cal.shifts) || []).findIndex(v => v.id === id);
-    let week = null;
-    if (tk) {
-      week = {};
-      for (let g = 0; g < 7; g++) {
-        const v = new Set(); for (const w of merkezler) for (const id of ((tk.hafta[w.id] || {})[g] || [])) if (sira(id) >= 0) v.add(id);
-        week[g] = [...v].sort((a, b) => sira(a) - sira(b));
-      }
-    }
-    o.wcs = [{ id: RR_WC, code: '', name: 'Atölye', week }, ...merkezler.map(w => ({ id: w.id, code: w.code, name: w.name, week: null }))];
-  }
-  const istasyonlar = Array.isArray(d.stations) ? d.stations.filter(x => x.aktif !== false) : null;
-  if (istasyonlar) o.stations = istasyonlar.map(x => ({ id: x.id, code: x.code, name: x.name, wcId: x.wcId, cost: maliyet('istasyon', x.id), eff: x.eff, opPer: x.opPer, count: x.count }));
-  if (Array.isArray(d.machines) && istasyonlar) {
-    const ist = new Set(istasyonlar.map(x => x.id));
-    o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
-      const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
-      const a = eski('tezgahlar', m.id); if (a) y.plan = a;
-      return y;
-    });
-  }
-  if (Array.isArray(d.people)) {
-    o.people = d.people.filter(k => k.active !== false).map(k => {
-      const y = { id: k.id, name: k.name, code: k.code || '', role: (ek.kisiGorevi && ek.kisiGorevi[k.id]) || '', wcId: k.wcId || '', stationId: k.stationId || '',
-        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true };
-      const a = eski('personel', k.id); if (a) y.plan = a;
-      return y;
-    });
-  }
-  return o;
-}
-/* Fason firmanın sahibi Müşteri ve Tedarikçi'dir; durum okuması aktif fason firmaları verir (fasonFirms). Motor fason adımı yalnız
-   fasoncular listesindeki firmaya yerleştirir; liste boşken her fason adımı yerleşmez. Firma başına süre rota adımlarının termin gününün
-   en büyüğüdür (yoksa motorun 1 günü); çıkış günleri takvimin çalışma günleridir; aynı anda iş sınırı yoktur (firmanın kapasitesi bilinmez).
-   Sayfada değiştirilen süre, kapasite ve çıkış ayarı aynı kimlikte korunur; ad sahibinden gelir. */
-function tmiFasoncular(st, firmalar, D, onceki) {
-  const sure = {};
-  for (const r of Object.values(st.routes || {})) for (const a of (r && r.steps) || []) {
-    if (a.fasonId && +a.terminGun > 0) sure[a.fasonId] = Math.max(sure[a.fasonId] || 0, +a.terminGun);
-  }
-  const cg = D.calismaGunleri || {};
-  const gunler = GUNLER.filter(g => (cg[g] || []).length);
-  const eski = id => ((onceki && onceki.fasoncular) || D.fasoncular || []).find(f => String(f.id) === id) || null;
-  return firmalar.map(f => {
-    const a = eski(String(f.id));
-    const y = { id: String(f.id), ad: f.name, kapasite: 999, sureGun: sure[f.id] || 1, cikisGunleri: gunler.length ? gunler : GUNLER.slice(0, 5), cikisSaat: 16 };
-    return a ? Object.assign({}, y, rrKopya(a), { id: y.id, ad: y.ad }) : y;
-  });
-}
-/* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine
-   (sipariş.adım) kayıttaki emir ve rota adımından çevrilir; karşılığı olmayan adım (rotasız emir, emirde değişen adım) gelmez. Saatler
-   terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
-   kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
-   Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
-/* Gerçek an -> planın saat ekseni (başlangıç günü 00:00'dan saat); okunamazsa null. */
-function tmiSaat(D, an) {
-  if (an == null) return null; const d = new Date(an); if (isNaN(d.getTime())) return null; const p = n => String(n).padStart(2, '0');
-  return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`);
-}
-function tmiIslemler(st, D) {
-  const opOf = {};
-  for (const o of (st && st.orders) || []) {
-    const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
-    const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
-    adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
-  }
-  return opOf;
-}
-/* Adımın işleyeceği adet (24 a): tek kaynak uretim-emirleri (durum.adimAdetleri, yalnız emir adedinden farklı olan). Motor D.opAdet'i okur. */
-function tmiAdimAdetleri(durum, st, D) {
-  const a = durum && durum.adimAdetleri && typeof durum.adimAdetleri === 'object' ? durum.adimAdetleri : null; if (!a) return undefined;
-  const opOf = tmiIslemler(st, D); const y = {};
-  for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
-  return y;
-}
-function tmiCalisanlar(durum, st, D, now) {
-  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
-  const opOf = tmiIslemler(st, D);
-  const saat = an => tmiSaat(D, an);
-  const y = {};
-  for (const c of liste) {
-    const id = opOf[c.anahtar]; if (!id) continue;
-    const S0 = saat(c.baslangic);
-    const S = S0 == null ? now : S0; const sayim = saat(c.sayimAni);
-    y[id] = { m: c.makineId, S, kalan: Math.max(0, +c.kalanVerimliDk || 0) / 60, sayim: sayim == null ? S : Math.max(S, sayim), n: c.saglam, A: c.adet, sayimAni: c.sayimAni };
-  }
-  return y;
-}
+/* Kayıt çevirisi, kaynak birleştirmesi, fason firma, adım adedi ve başlamış adımlar motor klasöründeki girdi.betik'tedir (tmiCevir,
+   tmiKaynakIle, tmiFasoncular, tmiAdimAdetleri, tmiCalisanlar, kaynakBirlestir, calisanBirlestir): sunucu planın girdisini aynı kodla kurar. */
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
-/* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular', 'opAdet'];
 
 if (TMI_ICINDE) {
-  const rd0 = rrDenemeyeCevir;
   /* Kaydı planlama sayfası hiç yazmadıysa plan dilimi, dolayısıyla başlangıç yoktur. Saklanmış çalışma açılırken kayıt değişmişse
      (rrCek) çalışma bu çeviriyle değişir: açık çalışmanın başlangıcı korunur, yoksa taban kurulur; başlangıçsız çalışma çizimi düşürür. */
-  rrDenemeyeCevir = function (st) {
-    const D = rd0(TMI_KAYNAK.durum ? tmiKaynakIle(st, TMI_KAYNAK, S && S.D) : st);
-    if (!D.meta && S && S.D && S.D.meta) D.meta = rrKopya(S.D.meta);
-    tmiTabanKur(D);
-    const firmalar = TMI_KAYNAK.durum && TMI_KAYNAK.durum.fasonFirms;
-    if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, S && S.D);
-    const adet = tmiAdimAdetleri(TMI_KAYNAK.durum, st, D); if (adet) D.opAdet = adet;
-    return D;
-  };
+  rrDenemeyeCevir = function (st) { return tmiCevir(st, TMI_KAYNAK.durum ? TMI_KAYNAK : null, S && S.D); };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
      yazılmaz (sunucu zaten ayıklar); değişiklik planı eskitir. */
   const kaynakUygula = () => {
-    const st = rrOku();
-    const D = rrDenemeyeCevir(st && st.items ? st : TMI_BOS_KAYIT);
-    const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !rrEsit(D[a], S.D[a]));
-    if (!alanlar.length) return false;
-    for (const a of alanlar) S.D[a] = D[a];
-    tmiTabanKur(S.D);
+    if (!kaynakBirlestir(S.D, rrOku(), TMI_KAYNAK.durum ? TMI_KAYNAK : null).length) return false;
     S.dataVer++; U.hamle = null;
     RRV.S = S; RRV.dj = JSON.stringify(S.D);
     if (S.plan) bildir('Tezgâh, personel ve takvim sunucudan alındı. Plan yeniden çözülünce güncellenir.', 'tamam');
@@ -167,21 +32,8 @@ if (TMI_ICINDE) {
     if (!TMI_KAYNAK.durum || !Array.isArray(TMI_KAYNAK.durum.calisanAdimlar)) return false;
     const now = cxAl() ? cxAl().st.now : 7;
     const y = tmiCalisanlar(TMI_KAYNAK.durum, rrOku(), S.D, now); if (!y) return false;
-    const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
-    for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
-    for (const [id, a] of Object.entries(y)) {
-      const r = S.plan && S.plan.ops[id]; const m = a.m && cxAl() && cxAl().M[a.m] ? a.m : r ? r.m : a.m;
-      const yeni = { ...a, m, sunucu: 1, planC: g[id] && g[id].planC != null ? g[id].planC : r ? r.C : null };
-      if (rrEsit(g[id], yeni)) continue;
-      g[id] = yeni; degisti = true;
-      const M = cxAl() && cxAl().M[m]; if (!r || !M) continue;
-      const C = kalanBitis(M, yeni); const o = cxAl().byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
-      const Su = Math.min(adv(M.sw, yeni.S, (c && c.su) || 0), C);
-      S.plan = { ...S.plan, ops: { ...S.plan.ops, [id]: { ...r, m, S: yeni.S, Su, C, lot1: Math.min(C, Math.max(Su, r.lot1 || Su)), act: 1, pin: 1, adetN: yeni.n } } };
-      yeniSapma.push(id);
-    }
+    const { degisti, yeniSapma } = calisanBirlestir(S, y, cxAl());
     if (!degisti) return false;
-    S.gercek = g;
     if (S.plan) ozetTazele();
     /* yazılmaz: her açılışta sunucudan yeniden kurulur; ortak çalışma kaydına açılışta yazmak aynı anda açana çakışma (409) verir */
     const l = yeniSapma.map(sapmaOf).filter(x => x && Math.abs(x.d) > sapmaEsik());
@@ -200,7 +52,7 @@ if (TMI_ICINDE) {
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
      yazılmaz. Planın başlangıç günü sabit kalır: kayıtlı plan saatleri bu güne göredir. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
   const st0 = stOf;
-  stOf = function () { const st = st0.apply(this, arguments); if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; };
+  stOf = function () { return simdiUygula(st0.apply(this, arguments), S); };
   const coz0 = coz;
   coz = function () {
     if (S && S.D && yetkili('plan.yaz') && !calisan) {
