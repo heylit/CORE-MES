@@ -34,7 +34,7 @@
 | Tanıtım ve kılavuz anahtarları | Denemenin kılavuz tercihi önek dışı anahtarda (`pm-at-kilavuz-v1`): köprü onları yazmaz, sayfa yenilenince yeniden görünür. | Önekli anahtara alınır. |
 | Kendi renkleri | `modul.stil`'de 30 onaltılık renk (`--is-*` iş renkleri dahil). | Ortak seri renkleri (CEKIRDEK-ISTEKLERI 4). |
 | Satır içi stil | Reçete ve Rota'ya eklenen planlama alanlarında satır içi stil: `margin-top:8px` (2), `min-height:0` (2), prototipin kendi kalıbıyla. | Sınıfa çevrilir. |
-| Gömülü kütüphaneler | driver, interact, sortable ve iki yardımcı paket değil, kaynak olarak gömülü (lisansları `cerceve/planlama/lib/`). | Paket olarak girmesi yeni bağımlılık kararıdır. |
+| Gömülü kütüphaneler | KAPANDI (362 a, 20.10.2026): beş gömülü kütüphane çıkarıldı; tur, ipucu konumu, Gantt sürüklemesi ve sıralama kendi kodumuz (`parca/v-arac.betik`). | - |
 | Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
 | Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
 | İkinci menü | KAPANDI (20.10.2026): çekirdek yaması menüyü `ONERILEN_IKINCI_MENU` ile aynı yapar (`planlama-derle.test.ts` denetler). | - |

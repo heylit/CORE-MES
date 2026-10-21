@@ -1,6 +1,6 @@
 # recete-rota: sorulacaklar (teslim 20.10.2026)
 
-Cevaplar (20.10.2026, kullanıcı): 353 a (yetki genişletme onaylı), 356 b, 357 a (prototip değişikliği onaylı), 359 a. Açık: 354 (motorun yeri; ölçüm istendi, karar gelene kadar tarayıcıda), 355 b (HiGHS girsin; paket onayı yazılı gelmedi, paket eklenmedi), 358 b (gömülü kütüphaneler çıkarılıp yeniden yazılsın; iş büyüklüğü bildirilecek, başlanmadı). Google Fonts satırları dosyadan silindi (öneri a).
+Cevaplar (20.10.2026, kullanıcı): 353 a (yetki genişletme onaylı), 356 b, 357 a (prototip değişikliği onaylı), 359 a. Açık: 354 (motorun yeri; ölçüm istendi, karar gelene kadar tarayıcıda), 355 b (HiGHS girsin; paket onayı yazılı gelmedi, paket eklenmedi), 358 b (gömülü kütüphaneler çıkarılsın). Sonra: 362 a (dört kütüphane kendi kodumuzla yazıldı, `parca/v-arac.betik`; prototip değişikliği onaylı). Google Fonts satırları dosyadan silindi (öneri a).
 
 Numarasızdır; numarayı koordinatör verir. Her madde cevap gelene kadar öneriyle ilerler; geri alması pahalı olanlar ("sorulur" kademesi) işaretli.
 Cevapta doldurulmamış yer tutucu ya da silinmemiş seçenek onay sayılmaz.
@@ -93,7 +93,7 @@ Cevapta doldurulmamış yer tutucu ya da silinmemiş seçenek onay sayılmaz.
 - Seçenekler: a) dosyadan silinsin; b) kalsın, açılışta çıkarılsın.
 - Öneri: a. Davranış değişmez.
 
-## Gömülü kütüphaneler (sorulur: yeni bağımlılık)
+## Gömülü kütüphaneler (KAPANDI: 358 b, 362 a; kendi kodumuz)
 - Soru: Planlama sayfasındaki beş gömülü kütüphane (driver, interact, sortable, iki yardımcı) kaynak olarak gömülü kalsın mı?
 - Neden: Paket değiller (`package.json`'a girmez), lisansları yanında; ama dışarıdan gelen kod.
 - Seçenekler: a) gömülü kalsın; b) paket olarak girsin (yeni bağımlılık); c) çıkarılsın, ilgili özellik (tanıtım, sürükle bırak) kapanır.

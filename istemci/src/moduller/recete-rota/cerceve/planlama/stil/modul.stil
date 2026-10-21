@@ -1322,7 +1322,7 @@ button.pm-gy-ad:hover { background: var(--panel2); }
   .pm-bg-ad { display: none; } .pm-bg-adimlar button[aria-selected="true"] .pm-bg-ad { display: inline; }
 }
 
-/* v18: gömülü kütüphaneler. İpucu ve tur kutusu uygulamanın panel ve yazı değişkenleriyle çizilir. */
+/* v18: ipucu, tur ve sürükleme. İpucu ve tur kutusu uygulamanın panel ve yazı değişkenleriyle çizilir. */
 .pm-bg-ust-satir { display: flex; align-items: center; gap: var(--b-2); }
 .pm-bg-ust-satir .pm-bg-durum { flex: 1; min-width: 0; }
 .pm-ipucu { position: fixed; left: 0; top: 0; z-index: 60; display: grid; gap: 2px; max-width: min(320px, calc(100vw - 16px)); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); font-size: var(--yazi-xs); pointer-events: none; }
@@ -1330,14 +1330,20 @@ button.pm-gy-ad:hover { background: var(--panel2); }
 .pm-ipucu [data-ton="hata"] { color: var(--stop); } .pm-ipucu [data-ton="uyari"] { color: var(--hold); } .pm-ipucu [data-ton="tamam"] { color: var(--run); }
 .pm-gy-blok { touch-action: none; }
 .pm-gy-blok[data-tutulan] { z-index: 5; box-shadow: var(--shadow); opacity: .9; cursor: grabbing; }
-.driver-popover.pm-tur { background: var(--panel-solid); color: var(--ink); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow); max-width: min(340px, calc(100vw - 24px)); font-family: inherit; }
-.driver-popover.pm-tur .driver-popover-title { font: inherit; font-size: var(--yazi-m); font-weight: 700; }
-.driver-popover.pm-tur .driver-popover-description { font: inherit; font-size: var(--yazi-s); color: var(--ink); }
-.driver-popover.pm-tur .driver-popover-progress-text { color: var(--muted); font-size: var(--yazi-xs); }
-.driver-popover.pm-tur .driver-popover-footer button { min-height: 36px; padding: 0 var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); text-shadow: none; }
-.driver-popover.pm-tur .driver-popover-next-btn { background: var(--sig); color: var(--on-sig, var(--ink)); border-color: var(--sig); }
-.driver-popover.pm-tur .driver-popover-close-btn { color: var(--muted); }
-.driver-popover.pm-tur .driver-popover-arrow { border-color: var(--panel-solid); }
+.pm-tur-perde { position: fixed; inset: 0; z-index: 70; background: color-mix(in oklab, var(--bg) 60%, transparent); }
+.pm-tur-perde[data-delik] { background: transparent; }
+.pm-tur-vurgu { position: fixed; z-index: 70; border-radius: var(--yari-2); box-shadow: 0 0 0 100vmax color-mix(in oklab, var(--bg) 60%, transparent); outline: 2px solid var(--sig); pointer-events: none; }
+.pm-tur { position: fixed; left: 0; top: 0; z-index: 71; display: grid; gap: var(--b-2); width: min(340px, calc(100vw - 24px)); padding: var(--b-3); background: var(--panel-solid); color: var(--ink); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow); }
+.pm-tur header { display: flex; align-items: start; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-m); }
+.pm-tur p { margin: 0; font-size: var(--yazi-s); }
+.pm-tur footer { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.pm-tur footer small { color: var(--muted); font-size: var(--yazi-xs); }
+.pm-tur footer span { display: flex; gap: var(--b-1); }
+.pm-tur button { min-height: 36px; padding: 0 var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer; }
+.pm-tur button[disabled] { opacity: .5; cursor: default; }
+.pm-tur button[data-birincil] { background: var(--sig); color: var(--on-sig, var(--ink)); border-color: var(--sig); }
+.pm-tur .pm-tur-kapat { min-height: 0; padding: var(--b-1); border: 0; background: none; color: var(--muted); }
+.pm-sirala-ucan { position: fixed; z-index: 80; margin: 0; box-sizing: border-box; pointer-events: none; box-shadow: var(--shadow); opacity: .9; }
 
 /* v20: araç çubuğu, paneller, menü, palet, etki önizlemesi */
 .pm-v20-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }

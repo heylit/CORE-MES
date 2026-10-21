@@ -1,12 +1,9 @@
-/* ---------- Gömülü üç kütüphane: driver.js (tur), Floating UI (ipucu), interact.js (sürükleme) ----------
-   Üçü de sayfanın içinde gelir; ağdan bir şey yüklenmez. Biri yoksa ilgili yardım sessizce devre dışı kalır,
-   sayfanın geri kalanı eskisi gibi çalışır (sürükleme o zaman tarayıcının kendi sürükle-bırakına düşer). */
+/* ---------- Tur, ipucu ve gün planında sürükleme (araçlar v-arac'ta) ---------- */
 const TUR_ANAHTAR = 'pm-tur-bugun-v1';
 const turGoruldu = () => { try { return localStorage.getItem(TUR_ANAHTAR) === '1'; } catch (e) { return true; } };
 const turIsaretle = () => { try { localStorage.setItem(TUR_ANAHTAR, '1'); } catch (e) { /* özel pencere */ } };
 
 function turBaslat() {
-  const D = window.driver && window.driver.js && window.driver.js.driver; if (!D) { bildir('Tur bu tarayıcıda açılamadı.', 'hata'); return; }
   if (U.sayfa !== 'bugun') { U.sayfa = 'bugun'; render(); }
   const adimlar = [
     ['.pm-bg-durum', 'Planın durumu', 'Tek cümlede: kaç sipariş geç, en çok hangisi, kaç karar sizi bekliyor.'],
@@ -15,9 +12,8 @@ function turBaslat() {
     ['.pm-bg-plan', 'Gün planı', 'Gri işler sorunsuz, kırmızılar geç kalan siparişin işleri. Bir işin üstüne gelince neden orada olduğu yazar. İşi tutup sürükleyerek başka saate ya da tezgâha taşıyabilirsiniz; yalnız yapabilen tezgâhlar yanar.'],
     ['[data-act="bg-adim"][data-v="yayin"]', 'Yayınla', 'Bitince planı müdür onayına gönderirsiniz. Müdür farkı görür, onaylar ya da geri gönderir.'],
     ['.pm-bg-ust [data-act="tur"]', 'Tur', 'Bu turu buradan yeniden açabilirsiniz.'],
-  ].filter(([s]) => document.querySelector(s)).map(([element, title, description]) => ({ element, popover: { title, description } }));
-  const d = D({ showProgress: true, progressText: '{{current}} / {{total}}', nextBtnText: 'İleri', prevBtnText: 'Geri', doneBtnText: 'Bitti', allowClose: true, popoverClass: 'pm-tur', steps: adimlar, onDestroyed: turIsaretle });
-  d.drive();
+  ].filter(([s]) => document.querySelector(s)).map(([el, baslik, metin]) => ({ el, baslik, metin }));
+  pmTur(adimlar, { bitince: turIsaretle });
 }
 function turKendiliginden() {
   if (turGoruldu() || U.turPlanli || !S.plan || kim().rol === 'operator') return;
@@ -31,10 +27,9 @@ function pmIpucuEl() {
   return t;
 }
 function pmIpucuGoster(ref, html) {
-  const F = window.FloatingUIDOM; if (!F || !ref.isConnected) return;
+  if (!ref.isConnected) return;
   const t = pmIpucuEl(); t.innerHTML = html; t.hidden = false;
-  F.computePosition(ref, t, { placement: 'top', strategy: 'fixed', middleware: [F.offset(8), F.flip(), F.shift({ padding: 8 })] })
-    .then(({ x, y }) => { t.style.left = x + 'px'; t.style.top = y + 'px'; });
+  pmKonumla(ref, t, { yer: 'top', aralik: 8, kenar: 8 });
 }
 function pmIpucuGizle() { const t = document.getElementById('pm-ipucu'); if (t) t.hidden = true; clearTimeout(pmIpucuGizle.z); }
 function isIpucu(id) {
@@ -65,33 +60,30 @@ function gyHedef(x, y) {
   return { c, m: c.dataset.m, t: Math.max(cxAl().st.now, t), ok: GY_TAS.ok.has(c.dataset.m) };
 }
 function gyEtkilesimKur() {
-  if (typeof interact !== 'function' || gyEtkilesimKur.kuruldu) return; gyEtkilesimKur.kuruldu = true;
-  const dokunmatik = matchMedia('(pointer: coarse)').matches;
-  interact('.pm-gy-blok').draggable({
-    hold: dokunmatik ? 350 : 0, autoScroll: true,
-    listeners: {
-      start(e) {
-        const el = e.target; const y = el.closest('.pm-gy');
-        if (!yetkili('plan.yaz') || U.gyBoya || !y) { e.interaction.stop(); return; }
-        const id = el.dataset.v; const o = cxAl().byId[id]; pmIpucuGizle();
-        GY_TAS = { id, el, y, dx: 0, dy: 0, ok: new Set(o ? o.c.map(c => c.m) : []), h: null, oldu: false };
-        y.dataset.tasiniyor = ''; el.dataset.tutulan = '';
-        y.querySelectorAll('.pm-gy-satir').forEach(s => s.toggleAttribute('data-uygun', GY_TAS.ok.has(s.dataset.m)));
-      },
-      move(e) {
-        const T = GY_TAS; if (!T) return; T.dx += e.dx; T.dy += e.dy; T.oldu = true;
-        T.el.style.transform = `translate(${T.dx}px, ${T.dy}px)`;
-        const h = gyHedef(e.client.x, e.client.y); T.h = h;
-        T.y.querySelectorAll('[data-hedef]').forEach(x => delete x.dataset.hedef); if (h && h.ok) h.c.dataset.hedef = '';
-        T.html = h ? (h.ok ? `<b>${esc(bgTezAd(h.m))} · <span class="mono">${esc(fmtDT(S.D, h.t))}</span></b><span>Bırakınca motor geri kalanı yeniden dizer.</span>` : `<b data-ton="hata">${esc(bgTezAd(h.m))} bu adımı yapamaz</b><span>Yanan satırlardan birine bırakın.</span>`) : '<span>Bir tezgâh satırına bırakın.</span>';
-        v20EtkiPlanla(T.id, h); pmIpucuGoster(T.el, T.html + (h && h.ok ? v20EtkiMetin() : ''));
-      },
-      end() {
-        const T = GY_TAS; GY_TAS = null; pmIpucuGizle(); v20EtkiPlanla(null, null); if (!T) return;
-        delete T.y.dataset.tasiniyor; delete T.el.dataset.tutulan;
-        if (T.oldu) GY_SON.t = Date.now();
-        if (T.h && T.h.ok && T.oldu) gyTasi(T.id, T.h.m, T.h.t); else render();
-      },
+  if (gyEtkilesimKur.kuruldu) return; gyEtkilesimKur.kuruldu = true;
+  pmSurukle('.pm-gy-blok', {
+    tutma: 350, kenarKaydir: true,
+    basla(e) {
+      const el = e.hedef; const y = el.closest('.pm-gy');
+      if (!yetkili('plan.yaz') || U.gyBoya || !y) { e.durdur(); return; }
+      const id = el.dataset.v; const o = cxAl().byId[id]; pmIpucuGizle();
+      GY_TAS = { id, el, y, dx: 0, dy: 0, ok: new Set(o ? o.c.map(c => c.m) : []), h: null, oldu: false };
+      y.dataset.tasiniyor = ''; el.dataset.tutulan = '';
+      y.querySelectorAll('.pm-gy-satir').forEach(s => s.toggleAttribute('data-uygun', GY_TAS.ok.has(s.dataset.m)));
+    },
+    tasi(e) {
+      const T = GY_TAS; if (!T) return; T.dx += e.dx; T.dy += e.dy; T.oldu = true;
+      T.el.style.transform = `translate(${T.dx}px, ${T.dy}px)`;
+      const h = gyHedef(e.x, e.y); T.h = h;
+      T.y.querySelectorAll('[data-hedef]').forEach(x => delete x.dataset.hedef); if (h && h.ok) h.c.dataset.hedef = '';
+      T.html = h ? (h.ok ? `<b>${esc(bgTezAd(h.m))} · <span class="mono">${esc(fmtDT(S.D, h.t))}</span></b><span>Bırakınca motor geri kalanı yeniden dizer.</span>` : `<b data-ton="hata">${esc(bgTezAd(h.m))} bu adımı yapamaz</b><span>Yanan satırlardan birine bırakın.</span>`) : '<span>Bir tezgâh satırına bırakın.</span>';
+      v20EtkiPlanla(T.id, h); pmIpucuGoster(T.el, T.html + (h && h.ok ? v20EtkiMetin() : ''));
+    },
+    birak() {
+      const T = GY_TAS; GY_TAS = null; pmIpucuGizle(); v20EtkiPlanla(null, null); if (!T) return;
+      delete T.y.dataset.tasiniyor; delete T.el.dataset.tutulan;
+      if (T.oldu) GY_SON.t = Date.now();
+      if (T.h && T.h.ok && T.oldu) gyTasi(T.id, T.h.m, T.h.t); else render();
     },
   });
 }

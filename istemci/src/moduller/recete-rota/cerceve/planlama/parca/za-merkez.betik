@@ -118,10 +118,10 @@ function mzKuyruk(p) {
     <div class="pm-mz-kolonlar">${kol}</div>`;
 }
 function mzKuyrukBagla() {
-  if (typeof Sortable !== 'function' || !yetkili('plan.yaz')) return;
+  if (!yetkili('plan.yaz')) return;
   for (const el of document.querySelectorAll('.pm-mz-kart')) { if (el.dataset.bagli) continue; el.dataset.bagli = '1';
-    Sortable.create(el, { group: 'mz-kuyruk', animation: V20_AZ() ? 0 : 150, filter: '[data-sabit], [data-bos]', preventOnFilter: false, ghostClass: 'pm-v20-hayalet', forceFallback: true, fallbackTolerance: 4, delay: 120, delayOnTouchOnly: true,
-      onMove: e => !(e.related && e.related.hasAttribute('data-sabit') && e.willInsertAfter === false && !e.related.nextElementSibling), onEnd: mzKuyrukBirak }); }
+    pmSirala(el, { grup: 'mz-kuyruk', animasyon: V20_AZ() ? 0 : 150, suzgec: '[data-sabit], [data-bos]', hayalet: 'pm-v20-hayalet', gecikme: 120,
+      gecebilir: e => !(e.related && e.related.hasAttribute('data-sabit') && e.willInsertAfter === false && !e.related.nextElementSibling), bitince: mzKuyrukBirak }); }
 }
 function mzKuyrukBirak(e) {
   const id = e.item.dataset.id; const p = S.plan; const r = p.ops[id]; if (!r) return;

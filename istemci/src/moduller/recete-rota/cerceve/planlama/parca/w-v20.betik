@@ -1,7 +1,7 @@
 /* ---------- v20: seçilen 11 parça denemede ----------
    Geri al ve yinele (Ctrl Z), sürüm listesi, komut paleti (Ctrl K, <dialog>), iş menüsü (Popover API ve CSS anchor),
    kayarak geçiş (Web Animations), sürüklerken etki önizlemesi, öneri listesi (kabul, ret, değiştir), istisna kutusu,
-   kilit ve dondurma şeridi, değişim bütçesi karşılaştırması, tezgâh sırası (SortableJS), role göre tur ve vardiya devri.
+   kilit ve dondurma şeridi, değişim bütçesi karşılaştırması, tezgâh sırası (sürükleyerek), role göre tur ve vardiya devri.
    Hepsi var olan motoru ve sepeti kullanır; yeni bir plan kuralı eklemez. */
 const V20 = { ileri: [], dvSon: null, yineliyor: false, oneri: null, ret: new Set(), butce: null, ist: 'hepsi', sira: null, ist0: null };
 const V20_AZ = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -167,7 +167,7 @@ function v20ButceDene(i) {
   if (U.taslak) render(); else hamleUygula(); V20.butce = null; v20PencereYenile();
 }
 
-/* ---------- SortableJS: tezgâh sırası ---------- */
+/* ---------- Tezgâh sırası ---------- */
 function v20SiraKur(m) {
   const cx = cxAl(); if (!S.plan || !cx) return;
   const now = cx.st.now;
@@ -189,10 +189,10 @@ function v20SiraGovde() {
     <div class="pm-dugmeler">${deg ? dugme('Baştaki sıraya dön', 'v20-sira-sifirla', { kucuk: true, simge: 'rotate' }) : ''}${dugme('Uygula', 'v20-sira-uygula', { kucuk: true, birincil: true, simge: 'check', yetki: 'plan.yaz', cls: deg ? '' : 'pm-v20-pasif' })}</div>`;
 }
 function v20SiraBagla() {
-  const el = document.getElementById('pm-v20-sira'); if (!el || el.dataset.bagli || typeof Sortable !== 'function' || !yetkili('plan.yaz')) return;
+  const el = document.getElementById('pm-v20-sira'); if (!el || el.dataset.bagli || !yetkili('plan.yaz')) return;
   el.dataset.bagli = '1';
-  Sortable.create(el, { animation: V20_AZ() ? 0 : 150, handle: '.pm-v20-tut', filter: '[data-sabit]', ghostClass: 'pm-v20-hayalet', onMove: e => !e.related.hasAttribute('data-sabit'),
-    onEnd: () => { V20.sira.ids = [...el.children].map(x => x.dataset.id); v20PencereYenile(); } });
+  pmSirala(el, { animasyon: V20_AZ() ? 0 : 150, tutamac: '.pm-v20-tut', suzgec: '[data-sabit]', hayalet: 'pm-v20-hayalet', gecebilir: e => !e.related.hasAttribute('data-sabit'),
+    bitince: () => { V20.sira.ids = [...el.children].map(x => x.dataset.id); v20PencereYenile(); } });
 }
 function v20SiraYon(id, yon) {
   const l = V20.sira && V20.sira.ids; if (!l) return; const i = l.indexOf(id), k = i + yon; if (i < 0 || k < 0 || k >= l.length) return;
@@ -232,9 +232,8 @@ const V20_TUR = {
 const v20TurEski = turBaslat;
 turBaslat = function () {
   const rol = kim().rol; if (rol === 'planlamaci' || !V20_TUR[rol]) { v20TurEski(); return; }
-  const D = window.driver && window.driver.js && window.driver.js.driver; if (!D) { bildir('Tur bu tarayıcıda açılamadı.', 'hata'); return; }
-  const adimlar = V20_TUR[rol].filter(([s]) => !s || document.querySelector(s)).map(([s, title, description]) => s ? { element: s, popover: { title, description } } : { popover: { title, description } });
-  D({ showProgress: true, progressText: '{{current}} / {{total}}', nextBtnText: 'İleri', prevBtnText: 'Geri', doneBtnText: 'Bitti', allowClose: true, popoverClass: 'pm-tur', steps: adimlar, onDestroyed: turIsaretle }).drive();
+  const adimlar = V20_TUR[rol].filter(([s]) => !s || document.querySelector(s)).map(([el, baslik, metin]) => ({ el, baslik, metin }));
+  pmTur(adimlar, { bitince: turIsaretle });
 };
 function v20DevirGovde() {
   const cx = cxAl(); const p = S.plan; const L = S.devirler || [];
@@ -322,7 +321,7 @@ function v20MenuAc(ref, id) {
   if (V20.menuRef && V20.menuRef !== ref) V20.menuRef.style.anchorName = '';
   V20.menuRef = ref;
   if (V20_ANCHOR) { ref.style.anchorName = '--pm-v20-menu'; m.dataset.anchor = ''; m.showPopover(); }
-  else { delete m.dataset.anchor; m.showPopover(); const F = window.FloatingUIDOM; if (F) F.computePosition(ref, m, { placement: 'bottom-start', strategy: 'fixed', middleware: [F.offset(6), F.flip(), F.shift({ padding: 8 })] }).then(({ x, y }) => { m.style.left = x + 'px'; m.style.top = y + 'px'; }); }
+  else { delete m.dataset.anchor; m.showPopover(); pmKonumla(ref, m, { yer: 'bottom-start', aralik: 6, kenar: 8 }); }
   const ilk = m.querySelector('[role="menuitem"]'); if (ilk) ilk.focus();
   return true;
 }

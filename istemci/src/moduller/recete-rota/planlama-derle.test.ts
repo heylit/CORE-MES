@@ -30,6 +30,11 @@ describe('planlama çerçevesinin sayfası', () => {
     expect(sayfa).not.toMatch(/sourceMappingURL/);
   });
 
+  it('dışarıdan kütüphane gömülmez; tur, konumlama ve sürükleme kendi araçlarımızdır (362 a)', () => {
+    expect(sayfa).not.toMatch(/driver\.js|floating-ui|interact\.js|SortableJS|@license/i);
+    for (const ad of ['function pmKonumla(', 'function pmSurukle(', 'function pmSirala(', 'function pmTur(']) expect(sayfa).toContain(ad);
+  });
+
   it('ortak stil ve simgeler kabukta konur: yer tutucular birer kez vardır, kurulunca kalmaz', () => {
     expect(sayfa.split(ORTAK_STIL_YERI)).toHaveLength(2);
     expect(sayfa.split(SIMGE_YERI)).toHaveLength(2);
