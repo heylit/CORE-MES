@@ -55,6 +55,24 @@ export const makineDoluIhlali = (acikEmirId: number | null, emirId: number, maki
   return makineli ? MAKINE_DOLU : ISTASYON_DOLU;
 };
 
+// 393 d: operatör planınkinden başka makine seçebilir; seçtiği makinede başka emre ayrılmış, önümüzdeki 4 saat içinde başlayan ve henüz
+// başlamamış bir iş varsa başlatamaz (o emrin yeri korunur). Ayrım canlı plandandır; aynı emrin adımı ayrım sayılmaz.
+export const MAKINE_AYRIM_UFKU_DK = 240;
+export interface MakineAyrimi {
+  makineId: number;
+  uretimEmriId: number;
+  emirNo: string;
+  opNo: number;
+  durum: 'bekliyor' | 'calisiyor' | 'tamam';
+  baslangic: string;
+}
+export const ilkAyrim = (ayrimlar: readonly MakineAyrimi[], emirId: number, secilen: readonly number[], atanan: number | null): MakineAyrimi | null =>
+  ayrimlar.filter((a) => a.makineId !== atanan && secilen.includes(a.makineId) && a.durum === 'bekliyor' && a.uretimEmriId !== emirId)
+    .sort((x, y) => Date.parse(x.baslangic) - Date.parse(y.baslangic))[0] ?? null;
+export const makineAyrildiMetni = (makine: string, a: Pick<MakineAyrimi, 'emirNo' | 'opNo'>, saat: string, planMakinesi: string | null): string =>
+  `${makine} önümüzdeki ${MAKINE_AYRIM_UFKU_DK / 60} saat için başka işe ayrılmış: ${a.emirNo} op ${a.opNo}, başlangıç ${saat}. `
+  + `Bu işi ${planMakinesi === null ? 'planlanan makinede' : `planlanan makinede (${planMakinesi})`} başlatın ya da planlamacıdan planı taşımasını isteyin.`;
+
 // Seçilmeyen makine iş emrinin makinesidir; o da yoksa iş makinesiz çalışır.
 export const calisilacakMakineler = (secilen: readonly number[] | undefined, atanmis: number | null): number[] => {
   if (secilen !== undefined) return [...secilen];

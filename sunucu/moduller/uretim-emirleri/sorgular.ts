@@ -757,6 +757,15 @@ export function isEmriBul(db: Db, id: number, kilit = false): Promise<IsEmriSati
   return db.tek<IsEmriSatiri>(`SELECT ${IS_EMRI} FROM uretim_emirleri_is_emri i WHERE i.id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 }
 
+// Makine ayrımı denetimi için (393 d): iş emirlerinin emri, emir no'su, op no'su ve durumu.
+export function isEmriAyrimBilgileri(db: Db, idler: readonly number[]): Promise<{ id: number; uretimEmriId: number; emirNo: string; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam' }[]> {
+  return db.sorgu(
+    `SELECT i.id, i.uretim_emri_id AS "uretimEmriId", e.emir_no AS "emirNo", i.op_no AS "opNo", i.durum
+       FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = ANY($1::int[])`,
+    [[...idler]],
+  );
+}
+
 // Plan için: verilen iş emirlerinden var olanların emir no'su, op no'su, durumu ve fasonda olup olmadığı (silinen iş emri listede yoktur).
 export function isEmriVarliklari(db: Db, idler: readonly number[]): Promise<{ id: number; emirNo: string; opNo: number; durum: string; fason: boolean }[]> {
   return db.sorgu(
@@ -1260,6 +1269,16 @@ export function acikKullanimlar(db: Db, istasyonId: number, makineIdleri: readon
       WHERE ${makineli ? 'k.makine_id = ANY($1::int[])' : 'k.istasyon_id = $1 AND k.makine_id IS NULL'} AND k.bitis IS NULL
       ORDER BY k.makine_id${kilit ? ' FOR UPDATE OF k' : ''}`,
     [makineli ? [...makineIdleri] : istasyonId],
+  );
+}
+
+// Çalışan iş emirlerinin açık kullanımdaki makineleri, açılış sırasıyla (plan çalışan işi fiili makinede gösterir, 393 d).
+export function acikMakineleriGetir(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; makineId: number }[]> {
+  if (isEmriIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<{ isEmriId: number; makineId: number }>(
+    `SELECT is_emri_id AS "isEmriId", makine_id AS "makineId" FROM uretim_emirleri_makine_kullanimi
+      WHERE is_emri_id = ANY($1::int[]) AND makine_id IS NOT NULL AND bitis IS NULL ORDER BY baslama, id`,
+    [[...isEmriIdleri]],
   );
 }
 

@@ -413,3 +413,6 @@ export async function calismayaGecisAnlari(db: Db, emirIdleri: readonly number[]
   if (emirIdleri.length === 0) return new Map();
   return new Map((await gecisAnlariGetir(db, emirIdleri)).map((r) => [r.emirId, r.an]));
 }
+
+// 393 d: plan, makinelerin canlı ayrımlarını verir (kablolama.ts).
+export const planAyrimiCozucusu = (cozucu: servis.PlanAyrimiCozucusu | null): void => servis.planAyrimiCozucusuKaydet(cozucu);

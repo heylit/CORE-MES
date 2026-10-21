@@ -1163,6 +1163,9 @@ export interface PlanIsEmri {
   adimBaslama?: string | null;
   islenenAdet?: number;
   sonSayimAni?: string | null;
+  // Terminalin çalıştırdığı makine (açık kullanım; 393 d): planlanan makine çalışanlar arasındaysa o, değilse ilk açılan. Makinesiz
+  // çalışmada ve çalışmayan adımda yoktur.
+  fiiliMakineId?: number;
 }
 
 // Termini girilmemiş fason adımların süre tahmini (takvim günü, sorgularla aynı sırada; veri yoksa null). Plan satın almanın geçmiş teslim
@@ -1202,11 +1205,19 @@ async function acikAdimlar<R extends number | null>(
     sorulacak.forEach((x, n) => tahminler.set(`${x.uretimEmriId}|${x.sira}`, cevap[n] ?? null));
   }
   const simdi = Date.now();
-  const islenen = await s.islenenAdetleriGetir(db, satirlar.filter((i) => i.durum === 'calisiyor').map((i) => i.id));
+  const calisanlar = satirlar.filter((i) => i.durum === 'calisiyor').map((i) => i.id);
+  const islenen = await s.islenenAdetleriGetir(db, calisanlar);
+  const fiili = new Map<number, number[]>();
+  for (const k of await s.acikMakineleriGetir(db, calisanlar)) fiili.set(k.isEmriId, [...(fiili.get(k.isEmriId) ?? []), k.makineId]);
+  const fiiliMakine = (i: { id: number; makineId: number | null }): number | undefined => {
+    const m = fiili.get(i.id);
+    return m === undefined ? undefined : i.makineId !== null && m.includes(i.makineId) ? i.makineId : m[0];
+  };
   return satirlar.flatMap((i) => {
     const e = i.emir;
     const revizyon = e.kaynakRotaRevizyonId;
     if (e.malzemeNo === null || !revizyonUyar(revizyon)) return [];
+    const makine = fiiliMakine(i);
     const kaynak: AtanabilirKaynak | null = i.makineId !== null ? { tur: 'makine', id: i.makineId } : i.kisiId !== null ? { tur: 'kisi', id: i.kisiId } : null;
     return [{
       id: i.id, uretimEmriId: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, teslim: e.teslim, oncelik: e.oncelik, acilma: e.acilma, baslangic: e.baslangic,
@@ -1216,6 +1227,7 @@ async function acikAdimlar<R extends number | null>(
       devirAdedi: i.devirAdedi, durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi),
       ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
+      ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];
   });
 }
