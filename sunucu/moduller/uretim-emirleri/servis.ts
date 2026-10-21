@@ -22,7 +22,7 @@ import {
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, ROTASIZ_EMIR_KAPALI, sayimIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
 } from './kurallar.ts';
-import type { IstasyonDurumu } from './kurallar.ts';
+import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
@@ -352,19 +352,42 @@ let planAyrimi: PlanAyrimiCozucusu | null = null;
 export function planAyrimiCozucusuKaydet(cozucu: PlanAyrimiCozucusu | null): void { planAyrimi = cozucu; }
 
 // 393 d: yalnız seçilen ve iş emrinin makinesi olmayan makineler denetlenir; seçimsiz başlatma planın makinesindedir.
-async function ayrimiDenetle(db: Db, emirId: number, secilen: readonly number[] | undefined, atanan: number | null): Promise<void> {
-  const baska = (secilen ?? []).filter((m) => m !== atanan);
-  if (planAyrimi === null || baska.length === 0) return;
+async function ayrimAdaylari(db: Db, baska: readonly number[]): Promise<MakineAyrimi[]> {
+  if (planAyrimi === null || baska.length === 0) return [];
   const satirlar = await planAyrimi(db, baska, MAKINE_AYRIM_UFKU_DK);
-  if (satirlar.length === 0) return;
+  if (satirlar.length === 0) return [];
   const bilgi = new Map((await sorgular.isEmriAyrimBilgileri(db, [...new Set(satirlar.map((x) => x.isEmriId))])).map((i) => [i.id, i]));
-  const a = ilkAyrim(satirlar.flatMap((x) => {
+  return satirlar.flatMap((x) => {
     const i = bilgi.get(x.isEmriId);
     return i === undefined ? [] : [{ ...i, makineId: x.makineId, baslangic: x.baslangic }];
-  }), emirId, baska, atanan);
+  });
+}
+
+async function ayrimiDenetle(db: Db, emirId: number, secilen: readonly number[] | undefined, atanan: number | null): Promise<void> {
+  const baska = (secilen ?? []).filter((m) => m !== atanan);
+  const a = ilkAyrim(await ayrimAdaylari(db, baska), emirId, baska, atanan);
   if (a === null) return;
   const kod = async (id: number) => (await makineGetir(db, id))?.kod ?? `#${id}`;
   throw cakisma(makineAyrildiMetni(await kod(a.makineId), a, tesisSaati(new Date(a.baslangic)), atanan === null ? null : await kod(atanan)));
+}
+
+// Seçici reddin kuralından okur: makine başına ilk ayrım. Atanan, başlatmada sıradaki, devamda çalışan iş emrinin makinesidir
+// (emirBaslat ve emirDevam'ın ayrimiDenetle'ye verdiği). Salt okuma: kilit almaz, yetki denetlemez.
+export async function makineAyrimlari(db: Db, emirId: number, makineIdleri: readonly number[]): Promise<{
+  atanan: number | null; ayrimlar: { makineId: number; emirNo: string; opNo: number; baslangic: string }[];
+}> {
+  const emir = await sorgular.emirBul(db, emirId);
+  if (emir === null) throw bulunamadi(EMIR_YOK);
+  const isEmirleri = emir.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [emirId]);
+  const isEmri = emir.durum === 'planli' ? siradakiIsEmri(isEmirleri) : isEmirleri.find((i) => i.durum === 'calisiyor') ?? null;
+  const atanan = isEmri?.makineId ?? null;
+  const baska = [...new Set(makineIdleri)].filter((m) => m !== atanan);
+  const adaylar = await ayrimAdaylari(db, baska);
+  const ayrimlar = baska.flatMap((m) => {
+    const a = ilkAyrim(adaylar, emirId, [m], atanan);
+    return a === null ? [] : [{ makineId: a.makineId, emirNo: a.emirNo, opNo: a.opNo, baslangic: a.baslangic }];
+  }).sort((x, y) => Date.parse(x.baslangic) - Date.parse(y.baslangic));
+  return { atanan, ayrimlar };
 }
 
 // Kilidin yeri: seçilen ya da atanmış makineler; makinesiz işte istasyonun makinesiz yeri (eski istasyon kilidi). Aynı işe

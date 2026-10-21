@@ -416,3 +416,5 @@ export async function calismayaGecisAnlari(db: Db, emirIdleri: readonly number[]
 
 // 393 d: plan, makinelerin canlı ayrımlarını verir (kablolama.ts).
 export const planAyrimiCozucusu = (cozucu: servis.PlanAyrimiCozucusu | null): void => servis.planAyrimiCozucusuKaydet(cozucu);
+// Arkon makine seçicisi: seçilen makinelerin başka emre ayrımları, başlatma ve devamın 409 kuralıyla aynı yoldan.
+export const makineAyrimlari = (db: Db, emirId: number, makineIdleri: readonly number[]) => servis.makineAyrimlari(db, emirId, makineIdleri);
