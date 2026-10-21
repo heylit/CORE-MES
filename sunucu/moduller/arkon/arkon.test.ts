@@ -238,7 +238,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
     const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali'));
-    assert.equal(okuma.length, 13);
+    assert.equal(okuma.length, 14);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -782,6 +782,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'GET', yol: '/arkon/ozet' },
     { yontem: 'GET', yol: '/arkon/son-olaylar' },
     { yontem: 'GET', yol: '/arkon/operator-ozeti' },
+    { yontem: 'GET', yol: '/arkon/makine-ayrimlari?emirId=999999999' },
     { yontem: 'POST', yol: '/arkon/plan-sira/sirala', govde: { kaynak: { tur: 'makine', id: 999999999 }, onceki: [999999999], yeni: [999999999], planSurumu: 0 } },
     { yontem: 'GET', yol: '/arkon/cizim-merkezi/belgeler' },
     { yontem: 'GET', yol: `/arkon/cizim-merkezi/kontrol?dosyalar=999999999:${OZET}` },

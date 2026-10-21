@@ -16,7 +16,7 @@ import { anlikPencereler } from '../data/vardiya-gunu';
 import { opOf, stOf } from './istasyonlar';
 import { kalanAdet } from '../data/sayac-halkasi';
 import { topluGirisHatasi, topluGirisSayilari } from '../data/toplu-giris';
-import { makineSecimiGorunur, secimOzeti, secimiDegistir } from '../data/makine-secimi';
+import { ayrimAciklamasi, ayrimEtiketi, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir } from '../data/makine-secimi';
 import { TEKRAR_OLCUM } from '../data/otomatik-numune';
 import { hurdaNedeniYokIletisi } from '../data/hurda-nedeni';
 
@@ -443,11 +443,16 @@ export function PreviewOv({ id, onClose }) {
 }
 
 /* ── makine seçimi (kart #1148) ── */
-export function MakineSecici({ makineler, secili, atanan, durum, onChange }) {
+// 393 d: planın makinesi "plan" etiketiyle; başka emre ayrılmış makine kilitli, saat ve emir no ile, seçilemez.
+export function MakineSecici({ makineler, secili, atanan, ayrim = null, durum, onChange }) {
   if (!makineSecimiGorunur(makineler, durum)) return null;
   return html`<div className="mksec" role="group" aria-label="Çalışılacak makine">
     <span className="over">Makine</span>
-    ${makineler.map(m => html`<button key=${m.id} type="button" className=${'mkchip' + (secili.includes(m.id) ? ' on' : '')} aria-pressed=${secili.includes(m.id)} title=${m.name || m.id} onClick=${() => onChange(secimiDegistir(secili, m.id))}>${m.id}</button>`)}
+    ${makineler.map(m => {
+      const a = makineAyrimi(ayrim, m.id);
+      if (a) return html`<button key=${m.id} type="button" className="mkchip kilit" disabled aria-disabled="true" title=${ayrimAciklamasi(a, saatMetni)}><${I} n="lock" s=${14} />${m.id}<small>${ayrimEtiketi(a, saatMetni)}</small></button>`;
+      return html`<button key=${m.id} type="button" className=${'mkchip' + (secili.includes(m.id) ? ' on' : '')} aria-pressed=${secili.includes(m.id)} title=${m.name || m.id} onClick=${() => onChange(secimiDegistir(secili, m.id))}>${m.id}${m.id === atanan ? html`<span className="mkplan">plan</span>` : null}</button>`;
+    })}
     <small className="mkhint">${secimOzeti(secili, atanan)}</small>
   </div>`;
 }

@@ -3,7 +3,7 @@ import {
   anomaliCevabi, anomaliIstatistikCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi,
-  kayitParametresi, kayitSorgusu, kayitlarCevabi, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
+  kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   merkezBelgeParametresi, merkezBelgeSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import * as servis from './servis.ts';
@@ -241,6 +241,15 @@ export const uclar = [
     sorgu: operatorOzetiSorgusu,
     cevap: operatorOzetiCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.operatorOzeti(db, kullanici, sorgu),
+  }),
+  // Terminalin makine seçicisi (393 d): ayrılmış makineyi başlatmadan önce gösterir; son söz başlatma komutundadır.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/makine-ayrimlari',
+    yetki: ARKON_SAYFASI,
+    sorgu: makineAyrimlariSorgusu,
+    cevap: makineAyrimlariCevabi,
+    isle: ({ db, kullanici, sorgu }) => servis.makineAyrimlari(db, kullanici, sorgu.emirId),
   }),
   uc({
     yontem: 'GET',

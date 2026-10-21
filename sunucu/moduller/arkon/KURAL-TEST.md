@@ -129,6 +129,8 @@ A3 kırmızı (DOĞRULANDI, yerelde): her düzeltme tek tek geri alınınca ilgi
 | 1148-5: bir kişi birden çok makine başlatabilir | yansima.test.ts "makine seçimi" (iki makine tek kişide) | aynı test: aynı makinede ikinci iş dolu cevabı |
 | 1148-6: insanlı istasyonda başkası çalışırken uyarı, kişinin kendi çalışması başlar; ikinci kişi yalnız uyarı alır | yansima.test.ts "insanlı istasyonda çalışan işe başlatma katılımdır"; kurallar.test.ts "katılım yolu" | aynı testler: ekip dışı reddedilir, aynı kişi ikinci çalışma açamaz, makinelide reddedilir |
 | 1148-7: kişi yalnız kendi çalışmasını durdurur ve bitirir | yansima.test.ts "kişi yalnız kendi çalışmasını duraklatır ve bitirir" | aynı test: katılımsız kişi duraklatamaz/durduramaz/bitiremez, başkası çalışırken `stopped` reddedilir |
+| 393-1: terminal seçicisi planın makinesini "plan" etiketiyle, başka emre önümüzdeki 4 saatte ayrılmış makineyi kilit, saat ve emir no ile gösterir; kilitli makine seçilemez. Ayrım uretim-emirleri başlatma denetimiyle aynı kuraldan gelir | makine-ayrimi.test.ts "planın makinesi döner..." (boş makinede başlatma 200), "ayrılmış makinenin kendi emri..."; istemci makine-secici.test.tsx, makine-secimi.test.ts "ayrılmış makine kilitlidir..." | makine-ayrimi.test.ts: kilitli makinede başlatma 409; aynı emrin adımı ve boş makine kilitli değil; makine-secici.test.tsx kilitli makineye dokunuş seçmez; makine-secimi.test.ts kilit seçimden ve kayıttan düşer |
+| 393-2: ayrım okuması yalnız Arkon rolü ve terminal sayfası olana, yalnız kapsamındaki istasyonun emri için | makine-ayrimi.test.ts "reddedilen..." (kapsamındaki istasyon 200) | aynı test: rolsüz 403, sayfasız 403, oturumsuz 401, kapsam dışı 403, bozuk emir 400 |
 
 
 

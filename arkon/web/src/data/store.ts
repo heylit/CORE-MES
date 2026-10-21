@@ -2,6 +2,7 @@ import type { BusMsg, HealthRes, PkgFile, Role, Session, User } from '@shared/mo
 import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from './anomali';
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from './cizim-merkezi';
+import type { MakineAyrimlari } from './makine-secimi';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
 import { depoOkunur } from './depo-okuma';
@@ -492,6 +493,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     },
     /** Operatör Özetim (kart #1295): kişinin kendi üretimi; başkasını yalnız amir, kendi iş merkezindekini ister */
     async operatorOzeti(donem: OzetDonemi, kisiId?: number | null): Promise<OperatorOzeti> { return api('GET', '/operator-ozeti?donem=' + donem + (kisiId ? '&kisiId=' + kisiId : '')); },
+    /** 393 d: emrin istasyonundaki makinelerin ayrımı (başlatmayı reddettirecek olanlar); sunucunun başlatma denetimiyle aynı kural */
+    async makineAyrimlari(emirId: number): Promise<MakineAyrimlari | undefined> { return api('GET', '/makine-ayrimlari?emirId=' + emirId); },
     /** TMI emrinin talimat adımları; işaret TMI'ye yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
     async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, { tamam }); },

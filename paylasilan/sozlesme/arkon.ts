@@ -422,6 +422,14 @@ export const anomaliIstatistikCevabi = z.object({
 });
 export type AnomaliIstatistikSorgusu = z.input<typeof anomaliIstatistikSorgusu>;
 export type AnomaliIstatistikCevabi = z.output<typeof anomaliIstatistikCevabi>;
+// 393 d sonrası terminalin makine seçicisi: emrin istasyonundaki makinelerden başlatmayı reddettirecek ayrımı olanlar (makine başına ilki,
+// uretim-emirleri'nin başlatma denetimiyle aynı kural). `planMakinesi` emrin başlatılacak iş emrinin makinesidir; kodlar TMI makine kodlarıdır.
+export const makineAyrimlariSorgusu = z.object({ emirId: z.coerce.number().int().positive() });
+export const makineAyrimlariCevabi = z.object({
+  planMakinesi: z.string().nullable(),
+  ayrimlar: z.array(z.object({ mc: z.string(), emirNo: z.string(), opNo: z.number().int(), baslangic: zamanSemasi })),
+});
+export type MakineAyrimlariCevabi = z.infer<typeof makineAyrimlariCevabi>;
 export const planSiraSurumuCevabi = z.object({ planSurumu: z.number().int().nonnegative() });
 export const planSiralaCevabi = z.object({ taslakId: z.number().int(), taslakAcildi: z.boolean() });
 

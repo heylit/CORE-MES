@@ -2,7 +2,7 @@
 // adresine gider, bu katman onları TMI'nin /api/arkon uçlarına çevirir. Oturum TMI'nindir (çerez); Arkon'a ayrı giriş yoktur.
 import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
-  EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
+  EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -253,6 +253,11 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
       window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: odak }));
     }
     return tamam({ hazir: false, metin });
+  }
+  // 393 d: makine seçicisinin ayrımları; yalnız emir kimliği geçer, doğrulamayı TMI ucu yapar.
+  if (ilk === 'makine-ayrimlari' && g.yontem === 'GET') {
+    const q = new URLSearchParams({ emirId: g.sorgu.get('emirId') ?? '' });
+    return tamam(await istemci.get<MakineAyrimlariCevabi>(`/arkon/makine-ayrimlari?${q.toString()}`));
   }
   if (ilk === 'plan-sira' && g.yontem === 'POST') return tamam(await istemci.post('/arkon/plan-sira/sirala', govdeyiOku(g.govde)));
   if (ilk === 'plan-sira' && g.yontem === 'GET') return tamam(await istemci.get('/arkon/plan-sira/surum'));
