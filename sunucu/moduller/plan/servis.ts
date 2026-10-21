@@ -366,17 +366,40 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
 const fiiliKaynaklar = (acik: readonly PlanIsEmri[]): Baglam['fiili'] => new Map(acik.flatMap((i) =>
   (i.adimDurumu === 'calisiyor' && i.fiiliMakineId !== undefined ? [[i.id, { tur: 'makine', id: i.fiiliMakineId } as Kaynak] as const] : [])));
 
+// 391 a: çalışan adımın kalanı tek yerde, adetten: parça sayılmadıysa ayar, artı kalan adet x birim süre (dakika, verimsiz). Plan
+// ekranı ve ortak motor (calisanAdimlar) bunu kullanır; çalışmayan ya da süresiz adımda null.
+function calisanKalani(i: PlanIsEmri): { kalanDk: number; ayarDk: number } | null {
+  if (i.durum !== 'basladi' || i.adimDurumu !== 'calisiyor' || i.islenenAdet === undefined) return null;
+  const ayarDk = i.islenenAdet > 0 || i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk);
+  const kalanDk = isSuresi(ayarDk, i.birimSureDk === null ? null : Number(i.birimSureDk), Math.max((i.adimAdedi ?? i.adet) - i.islenenAdet, 0));
+  return kalanDk === null ? null : { kalanDk, ayarDk };
+}
+
 function gerceklesenler(simdi: number, acik: readonly PlanIsEmri[]): Baglam['gercek'] {
   const h: Baglam['gercek'] = new Map();
   for (const i of acik) {
-    if (i.durum !== 'basladi' || i.adimDurumu !== 'calisiyor' || i.islenenAdet === undefined) continue;
-    const ayarDk = i.islenenAdet > 0 || i.ayarSuresiDk === null ? 0 : Number(i.ayarSuresiDk);
-    const kalanDk = isSuresi(ayarDk, i.birimSureDk === null ? null : Number(i.birimSureDk), Math.max((i.adimAdedi ?? i.adet) - i.islenenAdet, 0));
-    if (kalanDk === null) continue;
+    const k = calisanKalani(i);
+    if (k === null) continue;
     const an = (t: string | null | undefined) => (t ? dk({ simdi }, new Date(t)) : null);
-    h.set(i.id, { baslangic: an(i.adimBaslama), cikis: an(i.sonSayimAni ?? i.adimBaslama), kalanDk, ayarDk });
+    h.set(i.id, { baslangic: an(i.adimBaslama), cikis: an(i.sonSayimAni ?? i.adimBaslama), ...k });
   }
   return h;
+}
+
+// Reçete ve Rota'nın ortak motoru (ADR 0018 taslağı, 391 a) çalışan adımın kalanını buradan alır, kendisi hesaplamaz. Anahtar
+// emir no|op no; makine terminalin çalıştırdığı (393 d), yoksa planın kaynağı; sayım anı son sayım, sayım yoksa adımın başladığı an.
+// Yetki denetlemez; çağıran korur.
+export interface CalisanAdim { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanDk: number }
+export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
+  const iso = (t: string | null | undefined) => (t ? new Date(t).toISOString() : null);
+  return (await planlanacakIsEmirleri(db)).flatMap((i) => {
+    const k = calisanKalani(i);
+    if (k === null) return [];
+    return [{
+      anahtar: `${i.emirNo}|${i.opNo}`, makineId: i.fiiliMakineId ?? (i.kaynak?.tur === 'makine' ? i.kaynak.id : null),
+      baslangic: iso(i.adimBaslama), sayimAni: iso(i.sonSayimAni ?? i.adimBaslama), kalanDk: k.kalanDk,
+    }];
+  });
 }
 
 // Takvim (PL-04): kaynağın vardiya takvimi; takvimi olmayan sürekli çalışır. Taslakta kapatılan gün (stüdyo denemesi) çalışma vermez.
