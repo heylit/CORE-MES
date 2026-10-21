@@ -207,7 +207,7 @@ function cpGirdi(st, plan) {
     if (o.aile) x.aile = o.aile; if (o.aparat) x.aparat = o.aparat;
     if (r) x.ipucu = { m: r.m, s: Math.ceil(r.S / SL - 1e-9) }; ops.push(x);
   }
-  const jobs = {}; for (const j in cx.jobs) jobs[j] = { due: cx.jobs[j].due == null ? null : cx.jobs[j].due / SL, w: PW[cx.jobs[j].oncelik] || 1 };
+  const jobs = {}; for (const j in cx.jobs) jobs[j] = { due: cx.jobs[j].due == null ? null : cx.jobs[j].due / SL, w: isAgirligi(cx.jobs[j]) };
   // personel yalnız genel vardiya açıkken sayılır; kapalı saatte tezgâhlar durduğu için kısıt konmaz
   const gm = mask(cx.gen), NQ = Math.ceil(H / SL), seg = a => { const o = []; let k0 = 0; for (let k = 1; k <= NQ; k++) if (k === NQ || a(k) !== a(k0)) { o.push([k0, k, a(k0)]); k0 = k; } return o; };
   const per = { tot: seg(k => gm[k] ? Math.max(0, cx.capTot[k]) : -1), g: {} }; for (const g in cx.capG) per.g[g] = seg(k => gm[k] ? Math.max(0, cx.capG[g][k]) : -1);

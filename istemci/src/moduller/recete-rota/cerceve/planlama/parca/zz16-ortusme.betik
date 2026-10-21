@@ -33,7 +33,7 @@ function orAdaylar() {
   const A = orAcik();
   return S.D.siparisler.filter(s => !s.havuz && !s.ortus && !A[s.id] && !A[s.id.split('/')[0]] && !basladiMi(s.id) && (S.plan.J[s.id] || {}).T > 0.05).filter(s => {
     const u = S.D.urunler.find(z => z.id === s.urun); return u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); })
-    .map(s => ({ s, w: S.plan.J[s.id].T * (PW[s.oncelik] || 1) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
+    .map(s => ({ s, w: S.plan.J[s.id].T * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
 }
 function orOlc(ms) {
   const st = stOf(); const cx = compile(st);

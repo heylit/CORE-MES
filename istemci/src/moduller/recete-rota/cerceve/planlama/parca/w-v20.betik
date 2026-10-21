@@ -39,7 +39,7 @@ function v20SurumGovde() {
 /* ---------- 5. Öneri: kabul, ret, değiştir ---------- */
 function v20OneriHesapla() {
   if (!S.plan || !yetkili('plan.yaz')) { V20.oneri = { dv: S.dataVer, liste: [], bitti: true }; return; }
-  const gec = Object.entries(S.plan.J).filter(([j, x]) => x.T > 0.05 && !V20.ret.has(j)).map(([j, x]) => { const s = S.D.siparisler.find(y => y.id === j); return { j, T: x.T, w: x.T * (PW[s ? s.oncelik : 2] || 1) }; })
+  const gec = Object.entries(S.plan.J).filter(([j, x]) => x.T > 0.05 && !V20.ret.has(j)).map(([j, x]) => { const s = S.D.siparisler.find(y => y.id === j); return { j, T: x.T, w: x.T * isAgirligi(s || { oncelik: 2 }) }; })
     .sort((a, b) => b.w - a.w).slice(0, 3);
   V20.oneri = { dv: S.dataVer, liste: gec.map(x => ({ ...x, adaylar: null, sec: 0 })), bitti: !gec.length };
   const sira = V20.oneri; let i = 0;
@@ -87,7 +87,7 @@ function v20Istisnalar() {
   const now = cx.st.now; const l = [];
   const ilk = {}; for (const r of Object.values(p.ops)) if (isFinite(r.S) && !r.done && (!ilk[r.job] || r.S < ilk[r.job].S)) ilk[r.job] = r;
   for (const [j, x] of Object.entries(p.J)) {
-    const s = S.D.siparisler.find(y => y.id === j); const pw = PW[s ? s.oncelik : 2] || 1;
+    const s = S.D.siparisler.find(y => y.id === j); const pw = isAgirligi(s || { oncelik: 2 });
     if (x.T > 0.05) l.push({ tur: 'gec', w: x.T * pw, j, op: ilk[j] && ilk[j].id, t: ilk[j] && ilk[j].S, baslik: `${j} ${gecMetin(x.T)} geç`, neden: `${ONCELIK[s ? s.oncelik : 2] || 'Normal'} öncelik (×${pw}) · ${sayi(x.T, 1)} sa gecikme` });
   }
   for (const j in ilk) {

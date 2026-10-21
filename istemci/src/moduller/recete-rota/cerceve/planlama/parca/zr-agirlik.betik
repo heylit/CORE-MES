@@ -47,18 +47,20 @@ function agKatki(s, D = S.D) {
   }
   return +s.gelir - t;
 }
-/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri */
+/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri. Bölünen siparişin parçasında (35 b) tutardan gelen bileşenler zaten
+   oranlıdır (parçanın geliri); siparişe ait olanlar (girilen ceza, taban bedel) adet payıyla sayılır. */
 function agBedel(D, s, A = agAyar(D)) {
+  const pay = isPayi(s);
   const mu = (D.musteriler || []).find(m => m.id === s.musteri) || null;
   const tutar = s.gelir == null ? null : +s.gelir;
   const oran = s.cezaOran != null ? +s.cezaOran : mu && mu.cezaOran != null ? +mu.cezaOran : null;
-  const ceza = s.cezaGun != null ? +s.cezaGun / 24 : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
+  const ceza = s.cezaGun != null ? +s.cezaGun / 24 * pay : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
   const fin = tutar != null ? tutar * A.fin / 100 / 24 : 0;
   const B = A.bil; const kat = agKatki(s); const kr = kat == null ? null : Math.max(0, kat) * A.kar / 100 / 24;
   const sc = B.sinif && mu ? (A.sinif[mu.sinif] ?? 1) : 1; const el = B.elle ? agElle(s) : 1;
   const eksik = []; if (tutar == null) eksik.push('tutar'); if (B.ceza && ceza == null) eksik.push('ceza oranı'); if (!mu) eksik.push('müşteri'); if (B.kar && kat == null) eksik.push('maliyet');
-  const temel = B.ceza ? (ceza == null ? A.taban : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
-  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban;
+  const temel = B.ceza ? (ceza == null ? A.taban * pay : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
+  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban * pay;
   const tavanO = s.cezaTavan != null ? +s.cezaTavan : mu && mu.cezaTavan != null ? +mu.cezaTavan : A.tavan;
   const tavanTL = B.ceza && s.cezaGun == null && tutar != null && ceza != null ? tutar * tavanO / 100 : null;
   return { b: ham * sc * el, ceza: B.ceza ? ceza : null, temel, fin: finK, kr: B.kar ? kr : null, kat, sc, el, sinif: mu ? mu.sinif : null, mu, eksik, taban: (B.ceza && ceza == null) || bos, tutar, oran, tavanO, tavanTL, sonra: ham * sc * el };
@@ -97,7 +99,8 @@ stOf = function (ek, gevset) {
   const P = S.plan && S.plan.J ? S.plan.J : {};
   for (const [s] of l) { const x = agBedel(st.D, s, A); const T = P[s.id] ? P[s.id].T : 0;
     const asti = x.ceza > 0 && x.tavanTL != null && T > x.tavanTL / x.ceza; const be = asti ? x.sonra : x.b;
-    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; }
+    /* parçanın bedeli payını içerir: motor bir daha payla çarpmasın */
+    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; s.pay = 1; }
   return st;
 };
 

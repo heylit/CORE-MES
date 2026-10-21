@@ -52,7 +52,7 @@ function kpiSerit(p) {
 }
 function siparisListesi(p) {
   const D = S.D;
-  const l = D.siparisler.map(s => { const j = p.J[s.id]; const w = !j ? -2 : j.T == null ? 1e9 : j.T * (PW[s.oncelik] || 1); return { s, j, w }; })
+  const l = D.siparisler.map(s => { const j = p.J[s.id]; const w = !j ? -2 : j.T == null ? 1e9 : j.T * isAgirligi(s); return { s, j, w }; })
     .sort((a, b) => b.w - a.w || (parseT(D, a.s.termin) ?? 1e9) - (parseT(D, b.s.termin) ?? 1e9));
   const gec = l.filter(x => x.j && (x.j.T == null || x.j.T > 0.01)).length;
   const satir = ({ s, j }) => {
@@ -440,7 +440,7 @@ function sAnaliz() {
   const cx = cxAl(); const p = S.plan; const D = S.D;
   if (!cx) return '<p class="pm-alt">Veri derlenemedi.</p>';
   const l = D.siparisler.map(s => ({ s, j: p.J[s.id] || {}, a: ayristir(p, cx, s.id) })).filter(x => x.a && x.a.tam)
-    .sort((a, b) => ((b.j.T || 0) * (PW[b.s.oncelik] || 1)) - ((a.j.T || 0) * (PW[a.s.oncelik] || 1)) || b.a.C - a.a.C);
+    .sort((a, b) => ((b.j.T || 0) * isAgirligi(b.s)) - ((a.j.T || 0) * isAgirligi(a.s)) || b.a.C - a.a.C);
   const olcek = Math.max(24, ...l.map(x => Math.max(x.a.toplam, (parseT(D, x.s.termin) ?? 7) - 7)));
   const satirlar = l.map(x => {
     const t = parseT(D, x.s.termin); const lb = p.lbC && p.lbC[x.s.id];

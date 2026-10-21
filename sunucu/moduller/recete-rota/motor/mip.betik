@@ -78,7 +78,7 @@ function mipModel(st,cx,jobIds,opt={}){
       R.push(`p${ri++}: `+lin(terms)+' >= '+(lag+q.k));}}
   // kritik yol sınırı da geçerlidir: model en az onun kadar güçlü olur
   const T={},TL={};const obj=[];const cp=lowerBound(st,cx);
-  for(const jid of jobIds){const j=cx.jobs[jid];if(j.due==null)continue;const pw=PW[j.oncelik]||1;
+  for(const jid of jobIds){const j=cx.jobs[jid];if(j.due==null)continue;const pw=isAgirligi(j);
     const succ=new Set();for(const o of j.ops)for(const [p] of o.pr)succ.add(p);
     const tn='T'+jid.replace(/[^A-Za-z0-9]/g,'_');T[jid]=tn;obj.push([tn,pw]);TL[tn]=isFinite(cp.C[jid])?Math.max(0,cp.C[jid]-j.due):0;
     for(const o of j.ops){if(succ.has(o.id))continue;const c=CE(o.id);
@@ -133,7 +133,7 @@ function cerceveModel(st,cx,plan,opt={}){
     const ms=o.c.filter(c=>!c.fas);if(!ms.length||o.c.some(c=>c.fas&&!c.opt))continue;
     let best=null;for(const c of ms){const p=suMin(o,c,cx)+c.run;if(!best||p<best.p)best={c,p};}
     const g=cx.M[best.c.m].grup,p=best.p;if(p<1e-6)continue;
-    const j=cx.jobs[o.job],pw=PW[j.oncelik]||1,eb=Math.max(0,bOf(ht.head[o.id]));
+    const j=cx.jobs[o.job],pw=isAgirligi(j),eb=Math.max(0,bOf(ht.head[o.id]));
     const row=[];Y[o.id]={};P[o.id]=p;(EB[g+'|'+eb]=EB[g+'|'+eb]||[]).push({id:o.id,h:ht.head[o.id]});
     for(let k=Math.min(eb,NB);k<=NB;k++){const v='y'+(n++);
       const end=k<NB?bk(k)[1]:bk(NB)[0]+7*24;const late=j.due==null?0:Math.max(0,end+(ht.tail[o.id]||0)-j.due);
@@ -164,7 +164,7 @@ function cerceveModel(st,cx,plan,opt={}){
 // HiGHS'in grup × dilim ek vardiya sayısı somut vardiyaya çevrilir: o haftada geciken işlerin en çok yüklendiği tezgâh, en erken gün
 function cerceveUygula(st,cx,plan,mod,vals){
   const ev=plan?evaluate(plan,st,null,true):null,yuk={};
-  if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*(PW[cx.jobs[r.job].oncelik]||1);}
+  if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*isAgirligi(cx.jobs[r.job]);}
   const sec=[],ozet=[];
   for(const key in mod.nv){const n=Math.round(vals[mod.nv[key]]||0);if(n<=0)continue;const [g,ks]=key.split('|'),k=+ks;
     const c=mod.ad.filter(x=>x.g===g&&mod.bOf(x.a)===k).sort((a,b)=>(yuk[b.m+'|'+k]||0)-(yuk[a.m+'|'+k]||0)||a.a-b.a);

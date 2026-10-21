@@ -23,7 +23,7 @@ function bolmeHamleN(jid, opId, parcalar, ad, ms) {
   const s = S.D.siparisler.find(x => x.id === jid); if (!s) return null;
   if (parcalar.length < 2 || parcalar.some(x => !(x.n >= 1)) || parcalar.reduce((t, x) => t + x.n, 0) !== s.adet) return null;
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = parcalar.map((x, i) => parca(x.n, i + 1)); const eski = S.D.siparisler; const once = U.hamle;
   try {
     S.D.siparisler = eski.flatMap(x => x.id === jid ? yeni : [x]);
@@ -106,7 +106,7 @@ function otoBolme(elle) {
   const bozuldu = () => S.plan !== asil.plan || S.dataVer !== asil.dv || calisan;
   const temelTL = () => { const st = stOf(); const cx = compile(st); const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); return tlToplam(evaluate(kisaArama(st, cx, p0, 300), st, null, true)); };
   const geciken = () => Object.entries(S.plan.J).filter(([j, J]) => J.T > 0.01 && !j.includes('/') && !denendi.has(j) && !basladiMi(j))
-    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? (PW[s.oncelik] || 1) : 1), s }; })
+    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? isAgirligi(s) : 1), s }; })
     .filter(x => x.s && x.s.adet >= 2 * bolmeMin() && !x.s.havuz).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.j);
   otoBolmeSurer = { n: 0 };
   const bitir = () => {

@@ -27,7 +27,7 @@ function kayanPencereKur() {
     const sure = () => { if (bitti) return true; if (is < 1) return false; is = 0; bitti = Date.now() - t0 > budget; return bitti; };
     let HT = BAS.get(cx); if (!HT) { HT = lbHeadsTails(st, cx); BAS.set(cx, HT); }
     const ok = (p, e) => (p.fail || []).length <= failN && e.chg <= maxChg;
-    const pw = j => PW[cx.jobs[j].oncelik] || 1;
+    const pw = j => isAgirligi(cx.jobs[j]);
     /* pencere çözümü işlemleri dondurulmuş diye işaretler; asıl dondurma sınırının ötesindekiler sonraki pencerelerde yine oynar */
     const temizle = p => { for (const id in p.ops) { const r = p.ops[id]; if (r.frz && !r.act && !r.done && (free || r.S >= frz - 1e-9)) { const q = { ...r }; delete q.pin; delete q.frz; p.ops[id] = q; } } return p; };
     const hareketli = r => r && !r.act && !r.done && (free || !r.pin) && !r.fas && r.S >= frz - 1e-9 && !st.locks[r.id];
