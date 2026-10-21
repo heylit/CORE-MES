@@ -41,13 +41,16 @@ test('ikinci menüden bölümler arasında geçilir', async ({ page, ag, ac }) =
   await cerceve(page);
   const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   // Bağlantı adı bekleyen iş sayısını da taşır ("Plan 2"); bağlantı adresinden bulunur.
-  for (const yol of ['/recete-rota/plan', '/recete-rota/studio', '/recete-rota/schema']) {
+  for (const [yol, baslik] of [['/recete-rota/plan', 'Planlama'], ['/recete-rota/studio', 'Planlama'], ['/recete-rota/schema', 'Reçete ve Rota']] as const) {
     await menu.locator(`a[href="${yol}"]`).filter({ visible: true }).first().click();
     await expect(page).toHaveURL((u) => u.pathname === yol);
     // Plan ve atölye planlama çerçevesindedir (kanban yalnız eski adrestir, menüde yoktur): geçişte eski çerçeve bekleyen
-    // yazması bitene kadar gizli durur, sonra yenisi kurulur; görünen çerçeve beklenir.
-    await expect(page.locator('main iframe').first()).toBeVisible({ timeout: 30_000 });
-    const f = await cerceve(page);
+    // yazması bitene kadar gizli durur, sonra yenisi kurulur. Adres değiştikten hemen sonra eski çerçeve bir an daha görünür
+    // olabilir; ilk görünen çerçeve alınırsa gizlenen eski çerçeve yakalanır. Bu yüzden istenen türün çerçevesi başlığıyla beklenir.
+    const ogesi = page.locator(`main iframe[title="${baslik}"]`);
+    await expect(ogesi).toBeVisible({ timeout: 30_000 });
+    const f = await (await ogesi.elementHandle())?.contentFrame();
+    if (!f) throw new Error(`${baslik} çerçevesi yüklenmedi`);
     await expect(f.locator('main').first()).toBeVisible();
   }
   expect(ag.hatalar).toEqual([]);
