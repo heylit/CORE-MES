@@ -43,3 +43,10 @@
 |---|---|---|---|
 | P-B25 | KAPANDI: emirdeki termini girilmemiş fason adımın süresi satın almanın `fasonSuresiTahminleri` tahmininden, yoksa 7 gün (plan `planlanacakIsEmirleri`'ne toplu tahmin verir). Kalan: emir açılmadan önceki rota önizlemesi (`icAdimlar`) hâlâ 7 gün sayar | Hayır | Önizleme için malzeme ve adet bilinince aynı tahmin verilebilir |
 | P-B26 | KAPANDI (kullanıcı kararı "İsteğe bağlı"): emirde fasona almada termin isteğe bağlı (`uretimYeriIhlali`); rota onayı (`onayaHazirMi`) Reçete ve Rota şeridinde | - | - |
+
+## Sunucu motoru (ADR 0018, 391 a)
+
+| No | Borç | Ekrana dokunur | Kapanış |
+|---|---|---|---|
+| P-B27 | `planMotoruCozucusu` kablolama.ts'te bağlı değil: çözücüyü (girdiyi sunucuda kuran çevirici) Reçete ve Rota sonraki yamasında verir; o güne kadar asıl plan Motor A'da | Hayır | R&R çözücüsü gelince `bag('plan motoru -> plan', ...)` |
+| P-B28 | Çözücü kayıtlıyken parçalı ya da kişi kaynaklı kuyruk yazımı Motor A yolundan gider (çözücü cevabı parça ve kişi taşımıyor); canlıya almada bölünmüş iş ve kişi kaynaklı iş yeniden dizilmez, sabit kalır | Hayır | Çözücü parça ve kişi kaynağı verince |

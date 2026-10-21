@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  CanliYerlesimCevabi, HizliDeneme, KarsilastirmaCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  CanliYerlesimCevabi, CanliyaAlCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
@@ -281,6 +281,19 @@ export const canliMakineAyrimlari = async (db: Db, makineIdleri: readonly number
 export type TahminiMaliyetCozucusu = (db: Db, isEmriIdleri: readonly number[]) => Promise<Map<number, number | null>>;
 let tahminiMaliyet: TahminiMaliyetCozucusu | null = null;
 export function tahminiMaliyetCozucusuKaydet(cozucu: TahminiMaliyetCozucusu | null): void { tahminiMaliyet = cozucu; }
+
+// ADR 0018: ortak plan motoru Reçete ve Rota'nındır; plan onu ithal etmez, kablolama.ts çözücü olarak verir. Kayıtlıyken asıl plana
+// yazan komutlar (kuyruk yaz, canlıya al) saatleri sunucu motorundan, aramasız sabit kipte yazar; kayıtsızken bugünkü yol sürer.
+// sabitler motorun etrafına dizdiği yerlerdir (kilitli, dondurulmuş, bölünmüş işin parçası, kuyrukta olmayan iş); çalışan adım
+// calisanlar'dadır. Girdinin geri kalanını (rota, takvim, personel) çözücü kendisi kurar.
+export interface PlanMotoruIstegi {
+  kip: 'sabit' | 'yeni'; simdi: Date; kuyruklar: { makineId: number; anahtarlar: string[] }[];
+  sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[]; calisanlar: CalisanAdim[]; taslakId: number | null;
+}
+export type PlanMotoruCozucusu = (db: Db, istek: PlanMotoruIstegi) =>
+  Promise<{ yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[]; yerlesmeyen: string[] }>;
+let planMotoru: PlanMotoruCozucusu | null = null;
+export function planMotoruCozucusuKaydet(cozucu: PlanMotoruCozucusu | null): void { planMotoru = cozucu; }
 // 227 a: üretim emrinin plan malzeme maliyeti (Proje maliyet) katkıdan düşülür; kayıtsızken katkı payı bilinmez.
 export type MalzemeMaliyetiCozucusu = (db: Db, uretimEmriIdleri: readonly number[]) => Promise<Map<number, number | null>>;
 let malzemeMaliyeti: MalzemeMaliyetiCozucusu | null = null;
@@ -408,6 +421,56 @@ export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
       kalanDk: k.kalanDk, kalanVerimliDk: verimliSure(k.kalanDk, k.ayarDk, verim),
     }];
   });
+}
+
+const FARK_MS = 60_000;
+type MotorKuyrugu = { makineId: number; isler: { isId: number; onizleme: { baslangic: string; bitis: string } | null }[] };
+const anahtarMetni = (a: string) => a.replace('|', ' OP ');
+
+// Son söz sunucuda (ADR 0018): kuyruklardaki işler sıraları korunarak sunucu motoruyla yeniden dizilir. Taslağın öteki makine yerleri
+// sabittir. Başka makineye konan, yinelenen, eksik ya da yerleşmeyen iş komutu reddeder (plan yazılmaz). Fark yalnız önizlemesi olan işte.
+async function sunucuMotoru(db: Db, b: Baglam, taslakId: number, kuyruklar: readonly MotorKuyrugu[]): Promise<{ yer: Map<number, { baslangic: Date; bitis: Date }>; fark: MotorFarki }> {
+  const yer = new Map<number, { baslangic: Date; bitis: Date }>();
+  const yeniden = new Map(kuyruklar.flatMap((q) => q.isler.map((i) => [i.isId, q.makineId] as const)));
+  if (planMotoru === null || yeniden.size === 0) return { yer, fark: [] };
+  const anahtarOf = (id: number) => { const is = b.isler.get(id); return is ? `${is.emirNo}|${is.opNo}` : null; };
+  const idOf = new Map<string, number>();
+  for (const id of yeniden.keys()) {
+    const a = anahtarOf(id)!;
+    if (idOf.has(a)) throw cakisma(`${anahtarMetni(a)} birden çok iş emrine denk geliyor; sunucu motoru dizemez.`);
+    idOf.set(a, id);
+  }
+  const calisanlar = await calisanAdimlar(db);
+  const calisan = new Set(calisanlar.map((c) => c.anahtar));
+  const sabitler = (await s.yerlesimler(db, taslakId)).flatMap((y) => {
+    const a = anahtarOf(y.isEmriId);
+    if (yeniden.has(y.isEmriId) || a === null || calisan.has(a)) return [];
+    return (bolunmus(y) ? y.parcalar! : [y]).flatMap((p) => (p.kaynak.tur === 'makine'
+      ? [{ anahtar: a, makineId: p.kaynak.id, baslangic: p.baslangic.toISOString(), bitis: p.bitis.toISOString() }] : []));
+  });
+  const sonuc = await planMotoru(db, {
+    kip: 'sabit', simdi: new Date(b.simdi), sabitler, calisanlar, taslakId,
+    kuyruklar: kuyruklar.filter((q) => q.isler.length > 0).map((q) => ({ makineId: q.makineId, anahtarlar: q.isler.map((i) => anahtarOf(i.isId)!) })),
+  });
+  if (sonuc.yerlesmeyen.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştiremedi: ${sonuc.yerlesmeyen.map(anahtarMetni).join(', ')}. Plan yazılmadı.`);
+  for (const r of sonuc.yerlesimler) {
+    const id = idOf.get(r.anahtar);
+    const baslangic = new Date(r.baslangic), bitis = new Date(r.bitis);
+    if (id === undefined || yer.has(id) || yeniden.get(id) !== r.makineId || !(bitis.getTime() >= baslangic.getTime())) {
+      throw cakisma(`Sunucu motoru ${anahtarMetni(r.anahtar)} için istenmeyen yer verdi. Plan yazılmadı.`);
+    }
+    yer.set(id, { baslangic, bitis });
+  }
+  const eksik = [...yeniden.keys()].filter((id) => !yer.has(id));
+  if (eksik.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştirmedi: ${eksik.map((id) => anahtarMetni(anahtarOf(id)!)).join(', ')}. Plan yazılmadı.`);
+  const iso = (t: string | Date) => new Date(t).toISOString();
+  const fark: MotorFarki = kuyruklar.flatMap((q) => q.isler.flatMap((i) => {
+    const y = yer.get(i.isId)!;
+    const o = i.onizleme;
+    if (o === null || (Math.abs(Date.parse(o.baslangic) - y.baslangic.getTime()) <= FARK_MS && Math.abs(Date.parse(o.bitis) - y.bitis.getTime()) <= FARK_MS)) return [];
+    return [{ anahtar: anahtarOf(i.isId)!, onizleme: { baslangic: iso(o.baslangic), bitis: iso(o.bitis) }, sunucu: { baslangic: iso(y.baslangic), bitis: iso(y.bitis) } }];
+  }));
+  return { yer, fark };
 }
 
 // Takvim (PL-04): kaynağın vardiya takvimi; takvimi olmayan sürekli çalışır. Taslakta kapatılan gün (stüdyo denemesi) çalışma vermez.
@@ -1083,6 +1146,7 @@ export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): 
   let taslak: TaslakGirdisi = g.taslak ?? null;
   let yazilan = 0;
   let atlanan = 0;
+  let motorFarki: MotorFarki | undefined;
   if (g.kuyruklar.length > 0) {
     const p = await taslagaYaz(db, k, taslak, async (b, id) => {
       const hepsi = await s.yerlesimler(db, id);
@@ -1130,6 +1194,28 @@ export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): 
           const mevcutKaynak = i.x.parca ? i.mevcut!.parcalar?.find((p) => p.no === i.x.parca!.no)?.kaynak : i.mevcut!.kaynak;
           if (!mevcutKaynak || !ayniKaynak(mevcutKaynak, q.kaynak)) throw cakisma(`${isMetni(b, i.is.id)} kilitli ya da dondurulmuş ve başka kaynakta; önce kilidi ya da dondurmayı kaldır.`);
         }
+      }
+      // ADR 0018: sunucu motoru kayıtlıyken saatler ondandır ve Motor A önermez. Parça ve kişi kaynağı motorun cevabında yok: o istek
+      // bugünkü yoldan gider (UYUM-BORCU).
+      if (planMotoru !== null && parcaNolari.size === 0 && g.kuyruklar.every((q) => q.kaynak.tur === 'makine')) {
+        atlanan += kuyruklar.reduce((t, k) => t + k.isler.filter((i) => !tasinacak.has(i.is.id)).length, 0);
+        const m = await sunucuMotoru(db, b, id, kuyruklar.map(({ q, isler }) => ({
+          makineId: q.kaynak.id, isler: isler.filter((i) => tasinacak.has(i.is.id)).map((i) => ({ isId: i.is.id, onizleme: i.x.onizleme ?? null })),
+        })));
+        for (const { q, isler } of kuyruklar) {
+          for (const i of isler) {
+            const y = m.yer.get(i.is.id);
+            if (y === undefined) continue;
+            yazilan += 1;
+            await s.yerlesimYaz(db, id, {
+              isEmriId: i.is.id, kaynak: q.kaynak, ...y, kilitli: false, dondurulmus: i.x.dondurulmus, elleSira: i.x.elle ? i.sira : null,
+              elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak,
+            });
+            idler.push(i.is.id);
+          }
+        }
+        motorFarki = m.fark;
+        return { tur: 'sirala', ozet: `Reçete ve Rota kuyrukları sunucu motoruyla yazıldı (${g.kuyruklar.length} kaynak, ${yazilan} iş)`, isEmriIdleri: idler };
       }
       const tur = (onceki: ReadonlyMap<number, Aralik & { kaynak: Kaynak }>) => {
         const yeniYer = new Map<number, Aralik & { kaynak: Kaynak }>();
@@ -1213,7 +1299,7 @@ export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): 
     taslak = { id: p.taslak!.id, surum: p.taslak!.surum };
   }
   if (taslak === null) throw dogrulama('Yazılacak kuyruk yok.', 'kuyruklar');
-  return { taslak: taslak.id, canli: false, yazilan, atlanan };
+  return { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }) };
 }
 
 // Parti kolu (B7): kolun bölünme adımı üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler. Kol birleşme adımını taşımaz.
@@ -1669,7 +1755,7 @@ export async function hizliDene(db: Db, k: Kullanici, id: number, g: { tur: Hizl
 
 // Canlıya alma (P4, P6, ST-02..ST-04): iki adımlı ve yetkili. Taslağın yerleşimleri ve ayarı canlıya yazılır; başlamış ve bitmiş işler
 // canlıdaki hâliyle kalır; yerleşimin makine ya da kişisi iş emrine yazılır (P3). Sahibi bağlanmamış denemeler varsa alınmaz.
-export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: number; cakismalariKabul: boolean; acilMusteriler?: readonly { degisiklikId: number; firmaId: number }[] }) {
+export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: number; cakismalariKabul: boolean; acilMusteriler?: readonly { degisiklikId: number; firmaId: number }[] }): Promise<CanliyaAlCevabi> {
   const x = await acikTaslak(db, k, id, g.surum, false);
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
@@ -1689,7 +1775,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   if (surum !== x.tabanPlanSurumu && !g.cakismalariKabul) throw cakisma('Senaryo açıldıktan sonra canlı plan değişti; onaylayarak canlıya al.');
   const b = await baglamKur(db, k, id);
   const canli = await s.yerlesimler(db, null);
-  const taslak = await s.yerlesimler(db, id);
+  let taslak = await s.yerlesimler(db, id);
   // Çalışan iş yalnız aynı kaynakta elle sıralanmışsa canlıya geçer (A4); makinesi değişmez, başka yerleşim farkı canlıyı ezmez.
   const canliYeri = new Map(canli.map((c) => [c.isEmriId, c]));
   const siralanmisCalisan = new Set(taslak.filter((y) => {
@@ -1702,6 +1788,26 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   const kaynaklari = (y: YerlesimSatiri) => (bolunmus(y) ? y.parcalar!.map((p) => p.kaynak) : [y.kaynak]);
   for (const c of canli) if (degisebilir(c.isEmriId) && kaynaklari(c).some((kk) => !izinliMi(b, b.kaynaklar.get(kaynakAnahtari(kk)) ?? null))) throw kapsamDisi();
   for (const y of taslak) if (degisebilir(y.isEmriId)) for (const kk of kaynaklari(y)) await kaynakDenetle(db, b, kk);
+  // ADR 0018: sunucu motoru kayıtlıyken taslağın makine kuyrukları (planlı, sabit olmayan, bölünmemiş iş; sıra taslağınki) canlıya geçmeden
+  // sabit kipte yeniden dizilir; önizleme taslaktaki saattir. Sıra denetimi yeni saatlerle yapılır.
+  let motorFarki: MotorFarki | undefined;
+  if (planMotoru !== null) {
+    const kuyruk = new Map<number, YerlesimSatiri[]>();
+    for (const y of taslak) {
+      if (y.isEmriId < 0 || b.isler.get(y.isEmriId)?.durum !== 'planli' || y.kilitli || y.dondurulmus || bolunmus(y) || y.kaynak.tur !== 'makine') continue;
+      kuyruk.set(y.kaynak.id, [...(kuyruk.get(y.kaynak.id) ?? []), y]);
+    }
+    const m = await sunucuMotoru(db, b, id, [...kuyruk].map(([makineId, l]) => ({
+      makineId, isler: [...l].sort((x, z) => x.baslangic.getTime() - z.baslangic.getTime() || x.isEmriId - z.isEmriId)
+        .map((y) => ({ isId: y.isEmriId, onizleme: { baslangic: y.baslangic.toISOString(), bitis: y.bitis.toISOString() } })),
+    })));
+    for (const y of taslak) {
+      const r = m.yer.get(y.isEmriId);
+      if (r !== undefined) await s.yerlesimYaz(db, id, { ...y, ...r });
+    }
+    motorFarki = m.fark;
+    taslak = await s.yerlesimler(db, id);
+  }
   // 308 b: sıraya aykırı adım canlıya geçmez. Yalnız taslakta yeri değişen adımların emirlerine bakılır: canlıda önceden kalmış aykırılık
   // başka emirlerin canlıya alınmasını durdurmaz.
   const degisen = taslak.filter((y) => {
@@ -1742,7 +1848,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   await s.ayariCanliyaYaz(db, id, k.id);
   await s.planSurumuArtir(db);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
-  return senaryolar(db, k);
+  return { ...(await senaryolar(db, k)), ...(motorFarki === undefined ? {} : { motorFarki }) };
 }
 
 interface AcilVeri { malzemeNo: number; adet: number; teslim: string; revizyonId: number; siparisId?: number; uretimEmriId?: number }

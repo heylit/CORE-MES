@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, bedelAyariGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, bedelAyariGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi,
@@ -96,7 +96,7 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/hizli', yetki: 'plan.studyo', tekrarKorumali: true, parametre: senaryoParametresi, govde: hizliGovdesi,
     cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.hizliDene(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/canliya-al', yetki: 'plan.canliya-al', tekrarKorumali: true, parametre: senaryoParametresi,
-    govde: canliyaAlGovdesi, cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.canliyaAl(db, kullanici, parametre.id, govde) }),
+    govde: canliyaAlGovdesi, cevap: canliyaAlCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.canliyaAl(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/plan/musteri-secenekleri', yetki: 'plan.canliya-al', sorgu: musteriSecenekleriSorgusu, cevap: musteriSecenekleriCevabi,
     isle: ({ db, sorgu }) => servis.musteriSecenekleri(db, sorgu.ara) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/vazgec', yetki: 'plan.studyo', parametre: senaryoParametresi, govde: senaryoSurumGovdesi,
