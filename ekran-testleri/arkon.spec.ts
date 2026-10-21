@@ -1,4 +1,5 @@
 import type { Frame, Page } from '@playwright/test';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Arkon'un UYUM-BORCU.md'de "tarayıcıda görülünce kapanır" diye bekleyen davranışları; yalnız okuyan akışlar (örnek veri değişmez).
@@ -60,11 +61,24 @@ test.describe('yönetici', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
+  // "Bugün" panosu yalnız bugünün sayımını gösterir; örnek verinin sayımları yüklendiği anın günündedir. Yükleme gece yarısından önce,
+  // koşu sonra olursa (CI'da 23:59 / 00:02) pano doğru olarak boştur: beklenen, örnek emrin açılış günü bugün mü diye seçilir.
+  // Örnek veri tek transaction'da yazılır: emirlerin açılışı ile sayımlar aynı andadır.
   test('Üretim Anomalisi panosu ve dönem görünümü açılır', async ({ page, ag, ac }) => {
+    const liste = await page.request.get(`${ADRES}/api/uretim-emirleri`);
+    expect(liste.ok()).toBe(true);
+    // Ekran testleri yazmaz: listedeki emirlerin hepsi örnek veridir.
+    const acilislar = ((await liste.json()) as { emirler: { acilma: string }[] }).emirler.map((e) => Date.parse(e.acilma));
+    expect(acilislar.length, 'örnek emir').toBeGreaterThan(0);
+    const ornekBugun = tesisGunu(Math.min(...acilislar)) === tesisGunu(Date.now());
     await ac('/arkon/anomali');
     const f = await cerceve(page);
+    const bugunPanosu = async (): Promise<void> => {
+      if (ornekBugun) await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
+      else await expect(f.getByRole('region', { name: 'İstasyon' })).toContainText('Canlı planda yerleşmiş iş yok');
+    };
     await expect(f.getByText('İstasyon', { exact: true }).first()).toBeVisible();
-    await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
+    await bugunPanosu();
     for (const d of ['Gün', 'Hafta', 'Ay']) {
       await f.getByRole('button', { name: d, exact: true }).click();
       await expect(f.getByRole('button', { name: d, exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -73,7 +87,7 @@ test.describe('yönetici', () => {
       await expect(f.locator('input[type="date"]')).toBeVisible();
     }
     await f.getByRole('button', { name: 'Bugün', exact: true }).click();
-    await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
+    await bugunPanosu();
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'pano okumakla yazmaz').toEqual([]);
   });
