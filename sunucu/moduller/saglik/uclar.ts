@@ -7,9 +7,9 @@ import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import { ayrintiCevabi, saglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
 import type { YedekBilgisi } from './kurallar.ts';
-import { ayrintiTopla, gitCommitOku, onbellekliOkuyucu, saglikliMi } from './servis.ts';
+import { ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, saglikliMi, surecYedegi } from './servis.ts';
 import type { DiskDizinleri, DiskOkuyucu, GitOkuyucu } from './servis.ts';
-import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
+import { yedekOrtaminiKur } from '../ayarlar/disari.ts';
 
 export interface SaglikKaynagi {
   ayarOku: () => Pick<Ayar, 'commit' | 'ortam'>;
@@ -23,12 +23,6 @@ export interface SaglikKaynagi {
   yedekOku?: (db: Db) => Promise<YedekBilgisi>;
 }
 
-async function surecYedegi(db: Db): Promise<YedekBilgisi> {
-  const { durum, yedekler } = await yedekleriListele(await yedekOrtaminiKur(db));
-  const en = yedekler[0];
-  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman) };
-}
-
 async function surecDiskDizinleri(db: Db): Promise<DiskDizinleri> {
   return { yedek: (await yedekOrtaminiKur(db)).dizin, veritabani: pgVeriDiziniOku() };
 }
@@ -38,6 +32,7 @@ const SUREC_KAYNAGI: SaglikKaynagi = { ayarOku, gitOku: () => gitCommitOku() };
 // Süre sınırı parametredir ki test kısa bir sınırla asılı veritabanını sınayabilsin.
 export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi = SUREC_KAYNAGI) {
   const gitOkuyucu = onbellekliOkuyucu(kaynak.gitOku);
+  const olayDongusu = olayDongusuOlceri();
   // Ortam süreç ömründe değişmez. İlk istekte okunur, modül yüklenirken değil: uç listesini çıkaran
   // araç bu dosyayı ortam değişkenleri olmadan yükler.
   let ayar: Pick<Ayar, 'commit' | 'ortam'> | undefined;
@@ -72,6 +67,7 @@ export function saglikUclari(yoklamaSureSiniriMs: number, kaynak: SaglikKaynagi 
           diskDizinleri: () => (kaynak.diskDizinleri ?? surecDiskDizinleri)(db),
           ...(kaynak.diskOku === undefined ? {} : { diskOku: kaynak.diskOku }),
           yedekOku: () => (kaynak.yedekOku ?? surecYedegi)(db),
+          olayDongusu,
         });
       },
     }),

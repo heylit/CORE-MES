@@ -14,3 +14,5 @@
 7. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): teslim ana dalda; `npm run sinir -- --modul guvenlik` 17.10.2026: sınır 0 ihlal, göç damgası 0 ihlal, yol bulgusu teslime ait değil. Sınır denetimi `[yol]` bulguları: modül dışında değişen dosyalar (oturum `disari.ts`, `sorgular.ts`, testleri; `paylasilan`
    toplayıcıları ve ayar modeli; `kurulum/yetki-matrisi.md`, `araclar/yetki-matrisi.test.ts`; kisiler `kurallar.ts` ve testi;
    Sistem Ayarları metin satırı; `eslint.config.js`). Hepsi ayrı commit'te, görev gereği.
+8. Koruma maddelerinde zaman değeri ham ISO metniyle görünür (bugünkü "tarama" maddesi gibi); biçim ortak zaman biçimleyiciyle gelir (CEKIRDEK-ISTEKLERI 3).
+9. Sertifika bitişi yalnız arayüz kapısının kendi sertifikasından okunur; ters vekil kurulursa (askıda) madde onun sertifikasını göstermez.

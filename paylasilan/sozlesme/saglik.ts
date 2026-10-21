@@ -46,6 +46,11 @@ export const ayrintiCevabi = z.object({
   yedekDiski: diskDurumuSemasi.nullable().optional(),
   veritabaniDiski: diskDurumuSemasi.nullable().optional(),
   uyarilar: z.array(uyariSemasi),
+  // Süreç belleği (bayt), olay döngüsünün son ölçümden beri 99. yüzdelik gecikmesi ve veritabanındaki açık bağlantı sayısı.
+  // Ölçülemeyen null; ekran okumadığı için isteğe bağlı.
+  bellek: z.object({ rssBayt: z.number().int().nonnegative(), yiginBayt: z.number().int().nonnegative() }).optional(),
+  olayDongusuGecikmeMs: z.number().nonnegative().nullable().optional(),
+  vtBaglantiSayisi: z.number().int().nonnegative().nullable().optional(),
 });
 
 export type SaglikCevabi = z.output<typeof saglikCevabi>;

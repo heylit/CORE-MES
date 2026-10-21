@@ -58,3 +58,16 @@ Hesap kilidi (PR #1363) main'e girdi; boş kilit durumu gerçek listeyle değiş
 - Kapanan alarm ve tarama defteri 400 gün saklanır; silme taramanın içinde koşar.
 - G-17: son tarama 5 dakikadan eskiyse "tarama durdu".
 - Durum ekranı 30 sn'de bir yenilenir.
+
+## Güvenlik Merkezi Aşama 1, sunucu okumaları (384 a, dal `guvenlik-asama-1`)
+- Koruma durumunun beş "bilinmiyor" maddesi kaynağından okunur: yedek (sağlık uyarısıyla aynı kaynak ve eşik, `saglik/disari.ts`), güncelleme imzası
+  (`ayarlar/disari.ts guncellemeKanaliDurumu`), HTTPS ve sertifika bitişi (`#cekirdek/https-durumu.ts`, açılıştaki iki değişkenden), denetim kaydı
+  (`denetim/disari.ts denetimDurumu`). Kaynak okunamazsa madde yine "bilinmiyor"dur. Kurallar G-23 - G-27.
+- Sağlık ayrıntısına bellek, olay döngüsü gecikmesi ve veritabanı bağlantı sayısı eklendi (isteğe bağlı alanlar; ekran değişmedi).
+- Göç, yeni paket, yeni işlem ve rol satırı yok.
+
+## Güvenlik Merkezi Aşama 1, başlıklar ve belge
+- Sunucu günlüğünde oturum çerezi ve yetki başlığı gizlenir (`#cekirdek/uygulama.ts gunlukSecenegi`; paket zaten var).
+- Arayüz kapısındaki her dosyaya `Referrer-Policy: same-origin` ve `Permissions-Policy: camera=(self), microphone=(self)`
+  (`istemci/src/ortak/pwa/icerik-ilkesi.ts EK_GUVENLIK_BASLIKLARI`; geliştirme ve önizleme sunucusunda da).
+- `kurulum/canli.md`: PostgreSQL yalnız yerelden dinler; yedek, kopyası ve anahtarı ayrı yerde.

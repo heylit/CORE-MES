@@ -1,12 +1,14 @@
 import { execFile } from 'node:child_process';
 import { statfs } from 'node:fs/promises';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { promisify } from 'node:util';
 import type { Db } from '#cekirdek/db.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { Ayrinti } from '#paylasilan/sozlesme/saglik.ts';
 import { YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, uyarilar } from './kurallar.ts';
 import type { YedekBilgisi } from './kurallar.ts';
-import { sonGocAdi, veritabaniYokla } from './sorgular.ts';
+import { sonGocAdi, veritabaniYokla, vtBaglantiSay } from './sorgular.ts';
+import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 
 const calistir = promisify(execFile);
 
@@ -60,6 +62,30 @@ export async function saglikliMi(db: Db, sureSiniriMs: number = YOKLAMA_SURE_SIN
   }
 }
 
+// Yedek klasöründeki en yeni yedek dosyası: Sistem Ayarları'ndaki yedek listesiyle aynı kaynak.
+export async function surecYedegi(db: Db): Promise<YedekBilgisi> {
+  const { durum, yedekler } = await yedekleriListele(await yedekOrtaminiKur(db));
+  const en = yedekler[0];
+  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman) };
+}
+
+export type OlayDongusuOlcer = () => number | null;
+
+// Ölçüm ilk istekte başlar ve her okumada sıfırlanır: değer son okumadan beri olan gecikmedir. Henüz örnek yoksa null.
+export function olayDongusuOlceri(): OlayDongusuOlcer {
+  let olcum: ReturnType<typeof monitorEventLoopDelay> | null = null;
+  return () => {
+    if (olcum === null) {
+      olcum = monitorEventLoopDelay({ resolution: 20 });
+      olcum.enable();
+      return null;
+    }
+    const deger = olcum.count === 0 ? null : Math.round(olcum.percentile(99) / 10_000) / 100;
+    olcum.reset();
+    return deger;
+  };
+}
+
 export interface DiskOlcusu { bos: number; toplam: number }
 export type DiskOkuyucu = (dizin: string) => Promise<DiskOlcusu | null>;
 export interface DiskDizinleri { yedek: string | null; veritabani: string | null }
@@ -86,6 +112,9 @@ export interface AyrintiGirdisi {
   diskOku?: DiskOkuyucu;
   // Verilmezse ya da süresinde okunamazsa yedeğin durumu bilinmiyor: bu da uyarıdır.
   yedekOku?: () => Promise<YedekBilgisi>;
+  // Verilmezse ölçülmez (null).
+  olayDongusu?: OlayDongusuOlcer;
+  bellekOku?: () => { rss: number; heapUsed: number };
   simdi?: Date;
 }
 
@@ -118,16 +147,13 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
   const baslangic = performance.now();
   let veritabaniGecikmeMs: number | null = null;
   let sonGoc: string | null = null;
+  let vtBaglantiSayisi: number | null = null;
   if (await saglikliMi(db, sureSiniri)) {
     veritabaniGecikmeMs = Math.round(performance.now() - baslangic);
-    try {
-      const sorgu = sonGocAdi(db);
-      sorgu.catch(() => undefined);
-      sonGoc = await sureliBekle(sorgu, sureSiniri);
-    } catch {
-      sonGoc = null;
-    }
+    sonGoc = await sureliGuvenli(() => sonGocAdi(db), sureSiniri);
+    vtBaglantiSayisi = await sureliGuvenli(() => vtBaglantiSay(db), sureSiniri);
   }
+  const bellek = girdi.bellekOku?.() ?? process.memoryUsage();
   const isler = girdi.isDurumlari();
   const diskler = await diskleriTopla(girdi, sureSiniri);
   const { yedekOku } = girdi;
@@ -137,6 +163,9 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     veritabaniGecikmeMs, sonGoc, commit, calismaSuresiSn: girdi.calismaSuresiSn, ortam: girdi.ortam,
     isler: isler.map(isDurumuOzeti),
     ...diskler,
+    bellek: { rssBayt: bellek.rss, yiginBayt: bellek.heapUsed },
+    olayDongusuGecikmeMs: girdi.olayDongusu?.() ?? null,
+    vtBaglantiSayisi,
     uyarilar: uyarilar({
       simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
     }),

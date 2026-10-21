@@ -58,7 +58,7 @@ export interface UyariGirdisi {
 const dakika = (ms: number): number => Math.floor(ms / 60_000);
 const gbMetni = (bayt: number): string => (bayt / 1024 ** 3).toFixed(1).replace('.', ',');
 
-function yedekUyarisi(yedek: YedekBilgisi | null, simdi: Date): string | null {
+export function yedekUyarisi(yedek: YedekBilgisi | null, simdi: Date): string | null {
   if (yedek === null) return 'Yedek durumu okunamadı.';
   if (yedek.durum === 'dizin-yok') return 'Yedek kapalı: yedek klasörü seçilmemiş ya da erişilemiyor.';
   if (yedek.durum === 'anahtar-yok') return 'Yedek kapalı: yedek şifreleme anahtarı yok.';

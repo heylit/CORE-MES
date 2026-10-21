@@ -6,13 +6,13 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import { SINYALLER, alarmListeCevabi, alarmSemasi, kilitListeCevabi, korumaCevabi, kurallarCevabi, oturumlarCevabi, ozetCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
-import type { Alarm } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { Alarm, KorumaCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { HATALI_SERI, SAKLAMA_GUN } from './kurallar.ts';
-import { taramaYap } from './servis.ts';
+import { koruma, taramaYap } from './servis.ts';
 import { taramaKilidiAl } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -345,16 +345,30 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.equal(koruma.maddeler.find((m) => m.anahtar === 'tarama')?.durum, 'acik');
     assert.match(koruma.maddeler.find((m) => m.anahtar === 'hesap-kilidi')?.deger ?? '', /^\d+ etkin kilit$/);
     assert.equal(koruma.maddeler.find((m) => m.anahtar === 'hesap-kilidi')?.durum, 'acik');
-    for (const anahtar of ['yedek', 'guncelleme-imzasi', 'https', 'sertifika', 'denetim']) {
-      const m = koruma.maddeler.find((x) => x.anahtar === anahtar);
-      assert.deepEqual([m?.durum, m?.deger], ['bilinmiyor', null], anahtar);
-    }
+    // Koruma maddeleri kaynaklarından okunur; bu ortamda yedek, güncelleme ve HTTPS tanımlı değil, denetim kaydı yazılır ve korumalıdır.
+    const durum = (anahtar: string) => koruma.maddeler.find((x) => x.anahtar === anahtar);
+    for (const anahtar of ['yedek', 'guncelleme-imzasi', 'https', 'sertifika']) assert.notEqual(durum(anahtar)?.durum, 'bilinmiyor', anahtar);
+    assert.equal(durum('denetim')?.durum, 'acik');
+    assert.match(durum('denetim')?.deger ?? '', /^\d{4}-\d{2}-\d{2}T/);
     const kurallar = kurallarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/kurallar')).govde);
     assert.deepEqual(kurallar.kurallar.map((k) => [k.sinyal, k.onem]), [
       ['hatali-giris-serisi', 'orta'], ['yayilan-deneme', 'yuksek'], ['hedefli-hesap', 'yuksek'], ['cok-oturum', 'orta'], ['hesap-kilidi', 'orta'],
     ]);
     assert.deepEqual([kurallar.vpnAraliklari, kurallar.muafSinyaller], [[], []]);
     assert.equal(kurallar.saklamaGun, SAKLAMA_GUN);
+  });
+
+  test('koruma: kaynak okunamazsa madde bilinmiyor; okunan kaynak maddeye taşınır', async () => {
+    const hata = (): never => { throw new Error('okunamadı'); };
+    const okunamayan = await o().vt.tx((db) => koruma(db, { yedek: async () => hata(), imza: async () => hata(), https: hata }));
+    const bul = (c: KorumaCevabi, anahtar: string) => c.maddeler.find((m) => m.anahtar === anahtar)?.durum;
+    for (const anahtar of ['yedek', 'guncelleme-imzasi', 'https', 'sertifika']) assert.equal(bul(okunamayan, anahtar), 'bilinmiyor', anahtar);
+    assert.equal(bul(okunamayan, 'denetim'), 'acik');
+    const yarin = new Date(Date.now() + 86_400_000);
+    const okunan = await o().vt.tx((db) => koruma(db, {
+      yedek: async () => ({ durum: 'acik', sonYedek: new Date() }), imza: async () => 'acik', https: () => ({ acik: true, sertifikaBitis: yarin }),
+    }));
+    assert.deepEqual(['yedek', 'guncelleme-imzasi', 'https', 'sertifika'].map((a) => bul(okunan, a)), ['acik', 'acik', 'acik', 'uyari']);
   });
 
   test('zamanlanmış iş: tarama her dakika koşan iş olarak bulunur; tek turu durum satırını yazar', async () => {

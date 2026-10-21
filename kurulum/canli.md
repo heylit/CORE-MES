@@ -53,4 +53,10 @@ vardır. Denetim: tarayıcı konsolunda "Refused to" ya da "Content Security Pol
 - Vekilin yeri denetlenir: başka bilgisayardaysa `.env`'de `TMIV2_VEKIL_ADRESI` vekilin IP'sidir. Adres eksikse sunucu ilk vekil isteğinde
   günlüğe "X-Forwarded-For güvenilmeyen eşten geldi" uyarısını bir kez yazar; kabulde bir giriş yapılıp günlükte bu satırın olmadığı
   görülür (yoksa bütün cihazlar vekilin IP'siyle sayılır, cihaz başına giriş sınırı herkese ortak olur).
+- PostgreSQL yalnız bu bilgisayardan bağlantı kabul eder: `postgresql.conf`'ta `listen_addresses = 'localhost'`; `pg_hba.conf`'ta
+  yalnız `127.0.0.1/32` ve `::1/128` satırları kalır (yöntem `scram-sha-256`), başka adres satırı silinir. Değişiklik PostgreSQL
+  servisi yeniden başlatılınca geçerli olur. Kabul: ağdaki başka bir bilgisayardan 5432'ye bağlantı kurulamaz; sunucunun kendisinde
+  `npm run goc` ve uygulama çalışır. Uzaktan yönetim gerekiyorsa VPN ve uzak masaüstüyle sunucuya girilir, veritabanı ağa açılmaz.
+- Yedek ve anahtar ayrı yerde durur (`kurulum/yedek.md`): yedek klasörü veritabanından başka bir diskte, haftalık indirilen kopya
+  sunucunun dışında; yedek anahtarı bunların hiçbirinde değil, bilgi işlemin ayrı sakladığı yerdedir.
 - Kabul: telefondan `https://<ad>` açılır, giriş yapılır; `http://<ad>:4100/api/oturum` ve `http://<ad>:4101/` ağdan açılmaz.

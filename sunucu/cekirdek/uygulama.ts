@@ -27,6 +27,17 @@ export interface UygulamaSecenegi {
 // okunur: giriş beklemesi gerçek cihaza göre sayılır, HTTPS bilinir. Ağdan doğrudan 4100'e gelen istekte başlık yok sayılır.
 export const GUVENILEN_VEKIL = ['127.0.0.1', '::1'];
 
+// Oturum çerezi ve yetki başlığı günlüğe düşmez: günlük dosyasını okuyan, oturumu ele geçiremesin. Varsayılan istek özeti başlık
+// taşımaz; bu liste başlığı açıkça yazan bir satır için de geçerlidir.
+export const GUNLUKTE_GIZLENENLER = [
+  'req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]', 'headers.cookie', 'headers.authorization', 'headers["set-cookie"]',
+];
+export const GIZLI_DEGER = '[gizli]';
+
+export function gunlukSecenegi(ortam: Ayar['ortam']): false | { redact: { paths: string[]; censor: string } } {
+  return ortam === 'test' ? false : { redact: { paths: GUNLUKTE_GIZLENENLER, censor: GIZLI_DEGER } };
+}
+
 // Güvenilmeyen eşten gelen X-Forwarded-For, önde adresi tanımlanmamış bir vekil olduğunu gösterir (TMIV2_VEKIL_ADRESI boş):
 // başlık yok sayılır, bütün cihazlar vekilin IP'si sayılır ve cihaz başına giriş sınırı herkese ortak olur. Doğrudan gelen
 // kötü niyetli istek de aynı başlığı taşıyabilir; bu yüzden istek reddedilmez, günlüğe bir kez yazılır (kurulum/canli.md).
@@ -167,7 +178,7 @@ export async function uygulamaKur(secenek: UygulamaSecenegi): Promise<FastifyIns
   }
   const { vt, ayar, kimlik = async () => null, denetle, tekrar } = secenek;
   const guvenilen = ayar.vekilAdresi === undefined ? GUVENILEN_VEKIL : [...GUVENILEN_VEKIL, ayar.vekilAdresi];
-  const app = Fastify({ logger: ayar.ortam !== 'test', trustProxy: guvenilen });
+  const app = Fastify({ logger: gunlukSecenegi(ayar.ortam), trustProxy: guvenilen });
   vekilUyarisiniKur(app, guvenilen, (ileti) => { app.log.warn(ileti); });
   hataYonetiminiKur(app);
   istekOlcumunuKur(app);

@@ -18,7 +18,7 @@ import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { YOKLAMA_SURE_SINIRI_MS } from './kurallar.ts';
-import { ayrintiTopla, gitCommitOku, onbellekliOkuyucu } from './servis.ts';
+import { ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu } from './servis.ts';
 import type { AyrintiGirdisi } from './servis.ts';
 import { saglikUclari } from './uclar.ts';
 import type { SaglikKaynagi } from './uclar.ts';
@@ -127,11 +127,12 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
   assert.equal(cevap.statusCode, 503);
   assert.deepEqual(cevap.json(), { durum: 'hata' });
   for (const vt of [asili, bozukVt()]) {
-    const ayrinti = await ayrintiTopla(vt, girdi('a'.repeat(40), null, 30));
+    const { bellek, ...ayrinti } = await ayrintiTopla(vt, girdi('a'.repeat(40), null, 30));
     assert.deepEqual(ayrinti, {
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
-      uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }],
+      uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null,
     });
+    assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
   assert.equal(performance.now() - baslangic < 2000, true);
   // Sağlıklı veritabanında aynı kısa sınır ok döner: süre sınırı her şeyi reddetmez.
@@ -153,6 +154,15 @@ function sahteSaglikliVt(): Veritabani {
   };
   return vt;
 }
+
+test('olay döngüsü ölçeri: ilk okumada ölçüm başlar ve null; sonra örnekten 99. yüzdelik, her okumada sıfırlanır', async () => {
+  const olc = olayDongusuOlceri();
+  assert.equal(olc(), null);
+  await new Promise((coz) => setTimeout(coz, 120));
+  const deger = olc();
+  assert.equal(typeof deger === 'number' && deger >= 0, true);
+  assert.equal(olc(), null);
+});
 
 test('git okuyucu: gerçek depoda git rev-parse HEAD ile eşit, depo olmayan klasörde null', async () => {
   const beklenen = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -255,11 +265,24 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     const kabul = await ayrintiIste(app, yoneticiCerezi);
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
-    assert.deepEqual(Object.keys(govde).sort(), ['calismaSuresiSn', 'commit', 'isler', 'ortam', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs', 'yedekDiski']);
+    assert.deepEqual(Object.keys(govde).sort(), [
+      'bellek', 'calismaSuresiSn', 'commit', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'sonGoc', 'uyarilar', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'vtBaglantiSayisi', 'yedekDiski',
+    ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
     assert.equal(Number.isInteger(govde.calismaSuresiSn) && govde.calismaSuresiSn >= 0, true);
     assert.equal(govde.ortam, ayarOku().ortam);
     sizdirmaYok(kabul.body);
+  });
+
+  test('/saglik/ayrinti bellek, olay döngüsü gecikmesi ve veritabanı bağlantı sayısı ölçülür', async () => {
+    const ilk = (await ayrintiIste(app, yoneticiCerezi)).json();
+    assert.equal(Number.isInteger(ilk.bellek.rssBayt) && ilk.bellek.rssBayt > 0, true);
+    assert.equal(Number.isInteger(ilk.bellek.yiginBayt) && ilk.bellek.yiginBayt > 0, true);
+    assert.equal(Number.isInteger(ilk.vtBaglantiSayisi) && ilk.vtBaglantiSayisi >= 1, true);
+    await new Promise((coz) => setTimeout(coz, 120));
+    const ikinci = (await ayrintiIste(app, yoneticiCerezi)).json();
+    assert.equal(typeof ikinci.olayDongusuGecikmeMs === 'number' && ikinci.olayDongusuGecikmeMs >= 0, true);
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {

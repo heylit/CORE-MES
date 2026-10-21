@@ -4,6 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import {
   COK_OTURUM, DURMA_ESIGI_DK, HATALI_SERI, alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari,
   hesapKilidiBulgulari, kapatilabilirMi, onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
+  SERTIFIKA_UYARI_GUN, denetimMaddesi, httpsMaddesi, imzaMaddesi, sertifikaMaddesi, yedekMaddesi,
 } from './kurallar.ts';
 import type { Bulgu, DenemeOzeti } from './kurallar.ts';
 
@@ -95,5 +96,56 @@ describe('guvenlik kuralları (saf)', () => {
     const ayni = ['x', 'y', 'z'].map((ad) => ozet(ad, '10.30.0.5', 1));
     assert.deepEqual(yayilanDenemeBulgulari(vpnDisindakiler(ayni, araliklar)), []);
     assert.equal(yayilanDenemeBulgulari(vpnDisindakiler(ayni, [])).length, 1);
+  });
+});
+
+describe('koruma durumu maddeleri (saf)', () => {
+  const SIMDI = new Date('2026-10-21T12:00:00Z');
+  const gunSonra = (gun: number) => new Date(SIMDI.getTime() + gun * 86_400_000);
+
+  test('G-23: yedek açık ve uyarısızsa açık; sağlık uyarısı varsa uyarı; kapalıysa kapalı; okunamazsa bilinmiyor', () => {
+    const son = new Date('2026-10-21T02:00:00Z');
+    assert.deepEqual([yedekMaddesi({ durum: 'acik', sonYedek: son }, null).durum, yedekMaddesi({ durum: 'acik', sonYedek: son }, null).deger],
+      ['acik', son.toISOString()]);
+    assert.deepEqual(yedekMaddesi({ durum: 'acik', sonYedek: null }, 'Hiç yedek alınmamış.'),
+      { durum: 'uyari', deger: null, aciklama: 'Hiç yedek alınmamış.' });
+    assert.equal(yedekMaddesi({ durum: 'dizin-yok', sonYedek: null }, 'Yedek kapalı: yedek klasörü seçilmemiş ya da erişilemiyor.').durum, 'kapali');
+    assert.equal(yedekMaddesi({ durum: 'anahtar-yok', sonYedek: son }, null).durum, 'kapali');
+    assert.deepEqual(yedekMaddesi(null, null), { durum: 'bilinmiyor', deger: null, aciklama: 'Yedek durumu okunamadı.' });
+  });
+
+  test('G-24: yalnız geçerli anahtarla açık kanal açıktır; anahtarsız ya da klasörsüz kanal kapalı, geçersiz anahtar uyarı', () => {
+    assert.equal(imzaMaddesi('acik').durum, 'acik');
+    assert.equal(imzaMaddesi('anahtar-gecersiz').durum, 'uyari');
+    assert.equal(imzaMaddesi('anahtar-yok').durum, 'kapali');
+    assert.equal(imzaMaddesi('dizin-yok').durum, 'kapali');
+    assert.deepEqual([imzaMaddesi(null).durum, imzaMaddesi(null).deger], ['bilinmiyor', null]);
+  });
+
+  test('G-25: HTTPS değişkenleri varsa açık, yoksa kapalı, okunamazsa bilinmiyor', () => {
+    assert.equal(httpsMaddesi({ acik: true, sertifikaBitis: null }).durum, 'acik');
+    assert.equal(httpsMaddesi({ acik: false, sertifikaBitis: null }).durum, 'kapali');
+    assert.equal(httpsMaddesi(null).durum, 'bilinmiyor');
+  });
+
+  test(`G-26: sertifika ${String(SERTIFIKA_UYARI_GUN)} günden uzun geçerliyse açık, kısa kalmışsa uyarı, dolmuşsa kapalı`, () => {
+    const s = (bitis: Date | null, acik = true) => sertifikaMaddesi({ acik, sertifikaBitis: bitis }, SIMDI);
+    assert.deepEqual([s(gunSonra(SERTIFIKA_UYARI_GUN)).durum, s(gunSonra(SERTIFIKA_UYARI_GUN)).deger], ['acik', gunSonra(SERTIFIKA_UYARI_GUN).toISOString()]);
+    assert.equal(s(gunSonra(SERTIFIKA_UYARI_GUN - 0.5)).durum, 'uyari');
+    assert.equal(s(gunSonra(1)).aciklama, 'Sertifika 1 gün içinde bitiyor; yenileyin.');
+    assert.equal(s(SIMDI).durum, 'kapali');
+    assert.equal(s(gunSonra(-10)).durum, 'kapali');
+    assert.deepEqual([s(null).durum, s(null).deger], ['bilinmiyor', null]);
+    assert.deepEqual([s(gunSonra(400), false).durum, s(gunSonra(400), false).deger], ['kapali', null]);
+    assert.equal(sertifikaMaddesi(null, SIMDI).durum, 'bilinmiyor');
+  });
+
+  test('G-27: denetim kaydı yazılır ve korumalıysa açık; koruma yoksa uyarı; yazılamıyorsa kapalı', () => {
+    const son = '2026-10-21T11:59:00Z';
+    assert.deepEqual([denetimMaddesi({ yazilir: true, degismez: true, sonKayit: son }).durum, denetimMaddesi({ yazilir: true, degismez: true, sonKayit: son }).deger],
+      ['acik', son]);
+    assert.equal(denetimMaddesi({ yazilir: true, degismez: false, sonKayit: null }).durum, 'uyari');
+    assert.equal(denetimMaddesi({ yazilir: false, degismez: true, sonKayit: son }).durum, 'kapali');
+    assert.equal(denetimMaddesi(null).durum, 'bilinmiyor');
   });
 });

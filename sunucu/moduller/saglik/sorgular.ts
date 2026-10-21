@@ -11,3 +11,9 @@ export async function sonGocAdi(db: Db): Promise<string | null> {
   const satir = await db.tek<{ ad: string }>('SELECT ad FROM goc_kaydi ORDER BY ad DESC LIMIT 1');
   return satir?.ad ?? null;
 }
+
+// Bu veritabanına açık bütün bağlantılar (uygulama, göç, yönetim aracı); havuzun dolup dolmadığını gösterir.
+export async function vtBaglantiSay(db: Db): Promise<number | null> {
+  const satir = await db.tek<{ sayi: number }>('SELECT count(*)::int AS sayi FROM pg_stat_activity WHERE datname = current_database()');
+  return satir?.sayi ?? null;
+}

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { arkonuSun } from '../arkon/sun.ts';
-import { CERCEVE_ILKESI, ICERIK_ILKESI, ILKE_BASLIGI } from './src/ortak/pwa/icerik-ilkesi.ts';
+import { CERCEVE_ILKESI, EK_GUVENLIK_BASLIKLARI, ICERIK_ILKESI, ILKE_BASLIGI } from './src/ortak/pwa/icerik-ilkesi.ts';
 import { webUygulamasi } from './src/ortak/pwa/vite-eklentisi.ts';
 import { tembelRotalar } from './src/ortak/rota/tembel-rotalar.ts';
 
@@ -25,8 +25,8 @@ function derlemeBilgisi(): { surum: string; tarih: string; commit: string | null
 
 // Uygulama başka bir sitenin sayfasına gömülemez; kendi çerçeveleri (Arkon, prototip sayfaları) aynı kökendir ya da srcdoc'tur.
 // Derlenmiş sürüm tam ilkeyle sunulur (icerik-ilkesi.ts); Arkon sayfası ve STEP çalışanı bunu kendi ilkeleriyle değiştirir (arkon/sun.ts).
-const GELISTIRME_BASLIKLARI = { [ILKE_BASLIGI]: CERCEVE_ILKESI };
-const ONIZLEME_BASLIKLARI = { [ILKE_BASLIGI]: ICERIK_ILKESI };
+const GELISTIRME_BASLIKLARI = { [ILKE_BASLIGI]: CERCEVE_ILKESI, ...EK_GUVENLIK_BASLIKLARI };
+const ONIZLEME_BASLIKLARI = { [ILKE_BASLIGI]: ICERIK_ILKESI, ...EK_GUVENLIK_BASLIKLARI };
 
 // vitest kendi vite kopyasını getirdiği için tipler çakışır; yapılandırma düz nesne olarak verilir.
 export default {
