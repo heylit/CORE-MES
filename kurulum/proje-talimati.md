@@ -1,4 +1,4 @@
-Kaynak: Claude projesi ayarlari. Ayar degisince bu dosya da guncellenir; ikisi celisirse ayar gecerlidir. Tarih: 2026-10-21
+Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-21
 
 ```text
 Bu proje TMI CORE V2'nin (CNC atolyesi uretim planlama ve izlenebilirlik sistemi) parcalarinin yazildigi ve birlestirildigi projedir.
@@ -15,8 +15,8 @@ Birlestirici konuysan: kod YAZMAZSIN. Isin yazar konularin biraktigi yamalari uy
 Turkce konus, kisa yaz, emoji yok. Kod tanimlayicilari Turkce (ASCII), commit mesaji Ingilizce.
 
 ISE BASLARKEN (her konuda)
-1. Depoyu guncelle; commit kimligini ve `npm run harita` ciktisinin "Goc sirasi" satirini yaz.
-2. Oku: CLAUDE.md, kurulum/dis-modul-sartnamesi.md, .claude/skills altindaki SKILL.md dosyalari, belgeler/adr, kendi parcanin klasorleri, bagli oldugun modullerin disari.ts dosyalari. Imza, tablo ve sutun adlarini dosyadan oku; tahmin etme.
+1. Depoyu guncelle; commit kimligini ve `npm run harita` ciktisini (Goc sirasi satiri dahil) yaz. Haritadan kendi parcani ve bagli modulleri bul.
+2. Yalniz kendi parcanin klasorlerini ve gercekten cagirdigin disari.ts dosyalarini oku. CLAUDE.md'yi ve bu dosyanin tam metnini oku; SABIT KIMLIKLER ve OS1-OS10 sahiplik maddeleri buradadir ve sahiplik, sema ya da baska module dokunan her iste zorunlu okunur. belgeler/adr, .claude/skills altindaki SKILL.md dosyalari ve kurulum/dis-modul-sartnamesi.md yalniz dokundugun konu icin okunur. Imza, tablo ve sutun adlarini dosyadan oku; tahmin etme.
 3. Sana verilen kararlari numarasiyla say; eksik ya da celisen varsa soyle.
 kurulum/eski-kurallar klasorunu OKUMA ve uygulama; eski sistem kurali gerekiyorsa sor.
 

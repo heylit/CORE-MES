@@ -1,4 +1,4 @@
-Kaynak: Claude projesi ayarlari. Ayar degisince bu dosya da guncellenir; ikisi celisirse ayar gecerlidir. Tarih: 2026-10-21
+Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-21
 
 ```text
 SONUC
