@@ -26,5 +26,6 @@
 | TKL-08 verilen sürüm ve fiyat değişmez (`yalniz_ekleme`) | `verilen sürüm değişmez ...` |
 | TKL-09 (E-24) her teklif ucu işlemi olmayana ve salt okuyana 403; olmayan teklife okuma ve her komut 404; ret kaydı değiştirmez | `teklif.test.ts` `TKL-09 ...` |
 | TKL-10 (254 a) disari `teklifDurumlari` toplu okur: tek sorgu, yinelenen tek, olmayan haritada yok, boş dizide sorgu yok | `teklif.test.ts` `TKL-10 ...` |
+| TKL-11 (291 a) iskontosu %10'u aşan sürüm 'onay-bekliyor'a düşer, müdüre bildirim gider; bekleyen teklif kabul edilmez, revizyon istenmez (422); onayı yalnız `siparisler.iskonto-onayla` verir (403), onaylayan ve an sürümde görünür; eşit oran onaysız geçer; yeni sürüm ya da red açık | `TKL-11 ...` (kurallar.test.ts, teklif.test.ts) |
 | Yetki: okuma `siparisler.oku`, taslak `siparisler.yaz`, onay/kapat/iptal `siparisler.onayla`; teklif okuma `oku`, bütün teklif yazmaları `yaz` | `siparisler.test.ts` ve `teklif.test.ts` `yetki: ...` |
 | disari.ts sözleşmesi | `disari: ...` |
