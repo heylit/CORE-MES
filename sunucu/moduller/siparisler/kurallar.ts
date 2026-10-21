@@ -1,7 +1,10 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { ISKONTO_ONAY_ESIGI } from '#paylasilan/sozlesme/siparisler.ts';
-import type { Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type {
+  MaliyetKalemi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
+  TerminDenemesiKalemi,
+} from '#paylasilan/sozlesme/siparisler.ts';
 
 export const SIPARIS_YOK = 'Sipariş bulunamadı.';
 export const FIRMA_YOK = 'Firma bulunamadı.';
@@ -80,20 +83,21 @@ export const KART_BAGLANAMAZ = 'Reddedilmiş ya da siparişe dönüşmüş tekli
 
 // TKL-05: teklif durum geçişleri. Sürüm yeni, verilmiş ve revizyondaki teklife verilir; kabul ve revizyon verilmiş teklife;
 // red kabulden önce; siparişe yalnız kabul edilmiş teklif döner. Red ve sipariş son durumdur.
-export type TeklifKomutu = 'surum' | 'iskonto-onay' | 'revizyon' | 'kabul' | 'red' | 'siparis';
+export type TeklifKomutu = 'surum' | 'iskonto-onay' | 'termin-onay' | 'revizyon' | 'kabul' | 'red' | 'siparis';
 const TEKLIF_GECISLERI: Readonly<Record<TeklifKomutu, { kaynak: readonly TeklifDurumu[]; hedef: TeklifDurumu }>> = {
   surum: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'verildi' },
   'iskonto-onay': { kaynak: ['onay-bekliyor'], hedef: 'verildi' },
+  'termin-onay': { kaynak: ['onay-bekliyor'], hedef: 'verildi' },
   revizyon: { kaynak: ['verildi'], hedef: 'revizyon' },
   kabul: { kaynak: ['verildi'], hedef: 'kabul' },
   red: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'red' },
   siparis: { kaynak: ['kabul'], hedef: 'siparis' },
 };
 const TEKLIF_DURUM_ADI: Readonly<Record<TeklifDurumu, string>> = {
-  yeni: 'yeni', 'onay-bekliyor': 'iskonto onayı bekliyor', verildi: 'verildi', revizyon: 'revizyon bekliyor', kabul: 'kabul edildi', red: 'reddedildi', siparis: 'siparişe dönüştü',
+  yeni: 'yeni', 'onay-bekliyor': 'onay bekliyor', verildi: 'verildi', revizyon: 'revizyon bekliyor', kabul: 'kabul edildi', red: 'reddedildi', siparis: 'siparişe dönüştü',
 };
 const TEKLIF_KOMUT_ADI: Readonly<Record<TeklifKomutu, string>> = {
-  surum: 'yeni sürüm verilemez', 'iskonto-onay': 'onaylanacak iskonto yok', revizyon: 'revizyon istenemez', kabul: 'kabul edilemez', red: 'reddedilemez', siparis: 'siparişe dönüştürülemez',
+  surum: 'yeni sürüm verilemez', 'iskonto-onay': 'onaylanacak iskonto yok', 'termin-onay': 'onaylanacak termin yok', revizyon: 'revizyon istenemez', kabul: 'kabul edilemez', red: 'reddedilemez', siparis: 'siparişe dönüştürülemez',
 };
 
 export function teklifHedefi(komut: TeklifKomutu): TeklifDurumu {
@@ -101,9 +105,19 @@ export function teklifHedefi(komut: TeklifKomutu): TeklifDurumu {
 }
 
 // 291 a: eşiği aşan iskontolu sürüm müşteriye gitmeden müdür onayı bekler; müdür onaylamazsa yeni sürüm ya da red verilir.
-export function surumHedefi(iskontoOrani: string): TeklifDurumu {
-  return Number(iskontoOrani) > ISKONTO_ONAY_ESIGI ? 'onay-bekliyor' : 'verildi';
+export function iskontoOnayiGerekir(iskontoOrani: string): boolean {
+  return Number(iskontoOrani) > ISKONTO_ONAY_ESIGI;
 }
+
+// TKL-15 (63 b): iskonto ve termin onayı ayrı verilir; teklif ikisi de bitmeden müşteriye gitmez.
+export function onayHedefi(bekleyen: { iskonto: boolean; termin: boolean }): TeklifDurumu {
+  return bekleyen.iskonto || bekleyen.termin ? 'onay-bekliyor' : 'verildi';
+}
+export function surumHedefi(iskontoOrani: string, terminOnayiBekler = false): TeklifDurumu {
+  return onayHedefi({ iskonto: iskontoOnayiGerekir(iskontoOrani), termin: terminOnayiBekler });
+}
+export const ONAYLANACAK_ISKONTO_YOK = 'Onaylanacak iskonto yok.';
+export const ONAYLANACAK_TERMIN_YOK = 'Plancı onayı bekleyen satış taslağı yok.';
 
 // 293: ayar açıkken sürümü veren kişi kendi iskontosunu onaylayamaz; kapalıyken onay yetkisi yeter.
 export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number): string | null {
@@ -174,4 +188,220 @@ export function fiyatlariKoru<T extends { malzemeNo: number; birimFiyat: string 
 
 export function fiyatEksikReddi(satirlar: readonly { birimFiyat: string | null }[]): string | null {
   return satirlar.some((s) => s.birimFiyat === null) ? SIPARIS_FIYAT_EKSIK : null;
+}
+
+// ---- Teklif termin ve fiyat denemesi (44) ----
+
+export const TERMIN_DENEMESI_YOK = 'Termin denemesi kullanılamıyor (planlama motoru bağlı değil); fiyat ve termin elle girilir.';
+export const DENENECEK_KALEM_YOK = 'Teklifte kartı bağlı kalem yok; fiyat ve termin elle girilir.';
+export const GENEL_GIDER_YOK = 'Genel gider oranı tanımlı değil (Finans).';
+export const TERMIN_CIKMADI = 'Motor teklifin bütün kalemlerini yerleştiremedi; termin çıkmadı. Eksik veriyi tamamlayın ya da fiyat ve termini elle verin.';
+
+// Motorun bir kalem için verdiği yerleşim. TL'ler motorun ücretlerinden gelir; ücret ya da fiyat eksikse null.
+export interface DenemeIslemi {
+  opId: string;
+  tezgah: string;
+  fason: boolean;
+  baslangic: string;
+  bitis: string;
+  ayarSaat: number;
+  islemeSaat: number;
+  // Motor işlemin ayar ve işleme bedelini tek tutar verir; fasonda fason bedelidir.
+  tl: number | null;
+}
+export interface DenemeKalemi {
+  satirId: number;
+  yerlesti: boolean;
+  bitis: string | null;
+  planTermini: string | null;
+  malzemeTl: number | null;
+  malzemeGelisi: string | null;
+  satinalma: { kod: string; miktar: number; birim: string | null; gelis: string }[];
+  islemler: DenemeIslemi[];
+  eksikVeri: string[];
+}
+export interface DenemeSonucu {
+  planSurumu: string | null;
+  kalemler: DenemeKalemi[];
+  kayanlar: { siparis: string; once: string; sonra: string; termin: string | null; gecikir: boolean }[];
+}
+
+const tl = (n: number | null): string | null => (n === null || !Number.isFinite(n) ? null : n.toFixed(2));
+const toplamVeyaNull = (sayilar: readonly (number | null)[]): number | null =>
+  sayilar.some((n) => n === null || !Number.isFinite(n)) ? null : sayilar.reduce<number>((a, n) => a + (n ?? 0), 0);
+
+// TKL-14: maliyet aynı yerleşimden çıkar: malzeme, her işlemin (ayar dahil) tutarı, fason bedeli ve tezgâh saatine genel gider.
+// Biri bilinmiyorsa toplam null (sıfır uydurulmaz); yerleşmeyen kalemin maliyeti yoktur.
+export function kalemMaliyeti(k: DenemeKalemi, adet: number, genelGiderSaatBasi: number | null): {
+  dokum: MaliyetKalemi[]; toplam: number | null; birim: number | null;
+} {
+  const dokum: MaliyetKalemi[] = [{ tur: 'malzeme', ad: 'Malzeme', tezgah: null, saat: null, tutar: tl(k.malzemeTl) }];
+  const tutarlar: (number | null)[] = [k.malzemeTl];
+  let makineSaati = 0;
+  for (const i of k.islemler) {
+    if (i.fason) {
+      dokum.push({ tur: 'fason', ad: i.opId, tezgah: i.tezgah, saat: null, tutar: tl(i.tl) });
+      tutarlar.push(i.tl);
+      continue;
+    }
+    makineSaati += i.ayarSaat + i.islemeSaat;
+    dokum.push({ tur: 'isleme', ad: i.opId, tezgah: i.tezgah, saat: (i.ayarSaat + i.islemeSaat).toFixed(2), tutar: tl(i.tl) });
+    tutarlar.push(i.tl);
+  }
+  const genel = genelGiderSaatBasi === null ? null : makineSaati * genelGiderSaatBasi;
+  dokum.push({ tur: 'genel-gider', ad: 'Genel gider', tezgah: null, saat: makineSaati.toFixed(2), tutar: tl(genel) });
+  tutarlar.push(genel);
+  const toplam = k.yerlesti && adet > 0 ? toplamVeyaNull(tutarlar) : null;
+  return { dokum, toplam, birim: toplam === null ? null : toplam / adet };
+}
+
+// 59 a: termin, geçerlilik tarihinden itibaren gün olarak da yazılır. Tarihler gündür; saat dilimi karışmaz.
+export function gunFarki(bas: string, son: string): number {
+  return Math.round((Date.parse(`${son}T00:00:00Z`) - Date.parse(`${bas}T00:00:00Z`)) / 86_400_000);
+}
+
+const enGec = (tarihler: readonly string[]): string | null => (tarihler.length === 0 ? null : [...tarihler].sort().at(-1) ?? null);
+
+// TKL-13 (64 a, 62 a, 48 b, 63 b): bütün kartlı kalemler tek denemede yerleşir; teklifin plan termini en geç kalemin terminidir,
+// yerleşmeyen kalem varsa plan termini yoktur. Kartsız kalem plansızdır. İstenen termin bir siparişi geciktiriyorsa plancı onayı gerekir.
+export function denemeCevabi(
+  satirlar: readonly Pick<TeklifSatiri, 'id' | 'sira' | 'malzemeNo' | 'tanim' | 'miktar'>[], sonuc: DenemeSonucu | null,
+  g: { gecerlilik: string | null; istenenTermin: string | null; genelGiderSaatBasi: number | null },
+): TerminDenemesiCevabi {
+  const motor = new Map((sonuc?.kalemler ?? []).map((k) => [k.satirId, k]));
+  const kalemler: TerminDenemesiKalemi[] = satirlar.map((s) => {
+    const k = s.malzemeNo === null ? undefined : motor.get(s.id);
+    const ortak = { satirId: s.id, sira: s.sira, tanim: s.tanim, malzemeNo: s.malzemeNo, adet: s.miktar, plansiz: s.malzemeNo === null };
+    if (k === undefined) {
+      return {
+        ...ortak, yerlesti: false, bitis: null, planTermini: null, malzemeGelisi: null, satinalma: [], birimMaliyet: null, toplamMaliyet: null, dokum: null,
+        eksikVeri: [],
+      };
+    }
+    const m = kalemMaliyeti(k, Number(s.miktar), g.genelGiderSaatBasi);
+    const eksik = g.genelGiderSaatBasi === null ? [...k.eksikVeri, GENEL_GIDER_YOK] : k.eksikVeri;
+    return {
+      ...ortak, yerlesti: k.yerlesti, bitis: k.bitis, planTermini: k.planTermini, malzemeGelisi: k.malzemeGelisi,
+      satinalma: k.satinalma.map((a) => ({ kod: a.kod, miktar: String(a.miktar), birim: a.birim, gelis: a.gelis })),
+      birimMaliyet: m.birim === null ? null : m.birim.toFixed(4), toplamMaliyet: tl(m.toplam), dokum: m.dokum, eksikVeri: eksik,
+    };
+  });
+  const planli = kalemler.filter((k) => !k.plansiz);
+  const planTermini = sonuc === null || planli.length === 0 || planli.some((k) => k.planTermini === null)
+    ? null : enGec(planli.map((k) => k.planTermini ?? ''));
+  const termin = g.istenenTermin ?? planTermini;
+  const kayanlar = sonuc?.kayanlar ?? [];
+  return {
+    durum: sonuc === null && planli.length > 0 ? 'cozucu-yok' : 'hazir',
+    planSurumu: sonuc?.planSurumu ?? null,
+    gecerlilik: g.gecerlilik,
+    istenenTermin: g.istenenTermin,
+    planTermini,
+    termin,
+    terminGun: termin !== null && g.gecerlilik !== null ? gunFarki(g.gecerlilik, termin) : null,
+    yetisir: g.istenenTermin === null ? null : planTermini !== null && planTermini <= g.istenenTermin,
+    onayGerekli: g.istenenTermin !== null && kayanlar.some((k) => k.gecikir),
+    satinalmaGerekli: kalemler.some((k) => k.satinalma.length > 0),
+    kalemler,
+    maliyetToplami: planli.length === 0 ? null : tl(toplamVeyaNull(planli.map((k) => (k.toplamMaliyet === null ? null : Number(k.toplamMaliyet))))),
+    genelGiderSaatBasi: tl(g.genelGiderSaatBasi),
+    kayanlar,
+  };
+}
+
+// TKL-16 (180, 65 a): maliyet toplamı fiyat ya da maliyet görene, döküm ve genel gider oranı yalnız maliyet okuyana gider; görmeyene null.
+export function denemeSuzgeci(c: TerminDenemesiCevabi, gorur: { toplam: boolean; dokum: boolean }): TerminDenemesiCevabi {
+  return {
+    ...c,
+    maliyetToplami: gorur.toplam ? c.maliyetToplami : null,
+    genelGiderSaatBasi: gorur.dokum ? c.genelGiderSaatBasi : null,
+    kalemler: c.kalemler.map((k) => ({
+      ...k,
+      birimMaliyet: gorur.toplam ? k.birimMaliyet : null,
+      toplamMaliyet: gorur.toplam ? k.toplamMaliyet : null,
+      dokum: gorur.dokum ? k.dokum : null,
+    })),
+  };
+}
+
+// Satış taslağının planda tuttuğu yer: kalemlerin bütün işlemleri, tezgâh ve zamanıyla.
+export function kilitler(sonuc: DenemeSonucu): { satirId: number; opId: string; tezgah: string; baslangic: string; bitis: string }[] {
+  return sonuc.kalemler.flatMap((k) => k.islemler.map((i) => ({ satirId: k.satirId, opId: i.opId, tezgah: i.tezgah, baslangic: i.baslangic, bitis: i.bitis })));
+}
+
+// Planlama motorunun (Reçete ve Rota teklifDene) girdi ve sonuç biçimi; yalnız siparişlerin kullandığı alanlar. Kalemler sırayla eşleşir.
+// Anlar tesis anı (ISO), günler 'GGGG-AA-GG'. Motor çalışması yoksa sonuç null'dır.
+export interface MotorYerlesimi { makineId: string; baslangic: string }
+export interface MotorGirdisi {
+  kalemler: { malzemeNo: number; adet: number }[];
+  gecerlilik: string;
+  istenenTermin: string | null;
+  taslakId: string | null;
+  taslaklar: { id: string; gecerlilik: string; kalemler: { malzemeNo: number; adet: number; termin: string; yerlesim: Record<string, MotorYerlesimi> }[] }[];
+}
+export interface MotorSonucu {
+  kalemler: {
+    tamam: boolean;
+    bitis: string | null;
+    planTermini: string | null;
+    malzeme: { gelis: string | null }[];
+    satinalma: { kod: string; birim: string; miktar: number; gelis: string }[];
+    islemler: { adim: string; makineId: string; fason: boolean; baslangic: string; bitis: string; ayarSaat: number; islemeSaat: number; tl: number | null }[];
+    malzemeTl: number | null;
+    eksik: string[];
+  }[];
+  kayan: { siparis: string; emirNo: string | null; once: string; sonra: string; termin: string | null }[];
+}
+
+const enGecAn = (anlar: readonly (string | null)[]): string | null =>
+  anlar.reduce<string | null>((a, x) => (x === null || (a !== null && Date.parse(a) >= Date.parse(x)) ? a : x), null);
+
+// Motor sonucunu teklifin satırlarına çevirir: kalem sırası denemeye verilen sırayla aynıdır. Kayan siparişin termini motorda
+// tesis anıdır; gün olarak ilk on karakteri alınır, gecikme anla karşılaştırılır.
+export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu): DenemeSonucu {
+  return {
+    planSurumu: null,
+    kalemler: r.kalemler.flatMap((k, i) => {
+      const satirId = satirIdleri[i];
+      if (satirId === undefined) return [];
+      return [{
+        satirId, yerlesti: k.tamam, bitis: k.bitis, planTermini: k.planTermini, malzemeTl: k.malzemeTl,
+        malzemeGelisi: enGecAn(k.malzeme.map((m) => m.gelis)),
+        satinalma: k.satinalma.map((a) => ({ kod: a.kod, miktar: a.miktar, birim: a.birim, gelis: a.gelis })),
+        islemler: k.islemler.map((o) => ({
+          opId: o.adim, tezgah: o.makineId, fason: o.fason, baslangic: o.baslangic, bitis: o.bitis, ayarSaat: o.ayarSaat, islemeSaat: o.islemeSaat, tl: o.tl,
+        })),
+        eksikVeri: k.eksik,
+      }];
+    }),
+    kayanlar: r.kayan.map((x) => ({
+      siparis: x.emirNo ?? x.siparis, once: x.once, sonra: x.sonra, termin: x.termin === null ? null : x.termin.slice(0, 10),
+      gecikir: x.termin !== null && Date.parse(x.sonra) > Date.parse(x.termin),
+    })),
+  };
+}
+
+// 49: yer tutan satış taslakları motora kilitli iş olarak gider: kalem başına termin ve adım başına makine ile başlangıç.
+// Satış taslağı yalnız termin çıkınca yazılır (TERMIN_CIKMADI); termini yoksa motora verilecek kalem termini de yoktur, gönderilmez.
+export function motorTaslaklari(t: readonly {
+  taslakId: number; gecerlilik: string; termin: string | null;
+  kalemler: readonly { satirId: number; malzemeNo: number | null; adet: string }[];
+  kilitler: readonly { satirId: number; opId: string; tezgah: string; baslangic: string }[];
+}[]): MotorGirdisi['taslaklar'] {
+  return t.flatMap((x) => {
+    const termin = x.termin;
+    if (termin === null) return [];
+    return [{
+      id: String(x.taslakId), gecerlilik: x.gecerlilik,
+      kalemler: x.kalemler.flatMap((k) => (k.malzemeNo === null ? [] : [{
+        malzemeNo: k.malzemeNo, adet: Number(k.adet), termin,
+        yerlesim: Object.fromEntries(x.kilitler.filter((y) => y.satirId === k.satirId).map((y) => [y.opId, { makineId: y.tezgah, baslangic: y.baslangic }])),
+      }])),
+    }];
+  });
+}
+
+// TKL-17 (49): yer tutan satış taslağı yalnız istenen termin değişince yeniden yerleşir; geçerliliği geçmişse yeri kalkmıştır.
+export function yenidenYerlesirMi(mevcut: { istenenTermin: string | null; gecerli: boolean } | null, istenenTermin: string | null): boolean {
+  return mevcut === null || !mevcut.gecerli || mevcut.istenenTermin !== istenenTermin;
 }

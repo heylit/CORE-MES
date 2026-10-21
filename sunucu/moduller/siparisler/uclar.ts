@@ -2,14 +2,15 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  durumGovdesi, idParametresi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, teklifAyrintiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import type { SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
-import { FIYAT_YETKISI_YOK, siparisAyrintisiFiyatsiz, siparisFiyatsiz, teklifFiyatsiz } from './kurallar.ts';
+import type { PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
+import { FIYAT_YETKISI_YOK, denemeSuzgeci, siparisAyrintisiFiyatsiz, siparisFiyatsiz, teklifFiyatsiz } from './kurallar.ts';
 import * as servis from './servis.ts';
+import * as deneme from './teklif-deneme.ts';
 import * as teklif from './teklif-servis.ts';
 
 // 180: fiyatı ve maliyeti yalnız `siparisler.fiyat-oku` olan görür; bütün cevaplar buradan geçer, servis ve disari dolu kalır.
@@ -17,6 +18,15 @@ const FIYAT_ISLEMI = 'siparisler.fiyat-oku';
 const fiyatGorur = (k: Kullanici): boolean => islemVarMi(k, FIYAT_ISLEMI);
 const siparisCevabi = (k: Kullanici) => async (s: Promise<SiparisAyrintisi>) => (fiyatGorur(k) ? s : siparisAyrintisiFiyatsiz(await s));
 const teklifCevabi = (k: Kullanici) => async (t: Promise<TeklifAyrintisi>) => (fiyatGorur(k) ? t : teklifFiyatsiz(await t));
+// 65 a: maliyet toplamı fiyatla, dökümü `siparisler.maliyet-oku` ile görünür.
+const TERMIN_ISLEMI = 'siparisler.termin-dene';
+const MALIYET_ISLEMI = 'siparisler.maliyet-oku';
+const TERMIN_YETKISI_YOK = 'Plan taslağıyla sürüm yalnız termin deneme yetkisiyle verilir; termini elle girin.';
+const maliyetGorusu = (k: Kullanici) => ({ toplam: fiyatGorur(k) || islemVarMi(k, MALIYET_ISLEMI), dokum: islemVarMi(k, MALIYET_ISLEMI) });
+const taslakCevabi = (k: Kullanici) => async (l: Promise<PlanTaslagi[]>) => {
+  const toplam = maliyetGorusu(k).toplam;
+  return { taslaklar: (await l).map((t) => (toplam ? t : { ...t, karOrani: null, maliyetToplami: null })) };
+};
 
 // Taslağı `siparisler.yaz` açar ve düzenler; onay, kapatma ve iptal `siparisler.onayla` ister (onaylı kayıt onaysız değişmez).
 export const uclar = [
@@ -135,9 +145,10 @@ export const uclar = [
     parametre: idParametresi,
     govde: teklifSurumuGovdesi,
     cevap: teklifAyrintiCevabi,
-    // 201 a: teklif sürümü fiyattır; yalnız fiyatı gören verir.
+    // 201 a: teklif sürümü fiyattır; yalnız fiyatı gören verir. Satış taslağı (49) termin deneme yetkisi ister.
     isle: ({ db, kullanici, parametre, govde }) => {
       if (!fiyatGorur(kullanici)) throw yetkiYok(FIYAT_YETKISI_YOK);
+      if (govde.planTaslagi !== null && !islemVarMi(kullanici, TERMIN_ISLEMI)) throw yetkiYok(TERMIN_YETKISI_YOK);
       return teklifCevabi(kullanici)(teklif.surumVer(db, kullanici, parametre.id, govde));
     },
   }),
@@ -168,6 +179,44 @@ export const uclar = [
     govde: iskontoOnayGovdesi,
     cevap: teklifAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.iskontoOnayla(db, kullanici, parametre.id, govde)),
+  }),
+  // 63 b: istenen termini başka siparişi geciktiren satış taslağını plancı onaylar.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/termin-onayla',
+    yetki: 'plan.yaz',
+    parametre: idParametresi,
+    govde: terminOnayGovdesi,
+    cevap: teklifAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.terminOnayla(db, kullanici, parametre.id, govde)),
+  }),
+  // 44: teklif planın arkasına denenir; termin herkese, maliyet yetkiye göre.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/teklifler/:id/termin-denemesi',
+    yetki: TERMIN_ISLEMI,
+    parametre: idParametresi,
+    sorgu: terminDenemesiSorgusu,
+    cevap: terminDenemesiCevabi,
+    isle: async ({ db, kullanici, parametre, sorgu }) => denemeSuzgeci(await deneme.terminDenemesi(db, kullanici, parametre.id, sorgu), maliyetGorusu(kullanici)),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/deneme-taslagi',
+    yetki: TERMIN_ISLEMI,
+    tekrarKorumali: true,
+    parametre: idParametresi,
+    govde: denemeTaslagiGovdesi,
+    cevap: planTaslaklariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => taslakCevabi(kullanici)(deneme.denemeTaslagiAc(db, kullanici, parametre.id, govde)),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/teklifler/:id/plan-taslaklari',
+    yetki: 'siparisler.oku',
+    parametre: idParametresi,
+    cevap: planTaslaklariCevabi,
+    isle: ({ db, kullanici, parametre }) => taslakCevabi(kullanici)(deneme.planTaslaklari(db, parametre.id)),
   }),
   uc({
     yontem: 'POST',

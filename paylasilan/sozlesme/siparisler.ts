@@ -197,7 +197,13 @@ export const teklifSurumuGovdesi = z.object({
   odemeKosulu: istege(200),
   gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(1000),
-});
+  // 59-60 a: teklifteki termin günü. Plan taslağıyla verilen sürümde sunucu denemeden yazar; elle (plansız) sürümde buradan gelir.
+  terminTarihi: tarihSemasi.nullish().transform((t) => t ?? null),
+  // Boşsa sürüm elle verilmiştir ve teklifin plandaki satış taslağı kalkar.
+  planTaslagi: planTaslagiGovdesi.nullish().transform((p) => p ?? null),
+})
+  .refine((g) => g.planTaslagi === null || g.gecerlilik !== null, { message: PLAN_TASLAGI_GECERLILIK, path: ['gecerlilik'] })
+  .refine((g) => g.planTaslagi === null || g.terminTarihi === null, { message: PLAN_TASLAGI_TERMINI, path: ['terminTarihi'] });
 export const teklifNotGovdesi = z.object({
   ...beklenenSurum,
   not: z.string().trim().min(1, 'Not zorunlu.').max(500, 'En çok 500 karakter.'),
@@ -242,6 +248,7 @@ export const teklifSurumuSemasi = z.object({
   surumNo: z.number().int(),
   iskontoOrani: ondalikMetinSemasi,
   teslimGun: z.number().int().nullable(),
+  terminTarihi: tarihSemasi.nullable(),
   odemeKosulu: z.string().nullable(),
   gecerlilik: tarihSemasi.nullable(),
   aciklama: z.string().nullable(),

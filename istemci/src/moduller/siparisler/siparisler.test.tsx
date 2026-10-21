@@ -46,7 +46,7 @@ const TEKLIF = {
   olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
 } satisfies Teklif;
 const SURUM_1 = {
-  surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
+  surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
   olusturma: '2026-10-02T09:00:00+03:00',
   fiyatlar: [{ satirId: 11, birimFiyat: '10.0000', iskontoluFiyat: '9.0000', tutar: '360.00' }], toplam: '360.00',
   iskontoOnaylayan: null, iskontoOnayAni: null,

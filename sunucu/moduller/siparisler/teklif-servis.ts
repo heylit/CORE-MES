@@ -14,12 +14,13 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, talepDuzenlemeReddi,
-  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
+  FIRMA_YOK, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
+  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
 import * as sorgular from './sorgular.ts';
+import { satisTaslagiHazirla, satisTaslagiYaz, yerTutaniKaldir } from './teklif-deneme.ts';
 import type { TeklifAlanlari, TeklifBaslikSatiri } from './sorgular.ts';
 
 const KISITLAR = {
@@ -57,7 +58,7 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
   const surumler = ham.map((v) => {
     const kendi = fiyatlar.filter((f) => f.surum_id === v.id);
     return {
-      surumNo: v.surum_no, iskontoOrani: v.iskonto_orani, teslimGun: v.teslim_gun, odemeKosulu: v.odeme_kosulu, gecerlilik: v.gecerlilik,
+      surumNo: v.surum_no, iskontoOrani: v.iskonto_orani, teslimGun: v.teslim_gun, terminTarihi: v.termin_tarihi, odemeKosulu: v.odeme_kosulu, gecerlilik: v.gecerlilik,
       aciklama: v.aciklama, olusturma: v.olusturma,
       fiyatlar: kendi.map((f) => ({ satirId: f.satir_id, birimFiyat: f.birim_fiyat, iskontoluFiyat: f.iskontolu_fiyat, tutar: f.tutar })),
       toplam: v.toplam,
@@ -133,32 +134,68 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
   const talep = await sorgular.talepSatirlari(db, id);
   const ret = fiyatReddi(talep.map((t) => t.id), g.fiyatlar.map((f) => f.satirId));
   if (ret !== null) throw dogrulama(ret, 'fiyatlar');
-  const hedef = surumHedefi(g.iskontoOrani);
+  // 49, 59-60 a: plan taslağıyla verilen sürümün termini denemeden gelir; sürüm yazılmadan önce denenir.
+  const plan = g.planTaslagi !== null && g.gecerlilik !== null ? await satisTaslagiHazirla(db, kullanici, id, g.gecerlilik, g.planTaslagi) : null;
+  const terminOnayi = plan?.onayBekler ?? false;
+  const hedef = surumHedefi(g.iskontoOrani, terminOnayi);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef, surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
-  await sorgular.surumEkle(db, id, g, g.fiyatlar, kullanici.id);
+  const surum = await sorgular.surumEkle(db, id, { ...g, terminTarihi: plan === null ? g.terminTarihi : plan.termin }, g.fiyatlar, kullanici.id);
+  if (plan !== null && g.planTaslagi !== null && g.gecerlilik !== null) {
+    await satisTaslagiYaz(db, kullanici, id, surum.id, g.gecerlilik, g.planTaslagi, plan.hazirlik);
+  } else {
+    await yerTutaniKaldir(db, id);
+  }
   const t = await teklifAyrintisi(db, id);
-  if (hedef === 'onay-bekliyor') {
+  if (iskontoOnayiGerekir(g.iskontoOrani)) {
     await bildirimGonder(db, {
       tur: 'siparisler.iskonto-onay-bekliyor', baslik: `İskonto onayı bekleyen teklif: ${t.no}`, metin: `%${g.iskontoOrani} iskonto`,
+      yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+    });
+  }
+  if (terminOnayi) {
+    await bildirimGonder(db, {
+      tur: 'siparisler.termin-onay-bekliyor', baslik: `Termin onayı bekleyen teklif: ${t.no}`, metin: `İstenen termin ${g.planTaslagi?.istenenTermin ?? ''} başka siparişi geciktiriyor`,
       yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
     });
   }
   return t;
 }
 
-// 291 a: müdür son sürümün iskontosunu onaylar, teklif müşteriye gider. Geri çevirmek yeni sürüm ya da redle olur.
+async function bekleyenOnaylar(db: Db, id: number): Promise<{ iskonto: boolean; termin: boolean }> {
+  const son = await sorgular.sonSurumIskontosu(db, id);
+  const yer = await sorgular.yerTutanTaslak(db, id);
+  return { iskonto: son !== null && iskontoOnayiGerekir(son.iskonto_orani) && !son.onayli, termin: yer?.durum === 'onay-bekliyor' };
+}
+
+// 291 a: müdür son sürümün iskontosunu onaylar. Termin onayı da bekleniyorsa teklif plancıyı bekler (63 b). Geri çevirmek yeni sürüm ya da redle olur.
 export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
   const mevcut = await kilitle(db, id);
   gecisDenetle(mevcut.durum, 'iskonto-onay');
+  const bekleyen = await bekleyenOnaylar(db, id);
+  if (!bekleyen.iskonto) throw gecersiz(ONAYLANACAK_ISKONTO_YOK);
   const veren = await sorgular.sonSurumuVeren(db, id);
   const ret = veren === null ? null : dortGozReddi(await sistemAyariOku(db, 'siparisler.iskonto-dort-goz'), veren, kullanici.id);
   if (ret !== null) throw gecersiz(ret);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
-    hedef: teklifHedefi('iskonto-onay'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+    hedef: onayHedefi({ ...bekleyen, iskonto: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   await sorgular.iskontoOnayiEkle(db, id, kullanici.id);
+  return teklifAyrintisi(db, id);
+}
+
+// TKL-15 (63 b): istenen termin bir siparişi geciktiren satış taslağını plancı (`plan.yaz`) onaylar; onaya kadar yer tutar,
+// teklif müşteriye verilmiş sayılmaz. İskonto onayı da bekleniyorsa teklif müdürü bekler.
+export async function terminOnayla(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
+  const mevcut = await kilitle(db, id);
+  gecisDenetle(mevcut.durum, 'termin-onay');
+  const bekleyen = await bekleyenOnaylar(db, id);
+  if (!bekleyen.termin) throw gecersiz(ONAYLANACAK_TERMIN_YOK);
+  await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
+    hedef: onayHedefi({ ...bekleyen, termin: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+  }));
+  if ((await sorgular.terminOnayiYaz(db, id, kullanici.id)) === null) throw new Error('Termin onayı yazılamadı');
   return teklifAyrintisi(db, id);
 }
 
@@ -170,6 +207,7 @@ export async function notluGecis(
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: teklifHedefi(komut), surum: g.surum, kisiId: kullanici.id, not: g.not, kabulSurumu: null, siparisId: null,
   }));
+  if (komut === 'red') await yerTutaniKaldir(db, id);
   return teklifAyrintisi(db, id);
 }
 
@@ -218,6 +256,8 @@ export async function siparisDonustur(
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: teklifHedefi('siparis'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: siparis.id,
   }));
+  // Sipariş plana kendi emriyle girer; satış taslağının yeri kalkar.
+  await yerTutaniKaldir(db, id);
   return { teklif: await teklifAyrintisi(db, id), siparisId: siparis.id };
 }
 
