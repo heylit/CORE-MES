@@ -220,7 +220,7 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
                   SELECT $2, ${PARCA_SUTUN} FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1`, [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_ayari (senaryo_id, ${AYAR_SUTUN}) SELECT $2, ${AYAR_SUTUN} FROM plan_senaryo_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_degisikligi (senaryo_id, tur, ozet, is_emri_idleri, veri, yazan_kisi_id)
-                  SELECT $2, tur, ozet, is_emri_idleri, veri, yazan_kisi_id FROM plan_senaryo_degisikligi WHERE senaryo_id = $1 ORDER BY id`,
+                  SELECT $2, tur, ozet, is_emri_idleri, veri, yazan_kisi_id FROM plan_senaryo_degisikligi WHERE senaryo_id = $1 AND kaldirma IS NULL ORDER BY id`,
   [kaynakId, id]);
   return id;
 }
@@ -233,14 +233,14 @@ export const senaryoKapat = (db: Db, id: number, durum: 'canliya_alindi' | 'vazg
 export const tabanYenile = (db: Db, id: number) =>
   db.sorgu('UPDATE plan_senaryosu SET taban_plan_surumu = (SELECT surum FROM plan_durumu), surum = surum + 1 WHERE id = $1', [id]);
 
-// Değişiklikleri at: taslak yeniden canlının kopyası olur, defter boşalır, taban yenilenir.
-export async function senaryoSifirla(db: Db, id: number): Promise<void> {
+// Değişiklikleri at: taslak yeniden canlının kopyası olur, defterin kayıtları kaldırılmış olur (379 a: silinmez), taban yenilenir.
+export async function senaryoSifirla(db: Db, id: number, kisiId: number): Promise<void> {
   await db.sorgu('DELETE FROM plan_senaryo_yerlesimi WHERE senaryo_id = $1', [id]);
   await db.sorgu('DELETE FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1', [id]);
   await db.sorgu(CANLIYI_KOPYALA, [id]);
   await db.sorgu(CANLI_PARCALARI_KOPYALA, [id]);
   await ayariCanlidanAl(db, id);
-  await db.sorgu('DELETE FROM plan_senaryo_degisikligi WHERE senaryo_id = $1', [id]);
+  await db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $2, kaldirma = now() WHERE senaryo_id = $1 AND kaldirma IS NULL', [id, kisiId]);
   await tabanYenile(db, id);
 }
 
@@ -261,7 +261,7 @@ export interface DegisiklikSatiri {
 }
 export const degisiklikler = (db: Db, senaryoIdleri: readonly number[]): Promise<DegisiklikSatiri[]> =>
   db.sorgu(`SELECT id, senaryo_id AS "senaryoId", tur, ozet, is_emri_idleri AS "isEmriIdleri", veri, to_json(yazma) #>> '{}' AS yazma
-              FROM plan_senaryo_degisikligi WHERE senaryo_id = ANY($1::int[]) ORDER BY id`, [[...senaryoIdleri]]);
+              FROM plan_senaryo_degisikligi WHERE senaryo_id = ANY($1::int[]) AND kaldirma IS NULL ORDER BY id`, [[...senaryoIdleri]]);
 export const degisiklikEkle = (db: Db, senaryoId: number, d: { tur: string; ozet: string; isEmriIdleri: readonly number[]; veri?: unknown }, kisiId: number) =>
   db.sorgu('INSERT INTO plan_senaryo_degisikligi (senaryo_id, tur, ozet, is_emri_idleri, veri, yazan_kisi_id) VALUES ($1, $2, $3, $4, $5, $6)',
     [senaryoId, d.tur, d.ozet.slice(0, 300), [...d.isEmriIdleri], d.veri === undefined ? null : JSON.stringify(d.veri), kisiId]);
@@ -270,9 +270,11 @@ export const degisiklikVerisiYaz = (db: Db, id: number, veri: unknown) =>
   db.sorgu('UPDATE plan_senaryo_degisikligi SET veri = $2 WHERE id = $1', [id, JSON.stringify(veri)]);
 export const acilSiparisDenemesi = (db: Db, siparisId: number): Promise<DegisiklikSatiri | null> =>
   db.tek<DegisiklikSatiri>(`SELECT id, senaryo_id AS "senaryoId", tur, ozet, is_emri_idleri AS "isEmriIdleri", veri, to_json(yazma) #>> '{}' AS yazma
-            FROM plan_senaryo_degisikligi WHERE tur = 'acil_emir' AND (veri ->> 'siparisId')::int = $1 ORDER BY id LIMIT 1 FOR UPDATE`, [siparisId]);
-export const degisiklikSil = (db: Db, senaryoId: number, ids: readonly number[]) =>
-  db.sorgu('DELETE FROM plan_senaryo_degisikligi WHERE senaryo_id = $1 AND id = ANY($2::int[])', [senaryoId, [...ids]]);
+            FROM plan_senaryo_degisikligi WHERE tur = 'acil_emir' AND (veri ->> 'siparisId')::int = $1 AND kaldirma IS NULL ORDER BY id LIMIT 1 FOR UPDATE`, [siparisId]);
+// 379 a: defter kaydı silinmez; kaldıran ve zaman işaretlenir, okumalar kaldırılmamışları görür.
+export const degisiklikKaldir = (db: Db, senaryoId: number, ids: readonly number[], kisiId: number) =>
+  db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $3, kaldirma = now() WHERE senaryo_id = $1 AND id = ANY($2::int[]) AND kaldirma IS NULL',
+    [senaryoId, [...ids], kisiId]);
 
 /* ---------------- bedel ayarı (209 a) ---------------- */
 

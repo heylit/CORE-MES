@@ -129,4 +129,48 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     await reddedilir('DELETE FROM plan_ayari');
     await reddedilir('TRUNCATE plan_ayari');
   });
+  // 379 a (kullanıcı kararı, 2026-10-21): göç 20261019155000.
+  test('379: taslağın defter kaydı kaldırılınca ve değişiklikler atılınca silinmez, kimin ne zaman kaldırdığı işaretlenir; listede ve çoğaltmada görünmez', async () => {
+    const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
+    let l = await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: 'Defter 379' });
+    let s = l.senaryolar.find((x) => x.ad === 'Defter 379')!;
+    let p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: { id: s.id, surum: s.surum } });
+    p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, {
+      taslak: tg(p), kaynak: { tur: 'makine', id: makineB }, baslangic: new Date(Date.parse(yer(p, ie!).baslangic) + 24 * 3600_000).toISOString(),
+    });
+    s = (await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === s.id)!;
+    assert.deepEqual(s.degisiklikler.map((d) => d.tur), ['oner', 'tasi']);
+    const [oner, tasi] = s.degisiklikler;
+    const planlamaci = (await sahip().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'planlama'"))!.id;
+    const satir = (id: number) => sahip().tek<{ kaldiran: number | null; kaldirma: string | null }>(
+      'SELECT kaldiran_kisi_id AS kaldiran, to_json(kaldirma) #>> \'{}\' AS kaldirma FROM plan_senaryo_degisikligi WHERE id = $1', [id]);
+
+    l = await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/degisiklikler/${tasi!.id}/kaldir`, { surum: s.surum });
+    s = l.senaryolar.find((x) => x.id === s.id)!;
+    assert.deepEqual(s.degisiklikler.map((d) => d.id), [oner!.id], 'kaldırılan listede yok');
+    const k = await satir(tasi!.id);
+    assert.equal(k?.kaldiran, planlamaci, 'kaldıran kişi sunucudan');
+    assert.ok(k?.kaldirma && Math.abs(Date.parse(k.kaldirma) - Date.now()) < 60_000, 'kaldırma zamanı sunucudan');
+    assert.deepEqual(await satir(oner!.id), { kaldiran: null, kaldirma: null });
+
+    const cogalan = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/cogalt`)).senaryolar.find((x) => x.id !== s.id && x.ad.includes('Defter 379'))!;
+    assert.deepEqual(cogalan.degisiklikler.map((d) => d.tur), ['oner'], 'çoğaltma kaldırılanı taşımaz');
+    assert.equal((await sahip().tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_senaryo_degisikligi WHERE senaryo_id = $1', [cogalan.id]))!.n, 1);
+
+    s = (await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === s.id)!;
+    l = await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/degisiklikleri-at`, { surum: s.surum });
+    assert.equal(l.senaryolar.find((x) => x.id === s.id)!.degisiklikler.length, 0);
+    assert.equal((await satir(oner!.id))?.kaldiran, planlamaci, 'değişiklikleri at da işaretler');
+    assert.equal((await satir(tasi!.id))?.kaldirma, k.kaldirma, 'önceden kaldırılanın işareti değişmez');
+    assert.equal((await sahip().tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_senaryo_degisikligi WHERE senaryo_id = $1', [s.id]))!.n, 2, 'kayıtlar yerinde');
+
+    // Açık taslakta da: silme yok, kaldırılmış kayıt geri alınmaz ve değişmez; kaldırma kişisiz yazılmaz.
+    const red = (sql: string, params: unknown[]) => assert.rejects(sahip().sorgu(sql, params), /silinmez|değişmez|plan_senaryo_degisikligi_kaldirma/);
+    await red('DELETE FROM plan_senaryo_degisikligi WHERE id = $1', [tasi!.id]);
+    await red('UPDATE plan_senaryo_degisikligi SET kaldirma = NULL, kaldiran_kisi_id = NULL WHERE id = $1', [tasi!.id]);
+    await red("UPDATE plan_senaryo_degisikligi SET ozet = 'başka' WHERE id = $1", [tasi!.id]);
+    const yeniKayit = (await sahip().tek<{ id: number }>('SELECT id FROM plan_senaryo_degisikligi WHERE senaryo_id = $1', [cogalan.id]))!.id;
+    await red('UPDATE plan_senaryo_degisikligi SET kaldirma = now() WHERE id = $1', [yeniKayit]);
+    await red('DELETE FROM plan_senaryo_degisikligi WHERE id = $1', [yeniKayit]);
+  });
 });
