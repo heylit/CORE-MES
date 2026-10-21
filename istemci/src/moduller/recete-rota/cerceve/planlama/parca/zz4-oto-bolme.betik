@@ -173,6 +173,7 @@ document.addEventListener('click', e => {
   p: [['param', 'bolmeKip', 'Kip', 'sec', [['otomatik', 'Otomatik'], ['oneri', 'Yalnız öneri'], ['kapali', 'Kapalı']]],
     ['param', 'bolmeMin', 'En küçük parti', 'adet', 1, 10000, 1], ['param', 'bolmeMaks', 'Bir çözümde en çok bölünen', 'sipariş', 0, 20, 1], ['param', 'bolmeEsik', 'En az kazanç', 'TL', 0, 1000000, 100],
     ...BOLME_CESIT.map(([c, ad]) => ['param', BC_ANAHTAR[c], ad, 'sec', [['acik', 'Denenir'], ['kapali', 'Denenmez']]])] }); }
-setTimeout(() => { if (!S.param) return; let d = false; for (const [k, v] of [['bolmeKip', 'otomatik'], ['bolmeMin', 5], ['bolmeMaks', 3], ['bolmeEsik', 1000]]) if (S.param[k] == null) { S.param[k] = v; d = true; } if (d) kaydet(); }, 0);
+/* eksik varsayılan yalnız bellekte tamamlanır, ilk kayıtla yazılır (açılışta yazılmaz) */
+setTimeout(() => { if (!S.param) return; for (const [k, v] of [['bolmeKip', 'otomatik'], ['bolmeMin', 5], ['bolmeMaks', 3], ['bolmeEsik', 1000]]) if (S.param[k] == null) S.param[k] = v; }, 0);
 /* öne alma adayları önizleme alanını kullanır; bekleyen önizleme (otomatik bölme) aday hesabından sonra yerinde kalır */
 { const oa1 = oneAlAdaylari; oneAlAdaylari = function () { const h = U.hamle, s = U.secili; try { return oa1.apply(this, arguments); } finally { U.hamle = h; U.secili = s; } }; }
