@@ -236,4 +236,13 @@ class KurallarTest {
         assertNull("hedefi sifir emir orani uydurmaz", Kadran.toplamOran(listOf(0 to 0)))
         assertNull(Kadran.toplamOran(emptyList()))
     }
+
+    @Test
+    fun `kadran istasyon ozeti once ariza ve durani sayar, yoksa calisani yazar`() {
+        val liste = listOf("A" to "calisiyor", "B" to "durakli", "C" to "durdu", "D" to "bakim", "E" to "ariza")
+        assertEquals("4 istasyon dikkat" to "C durdu, E arıza, B duraklı", Kadran.ozet(liste))
+        assertEquals("İstasyonlar" to "1/2 çalışıyor", Kadran.ozet(listOf("A" to "calisiyor", "B" to "bos")))
+        assertEquals("bilinmeyen durum dikkat sayilmaz", "İstasyonlar" to "0/1 çalışıyor", Kadran.ozet(listOf("A" to "yeni-durum")))
+        assertEquals("İstasyonlar" to "İstasyon yok", Kadran.ozet(emptyList()))
+    }
 }

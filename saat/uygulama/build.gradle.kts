@@ -108,5 +108,5 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.wear.tiles)
     implementation(libs.wear.protolayout)
-    implementation(libs.wear.watchface)
+    implementation(libs.wear.complications.data.source)
 }

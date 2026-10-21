@@ -66,6 +66,22 @@ Denemede kabul: saatte sunucu adresi `https://<ip>:4101` girilir, saat 6 rakamli
 
 Sunucu ve saat birlikte guncellenir: uyari cevabinda istasyon artik bos olabilir (kalibrasyon uyarisi), eski saat uygulamasi yeni sunucunun uyarilarini okuyamaz.
 
+## TMI kadrani (Watch Face Format, soru 375 a)
+
+Wear OS 6 (Android 16) kodla cizilen eski tip kadrani reddeder; kadran bu yuzden ayri ve kodsuz bir APK'dir (`kadran/`,
+`res/raw/watchface.xml`). Kadran veri cekemez: acik emir halkasi, dikkat isteyen istasyonlar ve kurum logosu saat uygulamasinin
+veri kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`) gelir. Kutucuga dokununca uygulama Tezgahlar 3B ile acilir.
+Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); kisik modda kadran yalniz saat ve tarihi gosterir.
+
+```
+gradle :uygulama:assembleDebug :kadran:assembleDebug
+adb.exe install -r uygulama-debug.apk
+adb.exe install -r kadran-debug.apk
+```
+
+Cikti `kadran/build/outputs/apk/debug/kadran-debug.apk`. Saatte kadrana uzun basilir, listeden "TMI Kadran" secilir. Kutucuklar
+bos kalirsa kadran duzenleme ekraninda her yere sirasiyla "TMI Açık emirler", "TMI Logo", "TMI İstasyonlar" secilir.
+
 ## Saatte ilk acilis
 
 Saat once TMI sunucu adresini sorar (orn. `tmi.kurum.ic:4100`; https kendiliginden eklenir, http kabul edilmez). Adres
@@ -88,3 +104,6 @@ kisinin kendi istasyonlarindan biriyse ayrintisini acar. Etiket herhangi bir NFC
 - `-PkurumKok` ile derlenen APK'nin gercek saatte deneme kokunden imzali sunucuya baglanmasi denenmedi (cihaz adimi kullanicida).
 - Kurumsal Wi-Fi istemci yalitimi yapiyorsa kablosuz adb ve saatin sunucuya ulasmasi engellenir.
 - Galaxy Watch'ta NFC okuyucu kipinin (enableReaderMode) uygulamaya acik oldugu ve etiketin okunmasi denenmedi.
+- TMI kadrani gercek saatte denenmedi. Kadran XML'i Google'in Watch Face Format 1 semasina gore gecerlidir (resmi XSD ile denendi);
+  kutucuk ifadeleri (`[COMPLICATION.*]`), halkanin 12 yonunden baslamasi ve kadranin uygulama kutucuklarini kendiliginden
+  secmesi (`DefaultProviderPolicy primaryProvider`) cihazda denenmedi.
