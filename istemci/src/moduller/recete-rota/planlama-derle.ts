@@ -40,9 +40,14 @@ const betikKapanisiYok = (ad: string, metin: string): string => {
   return metin;
 };
 
-// Uygulama betiği: parçalar son satır sonu atılıp satır sonuyla birleşir.
+// Tek parça, son satır sonu atılmış (parçaları ayrı ayrı koşturan testler de bunu okur).
+export function planlamaParcasi(ad: string, kok: string = KAYNAK): string {
+  return oku(join(kok, 'parca', `${ad}.betik`)).replace(/\n$/, '');
+}
+
+// Uygulama betiği: parçalar satır sonuyla birleşir.
 export function planlamaBetigi(kok: string = KAYNAK): string {
-  return PARCA_SIRASI.map((p) => (p === null ? '' : oku(join(kok, 'parca', `${p}.betik`)).replace(/\n$/, ''))).join('\n');
+  return PARCA_SIRASI.map((p) => (p === null ? '' : planlamaParcasi(p, kok))).join('\n');
 }
 
 export function planlamaMotoru(kok: string = KAYNAK): string {
