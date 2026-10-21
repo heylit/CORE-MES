@@ -37,6 +37,7 @@
 | Gömülü kütüphaneler | KAPANDI (362 a, 20.10.2026): beş gömülü kütüphane çıkarıldı; tur, ipucu konumu, Gantt sürüklemesi ve sıralama kendi kodumuz (`parca/v-arac.betik`). | - |
 | Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
 | Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
+| Planlama fasoncuları (23 a) | Aktif fason firmalar fasoncu olur; süre firmanın rota adımlarındaki en büyük termin günü (yoksa 1), çıkış günleri takvimin çalışma günleri, aynı anda iş sınırı yok (999). Sayfada değişen ayar aynı kimlikte kalır, sonraki rota süresi değişikliği ona geçmez. Emirde fasona alınan adımın (opYer) süresi okunmaz. | Firma kapasitesi ve çıkış günü sahibinde tutulursa oradan; adım başına süre motor değişikliği ister. |
 | İkinci menü | KAPANDI (20.10.2026): çekirdek yaması menüyü `ONERILEN_IKINCI_MENU` ile aynı yapar (`planlama-derle.test.ts` denetler). | - |
 | KAPANDI (359 a): aynı adlı tezgâhlar ayrı kaynak kalır, teke indirilmez. Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"). Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Kalır. |
 

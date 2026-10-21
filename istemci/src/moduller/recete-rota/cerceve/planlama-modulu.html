@@ -18443,8 +18443,10 @@ function rrDenemedenKur(D0, onceki) {
     const esAdim = seq => { const r = onceki && onceki.routes && onceki.routes[u.id]; return r ? (r.steps || []).find(x => x.seq === seq) : null; };
     const steps = (u.rota || []).map((o, i) => {
       const seq = rrSeq(o, i), ad = o.ad || ('OP ' + seq);
-      const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
       const eA = esAdim(seq);
+      const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
+      /* termin günü adımındır, fasoncunun süresi bütün adımlarının en büyüğü olabilir: aynı firmadaki adımın kendi günü korunur */
+      if (o.fason && eA && eA.fasonId === o.fason && eA.terminGun != null) y.terminGun = eA.terminGun;
       return Object.assign({}, eA || { id: 'p-' + u.id + '-' + o.k, outItem: '', outStatus: '', rejectPct: 0, outs: [], transfer: 0, resetup: true }, y, { seq, ins: [], plan: rrKopya(o) });
     });
     for (const b of u.bilesenler || []) {
@@ -19431,9 +19433,27 @@ function tmiKaynakIle(st, kaynak, D) {
   }
   return o;
 }
+/* Fason firmanın sahibi Müşteri ve Tedarikçi'dir; durum okuması aktif fason firmaları verir (fasonFirms). Motor fason adımı yalnız
+   fasoncular listesindeki firmaya yerleştirir; liste boşken her fason adımı yerleşmez. Firma başına süre rota adımlarının termin gününün
+   en büyüğüdür (yoksa motorun 1 günü); çıkış günleri takvimin çalışma günleridir; aynı anda iş sınırı yoktur (firmanın kapasitesi bilinmez).
+   Sayfada değiştirilen süre, kapasite ve çıkış ayarı aynı kimlikte korunur; ad sahibinden gelir. */
+function tmiFasoncular(st, firmalar, D, onceki) {
+  const sure = {};
+  for (const r of Object.values(st.routes || {})) for (const a of (r && r.steps) || []) {
+    if (a.fasonId && +a.terminGun > 0) sure[a.fasonId] = Math.max(sure[a.fasonId] || 0, +a.terminGun);
+  }
+  const cg = D.calismaGunleri || {};
+  const gunler = GUNLER.filter(g => (cg[g] || []).length);
+  const eski = id => ((onceki && onceki.fasoncular) || D.fasoncular || []).find(f => String(f.id) === id) || null;
+  return firmalar.map(f => {
+    const a = eski(String(f.id));
+    const y = { id: String(f.id), ad: f.name, kapasite: 999, sureGun: sure[f.id] || 1, cikisGunleri: gunler.length ? gunler : GUNLER.slice(0, 5), cikisSaat: 16 };
+    return a ? Object.assign({}, y, rrKopya(a), { id: y.id, ad: y.ad }) : y;
+  });
+}
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular'];
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;
@@ -19443,6 +19463,8 @@ if (TMI_ICINDE) {
     const D = rd0(TMI_KAYNAK.durum ? tmiKaynakIle(st, TMI_KAYNAK, S && S.D) : st);
     if (!D.meta && S && S.D && S.D.meta) D.meta = rrKopya(S.D.meta);
     tmiTabanKur(D);
+    const firmalar = TMI_KAYNAK.durum && TMI_KAYNAK.durum.fasonFirms;
+    if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, S && S.D);
     return D;
   };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
