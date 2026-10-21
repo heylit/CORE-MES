@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planlamaParcasi } from './planlama-derle.ts';
+import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
 
 // Planlama çerçevesinin tezgâh, personel ve takvimi sahibi modüllerden (kaynak okuması) gelir; kayıtta yoktur (sunucu ayıklar).
 // Parçalar (zz27 kayıt çevirisi, zz31 TMI uyarlaması) sayfanın geri kalanı yerine küçük taklitlerle koşar. Veriler uydurmadır.
@@ -21,13 +21,13 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
     let S = null; let U = { sayfa: 'tahta', hamle: null }; let cizim = 0; const bildirimler = [];
     const RR = { el: null }; const SAYFA_AD = {}; const VERI = {}; let hsKaynak = null; let rrYerlestir = null;
     const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
-    const GUNLER = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
     function bildir(m) { bildirimler.push(m); }
     function kaydet() {}
     function render() { cizim++; }
     function yukle() { return null; }
     function yeniCalisma(k) { return { D: VERI[k].veri, dataVer: 1, plan: null }; }
     function stOf() { return { now: 7 }; } function coz() {}
+    ${planlamaMotoru()}
     ${planlamaParcasi('zz27-rr-veri')}
     ${planlamaParcasi('zz31-tmi')}
     return { ac: () => { S = yeniCalisma(); render(); return S; }, S: () => S, cizim: () => cizim, bildirimler, cevir: rrDenemeyeCevir, kur: rrDenemedenKur };`;
