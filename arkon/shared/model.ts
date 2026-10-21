@@ -32,7 +32,7 @@ export interface Plant { wcs: WorkCenter[]; sts: Station[]; mcs: Machine[] }
 export interface ShiftBreak { at: string; min: number }
 export interface Shift { name: string; start: string; end: string; breaks: ShiftBreak[] }
 export interface Policy { shiftLogout: boolean; idleLock: number; callEsc: number; approval: boolean; autoCall: boolean; scrapAsk: boolean; /** değişiklikte ara onay sor (Terminal kural 1/5) */ fpRestart?: boolean }
-export type CallTeam = 'bakim' | 'kalite' | 'malzeme' | 'amir';
+export type CallTeam = 'bakim' | 'kalite' | 'malzeme' | 'amir' | 'ayarci';
 /** duruş nedeni · cat: 'u' plansız (OEE kaybı) · 'p' planlı (planlı süreden düşülür) */
 export interface Reason { code: string; l: string; i?: string; cat: 'u' | 'p'; team?: CallTeam; after?: number; active?: boolean; c?: string }
 export interface ScrapReason { code: string; l: string; active?: boolean }

@@ -33,6 +33,7 @@ import { adimEtkinSureleriToplu, gecerliTalimat, girdisiEksikRevizyonlar, revizy
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { ekipCagrisiBildir } from '../bildirim/disari.ts';
 import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
@@ -44,7 +45,7 @@ import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
 import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
-  ILETILER, ILETI_YENIDEN_YUKLE, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
+  ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
   adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
@@ -1506,6 +1507,8 @@ export async function kayitEkle(
     eklenen++;
     yazilanlar.push(kayitId);
     yazilanCidler.add(sutunlar.cid);
+    const cagri = tur === 'calls' ? cagriBildirimi(govde) : null;
+    if (cagri !== null) await ekipCagrisiBildir(db, { ...cagri, haric: kullanici.id });
     // Sayımın kararı kaydedilen gövdeden yeniden kurulur: karar bekleyen kısmı yalnız sunucu yazar (istemcinin alanı `kayitGovdesi`nde atılır).
     let karar = kararlar[sira] !== undefined && tur === 'counts' ? yansimaKarari(tur, govde) : kararlar[sira];
     if (karar !== undefined && tur === 'events' && parca?.no != null) {

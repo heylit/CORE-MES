@@ -53,7 +53,9 @@ export function LoginApp({ onDone, lock, onCancel }) {
 
 /* ── başka istasyondan gelen çağrı (kalite, hazırlık ekranlarında görünür) ── */
 /** Çağrı bu kişiye mi? Üstlenme yetkisi olan, çağrılan ekibin rolündeki kişiler (yönetici ve vardiya amiri hepsini görür); çağrıyı yapan istasyon hariç */
-export const CALL_ROLES = { bakim: ['maint'], kalite: ['quality'], malzeme: ['plan'], amir: ['lead'] };
+// Ekip -> Arkon rolü eşlemesi bannerin geçici kopyasıdır; asıl yönlendirme TMI bildirim modülündedir (298, CEKIRDEK-ISTEKLERI 8).
+// Ayarcı varsayılanda müdüre gider; müdürün Arkon rolü (vardiya amiri, yönetici) bütün çağrıları zaten görür.
+export const CALL_ROLES = { bakim: ['maint'], kalite: ['quality'], malzeme: ['plan'], amir: ['lead'], ayarci: ['lead'] };
 export const callForMe = m => { if (!can('prod.ack') || (m.machine && m.machine === LS.get('station') && (location.hash || '#') === '#')) return false; const u = MEU(); if (!u || u.role === 'admin' || u.role === 'lead') return true; const R = CALL_ROLES[m.k]; return !R || R.includes(u.role) || !Object.values<any>(CALL_ROLES).some(x => x.includes(u.role)); };
 export function CallBanner({ cur }) {
   const [list, setList] = useState([]);

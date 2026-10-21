@@ -767,3 +767,7 @@ Bu tur şunları varsaydı:
 - `/arkon/dosyalar/:ozet/parca` ucu kalır: iç eşitleme (16 KB üstü ikili, 3B türev verisi dahil) ve .arkon içe aktarma onu kullanır. Kişi sınırı aşılınca en eski yüklemeyi atan kod kalktı: yeni parça 429 alır, hiçbir yükleme kendiliğinden silinmez.
 - Reddedilen belge yazımı (`store.ts`) kayda düşer ve ekranda "Kayıt sunucuya yazılmadı" iletisi çıkar.
 
+## Ekip çağrısı: ayarcı ve TMI bildirimi (298)
+- Çağrı ekranına beşinci ekip "Ayarcı" eklendi (prototip değişikliği onaylı, 298 b); tek kalan düğme satırı doldurur.
+- Operatörün açtığı çağrı (calls, phase `open`) aynı işlemde TMI bildirim merkezine gider: `bildirim/disari.ts ekipCagrisiBildir`, alıcıyı Sistem Ayarları'ndaki ekip eşlemesi seçer, çağıran almaz. Kabul, yükseltme ve kapatma yeni bildirim açmaz; aynı kayıt (cid) yinelenirse kayıt yazılmadığı için bildirim de yinelenmez.
+- Kural `kurallar.ts cagriBildirimi` (tanınmayan ekip, yersiz ya da kimliksiz çağrı bildirilmez); yer makine kodu, yoksa istasyon kodu.

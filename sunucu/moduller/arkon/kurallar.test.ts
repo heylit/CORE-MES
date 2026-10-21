@@ -7,7 +7,7 @@ import {
   hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
-  olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
+  cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -864,4 +864,16 @@ test('İleti yoklaması denetimi süre ve işlem imzasıyla geçer (118 a)', () 
   assert.equal(yoklamaDenetimiGecerli(d, 1000 + YOKLAMA_DENETIM_SURESI_MS, imza), false);
   assert.equal(yoklamaDenetimiGecerli(d, 999, imza), false);
   assert.equal(yoklamaDenetimiGecerli(d, 1000, islemImzasi(['arkon.oku'])), false);
+});
+
+test('298: yalnız açılan çağrı bildirilir; yer makine, yoksa istasyon; tanınmayan ekip, yersiz ve kimliksiz çağrı bildirilmez', () => {
+  const ac = { phase: 'open', team: 'bakim', callId: '17', machine: 'IST-1', mc: 'MK-2', note: 'Takım kırıldı' };
+  assert.deepEqual(cagriBildirimi(ac), { ekip: 'bakim', yer: 'MK-2', not: 'Takım kırıldı', cagriKimligi: '17' });
+  assert.deepEqual(cagriBildirimi({ ...ac, mc: null, note: '' }), { ekip: 'bakim', yer: 'IST-1', not: null, cagriKimligi: '17' });
+  assert.equal(cagriBildirimi({ ...ac, team: 'ayarci' })?.ekip, 'ayarci');
+  assert.equal(cagriBildirimi({ ...ac, mc: null, machine: null }), null);
+  for (const phase of ['ack', 'esc', 'done', 'cancel']) assert.equal(cagriBildirimi({ ...ac, phase }), null, phase);
+  assert.equal(cagriBildirimi({ ...ac, team: 'mudur' }), null);
+  assert.equal(cagriBildirimi({ ...ac, callId: '' }), null);
+  assert.equal(cagriBildirimi({ ...ac, callId: 17 }), null);
 });
