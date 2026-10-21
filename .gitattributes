@@ -12,3 +12,8 @@
 *.ico binary
 *.pdf binary
 *.cmd text eol=crlf
+# Birikimli belgeler yalniz satir eklenerek buyur: iki dalin eklemeleri cakismadan ikisi de kalir. Ayni satiri iki dal degistirirse
+# ikisi de yazilir; birlesmede belge gozden gecirilir.
+FARK.md merge=union
+GUVENLIK-DENETIMI.md merge=union
+UYUM-BORCU.md merge=union
