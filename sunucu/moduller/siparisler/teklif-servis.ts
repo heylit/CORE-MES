@@ -8,11 +8,13 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
+import { bildirimGonder } from '../bildirim/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, talepDuzenlemeReddi,
-  teklifGecisReddi, teklifHedefi, teklifNo,
+  surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -49,13 +51,16 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
   const talep = await sorgular.talepSatirlari(db, id);
   const kartlar = await malzemeOzetleri(db, talep.flatMap((t) => (t.malzeme_no === null ? [] : [t.malzeme_no])));
   const fiyatlar = await sorgular.teklifFiyatlari(db, id);
-  const surumler = (await sorgular.teklifSurumleri(db, id)).map((v) => {
+  const ham = await sorgular.teklifSurumleri(db, id);
+  const onaylayanlar = await kisiAdlari(db, ham.flatMap((v) => (v.onaylayan_id === null ? [] : [v.onaylayan_id])));
+  const surumler = ham.map((v) => {
     const kendi = fiyatlar.filter((f) => f.surum_id === v.id);
     return {
       surumNo: v.surum_no, iskontoOrani: v.iskonto_orani, teslimGun: v.teslim_gun, odemeKosulu: v.odeme_kosulu, gecerlilik: v.gecerlilik,
       aciklama: v.aciklama, olusturma: v.olusturma,
       fiyatlar: kendi.map((f) => ({ satirId: f.satir_id, birimFiyat: f.birim_fiyat, iskontoluFiyat: f.iskontolu_fiyat, tutar: f.tutar })),
       toplam: v.toplam,
+      iskontoOnaylayan: v.onaylayan_id === null ? null : (onaylayanlar.get(v.onaylayan_id) ?? null), iskontoOnayAni: v.onay_ani,
     };
   });
   return {
@@ -127,10 +132,29 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
   const talep = await sorgular.talepSatirlari(db, id);
   const ret = fiyatReddi(talep.map((t) => t.id), g.fiyatlar.map((f) => f.satirId));
   if (ret !== null) throw dogrulama(ret, 'fiyatlar');
+  const hedef = surumHedefi(g.iskontoOrani);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
-    hedef: teklifHedefi('surum'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+    hedef, surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   await sorgular.surumEkle(db, id, g, g.fiyatlar, kullanici.id);
+  const t = await teklifAyrintisi(db, id);
+  if (hedef === 'onay-bekliyor') {
+    await bildirimGonder(db, {
+      tur: 'siparisler.iskonto-onay-bekliyor', baslik: `İskonto onayı bekleyen teklif: ${t.no}`, metin: `%${g.iskontoOrani} iskonto`,
+      yol: `/siparisler/teklifler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
+    });
+  }
+  return t;
+}
+
+// 291 a: müdür son sürümün iskontosunu onaylar, teklif müşteriye gider. Geri çevirmek yeni sürüm ya da redle olur.
+export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
+  const mevcut = await kilitle(db, id);
+  gecisDenetle(mevcut.durum, 'iskonto-onay');
+  await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
+    hedef: teklifHedefi('iskonto-onay'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
+  }));
+  await sorgular.iskontoOnayiEkle(db, id, kullanici.id);
   return teklifAyrintisi(db, id);
 }
 

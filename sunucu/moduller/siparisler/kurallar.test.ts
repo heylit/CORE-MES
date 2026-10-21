@@ -4,7 +4,7 @@ import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
   duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi, siparisNo,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
-  teklifGecisReddi, teklifHedefi, teklifNo,
+  surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
 } from './kurallar.ts';
 
 describe('siparisler kuralları (saf)', () => {
@@ -72,6 +72,17 @@ describe('teklif kuralları (saf)', () => {
     assert.equal(teklifGecisReddi('kabul', 'red'), 'Teklif durumu "kabul edildi"; reddedilemez.');
     assert.equal(teklifGecisReddi('siparis', 'siparis'), 'Teklif durumu "siparişe dönüştü"; siparişe dönüştürülemez.');
     assert.deepEqual((['surum', 'revizyon', 'kabul', 'red', 'siparis'] as const).map(teklifHedefi), ['verildi', 'revizyon', 'kabul', 'red', 'siparis']);
+  });
+
+  test('TKL-11 (291 a) eşiği aşan iskonto onay bekler; onay yalnız bekleyen teklife, bekleyen teklif kabul edilmez', () => {
+    assert.deepEqual(['0', '9.99', '10', '10.01', '99.99'].map(surumHedefi), ['verildi', 'verildi', 'verildi', 'onay-bekliyor', 'onay-bekliyor']);
+    assert.equal(teklifGecisReddi('onay-bekliyor', 'iskonto-onay'), null);
+    assert.equal(teklifHedefi('iskonto-onay'), 'verildi');
+    assert.equal(teklifGecisReddi('verildi', 'iskonto-onay'), 'Teklif durumu "verildi"; onaylanacak iskonto yok.');
+    assert.equal(teklifGecisReddi('onay-bekliyor', 'kabul'), 'Teklif durumu "iskonto onayı bekliyor"; kabul edilemez.');
+    assert.equal(teklifGecisReddi('onay-bekliyor', 'revizyon'), 'Teklif durumu "iskonto onayı bekliyor"; revizyon istenemez.');
+    assert.equal(teklifGecisReddi('onay-bekliyor', 'surum'), null);
+    assert.equal(teklifGecisReddi('onay-bekliyor', 'red'), null);
   });
 
   test('TKL-06 kartsız satır siparişe dönüşmez; reddedilmiş ve dönüşmüş teklife kart bağlanmaz', () => {

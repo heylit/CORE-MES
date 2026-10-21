@@ -4,7 +4,7 @@ import { CokSatir, Dugme, Girdi, Kart, useBildirim } from '../../ortak/arayuz/in
 import { api } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { BELIRSIZ_SAYI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, sayiGirdisi } from './gorunum.ts';
+import { BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, sayiGirdisi } from './gorunum.ts';
 import { eskiyseYenile } from './yazma.ts';
 
 interface Degerler {
@@ -97,7 +97,7 @@ export function SurumFormu({ teklif }: { teklif: TeklifAyrintiCevabi }) {
           ))}
         </ol>
         <div className="tc-sp-izgara">
-          <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" {...form.alan('iskontoOrani')} />
+          <Girdi etiket="İskonto (%)" inputMode="decimal" autoComplete="off" ipucu={`%${ISKONTO_ONAY_ESIGI} üstü iskonto müdür onayından sonra müşteriye gider.`} {...form.alan('iskontoOrani')} />
           <Girdi etiket="Teslim süresi (gün)" inputMode="numeric" autoComplete="off" {...form.alan('teslimGun')} />
           <Girdi etiket="Ödeme koşulu" autoComplete="off" placeholder="Örnek: 30 gün vadeli" {...form.alan('odemeKosulu')} />
           <Girdi etiket="Geçerlilik tarihi" type="date" {...form.alan('gecerlilik')} />

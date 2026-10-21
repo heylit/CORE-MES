@@ -149,7 +149,10 @@ export type SiparisListesiCevabi = z.output<typeof siparisListesiCevabi>;
 
 // ---- Satış teklifi (soru 148): talep satırları, fiyatlı sürümler, kabul edilen sürümden sipariş ----
 
-export const TEKLIF_DURUMLARI = ['yeni', 'verildi', 'revizyon', 'kabul', 'red', 'siparis'] as const;
+// 291 a: iskontosu eşiği aşan sürüm müdür onaylayana dek 'onay-bekliyor'da kalır, müşteriye gitmez.
+export const TEKLIF_DURUMLARI = ['yeni', 'onay-bekliyor', 'verildi', 'revizyon', 'kabul', 'red', 'siparis'] as const;
+// Yüzde; bu oranın üstündeki iskonto `siparisler.iskonto-onayla` ister (eşitlik onaysız geçer).
+export const ISKONTO_ONAY_ESIGI = 10;
 export const teklifDurumuSemasi = z.enum(TEKLIF_DURUMLARI);
 
 const ISKONTO = /^\d{1,2}(\.\d{1,2})?$/;
@@ -190,6 +193,7 @@ export const teklifNotGovdesi = z.object({
   not: z.string().trim().min(1, 'Not zorunlu.').max(500, 'En çok 500 karakter.'),
 });
 export const teklifKabulGovdesi = z.object({ ...beklenenSurum, surumNo: z.number().int().min(1).max(99) });
+export const iskontoOnayGovdesi = z.object(beklenenSurum);
 export const kartBaglaGovdesi = z.object({ ...beklenenSurum, malzemeNo: z.number().int().positive() });
 export const siparisDonusumGovdesi = z.object({
   ...beklenenSurum,
@@ -235,6 +239,9 @@ export const teklifSurumuSemasi = z.object({
   // İskontolu birim fiyat sipariş satırına giden fiyattır (dört ondalık); tutar iki ondalık.
   fiyatlar: z.array(z.object({ satirId: z.number().int(), birimFiyat: ondalikMetinSemasi, iskontoluFiyat: ondalikMetinSemasi, tutar: ondalikMetinSemasi })),
   toplam: ondalikMetinSemasi,
+  // 291 a: eşiği aşan iskontoyu onaylayan ve anı; onay gerekmeyen ya da bekleyen sürümde null.
+  iskontoOnaylayan: z.string().nullable(),
+  iskontoOnayAni: zamanSemasi.nullable(),
 });
 
 export const teklifSemasi = z.object({

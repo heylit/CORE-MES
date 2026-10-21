@@ -9,8 +9,12 @@ export const SIPARIS_DURUMU: Record<SiparisDurumu, { etiket: string; ton: RozetT
   iptal: { etiket: 'İptal', ton: 'hata' },
 };
 
+// 291 a: sözleşmedeki ISKONTO_ONAY_ESIGI (istemci sözleşmeden değer ithal etmez); sınırı sunucu uygular, ekran yalnız haber verir.
+export const ISKONTO_ONAY_ESIGI = 10;
+
 export const TEKLIF_DURUMU: Record<TeklifDurumu, { etiket: string; ton: RozetTonu }> = {
   yeni: { etiket: 'Fiyat bekliyor', ton: 'uyari' },
+  'onay-bekliyor': { etiket: 'İskonto onayı bekliyor', ton: 'uyari' },
   verildi: { etiket: 'Müşteride', ton: 'bilgi' },
   revizyon: { etiket: 'Revizyon istendi', ton: 'uyari' },
   kabul: { etiket: 'Kabul edildi', ton: 'tamam' },
@@ -32,6 +36,7 @@ export const SIPARIS_SEKMELERI: readonly Sekme<SiparisSekmesi>[] = [
 export const TEKLIF_SEKMELERI: readonly Sekme<TeklifSekmesi>[] = [
   { anahtar: 'tumu', baslik: 'Tümü' },
   { anahtar: 'yeni', baslik: TEKLIF_DURUMU.yeni.etiket },
+  { anahtar: 'onay-bekliyor', baslik: TEKLIF_DURUMU['onay-bekliyor'].etiket },
   { anahtar: 'verildi', baslik: TEKLIF_DURUMU.verildi.etiket },
   { anahtar: 'revizyon', baslik: TEKLIF_DURUMU.revizyon.etiket },
   { anahtar: 'kabul', baslik: TEKLIF_DURUMU.kabul.etiket },

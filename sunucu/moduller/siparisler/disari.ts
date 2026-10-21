@@ -16,5 +16,5 @@ export { siparisOnaylandiDinle } from './siparis-olaylari.ts';
 export type { SiparisOnaylandiDinleyicisi, SiparisOnaylandiOlayi } from './siparis-olaylari.ts';
 // Teklif (soru 148): okuma, talep, sürüm, kabul, revizyon ya da red ve siparişe dönüşüm; hepsi siparisler.yaz.
 export {
-  kabulEt, notluGecis, siparisDonustur, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle, teklifListesi,
+  iskontoOnayla, kabulEt, notluGecis, siparisDonustur, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle, teklifListesi,
 } from './teklif-servis.ts';

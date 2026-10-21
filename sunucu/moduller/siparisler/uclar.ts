@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  durumGovdesi, idParametresi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  durumGovdesi, idParametresi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, teklifAyrintiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi,
@@ -158,6 +158,16 @@ export const uclar = [
     govde: teklifNotGovdesi,
     cevap: teklifAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.notluGecis(db, kullanici, parametre.id, 'red', govde)),
+  }),
+  // 291 a: eşiği aşan iskontoyu yalnız müdür onaylar; yazma işlemi tek başına yetmez.
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklifler/:id/iskonto-onayla',
+    yetki: 'siparisler.iskonto-onayla',
+    parametre: idParametresi,
+    govde: iskontoOnayGovdesi,
+    cevap: teklifAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => teklifCevabi(kullanici)(teklif.iskontoOnayla(db, kullanici, parametre.id, govde)),
   }),
   uc({
     yontem: 'POST',

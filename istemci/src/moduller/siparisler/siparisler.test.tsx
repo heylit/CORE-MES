@@ -49,6 +49,7 @@ const SURUM_1 = {
   surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
   olusturma: '2026-10-02T09:00:00+03:00',
   fiyatlar: [{ satirId: 11, birimFiyat: '10.0000', iskontoluFiyat: '9.0000', tutar: '360.00' }], toplam: '360.00',
+  iskontoOnaylayan: null, iskontoOnayAni: null,
 };
 const TEKLIF_VERILDI = { ...TEKLIF, satirlar: [TEKLIF_SATIR], surumler: [SURUM_1] } satisfies TeklifAyrintisi;
 const TEKLIF_YENI = { ...TEKLIF, durum: 'yeni', sonSurumNo: null, satirlar: [TEKLIF_SATIR], surumler: [] } satisfies TeklifAyrintisi;
@@ -667,6 +668,34 @@ describe('Teklifler', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/kabul', govde: { surum: 4, surumNo: 1 } });
     expect(await screen.findByRole('button', { name: 'Satış siparişine dönüştür' })).toBeTruthy();
     expect(screen.getByText('Müşteri sürüm 1 teklifini kabul etti')).toBeTruthy();
+  });
+
+  it('291 a: iskonto onayı bekleyen teklifte yazar onaylayamaz; müdür onaylar, teklif müşteriye gider', async () => {
+    const bekleyen = { ...TEKLIF_VERILDI, durum: 'onay-bekliyor', surumler: [{ ...SURUM_1, iskontoOrani: '15.00' }] } satisfies TeklifAyrintisi;
+    const onayli = {
+      ...bekleyen, durum: 'verildi', surum: 5, surumler: [{ ...bekleyen.surumler[0]!, iskontoOnaylayan: 'Deneme Mudur', iskontoOnayAni: '2026-10-20T09:00:00+03:00' }],
+    } satisfies TeklifAyrintisi;
+    const yaniti = (yontem: string, yol: string) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, bekleyen);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/iskonto-onayla') return json(200, onayli);
+      return undefined;
+    };
+    sunucuKur(YAZAR, yaniti);
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('İskonto onayı bekliyor', { selector: 'strong' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İskontoyu onayla' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Müşteri kabulünü kaydet' })).toBeNull();
+    cleanup();
+    const MUDUR: Kullanici = { id: 5, ad: 'Deneme Mudur', islemler: [...KOK, 'siparisler.iskonto-onayla'] };
+    const istekler = sunucuKur(MUDUR, yaniti);
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'İskontoyu onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'İskontoyu onayla' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/iskonto-onayla', govde: { surum: 4 } });
+    expect(await screen.findByText('İskonto onayı: Deneme Mudur')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İskontoyu onayla' })).toBeNull();
   });
 
   it('revizyon ve red notsuz gitmez; notla gövdede gider', async () => {

@@ -13,6 +13,8 @@ const useIslemVar = (islem: Islem): boolean => (useOturum().data?.islemler ?? []
 // Düğmeler yalnız işlemi olana görünür; asıl denetim ve durum kuralı sunucudadır, reddi ekranda yazılır.
 export const useYazabilir = (): boolean => useIslemVar('siparisler.yaz');
 export const useOnaylayabilir = (): boolean => useIslemVar('siparisler.onayla');
+// 291 a: eşiği aşan teklif iskontosunu yalnız müdür onaylar.
+export const useIskontoOnaylar = (): boolean => useIslemVar('siparisler.iskonto-onayla');
 // 180: fiyat, tutar ve teklif sürümü yalnız fiyatı görene; sunucu da bu alanları boş döner.
 export const useFiyatGorur = (): boolean => useIslemVar('siparisler.fiyat-oku');
 // 195 a: elle çarpanı plan.yaz 2'ye, siparisler.onayla 3'e kadar verir; sınırı sunucu denetler, ekran yalnız uyarır.
