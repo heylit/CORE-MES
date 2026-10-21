@@ -4,7 +4,7 @@ import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
   duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi, siparisNo,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
-  surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
+  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
 } from './kurallar.ts';
 
 describe('siparisler kuralları (saf)', () => {
@@ -83,6 +83,12 @@ describe('teklif kuralları (saf)', () => {
     assert.equal(teklifGecisReddi('onay-bekliyor', 'revizyon'), 'Teklif durumu "iskonto onayı bekliyor"; revizyon istenemez.');
     assert.equal(teklifGecisReddi('onay-bekliyor', 'surum'), null);
     assert.equal(teklifGecisReddi('onay-bekliyor', 'red'), null);
+  });
+
+  test('TKL-12 (293) dört göz açıkken sürümü veren onaylayamaz; kapalıyken ya da başkası onaylar', () => {
+    assert.equal(dortGozReddi(true, 7, 7), 'Dört göz kuralı açık: kendi verdiğiniz sürümün iskontosunu başka bir yetkili onaylamalı.');
+    assert.equal(dortGozReddi(true, 7, 8), null);
+    assert.equal(dortGozReddi(false, 7, 7), null);
   });
 
   test('TKL-06 kartsız satır siparişe dönüşmez; reddedilmiş ve dönüşmüş teklife kart bağlanmaz', () => {

@@ -105,6 +105,11 @@ export function surumHedefi(iskontoOrani: string): TeklifDurumu {
   return Number(iskontoOrani) > ISKONTO_ONAY_ESIGI ? 'onay-bekliyor' : 'verildi';
 }
 
+// 293: ayar açıkken sürümü veren kişi kendi iskontosunu onaylayamaz; kapalıyken onay yetkisi yeter.
+export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number): string | null {
+  return acik && surumuVeren === onaylayan ? 'Dört göz kuralı açık: kendi verdiğiniz sürümün iskontosunu başka bir yetkili onaylamalı.' : null;
+}
+
 export function teklifGecisReddi(durum: TeklifDurumu, komut: TeklifKomutu): string | null {
   return TEKLIF_GECISLERI[komut].kaynak.includes(durum) ? null : `Teklif durumu "${TEKLIF_DURUM_ADI[durum]}"; ${TEKLIF_KOMUT_ADI[komut]}.`;
 }

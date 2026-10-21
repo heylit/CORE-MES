@@ -8,13 +8,14 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
+import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, talepDuzenlemeReddi,
-  surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
+  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -151,6 +152,9 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
 export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g: { surum: number }): Promise<TeklifAyrintisi> {
   const mevcut = await kilitle(db, id);
   gecisDenetle(mevcut.durum, 'iskonto-onay');
+  const veren = await sorgular.sonSurumuVeren(db, id);
+  const ret = veren === null ? null : dortGozReddi(await sistemAyariOku(db, 'siparisler.iskonto-dort-goz'), veren, kullanici.id);
+  if (ret !== null) throw gecersiz(ret);
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: teklifHedefi('iskonto-onay'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));

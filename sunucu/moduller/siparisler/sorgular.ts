@@ -365,6 +365,12 @@ export function teklifSurumleri(db: Db, teklifId: number): Promise<TeklifSurumSa
   );
 }
 
+export async function sonSurumuVeren(db: Db, teklifId: number): Promise<number | null> {
+  const [s] = await db.sorgu<{ olusturan_id: number }>(
+    'SELECT olusturan_id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [teklifId]);
+  return s?.olusturan_id ?? null;
+}
+
 export async function iskontoOnayiEkle(db: Db, teklifId: number, kisiId: number): Promise<void> {
   await db.sorgu(
     `INSERT INTO siparisler_teklif_iskonto_onayi (surum_id, onaylayan_id)

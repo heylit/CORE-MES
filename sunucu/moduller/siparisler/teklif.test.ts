@@ -296,4 +296,30 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     r = await komut(r, 'reddet', { not: 'Müdür onaylamadı' });
     assert.equal(r.durum, 'red');
   });
+
+  test('TKL-12 (293) dört göz açıkken sürümü veren kendi iskontosunu onaylayamaz (422); başka yetkili onaylar; kapalıyken veren de onaylar', async () => {
+    const mudur = (await girisYap('mudur')).cerez;
+    const ayarla = async (deger: boolean) => {
+      const c = await gonder(yonetici, '/ayarlar/siparisler.iskonto-dort-goz/degistir', { deger });
+      assert.equal(c.statusCode, 200, c.body);
+    };
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t), iskontoOrani: '15' });
+    t = await komut(t, 'iskonto-onayla', {});
+    assert.equal(t.durum, 'verildi');
+
+    await ayarla(true);
+    try {
+      let u = await teklifAc();
+      u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u), iskontoOrani: '15' });
+      const ret = await gonder(yonetici, `/siparisler/teklifler/${u.id}/iskonto-onayla`, { surum: u.surum });
+      assert.equal(ret.statusCode, 422, ret.body);
+      assert.match(ret.body, /Dört göz kuralı açık/);
+      const c = await gonder(mudur, `/siparisler/teklifler/${u.id}/iskonto-onayla`, { surum: u.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      assert.equal(c.json<TeklifAyrintisi>().durum, 'verildi');
+    } finally {
+      await ayarla(false);
+    }
+  });
 });
