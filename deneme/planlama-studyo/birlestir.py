@@ -58,6 +58,8 @@ out=out.replace("ic('chevron-down', 'k')","ic('down', 'k')")
 for bad in ['sPano','sCizelge','sCozucu(','opPaneli','tercih']:
     if bad in out: print('KALDI:',bad,[m.start() for m in re.finditer(bad,out)][:5])
 import re as _re, collections as _c
+# Ufuk sayfası (karar 58 a) en sona eklenir: tekEylem ve sayfa kaydını sarar, Yıllık planın ayarını okur
+out=out+P('zz39-ufuk.js')+'\n'
 _ad=_c.Counter(_re.findall(r'^(?:async )?(?:function|const|let) ([A-Za-z0-9_$]+)', out, _re.M))
 _cift=[k for k,v in _ad.items() if v>1]
 assert not _cift, 'ayni ad iki kez tanimli: '+', '.join(_cift)
