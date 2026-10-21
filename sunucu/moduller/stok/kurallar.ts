@@ -837,3 +837,10 @@ export function kisiKoduEngeli(sonSn: number, simdiSn: number, imzaDogru: boolea
   if (sonSn < simdiSn) return 'Kişi kodunun süresi geçti; karşıdakinden ekrandaki yeni kodu göstermesini isteyin.';
   return null;
 }
+
+// DEP-64 (372 a, 373 a): Malzemeler ve Hizmetler'in kendi etiketi QR'a "MK:<stok kodu>" yazar; ortak sözlük bu öneki tanımaz. Stok kodu
+// bu önekten çıkarılır, kart no'ya Malzemeler çevirir; önek yoksa ya da gövde boşsa null.
+export function katalogEtiketiStokKodu(ham: string): string | null {
+  const p = /^\s*MK\s*:\s*(\S+)\s*$/i.exec(ham);
+  return p ? p[1]!.toUpperCase() : null;
+}

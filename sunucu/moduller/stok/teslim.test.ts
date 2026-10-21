@@ -383,6 +383,22 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal((await istek('sevkiyat', 'GET', '/stok/teslim-kutusu/kod-coz?kod=KABUL')).durum, 403, 'stok.istek olmayan okutamaz');
     assert.equal((await istek('oturumsuz', 'GET', '/stok/teslim-kutusu/kod-coz?kod=KABUL')).durum, 401);
   });
+  test('DEP-64 katalog etiketi: MK:<stok kodu> kartın kendisini çözer (küçük harf ve boşlukla da); bilinmeyen stok kodu ve boş MK tanınmaz', async () => {
+    const h = await kart('hammadde');
+    await malKabul(h, '4');
+    const stokKodu = (await o().sahip.tek<{ kod: string }>('SELECT stok_kodu AS kod FROM malzeme_katalog_karti WHERE no = $1', [h]))!.kod;
+    const coz = async (kod: string) => {
+      const c = await istek<OkutCozCevabi & Hata>('depo', 'GET', `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return okutCozCevabi.parse(c.govde);
+    };
+    for (const kod of [`MK:${stokKodu}`, ` mk: ${stokKodu.toLowerCase()} `]) {
+      const m = await coz(kod);
+      assert.deepEqual(m.tur === 'malzeme' ? [m.malzeme.id, m.parti, m.yerler.map((y) => [y.tur, y.miktar])] : m, [h, null, [['kabul', '4.000']]], kod);
+    }
+    assert.deepEqual(await coz('MK:YOK-00000'), { tur: 'bilinmiyor', kod: 'MK:YOK-00000' });
+    assert.deepEqual(await coz('MK:'), { tur: 'bilinmiyor', kod: 'MK:' });
+  });
 
   test('Akış A provası D1: iş kutusu teslim bekleyen isteği depo işlemi olana sayar, yolda teslimi olanı saymaz; depo işlemi olmayana null', async () => {
     const h = await kart('hammadde');

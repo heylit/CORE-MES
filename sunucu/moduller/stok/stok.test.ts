@@ -950,6 +950,11 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(m.govde.toplam, '2');
     assert.equal((await depo<{ tur: string }>('GET', `/stok/kod-coz?kod=${k}`)).govde.tur, 'malzeme');
     assert.equal((await depo<{ tur: string }>('GET', '/stok/kod-coz?kod=YOK-999')).govde.tur, 'bilinmiyor');
+    // DEP-64: Malzemeler'in kendi etiketi stok kodunu taşır.
+    const stokKodu = (await o().sahip.tek<{ kod: string }>('SELECT stok_kodu AS kod FROM malzeme_katalog_karti WHERE no = $1', [k]))!.kod;
+    const mk = await depo<{ tur: string; ozet: { id: number } }>('GET', `/stok/kod-coz?kod=${encodeURIComponent(`MK:${stokKodu}`)}`);
+    assert.deepEqual([mk.govde.tur, mk.govde.ozet.id], ['malzeme', k]);
+    assert.equal((await depo<{ tur: string }>('GET', '/stok/kod-coz?kod=MK:YOK-00000')).govde.tur, 'bilinmiyor');
   });
 
   test('#1060 lot etiketi ve LOT okutma: etiket verisi okuma yetkisiyle gelir; LOT: kodu o lotu çözer, düşüm o lottan olur; bilinmeyen lot tanınmaz', async () => {
