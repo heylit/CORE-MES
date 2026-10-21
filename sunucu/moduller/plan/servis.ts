@@ -742,11 +742,13 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
   const satirlar = anahtar.size ? await s.canliYerlesimleri(db, [...anahtar.keys()]) : [];
   // Elle sıranın düşüp düşmediği rota istasyonuna bakar; bağlam pahalı, yalnız istasyonu kayıtlı elle sıra varsa kurulur.
   const b = satirlar.some((y) => y.elleSira !== null && (y.elleIstasyonId ?? null) !== null) ? await baglamKur(db, null, null) : null;
-  // Bölünmüş işin her parçası kendi makinesinin kuyruğunda ayrı iştir; elle sıra ve elle kaynak parçanındır.
+  const fiili = fiiliKaynaklar(planlanacakIsler);
+  // Bölünmüş işin her parçası kendi makinesinin kuyruğunda ayrı iştir; elle sıra ve elle kaynak parçanındır. Çalışan iş, plan ekranındaki
+  // gibi (kaynakOf), terminalin çalıştırdığı makinededir.
   type KuyrukParcasi = { y: YerlesimSatiri; p: ParcaSatiri | null; kaynak: Kaynak; baslangic: Date; bitis: Date; elleSira: number | null; elleKaynak: boolean };
   const sirali = satirlar.flatMap((y): KuyrukParcasi[] => (bolunmus(y)
     ? y.parcalar!.map((p) => ({ y, p, kaynak: p.kaynak, baslangic: p.baslangic, bitis: p.bitis, elleSira: p.elleSira, elleKaynak: p.elleKaynak }))
-    : [{ y, p: null, kaynak: y.kaynak, baslangic: y.baslangic, bitis: y.bitis, elleSira: y.elleSira, elleKaynak: y.elleKaynak ?? false }]))
+    : [{ y, p: null, kaynak: fiili.get(y.isEmriId) ?? y.kaynak, baslangic: y.baslangic, bitis: y.bitis, elleSira: y.elleSira, elleKaynak: y.elleKaynak ?? false }]))
     .sort((x, z) => x.baslangic.getTime() - z.baslangic.getTime() || x.y.isEmriId - z.y.isEmriId);
   for (const x of sirali) {
     if (x.kaynak.tur !== 'makine') continue;
