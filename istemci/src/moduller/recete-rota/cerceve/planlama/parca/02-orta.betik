@@ -1,0 +1,334 @@
+/* ---------- Genel liste tanımları ---------- */
+const GUN_AD2 = { pzt: 'Pzt', sal: 'Sal', car: 'Çar', per: 'Per', cum: 'Cum', cmt: 'Cmt', paz: 'Paz' };
+const TANIM = {
+  tezgah: {
+    ad: 'Tezgâh', al: () => S.D.tezgahlar, kimlik: 'id',
+    alanlar: () => [
+      { k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1, ipucu: 'Ör. T6' },
+      { k: 'ad', ad: 'Ad', tur: 'metin', zorunlu: 1 },
+      { k: 'grup', ad: 'Grup', tur: 'metin', zorunlu: 1, liste: [...new Set(S.D.tezgahlar.map(t => t.grup))], ipucu: 'Personel yetkinliği bu gruba göre aranır' },
+      { k: 'vardiyalar', ad: 'Çalıştığı vardiyalar', tur: 'cok', secenek: () => S.D.vardiyalar.map(v => [v.id, `${v.id} ${v.bas}-${v.bit}`]), ipucu: 'Boş: fabrikanın bütün açık vardiyaları' },
+      { k: 'verim', ad: 'Verim', tur: 'sayi', min: 0.1, max: 3, adim: 0.05, vars: 1, ipucu: '1: çevrim süresi aynen; 1,2: %20 hızlı' },
+      { k: 'opOran', ad: 'Operatör oranı', tur: 'sayi', min: 0, max: 1, adim: 0.1, vars: 1, ipucu: '0,5: bir operatör iki tezgâha bakar' },
+      { k: 'isiksiz', ad: 'Işıksız çalışır (vardiya dışında da işler)', tur: 'evet' },
+      { k: 'ucret', ad: 'Saat ücreti (TL)', tur: 'sayi', min: 0 },
+      { k: 'arizaGun', ad: 'Ortalama arıza aralığı (gün)', tur: 'sayi', min: 0 },
+      { k: 'onarimSaat', ad: 'Ortalama onarım (sa)', tur: 'sayi', min: 0 },
+    ],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['ad', 'Ad'], ['grup', 'Grup', x => rozet(x.grup, 'pasif')], ['v', 'Vardiya', x => (x.vardiyalar && x.vardiyalar.length ? x.vardiyalar.join(', ') : 'hepsi') + (x.isiksiz ? ' · ışıksız' : '')], ['verim', 'Verim', x => sayi(x.verim ?? 1, 2), 1], ['opOran', 'Operatör', x => sayi(x.opOran ?? 1, 2), 1], ['ucret', 'TL/sa', x => sayi(x.ucret, 0), 1]],
+    silKontrol: x => { const u = S.D.urunler.filter(u => u.rota.some(o => (o.tezgahlar || []).some(t => t.id === x.id))); return u.length ? `${x.id} şu ürünlerin rotasında: ${u.map(z => z.id).join(', ')}. Önce rotadan çıkarın.` : null; },
+  },
+  personel: {
+    ad: 'Personel', al: () => S.D.personel, kimlik: 'id',
+    alanlar: () => [
+      { k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1 },
+      { k: 'ad', ad: 'Ad (uydurma)', tur: 'metin', zorunlu: 1 },
+      { k: 'vardiya', ad: 'Vardiya', tur: 'secim', zorunlu: 1, secenek: () => S.D.vardiyalar.map(v => [v.id, `${v.id} ${v.bas}-${v.bit}`]) },
+      { k: 'gruplar', ad: 'Yetkinlik (tezgâh grupları)', tur: 'cok', secenek: () => [...new Set(S.D.tezgahlar.map(t => t.grup))].map(g => [g, g]) },
+      { k: 'ayar', ad: 'Ayar yapabilir (ayarcı)', tur: 'evet' },
+    ],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['ad', 'Ad'], ['vardiya', 'Vardiya'], ['gruplar', 'Yetkinlik', x => `<span class="pm-cipler">${(x.gruplar || []).map(g => `<span class="pm-cip">${esc(g)}</span>`).join('')}</span>`], ['ayar', 'Ayarcı', x => x.ayar ? rozet('Ayarcı', 'tamam') : '—']],
+    silKontrol: () => null,
+  },
+  vardiya: {
+    ad: 'Vardiya', al: () => S.D.vardiyalar, kimlik: 'id',
+    alanlar: () => [{ k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1 }, { k: 'bas', ad: 'Başlangıç', tur: 'saat', zorunlu: 1 }, { k: 'bit', ad: 'Bitiş', tur: 'saat', zorunlu: 1, ipucu: 'Gece vardiyası ertesi gün biter' }],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['bas', 'Başlangıç'], ['bit', 'Bitiş'], ['s', 'Süre', x => { let h = hm(x.bit) - hm(x.bas); if (h <= 0) h += 24; return saat(h); }, 1]],
+    silKontrol: x => { const p = S.D.personel.filter(p => p.vardiya === x.id).length; return p ? `${p} personel bu vardiyada. Önce personeli taşıyın.` : null; },
+  },
+  malzeme: {
+    ad: 'Malzeme', al: () => S.D.malzemeler, kimlik: 'kod',
+    alanlar: () => [{ k: 'kod', ad: 'Kod', tur: 'metin', zorunlu: 1 }, { k: 'ad', ad: 'Ad', tur: 'metin', zorunlu: 1 }, { k: 'birim', ad: 'Birim', tur: 'metin', zorunlu: 1, liste: ['kg', 'adet', 'm'] }, { k: 'stok', ad: 'Serbest stok', tur: 'sayi', min: 0, zorunlu: 1 }, { k: 'birimFiyat', ad: 'Birim fiyat (TL)', tur: 'sayi', min: 0 }, { k: 'muayeneGun', ad: 'Giriş muayenesi (gün)', tur: 'sayi', min: 0, adim: 0.5 }, { k: 'tedarikGun', ad: 'Tedarik süresi (gün)', tur: 'sayi', min: 0 }],
+    sutunlar: [['kod', 'Kod', x => `<b class="mono">${esc(x.kod)}</b>`], ['ad', 'Ad'], ['stok', 'Stok', x => `${sayi(x.stok, 1)} ${esc(x.birim)}`, 1], ['birimFiyat', 'TL/birim', x => sayi(x.birimFiyat, 2), 1], ['tedarikGun', 'Tedarik', x => x.tedarikGun != null ? x.tedarikGun + ' gün' : '—', 1]],
+    silKontrol: x => { const s = S.D.siparisler.filter(s => (s.malzeme || []).some(m => m.kod === x.kod)); return s.length ? `${s.length} sipariş bu malzemeyi kullanıyor.` : null; },
+  },
+  satinalma: {
+    ad: 'Satın alma', al: () => S.D.satinalma, kimlik: null,
+    alanlar: () => [{ k: 'kod', ad: 'Malzeme', tur: 'secim', zorunlu: 1, secenek: () => S.D.malzemeler.map(m => [m.kod, `${m.kod} · ${m.ad}`]) }, { k: 'miktar', ad: 'Miktar', tur: 'sayi', min: 0, zorunlu: 1 }, { k: 'gelis', ad: 'Söz verilen geliş', tur: 'tarihsaat', zorunlu: 1 }, { k: 'tedarikci', ad: 'Tedarikçi', tur: 'secim', secenek: () => (S.D.tedarikciler || []).map(t => [t.id, t.ad]) }],
+    sutunlar: [['kod', 'Malzeme', x => `<b class="mono">${esc(x.kod)}</b>`], ['miktar', 'Miktar', x => sayi(x.miktar, 1), 1], ['gelis', 'Geliş'], ['tedarikci', 'Tedarikçi', x => esc(((S.D.tedarikciler || []).find(t => t.id === x.tedarikci) || {}).ad || x.tedarikci || '—')]],
+    silKontrol: () => null,
+  },
+  tedarikci: {
+    ad: 'Tedarikçi', al: () => (S.D.tedarikciler = S.D.tedarikciler || []), kimlik: 'id',
+    alanlar: () => [{ k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1 }, { k: 'ad', ad: 'Ad (uydurma)', tur: 'metin', zorunlu: 1 }, { k: 'ortGecikmeGun', ad: 'Ortalama gecikme (gün)', tur: 'sayi', min: 0, adim: 0.5, vars: 0 }, { k: 'sapmaGun', ad: 'Gecikme sapması (gün)', tur: 'sayi', min: 0, adim: 0.5, vars: 0 }],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['ad', 'Ad'], ['ortGecikmeGun', 'Ort. gecikme', x => sayi(x.ortGecikmeGun, 1) + ' gün', 1]],
+    silKontrol: x => S.D.satinalma.some(p => p.tedarikci === x.id) ? 'Bu tedarikçiye bağlı satın alma var.' : null,
+  },
+  fasoncu: {
+    ad: 'Fasoncu', al: () => (S.D.fasoncular = S.D.fasoncular || []), kimlik: 'id',
+    alanlar: () => [{ k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1 }, { k: 'ad', ad: 'Ad (uydurma)', tur: 'metin', zorunlu: 1 }, { k: 'kapasite', ad: 'Aynı anda iş', tur: 'sayi', min: 1, zorunlu: 1, vars: 1 }, { k: 'sureGun', ad: 'Süre (gün)', tur: 'sayi', min: 0.5, adim: 0.5, zorunlu: 1, vars: 1 }, { k: 'cikisGunleri', ad: 'Çıkış günleri', tur: 'cok', secenek: () => GUNLER.map(g => [g, GUN_AD2[g]]) }, { k: 'cikisSaat', ad: 'Çıkış saati', tur: 'sayi', min: 0, max: 23, vars: 16 }, { k: 'fiyat', ad: 'Adet fiyatı (TL)', tur: 'sayi', min: 0 }],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['ad', 'Ad'], ['kapasite', 'Kapasite', x => x.kapasite, 1], ['sureGun', 'Süre', x => sayi(x.sureGun, 1) + ' gün', 1], ['cikis', 'Çıkış', x => (x.cikisGunleri || []).map(g => GUN_AD2[g]).join(', ') + ' · ' + (x.cikisSaat ?? 16) + ':00']],
+    silKontrol: x => { const u = S.D.urunler.filter(u => u.rota.some(o => o.fason === x.id)); return u.length ? `${u.map(z => z.id).join(', ')} rotasında kullanılıyor.` : null; },
+  },
+  aparat: {
+    ad: 'Aparat', al: () => (S.D.aparatlar = S.D.aparatlar || []), kimlik: 'id',
+    alanlar: () => [{ k: 'id', ad: 'Kod', tur: 'metin', zorunlu: 1 }, { k: 'ad', ad: 'Ad', tur: 'metin', zorunlu: 1 }, { k: 'adet', ad: 'Adet', tur: 'sayi', min: 1, zorunlu: 1, vars: 1 }],
+    sutunlar: [['id', 'Kod', x => `<b class="mono">${esc(x.id)}</b>`], ['ad', 'Ad'], ['adet', 'Adet', x => x.adet, 1]],
+    silKontrol: x => { const u = S.D.urunler.filter(u => u.rota.some(o => o.aparat === x.id)); return u.length ? `${u.map(z => z.id).join(', ')} rotasında kullanılıyor.` : null; },
+  },
+  siparis: {
+    ad: 'Sipariş', al: () => S.D.siparisler, kimlik: 'id',
+    alanlar: () => [
+      { k: 'id', ad: 'Sipariş no', tur: 'metin', zorunlu: 1, ipucu: 'Ör. SP-301' },
+      { k: 'urun', ad: 'Ürün', tur: 'secim', zorunlu: 1, secenek: () => S.D.urunler.map(u => [u.id, `${u.id} · ${u.ad}`]) },
+      { k: 'ad', ad: 'Açıklama (uydurma)', tur: 'metin' },
+      { k: 'adet', ad: 'Adet', tur: 'sayi', min: 1, zorunlu: 1, tam: 1 },
+      { k: 'termin', ad: 'Termin', tur: 'tarihsaat', zorunlu: 1 },
+      { k: 'oncelik', ad: 'Öncelik', tur: 'secim', zorunlu: 1, secenek: () => [[1, 'Yüksek (ağırlık 4)'], [2, 'Normal (ağırlık 2)'], [3, 'Düşük (ağırlık 1)']], sayisal: 1, vars: 2 },
+      { k: 'serbest', ad: 'Serbest bırakma', tur: 'tarihsaat', ipucu: 'Boş: hemen başlayabilir' },
+      { k: 'gelir', ad: 'Gelir (TL)', tur: 'sayi', min: 0 },
+      { k: 'malzeme', ad: 'Adet başına malzeme', tur: 'malzeme' },
+    ],
+    sutunlar: [],
+    silKontrol: () => null,
+  },
+};
+
+/* Genel tablo: sütunlar tanımdan, satır tıklanınca düzenleme çekmecesi açılır. */
+function listeTablosu(tur, liste, ek = {}) {
+  const T = TANIM[tur]; const yaz = yetkili('veri.yaz');
+  const satirlar = liste.map((x, i) => {
+    const anahtar = T.kimlik ? x[T.kimlik] : i;
+    return `<tr class="tc-tablo-secilir" data-act="duzenle" data-tur="${tur}" data-v="${esc(anahtar)}">${T.sutunlar.map(([k, b, f, num]) => td(b, f ? f(x) : esc(x[k] ?? '—'), num ? 'pm-num' : '')).join('')}${td('', `<div class="pm-dugmeler">${yaz ? dugme('', 'sil', { simge: 'trash', hayalet: true, ad: 'Sil', veri: `data-tur="${tur}" data-v="${esc(anahtar)}"` }) : ''}</div>`)}</tr>`;
+  }).join('');
+  return `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr>${T.sutunlar.map(([, b, , num]) => `<th${num ? ' class="pm-num"' : ''}>${b}</th>`).join('')}<th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${satirlar || `<tr><td colspan="${T.sutunlar.length + 1}" class="tc-tablo-yok">Kayıt yok.</td></tr>`}</tbody></table></div>`;
+}
+function bul(tur, v) {
+  const T = TANIM[tur]; const l = T.al();
+  return T.kimlik ? l.find(x => String(x[T.kimlik]) === String(v)) : l[+v];
+}
+function formHtml(tur, x) {
+  const T = TANIM[tur]; const yeni = !x;
+  return `<form class="tc-form" data-form="${tur}" data-v="${esc(yeni ? '' : (T.kimlik ? x[T.kimlik] : T.al().indexOf(x)))}" novalidate>${T.alanlar().map(a => alanHtml(a, x ? x[a.k] : a.vars, yeni, T)).join('')}<p class="pm-form-hata tc-form-tam" data-hata hidden></p></form>`;
+}
+function alanHtml(a, v, yeni, T) {
+  const id = 'f-' + a.k;
+  const etiket = `<span class="tc-alan-etiket">${esc(a.ad)}${a.zorunlu ? ' <span class="tc-alan-zorunlu">*</span>' : ''}</span>`;
+  const alt = a.ipucu ? `<span class="tc-alan-alt">${esc(a.ipucu)}</span>` : '';
+  const kilitli = !yeni && T && a.k === T.kimlik;
+  if (a.tur === 'evet') return `<label class="tc-isaret tc-form-tam"><input type="checkbox" name="${a.k}" ${v ? 'checked' : ''}> ${esc(a.ad)}</label>`;
+  if (a.tur === 'cok') { const s = new Set(v || []); return `<fieldset class="tc-alan tc-form-tam" style="border:0;padding:0;margin:0"><legend class="tc-alan-etiket">${esc(a.ad)}</legend><div class="pm-secimler">${a.secenek().map(([k, ad]) => `<label><input type="checkbox" name="${a.k}" value="${esc(k)}" ${s.has(k) ? 'checked' : ''}> ${esc(ad)}</label>`).join('')}</div>${alt}</fieldset>`; }
+  if (a.tur === 'secim') return `<label class="tc-alan">${etiket}<select class="tc-alan-kutu" name="${a.k}" id="${id}" ${a.sayisal ? 'data-sayisal' : ''}><option value="">Seçin</option>${a.secenek().map(([k, ad]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(ad)}</option>`).join('')}</select>${alt}</label>`;
+  if (a.tur === 'malzeme') {
+    const satir = (m = {}) => `<div class="pm-alt-satir pm-alt-satir-2" data-satir><select class="tc-alan-kutu" name="mkod" aria-label="Malzeme"><option value="">Malzeme</option>${S.D.malzemeler.map(z => `<option value="${esc(z.kod)}" ${m.kod === z.kod ? 'selected' : ''}>${esc(z.kod)} · ${esc(z.ad)}</option>`).join('')}</select><input class="tc-alan-kutu" type="number" step="0.01" min="0" name="mmiktar" value="${m.miktar ?? ''}" placeholder="Miktar" aria-label="Adet başına miktar"><button type="button" class="tc-dugme tc-dugme-simge tc-dugme-hayalet" data-act="satir-sil" aria-label="Satırı sil">${ic('x', 'k')}</button></div>`;
+    return `<div class="tc-alan tc-form-tam"><span class="tc-alan-etiket">${esc(a.ad)}</span><div class="pm-satirlar" data-malzemeler>${(v || []).map(satir).join('')}</div><template data-sablon>${satir()}</template><button type="button" class="tc-dugme tc-dugme-kucuk pm-satir-ekle" data-act="satir-ekle">${ic('plus', 'k')}Malzeme ekle</button></div>`;
+  }
+  const tip = a.tur === 'sayi' ? 'number' : a.tur === 'tarihsaat' ? 'datetime-local' : a.tur === 'tarih' ? 'date' : a.tur === 'saat' ? 'time' : 'text';
+  const deger = a.tur === 'tarihsaat' ? girdiDT(v) : (v ?? '');
+  const dl = a.liste ? `<datalist id="dl-${a.k}">${a.liste.map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : '';
+  return `<label class="tc-alan">${etiket}<input class="tc-alan-kutu" type="${tip}" name="${a.k}" id="${id}" value="${esc(deger)}" ${a.min != null ? `min="${a.min}"` : ''} ${a.max != null ? `max="${a.max}"` : ''} ${a.tur === 'sayi' ? `step="${a.adim || (a.tam ? 1 : 'any')}"` : ''} ${a.liste ? `list="dl-${a.k}"` : ''} ${kilitli ? 'readonly title="Kod değişmez; yeni kayıt açın"' : ''} ${a.ipucu && tip === 'text' ? `placeholder="${esc(a.ipucu)}"` : ''}>${alt}${dl}</label>`;
+}
+function formOku(form, tur) {
+  const T = TANIM[tur]; const x = {}; const hata = [];
+  for (const a of T.alanlar()) {
+    if (a.tur === 'evet') { x[a.k] = form.querySelector(`[name="${a.k}"]`).checked; continue; }
+    if (a.tur === 'cok') { x[a.k] = [...form.querySelectorAll(`[name="${a.k}"]:checked`)].map(i => i.value); continue; }
+    if (a.tur === 'malzeme') {
+      x[a.k] = [...form.querySelectorAll('[data-satir]')].map(r => ({ kod: r.querySelector('[name="mkod"]').value, miktar: parseFloat(r.querySelector('[name="mmiktar"]').value) })).filter(m => m.kod);
+      for (const m of x[a.k]) if (!(m.miktar > 0)) hata.push(`${m.kod} için miktar girin.`);
+      continue;
+    }
+    const el = form.querySelector(`[name="${a.k}"]`); let v = el.value.trim();
+    if (v === '') { if (a.zorunlu) hata.push(`${a.ad} boş olamaz.`); x[a.k] = null; continue; }
+    if (a.tur === 'sayi') { v = Number(v); if (!isFinite(v)) { hata.push(`${a.ad} sayı olmalı.`); continue; } if (a.min != null && v < a.min) hata.push(`${a.ad} en az ${a.min}.`); if (a.max != null && v > a.max) hata.push(`${a.ad} en çok ${a.max}.`); if (a.tam && !Number.isInteger(v)) hata.push(`${a.ad} tam sayı olmalı.`); }
+    if (a.tur === 'secim' && a.sayisal) v = Number(v);
+    if (a.tur === 'tarihsaat') { v = DTgirdi(v); if (parseT(S.D, v) == null) hata.push(`${a.ad} geçerli bir tarih değil.`); else if (parseT(S.D, v) < 0) hata.push(`${a.ad} planın başlangıcından (${S.D.meta.baslangic}) önce olamaz.`); }
+    x[a.k] = v;
+  }
+  return { x, hata };
+}
+
+/* ---------- Siparişler ---------- */
+function sSiparisler() {
+  const D = S.D, p = S.plan;
+  const f = U.sipFiltre;
+  const J = p ? p.J : {};
+  let l = D.siparisler.slice();
+  if (f === 'gec') l = l.filter(s => J[s.id] && (J[s.id].T == null || J[s.id].T > 0.01));
+  if (f === 'yuksek') l = l.filter(s => s.oncelik === 1);
+  const yaz = yetkili('veri.yaz');
+  const durum = s => { const j = J[s.id]; if (!p) return '—'; if (!j) return rozet('Planda yok', 'pasif'); if (j.T == null) return rozet('Planlanmadı', 'hata'); return j.T > 0.01 ? rozet(saat(j.T) + ' geç', 'hata') : rozet('Zamanında', 'tamam'); };
+  const rows = l.map(s => `<tr class="tc-tablo-secilir" data-act="duzenle" data-tur="siparis" data-v="${esc(s.id)}" data-ara="${esc((s.id + ' ' + s.urun + ' ' + urunAd(s.urun)).toLowerCase())}">${td('Sipariş', `<b class="mono">${esc(s.id)}</b>`)}${td('Ürün', esc(urunAd(s.urun)))}${td('Adet', sayi(s.adet, 0), 'pm-num')}${td('Termin', esc(s.termin || '—'), 'tc-tablo-kirilmaz')}${td('Öncelik', oncelikRozet(s.oncelik))}${td('Serbest', esc(s.serbest || 'hemen'), 'tc-tablo-kirilmaz')}${td('Planlanan bitiş', esc(J[s.id] && J[s.id].C != null ? fmtDT(D, J[s.id].C) : '—'), 'tc-tablo-kirilmaz')}${td('Durum', durum(s))}${td('', `<div class="pm-dugmeler">${p ? dugme('', 'siparis-cizelge', { simge: 'gantt', hayalet: true, ad: 'Çizelgede göster', veri: `data-v="${esc(s.id)}"` }) : ''}${yaz ? dugme('', 'sil', { simge: 'trash', hayalet: true, ad: 'Sil', veri: `data-tur="siparis" data-v="${esc(s.id)}"` }) : ''}</div>`)}</tr>`).join('');
+  return `<div class="pm-sira"><div class="pm-seg" role="group" aria-label="Süzgeç">${[['hepsi', 'Hepsi'], ['gec', 'Gecikenler'], ['yuksek', 'Yüksek öncelik']].map(([k, ad]) => `<button type="button" data-act="sip-filtre" data-v="${k}" aria-pressed="${f === k}">${ad}</button>`).join('')}</div><input class="tc-alan-kutu pm-sira-ara" type="search" placeholder="Sipariş no ya da ürün ara" data-inp="ara-satir" aria-label="Sipariş ara" style="max-width:320px">${dugme('Yeni sipariş', 'yeni', { birincil: true, simge: 'plus', yetki: 'veri.yaz', veri: 'data-tur="siparis"' })}</div>
+  ${kart(`Siparişler <span class="pm-kucuk">${l.length} / ${D.siparisler.length}</span>`, `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sipariş</th><th>Ürün</th><th class="pm-num">Adet</th><th>Termin</th><th>Öncelik</th><th>Serbest</th><th>Planlanan bitiş</th><th>Durum</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${rows || '<tr><td colspan="9" class="tc-tablo-yok">Kayıt yok.</td></tr>'}</tbody></table></div>`)}
+  <p class="pm-kucuk">Öncelik gecikmenin ağırlığıdır: yüksek önceliğin bir saati normalin iki, düşüğün dört saati sayılır. Bir satıra tıklayınca düzenleme açılır.</p>`;
+}
+
+/* ---------- Tezgâh kuyruğu (operatör görünümü) ---------- */
+function sKuyruk() {
+  const D = S.D; const u = kim();
+  const m = u.rol === 'operator' ? u.tezgah : (U.kuyrukM || D.tezgahlar[0].id);
+  const M = D.tezgahlar.find(t => t.id === m) || D.tezgahlar[0];
+  const sec = u.rol === 'operator' ? `<span class="pm-cip">${ic('lock', 'k')} ${esc(M.id)} · ${esc(M.ad)}</span>` : `<select class="tc-alan-kutu" style="width:auto" data-chg="kuyruk-m" aria-label="Tezgâh">${D.tezgahlar.map(t => `<option value="${esc(t.id)}" ${t.id === M.id ? 'selected' : ''}>${esc(t.id)} · ${esc(t.ad)}</option>`).join('')}</select>`;
+  if (!S.plan) return `<div class="pm-sira">${sec}</div><div class="pm-bos">${ic('play', 'b')}<strong>Bu tezgâh için plan yok</strong><span>Planlamacı planı çözünce iş listesi burada görünür.</span></div>`;
+  const cx = cxAl();
+  const ops = Object.values(S.plan.ops).filter(r => r.m === M.id).sort((a, b) => a.S - b.S);
+  const now = 7;
+  const durum = r => r.C <= now ? ['bitti', 'Bitti'] : r.S <= now && now < r.Su ? ['ayar', 'Ayarda'] : r.Su <= now && now < r.C ? ['calisiyor', 'Çalışıyor'] : ['sirada', 'Sırada'];
+  const gunler = {};
+  for (const r of ops) { const d = Math.floor(r.S / 24); (gunler[d] = gunler[d] || []).push(r); }
+  const bolumler = Object.entries(gunler).slice(0, 14).map(([d, l]) => kart(esc(fmtDT(D, d * 24).slice(0, 9)), `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sıra</th><th>Sipariş · adım</th><th class="pm-num">Adet</th><th>Başla</th><th class="pm-num">Ayar</th><th>Bitiş</th><th>Durum</th></tr></thead><tbody>${l.map(r => { const o = cx && cx.byId[r.id]; const [ds, dad] = durum(r); const s = D.siparisler.find(z => z.id === r.job) || {}; return `<tr class="tc-tablo-secilir" data-act="op" data-v="${esc(r.id)}">${td('Sıra', ops.indexOf(r) + 1, 'pm-num')}${td('Sipariş · adım', `<b class="mono">${esc(r.job)}</b> · ${esc(o ? o.k + ' ' + o.ad : r.id)}<br><span class="pm-kucuk">${esc(urunAd(s.urun))}</span>`)}${td('Adet', sayi(s.adet, 0), 'pm-num')}${td('Başla', `<span class="mono">${esc(fmtDT(D, r.S).slice(10))}</span>`)}${td('Ayar', r.su > 0 ? saat(r.su) : '—', 'pm-num')}${td('Bitiş', `<span class="mono">${esc(fmtDT(D, r.C))}</span>`)}${td('Durum', `<span data-durum="${ds}" class="tc-rozet" style="--c:var(--sig)"><i></i>${dad}</span>`)}</tr>`; }).join('')}</tbody></table></div>`, '', `<span class="pm-kucuk">${l.length} iş · ayar ${saat(l.reduce((a, r) => a + r.su, 0))}</span>`)).join('');
+  return `<div class="pm-sira">${sec}<span class="pm-alt">${ops.length} iş planlı. ${u.rol === 'operator' ? 'Bu görünüm yalnız okunur; başlatma ve bitirme uygulamada terminalden yapılır.' : 'Operatörün göreceği liste.'}</span></div>${bolumler || `<p class="pm-alt">Bu tezgâhta planlı iş yok.</p>`}`;
+}
+
+/* ---------- Tezgâhlar ---------- */
+function sTezgahlar() {
+  const l = S.D.tezgahlar;
+  return `<div class="pm-sira"><span class="pm-alt pm-sira-ara">${l.length} tezgâh, ${new Set(l.map(t => t.grup)).size} grup. Tezgâh kodu rotada kullanılır; kod değişmez.</span>${dugme('Yeni tezgâh', 'yeni', { birincil: true, simge: 'plus', yetki: 'veri.yaz', veri: 'data-tur="tezgah"' })}</div>${kart('Tezgâhlar', listeTablosu('tezgah', l))}`;
+}
+
+/* ---------- Ürün ve rota ---------- */
+function sRotalar() {
+  const D = S.D;
+  if (!U.urun || !D.urunler.find(u => u.id === U.urun)) U.urun = D.urunler[0] && D.urunler[0].id;
+  const u = D.urunler.find(x => x.id === U.urun);
+  const liste = `<div class="pm-urunler">${D.urunler.map(x => `<button type="button" class="pm-urun" data-act="urun" data-v="${esc(x.id)}" aria-current="${x.id === U.urun}"><span><b class="mono">${esc(x.id)}</b><br><span class="pm-kucuk">${esc(x.ad)}</span></span><span class="tc-ikinci-sayi">${x.rota.length}</span></button>`).join('')}</div>`;
+  let sag = '<p class="pm-alt">Ürün yok.</p>';
+  if (u) {
+    const ordered = u.rota.slice();
+    const akis = ordered.map((o, i) => {
+      const bag = (o.bag || []).map(([k, t]) => t).join('');
+      const ok = i ? `<span class="pm-ok" data-tip="${(o.bag || []).some(([, t]) => t === 'o') ? 'o' : 'b'}" aria-hidden="true"><i></i>${(o.bag || []).some(([, t]) => t === 'o') ? 'örtüşmeli' : ''}</span>` : '';
+      const ne = o.fason ? 'Fason: ' + (((D.fasoncular || []).find(f => f.id === o.fason) || {}).ad || o.fason) : (o.tezgahlar || []).map(t => t.id).join(' / ');
+      return `${ok}<button type="button" class="pm-adim" data-act="adim" data-v="${esc(o.k)}"><b>${esc(o.k)}</b><span>${esc(o.ad)}</span><small>${esc(ne)}${o.aile ? ' · ' + esc(o.aile) : ''}</small></button>`;
+    }).join('');
+    const satirlar = ordered.map(o => `<tr class="tc-tablo-secilir" data-act="adim" data-v="${esc(o.k)}">${td('Sıra', `<b class="mono">${esc(o.k)}</b>`)}${td('Adım', esc(o.ad))}${td('Tezgâh · çevrim · ayar', o.fason ? rozet('Fason ' + o.fason, 'uyari') : (o.tezgahlar || []).map(t => `<span class="pm-cip">${esc(t.id)} · ${sayi(t.cevrim, 1)} dk · ${sayi(t.ayar, 0)} dk</span>`).join(' '))}${td('Öncül', (o.bag || []).map(([k, t]) => `${esc(k)} ${t === 'o' ? '(örtüşmeli)' : '(bitince)'}`).join(', ') || '—')}${td('Aile', esc(o.aile || '—'))}${td('Ek', [o.aparat ? 'aparat ' + o.aparat : '', o.fai ? 'ilk parça onayı' : '', o.program === false ? 'NC program yok' : '', o.fasonIzin ? 'fasona verilebilir' : ''].filter(Boolean).map(z => `<span class="pm-cip">${esc(z)}</span>`).join(' ') || '—')}${td('', `<div class="pm-dugmeler">${yetkili('veri.yaz') ? dugme('', 'adim-sil', { simge: 'trash', hayalet: true, ad: 'Adımı sil', veri: `data-v="${esc(o.k)}"` }) : ''}</div>`)}</tr>`).join('');
+    const kul = D.siparisler.filter(s => s.urun === u.id).length;
+    sag = kart(`<span class="mono">${esc(u.id)}</span> · ${esc(u.ad)}`, `<div class="pm-dik"><div class="pm-kap"><div class="pm-akis">${akis || '<span class="pm-alt">Rotada adım yok.</span>'}</div></div>
+      <div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sıra</th><th>Adım</th><th>Tezgâh · çevrim · ayar</th><th>Öncül</th><th>Aile</th><th>Ek</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${satirlar || '<tr><td colspan="7" class="tc-tablo-yok">Adım yok.</td></tr>'}</tbody></table></div>
+      <p class="pm-kucuk">${kul} sipariş bu ürünü kullanıyor. Çevrim adet başına dakikadır. Aile, sıraya bağlı ayarı belirler (Ayar matrisi). Örtüşmeli geçişte sonraki adım ilk transfer partisi bitince başlar.</p></div>`,
+      `${dugme('Adım ekle', 'adim-yeni', { simge: 'plus', yetki: 'veri.yaz' })}${dugme('', 'urun-sil', { simge: 'trash', ad: 'Ürünü sil', yetki: 'veri.yaz' })}`);
+  }
+  return `<div class="pm-yan">${kart('Ürünler', liste, dugme('', 'urun-yeni', { simge: 'plus', ad: 'Yeni ürün', yetki: 'veri.yaz' }))}${sag}</div>`;
+}
+function adimFormu(u, o) {
+  const D = S.D; const yeni = !o; o = o || { k: String(((Math.max(0, ...u.rota.map(x => +x.k || 0)) / 10 | 0) + 1) * 10), ad: '', tezgahlar: [], bag: u.rota.length ? [[u.rota[u.rota.length - 1].k, 'b']] : [], aile: '' };
+  const fason = !!o.fason;
+  const tSatir = (t = {}) => `<div class="pm-alt-satir" data-satir><select class="tc-alan-kutu" name="tid" aria-label="Tezgâh"><option value="">Tezgâh</option>${D.tezgahlar.map(m => `<option value="${esc(m.id)}" ${t.id === m.id ? 'selected' : ''}>${esc(m.id)} · ${esc(m.ad)}</option>`).join('')}</select><input class="tc-alan-kutu" type="number" min="0" step="any" name="tcevrim" value="${t.cevrim ?? ''}" placeholder="0" aria-label="Çevrim dakika"><input class="tc-alan-kutu" type="number" min="0" step="any" name="tayar" value="${t.ayar ?? ''}" placeholder="0" aria-label="Ayar dakika"><button type="button" class="tc-dugme tc-dugme-simge tc-dugme-hayalet" data-act="satir-sil" aria-label="Satırı sil">${ic('x', 'k')}</button></div>`;
+  const diger = u.rota.filter(x => x.k !== o.k);
+  const bagMap = Object.fromEntries((o.bag || []).map(([k, t]) => [k, t]));
+  const aileler = [...new Set(D.urunler.flatMap(z => z.rota.map(x => x.aile)).filter(Boolean))];
+  return `<form class="tc-form" data-form="adim" data-v="${esc(yeni ? '' : o.k)}" novalidate>
+    <label class="tc-alan"><span class="tc-alan-etiket">Sıra no <span class="tc-alan-zorunlu">*</span></span><input class="tc-alan-kutu" name="k" value="${esc(o.k)}" ${yeni ? '' : 'readonly'}></label>
+    <label class="tc-alan"><span class="tc-alan-etiket">Adım adı <span class="tc-alan-zorunlu">*</span></span><input class="tc-alan-kutu" name="ad" value="${esc(o.ad)}"></label>
+    <fieldset class="tc-alan tc-form-tam" style="border:0;padding:0;margin:0"><legend class="tc-alan-etiket">Nerede yapılır</legend><div class="pm-secimler"><label><input type="radio" name="tur" value="tezgah" ${fason ? '' : 'checked'} data-chg="adim-tur"> Tezgâhta</label><label><input type="radio" name="tur" value="fason" ${fason ? 'checked' : ''} data-chg="adim-tur"> Fasonda</label></div></fieldset>
+    <div class="tc-alan tc-form-tam" data-bolum="tezgah" ${fason ? 'hidden' : ''}><span class="tc-alan-etiket">Uygun tezgâhlar (biri seçilir)</span><div class="pm-alt-satir pm-kucuk" aria-hidden="true"><span>Tezgâh</span><span>Çevrim dk/adet</span><span>Ayar dk</span><span></span></div><div class="pm-satirlar" data-tezgahlar>${(o.tezgahlar || []).map(tSatir).join('') || tSatir()}</div><template data-sablon>${tSatir()}</template><button type="button" class="tc-dugme tc-dugme-kucuk pm-satir-ekle" data-act="satir-ekle">${ic('plus', 'k')}Alternatif tezgâh</button><span class="tc-alan-alt">Çevrim: adet başına dakika. Ayar: tam ayar dakikası; aile geçişinde matris uygulanır.</span></div>
+    <label class="tc-alan tc-form-tam" data-bolum="fason" ${fason ? '' : 'hidden'}><span class="tc-alan-etiket">Fasoncu</span><select class="tc-alan-kutu" name="fason"><option value="">Seçin</option>${(D.fasoncular || []).map(f => `<option value="${esc(f.id)}" ${o.fason === f.id ? 'selected' : ''}>${esc(f.ad)}</option>`).join('')}</select></label>
+    <fieldset class="tc-alan tc-form-tam" style="border:0;padding:0;margin:0"><legend class="tc-alan-etiket">Öncül adımlar</legend>${diger.length ? `<div class="pm-satirlar">${diger.map(x => `<div class="pm-sira"><label class="tc-isaret"><input type="checkbox" name="bag" value="${esc(x.k)}" ${bagMap[x.k] ? 'checked' : ''}> ${esc(x.k)} ${esc(x.ad)}</label><select class="tc-alan-kutu" style="width:auto" name="bagtip-${esc(x.k)}" aria-label="Geçiş türü"><option value="b" ${bagMap[x.k] !== 'o' ? 'selected' : ''}>bitince</option><option value="o" ${bagMap[x.k] === 'o' ? 'selected' : ''}>örtüşmeli</option></select></div>`).join('')}</div>` : '<span class="pm-alt">İlk adım.</span>'}</fieldset>
+    <label class="tc-alan"><span class="tc-alan-etiket">Aile</span><input class="tc-alan-kutu" name="aile" value="${esc(o.aile || '')}" list="dl-aile" placeholder="Boş: aile yok"><datalist id="dl-aile">${aileler.map(a => `<option value="${esc(a)}">`).join('')}</datalist></label>
+    <label class="tc-alan"><span class="tc-alan-etiket">Aparat</span><select class="tc-alan-kutu" name="aparat"><option value="">Yok</option>${(D.aparatlar || []).map(a => `<option value="${esc(a.id)}" ${o.aparat === a.id ? 'selected' : ''}>${esc(a.ad)} (${a.adet})</option>`).join('')}</select></label>
+    <label class="tc-isaret"><input type="checkbox" name="fai" ${o.fai ? 'checked' : ''}> İlk parça onayı gerekir</label>
+    <label class="tc-isaret"><input type="checkbox" name="programYok" ${o.program === false ? 'checked' : ''}> NC programı henüz hazır değil</label>
+    <label class="tc-isaret tc-form-tam"><input type="checkbox" name="fasonIzin" ${o.fasonIzin ? 'checked' : ''}> Gerekirse talaşlı fasona verilebilir</label>
+    <p class="pm-form-hata tc-form-tam" data-hata hidden></p></form>`;
+}
+
+/* ---------- Takvim ---------- */
+function sTakvim() {
+  const D = S.D; const yaz = yetkili('veri.yaz');
+  const vs = D.vardiyalar;
+  const gunIzgara = `<div class="pm-kap"><table class="pm-izgara"><thead><tr><th scope="col">Vardiya</th>${GUNLER.map(g => `<th scope="col">${GUN_AD2[g]}</th>`).join('')}</tr></thead><tbody>${vs.map(v => `<tr><th scope="row">${esc(v.id)} <span class="pm-kucuk">${esc(v.bas)}-${esc(v.bit)}</span></th>${GUNLER.map(g => `<td><input type="checkbox" aria-label="${GUN_AD2[g]} ${esc(v.id)}" data-chg="calisma" data-g="${g}" data-v="${esc(v.id)}" ${(D.calismaGunleri[g] || []).includes(v.id) ? 'checked' : ''} ${yaz ? '' : 'disabled'}></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const tatil = `<div class="pm-dik"><div class="pm-cipler">${(D.tatiller || []).map(t => `<span class="pm-cip">${esc(t)}${yaz ? `<button type="button" data-act="tatil-sil" data-v="${esc(t)}" aria-label="${esc(t)} tatilini sil">${ic('x', 'k')}</button>` : ''}</span>`).join('') || '<span class="pm-alt">Tatil yok.</span>'}</div>${yaz ? `<div class="pm-sira"><input class="tc-alan-kutu" type="date" data-tatil-gir aria-label="Tatil günü" style="max-width:200px">${dugme('Ekle', 'tatil-ekle', { simge: 'plus', kucuk: true })}</div>` : ''}</div>`;
+  const ariza = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Tezgâh</th><th>Başlangıç</th><th>Bitiş</th><th class="pm-num">Süre</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${S.down.map((d, i) => `<tr>${td('Tezgâh', `<b class="mono">${esc(d.m)}</b>`)}${td('Başlangıç', esc(fmtDT(D, d.from)))}${td('Bitiş', esc(fmtDT(D, d.to)))}${td('Süre', saat(d.to - d.from), 'pm-num')}${td('', yaz ? `<div class="pm-dugmeler">${dugme('', 'ariza-sil', { simge: 'trash', hayalet: true, ad: 'Sil', veri: `data-v="${i}"` })}</div>` : '')}</tr>`).join('') || '<tr><td colspan="5" class="tc-tablo-yok">Kayıt yok.</td></tr>'}</tbody></table></div>
+  ${yaz ? `<form class="tc-form" data-form="ariza" novalidate style="margin-top:var(--b-3)"><label class="tc-alan"><span class="tc-alan-etiket">Tezgâh</span><select class="tc-alan-kutu" name="m">${D.tezgahlar.map(t => `<option value="${esc(t.id)}">${esc(t.id)} · ${esc(t.ad)}</option>`).join('')}</select></label><label class="tc-alan"><span class="tc-alan-etiket">Başlangıç</span><input class="tc-alan-kutu" type="datetime-local" name="from" value="${girdiDT(tStr(31))}"></label><label class="tc-alan"><span class="tc-alan-etiket">Bitiş</span><input class="tc-alan-kutu" type="datetime-local" name="to" value="${girdiDT(tStr(39))}"></label><div class="tc-alan" style="justify-content:end"><button type="submit" class="tc-dugme">${ic('plus', 'k')}Arıza ya da bakım ekle</button></div><p class="pm-form-hata tc-form-tam" data-hata hidden></p></form>` : ''}`;
+  const mesai = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Tezgâh</th><th>Gün</th><th>Vardiya</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${S.ekMesai.map((e, i) => `<tr>${td('Tezgâh', `<b class="mono">${esc(e.m)}</b>`)}${td('Gün', esc(fmtDT(D, e.gun * 24).slice(0, 9)))}${td('Vardiya', esc(e.vardiya))}${td('', yaz ? `<div class="pm-dugmeler">${dugme('', 'mesai-sil', { simge: 'trash', hayalet: true, ad: 'Sil', veri: `data-v="${i}"` })}</div>` : '')}</tr>`).join('') || '<tr><td colspan="4" class="tc-tablo-yok">Ek mesai yok.</td></tr>'}</tbody></table></div>
+  ${yaz ? `<form class="tc-form" data-form="mesai" novalidate style="margin-top:var(--b-3)"><label class="tc-alan"><span class="tc-alan-etiket">Tezgâh</span><select class="tc-alan-kutu" name="m">${D.tezgahlar.map(t => `<option value="${esc(t.id)}">${esc(t.id)}</option>`).join('')}</select></label><label class="tc-alan"><span class="tc-alan-etiket">Gün</span><input class="tc-alan-kutu" type="date" name="gun" value="${gunTarih(5)}"></label><label class="tc-alan"><span class="tc-alan-etiket">Vardiya</span><select class="tc-alan-kutu" name="vardiya">${vs.map(v => `<option>${esc(v.id)}</option>`).join('')}</select></label><div class="tc-alan" style="justify-content:end"><button type="submit" class="tc-dugme">${ic('plus', 'k')}Ek mesai ekle</button></div><p class="pm-kucuk tc-form-tam">Ek mesai o vardiyada tezgâhı, bir operatörü ve bir ayarcıyı açar.</p></form>` : ''}`;
+  return `<div class="pm-iki-esit pm-iki">${kart('Vardiyalar', listeTablosu('vardiya', vs), dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="vardiya"' }))}${kart('Çalışma günleri', gunIzgara + `<p class="pm-kucuk">İşaretli vardiyada fabrika açıktır. Tezgâhın kendi vardiyası Tezgâhlar sayfasında daraltılır.</p>`)}</div>
+  <div class="pm-iki">${kart('Arıza ve planlı bakım', ariza)}${kart('Tatiller', tatil)}</div>${kart('Ek mesai', mesai)}`;
+}
+
+/* ---------- Personel ---------- */
+function sPersonel() {
+  const D = S.D; const yaz = yetkili('veri.yaz');
+  const gruplar = [...new Set(D.tezgahlar.map(t => t.grup))];
+  const vs = D.vardiyalar.map(v => v.id);
+  const acik = (g, v) => D.tezgahlar.some(t => t.grup === g && (t.opOran == null || +t.opOran > 0) && (!t.vardiyalar || !t.vardiyalar.length || t.vardiyalar.includes(v))) && GUNLER.some(gn => (D.calismaGunleri[gn] || []).includes(v));
+  const say = (g, v) => D.personel.filter(p => p.vardiya === v && (p.gruplar || []).includes(g)).length;
+  const tez = (g, v) => D.tezgahlar.filter(t => t.grup === g && (!t.vardiyalar || !t.vardiyalar.length || t.vardiyalar.includes(v))).reduce((a, t) => a + (t.opOran == null ? 1 : +t.opOran), 0);
+  const matris = `<div class="pm-kap"><table class="pm-izgara"><thead><tr><th scope="col">Grup</th>${vs.map(v => `<th scope="col">${esc(v)}</th>`).join('')}</tr></thead><tbody>${gruplar.map(g => `<tr><th scope="row">${esc(g)}</th>${vs.map(v => { const n = say(g, v), t = tez(g, v), a = acik(g, v); const ton = a && n === 0 ? 'hata' : a && n < t ? 'uyari' : ''; return `<td ${ton ? `data-ton="${ton}"` : ''} title="${n} kişi · operatör ihtiyacı ${sayi(t, 1)}">${a ? `${n} <span class="pm-kucuk">/ ${sayi(t, 1)}</span>` : '<span class="pm-kucuk">kapalı</span>'}</td>`; }).join('')}</tr>`).join('')}<tr><th scope="row">Ayarcı</th>${vs.map(v => { const n = D.personel.filter(p => p.vardiya === v && p.ayar).length; const a = GUNLER.some(gn => (D.calismaGunleri[gn] || []).includes(v)); return `<td ${a && !n ? 'data-ton="hata"' : ''}>${a ? n : '<span class="pm-kucuk">kapalı</span>'}</td>`; }).join('')}</tr></tbody></table></div><p class="pm-kucuk">Hücre: yetkin kişi / o vardiyada açık tezgâhların operatör ihtiyacı. Kırmızı: tezgâh açık ama kimse yok, o vardiyada iş yerleşmez. Sarı: kişi tezgâhtan az, tezgâhlar sırayla çalışır.</p>`;
+  const devam = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Personel</th><th>Gün</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${(D.devamsizlik || []).map((d, i) => `<tr>${td('Personel', `<b class="mono">${esc(d.personel)}</b>`)}${td('Gün', esc(d.gun))}${td('', yaz ? `<div class="pm-dugmeler">${dugme('', 'devam-sil', { simge: 'trash', hayalet: true, ad: 'Sil', veri: `data-v="${i}"` })}</div>` : '')}</tr>`).join('') || '<tr><td colspan="3" class="tc-tablo-yok">Devamsızlık yok.</td></tr>'}</tbody></table></div>${yaz ? `<form class="tc-form" data-form="devam" novalidate style="margin-top:var(--b-3)"><label class="tc-alan"><span class="tc-alan-etiket">Personel</span><select class="tc-alan-kutu" name="personel">${D.personel.map(p => `<option value="${esc(p.id)}">${esc(p.id)} · ${esc(p.ad)}</option>`).join('')}</select></label><label class="tc-alan"><span class="tc-alan-etiket">Gün</span><input class="tc-alan-kutu" type="date" name="gun" value="${gunTarih(1)}"></label><div class="tc-alan tc-form-tam"><button type="submit" class="tc-dugme">${ic('plus', 'k')}Devamsızlık ekle</button></div></form>` : ''}`;
+  return `<div class="pm-iki">${kart('Vardiya ve yetkinlik kapasitesi', matris)}${kart('Devamsızlık', devam)}</div>${kart(`Personel <span class="pm-kucuk">${D.personel.length}</span>`, listeTablosu('personel', D.personel), dugme('Yeni personel', 'yeni', { simge: 'plus', birincil: true, yetki: 'veri.yaz', veri: 'data-tur="personel"' }))}`;
+}
+
+/* ---------- Malzeme ---------- */
+function sMalzeme() {
+  const D = S.D; const cx = cxAl();
+  let karsilama = '';
+  if (cx) {
+    const satir = [];
+    for (const s of D.siparisler) { const r = cx.mat.res[s.id]; if (!r) continue; for (const d of r.det) satir.push({ s, d }); }
+    karsilama = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sipariş</th><th>Malzeme</th><th class="pm-num">İhtiyaç</th><th>Kaynak</th><th>Hazır</th></tr></thead><tbody>${satir.map(({ s, d }) => `<tr>${td('Sipariş', `<b class="mono">${esc(s.id)}</b>`)}${td('Malzeme', esc(d.kod))}${td('İhtiyaç', `${sayi(d.need, 1)} ${esc(d.birim)}`, 'pm-num')}${td('Kaynak', d.kaynak === 'eksik' ? rozet(`Eksik ${sayi(d.eksikQ, 1)}`, 'hata') : d.kaynak === 'stok' ? rozet('Stok', 'tamam') : rozet('Satın alma', 'uyari'))}${td('Hazır', esc(d.t == null ? '—' : fmtDT(D, d.t)))}</tr>`).join('') || '<tr><td colspan="5" class="tc-tablo-yok">Malzemeli sipariş yok.</td></tr>'}</tbody></table></div><p class="pm-kucuk">Dağıtım önce önceliğe, sonra termine göre. Hazır anı: söz tarihi + tedarikçinin ortalama gecikmesi + giriş muayenesi. Malzeme kuralı: ${S.w.mat === 'sert' ? 'sert (iş malzemesiz başlamaz)' : 'uyarı (iş başlar, uyarı verilir; K3 kararı)'}.</p>`;
+  }
+  return `<div class="pm-iki">${kart('Malzemeler', listeTablosu('malzeme', D.malzemeler), dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="malzeme"' }))}${kart('Tedarikçiler', listeTablosu('tedarikci', D.tedarikciler || []), dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="tedarikci"' }))}</div>
+  ${kart('Açık satın almalar', listeTablosu('satinalma', D.satinalma), dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="satinalma"' }))}${kart('Siparişlere karşılama', karsilama)}`;
+}
+
+/* ---------- Fason ve aparat ---------- */
+function sFason() {
+  return `<div class="pm-iki">${kart('Fasoncular', listeTablosu('fasoncu', S.D.fasoncular || []) + `<p class="pm-kucuk">Fason iş yalnız çıkış gününde ve saatinde gider, süre sonunda döner; aynı anda en çok "kapasite" kadar iş alır.</p>`, dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="fasoncu"' }))}${kart('Aparatlar', listeTablosu('aparat', S.D.aparatlar || []) + `<p class="pm-kucuk">Aynı aparatı isteyen adımlar aparat adedinden fazla aynı anda çalışmaz.</p>`, dugme('Yeni', 'yeni', { simge: 'plus', kucuk: true, yetki: 'veri.yaz', veri: 'data-tur="aparat"' }))}</div>`;
+}
+
+/* ---------- Ayar matrisi ---------- */
+function sAyar() {
+  const D = S.D; const yaz = yetkili('veri.yaz');
+  const aileler = [...new Set(D.urunler.flatMap(u => u.rota.map(o => o.aile)).filter(Boolean))].sort();
+  const mx = {}; for (const e of D.ayarMatrisi || []) mx[e.den + '|' + e.ye] = e.dk;
+  let bos = 0;
+  const govde = aileler.map(a => `<tr><th scope="row">${esc(a)}</th>${aileler.map(b => { if (a === b) return `<td data-kosegen title="Aynı aile: tam ayar × ${S.w.famK}">× ${sayi(S.w.famK, 2)}</td>`; const v = mx[a + '|' + b]; if (v == null) bos++; return `<td ${v == null ? 'data-ton="uyari"' : ''}><input type="number" min="0" step="5" value="${v ?? ''}" placeholder="tam" aria-label="${esc(a)} sonra ${esc(b)} ayar dakikası" data-chg="matris" data-a="${esc(a)}" data-b="${esc(b)}" ${yaz ? '' : 'disabled'}></td>`; }).join('')}</tr>`).join('');
+  return kart('Aileler arası ayar süresi (dakika)', `<div class="pm-kap"><table class="pm-izgara"><thead><tr><th scope="col">Önceki ↓ / sonraki →</th>${aileler.map(a => `<th scope="col">${esc(a)}</th>`).join('')}</tr></thead><tbody>${govde}</tbody></table></div><p class="pm-kucuk">Satır: tezgâhtaki önceki işin ailesi; sütun: sıradaki işin ailesi. Boş hücre (sarı) tam ayar alır. Köşegen aynı aile kısalmasıdır; katsayı Kısıtlar sayfasında. ${bos} geçiş tanımsız.</p>`, '', `<span class="pm-kucuk">${aileler.length} aile</span>`);
+}
+
+/* ---------- Veri denetimi ---------- */
+let denOnbellek = { v: -1, l: [] };
+function denetimBulgulari() {
+  if (denOnbellek.v === S.dataVer) return denOnbellek.l;
+  let l = [];
+  try {
+    const cx = cxAl();
+    if (cx) l = veriDenetimi(stOf(), cx);
+    for (const s of S.D.siparisler) { if (!S.D.urunler.find(u => u.id === s.urun)) l.push({ k: 'tezgah', t: `${s.id}: ürün ${s.urun} tanımlı değil; sipariş planlanmaz.` }); if (!s.termin) l.push({ k: 'amac', t: `${s.id}: termin yok; gecikmesi ölçülemez.` }); }
+    for (const u of S.D.urunler) if (!u.rota.length) l.push({ k: 'rota', t: `${u.id}: rotada adım yok.` });
+  } catch (e) { l.push({ k: 'hata', t: 'Veri derlenemedi: ' + e.message }); }
+  denOnbellek = { v: S.dataVer, l };
+  return l;
+}
+function sDenetim() {
+  const l = denetimBulgulari();
+  const sayfa = { personel: 'personel', ayarci: 'personel', tezgah: 'rotalar', aparat: 'fason', rota: 'rotalar', ayar: 'ayar', malzeme: 'malzeme', fason: 'fason', amac: 'siparisler' };
+  const ad = Object.fromEntries(KISITLAR.map(k => [k.id, k.ad]));
+  const grup = {}; for (const b of l) (grup[b.k] = grup[b.k] || []).push(b);
+  const icerik = l.length ? Object.entries(grup).map(([k, bs]) => kart(esc(ad[k] || k), `<ul class="pm-olaylar">${bs.map(b => `<li class="pm-olay" data-ton="${['personel', 'tezgah', 'rota', 'hata'].includes(k) ? 'hata' : 'uyari'}">${ic('alert', 'k')}<span class="pm-olay-metin">${esc(b.t)}</span></li>`).join('')}</ul>`, sayfa[k] ? dugme('Düzelt', 'git', { kucuk: true, simge: 'edit', veri: `data-v="${sayfa[k]}"` }) : '', rozet(bs.length + '', 'uyari'))).join('')
+    : `<div class="pm-serit" data-ton="tamam">${ic('check', 'k')}<span class="pm-serit-metin">Bulgu yok. Kısıtlar birlikte tutarlı.</span></div>`;
+  return `<div class="pm-serit">${ic('scan', 'k')}<span class="pm-serit-metin">Denetim çözücüden önce kısıtları birlikte sınar: açık vardiyada yetkin personel ve ayarcı, rotadaki tezgâh ve öncül, tanımsız aparat, ayar matrisinde olmayan aile geçişi, karşılanmayan malzeme, çıkış günü olmayan fasoncu. Veri her değiştiğinde yeniden koşar.</span></div>${icerik}`;
+}
+
+/* ---------- Senaryolar ---------- */
+function ozetSatir(p) { return p ? { wT: p.ozet.wT, late: p.ozet.late, n: p.ozet.n, suH: p.ozet.suH, Cmax: p.ozet.Cmax, chg: p.ozet.chg } : null; }
+function sSenaryolar() {
+  const D = S.D; const yazP = yetkili('plan.yaz');
+  const calisma = S.plan ? `<dl class="pm-dl"><dt>Gecikme</dt><dd class="mono">${saat(S.plan.ozet.wT)} · ${S.plan.ozet.late}/${S.plan.ozet.n} sipariş</dd><dt>Ayar</dt><dd class="mono">${saat(S.plan.ozet.suH)}</dd><dt>Son bitiş</dt><dd class="mono">${esc(fmtDT(D, S.plan.ozet.Cmax))}</dd><dt>Çözen</dt><dd>${esc(S.plan.kim)} · ${zamanYaz(S.plan.zaman)}</dd><dt>Durum</dt><dd>${planGuncel() ? rozet('Güncel', 'tamam') : rozet('Veri değişti', 'uyari')}</dd></dl>` : '<p class="pm-alt">Çalışmada plan yok. Önce çözün.</p>';
+  const kaydetForm = yazP ? `<form class="pm-sira" data-form="senaryo-kaydet" novalidate style="margin-top:var(--b-3)"><input class="tc-alan-kutu pm-sira-ara" name="ad" placeholder="Senaryo adı (ör. T2 bakımı ileri)" aria-label="Senaryo adı" ${S.plan ? '' : 'disabled'}><button type="submit" class="tc-dugme tc-dugme-birincil" ${S.plan && planGuncel() ? '' : 'disabled title="Güncel plan gerekir"'}>${ic('flag', 'k')}Senaryo olarak kaydet</button></form>` : '';
+  const sec = new Set(U.karsilastir);
+  const satirlar = S.senaryolar.slice().reverse().map(s => {
+    const o = s.ozet; const canli = s.id === S.canli;
+    const durum = canli ? rozet('Canlı', 'tamam') : s.durum === 'vazgecildi' ? rozet('Vazgeçildi', 'pasif') : rozet('Açık', '');
+    const eski = canli || s.durum === 'vazgecildi' ? false : s.tabanSurum !== S.canliSurum && S.canli;
+    return `<tr>${td('Seç', `<input type="checkbox" data-chg="karsilastir" data-v="${esc(s.id)}" ${sec.has(s.id) ? 'checked' : ''} aria-label="${esc(s.ad)} karşılaştır" style="width:22px;height:22px;accent-color:var(--hazard)">`)}${td('Senaryo', `<b>${esc(s.ad)}</b><br><span class="pm-kucuk">${esc(s.yazar)} · ${zamanYaz(s.zaman)} · canlı s.${s.tabanSurum} üstünde${eski ? ' · ' : ''}</span>${eski ? rozet('Canlı değişti', 'uyari') : ''}`)}${td('Durum', durum)}${td('Gecikme', saat(o.wT), 'pm-num')}${td('Geciken', `${o.late}/${o.n}`, 'pm-num')}${td('Ayar', saat(o.suH), 'pm-num')}${td('', `<div class="pm-dugmeler">${dugme('Aç', 'sen-ac', { kucuk: true, veri: `data-v="${esc(s.id)}"`, ipucu: 'Veriyi ve planı çalışmaya yükler' })}${!canli && s.durum !== 'vazgecildi' ? dugme('Canlıya al', 'sen-canli', { kucuk: true, birincil: true, yetki: 'plan.canliya-al', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli && s.durum !== 'vazgecildi' ? dugme('', 'sen-vazgec', { simge: 'x', hayalet: true, ad: 'Vazgeç', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli ? dugme('', 'sen-sil', { simge: 'trash', hayalet: true, ad: 'Sil', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}</div>`)}</tr>`;
+  }).join('');
+  const tablo = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th><span class="tc-gizli-etiket">Seç</span></th><th>Senaryo</th><th>Durum</th><th class="pm-num">Gecikme</th><th class="pm-num">Geciken</th><th class="pm-num">Ayar</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${satirlar || '<tr><td colspan="7" class="tc-tablo-yok">Senaryo yok. Çalışmayı kaydedin; farklı veri ya da kararla ikinci bir senaryo kurup karşılaştırın.</td></tr>'}</tbody></table></div>`;
+  const veri = `<div class="pm-dik"><div class="pm-dugmeler">${Object.entries(VERI).map(([id, v]) => dugme(v.veri.meta.ad.replace(' (uydurma veri)', ''), 'set-yukle', { kucuk: true, veri: `data-v="${id}"`, yetki: 'veri.yaz', cls: S.setId === id ? 'tc-dugme-birincil' : '' })).join('')}</div><p class="pm-kucuk">Örnek veri setini yüklemek çalışmadaki veriyi değiştirir; senaryolar ve değişiklik izi kalır.</p>
+  <div class="pm-dugmeler">${dugme('Veriyi kopyala (JSON)', 'disari', { simge: 'download', kucuk: true })}${dugme('İçe aktar', 'iceri-ac', { simge: 'upload', kucuk: true, yetki: 'veri.yaz' })}${dugme('Denemeyi sıfırla', 'sifirla', { simge: 'rotate', kucuk: true, tehlike: true, yetki: 'veri.yaz' })}</div></div>`;
+  return `<div class="pm-iki">${kart('Çalışma', calisma + kaydetForm, '', '<span class="pm-kucuk">kaydedilmemiş</span>')}${kart('Nasıl işler', `<ul class="pm-olaylar"><li class="pm-olay" data-ton="bilgi">${ic('flag', 'k')}<span class="pm-olay-metin">Planlamacı çalışmayı çözer, senaryo olarak kaydeder. Birden çok senaryo yan yana karşılaştırılır.</span></li><li class="pm-olay" data-ton="bilgi">${ic('lock', 'k')}<span class="pm-olay-metin">Canlıya almayı üretim müdürü ya da yönetici yapar (plan.canliya-al). Canlı plan sürümü artar.</span></li><li class="pm-olay" data-ton="uyari">${ic('alert', 'k')}<span class="pm-olay-metin">Senaryo, canlının eski sürümü üstünde kurulduysa canlıya alırken uyarı çıkar; başkasının aldığı plan sessizce ezilmez.</span></li></ul>`)}</div>
+  ${kart('Senaryolar', tablo, U.karsilastir.length >= 2 ? '' : '<span class="pm-kucuk">Karşılaştırmak için iki ya da üç senaryo seçin</span>')}${U.karsilastir.length >= 2 ? karsilastirma() : ''}${kart('Veri seti', veri)}`;
+}
+function karsilastirma() {
+  const l = U.karsilastir.map(id => S.senaryolar.find(s => s.id === id)).filter(Boolean);
+  if (l.length < 2) return '';
+  const D = S.D;
+  const satir = (ad, f, fmt, kucukIyi = true) => { const v = l.map(f); const best = kucukIyi ? Math.min(...v.filter(isFinite)) : Math.max(...v.filter(isFinite)); return `<tr><th scope="row">${ad}</th>${v.map((x, i) => `<td class="pm-num${x === best && v.filter(y => y === best).length < v.length ? ' pm-en-iyi' : ''}">${fmt(x)}${i > 0 && isFinite(x) && isFinite(v[0]) && Math.abs(x - v[0]) > 1e-6 ? ` <span class="${(x < v[0]) === kucukIyi ? 'pm-fark-iyi' : 'pm-fark-kotu'}">${x > v[0] ? '+' : ''}${sayi(x - v[0], 1)}</span>` : ''}</td>`).join('')}</tr>`; };
+  const tumJ = [...new Set(l.flatMap(s => Object.keys(s.J || {})))];
+  const farkli = tumJ.filter(j => { const t = l.map(s => (s.J[j] || {}).T); return t.some(x => Math.abs((x ?? -1) - (t[0] ?? -1)) > 0.5); }).slice(0, 20);
+  return kart('Karşılaştırma', `<div class="pm-kap"><table class="tc-tablo"><thead><tr><th></th>${l.map(s => `<th class="pm-num">${esc(s.ad)}</th>`).join('')}</tr></thead><tbody>
+    ${satir('Ağırlıklı gecikme (sa)', s => s.ozet.wT, x => sayi(x, 1))}${satir('Geciken sipariş', s => s.ozet.late, x => sayi(x, 0))}${satir('Toplam ayar (sa)', s => s.ozet.suH, x => sayi(x, 1))}${satir('Son bitiş (sa)', s => s.ozet.Cmax - 7, x => sayi(x, 1))}${satir('Sipariş', s => s.D.siparisler.length, x => sayi(x, 0), false)}${satir('Tezgâh', s => s.D.tezgahlar.length, x => sayi(x, 0), false)}
+  </tbody></table></div>${farkli.length ? `<h3 class="pm-kucuk" style="margin-top:var(--b-4)">Gecikmesi değişen siparişler</h3><div class="pm-kap"><table class="tc-tablo"><thead><tr><th>Sipariş</th>${l.map(s => `<th class="pm-num">${esc(s.ad)}</th>`).join('')}</tr></thead><tbody>${farkli.map(j => `<tr><th scope="row" class="mono">${esc(j)}</th>${l.map(s => { const x = s.J[j]; return `<td class="pm-num">${!x ? '—' : x.T == null ? 'planlanmadı' : x.T > 0.01 ? saat(x.T) : 'zamanında'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : ''}<p class="pm-kucuk">İlk sütun başvurudur; yeşil fark iyileşme, kırmızı kötüleşmedir.</p>`);
+}

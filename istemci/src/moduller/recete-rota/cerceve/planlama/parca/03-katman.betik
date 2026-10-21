@@ -1,0 +1,32 @@
+/* ---------- Değişiklik izi ---------- */
+function sIz() {
+  const kimler = [...new Set(S.iz.map(x => x.kim))];
+  const l = S.iz.filter(x => !U.izKim || x.kim === U.izKim).slice(0, 200);
+  return `<div class="pm-sira"><select class="tc-alan-kutu" style="width:auto" data-chg="iz-kim" aria-label="Kişi"><option value="">Herkes</option>${kimler.map(k => `<option ${U.izKim === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select><span class="pm-alt">${S.iz.length} kayıt. Bu denemede iz tarayıcıda tutulur; uygulamada denetim kaydına yazılır.</span></div>
+  ${kart('Değişiklik izi', `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Zaman</th><th>Kişi</th><th>Rol</th><th>Sayfa</th><th>İşlem</th><th>Ayrıntı</th></tr></thead><tbody>${l.map(x => `<tr>${td('Zaman', `<span class="mono">${zamanYaz(x.t)}</span>`, 'tc-tablo-kirilmaz')}${td('Kişi', esc(x.kim))}${td('Rol', esc(x.rol))}${td('Sayfa', esc(x.sayfa))}${td('İşlem', `<b>${esc(x.ne)}</b>`)}${td('Ayrıntı', `<span class="pm-kucuk">${esc(x.ayrinti)}</span>`)}</tr>`).join('') || '<tr><td colspan="6" class="tc-tablo-yok">Kayıt yok.</td></tr>'}</tbody></table></div>`)}`;
+}
+
+/* ---------- katman: pencere, çekmece, onay ---------- */
+function katmanCiz() {
+  let h = '';
+  const p = U.pencere;
+  if (p) {
+    let d = p;
+    h += `<div class="tc-perde" data-act="perde"><div class="tc-pencere${d.yan ? ' tc-pencere-yan' : ''}" role="dialog" aria-modal="true" aria-label="${esc(d.baslik)}"><div class="tc-pencere-ust"><h2 class="tc-pencere-baslik">${d.baslik}</h2><button type="button" class="tc-pencere-kapat" data-act="pencere-kapat" aria-label="Kapat">${ic('x', 'k')}</button></div><div class="tc-pencere-govde">${d.govde}</div>${d.alt ? `<div class="tc-pencere-alt">${d.alt}</div>` : ''}</div></div>`;
+  }
+  if (U.onay) {
+    const o = U.onay;
+    h += `<div class="tc-perde" data-act="onay-hayir"><div class="tc-pencere" role="alertdialog" aria-modal="true" aria-label="${esc(o.baslik)}"><div class="tc-pencere-ust"><h2 class="tc-pencere-baslik">${esc(o.baslik)}</h2></div><div class="tc-pencere-govde"><p class="tc-pencere-ileti">${esc(o.metin)}</p></div><div class="tc-pencere-alt"><button type="button" class="tc-dugme" data-act="onay-hayir">Vazgeç</button><button type="button" class="tc-dugme ${o.tehlike ? 'tc-dugme-tehlike' : 'tc-dugme-birincil'}" data-act="onay-evet">${esc(o.evet || 'Evet')}</button></div></div></div>`;
+  }
+  const odak = katman.innerHTML === '' && h !== '';
+  katman.innerHTML = h;
+  if (odak) { const el = katman.querySelector('.tc-pencere input:not([readonly]), .tc-pencere select, .tc-pencere textarea, .tc-pencere button'); if (el) el.focus({ preventScroll: true }); }
+}
+function onayla(baslik, metin, fn, o = {}) { U.onay = { baslik, metin, fn, ...o }; katmanCiz(); }
+function formPenceresi(tur, x) {
+  const T = TANIM[tur];
+  U.pencere = { baslik: `${x ? esc(T.ad) + ' · ' + esc(T.kimlik ? x[T.kimlik] : '') : 'Yeni ' + esc(T.ad.toLowerCase())}`, govde: formHtml(tur, x), alt: yetkili('veri.yaz') ? `<button type="button" class="tc-dugme" data-act="pencere-kapat">Vazgeç</button><button type="button" class="tc-dugme tc-dugme-birincil" data-act="form-gonder">${ic('check', 'k')}Kaydet</button>` : `<span class="pm-alt">Yalnız okuma yetkiniz var.</span>${dugme('Kapat', 'pencere-kapat')}`, yan: true };
+  katmanCiz();
+  if (!yetkili('veri.yaz')) katman.querySelectorAll('.tc-pencere input, .tc-pencere select').forEach(i => i.disabled = true);
+}
+

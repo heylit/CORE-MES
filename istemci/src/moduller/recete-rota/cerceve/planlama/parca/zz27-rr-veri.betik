@@ -1,0 +1,272 @@
+/* ---------- Reçete ve Rota ana tablodur: deneme verisi onun kaydından kurulur ----------
+   Çerçevenin kaydı (localStorage 'recete-rota-motoru-v1') ana veridir; motor S.D'yi okur. İki yön de buradadır:
+   rrDenemedenKur(D) → st, rrDenemeyeCevir(st) → D. Çerçevede karşılığı olan alan çerçevenin alanına yazılır (ad, istasyon, süre, adet,
+   termin, stok...). Karşılığı olmayan her motor parametresi (aile, ayar matrisi, aparat, ayarcı, ışıksız, verim, fason, tedarik ve muayene
+   günü, Qmin, kasa, gelir, ceza...) ilgili kaydın "plan" alt nesnesinde kalır; plan alt nesnesi kaydın asıl hâlinin tam kopyasıdır.
+   Geri çevirmede bir alan çerçevede değişmemişse asıl değer olduğu gibi alınır; böylece gidiş dönüş kayıpsızdır ve yalnız değişen alan
+   motora geçer. Genel plan ayarları (ağırlıklar, dondurma, kilitler, senaryolar, olaylar, ek mesai) S'de kalır, çerçeveye gitmez. */
+const RR_LS = 'recete-rota-motoru-v1';
+const RR_WC = 'w-atolye';
+const RR_GUN = { paz: 0, pzt: 1, sal: 2, car: 3, per: 4, cum: 5, cmt: 6 };
+const RR_GUN_SIRA = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
+/* D'nin bu dizileri çerçeve kayıtlarına dağılır; kalan üst düzey alanlar st.plan'da durur */
+const RR_DAGILAN = ['urunler', 'malzemeler', 'tezgahlar', 'personel', 'siparisler'];
+const rrKopya = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
+const rrEsit = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const rrTarih = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(0, 10) : '';
+const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) ? s.slice(11, 16) : '';
+const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
+const rrKisalt = ad => String(ad || '').split(/\s+/).filter(Boolean).map(w => w[0]).join('').toLocaleUpperCase('tr-TR').slice(0, 6) || 'OP';
+
+/* rota adımının çerçevedeki karşılığı: istasyon = ilk makinenin grubu, alternatif = öteki gruplar, süre = grubun ilk makinesi */
+/* fason adım çerçevede istasyonsuz, fasonId'li adımdır; termin günü fasoncunun süresidir */
+function rrAdimYerli(o, grupOf, opId, fasonGun) {
+  if (o.fason) return { opId, stationId: null, machineId: null, fasonId: o.fason, terminGun: fasonGun ? fasonGun(o.fason) : null, setup: 0, proc: 0, chg: null, cycle: 0, alts: [], altTimes: {},
+    dep: o.ortusebilir ? 'ortulu' : 'bagimli', depQty: +o.transfer > 0 ? +o.transfer : 1, minLot: +o.minParti > 0 ? +o.minParti : 0, split: 'tek' };
+  const tz = o.tezgahlar || [];
+  const gruplar = [...new Set(tz.map(t => grupOf(t.id)).filter(Boolean))];
+  const ilk = g => tz.find(t => grupOf(t.id) === g) || {};
+  const g1 = gruplar[0] || '', t1 = ilk(g1);
+  const altTimes = {}; for (const g of gruplar.slice(1)) { const t = ilk(g); altTimes[g] = { setup: +t.ayar || 0, cycle: +t.cevrim || 0 }; }
+  const cyc = +t1.cevrim || 0;
+  return { opId, stationId: g1, setup: +t1.ayar || 0, proc: cyc, chg: null, cycle: cyc, alts: gruplar.slice(1), altTimes,
+    dep: o.ortusebilir ? 'ortulu' : 'bagimli', depQty: +o.transfer > 0 ? +o.transfer : 1, minLot: +o.minParti > 0 ? +o.minParti : 0,
+    split: tz.filter(t => grupOf(t.id) === g1).length > 1 ? 'bol' : 'tek' };
+}
+const RR_ADIM_SURE = ['stationId', 'setup', 'cycle', 'alts', 'altTimes'];
+
+function rrDenemedenKur(D0, onceki) {
+  const D = rrKopya(D0);
+  const es = (dizi, id) => (onceki && (onceki[dizi] || []).find(x => x.id === id)) || null;
+  const grupOf = id => { const m = (D.tezgahlar || []).find(x => x.id === id); return m ? m.grup : ''; };
+  const fasonGun = id => { const f = (D.fasoncular || []).find(x => x.id === id); return f && +f.sureGun > 0 ? +f.sureGun : null; };
+  const plan = {}; plan._sira = Object.keys(D);
+  for (const k of Object.keys(D)) if (!RR_DAGILAN.includes(k)) plan[k] = D[k];
+  /* operasyon kataloğu: rotadaki adım adları */
+  const opdefs = [];
+  const opOf = (ad, yerli) => {
+    let d = opdefs.find(x => x.name === ad); if (d) return d.id;
+    const e = onceki && (onceki.opdefs || []).find(x => x.name === ad);
+    d = Object.assign({}, e || { id: 'od-' + (opdefs.length + 1), code: 'OP-' + String(opdefs.length + 1).padStart(2, '0'), abbr: rrKisalt(ad) }, { name: ad, stationId: yerli.stationId, setup: yerli.setup, proc: yerli.proc, chg: null, cycle: yerli.cycle });
+    opdefs.push(d); return d.id;
+  };
+  const bilesenUrun = new Set(); for (const u of D.urunler || []) for (const b of u.bilesenler || []) bilesenUrun.add(b.urun);
+  const items = [], routes = {};
+  for (const u of D.urunler || []) {
+    const e = es('items', u.id);
+    items.push(Object.assign({}, e || { code: u.id, unit: 'adet', cost: 0, stock: 0, min: 0 }, { id: u.id, name: u.ad, type: bilesenUrun.has(u.id) ? 'yari' : 'mamul', plan: rrKopya(u) }));
+    const esAdim = seq => { const r = onceki && onceki.routes && onceki.routes[u.id]; return r ? (r.steps || []).find(x => x.seq === seq) : null; };
+    const steps = (u.rota || []).map((o, i) => {
+      const seq = rrSeq(o, i), ad = o.ad || ('OP ' + seq);
+      const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
+      const eA = esAdim(seq);
+      return Object.assign({}, eA || { id: 'p-' + u.id + '-' + o.k, outItem: '', outStatus: '', rejectPct: 0, outs: [], transfer: 0, resetup: true }, y, { seq, ins: [], plan: rrKopya(o) });
+    });
+    for (const b of u.bilesenler || []) {
+      const s = steps.find(x => x.plan.k === b.adim) || steps[0]; if (!s) continue;
+      s.ins.push({ id: 'n-' + u.id + '-' + b.urun + '-' + s.ins.length, itemId: b.urun, qty: b.miktar, scrap: 0, status: '' });
+    }
+    /* hammadde ihtiyacı denemede siparişin malzeme listesindedir; rotanın ilk adımına bilgi olarak girer, geri çevirmede okunmaz */
+    const sip = (D.siparisler || []).find(s => s.urun === u.id && (s.malzeme || []).length);
+    if (steps[0] && sip) for (const m of sip.malzeme) steps[0].ins.push({ id: 'n-' + u.id + '-' + m.kod, itemId: m.kod, qty: m.miktar, scrap: 0, status: '', tmiSiparis: true });
+    if (steps.length) routes[u.id] = { base: 1, steps };
+  }
+  for (const m of D.malzemeler || []) {
+    const e = es('items', m.kod);
+    items.push(Object.assign({}, e || { code: m.kod, min: 0 }, { id: m.kod, name: m.ad, type: 'ham', unit: m.birim || '', cost: +m.birimFiyat || 0, stock: +m.stok || 0, plan: rrKopya(m) }));
+  }
+  const grupSira = [...new Set((D.tezgahlar || []).map(m => m.grup))];
+  const stations = grupSira.map(g => { const ms = D.tezgahlar.filter(m => m.grup === g); const e = es('stations', g);
+    return Object.assign({}, e || { code: String(g).toLocaleUpperCase('tr-TR'), name: (typeof RT_GRUP_AD !== 'undefined' && RT_GRUP_AD[g]) || g, eff: 100, opPer: 1 }, { id: g, wcId: RR_WC, cost: +ms[0].ucret || 0, count: ms.length }); });
+  const machines = (D.tezgahlar || []).map(m => Object.assign({}, es('machines', m.id) || { code: m.id, status: 'aktif', note: '' }, { id: m.id, name: m.ad, stationId: m.grup, plan: rrKopya(m) }));
+  const people = (D.personel || []).map(p => Object.assign({}, es('people', p.id) || { code: p.id, cost: 0, active: true }, { id: p.id, name: p.ad, role: p.ayar ? 'Ayarcı' : 'Operatör', wcId: RR_WC, shiftId: p.vardiya, skills: (p.gruplar || []).slice(), plan: rrKopya(p) }));
+  const bas = rrTarih(D.meta && D.meta.baslangic);
+  const orders = (D.siparisler || []).map(s => {
+    const e = es('orders', s.id);
+    return Object.assign({}, e || { no: s.id, tur: 'seri', created: 0 }, { id: s.id, itemId: s.urun, qty: s.adet, start: rrTarih(s.serbest) || bas, due: rrTarih(s.termin), priority: s.oncelik, status: s.havuz ? 'taslak' : (e && e.status && e.status !== 'taslak' ? e.status : 'serbest'), note: s.ad || '', plan: rrKopya(s) });
+  });
+  const week = {}; for (const [g, n] of Object.entries(RR_GUN)) week[n] = ((D.calismaGunleri || {})[g] || []).slice();
+  const wcE = es('wcs', RR_WC);
+  const wcs = [Object.assign({}, wcE || { code: 'IM-10', name: 'Atölye' }, { id: RR_WC, week })];
+  const cal = { shifts: (D.vardiyalar || []).map(v => ({ id: v.id, name: v.id + ' vardiyası', start: v.bas, end: v.bit, breaks: [] })), holidays: (D.tatiller || []).slice() };
+  const st = Object.assign({}, onceki || {}, { version: 7, name: (D.meta && D.meta.ad) || 'Atölye', items, wcs, stations, opdefs, routes, cal, machines, people, orders, plan });
+  if (!onceki) Object.assign(st, { settings: { orderItem: null, orderQty: 100, start: bas || null, due: null, useStock: true, peopleLimit: true }, moves: [], opStatus: {}, assign: {}, qorder: {}, frozen: {}, opProg: {}, splitManual: {}, statusStock: {}, statusCards: [], routeRevs: [], gercekSure: {} });
+  else st.routeRevs = (onceki.routeRevs || []).filter(r => routes[r.itemId]).map(r => r.status === 'yururlukte' ? Object.assign({}, r, { data: rrKopya(routes[r.itemId]) }) : r);
+  return st;
+}
+
+/* plan kopyasındaki anahtar sırasıyla kurar; yerli alan değişmişse onun değeri, değişmemişse asıl değer yazılır */
+function rrKur(asil, yeni) {
+  const o = {};
+  for (const k of Object.keys(asil || {})) { if (k in yeni) { if (yeni[k] !== undefined) o[k] = yeni[k]; } else o[k] = asil[k]; }
+  for (const k of Object.keys(yeni)) if (!(k in o) && yeni[k] !== undefined && !(asil && k in asil)) o[k] = yeni[k];
+  return o;
+}
+function rrDenemeyeCevir(st) {
+  const P = rrKopya(st.plan || {});
+  const items = st.items || [], item = id => items.find(x => x.id === id);
+  const urunMu = it => it && (it.type === 'mamul' || it.type === 'yari');
+  const grupOf = id => { const m = (st.machines || []).find(x => x.id === id); return m ? m.stationId : ''; };
+  const opAd = id => { const d = (st.opdefs || []).find(x => x.id === id); return d ? d.name : ''; };
+  const ilkVardiya = (st.cal && st.cal.shifts && st.cal.shifts[0] && st.cal.shifts[0].start) || '08:00';
+  /* makineler önce: adımların makine listesi grubu buradan bulur */
+  const tezgahlar = (st.machines || []).map(m => {
+    const a = m.plan || null; const y = {};
+    if (!a || a.id !== m.id) y.id = m.id;
+    if (!a || a.ad !== m.name) y.ad = m.name;
+    if (!a || a.grup !== m.stationId) y.grup = m.stationId;
+    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: +s.cost || 0, verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    return rrKur(a, y);
+  });
+  const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
+  const urunler = [];
+  for (const it of items.filter(urunMu)) {
+    const a = it.plan || null; const y = {};
+    if (!a || a.id !== it.id) y.id = it.id;
+    if (!a || a.ad !== it.name) y.ad = it.name;
+    const r = st.routes && st.routes[it.id];
+    const steps = r ? (r.steps || []).slice().sort((p, q) => p.seq - q.seq) : [];
+    const kHarita = {};
+    const rota = steps.map((s, i) => {
+      const o0 = s.plan || null; const z = {};
+      const k = o0 && rrSeq(o0, ((a && a.rota) || []).findIndex(x => x.k === o0.k)) === s.seq ? o0.k : String(s.seq);
+      if (o0) kHarita[o0.k] = k;
+      if (!o0 || o0.k !== k) z.k = k;
+      const ad = opAd(s.opId) || (o0 && o0.ad) || ('OP ' + s.seq); if (!o0 || o0.ad !== ad) z.ad = ad;
+      const ref = o0 ? rrAdimYerli(o0, grupOf, s.opId) : null;
+      if (!o0 || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
+        const izin = [s.stationId, ...(s.alts || [])].filter(Boolean);
+        const eski = (o0 && o0.tezgahlar) || [];
+        const sure = g => g === s.stationId ? { ayar: +s.setup || 0, cevrim: +s.cycle || 0 } : { ayar: +((s.altTimes || {})[g] || {}).setup || 0, cevrim: +((s.altTimes || {})[g] || {}).cycle || 0 };
+        const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
+        const tz = [];
+        for (const g of izin) {
+          const varolan = eski.filter(t => grupOf(t.id) === g);
+          if (varolan.length && !degisti(g)) tz.push(...varolan);
+          else if (varolan.length) tz.push(...varolan.map(t => Object.assign({}, t, sure(g))));
+          else tz.push(...grupMak(g).map(id => Object.assign({ id }, sure(g))));
+        }
+        z.tezgahlar = tz;
+      }
+      const sFason = s.fasonId && !s.stationId ? s.fasonId : null;
+      if (!o0 || (ref.fasonId || null) !== sFason) { if (sFason) z.fason = sFason; else if (o0 && 'fason' in o0) z.fason = undefined; }
+      if (!o0 || ref.dep !== s.dep) { if (s.dep === 'ortulu') z.ortusebilir = true; else if (o0 && 'ortusebilir' in o0) z.ortusebilir = false; }
+      if (!o0 || ref.depQty !== s.depQty) { if (+s.depQty > 1 || (o0 && 'transfer' in o0)) z.transfer = +s.depQty; }
+      if (!o0 || ref.minLot !== s.minLot) { if (+s.minLot > 0 || (o0 && 'minParti' in o0)) z.minParti = +s.minLot; }
+      if (!o0) { z.bag = i ? [[String(steps[i - 1].seq), 'b']] : []; z.aile = ''; }
+      return rrKur(o0, z);
+    });
+    for (const o of rota) if (Array.isArray(o.bag)) { const yeni = o.bag.filter(([k]) => k in kHarita || rota.some(x => x.k === k)).map(([k, t, ...e]) => [kHarita[k] || k, t, ...e]); if (!rrEsit(yeni, o.bag)) o.bag = yeni; }
+    if (!a || 'rota' in a || rota.length) y.rota = (a && rrEsit(a.rota, rota)) ? a.rota : rota;
+    const bil = [];
+    for (const s of steps) { const k = rota[steps.indexOf(s)].k; for (const x of s.ins || []) if (!x.tmiSiparis && urunMu(item(x.itemId))) bil.push({ urun: x.itemId, miktar: x.qty, adim: k }); }
+    const anah = b => b.urun + '|' + b.miktar + '|' + b.adim;
+    const asilB = (a && a.bilesenler) || [];
+    if (rrEsit(asilB.map(anah).sort(), bil.map(anah).sort())) { if (a && 'bilesenler' in a) y.bilesenler = a.bilesenler; }
+    else y.bilesenler = bil.map(b => asilB.find(x => anah(x) === anah(b)) || b);
+    urunler.push(rrKur(a, y));
+  }
+  const malzemeler = items.filter(it => it.type === 'ham').map(it => {
+    const a = it.plan || null; const y = {};
+    if (!a || a.kod !== it.id) y.kod = it.id;
+    if (!a || a.ad !== it.name) y.ad = it.name;
+    if (!a || (a.birim || '') !== it.unit) y.birim = it.unit;
+    if (!a || (+a.stok || 0) !== it.stock) y.stok = +it.stock || 0;
+    if (!a || (+a.birimFiyat || 0) !== it.cost) y.birimFiyat = +it.cost || 0;
+    if (!a) Object.assign(y, { tedarikGun: 0, muayeneGun: 0 });
+    return rrKur(a, y);
+  });
+  const personel = (st.people || []).map(p => {
+    const a = p.plan || null; const y = {};
+    if (!a || a.id !== p.id) y.id = p.id;
+    if (!a || a.ad !== p.name) y.ad = p.name;
+    if (!a || a.vardiya !== p.shiftId) y.vardiya = p.shiftId;
+    if (!a || !rrEsit(a.gruplar || [], p.skills || [])) y.gruplar = (p.skills || []).slice();
+    if (!a) y.ayar = p.role === 'Ayarcı';
+    return rrKur(a, y);
+  });
+  const bas = rrTarih(P.meta && P.meta.baslangic);
+  const siparisler = (st.orders || []).map(o => {
+    const a = o.plan || null; const y = {};
+    if (!a || a.id !== o.id) y.id = o.id;
+    if (!a || a.urun !== o.itemId) y.urun = o.itemId;
+    if (!a || a.adet !== o.qty) y.adet = +o.qty;
+    if (!a || rrTarih(a.termin) !== o.due) y.termin = o.due + ' ' + (rrSaat(a && a.termin) || '17:00');
+    if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
+    if (!a || a.oncelik !== o.priority) y.oncelik = +o.priority || 0;
+    if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
+    if (!a || (a.ad || '') !== (o.note || '')) y.ad = o.note || o.no || o.id;
+    if (!a) { const r = st.routes && st.routes[o.itemId]; const s0 = r && (r.steps || []).slice().sort((p, q) => p.seq - q.seq)[0];
+      Object.assign(y, { gelir: null, cezaGun: null, malzeme: s0 ? (s0.ins || []).filter(x => (item(x.itemId) || {}).type === 'ham').map(x => ({ kod: x.itemId, miktar: x.qty })) : [] }); }
+    return rrKur(a, y);
+  });
+  /* takvim: vardiya, çalışma günü ve tatil değişmemişse asıl kayıt */
+  const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit }));
+  const vrr = ((st.cal && st.cal.shifts) || []).map(v => ({ id: v.id, start: v.start, end: v.end }));
+  if (!rrEsit(vref, vrr)) P.vardiyalar = vrr.map(v => Object.assign({}, (P.vardiyalar || []).find(x => x.id === v.id) || {}, { id: v.id, bas: v.start, bit: v.end }));
+  const wc = (st.wcs || []).find(w => w.id === RR_WC) || (st.wcs || [])[0];
+  if (wc && wc.week) {
+    const cg0 = P.calismaGunleri || {}; const cg = {};
+    for (const g of [...Object.keys(cg0), ...RR_GUN_SIRA.filter(g => !(g in cg0))]) cg[g] = (wc.week[RR_GUN[g]] || []).slice();
+    if (!rrEsit(Object.keys(cg0).map(g => [g, cg0[g]]), Object.keys(cg0).map(g => [g, cg[g]])) || RR_GUN_SIRA.some(g => !(g in cg0) && cg[g].length)) P.calismaGunleri = cg;
+  }
+  if (st.cal && Array.isArray(st.cal.holidays) && !rrEsit(P.tatiller || [], st.cal.holidays)) P.tatiller = st.cal.holidays.slice();
+  const dag = { urunler, malzemeler, tezgahlar, personel, siparisler };
+  const D = {}; const sira = P._sira || [...Object.keys(P), ...RR_DAGILAN];
+  for (const k of sira) { if (k === '_sira') continue; if (k in dag) D[k] = dag[k]; else if (k in P) D[k] = P[k]; }
+  for (const k of Object.keys(P)) if (k !== '_sira' && !(k in D)) D[k] = P[k];
+  for (const k of RR_DAGILAN) if (!(k in D)) D[k] = dag[k];
+  return D;
+}
+
+/* ---------- akış ----------
+   Kayıt yoksa ya da çalışma yeni kurulduysa (veri seti yüklendi, sıfırlandı) çerçeve kaydı denemeden kurulur. Planlama sayfasına
+   dönülünce çerçeve kaydı değişmişse S.D ondan yeniden kurulur ve plan eski sayılır. Denemede veri değişince çerçeve kaydı
+   güncellenir; çerçevenin yalnız kendi tuttuğu alanları (iş emri durumu, revizyon, terminal kaydı) korunur. */
+const RRV = { S: null, dj: '', sayfa: null, yaziyor: false };
+function rrOku() { try { const r = localStorage.getItem(RR_LS); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function rrYaz(st) {
+  st.savedAt = Date.now();
+  try { localStorage.setItem(RR_LS, JSON.stringify(st)); } catch (e) { return false; }
+  S.rrSavedAt = st.savedAt; RRV.S = S; RRV.dj = JSON.stringify(S.D);
+  /* açık çerçeve kaydı yeniden okur; kendi kodu değişmez */
+  try { const w = RR.el && RR.el.contentWindow; if (w && w.eval) w.eval('st = normalize(JSON.parse(localStorage.getItem(LS_KEY))); if (typeof invalidate === "function") invalidate(); render();'); } catch (e) { /* çerçeve henüz açılmadı */ }
+  return true;
+}
+function rrKurVeYaz(merge) { const o = merge ? rrOku() : null; rrYaz(rrDenemedenKur(S.D, o && o.items ? o : null)); }
+function rrCek() {
+  let raw = null; try { raw = localStorage.getItem(RR_LS); } catch (e) { return false; }
+  if (!raw) { rrKurVeYaz(false); return false; }
+  const m = raw.match(/"savedAt":(\d+)(?![^]*"savedAt":)/); const sa = m ? +m[1] : 0;
+  if (sa === S.rrSavedAt) return false;
+  let st; try { st = JSON.parse(raw); } catch (e) { return false; }
+  let D; try { D = rrDenemeyeCevir(st); } catch (e) { console.error(e); bildir('Reçete ve Rota kaydı okunamadı; deneme verisi değişmedi.', 'hata'); return false; }
+  S.rrSavedAt = sa; RRV.S = S;
+  if (rrEsit(D, S.D)) { RRV.dj = JSON.stringify(S.D); kaydet(); return false; }
+  geriAl.push(JSON.stringify({ D: S.D, down: S.down, ekMesai: S.ekMesai, locks: S.locks, pref: S.pref, w: S.w, param: S.param, kapali: S.kapali, dataVer: S.dataVer }));
+  if (geriAl.length > 30) geriAl.shift();
+  S.D = D; S.dataVer++; U.hamle = null; RRV.dj = JSON.stringify(S.D);
+  iz('Reçete ve Rota verisi alındı', 'Ürün, rota, kaynak ya da emir değişti');
+  kaydet();
+  bildir('Reçete ve Rota verisi alındı' + (S.plan ? '. Plan yeniden çözülünce güncellenir.' : '.'), 'tamam', { metin: 'Geri al', act: 'geri-al' });
+  return true;
+}
+/* deneme bazı alanları çizimde de tamamlar (örnek işaretleri); bu yüzden karşılaştırma sürümle değil içerikle yapılır */
+function rrEsitle() {
+  if (!S || RRV.yaziyor) return;
+  RRV.yaziyor = true;
+  try {
+    if (S.rrSavedAt == null) rrKurVeYaz(false);
+    else if (RRV.S !== S) { RRV.S = S; RRV.dj = JSON.stringify(S.D); }
+    else if (JSON.stringify(S.D) !== RRV.dj) rrKurVeYaz(true);
+  } catch (e) { console.error(e); } finally { RRV.yaziyor = false; }
+}
+{ const k0 = kaydet; kaydet = function () { const x = k0.apply(this, arguments); rrEsitle(); return x; }; }
+{ const r0 = render; render = function () {
+  if (S && !RRV.yaziyor) {
+    const ilk = RRV.sayfa === null, rrdeydi = !ilk && rrMi(RRV.sayfa);
+    if ((ilk || rrdeydi) && !rrMi(U.sayfa) && S.rrSavedAt != null) { RRV.yaziyor = true; try { rrCek(); } catch (e) { console.error(e); } finally { RRV.yaziyor = false; } }
+    RRV.sayfa = U.sayfa;
+  }
+  const x = r0.apply(this, arguments); rrEsitle(); return x;
+}; }

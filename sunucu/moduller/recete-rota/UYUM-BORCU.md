@@ -20,6 +20,25 @@
 | KAPANDI (19.10.2026, yapılmış): ipucu `.hint.kucuk`, katalog başlığı `.grid.head .sag` sınıfıyla; görünüm aynı (`Sureler.test.tsx` "UYUM-BORCU süre stilleri"). Süreler için eklenen satır içi stiller | Kart #1044: adım panelindeki "Çevrim = işlem + değişim" ipucu (`style="font-size:.82rem"`) ve operasyon kataloğu başlığındaki "Değişim dk", "Değişim %" hücreleri (`style="text-align:right"`) prototipin kendi kalıbıyla satır içi yazıldı. Süreler sekmesinin kendisi sınıf kullanır. | Görünüm borcu, bağlamada kapanacak: sınıfa çevrilir (prototip `.hint.sm`, `.grid.head .n`). |
 
 
+## Bağlamada kapanacak: planlama (teslim 20.10.2026)
+| Kural / konu | İstisna | Nasıl uyumlanır |
+|---|---|---|
+| Rol ve yetki | Planlama çerçevesinde rol her zaman yönetici (`u5`, `zz31-tmi.betik`); denemenin rol seçicisi ve kendi yan menüsü görünür. Planlama sayfaları `plan.oku` ile görünür, Aşama 1 kuralı (işlemler yalnız yöneticide) bu işlemle sağlanmaz. | Aşama 2: rol ortak yetki matrisinden; çerçevenin rol seçicisi kalkar. Yalnız yönetici kararı SORULACAKLAR'da. |
+| Deneme metni | Alt bilgi "Deneme sayfası ... bütün veri uydurmadır" uygulamada da görünür; uygulamada veri kayıttandır. | Görünüm: metin TMI içinde gizlenir ya da değişir. |
+| Canlı plan yalnız kayıtta | "Canlıya al" `st.tmiCanli`'ya yazar; sunucu planı, Arkon ve terminal güncellenmez. | Aşama 2: uretim-emirleri canlı plan uçları (BASKA-MODUL-ISTEKLERI). |
+| İki motor | Reçete ve Rota'nın kendi plan hesabı (`planRun`) ve planlama motoru (`engine`) ayrı; Reçete ve Rota'nın emir tarihleri canlı plandan farklı (t163). Reçete ve Rota'nın Plan, Stüdyo, Kanban sekmelerine menüden gidilmez; 307 a ve 304 a o sekmelerde kaldı. | Tek motor kararı (SORULACAKLAR). |
+| Çözücüler | HiGHS ve CP-SAT pakette yok; seçilirse çalışmaz. Denemenin yerel çözücü servisi yoklaması (`h-cozuculer`) çerçevede bağlantı kapalı olduğundan sonuçsuz. | HiGHS kararı (SORULACAKLAR); sunucu motoru kararıyla birlikte. |
+| Çerçeve geçişi | Reçete ve Rota bölümü ile planlama sayfası arasında geçişte bekleme (bekleme süresi + 1,5 sn) ve 2,3 MB sayfanın yeniden kurulması. | Tek çerçeve ya da sunucu motoru ile kalkar. |
+| Kayıt boyutu | Planlama durumu ayrı anahtarda; büyük set ölçülmedi. 1 MB uyarısı yalıtılmış çerçevede görünür mü denenmedi (VARSAYIM: görünmez). | Ölçülür; aşarsa alan başına kayıt. |
+| Tanıtım ve kılavuz anahtarları | Denemenin kılavuz tercihi önek dışı anahtarda (`pm-at-kilavuz-v1`): köprü onları yazmaz, sayfa yenilenince yeniden görünür. | Önekli anahtara alınır. |
+| Kendi renkleri | `modul.stil`'de 30 onaltılık renk (`--is-*` iş renkleri dahil). | Ortak seri renkleri (CEKIRDEK-ISTEKLERI 4). |
+| Satır içi stil | Reçete ve Rota'ya eklenen planlama alanlarında satır içi stil: `margin-top:8px` (2), `min-height:0` (2), prototipin kendi kalıbıyla. | Sınıfa çevrilir. |
+| Gömülü kütüphaneler | driver, interact, sortable ve iki yardımcı paket değil, kaynak olarak gömülü (lisansları `cerceve/planlama/lib/`). | Paket olarak girmesi yeni bağımlılık kararıdır. |
+| Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
+| Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
+| İkinci menü | Yeni planlama sayfaları menüde değil, `paylasilan` yaması girene kadar. | CEKIRDEK-ISTEKLERI 1. |
+| Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"); teke indirilmedi. Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Onay bekliyor (SORULACAKLAR). |
+
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
