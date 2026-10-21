@@ -12,6 +12,7 @@ interface Duzenek {
   cizim: () => number;
   bildirimler: string[];
   cevir: (st: Nesne) => Nesne;
+  kur: (D: Nesne, onceki: Nesne | null) => Nesne;
 }
 
 // kayit: Reçete ve Rota ana kaydı (çerçevenin yerel deposundaki metin). kaynak: kaynakOku cevabı; null ise okuma reddedilir.
@@ -20,6 +21,7 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
     let S = null; let U = { sayfa: 'tahta', hamle: null }; let cizim = 0; const bildirimler = [];
     const RR = { el: null }; const SAYFA_AD = {}; const VERI = {}; let hsKaynak = null; let rrYerlestir = null;
     const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
+    const GUNLER = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
     function bildir(m) { bildirimler.push(m); }
     function kaydet() {}
     function render() { cizim++; }
@@ -27,7 +29,7 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
     function yeniCalisma(k) { return { D: VERI[k].veri, dataVer: 1, plan: null }; }
     ${planlamaParcasi('zz27-rr-veri')}
     ${planlamaParcasi('zz31-tmi')}
-    return { ac: () => { S = yeniCalisma(); render(); return S; }, S: () => S, cizim: () => cizim, bildirimler, cevir: rrDenemeyeCevir };`;
+    return { ac: () => { S = yeniCalisma(); render(); return S; }, S: () => S, cizim: () => cizim, bildirimler, cevir: rrDenemeyeCevir, kur: rrDenemedenKur };`;
   const depo = new Map<string, string>(kayit === null ? [] : [['recete-rota-motoru-v1', JSON.stringify(kayit)]]);
   const localStorage = { getItem: (k: string) => depo.get(k) ?? null, setItem: (k: string, v: string) => { depo.set(k, v); } };
   const window = { tmi: { kaynakOku: () => kaynak }, tmiGorunum: { kaydet: () => undefined, bildir: () => undefined } };
@@ -136,6 +138,57 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(D['meta']).toEqual({ ad: 'Kayit', baslangic: '2026-10-21' });
     expect(D['meta']).not.toBe(S.D['meta']);
     expect(D).toMatchObject({ vardiyalar: [], calismaGunleri: {}, tatiller: [] });
+  });
+
+  describe('fason firmalar (23 a)', () => {
+    const FASON_KAYIT = {
+      ...KAYIT,
+      items: [...KAYIT.items, { id: '51', code: 'MM-2', name: 'Ornek urun iki', type: 'mamul' }],
+      routes: {
+        50: { base: null, steps: [
+          { id: '50-o10', seq: 10, opId: '13', stationId: '10', setup: 30, cycle: 4, alts: [], altTimes: {}, ins: [] },
+          { id: '50-o20', seq: 20, opId: '14', stationId: null, fasonId: '900', terminGun: 3, setup: 0, cycle: 0, alts: [], altTimes: {}, ins: [] },
+        ] },
+        51: { base: null, steps: [{ id: '51-o10', seq: 10, opId: '14', stationId: null, fasonId: '900', terminGun: 5, setup: 0, cycle: 0, alts: [], altTimes: {}, ins: [] }] },
+      },
+    };
+    const FIRMALAR = [{ id: '900', code: 'F1', name: 'Ornek Fason' }, { id: '901', code: null, name: 'Ornek Fason Iki' }];
+
+    it('aktif fason firmalar fasoncu olur: süre adımların en büyük termin günü, çıkış çalışma günleri, aynı anda iş sınırı yok', async () => {
+      const d = duzenek(FASON_KAYIT, Promise.resolve({ durum: { ...DURUM, fasonFirms: FIRMALAR }, ek: EK }));
+      d.ac();
+      await bekle();
+      const D = d.S()?.D as { fasoncular: Nesne[]; urunler: Array<{ id: string; rota: Nesne[] }> };
+      expect(D.fasoncular).toEqual([
+        { id: '900', ad: 'Ornek Fason', kapasite: 999, sureGun: 5, cikisGunleri: ['pzt', 'sal'], cikisSaat: 16 },
+        { id: '901', ad: 'Ornek Fason Iki', kapasite: 999, sureGun: 1, cikisGunleri: ['pzt', 'sal'], cikisSaat: 16 },
+      ]);
+      expect(D.urunler.find((u) => u.id === '50')?.rota[1]).toMatchObject({ fason: '900' });
+    });
+
+    it('sayfadaki fasoncu ayarı aynı kimlikte korunur, ad sahibinden gelir', async () => {
+      const d = duzenek(FASON_KAYIT, Promise.resolve({ durum: { ...DURUM, fasonFirms: FIRMALAR }, ek: EK }));
+      const S = d.ac() as { D: Nesne };
+      S.D['fasoncular'] = [{ id: '900', ad: 'Eski ad', kapasite: 2, sureGun: 7, cikisGunleri: ['cum'], cikisSaat: 12 }];
+      await bekle();
+      expect((d.S()?.D as { fasoncular: Nesne[] }).fasoncular[0]).toEqual({ id: '900', ad: 'Ornek Fason', kapasite: 2, sureGun: 7, cikisGunleri: ['cum'], cikisSaat: 12 });
+    });
+
+    it('fason okuması yoksa (eski durum, yetki yok) kayıttaki fasoncular kalır', async () => {
+      const d = duzenek(FASON_KAYIT, Promise.resolve({ durum: { ...DURUM, fasonFirms: null }, ek: EK }));
+      d.ac();
+      await bekle();
+      expect((d.S()?.D as { fasoncular?: unknown }).fasoncular).toBeUndefined();
+    });
+
+    it('kayda yazarken fason adımın kendi termin günü korunur, firma süresiyle ezilmez', async () => {
+      const d = duzenek(FASON_KAYIT, Promise.resolve({ durum: { ...DURUM, fasonFirms: FIRMALAR }, ek: EK }));
+      d.ac();
+      await bekle();
+      const st = d.kur(d.S()?.D as Nesne, FASON_KAYIT) as { routes: Record<string, { steps: Array<{ terminGun: number | null }> }> };
+      expect(st.routes['50']?.steps[1]?.terminGun).toBe(3);
+      expect(st.routes['51']?.steps[0]?.terminGun).toBe(5);
+    });
   });
 
   it('tezgâhın motor ayarları aynı kimlikte korunur; ad ve istasyon sahibinden gelir', async () => {

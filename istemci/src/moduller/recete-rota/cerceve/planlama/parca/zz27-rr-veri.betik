@@ -58,8 +58,10 @@ function rrDenemedenKur(D0, onceki) {
     const esAdim = seq => { const r = onceki && onceki.routes && onceki.routes[u.id]; return r ? (r.steps || []).find(x => x.seq === seq) : null; };
     const steps = (u.rota || []).map((o, i) => {
       const seq = rrSeq(o, i), ad = o.ad || ('OP ' + seq);
-      const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
       const eA = esAdim(seq);
+      const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
+      /* termin günü adımındır, fasoncunun süresi bütün adımlarının en büyüğü olabilir: aynı firmadaki adımın kendi günü korunur */
+      if (o.fason && eA && eA.fasonId === o.fason && eA.terminGun != null) y.terminGun = eA.terminGun;
       return Object.assign({}, eA || { id: 'p-' + u.id + '-' + o.k, outItem: '', outStatus: '', rejectPct: 0, outs: [], transfer: 0, resetup: true }, y, { seq, ins: [], plan: rrKopya(o) });
     });
     for (const b of u.bilesenler || []) {

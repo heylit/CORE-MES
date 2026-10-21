@@ -4,7 +4,8 @@ Bu teslim başka modülün dosyasına dokunmaz. Aşama 1'de bağlantı gereken y
 
 | İsteyen yer | Gereken | Olası sahibi | Bugün |
 |---|---|---|---|
-| Fason planı, Kaynaklar > Fason ve aparat | Fason firma listesi: kod, ad (kapasite, süre, çıkış günü ve saati planlamada kalabilir) | musteri-tedarikci | Firma adı yok: çerçeve "Fason firma #FS-..." gösterir; liste bağlı sunucudan (`BAGLI.durum.fasonFirms`) gelirdi, Aşama 1'de boş. |
+| Fason planı, Kaynaklar > Fason ve aparat | Fason firma listesi: kod, ad (kapasite, süre, çıkış günü ve saati planlamada kalabilir) | musteri-tedarikci | Karşılandı: durum okuması aktif fason firmaları verir (`fasonFirms`); planlama sayfası bunları fasoncu olarak kurar (21.10.2026, 23 a). Kapasite, süre ve çıkış ayarı planlamada kalır. |
+| Planlama örneği, ayar (23 a, 21.10.2026) | Örnek veride görevi tam "Ayarcı" olan iki kişi (`sunucu/moduller/kisiler/ornek-veri.ts`, `gorev`); planlama ayarcıyı kişi görevinden okur (`kisiGorevi`), ayarı olan adım ayarcısız yerleşmez | kisiler | Örnekte ayarcı yok; örnek plan ayar süreli adımları yerleştirmez. 298'deki Arkon "Ayarcı" çağrı ekibi rollere yönlenir, bu alanla ilgisi yoktur. |
 | Planlama motoru, ilk parça onayı (`fai` adımı) | Onay süresi ve onayın kendisi: planlama onayı bekleyen süre olarak koyar | Kalite Merkezi | Süre kayıttaki adım alanından (`fai`) ve atölye genelinden (`faiSaat`); onay olayı okunmaz. |
 | Canlıya al | Canlı planın yazılacağı tablo (emir no, OP no -> makine, başlangıç) ve sürümü | uretim-emirleri (220 a canlı plan) | Yalnız kayda yazılır (`st.tmiCanli`); sunucu planı güncellenmez. Reçete ve Rota çerçevesi kaydı okur (`curPlan`). |
 | Canlıya al, operatör ekranı | Terminalin okuduğu plan sırası (istasyon başına iş listesi) | Arkon MES / Üretim Terminali | Terminal güncellenmez; bu teslim Arkon'a dokunmaz. |
