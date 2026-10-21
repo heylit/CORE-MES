@@ -15,7 +15,7 @@ import * as receteRota from './moduller/recete-rota/disari.ts';
 import { rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
 import { durumRevizyonlari } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { siparisAyrintisi, siparisListesi, siparisOnaylandiDinle } from './moduller/siparisler/disari.ts';
+import { siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import * as stok from './moduller/stok/disari.ts';
 import * as uretimEmirleri from './moduller/uretim-emirleri/disari.ts';
@@ -67,6 +67,7 @@ export function sunucununBaglari(): Bag[] {
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('müşteri sınıfı -> plan', musteriSinifiCozucusu, musteriSiniflari),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
+    bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, receteRota.teklifDene),
     bag('stok değer grupları -> satın alma kg stok değeri', stokMiktariCozucusu, stok.degerGrubuToplamlari),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
     bag('kalite askısı -> satın alma siparişi', kaliteAskisiCozucusu, kaliteMerkezi.kaliteAskisindakiTedarikciler),
