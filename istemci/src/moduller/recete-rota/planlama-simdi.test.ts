@@ -1,22 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
 
-// 31 a: sayfanın "şimdi"si yalnız yeniden planlamada gerçek saate geçer; açılışta ve çizimde değişmez. Motor, zz27, zz34 ve zz31 gerçek;
-// sayfanın geri kalanı küçük taklit. Veriler uydurmadır.
+// 31 a: sayfanın "şimdi"si yalnız yeniden planlamada gerçek saate geçer; açılışta ve çizimde değişmez. 36 a: başlangıç günü yeniden
+// planlamada bugüne kayar. Motor, zz27, zz34 ve zz31 gerçek; sayfanın geri kalanı küçük taklit. Veriler uydurmadır.
 
-interface Duzenek { st: () => { now: number }; coz: (kip: string) => void; S: () => Record<string, unknown>; cozumler: string[]; bildirimler: string[] }
+interface Duzenek { st: () => { now: number }; coz: (kip: string) => void; S: () => Record<string, unknown>; cozumler: string[]; bildirimler: string[]; izler: string[]; geri: () => number[] }
 
 function duzenek(baslangic: string, simdi: number, yetki = true): Duzenek {
   const govde = `
-    let S = null; let U = { sayfa: 'tahta', hamle: null }; const bildirimler = []; const cozumler = [];
+    let S = null; let U = { sayfa: 'tahta', hamle: 'h' }; const bildirimler = []; const cozumler = []; const izler = [];
+    const geriAl = ['g']; const planGeri = ['p']; const planGuncel = () => !!(S.plan && S.plan.dataVer === S.dataVer);
     const RR = { el: null }; const SAYFA_AD = {}; const VERI = {}; let hsKaynak = null; let rrYerlestir = null; let calisan = null;
     const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
     const sayi = (x, n) => Number(x).toFixed(n); const saat = x => sayi(x, 1) + ' sa'; const esc = x => String(x); const ic = a => '[' + a + ']';
     const dugme = () => ''; const yetkili = () => ${String(yetki)};
-    function bildir(m) { bildirimler.push(m); }
+    function bildir(m) { bildirimler.push(m); } function iz(ne, a) { izler.push(ne + ': ' + a); }
     function kaydet() {} function render() {} function ozetTazele() {}
     function yukle() { return null; }
-    function yeniCalisma() { return { D: { meta: { baslangic: '${baslangic}' } }, dataVer: 1, plan: null, gercek: {} }; }
+    function yeniCalisma() { return { D: { meta: { baslangic: '${baslangic}' } }, dataVer: 1, plan: { dataVer: 1, ops: { 'O1.10': { S: 1400, C: 1410 } } }, gercek: {} }; }
     function stOf() { return { now: 7 }; }
     function coz(kip) { cozumler.push(kip + '@' + stOf().now); }
     let tekEylem = () => false;
@@ -26,7 +27,7 @@ function duzenek(baslangic: string, simdi: number, yetki = true): Duzenek {
     ${planlamaParcasi('zz34-adet-sayim')}
     ${planlamaParcasi('zz31-tmi')}
     S = yeniCalisma();
-    return { st: () => stOf(), coz: k => coz(k), S: () => S, cozumler, bildirimler };`;
+    return { st: () => stOf(), coz: k => coz(k), S: () => S, cozumler, bildirimler, izler, geri: () => [geriAl.length, planGeri.length, U.hamle === null ? 0 : 1] };`;
   const localStorage = { getItem: () => null, setItem: () => undefined };
   const window = { tmi: { kaynakOku: () => new Promise(() => undefined) }, tmiGorunum: { kaydet: () => undefined, bildir: () => undefined } };
   const belge = { addEventListener: () => undefined, visibilityState: 'visible' };
@@ -57,9 +58,27 @@ describe('sayfanın şimdisi (31 a)', () => {
     expect(y.st().now).toBe(7);
   });
 
-  it('başlangıç eskiyip ufkun sonu yaklaşınca uyarır', () => {
+  it('başlangıç yedi gün eskiyse yeniden planlamada bugüne kayar: saatler birlikte kayar, plan güncel kalır, geri alma boşalır', () => {
     const d = duzenek('2026-08-24', an('2026-10-21', 10));
     d.coz('sifir');
-    expect(d.bildirimler[0]).toContain('ufkun sonuna 4 gün kaldı');
+    const S = d.S() as { D: { meta: { baslangic: string } }; dataVer: number; plan: { dataVer: number; ops: Record<string, { S: number; C: number }> }; simdi: number };
+    expect(S.D.meta.baslangic).toBe('2026-10-21');
+    expect(S.plan.ops['O1.10']).toEqual({ S: 1400 - 58 * 24, C: 1410 - 58 * 24 });
+    expect(S.dataVer).toBe(2);
+    expect(S.plan.dataVer).toBe(2);
+    expect(S.simdi).toBe(10);
+    expect(d.cozumler).toEqual(['sifir@10']);
+    expect(d.geri()).toEqual([0, 0, 0]);
+    expect(d.izler).toEqual(['Planın başlangıç günü kaydı: 2026-08-24 -> 2026-10-21 (58 gün)']);
+    expect(d.bildirimler).toEqual([]);
+  });
+
+  it('başlangıç yedi günden yeniyse kaymaz', () => {
+    const d = duzenek('2026-10-15', an('2026-10-21', 10));
+    d.coz('sifir');
+    expect((d.S()['D'] as { meta: { baslangic: string } }).meta.baslangic).toBe('2026-10-15');
+    expect(d.cozumler).toEqual(['sifir@154']);
+    expect(d.geri()).toEqual([1, 1, 1]);
+    expect(d.izler).toEqual([]);
   });
 });

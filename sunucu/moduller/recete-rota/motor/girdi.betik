@@ -358,6 +358,63 @@ function stKur(S, ek = [], gevset = true) {
 }
 /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi); başlangıç günü 07:00'den önce değildir. */
 function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; }
+/* 36 a: motorun ufku başlangıçtan HDAYS gündür; başlangıç sabit kalırsa ufuk biter. Kayıtlı bütün plan saatleri başlangıç günü 00:00'dan
+   sayıdır: başlangıç g gün ileri alınınca her saat 24g, her gün sırası g azalır. Tarih metinleri (termin, tatil) ve gerçek anlar (canlı
+   yerleşim) olduğu gibi kalır. Geçmişte kalan plan işi düşmez (taban planda olmayan iş yeniden yerleşirdi), eksi saatte tamamlanmış sayılır;
+   yalnız yeni günden önce bitmiş arıza ve fazla mesai düşer. Gece vardiyası ertesi güne taştığı için önceki günün mesaisi kalır. */
+const BASLANGIC_ESIGI = 7;
+const kaydirSayi = (x, k, h) => { if (x && typeof x[k] === 'number') x[k] -= h; };
+const kaydirAlan = (x, alanlar, h) => { if (x) for (const k of alanlar) kaydirSayi(x, k, h); };
+function gunFarki(a, b) {
+  const t = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof s === 'string' ? s : ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+  const f = Math.round((t(b) - t(a)) / 86400000); return isFinite(f) ? f : null;
+}
+function planKaydir(p, h) {
+  if (!p || typeof p !== 'object') return;
+  for (const r of Object.values(p.ops || {})) kaydirAlan(r, ['S', 'Su', 'C', 'lot1'], h);
+  for (const j of Object.values(p.J || {})) kaydirSayi(j, 'C', h);
+  kaydirSayi(p.ozet, 'Cmax', h); kaydirSayi(p.oncekiOzet, 'Cmax', h);
+  for (const k in p.lbC || {}) kaydirSayi(p.lbC, k, h);
+}
+/* nabız ve sabit referansın kısa kayıtları: işlem [tezgâh, başlangıç], sipariş [bitiş, gecikme] */
+function kisaKaydir(l, i, h) { for (const k in l || {}) if (Array.isArray(l[k]) && typeof l[k][i] === 'number') l[k][i] -= h; }
+const OLAY_SAATI = { ariza: 'bas', acil: 'termin' };
+const OLAY_GUNU = { eksik: 'gun', mesai: 'gun' };
+/* x: çalışma ya da senaryo (her biri kendi D'siyle). Dönen: kayan gün; başlangıç yoksa ya da yeni gün ileride değilse 0, hiçbir şey değişmez. */
+function durumKaydir(x, yeni) {
+  const g = x && x.D && x.D.meta ? gunFarki(x.D.meta.baslangic, yeni) : null; if (!(g > 0)) return 0;
+  const h = g * 24;
+  x.D.meta.baslangic = yeni;
+  for (const s of x.D.siparisler || []) kaydirAlan(s, ['termin', 'serbest'], h);
+  for (const s of x.D.satinalma || []) kaydirSayi(s, 'gelis', h);
+  if (Array.isArray(x.down)) { for (const d of x.down) kaydirAlan(d, ['from', 'to'], h); x.down = x.down.filter(d => !(typeof d.to === 'number' && d.to <= 0)); }
+  if (Array.isArray(x.ekMesai)) { for (const e of x.ekMesai) kaydirSayi(e, 'gun', g); x.ekMesai = x.ekMesai.filter(e => !(typeof e.gun === 'number' && e.gun < -1)); }
+  for (const l of Object.values(x.locks || {})) kaydirSayi(l, 'S', h);
+  for (const a of Object.values(x.gercek || {})) kaydirAlan(a, ['S', 'C', 'sayim'], h);
+  for (const ev of x.olaylar || []) { if (OLAY_SAATI[ev.tip]) kaydirSayi(ev, OLAY_SAATI[ev.tip], h); if (OLAY_GUNU[ev.tip]) kaydirSayi(ev, OLAY_GUNU[ev.tip], g); }
+  planKaydir(x.plan, h);
+  /* senaryo planın özetini ve sipariş bitişlerini ayrıca da tutar */
+  planKaydir({ J: x.J, ozet: x.ozet }, h);
+  return g;
+}
+/* Çalışmanın başlangıcı yeni güne (GGGG-AA-GG) alınır; senaryolar kendi başlangıçlarından kayar. Dönen: çalışmanın kayan günü. */
+function baslangicKaydir(S, yeni) {
+  const g = durumKaydir(S, yeni); if (!g) return 0;
+  const h = g * 24;
+  for (const s of S.senaryolar || []) durumKaydir(s, yeni);
+  for (const n of [S.nbSabit, ...(S.nabiz || [])]) if (n) { kaydirSayi(n.o, 'cmax', h); kisaKaydir(n.ops, 1, h); kisaKaydir(n.J, 0, h); }
+  for (const l of Object.values(S.sevkIz || {})) for (const k of l || []) kaydirAlan(k, ['C', 'due'], h);
+  for (const k of S.paGecmis || []) kaydirSayi(k.ozet, 'Cmax', h);
+  kaydirSayi(S, 'simdi', h);
+  return g;
+}
+/* Gerçek gün başlangıçtan BASLANGIC_ESIGI gün ya da daha ilerideyse başlangıç o güne alınır (eşik her gün kaydırıp bütün kaydı yeniden
+   yazmamak için). an: gerçek an (ms). Dönen: kayan gün, kaymadıysa 0. */
+function baslangicTazele(S, an) {
+  const s = duvarSaati(an); if (!s || !S || !S.D || !S.D.meta) return 0;
+  const bugun = s.slice(0, 10), g = gunFarki(S.D.meta.baslangic, bugun);
+  return g != null && g >= BASLANGIC_ESIGI ? baslangicKaydir(S, bugun) : 0;
+}
 /* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek),
    kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
    kaydı, kaynak: { durum, ek } (çerçevenin kaynakOku cevabı) ya da null. Girdiler değişmez. Dönen: { S, st }; çalışma yoksa null. */
