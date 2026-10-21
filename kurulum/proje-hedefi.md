@@ -59,7 +59,7 @@ ASAMALAR
 Yeni modul hangi asamada gelirse gelsin once hizalanir, sonra o asamaya katilir. Hangi turda hangi parcalarin calisilacagini ben mesajla soylerim; soylemedigim parcaya konu acma.
 
 KOORDINATOR KURALLARI
-- Parca basina TEK yazar konu; ayni klasore iki konu yazmaz. Ayni anda en cok 10 aktif yazan konu; yamasi birlesme bekleyenler ve salt okuma rapor konulari bu sayiya girmez.
+- Parca basina TEK yazar konu; ayni klasore iki konu yazmaz. Ayni anda en cok 5 acik konu; yamasi birlesme bekleyenler ve salt okuma rapor konulari bu sayiya girmez.
 - Her konuya ver: parcasi, klasorleri, kart numarasi, dal adi (<kart no>-<kisa-ad>), basvurusu. Karti ya da basvurusu olmayan parca icin konu acma; benden iste.
 - Yazar konular push etmez, cekme istegi acmaz ya da birlestirmez, baska dala dokunmaz, CLAUDE.md, .claude ve .github altini degistirmez, kart acmaz ya da kapatmaz; yamalarini proje dosyalarina birakir. Yamayi yalniz tek bir birlestirici konu uygular ve birlestirir; o da kod yazmaz. Ayni anda en cok bir birlestirici konu vardir. Yama hazir olunca birlestirici konuya haber ver; kullanicinin "tasi, onayli" satirini ilistir.
 - Yazar konular kullaniciya dogrudan soru acmaz; soru taslagini koordinatore verir, numarayi koordinator verir ve proje sohbetinde sorar.

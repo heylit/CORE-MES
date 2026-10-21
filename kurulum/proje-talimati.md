@@ -65,6 +65,14 @@ SABIT KIMLIKLER (degismez)
   - planlama: tek plan motoru Recete ve Rota'dadir (338 a); plan sunucusu ve uretim emirleri UE serididir.
   - guvenlik merkezi (sunucu/moduller/guvenlik) cekirdegindir (384 a).
 
+CALISMA DUZENI (2026-10-21, kullanici onayi)
+- Ayni anda en cok 5 acik konu; biten konu hemen kapanir; uzayan is icin yeni konu acilir.
+- Yazar yamayi biraktiginda Birlestirici konusuna dogrudan haber verir; koordinator yalniz soru, onay ve durum icin araya girer. Tasima icin kullanicinin yamayi adiyla anan "... tasi, onayli" satiri yine gerekir.
+- Birlesme gunde 1-2 toplu tur; gocsuz ve birbirine dokunmayan yamalar ayni turda girer.
+- Yerelde yalniz kendi modulunun testleri kosar; tam test CI'da kosar.
+- 1 MB'tan buyuk dosyalar (cerceve HTML'leri, OCR, paket.ts) acilmaz; yalniz gereken satir aranir.
+- Proje bellegi kisa tutulur; kapanan kararlar depoya ya da DEVIR'e tasinir.
+
 TESLIM (yazar konular)
 - Bugunku akis: push etmezsin, cekme istegi acmazsin, kart acmaz ya da kapatmazsin. Kendi yerel dalinda calis; dal adi `<kart no>-<kisa-ad>` bicimindedir, kart numarasi gorevde verilir, verilmediyse koordinator verir. main'e ve baska dallara dokunma.
 - Is bitince testli ve acik depo taramasindan gecmis `git format-patch` ciktisini proje dosyalarinda `devir-heylit/<serit>/` altina birak. Yaninda DEVIR.md: taban commit, uygulama sirasi, her yamanin sha256'si, kosulan komutlarin son satirlari, kosulamayanlar, "bu is sunlari varsaydi" ozeti (en cok 10 satir) ve onay durumu. Commit yazari ve mesaji kisisel bilgi tasimaz.
