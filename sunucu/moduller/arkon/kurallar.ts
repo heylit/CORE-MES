@@ -1,6 +1,7 @@
 import { arkonBelgeAlanlari } from '#paylasilan/sozlesme/arkon.ts';
 import type { ANOMALI_DONEM_ADLARI, ArkonDeposu, ArkonKayitTuru, ArkonRolu, MerkezDurumu, OzetDonemi } from '#paylasilan/sozlesme/arkon.ts';
-import type { DurusNedeni, HurdaNedeni } from '#paylasilan/sozlesme/durus-nedenleri.ts';
+import type { CagriEkibi, DurusNedeni, HurdaNedeni } from '#paylasilan/sozlesme/durus-nedenleri.ts';
+import { CAGRI_EKIPLERI } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { IsMerkezi, Istasyon, Makine } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1333,6 +1334,19 @@ export const konumBosMu = (k: Konum): boolean =>
 
 // Konumu olan depolar. Çizim, ölçü aleti ve ayar belgelerinin iş merkezi yoktur: kapsam uygulanmaz.
 export const KONUMLU_DEPOLAR: ReadonlySet<ArkonDeposu> = new Set<ArkonDeposu>(['pkgs', 'requests', 'logi', 'maint', 'downs', 'results']);
+// 298: ekip çağrısı açılınca (calls, phase 'open') TMI bildirim merkezine gider; alıcıyı bildirim modülü ekip eşlemesinden seçer. Yer makine kodu,
+// yoksa istasyon kodu. Kabul, yükseltme ve kapatma yeni bildirim açmaz; tanınmayan ekip, yersiz ya da kimliksiz çağrı bildirilmez.
+export interface CagriBildirimi { ekip: CagriEkibi; yer: string; not: string | null; cagriKimligi: string }
+export function cagriBildirimi(govde: Readonly<Record<string, unknown>>): CagriBildirimi | null {
+  const { phase, team, callId, mc, machine, note } = govde;
+  if (phase !== 'open' || typeof callId !== 'string' || callId === '') return null;
+  const ekip = CAGRI_EKIPLERI.find((e) => e === team);
+  if (ekip === undefined) return null;
+  const metin = (x: unknown): string | null => (typeof x === 'string' && x !== '' ? x : null);
+  const yer = metin(mc) ?? metin(machine);
+  return yer === null ? null : { ekip, yer, not: metin(note), cagriKimligi: callId };
+}
+
 export const KONUMLU_KAYITLAR: ReadonlySet<ArkonKayitTuru> = new Set<ArkonKayitTuru>(['events', 'counts', 'meas', 'calls']);
 
 // Sonuç belgesinin (results) iş merkezi kendi gövdesinde değil, aynı kimlikli paketin istasyonundadır.

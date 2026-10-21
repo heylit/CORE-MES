@@ -771,3 +771,8 @@ Bu tur şunları varsaydı:
 - Terminalin makine seçicisi planın makinesini "plan" etiketiyle gösterir; başka emre önümüzdeki 4 saatte ayrılmış makine kilit ikonu, başlangıç saati ve emir no ile görünür ve seçilemez (sunucu zaten 409 verir, 393 d).
 - Veri `GET /arkon/makine-ayrimlari?emirId=` ucundan, o da uretim-emirleri `makineAyrimlari`'ndan (başlatma denetimiyle aynı kural ve aynı plan işlevi). Seçici açıkken dakikada bir yeniden okunur.
 - Ayrım okunamazsa (çevrimdışı) seçici eskisi gibidir; ayrım seçimden sonra gelirse kilitli makine seçimden ve çalışmaya geçiş kaydından düşer.
+
+## Ekip çağrısı: ayarcı ve TMI bildirimi (298)
+- Çağrı ekranına beşinci ekip "Ayarcı" eklendi (prototip değişikliği onaylı, 298 b); tek kalan düğme satırı doldurur.
+- Operatörün açtığı çağrı (calls, phase `open`) aynı işlemde TMI bildirim merkezine gider: `bildirim/disari.ts ekipCagrisiBildir`, alıcıyı Sistem Ayarları'ndaki ekip eşlemesi seçer, çağıran almaz. Kabul, yükseltme ve kapatma yeni bildirim açmaz; aynı kayıt (cid) yinelenirse kayıt yazılmadığı için bildirim de yinelenmez.
+- Kural `kurallar.ts cagriBildirimi` (tanınmayan ekip, yersiz ya da kimliksiz çağrı bildirilmez); yer makine kodu, yoksa istasyon kodu.
