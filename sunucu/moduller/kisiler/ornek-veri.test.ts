@@ -27,7 +27,7 @@ describe('kisiler örnek verisi', { timeout: 60_000 }, () => {
   });
   after(async () => { await kaldir?.(); });
 
-  test('boş veritabanına 13 örnek hesap rolüyle girer; her hesap basılan parolayla girer ve rolünün işlemini taşır', async () => {
+  test('boş veritabanına 15 örnek hesap rolüyle girer; her hesap basılan parolayla girer ve rolünün işlemini taşır', async () => {
     assert.deepEqual(await ornekVeriYukle(acik(), [ornekVeri], secenek), { durum: 'yuklendi', moduller: ['kisiler'] });
     assert.equal(parolalar.size, ORNEK_KISILER.length + 1);
     const yoneticiId = await kisiNoKullaniciAdindan(acik(), ORNEK_YONETICI);
@@ -42,6 +42,12 @@ describe('kisiler örnek verisi', { timeout: 60_000 }, () => {
       const kullanici = await acik().tx((db) => kullaniciYukle(db, id));
       assert.ok(kullanici && kullanici.islemler.length > 0, `${k.kullaniciAdi} rolsüz kaldı`);
     }
+  });
+
+  test('planlama örneği için görevi tam "Ayarcı" iki kişi vardır; başka kişi bu görevi taşımaz', async () => {
+    const ayarcilar = await acik().sorgu<{ ad: string }>("SELECT ad FROM kisi WHERE gorev = 'Ayarcı' ORDER BY ad");
+    assert.deepEqual(ayarcilar.map((k) => k.ad), ['Örnek Ayarcı Bir', 'Örnek Ayarcı İki']);
+    assert.equal(ORNEK_KISILER.filter((k) => k.gorev === 'Ayarcı').length, 2);
   });
 
   test('ikinci koşu bir şey yazmaz; olmayan kullanıcı adı null döner', async () => {
