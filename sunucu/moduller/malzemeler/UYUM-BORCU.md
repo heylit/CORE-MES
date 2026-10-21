@@ -252,3 +252,9 @@ Açık:
 ## Kartın etiketi Etiket Merkezi'nde (269 a, 20.10.2026, #2033)
 - Kart ayrıntısında prototipin "Etiket" düğmesinin yanında "Etiket Merkezi'nde bas" düğmesi durur; `/etiket-merkezi?tur=malzeme&id=<kart no>` açılır. Yalnız `sayfa.etiket-merkezi` olan kullanıcıda, kayıtlı ve hizmet olmayan kartta görünür.
 - Bilinen sınır: düğme prototipten sonra eklenen betiktedir (`etiket-merkezi-eki.ts`, `openItem` sarılır). Prototipin kendi etiket penceresi yerinde durur; ikisinin birleşmesi ayrı karardır. Aynı düğme QR ile açılan saha görünümünde de durur (`sahaAc` sarılır).
+
+## Alış birimi ve katsayısı (323 b, 20.10.2026)
+- Kartta tek alış birimi ve katsayısı durur (1 alış birimi = katsayı kadar stok birimi; ör. 1 kutu = 50 adet). Kartın `com.alisBirimi` ve `com.alisKatsayisi` alanları `alis_birimi` ve `alis_katsayisi` sütunlarına yazılır;
+  ikisi birlikte dolu ya da boştur, alış birimi stok biriminden farklı ve birim listesinde olmalıdır (yeni ya da değişmişse), katsayı sıfırdan büyük, en çok 6 ondalıktır. Satın alma `malzemeBirimDonusumleri` (disari.ts) ile okur.
+- Bilinen sınır: alanlar prototipten sonra eklenen betiktedir (`birim-donusumu-eki.ts`, `s5` ve `gTicariHTML` sarılır). Alış birimi seçenekleri ekranın bütün birim listelerinin birleşimidir; Excel aktarımı, föy ve değişiklik karşılaştırması alanları göstermez.
+  Eski kartlar boş kalır (314). Satın almada siparişin birimi ve stoka çeviri Satın alma şeridindedir.

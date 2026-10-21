@@ -796,3 +796,38 @@ describe('kart ayrıntısında Etiket Merkezi düğmesi (269 a; prototipe dokunm
     expect(r).toEqual({ yetkisiz: false, yetkili: true, hizmet: false, koprusuz: false, istenen: ['k1'], saha: true, sahaHizmet: false });
   });
 });
+
+describe('323 b: kartta alış birimi ve katsayısı (birim-donusumu-eki)', () => {
+  it('hammadde ve öteki türlerde iki alan stok biriminin arkasına gelir; stok birimi seçenekte yok, kayıtlı değerler dolu gelir', async () => {
+    const w = await prototipiKostur();
+    const r = await hesapla<Record<string, unknown>>(w, `
+      const oku = (h) => {
+        const k = document.createElement('div'); k.innerHTML = h;
+        const s = k.querySelector('select[data-b="com.alisBirimi"]'); const i = k.querySelector('input[data-b="com.alisKatsayisi"]');
+        const etiketler = [...k.querySelectorAll('label.f > span:first-child')].map(e => e.textContent);
+        return s && i ? { secili: s.value, secenekler: [...s.options].map(o => o.value), katsayi: i.value, etiketler: etiketler.slice(etiketler.indexOf('Stok birimi'), etiketler.indexOf('Stok birimi') + 3) } : null;
+      };
+      const o = {};
+      D = { ...newDraft(), com: { ...newDraft().com, birim: 'kg', alisBirimi: 'levha', alisKatsayisi: '12,5' } };
+      o.hammadde = oku(s5());
+      D = { ...newDraft(), tur: 'sarf', g: {}, com: { ...newDraft().com, birim: 'adet' } };
+      o.sarf = oku(gTicariHTML());
+      return o;`);
+    expect(r['hammadde']).toMatchObject({ secili: 'levha', katsayi: '12,5', etiketler: ['Stok birimi', 'Alış birimi', '1 alış birimi = kaç kg'] });
+    expect(r['hammadde']).toHaveProperty('secenekler', expect.not.arrayContaining(['kg']));
+    expect(r['sarf']).toMatchObject({ secili: '', katsayi: '', etiketler: ['Stok birimi', 'Alış birimi', '1 alış birimi = kaç adet'] });
+    const sarf = r['sarf'] as { secenekler: string[] };
+    expect(sarf.secenekler[0]).toBe('');
+    expect(sarf.secenekler).toContain('kutu');
+    expect(sarf.secenekler).not.toContain('adet');
+  });
+
+  it('alanlara yazılan değer kartın com alanına geçer', async () => {
+    const w = await prototipiKostur();
+    const r = await hesapla<Record<string, unknown>>(w, `
+      D = { ...newDraft(), com: { ...newDraft().com, birim: 'kg' } };
+      setPath('com.alisBirimi', 'levha'); setPath('com.alisKatsayisi', '40');
+      return { b: D.com.alisBirimi, k: D.com.alisKatsayisi };`);
+    expect(r).toEqual({ b: 'levha', k: '40' });
+  });
+});

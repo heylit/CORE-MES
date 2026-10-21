@@ -22,9 +22,9 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, kartTedarikciFirmaId, katalogAciklamalari, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
-import type { KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
+import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -61,6 +61,14 @@ export async function malzemeMaliyetBilgileri(db: Db, nolar: number[]): Promise<
   return new Map((await s.katalogMaliyetSatirlari(db, benzersiz)).map((r) => [r.no, {
     kaliteKodu: r.kaliteKodu, kaliteAdi: r.kaliteAdi, aile: r.aile, form: r.form, formAdi: r.formAdi, stokBirimi: r.stokBirimi, birimKg: r.birimKg, netKg: r.netKg,
   }]));
+}
+
+// 323 b: tedarikçinin biriminde girilen miktar stok birimine `miktar * katsayi` ile çevrilir. Olmayan ya da dönüşümsüz kart haritada yok.
+export interface MalzemeBirimDonusumu { stokBirimi: string | null; alisBirimi: string; katsayi: string }
+export async function malzemeBirimDonusumleri(db: Db, nolar: number[]): Promise<Map<number, MalzemeBirimDonusumu>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogBirimDonusumleri(db, benzersiz)).map((r) => [r.no, { stokBirimi: r.stokBirimi, alisBirimi: r.alisBirimi, katsayi: r.katsayi }]));
 }
 
 export function kullanilanKaliteler(db: Db): Promise<s.KullanilanKaliteSatiri[]> {
@@ -342,6 +350,11 @@ const KART_KISITLARI = {
   malzeme_katalog_karti_degismez: 'Kartın türü ve stok kodu yalnız hiç aktif olmamış taslakta değişir.',
 } as const;
 
+function kayitBirimDonusumu(kayit: Record<string, unknown>): BirimDonusumu | null {
+  const d = kartBirimDonusumu(kayit);
+  return d === null || 'mesaj' in d ? null : d;
+}
+
 export async function katalogKartiKaydet(
   db: Db, kullanici: Kullanici, kimlik: string, g: z.output<typeof katalogKartiKaydetGovdesi>,
 ): Promise<KatalogKartiKaydetCevabi> {
@@ -368,6 +381,15 @@ export async function katalogKartiKaydet(
   if (kayitli && kartRotaIcerigiDegistiMi(kayitli.kayit, g.kayit) && await rotasiVarMi(db, kayitli.no)) throw cakisma(ROTALI_KART_ILETISI);
   const olcuHatasi = hammaddeOlcuHatasi(kayitli?.kayit ?? null, g.kayit);
   if (olcuHatasi) throw dogrulama(olcuHatasi, 'kayit.dims');
+  // 323 b: alış birimi, stok birimi gibi (SH4 a) yalnız yeni ya da değişmişse listede aranır.
+  for (const { onek, donusum } of kartBirimDonusumleri(g.kayit)) {
+    if (donusum === null) continue;
+    if ('mesaj' in donusum) throw dogrulama(donusum.mesaj, onek + donusum.alan);
+    const eski = kayitli ? kartBirimDonusumu(kayitli.kayit) : null;
+    if ((eski === null || 'mesaj' in eski || eski.alisBirimi !== donusum.alisBirimi) && !(await s.birimSecilebilirMi(db, donusum.alisBirimi))) {
+      throw dogrulama(`"${donusum.alisBirimi}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, `${onek}alisBirimi`);
+    }
+  }
   // Madde 6 ve TM3: hizmet ve ticari mal reçete bileşeni ya da operasyon sarfı olamaz.
   const yasakBilesenler = await s.katalogBilesenOlamayanKodlar(db, kartBilesenKimlikleri(g.kayit));
   if (yasakBilesenler.length) throw gecersiz(`Hizmet ve ticari mal kartı reçeteye ya da operasyon sarfına girmez: ${yasakBilesenler.join(', ')}.`);
@@ -454,6 +476,7 @@ export async function katalogKartiKaydet(
     netAgirlikKg: katalogNetAgirlikKg(tur, kayit),
     tedarikciFirmaId: kartTedarikciFirmaId(kayit),
     aciklamalar: katalogAciklamalari(g.ozet),
+    birimDonusumu: kayitBirimDonusumu(kayit),
   };
   // Firma kodlu türde önek ayardan gelir, gelen kod okunmaz.
   const onekDegisti = kayitli !== null && !turDegisti && katalogFirmaOneki(await katalogGenelAyari(db), tur) === null
