@@ -19,6 +19,9 @@ interface Sayfa {
 
 const RECETE_ROTA = /^\/recete-rota(\/[a-z]+)?$/;
 const RECETE_ROTA_BOLUMLERI = ['schema', 'plan', 'kanban', 'items', 'ops', 'res', 'stock', 'studio', 'sureler'] as const;
+// Bu bölümler planlama çerçevesinde açılır ve planlama işlemini ister; Aşama 1'de yalnız yöneticide (353 a). Planlamacının
+// reddi recete-rota.spec.ts'te sınanır.
+const PLANLAMA_BOLUMLERI: readonly string[] = ['plan', 'kanban', 'studio'];
 
 // İstasyonlar ve Vardiya bölümleri (UYUM-BORCU istasyonlar 1, vardiya V-B9, V-B10, V-B14). İstasyonlar bölüm adını kartta yinelemez:
 // başlık sayfanın adıdır; Vardiya'da bölümün ilk panel başlığıdır.
@@ -39,7 +42,8 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'plan', yol: '/matris', hesap: 'ornek.planlama', baslik: 'Plan Matrisi' },
   { modul: 'recete-rota', yol: '/recete-rota', varis: RECETE_ROTA, hesap: 'ornek.yonetici', baslik: 'Reçete ve Rota', cerceve: true },
   ...RECETE_ROTA_BOLUMLERI.map((b): Sayfa => ({
-    modul: 'recete-rota', yol: `/recete-rota/${b}`, varis: RECETE_ROTA, hesap: 'ornek.planlama', baslik: 'Reçete ve Rota', cerceve: true,
+    modul: 'recete-rota', yol: `/recete-rota/${b}`, varis: RECETE_ROTA, hesap: PLANLAMA_BOLUMLERI.includes(b) ? 'ornek.yonetici' : 'ornek.planlama', baslik: 'Reçete ve Rota',
+    cerceve: true,
   })),
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', cerceve: true },
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', cerceve: true },
