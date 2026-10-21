@@ -1,4 +1,4 @@
-Kaynak: Claude projesi ayarlari. Ayar degisince bu dosya da guncellenir; ikisi celisirse ayar gecerlidir. Tarih: 2026-10-14
+Kaynak: Claude projesi ayarlari. Ayar degisince bu dosya da guncellenir; ikisi celisirse ayar gecerlidir. Tarih: 2026-10-21
 
 ```text
 Bu proje TMI CORE V2'nin (CNC atolyesi uretim planlama ve izlenebilirlik sistemi) disarida yazilan parcalaridir.
@@ -23,7 +23,7 @@ KURALLAR
 5. Adlandirma: tablo, kisit, dizin ve islem adlari modul adiyla baslar; kisitlar adlandirilir; her is kurali modul oneki ve numara tasir, bir teste ya da kisita baglanir.
 6. Baglanti eksikse bekleme: bos olabilen sutun ya da calisma kopyandaki gecici karsilikla kur, gecici karsiligi gonderme, UYUM-BORCU.md'ye "baglamada kapanacak" diye yaz.
 7. Guvenlik isin parcasidir: genel depo ucu yok; her yazma adindan belli ayri bir uc, kendi semasi ve islemiyle; surum denetimi; kayit zamani ve kisi sunucudan; onayli ya da kesinlesmis kayit onaysiz degismez; is merkezine bagli kayitta veri kapsami; tekrar korumasi gereken komutta istek kimligi; kullanici metni kacirilarak basilir. Her kural icin iki test: izinli durum gecer, yasak durum reddedilir.
-8. Gercek musteri adi, parca numarasi, kisi adi, parola, anahtar depoya ve testlere girmez. Dis servis, CDN, telemetri, onaysiz npm paketi yok. Eski sisteme baglanma.
+8. DEPO HERKESE ACIKTIR (heylit/core-mes; 2026-10-21 kullanici karari, kalici): gizli, ozel ya da sirket bilgisi depoya GIRMEZ. Kod, test, ornek veri, belge, commit mesaji, cekme istegi ve kart metni buna dahildir. Girmeyecekler: gercek musteri, tedarikci ve kisi adi; parca numarasi; tezgah parki (marka, model); adres, IP, alan adi, kullanici adi; parola, anahtar, sertifika; Logo, SmartES ve PDKS kimlik ve adresleri; ic belge ve sirket sureci ayrintisi; guvenlik acigi ayrintisi. Bunlar yalniz depo disinda (proje dosyalari) ya da kurulumdaki yapilandirmada tutulur. Her degisiklik depoya gitmeden once acik depo taramasindan gecer; supheli satir varsa yazilmaz, sorulur. Dis servis, CDN, telemetri, onaysiz npm paketi yok. Eski sisteme baglanma.
 9. On paket en cok iki tur ve en cok 6 soru; yalniz geri almasi pahali kararlar (dolu tabloyu degistiren sema, yetki modeli, kapsam, sahiplik). Onayli on paket varsa kodu yaz.
 10. Yeni modulsen (depoda klasorun yok): yazmadan once cakisma taramasi yap. Modulun tuttugu her kavrami var olan modullerle karsilastir (harita, ORTAKLIK dosyalari, disari.ts) ve uc liste ver: baska modulde olan (oradan okunacak), yalniz sende olan, belirsiz (sorulacak). Belirsiz listesi cevaplanmadan yazima baslama.
 11. Node 24 ve PostgreSQL kur (ortamda hazir degilse); `npm run tip`, `npm run lint`, `npm run sinir -- --modul <ad>` ve kendi testlerini kos, son satirlarini yaz. Kosamadigini "calistirilmadi" diye yaz; uydurma sonuc yazma.
@@ -63,7 +63,7 @@ TESLIM (yazar konular)
 BIRLESTIRME (yalniz birlestirici konu)
 - main korumalidir: her degisiklik cekme istegiyle girer ve `kontrol` testi yesil olmadan birlesemez. Bu kurali dolanmaya calisma.
 - Yalniz CI'i yesil, taslakta olmayan ve sirasi gelmis cekme istegi birlesir; boyle bir istegi beklemeden birlestir. Kirmizi olan sahibi konuya nedeniyle geri doner. Taslaktaki istek yazarin hala calistigi istektir; dokunma.
-- Birlesmeyi tutanlar: kirmizi CI, yetki acigi, veri kaybi, yanlis sayi ya da para, kirmizi cizgi (gercek veri, dis cagri, onaysiz paket), baska parcanin klasorune yazim, FARK.md'de yazmayan degisiklik. Diger bulgular modulun UYUM-BORCU.md'sine ya da karta yazilir; birlesmeyi tutmaz.
+- Birlesmeyi tutanlar: kirmizi CI, yetki acigi, veri kaybi, yanlis sayi ya da para, kirmizi cizgi (gercek veri, gizli ya da sirket bilgisi, dis cagri, onaysiz paket), baska parcanin klasorune yazim, FARK.md'de yazmayan degisiklik. Diger bulgular modulun UYUM-BORCU.md'sine ya da karta yazilir; birlesmeyi tutmaz.
 - Toplayici istisnasi: modulun toplayiciya ya da cekirdek kayit listesine ekledigi ayri commit'in yalniz o modulun kayit satirlari oldugunu ve listenin yapisina dokunmadigini denetle; degilse birlesmeyi tutar.
 - Bana sorulur, onayim beklenir: rol x islem degisikligi, dolu tabloyu degistiren ya da dusuren goc, yeni paket, CLAUDE.md, .claude ve .github degisikligi, sahibi disarida olan module dokunan is (uretim-emirleri 2026-10-12'de projeye alindi; artik bu kapsamda degil).
 - Sira: ayni dosyaya dokunmayan cekme istekleri pes pese birlesir; ortak dosyasi olanlar sirayla, her birinden sonra siradaki guncel ana dala alinir ve CI beklenir. Cekirdek ve ortak arayuz once, moduller sonra.
