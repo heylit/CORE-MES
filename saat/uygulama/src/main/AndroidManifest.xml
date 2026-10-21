@@ -7,9 +7,6 @@
     <!-- Istasyon etiketi yalniz okunur (297 a); NFC olmayan saatte menu satiri gorunmez. -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
-    <!-- Kadran (340 a): sistem kadrani arka planda calistirir. -->
-    <uses-permission android:name="com.google.android.permission.PROVIDE_BACKGROUND" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Yedekleme kapali: belirtec bulut yedegine ya da baska cihaza gecmez. -->
     <application
@@ -51,25 +48,52 @@
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
         </service>
-        <!-- TMI kadrani: saat, dikkat isteyen istasyonlar, acik emirlerin toplam ilerleme halkasi. Dokununca Tezgahlar 3B acilir. -->
+        <!-- TMI kadraninin (saat/kadran, Watch Face Format) veri kutucuklari; baska kadranlarda da secilebilir.
+             Sistem en sik 5 dakikada bir ister (pil); logo saatte bir. Dokununca Tezgahlar 3B acilir. -->
         <service
-            android:name=".kadran.TmiKadrani"
+            android:name=".kadran.EmirHalkasi"
             android:exported="true"
-            android:label="@string/kadran_adi"
-            android:permission="android.permission.BIND_WALLPAPER">
+            android:label="@string/kutucuk_emirler"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter>
-                <action android:name="android.service.wallpaper.WallpaperService" />
-                <category android:name="com.google.android.wearable.watchface.category.WATCH_FACE" />
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
             <meta-data
-                android:name="com.google.android.wearable.watchface.preview"
-                android:resource="@drawable/kadran_onizleme" />
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE" />
             <meta-data
-                android:name="com.google.android.wearable.watchface.preview_circular"
-                android:resource="@drawable/kadran_onizleme" />
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+        </service>
+        <service
+            android:name=".kadran.IstasyonOzeti"
+            android:exported="true"
+            android:label="@string/kutucuk_istasyonlar"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
             <meta-data
-                android:name="android.service.wallpaper"
-                android:resource="@xml/kadran" />
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="LONG_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+        </service>
+        <service
+            android:name=".kadran.KurumLogosu"
+            android:exported="true"
+            android:label="@string/kutucuk_logo"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SMALL_IMAGE,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="3600" />
         </service>
     </application>
 </manifest>

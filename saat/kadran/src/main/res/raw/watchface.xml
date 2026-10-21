@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TMI kadrani (375 a). Veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir: acik emir halkasi, dikkat isteyen
+     istasyonlar, kurum logosu. Kisik modda yalniz saat ve tarih kalir; kutucuklar gizlenir. Dokununca Tezgahlar 3B acilir. -->
+<WatchFace width="450" height="450">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+    <Metadata key="PREVIEW_TIME" value="10:08:32" />
+    <Scene backgroundColor="#ff000000">
+
+        <ComplicationSlot slotId="0" displayName="Emirler" x="0" y="0" width="450" height="450"
+            supportedTypes="RANGED_VALUE EMPTY" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="tmi.saat/tmi.saat.kadran.EmirHalkasi" primaryProviderType="RANGED_VALUE" />
+            <BoundingOval x="0" y="0" width="450" height="450" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="428" height="428" startAngle="0" endAngle="360">
+                        <Stroke color="#ff1d222a" thickness="11" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="428" height="428" startAngle="0" endAngle="0">
+                        <Transform target="endAngle"
+                            value="360 * ([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])" />
+                        <Stroke color="#ff3cf0a8" thickness="11" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="105" y="376" width="240" height="30">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="21" color="#ff929cab">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+        </ComplicationSlot>
+
+        <ComplicationSlot slotId="1" displayName="Logo" x="185" y="52" width="80" height="50"
+            supportedTypes="SMALL_IMAGE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="tmi.saat/tmi.saat.kadran.KurumLogosu" primaryProviderType="SMALL_IMAGE" />
+            <BoundingBox x="0" y="0" width="80" height="50" />
+            <Complication type="SMALL_IMAGE">
+                <PartImage x="0" y="0" width="80" height="50">
+                    <Image resource="[COMPLICATION.SMALL_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="0" width="80" height="50">
+                    <Text align="CENTER">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="BOLD" color="#ffffd23f">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+        </ComplicationSlot>
+
+        <DigitalClock x="0" y="118" width="450" height="112">
+            <TimeText x="0" y="0" width="450" height="112" align="CENTER" format="hh:mm" hourFormat="24">
+                <Font family="SYNC_TO_DEVICE" size="104" weight="BOLD" color="#fff2f4f7" />
+            </TimeText>
+        </DigitalClock>
+
+        <PartText x="40" y="232" width="370" height="36">
+            <Variant mode="AMBIENT" target="alpha" value="150" />
+            <Text align="CENTER" ellipsis="TRUE">
+                <Font family="SYNC_TO_DEVICE" size="23" color="#ff929cab">
+                    <Template>%s %s %s<Parameter expression="[DAY_OF_WEEK_F]" /><Parameter expression="[DAY]" /><Parameter expression="[MONTH_F]" /></Template>
+                </Font>
+            </Text>
+        </PartText>
+
+        <ComplicationSlot slotId="2" displayName="İstasyonlar" x="55" y="282" width="340" height="86"
+            supportedTypes="LONG_TEXT SHORT_TEXT EMPTY" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="tmi.saat/tmi.saat.kadran.IstasyonOzeti" primaryProviderType="LONG_TEXT" />
+            <BoundingRoundBox x="0" y="0" width="340" height="86" cornerRadius="20" />
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="0" width="340" height="32">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="#ffffd23f">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="36" width="340" height="44">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="2">
+                        <Font family="SYNC_TO_DEVICE" size="21" color="#fff2f4f7">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="20" width="340" height="44">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="24" color="#fff2f4f7">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+        </ComplicationSlot>
+    </Scene>
+</WatchFace>

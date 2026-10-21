@@ -29,4 +29,8 @@ rootProject.name = "tmi-saat"
 
 // Saf kurallar Android'siz derlenir ve sinanir: `gradle -PyalnizCekirdek :cekirdek:test`.
 include(":cekirdek")
-if (!providers.gradleProperty("yalnizCekirdek").isPresent) include(":uygulama")
+if (!providers.gradleProperty("yalnizCekirdek").isPresent) {
+    include(":uygulama")
+    // Kodsuz Watch Face Format kadrani; ayri APK olarak kurulur.
+    include(":kadran")
+}

@@ -9,7 +9,7 @@ okhttp = "4.12.0"
 # Karolar: kullanici onayi soru 294 a (yalniz tiles ve protolayout ile zorunlu bagimliliklari).
 wear-tiles = "1.4.1"
 wear-protolayout = "1.2.1"
-# Kadran: kullanici onayi soru 340 a (yalniz watchface ve zorunlu bagimliliklari).
+# Kadran veri kutucuklari: kullanici onayi soru 375 a (yalniz complications-data-source ve zorunlu bagimliliklari).
 wear-watchface = "1.2.1"
 junit = "4.13.2"
 
@@ -21,7 +21,7 @@ wear-compose-navigation = { module = "androidx.wear.compose:compose-navigation",
 compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose-ui" }
 wear-tiles = { module = "androidx.wear.tiles:tiles", version.ref = "wear-tiles" }
 wear-protolayout = { module = "androidx.wear.protolayout:protolayout", version.ref = "wear-protolayout" }
-wear-watchface = { module = "androidx.wear.watchface:watchface", version.ref = "wear-watchface" }
+wear-complications-data-source = { module = "androidx.wear.watchface:watchface-complications-data-source", version.ref = "wear-watchface" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 junit = { module = "junit:junit", version.ref = "junit" }
 

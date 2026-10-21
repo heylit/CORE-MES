@@ -1,5 +1,7 @@
 package tmi.saat.cekirdek
 
+import java.util.Locale
+
 // Sunucunun saat sozlesmesi (paylasilan/sozlesme/saat.ts) ile ayni adlar. Olculemeyen deger null'dir; ekran "veri yok" yazar.
 
 enum class IstasyonDurumu(val kod: String, val etiket: String) {
@@ -248,6 +250,23 @@ object Kadran {
 
     fun gosterilecek(durumlar: List<String>, enCok: Int = 3): List<Int> =
         durumlar.indices.sortedBy { oncelik(IstasyonDurumu.coz(durumlar[it])) }.take(enCok)
+
+    // Kadranin istasyon kutucugu: baslik kac istasyonun dikkat istedigi, metin en cok uc tanesi ("Ad durum").
+    // Dikkat isteyen yoksa calisan sayisi yazilir; istasyon yoksa uydurma sayi yazilmaz.
+    fun ozet(istasyonlar: List<Pair<String, String>>, enCok: Int = 3): Pair<String, String> {
+        if (istasyonlar.isEmpty()) return "İstasyonlar" to "İstasyon yok"
+        val dikkat = istasyonlar.indices.filter { oncelik(IstasyonDurumu.coz(istasyonlar[it].second)) <= 1 }
+        if (dikkat.isEmpty()) {
+            val calisan = istasyonlar.count { IstasyonDurumu.coz(it.second) == IstasyonDurumu.CALISIYOR }
+            return "İstasyonlar" to "$calisan/${istasyonlar.size} çalışıyor"
+        }
+        val sirali = dikkat.sortedBy { oncelik(IstasyonDurumu.coz(istasyonlar[it].second)) }.take(enCok)
+        val metin = sirali.joinToString(", ") { k ->
+            val (ad, durum) = istasyonlar[k]
+            "$ad ${(IstasyonDurumu.coz(durum)?.etiket ?: durum).lowercase(Locale("tr"))}"
+        }
+        return "${dikkat.size} istasyon dikkat" to metin
+    }
 
     fun toplamOran(adetler: List<Pair<Int?, Int>>): Float? {
         val bilinen = adetler.filter { it.first != null }
