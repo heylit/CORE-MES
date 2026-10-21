@@ -17,6 +17,10 @@ export const useOnaylayabilir = (): boolean => useIslemVar('siparisler.onayla');
 export const useIskontoOnaylar = (): boolean => useIslemVar('siparisler.iskonto-onayla');
 // 180: fiyat, tutar ve teklif sürümü yalnız fiyatı görene; sunucu da bu alanları boş döner.
 export const useFiyatGorur = (): boolean => useIslemVar('siparisler.fiyat-oku');
+// 44, 65 a: teklifi plana dener; maliyet dökümü ayrı işlemdir. 63 b: geciktiren termini plancı (plan.yaz) onaylar.
+export const useTerminDener = (): boolean => useIslemVar('siparisler.termin-dene');
+export const useMaliyetOkur = (): boolean => useIslemVar('siparisler.maliyet-oku');
+export const useTerminOnaylar = (): boolean => useIslemVar('plan.yaz');
 // 195 a: elle çarpanı plan.yaz 2'ye, siparisler.onayla 3'e kadar verir; sınırı sunucu denetler, ekran yalnız uyarır.
 // Değerler Plan sözleşmesindeki ELLE_CARPAN'dır (istemci sözleşmeden değer ithal etmez).
 export const ELLE_CARPAN = { enAz: 0.5, planlama: 2, enCok: 3 } as const;

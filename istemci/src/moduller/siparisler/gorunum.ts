@@ -1,4 +1,4 @@
-import type { SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { PlanTaslagiGorunumu, SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu, Sekme } from '../../ortak/arayuz/index.ts';
 
@@ -14,12 +14,21 @@ export const ISKONTO_ONAY_ESIGI = 10;
 
 export const TEKLIF_DURUMU: Record<TeklifDurumu, { etiket: string; ton: RozetTonu }> = {
   yeni: { etiket: 'Fiyat bekliyor', ton: 'uyari' },
-  'onay-bekliyor': { etiket: 'İskonto onayı bekliyor', ton: 'uyari' },
+  'onay-bekliyor': { etiket: 'Onay bekliyor', ton: 'uyari' },
   verildi: { etiket: 'Müşteride', ton: 'bilgi' },
   revizyon: { etiket: 'Revizyon istendi', ton: 'uyari' },
   kabul: { etiket: 'Kabul edildi', ton: 'tamam' },
   red: { etiket: 'Reddedildi', ton: 'hata' },
   siparis: { etiket: 'Siparişe döndü', ton: 'tamam' },
+};
+
+// 49: plan taslağının görünümü sunucuda, okuma anında çıkar.
+export const PLAN_TASLAGI_GORUNUMU: Record<PlanTaslagiGorunumu, { etiket: string; ton: RozetTonu }> = {
+  deneme: { etiket: 'Deneme taslağı', ton: 'pasif' },
+  satis: { etiket: 'Satış taslağı: yer tutuyor', ton: 'bilgi' },
+  'onay-bekliyor': { etiket: 'Plancı onayı bekliyor', ton: 'uyari' },
+  'satis-deneme': { etiket: 'Deneme satış taslağı: süresi doldu', ton: 'pasif' },
+  kalkti: { etiket: 'Plandan kalktı', ton: 'pasif' },
 };
 
 export type SiparisSekmesi = SiparisDurumu | 'tumu';

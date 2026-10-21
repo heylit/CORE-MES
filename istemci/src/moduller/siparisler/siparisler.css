@@ -54,6 +54,21 @@
 .tc-sp-secili { min-width: 0; overflow-wrap: anywhere; color: var(--muted); }
 .tc-sp-alt-cubuk { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-3); }
 
+/* Termin ve fiyat (44): termin sonucu, kâr seçimi; renk ve ölçü yalnız tasarım değişkenleriyle. */
+.tc-sp-tf { display: grid; gap: var(--b-4); min-width: 0; padding: var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-sp-secim { display: grid; gap: var(--b-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.tc-sp-secim legend { padding: 0; margin-bottom: var(--b-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-sp-secim label { display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); }
+.tc-sp-termin { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3) var(--b-4); margin: 0; }
+.tc-sp-termin div { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-sp-termin dt { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tc-sp-termin dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tc-sp-termin-ana dd:first-of-type { font-size: var(--yazi-xl); font-weight: 700; }
+.tc-sp-rozetler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-sp-etiket { color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-sp-kar { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-sp-kar-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
 @media (max-width: 1099px) {
   .tc-sp-iki { grid-template-columns: minmax(0, 1fr); }
 }

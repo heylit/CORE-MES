@@ -8,6 +8,9 @@ export const anahtarlar = {
   teklifListeleri: ['siparisler', 'teklif', 'liste'] as const,
   teklifListe: (sorgu: object) => ['siparisler', 'teklif', 'liste', sorgu] as const,
   teklif: (id: number) => ['siparisler', 'teklif', 'ayrinti', id] as const,
+  // Deneme sunucuda koşar; geçerlilik ve istenen terminle ayrı önbelleklenir.
+  teklifDenemesi: (id: number, sorgu: object) => ['siparisler', 'teklif', 'deneme', id, sorgu] as const,
+  planTaslaklari: (id: number) => ['siparisler', 'teklif', 'plan-taslaklari', id] as const,
   // Projeler modülünün verisi; sipariş ayrıntısında yalnız okunur.
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
   // Plan modülünün elle çarpanı (195 a); sipariş ayrıntısında okunur ve yazılır.
