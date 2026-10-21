@@ -178,6 +178,16 @@ export const teklifEkleGovdesi = z.object(teklifAlanlari);
 // Talep yalnız ilk sürüm verilmeden düzenlenir (TKL-03); satırlar bütün olarak yeniden yazılır.
 export const teklifGuncelleGovdesi = z.object({ ...teklifAlanlari, ...beklenenSurum });
 
+// Kâr maliyet üstü yüzdedir (44): fiyat = birim maliyet x (1 + kâr / 100).
+export const karOraniSemasi = z.string().trim().regex(ORAN, 'Kâr oranı en çok iki ondalıklı bir yüzde olmalı (örnek: 25).');
+// 49, 48 b: verilen sürüm planda satış taslağı olarak yer tutar. İstenen termin boşsa teklif planın arkasına eklenir.
+export const planTaslagiGovdesi = z.object({
+  karOrani: karOraniSemasi,
+  istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
+});
+export const PLAN_TASLAGI_GECERLILIK = 'Satış taslağı geçerlilik tarihine kadar yer tutar; geçerlilik tarihi zorunlu.';
+export const PLAN_TASLAGI_TERMINI = 'Plan taslağıyla verilen sürümün termini denemeden gelir; termin elle girilmez.';
+
 export const teklifSurumuGovdesi = z.object({
   ...beklenenSurum,
   // Talep satırlarının her biri için birim fiyat, satır sırasıyla (TKL-04).
@@ -312,3 +322,110 @@ export const malzemeSecenekleriCevabi = z.object({
 });
 export type MalzemeSecenegi = z.output<typeof malzemeSecenegiSemasi>;
 export type MalzemeSecenekleriCevabi = z.output<typeof malzemeSecenekleriCevabi>;
+
+// ---- Teklif termin ve fiyat denemesi (44) ----
+// Teklifin kartlı kalemleri planlama tezgâhının ortak motoruyla mevcut planın arkasına birlikte denenir (64 a); termin ve maliyet
+// aynı yerleşimden çıkar. Kartsız kalem denenmez, fiyatı ve termini elle girilir (62 a). Motor yoksa cevap "cozucu-yok" der.
+export const terminDenemesiSorgusu = z.object({
+  gecerlilik: tarihSemasi.optional().transform((t) => t ?? null),
+  istenenTermin: tarihSemasi.optional().transform((t) => t ?? null),
+});
+export const denemeTaslagiGovdesi = z.object({
+  gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
+  istenenTermin: tarihSemasi.nullish().transform((t) => t ?? null),
+  karOrani: karOraniSemasi,
+});
+export const terminOnayGovdesi = z.object(beklenenSurum);
+
+const tutar = ondalikMetinSemasi.nullable();
+export const MALIYET_KALEMI_TURLERI = ['malzeme', 'isleme', 'fason', 'genel-gider'] as const;
+export const maliyetKalemiSemasi = z.object({
+  tur: z.enum(MALIYET_KALEMI_TURLERI),
+  ad: z.string(),
+  tezgah: z.string().nullable(),
+  saat: ondalikMetinSemasi.nullable(),
+  tutar,
+});
+// 61 a: eksik hammadde kartındaki tedarik süresiyle farazi satın alınmış sayılır; ekranda "satın alma ister" görünür.
+export const denemeSatinalmaSemasi = z.object({ kod: z.string(), miktar: ondalikMetinSemasi, birim: z.string().nullable(), gelis: zamanSemasi });
+export const terminDenemesiKalemiSemasi = z.object({
+  satirId: z.number().int(),
+  sira: z.number().int(),
+  tanim: z.string(),
+  malzemeNo: z.number().int().nullable(),
+  adet: ondalikMetinSemasi,
+  plansiz: z.boolean(),
+  yerlesti: z.boolean(),
+  bitis: zamanSemasi.nullable(),
+  planTermini: tarihSemasi.nullable(),
+  malzemeGelisi: zamanSemasi.nullable(),
+  satinalma: z.array(denemeSatinalmaSemasi),
+  // Toplam fiyat görene, döküm maliyet okuyana gider; görmeyene null. Eksik ücret ya da fiyat varsa toplam null (sıfır uydurulmaz).
+  birimMaliyet: tutar,
+  toplamMaliyet: tutar,
+  dokum: z.array(maliyetKalemiSemasi).nullable(),
+  eksikVeri: z.array(z.string()),
+});
+export const kayanSiparisSemasi = z.object({
+  siparis: z.string(),
+  once: zamanSemasi,
+  sonra: zamanSemasi,
+  termin: tarihSemasi.nullable(),
+  gecikir: z.boolean(),
+});
+export const terminDenemesiCevabi = z.object({
+  durum: z.enum(['hazir', 'cozucu-yok']),
+  planSurumu: z.string().nullable(),
+  gecerlilik: tarihSemasi.nullable(),
+  istenenTermin: tarihSemasi.nullable(),
+  planTermini: tarihSemasi.nullable(),
+  // İstenen termin varsa odur, yoksa plan termini; 59 a: geçerlilik tarihinden itibaren gün olarak da yazılır.
+  termin: tarihSemasi.nullable(),
+  terminGun: z.number().int().nullable(),
+  yetisir: z.boolean().nullable(),
+  // 63 b: istenen termin başka bir siparişi geciktiriyorsa satış taslağı plancı onayı bekler.
+  onayGerekli: z.boolean(),
+  satinalmaGerekli: z.boolean(),
+  kalemler: z.array(terminDenemesiKalemiSemasi),
+  maliyetToplami: tutar,
+  genelGiderSaatBasi: tutar,
+  kayanlar: z.array(kayanSiparisSemasi),
+});
+
+export const PLAN_TASLAGI_TURLERI = ['deneme', 'satis'] as const;
+// Görünüm okuma anında çıkar: geçerliliği geçen satış taslağı plandan kalkmış "satış denemesi"dir (49); yerine yenisi gelen "kalktı".
+export const PLAN_TASLAGI_GORUNUMLERI = ['deneme', 'satis', 'onay-bekliyor', 'satis-deneme', 'kalkti'] as const;
+export const planTaslagiSemasi = z.object({
+  id: z.number().int(),
+  teklifId: z.number().int(),
+  surumNo: z.number().int().nullable(),
+  tur: z.enum(PLAN_TASLAGI_TURLERI),
+  gorunum: z.enum(PLAN_TASLAGI_GORUNUMLERI),
+  planSurumu: z.string().nullable(),
+  gecerlilik: tarihSemasi.nullable(),
+  istenenTermin: tarihSemasi.nullable(),
+  planTermini: tarihSemasi.nullable(),
+  termin: tarihSemasi.nullable(),
+  karOrani: tutar,
+  maliyetToplami: tutar,
+  kayanSayisi: z.number().int(),
+  gecikenSayisi: z.number().int(),
+  onayGerekli: z.boolean(),
+  onaylayan: z.string().nullable(),
+  onayAni: zamanSemasi.nullable(),
+  olusturan: z.string().nullable(),
+  olusturma: zamanSemasi,
+});
+export const planTaslaklariCevabi = z.object({ taslaklar: z.array(planTaslagiSemasi) });
+
+export type PlanTaslagiVerisi = z.output<typeof planTaslagiGovdesi>;
+export type TerminDenemesiSuzgeci = z.output<typeof terminDenemesiSorgusu>;
+export type DenemeTaslagiVerisi = z.output<typeof denemeTaslagiGovdesi>;
+export type MaliyetKalemi = z.output<typeof maliyetKalemiSemasi>;
+export type TerminDenemesiKalemi = z.output<typeof terminDenemesiKalemiSemasi>;
+export type KayanSiparis = z.output<typeof kayanSiparisSemasi>;
+export type TerminDenemesiCevabi = z.output<typeof terminDenemesiCevabi>;
+export type PlanTaslagiTuru = (typeof PLAN_TASLAGI_TURLERI)[number];
+export type PlanTaslagiGorunumu = (typeof PLAN_TASLAGI_GORUNUMLERI)[number];
+export type PlanTaslagi = z.output<typeof planTaslagiSemasi>;
+export type PlanTaslaklariCevabi = z.output<typeof planTaslaklariCevabi>;

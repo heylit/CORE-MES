@@ -122,6 +122,8 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'siparisler.onayla': 'Satış siparişini onaylama, kapatma ve iptal',
   'siparisler.fiyat-oku': 'Sipariş ve teklif fiyatını, tutarı ve kârı görme',
   'siparisler.iskonto-onayla': 'Teklifte %10 üstü iskontoyu onaylama',
+  'siparisler.termin-dene': 'Teklifi plana deneyip termin görme, satış taslağı açma',
+  'siparisler.maliyet-oku': 'Teklif denemesinin maliyet dökümünü görme',
   'smartes.esleme-yaz': 'SmartES kod eşlemelerini düzenleme',
   'stok.giris': 'Stok girişi',
   'stok.cikis': 'Stok çıkışı',
