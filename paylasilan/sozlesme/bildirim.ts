@@ -138,6 +138,8 @@ export const cagriYonlendirmeCevabi = z.object({
   satirlar: z.array(cagriYonlendirmeSatiri),
   roller: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
 });
+// Oturumdaki kişinin rollerinden çıkan ekipler (Arkon çağrı bandı): yalnız oturum ister, başka kişiyi seçemez.
+export const cagriEkiplerimCevabi = z.object({ ekipler: z.array(z.enum(CAGRI_EKIPLERI)) });
 export const cagriYonlendirmeDegistirGovdesi = z.object({
   rolIdleri: z.array(KIMLIK).max(CAGRI_ROL_EN_COK, `En çok ${CAGRI_ROL_EN_COK} rol seçilir.`)
     .refine((l) => new Set(l).size === l.length, 'Aynı rol iki kez seçilemez.'),
@@ -154,4 +156,5 @@ export type BildirimTercihleriCevabi = z.output<typeof bildirimTercihleriCevabi>
 export type BildirimTercihDegistirGovdesi = z.input<typeof bildirimTercihDegistirGovdesi>;
 export type CagriYonlendirmeSatiri = z.output<typeof cagriYonlendirmeSatiri>;
 export type CagriYonlendirmeCevabi = z.output<typeof cagriYonlendirmeCevabi>;
+export type CagriEkiplerimCevabi = z.output<typeof cagriEkiplerimCevabi>;
 export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDegistirGovdesi>;

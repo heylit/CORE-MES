@@ -27,3 +27,6 @@ Tetik çağrıları sahibi modüllerde yazılır; bu dal yazmaz. Çağrı tek: `
    tutuyor (malzeme -> plan); iki kaynak kalmaması için banner ya kaldırılır ya da `GET /bildirimler/cagri-yonlendirme` ile aynı eşlemeyi okur
    (o uç `ayarlar.yaz` ister; Arkon için okuma yolu gerekirse çekirdeğe istek yazılır).
 8. AÇIK. saat (ikinci sürüm): saatten çağrı yazma gelince aynı Arkon kaydını ya da `ekipCagrisiBildir`'i kullanır; ayrı yönlendirme kurulmaz.
+9. AÇIK. arkon (istemci): çağrı bandı `giris-ayarlar-spc.ts` `CALL_ROLES` kopyası yerine `GET /bildirimler/cagri-yonlendirme/benim` okur
+   (`{ ekipler: CagriEkibi[] }`, yetki oturum; sözleşme `cagriEkiplerimCevabi`). Yönetici ve vardiya amirinin bütün çağrıları görmesi Arkon kuralıdır,
+   bu uç yalnız eşlemeyi verir. Arkon CEKIRDEK-ISTEKLERI 8 bu uçla karşılanır; banner geçince Arkon UYUM-BORCU'daki iki kaynak maddesi kapanır.

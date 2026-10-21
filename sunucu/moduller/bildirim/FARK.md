@@ -30,3 +30,7 @@ Kararlar: 298 a ("298 a, yetki genişletme onaylı"; "bildirim yönetim ayarlar�
 - `sunucu/moduller/kisiler/disari.ts`: `rolSecenekleri`, `rollerdekiKisiler` (salt okuma).
 - `paylasilan/sayfalar/ayarlar.ts`: Sistem Ayarları ikinci menüsüne "Bildirim yönetimi" (`ayarlar.yaz`); `istemci/src/moduller/ayarlar/BildirimYonetimi.tsx`.
 - Rol x işlem satırı ve yeni işlem yok.
+
+## Çağrı alıcıları okuması (Arkon CEKIRDEK-ISTEKLERI 8) — dal `cekirdek-cagri-alicilari`, taban 298 yaması
+- `GET /bildirimler/cagri-yonlendirme/benim` (`oturum`): oturumdaki kişinin rollerinden çıkan ekip listesi, `{ ekipler }`. Alıcı seçimi
+  `ekipCagrisiBildir` ile aynı yoldan (`rollerdekiKisiler`) yapılır; iki kaynak oluşmaz. Yeni SQL, işlem, rol satırı ve göç yok.

@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
-  bildirimTercihleriCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
+  bildirimTercihleriCevabi, cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  arsivle, bildirimListesi, bildirimSayaci, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+  arsivle, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
 } from './servis.ts';
 
 // Kişinin kendi bildirimleri (222 a): her uç yalnız oturum ister ve yalnız oturumdaki kişinin satırına dokunur; adres ya da
@@ -30,6 +30,8 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => tercihDegistir(db, kullanici, govde),
   }),
   // Ekip çağrısı yönlendirmesi (298 a): Sistem Ayarları'nın işlemiyle okunur ve yazılır; rol yetkisi vermez, yalnız alıcıyı seçer.
+  // Arkon çağrı bandı için: oturumdaki kişinin hangi ekip çağrılarını aldığı; eşlemenin kendisini ve başka kişiyi göstermez.
+  uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme/benim', yetki: 'oturum', cevap: cagriEkiplerimCevabi, isle: ({ db, kullanici }) => cagriEkiplerim(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme', yetki: 'ayarlar.yaz', cevap: cagriYonlendirmeCevabi, isle: ({ db }) => cagriYonlendirmesi(db) }),
   uc({
     yontem: 'POST', yol: '/bildirimler/cagri-yonlendirme/:ekip/degistir', yetki: 'ayarlar.yaz', parametre: cagriYonlendirmeParametresi,
