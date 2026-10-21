@@ -2,6 +2,7 @@ import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { canliOzeti } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde seçilen makine ve makine ayrımı (393 d)', () => {
@@ -69,6 +70,21 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     const p = await taslaktaOner();
     assert.deepEqual(yer(p, i1!).kaynak, { tur: 'makine', id: fiili.id }, 'motor çalışan işi fiili makinede sabitler');
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+  });
+
+  test('canlı özet (Reçete ve Rota şeridi) çalışan işi planın gösterdiği fiili makinede gösterir', async () => {
+    const planlanan = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-DG3P', ad: 'Deneme planlanan', istasyonId: istasyonB });
+    const fiili = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-DG3F', ad: 'Deneme fiili', istasyonId: istasyonB });
+    const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: planlanan.id } })]);
+    await canliyaAl(await taslaktaOner());
+    const emirId = (await vt().tx((db) => db.tek<{ uretim_emri_id: number }>('SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1', [i1])))!.uretim_emri_id;
+    const r = await istek(c.operator, 'POST', `/uretim-emirleri/${emirId}/baslat`, { makineIdleri: [fiili.id] });
+    assert.equal(r.statusCode, 200, r.body);
+    const ozet = await vt().tx((db) => canliOzeti(db));
+    const kuyrugu = (makineId: number) => ozet.kuyruklar.find((q) => q.makineId === makineId)?.isler.length ?? 0;
+    assert.equal(kuyrugu(fiili.id), 1, 'çalışan iş fiili makinenin kuyruğunda');
+    assert.equal(kuyrugu(planlanan.id), 0, 'planlanan makinede değil');
+    assert.deepEqual(yer(await planOku(), i1!).kaynak, { tur: 'makine', id: fiili.id }, 'plan ekranıyla aynı');
   });
 
   // 393 d: başka emre önümüzdeki 4 saatte ayrılmış makinede başlatma reddedilir.
