@@ -1747,9 +1747,12 @@ table.rtbl { min-width: 0; } .rtbl td.num, .rtbl th.num { text-align: right; fon
 /* ── Makine seçimi: birden çok makineli istasyonda başlatmadan önce (kart #1148) ── */
 .mksec { align-self: stretch; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 10px; border-radius: 14px; border: 1px solid var(--edge); background: var(--panel2); }
 .mksec .over { font-size: 10px; letter-spacing: .12em; color: var(--muted); }
-.mkchip { min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--edge2); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mkchip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--edge2); background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .mkchip.on { border-color: var(--hazard); background: color-mix(in srgb, var(--hazard) 14%, transparent); }
 .mkhint { flex: 1 1 100%; font-size: 11px; color: var(--muted); }
+.mkchip small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.mkchip.kilit { cursor: not-allowed; color: var(--muted); border-style: dashed; }
+.mkplan { padding: 1px 6px; border-radius: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: color-mix(in srgb, var(--run) 18%, transparent); color: var(--run); }
 .mob .mksec { padding: 6px 8px; }
 
 /* Sayaç (kart #1194): daire ve dört düğme birlikte. Geniş sahnede düğmeler dairenin yanında iki sıra (İyi, Hurda) durur ve daire

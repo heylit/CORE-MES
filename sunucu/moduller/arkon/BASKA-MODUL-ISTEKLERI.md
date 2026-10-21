@@ -75,3 +75,6 @@ imzayı ya da davranışı değiştirirse bu test kırmızı olur ve kırılan m
        aynı emrin iki iş emri iki makinede aynı anda açıksa sayım ikisine de yazılır. İki tabloda da `is_emri_id` var; eşleme ondan yapılmalı.
     c) `standartSureler` makine ve istasyon kırılımıyla: performans bugün yalnız kişi ve toplamda; makine ve istasyon satırında null.
 
+15. **Makine seçicisi için ayrım okuması (393 d sonrası), uretim-emirleri'nden. KARŞILANDI (UE yaması "makineAyrimlari", bu yamadan önce uygulanır):**
+    `makineAyrimlari(db, emirId, makineIdleri)` başlatma ve devam denetimiyle aynı `atanan` ve aynı ayrım kuralını verir; Arkon `GET /arkon/makine-ayrimlari` bunu çağırır,
+    kural kopyalanmaz.

@@ -54,6 +54,14 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect(cagrilar).toEqual([{ yontem: 'GET', yol: '/arkon/plan-sira/surum' }]);
   });
 
+  it('makine ayrımları (393 d): yalnız emir kimliği TMI ucuna geçer, cevap olduğu gibi döner', async () => {
+    const ayrim = { planMakinesi: 'M1', ayrimlar: [{ mc: 'M2', emirNo: 'E-1', opNo: 10, baslangic: '2026-10-21T10:30:00+03:00' }] };
+    const { istemci, cagrilar } = istemciKur({ 'GET /arkon/makine-ayrimlari?emirId=12': ayrim });
+    const c = await cevapla(istemci, istek('GET', '/makine-ayrimlari', 'emirId=12&kisiId=5&c=c1'));
+    expect(c.govde).toEqual(ayrim);
+    expect(cagrilar).toEqual([{ yontem: 'GET', yol: '/arkon/makine-ayrimlari?emirId=12' }]);
+  });
+
   it('sağlık ve kişi: Arkon biçimiyle döner, kişi TMI\'den gelir', async () => {
     const { istemci } = istemciKur({ 'GET /arkon/ben': { kisi: KISI }, 'GET /arkon/kisiler': { kisiler: [KISI] } });
     const saglik = await cevapla(istemci, istek('GET', '/health'));

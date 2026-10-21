@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  ArkonDeposu, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
+  ArkonDeposu, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -39,6 +39,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
+  makineAyrimlari as emrinMakineAyrimlari,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -1101,6 +1102,22 @@ async function isEmirlerininEmirleri(db: Db, satirlar: readonly Readonly<Record<
 export async function planSiraSurumu(db: Db, kullanici: Kullanici): Promise<{ planSurumu: number }> {
   await rolGerekli(db, kullanici);
   return { planSurumu: (await canliSira(db, [])).planSurumu };
+}
+
+// 393 d sonrası makine seçicisi: emrin istasyonundaki makinelerin ayrımı, başlatma denetimiyle aynı kuraldan (uretim-emirleri). Ayrım başka
+// emrin numarasını ve saatini taşır: kapsam dışındaki istasyonun ayrımı okunmaz. Emir yoksa ya da istasyonsuzsa seçici bugünkü gibi kalır.
+export async function makineAyrimlari(db: Db, kullanici: Kullanici, emirId: number): Promise<MakineAyrimlariCevabi> {
+  await rolGerekli(db, kullanici);
+  const emir = await emirOzeti(db, emirId);
+  const istasyon = emir === null ? null : await istasyonGetir(db, emir.istasyonId);
+  if (istasyon === null) return { planMakinesi: null, ayrimlar: [] };
+  if (!kapsamdaMi(await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri), istasyon.isMerkeziId)) throw kapsamDisi();
+  const kodlar = new Map((await istasyondakiMakineler(db, istasyon.id)).map((m) => [m.id, m.kod]));
+  const { atanan, ayrimlar } = await emrinMakineAyrimlari(db, emirId, [...kodlar.keys()]);
+  return {
+    planMakinesi: atanan === null ? null : kodlar.get(atanan) ?? null,
+    ayrimlar: ayrimlar.flatMap((a) => { const mc = kodlar.get(a.makineId); return mc === undefined ? [] : [{ mc, emirNo: a.emirNo, opNo: a.opNo, baslangic: a.baslangic }]; }),
+  };
 }
 
 export async function planSirasiYaz(

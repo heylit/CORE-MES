@@ -18,7 +18,7 @@ import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/nu
 import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
 import { refakatIsi, refakatKodu } from '../data/refakat-okut';
-import { kayittakiMakineler, seciliMakineler } from '../data/makine-secimi';
+import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
 import { CALLS, Fragment, I, ORDERS, REASONS, ST, dur, fmt, html, isPlannedReason, pl, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
 import { Dial, Orbs, Queue, Top } from './bilesenler';
 import { FEAT, LS } from './yukleyici';
@@ -51,6 +51,19 @@ export function App({ preview }) {
   const [mcSel, setMcSel] = useState<string[]>([]); // başlatırken seçilen makineler (kart #1148); boşsa işe atanmış makine
   const aiRef = useRef(0); aiRef.current = ai;
   const o = orders[ai] || orders[0] || EMPTY_ORDER(MACHINE);
+  // 393 d: seçici açıkken emrin makine ayrımları sunucudan okunur; okunamazsa null ve seçici bugünkü gibidir (son söz başlatmada).
+  const [ayrim, setAyrim] = useState<MakineAyrimlari | null>(null);
+  const ayrimEmri = tmiEmirId(o.pkg);
+  const seciciAcik = !preview && !o.empty && can('prod.run') && makineSecimiGorunur(machineOf(MACHINE).mcs, o.state);
+  useEffect(() => {
+    setAyrim(null);
+    if (!seciciAcik || ayrimEmri === null) return;
+    let bitti = false;
+    const oku = () => AKStore.Server.makineAyrimlari(ayrimEmri).then(c => { if (!bitti) setAyrim(c || null); }, () => { if (!bitti) setAyrim(null); });
+    oku();
+    const t = setInterval(oku, AYRIM_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [ayrimEmri, seciciAcik, MACHINE]);
   const [since, setSince] = useState(() => { const l = LS.get('lastState:' + MACHINE); return l && l.at ? l.at : Date.now(); });
   const [tab, setTab] = useState('draw');
   const [ov, setOv] = useState(null);
@@ -273,7 +286,7 @@ export function App({ preview }) {
     if (l && l.no === o.no && l.state === o.state) return;
     LS.set(k, { no: o.no, state: o.state, at: Date.now() });
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
-    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(mcSel, machineOf(MACHINE).mcs, o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
+    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), machineOf(MACHINE).mcs, o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
     autoRef.current.state = false; lastNoteRef.current = null;
     schedAutoCall(why);
   }, [o.state, o.no]);
@@ -544,7 +557,7 @@ export function App({ preview }) {
           <div className="glass morder" onClick=${() => setMv('queue')}><div><span className="over">Aktif iş ${o.urgent ? '· ACİL' : ''}</span><b>${o.no}${o.pkg ? html`<span className="revc">Rev ${o.pkg.rev}</span>` : null}</b><small>${o.part} · ${o.op}${adimTuru(o.pkg) ? html` · <span className="tag adim">${adimTuru(o.pkg).etiket}</span>` : null}${parcaEtiketi(o.pkg) ? html` · <span className="tag adim">${parcaEtiketi(o.pkg)}</span>` : null}</small></div>${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${e => { e.stopPropagation(); act('warns'); }} aria-label="Bu işin uyarıları"><${I} n="bell" s=${16} />${RL.warns.filter(w => w.t).length}</button>` : null}<${I} n="next" s=${18} /></div>
           ${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}
           ${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}
-          <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${seciliMakineler(mcSel, machineOf(MACHINE).mcs)} atanan=${o.pkg && o.pkg.mc} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+          <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${(a, t) => { if (a === 'measure' || a === 'drawing') setMv('draw'); act(a, t); }} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
           <div className="sayac">
             <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />
@@ -591,7 +604,7 @@ export function App({ preview }) {
           <div className="glass order"><div><span className="over">Aktif iş emri ${o.urgent ? html`<span className="tag urgent" style=${{ marginLeft: 6 }}>Acil</span>` : null}</span><h1>${o.no}${o.pkg ? html`<span className="revbig">Rev ${o.pkg.rev}</span>` : null}</h1><p>${o.part} · ${o.op}</p>${parcaEtiketi(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${parcaEtiketi(o.pkg)}</span></div>` : null}${adimTuru(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${adimTuru(o.pkg).etiket}</span>${adimTuru(o.pkg).aciklama ? html`<span className="adimnot">${adimTuru(o.pkg).aciklama}</span>` : null}</div>` : null}${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}</div>
             <div className="facts">${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${() => act('warns')} title="Bu işin uyarıları"><${I} n="bell" s=${18} />${RL.warns.filter(w => w.t).length}</button>` : null}<div><span className="over">Çevrim</span><b>${o.cycle} sn</b></div><div><span className="over">Termin</span><b>${o.due}</b></div></div></div>
           <div className=${'glass stage' + (preview || can('prod.run') ? '' : ' noperm')} title=${preview || can('prod.run') ? null : 'Bu rol üretim kaydı yapamaz'}>
-            <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${seciliMakineler(mcSel, machineOf(MACHINE).mcs)} atanan=${o.pkg && o.pkg.mc} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+            <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${act} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
             <div className="sayac">
               <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />
