@@ -295,7 +295,8 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 
 /* Sekme şeridi dar ekranda alt satıra sarar: gizli kaydırma ile kesilen sekme olmaz. */
 .tc-stok-sekmeler-sar .tc-sekmeler { flex-wrap: wrap; overflow-x: visible; }
-/* QR okut paneli (karar 91 a): adım çizgisi ve seçilen kaynak. */
+/* Malzeme penceresinin üstündeki okuyucu (372 a; eski QR okut paneli, karar 91 a): okuyucu alanı, adım çizgisi ve seçilen kaynak. */
+.tc-stok-okut-ust { display: grid; gap: var(--b-2); padding-bottom: var(--b-3); border-bottom: var(--cizgi) solid var(--edge); }
 .tc-stok-okut-adimlar { display: flex; gap: var(--b-2); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); color: var(--muted); }
 .tc-stok-okut-adimlar li { flex: 1; padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi) solid var(--edge); text-align: center; }
 .tc-stok-okut-adimlar li[aria-current="step"] { color: var(--ink); border-color: var(--hazard); font-weight: 600; }

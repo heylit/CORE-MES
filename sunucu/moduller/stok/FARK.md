@@ -394,3 +394,11 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 - Performans modu ('arkon:lite' ile aynı düğme) açıkken ve işletim sisteminde hareket azaltılmışsa yalnız son hâl çizilir; süre Sistem
   Ayarları'ndaki geçiş hızıyla ölçeklenir. Kareler kutudaki `zemin` alanından gelir (istasyon yeri ve seçilebilen konumların karesi);
   ayrı bölümdeki ya da haritada yeri olmayan yer için yol çizilmez, uydurulmaz.
+
+## Tek Malzeme tuşu (372 a, 373 a)
+- Üst çubuktaki ayrı QR okut tuşu kalktı. Okuyucu Malzeme · Teslim penceresinin üstünde hazır bekler; okutma yokken altındaki dört sekme
+  görünür, okutulan kod akışı başlatınca sekmelerin yerini "ne, nereye, onay" alır ve "Vazgeç, sekmelere dön" ile geri gelir.
+- İlk okutulan kişi kodu Teslim et'i o kişinin istasyonuna, alıcı o kişi olarak açar; istasyon buradan gönderilebilecek yerlerde değilse
+  hedef boş kalır ve söylenir. Nereye adımında okutulan kişi kodu teslimi kişinin istasyonuna `aliciKodu` ile gönderir; sunucu kodu yine doğrular.
+- Malzemeler kataloğunun bastığı `MK:<stok kodu>` etiketi iki okuyucuda da (Okut sayfası ve pencere) kartı çözer (DEP-64). Uç, yetki ve
+  kayıt değişmedi; tuşun yeri sağda, Malzeme tuşunun yerinde kaldı.
