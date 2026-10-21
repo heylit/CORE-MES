@@ -19408,7 +19408,8 @@ function tmiKaynakIle(st, kaynak, D) {
   return o;
 }
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller'];
+/* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler'];
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;

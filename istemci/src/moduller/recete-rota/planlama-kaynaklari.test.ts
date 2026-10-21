@@ -58,7 +58,12 @@ const EK = {
   kisiGorevi: { 8: 'Ayarcı' }, makineNotu: null, istasyonTipi: null, kapasiteKaynagi: null, kapasite: null,
 };
 // Kayıtta sipariş ve rota var, tezgâh ve personel yok (sunucunun yazdığı ana kayıt gibi).
-const KAYIT = { version: 7, items: [], routes: {}, orders: [], opdefs: [], savedAt: 5 };
+const KAYIT = {
+  version: 7, savedAt: 5, orders: [],
+  items: [{ id: '50', code: 'MM-1', name: 'Ornek urun', type: 'mamul' }],
+  opdefs: [{ id: '13', name: 'Tornalama' }],
+  routes: { 50: { base: null, steps: [{ id: '50-o10', seq: 10, opId: '13', stationId: '10', setup: 30, cycle: 4, alts: [], altTimes: {}, ins: [] }] } },
+};
 
 const bekle = (): Promise<void> => new Promise((coz) => { setTimeout(coz, 0); });
 
@@ -79,6 +84,9 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     // Pasif iş merkezinin cumartesisi takvime girmez.
     expect(D.calismaGunleri).toMatchObject({ pzt: ['3'], sal: ['3'], car: [], cmt: [], paz: [] });
     expect(D.tatiller).toEqual(['2026-10-29']);
+    // Rota adımının tezgâhları makineler gelince kurulur (adım istasyonunun aktif makineleri).
+    const urun = (d.S()?.D as { urunler: Array<{ rota: Array<{ tezgahlar: Array<{ id: string }> }> }> }).urunler[0];
+    expect(urun?.rota[0]?.tezgahlar.map((t) => t.id)).toEqual(['100', '101']);
     expect(d.S()?.dataVer).toBe(2);
     expect(d.cizim()).toBe(2);
   });
