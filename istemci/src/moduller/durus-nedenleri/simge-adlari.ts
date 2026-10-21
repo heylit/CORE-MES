@@ -65,6 +65,8 @@ export const SIMGE_ADLARI: Record<SimgeAdi, string> = {
   printer: 'Yazıcı',
   building: 'Bina',
   users: 'Kişi grubu',
+  cart: 'Sepet',
+  pallet: 'Palet',
   gantt: 'Zaman çizelgesi',
   lira: 'Türk lirası',
   tag: 'Etiket',
