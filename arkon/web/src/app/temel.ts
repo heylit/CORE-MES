@@ -77,7 +77,8 @@ export const CALLS = [
   { k: 'bakim', l: 'Bakım', d: 'Mekanik / elektrik destek', i: 'wrench', c: 'var(--stop)', eta: 4 },
   { k: 'kalite', l: 'Kalite', d: 'Ölçüm onayı, ilk parça', i: 'search', c: 'var(--done)', eta: 6 },
   { k: 'malzeme', l: 'Malzeme', d: 'Ham madde, kasa, forklift', i: 'truck', c: 'var(--hold)', eta: 8 },
-  { k: 'amir', l: 'Vardiya amiri', d: 'Karar ve onay', i: 'user', c: 'var(--hazard)', eta: 3 }
+  { k: 'amir', l: 'Vardiya amiri', d: 'Karar ve onay', i: 'user', c: 'var(--hazard)', eta: 3 },
+  { k: 'ayarci', l: 'Ayarcı', d: 'Tezgâh ayarı, takım ve program', i: 'gear', c: 'var(--cmm)', eta: 5 }
 ];
 export const STEPS0 = [
   { id: 'a', t: 'Ayna ve pens kontrolü', d: 'Sıkma basıncı 32 bar', r: 1, on: 1 },

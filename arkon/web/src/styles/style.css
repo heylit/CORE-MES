@@ -378,6 +378,8 @@ button { font: inherit; color: inherit; }
 .np-k button.ok { background: var(--run); color: var(--on-sig); border: 0; }
 
 .calls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+/* Beşinci ekip (298, ayarcı): tek kalan düğme satırı doldurur. */
+.calls > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 .done-ov { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); animation: ovin .3s; }
 .done-c { text-align: center; display: grid; justify-items: center; gap: 18px; }

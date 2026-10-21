@@ -176,4 +176,4 @@ A3 kırmızı (DOĞRULANDI, yerelde): her düzeltme tek tek geri alınınca ilgi
 | Biten iş emrinin beklenen adedi kayıttan kalır | anomali.test.ts "gün kaydı..."; anomali-akis.test.ts "gün kaydı: plandan düşen..." | aynı test: kaydı yoksa düşer |
 | Kişinin beklenen adedi makinedeki payıdır | anomali.test.ts "AR-AN-4: kişinin beklenen adedi..."; anomali-akis.test.ts "kişinin beklenen adedi makinedeki payıdır..." | aynı testler: iki makineye bakan tek kişi iki makinenin toplamı |
 | Kişi kırılımı yalnız `arkon.anomali-kisi` ile | anomali-akis.test.ts "kişi kırılımı yalnız..." (yönetici ve işlemi verilen kişi görür) | aynı test: hazırlık bugünde ve istatistikte null; operatör 403, oturumsuz 401, bozuk dönem ve tarih 400 |
-
+| 298-1: açılan ekip çağrısı eşlemedeki rollere TMI bildirimi olur; çağıran almaz; kabul, yükseltme, kapatma ve yinelenen kayıt yeni bildirim açmaz | cagri-bildirimi.test.ts "açılan ayarcı çağrısı..."; kurallar.test.ts "298: ..." | aynı testler: kalite ve çağıran almaz, tekrar sayısı 1; tanınmayan ekip bildirim açmaz; kurallar.test.ts ack/esc/done/cancel, yersiz, kimliksiz null. Mutasyon: faz denetimi ve tetik kaldırılınca kırmızı (yerelde) |
