@@ -386,18 +386,26 @@ function gerceklesenler(simdi: number, acik: readonly PlanIsEmri[]): Baglam['ger
   return h;
 }
 
-// Reçete ve Rota'nın ortak motoru (ADR 0018 taslağı, 391 a) çalışan adımın kalanını buradan alır, kendisi hesaplamaz. Anahtar
-// emir no|op no; makine terminalin çalıştırdığı (393 d), yoksa planın kaynağı; sayım anı son sayım, sayım yoksa adımın başladığı an.
+// Reçete ve Rota'nın ortak motoru (ADR 0018, 391 a) çalışan adımın kalanını buradan alır, kendisi hesaplamaz. Anahtar emir no|op no;
+// makine terminalin çalıştırdığı (393 d), yoksa planın kaynağı; sayım anı son sayım, sayım yoksa adımın başladığı an. kalanVerimliDk
+// makinenin istasyon verimiyle, plan ekranının bitişi kurduğu (gerceklesenAralik) aynı verimliSure'den: verim tek yerde uygulanır.
 // Yetki denetlemez; çağıran korur.
-export interface CalisanAdim { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanDk: number }
+export interface CalisanAdim {
+  anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanDk: number; kalanVerimliDk: number;
+}
 export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
   const iso = (t: string | null | undefined) => (t ? new Date(t).toISOString() : null);
-  return (await planlanacakIsEmirleri(db)).flatMap((i) => {
+  const acik = await planlanacakIsEmirleri(db);
+  if (!acik.some((i) => calisanKalani(i) !== null)) return [];
+  const kaynaklar = await kaynaklariOku(db, new Map());
+  return acik.flatMap((i) => {
     const k = calisanKalani(i);
     if (k === null) return [];
+    const makineId = i.fiiliMakineId ?? (i.kaynak?.tur === 'makine' ? i.kaynak.id : null);
+    const verim = makineId === null ? 1 : kaynaklar.get(kaynakAnahtari({ tur: 'makine', id: makineId }))?.verim ?? 1;
     return [{
-      anahtar: `${i.emirNo}|${i.opNo}`, makineId: i.fiiliMakineId ?? (i.kaynak?.tur === 'makine' ? i.kaynak.id : null),
-      baslangic: iso(i.adimBaslama), sayimAni: iso(i.sonSayimAni ?? i.adimBaslama), kalanDk: k.kalanDk,
+      anahtar: `${i.emirNo}|${i.opNo}`, makineId, baslangic: iso(i.adimBaslama), sayimAni: iso(i.sonSayimAni ?? i.adimBaslama),
+      kalanDk: k.kalanDk, kalanVerimliDk: verimliSure(k.kalanDk, k.ayarDk, verim),
     }];
   });
 }

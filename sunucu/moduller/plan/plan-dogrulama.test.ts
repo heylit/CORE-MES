@@ -75,8 +75,16 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
       assert.equal(x!.anahtar, a1);
       assert.equal(x!.makineId, m.id, 'fiili makine yoksa planın makinesi');
       assert.equal(x!.kalanDk, 2);
+      assert.equal(x!.kalanVerimliDk, 2, 'ayarsız istasyon verimi yüzde 100');
       assert.equal(x!.sayimAni, new Date(sayim).toISOString());
       assert.ok(x!.baslangic && Math.abs(Date.parse(x!.baslangic) - (Date.now() - 2 * 3600_000)) < 60_000);
+      // Verim yüzde 50: kalan işleme iki katı sürer (ayar parça sayıldığı için düşmüş).
+      await ortam!.sahip.sorgu('INSERT INTO istasyonlar_plan_ayari (istasyon_id, verim_yuzde, operator_ihtiyaci, degistiren_kisi_id) VALUES ($1, 50, 1, $2)', [istasyonB, yoneticiId]);
+      try {
+        assert.equal((await oku())[0]!.kalanVerimliDk, 4);
+      } finally {
+        await ortam!.sahip.sorgu('DELETE FROM istasyonlar_plan_ayari WHERE istasyon_id = $1', [istasyonB]);
+      }
     } finally {
       await isEmriDurumu(i1!, 'bekliyor');
     }
