@@ -292,7 +292,7 @@ const agKisa = x => x == null || !isFinite(x) ? '—' : x >= 1e6 ? sayi(x / 1e6,
 sdNabiz = function () {
   if (!S.plan || typeof nbOlc !== 'function') return '';
   const R = nbRef(); const onz = U.hamle && !U.taslak ? U.hamle.plan : null; const v = nbOlc(onz || S.plan); const kar = onz ? nbOlc(S.plan) : R.o;
-  const l = [['late', v.late == null ? '—' : String(v.late), 'geç', true], agAyar().kip === 'bedel' ? ['tl', agKisa(v.tl), 'gecikme', true, 1] : ['wT', saat(v.wT), 'gecikme', true, 1], ['dar', v.dar == null ? '—' : `%${Math.round(v.dar)}`, 'darboğaz', true, 1]];
+  const l = [['late', v.late == null ? '—' : String(v.late), `geciken · ${olDonemEtiket()}`, true], agAyar().kip === 'bedel' ? ['tl', agKisa(v.tl), 'gecikme', true, 1] : ['wT', saat(v.wT), 'gecikme', true, 1], ['dar', v.dar == null ? '—' : `%${Math.round(v.dar)}`, 'darboğaz', true, 1]];
   return `<div class="pm-sb-nb" role="group" aria-label="Plan nabzı">${l.map(([id, d, ad, kucukIyi, ikincil]) => { const f = kar ? nbFark(id, v[id], kar[id], kucukIyi) : { ton: '', m: '' };
     return `<button type="button" class="pm-sb-nb-k" ${ikincil ? 'data-ikincil' : ''} data-act="br-odak" data-v="ozet" data-ton="${f.ton}" title="${esc(ad)}: ${onz ? 'önizlemede, plana göre' : esc(R.ad) + ' referansına göre'} ${esc(f.m || 'aynı')}. Göstergelere git."><b class="mono">${esc(d)}</b><span>${ad}</span>${f.ton ? `<small>${f.ton === 'iyi' ? '▼' : '▲'}</small>` : ''}</button>`; }).join('')}</div>`;
 };

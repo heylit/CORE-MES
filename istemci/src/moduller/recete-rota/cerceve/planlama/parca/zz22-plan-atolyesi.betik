@@ -164,7 +164,7 @@ function paEylem(act, v) {
 /* ---------- görünüm ---------- */
 function paSayilar(o, ref) {
   const s = (ad, v, f) => `<div><dt>${ad}</dt><dd class="mono">${v}${f ? ' ' + f : ''}</dd></div>`;
-  return `<dl class="pm-pa-sayilar">${s('Geciken', `${o.late}/${o.n}`, ref ? fark(o.late, ref.late, 0) : '')}${s('Gecikme', saat(o.wT), ref ? fark(o.wT, ref.wT) : '')}${s('Plan TL', o.tl != null ? sayi(o.tl / 1000, 0) + ' bin' : '—', ref && o.tl != null && ref.tl != null ? fark(o.tl / 1000, ref.tl / 1000, 0) : '')}</dl>`;
+  return `<dl class="pm-pa-sayilar">${s('Geciken · tüm plan', `${o.late}/${o.n}`, ref ? fark(o.late, ref.late, 0) : '')}${s('Gecikme', saat(o.wT), ref ? fark(o.wT, ref.wT) : '')}${s('Plan TL', o.tl != null ? sayi(o.tl / 1000, 0) + ' bin' : '—', ref && o.tl != null && ref.tl != null ? fark(o.tl / 1000, ref.tl / 1000, 0) : '')}</dl>`;
 }
 function paDurumSerit(c, a) {
   const on = paOnayda();
