@@ -912,13 +912,19 @@ describe('plan (gerçek PostgreSQL)', () => {
     await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/plan-ayari`, { verimYuzde: 100, operatorIhtiyaci: 3, surum: 0 });
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m1 } })]);
     const [i2] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m2 } })]);
-    let p = await taslaktaOner();
-    const gun = (x: PlanCevabi, id: number) => tesisGunu(Date.parse(yer(x, id).baslangic));
-    assert.equal(gun(p, i2!), gun(p, i1!), 'kısıt kapalıyken iki makine aynı gün');
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: tg(p), ayar: { ...p.ayar, personelKisiti: true } });
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-    assert.ok(gun(p, i2!) > gun(p, i1!), `dolu günden sonra: ${gun(p, i1!)} / ${gun(p, i2!)}`);
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    // Gün sonuna yakın koşuda ilk iş günün kalanına sığmaz ve iki iş de aynı güne düşerdi: an tesisin 09:00'ına sabitlenir.
+    mock.timers.enable({ apis: ['Date'], now: tesisGunBasi(tesisGunu(Date.now())) + 9 * 3600_000 });
+    try {
+      let p = await taslaktaOner();
+      const gun = (x: PlanCevabi, id: number) => tesisGunu(Date.parse(yer(x, id).baslangic));
+      assert.equal(gun(p, i2!), gun(p, i1!), 'kısıt kapalıyken iki makine aynı gün');
+      p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: tg(p), ayar: { ...p.ayar, personelKisiti: true } });
+      p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+      assert.ok(gun(p, i2!) > gun(p, i1!), `dolu günden sonra: ${gun(p, i1!)} / ${gun(p, i2!)}`);
+      await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   test('PL-03, PL-04, PL-09: vardiyalı makine yalnız çalışma aralığında çalışır; kişi kısıtı yükü; kapalı gün canlıya vardiya yetkisiyle yazılır', async () => {
