@@ -6,7 +6,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
-  BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
+  BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
@@ -122,6 +122,15 @@ export async function cagriYonlendirmesiYaz(
   if (olmayan.length > 0) throw dogrulama(`Rol bulunamadı: ${olmayan.join(', ')}`, 'rolIdleri');
   if (!(await s.cagriEkibiYaz(db, ekip, govde.rolIdleri, govde.surum, kullanici.id))) throw eskiSurum();
   return cagriYonlendirmesi(db);
+}
+
+// Kişinin alıcısı olduğu ekipler: çağrı gidecek kişiler ekipCagrisiBildir ile aynı yoldan seçilir, iki kaynak oluşmaz.
+export async function cagriEkiplerim(db: Db, kullanici: Kullanici): Promise<CagriEkiplerimCevabi> {
+  const ekipler: CagriEkibi[] = [];
+  for (const satir of await s.cagriEkipleri(db)) {
+    if ((await rollerdekiKisiler(db, satir.rolIdleri)).includes(kullanici.id)) ekipler.push(satir.ekip as CagriEkibi);
+  }
+  return { ekipler };
 }
 
 export interface EkipCagrisi {

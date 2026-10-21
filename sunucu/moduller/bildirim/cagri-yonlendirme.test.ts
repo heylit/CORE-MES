@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { cagriYonlendirmeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import { cagriEkiplerimCevabi, cagriYonlendirmeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { CAGRI_EKIPLERI } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type { CagriYonlendirmeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -198,6 +198,54 @@ describe('ekip çağrısı yönlendirmesi (298 a, gerçek PostgreSQL)', () => {
       assert.equal(c.durum, 403, ad);
     }
     assert.deepEqual(await ekipSatiri('bakim'), once);
+  });
+
+  async function ekiplerim(ad: string): Promise<string[]> {
+    const c = await istek(ad, 'GET', '/bildirimler/cagri-yonlendirme/benim');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return cagriEkiplerimCevabi.parse(c.govde).ekipler;
+  }
+
+  test('benim ekiplerim: kişi yalnız rolünün yönlendirildiği ekipleri görür; yönlendirmede olmayan rol boş liste alır', async () => {
+    const satirlar = (await yonlendirme()).satirlar;
+    const beklenen = async (rolKodu: string) => {
+      const rol = await rolNo(rolKodu);
+      return satirlar.filter((r) => r.rolIdleri.includes(rol)).map((r) => r.ekip).sort();
+    };
+    for (const [ad, rol] of [['bakim', 'bakim'], ['mudur', 'mudur'], ['depo', 'depo'], ['kalite', 'kalite']] as const) {
+      const ekipler = await ekiplerim(ad);
+      assert.deepEqual([...ekipler].sort(), await beklenen(rol), ad);
+      assert.ok(ekipler.length > 0, ad);
+    }
+    assert.deepEqual(await ekiplerim('operator'), []);
+  });
+
+  test('benim ekiplerim yönlendirmeyle değişir; çağrının gittiği kişilerle aynıdır', async () => {
+    const once = await ekipSatiri('kalite');
+    const c = await istek('yonetici', 'POST', '/bildirimler/cagri-yonlendirme/kalite/degistir', {
+      rolIdleri: [...once.rolIdleri, await rolNo('operator')], surum: once.surum,
+    });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    try {
+      assert.ok((await ekiplerim('operator')).includes('kalite'));
+      await bosalt();
+      await cagir({ ekip: 'kalite', yer: 'T-01', cagriKimligi: 'ben-1' });
+      assert.ok((await alanlar()).includes(kim('operator')));
+    } finally {
+      const geri = await istek('yonetici', 'POST', '/bildirimler/cagri-yonlendirme/kalite/degistir', {
+        rolIdleri: once.rolIdleri, surum: once.surum + 1,
+      });
+      assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
+    }
+    assert.ok(!(await ekiplerim('operator')).includes('kalite'));
+  });
+
+  test('benim ekiplerim oturum ister ve başka kişiyi seçtirmez', async () => {
+    assert.equal((await istek(null, 'GET', '/bildirimler/cagri-yonlendirme/benim')).durum, 401);
+    const baska = await istek('operator', 'GET', `/bildirimler/cagri-yonlendirme/benim?kisiId=${kim('bakim')}`);
+    // Adres kişi seçemez: ya reddedilir ya da yalnız oturumdaki kişinin (boş) listesi döner.
+    if (baska.durum === 200) assert.deepEqual(cagriEkiplerimCevabi.parse(baska.govde).ekipler, []);
+    else assert.equal(baska.durum, 400);
   });
 
   test('silinen rol yönlendirmeden düşer', async () => {

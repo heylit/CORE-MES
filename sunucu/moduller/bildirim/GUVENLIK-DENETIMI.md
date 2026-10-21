@@ -31,3 +31,11 @@ Bütün uçlar `oturum` ile herkese açıktır (222 a, yetki genişletme onaylı
 - Yeni işlem ve rol satırı yok: ekran ve uçlar Sistem Ayarları'nın `ayarlar.yaz` işlemini kullanır.
 - `ekipCagrisiBildir` uç değildir; çağıranın transaction'ında yazar. Tetik Arkon'dadır (BASKA-MODUL-ISTEKLERI 6).
 - Yalnız ekranda kalan kural: yok.
+
+## Çağrı alıcıları okuması (Arkon isteği 8)
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| `GET /bildirimler/cagri-yonlendirme/benim` | `oturum` | yalnız oturumdaki kişi; eşlemenin rol listesini ve başka kişiyi göstermez; alıcı seçimi çağrıyla aynı | rolü yönlendirilen kişi ekiplerini görür; eşleme değişince liste değişir | oturumsuz 401; yönlendirilmeyen rol boş liste; adresteki `kisiId` kişi seçtirmez |
+
+- VARSAYIM: yetki genişletme sayılmadı; kişi yalnız kendi alacağı çağrı ekiplerini görür, bu bilgi ona zaten bildirimle gelir. Geri alma: uç kaldırılır, düşük.
