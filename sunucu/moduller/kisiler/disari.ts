@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { islemleriBirlestir } from './kurallar.ts';
 import {
-  etkinKisiSecenekleri, kisiAdlariniBul, kisiGorevBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
+  etkinKisiSecenekleri, kisiAdlariniBul, kisiGorevBul, kisiGorevleriniBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
   rollerdekiKisiSatirlari,
 } from './sorgular.ts';
 
@@ -47,6 +47,14 @@ export function kisiNoKullaniciAdindan(db: Db, kullaniciAdi: string): Promise<nu
 // Kişi kartındaki görev; görev boşsa ya da kişi yoksa null. Yetki denetlemez: çağıran modül kendi ucunda denetler (portal unvanı).
 export function kisiGorevi(db: Db, kisiId: number): Promise<string | null> {
   return kisiGorevBul(db, kisiId);
+}
+
+// kisiGorevi'nin toplu sürümü, tek sorguda (satış teklifi denemesi ayarcıyı görevden okur). Boş dizide sorgu atılmaz; olmayan kimlik
+// haritada yok, görevi boş kişi null, pasif kişi göreviyle döner. Yetki denetlemez: çağıran uç denetler.
+export async function kisiGorevleri(db: Db, idler: readonly number[]): Promise<Map<number, string | null>> {
+  const benzersiz = [...new Set(idler)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await kisiGorevleriniBul(db, benzersiz)).map((k) => [k.id, k.gorev]));
 }
 
 // Bütün roller (kimlik, kod, ad); ekip çağrısı yönlendirmesinin seçenekleri (298 a). Yetki denetlemez: çağıran uç denetler.

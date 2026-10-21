@@ -141,6 +141,10 @@ export async function kisiGorevBul(db: Db, kisiId: number): Promise<string | nul
   return (await db.tek<{ gorev: string | null }>('SELECT gorev FROM kisi WHERE id = $1', [kisiId]))?.gorev ?? null;
 }
 
+export function kisiGorevleriniBul(db: Db, idler: readonly number[]): Promise<{ id: number; gorev: string | null }[]> {
+  return db.sorgu<{ id: number; gorev: string | null }>('SELECT id, gorev FROM kisi WHERE id = ANY($1::int[])', [idler]);
+}
+
 export async function rolNoKodundan(db: Db, kod: string): Promise<number | null> {
   return (await db.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]))?.id ?? null;
 }

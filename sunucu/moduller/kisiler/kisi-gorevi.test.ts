@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
+import type { Db } from '#cekirdek/db.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { kisiGorevi, yoneticiOlustur } from './disari.ts';
+import { kisiGorevi, kisiGorevleri, yoneticiOlustur } from './disari.ts';
 import { kisiEkle, kisiPasifeAl } from './servis.ts';
 
 describe('kisiGorevi (gerçek PostgreSQL)', () => {
@@ -42,5 +43,25 @@ describe('kisiGorevi (gerçek PostgreSQL)', () => {
 
   test('pasif kişinin görevi de döner', async () => {
     assert.equal(await vt().tx((db) => kisiGorevi(db, pasif)), 'Operatör');
+  });
+
+  test('kisiGorevleri: toplu okuma tek tek okumayla aynı; yinelenen kimlik tek kayıt, olmayan kimlik haritada yok', async () => {
+    const toplu = await vt().tx((db) => kisiGorevleri(db, [gorevli, gorevsiz, pasif, gorevli, 999999]));
+    assert.deepEqual([...toplu.entries()].sort(([a], [b]) => a - b), [[gorevli, 'Satın alma sorumlusu'], [gorevsiz, null], [pasif, 'Operatör']]);
+    for (const [id, gorev] of toplu) assert.equal(await vt().tx((db) => kisiGorevi(db, id)), gorev);
+    assert.equal(toplu.has(999999), false);
+  });
+
+  test('kisiGorevleri: boş dizide sorgu atılmaz, boş harita döner', async () => {
+    let sorgu = 0;
+    const sonuc = await vt().tx((db) => {
+      const sayan: Db = {
+        sorgu: <T>(sql: string, p?: readonly unknown[]) => { sorgu++; return db.sorgu<T>(sql, p); },
+        tek: <T>(sql: string, p?: readonly unknown[]) => { sorgu++; return db.tek<T>(sql, p); },
+      };
+      return kisiGorevleri(sayan, []);
+    });
+    assert.equal(sonuc.size, 0);
+    assert.equal(sorgu, 0);
   });
 });
