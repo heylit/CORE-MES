@@ -90,3 +90,62 @@ describe('ortak plan motoru, sunucuda çalışma (ADR 0018)', () => {
     await assert.rejects(planCoz({ durum: { D: {} }, kip: 'yeni', taban: null }));
   });
 });
+
+describe('ortak plan motoru, kilitli iş (kilit a)', () => {
+  // S1 4 saat, termini erken; S2 2 saat, termini geç. Kilitsiz plan S1 0-4, S2 4-6.
+  const ikiSiparis = () => veri([{ id: 'S1', adet: 4, termin: '2026-01-06' }, { id: 'S2', adet: 2, termin: '2026-01-20' }]);
+  const kilitli = (m: Motor, S: number, ek: Partial<MotorDurumu> = {}): MotorDurumu => ({ ...durum(m, {}, 0, ikiSiparis()), locks: { 'S2.10': { m: 'T1', S } }, ...ek });
+  const yer = (p: MotorPlani, id: string) => [p.ops[id]?.S, p.ops[id]?.C];
+
+  test('önüne sığmayan iş girse de kilitli iş kilit saatinde kalır, öteki iş arkasına dizilir', () => {
+    const m = motorYukle();
+    const p = m.schedule(kilitli(m, 1), 'yeni', null);
+    assert.deepEqual(yer(p, 'S2.10'), [1, 3]);
+    assert.deepEqual(yer(p, 'S1.10'), [3, 7]);
+  });
+
+  test('operatör boşken de iş kilitli işin üstüne binmez: tezgâh kilit süresince doludur', () => {
+    const m = motorYukle();
+    const D = { ...ikiSiparis(), personel: [{ id: 'P1', vardiya: 'V', gruplar: ['G'] }, { id: 'P2', vardiya: 'V', gruplar: ['G'] }] };
+    const p = m.schedule({ ...kilitli(m, 1), D }, 'yeni', null);
+    assert.deepEqual(yer(p, 'S2.10'), [1, 3]);
+    assert.deepEqual(yer(p, 'S1.10'), [3, 7]);
+  });
+
+  test('önüne sığan iş kilitten önce yapılır; kilit saatine kadar boşluk kalabilir', () => {
+    const m = motorYukle();
+    const p = m.schedule(kilitli(m, 5), 'yeni', null);
+    assert.deepEqual(yer(p, 'S1.10'), [0, 4]);
+    assert.deepEqual(yer(p, 'S2.10'), [5, 7]);
+  });
+
+  test('alt sınır ve baş-kuyruk kilidin yerini sayar', () => {
+    const m = motorYukle();
+    const st = kilitli(m, 1);
+    assert.equal(m.lowerBound(st).C['S2'], 3);
+    assert.equal(m.lbHeadsTails(st, m.compile(st)).fin['S2.10'], 3);
+  });
+
+  test('kilit saatinde arıza varsa iş kilit saatinde başlar, arıza süresince durur ve uyarı çıkar', () => {
+    const m = motorYukle();
+    const st = kilitli(m, 1, { down: [{ m: 'T1', from: 1.5, to: 2.5, id: 'd0' }] });
+    const p = m.schedule(st, 'yeni', null);
+    assert.deepEqual(yer(p, 'S2.10'), [1, 4]);
+    const uyari = (m.evaluate(p, st, null) as { warn: { t: string; txt: string }[] }).warn.filter((w) => w.t === 'kilit');
+    assert.equal(uyari.length, 1);
+    assert.match(uyari[0]!.txt, /S2\.10/);
+  });
+
+  test('arızasız kilitte uyarı yoktur', () => {
+    const m = motorYukle();
+    const st = kilitli(m, 1);
+    assert.equal((m.evaluate(m.schedule(st, 'yeni', null), st, null) as { warn: { t: string }[] }).warn.filter((w) => w.t === 'kilit').length, 0);
+  });
+
+  test('saati geçmiş kilit yalnız tezgâhı bağlar: iş şimdiden önce yerleşmez', () => {
+    const m = motorYukle();
+    const p = m.schedule({ ...kilitli(m, 0), now: 2 }, 'yeni', null);
+    assert.ok(p.ops['S2.10']!.S >= 2);
+    assert.equal(p.ops['S2.10']!.m, 'T1');
+  });
+});

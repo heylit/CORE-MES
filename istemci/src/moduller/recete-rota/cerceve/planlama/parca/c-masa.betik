@@ -7,14 +7,14 @@ function nedenMetni(r) {
   let neden = NEDEN[why.t] || 'Bilinmiyor.';
   if (why.t === 'rota') neden = why.o === 2 ? `Son parti kuralı: önceki adım ${why.r} bitmeden son partiyi bitiremezdi.` : why.o === 1 ? `Önceki adım ${why.r} ilk partisini bitirince örtüşmeli başladı.` : `Önceki adım ${why.r} bitince başladı (taşıma payı dahil).`;
   if (why.t === 'tezgah') neden = `Tezgâhta önceki iş ${why.r} bitince başladı.`;
-  if (why.t === 'kilit') neden = 'Kilitli: planlamacının verdiği en erken saatte başladı.';
+  if (why.t === 'kilit') neden = 'Kilitli: planlamacının verdiği saatte, kendi tezgâhında sabit; öteki işler etrafına dizilir.';
   if (why.t === 'oneri') neden = 'Çözücü önerisindeki saatte başladı; motor kısıtları yeniden uyguladı.';
   return neden;
 }
 function uyarilar(p) {
   const w = p.warn || [];
   if (!w.length && !(p.fail || []).length) return '';
-  const tip = { malzeme: ['box', 'uyari', 'Malzeme'], program: ['tool', 'bilgi', 'NC programı'], plan: ['alert', 'hata', 'Planlanamadı'] };
+  const tip = { malzeme: ['box', 'uyari', 'Malzeme'], program: ['tool', 'bilgi', 'NC programı'], plan: ['alert', 'hata', 'Planlanamadı'], kilit: ['lock', 'uyari', 'Kilit'] };
   const grup = {};
   for (const x of w) (grup[x.t] = grup[x.t] || []).push(x);
   return `<ul class="pm-olaylar">${Object.entries(grup).map(([t, l]) => { const [s, ton, ad] = tip[t] || ['alert', 'uyari', t]; return l.slice(0, 5).map(x => `<li class="pm-olay" data-ton="${ton}">${ic(s, 'k')}<span class="pm-olay-metin"><b>${ad}.</b> ${esc(x.txt)}</span></li>`).join('') + (l.length > 5 ? `<li class="pm-kucuk">${ad}: ${l.length - 5} uyarı daha</li>` : ''); }).join('')}</ul>`;

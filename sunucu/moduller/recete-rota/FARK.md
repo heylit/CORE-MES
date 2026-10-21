@@ -129,3 +129,11 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
 - Davranış (391 a): gerçekleşen kaydı `kalan` (verimli saat) ve `sayim` (son sayım anı) taşırsa motor başlamış adımın bitişini
   `sayim`dan takvimle `kalan` kadar ilerletir; yoksa geçen süreyi düşen eski yol sürer. Plan, alt sınır, baş-kuyruk ve MIP gevşetmesi aynı
   yardımcıyı (`kalanBitis`) kullanır.
+
+## Kilitli iş sabit (kilit a, davranış değiştiren düzeltme onaylı 21.10.2026)
+- Önce: kilit yalnız "bu tezgâh, en erken bu saat" idi; önüne iş girince kilitli iş sonraya itiliyordu.
+- Şimdi: saati şimdiden ileri olan kilitli iş tezgâhında tam kilit saatinde sabittir (dondurulmuş gibi, öncülünü beklemez). Öteki işler
+  etrafına dizilir: önüne sığan önce yapılır, sığmayan kilitten sonra başlar; kilitli iş tezgâhın boş anını ilerletmez (`kilitYeri`,
+  `kilitKoy`, `tMach`). Alt sınır, baş-kuyruk ve MIP gevşetmesi kilidin yerini sabit sayar.
+- Kilit saatinde arıza ya da bakım varsa iş kilitte başlar, arıza süresince durur; plan uyarılarında "Kilit" satırı çıkar.
+- Saati geçmiş (şimdiden önce) ve başlamamış kilit eskisi gibi yalnız tezgâhı bağlar.
