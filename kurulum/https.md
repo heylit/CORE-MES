@@ -19,7 +19,7 @@ sertifikayla girer. Uygulama internete açılmaz; ters vekil ve Let's Encrypt bu
 
 - `npm run baslat` 4101'i varsayılan olarak yalnız bu makinede açar (`localhost`); telefon ulaşamaz.
 - Telefonların yerel ağdan bağlanması için `.env`'e `TMIV2_ONIZLEME_ADRESI` yazılır: `0.0.0.0` bütün ağ arayüzleri, belirli bir IP
-  (ör. `10.10.10.88`) yalnız o arayüz. IP olmayan değerde sunucu Türkçe iletiyle açılmaz. Kod: `istemci/src/ortak/pwa/dinleme.ts`.
+  (ör. `10.0.9.88`) yalnız o arayüz. IP olmayan değerde sunucu Türkçe iletiyle açılmaz. Kod: `istemci/src/ortak/pwa/dinleme.ts`.
   Değişkenin adı eskiden 4101'i ayrı süreç (`vite preview`) açtığı içindir; artık arayüz kapısını etkiler, API kapısı (4100) bu makinede kalır.
   `npm run gelistir:istemci` bu makinede kalır.
 - HTTPS değişkenleriyle birlikte telefonlar `https://<sunucu-adı-ya-da-ip>:4101` ile girer.

@@ -162,7 +162,7 @@ test('canlıda sunucu yalnız bu makinede dinler; geliştirme ve testte bütün 
 test('ters vekil başka bilgisayardaysa adresi okunur; IP olmayan değer açılışı durdurur (kart #175)', () => {
   const tam = { ...TAM };
   assert.equal(ayarOku(tam).vekilAdresi, undefined);
-  assert.equal(ayarOku({ ...tam, TMIV2_VEKIL_ADRESI: ' 10.10.10.5 ' }).vekilAdresi, '10.10.10.5');
+  assert.equal(ayarOku({ ...tam, TMIV2_VEKIL_ADRESI: ' 10.0.9.5 ' }).vekilAdresi, '10.0.9.5');
   assert.throws(() => ayarOku({ ...tam, TMIV2_VEKIL_ADRESI: 'vekil.kurum' }), /TMIV2_VEKIL_ADRESI/);
 });
 

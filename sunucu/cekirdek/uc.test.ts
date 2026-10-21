@@ -439,14 +439,14 @@ test('vekil uyarısı: güvenilmeyen eşten X-Forwarded-For gelince bir kez uyar
   await bos.app.inject(istek('::ffff:127.0.0.1', '10.0.0.5'));
   await bos.app.inject(istek('10.0.0.8'));
   assert.deepEqual(bos.uyarilar, []);
-  const uzak = await bos.app.inject(istek('10.10.10.5', '10.0.0.5'));
-  assert.deepEqual(uzak.json(), { ip: '10.10.10.5' });
-  await bos.app.inject(istek('10.10.10.6', '10.0.0.6'));
+  const uzak = await bos.app.inject(istek('10.0.9.5', '10.0.0.5'));
+  assert.deepEqual(uzak.json(), { ip: '10.0.9.5' });
+  await bos.app.inject(istek('10.0.9.6', '10.0.0.6'));
   assert.equal(bos.uyarilar.length, 1);
-  assert.match(bos.uyarilar[0] ?? '', /10\.10\.10\.5.*TMIV2_VEKIL_ADRESI.*kurulum\/canli\.md/);
+  assert.match(bos.uyarilar[0] ?? '', /10\.0\.9\.5.*TMIV2_VEKIL_ADRESI.*kurulum\/canli\.md/);
 
-  const tanimli = kur([...GUVENILEN_VEKIL, '10.10.10.5']);
-  assert.deepEqual((await tanimli.app.inject(istek('10.10.10.5', '10.0.0.5'))).json(), { ip: '10.0.0.5' });
+  const tanimli = kur([...GUVENILEN_VEKIL, '10.0.9.5']);
+  assert.deepEqual((await tanimli.app.inject(istek('10.0.9.5', '10.0.0.5'))).json(), { ip: '10.0.0.5' });
   assert.deepEqual(tanimli.uyarilar, []);
 });
 
