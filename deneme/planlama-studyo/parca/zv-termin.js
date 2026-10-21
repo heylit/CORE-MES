@@ -1,0 +1,260 @@
+/* ---------- Malzeme ve fason terminleri, genel gider, satın alma siparişi ----------
+   Kullanıcı 12:21: satın alma ve fason, plana gireceği günden en geç bir hafta önce termin almış olmalı; termini olmayan sipariş yok sayılır,
+   plan uyarır ve işi ileri atmayı önerir. Termin girilene kadar süre varsayılan katsayıdan gelir (tedarik ya da fason süresi × katsayı,
+   istenirse miktarla orantılı ek gün); girilen termin kesinleşen süredir ve katsayının yerine geçer.
+   Motor dosyası değişmez: termin ve tahmini geliş plana verilen veri kopyasında satın alma satırı olarak, fason dönüşü fason yerleştirmesinin
+   üstünde uygulanır; aynı kod işçide de çalışır. */
+const TM0 = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik: 7 };
+const tmAyar = (D = S.D) => ({ ...TM0, ...((D && D.terminAyar) || {}) });
+const tmYaz = t => mpTarih(t).toISOString().slice(0, 16).replace('T', ' ');
+/* kullanıcı 13:17: varsayılan termin malzemeye ve fason firmasına göre değişir; malzeme ya da fasoncu kendi katsayısını taşırsa genel katsayının yerine o kullanılır */
+const tmKat = (x, k, genel) => x && x[k] != null && isFinite(+x[k]) ? +x[k] : genel;
+function tmSureMal(D, kod, q, A) { const m = (D.malzemeler || []).find(x => x.kod === kod); if (!m || m.tedarikGun == null) return null; return (+m.tedarikGun * tmKat(m, 'terminKat', A.katMal) + tmKat(m, 'terminEk', A.ekMal) * q / 100) * 24; }
+const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
+/* malzemenin ihtiyaç günü son plandan: onu kullanan ilk işin başlangıcı; plan yoksa bilinmez */
+function tmIhtiyac(D, p) {
+  const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
+  for (const id in p.ops) { const r = p.ops[id]; if (r.done || !isFinite(r.S)) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
+  for (const s of D.siparisler) { if (s.havuz || ilk[s.id] == null) continue; for (const r of s.malzeme || []) out[r.kod] = Math.min(out[r.kod] ?? Infinity, ilk[s.id]); }
+  return { kod: out, is: ilk };
+}
+/* plana giden veri: termini olmayan satın alma tahmini gelişle, siparişi verilmemiş eksik tahmini bir satırla girer.
+   İhtiyacına eşik kadar gün kalmış ve termini yoksa sipariş yok sayılır: geliş bugünden tam tedarik süresidir. */
+function tmUygula(st) {
+  const D = st.D, A = tmAyar(S.D), now = st.now, sinir = now + A.esik * 24; const ih = tmIhtiyac(D, S.plan); const uy = []; const kayit = [];
+  D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
+  for (const p of D.satinalma) { if (parseT(D, p.gelis) != null) continue;
+    const sure = tmSureMal(D, p.kod, +p.miktar || 0, A); if (sure == null) { p.tm = 'sure-yok'; continue; }
+    const h = ih.kod[p.kod]; const t0 = parseT(D, p.verildi) ?? now;
+    if (h != null && h <= sinir) { const g = now + sure; p.gelis = tmYaz(g); p.tm = 'yok'; p.yakin = 1; }
+    else { p.gelis = tmYaz(Math.max(now, t0 + sure)); p.tm = 'tahmini'; }
+    kayit.push(p); }
+  const ihtiyac = {}; for (const s of D.siparisler) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
+  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
+    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue; const sure = tmSureMal(D, kod, eks, A); if (sure == null) continue;
+    const g = now + sure; D.satinalma.push({ kod, miktar: eks, gelis: tmYaz(g), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok' });
+    if (ih.kod[kod] != null && ih.kod[kod] <= sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
+  for (const id in (S.plan && S.plan.ops) || {}) { const r = S.plan.ops[id]; if (!r.fas || r.done || r.S > sinir || r.S < now - 1e-9) continue; if ((D.fasonTermin || {})[id]) continue;
+    uy.push({ t: 'Termin yok', j: r.job, fason: id, txt: `${id}: fason ${fmtDT(D, r.S)} çıkıyor, dönüş termini girilmedi; dönüş katsayıyla tahmin edildi.` }); }
+  st.tmP = { katFas: A.katFas, ekFas: A.ekFas }; st.tmUyari = uy; st.ggP = +ymAyar(S.D).genelGider || 0;
+  return st;
+}
+const tmStEski = stOf;
+stOf = function (ek, gevset) { return tmUygula(tmStEski(ek, gevset)); };
+
+/* motora bağlanan kısım (ana iş parçacığı ve işçi): genel gider her tezgâh saatine yük olarak, termin uyarıları, fason dönüşü */
+function terminUygula() {
+  if (self.__tmU) return; self.__tmU = 1;
+  const e0 = evaluate;
+  evaluate = function (plan, st, ref, fast) {
+    const e = e0(plan, st, ref, fast); if (!st) return e;
+    if (st.ggP > 0) { let h = 0; for (const id in plan.ops) { const r = plan.ops[id]; if (!r.fas) h += (+r.run || 0) + (+r.su || 0); } const g = h * st.ggP; e.gg = g; e.tl += g; e.lex[4] += g; }
+    if (!fast && e.warn) {
+      /* uyarı yalnız terminsiz satırdan malzeme alan ve ondan önce başlayan işe: stoktan karşılanan iş etkilenmez */
+      const cx = plan.cx || compile(st); const D = st.D;
+      for (const x of cx.mat.po) { const p = D.satinalma[x.i]; if (!p || !p.yakin) continue;
+        for (const j of new Set(x.jobs.map(u => u.j))) { let b = Infinity; for (const o of (cx.jobs[j] || { ops: [] }).ops) { const r = plan.ops[o.id]; if (r && !r.done && !o.pr.length) b = Math.min(b, r.S); }
+          if (!(b < x.t - 1e-9)) continue;
+          e.warn.push({ t: 'Termin yok', j, gelis: x.t, kod: p.kod, txt: `${j}: ${p.kod} ${p.tm === 'yok' ? 'siparişinin termini girilmedi, sipariş yok sayıldı' : 'için sipariş verilmedi'}; en erken geliş ${fmtDT(D, x.t)}, iş ${fmtDT(D, b)} başlıyor. İşi ileri atmak gerekebilir.` }); } }
+      for (const w of st.tmUyari || []) e.warn.push(w); }
+    return e;
+  };
+  const f0 = tFason;
+  tFason = function (o, c, cx, ctx, b) {
+    const r = f0(o, c, cx, ctx, b); const A = cx.st.tmP; if (!r || !A) return r;
+    const k = cx.st.D.fasonTermin && cx.st.D.fasonTermin[o.id]; const T = k ? parseT(cx.st.D, k) : null;
+    const C = T != null ? Math.max(r.S + 1, T) : r.S + tmSureFas(cx.FS[c.m.slice(1)], o.adet, A);
+    r.C = r.lot1 = C; r.run = C - r.S; return r;
+  };
+}
+terminUygula();
+{ const iA = isciAc; isciAc = function () {
+  const src = document.getElementById('motor').textContent + '\n' + opKaydi.toString() + '\n' + planKaydi.toString() + '\n' + ISCI_KODU + '\n' + TL_ISCI() + `\nvar tmSureFas = ${tmSureFas};\n${terminUygula}\nterminUygula();`;
+  const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+  let w; try { w = new Worker(url); } catch (e) { URL.revokeObjectURL(url); return iA(); }
+  w.bitir = () => { w.terminate(); URL.revokeObjectURL(url); calisan = null; U.ilerleme = null; };
+  w.onerror = e => { w.bitir(); render(); bildir('Motor hatası: ' + (e.message || 'bilinmiyor'), 'hata'); };
+  return w; }; }
+
+/* ---------- ortak: satırlar ---------- */
+const tmTarih = t => t == null || !isFinite(t) ? '—' : `<span class="mono">${esc(fmtDT(S.D, t).slice(0, 9))}</span>`;
+const tmGun = h => `${sayi(Math.abs(h) / 24, Math.abs(h) < 240 ? 1 : 0)} gün`;
+/* satın alma satırları motorun kendi listesinden (plana giden veriyle); src aslındaki satır, boşsa henüz sipariş verilmemiş tahmini satırdır */
+function tmMalzeme() {
+  const p = gosterilen(); const cx = cxAl(); if (!p || !p.ops || !cx) return null; const D = cx.st.D; const now = cx.st.now;
+  let L = []; try { L = satinalmaListe({ ops: p.ops, cx }, { D, now }); } catch (e) { return null; }
+  const A = tmAyar(); const out = [];
+  L.filter(r => r.tur === 'sa').forEach((r, k) => { const po = D.satinalma[k]; out.push({ ...r, po, src: po.src, tm: po.tm || 'termin', i: k }); });
+  for (const r of L.filter(r => r.tur === 'eksik')) out.push({ ...r, po: null, src: null, tm: 'sure-yok' });
+  for (const r of out) { const m = (S.D.malzemeler || []).find(x => x.kod === r.kod) || {}; r.tg = m.tedarikGun == null ? null : +m.tedarikGun; r.mu = (+m.muayeneGun || 0) * 24;
+    r.kat = tmKat(m, 'terminKat', A.katMal); r.siparisGun = r.enGec != null && r.tg != null ? r.enGec - r.tg * r.kat * 24 : null; r.yakin = r.plan != null && r.plan <= now + A.esik * 24; }
+  return { L: out, now, D, A };
+}
+function tmDurum(r, now) {
+  if (r.tm === 'siparis-yok' || r.tm === 'sure-yok') return r.siparisGun != null && r.siparisGun < now ? ['Sipariş geç kaldı', 'hata'] : r.yakin ? ['Sipariş verilmedi', 'hata'] : ['Sipariş verilmeli', 'uyari'];
+  if (r.tm === 'yok') return ['Termin yok, sipariş yok sayıldı', 'hata'];
+  if (r.tm === 'tahmini') return ['Termin bekleniyor', 'uyari'];
+  const d = mpDurum(r, now).slice(0, 2); const ref = r.po && parseT(S.D, r.po.ref);
+  if (d[1] === 'tamam' && ref != null && parseT(S.D, r.po.gelis) > ref + 1e-6) return ['Referanstan geç, plan güncellenmeli', 'uyari'];
+  return d;
+}
+/* fason: plandaki her çıkış, gerekli dönüş (sonraki adımın başlangıcı ya da termin) ve siparişi geciktirmeden en geç dönüş */
+function tmFason() {
+  const p = gosterilen(); const cx = cxAl(); if (!p || !p.ops || !cx) return null; const now = cx.st.now; const A = tmAyar(); const k = S.D.fasonTermin || {};
+  const out = [];
+  for (const id in p.ops) { const r = p.ops[id]; if (!r.fas || r.done) continue; const o = cx.byId[id]; const j = cx.jobs[r.job]; if (!o || !j) continue;
+    let ger = null; for (const x of Object.values(p.ops)) if (x.job === r.job && cx.byId[x.id] && cx.byId[x.id].pr.some(([q]) => q === id)) ger = ger == null ? x.S : Math.min(ger, x.S);
+    if (ger == null) ger = j.due; const C = p.J && p.J[r.job] ? p.J[r.job].C : null; const bol = j.due != null && C != null ? Math.max(0, j.due - C) : 0;
+    const T = k[id] ? parseT(S.D, k[id]) : null; const f = cx.FS[r.m.slice(1)] || {};
+    out.push({ id, r, o, j, ger, enGec: ger == null ? null : ger + bol, T, f, tahmini: r.S + tmSureFas(f, o.adet, A), yakin: r.S <= now + A.esik * 24 }); }
+  return { L: out.sort((a, b) => a.r.S - b.r.S), now, A };
+}
+function tmFasonDurum(x) {
+  const don = x.T ?? x.r.C;
+  if (x.T == null) return x.yakin ? ['Termin yok, bir hafta içinde çıkıyor', 'hata'] : ['Termin bekleniyor', 'uyari'];
+  const ref = parseT(S.D, (S.D.fasonRef || {})[x.id]);
+  if (x.enGec != null && don > x.enGec + 1e-6) return ['Siparişi geciktirir', 'hata'];
+  if (x.ger != null && don > x.ger + 1e-6) return ['Plandan geç', 'uyari'];
+  if (ref != null && x.T > ref + 1e-6) return ['Referanstan geç, plan güncellenmeli', 'uyari'];
+  return ['Karşılıyor', 'tamam'];
+}
+
+/* ---------- Fason planı: dönüş terminleri ---------- */
+function tmFasonKart(sadeceBos) {
+  const v = tmFason(); if (!v) return ''; const yaz = yetkili('veri.yaz');
+  const l = sadeceBos ? v.L.filter(x => x.T == null) : v.L;
+  const tr = l.map(x => { const [d, ton] = tmFasonDurum(x);
+    const gir = yaz ? `<input class="pm-mz-sec" type="date" value="${mpTarihGir(x.T)}" data-chg="tm-fason" data-v="${esc(x.id)}" aria-label="${esc(x.id)} fason dönüş termini">` : tmTarih(x.T);
+    return `<tr ${ton === 'hata' ? 'data-ton="hata"' : ''}>${td('İş', `<b class="mono">${esc(x.id)}</b><small class="pm-ag-not">${esc(x.o.ad || '')} · ${sayi(x.o.adet, 0)} adet</small>`)}${td('Fasoncu', esc(x.f.ad || x.r.m))}${td('Durum', rozet(d, ton))}${td('Çıkış', tmTarih(x.r.S))}${td('Gerekli dönüş', tmTarih(x.ger))}${td('En geç', tmTarih(x.enGec))}${td('Dönüş termini', `${gir}<small class="pm-ag-not">referans ${esc(fmtDT(S.D, parseT(S.D, (S.D.fasonRef || {})[x.id]) ?? x.tahmini).slice(0, 9))}</small>`)}${td('Planda dönüş', `${tmTarih(x.r.C)}<small class="pm-ag-not">${x.T == null ? 'referans terminden' : 'terminden'}</small>`)}</tr>`; }).join('');
+  return kart(`${ic('truck', 'k')} Fason dönüş terminleri`, `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>İş</th><th>Fasoncu</th><th>Durum</th><th>Çıkış</th><th>Gerekli dönüş</th><th>En geç</th><th>Dönüş termini</th><th>Planda dönüş</th></tr></thead><tbody>${tr || `<tr><td colspan="8" class="pm-kucuk">${sadeceBos ? 'Termini beklenen fason yok.' : 'Planda fason yok.'}</td></tr>`}</tbody></table></div>
+    <p class="pm-kucuk">Gerekli dönüş: işin sonraki adımının planlanan başlangıcı (son adımsa sipariş termini). En geç: siparişin terminini kaçırmadan dönebileceği son gün. Termin girilmeyen fasonda dönüş, fasoncunun süresi × katsayısından (fasoncunun kendi katsayısı, yoksa genel ${sayi(v.A.katFas, 2)})${v.A.ekFas ? ` + 100 adet başına ${sayi(v.A.ekFas, 1)} gün` : ''} tahmin edilir; girilen termin kesin süredir ve plan onu kullanır.</p>`);
+}
+
+/* ---------- Satın alma planı: tekli ve toplu sipariş ---------- */
+U.tmSec = U.tmSec || {};
+mpSatinalmaPlani = function (fg) {
+  const v = tmMalzeme(); if (!v) return ''; const D = S.D; const yaz = yetkili('veri.yaz'); const now = v.now;
+  const ted = D.tedarikciler || []; const mats = Object.fromEntries((D.malzemeler || []).map(m => [m.kod, m]));
+  const mat = kod => `<b class="mono">${esc(kod)}</b> <span class="pm-kucuk">${esc((mats[kod] || {}).ad || '')}</span>`;
+  const tutar = (kod, q) => { const m = mats[kod]; return m && m.birimFiyat != null ? m.birimFiyat * q : null; };
+  const yeni = v.L.filter(r => r.src == null).sort((a, b) => (a.siparisGun ?? 1e9) - (b.siparisGun ?? 1e9));
+  const acik = v.L.filter(r => r.src != null).sort((a, b) => (a.plan ?? 1e9) - (b.plan ?? 1e9));
+  const anahtar = r => r.kod; const sec = U.tmSec;
+  const tedSec = (r, ad) => `<select class="pm-mz-sec" data-tm-ted="${esc(anahtar(r))}" aria-label="${esc(r.kod)} tedarikçi" ${yaz ? '' : 'disabled'}>${ted.map(t => `<option value="${esc(t.id)}" ${(sec[r.kod + '|ted'] || (mats[r.kod] || {}).tedarikci) === t.id ? 'selected' : ''}>${esc(t.ad)}</option>`).join('')}</select>`;
+  const trY = yeni.map(r => { const [d, ton] = tmDurum(r, now); const q = Math.ceil(r.miktar);
+    return `<tr ${ton === 'hata' ? 'data-ton="hata"' : ''}>${td('Seç', `<input type="checkbox" data-act="tm-sec" data-v="${esc(r.kod)}" ${sec[r.kod] ? 'checked' : ''} ${yaz ? '' : 'disabled'} aria-label="${esc(r.kod)} seç">`)}${td('Malzeme', mat(r.kod))}${td('Durum', rozet(d, ton))}${td('Miktar', mpMiktar(q, r.kod), 'pm-num')}${fg ? td('Tutar', esc(agTL(tutar(r.kod, q))), 'pm-num') : ''}${td('En geç sipariş', r.siparisGun == null ? '—' : `${tmTarih(r.siparisGun)}${r.siparisGun < now ? '<small class="pm-ag-not">geçti</small>' : ''}`)}${td('Gerekli geliş', tmTarih(r.plan))}${td('Referans termin', r.etkin == null ? '<span class="pm-kucuk">tedarik süresi yok</span>' : tmTarih(r.etkin))}${td('Tedarikçi', tedSec(r))}${td('Siparişler', `<span class="mono">${(r.jobs || []).map(esc).join(', ')}</span>`)}${td('', yaz ? dugme('Sipariş ver', 'tm-ver', { kucuk: true, simge: 'check', veri: `data-v="${esc(r.kod)}"` }) : '')}</tr>`; }).join('');
+  const nSec = yeni.filter(r => sec[r.kod]).length;
+  const toplu = yaz && yeni.length ? `<div class="pm-sira pm-tm-toplu"><button type="button" class="tc-dugme tc-dugme-kucuk" data-act="tm-hepsi">${ic('check', 'k')}${nSec === yeni.length ? 'Seçimi kaldır' : 'Tümünü seç'}</button><label class="pm-ym-alan"><span>Termin (biliniyorsa)</span><input class="pm-mz-sec" type="date" id="tm-toplu-termin"></label>${dugme(`Seçilenlere sipariş ver${nSec ? ` (${nSec})` : ''}`, 'tm-toplu', { kucuk: true, birincil: true, simge: 'truck' })}<span class="pm-kucuk">Aynı tedarikçiye gidenler tek sipariş numarasında toplanır.</span></div>` : '';
+  const trA = acik.map(r => { const [d, ton] = tmDurum(r, now); const po = D.satinalma[r.src] || {};
+    const gir = yaz ? `<input class="pm-mz-sec" type="date" value="${mpTarihGir(parseT(D, po.gelis))}" data-chg="mp-termin" data-i="${r.src}" aria-label="${esc(r.kod)} satın alma termini">` : tmTarih(parseT(D, po.gelis));
+    return `<tr ${ton === 'hata' ? 'data-ton="hata"' : ''}>${td('Malzeme', mat(r.kod))}${td('Durum', rozet(d, ton))}${td('Sipariş', `<span class="mono">${esc(po.no || '—')}</span><small class="pm-ag-not">${esc((ted.find(t => t.id === po.tedarikci) || {}).ad || po.tedarikci || '')}${po.verildi ? ' · ' + esc(po.verildi.slice(0, 10)) : ''}</small>`)}${td('Miktar', mpMiktar(r.miktar, r.kod), 'pm-num')}${fg ? td('Tutar', esc(agTL(tutar(r.kod, r.miktar))), 'pm-num') : ''}${td('Gerekli geliş', tmTarih(r.plan))}${td('En geç', tmTarih(r.enGec))}${td('Termin', `${gir}${po.ref ? `<small class="pm-ag-not">referans ${esc(fmtDT(S.D, parseT(S.D, po.ref)).slice(0, 9))}</small>` : ''}`)}${td('Planda geliş', `${tmTarih(r.etkin)}<small class="pm-ag-not">${r.tm === 'termin' ? 'termin + tedarikçi gecikmesi' : 'referans terminden'}</small>`)}${td('Siparişler', `<span class="mono">${(r.jobs || []).map(esc).join(', ')}</span>`)}</tr>`; }).join('');
+  const say = (l, f) => l.filter(f).length;
+  const kut = [['lira', 'Sipariş verilmeli', String(yeni.length), `${say(yeni, r => r.siparisGun != null && r.siparisGun < now)} tanesinin günü geçti`, yeni.length ? 'uyari' : 'tamam'],
+    ['clock', 'Termin bekleniyor', String(say(acik, r => r.tm === 'tahmini' || r.tm === 'yok')), `${say(acik, r => r.tm === 'yok')} tanesi bir hafta içinde gerekiyor`, say(acik, r => r.tm === 'yok') ? 'hata' : ''],
+    ['alert', 'Siparişi geciktirir', String(say(acik, r => tmDurum(r, now)[0] === 'Siparişi geciktirir')), 'termin en geç günden sonra', say(acik, r => tmDurum(r, now)[0] === 'Siparişi geciktirir') ? 'hata' : 'tamam'],
+    ['check', 'Karşılıyor', String(say(acik, r => tmDurum(r, now)[1] === 'tamam')), 'termin planı tutuyor']];
+  return kart(`${ic('truck', 'k')} Satın alma planı <span class="pm-kucuk">üretim planına göre</span>`, `${ymKpi(kut)}
+    <h3 class="pm-tm-alt">${ic('lira', 'k')} Verilecek siparişler</h3>${toplu}
+    <div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th><span class="tc-gizli-etiket">Seç</span></th><th>Malzeme</th><th>Durum</th><th class="pm-num">Miktar</th>${fg ? '<th class="pm-num">Tutar</th>' : ''}<th>En geç sipariş</th><th>Gerekli geliş</th><th>Referans termin</th><th>Tedarikçi</th><th>Siparişler</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${trY || `<tr><td colspan="${fg ? 11 : 10}" class="pm-kucuk">Verilecek sipariş yok: ihtiyaç stoktan ve açık siparişlerden karşılanıyor.</td></tr>`}</tbody></table></div>
+    <h3 class="pm-tm-alt">${ic('truck', 'k')} Açık siparişler</h3>
+    <div class="tc-tablo-kap"${kip()}><table class="tc-tablo pm-mp-sa"><thead><tr><th>Malzeme</th><th>Durum</th><th>Sipariş</th><th class="pm-num">Miktar</th>${fg ? '<th class="pm-num">Tutar</th>' : ''}<th>Gerekli geliş</th><th>En geç</th><th>Termin</th><th>Planda geliş</th><th>Siparişler</th></tr></thead><tbody>${trA || `<tr><td colspan="${fg ? 10 : 9}" class="pm-kucuk">Açık satın alma siparişi yok.</td></tr>`}</tbody></table></div>
+    <p class="pm-kucuk">Sipariş termin olmadan verilebilir; termin gelene kadar geliş tedarik süresi × katsayısından (malzemenin kendi katsayısı, yoksa genel ${sayi(v.A.katMal, 2)}) tahmin edilir (Terminler sayfası). İhtiyacına ${sayi(v.A.esik, 0)} gün kalmış ve termini girilmemiş sipariş yok sayılır: plan gelişi bugünden tam tedarik süresi olarak alır ve uyarır. En geç sipariş: siparişin terminini kaçırmadan verilebileceği son gün (tedarik süresi düşülmüş).</p>`);
+};
+
+/* ---------- Terminler sayfası ---------- */
+function sTerminler() {
+  const A = tmAyar(); const yaz = yetkili('veri.yaz'); const v = tmMalzeme();
+  const al = (k, ad, o) => `<label class="pm-ym-alan"><span>${ad}</span>${yaz ? `<input class="pm-mz-sec pm-ag-sayi" type="number" min="${o.min ?? 0}" max="${o.max}" step="${o.adim}" value="${A[k]}" data-chg="tm-ayar" data-k="${k}" aria-label="${esc(ad)}">` : `<b class="mono">${sayi(A[k], 2)}</b>`}</label>`;
+  const orn = (S.D.malzemeler || []).find(m => m.tedarikGun != null);
+  const ayar = kart(`${ic('gear', 'k')} Varsayılan termin`, `<div class="pm-ym-alanlar">${al('katMal', 'Malzeme katsayısı ×', { adim: 0.1, min: 0.1, max: 10 })}${al('ekMal', 'Malzeme ek gün / 100 birim', { adim: 0.1, max: 100 })}${al('katFas', 'Fason katsayısı ×', { adim: 0.1, min: 0.1, max: 10 })}${al('ekFas', 'Fason ek gün / 100 adet', { adim: 0.1, max: 100 })}${al('esik', 'Termin zorunlu (gün önce)', { adim: 1, min: 1, max: 60 })}</div>
+    <p class="pm-kucuk">Katsayının iki işi var: termin gelene kadar planda boşluk kalmasın diye malzemenin ve fasonun ne zaman geleceğini varsayar, ve satın almaya referans termin verir (tedarikçiden en geç bu tarih istenir). Referans siparişle birlikte saklanır; tedarikçinin verdiği termin referanstan geçse durum "plan güncellenmeli" olur. Hesap: malzemede tedarik süresi × katsayı + miktarla orantılı ek gün, fasonda fasoncunun süresi × katsayı + adetle orantılı ek gün.${orn ? ` Örnek: ${esc(orn.kod)} tedarik ${sayi(orn.tedarikGun, 0)} gün × ${sayi(A.katMal, 2)}${A.ekMal ? ` + 100 birim başına ${sayi(A.ekMal, 1)} gün` : ''} = ${sayi(orn.tedarikGun * A.katMal, 1)} gün${A.ekMal ? ' + miktar payı' : ''}.` : ''} Girilen termin kesinleşen süredir ve katsayının yerine geçer. Plana girmesine ${sayi(A.esik, 0)} gün kalmış ve termini olmayan malzeme siparişi yok sayılır, fason için uyarı çıkar.</p>`);
+  const ayar2 = ayar + tmKatKart(A, yaz);
+  if (!v) return ayar2 + kart(`${ic('flag', 'k')} Terminler`, '<p class="pm-kucuk">Önce plan kurulmalı.</p>');
+  const mats = Object.fromEntries((S.D.malzemeler || []).map(m => [m.kod, m]));
+  const bek = v.L.filter(r => r.tm !== 'termin').sort((a, b) => (a.plan ?? 1e9) - (b.plan ?? 1e9));
+  const uy = ((gosterilen() || {}).warn || []).filter(w => w.t === 'Termin yok' && w.kod);
+  const ileri = r => { const js = [...new Set(uy.filter(w => w.kod === r.kod).map(w => w.j))]; return js.length && yaz ? dugme('İleri at', 'tm-ileri', { kucuk: true, simge: 'next', veri: `data-v="${esc(js.join(','))}|${r.etkin + r.mu}"` }) : ''; };
+  const tr = bek.map(r => { const [d, ton] = tmDurum(r, v.now);
+    const gir = !yaz ? '—' : r.src != null ? `<input class="pm-mz-sec" type="date" value="" data-chg="mp-termin" data-i="${r.src}" aria-label="${esc(r.kod)} termin">` : `<input class="pm-mz-sec" type="date" value="" data-chg="tm-yeni-termin" data-v="${esc(r.kod)}" data-q="${Math.ceil(r.miktar)}" aria-label="${esc(r.kod)} sipariş ve termin">`;
+    return `<tr ${ton === 'hata' ? 'data-ton="hata"' : ''}>${td('Malzeme', `<b class="mono">${esc(r.kod)}</b> <span class="pm-kucuk">${esc((mats[r.kod] || {}).ad || '')}</span>`)}${td('Durum', rozet(d, ton))}${td('Miktar', mpMiktar(r.miktar, r.kod), 'pm-num')}${td('Gerekli geliş', tmTarih(r.plan))}${td('Referans termin', `${tmTarih(r.etkin)}<small class="pm-ag-not">${r.tg == null ? 'tedarik süresi yok' : `${sayi(r.tg, 0)} gün × ${sayi(r.kat, 2)}`}</small>`)}${td('Termin', gir)}${td('Siparişler', `<span class="mono">${(r.jobs || []).map(esc).join(', ')}</span>`)}${td('', ileri(r))}</tr>`; }).join('');
+  const malKart = kart(`${ic('box', 'k')} Malzeme: termin bekleyenler`, `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Malzeme</th><th>Durum</th><th class="pm-num">Miktar</th><th>Gerekli geliş</th><th>Referans termin</th><th>Termin</th><th>Siparişler</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${tr || '<tr><td colspan="8" class="pm-kucuk">Termini beklenen malzeme yok.</td></tr>'}</tbody></table></div>
+    <p class="pm-kucuk">Siparişi verilmemiş satıra termin girmek siparişi o terminle verir. İleri at: işin serbest bırakılma zamanını tahmini gelişe (muayene dahil) taşır; plan yeniden çözülünce iş o tarihten önce başlamaz.</p>`);
+  return `${ayar2}${malKart}${tmFasonKart(true)}`;
+}
+
+/* malzeme ve fasoncu başına katsayı; boş alan genel katsayıyı kullanır */
+function tmKatKart(A, yaz) {
+  const gir = (tur, x, k, genel, ad) => yaz ? `<input class="pm-mz-sec pm-ag-sayi" type="number" min="${k === 'terminKat' ? 0.1 : 0}" max="${k === 'terminKat' ? 10 : 100}" step="0.1" value="${x[k] ?? ''}" placeholder="${sayi(genel, 2)}" data-chg="tm-kat" data-tur="${tur}" data-v="${esc(tur === 'mal' ? x.kod : x.id)}" data-k="${k}" aria-label="${esc(ad)}">` : `<span class="mono">${x[k] == null ? '—' : sayi(x[k], 2)}</span>`;
+  const mal = (S.D.malzemeler || []).filter(m => m.tedarikGun != null).map(m => { const k = tmKat(m, 'terminKat', A.katMal);
+    return `<tr>${td('Malzeme', `<b class="mono">${esc(m.kod)}</b> <span class="pm-kucuk">${esc(m.ad || '')}</span>`)}${td('Tedarik', `<span class="mono">${sayi(m.tedarikGun, 0)} gün</span>`, 'pm-num')}${td('Katsayı', gir('mal', m, 'terminKat', A.katMal, m.kod + ' katsayı'), 'pm-num')}${td('Ek gün / 100 birim', gir('mal', m, 'terminEk', A.ekMal, m.kod + ' ek gün'), 'pm-num')}${td('Varsayılan süre', `<b class="mono">${sayi(+m.tedarikGun * k, 1)} gün</b>${m.terminKat != null ? '<small class="pm-ag-not">malzemenin kendi</small>' : '<small class="pm-ag-not">genel</small>'}`, 'pm-num')}</tr>`; }).join('');
+  const fas = (S.D.fasoncular || []).map(f => { const k = f.terminKat != null ? +f.terminKat : A.katFas;
+    return `<tr>${td('Fasoncu', `<b>${esc(f.ad)}</b><small class="pm-ag-not mono">${esc(f.id)}</small>`)}${td('Süre', `<span class="mono">${sayi(+f.sureGun || 1, 1)} gün</span>`, 'pm-num')}${td('Katsayı', gir('fas', f, 'terminKat', A.katFas, f.ad + ' katsayı'), 'pm-num')}${td('Ek gün / 100 adet', gir('fas', f, 'terminEk', A.ekFas, f.ad + ' ek gün'), 'pm-num')}${td('Varsayılan dönüş', `<b class="mono">${sayi((+f.sureGun || 1) * k, 1)} gün</b>${f.terminKat != null ? '<small class="pm-ag-not">firmanın kendi</small>' : '<small class="pm-ag-not">genel</small>'}`, 'pm-num')}</tr>`; }).join('');
+  return kart(`${ic('list', 'k')} Malzeme ve fasoncu başına katsayı`, `<p class="pm-kucuk">Varsayılan termin malzemeye ve fason firmasına göre değişir. Boş bırakılan alan genel katsayıyı kullanır (gri yazılan değer).</p>
+    <div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Malzeme</th><th class="pm-num">Tedarik</th><th class="pm-num">Katsayı ×</th><th class="pm-num">Ek gün / 100 birim</th><th class="pm-num">Varsayılan süre</th></tr></thead><tbody>${mal || '<tr><td colspan="5" class="pm-kucuk">Tedarik süresi girilmiş malzeme yok.</td></tr>'}</tbody></table></div>
+    <div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Fasoncu</th><th class="pm-num">Süre</th><th class="pm-num">Katsayı ×</th><th class="pm-num">Ek gün / 100 adet</th><th class="pm-num">Varsayılan dönüş</th></tr></thead><tbody>${fas || '<tr><td colspan="5" class="pm-kucuk">Fasoncu yok.</td></tr>'}</tbody></table></div>`);
+}
+
+/* ---------- Bugün ekranında karar: termini olmayan iş ileri atılsın mı ---------- */
+{ const bkE = bgKararlar; bgKararlar = function (p) {
+  const out = bkE(p); const w = (p && p.warn || []).filter(x => x.t === 'Termin yok' && x.gelis != null); if (!w.length) return out;
+  const js = [...new Set(w.map(x => x.j))]; const g = Math.max(...w.map(x => x.gelis));
+  out.unshift({ id: 'tm', ton: 'hata', simge: 'flag', baslik: `${js.length} işin malzeme termini yok`, metin: `${js.slice(0, 4).join(', ')}${js.length > 4 ? '…' : ''}: sipariş yok sayıldı, malzeme en erken ${fmtDT(S.D, g).slice(0, 9)}. Plan güncellenmeli; işler ileri atılsın mı?`, eylem: [['İleri at', 'tm-ileri', `${js.join(',')}|${g}`, true], ['Terminler', 'git', 'terminler']] });
+  return out; }; }
+
+YAN.push(['terminler', 'Terminler', 'flag']); YAN_ID.add('terminler'); SAYFA_AD.terminler = 'Malzeme ve fason terminleri'; EKRAN_OF.terminler = 'plan';
+YM_GORUNUM.terminler = sTerminler;
+{ const fp = YM_GORUNUM.fasonplan; YM_GORUNUM.fasonplan = () => fp() + tmFasonKart(false); }
+
+/* ---------- eylemler ---------- */
+function tmSiparisVer(l, termin) {
+  const ted = S.D.tedarikciler || []; const gr = {};
+  for (const r of l) { const t = U.tmSec[r.kod + '|ted'] || (S.D.malzemeler.find(m => m.kod === r.kod) || {}).tedarikci || (ted[0] && ted[0].id) || ''; (gr[t] = gr[t] || []).push(r); }
+  const bugun = tmYaz(cxAl().st.now); let n = Math.max(0, ...(S.D.satinalma || []).map(p => +String(p.no || '').replace(/\D/g, '') || 0));
+  return degistir(l.length > 1 ? 'Toplu satın alma siparişi' : 'Satın alma siparişi', Object.entries(gr).map(([t, rs]) => `${(ted.find(x => x.id === t) || {}).ad || t}: ${rs.map(r => `${r.kod} ${sayi(Math.ceil(r.miktar), 0)}`).join(', ')}`).join('; ') + (termin ? `, termin ${termin}` : ', termin bekleniyor'), () => {
+    S.D.satinalma = S.D.satinalma || [];
+    for (const [t, rs] of Object.entries(gr)) { const no = 'SA-' + String(++n).padStart(4, '0'); for (const r of rs) S.D.satinalma.push({ no, kod: r.kod, miktar: Math.ceil(r.miktar), tedarikci: t, verildi: bugun, gelis: termin ? `${termin} 08:00` : null, ref: r.etkin != null && isFinite(r.etkin) ? tmYaz(r.etkin) : null }); }
+    for (const r of l) delete U.tmSec[r.kod]; U.mpV = null; });
+}
+{ const tmTek = tekEylem; tekEylem = function (act, v, el, e) {
+  if (act === 'tm-sec') { U.tmSec[v] = !U.tmSec[v]; render(); return true; }
+  if (act === 'tm-hepsi') { const l = (tmMalzeme() || { L: [] }).L.filter(r => r.src == null); const hep = l.every(r => U.tmSec[r.kod]); for (const r of l) U.tmSec[r.kod] = !hep; render(); return true; }
+  if (act === 'tm-ver' || act === 'tm-toplu') { const l = (tmMalzeme() || { L: [] }).L.filter(r => r.src == null && (act === 'tm-ver' ? r.kod === v : U.tmSec[r.kod]));
+    if (!l.length) { bildir('Önce sipariş verilecek malzemeyi seçin.', 'hata'); return true; }
+    const t = act === 'tm-toplu' ? (document.getElementById('tm-toplu-termin') || {}).value || '' : ''; tmSiparisVer(l, t); return true; }
+  if (act === 'tm-ileri') { const [js, g] = String(v).split('|'); const t = +g; if (!isFinite(t)) return true; const l = js.split(',').map(j => S.D.siparisler.find(s => s.id === j)).filter(Boolean);
+    degistir('İşler ileri atıldı', `${l.map(s => s.id).join(', ')}: en erken ${fmtDT(S.D, t)} (malzeme termini yok)`, () => { for (const s of l) if (parseT(S.D, s.serbest) == null || parseT(S.D, s.serbest) < t) s.serbest = tmYaz(Math.ceil(t)); }, 'plan.yaz'); return true; }
+  return tmTek(act, v, el, e); }; }
+document.addEventListener('change', e => {
+  const el = e.target; if (!el.dataset) return;
+  if (el.dataset.tmTed) { U.tmSec[el.dataset.tmTed + '|ted'] = el.value; return; }
+  const c = el.dataset.chg; if (!c || !c.startsWith('tm-')) return;
+  if (c === 'tm-ayar') { const k = el.dataset.k; const x = el.value === '' ? null : +el.value; if (x == null || !(x >= +el.min) || x > +el.max) { bildir('Geçerli bir sayı girin.', 'hata'); render(); return; }
+    degistir('Varsayılan termin ayarı', `${k}: ${tmAyar()[k]} → ${x}`, () => { S.D.terminAyar = { ...(S.D.terminAyar || {}), [k]: x }; }); return; }
+  if (c === 'tm-kat') { const k = el.dataset.k; const x = el.value === '' ? null : +el.value; if (x != null && (!(x >= +el.min) || x > +el.max)) { bildir('Geçerli bir sayı girin.', 'hata'); render(); return; }
+    const l = el.dataset.tur === 'mal' ? S.D.malzemeler : S.D.fasoncular; const o = (l || []).find(y => (el.dataset.tur === 'mal' ? y.kod : y.id) === el.dataset.v); if (!o) return;
+    degistir(el.dataset.tur === 'mal' ? 'Malzeme termin katsayısı' : 'Fasoncu termin katsayısı', `${el.dataset.v} ${k === 'terminKat' ? 'katsayı' : 'ek gün'}: ${o[k] ?? 'genel'} → ${x ?? 'genel'}`, () => { if (x == null) delete o[k]; else o[k] = x; }); return; }
+  if (c === 'tm-fason') { const id = el.dataset.v; degistir(el.value ? 'Fason dönüş termini girildi' : 'Fason dönüş termini silindi', `${id}: ${el.value || '—'}`, () => { const k = { ...(S.D.fasonTermin || {}) }; if (el.value) k[id] = `${el.value} 16:00`; else delete k[id]; S.D.fasonTermin = k;
+    const r = S.plan && S.plan.ops[id]; if (el.value && r && !(S.D.fasonRef || {})[id]) S.D.fasonRef = { ...(S.D.fasonRef || {}), [id]: tmYaz(r.C) }; }); return; }
+  if (c === 'tm-yeni-termin') { if (!el.value) return; const r = (tmMalzeme() || { L: [] }).L.find(x => x.src == null && x.kod === el.dataset.v); if (r) tmSiparisVer([r], el.value); }
+});
+
+/* ---------- Maliyetler: bu planın bütün maliyeti tek yerde ---------- */
+function tmPlanMaliyet() {
+  const p = S.plan; const cx = cxAl(); if (!p || !cx) return null;
+  const W = wipHesap(p, stOf(), cx); const MP = ymMesaiPay(p, cx); const t = { mal: 0, talas: 0, isl: 0, ayar: 0, gg: 0, fas: 0, mes: 0, fin: 0, tah: 0, gec: 0, eksik: 0 };
+  for (const s of S.D.siparisler) { if (s.havuz) continue; const x = ymSipMaliyet(s, p, cx, W, MP); if (!x) continue; if (x.eksik.length) t.eksik++;
+    for (const k of ['mal', 'talas', 'isl', 'ayar', 'gg', 'fas', 'mes', 'gec']) t[k] += +x[k] || 0; if (x.bek) { t.fin += x.bek.fin; t.tah += x.bek.tah; } }
+  t.mesTop = (S.ekMesai || []).reduce((a, e) => a + ymMesaiTL(S.D, cx, e), 0);
+  return t;
+}
+{ const mg = YM_GORUNUM.maliyet; YM_GORUNUM.maliyet = () => { const h = mg(); if (!agFiyatGorur()) return h; const t = tmPlanMaliyet(); if (!t) return h;
+  const sat = [['box', 'Malzeme', t.mal, 'kg fiyatı × fire dahil miktar', 0], ['rotate', 'Talaş satışı', t.talas ? -t.talas : 0, 'malzemeden düşülür', 0], ['cpu', 'İşleme', t.isl, 'tezgâh saat maliyeti', 1], ['wrench', 'Ayar', t.ayar, 'tezgâh + ayarcı', 1],
+    ['layers', 'Genel gider', t.gg, 'tezgâh saati × yük oranı', 1], ['truck', 'Fason', t.fas, 'fiyat + taşıma', 1], ['clock', 'Ek mesai', t.mesTop, t.mesTop - t.mes > 1 ? `${agTL(t.mesTop - t.mes)} işe düşmüyor` : 'vardiya × ücret × çarpan', 1],
+    ['pause', 'Bekleme finansmanı', t.fin, 'yarı mamul', 1], ['lira', 'Erken tahsilat', t.tah, 'vade üretim bitince başlar', 1], ['alert', 'Gecikme bedeli', t.gec, 'sipariş başına bedel × saat', 1]];
+  const top = sat.reduce((a, x) => a + x[2], 0);
+  const tr = sat.map(([sm, ad, v, alt, amac]) => `<tr>${td('Kalem', `${ic(sm, 'k')} ${ad}<small class="pm-ag-not">${alt}</small>`)}${td('TL', `<b class="mono">${v < 0 ? '−' + agTL(-v) : agTL(v)}</b>`, 'pm-num')}${td('Plan amacında', amac ? rozet('evet', 'tamam') : rozet('sabit', 'pasif'))}</tr>`).join('');
+  const kartH = kart(`${ic('chart', 'k')} Bu planın bütün maliyeti`, `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Kalem</th><th class="pm-num">TL</th><th>Plan amacında</th></tr></thead><tbody>${tr}<tr class="pm-mp-top">${td('Kalem', '<b>Toplam</b>')}${td('TL', `<b class="mono">${agTL(top)}</b>`, 'pm-num')}${td('', '')}</tr></tbody></table></div>
+    <p class="pm-kucuk">Siparişler sayfasındaki kâr aynı kalemlerden hesaplanır. Malzeme ve talaş plana göre değişmez (sabit); diğerleri plan amacına girer ve plan bunların toplamını en aza indirir.${t.eksik ? ` <b>${t.eksik} siparişin maliyeti eksik veri yüzünden tam değil.</b>` : ''}${planGuncel() ? '' : ' Veri plandan sonra değişti; plan yeniden çözülünce güncellenir.'}</p>`);
+  return kartH + h; }; }
+/* satın alma planı sayfanın başında: önce yapılacak iş (sipariş ver, termin gir), sonra bütçe ve dağılım */
+{ const sp = mpSatinalmaPlani; YM_GORUNUM.malzplan = () => { const ust = sp(agFiyatGorur()); mpSatinalmaPlani = () => ''; try { return ust + GORUNUM.malzplan(); } finally { mpSatinalmaPlani = sp; } }; }

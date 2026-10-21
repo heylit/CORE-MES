@@ -1,0 +1,172 @@
+/* ---- HiGHS kıyası: saat dilimli karışık tamsayılı gevşetme ----
+   Personel, ayarcı, aparat ve fason kapasitesi yok sayılır; ayar en kısa hâliyle ve gece de yapılabilir sayılır;
+   süreler tam saate aşağı yuvarlanır. Bu yüzden çözümün değeri motorun her planından küçük ya da eşittir: alt sınırdır.
+   Ufuk dışına taşan işlem ufkun sonunda başlamış sayılır ve tezgâh tutmaz; bu da yalnız gevşetir. */
+function mipGroups(st,cx,plan,size){
+  // aynı tezgâhı en çok paylaşan siparişler aynı gruba girer; gruplar ayrık olduğu için alt sınırları toplanabilir
+  const jobs=Object.keys(cx.jobs),mj={};
+  for(const j of jobs)for(const o of cx.jobs[j].ops)for(const c of o.c)if(!c.fas)(mj[c.m]=mj[c.m]||new Set()).add(j);
+  const load={};for(const j of jobs){load[j]={};for(const o of cx.jobs[j].ops){const ms=o.c.filter(c=>!c.fas);for(const c of ms)load[j][c.m]=(load[j][c.m]||0)+c.run/ms.length;}}
+  const e=plan?evaluate(plan,st,null,true):null;
+  const late=j=>e&&e.J[j]&&e.J[j].T>0?1:0;
+  const left=new Set(jobs),out=[];
+  const order=[...jobs].sort((a,b)=>late(b)-late(a)||(cx.jobs[a].due||1e9)-(cx.jobs[b].due||1e9));
+  for(const seed of order){if(!left.has(seed))continue;const g=[seed];left.delete(seed);
+    while(g.length<size&&left.size){let best=null,bv=-1;
+      for(const j of left){let v=0;for(const m in load[j])for(const i of g)v+=Math.min(load[j][m],load[i][m]||0);v+=late(j)*1e-3;if(v>bv){bv=v;best=j;}}
+      g.push(best);left.delete(best);}
+    out.push(g);}
+  return out;
+}
+function mipModel(st,cx,jobIds,opt={}){
+  const A=cx.A,g=st.gercek||{},w=st.w,mx=cx.D.ayarMatrisi||[];
+  const H=Math.min(HDAYS*24,Math.ceil(opt.ufuk||(st.now+21*24)));
+  const tas=Math.floor(+A.tasimaSaat||0),BIG=HDAYS*24*2;
+  const ht=lbHeadsTails(st,cx);
+  const inG=new Set(jobIds),ops=cx.ops.filter(o=>inG.has(o.job));
+  const slots={};// tezgâh başına çalışılabilir saat dilimleri
+  const slotsOf=m=>{if(slots[m])return slots[m];const M=cx.M[m],a=[];for(let h=0;h<HDAYS*24;h++)if(workIn(M.rw,h,h+1)>1e-9)a.push(h);return slots[m]=a;};
+  const V=[],cols={},rowsCap={},expr={},fixed={};
+  let nv=0;const nm=()=>'x'+(nv++);
+  for(const o of ops){
+    const ex={S:[],C:[],vars:[]};expr[o.id]=ex;
+    // sabitlenmiş işlem (başlamış, bitmiş, dondurulmuş) motorun her planında aynı yerdedir
+    const pr=opt.plan&&opt.plan.ops[o.id];
+    if(pr&&pr.pin){fixed[o.id]={S:pr.S,C:pr.C};continue;}
+    if(g[o.id]&&g[o.id].C!=null){fixed[o.id]={S:g[o.id].S!=null?g[o.id].S:g[o.id].C,C:g[o.id].C};continue;}
+    const head=Math.max(st.now,ht.head[o.id]);
+    let dumC=Infinity;
+    for(const c of o.c){
+      if(g[o.id]&&g[o.id].S!=null&&c.m!==g[o.id].m)continue;
+      if(c.fas){const f=cx.FS[c.m.slice(1)];if(!f)continue;
+        for(let d=Math.floor(head/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
+          const t=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(t<head-1e-9)continue;const ret=t+(+f.sureGun||1)*24;
+          if(t>H){dumC=Math.min(dumC,ret);break;}
+          const n=nm();V.push(n);ex.vars.push(n);ex.S.push([n,t]);ex.C.push([n,ret]);cols[n]={o:o.id,m:c.m,S:t,C:ret};}
+        continue;}
+      const M=cx.M[c.m];if(!M)continue;
+      let su=suMin(o,c,cx);
+      let p=su+c.run+(o.fai?(+A.faiSaat||0):0);
+      let from=head;
+      if(g[o.id]&&g[o.id].S!=null){p=Math.max(0,c.run-workIn(M.rw,g[o.id].S,st.now));from=st.now;}
+      const P=Math.floor(p+1e-9),sl=slotsOf(c.m);
+      let i0=0;while(i0<sl.length&&sl[i0]+1<=from+1e-9)i0++;
+      // başlamış işlem yerinde kalır
+      const iEnd=g[o.id]&&g[o.id].S!=null?i0:sl.length-1;
+      for(let i=i0;i<=iEnd&&i<sl.length;i++){const t=sl[i];if(t>H)break;
+        const last=i+P-1;if(last>=sl.length)break;
+        const C=P>0?sl[last]+1:t;
+        const n=nm();V.push(n);ex.vars.push(n);ex.S.push([n,t]);ex.C.push([n,C]);cols[n]={o:o.id,m:c.m,S:t,C};
+        for(let k=i;k<=last;k++){const h=sl[k];if(h>=H+48)break;const key=c.m+'_'+h;(rowsCap[key]=rowsCap[key]||[]).push(n);}}
+      // ufuk sonrası en erken bitiş
+      let i=0;while(i<sl.length&&sl[i]<H)i++;if(i+P-1<sl.length)dumC=Math.min(dumC,P>0?sl[i+P-1]+1:sl[i]);
+    }
+    if(isFinite(dumC)||!ex.vars.length){const n='d'+(nv++);V.push(n);ex.vars.push(n);ex.S.push([n,H]);ex.C.push([n,isFinite(dumC)?dumC:H]);ex.dum=n;cols[n]={o:o.id,dum:1,S:H,C:dumC};}
+  }
+  const R=[],lin=a=>a.map(([n,c])=>(c<0?'- ':'+ ')+Math.abs(+c.toFixed(4))+' '+n).join(' ');
+  let ri=0;
+  for(const o of ops){const ex=expr[o.id];if(fixed[o.id])continue;R.push(`a${ri++}: `+ex.vars.map(n=>'+ '+n).join(' ')+' = 1');}
+  for(const key in rowsCap){const v=rowsCap[key];if(v.length>1)R.push(`m${ri++}: `+v.map(n=>'+ '+n).join(' ')+' <= 1');}
+  const SE=id=>fixed[id]?{t:[],k:fixed[id].S}:{t:expr[id].S,k:0},CE=id=>fixed[id]?{t:[],k:fixed[id].C}:{t:expr[id].C,k:0};
+  for(const o of ops){if(fixed[o.id])continue;
+    for(const [pid,ty] of o.pr){if(!inG.has(cx.byId[pid].job))continue;const po=cx.byId[pid];
+      const ov=ty==='o'&&po.c.some(c=>!c.fas);const lag=po.c.some(c=>c.fas)?0:tas;
+      const s=SE(o.id).t.map(([n,c])=>[n,n===expr[o.id].dum?c+BIG:c]);
+      const q=ov?SE(pid):CE(pid);
+      const terms=s.concat(q.t.map(([n,c])=>[n,-c]));
+      R.push(`p${ri++}: `+lin(terms)+' >= '+(lag+q.k));}}
+  // kritik yol sınırı da geçerlidir: model en az onun kadar güçlü olur
+  const T={},TL={};const obj=[];const cp=lowerBound(st,cx);
+  for(const jid of jobIds){const j=cx.jobs[jid];if(j.due==null)continue;const pw=PW[j.oncelik]||1;
+    const succ=new Set();for(const o of j.ops)for(const [p] of o.pr)succ.add(p);
+    const tn='T'+jid.replace(/[^A-Za-z0-9]/g,'_');T[jid]=tn;obj.push([tn,pw]);TL[tn]=isFinite(cp.C[jid])?Math.max(0,cp.C[jid]-j.due):0;
+    for(const o of j.ops){if(succ.has(o.id))continue;const c=CE(o.id);
+      R.push(`t${ri++}: + 1 ${tn} `+lin(c.t.map(([n,v])=>[n,-v]))+' >= '+(c.k-j.due).toFixed(4));}}
+  const lp='Minimize\n obj: '+(obj.length?lin(obj):'0 x0')+'\nSubject To\n '+R.join('\n ')+'\nBounds\n'+Object.values(T).map(t=>' '+t+' >= '+(Math.floor(TL[t]*1000)/1000)).join('\n')+'\nBinary\n '+V.join(' ')+'\nEnd\n';
+  return {lp,cols,T,jobIds,H,nVar:V.length+Object.keys(T).length,nRow:R.length};
+}
+function mipRead(mod,sol){
+  const ops={},J={};
+  for(const n in mod.cols){const c=sol.Columns[n];if(c&&c.Primal>.5){const k=mod.cols[n];ops[k.o]=k;}}
+  for(const j in mod.T){const c=sol.Columns[mod.T[j]];J[j]=c?c.Primal:null;}
+  return {ops,J};
+}
+
+/* ---- HiGHS çerçeve: tezgâh grubu × vardiya dilimi yük dağıtımı ve haftalık fazla mesai bütçesi ----
+   Yalnız çerçeve kararı verir (hangi vardiyada hangi gruba kaç ek vardiya); iş sırası ve saat motorundur.
+   Yük işlem başına en hızlı tezgâhın grubuna yazılır; işlem en erken başlayabileceği haftadan önce yük almaz.
+   Gecikme yaklaşık: işlemin bittiği dilimin sonu + kuyruk süresi − termin. Fazla mesai sıralı amaçta gecikmeden sonra gelir. */
+function vardiyaSaat(D,id){const v=D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;}
+function ekAdaylar(st,cx){
+  // tezgâhın o gün çalışmadığı vardiyalar; tezgâhın kendi vardiya listesi varsa yalnız onlar
+  const D=cx.D,out=[];
+  for(const m in cx.M){const M=cx.M[m],own=M.vardiyalar||[];
+    for(let d=Math.floor(st.now/24);d<HDAYS;d++){if(cx.days[d].tatil)continue;
+      for(const v of D.vardiyalar){if(own.length&&!own.includes(v.id))continue;
+        const a=d*24+hm(v.bas);let b=d*24+hm(v.bit);if(b<=a)b+=24;if(a<st.now)continue;
+        if(workIn(M.sw,a,b)>=(b-a)-1e-6)continue;
+        if((st.ekMesai||[]).some(e=>e.m===m&&e.gun===d&&e.vardiya===v.id))continue;
+        out.push({m,g:M.grup,gun:d,vardiya:v.id,a,h:b-a});}}}
+  return out;
+}
+function cerceveModel(st,cx,plan,opt={}){
+  // dilim vardiya boyu, ilk vardiya başına hizalı: gün dilimi akşam gelen işin sabaha kalmasını görmüyordu; haftalık bütçe dilimlerin toplamına konur
+  const O=hm(cx.D.vardiyalar[0].bas)%8,L=vardiyaSaat(cx.D,cx.D.vardiyalar[0].id)||8,b0=Math.floor((st.now-O)/L),NB=Math.round((opt.gun||21)*24/L),ht=lbHeadsTails(st,cx),butH=+st.w.mesaiHafta||0;
+  const bk=k=>[O+(b0+k)*L,O+(b0+k+1)*L],wkOf=k=>Math.floor(bk(k)[0]/168),bOf=t=>Math.floor((t-O)/L)-b0;
+  const grp=[...new Set(Object.values(cx.M).map(M=>M.grup))];
+  // kapasite: gözetimsiz saat + en çok(vardiya saati, yetkin personel saati / tezgâh başına personel); personel toplamı ayrıca sınırlı
+  const sl=(arr,a,b)=>{let h=0;for(let q=k0(a);q<k1(b);q++)h+=Math.max(0,arr[q])*SL;return h;};
+  const opG={};for(const g of grp){const ms=Object.values(cx.M).filter(M=>M.grup===g);opG[g]=ms.reduce((s,M)=>s+M.opOran,0)/ms.length;}
+  const capOf=(g,a2,b)=>{let S=0,U=0;for(const m in cx.M){const M=cx.M[m];if(M.grup!==g)continue;const sw=workIn(M.sw,a2,b),rw=workIn(M.rw,a2,b);S+=sw;U+=Math.max(0,rw-sw);}
+    const PH=cx.capG[g]?sl(cx.capG[g],a2,b):S*opG[g];return {c:U+(opG[g]>0?Math.min(S,PH/opG[g]):S),U};};
+  const cap={},att={},tot={};
+  for(let k=0;k<NB;k++){const [a,b]=bk(k),a2=Math.max(a,st.now);tot[k]=sl(cx.capTot,a2,b);
+    for(const g of grp){const x=capOf(g,a2,b);cap[g+'|'+k]=x.c;att[g+'|'+k]=x.U;}}
+  const ad=ekAdaylar(st,cx),ot={};for(const x of ad){const k=bOf(x.a);if(k<0||k>=NB)continue;const key=x.g+'|'+k;ot[key]=(ot[key]||0)+1;}
+  const used={};for(const e of st.ekMesai||[]){const w=Math.floor(e.gun*24/168);used[w]=(used[w]||0)+vardiyaSaat(cx.D,e.vardiya);}
+  const vh=vardiyaSaat(cx.D,cx.D.vardiyalar[0].id)||8;
+  const R=[],obj=[],gen=[],bnd=[];let n=0;const cols={},Y={},P={},EB={};
+  const lin=a=>a.map(([v,c])=>(c<0?'- ':'+ ')+Math.abs(+(+c).toFixed(5))+' '+v).join(' ');
+  const capT={};
+  for(const o of cx.ops){const r=plan&&plan.ops[o.id];if(r&&(r.pin||r.done||r.act))continue;
+    const ms=o.c.filter(c=>!c.fas);if(!ms.length||o.c.some(c=>c.fas&&!c.opt))continue;
+    let best=null;for(const c of ms){const p=suMin(o,c,cx)+c.run;if(!best||p<best.p)best={c,p};}
+    const g=cx.M[best.c.m].grup,p=best.p;if(p<1e-6)continue;
+    const j=cx.jobs[o.job],pw=PW[j.oncelik]||1,eb=Math.max(0,bOf(ht.head[o.id]));
+    const row=[];Y[o.id]={};P[o.id]=p;(EB[g+'|'+eb]=EB[g+'|'+eb]||[]).push({id:o.id,h:ht.head[o.id]});
+    for(let k=Math.min(eb,NB);k<=NB;k++){const v='y'+(n++);
+      const end=k<NB?bk(k)[1]:bk(NB)[0]+7*24;const late=j.due==null?0:Math.max(0,end+(ht.tail[o.id]||0)-j.due);
+      obj.push([v,pw*late/p]);row.push([v,1]);cols[v]={o:o.id,g,k};Y[o.id][k]=v;
+      if(k<NB)(capT[g+'|'+k]=capT[g+'|'+k]||[]).push(v);}
+    R.push('l'+R.length+': '+lin(row)+' = '+p.toFixed(4));}
+  // rota sırası, oranla: bir işlem öncülünün bitirdiği oranı geçemez
+  for(const o of cx.ops){if(!Y[o.id])continue;for(const [pid] of o.pr){if(!Y[pid])continue;
+    for(let k=0;k<NB;k++){const a=[];for(const kk in Y[o.id])if(+kk<=k)a.push([Y[o.id][kk],1/P[o.id]]);if(!a.length)continue;
+      for(const kk in Y[pid])if(+kk<=k)a.push([Y[pid][kk],-1/P[pid]]);R.push('s'+R.length+': '+lin(a)+' <= 0');}}}
+  const nv={};
+  for(const g of grp)for(let k=0;k<NB;k++){const key=g+'|'+k;const T=capT[key];if(!T)continue;
+    const terms=T.map(v=>[v,1]);
+    if(ot[key]&&butH>0){const v='n'+(n++);nv[key]=v;gen.push(v);bnd.push(` 0 <= ${v} <= ${ot[key]}`);terms.push([v,-vh*Math.min(1,opG[g]>0?1/opG[g]:1)]);obj.push([v,(opt.mesaiAgirlik||.05)*vh]);cols[v]={g,k,n:1};}
+    R.push('c'+R.length+': '+lin(terms)+' <= '+cap[key].toFixed(4));}
+  for(let k=0;k<NB;k++){const terms=[];let rhs=tot[k];
+    for(const g of grp){const T=capT[g+'|'+k];if(!T||!(opG[g]>0))continue;for(const v of T)terms.push([v,opG[g]]);rhs+=opG[g]*att[g+'|'+k];if(nv[g+'|'+k])terms.push([nv[g+'|'+k],-vh]);}
+    if(terms.length)R.push('t'+R.length+': '+lin(terms)+' <= '+rhs.toFixed(4));}
+  // dilimin ortasında hazır olan işler dilimin hazır olduklarından önceki kapasitesini kullanamaz
+  for(const key in EB){const [g,ks]=key.split('|'),k=+ks;if(k>=NB)continue;const L0=EB[key].sort((x,y)=>x.h-y.h),end=bk(k)[1];
+    for(let i=0;i<L0.length;i++){const h=L0[i].h;if(h<=Math.max(bk(k)[0],st.now)+1e-6)continue;const terms=L0.slice(i).map(x=>[Y[x.id][k],1]).filter(x=>x[0]);
+      if(!terms.length)continue;const c=capOf(g,h,end).c;if(nv[key])terms.push([nv[key],-vh*Math.max(0,end-h)/L]);R.push('r'+R.length+': '+lin(terms)+' <= '+c.toFixed(4));}}
+  const byW={};for(const key in nv){const k=+key.split('|')[1];(byW[wkOf(k)]=byW[wkOf(k)]||[]).push(nv[key]);}
+  for(const w in byW)R.push('b'+R.length+': '+lin(byW[w].map(v=>[v,vh]))+' <= '+Math.max(0,butH-(used[w]||0)).toFixed(4));
+  const lp='Minimize\n obj: '+lin(obj)+'\nSubject To\n '+R.join('\n ')+'\nBounds\n'+bnd.join('\n')+'\n'+(gen.length?'General\n '+gen.join(' ')+'\n':'')+'End\n';
+  return {lp,cols,nv,grp,NB,b0,L,O,bOf,cap,ot,vh,ad,nOps:Object.keys(Y).length,nVar:n,nRow:R.length};
+}
+// HiGHS'in grup × dilim ek vardiya sayısı somut vardiyaya çevrilir: o haftada geciken işlerin en çok yüklendiği tezgâh, en erken gün
+function cerceveUygula(st,cx,plan,mod,vals){
+  const ev=plan?evaluate(plan,st,null,true):null,yuk={};
+  if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*(PW[cx.jobs[r.job].oncelik]||1);}
+  const sec=[],ozet=[];
+  for(const key in mod.nv){const n=Math.round(vals[mod.nv[key]]||0);if(n<=0)continue;const [g,ks]=key.split('|'),k=+ks;
+    const c=mod.ad.filter(x=>x.g===g&&mod.bOf(x.a)===k).sort((a,b)=>(yuk[b.m+'|'+k]||0)-(yuk[a.m+'|'+k]||0)||a.a-b.a);
+    const al=c.slice(0,n);for(const x of al)sec.push({m:x.m,gun:x.gun,vardiya:x.vardiya});ozet.push({g,k,n:al.length,tez:[...new Set(al.map(x=>x.m))]});}
+  return {ekMesai:sec,ozet};
+}
