@@ -39,7 +39,7 @@ import {
 } from '../atolye/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari, istasyonGetir, istasyonlar as tumIstasyonlar, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import { emirlerinSevkleri } from '../sevkiyat/disari.ts';
@@ -56,7 +56,7 @@ import {
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli,
-  kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
+  kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
 } from './kurallar.ts';
 import type { IstekGecisi, MalzemeTuru } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -1594,8 +1594,13 @@ export async function kodCoz(db: Db, ham: string): Promise<KodCozCevabi> {
   const kod = ham.trim().toUpperCase();
   const konum = await konumCoz(db, kod.replace(/^LOC[:\s-]*/, ''));
   if (konum) return konum;
-  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1];
-  return (no === undefined ? null : await malzemeCoz(db, Number(no))) ?? { tur: 'bilinmiyor', kod: ham.trim() };
+  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1] ?? await katalogEtiketiKartNo(db, ham);
+  return (no === undefined || no === null ? null : await malzemeCoz(db, Number(no))) ?? { tur: 'bilinmiyor', kod: ham.trim() };
+}
+// DEP-64: katalog etiketi (MK:<stok kodu>); kart no'yu Malzemeler verir, stok onun tablosunu okumaz. Kart yoksa null.
+async function katalogEtiketiKartNo(db: Db, ham: string): Promise<number | null> {
+  const stokKodu = katalogEtiketiStokKodu(ham);
+  return stokKodu === null ? null : malzemeNoKoddan(db, stokKodu);
 }
 
 
@@ -2196,8 +2201,8 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
   const kod = ham.trim().toUpperCase();
   const yer = await yerCevabi(kod.replace(/^LOC[:\s-]*/, ''));
   if (yer) return yer;
-  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1];
-  return (no === undefined ? null : await malzemeCevabi(Number(no), null, await sorgular.malzemeBakiyeleri(db, Number(no)))) ?? { tur: 'bilinmiyor', kod: ham.trim() };
+  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1] ?? await katalogEtiketiKartNo(db, ham);
+  return (no === undefined || no === null ? null : await malzemeCevabi(Number(no), null, await sorgular.malzemeBakiyeleri(db, Number(no)))) ?? { tur: 'bilinmiyor', kod: ham.trim() };
 }
 // İstasyon sepeti (kart #1353): istasyonun stoğu kapsamdaki herkese açıktır. Getiren, satıra son giren hareketin kişisidir (teslim,
 // üretim sayımı ya da statü dönüşümü). Sonraki istasyon emrin iş emirlerinden okunur; adımın statüsünü Reçete ve Rota çözer.

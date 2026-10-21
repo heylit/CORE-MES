@@ -682,7 +682,7 @@ Kapsam dışı: birim dönüşümü (Logo birimi ile TMI stok birimi farklıysa)
 | Ayar | 6 numara kalıbı |
 | İkinci menü | 11 madde, 4 grup |
 | `disari.ts` | 29 dışa açık ad, 25 imza |
-| Kural | 63 DEP kuralı: DEP-01…DEP-53 aşağıdaki tabloda, DEP-54…DEP-63 `KURAL-TEST.md`'de (kural ve testiyle); DEP-31…33, DEP-43…46 sonraki adım, koda girmedi |
+| Kural | 64 DEP kuralı: DEP-01…DEP-53 aşağıdaki tabloda, DEP-54…DEP-64 `KURAL-TEST.md`'de (kural ve testiyle); DEP-31…33, DEP-43…46 sonraki adım, koda girmedi |
 
 İlk sürüm ve "sonraki sürüm" (İ ve S) işaretleri paketin ilk planıdır; kodun güncel durumu "Güncel durum (kod)" bölümündedir.
 

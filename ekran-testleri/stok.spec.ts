@@ -53,7 +53,13 @@ test('Malzeme ve teslim paneli: sekmelerin hepsi görünür ve açılır', async
   await page.getByRole('button', { name: /^Malzeme ve teslim/ }).filter({ visible: true }).first().click();
   const panel = page.getByRole('dialog', { name: 'Malzeme · Teslim' });
   await expect(panel).toBeVisible();
+  // 372 a: ayrı QR tuşu yok; okuyucu pencerenin üstünde, sekmelerden önce görünür.
+  await expect(page.getByRole('button', { name: 'QR okut', exact: true })).toHaveCount(0);
+  const kod = panel.getByRole('textbox', { name: /Kod/ }).first();
+  await expect(kod).toBeVisible();
   const serit = panel.getByRole('tablist', { name: 'Malzeme ve teslim' });
+  const [k, s] = [await kod.boundingBox(), await serit.boundingBox()];
+  expect(k !== null && s !== null && k.y < s.y, 'okuyucu sekmelerin üstünde').toBe(true);
   await sekmelerTam(page, serit);
   for (const ad of ['Teslim et', 'Malzeme iste']) {
     await serit.getByRole('tab', { name: ad }).click();

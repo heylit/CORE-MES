@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OkutCozCevabi, OkutYeri } from '#paylasilan/sozlesme/stok.ts';
-import { OKUT_BASI, okutulanHedef, okutuldu, okutYolu, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
+import { OKUT_BASI, okutulanHedef, okutuldu, okutYolu, panelOkutuldu, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
 
 const yer = (konumId: number, tur: OkutYeri['tur'], istasyonId: number | null = null): OkutYeri => ({ konumId, kod: `K${konumId}`, ad: null, tur, istasyonId });
 const malzeme = (yerler: OkutYeri[]): OkutCozCevabi => ({
@@ -52,10 +52,27 @@ describe('QR okut akışı', () => {
     expect(okutulanHedef({ tur: 'bilinmiyor', kod: 'ZZZ' })).toBe('Kod tanınmadı: ZZZ');
   });
 
-  it('kişi kodu QR okut panelinde kaynak da hedef de olmaz; Teslim et\'e yönlendirilir', () => {
-    const ileti = "Kişiye teslim Malzeme · Teslim > Teslim et'ten yapılır; kişinin kodunu orada okutun.";
-    expect(okutuldu(OKUT_BASI, KISI)).toEqual({ adim: 'ne', ileti });
-    const d = okutuldu(OKUT_BASI, malzeme([yer(1, 'istasyon', 3)]));
-    expect(okutuldu(d, KISI)).toMatchObject({ adim: 'nereye', ileti });
+  it('kişi kodu kaynak olmaz; nereye adımında kişinin istasyonu hedeftir, malzeme zaten oradaysa reddedilir (372 a)', () => {
+    expect(okutuldu(OKUT_BASI, KISI)).toEqual({ adim: 'ne', ileti: 'Kişinin kodu kaynak olmaz; önce malzemeyi okut, kişiyi nereye adımında okut.' });
+    const d = okutuldu(OKUT_BASI, malzeme([yer(1, 'istasyon', 1)]));
+    expect(okutuldu(d, KISI)).toMatchObject({ adim: 'onay', hedef: { alici: { kod: 'KSI-9-A-x', ad: 'Deneme Alıcı' }, istasyon: { id: 3 } } });
+    const ayni = okutuldu(OKUT_BASI, malzeme([yer(1, 'istasyon', 3)]));
+    expect(okutuldu(ayni, KISI)).toMatchObject({ adim: 'nereye', ileti: 'Malzeme zaten Torna 3 istasyonunda; başka bir yer okut.' });
+  });
+
+  it('kişiye teslim her zaman teslim kaydıdır ve alıcı kodunu taşır', () => {
+    const h = { alici: { kod: 'KSI-9-A-x', ad: 'Deneme Alıcı' }, istasyon: { id: 3, kod: 'T3', ad: 'Torna 3' } };
+    expect(okutYolu(kaynak(yer(5, 'kabul')), h, true)).toBe('teslim');
+    expect(teslimGovdesi(kaynak(yer(5, 'kabul')), h, '1', 'k-2')).toEqual({
+      malzemeId: 901, miktar: '1', partiId: null, statuId: null, kaynak: { konumId: 5 }, hedef: { istasyonId: 3 }, aliciKodu: 'KSI-9-A-x', not: 'QR okut', kaynakKimligi: 'k-2',
+    });
+  });
+
+  it('pencere okuyucusu: ilk okutmada kişi Teslim et\'e yönlendirir; sonraki adımda ve öteki kodlarda akış sürer', () => {
+    expect(panelOkutuldu(OKUT_BASI, KISI)).toEqual({ tur: 'teslim-et', hedef: { yer: { istasyonId: 3 }, alici: { kod: 'KSI-9-A-x', ad: 'Deneme Alıcı' } } });
+    expect(panelOkutuldu(OKUT_BASI, malzeme([yer(1, 'istasyon', 1)]))).toMatchObject({ tur: 'akis', durum: { adim: 'nereye' } });
+    const d = okutuldu(OKUT_BASI, malzeme([yer(1, 'istasyon', 1)]));
+    expect(panelOkutuldu(d, KISI)).toMatchObject({ tur: 'akis', durum: { adim: 'onay' } });
+    expect(panelOkutuldu(OKUT_BASI, { tur: 'bilinmiyor', kod: 'ZZZ' })).toEqual({ tur: 'akis', durum: { adim: 'ne', ileti: 'Kod tanınmadı: ZZZ' } });
   });
 });

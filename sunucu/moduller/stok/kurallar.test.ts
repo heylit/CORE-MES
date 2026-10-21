@@ -7,7 +7,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli,
+  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -515,5 +515,13 @@ describe('stok kuralları: parti etiketi emir numarası (borç #419)', () => {
     assert.match(kisiKoduEngeli(99, 100, true)!, /süresi geçti/);
     assert.match(kisiKoduEngeli(200, 100, false)!, /geçersiz/);
     assert.match(kisiKoduEngeli(101 + KISI_KODU_SURESI_SN, 100, true)!, /geçersiz/, 'süreden uzun ileri tarihli kod');
+  });
+});
+
+describe('DEP-64 katalog etiketi', () => {
+  test('MK önekinden stok kodu büyük harfle çıkar; önek yoksa, gövde boşsa ya da boşluk içeriyorsa null', () => {
+    assert.equal(katalogEtiketiStokKodu('MK:HM-ABC-00001'), 'HM-ABC-00001');
+    assert.equal(katalogEtiketiStokKodu(' mk : hm-abc-00001 '), 'HM-ABC-00001');
+    for (const ham of ['MK:', 'MK: ', 'MLZ:12', 'HM-ABC-00001', 'MK:A B', 'XMK:HM-1']) assert.equal(katalogEtiketiStokKodu(ham), null, ham);
   });
 });

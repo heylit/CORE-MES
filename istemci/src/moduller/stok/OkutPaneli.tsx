@@ -1,58 +1,59 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Girdi, KodOkuyucu, Pencere, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, KodOkuyucu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
-import { OKUT_BASI, okutuldu, okutYolu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutKaynagi } from './okut-akisi.ts';
+import {
+  OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
+} from './okut-akisi.ts';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
 import './stok.css';
 
-// Üst çubuğun solundaki QR tuşu (karar 91 a): her sayfada aynı yerde. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
-// Yalnız simge: yazılı ad 1280'de sayfa başlığını kesiyordu; ad ipucu ve erişilebilir ad olarak kalır.
-export function OkutDugmesi() {
-  const [acik, setAcik] = useState(false);
-  return (
-    <>
-      <button type="button" className="tc-kabuk-tema" onClick={() => setAcik(true)} aria-haspopup="dialog" aria-label="QR okut" title="QR okut">
-        <Simge ad="scan" />
-      </button>
-      {acik && <OkutPaneli kapat={() => setAcik(false)} />}
-    </>
-  );
-}
-
 const yerMetni = (y: OkutYeri): string => `${y.ad ?? y.kod}${y.ad ? ` (${y.kod})` : ''} · ${KONUM_ETIKETI[y.tur]}`;
+const hedefMetni = (h: OkutHedefi): string => (kisiHedefiMi(h) ? `${h.alici.ad ?? 'Okutulan kişi'} · ${h.istasyon.ad} (${h.istasyon.kod})` : yerMetni(h));
+const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.istasyon.ad : h.ad ?? h.kod);
 
-export function OkutPaneli({ kapat }: { kapat: () => void }) {
+// Malzeme penceresinin üstündeki okuyucu (372 a; eski ayrı QR tuşu, karar 91 a): pencere açılınca hazır bekler. Okutma yoksa altındaki
+// sekmeler görünür; okutulan kod akışı başlatınca sekmelerin yerini "ne, nereye, onay" alır. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
+export function OkutAlani({ teslimEteGec, children }: { teslimEteGec: (h: OkutulanHedef) => void; children: ReactNode }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
-    onSuccess: (c) => { setSonuc(null); setDurum((d) => okutuldu(d, c)); },
+    onSuccess: (c) => {
+      setSonuc(null);
+      const p = panelOkutuldu(durum, c);
+      if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
+    },
   });
   const basaDon = (metin: string | null) => { setDurum(OKUT_BASI); setSonuc(metin); };
-  const ipucu = durum.adim === 'ne' || durum.adim === 'kaynak-sec' ? 'Ne: malzeme, lot ya da alacağın yerin etiketi.' : 'Nereye: istasyon, raf ya da harita kutusunun etiketi.';
+  const ipucu = durum.adim === 'ne' ? 'Malzeme, lot, raf ya da kişinin kodunu okut; okutmadan aşağıdaki sekmelerle de çalışılır.'
+    : durum.adim === 'kaynak-sec' ? 'Ne: malzeme, lot ya da alacağın yerin etiketi.' : 'Nereye: istasyon, raf, harita kutusu ya da alacak kişinin kodu.';
   return (
-    <Pencere acik kapat={kapat} baslik="QR okut" tur="yan">
-      <div className="tc-stok-form tc-stok-okut-paneli">
-        <ol className="tc-stok-okut-adimlar" aria-label="Adımlar">
-          <li aria-current={durum.adim === 'ne' || durum.adim === 'kaynak-sec' ? 'step' : undefined}>Ne</li>
-          <li aria-current={durum.adim === 'nereye' ? 'step' : undefined}>Nereye</li>
-          <li aria-current={durum.adim === 'onay' ? 'step' : undefined}>Onay</li>
-        </ol>
+    <>
+      <div className="tc-stok-okut-ust">
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
         {durum.adim !== 'onay' && <KodOkuyucu okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
-        {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sec={(kaynak) => setDurum({ adim: 'nereye', kaynak, ileti: null })} />}
-        {(durum.adim === 'nereye' || durum.adim === 'onay') && <KaynakOzeti kaynak={durum.kaynak} />}
-        {durum.adim === 'onay' && <Onay kaynak={durum.kaynak} hedef={durum.hedef} geri={() => setDurum({ adim: 'nereye', kaynak: durum.kaynak, ileti: null })} bitti={basaDon} />}
-        {durum.adim !== 'ne' && <div className="tc-stok-eylem"><Dugme simge="x" onClick={() => basaDon(null)}>Baştan başla</Dugme></div>}
       </div>
-    </Pencere>
+      {durum.adim === 'ne' ? children : (
+        <div className="tc-stok-form tc-stok-okut-paneli">
+          <ol className="tc-stok-okut-adimlar" aria-label="Adımlar">
+            <li aria-current={durum.adim === 'kaynak-sec' ? 'step' : undefined}>Ne</li>
+            <li aria-current={durum.adim === 'nereye' ? 'step' : undefined}>Nereye</li>
+            <li aria-current={durum.adim === 'onay' ? 'step' : undefined}>Onay</li>
+          </ol>
+          {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sec={(kaynak) => setDurum({ adim: 'nereye', kaynak, ileti: null })} />}
+          {(durum.adim === 'nereye' || durum.adim === 'onay') && <KaynakOzeti kaynak={durum.kaynak} />}
+          {durum.adim === 'onay' && <Onay kaynak={durum.kaynak} hedef={durum.hedef} geri={() => setDurum({ adim: 'nereye', kaynak: durum.kaynak, ileti: null })} bitti={basaDon} />}
+          <div className="tc-stok-eylem"><Dugme simge="x" onClick={() => basaDon(null)}>Vazgeç, sekmelere dön</Dugme></div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -83,7 +84,7 @@ function KaynakOzeti({ kaynak }: { kaynak: OkutKaynagi }) {
   return <div className="tc-stok-is tc-stok-okut-kaynak"><div><span>Alınan</span><KaynakSatiri k={kaynak} /></div></div>;
 }
 
-function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: OkutYeri; geri: () => void; bitti: (metin: string) => void }) {
+function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: OkutHedefi; geri: () => void; bitti: (metin: string) => void }) {
   const depocu = useIslem('stok.transfer');
   const yol = okutYolu(kaynak, hedef, depocu);
   const [miktar, setMiktar] = useState(miktarMetni(kaynak.miktar).replace(/\./g, ''));
@@ -91,18 +92,19 @@ function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: Okut
   const [kimlik] = useState(yeniIstekKimligi);
   const cevrimdisi = typeof navigator !== 'undefined' && navigator.onLine === false;
   const tasima = useStokKomutu((g: ReturnType<typeof tasimaGovdesi>) => korumaliPost<HareketCevabi>('/stok/tasima', g)
-    .then((c) => { bitti(`${kaynak.malzemeAd} ${hedef.ad ?? hedef.kod} yerine taşındı.`); return c; }), 'Taşındı.');
+    .then((c) => { bitti(`${kaynak.malzemeAd} ${hedefAdi(hedef)} yerine taşındı.`); return c; }), 'Taşındı.');
   const teslim = useStokKomutu((g: ReturnType<typeof teslimGovdesi>) => korumaliPost<TeslimCevabi>('/stok/teslimler/gonder', g)
-    .then((c) => { bitti(c.teslim.durum === 'teslim' ? `${c.teslim.no}: ${hedef.ad ?? hedef.kod} yerine bırakıldı.` : `${c.teslim.no} yolda; ${hedef.ad ?? hedef.kod} teslim alınca kapanır.`); return c; }), 'Teslim kaydedildi.');
+    .then((c) => { bitti(c.teslim.durum === 'teslim' ? `${c.teslim.no}: ${hedefAdi(hedef)} yerine bırakıldı.` : `${c.teslim.no} yolda; ${hedefAdi(hedef)} teslim alınca kapanır.`); return c; }), 'Teslim kaydedildi.');
   const komut = yol === 'tasima' ? tasima.komut : teslim.komut;
   const gonder = () => {
     const m = miktarGirdisi(miktar);
-    if (yol === 'tasima') tasima.komut.mutate(tasimaGovdesi(kaynak, hedef, m));
+    if (yol === 'tasima' && !kisiHedefiMi(hedef)) tasima.komut.mutate(tasimaGovdesi(kaynak, hedef, m));
     else teslim.komut.mutate(teslimGovdesi(kaynak, hedef, m, kimlik));
   };
   return (
     <form className="tc-stok-form" onSubmit={(o) => { o.preventDefault(); gonder(); }}>
-      <div className="tc-stok-is tc-stok-okut-kaynak"><div><span>Nereye</span><strong>{yerMetni(hedef)}</strong></div></div>
+      <div className="tc-stok-is tc-stok-okut-kaynak"><div><span>Nereye</span><strong>{hedefMetni(hedef)}</strong></div></div>
+      {kisiHedefiMi(hedef) && <p className="tc-stok-bilgi" role="status">Alıcı: {hedef.alici.ad ?? 'okutulan kişi'}; teslimi yalnız o alır.</p>}
       <div className="tc-stok-iki"><Girdi etiket="Miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} required autoFocus /></div>
       {cevrimdisi && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Bağlantı yok; kayıt yalnız bağlantı varken yapılır.</p>}
       {komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(komut.error)}</p>}

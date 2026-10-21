@@ -13,16 +13,20 @@ export interface OkutKaynagi {
   // Alınabilecek serbest miktar (yoldaki düşülmüş).
   miktar: string;
 }
+// Nereye adımında okutulan kişi kodu (372 a): teslim kişinin bulunduğu istasyona, yalnız o kişiye gider; sunucu kodu yeniden doğrular.
+export interface KisiHedefi { alici: { kod: string; ad: string | null }; istasyon: { id: number; kod: string; ad: string } }
+export type OkutHedefi = OkutYeri | KisiHedefi;
+export const kisiHedefiMi = (h: OkutHedefi): h is KisiHedefi => 'alici' in h;
 export type OkutDurumu =
   | { adim: 'ne'; ileti: string | null }
   | { adim: 'kaynak-sec'; secenekler: OkutKaynagi[]; ileti: string | null }
   | { adim: 'nereye'; kaynak: OkutKaynagi; ileti: string | null }
-  | { adim: 'onay'; kaynak: OkutKaynagi; hedef: OkutYeri };
+  | { adim: 'onay'; kaynak: OkutKaynagi; hedef: OkutHedefi };
 
 export const OKUT_BASI: OkutDurumu = { adim: 'ne', ileti: null };
 
-// Kişiye teslim (299 b) kişinin bulunduğu istasyona ve o kişiye yazılır; bu panel yer okur, kişi Teslim et'te okutulur.
-const KISI_ILETISI = "Kişiye teslim Malzeme · Teslim > Teslim et'ten yapılır; kişinin kodunu orada okutun.";
+// Kişiye teslim (299 b) kişinin bulunduğu istasyona ve o kişiye yazılır. Kişi kaynak olmaz; ilk okutmada panel Teslim et'i açar (panelOkutuldu).
+const KISI_ILETISI = 'Kişinin kodu kaynak olmaz; önce malzemeyi okut, kişiyi nereye adımında okut.';
 const yerAdi = (y: OkutYeri): string => (y.ad ? `${y.ad} (${y.kod})` : y.kod);
 
 function kaynaklar(c: OkutCozCevabi): OkutKaynagi[] | string {
@@ -45,7 +49,10 @@ const ayniYer = (a: OkutYeri, b: OkutYeri): boolean => a.konumId === b.konumId |
 export function okutuldu(d: OkutDurumu, c: OkutCozCevabi): OkutDurumu {
   if (d.adim === 'nereye' || d.adim === 'onay') {
     const kaynak = d.kaynak;
-    if (c.tur === 'kisi') return { adim: 'nereye', kaynak, ileti: KISI_ILETISI };
+    if (c.tur === 'kisi') {
+      if (kaynak.yer.istasyonId === c.istasyon.id) return { adim: 'nereye', kaynak, ileti: `Malzeme zaten ${c.istasyon.ad} istasyonunda; başka bir yer okut.` };
+      return { adim: 'onay', kaynak, hedef: { alici: { kod: c.kod, ad: c.kisi.ad }, istasyon: c.istasyon } };
+    }
     if (c.tur !== 'yer') return { adim: 'nereye', kaynak, ileti: c.tur === 'bilinmiyor' ? `Kod tanınmadı: ${c.kod}` : 'Nereye bırakılacağını okut: istasyon, raf ya da alan etiketi.' };
     if (ayniYer(kaynak.yer, c.yer)) return { adim: 'nereye', kaynak, ileti: 'Malzeme zaten burada; başka bir yer okut.' };
     return { adim: 'onay', kaynak, hedef: c.yer };
@@ -58,8 +65,8 @@ export function okutuldu(d: OkutDurumu, c: OkutCozCevabi): OkutDurumu {
 // Depo işlemi olan, serbest stoğu istasyon dışı yerler arasında doğrudan taşır (Yerleştir). Öteki her durum teslim kaydıdır: ara alana
 // bırakılan hemen kapanır, istasyona ve depo konumuna giden alan taraf onaylayınca.
 export type OkutYolu = 'tasima' | 'teslim';
-export function okutYolu(kaynak: OkutKaynagi, hedef: OkutYeri, depocu: boolean): OkutYolu {
-  return depocu && kaynak.statuId === null && kaynak.yer.tur !== 'istasyon' && hedef.tur !== 'istasyon' ? 'tasima' : 'teslim';
+export function okutYolu(kaynak: OkutKaynagi, hedef: OkutHedefi, depocu: boolean): OkutYolu {
+  return depocu && !kisiHedefiMi(hedef) && kaynak.statuId === null && kaynak.yer.tur !== 'istasyon' && hedef.tur !== 'istasyon' ? 'tasima' : 'teslim';
 }
 
 const teslimYeri = (y: OkutYeri): TeslimYeri => (y.istasyonId !== null ? { istasyonId: y.istasyonId } : { konumId: y.konumId });
@@ -76,8 +83,14 @@ export function tasimaGovdesi(kaynak: OkutKaynagi, hedef: OkutYeri, miktar: stri
   return { malzemeId: kaynak.malzemeId, kaynakKonumId: kaynak.yer.konumId, partiId: kaynak.partiId, hedefKonumId: hedef.konumId, miktar, aciklama: 'QR okut' };
 }
 // Kaynak kimliği okutma başına bir kez üretilir: bağlantı kopup yeniden gönderilen kayıt ikinci teslim açmaz (karar 95 a).
-export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutYeri, miktar: string, kaynakKimligi: string): TeslimGonderGovdesi {
-  return {
-    malzemeId: kaynak.malzemeId, miktar, partiId: kaynak.partiId, statuId: kaynak.statuId, kaynak: teslimYeri(kaynak.yer), hedef: teslimYeri(hedef), not: 'QR okut', kaynakKimligi,
-  };
+export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: string, kaynakKimligi: string): TeslimGonderGovdesi {
+  const ortak = { malzemeId: kaynak.malzemeId, miktar, partiId: kaynak.partiId, statuId: kaynak.statuId, kaynak: teslimYeri(kaynak.yer), not: 'QR okut', kaynakKimligi };
+  return kisiHedefiMi(hedef) ? { ...ortak, hedef: { istasyonId: hedef.istasyon.id }, aliciKodu: hedef.alici.kod } : { ...ortak, hedef: teslimYeri(hedef) };
+}
+
+// Malzeme penceresinin üstündeki okuyucu (372 a): ilk okutmada kişi kodu Teslim et'i o kişiye hedefli açar; öteki her kod akışa girer.
+export type PanelOkutmasi = { tur: 'akis'; durum: OkutDurumu } | { tur: 'teslim-et'; hedef: OkutulanHedef };
+export function panelOkutuldu(d: OkutDurumu, c: OkutCozCevabi): PanelOkutmasi {
+  if (d.adim === 'ne' && c.tur === 'kisi') return { tur: 'teslim-et', hedef: { yer: { istasyonId: c.istasyon.id }, alici: { kod: c.kod, ad: c.kisi.ad } } };
+  return { tur: 'akis', durum: okutuldu(d, c) };
 }
