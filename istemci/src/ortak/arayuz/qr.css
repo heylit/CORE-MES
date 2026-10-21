@@ -1,0 +1,3 @@
+.tc-qr { flex: none; }
+.tc-qr-zemin { fill: var(--qr-zemin); }
+.tc-qr-kare { fill: var(--qr-kare); }
