@@ -257,4 +257,69 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await teklifDurumlari(sayanDb, [])).size, 0);
     assert.equal(sorgu, 0);
   });
+
+  test('TKL-11 (291 a) %10 üstü iskontolu sürüm müdür onayı bekler: kabul edilemez, yazar onaylayamaz; müdür onaylar, teklif müşteriye gider', async () => {
+    const mudur = await girisYap('mudur');
+    const planlama = (await girisYap('planlama_proje')).cerez;
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), iskontoOrani: '10.01' });
+    assert.equal(t.durum, 'onay-bekliyor');
+    assert.deepEqual(t.surumler.map((v) => [v.iskontoOnaylayan, v.iskontoOnayAni]), [[null, null]]);
+    const bildirim = await o().sahip.sorgu<{ baslik: string }>(
+      "SELECT baslik FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'siparisler.iskonto-onay-bekliyor' AND yol = $2", [mudur.id, `/siparisler/teklifler/${t.id}`]);
+    assert.deepEqual(bildirim, [{ baslik: `İskonto onayı bekleyen teklif: ${t.no}` }]);
+    await komut(t, 'kabul', { surumNo: 1 }, 422);
+    await komut(t, 'revizyon-iste', { not: 'Deneme' }, 422);
+    assert.equal((await gonder(planlama, `/siparisler/teklifler/${t.id}/iskonto-onayla`, { surum: t.surum })).statusCode, 403);
+    assert.equal((await gonder(operator, `/siparisler/teklifler/${t.id}/iskonto-onayla`, { surum: t.surum })).statusCode, 403);
+    assert.equal((await oku(yonetici, `/siparisler/teklifler/${t.id}`)).json<TeklifAyrintisi>().surum, t.surum);
+    const c = await gonder(mudur.cerez, `/siparisler/teklifler/${t.id}/iskonto-onayla`, { surum: t.surum });
+    assert.equal(c.statusCode, 200, c.body);
+    t = c.json<TeklifAyrintisi>();
+    assert.equal(t.durum, 'verildi');
+    assert.match(t.surumler[0]?.iskontoOnaylayan ?? '', /^Deneme teklif-/);
+    assert.ok(t.surumler[0]?.iskontoOnayAni);
+    await komut(t, 'iskonto-onayla', {}, 422);
+    t = await komut(t, 'kabul', { surumNo: 1 });
+    assert.equal(t.durum, 'kabul');
+
+    // Eşik dahil onaysız geçer; bekleyen teklife daha düşük iskontolu yeni sürüm verilir ya da reddedilir.
+    let u = await teklifAc();
+    u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u), iskontoOrani: '10' });
+    assert.equal(u.durum, 'verildi');
+    u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u), iskontoOrani: '25' });
+    assert.equal(u.durum, 'onay-bekliyor');
+    u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u), iskontoOrani: '5' });
+    assert.equal(u.durum, 'verildi');
+    let r = await teklifAc();
+    r = await komut(r, 'surum-ver', { fiyatlar: fiyatlar(r), iskontoOrani: '50' });
+    r = await komut(r, 'reddet', { not: 'Müdür onaylamadı' });
+    assert.equal(r.durum, 'red');
+  });
+
+  test('TKL-12 (293) dört göz açıkken sürümü veren kendi iskontosunu onaylayamaz (422); başka yetkili onaylar; kapalıyken veren de onaylar', async () => {
+    const mudur = (await girisYap('mudur')).cerez;
+    const ayarla = async (deger: boolean) => {
+      const c = await gonder(yonetici, '/ayarlar/siparisler.iskonto-dort-goz/degistir', { deger });
+      assert.equal(c.statusCode, 200, c.body);
+    };
+    let t = await teklifAc();
+    t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t), iskontoOrani: '15' });
+    t = await komut(t, 'iskonto-onayla', {});
+    assert.equal(t.durum, 'verildi');
+
+    await ayarla(true);
+    try {
+      let u = await teklifAc();
+      u = await komut(u, 'surum-ver', { fiyatlar: fiyatlar(u), iskontoOrani: '15' });
+      const ret = await gonder(yonetici, `/siparisler/teklifler/${u.id}/iskonto-onayla`, { surum: u.surum });
+      assert.equal(ret.statusCode, 422, ret.body);
+      assert.match(ret.body, /Dört göz kuralı açık/);
+      const c = await gonder(mudur, `/siparisler/teklifler/${u.id}/iskonto-onayla`, { surum: u.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      assert.equal(c.json<TeklifAyrintisi>().durum, 'verildi');
+    } finally {
+      await ayarla(false);
+    }
+  });
 });

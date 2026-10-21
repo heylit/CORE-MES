@@ -1,5 +1,6 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import { ISKONTO_ONAY_ESIGI } from '#paylasilan/sozlesme/siparisler.ts';
 import type { Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
 
 export const SIPARIS_YOK = 'Sipariş bulunamadı.';
@@ -79,23 +80,34 @@ export const KART_BAGLANAMAZ = 'Reddedilmiş ya da siparişe dönüşmüş tekli
 
 // TKL-05: teklif durum geçişleri. Sürüm yeni, verilmiş ve revizyondaki teklife verilir; kabul ve revizyon verilmiş teklife;
 // red kabulden önce; siparişe yalnız kabul edilmiş teklif döner. Red ve sipariş son durumdur.
-export type TeklifKomutu = 'surum' | 'revizyon' | 'kabul' | 'red' | 'siparis';
+export type TeklifKomutu = 'surum' | 'iskonto-onay' | 'revizyon' | 'kabul' | 'red' | 'siparis';
 const TEKLIF_GECISLERI: Readonly<Record<TeklifKomutu, { kaynak: readonly TeklifDurumu[]; hedef: TeklifDurumu }>> = {
-  surum: { kaynak: ['yeni', 'verildi', 'revizyon'], hedef: 'verildi' },
+  surum: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'verildi' },
+  'iskonto-onay': { kaynak: ['onay-bekliyor'], hedef: 'verildi' },
   revizyon: { kaynak: ['verildi'], hedef: 'revizyon' },
   kabul: { kaynak: ['verildi'], hedef: 'kabul' },
-  red: { kaynak: ['yeni', 'verildi', 'revizyon'], hedef: 'red' },
+  red: { kaynak: ['yeni', 'onay-bekliyor', 'verildi', 'revizyon'], hedef: 'red' },
   siparis: { kaynak: ['kabul'], hedef: 'siparis' },
 };
 const TEKLIF_DURUM_ADI: Readonly<Record<TeklifDurumu, string>> = {
-  yeni: 'yeni', verildi: 'verildi', revizyon: 'revizyon bekliyor', kabul: 'kabul edildi', red: 'reddedildi', siparis: 'siparişe dönüştü',
+  yeni: 'yeni', 'onay-bekliyor': 'iskonto onayı bekliyor', verildi: 'verildi', revizyon: 'revizyon bekliyor', kabul: 'kabul edildi', red: 'reddedildi', siparis: 'siparişe dönüştü',
 };
 const TEKLIF_KOMUT_ADI: Readonly<Record<TeklifKomutu, string>> = {
-  surum: 'yeni sürüm verilemez', revizyon: 'revizyon istenemez', kabul: 'kabul edilemez', red: 'reddedilemez', siparis: 'siparişe dönüştürülemez',
+  surum: 'yeni sürüm verilemez', 'iskonto-onay': 'onaylanacak iskonto yok', revizyon: 'revizyon istenemez', kabul: 'kabul edilemez', red: 'reddedilemez', siparis: 'siparişe dönüştürülemez',
 };
 
 export function teklifHedefi(komut: TeklifKomutu): TeklifDurumu {
   return TEKLIF_GECISLERI[komut].hedef;
+}
+
+// 291 a: eşiği aşan iskontolu sürüm müşteriye gitmeden müdür onayı bekler; müdür onaylamazsa yeni sürüm ya da red verilir.
+export function surumHedefi(iskontoOrani: string): TeklifDurumu {
+  return Number(iskontoOrani) > ISKONTO_ONAY_ESIGI ? 'onay-bekliyor' : 'verildi';
+}
+
+// 293: ayar açıkken sürümü veren kişi kendi iskontosunu onaylayamaz; kapalıyken onay yetkisi yeter.
+export function dortGozReddi(acik: boolean, surumuVeren: number, onaylayan: number): string | null {
+  return acik && surumuVeren === onaylayan ? 'Dört göz kuralı açık: kendi verdiğiniz sürümün iskontosunu başka bir yetkili onaylamalı.' : null;
 }
 
 export function teklifGecisReddi(durum: TeklifDurumu, komut: TeklifKomutu): string | null {

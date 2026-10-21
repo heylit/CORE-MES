@@ -350,14 +350,32 @@ export interface TeklifSurumSatiri {
   aciklama: string | null;
   olusturma: string;
   toplam: string;
+  onaylayan_id: number | null;
+  onay_ani: string | null;
 }
 
 export function teklifSurumleri(db: Db, teklifId: number): Promise<TeklifSurumSatiri[]> {
   return db.sorgu<TeklifSurumSatiri>(
     `SELECT v.id, v.surum_no, v.iskonto_orani, v.teslim_gun, v.odeme_kosulu, v.gecerlilik, v.aciklama, ${zamanMetni('v.olusturma')} AS olusturma,
+            o.onaylayan_id, ${zamanMetni('o.an')} AS onay_ani,
             (SELECT coalesce(sum(round(round(f.birim_fiyat * (100 - v.iskonto_orani) / 100, 4) * r.miktar, 2)), 0)::numeric(20,2)
                FROM siparisler_teklif_fiyati f JOIN siparisler_teklif_satiri r ON r.id = f.satir_id WHERE f.surum_id = v.id) AS toplam
-       FROM siparisler_teklif_surumu v WHERE v.teklif_id = $1 ORDER BY v.surum_no`, [teklifId],
+       FROM siparisler_teklif_surumu v LEFT JOIN siparisler_teklif_iskonto_onayi o ON o.surum_id = v.id
+      WHERE v.teklif_id = $1 ORDER BY v.surum_no`, [teklifId],
+  );
+}
+
+export async function sonSurumuVeren(db: Db, teklifId: number): Promise<number | null> {
+  const [s] = await db.sorgu<{ olusturan_id: number }>(
+    'SELECT olusturan_id FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1', [teklifId]);
+  return s?.olusturan_id ?? null;
+}
+
+export async function iskontoOnayiEkle(db: Db, teklifId: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO siparisler_teklif_iskonto_onayi (surum_id, onaylayan_id)
+     SELECT id, $2 FROM siparisler_teklif_surumu WHERE teklif_id = $1 ORDER BY surum_no DESC LIMIT 1`,
+    [teklifId, kisiId],
   );
 }
 
