@@ -13,6 +13,13 @@ export const ILKE_BASLIGI = 'Content-Security-Policy';
 
 export const CERCEVE_ILKESI = "frame-ancestors 'self'";
 
+// Her sayfaya eklenen iki başlık: adres başka siteye gönderilmez; kamera ve mikrofonu yalnız kendi köken (ve aynı kökenli çerçeveler)
+// isteyebilir. Kamerayı QR okutma, saat eşleştirme ve Kalite Merkezi kullanır; hepsi aynı kökendendir.
+export const EK_GUVENLIK_BASLIKLARI: Readonly<Record<string, string>> = {
+  'Referrer-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(self), microphone=(self)',
+};
+
 export const ICERIK_ILKESI = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",

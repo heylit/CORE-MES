@@ -70,6 +70,15 @@ describe('arayüz kapısı', () => {
     }
   });
 
+  test('her dosyada adres başka siteye gönderilmez; kamera ve mikrofon yalnız kendi kökende (Arkon dahil)', async () => {
+    for (const yol of ['/', '/uretim-emirleri/12', '/assets/index-AbCd1234.js', '/arkon-mes/']) {
+      const cevap = await fetch(`${adres}${yol}`);
+      assert.equal(cevap.status, 200, yol);
+      assert.equal(cevap.headers.get('referrer-policy'), 'same-origin', yol);
+      assert.equal(cevap.headers.get('permissions-policy'), 'camera=(self), microphone=(self)', yol);
+    }
+  });
+
   test('özetli dosya kalıcı önbellekle, gzip isteyene sıkıştırılmış gider; ETag eşleşirse 304', async () => {
     const cevap = await fetch(`${adres}/assets/index-AbCd1234.js`, { headers: { 'accept-encoding': 'gzip' } });
     assert.equal(cevap.status, 200);

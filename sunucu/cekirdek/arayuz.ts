@@ -5,7 +5,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
 import { ARKON_YOLU, CALISAN_ILKESI, CALISAN_YOLU, KALICI_ONBELLEK, SORARAK_ONBELLEK, icerikIlkesi } from '../../arkon/sun.ts';
-import { ICERIK_ILKESI, ILKE_BASLIGI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
+import { EK_GUVENLIK_BASLIKLARI, ICERIK_ILKESI, ILKE_BASLIGI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
 import type { HttpsAyari } from '../../istemci/src/ortak/pwa/https.ts';
 
 // Derlenmiş istemci (istemci/dist) telefonların ve ters vekilin bağlandığı kapıdan (4101) sunucu sürecinin kendisince verilir;
@@ -144,6 +144,7 @@ export function arayuzIsleyicisi({ kok, api }: { kok: string; api: ApiIsleyicisi
     yanit.setHeader('Cache-Control', OZETLI.test(kokGoreli) ? KALICI_ONBELLEK : SORARAK_ONBELLEK);
     yanit.setHeader('ETag', etiket);
     yanit.setHeader('X-Content-Type-Options', 'nosniff');
+    for (const [ad, deger] of Object.entries(EK_GUVENLIK_BASLIKLARI)) yanit.setHeader(ad, deger);
     if (SIKISAN.has(uzanti)) yanit.setHeader('Vary', 'Accept-Encoding');
     const sayfa = uzanti === '.html' ? await readFile(dosya) : null;
     let ilke = ICERIK_ILKESI;
