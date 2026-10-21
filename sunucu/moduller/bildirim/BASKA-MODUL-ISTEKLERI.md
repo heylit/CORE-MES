@@ -14,3 +14,16 @@ Tetik çağrıları sahibi modüllerde yazılır; bu dal yazmaz. Çağrı tek: `
 4. KAPANDI (eski depo #1882; tekil ve toplu yol). istasyonlar: `servis.ts` `makineDurumuYaz` (yaklaşık :437) ve toplu `makineDurumlariniYaz` (:195), koşul yeni durum `ariza` ve önceki `ariza` değil.
    `bildirimGonder(db, { tur: 'istasyonlar.makine-durdu', baslik: \`Makine durdu: ${makine.kod}\`, metin: g.aciklama, yol: '/istasyonlar', kaynakKimlik: String(makineId), haric: kullanici.id })`.
 5. KAPANDI (Profil.tsx "Bildirimlerim"). profil: `istemci/src/moduller/profil/Profil.tsx` Hesap ya da üst kartta "Bildirimlerim" bağlantısı (`/profil/bildirimler`, simge `bell`).
+
+## Ekip çağrısı (298 a, ayarcı 298 b; dal `298-ekip-cagrisi-yonlendirme`)
+
+6. AÇIK. arkon (sunucu): çağrı kaydı açılınca bildirim. `calls` deposuna `phase: 'open'` belgesi yazılınca, aynı transaction'da
+   `ekipCagrisiBildir(db, { ekip: govde.team, yer: <istasyon ya da makine kodu: govde.mc ?? govde.machine>, not: govde.note ?? null,
+   cagriKimligi: govde.callId, haric: kullanici.id })` (`sunucu/moduller/bildirim/disari.ts`). `team` CAGRI_EKIPLERI dışındaysa çağrılmaz.
+   Alıcıyı bildirim seçer (Sistem Ayarları > Bildirim yönetimi). Bu girmeden çağrı bildirime dönüşmez. Testler: açan almaz; ekibin rolündeki kişi alır;
+   `phase: 'ack'`, `'done'` ve `'esc'` yeni bildirim açmaz.
+7. AÇIK. arkon (istemci, prototip değişikliği onaylı: "298 ayarcı b"): `arkon/web/src/app/temel.ts` `CALLS` listesine beşinci ekip
+   `{ k: 'ayarci', l: 'Ayarcı', ... }`; simge ve renk Arkon'un kararı. `giris-ayarlar-spc.ts` `CALL_ROLES` bannerı bugün ayrı bir eşleme
+   tutuyor (malzeme -> plan); iki kaynak kalmaması için banner ya kaldırılır ya da `GET /bildirimler/cagri-yonlendirme` ile aynı eşlemeyi okur
+   (o uç `ayarlar.yaz` ister; Arkon için okuma yolu gerekirse çekirdeğe istek yazılır).
+8. AÇIK. saat (ikinci sürüm): saatten çağrı yazma gelince aynı Arkon kaydını ya da `ekipCagrisiBildir`'i kullanır; ayrı yönlendirme kurulmaz.

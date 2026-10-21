@@ -16,6 +16,8 @@ export const AYARLAR_IKINCI_MENU = {
       { anahtar: 'yetkiler', baslik: 'Yetkiler', yol: '/ayarlar/yetkiler', simge: 'lock', islem: 'kisiler.rol-yonet' },
       // Kişiye rolün üstüne sayfa ve işlem (kart #1233); uç da `kisiler.rol-yonet` ister.
       { anahtar: 'sayfa-yetkileri', baslik: 'Sayfa yetkileri', yol: '/ayarlar/sayfa-yetkileri', simge: 'user', islem: 'kisiler.rol-yonet' },
+      // Ekip çağrısı alıcıları (298 a); uç da `ayarlar.yaz` ister.
+      { anahtar: 'bildirim-yonetimi', baslik: 'Bildirim yönetimi', yol: '/ayarlar/bildirim-yonetimi', simge: 'bell', islem: 'ayarlar.yaz' },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

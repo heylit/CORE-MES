@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { Islem } from '../islemler.ts';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
+import { beklenenSurum } from '../surum.ts';
 import { kayitYoluMu } from '../sayfa-tanimi.ts';
 import { zamanSemasi } from '../zaman.ts';
+import { CAGRI_EKIPLERI } from './durus-nedenleri.ts';
 
 // Bildirim merkezi: kişiye gelen kalıcı haberler (zil). Kişi her zaman oturumdan gelir: adres ve gövde başka kişiyi seçemez,
 // başkasının bildirimi hiçbir uçtan dönmez. Olay türünü üreten modüldür; bu modül olayın anlamını bilmez, yalnız taşır.
@@ -46,6 +48,12 @@ export const BILDIRIM_TURLERI = {
   // Ömür %20'nin altına indiğinde ve bittiğinde tetiklenir; alıcı takımı değiştirebilenlerdir.
   'cnc-kurulum.takim-omru': {
     baslik: 'Takım ömrü doluyor', onem: 'uyari', alanIslemler: ['cnc-kurulum.takim-degistir'], yol: '/cnc-kurulum', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 298 a: alıcı işlemden değil, çağrılan ekibin yönlendirmesindeki rollerden seçilir (Sistem Ayarları > Bildirim yönetimi).
+  // Alıcı roller ortak bir ekran açamadığı için bildirim yolsuz gider; tür yolu yalnız kayıt içindir. Acil çağrı kişi
+  // tercihinden kapatılamasın diye tercih listesinde görünmez (alan işlemi yok).
+  'arkon.ekip-cagrisi': {
+    baslik: 'Ekip çağrısı', onem: 'acil', alanIslemler: [], yol: '/istasyonlar', varsayilan: { mesaj: false, eposta: false },
   },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
@@ -112,6 +120,30 @@ export const bildirimTercihDegistirGovdesi = z.object({
   eposta: z.boolean(),
 }).strict();
 
+// Ekip çağrısı yönlendirmesi (298 a): ekip başına alıcı roller. Okuma ve yazma `ayarlar.yaz` ister.
+export const CAGRI_EKIP_ADLARI = {
+  bakim: 'Bakım', kalite: 'Kalite', malzeme: 'Malzeme', amir: 'Vardiya amiri', ayarci: 'Ayarcı',
+} as const satisfies Record<(typeof CAGRI_EKIPLERI)[number], string>;
+export const CAGRI_ROL_EN_COK = 20;
+
+export const cagriYonlendirmeParametresi = z.object({ ekip: z.enum(CAGRI_EKIPLERI) });
+export const cagriYonlendirmeSatiri = z.object({
+  ekip: z.enum(CAGRI_EKIPLERI),
+  rolIdleri: z.array(z.number().int()),
+  surum: z.number().int(),
+  degistiren: z.object({ id: z.number().int(), ad: z.string().nullable() }).nullable(),
+  degistirildi: zamanSemasi,
+});
+export const cagriYonlendirmeCevabi = z.object({
+  satirlar: z.array(cagriYonlendirmeSatiri),
+  roller: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
+});
+export const cagriYonlendirmeDegistirGovdesi = z.object({
+  rolIdleri: z.array(KIMLIK).max(CAGRI_ROL_EN_COK, `En çok ${CAGRI_ROL_EN_COK} rol seçilir.`)
+    .refine((l) => new Set(l).size === l.length, 'Aynı rol iki kez seçilemez.'),
+  ...beklenenSurum,
+}).strict();
+
 export type Bildirim = z.output<typeof bildirimSemasi>;
 export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;
@@ -120,3 +152,6 @@ export type TumunuOkunduCevabi = z.output<typeof tumunuOkunduCevabi>;
 export type BildirimTercihSatiri = z.output<typeof bildirimTercihSatiri>;
 export type BildirimTercihleriCevabi = z.output<typeof bildirimTercihleriCevabi>;
 export type BildirimTercihDegistirGovdesi = z.input<typeof bildirimTercihDegistirGovdesi>;
+export type CagriYonlendirmeSatiri = z.output<typeof cagriYonlendirmeSatiri>;
+export type CagriYonlendirmeCevabi = z.output<typeof cagriYonlendirmeCevabi>;
+export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDegistirGovdesi>;

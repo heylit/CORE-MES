@@ -18,3 +18,15 @@ Yeni modül. Kararlar: 221 a (taslak uygun, ilk aşama), 222 a (herkes yalnız k
 
 ## Başka yerde değişen
 - Yok. Toplayıcıya ve rol x işleme dokunulmadı.
+
+## 298 a ve 298 b (ekip çağrısı yönlendirmesi) — dal `298-ekip-cagrisi-yonlendirme`, taban `main` e384b8d
+
+Kararlar: 298 a ("298 a, yetki genişletme onaylı"; "bildirim yönetim ayarlarına ekle"), 298 b ayarcı ("298 ayarcı b, prototip değişikliği onaylı").
+- `sunucu/gocler/20261019155500_bildirim_cagri_yonlendirme.sql`: yeni boş tablolar `bildirim_cagri_ekibi`, `bildirim_cagri_alicisi`; varsayılan eşleme tohumu.
+- `sunucu/gocler/20261019160000_durus_nedenleri_ayarci_ekibi.sql`: `durus_nedeni_ekip` kısıtına `ayarci` (CHECK genişletme).
+- `paylasilan/sozlesme/durus-nedenleri.ts`: `CAGRI_EKIPLERI` beşinci ekip `ayarci`; `istemci/src/moduller/durus-nedenleri/NedenFormlari.tsx` ad satırı.
+- `paylasilan/sozlesme/bildirim.ts`: tür `arkon.ekip-cagrisi` (acil, alan işlemi yok, yolsuz gönderilir); yönlendirme şemaları.
+- `sunucu/moduller/bildirim/`: iki uç (`ayarlar.yaz`), `disari.ts` `ekipCagrisiBildir`, BIL-7, BIL-8, `cagri-yonlendirme.test.ts`.
+- `sunucu/moduller/kisiler/disari.ts`: `rolSecenekleri`, `rollerdekiKisiler` (salt okuma).
+- `paylasilan/sayfalar/ayarlar.ts`: Sistem Ayarları ikinci menüsüne "Bildirim yönetimi" (`ayarlar.yaz`); `istemci/src/moduller/ayarlar/BildirimYonetimi.tsx`.
+- Rol x işlem satırı ve yeni işlem yok.

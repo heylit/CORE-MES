@@ -1,15 +1,18 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
+import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
-  BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, type Bildirim, type BildirimListeDurumu, type BildirimSayacCevabi,
+  BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
-import { kisilerinIslemleri } from '../kisiler/disari.ts';
-import { ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, tekilAnahtar, yolTureUyar } from './kurallar.ts';
+import { kisiAdlari, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
+import {
+  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanRoller, tekilAnahtar, yolTureUyar,
+} from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 const BULUNAMADI = 'Bildirim bulunamadı.';
@@ -97,4 +100,47 @@ export async function tercihDegistir(db: Db, kullanici: Kullanici, govde: Bildir
   const eposta = epostaSecilebilir(kullanici.islemler) && govde.eposta;
   await s.tercihYaz(db, kullanici.id, { tur: govde.tur, mesaj: govde.mesaj, eposta });
   return tercihler(db, kullanici);
+}
+
+// Ekip çağrısı yönlendirmesi (298 a). Değiştiren kişi ve zaman sunucudan yazılır; ad kisiler modülünden eklenir.
+export async function cagriYonlendirmesi(db: Db): Promise<CagriYonlendirmeCevabi> {
+  const satirlar = await s.cagriEkipleri(db);
+  const adlar = await kisiAdlari(db, satirlar.flatMap((r) => (r.degistirenKisiId === null ? [] : [r.degistirenKisiId])));
+  return {
+    satirlar: satirlar.map(({ degistirenKisiId, ...r }) => ({
+      ...r, ekip: r.ekip as CagriEkibi,
+      degistiren: degistirenKisiId === null ? null : { id: degistirenKisiId, ad: adlar.get(degistirenKisiId) ?? null },
+    })),
+    roller: await rolSecenekleri(db),
+  };
+}
+
+export async function cagriYonlendirmesiYaz(
+  db: Db, kullanici: Kullanici, ekip: CagriEkibi, govde: CagriYonlendirmeDegistirGovdesi,
+): Promise<CagriYonlendirmeCevabi> {
+  const olmayan = olmayanRoller(govde.rolIdleri, (await rolSecenekleri(db)).map((r) => r.id));
+  if (olmayan.length > 0) throw dogrulama(`Rol bulunamadı: ${olmayan.join(', ')}`, 'rolIdleri');
+  if (!(await s.cagriEkibiYaz(db, ekip, govde.rolIdleri, govde.surum, kullanici.id))) throw eskiSurum();
+  return cagriYonlendirmesi(db);
+}
+
+export interface EkipCagrisi {
+  ekip: CagriEkibi;
+  // Çağrının açıldığı istasyon ya da makine kodu; ekranda başlıkta görünür.
+  yer: string;
+  not?: string | null;
+  // Çağrının kimliği: okunmamışken aynı çağrı yinelenirse yeni satır açılmaz.
+  cagriKimligi: string;
+  // Çağrıyı açan kişi: kendi çağrısını almaz.
+  haric?: number | null;
+}
+
+// BIL-7: çağıranın transaction'ında yazar; alıcı ekibin yönlendirmesindeki rollerden gelir, açan kendi çağrısını almaz. Yazılan alıcı sayısını döner.
+export async function ekipCagrisiBildir(db: Db, c: EkipCagrisi): Promise<number> {
+  const kisiler = await rollerdekiKisiler(db, await s.cagriEkibiRolleri(db, c.ekip));
+  if (kisiler.length === 0) return 0;
+  return bildirimGonder(db, {
+    tur: 'arkon.ekip-cagrisi', baslik: `${CAGRI_EKIP_ADLARI[c.ekip]} çağrısı: ${c.yer}`, metin: c.not ?? null, yol: null,
+    kaynakKimlik: c.cagriKimligi, kisiler, haric: c.haric ?? null,
+  });
 }

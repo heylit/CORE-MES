@@ -99,3 +99,32 @@ export async function tercihYaz(db: Db, kisiId: number, t: TercihSatiri): Promis
     [kisiId, t.tur, t.mesaj, t.eposta],
   );
 }
+
+export interface CagriEkibiSatiri { ekip: string; rolIdleri: number[]; surum: number; degistirenKisiId: number | null; degistirildi: string }
+
+export function cagriEkipleri(db: Db): Promise<CagriEkibiSatiri[]> {
+  return db.sorgu<CagriEkibiSatiri>(
+    `SELECT e.ekip, COALESCE(array_agg(a.rol_id ORDER BY a.rol_id) FILTER (WHERE a.rol_id IS NOT NULL), '{}') AS "rolIdleri",
+            e.surum, e.degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('e.degistirildi')} AS degistirildi
+       FROM bildirim_cagri_ekibi e LEFT JOIN bildirim_cagri_alicisi a ON a.ekip = e.ekip
+      GROUP BY e.ekip ORDER BY e.ekip`,
+  );
+}
+
+export async function cagriEkibiRolleri(db: Db, ekip: string): Promise<number[]> {
+  const satirlar = await db.sorgu<{ rolId: number }>('SELECT rol_id AS "rolId" FROM bildirim_cagri_alicisi WHERE ekip = $1 ORDER BY rol_id', [ekip]);
+  return satirlar.map((s) => s.rolId);
+}
+
+// Sürüm tutmazsa (ya da ekip satırı yoksa) false: alıcılar değişmez. Rol listesi tek transaction'da yeniden yazılır.
+export async function cagriEkibiYaz(db: Db, ekip: string, rolIdleri: readonly number[], surum: number, kisiId: number): Promise<boolean> {
+  const satir = await db.tek(
+    `UPDATE bildirim_cagri_ekibi SET surum = surum + 1, degistiren_kisi_id = $3, degistirildi = now()
+      WHERE ekip = $1 AND surum = $2 RETURNING 1`,
+    [ekip, surum, kisiId],
+  );
+  if (satir === null) return false;
+  await db.sorgu('DELETE FROM bildirim_cagri_alicisi WHERE ekip = $1', [ekip]);
+  await db.sorgu('INSERT INTO bildirim_cagri_alicisi (ekip, rol_id) SELECT $1, unnest($2::int[])', [ekip, rolIdleri]);
+  return true;
+}

@@ -55,3 +55,8 @@
 .tc-hazirlik-adim { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-3); align-items: baseline; }
 .tc-hazirlik-adim > .tc-ayar-aciklama { grid-column: 2; overflow-wrap: anywhere; }
 .tc-hazirlik-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-cagri-ekibi { align-items: flex-start; }
+.tc-cagri-rolleri { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); justify-content: flex-end; min-width: 0; }
+@media (max-width: 479px) {
+  .tc-cagri-rolleri { justify-content: flex-start; }
+}

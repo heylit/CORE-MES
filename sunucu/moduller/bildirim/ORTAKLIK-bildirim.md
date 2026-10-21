@@ -10,3 +10,6 @@
 | Bildirim kaydı, okundu, arşiv | `bildirim_kaydi` | bildirim | yalnız bu modülde |
 | Kanal tercihi | `bildirim_tercihi` (mesaj, eposta) | bildirim | Mesaj (Faz 4) ve e-posta (Faz 3) gelince okunur |
 | E-posta adresi | (tablo yok) | ik (iş e-postası) | Faz 3; bu aşamada okunmaz |
+| Rol (çağrı alıcısı) | `bildirim_cagri_alicisi.rol_id` -> `rol.id` | kisiler | yabancı anahtar, rol silinince satır düşer; kişiler `kisiler/disari.ts` `rollerdekiKisiler` ile |
+| Çağrı ekibi | `bildirim_cagri_ekibi.ekip`, `bildirim_cagri_alicisi.ekip` | durus-nedenleri sözleşmesi (`CAGRI_EKIPLERI`) | aynı liste `durus_nedeni.cagri_ekibi` kısıtında; Arkon `CALLS` listesi Arkon'da |
+| Değiştiren kişi | `bildirim_cagri_ekibi.degistiren_kisi_id` -> `kisi.id` | kisiler | |

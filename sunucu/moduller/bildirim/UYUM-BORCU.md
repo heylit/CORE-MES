@@ -9,3 +9,7 @@
 4. Yönetici ekranları (olay türü varsayılanları, zorunlu işaret, e-posta defteri) Faz 3 ile; `bildirim.yonet` işlemi o zaman gelir.
 5. Arşiv temizliği (180 gün, kurgu §5) zamanlanmış işle Faz 2'de.
 6. Operatör ayrımı işlemden çıkarılıyor (`arkon.operator` var, `kisiler.rol-yonet` yok). Rol kodu dışarı açılırsa (kisiler) ona geçer.
+
+## Ekip çağrısı (298 a)
+7. Arkon tetiği (BASKA-MODUL-ISTEKLERI 6) girene kadar `arkon.ekip-cagrisi` hiç yazılmaz; yönlendirme ekranı yalnız ayarı tutar.
+8. Yükseltme (`phase: 'esc'`, "vardiya amirine yükseltildi") Arkon istemcisinde kalır; bildirime dönüştürülmesi ayrı karar.
