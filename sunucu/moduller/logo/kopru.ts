@@ -2,12 +2,12 @@ import type { LogoAyari } from './ayar.ts';
 import { agHatasiniYorumla, cevabiYorumla, faturalariAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla } from './kurallar.ts';
 import type { FaturaKaydi, HizmetYonu, KopruSonucu, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi } from './kurallar.ts';
 
-// Logo köprüsüyle yalnız bu dosya konuşur (kart #207, ADR 0011). Adres ve anahtar ayardan gelir; hata metnine girmez.
+// Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
   malzemeVarMi(kod: string): Promise<KopruSonucu>;
   malzemeEkle(govde: MalzemeEklemeGovdesi): Promise<KopruSonucu>;
   birimSetleri(): Promise<{ tur: 'basarili'; setler: BirimSeti[] } | Exclude<KopruSonucu, { tur: 'basarili' }>>;
-  // Yol verilmemişse istek atmaz, "reddedildi" döner: hizmet "var mı" ucu kılavuzda yok (BİLMİYORUM).
+  // Yol verilmemişse istek atmaz, "reddedildi" döner.
   hizmetVarMi(yon: HizmetYonu, kod: string): Promise<KopruSonucu>;
   hizmetEkle(yon: HizmetYonu, govde: Record<string, string | number>): Promise<KopruSonucu>;
   // Satın alma siparişi (kullanıcının köprü notu 2.3, 3b). Numarayla bulma çift gönderim kalkanıdır; 404 "yok" sayılır.
@@ -65,9 +65,12 @@ export interface KopruSecenegi {
   // Testte değişir; sunucuda Node'un kendi fetch'i (yeni paket yok).
   fetch?: typeof fetch;
   sureMs?: number;
-  // Hizmet "var mı" ucunun yolu; gerçek köprüde doğrulanınca verilir (bugün yok). Testte sahte köprünün test yolu verilir.
+  // Hizmet "var mı" ucunun yolu; verilmezse istek atılmaz. Sunucuda HIZMET_VAR_MI_YOLU, testte sahte köprünün test yolu verilir.
   hizmetVarMiYolu?: (yon: HizmetYonu, kod: string) => string;
 }
+
+// Logo yardımcısının hizmet kartı "var mı" ucu (araclar/logo-yardimcisi Islemler.cs).
+export const HIZMET_VAR_MI_YOLU = (yon: HizmetYonu, kod: string): string => `${HIZMET_KOKU[yon]}/exists/${encodeURIComponent(kod)}`;
 
 function agHatasi(hata: unknown): { zamanAsimi: boolean; kod: string | null } {
   const ad = hata instanceof Error ? hata.name : '';
@@ -205,7 +208,7 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
       return sonuc.tur === 'basarili' ? { tur: 'belirsiz', ileti: 'Birim seti listesi okunamadı.' } : sonuc;
     },
     async hizmetVarMi(yon, kod) {
-      if (!secenek.hizmetVarMiYolu) return { tur: 'reddedildi', ileti: 'Hizmet kartı "var mı" ucu doğrulanmadı; istek atılmadı.' };
+      if (!secenek.hizmetVarMiYolu) return { tur: 'reddedildi', ileti: 'Hizmet kartı "var mı" yolu verilmedi; istek atılmadı.' };
       return yorumla(await istek('GET', secenek.hizmetVarMiYolu(yon, kod)));
     },
     async hizmetEkle(yon, govde) {

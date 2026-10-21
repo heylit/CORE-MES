@@ -1,7 +1,7 @@
 # ADR 0011 — Sunucudan kurum içi köprü servisine istek
 
-Durum: kabul (kartlar #209, #207, #210; kullanıcı kararları 08.10.2026, kabul 11.10.2026). `CLAUDE.md` kırmızı çizgi satırına
-"yalnız Logo iç köprüsü (ADR 0011) istisna" eklendi; aşağıdaki öneri metni başvurudur.
+Durum: kısmen yerine geçildi. 1, 2 ve 4. kararların yerine ADR 0017 (Logo yardımcısı, yalnız 127.0.0.1) geçti; 3, 5, 6 ve 7 sürer.
+Karar 2'deki adres kuralı SmartES için (ADR 0013) geçerlidir. İlk kabul: kartlar #209, #207, #210; kullanıcı kararları 08.10.2026, kabul 11.10.2026.
 
 ## Bağlam
 
@@ -37,7 +37,7 @@ gerçek köprüye istek atılmaz. Firma, sipariş, talep ve fişler bu kararın 
 
 ## Sonuçlar
 
-- Gerçek köprüye geçiş yalnız ortam değişkenini vermektir; kod değişmez. Önce kullanıcının yapacakları `kurulum/logo-koprusu.md`'dedir.
+- Gerçek köprüye geçiş yalnız ortam değişkenini vermektir; kod değişmez. Önce kullanıcının yapacakları `kurulum/logo-yardimcisi.md`'dedir (eski `logo-koprusu.md`).
 - Firma, sipariş, talep ve fiş gönderimi aynı modüle ve aynı giden kutusuna (`logo_giden.belge_turu`) eklenir; her biri kendi kararıyla gelir.
 
 ## Vazgeçilenler

@@ -11,7 +11,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    işin oturumunda transaction yok), LGB-6 ve LGS-22 (sonuç transaction'ı açılamazsa yeniden deneme ikinci kayıt açmaz), LGB-8 (300 ms boşta kesmesi).
 3. Kapandı: kart sonucu bildirilirken bu turda gönderilen (kuyruktan okunan) `logoKartTuru` ve `logoBirimSeti` verilir (`servis.ts` `gonder`,
    malzemeler `malzemeLogoSonucu`); tur sırasında değişen karşılık karta yazılmaz. Test: `logo.test.ts` "LGB-8 gönderilen karşılık".
-4. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bağlantı kodu kapsam dışı; aynı kayıt `kurulum/logo-koprusu.md` "Hâlâ doğrulanmayan" ve varsayım listesinde.
+4. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bağlantı kodu kapsam dışı; aynı kayıt `kurulum/logo-yardimcisi.md` varsayım listesinde (eski `logo-koprusu.md`).
    Eski metin: Köprü cevap biçimi VARSAYIM / "var mı" ve birim seti cevabı, `validate` biçimi / `kurallar.ts` `cevabiYorumla`, `kopru.ts` `birimSetleriniAyikla` /
    kullanıcı kılavuzdan doğrulayınca (LB8) yalnız bu iki dosya değişir.
 5. Bağlantı durumu ekranda / son tur bilgisi yalnız `/saglik/ayrinti`'de; açık-kapalı ve değişken durumu `GET /logo/birim-setleri` `baglanti`
@@ -21,7 +21,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    oran `logo.kdv-orani` ayarından okunur (varsayılan 20, kullanıcı kararı 08.10.2026).
 10. Geçersiz karşılıkla düşen kart / karşılık düzeltilince geri çekilme süresi (en çok 30 dk) dolunca yeniden denenir, hemen değil / `logo_giden.sonraki_deneme` /
    malzemeler karşılık değişince haber verirse (olay ya da `disari` işlevi) bekleme sıfırlanır.
-11. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bağlantı kodu kapsam dışı; aynı kayıt `kurulum/logo-koprusu.md` varsayım 12-17'de.
+11. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): bağlantı kodu kapsam dışı; aynı kayıt `kurulum/logo-yardimcisi.md`'de (eski `logo-koprusu.md` varsayım 12-17). Hizmet "var mı" yolu ADR 0017 ile verildi.
    Eski metin: Hizmet kartı gönderimi ayarla kapalı / alınan ve verilen ayrı anahtar (`kurallar.ts` `HIZMET_AYARI`) / alan adları (`HIZMET_ALANLARI`) DOĞRULANMADI,
    verilen yolu (`/api/SalesService/AddRich`) VARSAYIM / anahtar açılmadan önce deneme firmasında gerçek köprüyle denenir, sonuç `kurulum/logo-koprusu.md`'ye
    yazılır. "Var mı" ucu çıkarsa `kopru.ts` `hizmetVarMiYolu` verilir ve sonucu bilinmeyen gönderim de kendiliğinden yinelenir.

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
-import { kurumIciMi, logoAyariOku } from './ayar.ts';
+import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
   agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, OZEL_KOD,
@@ -13,9 +13,9 @@ describe('logo ayarı (kart #210)', () => {
     assert.equal(logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: '  ', TMIV2_LOGO_KOPRU_ANAHTARI: '' }), null);
   });
 
-  test('LGB-1: kurum içi adres ve anahtar açar; sondaki / atılır', () => {
-    assert.deepEqual(logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'http://10.1.2.3:5000/', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), { adres: 'http://10.1.2.3:5000', anahtar: 'a' });
-    assert.deepEqual(logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'https://logosrv/kopru', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), { adres: 'https://logosrv/kopru', anahtar: 'a' });
+  test('LGB-1: yerel adres ve anahtar açar; sondaki / atılır', () => {
+    assert.deepEqual(logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'http://127.0.0.1:4190/', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), { adres: 'http://127.0.0.1:4190', anahtar: 'a' });
+    assert.deepEqual(logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'http://localhost:4190/yardimci', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), { adres: 'http://localhost:4190/yardimci', anahtar: 'a' });
   });
 
   test('LGB-1 (ret): biri eksikse, adres bozuksa ya da kimlik/sorgu taşıyorsa açılış durur; ileti değeri taşımaz', () => {
@@ -33,14 +33,15 @@ describe('logo ayarı (kart #210)', () => {
     }
   });
 
-  test('LGB-2: yalnız kurum içi adres; internete çıkan adres açılışta reddedilir (ADR 0011)', () => {
-    for (const host of ['10.0.0.5', '172.16.0.1', '172.31.255.1', '192.168.1.10', '127.0.0.1', 'localhost', 'logosrv', 'logo-kopru', '[::1]', '[fd12::1]']) {
-      assert.equal(kurumIciMi(host), true, host);
+  test('LGB-2: yalnız aynı bilgisayar; başka adres, kurum içi olsa da, açılışta reddedilir (ADR 0017)', () => {
+    for (const host of ['127.0.0.1', 'localhost', 'LOCALHOST', '[::1]']) {
+      assert.equal(yerelMi(host), true, host);
     }
-    for (const host of ['8.8.8.8', '172.32.0.1', '11.0.0.1', 'logo.example.com', 'api.logo.com.tr', '[2001:db8::1]']) {
-      assert.equal(kurumIciMi(host), false, host);
+    for (const host of ['10.0.0.5', '192.168.1.10', '127.0.0.2', '0.0.0.0', 'logosrv', '[fd12::1]', '8.8.8.8', 'logo.example.com', 'localhost.example.com']) {
+      assert.equal(yerelMi(host), false, host);
     }
-    assert.throws(() => logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'https://kopru.example.com', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), /kurum içi/);
+    assert.throws(() => logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'http://10.0.0.5:4190', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), /aynı bilgisayar/);
+    assert.throws(() => logoAyariOku({ TMIV2_LOGO_KOPRU_ADRESI: 'https://kopru.example.com', TMIV2_LOGO_KOPRU_ANAHTARI: 'a' }), /aynı bilgisayar/);
   });
 });
 

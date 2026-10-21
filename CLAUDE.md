@@ -27,7 +27,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
 - Süreç ağırlaştırılmaz: sahiplik defteri, ders dosyası, kanca, durum dosyası kurulmaz. Hata iki kez olursa kural yazılmaz; tip, kısıt, ortak parça ya da test eklenir.
 
 ## Kırmızı çizgiler
-- Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve dış servis çağrısı yok; yalnız kurum içi üç servis istisna: Logo iç köprüsü (ADR 0011, yalnız `logo` modülü), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı). Üçünde de adres yalnız `TMIV2_*` ortam değişkenindedir ve kurum içi olmalıdır; bağlantı varsayılan olarak kapalıdır.
+- Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve dış servis çağrısı yok; yalnız kurum içi üç servis istisna: Logo yardımcısı (ADR 0017, yalnız `logo` modülü, yalnız aynı bilgisayar: 127.0.0.1), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı). Üçünde de adres yalnız `TMIV2_*` ortam değişkenindedir ve kurum içi olmalıdır (Logo için yalnız 127.0.0.1); bağlantı varsayılan olarak kapalıdır.
 - Eski sistem (`Desktop\Planlama`, veritabanı `tmi`, port 4000) ve `Desktop\TMI_YEDEK` bu deponun
   dışındadır; okunmaz, yazılmaz, bağlanılmaz. Bu sistem yalnız `TMIV2_*` ortam değişkenlerini okur.
 - `git reset --hard` yok; `main`'e zorla gönderme yok. Gönderilmiş iş dalı rebase sonrası aynı adla, yalnız `git push --force-with-lease` ile güncellenir. Birleşmemiş dal silinmez. Yeni bağımlılık kullanıcı onayıyla.
