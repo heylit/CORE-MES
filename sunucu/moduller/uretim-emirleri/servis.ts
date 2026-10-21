@@ -4,6 +4,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
   AdimCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -19,6 +20,7 @@ import {
   adimDegisiyorMu, adimIhlali, ayarIhlali, adimliIptalIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, iptalIhlali, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, ROTASIZ_EMIR_KAPALI, sayimIhlali, siradakiIsEmri, toplamAsimiIhlali,
+  ilkAyrim, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
 } from './kurallar.ts';
 import type { IstasyonDurumu } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -343,6 +345,28 @@ async function secimiDenetle(db: Db, istasyonId: number, secilen: readonly numbe
   if (secilen.some((m) => !calisir.has(m))) throw dogrulama(MAKINE_SECILEMEZ, 'makineIdleri');
 }
 
+// Canlı plan bu modülün değil: plan, verilen makinelerde ufuk içinde başlayan canlı yerleşimleri (bölünmüş işte parçaları) kablolama.ts
+// çözücüsüyle verir. Kayıtsızken (araç, test) ayrım denetlenmez.
+export type PlanAyrimiCozucusu = (db: Db, makineIdleri: readonly number[], ufukDk: number) => Promise<{ makineId: number; isEmriId: number; baslangic: string }[]>;
+let planAyrimi: PlanAyrimiCozucusu | null = null;
+export function planAyrimiCozucusuKaydet(cozucu: PlanAyrimiCozucusu | null): void { planAyrimi = cozucu; }
+
+// 393 d: yalnız seçilen ve iş emrinin makinesi olmayan makineler denetlenir; seçimsiz başlatma planın makinesindedir.
+async function ayrimiDenetle(db: Db, emirId: number, secilen: readonly number[] | undefined, atanan: number | null): Promise<void> {
+  const baska = (secilen ?? []).filter((m) => m !== atanan);
+  if (planAyrimi === null || baska.length === 0) return;
+  const satirlar = await planAyrimi(db, baska, MAKINE_AYRIM_UFKU_DK);
+  if (satirlar.length === 0) return;
+  const bilgi = new Map((await sorgular.isEmriAyrimBilgileri(db, [...new Set(satirlar.map((x) => x.isEmriId))])).map((i) => [i.id, i]));
+  const a = ilkAyrim(satirlar.flatMap((x) => {
+    const i = bilgi.get(x.isEmriId);
+    return i === undefined ? [] : [{ ...i, makineId: x.makineId, baslangic: x.baslangic }];
+  }), emirId, baska, atanan);
+  if (a === null) return;
+  const kod = async (id: number) => (await makineGetir(db, id))?.kod ?? `#${id}`;
+  throw cakisma(makineAyrildiMetni(await kod(a.makineId), a, tesisSaati(new Date(a.baslangic)), atanan === null ? null : await kod(atanan)));
+}
+
 // Kilidin yeri: seçilen ya da atanmış makineler; makinesiz işte istasyonun makinesiz yeri (eski istasyon kilidi). Aynı işe
 // birden çok kişinin girmesi kilit değil katılımdır.
 interface Yer {
@@ -401,6 +425,7 @@ export async function emirBaslat(db: Db, kisiId: number, id: number, makineIdler
   const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId });
   if (denetim.engel !== null) throw cakisma(denetim.engel);
   await secimiDenetle(db, istasyonId, makineIdleri);
+  await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
   await yeriDenetle(db, id, yer);
   const an = await komutAni(db, id);
@@ -615,6 +640,7 @@ export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri
   if (ihlal !== null) throw cakisma(ihlal);
   await secimiDenetle(db, istasyonId, makineIdleri);
   const isEmri = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
+  await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const son = makineIdleri === undefined ? await sorgular.sonKapananMakineler(db, id, isEmri?.id ?? null) : [];
   const yer: Yer = { istasyonId, makineler: son.length > 0 ? son : calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
   await yeriDenetle(db, id, yer);

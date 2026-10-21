@@ -53,6 +53,21 @@ export async function yerlesimler(db: Db, hedef: Hedef): Promise<YerlesimSatiri[
   return parcalariEkle(r.map(coz), p);
 }
 
+// Verilen makinelerde şimdiden ufuk sonuna dek başlayan ve henüz bitmemiş canlı yerleşimler; bölünmüş işte parçalar (393 d).
+export function canliMakineAyrimlari(db: Db, makineIdleri: readonly number[], ufukDk: number): Promise<{ makineId: number; isEmriId: number; baslangic: Date }[]> {
+  if (makineIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT makine_id AS "makineId", is_emri_id AS "isEmriId", baslangic FROM (
+       SELECT y.makine_id, y.is_emri_id, y.baslangic, y.bitis FROM plan_yerlesimi y
+        WHERE NOT EXISTS (SELECT 1 FROM plan_yerlesim_parcasi p WHERE p.is_emri_id = y.is_emri_id)
+       UNION ALL
+       SELECT makine_id, is_emri_id, baslangic, bitis FROM plan_yerlesim_parcasi) a
+      WHERE makine_id = ANY($1::int[]) AND baslangic < now() + make_interval(mins => $2) AND bitis > now()
+      ORDER BY baslangic, is_emri_id`,
+    [[...makineIdleri], ufukDk],
+  );
+}
+
 // Canlı plandaki verilen iş emirlerinin yerleşimi, başlangıç sırasıyla.
 export async function canliYerlesimleri(db: Db, isEmriIdleri: readonly number[]): Promise<YerlesimSatiri[]> {
   const r = await db.sorgu<Ham>(`SELECT ${YERLESIM} FROM plan_yerlesimi WHERE is_emri_id = ANY($1::int[]) ORDER BY baslangic, is_emri_id`, [isEmriIdleri]);

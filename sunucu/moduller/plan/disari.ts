@@ -7,7 +7,7 @@ import { ayarOku, bedelAyariOku } from './sorgular.ts';
 import {
   malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
 } from './servis.ts';
-export { canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
+export { canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
 export type { Kaynak } from './kurallar.ts';
 export type { YerlesimSatiri } from './sorgular.ts';
 

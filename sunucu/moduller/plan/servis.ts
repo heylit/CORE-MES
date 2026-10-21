@@ -94,6 +94,8 @@ interface Baglam {
   // Denetim #23: çalışan adımın gerçekleşeni, iş emri kimliğiyle (dakikalar simdi'ye göre): başladığı an, kalan sürenin sayıldığı an (son
   // sayım, yoksa başlama) ve kalan adedin süresi (parça sayılmışsa ayar bitmiştir, düşülür). Yer okunurken saklı aralığın yerine geçer.
   gercek: Map<number, { baslangic: number | null; cikis: number | null; kalanDk: number; ayarDk: number }>;
+  // 393 d: çalışan adımın terminalde çalıştığı makine (açık kullanım), iş emri kimliğiyle. Yer okunurken saklı kaynağın yerine geçer.
+  fiili: Map<number, Kaynak>;
 }
 type IstasyonMakineleri = Map<number, Kaynak[]>;
 
@@ -270,6 +272,10 @@ async function denemeIsleri(
   return sonuc;
 }
 
+// 393 d: uretim-emirleri başka makinede başlatmayı denetlerken canlı ayrımları buradan alır (kablolama.ts). Durum ve emir süzmesi onundur.
+export const canliMakineAyrimlari = async (db: Db, makineIdleri: readonly number[], ufukDk: number) =>
+  (await s.canliMakineAyrimlari(db, makineIdleri, ufukDk)).map((x) => ({ ...x, baslangic: x.baslangic.toISOString() }));
+
 // Proje maliyet plana bağlıdır (canlı sıra): iş emrinin tahmini maliyetini plan ithal edemez, kablolama.ts çözücü olarak verir.
 // Kayıtsızken (araç, test) katkı payı bilinmez, kâr riski işlemez.
 export type TahminiMaliyetCozucusu = (db: Db, isEmriIdleri: readonly number[]) => Promise<Map<number, number | null>>;
@@ -331,7 +337,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
     simdi, gun0, hedef, ayar, isler, rotaEksik, kaynaklar, defter, kapaliGunler: [], siparisSatirlari, carpanlar, siniflar, bedelAyari: await s.bedelAyariOku(db), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
     ...await vardiyaOku(db, simdi, kaynaklar),
     izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
-    fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik),
+    fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
   };
   if (tahminiMaliyet && malzemeMaliyeti) {
     const emirler = new Map<number, BedelSatiri>();
@@ -356,6 +362,9 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
   devirleriKur(isler);
   return b;
 }
+
+const fiiliKaynaklar = (acik: readonly PlanIsEmri[]): Baglam['fiili'] => new Map(acik.flatMap((i) =>
+  (i.adimDurumu === 'calisiyor' && i.fiiliMakineId !== undefined ? [[i.id, { tur: 'makine', id: i.fiiliMakineId } as Kaynak] as const] : [])));
 
 function gerceklesenler(simdi: number, acik: readonly PlanIsEmri[]): Baglam['gercek'] {
   const h: Baglam['gercek'] = new Map();
@@ -428,8 +437,11 @@ const izinliMi = (b: Baglam, k: KaynakBilgisi | null): boolean =>
 
 // Bölünmüş işin yeri zarftır; kaynağı dolduran parçalarıdır (isgal).
 type Yer = Aralik & { isEmriId: number; kaynak: Kaynak; parcalar?: (Aralik & { no: number; kaynak: Kaynak })[] };
+// Çalışan iş planlanan makinede değil, terminalin çalıştırdığı makinededir (393 d); bölünmüş iş saklı parçalarıyla kalır.
+const kaynakOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Kaynak =>
+  ('fiili' in b && !y.parcalar?.length ? b.fiili.get(y.isEmriId) : undefined) ?? y.kaynak;
 const yerOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Yer & { kilitli: boolean; dondurulmus: boolean; elleSira: number | null; elleIstasyonId: number | null; elleKaynak: boolean } => ({
-  isEmriId: y.isEmriId, kaynak: y.kaynak, ...(gerceklesenAralik(b, y) ?? { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis) }), kilitli: y.kilitli, dondurulmus: y.dondurulmus, elleSira: y.elleSira,
+  isEmriId: y.isEmriId, kaynak: kaynakOf(b, y), ...(gerceklesenAralik(b, y) ?? { baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis) }), kilitli: y.kilitli, dondurulmus: y.dondurulmus, elleSira: y.elleSira,
   elleIstasyonId: y.elleIstasyonId ?? null, elleKaynak: y.elleKaynak ?? false,
   ...(y.parcalar?.length ? { parcalar: y.parcalar.map((p) => ({ no: p.no, kaynak: p.kaynak, baslangic: dk(b, p.baslangic), bitis: dk(b, p.bitis) })) } : {}),
 });
@@ -440,8 +452,9 @@ function gerceklesenAralik(b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri)
   const g = b.gercek.get(y.isEmriId);
   if (g === undefined) return null;
   const cikis = g.cikis ?? 0;
-  const kalan = verimliSure(g.kalanDk, g.ayarDk, verimi(b)(y.kaynak));
-  return { baslangic: Math.min(g.baslangic ?? dk(b, y.baslangic), 0), bitis: calismaBitisi(takvim(b)(y.kaynak), cikis, kalan) ?? cikis + kalan };
+  const kaynak = kaynakOf(b, y);
+  const kalan = verimliSure(g.kalanDk, g.ayarDk, verimi(b)(kaynak));
+  return { baslangic: Math.min(g.baslangic ?? dk(b, y.baslangic), 0), bitis: calismaBitisi(takvim(b)(kaynak), cikis, kalan) ?? cikis + kalan };
 }
 // Motor çalışan işi şimdiye koyar; bundan ileride başlayan çalışan iş elle arkaya sıralanmıştır.
 const ILERI_SIRA_DK = 1;
@@ -580,10 +593,10 @@ async function taslakOzeti(db: Db, b: Baglam, k: Kullanici | null) {
 function cevapKur(b: Baglam, satirlar: readonly YerlesimSatiri[]) {
   const ilgili = satirlar.filter((y) => b.isler.has(y.isEmriId));
   const yerler = ilgili.map((y) => yerOf(b, y));
-  const gorunur = ilgili.filter((y) => izinliMi(b, b.kaynaklar.get(kaynakAnahtari(y.kaynak)) ?? null));
+  const gorunur = ilgili.filter((y) => izinliMi(b, b.kaynaklar.get(kaynakAnahtari(kaynakOf(b, y))) ?? null));
   const yerlesmis = new Set(ilgili.map((y) => y.isEmriId));
   const yerlesimler = gorunur.map((y) => ({
-    ...isOzeti(b.isler.get(y.isEmriId)!), kaynak: y.kaynak, ...cevapAraligi(b, y),
+    ...isOzeti(b.isler.get(y.isEmriId)!), kaynak: kaynakOf(b, y), ...cevapAraligi(b, y),
     kilitli: y.kilitli, dondurulmus: y.dondurulmus, elleSira: istasyonDegisti(b, y) ? null : y.elleSira, elleKaynak: y.elleKaynak ?? false, uyarilar: uyariListesi(b, yerOf(b, y), yerler),
     ...(bolunmus(y) ? { parcalar: y.parcalar!.map(parcaIso) } : {}),
   }));
