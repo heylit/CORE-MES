@@ -1,0 +1,202 @@
+/* ---------- Termin ve kâr: plan dengesi ----------
+   Kullanıcı 13:12: termin ile kâr arasında kaydırılan bir çubukla plan dengesi; plan seçenekleri, teklif için termin-kâr tablosu,
+   termin uzatma önerisi. Çubuk, tek TL toplamında gecikme bedelinin ağırlığını değiştirir: ortada 1 (gerçek TL), termin ucunda 100,
+   kâr ucunda 0,1. Aynı çarpan ek mesai önerisinde önlenen gecikme bedeline uygulanır: motorun kendi başına termin ile maliyet arasında
+   değiştirebileceği az (tezgâh seçimi, isteğe bağlı fason); asıl kaldıraç kapasite satın almaktır. Maliyet kalemleri hep gerçek TL'dir; ekranda gösterilen tutarlar çarpansız hesaplanır.
+   Çubuğu müdür ve yönetici değiştirir (bedel ayarı gibi, 210 a); kâr ve tutarlar yalnız onlarda görünür (180 a). */
+const pdDenge = (D = S.D) => { const v = D && D.planDenge; return v == null || !isFinite(+v) ? 50 : Math.max(0, Math.min(100, +v)); };
+/* termin ucu 100 kata kadar çıkar: bedel modelinde bir saatlik gecikme bir ek mesai vardiyasından çok ucuzdur, kapasite ancak büyük çarpanla satın alınır */
+const pdKat = d => d <= 50 ? Math.pow(100, (50 - d) / 50) : Math.pow(10, (50 - d) / 50);
+const pdAd = d => d <= 10 ? 'Termin önce' : d < 40 ? 'Termine yakın' : d <= 60 ? 'Dengeli' : d < 90 ? 'Kâra yakın' : 'Kâr önce';
+const pdH = h => `<span class="pm-pd-hucre">${h}</span>`;
+const pdKatYaz = d => '×' + sayi(pdKat(d), pdKat(d) >= 10 ? 0 : 2);
+
+/* gecikme ve tampon ihlali bedeli çubuğun çarpanıyla, maliyet olduğu gibi; işçi kaynağına bu tanım gider */
+tlToplam = function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4]; };
+{ const pdSt = stOf; stOf = function (ek, gevset) { const st = pdSt(ek, gevset); st.tlAmac.kT = pdKat(pdDenge()); Object.assign(TL_AMAC, st.tlAmac); return st; }; }
+
+/* aynı veriyle birden çok plan: her biri kendi çarpanı ve termin kopyasıyla. ms 0 ise yalnız kural tabanlı ilk plan kurulur
+   (aynı girdiye aynı sonuç); farkları karşılaştırmak için bu yeterlidir, iyileştirme rastgele seçimle birkaç bin TL oynar. */
+const PD_ISCI = `
+{ const om2 = self.onmessage; self.onmessage = e => { const d = e.data || {}; if (d.tur !== 'coklu') return om2(e);
+  try { const out = [];
+    d.liste.forEach((x, i) => { self.postMessage({ t: 'coklu-ilerleme', i, n: d.liste.length });
+      const st = x.st; if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); }
+      const cx = compile(st); let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx); let E = evaluate(cur, st, null, true);
+      const t0 = Date.now(); let seed = 17, durgun = 0;
+      while (d.ms > 0 && Date.now() - t0 < d.ms && durgun < 3) { const L = lns(st, cur, null, { ms: Math.max(200, Math.min(1000, d.ms - (Date.now() - t0))), seed: seed++, free: true }); if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++; }
+      out.push({ id: x.id, k: planKaydi(cur, st, null) }); });
+    self.postMessage({ t: 'coklu-bitti', out });
+  } catch (err) { self.postMessage({ t: 'hata', msg: String(err && err.message || err) }); } }; }`;
+{ const iA = isciAc; isciAc = function () {
+  const src = document.getElementById('motor').textContent + '\n' + opKaydi.toString() + '\n' + planKaydi.toString() + '\n' + ISCI_KODU + '\n' + TL_ISCI() + `\nvar tmSureFas = ${tmSureFas};\n${terminUygula}\nterminUygula();\n${PD_ISCI}`;
+  const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+  let w; try { w = new Worker(url); } catch (e) { URL.revokeObjectURL(url); return iA(); }
+  w.bitir = () => { w.terminate(); URL.revokeObjectURL(url); calisan = null; U.ilerleme = null; };
+  w.onerror = e => { w.bitir(); U.pdIs = null; render(); bildir('Motor hatası: ' + (e.message || 'bilinmiyor'), 'hata'); };
+  return w; }; }
+KIP_AD.denge = 'Plan dengesi seçeneği';
+
+function pdCalistir(ad, liste, ms, bitti) {
+  if (calisan) { bildir('Motor çalışıyor; bitince yeniden deneyin.', 'hata'); return; }
+  const w = isciAc(); if (!w) return; calisan = w; const dv = S.dataVer; U.pdIs = { ad, i: 0, n: liste.length }; render();
+  w.onmessage = e => { const m = e.data;
+    if (m.t === 'coklu-ilerleme') { U.pdIs = { ad, i: m.i, n: m.n }; const el = document.getElementById('pd-is'); if (el) el.textContent = pdIsYaz(); return; }
+    w.bitir(); U.pdIs = null;
+    if (m.t === 'hata') { render(); bildir('Hesap yapılamadı: ' + m.msg, 'hata'); return; }
+    if (dv !== S.dataVer) { render(); bildir('Hesap sırasında veri değişti; yeniden hesaplayın.', 'hata'); return; }
+    const by = Object.fromEntries(m.out.map(x => [x.id, x.k])); bitti(liste.map(x => ({ ...x, k: by[x.id] }))); render(); };
+  w.postMessage({ tur: 'coklu', ms, liste: liste.map(x => ({ id: x.id, st: x.st })) });
+}
+const pdIsYaz = () => U.pdIs ? `${U.pdIs.ad}: ${U.pdIs.i + 1} / ${U.pdIs.n} plan kuruluyor…` : '';
+
+/* bir planın sipariş sipariş kârı; termini değişmiş kopya varsa hesap o kopyanın verisiyle yapılır */
+function pdOzet(k, st) {
+  const cx = compile(st); const W = wipHesap(k, st, cx); const MP = ymMesaiPay(k, cx);
+  const o = { net: 0, eksik: 0, gec: 0, gecSa: 0, late: 0, sip: {} };
+  for (const s of st.D.siparisler) { const J = k.J[s.id] || {}; if (J.T > 0.05) { o.gecSa += J.T; o.late++; }
+    const x = ymSipMaliyet(s, k, cx, W, MP); if (!x) continue; o.sip[s.id] = { ...x, C: J.C }; if (x.net == null) { o.eksik++; continue; } o.net += x.net; o.gec += x.gec; }
+  return o;
+}
+/* teklif için havuzdaki sipariş plana alınmış gibi kopyalanır; motor havuzu görmez */
+function pdSt(id, termin) {
+  const s0 = S.D.siparisler.find(x => x.id === id); const h = s0 && s0.havuz; if (h) s0.havuz = false;
+  let st; try { st = dengeKilit(stOf()); } finally { if (h) s0.havuz = h; }
+  if (termin !== undefined) { const s = st.D.siparisler.find(x => x.id === id); if (s) s.termin = termin; }
+  return st;
+}
+const pdMs = () => Math.max(1500, (+S.w.sure || 10) * 1000 / 3);
+const pdTL = (x, isaret) => x == null || !isFinite(x) ? '—' : (isaret && x > 0.5 ? '+' : x < -0.5 ? '−' : '') + agTL(Math.abs(x));
+
+/* ---------- eylemler ---------- */
+/* her seçenek kendi çarpanıyla: motorun amacı ve ek mesai adaylarından o çarpanla kâr ettirenler (adaylar Ek mesai sayfasının ölçtükleri) */
+async function pdSecenekler() {
+  if (S.plan && planGuncel() && !(U.ymMs && U.ymMs.dv === S.dataVer)) { U.pdIs = { ad: 'Ek mesai adayları ölçülüyor', i: 0, n: 1 }; await ymMesaiOner(); U.pdIs = null; }
+  const M = U.ymMs && U.ymMs.dv === S.dataVer ? U.ymMs.liste : [];
+  const l = [...new Set([0, 50, 100, pdDenge()])].sort((a, b) => a - b).map(d => { const st = dengeKilit(stOf()); st.tlAmac.kT = pdKat(d);
+    const ac = M.filter(a => a.dGec * pdKat(d) - a.tl - a.dDiger > 0).map(a => ({ m: a.m, gun: a.gun, vardiya: a.vardiya, tl: a.tl }));
+    st.ekMesai = [...st.ekMesai, ...ac.map(({ tl, ...e }) => e)]; return { id: 'd' + d, d, st, mesai: ac }; });
+  Object.assign(TL_AMAC, stOf().tlAmac);
+  pdCalistir('Plan seçenekleri', l, pdMs(), r => { U.pdSec = { dv: S.dataVer, l: r.map(x => { const o = pdOzet(x.k, x.st); const mTL = x.mesai.reduce((a, e) => a + e.tl, 0); return { d: x.d, k: x.k, mesai: x.mesai, mTL, o: { ...o, net: o.net - mTL } }; }) }; });
+}
+function pdTeklif(id) {
+  const s = S.D.siparisler.find(x => x.id === id); if (!s) return;
+  /* önce en erken bitiş: termin şimdiye çekilince sipariş en acil olur; söz verilebilecek en erken tarih budur */
+  const now = cxAl().st.now;
+  pdCalistir('Teklif: en erken bitiş', [{ id: 'erken', st: pdSt(id, tmYaz(Math.ceil(now + 1))) }], 0, r => {
+    const C = (r[0].k.J[id] || {}).C; if (C == null) { bildir(`${id} plana yerleşmedi; rota ve tezgâh verisini kontrol edin.`, 'hata'); return; }
+    const C0 = Math.ceil(C); const mev = parseT(S.D, s.termin);
+    const adaylar = [['En erken', C0], ['+3 gün', C0 + 72], ['+7 gün', C0 + 168], ['+14 gün', C0 + 336]];
+    if (mev != null && !adaylar.some(a => Math.abs(a[1] - mev) < 12)) adaylar.push(['Girilen termin', mev]);
+    adaylar.sort((a, b) => a[1] - b[1]);
+    const l = adaylar.map(([ad, t], i) => ({ id: 't' + i, ad, t, st: pdSt(id, tmYaz(t)) }));
+    /* karşılaştırma tabanı: havuzdaki teklif için siparişsiz plan, plandaki için girilen termin */
+    const taban = { id: 'taban', st: dengeKilit(stOf()) };
+    setTimeout(() => pdCalistir('Teklif: termin seçenekleri', [taban, ...l], 0, r2 => {
+      const T0 = r2.find(x => x.id === 'taban');
+      const o0 = T0 ? pdOzet(T0.k, T0.st) : null;
+      const sat = r2.filter(x => x.id !== 'taban').map(x => { const o = pdOzet(x.k, x.st); const b = o.sip[id] || {};
+        let diger = null, digerSa = null; if (o0) { diger = 0; digerSa = 0; for (const j in o.sip) { if (j === id) continue; const a = o.sip[j], z = o0.sip[j]; if (a && z && a.net != null && z.net != null) diger += a.net - z.net; }
+          digerSa = (o.gecSa - ((o.sip[id] || {}).T > 0.05 ? o.sip[id].T : 0)) - (o0.gecSa - ((o0.sip[id] || {}).T > 0.05 ? o0.sip[id].T : 0)); }
+        return { ad: x.ad, t: x.t, C: b.C, T: b.T, net: b.net, tutar: b.tutar, diger, digerSa, top: b.net == null ? null : b.net + (diger || 0) }; });
+      U.pdTk = { dv: S.dataVer, id, havuz: !!s.havuz, sat, taban: s.havuz ? 'siparişsiz plan' : 'girilen terminli plan' };
+    }), 0);
+  });
+}
+function pdUzatma() {
+  const p = S.plan; if (!p) return; const gun = U.pdUzGun || 2;
+  const gec = S.D.siparisler.filter(s => !s.havuz && (p.J[s.id] || {}).T > 0.05).map(s => ({ s, b: agGecTL(agBedel(S.D, s), p.J[s.id].T) })).sort((a, b) => b.b - a.b).slice(0, 6);
+  if (!gec.length) { U.pdUz = { dv: S.dataVer, gun, sat: [] }; render(); return; }
+  const l = [{ id: 'taban', st: dengeKilit(stOf()) }, ...gec.map(({ s }) => ({ id: s.id, st: pdSt(s.id, tmYaz(parseT(S.D, s.termin) + gun * 24)) }))];
+  pdCalistir('Termin uzatma', l, 0, r => {
+    const t = r.find(x => x.id === 'taban'); const o0 = pdOzet(t.k, t.st);
+    const sat = r.filter(x => x.id !== 'taban').map(x => { const o = pdOzet(x.k, x.st); const a = o0.sip[x.id] || {}, b = o.sip[x.id] || {};
+      return { id: x.id, T0: a.T, T1: b.T, dNet: o.eksik === o0.eksik ? o.net - o0.net : null, dSa: o0.gecSa - o.gecSa, dLate: o0.late - o.late }; }).sort((a, b) => (b.dNet ?? b.dSa) - (a.dNet ?? a.dSa));
+    U.pdUz = { dv: S.dataVer, gun, sat };
+  });
+}
+function pdSecAl(i) {
+  const x = U.pdSec && U.pdSec.l[i]; if (!x || !U.pdSec || U.pdSec.dv !== S.dataVer) { bildir('Seçenekler eski; yeniden hesaplayın.', 'hata'); return; }
+  if (!agFiyatGorur()) { bildir('Plan dengesini müdür ya da yönetici seçer.', 'hata'); return; }
+  const once = S.plan ? S.plan.ozet : null; const d = x.d;
+  /* seçeneğin ek mesaisi müdürün kararıyla birlikte takvime girer; yoksa alınan plan takvimde olmayan vardiyayı kullanırdı */
+  const yeniM = x.mesai.filter(e => !S.ekMesai.some(y => ymAnahtar(y) === ymAnahtar(e)));
+  if ((pdDenge() !== d || yeniM.length) && !degistir('Plan dengesi seçildi', `${pdAd(pdDenge())} → ${pdAd(d)} (gecikme bedeli ${pdKatYaz(d)})${yeniM.length ? `, ${yeniM.length} ek mesai vardiyası kabul` : ''}`, () => { S.D.planDenge = d;
+    for (const e of yeniM) { S.D.mesaiKarar = [...(S.D.mesaiKarar || []).filter(y => ymAnahtar(y) !== ymAnahtar(e)), { m: e.m, gun: e.gun, vardiya: e.vardiya, karar: 'kabul', kim: kim().ad, t: Date.now(), net: null }]; S.ekMesai.push({ m: e.m, gun: e.gun, vardiya: e.vardiya }); } }, 'plan.kilitle')) return;
+  if (S.plan) { planGeri.push({ plan: S.plan, locks: S.locks, guncel: planGuncel() }); if (planGeri.length > 20) planGeri.shift(); }
+  S.plan = { ...x.k, dataVer: S.dataVer, kim: kim().ad, zaman: Date.now(), kaynak: 'denge', oncekiOzet: once, kapali: S.kapali.slice() };
+  U.pdSec = null; iz('Plan seçeneği alındı', `${pdAd(d)} · geciken ${x.o.late}/${x.k.ozet.n}, gecikme ${sayi(x.o.gecSa, 1)} sa`); kaydet(); render();
+  bildir(`${pdAd(d)} planı alındı.`, 'tamam', once ? { metin: 'Geri al', act: 'plan-geri' } : undefined);
+}
+
+/* ---------- sayfa ---------- */
+function sDenge() {
+  const fg = agFiyatGorur(); const d = pdDenge(); const Y = ymAyar(); const etkin = Y.amac === 'tl' && agAyar().kip === 'bedel';
+  const isH = U.pdIs ? `<p class="pm-kucuk" id="pd-is" role="status">${esc(pdIsYaz())}</p>` : '';
+  const kapali = !!calisan;
+  const cubuk = `<div class="pm-pd-cubuk"><div class="pm-pd-uc"><span>${ic('clock', 'k')}Termin önce</span><span>Kâr önce${ic('lira', 'k')}</span></div>
+    <input type="range" min="0" max="100" step="5" value="${d}" data-chg="pd-denge" aria-label="Plan dengesi: termin ile kâr arası" ${fg && etkin ? '' : 'disabled'}>
+    <div class="pm-pd-olcek" aria-hidden="true">${[0, 25, 50, 75, 100].map(x => `<span>${pdKatYaz(x)}</span>`).join('')}</div></div>
+    <p class="pm-pd-deger"><b>${pdAd(d)}</b> <span class="mono">gecikme bedeli ${pdKatYaz(d)}</span></p>
+    <p class="pm-kucuk">Plan, gecikme bedeli ile maliyetlerin toplamını en aza indirir. Çubuk termine kaydıkça bir saatlik gecikme amaçta daha pahalı sayılır: plan ek fason ya da pahalı tezgâhla da olsa yetiştirmeye çalışır. Kâra kaydıkça ucuz yol seçilir, gecikme kabul edilir. Ortada gecikme gerçek bedeliyle sayılır. Gösterilen tutarlar her zaman gerçek TL'dir.</p>
+    ${!etkin ? `<p class="pm-kucuk"><b>Çubuk yalnız plan amacı "Tek TL toplamı" ve ağırlık kipi "bedel" iken etkilidir</b> (Maliyetler ve Öncelik ve ağırlık sayfaları).</p>` : ''}
+    ${fg ? '' : `<p class="pm-kucuk">${ic('lock', 'k')} Plan dengesini müdür ve yönetici ayarlar.</p>`}
+    ${S.plan && !planGuncel() ? '<p class="pm-kucuk">Denge plandan sonra değişti; plan yeniden çözülünce uygulanır.</p>' : ''}`;
+  const k1 = kart(`${ic('gauge', 'k')} Plan dengesi`, cubuk);
+
+  /* plan seçenekleri */
+  const P = U.pdSec && U.pdSec.dv === S.dataVer ? U.pdSec : null;
+  let secH = `<p class="pm-kucuk">Aynı veriyle termin önce, dengeli ve kâr önce üç plan kurulur; sonuçlar yan yana görünür. Müdür birini seçerse çubuk o konuma gelir ve plan çalışmaya alınır.</p>`;
+  if (P) { const enK = Math.max(...P.l.map(x => x.o.net));
+    secH += `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Seçenek</th><th>Ek mesai</th><th class="pm-num">Geciken</th><th class="pm-num">Gecikme</th>${fg ? '<th class="pm-num">Gecikme bedeli</th><th class="pm-num">Net kâr</th>' : ''}<th></th></tr></thead><tbody>${P.l.map((x, i) =>
+      `<tr>${td('Seçenek', pdH(`<b>${pdAd(x.d)}</b><small class="pm-ag-not">gecikme bedeli ${pdKatYaz(x.d)}${x.d === d ? ' · şimdiki ayar' : ''}</small>`))}${td('Ek mesai', x.mesai.length ? `<span class="mono pm-pd-nw">${x.mesai.length} vardiya</span>${fg ? `<small class="pm-ag-not">${agTL(x.mTL)}</small>` : ''}` : '<span class="pm-kucuk">yok</span>')}${td('Geciken', `<span class="mono">${x.o.late} / ${x.k.ozet.n}</span>`, 'pm-num')}${td('Gecikme', `<span class="mono">${sayi(x.o.gecSa, 1)} sa</span>`, 'pm-num')}${fg ? td('Gecikme bedeli', `<span class="mono">${agTL(x.o.gec)}</span>`, 'pm-num') + td('Net kâr', pdH(`<b class="mono">${agTL(x.o.net)}</b>${x.o.net === enK ? ' ' + rozet('en kârlı', 'tamam') : ''}${x.o.eksik ? `<small class="pm-ag-not">${x.o.eksik} siparişte eksik veri</small>` : ''}`), 'pm-num') : ''}${td('', fg ? dugme('Bu planı al', 'pd-sec-al', { kucuk: true, veri: `data-v="${i}"`, yetki: 'plan.kilitle' }) : '')}</tr>`).join('')}</tbody></table></div>
+      <p class="pm-kucuk">Ek mesai: Ek mesai sayfasının ölçtüğü adaylardan, o seçeneğin çarpanıyla kazanç bırakanlar plana eklenerek denendi; seçenek alınınca bu vardiyalar kabul edilmiş olarak Ek mesai planına girer. Net kâr: tutar − malzeme + talaş − işleme, ayar, genel gider, fason, ek mesai − gecikme bedeli (gerçek, çarpansız) − finansman ve bekleme. Her seçenek ${sayi(pdMs() / 1000, 1)} sn iyileştirildi; aynı veriyle iki çözüm birkaç bin TL farklı çıkabilir.</p>`; }
+  const k2 = kart(`${ic('layers', 'k')} Plan seçenekleri`, secH + isH, dugme(P ? 'Yeniden hesapla' : 'Seçenekleri hesapla', 'pd-secenek', { kucuk: true, simge: 'play', birincil: !P, cls: kapali ? 'is-disabled' : '' }));
+
+  /* teklif */
+  const sips = S.D.siparisler; const tid = U.pdTkSip && sips.some(s => s.id === U.pdTkSip) ? U.pdTkSip : ((sips.find(s => s.havuz) || sips[0] || {}).id);
+  const T = U.pdTk && U.pdTk.dv === S.dataVer && U.pdTk.id === tid ? U.pdTk : null;
+  const secim = `<label class="pm-ym-alan"><span>Sipariş</span><select class="pm-mz-sec" data-chg="pd-tk-sip" aria-label="Teklif siparişi">${sips.map(s => `<option value="${esc(s.id)}" ${s.id === tid ? 'selected' : ''}>${esc(s.id)}${s.havuz ? ' (havuzda, teklif)' : ''}</option>`).join('')}</select></label>`;
+  let tkH = `<div class="pm-sira">${secim}${dugme('Termin seçeneklerini hesapla', 'pd-teklif', { kucuk: true, simge: 'play', veri: `data-v="${esc(tid || '')}"`, cls: kapali ? 'is-disabled' : '' })}</div>
+    <p class="pm-kucuk">Siparişe söz verilebilecek en erken tarih ve daha geç termin seçenekleri bugünkü planın üstünde denenir. Havuzdaki sipariş teklif sayılır: plana alınmış gibi hesaplanır, plan değişmez.</p>`;
+  if (T) { const enI = Math.max(...T.sat.map(x => x.top ?? -Infinity));
+    tkH += `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Termin</th><th>Planlanan bitiş</th><th class="pm-num">Gecikme</th>${fg ? '<th class="pm-num">Siparişin net kârı</th><th class="pm-num">Diğer siparişlere etkisi</th><th class="pm-num">Toplam</th>' : '<th class="pm-num">Diğer siparişlerde gecikme</th>'}</tr></thead><tbody>${T.sat.map(x =>
+      `<tr>${td('Termin', pdH(`<b>${esc(x.ad)}</b><small class="pm-ag-not">${esc(fmtDT(S.D, x.t))}</small>`))}${td('Planlanan bitiş', tmTarih(x.C))}${td('Gecikme', x.T > 0.05 ? `<span class="mono">${sayi(x.T, 1)} sa</span>` : rozet('zamanında', 'tamam'), 'pm-num')}${fg
+        ? td('Siparişin net kârı', pdH(`<span class="mono">${agTL(x.net)}</span>${x.net != null && x.tutar ? `<small class="pm-ag-not">${ymYuzde(x.net / x.tutar)}</small>` : ''}`), 'pm-num') + td('Diğer siparişlere etkisi', `<span class="mono">${pdTL(x.diger, true)}</span>`, 'pm-num') + td('Toplam', pdH(`<b class="mono">${agTL(x.top)}</b>${x.top === enI && x.top != null ? ' ' + rozet('en iyi', 'tamam') : ''}`), 'pm-num')
+        : td('Diğer siparişlerde gecikme', x.digerSa == null ? '—' : `<span class="mono">${x.digerSa > 0.05 ? '+' : ''}${sayi(x.digerSa, 1)} sa</span>`, 'pm-num')}</tr>`).join('')}</tbody></table></div>
+      <p class="pm-kucuk">Diğer siparişlere etki, ${esc(T.taban || 'taban plan')} ile karşılaştırılır: erken termin verilen sipariş öne geçince başkaları gecikebilir. Karşılaştırma kural tabanlı ilk planla yapılır (iyileştirmesiz), böylece fark yalnız terminden gelir. Ek mesai bu tabloya girmez; Ek mesai sayfasındaki öneri ayrıca bakılır.</p>`; }
+  const k3 = kart(`${ic('tag', 'k')} Teklif: termin ve kâr`, tkH);
+
+  /* termin uzatma */
+  const Z = U.pdUz && U.pdUz.dv === S.dataVer ? U.pdUz : null; const gun = U.pdUzGun || 2;
+  const gunSeg = `<div class="pm-seg" role="group" aria-label="Uzatma süresi">${[1, 2, 3, 5].map(g => `<button type="button" data-act="pd-uz-gun" data-v="${g}" aria-pressed="${g === gun}">${g} gün</button>`).join('')}</div>`;
+  let uzH = `<div class="pm-sira">${gunSeg}${dugme('Önerileri hesapla', 'pd-uzat', { kucuk: true, simge: 'play', cls: kapali || !S.plan ? 'is-disabled' : '' })}</div>
+    <p class="pm-kucuk">Geciken siparişlerden gecikme bedeli en büyük altısı için termin seçilen gün kadar uzatılmış gibi plan yeniden kurulur. Planı en çok iyileştiren üstte; müşteriyle konuşmak için dayanaktır.</p>`;
+  if (!S.plan) uzH += '<p class="pm-kucuk">Önce planı çözün.</p>';
+  if (Z && !Z.sat.length) uzH += '<p class="pm-kucuk">Planda geciken sipariş yok.</p>';
+  if (Z && Z.sat.length) uzH += `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sipariş</th><th class="pm-num">Gecikme şimdi</th><th class="pm-num">Uzatınca</th><th class="pm-num">Plandaki toplam gecikme</th>${fg ? '<th class="pm-num">Plan kârı</th>' : ''}<th>Öneri</th><th></th></tr></thead><tbody>${Z.sat.map(x =>
+    `<tr>${td('Sipariş', pdH(`<b>${esc(x.id)}</b><small class="pm-ag-not">${Z.gun} gün uzatma</small>`))}${td('Gecikme şimdi', `<span class="mono">${sayi(x.T0 || 0, 1)} sa</span>`, 'pm-num')}${td('Uzatınca', x.T1 > 0.05 ? `<span class="mono">${sayi(x.T1, 1)} sa</span>` : rozet('zamanında', 'tamam'), 'pm-num')}${td('Plandaki toplam gecikme', pdH(`<span class="mono">${x.dSa > 0.05 ? '−' : x.dSa < -0.05 ? '+' : ''}${sayi(Math.abs(x.dSa), 1)} sa</span>${x.dLate > 0 ? `<small class="pm-ag-not">${x.dLate} sipariş daha zamanında</small>` : ''}`), 'pm-num')}${fg ? td('Plan kârı', `<b class="mono">${pdTL(x.dNet, true)}</b>`, 'pm-num') : ''}${td('Öneri', (x.dNet != null ? x.dNet > 0.5 : x.dSa > 0.05) ? rozet('ister', 'tamam') : rozet('ödemez', 'pasif'))}${td('', dugme('Müşteri kabul etti, uzat', 'pd-uz-al', { kucuk: true, veri: `data-v="${esc(x.id)}|${Z.gun}"`, yetki: 'veri.yaz' }))}</tr>`).join('')}</tbody></table></div>
+    <p class="pm-kucuk">Karşılaştırma kural tabanlı ilk planla yapılır; uzatmanın etkisi taban plana göredir. Uzatılan sipariş aciliyetini kaybedip daha geç bitebilir; plan kârını düşüren uzatma "ödemez" olarak işaretlenir. Termin ancak müşteri kabul ederse uzatılır; uzatma siparişin termin alanına yazılır ve plan yeniden çözülmelidir.</p>`;
+  const k4 = kart(`${ic('flag', 'k')} Termin uzatma önerisi`, uzH);
+  return k1 + k2 + k3 + k4;
+}
+
+YAN.push(['denge', 'Termin ve kâr', 'gauge']); YAN_ID.add('denge'); SAYFA_AD.denge = 'Termin ve kâr dengesi'; EKRAN_OF.denge = 'plan';
+YM_GORUNUM.denge = sDenge;
+
+{ const pdTek = tekEylem; tekEylem = function (act, v, el, e) {
+  if (act === 'pd-secenek') { if (!calisan) pdSecenekler(); return true; }
+  if (act === 'pd-sec-al') { pdSecAl(+v); return true; }
+  if (act === 'pd-teklif') { if (!calisan && v) { U.pdTkSip = v; pdTeklif(v); } return true; }
+  if (act === 'pd-uz-gun') { U.pdUzGun = +v; U.pdUz = null; render(); return true; }
+  if (act === 'pd-uzat') { if (!calisan && S.plan) pdUzatma(); return true; }
+  if (act === 'pd-uz-al') { const [id, g] = String(v).split('|'); const s = S.D.siparisler.find(x => x.id === id); const t = s && parseT(S.D, s.termin); if (t == null) return true;
+    degistir('Termin uzatıldı', `${id}: ${s.termin} → ${tmYaz(t + +g * 24)} (müşteri kabul etti)`, () => { s.termin = tmYaz(t + +g * 24); U.pdUz = null; }); return true; }
+  return pdTek(act, v, el, e); }; }
+document.addEventListener('change', e => {
+  const el = e.target; const c = el.dataset && el.dataset.chg; if (!c || !c.startsWith('pd-')) return;
+  if (c === 'pd-tk-sip') { U.pdTkSip = el.value; render(); return; }
+  if (c === 'pd-denge') { if (!agFiyatGorur()) { bildir('Plan dengesini müdür ya da yönetici ayarlar.', 'hata'); render(); return; }
+    const d = +el.value, d0 = pdDenge(); if (d === d0) return;
+    degistir('Plan dengesi değişti', `${pdAd(d0)} ${pdKatYaz(d0)} → ${pdAd(d)} ${pdKatYaz(d)}`, () => { S.D.planDenge = d; }, 'plan.kilitle'); }
+});

@@ -1,0 +1,103 @@
+/* ---------- durum ---------- */
+let S = null;
+const U = { sayfa: 'bugun', zoom: 10, grup: '', yalnizGec: false, secili: null, secJob: null, urun: null, pencere: null, onay: null, menu: false, tum: false, karsilastir: [], izKim: '', sipFiltre: 'hepsi', kuyrukM: null, ilerleme: null, dar: dar(), hamle: null, cozAcik: false, kipCoz: 'ekip', yuk: false, canliGoster: false };
+const geriAl = [];
+const planGeri = [];
+let cxOnbellek = { v: -1, cx: null }, cxGOnbellek = { v: -1, cx: null };
+let calisan = null;
+
+function yeniCalisma(setId) {
+  const v = VERI[setId];
+  return {
+    surum: 2, setId, D: clone(v.veri), down: clone(v.ariza || []), ekMesai: [], locks: {}, pref: {},
+    w: { dondurma: 4, famK: 0.3, mat: 'karma', sure: 10 },
+    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: [], bedel: null,
+    olaylar: [], plan: null, dataVer: 1, senaryolar: [], canli: null, canliSurum: 0, tabanSurum: 0, iz: [], kullanici: (S && S.kullanici) || 'u1',
+  };
+}
+function yukle() {
+  try { const x = JSON.parse(localStorage.getItem(ANAHTAR) || 'null'); if (x && x.surum === 2 && x.D) return x; } catch (e) { /* tarayıcı belleği kapalı olabilir */ }
+  return null;
+}
+function kaydet() {
+  try { localStorage.setItem(ANAHTAR, JSON.stringify(S)); } catch (e) {
+    /* yer yoksa önce kendiliğinden adlanmış taslaklar düşer; korunan planlar silinmez, en eskisinden başlayarak yalnız
+       veri anlık görüntüsü bırakılır (plan ve özet kalır, karşılaştırılabilir) */
+    const dene = () => { try { localStorage.setItem(ANAHTAR, JSON.stringify(S)); return true; } catch (e2) { return false; } };
+    if (typeof senKirp === 'function') { senKirp(0); if (dene()) return kaydetUi(); }
+    for (const x of S.senaryolar.filter(y => !y.hafif && y.id !== S.canli).sort((a, b) => (a.zaman || 0) - (b.zaman || 0))) {
+      for (const k of ['D', 'down', 'ekMesai', 'locks', 'pref', 'w']) delete x[k]; x.hafif = true; if (dene()) return kaydetUi();
+    }
+    if (!dene() && typeof bildir === 'function') bildir('Tarayıcı belleği doldu; son değişiklik kaydedilemedi. Geçmiş planlar silinmedi.', 'hata');
+  }
+  kaydetUi();
+}
+function kaydetUi() {
+  try { localStorage.setItem(ANAHTAR + '-ui4', JSON.stringify({ sayfa: U.sayfa, zoom: U.zoom, yuk: U.yuk })); } catch (e) { /* yok */ }
+}
+const kim = () => KULLANICILAR.find(k => k.id === S.kullanici) || KULLANICILAR[0];
+const yetkili = y => (YETKI[kim().rol] || []).includes(y);
+function iz(ne, ayrinti) { const k = kim(); S.iz.unshift({ t: Date.now(), kim: k.ad, rol: ROL_AD[k.rol], sayfa: SAYFA_AD[U.sayfa] || U.sayfa, ne, ayrinti: ayrinti || '' }); if (S.iz.length > 400) S.iz.length = 400; }
+
+/* Kısıt gevşetmeleri motoru değiştirmez; veriyi değiştirir. Böylece "bu kısıt olmasaydı" sorusu aynı motorla ölçülür. */
+const GEVSEK = {
+  tvardiya: st => { for (const m of st.D.tezgahlar) delete m.vardiyalar; },
+  tatil: st => { st.D.tatiller = []; },
+  ariza: st => { st.down = []; },
+  tampon: st => { st.w.tampon = false; },
+  personel: st => { for (const m of st.D.tezgahlar) m.opOran = 0; },
+  yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) p.gruplar = g.slice(); },
+  devam: st => { st.D.devamsizlik = []; },
+  ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
+  aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; },
+  program: st => { st.D.ayarlar.programSaat = 0; },
+  fai: st => { for (const u of st.D.urunler) for (const o of u.rota) o.fai = false; },
+  serbest: st => { for (const s of st.D.siparisler) s.serbest = null; },
+  tasima: st => { st.D.ayarlar.tasimaSaat = 0; },
+  fasonGun: st => { for (const f of st.D.fasoncular || []) f.cikisGunleri = GUNLER.slice(); },
+  fasonKap: st => { for (const f of st.D.fasoncular || []) f.kapasite = 999; },
+  ayar: st => { for (const u of st.D.urunler) for (const o of u.rota) for (const t of o.tezgahlar || []) t.ayar = 0; st.D.ayarMatrisi = []; },
+  malzeme: st => { st.w.mat = 'uyari'; },
+};
+function stOf(ek = [], gevset = true) {
+  const D = clone(S.D);
+  D.ayarlar = D.ayarlar || {};
+  /* havuzdaki sipariş plana henüz alınmamıştır; motor onu görmez */
+  D.siparisler = D.siparisler.filter(s => !s.havuz);
+  const st = {
+    D, now: 7, down: S.down.map((d, i) => ({ ...d, id: 'd' + i })), ekMesai: clone(S.ekMesai), eksik: [],
+    locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
+    w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
+  };
+  for (const k of new Set([...(gevset ? S.kapali : []), ...ek])) if (GEVSEK[k]) GEVSEK[k](st);
+  for (const ev of S.olaylar || []) applyEvent(st, ev);
+  return st;
+}
+function cxAl() {
+  if (cxOnbellek.v !== S.dataVer || cxOnbellek.s !== S) { try { cxOnbellek = { v: S.dataVer, s: S, cx: compile(stOf()) }; } catch (e) { cxOnbellek = { v: S.dataVer, s: S, cx: null, hata: String(e.message || e) }; } }
+  return cxOnbellek.cx;
+}
+/* Kaynak yükü kapalı kısıtları da sayar: kısıt kapalıyken kurulan planın gerçekte nerede taştığı görünsün. */
+function cxGercek() {
+  if (!S.kapali.length) return cxAl();
+  if (cxGOnbellek.v !== S.dataVer || cxGOnbellek.s !== S) { try { cxGOnbellek = { v: S.dataVer, s: S, cx: compile(stOf([], false)) }; } catch (e) { cxGOnbellek = { v: S.dataVer, s: S, cx: null }; } }
+  return cxGOnbellek.cx;
+}
+const planGuncel = () => S.plan && S.plan.dataVer === S.dataVer;
+const canliSen = () => S.senaryolar.find(s => s.id === S.canli) || null;
+const gosterilen = () => (U.hamle ? U.hamle.plan : S.plan);
+
+/* Ana veriye her yazış buradan geçer: yetki, geri alma, değişiklik izi, plan bayatlığı. */
+function degistir(ne, ayrinti, fn, yetki = 'veri.yaz', o = {}) {
+  if (!yetkili(yetki)) { bildir(`Yetkiniz yok (${yetki}).`, 'hata'); return false; }
+  const gunceldi = planGuncel();
+  geriAl.push(JSON.stringify({ D: S.D, down: S.down, ekMesai: S.ekMesai, locks: S.locks, pref: S.pref, w: S.w, param: S.param, kapali: S.kapali, dataVer: S.dataVer }));
+  if (geriAl.length > 30) geriAl.shift();
+  const sonuc = fn();
+  if (sonuc === false) { geriAl.pop(); return false; }
+  S.dataVer++; U.hamle = null;
+  if (o.planKoru && gunceldi) S.plan.dataVer = S.dataVer;
+  iz(ne, ayrinti); kaydet(); render();
+  bildir(ne + (S.plan && !o.planKoru ? '. Plan yeniden çözülünce güncellenir.' : '.'), 'tamam', { metin: 'Geri al', act: 'geri-al' });
+  return true;
+}

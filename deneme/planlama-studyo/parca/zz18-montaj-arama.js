@@ -1,0 +1,47 @@
+/* ---------- Montajlı işte arama: yarı mamul zinciri de öne alınır ----------
+   Yarı mamulün kendi termini yoktur, gecikmesi yalnız mamulün gecikmesinde görünür. Motorun yerel araması geciken işin
+   yalnız kendi işlemlerini öne aldığı için montajı bekleten yarı mamul zincirine dokunmuyor, plan bu tuzaktan çıkamıyordu
+   (mamul 141 sa gecikmede kalıyordu). Arama bitince geciken her mamulün yarı mamul işlemleri (ve kendi işlemleri) en erken
+   başlayabilecekleri yere alınıp denenir; iyileşirse arama kalan süreyle sürer. İşçide de çalışır. */
+function montajAramaKur() {
+  if (self.__mtAra) return; self.__mtAra = 1;
+  const l0 = lns;
+  lns = function (st, start, ref, opt = {}) {
+    const L = l0(st, start, ref, opt); const B = st && st.montaj; if (!B || !L || !L.plan) return L;
+    const t0 = Date.now(), ms = opt.ms || 1500;
+    const cx = L.plan.cx || start.cx || compile(st);
+    const free = opt.free != null ? !!opt.free : !ref, frz = free ? st.now : st.now + (st.w.dondurma || 0);
+    const kok = id => String(id).split('/')[0];
+    const cocuk = {}; for (const jid in cx.jobs) { const b = B[kok(jid)]; if (b) (cocuk[b.ust] = cocuk[b.ust] || []).push(jid); }
+    const altlar = pk => { const out = [], y = [pk], g = new Set(); while (y.length) { const k = y.pop(); for (const c of cocuk[k] || []) { if (g.has(c)) continue; g.add(c); out.push(c); y.push(kok(c)); } } return out; };
+    let cur = L.plan, E = L.e; const failN = (cur.fail || []).length; let iyi = 0;
+    const gec = Object.keys(E.J).filter(j => E.J[j].T > 0 && cocuk[kok(j)] && cx.jobs[j])
+      .sort((a, b) => E.J[b].T * (PW[cx.jobs[b].oncelik] || 1) - E.J[a].T * (PW[cx.jobs[a].oncelik] || 1));
+    if (!gec.length) return L;
+    const HT = lbHeadsTails(st, cx);
+    const tasin = (jobs, pl) => { const mods = [];
+      for (const j of jobs) for (const o of (cx.jobs[j] || { ops: [] }).ops) { const r = pl.ops[o.id];
+        if (!r || r.act || r.done || (!free && r.pin) || r.S < frz - 1e-9 || st.locks[o.id]) continue;
+        mods.push([o.id, r.m, Math.max(frz, HT.head[o.id] || frz)]); }
+      return mods; };
+    for (const pj of gec) {
+      if (Date.now() - t0 > ms * 0.3) break;
+      /* her yarı mamul dalı tek başına, mamulle birlikte ve hepsi birden denenir; hepsini birden öne almak çoğu zaman tezgâhları tıkar */
+      const dallar = (cocuk[kok(pj)] || []).map(c => [c, ...altlar(kok(c))]);
+      const secenek = [...dallar, ...dallar.map(d => [...d, pj]), [...altlar(kok(pj)), pj]];
+      let en = null;
+      for (const jobs of secenek) {
+        if (Date.now() - t0 > ms * 0.3) break;
+        const mods = tasin(jobs, cur); if (!mods.length) continue;
+        const p = lnsDecode(st, cur, mods, cx, free); const e = evaluate(p, st, ref, true);
+        if ((p.fail || []).length <= failN && (opt.maxChg == null || e.chg <= opt.maxChg) && cmpEv(e, en ? en.e : E) > 0) en = { p, e };
+      }
+      if (en) { slack(en.p, cx); cur = en.p; E = en.e; iyi++; }
+    }
+    if (!iyi) return L;
+    const L2 = l0(st, cur, ref, { ...opt, ms: Math.max(60, ms * 0.3 - (Date.now() - t0)) });
+    return { ...L2, e0: L.e0, dec: L.dec + L2.dec, acc: L.acc + L2.acc + iyi, log: L.log.concat([{ tur: 'montaj zinciri', id: gec[0] }], L2.log), ms: L.ms + Date.now() - t0 };
+  };
+}
+montajAramaKur();
+ISCI_EK.push(`${montajAramaKur}\nmontajAramaKur();`);

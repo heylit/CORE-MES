@@ -1,0 +1,167 @@
+/* ---------- karar paneli ----------
+   Panel üç durumdan birini gösterir: önizleme (bir öneri ya da olay hesaplandı), seçim (iş ya da sipariş), sorun listesi.
+   Sorunlar plandan okunur, öneriler ise düğmeye basınca motorda hesaplanır: plan kendiliğinden değişmez. */
+function kararPaneli() {
+  const p = S.plan;
+  if (U.hamle) return hamlePaneli();
+  if (U.secili && p.ops[U.secili]) return opDenetci(U.secili);
+  if (U.secJob && S.D.siparisler.find(s => s.id === U.secJob)) return isDenetci(U.secJob);
+  return sorunPaneli();
+}
+
+/* Gecikmenin kaynağı: geciken her siparişin bitişini belirleyen zincirde en çok neyi beklediği, ağırlıklı saat olarak toplanır. */
+function gecikmeKaynaklari(p) {
+  const cx = cxAl(); if (!cx) return { liste: [], is: {} };
+  const top = {}, is = {};
+  for (const s of S.D.siparisler) {
+    const j = p.J[s.id]; if (!j || !(j.T > 0.05)) continue;
+    const a = ayristir(p, cx, s.id); if (!a || !a.tam) continue;
+    const w = PW[s.oncelik] || 1; let en = null;
+    const yer = {}; for (const [k, ad, v] of a.kaynak) yer[ad] = (yer[ad] || { k, v: 0 }), yer[ad].v += v;
+    for (const [ad, x] of Object.entries(yer)) { (top[ad] = top[ad] || { k: x.k, v: 0, n: 0 }); top[ad].v += x.v * w; top[ad].n++; if (!en || x.v > en.v) en = { ad, ...x }; }
+    is[s.id] = en;
+  }
+  return { liste: Object.entries(top).map(([ad, x]) => ({ ad, ...x })).sort((a, b) => b.v - a.v), is };
+}
+
+function sorunlar(p) {
+  if (!p) return [];
+  const D = S.D, out = [];
+  const ekle = (ton, simge, baslik, metin, eylem = [], o = {}) => out.push({ ton, simge, baslik, metin, eylem, ...o });
+  if (!planGuncel() && !U.hamle) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', 'Plan kurulduktan sonra veri, kısıt ya da olay değişti. Gösterilen saatler gerçeği yansıtmayabilir.', [['Planı iyileştir', 'ekip', '', true]]);
+  if (S.kapali.length) ekle('hata', 'alert', `${S.kapali.length} kısıt kapalı`, `${kapaliAdlar().join(', ')}. Motor bunları saymadan çözer; plan atölyede uygulanamayabilir.`, [['Hepsini aç', 'kisit-hepsi', '', true], ['Kısıtlar', 'git', 'kisitlar']]);
+  const fail = p.fail || [];
+  if (fail.length) ekle('hata', 'alert', `${fail.length} işlem planlanamadı`, `${fail.slice(0, 3).join(', ')}${fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`, [['Veri denetimi', 'git', 'denetim']]);
+  const kay = gecikmeKaynaklari(p);
+  const gec = D.siparisler.map(s => ({ s, j: p.J[s.id] })).filter(x => x.j && (x.j.T == null || x.j.T > 0.05))
+    .sort((a, b) => ((b.j.T ?? 1e4) * (PW[b.s.oncelik] || 1)) - ((a.j.T ?? 1e4) * (PW[a.s.oncelik] || 1)));
+  for (const { s, j } of gec.slice(0, 3)) {
+    const en = kay.is[s.id];
+    const neden = en ? ` En çok <b>${esc(en.ad)}</b> bekledi (${saat(en.v)}).` : '';
+    ekle('hata', 'flag', `${s.id} ${j.T == null ? 'planlanamadı' : saat(j.T) + ' gecikiyor'}`, `${esc(urunAd(s.urun))}, ${sayi(s.adet, 0)} adet, ${esc(ONCELIK[s.oncelik] || '')} öncelik. Termin ${esc((s.termin || '—').slice(5))}, bitiş ${j.C != null ? esc(fmtDT(D, j.C).slice(0, 15)) : '—'}.${neden}`,
+      [['Öne almayı dene', 'one-al', s.id, true], ['Ayrıntı', 'sec-is', s.id]], { job: s.id, html: true });
+  }
+  if (gec.length > 3) ekle('uyari', 'flag', `${gec.length - 3} sipariş daha gecikiyor`, 'Hepsini görmek için süzgeçte "Yalnız geciken siparişler"i açın.', [['Gecikenleri göster', 'suz-gec', '']]);
+  const mal = (p.warn || []).filter(w => w.t === 'malzeme');
+  const malJ = [...new Set(mal.map(w => w.j))];
+  if (malJ.length) ekle('uyari', 'box', `${malJ.length} siparişin malzemesi eksik`, `${esc(mal[0].txt)}${malJ.length > 1 ? ` Diğerleri: ${esc(malJ.slice(1, 4).join(', '))}${malJ.length > 4 ? '…' : ''}.` : ''} İş planda başlar; malzeme gelmezse kayar.`, [['Ayrıntı', 'sec-is', malJ[0]], ['Malzeme', 'git', 'malzeme']], { html: true });
+  const dol = grupDoluluk(p).filter(g => g.u > 0.88);
+  const darb = kay.liste.find(x => x.k === 'tezgah');
+  if (dol.length || darb) {
+    const g = dol[0]; const m = U.mesai && U.mesai.dv === S.dataVer ? U.mesai : null;
+    const metin = `${g ? `<b>${esc(g.ad)}</b> grubu %${Math.round(g.u * 100)} dolu.` : ''}${darb ? ` Gecikmenin en büyük kaynağı <b>${esc(darb.ad)}</b> kuyruğu: ${darb.n} siparişte ağırlıklı ${saat(darb.v)}.` : ''}`;
+    const ek = m ? (m.liste.length ? `<ul class="pm-sor-oneri">${m.liste.slice(0, 3).map((a, i) => `<li><span>${a.ek.map(e => `<b class="mono">${esc(e.m)}</b> ${esc(fmtDT(D, e.gun * 24).slice(0, 9))} ${esc(e.vardiya)}`).join(', ')}</span><span class="pm-fark-iyi mono">${a.dW > 0.05 ? '−' + sayi(a.dW, 1) + ' sa' : ''}</span>${dugme('Önizle', 'mesai-onizle', { kucuk: true, simge: 'eye', yetki: 'plan.yaz', veri: `data-v="${i}"` })}</li>`).join('')}</ul>` : '<p class="pm-kucuk">Gecikmeyi azaltan ek vardiya adayı bulunmadı.</p>') : U.hs && U.hs.run ? `<p class="pm-kucuk">${esc(U.hs.run)}</p>` : '';
+    ekle('uyari', 'gauge', 'Darboğaz', metin, m ? [] : [['Ek mesai öner', 'hs-mesai', '', true], ['Matriste gör', 'git', 'matris']], { html: true, ek });
+  }
+  S.down.forEach((d, i) => {
+    if (d.to <= 7) return;
+    const n = new Set(Object.values(p.ops).filter(r => r.m === d.m && r.S < d.to + 24 && r.C > d.from).map(r => r.job)).size;
+    ekle('bilgi', 'wrench', `${d.m} duruşta`, `${esc(fmtDT(D, d.from))} → ${esc(fmtDT(D, d.to))}. Planda hesaba katıldı; yakınındaki ${n} siparişin işleri başka saate ya da tezgâha kaydı.`, [['Duruşu kaldır', 'durus-kaldir', String(i)]], { html: true });
+  });
+  (S.olaylar || []).forEach((ev, i) => ekle('bilgi', 'alert', olayAd(ev), 'İşlenmiş olay. Planda hesaba katılıyor.', [['Olayı kaldır', 'olay-kaldir', String(i)]]));
+  const den = denetimBulgulari();
+  if (den.length) ekle('uyari', 'scan', `${den.length} veri bulgusu`, 'Eksik ya da çelişkili veri planı yanıltabilir.', [['Veri denetimi', 'git', 'denetim']]);
+  return out;
+}
+const SOR_SIRA = { hata: 0, uyari: 1, bilgi: 2 };
+function sorunPaneli() {
+  const p = S.plan; const l = sorunlar(gosterilen()).sort((a, b) => SOR_SIRA[a.ton] - SOR_SIRA[b.ton]);
+  const kart1 = x => `<li class="pm-sor" data-ton="${x.ton}"><span class="pm-sor-simge">${ic(x.simge, 'k')}</span><div class="pm-sor-govde"><b class="pm-sor-baslik">${esc(x.baslik)}</b><p class="pm-sor-metin">${x.html ? x.metin : esc(x.metin)}</p>${x.ek || ''}${x.eylem.length ? `<div class="pm-dugmeler">${x.eylem.map(([ad, act, v, bir]) => dugme(ad, act, { kucuk: true, birincil: !!bir, veri: `data-v="${esc(v)}"`, yetki: ['one-al', 'ekip', 'hs-mesai', 'kisit-hepsi', 'durus-kaldir', 'olay-kaldir', 'mesai-onizle'].includes(act) ? 'plan.yaz' : '' })).join('')}</div>` : ''}</div></li>`;
+  const kay = gecikmeKaynaklari(p).liste.slice(0, 5);
+  const enb = kay.length ? kay[0].v : 1;
+  const kaynak = kay.length ? `<div class="pm-bolum"><h3>Gecikmenin kaynağı</h3><ul class="pm-kay">${kay.map(x => `<li><span class="pm-kay-ad">${esc(x.ad)}</span><span class="pm-kay-yol"><i style="width:${Math.max(4, (x.v / enb) * 100)}%;--c:${(KAT[x.k] || KAT.tezgah)[1]}"></i></span><span class="mono pm-kucuk">${saat(x.v)}</span></li>`).join('')}</ul><p class="pm-kucuk">Geciken siparişlerin bitişini belirleyen zincirde beklenen süre, öncelik ağırlığıyla. En üstteki kaynağı rahatlatmak en çok gecikmeyi azaltır.</p></div>` : '';
+  const yaz = yetkili('plan.yaz');
+  const hizli = yaz ? `<div class="pm-bolum"><h3>Ne yapabilirsiniz</h3><div class="pm-hizli">
+    <button type="button" class="pm-hizli-d" data-act="ekip">${ic('play', 'k')}<span><b>Planı iyileştir</b><small>Motor ve HiGHS birlikte çözer; sonucu önizlersiniz.</small></span></button>
+    <button type="button" class="pm-hizli-d" data-act="olay-ac">${ic('alert', 'k')}<span><b>Olay ekle</b><small>Arıza, acil sipariş, malzeme ya da personel; etkisi önce gösterilir.</small></span></button>
+    <button type="button" class="pm-hizli-d" data-act="git" data-v="kuyruk">${ic('sort', 'k')}<span><b>Sırayı elle değiştir</b><small>Kuyrukta kartı sürükleyin; motor bedelini ölçer.</small></span></button></div></div>` : '';
+  return `<section class="pm-panel pm-kpanel"><div class="pm-panel-ust"><h2>${ic('alert', 'k')} Karar paneli</h2><span class="pm-kucuk">${l.length ? `${l.length} madde` : 'sorun yok'}</span>${dugme('', 'karar-kapat', { simge: 'x', hayalet: true, kucuk: true, ad: 'Paneli kapat', cls: 'pm-dar-yalniz' })}</div>
+    ${l.length ? `<ul class="pm-sorlar">${l.map(kart1).join('')}</ul>` : `<p class="pm-alt">${ic('check', 'k')} Bekleyen sorun yok. Bütün siparişler termininde.</p>`}${kaynak}${hizli}</section>`;
+}
+
+/* ---------- olaylar: atölyede olan bir şey önce önizlenir, Uygula ile kalıcı olur ---------- */
+const OLAY_TIP = [['ariza', 'Tezgâh arızası ya da bakım', 'wrench'], ['acil', 'Acil sipariş', 'flag'], ['malzeme', 'Malzeme gecikti', 'box'], ['eksik', 'Personel eksik', 'user'], ['fason', 'Fason gecikti', 'truck']];
+function olayAd(ev) {
+  const D = S.D;
+  if (ev.tip === 'malzeme') { const m = (D.malzemeler || []).find(x => x.kod === ev.kod); return `${m ? m.ad : ev.kod}: satın alma ${ev.gun} gün gecikti`; }
+  if (ev.tip === 'eksik') return `${fmtDT(D, ev.gun * 24).slice(0, 9)} ${ev.vardiya}: ${ev.n} ${ev.grup === 'ayar' ? 'ayarcı' : ev.grup + ' personeli'} eksik`;
+  if (ev.tip === 'fason') return `${ev.f} teslim süresi +${ev.gun} gün`;
+  return ev.tip;
+}
+function olayAlanlari(tip) {
+  const D = S.D;
+  const sec = (ad, name, l, v) => `<label class="tc-alan"><span class="tc-alan-etiket">${ad}</span><select class="tc-alan-kutu" name="${name}">${l.map(([k, a]) => `<option value="${esc(k)}" ${String(k) === String(v) ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>`;
+  const say = (ad, name, v, min, max, adim = 1) => `<label class="tc-alan"><span class="tc-alan-etiket">${ad}</span><input class="tc-alan-kutu" type="number" name="${name}" value="${v}" min="${min}" max="${max}" step="${adim}"></label>`;
+  const gunler = Array.from({ length: 10 }, (_, d) => [d, fmtDT(D, d * 24).slice(0, 9)]);
+  const gruplar = [...new Set(D.tezgahlar.map(m => m.grup))];
+  return {
+    ariza: sec('Tezgâh', 'm', D.tezgahlar.map(m => [m.id, `${m.id} · ${m.ad}`]), U.olayM || (U.secili && S.plan.ops[U.secili] && S.plan.ops[U.secili].m) || D.tezgahlar[0].id) + say('Kaç saat sonra başlıyor', 'bas', 0, 0, 240, 0.5) + say('Süre (saat)', 'saat', 4, 0.5, 240, 0.5),
+    acil: sec('Ürün', 'urun', D.urunler.map(u => [u.id, `${u.id} · ${u.ad}`]), D.urunler[0].id) + say('Adet', 'adet', 20, 1, 100000) + sec('Termin', 'termin', gunler.slice(1).map(([d, a]) => [d, a + ' 17:00']), 3) + sec('Öncelik', 'oncelik', [[1, ONCELIK[1]], [2, ONCELIK[2]], [3, ONCELIK[3]]], 1),
+    malzeme: (D.malzemeler || []).length ? sec('Malzeme', 'kod', D.malzemeler.map(m => [m.kod, `${m.kod} · ${m.ad}`]), D.malzemeler[0].kod) + say('Gecikme (gün)', 'gun', 2, 1, 60) : '<p class="pm-alt">Bu veri setinde malzeme yok.</p>',
+    eksik: sec('Gün', 'gun', gunler, 0) + sec('Vardiya', 'vardiya', D.vardiyalar.map(v => [v.id, `${v.id} · ${v.bas}-${v.bit}`]), D.vardiyalar[0].id) + sec('Kimler', 'grup', [...gruplar.map(g => [g, g + ' operatörü']), ['ayar', 'ayarcı']], gruplar[0]) + say('Eksik kişi', 'n', 1, 1, 50),
+    fason: (D.fasoncular || []).length ? sec('Fasoncu', 'f', D.fasoncular.map(f => [f.id, `${f.id} · ${f.ad}`]), D.fasoncular[0].id) + say('Ek gün', 'gun', 2, 1, 30) : '<p class="pm-alt">Bu veri setinde fasoncu yok.</p>',
+  }[tip] || '';
+}
+function olayPenceresi(tip) {
+  tip = tip || U.olayTip || 'ariza'; U.olayTip = tip; const alan = olayAlanlari(tip);
+  const tipSec = `<div class="pm-olay-tip" role="radiogroup" aria-label="Olay türü">${OLAY_TIP.map(([k, ad, sm]) => `<button type="button" role="radio" aria-checked="${tip === k}" data-act="olay-tip" data-v="${k}">${ic(sm, 'k')}<span>${ad}</span></button>`).join('')}</div>`;
+  U.pencere = { baslik: 'Olay ekle', yan: true, govde: `${tipSec}<form data-form="olay" data-tip="${tip}" novalidate class="pm-dik">${alan}<p class="pm-kucuk">Olay önce önizlenir: motor planı bu olayla yeniden kurar, kısa süre toparlar ve hangi siparişin ne kadar kaydığını gösterir. Uygula demeden hiçbir şey değişmez.</p><p class="pm-form-hata" data-hata hidden></p></form>`,
+    alt: `<button type="button" class="tc-dugme" data-act="pencere-kapat">Vazgeç</button><button type="button" class="tc-dugme tc-dugme-birincil" data-act="form-gonder">${ic('eye', 'k')}Etkisini göster</button>` };
+  katmanCiz();
+}
+function olayOku(f) {
+  const tip = f.dataset.tip; const g = n => f.elements[n] ? f.elements[n].value : null;
+  if (tip === 'ariza') { const bas = Math.max(0, +g('bas') || 0), sa = +g('saat'); if (!(sa > 0)) return { hata: 'Süre sıfırdan büyük olmalı.' }; return { ev: { tip, m: g('m'), bas: 7 + bas, saat: sa } }; }
+  if (tip === 'acil') { const adet = +g('adet'); if (!(adet > 0)) return { hata: 'Adet sıfırdan büyük olmalı.' }; return { ev: { tip, urun: g('urun'), adet, termin: isoT(S.D, +g('termin') * 24 + 17).slice(0, 16).replace('T', ' '), oncelik: +g('oncelik') } }; }
+  if (tip === 'malzeme') { if (!g('kod')) return { hata: 'Malzeme yok.' }; return { ev: { tip, kod: g('kod'), gun: +g('gun') || 1 } }; }
+  if (tip === 'eksik') return { ev: { tip, gun: +g('gun'), vardiya: g('vardiya'), grup: g('grup'), n: +g('n') || 1 } };
+  if (tip === 'fason') { if (!g('f')) return { hata: 'Fasoncu yok.' }; return { ev: { tip, f: g('f'), gun: +g('gun') || 1 } }; }
+  return { hata: 'Bilinmeyen olay.' };
+}
+/* Olay planın sırası korunarak işlenir, sonra motor kısa süre toparlar; ikisinden iyisi önizlenir.
+   Böylece "hiçbir şey yapmasak ne olur" ile "motor toparlarsa ne olur" ayrımı panelde görünür. */
+function olayDene(ev) {
+  if (!yetkili('plan.yaz') || !S.plan || calisan) return false;
+  const st = stOf(); let info, yeniSip = null;
+  try {
+    if (ev.tip === 'ariza') { st.down = [...st.down, { m: ev.m, from: ev.bas, to: ev.bas + ev.saat, id: 'deneme' }]; info = { label: `${ev.m}: ${fmtDT(S.D, ev.bas)} itibarıyla ${sayi(ev.saat, 1)} saat duruş` }; }
+    else { info = applyEvent(st, ev); if (ev.tip === 'acil') yeniSip = clone(st.D.siparisler[st.D.siparisler.length - 1]); }
+    const cx = compile(st);
+    const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); slack(p0, cx);
+    const e0 = evaluate(p0, st, null, true);
+    /* Sıra korunarak işlenen plan yeni işi kuyruk sonlarına iter; kural tabanlı yeni kurulum da aday olur, iyisi kısa süre iyileştirilir */
+    const pD = schedule(st, 'dagit', null, { cx }); slack(pD, cx);
+    const L1 = lns(st, p0, null, { ms: 700, seed: 7, free: true }), L2 = lns(st, pD, null, { ms: 700, seed: 7, free: true });
+    const L = cmpEv(L2.e, L1.e) > 0 ? L2 : L1;
+    let p = p0, toparla = 0;
+    if (cmpEv(L.e, e0) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length) { toparla = e0.wT - L.e.wT; p = L.plan; slack(p, cx); }
+    hamleKur(p, st, info.label, { toparla, kaynak: 'olay' });
+    U.hamle.olay = ev; U.hamle.olayBekle = { wT: e0.wT, late: e0.late }; U.hamle.yeniSip = yeniSip;
+    if (ev.tip === 'ariza') U.hamle.ariza = { m: ev.m, from: ev.bas, to: ev.bas + ev.saat };
+    if (yeniSip) U.secJob = yeniSip.id;
+  } catch (e) { bildir('Olay hesaplanamadı: ' + e.message, 'hata'); return false; }
+  U.pencere = null; katmanCiz(); render();
+  olayDerinlestir(st);
+  return true;
+}
+/* İlk önizleme kısa sürede çıkar; motor ardından aynı olayla birkaç saniye daha arar, daha iyisini bulursa önizleme yenilenir. */
+function olayDerinlestir(st) {
+  const h0 = U.hamle; if (!h0) return;
+  const w = isciAc(); if (!w) return;
+  calisan = w; const ms = Math.max(3000, (+S.w.sure || 10) * 400);
+  U.ilerleme = { kip: 'iyilestir', sn: 0, wT: h0.plan.ozet.wT, late: h0.plan.ozet.late, n: h0.plan.ozet.n, lb: null, ilk: h0.plan.ozet.wT, olay: true };
+  render();
+  w.onmessage = e => {
+    const m = e.data;
+    if (m.t === 'ilerleme') { U.ilerleme = { ...m, olay: true }; const el = document.querySelector('.pm-ilerleme'); if (el) el.outerHTML = ilerlemeHtml(); return; }
+    w.bitir();
+    if (U.hamle !== h0) { render(); return; }
+    if (m.t === 'bitti' && m.ozet.wT < h0.plan.ozet.wT - 0.05) {
+      const ek = { olay: h0.olay, olayBekle: h0.olayBekle, yeniSip: h0.yeniSip, ariza: h0.ariza };
+      hamleKur({ ops: m.ops, fail: m.fail }, st, h0.ad, { toparla: h0.olayBekle.wT - m.ozet.wT, kaynak: 'olay' });
+      Object.assign(U.hamle, ek); U.hamle.derin = { once: h0.plan.ozet.wT, sn: m.sn };
+    } else U.hamle.derin = { once: h0.plan.ozet.wT, sn: m.sn || 0, ayni: true };
+    render();
+  };
+  w.postMessage({ st, ms, kip: 'iyilestir', taban: h0.plan.ops, canli: null, maxChg: 1e9 });
+}

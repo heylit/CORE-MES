@@ -1,0 +1,81 @@
+/* ---------- Örtüşmeyi otomatik açma (parti bölme planı adım 4) ----------
+   Rotada "örtüşebilir" işaretli bağlar motorca örtüşmeye çevrilebilir; öteki bağlara (ısıl işlem, kalite onayı gibi) dokunulmaz.
+   Açılan örtüşme iş emrinin kaydında tutulur (ortus), ürünün rotası değişmez; bölünen partiler kaydı kopyaladığı için kararı taşır.
+   S.D.ortusAcik yalnız deneme sırasında geçici olarak kullanılır.
+   Deneme: geciken iş emirleri sırayla, kısa aramayla örtüşmeli ve örtüşmesiz ölçülür; iş emrinin gecikmesi düşer ve plan TL'si
+   artmazsa önerilir. Örtüşme ek ayar üretmez. Uygulamayı planlamacı yapar, geri alınabilir. */
+function ortusUygula() {
+  if (self.__orBag) return; self.__orBag = 1;
+  const c0 = compile;
+  compile = function (st) {
+    const cx = c0(st); const A = st && st.D && st.D.ortusAcik;
+    let deg = false;
+    for (const o of cx.ops) { const j = cx.jobs[o.job]; if (!j || !(j.ortus || (A && (A[o.job] || A[o.job.split('/')[0]])))) continue;
+      const u = (st.D.urunler || []).find(z => z.id === j.urun); const a = u && u.rota.find(x => x.k === o.k); if (!a || !a.ortusebilir) continue;
+      o.pr = o.pr.map(([p, t]) => [p, t === 'b' && p.slice(0, p.lastIndexOf('.')) === o.job ? 'o' : t]); deg = true; }
+    if (deg) { const succ = {}; for (const o of cx.ops) for (const [p, t] of o.pr) (succ[p] = succ[p] || []).push([o.id, t]); cx.succ = succ; }
+    return cx;
+  };
+}
+ortusUygula();
+ISCI_EK.push(`${ortusUygula}\nortusUygula();`);
+/* deneme verisi: makinede yapılan ardışık adımlar arasındaki "bitince" bağları örtüşebilir işaretlenir (fason hariç) */
+function orOrnek() {
+  const D = S.D; if (!D || !D.meta || D.meta.orOrnek) return; D.meta.orOrnek = 1;
+  for (const u of D.urunler || []) u.rota.forEach((o, i) => { if (i && !o.fason && !u.rota[i - 1].fason && rtTur(u, i) === 'b' && o.ortusebilir == null) o.ortusebilir = true; });
+}
+{ const r0 = render; render = function () { try { orOrnek(); } catch (e) { } return r0.apply(this, arguments); }; }
+try { orOrnek(); } catch (e) { }
+U.or = null;
+const orAcik = () => (S.D.ortusAcik = S.D.ortusAcik || {});
+function orAdaylar() {
+  if (!S.plan) return [];
+  const A = orAcik();
+  return S.D.siparisler.filter(s => !s.havuz && !s.ortus && !A[s.id] && !A[s.id.split('/')[0]] && !basladiMi(s.id) && (S.plan.J[s.id] || {}).T > 0.05).filter(s => {
+    const u = S.D.urunler.find(z => z.id === s.urun); return u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); })
+    .map(s => ({ s, w: S.plan.J[s.id].T * (PW[s.oncelik] || 1) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
+}
+function orOlc(ms) {
+  const st = stOf(); const cx = compile(st);
+  let p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); if (ms) p = kisaArama(st, cx, p, ms);
+  const e = evaluate(p, st, null, true); return { e, tl: tlToplam(e) };
+}
+function orDene() {
+  if (!S.plan || calisan) return; const anah = moAnah(); const l = orAdaylar();
+  U.or = { durum: 'hesap', anah, n: l.length, i: 0, sonuc: [] }; render();
+  const A = orAcik(); const gecici = [];
+  const adim = () => {
+    if (!U.or || U.or.anah !== moAnah() || calisan) { for (const j of gecici) delete A[j]; if (U.or) { U.or.durum = 'hata'; U.or.hata = 'Plan değişti.'; } render(); return; }
+    if (U.or.i >= l.length) { for (const j of gecici) delete A[j]; U.or.durum = 'bitti'; render(); return; }
+    const s = l[U.or.i++]; const b0 = orOlc(300); A[s.id] = true; const b1 = orOlc(300);
+    const T0 = (b0.e.J[s.id] || {}).T || 0, T1 = (b1.e.J[s.id] || {}).T || 0; const kabul = T1 < T0 - 0.05 && b1.tl <= b0.tl + 1e-6;
+    if (kabul) gecici.push(s.id); else delete A[s.id];
+    U.or.sonuc.push({ j: s.id, T0, T1, tl0: b0.tl, tl1: b1.tl, kabul }); render(); setTimeout(adim, 30);
+  };
+  setTimeout(adim, 30);
+}
+function orKart() {
+  const bas = `${ic('layers', 'k')} Örtüşme <span class="pm-kucuk">"örtüşebilir" bağlarda, ek ayar yok</span>`;
+  if (!S.plan) return '';
+  const A = orAcik(); const fg = agFiyatGorur(); const d = U.or; const bayat = d && d.anah !== moAnah();
+  const acik = S.D.siparisler.filter(s => s.ortus).map(s => s.id);
+  const acikH = acik.length ? `<p class="pm-kucuk">Örtüşmesi açık: ${acik.map(j => `<b class="mono">${esc(j)}</b> ${dugme('Kapat', 'or-kapat', { kucuk: true, hayalet: true, simge: 'x', veri: `data-v="${esc(j)}"`, yetki: 'plan.yaz' })}`).join(' ')}</p>` : '';
+  const l = orAdaylar();
+  const dg = d && d.durum === 'hesap' ? '' : dugme('Örtüşmeyi dene', 'or-dene', { simge: 'rotate', yetki: 'plan.yaz' });
+  let govde = `${acikH}<p class="pm-kucuk">${l.length ? `Denenecek: ${l.map(s => `<b class="mono">${esc(s.id)}</b>`).join(', ')}.` : 'Örtüşebilir bağı olan geciken iş emri yok.'}</p>`;
+  if (d && !bayat) {
+    if (d.durum === 'hesap') govde += `<p class="pm-kucuk">${d.i}/${d.n} iş emri ölçüldü.</p>`;
+    if (d.durum === 'hata') govde += `<p class="pm-ag-uyari">${ic('alert', 'k')} ${esc(d.hata)}</p>`;
+    if (d.sonuc.length) govde += `<div class="pm-tablo-kap"><table class="pm-tablo"><thead><tr><th>İş emri</th><th>Gecikme (sa)</th>${fg ? '<th>TL farkı</th>' : ''}<th>Sonuç</th></tr></thead><tbody>${d.sonuc.map(r => `<tr><td class="mono">${esc(r.j)}</td><td>${sayi(r.T0, 1)} → ${sayi(r.T1, 1)}</td>${fg ? `<td>${sayi(r.tl1 - r.tl0, 0)}</td>` : ''}<td>${r.kabul ? `${ic('check', 'k')} öneriliyor` : 'kazanç yok'}</td></tr>`).join('')}</tbody></table></div>`;
+    const ok = d.sonuc.filter(r => r.kabul);
+    if (d.durum === 'bitti') govde += ok.length ? `<div class="pm-dugmeler">${dugme(`${ok.length} iş emrinde örtüşmeyi aç`, 'or-uygula', { birincil: true, simge: 'check', yetki: 'plan.yaz' })}</div>` : '<p class="pm-kucuk">Örtüşme hiçbir iş emrinde gecikmeyi düşürmedi.</p>';
+  } else if (bayat) govde += `<p class="pm-ag-uyari">${ic('alert', 'k')} Plan ya da veri değişti; yeniden denenmeli.</p>`;
+  return kart(bas, govde, dg);
+}
+{ const bt0 = btKart; btKart = function () { return bt0() + orKart(); }; }
+{ const te0 = tekEylem; tekEylem = function (act, v, el, e) {
+  if (act === 'or-dene') { if (!yetkili('plan.yaz')) { bildir('Yetkiniz yok (plan.yaz).', 'hata'); return true; } orDene(); return true; }
+  if (act === 'or-uygula') { const ok = (U.or && U.or.sonuc || []).filter(r => r.kabul).map(r => r.j); if (!ok.length) return true;
+    degistir('Örtüşme açıldı', ok.join(', '), () => { S.D.siparisler = S.D.siparisler.map(x => ok.includes(x.id) ? { ...x, ortus: true } : x); }, 'plan.yaz'); U.or = null; bildir('Örtüşme açıldı. Planı yeniden kurun; beğenmezseniz geri alın.', 'bilgi'); return true; }
+  if (act === 'or-kapat') { degistir('Örtüşme kapatıldı', v, () => { S.D.siparisler = S.D.siparisler.map(x => x.id === v ? (({ ortus, ...y }) => y)(x) : x); }, 'plan.yaz'); return true; }
+  return te0.apply(this, arguments); }; }

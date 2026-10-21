@@ -1,0 +1,418 @@
+/* ---------- çözücüler: HiGHS (sayfaya gömülü) ve CP-SAT (dışarıda koşar) ----------
+   Kural: plana yalnız motor yazar. Dış çözücü öneri ya da sınır verir; öneri motorun bütün kısıtlarıyla yeniden kurulur,
+   önizlenir ve planlamacı seçerse uygulanır. */
+const HS_SURUM = '1.15.3';
+const HS_ISCI = `
+// bu derleme wasmBinary seçeneğini okumuyor; ikili instantiateWasm ile verilir, dosya aranmaz
+let H=null;
+self.onmessage=async e=>{const m=e.data;
+  if(m.t==='kur'){try{H=await Module({instantiateWasm:(imp,ok)=>{WebAssembly.instantiate(m.wasm,imp).then(r=>ok(r.instance,r.module)).catch(err=>self.postMessage({t:'hata',e:String(err&&err.message||err)}));return {};}});self.postMessage({t:'hazir',v:H.version});}catch(err){self.postMessage({t:'hata',e:String(err&&err.message||err)});}return;}
+  if(m.t==='coz'){const t0=Date.now();let md=null;
+    try{md=H.createModel({format:'lp',data:m.lp});md.options.set({output_flag:false,time_limit:m.sure,mip_rel_gap:0});md.run();
+      const s=md.getModelStatus(),ob=md.getObjectiveValue();let bd=null;try{bd=md.info.get('mip_dual_bound');}catch(_){}
+      let val=null,dual=null;if(m.want){const so=md.getSolution();val={};dual={};for(const n of m.want){const i=md.getColByName(n);val[n]=so.colValue[i];dual[n]=so.colDual?so.colDual[i]:null;}}
+      self.postMessage({id:m.id,s,ob,bd,val,dual,ms:Date.now()-t0});}
+    catch(err){self.postMessage({id:m.id,e:String(err&&err.message||err)});}
+    finally{if(md)md.dispose();}}};`;
+const HS = { hazir: null, w: null, seq: 0, bekle: {} };
+function hsIsci() {
+  if (HS.hazir) return HS.hazir;
+  HS.hazir = new Promise((res, rej) => {
+    try {
+      const src = document.getElementById('highs-js').textContent + '\n' + HS_ISCI;
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      w.onmessage = e => { const m = e.data; if (m.t === 'hazir') { res(w); return; } if (m.t === 'hata') { rej(new Error(m.e)); return; } const cb = HS.bekle[m.id]; if (cb) { delete HS.bekle[m.id]; cb(m); } };
+      w.onerror = e => rej(new Error(e.message || 'iş parçacığı açılamadı'));
+      const b = atob(document.getElementById('highs-wasm').textContent.trim()); const bin = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) bin[i] = b.charCodeAt(i);
+      w.postMessage({ t: 'kur', wasm: bin.buffer }, [bin.buffer]); HS.w = w;
+    } catch (e) { rej(e); }
+  });
+  HS.hazir.catch(() => { HS.hazir = null; });
+  return HS.hazir;
+}
+/* Sunucudaki çözücü: sayfa 127.0.0.1'deki servisten açıldıysa CP-SAT ve HiGHS orada çözülür; yoksa hazır öneri ve sayfa içi HiGHS. */
+const SUNUCU = { var: false, bilgi: null, denendi: false };
+async function sunucuYokla() {
+  SUNUCU.denendi = true;
+  if (!/^https?:$/.test(location.protocol)) return false;
+  try { const r = await fetch('/durum', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); const b = await r.json(); SUNUCU.var = !!(b.ortools || b.highs); SUNUCU.bilgi = b; }
+  catch (e) { SUNUCU.var = false; SUNUCU.bilgi = null; }
+  return SUNUCU.var;
+}
+async function sunucuIste(yol, govde) {
+  const r = await fetch(yol, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(govde) });
+  const b = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(b.hata || ('HTTP ' + r.status));
+  return b;
+}
+const sunucuCp = () => SUNUCU.var && SUNUCU.bilgi && !!SUNUCU.bilgi.ortools;
+const sunucuHs = () => SUNUCU.var && SUNUCU.bilgi && !!SUNUCU.bilgi.highs;
+async function hsCoz(lp, sure, want) {
+  if (sunucuHs()) { try { const m = await sunucuIste('/highs', { lp, sure, want }); m.kaynak = 'sunucu'; return m; } catch (e) { console.warn('sunucu HiGHS:', e.message); } }
+  await hsIsci(); const id = ++HS.seq;
+  return new Promise((res, rej) => { HS.bekle[id] = m => m.e ? rej(new Error(m.e)) : res(m); HS.w.postMessage({ t: 'coz', id, lp, sure, want }); });
+}
+const HS_DURUM = { 7: 'en iyi bulundu', 13: 'süre doldu', 8: 'çözüm yok', 14: 'adım sınırı' };
+const bekleKisa = () => new Promise(r => setTimeout(r, 30));
+
+/* Problem sürümü: dış önerinin hangi veriye ait olduğunu tutar; veri, kısıt ya da kilit değişince öneri geçersiz olur. */
+function problemOf(st) { const { plan, hist, ...p } = st; return JSON.parse(JSON.stringify(p)); }
+function surumOf(p) { const s = JSON.stringify(p); let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); }
+/* Alt sınır kilitlerden bağımsızdır (kilit yalnız kısıtlar); bu yüzden anahtarı kilitsiz problemdir. */
+const sinirAnahtari = () => surumOf(problemOf({ ...stOf(), locks: {} }));
+function hsSinir() {
+  const x = S.hsSinir; if (!x || !S.plan) return null;
+  return x.anahtar === sinirAnahtari() ? x : null;
+}
+const altSinir = p => { const h = hsSinir(); return Math.max(p.lb || 0, h ? h.best : 0); };
+
+async function hsSinirHesapla() {
+  if (!S.plan || calisan || U.hs && U.hs.run) return;
+  const sure = +U.hsSure || 30;
+  U.hs = { run: 'Model kuruluyor…' }; render(); await bekleKisa();
+  try {
+    const st = stOf(), cx = cxAl(); if (!cx) throw new Error('veri derlenemedi');
+    const cp = lowerBound(st, cx).wT;
+    const mod = mipModel(st, cx, Object.keys(cx.jobs), { plan: S.plan });
+    U.hs.run = `Doğrusal gevşetme çözülüyor (${sayi(mod.nVar)} değişken, ${sayi(mod.nRow)} kısıt)…`; render();
+    const r1 = await hsCoz(mod.lp.replace(/\nBinary\n[^\n]*\n/, '\n'), sure);
+    const lpB = r1.s === 7 ? r1.ob : null;
+    U.hs.run = `Tamsayılı model çözülüyor, en çok ${sure} sn…`; render();
+    const r2 = await hsCoz(mod.lp, sure);
+    const mipB = r2.s === 7 ? r2.ob : (r2.bd != null && isFinite(r2.bd) && r2.bd > -1e20 ? r2.bd : null);
+    S.hsSinir = { anahtar: sinirAnahtari(), cp, lpB, mipB, s2: r2.s, ms1: r1.ms, ms2: r2.ms, nVar: mod.nVar, nRow: mod.nRow, best: Math.max(cp, lpB || 0, mipB || 0), zaman: Date.now() };
+    U.hs = null;
+    iz('HiGHS alt sınırı', `${sayi(S.hsSinir.best, 1)} sa · plan ${sayi(S.plan.ozet.wT, 1)} sa`);
+    kaydet();
+  } catch (e) { U.hs = { err: 'HiGHS çalışmadı: ' + e.message + '. Tarayıcı WebAssembly ya da iş parçacığına izin vermiyor olabilir.' }; }
+  render();
+}
+
+/* Ek mesai: HiGHS vardiya dilimli yük modelinde hangi grup ve vardiyaya ek vardiya en çok gecikme kazandırır diye bakar;
+   her adayı motor gerçek plana çevirip ölçer. Seçim planlamacınındır. */
+const MESAI_BUTCE = () => +(S.param.mesaiHafta ?? W0.mesaiHafta) || 0;
+function haftaMesai(ekMesai) { const wk = {}; for (const e of ekMesai) { const k = Math.floor(e.gun / 7); wk[k] = (wk[k] || 0) + vardiyaSaat(S.D, e.vardiya); } return wk; }
+async function hsMesaiOner() {
+  if (!S.plan || !planGuncel() || calisan || U.hs && U.hs.run) { if (S.plan && !planGuncel()) bildir('Önce güncel veriyle çözün.', 'hata'); return; }
+  U.hs = { run: 'Vardiya dilimli yük modeli kuruluyor…' }; render(); await bekleKisa();
+  try {
+    const st = stOf(), cx = cxAl();
+    const s1 = { ...st, w: { ...st.w, mesaiHafta: 1e4 } };
+    const mod = cerceveModel(s1, cx, S.plan);
+    U.hs.run = `HiGHS çözüyor (${sayi(mod.nVar)} değişken)…`; render();
+    const r = await hsCoz(mod.lp.replace(/General\n[^\n]*\n/, ''), 10, Object.values(mod.nv));
+    const c = 0.05 * mod.vh;
+    const aday = Object.entries(mod.nv).map(([key, v]) => ({ key, x: r.val[v] || 0, kazanc: c - (r.dual[v] || 0) })).sort((a, b) => b.x - a.x || b.kazanc - a.kazanc).filter(x => x.x > 1e-6 || x.kazanc > 1e-6).slice(0, 6);
+    const e0 = S.plan.ozet.wT, liste = [];
+    for (let i = 0; i < aday.length; i++) {
+      const ap = cerceveUygula(st, cx, S.plan, mod, { [mod.nv[aday[i].key]]: 1 });
+      if (!ap.ekMesai.length) continue;
+      U.hs.run = `Motor adayı ölçüyor ${i + 1}/${aday.length}…`; render(); await bekleKisa();
+      const em = [...S.ekMesai, ...ap.ekMesai]; const stC = { ...stOf(), ekMesai: clone(em) }; const cxC = compile(stC);
+      const p0 = lnsDecode(stC, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cxC, true);
+      const L = lns(stC, p0, null, { ms: 350, seed: 11, free: true });
+      const p = cmpEv(L.e, evaluate(p0, stC, null, true)) > 0 ? L.plan : p0;
+      const e = evaluate(p, stC, null, true);
+      const wk = haftaMesai(em); const asar = MESAI_BUTCE() > 0 && Object.values(wk).some(h => h > MESAI_BUTCE() + 1e-9);
+      liste.push({ ek: ap.ekMesai, wT: e.wT, dW: e0 - e.wT, asar, hs: aday[i].x });
+    }
+    liste.sort((a, b) => b.dW - a.dW);
+    U.hs = null; U.mesai = { dv: S.dataVer, liste, ms: r.ms, nVar: mod.nVar };
+  } catch (e) { U.hs = { err: 'HiGHS çalışmadı: ' + e.message }; }
+  render();
+}
+function mesaiOnizle(i) {
+  const a = U.mesai && U.mesai.dv === S.dataVer && U.mesai.liste[+i]; if (!a) return;
+  const em = [...S.ekMesai, ...a.ek]; const st = { ...stOf(), ekMesai: clone(em) }; const cx = compile(st);
+  const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true);
+  const L = lns(st, p0, null, { ms: 500, seed: 11, free: true });
+  const p = cmpEv(L.e, evaluate(p0, st, null, true)) > 0 ? L.plan : p0; slack(p, cx);
+  const ad = 'Ek mesai: ' + a.ek.map(e => `${e.m} ${fmtDT(S.D, e.gun * 24).slice(0, 9)} ${e.vardiya}`).join(', ');
+  hamleKur(p, st, ad, { ekMesai: em, kaynak: 'HiGHS + motor' });
+  if (U.sayfa !== 'tahta') U.sayfa = 'masa'; render();
+}
+
+/* CP-SAT tarayıcıda koşmaz; bu makinedeki çözücü serviste çalışır. Servis kapalıyken örnek veriler için gömülü öneri kullanılır;
+   veri değişince problem dosyası kopyalanır, serviste ya da başka yerde çözülür, öneri buraya yapıştırılır. */
+function cpOneriHazir() {
+  const o = (typeof CP_ONERI !== 'undefined' && CP_ONERI[S.setId]) || null; if (!o) return { o: null };
+  return { o, gecerli: o.surum === surumOf(problemOf(stOf())) };
+}
+function oneriDene(o, kaynak) {
+  if (!S.plan) { bildir('Önce plan kurun.', 'hata'); return false; }
+  const st = stOf(); const sv = surumOf(problemOf(st));
+  if (!o || !Array.isArray(o.ops)) { bildir('Öneri okunamadı: "ops" listesi yok.', 'hata'); return false; }
+  if (o.surum !== sv) { bildir(`Öneri bu veriye ait değil (öneri ${o.surum || 'yok'}, veri ${sv}). Problem dosyasını yeniden alın.`, 'hata'); return false; }
+  const cx = cxAl(); const st2 = { ...st, locks: { ...st.locks } }; const mods = []; let n = 0, gecersiz = 0;
+  for (const x of o.ops) {
+    const op = cx.byId[x.id]; if (!op || st.locks[x.id]) continue;
+    if (!op.c.some(c => c.m === x.m) || !isFinite(+x.S)) { gecersiz++; continue; }
+    st2.locks[x.id] = { m: x.m, S: +x.S }; mods.push([x.id, x.m, +x.S]); n++;
+  }
+  /* öneri saatleri en erken başlangıç olarak verilir; motor bütün kısıtları kendisi uygular, gerekirse geciktirir.
+     Sonra öneri sırası kilitsiz yeniden çözülür; motorun ölçüsünde hangisi iyiyse o önizlenir. */
+  const cx2 = compile(st2);
+  const p1 = lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx2, true, true);
+  const p2 = lnsDecode(st, p1, [], cx, true);
+  const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
+  for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
+  slack(p, cx);
+  const farkli = o.ops.filter(x => p.ops[x.id] && p.ops[x.id].m !== x.m).length;
+  hamleKur(p, st, `${kaynak || o.kaynak || 'Dış çözücü'} önerisi (${n} işlem${gecersiz ? `, ${gecersiz} geçersiz` : ''}${farkli ? `, ${farkli} başka tezgâha düştü` : ''})`, { kaynak: o.kaynak || 'dış çözücü' });
+  U.sayfa = 'masa'; render();
+  return true;
+}
+/* fason dönüşü motordakiyle aynı: girilen termin, yoksa fasoncunun süresi × katsayı (Terminler sayfası) */
+function cpFasonDonus(st, cx, o, f, t) {
+  const k = st.D.fasonTermin && st.D.fasonTermin[o.id]; const T = k ? parseT(st.D, k) : null;
+  if (T != null) return Math.max(t + SL, T);
+  return st.tmP && typeof tmSureFas === 'function' ? t + tmSureFas(f, o.adet, st.tmP) : t + (+f.sureGun || 1) * 24;
+}
+function cpGirdi(st, plan) {
+  // birim çeyrek saat (motorla aynı); personel profili kesintisiz parçalar olarak verilir
+  const cx = compile(st), ht = lbHeadsTails(st, cx), q = t => Math.round(t / SL), tas = Math.ceil((+cx.A.tasimaSaat || 0) / SL);
+  let cmax = st.now; for (const r of Object.values(plan.ops)) if (isFinite(r.C)) cmax = Math.max(cmax, r.C);
+  const H = Math.min(HDAYS * 24, Math.ceil(cmax) + 120), ops = [];
+  const famOf = {}; for (const o of cx.ops) if (o.aile) for (const c of o.c) if (!c.fas) (famOf[c.m] = famOf[c.m] || new Set()).add(o.aile);
+  for (const k in famOf) famOf[k] = [...famOf[k]];
+  for (const o of cx.ops) {
+    const r = plan.ops[o.id], x = { id: o.id, job: o.job, pr: o.pr.map(([p, t]) => [p, t === 'o' ? 'o' : 'b', tas]), opts: [] };
+    // kilitli iş plandaki yerinde sabit verilir: plan kilidi zaten uyguluyor
+    if (st.locks[o.id] && r) { x.sabit = { m: r.m, s: Math.floor(r.S / SL), e: Math.ceil(r.C / SL - 1e-9) }; ops.push(x); continue; }
+    const h0 = Math.max(st.now, ht.head[o.id] || st.now);
+    for (const c of o.c) {
+      if (c.fas) {
+        const f = cx.FS[c.m.slice(1)]; if (!f) continue; const s = [], e = [];
+        for (let d = Math.floor(h0 / 24); d < HDAYS; d++) { const dy = cx.days[d]; if (dy.tatil || !(f.cikisGunleri || []).includes(dy.wd)) continue; const t = d * 24 + (f.cikisSaat == null ? 16 : +f.cikisSaat); if (t < h0 - 1e-9) continue; if (t >= H) break; s.push(q(t)); e.push(q(cpFasonDonus(st, cx, o, f, t))); }
+        if (s.length) x.opts.push({ m: c.m, fason: f.id, kap: +f.kapasite || 1, s, e }); continue;
+      }
+      const M = cx.M[c.m]; if (!M) continue;
+      const fai = o.fai ? c.cyc + (+cx.A.faiSaat || 0) : 0, run = o.fai ? Math.max(0, c.run - c.cyc) : c.run, base = suMin(o, c, cx) + fai, mx = cx.D.ayarMatrisi || [];
+      const suEng = prev => {
+        let su = c.su; const hit = !!o.aile && prev === o.aile;
+        if (prev != null && o.aile && mx) { const e = mx.find(z => z.den === prev && z.ye === o.aile); if (e) su = (+e.dk) / 60; else if (hit) su = c.su * st.w.famK; } else if (hit) su = c.su * st.w.famK; return su + fai;
+      };
+      const onc = [null, '', ...(famOf[c.m] || [])], gec = {}, sinif = {};
+      for (const pv of onc) { const su = suEng(pv), xq = Math.max(0, Math.ceil((su - base) / SL - 1e-9)); gec[pv == null ? '__ilk' : pv] = xq; sinif[xq] = Math.max(sinif[xq] || 0, su); }
+      sinif[0] = Math.max(sinif[0] || 0, base);
+      const Wb = base > 0 ? M.sw : M.rw, s = [], ek = {}, l1 = {}; for (const xq in sinif) { ek[xq] = []; l1[xq] = []; }
+      for (let k = Math.ceil(h0 / SL - 1e-9); k * SL < H; k++) {
+        const t = k * SL; if (openAt(Wb, t) > t + 1e-9) continue; let ok = true; const row = [];
+        for (const xq in sinif) { const su = sinif[xq], a = openAt(su > 0 ? M.sw : M.rw, t), Su = adv(M.sw, a, su), C = adv(M.rw, Su, run); if (!isFinite(C)) { ok = false; break; } row.push([xq, Math.max(k + 1, Math.ceil(C / SL - 1e-9)), Math.ceil(adv(M.rw, Su, Math.min(run, c.tbRun)) / SL - 1e-9)]); }
+        if (!ok) break; s.push(k); for (const [xq, e, l] of row) { ek[xq].push(e); l1[xq].push(l); }
+      }
+      if (s.length) x.opts.push({ m: c.m, lot: Math.ceil(Math.min(run, c.tbRun) / SL), s, e: ek[0], ek, l1, gec, suqF: Math.floor(base / SL + 1e-9), ayq: Object.fromEntries(Object.entries(sinif).map(([xq, su]) => [xq, Math.ceil(su / SL - 1e-9)])) });
+    }
+    if (o.aile) x.aile = o.aile; if (o.aparat) x.aparat = o.aparat;
+    if (r) x.ipucu = { m: r.m, s: Math.ceil(r.S / SL - 1e-9) }; ops.push(x);
+  }
+  const jobs = {}; for (const j in cx.jobs) jobs[j] = { due: cx.jobs[j].due == null ? null : cx.jobs[j].due / SL, w: PW[cx.jobs[j].oncelik] || 1 };
+  // personel yalnız genel vardiya açıkken sayılır; kapalı saatte tezgâhlar durduğu için kısıt konmaz
+  const gm = mask(cx.gen), NQ = Math.ceil(H / SL), seg = a => { const o = []; let k0 = 0; for (let k = 1; k <= NQ; k++) if (k === NQ || a(k) !== a(k0)) { o.push([k0, k, a(k0)]); k0 = k; } return o; };
+  const per = { tot: seg(k => gm[k] ? Math.max(0, cx.capTot[k]) : -1), g: {} }; for (const g in cx.capG) per.g[g] = seg(k => gm[k] ? Math.max(0, cx.capG[g][k]) : -1);
+  const tez = {}; for (const m in cx.M) tez[m] = { grup: cx.M[m].grup, op: cx.M[m].opOran, isiksiz: !!cx.M[m].isiksiz };
+  per.ayar = seg(k => gm[k] ? Math.max(0, cx.capAyar[k]) : -1);
+  const ayar = { famK: +st.w.famK, mx: Object.fromEntries((cx.D.ayarMatrisi || []).map(e => [e.den + '|' + e.ye, (+e.dk) / 60])), fai: +cx.A.faiSaat || 0 };
+  const aparat = Object.fromEntries(Object.values(cx.AP).map(a => [a.id, +a.adet || 1]));
+  return { surum: surumOf(problemOf(st)), birim: SL, H: NQ, ops, jobs, per, tez, ayar, aparat, kisitlar: KISITLAR.map(k => ({ id: k.id, cpsat: k.cpsat })) };
+}
+function cpProblemKopyala() {
+  if (!S.plan) { bildir('Önce plan kurun; problem dosyası planı ipucu olarak taşır.', 'hata'); return; }
+  let metin; try { metin = JSON.stringify(cpGirdi(stOf(), S.plan)); } catch (e) { bildir('Problem dosyası kurulamadı: ' + e.message, 'hata'); return; }
+  const ok = () => bildir(`Problem dosyası panoya kopyalandı (${sayi(metin.length / 1024)} KB).`, 'tamam');
+  try { navigator.clipboard.writeText(metin).then(ok, () => metinGoster(metin)); } catch (x) { metinGoster(metin); }
+}
+function cpYapistirAc() {
+  U.pencere = { baslik: 'CP-SAT önerisi yapıştır', govde: `<form data-form="cp-oneri" novalidate class="pm-dik"><label class="tc-alan"><span class="tc-alan-etiket">Öneri (JSON: surum, kaynak, ops)</span><textarea class="tc-alan-kutu" name="json" rows="10"></textarea></label><label class="tc-alan"><span class="tc-alan-etiket">ya da dosyadan</span><input class="tc-alan-kutu" type="file" accept=".json,application/json" data-chg="cp-dosya"></label><p class="pm-kucuk">Öneri motorun ölçüsünden geçer: saatler en erken başlangıç sayılır, bütün kısıtlar yeniden uygulanır. Önizlemede Uygula ya da Vazgeç.</p><p class="pm-form-hata" data-hata hidden></p></form>`, alt: `<button type="button" class="tc-dugme" data-act="pencere-kapat">Vazgeç</button><button type="button" class="tc-dugme tc-dugme-birincil" data-act="form-gonder">Önizle</button>`, yan: true };
+  katmanCiz();
+}
+
+function sCozuculer() {
+  const yaz = yetkili('plan.yaz'); const p = S.plan; const h = hsSinir(); const run = U.hs && U.hs.run; const mes = U.mesai && U.mesai.dv === S.dataVer ? U.mesai : null;
+  const yok = !p ? `<div class="pm-bos">${ic('cpu', 'b')}<strong>Henüz plan yok</strong>${dugme('Ekip olarak çöz', 'ekip', { birincil: true, simge: 'play', yetki: 'plan.yaz' })}</div>` : '';
+  if (yok) return yok;
+  const sureSec = `<label class="tc-alan pm-oto"><span class="tc-alan-etiket">HiGHS süresi</span><select class="tc-alan-kutu" data-chg="hs-sure">${[10, 30, 60].map(x => `<option value="${x}"${(+U.hsSure || 30) === x ? ' selected' : ''}>${x} sn</option>`).join('')}</select></label>`;
+  const durum = run ? `<div class="pm-serit" data-ton="bilgi">${ic('clock', 'k')}<span class="pm-serit-metin">${esc(run)}</span></div>` : U.hs && U.hs.err ? `<div class="pm-serit" data-ton="hata">${ic('alert', 'k')}<span class="pm-serit-metin">${esc(U.hs.err)}</span></div>` : '';
+  const uzak = h ? Math.max(0, p.ozet.wT - h.best) : null;
+  const sinirGovde = `<p class="pm-alt">HiGHS planı kurmaz, ölçer. Atölyeyi saat dilimli bir tamsayılı modele çevirir ve gevşetir: personel, ayarcı, aparat ve fason kapasitesi sayılmaz, ayar en kısa hâliyle sayılır. Gevşek problemin en iyisi gerçek planın en iyisinden kötü olamaz; bu yüzden bulduğu değer bir <b>alt sınırdır</b>: hiçbir plan bundan iyi olamaz.</p>
+    ${h ? `<div class="pm-sayilar">${sayiKart('Bu plan', saat(p.ozet.wT), '', 'gantt', 'ağırlıklı gecikme')}${sayiKart('Alt sınır', saat(h.best), '', 'target', 'hiçbir plan bundan iyi olamaz')}${sayiKart('En çok uzaklık', saat(uzak), uzak > 0.25 * p.ozet.wT ? 'uyari' : '', 'gauge', p.ozet.wT > 0.5 ? `planın %${Math.round(uzak / p.ozet.wT * 100)}'i` : '')}</div>
+    <div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Sınır</th><th class="tc-sayi">En az gecikme</th><th class="tc-sayi">Süre</th></tr></thead><tbody>
+      <tr>${td('Sınır', 'Kritik yol (kapasitesiz)')}${td('En az gecikme', `<span class="mono">${saat(h.cp)}</span>`, 'tc-sayi')}${td('Süre', '—', 'tc-sayi')}</tr>
+      <tr>${td('Sınır', 'HiGHS doğrusal gevşetme')}${td('En az gecikme', `<span class="mono">${saat(h.lpB)}</span>`, 'tc-sayi')}${td('Süre', `${sayi(h.ms1 / 1000, 1)} sn`, 'tc-sayi')}</tr>
+      <tr>${td('Sınır', `HiGHS tamsayılı model · ${esc(HS_DURUM[h.s2] || 'durum ' + h.s2)}`)}${td('En az gecikme', `<span class="mono">${saat(h.mipB)}</span>`, 'tc-sayi')}${td('Süre', `${sayi(h.ms2 / 1000, 1)} sn`, 'tc-sayi')}</tr>
+    </tbody></table></div>
+    <p class="pm-kucuk">En iyi plan ${saat(h.best)} ile ${saat(p.ozet.wT)} arasındadır. Fark ya planın iyileşebileceğini ya da gevşetmenin (personel, fason kapasitesi) sınırı düşük tuttuğunu gösterir; ne kadarının hangisi olduğu bilinmiyor. Model ${sayi(h.nVar)} değişken, ${sayi(h.nRow)} kısıt.${h.s2 === 13 ? ' Süre doldu: süre uzarsa sınır yükselebilir.' : ''}</p>` : '<p class="pm-kucuk">Henüz hesaplanmadı ya da veri değişti.</p>'}`;
+  const butce = MESAI_BUTCE(); const wk = haftaMesai(S.ekMesai);
+  const mesaiGovde = `<p class="pm-alt">HiGHS, tezgâh grubu ve vardiya dilimi başına yükü dağıtır; hangi gruba hangi vardiyada ek vardiya açmanın gecikmeyi en çok azalttığını bulur. Her aday sonra motorda gerçek plana çevrilip ölçülür. Haftalık bütçe ${butce} sa${Object.keys(wk).length ? `; kullanılan: ${Object.entries(wk).map(([k, v]) => `${+k + 1}. hafta ${v} sa`).join(', ')}` : ''}.</p>
+    ${mes ? (mes.liste.length ? `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Ek vardiya</th><th class="tc-sayi">Gecikme</th><th class="tc-sayi">Kazanç</th><th>Bütçe</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${mes.liste.map((a, i) => `<tr>${td('Ek vardiya', a.ek.map(e => `<span class="pm-nobr"><b class="mono">${esc(e.m)}</b> ${esc(fmtDT(S.D, e.gun * 24).slice(0, 9))} ${esc(e.vardiya)}</span>`).join('<br>'))}${td('Gecikme', `<span class="mono">${saat(a.wT)}</span>`, 'tc-sayi')}${td('Kazanç', a.dW > 0.05 ? `<span class="pm-fark-iyi mono">−${sayi(a.dW, 1)} sa</span>` : '<span class="pm-kucuk">yok</span>', 'tc-sayi')}${td('Bütçe', a.asar ? rozet('Aşar', 'uyari') : rozet('İçinde', 'tamam'))}${td('', dugme('', 'mesai-onizle', { kucuk: true, simge: 'eye', ad: 'Önizle', yetki: 'plan.yaz', veri: `data-v="${i}"` }))}</tr>`).join('')}</tbody></table></div><p class="pm-kucuk">HiGHS ${sayi(mes.ms)} ms, ${sayi(mes.nVar)} değişken. Kazanç motorun kısa çözümüyle ölçüldü; önizleme biraz daha uzun çözer.</p>` : '<p class="pm-kucuk">Gecikmeyi azaltan ek vardiya adayı bulunmadı.</p>') : ''}`;
+  const cp = cpOneriHazir();
+  const es = U.ekipSon || S.ekipSon || null;
+  const ekipGovde = `<p class="pm-alt">İki çözücü tek akışta, her biri kendi göreviyle çalışır ve tek plan çıkar. Motor kurar ve hakemdir; HiGHS ek mesai önerir; motor her öneriyi bütün kısıtlarla ölçer, yalnız planı iyileştireni alır. Hiçbir adım öncekini kötüleştiremez, kilitlere dokunulmaz, mesai bütçesi aşılmaz; sonuç mevcut plandan kötüyse mevcut plan kalır. Sonuç önizlenir, Uygula deyince plana yazılır.</p>${es ? `<p class="pm-kucuk">Son çalışma ${zamanYaz(es.zaman)} · ${sayi(es.ms / 1000, 1)} sn · gecikme ${es.basla != null ? `${saat(es.basla)} → ` : ''}${saat(es.wT)} · alt sınır ${saat(es.lb)}</p>${ekipListe(es.adim)}` : ekipListe(Object.fromEntries(EKIP_ADIM.map(([id, rol, is]) => [id, { rol, is, durum: 'bekliyor' }])), true)}`;
+  const kartlar = `${durum}${kart(`${ic('cpu', 'k')} Ekip çözümü · motor + HiGHS`, ekipGovde, yaz ? dugme('Ekip olarak çöz', 'ekip', { birincil: true, simge: 'play', yetki: 'plan.yaz' }) : '')}<div class="pm-iki pm-iki-esit">${kart(`${ic('target', 'k')} Plan ne kadar iyi? · HiGHS`, sinirGovde, yaz ? dugme(h ? 'Yeniden hesapla' : 'Alt sınırı hesapla', 'hs-sinir', { birincil: !h, simge: 'target', yetki: 'plan.yaz', veri: run ? 'disabled' : '' }) : '', sureSec)}
+    ${kart(`${ic('clock', 'k')} Ek mesai önerisi · HiGHS + motor`, mesaiGovde, yaz ? dugme(mes ? 'Yeniden öner' : 'Mesai öner', 'hs-mesai', { birincil: !mes, simge: 'bolt', yetki: 'plan.yaz' }) : '')}</div>
+    <p class="pm-kucuk">HiGHS ${HS_SURUM} (highs-js, MIT) sayfaya gömülü; internete çıkmaz, ayrı iş parçacığında çalışır. Plana yalnız motor yazar; çözücüler öneri ve sınır verir.</p>`;
+  return kartlar;
+}
+
+/* ---------- ekip çözümü: tek akış, tek sonuç ----------
+   Görevler: motor planı kurar ve her önerinin hakemidir; HiGHS ek mesai önerir ve sonunda alt sınırla denetler.
+   Kurallar: hiçbir adım öncekini kötüleştiremez (motorun sıralı amacıyla ölçülür), kilitlere dokunulmaz, mesai bütçesi aşılmaz,
+   sonuç mevcut plandan kötüyse mevcut plan kalır. Plana yalnız planlamacı Uygula deyince yazılır. */
+const EKIP_ADIM = [['motor', 'Motor', 'İlk planı kurar, iyileştirir'], ['mesai', 'HiGHS', 'Ek mesai önerir'], ['son', 'Motor', 'Son iyileştirme, kabul edilenleri birleştirir'], ['sinir', 'HiGHS', 'Alt sınırla denetler'], ['kontrol', 'Hakem', 'Çapraz kontrol']];
+let ekipDur = false;
+let ekipOlcum = null;
+let ekipIz = null;
+async function motorSure(st, p, ms, seed, sessiz) {
+  let cur = p, E = evaluate(p, st, null, true), s = seed, durgun = 0; const bit = performance.now() + ms;
+  while (performance.now() < bit && durgun < 3) {
+    if (ekipDur) throw new Error('durduruldu');
+    const L = lns(st, cur, null, { ms: Math.max(120, Math.min(400, bit - performance.now())), seed: s++, free: true });
+    if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; if (ekipIz && !sessiz) ekipIz.iz.push({ t: (performance.now() - ekipIz.t0) / 1000, wT: E.wT }); } else durgun++;
+    await bekleKisa();
+  }
+  return { p: cur, E };
+}
+function oneriPlan(o, st, cx, base) {
+  const st2 = { ...st, locks: { ...st.locks } }; const mods = [];
+  for (const x of o.ops || []) { const op = cx.byId[x.id]; if (!op || st.locks[x.id] || !op.c.some(c => c.m === x.m) || !isFinite(+x.S)) continue; st2.locks[x.id] = { m: x.m, S: +x.S }; mods.push([x.id, x.m, +x.S]); }
+  const p1 = lnsDecode(st2, base, mods, compile(st2), true, true);
+  const p2 = lnsDecode(st, p1, [], cx, true);
+  const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
+  for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
+  return { p, n: mods.length };
+}
+const ekipOzet = E => ({ wT: E.wT, late: E.late, suH: E.suH });
+const ekipAyar = () => ({ cpsat: false, mesai: true, sinir: true, paralel: false, ...(S.ekipAyar || {}), cpsat: false });
+const mesaiAnahtar = ek => 'mesai:' + ek.map(e => `${e.m}|${e.gun}|${e.vardiya}`).join('+');
+const mesaiAd = ek => ek.map(e => `${e.m} ${fmtDT(S.D, e.gun * 24).slice(0, 9)} ${e.vardiya}`).join(', ');
+async function ekipCoz() {
+  if (!yetkili('plan.yaz')) { bildir('Yetkiniz yok (plan.yaz).', 'hata'); return; }
+  if (calisan) return;
+  const sure = (+S.w.sure || 10) * 1000, dv = S.dataVer, t0 = performance.now(), ayar = ekipAyar(), haric = new Set(S.ekipHaric || []);
+  const sayfa0 = U.sayfa;
+  const adim = {}; for (const [id, rol, is] of EKIP_ADIM) adim[id] = { rol, is, durum: 'bekliyor', not: '' };
+  const kararlar = {}; const karar = k => { kararlar[k.id] = k; };
+  const izler = []; const basamak = [];
+  const kur = (id, durum, not, E) => { Object.assign(adim[id], { durum, not }); if (E) adim[id].E = ekipOzet(E); U.ilerleme = { ekip: true, adim, id }; const el = document.querySelector('.pm-ilerleme'); if (el) el.outerHTML = ilerlemeHtml(); else render(); };
+  ekipDur = false; calisan = { bitir: () => { ekipDur = true; calisan = null; U.ilerleme = null; } };
+  ekipIz = { t0, iz: izler };
+  U.cozAcik = false; U.hamle = null; U.ilerleme = { ekip: true, adim, id: 'motor' }; render(); await bekleKisa();
+  try {
+    let st = dengeKilit(stOf()), cx = compile(st);
+    const eski = S.plan && planGuncel() ? S.plan.ozet : null;
+    /* 1. motor */
+    kur('motor', 'calisiyor', 'İlk plan kuruluyor…');
+    const p0 = schedule(st, 'dagit', null, { cx }); const E0 = evaluate(p0, st, null, true);
+    const adaylar = [p0];
+    if (S.plan && planGuncel()) adaylar.push(lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true));
+    let P = adaylar.reduce((a, b) => cmpEv(evaluate(b, st, null, true), evaluate(a, st, null, true)) > 0 ? b : a);
+    const bas = eski ? eski.wT : E0.wT;
+    const J0 = {}; for (const j in E0.J) J0[j] = eski && S.plan.J[j] ? (S.plan.J[j].T || 0) : (E0.J[j].T || 0);
+    basamak.push({ id: 'bas', ad: eski ? 'Mevcut plan' : 'Kural tabanlı ilk plan', wT: bas });
+    izler.push({ t: 0, wT: bas, adim: 'motor' });
+    let r = await motorSure(st, P, sure * 0.35, 17); P = r.p; let E = r.E;
+    kur('motor', 'tamam', `Gecikme ${saat(E.wT)}, geciken ${E.late}.`, E);
+    karar({ id: 'motor', tur: 'motor', ad: 'Motor: ilk plan ve iyileştirme', dW: bas - E.wT, durum: 'alindi', neden: 'Motorun kendi araması; kilitler korunur.' });
+    basamak.push({ id: 'motor', ad: 'Motor', wT: E.wT });
+    /* 3. HiGHS ek mesai */
+    const butce = MESAI_BUTCE(); let em = clone(S.ekMesai); const alinan = [];
+    if (butce > 0 && ayar.mesai) {
+      kur('mesai', 'calisiyor', 'Vardiya dilimli yük modeli çözülüyor…');
+      const mod = cerceveModel({ ...st, w: { ...st.w, mesaiHafta: 1e4 } }, cx, P);
+      const rr = await hsCoz(mod.lp.replace(/General\n[^\n]*\n/, ''), 10, Object.values(mod.nv));
+      const cc = 0.05 * mod.vh;
+      const ad = Object.entries(mod.nv).map(([key, v]) => ({ key, x: rr.val[v] || 0, g: cc - (rr.dual[v] || 0) })).sort((a, b) => b.x - a.x || b.g - a.g).filter(x => x.x > 1e-6 || x.g > 1e-6).slice(0, 6);
+      /* her tur bütçeye sığan adaylar motorda ölçülür, en çok kazandıran alınır; plan değiştiği için kalanlar yeniden ölçülür */
+      let denenen = 0; let kalanAd = ad.slice();
+      const planOps = p => ({ ops: Object.values(p.ops).map(o => ({ id: o.id, m: o.m, S: o.S })) });
+      for (let tur = 0; tur < 3 && kalanAd.length; tur++) {
+        const olc = [];
+        for (const a of kalanAd) {
+          const ap = cerceveUygula(st, cx, P, mod, { [mod.nv[a.key]]: 1 }); if (!ap.ekMesai.length) continue;
+          const id = mesaiAnahtar(ap.ekMesai);
+          if (haric.has(id)) { karar({ id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(ap.ekMesai), ek: ap.ekMesai, dW: null, durum: 'haric', neden: 'Planlamacı hariç tuttu.' }); continue; }
+          const em2 = [...em, ...ap.ekMesai];
+          if (Object.values(haftaMesai(em2)).some(h => h > butce + 1e-9)) { if (!kararlar[id]) karar({ id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(ap.ekMesai), ek: ap.ekMesai, dW: null, durum: 'butce', neden: `Haftalık bütçeyi (${butce} sa) aşar.` }); continue; }
+          denenen++; kur('mesai', 'calisiyor', `Aday ${denenen} motorda ölçülüyor…`);
+          const st2 = { ...st, ekMesai: clone(em2) }; const cx2 = compile(st2);
+          /* aday plan, mevcut planın tezgâh ve saatleri en erken başlangıç alınarak kurulur: iyi sıra kod çözmede kaybolmasın */
+          const q = await motorSure(st2, oneriPlan(planOps(P), st2, cx2, P).p, 350, 11, true);
+          olc.push({ a, ap, em2, st2, cx2, q, id });
+        }
+        olc.sort((x, y) => x.q.E.wT - y.q.E.wT);
+        const en = olc[0];
+        const iyi = en && en.q.E.wT < E.wT - 0.5 && cmpEv(en.q.E, E) > 0;
+        for (const o of olc) karar({ id: o.id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(o.ap.ekMesai), ek: o.ap.ekMesai, dW: E.wT - o.q.E.wT, durum: iyi && o === en ? 'alindi' : 'alinmadi', neden: iyi && o === en ? 'Bu turda en çok kazandıran aday.' : E.wT - o.q.E.wT <= 0.5 ? 'Gecikmeyi 0,5 saatten çok azaltmadı.' : 'Başka aday daha çok kazandırdı; bütçe paylaşılıyor.' });
+        if (!iyi) break;
+        alinan.push({ ek: en.ap.ekMesai, dW: E.wT - en.q.E.wT }); st = en.st2; cx = en.cx2; P = en.q.p; E = en.q.E; em = en.em2;
+        kalanAd = kalanAd.filter(x => x !== en.a);
+        izler.push({ t: (performance.now() - t0) / 1000, wT: E.wT, adim: 'mesai' });
+      }
+      kur('mesai', alinan.length ? 'alindi' : 'alinmadi', alinan.length ? `${alinan.length} ek vardiya alındı: ${alinan.map(a => mesaiAd(a.ek) + ` (−${sayi(a.dW, 1)} sa)`).join('; ')}.` : `${denenen} aday ölçüldü; bütçe içinde gecikmeyi azaltan yok.`, alinan.length ? E : null);
+    } else kur('mesai', 'yok', butce > 0 ? 'Bu çalışmada ek mesai kapalı.' : 'Haftalık mesai bütçesi 0.');
+    basamak.push({ id: 'mesai', ad: 'Ek mesai', wT: E.wT });
+    /* 4. motor son */
+    const kalan = Math.max(sure * 0.25, sure - (performance.now() - t0));
+    kur('son', 'calisiyor', 'Son iyileştirme…');
+    const e4 = E.wT; r = await motorSure(st, P, kalan, 29); P = r.p; E = r.E;
+    kur('son', 'tamam', e4 - E.wT > 0.05 ? `Gecikme ${saat(e4)} → ${saat(E.wT)}.` : 'Daha iyisi bulunmadı.', E);
+    karar({ id: 'son', tur: 'motor', ad: 'Motor: son iyileştirme', dW: e4 - E.wT, durum: e4 - E.wT > 0.05 ? 'alindi' : 'alinmadi', neden: e4 - E.wT > 0.05 ? 'Kabul edilenler birleşince yeni iyileştirme bulundu.' : 'Daha iyisi bulunmadı.' });
+    basamak.push({ id: 'son', ad: 'Son iyileştirme', wT: E.wT });
+    /* 5. HiGHS alt sınır */
+    kur('sinir', 'calisiyor', 'Alt sınır hesaplanıyor…');
+    let lb = lowerBound(st, cx).wT, sinirNot = 'kritik yol';
+    if (ayar.sinir) try {
+      const mod = mipModel(st, cx, Object.keys(cx.jobs), { plan: P });
+      const r1 = await hsCoz(mod.lp.replace(/\nBinary\n[^\n]*\n/, '\n'), 5);
+      const r2 = await hsCoz(mod.lp, 5);
+      const mb = r2.s === 7 ? r2.ob : (r2.bd != null && isFinite(r2.bd) && r2.bd > -1e20 ? r2.bd : null);
+      const yeni = Math.max(lb, r1.s === 7 ? r1.ob : 0, mb || 0); if (yeni > lb + 1e-6) sinirNot = 'HiGHS'; lb = yeni;
+      S.hsSinir = { anahtar: surumOf(problemOf({ ...st, locks: {} })), cp: lowerBound(st, cx).wT, lpB: r1.s === 7 ? r1.ob : null, mipB: mb, s2: r2.s, ms1: r1.ms, ms2: r2.ms, nVar: mod.nVar, nRow: mod.nRow, best: lb, zaman: Date.now() };
+    } catch (e) { sinirNot = 'kritik yol (HiGHS çalışmadı: ' + e.message + ')'; }
+    else sinirNot = 'kritik yol; HiGHS bu çalışmada kapalı';
+    kur('sinir', 'tamam', `Alt sınır ${saat(lb)} (${sinirNot}); plan en çok ${saat(Math.max(0, E.wT - lb))} uzakta.`);
+    /* 6. kontrol */
+    const K = [];
+    K.push([lb <= E.wT + 1e-6, `Alt sınır (${saat(lb)}) planın (${saat(E.wT)}) altında`]);
+    const kilitBoz = Object.entries(st.locks).filter(([id, l]) => P.ops[id] && (P.ops[id].m !== l.m || P.ops[id].S < l.S - 1e-6)).length;
+    K.push([!kilitBoz, kilitBoz ? `${kilitBoz} kilit bozuldu` : 'Kilitli işler yerinde']);
+    K.push([butce <= 0 || Object.values(haftaMesai(em)).every(h => h <= butce + 1e-9), `Haftalık mesai bütçesi (${butce} sa) aşılmadı`]);
+    K.push([dv === S.dataVer, 'Veri çözüm boyunca değişmedi']);
+    const kotu = eski && E.wT > eski.wT + 0.05;
+    K.push([!kotu, kotu ? `Sonuç mevcut plandan kötü (${saat(E.wT)} > ${saat(eski.wT)}); mevcut plan kalır` : 'Sonuç mevcut plandan kötü değil']);
+    const tut = K.filter(k => k[0]).length;
+    kur('kontrol', tut === K.length ? 'tamam' : 'red', `${tut}/${K.length} kontrol tuttu.`);
+    adim.kontrol.liste = K.map(([ok, t]) => ({ ok, t }));
+    calisan = null; U.ilerleme = null; ekipIz = null;
+    izler.push({ t: (performance.now() - t0) / 1000, wT: E.wT, adim: 'son' });
+    const J = {}; for (const j in E.J) J[j] = [J0[j] ?? null, E.J[j].T || 0];
+    const son = { adim, lb, ms: performance.now() - t0, zaman: Date.now(), basla: eski ? eski.wT : null, bas, wT: E.wT, kararlar: Object.values(kararlar).slice(0, 40), basamak, iz: izler.length > 240 ? izler.filter((_, i) => i % Math.ceil(izler.length / 240) === 0 || i === izler.length - 1) : izler, J, gecti: tut === K.length && !kotu };
+    U.ekipSon = son; S.ekipSon = son;
+    if (dv !== S.dataVer) { render(); bildir('Çözüm sırasında veri değişti; yeniden çözün.', 'hata'); return; }
+    /* yalnız "mevcut plandan kötü" tutmadıysa bu bir hata değil: ekip daha iyisini bulamadı, plan zaten iyi */
+    if (kotu && tut === K.length - 1) { kaydet(); render(); bildir(`Ekip daha iyi plan bulamadı (${saat(E.wT)}); mevcut plan (${saat(eski.wT)}) kaldı.`, 'bilgi', { metin: 'Göster', act: 'git-studyo' }); return; }
+    if (kotu || tut < K.length) { kaydet(); render(); bildir('Ekip çözümü kontrolden geçmedi; mevcut plan kaldı. Ayrıntı Plan stüdyosunda.', 'hata', { metin: 'Göster', act: 'git-studyo' }); return; }
+    slack(P, cx);
+    const emDegisti = JSON.stringify(em) !== JSON.stringify(S.ekMesai);
+    if (!S.plan) {
+      if (emDegisti) S.ekMesai = em;
+      S.dataVer++;
+      S.plan = { ...planKaydi(P, st, null), lb: lowerBound(st, cx).wT, dataVer: S.dataVer, kim: kim().ad, zaman: Date.now(), kaynak: 'ekip', oncekiOzet: null, kapali: S.kapali.slice(), ekip: son };
+      iz_kaydet(`Ekip · gecikme ${sayi(E.wT, 1)} sa`); kaydet(); render();
+      bildir(`Ekip planı hazır: gecikme ${saat(E.wT)}.`, 'tamam'); return;
+    }
+    hamleKur(P, st, 'Ekip çözümü (motor + HiGHS)', { ekMesai: emDegisti ? em : null, kaynak: 'ekip' });
+    U.hamle.ekip = son;
+    if (sayfa0 !== 'studyo') U.sayfa = 'masa';
+    kaydet(); render();
+  } catch (e) {
+    calisan = null; U.ilerleme = null; ekipIz = null; render();
+    if (String(e.message) === 'durduruldu') bildir('Ekip çözümü durduruldu; mevcut plan duruyor.'); else bildir('Ekip çözümü hatası: ' + e.message, 'hata');
+  }
+}
+const iz_kaydet = ayrinti => iz('Plan çözüldü', ayrinti);
+const EKIP_TON = { tamam: 'tamam', alindi: 'tamam', alinmadi: 'bilgi', yok: '', red: 'hata', calisiyor: 'uyari', bekliyor: '' };
+const EKIP_DURUM = { tamam: 'tamam', alindi: 'alındı', alinmadi: 'alınmadı', yok: 'yok', red: 'tutmadı', calisiyor: 'çalışıyor', bekliyor: 'bekliyor' };
+function ekipListe(adim, kisa) {
+  return `<ol class="pm-olaylar">${EKIP_ADIM.map(([id]) => { const a = adim[id]; return `<li class="pm-olay" data-ton="${EKIP_TON[a.durum] || ''}"><b class="mono">${EKIP_ADIM.findIndex(x => x[0] === id) + 1}</b><span class="pm-olay-metin"><b>${esc(a.rol)}</b> · ${esc(a.is)}${a.not && !kisa ? `<br><span class="pm-kucuk">${esc(a.not)}</span>` : ''}${id === 'kontrol' && a.liste && !kisa ? `<br>${a.liste.map(k => `<span class="pm-kucuk">${k.ok ? '✓' : '✗'} ${esc(k.t)}</span>`).join('<br>')}` : ''}</span>${rozet(EKIP_DURUM[a.durum], EKIP_TON[a.durum] === 'bilgi' ? '' : EKIP_TON[a.durum])}</li>`; }).join('')}</ol>`;
+}

@@ -1,0 +1,2617 @@
+{
+ "veri": {
+  "meta": {
+   "ad": "Darboğazlı ay sonu (uydurma veri)",
+   "baslangic": "2026-10-19",
+   "surum": 2
+  },
+  "ayarlar": {
+   "tasimaSaat": 0.5,
+   "transferOran": 0.25,
+   "faiSaat": 2,
+   "programSaat": 6,
+   "ayarciUcret": 650,
+   "mesaiUcret": 950,
+   "fasonTalas": "FS-TALAS"
+  },
+  "vardiyalar": [
+   {
+    "id": "V1",
+    "bas": "07:00",
+    "bit": "15:00"
+   },
+   {
+    "id": "V2",
+    "bas": "15:00",
+    "bit": "23:00"
+   },
+   {
+    "id": "V3",
+    "bas": "23:00",
+    "bit": "07:00"
+   }
+  ],
+  "calismaGunleri": {
+   "pzt": [
+    "V1",
+    "V2"
+   ],
+   "sal": [
+    "V1",
+    "V2"
+   ],
+   "car": [
+    "V1",
+    "V2"
+   ],
+   "per": [
+    "V1",
+    "V2"
+   ],
+   "cum": [
+    "V1",
+    "V2"
+   ],
+   "cmt": [],
+   "paz": []
+  },
+  "tatiller": [
+   "2026-10-29"
+  ],
+  "tezgahlar": [
+   {
+    "id": "TST",
+    "ad": "Şerit testere",
+    "grup": "testere",
+    "ucret": 350,
+    "verim": 1,
+    "vardiyalar": [
+     "V1"
+    ],
+    "opOran": 0.5
+   },
+   {
+    "id": "T1",
+    "ad": "CNC torna Ø400",
+    "grup": "torna",
+    "ucret": 950,
+    "verim": 1,
+    "arizaGun": 20,
+    "onarimSaat": 4
+   },
+   {
+    "id": "T2",
+    "ad": "CNC torna Ø400",
+    "grup": "torna",
+    "ucret": 950,
+    "verim": 0.95,
+    "arizaGun": 20,
+    "onarimSaat": 4
+   },
+   {
+    "id": "T3",
+    "ad": "Torna, canlı takım ve Y ekseni",
+    "grup": "torna",
+    "ucret": 1300,
+    "verim": 1,
+    "arizaGun": 25,
+    "onarimSaat": 6
+   },
+   {
+    "id": "F1",
+    "ad": "Dik işleme, 3 eksen",
+    "grup": "freze",
+    "ucret": 1100,
+    "verim": 1,
+    "arizaGun": 18,
+    "onarimSaat": 4
+   },
+   {
+    "id": "F2",
+    "ad": "Dik işleme, 3 eksen (eski)",
+    "grup": "freze",
+    "ucret": 1050,
+    "verim": 0.9,
+    "arizaGun": 10,
+    "onarimSaat": 6
+   },
+   {
+    "id": "F3",
+    "ad": "Dik işleme, 4 eksen",
+    "grup": "freze",
+    "ucret": 1250,
+    "verim": 1,
+    "arizaGun": 20,
+    "onarimSaat": 4
+   },
+   {
+    "id": "F4",
+    "ad": "Yatay işleme, paletli",
+    "grup": "freze",
+    "ucret": 1700,
+    "verim": 1,
+    "isiksiz": true,
+    "opOran": 0.5,
+    "arizaGun": 25,
+    "onarimSaat": 8
+   },
+   {
+    "id": "F5",
+    "ad": "5 eksen işleme merkezi",
+    "grup": "5eksen",
+    "ucret": 2200,
+    "verim": 1,
+    "arizaGun": 15,
+    "onarimSaat": 10
+   },
+   {
+    "id": "F6",
+    "ad": "5 eksen, paletli",
+    "grup": "5eksen",
+    "ucret": 2300,
+    "verim": 1,
+    "isiksiz": true,
+    "opOran": 0.5,
+    "arizaGun": 20,
+    "onarimSaat": 10
+   },
+   {
+    "id": "TS1",
+    "ad": "Silindirik taşlama",
+    "grup": "taslama",
+    "ucret": 1200,
+    "verim": 1,
+    "arizaGun": 30,
+    "onarimSaat": 6
+   },
+   {
+    "id": "TS2",
+    "ad": "Düzlem taşlama",
+    "grup": "taslama",
+    "ucret": 1000,
+    "verim": 1,
+    "arizaGun": 30,
+    "onarimSaat": 6
+   },
+   {
+    "id": "TV1",
+    "ad": "Tesviye tezgâhı 1",
+    "grup": "tesviye",
+    "ucret": 450,
+    "verim": 1
+   },
+   {
+    "id": "TV2",
+    "ad": "Tesviye tezgâhı 2",
+    "grup": "tesviye",
+    "ucret": 450,
+    "verim": 1
+   },
+   {
+    "id": "TV3",
+    "ad": "Tesviye tezgâhı 3",
+    "grup": "tesviye",
+    "ucret": 450,
+    "verim": 1,
+    "vardiyalar": [
+     "V1"
+    ]
+   },
+   {
+    "id": "YK",
+    "ad": "Yıkama",
+    "grup": "yikama",
+    "ucret": 300,
+    "verim": 1,
+    "opOran": 0.3
+   },
+   {
+    "id": "CMM",
+    "ad": "CMM ölçüm",
+    "grup": "olcum",
+    "ucret": 900,
+    "verim": 1,
+    "arizaGun": 40,
+    "onarimSaat": 8
+   }
+  ],
+  "personel": [
+   {
+    "id": "P01",
+    "ad": "Personel 01",
+    "vardiya": "V1",
+    "gruplar": [
+     "torna"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P02",
+    "ad": "Personel 02",
+    "vardiya": "V1",
+    "gruplar": [
+     "torna"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P03",
+    "ad": "Personel 03",
+    "vardiya": "V1",
+    "gruplar": [
+     "torna"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P04",
+    "ad": "Personel 04",
+    "vardiya": "V1",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P05",
+    "ad": "Personel 05",
+    "vardiya": "V1",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P06",
+    "ad": "Personel 06",
+    "vardiya": "V1",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P07",
+    "ad": "Personel 07",
+    "vardiya": "V1",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P08",
+    "ad": "Personel 08",
+    "vardiya": "V1",
+    "gruplar": [
+     "freze",
+     "5eksen"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P09",
+    "ad": "Personel 09",
+    "vardiya": "V1",
+    "gruplar": [
+     "5eksen"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P10",
+    "ad": "Personel 10",
+    "vardiya": "V1",
+    "gruplar": [
+     "taslama"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P11",
+    "ad": "Personel 11",
+    "vardiya": "V1",
+    "gruplar": [
+     "tesviye"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P12",
+    "ad": "Personel 12",
+    "vardiya": "V1",
+    "gruplar": [
+     "tesviye"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P13",
+    "ad": "Personel 13",
+    "vardiya": "V1",
+    "gruplar": [
+     "tesviye"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P14",
+    "ad": "Personel 14",
+    "vardiya": "V1",
+    "gruplar": [
+     "olcum"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P15",
+    "ad": "Personel 15",
+    "vardiya": "V1",
+    "gruplar": [
+     "testere",
+     "yikama"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P16",
+    "ad": "Personel 16",
+    "vardiya": "V1",
+    "gruplar": [],
+    "ayar": true
+   },
+   {
+    "id": "P17",
+    "ad": "Personel 17",
+    "vardiya": "V2",
+    "gruplar": [
+     "torna"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P18",
+    "ad": "Personel 18",
+    "vardiya": "V2",
+    "gruplar": [
+     "torna"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P19",
+    "ad": "Personel 19",
+    "vardiya": "V2",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P20",
+    "ad": "Personel 20",
+    "vardiya": "V2",
+    "gruplar": [
+     "freze"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P21",
+    "ad": "Personel 21",
+    "vardiya": "V2",
+    "gruplar": [
+     "5eksen",
+     "freze"
+    ],
+    "ayar": true
+   },
+   {
+    "id": "P22",
+    "ad": "Personel 22",
+    "vardiya": "V2",
+    "gruplar": [
+     "taslama"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P23",
+    "ad": "Personel 23",
+    "vardiya": "V2",
+    "gruplar": [
+     "tesviye"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P24",
+    "ad": "Personel 24",
+    "vardiya": "V2",
+    "gruplar": [
+     "olcum"
+    ],
+    "ayar": false
+   },
+   {
+    "id": "P25",
+    "ad": "Personel 25",
+    "vardiya": "V2",
+    "gruplar": [
+     "yikama",
+     "testere"
+    ],
+    "ayar": false
+   }
+  ],
+  "aparatlar": [
+   {
+    "id": "A-FLN",
+    "ad": "Flanş bağlama aparatı",
+    "adet": 2
+   },
+   {
+    "id": "A-GOV",
+    "ad": "Gövde fikstürü",
+    "adet": 1
+   },
+   {
+    "id": "A-KAP",
+    "ad": "Kapak vakum tablası",
+    "adet": 1
+   },
+   {
+    "id": "A-BRK",
+    "ad": "Braket fikstürü",
+    "adet": 1
+   },
+   {
+    "id": "A-5X",
+    "ad": "5 eksen sıfır noktası paleti",
+    "adet": 3
+   }
+  ],
+  "fasoncular": [
+   {
+    "id": "FS-ISL",
+    "ad": "Isıl işlem (fason)",
+    "kapasite": 4,
+    "sureGun": 2,
+    "cikisGunleri": [
+     "pzt",
+     "car",
+     "cum"
+    ],
+    "cikisSaat": 16,
+    "fiyat": 35,
+    "sapmaGun": 0.5
+   },
+   {
+    "id": "FS-ELK",
+    "ad": "Eloksal (fason)",
+    "kapasite": 3,
+    "sureGun": 3,
+    "cikisGunleri": [
+     "sal",
+     "per"
+    ],
+    "cikisSaat": 16,
+    "fiyat": 18,
+    "sapmaGun": 1
+   },
+   {
+    "id": "FS-KPL",
+    "ad": "Nikel kaplama (fason)",
+    "kapasite": 2,
+    "sureGun": 4,
+    "cikisGunleri": [
+     "cum"
+    ],
+    "cikisSaat": 14,
+    "fiyat": 40,
+    "sapmaGun": 1
+   },
+   {
+    "id": "FS-TALAS",
+    "ad": "Fason talaşlı imalat",
+    "kapasite": 2,
+    "sureGun": 3,
+    "cikisGunleri": [
+     "pzt",
+     "sal",
+     "car",
+     "per",
+     "cum"
+    ],
+    "cikisSaat": 16,
+    "saatFiyat": 2600
+   }
+  ],
+  "malzemeler": [
+   {
+    "kod": "M-C45-40",
+    "ad": "C45 çubuk Ø40",
+    "birim": "kg",
+    "stok": 300,
+    "birimFiyat": 55,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-4140-80",
+    "ad": "42CrMo4 çubuk Ø80",
+    "birim": "kg",
+    "stok": 240,
+    "birimFiyat": 95,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-7075-50",
+    "ad": "Al 7075 levha 50 mm",
+    "birim": "kg",
+    "stok": 90,
+    "birimFiyat": 380,
+    "muayeneGun": 1,
+    "tedarikGun": 10
+   },
+   {
+    "kod": "M-6061-30",
+    "ad": "Al 6061 levha 30 mm",
+    "birim": "kg",
+    "stok": 140,
+    "birimFiyat": 210,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-2379-BL",
+    "ad": "1.2379 blok",
+    "birim": "kg",
+    "stok": 45,
+    "birimFiyat": 320,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-304-60",
+    "ad": "AISI 304 çubuk Ø60",
+    "birim": "kg",
+    "stok": 160,
+    "birimFiyat": 240,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-S235-20",
+    "ad": "S235 levha 20 mm",
+    "birim": "kg",
+    "stok": 700,
+    "birimFiyat": 38,
+    "muayeneGun": 0.5,
+    "tedarikGun": 7
+   },
+   {
+    "kod": "M-TI-BL",
+    "ad": "Ti6Al4V blok",
+    "birim": "kg",
+    "stok": 6,
+    "birimFiyat": 2800,
+    "muayeneGun": 1,
+    "tedarikGun": 10
+   }
+  ],
+  "tedarikciler": [
+   {
+    "id": "TD-A",
+    "ad": "Tedarikçi A (örnek)",
+    "ortGecikmeGun": 0.5,
+    "sapmaGun": 1
+   },
+   {
+    "id": "TD-B",
+    "ad": "Tedarikçi B (örnek)",
+    "ortGecikmeGun": 2,
+    "sapmaGun": 2
+   },
+   {
+    "id": "TD-C",
+    "ad": "Tedarikçi C (örnek)",
+    "ortGecikmeGun": 0,
+    "sapmaGun": 0.5
+   }
+  ],
+  "satinalma": [
+   {
+    "kod": "M-4140-80",
+    "miktar": 300,
+    "gelis": "2026-10-21 10:00",
+    "tedarikci": "TD-A"
+   },
+   {
+    "kod": "M-7075-50",
+    "miktar": 120,
+    "gelis": "2026-10-26 09:00",
+    "tedarikci": "TD-B"
+   },
+   {
+    "kod": "M-304-60",
+    "miktar": 80,
+    "gelis": "2026-10-22 14:00",
+    "tedarikci": "TD-A"
+   },
+   {
+    "kod": "M-TI-BL",
+    "miktar": 20,
+    "gelis": "2026-10-26 11:00",
+    "tedarikci": "TD-B"
+   },
+   {
+    "kod": "M-C45-40",
+    "miktar": 200,
+    "gelis": "2026-10-27 10:00",
+    "tedarikci": "TD-C"
+   },
+   {
+    "kod": "M-6061-30",
+    "miktar": 150,
+    "gelis": "2026-10-22 11:00",
+    "tedarikci": "TD-C"
+   },
+   {
+    "kod": "M-2379-BL",
+    "miktar": 60,
+    "gelis": "2026-10-26 09:00",
+    "tedarikci": "TD-B"
+   },
+   {
+    "kod": "M-304-60",
+    "miktar": 80,
+    "gelis": "2026-11-09 10:00",
+    "tedarikci": "TD-A"
+   },
+   {
+    "kod": "M-C45-40",
+    "miktar": 170,
+    "gelis": "2026-10-22 10:00",
+    "tedarikci": "TD-A"
+   },
+   {
+    "kod": "M-4140-80",
+    "miktar": 1060,
+    "gelis": "2026-10-23 10:00",
+    "tedarikci": "TD-C"
+   },
+   {
+    "kod": "M-7075-50",
+    "miktar": 90,
+    "gelis": "2026-10-27 10:00",
+    "tedarikci": "TD-A"
+   },
+   {
+    "kod": "M-2379-BL",
+    "miktar": 60,
+    "gelis": "2026-10-23 10:00",
+    "tedarikci": "TD-B"
+   }
+  ],
+  "ayarMatrisi": [
+   {
+    "den": "mil40",
+    "ye": "kanal",
+    "dk": 45
+   },
+   {
+    "den": "mil40",
+    "ye": "flans",
+    "dk": 70
+   },
+   {
+    "den": "mil40",
+    "ye": "pim",
+    "dk": 15
+   },
+   {
+    "den": "mil40",
+    "ye": "burc",
+    "dk": 55
+   },
+   {
+    "den": "mil40",
+    "ye": "nipel",
+    "dk": 25
+   },
+   {
+    "den": "kanal",
+    "ye": "mil40",
+    "dk": 45
+   },
+   {
+    "den": "kanal",
+    "ye": "flans",
+    "dk": 25
+   },
+   {
+    "den": "kanal",
+    "ye": "pim",
+    "dk": 70
+   },
+   {
+    "den": "kanal",
+    "ye": "burc",
+    "dk": 50
+   },
+   {
+    "den": "kanal",
+    "ye": "nipel",
+    "dk": 40
+   },
+   {
+    "den": "flans",
+    "ye": "mil40",
+    "dk": 50
+   },
+   {
+    "den": "flans",
+    "ye": "kanal",
+    "dk": 60
+   },
+   {
+    "den": "flans",
+    "ye": "pim",
+    "dk": 25
+   },
+   {
+    "den": "flans",
+    "ye": "burc",
+    "dk": 55
+   },
+   {
+    "den": "flans",
+    "ye": "nipel",
+    "dk": 65
+   },
+   {
+    "den": "pim",
+    "ye": "mil40",
+    "dk": 65
+   },
+   {
+    "den": "pim",
+    "ye": "kanal",
+    "dk": 70
+   },
+   {
+    "den": "pim",
+    "ye": "flans",
+    "dk": 25
+   },
+   {
+    "den": "pim",
+    "ye": "burc",
+    "dk": 50
+   },
+   {
+    "den": "pim",
+    "ye": "nipel",
+    "dk": 55
+   },
+   {
+    "den": "burc",
+    "ye": "mil40",
+    "dk": 20
+   },
+   {
+    "den": "burc",
+    "ye": "kanal",
+    "dk": 40
+   },
+   {
+    "den": "burc",
+    "ye": "flans",
+    "dk": 25
+   },
+   {
+    "den": "burc",
+    "ye": "pim",
+    "dk": 50
+   },
+   {
+    "den": "burc",
+    "ye": "nipel",
+    "dk": 30
+   },
+   {
+    "den": "nipel",
+    "ye": "mil40",
+    "dk": 55
+   },
+   {
+    "den": "nipel",
+    "ye": "kanal",
+    "dk": 30
+   },
+   {
+    "den": "nipel",
+    "ye": "flans",
+    "dk": 50
+   },
+   {
+    "den": "nipel",
+    "ye": "pim",
+    "dk": 40
+   },
+   {
+    "den": "nipel",
+    "ye": "burc",
+    "dk": 45
+   },
+   {
+    "den": "kanal",
+    "ye": "flans-d",
+    "dk": 70
+   },
+   {
+    "den": "kanal",
+    "ye": "kapak",
+    "dk": 35
+   },
+   {
+    "den": "kanal",
+    "ye": "braket",
+    "dk": 35
+   },
+   {
+    "den": "kanal",
+    "ye": "klp",
+    "dk": 45
+   },
+   {
+    "den": "flans-d",
+    "ye": "kanal",
+    "dk": 20
+   },
+   {
+    "den": "flans-d",
+    "ye": "kapak",
+    "dk": 65
+   },
+   {
+    "den": "flans-d",
+    "ye": "braket",
+    "dk": 65
+   },
+   {
+    "den": "flans-d",
+    "ye": "klp",
+    "dk": 20
+   },
+   {
+    "den": "kapak",
+    "ye": "kanal",
+    "dk": 25
+   },
+   {
+    "den": "kapak",
+    "ye": "flans-d",
+    "dk": 45
+   },
+   {
+    "den": "kapak",
+    "ye": "braket",
+    "dk": 55
+   },
+   {
+    "den": "kapak",
+    "ye": "klp",
+    "dk": 30
+   },
+   {
+    "den": "braket",
+    "ye": "kanal",
+    "dk": 60
+   },
+   {
+    "den": "braket",
+    "ye": "flans-d",
+    "dk": 25
+   },
+   {
+    "den": "braket",
+    "ye": "kapak",
+    "dk": 25
+   },
+   {
+    "den": "braket",
+    "ye": "klp",
+    "dk": 50
+   },
+   {
+    "den": "klp",
+    "ye": "kanal",
+    "dk": 15
+   },
+   {
+    "den": "klp",
+    "ye": "flans-d",
+    "dk": 45
+   },
+   {
+    "den": "klp",
+    "ye": "kapak",
+    "dk": 70
+   },
+   {
+    "den": "klp",
+    "ye": "braket",
+    "dk": 65
+   },
+   {
+    "den": "tas40",
+    "ye": "tas-burc",
+    "dk": 20
+   },
+   {
+    "den": "tas-burc",
+    "ye": "tas40",
+    "dk": 30
+   },
+   {
+    "den": "govde",
+    "ye": "ti",
+    "dk": 30
+   },
+   {
+    "den": "ti",
+    "ye": "govde",
+    "dk": 65
+   }
+  ],
+  "urunler": [
+   {
+    "id": "U-MIL",
+    "ad": "Mil Ø40",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Testere kesim",
+      "tezgahlar": [
+       {
+        "id": "TST",
+        "cevrim": 0.8,
+        "ayar": 10
+       }
+      ],
+      "bag": [],
+      "aile": ""
+     },
+     {
+      "k": "20",
+      "ad": "Tornalama",
+      "tezgahlar": [
+       {
+        "id": "T1",
+        "cevrim": 9,
+        "ayar": 50
+       },
+       {
+        "id": "T2",
+        "cevrim": 9,
+        "ayar": 50
+       },
+       {
+        "id": "T3",
+        "cevrim": 8,
+        "ayar": 60
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "mil40",
+      "fasonIzin": true
+     },
+     {
+      "k": "30",
+      "ad": "Kama kanalı",
+      "tezgahlar": [
+       {
+        "id": "F1",
+        "cevrim": 5,
+        "ayar": 40
+       },
+       {
+        "id": "F2",
+        "cevrim": 5.5,
+        "ayar": 40
+       },
+       {
+        "id": "F3",
+        "cevrim": 4.5,
+        "ayar": 45
+       },
+       {
+        "id": "T3",
+        "cevrim": 6,
+        "ayar": 30
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "o"
+       ]
+      ],
+      "aile": "kanal"
+     },
+     {
+      "k": "40",
+      "ad": "Isıl işlem",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-ISL"
+     },
+     {
+      "k": "50",
+      "ad": "Taşlama",
+      "tezgahlar": [
+       {
+        "id": "TS1",
+        "cevrim": 7,
+        "ayar": 45
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": "tas40"
+     },
+     {
+      "k": "60",
+      "ad": "Yıkama",
+      "tezgahlar": [
+       {
+        "id": "YK",
+        "cevrim": 0.5,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "50",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "70",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 3,
+        "ayar": 20
+       }
+      ],
+      "bag": [
+       [
+        "60",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-FLN",
+    "ad": "Flanş Ø160",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Testere kesim",
+      "tezgahlar": [
+       {
+        "id": "TST",
+        "cevrim": 1.5,
+        "ayar": 10
+       }
+      ],
+      "bag": [],
+      "aile": ""
+     },
+     {
+      "k": "20",
+      "ad": "Tornalama",
+      "tezgahlar": [
+       {
+        "id": "T1",
+        "cevrim": 14,
+        "ayar": 60
+       },
+       {
+        "id": "T2",
+        "cevrim": 14,
+        "ayar": 60
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "flans"
+     },
+     {
+      "k": "30",
+      "ad": "Delik ve diş",
+      "tezgahlar": [
+       {
+        "id": "F1",
+        "cevrim": 8,
+        "ayar": 45
+       },
+       {
+        "id": "F2",
+        "cevrim": 9,
+        "ayar": 45
+       },
+       {
+        "id": "F3",
+        "cevrim": 7,
+        "ayar": 50
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "o"
+       ]
+      ],
+      "aile": "flans-d",
+      "aparat": "A-FLN",
+      "fasonIzin": true
+     },
+     {
+      "k": "40",
+      "ad": "Çapak alma",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 3,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 3,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 3,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "30",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 4,
+        "ayar": 20
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-GOV",
+    "ad": "Elektronik gövde",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Kaba işleme",
+      "tezgahlar": [
+       {
+        "id": "F5",
+        "cevrim": 35,
+        "ayar": 120
+       },
+       {
+        "id": "F6",
+        "cevrim": 35,
+        "ayar": 120
+       }
+      ],
+      "bag": [],
+      "aile": "govde",
+      "aparat": "A-5X"
+     },
+     {
+      "k": "20",
+      "ad": "İnce işleme",
+      "tezgahlar": [
+       {
+        "id": "F5",
+        "cevrim": 28,
+        "ayar": 60
+       },
+       {
+        "id": "F6",
+        "cevrim": 28,
+        "ayar": 60
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "govde",
+      "aparat": "A-5X",
+      "fai": true
+     },
+     {
+      "k": "30",
+      "ad": "Tesviye",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 15,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 15,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 15,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "40",
+      "ad": "Eloksal",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-ELK"
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 12,
+        "ayar": 30
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-KAP",
+    "ad": "Kapak",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Frezeleme",
+      "tezgahlar": [
+       {
+        "id": "F4",
+        "cevrim": 12,
+        "ayar": 90
+       },
+       {
+        "id": "F3",
+        "cevrim": 16,
+        "ayar": 60
+       }
+      ],
+      "bag": [],
+      "aile": "kapak",
+      "aparat": "A-KAP",
+      "fasonIzin": true
+     },
+     {
+      "k": "20",
+      "ad": "Tesviye",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 5,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 5,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 5,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "30",
+      "ad": "Eloksal",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "20",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-ELK"
+     },
+     {
+      "k": "40",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 3,
+        "ayar": 15
+       }
+      ],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-BRK",
+    "ad": "Braket",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Testere kesim",
+      "tezgahlar": [
+       {
+        "id": "TST",
+        "cevrim": 1,
+        "ayar": 10
+       }
+      ],
+      "bag": [],
+      "aile": ""
+     },
+     {
+      "k": "20",
+      "ad": "Frezeleme",
+      "tezgahlar": [
+       {
+        "id": "F1",
+        "cevrim": 11,
+        "ayar": 50
+       },
+       {
+        "id": "F2",
+        "cevrim": 12,
+        "ayar": 50
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "braket",
+      "aparat": "A-BRK",
+      "fasonIzin": true
+     },
+     {
+      "k": "25",
+      "ad": "Pim tornalama (bağımsız parça)",
+      "tezgahlar": [
+       {
+        "id": "T1",
+        "cevrim": 3,
+        "ayar": 30
+       },
+       {
+        "id": "T2",
+        "cevrim": 3,
+        "ayar": 30
+       }
+      ],
+      "bag": [],
+      "aile": "pim"
+     },
+     {
+      "k": "30",
+      "ad": "Montaj ve tesviye",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 6,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 6,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 6,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "b"
+       ],
+       [
+        "25",
+        "b"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "40",
+      "ad": "Nikel kaplama",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-KPL"
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 2,
+        "ayar": 15
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-BRC",
+    "ad": "Burç",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Testere kesim",
+      "tezgahlar": [
+       {
+        "id": "TST",
+        "cevrim": 0.6,
+        "ayar": 10
+       }
+      ],
+      "bag": [],
+      "aile": ""
+     },
+     {
+      "k": "20",
+      "ad": "Tornalama",
+      "tezgahlar": [
+       {
+        "id": "T1",
+        "cevrim": 6,
+        "ayar": 45
+       },
+       {
+        "id": "T2",
+        "cevrim": 6,
+        "ayar": 45
+       },
+       {
+        "id": "T3",
+        "cevrim": 5.5,
+        "ayar": 50
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "burc"
+     },
+     {
+      "k": "30",
+      "ad": "Isıl işlem",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "20",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-ISL"
+     },
+     {
+      "k": "40",
+      "ad": "Taşlama",
+      "tezgahlar": [
+       {
+        "id": "TS1",
+        "cevrim": 5,
+        "ayar": 40
+       }
+      ],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": "tas-burc"
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 2,
+        "ayar": 15
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-KLP",
+    "ad": "Kalıp plakası",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Kaba frezeleme",
+      "tezgahlar": [
+       {
+        "id": "F3",
+        "cevrim": 40,
+        "ayar": 60
+       },
+       {
+        "id": "F2",
+        "cevrim": 46,
+        "ayar": 60
+       }
+      ],
+      "bag": [],
+      "aile": "klp",
+      "fasonIzin": true
+     },
+     {
+      "k": "20",
+      "ad": "Isıl işlem",
+      "tezgahlar": [],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "fason": "FS-ISL"
+     },
+     {
+      "k": "30",
+      "ad": "Düzlem taşlama",
+      "tezgahlar": [
+       {
+        "id": "TS2",
+        "cevrim": 25,
+        "ayar": 40
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "b"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "40",
+      "ad": "Sert işleme",
+      "tezgahlar": [
+       {
+        "id": "F5",
+        "cevrim": 30,
+        "ayar": 90
+       }
+      ],
+      "bag": [
+       [
+        "30",
+        "b"
+       ]
+      ],
+      "aile": "",
+      "program": false
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 15,
+        "ayar": 20
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-TI",
+    "ad": "Titanyum bağlantı",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "5 eksen işleme",
+      "tezgahlar": [
+       {
+        "id": "F6",
+        "cevrim": 55,
+        "ayar": 150
+       },
+       {
+        "id": "F5",
+        "cevrim": 55,
+        "ayar": 150
+       }
+      ],
+      "bag": [],
+      "aile": "ti",
+      "aparat": "A-5X",
+      "fai": true,
+      "program": false
+     },
+     {
+      "k": "20",
+      "ad": "Tesviye",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 20,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 20,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 20,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "30",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 20,
+        "ayar": 30
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   },
+   {
+    "id": "U-NPL",
+    "ad": "Paslanmaz nipel",
+    "rota": [
+     {
+      "k": "10",
+      "ad": "Testere kesim",
+      "tezgahlar": [
+       {
+        "id": "TST",
+        "cevrim": 0.6,
+        "ayar": 10
+       }
+      ],
+      "bag": [],
+      "aile": ""
+     },
+     {
+      "k": "20",
+      "ad": "Tornalama",
+      "tezgahlar": [
+       {
+        "id": "T3",
+        "cevrim": 7,
+        "ayar": 60
+       },
+       {
+        "id": "T1",
+        "cevrim": 9,
+        "ayar": 50
+       }
+      ],
+      "bag": [
+       [
+        "10",
+        "b"
+       ]
+      ],
+      "aile": "nipel"
+     },
+     {
+      "k": "30",
+      "ad": "Çapak alma",
+      "tezgahlar": [
+       {
+        "id": "TV1",
+        "cevrim": 2,
+        "ayar": 0
+       },
+       {
+        "id": "TV2",
+        "cevrim": 2,
+        "ayar": 0
+       },
+       {
+        "id": "TV3",
+        "cevrim": 2,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "20",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "40",
+      "ad": "Yıkama",
+      "tezgahlar": [
+       {
+        "id": "YK",
+        "cevrim": 0.4,
+        "ayar": 0
+       }
+      ],
+      "bag": [
+       [
+        "30",
+        "o"
+       ]
+      ],
+      "aile": ""
+     },
+     {
+      "k": "50",
+      "ad": "Son ölçüm",
+      "tezgahlar": [
+       {
+        "id": "CMM",
+        "cevrim": 2,
+        "ayar": 10
+       }
+      ],
+      "bag": [
+       [
+        "40",
+        "b"
+       ]
+      ],
+      "aile": ""
+     }
+    ]
+   }
+  ],
+  "siparisler": [
+   {
+    "id": "SP-301",
+    "ad": "Burç (örnek)",
+    "urun": "U-BRC",
+    "adet": 118,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 2,
+    "gelir": 65800,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 0.8
+     }
+    ]
+   },
+   {
+    "id": "SP-302",
+    "ad": "Mil Ø40 (örnek)",
+    "urun": "U-MIL",
+    "adet": 119,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 2,
+    "gelir": 95100,
+    "cezaGun": null,
+    "serbest": "2026-10-22 07:00",
+    "malzeme": [
+     {
+      "kod": "M-C45-40",
+      "miktar": 1.6
+     }
+    ]
+   },
+   {
+    "id": "SP-303",
+    "ad": "Mil Ø40 (örnek)",
+    "urun": "U-MIL",
+    "adet": 67,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 2,
+    "gelir": 69400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-C45-40",
+      "miktar": 1.6
+     }
+    ]
+   },
+   {
+    "id": "SP-304",
+    "ad": "Mil Ø40 (örnek)",
+    "urun": "U-MIL",
+    "adet": 49,
+    "termin": "2026-10-26 17:00",
+    "oncelik": 2,
+    "gelir": 49900,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-C45-40",
+      "miktar": 1.6
+     }
+    ]
+   },
+   {
+    "id": "SP-305",
+    "ad": "Kalıp plakası (örnek)",
+    "urun": "U-KLP",
+    "adet": 4,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 3,
+    "gelir": 35900,
+    "cezaGun": null,
+    "serbest": "2026-10-20 07:00",
+    "malzeme": [
+     {
+      "kod": "M-2379-BL",
+      "miktar": 9
+     }
+    ]
+   },
+   {
+    "id": "SP-306",
+    "ad": "Kalıp plakası (örnek)",
+    "urun": "U-KLP",
+    "adet": 4,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 29500,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-2379-BL",
+      "miktar": 9
+     }
+    ]
+   },
+   {
+    "id": "SP-307",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 52,
+    "termin": "2026-10-28 17:00",
+    "oncelik": 3,
+    "gelir": 77200,
+    "cezaGun": null,
+    "serbest": "2026-10-20 07:00",
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-308",
+    "ad": "Kalıp plakası (örnek)",
+    "urun": "U-KLP",
+    "adet": 4,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 1,
+    "gelir": 31400,
+    "cezaGun": 300,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-2379-BL",
+      "miktar": 9
+     }
+    ]
+   },
+   {
+    "id": "SP-309",
+    "ad": "Braket (örnek)",
+    "urun": "U-BRK",
+    "adet": 99,
+    "termin": "2026-10-28 17:00",
+    "oncelik": 2,
+    "gelir": 59700,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-S235-20",
+      "miktar": 1.5
+     }
+    ]
+   },
+   {
+    "id": "SP-310",
+    "ad": "Kapak (örnek)",
+    "urun": "U-KAP",
+    "adet": 53,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 73500,
+    "cezaGun": null,
+    "serbest": "2026-10-21 07:00",
+    "malzeme": [
+     {
+      "kod": "M-6061-30",
+      "miktar": 1.8
+     }
+    ]
+   },
+   {
+    "id": "SP-311",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 5,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 50400,
+    "cezaGun": null,
+    "serbest": "2026-10-20 07:00",
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-312",
+    "ad": "Kalıp plakası (örnek)",
+    "urun": "U-KLP",
+    "adet": 3,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 1,
+    "gelir": 23300,
+    "cezaGun": 200,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-2379-BL",
+      "miktar": 9
+     }
+    ]
+   },
+   {
+    "id": "SP-313",
+    "ad": "Kalıp plakası (örnek)",
+    "urun": "U-KLP",
+    "adet": 2,
+    "termin": "2026-10-28 17:00",
+    "oncelik": 1,
+    "gelir": 18000,
+    "cezaGun": 200,
+    "serbest": "2026-10-22 07:00",
+    "malzeme": [
+     {
+      "kod": "M-2379-BL",
+      "miktar": 9
+     }
+    ]
+   },
+   {
+    "id": "SP-314",
+    "ad": "Paslanmaz nipel (örnek)",
+    "urun": "U-NPL",
+    "adet": 146,
+    "termin": "2026-10-26 17:00",
+    "oncelik": 2,
+    "gelir": 77400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-304-60",
+      "miktar": 0.9
+     }
+    ]
+   },
+   {
+    "id": "SP-315",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 55,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 90000,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-316",
+    "ad": "Burç (örnek)",
+    "urun": "U-BRC",
+    "adet": 139,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 2,
+    "gelir": 83600,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 0.8
+     }
+    ]
+   },
+   {
+    "id": "SP-317",
+    "ad": "Titanyum bağlantı (örnek)",
+    "urun": "U-TI",
+    "adet": 5,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 3,
+    "gelir": 51500,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-TI-BL",
+      "miktar": 1.1
+     }
+    ]
+   },
+   {
+    "id": "SP-318",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 29,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 1,
+    "gelir": 50700,
+    "cezaGun": 500,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-319",
+    "ad": "Titanyum bağlantı (örnek)",
+    "urun": "U-TI",
+    "adet": 10,
+    "termin": "2026-11-03 17:00",
+    "oncelik": 2,
+    "gelir": 109300,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-TI-BL",
+      "miktar": 1.1
+     }
+    ]
+   },
+   {
+    "id": "SP-320",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 33,
+    "termin": "2026-11-03 17:00",
+    "oncelik": 2,
+    "gelir": 56400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-321",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 50,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 77600,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-322",
+    "ad": "Paslanmaz nipel (örnek)",
+    "urun": "U-NPL",
+    "adet": 131,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 2,
+    "gelir": 66900,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-304-60",
+      "miktar": 0.9
+     }
+    ]
+   },
+   {
+    "id": "SP-323",
+    "ad": "Burç (örnek)",
+    "urun": "U-BRC",
+    "adet": 120,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 2,
+    "gelir": 64400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 0.8
+     }
+    ]
+   },
+   {
+    "id": "SP-324",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 4,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 3,
+    "gelir": 43500,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-325",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 23,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 3,
+    "gelir": 38200,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-326",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 22,
+    "termin": "2026-10-29 17:00",
+    "oncelik": 2,
+    "gelir": 40000,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-327",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 25,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 2,
+    "gelir": 45100,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-328",
+    "ad": "Mil Ø40 (örnek)",
+    "urun": "U-MIL",
+    "adet": 106,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 100800,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-C45-40",
+      "miktar": 1.6
+     }
+    ]
+   },
+   {
+    "id": "SP-329",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 9,
+    "termin": "2026-10-26 17:00",
+    "oncelik": 2,
+    "gelir": 85400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-330",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 5,
+    "termin": "2026-10-29 17:00",
+    "oncelik": 2,
+    "gelir": 43400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-331",
+    "ad": "Mil Ø40 (örnek)",
+    "urun": "U-MIL",
+    "adet": 54,
+    "termin": "2026-10-29 17:00",
+    "oncelik": 1,
+    "gelir": 51800,
+    "cezaGun": 500,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-C45-40",
+      "miktar": 1.6
+     }
+    ]
+   },
+   {
+    "id": "SP-332",
+    "ad": "Burç (örnek)",
+    "urun": "U-BRC",
+    "adet": 154,
+    "termin": "2026-11-02 17:00",
+    "oncelik": 2,
+    "gelir": 72400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 0.8
+     }
+    ]
+   },
+   {
+    "id": "SP-333",
+    "ad": "Flanş Ø160 (örnek)",
+    "urun": "U-FLN",
+    "adet": 35,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 2,
+    "gelir": 49000,
+    "cezaGun": null,
+    "serbest": "2026-10-23 07:00",
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 3.2
+     }
+    ]
+   },
+   {
+    "id": "SP-334",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 6,
+    "termin": "2026-10-26 17:00",
+    "oncelik": 1,
+    "gelir": 62700,
+    "cezaGun": 600,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-335",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 8,
+    "termin": "2026-10-30 17:00",
+    "oncelik": 2,
+    "gelir": 82900,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-336",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 6,
+    "termin": "2026-10-28 17:00",
+    "oncelik": 2,
+    "gelir": 65600,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-337",
+    "ad": "Elektronik gövde (örnek)",
+    "urun": "U-GOV",
+    "adet": 4,
+    "termin": "2026-10-23 17:00",
+    "oncelik": 2,
+    "gelir": 45400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-7075-50",
+      "miktar": 6
+     }
+    ]
+   },
+   {
+    "id": "SP-338",
+    "ad": "Burç (örnek)",
+    "urun": "U-BRC",
+    "adet": 68,
+    "termin": "2026-11-03 17:00",
+    "oncelik": 2,
+    "gelir": 32400,
+    "cezaGun": null,
+    "serbest": null,
+    "malzeme": [
+     {
+      "kod": "M-4140-80",
+      "miktar": 0.8
+     }
+    ]
+   }
+  ],
+  "devamsizlik": [
+   {
+    "personel": "P01",
+    "gun": "2026-10-21"
+   },
+   {
+    "personel": "P02",
+    "gun": "2026-10-26"
+   },
+   {
+    "personel": "P02",
+    "gun": "2026-10-28"
+   },
+   {
+    "personel": "P11",
+    "gun": "2026-10-19"
+   },
+   {
+    "personel": "P12",
+    "gun": "2026-10-30"
+   },
+   {
+    "personel": "P15",
+    "gun": "2026-10-20"
+   },
+   {
+    "personel": "P15",
+    "gun": "2026-10-27"
+   },
+   {
+    "personel": "P17",
+    "gun": "2026-10-30"
+   },
+   {
+    "personel": "P21",
+    "gun": "2026-10-20"
+   },
+   {
+    "personel": "P22",
+    "gun": "2026-10-19"
+   }
+  ]
+ },
+ "ariza": []
+}
