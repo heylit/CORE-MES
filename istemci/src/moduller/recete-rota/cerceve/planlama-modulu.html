@@ -8437,6 +8437,7 @@ function gercekFormu(r) {
   const g = (S.gercek || {})[r.id]; const v = t => t == null ? '' : isoT(S.D, t).replace(' ', 'T');
   const sap = (S.olaylar || []).filter(e => e.tip === 'sureOp' && e.id === r.id).pop(); const oran = sap ? +sap.oran : 1;
   if (r.S <= now + 1e-6 || g) return `<details class="pm-gy-ac" ${g ? 'open' : ''}><summary>${ic('clock', 'k')} Gerçekleşen${g ? ' (girildi)' : ''}</summary><form class="pm-dik" data-form="gercek" novalidate><input type="hidden" name="id" value="${esc(r.id)}">
+    <p class="pm-kucuk" data-yer="gercek-tezgah">${ic('lock', 'k')} Tezgâh: <b>${esc(tezgahAd(cx, r.m))}</b>; gerçekleşen planın atadığı bu tezgâha yazılır.</p>
     <label class="tc-alan"><span class="tc-alan-etiket">Başladı</span><input class="tc-alan-kutu" type="datetime-local" name="bas" value="${v(g ? g.S : Math.min(r.S, now))}" max="${v(now)}" required></label>
     <label class="tc-alan"><span class="tc-alan-etiket">Bitti (boşsa sürüyor)</span><input class="tc-alan-kutu" type="datetime-local" name="bit" value="${v(g ? g.C : null)}" max="${v(now)}"></label>
     <p class="pm-kucuk">Şimdi ${esc(fmtDT(S.D, now))}; gerçekleşen saat şimdiden ileri olamaz. Bitmeyen adımın kalan süresi plandaki süreden hesaplanır.</p>
