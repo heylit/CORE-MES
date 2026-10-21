@@ -2,7 +2,7 @@
 
 Uçlar `uc()` ile: şema, oturum, işlem, kayıt noktası, denetim kaydı çekirdekten. Kişi ve zaman sunucudan. Genel kaydet ucu yok; her yazma
 ayrı uçtur. Yerleşim komutları yerleşim sürümüyle, plan geneli (öner, yerleştir, sırala) plan sürümüyle denetlenir (eski sürüm 409).
-Test: U = `sunucu/moduller/plan/plan.test.ts` (gerçek PostgreSQL), K = `kurallar.test.ts`, E = `istemci/src/moduller/rota/Rotalar.test.tsx`.
+Test: U = `sunucu/moduller/plan/plan-*.test.ts` (gerçek PostgreSQL; ortak kurulum `plan-ortak.test.ts`), K = `kurallar.test.ts`, E = `istemci/src/moduller/rota/Rotalar.test.tsx`.
 
 | Yol | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
