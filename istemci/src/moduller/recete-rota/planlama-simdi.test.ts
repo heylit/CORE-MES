@@ -18,7 +18,7 @@ function duzenek(baslangic: string, simdi: number, yetki = true): Duzenek {
     function kaydet() {} function render() {} function ozetTazele() {}
     function yukle() { return null; }
     function yeniCalisma() { return { D: { meta: { baslangic: '${baslangic}' } }, dataVer: 1, plan: { dataVer: 1, ops: { 'O1.10': { S: 1400, C: 1410 } } }, gercek: {} }; }
-    function stOf() { return { now: 7 }; }
+    function stOf() { return simdiUygula({ now: 7 }, S); }
     function coz(kip) { cozumler.push(kip + '@' + stOf().now); }
     let tekEylem = () => false;
     const cxAl = () => null;

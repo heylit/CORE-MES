@@ -30,7 +30,6 @@ wipHesap = function wipHesap(plan, st, cx) {
   }
   return out;
 };
-{ const esSt = stOf; stOf = function (ek, gevset) { const st = esSt(ek, gevset); if (st.wipP) { const e = {}; for (const s of st.D.siparisler) if (s.erkenSevk) e[s.id] = 1; st.wipP.erken = e; } return st; }; }
 { const yb0 = ymBeklemeKart; ymBeklemeKart = function () {
   const D = S.D; const fg = agFiyatGorur(); const l = D.siparisler.filter(s => !s.havuz);
   const sat = s => `<label class="pm-es-sip"><input type="checkbox" data-chg="es-sip" data-v="${esc(s.id)}" ${s.erkenSevk ? 'checked' : ''} ${fg ? '' : 'disabled'}><span class="mono">${esc(s.id)}</span></label>`;

@@ -20,7 +20,7 @@ function duzenek(kayit: Nesne, calisma: Nesne, kaynak: { durum: Nesne; ek: Nesne
     const CALISMA = ${JSON.stringify(calisma)};
     function yukle() { return JSON.parse(JSON.stringify(CALISMA)); }
     function yeniCalisma() { throw new Error('çalışma kayıttan açılmalı'); }
-    function stOf(ek = [], gevset = true) { return stKur(S, ek, gevset); } function coz() {}
+    function stOf(ek = [], gevset = true) { return stTamKur(S, ek, gevset); } function coz() {}
     let cxOn = null; const cxAl = () => { const k = JSON.stringify([S.D, S.gercek, S.simdi]); if (!cxOn || cxOn.k !== k) cxOn = { k, cx: compile(stOf()) }; return cxOn.cx; };
     let tekEylem = () => false;
     ${planlamaMotoru()}
@@ -29,7 +29,7 @@ function duzenek(kayit: Nesne, calisma: Nesne, kaynak: { durum: Nesne; ek: Nesne
     ${planlamaParcasi('zz31-tmi')}
     const KAYNAK = ${JSON.stringify(kaynak)};
     return {
-      ac: () => { S = yukle(); render(); },
+      ac: () => { S = yukle(); render(); karar1650Goc(S); },
       cerceve: () => ({ S: JSON.parse(JSON.stringify(S)), st: JSON.parse(JSON.stringify(stOf())) }),
       sunucu: () => { const r = girdiKur(CALISMA, JSON.parse(localStorage.getItem('recete-rota-motoru-v1')), KAYNAK, '2026-10-19'); return r && JSON.parse(JSON.stringify(r)); },
     };`;

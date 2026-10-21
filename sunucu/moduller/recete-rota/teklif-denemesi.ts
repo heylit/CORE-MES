@@ -9,7 +9,7 @@ import { COZUM_SURESI_MS } from './plan-motoru.ts';
 // Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.betik), kalemler motorun acil sipariş olayıyla eklenir
 // (motor/teklif.betik). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
-const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'teklif'] as const;
+const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum', 'teklif'] as const;
 
 let kod: string | null = null;
 function denemeKodu(): string {

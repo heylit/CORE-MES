@@ -14,9 +14,7 @@
    eldeki sipariş defterinin hızıdır (VARSAYIM, uygulamada kapanmış siparişlerden okunmalı). */
 const YL_ACIL = 1e5;
 const YL_GUN = 364;
-function ylAyar(D = S.D) {
-  return (D.yillik = D.yillik || { tahmin: 'gecmis', buyume: 10, elle: {}, mesaiMaks: 15, gecTL: 0.43, stokTL: 3.9, yatirim: true, teslimAy: 3, hedef: null });
-}
+/* ylAyar ve motorun yıllık hedefi st'ye yazması motor/durum.betik'tedir. */
 /* dönemler: gün cinsinden [a, b) */
 function ylDonemler() {
   const l = []; for (let w = 0; w < 13; w++) l.push({ a: w * 7, b: w * 7 + 7, tur: 'hafta' });
@@ -160,9 +158,6 @@ function hedefUygula() {
 }
 hedefUygula();
 ISCI_EK.push(`${hedefUygula}\nhedefUygula();`);
-{ const s0 = stOf; stOf = function () { const st = s0.apply(this, arguments); const A = ylAyar(); const h = A.hedef;
-  if (h && h.hedef && h.hedef.length) { const isler = {}; for (const s of st.D.siparisler) { const f = h.aile[s.urun]; if (f) isler[s.id] = [f, +s.adet || 0]; } st.yHedef = { hedef: h.hedef, isler }; }
-  return st; }; }
 function ylPlanUretim(f, t, h0) { const p = S.plan; if (!p || !p.J) return null; const A = ylAyar(); const h = h0 || A.hedef || ylHedefKur(); if (!h) return null; let k = 0;
   for (const s of S.D.siparisler) { if (h.aile[s.urun] !== f) continue; const j = p.J[s.id]; if (j && j.C != null && j.C <= t) k += +s.adet || 0; } return k; }
 

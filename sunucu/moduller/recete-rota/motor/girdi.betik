@@ -417,21 +417,23 @@ function baslangicTazele(S, an) {
   const bugun = s.slice(0, 10), g = gunFarki(S.D.meta.baslangic, bugun);
   return g != null && g >= BASLANGIC_ESIGI ? baslangicKaydir(S, bugun) : 0;
 }
-/* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek),
-   kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
+/* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek,
+   ilk çizimde), eski kayıtta 1650 kararlarının taşınması (zz-karar-1650, çizimden sonra), kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula);
+   st sayfanın stOf'uyla aynı yoldan (durum.betik stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
    kaydı, kaynak: { durum, ek } (çerçevenin kaynakOku cevabı) ya da null. Girdiler değişmez. Dönen: { S, st }; çalışma yoksa null. */
 function girdiKur(calisma, kayit, kaynak, bugun) {
   if (!calisma || !calisma.D) return null;
   const S = clone(calisma); tmiTabanKur(S.D, bugun);
   const k = kayit && kayit.items ? kayit : null;
   if (k && S.rrSavedAt != null && (k.savedAt || 0) !== S.rrSavedAt) { const D = tmiCevir(k, null, S.D, bugun); if (!rrEsit(D, S.D)) S.D = D; }
+  karar1650Goc(S);
   const kn = kaynak && kaynak.durum ? kaynak : null;
   if (kn) {
     kaynakBirlestir(S.D, k, kn, bugun);
     if (Array.isArray(kn.durum.calisanAdimlar)) {
-      const cx = compile(simdiUygula(stKur(S), S));
+      const cx = compile(stTamKur(S));
       const y = tmiCalisanlar(kn.durum, k, S.D, cx.st.now); if (y) calisanBirlestir(S, y, cx);
     }
   }
-  return { S, st: simdiUygula(stKur(S), S) };
+  return { S, st: stTamKur(S) };
 }

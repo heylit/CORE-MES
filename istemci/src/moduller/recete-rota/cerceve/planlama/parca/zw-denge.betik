@@ -4,16 +4,13 @@
    kâr ucunda 0,1. Aynı çarpan ek mesai önerisinde önlenen gecikme bedeline uygulanır: motorun kendi başına termin ile maliyet arasında
    değiştirebileceği az (tezgâh seçimi, isteğe bağlı fason); asıl kaldıraç kapasite satın almaktır. Maliyet kalemleri hep gerçek TL'dir; ekranda gösterilen tutarlar çarpansız hesaplanır.
    Çubuğu müdür ve yönetici değiştirir (bedel ayarı gibi, 210 a); kâr ve tutarlar yalnız onlarda görünür (180 a). */
-const pdDenge = (D = S.D) => { const v = D && D.planDenge; return v == null || !isFinite(+v) ? 50 : Math.max(0, Math.min(100, +v)); };
-/* termin ucu 100 kata kadar çıkar: bedel modelinde bir saatlik gecikme bir ek mesai vardiyasından çok ucuzdur, kapasite ancak büyük çarpanla satın alınır */
-const pdKat = d => d <= 50 ? Math.pow(100, (50 - d) / 50) : Math.pow(10, (50 - d) / 50);
+/* pdDenge ve pdKat motor/durum.betik'tedir (çarpan st'ye orada yazılır). */
 const pdAd = d => d <= 10 ? 'Termin önce' : d < 40 ? 'Termine yakın' : d <= 60 ? 'Dengeli' : d < 90 ? 'Kâra yakın' : 'Kâr önce';
 const pdH = h => `<span class="pm-pd-hucre">${h}</span>`;
 const pdKatYaz = d => '×' + sayi(pdKat(d), pdKat(d) >= 10 ? 0 : 2);
 
 /* gecikme ve tampon ihlali bedeli çubuğun çarpanıyla, maliyet olduğu gibi; işçi kaynağına bu tanım gider */
 tlToplam = function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4]; };
-{ const pdSt = stOf; stOf = function (ek, gevset) { const st = pdSt(ek, gevset); st.tlAmac.kT = pdKat(pdDenge()); Object.assign(TL_AMAC, st.tlAmac); return st; }; }
 
 /* aynı veriyle birden çok plan: her biri kendi çarpanı ve termin kopyasıyla. ms 0 ise yalnız kural tabanlı ilk plan kurulur
    (aynı girdiye aynı sonuç); farkları karşılaştırmak için bu yeterlidir, iyileştirme rastgele seçimle birkaç bin TL oynar. */

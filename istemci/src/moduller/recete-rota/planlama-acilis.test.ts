@@ -45,8 +45,9 @@ describe('planlama sayfasını açmak yazmaz', () => {
     const ac = (S: Nesne): { S: Nesne; yazma: () => number; depo: Map<string, string> } => {
       const govde = `
         let yazma = 0;
-        const ANAHTAR = 'recete-rota-motoru-v1:planlama'; const WIP0 = {};
-        let stOf = () => ({ w: {} }); let compile = () => ({}); let evaluate = () => ({}); let isciAc = () => null;
+        const ANAHTAR = 'recete-rota-motoru-v1:planlama';
+        let isciAc = () => null;
+        ${planlamaMotoru()}
         let S = ${JSON.stringify(S)};
         function kaydet() { yazma++; } function render() {}
         ${planlamaParcasi('zz-karar-1650')}

@@ -30,7 +30,8 @@ const yetkili = y => (YETKI[kim().rol] || []).includes(y);
 function iz(ne, ayrinti) { const k = kim(); S.iz.unshift({ t: Date.now(), kim: k.ad, rol: ROL_AD[k.rol], sayfa: SAYFA_AD[U.sayfa] || U.sayfa, ne, ayrinti: ayrinti || '' }); if (S.iz.length > 400) S.iz.length = 400; }
 
 /* Plan girdisi (st) motor klasöründeki girdi.betik'tedir: sunucu aynı kodla kurar. */
-function stOf(ek = [], gevset = true) { return stKur(S, ek, gevset); }
+/* planın girdisi sunucuyla aynı koddan (motor/durum.betik stTamKur): ağırlık, TL ayarları, terminler ve sayfanın şimdisi dahil */
+function stOf(ek = [], gevset = true) { return stTamKur(S, ek, gevset, { kiyasEski: U.agKiyasEski }); }
 function cxAl() {
   if (cxOnbellek.v !== S.dataVer || cxOnbellek.s !== S) { try { cxOnbellek = { v: S.dataVer, s: S, cx: compile(stOf()) }; } catch (e) { cxOnbellek = { v: S.dataVer, s: S, cx: null, hata: String(e.message || e) }; } }
   return cxOnbellek.cx;
