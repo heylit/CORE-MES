@@ -620,7 +620,7 @@ export function teklifAdimlari(yol: string, eski: Veri | null, yeni: Veri): Tekl
 
 // Teklif durumu Siparişler'dedir (254 a): bağlı talebin durumu okurken oradan gelir; fiyat ve kalem Portal'ın kopyasından kalır.
 const PORTAL_TALEP_DURUMU: Record<TeklifDurumu, string> = {
-  yeni: 'new', verildi: 'quoted', revizyon: 'revision', kabul: 'accepted', red: 'rejected', siparis: 'ordered',
+  yeni: 'new', 'onay-bekliyor': 'new', verildi: 'quoted', revizyon: 'revision', kabul: 'accepted', red: 'rejected', siparis: 'ordered',
 };
 
 export const talepKimligi = (yol: string): string | null => {
