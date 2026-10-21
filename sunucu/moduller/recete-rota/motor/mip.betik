@@ -34,6 +34,7 @@ function mipModel(st,cx,jobIds,opt={}){
     const pr=opt.plan&&opt.plan.ops[o.id];
     if(pr&&pr.pin){fixed[o.id]={S:pr.S,C:pr.C};continue;}
     if(g[o.id]&&g[o.id].C!=null){fixed[o.id]={S:g[o.id].S!=null?g[o.id].S:g[o.id].C,C:g[o.id].C};continue;}
+    const kr=!(g[o.id]&&g[o.id].S!=null)&&kilitYeri(o,st.locks&&st.locks[o.id],cx);if(kr){fixed[o.id]={S:kr.S,C:kr.C};continue;}
     const head=Math.max(st.now,ht.head[o.id]);
     let dumC=Infinity;
     for(const c of o.c){

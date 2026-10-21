@@ -3312,6 +3312,14 @@ function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),
 /* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
    Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
 function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
+/* Kilitli iş (kilit a): saati şimdiden ileriyse tezgâhında tam kilit saatinde sabittir; öncülünü beklemez (dondurulmuş gibi), öteki işler
+   etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
+function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
+  const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
+  const downHit=(cx.st.down||[]).some(d=>d.m===c.m&&d.from<C-1e-9&&d.to>S+1e-9);
+  return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,c.tbRun)),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit};}
+/* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
+function kilitKoy(cx,ctx,r){ctx.P[r.id]=r;(ctx.kilit[r.m]=ctx.kilit[r.m]||[]).push([r.S,r.C,r.id]);addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat);}
 function k0(t){return Math.max(0,Math.floor(t/SL+1e-9));}
 function k1(t){return Math.min(NS,Math.ceil(t/SL-1e-9));}
 function checkUse(cx,u,M,r,apId){
@@ -3377,6 +3385,7 @@ function tMach(o,c,cx,ctx,b,fast){
     const Su=adv(M.sw,s,su);if(!isFinite(Su))return null;
     const C=adv(M.rw,Su,run);if(!isFinite(C))return null;
     if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
+    const kl=ctx.kilit&&ctx.kilit[c.m]&&ctx.kilit[c.m].find(([a,z])=>s<z-1e-9&&C>a+1e-9);if(kl){s=kl[1];why={t:'tezgah',r:kl[2]};continue;}
     const r={S:s,Su,C,su};
     const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat);
     if(bad){let k=bad.k+1;
@@ -3423,19 +3432,20 @@ function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Ma
 
 function schedule(st,mode,base,opt={}){
   const cx=opt.cx||compile(st);
-  const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},rnd:rng(opt.seed||7),fail:[]};
+  const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},kilit:{},rnd:rng(opt.seed||7),fail:[]};
   const all=cx.ops.filter(o=>o.c.length);let ps=0,ss=0,n=0;for(const o of all){const c=o.c.find(x=>!x.fas);if(c){ps+=c.su+c.run;ss+=c.su;n++;}}
   ctx.pbar=n?ps/n:4;ctx.sbar=n?Math.max(.1,ss/n):.5;
   const now=st.now,frz=now+(st.w.dondurma||0);
   const g=st.gercek||{};
   // sabitler: gerçekleşen, başlamış, dondurulmuş
-  const pins=[];
+  const pins=[],kilitler=[];
   for(const o of cx.ops){const b=base&&base.ops[o.id],a=g[o.id];
     if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
       let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
       if(a.C!=null){r.C=a.C;r.Su=Math.min(a.C,src.Su!=null?a.S+(src.Su-src.S):a.S);r.lot1=Math.min(r.C,src.lot1||r.C);r.done=1;}
       else if(M){r.Su=adv(M.sw,a.S,src.su||0);const kb=kalanBitis(M,a);if(kb!=null){r.C=kb;r.Su=Math.min(r.Su,kb);}else r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);}
       pins.push(r);continue;}
+    const kr=kilitYeri(o,st.locks&&st.locks[o.id],cx);if(kr){kilitler.push(kr);continue;}
     if(!b)continue;
     if(b.C<=now+1e-9){pins.push({...b,pin:1,done:1});continue;}
     const hit=!b.fas&&(st.down||[]).some(d=>d.m===b.m&&d.from<b.C-1e-9&&d.to>b.S+1e-9&&!(base.downIds||[]).includes(d.id));
@@ -3445,6 +3455,7 @@ function schedule(st,mode,base,opt={}){
     if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
   }
   pins.sort((a,b)=>a.S-b.S).forEach(r=>commit(cx,ctx,r));
+  kilitler.forEach(r=>kilitKoy(cx,ctx,r));
   const U=new Set(cx.ops.filter(o=>!ctx.P[o.id]&&o.c.length).map(o=>o.id));
   const ready=o=>o.pr.every(([p])=>ctx.P[p]);
   if((mode==='sabit'||mode==='sabit-mc')&&base){
@@ -3558,6 +3569,7 @@ function evaluate(plan,st,ref,fast){
   // sıralı amaç: 1 ağırlıklı gecikme, 2 değişiklik, 3 ayar süresi, 4 bilinen TL maliyet
   // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir
   const tl=cost+mesaiTL;const lex=[wT,wB,chg,suH,tl];Z=-wT;
+  for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
@@ -3576,7 +3588,9 @@ function lowerBound(st,cx){
   for(const o of order){let s=st.now;const j=cx.jobs[o.job];if(j.rel!=null)s=Math.max(s,j.rel);if(!o.program)s=Math.max(s,cx.progRel);
     for(const [p,t] of o.pr){const q=done[p];if(q==null){s=Infinity;break;}s=Math.max(s,q.f+(t==='o'?-(q.f-q.l1):0)+(cx.byId[p].c.some(c=>c.fas)?0:tas));}
     let best=Infinity,l1=Infinity;
+    const kr=!(g[o.id]&&g[o.id].S!=null)&&kilitYeri(o,st.locks&&st.locks[o.id],cx);
     if(g[o.id]&&g[o.id].C!=null){best=g[o.id].C;l1=best;}
+    else if(kr){best=kr.C;l1=kr.lot1;}
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       // başlamış işlemin yalnız kalan süresi sayılır
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);}l1=best;}else{best=st.now;l1=best;}}
@@ -3747,7 +3761,9 @@ function lbHeadsTails(st,cx){
     for(const [p,t] of o.pr){if(fin[p]==null||!isFinite(fin[p])){s=Infinity;break;}const pf=cx.byId[p].c.some(c=>c.fas);s=Math.max(s,(t==='o'&&cx.byId[p].c.some(c=>!c.fas)?l1[p]:fin[p])+(pf?0:tas));}
     head[o.id]=s;
     let best=Infinity,b1=Infinity;
+    const kr=!(g[o.id]&&g[o.id].S!=null)&&kilitYeri(o,st.locks&&st.locks[o.id],cx);
     if(g[o.id]&&g[o.id].C!=null){best=b1=g[o.id].C;}
+    else if(kr){best=kr.C;b1=kr.lot1;}
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       if(M){const kb=kalanBitis(M,a);if(kb!=null)best=b1=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}}else best=b1=st.now;}
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=b1=v;}}continue;}
@@ -3971,6 +3987,7 @@ function mipModel(st,cx,jobIds,opt={}){
     const pr=opt.plan&&opt.plan.ops[o.id];
     if(pr&&pr.pin){fixed[o.id]={S:pr.S,C:pr.C};continue;}
     if(g[o.id]&&g[o.id].C!=null){fixed[o.id]={S:g[o.id].S!=null?g[o.id].S:g[o.id].C,C:g[o.id].C};continue;}
+    const kr=!(g[o.id]&&g[o.id].S!=null)&&kilitYeri(o,st.locks&&st.locks[o.id],cx);if(kr){fixed[o.id]={S:kr.S,C:kr.C};continue;}
     const head=Math.max(st.now,ht.head[o.id]);
     let dumC=Infinity;
     for(const c of o.c){
@@ -4507,14 +4524,14 @@ function nedenMetni(r) {
   let neden = NEDEN[why.t] || 'Bilinmiyor.';
   if (why.t === 'rota') neden = why.o === 2 ? `Son parti kuralı: önceki adım ${why.r} bitmeden son partiyi bitiremezdi.` : why.o === 1 ? `Önceki adım ${why.r} ilk partisini bitirince örtüşmeli başladı.` : `Önceki adım ${why.r} bitince başladı (taşıma payı dahil).`;
   if (why.t === 'tezgah') neden = `Tezgâhta önceki iş ${why.r} bitince başladı.`;
-  if (why.t === 'kilit') neden = 'Kilitli: planlamacının verdiği en erken saatte başladı.';
+  if (why.t === 'kilit') neden = 'Kilitli: planlamacının verdiği saatte, kendi tezgâhında sabit; öteki işler etrafına dizilir.';
   if (why.t === 'oneri') neden = 'Çözücü önerisindeki saatte başladı; motor kısıtları yeniden uyguladı.';
   return neden;
 }
 function uyarilar(p) {
   const w = p.warn || [];
   if (!w.length && !(p.fail || []).length) return '';
-  const tip = { malzeme: ['box', 'uyari', 'Malzeme'], program: ['tool', 'bilgi', 'NC programı'], plan: ['alert', 'hata', 'Planlanamadı'] };
+  const tip = { malzeme: ['box', 'uyari', 'Malzeme'], program: ['tool', 'bilgi', 'NC programı'], plan: ['alert', 'hata', 'Planlanamadı'], kilit: ['lock', 'uyari', 'Kilit'] };
   const grup = {};
   for (const x of w) (grup[x.t] = grup[x.t] || []).push(x);
   return `<ul class="pm-olaylar">${Object.entries(grup).map(([t, l]) => { const [s, ton, ad] = tip[t] || ['alert', 'uyari', t]; return l.slice(0, 5).map(x => `<li class="pm-olay" data-ton="${ton}">${ic(s, 'k')}<span class="pm-olay-metin"><b>${ad}.</b> ${esc(x.txt)}</span></li>`).join('') + (l.length > 5 ? `<li class="pm-kucuk">${ad}: ${l.length - 5} uyarı daha</li>` : ''); }).join('')}</ul>`;
