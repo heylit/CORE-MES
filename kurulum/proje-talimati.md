@@ -10,7 +10,7 @@ DEPO VE DEVIR
 
 ROLUN
 Koordinatorsen: rolun ve sinirlarin projenin hedefinde yazilidir; asagidaki yazar kurallari actigin konular icindir, her konuya parcasini, klasorlerini, kart numarasini, dal adini ve basvurusunu verirsin. Goc damgasini tek elden sen verirsin.
-Yazar konuysan: SEF DEGILSIN; tek bir parcanin yazarisin. Depodaki CLAUDE.md'nin "Ajanlar" bolumu (ajan dagitma, birlestirme, kart acma, CLAUDE.md ve .claude duzenleme) sana uygulanmaz. CLAUDE.md'nin geri kalani (temel kural, kirmizi cizgiler, yapi kurallari) ve kurulum/dis-modul-sartnamesi.md senin icin gecerlidir.
+Yazar konuysan: SEF DEGILSIN; tek bir parcanin yazarisin. Sef ve ajan duzeni (kurulum/sef-duzeni.md: ajan dagitma, birlestirme, kart acma, CLAUDE.md ve .claude duzenleme) sana uygulanmaz. CLAUDE.md'nin geri kalani (temel kural, kirmizi cizgiler, yapi kurallari) ve kurulum/dis-modul-sartnamesi.md senin icin gecerlidir.
 Birlestirici konuysan: kod YAZMAZSIN. Isin yazar konularin biraktigi yamalari uygulamak, dal push etmek, cekme istegi acmak, siraya koymak ve birlestirmektir; kurallarin "BIRLESTIRME" bolumundedir. Baska hicbir konu push etmez, cekme istegi acmaz ya da birlestirmez, main'e yazmaz.
 Turkce konus, kisa yaz, emoji yok. Kod tanimlayicilari Turkce (ASCII), commit mesaji Ingilizce.
 
@@ -76,6 +76,7 @@ CALISMA DUZENI (2026-10-21, kullanici onayi)
 TESLIM (yazar konular)
 - Bugunku akis: push etmezsin, cekme istegi acmazsin, kart acmaz ya da kapatmazsin. Kendi yerel dalinda calis; dal adi `<kart no>-<kisa-ad>` bicimindedir, kart numarasi gorevde verilir, verilmediyse koordinator verir. main'e ve baska dallara dokunma.
 - Is bitince testli ve acik depo taramasindan gecmis `git format-patch` ciktisini proje dosyalarinda `devir-heylit/<serit>/` altina birak. Yaninda DEVIR.md: taban commit, uygulama sirasi, her yamanin sha256'si, kosulan komutlarin son satirlari, kosulamayanlar, "bu is sunlari varsaydi" ozeti (en cok 10 satir) ve onay durumu. Commit yazari ve mesaji kisisel bilgi tasimaz.
+- Derlenmis planlama sayfasi (`istemci/src/moduller/recete-rota/cerceve/planlama-modulu.html`) yamaya girmez: yalniz kaynak parcalari girer, sayfayi Birlestirici kurar. Test icin yerelde kurabilirsin; commit'e koymazsin (`git restore` ile geri al). Uretilmis buyuk dosya her commit'te catisir ve yamayi yeniden urettirir.
 - Yama main ilerleyip catisirsa yeniden uretmek senin isindir; birlestirici elle birlestirmez. CI kirmizi olursa duzeltme yamasi senin isindir.
 - Taslaktan cikarma (2026-10-14, kullanici karari, kalici): bir yazar konu cekme istegi acarsa (kullanici ya da koordinator boyle isterse) istegi yalniz is bitince acar ve hemen taslaktan cikarir; acik istege yeni is eklenecekse once taslaga geri alinir, bitince yeniden cikarilir. Kirmizi CI'i duzeltmek yazarin isidir.
 - Bolme (2026-10-14, kullanici karari, "Yumusat"): is yalniz gercekten bagimsiz parcalari varsa ve yaklasik 800 satiri asiyorsa 2-3 yamaya bolunur; parcalar birbirinin ustune kurulmaz ve ayni turda birlesir. Aksi halde is tek yamadir. Dal basina tek modul.
@@ -90,9 +91,12 @@ BIRLESTIRME (yalniz birlestirici konu)
 - Birlesmeyi tutanlar: kirmizi CI, yetki acigi, veri kaybi, yanlis sayi ya da para, kirmizi cizgi (gercek veri, gizli ya da sirket bilgisi, dis cagri, onaysiz paket), baska parcanin klasorune yazim, FARK.md'de yazmayan degisiklik. Diger bulgular modulun UYUM-BORCU.md'sine ya da karta yazilir; birlesmeyi tutmaz.
 - Toplayici istisnasi: modulun toplayiciya ya da cekirdek kayit listesine ekledigi ayri commit'in yalniz o modulun kayit satirlari oldugunu ve listenin yapisina dokunmadigini denetle; degilse birlesmeyi tutar.
 - Bana sorulur, onayim beklenir: rol x islem degisikligi, dolu tabloyu degistiren ya da dusuren goc, yeni paket, CLAUDE.md, .claude ve .github degisikligi, sahibi disarida olan module dokunan is (uretim-emirleri 2026-10-12'de projeye alindi; artik bu kapsamda degil).
+- Planlama sayfasi: kaynagina dokunan yama uygulaninca `node istemci/src/moduller/recete-rota/planlama-derle.ts` kosulur; degisen `cerceve/planlama-modulu.html` ayni dala ayri commit olarak eklenir ("Rebuild the planning frame page"). Bu commit yalniz o dosyayi tasir.
 - Goc damgalari sirali olmali; `npm run sinir -- --modul <ad>` goc damgasi dahil yesil olmali.
 - Sira: ayni dosyaya dokunmayan istekler pes pese birlesir; ortak dosyasi olanlar sirayla, her birinden sonra siradaki guncel ana dala alinir ve CI beklenir. Cekirdek ve ortak arayuz once, moduller sonra. Koordinatorun yazdigi sira bozulmaz.
-- Her birlesmeden sonra ana dalin CI'ini izle; kirmizi olursa DUR, yeni birlestirme yapma, hangi birlesmenin kirdigini bana soyle. Geri alma karari benimdir.
+- Kapi: istegin tabani birlesme aninda main'in ucuyla ayniysa (dal guncel, arada birlesme yok) kapi istegin kendi `kontrol` kosusudur; main'in push kosusu beklenmeden siradaki istege gecilir. Taban main'in ucu degilse once guncel main'e alinir ve istegin CI'i yeniden beklenir.
+- Main'in push kosusu arka kontroldur; her birlesmeden sonra izlenir. Kirmizi olursa DUR, yeni birlestirme yapma, hangi birlesmenin kirdigini bana soyle. Geri alma karari benimdir.
+- Geri alma onerisinden once: dusen test, bozdugu dusunulen birlesmeden onceki tabanda (birlesme commit'inin ilk ebeveyni) ayni komutla kosulur. Orada da dusuyorsa birlesme bozmamistir, geri alma onerilmez; sonuc (iki kosunun son satirlari) rapora yazilir.
 - Zorla gonderme, bos commit, test atlama yok; dal silme benim onayimla.
 - Rapor: birlesen ve birlesmeyen istekler, ana dalin commit kimligi, kapanan kartlar, bana sorulanlar. Kullanicinin gorecegi birlesme "main'e girdi, git pull sonrasi dene" diye bildirilir; goc varsa butun guncelleme adimlari yazilir.
 ```

@@ -8,6 +8,8 @@ on:
       - 'kurulum/**'
       - 'belgeler/**'
   pull_request:
+  # Ana dalda ya da bir dalda elle yeniden koşu: boş commit ya da istek kapatıp açma gerekmez.
+  workflow_dispatch:
 
 # Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda her commit kendi grubundadır, hiçbir koşu iptal edilmez ya da
 # bekleyen koşunun yerini almaz: kırmızıda bozan birleşme tek commit'e iner.
