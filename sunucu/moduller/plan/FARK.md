@@ -107,3 +107,12 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - Sözleşme: yerleşim ve yerleşmemiş satırına `tur` (rota, rework, tamir, ek) eklendi. Göç, uç ve rol değişikliği yok.
 - uretim-emirleri: `PlanIsEmri.bolunmeSira` eklendi (yalnız okuma).
 - VARSAYIM: uyarılar (sıraya aykırı başlangıç) yalnız emir içi öncüle bakar; kol bağı uyarıya girmedi.
+
+## Taban plan (33 a, 25 b, 394 a, 2026-10-21)
+- Kullanıcı kararı 33 a: taban planın sahibi plan modülüdür; canlıya almayla aynı işlemde yeni, yalnız eklenen bir tabloya yazılır. Reçete ve Rota sekmeyi `disari.ts` `tabanPlani` ile okur (sekme ayrı iş).
+- Göç `20261019161000_plan_taban.sql`: `plan_taban` (adım başına tek satır, `plan_taban_is_emri_tek`); değiştirme, silme ve boşaltma `yalniz_ekleme` ile reddedilir. Boş tablo; dolu tabloya dokunulmadı. İş emrine yabancı anahtar yok: emir silinse de taban kalır.
+- `canliyaAl`: plan sürümü artırıldıktan sonra canlıya geçen her adımın canlı yeri (makine ya da kişi, başlangıç, bitiş), yeni canlı sürüm, senaryo ve canlıya alan kişi yazılır; tabanı olan adım atlanır. Plan sürümü satırı canlıya almanın başında kilitlenir, eşzamanlı ikinci canlıya alma bekler; benzersiz kısıt ikinci yazmayı ayrıca durdurur. Deneme emirleri (eksi kimlik) yazılmaz.
+- Yeni uç, işlem, rol ve paket yok.
+- VARSAYIM: taban adım başınadır; ilk canlıya almada yerleşmemiş adım, ilk yerleştiği canlıya almada kendi tabanını alır. Emrin ilk planı en küçük plan sürümlü satırlarıdır. Bölünmüş işte zarf (ilk başlangıç, son bitiş, ilk parçanın kaynağı) yazılır, parçalar yazılmaz.
+- VARSAYIM: göçten önce canlıda olan adımın tabanı, göçten sonraki ilk canlıya almadaki yeridir (canlı kurulum yok; yalnız geliştirme verisi).
+- `plan-taban.test.ts`: ilk yazma, değişmezlik, sonradan giren adım, yalnız ekleme ve kısıt, emir silinince kalma, eşzamanlı iki canlıya alma, yetkisiz ve vazgeçilen taslak.

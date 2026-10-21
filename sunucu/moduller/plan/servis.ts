@@ -1847,6 +1847,11 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }
   await s.ayariCanliyaYaz(db, id, k.id);
   await s.planSurumuArtir(db);
+  // 33 a: taban, yeni canlı sürümle yazılır; tabanı olan adım atlanır.
+  await s.tabanYaz(db, id, idler.flatMap((i) => {
+    const u = b.isler.get(i)?.uretimEmriId;
+    return u === undefined || i < 0 ? [] : [{ isEmriId: i, uretimEmriId: u }];
+  }), k.id);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
   return { ...(await senaryolar(db, k)), ...(motorFarki === undefined ? {} : { motorFarki }) };
 }

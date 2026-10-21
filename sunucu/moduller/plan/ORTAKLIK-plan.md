@@ -14,3 +14,9 @@
 | Takvim, vardiya | yok (sürekli çalışma, P-B3) | vardiya, mesai |
 | Senaryo durumu | `plan_senaryosu.durum` (acik, canliya_alindi, vazgecildi) | - |
 | Plan sürümü | `plan_durumu.surum` | - |
+
+## Taban plan (33 a)
+| Kavram | Planda | Sahibi / öteki yer |
+|---|---|---|
+| Taban plan (adımın ilk canlı yeri) | `plan_taban` (is_emri_id, uretim_emri_id, makine_id, kisi_id, baslangic, bitis, plan_surumu, senaryo_id, yazan_kisi_id, zaman) | plan (sahibi, 33 a); Reçete ve Rota `tabanPlani` ile okur |
+| İş emri, üretim emri | `plan_taban.is_emri_id`, `plan_taban.uretim_emri_id` (FK yok: taban emirden sonra da kalır) | uretim-emirleri |
