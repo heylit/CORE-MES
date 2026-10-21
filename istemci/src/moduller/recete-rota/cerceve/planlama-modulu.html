@@ -14919,10 +14919,11 @@ function ozetTazele() {
    4 c: geliş tarihi belli olan malzeme sert kısıttır; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.
    5 b: genel gider batık maliyettir; plan amacına girmez, maliyet ve teklif raporunda kalır. */
 WIP0.vadeBas = 'termin';
-/* eski kayıtlarda varsayılanlar bir kez yeni kararlara taşınır; durum yüklendikten sonra */
+/* eski kayıtlarda varsayılanlar bir kez yeni kararlara taşınır; durum yüklendikten sonra. Taşıma yalnız bellekte yapılır, işareti çalışmadadır
+   ve ilk kayıtla yazılır: kayıt ortaktır, açılışta yazmak aynı anda açan ikinci kişiye çakışma (409) verir. */
 setTimeout(() => {
   let k1650 = null; try { k1650 = localStorage.getItem(ANAHTAR + '-karar1650'); } catch (e) { /* yok */ }
-  if (!k1650 && S && S.D) { if (S.w.mat === 'uyari') S.w.mat = 'karma'; const w = S.D.planTL && S.D.planTL.wip; if (w && w.vadeBas === 'bitis') w.vadeBas = 'termin'; if (S.D.planDenge == null) S.D.planDenge = 25; try { localStorage.setItem(ANAHTAR + '-karar1650', '1'); } catch (e) { /* yok */ } kaydet(); render(); }
+  if (!k1650 && S && S.D && !S.karar1650) { if (S.w.mat === 'uyari') S.w.mat = 'karma'; const w = S.D.planTL && S.D.planTL.wip; if (w && w.vadeBas === 'bitis') w.vadeBas = 'termin'; if (S.D.planDenge == null) S.D.planDenge = 25; S.karar1650 = 1; render(); }
 }, 0);
 { const kgSt = stOf; stOf = function (ek, gevset) { const st = kgSt(ek, gevset); st.ggP = 0; if (S.param.tezgahTL === false) st.w.tezgahEski = true; st.w.matKarma = st.w.mat === 'karma'; if (st.w.matKarma) st.w.mat = 'sert'; return st; }; }
 /* ana iş parçacığı ve işçi: belli olmayan gelişte malzeme hazır sayılır (iş başlar), uyarı motorun malzeme uyarısıyla aynı metinle verilir */
@@ -15249,7 +15250,8 @@ document.addEventListener('click', e => {
   p: [['param', 'bolmeKip', 'Kip', 'sec', [['otomatik', 'Otomatik'], ['oneri', 'Yalnız öneri'], ['kapali', 'Kapalı']]],
     ['param', 'bolmeMin', 'En küçük parti', 'adet', 1, 10000, 1], ['param', 'bolmeMaks', 'Bir çözümde en çok bölünen', 'sipariş', 0, 20, 1], ['param', 'bolmeEsik', 'En az kazanç', 'TL', 0, 1000000, 100],
     ...BOLME_CESIT.map(([c, ad]) => ['param', BC_ANAHTAR[c], ad, 'sec', [['acik', 'Denenir'], ['kapali', 'Denenmez']]])] }); }
-setTimeout(() => { if (!S.param) return; let d = false; for (const [k, v] of [['bolmeKip', 'otomatik'], ['bolmeMin', 5], ['bolmeMaks', 3], ['bolmeEsik', 1000]]) if (S.param[k] == null) { S.param[k] = v; d = true; } if (d) kaydet(); }, 0);
+/* eksik varsayılan yalnız bellekte tamamlanır, ilk kayıtla yazılır (açılışta yazılmaz) */
+setTimeout(() => { if (!S.param) return; for (const [k, v] of [['bolmeKip', 'otomatik'], ['bolmeMin', 5], ['bolmeMaks', 3], ['bolmeEsik', 1000]]) if (S.param[k] == null) S.param[k] = v; }, 0);
 /* öne alma adayları önizleme alanını kullanır; bekleyen önizleme (otomatik bölme) aday hesabından sonra yerinde kalır */
 { const oa1 = oneAlAdaylari; oneAlAdaylari = function () { const h = U.hamle, s = U.secili; try { return oa1.apply(this, arguments); } finally { U.hamle = h; U.secili = s; } }; }
 
@@ -18624,7 +18626,8 @@ function rrCek() {
   let st; try { st = JSON.parse(raw); } catch (e) { return false; }
   let D; try { D = rrDenemeyeCevir(st); } catch (e) { console.error(e); bildir('Reçete ve Rota kaydı okunamadı; deneme verisi değişmedi.', 'hata'); return false; }
   S.rrSavedAt = sa; RRV.S = S;
-  if (rrEsit(D, S.D)) { RRV.dj = JSON.stringify(S.D); kaydet(); return false; }
+  /* veri aynıysa yazılmaz: açılışta yazmak ortak kayıtta aynı anda açan ikinci kişiye çakışma (409) verir */
+  if (rrEsit(D, S.D)) { RRV.dj = JSON.stringify(S.D); return false; }
   geriAl.push(JSON.stringify({ D: S.D, down: S.down, ekMesai: S.ekMesai, locks: S.locks, pref: S.pref, w: S.w, param: S.param, kapali: S.kapali, dataVer: S.dataVer }));
   if (geriAl.length > 30) geriAl.shift();
   S.D = D; S.dataVer++; U.hamle = null; RRV.dj = JSON.stringify(S.D);

@@ -242,7 +242,8 @@ function rrCek() {
   let st; try { st = JSON.parse(raw); } catch (e) { return false; }
   let D; try { D = rrDenemeyeCevir(st); } catch (e) { console.error(e); bildir('Reçete ve Rota kaydı okunamadı; deneme verisi değişmedi.', 'hata'); return false; }
   S.rrSavedAt = sa; RRV.S = S;
-  if (rrEsit(D, S.D)) { RRV.dj = JSON.stringify(S.D); kaydet(); return false; }
+  /* veri aynıysa yazılmaz: açılışta yazmak ortak kayıtta aynı anda açan ikinci kişiye çakışma (409) verir */
+  if (rrEsit(D, S.D)) { RRV.dj = JSON.stringify(S.D); return false; }
   geriAl.push(JSON.stringify({ D: S.D, down: S.down, ekMesai: S.ekMesai, locks: S.locks, pref: S.pref, w: S.w, param: S.param, kapali: S.kapali, dataVer: S.dataVer }));
   if (geriAl.length > 30) geriAl.shift();
   S.D = D; S.dataVer++; U.hamle = null; RRV.dj = JSON.stringify(S.D);
