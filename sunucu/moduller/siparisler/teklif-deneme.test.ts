@@ -298,4 +298,17 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     await assert.rejects(ekle('satis', 'aktif', surum), (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_tek_yer');
     await assert.rejects(ekle('satis', 'onay-bekliyor', surum), (h: { constraint?: string }) => h.constraint === 'siparisler_teklif_plan_taslagi_bekleyen');
   });
+  test('65 a satış rolü: teklifi dener, termin ve maliyet toplamını görür, dökümü görmez; plan taslaklı sürüm verir; müdür dökümü görür', async () => {
+    const satis = await girisYap('satis');
+    let t = await teklifAc();
+    const d = (await oku(satis.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([d.termin, d.maliyetToplami, d.kalemler[0]?.dokum, d.genelGiderSaatBasi], [PLAN_TERMINI, '380.00', null, null]);
+    t = await komut(t, 'surum-ver', satisSurumu(t), 200, satis.cerez);
+    assert.deepEqual([t.durum, t.surumler[0]?.toplam !== null], ['verildi', true]);
+    assert.deepEqual((await taslaklar(t, satis.cerez)).map((x) => [x.gorunum, x.karOrani]), [['satis', '25.00']]);
+    assert.equal((await gonder(satis.cerez, `/siparisler/teklifler/${t.id}/termin-onayla`, { surum: t.surum })).statusCode, 403);
+    assert.equal((await oku(satis.cerez, '/musteri-tedarikci/firmalar/secim')).statusCode, 200);
+    const mudur = await girisYap('mudur');
+    assert.equal((await oku(mudur.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>().kalemler[0]?.dokum?.length, 3);
+  });
 });

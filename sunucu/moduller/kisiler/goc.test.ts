@@ -261,6 +261,7 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
         { kod: 'operator', ad: 'Operatör', yerlesik: true, yonetici: false },
         { kod: 'planlama_proje', ad: 'Planlama ve Proje', yerlesik: true, yonetici: false },
         { kod: 'satin_alma', ad: 'Satın Alma', yerlesik: true, yonetici: false },
+        { kod: 'satis', ad: 'Satış', yerlesik: true, yonetici: false },
         { kod: 'sevkiyat', ad: 'Sevkiyat', yerlesik: true, yonetici: false },
         { kod: 'vardiya_sorumlusu', ad: 'Vardiya Sorumlusu', yerlesik: true, yonetici: false },
         { kod: 'yonetici', ad: 'Yönetici', yerlesik: true, yonetici: true },

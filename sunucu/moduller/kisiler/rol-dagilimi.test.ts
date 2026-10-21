@@ -81,6 +81,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     operator: { arkon: 'operator', tanim: false, yansima: false, yeniden: false },
     bakim: { arkon: 'maint', tanim: false, yansima: false, yeniden: false },
     satin_alma: { arkon: null, tanim: false, yansima: false, yeniden: false },
+    satis: { arkon: null, tanim: false, yansima: false, yeniden: false },
     depo: { arkon: null, tanim: false, yansima: false, yeniden: false },
     insan_kaynaklari: { arkon: null, tanim: false, yansima: false, yeniden: false },
     muhasebe_finans: { arkon: null, tanim: false, yansima: false, yeniden: false },
