@@ -116,3 +116,10 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - VARSAYIM: taban adım başınadır; ilk canlıya almada yerleşmemiş adım, ilk yerleştiği canlıya almada kendi tabanını alır. Emrin ilk planı en küçük plan sürümlü satırlarıdır. Bölünmüş işte zarf (ilk başlangıç, son bitiş, ilk parçanın kaynağı) yazılır, parçalar yazılmaz.
 - VARSAYIM: göçten önce canlıda olan adımın tabanı, göçten sonraki ilk canlıya almadaki yeridir (canlı kurulum yok; yalnız geliştirme verisi).
 - `plan-taban.test.ts`: ilk yazma, değişmezlik, sonradan giren adım, yalnız ekleme ve kısıt, emir silinince kalma, eşzamanlı iki canlıya alma, yetkisiz ve vazgeçilen taslak.
+## Bölünen siparişin gecikme bedeli (35 b, 2026-10-21)
+- Kullanıcı kararı 35 b (davranış değiştiren düzeltme onaylı): bölünen siparişin her parçasının gecikmesi sipariş adedindeki payıyla ağırlanır.
+- Bulgu: planın TL maliyetinde ceza, kâr riski ve finansman emrin tutar payıyla (225) zaten ağırlıydı; `tabanSaat × gecikme` ise emir başına tamdı. Aynı satır iki emre bölününce taban iki kez sayılıyor, motor bölmeyi pahalı görüyordu.
+- `kurallar.ts`: `adetPayi` (emir adedi / satır miktarı, en çok 1; satırsız ya da miktarı bilinmeyen emirde 1); `gecikmeMaliyeti` ve `planMaliyeti` payı alır, yalnız taban kısmını ağırlar. `servis.ts` `tlToplami` payı emrin sipariş satırından verir.
+- Şema, uç, işlem ve paket yok. Plan TL toplamı ve TL iyileştirmesinin sonuçları değişir.
+- VARSAYIM: öncelik sınıfının saatlik bedeli (`gecikmeBedeli`, `emirBedelleri`) değişmedi: oran saatliktir, toplam değildir; payla ağırlansa küçük parça daha düşük sınıfa düşerdi.
+- Testler: `kurallar.test.ts` 35 b (saf); `plan-bedel.test.ts` 35 b (gerçek PostgreSQL, satır 10/20/40 adette taban 1, 1/2, 1/4).

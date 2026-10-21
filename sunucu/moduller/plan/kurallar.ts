@@ -245,11 +245,12 @@ export const elleCarpanSiniri = (genis: boolean): number => (genis ? ELLE_CARPAN
 // termine kadar bekler, erken bitiş tahsilatı öne çekmez. Ceza tavanı dolunca plan bedeli tabana düşmez, ceza son oranıyla sürer (2b):
 // düşseydi motor gecikmiş müşteriyi daha da geciktirirdi; tavan sözleşmedeki tutardır, sıralamayı yönetmez. Ceza ve kâr riski yalnız
 // teslimi geçen saatte işler. Hepsi yalnız TL satırda hesaplanır: kur verisi yok. Oranı boş olan parça girmez; sıfır uydurulmaz ama taban
-// her geciken emre işler (196 a).
+// her geciken emre işler (196 a). 35 b: taban, emrin sipariş satırı adedindeki payıyla ağırlanır (ceza, kâr ve finansman emrin tutar payıyla
+// zaten ağırlıdır, 225); bölünen sipariş tabanı parça sayısı kadar saymaz. Satırsız emrin payı 1.
 export interface MaliyetAyari { tabanSaat: number; finansmanOraniGun: number | null; karRiskiOraniGun: number }
 export interface MaliyetSatiri extends BedelSatiri { cezaTavaniOrani: string | null; katkiPayi: string | null }
 export function gecikmeMaliyeti(
-  satir: MaliyetSatiri | null, carpan: number, zaman: { bitisSaat: number; teslimSaat: number | null }, ayar: MaliyetAyari,
+  satir: MaliyetSatiri | null, carpan: number, zaman: { bitisSaat: number; teslimSaat: number | null }, ayar: MaliyetAyari, pay = 1,
 ): number {
   const tl = satir !== null && satir.paraBirimi === 'TRY';
   const tutar = tl && satir.tutar != null ? Number(satir.tutar) : 0;
@@ -259,7 +260,13 @@ export function gecikmeMaliyeti(
   if (gecikme === 0) return finansman * carpan;
   const ceza = saatlik(tutar, satir?.cezaOraniGun == null ? null : Number(satir.cezaOraniGun)) * gecikme;
   const katki = tl && satir.katkiPayi != null ? Number(satir.katkiPayi) : 0;
-  return (Math.max(ayar.tabanSaat * gecikme, ceza + saatlik(katki, ayar.karRiskiOraniGun) * gecikme) + finansman) * carpan;
+  return (Math.max(ayar.tabanSaat * pay * gecikme, ceza + saatlik(katki, ayar.karRiskiOraniGun) * gecikme) + finansman) * carpan;
+}
+
+// 35 b: emrin sipariş satırı adedindeki payı (0-1]; satırsız, miktarı bilinmeyen ya da satırdan büyük emirde 1.
+export function adetPayi(satir: { miktar: string } | null, adet: number): number {
+  const miktar = satir === null ? 0 : Number(satir.miktar);
+  return miktar > 0 && adet > 0 ? Math.min(1, adet / miktar) : 1;
 }
 
 // 225: aynı satıra bağlı her emir satırın birim fiyatıyla kendi adedi kadar tutar taşır; satırın tamamı her emre yazılmaz (bölünen parti
@@ -291,12 +298,12 @@ export function katkiPaylari(
 // Planın TL toplamı (203 a): yerleşen emirlerin maliyetleri toplanır. Tam yerleşmemiş emrin bitişi bilinmez, toplama girmez; yerleşmeyen
 // emir sayısı göstergelerde ayrıca görünür.
 export function planMaliyeti(
-  emirler: readonly { bitDk: number | null; teslimDk: number | null; satir: MaliyetSatiri | null; carpan: number }[], ayar: MaliyetAyari,
+  emirler: readonly { bitDk: number | null; teslimDk: number | null; satir: MaliyetSatiri | null; carpan: number; pay?: number }[], ayar: MaliyetAyari,
 ): number {
   let toplam = 0;
   for (const e of emirler) {
     if (e.bitDk === null) continue;
-    toplam += gecikmeMaliyeti(e.satir, e.carpan, { bitisSaat: e.bitDk / 60, teslimSaat: e.teslimDk === null ? null : e.teslimDk / 60 }, ayar);
+    toplam += gecikmeMaliyeti(e.satir, e.carpan, { bitisSaat: e.bitDk / 60, teslimSaat: e.teslimDk === null ? null : e.teslimDk / 60 }, ayar, e.pay);
   }
   return Math.round(toplam);
 }

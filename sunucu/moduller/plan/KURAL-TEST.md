@@ -32,6 +32,7 @@ K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-
 | Plan sırasına dön | kuyruğun elle sıraları taslakta silinir, motor kuralına döner; elle sırası olmayan kuyruk 409 | U kuyruk sırası (KY-03); E Kanban: elle sıralı makine kuyruğu | yok |
 | Önizleme | Emir önizlemesi yeni emri planla iki kez koşar, hiçbir şey yazmaz; bitiş, önerilen teslim (bitiş + tampon), etkilenen emirler, istasyon yükü, yeni uyarılar; yalnız yürürlükteki rota (422); emre kopyalama ya da plan yazma yetkisi | U emir önizlemesi; E UE-01, P-B21 | yok |
 | Bölme ve hurda | Bölme yazıldıktan sonra önceki adım daha az sağlamla bitince parçaların süresi adım adedine oranla hesaplanır; yazılı adetler kalır | U elle bölme sonra hurda | yok |
+| 35 b | Bölünen siparişte taban gecikme bedeli emrin satır adedindeki payıyla sayılır; ceza, kâr ve finansman tutar payıyla (225) | K 35 b; U 35 b (`plan-bedel.test.ts`) | yok |
 | Verim | İşin süresi yerleştiği makinenin istasyon verimine bölünür (kişide %100); ayarı olmayan istasyon %100; elle yerleştirme ve taşıma hedef kaynağın verimiyle, elle girilen süre olduğu gibi | K Verim; U istasyonlar eki (#439) | yok |
 | Makine durumu | Arızalı ya da bakımdaki makine plana iş almaz; var olan yerleşim "kullanımda değil" uyarısı taşır | U istasyonlar eki (#439) | yok |
 | S3 | Kişi, rotadaki makinenin istasyonunda yetkin değilse uyarı (kayıt geçer); yetkinliği tanımlanmamış kişide uyarı yok | U istasyonlar eki (#439) | yok |

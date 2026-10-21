@@ -305,6 +305,32 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     }
   });
 
+  test('35 b: fiyatsız satırda geciken emrin tabanı satır adedindeki payıyla sayılır; emrin payı yarıya inince tabanı da yarıya iner', async () => {
+    const [g] = await isEmirleriAc([yeniAdim()], 10, '2020-01-10');
+    const satirId = await ortam!.sahip.tx(async (db) => {
+      const firma = (await db.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Müşteri 35', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
+      const id = (await db.tek<{ id: number }>(`INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
+        VALUES ('SS-2030-635', 'onayli', $1, '2020-01-01', current_date + 30, 20, $2, $2, now()) RETURNING id`, [firma, yoneticiId]))!.id;
+      const malzeme = (await db.tek<{ malzeme_no: number }>('SELECT e.malzeme_no FROM uretim_emri e JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = e.id WHERE i.id = $1', [g!]))!.malzeme_no;
+      const satir = (await db.tek<{ id: number }>("INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, termin) VALUES ($1, 1, $2, 10, '2020-01-10') RETURNING id", [id, malzeme]))!.id;
+      await db.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $1 WHERE id = (SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $2)', [satir, g]);
+      return satir;
+    });
+    const p = await taslaktaOner(c.yonetici);
+    try {
+      // Planda önceki testlerin emirleri de var: bu emrin payı farkla ölçülür. Satır 10, 20, 40 adetken emrin payı 1, 1/2, 1/4.
+      const oku = async (miktar: number) => {
+        await ortam!.sahip.tx((db) => db.sorgu('UPDATE siparisler_siparis_satiri SET miktar = $2 WHERE id = $1', [satirId, miktar]));
+        return (await planOku(p.taslak!.id, c.yonetici)).gostergeler.maliyetTl!;
+      };
+      const [tam, yarim, ceyrek] = [await oku(10), await oku(20), await oku(40)];
+      assert.ok(tam - yarim > 0, `geciken emrin tabanı payla iner: ${String(tam)} -> ${String(yarim)}`);
+      assert.ok(Math.abs((tam - yarim) - 2 * (yarim - ceyrek)) <= 2, `taban paya oranlı: ${String(tam)}, ${String(yarim)}, ${String(ceyrek)}`);
+    } finally {
+      await tamam(c.yonetici, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: (await planOku(p.taslak!.id, c.yonetici)).taslak!.surum });
+    }
+  });
+
   test('210 a, denetim #21: bedel ayarını yalnız plan.bedel-ayari değiştirir (müdür); planlama değiştiremez; değerler sınırlıdır; çarpansız gövde çarpanları korur', async () => {
     const varsayilan = { tabanBedelSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6, yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7 };
     const yeni = { tabanBedelSaat: 200, finansmanOraniGun: 0.14, karRiskiOraniGun: 0.25, yuksekEsigi: 1.8, dusukEsigi: 0.5 };

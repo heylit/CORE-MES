@@ -23,7 +23,7 @@ import { calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri } from '
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, bantSinirlari, bedelCarpani, emirTutari, katkiPaylari, calisilanParcalar, elleCarpanSiniri, gecikmeBedeli, oncelikSiniflari, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -632,10 +632,11 @@ function tlToplami(b: Baglam, emirler: readonly { id: number; teslimDk: number |
   return planMaliyeti(emirler.map((e) => {
     const i = ilkIs.get(e.id);
     const satir = i ? emirSatiri(b, i) : null;
+    const ham = i?.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId) ?? null;
     // 284 a: ceza ve vade müşteriyle anlaşılan terminden işler (satırın, yoksa siparişin); emrin teslimi yalnız sıralamadadır.
     return {
       bitDk: e.bit, teslimDk: satir ? teslimDk(b, satir.termin) : e.teslimDk, satir: satir && { ...satir, katkiPayi: b.katkilar.get(e.id) ?? null },
-      carpan: i ? emirCarpani(b, i, satir) : bedelCarpani(null, null, null, b.bedelAyari),
+      carpan: i ? emirCarpani(b, i, satir) : bedelCarpani(null, null, null, b.bedelAyari), pay: i ? adetPayi(ham, i.adet) : 1,
     };
   }), { tabanSaat: b.bedelAyari.tabanBedelSaat, finansmanOraniGun: b.bedelAyari.finansmanOraniGun, karRiskiOraniGun: b.bedelAyari.karRiskiOraniGun });
 }
