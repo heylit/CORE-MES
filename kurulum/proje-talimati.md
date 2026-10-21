@@ -66,7 +66,7 @@ SABIT KIMLIKLER (degismez)
   - guvenlik merkezi (sunucu/moduller/guvenlik) cekirdegindir (384 a).
 
 CALISMA DUZENI (2026-10-21, kullanici onayi)
-- Ayni anda en cok 5 acik konu; biten konu hemen kapanir; uzayan is icin yeni konu acilir.
+- Acik konu siniri yok; isler paralel yurur, cakismayi birlesme sirasi yonetir (koordinator sirayi verir, Birlestirici uygular, catisan yamayi sahibi yeniden uretir). Biten konu hemen kapanir; uzayan is icin yeni konu acilir.
 - Yazar yamayi biraktiginda Birlestirici konusuna dogrudan haber verir; koordinator yalniz soru, onay ve durum icin araya girer. Tasima icin kullanicinin yamayi adiyla anan "... tasi, onayli" satiri yine gerekir.
 - Birlesme gunde 1-2 toplu tur; gocsuz ve birbirine dokunmayan yamalar ayni turda girer.
 - Yerelde yalniz kendi modulunun testleri kosar; tam test CI'da kosar.
