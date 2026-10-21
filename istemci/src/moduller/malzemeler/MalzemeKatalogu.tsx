@@ -5,6 +5,7 @@ import { ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
 import { adrestekiGorunum, disSayfaYolu, malzemeEtiketiYolu, type KatalogGorunumu } from './gorunumler.ts';
+import { BIRIM_DONUSUMU_EKI } from './birim-donusumu-eki.ts';
 import { ETIKET_MERKEZI_EKI } from './etiket-merkezi-eki.ts';
 import { kopruKur } from './kopru.ts';
 import { KG_FIYATI_EKI } from './kg-fiyati-eki.ts';
@@ -113,7 +114,7 @@ export function KatalogCercevesi({ gorunum, sinif }: { gorunum: KatalogGorunumu;
     let bitti = false;
     void Promise.all([
       import('./katalog/katalog.html?raw'), gomuluYaziStili(), import('../../../../node_modules/jsqr/dist/jsQR.js?raw'),
-    ]).then(([m, yaziStili, qr]) => { if (!bitti) setSayfa(sayfaKur(m.default, yaziStili, qrKitapligi(qr.default), qrKitapligi(KG_FIYATI_EKI) + qrKitapligi(ROTALI_KART_EKI) + qrKitapligi(ETIKET_MERKEZI_EKI))); });
+    ]).then(([m, yaziStili, qr]) => { if (!bitti) setSayfa(sayfaKur(m.default, yaziStili, qrKitapligi(qr.default), qrKitapligi(KG_FIYATI_EKI) + qrKitapligi(ROTALI_KART_EKI) + qrKitapligi(ETIKET_MERKEZI_EKI) + qrKitapligi(BIRIM_DONUSUMU_EKI))); });
     return () => { bitti = true; };
   }, []);
 

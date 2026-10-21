@@ -744,6 +744,35 @@ export function kartBirimi(kayit: Nesne): string | null {
 }
 
 export const BIRIM_EN_COK = 40;
+
+// 323 b: tedarikçinin biriminden alınan kalem stoka kartın biriminde girer; kart tek alış birimi ve katsayısını tutar
+// (1 alış birimi = katsayı kadar stok birimi). İki alan birlikte dolu ya da birlikte boştur; katsayı numeric(18,6) sütununa sığar.
+export interface BirimDonusumu { alisBirimi: string; katsayi: string }
+const KATSAYI = /^\d{1,12}(\.\d{1,6})?$/;
+export function kartBirimDonusumu(kayit: Nesne): BirimDonusumu | null | { mesaj: string; alan: 'alisBirimi' | 'alisKatsayisi' } {
+  const com = kayit['com'];
+  if (!nesneMi(com)) return null;
+  const b = com['alisBirimi'];
+  const birim = typeof b === 'string' ? b.trim() : '';
+  const k = com['alisKatsayisi'];
+  const metin = typeof k === 'number' ? String(k) : typeof k === 'string' ? k.trim().replace(',', '.') : '';
+  if (birim === '' && metin === '') return null;
+  if (birim === '') return { mesaj: 'Alış katsayısı yazıldıysa alış birimi de seçilir.', alan: 'alisBirimi' };
+  if (birim.length > BIRIM_EN_COK) return { mesaj: `Alış birimi en çok ${BIRIM_EN_COK} karakterdir.`, alan: 'alisBirimi' };
+  if (birim === kartBirimi(kayit)) return { mesaj: 'Alış birimi stok biriminden farklı olmalı; aynı birimde dönüşüm gerekmez.', alan: 'alisBirimi' };
+  if (metin === '') return { mesaj: 'Alış birimi seçildiyse katsayı da yazılır (1 alış birimi kaç stok birimi).', alan: 'alisKatsayisi' };
+  if (!KATSAYI.test(metin) || Number(metin) <= 0) {
+    return { mesaj: 'Alış katsayısı sıfırdan büyük bir sayı olmalı (en çok 6 ondalık, ör. 50 ya da 1,5).', alan: 'alisKatsayisi' };
+  }
+  return { alisBirimi: birim, katsayi: metin };
+}
+// Kart ve bekleyen talebin önerdiği kart aynı denetimden geçer; `onek` hatanın alan yoludur.
+export function kartBirimDonusumleri(kayit: Nesne): { onek: string; kayit: Nesne; donusum: ReturnType<typeof kartBirimDonusumu> }[] {
+  const talep = kayit['talep'];
+  const yeni = nesneMi(talep) && nesneMi(talep['yeni']) ? talep['yeni'] : null;
+  return [{ onek: 'kayit.com.', kayit }, ...(yeni ? [{ onek: 'kayit.talep.yeni.com.', kayit: yeni }] : [])]
+    .map((x) => ({ ...x, donusum: kartBirimDonusumu(x.kayit) }));
+}
 const BIRIM_LISTESI = /^birim(\|.+)?$/;
 
 const metinler = (d: unknown): string[] => (Array.isArray(d) ? d.filter((x): x is string => typeof x === 'string').map((x) => x.trim()) : []);
