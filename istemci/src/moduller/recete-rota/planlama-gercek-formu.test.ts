@@ -8,6 +8,7 @@ function gercekFormu(gercek: Record<string, unknown> | null): string {
     const yetkili = () => true; const ic = (a) => '[' + a + ']'; const esc = (x) => String(x);
     const isoT = () => '2026-10-21 08:00'; const fmtDT = () => '21.10 08:00'; const sayi = (x) => String(x);
     const dugme = (ad) => '<button>' + ad + '</button>';
+    const ilerlemeCubugu = () => ''; const sapmaKutu = () => '';
     const tezgahAd = (cx, m) => m + ' · ' + cx.M[m].ad;
     const cxAl = () => ({ st: { now: 10 }, M: { T1: { ad: 'Torna 1' } }, byId: { 'j1.10': { c: [{ m: 'T1', run: 2 }] } } });
     ${planlamaParcasi('t-tekyer')}

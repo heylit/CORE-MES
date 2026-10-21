@@ -24,11 +24,11 @@ import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
-import { canliOzeti, planAyariOku } from '../plan/disari.ts';
+import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
+  adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
@@ -218,6 +218,7 @@ export async function durum(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
+  const emirDilimleri = emirOkur ? await emirDilimi(db) : null;
 
   const ayarHaritasi = new Map(ayarlar.map((a) => [a.istasyonId, a]));
   const makineDurumu = new Map(durumlar.map((d) => [d.makineId, d.durum]));
@@ -242,7 +243,8 @@ export async function durum(
     routeRevs: rotaOkur ? rota.routeRevs : null,
     fasonFirms: fasonFirmalari === null ? null : fasonFirmalari.map((f) => ({ id: String(f.id), code: f.kod, name: f.ad })),
     cal: { shifts: vardiyalar.filter((v) => v.aktif).map(vardiyaCevir), holidays: tatilTarihleri(gunler) },
-    emirler: emirOkur ? emirleriCevir(await emirDilimi(db)) : null,
+    emirler: emirDilimleri === null ? null : emirleriCevir(emirDilimleri),
+    calisanAdimlar: emirDilimleri === null ? null : calisanAdimlariCevir(await calisanAdimlar(db), emirDilimleri),
     maliyet,
     settings: ayarCevir(ayar),
     planCanli: await canliOzeti(db),

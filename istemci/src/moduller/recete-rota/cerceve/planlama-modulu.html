@@ -1246,6 +1246,12 @@ button.pm-gy-ad:hover { background: var(--panel2); }
 .pm-gy-ac { border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-1) var(--b-2); }
 .pm-gy-ac summary { cursor: pointer; display: flex; align-items: center; gap: var(--b-1); }
 .pm-gy-ac[open] summary { margin-bottom: var(--b-1); }
+.pm-adet-ilerleme { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); }
+.pm-adet-cubuk { flex: 1 1 100%; display: block; height: var(--b-2); border-radius: var(--b-1); background: var(--panel2); border: 1px solid var(--edge); overflow: hidden; }
+.pm-adet-cubuk > i { display: block; height: 100%; width: var(--ilerleme, 0%); background: var(--run); }
+.pm-sapma { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-left: var(--b-1) solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s); }
+.pm-sapma > .tc-simge { color: var(--hold); }
+.pm-sapma > span { flex: 1 1 12rem; min-width: 0; }
 .pm-gy-erken-not { display: flex; gap: var(--b-1); align-items: flex-start; font-size: var(--yazi-xs); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
 /* dar alanlar: yazılar kısalır, paneller tahtanın üstüne açılır */
 @container (max-width: 1180px) { .pm-mercek button span, .pm-tb-pd span { display: none; } }
@@ -8440,7 +8446,8 @@ function gercekFormu(r) {
     <p class="pm-kucuk" data-yer="gercek-tezgah">${ic('lock', 'k')} Tezgâh: <b>${esc(tezgahAd(cx, r.m))}</b>; gerçekleşen planın atadığı bu tezgâha yazılır.</p>
     <label class="tc-alan"><span class="tc-alan-etiket">Başladı</span><input class="tc-alan-kutu" type="datetime-local" name="bas" value="${v(g ? g.S : Math.min(r.S, now))}" max="${v(now)}" required></label>
     <label class="tc-alan"><span class="tc-alan-etiket">Bitti (boşsa sürüyor)</span><input class="tc-alan-kutu" type="datetime-local" name="bit" value="${v(g ? g.C : null)}" max="${v(now)}"></label>
-    <p class="pm-kucuk">Şimdi ${esc(fmtDT(S.D, now))}; gerçekleşen saat şimdiden ileri olamaz. Bitmeyen adımın kalan süresi plandaki süreden hesaplanır.</p>
+    ${ilerlemeCubugu(r.id)}${sapmaKutu(r.id)}
+    <p class="pm-kucuk">Şimdi ${esc(fmtDT(S.D, now))}; gerçekleşen saat şimdiden ileri olamaz. ${g && g.sunucu ? 'Kalan süre terminal sayımından sunucuda hesaplanır; yalnız bu adım güncellenir, diğer işler yerinde kalır.' : 'Bitmeyen adımın kalan süresi plandaki süreden hesaplanır.'}</p>
     <div class="pm-dugmeler"><button type="submit" class="tc-dugme tc-dugme-kucuk tc-dugme-birincil">${ic('check', 'k')}İşle</button>${g ? dugme('Gerçekleşeni sil', 'gercek-sil', { kucuk: true, hayalet: true, simge: 'x', veri: `data-v="${esc(r.id)}"` }) : ''}</div></form></details>`;
   const taban = c.run / oran;
   return `<details class="pm-gy-ac" ${sap ? 'open' : ''}><summary>${ic('clock', 'k')} Erken ya da geç biterse${sap && Math.abs(oran - 1) > 1e-3 ? ` (×${sayi(oran, 2)})` : ''}</summary><form class="pm-dik" data-form="sure-fark" novalidate><input type="hidden" name="id" value="${esc(r.id)}"><input type="hidden" name="taban" value="${taban}">
@@ -19358,6 +19365,51 @@ ISI.sevkiyat = {
       secenekler: [{ ad: `${z.s.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', act: 'siparis-cizelge', v: z.s.id, simge: 'gantt' }] };
   },
 };
+/* ---------- adetle ilerleme: sayım ve plandan sapma ----------
+   Prototipin (deneme v96 zz34) uygulamadaki karşılığı. Başlamış adımın kalanını sunucu verir (391 a, zz31 calisanUygula); sayfada elle sayım
+   girilmez. Sayım yalnız o adımın kendi çubuğunu günceller; başka iş yerinden oynamaz. Tahmini bitiş plandakinden eşikten fazla saparsa
+   "Plandan sapma" uyarısı çıkar; planı düzeltmek planlamacının kararıdır ("Canlıya göre onar", Sonuç kutusundan geçer). */
+const sapmaEsik = () => (S.param && S.param.sapmaEsik != null ? +S.param.sapmaEsik : 0.5);
+function sapmaOf(id) {
+  const g = (S.gercek || {})[id]; const r = S.plan && S.plan.ops[id];
+  if (!g || g.n == null || g.C != null || !r || g.planC == null) return null;
+  const d = r.C - g.planC;
+  const sonraki = Object.values(S.plan.ops).filter(q => q.m === r.m && q.id !== id && isFinite(q.S) && q.S >= r.S - 1e-6).sort((a, b) => a.S - b.S)[0] || null;
+  return { id, d, r, sonraki, cakisma: sonraki ? r.C - sonraki.S : null };
+}
+const sapmalar = () => Object.keys(S.gercek || {}).map(sapmaOf).filter(x => x && Math.abs(x.d) > sapmaEsik());
+function sapmaMetni(x) {
+  const ne = x.d > 0 ? `${saat(x.d)} geç bitecek` : `${saat(-x.d)} erken bitecek`;
+  const yan = !x.sonraki ? '' : x.cakisma > 0.01 ? `; sıradaki ${x.sonraki.id} ile ${saat(x.cakisma)} çakışıyor` : x.d < 0 ? `; ${x.r.m} sıradaki ${x.sonraki.id} öncesinde ${saat(-x.cakisma)} boş kalacak` : '';
+  return `${x.id} plandan ${ne}${yan}.`;
+}
+function sapmaKutu(id) {
+  const x = sapmaOf(id); if (!x || Math.abs(x.d) <= sapmaEsik()) return '';
+  return `<div class="pm-sapma" role="alert" data-yer="sapma-kutu">${ic('alert', 'k')}<span><b>Plandan sapma.</b> ${esc(sapmaMetni(x))} Plan kendiliğinden değişmez.</span>${dugme('Canlıya göre onar', 'sapma-onar', { kucuk: true, simge: 'rotate', yetki: 'plan.yaz', veri: `data-v="${esc(id)}"` })}</div>`;
+}
+/* adım adedi: sunucunun verdiği emir adedi */
+const adetEtkin = g => Math.max(0, +g.A || 0);
+function ilerlemeCubugu(id) {
+  const g = (S.gercek || {})[id]; if (!g || g.n == null || g.C != null) return '';
+  const A = adetEtkin(g); const y = A ? Math.max(0, Math.min(100, Math.round(g.n / A * 100))) : 100;
+  const son = g.sayimAni ? new Date(g.sayimAni).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
+  return `<div class="pm-adet-ilerleme" data-yer="ilerleme"><span class="pm-adet-cubuk" style="--ilerleme:${y}%" aria-hidden="true"><i></i></span><span class="mono">${sayi(g.n, 0)}/${sayi(A, 0)} adet</span>${son ? `<span class="pm-kucuk">son sayım ${esc(son)}</span>` : ''}</div>`;
+}
+/* Planlamacı isterse plan gerçekleşene göre onarılır: dondurma ve başlamış işler sabit kalır; sonuç önizlemedir, Uygula ile girer. */
+function sapmaOnar(id) {
+  if (!yetkili('plan.yaz') || !S.plan || calisan) return;
+  try {
+    const st = stOf(); st.gercek = clone(S.gercek || {}); const cx = compile(st);
+    const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true);
+    const p = kisaArama(st, cx, p0, 500);
+    hamleKur(p, st, `${id} gerçekleşene göre onarıldı`, { kaynak: 'elle' }); U.hamle.gercek = S.gercek;
+  } catch (e) { bildir('Onarım yapılamadı: ' + e.message, 'hata'); return; }
+  render();
+}
+{ const f0 = tekEylem; tekEylem = function (act, v) {
+  if (act === 'sapma-onar') { sapmaOnar(v); return true; }
+  return f0.apply(this, arguments);
+}; }
 /* ---------- TMI içinde ----------
    Uygulamada bu sayfa yalıtılmış çerçevededir (opak köken). Reçete ve Rota bu sayfanın içinde açılamaz: yalıtılmış çerçevenin içindeki
    çerçeve ayrı opak kökendir, birbirinin penceresine ve deposuna erişemez. Reçete ve Rota bölümleri kabuğun öteki çerçevesidir; iki
@@ -19451,6 +19503,30 @@ function tmiFasoncular(st, firmalar, D, onceki) {
     return a ? Object.assign({}, y, rrKopya(a), { id: y.id, ad: y.ad }) : y;
   });
 }
+/* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine
+   (sipariş.adım) kayıttaki emir ve rota adımından çevrilir; karşılığı olmayan adım (rotasız emir, emirde değişen adım) gelmez. Saatler
+   terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
+   kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
+   Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
+function tmiCalisanlar(durum, st, D, now) {
+  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+  const opOf = {};
+  for (const o of (st && st.orders) || []) {
+    const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
+    const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
+    adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
+  }
+  const saat = iso => { if (!iso) return null; const d = new Date(iso); const p = n => String(n).padStart(2, '0');
+    return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`); };
+  const y = {};
+  for (const c of liste) {
+    const id = opOf[c.anahtar]; if (!id) continue;
+    const S0 = saat(c.baslangic);
+    const S = S0 == null ? now : S0; const sayim = saat(c.sayimAni);
+    y[id] = { m: c.makineId, S, kalan: Math.max(0, +c.kalanVerimliDk || 0) / 60, sayim: sayim == null ? S : Math.max(S, sayim), n: c.saglam, A: c.adet, sayimAni: c.sayimAni };
+  }
+  return y;
+}
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
 const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular'];
@@ -19481,13 +19557,40 @@ if (TMI_ICINDE) {
     if (S.plan) bildir('Tezgâh, personel ve takvim sunucudan alındı. Plan yeniden çözülünce güncellenir.', 'tamam');
     return true;
   };
+  /* Sayım yalnız o adımın çubuğunu günceller, başka iş yerinden oynamaz (prototip zz34); plan eskimez. Planlamacının elle girdiği gerçekleşen
+     sunucunun başlamış dediği adımda sunucununkiyle değişir; sunucunun artık başlamış demediği adımın sunucu kaydı silinir. */
+  const calisanUygula = () => {
+    if (!TMI_KAYNAK.durum || !Array.isArray(TMI_KAYNAK.durum.calisanAdimlar)) return false;
+    const now = cxAl() ? cxAl().st.now : 7;
+    const y = tmiCalisanlar(TMI_KAYNAK.durum, rrOku(), S.D, now); if (!y) return false;
+    const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
+    for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
+    for (const [id, a] of Object.entries(y)) {
+      const r = S.plan && S.plan.ops[id]; const m = a.m && cxAl() && cxAl().M[a.m] ? a.m : r ? r.m : a.m;
+      const yeni = { ...a, m, sunucu: 1, planC: g[id] && g[id].planC != null ? g[id].planC : r ? r.C : null };
+      if (rrEsit(g[id], yeni)) continue;
+      g[id] = yeni; degisti = true;
+      const M = cxAl() && cxAl().M[m]; if (!r || !M) continue;
+      const C = kalanBitis(M, yeni); const o = cxAl().byId[id]; const c = o && (o.c.find(x => x.m === m) || o.c[0]);
+      const Su = Math.min(adv(M.sw, yeni.S, (c && c.su) || 0), C);
+      S.plan = { ...S.plan, ops: { ...S.plan.ops, [id]: { ...r, m, S: yeni.S, Su, C, lot1: Math.min(C, Math.max(Su, r.lot1 || Su)), act: 1, pin: 1, adetN: yeni.n } } };
+      yeniSapma.push(id);
+    }
+    if (!degisti) return false;
+    S.gercek = g;
+    if (S.plan) ozetTazele();
+    /* yazılmaz: her açılışta sunucudan yeniden kurulur; ortak çalışma kaydına açılışta yazmak aynı anda açana çakışma (409) verir */
+    const l = yeniSapma.map(sapmaOf).filter(x => x && Math.abs(x.d) > sapmaEsik());
+    if (l.length) bildir(l.map(sapmaMetni).join(' ') + ' Plan kendiliğinden değişmez.', 'uyari');
+    return true;
+  };
   const kaynakAl = () => {
     if (typeof window.tmi.kaynakOku !== 'function') return;
     window.tmi.kaynakOku().then(r => {
       if (!r || !r.durum) return;
       TMI_KAYNAK.durum = r.durum; TMI_KAYNAK.ek = r.ek || null;
       if (!S) { TMI_KAYNAK.bekliyor = true; return; }
-      if (kaynakUygula()) render();
+      const k = kaynakUygula(); if (calisanUygula() || k) render();
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
   };
   const yk0 = yukle;
@@ -19529,7 +19632,7 @@ if (TMI_ICINDE) {
   const r0 = render;
   render = function () {
     if (S && bekleyen !== null) { const ad = bekleyen; bekleyen = null; uygula(ad); }
-    if (S && TMI_KAYNAK.bekliyor) { TMI_KAYNAK.bekliyor = false; kaynakUygula(); }
+    if (S && TMI_KAYNAK.bekliyor) { TMI_KAYNAK.bekliyor = false; kaynakUygula(); calisanUygula(); }
     if (S && S.kullanici !== TMI_KULLANICI) S.kullanici = TMI_KULLANICI;
     const x = r0.apply(this, arguments);
     const ad = rrMi(U.sayfa) ? U.sayfa.slice(3) : (TMI_SAYFA_ANAHTAR[U.sayfa] || U.sayfa);
@@ -19537,6 +19640,8 @@ if (TMI_ICINDE) {
     return x;
   };
   kaynakAl();
+  /* başlamış adımların sayımı sayfa açıkken de ilerler: sayfaya dönülünce kaynaklar yeniden okunur */
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S) kaynakAl(); });
 }
 
 /* ---------- Değişiklik izi ---------- */

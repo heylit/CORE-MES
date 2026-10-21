@@ -1238,6 +1238,12 @@ button.pm-gy-ad:hover { background: var(--panel2); }
 .pm-gy-ac { border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-1) var(--b-2); }
 .pm-gy-ac summary { cursor: pointer; display: flex; align-items: center; gap: var(--b-1); }
 .pm-gy-ac[open] summary { margin-bottom: var(--b-1); }
+.pm-adet-ilerleme { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); }
+.pm-adet-cubuk { flex: 1 1 100%; display: block; height: var(--b-2); border-radius: var(--b-1); background: var(--panel2); border: 1px solid var(--edge); overflow: hidden; }
+.pm-adet-cubuk > i { display: block; height: 100%; width: var(--ilerleme, 0%); background: var(--run); }
+.pm-sapma { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: 1px solid var(--edge); border-left: var(--b-1) solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s); }
+.pm-sapma > .tc-simge { color: var(--hold); }
+.pm-sapma > span { flex: 1 1 12rem; min-width: 0; }
 .pm-gy-erken-not { display: flex; gap: var(--b-1); align-items: flex-start; font-size: var(--yazi-xs); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
 /* dar alanlar: yazılar kısalır, paneller tahtanın üstüne açılır */
 @container (max-width: 1180px) { .pm-mercek button span, .pm-tb-pd span { display: none; } }

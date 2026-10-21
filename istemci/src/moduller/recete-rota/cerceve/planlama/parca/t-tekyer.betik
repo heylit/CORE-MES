@@ -182,7 +182,8 @@ function gercekFormu(r) {
     <p class="pm-kucuk" data-yer="gercek-tezgah">${ic('lock', 'k')} Tezgâh: <b>${esc(tezgahAd(cx, r.m))}</b>; gerçekleşen planın atadığı bu tezgâha yazılır.</p>
     <label class="tc-alan"><span class="tc-alan-etiket">Başladı</span><input class="tc-alan-kutu" type="datetime-local" name="bas" value="${v(g ? g.S : Math.min(r.S, now))}" max="${v(now)}" required></label>
     <label class="tc-alan"><span class="tc-alan-etiket">Bitti (boşsa sürüyor)</span><input class="tc-alan-kutu" type="datetime-local" name="bit" value="${v(g ? g.C : null)}" max="${v(now)}"></label>
-    <p class="pm-kucuk">Şimdi ${esc(fmtDT(S.D, now))}; gerçekleşen saat şimdiden ileri olamaz. Bitmeyen adımın kalan süresi plandaki süreden hesaplanır.</p>
+    ${ilerlemeCubugu(r.id)}${sapmaKutu(r.id)}
+    <p class="pm-kucuk">Şimdi ${esc(fmtDT(S.D, now))}; gerçekleşen saat şimdiden ileri olamaz. ${g && g.sunucu ? 'Kalan süre terminal sayımından sunucuda hesaplanır; yalnız bu adım güncellenir, diğer işler yerinde kalır.' : 'Bitmeyen adımın kalan süresi plandaki süreden hesaplanır.'}</p>
     <div class="pm-dugmeler"><button type="submit" class="tc-dugme tc-dugme-kucuk tc-dugme-birincil">${ic('check', 'k')}İşle</button>${g ? dugme('Gerçekleşeni sil', 'gercek-sil', { kucuk: true, hayalet: true, simge: 'x', veri: `data-v="${esc(r.id)}"` }) : ''}</div></form></details>`;
   const taban = c.run / oran;
   return `<details class="pm-gy-ac" ${sap ? 'open' : ''}><summary>${ic('clock', 'k')} Erken ya da geç biterse${sap && Math.abs(oran - 1) > 1e-3 ? ` (×${sayi(oran, 2)})` : ''}</summary><form class="pm-dik" data-form="sure-fark" novalidate><input type="hidden" name="id" value="${esc(r.id)}"><input type="hidden" name="taban" value="${taban}">

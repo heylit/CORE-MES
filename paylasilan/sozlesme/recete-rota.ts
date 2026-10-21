@@ -298,6 +298,12 @@ export const durumCevabi = z.object({
   cal: z.object({ shifts: z.array(durumVardiyaSemasi), holidays: z.array(z.string()) }),
   // Emir yetkisi yoksa null; alan eski sürümde yoktu (isteğe bağlı), sunucu her zaman yazar.
   emirler: durumEmirlerSemasi.nullable().optional(),
+  // Başlamış adımlar (391 a, kalanın tek kaynağı sunucu): anahtar `emirNo|opNo`; makine terminalin çalıştırdığı, yoksa planınki; kalan
+  // verimli dakika son sayım anından (yoksa başlamadan) itibarendir. saglam terminal sayacı, adet emrin adedi. Emir yetkisi yoksa null.
+  calisanAdimlar: z.array(z.object({
+    anahtar: z.string(), makineId: kimlikMetni.nullable(), baslangic: zamanSemasi.nullable(), sayimAni: zamanSemasi.nullable(),
+    kalanVerimliDk: z.number(), saglam: z.number().int(), adet: z.number().int(),
+  })).nullable().optional(),
   // finans.maliyet-oku yoksa null.
   maliyet: durumMaliyetSemasi.nullable(),
   // Canlı plan ayarı; plan okuması oturumla açıktır.

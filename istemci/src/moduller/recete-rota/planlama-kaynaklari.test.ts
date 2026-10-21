@@ -33,7 +33,8 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
   const depo = new Map<string, string>(kayit === null ? [] : [['recete-rota-motoru-v1', JSON.stringify(kayit)]]);
   const localStorage = { getItem: (k: string) => depo.get(k) ?? null, setItem: (k: string, v: string) => { depo.set(k, v); } };
   const window = { tmi: { kaynakOku: () => kaynak }, tmiGorunum: { kaydet: () => undefined, bildir: () => undefined } };
-  return new Function('window', 'localStorage', 'console', govde)(window, localStorage, { error: () => undefined }) as Duzenek;
+  const document = { addEventListener: () => undefined, visibilityState: 'visible' };
+  return new Function('window', 'localStorage', 'console', 'document', govde)(window, localStorage, { error: () => undefined }, document) as Duzenek;
 }
 
 const DURUM = {
