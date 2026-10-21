@@ -24,7 +24,92 @@ function tmiTabanKur(D) {
   if (!Array.isArray(D.tatiller)) D.tatiller = [];
 }
 
+/* Tezgâh, istasyon, kişi ve takvimin sahibi İstasyonlar, Kişiler ve Vardiya'dır; sunucu bunları ana kayda yazmaz (bagliDilimleriAyikla),
+   Reçete ve Rota çerçevesi kaynak okumasından birleştirir (kaynakUygula). Bu sayfa da aynı okumayla kaydı tamamlar; biçim o çerçevenin
+   kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
+   merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
+   Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
+function tmiKaynakIle(st, kaynak, D) {
+  const d = kaynak.durum, ek = kaynak.ek || {}, tk = ek.takvim || null;
+  const o = Object.assign({}, st);
+  const eski = (dizi, id) => { const x = D && (D[dizi] || []).find(y => String(y.id) === id); return x ? rrKopya(x) : null; };
+  const maliyet = (tur, id) => { const g = d.maliyet && d.maliyet[tur] && d.maliyet[tur][id]; return g && g.paraBirimi === 'TRY' ? Number(g.birimMaliyet) : null; };
+  if (d.cal) {
+    o.cal = Object.assign({}, st.cal || {}, {
+      shifts: d.cal.shifts.map(v => ({ id: v.id, name: v.name, start: v.start, end: v.end, breaks: v.breaks.map((b, i) => ({ id: v.id + '~' + i, name: 'Mola', start: b.start, end: b.end })) })),
+      holidays: d.cal.holidays.slice(),
+    });
+  }
+  if (Array.isArray(d.wcs)) {
+    const merkezler = d.wcs.filter(w => w.aktif !== false);
+    const sira = id => ((d.cal && d.cal.shifts) || []).findIndex(v => v.id === id);
+    let week = null;
+    if (tk) {
+      week = {};
+      for (let g = 0; g < 7; g++) {
+        const v = new Set(); for (const w of merkezler) for (const id of ((tk.hafta[w.id] || {})[g] || [])) if (sira(id) >= 0) v.add(id);
+        week[g] = [...v].sort((a, b) => sira(a) - sira(b));
+      }
+    }
+    o.wcs = [{ id: RR_WC, code: '', name: 'Atölye', week }, ...merkezler.map(w => ({ id: w.id, code: w.code, name: w.name, week: null }))];
+  }
+  const istasyonlar = Array.isArray(d.stations) ? d.stations.filter(x => x.aktif !== false) : null;
+  if (istasyonlar) o.stations = istasyonlar.map(x => ({ id: x.id, code: x.code, name: x.name, wcId: x.wcId, cost: maliyet('istasyon', x.id), eff: x.eff, opPer: x.opPer, count: x.count }));
+  if (Array.isArray(d.machines) && istasyonlar) {
+    const ist = new Set(istasyonlar.map(x => x.id));
+    o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
+      const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
+      const a = eski('tezgahlar', m.id); if (a) y.plan = a;
+      return y;
+    });
+  }
+  if (Array.isArray(d.people)) {
+    o.people = d.people.filter(k => k.active !== false).map(k => {
+      const y = { id: k.id, name: k.name, code: k.code || '', role: (ek.kisiGorevi && ek.kisiGorevi[k.id]) || '', wcId: k.wcId || '', stationId: k.stationId || '',
+        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true };
+      const a = eski('personel', k.id); if (a) y.plan = a;
+      return y;
+    });
+  }
+  return o;
+}
+const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
+/* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler'];
+
 if (TMI_ICINDE) {
+  const rd0 = rrDenemeyeCevir;
+  /* Kaydı planlama sayfası hiç yazmadıysa plan dilimi, dolayısıyla başlangıç yoktur. Saklanmış çalışma açılırken kayıt değişmişse
+     (rrCek) çalışma bu çeviriyle değişir: açık çalışmanın başlangıcı korunur, yoksa taban kurulur; başlangıçsız çalışma çizimi düşürür. */
+  rrDenemeyeCevir = function (st) {
+    const D = rd0(TMI_KAYNAK.durum ? tmiKaynakIle(st, TMI_KAYNAK, S && S.D) : st);
+    if (!D.meta && S && S.D && S.D.meta) D.meta = rrKopya(S.D.meta);
+    tmiTabanKur(D);
+    return D;
+  };
+  /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
+     yazılmaz (sunucu zaten ayıklar); değişiklik planı eskitir. */
+  const kaynakUygula = () => {
+    const st = rrOku();
+    const D = rrDenemeyeCevir(st && st.items ? st : TMI_BOS_KAYIT);
+    const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !rrEsit(D[a], S.D[a]));
+    if (!alanlar.length) return false;
+    for (const a of alanlar) S.D[a] = D[a];
+    tmiTabanKur(S.D);
+    S.dataVer++; U.hamle = null;
+    RRV.S = S; RRV.dj = JSON.stringify(S.D);
+    if (S.plan) bildir('Tezgâh, personel ve takvim sunucudan alındı. Plan yeniden çözülünce güncellenir.', 'tamam');
+    return true;
+  };
+  const kaynakAl = () => {
+    if (typeof window.tmi.kaynakOku !== 'function') return;
+    window.tmi.kaynakOku().then(r => {
+      if (!r || !r.durum) return;
+      TMI_KAYNAK.durum = r.durum; TMI_KAYNAK.ek = r.ek || null;
+      if (!S) { TMI_KAYNAK.bekliyor = true; return; }
+      if (kaynakUygula()) render();
+    }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
+  };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
   const yc0 = yeniCalisma;
@@ -64,10 +149,12 @@ if (TMI_ICINDE) {
   const r0 = render;
   render = function () {
     if (S && bekleyen !== null) { const ad = bekleyen; bekleyen = null; uygula(ad); }
+    if (S && TMI_KAYNAK.bekliyor) { TMI_KAYNAK.bekliyor = false; kaynakUygula(); }
     if (S && S.kullanici !== TMI_KULLANICI) S.kullanici = TMI_KULLANICI;
     const x = r0.apply(this, arguments);
     const ad = rrMi(U.sayfa) ? U.sayfa.slice(3) : (TMI_SAYFA_ANAHTAR[U.sayfa] || U.sayfa);
     if (ad !== sonBildirilen && !(TMI_MENU[sonBildirilen] === U.sayfa)) { sonBildirilen = ad; g.bildir(ad); }
     return x;
   };
+  kaynakAl();
 }
