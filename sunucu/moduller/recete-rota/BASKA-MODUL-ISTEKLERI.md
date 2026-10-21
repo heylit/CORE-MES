@@ -29,3 +29,17 @@ adımın gerçekleşeni hiç gelmiyor.
    `sunucu/kablolama.ts`'te. Kuyruk yaz ve canlıya al komutlarında saatleri sunucu ortak motorla sabit sırayla yeniden kurar. Canlıya alma
    (356 b) ayrı onaydır; o güne kadar asıl plan `kurallar.ts` `oner` ile kalır.
 3. Test: sayımı olan çalışan adımda okunan `kalanDk` plan ekranındaki bitişle aynıdır; sayımsız adımda ayar dahildir.
+
+## Satış teklifi denemesi (Y4): sunucuda kaynak okuması çerçevedekiyle aynı olsun
+
+Teklif denemesi planın girdisini sunucuda çerçevenin koduyla kurar (`motor/girdi.betik` `girdiKur`). Çerçeve kaynak okumasını istemcide
+sahiplerin uçlarından toplar (`istemci/src/moduller/recete-rota/kopru.ts` `ekOzeti`, `kaynak-komutlari.ts` `takvimEki`); sunucuda
+(`servis.ts` `kaynakOku`) aynısı için iki okuma eksik. Eksikken alan null'dır (çerçevenin okuyamadığı durumla aynı): takvim çalışmanın
+kayıtlı takviminden gelir, kişinin görevi tek tek okunur.
+
+| Sahibi | Gereken | Neden | Bugün |
+|---|---|---|---|
+| vardiya | `disari.ts`'ten kişi vardiyaları: `kisiVardiyalari(db): { kisiId, vardiyaId }[]` (`sorgular.ts`'teki var olan sorgu) | Takvim eki: iş merkezi haftası (`vardiyaMatrisi`, zaten dışarıda) ve kişi -> vardiya; ikisi birlikte yoksa takvim eki kurulmaz | `ek.takvim` null; çalışmanın kayıtlı haftası kullanılır. Kişi vardiyası değiştiyse sunucu planı çerçevedekinden ayrılır |
+| kisiler | Toplu görev okuması: `kisiGorevleri(db, idler): Map<number, string \| null>` | Ayarcı görevden okunur (`gorev` "Ayarcı"); bugün kişi başına bir sorgu | `kisiGorevi(db, id)` kişi başına çağrılıyor |
+
+VARSAYIM: iki okuma da var olan sorgunun dışarı açılmasıdır, yeni hesap gerekmez (sorgular okundu, servis katmanı izlenmedi).
