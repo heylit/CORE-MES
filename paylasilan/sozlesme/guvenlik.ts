@@ -97,6 +97,9 @@ export const oturumSatiri = z.object({
   kisiAdi: z.string(),
   acildi: zamanSemasi,
   sonGorulme: zamanSemasi,
+  // Girişteki cihaz (386 a); bu bilgiden önce açılmış oturumda boştur.
+  ip: z.string().nullable(),
+  tarayici: z.string().nullable(),
   buOturum: z.boolean(),
 });
 export const oturumlarCevabi = z.object({ oturumlar: z.array(oturumSatiri) });

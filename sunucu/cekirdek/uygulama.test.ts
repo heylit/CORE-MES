@@ -134,6 +134,21 @@ const TAM_DENETLENMEYEN_UCLAR = [
   'POST /kalite-merkezi/geri-yukle govdesiz+secim',
 ];
 
+// 385 a: dosya veren okuma ucu dosyayı verirken denetime yazılır. Yalnız ekranın kendiliğinden yüklediği, kişinin dosya olarak
+// açmadığı dosyalar yazılmaz (koordinatör kapsam daraltması 21.10.2026: atölye haritasının 3B modelleri).
+const KENDILIGINDEN_YUKLENEN_DOSYALAR = [
+  'GET /atolye/istasyonlar/:id/merkez-modeli',
+  'GET /atolye/malzemeler/:no/merkez-modeli',
+];
+
+test('indirme denetimi kapsamı: denetime yazılmayan dosya uçları onaylı sabit listeyle aynıdır (385 a)', async () => {
+  const uclar = await modulUclariniKesfet();
+  assert.equal(uclar.some((u) => u.ikili && u.yol === '/cizimler/:id/revizyonlar/:revizyonId/dosya'), true);
+  const disarida = ucEnvanteri(uclar).filter((u) => u.kendiligindenYuklenir === true).map((u) => `${u.yontem} ${u.yol}`).sort();
+  assert.deepEqual(disarida, [...KENDILIGINDEN_YUKLENEN_DOSYALAR].sort(),
+    'İndirme denetiminin kapsamı değişti: bir dosya ucu deftere yazılmıyor. Bu kullanıcı kararıdır (385 a); karar alınmadan liste güncellenmez.');
+});
+
 test('denetim kapsamı: gövdesiz ya da denetimsiz uçlar kullanıcı kararıyla onaylanmış sabit listeyle aynıdır (kart #212)', async () => {
   const yazmalar = (await modulUclariniKesfet()).filter((u) => u.yontem !== 'GET');
   // Keşif gerçekten yazma uçlarını getiriyor ve kipi okuyor: boş listede karşılaştırma kendiliğinden geçerdi.

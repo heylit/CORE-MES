@@ -9,6 +9,8 @@ export const GORULME_ARALIGI_SN = 60;
 
 export const BEKLEME_AZAMI_SN = 60;
 export const DENEME_SAKLAMA_GUN = 30;
+// 398 a: oturumdaki adres ve tarayıcı kişisel veridir; oturum kapandıktan bu kadar gün sonra boşaltılır, satır kalır.
+export const CIHAZ_SAKLAMA_GUN = 30;
 
 // ardArdaHatali: aynı kullanıcı adı ve cihazdan, son başarılı girişten beri gelen hatalı deneme sayısı.
 // Her hatalı denemede bekleme ikiye katlanır, üst sınırda kalır; hesap kilidi bundan ayrıdır (cihazdan bağımsız sayılır).
@@ -49,6 +51,13 @@ export function kilitKalanDk(kalanSn: number): number {
 export function denemeKilitAnahtari(ip: string): string {
   const ozet = createHash('sha256').update(JSON.stringify(['giris-cihazi', ip])).digest();
   return ozet.readBigInt64BE(0).toString();
+}
+
+// 386 a: oturum girişteki tarayıcıyla saklanır. Başlık istemcinin elindedir: uzunluğu sınırlanır, boşu bilinmeyen sayılır.
+export const TARAYICI_AZAMI = 300;
+export function tarayiciMetni(baslik: string | null): string | null {
+  const metin = (baslik ?? '').trim().slice(0, TARAYICI_AZAMI).trim();
+  return metin === '' ? null : metin;
 }
 
 // Veritabanını okuyan biri oturum çalamasın diye anahtarın yalnız özeti saklanır.

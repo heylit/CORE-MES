@@ -15,12 +15,12 @@ import {
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
 import {
-  AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_PENCERESI_DK, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
+  AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk,
-  saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi,
+  saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
 } from './kurallar.ts';
 import {
-  cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
+  cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay,
@@ -35,7 +35,10 @@ export type GirisSonucu =
 
 export async function girisYap(
   db: Db,
-  girdi: { kullaniciAdi: string; parola?: string | undefined; pin?: string | undefined; ip: string; gunluk?: Gunluk | undefined },
+  girdi: {
+    kullaniciAdi: string; parola?: string | undefined; pin?: string | undefined; ip: string; tarayici?: string | null | undefined;
+    gunluk?: Gunluk | undefined;
+  },
   simdi: Simdi = null,
 ): Promise<GirisSonucu> {
   const ad = kullaniciAdiniDuzelt(girdi.kullaniciAdi);
@@ -52,12 +55,12 @@ export async function girisYap(
   }
   await denemeyiSifirla(db, ad, girdi.ip, simdi);
   if (sonuc.pinBelirlenecek) return { anahtar: null, kullanici: null, pinBelirlenecek: true };
-  return { anahtar: await oturumAc(db, kullanici.id), kullanici };
+  return { anahtar: await oturumAc(db, kullanici.id, girdi), kullanici };
 }
 
-async function oturumAc(db: Db, kisiId: number): Promise<string> {
+async function oturumAc(db: Db, kisiId: number, girdi: { ip: string; tarayici?: string | null | undefined }): Promise<string> {
   const anahtar = randomBytes(32).toString('base64url');
-  await oturumEkle(db, anahtarOzeti(anahtar), kisiId);
+  await oturumEkle(db, anahtarOzeti(anahtar), kisiId, { ip: girdi.ip.trim() === '' ? null : girdi.ip, tarayici: tarayiciMetni(girdi.tarayici ?? null) });
   return anahtar;
 }
 
@@ -65,7 +68,7 @@ async function oturumAc(db: Db, kisiId: number): Promise<string> {
 // oturum açılır. Geçici PIN'i olmayan kişinin doğru PIN'i de hatalı deneme sayılır: bu yol PIN değiştirme yolu değildir.
 export async function ilkPiniBelirle(
   db: Db,
-  girdi: { kullaniciAdi: string; geciciPin: string; yeniPin: string; ip: string; gunluk?: Gunluk | undefined },
+  girdi: { kullaniciAdi: string; geciciPin: string; yeniPin: string; ip: string; tarayici?: string | null | undefined; gunluk?: Gunluk | undefined },
   simdi: Simdi = null,
 ): Promise<{ anahtar: string; kullanici: Kullanici }> {
   const ad = kullaniciAdiniDuzelt(girdi.kullaniciAdi);
@@ -81,7 +84,7 @@ export async function ilkPiniBelirle(
   }
   await ilkPiniYaz(db, kullanici.id, girdi.yeniPin);
   await denemeyiSifirla(db, ad, girdi.ip, simdi);
-  return { anahtar: await oturumAc(db, kullanici.id), kullanici };
+  return { anahtar: await oturumAc(db, kullanici.id, girdi), kullanici };
 }
 
 // Bekleme ya da eşzamanlı deneme varsa fırlatır; parolaya bakılmadan, kayıt yazılmadan döner. ad kullaniciAdiniDuzelt'ten
@@ -107,8 +110,14 @@ export async function girisDenemesiniDenetle(db: Db, ad: string, ip: string, sim
   const kalanSn = kalanBeklemeSn(seri.sayi, seri.gecen_sn);
   if (kalanSn > 0) throw oturumYok(`Çok sık deneme. ${kalanSn} sn sonra yeniden deneyin.`);
 
-  // Zamanlanmış iş yok; temizlik parolaya bakılan her denemede koşar.
+  // Deneme temizliği zamanlanmış iş değildir; parolaya bakılan her denemede koşar.
   await eskiDenemeleriSil(db, DENEME_SAKLAMA_GUN, simdi);
+}
+
+// 398 a: girişte değil zamanlanmış işte koşar. Giriş oturum tablosuna yalnız kendi satırını yazar; başka oturumlara dokunan
+// güncelleme girişin kilit sırasını bozar (kişi satırından önce oturum tablosunu kilitlerdi).
+export async function eskiOturumCihaziniTemizle(db: Db): Promise<void> {
+  await eskiOturumCihaziniBosalt(db, CIHAZ_SAKLAMA_GUN, { bostaSn: BOSTA_SN, azamiSn: AZAMI_SN }, null);
 }
 
 // Ada bütün cihazlardan gelen seri eşiğe varınca ad kilitlenir. Yöneticiye bildirim yolu yok (UYUM-BORCU): kilit tabloda

@@ -347,6 +347,23 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     assert.equal((await istek(yonetici, 'GET', `/yedekler/${ad}/indir?izin=${ikinci}`)).statusCode, 403, 'ikinci kullanım');
   });
 
+  test('385 a: verilen dosya kişi, uç, kayıt ve dosya bilgisiyle GET satırı olarak denetime düşer; reddedilen indirme düşmez; izin değeri deftere girmez', async () => {
+    const ad = yedekAdi(sunucuVt(), 'gece', new Date('2026-10-15T23:00:00Z'));
+    await writeFile(path.join(dizin, ad), 'yedek-icerik');
+    const once = (await vt().tek<{ id: number }>('SELECT coalesce(max(id), 0)::int AS id FROM denetim_kaydi'))?.id ?? 0;
+    assert.equal((await istek(yonetici, 'GET', `/yedekler/${ad}/indir?izin=uydurma-izin-degeri`)).statusCode, 403);
+    const cevap = await indir(yonetici, ad);
+    assert.equal(cevap.statusCode, 200);
+    const satirlar = await vt().sorgu<{ kisi_id: number; yol: string; parametre: unknown; govde: unknown; modul: string; yetki: string }>(
+      "SELECT kisi_id, yol, parametre, govde, modul, yetki FROM denetim_kaydi WHERE id > $1 AND yontem = 'GET'", [once]);
+    assert.deepEqual(satirlar, [{
+      kisi_id: yoneticiId, yol: '/yedekler/:ad/indir', parametre: { ad }, modul: 'ayarlar', yetki: 'ayarlar.yedek-indir',
+      govde: { _ek: [{ ad, tur: 'application/octet-stream', boyut: Number(cevap.headers['content-length']) }] },
+    }]);
+    const butunSatirlar = await vt().sorgu<{ metin: string }>('SELECT row_to_json(d)::text AS metin FROM denetim_kaydi d WHERE id > $1', [once]);
+    assert.equal(butunSatirlar.some((r) => r.metin.includes('uydurma-izin-degeri')), false);
+  });
+
   test('klasör yoksa yedek kapalıdır: liste boş ve nedeniyle döner, yedek alınmaz ve indirilmez; gece işi bekler', async () => {
     for (const [ad, deger] of [['tanımsız', undefined], ['göreli', 'yedekler'], ['olmayan', path.join(dizin, 'yok')]] as const) {
       if (deger === undefined) delete process.env['TMIV2_YEDEK_DIZINI'];

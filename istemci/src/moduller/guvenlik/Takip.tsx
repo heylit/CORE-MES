@@ -5,7 +5,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Tablo, us
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { BOS, SONUC_ADI, zamanMetni } from './gorunum.ts';
+import { BOS, SONUC_ADI, tarayiciOzeti, zamanMetni } from './gorunum.ts';
 import './guvenlik.css';
 
 type GirisSatiri = GirisListeCevabi['satirlar'][number];
@@ -77,6 +77,8 @@ export function GuvenlikOturumlar() {
     ) },
     { anahtar: 'acildi', baslik: 'Açıldı', kirilmaz: true, hucre: (o) => zamanMetni(o.acildi) },
     { anahtar: 'son', baslik: 'Son görülme', kirilmaz: true, hucre: (o) => zamanMetni(o.sonGorulme) },
+    { anahtar: 'ip', baslik: 'Cihaz', mono: true, hucre: (o) => o.ip ?? BOS },
+    { anahtar: 'tarayici', baslik: 'Tarayıcı', hucre: (o) => (o.tarayici === null ? BOS : <span title={o.tarayici}>{tarayiciOzeti(o.tarayici)}</span>) },
     ...(yonetir ? [{
       anahtar: 'islem', baslik: 'İşlem', hizala: 'sag' as const,
       hucre: (o: OturumSatiri) => (o.buOturum ? BOS : <Dugme simge="x" onClick={() => kapanacakYaz(o)}>Kapat</Dugme>),

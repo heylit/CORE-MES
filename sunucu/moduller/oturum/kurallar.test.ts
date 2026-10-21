@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BEKLEME_AZAMI_SN, beklemeSn, denemeKilitAnahtari, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk } from './kurallar.ts';
+import { BEKLEME_AZAMI_SN, TARAYICI_AZAMI, beklemeSn, denemeKilitAnahtari, hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk, tarayiciMetni } from './kurallar.ts';
 
 test('bekleme her hatalı denemede ikiye katlanır: 1, 2, 4, 8... sn; üst sınır 60 sn', () => {
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(beklemeSn), [0, 1, 2, 4, 8, 16, 32]);
@@ -41,4 +41,16 @@ test('hesap 10. hatalı denemede kilitlenir, 9\'da kilitlenmez; kalan süre daki
   assert.equal(kilitKalanDk(60), 1);
   assert.equal(kilitKalanDk(1), 1);
   assert.equal(kilitKalanDk(0), 1);
+});
+
+test('tarayıcı metni (386 a): baştaki ve sondaki boşluk atılır, 300 karakterde kesilir', () => {
+  assert.equal(tarayiciMetni('  Deneme/1.0 (Windows)  '), 'Deneme/1.0 (Windows)');
+  assert.equal(TARAYICI_AZAMI, 300);
+  assert.equal(tarayiciMetni(`D/1 ${'x'.repeat(500)}`)?.length, 300);
+});
+
+test('tarayıcı metni (386 a): başlık yoksa ya da boşsa bilinmiyor (null) sayılır, boş metin saklanmaz', () => {
+  assert.equal(tarayiciMetni(null), null);
+  assert.equal(tarayiciMetni(''), null);
+  assert.equal(tarayiciMetni('   '), null);
 });
