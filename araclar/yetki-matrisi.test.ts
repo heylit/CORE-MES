@@ -48,7 +48,7 @@ describe('yetki matrisi belgesi rol göçleriyle aynıdır (gerçek PostgreSQL)'
     const yalniz = kodlar(bolum).filter((k) => !verilenler.has(k));
     assert.deepEqual(yalniz.sort(), [
       'arkon.yonetici', 'denetim.govde-oku', 'guvenlik.oku', 'guvenlik.yonet', 'kisiler.parola-degistir', 'kisiler.rol-yonet', 'logo.birim-seti-yaz',
-      'saglik.ayrinti-oku', 'sayfa.guvenlik',
+      'saglik.ayrinti-oku', 'sayfa.guvenlik', 'smartes.esleme-yaz',
     ]);
     for (const islem of yalniz) assert.equal((ISLEMLER as readonly string[]).includes(islem), true, islem);
   });

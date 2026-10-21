@@ -49,6 +49,7 @@ Hiçbir role verilmez; yalnız bayraklı yönetici yapar:
 - sağlık ayrıntısı: `saglik.ayrinti-oku`
 - Arkon yöneticisi: `arkon.yonetici`
 - Logo birim seti listesini yazma: `logo.birim-seti-yaz`
+- SmartES kod eşlemelerini düzenleme: `smartes.esleme-yaz`
 - denetim kaydının gövdesi ve bütün parametreleri: `denetim.govde-oku`
 - Güvenlik Merkezi sayfası, okuma ve yönetme: `sayfa.guvenlik` `guvenlik.oku` `guvenlik.yonet` (kullanıcı onayı 2026-10-14)
 - malzeme onay akışını açıp kapatma (işlem değildir; müdür ve planlama öteki tanım ve ayarları `malzemeler.tanim-yaz` ile yazar)
