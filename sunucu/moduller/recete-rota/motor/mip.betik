@@ -48,7 +48,7 @@ function mipModel(st,cx,jobIds,opt={}){
       let su=suMin(o,c,cx);
       let p=su+c.run+(o.fai?(+A.faiSaat||0):0);
       let from=head;
-      if(g[o.id]&&g[o.id].S!=null){p=Math.max(0,c.run-workIn(M.rw,g[o.id].S,st.now));from=st.now;}
+      if(g[o.id]&&g[o.id].S!=null){const kb=kalanBitis(M,g[o.id]);p=kb!=null?workIn(M.rw,st.now,Math.max(st.now,kb)):Math.max(0,c.run-workIn(M.rw,g[o.id].S,st.now));from=st.now;}
       const P=Math.floor(p+1e-9),sl=slotsOf(c.m);
       let i0=0;while(i0<sl.length&&sl[i0]+1<=from+1e-9)i0++;
       // başlamış işlem yerinde kalır
