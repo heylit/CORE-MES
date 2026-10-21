@@ -96,16 +96,31 @@ function tmiFasoncular(st, firmalar, D, onceki) {
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
    kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
    Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
-function tmiCalisanlar(durum, st, D, now) {
-  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+/* Gerçek an -> planın saat ekseni (başlangıç günü 00:00'dan saat); okunamazsa null. */
+function tmiSaat(D, an) {
+  if (an == null) return null; const d = new Date(an); if (isNaN(d.getTime())) return null; const p = n => String(n).padStart(2, '0');
+  return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`);
+}
+function tmiIslemler(st, D) {
   const opOf = {};
   for (const o of (st && st.orders) || []) {
     const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
     const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
     adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
   }
-  const saat = iso => { if (!iso) return null; const d = new Date(iso); const p = n => String(n).padStart(2, '0');
-    return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`); };
+  return opOf;
+}
+/* Adımın işleyeceği adet (24 a): tek kaynak uretim-emirleri (durum.adimAdetleri, yalnız emir adedinden farklı olan). Motor D.opAdet'i okur. */
+function tmiAdimAdetleri(durum, st, D) {
+  const a = durum && durum.adimAdetleri && typeof durum.adimAdetleri === 'object' ? durum.adimAdetleri : null; if (!a) return undefined;
+  const opOf = tmiIslemler(st, D); const y = {};
+  for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
+  return y;
+}
+function tmiCalisanlar(durum, st, D, now) {
+  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+  const opOf = tmiIslemler(st, D);
+  const saat = an => tmiSaat(D, an);
   const y = {};
   for (const c of liste) {
     const id = opOf[c.anahtar]; if (!id) continue;
@@ -117,7 +132,7 @@ function tmiCalisanlar(durum, st, D, now) {
 }
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular', 'opAdet'];
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;
@@ -129,6 +144,7 @@ if (TMI_ICINDE) {
     tmiTabanKur(D);
     const firmalar = TMI_KAYNAK.durum && TMI_KAYNAK.durum.fasonFirms;
     if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, S && S.D);
+    const adet = tmiAdimAdetleri(TMI_KAYNAK.durum, st, D); if (adet) D.opAdet = adet;
     return D;
   };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
@@ -180,6 +196,19 @@ if (TMI_ICINDE) {
       if (!S) { TMI_KAYNAK.bekliyor = true; return; }
       const k = kaynakUygula(); if (calisanUygula() || k) render();
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
+  };
+  /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
+     yazılmaz. Planın başlangıç günü sabit kalır: kayıtlı plan saatleri bu güne göredir. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
+  const st0 = stOf;
+  stOf = function () { const st = st0.apply(this, arguments); if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; };
+  const coz0 = coz;
+  coz = function () {
+    if (S && S.D && yetkili('plan.yaz') && !calisan) {
+      const n = tmiSaat(S.D, Date.now()); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
+      /* motorun ufku başlangıçtan HDAYS gündür; başlangıç ötelenmez (kayıtlı saatler ona bağlı), yaklaşınca söylenir */
+      if (S.simdi != null && S.simdi > (HDAYS - 14) * 24) bildir(`Planın başlangıç günü (${S.D.meta.baslangic}) eski; planlama ufku ${HDAYS} gün olduğu için ufkun sonuna ${Math.max(0, Math.floor(HDAYS - S.simdi / 24))} gün kaldı.`, 'uyari');
+    }
+    return coz0.apply(this, arguments);
   };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };

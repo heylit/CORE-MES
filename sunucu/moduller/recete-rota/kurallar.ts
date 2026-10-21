@@ -263,11 +263,22 @@ export function rotasizAdimlariCevir(isEmirleri: readonly RotasizIsEmri[]): NonN
   }));
 }
 
-// Sahibinin `CalisanAdim` biçimi (plan/disari.ts). Sağlam adet ve emir adedi emir diliminden eklenir; dilimde olmayan adım (emir okunmadı,
+// Sahibinin `CalisanAdim` biçimi (plan/disari.ts). Sağlam adet emir diliminden, adet adımın adedinden (yoksa emir adedi) eklenir; dilimde olmayan adım (emir okunmadı,
 // rotasız emir değil) gelmez.
 export interface CalisanAdimKaydi { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }
 
-export function calisanAdimlariCevir(adimlar: readonly CalisanAdimKaydi[], emirler: readonly EmirKaydi[]): NonNullable<DurumCevabi['calisanAdimlar']> {
+// Sahibinin açık adım satırı (uretim-emirleri planlanacakIsEmirleri): adimAdedi önceki biten adımın hurdası düşülmüş adettir (tek kaynak).
+export interface AcikAdimKaydi { emirNo: string; opNo: number; adet: number; adimAdedi?: number }
+
+export function adimAdetleriCevir(adimlar: readonly AcikAdimKaydi[]): NonNullable<DurumCevabi['adimAdetleri']> {
+  const y: NonNullable<DurumCevabi['adimAdetleri']> = {};
+  for (const a of adimlar) if (a.adimAdedi !== undefined && a.adimAdedi !== a.adet) y[`${a.emirNo}|${String(a.opNo)}`] = a.adimAdedi;
+  return y;
+}
+
+export function calisanAdimlariCevir(
+  adimlar: readonly CalisanAdimKaydi[], emirler: readonly EmirKaydi[], adimAdetleri: NonNullable<DurumCevabi['adimAdetleri']> = {},
+): NonNullable<DurumCevabi['calisanAdimlar']> {
   const emre = new Map(emirler.map((e) => [e.emirNo, e]));
   return adimlar.flatMap((a) => {
     const i = a.anahtar.lastIndexOf('|');
@@ -276,7 +287,7 @@ export function calisanAdimlariCevir(adimlar: readonly CalisanAdimKaydi[], emirl
     if (e === undefined || ie === undefined) return [];
     return [{
       anahtar: a.anahtar, makineId: a.makineId === null ? null : String(a.makineId), baslangic: a.baslangic, sayimAni: a.sayimAni,
-      kalanVerimliDk: a.kalanVerimliDk, saglam: ie.canliAdet ?? 0, adet: e.adet,
+      kalanVerimliDk: a.kalanVerimliDk, saglam: ie.canliAdet ?? 0, adet: adimAdetleri[a.anahtar] ?? e.adet,
     }];
   });
 }

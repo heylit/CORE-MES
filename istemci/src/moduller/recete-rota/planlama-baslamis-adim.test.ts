@@ -28,6 +28,7 @@ function duzenek(kayit: Nesne, okumalar: Array<{ durum: Nesne; ek: null }>): Duz
     let yazma = 0; function kaydet() { yazma++; } function render() {} function ozetTazele() {}
     function yukle() { return null; }
     function yeniCalisma(k) { return { D: VERI[k].veri, dataVer: 1, plan: null, gercek: {} }; }
+    function stOf() { return { now: 7 }; } function coz() {}
     let tekEylem = () => false;
     const ZAMAN = { M: { 100: { sw: [[0, 1500]], rw: [[0, 1500]] } } };
     const cxAl = () => ({ st: { now: 7 }, M: ZAMAN.M, byId: { 'O1.10': { c: [{ m: '100', su: 0.5 }] } } });

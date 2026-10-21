@@ -388,7 +388,7 @@ function ayristir(p, cx, jid) {
   const j = cx.jobs[jid]; if (!j || !j.ops.length) return null;
   const rs = j.ops.map(o => p.ops[o.id]);
   if (rs.some(r => !r || !isFinite(r.C))) return { tam: false };
-  const tas = +cx.A.tasimaSaat || 0, now = 7;
+  const tas = +cx.A.tasimaSaat || 0, now = cx.st ? cx.st.now : 7;
   const seg = {}, kaynak = [];
   const ekle = (k, v) => { if (v > 1e-6) seg[k] = (seg[k] || 0) + v; };
   const bekle = (w, r, v) => {

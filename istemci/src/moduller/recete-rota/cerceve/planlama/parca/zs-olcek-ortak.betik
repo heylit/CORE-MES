@@ -95,6 +95,9 @@ function olOlc(src, kume) {
   const u = Object.values(util);
   return { n, late, wT, tl, zam: n ? (n - late) / n * 100 : null, dar: tamOps && u.length ? Math.max(...u) * 100 : null, suH: tamOps ? suH : null, util, cmax: src.ozet ? src.ozet.Cmax : null };
 }
+/* "Geciken" iki tanımla görünür: dönem göstergesi (nbOlc, olKume) ve planın özeti (tüm plan); etiket neyi saydığını söyler */
+const OL_BU = { gun: 'bugün', hafta: 'bu hafta', ay: 'bu ay', yil: 'bu yıl' };
+function olDonemEtiket() { const x = OLCEK.find(o => o[0] === U.olcek); return U.olKay ? `seçili ${x ? x[1].toLocaleLowerCase('tr-TR') : 'dönem'}` : OL_BU[U.olcek] || 'bu dönem'; }
 let olTum = false;
 const ooNbOlc = nbOlc;
 nbOlc = function (p) {

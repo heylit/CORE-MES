@@ -45,6 +45,17 @@ describe('ortak plan motoru, başlamış adımın kalanı (391 a)', () => {
   });
 });
 
+describe('ortak plan motoru, adımın adedi (24 a)', () => {
+  test('adımın adedi verilirse süre o adetle hesaplanır; verilmezse sipariş adedi', () => {
+    const m = motorYukle();
+    const adet = (st: MotorDurumu) => (m.compile(st) as { byId: Record<string, { adet: number }> }).byId['S1.10']?.adet;
+    assert.equal(adet(durum(m, {}, 0)), 10);
+    const st = durum(m, {}, 0, { ...veri(), opAdet: { 'S1.10': 7 } });
+    assert.equal(adet(st), 7);
+    assert.equal(m.schedule(st, 'yeni', null).ops['S1.10']?.C, 7);
+  });
+});
+
 describe('ortak plan motoru, sunucuda çalışma (ADR 0018)', () => {
   const ikiSiparis = () => veri([{ id: 'S1', adet: 4, termin: '2026-01-20' }, { id: 'S2', adet: 2, termin: '2026-01-06' }]);
   const ozet = (p: MotorPlani) => Object.fromEntries(Object.entries(p.ops).map(([k, r]) => [k, [r.m, r.S, r.C]]));

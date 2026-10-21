@@ -299,11 +299,14 @@ export const durumCevabi = z.object({
   // Emir yetkisi yoksa null; alan eski sürümde yoktu (isteğe bağlı), sunucu her zaman yazar.
   emirler: durumEmirlerSemasi.nullable().optional(),
   // Başlamış adımlar (391 a, kalanın tek kaynağı sunucu): anahtar `emirNo|opNo`; makine terminalin çalıştırdığı, yoksa planınki; kalan
-  // verimli dakika son sayım anından (yoksa başlamadan) itibarendir. saglam terminal sayacı, adet emrin adedi. Emir yetkisi yoksa null.
+  // verimli dakika son sayım anından (yoksa başlamadan) itibarendir. saglam terminal sayacı, adet adımın işleyeceği adet. Emir yetkisi yoksa null.
   calisanAdimlar: z.array(z.object({
     anahtar: z.string(), makineId: kimlikMetni.nullable(), baslangic: zamanSemasi.nullable(), sayimAni: zamanSemasi.nullable(),
     kalanVerimliDk: z.number(), saglam: z.number().int(), adet: z.number().int(),
   })).nullable().optional(),
+  // Bitmemiş adımın işleyeceği adet emir adedinden farklıysa (önceki biten adımın hurdası düşülmüş, tek kaynak uretim-emirleri adimAdedi):
+  // anahtar `emirNo|opNo`. Farksız adım gelmez. Emir yetkisi yoksa null.
+  adimAdetleri: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
   // finans.maliyet-oku yoksa null.
   maliyet: durumMaliyetSemasi.nullable(),
   // Canlı plan ayarı; plan okuması oturumla açıktır.

@@ -3254,15 +3254,17 @@ function compile(st){
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
-      const tb=Math.max(1,Math.min(j.adet,o.transfer||Math.ceil(j.adet*(A.transferOran||.25))));
+      /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
+      const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
+      const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
       else for(const t of o.tezgahlar||[]){const mm=M[t.id];if(!mm)continue;const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
-        c.push({m:t.id,run:j.adet*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
+        c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:j.adet,x};
+        program:o.program!==false,fai:!!o.fai,adet:ad,x};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
@@ -4911,7 +4913,7 @@ function ayristir(p, cx, jid) {
   const j = cx.jobs[jid]; if (!j || !j.ops.length) return null;
   const rs = j.ops.map(o => p.ops[o.id]);
   if (rs.some(r => !r || !isFinite(r.C))) return { tam: false };
-  const tas = +cx.A.tasimaSaat || 0, now = 7;
+  const tas = +cx.A.tasimaSaat || 0, now = cx.st ? cx.st.now : 7;
   const seg = {}, kaynak = [];
   const ekle = (k, v) => { if (v > 1e-6) seg[k] = (seg[k] || 0) + v; };
   const bekle = (w, r, v) => {
@@ -5164,7 +5166,7 @@ function sKuyruk() {
   if (!S.plan) return `<div class="pm-sira">${sec}</div><div class="pm-bos">${ic('play', 'b')}<strong>Bu tezgâh için plan yok</strong><span>Planlamacı planı çözünce iş listesi burada görünür.</span></div>`;
   const cx = cxAl();
   const ops = Object.values(S.plan.ops).filter(r => r.m === M.id).sort((a, b) => a.S - b.S);
-  const now = 7;
+  const now = cx && cx.st ? cx.st.now : 7;
   const durum = r => r.C <= now ? ['bitti', 'Bitti'] : r.S <= now && now < r.Su ? ['ayar', 'Ayarda'] : r.Su <= now && now < r.C ? ['calisiyor', 'Çalışıyor'] : ['sirada', 'Sırada'];
   const gunler = {};
   for (const r of ops) { const d = Math.floor(r.S / 24); (gunler[d] = gunler[d] || []).push(r); }
@@ -5314,9 +5316,9 @@ function sSenaryolar() {
     const o = s.ozet; const canli = s.id === S.canli;
     const durum = canli ? rozet('Canlı', 'tamam') : s.durum === 'vazgecildi' ? rozet('Vazgeçildi', 'pasif') : rozet('Açık', '');
     const eski = canli || s.durum === 'vazgecildi' ? false : s.tabanSurum !== S.canliSurum && S.canli;
-    return `<tr>${td('Seç', `<input type="checkbox" data-chg="karsilastir" data-v="${esc(s.id)}" ${sec.has(s.id) ? 'checked' : ''} aria-label="${esc(s.ad)} karşılaştır" style="width:22px;height:22px;accent-color:var(--hazard)">`)}${td('Senaryo', `<b>${esc(s.ad)}</b><br><span class="pm-kucuk">${esc(s.yazar)} · ${zamanYaz(s.zaman)} · canlı s.${s.tabanSurum} üstünde${eski ? ' · ' : ''}</span>${eski ? rozet('Canlı değişti', 'uyari') : ''}`)}${td('Durum', durum)}${td('Gecikme', saat(o.wT), 'pm-num')}${td('Geciken', `${o.late}/${o.n}`, 'pm-num')}${td('Ayar', saat(o.suH), 'pm-num')}${td('', `<div class="pm-dugmeler">${dugme('Aç', 'sen-ac', { kucuk: true, veri: `data-v="${esc(s.id)}"`, ipucu: 'Veriyi ve planı çalışmaya yükler' })}${!canli && s.durum !== 'vazgecildi' ? dugme('Canlıya al', 'sen-canli', { kucuk: true, birincil: true, yetki: 'plan.canliya-al', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli && s.durum !== 'vazgecildi' ? dugme('', 'sen-vazgec', { simge: 'x', hayalet: true, ad: 'Vazgeç', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli ? dugme('', 'sen-sil', { simge: 'trash', hayalet: true, ad: 'Sil', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}</div>`)}</tr>`;
+    return `<tr>${td('Seç', `<input type="checkbox" data-chg="karsilastir" data-v="${esc(s.id)}" ${sec.has(s.id) ? 'checked' : ''} aria-label="${esc(s.ad)} karşılaştır" style="width:22px;height:22px;accent-color:var(--hazard)">`)}${td('Senaryo', `<b>${esc(s.ad)}</b><br><span class="pm-kucuk">${esc(s.yazar)} · ${zamanYaz(s.zaman)} · canlı s.${s.tabanSurum} üstünde${eski ? ' · ' : ''}</span>${eski ? rozet('Canlı değişti', 'uyari') : ''}`)}${td('Durum', durum)}${td('Gecikme', saat(o.wT), 'pm-num')}${td('Geciken sipariş · tüm plan', `${o.late}/${o.n}`, 'pm-num')}${td('Ayar', saat(o.suH), 'pm-num')}${td('', `<div class="pm-dugmeler">${dugme('Aç', 'sen-ac', { kucuk: true, veri: `data-v="${esc(s.id)}"`, ipucu: 'Veriyi ve planı çalışmaya yükler' })}${!canli && s.durum !== 'vazgecildi' ? dugme('Canlıya al', 'sen-canli', { kucuk: true, birincil: true, yetki: 'plan.canliya-al', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli && s.durum !== 'vazgecildi' ? dugme('', 'sen-vazgec', { simge: 'x', hayalet: true, ad: 'Vazgeç', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}${!canli ? dugme('', 'sen-sil', { simge: 'trash', hayalet: true, ad: 'Sil', yetki: 'plan.yaz', veri: `data-v="${esc(s.id)}"` }) : ''}</div>`)}</tr>`;
   }).join('');
-  const tablo = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th><span class="tc-gizli-etiket">Seç</span></th><th>Senaryo</th><th>Durum</th><th class="pm-num">Gecikme</th><th class="pm-num">Geciken</th><th class="pm-num">Ayar</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${satirlar || '<tr><td colspan="7" class="tc-tablo-yok">Senaryo yok. Çalışmayı kaydedin; farklı veri ya da kararla ikinci bir senaryo kurup karşılaştırın.</td></tr>'}</tbody></table></div>`;
+  const tablo = `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th><span class="tc-gizli-etiket">Seç</span></th><th>Senaryo</th><th>Durum</th><th class="pm-num">Gecikme</th><th class="pm-num">Geciken sipariş · tüm plan</th><th class="pm-num">Ayar</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${satirlar || '<tr><td colspan="7" class="tc-tablo-yok">Senaryo yok. Çalışmayı kaydedin; farklı veri ya da kararla ikinci bir senaryo kurup karşılaştırın.</td></tr>'}</tbody></table></div>`;
   const veri = `<div class="pm-dik"><div class="pm-dugmeler">${Object.entries(VERI).map(([id, v]) => dugme(v.veri.meta.ad.replace(' (uydurma veri)', ''), 'set-yukle', { kucuk: true, veri: `data-v="${id}"`, yetki: 'veri.yaz', cls: S.setId === id ? 'tc-dugme-birincil' : '' })).join('')}</div><p class="pm-kucuk">Örnek veri setini yüklemek çalışmadaki veriyi değiştirir; senaryolar ve değişiklik izi kalır.</p>
   <div class="pm-dugmeler">${dugme('Veriyi kopyala (JSON)', 'disari', { simge: 'download', kucuk: true })}${dugme('İçe aktar', 'iceri-ac', { simge: 'upload', kucuk: true, yetki: 'veri.yaz' })}${dugme('Denemeyi sıfırla', 'sifirla', { simge: 'rotate', kucuk: true, tehlike: true, yetki: 'veri.yaz' })}</div></div>`;
   return `<div class="pm-iki">${kart('Çalışma', calisma + kaydetForm, '', '<span class="pm-kucuk">kaydedilmemiş</span>')}${kart('Nasıl işler', `<ul class="pm-olaylar"><li class="pm-olay" data-ton="bilgi">${ic('flag', 'k')}<span class="pm-olay-metin">Planlamacı çalışmayı çözer, senaryo olarak kaydeder. Birden çok senaryo yan yana karşılaştırılır.</span></li><li class="pm-olay" data-ton="bilgi">${ic('lock', 'k')}<span class="pm-olay-metin">Canlıya almayı üretim müdürü ya da yönetici yapar (plan.canliya-al). Canlı plan sürümü artar.</span></li><li class="pm-olay" data-ton="uyari">${ic('alert', 'k')}<span class="pm-olay-metin">Senaryo, canlının eski sürümü üstünde kurulduysa canlıya alırken uyarı çıkar; başkasının aldığı plan sessizce ezilmez.</span></li></ul>`)}</div>
@@ -8021,7 +8023,7 @@ function sStudyoSen() {
     const deg = i ? Object.keys(a.plan.J).map(j => { const x = taban.plan.J[j], y = a.plan.J[j]; return x && y && x.C != null && y.C != null ? { j, d: y.C - x.C } : null; }).filter(x => x && Math.abs(x.d) > 0.05).sort((x, y) => Math.abs(y.d) - Math.abs(x.d)) : [];
     const sat = (ad_, v, b, k = 1) => `<div><small>${ad_}</small><b class="mono">${k ? saat(v) : v}</b>${i && b != null ? `<span class="mono">${fark(v, b, k)}</span>` : ''}</div>`;
     return `<article class="pm-st-kol" ${i ? '' : 'data-taban'}><header><b>${esc(a.ad)}</b>${i ? '' : rozet('Taban', '')}</header>
-      <div class="pm-st-tepki-sayi">${sat('Gecikme', o.wT, t.wT)}${sat('Geciken', o.late, t.late, 0)}${o.suH != null ? sat('Ayar', o.suH, t.suH) : ''}</div>
+      <div class="pm-st-tepki-sayi">${sat('Gecikme', o.wT, t.wT)}${sat('Geciken sipariş · tüm plan', o.late, t.late, 0)}${o.suH != null ? sat('Ayar', o.suH, t.suH) : ''}</div>
       ${stMini(a.plan, kip === 'fark' && i ? taban.plan : null)}
       ${i ? (deg.length ? `<p class="pm-kucuk">${deg.length} siparişin bitişi farklı</p><ul class="pm-st-deg">${deg.slice(0, 5).map(x => `<li><b class="mono">${esc(x.j)}</b><span class="mono ${x.d > 0 ? 'pm-fark-kotu' : 'pm-fark-iyi'}">${x.d > 0 ? '+' : '−'}${saat(Math.abs(x.d))}</span></li>`).join('')}</ul>` : '<p class="pm-kucuk">Sipariş bitişleri tabanla aynı.</p>') : '<p class="pm-kucuk">Diğerleri buna göre ölçülür.</p>'}
       ${a.sen ? `<label class="tc-alan"><span class="tc-alan-etiket">Karar notu</span><textarea class="tc-alan-kutu" rows="2" data-inp="sen-not" data-v="${esc(a.id)}" placeholder="Neden bu senaryo?" ${yaz ? '' : 'readonly'}>${esc(a.sen.not || '')}</textarea></label><div class="pm-dugmeler">${dugme('Bu planı aç', 'sen-ac', { kucuk: true, veri: `data-v="${esc(a.id)}"` })}</div>` : ''}</article>`; };
@@ -13373,7 +13375,7 @@ const agKisa = x => x == null || !isFinite(x) ? '—' : x >= 1e6 ? sayi(x / 1e6,
 sdNabiz = function () {
   if (!S.plan || typeof nbOlc !== 'function') return '';
   const R = nbRef(); const onz = U.hamle && !U.taslak ? U.hamle.plan : null; const v = nbOlc(onz || S.plan); const kar = onz ? nbOlc(S.plan) : R.o;
-  const l = [['late', v.late == null ? '—' : String(v.late), 'geç', true], agAyar().kip === 'bedel' ? ['tl', agKisa(v.tl), 'gecikme', true, 1] : ['wT', saat(v.wT), 'gecikme', true, 1], ['dar', v.dar == null ? '—' : `%${Math.round(v.dar)}`, 'darboğaz', true, 1]];
+  const l = [['late', v.late == null ? '—' : String(v.late), `geciken · ${olDonemEtiket()}`, true], agAyar().kip === 'bedel' ? ['tl', agKisa(v.tl), 'gecikme', true, 1] : ['wT', saat(v.wT), 'gecikme', true, 1], ['dar', v.dar == null ? '—' : `%${Math.round(v.dar)}`, 'darboğaz', true, 1]];
   return `<div class="pm-sb-nb" role="group" aria-label="Plan nabzı">${l.map(([id, d, ad, kucukIyi, ikincil]) => { const f = kar ? nbFark(id, v[id], kar[id], kucukIyi) : { ton: '', m: '' };
     return `<button type="button" class="pm-sb-nb-k" ${ikincil ? 'data-ikincil' : ''} data-act="br-odak" data-v="ozet" data-ton="${f.ton}" title="${esc(ad)}: ${onz ? 'önizlemede, plana göre' : esc(R.ad) + ' referansına göre'} ${esc(f.m || 'aynı')}. Göstergelere git."><b class="mono">${esc(d)}</b><span>${ad}</span>${f.ton ? `<small>${f.ton === 'iyi' ? '▼' : '▲'}</small>` : ''}</button>`; }).join('')}</div>`;
 };
@@ -13479,6 +13481,9 @@ function olOlc(src, kume) {
   const u = Object.values(util);
   return { n, late, wT, tl, zam: n ? (n - late) / n * 100 : null, dar: tamOps && u.length ? Math.max(...u) * 100 : null, suH: tamOps ? suH : null, util, cmax: src.ozet ? src.ozet.Cmax : null };
 }
+/* "Geciken" iki tanımla görünür: dönem göstergesi (nbOlc, olKume) ve planın özeti (tüm plan); etiket neyi saydığını söyler */
+const OL_BU = { gun: 'bugün', hafta: 'bu hafta', ay: 'bu ay', yil: 'bu yıl' };
+function olDonemEtiket() { const x = OLCEK.find(o => o[0] === U.olcek); return U.olKay ? `seçili ${x ? x[1].toLocaleLowerCase('tr-TR') : 'dönem'}` : OL_BU[U.olcek] || 'bu dönem'; }
 let olTum = false;
 const ooNbOlc = nbOlc;
 nbOlc = function (p) {
@@ -16991,7 +16996,7 @@ function paEylem(act, v) {
 /* ---------- görünüm ---------- */
 function paSayilar(o, ref) {
   const s = (ad, v, f) => `<div><dt>${ad}</dt><dd class="mono">${v}${f ? ' ' + f : ''}</dd></div>`;
-  return `<dl class="pm-pa-sayilar">${s('Geciken', `${o.late}/${o.n}`, ref ? fark(o.late, ref.late, 0) : '')}${s('Gecikme', saat(o.wT), ref ? fark(o.wT, ref.wT) : '')}${s('Plan TL', o.tl != null ? sayi(o.tl / 1000, 0) + ' bin' : '—', ref && o.tl != null && ref.tl != null ? fark(o.tl / 1000, ref.tl / 1000, 0) : '')}</dl>`;
+  return `<dl class="pm-pa-sayilar">${s('Geciken · tüm plan', `${o.late}/${o.n}`, ref ? fark(o.late, ref.late, 0) : '')}${s('Gecikme', saat(o.wT), ref ? fark(o.wT, ref.wT) : '')}${s('Plan TL', o.tl != null ? sayi(o.tl / 1000, 0) + ' bin' : '—', ref && o.tl != null && ref.tl != null ? fark(o.tl / 1000, ref.tl / 1000, 0) : '')}</dl>`;
 }
 function paDurumSerit(c, a) {
   const on = paOnayda();
@@ -19508,16 +19513,31 @@ function tmiFasoncular(st, firmalar, D, onceki) {
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
    kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
    Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
-function tmiCalisanlar(durum, st, D, now) {
-  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+/* Gerçek an -> planın saat ekseni (başlangıç günü 00:00'dan saat); okunamazsa null. */
+function tmiSaat(D, an) {
+  if (an == null) return null; const d = new Date(an); if (isNaN(d.getTime())) return null; const p = n => String(n).padStart(2, '0');
+  return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`);
+}
+function tmiIslemler(st, D) {
   const opOf = {};
   for (const o of (st && st.orders) || []) {
     const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
     const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
     adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
   }
-  const saat = iso => { if (!iso) return null; const d = new Date(iso); const p = n => String(n).padStart(2, '0');
-    return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`); };
+  return opOf;
+}
+/* Adımın işleyeceği adet (24 a): tek kaynak uretim-emirleri (durum.adimAdetleri, yalnız emir adedinden farklı olan). Motor D.opAdet'i okur. */
+function tmiAdimAdetleri(durum, st, D) {
+  const a = durum && durum.adimAdetleri && typeof durum.adimAdetleri === 'object' ? durum.adimAdetleri : null; if (!a) return undefined;
+  const opOf = tmiIslemler(st, D); const y = {};
+  for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
+  return y;
+}
+function tmiCalisanlar(durum, st, D, now) {
+  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+  const opOf = tmiIslemler(st, D);
+  const saat = an => tmiSaat(D, an);
   const y = {};
   for (const c of liste) {
     const id = opOf[c.anahtar]; if (!id) continue;
@@ -19529,7 +19549,7 @@ function tmiCalisanlar(durum, st, D, now) {
 }
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular', 'opAdet'];
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;
@@ -19541,6 +19561,7 @@ if (TMI_ICINDE) {
     tmiTabanKur(D);
     const firmalar = TMI_KAYNAK.durum && TMI_KAYNAK.durum.fasonFirms;
     if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, S && S.D);
+    const adet = tmiAdimAdetleri(TMI_KAYNAK.durum, st, D); if (adet) D.opAdet = adet;
     return D;
   };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
@@ -19592,6 +19613,19 @@ if (TMI_ICINDE) {
       if (!S) { TMI_KAYNAK.bekliyor = true; return; }
       const k = kaynakUygula(); if (calisanUygula() || k) render();
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
+  };
+  /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
+     yazılmaz. Planın başlangıç günü sabit kalır: kayıtlı plan saatleri bu güne göredir. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
+  const st0 = stOf;
+  stOf = function () { const st = st0.apply(this, arguments); if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; };
+  const coz0 = coz;
+  coz = function () {
+    if (S && S.D && yetkili('plan.yaz') && !calisan) {
+      const n = tmiSaat(S.D, Date.now()); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
+      /* motorun ufku başlangıçtan HDAYS gündür; başlangıç ötelenmez (kayıtlı saatler ona bağlı), yaklaşınca söylenir */
+      if (S.simdi != null && S.simdi > (HDAYS - 14) * 24) bildir(`Planın başlangıç günü (${S.D.meta.baslangic}) eski; planlama ufku ${HDAYS} gün olduğu için ufkun sonuna ${Math.max(0, Math.floor(HDAYS - S.simdi / 24))} gün kaldı.`, 'uyari');
+    }
+    return coz0.apply(this, arguments);
   };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
