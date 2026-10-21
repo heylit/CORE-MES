@@ -135,6 +135,11 @@
   --sure-kisa: 120ms;
 }
 
+/* QR kodu temaya gore degismez: okuyucular acik zemin ustunde koyu kareyi okur. */
+:root {
+  --qr-zemin: #fff; --qr-kare: #000;
+}
+
 /* Atolye haritasi: iki boyutlu plan ve sahne arka plani (temaya gore) */
 :root, [data-theme="dark"] {
   --sahne-arka: #0b1117; --sahne-duvar: #59606a; --sahne-cam: #8fc3e6; --sahne-raf: #2a5d9f; --sahne-ahsap: #b48a5a;

@@ -1,6 +1,8 @@
 export { Simge } from './Simge.tsx';
 export { Dugme } from './Dugme.tsx';
 export { Rozet, type RozetTonu } from './Rozet.tsx';
+export { Qr } from './Qr.tsx';
+export { QR_SESSIZ_PAY, qrKareleri, qrSvgMetni } from './qr.ts';
 export { Kart } from './Kart.tsx';
 export { AnaSayfa } from './AnaSayfa.tsx';
 export { SayiKarti, type SayiTonu } from './SayiKarti.tsx';
