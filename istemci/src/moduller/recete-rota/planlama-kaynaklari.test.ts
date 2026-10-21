@@ -125,6 +125,19 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(D.tezgahlar[0]?.['ucret']).toBe(0);
   });
 
+  // Saklanmış çalışma açılırken kayıt başka çerçevede değişmişse çalışma yeniden çevrilir (rrCek). Kayıtta plan dilimi yoksa
+  // başlangıç da yoktur; başlangıçsız çalışmada motor çeviremiyor ve sayfa çizilmiyordu.
+  it('plan dilimi olmayan kayıt çevrilirken açık çalışmanın başlangıcı korunur, çalışma yoksa taban kurulur', () => {
+    const d = duzenek(KAYIT, new Promise<Kaynak>(() => undefined));
+    expect(d.cevir(KAYIT)['meta']).toMatchObject({ baslangic: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as unknown });
+    const S = d.ac() as { D: Nesne };
+    S.D['meta'] = { ad: 'Kayit', baslangic: '2026-10-21' };
+    const D = d.cevir(KAYIT);
+    expect(D['meta']).toEqual({ ad: 'Kayit', baslangic: '2026-10-21' });
+    expect(D['meta']).not.toBe(S.D['meta']);
+    expect(D).toMatchObject({ vardiyalar: [], calismaGunleri: {}, tatiller: [] });
+  });
+
   it('tezgâhın motor ayarları aynı kimlikte korunur; ad ve istasyon sahibinden gelir', async () => {
     const d = duzenek(KAYIT, Promise.resolve({ durum: DURUM, ek: EK }));
     const S = d.ac() as { D: Nesne };

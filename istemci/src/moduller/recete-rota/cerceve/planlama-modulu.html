@@ -19413,7 +19413,14 @@ const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunl
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;
-  rrDenemeyeCevir = function (st) { return rd0(TMI_KAYNAK.durum ? tmiKaynakIle(st, TMI_KAYNAK, S && S.D) : st); };
+  /* Kaydı planlama sayfası hiç yazmadıysa plan dilimi, dolayısıyla başlangıç yoktur. Saklanmış çalışma açılırken kayıt değişmişse
+     (rrCek) çalışma bu çeviriyle değişir: açık çalışmanın başlangıcı korunur, yoksa taban kurulur; başlangıçsız çalışma çizimi düşürür. */
+  rrDenemeyeCevir = function (st) {
+    const D = rd0(TMI_KAYNAK.durum ? tmiKaynakIle(st, TMI_KAYNAK, S && S.D) : st);
+    if (!D.meta && S && S.D && S.D.meta) D.meta = rrKopya(S.D.meta);
+    tmiTabanKur(D);
+    return D;
+  };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
      yazılmaz (sunucu zaten ayıklar); değişiklik planı eskitir. */
   const kaynakUygula = () => {
