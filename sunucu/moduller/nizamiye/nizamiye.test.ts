@@ -10,7 +10,7 @@ import type {
   AcilDurumCevabi, BenimZiyaretcim, Kart, KartlarCevabi, KapiCevabi, PdksAktarCevabi, PdksCihazAnahtarCevabi, PdksCihazHareketiCevabi, Ziyaret,
   ZiyaretcilerimCevabi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
-import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -291,6 +291,14 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
   });
 
   const birSaatSonra = () => new Date(Date.now() + 3_600_000).toISOString();
+  // PDKS satırları koşu anından geriye sayılır: günün sabit saatleri (00:01 gibi) gece yarısından hemen sonra henüz gelmemiş olur.
+  // İki PDKS testi aynı anı kullanır: kart okuyucu testi dosyadan gelmiş hareketi yeniden gönderir.
+  const pdksAn = Math.floor(Date.now() / 60_000) * 60_000;
+  const pdksZamani = (saatOnce: number): string => {
+    const [tarih, saat] = tesisSaati(pdksAn - saatOnce * 3_600_000).split(' ') as [string, string];
+    const [y, a, g] = tarih.split('-') as [string, string, string];
+    return `${g}.${a}.${y};${saat}`;
+  };
   // Varsayılan şimdi: kapı listesinde görünmesi gereken ön kayıt günün sonuna taşmaz (beklenen() ile aynı neden).
   const onKayit = (cerez: string, ek: Record<string, unknown> = {}, istekKimligi?: string | null) =>
     yaz(cerez, '/ziyaretcilerim/on-kayit', { ad: 'Misafir Üç', firmaAdi: 'Firma B', neden: 'toplanti', beklenenZaman: new Date().toISOString(), ...ek }, istekKimligi);
@@ -372,9 +380,8 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
   test('PDKS dosyasını yalnız aktarma yetkilisi aktarır (259 a, kapı görevlisi değil): içeride olan personel acil durum listesinde; aynı dosya ikinci kez hareket yazmaz', async () => {
     await vt().sorgu("UPDATE kisi SET sicil_no = 'T-P1' WHERE id = $1", [evSahibiId]);
     await vt().sorgu("UPDATE kisi SET sicil_no = 'T-P2' WHERE id = $1", [gorevliId]);
-    const [y, a, g] = tesisGunu(Date.now()).split('-') as [string, string, string];
-    const gun = `${g}.${a}.${y}`;
-    const metin = ['Sicil;Tarih;Saat;Yon', `T-P1;${gun};00:01;G`, `T-P2;${gun};00:01;G`, `T-P2;${gun};00:02:30;C`, `T-YOK;${gun};00:01;G`,
+    const y = tesisSaati(pdksAn).slice(0, 4);
+    const metin = ['Sicil;Tarih;Saat;Yon', `T-P1;${pdksZamani(3)};G`, `T-P2;${pdksZamani(3)};G`, `T-P2;${pdksZamani(2)}:30;C`, `T-YOK;${pdksZamani(3)};G`,
       `T-P1;31.02.${y};08:00;G`, ''].join('\r\n');
     const govde = { dosyaAdi: 'pdks-gunluk.csv', metin };
     const ilk = await yaz(pdksci, '/nizamiye/pdks/aktar', govde);
@@ -408,9 +415,7 @@ describe('nizamiye (gerçek PostgreSQL)', () => {
 
     const gonder = (ham: string, ip = '10.0.7.21', a = anahtar) =>
       app.inject({ method: 'POST', url: '/api/nizamiye/pdks/cihaz-hareketi', remoteAddress: ip, payload: { anahtar: a, ham } });
-    const [y, a, g] = tesisGunu(Date.now()).split('-') as [string, string, string];
-    const gun = `${g}.${a}.${y}`;
-    const ham = [`T-P1;${gun};00:03;G`, `T-YOK;${gun};00:04;G`, 'bozuk', `T-P2;${gun};00:01;G`].join('\n');
+    const ham = [`T-P1;${pdksZamani(1)};G`, `T-YOK;${pdksZamani(1)};G`, 'bozuk', `T-P2;${pdksZamani(3)};G`].join('\n');
     assert.equal((await gonder(ham)).statusCode, 404);
     await ortam!.sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('nizamiye.pdks-cihaz-girisi', 'true', $1)", [yoneticiId]);
     // Ağ dışındaki cihaz kayıtlı ve anahtarı doğru olsa da reddedilir.
