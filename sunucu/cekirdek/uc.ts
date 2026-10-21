@@ -150,6 +150,8 @@ async function* ikiliAkis(cevap: IkiliCevap, db: Db, ad: string): AsyncGenerator
 
 export interface IstekBilgisi {
   ip: string;
+  // İsteğin User-Agent başlığı olduğu gibi; yoksa null. Kısaltma ve saklama kuralı kullanan modülündür.
+  tarayici: string | null;
   cerez(ad: string): string | null;
   // Çerezler yalnız komut kalıcı olduysa cevaba eklenir.
   cerezYaz(ad: string, deger: string, azamiSn: number): void;
@@ -474,6 +476,7 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
         const gunluk = gunlukKur(istek.log, { uc: anahtar });
         const istekBilgisi: IstekBilgisi = {
           ip: istek.ip,
+          tarayici: istek.headers['user-agent'] ?? null,
           cerez: (ad) => cerezOku(istek.headers.cookie, ad),
           cerezYaz: (ad, deger, azamiSn) => { cerezEkle(cerezBasligi(ad, deger, azamiSn, guvenliCerez || istek.protocol === 'https')); },
           cerezSil: (ad) => { cerezEkle(cerezBasligi(ad, '', 0, guvenliCerez || istek.protocol === 'https')); },

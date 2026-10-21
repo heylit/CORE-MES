@@ -32,7 +32,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       govde: girisGovdesi,
       cevap: girisCevabi,
       isle: async ({ db, govde, istek, gunluk }) => {
-        const sonuc = await girisYap(db, { ...govde, ip: istek.ip, gunluk }, simdi());
+        const sonuc = await girisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         if (sonuc.anahtar === null) return { kullanici: null, pinBelirlenecek: true as const };
         istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, AZAMI_SN);
         return { kullanici: sonuc.kullanici };
@@ -45,7 +45,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       govde: pinBelirleGovdesi,
       cevap: oturumCevabi,
       isle: async ({ db, govde, istek, gunluk }) => {
-        const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, gunluk }, simdi());
+        const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
         return { kullanici };
       },

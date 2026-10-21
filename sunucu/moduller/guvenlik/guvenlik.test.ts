@@ -35,8 +35,11 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     return { durum: c.statusCode, govde: (c.body ? c.json() : undefined) as T };
   }
 
-  async function giris(kullaniciAdi: string, cerezAdi = kullaniciAdi): Promise<void> {
-    const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
+  async function giris(kullaniciAdi: string, cerezAdi = kullaniciAdi, tarayici?: string): Promise<void> {
+    const c = await app.inject({
+      method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA },
+      ...(tarayici === undefined ? {} : { headers: { 'user-agent': tarayici } }),
+    });
     assert.equal(c.statusCode, 200, c.body);
     cerezler.set(cerezAdi, String(c.headers['set-cookie']).split(';')[0] ?? '');
   }
@@ -380,6 +383,20 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     const sonra = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde);
     assert.equal(sonra.oturumlar.some((x) => x.id === hedef.id), false);
     assert.equal(sonra.oturumlar.some((x) => x.id === kendi.id), true);
+  });
+
+  test('oturumlar: girişteki adres ve tarayıcı oturumla saklanır ve listede görünür; tarayıcı 300 karakterde kesilir, yoksa boştur', async () => {
+    await giris('mudur', 'mudur-tarayicili', 'Deneme/1.0 (Windows NT 10.0; Win64; x64) Chrome/130.0');
+    await giris('mudur', 'mudur-uzun', `Deneme/2.0 ${'x'.repeat(400)}`);
+    await giris('mudur', 'mudur-tarayicisiz', '');
+    const liste = oturumlarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/oturumlar')).govde).oturumlar;
+    const bul = (onek: string) => liste.find((x) => x.tarayici?.startsWith(onek));
+    const tarayicili = bul('Deneme/1.0');
+    assert.equal(tarayicili?.ip, '127.0.0.1');
+    assert.equal(tarayicili?.tarayici, 'Deneme/1.0 (Windows NT 10.0; Win64; x64) Chrome/130.0');
+    assert.equal(bul('Deneme/2.0')?.tarayici?.length, 300);
+    const bos = await o().vt.sorgu<{ n: number }>("SELECT count(*)::int AS n FROM oturum WHERE tarayici IS NULL AND ip = '127.0.0.1'");
+    assert.ok((bos[0]?.n ?? 0) >= 1);
   });
 
   test('hesap kilidi: her yeni kilit orta önemli alarm açar; kapanan alarm aynı kilitle yeniden açılmaz, yeni kilitle açılır; kilidi yalnız yönetici açar', async () => {

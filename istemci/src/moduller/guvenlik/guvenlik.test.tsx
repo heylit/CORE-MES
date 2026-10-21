@@ -12,6 +12,7 @@ import { GuvenlikAlarmlar } from './Alarmlar.tsx';
 import { GuvenlikDurum, genelDurum } from './Durum.tsx';
 import { GuvenlikKoruma, GuvenlikKurallar } from './Koruma.tsx';
 import { GuvenlikOturumlar } from './Takip.tsx';
+import { tarayiciOzeti } from './gorunum.ts';
 
 // Biçim sunucu cevabından (guvenlik.test.ts); adlar ve adresler uydurma deneme değerleridir.
 const T = '2099-10-14T10:00:00.000Z';
@@ -191,8 +192,8 @@ describe('Oturumlar ve koruma', () => {
   it('kilit yokken boş durum gösterir; kendi oturumunu kapatma düğmesi yoktur', async () => {
     const cevap: OturumlarCevabi = {
       oturumlar: [
-        { id: 1, kisiId: 1, kisiAdi: 'Deneme bir', acildi: T, sonGorulme: T, buOturum: true },
-        { id: 2, kisiId: 2, kisiAdi: 'Deneme iki', acildi: T, sonGorulme: T, buOturum: false },
+        { id: 1, kisiId: 1, kisiAdi: 'Deneme bir', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: true },
+        { id: 2, kisiId: 2, kisiAdi: 'Deneme iki', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: false },
       ],
     };
     const cagrilar = sunucuKur({
@@ -206,6 +207,30 @@ describe('Oturumlar ve koruma', () => {
     fireEvent.click(within(within(tablo).getByText(/Deneme iki/).closest('tr')!).getByRole('button', { name: 'Kapat' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Oturumu kapat' }));
     await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/guvenlik/oturumlar/2/kapat')).toBe(true));
+  });
+
+  it('oturum girişteki cihaz adresi ve tarayıcı özetiyle görünür; bilinmeyen boş çizgidir (386 a)', async () => {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0';
+    const cevap: OturumlarCevabi = {
+      oturumlar: [
+        { id: 1, kisiId: 1, kisiAdi: 'Deneme bir', acildi: T, sonGorulme: T, ip: '192.0.2.5', tarayici: ua, buOturum: true },
+        { id: 2, kisiId: 2, kisiAdi: 'Deneme iki', acildi: T, sonGorulme: T, ip: null, tarayici: null, buOturum: false },
+      ],
+    };
+    sunucuKur({ 'GET /guvenlik/oturumlar': () => json(200, cevap), 'GET /guvenlik/kilitler': () => json(200, kilitler([])) });
+    cizdir(<GuvenlikOturumlar />);
+    const tablo = await screen.findByRole('table', { name: 'Açık oturumlar' });
+    const bir = within(within(tablo).getByText(/Deneme bir/).closest('tr')!);
+    expect(bir.getByText('192.0.2.5')).toBeTruthy();
+    expect(bir.getByText('Edge · Windows').getAttribute('title')).toBe(ua);
+    expect(within(within(tablo).getByText(/Deneme iki/).closest('tr')!).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('tarayıcı özeti: bilinen tarayıcı ve sistem adı, bilinmeyen için "Diğer"', () => {
+    expect(tarayiciOzeti('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36')).toBe('Chrome · Android');
+    expect(tarayiciOzeti('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1')).toBe('Safari · iOS');
+    expect(tarayiciOzeti('Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0')).toBe('Firefox · Linux');
+    expect(tarayiciOzeti('Deneme/1.0')).toBe('Diğer');
   });
 
   it('okunamayan koruma maddesi "Bilinmiyor" görünür, açık sayılmaz', async () => {

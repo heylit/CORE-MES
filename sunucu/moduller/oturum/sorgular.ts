@@ -3,10 +3,15 @@ import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { denemeKilitAnahtari } from './kurallar.ts';
 
-export async function oturumEkle(db: Db, ozet: string, kisiId: number): Promise<void> {
+export interface OturumCihazi { ip: string | null; tarayici: string | null }
+
+export async function oturumEkle(db: Db, ozet: string, kisiId: number, cihaz: OturumCihazi): Promise<void> {
   // clock_timestamp: açılış, giriş kişi satırını paylaşımlı kilitledikten sonraki andır (transaction başlangıcı değil);
   // kisiler'in "bundan önceki oturumlar geçersiz" zamanıyla bu yüzden doğru sıralanır.
-  await db.sorgu('INSERT INTO oturum (anahtar_ozeti, kisi_id, acildi) VALUES ($1, $2, clock_timestamp())', [ozet, kisiId]);
+  await db.sorgu(
+    'INSERT INTO oturum (anahtar_ozeti, kisi_id, acildi, ip, tarayici) VALUES ($1, $2, clock_timestamp(), $3, $4)',
+    [ozet, kisiId, cihaz.ip, cihaz.tarayici],
+  );
 }
 
 export interface GecerliOturum {
@@ -110,6 +115,17 @@ export async function cihazHataliBul(
     [ip, pencereDk, sinir, simdi],
   );
   return { sayi: satir?.sayi ?? 0, kalanSn: satir?.kalan_sn ?? null };
+}
+
+// Kapanış anı: kapatıldıysa kapandi; kapatılmadıysa hareketsizlik ya da azami sürenin önce dolduğu an (gecerliOturumBul ile aynı süreler).
+export async function eskiOturumCihaziniBosalt(db: Db, gun: number, sure: OturumSuresi, simdi: Simdi): Promise<void> {
+  await db.sorgu(
+    `UPDATE oturum SET ip = NULL, tarayici = NULL
+      WHERE (ip IS NOT NULL OR tarayici IS NOT NULL)
+        AND COALESCE(kapandi, LEAST(son_gorulme + make_interval(secs => $2), acildi + make_interval(secs => $3)))
+            < COALESCE($4::timestamptz, now()) - make_interval(days => $1)`,
+    [gun, sure.bostaSn, sure.azamiSn, simdi],
+  );
 }
 
 export async function eskiDenemeleriSil(db: Db, gun: number, simdi: Simdi): Promise<void> {
@@ -299,6 +315,8 @@ export interface AcikOturumSatiri {
   kisiId: number;
   acildi: string;
   sonGorulme: string;
+  ip: string | null;
+  tarayici: string | null;
   buOturum: boolean;
 }
 
@@ -310,7 +328,7 @@ const ACIK_OTURUM = `FROM oturum
 
 export function acikOturumSatirlari(db: Db, sure: OturumSuresi, buOzet: string | null): Promise<AcikOturumSatiri[]> {
   return db.sorgu<AcikOturumSatiri>(
-    `SELECT id::int AS id, kisi_id AS "kisiId", ${zamanMetni('acildi')} AS acildi, ${zamanMetni('son_gorulme')} AS "sonGorulme",
+    `SELECT id::int AS id, kisi_id AS "kisiId", ${zamanMetni('acildi')} AS acildi, ${zamanMetni('son_gorulme')} AS "sonGorulme", ip, tarayici,
             ($3::text IS NOT NULL AND anahtar_ozeti = $3) AS "buOturum"
        ${ACIK_OTURUM}
       ORDER BY oturum.son_gorulme DESC, id DESC`,

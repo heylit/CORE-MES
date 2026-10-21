@@ -9,6 +9,7 @@ import { ayarOku } from '#cekirdek/ayar.ts';
 import { izinYok, testSemasiAc, testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uc, uclariKaydet } from '#cekirdek/uc.ts';
+import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -783,6 +784,41 @@ describe('oturum (gerçek PostgreSQL)', () => {
         WHERE i.indrelid = 'giris_denemesi'::regclass AND a.attname = 'zaman'`,
     );
     assert.equal(indeks.length, 1);
+  });
+
+  test('398 a: zamanlanmış iş, kapanışının üzerinden 30 gün geçen oturumun yalnız adresini ve tarayıcısını boşaltır; satır ve öbür alanlar kalır, genç oturum değişmez; giriş temizlik yapmaz', async () => {
+    const tanim = (await modulIsleriniKesfet()).find((i) => i.ad === 'oturum-cihaz-temizligi');
+    if (!tanim) throw new Error('iş yok');
+    assert.equal(tanim.aralikMs, 60 * 60 * 1000);
+    const kisiId = await kisiEkle('cihaz-temizligi');
+    // Kapanış anı: kapatıldıysa kapandi, kapatılmadıysa hareketsizlik ya da azami sürenin dolduğu an.
+    await vt().sorgu(
+      `INSERT INTO oturum (anahtar_ozeti, kisi_id, acildi, son_gorulme, kapandi, ip, tarayici) VALUES
+         ('temizlik-kapali-eski', $1, now() - interval '40 days', now() - interval '31 days', now() - interval '30 days 1 hour', '192.0.2.21', 'Deneme/1'),
+         ('temizlik-suresi-dolmus', $1, now() - interval '40 days', now() - interval '30 days 13 hours', NULL, '192.0.2.22', 'Deneme/2'),
+         ('temizlik-kapali-genc', $1, now() - interval '35 days', now() - interval '30 days', now() - interval '29 days 23 hours', '192.0.2.23', 'Deneme/3'),
+         ('temizlik-acik', $1, now(), now(), NULL, '192.0.2.24', 'Deneme/4')`,
+      [kisiId],
+    );
+    const oku = () => vt().sorgu<{ ozet: string; kisi: number; acildi: string; kapandi: string | null; ip: string | null; tarayici: string | null }>(
+      `SELECT anahtar_ozeti AS ozet, kisi_id AS kisi, acildi::text AS acildi, kapandi::text AS kapandi, ip, tarayici
+         FROM oturum WHERE anahtar_ozeti LIKE 'temizlik-%' ORDER BY anahtar_ozeti`,
+    );
+    const once = await oku();
+    // Giriş oturum tablosuna eski satırlar için dokunmaz: girişin kilit sırası değişmez.
+    await hataliDene('cihaz-temizligi-tetikleyen');
+    assert.deepEqual(await oku(), once);
+    assert.equal(await isiBirKezCalistir(vt(), tanim), 'tamam');
+    const sonra = await oku();
+    assert.equal(sonra.length, 4);
+    assert.deepEqual(sonra.map((o) => [o.ozet, o.ip, o.tarayici]), [
+      ['temizlik-acik', '192.0.2.24', 'Deneme/4'],
+      ['temizlik-kapali-eski', null, null],
+      ['temizlik-kapali-genc', '192.0.2.23', 'Deneme/3'],
+      ['temizlik-suresi-dolmus', null, null],
+    ]);
+    assert.deepEqual(sonra.map(({ ozet, kisi, acildi, kapandi }) => ({ ozet, kisi, acildi, kapandi })),
+      once.map(({ ozet, kisi, acildi, kapandi }) => ({ ozet, kisi, acildi, kapandi })));
   });
 
   test('temizlik saklama süresi dolmamış satıra dokunmaz: sınırdaki genç satır varken giriş veritabanı korumasına takılmaz, eski satır silinir', async () => {

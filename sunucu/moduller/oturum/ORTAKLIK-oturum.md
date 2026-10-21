@@ -6,7 +6,7 @@ Sütunlar `npm run harita -- --modul oturum` çıktısından (DOĞRULANDI, `9b65
 
 | Tablo | Sütunlar | Sahibi |
 |---|---|---|
-| `oturum` | id, anahtar_ozeti, kisi_id -> kisi, acildi, son_gorulme, kapandi? | oturum |
+| `oturum` | id, anahtar_ozeti, kisi_id -> kisi, acildi, son_gorulme, kapandi?, ip?, tarayici? | oturum |
 | `giris_denemesi` | id, kullanici_adi, sonuc, ip?, zaman | oturum |
 | `oturum_hesap_kilidi` | id, kullanici_adi, kilitlendi, bitis, acildi?, acan_kisi_id? -> kisi | oturum |
 

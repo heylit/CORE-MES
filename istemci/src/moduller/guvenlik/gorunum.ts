@@ -12,6 +12,17 @@ export function zamanMetni(iso: string | null): string {
   return Number.isNaN(an.getTime()) ? iso : an.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+// Ham tarayıcı başlığı okunmaz; tabloda kısa ad görünür, tamamı ipucundadır. Sıra önemli: Edge ve Chrome başlığı Safari'yi de anar.
+const TARAYICILAR: readonly [RegExp, string][] = [[/Edg\//, 'Edge'], [/OPR\//, 'Opera'], [/Firefox\//, 'Firefox'], [/Chrome\//, 'Chrome'], [/Safari\//, 'Safari']];
+const SISTEMLER: readonly [RegExp, string][] = [[/Windows/, 'Windows'], [/Android/, 'Android'], [/iPhone|iPad/, 'iOS'], [/Mac OS X/, 'macOS'], [/Linux/, 'Linux']];
+
+export function tarayiciOzeti(baslik: string): string {
+  const tarayici = TARAYICILAR.find(([k]) => k.test(baslik))?.[1];
+  const sistem = SISTEMLER.find(([k]) => k.test(baslik))?.[1];
+  if (tarayici === undefined && sistem === undefined) return 'Diğer';
+  return [tarayici, sistem].filter((p) => p !== undefined).join(' · ');
+}
+
 export function saatMetni(iso: string): string {
   const an = new Date(iso);
   return Number.isNaN(an.getTime()) ? iso : an.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
