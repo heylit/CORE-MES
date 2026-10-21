@@ -51,6 +51,25 @@ davranış 6. maddedeki gibidir.
 - Vazgeçilenler: eşik üstü alanı çekirdekte kendiliğinden kısaltmak (sihirli eşik; küçük alanlı büyük
   gövdeyi küçültmez) ve ucun kendi özet gövdesini vermesi (uç denetim için kod yazmaz).
 
+## Ek: dosya indirmeleri (21.10.2026, kullanıcı kararı 385 a)
+
+6. maddeye ek. Okuma denetlenmez; tek istisna dosyadır. Dosya cevabı veren okuma ucu (ADR 0009, `ikiliCevap`)
+oturumlu kişiye dosyayı verdiğinde satır yazılır: kim, ne zaman, uç (`GET` ve yol kalıbı), maskelenmiş yol
+parametresi, ucun modülü ve yetkisi; gövdenin yerine `{ "_ek": [{ "ad", "tur", "boyut" }] }`. Sorgu dizgisi
+girmez (tek kullanımlık izin gibi değerler taşır).
+
+- Satır, okuma transaction'ı bittikten sonra ve içerik akmadan önce ayrı bir yazma transaction'ında yazılır;
+  yazılamazsa dosya verilmez (500). İz kalmadan dosya çıkmaz.
+- Yalnız dosya verilen istek yazılır: yetkisiz (401, 403), reddedilen ve boş (204) istek yazılmaz. Kimliksiz açık
+  uç (giriş logosu) yazılmaz: kişi yoktur.
+- Uç yazan modül kod yazmaz; kayıt uç katmanındadır, bugünkü ve sonraki bütün dosya uçlarını kapsar. Çizim ve belge
+  önizlemesi de yazılır: önizleme dosyayı tarayıcıya verir.
+- Kapsam yalnız dosya indirmeleridir: ekranın kişi istemeden kendiliğinden yüklediği dosya (atölye haritasının 3B
+  modelleri) yazılmaz. Uç tanımı bunu `kendiligindenYuklenir` ile söyler; bu uçlar çekirdekteki sabit liste testindedir,
+  liste kararsız genişlemez.
+- Denetim Kaydı ekranında `GET` komutu olarak süzülür; göç yoktur. Geri alınırsa uç katmanındaki adım kaldırılır,
+  yazılmış satırlar kalır (yalnız ekleme).
+
 ## Sonuçlar
 
 - Uç yazan modül denetim için kod yazmaz; kayıt uç katmanından gelir.

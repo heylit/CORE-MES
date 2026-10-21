@@ -207,6 +207,9 @@ export interface UcTanimi<
   // Yalnız GET: büyük ve seyrek değişen cevap (harita gibi) aynıysa yeniden inmesin. Etiket yetki denetiminden sonra kullanıcıya
   // dönen gövdeden üretilir; önbellek özeldir, paylaşılan vekil saklamaz.
   onbellek?: 'etag';
+  // Yalnız dosya ucu: ekranın kişi istemeden kendiliğinden yüklediği dosya (atölye haritasının 3B modeli) indirme denetimine
+  // yazılmaz (385 a, ADR 0002 eki). Her kullanım kararla ve çekirdeğin sabit liste testindedir.
+  kendiligindenYuklenir?: true;
   parametre?: P;
   sorgu?: S;
   govde?: G;
@@ -231,6 +234,7 @@ export interface Uc {
   readonly cevap: Sema;
   // Cevap `ikiliCevap` ise: gövde JSON değil, dosyadır.
   readonly ikili: boolean;
+  readonly kendiligindenYuklenir: boolean;
   readonly onbellek: boolean;
   readonly isle: (baglam: IsleBaglami<unknown, unknown, unknown, UcYetkisi>) => unknown;
 }
@@ -244,6 +248,8 @@ export interface UcOzeti {
   denetim?: Exclude<DenetimKipi, 'tam'>;
   // Yalnız gövdesiz uç gövdeden deftere alan seçiyorsa vardır.
   denetimSecimi?: true;
+  // Yalnız indirme denetimine yazılmayan dosya ucunda vardır.
+  kendiligindenYuklenir?: true;
 }
 
 export type Kimlik = (istek: FastifyRequest) => Promise<Kullanici | null>;
@@ -345,6 +351,9 @@ export function uc<
       throw new Error(`Bilinmeyen denetim kipi (${String(tanim.denetim)}): ${ad}`);
     }
   }
+  if (tanim.kendiligindenYuklenir !== undefined && !ikiliMi(tanim.cevap as Sema)) {
+    throw new Error(`Kendiliğinden yükleme seçeneği yalnız dosya ucunda verilebilir: ${ad}`);
+  }
   if (ikiliMi(tanim.cevap as Sema)) {
     if (tanim.yontem !== 'GET') throw new Error(`İkili cevap yalnız okuma ucunda verilebilir: ${ad}`);
     // Akış transaction bittikten sonra veritabanına gider; transaction dışı uç veritabanı yokken cevap vermek içindir.
@@ -373,16 +382,18 @@ export function uc<
     govde: tanim.govde ?? null,
     cevap: tanim.cevap,
     ikili: ikiliMi(tanim.cevap as Sema),
+    kendiligindenYuklenir: tanim.kendiligindenYuklenir === true,
     onbellek: tanim.onbellek === 'etag',
     isle: tanim.isle as unknown as Uc['isle'],
   };
 }
 
 export function ucEnvanteri(uclar: readonly Uc[]): UcOzeti[] {
-  return uclar.map(({ yontem, yol, yetki, txDisi, denetim, denetimOzeti }) => ({
+  return uclar.map(({ yontem, yol, yetki, txDisi, denetim, denetimOzeti, kendiligindenYuklenir }) => ({
     yontem, yol, yetki, txDisi, ...(denetim === 'govdesiz' || denetim === 'yok' ? { denetim } : {}),
     // Modül dosyasından `uc()` ile kurulmamış düz nesne de gelebilir (harita): alanı olmayan uç seçicili sayılmaz.
     ...(typeof denetimOzeti === 'function' ? { denetimSecimi: true as const } : {}),
+    ...(kendiligindenYuklenir === true ? { kendiligindenYuklenir: true as const } : {}),
   }));
 }
 
@@ -563,6 +574,17 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           if (durumKodu !== null) throw new Error(`İkili cevapta durum kodu yazılamaz: ${anahtar}`);
           if (sonuc === null) return yanit.code(204).header('cache-control', 'private, no-store').send();
           const dosya = sonuc as IkiliCevap;
+          // 385 a (ADR 0002 eki): oturumlu kişiye verilen her dosya, içerik akmadan önce kendi yazma transaction'ında deftere
+          // girer; yazılamazsa dosya verilmez. Satırı uç katmanı kurar: ad şemada 255 karakterle sınırlıdır, seçim sınırı
+          // işleyicinin bıraktığı ek içindir. Kimliksiz açık uçta (giriş logosu) kişi yoktur, ekranın kendiliğinden yüklediği
+          // dosyayı kişi açmamıştır; ikisinde de satır yazılmaz.
+          if (denetle !== undefined && kullanici !== null && !tanim.kendiligindenYuklenir) {
+            const ek: readonly DenetimSecimi[] = Object.freeze([Object.freeze({ ad: dosya.ad, tur: dosya.tur, boyut: dosya.boyut })]);
+            await vt.tx((db) => denetle(db, {
+              kisiId: kullanici.id, yontem: tanim.yontem, yol: tanim.yol, parametre: semayaGoreGizle(tanim.parametre, parametre),
+              govde: undefined, yetki: yetkiMetni(tanim.yetki), ...(modul === undefined ? {} : { modul }), ek,
+            }));
+          }
           return yanit.code(200)
             .header('content-type', dosya.tur)
             .header('content-length', String(dosya.boyut))

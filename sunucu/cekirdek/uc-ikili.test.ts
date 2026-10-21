@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import Fastify from 'fastify';
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { Db, Veritabani } from './db.ts';
 import { bulunamadi } from './hata.ts';
 import { ikiliCevap, ikiliCevapYaDaBos, uc, uclariKaydet } from './uc.ts';
-import type { Kimlik, Uc } from './uc.ts';
+import type { Denetle, DenetimGirdisi, Kimlik, Uc } from './uc.ts';
 import { hataYonetiminiKur } from './uygulama.ts';
 
 const okuyan: Kimlik = async () => ({ id: 2, ad: 'okuyan', islemler: ['kisiler.oku'] });
 const yetkisiz: Kimlik = async () => ({ id: 3, ad: 'yetkisiz', islemler: [] });
 
-function kur(uclar: readonly Uc[], kimlik: Kimlik = okuyan): { app: FastifyInstance; gunluk: string[] } {
+function kur(uclar: readonly Uc[], kimlik: Kimlik = okuyan, denetle?: Denetle): { app: FastifyInstance; gunluk: string[] } {
   const gunluk: string[] = [];
   const db: Db = {
     sorgu: async <T>(): Promise<T[]> => { gunluk.push('SORGU'); return []; },
@@ -31,7 +32,7 @@ function kur(uclar: readonly Uc[], kimlik: Kimlik = okuyan): { app: FastifyInsta
   const vt: Veritabani = { ...db, tx: sar, okumaTx: sar, kapat: async () => undefined };
   const app = Fastify();
   hataYonetiminiKur(app);
-  uclariKaydet(app, uclar, { vt, kimlik });
+  uclariKaydet(app, uclar, { vt, kimlik, modul: 'deneme', ...(denetle === undefined ? {} : { denetle }) });
   return { app, gunluk };
 }
 
@@ -122,4 +123,80 @@ test('boş olabilen ikili cevap: işleyici null verirse gövdesiz 204 ve önbell
   assert.equal(dolu.statusCode, 200, dolu.body);
   assert.equal(dolu.headers['content-type'], 'image/png');
   assert.equal(dolu.headers['x-content-type-options'], 'nosniff');
+});
+
+// 385 a: dosya cevabı veren okuma ucu, dosya verilmeden önce denetim kaydına yazılır (kim, ne zaman, hangi uç, hangi kayıt, dosya).
+function kaydeden(gunluk: string[], hata?: Error): { denetle: Denetle; kayitlar: DenetimGirdisi[] } {
+  const kayitlar: DenetimGirdisi[] = [];
+  return {
+    kayitlar,
+    denetle: async (_db, girdi) => {
+      gunluk.push('DENETIM');
+      if (hata) throw hata;
+      kayitlar.push(girdi);
+    },
+  };
+}
+
+const parametreliIndir = (): Uc =>
+  uc({
+    yontem: 'GET', yol: '/belgeler/:id', yetki: 'kisiler.oku', parametre: z.object({ id: z.coerce.number().int() }), cevap: ikiliCevap,
+    isle: () => ({ tur: 'application/pdf', ad: 'Çizim A.pdf', boyut: BOYUT, akis: async function* (db: Db) { await db.sorgu('SELECT parca'); yield* PARCALAR; } }),
+  });
+
+test('385 a: oturumlu kişiye verilen dosya ayrı yazma transaction\'ında denetime yazılır; içerik ondan sonra akar', async () => {
+  const gunluk: string[] = [];
+  const { denetle, kayitlar } = kaydeden(gunluk);
+  const { app, gunluk: vtGunlugu } = kur([parametreliIndir()], okuyan, denetle);
+  const cevap = await app.inject({ method: 'GET', url: '/api/belgeler/7' });
+  assert.equal(cevap.statusCode, 200, cevap.body);
+  assert.deepEqual(cevap.rawPayload, Buffer.concat(PARCALAR));
+  assert.deepEqual(kayitlar, [{
+    kisiId: 2, yontem: 'GET', yol: '/belgeler/:id', parametre: { id: 7 }, govde: undefined, yetki: 'kisiler.oku', modul: 'deneme',
+    ek: [{ ad: 'Çizim A.pdf', tur: 'application/pdf', boyut: BOYUT }],
+  }]);
+  // Okuma, sonra denetim kendi transaction'ında, sonra içerik.
+  assert.deepEqual(vtGunlugu, ['BEGIN', 'COMMIT', 'BEGIN', 'COMMIT', 'SORGU']);
+  assert.deepEqual(gunluk, ['DENETIM']);
+});
+
+test('385 a: denetim yazılamazsa dosya verilmez (500) ve içerik okunmaz', async () => {
+  const gunluk: string[] = [];
+  const { denetle } = kaydeden(gunluk, new Error('defter yazılamadı'));
+  const { app, gunluk: vtGunlugu } = kur([parametreliIndir()], okuyan, denetle);
+  const cevap = await app.inject({ method: 'GET', url: '/api/belgeler/7' });
+  assert.equal(cevap.statusCode, 500);
+  assert.equal(cevap.rawPayload.includes(Buffer.from('%PDF')), false);
+  assert.equal(vtGunlugu.includes('SORGU'), false);
+  assert.deepEqual(gunluk, ['DENETIM']);
+});
+
+test('385 a: dosya verilmeyen istek (yetkisiz, 204) ve kimliksiz açık uç denetime yazılmaz', async () => {
+  const gunluk: string[] = [];
+  const { denetle, kayitlar } = kaydeden(gunluk);
+  const yetkisizde = kur([parametreliIndir()], yetkisiz, denetle);
+  assert.equal((await yetkisizde.app.inject({ method: 'GET', url: '/api/belgeler/7' })).statusCode, 403);
+  const bosta = kur([uc({ yontem: 'GET', yol: '/gorsel', yetki: 'kisiler.oku', cevap: ikiliCevapYaDaBos, isle: () => null })], okuyan, denetle);
+  assert.equal((await bosta.app.inject({ method: 'GET', url: '/api/gorsel' })).statusCode, 204);
+  const acik = kur([uc({
+    yontem: 'GET', yol: '/logo', yetki: 'acik', cevap: ikiliCevapYaDaBos,
+    isle: () => ({ tur: 'image/png', ad: 'l.png', boyut: 1, akis: async function* () { yield Buffer.from('x'); } }),
+  })], async () => null, denetle);
+  assert.equal((await acik.app.inject({ method: 'GET', url: '/api/logo' })).statusCode, 200);
+  assert.deepEqual(kayitlar, []);
+  assert.deepEqual(gunluk, []);
+});
+
+test('385 a kapsamı: ekranın kendiliğinden yüklediği dosya (atölye 3B modeli) denetime yazılmaz; seçenek yalnız dosya ucunda geçer', async () => {
+  const gunluk: string[] = [];
+  const { denetle, kayitlar } = kaydeden(gunluk);
+  const akis = async function* () { yield Buffer.from('x'); };
+  const { app } = kur([uc({
+    yontem: 'GET', yol: '/model', yetki: 'kisiler.oku', kendiligindenYuklenir: true, cevap: ikiliCevap,
+    isle: () => ({ tur: 'model/step', ad: 'm.step', boyut: 1, akis }),
+  })], okuyan, denetle);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/model' })).statusCode, 200);
+  assert.deepEqual(kayitlar, []);
+  assert.throws(() => uc({ yontem: 'GET', yol: '/x', yetki: 'kisiler.oku', kendiligindenYuklenir: true, cevap: z.object({}), isle: () => ({}) }),
+    /yalnız dosya ucunda/);
 });

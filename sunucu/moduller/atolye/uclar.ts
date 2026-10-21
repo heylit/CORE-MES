@@ -30,6 +30,8 @@ export const uclar = [
     yontem: 'GET',
     yol: '/atolye/istasyonlar/:id/merkez-modeli',
     yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    // Harita sahnesi kendiliğinden yükler; kişi dosyayı açmaz (385 a kapsamı).
+    kendiligindenYuklenir: true,
     parametre: istasyonParametresi,
     cevap: ikiliCevap,
     isle: ({ db, parametre }) => servis.merkezModelDosyasi(db, parametre.id),
@@ -46,6 +48,8 @@ export const uclar = [
     yontem: 'GET',
     yol: '/atolye/malzemeler/:no/merkez-modeli',
     yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    // Harita sahnesi kendiliğinden yükler; kişi dosyayı açmaz (385 a kapsamı).
+    kendiligindenYuklenir: true,
     parametre: malzemeParametresi,
     cevap: ikiliCevap,
     isle: ({ db, parametre }) => servis.malzemeModelDosyasi(db, parametre.no),
