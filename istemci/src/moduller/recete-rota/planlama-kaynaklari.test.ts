@@ -120,13 +120,13 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(d.bildirimler).toEqual(['Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.']);
   });
 
-  it('yetkisiz dilim (null) kayıttaki gibi kalır; maliyet satırı yoksa ücret uydurulmaz', async () => {
+  it('yetkisiz dilim (null) kayıttaki gibi kalır; maliyet satırı yoksa ücret uydurulmaz (69 a: boş, sıfır değil)', async () => {
     const d = duzenek(KAYIT, Promise.resolve({ durum: { ...DURUM, people: null, maliyet: null }, ek: EK }));
     d.ac();
     await bekle();
     const D = d.S()?.D as { tezgahlar: Nesne[]; personel: unknown[] };
     expect(D.personel).toEqual([]);
-    expect(D.tezgahlar[0]?.['ucret']).toBe(0);
+    expect(D.tezgahlar[0]?.['ucret']).toBeNull();
   });
 
   // Saklanmış çalışma açılırken kayıt başka çerçevede değişmişse çalışma yeniden çevrilir (rrCek). Kayıtta plan dilimi yoksa

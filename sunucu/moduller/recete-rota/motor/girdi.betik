@@ -12,6 +12,7 @@ const rrKopya = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x))
 const rrEsit = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const rrTarih = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(0, 10) : '';
 const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) ? s.slice(11, 16) : '';
+const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
 const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 
 /* rota adımının çerçevedeki karşılığı: istasyon = ilk makinenin grubu, alternatif = öteki gruplar, süre = grubun ilk makinesi */
@@ -51,7 +52,8 @@ function rrCevir(st) {
     if (!a || a.id !== m.id) y.id = m.id;
     if (!a || a.ad !== m.name) y.ad = m.name;
     if (!a || a.grup !== m.stationId) y.grup = m.stationId;
-    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: +s.cost || 0, verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
+    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
     return rrKur(a, y);
   });
   const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
