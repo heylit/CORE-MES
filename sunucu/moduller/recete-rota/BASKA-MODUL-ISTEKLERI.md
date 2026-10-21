@@ -14,3 +14,17 @@ Bu teslim başka modülün dosyasına dokunmaz. Aşama 1'de bağlantı gereken y
 
 DOĞRULANDI: 1., 3. ve 4. satır (FARK "Fason adım ve canlı plan", `zz28-rr-canli.betik` başlık yorumu, t163). VARSAYIM: 2. satır ve son üç satırın "Bugün" sütunu alan adlarından çıkarıldı, motor kodunda satır satır izlenmedi.
 Bugün hiçbirinde veri uydurulmaz: kaynak yoksa alan boştur.
+
+## plan (UE şeridi): başlamış adımın kalanı ve ortak motor (354, 391 a; ADR 0018 taslağı)
+
+391 a (onaylı): başlamış adımın kalanını yalnız sunucu hesaplar, ortak motor onu kullanır. Bugün sunucu adetten (`plan/servis.ts`
+`function gerceklesenler(`), motor geçen süreden (`engine.betik` `schedule`, `lowerBound`, `lbHeadsTails`) hesaplıyor; çerçeveye çalışan
+adımın gerçekleşeni hiç gelmiyor.
+
+1. Çalışan adımın gerçekleşeni dışarı verilsin: `canliOzeti` (ya da plan modülünün seçeceği ayrı okuma) iş başına `{ anahtar ('emirNo|opNo'),
+   makineId, baslangic, sayimAni, kalanDk }`. `kalanDk` bugünkü `gerceklesenler` ile aynı hesap, verim uygulanmış (`gerceklesenAralik`
+   içindeki `verimliSure`); `sayimAni` son sayım, yoksa başlama. Yeni hesap yazılmaz, var olan tek kaynak açılır (396 a, 397 a aynen).
+2. ADR 0018 onaylanırsa: `plan/disari.ts` içinde `planMotoruCozucusu` kaydı (ADR 0006 madde 6); karşılığı Reçete ve Rota verir, bağ
+   `sunucu/kablolama.ts`'te. Kuyruk yaz ve canlıya al komutlarında saatleri sunucu ortak motorla sabit sırayla yeniden kurar. Canlıya alma
+   (356 b) ayrı onaydır; o güne kadar asıl plan `kurallar.ts` `oner` ile kalır.
+3. Test: sayımı olan çalışan adımda okunan `kalanDk` plan ekranındaki bitişle aynıdır; sayımsız adımda ayar dahildir.

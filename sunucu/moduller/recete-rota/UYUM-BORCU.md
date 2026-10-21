@@ -43,3 +43,9 @@
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
+
+## Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
+- Motor girdisini kuran çevirici (`zz27-rr-veri.betik` `rrDenemeyeCevir` ve bağlıları) hâlâ tarayıcıda; sunucuya `motor/` altına taşınmadan
+  `planMotoruCozucusu` karşılığı yazılamaz. Çerçeveye çalışan adımlar (`plan/disari.ts` `calisanAdimlar`, `kalanVerimliDk`) bağlanmadı.
+- Kıyas testi (`oner` ile ortak motor, aynı uydurma veri) plan modülünde yazılacak; farklar kullanıcıya sorulur.
+- Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.

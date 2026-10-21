@@ -3309,6 +3309,9 @@ function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries
   return out;}
 /* ---- kaynak kullanımı ---- */
 function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
+/* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
+   Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
+function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
 function k0(t){return Math.max(0,Math.floor(t/SL+1e-9));}
 function k1(t){return Math.min(NS,Math.ceil(t/SL-1e-9));}
 function checkUse(cx,u,M,r,apId){
@@ -3431,7 +3434,7 @@ function schedule(st,mode,base,opt={}){
     if(a&&a.S!=null){const src=b||{m:a.m,su:0,run:1,lot1:a.S};const M=cx.M[a.m||src.m];
       let r={...src,id:o.id,job:o.job,m:a.m||src.m,S:a.S,pin:1,act:1};
       if(a.C!=null){r.C=a.C;r.Su=Math.min(a.C,src.Su!=null?a.S+(src.Su-src.S):a.S);r.lot1=Math.min(r.C,src.lot1||r.C);r.done=1;}
-      else if(M){r.Su=adv(M.sw,a.S,src.su||0);r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);}
+      else if(M){r.Su=adv(M.sw,a.S,src.su||0);const kb=kalanBitis(M,a);if(kb!=null){r.C=kb;r.Su=Math.min(r.Su,kb);}else r.C=adv(M.rw,Math.max(r.Su,now),Math.max(0,(src.run||0)-workIn(M.rw,r.Su,now)));r.lot1=Math.max(r.Su,src.lot1||r.Su);}
       pins.push(r);continue;}
     if(!b)continue;
     if(b.C<=now+1e-9){pins.push({...b,pin:1,done:1});continue;}
@@ -3576,7 +3579,7 @@ function lowerBound(st,cx){
     if(g[o.id]&&g[o.id].C!=null){best=g[o.id].C;l1=best;}
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
       // başlamış işlemin yalnız kalan süresi sayılır
-      if(M){const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);l1=best;}else{best=st.now;l1=best;}}
+      if(M){const kb=kalanBitis(M,a);if(kb!=null)best=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=adv(M.rw,st.now,rem);}l1=best;}else{best=st.now;l1=best;}}
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=v;l1=v;}}continue;}
       const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
     done[o.id]={f:best,l1};const jl=LB[o.job]||0;LB[o.job]=Math.max(jl,best);}
@@ -3746,7 +3749,7 @@ function lbHeadsTails(st,cx){
     let best=Infinity,b1=Infinity;
     if(g[o.id]&&g[o.id].C!=null){best=b1=g[o.id].C;}
     else if(g[o.id]&&g[o.id].S!=null){const a=g[o.id],c=o.c.find(x=>x.m===a.m)||o.c.find(x=>!x.fas);const M=c&&cx.M[c.m];
-      if(M){const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}else best=b1=st.now;}
+      if(M){const kb=kalanBitis(M,a);if(kb!=null)best=b1=kb;else{const rem=Math.max(0,c.run-workIn(M.rw,a.S,st.now));best=b1=adv(M.rw,st.now,rem);}}else best=b1=st.now;}
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=b1=v;}}continue;}
       const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;b1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
     fin[o.id]=best;l1[o.id]=b1;}
@@ -3982,7 +3985,7 @@ function mipModel(st,cx,jobIds,opt={}){
       let su=suMin(o,c,cx);
       let p=su+c.run+(o.fai?(+A.faiSaat||0):0);
       let from=head;
-      if(g[o.id]&&g[o.id].S!=null){p=Math.max(0,c.run-workIn(M.rw,g[o.id].S,st.now));from=st.now;}
+      if(g[o.id]&&g[o.id].S!=null){const kb=kalanBitis(M,g[o.id]);p=kb!=null?workIn(M.rw,st.now,Math.max(st.now,kb)):Math.max(0,c.run-workIn(M.rw,g[o.id].S,st.now));from=st.now;}
       const P=Math.floor(p+1e-9),sl=slotsOf(c.m);
       let i0=0;while(i0<sl.length&&sl[i0]+1<=from+1e-9)i0++;
       // başlamış işlem yerinde kalır

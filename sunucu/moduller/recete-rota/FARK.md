@@ -119,3 +119,13 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
 - "Çevrim dk" yerine "İşlem dk" ve "Değişim dk" ve "Değişim %" (akış kartı, adım paneli, operasyon kataloğu). Değişim % = değişim ÷ işlem × 100; işlem boş ya da 0 ise boş.
 - Eski kayıt açılışta normalleşir: işlem = eski çevrim, değişim boş. `cycle` toplam kalır.
 - Plan etkin süreyi kullanır: hazırlık + (işlem + değişim) × miktar ÷ verim. Gerçekleşene yalnız elle giriş ya da "kabul et" ile geçilir (kullanıcı kararı S4 a); plan canlıyken değişiklik mevcut kurala göre taslak senaryoya yazılır.
+
+## Plan motoru sunucuda (354, 391 a; ADR 0018)
+- Motor dosyaları (`engine`, `kisitlar`, `mip`) `sunucu/moduller/recete-rota/motor/` altına taşındı; planlama çerçevesinin sayfası onları
+  buradan gömer (`planlama-derle.ts` `MOTOR`); taşımanın kendisi sayfayı değiştirmedi, motor değişikliğiyle sayfa yeniden kuruldu.
+- `plan-motoru.ts`: motor sunucuda ayrı iş parçacığında, boş `vm` bağlamında koşar; aynı anda tek çözüm, süre sınırı, yalnız aramasız
+  kipler (`sabit`, `yeni`). `disari.ts` `planCoz`, `motorYukle` açar. Asıl plan bugün değişmedi: plan modülü çözücüyü bağlayana ve canlıya
+  alma (356 b) kararına kadar `oner` yolu sürer.
+- Davranış (391 a): gerçekleşen kaydı `kalan` (verimli saat) ve `sayim` (son sayım anı) taşırsa motor başlamış adımın bitişini
+  `sayim`dan takvimle `kalan` kadar ilerletir; yoksa geçen süreyi düşen eski yol sürer. Plan, alt sınır, baş-kuyruk ve MIP gevşetmesi aynı
+  yardımcıyı (`kalanBitis`) kullanır.

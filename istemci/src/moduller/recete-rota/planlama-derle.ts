@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Planlama çerçevesinin sayfası (cerceve/planlama-modulu.html) yalnız bu modülün kaynaklarından kurulur: parçalar sırayla tek betik,
-// motor ve stil; dışarıdan kütüphane gömülmez. Uygulamanın ortak stili ve simgeleri sayfaya gömülmez; kabuk açılışta yer tutucuların yerine
+// motor ve stil; dışarıdan kütüphane gömülmez. Motor sunucuyla tek kaynaktır (ADR 0018): sunucu modülünün klasöründen okunur. Uygulamanın ortak stili ve simgeleri sayfaya gömülmez; kabuk açılışta yer tutucuların yerine
 // koyar (planlama-sayfasi.ts), ortak parça değişince bu sayfa yeniden kurulmak zorunda kalmaz.
 // Kurmak: node istemci/src/moduller/recete-rota/planlama-derle.ts  (sayfanın kaynakla aynı olduğunu planlama-derle.test.ts sınar)
 //
@@ -32,6 +32,7 @@ export const PARCA_SIRASI: readonly (string | null)[] = [
 
 const MODUL = dirname(fileURLToPath(import.meta.url));
 const KAYNAK = join(MODUL, 'cerceve', 'planlama');
+export const MOTOR = resolve(MODUL, '..', '..', '..', '..', 'sunucu', 'moduller', 'recete-rota', 'motor');
 export const CIKTI = join(MODUL, 'cerceve', 'planlama-modulu.html');
 
 const oku = (yol: string): string => readFileSync(yol, 'utf8');
@@ -50,8 +51,8 @@ export function planlamaBetigi(kok: string = KAYNAK): string {
   return PARCA_SIRASI.map((p) => (p === null ? '' : planlamaParcasi(p, kok))).join('\n');
 }
 
-export function planlamaMotoru(kok: string = KAYNAK): string {
-  return ['engine', 'kisitlar'].map((m) => oku(join(kok, 'motor', `${m}.betik`))).join('\n');
+export function planlamaMotoru(kok: string = MOTOR): string {
+  return ['engine', 'kisitlar'].map((m) => oku(join(kok, `${m}.betik`))).join('\n');
 }
 
 export function planlamaSayfasi(kok: string = KAYNAK): string {
@@ -67,8 +68,8 @@ export function planlamaSayfasi(kok: string = KAYNAK): string {
     '</head>',
     '<body>',
     '<div id="kok"></div><div id="katman"></div><div class="tc-bildirimler" id="bildirimler" aria-live="polite"></div>',
-    `<script id="motor">\n${betikKapanisiYok('motor', planlamaMotoru(kok))}\n</script>`,
-    `<script>\n${betikKapanisiYok('mip', oku(join(kok, 'motor', 'mip.betik')))}\n</script>`,
+    `<script id="motor">\n${betikKapanisiYok('motor', planlamaMotoru())}\n</script>`,
+    `<script>\n${betikKapanisiYok('mip', oku(join(MOTOR, 'mip.betik')))}\n</script>`,
     // Uygulamada örnek veri, HiGHS ve iç içe Reçete ve Rota yoktur (zz31-tmi).
     `<script>\nconst CP_ONERI = {};\nconst VERI = {};\nconst RR_HTML = '';\n${SIMGE_YERI}\n</script>`,
     `<script>\n${betikKapanisiYok('uygulama', planlamaBetigi(kok))}\n</script>`,
