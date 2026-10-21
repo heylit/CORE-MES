@@ -1573,14 +1573,14 @@ export async function degisiklikKaldir(db: Db, k: Kullanici, id: number, degisik
     await s.yerlesimleriSil(db, id, sanal);
   }
   if (d.isEmriIdleri.length > 0) await s.canlidanAl(db, id, d.isEmriIdleri.filter((x) => x > 0));
-  await s.degisiklikSil(db, id, [d.id]);
+  await s.degisiklikKaldir(db, id, [d.id], k.id);
   await s.senaryoSurumArtir(db, id);
   return senaryolar(db, k);
 }
 
 export async function degisiklikleriAt(db: Db, k: Kullanici, id: number, surum: number) {
   await acikTaslak(db, k, id, surum);
-  await s.senaryoSifirla(db, id);
+  await s.senaryoSifirla(db, id, k.id);
   return senaryolar(db, k);
 }
 
