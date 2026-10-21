@@ -1,6 +1,6 @@
 # Kural -> test (plan)
 
-K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan.test.ts` (gerçek PostgreSQL), E: `istemci/src/moduller/rota/Rotalar.test.tsx`.
+K: `sunucu/moduller/plan/kurallar.test.ts` (saf), U: `sunucu/moduller/plan/plan-*.test.ts` (gerçek PostgreSQL; ortak kurulum `plan-ortak.test.ts`), E: `istemci/src/moduller/rota/Rotalar.test.tsx`.
 
 | Kural | Madde | Test | Kısıt |
 |---|---|---|---|
