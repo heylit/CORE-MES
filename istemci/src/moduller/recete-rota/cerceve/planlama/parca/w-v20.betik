@@ -354,7 +354,7 @@ function v20EtkiPlanla(id, h) {
 }
 function v20EtkiHesapla(id, m, t) {
   const st = stOf(); st.locks[id] = { m, S: t };
-  const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [[id, m, t]], cx, true); slack(p, cx);
+  const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [[id, m, t]], cx, true, true); slack(p, cx);
   const ev = evaluate(p, st, null, false);
   const kayan = Object.values(p.ops).filter(r => r.id !== id && isFinite(r.S) && v20Esik(S.plan.ops[r.id], r));
   const gecMi = x => x && x.T > 0.05;

@@ -3451,11 +3451,23 @@ function schedule(st,mode,base,opt={}){
     const key=id=>base.ops[id].S;
     // liste kipinde tezgâh sırası bağlayıcı değil, öncelik sırasıdır: hazır olmayan iş kuyruğu tıkamaz
     const lst=!!opt.liste;
+    // hamle kipinde (elle taşıma ve önizleme) öncülünü, örneğin fason dönüşünü bekleyen iş tezgâhı boş bekletmez: bir kez ertelenir
+    // (bek: başlayabileceği saat), tezgâh o saate kadar arkadaki işlerle dolar; o saati aşacak iş gelince sıra yine anahtarındır,
+    // başka aday kalmayınca en erken başlayabilecek ertelenmiş iş serbest kalır. Arama (lns) bunu kullanmaz: sırayı kendisi kurar.
+    const hk=lst&&!!opt.bekletme;
+    const bek={},ertelendi=new Set(),bosAn=m=>ctx.av[m]==null?st.now:ctx.av[m];
     for(;;){let bm=null,bi=-1,bk=Infinity;
       for(const m in seq){const q=seq[m];if(!q.length)continue;
-        if(m[0]==='@'||lst){for(let i=0;i<q.length;i++){const k=key(q[i]);if(k<bk&&ready(cx.byId[q[i]])){bk=k;bm=m;bi=i;}if(lst&&k>=bk)break;}continue;}
+        if(m[0]==='@'||lst){for(let i=0;i<q.length;i++){const k=key(q[i]);if(hk&&bek[q[i]]>bosAn(m)+1e-6)continue;if(k<bk&&ready(cx.byId[q[i]])){bk=k;bm=m;bi=i;}if(lst&&k>=bk)break;}continue;}
         const k=key(q[0]);if(k<bk&&ready(cx.byId[q[0]])){bk=k;bm=m;bi=0;}}
-      if(bm==null)break;const q=seq[bm],o=cx.byId[q[bi]];const c=o.c.find(x=>x.m===bm);const r=c&&timing(o,c,cx,ctx);
+      if(bm==null){let en=null;for(const id in bek)if(en==null||bek[id]<bek[en])en=id;if(en==null)break;delete bek[en];continue;}
+      const q=seq[bm];let o=cx.byId[q[bi]],c=o.c.find(x=>x.m===bm),r=c&&timing(o,c,cx,ctx);
+      if(hk&&r&&!c.fas&&bm[0]!=='@'){
+        if(!ertelendi.has(o.id)&&r.S>bosAn(bm)+1e-6&&q.some((id,i)=>i!==bi&&!ertelendi.has(id))){ertelendi.add(o.id);bek[o.id]=r.S;continue;}
+        const d=q.find(id=>id!==o.id&&bek[id]!=null&&key(id)<key(o.id)&&r.C>bek[id]+1e-6&&ready(cx.byId[id]));
+        if(d){delete bek[d];bi=q.indexOf(d);o=cx.byId[d];c=o.c.find(x=>x.m===bm);r=c&&timing(o,c,cx,ctx);}
+        else delete bek[o.id];
+      }
       if(r)commit(cx,ctx,r);else ctx.fail.push(o.id);U.delete(o.id);q.splice(bi,1);}
   }
   let guard=0;
@@ -3784,14 +3796,17 @@ function forwardTo(st,startPlan,topPlan,ref,k,budget){
    Plan tezgâh başına sıra olarak tutulur; sabit kipteki çözücü sırayı takvim ve kaynaklarla gerçek plana çevirir.
    Her turda bir parça sökülür (gecikmiş bir işin kritik işlemi ya da bir tezgâhta ardışık üç-dört işlem),
    o parçanın bütün yerleşimleri denenir, en iyisi kabul edilir. Dondurulmuş ve başlamış işler sökülmez. */
-function lnsDecode(st,cur,mods,cx,free){
+function lnsDecode(st,cur,mods,cx,free,bekletme){
   const ops={...cur.ops};for(const [id,m,key] of mods)ops[id]={...ops[id],m,S:key};
   // sıra anahtarları dondurma sınırının ötesine sıralı yayılır: anahtar yalnız tezgâhtaki sırayı taşır
   const frz=st.now+(free?0:(st.w.dondurma||0));const mid=new Set(mods.map(x=>x[0]));const mv=Object.values(ops).filter(r=>!r.act&&!r.done&&(free||!r.pin)&&(r.S>=frz-1e-9||mid.has(r.id))).sort((a,b)=>a.S-b.S);
   mv.forEach((r,i)=>{ops[r.id]={...r,S:frz+1+i*1e-3};});
   const fake={...cur,ops,downIds:(st.down||[]).map(d=>d.id)};
   // başvuru planı yoksa dondurma da yoktur
-  return schedule(st,'sabit',fake,{cx,noFreeze:!!free,noSlack:true,liste:true});
+  const o={cx,noFreeze:!!free,noSlack:true,liste:true};const a=schedule(st,'sabit',fake,o);if(!bekletme)return a;
+  // erteleme kaynak ve ayar sırasını da değiştirir; taşınmamış plan kendini aynen üretsin diye iki çözümden iyisi alınır
+  const b=schedule(st,'sabit',fake,{...o,bekletme:true});
+  return (b.fail||[]).length<=(a.fail||[]).length&&cmpEv(evaluate(b,st,null,true),evaluate(a,st,null,true))>0?b:a;
 }
 function lns(st,start,ref,opt={}){
   const t0=Date.now(),cx=start.cx||compile(st),budget=opt.ms||1500,maxChg=opt.maxChg==null?Infinity:opt.maxChg;
@@ -4743,7 +4758,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
   let p;
   let toparla = 0;
   try {
-    const cx = compile(st); p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true);
+    const cx = compile(st); p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true, true);
     /* Kod çözücü işleri anahtar sırasıyla işler; öncülü geç kalan iş kuyrukta öndekileri bekletebilir.
        Anahtarlar gerçek başlama saatleriyle yenilenip yeniden çözülür, iyileştikçe tekrarlanır. */
     const tas = +cx.A.tasimaSaat || 0, tasinan = new Set(mods.map(x => x[0]));
@@ -4756,7 +4771,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
         if (hazir < r.S - 1) yeni.push([r.id, r.m, hazir]);
       }
       if (!yeni.length) break;
-      const q = lnsDecode(st, p, yeni, cx, true);
+      const q = lnsDecode(st, p, yeni, cx, true, true);
       if (cmpEv(evaluate(q, st, null, true), evaluate(p, st, null, true)) > 0) p = q; else break;
     }
     slack(p, cx);
@@ -4770,7 +4785,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
       const e0 = evaluate(p, st, null, true);
       /* toparlama taşınan işin önüne başka iş koymuş olabilir: taşınan işler eski yerlerine anahtarlanıp yeniden çözülür */
       const geri = mods.map(([id]) => p.ops[id] && [id, p.ops[id].m, p.ops[id].S - 1e-3]).filter(Boolean);
-      const p2 = lnsDecode(stR, L.plan, geri, cxR, true); slack(p2, cxR);
+      const p2 = lnsDecode(stR, L.plan, geri, cxR, true, true); slack(p2, cxR);
       const e1 = evaluate(p2, st, null, true);
       const yerinde = geri.every(([id]) => { const a = p.ops[id], b = p2.ops[id]; return a && b && b.S <= a.S + 0.25; });
       if (yerinde && cmpEv(e1, e0) > 0 && (p2.fail || []).length <= (p.fail || []).length) { toparla = e0.wT - e1.wT; p = p2; }
@@ -5550,7 +5565,7 @@ function oneriDene(o, kaynak) {
   /* öneri saatleri en erken başlangıç olarak verilir; motor bütün kısıtları kendisi uygular, gerekirse geciktirir.
      Sonra öneri sırası kilitsiz yeniden çözülür; motorun ölçüsünde hangisi iyiyse o önizlenir. */
   const cx2 = compile(st2);
-  const p1 = lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx2, true);
+  const p1 = lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx2, true, true);
   const p2 = lnsDecode(st, p1, [], cx, true);
   const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
   for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
@@ -5673,7 +5688,7 @@ async function motorSure(st, p, ms, seed, sessiz) {
 function oneriPlan(o, st, cx, base) {
   const st2 = { ...st, locks: { ...st.locks } }; const mods = [];
   for (const x of o.ops || []) { const op = cx.byId[x.id]; if (!op || st.locks[x.id] || !op.c.some(c => c.m === x.m) || !isFinite(+x.S)) continue; st2.locks[x.id] = { m: x.m, S: +x.S }; mods.push([x.id, x.m, +x.S]); }
-  const p1 = lnsDecode(st2, base, mods, compile(st2), true);
+  const p1 = lnsDecode(st2, base, mods, compile(st2), true, true);
   const p2 = lnsDecode(st, p1, [], cx, true);
   const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
   for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
@@ -9503,7 +9518,7 @@ function v20EtkiPlanla(id, h) {
 }
 function v20EtkiHesapla(id, m, t) {
   const st = stOf(); st.locks[id] = { m, S: t };
-  const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [[id, m, t]], cx, true); slack(p, cx);
+  const cx = compile(st); const p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [[id, m, t]], cx, true, true); slack(p, cx);
   const ev = evaluate(p, st, null, false);
   const kayan = Object.values(p.ops).filter(r => r.id !== id && isFinite(r.S) && v20Esik(S.plan.ops[r.id], r));
   const gecMi = x => x && x.T > 0.05;

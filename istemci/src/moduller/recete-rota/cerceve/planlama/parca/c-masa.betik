@@ -261,7 +261,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
   let p;
   let toparla = 0;
   try {
-    const cx = compile(st); p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true);
+    const cx = compile(st); p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true, true);
     /* Kod çözücü işleri anahtar sırasıyla işler; öncülü geç kalan iş kuyrukta öndekileri bekletebilir.
        Anahtarlar gerçek başlama saatleriyle yenilenip yeniden çözülür, iyileştikçe tekrarlanır. */
     const tas = +cx.A.tasimaSaat || 0, tasinan = new Set(mods.map(x => x[0]));
@@ -274,7 +274,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
         if (hazir < r.S - 1) yeni.push([r.id, r.m, hazir]);
       }
       if (!yeni.length) break;
-      const q = lnsDecode(st, p, yeni, cx, true);
+      const q = lnsDecode(st, p, yeni, cx, true, true);
       if (cmpEv(evaluate(q, st, null, true), evaluate(p, st, null, true)) > 0) p = q; else break;
     }
     slack(p, cx);
@@ -288,7 +288,7 @@ function hamleDene(mods, ad, kilitler = [], kaldir = [], ayar = {}) {
       const e0 = evaluate(p, st, null, true);
       /* toparlama taşınan işin önüne başka iş koymuş olabilir: taşınan işler eski yerlerine anahtarlanıp yeniden çözülür */
       const geri = mods.map(([id]) => p.ops[id] && [id, p.ops[id].m, p.ops[id].S - 1e-3]).filter(Boolean);
-      const p2 = lnsDecode(stR, L.plan, geri, cxR, true); slack(p2, cxR);
+      const p2 = lnsDecode(stR, L.plan, geri, cxR, true, true); slack(p2, cxR);
       const e1 = evaluate(p2, st, null, true);
       const yerinde = geri.every(([id]) => { const a = p.ops[id], b = p2.ops[id]; return a && b && b.S <= a.S + 0.25; });
       if (yerinde && cmpEv(e1, e0) > 0 && (p2.fail || []).length <= (p.fail || []).length) { toparla = e0.wT - e1.wT; p = p2; }

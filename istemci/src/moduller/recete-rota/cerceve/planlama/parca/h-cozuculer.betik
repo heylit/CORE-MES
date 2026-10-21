@@ -153,7 +153,7 @@ function oneriDene(o, kaynak) {
   /* öneri saatleri en erken başlangıç olarak verilir; motor bütün kısıtları kendisi uygular, gerekirse geciktirir.
      Sonra öneri sırası kilitsiz yeniden çözülür; motorun ölçüsünde hangisi iyiyse o önizlenir. */
   const cx2 = compile(st2);
-  const p1 = lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx2, true);
+  const p1 = lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx2, true, true);
   const p2 = lnsDecode(st, p1, [], cx, true);
   const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
   for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
@@ -276,7 +276,7 @@ async function motorSure(st, p, ms, seed, sessiz) {
 function oneriPlan(o, st, cx, base) {
   const st2 = { ...st, locks: { ...st.locks } }; const mods = [];
   for (const x of o.ops || []) { const op = cx.byId[x.id]; if (!op || st.locks[x.id] || !op.c.some(c => c.m === x.m) || !isFinite(+x.S)) continue; st2.locks[x.id] = { m: x.m, S: +x.S }; mods.push([x.id, x.m, +x.S]); }
-  const p1 = lnsDecode(st2, base, mods, compile(st2), true);
+  const p1 = lnsDecode(st2, base, mods, compile(st2), true, true);
   const p2 = lnsDecode(st, p1, [], cx, true);
   const p = cmpEv(evaluate(p2, st, null, true), evaluate(p1, st, null, true)) >= 0 ? p2 : p1;
   for (const r of Object.values(p.ops)) if (r.why && r.why.t === 'kilit' && !st.locks[r.id]) r.why = { ...r.why, t: 'oneri' };
