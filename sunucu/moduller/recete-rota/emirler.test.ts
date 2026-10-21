@@ -199,6 +199,28 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual([1, 2, 3].map((n) => s.opStatus[adimAnahtari(n)]), ['tamam', 'tamam', 'tamam']);
   });
 
+  test('EMR-9 (391 a): başlamış adım kalanı, makinesi, sağlam sayacı ve emir adedi plan modülünden gelir; biten adım listede yoktur', async () => {
+    const id = await emirAc(10);
+    const terminal = (yol: string, govde?: unknown) => istek('operator', 'POST', `/uretim-emirleri/${id}${yol}`, govde);
+    const no = (await siparis(id)).emir.no;
+    const opNo = (await ayrinti(id)).isEmirleri[0]?.opNo;
+    const calisan = async () => (await durum('yonetici')).calisanAdimlar?.find((a) => a.anahtar === `${no}|${String(opNo)}`);
+    assert.equal(await calisan(), undefined, 'başlamamış adım yok');
+
+    assert.equal((await terminal('/baslat')).durum, 200);
+    assert.equal((await terminal('/sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+    await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    const a = await calisan();
+    assert.ok(a, 'çalışan adım durumda');
+    assert.equal(a.saglam, 4);
+    assert.equal(a.adet, 10);
+    assert.equal(typeof a.kalanVerimliDk, 'number');
+    assert.ok(a.baslangic !== null && a.sayimAni !== null && a.sayimAni >= a.baslangic);
+
+    assert.equal((await terminal('/bitir', { saglamAdet: 9 })).durum, 200);
+    assert.equal(await calisan(), undefined, 'biten adım listeden çıkar');
+  });
+
   test('EMR-3: iptal edilen emir iptal görünür; bölünen parti ana emre bağlı alt emir, adım aralıklı bölme kol olur', async () => {
     const iptal = await emirAc(3);
     const ip = await istek('planlama_proje', 'POST', `/adimli-emirler/${iptal}/iptal`, { surum: (await ayrinti(iptal)).surum });
@@ -221,6 +243,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     const id = await emirAc(2);
     const sade = await durum('sadece_sayfa');
     assert.equal(sade.emirler, null, 'sayfa.recete-rota emir okumaz');
+    assert.equal(sade.calisanAdimlar, null, 'emir okumayan başlamış adımı da görmez');
     assert.equal((await durum('planlama_proje')).emirler?.orders.some((x) => x.id === String(id)), true);
     assert.equal((await durum('yonetici')).emirler?.orders.some((x) => x.id === String(id)), true);
   });

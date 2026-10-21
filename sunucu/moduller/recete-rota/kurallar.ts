@@ -263,6 +263,24 @@ export function rotasizAdimlariCevir(isEmirleri: readonly RotasizIsEmri[]): NonN
   }));
 }
 
+// Sahibinin `CalisanAdim` biçimi (plan/disari.ts). Sağlam adet ve emir adedi emir diliminden eklenir; dilimde olmayan adım (emir okunmadı,
+// rotasız emir değil) gelmez.
+export interface CalisanAdimKaydi { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }
+
+export function calisanAdimlariCevir(adimlar: readonly CalisanAdimKaydi[], emirler: readonly EmirKaydi[]): NonNullable<DurumCevabi['calisanAdimlar']> {
+  const emre = new Map(emirler.map((e) => [e.emirNo, e]));
+  return adimlar.flatMap((a) => {
+    const i = a.anahtar.lastIndexOf('|');
+    const e = emre.get(a.anahtar.slice(0, i));
+    const ie = e?.isEmirleri.find((x) => String(x.opNo) === a.anahtar.slice(i + 1));
+    if (e === undefined || ie === undefined) return [];
+    return [{
+      anahtar: a.anahtar, makineId: a.makineId === null ? null : String(a.makineId), baslangic: a.baslangic, sayimAni: a.sayimAni,
+      kalanVerimliDk: a.kalanVerimliDk, saglam: ie.canliAdet ?? 0, adet: e.adet,
+    }];
+  });
+}
+
 export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
   const opStatus: DurumEmirleri['opStatus'] = {};
