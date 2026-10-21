@@ -56,6 +56,16 @@ test('ikinci menüden bölümler arasında geçilir', async ({ page, ag, ac }) =
   expect(ag.hatalar).toEqual([]);
 });
 
+test('planlama sayfasını açmak ortak kayda yazmaz (aynı anda açan ikinci kişi çakışma uyarısı almaz)', async ({ page, ag, ac }) => {
+  await ac('/recete-rota/plan');
+  const f = await cerceve(page);
+  await expect(f.locator('main').first()).toBeVisible();
+  // Çerçeve kaydı 2 sn bekletip yazar; yokluk ancak bekleyerek görülür.
+  await page.waitForTimeout(4_000);
+  expect(ag.yazmalar.filter((y) => y.includes('/recete-rota/kayitlar/'))).toEqual([]);
+  expect(ag.hatalar).toEqual([]);
+});
+
 test.describe('planlama işlemi olmayan', () => {
   test.use({ hesap: 'ornek.planlama' });
 
