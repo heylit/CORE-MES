@@ -1,0 +1,24 @@
+# Logo yardimcisi ayar dosyasi ornegi (kurulum/logo-yardimcisi.md). Kopyalayip depo disinda saklayin; gercek degerler depoya girmez.
+# Bicim: anahtar=deger, her satirda bir tane; # ile baslayan satir yorumdur. Bilinmeyen ya da iki kez yazilan anahtar hatadir.
+
+# Yalniz 127.0.0.1'de dinlenen port; TMI'de TMIV2_LOGO_KOPRU_ADRESI=http://127.0.0.1:<port>
+port=4190
+# TMI'deki TMIV2_LOGO_KOPRU_ANAHTARI ile ayni; en az 16 karakter, rastgele uretin.
+anahtar=<en-az-16-karakter-rastgele-anahtar>
+
+# Logo Objects oturumu: UserLogin ve CompanyLogin
+logo_kullanici=<logo-kullanici-adi>
+logo_parola=<logo-parolasi>
+firma_no=<firma-no>
+donem_no=<donem-no>
+
+# Yalniz okuma icin SQL baglantisi; salt okunur (db_datareader) kullanici onerilir.
+sql_baglanti=Server=<sunucu>;Database=<veritabani>;User Id=<salt-okunur-kullanici>;Password=<parola>;
+
+# Istege bagli: siparis ve fislerde ambar ve isyeri numarasi (varsayilan 0)
+# ambar_no=0
+# isyeri_no=0
+
+# Istege bagli, yalniz --deneme icin: Logo'daki test satici ve test alici cari kodlari
+# deneme_satici=<test-satici-cari-kodu>
+# deneme_alici=<test-alici-cari-kodu>

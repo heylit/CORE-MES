@@ -1,6 +1,4 @@
-import { isIP } from 'node:net';
-
-// Köprü adresi ve anahtarı yalnız ortam değişkenindedir (kart #210); depoya, karta, günlüğe ve hata metnine girmez.
+// Yardımcı adresi ve anahtarı yalnız ortam değişkenindedir (kart #210); depoya, karta, günlüğe ve hata metnine girmez.
 export const LOGO_DEGISKENLERI = ['TMIV2_LOGO_KOPRU_ADRESI', 'TMIV2_LOGO_KOPRU_ANAHTARI'] as const;
 
 export interface LogoAyari {
@@ -11,18 +9,11 @@ export interface LogoAyari {
 
 type Ortamlar = Record<string, string | undefined>;
 
-// Kurum içi adres (ADR 0011): özel ya da yerel IPv4, IPv6 yerel ya da tek parçalı ad (alan adı yok).
-// İnternete çıkan adres açılışta reddedilir; dış servis çağrısı yasağı sürer.
-export function kurumIciMi(host: string): boolean {
+// Logo yardımcısı TMI sunucusuyla aynı bilgisayarda çalışır ve yalnız geri döngü adresini dinler (ADR 0017):
+// adres yalnız 127.0.0.1, localhost ya da [::1] olabilir; başka her adres açılışta reddedilir.
+export function yerelMi(host: string): boolean {
   const ad = host.replace(/^\[|\]$/g, '').toLowerCase();
-  if (ad === 'localhost') return true;
-  const surum = isIP(ad);
-  if (surum === 4) {
-    const [a = -1, b = -1] = ad.split('.').map(Number);
-    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
-  }
-  if (surum === 6) return ad === '::1' || /^f[cd][0-9a-f]{2}:/.test(ad) || /^fe[89ab][0-9a-f]:/.test(ad);
-  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(ad);
+  return ad === '127.0.0.1' || ad === 'localhost' || ad === '::1';
 }
 
 // İki değişken de yoksa bağlantı kapalıdır (null): kuyruk birikir, istek atılmaz, sunucu açılır.
@@ -45,8 +36,8 @@ export function logoAyariOku(env: Ortamlar): LogoAyari | null {
   if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
     throw new Error('Ortam değişkeni geçersiz: TMIV2_LOGO_KOPRU_ADRESI (kullanıcı, parola, sorgu ve # taşımaz; anahtar ayrı değişkendedir)');
   }
-  if (!kurumIciMi(url.hostname)) {
-    throw new Error('Ortam değişkeni geçersiz: TMIV2_LOGO_KOPRU_ADRESI (yalnız kurum içi adres: özel IP ya da tek parçalı sunucu adı; ADR 0011)');
+  if (!yerelMi(url.hostname)) {
+    throw new Error('Ortam değişkeni geçersiz: TMIV2_LOGO_KOPRU_ADRESI (yalnız aynı bilgisayar: 127.0.0.1, localhost ya da [::1]; ADR 0017)');
   }
   return { adres: `${url.origin}${url.pathname.replace(/\/+$/, '')}`, anahtar };
 }

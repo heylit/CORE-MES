@@ -6,8 +6,8 @@ import type { AddressInfo } from 'node:net';
 // sunucu köprü adresini yalnız TMIV2_LOGO_KOPRU_ADRESI'nden alır. Yalnız 127.0.0.1'de dinler.
 // Taklit edilen: GET /api/Material/exists/{kod}, POST /api/Material/AddRich, GET /api/Lookup/unitsets, GET /api/Lookup/warehouses ve
 // { success, logicalRef, error, validate } cevabı. Cevap biçiminin bilinmeyen kısımları VARSAYIM'dır (LB8).
-// Hizmet: POST /api/PurchaseService/AddRich ve /api/SalesService/AddRich (gövdede CODE). Hizmet "var mı" ucu kılavuzda yok; sahte köprüdeki
-// GET /sahte/hizmet-var-mi/{alinan|verilen}/{kod} yalnız test yoludur, gerçek yol değildir.
+// Hizmet: POST /api/PurchaseService/AddRich ve /api/SalesService/AddRich (gövdede CODE). Hizmet "var mı" için sahte köprüdeki
+// GET /sahte/hizmet-var-mi/{alinan|verilen}/{kod} yalnız test yoludur; gerçek yol kopru.ts HIZMET_VAR_MI_YOLU.
 // Sipariş (not 2.3, 3b): GET /api/PurchaseOrder/find/{no} (yoksa 404), GET /api/PurchaseOrder/{no}/lines, POST /api/PurchaseOrder/AddRich
 // (cevap order.lines[].logicalRef), POST /api/PurchaseOrder/{no}/cancel; GET /api/Arp/find/{kod}. Satır listesinin biçimi VARSAYIM.
 // Düzenleme ve kapatma: POST /api/PurchaseOrder/UpdateRich (kayıtsız satır eklenir, gövdede olmayan satır kapanır ama listede kalır),

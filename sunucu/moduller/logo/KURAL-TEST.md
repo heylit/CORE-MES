@@ -5,7 +5,7 @@ Kırmızı: kod testlerle aynı turda yazıldı; kırmızı her kural için kodu
 | Kural | Test | Kırmızı |
 |---|---|---|
 | LGB-1 istek ancak "Logo bağlantısı" anahtarı açık VE iki değişken varken çıkar. Anahtar kapalı: istek ve yazma yok. Anahtar kapalı ya da değişken yokken iş `isBekliyor(neden)` döner; neden sağlık ayrıntısında. Anahtar değişikliği denetime yazılır. Biri eksik ya da geçersiz değişken açılışı durdurur, ileti değer taşımaz | `kurallar.test.ts` `LGB-1: ...` (3 test), `logo.test.ts` `LGB-1 anahtar kapalı ...`, `LGB-1 anahtar açık + değişken yok ...`, `LGB-1 anahtar açık + değişkenler var ...` | görüldü: anahtar denetimi kaldırılınca 1 test, isBekliyor dönüşü kaldırılınca 2 test kırmızı |
-| LGB-2 yalnız kurum içi adres (ADR 0011) | `LGB-2: yalnız kurum içi adres; ...` | görüldü |
+| LGB-2 yalnız aynı bilgisayar: 127.0.0.1, localhost, [::1] (ADR 0017) | `LGB-2: yalnız aynı bilgisayar; ...` | görüldü: `yerelMi` kurum içi adresi kabul edince 1 test kırmızı |
 | LGB-3 success=false kesin ret, metin saklanır, sonraki deneme bekleme sonrası | `LGB-3: success=false ...`, `LGB-3: validate biçimi ...`, `logo.test.ts` `LGB-3 doğrulama hatası ...` | görüldü |
 | LGB-4 401/403 yetkisiz; ulaşılamayan köprü; 5xx/zaman aşımı belirsiz; metin adres taşımaz | `LGB-4: 401/403 ...`, `LGB-4: bağlantı kurulamadıysa ...`, `logo.test.ts` `LGB-4 401 ...`, `LGB-4 köprüye ulaşılamaz ...` | görüldü |
 | LGB-5 gövde: code, name, cardType (10/11/12/13/4), unitSetCode, auxilCode=TMI; kod en çok 24 | `LGB-5: gövde ...`, `LGB-5 (ret): ...`, `logo.test.ts` `LGB-8 kabul ...` (gövde birebir) | görüldü |

@@ -13,3 +13,6 @@ uretilen/
 .claude/worktrees/
 .claude/agent-memory-local/
 .claude/settings.local.json
+
+# Logo yardimcisinin derleme ciktisi (araclar/logo-yardimcisi/derle.cmd)
+araclar/logo-yardimcisi/cikti/

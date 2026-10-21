@@ -1,6 +1,6 @@
 # logo notları (kart #207)
 
-- Logo ile yalnız bu modül konuşur (ADR 0011). Malzeme kartı ve ad güncellemesi gider; satın alma (talep fişi, sipariş açma, düzenleme, kapatma, iptal,
+- Logo ile yalnız bu modül konuşur (ADR 0011 karar 3; karşı uç aynı bilgisayardaki Logo yardımcısı, ADR 0017). Malzeme kartı ve ad güncellemesi gider; satın alma (talep fişi, sipariş açma, düzenleme, kapatma, iptal,
   talep karşılaması; kart #777 S1 a, S2 b, S3 b) ayrı ayarla kapalı (`logo.satin-alma-gonderimi`) ve kaynağı satın alma işlevleri gelene kadar iş
   listesinde yok (`satinAlmaIsi`). Firma kartı yazılamaz (köprüde cari yazma ucu yok, yalnız `Arp/find`). Yeni belge türü `logo_giden.belge_turu`
   kısıtına ve kendi turuna eklenir. Satın alma turu sırası: talep, açma, düzenleme, kapatma, iptal, karşılama (karşılama ancak iki taraf Logo'dayken).
