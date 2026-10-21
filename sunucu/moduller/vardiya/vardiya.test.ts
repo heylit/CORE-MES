@@ -14,7 +14,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from './disari.ts';
+import { basladigiGunTakvimi, basladigiGunTakvimleri, calisirMakineSayilari, calismaSuresi, calismaTakvimleri, gunYaz, kisiVardiyalari, vardiyaMatrisi, planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from './disari.ts';
 import type { ArkonDurusSonucu, PlanliDurusKaydi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -244,6 +244,19 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     t = (await belirle(c.planlama, { kisiIdleri: [bosta, personel], vardiyaId: null })).govde;
     assert.equal(vardiyasi(t, personel), null);
     assert.equal(vardiyasi(t, bosta), null);
+  });
+
+  test('kisiVardiyalari (dışarı): takvim ekranının okumasıyla aynı; reddedilen yazım okumaya yansımaz; vardiyası kaldırılan kişi listede yok', async () => {
+    const v = await vardiyaAc();
+    const personel = kisiler['personel']!;
+    const okunan = () => vt().tx((db) => kisiVardiyalari(db));
+    assert.equal((await istek(c.operator, 'POST', `/kisi-vardiyalari/${personel}/belirle`, { vardiyaId: v.id })).durum, 403);
+    assert.equal((await okunan()).find((k) => k.kisiId === personel), undefined);
+    const t = await tamam<TakvimCevabi>(c.planlama, 'POST', `/kisi-vardiyalari/${personel}/belirle`, { vardiyaId: v.id });
+    assert.deepEqual(await okunan(), t.kisiVardiyalari);
+    assert.deepEqual((await okunan()).find((k) => k.kisiId === personel), { kisiId: personel, vardiyaId: v.id });
+    await tamam(c.planlama, 'POST', `/kisi-vardiyalari/${personel}/belirle`, { vardiyaId: null });
+    assert.equal((await okunan()).find((k) => k.kisiId === personel), undefined);
   });
 
   test('VR-02, VR-03, VR-10: tatil o günü kapatır; geçmiş tarih ayrı yetki ister; temizle geçmişi yalnız yetkiliyle siler', async () => {

@@ -9,6 +9,9 @@ export type { ArkonDurusHedefi, ArkonDurusSonucu, PlanliDurusKaydi, TakvimAralig
 // Arkon (A7, #517) vardiya saatlerini ve molalarını buradan okur; Arkon'da vardiya yazılmaz. Haftanın hangi günü hangi vardiyanın
 // çalıştığını (`vardiyaMatrisi`, takvim ekranının matrisi) ve tatil günlerini (`takvimGunleri`) de buradan okur.
 export { vardiyaMatrisi, vardiyaTanimlari } from './servis.ts';
+// Kişi -> vardiya (takvim ekranının `kisiVardiyalari` alanıyla aynı okuma). Satış teklifi denemesi (R&R) sunucuda takvim ekini bununla ve
+// `vardiyaMatrisi` ile kurar. Vardiyası olmayan kişi listede yoktur. Yetki denetlemez: çağıran uç denetler.
+export { kisiVardiyalari } from './sorgular.ts';
 // Tek tanım (kullanıcı kararı "Tek tanım"): iş merkezi x vardiya kadrosu (kişiler ve atama payı, sent) ve iş merkezinin çalışan makine sayısı.
 // İstasyonlar ve Vardiya ekranları, kapasite ve OEE kişi ve makine sayısını yalnız buradan alır.
 export { calisirMakineSayilari, isMerkeziKisiPaylari, vardiyaKadrosu } from './servis.ts';
