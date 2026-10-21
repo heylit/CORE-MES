@@ -75,15 +75,17 @@ function compile(st){
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
-      const tb=Math.max(1,Math.min(j.adet,o.transfer||Math.ceil(j.adet*(A.transferOran||.25))));
+      /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
+      const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
+      const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
       else for(const t of o.tezgahlar||[]){const mm=M[t.id];if(!mm)continue;const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
-        c.push({m:t.id,run:j.adet*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
+        c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:j.adet,x};
+        program:o.program!==false,fai:!!o.fai,adet:ad,x};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));

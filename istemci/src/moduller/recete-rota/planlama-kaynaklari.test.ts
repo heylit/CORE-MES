@@ -201,3 +201,32 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(t).toMatchObject({ id: '100', ad: 'Torna 1', grup: '10', verim: 0.5, aile: 'x' });
   });
 });
+
+describe('adımın adedi (24 a): tek kaynak uretim-emirleri', () => {
+  const ADET_KAYIT = {
+    ...KAYIT,
+    orders: [{ id: 'O1', no: 'E-1', itemId: '50', qty: 10, start: null, due: null, priority: 2, status: 'uretimde' }],
+    routes: { 50: { base: null, steps: [
+      { id: '50-o10', seq: 10, opNo: 10, opId: '13', stationId: '10', setup: 30, cycle: 4, alts: [], altTimes: {}, ins: [] },
+      { id: '50-o20', seq: 20, opNo: 20, opId: '13', stationId: '10', setup: 30, cycle: 4, alts: [], altTimes: {}, ins: [] },
+    ] } },
+  };
+
+  it('sunucunun adım adedi plan işine eşlenir, çalışmaya girer ve planı eskitir; eşlenemeyen anahtar yok sayılır', async () => {
+    const d = duzenek(ADET_KAYIT, Promise.resolve({ durum: { ...DURUM, adimAdetleri: { 'E-1|20': 7, 'E-9|20': 3 } }, ek: EK }));
+    const S0 = d.ac() as { dataVer: number };
+    const v0 = S0.dataVer;
+    await bekle();
+    const D = d.S()?.D as { opAdet: Record<string, number>; urunler: Array<{ id: string; rota: Array<{ k: number }> }> };
+    const k = D.urunler.find((u) => u.id === '50')?.rota[1]?.k;
+    expect(D.opAdet).toEqual({ [`O1.${String(k)}`]: 7 });
+    expect(d.S()?.dataVer).toBeGreaterThan(v0);
+  });
+
+  it('alan gelmezse (eski durum, emir yetkisi yok) adım adedine dokunulmaz', async () => {
+    const d = duzenek(ADET_KAYIT, Promise.resolve({ durum: { ...DURUM, adimAdetleri: null }, ek: EK }));
+    d.ac();
+    await bekle();
+    expect((d.S()?.D as { opAdet?: unknown }).opAdet).toBeUndefined();
+  });
+});

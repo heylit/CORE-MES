@@ -3254,15 +3254,17 @@ function compile(st){
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
-      const tb=Math.max(1,Math.min(j.adet,o.transfer||Math.ceil(j.adet*(A.transferOran||.25))));
+      /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
+      const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
+      const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
       else for(const t of o.tezgahlar||[]){const mm=M[t.id];if(!mm)continue;const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
-        c.push({m:t.id,run:j.adet*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
+        c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:j.adet,x};
+        program:o.program!==false,fai:!!o.fai,adet:ad,x};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
@@ -19508,14 +19510,25 @@ function tmiFasoncular(st, firmalar, D, onceki) {
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
    kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
    Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
-function tmiCalisanlar(durum, st, D, now) {
-  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+function tmiIslemler(st, D) {
   const opOf = {};
   for (const o of (st && st.orders) || []) {
     const u = (D.urunler || []).find(x => x.id === o.itemId); if (!u) continue;
     const adimlar = (((st.routes || {})[o.itemId] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
     adimlar.forEach((a, i) => { const k = u.rota[i] && u.rota[i].k; if (k != null) opOf[`${o.no}|${a.opNo > 0 ? a.opNo : a.seq}`] = `${o.id}.${k}`; });
   }
+  return opOf;
+}
+/* Adımın işleyeceği adet (24 a): tek kaynak uretim-emirleri (durum.adimAdetleri, yalnız emir adedinden farklı olan). Motor D.opAdet'i okur. */
+function tmiAdimAdetleri(durum, st, D) {
+  const a = durum && durum.adimAdetleri && typeof durum.adimAdetleri === 'object' ? durum.adimAdetleri : null; if (!a) return undefined;
+  const opOf = tmiIslemler(st, D); const y = {};
+  for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
+  return y;
+}
+function tmiCalisanlar(durum, st, D, now) {
+  const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
+  const opOf = tmiIslemler(st, D);
   const saat = iso => { if (!iso) return null; const d = new Date(iso); const p = n => String(n).padStart(2, '0');
     return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`); };
   const y = {};
@@ -19529,7 +19542,7 @@ function tmiCalisanlar(durum, st, D, now) {
 }
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrDenemeyeCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular', 'opAdet'];
 
 if (TMI_ICINDE) {
   const rd0 = rrDenemeyeCevir;
@@ -19541,6 +19554,7 @@ if (TMI_ICINDE) {
     tmiTabanKur(D);
     const firmalar = TMI_KAYNAK.durum && TMI_KAYNAK.durum.fasonFirms;
     if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, S && S.D);
+    const adet = tmiAdimAdetleri(TMI_KAYNAK.durum, st, D); if (adet) D.opAdet = adet;
     return D;
   };
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda

@@ -221,6 +221,26 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.equal(await calisan(), undefined, 'biten adım listeden çıkar');
   });
 
+  test('EMR-10 (24 a): sonraki adımın adedi önceki adımın hurdası kadar düşer; tek kaynak uretim-emirleri, farksız adım gelmez', async () => {
+    const id = await emirAc(10);
+    const terminal = (yol: string, govde?: unknown) => istek('operator', 'POST', `/uretim-emirleri/${id}${yol}`, govde);
+    const no = (await siparis(id)).emir.no;
+    const [op1, op2, op3] = (await ayrinti(id)).isEmirleri.map((i) => `${no}|${String(i.opNo)}`);
+    const adetler = async () => (await durum('yonetici')).adimAdetleri ?? {};
+    assert.deepEqual(Object.keys(await adetler()).filter((k) => k.startsWith(`${no}|`)), [], 'hurda yokken fark yok');
+
+    assert.equal((await terminal('/baslat')).durum, 200);
+    assert.equal((await terminal('/bitir', { saglamAdet: 7 })).durum, 200);
+    const a = await adetler();
+    assert.equal(a[op1 ?? ''], undefined, 'biten adım gelmez');
+    assert.equal(a[op2 ?? ''], 7);
+    assert.equal(a[op3 ?? ''], 7, 'kayıp sonraki adımlara taşınır');
+
+    assert.equal((await terminal('/baslat')).durum, 200);
+    const c = (await durum('yonetici')).calisanAdimlar?.find((x) => x.anahtar === op2);
+    assert.equal(c?.adet, 7, 'çalışan adımın adedi adımın adedidir');
+  });
+
   test('EMR-3: iptal edilen emir iptal görünür; bölünen parti ana emre bağlı alt emir, adım aralıklı bölme kol olur', async () => {
     const iptal = await emirAc(3);
     const ip = await istek('planlama_proje', 'POST', `/adimli-emirler/${iptal}/iptal`, { surum: (await ayrinti(iptal)).surum });
@@ -244,6 +264,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     const sade = await durum('sadece_sayfa');
     assert.equal(sade.emirler, null, 'sayfa.recete-rota emir okumaz');
     assert.equal(sade.calisanAdimlar, null, 'emir okumayan başlamış adımı da görmez');
+    assert.equal(sade.adimAdetleri, null, 'emir okumayan adım adedini de görmez');
     assert.equal((await durum('planlama_proje')).emirler?.orders.some((x) => x.id === String(id)), true);
     assert.equal((await durum('yonetici')).emirler?.orders.some((x) => x.id === String(id)), true);
   });
