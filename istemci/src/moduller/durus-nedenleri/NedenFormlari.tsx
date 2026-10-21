@@ -10,7 +10,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SIMGE_ADLARI } from './simge-adlari.ts';
 
-export const EKIP_ADLARI: Record<CagriEkibi, string> = { bakim: 'Bakım', kalite: 'Kalite', malzeme: 'Malzeme', amir: 'Amir' };
+export const EKIP_ADLARI: Record<CagriEkibi, string> = { bakim: 'Bakım', kalite: 'Kalite', malzeme: 'Malzeme', amir: 'Amir', ayarci: 'Ayarcı' };
 export const KATEGORI_ADLARI: Record<Kategori, string> = { plansiz: 'Plansız', planli: 'Planlı' };
 
 const EKIPLER = (Object.keys(EKIP_ADLARI) as CagriEkibi[]).map((deger) => ({ deger, baslik: EKIP_ADLARI[deger] }));

@@ -9,4 +9,5 @@ export const anahtarlar = {
   logoKontrol: ['ayarlar', 'logo-kontrol'] as const,
   smartesHazirlik: ['ayarlar', 'smartes-hazirlik'] as const,
   smartesKontrol: ['ayarlar', 'smartes-kontrol'] as const,
+  cagriYonlendirme: ['ayarlar', 'cagri-yonlendirme'] as const,
 };

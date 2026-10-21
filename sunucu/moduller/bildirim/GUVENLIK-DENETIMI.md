@@ -18,3 +18,16 @@ Bütün uçlar `oturum` ile herkese açıktır (222 a, yetki genişletme onaylı
 - Yol yalnız uygulama içi adres (`kayitYoluMu` ve kısıt `bildirim_kaydi_yol_gecerli`); `//dis-site` reddedilir (test).
 - Kullanıcı metni React ile kaçırılarak basılır. Denetim kaydı: yazma uçları çekirdeğin varsayılanıyla tam gövde.
 - Yalnız ekranda kalan kural: yok.
+
+## Ekip çağrısı yönlendirmesi (298 a, yetki genişletme onaylı)
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| `GET /bildirimler/cagri-yonlendirme` | `ayarlar.yaz` | ekip satırları ve rol seçenekleri | yönetici 200 | oturumsuz 401; müdür ve operatör 403 |
+| `POST /bildirimler/cagri-yonlendirme/:ekip/degistir` | `ayarlar.yaz` | ekip sözleşme listesinden; gövde katı; rol var olmalı ve tekil (en çok 20); sürüm denetimi; değiştiren ve zaman sunucudan | sürüm artar, değiştiren yönetici | bilinmeyen ekip 400; `kisiId` alanı 400; olmayan ve yinelenen rol 400; eski sürüm 409 ve roller değişmez; müdür ve operatör 403 |
+
+- Yetki genişletme (298 a): çağrı bildirimi işlemden değil rolden alıcı seçer; depo, kalite, bakım, müdür ve vardiya sorumlusu bugün görmedikleri
+  çağrıyı alır. Bildirim yetki vermez ve yolsuzdur (açılan ekran yok); başlıkta yalnız ekip ve yer, metinde operatörün notu.
+- Yeni işlem ve rol satırı yok: ekran ve uçlar Sistem Ayarları'nın `ayarlar.yaz` işlemini kullanır.
+- `ekipCagrisiBildir` uç değildir; çağıranın transaction'ında yazar. Tetik Arkon'dadır (BASKA-MODUL-ISTEKLERI 6).
+- Yalnız ekranda kalan kural: yok.

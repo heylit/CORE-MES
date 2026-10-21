@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
-import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, tekilAnahtar, yolTureUyar } from './kurallar.ts';
+import { alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanRoller, tekilAnahtar, yolTureUyar } from './kurallar.ts';
 
 describe('bildirim kuralları', () => {
   const kisiler = new Map<number, readonly Islem[]>([
@@ -48,7 +48,7 @@ describe('bildirim kuralları', () => {
   });
 
   test('her olay türünün kaynak modülü anahtarın başıdır', () => {
-    assert.deepEqual(BILDIRIM_TUR_ANAHTARLARI.map(kaynakModulu), ['satin-alma', 'siparisler', 'siparisler', 'ik', 'istasyonlar', 'cnc-kurulum']);
+    assert.deepEqual(BILDIRIM_TUR_ANAHTARLARI.map(kaynakModulu), ['satin-alma', 'siparisler', 'siparisler', 'ik', 'istasyonlar', 'cnc-kurulum', 'arkon']);
   });
 
   test('BIL-6: gönderilen yol türün yolu ya da altıdır; yolsuz bildirim geçer', () => {
@@ -59,5 +59,12 @@ describe('bildirim kuralları', () => {
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', '/ik/izinler'), false);
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', null), true);
     assert.equal(yolTureUyar('ik.izin-onay-bekliyor', undefined), true);
+  });
+});
+
+describe('BIL-8: yönlendirmeye yalnız var olan rol yazılır', () => {
+  test('olmayan kimlik döner, var olan geçer', () => {
+    assert.deepEqual(olmayanRoller([1, 2, 9], [1, 2, 3]), [9]);
+    assert.deepEqual(olmayanRoller([], [1]), []);
   });
 });

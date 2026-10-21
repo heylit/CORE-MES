@@ -395,3 +395,17 @@ export async function rolIslemiSil(db: Db, rolId: number, islem: string): Promis
 export function etkinKisiSecenekleri(db: Db): Promise<{ id: number; ad: string; sicilNo: string | null }[]> {
   return db.sorgu('SELECT id, ad, sicil_no AS "sicilNo" FROM kisi WHERE aktif ORDER BY ad, id');
 }
+
+export function rolKodSatirlari(db: Db): Promise<{ id: number; kod: string; ad: string }[]> {
+  return db.sorgu('SELECT id, kod, ad FROM rol ORDER BY ad, id');
+}
+
+// Rollerden birini taşıyan etkin ve girişli kişiler; bildirim alıcısı olabilecek kapsam kisiIslemSatirlari ile aynıdır.
+export async function rollerdekiKisiSatirlari(db: Db, rolIdleri: readonly number[]): Promise<number[]> {
+  const satirlar = await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT k.id FROM kisi k JOIN kisi_rolu kr ON kr.kisi_id = k.id
+      WHERE kr.rol_id = ANY($1::int[]) AND k.aktif AND k.kullanici_adi IS NOT NULL ORDER BY k.id`,
+    [rolIdleri],
+  );
+  return satirlar.map((s) => s.id);
+}

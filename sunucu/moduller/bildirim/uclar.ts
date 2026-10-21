@@ -1,9 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
-  bildirimTercihleriCevabi, tumunuOkunduCevabi,
+  bildirimTercihleriCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
-import { arsivle, bildirimListesi, bildirimSayaci, okundu, tercihDegistir, tercihler, tumunuOkundu } from './servis.ts';
+import {
+  arsivle, bildirimListesi, bildirimSayaci, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+} from './servis.ts';
 
 // Kişinin kendi bildirimleri (222 a): her uç yalnız oturum ister ve yalnız oturumdaki kişinin satırına dokunur; adres ya da
 // gövde başka kişiyi seçemez. Başkasının bildirim kimliği "bulunamadı" döner.
@@ -26,5 +28,12 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/bildirimler/tercihler/degistir', yetki: 'oturum', govde: bildirimTercihDegistirGovdesi, cevap: bildirimTercihleriCevabi,
     isle: ({ db, kullanici, govde }) => tercihDegistir(db, kullanici, govde),
+  }),
+  // Ekip çağrısı yönlendirmesi (298 a): Sistem Ayarları'nın işlemiyle okunur ve yazılır; rol yetkisi vermez, yalnız alıcıyı seçer.
+  uc({ yontem: 'GET', yol: '/bildirimler/cagri-yonlendirme', yetki: 'ayarlar.yaz', cevap: cagriYonlendirmeCevabi, isle: ({ db }) => cagriYonlendirmesi(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/cagri-yonlendirme/:ekip/degistir', yetki: 'ayarlar.yaz', parametre: cagriYonlendirmeParametresi,
+    govde: cagriYonlendirmeDegistirGovdesi, cevap: cagriYonlendirmeCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => cagriYonlendirmesiYaz(db, kullanici, parametre.ekip, govde),
   }),
 ];

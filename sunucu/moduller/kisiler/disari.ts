@@ -1,7 +1,10 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { islemleriBirlestir } from './kurallar.ts';
-import { etkinKisiSecenekleri, kisiAdlariniBul, kisiGorevBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo } from './sorgular.ts';
+import {
+  etkinKisiSecenekleri, kisiAdlariniBul, kisiGorevBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
+  rollerdekiKisiSatirlari,
+} from './sorgular.ts';
 
 export { kullaniciAdiniDuzelt } from './kurallar.ts';
 export {
@@ -44,4 +47,15 @@ export function kisiNoKullaniciAdindan(db: Db, kullaniciAdi: string): Promise<nu
 // Kişi kartındaki görev; görev boşsa ya da kişi yoksa null. Yetki denetlemez: çağıran modül kendi ucunda denetler (portal unvanı).
 export function kisiGorevi(db: Db, kisiId: number): Promise<string | null> {
   return kisiGorevBul(db, kisiId);
+}
+
+// Bütün roller (kimlik, kod, ad); ekip çağrısı yönlendirmesinin seçenekleri (298 a). Yetki denetlemez: çağıran uç denetler.
+export function rolSecenekleri(db: Db): Promise<{ id: number; kod: string; ad: string }[]> {
+  return rolKodSatirlari(db);
+}
+
+// Verilen rollerden birini taşıyan etkin ve girişli kişiler, kimlik sırasıyla. Boş dizide sorgu atılmaz.
+export async function rollerdekiKisiler(db: Db, rolIdleri: readonly number[]): Promise<number[]> {
+  if (rolIdleri.length === 0) return [];
+  return rollerdekiKisiSatirlari(db, rolIdleri);
 }

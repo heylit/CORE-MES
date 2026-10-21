@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 
 export const KATEGORILER = ['plansiz', 'planli'] as const;
-export const CAGRI_EKIPLERI = ['bakim', 'kalite', 'malzeme', 'amir'] as const;
+// Operatörün çağırabildiği ekipler; çağrının kime gideceği Sistem Ayarları > Bildirim yönetimi'ndedir (298 a). Ayarcı 298 b.
+export const CAGRI_EKIPLERI = ['bakim', 'kalite', 'malzeme', 'amir', 'ayarci'] as const;
 
 export const KOD_DESENI = /^[A-Z0-9-]{1,12}$/;
 export const AZAMI_GECIKME_DK = 1440;

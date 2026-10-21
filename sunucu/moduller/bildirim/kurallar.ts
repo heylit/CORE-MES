@@ -54,3 +54,9 @@ export function metniHazirla(baslik: string, metin: string | null | undefined): 
     metin: m === '' ? null : m.length > BILDIRIM_METIN_EN_COK ? `${m.slice(0, BILDIRIM_METIN_EN_COK - 1)}…` : m,
   };
 }
+
+// BIL-8: yönlendirmeye yalnız var olan rol yazılır; olmayan kimlik sessizce düşürülmez, reddedilir.
+export const olmayanRoller = (secilen: readonly number[], varOlan: readonly number[]): number[] => {
+  const kume = new Set(varOlan);
+  return secilen.filter((r) => !kume.has(r));
+};
