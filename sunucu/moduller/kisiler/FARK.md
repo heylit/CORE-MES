@@ -113,3 +113,7 @@ Yok. K3 a, `POST /kisiler` tekrar koruması ve ek karar (T3r a ile) uygulandı; 
 ## Değişen onaylı kararlar
 Yok. Kart #259 kararları belgelere işlendi: K1 a (tablo öneki istisnası), K2 a (`rol` ve `rol_islemi` sahibi kisiler; satırları çekirdek
 konusu kisiler adlı göçlerle yazar), K3 a ve ek karar (sürüm, `POST /kisiler` tekrar koruması, `disari.ts` daraltma) 3. tura borç olarak.
+
+## Örnek veride iki ayarcı (Reçete ve Rota isteği, 23 a; 27 a: kisiler Çekirdek'in) — dal `kisiler-ornek-ayarci`
+- `ornek-veri.ts`: görevi tam "Ayarcı" iki uydurma kişi (`ornek.ayarci1`, `ornek.ayarci2`, ORN-015, ORN-016). Planlama ayarcıyı görevden okur.
+- VARSAYIM: rolleri `operator` (TMI'de ayarcı rolü yok; tezgâhta çalışırlar). Geri alma: örnek veri satırı, düşük. Göç yok.
