@@ -11,7 +11,22 @@ const TMI_MENU = { plan: 'tahta', studio: 'patolye', kanban: 'tahta' };
 const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
 const TMI_BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
 
+/* Kayda planlama sayfası hiç yazmadıysa (yeni kurulum, ya da kaydı yalnız Reçete ve Rota yazdı) planın başlangıcı ve takvimi yoktur,
+   açılış durur. Plan bugünden başlar; takvim boş kalır (vardiya ve çalışma günü uydurulmaz, sayfa kapasite yok der). İlk değişiklikle
+   kayda yazılır; bunlarsız saklanmış çalışma da açılışta onarılır. */
+function tmiTabanKur(D) {
+  if (!D.meta) {
+    const b = new Date();
+    D.meta = { ad: 'Reçete ve Rota kaydı', baslangic: `${b.getFullYear()}-${String(b.getMonth() + 1).padStart(2, '0')}-${String(b.getDate()).padStart(2, '0')}` };
+  }
+  if (!Array.isArray(D.vardiyalar)) D.vardiyalar = [];
+  if (!D.calismaGunleri || typeof D.calismaGunleri !== 'object') D.calismaGunleri = {};
+  if (!Array.isArray(D.tatiller)) D.tatiller = [];
+}
+
 if (TMI_ICINDE) {
+  const yk0 = yukle;
+  yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
   const yc0 = yeniCalisma;
   yeniCalisma = function () {
     const st = rrOku();
@@ -19,6 +34,7 @@ if (TMI_ICINDE) {
     try { D = rrDenemeyeCevir(st && st.items ? st : TMI_BOS_KAYIT); } catch (e) { console.error(e); D = rrDenemeyeCevir(TMI_BOS_KAYIT); }
     /* 1650 kararının varsayılanı (zz-karar-1650) kurulurken konur: açılıştaki göç ana tabloya kullanıcı bir şey değiştirmeden yazmasın */
     if (D.planDenge == null) D.planDenge = 25;
+    tmiTabanKur(D);
     VERI.tmi = { veri: D, ariza: [] };
     const s = yc0('tmi');
     delete VERI.tmi;
