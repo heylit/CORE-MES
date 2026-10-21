@@ -7,6 +7,7 @@ import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
 import type { PlanSenaryoKomutu } from './plan-senaryo-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
+import { highsYukle } from './highs.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
 import type { DurumCevabi, KapasiteCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { BedelAyari, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
@@ -274,11 +275,12 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
 // motorDurumu: motor yerleşimi okunamaz olunca true, yeniden okununca false (yalnız değişince). Okunamazken ekran kendi sırasıyla
 // çizer (öncelik teslimden önce) ve sunucunun sırasından ayrılabilir; kabuk bunu kullanıcıya söyler.
 // motorUyarilari: motorun uygulayamadığı kısıtlar (307 a), her okunan yerleşimde; liste değişince çağrılır. Okunamayan yerleşimde dokunulmaz.
+// highsVerilir: açık çerçeve HiGHS alabilir mi (yalnız planlama çerçevesi, 361 b); verilmezse istek reddedilir.
 export function kopruKur(
   cihazAnahtarlari: readonly string[] = [],
   secenek: {
     kartTaslakAcabilir?: boolean; bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
-    motorUyarilari?: (uyarilar: readonly string[]) => void;
+    motorUyarilari?: (uyarilar: readonly string[]) => void; highsVerilir?: () => boolean;
   } = {},
 ): KopruIsleyici {
   // Çerçeve kayıtları okuduğu andaki sürümler: güncelleme bu sürümle gider, başkası arada yazdıysa sahibi 409 döner. Her başarılı
@@ -361,6 +363,10 @@ export function kopruKur(
       case 'bedel-ayari-oku':
         return { ayar: await api.get<BedelAyari>('/plan/bedel-ayari'), yazabilir: secenek.bedelAyariYazabilir === true };
       // Termini girilmemiş fason adımın süre tahmini (satın almanın geçmiş teslimatı); cevap sorgularla aynı sırada gün ya da null.
+      // HiGHS betiği ve wasm ikilisi (361 b): uç değil, uygulamanın kendi dosyası; yalnız planlama çerçevesine.
+      case 'highs-oku':
+        if (secenek.highsVerilir?.() !== true) throw new Error('Geçersiz istek: HiGHS bu çerçevede açık değil.');
+        return highsYukle();
       case 'fason-tahmin':
         return api.get<unknown>(`/recete-rota/fason-tahminleri?s=${fasonTahminSorgusu(v['sorgular'])}`);
       // Bağlı durum ve sürümler: sürümler durumdan ÖNCE okunur; arada biri yazarsa sürüm eski, durum yeni kalır ve güncelleme

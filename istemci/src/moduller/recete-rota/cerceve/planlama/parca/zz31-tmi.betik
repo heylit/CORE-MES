@@ -43,6 +43,10 @@ if (TMI_ICINDE) {
     s.rrSavedAt = st && st.savedAt ? st.savedAt : 0;
     return s;
   };
+  /* HiGHS'ı kabuk verir (highs paketi, 361 b): betik ve wasm ikilisi kabuktan gelir; çerçeve dışarıdan bir şey yüklemez */
+  hsKaynak = typeof window.tmi.highs === 'function'
+    ? () => window.tmi.highs()
+    : () => Promise.reject(new Error('HiGHS bu çerçevede açık değil'));
   /* iç içe çerçeve kurulmaz; Reçete ve Rota sayfası istenince kabuğa bildirilir, kabuk öteki çerçeveyi açar */
   rrYerlestir = function () { if (RR.el) RR.el.hidden = true; };
   const g = window.tmiGorunum;

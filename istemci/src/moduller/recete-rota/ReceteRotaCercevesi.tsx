@@ -23,6 +23,8 @@ import './recete-rota.css';
 // yalnız gömülü veriden: opak kökenden TMI adresine yazı tipi isteğini tarayıcı reddeder.
 // Planlama motoru sayfanın kendi kurduğu iş parçacığında (blob:) koşar; iş parçacığı bu politikayı devralır, dışarı istek yine kapalıdır.
 const POLITIKA = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src 'none'; worker-src blob:; frame-src 'none'; form-action 'none'; base-uri 'none'";
+// Planlama çerçevesi ayrıca 'wasm-unsafe-eval' ister: HiGHS WebAssembly'dir (361 b); ikili kabuktan gelir, ağ yine kapalıdır.
+export const PLANLAMA_POLITIKASI = POLITIKA.replace("script-src 'unsafe-inline'", "script-src 'unsafe-inline' 'wasm-unsafe-eval'");
 export const KOK = '/recete-rota';
 const KANAL = 'recete-rota';
 // Çerçevenin gidebileceği sayfalar: malzeme yalnız Malzemeler ve Hizmetler'de açılır; istasyonun plan ayarı ve makine durumu İstasyonlar'da,
@@ -77,9 +79,9 @@ type Tur = 'recete-rota' | 'planlama';
 // Prototipin dış yazı tipi bağlantıları sayfadan çıkarılır (politika zaten kapatır; konsol hatası kalmasın), yerine gömülü
 // yazı tipi gelir. Köprü ve politika belgenin başına, prototip betiklerinden önce konur.
 // `sonStil` prototipin stillerinden sonra gelir (tema uyumu, rr-tema.css).
-export function sayfaKur(prototip: string, betik: string, yaziStili: string, sonStil = ''): string {
+export function sayfaKur(prototip: string, betik: string, yaziStili: string, sonStil = '', politika = POLITIKA): string {
   const temiz = prototip.replace(/<link\b[^>]*fonts\.(?:googleapis|gstatic)\.com[^>]*>\s*/gi, '');
-  const bas = `<meta http-equiv="Content-Security-Policy" content="${POLITIKA}">\n<style>${yaziStili}</style>\n${betik}\n`;
+  const bas = `<meta http-equiv="Content-Security-Policy" content="${politika}">\n<style>${yaziStili}</style>\n${betik}\n`;
   // Değiştirme işlevle yapılır: metindeki $ dizileri değiştirme kalıbı olarak yorumlanmasın.
   const sayfa = temiz.replace(/<head>/i, () => `<head>\n${bas}`);
   return sonStil === '' ? sayfa : sayfa.replace(/<\/head>/i, () => `<style>${sonStil}</style>\n</head>`);
@@ -212,7 +214,8 @@ export function ReceteRotaCercevesi() {
         ...(canliyaAlabilir ? [] : SENARYO_CANLIYA_ALMA_DUGMELERI),
       ],
       bedelAyariOkunur,
-    }), prototip.yaziStili, prototip.sonStil);
+      highsOkunur: planlama,
+    }), prototip.yaziStili, prototip.sonStil, planlama ? PLANLAMA_POLITIKASI : undefined);
   }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, canliyaAlabilir, bedelAyariOkunur]);
   const kartTaslakAcabilir = kullanici?.islemler.includes('rota.yaz') ?? false;
   const bedelAyariYazabilir = kullanici?.islemler.includes('plan.bedel-ayari') ?? false;
@@ -226,8 +229,11 @@ export function ReceteRotaCercevesi() {
   const acilRef = useRef(acil);
   acilRef.current = acil;
   const { bildir } = useBildirim();
+  const acikTur = useRef(tur);
+  acikTur.current = tur;
   const isle = useMemo(() => kopruKur(CIHAZ_ANAHTARLARI, {
     kartTaslakAcabilir,
+    highsVerilir: () => acikTur.current === 'planlama',
     bedelAyariYazabilir,
     motorDurumu: (okunamadi) => { if (okunamadi) bildir('hata', MOTOR_OKUNAMADI); },
     planVerisi: setPlanVerisiYok,

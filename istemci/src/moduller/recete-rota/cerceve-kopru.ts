@@ -45,6 +45,8 @@ export interface CerceveAyari {
   // Plan öncelik ayarlarını okuyabilir mi (237 a: plan.yaz, plan.bedel-ayari ya da siparisler.fiyat-oku). Okuyamayana `tmi.bedelAyari`
   // verilmez; prototip paneli bu işlev yoksa çizmez, sunucunun 403'ü kutu olarak görünmez.
   bedelAyariOkunur?: boolean;
+  // HiGHS çözücüsünü kabuktan isteyebilir mi (yalnız planlama çerçevesi, 361 b): `tmi.highs()` -> { betik, wasm }.
+  highsOkunur?: boolean;
 }
 
 type Nesne = Record<string, unknown>;
@@ -160,6 +162,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       planSurumu: (): Promise<unknown> => istek('plan-surum', {}),
       // Plan öncelik ayarları: { ayar, yazabilir }; yazma `plan-bedel-ayari` komutuyla.
       ...(ayar.bedelAyariOkunur === false ? {} : { bedelAyari: (): Promise<unknown> => istek('bedel-ayari-oku', {}) }),
+      ...(ayar.highsOkunur === true ? { highs: (): Promise<unknown> => istek('highs-oku', {}) } : {}),
       kisiAdi: ayar.kisiAdi ?? null,
       // Termini girilmemiş fason adımın süre tahmini: { malzemeNo, operasyonTipiId, firmaId, adet }[] -> { gunler: (number|null)[] }.
       fasonTahminleri: (sorgular: unknown[]): Promise<unknown> => istek('fason-tahmin', { sorgular }),

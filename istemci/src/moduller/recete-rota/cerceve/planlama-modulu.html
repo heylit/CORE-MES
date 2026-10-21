@@ -5395,7 +5395,7 @@ function sKisitlar() {
   <p class="pm-kucuk">Kaynak: araştırma notu cnc/1-kisitlar.md, bölüm 2. "Modelde yok" satırları motora girmedikçe planda sayılmaz; girmeleri ayrı karardır.</p>`;
 }
 
-/* ---------- çözücüler: HiGHS (sayfaya gömülü) ve CP-SAT (dışarıda koşar) ----------
+/* ---------- çözücüler: HiGHS (tarayıcıda, iş parçacığında) ve CP-SAT (dışarıda koşar) ----------
    Kural: plana yalnız motor yazar. Dış çözücü öneri ya da sınır verir; öneri motorun bütün kısıtlarıyla yeniden kurulur,
    önizlenir ve planlamacı seçerse uygulanır. */
 const HS_SURUM = '1.15.3';
@@ -5412,18 +5412,19 @@ self.onmessage=async e=>{const m=e.data;
     catch(err){self.postMessage({id:m.id,e:String(err&&err.message||err)});}
     finally{if(md)md.dispose();}}};`;
 const HS = { hazir: null, w: null, seq: 0, bekle: {} };
+/* HiGHS'ın kaynağı: { betik, wasm (ArrayBuffer) }. Denemede sayfaya gömülü etiketlerden okunur; uygulamada kabuk verir (zz31-tmi). */
+let hsKaynak = async () => {
+  const b = atob(document.getElementById('highs-wasm').textContent.trim()); const bin = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) bin[i] = b.charCodeAt(i);
+  return { betik: document.getElementById('highs-js').textContent, wasm: bin.buffer };
+};
 function hsIsci() {
   if (HS.hazir) return HS.hazir;
-  HS.hazir = new Promise((res, rej) => {
-    try {
-      const src = document.getElementById('highs-js').textContent + '\n' + HS_ISCI;
-      const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-      w.onmessage = e => { const m = e.data; if (m.t === 'hazir') { res(w); return; } if (m.t === 'hata') { rej(new Error(m.e)); return; } const cb = HS.bekle[m.id]; if (cb) { delete HS.bekle[m.id]; cb(m); } };
-      w.onerror = e => rej(new Error(e.message || 'iş parçacığı açılamadı'));
-      const b = atob(document.getElementById('highs-wasm').textContent.trim()); const bin = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) bin[i] = b.charCodeAt(i);
-      w.postMessage({ t: 'kur', wasm: bin.buffer }, [bin.buffer]); HS.w = w;
-    } catch (e) { rej(e); }
-  });
+  HS.hazir = hsKaynak().then(k => new Promise((res, rej) => {
+    const w = new Worker(URL.createObjectURL(new Blob([k.betik + '\n' + HS_ISCI], { type: 'text/javascript' })));
+    w.onmessage = e => { const m = e.data; if (m.t === 'hazir') { res(w); return; } if (m.t === 'hata') { rej(new Error(m.e)); return; } const cb = HS.bekle[m.id]; if (cb) { delete HS.bekle[m.id]; cb(m); } };
+    w.onerror = e => rej(new Error(e.message || 'iş parçacığı açılamadı'));
+    w.postMessage({ t: 'kur', wasm: k.wasm }, [k.wasm]); HS.w = w;
+  }));
   HS.hazir.catch(() => { HS.hazir = null; });
   return HS.hazir;
 }
@@ -5647,7 +5648,7 @@ function sCozuculer() {
   const ekipGovde = `<p class="pm-alt">İki çözücü tek akışta, her biri kendi göreviyle çalışır ve tek plan çıkar. Motor kurar ve hakemdir; HiGHS ek mesai önerir; motor her öneriyi bütün kısıtlarla ölçer, yalnız planı iyileştireni alır. Hiçbir adım öncekini kötüleştiremez, kilitlere dokunulmaz, mesai bütçesi aşılmaz; sonuç mevcut plandan kötüyse mevcut plan kalır. Sonuç önizlenir, Uygula deyince plana yazılır.</p>${es ? `<p class="pm-kucuk">Son çalışma ${zamanYaz(es.zaman)} · ${sayi(es.ms / 1000, 1)} sn · gecikme ${es.basla != null ? `${saat(es.basla)} → ` : ''}${saat(es.wT)} · alt sınır ${saat(es.lb)}</p>${ekipListe(es.adim)}` : ekipListe(Object.fromEntries(EKIP_ADIM.map(([id, rol, is]) => [id, { rol, is, durum: 'bekliyor' }])), true)}`;
   const kartlar = `${durum}${kart(`${ic('cpu', 'k')} Ekip çözümü · motor + HiGHS`, ekipGovde, yaz ? dugme('Ekip olarak çöz', 'ekip', { birincil: true, simge: 'play', yetki: 'plan.yaz' }) : '')}<div class="pm-iki pm-iki-esit">${kart(`${ic('target', 'k')} Plan ne kadar iyi? · HiGHS`, sinirGovde, yaz ? dugme(h ? 'Yeniden hesapla' : 'Alt sınırı hesapla', 'hs-sinir', { birincil: !h, simge: 'target', yetki: 'plan.yaz', veri: run ? 'disabled' : '' }) : '', sureSec)}
     ${kart(`${ic('clock', 'k')} Ek mesai önerisi · HiGHS + motor`, mesaiGovde, yaz ? dugme(mes ? 'Yeniden öner' : 'Mesai öner', 'hs-mesai', { birincil: !mes, simge: 'bolt', yetki: 'plan.yaz' }) : '')}</div>
-    <p class="pm-kucuk">HiGHS ${HS_SURUM} (highs-js, MIT) sayfaya gömülü; internete çıkmaz, ayrı iş parçacığında çalışır. Plana yalnız motor yazar; çözücüler öneri ve sınır verir.</p>`;
+    <p class="pm-kucuk">HiGHS ${HS_SURUM} (highs-js, MIT) tarayıcıda, ayrı iş parçacığında çalışır; internete çıkmaz. Plana yalnız motor yazar; çözücüler öneri ve sınır verir.</p>`;
   return kartlar;
 }
 
@@ -19361,6 +19362,10 @@ if (TMI_ICINDE) {
     s.rrSavedAt = st && st.savedAt ? st.savedAt : 0;
     return s;
   };
+  /* HiGHS'ı kabuk verir (highs paketi, 361 b): betik ve wasm ikilisi kabuktan gelir; çerçeve dışarıdan bir şey yüklemez */
+  hsKaynak = typeof window.tmi.highs === 'function'
+    ? () => window.tmi.highs()
+    : () => Promise.reject(new Error('HiGHS bu çerçevede açık değil'));
   /* iç içe çerçeve kurulmaz; Reçete ve Rota sayfası istenince kabuğa bildirilir, kabuk öteki çerçeveyi açar */
   rrYerlestir = function () { if (RR.el) RR.el.hidden = true; };
   const g = window.tmiGorunum;

@@ -27,6 +27,9 @@ describe('planlama çerçevesi', () => {
     expect(belge).toContain("connect-src 'none'");
     expect(belge).toContain('worker-src blob:');
     expect(belge).toContain("frame-src 'none'");
+    // HiGHS (361 b): yalnız bu çerçevede WebAssembly açıktır; ikiliyi kabuk verir (tmi.highs), ağ yine kapalıdır.
+    expect(belge).toContain("script-src 'unsafe-inline' 'wasm-unsafe-eval';");
+    expect(belge).toContain('"highsOkunur":true');
     expect(belge).not.toContain('/*TMI-ORTAK-STIL*/');
     expect(belge).not.toContain('/*TMI-SIMGELER*/');
     expect(belge).toContain('const VERI = {};');

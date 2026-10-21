@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { BildirimSaglayici, Kabuk } from '../../ortak/arayuz/index.ts';
 import { IKINCI_MENU_TANIMLARI, etkinMadde, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
-import { CIHAZ_ANAHTARLARI, ONEK, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
+import { CIHAZ_ANAHTARLARI, ONEK, PLANLAMA_POLITIKASI, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
 import { CIHAZ_ONEKI, cihazDegerleriOku, kopruKur } from './kopru.ts';
 import { rotalar } from './rotalar.tsx';
 import { YAZAR, YETKISIZ, ac, bekle, prototipiCalistir, sayacIletileri, sunucuKur, yazilan, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -150,6 +150,14 @@ describe('ReceteRotaCercevesi', () => {
     expect(sayfa.indexOf('kopru()')).toBeLessThan(sayfa.indexOf('<title>'));
     expect(sayfa).not.toContain('googleapis');
     expect(sayfa).toContain('<body>$& $1</body>');
+  });
+
+  it('WebAssembly izni yalnız planlama çerçevesinin politikasındadır (361 b); öteki yönergeler aynıdır', () => {
+    const rr = sayfaKur('<html><head></head></html>', '', '');
+    const pl = sayfaKur('<html><head></head></html>', '', '', '', PLANLAMA_POLITIKASI);
+    expect(rr).not.toContain('wasm-unsafe-eval');
+    expect(pl).toContain("script-src 'unsafe-inline' 'wasm-unsafe-eval';");
+    expect(pl.replace(" 'wasm-unsafe-eval'", '')).toBe(rr);
   });
 
   it('kayıtlar prototipin metnine döner: json yeniden metne, metin olduğu gibi; önek dışı ve bozuk kayıt atlanır', () => {
