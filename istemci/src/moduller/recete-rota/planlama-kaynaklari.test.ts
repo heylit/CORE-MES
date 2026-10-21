@@ -27,6 +27,7 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
     function render() { cizim++; }
     function yukle() { return null; }
     function yeniCalisma(k) { return { D: VERI[k].veri, dataVer: 1, plan: null }; }
+    function stOf() { return { now: 7 }; } function coz() {}
     ${planlamaParcasi('zz27-rr-veri')}
     ${planlamaParcasi('zz31-tmi')}
     return { ac: () => { S = yeniCalisma(); render(); return S; }, S: () => S, cizim: () => cizim, bildirimler, cevir: rrDenemeyeCevir, kur: rrDenemedenKur };`;

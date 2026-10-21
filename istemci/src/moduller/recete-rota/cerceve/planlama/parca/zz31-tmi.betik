@@ -96,6 +96,11 @@ function tmiFasoncular(st, firmalar, D, onceki) {
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
    kullanımda yanlış bitiş verirdi. Kalan sunucunun sayım anından (yoksa başlamadan) yürür (motor kalanBitis ile aynı anlam).
    Dönen: işlem kimliği -> { m, S, kalan (saat, verimli), sayim, n (sağlam), A (adım adedi) }. */
+/* Gerçek an -> planın saat ekseni (başlangıç günü 00:00'dan saat); okunamazsa null. */
+function tmiSaat(D, an) {
+  if (an == null) return null; const d = new Date(an); if (isNaN(d.getTime())) return null; const p = n => String(n).padStart(2, '0');
+  return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`);
+}
 function tmiIslemler(st, D) {
   const opOf = {};
   for (const o of (st && st.orders) || []) {
@@ -115,8 +120,7 @@ function tmiAdimAdetleri(durum, st, D) {
 function tmiCalisanlar(durum, st, D, now) {
   const liste = durum && Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : null; if (!liste) return null;
   const opOf = tmiIslemler(st, D);
-  const saat = iso => { if (!iso) return null; const d = new Date(iso); const p = n => String(n).padStart(2, '0');
-    return parseT(D, `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`); };
+  const saat = an => tmiSaat(D, an);
   const y = {};
   for (const c of liste) {
     const id = opOf[c.anahtar]; if (!id) continue;
@@ -192,6 +196,19 @@ if (TMI_ICINDE) {
       if (!S) { TMI_KAYNAK.bekliyor = true; return; }
       const k = kaynakUygula(); if (calisanUygula() || k) render();
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
+  };
+  /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
+     yazılmaz. Planın başlangıç günü sabit kalır: kayıtlı plan saatleri bu güne göredir. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
+  const st0 = stOf;
+  stOf = function () { const st = st0.apply(this, arguments); if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; };
+  const coz0 = coz;
+  coz = function () {
+    if (S && S.D && yetkili('plan.yaz') && !calisan) {
+      const n = tmiSaat(S.D, Date.now()); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
+      /* motorun ufku başlangıçtan HDAYS gündür; başlangıç ötelenmez (kayıtlı saatler ona bağlı), yaklaşınca söylenir */
+      if (S.simdi != null && S.simdi > (HDAYS - 14) * 24) bildir(`Planın başlangıç günü (${S.D.meta.baslangic}) eski; planlama ufku ${HDAYS} gün olduğu için ufkun sonuna ${Math.max(0, Math.floor(HDAYS - S.simdi / 24))} gün kaldı.`, 'uyari');
+    }
+    return coz0.apply(this, arguments);
   };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };

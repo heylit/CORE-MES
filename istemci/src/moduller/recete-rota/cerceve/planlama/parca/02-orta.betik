@@ -163,7 +163,7 @@ function sKuyruk() {
   if (!S.plan) return `<div class="pm-sira">${sec}</div><div class="pm-bos">${ic('play', 'b')}<strong>Bu tezgâh için plan yok</strong><span>Planlamacı planı çözünce iş listesi burada görünür.</span></div>`;
   const cx = cxAl();
   const ops = Object.values(S.plan.ops).filter(r => r.m === M.id).sort((a, b) => a.S - b.S);
-  const now = 7;
+  const now = cx && cx.st ? cx.st.now : 7;
   const durum = r => r.C <= now ? ['bitti', 'Bitti'] : r.S <= now && now < r.Su ? ['ayar', 'Ayarda'] : r.Su <= now && now < r.C ? ['calisiyor', 'Çalışıyor'] : ['sirada', 'Sırada'];
   const gunler = {};
   for (const r of ops) { const d = Math.floor(r.S / 24); (gunler[d] = gunler[d] || []).push(r); }
