@@ -31,4 +31,9 @@ Her kural için izin verilen ve reddedilen durum aynı testte sınanır.
 | Kilit listesi ve açma | yönetici okur ve açar, açan kişi yazılır | müdür 403, oturumsuz 401, ikinci açma 404; okuyan ekranda düğme görmez | `hesap kilidi: ...`; `G-19`; ekran `kilitli hesap listelenir` |
 | VPN muafiyeti (G-03, G-20) | aralık dışı cihaz alarm açar; G-02 sürer | aralıktaki cihaz G-03 ve G-20 açmaz; hatalı aralık 400 | `VPN muafiyeti` (saf); `VPN aralığı: ...`; ekran `VPN aralığı doluysa` |
 | Devredilmezlik | | `guvenlik.oku`, `guvenlik.yonet` kişiye verilemez (422) | kisiler `ek-islem.test.ts` "KS-4: bayraklı kişi, kayıtsız işlem ve devredilmez ..." |
+| G-23 koruma: yedek | yedek açık, son yedek süresinde | kapalı yedek "kapalı"; eski ya da hiç yedek "uyarı"; okunamayan "bilinmiyor" | `G-23: ...` (saf); `koruma: kaynak okunamazsa ...` |
+| G-24 koruma: güncelleme imzası | geçerli anahtarla kanal "açık" | anahtarsız ya da klasörsüz "kapalı", geçersiz anahtar "uyarı", okunamayan "bilinmiyor" | `G-24: ...`; `koruma: ...` |
+| G-25 koruma: HTTPS | iki değişken varsa "açık" | yoksa "kapalı"; okunamayan "bilinmiyor" | `G-25: ...`; cekirdek `https-durumu.test.ts` |
+| G-26 koruma: sertifika (30 gün) | 30 gün ve üstü "açık" | 30 günden az "uyarı", dolmuş "kapalı", okunamayan "bilinmiyor", HTTPS kapalıysa "kapalı" | `G-26: ...`; `https-durumu.test.ts` |
+| G-27 koruma: denetim kaydı | yazılır ve değiştirme koruması etkin "açık", değer son kaydın zamanı | koruma yoksa "uyarı", yazılamıyorsa "kapalı" | `G-27: ...`; `özet, girişler, koruma ve kurallar` |
 | Bilinmeyen değer | | sıfır uydurulmaz: `null` ya da "bilinmiyor" | `özet, girişler, koruma ve kurallar`; ekran `Veri yok`, `Bilinmiyor` |

@@ -53,6 +53,11 @@ async function kanal(o: GuncellemeOrtami): Promise<Kanal> {
   return { durum: 'acik', dizin: o.dizin, anahtar };
 }
 
+// Kanal yalnız geçerli imza anahtarıyla açılır; imzasız paket hiçbir durumda yüklenmez.
+export async function guncellemeKanaliDurumu(o: GuncellemeOrtami = ortamdanOku()): Promise<GuncellemeKanali> {
+  return (await kanal(o)).durum;
+}
+
 const KAPALI_ILETISI: Readonly<Record<Exclude<GuncellemeKanali, 'acik'>, string>> = {
   'dizin-yok': 'Güncelleme kanalı kapalı: sunucuda TMIV2_GUNCELLEME_DIZINI tanımlı değil ya da klasör yok.',
   'anahtar-yok': 'Güncelleme kanalı kapalı: sunucuda TMIV2_GUNCELLEME_ANAHTARI tanımlı değil.',

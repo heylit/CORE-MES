@@ -1,6 +1,7 @@
 import { adresAraliktaMi } from '#paylasilan/ag-araligi.ts';
 import type { AgAraligi } from '#paylasilan/ag-araligi.ts';
-import type { AlarmDurumu, Onem, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { GuncellemeKanali, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { AlarmDurumu, KorumaDurumu, Onem, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
 
 // Eşikler ekrandan değişmez: kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
 export const HATALI_SERI = { pencereSn: 15 * 60, esik: 10 } as const;
@@ -165,4 +166,61 @@ export const kapatilabilirMi = (durum: AlarmDurumu): boolean => durum === 'acik'
 export function taramaDurduMu(sonTarama: string | null, simdi: string): boolean {
   if (sonTarama === null) return true;
   return an(simdi) - an(sonTarama) > DURMA_ESIGI_DK * 60_000;
+}
+
+// Koruma durumu maddeleri (G-23 - G-27): durum yalnız okunan kaynaktan; okunamayan "bilinmiyor"dur, açık ya da kapalı uydurulmaz.
+export interface KorumaDegeri { durum: KorumaDurumu; deger: string | null; aciklama: string }
+
+// Sertifikanın bitmesine bu kadar gün kala uyarı verilir (VARSAYIM; telefonlara yeni sertifika dağıtımı için pay).
+export const SERTIFIKA_UYARI_GUN = 30;
+
+// G-23: yedek kapalıysa kapalı; sağlık uyarısı (eşik orada) varsa uyarı.
+export function yedekMaddesi(yedek: { durum: YedekDurumu; sonYedek: Date | null } | null, uyari: string | null): KorumaDegeri {
+  if (yedek === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Yedek durumu okunamadı.' };
+  const deger = yedek.sonYedek === null ? null : yedek.sonYedek.toISOString();
+  if (yedek.durum !== 'acik') return { durum: 'kapali', deger, aciklama: uyari ?? 'Yedek kapalı.' };
+  if (uyari !== null) return { durum: 'uyari', deger, aciklama: uyari };
+  return { durum: 'acik', deger, aciklama: 'Şifreli gece yedeği alınıyor; son yedek süresinde.' };
+}
+
+// G-24: kanal yalnız geçerli anahtarla açılır; anahtarsız kanal kapalıdır, imzasız paket yüklenmez.
+export function imzaMaddesi(kanal: GuncellemeKanali | null): KorumaDegeri {
+  switch (kanal) {
+    case null: return { durum: 'bilinmiyor', deger: null, aciklama: 'Güncelleme kanalının durumu okunamadı.' };
+    case 'acik': return { durum: 'acik', deger: 'anahtar kurulu', aciklama: 'Güncelleme paketi yalnız imzası kurulu anahtarla doğrulanınca yüklenir.' };
+    case 'anahtar-gecersiz': return { durum: 'uyari', deger: null, aciklama: 'İmza anahtarı geçerli değil; güncelleme kanalı kapalı.' };
+    case 'anahtar-yok': return { durum: 'kapali', deger: null, aciklama: 'İmza anahtarı tanımlı değil; güncelleme kanalı kapalı, paket yüklenemez.' };
+    case 'dizin-yok': return { durum: 'kapali', deger: null, aciklama: 'Güncelleme klasörü tanımlı değil; güncelleme kanalı kapalı, paket yüklenemez.' };
+  }
+}
+
+export interface HttpsBilgisi { acik: boolean; sertifikaBitis: Date | null }
+
+// G-25
+export function httpsMaddesi(h: HttpsBilgisi | null): KorumaDegeri {
+  if (h === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'HTTPS ayarı okunamadı.' };
+  return h.acik
+    ? { durum: 'acik', deger: null, aciklama: 'Arayüz kapısı HTTPS ile sunuluyor.' }
+    : { durum: 'kapali', deger: null, aciklama: 'Arayüz kapısı düz HTTP ile sunuluyor; sertifika tanımlı değil (kurulum/https.md).' };
+}
+
+// G-26: süresi dolan kapalı, son SERTIFIKA_UYARI_GUN gün uyarı.
+export function sertifikaMaddesi(h: HttpsBilgisi | null, simdi: Date): KorumaDegeri {
+  if (h === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'HTTPS ayarı okunamadı.' };
+  if (!h.acik) return { durum: 'kapali', deger: null, aciklama: 'HTTPS kapalı; sunucuda sertifika yok.' };
+  if (h.sertifikaBitis === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Sertifika dosyası okunamadı; bitiş tarihi bilinmiyor.' };
+  const deger = h.sertifikaBitis.toISOString();
+  const kalanMs = h.sertifikaBitis.getTime() - simdi.getTime();
+  if (kalanMs <= 0) return { durum: 'kapali', deger, aciklama: 'Sertifikanın süresi dolmuş; telefonlar bağlanamaz.' };
+  const kalanGun = Math.floor(kalanMs / 86_400_000);
+  if (kalanGun < SERTIFIKA_UYARI_GUN) return { durum: 'uyari', deger, aciklama: `Sertifika ${String(kalanGun)} gün içinde bitiyor; yenileyin.` };
+  return { durum: 'acik', deger, aciklama: `Sertifika geçerli; bitişe ${String(kalanGun)} gün var.` };
+}
+
+// G-27: yazılamayan kayıt kapalı; değiştirme koruması etkin değilse uyarı.
+export function denetimMaddesi(d: { yazilir: boolean; degismez: boolean; sonKayit: string | null } | null): KorumaDegeri {
+  if (d === null) return { durum: 'bilinmiyor', deger: null, aciklama: 'Denetim kaydının durumu okunamadı.' };
+  if (!d.yazilir) return { durum: 'kapali', deger: d.sonKayit, aciklama: 'Uygulama denetim kaydına yazamıyor.' };
+  if (!d.degismez) return { durum: 'uyari', deger: d.sonKayit, aciklama: 'Denetim kaydının değiştirme ve silme koruması etkin değil.' };
+  return { durum: 'acik', deger: d.sonKayit, aciklama: 'Her yazma kaydedilir; kayıt değiştirilemez ve silinemez. Değer son kaydın zamanı.' };
 }

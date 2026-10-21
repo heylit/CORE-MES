@@ -2,6 +2,7 @@
 
 | Modül | İstek | Neden |
 |---|---|---|
-| ayarlar | `sonYedek(db)`: son başarılı yedeğin zamanı ve sonucu | Koruma "Yedek" maddesi; bugün bilinmiyor |
-| ayarlar | Güncelleme imzası denetimi açık mı (`guncellemeImzasiDurumu`) | Koruma "Güncelleme imzası"; bugün bilinmiyor |
-| denetim | Okuyucu: yönetici işlemleri süzgeci (işlem, kişi, zaman) ve kaydın yazılır durumda olduğu | Yönetici işlemleri ve koruma "Denetim kaydı"; bugün `/denetim` bağlantısı |
+| ayarlar | KAPANDI (Aşama 1): son yedek sağlık modülünün `surecYedegi` okumasıyla (Sistem Ayarları yedek listesi) | Koruma "Yedek" maddesi |
+| ayarlar | KAPANDI (Aşama 1): `guncellemeKanaliDurumu` | Koruma "Güncelleme imzası" |
+| denetim | Yazılır durum KAPANDI (Aşama 1, `denetimDurumu`); yönetici işlemleri süzgeci AÇIK | Yönetici işlemleri ve koruma "Denetim kaydı"; bugün `/denetim` bağlantısı |
+| smartes | AÇIK (Aşama 1.6): `smartes/ayar.ts` `kurumIciMi` kopyası çekirdekteki tek işlevi (`#cekirdek/kurum-ici.ts`) kullansın | Tek kural, tek test |

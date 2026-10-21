@@ -63,3 +63,16 @@ export function kayitliKomutlar(db: Db): Promise<{ yontem: string; yol: string }
 export function kayitIcerigi(db: Db, id: number): Promise<{ id: number; parametre: unknown; govde: unknown } | null> {
   return db.tek<{ id: number; parametre: unknown; govde: unknown }>('SELECT id, parametre, govde FROM denetim_kaydi WHERE id = $1', [id]);
 }
+
+export interface DenetimDurumuSatiri { yazilir: boolean; degismez: boolean; sonKayit: string | null }
+
+// Uygulama kullanıcısı ekleyebiliyor mu; değiştirme ve boşaltma tetikleyicileri etkin mi; son kaydın zamanı (zaman dizini).
+export async function denetimDurumu(db: Db): Promise<DenetimDurumuSatiri> {
+  const satir = await db.tek<DenetimDurumuSatiri>(
+    `SELECT has_table_privilege(current_user, 'denetim_kaydi', 'INSERT') AS yazilir,
+            (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'denetim_kaydi'::regclass AND tgenabled <> 'D'
+                AND tgname IN ('denetim_kaydi_degismez', 'denetim_kaydi_bosaltilmaz')) = 2 AS degismez,
+            (SELECT ${zamanMetni('max(zaman)')} FROM denetim_kaydi) AS "sonKayit"`,
+  );
+  return satir ?? { yazilir: false, degismez: false, sonKayit: null };
+}

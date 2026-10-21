@@ -11,17 +11,21 @@ import type {
   OturumlarCevabi, OzetCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import { SINYALLER } from '#paylasilan/sozlesme/guvenlik.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { httpsDurumuOku } from '#cekirdek/https-durumu.ts';
+import type { GuncellemeKanali } from '#paylasilan/sozlesme/ayarlar.ts';
+import { guncellemeKanaliDurumu, sistemAyariOku } from '../ayarlar/disari.ts';
+import { denetimDurumu } from '../denetim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
   acikOturumlar, acikOturumlariSay, etkinHesapKilidiSay, etkinHesapKilitleri, girisDenemeleriListesi, girisDenemeleriniOzetle, hesapKilidiniKaldir,
   oturumuKapat, saatlikGirisDenemeleri, sonHesapKilitleri,
 } from '../oturum/disari.ts';
 import {
-  DURMA_ESIGI_DK, HATALI_SERI, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
+  DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, httpsMaddesi, imzaMaddesi, sertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
   onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
 } from './kurallar.ts';
+import { surecYedegi, yedekUyarisi, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
 
 export interface TaramaSonucu { yeniAlarm: number; guncellenenAlarm: number; silinen: number }
@@ -179,12 +183,34 @@ export async function oturumKapat(db: Db, id: number, istek: { cerez(ad: string)
   return { id };
 }
 
+export interface KorumaKaynagi {
+  yedek: (db: Db) => Promise<YedekBilgisi>;
+  imza: () => Promise<GuncellemeKanali>;
+  https: () => HttpsBilgisi;
+}
+
+const SUREC_KORUMA_KAYNAGI: KorumaKaynagi = { yedek: surecYedegi, imza: () => guncellemeKanaliDurumu(), https: () => httpsDurumuOku() };
+
+// Okunamayan kaynak hatası koruma ekranını düşürmez: o madde "bilinmiyor" olur.
+async function guvenliOku<T>(oku: () => T | Promise<T>): Promise<T | null> {
+  try {
+    return await oku();
+  } catch {
+    return null;
+  }
+}
+
 // Yalnız okunabilen kaynaktan durum verilir; kaynağı olmayan madde "bilinmiyor"dur, açık ya da kapalı uydurulmaz.
-export async function koruma(db: Db): Promise<KorumaCevabi> {
+export async function koruma(db: Db, kaynak: KorumaKaynagi = SUREC_KORUMA_KAYNAGI): Promise<KorumaCevabi> {
+  const simdiMetni = await s.veritabaniSaati(db);
+  const simdi = new Date(simdiMetni);
   const sonTarama = await s.sonTaramaZamani(db);
-  const durdu = taramaDurduMu(sonTarama, await s.veritabaniSaati(db));
+  const durdu = taramaDurduMu(sonTarama, simdiMetni);
   const etkinKilit = await etkinHesapKilidiSay(db);
-  const bilinmiyor = (anahtar: string, baslik: string, aciklama: string) => ({ anahtar, baslik, aciklama, durum: 'bilinmiyor' as const, deger: null });
+  const yedek = await guvenliOku(() => kaynak.yedek(db));
+  const https = await guvenliOku(kaynak.https);
+  const madde = (anahtar: string, baslik: string, d: { durum: KorumaCevabi['maddeler'][number]['durum']; deger: string | null; aciklama: string }) =>
+    ({ anahtar, baslik, ...d });
   return {
     maddeler: [
       {
@@ -197,11 +223,11 @@ export async function koruma(db: Db): Promise<KorumaCevabi> {
         aciklama: 'Art arda hatalı denemede kullanıcı adı geçici kilitlenir; her yeni kilit alarm açar ve Oturumlar ve kilitler bölümünden açılır.',
         durum: 'acik', deger: `${String(etkinKilit)} etkin kilit`,
       },
-      bilinmiyor('yedek', 'Yedek', 'Son başarılı yedeğin zamanı Sistem Ayarları modülünden okunamıyor; istek yazıldı.'),
-      bilinmiyor('guncelleme-imzasi', 'Güncelleme paketi imzası', 'İmza anahtarının kurulu olup olmadığı Sistem Ayarları modülünden okunamıyor; istek yazıldı.'),
-      bilinmiyor('https', 'Şifreli bağlantı (HTTPS)', 'Bağlantının şifreli olup olmadığı çekirdekten okunamıyor; istek yazıldı.'),
-      bilinmiyor('sertifika', 'Sertifika süresi', 'Sunucu sertifikasının bitiş tarihi çekirdekten okunamıyor; istek yazıldı.'),
-      bilinmiyor('denetim', 'Denetim kaydı', 'Denetim kaydının durumu denetim modülünden okunamıyor; kayıtlar Denetim Kaydı sayfasındadır.'),
+      madde('yedek', 'Yedek', yedekMaddesi(yedek, yedek === null ? null : yedekUyarisi(yedek, simdi))),
+      madde('guncelleme-imzasi', 'Güncelleme paketi imzası', imzaMaddesi(await guvenliOku(kaynak.imza))),
+      madde('https', 'Şifreli bağlantı (HTTPS)', httpsMaddesi(https)),
+      madde('sertifika', 'Sertifika süresi', sertifikaMaddesi(https, simdi)),
+      madde('denetim', 'Denetim kaydı', denetimMaddesi(await guvenliOku(() => denetimDurumu(db)))),
     ],
   };
 }
