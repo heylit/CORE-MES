@@ -49,7 +49,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
    Aşama 2, bağla: `ORTAKLIK` dosyalarından tek tablo çıkar (kavram başına hangi modül ne tutuyor); sahiplik kullanıcıya tek listede sorulur. Belli olanlar: malzeme malzemeler, firma musteri-tedarikci,
    kişi kisiler, istasyon istasyonlar, üretim kaydı uretim-emirleri. Bağlama akış akış yapılır; her akışta yetki, sürüm ve sunucu kuralları kapanır, roller ortak yetki matrisinden verilir,
    kullanıcı deneyip kabul eder. Birleşmek kullanıma açmak değildir; düzeltmeler sunucuda yapılır.
-6. Dal ve kart temizliği: kartı kapalı dal kullanıcı onayıyla silinir. Açık dal en çok 5; aşılırsa yeni iş başlamaz.
+6. Dal ve kart temizliği: kartı kapalı dal kullanıcı onayıyla silinir. Açık dal sınırı yok; çakışmayı birleşme sırası yönetir.
 7. Boş ajan yeri kullanılır: ana oturum yalnız dağıtır ve birleştirir; hazır kart kuyruğundan iş verir.
 8. Öneriyle ilerlenen kurallar görünür olur: her modül tesliminde en çok on satırlık "bu modül şunları varsaydı" özeti kullanıcıya gösterilir.
 9. Çekirdek ya da ortakta her değişiklikten sonra kullanıcıya haber verilir (dışarıdaki yazıma yeni zip gider).
