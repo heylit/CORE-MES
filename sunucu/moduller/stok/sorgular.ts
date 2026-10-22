@@ -815,11 +815,12 @@ export const toplamaIstekBaginiSil = (db: Db, istekId: number): Promise<unknown[
 export interface IstekHam {
   id: number; no: string; kaynakKimligi: string; malzemeId: number; miktar: string; karsilanan: string | null; istasyonId: number | null; uretimEmriId: number | null;
   aciklama: string | null; durum: MalzemeIstegiDurumu; acilis: string; guncelleme: string; kisiId: number; kapatanKisiId: number | null; surum: number;
-  toplamaId: number | null; toplamaNo: string | null; toplamaDurumu: 'topluyor' | 'bitti' | 'iptal' | null;
+  toplamaId: number | null; toplamaNo: string | null; toplamaDurumu: 'topluyor' | 'bitti' | 'iptal' | null; kaynakIstasyonId: number | null; redNedeni: string | null;
 }
 const ISTEK_SECIMI = `SELECT i.id, i.no, i.kaynak_kimligi AS "kaynakKimligi", i.malzeme_id AS "malzemeId", i.miktar, i.karsilanan, i.istasyon_id AS "istasyonId",
   i.uretim_emri_id AS "uretimEmriId", i.aciklama, i.durum, ${zamanMetni('i.acilis')} AS acilis, ${zamanMetni('i.guncelleme')} AS guncelleme,
-  i.kisi_id AS "kisiId", i.kapatan_kisi_id AS "kapatanKisiId", i.surum, tl.id AS "toplamaId", tl.no AS "toplamaNo", tl.durum AS "toplamaDurumu"
+  i.kisi_id AS "kisiId", i.kapatan_kisi_id AS "kapatanKisiId", i.surum, tl.id AS "toplamaId", tl.no AS "toplamaNo", tl.durum AS "toplamaDurumu",
+  i.kaynak_istasyon_id AS "kaynakIstasyonId", i.red_nedeni AS "redNedeni"
   FROM stok_malzeme_istegi i LEFT JOIN stok_toplama_istegi ti ON ti.istek_id = i.id LEFT JOIN stok_toplama tl ON tl.id = ti.toplama_id`;
 export const toplamaIstekleri = (db: Db, toplamaId: number, kilit = false): Promise<IstekHam[]> =>
   db.sorgu(`${ISTEK_SECIMI} WHERE ti.toplama_id = $1 ORDER BY i.acilis, i.id${kilit ? ' FOR UPDATE OF i' : ''}`, [toplamaId]);
@@ -830,11 +831,14 @@ export const yoldaTeslimleri = (db: Db, istekIdler: number[]): Promise<{ istekId
 export const yoldaTeslimVarMi = async (db: Db, istekId: number): Promise<boolean> =>
   (await db.tek("SELECT 1 FROM stok_teslim WHERE istek_id = $1 AND durum = 'yolda' LIMIT 1", [istekId])) !== null;
 // Aynı kaynak kimliğiyle eşzamanlı ikinci açılış ilkinin bitmesini bekler ve satır döndürmez; çağıran ilk kaydı okur.
-export const istekAc = async (db: Db, i: { no: string; kaynakKimligi: string; malzemeId: number; miktar: string; istasyonId: number | null; uretimEmriId: number | null; aciklama: string | null; kisiId: number; durum?: 'acik' | 'stok_yok' }): Promise<number | null> =>
+export const istekAc = async (db: Db, i: {
+  no: string; kaynakKimligi: string; malzemeId: number; miktar: string; istasyonId: number | null; uretimEmriId: number | null; aciklama: string | null; kisiId: number;
+  durum?: 'acik' | 'stok_yok'; kaynakIstasyonId?: number | null;
+}): Promise<number | null> =>
   (await db.tek<{ id: number }>(
-    `INSERT INTO stok_malzeme_istegi (no, kaynak_kimligi, malzeme_id, miktar, istasyon_id, uretim_emri_id, aciklama, kisi_id, durum) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT ON CONSTRAINT stok_malzeme_istegi_kaynak_tek DO NOTHING RETURNING id`,
-    [i.no, i.kaynakKimligi, i.malzemeId, i.miktar, i.istasyonId, i.uretimEmriId, i.aciklama, i.kisiId, i.durum ?? 'acik']))?.id ?? null;
+    `INSERT INTO stok_malzeme_istegi (no, kaynak_kimligi, malzeme_id, miktar, istasyon_id, uretim_emri_id, aciklama, kisi_id, durum, kaynak_istasyon_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT ON CONSTRAINT stok_malzeme_istegi_kaynak_tek DO NOTHING RETURNING id`,
+    [i.no, i.kaynakKimligi, i.malzemeId, i.miktar, i.istasyonId, i.uretimEmriId, i.aciklama, i.kisiId, i.durum ?? 'acik', i.kaynakIstasyonId ?? null]))?.id ?? null;
 // Emrin açık istekleri (kart #1413): emir kapanınca kilitlenip iptal edilir.
 export const emrinAcikIstekleri = (db: Db, uretimEmriId: number): Promise<IstekHam[]> =>
   db.sorgu(`${ISTEK_SECIMI} WHERE i.uretim_emri_id = $1 AND i.durum IN ('acik', 'stok_yok', 'hazirlaniyor') ORDER BY i.id FOR UPDATE OF i`, [uretimEmriId]);
@@ -849,7 +853,8 @@ export const istekleriKoktan = (db: Db, kok: string): Promise<IstekHam[]> =>
 export const istekleriKaynaktan = (db: Db, kaynakKimlikleri: string[]): Promise<IstekHam[]> => db.sorgu(`${ISTEK_SECIMI} WHERE i.kaynak_kimligi = ANY($1::text[])`, [kaynakKimlikleri]);
 export const ISTEK_SIRALAMASI: SiralamaTanimi<'acilis'> = { sutunlar: { acilis: 'i.acilis' }, ikincil: 'i.id', varsayilan: { sutun: 'i.acilis', yon: 'azalan' } };
 // Kapsam süzgeci: istasyonlar null ise sınırsız; değilse istasyonu kapsam dışı olan istek çıkar. İstasyonsuz istek süzülmez.
-const ISTEK_KAPSAMI = (n: number): string => `($${n}::int[] IS NULL OR i.istasyon_id IS NULL OR i.istasyon_id = ANY($${n}::int[]))`;
+// Bu süzgeç depo listeleri ve sayaçlarınındır: istasyondan istenen istek (soru 96 a) depoya düşmez, o istasyon karşılar.
+const ISTEK_KAPSAMI = (n: number): string => `i.kaynak_istasyon_id IS NULL AND ($${n}::int[] IS NULL OR i.istasyon_id IS NULL OR i.istasyon_id = ANY($${n}::int[]))`;
 export const istekSay = async (db: Db, durum: string | undefined, istasyonlar: number[] | null = null): Promise<number> =>
   (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM stok_malzeme_istegi i WHERE ($1::text IS NULL OR i.durum = $1) AND ${ISTEK_KAPSAMI(2)}`, [durum ?? null, istasyonlar]))?.toplam ?? 0;
 export const istekler = (db: Db, durum: string | undefined, sira: SiralamaIstegi<'acilis'>, d: Dilim, istasyonlar: number[] | null = null): Promise<IstekHam[]> =>
@@ -873,6 +878,17 @@ export const stokYokIstekleri = (db: Db, sinir: number): Promise<StokYokIstegiHa
     FROM stok_malzeme_istegi i WHERE i.durum = 'stok_yok' ORDER BY i.acilis, i.id LIMIT $1`, [sinir]);
 export const istekVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_malzeme_istegi WHERE id = $1', [id])) !== null;
 
+// Benden istenenler (soru 96 a): kaynağı verilen istasyonlardan biri olan açık istekler, en eski önce; null ise bütün istasyonlar.
+export const istasyondanIstenenler = (db: Db, istasyonlar: number[] | null): Promise<IstekHam[]> =>
+  db.sorgu(`${ISTEK_SECIMI} WHERE i.kaynak_istasyon_id IS NOT NULL AND ($1::int[] IS NULL OR i.kaynak_istasyon_id = ANY($1::int[]))
+    AND i.durum IN ('acik', 'stok_yok') ORDER BY i.acilis, i.id LIMIT 50`, [istasyonlar]);
+// İstasyondan istenen isteğin reddi: neden yazılır, istek iptal olur.
+export const istekReddet = (db: Db, id: number, surum: number, k: { neden: string; kisiId: number }): Promise<{ id: number } | null> =>
+  db.tek(
+    `UPDATE stok_malzeme_istegi SET durum = 'iptal', red_nedeni = $3, kapatan_kisi_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND durum IN ('acik', 'stok_yok') AND kaynak_istasyon_id IS NOT NULL RETURNING id`,
+    [id, surum, k.neden, k.kisiId]);
+
 // Kişinin istekleri: açık olanların hepsi, kapananlardan son 30 gün.
 export const isteklerim = (db: Db, kisiId: number): Promise<IstekHam[]> =>
   db.sorgu(`${ISTEK_SECIMI} WHERE i.kisi_id = $1 AND (i.durum NOT IN ('teslim', 'iptal') OR i.guncelleme > now() - interval '30 days')
@@ -885,9 +901,11 @@ export const istasyonKonumlari = (db: Db, istasyonIdler: readonly number[]): Pro
 export const istasyonKonumu = async (db: Db, istasyonId: number): Promise<number | null> =>
   (await db.tek<{ id: number }>('SELECT id FROM stok_konum WHERE istasyon_id = $1', [istasyonId]))?.id ?? null;
 // Konuma son giren hareket (malzeme, parti, statü ekseninde): kişi ve zaman. Geri alma giriş sayılmaz.
-export const konumaSonGirisler = (db: Db, konumId: number): Promise<{ malzemeId: number; partiId: number | null; statuId: number | null; kisiId: number; zaman: string }[]> => db.sorgu(
+// Köken (soru 89, sepet süzgeci): giriş ve aynı yerdeki statü dönüşümü üretimdir; başka yerden gelen transfer teslim alınandır.
+export const konumaSonGirisler = (db: Db, konumId: number): Promise<{ malzemeId: number; partiId: number | null; statuId: number | null; kisiId: number; zaman: string; koken: 'uretim' | 'teslim' }[]> => db.sorgu(
   `SELECT DISTINCT ON (h.malzeme_id, h.parti_id, h.hedef_statu_id) h.malzeme_id AS "malzemeId", h.parti_id::int AS "partiId", h.hedef_statu_id AS "statuId",
-     h.kisi_id AS "kisiId", ${zamanMetni('h.zaman')} AS zaman
+     h.kisi_id AS "kisiId", ${zamanMetni('h.zaman')} AS zaman,
+     CASE WHEN h.kaynak_konum_id IS NULL OR h.kaynak_konum_id = h.hedef_konum_id THEN 'uretim' ELSE 'teslim' END AS koken
    FROM stok_hareketi h WHERE h.hedef_konum_id = $1 AND h.tur <> 'geri_alma'
    ORDER BY h.malzeme_id, h.parti_id, h.hedef_statu_id, h.zaman DESC, h.id DESC`, [konumId]);
 export const istasyonKonumuAc = async (db: Db, k: { depoId: number; kod: string; ad: string; istasyonId: number }): Promise<number | null> =>
@@ -909,22 +927,25 @@ export interface TeslimHam {
   id: number; no: string; kaynakKimligi: string; malzemeId: number; miktar: string; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; kaynakKonumId: number; hedefKonumId: number;
   uretimEmriId: number | null; istekId: number | null; aciklama: string | null; durum: TeslimDurumu; alinan: string | null; redNedeni: string | null; hareketId: number | null;
   gonderenKisiId: number; kapatanKisiId: number | null; aliciKisiId: number | null; gonderim: string; kapanis: string | null; surum: number;
+  okutarak: boolean; itirazSonu: string | null; itirazNedeni: string | null; itirazKisiId: number | null; itirazZamani: string | null; iadeTeslimId: number | null;
 }
 const TESLIM_SECIMI = `SELECT t.id, t.no, t.kaynak_kimligi AS "kaynakKimligi", t.malzeme_id AS "malzemeId", t.miktar, t.parti_id AS "partiId", t.statu_id AS "statuId",
   t.kalite_durumu AS "kaliteDurumu", t.kaynak_konum_id AS "kaynakKonumId", t.hedef_konum_id AS "hedefKonumId", t.uretim_emri_id AS "uretimEmriId", t.istek_id AS "istekId", t.aciklama, t.durum,
   t.alinan, t.red_nedeni AS "redNedeni", t.hareket_id AS "hareketId", t.gonderen_kisi_id AS "gonderenKisiId", t.kapatan_kisi_id AS "kapatanKisiId", t.alici_kisi_id AS "aliciKisiId",
-  ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis, t.surum FROM stok_teslim t`;
+  ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis, t.surum, t.okutarak, ${zamanMetni('t.itiraz_sonu')} AS "itirazSonu",
+  t.itiraz_nedeni AS "itirazNedeni", t.itiraz_kisi_id AS "itirazKisiId", ${zamanMetni('t.itiraz_zamani')} AS "itirazZamani", t.iade_teslim_id AS "iadeTeslimId" FROM stok_teslim t`;
 export const teslimAc = async (db: Db, t: {
   no: string; kaynakKimligi: string; malzemeId: number; miktar: string; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu;
   kaynakKonumId: number; hedefKonumId: number; uretimEmriId: number | null; isEmriId: number | null; istekId: number | null; aciklama: string | null; gonderenKisiId: number;
-  aliciKisiId?: number | null;
+  aliciKisiId?: number | null; itirazSonu?: string | null;
 }): Promise<number | null> =>
   (await db.tek<{ id: number }>(
     `INSERT INTO stok_teslim (no, kaynak_kimligi, malzeme_id, miktar, parti_id, statu_id, kaynak_konum_id, hedef_konum_id, uretim_emri_id, istek_id, aciklama, gonderen_kisi_id,
-       kalite_durumu, is_emri_id, alici_kisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT ON CONSTRAINT stok_teslim_kaynak_tek DO NOTHING RETURNING id`,
+       kalite_durumu, is_emri_id, alici_kisi_id, okutarak, itiraz_sonu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::timestamptz IS NOT NULL, $16::timestamptz)
+     ON CONFLICT ON CONSTRAINT stok_teslim_kaynak_tek DO NOTHING RETURNING id`,
     [t.no, t.kaynakKimligi, t.malzemeId, t.miktar, t.partiId, t.statuId, t.kaynakKonumId, t.hedefKonumId, t.uretimEmriId, t.istekId, t.aciklama, t.gonderenKisiId,
-      t.kaliteDurumu, t.isEmriId, t.aliciKisiId ?? null]))?.id ?? null;
+      t.kaliteDurumu, t.isEmriId, t.aliciKisiId ?? null, t.itirazSonu ?? null]))?.id ?? null;
 export const teslimBul = (db: Db, id: number, kilit = false): Promise<TeslimHam | null> => db.tek(`${TESLIM_SECIMI} WHERE t.id = $1${kilit ? ' FOR UPDATE OF t' : ''}`, [id]);
 export const teslimKaynaktan = (db: Db, kaynakKimligi: string): Promise<TeslimHam | null> => db.tek(`${TESLIM_SECIMI} WHERE t.kaynak_kimligi = $1`, [kaynakKimligi]);
 // Adında verilen sözcük geçen konumlar (istasyon konumu sayılmaz); tam ad eşleşmesini Türkçe harf kuralıyla çağıran yapar.
@@ -945,6 +966,20 @@ export const yoldakiGelenler = (db: Db, hedefIstasyonlar: number[] | null, depoD
   db.sorgu(`${TESLIM_SECIMI} JOIN stok_konum h ON h.id = t.hedef_konum_id
     WHERE t.durum = 'yolda' AND ((h.istasyon_id IS NOT NULL AND ($1::int[] IS NULL OR h.istasyon_id = ANY($1::int[]))) OR ($2 AND h.istasyon_id IS NULL))
     ORDER BY t.gonderim, t.id LIMIT 100`, [hedefIstasyonlar, depoDahil]);
+// Kapsamdaki istasyonlardan okutarak alınmış, itiraz süresi bitmemiş teslimler (soru 96 b, telafi 3); null ise bütün istasyonlar.
+export const okutarakAlinanlar = (db: Db, kaynakIstasyonlar: number[] | null): Promise<TeslimHam[]> =>
+  db.sorgu(`${TESLIM_SECIMI} JOIN stok_konum k ON k.id = t.kaynak_konum_id
+    WHERE t.okutarak AND t.durum = 'teslim' AND t.itiraz_nedeni IS NULL AND t.itiraz_sonu > now()
+      AND k.istasyon_id IS NOT NULL AND ($1::int[] IS NULL OR k.istasyon_id = ANY($1::int[]))
+    ORDER BY t.kapanis DESC, t.id DESC LIMIT 50`, [kaynakIstasyonlar]);
+// İtiraz yalnız bir kez ve süre içinde yazılır; geri alma yapmaz, iade teslimi ayrıca bağlanır.
+export const itirazYaz = (db: Db, id: number, surum: number, k: { neden: string; kisiId: number }): Promise<{ id: number } | null> =>
+  db.tek(
+    `UPDATE stok_teslim SET itiraz_nedeni = $3, itiraz_kisi_id = $4, itiraz_zamani = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND okutarak AND durum = 'teslim' AND itiraz_nedeni IS NULL AND itiraz_sonu > now() RETURNING id`,
+    [id, surum, k.neden, k.kisiId]);
+export const iadeBagla = (db: Db, id: number, iadeTeslimId: number): Promise<unknown> =>
+  db.sorgu('UPDATE stok_teslim SET iade_teslim_id = $2 WHERE id = $1 AND iade_teslim_id IS NULL', [id, iadeTeslimId]);
 export const gonderdiklerim = (db: Db, kisiId: number): Promise<TeslimHam[]> =>
   db.sorgu(`${TESLIM_SECIMI} WHERE t.gonderen_kisi_id = $1 AND (t.durum = 'yolda' OR t.kapanis > now() - interval '7 days')
     ORDER BY t.gonderim DESC, t.id DESC LIMIT 50`, [kisiId]);

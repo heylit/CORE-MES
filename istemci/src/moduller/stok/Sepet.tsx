@@ -12,6 +12,7 @@ import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import './stok.css';
+import { paneliAc } from './panel-olayi.ts';
 
 function MiktarHucresi({ s }: { s: SepetSatiri }) {
   const [deger, setDeger] = useState(miktarMetni(s.miktar).replace(/\./g, ''));
@@ -59,6 +60,46 @@ function StoktanDusPenceresi({ kapat }: { kapat: () => void }) {
   );
 }
 
+// Depo sepeti (soru 95 a): Malzeme · Teslim panelinde Sepet altında, yalnız stok.transfer olana. Satırlar kaldırılır, hepsi tek yere
+// taşınır; satır başına yer ve stoktan düşme Taşı ekranındadır.
+export function DepoSepeti() {
+  const [hepsi, setHepsi] = useState<KonumSecimi | null>(null);
+  const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'sepet'], queryFn: () => api.get<SepetCevabi>('/stok/sepet') });
+  const sil = useStokKomutu((g: { id: number }) => api.post<SepetCevabi>(`/stok/sepet/satirlar/${g.id}/sil`, {}), 'Satır kaldırıldı.');
+  const tasi = useStokKomutu((g: TeslimGovdesi) => korumaliPost<SepetTeslimCevabi>('/stok/sepet/teslim-et', g), 'Taşındı; fiş yazıldı.', () => setHepsi(null));
+  const satirlar = s.data?.satirlar ?? [];
+  if (s.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (s.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />;
+  return (
+    <div className="tc-stok-form">
+      {satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Depo sepeti boş. Okutulan malzemeyi sonuçtan sepete ekleyin." /> : (
+        <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Depo sepeti">
+          {satirlar.map((x) => (
+            <li key={x.id} className="tc-stok-is tc-stok-teslim-satir">
+              <div>
+                <strong>{x.malzemeAd ?? `Kart ${x.malzemeId}`} · {miktarMetni(x.miktar)}</strong>
+                <span className="tc-stok-mono">{x.kaynakKonumKod ?? 'En eski giriş'}{x.partiEtiketi ? ` · ${x.partiEtiketi}` : ''}</span>
+                {Number(x.miktar) > Number(x.mevcut) && <Rozet ton="hata">Yetersiz stok</Rozet>}
+              </div>
+              <Dugme tur="ikincil" simge="trash" onClick={() => sil.komut.mutate({ id: x.id })}>Kaldır</Dugme>
+            </li>
+          ))}
+        </ul>
+      )}
+      {satirlar.length > 0 && (
+        <>
+          <KonumSecici etiket="Hepsi nereye" deger={hepsi} degistir={setHepsi} />
+          <div className="tc-stok-eylem">
+            <Dugme tur="birincil" simge="truck" disabled={hepsi === null} yukleniyor={tasi.komut.isPending}
+              onClick={() => hepsi && tasi.komut.mutate({ hedefKonumId: hepsi.id, satirHedefleri: [], aciklama: '' })}>Hepsini taşı</Dugme>
+          </div>
+        </>
+      )}
+      {sil.onayPenceresi}{tasi.onayPenceresi}
+    </div>
+  );
+}
+
 // Taşı: malzemeyi okut ya da ara, her satıra nereye gideceğini seç (ya da hepsine tek yer), tek dokunuşla taşı.
 // Satır hedefi sunucuya teslimde gider; her hedef için ayrı fiş yazılır.
 export function Sepet() {
@@ -99,7 +140,7 @@ export function Sepet() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Taşı" alt="Malzemeyi okut ya da ara, her satıra nereye gideceğini seç, tek dokunuşla taşı. Bir istasyonun ya da siparişin malzemesini toplu hazırlamak için Hazırlık."
-        sag={<Link to="/stok/okut?mod=sepet"><Dugme tur="birincil" simge="scan">Okutarak ekle</Dugme></Link>} />
+        sag={<Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}>Okutarak ekle</Dugme>} />
       {s.isError && <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />}
       <Kart baslik={`Taşınacaklar${satirlar.length ? ` (${satirlar.length})` : ''}`}>
         <div className="tc-stok-form">

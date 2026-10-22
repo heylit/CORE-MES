@@ -120,3 +120,17 @@ Rol x işlem değişmedi. Kişi her uçta oturumdan; gövde kişi taşımaz.
 | `POST /stok/toplamalar/:id/kapat` (`stok.toplama`) | STK-H4 dağıtım, iptalde bağ silinir; tekrar korumalı | "STK-H1/H2/H4", "STK-H1/H3" 200 | kapalı liste 409 |
 | `POST /stok/sepet/teslim-et` (`stok.transfer`) | satır yerleri kişinin sepetinde olmalı, her satırın yeri olmalı, aktif konum | sepet testleri 200 | yersiz satır 400 |
 | `POST /stok/teslimler/gonder` ve `/stok/malzeme-istekleri/:id/teslim-et` | STK-H1, STK-H3 (istek kilitlenir) | "STK-H1/H3" 200 | ikinci yolda teslim 400, listedeki istek 400/409 |
+
+| Uç (kart #95) | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|
+| `POST /stok/malzeme-istekleri/ac` `kaynakIstasyonId` (`stok.istek`) | kaynak aktif, teslim yeri istasyon ve kaynaktan farklı, teslim yeri isteyenin kapsamında; depo listesine düşmez | "soru 96 a" 200 | yersiz 400, kapsam dışı yer 403, depo hazırla 409 |
+| `POST /stok/malzeme-istekleri/:id/kabul-et` (`stok.istek`) | kaynak istasyonun kapsamı, isteyen kabul etmez, sürüm, serbest miktar (kilitli), K2, rezerve; kilitlenmede yinelenir, kaynak kimliğiyle tek teslim | "soru 96 a" 200 | isteyen 403, kapsam dışı 403, eski sürüm 409, fazla 400 |
+| `POST /stok/malzeme-istekleri/:id/reddet` (`stok.istek`) | kaynak istasyonun kapsamı, sürüm, yalnız açık istasyon isteği | "soru 96 a" 200 | isteyen 403, kapanmış 409 |
+| `GET /stok/teslim-kutusu/malzeme-yerleri`, `GET /stok/teslim-kutusu/okutarak-al` (`stok.istek`) | yalnız okuma; istasyonlardaki serbest miktarı kapsam süzmeden verir (soru 93 a ve 96 onayı) | "soru 96 a/b" 200 | `stok.istek` yok 403, istasyon olmayan yer 400 |
+| `POST /stok/teslim-kutusu/okutarak-al` (`stok.istek`) | iki kod sunucuda çözülür, yer istasyon, hedef alanın kapsamında, kalite serbest, yolda ayrılan düşülür (kilitli), K2, rezerve; tekrar korumalı; işaret ve bildirim | "soru 96 b" 200 | kapsam dışı hedef 403, fazla 400, `stok.istek` yok 403 |
+| `POST /stok/teslimler/:id/itiraz` (`stok.istek`) | yalnız okutarak alınmış ve alınmış teslim, kaynak istasyonun kapsamı, alan itiraz etmez, süre, tek itiraz, sürüm; geri almaz, iade teslimi | "soru 96 b" 200 | alan 403, kapsam dışı 403, ikinci 409, süre bitti 409, okutmasız 409 |
+| `POST /stok/cikis`, `/stok/sepet/stoktan-dus` (soru 98 a) | mamul ve yarı mamulde sevk nedeni reddedilir | "soru 98 a" hammadde sevk ve fire 200 | mamul ve yarı mamul sevk 422 |
+
+Güvenlik gevşemesi (kullanıcı onaylı, soru 96): okutarak almada iki imza (T7) yerine tek imza ve sonradan itiraz; istasyonlardaki serbest miktar `stok.istek` sahibine açık. Telafi: okutma iki kodun sunucuda çözülmesiyle (canlılık denetimi yok), işaret, bildirim, itiraz.
+
+İstemci (kart #95): yeni yazma ucu yok. Panel bölümleri yetkiyle süzülür, sunucu yine denetler: gözler ve depo sepeti stok okumasıyla (`sayfa.stok` ya da bir stok işlemi, `/stok/kod-coz` yalnız onlara sorulur; "okut-paneli" testi istek sahibinde sorulmadığını doğrular), Mal kabul `stok.giris`, sevk çıkışı `stok.cikis`, depo sepeti `stok.transfer`; sevk ve fason bölümleri kendi modüllerinin yetkisiyle görünür. `kod-coz` (panel) cevabındaki `malzeme.tur` ve `parti.uretimEmriId` yeni bilgi açmaz: lot etiketi emir numarasını zaten taşır, tür kartın genel bilgisidir. VARSAYIM.

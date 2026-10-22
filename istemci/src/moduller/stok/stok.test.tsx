@@ -97,7 +97,7 @@ describe('İş kutusu', () => {
     expect(await screen.findByText('2 bakiye satırı eksiye düştü')).toBeTruthy();
     expect(screen.getByText(/Logo irsaliyesiyle fark var/)).toBeTruthy();
     expect(screen.getByText(/Sizi bekleyen 2 iş var/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Mal kabul/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mal kabul' })).toBeTruthy();
   });
   it('Akış A provası D1: teslim bekleyen malzeme isteği iş satırıdır ve Hazırlık\'a götürür', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...BOS_KUTU, teslimBekleyenIstek: 2 } satisfies IsKutusuCevabi) });
@@ -685,31 +685,11 @@ describe('Hareketler', () => {
   });
 });
 
-describe('Okut', () => {
-  const KOD = { tur: 'malzeme', ozet: { id: 901, tur: 'sarf', kod: 'SR-001', ad: 'Eldiven', onayDurumu: 'aktif', kullanilabilir: true }, toplam: '3', bakiyeler: [BAKIYE] } as const;
-  it('el okuyucuyla girilen kodu çözer; sepet modunda pencere açar ve seçilen gözden sepete ekler', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, KOD),
-      'POST /stok/sepet/satir-ekle': () => json(200, { satirlar: [] }),
-    });
-    ac('/stok/okut?mod=sepet');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: 'MLZ:901' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    const pencere = await screen.findByRole('dialog', { name: /Sepete ekle: Eldiven/ });
-    fireEvent.click(within(pencere).getByLabelText(/A-01-02/));
-    fireEvent.click(within(pencere).getByRole('button', { name: '5' }));
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Sepete ekle' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/sepet/satir-ekle')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')!.govde).toMatchObject({ malzemeId: 901, miktar: '5', kaynakKonumId: 3, partiId: 4 });
-    expect(istekler.some((i) => i.yol.startsWith('/stok/kod-coz?kod=MLZ%3A901'))).toBe(true);
-  });
-  it('tanınmayan kodu söyler, uydurmaz', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/kod-coz': () => json(200, { tur: 'bilinmiyor', kod: 'XYZ' }) });
+describe('Okut adresi (soru 90 a)', () => {
+  it('panel yetkisi olmayan okuyucuya okutmanın panelde olduğunu söyler', async () => {
+    sunucuKur(OKUYUCU, {});
     ac('/stok/okut');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: 'XYZ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    expect(await screen.findByText(/"XYZ" tanınmadı/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Sepete ekle' })).toBeNull();
+    expect(await screen.findByText(/Okutma, üst çubuktaki Malzeme · Teslim panelindedir/)).toBeTruthy();
   });
 });
 
@@ -1036,86 +1016,6 @@ describe('Arama, depocu modu, etiketler', () => {
   });
 });
 
-describe('Okut: bekleyen giriş ve geri al', () => {
-  const SIPARIS = (id: number, malzemeId: number) => ({ id, siparisNo: `SA-${id}`, talepNo: `TL-${id}`, tedarikciAdi: 'Deneme Tedarikçi', malzemeId, malzemeTur: 'sarf', kalemAdi: 'Eldiven', miktar: '20', kalanMiktar: '20', birim: 'adet', beklenenTeslim: null });
-  const MLZ = { tur: 'malzeme', ozet: { id: 901, tur: 'sarf', kod: 'SR-001', ad: 'Eldiven', onayDurumu: 'aktif', kullanilabilir: true }, toplam: '3', bakiyeler: [BAKIYE] };
-  const KNM = { tur: 'konum', konum: { id: 7, kod: 'A-02-01', tur: 'raf_gozu', ad: null, depoId: 1, depoKod: 'ANA', rafId: 1, bolmeNo: 2, katNo: 1, sonSayim: null, aktif: true, satirSayisi: 0, haritaGozId: null, haritaAlanId: null, surum: 1 }, bakiyeler: [] };
-  it('mal kabulde ambalaj seçilir, Rafı okut bekler; okutulan konuma ambalajla birlikte girer', async () => {
-    let n = 0;
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, n++ === 0 ? MLZ : KNM),
-      'GET /stok/malzemeler/901/goz-onerisi': () => json(200, { oneri: { konumId: 7, kod: 'A-02-01' } }),
-      'GET /stok/acik-siparis-satirlari': () => json(200, { satirlar: [SIPARIS(31, 901)] }),
-      'POST /stok/mal-kabul': () => json(200, { belge: { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-07T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [1] }),
-    });
-    ac('/stok/okut?mod=kabul');
-    const kod = await screen.findByLabelText('Kod');
-    fireEvent.change(kod, { target: { value: 'MLZ:901' } }); fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Karton koli/ }));
-    fireEvent.change(screen.getByLabelText(/^Sayılan miktar/), { target: { value: '12' } });
-    fireEvent.change(screen.getByLabelText('Ambalaj sayısı'), { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Rafı okut' }));
-    expect(await screen.findByText(/için rafı okut/)).toBeTruthy();
-    expect(await screen.findByRole('button', { name: 'Önerilen: A-02-01' })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Kod'), { target: { value: 'LOC:A-02-01' } }); fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ tur: 'satin_alma', satirlar: [{ malzemeId: 901, miktar: '12', konumId: 7, siparisSatirId: 31, ambalaj: { tur: 'koli', olcu: 'm', adet: 2 } }] });
-    expect(await screen.findByText(/rafa girdi \(MK-000012\)/)).toBeTruthy();
-  });
-  // Soru 91 a: okutarak satın alma teslimi yalnız açık sipariş satırıyla; siparişi yoksa "diğer" girişi.
-  const KABUL_CEVABI = { belge: { id: 13, no: 'MK-000013', tur: 'diger', irsaliyeNo: null, zaman: '2026-10-07T10:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [1] };
-  const kabulBaslat = async () => {
-    ac('/stok/okut?mod=kabul');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: 'MLZ:901' } }); fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    fireEvent.change(await screen.findByLabelText(/^Sayılan miktar/), { target: { value: '4' } });
-  };
-  it('mal kabul: açık siparişi olmayan malzeme diğer girişi olarak alınır, sipariş satırı gönderilmez', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, MLZ),
-      'GET /stok/acik-siparis-satirlari': () => json(200, { satirlar: [SIPARIS(32, 555)] }),
-      'POST /stok/mal-kabul': () => json(200, KABUL_CEVABI),
-    });
-    await kabulBaslat();
-    expect(await screen.findByText(/açık siparişi yok/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Mal kabul alanına teslim al' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
-    const govde = istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde as { tur: string; satirlar: Record<string, unknown>[] };
-    expect(govde.tur).toBe('diger');
-    expect(govde.satirlar[0]).not.toHaveProperty('siparisSatirId');
-  });
-  it('mal kabul: birden çok açık sipariş satırında seçim yapılmadan gönderilmez; seçilen satırla satın alma teslimi yazılır', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, MLZ),
-      'GET /stok/acik-siparis-satirlari': () => json(200, { satirlar: [SIPARIS(41, 901), SIPARIS(42, 901), { ...SIPARIS(43, 901), malzemeTur: 'hizmet' }] }),
-      'POST /stok/mal-kabul': () => json(200, { ...KABUL_CEVABI, belge: { ...KABUL_CEVABI.belge, tur: 'satin_alma' } }),
-    });
-    await kabulBaslat();
-    const secim = await screen.findByLabelText(/^Sipariş/);
-    expect(within(secim).queryByRole('option', { name: /SA-43/ })).toBeNull();
-    const dugme = screen.getByRole('button', { name: 'Mal kabul alanına teslim al' });
-    expect(dugme).toHaveProperty('disabled', true);
-    fireEvent.change(secim, { target: { value: '42' } });
-    fireEvent.click(dugme);
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/mal-kabul')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/mal-kabul')!.govde).toMatchObject({ tur: 'satin_alma', satirlar: [{ malzemeId: 901, miktar: '4', siparisSatirId: 42 }] });
-  });
-  it('sepete eklemeyi geri alır: satır eski miktarına döner', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, MLZ),
-      'POST /stok/sepet/satir-ekle': () => json(200, { satirlar: [{ id: 5, malzemeId: 901, malzemeAd: 'Eldiven', malzemeKod: 'SR-001', kaynakKonumId: null, kaynakKonumKod: null, partiId: null, partiEtiketi: null, miktar: '8', mevcut: '3', eklenme: '2026-10-07T10:00:00+03:00' }] }),
-      'POST /stok/sepet/satirlar/5/degistir': () => json(200, { satirlar: [] }),
-    });
-    ac('/stok/okut?mod=sepet');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: '901' } }); fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    const p = await screen.findByRole('dialog', { name: /Sepete ekle/ });
-    fireEvent.click(within(p).getByRole('button', { name: '5' }));
-    fireEvent.click(within(p).getByRole('button', { name: 'Sepete ekle' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/sepet/satirlar/5/degistir')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/sepet/satirlar/5/degistir')!.govde).toEqual({ miktar: '3' });
-  });
-});
-
 describe('Önizleme ayrıntıları', () => {
   it('taşı ekranı son teslim yerlerini gösterir; dokununca hepsi için yer seçilir', async () => {
     sunucuKur(DEPOCU, {
@@ -1180,33 +1080,6 @@ describe('Lot etiketi ve LOT okutma (#1060)', () => {
     const html = lotEtiketHtml([{ e: ETIKET, adet: 3 }]);
     expect(html).toContain('@page{size:100mm 50mm;margin:0}');
     expect(html.match(/class="e"/g)).toHaveLength(3);
-  });
-  it('sevkiyatta okutulan lot o lottan düşülür', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, LOT),
-      'POST /stok/cikis': () => json(200, { hareketIdler: [77] }),
-    });
-    ac('/stok/okut?mod=sevkiyat');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: 'LOT:LT-000123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    expect(await screen.findByText('LT-000123')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Stoktan düş' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/cikis')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/cikis')!.govde).toMatchObject({ malzemeId: 901, konumId: 3, partiId: 4 });
-  });
-  it('sepette okutulan lotta en eski giriş seçeneği yoktur; lotun gözü seçili gelir', async () => {
-    const istekler = sunucuKur(DEPOCU, {
-      'GET /stok/kod-coz': () => json(200, LOT),
-      'POST /stok/sepet/satir-ekle': () => json(200, { satirlar: [] }),
-    });
-    ac('/stok/okut?mod=sepet');
-    fireEvent.change(await screen.findByLabelText('Kod'), { target: { value: 'LT-000123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
-    const pencere = await screen.findByRole('dialog', { name: /Sepete ekle: Deneme sac · LT-000123/ });
-    expect(within(pencere).queryByText('Otomatik')).toBeNull();
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Sepete ekle' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/sepet/satir-ekle')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')!.govde).toMatchObject({ malzemeId: 901, kaynakKonumId: 3, partiId: 4 });
   });
   it('mal kabul belgesinden lot etiketleri basılır', async () => {
     const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;

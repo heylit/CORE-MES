@@ -613,6 +613,24 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(yok.govde.veriYetersiz, true);
   });
 
+  test('soru 98 a: mamul ve yarı mamul elle sevk çıkışı reddedilir (sevkiyat işinden düşer); fire çıkışı ve hammadde sevki geçer', async () => {
+    const kabul = await konumId('KABUL');
+    for (const tur of ['mamul', 'yarimamul'] as const) {
+      const m = await kart(tur);
+      assert.equal((await malKabul(m, '3')).durum, 200);
+      const red = await depo<Hata>('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'sevk' });
+      assert.equal(red.durum, 422, JSON.stringify(red.govde));
+      assert.match(red.govde.mesaj, /Teslim et > Sevk/);
+      // Kalite engeli önce gelir: karar bekleyen mamul tür engeline değil kalite nedenine takılır (akış sağlığı adım 10).
+      const bekleyen = await depo<Hata>('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'sevk', kaliteDurumu: 'karar_bekliyor' });
+      assert.deepEqual([bekleyen.durum, bekleyen.govde.mesaj], [422, 'Karar bekleyen parça sevke çıkamaz; kalite kararını bekleyin.']);
+      assert.equal((await depo('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'fire' })).durum, 200, `${tur} fire`);
+    }
+    const h = await kart('hammadde');
+    await malKabul(h, '2');
+    assert.equal((await depo('POST', '/stok/cikis', { malzemeId: h, konumId: kabul, miktar: '1', cikisNedeni: 'sevk' })).durum, 200, 'emirsiz malzemede elle sevk');
+  });
+
   test('DEP-23/22 parti: gözde iki parti varsa seçim istenir; başka malzemenin partisi bağlanamaz', async () => {
     const h = await kart('hammadde');
     await malKabul(h, '2', { parti: { dokumNo: 'X1' } });

@@ -59,6 +59,11 @@ export const BILDIRIM_TURLERI = {
   'arkon.ekip-cagrisi': {
     baslik: 'Ekip çağrısı', onem: 'acil', alanIslemler: [], yol: '/istasyonlar', varsayilan: { mesaj: false, eposta: false },
   },
+  // Soru 96 b (telafi 2): başka istasyondan okutarak alınan malzeme kaynak istasyona atanmış kişilere bildirilir; alıcı işlemden değil
+  // istasyon atamasından gelir (alan işlemi yok). Yolsuz gider: itiraz Malzeme · Teslim panelindedir, panel bir sayfa değildir.
+  'stok.okutarak-alindi': {
+    baslik: 'Malzeme okutarak alındı', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;

@@ -1,3 +1,23 @@
+# FARK: stok, Malzeme · Teslim paneline Okut taşınması, sunucu (kart #95; sorular 89, 93 a, 95 a, 96 a+b, 98 a)
+
+Kullanıcı kararları 2026-10-22: Soru 96 a ve b, b'de telafi 1-4 ile; onaylı kararı (T7) değiştirme, dolu tabloyu değiştiren göç, yetki genişletme ve güvenliği gevşetme onaylı. Soru 98 a davranış değiştiren düzeltme onaylı. Rol x işlem değişmedi.
+- Göç `20261022101900_stok_istek_kaynagi_okutarak_alma`: `stok_malzeme_istegi`ne `kaynak_istasyon_id`, `red_nedeni`; `stok_teslim`e `okutarak`, `itiraz_sonu`, `itiraz_nedeni`, `itiraz_kisi_id`, `itiraz_zamani`, `iade_teslim_id`. Var olan satırlar değişmez (eski istek depoya, eski teslim okutmasız).
+- A, istasyondan istek: `POST /stok/malzeme-istekleri/ac` `kaynakIstasyonId` alır (teslim yeri istasyon olmalı). İstek depo listelerine ve sayaçlarına düşmez, depo geçişleri 409. Kaynak istasyonun kapsamındaki kişi kutuda `bendenIstenenler`i görür; `POST /stok/malzeme-istekleri/:id/kabul-et` istekle yolda teslim açar (istek hazırlanıyor; isteyen istasyon alınca teslim olur), `/reddet` nedenle iptal eder. İsteyen kendi isteğini kabul edemez.
+- "Nerede var": `GET /stok/teslim-kutusu/malzeme-yerleri` (`stok.istek`) depodaki kullanılabilir toplam ve bütün istasyonlardaki serbest miktar; `kod-coz` malzeme cevabına kapsam dışı istasyonlar `digerIstasyonlar` olarak eklendi (yalnız gösterim, soru 93 a).
+- B, okutarak al: `GET` ve `POST /stok/teslim-kutusu/okutarak-al` malzeme (ya da lot) ve yer kodunu sunucuda yeniden çözer; yer yalnız aktif istasyon konumu. Teslim açılıp aynı anda alınır, `okutarak` işaretli, açıklaması "Okutarak alındı, kaynak onayı yok" (telafi 4). Yalnız kalitesi serbest ve yolda ayrılmamış miktar; emirli parti yalnız kendi emri için (telafi 1, K2). Kaynak istasyona atanmış kişilere `stok.okutarak-alindi` bildirimi (telafi 2).
+- İtiraz: `POST /stok/teslimler/:id/itiraz` kaynak istasyonun kapsamındaki kişi, `itiraz_sonu`na kadar bir kez (telafi 3). Süre kaynak istasyonun o gün başlayan vardiyalarının bitişi, yoksa tesis günü sonu. İtiraz geri almaz; malzeme alanın istasyonunda serbestse ondan kaynağa iade teslimi açılır. Kutuda `okutarakAlinanlar`.
+- Soru 98 a: mamul ve yarı mamulde `cikisNedeni: 'sevk'` olan `/stok/cikis` ve `/stok/sepet/stoktan-dus` 422 döner; sevk sevkiyat işinden düşer.
+- Sepet: satıra `koken` (`uretim` giriş ya da aynı yerde statü dönüşümü; `teslim` başka yerden transfer).
+- `kod-coz` (panel) malzeme cevabı `malzeme.tur` ve lotun `parti.uretimEmriId`'sini taşır: panel stok okuması olmadan mamulü sevke, emri fasona yönlendirir.
+
+# FARK: stok, Malzeme · Teslim paneli, istemci (kart #95; sorular 89, 90 a, 93 a, 95 a, 96, 97 a, 98 a)
+- Okut sayfası kalktı (90 a). `/stok/okut` adresi ve menü maddesi paneli açar, sayfa İş kutusuna döner (`?mod=kabul` Teslim al, `sevkiyat` Teslim et, `sepet` depo sepeti). Panel yetkisi (`stok.istek`) olmayan okuyucuya okutmanın panelde olduğu yazılır. Stok Merkezi'ndeki Okut, Mal kabul ve Sevk çıkışı düğmeleri paneli açar.
+- Okutma sonucu (89): okuyucunun altında kart; Sorgula sekmesi yok. Gözler, lotlar, toplam yalnız stok okuması olana (`/stok/kod-coz`, 93 a); herkes alabileceği yerdeki serbest miktarı ve başka istasyonlardakini görür. İşler karttan seçilir: Mal kabul (`stok.giris`), Sevk, Okutarak al, Depo sepetine ekle (`stok.transfer`, son ekleme geri alınır).
+- Teslim al: okutulan malzeme için Mal kabul (eski hızlı kabul, 91 a sipariş satırı; Rafı okut penceresi, önerilen göz, etiket bas), sonra Malzeme teslim al.
+- Sepet: Hepsi, Üretilen, Teslim alınan (`koken`); Depo sepeti yalnız `stok.transfer` (95 a): satır kaldır, hepsini tek yere taşı.
+- Teslim et: Benden istenenler (kabul: kaynak istasyon sepetinden parti ve miktar; red: neden), Okutarak alınanlar (süre içinde itiraz), Sevk, sonra Malzeme teslim et. Sevk: mamul ve yarı mamulde `sevkiyat` modülünün `UrunSevkleri` ve `uretim-emirleri`nin `FasonaGonder` bölümü (97 a, stok yalnız ev sahibi); siparişsiz malzemede `stok.cikis` ile sevk çıkışı (98 a), son çıkış `stok.geri-al` ile geri alınır.
+- Malzeme iste: Nereden (depo ya da malzemenin bulunduğu istasyon, `malzeme-yerleri`); istasyondan istekte teslim yeri zorunlu. Okutarak al bölümü: malzeme ve yer okutulur, önizlemeden satır, götürülen istasyon ve miktar seçilir. İsteklerimde kaynak istasyon ve red nedeni.
+
 # FARK: stok, Stok Merkezi sadeleştirme: tek Hazırlık listesi ve Taşı ekranı (kart #1319)
 
 Kullanıcı (14.10 18:41): taşıma sepeti ve sipariş toplama işe yaramıyor; sade, hızlı, profesyonel olsun. Kararlar (karar kartları 18:53): Birleştir, Taşı ekranı, okutma isteğe bağlı, geri alma müdürde. Rol x işlem değişmedi.
