@@ -14,10 +14,13 @@ interface Motor {
   girdiKur: (calisma: Nesne, kayit: Nesne, kaynak: Nesne, bugun: string) => { S: Nesne & { D: Nesne }; st: St } | null;
   stTamKur: (S: Nesne) => St;
   karar1650Goc: (S: Nesne) => boolean;
+  agHazirla: (D: Nesne) => void;
+  uydurma: (acik: boolean) => void;
   PW: Record<string, number>;
   AG_BIRIM: number;
 }
-const motorKur = (): Motor => new Function(`${planlamaMotoru()}\nreturn { girdiKur, stTamKur, karar1650Goc, PW, AG_BIRIM };`)() as Motor;
+const motorKur = (): Motor => new Function(`${planlamaMotoru()}
+return { girdiKur, stTamKur, karar1650Goc, agHazirla, uydurma: a => { AG_UYDURMA = a; }, PW, AG_BIRIM };`)() as Motor;
 const kopya = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 const KAYIT = {
@@ -84,5 +87,26 @@ describe('tam st (stTamKur)', () => {
     expect(st.w).toMatchObject({ mat: 'sert', matKarma: true });
     expect(st.wipP.erken).toEqual({ [st.D.siparisler[0]!.id]: 1 });
     expect(st.ayariOneAl).toBe(true);
+  });
+
+  it('72 a: sunucuda uydurma müşteri atanmaz; kayıttan kalan uydurma müşteri silinir, gerçeği kalır', () => {
+    const { m, S } = kur();
+    expect(S.D['musteriler']).toEqual([]);
+    expect((S.D['siparisler'] as Nesne[]).every((s) => s['musteri'] === undefined)).toBe(true);
+    const D: Nesne = {
+      musteriler: [{ id: 'MU-1', ad: 'Müşteri 1', sinif: 'A', cezaOran: 0.3, cezaTavan: 10 }, { id: 'MU-2', ad: 'Ornek firma', sinif: 'B', cezaOran: null, cezaTavan: null }],
+      siparisler: [{ id: 'O1', musteri: 'MU-1', oncelik: 2 }, { id: 'O2', musteri: 'MU-2', oncelik: 2 }],
+    };
+    m.agHazirla(D);
+    expect(D['musteriler']).toEqual([{ id: 'MU-2', ad: 'Ornek firma', sinif: 'B', cezaOran: null, cezaTavan: null }]);
+    expect((D['siparisler'] as Nesne[]).map((s) => s['musteri'])).toEqual([undefined, 'MU-2']);
+  });
+
+  it('72 a: TMI dışındaki denemede uydurma müşteri atanır ve silinmez', () => {
+    const m = motorKur(); m.uydurma(true);
+    const D: Nesne = { siparisler: [{ id: 'O1', oncelik: 2 }, { id: 'O2', oncelik: 2 }] };
+    m.agHazirla(D);
+    expect((D['musteriler'] as Nesne[]).map((x) => x['id'])).toEqual(['MU-1', 'MU-2', 'MU-3', 'MU-4']);
+    expect((D['siparisler'] as Nesne[]).map((s) => s['musteri'])).toEqual(['MU-1', 'MU-2']);
   });
 });

@@ -16,13 +16,22 @@ const AG_MUSTERI0 = [
   { id: 'MU-3', ad: 'Müşteri 3', sinif: 'B', cezaOran: null, cezaTavan: null },
   { id: 'MU-4', ad: 'Müşteri 4', sinif: 'C', cezaOran: 0.1, cezaTavan: 5 },
 ];
-/* yüklenen veri setlerinde müşteri yok; denemede uydurma müşteri ve sınıf atanır */
+/* 72 a: uydurma müşteri ve sınıf yalnız TMI dışındaki denemede atanır (çerçeve açar). TMI'de ve sunucuda atanmaz, önceki kayıttan kalan
+   uydurma müşteriler (kimliği ve adı AG_MUSTERI0'daki gibi) silinir, onlara bağlı siparişin müşterisi boşalır: ceza ve sınıf bilinmez,
+   bedel tabandan gelir. Müşterinin sahibi müşteri-tedarikçi modülüdür. */
+var AG_UYDURMA = false;
+function agUydurmaTemizle(D) {
+  const uy = new Set(AG_MUSTERI0.filter(u => (D.musteriler || []).some(m => m.id === u.id && m.ad === u.ad)).map(u => u.id));
+  D.musteriler = (D.musteriler || []).filter(m => !uy.has(m.id));
+  if (uy.size) for (const s of D.siparisler || []) if (uy.has(s.musteri)) delete s.musteri;
+}
 function agHazirla(D) {
   if (!D) return;
-  if (!D.musteriler) {
+  if (AG_UYDURMA && !D.musteriler) {
     D.musteriler = clone(AG_MUSTERI0);
     D.siparisler.forEach((s, i) => { if (s.musteri === undefined) s.musteri = AG_MUSTERI0[i % AG_MUSTERI0.length].id; });
   }
+  if (!AG_UYDURMA) agUydurmaTemizle(D);
   /* öncelik artık ağırlıktan çıkar; eski elle sınıf bir kez elle çarpana taşınır, karşılaştırma için onc0 saklanır.
      onc0 taşıyan sipariş taşınmıştır: önceliği artık bedelden hesaplanan sınıftır, ikinci kez elle çarpana çevrilirse ağırlığı kayar */
   if (!D.agGoc) {
