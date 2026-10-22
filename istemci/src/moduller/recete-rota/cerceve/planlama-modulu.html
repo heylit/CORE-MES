@@ -4428,13 +4428,22 @@ const AG_MUSTERI0 = [
   { id: 'MU-3', ad: 'Müşteri 3', sinif: 'B', cezaOran: null, cezaTavan: null },
   { id: 'MU-4', ad: 'Müşteri 4', sinif: 'C', cezaOran: 0.1, cezaTavan: 5 },
 ];
-/* yüklenen veri setlerinde müşteri yok; denemede uydurma müşteri ve sınıf atanır */
+/* 72 a: uydurma müşteri ve sınıf yalnız TMI dışındaki denemede atanır (çerçeve açar). TMI'de ve sunucuda atanmaz, önceki kayıttan kalan
+   uydurma müşteriler (kimliği ve adı AG_MUSTERI0'daki gibi) silinir, onlara bağlı siparişin müşterisi boşalır: ceza ve sınıf bilinmez,
+   bedel tabandan gelir. Müşterinin sahibi müşteri-tedarikçi modülüdür. */
+var AG_UYDURMA = false;
+function agUydurmaTemizle(D) {
+  const uy = new Set(AG_MUSTERI0.filter(u => (D.musteriler || []).some(m => m.id === u.id && m.ad === u.ad)).map(u => u.id));
+  D.musteriler = (D.musteriler || []).filter(m => !uy.has(m.id));
+  if (uy.size) for (const s of D.siparisler || []) if (uy.has(s.musteri)) delete s.musteri;
+}
 function agHazirla(D) {
   if (!D) return;
-  if (!D.musteriler) {
+  if (AG_UYDURMA && !D.musteriler) {
     D.musteriler = clone(AG_MUSTERI0);
     D.siparisler.forEach((s, i) => { if (s.musteri === undefined) s.musteri = AG_MUSTERI0[i % AG_MUSTERI0.length].id; });
   }
+  if (!AG_UYDURMA) agUydurmaTemizle(D);
   /* öncelik artık ağırlıktan çıkar; eski elle sınıf bir kez elle çarpana taşınır, karşılaştırma için onc0 saklanır.
      onc0 taşıyan sipariş taşınmıştır: önceliği artık bedelden hesaplanan sınıftır, ikinci kez elle çarpana çevrilirse ağırlığı kayar */
   if (!D.agGoc) {
@@ -13711,6 +13720,8 @@ KB_KISAYOL[0][1].push(['V', 'Çizelgede ölçek: gün, hafta, ay, yıl']);
    İkinci tur (kullanıcı 19.10 09:30, "öncelik ağırlıktan belirlensin"): kâr riski bileşeni (katkı payı × günlük kayıp riski) ve
    ağırlıktan otomatik öncelik sınıfı; ikisi de onaylı karar değil, denemede açılıp kapatılabilir. */
 /* Bedel hesabı (AG0, agHazirla, agAyar, agKatki, agBedel, agOncYaz) ve motor bağlantısı motor/durum.betik'tedir (sunucu da aynı st'yi kurar). */
+/* deneme verisinde müşteri yoktur: uydurma müşteri atanır (TMI içinde zz31 kapatır) */
+AG_UYDURMA = true;
 const AG_BIL = [['ceza', 'Sözleşme cezası'], ['fin', 'Finansman'], ['kar', 'Kâr riski'], ['sinif', 'Müşteri sınıfı'], ['elle', 'Elle çarpan']];
 const agFiyatGorur = () => ['mudur', 'yonetici'].includes(kim().rol);
 const agElleSinir = () => kim().rol === 'planlamaci' ? 2 : ['mudur', 'yonetici'].includes(kim().rol) ? 3 : 0;
@@ -19752,6 +19763,8 @@ const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 
 if (TMI_ICINDE) {
+  /* 72 a: TMI'de uydurma müşteri atanmaz, kalanı silinir (motor/durum.betik agHazirla) */
+  AG_UYDURMA = false;
   /* Kaydı planlama sayfası hiç yazmadıysa plan dilimi, dolayısıyla başlangıç yoktur. Saklanmış çalışma açılırken kayıt değişmişse
      (rrCek) çalışma bu çeviriyle değişir: açık çalışmanın başlangıcı korunur, yoksa taban kurulur; başlangıçsız çalışma çizimi düşürür. */
   rrDenemeyeCevir = function (st) { return tmiCevir(st, TMI_KAYNAK.durum ? TMI_KAYNAK : null, S && S.D); };
