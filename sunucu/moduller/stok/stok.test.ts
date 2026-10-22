@@ -621,6 +621,9 @@ describe('stok (gerçek PostgreSQL)', () => {
       const red = await depo<Hata>('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'sevk' });
       assert.equal(red.durum, 422, JSON.stringify(red.govde));
       assert.match(red.govde.mesaj, /Teslim et > Sevk/);
+      // Kalite engeli önce gelir: karar bekleyen mamul tür engeline değil kalite nedenine takılır (akış sağlığı adım 10).
+      const bekleyen = await depo<Hata>('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'sevk', kaliteDurumu: 'karar_bekliyor' });
+      assert.deepEqual([bekleyen.durum, bekleyen.govde.mesaj], [422, 'Karar bekleyen parça sevke çıkamaz; kalite kararını bekleyin.']);
       assert.equal((await depo('POST', '/stok/cikis', { malzemeId: m, konumId: kabul, miktar: '1', cikisNedeni: 'fire' })).durum, 200, `${tur} fire`);
     }
     const h = await kart('hammadde');

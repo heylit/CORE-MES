@@ -1109,14 +1109,15 @@ function dusumDenetle(mevcut: string, miktar: string, eksiOnay: boolean): boolea
 export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<HareketCevabi> {
   const malzemeId = Number(g.malzemeId);
   const konumId = Number(g.konumId);
+  // Kalite engeli tür engelinden önce: karar bekleyen parça her türde aynı nedenle durur.
+  const kalite = g.kaliteDurumu ?? 'serbest';
+  const karar = cikisKaliteKarari(kalite, g.cikisNedeni);
+  if (karar !== null && 'engel' in karar) throw gecersiz(karar.engel);
   await sevkCikisiniDenetle(db, [malzemeId], g.cikisNedeni);
   const konum = await aktifKonum(db, konumId, 'konumId');
   const karantina = karantinaEngeli(konum.tur, { cikisNedeni: g.cikisNedeni });
   if (karantina) throw gecersiz(karantina);
   await sarfEmriDenetle(db, kisiId, g.uretimEmriId === undefined || g.uretimEmriId === null ? null : Number(g.uretimEmriId));
-  const kalite = g.kaliteDurumu ?? 'serbest';
-  const karar = cikisKaliteKarari(kalite, g.cikisNedeni);
-  if (karar !== null && 'engel' in karar) throw gecersiz(karar.engel);
   const p = await kaynakPartisi(db, malzemeId, konumId, g.partiId === undefined ? undefined : g.partiId === null ? null : Number(g.partiId), 'partiId', kalite);
   const miktar = bindenMetin(binde(g.miktar));
   return korumali(async () => {
