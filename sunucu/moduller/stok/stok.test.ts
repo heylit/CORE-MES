@@ -490,7 +490,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(d.govde.koduDegisenler, [{ konumId: c.govde.konum.id, eskiKod: 'ARA-K1', yeniKod: 'ARA-K2', tur: 'ara_alan', ad: 'Bekleme', bolmeNo: null, katNo: null }]);
   });
 
-  test('DEP-20/21/10/49 mal kabul: hammadde her girişte lot alır, aynı parti yeniden açılmaz, kullanılamaz kart reddedilir, demirbaş parti almaz', async () => {
+  test('DEP-20/10/49 mal kabul: hammadde her girişte lot alır, aynı döküm no ikinci gelişte ayrı lottur, kullanılamaz kart reddedilir, demirbaş parti almaz', async () => {
     // #1018: numarasız hammadde girişi yeni lot açar; ikinci numarasız giriş (parçalı teslimat) ayrı lottur.
     const hl = await kart('hammadde');
     assert.equal((await malKabul(hl, '3')).durum, 200);
@@ -505,18 +505,24 @@ describe('stok (gerçek PostgreSQL)', () => {
     malKabulCevabi.parse(p1.govde);
     assert.match(p1.govde.belge.no, /^MK-\d{6}$/);
     assert.equal((await malKabul(h, '5', { parti: { tedarikciPartiNo: 'TP-1', dokumNo: 'D-77' } })).durum, 200);
-    const partiler = await o().vt.sorgu('SELECT id FROM stok_parti WHERE malzeme_id = $1', [h]);
-    assert.equal(partiler.length, 1);
+    // #124: aynı tedarikçi parti ve döküm no ikinci gelişte de yeni lottur; iki lotun miktarı ayrı tutulur.
+    const partiler = await o().vt.sorgu<{ lot_no: string; miktar: string }>(
+      `SELECT p.lot_no, sum(b.miktar)::numeric(14,3)::text AS miktar FROM stok_parti p JOIN stok_bakiye b ON b.parti_id = p.id WHERE p.malzeme_id = $1 GROUP BY p.id ORDER BY p.id`, [h]);
+    assert.deepEqual(partiler.map((x) => x.miktar), ['10.000', '5.000']);
+    assert.notEqual(partiler[0]!.lot_no, partiler[1]!.lot_no);
     assert.equal(await bakiye(h, 'KABUL'), '15.000');
-    // #960: son partiler okuması parti, döküm ve sertifika numarasıyla döner.
+    // #960: son partiler okuması parti, döküm ve sertifika numarasıyla döner; en yeni lot önce gelir.
     const son = await o().vt.tx((db) => sonPartiler(db, h));
-    assert.deepEqual(son.map(({ partiId: _p, kayitZamani: _z, lotNo: _l, ...x }) => x), [{ tedarikciPartiNo: 'TP-1', dokumNo: 'D-77', sertifikaNo: 'S-1', belgeler: [] }]);
+    assert.deepEqual(son.map(({ partiId: _p, kayitZamani: _z, lotNo: _l, ...x }) => x), [
+      { tedarikciPartiNo: 'TP-1', dokumNo: 'D-77', sertifikaNo: null, belgeler: [] },
+      { tedarikciPartiNo: 'TP-1', dokumNo: 'D-77', sertifikaNo: 'S-1', belgeler: [] },
+    ]);
     assert.match(son[0]!.lotNo, /^LT-\d{6}$/);
     assert.deepEqual(await o().vt.tx((db) => sonPartiler(db, 424242)), []);
     // #1001: aynı okuma uçtan; satın alma da okur, sinir 1-50.
     const uc = await istek<SonPartilerCevabi>('satin_alma', 'GET', `/stok/malzemeler/${h}/son-partiler?sinir=5`);
     assert.equal(uc.durum, 200, JSON.stringify(uc.govde));
-    assert.deepEqual(uc.govde.partiler.map((p) => p.dokumNo), ['D-77']);
+    assert.deepEqual(uc.govde.partiler.map((p) => p.dokumNo), ['D-77', 'D-77']);
     assert.equal((await depo('GET', `/stok/malzemeler/${h}/son-partiler`)).durum, 200);
     assert.equal((await depo('GET', `/stok/malzemeler/${h}/son-partiler?sinir=51`)).durum, 400);
     assert.equal((await istek('operator', 'GET', `/stok/malzemeler/${h}/son-partiler`)).durum, 403);

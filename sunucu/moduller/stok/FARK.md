@@ -438,3 +438,9 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 - Kartın açık siparişi yoksa ya da "Siparişsiz: diğer giriş" seçilirse giriş `diger` türüyle yazılır. Hizmet satırı (fason dönüşü)
   hızlı kabulde listelenmez; ayrıntılı Mal kabul ekranında kalır.
 - Uç, yetki ve göç değişmedi; sunucu siparişsiz satın alma kabulünü hâlâ kabul eder (ayrıntılı ekran için; ayrı soru).
+
+## Her geliş ayrı lot (kart #124)
+
+| No | Fark | Gerekçe |
+|---|---|---|
+| H1 | Göç `stok_her_gelis_ayri_lot`: `stok_parti_tek` kaldırıldı; mal kabulün her satırı yeni lot açar, aynı tedarikçi parti ya da döküm no ikinci gelişte de ayrı lottur (L3'ün "aynı lota eklenir" kısmı değişti, DEP-21 kalktı). Üretim girişi emrin partisine eklenmeye devam eder (`stok_parti_emir_tek`) | Kullanıcı kararı 22.10 (Soru 119 a): "farklı gün gelse aynı döküm bile olsa farklı lot" |

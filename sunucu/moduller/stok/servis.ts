@@ -70,13 +70,12 @@ import type { BakiyeHam, BelgeTablosu, HareketHam, HareketYeni, IstekHam, Teslim
 const belgeNo = (db: Db, anahtar: NumaraAnahtari, tablo: BelgeTablosu): Promise<string> =>
   numaraAl(db, anahtar, { varMi: (no) => sorgular.belgeNoVarMi(db, tablo, no) });
 
-// Lot numarası (#1018): anahtarlı parti (tedarikçi parti/döküm no ya da emir) varsa o kullanılır; yoksa yeni lot açılır.
+// Her mal kabul gelişi ayrı lottur, aynı tedarikçi parti/döküm no gelse de (#124); yalnız üretim girişi emrin partisine eklenir.
 async function partiBulVeyaAc(db: Db, p: sorgular.PartiAnahtari): Promise<number> {
-  const anahtarli = p.tedarikciPartiNo !== null || p.dokumNo !== null || p.uretimEmriId !== null;
-  const varOlan = anahtarli ? await sorgular.anahtarliPartiBul(db, p) : null;
+  const varOlan = p.uretimEmriId !== null ? await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId) : null;
   if (varOlan !== null) return varOlan;
   const lotNo = await numaraAl(db, 'stok.lot-no', { varMi: (no) => sorgular.lotNoVarMi(db, no) });
-  return (await sorgular.partiAc(db, { ...p, lotNo })) ?? (await sorgular.anahtarliPartiBul(db, p))!;
+  return (await sorgular.partiAc(db, { ...p, lotNo })) ?? (await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId!))!;
 }
 
 // ---- Kısıt → ileti (kisitKorumali); adlar göçtedir ---------------------------------------------------------------
@@ -86,7 +85,7 @@ const ESLEME: KisitEslemesi = {
   stok_bakiye_aktif_konumda: 'Bu konumda stok var ya da konum pasif; önce stoğu taşıyın.',
   stok_bakiye_tek: 'Aynı anda başka bir stok işlemi yazıldı; yeniden deneyin.',
   stok_parti_tanimli: { ileti: 'Parti için tedarikçi parti no ya da döküm no gerekli.', alan: 'parti' },
-  stok_parti_tek: 'Bu parti az önce açıldı; yeniden deneyin.',
+  stok_parti_emir_tek: 'Bu parti az önce açıldı; yeniden deneyin.',
   stok_parti_lot_tek: 'Bu lot numarası kullanılıyor; yeniden deneyin.',
   stok_bakiye_parti_malzemesi: { ileti: 'Parti bu malzemeye ait değil.', alan: 'partiId' },
   stok_hareketi_parti_malzemesi: { ileti: 'Parti bu malzemeye ait değil.', alan: 'partiId' },

@@ -341,19 +341,15 @@ export const partiLotEtiketi = (db: Db, partiId: number): Promise<LotEtiketiHam 
         WHERE s.parti_id = p.id ORDER BY s.id LIMIT 1) k ON true
     WHERE p.id = $1`, [partiId]);
 export interface PartiAnahtari { malzemeId: number; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null; uretimEmriId: number | null; kisiId: number }
-// Var olan parti yalnız tedarikçi parti/döküm no ya da emirle bulunur (DEP-21); numarasız teslimat her seferinde yeni lottur.
-export const anahtarliPartiBul = async (db: Db, p: PartiAnahtari): Promise<number | null> =>
-  (await db.tek<{ id: number }>(
-    `SELECT id FROM stok_parti WHERE malzeme_id = $1 AND tedarikci_parti_no IS NOT DISTINCT FROM $2 AND dokum_no IS NOT DISTINCT FROM $3
-       AND uretim_emri_id IS NOT DISTINCT FROM $4 AND (tedarikci_parti_no IS NOT NULL OR dokum_no IS NOT NULL OR uretim_emri_id IS NOT NULL)`,
-    [p.malzemeId, p.tedarikciPartiNo, p.dokumNo, p.uretimEmriId],
-  ))?.id ?? null;
+// Var olan parti yalnız emirle bulunur; mal kabulün her gelişi yeni lottur (#124).
+export const emirPartisiBul = async (db: Db, malzemeId: number, uretimEmriId: number): Promise<number | null> =>
+  (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND uretim_emri_id = $2', [malzemeId, uretimEmriId]))?.id ?? null;
 // Eşzamanlı açışta ikincisi çakışmayı yakalar (null) ve var olanı okur.
 export const partiAc = async (db: Db, p: PartiAnahtari & { lotNo: string }): Promise<number | null> =>
   (await db.tek<{ id: number }>(
     `INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, dokum_no, sertifika_no, uretim_emri_id, acan_kisi_id, lot_no)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (malzeme_id, tedarikci_parti_no, dokum_no, uretim_emri_id) WHERE tedarikci_parti_no IS NOT NULL OR dokum_no IS NOT NULL OR uretim_emri_id IS NOT NULL
+     ON CONFLICT (malzeme_id, uretim_emri_id) WHERE uretim_emri_id IS NOT NULL
      DO NOTHING RETURNING id`,
     [p.malzemeId, p.tedarikciPartiNo, p.dokumNo, p.sertifikaNo, p.uretimEmriId, p.kisiId, p.lotNo],
   ))?.id ?? null;
