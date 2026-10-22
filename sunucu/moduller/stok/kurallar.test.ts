@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  refakatEtiketi, refakatIptalEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
+  refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
   sonrakiIstasyon,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -578,5 +578,17 @@ describe('DEP-64 katalog etiketi', () => {
     assert.match(refakatSayimEngeli({ durum: 'iptal', uretimEmriId: 3 }, 3) ?? '', /iptal/);
     assert.match(refakatIptalEngeli({ durum: 'acik', verilen: '0' }, true) ?? '', /üretim sayıldı/);
     assert.equal(refakatIptalEngeli({ durum: 'acik', verilen: '0' }, false), null);
+  });
+  test('kart #126 alt parti kartı: kol üst kartla sayamaz; kol kartı yalnız kartın emrinin açık koluna, açık ve birleşmemiş karttan açılır', () => {
+    assert.match(refakatSayimEngeli({ durum: 'acik', uretimEmriId: 4 }, 3, 4) ?? '', /üst partinin/);
+    assert.match(refakatSayimEngeli({ durum: 'acik', uretimEmriId: 5 }, 3, 4) ?? '', /başka bir emrin/);
+    const ust = { durum: 'acik' as const, uretimEmriId: 4, birlestigiRefakatPartisiId: null };
+    const kol = { ustEmirId: 4, durum: 'planli', emirNo: 'UE-000004/1' };
+    assert.equal(refakatKolEngeli(ust, kol), null);
+    assert.match(refakatKolEngeli({ ...ust, durum: 'iptal' }, kol) ?? '', /iptal/);
+    assert.match(refakatKolEngeli({ ...ust, birlestigiRefakatPartisiId: 9 }, kol) ?? '', /birleşti/);
+    assert.match(refakatKolEngeli(ust, { ...kol, ustEmirId: 7 }) ?? '', /alt parti değil/);
+    assert.match(refakatKolEngeli(ust, { ...kol, ustEmirId: null }) ?? '', /alt parti değil/);
+    assert.match(refakatKolEngeli(ust, { ...kol, durum: 'bitti' }) ?? '', /bitti/);
   });
 });

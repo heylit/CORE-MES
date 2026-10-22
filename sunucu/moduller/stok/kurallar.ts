@@ -889,10 +889,23 @@ export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string
   return uretildi ? 'Bu kartla üretim sayıldı; kart iptal edilemez.' : null;
 }
 // Sayım kartın emrine yazılır (#126); iptal kartla sayım olmaz. Kart yoksa sayım reddedilir (kimlik başka modülden gelir, FK yok).
-export function refakatSayimEngeli(r: { durum: 'acik' | 'iptal'; uretimEmriId: number } | null, uretimEmriId: number): string | null {
+// Kol (alt parti) üst emrin kartıyla sayamaz; kola üst karttan alt parti kartı açılır.
+export function refakatSayimEngeli(r: { durum: 'acik' | 'iptal'; uretimEmriId: number } | null, uretimEmriId: number, ustEmirId: number | null = null): string | null {
   if (r === null) return 'Refakat kartı bulunamadı.';
+  if (r.uretimEmriId !== uretimEmriId && r.uretimEmriId === ustEmirId) return 'Bu kart üst partinin; bu alt parti için üst karttan alt parti kartı açın.';
   if (r.uretimEmriId !== uretimEmriId) return 'Bu refakat kartı başka bir emrin; işin kartını okutun.';
   return r.durum === 'iptal' ? 'Refakat kartı iptal edilmiş; geçerli kartı okutun.' : null;
+}
+// Alt parti kartı üst karttan açılır: emir üst kartın emrinden bölünmüş, açık bir kol olmalı; üst kart açık ve birleşmemiş olmalı.
+export function refakatKolEngeli(
+  ust: { durum: 'acik' | 'iptal'; uretimEmriId: number; birlestigiRefakatPartisiId: number | null },
+  kol: { ustEmirId: number | null; durum: string; emirNo: string },
+): string | null {
+  if (ust.durum === 'iptal') return 'Üst refakat kartı iptal edilmiş.';
+  if (ust.birlestigiRefakatPartisiId !== null) return 'Üst refakat kartı başka karta birleşti; birleştiği kartı okutun.';
+  if (kol.ustEmirId !== ust.uretimEmriId) return `Emir ${kol.emirNo} bu kartın emrinden bölünmüş bir alt parti değil.`;
+  if (kol.durum === 'bitti' || kol.durum === 'iptal') return `Emir ${kol.emirNo} ${kol.durum === 'bitti' ? 'bitti' : 'iptal edildi'}; kart açılmaz.`;
+  return null;
 }
 // Kartla teslimde malzeme, lot ve emir karttan gelir; gövdede verilen farklıysa teslim reddedilir (yanlış kart ya da yanlış satır).
 export function refakatTeslimEngeli(

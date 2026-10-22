@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { gelecekSepetCevabi, isMalzemeleriCevabi, kodCozCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { gelecekSepetCevabi, isMalzemeleriCevabi, kodCozCevabi, refakatIziCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { IsMalzemeleriCevabi, IstasyonSepetiCevabi, KodCozCevabi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi, IstekMalzemeleriCevabi, MalzemeIstegiCevabi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutCozCevabi, TeslimCevabi, TeslimKutusuCevabi, ToplamaAyrintiCevabi, UretimHazirligiCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -2192,5 +2192,79 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     } finally {
       adimStatusuCozucusuKaydet(async () => null);
     }
+  });
+
+  test('kart #126 alt parti kartı, birleşme ve iz: kol üst karttan kart alır ve onunla sayar; birleşen kolun kartı birleştiği karta yönlenir', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`TK-${sira}`]))!.id;
+    const makine = (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`TKM-${a.id}`, 'Tezgah', a.id]))!.id;
+    const adim = (n: number, bilesenler: { malzemeNo: number; miktar: string }[]): IsEmriGirdisi => ({
+      sira: n, opNo: n * 10, ad: `Adım ${n}`, operasyonTipiId: tip, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler,
+    });
+    if (!kisiler.has('planlama_proje')) await kisiEkle('planlama_proje', 'planlama_proje');
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    const emirAc = async () => (await o().vt.tx(async (db) => uretimEmriAc(db, planlamaci, {
+      projeId: denemeProjeId, malzemeNo: ym, adet: 10, teslim: null, kaynakRotaRevizyonId: await revizyon(ym), isEmirleri: [adim(1, [{ malzemeNo: hm, miktar: '1' }]), adim(2, [])],
+    }))).uretimEmriId;
+    const [e, baska] = [await emirAc(), await emirAc()];
+    const surum = async (id: number) => (await o().vt.tek<{ surum: number }>('SELECT surum FROM uretim_emri WHERE id = $1', [id]))!.surum;
+    const bol = async (adet: number) => {
+      const c = await istek<{ altEmirId: number }>('planlama_proje', 'POST', `/adimli-emirler/${e}/bol`, { adimSira: 1, adet, surum: await surum(e) });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.altEmirId;
+    };
+    const adimlari = async (emir: number) => (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [emir])).map((x) => x.id);
+    const operator = kisiler.get('operator')!;
+    const saglam = (emir: number, isEmriId: number, fark: string, refakatPartisiId: number | null) =>
+      o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: emir, isEmriId, istasyonId: a.id, kisiId: operator, fark, refakatPartisiId }));
+    await malKabul(hm, '10');
+    const lot = (await o().vt.tek<{ id: number; lot_no: string }>('SELECT id, lot_no FROM stok_parti WHERE malzeme_id = $1', [hm]))!;
+    const r = (await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, lotKodu: `LOT:${lot.lot_no}` })).govde.refakat;
+    const kartla = await gonder('depo', { malzemeId: hm, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: a.id }, refakatPartisiId: r.id });
+    assert.equal(kartla.durum, 200, JSON.stringify(kartla.govde));
+    assert.equal((await istek('operator', 'POST', `/stok/teslimler/${kartla.govde.teslim.id}/teslim-al`, { surum: kartla.govde.teslim.surum, alinan: '10' })).durum, 200);
+    const kolAc = (kartId: number, uretimEmriId: number) => istek<RefakatPartisiCevabi & { hata?: { mesaj: string } }>('depo', 'POST', `/stok/refakat-partileri/${kartId}/kol-ac`, { uretimEmriId });
+
+    const [kol, kol2] = [await bol(4), await bol(2)];
+    // Kol üst kartla sayamaz; kol kartı yalnız bu emrin kolu için açılır.
+    const [k10, k20] = await adimlari(kol);
+    await assert.rejects(saglam(kol, k10!, '1', r.id), /üst partinin/);
+    assert.equal((await kolAc(r.id, baska)).durum, 400);
+    const kk = await kolAc(r.id, kol);
+    assert.equal(kk.durum, 200, JSON.stringify(kk.govde));
+    assert.deepEqual([kk.govde.refakat.uretimEmriId, kk.govde.refakat.partiId, kk.govde.refakat.ust?.id], [kol, lot.id, r.id]);
+    assert.equal((await kolAc(r.id, kol)).govde.refakat.id, kk.govde.refakat.id, 'aynı kolun açık kartı döner');
+
+    // Birleşme: kolun kartı birleştiği emrin kartına (üst kart) bağlanır; eski kart okutulunca üst kart gelir, sayımda yönlenir.
+    const kk2 = (await kolAc(r.id, kol2)).govde.refakat;
+    const b = await istek('planlama_proje', 'POST', `/adimli-emirler/${e}/birlestir`, { kaynakEmirId: kol2, surum: await surum(e), kaynakSurum: await surum(kol2) });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const eski = refakatPartisiCevabi.parse((await istek('depo', 'GET', `/stok/refakat-partileri/${kk2.id}`)).govde).refakat;
+    assert.equal(eski.birlestigi?.id, r.id);
+    const coz = kodCozCevabi.parse((await istek('depo', 'GET', `/stok/kod-coz?kod=${encodeURIComponent(kk2.qr)}`)).govde);
+    assert.equal(coz.tur === 'lot' ? coz.refakat?.id : null, r.id);
+    const [e10] = await adimlari(e);
+    await saglam(e, e10!, '1', kk2.id);
+
+    // Kol kendi kartıyla sayar; parça kol kartının partisine girer.
+    await saglam(kol, k10!, '2', kk.govde.refakat.id);
+    await saglam(kol, k20!, '2', kk.govde.refakat.id);
+    const kolCiktisi = (await o().vt.tek<{ id: number; uretimEmriId: number }>(
+      'SELECT id, uretim_emri_id AS "uretimEmriId" FROM stok_parti WHERE malzeme_id = $1 AND refakat_partisi_id = $2', [ym, kk.govde.refakat.id]))!;
+    assert.equal(kolCiktisi.uretimEmriId, kol);
+
+    // İz: üst kart altları ve birleşeni görür; kol kartı üstünü ve kendi çıktısını görür.
+    const iz = refakatIziCevabi.parse((await istek('depo', 'GET', `/stok/refakat-partileri/${r.id}/iz`)).govde);
+    assert.deepEqual(iz.altlar.map((x) => x.id).sort(), [kk.govde.refakat.id, kk2.id].sort());
+    assert.deepEqual(iz.birlesenler.map((x) => x.id), [kk2.id]);
+    assert.deepEqual(iz.ayniLot.map((x) => x.id).sort(), [kk.govde.refakat.id, kk2.id].sort());
+    const kolIzi = refakatIziCevabi.parse((await istek('depo', 'GET', `/stok/refakat-partileri/${kk.govde.refakat.id}/iz`)).govde);
+    assert.deepEqual(kolIzi.ustler.map((x) => x.id), [r.id]);
+    assert.deepEqual(kolIzi.ciktilar.map((c) => [c.partiId, c.eldeki]), [[kolCiktisi.id, '2']]);
+    assert.deepEqual(kolIzi.sevkler, []);
+    // Birleşmiş kartın altına kart açılmaz.
+    assert.equal((await kolAc(kk2.id, kol)).govde.refakat.id, kk.govde.refakat.id, 'birleşmiş kart birleştiği karta yönlenir');
   });
 });

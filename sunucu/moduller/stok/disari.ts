@@ -127,15 +127,16 @@ export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void 
 // aynı işlemde gelir; stoğun reddi komutu da geri alır.
 export { emirAcildiYansit, emirBirlestiYansit, emirBittiYansit, emirIptalYansit, fasonHareketiYansit, fasonSevkiYansit, urunSevkiYansit } from './servis.ts';
 // Refakat partisi (kart #123): Arkon kart QR'ından (`RP:<id>`) emri ve partiyi okur. Yoksa null; yetki denetlemez, çağıran korur.
+// Birleşmiş kolun kartı birleştiği kartı döndürür (kart #126).
 export interface RefakatPartisiOzeti {
   id: number; uretimEmriId: number; etiket: string; qr: string; durum: 'acik' | 'iptal';
   // Depodan verilen lot (Etiket Merkezi kartın lot satırını basar, kart #127).
   lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
 }
 export async function refakatPartisi(db: Db, id: number): Promise<RefakatPartisiOzeti | null> {
-  const r = await sorgular.refakatPartisiBul(db, id);
+  const r = await sorgular.etkinRefakatPartisiBul(db, id);
   if (r === null) return null;
-  const { refakat } = await servis.refakatPartisiOku(db, id);
+  const { refakat } = await servis.refakatPartisiOku(db, r.id);
   return {
     id: refakat.id, uretimEmriId: refakat.uretimEmriId, etiket: refakat.etiket, qr: refakat.qr, durum: refakat.durum,
     lotNo: refakat.lotNo, tedarikciPartiNo: refakat.tedarikciPartiNo, dokumNo: refakat.dokumNo, sertifikaNo: refakat.sertifikaNo,

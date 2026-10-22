@@ -28,7 +28,7 @@ import type {
   TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { malzemeIstegiAcGirdisi, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { malzemeIstegiAcGirdisi, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type RefakatIziCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -60,7 +60,7 @@ import {
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
-  sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatEtiketi, refakatIptalEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
+  sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
 } from './kurallar.ts';
 import type { IstekGecisi, MalzemeTuru } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -1594,7 +1594,7 @@ async function lotCoz(db: Db, lotNo: string): Promise<KodCozCevabi | null> {
 }
 // Refakat kartı: lotun çözümü ve kartın partisi.
 async function refakatCoz(db: Db, id: number): Promise<KodCozCevabi | null> {
-  const r = await sorgular.refakatPartisiBul(db, id);
+  const r = await sorgular.etkinRefakatPartisiBul(db, id);
   const lot = r === null ? null : await lotCoz(db, r.lotNo);
   if (!r || lot?.tur !== 'lot') return null;
   return { ...lot, refakat: (await refakatPartileriCevir(db, [r]))[0]! };
@@ -2255,7 +2255,7 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
     if (p) bulunan = await malzemeCevabi(p.malzemeId, { id: p.id, etiket: partiEtiketi(p, emirNoDe(nolar, p.uretimEmriId)) ?? p.lotNo, uretimEmriId: p.uretimEmriId }, await sorgular.lotBakiyeleri(db, p.id));
   } else if (t.tur === 'refakat-partisi') {
     // Refakat kartı (kart #123): veren için lotun alabileceği yerleri, alan için kendisine o kartla yoldaki teslimleri taşır (Soru 118 a).
-    const r = await sorgular.refakatPartisiBul(db, Number(t.deger));
+    const r = await sorgular.etkinRefakatPartisiBul(db, Number(t.deger));
     const refakat = r === null ? undefined : (await refakatPartileriCevir(db, [r]))[0];
     const m = !r || !refakat ? null : await malzemeCevabi(r.malzemeId, { id: r.partiId, etiket: refakat.etiket, uretimEmriId: null }, await sorgular.lotBakiyeleri(db, r.partiId));
     if (r && refakat && m?.tur === 'malzeme') {
@@ -2615,7 +2615,7 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi)
   const statuId = g.statuId === null ? null : Number(g.statuId);
   const kalite = g.kaliteDurumu ?? 'serbest';
   // Refakat kartıyla teslim (kart #123): lot ve emir karttan gelir; gövdedeki farklıysa yanlış kart okutulmuştur.
-  const refakat = g.refakatPartisiId == null ? null : await sorgular.refakatPartisiBul(db, Number(g.refakatPartisiId));
+  const refakat = g.refakatPartisiId == null ? null : await sorgular.etkinRefakatPartisiBul(db, Number(g.refakatPartisiId));
   if (g.refakatPartisiId != null) {
     if (!refakat) throw dogrulama('Refakat kartı bulunamadı.', 'refakatPartisiId');
     const engel = refakatTeslimEngeli(refakat, { malzemeId, partiId: g.partiId == null ? g.partiId : Number(g.partiId), uretimEmriId: g.uretimEmriId == null ? g.uretimEmriId : Number(g.uretimEmriId) });
@@ -2824,7 +2824,7 @@ async function okutulanMalzeme(db: Db, ham: string): Promise<{ malzemeId: number
   const t = kodTuru(ham);
   if (t.tur === 'lot') { const p = await sorgular.lotNoylaParti(db, t.deger); return p ? { malzemeId: p.malzemeId, partiId: p.id } : null; }
   if (t.tur === 'malzeme') return { malzemeId: Number(t.deger), partiId: null };
-  if (t.tur === 'refakat-partisi') { const r = await sorgular.refakatPartisiBul(db, Number(t.deger)); return r ? { malzemeId: r.malzemeId, partiId: r.partiId } : null; }
+  if (t.tur === 'refakat-partisi') { const r = await sorgular.etkinRefakatPartisiBul(db, Number(t.deger)); return r ? { malzemeId: r.malzemeId, partiId: r.partiId } : null; }
   if (t.tur === 'konum') return null;
   const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(ham.trim().toUpperCase())?.[1] ?? await katalogEtiketiKartNo(db, ham);
   return no === undefined || no === null ? null : { malzemeId: Number(no), partiId: null };
@@ -3051,13 +3051,16 @@ export interface UretimSayimiYansimasi {
   refakatPartisiId?: number | null;
 }
 // Sayımın refakat kartı (#126): kart emre ait ve açık olmalı, yoksa sayım reddedilir (ret sayımı geri alır). Kartın lotu ve kartla
-// sayılmış partiler önce kullanılır; kartsız sayımda liste boştur ve seçim bugünkü gibidir.
+// sayılmış partiler önce kullanılır; kartsız sayımda liste boştur ve seçim bugünkü gibidir. Birleşmiş kolun kartı birleştiği karta
+// yönlenir; kart kendi emrine yazılmışsa (birleşmeden önceki sayımın geri alınması) yönlenmez.
 interface SayimKarti { id: number | null; partiler: readonly number[] }
 async function sayimKarti(db: Db, uretimEmriId: number, refakatPartisiId: number | null | undefined): Promise<SayimKarti> {
   if (refakatPartisiId === null || refakatPartisiId === undefined) return { id: null, partiler: [] };
-  const engel = refakatSayimEngeli(await sorgular.refakatPartisiBul(db, refakatPartisiId), uretimEmriId);
-  if (engel !== null) throw dogrulama(engel, 'refakatPartisiId');
-  return { id: refakatPartisiId, partiler: await sorgular.refakatStokPartileri(db, refakatPartisiId) };
+  const kendi = await sorgular.refakatPartisiBul(db, refakatPartisiId);
+  const r = kendi !== null && kendi.uretimEmriId === uretimEmriId ? kendi : await sorgular.etkinRefakatPartisiBul(db, refakatPartisiId);
+  const engel = refakatSayimEngeli(r, uretimEmriId, r === null ? null : (await uretimEmriOzeti(db, uretimEmriId))?.ustEmirId ?? null);
+  if (engel !== null || r === null) throw dogrulama(engel ?? 'Refakat kartı bulunamadı.', 'refakatPartisiId');
+  return { id: r.id, partiler: await sorgular.refakatStokPartileri(db, await sorgular.refakatSoyu(db, r.id)) };
 }
 // Soru 126 b: kartla sayımda malzeme kartın dışından düştüyse (kartın lotu istasyonda bitti) çıktı, malzemenin çoğunu veren partinin
 // kartına girer: mal kabul lotuysa emrin o lotla açık kartı, yoksa yeni kart açılır; başka kartın çıktısıysa o kart. Not hareketin
@@ -3603,8 +3606,9 @@ async function emirKapandi(db: Db, uretimEmriId: number, kisiId: number, neden: 
 }
 export const emirBittiYansit = (db: Db, olay: { uretimEmriId: number; kisiId: number }): Promise<void> => emirKapandi(db, olay.uretimEmriId, olay.kisiId, 'Emir bitti');
 export const emirIptalYansit = (db: Db, olay: { uretimEmriId: number; kisiId: number }): Promise<void> => emirKapandi(db, olay.uretimEmriId, olay.kisiId, 'Emir iptal edildi');
-// Birleşen partinin ayrılanı üretimin sürdüğü üst emre geçer: malzeme başka emre kaymaz. Kaynağın bekleme isteği de hedefe geçer.
+// Birleşen partinin ayrılanı üretimin sürdüğü üst emre geçer: malzeme başka emre kaymaz. Kaynağın bekleme isteği ve refakat kartları da hedefe geçer.
 export async function emirBirlestiYansit(db: Db, olay: { uretimEmriId: number; hedefEmirId: number; kisiId: number }): Promise<void> {
+  await refakatKartlariniBirlestir(db, olay.uretimEmriId, olay.hedefEmirId, olay.kisiId);
   const bekliyordu = (await sorgular.rezerveIsteyenEmirler(db)).includes(olay.uretimEmriId);
   const satirlar = await sorgular.emrinRezerveleriniSil(db, olay.uretimEmriId);
   if (bekliyordu) await sorgular.emirRezerveIstegiYaz(db, olay.hedefEmirId, olay.kisiId);
@@ -3709,7 +3713,7 @@ export async function kaliteKarariYansit(db: Db, g: KaliteKarariYansimasi): Prom
   const aciklama = `Kalite kararı: ${g.karar === 'onay' ? 'onay' : 'ret'} · emir ${emir?.emirNo ?? String(g.uretimEmriId)}`;
   await korumali(async () => {
     // Karar, sayımın kartının partisine önce uygulanır; kart artık geçersizse de karar düşmez (sayım zaten yazılmıştı).
-    const kart = g.refakatPartisiId == null ? undefined : { id: g.refakatPartisiId, partiler: await sorgular.refakatStokPartileri(db, g.refakatPartisiId) };
+    const kart = g.refakatPartisiId == null ? undefined : { id: g.refakatPartisiId, partiler: await sorgular.refakatStokPartileri(db, await sorgular.refakatSoyu(db, g.refakatPartisiId)) };
     const kaynaklar = kartOnce(await sorgular.kaliteBakiyeleri(db, parca.malzemeId, parca.statuId, 'karar_bekliyor', g.uretimEmriId), kart);
     for (const a of kaynaklardanAl(kaynaklar, parca.miktar)) {
       await kaliteDegistir(db, g.kisiId, {
@@ -4089,8 +4093,14 @@ export async function urunSevkiYansit(db: Db, olay: UrunSevkiOlayi): Promise<str
 
 // ---- Refakat partisi (kart #123): depo lotu okutup emre ayırınca doğar, kartı basılır; teslim kartla yapılır ------------------
 async function refakatPartileriCevir(db: Db, satirlar: RefakatPartisiHam[]): Promise<RefakatPartisi[]> {
-  const nolar = await emirNoHaritasi(db, satirlar.map((r) => r.uretimEmriId));
+  const bagliIdler = [...new Set(satirlar.flatMap((r) => [r.ustRefakatPartisiId, r.birlestigiRefakatPartisiId]).filter((x): x is number => x !== null))];
+  const bagliler = bagliIdler.length === 0 ? [] : await sorgular.refakatPartileriBul(db, bagliIdler);
+  const nolar = await emirNoHaritasi(db, [...satirlar, ...bagliler].map((r) => r.uretimEmriId));
   const ozetler = await malzemeOzetleri(db, satirlar.map((r) => r.malzemeId));
+  const bag = (id: number | null): { id: number; etiket: string } | null => {
+    const b = id === null ? undefined : bagliler.find((x) => x.id === id);
+    return b === undefined ? null : { id: b.id, etiket: refakatEtiketi(emirNoDe(nolar, b.uretimEmriId), b.uretimEmriId, b.sira) };
+  };
   return satirlar.map((r) => {
     const o = ozetler.get(r.malzemeId);
     const emirNo = emirNoDe(nolar, r.uretimEmriId);
@@ -4099,6 +4109,7 @@ async function refakatPartileriCevir(db: Db, satirlar: RefakatPartisiHam[]): Pro
       malzemeId: r.malzemeId, malzemeKod: o?.kod ?? null, malzemeAd: o?.ad ?? null, birim: o?.birim ?? null,
       partiId: r.partiId, lotNo: r.lotNo, tedarikciPartiNo: r.tedarikciPartiNo, dokumNo: r.dokumNo, sertifikaNo: r.sertifikaNo,
       verilen: bindenMetin(binde(r.verilen)), durum: r.durum, surum: r.surum, kayitZamani: r.kayitZamani,
+      ust: bag(r.ustRefakatPartisiId), birlestigi: bag(r.birlestigiRefakatPartisiId), birlesmeZamani: r.birlesmeZamani,
     };
   });
 }
@@ -4148,6 +4159,64 @@ export async function refakatPartisiIptal(db: Db, kisiId: number, id: number, g:
     guncelle: () => sorgular.refakatPartisiIptal(db, id, g.surum, kisiId), varMi: () => sorgular.refakatPartisiVarMi(db, id), bulunamadiIletisi: 'Refakat kartı bulunamadı.',
   });
   return refakatPartisiOku(db, id);
+}
+// Alt parti (kol) kartı (kart #126): bölmeyle doğan kol, üst emrin kartının lotuyla kendi kartını alır; parçalar artık bu kartla
+// sayılır. Kart üst karta bağlanır (iz ve birleşmede üst karta dönüş). Kolun aynı lotla açık kartı varsa o döner.
+export async function refakatKolKartiAc(db: Db, kisiId: number, ustId: number, g: { uretimEmriId: number }): Promise<RefakatPartisiCevabi> {
+  const ust = await sorgular.etkinRefakatPartisiBul(db, ustId);
+  if (!ust) throw bulunamadi('Refakat kartı bulunamadı.');
+  const kol = await uretimEmriOzeti(db, g.uretimEmriId);
+  if (kol === null) throw dogrulama('Üretim emri bulunamadı.', 'uretimEmriId');
+  const engel = refakatKolEngeli(ust, kol);
+  if (engel) throw dogrulama(engel, 'uretimEmriId');
+  const varOlan = await sorgular.acikRefakatPartisi(db, kol.id, ust.partiId);
+  if (varOlan) return { refakat: (await refakatPartileriCevir(db, [varOlan]))[0]! };
+  const id = await sorgular.refakatPartisiAc(db, { uretimEmriId: kol.id, malzemeId: ust.malzemeId, partiId: ust.partiId, kisiId, ustRefakatPartisiId: ust.id })
+    ?? (await sorgular.acikRefakatPartisi(db, kol.id, ust.partiId))!.id;
+  return refakatPartisiOku(db, id);
+}
+// Birleşen emrin açık kartları hedef emrin kartına bağlanır (kart #126): kol üst emre döndüyse üst kart, değilse hedefin aynı lotla
+// açık kartı; o da yoksa hedefe aynı lotla kart açılır. Eski kart okutulunca birleştiği kart döner; iz iki kartı da gösterir.
+async function refakatKartlariniBirlestir(db: Db, kaynakEmirId: number, hedefEmirId: number, kisiId: number): Promise<void> {
+  for (const k of await sorgular.emrinRefakatPartileri(db, kaynakEmirId)) {
+    if (k.durum !== 'acik' || k.birlestigiRefakatPartisiId !== null) continue;
+    const ust = k.ustRefakatPartisiId === null ? null : await sorgular.etkinRefakatPartisiBul(db, k.ustRefakatPartisiId);
+    const hedef = ust !== null && ust.uretimEmriId === hedefEmirId && ust.durum === 'acik' ? ust
+      : await sorgular.acikRefakatPartisi(db, hedefEmirId, k.partiId);
+    const hedefId = hedef?.id
+      ?? await sorgular.refakatPartisiAc(db, { uretimEmriId: hedefEmirId, malzemeId: k.malzemeId, partiId: k.partiId, kisiId })
+      ?? (await sorgular.acikRefakatPartisi(db, hedefEmirId, k.partiId))!.id;
+    await sorgular.refakatBirlestir(db, k.id, hedefId);
+  }
+}
+export async function refakatIzi(db: Db, id: number): Promise<RefakatIziCevabi> {
+  const r = await sorgular.refakatPartisiBul(db, id);
+  if (!r) throw bulunamadi('Refakat kartı bulunamadı.');
+  const soy = await sorgular.refakatSoyu(db, r.id);
+  const ustler: RefakatPartisiHam[] = [];
+  for (let u = r.ustRefakatPartisiId; u !== null && ustler.length < 20;) {
+    const x = await sorgular.refakatPartisiBul(db, u);
+    if (x === null) break;
+    ustler.push(x);
+    u = x.ustRefakatPartisiId;
+  }
+  const [altlar, birlesenler, ayniLot, ciktilar, sevkler] = [
+    await sorgular.altRefakatPartileri(db, r.id), await sorgular.birlesenRefakatPartileri(db, r.id),
+    (await sorgular.lotunRefakatPartileri(db, r.partiId)).filter((x) => x.id !== r.id),
+    await sorgular.refakatCiktilari(db, soy), await sorgular.refakatSevkleri(db, soy),
+  ];
+  const ozetler = await malzemeOzetleri(db, [...ciktilar.map((c) => c.malzemeId), ...sevkler.map((x) => x.malzemeId)]);
+  const nolar = await emirNoHaritasi(db, sevkler.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])));
+  const malzeme = (m: number) => { const o = ozetler.get(m); return { malzemeId: m, malzemeKod: o?.kod ?? null, malzemeAd: o?.ad ?? null, birim: o?.birim ?? null }; };
+  const cevir = (l: RefakatPartisiHam[]) => refakatPartileriCevir(db, l);
+  return {
+    refakat: (await cevir([r]))[0]!, ustler: await cevir(ustler), altlar: await cevir(altlar), birlesenler: await cevir(birlesenler), ayniLot: await cevir(ayniLot),
+    ciktilar: ciktilar.map((c) => ({ partiId: c.partiId, lotNo: c.lotNo, refakatPartisiId: c.refakatPartisiId, ...malzeme(c.malzemeId), eldeki: bindenMetin(binde(c.eldeki)) })),
+    sevkler: sevkler.map((x) => ({
+      hareketId: x.hareketId, zaman: x.zaman, partiId: x.partiId, lotNo: x.lotNo, ...malzeme(x.malzemeId), miktar: bindenMetin(binde(x.miktar)),
+      emirNo: x.uretimEmriId === null ? null : emirNoDe(nolar, x.uretimEmriId), aciklama: x.aciklama,
+    })),
+  };
 }
 // Kart, emrin refakat kartıdır (Üretim Emirleri'nin verisi); QR partiyi taşır, lot bilgisi partiden gelir.
 export async function refakatPartisiKarti(db: Db, id: number): Promise<RefakatPartisiKartiCevabi> {

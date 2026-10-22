@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import qrcode from 'qrcode-generator';
-import type { RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { RefakatIziCevabi, RefakatKolAcGovdesi, RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EmirSecici } from './EmirSecici.tsx';
-import { birimliMiktar } from './gorunum.ts';
+import { birimliMiktar, zamanMetni } from './gorunum.ts';
 import { yazdir } from './LotEtiketi.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -54,8 +54,62 @@ export function refakatPartisiBelgesi({ refakat: r, kart: k }: RefakatPartisiKar
     + '</div></body></html>';
 }
 
+// Kartın izi (kart #126): üst, alt ve birleşen kartlar, aynı lotun kartları, kartla üretilen partiler ve sevkler. Kart adına
+// basınca pencere o kartı gösterir.
+function RefakatIzi({ id, git }: { id: number; git: (id: number) => void }) {
+  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-izi', id], queryFn: () => api.get<RefakatIziCevabi>(`/stok/refakat-partileri/${id}/iz`) });
+  if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />;
+  const z = q.data;
+  const kartlar = (baslik: string, l: RefakatPartisi[]) => l.length > 0 && (
+    <div><strong>{baslik}</strong><ul className="tc-stok-liste">{l.map((k) => (
+      <li key={k.id}><button type="button" className="tc-stok-bag" onClick={() => git(k.id)}>{k.etiket}</button>{k.durum === 'iptal' ? ' · iptal' : k.birlestigi ? ` · ${k.birlestigi.etiket} kartına birleşti` : ''}</li>
+    ))}</ul></div>
+  );
+  const bos = [z.ustler, z.altlar, z.birlesenler, z.ayniLot, z.ciktilar, z.sevkler].every((l) => l.length === 0);
+  return (
+    <section className="tc-stok-form" aria-label="Kartın izi">
+      <h3 className="tc-stok-alt-baslik">İz</h3>
+      {bos && <p className="tc-stok-not">Bu kartla henüz üretim, sevk ya da bağlı kart yok.</p>}
+      {kartlar('Üst kartlar', z.ustler)}
+      {kartlar('Alt parti kartları', z.altlar)}
+      {kartlar('Bu karta birleşenler', z.birlesenler)}
+      {kartlar('Aynı lotun diğer kartları', z.ayniLot)}
+      {z.ciktilar.length > 0 && (
+        <div><strong>Üretilen partiler</strong><ul className="tc-stok-liste">{z.ciktilar.map((c) => (
+          <li key={c.partiId}>{c.lotNo} · {c.malzemeAd ?? c.malzemeKod ?? `Kart ${c.malzemeId}`} · elde {birimliMiktar(c.eldeki, c.birim)}</li>
+        ))}</ul></div>
+      )}
+      {z.sevkler.length > 0 && (
+        <div><strong>Sevkler</strong><ul className="tc-stok-liste">{z.sevkler.map((x) => (
+          <li key={x.hareketId}>{zamanMetni(x.zaman)} · {x.lotNo} · {birimliMiktar(x.miktar, x.birim)}{x.emirNo ? ` · ${x.emirNo}` : ''}</li>
+        ))}</ul></div>
+      )}
+    </section>
+  );
+}
+
+// Alt parti (kol) kartı: bölmeyle doğan kol bu kartın lotuyla kendi kartını alır. Seçimde yalnız bu emrin kolları listelenir.
+function AltPartiKartiAc({ r, ac }: { r: RefakatPartisi; ac: (id: number) => void }) {
+  const [emir, setEmir] = useState('');
+  const komut = useStokKomutu((g: RefakatKolAcGovdesi) => korumaliPost<RefakatPartisiCevabi>(`/stok/refakat-partileri/${r.id}/kol-ac`, g).then((c) => {
+    ac(c.refakat.id); return c;
+  }), 'Alt parti kartı hazır.');
+  const onek = `${r.emirNo ?? ''}/`;
+  return (
+    <section className="tc-stok-form" aria-label="Alt parti kartı">
+      <h3 className="tc-stok-alt-baslik">Alt parti kartı</h3>
+      <EmirSecici deger={emir} degistir={setEmir} zorunlu ipucu="Emir bölündüyse alt parti bu kartın lotuyla kendi kartını alır."
+        suzgec={(e) => r.emirNo !== null && e.emirNo.startsWith(onek) && !e.emirNo.slice(onek.length).includes('/')} />
+      {komut.komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(komut.komut.error)}</p>}
+      <div><Dugme simge="route" disabled={emir === ''} yukleniyor={komut.komut.isPending} onClick={() => komut.komut.mutate({ uretimEmriId: Number(emir) })}>Alt parti kartı aç</Dugme></div>
+    </section>
+  );
+}
+
 // Kartı göster, bas; hiç teslimi olmayan kart iptal edilir.
-export function RefakatKartPenceresi({ id, kapat }: { id: number; kapat: () => void }) {
+export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: () => void }) {
+  const [id, setId] = useState(ilkId);
   const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`) });
   const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.', kapat);
   const r = q.data?.refakat;
@@ -82,9 +136,13 @@ export function RefakatKartPenceresi({ id, kapat }: { id: number; kapat: () => v
               <strong>{r.etiket} · {q.data.kart.urun.ad}</strong>
               <span>{refakatLotSatiri(r)}</span>
               <span>{refakatMalzemeSatiri(r)}</span>
+              {r.ust && <span>Üst kart {r.ust.etiket}</span>}
+              {r.birlestigi && <span>{r.birlestigi.etiket} kartına birleşti; okutulunca o kart açılır.</span>}
               {r.durum === 'iptal' && <span>Kart iptal edildi.</span>}
             </div>
           </div>
+          {r.durum === 'acik' && r.birlestigi === null && <AltPartiKartiAc r={r} ac={setId} />}
+          <RefakatIzi id={r.id} git={setId} />
         </div>
       )}
     </Pencere>
