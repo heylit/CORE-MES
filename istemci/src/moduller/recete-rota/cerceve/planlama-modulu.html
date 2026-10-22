@@ -3182,6 +3182,9 @@ const SL=0.25, HDAYS=63, NS=HDAYS*24/SL;
 const GUN=['pzt','sal','car','per','cum','cmt','paz'];
 const GUN_AD={pzt:'Pzt',sal:'Sal',car:'Çar',per:'Per',cum:'Cum',cmt:'Cmt',paz:'Paz'};
 const PW={1:4,2:2,3:1};
+/* 35 b: bölünen siparişin parçası siparişin adet payını taşır (pay); gecikmesi ve cezası o payla sayılır, parçalar siparişi birden çok saymaz */
+function isPayi(j){return j.pay>0&&j.pay<1?+j.pay:1;}
+function isAgirligi(j){return (PW[j.oncelik]||1)*isPayi(j);}
 const W0={amac:'sirali',rule:'atcs',alpha:.3,ceza:150,cezaPuan:10,ayarPuan:2,mu:15,lam:400,famK:.3,mat:'uyari',dondurma:4,
   k1:2,k2:.6,otoKabul:false,mesaiHafta:8,lnsMs:2000,iyiMs:3000,tampon:true,tamponZ:1.28,acilPay:.05,otoDegisim:6,mcN:40,mcSigma:.15,mcAriza:true,l2Ms:1500};
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -3423,7 +3426,7 @@ function candM(o,st,opt,base){
 }
 function remH(cx,ctx,j){let h=0;for(const o of j.ops)if(!ctx.P[o.id]){const m=o.c.filter(c=>!c.fas).map(c=>c.su+c.run);h+=m.length?Math.min(...m):24;}return h;}
 function prio(r,cx,ctx,opt){
-  const st=cx.st,w=st.w,j=cx.jobs[r.job],p=Math.max(.25,r.su+r.run),pw=PW[j.oncelik]||1;let v;
+  const st=cx.st,w=st.w,j=cx.jobs[r.job],p=Math.max(.25,r.su+r.run),pw=isAgirligi(j);let v;
   const due=j.dueB==null?j.due:j.dueB;
   if(w.rule==='edd')v=1e4-(due||0)/10;
   else if(w.rule==='kar'){const g=j.gelir==null?1e5:j.gelir;v=(g/1e5)*pw/Math.max(1,remH(cx,ctx,j));}
@@ -3547,8 +3550,8 @@ function evaluate(plan,st,ref,fast){
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
-    const pw=PW[j.oncelik]||1;
-    let p=null;if(T!=null)p=j.cezaGun!=null?T/24*j.cezaGun:T*w.ceza*pw;
+    const pw=isAgirligi(j);
+    let p=null;if(T!=null)p=j.cezaGun!=null?T/24*j.cezaGun*isPayi(j):T*w.ceza*pw;
     const mf=cx.mat.res[jid]?cx.mat.res[jid].fiyat:null;if(mf==null&&(j.malzeme||[]).length)miss.push('malzeme fiyatı');
     if(j.gelir==null)miss.push('gelir');
     const h=E*w.mu;
@@ -3605,7 +3608,7 @@ function lowerBound(st,cx){
     else for(const c of o.c){if(c.fas){const f=cx.FS[c.m.slice(1)];if(f){const v=fasonEarliest(cx,f,s);if(v<best){best=v;l1=v;}}continue;}
       const M=cx.M[c.m],sm=suMin(o,c,cx);const a=openAt(sm>0?M.sw:M.rw,s);const su=adv(M.sw,a,sm);const e=adv(M.rw,su,c.run);if(e<best){best=e;l1=adv(M.rw,su,Math.min(c.run,c.tbRun));}}
     done[o.id]={f:best,l1};const jl=LB[o.job]||0;LB[o.job]=Math.max(jl,best);}
-  let wT=0;for(const jid in cx.jobs){const j=cx.jobs[jid];if(j.due!=null&&isFinite(LB[jid]))wT+=Math.max(0,LB[jid]-j.due)*(PW[j.oncelik]||1);}
+  let wT=0;for(const jid in cx.jobs){const j=cx.jobs[jid];if(j.due!=null&&isFinite(LB[jid]))wT+=Math.max(0,LB[jid]-j.due)*isAgirligi(j);}
   return {C:LB,wT};
 }
 
@@ -3663,6 +3666,8 @@ function degree(plan,id,memo={}){if(id in memo)return memo[id];memo[id]=null;con
 
 /* ---- olaylar ---- */
 function urunMalzeme(D,urun){const j=D.siparisler.find(x=>x.urun===urun&&(x.malzeme||[]).length);return j?clone(j.malzeme):[];}
+/* siparişin n adetlik parçası: gelir ve adet payı oranlı; termin, öncelik ve ceza siparişindir */
+function siparisParcasi(s,id,n){return {...clone(s),id,adet:n,gelir:s.gelir==null?null:Math.round(s.gelir*n/s.adet),pay:isPayi(s)*n/s.adet,malzeme:(s.malzeme||[]).map(x=>({...x}))};}
 function applyEvent(st,ev){
   const D=st.D;st.seq=(st.seq||0)+1;
   if(ev.tip==='ariza'){const from=ev.bas!=null?(typeof ev.bas==='number'?ev.bas:parseT(D,ev.bas)):st.now;const to=from+(+ev.saat||8);
@@ -3710,7 +3715,7 @@ function propose(st,base,ev,opts={}){
   // fazla mesai: gecikmeli işlerin geç biten işlemlerinin tezgâhına, o günün gecesi ya da ertesi tatil gününün sabahı
   const B=list.reduce((a,x)=>cmpEv(evaluate(x.plan,cand,base),evaluate(a.plan,cand,base))>0?x:a).plan;const ev0=evaluate(B,cand,base);const cnt={},days={};
   for(const r of Object.values(B.ops)){if(r.fas||r.pin)continue;const x=ev0.J[r.job];if(!x||!(x.T>0)||!(r.sl<0))continue;
-    const pw=PW[cx.jobs[r.job].oncelik]||1;cnt[r.m]=(cnt[r.m]||0)+Math.min(x.T,r.C-r.S)*pw;(days[r.m]=days[r.m]||new Set()).add(Math.floor(Math.max(r.S,cand.now)/24));}
+    const pw=isAgirligi(cx.jobs[r.job]);cnt[r.m]=(cnt[r.m]||0)+Math.min(x.T,r.C-r.S)*pw;(days[r.m]=days[r.m]||new Set()).add(Math.floor(Math.max(r.S,cand.now)/24));}
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
   // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 ise eski sınırla yalnız gösterilir
   const vH=id=>{const v=cand.D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;};
@@ -3861,19 +3866,19 @@ function lns(st,start,ref,opt={}){
     const cands=[];const key=(q,i)=>{const a=q[i-1],b=q[i];const lo=a?Math.max(a.S,frz):frz,hi=b?b.S:lo+48;return (lo+hi)/2;};
     const lateJ=late.map(x=>x.id).filter(id=>cx.jobs[id].ops.some(o=>movable(cur.ops[o.id])));
     // ilk tur: gecikmiş siparişler ağırlıklı gecikme sırasıyla tek tek zincir olarak öne alınır
-    const sweep=lateJ.filter(id=>!tried.has(id)).sort((a,b)=>E.J[b].T*(PW[cx.jobs[b].oncelik]||1)-E.J[a].T*(PW[cx.jobs[a].oncelik]||1));
+    const sweep=lateJ.filter(id=>!tried.has(id)).sort((a,b)=>E.J[b].T*isAgirligi(cx.jobs[b])-E.J[a].T*isAgirligi(cx.jobs[a]));
     const ru=R.u();const kind=sweep.length?'zincir':lateJ.length&&ru<.35?'zincir':crit.length&&ru<.75?'one':'pencere';
     let x=null,tag='';
     if(kind==='zincir'){
       // gecikmiş siparişin bütün işlemleri kapasitesiz en erken başlama anlarının hemen önüne alınır
-      let tot=0;const wv=lateJ.map(id=>{const v=(E.J[id].T||0)*(PW[cx.jobs[id].oncelik]||1)+.01;tot+=v;return v;});let u=R.u()*tot,jid=lateJ[0];
+      let tot=0;const wv=lateJ.map(id=>{const v=(E.J[id].T||0)*isAgirligi(cx.jobs[id])+.01;tot+=v;return v;});let u=R.u()*tot,jid=lateJ[0];
       for(let i=0;i<lateJ.length;i++){u-=wv[i];if(u<=0){jid=lateJ[i];break;}}
       if(sweep.length){jid=sweep[0];tried.add(jid);}
       tag='zincir '+jid;x={id:jid};
       for(const variant of ['ayni','hizli','karisik','karisik','karisik','karisik']){const mods=zincirMods(cur,jid,variant);if(mods.length)cands.push(mods);}
     } else if(kind==='one'&&crit.length){
       // ağırlıklı gecikmeye göre seç
-      let tot=0;const wv=crit.map(r=>{const v=(E.J[r.job].T||0)*(PW[cx.jobs[r.job].oncelik]||1)+.01;tot+=v;return v;});
+      let tot=0;const wv=crit.map(r=>{const v=(E.J[r.job].T||0)*isAgirligi(cx.jobs[r.job])+.01;tot+=v;return v;});
       let u=R.u()*tot;for(let i=0;i<crit.length;i++){u-=wv[i];if(u<=0){x=crit[i];break;}}x=x||crit[0];tag='öne al';
       const o=cx.byId[x.id];
       for(const c of o.c){if(c.fas||(st.pref[o.id]&&st.pref[o.id]!==c.m))continue;
@@ -3896,7 +3901,7 @@ function lns(st,start,ref,opt={}){
       if(ok(p,e)&&cmpEv(e,E)>0&&(!best||cmpEv(e,best.e)>0))best={p,e,mods};
       // ikinci derece: hedef sipariş kazandı ama başkaları geciktiyse, yeni gecikenler de zincirle öne alınır
       else if(kind==='zincir'&&x&&e.J[x.id]&&E.J[x.id]&&e.J[x.id].T<E.J[x.id].T-.5){
-        const l2=Object.values(e.J).filter(z=>z.T>0&&z.id!==x.id&&(!E.J[z.id]||z.T>E.J[z.id].T+.5)).sort((a,b)=>b.T*(PW[cx.jobs[b.id].oncelik]||1)-a.T*(PW[cx.jobs[a.id].oncelik]||1)).slice(0,3);
+        const l2=Object.values(e.J).filter(z=>z.T>0&&z.id!==x.id&&(!E.J[z.id]||z.T>E.J[z.id].T+.5)).sort((a,b)=>b.T*isAgirligi(cx.jobs[b.id])-a.T*isAgirligi(cx.jobs[a.id])).slice(0,3);
         let p2=p,e2=e;
         for(const z of l2){let bz=null;for(const v of ['ayni','hizli']){if(Date.now()-t0>budget)break;const m2=zincirMods(p2,z.id,v);if(!m2.length)continue;const p3=lnsDecode(st,p2,m2,cx,free);dec++;const e3=evaluate(p3,st,ref,true);if(cmpEv(e3,e2)>0&&(!bz||cmpEv(e3,bz.e)>0))bz={p:p3,e:e3};}
           if(bz){p2=bz.p;e2=bz.e;}}
@@ -4317,6 +4322,63 @@ function stKur(S, ek = [], gevset = true) {
 }
 /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi); başlangıç günü 07:00'den önce değildir. */
 function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; }
+/* 36 a: motorun ufku başlangıçtan HDAYS gündür; başlangıç sabit kalırsa ufuk biter. Kayıtlı bütün plan saatleri başlangıç günü 00:00'dan
+   sayıdır: başlangıç g gün ileri alınınca her saat 24g, her gün sırası g azalır. Tarih metinleri (termin, tatil) ve gerçek anlar (canlı
+   yerleşim) olduğu gibi kalır. Geçmişte kalan plan işi düşmez (taban planda olmayan iş yeniden yerleşirdi), eksi saatte tamamlanmış sayılır;
+   yalnız yeni günden önce bitmiş arıza ve fazla mesai düşer. Gece vardiyası ertesi güne taştığı için önceki günün mesaisi kalır. */
+const BASLANGIC_ESIGI = 7;
+const kaydirSayi = (x, k, h) => { if (x && typeof x[k] === 'number') x[k] -= h; };
+const kaydirAlan = (x, alanlar, h) => { if (x) for (const k of alanlar) kaydirSayi(x, k, h); };
+function gunFarki(a, b) {
+  const t = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof s === 'string' ? s : ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+  const f = Math.round((t(b) - t(a)) / 86400000); return isFinite(f) ? f : null;
+}
+function planKaydir(p, h) {
+  if (!p || typeof p !== 'object') return;
+  for (const r of Object.values(p.ops || {})) kaydirAlan(r, ['S', 'Su', 'C', 'lot1'], h);
+  for (const j of Object.values(p.J || {})) kaydirSayi(j, 'C', h);
+  kaydirSayi(p.ozet, 'Cmax', h); kaydirSayi(p.oncekiOzet, 'Cmax', h);
+  for (const k in p.lbC || {}) kaydirSayi(p.lbC, k, h);
+}
+/* nabız ve sabit referansın kısa kayıtları: işlem [tezgâh, başlangıç], sipariş [bitiş, gecikme] */
+function kisaKaydir(l, i, h) { for (const k in l || {}) if (Array.isArray(l[k]) && typeof l[k][i] === 'number') l[k][i] -= h; }
+const OLAY_SAATI = { ariza: 'bas', acil: 'termin' };
+const OLAY_GUNU = { eksik: 'gun', mesai: 'gun' };
+/* x: çalışma ya da senaryo (her biri kendi D'siyle). Dönen: kayan gün; başlangıç yoksa ya da yeni gün ileride değilse 0, hiçbir şey değişmez. */
+function durumKaydir(x, yeni) {
+  const g = x && x.D && x.D.meta ? gunFarki(x.D.meta.baslangic, yeni) : null; if (!(g > 0)) return 0;
+  const h = g * 24;
+  x.D.meta.baslangic = yeni;
+  for (const s of x.D.siparisler || []) kaydirAlan(s, ['termin', 'serbest'], h);
+  for (const s of x.D.satinalma || []) kaydirSayi(s, 'gelis', h);
+  if (Array.isArray(x.down)) { for (const d of x.down) kaydirAlan(d, ['from', 'to'], h); x.down = x.down.filter(d => !(typeof d.to === 'number' && d.to <= 0)); }
+  if (Array.isArray(x.ekMesai)) { for (const e of x.ekMesai) kaydirSayi(e, 'gun', g); x.ekMesai = x.ekMesai.filter(e => !(typeof e.gun === 'number' && e.gun < -1)); }
+  for (const l of Object.values(x.locks || {})) kaydirSayi(l, 'S', h);
+  for (const a of Object.values(x.gercek || {})) kaydirAlan(a, ['S', 'C', 'sayim'], h);
+  for (const ev of x.olaylar || []) { if (OLAY_SAATI[ev.tip]) kaydirSayi(ev, OLAY_SAATI[ev.tip], h); if (OLAY_GUNU[ev.tip]) kaydirSayi(ev, OLAY_GUNU[ev.tip], g); }
+  planKaydir(x.plan, h);
+  /* senaryo planın özetini ve sipariş bitişlerini ayrıca da tutar */
+  planKaydir({ J: x.J, ozet: x.ozet }, h);
+  return g;
+}
+/* Çalışmanın başlangıcı yeni güne (GGGG-AA-GG) alınır; senaryolar kendi başlangıçlarından kayar. Dönen: çalışmanın kayan günü. */
+function baslangicKaydir(S, yeni) {
+  const g = durumKaydir(S, yeni); if (!g) return 0;
+  const h = g * 24;
+  for (const s of S.senaryolar || []) durumKaydir(s, yeni);
+  for (const n of [S.nbSabit, ...(S.nabiz || [])]) if (n) { kaydirSayi(n.o, 'cmax', h); kisaKaydir(n.ops, 1, h); kisaKaydir(n.J, 0, h); }
+  for (const l of Object.values(S.sevkIz || {})) for (const k of l || []) kaydirAlan(k, ['C', 'due'], h);
+  for (const k of S.paGecmis || []) kaydirSayi(k.ozet, 'Cmax', h);
+  kaydirSayi(S, 'simdi', h);
+  return g;
+}
+/* Gerçek gün başlangıçtan BASLANGIC_ESIGI gün ya da daha ilerideyse başlangıç o güne alınır (eşik her gün kaydırıp bütün kaydı yeniden
+   yazmamak için). an: gerçek an (ms). Dönen: kayan gün, kaymadıysa 0. */
+function baslangicTazele(S, an) {
+  const s = duvarSaati(an); if (!s || !S || !S.D || !S.D.meta) return 0;
+  const bugun = s.slice(0, 10), g = gunFarki(S.D.meta.baslangic, bugun);
+  return g != null && g >= BASLANGIC_ESIGI ? baslangicKaydir(S, bugun) : 0;
+}
 /* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek),
    kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
    kaydı, kaynak: { durum, ek } (çerçevenin kaynakOku cevabı) ya da null. Girdiler değişmez. Dönen: { S, st }; çalışma yoksa null. */
@@ -4418,7 +4480,7 @@ function mipModel(st,cx,jobIds,opt={}){
       R.push(`p${ri++}: `+lin(terms)+' >= '+(lag+q.k));}}
   // kritik yol sınırı da geçerlidir: model en az onun kadar güçlü olur
   const T={},TL={};const obj=[];const cp=lowerBound(st,cx);
-  for(const jid of jobIds){const j=cx.jobs[jid];if(j.due==null)continue;const pw=PW[j.oncelik]||1;
+  for(const jid of jobIds){const j=cx.jobs[jid];if(j.due==null)continue;const pw=isAgirligi(j);
     const succ=new Set();for(const o of j.ops)for(const [p] of o.pr)succ.add(p);
     const tn='T'+jid.replace(/[^A-Za-z0-9]/g,'_');T[jid]=tn;obj.push([tn,pw]);TL[tn]=isFinite(cp.C[jid])?Math.max(0,cp.C[jid]-j.due):0;
     for(const o of j.ops){if(succ.has(o.id))continue;const c=CE(o.id);
@@ -4473,7 +4535,7 @@ function cerceveModel(st,cx,plan,opt={}){
     const ms=o.c.filter(c=>!c.fas);if(!ms.length||o.c.some(c=>c.fas&&!c.opt))continue;
     let best=null;for(const c of ms){const p=suMin(o,c,cx)+c.run;if(!best||p<best.p)best={c,p};}
     const g=cx.M[best.c.m].grup,p=best.p;if(p<1e-6)continue;
-    const j=cx.jobs[o.job],pw=PW[j.oncelik]||1,eb=Math.max(0,bOf(ht.head[o.id]));
+    const j=cx.jobs[o.job],pw=isAgirligi(j),eb=Math.max(0,bOf(ht.head[o.id]));
     const row=[];Y[o.id]={};P[o.id]=p;(EB[g+'|'+eb]=EB[g+'|'+eb]||[]).push({id:o.id,h:ht.head[o.id]});
     for(let k=Math.min(eb,NB);k<=NB;k++){const v='y'+(n++);
       const end=k<NB?bk(k)[1]:bk(NB)[0]+7*24;const late=j.due==null?0:Math.max(0,end+(ht.tail[o.id]||0)-j.due);
@@ -4504,7 +4566,7 @@ function cerceveModel(st,cx,plan,opt={}){
 // HiGHS'in grup × dilim ek vardiya sayısı somut vardiyaya çevrilir: o haftada geciken işlerin en çok yüklendiği tezgâh, en erken gün
 function cerceveUygula(st,cx,plan,mod,vals){
   const ev=plan?evaluate(plan,st,null,true):null,yuk={};
-  if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*(PW[cx.jobs[r.job].oncelik]||1);}
+  if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*isAgirligi(cx.jobs[r.job]);}
   const sec=[],ozet=[];
   for(const key in mod.nv){const n=Math.round(vals[mod.nv[key]]||0);if(n<=0)continue;const [g,ks]=key.split('|'),k=+ks;
     const c=mod.ad.filter(x=>x.g===g&&mod.bOf(x.a)===k).sort((a,b)=>(yuk[b.m+'|'+k]||0)-(yuk[a.m+'|'+k]||0)||a.a-b.a);
@@ -4923,7 +4985,7 @@ function kpiSerit(p) {
 }
 function siparisListesi(p) {
   const D = S.D;
-  const l = D.siparisler.map(s => { const j = p.J[s.id]; const w = !j ? -2 : j.T == null ? 1e9 : j.T * (PW[s.oncelik] || 1); return { s, j, w }; })
+  const l = D.siparisler.map(s => { const j = p.J[s.id]; const w = !j ? -2 : j.T == null ? 1e9 : j.T * isAgirligi(s); return { s, j, w }; })
     .sort((a, b) => b.w - a.w || (parseT(D, a.s.termin) ?? 1e9) - (parseT(D, b.s.termin) ?? 1e9));
   const gec = l.filter(x => x.j && (x.j.T == null || x.j.T > 0.01)).length;
   const satir = ({ s, j }) => {
@@ -5311,7 +5373,7 @@ function sAnaliz() {
   const cx = cxAl(); const p = S.plan; const D = S.D;
   if (!cx) return '<p class="pm-alt">Veri derlenemedi.</p>';
   const l = D.siparisler.map(s => ({ s, j: p.J[s.id] || {}, a: ayristir(p, cx, s.id) })).filter(x => x.a && x.a.tam)
-    .sort((a, b) => ((b.j.T || 0) * (PW[b.s.oncelik] || 1)) - ((a.j.T || 0) * (PW[a.s.oncelik] || 1)) || b.a.C - a.a.C);
+    .sort((a, b) => ((b.j.T || 0) * isAgirligi(b.s)) - ((a.j.T || 0) * isAgirligi(a.s)) || b.a.C - a.a.C);
   const olcek = Math.max(24, ...l.map(x => Math.max(x.a.toplam, (parseT(D, x.s.termin) ?? 7) - 7)));
   const satirlar = l.map(x => {
     const t = parseT(D, x.s.termin); const lb = p.lbC && p.lbC[x.s.id];
@@ -5993,7 +6055,7 @@ function cpGirdi(st, plan) {
     if (o.aile) x.aile = o.aile; if (o.aparat) x.aparat = o.aparat;
     if (r) x.ipucu = { m: r.m, s: Math.ceil(r.S / SL - 1e-9) }; ops.push(x);
   }
-  const jobs = {}; for (const j in cx.jobs) jobs[j] = { due: cx.jobs[j].due == null ? null : cx.jobs[j].due / SL, w: PW[cx.jobs[j].oncelik] || 1 };
+  const jobs = {}; for (const j in cx.jobs) jobs[j] = { due: cx.jobs[j].due == null ? null : cx.jobs[j].due / SL, w: isAgirligi(cx.jobs[j]) };
   // personel yalnız genel vardiya açıkken sayılır; kapalı saatte tezgâhlar durduğu için kısıt konmaz
   const gm = mask(cx.gen), NQ = Math.ceil(H / SL), seg = a => { const o = []; let k0 = 0; for (let k = 1; k <= NQ; k++) if (k === NQ || a(k) !== a(k0)) { o.push([k0, k, a(k0)]); k0 = k; } return o; };
   const per = { tot: seg(k => gm[k] ? Math.max(0, cx.capTot[k]) : -1), g: {} }; for (const g in cx.capG) per.g[g] = seg(k => gm[k] ? Math.max(0, cx.capG[g][k]) : -1);
@@ -7499,7 +7561,7 @@ function gecikmeKaynaklari(p) {
   for (const s of S.D.siparisler) {
     const j = p.J[s.id]; if (!j || !(j.T > 0.05)) continue;
     const a = ayristir(p, cx, s.id); if (!a || !a.tam) continue;
-    const w = PW[s.oncelik] || 1; let en = null;
+    const w = isAgirligi(s); let en = null;
     const yer = {}; for (const [k, ad, v] of a.kaynak) yer[ad] = (yer[ad] || { k, v: 0 }), yer[ad].v += v;
     for (const [ad, x] of Object.entries(yer)) { (top[ad] = top[ad] || { k: x.k, v: 0, n: 0 }); top[ad].v += x.v * w; top[ad].n++; if (!en || x.v > en.v) en = { ad, ...x }; }
     is[s.id] = en;
@@ -7517,7 +7579,7 @@ function sorunlar(p) {
   if (fail.length) ekle('hata', 'alert', `${fail.length} işlem planlanamadı`, `${fail.slice(0, 3).join(', ')}${fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`, [['Veri denetimi', 'git', 'denetim']]);
   const kay = gecikmeKaynaklari(p);
   const gec = D.siparisler.map(s => ({ s, j: p.J[s.id] })).filter(x => x.j && (x.j.T == null || x.j.T > 0.05))
-    .sort((a, b) => ((b.j.T ?? 1e4) * (PW[b.s.oncelik] || 1)) - ((a.j.T ?? 1e4) * (PW[a.s.oncelik] || 1)));
+    .sort((a, b) => ((b.j.T ?? 1e4) * isAgirligi(b.s)) - ((a.j.T ?? 1e4) * isAgirligi(a.s)));
   for (const { s, j } of gec.slice(0, 3)) {
     const en = kay.is[s.id];
     const neden = en ? ` En çok <b>${esc(en.ad)}</b> bekledi (${saat(en.v)}).` : '';
@@ -8711,7 +8773,7 @@ function sozVer(j) {
     const eski = S.D.siparisler; S.D.siparisler = eski.map(x => x.id === j ? { ...x, havuz: false, oncelik: 1 } : x);
     let st2; try { st2 = stOf(); } finally { S.D.siparisler = eski; }
     const cx2 = compile(st2); const p2 = kisaArama(st2, cx2, lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx2, true), 700); const e2 = evaluate(p2, st2, null, true);
-    const digerW = (e, pl) => Object.entries(e.J || {}).filter(([k]) => k !== j).reduce((t, [, x]) => t + (x.T || 0) * (PW[(S.D.siparisler.find(q => q.id === x.id) || {}).oncelik] || 1), 0);
+    const digerW = (e, pl) => Object.entries(e.J || {}).filter(([k]) => k !== j).reduce((t, [, x]) => t + (x.T || 0) * isAgirligi(S.D.siparisler.find(q => q.id === x.id) || {}), 0);
     const w0 = S.plan.ozet.wT; const etk = Object.keys(e2.J || {}).filter(k => k !== j && S.plan.J[k] && (e2.J[k].T || 0) > (S.plan.J[k].T || 0) + 0.05);
     U.soz = { j, termin: parseT(S.D, s.termin), d1: e1.J[j] ? e1.J[j].C : null, d2: e2.J[j] ? e2.J[j].C : null, bedel: Math.max(0, digerW(e2) - w0), etk };
   } catch (e) { bildir('Söz tarihi hesaplanamadı: ' + e.message, 'hata'); }
@@ -8760,7 +8822,7 @@ function partiBol(jid, opId, a, altM) {
   a = Math.round(+a); if (!(a >= 1 && a < s.adet)) { bildir(`Birinci parti 1 ile ${s.adet - 1} arasında olmalı.`, 'hata'); return; }
   if (basladiMi(jid)) { bildir('Başlamış sipariş bu denemede bölünmez.', 'hata'); return; }
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = [parca(a, 1), parca(s.adet - a, 2)];
   const eski = S.D.siparisler;
   try {
@@ -9075,7 +9137,7 @@ function bgGelenler(p) {
 function bgKararlar(p) {
   const kay = gecikmeKaynaklari(p); const km = bgKarar(); const out = [];
   const gec = S.D.siparisler.filter(s => !s.havuz).map(s => ({ s, j: p.J[s.id] })).filter(x => x.j && (x.j.T == null || x.j.T > 0.05))
-    .sort((a, b) => ((b.j.T ?? 1e4) * (PW[b.s.oncelik] || 1)) - ((a.j.T ?? 1e4) * (PW[a.s.oncelik] || 1)));
+    .sort((a, b) => ((b.j.T ?? 1e4) * isAgirligi(b.s)) - ((a.j.T ?? 1e4) * isAgirligi(a.s)));
   for (const { s, j } of gec) {
     const en = kay.is[s.id];
     const neden = en ? ` En çok <b>${esc(en.ad)}</b> yüzünden bekliyor (${esc(gecMetin(en.v))}).` : '';
@@ -9579,7 +9641,7 @@ function v20SurumGovde() {
 /* ---------- 5. Öneri: kabul, ret, değiştir ---------- */
 function v20OneriHesapla() {
   if (!S.plan || !yetkili('plan.yaz')) { V20.oneri = { dv: S.dataVer, liste: [], bitti: true }; return; }
-  const gec = Object.entries(S.plan.J).filter(([j, x]) => x.T > 0.05 && !V20.ret.has(j)).map(([j, x]) => { const s = S.D.siparisler.find(y => y.id === j); return { j, T: x.T, w: x.T * (PW[s ? s.oncelik : 2] || 1) }; })
+  const gec = Object.entries(S.plan.J).filter(([j, x]) => x.T > 0.05 && !V20.ret.has(j)).map(([j, x]) => { const s = S.D.siparisler.find(y => y.id === j); return { j, T: x.T, w: x.T * isAgirligi(s || { oncelik: 2 }) }; })
     .sort((a, b) => b.w - a.w).slice(0, 3);
   V20.oneri = { dv: S.dataVer, liste: gec.map(x => ({ ...x, adaylar: null, sec: 0 })), bitti: !gec.length };
   const sira = V20.oneri; let i = 0;
@@ -9627,7 +9689,7 @@ function v20Istisnalar() {
   const now = cx.st.now; const l = [];
   const ilk = {}; for (const r of Object.values(p.ops)) if (isFinite(r.S) && !r.done && (!ilk[r.job] || r.S < ilk[r.job].S)) ilk[r.job] = r;
   for (const [j, x] of Object.entries(p.J)) {
-    const s = S.D.siparisler.find(y => y.id === j); const pw = PW[s ? s.oncelik : 2] || 1;
+    const s = S.D.siparisler.find(y => y.id === j); const pw = isAgirligi(s || { oncelik: 2 });
     if (x.T > 0.05) l.push({ tur: 'gec', w: x.T * pw, j, op: ilk[j] && ilk[j].id, t: ilk[j] && ilk[j].S, baslik: `${j} ${gecMetin(x.T)} geç`, neden: `${ONCELIK[s ? s.oncelik : 2] || 'Normal'} öncelik (×${pw}) · ${sayi(x.T, 1)} sa gecikme` });
   }
   for (const j in ilk) {
@@ -13476,18 +13538,20 @@ function agKatki(s, D = S.D) {
   }
   return +s.gelir - t;
 }
-/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri */
+/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri. Bölünen siparişin parçasında (35 b) tutardan gelen bileşenler zaten
+   oranlıdır (parçanın geliri); siparişe ait olanlar (girilen ceza, taban bedel) adet payıyla sayılır. */
 function agBedel(D, s, A = agAyar(D)) {
+  const pay = isPayi(s);
   const mu = (D.musteriler || []).find(m => m.id === s.musteri) || null;
   const tutar = s.gelir == null ? null : +s.gelir;
   const oran = s.cezaOran != null ? +s.cezaOran : mu && mu.cezaOran != null ? +mu.cezaOran : null;
-  const ceza = s.cezaGun != null ? +s.cezaGun / 24 : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
+  const ceza = s.cezaGun != null ? +s.cezaGun / 24 * pay : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
   const fin = tutar != null ? tutar * A.fin / 100 / 24 : 0;
   const B = A.bil; const kat = agKatki(s); const kr = kat == null ? null : Math.max(0, kat) * A.kar / 100 / 24;
   const sc = B.sinif && mu ? (A.sinif[mu.sinif] ?? 1) : 1; const el = B.elle ? agElle(s) : 1;
   const eksik = []; if (tutar == null) eksik.push('tutar'); if (B.ceza && ceza == null) eksik.push('ceza oranı'); if (!mu) eksik.push('müşteri'); if (B.kar && kat == null) eksik.push('maliyet');
-  const temel = B.ceza ? (ceza == null ? A.taban : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
-  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban;
+  const temel = B.ceza ? (ceza == null ? A.taban * pay : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
+  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban * pay;
   const tavanO = s.cezaTavan != null ? +s.cezaTavan : mu && mu.cezaTavan != null ? +mu.cezaTavan : A.tavan;
   const tavanTL = B.ceza && s.cezaGun == null && tutar != null && ceza != null ? tutar * tavanO / 100 : null;
   return { b: ham * sc * el, ceza: B.ceza ? ceza : null, temel, fin: finK, kr: B.kar ? kr : null, kat, sc, el, sinif: mu ? mu.sinif : null, mu, eksik, taban: (B.ceza && ceza == null) || bos, tutar, oran, tavanO, tavanTL, sonra: ham * sc * el };
@@ -13526,7 +13590,8 @@ stOf = function (ek, gevset) {
   const P = S.plan && S.plan.J ? S.plan.J : {};
   for (const [s] of l) { const x = agBedel(st.D, s, A); const T = P[s.id] ? P[s.id].T : 0;
     const asti = x.ceza > 0 && x.tavanTL != null && T > x.tavanTL / x.ceza; const be = asti ? x.sonra : x.b;
-    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; }
+    /* parçanın bedeli payını içerir: motor bir daha payla çarpmasın */
+    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; s.pay = 1; }
   return st;
 };
 
@@ -15297,7 +15362,7 @@ function matKarmaUygula() {
        ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */
     if (st && st.w && !st.w.tezgahEski && st.tlAmac && st.tlAmac.ac && cx && cx.jobs) {
       const orta = l => { const a = l.filter(x => x > 0 && isFinite(x)).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
-      const bl = Object.values(cx.jobs).map(j => (PW[j.oncelik] || 1) * (st.tlAmac.birim || 5) * (st.tlAmac.kT || 1)); const V = bl.length ? bl.reduce((x, y) => x + y, 0) / bl.length : null;
+      const bl = Object.values(cx.jobs).map(j => isAgirligi(j) * (st.tlAmac.birim || 5) * (st.tlAmac.kT || 1)); const V = bl.length ? bl.reduce((x, y) => x + y, 0) / bl.length : null;
       const ucr = orta(Object.values(cx.M).map(M => +M.ucret)); const ay = +(cx.A && cx.A.ayarciUcret) || 0;
       const su = orta(cx.ops.map(o => Math.min(...o.c.filter(c => !c.fas).map(c => c.su)))); 
       const chg = st.w.chgTezgah != null ? +st.w.chgTezgah : su != null && ucr != null ? su * (ucr + ay) : null;
@@ -15343,7 +15408,7 @@ function saatSabitle() {
 function bolmeHamle(jid, opId, a, altM) {
   const s = S.D.siparisler.find(x => x.id === jid); if (!s || !(a >= 1 && a < s.adet)) return null;
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = [parca(a, 1), parca(s.adet - a, 2)]; const eski = S.D.siparisler; const once = U.hamle;
   try {
     S.D.siparisler = eski.flatMap(x => x.id === jid ? yeni : [x]);
@@ -15459,7 +15524,7 @@ function bolmeHamleN(jid, opId, parcalar, ad, ms) {
   const s = S.D.siparisler.find(x => x.id === jid); if (!s) return null;
   if (parcalar.length < 2 || parcalar.some(x => !(x.n >= 1)) || parcalar.reduce((t, x) => t + x.n, 0) !== s.adet) return null;
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = parcalar.map((x, i) => parca(x.n, i + 1)); const eski = S.D.siparisler; const once = U.hamle;
   try {
     S.D.siparisler = eski.flatMap(x => x.id === jid ? yeni : [x]);
@@ -15542,7 +15607,7 @@ function otoBolme(elle) {
   const bozuldu = () => S.plan !== asil.plan || S.dataVer !== asil.dv || calisan;
   const temelTL = () => { const st = stOf(); const cx = compile(st); const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); return tlToplam(evaluate(kisaArama(st, cx, p0, 300), st, null, true)); };
   const geciken = () => Object.entries(S.plan.J).filter(([j, J]) => J.T > 0.01 && !j.includes('/') && !denendi.has(j) && !basladiMi(j))
-    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? (PW[s.oncelik] || 1) : 1), s }; })
+    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? isAgirligi(s) : 1), s }; })
     .filter(x => x.s && x.s.adet >= 2 * bolmeMin() && !x.s.havuz).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.j);
   otoBolmeSurer = { n: 0 };
   const bitir = () => {
@@ -16390,7 +16455,7 @@ function btKur(A, idx, ms) {
   const bol = A.map((o, i) => ({ o, sec: o.l[idx[i]] })).filter(x => x.sec.n > 1);
   const Y = {};
   for (const { o, sec } of bol) { const pr = btParcalar(o, sec);
-    Y[o.j] = { o, pr, yeni: pr.map((x, i) => ({ ...clone(o.s), id: `${o.j}/${i + 1}`, adet: x.n, gelir: o.s.gelir == null ? null : Math.round(o.s.gelir * x.n / o.s.adet), malzeme: (o.s.malzeme || []).map(m => ({ ...m })) })) }; }
+    Y[o.j] = { o, pr, yeni: pr.map((x, i) => siparisParcasi(o.s, `${o.j}/${i + 1}`, x.n)) }; }
   const eski = S.D.siparisler;
   S.D.siparisler = eski.flatMap(x => Y[x.id] ? Y[x.id].yeni : [x]);
   let st; try { st = stOf(); } finally { S.D.siparisler = eski; }
@@ -16811,7 +16876,7 @@ function orAdaylar() {
   const A = orAcik();
   return S.D.siparisler.filter(s => !s.havuz && !s.ortus && !A[s.id] && !A[s.id.split('/')[0]] && !basladiMi(s.id) && (S.plan.J[s.id] || {}).T > 0.05).filter(s => {
     const u = S.D.urunler.find(z => z.id === s.urun); return u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); })
-    .map(s => ({ s, w: S.plan.J[s.id].T * (PW[s.oncelik] || 1) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
+    .map(s => ({ s, w: S.plan.J[s.id].T * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
 }
 function orOlc(ms) {
   const st = stOf(); const cx = compile(st);
@@ -16878,7 +16943,7 @@ otoBolme = function (elle) {
   const tut = (r, locks) => { S.plan = planKaydi(r.p, r.st, null); if (locks) S.locks = locks; S.dataVer += 1e-3; tl0 = r.tl; };
   const kok = j => j.split('/')[0];
   const geciken = () => Object.entries(S.plan.J).filter(([j, J]) => J.T > 0.01 && !denendi.has(j) && !basladiMi(j))
-    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? (PW[s.oncelik] || 1) : 1), s }; })
+    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? isAgirligi(s) : 1), s }; })
     .filter(x => x.s && !x.s.havuz).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.j);
   const ortusOlur = s => { if (s.ortus) return false; const u = S.D.urunler.find(z => z.id === s.urun); return !!u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); };
   otoBolmeSurer = { n: 0 };
@@ -16952,7 +17017,7 @@ function montajAramaKur() {
     const altlar = pk => { const out = [], y = [pk], g = new Set(); while (y.length) { const k = y.pop(); for (const c of cocuk[k] || []) { if (g.has(c)) continue; g.add(c); out.push(c); y.push(kok(c)); } } return out; };
     let cur = L.plan, E = L.e; const failN = (cur.fail || []).length; let iyi = 0;
     const gec = Object.keys(E.J).filter(j => E.J[j].T > 0 && cocuk[kok(j)] && cx.jobs[j])
-      .sort((a, b) => E.J[b].T * (PW[cx.jobs[b].oncelik] || 1) - E.J[a].T * (PW[cx.jobs[a].oncelik] || 1));
+      .sort((a, b) => E.J[b].T * isAgirligi(cx.jobs[b]) - E.J[a].T * isAgirligi(cx.jobs[a]));
     if (!gec.length) return L;
     const HT = lbHeadsTails(st, cx);
     const tasin = (jobs, pl) => { const mods = [];
@@ -17010,7 +17075,7 @@ function kayanPencereKur() {
     const sure = () => { if (bitti) return true; if (is < 1) return false; is = 0; bitti = Date.now() - t0 > budget; return bitti; };
     let HT = BAS.get(cx); if (!HT) { HT = lbHeadsTails(st, cx); BAS.set(cx, HT); }
     const ok = (p, e) => (p.fail || []).length <= failN && e.chg <= maxChg;
-    const pw = j => PW[cx.jobs[j].oncelik] || 1;
+    const pw = j => isAgirligi(cx.jobs[j]);
     /* pencere çözümü işlemleri dondurulmuş diye işaretler; asıl dondurma sınırının ötesindekiler sonraki pencerelerde yine oynar */
     const temizle = p => { for (const id in p.ops) { const r = p.ops[id]; if (r.frz && !r.act && !r.done && (free || r.S >= frz - 1e-9)) { const q = { ...r }; delete q.pin; delete q.frz; p.ops[id] = q; } } return p; };
     const hareketli = r => r && !r.act && !r.done && (free || !r.pin) && !r.fas && r.S >= frz - 1e-9 && !st.locks[r.id];
@@ -17162,7 +17227,7 @@ const hzBasladi = (ix, j) => (ix.get(j) || []).some(([, r]) => r.act || r.done |
   const A = orAcik(); const ix = hzIs(S.plan.ops); const ur = hzIlk(S.D.urunler, 'id', z => z.id);
   return S.D.siparisler.filter(s => !s.havuz && !s.ortus && !A[s.id] && !A[s.id.split('/')[0]] && !hzBasladi(ix, s.id) && (S.plan.J[s.id] || {}).T > 0.05).filter(s => {
     const u = ur.get(s.urun); return u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); })
-    .map(s => ({ s, w: S.plan.J[s.id].T * (PW[s.oncelik] || 1) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
+    .map(s => ({ s, w: S.plan.J[s.id].T * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
 }; }
 
 /* sipariş maliyeti yalnız o siparişin adımlarına bakar: plana o siparişin adımlarını aynı sırayla taşıyan bir görünüm verilir */
@@ -19666,15 +19731,22 @@ if (TMI_ICINDE) {
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
   };
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
-     yazılmaz. Planın başlangıç günü sabit kalır: kayıtlı plan saatleri bu güne göredir. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
+     yazılmaz. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
   const st0 = stOf;
   stOf = function () { return simdiUygula(st0.apply(this, arguments), S); };
   const coz0 = coz;
   coz = function () {
     if (S && S.D && yetkili('plan.yaz') && !calisan) {
+      /* 36 a: başlangıç günü yeniden planlamada bugüne kayar (girdi.betik baslangicTazele); kayıtlı saatler onunla birlikte kayar. Geri alma
+         yığınları eski eksendedir, boşaltılır. Plan güncelse güncel kalır: yalnız eksen değişti. */
+      const eski = S.D.meta && S.D.meta.baslangic; const guncel = planGuncel();
+      const g = baslangicTazele(S, Date.now());
+      if (g) {
+        geriAl.length = 0; planGeri.length = 0; U.hamle = null;
+        S.dataVer++; if (guncel) S.plan.dataVer = S.dataVer;
+        iz('Planın başlangıç günü kaydı', `${eski} -> ${S.D.meta.baslangic} (${g} gün)`);
+      }
       const n = tmiSaat(S.D, Date.now()); if (n != null && n > 7) S.simdi = Math.floor(n * 4) / 4;
-      /* motorun ufku başlangıçtan HDAYS gündür; başlangıç ötelenmez (kayıtlı saatler ona bağlı), yaklaşınca söylenir */
-      if (S.simdi != null && S.simdi > (HDAYS - 14) * 24) bildir(`Planın başlangıç günü (${S.D.meta.baslangic}) eski; planlama ufku ${HDAYS} gün olduğu için ufkun sonuna ${Math.max(0, Math.floor(HDAYS - S.simdi / 24))} gün kaldı.`, 'uyari');
     }
     return coz0.apply(this, arguments);
   };
