@@ -2,7 +2,6 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { TUM_BOLUMLER } from './bolumler.ts';
 import { KaynaklarEkrani } from './KaynaklarEkrani.tsx';
-import { paletli } from './KomutPaleti.tsx';
 import { MalzemelerEkrani } from './MalzemelerEkrani.tsx';
 import { MerkezBolumu } from './BolumYeri.tsx';
 import { PlanCizelgesiEkrani, PlanMatrisiEkrani } from './PlanSaltEkrani.tsx';
@@ -36,6 +35,6 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/matris', ekran: PlanMatrisiEkrani },
   ...ESKI_PLAN_ADRESLERI.map(([yol, hedef]) => ({ yol, ekran: () => <Navigate to={hedef} replace /> })),
   ...TUM_BOLUMLER.filter((b) => b.yol !== '/rota').map((b) => ({
-    yol: b.yol, ekran: ROTA_TANIM_BOLUMLERI.has(b.anahtar) ? ReceteRotayaYonlendirme : paletli(HAZIR[b.anahtar] ?? MerkezBolumu),
+    yol: b.yol, ekran: ROTA_TANIM_BOLUMLERI.has(b.anahtar) ? ReceteRotayaYonlendirme : HAZIR[b.anahtar] ?? MerkezBolumu,
   })),
 ];

@@ -25,7 +25,7 @@ E: `istemci/src/moduller/rota/Rotalar.test.tsx`, U: sunucu akış testi, K: saf 
 | EK: Şemadan "Üretim emri oluştur" (önizlemeyle) | B30 (emir Üretim emirleri bölümünden açılır) |
 | EK: "Listeden değiştir", "Katalog değerlerine dön", "Tanımla ve adıma ekle" | Var (E T4 EK maddeleri) |
 | EK: Hızlı ekle kutusu | B30 |
-| EK: Komut paleti (Ctrl / Cmd + K) | Var (E Hızlı git); kabukta düğme çekirdek isteği |
+| EK: Komut paleti (Ctrl / Cmd + K) | Ortak palette (karar 102 a): bölüm, emir, malzeme ve istasyon kabuğun Ctrl K aramasında; modülün kendi paleti yok |
 | İkinci tarama: "Bu adımdaki kullanım", "Bu adımdan çıkış" | Var (`AdimPaneli.tsx`) |
 | İkinci tarama: "Statülü kart aç" | B30, B32 |
 

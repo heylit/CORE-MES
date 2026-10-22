@@ -25,7 +25,7 @@ export function MalzemelerEkrani() {
   const oturum = useOturum();
   const kartSayfasi = oturum.data ? gorunurSayfalar(oturum.data).some((s) => s.yol === '/malzemeler') : false;
   const [tur, turYaz] = useState<Tur>('hepsi');
-  // Hızlı git'ten gelen kart aramayla açılır (?ara=).
+  // Bağlantıyla gelen kart aramayla açılır (?ara=).
   const [parametre] = useSearchParams();
   const [metin, metinYaz] = useState(() => parametre.get('ara') ?? '');
   const [hepsi, hepsiYaz] = useState(false);

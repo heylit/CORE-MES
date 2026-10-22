@@ -154,6 +154,20 @@ describe('Kaynaklar ve Rota revizyonları bölümleri', () => {
     expect(postlar(istekler)).toEqual([]);
   });
 
+  // Karar 102 a: Ctrl K yalnız kabuğun ortak paletidir; bölüm, emir, malzeme ve istasyon orada bulunur.
+  it('Ctrl K modülde pencere açmaz ve tuşu kabuğa bırakır; başka tuş da pencere açmaz', async () => {
+    sunucuKur(YONETEN, KAYNAK);
+    ac(rotalar, '/rota/kaynaklar');
+    await screen.findByRole('button', { name: 'Vardiyalar' });
+    const ctrlK = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(ctrlK);
+    expect(ctrlK.defaultPrevented).toBe(false);
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    fireEvent.keyDown(window, { key: 'k' });
+    expect(screen.queryByRole('dialog', { name: 'Hızlı git' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Hızlı git' })).toBeNull();
+  });
+
   it('#439, #441: plan ayarı ve kişinin vardiyası gösterilir, sahibinin sayfasına götürür; Personelde yetkinlik istasyon istasyon açılıp kapanır', async () => {
     let yetkin: { kisiId: number; istasyonIdleri: number[] }[] = [];
     const istekler = sunucuKur(YONETEN, {
