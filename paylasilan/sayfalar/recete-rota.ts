@@ -36,6 +36,7 @@ export const RECETE_ROTA_IKINCI_MENU = {
       { anahtar: 'terminler', baslik: 'Terminler', yol: '/recete-rota/terminler', simge: 'flag', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/recete-rota/denge', simge: 'gauge', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'yillik', baslik: 'Yıllık plan', yol: '/recete-rota/yillik', simge: 'chart', islem: 'recete-rota.planlama-oku' },
+      { anahtar: 'ufuk', baslik: 'Ufuk', yol: '/recete-rota/ufuk', simge: 'route', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/recete-rota/sevkiyat', simge: 'truck', islem: 'recete-rota.planlama-oku' },
     ] },
   ],

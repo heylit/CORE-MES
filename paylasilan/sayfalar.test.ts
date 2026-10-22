@@ -75,7 +75,7 @@ test('Reçete ve Rota ikinci menüsünde planlama maddeleri recete-rota.planlama
   assert.ok(menu);
   const planlama = menu.gruplar.find((g) => g.baslik === 'Planlama')?.maddeler ?? [];
   assert.deepEqual(planlama.map((m) => m.anahtar),
-    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'sevkiyat']);
+    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat']);
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
   assert.deepEqual(maddeler.filter((m) => m.islem === 'recete-rota.planlama-oku'), planlama);
   assert.ok(maddeler.filter((m) => m.islem !== 'recete-rota.planlama-oku').every((m) => m.islem === 'sayfa.recete-rota'));
