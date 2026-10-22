@@ -1,14 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { AmbalajTuru, CikisGovdesi, GozOnerisiCevabi, HareketCevabi, KodCozCevabi, MalKabulCevabi, MalKabulGovdesi, SepetCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { CikisGovdesi, GozOnerisiCevabi, HareketCevabi, KodCozCevabi, MalKabulCevabi, SepetCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useKamera } from '../../ortak/veri/kamera.ts';
-import { AMBALAJ_KATALOGU } from './ambalaj.ts';
-import { AmbalajIkonu } from './AmbalajIkonu.tsx';
-import { AMBALAJ_TURLERI, BelirsizMiktarHatasi, belirsizMiktarVar, KONUM_ETIKETI, MALZEME_TURU, miktarGirdisi, miktarMetni, lotluMu, LOT_IPUCU, zamanMetni } from './gorunum.ts';
+import { BelirsizMiktarHatasi, belirsizMiktarVar, KONUM_ETIKETI, MALZEME_TURU, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
+import { HizliMalKabul, kabulGovdesi, kopyaSayisi, type BekleyenGiris } from './HizliMalKabul.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { LotEtiketPenceresi } from './LotEtiketi.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
@@ -23,50 +22,6 @@ const IPUCU: Record<Mod, string> = {
   sepet: 'Okuttuğun her malzeme ya da lot için miktar sorulur ve sepete eklenir.',
 };
 interface Okutma { kod: string; zaman: string; sonuc: KodCozCevabi }
-
-// Önizlemedeki mal kabul okutması: ambalaj seçimi (Otomatik ya da tip), miktar; aktif konum varsa oraya, yoksa "rafı okut"
-// bekleyen girişi açılır: önerilen göz gösterilir, sıradaki konum okutması girişi o göze yazar (Vazgeç ile iptal).
-type AmbalajSecimi = 'oto' | AmbalajTuru;
-export interface BekleyenGiris { malzemeId: number; ad: string; miktar: string; parti: string; ambalaj: AmbalajSecimi; ambalajSayisi: string }
-function KabulFormu({ s, konumId, bekleyenAc, bitti }: { s: Extract<KodCozCevabi, { tur: 'malzeme' }>; konumId: number | null; bekleyenAc: (b: BekleyenGiris) => void; bitti: (belgeId: number, ambalajSayisi: number) => void }) {
-  const [miktar, setMiktar] = useState('');
-  const [parti, setParti] = useState('');
-  const [ambalaj, setAmbalaj] = useState<AmbalajSecimi>('oto');
-  const [sayi, setSayi] = useState('');
-  const ad = s.ozet.ad ?? s.ozet.kod;
-  const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => { bitti(c.belge.id, kopyaSayisi(sayi)); return c; }), `Mal kabul edildi: ${ad}`);
-  const gonder = (hedef: number | null) => komut.mutate(kabulGovdesi({ malzemeId: s.ozet.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi }, hedef));
-  return (
-    <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); gonder(konumId); }}>
-      <div className="tc-stok-ambalajlar" role="group" aria-label="Ambalaj">
-        <button type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === 'oto'} onClick={() => setAmbalaj('oto')}><AmbalajIkonu tur="oto" /><strong>Otomatik</strong><span>Malzemenin kayıtlı ambalajı</span></button>
-        {AMBALAJ_TURLERI.map((t) => <button key={t} type="button" className="tc-stok-ambalaj" aria-pressed={ambalaj === t} onClick={() => setAmbalaj(t)}><AmbalajIkonu tur={t} /><strong>{AMBALAJ_KATALOGU[t].ad}</strong><span>{AMBALAJ_KATALOGU[t].olculer.find((o) => o.kod === AMBALAJ_KATALOGU[t].varsayilan)?.ad}</span></button>)}
-      </div>
-      <div className="tc-stok-iki">
-        <Girdi etiket="Sayılan miktar" inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} required autoFocus />
-        {ambalaj !== 'oto' && <Girdi etiket="Ambalaj sayısı" inputMode="numeric" value={sayi} onChange={(e) => setSayi(e.target.value)} />}
-        {s.ozet.tur !== 'demirbas' && <Girdi etiket="Tedarikçi parti no" value={parti} onChange={(e) => setParti(e.target.value)} {...(lotluMu(s.ozet.tur) ? { ipucu: LOT_IPUCU } : {})} />}
-      </div>
-      <div className="tc-stok-eylem">
-        <Dugme tur="birincil" type="submit" yukleniyor={komut.isPending}>{konumId ? 'Aktif konuma teslim al' : 'Mal kabul alanına teslim al'}</Dugme>
-        {!konumId && <Dugme tur="ikincil" simge="scan" disabled={!miktar} onClick={() => bekleyenAc({ malzemeId: s.ozet.id, ad, miktar, parti, ambalaj, ambalajSayisi: sayi })}>Rafı okut</Dugme>}
-        <Link to="/stok/mal-kabul"><Dugme>Ayrıntılı mal kabul</Dugme></Link>
-      </div>
-      {onayPenceresi}
-    </form>
-  );
-}
-// Lot etiketi kopya önerisi ambalaj sayısıdır; girilmediyse tek etiket.
-const kopyaSayisi = (sayi: string): number => (Number(sayi) > 0 ? Math.min(99, Math.trunc(Number(sayi))) : 1);
-export function kabulGovdesi(b: BekleyenGiris, konumId: number | null): MalKabulGovdesi {
-  return {
-    tur: 'satin_alma',
-    satirlar: [{
-      malzemeId: b.malzemeId, miktar: miktarGirdisi(b.miktar), ...(konumId ? { konumId } : {}), parti: b.parti ? { tedarikciPartiNo: b.parti } : null,
-      ...(b.ambalaj === 'oto' ? {} : { ambalaj: { tur: b.ambalaj, olcu: AMBALAJ_KATALOGU[b.ambalaj].varsayilan, adet: b.ambalajSayisi ? Number(b.ambalajSayisi) : null } }),
-    }],
-  };
-}
 
 function SevkiyatFormu({ s, konumId, bitti }: { s: Extract<KodCozCevabi, { tur: 'malzeme' | 'lot' }>; konumId: number | null; bitti: (hareketId: number, miktar: string) => void }) {
   const [miktar, setMiktar] = useState('1');
@@ -216,7 +171,7 @@ export function Okut() {
                     { anahtar: 'g', baslik: 'Giriş', hucre: (b) => zamanMetni(b.ilkGiris) },
                     { anahtar: 'q', baslik: 'Miktar', hizala: 'sag', hucre: (b) => <strong className={b.miktar.startsWith('-') ? 'tc-stok-eksi' : ''}>{miktarMetni(b.miktar)}</strong> },
                   ]} />
-                {mod === 'kabul' && girisYetkisi && <KabulFormu s={sonuc} konumId={aktifKonum?.id ?? null} bekleyenAc={setBekleyen} bitti={(belgeId, kopya) => { setSonIslem({ tur: 'kabul', belgeId, kopya, metin: `${sonuc.ozet.ad ?? sonuc.ozet.kod} teslim alındı` }); yenile(); }} />}
+                {mod === 'kabul' && girisYetkisi && <HizliMalKabul key={sonuc.ozet.id} malzeme={sonuc.ozet} konumId={aktifKonum?.id ?? null} bekleyenAc={setBekleyen} bitti={(belgeId, kopya) => { setSonIslem({ tur: 'kabul', belgeId, kopya, metin: `${sonuc.ozet.ad ?? sonuc.ozet.kod} teslim alındı` }); yenile(); }} />}
                 {mod === 'sevkiyat' && cikisYetkisi && <SevkiyatFormu s={sonuc} konumId={aktifKonum?.id ?? null} bitti={(hareketId, m) => { setSonIslem({ tur: 'cikis', hareketId, metin: `${sonuc.ozet.ad ?? sonuc.ozet.kod} × ${miktarMetni(m)} stoktan düşüldü` }); yenile(); }} />}
                 <div className="tc-stok-eylem">
                   {sepetYetkisi && <Dugme tur={mod === 'sepet' ? 'birincil' : 'ikincil'} onClick={() => setSepetPenceresi(true)}>Sepete ekle</Dugme>}
