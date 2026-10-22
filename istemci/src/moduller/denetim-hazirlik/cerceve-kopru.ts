@@ -56,9 +56,18 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
   let gorunumAlindi = false;
   w.addEventListener('message', (olay: MessageEvent) => {
     if (olay.source !== ust) return;
-    const m = olay.data as { kanal?: unknown; yon?: unknown; id?: unknown; ok?: unknown; veri?: unknown; hata?: unknown; durum?: unknown; tip?: unknown } | null;
+    const m = olay.data as { kanal?: unknown; yon?: unknown; id?: unknown; ok?: unknown; veri?: unknown; hata?: unknown; durum?: unknown; tip?: unknown; anahtar?: unknown; metin?: unknown; sira?: unknown } | null;
     if (m === null || typeof m !== 'object') return;
-    if (m.kanal === 'tmi-gorunum' && m.tip === 'gorunum') { gorunumAlindi = true; return; }
+    if (m.kanal === 'tmi-gorunum' && m.tip === 'gorunum') {
+      if (!gorunumAlindi) komutlariBildir();
+      gorunumAlindi = true;
+      return;
+    }
+    if (m.kanal === 'tmi-gorunum' && m.tip === 'komut-calistir') { komutCalistir(m.anahtar); return; }
+    if (m.kanal === 'tmi-gorunum' && m.tip === 'komut-metni') {
+      if (typeof m.metin === 'string' && m.metin.trim() !== '' && typeof m.sira === 'number') onerileriBildir(m.metin, m.sira);
+      return;
+    }
     if (m.kanal !== ayar.kanal || m.yon !== 'yanit' || typeof m.id !== 'number') return;
     const b = bekleyen.get(m.id);
     if (b === undefined) return;
@@ -70,12 +79,74 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
     }
   });
 
+  // ----- Ctrl K ve ortak palet (karar 102 a) -----
+  // Ctrl K kabuğun ortak paletidir: çerçevede basılan tuş prototipin paletine ulaşmadan (yakalama evresi) kabuğa gider.
+  w.addEventListener('keydown', (o: KeyboardEvent) => {
+    if (!(o.ctrlKey || o.metaKey) || o.altKey || o.key.toLocaleLowerCase('tr') !== 'k') return;
+    o.preventDefault();
+    o.stopImmediatePropagation();
+    ust.postMessage({ kanal: ayar.kanal, yon: 'kisayol', tus: 'arama' }, '*');
+  }, true);
+  // Prototipin palet öğeleri (`window.__paletOgeleri`) ortak palete iki yoldan gider: "Komutlar" grubu paletin "Bu sayfa"
+  // grubunda (kural 7), yazılan metnin bütün sonuçları öneri olarak (kural 8, en çok 8). Seçilen anahtar yalnız son
+  // listede ya da son önerilerdeyse ve prototipte aynı yerde aynı başlıkla duruyorsa çalışır.
+  interface PaletOgesi { grp?: unknown; t?: unknown; sub?: unknown; run?: unknown }
+  interface Komut { anahtar: string; baslik: string; aciklama?: string }
+  const ogeler = (q: string): PaletOgesi[] => {
+    const kaynak = (w as unknown as { __paletOgeleri?: unknown }).__paletOgeleri;
+    if (typeof kaynak !== 'function') return [];
+    try {
+      const l: unknown = (kaynak as (q: string) => unknown)(q);
+      return Array.isArray(l) ? l.filter((o): o is PaletOgesi => o !== null && typeof o === 'object') : [];
+    } catch { return []; }
+  };
+  const komutOgeleri = (): PaletOgesi[] => ogeler('').filter((o) => o.grp === 'Komutlar').slice(0, 40);
+  const metni = (d: unknown, uzunluk: number): string | null => (typeof d === 'string' && d.trim() !== '' ? d.trim().slice(0, uzunluk) : null);
+  const komutYap = (o: PaletOgesi, anahtar: string): Komut | null => {
+    const baslik = metni(o.t, 80);
+    if (baslik === null) return null;
+    const aciklama = metni(o.sub, 160);
+    return { anahtar, baslik, ...(aciklama === null ? {} : { aciklama }) };
+  };
+  let listelenen = new Map<string, string>();
+  let onerilen = new Map<string, { metin: string; baslik: string }>();
+  const komutlariBildir = (): void => {
+    const komutlar: Komut[] = [];
+    listelenen = new Map();
+    komutOgeleri().forEach((o, i) => {
+      const k = komutYap(o, `komut-${String(i)}`);
+      if (k !== null) { listelenen.set(k.anahtar, k.baslik); komutlar.push(k); }
+    });
+    ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar }, '*');
+  };
+  const onerileriBildir = (metin: string, sira: number): void => {
+    const komutlar: Komut[] = [];
+    onerilen = new Map();
+    ogeler(metin).slice(0, 8).forEach((o, i) => {
+      const k = komutYap(o, `oneri-${String(i)}`);
+      if (k !== null) { onerilen.set(k.anahtar, { metin, baslik: k.baslik }); komutlar.push(k); }
+    });
+    ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-onerileri', sira, komutlar }, '*');
+  };
+  const komutCalistir = (anahtar: unknown): void => {
+    if (typeof anahtar !== 'string') return;
+    const oneri = onerilen.get(anahtar);
+    const baslik = listelenen.get(anahtar) ?? oneri?.baslik;
+    if (baslik === undefined) return;
+    const liste = listelenen.has(anahtar) ? komutOgeleri() : ogeler(oneri?.metin ?? '').slice(0, 8);
+    const o = liste[Number(anahtar.slice(anahtar.lastIndexOf('-') + 1))];
+    if (o === undefined || metni(o.t, 80) !== baslik || typeof o.run !== 'function') return;
+    try { (o.run as () => void)(); } catch { /* prototipin hatası kabuğa taşınmaz */ }
+  };
+
   // Kabuğun görünüm sözleşmesi: `hazir` görünüm gelene kadar yinelenir. Prototip tek görünümdür, gelen görünüm yalnız alınır.
+  // Komut listesi her `hazir`la gider: kabuğun dinleyicisi kurulmadan yollanan ilk ileti kaybolabilir.
   let hazirKalan = 20;
   const hazir = (): void => {
     if (gorunumAlindi || hazirKalan <= 0) return;
     hazirKalan -= 1;
     ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'hazir' }, '*');
+    komutlariBildir();
     w.setTimeout(hazir, 250);
   };
   hazir();

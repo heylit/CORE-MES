@@ -5441,6 +5441,8 @@ var prevTheme=null;
 window.addEventListener("beforeprint",function(){if(state.view==="hazirlik"){wkPrint=true;render();}prevTheme=document.documentElement.getAttribute("data-theme");document.documentElement.setAttribute("data-theme","light");});
 window.addEventListener("afterprint",function(){if(document.body.classList.contains("printdoc")){document.body.classList.remove("printdoc");var pa_=$("printArea");if(pa_) pa_.innerHTML="";}if(wkPrint){wkPrint=false;render();}if(prevTheme) document.documentElement.setAttribute("data-theme",prevTheme); else document.documentElement.removeAttribute("data-theme");});
 window.__go=function(v){go(v);};
+/* Ortak Ctrl K paleti (karar 102 a): köprü paletin öğelerini buradan okur. */
+window.__paletOgeleri=function(q){return palItems(q);};
 var h0=(location.hash||"").replace("#","");
 if(VIEWS.some(function(v){return v.k===h0;})) state.view=h0;
 render();

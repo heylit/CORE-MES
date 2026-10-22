@@ -11,6 +11,7 @@
 | Kişi yabancı anahtarı yok | `*_kisi_id` sütunları `kisi` tablosuna bağlı değil. | Aşama 2: ayrı göçle yabancı anahtar. |
 | Tema yalnız açılışta | Açık/koyu tema çerçeve kurulurken geçer; açıkken değişirse sayfa yenilenince uyar. | Gerekirse köprüye tema iletisi. |
 | Kullanılmayan çekirdek kalıbı | Belge deposu her modülde ayrı kopyadır (sunucu + `cerceve-kopru.ts`). | Önerilen çekirdek parçası: ortak belge deposu (CEKIRDEK-ISTEKLERI). |
+| Ctrl K ortak palette (kart #139, karar 102 a) | Çerçevede basılan Ctrl K prototipe ulaşmadan kabuğa gider (`cerceve-kopru.ts`, yakalama evresi). Prototip palet öğelerini `window.__paletOgeleri` ile açar (tek satır): "Komutlar" grubu paletin "Bu sayfa" grubunda, yazılanın bütün sonuçları (sayfa, soru, cihaz, doküman, terim) öneri olarak. Prototipin kendi paleti `/` ve palet düğmesiyle yerinde kalır. | Kullanıcı kabulünde `/` ve palet düğmesinin kalkması (prototip değişikliği) sorulur. |
 
 ## Sunucuda zorunlu olup eksik kalan
 Belge deposu kuralları (yol, erişim, sürüm, kilit, ek boyutu, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).

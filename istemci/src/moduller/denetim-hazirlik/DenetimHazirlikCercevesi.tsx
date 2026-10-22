@@ -134,7 +134,12 @@ export function DenetimHazirlikCercevesi() {
   // Kaynak ve köken denetimini YalitilmisCerceve yapar (yalnız bu çerçeve, opak köken); burada yalnız bilinen kanallar geçer.
   const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
     if (gorunumIletisi(veri, yanitla)) return;
-    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown } | null;
+    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown; tus?: unknown } | null;
+    // Çerçevede basılan Ctrl K: kabuğun arama kutusu pencerenin tuş olayını dinler; aynı tuş burada yeniden verilir.
+    if (m?.kanal === KANAL && m.yon === 'kisayol' && m.tus === 'arama') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+      return;
+    }
     if (kalibrasyonaGitIstegiMi(m)) { void gezin(KALIBRASYON_YOLU); return; }
     if (!m || m.kanal !== KANAL || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
     const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: KANAL, yon: 'yanit', id: m.id, ...govde }); };

@@ -216,4 +216,66 @@ describe('çerçeve köprüsü', () => {
       expect(baslik.textContent).toBe('Profil Firması');
     } finally { baslik.remove(); }
   });
+  // Karar 102 a: Ctrl K kabuğun ortak paletidir; prototipin palet öğeleri paletin "Bu sayfa" grubuna ve önerilerine gider.
+  it('CK-07: Ctrl K prototipe ulaşmadan kabuğa gider; başka tuş prototipte kalır', () => {
+    const ust: unknown[] = [];
+    vi.mocked(window.postMessage).mockImplementation((ileti: unknown) => { ust.push(ileti); });
+    kur();
+    const prototip = vi.fn();
+    document.addEventListener('keydown', prototip);
+    for (const ayar of [{ ctrlKey: true }, { metaKey: true }]) {
+      const tus = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true, ...ayar });
+      document.body.dispatchEvent(tus);
+      expect(tus.defaultPrevented).toBe(true);
+    }
+    expect(prototip).not.toHaveBeenCalled();
+    expect(ust.filter((i) => (i as { yon?: unknown }).yon === 'kisayol')).toEqual([
+      { kanal: 'denetim-hazirlik', yon: 'kisayol', tus: 'arama' }, { kanal: 'denetim-hazirlik', yon: 'kisayol', tus: 'arama' },
+    ]);
+    // Reddedilen: Ctrl Alt K, düz k ve Ctrl J kabuğa gitmez.
+    ust.length = 0;
+    for (const ayar of [{ key: 'k', ctrlKey: true, altKey: true }, { key: 'k' }, { key: 'j', ctrlKey: true }]) {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...ayar }));
+    }
+    expect(prototip).toHaveBeenCalledTimes(3);
+    expect(ust.filter((i) => (i as { yon?: unknown }).yon === 'kisayol')).toEqual([]);
+    document.removeEventListener('keydown', prototip);
+  });
+
+  it('CK-08: prototipin komutları listelenir, yazılana öneri döner; yalnız son listedeki ve aynı başlıklı öğe çalışır', () => {
+    const ust: { tip?: unknown; sira?: unknown; komutlar?: unknown }[] = [];
+    vi.mocked(window.postMessage).mockImplementation((ileti: unknown) => { ust.push(ileti as (typeof ust)[number]); });
+    const tur = vi.fn();
+    const cihaz = vi.fn();
+    let turBasligi = 'Hızlı tur başlat';
+    const pencere = window as unknown as { __paletOgeleri?: (q: string) => unknown };
+    pencere.__paletOgeleri = (q: string) => [
+      { grp: 'Sayfalar', t: 'Bugün', sub: 'Tüm işler', run: vi.fn() },
+      { grp: 'Komutlar', t: turBasligi, sub: '10 soru', run: tur },
+      ...(q.includes('cih') ? [{ grp: 'Cihazlar', t: 'C-01 · Deneme kumpas', sub: 'Atölye', run: cihaz }] : []),
+    ];
+    kur();
+    const gonder = (data: unknown, source: MessageEventSource | null = window) => { window.dispatchEvent(new MessageEvent('message', { data, source })); };
+    const son = ust.filter((i) => i.tip === 'komutlar').at(-1);
+    expect(son?.komutlar).toEqual([{ anahtar: 'komut-0', baslik: 'Hızlı tur başlat', aciklama: '10 soru' }]);
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'cih', sira: 4 });
+    expect(ust.filter((i) => i.tip === 'komut-onerileri').at(-1)).toEqual({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-onerileri', sira: 4, komutlar: [
+      { anahtar: 'oneri-0', baslik: 'Bugün', aciklama: 'Tüm işler' }, { anahtar: 'oneri-1', baslik: 'Hızlı tur başlat', aciklama: '10 soru' },
+      { anahtar: 'oneri-2', baslik: 'C-01 · Deneme kumpas', aciklama: 'Atölye' },
+    ] });
+    // Reddedilen: bilinmeyen anahtar, yabancı kaynak.
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'komut-9' });
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-2' }, null);
+    expect(cihaz).not.toHaveBeenCalled();
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-2' });
+    expect(cihaz).toHaveBeenCalled();
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'komut-0' });
+    expect(tur).toHaveBeenCalled();
+    // Reddedilen: listeden sonra prototipte aynı yerdeki öğe değişti; eski anahtar onu çalıştırmaz.
+    tur.mockClear();
+    turBasligi = 'Başka komut';
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'komut-0' });
+    expect(tur).not.toHaveBeenCalled();
+    delete pencere.__paletOgeleri;
+  });
 });
