@@ -1,0 +1,7 @@
+/* ---------- TMI içinde: tek palet (102 a) ----------
+   Uygulamada palet kabuğundur. Çerçevenin kendi paleti (v20) açılmaz, onu açan düğmeler ("Ara", "Komutlar") görünmez (stil: .pm-tmi);
+   Ctrl K'yi köprü kabuğa iletir. Panonun komutları kabuğun paletine liste olarak gider (zz36, paletBildir). */
+if (TMI_ICINDE) {
+  v20PaletAc = function () {};
+  document.documentElement.classList.add('pm-tmi');
+}
