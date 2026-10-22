@@ -3,9 +3,9 @@ import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts'
 import { emirParametresi, onizlemeKaresiParametresi, saatDurdurGovdesi, saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatSiradakiCevabi, saatUstlenGovdesi, saatUyarilariCevabi, saatVardiyaCevabi } from '#paylasilan/sozlesme/saat.ts';
 import * as servis from './servis.ts';
 
-// Okuma uçları yeni işlem istemez (kart #1631): açık emirleri ve istasyon durumunu zaten okuyan roller (emir listesi,
-// Fabrika Haritası) saatte de görür. Terminal rolü emir listesini okumadığı için burada da yoktur.
-const OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.atolye'] } as const;
+// Açık emirleri ve istasyon durumunu zaten okuyan roller (emir listesi, Fabrika Haritası; kart #1631) saatte de görür. Bu sayfaları
+// açmayan role saat okuması ayrı işlemle verilir (`saat.oku`, Soru 111 b); terminal rolü ikisini de almaz.
+const OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.atolye', 'saat.oku'] } as const;
 const PLAN_OKUMA = { biri: ['plan.oku', 'plan.yaz'] } as const;
 
 export const uclar = [

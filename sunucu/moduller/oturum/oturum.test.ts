@@ -388,6 +388,10 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.mudur?.push('istasyonlar.makine-durumu', 'uretim-emirleri.hazirlik-muaf');
   // 73 b (22.10.2026): ana sayfanın şirket özeti bölümü yalnız yönetici ve müdürdedir.
   MATRIS.mudur?.push('pano.sirket-ozeti');
+  // Soru 111 b (22.10.2026): saatten uyarı üstlenme; vardiya sorumlusu ve bakım saat okumasını ayrı işlemle alır.
+  for (const rol of ['mudur', 'planlama_proje', 'kalite', 'vardiya_sorumlusu', 'bakim']) MATRIS[rol]?.push('saat.uyari-ustlen');
+  MATRIS.vardiya_sorumlusu?.push('saat.oku');
+  MATRIS.bakim?.push('saat.oku');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet', 'recete-rota.planlama-oku'];
 
