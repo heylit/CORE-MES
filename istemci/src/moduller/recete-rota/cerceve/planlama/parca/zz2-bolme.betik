@@ -5,7 +5,7 @@
 function bolmeHamle(jid, opId, a, altM) {
   const s = S.D.siparisler.find(x => x.id === jid); if (!s || !(a >= 1 && a < s.adet)) return null;
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = [parca(a, 1), parca(s.adet - a, 2)]; const eski = S.D.siparisler; const once = U.hamle;
   try {
     S.D.siparisler = eski.flatMap(x => x.id === jid ? yeni : [x]);

@@ -24,7 +24,7 @@ function matKarmaUygula() {
        ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */
     if (st && st.w && !st.w.tezgahEski && st.tlAmac && st.tlAmac.ac && cx && cx.jobs) {
       const orta = l => { const a = l.filter(x => x > 0 && isFinite(x)).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
-      const bl = Object.values(cx.jobs).map(j => (PW[j.oncelik] || 1) * (st.tlAmac.birim || 5) * (st.tlAmac.kT || 1)); const V = bl.length ? bl.reduce((x, y) => x + y, 0) / bl.length : null;
+      const bl = Object.values(cx.jobs).map(j => isAgirligi(j) * (st.tlAmac.birim || 5) * (st.tlAmac.kT || 1)); const V = bl.length ? bl.reduce((x, y) => x + y, 0) / bl.length : null;
       const ucr = orta(Object.values(cx.M).map(M => +M.ucret)); const ay = +(cx.A && cx.A.ayarciUcret) || 0;
       const su = orta(cx.ops.map(o => Math.min(...o.c.filter(c => !c.fas).map(c => c.su)))); 
       const chg = st.w.chgTezgah != null ? +st.w.chgTezgah : su != null && ucr != null ? su * (ucr + ay) : null;

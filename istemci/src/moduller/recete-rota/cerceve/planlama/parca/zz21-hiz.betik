@@ -52,7 +52,7 @@ const hzBasladi = (ix, j) => (ix.get(j) || []).some(([, r]) => r.act || r.done |
   const A = orAcik(); const ix = hzIs(S.plan.ops); const ur = hzIlk(S.D.urunler, 'id', z => z.id);
   return S.D.siparisler.filter(s => !s.havuz && !s.ortus && !A[s.id] && !A[s.id.split('/')[0]] && !hzBasladi(ix, s.id) && (S.plan.J[s.id] || {}).T > 0.05).filter(s => {
     const u = ur.get(s.urun); return u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); })
-    .map(s => ({ s, w: S.plan.J[s.id].T * (PW[s.oncelik] || 1) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
+    .map(s => ({ s, w: S.plan.J[s.id].T * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.s);
 }; }
 
 /* sipariş maliyeti yalnız o siparişin adımlarına bakar: plana o siparişin adımlarını aynı sırayla taşıyan bir görünüm verilir */

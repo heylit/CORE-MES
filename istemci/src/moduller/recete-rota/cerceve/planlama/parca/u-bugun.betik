@@ -30,7 +30,7 @@ function bgGelenler(p) {
 function bgKararlar(p) {
   const kay = gecikmeKaynaklari(p); const km = bgKarar(); const out = [];
   const gec = S.D.siparisler.filter(s => !s.havuz).map(s => ({ s, j: p.J[s.id] })).filter(x => x.j && (x.j.T == null || x.j.T > 0.05))
-    .sort((a, b) => ((b.j.T ?? 1e4) * (PW[b.s.oncelik] || 1)) - ((a.j.T ?? 1e4) * (PW[a.s.oncelik] || 1)));
+    .sort((a, b) => ((b.j.T ?? 1e4) * isAgirligi(b.s)) - ((a.j.T ?? 1e4) * isAgirligi(a.s)));
   for (const { s, j } of gec) {
     const en = kay.is[s.id];
     const neden = en ? ` En çok <b>${esc(en.ad)}</b> yüzünden bekliyor (${esc(gecMetin(en.v))}).` : '';

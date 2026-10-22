@@ -99,7 +99,7 @@ function sozVer(j) {
     const eski = S.D.siparisler; S.D.siparisler = eski.map(x => x.id === j ? { ...x, havuz: false, oncelik: 1 } : x);
     let st2; try { st2 = stOf(); } finally { S.D.siparisler = eski; }
     const cx2 = compile(st2); const p2 = kisaArama(st2, cx2, lnsDecode(st2, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx2, true), 700); const e2 = evaluate(p2, st2, null, true);
-    const digerW = (e, pl) => Object.entries(e.J || {}).filter(([k]) => k !== j).reduce((t, [, x]) => t + (x.T || 0) * (PW[(S.D.siparisler.find(q => q.id === x.id) || {}).oncelik] || 1), 0);
+    const digerW = (e, pl) => Object.entries(e.J || {}).filter(([k]) => k !== j).reduce((t, [, x]) => t + (x.T || 0) * isAgirligi(S.D.siparisler.find(q => q.id === x.id) || {}), 0);
     const w0 = S.plan.ozet.wT; const etk = Object.keys(e2.J || {}).filter(k => k !== j && S.plan.J[k] && (e2.J[k].T || 0) > (S.plan.J[k].T || 0) + 0.05);
     U.soz = { j, termin: parseT(S.D, s.termin), d1: e1.J[j] ? e1.J[j].C : null, d2: e2.J[j] ? e2.J[j].C : null, bedel: Math.max(0, digerW(e2) - w0), etk };
   } catch (e) { bildir('Söz tarihi hesaplanamadı: ' + e.message, 'hata'); }
@@ -148,7 +148,7 @@ function partiBol(jid, opId, a, altM) {
   a = Math.round(+a); if (!(a >= 1 && a < s.adet)) { bildir(`Birinci parti 1 ile ${s.adet - 1} arasında olmalı.`, 'hata'); return; }
   if (basladiMi(jid)) { bildir('Başlamış sipariş bu denemede bölünmez.', 'hata'); return; }
   const k = opId.slice(opId.lastIndexOf('.') + 1);
-  const parca = (n, ek) => ({ ...clone(s), id: `${jid}/${ek}`, adet: n, gelir: s.gelir == null ? null : Math.round(s.gelir * n / s.adet), malzeme: (s.malzeme || []).map(x => ({ ...x })) });
+  const parca = (n, ek) => siparisParcasi(s, `${jid}/${ek}`, n);
   const yeni = [parca(a, 1), parca(s.adet - a, 2)];
   const eski = S.D.siparisler;
   try {

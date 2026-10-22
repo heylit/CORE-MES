@@ -16,7 +16,7 @@ function montajAramaKur() {
     const altlar = pk => { const out = [], y = [pk], g = new Set(); while (y.length) { const k = y.pop(); for (const c of cocuk[k] || []) { if (g.has(c)) continue; g.add(c); out.push(c); y.push(kok(c)); } } return out; };
     let cur = L.plan, E = L.e; const failN = (cur.fail || []).length; let iyi = 0;
     const gec = Object.keys(E.J).filter(j => E.J[j].T > 0 && cocuk[kok(j)] && cx.jobs[j])
-      .sort((a, b) => E.J[b].T * (PW[cx.jobs[b].oncelik] || 1) - E.J[a].T * (PW[cx.jobs[a].oncelik] || 1));
+      .sort((a, b) => E.J[b].T * isAgirligi(cx.jobs[b]) - E.J[a].T * isAgirligi(cx.jobs[a]));
     if (!gec.length) return L;
     const HT = lbHeadsTails(st, cx);
     const tasin = (jobs, pl) => { const mods = [];

@@ -19,7 +19,7 @@ otoBolme = function (elle) {
   const tut = (r, locks) => { S.plan = planKaydi(r.p, r.st, null); if (locks) S.locks = locks; S.dataVer += 1e-3; tl0 = r.tl; };
   const kok = j => j.split('/')[0];
   const geciken = () => Object.entries(S.plan.J).filter(([j, J]) => J.T > 0.01 && !denendi.has(j) && !basladiMi(j))
-    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? (PW[s.oncelik] || 1) : 1), s }; })
+    .map(([j, J]) => { const s = S.D.siparisler.find(x => x.id === j); return { j, w: J.T * (s ? isAgirligi(s) : 1), s }; })
     .filter(x => x.s && !x.s.havuz).sort((a, b) => b.w - a.w).slice(0, 6).map(x => x.j);
   const ortusOlur = s => { if (s.ortus) return false; const u = S.D.urunler.find(z => z.id === s.urun); return !!u && u.rota.some((o, i) => i && o.ortusebilir && rtTur(u, i) === 'b'); };
   otoBolmeSurer = { n: 0 };

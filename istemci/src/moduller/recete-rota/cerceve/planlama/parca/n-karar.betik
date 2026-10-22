@@ -16,7 +16,7 @@ function gecikmeKaynaklari(p) {
   for (const s of S.D.siparisler) {
     const j = p.J[s.id]; if (!j || !(j.T > 0.05)) continue;
     const a = ayristir(p, cx, s.id); if (!a || !a.tam) continue;
-    const w = PW[s.oncelik] || 1; let en = null;
+    const w = isAgirligi(s); let en = null;
     const yer = {}; for (const [k, ad, v] of a.kaynak) yer[ad] = (yer[ad] || { k, v: 0 }), yer[ad].v += v;
     for (const [ad, x] of Object.entries(yer)) { (top[ad] = top[ad] || { k: x.k, v: 0, n: 0 }); top[ad].v += x.v * w; top[ad].n++; if (!en || x.v > en.v) en = { ad, ...x }; }
     is[s.id] = en;
@@ -34,7 +34,7 @@ function sorunlar(p) {
   if (fail.length) ekle('hata', 'alert', `${fail.length} işlem planlanamadı`, `${fail.slice(0, 3).join(', ')}${fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`, [['Veri denetimi', 'git', 'denetim']]);
   const kay = gecikmeKaynaklari(p);
   const gec = D.siparisler.map(s => ({ s, j: p.J[s.id] })).filter(x => x.j && (x.j.T == null || x.j.T > 0.05))
-    .sort((a, b) => ((b.j.T ?? 1e4) * (PW[b.s.oncelik] || 1)) - ((a.j.T ?? 1e4) * (PW[a.s.oncelik] || 1)));
+    .sort((a, b) => ((b.j.T ?? 1e4) * isAgirligi(b.s)) - ((a.j.T ?? 1e4) * isAgirligi(a.s)));
   for (const { s, j } of gec.slice(0, 3)) {
     const en = kay.is[s.id];
     const neden = en ? ` En çok <b>${esc(en.ad)}</b> bekledi (${saat(en.v)}).` : '';

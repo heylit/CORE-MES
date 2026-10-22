@@ -27,7 +27,7 @@ function btKur(A, idx, ms) {
   const bol = A.map((o, i) => ({ o, sec: o.l[idx[i]] })).filter(x => x.sec.n > 1);
   const Y = {};
   for (const { o, sec } of bol) { const pr = btParcalar(o, sec);
-    Y[o.j] = { o, pr, yeni: pr.map((x, i) => ({ ...clone(o.s), id: `${o.j}/${i + 1}`, adet: x.n, gelir: o.s.gelir == null ? null : Math.round(o.s.gelir * x.n / o.s.adet), malzeme: (o.s.malzeme || []).map(m => ({ ...m })) })) }; }
+    Y[o.j] = { o, pr, yeni: pr.map((x, i) => siparisParcasi(o.s, `${o.j}/${i + 1}`, x.n)) }; }
   const eski = S.D.siparisler;
   S.D.siparisler = eski.flatMap(x => Y[x.id] ? Y[x.id].yeni : [x]);
   let st; try { st = stOf(); } finally { S.D.siparisler = eski; }
