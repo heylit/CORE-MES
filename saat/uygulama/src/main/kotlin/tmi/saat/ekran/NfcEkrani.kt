@@ -3,6 +3,7 @@ package tmi.saat.ekran
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
@@ -40,7 +41,9 @@ import tmi.saat.Istasyon
 import tmi.saat.Renkler
 import tmi.saat.cekirdek.NfcEtiketi
 
-fun nfcVarMi(baglam: Context): Boolean = NfcAdapter.getDefaultAdapter(baglam) != null
+// Yalniz kart taklidi (HCE) bildiren saatte de adaptor doner, ama okuyucu yoktur ve enableReaderMode hata atar: okuyucu ozelligi sorulur.
+fun nfcVarMi(baglam: Context): Boolean =
+    baglam.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC) && NfcAdapter.getDefaultAdapter(baglam) != null
 
 private tailrec fun Context.etkinlik(): Activity? = when (this) {
     is Activity -> this
@@ -56,6 +59,7 @@ private sealed interface Okuma {
     data object Bekliyor : Okuma
     data class Bulundu(val kod: String) : Okuma
     data object Okunamadi : Okuma
+    data object Desteklenmiyor : Okuma
 }
 
 // Ornekteki "Istasyona giris": saat istasyon etiketine yaklastirilir, etiketteki kodla o istasyonun ayrintisi acilir.
@@ -68,11 +72,21 @@ fun NfcEkrani(istasyonlar: List<Istasyon>?, geri: () -> Unit, istasyonAc: (istas
     DisposableEffect(Unit) {
         val etkinlik = baglam.etkinlik()
         val okuyucu = NfcAdapter.getDefaultAdapter(baglam)
+        var acik = false
         if (etkinlik != null && okuyucu != null) {
             val turler = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V
-            okuyucu.enableReaderMode(etkinlik, { etiket -> okuma = etiketKodu(etiket)?.let { Okuma.Bulundu(it) } ?: Okuma.Okunamadi }, turler, null)
+            // Menu satiri okuyucusuz saatte gizlidir; yine de sistem okuyucuyu reddederse ekran cokmez, durum yazilir.
+            acik = try {
+                okuyucu.enableReaderMode(etkinlik, { etiket -> okuma = etiketKodu(etiket)?.let { Okuma.Bulundu(it) } ?: Okuma.Okunamadi }, turler, null)
+                true
+            } catch (e: UnsupportedOperationException) {
+                false
+            } catch (e: IllegalStateException) {
+                false
+            }
         }
-        onDispose { if (etkinlik != null) okuyucu?.disableReaderMode(etkinlik) }
+        if (!acik) okuma = Okuma.Desteklenmiyor
+        onDispose { if (acik && etkinlik != null) runCatching { okuyucu?.disableReaderMode(etkinlik) } }
     }
 
     val bulunan = (okuma as? Okuma.Bulundu)?.let { o -> istasyonlar?.let { NfcEtiketi.bul(it, o.kod) { i -> i.kod } } }
@@ -81,6 +95,7 @@ fun NfcEkrani(istasyonlar: List<Istasyon>?, geri: () -> Unit, istasyonAc: (istas
     val (baslik, metin, renk) = when (val o = okuma) {
         Okuma.Bekliyor -> Triple("İstasyona giriş", "Saati istasyondaki etikete yaklaştırın.", Renkler.vurgu)
         Okuma.Okunamadi -> Triple("Etiket okunamadı", "Etikette istasyon kodu yok. Yeniden yaklaştırın.", Renkler.uyari)
+        Okuma.Desteklenmiyor -> Triple("NFC okunamıyor", "Bu saat etiket okuyamaz. İstasyonu İstasyonlarım listesinden seçin.", Renkler.uyari)
         is Okuma.Bulundu ->
             if (istasyonlar == null) Triple("İstasyon kodu: ${o.kod}", "İstasyonlar yükleniyor.", Renkler.vurgu)
             else if (bulunan == null) Triple("İstasyon kodu: ${o.kod}", "Bu istasyon sizin istasyonlarınız arasında değil.", Renkler.uyari)

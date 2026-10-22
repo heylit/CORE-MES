@@ -18,13 +18,38 @@ Bu klasor npm calisma alanina, `npm run kontrol`'e ve guncelleme adimlarina girm
 Gerekenler: JDK 17, Android SDK (platform 34, build-tools), Gradle 8.14. Atolye agindaki makinede internet yoktur; derleme
 internetli makinede yapilir ve yalniz APK tasinir.
 
+Saate kurulan surum release'tir (kart #85): debug derlemesi saatte yavas acilir ve kaydirmada takilir (olcum: soguk acilis
+4,0 sn yerine 1,2 sn). Release R8 ile kuculur ve kurum anahtariyla imzalanir.
+
+Anahtar deposu bir kez, depo disinda uretilir ve kurum icinde yedekli saklanir. Kaybolursa ayni uygulama bir daha guncellenemez
+(yeni anahtarla her saatte once kaldirma gerekir).
+
 ```
-gradle :uygulama:assembleDebug
+keytool -genkeypair -keystore C:\imza\tmi-saat.jks -alias tmi -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Cikti `uygulama/build/outputs/apk/debug/uygulama-debug.apk`. Release icin imza ayari yoktur; `assembleRelease` imzasiz APK uretir
-ve saate kurulmaz. Her makinenin debug anahtari farklidir: baska makinede derlenmis APK'nin ustune `install -r` reddedilir, once
-`adb uninstall tmi.saat` gerekir (eslesme ve sunucu adresi silinir).
+Parolalar derleyenin kendi `%USERPROFILE%\.gradle\gradle.properties` dosyasina yazilir (deponun `saat/gradle.properties`
+dosyasina degil):
+
+```
+imzaParolasi=<depo parolasi>
+imzaAnahtari=tmi
+```
+
+`imzaAnahtarParolasi` yalniz anahtarin parolasi depodan farkliysa gerekir. Derleme:
+
+```
+gradle -PimzaDeposu=C:\imza\tmi-saat.jks :uygulama:assembleRelease :kadran:assembleRelease
+```
+
+Ciktilar `uygulama/build/outputs/apk/release/uygulama-release.apk` ve `kadran/build/outputs/apk/release/kadran-release.apk`.
+- Anahtar deposu depo icindeyse ya da yoksa derleme durur; `*.jks`, `*.keystore`, `*.p12`, `*.pfx` `.gitignore`'dadir.
+- `-PimzaDeposu` verilmezse release paketlenmez (imzasiz APK saate kurulmaz).
+- Her yeni surumde `uygulama/build.gradle.kts` icindeki `versionCode` artirilir; ayni ya da kucuk surum ustune kurulmaz.
+- Gelistirmede `gradle :uygulama:assembleDebug` kalir; debug APK saatte olcum ve kullanim icin degildir.
+
+Debug'dan release'e ilk geciste imza degisir: her saatte bir kez `adb.exe uninstall tmi.saat` gerekir (eslesme ve sunucu adresi
+silinir, saatte yeniden girilir). Sonraki release'ler ayni anahtarla `install -r` ile ustune kurulur.
 
 Sunucu adresi uygulamaya ve depoya yazilmaz; saatte ilk acilista bir kez girilir (kullanici karari, soru 29). Ayni APK her saate
 kurulur. Saf kurallarin testi: `gradle -PyalnizCekirdek :cekirdek:test`.
@@ -38,7 +63,7 @@ certinstaller CA'yi reddeder). Sunucu kurum ici ya da deneme kokunden imzali ser
 "Sunucu sertifikasina guvenilmiyor (TLS)" gosterir. Cozum kokun APK'ya derlemede eklenmesidir:
 
 ```
-gradle -PkurumKok=C:\sertifikalar\kurum-kok.crt :uygulama:assembleDebug
+gradle -PkurumKok=C:\sertifikalar\kurum-kok.crt -PimzaDeposu=C:\imza\tmi-saat.jks :uygulama:assembleRelease
 ```
 
 - Dosya X.509 PEM ya da DER olur, mutlak yolla verilir; deponun disinda durur (depo icindeki yol reddedilir, `*.crt`, `*.pem`, `*.cer`, `*.der`
@@ -62,7 +87,10 @@ Denemede kabul: saatte sunucu adresi `https://<ip>:4101` girilir, saat 6 rakamli
 2. Ayarlar > Gelistirici secenekleri: "ADB hata ayiklama" ve "Kablosuz hata ayiklama" acik. Saat ve bilgisayar ayni Wi-Fi'da.
 3. Google "platform-tools" zip'i bir klasore acilir (kurulum istemez).
 4. Saatte "Yeni cihaz eslestir": `adb.exe pair ADRES:PORT` (6 haneli kod), sonra `adb.exe connect ADRES:PORT`.
-5. `adb.exe install tmi-saat.apk`.
+5. `adb.exe install -r uygulama-release.apk`.
+6. Uygulamayi on derleme (her kurulumdan sonra bir kez; soguk acilis ve kaydirma icin, 78 a):
+   `adb.exe shell cmd package compile -m speed-profile -f tmi.saat`. APK'daki profil sistem bosta kalinca da derlenir;
+   bu adim beklemeyi kaldirir. Olcumler bu adimdan sonra alinir.
 
 Sunucu ve saat birlikte guncellenir: uyari cevabinda istasyon artik bos olabilir (kalibrasyon uyarisi), eski saat uygulamasi yeni sunucunun uyarilarini okuyamaz.
 
@@ -74,9 +102,9 @@ veri kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`) gelir. Kutucuga 
 Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); kisik modda kadran yalniz saat ve tarihi gosterir.
 
 ```
-gradle :uygulama:assembleDebug :kadran:assembleDebug
-adb.exe install -r uygulama-debug.apk
-adb.exe install -r kadran-debug.apk
+gradle -PimzaDeposu=C:\imza\tmi-saat.jks :uygulama:assembleRelease :kadran:assembleRelease
+adb.exe install -r uygulama-release.apk
+adb.exe install -r kadran-release.apk
 ```
 
 Cikti `kadran/build/outputs/apk/debug/kadran-debug.apk`. Saatte kadrana uzun basilir, listeden "TMI Kadran" secilir. Kutucuklar
