@@ -66,6 +66,23 @@ describe('MesajCercevesi', () => {
     expect(belge).not.toContain('window.XLSX=');
   });
 
+  // Karar 102 a: çerçevede basılan Ctrl K kabuğun ortak paletini açar (kabuk tuşu pencerede dinler).
+  it('çerçevenin Ctrl K iletisi kabukta Ctrl K olur; başka tuş ya da başka kanal olmaz', async () => {
+    sunucuKur(YONETICI);
+    ac('/mesaj');
+    const cerceve = await screen.findByTitle('Mesaj', {}, { timeout: 5000 }) as HTMLIFrameElement;
+    const tuslar: string[] = [];
+    const dinle = (o: KeyboardEvent) => { tuslar.push(`${o.ctrlKey ? 'ctrl+' : ''}${o.key}`); };
+    window.addEventListener('keydown', dinle);
+    const gonder = (data: unknown) => { window.dispatchEvent(new MessageEvent('message', { data, origin: 'null', source: cerceve.contentWindow })); };
+    gonder({ kanal: 'mesaj', yon: 'kisayol', tus: 'baska' });
+    gonder({ kanal: 'baska', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual([]);
+    gonder({ kanal: 'mesaj', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual(['ctrl+k']);
+    window.removeEventListener('keydown', dinle);
+  });
+
   it('boş depoda yönetici açınca başlangıç kurulumunu bir kez çağırır', async () => {
     const istekler = sunucuKur(YONETICI, true);
     ac('/mesaj');

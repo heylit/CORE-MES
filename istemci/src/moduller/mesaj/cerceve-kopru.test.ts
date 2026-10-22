@@ -182,4 +182,50 @@ describe('çerçeve köprüsü', () => {
     expect(betik.match(/<\/script/gi)).toHaveLength(1);
     expect(betik).toContain('\\u003c/script>');
   });
+
+  // Karar 102 a: Ctrl K kabuğun ortak paletidir; çerçevenin komutu paletin "Bu sayfa" grubundan çalışır.
+  it('CK-07: Ctrl K prototipe ulaşmadan kabuğa gider; başka tuş prototipte kalır', () => {
+    const ust: unknown[] = [];
+    vi.mocked(window.postMessage).mockImplementation((ileti: unknown) => { ust.push(ileti); });
+    kur();
+    const prototip = vi.fn();
+    document.addEventListener('keydown', prototip);
+    for (const ayar of [{ ctrlKey: true }, { metaKey: true }]) {
+      const tus = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true, ...ayar });
+      document.body.dispatchEvent(tus);
+      expect(tus.defaultPrevented).toBe(true);
+    }
+    expect(prototip).not.toHaveBeenCalled();
+    expect(ust.filter((i) => (i as { yon?: unknown }).yon === 'kisayol')).toEqual([
+      { kanal: 'mesaj', yon: 'kisayol', tus: 'arama' }, { kanal: 'mesaj', yon: 'kisayol', tus: 'arama' },
+    ]);
+    // Reddedilen: Ctrl Alt K, düz k ve Ctrl J kabuğa gitmez.
+    ust.length = 0;
+    for (const ayar of [{ key: 'k', ctrlKey: true, altKey: true }, { key: 'k' }, { key: 'j', ctrlKey: true }]) {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...ayar }));
+    }
+    expect(prototip).toHaveBeenCalledTimes(3);
+    expect(ust.filter((i) => (i as { yon?: unknown }).yon === 'kisayol')).toEqual([]);
+    document.removeEventListener('keydown', prototip);
+  });
+
+  it('CK-08: komut listesi hazırla gider; seçilen komut prototipin düğmesini çalıştırır, bilinmeyen anahtar ve yabancı kaynak çalışmaz', () => {
+    const ust: unknown[] = [];
+    vi.mocked(window.postMessage).mockImplementation((ileti: unknown) => { ust.push(ileti); });
+    kur();
+    expect(ust).toContainEqual({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar: [expect.objectContaining({ anahtar: 'mesaj-ara', baslik: 'Mesajlarda ara', simge: 'search' })] });
+    const eylemler: string[] = [];
+    const tik = (o: Event) => { const a = (o.target as HTMLElement).dataset['act']; if (a !== undefined) eylemler.push(a); };
+    window.addEventListener('click', tik);
+    const gonder = (data: unknown, source: MessageEventSource | null = window) => { window.dispatchEvent(new MessageEvent('message', { data, source })); };
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'yok' });
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'mesaj-ara' }, null);
+    expect(eylemler).toEqual([]);
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'mesaj-ara' });
+    // Testte önceki köprüler de aynı pencerede dinler: her biri aynı düğmeyi çalıştırır.
+    expect(eylemler.length).toBeGreaterThan(0);
+    expect(new Set(eylemler)).toEqual(new Set(['search']));
+    expect(document.querySelector('button[data-act]')).toBeNull();
+    window.removeEventListener('click', tik);
+  });
 });

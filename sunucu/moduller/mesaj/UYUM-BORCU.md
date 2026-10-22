@@ -15,6 +15,7 @@
 | Tema yalnız açılışta | Açık/koyu tema çerçeve kurulurken geçer; açıkken değişirse sayfa yenilenince uyar. | Gerekirse köprüye tema iletisi. |
 | Kullanılmayan çekirdek kalıbı | Belge deposu her modülde ayrı kopyadır (sunucu + `cerceve-kopru.ts`). | Önerilen çekirdek parçası: ortak belge deposu (CEKIRDEK-ISTEKLERI). |
 | Üretim adedi girişi kapalı (311 a) | Siparişteki "Üretim gir", satır içi giriş ve MES üretim aktarımı köprüden gizli; sunucu `orders/*/giris` yazmasını ve `qty`, `imp`, `lastEntry` değişikliğini reddeder. Adet yalnız Üretim Terminali'nden girilir; siparişteki ilerleme bu ekranda artmaz. | Aşama 2: sipariş ilerlemesi üretim emrinden okunur. |
+| Ctrl K ortak palette (kart #140, karar 102 a) | Çerçevede basılan Ctrl K prototipe ulaşmadan kabuğa gider (`cerceve-kopru.ts`, yakalama evresi), kabuğun paleti açılır; "Mesajlarda ara" paletin "Bu sayfa" grubunda. Prototipin arama penceresi Ara düğmesiyle yerinde kalır; düğmenin "Ara (Ctrl+K)" ipucu prototip metnidir. | Kanal, mesaj, görev, toplantı, sipariş ve onay araması ortak palete değer alan komut (kural 8) ya da kayıt kaynağı olarak geçince pencere ve ipucu kalkar (prototip değişikliği). |
 
 ## Sunucuda zorunlu olup eksik kalan
 Belge deposu kuralları (yol, erişim, sürüm, kilit, ek boyutu, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
