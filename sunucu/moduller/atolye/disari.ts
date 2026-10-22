@@ -1,7 +1,7 @@
 // Başka modüllerin ithal edebildiği tek dosya. Raf, göz ve zemin alanı Fabrika Haritası'nda tek kaynaktır (kart #686):
 // stok miktarı ve hareketi stokta kalır, yeri buradaki göze ya da alana bağlanır.
 import type { Db } from '#cekirdek/db.ts';
-import type { AlanTuru, GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
+import type { AlanTuru, FabrikaCevabi, GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
 import { adresCoz, gozAdresi as adresUret } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
@@ -91,3 +91,7 @@ export async function istasyonYerleri(db: Db, salonId: number | null = null): Pr
 
 export type { ZeminBolumu, ZeminNesnesi } from './servis.ts';
 export const zemin = (db: Db) => servis.zemin(db);
+
+// Bütün bölümlerin yerleşimi fabrikadaki yeriyle (GET /atolye/fabrika ile aynı cevap, kart #114): Stok Merkezi tek fabrika
+// zeminini bununla çizer. Okuma yetkisini çağıran (stok) kendi ucunda denetler.
+export const fabrikaPlani = (db: Db): Promise<FabrikaCevabi> => servis.fabrika(db);

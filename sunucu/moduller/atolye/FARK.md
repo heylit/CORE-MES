@@ -416,3 +416,10 @@ npm ls occt-import-js three pdfjs-dist → occt-import-js@0.0.23, three@0.186.1,
   örnek istasyonlar (`ORN-` kodu, "Örnek" etiketiyle, eşleşmesiz de) durur; ayrı "Makineler" grubu kalktı, eşleşmeyenlerin sayısı ve
   Çizim Merkezi'nde "CNC makineleri" bölümüne yönlendiren not yazar. Daha önce yerleşmiş eşleşmesiz istasyon haritada kalır. Kural istemcidedir
   (`kurallar.ts` `eklenebilirIstasyonlar`); sunucu kaydı eşleşme denetlemez. Göç ve yeni işlem yok.
+
+## Tek fabrika zemini dışarıya (kart #114; Soru 106-109, Soru 109 a prototip değişikliği onaylı)
+- İstemci `disari.ts`: `FabrikaZemini` (salt okunur): bütün bölümler tek zeminde, fabrikadaki yer, dönüş ve gerçek ölçüyle; raf, alan (stok kutuları,
+  fason dahil), istasyon ve makine haritadaki simgesiyle. Seçim kayıtlı anahtarla (`raf:<id>`, `alan:<id>`, `bolum:<salonId>`, `istasyon:`, `makine:`).
+  Veri çağırandan gelir (stok kendi ucundan, #115). Yer ve boyut yalnız Fabrika Haritası'nda, `atolye.yaz` ile düzenlenir; yetki değişmedi.
+- Sahne3B'nin iki boyutlu planındaki taslak, görünüm kutusu ve anahtar çevirisi `zemin-plani.ts`'e alındı; ikisi aynısını kullanır (davranış aynı).
+- Sunucu `disari.ts`: `fabrikaPlani(db)` (GET /atolye/fabrika ile aynı cevap); okuma yetkisini çağıran denetler.
