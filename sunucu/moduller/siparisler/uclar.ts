@@ -3,7 +3,7 @@ import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
   denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
-  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, teklifAyrintiCevabi, teklifEkleGovdesi,
+  siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
@@ -40,6 +40,14 @@ export const uclar = [
       const liste = await servis.siparisListesi(db, sorgu);
       return fiyatGorur(kullanici) ? liste : { ...liste, satirlar: liste.satirlar.map(siparisFiyatsiz) };
     },
+  }),
+  // Ana sayfa özeti (76 a): yalnız sayı, fiyat taşımaz; listeyi okuyan görür.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/ozet',
+    yetki: 'siparisler.oku',
+    cevap: siparisOzetiCevabi,
+    isle: ({ db }) => servis.siparisOzeti(db),
   }),
   // Kart seçimi yalnız sipariş ve teklif yazanın işidir.
   uc({
