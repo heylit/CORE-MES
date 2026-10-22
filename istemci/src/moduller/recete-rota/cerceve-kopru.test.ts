@@ -276,6 +276,7 @@ describe('çerçeve köprüsü', () => {
     type Tmi = {
       kaydet: (f: (ad: string) => string) => void; bildir: (ad: string) => void; sayaclar: (s: Record<string, unknown>) => void;
       komutlar: (liste: unknown, calistir: (anahtar: string) => void) => void;
+      komutOnerici: (oner: (metin: string) => unknown, calistir: (anahtar: string) => void) => void;
     };
     const tmi = () => (window as unknown as { tmiGorunum: Tmi }).tmiGorunum;
     const kabuktan = (gorunum: string, sira: number) => {
@@ -426,6 +427,40 @@ describe('çerçeve köprüsü', () => {
       tmi().komutlar([], (a) => { calisan.push(a); });
       kabuktanKomut({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
       expect(calisan).toEqual(['gun-ozeti']);
+    });
+
+    it('KK-24: yazılan metne öneriler kabuğun sırasıyla döner (en çok 8, bozuk madde atılır); yalnız son önerideki anahtar çalışır; bozuk metin cevapsız kalır', () => {
+      cerceveKoprusu(window, AYAR);
+      // Önceki testlerin köprüleri de pencereyi dinler (boş önericiyle cevaplar); bu köprü en son kurulduğu için her sıranın son cevabıdır.
+      const oneriler = () => gorunumler.filter((g) => g.tip === 'komut-onerileri') as unknown as { sira: number; komutlar: { anahtar: string }[] }[];
+      const son = (sira: number) => oneriler().filter((o) => o.sira === sira).at(-1);
+      const kabuktan = (data: unknown) => { window.dispatchEvent(new MessageEvent('message', { data, source: window })); };
+      const sorulan: string[] = [];
+      const calisan: string[] = [];
+      tmi().komutOnerici((metin) => {
+        sorulan.push(metin);
+        if (metin === 'patla') throw new Error('x');
+        return [{ anahtar: 'oneri-0', baslik: 'SP-109 öne al', simge: 'up' }, { anahtar: 'Bozuk', baslik: 'x', simge: 'up' },
+          ...Array.from({ length: 10 }, (_, i) => ({ anahtar: `oneri-${i + 1}`, baslik: `Öneri ${i + 1}`, simge: 'up' }))];
+      }, (a) => { calisan.push(`oneri:${a}`); });
+      tmi().komutlar([{ anahtar: 'gun-ozeti', baslik: 'Gün özeti', simge: 'book' }], (a) => { calisan.push(`liste:${a}`); });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'sp-109 ö', sira: 3 });
+      expect(son(3)!.komutlar).toHaveLength(8);
+      expect(son(3)!.komutlar.map((k) => k.anahtar)).not.toContain('Bozuk');
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-0' });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-9' });
+      expect(calisan).toEqual(['oneri:oneri-0', 'liste:gun-ozeti']);
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'x'.repeat(201), sira: 4 });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'a', sira: 0 });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 7, sira: 5 });
+      kabuktan({ kanal: 'tmi-gorunum', surum: 2, tip: 'komut-metni', metin: 'a', sira: 6 });
+      expect(oneriler().filter((o) => o.sira !== 3)).toEqual([]);
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'patla', sira: 7 });
+      expect(son(7)!.komutlar).toEqual([]);
+      kabuktan({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-0' });
+      expect(calisan).toEqual(['oneri:oneri-0', 'liste:gun-ozeti']);
+      expect(sorulan).toEqual(['sp-109 ö', 'patla']);
     });
   });
 });
