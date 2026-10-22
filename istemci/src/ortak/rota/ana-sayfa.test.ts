@@ -50,6 +50,14 @@ describe('gorunenKartlar', () => {
     expect(gorunenKartlar(kartlar, ['satin-alma.talep-ac']).map((k) => k.anahtar)).toEqual(['talep', 'ikili', 'esit-b', 'sistem']);
     expect(gorunenKartlar(kartlar, ['saglik.ayrinti-oku']).map((k) => k.anahtar)).toEqual(['ikili', 'esit-b', 'sistem']);
   });
+
+  it('sirket ozeti karti bolum islemi ve kendi islemi birlikte olana gorunur; biri eksikse gorunmez (73 b)', () => {
+    const ozet = [kart('ozet-kart', { bolum: 'yonetim', islem: 'satin-alma.talep-ac' }), kart('is-kart', { bolum: 'is', islem: 'satin-alma.talep-ac' })];
+    expect(gorunenKartlar(ozet, ['satin-alma.talep-ac']).map((k) => k.anahtar)).toEqual(['is-kart']);
+    expect(gorunenKartlar(ozet, ['pano.sirket-ozeti']).map((k) => k.anahtar)).toEqual([]);
+    expect(gorunenKartlar(ozet, ['pano.sirket-ozeti', 'satin-alma.talep-ac']).map((k) => k.anahtar)).toEqual(['is-kart', 'ozet-kart']);
+    expect(gorunenKartlar([kart('islemsiz', { bolum: 'yonetim' })], []).map((k) => k.anahtar)).toEqual([]);
+  });
 });
 
 describe('bolumlereAyir', () => {

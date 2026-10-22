@@ -80,6 +80,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'mesaj.yaz': 'Mesaj yazma',
   'mesaj.yonet': 'Mesaj kurulumu',
   'oee.oku': 'OEE ve verimlilik görme',
+  'pano.sirket-ozeti': 'Ana sayfada şirket özetini görme',
   'plan.oku': 'Planı ve senaryoları görme',
   'plan.yaz': 'Plan düzenleme',
   'plan.kilitle': 'Planı kilitleme',

@@ -4,7 +4,7 @@ import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 
 // Pano bölümleri; ana sayfada bu sırayla dizilir. Kişinin panosu rolünden değil işlemlerinden çıkar: birden çok rolü olan
 // kişi rollerinin açtığı kartların hepsini görür.
-// Şirket özeti yöneticinin bütün işletmeye bakışıdır (kart #664); modül kartını yönetici işlemiyle (ayarlar.yaz) bildirir.
+// Şirket özeti yönetici ve müdürün bütün işletmeye bakışıdır (kart #664, 73 b); bölüm pano.sirket-ozeti ister, kart ayrıca kendi okumasını.
 export const ANA_SAYFA_BOLUMLERI = [
   { anahtar: 'yonetim', baslik: 'Şirket özeti' },
   { anahtar: 'is', baslik: 'Bana düşen işler' },
@@ -62,8 +62,13 @@ export function kartlariTopla(dosyalar: Record<string, unknown>): AnaSayfaKarti[
   return toplam;
 }
 
+// Şirket özeti bölümü ayrıca bölüm işlemini ister (73 b): kartın kendi okuma işlemi olan başka rol o kartı bu bölümde görmez.
+const SIRKET_OZETI_ISLEMI: Islem = 'pano.sirket-ozeti';
+
 export function gorunenKartlar(kartlar: readonly AnaSayfaKarti[], islemler: readonly string[]): AnaSayfaKarti[] {
+  const sirketOzeti = islemler.includes(SIRKET_OZETI_ISLEMI);
   return kartlar
+    .filter((k) => k.bolum !== 'yonetim' || sirketOzeti)
     .filter((k) => k.islem === undefined || maddeGorunurMu({ islem: k.islem, veya: k.veya }, islemler))
     .sort((a, b) => a.sira - b.sira || a.anahtar.localeCompare(b.anahtar));
 }
