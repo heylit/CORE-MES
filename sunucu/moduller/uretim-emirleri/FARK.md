@@ -1,3 +1,9 @@
+# FARK: Malzeme · Teslim panelinde Fasona gönder, kart #97 (sorular 92 b, 97 a; dal 97-fasona-gonder)
+
+- Yeni okuma ucu `GET /adimli-emirler/:id/siradaki-fason` (`uretim-emirleri.fason`): emrin sıradaki iş emri fason ise adım, firma ve gidiş özeti (giden, dönen sağlam, hurda, gönderilebilir); değilse, emir taslak ya da açık emir kuralına takılıyorsa `fason: null`. Yan etkisiz, kilit almaz.
+- İstemci `istemci/src/moduller/uretim-emirleri/disari.ts` ilk kez açıldı: `FasonaGonder` bölümü. Kart #95'te stok paneli Teslim et altında gösterecek. Gidiş mevcut `POST /adimli-emirler/:id/is-emirleri/:isEmriId/fason-gidis` komutuyla, istek kimliğiyle yazılır; adet sınırı sunucuda.
+- Şema, göç, işlem ve rol değişmedi.
+
 # FARK: iş başlatmada yetkinlik, karar 86 b (dal claude/ik-hassas-alan-yetkinlik-heu9ik)
 
 - `emirBaslat`: kapsam denetiminden sonra `yetkinMi` (istasyonlar `disari.ts`) ve `kisiBayrakliMi` (kisiler `disari.ts`); yetkinlik yoksa ya da süresi dolduysa 403 `YETKINLIK_YOK` (UE20). Terminal, makine devralma ve Arkon başlatması bu işlevden geçer.

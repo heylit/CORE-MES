@@ -94,6 +94,7 @@ export function useIsKomutu() {
               : api.post<IsCevabi>(`/sevkiyat/isler/${komut.id}/guncelle`, komut.govde),
     onSuccess: (_c, komut) => {
       void istemci.invalidateQueries({ queryKey: ['sevkiyat', 'plan'] });
+      if (komut.tur === 'durum') void istemci.invalidateQueries({ queryKey: ['sevkiyat', 'urun-sevkleri'] });
       if (komut.tur === 'ise-cevir') void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
     },
   });

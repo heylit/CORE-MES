@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { AZAMI_ADIM, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type {
-  AcilisSecenekleri, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
+  AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
   RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
@@ -712,6 +712,24 @@ export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriS
   if (onceki === undefined) return null;
   const bolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [emirId]), emirId).filter((p) => p.bolunmeSira === isEmri.sira).reduce((t, p) => t + p.adet, 0);
   return (onceki.saglamAdet ?? 0) + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
+}
+
+// Okutulan emrin sıradaki fason iş emri (kart #97): kilitlemeden okunur; gidişin kendisi `fasonGidis` ile aynı kurallarla denetlenir.
+// Kapalı, arşivdeki ya da taslak emirde ve sırada fason olmayan emirde null.
+export async function siradakiFason(db: Db, emirId: number): Promise<SiradakiFasonCevabi['fason']> {
+  const e = await s.ustEmirBul(db, emirId);
+  if (e === null || e.malzemeNo === null) throw bulunamadi(EMIR_YOK);
+  if (acikEmirIhlali(e.durum, e.arsiv) !== null || e.durum === 'taslak') return null;
+  const hepsi = await s.isEmirleriGetir(db, [emirId]);
+  const sira = siradakiIsEmri(hepsi);
+  if (sira === null || sira.fasonFirmaId === null) return null;
+  const ozet = fasonOzeti(await s.fasonHareketleriGetir(db, [sira.id]));
+  const firma = (await firmaOzetleri(db, [sira.fasonFirmaId])).get(sira.fasonFirmaId);
+  return {
+    uretimEmriId: e.id, emirNo: e.emirNo, isEmriId: sira.id, opNo: sira.opNo, ad: sira.ad, firma: firma?.ad ?? null,
+    gonderilen: ozet.gonderilen, donenSaglam: ozet.donenSaglam, donenHurda: ozet.donenHurda,
+    gonderilebilir: (await adimaGiren(db, emirId, hepsi, sira)) ?? e.adet,
+  };
 }
 
 export async function fasonGidis(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, adet: number): Promise<{ hareketId: number }> {

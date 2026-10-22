@@ -4,7 +4,7 @@ import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, bitirGovdesi, durdurGovdesi, emirAyrintiCevabi, emirBaslatCevabi, emirCevabi, emirGovdesi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, sayimAyarlaGovdesi, sayimGovdesi,
-  adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi,
+  adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineSecimiGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -501,6 +501,15 @@ const adimliUclar = [
       await isEmri.birlesmePlani(db, kullanici, parametre.id, govde);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
+  }),
+  // Okutulan emrin sıradaki fason iş emri (kart #97): Malzeme · Teslim panelindeki "Fasona gönder" bölümü; yalnız gönderebilen okur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/siradaki-fason',
+    yetki: 'uretim-emirleri.fason',
+    parametre: emirParametresi,
+    cevap: siradakiFasonCevabi,
+    isle: async ({ db, parametre }) => ({ fason: await isEmri.siradakiFason(db, parametre.id) }),
   }),
   // Fason gidiş ve dönüş yinelenirse adet iki kez sayılır: istek kimliği zorunludur.
   uc({
