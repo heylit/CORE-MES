@@ -119,12 +119,21 @@ export const saatUyarisiSemasi = z.object({
   aciklama: z.string().nullable(),
   // Bittide emrin bitiş anı.
   baslangic: zamanSemasi.nullable(),
+  // Uyarının kimliği (tür, istasyon, alet ve vadesi, emir, başlangıç); üstlenme ucu bununla çağrılır. Sunucu kurar, saat çözmez.
+  kimlik: z.string(),
+  // Geçerli üstlenme (son 12 saat); yoksa null.
+  ustlenen: z.object({ ad: z.string(), an: zamanSemasi }).nullable(),
 });
 
 export const saatUyarilariCevabi = z.object({
   zaman: zamanSemasi,
+  // Kişide üstlenme işlemi var mı; saat düğmeyi buna göre gösterir (yetki sunucuda yeniden denetlenir).
+  ustlenebilir: z.boolean(),
   uyarilar: z.array(saatUyarisiSemasi),
 });
+
+// Üstlenme (karar 79 a): yalnız üstlenir, kapatmaz. Cevap güncel uyarı listesidir.
+export const saatUstlenGovdesi = z.object({ kimlik: z.string().min(1).max(300) });
 
 // Saatin yazdığı tek komut duruştur (onaylı kapsam: terminal.uret); gövde ve cevap emir ucuyla aynı şekilde kalır.
 export const saatDurdurGovdesi = durdurGovdesi;

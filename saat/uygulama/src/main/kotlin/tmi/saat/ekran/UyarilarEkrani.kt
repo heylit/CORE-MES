@@ -16,7 +16,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.itemsIndexed
@@ -87,13 +92,19 @@ fun UyarilarEkrani(durum: Yukleme<List<Uyari>>, geri: () -> Unit, ac: (Uyari) ->
 }
 
 fun uyariMetni(u: Uyari): String =
-    listOfNotNull(uyariYeri(u), u.emirNo, u.aciklama ?: if (u.tur == "durus") "Duruş nedeni girilmedi." else null).joinToString(" · ")
+    listOfNotNull(
+        uyariYeri(u), u.emirNo, u.aciklama ?: if (u.tur == "durus") "Duruş nedeni girilmedi." else null, u.ustlenen?.let { "üstlenen $it" },
+    ).joinToString(" · ")
 
 // Tam ekran uyari (82 a): tur renginde merkezden kararan zemin, uclu isaret, istasyon, aciklama, titresim deseni ve iki buyuk
 // dugme. "Sustur" uyariyi bu saatte listeden dusurur; istasyon adina dokununca istasyon acilir. Ekran 60 sn acik kalir (83 a):
-// uygulama ici kisik mod yok, sure dolunca sistem ekrani kapatir.
+// uygulama ici kisik mod yok, sure dolunca sistem ekrani kapatir. Ustlenebilen kiside (79 a) ilk dugme "Ustlen"dir: ustlenme uyariyi
+// kapatmaz, baskalarinin listesinde "ustlenen" gorunur; basarida ekran kapanir, hata (baskasi ustlendi, yetki) ekranda yazar.
 @Composable
-fun UyariEkrani(uyari: Uyari, flas: Boolean, bak: (() -> Unit)?, gordum: () -> Unit) {
+fun UyariEkrani(uyari: Uyari, flas: Boolean, bak: (() -> Unit)?, gordum: () -> Unit, ustlen: (suspend () -> String?)? = null) {
+    val kapsam = rememberCoroutineScope()
+    var gidiyor by remember { mutableStateOf(false) }
+    var hata by remember { mutableStateOf<String?>(null) }
     val renk = Renkler.uyariTuru(uyari.tur)
     EkranAcikTut(EKRAN_ACIK_MS)
     // Yanip sonerek uyar: gurultude titresim kacirilir; zemin uc kez tur rengiyle parlar.
@@ -132,10 +143,27 @@ fun UyariEkrani(uyari: Uyari, flas: Boolean, bak: (() -> Unit)?, gordum: () -> U
             textAlign = TextAlign.Center,
             maxLines = 3,
         )
+        uyari.ustlenen?.let { Text("Üstlenen: $it", fontSize = 12.sp, color = Renkler.yazi, textAlign = TextAlign.Center, maxLines = 1) }
+        (hata ?: if (gidiyor) "Üstleniliyor" else null)?.let { Text(it, fontSize = 11.sp, color = Renkler.yazi, textAlign = TextAlign.Center, maxLines = 2) }
         Titresim.desen(uyari.tur)?.let { Desen(it) }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-            if (bak != null) Dugme("Bak", buyuk = true, onClick = bak)
-            Dugme("Sustur", ana = true, buyuk = true, onClick = gordum)
+            if (ustlen != null) {
+                Dugme("Üstlen", ana = true, buyuk = true) {
+                    if (!gidiyor) {
+                        gidiyor = true
+                        hata = null
+                        kapsam.launch {
+                            hata = ustlen()
+                            gidiyor = false
+                            if (hata == null) gordum()
+                        }
+                    }
+                }
+                Dugme("Sustur", buyuk = true, onClick = gordum)
+            } else {
+                if (bak != null) Dugme("Bak", buyuk = true, onClick = bak)
+                Dugme("Sustur", ana = true, buyuk = true, onClick = gordum)
+            }
         }
     }
 }

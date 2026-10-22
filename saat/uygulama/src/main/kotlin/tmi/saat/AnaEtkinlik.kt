@@ -13,6 +13,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import tmi.saat.cekirdek.Cerceve
 import tmi.saat.kadran.UyariSayisi
+import java.util.UUID
 import tmi.saat.ekran.AyarlarEkrani
 import tmi.saat.ekran.LocalEldiven
 import tmi.saat.ekran.SaatAyarlari
@@ -145,7 +146,10 @@ private fun Eslesmis(
 ) {
     LaunchedEffect(Unit) { ilkSayfa?.let { gezgin.navigate(it) } }
     val baglam = LocalContext.current
-    val pano by periyodikOku(oturumBitti) { Pano(api.istasyonlar(), api.uyarilar()) }
+    val pano by periyodikOku(oturumBitti) {
+        val liste = api.uyariListesi()
+        Pano(api.istasyonlar(), liste.uyarilar, liste.ustlenebilir)
+    }
     val veri = (pano as? Yukleme.Geldi)?.veri
     // "Gordum" denen uyarilar yalniz bu saatte ve bu acilista duser; sunucuya yazilmaz.
     var gorulen by remember { mutableStateOf(emptySet<String>()) }
@@ -257,6 +261,20 @@ private fun Eslesmis(
                 gordum = {
                     gorulen = gorulen + anahtar(u)
                     gezgin.popBackStack("ana", inclusive = false)
+                },
+                ustlen = u.kimlik?.takeIf { veri?.ustlenebilir == true && u.ustlenen == null }?.let { kimlik ->
+                    val istekKimligi = UUID.randomUUID().toString()
+                    suspend {
+                        try {
+                            api.uyariUstlen(kimlik, istekKimligi)
+                            null
+                        } catch (e: ApiHatasi.OturumYok) {
+                            oturumBitti()
+                            null
+                        } catch (e: ApiHatasi) {
+                            e.message ?: "Üstlenilemedi"
+                        }
+                    }
                 },
             )
         }

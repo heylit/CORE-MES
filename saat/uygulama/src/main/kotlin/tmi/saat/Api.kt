@@ -40,6 +40,10 @@ data class Uyari(
     val emirNo: String?,
     val aciklama: String?,
     val baslangic: String?,
+    // Sunucunun kurdugu uyari kimligi (ustlenme ucu bununla cagrilir); eski sunucuda yok.
+    val kimlik: String? = null,
+    // Gecerli ustlenmede ustlenenin adi; yoksa null.
+    val ustlenen: String? = null,
 )
 data class Op(val opNo: Int, val ad: String)
 data class Siradaki(val opNo: Int, val ad: String, val adet: Int)
@@ -67,7 +71,9 @@ data class Emir(
 data class DurusNedeni(val id: Int, val ad: String)
 // revizyonId yalniz onbellek anahtaridir; kare sunucuda emrin kaydiyla bulunur.
 data class Onizleme(val revizyonId: Int, val kareler: List<Int>)
-data class Pano(val istasyonlar: List<Istasyon>, val uyarilar: List<Uyari>)
+data class Pano(val istasyonlar: List<Istasyon>, val uyarilar: List<Uyari>, val ustlenebilir: Boolean = false)
+// ustlenebilir: kiside ustlenme islemi var (karar 79 a); dugme buna gore gorunur, yetki sunucuda yeniden denetlenir.
+data class UyariListesi(val ustlenebilir: Boolean, val uyarilar: List<Uyari>)
 // Kisinin o anki vardiyasi (takvimi yoksa ya da vardiya disindaysa null), bugunku uretim ve son sekiz saatin saglam sayimi.
 data class Vardiya(val ad: String?, val baslangic: String, val bitis: String)
 data class VardiyaDurumu(val zaman: String, val vardiya: Vardiya?, val bugun: Adet?, val saatlik: List<Int?>)
@@ -207,10 +213,21 @@ class Api(private val sunucu: () -> String?, private val belirtec: () -> String?
         )
     }
 
-    suspend fun uyarilar(): List<Uyari> {
+    suspend fun uyarilar(): List<Uyari> = uyariListesi().uyarilar
+
+    suspend fun uyariListesi(): UyariListesi {
         val c = istek("GET", "/saat/uyarilar")
-        return okunur { c.getJSONArray("uyarilar").esleOkunanlari(::uyariOku) }
+        return okunur { uyariListesiOku(c) }
     }
+
+    // Ustlenme uyariyi kapatmaz; cevap guncel listedir. istekKimligi bir dokunusun kimligidir (tekrar korumasi).
+    suspend fun uyariUstlen(kimlik: String, istekKimligi: String): UyariListesi {
+        val c = istek("POST", "/saat/uyarilar/ustlen", JSONObject().put("kimlik", kimlik), mapOf("istek-kimligi" to istekKimligi))
+        return okunur { uyariListesiOku(c) }
+    }
+
+    private fun uyariListesiOku(c: JSONObject): UyariListesi =
+        UyariListesi(c.mantikYaDaNull("ustlenebilir") ?: false, c.getJSONArray("uyarilar").esleOkunanlari(::uyariOku))
 
     private fun uyariOku(u: JSONObject): Uyari = Uyari(
         tur = u.getString("tur"),
@@ -220,6 +237,8 @@ class Api(private val sunucu: () -> String?, private val belirtec: () -> String?
         emirNo = u.metinYaDaNull("emirNo"),
         aciklama = u.metinYaDaNull("aciklama"),
         baslangic = u.metinYaDaNull("baslangic"),
+        kimlik = u.metinYaDaNull("kimlik"),
+        ustlenen = u.nesneYaDaNull("ustlenen")?.getString("ad"),
     )
 
     suspend fun emir(id: Int): Emir {

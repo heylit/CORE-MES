@@ -172,6 +172,19 @@ export function malzemeHazirMi(
   return true;
 }
 
+// Kimliği ve üstlenmesi olmadan uyarı: kurallar türetir, servis kimliği ve üstleneni ekler.
+export type HamUyari = Omit<SaatUyarisi, 'kimlik' | 'ustlenen'>;
+
+// Türetilmiş uyarının kimliği: aynı durum aynı kimliği verir; yeni duruş, yeni arıza ya da yeni vade yeni kimliktir.
+export const uyariKimligi = (u: HamUyari): string =>
+  [u.tur, u.istasyon?.id ?? '', u.alet?.id ?? '', u.alet?.vade ?? '', u.emirNo ?? '', u.baslangic ?? ''].join('|');
+
+// Üstlenme bu kadar saat geçerlidir; kalite, malzeme ve kalibrasyon uyarısının başlangıcı yoktur, kimlikleri uzun yaşar.
+export const USTLENME_GECERLILIK_SAAT = 12;
+
+export const USTLENME_ISLEMI = 'saat.uyari-ustlen' satisfies Islem;
+export const ustlenebilirMi = (islemler: readonly string[]): boolean => islemler.includes(USTLENME_ISLEMI);
+
 const UYARI_SIRASI: Record<SaatUyarisi['tur'], number> = { ariza: 0, durus: 1, bakim: 2, kalite: 3, malzeme: 4, bitti: 5, kalibrasyon: 6 };
 
 export interface UyariEkleri {
@@ -190,7 +203,7 @@ const KALIBRASYON_ACIKLAMASI: Record<string, string> = {
   yaklasan: 'Kalibrasyon vadesi yaklaşıyor',
 };
 
-const uyariAnahtari = (u: SaatUyarisi): number => u.istasyon?.id ?? u.alet?.id ?? 0;
+const uyariAnahtari = (u: HamUyari): number => u.istasyon?.id ?? u.alet?.id ?? 0;
 
 // Arıza önce, sonra duruş, bakım, kalite, malzeme, bitti, kalibrasyon; her türde en eski önce (en uzun süredir bekleyen).
 // Kalite ve malzeme yalnız açık emirlerden, bitti yalnız pencerede biten emirlerden, hepsi listedeki (kapsamdaki) istasyonlarda; malzeme yalnız başlamamış emirde.
@@ -199,9 +212,9 @@ export function uyarilariKur(
   emirler: readonly KaynakEmir[],
   makineler: readonly KaynakMakineDurumu[],
   ekler: UyariEkleri = {},
-): SaatUyarisi[] {
+): HamUyari[] {
   const adlar = new Map(istasyonlar.map((i) => [i.id, i.ad]));
-  const uyarilar: SaatUyarisi[] = [];
+  const uyarilar: HamUyari[] = [];
   for (const m of makineler) {
     const ad = adlar.get(m.istasyonId);
     if (ad === undefined || m.durum === 'calisir') continue;

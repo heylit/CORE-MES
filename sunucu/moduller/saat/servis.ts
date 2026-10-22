@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma } from '#cekirdek/hata.ts';
 import { kapsamDisiysaReddet, kapsamdaMi, kisininKapsami } from '#cekirdek/kapsam.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -12,6 +12,7 @@ import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { aktifIstasyonlar, aktifMakineler, istasyonGetir, kisininIzinliIsMerkezleri, makineDurumlari } from '../istasyonlar/disari.ts';
 import { stokMiktarlari, emirlerinNetSarfi } from '../stok/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { canliSira } from '../plan/disari.ts';
 import { basladigiGunTakvimleri, kisiVardiyalari, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
@@ -21,9 +22,9 @@ import {
 import type { Emir } from '../uretim-emirleri/disari.ts';
 import {
   birimSaniye, durumBaslangici, emirTezgahi, gecerliVardiya, istasyonDurumu, istasyonlariKur, kalanSaniye, kalibrasyonuGorebilirMi, malzemeHazirMi, pencereBaslangici,
-  saatlikSinirlar, siradakiIs, uyarilariKur,
+  saatlikSinirlar, siradakiIs, USTLENME_GECERLILIK_SAAT, ustlenebilirMi, uyariKimligi, uyarilariKur,
 } from './kurallar.ts';
-import type { KaynakEmir, KaynakMakine, KaynakMakineDurumu } from './kurallar.ts';
+import type { HamUyari, KaynakEmir, KaynakMakine, KaynakMakineDurumu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const kaynakEmir = (e: Emir, calismaBaslangic: string | null = null): KaynakEmir => ({
@@ -95,8 +96,29 @@ export async function uyarilar(db: Db, kullanici: Kullanici): Promise<SaatUyaril
   const biten = await bitenEmirler(db, k.istasyonlar.map((i) => i.id), pencereBaslangici(zaman), zaman);
   return {
     zaman,
-    uyarilar: uyarilariKur(k.istasyonlar, k.emirler, k.makineler.durumlar, { kararBekleyen, malzemeHazir, aletler, biten }),
+    ustlenebilir: ustlenebilirMi(kullanici.islemler),
+    uyarilar: await ustlenmeEkle(db, uyarilariKur(k.istasyonlar, k.emirler, k.makineler.durumlar, { kararBekleyen, malzemeHazir, aletler, biten })),
   };
+}
+
+async function ustlenmeEkle(db: Db, ham: readonly HamUyari[]): Promise<SaatUyarilariCevabi['uyarilar']> {
+  const kimlikler = ham.map(uyariKimligi);
+  const ustlenmeler = new Map((await sorgular.ustlenmeler(db, kimlikler, USTLENME_GECERLILIK_SAAT)).map((u) => [u.kimlik, u]));
+  const adlar = await kisiAdlari(db, [...new Set([...ustlenmeler.values()].map((u) => u.kisiId))]);
+  return ham.map((u, i) => {
+    const ustlenme = ustlenmeler.get(kimlikler[i]!);
+    const ad = ustlenme === undefined ? undefined : adlar.get(ustlenme.kisiId);
+    return { ...u, kimlik: kimlikler[i]!, ustlenen: ustlenme === undefined || ad === undefined ? null : { ad, an: ustlenme.an } };
+  });
+}
+
+// Kişi yalnız kendi gördüğü (kapsamındaki, o an açık) uyarıyı üstlenir: liste kişiye göre yeniden kurulur. Geçerli başka
+// üstlenme varsa çakışma; kişi ve zaman sunucudan.
+export async function ustlen(db: Db, kullanici: Kullanici, kimlik: string): Promise<SaatUyarilariCevabi> {
+  const once = await uyarilar(db, kullanici);
+  if (!once.uyarilar.some((u) => u.kimlik === kimlik)) throw bulunamadi('Uyarı artık açık değil.');
+  if (!await sorgular.ustlen(db, kimlik, kullanici.id, USTLENME_GECERLILIK_SAAT)) throw cakisma('Bu uyarıyı başka biri üstlendi.');
+  return uyarilar(db, kullanici);
 }
 
 export async function emir(db: Db, kullanici: Kullanici, id: number): Promise<SaatEmriCevabi> {

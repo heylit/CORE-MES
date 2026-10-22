@@ -5,6 +5,10 @@ Ilk surum yalniz okur. Akis ornektekiyle ayni: ana menu (Istasyonlarim, Uyarilar
 ve tam ekran uyari (yeni uyari gelince acilir). Yazma (durus nedeni, NFC, cagri)
 ve 3B ikinci surumdedir. Ekran duzeni ornek sayfadan gelir (`/mnt/project-files/arastirma/akilli-saat/ornek/`).
 
+Uyari ustlenme (kart #86, karar 79 a): tam ekran uyarida "Ustlen" uyariyi kapatmaz, "ben bakiyorum" der; baskalarinin listesinde
+ustlenen gorunur, ustlenme 12 saat gecerlidir. Dugme yalniz `saat.uyari-ustlen` islemi olan kiside gorunur; saatten yazmak icin
+oturum modulunun saat yazma listesi genisletilmelidir (ayri yama).
+
 Bu klasor npm calisma alanina, `npm run kontrol`'e ve guncelleme adimlarina girmez.
 
 ## Yapi

@@ -616,4 +616,54 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     assert.equal((await istek('plan_kisitli', 'GET', yol)).durum, 403, 'kapsam dışı istasyonun sırası');
     assert.equal((await istek('plan_kisitli', 'GET', `/saat/istasyonlar/${istasyonId}/siradaki`)).durum, 200);
   });
+  test('üstlenme: işlemsiz kişi 403; ilk üstlenen kazanır, ikinci 409; kapsam dışı ve kapanmış uyarı 404; 12 saat sonra başkası üstlenir', async () => {
+    const im = await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('SAMU', 'Üstlenme Merkezi') RETURNING id");
+    const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAIU', 'CNC-U', $1) RETURNING id", [im?.id]))!.id;
+    await o().sahip.sorgu("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAKU', 'Tezgah U', $1)", [ist]);
+    await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);
+    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-U', parcaAd: 'Deneme mil', adet: 2, istasyonId: ist, projeId });
+    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
+    const e = (ac.govde as { emir: { id: number } }).emir.id;
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/baslat`)).durum, 200);
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/durdur`, { durusNedeniId: durusId })).durum, 200);
+
+    await islemliKisiEkle('ustlenen_a', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    await islemliKisiEkle('ustlenen_b', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    await islemliKisiEkle('ustlenen_kisitli', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    const kisitli = await o().vt.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'ustlenen_kisitli'");
+    const sm1 = await o().vt.tek<{ id: number }>("SELECT id FROM is_merkezi WHERE kod = 'SAM1'");
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisitli?.id, sm1?.id]);
+
+    const liste = async (ad: string) => saatUyarilariCevabi.parse((await istek(ad, 'GET', '/saat/uyarilar')).govde);
+    const durus = async (ad: string) => (await liste(ad)).uyarilar.find((u) => u.tur === 'durus' && u.istasyon?.id === ist);
+    const u = await durus('ustlenen_a');
+    assert.ok(u, 'duruş uyarısı listede');
+    assert.equal(u.ustlenen, null);
+    assert.equal((await liste('ustlenen_a')).ustlenebilir, true);
+    assert.equal((await liste('harita')).ustlenebilir, false, 'işlemi olmayan kişide düğme yok');
+
+    const ustlen = (ad: string | null, kimlik: string) => istek(ad, 'POST', '/saat/uyarilar/ustlen', { kimlik });
+    assert.equal((await ustlen(null, u.kimlik)).durum, 401);
+    assert.equal((await ustlen('harita', u.kimlik)).durum, 403, 'işlemsiz kişi üstlenemez');
+    assert.equal((await ustlen('ustlenen_kisitli', u.kimlik)).durum, 404, 'kapsam dışı uyarı görünmez, üstlenilemez');
+    assert.equal((await ustlen('ustlenen_a', 'durus|0||||')).durum, 404, 'olmayan uyarı');
+    assert.equal((await ustlen('ustlenen_a', 'x'.repeat(301))).durum, 400);
+
+    const c = await ustlen('ustlenen_a', u.kimlik);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal(saatUyarilariCevabi.parse(c.govde).uyarilar.find((x) => x.kimlik === u.kimlik)?.ustlenen?.ad, 'Deneme ustlenen_a');
+    assert.equal((await durus('ustlenen_b'))?.ustlenen?.ad, 'Deneme ustlenen_a', 'başkası da üstleneni görür');
+    assert.equal((await ustlen('ustlenen_b', u.kimlik)).durum, 409, 'geçerli üstlenme varken başkası üstlenemez');
+    assert.equal((await ustlen('ustlenen_a', u.kimlik)).durum, 200, 'aynı kişi yeniden üstlenebilir');
+
+    await o().sahip.sorgu("UPDATE saat_uyari_ustlenme SET ustlenme = now() - interval '13 hours' WHERE kimlik = $1", [u.kimlik]);
+    assert.equal((await durus('ustlenen_b'))?.ustlenen, null, 'süresi geçen üstlenme gösterilmez');
+    assert.equal((await ustlen('ustlenen_b', u.kimlik)).durum, 200, 'süresi geçince başkası üstlenir');
+    assert.equal((await durus('ustlenen_a'))?.ustlenen?.ad, 'Deneme ustlenen_b');
+
+    // Üstlenme uyarıyı kapatmaz: duruş kaynağında bitince uyarı listeden düşer ve artık üstlenilemez.
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/devam`)).durum, 200);
+    assert.equal(await durus('ustlenen_a'), undefined);
+    assert.equal((await ustlen('ustlenen_a', u.kimlik)).durum, 404);
+  });
 });
