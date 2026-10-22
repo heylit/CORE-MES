@@ -1243,7 +1243,8 @@ Bilgilerinize sunarız.` };
     return L;
   }
   function paletBildir() {
-    if (!TP_UYG || typeof window.tmiGorunum.komutlar !== 'function') return;
+    /* pano kapalıyken listeyi planın genel komutları verir (zz31-tmi-palet) */
+    if (!TP_UYG || typeof window.tmiGorunum.komutlar !== 'function' || !acik()) return;
     window.tmiGorunum.komutlar(paletKomutlari().map(({ kos, ...k }) => k), anahtar => {
       const k = paletKomutlari().find(x => x.anahtar === anahtar); if (k) { menuKapat(); k.kos(); }
     });
