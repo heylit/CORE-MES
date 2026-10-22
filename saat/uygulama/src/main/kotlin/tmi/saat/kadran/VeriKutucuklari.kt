@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.drawable.Icon
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.CountDownTimeReference
 import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
@@ -18,9 +19,12 @@ import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.data.SmallImage
 import androidx.wear.watchface.complications.data.SmallImageComplicationData
 import androidx.wear.watchface.complications.data.SmallImageType
+import androidx.wear.watchface.complications.data.TimeDifferenceComplicationText
+import androidx.wear.watchface.complications.data.TimeDifferenceStyle
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceService
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import java.io.File
+import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,6 +36,8 @@ import tmi.saat.ApiHatasi
 import tmi.saat.Depo
 import tmi.saat.Istasyon
 import tmi.saat.cekirdek.Kadran
+import tmi.saat.cekirdek.VardiyaSayaci
+import tmi.saat.cekirdek.Zaman
 
 // Watch Face Format kadrani (ayri, kodsuz APK: saat/kadran) veri cekemez; veriyi bu kutucuklardan alir (375 a).
 // Sistem kutucugu manifestteki surede bir ister (pil); ag hatasinda null doner ve kadran son degeri gostermeye devam eder.
@@ -178,6 +184,40 @@ class UyariSayisi : TmiKutucugu() {
             .setText(metin(sayi.toString()))
             .setTapAction(dokunus())
             .build()
+}
+
+// Vardiya bitisine geri sayim (kadranin sag tusu, karar 81 a). Halka vardiyanin gecen payi; yazi sistemin kendi sayaci, her
+// dakika ag istemeden azalir. Vardiya disinda ve takvimsiz kiside bos. Dokununca Vardiya devri.
+class VardiyaKalan : TmiKutucugu() {
+    override val sayfa = AnaEtkinlik.VARDIYA
+
+    override suspend fun veri(request: ComplicationRequest): ComplicationData? {
+        if (!eslesti) return NoDataComplicationData()
+        val v = try {
+            api.vardiya()
+        } catch (_: ApiHatasi) {
+            return null
+        }
+        val bilgi = v.vardiya ?: return NoDataComplicationData()
+        val sunucu = Zaman.ms(v.zaman) ?: return null
+        val bas = Zaman.ms(bilgi.baslangic) ?: return null
+        val bit = Zaman.ms(bilgi.bitis) ?: return null
+        val oran = VardiyaSayaci.gecenOran(bas, bit, sunucu) ?: return NoDataComplicationData()
+        return kalan(oran, VardiyaSayaci.cihazdakiBitis(bit, sunucu, System.currentTimeMillis()))
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.RANGED_VALUE) kalan(0.7f, System.currentTimeMillis() + 2 * 3_600_000L) else null
+
+    private fun kalan(oran: Float, bitisMs: Long): ComplicationData {
+        val sayac = TimeDifferenceComplicationText.Builder(TimeDifferenceStyle.SHORT_SINGLE_UNIT, CountDownTimeReference(Instant.ofEpochMilli(bitisMs)))
+            .setMinimumTimeUnit(java.util.concurrent.TimeUnit.MINUTES)
+            .build()
+        return RangedValueComplicationData.Builder(oran * 100f, 0f, 100f, metin("Vardiya bitişine kalan"))
+            .setText(sayac)
+            .setTapAction(dokunus())
+            .build()
+    }
 }
 
 // Sistem Ayarlari'ndaki giris logosu; logo yoksa ya da eslesme yoksa "TMI" yazisi. Dokununca Tezgahlar 3B.

@@ -230,7 +230,11 @@ private fun Eslesmis(
         composable("nfc") {
             NfcEkrani(veri?.istasyonlar, geri) { id -> gezgin.navigate("istasyon/$id") { popUpTo("nfc") { inclusive = true } } }
         }
-        composable("vardiya") { VardiyaEkrani(pano, geri) }
+        composable("vardiya") {
+            // Vardiya yalniz bu ekran acikken okunur.
+            val vardiya by periyodikOku(oturumBitti) { api.vardiya() }
+            VardiyaEkrani(pano, vardiya, geri)
+        }
         composable("ozet") {
             OzetEkrani(pano, geri, uyarilariAc = { gezgin.navigate("uyarilar") }, istasyonAc = { id -> gezgin.navigate("istasyon/$id") })
         }

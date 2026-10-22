@@ -1,11 +1,12 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { emirParametresi, onizlemeKaresiParametresi, saatDurdurGovdesi, saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatUyarilariCevabi } from '#paylasilan/sozlesme/saat.ts';
+import { emirParametresi, onizlemeKaresiParametresi, saatDurdurGovdesi, saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatSiradakiCevabi, saatUyarilariCevabi, saatVardiyaCevabi } from '#paylasilan/sozlesme/saat.ts';
 import * as servis from './servis.ts';
 
 // Okuma uçları yeni işlem istemez (kart #1631): açık emirleri ve istasyon durumunu zaten okuyan roller (emir listesi,
 // Fabrika Haritası) saatte de görür. Terminal rolü emir listesini okumadığı için burada da yoktur.
 const OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.atolye'] } as const;
+const PLAN_OKUMA = { biri: ['plan.oku', 'plan.yaz'] } as const;
 
 export const uclar = [
   uc({
@@ -61,6 +62,22 @@ export const uclar = [
     parametre: onizlemeKaresiParametresi,
     cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => servis.tezgahOnizlemeKaresi(db, kullanici, parametre.id, parametre.kare),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/saat/vardiya',
+    yetki: OKUMA,
+    cevap: saatVardiyaCevabi,
+    isle: ({ db, kullanici }) => servis.vardiya(db, kullanici),
+  }),
+  // Plan saati yalnız planı okuyan rolde (karar 84 a); plan modülünün okuma işlemleriyle aynı küme.
+  uc({
+    yontem: 'GET',
+    yol: '/saat/istasyonlar/:id/siradaki',
+    yetki: PLAN_OKUMA,
+    parametre: emirParametresi,
+    cevap: saatSiradakiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.siradaki(db, kullanici, parametre.id),
   }),
   uc({
     yontem: 'GET',

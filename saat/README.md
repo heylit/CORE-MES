@@ -105,6 +105,7 @@ gelir. Her kutucuk kendi sayfasini acar:
 | Dis halka (yalniz halka bandi dokunulur) | TMI Açık emirler | Yonetici ozeti |
 | Ust | TMI Logo | Tezgahlar 3B |
 | Sol tus (saat 9) | TMI Uyarı sayısı: sayi, varsa kirmizi, yoksa gri | Uyarilar |
+| Sag tus (saat 3) | TMI Vardiya bitişi: vardiyanin gecen payi halkada, bitise kalan (sistem sayaci); vardiya disinda bos | Vardiya devri |
 | Alt kutu | TMI İstasyonlar: dikkat isteyenler ve durum cubugu | Istasyonlarim |
 
 Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); uygulama acikken uyari sayisi degisince kadrana hemen bildirir.
@@ -145,3 +146,5 @@ kisinin kendi istasyonlarindan biriyse ayrintisini acar. Etiket herhangi bir NFC
 - TMI kadrani gercek saatte denenmedi. Kadran XML'i Google'in Watch Face Format 1 semasina gore gecerlidir (resmi XSD ile denendi);
   kutucuk ifadeleri (`[COMPLICATION.*]`), halkanin 12 yonunden baslamasi ve kadranin uygulama kutucuklarini kendiliginden
   secmesi (`DefaultProviderPolicy primaryProvider`) cihazda denenmedi.
+- Vardiya tusundaki geri sayim yazisinin (`TimeDifferenceComplicationText`) kadranda kendiliginden azalmasi ve "TMI Vardiya"
+  karosunun sutun grafigi cihazda denenmedi.

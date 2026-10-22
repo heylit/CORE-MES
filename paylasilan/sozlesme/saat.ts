@@ -131,6 +131,35 @@ export const saatDurdurGovdesi = durdurGovdesi;
 export const saatDurusNedeniSemasi = z.object({ id: KIMLIK, ad: z.string(), simge: z.string().nullable(), kategori: z.enum(KATEGORILER) });
 export const saatDurusNedenleriCevabi = z.object({ nedenler: z.array(saatDurusNedeniSemasi) });
 
+// Kişinin vardiyası ve bugünkü üretim (karar 81 a: hedef verisi yoktur, saat hedef yerine vardiya bitişine geri sayar).
+// Vardiya Vardiya modülünün kişi takviminden gelir (tatil, izin, planlı duruş ve fazla mesai düşülmüş); kişinin o an içinde
+// olduğu çalışma günü yoksa (vardiya dışı, takvimsiz kişi) null. bitis fazla mesai dahil o günkü son çalışma anıdır.
+export const saatVardiyasiSemasi = z.object({ ad: z.string().nullable(), baslangic: zamanSemasi, bitis: zamanSemasi });
+export const saatVardiyaCevabi = z.object({
+  zaman: zamanSemasi,
+  vardiya: saatVardiyasiSemasi.nullable(),
+  // Sayımın penceresi: tesis gününün başından şimdiye (istasyon ucuyla aynı pencere).
+  pencere: z.object({ baslangic: zamanSemasi }),
+  // Kapsamdaki istasyonların penceredeki net sayımı; hiç sayım yoksa null.
+  bugun: z.object({ saglam: z.number().int(), hurda: adet }).nullable(),
+  // Son sekiz saat, saat başından saat başına (sonuncusu şimdiye kadar); sayımı olmayan saatte null.
+  saatlik: z.array(z.object({ baslangic: zamanSemasi, saglam: z.number().int().nullable() })),
+});
+
+// İstasyonun makinelerinde canlı planda sıradaki iş (karar 84 a: yalnız plan okuyan rol görür). Çalışan ve biten adım sayılmaz;
+// canlı planda yerleşmiş iş yoksa null.
+export const saatSiradakiCevabi = z.object({
+  zaman: zamanSemasi,
+  siradaki: z.object({
+    emirNo: z.string(),
+    opNo: z.number().int(),
+    ad: z.string(),
+    adet: z.number().int().positive(),
+    baslangic: zamanSemasi,
+    tezgah: z.string().nullable(),
+  }).nullable(),
+});
+
 export type SaatDurusNedenleriCevabi = z.output<typeof saatDurusNedenleriCevabi>;
 export type SaatIstasyonu = z.output<typeof saatIstasyonuSemasi>;
 export type SaatIstasyonlariCevabi = z.output<typeof saatIstasyonlariCevabi>;
@@ -138,3 +167,5 @@ export type SaatEmriCevabi = z.output<typeof saatEmriCevabi>;
 export type SaatUyarisi = z.output<typeof saatUyarisiSemasi>;
 export type SaatUyarilariCevabi = z.output<typeof saatUyarilariCevabi>;
 export type SaatOnizlemesiCevabi = z.output<typeof saatOnizlemesiCevabi>;
+export type SaatVardiyaCevabi = z.output<typeof saatVardiyaCevabi>;
+export type SaatSiradakiCevabi = z.output<typeof saatSiradakiCevabi>;

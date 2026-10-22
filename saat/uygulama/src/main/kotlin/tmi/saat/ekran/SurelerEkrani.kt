@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
@@ -18,19 +19,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Text
 import tmi.saat.Api
+import tmi.saat.ApiHatasi
 import tmi.saat.Istasyon
+import tmi.saat.PlanSiradaki
 import tmi.saat.Renkler
 import tmi.saat.cekirdek.GeriSayim
 import tmi.saat.cekirdek.IstasyonDurumu
+import tmi.saat.cekirdek.Zaman
 
 // Ornekteki "Sureler": halkada bu parcanin geri sayimi, altinda emir bitisine kalan, kalan parca ve siradaki is.
-// Birim sure girilmemis adimda sure hesaplanmaz; malzeme ihtiyaci bilinmiyorsa "veri yok".
+// Birim sure girilmemis adimda sure hesaplanmaz; malzeme ihtiyaci bilinmiyorsa "veri yok". Planda istasyonun sıradaki isi
+// yalniz plan okuyan rolde gelir (karar 84 a); yetkisiz rolde ve planda is yoksa satir hic gorunmez. Plan seyrek degisir: ekran
+// acilisinda bir kez okunur.
 @Composable
 fun SurelerEkrani(api: Api, istasyon: Istasyon?, emirId: Int, oturumBitti: () -> Unit, geri: () -> Unit) {
     val durumu = istasyon?.let { IstasyonDurumu.coz(it.durum) }
     val renk = Renkler.durum(durumu)
     val durum by periyodikOku(oturumBitti, emirId) { api.emir(emirId) }
     val simdi = simdiDurumu()
+    val plan by produceState<PlanSiradaki?>(null, istasyon?.id) {
+        value = istasyon?.id?.let { id ->
+            try {
+                api.istasyonSiradaki(id)
+            } catch (_: ApiHatasi) {
+                null
+            }
+        }
+    }
     when (val d = durum) {
         is Yukleme.Bekliyor -> Ileti("Yükleniyor")
         is Yukleme.Hata -> Ileti(d.ileti)
@@ -69,6 +84,7 @@ fun SurelerEkrani(api: Api, istasyon: Istasyon?, emirId: Int, oturumBitti: () ->
                     color = Renkler.soluk,
                 )
                 SureSatiri("Sıradaki: ", e.siradaki?.let { "OP${it.opNo} ${it.ad} · ${it.adet} adet" } ?: "veri yok")
+                plan?.let { p -> SureSatiri("Planda sırada: ", "${p.emirNo} OP${p.opNo} · ${Zaman.saatDakika(p.baslangic) ?: "-"}") }
                 Text(
                     when (e.malzemeHazir) {
                         true -> "malzeme hazır"

@@ -68,6 +68,11 @@ data class DurusNedeni(val id: Int, val ad: String)
 // revizyonId yalniz onbellek anahtaridir; kare sunucuda emrin kaydiyla bulunur.
 data class Onizleme(val revizyonId: Int, val kareler: List<Int>)
 data class Pano(val istasyonlar: List<Istasyon>, val uyarilar: List<Uyari>)
+// Kisinin o anki vardiyasi (takvimi yoksa ya da vardiya disindaysa null), bugunku uretim ve son sekiz saatin saglam sayimi.
+data class Vardiya(val ad: String?, val baslangic: String, val bitis: String)
+data class VardiyaDurumu(val zaman: String, val vardiya: Vardiya?, val bugun: Adet?, val saatlik: List<Int?>)
+// Istasyonun canli planinda siradaki is (karar 84 a: yalniz plan okuyan rol).
+data class PlanSiradaki(val emirNo: String, val opNo: Int, val ad: String, val adet: Int, val baslangic: String, val tezgah: String?)
 data class EslesmeIstegi(val istek: String, val kod: String, val son: String)
 data class Eslesme(val belirtec: String, val son: String, val kisiAd: String)
 
@@ -246,6 +251,27 @@ class Api(private val sunucu: () -> String?, private val belirtec: () -> String?
     }
 
     suspend fun tezgahKaresi(istasyonId: Int, kare: Int): ByteArray = bayt("/saat/istasyonlar/$istasyonId/onizleme/$kare")
+
+    suspend fun vardiya(): VardiyaDurumu {
+        val c = istek("GET", "/saat/vardiya")
+        return okunur {
+            VardiyaDurumu(
+                zaman = c.getString("zaman"),
+                vardiya = c.nesneYaDaNull("vardiya")?.let { Vardiya(it.metinYaDaNull("ad"), it.getString("baslangic"), it.getString("bitis")) },
+                bugun = c.nesneYaDaNull("bugun")?.let { Adet(it.getInt("saglam"), it.getInt("hurda")) },
+                saatlik = c.getJSONArray("saatlik").esle { it.sayiYaDaNull("saglam") },
+            )
+        }
+    }
+
+    suspend fun istasyonSiradaki(istasyonId: Int): PlanSiradaki? {
+        val c = istek("GET", "/saat/istasyonlar/$istasyonId/siradaki")
+        return okunur {
+            c.nesneYaDaNull("siradaki")?.let {
+                PlanSiradaki(it.getString("emirNo"), it.getInt("opNo"), it.getString("ad"), it.getInt("adet"), it.getString("baslangic"), it.metinYaDaNull("tezgah"))
+            }
+        }
+    }
 
     suspend fun durusNedenleri(): List<DurusNedeni> {
         val c = istek("GET", "/saat/durus-nedenleri")

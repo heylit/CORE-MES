@@ -3,18 +3,25 @@ import { bulunamadi } from '#cekirdek/hata.ts';
 import { kapsamDisiysaReddet, kapsamdaMi, kisininKapsami } from '#cekirdek/kapsam.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { SaatDurusNedenleriCevabi, SaatEmriCevabi, SaatIstasyonlariCevabi, SaatOnizlemesiCevabi, SaatUyarilariCevabi } from '#paylasilan/sozlesme/saat.ts';
+import type {
+  SaatDurusNedenleriCevabi, SaatEmriCevabi, SaatIstasyonlariCevabi, SaatOnizlemesiCevabi, SaatSiradakiCevabi, SaatUyarilariCevabi, SaatVardiyaCevabi,
+} from '#paylasilan/sozlesme/saat.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { yayindakiOnizleme, yayindakiOnizlemeKaresi } from '../cizimler/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { aktifIstasyonlar, aktifMakineler, istasyonGetir, kisininIzinliIsMerkezleri, makineDurumlari } from '../istasyonlar/disari.ts';
 import { stokMiktarlari, emirlerinNetSarfi } from '../stok/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
+import { canliSira } from '../plan/disari.ts';
+import { basladigiGunTakvimleri, kisiVardiyalari, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  acikEmir, acikEmirler, adimliEmirAyrintisi, bitenEmirler, calismayaGecisAnlari, emirDurdur, emirlerinMalzemeIhtiyaci, aralikAdetleri, isEmriPlanBilgileri, istasyonDurusSureleri, kararSayaclari, sonGirisler,
+  acikEmir, acikEmirler, adimliEmirAyrintisi, bitenEmirler, calismayaGecisAnlari, emirDurdur, emirlerinMalzemeIhtiyaci, aralikAdetleri, gunlukAralikAdetleri, isEmriPlanBilgileri, istasyonDurusSureleri, kararSayaclari, planlanacakIsEmirleri,
+  sonGirisler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir } from '../uretim-emirleri/disari.ts';
 import {
-  birimSaniye, durumBaslangici, emirTezgahi, istasyonDurumu, istasyonlariKur, kalanSaniye, kalibrasyonuGorebilirMi, malzemeHazirMi, pencereBaslangici, uyarilariKur,
+  birimSaniye, durumBaslangici, emirTezgahi, gecerliVardiya, istasyonDurumu, istasyonlariKur, kalanSaniye, kalibrasyonuGorebilirMi, malzemeHazirMi, pencereBaslangici,
+  saatlikSinirlar, siradakiIs, uyarilariKur,
 } from './kurallar.ts';
 import type { KaynakEmir, KaynakMakine, KaynakMakineDurumu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -201,4 +208,63 @@ export async function tezgahOnizlemeKaresi(db: Db, kullanici: Kullanici, id: num
   const dosya = o === null ? null : await yayindakiOnizlemeKaresi(db, hedef, o.revizyonId, kare);
   if (dosya === null) throw bulunamadi('Önizleme karesi bulunamadı.');
   return dosya;
+}
+
+const gunOncesi = (an: string): string => tesisGunu(Date.parse(an) - 86_400_000);
+
+// Kişinin o an içinde olduğu çalışma günü: dün başlayıp gece yarısını geçen vardiya da sayılır. Kişinin takvimi yoksa (istasyona
+// atanmamış kişi) Vardiya null verir; saat de vardiyayı null gösterir, genel vardiya tanımından uydurmaz.
+async function kisininVardiyasi(db: Db, kisiId: number, zaman: string): Promise<SaatVardiyaCevabi['vardiya']> {
+  const kaynak = { tur: 'kisi' as const, id: kisiId };
+  const gunler = (await basladigiGunTakvimleri(db, [kaynak], { baslangic: gunOncesi(zaman), bitis: tesisGunu(Date.parse(zaman)) })).get(`kisi:${String(kisiId)}`);
+  if (gunler == null) return null;
+  const v = gecerliVardiya([...gunler.values()], zaman);
+  if (v === null) return null;
+  const vardiyaId = (await kisiVardiyalari(db)).find((k) => k.kisiId === kisiId)?.vardiyaId ?? null;
+  const ad = vardiyaId === null ? null : (await vardiyaTanimlari(db)).find((t) => t.id === vardiyaId)?.ad ?? null;
+  return { ad, ...v };
+}
+
+export async function vardiya(db: Db, kullanici: Kullanici): Promise<SaatVardiyaCevabi> {
+  const kapsam = await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri);
+  const idler = (await aktifIstasyonlar(db)).filter((i) => kapsamdaMi(kapsam, i.isMerkeziId)).map((i) => i.id);
+  const zaman = await sorgular.simdi(db);
+  const baslangic = pencereBaslangici(zaman);
+  const adetler = [...(await aralikAdetleri(db, 'istasyon', idler, baslangic, zaman)).values()];
+  const sinirlar = saatlikSinirlar(zaman);
+  const saatler = await gunlukAralikAdetleri(db, 'istasyon', idler, sinirlar);
+  return {
+    zaman,
+    vardiya: await kisininVardiyasi(db, kullanici.id, zaman),
+    pencere: { baslangic },
+    bugun: adetler.length === 0 ? null : adetler.reduce((t, a) => ({ saglam: t.saglam + a.saglam, hurda: t.hurda + a.hurda }), { saglam: 0, hurda: 0 }),
+    saatlik: saatler.map((h, i) => ({
+      baslangic: sinirlar[i]!,
+      saglam: h.size === 0 ? null : [...h.values()].reduce((t, a) => t + a.saglam, 0),
+    })),
+  };
+}
+
+export async function siradaki(db: Db, kullanici: Kullanici, istasyonId: number): Promise<SaatSiradakiCevabi> {
+  await kapsamdakiIstasyon(db, kullanici, istasyonId);
+  const makineler = (await aktifMakineler(db)).filter((m) => m.istasyonId === istasyonId);
+  const zaman = await sorgular.simdi(db);
+  if (makineler.length === 0) return { zaman, siradaki: null };
+  const isler = (await planlanacakIsEmirleri(db)).map((i) => ({
+    id: i.id, emirNo: i.emirNo, opNo: i.opNo, ad: i.ad, adet: i.adimAdedi ?? i.adet, adimDurumu: i.adimDurumu ?? null,
+  }));
+  const { yerlesimler } = await canliSira(db, isler.map((i) => i.id));
+  const s = siradakiIs(
+    isler,
+    yerlesimler.map((y) => ({ isEmriId: y.isEmriId, makineId: y.kaynak.tur === 'makine' ? y.kaynak.id : null, baslangic: y.baslangic })),
+    new Set(makineler.map((m) => m.id)),
+  );
+  if (s === null) return { zaman, siradaki: null };
+  return {
+    zaman,
+    siradaki: {
+      emirNo: s.is.emirNo, opNo: s.is.opNo, ad: s.is.ad, adet: s.is.adet, baslangic: s.yerlesim.baslangic.toISOString(),
+      tezgah: makineler.find((m) => m.id === s.yerlesim.makineId)?.ad ?? null,
+    },
+  };
 }

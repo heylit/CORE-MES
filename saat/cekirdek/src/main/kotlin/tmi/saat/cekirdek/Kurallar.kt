@@ -93,6 +93,24 @@ object Zaman {
     fun gecenSaniye(iso: String?, simdiMs: Long): Long? = ms(iso)?.let { maxOf(0L, (simdiMs - it) / 1000) }
 }
 
+// Vardiya bitisine geri sayim (karar 81 a: hedef verisi yok). Saatin saati kaymis olabilir: kalan sunucu anina gore olculur,
+// sorgudan beri gecen eklenir.
+object VardiyaSayaci {
+    fun kalanSn(bitisMs: Long?, sunucuMs: Long?, sorgudanBeriSn: Long): Long? {
+        if (bitisMs == null || sunucuMs == null) return null
+        return maxOf(0L, (bitisMs - sunucuMs) / 1000 - sorgudanBeriSn)
+    }
+
+    // Kadrandaki sayac saatin kendi saatiyle sayar: sunucudaki bitis saatin saatine cevrilir.
+    fun cihazdakiBitis(bitisMs: Long, sunucuMs: Long, cihazMs: Long): Long = bitisMs - sunucuMs + cihazMs
+
+    // Vardiyanin gecen payi [0, 1]; bos ya da ters aralikta null.
+    fun gecenOran(baslangicMs: Long?, bitisMs: Long?, simdiMs: Long?): Float? {
+        if (baslangicMs == null || bitisMs == null || simdiMs == null || bitisMs <= baslangicMs) return null
+        return ((simdiMs - baslangicMs).toFloat() / (bitisMs - baslangicMs)).coerceIn(0f, 1f)
+    }
+}
+
 // Doner cerceve: ayrintida bir sonraki ya da onceki istasyona gecer. Kaydirma birikir; esik asilinca bir adim, uclarda durur.
 object Cerceve {
     const val ESIK = 40f

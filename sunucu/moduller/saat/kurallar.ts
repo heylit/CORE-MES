@@ -242,3 +242,61 @@ export function uyarilariKur(
     return Date.parse(a.baslangic) - Date.parse(b.baslangic);
   });
 }
+
+export interface KaynakCalismaGunu {
+  araliklar: readonly { baslangic: string; bitis: string }[];
+  // Fazla mesai dahil günün son çalışma anı; yoksa son aralığın bitişi alınır.
+  bitis: string | null;
+}
+
+// Şimdinin içinde olduğu çalışma günü: ilk aralığın başından son çalışma anına kadar (molalar ve aralar içeride sayılır; mola vardiya
+// dışı değildir). Gece yarısını geçen vardiya başladığı günde durur, bu yüzden dün de verilir. İçinde olunan gün yoksa null.
+export function gecerliVardiya(gunler: readonly KaynakCalismaGunu[], simdi: string): { baslangic: string; bitis: string } | null {
+  const an = Date.parse(simdi);
+  for (const g of gunler) {
+    const ilk = g.araliklar[0];
+    const son = g.bitis ?? g.araliklar.at(-1)?.bitis;
+    if (ilk === undefined || son === undefined) continue;
+    if (Date.parse(ilk.baslangic) <= an && an < Date.parse(son)) return { baslangic: ilk.baslangic, bitis: son };
+  }
+  return null;
+}
+
+const SAAT_MS = 3_600_000;
+
+// Saatlik sayımın sınırları: son `sayi` saatin başları ve şimdi. Tesis dilimi UTC'den tam saat farklıdır; saat başı UTC'de de saat başıdır.
+export function saatlikSinirlar(simdi: string, sayi = 8): string[] {
+  const an = Date.parse(simdi);
+  const bas = Math.floor(an / SAAT_MS) * SAAT_MS - (sayi - 1) * SAAT_MS;
+  return [...Array.from({ length: sayi }, (_, i) => new Date(bas + i * SAAT_MS).toISOString()), new Date(an).toISOString()];
+}
+
+export interface KaynakPlanIsi {
+  id: number;
+  emirNo: string;
+  opNo: number;
+  ad: string;
+  adet: number;
+  adimDurumu: 'bekliyor' | 'calisiyor' | 'tamam' | null;
+}
+
+export interface KaynakYerlesim {
+  isEmriId: number;
+  makineId: number | null;
+  baslangic: Date;
+}
+
+// İstasyonun makinelerine canlı planda yerleşmiş, çalışmayan ve bitmemiş işlerden en erken başlayanı. Kişiye yerleşmiş iş istasyona
+// bağlanmaz (kişinin istasyonu plan satırında yoktur).
+export function siradakiIs(
+  isler: readonly KaynakPlanIsi[], yerlesimler: readonly KaynakYerlesim[], makineIdleri: ReadonlySet<number>,
+): { is: KaynakPlanIsi; yerlesim: KaynakYerlesim } | null {
+  const bekleyen = new Map(isler.filter((i) => i.adimDurumu !== 'calisiyor' && i.adimDurumu !== 'tamam').map((i) => [i.id, i]));
+  let en: { is: KaynakPlanIsi; yerlesim: KaynakYerlesim } | null = null;
+  for (const y of yerlesimler) {
+    const is = bekleyen.get(y.isEmriId);
+    if (is === undefined || y.makineId === null || !makineIdleri.has(y.makineId)) continue;
+    if (en === null || y.baslangic.getTime() < en.yerlesim.baslangic.getTime()) en = { is, yerlesim: y };
+  }
+  return en;
+}
