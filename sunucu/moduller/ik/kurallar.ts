@@ -29,7 +29,7 @@ export const IK_ALANLARI = {
 
 // Kişinin herhangi bir İK yazma işlemi var mı (yoksa ekran salt okunur açılır).
 export const IK_YAZMA_ISLEMLERI: readonly string[] = [
-  'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-talep', 'ik.izin-onay', 'ik.devam-yaz', 'ik.bordro-kesinlestir', 'ik.bordro-kilit-ac',
+  'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-talep', 'ik.izin-onay', 'ik.devam-yaz', 'ik.devam-onay', 'ik.bordro-kesinlestir', 'ik.bordro-kilit-ac',
   'ik.performans-yaz', 'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.pozisyon-onay', 'ik.ayar-yaz',
 ];
 
@@ -58,6 +58,8 @@ export function istemciAlanlariniAyikla(tur: IkTuru, govde: Govde): Govde {
 }
 
 // IK-4: türün zorunlu alanları; kalan alanları ekran belirler.
+const eksiMi = (v: unknown): boolean => v !== null && v !== undefined && v !== '' && Number(v) < 0;
+
 export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
   switch (tur) {
     case 'emp':
@@ -66,6 +68,8 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
       break;
     case 'dept':
       if (!dolu(g['ad'])) return dogrulama('Departman adı boş olamaz.', 'govde.ad');
+      // IK-79: eksi bütçe gider raporunu ters çevirir (Soru 112 b; veritabanında da kısıt).
+      if (eksiMi(g['butce'])) return dogrulama('Bütçe eksi olamaz.', 'govde.butce');
       break;
     case 'leave': {
       if (!dolu(g['empId'])) return dogrulama('İzin bir personele bağlı olmalı.', 'govde.empId');
@@ -84,6 +88,8 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
     }
     case 'att': case 'perf':
       if (!dolu(g['empId'])) return dogrulama('Kayıt bir personele bağlı olmalı.', 'govde.empId');
+      // IK-79: eksi süre fazla mesaiyi düşürür ve bordroya öyle geçer (Soru 112 b; veritabanında da kısıt).
+      if (tur === 'att' && eksiMi(g['saat'])) return dogrulama('Süre eksi olamaz.', 'govde.saat');
       break;
     case 'job':
       if (!dolu(g['baslik'])) return dogrulama('Pozisyon adı boş olamaz.', 'govde.baslik');
@@ -117,9 +123,33 @@ export function katilimciIsMerkezleri(g: Govde, bul: (kimlik: string) => Govde |
   return (Array.isArray(g['katilimcilar']) ? g['katilimcilar'] : []).map((k) => kayitIsMerkezi('leave', { empId: k }, bul));
 }
 
+/* ---------------- devam onayı: IK-77, IK-78 ---------------- */
+
+export type DevamOnayi = 'Onaylandı' | 'Beklemede';
+const DEVAM_ICERIGI = ['empId', 'tarih', 'tur', 'saat'] as const;
+const devamOnayiOku = (g: Govde): DevamOnayi => (g['onay'] === 'Onaylandı' ? 'Onaylandı' : 'Beklemede');
+
+// IK-77: devam kaydının onayı ayrı işlemdir (ik.devam-onay, Soru 105 a): kaydı giren onayını kendi veremez. Yetkisi olmayanın, onaycının
+// kendi kaydının ve onaylı kaydı içeriğiyle değiştirenin yazdığı onay geçmez, kayıt onay bekler. Form "Onaylandı" önerdiği için ret
+// yerine kayıt beklemeye alınır ve kişiye söylenir.
+export function devamOnayiKur(g: { onceki: Govde | null; yeni: Govde; islemler: readonly string[]; benimPersonel: string | null }): { onay: DevamOnayi; uyari: string | null } {
+  const istenen = devamOnayiOku(g.yeni);
+  const kendi = g.benimPersonel !== null && metin(g.yeni['empId']) === g.benimPersonel;
+  const yetkili = g.islemler.includes('ik.devam-onay') && !kendi;
+  const degisti = g.onceki !== null && DEVAM_ICERIGI.some((k) => !esitMi(g.onceki![k] ?? null, g.yeni[k] ?? null));
+  const onay = yetkili ? istenen : g.onceki === null || degisti ? 'Beklemede' : devamOnayiOku(g.onceki);
+  if (onay === istenen) return { onay, uyari: null };
+  return { onay, uyari: kendi && g.islemler.includes('ik.devam-onay') ? 'Kendi devam kaydınız onay bekler; başka bir onaycı onaylar.' : 'Devam kaydı onay bekliyor; onayı devam onay yetkisi olan verir.' };
+}
+
+// IK-78: onay ucu kaydın içeriğini değiştirmez; kimse kendi devam kaydını onaylayamaz.
+export function devamOnayDenetle(onceki: Govde, benimPersonel: string | null): KuralHatasi | null {
+  return benimPersonel !== null && metin(onceki['empId']) === benimPersonel ? yetki('Kendi devam kaydınızı onaylayamazsınız.') : null;
+}
+
 /* ---------------- izinler: IK-5..IK-9 ---------------- */
 
-export type IzinUcu = 'kaydet' | 'talep' | 'karar';
+export type IzinUcu = 'kaydet' | 'talep' | 'karar' | 'onay';
 export interface IzinGecisi {
   onceki: Govde | null;
   yeni: Govde;

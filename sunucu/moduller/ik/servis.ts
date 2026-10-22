@@ -20,7 +20,7 @@ import type { Deger, Satirlar } from './eslesme.ts';
 import type { Govde, IzinUcu, KuralHatasi } from './kurallar.ts';
 import {
   EKIP_ALANLARI, FAZLA_MESAI_TURLERI, IS_GUNU_IZIN_TURLERI, GIZLI_AYARLAR, IK_ALANLARI, IK_YAZMA_ISLEMLERI, ILETISIM_ALANLARI, YONETICI_ALANLARI, alanlariSec, ayarDegisikligiDenetle,
-  bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
+  bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
   calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
@@ -234,6 +234,8 @@ const KISITLAR = {
   ik_pozisyon_ilan_kodu_tek: { ileti: 'Bu ilan kodu başka bir pozisyonda kayıtlı.', alan: 'govde.ilanKodu' },
   ik_bordro_ayda_tek: { ileti: 'Bu çalışanın bu ay için bordrosu zaten var.' },
   ik_bordro_onayi_tek: { ileti: 'Bu bordroyu zaten onayladınız; onay geri alınmaz.' },
+  ik_devam_saat_eksi_degil: { ileti: 'Süre eksi olamaz.', alan: 'govde.saat' },
+  ik_departman_butce_eksi_degil: { ileti: 'Bütçe eksi olamaz.', alan: 'govde.butce' },
 } as const;
 
 // Bağ alanlarının işaret ettiği kayıtlar var olmalı (yoksa sessizce boş kalırdı).
@@ -263,6 +265,12 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   // IK-27: eski ve yeni hali kişinin iş merkezi kapsamında olmalı.
   if (onceki) kapsamDenetle(g.tur, onceki, d);
   const ek: Record<string, Deger> = {};
+  let devamUyarisi: string | null = null;
+  if (g.tur === 'att') {
+    const o = devamOnayiKur({ onceki, yeni, islemler, benimPersonel: d.ben.personelKimlik });
+    yeni['onay'] = o.onay;
+    devamUyarisi = o.uyari;
+  }
   if (g.tur === 'emp' && g.uc !== 'iletisim') firlat(ucretDenetle(onceki, yeni, islemler));
   if (g.tur === 'emp') {
     firlat(ozelVeriDenetle(onceki, yeni, islemler));
@@ -322,7 +330,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     const haber = izinOnayBildirimi(onceki, kayit.govde, adHaritasi(d).get(String(kayit.govde['empId'])) ?? '');
     if (haber) await bildirimGonder(db, { tur: 'ik.izin-onay-bekliyor', ...haber, yol: '/ik-islemlerim/onaylar', kaynakKimlik: g.kimlik, haric: kullanici.id });
   }
-  const uyari = g.tur === 'emp' ? cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)) : null;
+  const uyari = g.tur === 'emp' ? cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)) : devamUyarisi;
   return { kayit, gecmis, uyari };
 }
 
@@ -376,6 +384,16 @@ export async function izinKarar(db: Db, kullanici: Kullanici, kimlik: string, ka
   if (!satir || satir.iptal) throw bulunamadi('İzin talebi bulunamadı.');
   const k = kayitKur(satir);
   return kaydet(db, kullanici, 'izinler', kimlik, { ...k.govde, durum: karar }, surum, 'karar');
+}
+
+// IK-78: onaycının devam yazma işlemi olmayabilir; kaydın içeriği okunan hâliyle kalır, yalnız onay değişir.
+export async function devamOnayla(db: Db, kullanici: Kullanici, kimlik: string, durum: 'Onaylandı' | 'Beklemede', surum: number): Promise<IkYazCevabi> {
+  const satir = await s.kayitKilitle(db, 'att', kimlik);
+  if (!satir || satir.iptal) throw bulunamadi('Devam kaydı bulunamadı.');
+  const k = kayitKur(satir);
+  const d = await durumOku(db, kullanici);
+  firlat(devamOnayDenetle(k.govde, d.ben.personelKimlik));
+  return kaydet(db, kullanici, 'devam', kimlik, { ...k.govde, onay: durum }, surum, 'onay');
 }
 
 export async function pozisyonOnayla(db: Db, kullanici: Kullanici, kimlik: string, surum: number): Promise<IkYazCevabi> {

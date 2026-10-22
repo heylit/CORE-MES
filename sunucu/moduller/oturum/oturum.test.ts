@@ -212,7 +212,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const IK_TALEP = ['ik.izin-talep', 'sayfa.ik-islemlerim', 'ik.bordro-gordum'];
   // Bütün personel kendi tesis talebini açar (kullanıcı kararı 216 a, 19.10.2026).
   const TESIS_TALEBI = ['sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac'];
-  const IK_UZMANI = [...IK_TALEP, 'sayfa.ik', 'ik.oku', 'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-onay', 'ik.devam-yaz', 'ik.bordro-kesinlestir',
+  const IK_UZMANI = [...IK_TALEP, 'sayfa.ik', 'ik.oku', 'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-onay', 'ik.devam-yaz', 'ik.devam-onay', 'ik.bordro-kesinlestir',
     'ik.bordro-kilit-ac', 'ik.performans-yaz', 'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.pozisyon-onay', 'ik.ayar-yaz',
     // Kan grubu ve engel durumu (KVKK özel nitelikli veri) yalnız İK'da (kullanıcı kararı 88 a).
     'ik.ozel-veri-oku'];
@@ -240,7 +240,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const MATRIS: Record<string, string[]> = {
     yonetici: [...ISLEMLER],
     mudur: [
-      'ik.izin-talep', 'ik.bordro-gordum', 'ik.izin-onay', 'ik.pozisyon-onay',
+      'ik.izin-talep', 'ik.bordro-gordum', 'ik.izin-onay', 'ik.pozisyon-onay', 'ik.devam-onay',
       'kisiler.oku', 'denetim.oku', 'vardiya.yaz', 'vardiya.gecmis-yaz', 'vardiya.durus-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'terminal.uret',
       ...MALZEME_ONAYI, 'malzemeler.tanim-yaz', 'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'istasyonlar.yaz',
       'finans.oku', 'finans.maliyet-oku', 'musteri-tedarikci.oku',

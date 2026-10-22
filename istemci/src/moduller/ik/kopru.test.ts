@@ -66,6 +66,20 @@ describe('İK köprüsü', () => {
     expect(post).toHaveBeenLastCalledWith('/ik/izinler/leave_2/talep', { govde: { id: 'leave_2', kind: 'leave', empId: 'emp_a', durum: 'Beklemede' }, surum: null });
   });
 
+  it('IK-78: devam yazamayan onaycının onayı onay ucuna gider, tek tek ve okunan sürümle; devam yazan kaydet ucunu kullanır', async () => {
+    const veri = { ...VERI, kayitlar: [...VERI.kayitlar, kayit('att_1', 'att', { empId: 'emp_b', saat: 2, onay: 'Beklemede' }, 6)] } satisfies IkVeriCevabi;
+    const post = vi.fn(async (): Promise<IkYazCevabi> => ({ kayit: kayit('att_1', 'att', { onay: 'Onaylandı' }, 7), gecmis: [] }));
+    const kopru = kopruKur({ get: vi.fn(async () => veri), post } as unknown as Istemci, ['ik.devam-onay'], () => undefined);
+    await kopru.isle('yukle', undefined);
+    await kopru.isle('toplu-kaydet', [{ id: 'att_1', kind: 'att', empId: 'emp_b', saat: 9, onay: 'Onaylandı' }]);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenLastCalledWith('/ik/devam/att_1/onay', { durum: 'Onaylandı', surum: 6 });
+    const yazan = kur(['ik.devam-yaz', 'ik.devam-onay']);
+    await yazan.kopru.isle('yukle', undefined);
+    await yazan.kopru.isle('kaydet', { id: 'att_2', kind: 'att', empId: 'emp_b', onay: 'Onaylandı' });
+    expect(yazan.post).toHaveBeenLastCalledWith('/ik/devam/att_2/kaydet', { govde: { id: 'att_2', kind: 'att', empId: 'emp_b', onay: 'Onaylandı' }, surum: null });
+  });
+
   it('pozisyonu açan onaycı onay ucuna, iletişimini güncelleyen çalışan iletişim ucuna gider', async () => {
     const { kopru, post } = kur(['ik.pozisyon-onay']);
     await kopru.isle('yukle', undefined);
