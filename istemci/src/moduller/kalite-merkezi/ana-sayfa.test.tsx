@@ -70,7 +70,8 @@ describe('Kalite Merkezi pano kartları', () => {
   });
 
   it('kartlar uçların yetkisiyle görünür: ilk parça karar verene, uyarı kalite kaydı yazana', () => {
-    expect(gorunen(['kalite-merkezi.oku'])).toEqual(['kalite-merkezi-yonetim-uygunsuzluk']);
+    // Şirket özeti kartı ayrıca bölüm işlemini ister (73 b); bu test bölümün kendisini değil kartın okuma işlemini ölçer.
+    expect(gorunen(['pano.sirket-ozeti', 'kalite-merkezi.oku'])).toEqual(['kalite-merkezi-yonetim-uygunsuzluk']);
     expect(gorunen(['kalite-merkezi.oku', 'kalite-merkezi.onayla'])).toContain('kalite-merkezi-ilk-parca');
     expect(gorunen(['kalite-merkezi.oku', 'kalite-merkezi.onayla'])).not.toContain('kalite-merkezi-uygunsuzluk');
     expect(gorunen(['kalite-merkezi.oku', 'kalite-merkezi.yaz'])).toContain('kalite-merkezi-uygunsuzluk');
