@@ -5,7 +5,9 @@
      her adım en hızlı tezgâhında (ayar + adet × çevrim) ÷ verim saat, tezgâhın günlük açık saatine bölünüp iş günü olarak; üstüne adım başı
      bekleme. Fason adım fasoncunun süresi + çıkış gününe ortalama bekleme. Başlangıç bugünden önceye düşerse zincir bugüne kaydırılır ve
      sipariş "termine yetişmiyor" sayılır. Bağ, örtüşme ve tezgâh yarışı yok: kaba yüktür, sıra değildir.
-   - Öngörü: Yıllık plan sayfasının tahmin ayarı (geçmiş hızı ya da elle) ürüne bölünür; aynı ürün ve aydaki siparişler tahmini tüketir
+   - Öngörü: Yıllık plan sayfasının tahmin ayarı. "Geçmişten": talepHizi (kapanmış ve açık siparişlerin giriş tarihinden hız); en az
+     12 haftalık giriş yoksa öngörü üretilmez ve sayfa "veri yetersiz" der. "Elle":
+     aylık aile tahmini ürüne bölünür. Aynı ürün ve aydaki siparişler tahmini tüketir
      (ay tahmini − ay siparişi, sıfırdan küçükse sıfır), kalan ay sonu terminli tek parti olarak aynı geriye zamanlamayla yüke girer. Motora girmez (karar 43 a).
    Kapasite: tezgâhın vardiya ve çalışma günü takviminden, tatil düşülerek, × kullanılabilirlik (Genel gider sayfasındaki verim). Kişi sınırı yok.
    Malzeme: ihtiyaç ilk adımın başlangıcında. Stok ve açık satın alma (söz + tedarikçi gecikmesi + muayene) zaman sırasıyla düşülür; eksik önce
@@ -47,12 +49,11 @@ function ufGeri(D, cal, u, adet, due, kuyruk, tezOf, fsOf, gunH) {
   return { bas: adim.length ? adim[0].a : due, adim };
 }
 /* ürün ve ay başına öngörü: Yıllık plan ayarından; sipariş tüketir */
-function ufOngoru(D, aylar, now) {
+function ufOngoru(D, aylar, now, gec) {
   const A = ylAyar(); const out = [];
   const sip = D.siparisler.map(s => ({ s, t: parseT(D, s.termin) })).filter(x => x.t != null);
-  if (!sip.length && A.tahmin !== 'elle') return out;
-  const ilk = Math.min(now, ...sip.map(x => parseT(D, x.s.serbest) ?? now)); const son = Math.max(now + 14 * 24, ...sip.map(x => x.t));
-  const hiz = {}; for (const { s } of sip) hiz[s.urun] = (hiz[s.urun] || 0) + (+s.adet || 0) / ((son - ilk) / 24 / 7);
+  if (A.tahmin !== 'elle' && !gec.hiz) return out;
+  const hiz = gec.hiz || {};
   let aile = null, pay = null;
   if (A.tahmin === 'elle') { const v = ylVeri(); aile = v ? v.urunAile : {}; pay = {};
     for (const u of D.urunler) { const f = aile[u.id]; const q = D.siparisler.filter(s => s.urun === u.id).reduce((a, s) => a + (+s.adet || 0), 0); pay[u.id] = q; }
@@ -106,7 +107,7 @@ function ufVeri() {
     for (let i = 0; i < 14; i++) { const a0 = (Date.UTC(y, m, 1) - baseMs(D)) / 36e5, b = (Date.UTC(y, m + 1, 1) - baseMs(D)) / 36e5; if (a0 >= son) break;
       const a = Math.max(a0, now); if (b > now) aylar.push({ k: `${y}-${String(m + 1).padStart(2, '0')}`, ad: `${OL_AY[m]} ${String(y).slice(2)}`, a0, a, b: Math.min(b, son), kesir: (Math.min(b, son) - a) / (b - a0) });
       m++; if (m > 11) { m = 0; y++; } } }
-  const ong = U.ufOngoru ? ufOngoru(D, aylar, now) : [];
+  const gec = talepHizi(D, now); const ong = U.ufOngoru ? ufOngoru(D, aylar, now, gec) : [];
   for (const o of ong) { const u = urunOf[o.urun]; let r = ufGeri(D, cal, u, o.net, Math.min(o.due, son - 1), A.kuyruk, tezOf, fsOf, gunH); if (r.bas < now) { const dt = now - r.bas; for (const x of r.adim) { x.a += dt; x.b += dt; } r = { ...r, bas: now }; }
     o.r = r; for (const x of r.adim) if (!x.fas) ekle(x.g, 'ongoru', x.a, x.b, x.h, { j: `Öngörü ${u.id} ${o.ay.ad}`, adim: x.o.k, ad: x.o.ad, ongoru: true }); }
   /* malzeme: ürün başına birim miktar en son siparişten (uygulamada rota bileşeninden) */
@@ -120,7 +121,7 @@ function ufVeri() {
   /* özet */
   const sat = gruplar.map(g => ({ g, n: D.tezgahlar.filter(t => (t.grup || t.id) === g).length, w: H.map(w => { const c = hucre[g][w.k]; const k = kap[g][w.k]; const top = c.plan + c.kaba + c.ongoru; return { ...c, top, kap: k, o: k > 0 ? top / k : top > 0 ? Infinity : 0, oK: k > 0 ? (c.plan + c.kaba) / k : 0 }; }) }))
     .filter(x => x.w.some(c => c.kap > 0 || c.top > 0));
-  U.ufV = { p, anah, H, sat, yuk, kaba, ong, aylar, mal, now, fasN, failJ, malzemesiz, son };
+  U.ufV = { p, anah, gec, H, sat, yuk, kaba, ong, aylar, mal, now, fasN, failJ, malzemesiz, son };
   return U.ufV;
 }
 /* malzeme netleştirme: olaylar zaman sırasıyla; stok, açık sipariş (etkin geliş), öne çekme, yeni alım */
@@ -164,7 +165,9 @@ function sUfuk() {
     v.kaba.length ? `Planda olmayan ${v.kaba.length} sipariş (${v.kaba.filter(x => x.havuz).length} havuzda) terminden geriye zamanlandı.` : 'Bütün siparişler planda.',
     v.failJ.size ? `Planda adımı planlanamayan ${v.failJ.size} sipariş var; o adımlar yüke girmedi.` : '',
     v.fasN ? `Fason işlemler (${v.fasN}) tezgâh yükü değildir, sayılmadı.` : '',
-    U.ufOngoru ? `Öngörü: ${Y.tahmin === 'elle' ? 'elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü' : `sipariş defterinin haftalık hızı, yıllık büyüme %${sayi(Y.buyume || 0, 0)}`}; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.` : 'Öngörü gizli.',
+    U.ufOngoru ? (Y.tahmin === 'elle' ? 'Öngörü: elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.'
+      : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.`
+      : `Öngörü yok: geçmiş veri yetersiz (en az ${TALEP_GECMIS_ENAZ} hafta sipariş girişi gerekir${v.gec.hafta > 0 ? `, ${sayi(v.gec.hafta, 0)} hafta var` : ''}). Termin ve plan hız sayılmaz. Yıllık plan sayfasında "Elle" seçip aylık tahmin girin.`) : 'Öngörü gizli.',
   ].filter(Boolean).join(' ');
   const ayarK = kart(`${ic('gear', 'k')} Varsayımlar`, `<div class="pm-ym-alanlar"><label class="pm-ym-alan"><span>Adım başı bekleme, iş günü</span>${ymSayi('uf-kuyruk', A.kuyruk, 'Adım başı bekleme, iş günü', { adim: 0.5, max: 10, veri: yaz ? '' : 'disabled' })}</label>
     <div class="pm-ym-alan"><span>Öngörü malzeme talebine</span><div class="pm-seg" role="group" aria-label="Öngörü malzeme talebine">${[['false', 'Girmesin'], ['true', 'Girsin']].map(([k, a]) => `<button type="button" data-act="uf-ongmal" data-v="${k}" aria-pressed="${String(A.ongoruMalzeme) === k}" ${yaz ? '' : 'disabled'}>${a}</button>`).join('')}</div></div></div>
@@ -180,7 +183,7 @@ function ufYukHtml(v, lejl) {
   const kpi = ymKpi([
     ['gantt', 'Plan yükü', `${sayi(top('plan'), 0)} sa`, `ilk ${Math.round(HDAYS / 7)} hafta, motorun planı`],
     ['list', 'Plan dışı sipariş', `${sayi(top('kaba'), 0)} sa`, `${v.kaba.length} sipariş, kaba`],
-    ...(on ? [['chart', 'Öngörü', `${sayi(top('ongoru'), 0)} sa`, `${v.ong.length} ürün-ay partisi`]] : []),
+    ...(on ? [ylAyar().tahmin !== 'elle' && !v.gec.hiz ? ['chart', 'Öngörü', 'veri yetersiz', `en az ${TALEP_GECMIS_ENAZ} hafta geçmiş gerekir; Yıllık planda elle girilebilir`, 'uyari'] : ['chart', 'Öngörü', `${sayi(top('ongoru'), 0)} sa`, `${v.ong.length} ürün-ay partisi`]] : []),
     ['alert', 'Kapasiteyi aşan', `${asim} hücre`, enDolu && enDolu.o > 0 ? `en dolu: ${esc(enDolu.g)} ${esc(v.H[enDolu.i].ad)} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', asim ? 'uyari' : 'tamam'],
     ['clock', 'Termine yetişmeyen', `${gec.length} sipariş`, gec.length ? 'plan dışı; bugün başlasa bile' : 'plan dışı siparişlerde yok', gec.length ? 'hata' : 'tamam'],
   ]);
