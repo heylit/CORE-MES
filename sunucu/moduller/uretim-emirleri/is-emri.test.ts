@@ -800,6 +800,11 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: id } = await ac([adim(1, mk), adim(2, mk), adim(3, mk)], { adet: 10 });
     const bol = async (adimSira: number, adet: number) => istek<PartiBolCevabi & Hata>(
       'planlama_proje', 'POST', `/adimli-emirler/${id}/bol`, { adimSira, adet, surum: (await ayrinti(id)).surum }, randomUUID());
+    // Kart stoktadır (kart #123); sayım kartın emrin ve açık olduğunu stokta denetletir (kart #126).
+    const lot = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, acan_kisi_id, lot_no) VALUES ($1, $2, $3, $4) RETURNING id', [hammaddeNo, `TP-${id}`, yoneticiId, `LT-UE-${id}`]))!.id;
+    const kart = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id', [id, hammaddeNo, lot, yoneticiId]))!.id;
     const saglamPartileri: (number | null)[] = [];
     const kararPartileri: (number | null)[] = [];
     const birak = [
@@ -808,7 +813,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     ];
     try {
       assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
-      assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3, refakatPartisiId: 42 })).durum, 200);
+      assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3, refakatPartisiId: kart })).durum, 200);
       await ilkParcaOnay(id);
       assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1 })).durum, 200);
       assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1, refakatPartisiId: 0 })).durum, 400, 'parti kimliği pozitif');
@@ -817,9 +822,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     }
     const satirlar = await o().vt.sorgu<{ tur: string; adet: number; p: number | null }>(
       'SELECT tur, adet, refakat_partisi_id AS p FROM uretim_sayimi WHERE emir_id = $1 ORDER BY id', [id]);
-    assert.deepEqual(satirlar.map((r) => [r.tur, r.adet, r.p]), [['karar_bekliyor', 3, 42], ['karar_bekliyor', -3, 42], ['saglam', 3, 42], ['saglam', 1, null]],
+    assert.deepEqual(satirlar.map((r) => [r.tur, r.adet, r.p]), [['karar_bekliyor', 3, kart], ['karar_bekliyor', -3, kart], ['saglam', 3, kart], ['saglam', 1, null]],
       'karar satırları sayımın partisinde kalır');
-    assert.deepEqual([saglamPartileri, kararPartileri], [[42, null], [42]]);
+    assert.deepEqual([saglamPartileri, kararPartileri], [[kart, null], [kart]]);
 
     // Adım 1 çalışıyor, 4 adet sayıldı: üretilmemiş 6 adet bölünür, üretilen üstte kalır.
     const fazla = await bol(1, 7);

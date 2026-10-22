@@ -341,18 +341,39 @@ export const partiLotEtiketi = (db: Db, partiId: number): Promise<LotEtiketiHam 
         WHERE s.parti_id = p.id ORDER BY s.id LIMIT 1) k ON true
     WHERE p.id = $1`, [partiId]);
 export interface PartiAnahtari { malzemeId: number; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null; uretimEmriId: number | null; kisiId: number }
-// Var olan parti yalnız emirle bulunur; mal kabulün her gelişi yeni lottur (#124).
+// Var olan parti yalnız emirle bulunur; mal kabulün her gelişi yeni lottur (#124). Refakat kartının partisi emir partisi değildir (#126).
 export const emirPartisiBul = async (db: Db, malzemeId: number, uretimEmriId: number): Promise<number | null> =>
-  (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND uretim_emri_id = $2', [malzemeId, uretimEmriId]))?.id ?? null;
+  (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND uretim_emri_id = $2 AND refakat_partisi_id IS NULL', [malzemeId, uretimEmriId]))?.id ?? null;
 // Eşzamanlı açışta ikincisi çakışmayı yakalar (null) ve var olanı okur.
 export const partiAc = async (db: Db, p: PartiAnahtari & { lotNo: string }): Promise<number | null> =>
   (await db.tek<{ id: number }>(
     `INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, dokum_no, sertifika_no, uretim_emri_id, acan_kisi_id, lot_no)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (malzeme_id, uretim_emri_id) WHERE uretim_emri_id IS NOT NULL
+     ON CONFLICT (malzeme_id, uretim_emri_id) WHERE uretim_emri_id IS NOT NULL AND refakat_partisi_id IS NULL
      DO NOTHING RETURNING id`,
     [p.malzemeId, p.tedarikciPartiNo, p.dokumNo, p.sertifikaNo, p.uretimEmriId, p.kisiId, p.lotNo],
   ))?.id ?? null;
+// Refakat kartıyla sayılan parçanın partisi (malzeme, kart başına bir; #126).
+export const refakatCiktiPartisiBul = async (db: Db, malzemeId: number, refakatPartisiId: number): Promise<number | null> =>
+  (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND refakat_partisi_id = $2', [malzemeId, refakatPartisiId]))?.id ?? null;
+export const refakatCiktiPartisiAc = async (
+  db: Db, p: { malzemeId: number; uretimEmriId: number; refakatPartisiId: number; kisiId: number; lotNo: string },
+): Promise<number | null> =>
+  (await db.tek<{ id: number }>(
+    `INSERT INTO stok_parti (malzeme_id, uretim_emri_id, refakat_partisi_id, acan_kisi_id, lot_no) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (malzeme_id, refakat_partisi_id) WHERE refakat_partisi_id IS NOT NULL DO NOTHING RETURNING id`,
+    [p.malzemeId, p.uretimEmriId, p.refakatPartisiId, p.kisiId, p.lotNo],
+  ))?.id ?? null;
+// Kartın lotu ve kartla sayılan parçaların partileri: sayım bunları önce kullanır.
+export const refakatStokPartileri = async (db: Db, refakatPartisiId: number): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    'SELECT parti_id AS id FROM stok_refakat_partisi WHERE id = $1 UNION SELECT id FROM stok_parti WHERE refakat_partisi_id = $1', [refakatPartisiId],
+  )).map((r) => r.id);
+// Partinin kaynağı (Soru 126 b): mal kabul lotu (emirsiz) ya da kartla sayılmış üretim partisi; ikisi de değilse kartsız emir partisi.
+export const partiKaynagi = (db: Db, id: number): Promise<{ uretimEmriId: number | null; refakatPartisiId: number | null; malzemeId: number } | null> =>
+  db.tek('SELECT uretim_emri_id AS "uretimEmriId", refakat_partisi_id AS "refakatPartisiId", malzeme_id AS "malzemeId" FROM stok_parti WHERE id = $1', [id]);
+export const refakatUretimiVar = async (db: Db, refakatPartisiId: number): Promise<boolean> =>
+  (await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM stok_parti WHERE refakat_partisi_id = $1) AS var', [refakatPartisiId]))?.var ?? false;
 export const lotNoVarMi = async (db: Db, no: string): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_parti WHERE lot_no = $1', [no])) !== null;
 export interface PartiSuzgeci { malzemeId?: number | undefined; metin?: string | undefined }
 const partiSuzgeci = (s: PartiSuzgeci) => ({

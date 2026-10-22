@@ -882,10 +882,17 @@ export const refakatEtiketi = (emirNo: string | null, uretimEmriId: number, sira
 export function refakatLotEngeli(lot: { uretimEmriId: number | null }): string | null {
   return lot.uretimEmriId !== null ? 'Bu lot bir üretim emrinin çıktısı; refakat kartı depodan verilen lotla açılır.' : null;
 }
-// Hiç teslimi olmayan parti iptal edilir; teslim yapılmışsa iz bozulmasın diye kalır.
-export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string }): string | null {
+// Hiç teslimi ve sayımı olmayan parti iptal edilir; teslim ya da üretim varsa iz bozulmasın diye kalır.
+export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string }, uretildi = false): string | null {
   if (r.durum === 'iptal') return 'Refakat kartı zaten iptal.';
-  return binde(r.verilen) > 0n ? 'Bu kartla teslim yapıldı; kart iptal edilemez.' : null;
+  if (binde(r.verilen) > 0n) return 'Bu kartla teslim yapıldı; kart iptal edilemez.';
+  return uretildi ? 'Bu kartla üretim sayıldı; kart iptal edilemez.' : null;
+}
+// Sayım kartın emrine yazılır (#126); iptal kartla sayım olmaz. Kart yoksa sayım reddedilir (kimlik başka modülden gelir, FK yok).
+export function refakatSayimEngeli(r: { durum: 'acik' | 'iptal'; uretimEmriId: number } | null, uretimEmriId: number): string | null {
+  if (r === null) return 'Refakat kartı bulunamadı.';
+  if (r.uretimEmriId !== uretimEmriId) return 'Bu refakat kartı başka bir emrin; işin kartını okutun.';
+  return r.durum === 'iptal' ? 'Refakat kartı iptal edilmiş; geçerli kartı okutun.' : null;
 }
 // Kartla teslimde malzeme, lot ve emir karttan gelir; gövdede verilen farklıysa teslim reddedilir (yanlış kart ya da yanlış satır).
 export function refakatTeslimEngeli(
