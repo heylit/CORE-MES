@@ -7,7 +7,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu,
+  sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
 } from './kurallar.ts';
 
@@ -546,5 +546,12 @@ describe('DEP-64 katalog etiketi', () => {
     assert.equal(itirazSonu(an, '2026-10-22T14:30:00Z', gunSonu), '2026-10-22T14:30:00.000Z', 'vardiya bitişi');
     assert.equal(itirazSonu(an, '2026-10-22T07:00:00Z', gunSonu), '2026-10-22T21:00:00.000Z', 'vardiya bittiyse gün sonu');
     assert.equal(itirazSonu(an, null, gunSonu), '2026-10-22T21:00:00.000Z', 'takvim yoksa gün sonu');
+  });
+  test('soru 104 a: satın alma kabulü sipariş satırı ister; sipariş satırı yalnız satın almada', () => {
+    assert.match(siparisBagiEngeli('satin_alma', null) ?? '', /"diğer" türüyle/);
+    assert.equal(siparisBagiEngeli('satin_alma', 5), null);
+    assert.equal(siparisBagiEngeli('diger', null), null);
+    assert.equal(siparisBagiEngeli('iade', null), null);
+    assert.match(siparisBagiEngeli('diger', 5) ?? '', /yalnız satın alma/);
   });
 });

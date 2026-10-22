@@ -94,7 +94,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
   }
   const kabulKonumu = async (): Promise<number> => (await o().vt.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
   const malKabul = async (malzemeId: number, miktar: string) => {
-    const c = await istek<Hata>('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId, miktar }] });
+    const c = await istek<Hata>('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId, miktar }] });
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
   };
   const bakiye = async (malzemeId: number, konumId: number, statuId: number | null = null): Promise<string | null> =>
@@ -351,7 +351,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
   });
   test('QR okut: konum her zaman çözülür, stok yalnız alınabilecek yerden; malzeme ve lot kişinin alabileceği yerlerle; bilinmeyen kod', async () => {
     const h = await kart('hammadde');
-    const kabulKabul = await istek<Hata>('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: h, miktar: '5', parti: { tedarikciPartiNo: `TP-${sira}` } }] });
+    const kabulKabul = await istek<Hata>('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: h, miktar: '5', parti: { tedarikciPartiNo: `TP-${sira}` } }] });
     assert.equal(kabulKabul.durum, 200, JSON.stringify(kabulKabul.govde));
     const lot = (await o().sahip.tek<{ id: number; lot: string }>('SELECT id, lot_no AS lot FROM stok_parti WHERE malzeme_id = $1', [h]))!;
     const a = await istasyon();

@@ -110,7 +110,7 @@ describe('stok (gerçek PostgreSQL)', () => {
   }
   const konumId = async (kod: string): Promise<number> => (await o().vt.tek<{ id: number }>('SELECT id FROM stok_konum WHERE kod = $1', [kod]))!.id;
   async function malKabul(malzemeId: number, miktar: string, ek: Record<string, unknown> = {}): Promise<Cevap<MalKabulCevabi & Hata>> {
-    return depo<MalKabulCevabi & Hata>('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId, miktar, ...ek }] });
+    return depo<MalKabulCevabi & Hata>('POST', '/stok/mal-kabul', { tur: ek.siparisSatirId === undefined ? 'diger' : 'satin_alma', satirlar: [{ malzemeId, miktar, ...ek }] });
   }
   async function rafAc(kod: string, bolme = 2, kat = 2): Promise<Raf> {
     const c = await mudur<{ raf: Raf }>('POST', '/stok/raflar', { kod, tur: 'palet', numaralama: 'sirali', bolmeSayisi: bolme, katSayisi: kat, bolmeGenislikM: '2.7', derinlikM: '1.1', katAraligiM: '1.5' });
@@ -176,6 +176,10 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'GET', '/stok/menu-sayaclari')).durum, 200);
     assert.equal((await istek('satin_alma', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: k, miktar: '1' }] })).durum, 403);
     assert.equal((await malKabul(k, '1')).durum, 200);
+    // Soru 104 a: siparişsiz satın alma kabulü reddedilir, stoğa bir şey girmez; siparişli kabul aşağıdaki sipariş testlerinde 200.
+    const siparissiz = await depo<Hata>('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: k, miktar: '1' }] });
+    assert.deepEqual([siparissiz.durum, siparissiz.govde.alan], [400, 'satirlar.0.siparisSatirId'], JSON.stringify(siparissiz.govde));
+    assert.match(siparissiz.govde.mesaj, /"diğer" türüyle/);
     assert.equal((await istek('kalite', 'POST', '/stok/raflar', { kod: 'Y', tur: 'palet', numaralama: 'sirali', bolmeSayisi: 1, katSayisi: 1, bolmeGenislikM: '1', derinlikM: '1', katAraligiM: '1' })).durum, 403);
     assert.equal((await istek('kalite', 'POST', '/stok/cikis', { malzemeId: k, konumId: await konumId('KABUL'), miktar: '1', cikisNedeni: 'sevk' })).durum, 403);
   });
@@ -713,7 +717,7 @@ describe('stok (gerçek PostgreSQL)', () => {
 
   test('DEP-53 düzeltmede sıfır miktarlı satır yazılmaz; satırsız düzeltme belgeyi tamamen iptal eder', async () => {
     const [a, b] = [await kart('sarf'), await kart('sarf')];
-    const iki = await depo<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: a, miktar: '5' }, { malzemeId: b, miktar: '7' }] });
+    const iki = await depo<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: a, miktar: '5' }, { malzemeId: b, miktar: '7' }] });
     assert.equal(iki.durum, 200, JSON.stringify(iki.govde));
     const d = await mudur<MalKabulCevabi>('POST', `/stok/mal-kabuller/${iki.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: a, miktar: '5' }, { malzemeId: b, miktar: '0' }] });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
@@ -1513,7 +1517,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     const k = await kart('sarf');
     const kimlik = randomUUID();
     const gonder = (istekKimligi: string | null) => app.inject({
-      method: 'POST', url: '/api/stok/mal-kabul', payload: { tur: 'satin_alma', satirlar: [{ malzemeId: k, miktar: '3' }] },
+      method: 'POST', url: '/api/stok/mal-kabul', payload: { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '3' }] },
       headers: { cookie: cerezler.get('depo') ?? '', ...(istekKimligi === null ? {} : { [ISTEK_KIMLIGI_BASLIGI]: istekKimligi }) },
     });
     const ilk = await gonder(kimlik);
