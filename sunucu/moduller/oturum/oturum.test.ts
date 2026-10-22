@@ -533,13 +533,14 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.deepEqual(await al(), ['denetim.oku', ...OPERATOR].sort());
   });
 
-  test('açılış sayfası rolden gelir: finans, satın alma ve depoda kendi panosu, operatörde ana sayfa; bütün rolleri aynı sayfayı söyleyen kişide geçerli, boş ya da farklı rol ana sayfada bırakır; biçimsiz yol reddedilir', async () => {
+  test('açılış sayfası rolden gelir: finans, satın alma ve depoda kendi panosu, satışta siparişler, operatörde ana sayfa; bütün rolleri aynı sayfayı söyleyen kişide geçerli, boş ya da farklı rol ana sayfada bırakır; biçimsiz yol reddedilir', async () => {
     assert.deepEqual(
       await vt().sorgu('SELECT kod, acilis_sayfasi FROM rol WHERE acilis_sayfasi IS NOT NULL ORDER BY kod'),
       [
         { kod: 'depo', acilis_sayfasi: '/stok' },
         { kod: 'muhasebe_finans', acilis_sayfasi: '/finans' },
         { kod: 'satin_alma', acilis_sayfasi: '/satin-alma' },
+        { kod: 'satis', acilis_sayfasi: '/siparisler' },
       ],
     );
     const acilis = async (kullaniciAdi: string): Promise<unknown> => (await giris(kullaniciAdi, PAROLA)).json().kullanici.acilisSayfasi;
