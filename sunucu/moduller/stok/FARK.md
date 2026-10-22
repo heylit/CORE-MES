@@ -402,3 +402,11 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
   hedef boş kalır ve söylenir. Nereye adımında okutulan kişi kodu teslimi kişinin istasyonuna `aliciKodu` ile gönderir; sunucu kodu yine doğrular.
 - Malzemeler kataloğunun bastığı `MK:<stok kodu>` etiketi iki okuyucuda da (Okut sayfası ve pencere) kartı çözer (DEP-64). Uç, yetki ve
   kayıt değişmedi; tuşun yeri sağda, Malzeme tuşunun yerinde kaldı.
+
+## Okutarak mal kabul siparişe bağlı (kart #94, soru 91 a)
+- Okut'taki hızlı mal kabul okutulan kartın açık sipariş satırlarını (`GET /stok/acik-siparis-satirlari`, `stok.giris`) listeler; tek satır
+  seçili gelir, birden çoksa seçmeden gönderilmez. Seçilen satırla satın alma teslimi yazılır ve sipariş teslimi işlenir (önceden sipariş
+  satırı gönderilmiyordu; mal stoğa girip siparişte teslim görünmüyordu).
+- Kartın açık siparişi yoksa ya da "Siparişsiz: diğer giriş" seçilirse giriş `diger` türüyle yazılır. Hizmet satırı (fason dönüşü)
+  hızlı kabulde listelenmez; ayrıntılı Mal kabul ekranında kalır.
+- Uç, yetki ve göç değişmedi; sunucu siparişsiz satın alma kabulünü hâlâ kabul eder (ayrıntılı ekran için; ayrı soru).
