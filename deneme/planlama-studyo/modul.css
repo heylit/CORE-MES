@@ -3832,3 +3832,36 @@ body.pm-ps-karar .pm-yp-kap { display: none; }
 
 /* Pano kendi sonucunu kartta gosterir; otomatik oneri paneli panoyu ortmesin diye Plan sekmesinde panonun altina akar. */
 .pm-ps-sayfa[data-sek="plan"] .tp-kap ~ .pm-ps-dok { position: static; margin-top: var(--b-2); }
+/* Y3: denemeler (şu olursa), üç tepki, ek mesai */
+.tp-kart textarea { width: 100%; background: var(--panel2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); padding: var(--b-1) var(--b-2); color: var(--ink); font: inherit; resize: vertical; }
+.tp-secenek[role="button"] { cursor: pointer; }
+.dn-0 { --dn: var(--grafik); } .dn-1 { --dn: var(--grafik-2); } .dn-2 { --dn: var(--hold); }
+.tp-tus.deneme, .tp-durum.deneme { border-color: var(--dn); color: var(--dn); }
+.tp-serit.dn { background: color-mix(in srgb, var(--dn) 16%, var(--panel-solid)); border-bottom-color: var(--dn); flex-wrap: wrap; }
+.tp-serit.dn .iyi { color: var(--run); } .tp-serit.dn .kotu { color: var(--stop); }
+.dn-ad { display: inline-grid; place-items: center; min-width: calc(var(--b-4) + var(--b-1)); padding: 0 var(--b-1); border-radius: var(--b-1); background: var(--dn); color: var(--panel-solid); font-family: var(--font-mono); font-weight: 700; text-align: center; }
+.tp-dn { position: absolute; top: var(--b-1); bottom: var(--b-1); border: var(--cizgi-orta) solid var(--dn); border-radius: var(--b-1); z-index: 3; pointer-events: none;
+  background: color-mix(in srgb, var(--dn) 22%, transparent); font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; padding: 0 var(--b-1); display: flex; align-items: center; color: var(--ink); }
+.tp-dn b { background: var(--dn); color: var(--panel-solid); font-family: var(--font-mono); padding: 0 var(--b-1); border-radius: var(--b-1); margin-right: var(--b-1); }
+.tp-dn span { overflow: hidden; text-overflow: ellipsis; }
+.tp-dn.dn-1 { border-style: dashed; top: calc(var(--b-1) * 2); }
+.tp-dn.dn-2 { border-style: dotted; top: calc(var(--b-1) * 3); }
+.tp-eski.ana { border-width: var(--cizgi-orta); border-color: var(--ink); opacity: var(--saydam-50); }
+.tp-karsi { display: grid; grid-template-columns: 1fr auto auto; gap: var(--b-1) var(--b-3); margin-top: var(--b-2); font-size: var(--yazi-xs); align-items: baseline; }
+.tp-karsi span { color: var(--muted); }
+.tp-karsi b { font-family: var(--font-mono); text-align: right; }
+.tp-karsi .iyi { color: var(--run); } .tp-karsi .kotu { color: var(--stop); }
+.tp-karsi .dn-ad { justify-self: end; }
+.tp-dn-sat { display: grid; grid-template-columns: auto 1fr; gap: var(--b-1) var(--b-2); align-items: center; padding: var(--b-2) 0; border-bottom: var(--cizgi-ince) solid var(--edge); font-size: var(--yazi-xs); }
+.tp-dn-sat textarea, .tp-dn-sat .ozet, .tp-dn-sat .eylem-ic { grid-column: 1 / -1; }
+.tp-dn-sat .eylem-ic { display: flex; flex-wrap: wrap; gap: var(--b-1); justify-content: flex-end; align-items: center; }
+.tp-dn-sat .iyi { color: var(--run); } .tp-dn-sat .kotu { color: var(--stop); }
+.tp-dn-sat [aria-pressed="false"] { opacity: var(--saydam-45); }
+/* stüdyonun eski akış adımları (düzenle, sonuç, onay) sekmelere göreydi; pano kendi durumunu gösterir. Telefonda otomatik öneri sayfanın sonuna akar. */
+.pm-ps-sayfa .pm-ps-akis { display: none; }
+@media (max-width: 767px) { .pm-ps-sayfa .pm-ps-dok { position: static; margin-top: var(--b-2); } }
+@container tp (max-width: 599px) {
+  .tp-serit.dn { flex-wrap: nowrap; padding: var(--b-1) var(--b-2); }
+  .tp-serit.dn .ek, .tp-serit.dn .metin { display: none; }
+  .tp-serit.dn > span:not(.tp-bosluk) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
