@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, KodOkuyucu } from '../../ortak/arayuz/index.ts';
@@ -18,13 +18,18 @@ const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.i
 
 // Malzeme penceresinin üstündeki okuyucu (372 a; eski ayrı QR tuşu, karar 91 a): pencere açılınca hazır bekler. Okutma yoksa altındaki
 // sekmeler görünür; okutulan kod akışı başlatınca sekmelerin yerini "ne, nereye, onay" alır. Kayıt yalnız bağlantı varken yapılır (karar 95 a).
-export function OkutAlani({ teslimEteGec, children }: { teslimEteGec: (h: OkutulanHedef) => void; children: ReactNode }) {
+// Soru 89: ilk okutmanın sonucu (`sonuc`) okuyucunun altında durur; oradan seçilen iş `sifir`ı artırıp akışı başa alır.
+export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, children }: {
+  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; children: ReactNode;
+}) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
+  useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); } }, [sifir]);
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
-    onSuccess: (c) => {
+    onSuccess: (c, kod) => {
       setSonuc(null);
+      if (durum.adim === 'ne') okundu?.(kod, c);
       const p = panelOkutuldu(durum, c);
       if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
     },
@@ -39,6 +44,7 @@ export function OkutAlani({ teslimEteGec, children }: { teslimEteGec: (h: Okutul
         {durum.adim !== 'onay' && <KodOkuyucu okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
+        {sonucKarti}
       </div>
       {durum.adim === 'ne' ? children : (
         <div className="tc-stok-form tc-stok-okut-paneli">

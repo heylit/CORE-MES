@@ -1062,8 +1062,9 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('yer'), yer: okutYeri, satirlar: yerdekiStokCevabi.shape.satirlar.nullable() }),
   z.object({
     tur: z.literal('malzeme'),
-    malzeme: z.object({ id: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() }),
-    parti: z.object({ id: z.number().int(), etiket: z.string() }).nullable(),
+    // tur ve partinin emri (kart #95): panel Teslim et'te mamul ve yarı mamulü sevke, emri fasona yönlendirir; stok okuması gerektirmez.
+    malzeme: z.object({ id: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable(), tur: z.enum(MALZEME_TURLERI).optional() }),
+    parti: z.object({ id: z.number().int(), etiket: z.string(), uretimEmriId: z.number().int().nullable().optional() }).nullable(),
     yerler: z.array(okutYeri.extend({ partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), statuId: z.number().int().nullable(), kaliteDurumu: z.enum(KALITE_DURUMLARI).optional(), miktar: ondalikMetinSemasi })),
     // Soru 93 a: kapsam dışı istasyonlardaki serbest miktar; buradan teslim gönderilmez, Malzeme iste ile istenir ya da okutarak alınır.
     digerIstasyonlar: z.array(z.object({ istasyonId: z.number().int(), kod: z.string(), ad: z.string(), miktar: ondalikMetinSemasi })).optional(),

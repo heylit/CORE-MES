@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Islem } from '#paylasilan/islemler.ts';
+import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '..
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar, miktarMetni } from './gorunum.ts';
+import { paneliAc } from './panel-olayi.ts';
 
 // Sunucuda tekrar korumalı stok komutu (mal kabul, hareket yazan komutlar, sepet, toplama açma): tek kimlikle gider; cevabı
 // yitirilen gönderim aynı kimlikle yeniden denenir, komut en çok bir kez uygulanır. Denemeler sonucu bilinmeden tükenirse
@@ -34,6 +36,14 @@ export async function korumaliPost<T>(yol: string, govde: unknown): Promise<T> {
 export function useIslem(islem: Islem): boolean {
   return (useOturum().data?.islemler ?? []).includes(islem);
 }
+// Tam stok okuması sunucudaki OKUMA ile aynıdır: sayfa.stok ya da herhangi bir stok işlemi; stok.istek tek başına açmaz (soru 93 a).
+// Liste istemcide yazılır (paylasilan değeri zod taşıyabilir); eksik işlem tip denetiminde yakalanır.
+const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir'] as const;
+const stokOkumaTam: [Exclude<(typeof STOK_ISLEMLERI)[number], (typeof STOK_OKUMA)[number]>] extends [never] ? true : never = true;
+export function useStokOkur(): boolean {
+  const islemler = useOturum().data?.islemler ?? [];
+  return stokOkumaTam && islemler.some((i) => (STOK_OKUMA as readonly string[]).includes(i));
+}
 
 // Stok Merkezi herkese depocu düzeniyle açılır (kart #1225): her stok ekranının altında Okut, Taşı, Hazırlık çubuğu durur;
 // yönetici görünümü ve mod seçimi yoktur, maddeler yetkiyle süzülür.
@@ -41,7 +51,7 @@ function DepocuCubugu() {
   const tasi = useIslem('stok.transfer'), toplama = useIslem('stok.toplama');
   return (
     <nav className="tc-stok-depocu-cubuk" aria-label="Depocu kısayolları">
-      <Link to="/stok/okut?mod=sepet"><Dugme tur="birincil" simge="scan">Okut</Dugme></Link>
+      <Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}>Okut</Dugme>
       {tasi && <Link to="/stok/sepet"><Dugme simge="box">Taşı</Dugme></Link>}
       {(tasi || toplama) && <Link to="/stok/hazirlik"><Dugme simge="list">Hazırlık</Dugme></Link>}
     </nav>

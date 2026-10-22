@@ -2209,7 +2209,7 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
     if (!alinir(yer)) return { tur: 'yer', yer, satirlar: null };
     return { tur: 'yer', yer, satirlar: (await yerdekiStok(db, k, yer.istasyonId === null ? { konumId: yer.konumId } : { istasyonId: yer.istasyonId })).satirlar };
   };
-  const malzemeCevabi = async (malzemeId: number, parti: { id: number; etiket: string } | null, bakiyeler: BakiyeHam[]): Promise<OkutCozCevabi | null> => {
+  const malzemeCevabi = async (malzemeId: number, parti: { id: number; etiket: string; uretimEmriId: number | null } | null, bakiyeler: BakiyeHam[]): Promise<OkutCozCevabi | null> => {
     const o = await malzemeOzeti(db, malzemeId);
     if (!o) return null;
     const yerler: Extract<OkutCozCevabi, { tur: 'malzeme' }>['yerler'] = [];
@@ -2219,7 +2219,7 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
       const nolar = await emirNoHaritasi(db, serbest.map((x) => x.uretimEmriId));
       for (const x of serbest) yerler.push({ ...yer, partiId: x.partiId, partiEtiketi: partiEtiketi(x.partiId === null ? null : x, emirNoDe(nolar, x.uretimEmriId)), statuId: x.statuId, kaliteDurumu: x.kaliteDurumu, miktar: x.miktar });
     }
-    return { tur: 'malzeme', malzeme: { id: o.id, kod: o.kod, ad: o.ad, birim: o.birim }, parti, yerler, digerIstasyonlar: await digerIstasyonlar(malzemeId, parti) };
+    return { tur: 'malzeme', malzeme: { id: o.id, kod: o.kod, ad: o.ad, birim: o.birim, tur: o.tur }, parti, yerler, digerIstasyonlar: await digerIstasyonlar(malzemeId, parti) };
   };
   // Soru 93 a: kapsam dışı istasyonlardaki serbest miktar yalnız gösterilir; teslim akışına girmez (Malzeme iste ile alınır).
   const digerIstasyonlar = async (malzemeId: number, parti: { id: number } | null) =>
@@ -2233,7 +2233,7 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
   else if (t.tur === 'lot') {
     const p = await sorgular.lotNoylaParti(db, t.deger);
     const nolar = p === null ? new Map() : await emirNoHaritasi(db, [p.uretimEmriId]);
-    if (p) bulunan = await malzemeCevabi(p.malzemeId, { id: p.id, etiket: partiEtiketi(p, emirNoDe(nolar, p.uretimEmriId)) ?? p.lotNo }, await sorgular.lotBakiyeleri(db, p.id));
+    if (p) bulunan = await malzemeCevabi(p.malzemeId, { id: p.id, etiket: partiEtiketi(p, emirNoDe(nolar, p.uretimEmriId)) ?? p.lotNo, uretimEmriId: p.uretimEmriId }, await sorgular.lotBakiyeleri(db, p.id));
   }
   if (bulunan) return bulunan;
   const kod = ham.trim().toUpperCase();

@@ -132,3 +132,5 @@ Rol x işlem değişmedi. Kişi her uçta oturumdan; gövde kişi taşımaz.
 | `POST /stok/cikis`, `/stok/sepet/stoktan-dus` (soru 98 a) | mamul ve yarı mamulde sevk nedeni reddedilir | "soru 98 a" hammadde sevk ve fire 200 | mamul ve yarı mamul sevk 422 |
 
 Güvenlik gevşemesi (kullanıcı onaylı, soru 96): okutarak almada iki imza (T7) yerine tek imza ve sonradan itiraz; istasyonlardaki serbest miktar `stok.istek` sahibine açık. Telafi: okutma iki kodun sunucuda çözülmesiyle (canlılık denetimi yok), işaret, bildirim, itiraz.
+
+İstemci (kart #95): yeni yazma ucu yok. Panel bölümleri yetkiyle süzülür, sunucu yine denetler: gözler ve depo sepeti stok okumasıyla (`sayfa.stok` ya da bir stok işlemi, `/stok/kod-coz` yalnız onlara sorulur; "okut-paneli" testi istek sahibinde sorulmadığını doğrular), Mal kabul `stok.giris`, sevk çıkışı `stok.cikis`, depo sepeti `stok.transfer`; sevk ve fason bölümleri kendi modüllerinin yetkisiyle görünür. `kod-coz` (panel) cevabındaki `malzeme.tur` ve `parti.uretimEmriId` yeni bilgi açmaz: lot etiketi emir numarasını zaten taşır, tür kartın genel bilgisidir. VARSAYIM.

@@ -376,6 +376,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual(mDepo.tur === 'malzeme' ? mDepo.yerler.map((y) => [y.tur, y.miktar]).sort() : null, [['istasyon', '2.000'], ['kabul', '3.000']], 'depo bütün yerleri görür');
     const l = await coz('depo', `LOT:${lot.lot}`);
     assert.deepEqual(l.tur === 'malzeme' ? [l.parti?.id, l.yerler.every((y) => y.partiId === lot.id)] : null, [lot.id, true], 'lot yalnız kendi partisiyle');
+    assert.deepEqual(l.tur === 'malzeme' ? [l.malzeme.tur, l.parti?.uretimEmriId] : null, ['hammadde', null], 'kart #95: tür ve partinin emri, Teslim et yönlendirmesi için');
     await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [kisiler.get('operator_kisitli'), (await istasyon()).isMerkeziId]);
     const kisitli = await coz('operator_kisitli', istKod);
     assert.deepEqual([kisitli.tur, kisitli.tur === 'yer' ? kisitli.satirlar : 'x'], ['yer', null], 'kapsam dışı istasyonun stoğu açılmaz');

@@ -10,7 +10,7 @@ import { Konumlar } from './Konumlar.tsx';
 import { MalKabul } from './MalKabul.tsx';
 import { MalKabulAyrinti } from './MalKabulAyrinti.tsx';
 import { MalzemeAyrinti } from './MalzemeAyrinti.tsx';
-import { Okut } from './Okut.tsx';
+import { OkutYonlendir } from './OkutYonlendir.tsx';
 import { Malzemeler } from './Malzemeler.tsx';
 import { Raflar } from './Raflar.tsx';
 import { Sepet } from './Sepet.tsx';
@@ -19,7 +19,7 @@ import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
 // Alt yollar `/stok` sayfasına aittir; ikinci menüyü kabuk `STOK_IKINCI_MENU` verisinden çizer.
 export const rotalar: ModulRotasi[] = [
   { yol: '/stok', ekran: IsKutusu },
-  { yol: '/stok/okut', ekran: Okut },
+  { yol: '/stok/okut', ekran: OkutYonlendir },
   { yol: '/stok/sepet', ekran: Sepet },
   { yol: '/stok/fisler/:id', ekran: Fis },
   { yol: '/stok/hazirlik', ekran: Hazirlik },
