@@ -53,7 +53,7 @@ function rrDenemedenKur(D0, onceki) {
   }
   const grupSira = [...new Set((D.tezgahlar || []).map(m => m.grup))];
   const stations = grupSira.map(g => { const ms = D.tezgahlar.filter(m => m.grup === g); const e = es('stations', g);
-    return Object.assign({}, e || { code: String(g).toLocaleUpperCase('tr-TR'), name: (typeof RT_GRUP_AD !== 'undefined' && RT_GRUP_AD[g]) || g, eff: 100, opPer: 1 }, { id: g, wcId: RR_WC, cost: +ms[0].ucret || 0, count: ms.length }); });
+    return Object.assign({}, e || { code: String(g).toLocaleUpperCase('tr-TR'), name: (typeof RT_GRUP_AD !== 'undefined' && RT_GRUP_AD[g]) || g, eff: 100, opPer: 1 }, { id: g, wcId: RR_WC, cost: rrSayi(ms[0].ucret), count: ms.length }); });
   const machines = (D.tezgahlar || []).map(m => Object.assign({}, es('machines', m.id) || { code: m.id, status: 'aktif', note: '' }, { id: m.id, name: m.ad, stationId: m.grup, plan: rrKopya(m) }));
   const people = (D.personel || []).map(p => Object.assign({}, es('people', p.id) || { code: p.id, cost: 0, active: true }, { id: p.id, name: p.ad, role: p.ayar ? 'Ayarcı' : 'Operatör', wcId: RR_WC, shiftId: p.vardiya, skills: (p.gruplar || []).slice(), plan: rrKopya(p) }));
   const bas = rrTarih(D.meta && D.meta.baslangic);

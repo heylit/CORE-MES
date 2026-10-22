@@ -5,7 +5,6 @@
    3) Plan girdilerinin bir kısmı plana bağlıdır (malzeme ihtiyaç günü, referans termin); ilk çözümden sonra girdiler değiştiyse bir tur daha çözülür. */
 const olayChgTL = () => S.param.chgTL != null ? +S.param.chgTL : 50;
 tlToplam = function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4] + (e.lex[2] || 0) * (TL_AMAC.chgTL || 0); };
-{ const oySt = stOf; stOf = function (ek, gevset) { const st = oySt(ek, gevset); st.tlAmac.chgTL = 0; Object.assign(TL_AMAC, st.tlAmac); return st; }; }
 /* olay için durum: değişiklik bedeli açık; motor tarafı TL_AMAC'ı st.tlAmac'tan alır */
 function olaySt() { const st = stOf(); st.tlAmac.chgTL = olayChgTL(); Object.assign(TL_AMAC, st.tlAmac); return st; }
 const olayBitir = () => { TL_AMAC.chgTL = 0; };

@@ -29,5 +29,4 @@ function ayarOneKur() {
 }
 ayarOneKur();
 ISCI_EK.push(`${ayarOneKur}\nayarOneKur();`);
-{ const aoSt = stOf; stOf = function (ek, gevset) { const st = aoSt(ek, gevset); st.ayariOneAl = (S.param || {}).ayariOneAl === 'acik'; return st; }; }
 { const kb = KATALOG_DUZ.bolme; if (kb && kb.p) kb.p.push(['param', 'ayariOneAl', 'Ayarı parça gelmeden yap', 'sec', [['kapali', 'Kapalı'], ['acik', 'Açık']]]); }

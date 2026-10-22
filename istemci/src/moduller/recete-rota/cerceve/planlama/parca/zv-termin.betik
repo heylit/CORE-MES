@@ -4,43 +4,9 @@
    istenirse miktarla orantılı ek gün); girilen termin kesinleşen süredir ve katsayının yerine geçer.
    Motor dosyası değişmez: termin ve tahmini geliş plana verilen veri kopyasında satın alma satırı olarak, fason dönüşü fason yerleştirmesinin
    üstünde uygulanır; aynı kod işçide de çalışır. */
-const TM0 = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik: 7 };
-const tmAyar = (D = S.D) => ({ ...TM0, ...((D && D.terminAyar) || {}) });
+/* Terminlerin plana giden veriye yazılması (TM0, tmAyar, tmSureMal, tmIhtiyac, tmUygula) motor/durum.betik'tedir. */
 const tmYaz = t => mpTarih(t).toISOString().slice(0, 16).replace('T', ' ');
-/* kullanıcı 13:17: varsayılan termin malzemeye ve fason firmasına göre değişir; malzeme ya da fasoncu kendi katsayısını taşırsa genel katsayının yerine o kullanılır */
-const tmKat = (x, k, genel) => x && x[k] != null && isFinite(+x[k]) ? +x[k] : genel;
-function tmSureMal(D, kod, q, A) { const m = (D.malzemeler || []).find(x => x.kod === kod); if (!m || m.tedarikGun == null) return null; return (+m.tedarikGun * tmKat(m, 'terminKat', A.katMal) + tmKat(m, 'terminEk', A.ekMal) * q / 100) * 24; }
 const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
-/* malzemenin ihtiyaç günü son plandan: onu kullanan ilk işin başlangıcı; plan yoksa bilinmez */
-function tmIhtiyac(D, p) {
-  const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
-  for (const id in p.ops) { const r = p.ops[id]; if (r.done || !isFinite(r.S)) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
-  for (const s of D.siparisler) { if (s.havuz || ilk[s.id] == null) continue; for (const r of s.malzeme || []) out[r.kod] = Math.min(out[r.kod] ?? Infinity, ilk[s.id]); }
-  return { kod: out, is: ilk };
-}
-/* plana giden veri: termini olmayan satın alma tahmini gelişle, siparişi verilmemiş eksik tahmini bir satırla girer.
-   İhtiyacına eşik kadar gün kalmış ve termini yoksa sipariş yok sayılır: geliş bugünden tam tedarik süresidir. */
-function tmUygula(st) {
-  const D = st.D, A = tmAyar(S.D), now = st.now, sinir = now + A.esik * 24; const ih = tmIhtiyac(D, S.plan); const uy = []; const kayit = [];
-  D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
-  for (const p of D.satinalma) { if (parseT(D, p.gelis) != null) continue;
-    const sure = tmSureMal(D, p.kod, +p.miktar || 0, A); if (sure == null) { p.tm = 'sure-yok'; continue; }
-    const h = ih.kod[p.kod]; const t0 = parseT(D, p.verildi) ?? now;
-    if (h != null && h <= sinir) { const g = now + sure; p.gelis = tmYaz(g); p.tm = 'yok'; p.yakin = 1; }
-    else { p.gelis = tmYaz(Math.max(now, t0 + sure)); p.tm = 'tahmini'; }
-    kayit.push(p); }
-  const ihtiyac = {}; for (const s of D.siparisler) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
-  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
-    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue; const sure = tmSureMal(D, kod, eks, A); if (sure == null) continue;
-    const g = now + sure; D.satinalma.push({ kod, miktar: eks, gelis: tmYaz(g), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok' });
-    if (ih.kod[kod] != null && ih.kod[kod] <= sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
-  for (const id in (S.plan && S.plan.ops) || {}) { const r = S.plan.ops[id]; if (!r.fas || r.done || r.S > sinir || r.S < now - 1e-9) continue; if ((D.fasonTermin || {})[id]) continue;
-    uy.push({ t: 'Termin yok', j: r.job, fason: id, txt: `${id}: fason ${fmtDT(D, r.S)} çıkıyor, dönüş termini girilmedi; dönüş katsayıyla tahmin edildi.` }); }
-  st.tmP = { katFas: A.katFas, ekFas: A.ekFas }; st.tmUyari = uy; st.ggP = +ymAyar(S.D).genelGider || 0;
-  return st;
-}
-const tmStEski = stOf;
-stOf = function (ek, gevset) { return tmUygula(tmStEski(ek, gevset)); };
 
 /* motora bağlanan kısım (ana iş parçacığı ve işçi): genel gider her tezgâh saatine yük olarak, termin uyarıları, fason dönüşü */
 function terminUygula() {

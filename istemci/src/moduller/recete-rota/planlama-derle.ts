@@ -52,7 +52,7 @@ export function planlamaBetigi(kok: string = KAYNAK): string {
 }
 
 export function planlamaMotoru(kok: string = MOTOR): string {
-  return ['engine', 'kisitlar', 'girdi'].map((m) => oku(join(kok, `${m}.betik`))).join('\n');
+  return ['engine', 'kisitlar', 'girdi', 'durum'].map((m) => oku(join(kok, `${m}.betik`))).join('\n');
 }
 
 export function planlamaSayfasi(kok: string = KAYNAK): string {

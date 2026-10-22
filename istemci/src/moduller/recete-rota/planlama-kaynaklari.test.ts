@@ -120,13 +120,13 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(d.bildirimler).toEqual(['Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.']);
   });
 
-  it('yetkisiz dilim (null) kayıttaki gibi kalır; maliyet satırı yoksa ücret uydurulmaz', async () => {
+  it('yetkisiz dilim (null) kayıttaki gibi kalır; maliyet satırı yoksa ücret uydurulmaz (69 a: boş, sıfır değil)', async () => {
     const d = duzenek(KAYIT, Promise.resolve({ durum: { ...DURUM, people: null, maliyet: null }, ek: EK }));
     d.ac();
     await bekle();
     const D = d.S()?.D as { tezgahlar: Nesne[]; personel: unknown[] };
     expect(D.personel).toEqual([]);
-    expect(D.tezgahlar[0]?.['ucret']).toBe(0);
+    expect(D.tezgahlar[0]?.['ucret']).toBeNull();
   });
 
   // Saklanmış çalışma açılırken kayıt başka çerçevede değişmişse çalışma yeniden çevrilir (rrCek). Kayıtta plan dilimi yoksa
@@ -200,6 +200,39 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     await bekle();
     const t = (d.S()?.D as { tezgahlar: Nesne[] }).tezgahlar[0];
     expect(t).toMatchObject({ id: '100', ad: 'Torna 1', grup: '10', verim: 0.5, aile: 'x' });
+  });
+
+  // 71 b
+  const istasyonMaliyeti = (birimMaliyet: string | null): Nesne => ({
+    ...DURUM, maliyet: { ...DURUM.maliyet, istasyon: birimMaliyet === null ? {} : { 10: { birimMaliyet, paraBirimi: 'TRY', surum: 2 } } },
+  });
+  const tezgahUcreti = async (tezgah: Nesne, birimMaliyet: string | null): Promise<Nesne | undefined> => {
+    const d = duzenek(KAYIT, Promise.resolve({ durum: istasyonMaliyeti(birimMaliyet), ek: EK }));
+    const S = d.ac() as { D: Nesne };
+    S.D['tezgahlar'] = [{ id: '100', ad: 'Torna 1', grup: '10', verim: 1, vardiyalar: ['3'], opOran: 0, ...tezgah }];
+    await bekle();
+    return (d.S()?.D as { tezgahlar: Nesne[] }).tezgahlar.find((x) => x['id'] === '100');
+  };
+
+  it('elle değiştirilmemiş tezgâhın saat ücreti istasyon maliyetini izler; elle girilen korunur', async () => {
+    expect(await tezgahUcreti({ ucret: 750, ucretIst: 750 }, '800.0000')).toMatchObject({ ucret: 800, ucretIst: 800 });
+    expect(await tezgahUcreti({ ucret: 900, ucretIst: 750 }, '800.0000')).toMatchObject({ ucret: 900, ucretIst: 750 });
+    // maliyeti önce okunamamış tezgâh maliyet gelince ücretini alır
+    expect(await tezgahUcreti({ ucret: null, ucretIst: null }, '800.0000')).toMatchObject({ ucret: 800, ucretIst: 800 });
+  });
+
+  it('işareti olmayan eski tezgâh ücreti maliyete eşitse izlemeye girer, değilse elle sayılır; okunamayan maliyet ücreti silmez', async () => {
+    expect(await tezgahUcreti({ ucret: 750 }, '750.0000')).toMatchObject({ ucret: 750, ucretIst: 750 });
+    const elle = await tezgahUcreti({ ucret: 1 }, '750.0000');
+    expect(elle).toMatchObject({ ucret: 1 }); expect(elle).not.toHaveProperty('ucretIst');
+    expect(await tezgahUcreti({ ucret: 750, ucretIst: 750 }, null)).toMatchObject({ ucret: 750, ucretIst: 750 });
+  });
+
+  it('yeni tezgâh ücretini istasyondan alır ve izler', async () => {
+    const d = duzenek(KAYIT, Promise.resolve({ durum: DURUM, ek: EK }));
+    d.ac();
+    await bekle();
+    expect((d.S()?.D as { tezgahlar: Nesne[] }).tezgahlar[0]).toMatchObject({ ucret: 750, ucretIst: 750 });
   });
 });
 

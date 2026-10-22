@@ -6,7 +6,6 @@
    Yarı mamulün kendi termini ve geliri yoktur; gecikmesi montajı geciktirdiği ölçüde mamulün gecikmesine yansır. Sıralama için
    geri planlanmış bir iç termin alır: mamulün tampon termini eksi montaj adımından sonraki adımların en kısa süreleri. Bu iç termin aşılırsa tampon ihlali bedeli işler. */
 const MT_DERIN = 4;
-const mtKok = id => String(id).split('/')[0];
 function mtGerekenler(D) {
   const UR = Object.fromEntries(D.urunler.map(u => [u.id, u]));
   const kokAdet = {}, kokS = {};
@@ -37,12 +36,7 @@ function mtEsitle() {
   if (degisti) { D.siparisler = l; S.dataVer++; }
   return degisti;
 }
-function mtStUygula(st) {
-  const B = {};
-  for (const s of st.D.siparisler) if (s.ust) { const k = mtKok(s.id); B[k] = { ust: s.ust, adim: s.ustAdim, birim: +s.birim || 1, derin: (k.match(/-Y\d+/g) || []).length }; s.termin = null; }
-  if (Object.keys(B).length) st.montaj = B;
-  return st;
-}
+/* mtKok ve montaj bağının st'ye yazılması (mtStUygula) motor/durum.betik'tedir. */
 /* İşçide de çalışır: kendi kendine yeter. */
 function montajUygula() {
   if (self.__mtBag) return; self.__mtBag = 1;
@@ -75,7 +69,6 @@ function montajUygula() {
 }
 montajUygula();
 ISCI_EK.push(`${montajUygula}\nmontajUygula();`);
-{ const s0 = stOf; stOf = function () { return mtStUygula(s0.apply(this, arguments)); }; }
 { const r0 = render; render = function () { try { mtOrnek(); mtEsitle(); } catch (e) { /* eşitleme ekranı durdurmaz */ } return r0.apply(this, arguments); }; }
 { const c0 = coz; coz = function () { try { mtOrnek(); mtEsitle(); } catch (e) { } return c0.apply(this, arguments); }; }
 

@@ -94,29 +94,7 @@ if (TANIM.malzeme) {
     ['tedarikGun', 'Tedarik', x => x.tedarikGun != null ? x.tedarikGun + ' gün' : '—', 1]];
 }
 
-/* ---------- motora bağlanan ayarlar ----------
-   Operatör ücreti girilince tezgâh saat maliyetine operatör payıyla eklenir; fire payı malzeme ihtiyacını büyütür; fason taşıma adet fiyatına eklenir.
-   Ağırlıklar ve amaç işçiye st içinde gider: işçi motoru kendi PW sözlüğüyle başlar, sipariş ağırlıklarını oradan alamaz. */
-var TL_AMAC = { ac: false, birim: 5, risk: 0.25 };
-const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: 120 };
-/* bekleme maliyeti yalnız finansmandır (212 a): alan ve elleçleme genel giderde, bozulma riski hurda payında; hesap bu bileşenleri taşır ama kapalı tutar.
-   Finansman oranı ayrı değildir: Öncelik ve ağırlıktaki günlük oran kullanılır. */
-const WIP0 = { ac: true, vadeBas: 'bitis', alanAc: false, ellAc: false, alfaAc: false, alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };
-function wipAyar(D = S.D) { return { ...WIP0, ...((D && D.planTL && D.planTL.wip) || {}), alanAc: false, ellAc: false, alfaAc: false }; }
-function ymAyar(D = S.D) { return { ...YM0, ...((D && D.planTL) || {}) }; }
-const ymStEski = stOf;
-stOf = function (ek, gevset) {
-  const st = ymStEski(ek, gevset); const D = st.D; const Y = ymAyar(S.D);
-  if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opOran == null ? 1 : +m.opOran);
-  const mats = Object.fromEntries((D.malzemeler || []).map(m => [m.kod, m]));
-  for (const s of D.siparisler) for (const r of s.malzeme || []) { const m = mats[r.kod]; if (m && m.fire > 0) r.miktar = +r.miktar * (1 + m.fire / 100); }
-  for (const f of D.fasoncular || []) if (f.tasima > 0 && f.fiyat != null) f.fiyat = +f.fiyat + +f.tasima;
-  { const w = wipAyar(S.D); st.wipP = { ...w, fin: agAyar(S.D).fin }; }
-  st.PWek = {}; for (const s of D.siparisler) if (PW[s.oncelik] != null) st.PWek[s.oncelik] = PW[s.oncelik];
-  st.tlAmac = { ac: Y.amac === 'tl' && agAyar(S.D).kip === 'bedel', birim: typeof AG_BIRIM === 'number' ? AG_BIRIM : 5, risk: +Y.risk || 0 };
-  Object.assign(TL_AMAC, st.tlAmac);
-  return st;
-};
+/* Motora bağlanan ayarlar (TL_AMAC, YM0, WIP0, ymAyar, wipAyar ve st'ye yazılması) motor/durum.betik'tedir. */
 /* tek TL toplamı: gecikme saati × bedel (ağırlık birimi TL/sa), tampon ihlali × bedel × risk katsayısı, bilinen maliyet (işleme, ayar, fason, mesai) */
 function tlToplam(e) { return e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk + e.lex[4]; }
 /* müdürün fason kararı: kabul edilen iş yalnız talaş fasonunda, reddedilen yalnız tezgâhta yapılabilir */

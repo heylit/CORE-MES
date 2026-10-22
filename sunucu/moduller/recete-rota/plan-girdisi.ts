@@ -8,7 +8,7 @@ import type { MotorDurumu } from './plan-motoru.ts';
 // Planın girdisi (st) planlama çerçevesindeki kodla kurulur: motor/girdi.betik çerçeveye de gömülür (planlama-derle.ts), aynı kayıt,
 // çalışma ve kaynak okuması iki yerde aynı st'yi verir. Motor gibi boş `vm` bağlamında yüklenir; duvar saati tesisin saat dilimindedir.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
-const DOSYALAR = ['engine', 'kisitlar', 'girdi'] as const;
+const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum'] as const;
 
 let kod: string | null = null;
 function girdiKodu(): string {

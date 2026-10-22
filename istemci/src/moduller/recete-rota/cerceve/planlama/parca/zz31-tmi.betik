@@ -50,9 +50,7 @@ if (TMI_ICINDE) {
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
   };
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
-     yazılmaz. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
-  const st0 = stOf;
-  stOf = function () { return simdiUygula(st0.apply(this, arguments), S); };
+     yazılmaz; st'ye stTamKur'da girer (motor/durum.betik, simdiUygula). Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
   const coz0 = coz;
   coz = function () {
     if (S && S.D && yetkili('plan.yaz') && !calisan) {

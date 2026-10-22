@@ -4,14 +4,12 @@
    3 b: ödeme vadesi terminde başlar: erken biten işin parası erken gelmez, termine kadar bekleyen mamulün finansmanı maliyettir.
    4 c: geliş tarihi belli olan malzeme sert kısıttır; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.
    5 b: genel gider batık maliyettir; plan amacına girmez, maliyet ve teklif raporunda kalır. */
-WIP0.vadeBas = 'termin';
 /* eski kayıtlarda varsayılanlar bir kez yeni kararlara taşınır; durum yüklendikten sonra. Taşıma yalnız bellekte yapılır, işareti çalışmadadır
    ve ilk kayıtla yazılır: kayıt ortaktır, açılışta yazmak aynı anda açan ikinci kişiye çakışma (409) verir. */
 setTimeout(() => {
   let k1650 = null; try { k1650 = localStorage.getItem(ANAHTAR + '-karar1650'); } catch (e) { /* yok */ }
-  if (!k1650 && S && S.D && !S.karar1650) { if (S.w.mat === 'uyari') S.w.mat = 'karma'; const w = S.D.planTL && S.D.planTL.wip; if (w && w.vadeBas === 'bitis') w.vadeBas = 'termin'; if (S.D.planDenge == null) S.D.planDenge = 25; S.karar1650 = 1; render(); }
+  if (!k1650 && karar1650Goc(S)) render();
 }, 0);
-{ const kgSt = stOf; stOf = function (ek, gevset) { const st = kgSt(ek, gevset); st.ggP = 0; if (S.param.tezgahTL === false) st.w.tezgahEski = true; st.w.matKarma = st.w.mat === 'karma'; if (st.w.matKarma) st.w.mat = 'sert'; return st; }; }
 /* ana iş parçacığı ve işçi: belli olmayan gelişte malzeme hazır sayılır (iş başlar), uyarı motorun malzeme uyarısıyla aynı metinle verilir */
 function matKarmaUygula() {
   const c0 = compile;

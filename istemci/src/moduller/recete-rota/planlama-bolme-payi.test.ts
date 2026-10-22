@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
+import { planlamaMotoru } from './planlama-derle.ts';
 
 // 35 b: bölünen siparişin parçaları (zz2, zz4, zz11, t-tekyer) siparişin adet payını taşır; motor gecikmeyi ve cezayı o payla sayar, aynı
-// yerde biten iki parça siparişi bir kez sayar. Çerçevenin gecikme bedelinde (zr-agirlik agBedel) siparişe ait bileşenler de payla sayılır.
+// yerde biten iki parça siparişi bir kez sayar. Gecikme bedelinde (motor/durum.betik agBedel) siparişe ait bileşenler de payla sayılır.
 // Veriler uydurmadır.
 
 type Nesne = Record<string, unknown>;
@@ -101,11 +101,8 @@ describe('bölünen siparişin gecikmesi adet oranlı (35 b)', () => {
   });
 
   it('çerçevenin gecikme bedeli: girilen ceza ve taban bedel parçada payla, tutardan gelen bileşenler parçanın tutarıyla', () => {
-    const z = planlamaParcasi('zr-agirlik');
-    const bas = z.indexOf('function agBedel(');
-    const kod = z.slice(bas, z.indexOf('\n}\n', bas) + 2);
     const A = { kip: 'bedel', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1 }, bil: { ceza: 1, fin: 1, kar: 0, sinif: 0, elle: 0 }, esik: { y: 1.5, d: 0.6 } };
-    const agBedel = new Function(`${planlamaMotoru()}\nconst agAyar = () => null; const agKatki = () => null; const agElle = () => 1;\n${kod}\nreturn agBedel;`)() as (D: Nesne, s: Nesne, a: Nesne) => { b: number };
+    const agBedel = new Function(`${planlamaMotoru()}\nreturn agBedel;`)() as (D: Nesne, s: Nesne, a: Nesne) => { b: number };
     const D = { musteriler: [{ id: 'MU-1', sinif: 'A', cezaOran: 0.3, cezaTavan: 10 }] };
     const butun = { id: 'O2', adet: 20, gelir: 2000, musteri: 'MU-1', cezaGun: 240 };
     const parca = motor.siparisParcasi(butun, 'O2/1', 5);

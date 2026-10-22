@@ -3976,6 +3976,7 @@ const rrKopya = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x))
 const rrEsit = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const rrTarih = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(0, 10) : '';
 const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) ? s.slice(11, 16) : '';
+const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
 const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 
 /* rota adımının çerçevedeki karşılığı: istasyon = ilk makinenin grubu, alternatif = öteki gruplar, süre = grubun ilk makinesi */
@@ -4015,7 +4016,8 @@ function rrCevir(st) {
     if (!a || a.id !== m.id) y.id = m.id;
     if (!a || a.ad !== m.name) y.ad = m.name;
     if (!a || a.grup !== m.stationId) y.grup = m.stationId;
-    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: +s.cost || 0, verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
+    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
     return rrKur(a, y);
   });
   const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
@@ -4142,6 +4144,14 @@ function tmiTabanKur(D, bugun = duvarSaati(Date.now()).slice(0, 10)) {
    kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
    merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
    Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
+/* 71 b: elle değiştirilmemiş tezgâhın saat ücreti istasyon maliyetini izler; ucretIst istasyondan alınan son ücrettir, ücret ondan farklıysa
+   elle girilmiştir ve korunur. İşareti olmayan eski tezgâh ücreti maliyete eşitse izlemeye girer. Maliyet okunamazsa (satır yok, yetki yok)
+   son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
+function ucretIzle(a, maliyet) {
+  if (maliyet == null) return;
+  const izler = a.ucretIst !== undefined ? a.ucret === a.ucretIst : a.ucret === maliyet;
+  if (izler) { a.ucret = maliyet; a.ucretIst = maliyet; }
+}
 function tmiKaynakIle(st, kaynak, D) {
   const d = kaynak.durum, ek = kaynak.ek || {}, tk = ek.takvim || null;
   const o = Object.assign({}, st);
@@ -4172,7 +4182,7 @@ function tmiKaynakIle(st, kaynak, D) {
     const ist = new Set(istasyonlar.map(x => x.id));
     o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
       const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
-      const a = eski('tezgahlar', m.id); if (a) y.plan = a;
+      const a = eski('tezgahlar', m.id); if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId)); }
       return y;
     });
   }
@@ -4379,23 +4389,226 @@ function baslangicTazele(S, an) {
   const bugun = s.slice(0, 10), g = gunFarki(S.D.meta.baslangic, bugun);
   return g != null && g >= BASLANGIC_ESIGI ? baslangicKaydir(S, bugun) : 0;
 }
-/* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek),
-   kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
+/* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek,
+   ilk çizimde), eski kayıtta 1650 kararlarının taşınması (zz-karar-1650, çizimden sonra), kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula);
+   st sayfanın stOf'uyla aynı yoldan (durum.betik stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
    kaydı, kaynak: { durum, ek } (çerçevenin kaynakOku cevabı) ya da null. Girdiler değişmez. Dönen: { S, st }; çalışma yoksa null. */
 function girdiKur(calisma, kayit, kaynak, bugun) {
   if (!calisma || !calisma.D) return null;
   const S = clone(calisma); tmiTabanKur(S.D, bugun);
   const k = kayit && kayit.items ? kayit : null;
   if (k && S.rrSavedAt != null && (k.savedAt || 0) !== S.rrSavedAt) { const D = tmiCevir(k, null, S.D, bugun); if (!rrEsit(D, S.D)) S.D = D; }
+  karar1650Goc(S);
   const kn = kaynak && kaynak.durum ? kaynak : null;
   if (kn) {
     kaynakBirlestir(S.D, k, kn, bugun);
     if (Array.isArray(kn.durum.calisanAdimlar)) {
-      const cx = compile(simdiUygula(stKur(S), S));
+      const cx = compile(stTamKur(S));
       const y = tmiCalisanlar(kn.durum, k, S.D, cx.st.now); if (y) calisanBirlestir(S, y, cx);
     }
   }
-  return { S, st: simdiUygula(stKur(S), S) };
+  return { S, st: stTamKur(S) };
+}
+
+/* ---------- Planın tam girdisi: çerçevenin st ayarları tek yerde (66 a, Y1b) ----------
+   Planlama sayfasının stOf'u ve sunucu (plan-girdisi.ts) aynı st'yi bu dosyadaki stTamKur ile kurar: gecikme bedeli ve ağırlıklar,
+   plan TL ayarları, malzeme terminleri, plan dengesi, olay uyumu, 1650 kararları, erken sevk, yıllık hedef, montaj, ayar önde ve
+   sayfanın şimdisi. Kurallar çerçevenin parçalarından taşındı (zr, zu, zv, zw, zy, zz-karar-1650, zz3, zz9, zz12, zz15, zz31); sayfanın
+   ekranları aynı işlevleri çağırır. Çalışmayı (S) parametre alır; varsayılan parametre çerçevede açık çalışmadır (cerceveS), sunucuda
+   çağıran verir. */
+function cerceveS() { return typeof S !== 'undefined' && S ? S : null; }
+const cerceveD = () => { const s = cerceveS(); return s ? s.D : null; };
+
+/* ---- gecikmenin bedeli (zr-agirlik) ---- */
+const AG0 = { kip: 'bedel', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 }, esik: { y: 1.5, d: 0.6 } };
+const ELLE_ONC = { 1: 2, 2: 1, 3: 0.5 };
+const AG_MUSTERI0 = [
+  { id: 'MU-1', ad: 'Müşteri 1', sinif: 'A', cezaOran: 0.3, cezaTavan: 10 },
+  { id: 'MU-2', ad: 'Müşteri 2', sinif: 'B', cezaOran: 0.2, cezaTavan: 10 },
+  { id: 'MU-3', ad: 'Müşteri 3', sinif: 'B', cezaOran: null, cezaTavan: null },
+  { id: 'MU-4', ad: 'Müşteri 4', sinif: 'C', cezaOran: 0.1, cezaTavan: 5 },
+];
+/* yüklenen veri setlerinde müşteri yok; denemede uydurma müşteri ve sınıf atanır */
+function agHazirla(D) {
+  if (!D) return;
+  if (!D.musteriler) {
+    D.musteriler = clone(AG_MUSTERI0);
+    D.siparisler.forEach((s, i) => { if (s.musteri === undefined) s.musteri = AG_MUSTERI0[i % AG_MUSTERI0.length].id; });
+  }
+  /* öncelik artık ağırlıktan çıkar; eski elle sınıf bir kez elle çarpana taşınır, karşılaştırma için onc0 saklanır.
+     onc0 taşıyan sipariş taşınmıştır: önceliği artık bedelden hesaplanan sınıftır, ikinci kez elle çarpana çevrilirse ağırlığı kayar */
+  if (!D.agGoc) {
+    for (const s of D.siparisler) { if (s.onc0 != null) continue; s.onc0 = s.oncelik; if (s.elle == null && s.oncelik !== 2 && ELLE_ONC[s.oncelik]) { s.elle = ELLE_ONC[s.oncelik]; s.elleGerekce = 'eski öncelik sınıfından'; s.elleKim = 'geçiş'; } delete s.elleOnc; }
+    D.agGoc = 1;
+  }
+  agOncYaz(D);
+}
+function agAyar(D = cerceveD()) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
+function agElle(s) { return s.elle != null ? +s.elle : 1; }
+/* katkı payı = tutar − malzeme − işleme − ayar − fason. İşleme ve ayar son plandaki tezgâh seçimiyle, saat ücretinden hesaplanır
+   (operatör payı yok sayılır); fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur.
+   S0: çalışma (son planı oradan) */
+function agKatki(s, D = cerceveD(), S0 = cerceveS()) {
+  if (s.gelir == null || !S0 || !S0.plan) return null;
+  let t = 0; const A = D.ayarlar || {};
+  for (const r of (s.malzeme || [])) { const m = (D.malzemeler || []).find(x => x.kod === r.kod); if (!m || m.birimFiyat == null) return null; t += m.birimFiyat * r.miktar * s.adet; }
+  const ops = Object.values(S0.plan.ops).filter(r => r.job === s.id); if (!ops.length) return null;
+  for (const r of ops) {
+    if (r.fas) { const f = (D.fasoncular || []).find(x => '@' + x.id === r.m); if (!f || f.fiyat == null) return null; t += f.fiyat * s.adet; continue; }
+    const m = D.tezgahlar.find(x => x.id === r.m); if (!m || m.ucret == null) return null;
+    t += r.run * m.ucret + r.su * (m.ucret + (+A.ayarciUcret || 0));
+  }
+  return +s.gelir - t;
+}
+/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri. Bölünen siparişin parçasında (35 b) tutardan gelen bileşenler zaten
+   oranlıdır (parçanın geliri); siparişe ait olanlar (girilen ceza, taban bedel) adet payıyla sayılır. Katkı payı çalışmanın verisinden (S0.D). */
+function agBedel(D, s, A = agAyar(D), S0 = cerceveS()) {
+  const pay = isPayi(s);
+  const mu = (D.musteriler || []).find(m => m.id === s.musteri) || null;
+  const tutar = s.gelir == null ? null : +s.gelir;
+  const oran = s.cezaOran != null ? +s.cezaOran : mu && mu.cezaOran != null ? +mu.cezaOran : null;
+  const ceza = s.cezaGun != null ? +s.cezaGun / 24 * pay : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
+  const fin = tutar != null ? tutar * A.fin / 100 / 24 : 0;
+  const B = A.bil; const kat = agKatki(s, S0 && S0.D, S0); const kr = kat == null ? null : Math.max(0, kat) * A.kar / 100 / 24;
+  const sc = B.sinif && mu ? (A.sinif[mu.sinif] ?? 1) : 1; const el = B.elle ? agElle(s) : 1;
+  const eksik = []; if (tutar == null) eksik.push('tutar'); if (B.ceza && ceza == null) eksik.push('ceza oranı'); if (!mu) eksik.push('müşteri'); if (B.kar && kat == null) eksik.push('maliyet');
+  const temel = B.ceza ? (ceza == null ? A.taban * pay : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
+  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban * pay;
+  const tavanO = s.cezaTavan != null ? +s.cezaTavan : mu && mu.cezaTavan != null ? +mu.cezaTavan : A.tavan;
+  const tavanTL = B.ceza && s.cezaGun == null && tutar != null && ceza != null ? tutar * tavanO / 100 : null;
+  return { b: ham * sc * el, ceza: B.ceza ? ceza : null, temel, fin: finK, kr: B.kar ? kr : null, kat, sc, el, sinif: mu ? mu.sinif : null, mu, eksik, taban: (B.ceza && ceza == null) || bos, tutar, oran, tavanO, tavanTL, sonra: ham * sc * el };
+}
+const agOrtanca = l => { const a = l.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+/* otomatik öncelik: ortanca bedelin 1,5 katı ve üstü Yüksek, 0,6 katı ve altı Düşük; eşikler ağırlık ayarında */
+function agOncHesap(D, A = agAyar(D)) {
+  const l = D.siparisler.filter(s => !s.havuz).map(s => [s, agBedel(D, s, A).b]); const ort = agOrtanca(l.map(x => x[1])) || 1;
+  return { l, ort, sinif: b => b >= A.esik.y * ort ? 1 : b <= A.esik.d * ort ? 3 : 2 };
+}
+function agOncYaz(D) { const A = agAyar(D); if (A.kip !== 'bedel') return; const h = agOncHesap(D, A); for (const [s, b] of h.l) s.oncelik = h.sinif(b); }
+/* motor bağlantısı: her siparişe kendi anahtarı; ağırlık ortanca bedele göre ölçeklenir (ortanca sipariş eski "Normal" ×2 kadar sayılır),
+   motorun kendi ceza raporu da aynı bedeli kullansın diye cezaGun bedel × 24 yazılır */
+const AG_BIRIM = 5;
+/* kiyasEski: eski öncelik sınıflarıyla karşılaştırma (sayfanın ağırlık kıyası) */
+function agUygula(st, S, kiyasEski) {
+  const A = agAyar(st.D);
+  if (A.kip !== 'bedel') { if (kiyasEski) for (const s of st.D.siparisler) if (s.onc0 != null) s.oncelik = s.onc0; return st; }
+  /* ağırlık bedelin kendisidir (1 birim = AG_BIRIM TL/sa): sipariş eklenip çıkınca ötekilerin ağırlığı kaymaz. Önceki planda ceza tavanını
+     aşmış siparişin bir saat daha gecikmesi yalnız tavan sonrası bedel kadar pahalıdır; motor bunu o siparişin ağırlığı olarak görür. */
+  const P = S.plan && S.plan.J ? S.plan.J : {};
+  for (const s of st.D.siparisler) { const x = agBedel(st.D, s, A, S); const T = P[s.id] ? P[s.id].T : 0;
+    const asti = x.ceza > 0 && x.tavanTL != null && T > x.tavanTL / x.ceza; const be = asti ? x.sonra : x.b;
+    /* parçanın bedeli payını içerir: motor bir daha payla çarpmasın */
+    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; s.pay = 1; }
+  return st;
+}
+
+/* ---- motora bağlanan plan TL ayarları (zu-yan-sayfalar) ----
+   Operatör ücreti girilince tezgâh saat maliyetine operatör payıyla eklenir; fire payı malzeme ihtiyacını büyütür; fason taşıma adet fiyatına eklenir.
+   Ağırlıklar ve amaç işçiye st içinde gider: işçi motoru kendi PW sözlüğüyle başlar, sipariş ağırlıklarını oradan alamaz. */
+var TL_AMAC = { ac: false, birim: 5, risk: 0.25 };
+const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: 120 };
+/* bekleme maliyeti yalnız finansmandır (212 a): alan ve elleçleme genel giderde, bozulma riski hurda payında; hesap bu bileşenleri taşır ama kapalı tutar.
+   Finansman oranı ayrı değildir: Öncelik ve ağırlıktaki günlük oran kullanılır. Ödeme vadesi terminde başlar (1650 kararı 3 b). */
+const WIP0 = { ac: true, vadeBas: 'termin', alanAc: false, ellAc: false, alfaAc: false, alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };
+function wipAyar(D = cerceveD()) { return { ...WIP0, ...((D && D.planTL && D.planTL.wip) || {}), alanAc: false, ellAc: false, alfaAc: false }; }
+function ymAyar(D = cerceveD()) { return { ...YM0, ...((D && D.planTL) || {}) }; }
+function ymUygula(st, S) {
+  const D = st.D; const Y = ymAyar(S.D);
+  if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opOran == null ? 1 : +m.opOran);
+  const mats = Object.fromEntries((D.malzemeler || []).map(m => [m.kod, m]));
+  for (const s of D.siparisler) for (const r of s.malzeme || []) { const m = mats[r.kod]; if (m && m.fire > 0) r.miktar = +r.miktar * (1 + m.fire / 100); }
+  for (const f of D.fasoncular || []) if (f.tasima > 0 && f.fiyat != null) f.fiyat = +f.fiyat + +f.tasima;
+  { const w = wipAyar(S.D); st.wipP = { ...w, fin: agAyar(S.D).fin }; }
+  st.PWek = {}; for (const s of D.siparisler) if (PW[s.oncelik] != null) st.PWek[s.oncelik] = PW[s.oncelik];
+  st.tlAmac = { ac: Y.amac === 'tl' && agAyar(S.D).kip === 'bedel', birim: AG_BIRIM, risk: +Y.risk || 0 };
+  Object.assign(TL_AMAC, st.tlAmac);
+  return st;
+}
+
+/* ---- malzeme terminleri (zv-termin) ---- */
+const TM0 = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik: 7 };
+const tmAyar = (D = cerceveD()) => ({ ...TM0, ...((D && D.terminAyar) || {}) });
+/* plan saatinin duvar saati yazımı ('GGGG-AA-GG SS:DD') */
+const tmTarihYaz = (D, t) => new Date(baseMs(D) + t * 3600000).toISOString().slice(0, 16).replace('T', ' ');
+/* kullanıcı 13:17: varsayılan termin malzemeye ve fason firmasına göre değişir; malzeme ya da fasoncu kendi katsayısını taşırsa genel katsayının yerine o kullanılır */
+const tmKat = (x, k, genel) => x && x[k] != null && isFinite(+x[k]) ? +x[k] : genel;
+function tmSureMal(D, kod, q, A) { const m = (D.malzemeler || []).find(x => x.kod === kod); if (!m || m.tedarikGun == null) return null; return (+m.tedarikGun * tmKat(m, 'terminKat', A.katMal) + tmKat(m, 'terminEk', A.ekMal) * q / 100) * 24; }
+/* malzemenin ihtiyaç günü son plandan: onu kullanan ilk işin başlangıcı; plan yoksa bilinmez */
+function tmIhtiyac(D, p) {
+  const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
+  for (const id in p.ops) { const r = p.ops[id]; if (r.done || !isFinite(r.S)) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
+  for (const s of D.siparisler) { if (s.havuz || ilk[s.id] == null) continue; for (const r of s.malzeme || []) out[r.kod] = Math.min(out[r.kod] ?? Infinity, ilk[s.id]); }
+  return { kod: out, is: ilk };
+}
+/* plana giden veri: termini olmayan satın alma tahmini gelişle, siparişi verilmemiş eksik tahmini bir satırla girer.
+   İhtiyacına eşik kadar gün kalmış ve termini yoksa sipariş yok sayılır: geliş bugünden tam tedarik süresidir. */
+function tmUygula(st, S) {
+  const D = st.D, A = tmAyar(S.D), now = st.now, sinir = now + A.esik * 24; const ih = tmIhtiyac(D, S.plan); const uy = []; const kayit = [];
+  const yaz = t => tmTarihYaz(S.D, t);
+  D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
+  for (const p of D.satinalma) { if (parseT(D, p.gelis) != null) continue;
+    const sure = tmSureMal(D, p.kod, +p.miktar || 0, A); if (sure == null) { p.tm = 'sure-yok'; continue; }
+    const h = ih.kod[p.kod]; const t0 = parseT(D, p.verildi) ?? now;
+    if (h != null && h <= sinir) { const g = now + sure; p.gelis = yaz(g); p.tm = 'yok'; p.yakin = 1; }
+    else { p.gelis = yaz(Math.max(now, t0 + sure)); p.tm = 'tahmini'; }
+    kayit.push(p); }
+  const ihtiyac = {}; for (const s of D.siparisler) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
+  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
+    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue; const sure = tmSureMal(D, kod, eks, A); if (sure == null) continue;
+    const g = now + sure; D.satinalma.push({ kod, miktar: eks, gelis: yaz(g), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok' });
+    if (ih.kod[kod] != null && ih.kod[kod] <= sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
+  for (const id in (S.plan && S.plan.ops) || {}) { const r = S.plan.ops[id]; if (!r.fas || r.done || r.S > sinir || r.S < now - 1e-9) continue; if ((D.fasonTermin || {})[id]) continue;
+    uy.push({ t: 'Termin yok', j: r.job, fason: id, txt: `${id}: fason ${fmtDT(D, r.S)} çıkıyor, dönüş termini girilmedi; dönüş katsayıyla tahmin edildi.` }); }
+  st.tmP = { katFas: A.katFas, ekFas: A.ekFas }; st.tmUyari = uy; st.ggP = +ymAyar(S.D).genelGider || 0;
+  return st;
+}
+
+/* ---- plan dengesi (zw-denge) ---- */
+const pdDenge = (D = cerceveD()) => { const v = D && D.planDenge; return v == null || !isFinite(+v) ? 50 : Math.max(0, Math.min(100, +v)); };
+/* termin ucu 100 kata kadar çıkar: bedel modelinde bir saatlik gecikme bir ek mesai vardiyasından çok ucuzdur, kapasite ancak büyük çarpanla satın alınır */
+const pdKat = d => d <= 50 ? Math.pow(100, (50 - d) / 50) : Math.pow(10, (50 - d) / 50);
+
+/* ---- yıllık plan ayarı (zz9-yillik): yoksa varsayılan çalışmaya yazılır ---- */
+function ylAyar(D = cerceveD()) {
+  return (D.yillik = D.yillik || { tahmin: 'gecmis', buyume: 10, elle: {}, mesaiMaks: 15, gecTL: 0.43, stokTL: 3.9, yatirim: true, teslimAy: 3, hedef: null });
+}
+
+/* ---- montaj (zz12-montaj) ---- */
+const mtKok = id => String(id).split('/')[0];
+function mtStUygula(st) {
+  const B = {};
+  for (const s of st.D.siparisler) if (s.ust) { const k = mtKok(s.id); B[k] = { ust: s.ust, adim: s.ustAdim, birim: +s.birim || 1, derin: (k.match(/-Y\d+/g) || []).length }; s.termin = null; }
+  if (Object.keys(B).length) st.montaj = B;
+  return st;
+}
+
+/* ---- 1650 kararları (zz-karar-1650) ----
+   1 a: bekleme maliyeti yalnız finansman; 3 b: ödeme vadesi terminde başlar; 4 c: geliş tarihi belli olan malzeme sert kısıttır, tedariki
+   olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar (karma); 5 b: genel gider plan amacına girmez. Eski kayıtlarda varsayılanlar
+   bir kez yeni kararlara taşınır; yalnız bellekte, işareti çalışmadadır ve ilk kayıtla yazılır. Dönen: taşındı mı. */
+function karar1650Goc(S) {
+  if (!S || !S.D || S.karar1650) return false;
+  if (S.w.mat === 'uyari') S.w.mat = 'karma'; const w = S.D.planTL && S.D.planTL.wip; if (w && w.vadeBas === 'bitis') w.vadeBas = 'termin'; if (S.D.planDenge == null) S.D.planDenge = 25; S.karar1650 = 1;
+  return true;
+}
+
+/* Çalışmanın (S) tam st'si; sıra çerçevedeki sarmalayıcıların sırasıdır. Ağırlık hazırlığı çalışmanın verisine yazar (müşteri, öncelik),
+   yıllık ayar da yoksa yazılır. o.kiyasEski: sayfanın ağırlık kıyası. */
+function stTamKur(S, ek = [], gevset = true, o = {}) {
+  agHazirla(S.D);
+  const st = stKur(S, ek, gevset);
+  agUygula(st, S, !!o.kiyasEski);
+  ymUygula(st, S);
+  tmUygula(st, S);
+  st.tlAmac.kT = pdKat(pdDenge(S.D)); Object.assign(TL_AMAC, st.tlAmac);
+  st.tlAmac.chgTL = 0; Object.assign(TL_AMAC, st.tlAmac);
+  st.ggP = 0; if (S.param.tezgahTL === false) st.w.tezgahEski = true; st.w.matKarma = st.w.mat === 'karma'; if (st.w.matKarma) st.w.mat = 'sert';
+  if (st.wipP) { const e = {}; for (const s of st.D.siparisler) if (s.erkenSevk) e[s.id] = 1; st.wipP.erken = e; }
+  { const A = ylAyar(S.D); const h = A.hedef;
+    if (h && h.hedef && h.hedef.length) { const isler = {}; for (const s of st.D.siparisler) { const f = h.aile[s.urun]; if (f) isler[s.id] = [f, +s.adet || 0]; } st.yHedef = { hedef: h.hedef, isler }; } }
+  mtStUygula(st);
+  st.ayariOneAl = (S.param || {}).ayariOneAl === 'acik';
+  return simdiUygula(st, S);
 }
 
 </script>
@@ -4678,7 +4891,8 @@ const yetkili = y => (YETKI[kim().rol] || []).includes(y);
 function iz(ne, ayrinti) { const k = kim(); S.iz.unshift({ t: Date.now(), kim: k.ad, rol: ROL_AD[k.rol], sayfa: SAYFA_AD[U.sayfa] || U.sayfa, ne, ayrinti: ayrinti || '' }); if (S.iz.length > 400) S.iz.length = 400; }
 
 /* Plan girdisi (st) motor klasöründeki girdi.betik'tedir: sunucu aynı kodla kurar. */
-function stOf(ek = [], gevset = true) { return stKur(S, ek, gevset); }
+/* planın girdisi sunucuyla aynı koddan (motor/durum.betik stTamKur): ağırlık, TL ayarları, terminler ve sayfanın şimdisi dahil */
+function stOf(ek = [], gevset = true) { return stTamKur(S, ek, gevset, { kiyasEski: U.agKiyasEski }); }
 function cxAl() {
   if (cxOnbellek.v !== S.dataVer || cxOnbellek.s !== S) { try { cxOnbellek = { v: S.dataVer, s: S, cx: compile(stOf()) }; } catch (e) { cxOnbellek = { v: S.dataVer, s: S, cx: null, hata: String(e.message || e) }; } }
   return cxOnbellek.cx;
@@ -13496,66 +13710,10 @@ KB_KISAYOL[0][1].push(['V', 'Çizelgede ölçek: gün, hafta, ay, yıl']);
    Motor amacı doğrusal kalır; tavan yalnız TL karşılığında sayılır. Fiyatı yalnız müdür ve yönetici görür (180 cevaplanmadı, öneri a varsayıldı).
    İkinci tur (kullanıcı 19.10 09:30, "öncelik ağırlıktan belirlensin"): kâr riski bileşeni (katkı payı × günlük kayıp riski) ve
    ağırlıktan otomatik öncelik sınıfı; ikisi de onaylı karar değil, denemede açılıp kapatılabilir. */
-const AG0 = { kip: 'bedel', taban: 10, fin: 0.13, tavan: 10, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 }, esik: { y: 1.5, d: 0.6 } };
+/* Bedel hesabı (AG0, agHazirla, agAyar, agKatki, agBedel, agOncYaz) ve motor bağlantısı motor/durum.betik'tedir (sunucu da aynı st'yi kurar). */
 const AG_BIL = [['ceza', 'Sözleşme cezası'], ['fin', 'Finansman'], ['kar', 'Kâr riski'], ['sinif', 'Müşteri sınıfı'], ['elle', 'Elle çarpan']];
-const ELLE_ONC = { 1: 2, 2: 1, 3: 0.5 };
-const AG_MUSTERI0 = [
-  { id: 'MU-1', ad: 'Müşteri 1', sinif: 'A', cezaOran: 0.3, cezaTavan: 10 },
-  { id: 'MU-2', ad: 'Müşteri 2', sinif: 'B', cezaOran: 0.2, cezaTavan: 10 },
-  { id: 'MU-3', ad: 'Müşteri 3', sinif: 'B', cezaOran: null, cezaTavan: null },
-  { id: 'MU-4', ad: 'Müşteri 4', sinif: 'C', cezaOran: 0.1, cezaTavan: 5 },
-];
-/* yüklenen veri setlerinde müşteri yok; denemede uydurma müşteri ve sınıf atanır */
-function agHazirla(D) {
-  if (!D) return;
-  if (!D.musteriler) {
-    D.musteriler = clone(AG_MUSTERI0);
-    D.siparisler.forEach((s, i) => { if (s.musteri === undefined) s.musteri = AG_MUSTERI0[i % AG_MUSTERI0.length].id; });
-  }
-  /* öncelik artık ağırlıktan çıkar; eski elle sınıf bir kez elle çarpana taşınır, karşılaştırma için onc0 saklanır.
-     onc0 taşıyan sipariş taşınmıştır: önceliği artık bedelden hesaplanan sınıftır, ikinci kez elle çarpana çevrilirse ağırlığı kayar */
-  if (!D.agGoc) {
-    for (const s of D.siparisler) { if (s.onc0 != null) continue; s.onc0 = s.oncelik; if (s.elle == null && s.oncelik !== 2 && ELLE_ONC[s.oncelik]) { s.elle = ELLE_ONC[s.oncelik]; s.elleGerekce = 'eski öncelik sınıfından'; s.elleKim = 'geçiş'; } delete s.elleOnc; }
-    D.agGoc = 1;
-  }
-  agOncYaz(D);
-}
-function agAyar(D = S.D) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
 const agFiyatGorur = () => ['mudur', 'yonetici'].includes(kim().rol);
 const agElleSinir = () => kim().rol === 'planlamaci' ? 2 : ['mudur', 'yonetici'].includes(kim().rol) ? 3 : 0;
-function agElle(s) { return s.elle != null ? +s.elle : 1; }
-/* katkı payı = tutar − malzeme − işleme − ayar − fason. İşleme ve ayar son plandaki tezgâh seçimiyle, saat ücretinden hesaplanır
-   (operatör payı yok sayılır); fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur. */
-function agKatki(s, D = S.D) {
-  if (s.gelir == null || !S || !S.plan) return null;
-  let t = 0; const A = D.ayarlar || {};
-  for (const r of (s.malzeme || [])) { const m = (D.malzemeler || []).find(x => x.kod === r.kod); if (!m || m.birimFiyat == null) return null; t += m.birimFiyat * r.miktar * s.adet; }
-  const ops = Object.values(S.plan.ops).filter(r => r.job === s.id); if (!ops.length) return null;
-  for (const r of ops) {
-    if (r.fas) { const f = (D.fasoncular || []).find(x => '@' + x.id === r.m); if (!f || f.fiyat == null) return null; t += f.fiyat * s.adet; continue; }
-    const m = D.tezgahlar.find(x => x.id === r.m); if (!m || m.ucret == null) return null;
-    t += r.run * m.ucret + r.su * (m.ucret + (+A.ayarciUcret || 0));
-  }
-  return +s.gelir - t;
-}
-/* saf hesap: siparişin bir saat gecikmesinin bedeli ve bileşenleri. Bölünen siparişin parçasında (35 b) tutardan gelen bileşenler zaten
-   oranlıdır (parçanın geliri); siparişe ait olanlar (girilen ceza, taban bedel) adet payıyla sayılır. */
-function agBedel(D, s, A = agAyar(D)) {
-  const pay = isPayi(s);
-  const mu = (D.musteriler || []).find(m => m.id === s.musteri) || null;
-  const tutar = s.gelir == null ? null : +s.gelir;
-  const oran = s.cezaOran != null ? +s.cezaOran : mu && mu.cezaOran != null ? +mu.cezaOran : null;
-  const ceza = s.cezaGun != null ? +s.cezaGun / 24 * pay : tutar != null && oran != null ? tutar * oran / 100 / 24 : null;
-  const fin = tutar != null ? tutar * A.fin / 100 / 24 : 0;
-  const B = A.bil; const kat = agKatki(s); const kr = kat == null ? null : Math.max(0, kat) * A.kar / 100 / 24;
-  const sc = B.sinif && mu ? (A.sinif[mu.sinif] ?? 1) : 1; const el = B.elle ? agElle(s) : 1;
-  const eksik = []; if (tutar == null) eksik.push('tutar'); if (B.ceza && ceza == null) eksik.push('ceza oranı'); if (!mu) eksik.push('müşteri'); if (B.kar && kat == null) eksik.push('maliyet');
-  const temel = B.ceza ? (ceza == null ? A.taban * pay : ceza) : 0; const finK = B.fin ? fin : 0; const krK = B.kar ? (kr || 0) : 0;
-  let ham = temel + finK + krK; const bos = ham <= 0; if (bos) ham = A.taban * pay;
-  const tavanO = s.cezaTavan != null ? +s.cezaTavan : mu && mu.cezaTavan != null ? +mu.cezaTavan : A.tavan;
-  const tavanTL = B.ceza && s.cezaGun == null && tutar != null && ceza != null ? tutar * tavanO / 100 : null;
-  return { b: ham * sc * el, ceza: B.ceza ? ceza : null, temel, fin: finK, kr: B.kar ? kr : null, kat, sc, el, sinif: mu ? mu.sinif : null, mu, eksik, taban: (B.ceza && ceza == null) || bos, tutar, oran, tavanO, tavanTL, sonra: ham * sc * el };
-}
 /* gecikmenin TL karşılığı: tavana kadar tam bedel, sonra taban bedel (179 a) */
 function agGecTL(x, T) {
   if (!(T > 0.05)) return 0;
@@ -13569,31 +13727,6 @@ function agToplamTL(p) {
   for (const s of S.D.siparisler) { const J = p.J[s.id]; if (J && J.T > 0.05) t += agGecTL(agBedel(S.D, s), J.T); }
   return t;
 }
-const agOrtanca = l => { const a = l.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
-/* otomatik öncelik: ortanca bedelin 1,5 katı ve üstü Yüksek, 0,6 katı ve altı Düşük; eşikler ağırlık ayarında */
-function agOncHesap(D, A = agAyar(D)) {
-  const l = D.siparisler.filter(s => !s.havuz).map(s => [s, agBedel(D, s, A).b]); const ort = agOrtanca(l.map(x => x[1])) || 1;
-  return { l, ort, sinif: b => b >= A.esik.y * ort ? 1 : b <= A.esik.d * ort ? 3 : 2 };
-}
-function agOncYaz(D) { const A = agAyar(D); if (A.kip !== 'bedel') return; const h = agOncHesap(D, A); for (const [s, b] of h.l) s.oncelik = h.sinif(b); }
-
-/* motor bağlantısı: her siparişe kendi anahtarı; ağırlık ortanca bedele göre ölçeklenir (ortanca sipariş eski "Normal" ×2 kadar sayılır),
-   motorun kendi ceza raporu da aynı bedeli kullansın diye cezaGun bedel × 24 yazılır */
-const AG_BIRIM = 5;
-const agStEski = stOf;
-stOf = function (ek, gevset) {
-  agHazirla(S.D); const st = agStEski(ek, gevset); const A = agAyar(st.D);
-  if (A.kip !== 'bedel') { if (U.agKiyasEski) for (const s of st.D.siparisler) if (s.onc0 != null) s.oncelik = s.onc0; return st; }
-  const l = st.D.siparisler.map(s => [s, agBedel(st.D, s, A).b]); const ort = agOrtanca(l.map(x => x[1])) || 1;
-  /* ağırlık bedelin kendisidir (1 birim = AG_BIRIM TL/sa): sipariş eklenip çıkınca ötekilerin ağırlığı kaymaz. Önceki planda ceza tavanını
-     aşmış siparişin bir saat daha gecikmesi yalnız tavan sonrası bedel kadar pahalıdır; motor bunu o siparişin ağırlığı olarak görür. */
-  const P = S.plan && S.plan.J ? S.plan.J : {};
-  for (const [s] of l) { const x = agBedel(st.D, s, A); const T = P[s.id] ? P[s.id].T : 0;
-    const asti = x.ceza > 0 && x.tavanTL != null && T > x.tavanTL / x.ceza; const be = asti ? x.sonra : x.b;
-    /* parçanın bedeli payını içerir: motor bir daha payla çarpmasın */
-    const k = 'b:' + s.id; PW[k] = Math.max(0.05, be / AG_BIRIM); s.oncelik = k; s.cezaGun = be * 24; s.pay = 1; }
-  return st;
-};
 
 /* ---------- Siparişler sayfası: ağırlık tablosu, müşteriler, ağırlık ayarı ---------- */
 function agTablo() {
@@ -14209,29 +14342,7 @@ if (TANIM.malzeme) {
     ['tedarikGun', 'Tedarik', x => x.tedarikGun != null ? x.tedarikGun + ' gün' : '—', 1]];
 }
 
-/* ---------- motora bağlanan ayarlar ----------
-   Operatör ücreti girilince tezgâh saat maliyetine operatör payıyla eklenir; fire payı malzeme ihtiyacını büyütür; fason taşıma adet fiyatına eklenir.
-   Ağırlıklar ve amaç işçiye st içinde gider: işçi motoru kendi PW sözlüğüyle başlar, sipariş ağırlıklarını oradan alamaz. */
-var TL_AMAC = { ac: false, birim: 5, risk: 0.25 };
-const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: 120 };
-/* bekleme maliyeti yalnız finansmandır (212 a): alan ve elleçleme genel giderde, bozulma riski hurda payında; hesap bu bileşenleri taşır ama kapalı tutar.
-   Finansman oranı ayrı değildir: Öncelik ve ağırlıktaki günlük oran kullanılır. */
-const WIP0 = { ac: true, vadeBas: 'bitis', alanAc: false, ellAc: false, alfaAc: false, alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };
-function wipAyar(D = S.D) { return { ...WIP0, ...((D && D.planTL && D.planTL.wip) || {}), alanAc: false, ellAc: false, alfaAc: false }; }
-function ymAyar(D = S.D) { return { ...YM0, ...((D && D.planTL) || {}) }; }
-const ymStEski = stOf;
-stOf = function (ek, gevset) {
-  const st = ymStEski(ek, gevset); const D = st.D; const Y = ymAyar(S.D);
-  if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opOran == null ? 1 : +m.opOran);
-  const mats = Object.fromEntries((D.malzemeler || []).map(m => [m.kod, m]));
-  for (const s of D.siparisler) for (const r of s.malzeme || []) { const m = mats[r.kod]; if (m && m.fire > 0) r.miktar = +r.miktar * (1 + m.fire / 100); }
-  for (const f of D.fasoncular || []) if (f.tasima > 0 && f.fiyat != null) f.fiyat = +f.fiyat + +f.tasima;
-  { const w = wipAyar(S.D); st.wipP = { ...w, fin: agAyar(S.D).fin }; }
-  st.PWek = {}; for (const s of D.siparisler) if (PW[s.oncelik] != null) st.PWek[s.oncelik] = PW[s.oncelik];
-  st.tlAmac = { ac: Y.amac === 'tl' && agAyar(S.D).kip === 'bedel', birim: typeof AG_BIRIM === 'number' ? AG_BIRIM : 5, risk: +Y.risk || 0 };
-  Object.assign(TL_AMAC, st.tlAmac);
-  return st;
-};
+/* Motora bağlanan ayarlar (TL_AMAC, YM0, WIP0, ymAyar, wipAyar ve st'ye yazılması) motor/durum.betik'tedir. */
 /* tek TL toplamı: gecikme saati × bedel (ağırlık birimi TL/sa), tampon ihlali × bedel × risk katsayısı, bilinen maliyet (işleme, ayar, fason, mesai) */
 function tlToplam(e) { return e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk + e.lex[4]; }
 /* müdürün fason kararı: kabul edilen iş yalnız talaş fasonunda, reddedilen yalnız tezgâhta yapılabilir */
@@ -14657,43 +14768,9 @@ document.addEventListener('submit', e => {
    istenirse miktarla orantılı ek gün); girilen termin kesinleşen süredir ve katsayının yerine geçer.
    Motor dosyası değişmez: termin ve tahmini geliş plana verilen veri kopyasında satın alma satırı olarak, fason dönüşü fason yerleştirmesinin
    üstünde uygulanır; aynı kod işçide de çalışır. */
-const TM0 = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik: 7 };
-const tmAyar = (D = S.D) => ({ ...TM0, ...((D && D.terminAyar) || {}) });
+/* Terminlerin plana giden veriye yazılması (TM0, tmAyar, tmSureMal, tmIhtiyac, tmUygula) motor/durum.betik'tedir. */
 const tmYaz = t => mpTarih(t).toISOString().slice(0, 16).replace('T', ' ');
-/* kullanıcı 13:17: varsayılan termin malzemeye ve fason firmasına göre değişir; malzeme ya da fasoncu kendi katsayısını taşırsa genel katsayının yerine o kullanılır */
-const tmKat = (x, k, genel) => x && x[k] != null && isFinite(+x[k]) ? +x[k] : genel;
-function tmSureMal(D, kod, q, A) { const m = (D.malzemeler || []).find(x => x.kod === kod); if (!m || m.tedarikGun == null) return null; return (+m.tedarikGun * tmKat(m, 'terminKat', A.katMal) + tmKat(m, 'terminEk', A.ekMal) * q / 100) * 24; }
 const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
-/* malzemenin ihtiyaç günü son plandan: onu kullanan ilk işin başlangıcı; plan yoksa bilinmez */
-function tmIhtiyac(D, p) {
-  const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
-  for (const id in p.ops) { const r = p.ops[id]; if (r.done || !isFinite(r.S)) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
-  for (const s of D.siparisler) { if (s.havuz || ilk[s.id] == null) continue; for (const r of s.malzeme || []) out[r.kod] = Math.min(out[r.kod] ?? Infinity, ilk[s.id]); }
-  return { kod: out, is: ilk };
-}
-/* plana giden veri: termini olmayan satın alma tahmini gelişle, siparişi verilmemiş eksik tahmini bir satırla girer.
-   İhtiyacına eşik kadar gün kalmış ve termini yoksa sipariş yok sayılır: geliş bugünden tam tedarik süresidir. */
-function tmUygula(st) {
-  const D = st.D, A = tmAyar(S.D), now = st.now, sinir = now + A.esik * 24; const ih = tmIhtiyac(D, S.plan); const uy = []; const kayit = [];
-  D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
-  for (const p of D.satinalma) { if (parseT(D, p.gelis) != null) continue;
-    const sure = tmSureMal(D, p.kod, +p.miktar || 0, A); if (sure == null) { p.tm = 'sure-yok'; continue; }
-    const h = ih.kod[p.kod]; const t0 = parseT(D, p.verildi) ?? now;
-    if (h != null && h <= sinir) { const g = now + sure; p.gelis = tmYaz(g); p.tm = 'yok'; p.yakin = 1; }
-    else { p.gelis = tmYaz(Math.max(now, t0 + sure)); p.tm = 'tahmini'; }
-    kayit.push(p); }
-  const ihtiyac = {}; for (const s of D.siparisler) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
-  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
-    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue; const sure = tmSureMal(D, kod, eks, A); if (sure == null) continue;
-    const g = now + sure; D.satinalma.push({ kod, miktar: eks, gelis: tmYaz(g), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok' });
-    if (ih.kod[kod] != null && ih.kod[kod] <= sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
-  for (const id in (S.plan && S.plan.ops) || {}) { const r = S.plan.ops[id]; if (!r.fas || r.done || r.S > sinir || r.S < now - 1e-9) continue; if ((D.fasonTermin || {})[id]) continue;
-    uy.push({ t: 'Termin yok', j: r.job, fason: id, txt: `${id}: fason ${fmtDT(D, r.S)} çıkıyor, dönüş termini girilmedi; dönüş katsayıyla tahmin edildi.` }); }
-  st.tmP = { katFas: A.katFas, ekFas: A.ekFas }; st.tmUyari = uy; st.ggP = +ymAyar(S.D).genelGider || 0;
-  return st;
-}
-const tmStEski = stOf;
-stOf = function (ek, gevset) { return tmUygula(tmStEski(ek, gevset)); };
 
 /* motora bağlanan kısım (ana iş parçacığı ve işçi): genel gider her tezgâh saatine yük olarak, termin uyarıları, fason dönüşü */
 function terminUygula() {
@@ -14918,16 +14995,13 @@ function tmPlanMaliyet() {
    kâr ucunda 0,1. Aynı çarpan ek mesai önerisinde önlenen gecikme bedeline uygulanır: motorun kendi başına termin ile maliyet arasında
    değiştirebileceği az (tezgâh seçimi, isteğe bağlı fason); asıl kaldıraç kapasite satın almaktır. Maliyet kalemleri hep gerçek TL'dir; ekranda gösterilen tutarlar çarpansız hesaplanır.
    Çubuğu müdür ve yönetici değiştirir (bedel ayarı gibi, 210 a); kâr ve tutarlar yalnız onlarda görünür (180 a). */
-const pdDenge = (D = S.D) => { const v = D && D.planDenge; return v == null || !isFinite(+v) ? 50 : Math.max(0, Math.min(100, +v)); };
-/* termin ucu 100 kata kadar çıkar: bedel modelinde bir saatlik gecikme bir ek mesai vardiyasından çok ucuzdur, kapasite ancak büyük çarpanla satın alınır */
-const pdKat = d => d <= 50 ? Math.pow(100, (50 - d) / 50) : Math.pow(10, (50 - d) / 50);
+/* pdDenge ve pdKat motor/durum.betik'tedir (çarpan st'ye orada yazılır). */
 const pdAd = d => d <= 10 ? 'Termin önce' : d < 40 ? 'Termine yakın' : d <= 60 ? 'Dengeli' : d < 90 ? 'Kâra yakın' : 'Kâr önce';
 const pdH = h => `<span class="pm-pd-hucre">${h}</span>`;
 const pdKatYaz = d => '×' + sayi(pdKat(d), pdKat(d) >= 10 ? 0 : 2);
 
 /* gecikme ve tampon ihlali bedeli çubuğun çarpanıyla, maliyet olduğu gibi; işçi kaynağına bu tanım gider */
 tlToplam = function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4]; };
-{ const pdSt = stOf; stOf = function (ek, gevset) { const st = pdSt(ek, gevset); st.tlAmac.kT = pdKat(pdDenge()); Object.assign(TL_AMAC, st.tlAmac); return st; }; }
 
 /* aynı veriyle birden çok plan: her biri kendi çarpanı ve termin kopyasıyla. ms 0 ise yalnız kural tabanlı ilk plan kurulur
    (aynı girdiye aynı sonuç); farkları karşılaştırmak için bu yeterlidir, iyileştirme rastgele seçimle birkaç bin TL oynar. */
@@ -15249,7 +15323,6 @@ function svOzetKart(v) {
    3) Plan girdilerinin bir kısmı plana bağlıdır (malzeme ihtiyaç günü, referans termin); ilk çözümden sonra girdiler değiştiyse bir tur daha çözülür. */
 const olayChgTL = () => S.param.chgTL != null ? +S.param.chgTL : 50;
 tlToplam = function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4] + (e.lex[2] || 0) * (TL_AMAC.chgTL || 0); };
-{ const oySt = stOf; stOf = function (ek, gevset) { const st = oySt(ek, gevset); st.tlAmac.chgTL = 0; Object.assign(TL_AMAC, st.tlAmac); return st; }; }
 /* olay için durum: değişiklik bedeli açık; motor tarafı TL_AMAC'ı st.tlAmac'tan alır */
 function olaySt() { const st = stOf(); st.tlAmac.chgTL = olayChgTL(); Object.assign(TL_AMAC, st.tlAmac); return st; }
 const olayBitir = () => { TL_AMAC.chgTL = 0; };
@@ -15342,14 +15415,12 @@ function ozetTazele() {
    3 b: ödeme vadesi terminde başlar: erken biten işin parası erken gelmez, termine kadar bekleyen mamulün finansmanı maliyettir.
    4 c: geliş tarihi belli olan malzeme sert kısıttır; tedariki olmayan ya da gelişi yalnız tahmin edilen malzemede iş başlar, uyarı verilir.
    5 b: genel gider batık maliyettir; plan amacına girmez, maliyet ve teklif raporunda kalır. */
-WIP0.vadeBas = 'termin';
 /* eski kayıtlarda varsayılanlar bir kez yeni kararlara taşınır; durum yüklendikten sonra. Taşıma yalnız bellekte yapılır, işareti çalışmadadır
    ve ilk kayıtla yazılır: kayıt ortaktır, açılışta yazmak aynı anda açan ikinci kişiye çakışma (409) verir. */
 setTimeout(() => {
   let k1650 = null; try { k1650 = localStorage.getItem(ANAHTAR + '-karar1650'); } catch (e) { /* yok */ }
-  if (!k1650 && S && S.D && !S.karar1650) { if (S.w.mat === 'uyari') S.w.mat = 'karma'; const w = S.D.planTL && S.D.planTL.wip; if (w && w.vadeBas === 'bitis') w.vadeBas = 'termin'; if (S.D.planDenge == null) S.D.planDenge = 25; S.karar1650 = 1; render(); }
+  if (!k1650 && karar1650Goc(S)) render();
 }, 0);
-{ const kgSt = stOf; stOf = function (ek, gevset) { const st = kgSt(ek, gevset); st.ggP = 0; if (S.param.tezgahTL === false) st.w.tezgahEski = true; st.w.matKarma = st.w.mat === 'karma'; if (st.w.matKarma) st.w.mat = 'sert'; return st; }; }
 /* ana iş parçacığı ve işçi: belli olmayan gelişte malzeme hazır sayılır (iş başlar), uyarı motorun malzeme uyarısıyla aynı metinle verilir */
 function matKarmaUygula() {
   const c0 = compile;
@@ -15485,7 +15556,6 @@ wipHesap = function wipHesap(plan, st, cx) {
   }
   return out;
 };
-{ const esSt = stOf; stOf = function (ek, gevset) { const st = esSt(ek, gevset); if (st.wipP) { const e = {}; for (const s of st.D.siparisler) if (s.erkenSevk) e[s.id] = 1; st.wipP.erken = e; } return st; }; }
 { const yb0 = ymBeklemeKart; ymBeklemeKart = function () {
   const D = S.D; const fg = agFiyatGorur(); const l = D.siparisler.filter(s => !s.havuz);
   const sat = s => `<label class="pm-es-sip"><input type="checkbox" data-chg="es-sip" data-v="${esc(s.id)}" ${s.erkenSevk ? 'checked' : ''} ${fg ? '' : 'disabled'}><span class="mono">${esc(s.id)}</span></label>`;
@@ -16113,9 +16183,7 @@ const ISCI_EK = [];
    eldeki sipariş defterinin hızıdır (VARSAYIM, uygulamada kapanmış siparişlerden okunmalı). */
 const YL_ACIL = 1e5;
 const YL_GUN = 364;
-function ylAyar(D = S.D) {
-  return (D.yillik = D.yillik || { tahmin: 'gecmis', buyume: 10, elle: {}, mesaiMaks: 15, gecTL: 0.43, stokTL: 3.9, yatirim: true, teslimAy: 3, hedef: null });
-}
+/* ylAyar ve motorun yıllık hedefi st'ye yazması motor/durum.betik'tedir. */
 /* dönemler: gün cinsinden [a, b) */
 function ylDonemler() {
   const l = []; for (let w = 0; w < 13; w++) l.push({ a: w * 7, b: w * 7 + 7, tur: 'hafta' });
@@ -16259,9 +16327,6 @@ function hedefUygula() {
 }
 hedefUygula();
 ISCI_EK.push(`${hedefUygula}\nhedefUygula();`);
-{ const s0 = stOf; stOf = function () { const st = s0.apply(this, arguments); const A = ylAyar(); const h = A.hedef;
-  if (h && h.hedef && h.hedef.length) { const isler = {}; for (const s of st.D.siparisler) { const f = h.aile[s.urun]; if (f) isler[s.id] = [f, +s.adet || 0]; } st.yHedef = { hedef: h.hedef, isler }; }
-  return st; }; }
 function ylPlanUretim(f, t, h0) { const p = S.plan; if (!p || !p.J) return null; const A = ylAyar(); const h = h0 || A.hedef || ylHedefKur(); if (!h) return null; let k = 0;
   for (const s of S.D.siparisler) { if (h.aile[s.urun] !== f) continue; const j = p.J[s.id]; if (j && j.C != null && j.C <= t) k += +s.adet || 0; } return k; }
 
@@ -16596,7 +16661,6 @@ document.addEventListener('change', e => {
    Yarı mamulün kendi termini ve geliri yoktur; gecikmesi montajı geciktirdiği ölçüde mamulün gecikmesine yansır. Sıralama için
    geri planlanmış bir iç termin alır: mamulün tampon termini eksi montaj adımından sonraki adımların en kısa süreleri. Bu iç termin aşılırsa tampon ihlali bedeli işler. */
 const MT_DERIN = 4;
-const mtKok = id => String(id).split('/')[0];
 function mtGerekenler(D) {
   const UR = Object.fromEntries(D.urunler.map(u => [u.id, u]));
   const kokAdet = {}, kokS = {};
@@ -16627,12 +16691,7 @@ function mtEsitle() {
   if (degisti) { D.siparisler = l; S.dataVer++; }
   return degisti;
 }
-function mtStUygula(st) {
-  const B = {};
-  for (const s of st.D.siparisler) if (s.ust) { const k = mtKok(s.id); B[k] = { ust: s.ust, adim: s.ustAdim, birim: +s.birim || 1, derin: (k.match(/-Y\d+/g) || []).length }; s.termin = null; }
-  if (Object.keys(B).length) st.montaj = B;
-  return st;
-}
+/* mtKok ve montaj bağının st'ye yazılması (mtStUygula) motor/durum.betik'tedir. */
 /* İşçide de çalışır: kendi kendine yeter. */
 function montajUygula() {
   if (self.__mtBag) return; self.__mtBag = 1;
@@ -16665,7 +16724,6 @@ function montajUygula() {
 }
 montajUygula();
 ISCI_EK.push(`${montajUygula}\nmontajUygula();`);
-{ const s0 = stOf; stOf = function () { return mtStUygula(s0.apply(this, arguments)); }; }
 { const r0 = render; render = function () { try { mtOrnek(); mtEsitle(); } catch (e) { /* eşitleme ekranı durdurmaz */ } return r0.apply(this, arguments); }; }
 { const c0 = coz; coz = function () { try { mtOrnek(); mtEsitle(); } catch (e) { } return c0.apply(this, arguments); }; }
 
@@ -16839,7 +16897,6 @@ function ayarOneKur() {
 }
 ayarOneKur();
 ISCI_EK.push(`${ayarOneKur}\nayarOneKur();`);
-{ const aoSt = stOf; stOf = function (ek, gevset) { const st = aoSt(ek, gevset); st.ayariOneAl = (S.param || {}).ayariOneAl === 'acik'; return st; }; }
 { const kb = KATALOG_DUZ.bolme; if (kb && kb.p) kb.p.push(['param', 'ayariOneAl', 'Ayarı parça gelmeden yap', 'sec', [['kapali', 'Kapalı'], ['acik', 'Açık']]]); }
 /* ---------- Örtüşmeyi otomatik açma (parti bölme planı adım 4) ----------
    Rotada "örtüşebilir" işaretli bağlar motorca örtüşmeye çevrilebilir; öteki bağlara (ısıl işlem, kalite onayı gibi) dokunulmaz.
@@ -18861,7 +18918,7 @@ function rrDenemedenKur(D0, onceki) {
   }
   const grupSira = [...new Set((D.tezgahlar || []).map(m => m.grup))];
   const stations = grupSira.map(g => { const ms = D.tezgahlar.filter(m => m.grup === g); const e = es('stations', g);
-    return Object.assign({}, e || { code: String(g).toLocaleUpperCase('tr-TR'), name: (typeof RT_GRUP_AD !== 'undefined' && RT_GRUP_AD[g]) || g, eff: 100, opPer: 1 }, { id: g, wcId: RR_WC, cost: +ms[0].ucret || 0, count: ms.length }); });
+    return Object.assign({}, e || { code: String(g).toLocaleUpperCase('tr-TR'), name: (typeof RT_GRUP_AD !== 'undefined' && RT_GRUP_AD[g]) || g, eff: 100, opPer: 1 }, { id: g, wcId: RR_WC, cost: rrSayi(ms[0].ucret), count: ms.length }); });
   const machines = (D.tezgahlar || []).map(m => Object.assign({}, es('machines', m.id) || { code: m.id, status: 'aktif', note: '' }, { id: m.id, name: m.ad, stationId: m.grup, plan: rrKopya(m) }));
   const people = (D.personel || []).map(p => Object.assign({}, es('people', p.id) || { code: p.id, cost: 0, active: true }, { id: p.id, name: p.ad, role: p.ayar ? 'Ayarcı' : 'Operatör', wcId: RR_WC, shiftId: p.vardiya, skills: (p.gruplar || []).slice(), plan: rrKopya(p) }));
   const bas = rrTarih(D.meta && D.meta.baslangic);
@@ -19731,9 +19788,7 @@ if (TMI_ICINDE) {
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
   };
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
-     yazılmaz. Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
-  const st0 = stOf;
-  stOf = function () { return simdiUygula(st0.apply(this, arguments), S); };
+     yazılmaz; st'ye stTamKur'da girer (motor/durum.betik, simdiUygula). Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
   const coz0 = coz;
   coz = function () {
     if (S && S.D && yetkili('plan.yaz') && !calisan) {
