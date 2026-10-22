@@ -58,7 +58,7 @@ const kuyrukKarti = (active, onPick, nextNo, aheadNo) => ([o, i]) => html`<butto
    Parça sayılınca baştan başlar; duraklatınca durur; süre aşılırsa halka sarıya döner ve gecikme yazar. */
 export function CycAnim({ o, el, late }) {
   const [d0] = useState(() => -(el() / 1000)); // yalnız ilk çizimde: sonradan değişirse CSS animasyonu kayar
-  const R = 158, C = 2 * Math.PI * R, st = { animationDuration: o.cycle + 's', animationDelay: d0 + 's' };
+  const R = 158, C = 2 * Math.PI * R, st = { animationDuration: o.cycle + 's', animationDelay: d0 + 's', '--adim': Math.max(1, Math.round(o.cycle * 2)) };
   return html`<${Fragment}>
     <div className=${'sweep ' + (late ? 'late' : '')} style=${st}></div>
     <svg className="cycsvg" viewBox="0 0 440 440" aria-hidden="true">

@@ -822,13 +822,15 @@ const ACTIONS: Record<string, Action> = {
     if (syncItems()) { toast(BELIRSIZ_MIKTAR); return; }
     draftReq.title = $("#r-title").value.trim(); draftReq.department = $("#r-dep").value.trim(); draftReq.requester = $("#r-req").value.trim();
     draftReq.needDate = $("#r-need").value; draftReq.notes = $("#r-notes").value.trim(); draftReq.priority = $("#r-prio").value as Priority;
-    draftReq.items = draftReq.items.filter(i => i.name);
+    // Boş satır kayıt geçene kadar taslakta kalır: ekrandaki satırlar taslağın sırasıyla bağlıdır, erken silinirse sonra yazılan kalem kaybolur.
+    const dolu = draftReq.items.filter(i => i.name);
     if (!draftReq.title) { toast("Talep başlığı girin."); $("#r-title").focus(); return; }
-    if (!draftReq.items.length) { toast("En az bir kalem girin."); return; }
-    if (draftReq.items.some(i => !isNum(i.qty) || i.qty <= 0)) { toast("Her kalem için sıfırdan büyük bir miktar girin."); return; }
+    if (!dolu.length) { toast("En az bir kalem girin."); return; }
+    if (dolu.some(i => !isNum(i.qty) || i.qty <= 0)) { toast("Her kalem için sıfırdan büyük bir miktar girin."); return; }
     // BR1: sunucu listede olmayan birimi reddeder; ret yeni talebi ekrandan siler, bu yüzden form kapanmadan söylenir.
     const birimRed = birimReddi(draftReq.department, (settings().departments || []).map(d => d.name));
     if (birimRed) { toast(birimRed); $("#r-dep").focus(); return; }
+    draftReq.items = dolu;
     const isNew = !S.requests[draftReq.id];
     linkItemsToCatalog(draftReq.items);
     saveRequest(draftReq, isNew ? `Talep oluşturuldu (${draftReq.items.length} kalem)` : "Talep bilgileri güncellendi");
