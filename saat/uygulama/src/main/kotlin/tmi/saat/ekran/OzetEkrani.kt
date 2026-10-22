@@ -14,15 +14,17 @@ import tmi.saat.cekirdek.DurumSuresi
 import tmi.saat.cekirdek.IstasyonDurumu
 import tmi.saat.cekirdek.VardiyaOzeti
 import tmi.saat.cekirdek.YoneticiOzeti
-import tmi.saat.cekirdek.Zaman
 
 // Yonetici ozeti: kapsamdaki istasyonlarin bugunku durumu tek ekranda. Yalniz okur; istasyon iş merkezi atanmis kiside
 // yalniz o merkezlerden gelir (sunucu suzer). OEE sunucuda yok, gosterilmez.
 @Composable
 fun OzetEkrani(durum: Yukleme<Pano>, geri: () -> Unit, uyarilariAc: () -> Unit, istasyonAc: (Int) -> Unit) {
-    val simdi = simdiMs()
+    val simdi = simdiDurumu()
     when (durum) {
-        is Yukleme.Bekliyor -> Ileti("Yükleniyor")
+        is Yukleme.Bekliyor -> ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            item { UstSatir("Yönetici özeti", geri) }
+            items(3) { IskeletSatiri() }
+        }
         is Yukleme.Hata -> Ileti(durum.ileti)
         is Yukleme.Geldi -> {
             val istasyonlar = durum.veri.istasyonlar
@@ -36,6 +38,7 @@ fun OzetEkrani(durum: Yukleme<Pano>, geri: () -> Unit, uyarilariAc: () -> Unit, 
             val bekleyen = durum.veri.uyarilar.count { it.tur == "kalite" || it.tur == "malzeme" || it.tur == "kalibrasyon" }
             ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 item { UstSatir("Yönetici özeti", geri) }
+                item { BayatSatiri(durum) }
                 item {
                     Satir(
                         renk = if (calisan > 0) Renkler.tamam else Renkler.bos,
@@ -69,11 +72,12 @@ fun OzetEkrani(durum: Yukleme<Pano>, geri: () -> Unit, uyarilariAc: () -> Unit, 
                 }
                 items(siraliDuranlar, key = { it.id }) { i ->
                     val d = IstasyonDurumu.coz(i.durum)
+                    val renk = if (d == IstasyonDurumu.BAKIM) Renkler.uyari else Renkler.hata
                     Satir(
-                        renk = if (d == IstasyonDurumu.BAKIM) Renkler.uyari else Renkler.hata,
+                        renk = renk,
                         baslik = i.ad,
                         alt = d?.etiket,
-                        sag = DurumSuresi.metin(Zaman.gecenSaniye(i.durumBaslangic, simdi)),
+                        sagIcerik = { Akan(simdi) { an -> GecenSure(i.durumBaslangic, an, renk) } },
                         onClick = { istasyonAc(i.id) },
                     )
                 }

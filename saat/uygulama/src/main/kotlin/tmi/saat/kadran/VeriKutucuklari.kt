@@ -48,12 +48,15 @@ abstract class TmiKutucugu : ComplicationDataSourceService() {
     protected val api by lazy { Api({ depo.sunucu }) { depo.belirtec } }
     protected val eslesti get() = depo.sunucu != null && depo.belirtec != null
 
-    // Kutucuga dokununca uygulama Tezgahlar 3B sayfasiyla acilir.
+    // Her kutucuk kendi sayfasini acar (86, 6.4). Istek kodu sayfaya gore ayridir: ayni kodla FLAG_UPDATE_CURRENT oteki
+    // kutucugun sayfasini ezerdi.
+    protected abstract val sayfa: String
+
     protected fun dokunus(): PendingIntent = PendingIntent.getActivity(
         this,
-        0,
+        sayfa.hashCode(),
         Intent(this, AnaEtkinlik::class.java)
-            .putExtra(AnaEtkinlik.ACILIS, AnaEtkinlik.VITRIN)
+            .putExtra(AnaEtkinlik.ACILIS, sayfa)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
@@ -84,8 +87,11 @@ abstract class TmiKutucugu : ComplicationDataSourceService() {
     }
 }
 
-// Acik emirlerin toplam ilerlemesi; adeti bilinen emir yoksa halka bos kalir (sifir uydurulmaz).
+// Acik emirlerin toplam ilerlemesi; adeti bilinen emir yoksa halka bos kalir (sifir uydurulmaz). Dokununca yonetici ozeti
+// (uretilen ve acik isler); saatte ayri emir listesi ekrani yok.
 class EmirHalkasi : TmiKutucugu() {
+    override val sayfa = AnaEtkinlik.OZET
+
     override suspend fun veri(request: ComplicationRequest): ComplicationData? {
         if (!eslesti) return NoDataComplicationData()
         val liste = istasyonlar() ?: return null
@@ -105,27 +111,79 @@ class EmirHalkasi : TmiKutucugu() {
     }
 }
 
-// Dikkat isteyen istasyonlar (ariza, durus, bakim, duraklama); yoksa calisan sayisi.
+// Dikkat isteyen istasyonlar (ariza, durus, bakim, duraklama); yoksa calisan sayisi. Altinda durum dagilimi cubugu
+// (gorsel): calisiyor / durus / ariza / bosta. Dokununca Istasyonlarim.
 class IstasyonOzeti : TmiKutucugu() {
+    override val sayfa = AnaEtkinlik.LISTE
+
     override suspend fun veri(request: ComplicationRequest): ComplicationData? {
-        if (!eslesti) return uzun("TMI", ESLESMEDI)
+        if (!eslesti) return uzun("TMI", ESLESMEDI, null)
         val liste = istasyonlar() ?: return null
         val (baslik, metin) = Kadran.ozet(liste.map { it.ad to it.durum })
-        return uzun(baslik, metin)
+        return uzun(baslik, metin, Kadran.dagilim(liste.map { it.durum }))
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.LONG_TEXT) uzun("2 istasyon dikkat", "İstasyon 1 arıza, İstasyon 2 durdu") else null
+        if (type == ComplicationType.LONG_TEXT) uzun("2 istasyon dikkat", "İstasyon 1 arıza, İstasyon 2 durdu", intArrayOf(5, 1, 1, 1)) else null
 
-    private fun uzun(baslik: String, m: String): ComplicationData =
+    private fun uzun(baslik: String, m: String, dagilim: IntArray?): ComplicationData =
         LongTextComplicationData.Builder(metin(m), metin("$baslik: $m"))
             .setTitle(metin(baslik))
+            .apply { dagilim?.let { setSmallImage(SmallImage.Builder(Icon.createWithBitmap(cubuk(it)), SmallImageType.PHOTO).build()) } }
+            .setTapAction(dokunus())
+            .build()
+
+    // Kadrandaki yer 240 x 8; iki kat cozunurlukte cizilir. Renkler uygulamadaki durum renkleriyle ayni.
+    private fun cubuk(sayi: IntArray): Bitmap {
+        val g = 480
+        val y = 16
+        val resim = Bitmap.createBitmap(g, y, Bitmap.Config.ARGB_8888)
+        val tuval = Canvas(resim)
+        val toplam = sayi.sum().coerceAtLeast(1)
+        val boya = Paint(Paint.ANTI_ALIAS_FLAG)
+        var x = 0f
+        sayi.forEachIndexed { k, n ->
+            if (n == 0) return@forEachIndexed
+            val genislik = g * n.toFloat() / toplam
+            boya.color = DAGILIM_RENKLERI[k]
+            tuval.drawRect(x, 0f, x + genislik - 2f, y.toFloat(), boya)
+            x += genislik
+        }
+        return resim
+    }
+}
+
+// calisiyor, durus, ariza, bosta (Renkler.tamam, uyari, hata, sonuk).
+private val DAGILIM_RENKLERI = intArrayOf(0xFF3CF0A8.toInt(), 0xFFFFA94D.toInt(), 0xFFFF5C7A.toInt(), 0xFF5D6675.toInt())
+
+// Acik uyari sayisi (kadranin sol tusu). Deger sayi, en buyuk deger en az 1: kadran "> 0" ile rengi secer. Dokununca Uyarilar.
+class UyariSayisi : TmiKutucugu() {
+    override val sayfa = AnaEtkinlik.UYARILAR
+
+    override suspend fun veri(request: ComplicationRequest): ComplicationData? {
+        if (!eslesti) return NoDataComplicationData()
+        val sayi = try {
+            api.uyarilar().size
+        } catch (_: ApiHatasi) {
+            return null
+        }
+        return sayac(sayi)
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.RANGED_VALUE) sayac(2) else null
+
+    private fun sayac(sayi: Int): ComplicationData =
+        RangedValueComplicationData.Builder(sayi.toFloat(), 0f, maxOf(1, sayi).toFloat(), metin("Açık uyarı $sayi"))
+            .setText(metin(sayi.toString()))
             .setTapAction(dokunus())
             .build()
 }
 
-// Sistem Ayarlari'ndaki giris logosu; logo yoksa ya da eslesme yoksa "TMI" yazisi.
+// Sistem Ayarlari'ndaki giris logosu; logo yoksa ya da eslesme yoksa "TMI" yazisi. Dokununca Tezgahlar 3B.
 class KurumLogosu : TmiKutucugu() {
+    override val sayfa = AnaEtkinlik.VITRIN
+
     override suspend fun veri(request: ComplicationRequest): ComplicationData? {
         if (!eslesti) return yazi()
         val dosya = File(cacheDir, "kurum-logosu")

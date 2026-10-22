@@ -1,6 +1,5 @@
 package tmi.saat.ekran
 
-import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -24,12 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Text
 import tmi.saat.Api
+import tmi.saat.KareDeposu
+import tmi.saat.getir
+import tmi.saat.kareCoz
 import tmi.saat.ApiHatasi
 import tmi.saat.Onizleme
 import tmi.saat.Renkler
@@ -37,7 +39,8 @@ import tmi.saat.cekirdek.Cerceve
 import tmi.saat.cekirdek.OnizlemeKaresi
 
 // Tezgahta islenen parcanin 3B onizlemesi: Cizim Merkezi'nin yayindaki modelden urettigi aci kareleri (PNG). Saat 3B
-// cozmez; tac (ya da dokunma) bir sonraki aciya gecer. Kareler yalniz bu ekran acilinca iner; bellekte en cok uc kare kalir.
+// cozmez; tac (ya da dokunma) bir sonraki aciya gecer. Kareler yalniz bu ekran acilinca iner ve saatin onbelleginde kalir;
+// bellekte en cok uc cozulmus kare tutulur. Gosterilen karenin iki komsusu arkadan hazirlanir: taci cevirince bekleme olmaz.
 @Composable
 fun ModelEkrani(api: Api, emirId: Int, oturumBitti: () -> Unit, geri: () -> Unit) {
     var durum by remember(emirId) { mutableStateOf<Yukleme<Onizleme?>>(Yukleme.Bekliyor) }
@@ -65,21 +68,29 @@ fun ModelEkrani(api: Api, emirId: Int, oturumBitti: () -> Unit, geri: () -> Unit
 @Composable
 private fun Kareler(api: Api, emirId: Int, o: Onizleme, oturumBitti: () -> Unit, geri: () -> Unit) {
     val onbellek = remember(o.revizyonId) { LruCache<Int, ImageBitmap>(3) }
+    val depo = KareDeposu(LocalContext.current)
+    val enCok = ekranPikseli()
+    val hazirla: suspend (Int) -> ImageBitmap? = { k ->
+        onbellek.get(k) ?: kareCoz(depo.getir(o.revizyonId, k) { api.onizlemeKaresi(emirId, k) }, enCok)?.also { onbellek.put(k, it) }
+    }
     var kare by remember(o.revizyonId) { mutableStateOf(o.kareler.first()) }
     var resim by remember { mutableStateOf<ImageBitmap?>(null) }
     var hata by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(o.revizyonId, kare) {
         hata = null
-        resim = onbellek.get(kare) ?: try {
-            val b = api.onizlemeKaresi(emirId, kare)
-            BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap()?.also { onbellek.put(kare, it) }
-                ?: run { hata = "Kare okunamadı"; null }
+        resim = try {
+            hazirla(kare) ?: run { hata = "Kare okunamadı"; null }
         } catch (e: ApiHatasi.OturumYok) {
             oturumBitti()
             return@LaunchedEffect
         } catch (e: ApiHatasi) {
             hata = e.message
             null
+        }
+        // Komsu acilar: hata gosterilmez, sirasi gelince yeniden denenir.
+        for (yon in listOf(1, -1)) {
+            val komsu = OnizlemeKaresi.sonraki(o.kareler, kare, yon) ?: continue
+            try { hazirla(komsu) } catch (e: ApiHatasi) { }
         }
     }
     val cevir = { yon: Int -> OnizlemeKaresi.sonraki(o.kareler, kare, yon)?.let { kare = it } }

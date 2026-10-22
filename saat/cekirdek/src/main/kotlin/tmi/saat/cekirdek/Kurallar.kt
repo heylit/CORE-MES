@@ -268,6 +268,22 @@ object Kadran {
         return "${dikkat.size} istasyon dikkat" to metin
     }
 
+    // Kadranin durum cubugu: calisiyor / durus (durdu, duraklama, bakim) / ariza / bosta (bekliyor, bos, bilinmeyen) sayilari.
+    // Istasyon yoksa null: bos cubuk "hepsi bosta" gibi okunmasin.
+    fun dagilim(durumlar: List<String>): IntArray? {
+        if (durumlar.isEmpty()) return null
+        val sayi = IntArray(4)
+        for (d in durumlar) {
+            sayi[when (IstasyonDurumu.coz(d)) {
+                IstasyonDurumu.CALISIYOR -> 0
+                IstasyonDurumu.DURDU, IstasyonDurumu.DURAKLI, IstasyonDurumu.BAKIM -> 1
+                IstasyonDurumu.ARIZA -> 2
+                IstasyonDurumu.BEKLIYOR, IstasyonDurumu.BOS, null -> 3
+            }]++
+        }
+        return sayi
+    }
+
     fun toplamOran(adetler: List<Pair<Int?, Int>>): Float? {
         val bilinen = adetler.filter { it.first != null }
         val hedef = bilinen.sumOf { it.second }

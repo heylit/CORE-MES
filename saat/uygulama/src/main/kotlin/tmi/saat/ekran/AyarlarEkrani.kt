@@ -21,7 +21,7 @@ import tmi.saat.cekirdek.Titresim
 data class SaatAyarlari(val eldiven: Boolean, val flas: Boolean, val sessiz: Boolean)
 
 @Composable
-fun AyarlarEkrani(ayar: SaatAyarlari, degistir: (SaatAyarlari) -> Unit, geri: () -> Unit) {
+fun AyarlarEkrani(ayar: SaatAyarlari, degistir: (SaatAyarlari) -> Unit, geri: () -> Unit, adresDegistir: () -> Unit) {
     ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         item { UstSatir("Saat ayarları", geri) }
         item { Anahtar("Eldiven modu", "büyük dokunma alanı", ayar.eldiven) { degistir(ayar.copy(eldiven = it)) } }
@@ -34,6 +34,8 @@ fun AyarlarEkrani(ayar: SaatAyarlari, degistir: (SaatAyarlari) -> Unit, geri: ()
                 Desen(desen, Renkler.vurgu)
             }
         }
+        // Sunucu adresi seyrek degisir; ana menuden buraya alindi (82 a).
+        item { Satir(renk = Renkler.bos, baslik = "Sunucu adresi", alt = "değişince eşleşme yenilenir", onClick = adresDegistir) }
     }
 }
 

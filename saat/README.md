@@ -97,9 +97,19 @@ Sunucu ve saat birlikte guncellenir: uyari cevabinda istasyon artik bos olabilir
 ## TMI kadrani (Watch Face Format, soru 375 a)
 
 Wear OS 6 (Android 16) kodla cizilen eski tip kadrani reddeder; kadran bu yuzden ayri ve kodsuz bir APK'dir (`kadran/`,
-`res/raw/watchface.xml`). Kadran veri cekemez: acik emir halkasi, dikkat isteyen istasyonlar ve kurum logosu saat uygulamasinin
-veri kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`) gelir. Kutucuga dokununca uygulama Tezgahlar 3B ile acilir.
-Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); kisik modda kadran yalniz saat ve tarihi gosterir.
+`res/raw/watchface.xml`). Kadran veri cekemez: veri saat uygulamasinin kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`)
+gelir. Her kutucuk kendi sayfasini acar:
+
+| Yer | Kutucuk | Dokununca |
+|---|---|---|
+| Dis halka (yalniz halka bandi dokunulur) | TMI Açık emirler | Yonetici ozeti |
+| Ust | TMI Logo | Tezgahlar 3B |
+| Sol tus (saat 9) | TMI Uyarı sayısı: sayi, varsa kirmizi, yoksa gri | Uyarilar |
+| Alt kutu | TMI İstasyonlar: dikkat isteyenler ve durum cubugu | Istasyonlarim |
+
+Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); uygulama acikken uyari sayisi degisince kadrana hemen bildirir.
+Kisik modda kadran yalniz saat, tarih ve uyari sayisini tek renk gosterir. Vurgu rengi (sari, yesil, mavi) kadran duzenleme
+ekranindan secilir. Yeni tus eklenince kadranda "Duzenle" > kutucuklar ile secilmesi gerekebilir.
 
 ```
 gradle -PimzaDeposu=C:\imza\tmi-saat.jks :uygulama:assembleRelease :kadran:assembleRelease

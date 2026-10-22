@@ -1,6 +1,5 @@
 package tmi.saat.ekran
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -40,6 +38,8 @@ import tmi.saat.Api
 import tmi.saat.ApiHatasi
 import tmi.saat.Istasyon
 import tmi.saat.KareDeposu
+import tmi.saat.getir
+import tmi.saat.kareCoz
 import tmi.saat.Onizleme
 import tmi.saat.Pano
 import tmi.saat.Renkler
@@ -162,6 +162,7 @@ private fun IlkKare(
     yok: () -> Unit = {},
 ) {
     val depo = KareDeposu(LocalContext.current)
+    val enCok = ekranPikseli()
     var durum by remember(anahtar) { mutableStateOf<KareDurumu>(KareDurumu.Bekliyor) }
     LaunchedEffect(anahtar) {
         durum = try {
@@ -169,8 +170,8 @@ private fun IlkKare(
             val kare = o?.kareler?.firstOrNull()
             if (o == null || kare == null) KareDurumu.Yok(yokMetni).also { yok() }
             else {
-                val bayt = depo.oku(o.revizyonId, kare) ?: kareOku(kare).also { depo.yaz(o.revizyonId, kare, it) }
-                BitmapFactory.decodeByteArray(bayt, 0, bayt.size)?.asImageBitmap()?.let { KareDurumu.Var(it) } ?: KareDurumu.Yok("Kare okunamadı")
+                val bayt = depo.getir(o.revizyonId, kare) { kareOku(kare) }
+                kareCoz(bayt, enCok)?.let { KareDurumu.Var(it) } ?: KareDurumu.Yok("Kare okunamadı")
             }
         } catch (e: ApiHatasi.OturumYok) {
             oturumBitti()

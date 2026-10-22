@@ -30,13 +30,12 @@ fun SurelerEkrani(api: Api, istasyon: Istasyon?, emirId: Int, oturumBitti: () ->
     val durumu = istasyon?.let { IstasyonDurumu.coz(it.durum) }
     val renk = Renkler.durum(durumu)
     val durum by periyodikOku(oturumBitti, emirId) { api.emir(emirId) }
-    val simdi = simdiMs()
+    val simdi = simdiDurumu()
     when (val d = durum) {
         is Yukleme.Bekliyor -> Ileti("Yükleniyor")
         is Yukleme.Hata -> Ileti(d.ileti)
         is Yukleme.Geldi -> {
             val e = d.veri
-            val s = sayimlar(e, d.alindiMs, simdi)
             val girisYok = e.sonUretimAni == null
             val birim = e.birimSaniye
             val kalanParca = e.saglam?.let { maxOf(0, e.hedef - it) }
@@ -47,14 +46,22 @@ fun SurelerEkrani(api: Api, istasyon: Istasyon?, emirId: Int, oturumBitti: () ->
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 UstSatir("${istasyon?.ad ?: e.istasyonAd} · Süreler", geri)
-                Halka(
-                    oran = if (birim == null || s.parca == null) null else s.parca.toFloat() / birim,
-                    renk = renk,
-                    buyuk = if (birim == null || girisYok) "-" else GeriSayim.metin(s.parca),
-                    kucuk = if (birim == null) "süre girilmemiş" else if (girisYok) "ilk üretim girilince başlar" else "bu parça · birim ${GeriSayim.metin(birim.toLong())}",
-                    modifier = Modifier.fillMaxWidth(0.46f / 0.73f),
-                )
-                SureSatiri("Emir bitişine ", if (birim == null) "hesaplanamaz" else if (girisYok) "ilk girişten sonra" else if (s.emir == 0L) "süre doldu" else GeriSayim.metin(s.emir))
+                BayatSatiri(d)
+                // Saniyelik sayac yalniz halkayi ve emir satirini yeniden kurar.
+                Akan(simdi) { an ->
+                    val s = sayimlar(e, d.alindiMs, an)
+                    Halka(
+                        oran = if (birim == null || s.parca == null) null else s.parca.toFloat() / birim,
+                        renk = renk,
+                        buyuk = if (birim == null || girisYok) "-" else GeriSayim.metin(s.parca),
+                        kucuk = if (birim == null) "süre girilmemiş" else if (girisYok) "ilk üretim girilince başlar" else "bu parça · birim ${GeriSayim.metin(birim.toLong())}",
+                        modifier = Modifier.fillMaxWidth(0.46f / 0.73f),
+                    )
+                }
+                Akan(simdi) { an ->
+                    val s = sayimlar(e, d.alindiMs, an)
+                    SureSatiri("Emir bitişine ", if (birim == null) "hesaplanamaz" else if (girisYok) "ilk girişten sonra" else if (s.emir == 0L) "süre doldu" else GeriSayim.metin(s.emir))
+                }
                 Text(
                     if (birim == null) "rota adımına birim süre girilmeli"
                     else "${kalanParca ?: "-"} parça kaldı" + if (durumu != IstasyonDurumu.CALISIYOR) " · ${durumAdi.lowercase()}, süre ilerlemiyor" else "",

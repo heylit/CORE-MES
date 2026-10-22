@@ -245,4 +245,12 @@ class KurallarTest {
         assertEquals("bilinmeyen durum dikkat sayilmaz", "İstasyonlar" to "0/1 çalışıyor", Kadran.ozet(listOf("A" to "yeni-durum")))
         assertEquals("İstasyonlar" to "İstasyon yok", Kadran.ozet(emptyList()))
     }
+
+    @Test
+    fun `kadran durum cubugu dort gruba ayirir, istasyon yoksa cizilmez`() {
+        val durumlar = listOf("calisiyor", "calisiyor", "durdu", "durakli", "bakim", "ariza", "bekliyor", "bos", "yeni-durum")
+        assertArrayEquals(intArrayOf(2, 3, 1, 3), Kadran.dagilim(durumlar))
+        assertArrayEquals(intArrayOf(0, 0, 1, 0), Kadran.dagilim(listOf("ariza")))
+        assertNull(Kadran.dagilim(emptyList()))
+    }
 }

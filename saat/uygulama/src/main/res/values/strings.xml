@@ -6,4 +6,5 @@
     <string name="kutucuk_emirler">TMI Açık emirler</string>
     <string name="kutucuk_istasyonlar">TMI İstasyonlar</string>
     <string name="kutucuk_logo">TMI Logo</string>
+    <string name="kutucuk_uyarilar">TMI Uyarı sayısı</string>
 </resources>

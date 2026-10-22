@@ -18,7 +18,10 @@ import tmi.saat.cekirdek.VardiyaOzeti
 @Composable
 fun VardiyaEkrani(durum: Yukleme<Pano>, geri: () -> Unit) {
     when (durum) {
-        is Yukleme.Bekliyor -> Ileti("Yükleniyor")
+        is Yukleme.Bekliyor -> ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            item { UstSatir("Vardiya devri", geri) }
+            items(3) { IskeletSatiri() }
+        }
         is Yukleme.Hata -> Ileti(durum.ileti)
         is Yukleme.Geldi -> {
             val istasyonlar = durum.veri.istasyonlar
@@ -29,6 +32,7 @@ fun VardiyaEkrani(durum: Yukleme<Pano>, geri: () -> Unit) {
             val nedenler = durum.veri.uyarilar.filter { it.tur == "durus" || it.tur == "ariza" }.associateBy { it.istasyonId }
             ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 item { UstSatir("Vardiya devri", geri) }
+                item { BayatSatiri(durum) }
                 item { Satir(renk = if (duran.isEmpty()) Renkler.tamam else Renkler.hata, baslik = "${duran.size} istasyon duruşta", onClick = {}) }
                 item { Satir(renk = Renkler.vurgu, baslik = "$acik açık iş emri", onClick = {}) }
                 item {

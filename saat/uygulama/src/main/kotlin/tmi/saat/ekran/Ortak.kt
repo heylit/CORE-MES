@@ -17,11 +17,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +37,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -44,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Text
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import tmi.saat.ApiHatasi
 import tmi.saat.Renkler
 
@@ -53,7 +65,8 @@ const val SORGU_ARALIGI_MS = 30_000L
 
 sealed interface Yukleme<out T> {
     data object Bekliyor : Yukleme<Nothing>
-    data class Geldi<T>(val veri: T, val alindiMs: Long) : Yukleme<T>
+    // bayatMs: son okuma basarisizsa son basarili okumanin ani; ekranda son veri "son guncelleme" satiriyla kalir.
+    data class Geldi<T>(val veri: T, val alindiMs: Long, val bayatMs: Long? = null) : Yukleme<T>
     data class Hata(val ileti: String) : Yukleme<Nothing>
 }
 
@@ -62,15 +75,28 @@ sealed interface Yukleme<out T> {
 fun <T> periyodikOku(oturumBitti: () -> Unit, anahtar: Any = Unit, oku: suspend () -> T): MutableState<Yukleme<T>> {
     val durum = remember(anahtar) { mutableStateOf<Yukleme<T>>(Yukleme.Bekliyor) }
     LaunchedEffect(anahtar) {
+        var sonBasari = 0L
         while (true) {
             try {
-                durum.value = Yukleme.Geldi(oku(), System.currentTimeMillis())
+                // Ag ve JSON ayristirma ana is parcaciginda kosmaz; cizim kaydirmada takilmaz.
+                val yeni = withContext(Dispatchers.IO) { oku() }
+                sonBasari = System.currentTimeMillis()
+                val eski = durum.value
+                // Degismeyen veri durumu yazmaz: her 30 sn'de butun ekran yeniden kurulmaz. Eski alindiMs kalir; geri sayimlar
+                // o verinin sunucu anina gore akar.
+                durum.value = when {
+                    eski is Yukleme.Geldi && eski.veri == yeni -> if (eski.bayatMs == null) eski else eski.copy(bayatMs = null)
+                    else -> Yukleme.Geldi(yeni, sonBasari)
+                }
             } catch (e: ApiHatasi.OturumYok) {
                 oturumBitti()
                 return@LaunchedEffect
             } catch (e: ApiHatasi) {
                 // Son gelen veri ekranda kalir; yalniz hic veri yoksa hata gosterilir.
-                if (durum.value !is Yukleme.Geldi) durum.value = Yukleme.Hata(e.message ?: "Hata")
+                when (val eski = durum.value) {
+                    is Yukleme.Geldi -> if (eski.bayatMs == null) durum.value = eski.copy(bayatMs = maxOf(sonBasari, eski.alindiMs))
+                    else -> durum.value = Yukleme.Hata(e.message ?: "Hata")
+                }
             }
             delay(SORGU_ARALIGI_MS)
         }
@@ -82,6 +108,64 @@ fun <T> periyodikOku(oturumBitti: () -> Unit, anahtar: Any = Unit, oku: suspend 
 // Doner cerceve bu ekranlarda baska ise (komsu istasyon, aci) bagli kalir.
 @Composable
 fun Modifier.kaydirilir(): Modifier = verticalScroll(rememberScrollState()).padding(bottom = 36.dp)
+
+// Saat ekraninin uzun kenari (piksel): onizleme kareleri bu boya kadar kucultulerek cozulur.
+@Composable
+fun ekranPikseli(): Int {
+    val ayar = LocalConfiguration.current
+    return with(LocalDensity.current) { maxOf(ayar.screenWidthDp, ayar.screenHeightDp).dp.roundToPx() }
+}
+
+// Saniyede bir ilerleyen an. Deger State olarak gecirilir ve yalniz onu gosteren kucuk bilesende okunur (Akan): sayac
+// butun ekrani degil, yalniz sure metnini yeniden kurar.
+@Composable
+fun simdiDurumu(): State<Long> {
+    val simdi = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(1_000); simdi.longValue = System.currentTimeMillis() } }
+    return simdi
+}
+
+@Composable
+fun Akan(simdi: State<Long>, icerik: @Composable (Long) -> Unit) {
+    icerik(simdi.value)
+}
+
+// Yuklenirken bos donen gosterge yerine satir iskeleti: ekran ne gelecegini gosterir, yer degistirmez.
+@Composable
+fun IskeletSatiri() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(if (LocalEldiven.current) 52.dp else 42.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Renkler.panel.copy(alpha = 0.6f)),
+    )
+}
+
+// Ag hatasinda son veri kalir; bu satir verinin ne zamandan oldugunu soyler.
+@Composable
+fun BayatSatiri(durum: Yukleme<*>) {
+    val ms = (durum as? Yukleme.Geldi<*>)?.bayatMs ?: return
+    val z = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+    Text("son güncelleme %02d:%02d".format(z.hour, z.minute), fontSize = 11.sp, color = Renkler.uyari, textAlign = TextAlign.Center)
+}
+
+// Ekran ilk acilinca satirlar kisa sirayla belirir (150 ms); sonra kaydirmada yeniden oynamaz. Saydamlik cizim asamasinda okunur.
+@Composable
+fun rememberAcilisAni(): Long = remember { System.currentTimeMillis() }
+
+@Composable
+fun Modifier.belirerek(acilis: Long, sira: Int): Modifier {
+    val oynar = remember { System.currentTimeMillis() - acilis < 400 && sira < 8 }
+    val saydamlik = remember { Animatable(if (oynar) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (oynar) {
+            delay(sira * 40L)
+            saydamlik.animateTo(1f, tween(150))
+        }
+    }
+    return graphicsLayer { alpha = saydamlik.value }
+}
 
 @Composable
 fun Ileti(metin: String) {
@@ -141,25 +225,33 @@ fun Satir(
     alt: String? = null,
     sag: String? = null,
     rozet: String? = null,
+    modifier: Modifier = Modifier,
+    sagIcerik: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val eldiven = LocalEldiven.current
+    val dokunus = LocalHapticFeedback.current
+    val nokta by animateColorAsState(renk, tween(300), label = "durum rengi")
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(50))
             .background(Renkler.panel)
-            .clickable(onClick = onClick)
+            .clickable {
+                dokunus.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
             .padding(horizontal = 12.dp, vertical = if (eldiven) 13.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(Modifier.size(10.dp).shadow(6.dp, CircleShape, ambientColor = renk, spotColor = renk).background(renk, CircleShape))
+        Box(Modifier.size(10.dp).shadow(6.dp, CircleShape, ambientColor = nokta, spotColor = nokta).background(nokta, CircleShape))
         Column(Modifier.weight(1f)) {
             Text(baslik, fontWeight = FontWeight.SemiBold, fontSize = if (eldiven) 16.sp else 14.sp, color = Renkler.yazi, maxLines = 1)
             alt?.let { Text(it, fontSize = if (eldiven) 13.sp else 11.sp, color = Renkler.soluk, maxLines = 2) }
         }
         sag?.let { Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = renk) }
+        sagIcerik?.invoke()
         rozet?.let {
             Text(
                 it,
@@ -178,13 +270,16 @@ fun Satir(
 // oran null ise yay cizilmez: bos halka "hic yapilmadi" gibi okunur.
 @Composable
 fun Halka(oran: Float?, renk: Color, buyuk: String, kucuk: String, modifier: Modifier = Modifier) {
+    // Deger ve renk degisince 300 ms yumusak gecis; oran null ise yay hic cizilmez (gecis de yok).
+    val yay by animateFloatAsState((oran ?: 0f).coerceIn(0f, 1f), tween(300), label = "halka")
+    val yayRengi by animateColorAsState(renk, tween(300), label = "halka rengi")
     Box(modifier.aspectRatio(1f), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val kalinlik = size.minDimension * 0.08f
             val ic = Size(size.width - kalinlik, size.height - kalinlik)
             val yer = Offset(kalinlik / 2, kalinlik / 2)
             drawArc(Renkler.halkaZemini, 0f, 360f, false, yer, ic, style = Stroke(kalinlik))
-            oran?.let { drawArc(renk, -90f, 360f * it.coerceIn(0f, 1f), false, yer, ic, style = Stroke(kalinlik, cap = StrokeCap.Round)) }
+            if (oran != null) drawArc(yayRengi, -90f, 360f * yay, false, yer, ic, style = Stroke(kalinlik, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(buyuk, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 26.sp, color = Renkler.yazi, maxLines = 1)
@@ -206,17 +301,22 @@ fun Desen(desen: LongArray, renk: Color = Renkler.yazi) {
 
 // Sari ana dugme ve koyu ikincil dugme (ornekteki .d ve .d.ana).
 @Composable
-fun Dugme(metin: String, ana: Boolean = false, onClick: () -> Unit) {
+fun Dugme(metin: String, ana: Boolean = false, buyuk: Boolean = false, onClick: () -> Unit) {
     val eldiven = LocalEldiven.current
+    val dokunus = LocalHapticFeedback.current
     Text(
         metin,
-        fontSize = 12.sp,
+        fontSize = if (buyuk) 15.sp else 12.sp,
         fontWeight = FontWeight.SemiBold,
         color = if (ana) Renkler.vurguUstu else Renkler.yazi,
+        textAlign = TextAlign.Center,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(if (ana) Renkler.vurgu else Renkler.panel)
-            .clickable(onClick = onClick)
-            .padding(horizontal = if (eldiven) 16.dp else 11.dp, vertical = if (eldiven) 10.dp else 7.dp),
+            .clickable {
+                dokunus.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .padding(horizontal = if (eldiven || buyuk) 16.dp else 11.dp, vertical = if (eldiven || buyuk) 12.dp else 7.dp),
     )
 }
