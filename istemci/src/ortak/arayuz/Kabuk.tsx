@@ -12,7 +12,7 @@ import { rehberMaddeleri, sayfaRehberleri, type SayfaRehberi } from '../rota/reh
 import { GENEL_KONULAR } from '../rota/rehber-genel.ts';
 import { gorunenUstEylemler, type UstEylem } from '../rota/ust-eylemler.ts';
 import { rotaninSayfasi } from '../rota/sayfa.ts';
-import { SayfaKomutBaglami, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
+import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
 import { usePerformans } from '../veri/gorunum.ts';
@@ -177,6 +177,8 @@ export function Kabuk({
     });
   }, []);
   const sayfaKomutlari = useMemo(() => [...sayfaKomutKayitlari.values()].flat(), [sayfaKomutKayitlari]);
+  // Değer alan komutu öneren sayfa paletin sorgusunu buradan dinler (sayfa-komutlari.ts).
+  const [paletSorgusu] = useState(paletSorgusuKur);
   const tumKutu = useKatman<HTMLDivElement>(tumuAcik, () => tumuYaz(false));
   const [yardimAcik, yardimYaz] = useState(false);
   const [acmaIstekleri, acmaIstekleriYaz] = useState<Readonly<Record<string, number>>>({});
@@ -301,6 +303,7 @@ export function Kabuk({
             aramaSayfalari={aramaSayfalari}
             komutlar={gorunenKomutListesi}
             sayfaKomutlari={kapaliAdres ? SAYFA_KOMUTSUZ : sayfaKomutlari}
+            sorguDegisti={paletSorgusu.yaz}
           />
           <IsPaneli gruplar={olayGruplari} />
           {gorunenler.filter((e) => e.yer !== 'sol').map((e) => (e.hesapMaddesi === undefined
@@ -367,7 +370,9 @@ export function Kabuk({
             ? <DurumKutusu durum="bos" mesaj="Bu sayfa şu an kapalı" />
             : (
               <CerceveSayacBaglami.Provider value={cerceveSayacYaz}>
-                <SayfaKomutBaglami.Provider value={sayfaKomutYaz}>{children}</SayfaKomutBaglami.Provider>
+                <SayfaKomutBaglami.Provider value={sayfaKomutYaz}>
+                  <PaletSorgusuBaglami.Provider value={paletSorgusu}>{children}</PaletSorgusuBaglami.Provider>
+                </SayfaKomutBaglami.Provider>
               </CerceveSayacBaglami.Provider>
             )}
         </main>

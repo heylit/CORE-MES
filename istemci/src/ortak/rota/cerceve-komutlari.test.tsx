@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { YalitilmisCerceve } from '../arayuz/YalitilmisCerceve.tsx';
 import { useYalitilmisGorunum } from './cerceve-gorunumu.ts';
 import {
-  CERCEVE_KANALI, CERCEVE_SURUMU, KOMUT_ANAHTAR_UZUNLUGU, KOMUT_SINIRI, cerceveKomutlariMi, cerceveKoprusuKur,
+  CERCEVE_KANALI, CERCEVE_SURUMU, KOMUT_ANAHTAR_UZUNLUGU, KOMUT_METNI_UZUNLUGU, KOMUT_ONERI_SINIRI, KOMUT_SINIRI, cerceveKomutlariMi, cerceveKoprusuKur,
   cercevedenIletiMi, kabukKoprusuKur, kabuktanIletiMi, type CerceveKomutu,
 } from './cerceve-iletisi.ts';
 import type { IkinciMenu } from './ikinci-menu.ts';
@@ -14,6 +14,10 @@ const KOKEN = 'http://uygulama.test';
 const BAS = { kanal: CERCEVE_KANALI, surum: CERCEVE_SURUMU } as const;
 const komutIletisi = (komutlar: unknown) => ({ ...BAS, tip: 'komutlar', komutlar });
 const calistirIletisi = (anahtar: unknown) => ({ ...BAS, tip: 'komut-calistir', anahtar });
+const metinIletisi = (metin: unknown, sira: unknown) => ({ ...BAS, tip: 'komut-metni', metin, sira });
+const oneriIletisi = (sira: unknown, komutlar: unknown) => ({ ...BAS, tip: 'komut-onerileri', sira, komutlar });
+const ONE_AL: CerceveKomutu = { anahtar: 'sp-116-one-al', baslik: 'SP-116 öne al', simge: 'next', aciklama: '434,1 sa -> 376,1 sa' };
+const sekiz = (n: number) => Array.from({ length: n }, (_, i) => ({ anahtar: `o${i}`, baslik: 'Öneri' }));
 const GUN_OZETI: CerceveKomutu = { anahtar: 'gun-ozeti', baslik: 'Gün özeti', simge: 'list', sozcukler: ['rapor'] };
 const ARIZA: CerceveKomutu = { anahtar: 'ariza', baslik: 'Arıza gir', simge: 'alert', aciklama: 'Tezgahı arızaya alır' };
 
@@ -133,8 +137,10 @@ describe('useYalitilmisGorunum: komutlar paletin "Bu sayfa" grubuna', () => {
   }
 
   function ac() {
-    let son: readonly SayfaKomutu[] | null = null;
-    const yaz = vi.fn((_kaynak: string, liste: readonly SayfaKomutu[] | null) => { son = liste; });
+    // Kaynak başına son yazılan; önerilerin ayrı kaynağı (#oneri) sabit listeyi ezmez.
+    const kayitlar = new Map<string, readonly SayfaKomutu[] | null>();
+    const yaz = vi.fn((kaynak: string, liste: readonly SayfaKomutu[] | null) => { kayitlar.set(kaynak, liste); });
+    const son = () => [...kayitlar.entries()].find(([k]) => !k.endsWith('#oneri'))?.[1] ?? null;
     const sonuc = render(
       <MemoryRouter initialEntries={['/ornek']}>
         <SayfaKomutBaglami.Provider value={yaz}><Ekran /></SayfaKomutBaglami.Provider>
@@ -142,11 +148,11 @@ describe('useYalitilmisGorunum: komutlar paletin "Bu sayfa" grubuna', () => {
     );
     const cerceve = (screen.getByTitle('Örnek') as HTMLIFrameElement).contentWindow as Window;
     const gonderilen = vi.spyOn(cerceve, 'postMessage').mockImplementation(() => undefined);
-    return { cerceve, gonderilen, yaz, son: () => son, sonuc };
+    return { cerceve, gonderilen, yaz, son, kayitlar, sonuc };
   }
 
   it('izinli: çerçevenin listesi kabuğa yazılır, seçilen komut çerçeveye döner; çerçeve kalkınca liste silinir', () => {
-    const { cerceve, gonderilen, yaz, son, sonuc } = ac();
+    const { cerceve, gonderilen, son, sonuc } = ac();
     ilet(window, komutIletisi([GUN_OZETI, { anahtar: 'yinele', baslik: 'Yinele' }]), 'null', cerceve);
     expect(son()?.map((k) => [k.anahtar, k.simge])).toEqual([['gun-ozeti', 'list'], ['yinele', 'bolt']]);
     act(() => { son()?.[0]?.calistir(); });
@@ -154,14 +160,94 @@ describe('useYalitilmisGorunum: komutlar paletin "Bu sayfa" grubuna', () => {
     ilet(window, komutIletisi([]), 'null', cerceve);
     expect(son()).toBeNull();
     ilet(window, komutIletisi([ARIZA]), 'null', cerceve);
-    const kaynak = yaz.mock.calls.at(-1)?.[0];
+    expect(son()).not.toBeNull();
     sonuc.unmount();
-    expect(yaz.mock.calls.at(-1)).toEqual([kaynak, null]);
+    expect(son()).toBeNull();
   });
 
   it('reddedilen: yalıtılmamış kökenden gelen liste palete girmez', () => {
     const { cerceve, son } = ac();
     ilet(window, komutIletisi([GUN_OZETI]), window.location.origin, cerceve);
     expect(son()).toBeNull();
+  });
+});
+
+describe('değer alan komut biçimi (kural 8)', () => {
+  it('kabul: metin ve sıra; en çok 8 öneri; iki yön karışmaz', () => {
+    expect(kabuktanIletiMi(metinIletisi('116 o', 1))).toBe(true);
+    expect(kabuktanIletiMi(metinIletisi('x'.repeat(KOMUT_METNI_UZUNLUGU), 3))).toBe(true);
+    expect(cercevedenIletiMi(oneriIletisi(1, [ONE_AL]))).toBe(true);
+    expect(cercevedenIletiMi(oneriIletisi(2, sekiz(KOMUT_ONERI_SINIRI)))).toBe(true);
+    expect(cercevedenIletiMi(oneriIletisi(1, []))).toBe(true);
+    expect(cercevedenIletiMi(metinIletisi('116 o', 1))).toBe(false);
+    expect(kabuktanIletiMi(oneriIletisi(1, [ONE_AL]))).toBe(false);
+  });
+
+  it('red: boş ya da uzun metin, sırasız ya da sıfır sıra, sınırı aşan ya da bozuk öneri', () => {
+    for (const metin of ['', '  ', 'x'.repeat(KOMUT_METNI_UZUNLUGU + 1), 3, null]) expect(kabuktanIletiMi(metinIletisi(metin, 1))).toBe(false);
+    for (const sira of [0, -1, 1.5, '1', null, undefined]) {
+      expect(kabuktanIletiMi(metinIletisi('116', sira)), String(sira)).toBe(false);
+      expect(cercevedenIletiMi(oneriIletisi(sira, [ONE_AL])), String(sira)).toBe(false);
+    }
+    expect(cercevedenIletiMi(oneriIletisi(1, sekiz(KOMUT_ONERI_SINIRI + 1)))).toBe(false);
+    expect(cercevedenIletiMi(oneriIletisi(1, [ONE_AL, ONE_AL]))).toBe(false);
+    expect(cercevedenIletiMi(oneriIletisi(1, [{ anahtar: 'A', baslik: 'x' }]))).toBe(false);
+  });
+});
+
+describe('kabuk köprüsü: komut metni', () => {
+  function kur() {
+    const cerceve = cerceveAc();
+    const gonderilen = vi.spyOn(cerceve, 'postMessage').mockImplementation(() => undefined);
+    const komutOnerileri = vi.fn();
+    const kopru = kabukKoprusuKur({ cerceve: () => cerceve, koken: KOKEN, gorunumDegisti: () => true, komutOnerileri });
+    kapatilacak.push(kopru.kapat);
+    return { cerceve, gonderilen, komutOnerileri, kopru };
+  }
+
+  it('izinli: metin artan sırayla gider (kırpılır); yalnız son sıranın cevabı kopyalanarak geçer', () => {
+    const { cerceve, gonderilen, komutOnerileri, kopru } = kur();
+    kopru.komutMetni(' 116 ');
+    kopru.komutMetni('116 o');
+    expect(gonderilen.mock.calls).toEqual([[metinIletisi('116', 1), KOKEN], [metinIletisi('116 o', 2), KOKEN]]);
+    ilet(window, oneriIletisi(1, [{ anahtar: 'eski', baslik: 'Eski' }]), KOKEN, cerceve);
+    expect(komutOnerileri).not.toHaveBeenCalled();
+    ilet(window, oneriIletisi(2, [ONE_AL]), KOKEN, cerceve);
+    expect(komutOnerileri.mock.calls).toEqual([[[ONE_AL]]]);
+    expect(komutOnerileri.mock.calls[0]?.[0][0]).not.toBe(ONE_AL);
+  });
+
+  it('reddedilen: boş metin gönderilmez ve bekleyen soruyu düşürür; sorulmamış, başka kökenden ya da bozuk cevap geçmez', () => {
+    const { cerceve, gonderilen, komutOnerileri, kopru } = kur();
+    ilet(window, oneriIletisi(1, [ONE_AL]), KOKEN, cerceve);
+    kopru.komutMetni('116');
+    ilet(window, oneriIletisi(1, [ONE_AL]), 'http://baska.test', cerceve);
+    ilet(window, oneriIletisi(1, [ONE_AL]), KOKEN, cerceveAc());
+    ilet(window, oneriIletisi(1, sekiz(KOMUT_ONERI_SINIRI + 1)), KOKEN, cerceve);
+    kopru.komutMetni('  ');
+    kopru.komutMetni('x'.repeat(KOMUT_METNI_UZUNLUGU + 1));
+    ilet(window, oneriIletisi(1, [ONE_AL]), KOKEN, cerceve);
+    expect(komutOnerileri).not.toHaveBeenCalled();
+    expect(gonderilen.mock.calls).toEqual([[metinIletisi('116', 1), KOKEN]]);
+  });
+});
+
+describe('çerçeve köprüsü: komut metni', () => {
+  it('kabuğun metni sırasıyla çağrılır; öneriler o sırayla gider, bozuk öneri ya da sıra hata verir', () => {
+    const ust = cerceveAc();
+    const yollanan = vi.spyOn(ust, 'postMessage').mockImplementation(() => undefined);
+    const pencere = cerceveAc();
+    const komutMetni = vi.fn();
+    const gorunumIste = vi.fn();
+    const kopru = cerceveKoprusuKur({ pencere, ust, koken: KOKEN, gorunumIste, komutMetni });
+    kapatilacak.push(kopru.kapat);
+    ilet(pencere, metinIletisi('116 o', 4), KOKEN, ust);
+    ilet(pencere, metinIletisi('116 o', 5), 'http://baska.test', ust);
+    expect(komutMetni.mock.calls).toEqual([['116 o', 4]]);
+    expect(gorunumIste).not.toHaveBeenCalled();
+    kopru.komutOnerileriBildir(4, [ONE_AL]);
+    expect(() => { kopru.komutOnerileriBildir(0, [ONE_AL]); }).toThrow(TypeError);
+    expect(() => { kopru.komutOnerileriBildir(4, sekiz(KOMUT_ONERI_SINIRI + 1)); }).toThrow(TypeError);
+    expect(yollanan.mock.calls).toEqual([[oneriIletisi(4, [ONE_AL]), KOKEN]]);
   });
 });
