@@ -6,6 +6,8 @@
    İkinci tur (kullanıcı 19.10 09:30, "öncelik ağırlıktan belirlensin"): kâr riski bileşeni (katkı payı × günlük kayıp riski) ve
    ağırlıktan otomatik öncelik sınıfı; ikisi de onaylı karar değil, denemede açılıp kapatılabilir. */
 /* Bedel hesabı (AG0, agHazirla, agAyar, agKatki, agBedel, agOncYaz) ve motor bağlantısı motor/durum.betik'tedir (sunucu da aynı st'yi kurar). */
+/* deneme verisinde müşteri yoktur: uydurma müşteri atanır (TMI içinde zz31 kapatır) */
+AG_UYDURMA = true;
 const AG_BIL = [['ceza', 'Sözleşme cezası'], ['fin', 'Finansman'], ['kar', 'Kâr riski'], ['sinif', 'Müşteri sınıfı'], ['elle', 'Elle çarpan']];
 const agFiyatGorur = () => ['mudur', 'yonetici'].includes(kim().rol);
 const agElleSinir = () => kim().rol === 'planlamaci' ? 2 : ['mudur', 'yonetici'].includes(kim().rol) ? 3 : 0;

@@ -14,6 +14,8 @@ const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
 
 if (TMI_ICINDE) {
+  /* 72 a: TMI'de uydurma müşteri atanmaz, kalanı silinir (motor/durum.betik agHazirla) */
+  AG_UYDURMA = false;
   /* Kaydı planlama sayfası hiç yazmadıysa plan dilimi, dolayısıyla başlangıç yoktur. Saklanmış çalışma açılırken kayıt değişmişse
      (rrCek) çalışma bu çeviriyle değişir: açık çalışmanın başlangıcı korunur, yoksa taban kurulur; başlangıçsız çalışma çizimi düşürür. */
   rrDenemeyeCevir = function (st) { return tmiCevir(st, TMI_KAYNAK.durum ? TMI_KAYNAK : null, S && S.D); };
