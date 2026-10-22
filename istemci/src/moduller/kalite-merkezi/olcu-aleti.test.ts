@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { kalibrasyonKuraliBetigi } from '../kalibrasyon/disari.ts';
 import { OLCU_ALETI_BETIGI } from './acilis.ts';
-import { KALIBRASYON_YOLU, kalibrasyonaGitIstegiMi } from './KaliteMerkeziCercevesi.tsx';
+import { KALIBRASYON_YOLU, kalibrasyonaGitIstegiMi, kisayolIstegiMi } from './KaliteMerkeziCercevesi.tsx';
 import { KITAPLIK_KIMLIKLERI, sayfaKur } from './sayfa.ts';
 import { KM_PAKETI } from './uygulama/paket.ts';
 
@@ -161,6 +161,14 @@ describe('Kalite Merkezi ölçüm cihazları: Kalibrasyondan salt okunur liste (
     expect(kalibrasyonaGitIstegiMi({ kanal: 'tmi-kalite-merkezi', yon: 'yanit', id: 1, tip: 'kalibrasyona-git' })).toBe(false);
     expect(kalibrasyonaGitIstegiMi({ kanal: 'tmi-kalite-merkezi', yon: 'istek', id: 1, tip: 'api' })).toBe(false);
     expect(kalibrasyonaGitIstegiMi(null)).toBe(false);
+  });
+
+  it('karar 102 a: kabuk yalnız kalite merkezi kanalındaki Ctrl K iletisini kendi Ctrl K\'sına çevirir', () => {
+    expect(kisayolIstegiMi({ kanal: 'tmi-kalite-merkezi', yon: 'kisayol', tus: 'arama' })).toBe(true);
+    expect(kisayolIstegiMi({ kanal: 'baska', yon: 'kisayol', tus: 'arama' })).toBe(false);
+    expect(kisayolIstegiMi({ kanal: 'tmi-kalite-merkezi', yon: 'kisayol', tus: 'baska' })).toBe(false);
+    expect(kisayolIstegiMi({ kanal: 'tmi-kalite-merkezi', yon: 'istek', tus: 'arama' })).toBe(false);
+    expect(kisayolIstegiMi(null)).toBe(false);
   });
 
   it('betik kurulu sayfada uygulamanın tanımlarından sonra, görünüm betiğinden önce çalışır', () => {

@@ -74,6 +74,7 @@
 ## Ekran (olduğu gibi)
 - Uygulamanın kendi bileşenleri, renkleri, ölçüleri, satır içi stilleri, yazı tipi (Barlow, gömülü) çerçevenin içindedir; TMI tokens.css kullanılmaz.
 - 360/768/1280: uygulamanın kendi duyarlı düzeni (tarayıcıda denendi).
+- Ctrl K ortak palette (kart #136, karar 102 a): çerçevede basılan Ctrl K uygulamanın komut paletine ulaşmadan kabuğa gider (`acilis.ts` `PALET_BETIGI`, yakalama evresi; paket değişmedi). "İşlem" grubu paletin "Bu sayfa" grubunda, yazılanın sonuçları (işlem ve kayıt: NCR, DÖF, cihaz, tedarikçi, form; en çok 8) öneri olarak. Uygulamanın kendi paleti `/` ile yerinde kalır; kullanıcı kabulünde kalkması (prototip değişikliği) sorulur.
 
 ## Susturma ve dosya
 - Üretilmiş büyük dosyalar: `uygulama/paket.ts` (1,2 MB), `uygulama/ocr.ts` (2,8 MB) ve `uygulama/ocr-cekirdek.ts` (3,9 MB). Yalnız Kalite Merkezi sayfası açılınca yüklenir;
