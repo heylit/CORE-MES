@@ -1,0 +1,100 @@
+/* ---------- Satış teklifi denemesi (Y4) ----------
+   Teklifin kalemleri motorun "acil sipariş" olayıyla plana eklenir; aramasız kip (aynı girdi aynı sonuç). İstenen termin yoksa bütün plan
+   dondurulur ve kalemler arkaya eklenir ('sabit', hiçbir sipariş kaymaz); varsa atölye yeniden dağıtır ('dagit') ve bitişi değişen siparişler
+   döner. Geçerliliği süren satış taslakları kilitli işlerdir; süresi dolan taslağı çağıran vermez. Eksik hammadde karttaki tedarik süresiyle
+   farazi satın alınmış sayılır (motor eksik malzemeli işi yerleştirmez). Saatler planın ekseninde (başlangıç günü 00:00'dan saat), günler
+   başlangıç gününden gün sırasıdır; tarihe çeviri çağıranındır. Bilinmeyen tutar null'dır, sıfır sayılmaz. */
+const TEKLIF_GUN = ['paz', 'pzt', 'sal', 'car', 'per', 'cum', 'cmt'];
+function teklifGunAdi(D, gun) {
+  const b = /^(\d{4})-(\d{2})-(\d{2})/.exec((D.meta && D.meta.baslangic) || ''); if (!b) return null;
+  const t = new Date(Date.UTC(+b[1], +b[2] - 1, +b[3] + gun));
+  return { ad: TEKLIF_GUN[t.getUTCDay()], iso: t.toISOString().slice(0, 10) };
+}
+/* kapalı gün: çalışma günü vardiyasız ya da tatil; ilk çalışma günü en çok bir yıl ileride aranır */
+function teklifCalismaGunu(D, gun) {
+  for (let i = 0; i < 366; i++, gun++) { const g = teklifGunAdi(D, gun); if (!g) return null; if (((D.calismaGunleri || {})[g.ad] || []).length && !(D.tatiller || []).includes(g.iso)) return gun; }
+  return null;
+}
+function teklifSiparis(s, id, urun, adet, termin, oncelik) {
+  s.D.siparisler = s.D.siparisler.filter(x => x.id !== id);
+  applyEvent(s, { tip: 'acil', urun, adet, termin, oncelik, gelir: null });
+  s.D.siparisler[s.D.siparisler.length - 1].id = id;
+}
+/* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet }], termin: 'GGGG-AA-GG SS:DD' | null,
+   taslaklar: [{ id, kalemler: [{ id, urun, adet, termin }], yerlesim: { islemId: { m, S } } }], haric: düzenlenen taslak kimliği | null,
+   tamponGun: plan termini için bitişe eklenen gün }. */
+function teklifDene(st0, taban0, istek) {
+  const s = clone(st0); const taban = taban0 && taban0.ops ? clone({ ops: taban0.ops }) : null;
+  s.D.satinalma = Array.isArray(s.D.satinalma) ? s.D.satinalma : [];
+  s.locks = s.locks || {};
+  const kendi = id => istek.kalemler.some(k => k.id === id);
+  if (istek.haric) {
+    const onek = istek.haric + '-';
+    s.D.siparisler = s.D.siparisler.filter(x => !String(x.id).startsWith(onek));
+    for (const k of Object.keys(s.locks)) if (k.startsWith(onek)) delete s.locks[k];
+    if (taban) for (const k of Object.keys(taban.ops)) if (String(taban.ops[k].job).startsWith(onek)) delete taban.ops[k];
+  }
+  for (const t of istek.taslaklar || []) {
+    if (t.id === istek.haric) continue;
+    for (const k of t.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, k.termin, 3);
+    for (const [op, y] of Object.entries(t.yerlesim || {})) s.locks[op] = { m: y.m, S: +y.S };
+  }
+  const tabanE = taban ? evaluate(taban, s, null, false) : null;
+  const farkli = istek.termin != null;
+  const sonGun = HDAYS * 24 - 1;
+  for (const k of istek.kalemler) teklifSiparis(s, k.id, k.urun, k.adet, farkli ? istek.termin : sonGun, farkli ? 1 : 3);
+  const satinalma = {}; const eksik = {};
+  for (const k of istek.kalemler) { satinalma[k.id] = []; eksik[k.id] = []; }
+  { const cx0 = compile(s);
+    for (const k of istek.kalemler) { const r = cx0.mat.res[k.id]; if (!r) continue;
+      for (const d of r.det) if (d.eksikQ > 0) {
+        const m = (s.D.malzemeler || []).find(x => x.kod === d.kod) || {}; const gun = m.tedarikGun == null || !isFinite(+m.tedarikGun) ? null : +m.tedarikGun;
+        if (gun == null) eksik[k.id].push(`${d.kod} tedarik süresi`);
+        const gelis = s.now + (gun || 0) * 24;
+        s.D.satinalma.push({ kod: d.kod, miktar: d.eksikQ, gelis, tedarikci: '', teklif: 1 });
+        satinalma[k.id].push({ kod: d.kod, birim: d.birim, miktar: d.eksikQ, gelis, gun });
+      } } }
+  const dondurma = s.w.dondurma;
+  s.w.dondurma = farkli ? dondurma : 1e6;
+  const p = schedule(s, farkli ? 'dagit' : 'sabit', taban);
+  s.w.dondurma = dondurma;
+  const e = evaluate(p, s, taban, false);
+  const cx = compile(s); const A = s.D.ayarlar || {};
+  const ayarci = A.ayarciUcret == null || !isFinite(+A.ayarciUcret) ? null : +A.ayarciUcret;
+  const kalemler = istek.kalemler.map(k => {
+    const j = e.J[k.id]; const tamam = !!(j && j.comp && isFinite(j.C));
+    const malzeme = cx.mat.res[k.id] ? cx.mat.res[k.id].det.map(d => ({ kod: d.kod, birim: d.birim, miktar: d.need, kaynak: d.kaynak, gelis: d.t })) : [];
+    const ek = eksik[k.id].slice();
+    if (!tamam) return { id: k.id, tamam, bitis: null, planTerminGun: null, ulasir: farkli ? false : null, malzeme, satinalma: satinalma[k.id], islemler: [], malzemeTl: null, eksik: ek, kilit: {} };
+    const islemler = Object.values(p.ops).filter(r => r.job === k.id).sort((a, b) => a.S - b.S).map(r => {
+      const y = { id: r.id, adim: r.id.slice(r.id.lastIndexOf('.') + 1), m: r.m, fason: !!r.fas, S: r.S, C: r.C, ayarSaat: +r.su || 0, islemeSaat: +r.run || 0, tl: null };
+      if (r.fas) { if (r.cost != null) y.tl = +r.cost; else ek.push(`${r.id} fason fiyatı`); return y; }
+      const M = cx.M[r.m] || {};
+      if (M.ucret == null) { ek.push(`${r.m} saat ücreti`); return y; }
+      if (y.ayarSaat > 0 && ayarci == null) { ek.push('ayarcı ücreti'); return y; }
+      y.tl = y.islemeSaat * (1 - (M.pay || 0)) * M.ucret + y.ayarSaat * (M.ucret + (ayarci || 0));
+      return y;
+    });
+    if (!malzeme.length) ek.push('reçetede hammadde yok');
+    for (const m of j.miss) if (m !== 'gelir' && !/saat ücreti|fason fiyatı/.test(m)) ek.push(m);
+    const planTerminGun = teklifCalismaGunu(s.D, Math.floor((j.C + (+istek.tamponGun || 0) * 24) / 24));
+    const kilit = {}; for (const r of islemler) kilit[r.id] = { m: r.m, S: r.S };
+    const istenen = farkli ? parseT(s.D, istek.termin) : null;
+    return { id: k.id, tamam, bitis: j.C, planTerminGun, ulasir: istenen == null ? null : j.C <= istenen, malzeme, satinalma: satinalma[k.id], islemler, malzemeTl: malzeme.length && j.mf != null ? j.mf : null, eksik: [...new Set(ek)], kilit };
+  });
+  const kayan = [];
+  if (tabanE) for (const id in tabanE.J) {
+    if (kendi(id)) continue; const o = tabanE.J[id], n = e.J[id]; if (!n || !isFinite(o.C) || !isFinite(n.C) || Math.abs(n.C - o.C) <= 0.5) continue;
+    kayan.push({ siparis: id, once: o.C, sonra: n.C, termin: cx.jobs[id] && cx.jobs[id].due != null ? cx.jobs[id].due : null });
+  }
+  kayan.sort((a, b) => (b.sonra - b.once) - (a.sonra - a.once));
+  /* satış taslaklarının bu denemedeki yeri: kilitliyse kilidin yeri, değilse motorun verdiği */
+  const taslakYeri = {};
+  for (const t of istek.taslaklar || []) if (t.id !== istek.haric) for (const r of Object.values(p.ops)) if (t.kalemler.some(k => k.id === r.job)) taslakYeri[r.id] = { m: r.m, S: r.S };
+  return { simdi: s.now, kalemler, kayan, taslakYeri };
+}
+/* Çalışmanın tabanı: canlıya alınmış senaryonun planı, yoksa çalışmanın planı. */
+function teklifTabani(S) {
+  const c = S && Array.isArray(S.senaryolar) ? S.senaryolar.find(x => x.id === S.canli) : null;
+  return c && c.plan && c.plan.ops ? c.plan : S && S.plan && S.plan.ops ? S.plan : null;
+}

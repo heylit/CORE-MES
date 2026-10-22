@@ -256,8 +256,10 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'mesaj.oku', 'mesaj.yaz', ...STOK_ISTEK,
       // OEE (kullanıcı kararı 14.10.2026, kart #1330).
       'oee.oku',
-      // Sipariş ve teklif fiyatını, tutarı ve kârı yalnız yönetici ve müdür görür (kullanıcı kararı 180, 19.10.2026).
+      // Sipariş ve teklif fiyatını, tutarı ve kârı yönetici, müdür ve satış görür (kullanıcı kararı 180, 19.10.2026; 65 a ile değişti, 21.10.2026).
       'siparisler.fiyat-oku',
+      // Teklifi plana dener, maliyet dökümünü görür (kullanıcı kararı 65 a, 21.10.2026).
+      'siparisler.termin-dene', 'siparisler.maliyet-oku',
       // İskonto sınırını aşan teklif sürümünü yalnız yönetici ve müdür onaylar (kullanıcı kararı 291 a, 20.10.2026).
       'siparisler.iskonto-onayla',
       // Plan öncelik ayarlarını (taban bedel, oranlar, eşikler) yalnız yönetici ve müdür değiştirir (kullanıcı kararı 210, 19.10.2026).
@@ -366,6 +368,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'cnc-kurulum.takim-degistir'],
     // Kapı görevlisi yalnız her çalışanın ortak işlemlerini alır, stok isteği almaz (kullanıcı kararları 165 a, 182 a).
     guvenlik_gorevlisi: [...MESAJ, ...IK_TALEP, 'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz'],
+    // Teklifi plana dener, termini ve maliyet toplamını görür, fiyatı verir; firmayı görür, yazmaz (kullanıcı kararı 65 a, 21.10.2026).
+    satis: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...SIPARIS_YAZ, 'siparisler.fiyat-oku', 'siparisler.termin-dene', ...FIRMA_OKU],
   };
   // Bütün personel kendi tesis talebini açar (kullanıcı kararı 216 a, 19.10.2026).
   for (const [rol, islemler] of Object.entries(MATRIS)) {
@@ -407,6 +411,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
         { kod: 'operator', ad: 'Operatör', yonetici: false },
         { kod: 'planlama_proje', ad: 'Planlama ve Proje', yonetici: false },
         { kod: 'satin_alma', ad: 'Satın Alma', yonetici: false },
+        { kod: 'satis', ad: 'Satış', yonetici: false },
         { kod: 'sevkiyat', ad: 'Sevkiyat', yonetici: false },
         { kod: 'vardiya_sorumlusu', ad: 'Vardiya Sorumlusu', yonetici: false },
         { kod: 'yonetici', ad: 'Yönetici', yonetici: true },

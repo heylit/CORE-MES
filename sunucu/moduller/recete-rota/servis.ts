@@ -19,7 +19,7 @@ import {
   aktifMakineler, istasyonKisiAtamalari, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { birimMaliyetleri } from '../finans/disari.ts';
-import { kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
@@ -29,10 +29,12 @@ import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
-  rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
+  planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
-import { DURUM_ANAHTARI } from './disari.ts';
+import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
+import type { KaynakOkumasi } from './plan-girdisi.ts';
+import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
 // Akış: yetkiyi uç verir; burada biçim ve sürüm denetimi uygulanır.
 
@@ -352,4 +354,115 @@ export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; 
 export async function adimCiktisi(db: Db, g: { malzemeNo: number; opNo: number }): Promise<number | null> {
   const belge = await sayimDurumu(db, g.malzemeNo);
   return belge === null ? null : adimCiktisiBul(belge, g.malzemeNo, g.opNo);
+}
+
+// Satış teklifi denemesi (Y4). Planın girdisi çerçevenin açılışındaki gibi kurulur: ortak çalışma kaydı, Reçete ve Rota kaydı ve çağıranın
+// yetkisiyle kaynak okuması. Takvim eki (iş merkezi haftası, kişi vardiyası) sunucuda henüz okunamaz (vardiya modülü kişi vardiyalarını dışarı
+// vermiyor; BASKA-MODUL-ISTEKLERI.md): çerçevenin okuyamadığı durumdaki gibi null'dır, çalışmanın kayıtlı takvimi kullanılır.
+const PLANLAMA_SURUMU = 2;
+
+export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi> {
+  const d = await durum(db, kullanici);
+  const makineNotu = yetkiliMi(kullanici, ISTASYON_OKUMA)
+    ? Object.fromEntries((await makineDurumlari(db)).map((x) => [String(x.makineId), x.aciklama ?? null])) : null;
+  let gorev: Record<string, string | null> | null = null;
+  if (yetkiliMi(kullanici, KISI_OKUMA) && d.people !== null) {
+    gorev = {};
+    for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
+  }
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev } };
+}
+
+// Çerçeve kaydı metin olarak da yazabilir (yerel depo değeri); metin biçimli değer JSON olarak okunur.
+const kayitDegeri = (k: { bicim: string; deger?: unknown } | null): unknown => {
+  if (k === null || k.deger === undefined) return null;
+  if (k.bicim !== 'metin' || typeof k.deger !== 'string') return k.deger;
+  try { return JSON.parse(k.deger) as unknown; } catch { return null; }
+};
+
+export interface TeklifKalemiGirdisi { malzemeNo: number; adet: number }
+// Satış taslağı siparişlerin kaydıdır; kilitli yeri adım başına makine ve başlangıç anı. Süresi dolan taslak verilmez ya da süzülür.
+export interface SatisTaslagiGirdisi {
+  id: string;
+  gecerlilik: string;
+  kalemler: Array<TeklifKalemiGirdisi & { termin: string; yerlesim: Record<string, { makineId: string; baslangic: string }> }>;
+}
+export interface TeklifDenemeGirdisi {
+  kalemler: TeklifKalemiGirdisi[];
+  gecerlilik: string;
+  istenenTermin: string | null;
+  taslakId: string | null;
+  taslaklar: SatisTaslagiGirdisi[];
+  // Plan termini için bitişe eklenen gün; verilmezse canlı plan ayarının tamponu (plan modülü).
+  tamponGun?: number;
+}
+export interface TeklifIslemi { adim: string; makineId: string; fason: boolean; baslangic: string; bitis: string; ayarSaat: number; islemeSaat: number; tl: number | null }
+export interface TeklifKalemiSonucu {
+  malzemeNo: number;
+  adet: number;
+  tamam: boolean;
+  bitis: string | null;
+  planTermini: string | null;
+  ulasir: boolean | null;
+  malzeme: Array<{ kod: string; birim: string; miktar: number; kaynak: string; gelis: string | null }>;
+  satinalma: Array<{ kod: string; birim: string; miktar: number; gelis: string; tedarikGun: number | null }>;
+  islemler: TeklifIslemi[];
+  malzemeTl: number | null;
+  eksik: string[];
+  // satış taslağı olarak kaydedilirse kilitlenecek yer: adım -> makine ve başlangıç
+  yerlesim: Record<string, { makineId: string; baslangic: string }>;
+}
+export interface TeklifDenemeSonucu {
+  kalemler: TeklifKalemiSonucu[];
+  kayan: Array<{ siparis: string; emirNo: string | null; once: string; sonra: string; termin: string | null }>;
+  taslakYerlesimi: Array<{ taslakId: string; kalem: number; adim: string; makineId: string; baslangic: string }>;
+}
+
+const fasonMu = (m: string): boolean => m.startsWith('@');
+
+// Çalışma yoksa null (planlama sayfası hiç açılıp kaydedilmemiş). Süre sınırı aşılırsa hata.
+export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGirdisi, simdi: number = Date.now()): Promise<TeklifDenemeSonucu | null> {
+  const calisma = kayitDegeri(await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: { meta?: { baslangic?: unknown } } } | null;
+  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
+  const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI)) as { orders?: Array<{ id: string; no?: string }> } | null;
+  const kaynak = await kaynakOku(db, kullanici);
+  const bugun = tesisGunu(simdi);
+  const baslangic = typeof calisma.D.meta?.baslangic === 'string' ? calisma.D.meta.baslangic : bugun;
+  const saat = (an: string): number => planSaati(baslangic, an);
+  const taslaklar: TeklifTaslagi[] = g.taslaklar.filter((t) => t.gecerlilik >= bugun).map((t) => ({
+    id: t.id,
+    kalemler: t.kalemler.map((k, i) => ({ id: `${t.id}-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet, termin: `${k.termin} 23:00` })),
+    yerlesim: Object.fromEntries(t.kalemler.flatMap((k, i) => Object.entries(k.yerlesim).map(([adim, y]) => [`${t.id}-${String(i + 1)}.${adim}`, { m: y.makineId, S: saat(y.baslangic) }]))),
+  }));
+  const r: DenemeSonucu | null = await teklifDenemesi({
+    calisma, kayit, kaynak, bugun,
+    kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet })),
+    termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
+    taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await planAyariOku(db)).tamponGun,
+  });
+  if (r === null) return null;
+  const an = (h: number): string => planAni(r.baslangic, h);
+  const makine = (m: string): string => (fasonMu(m) ? m.slice(1) : m);
+  const emirNo = new Map((kayit?.orders ?? []).map((o) => [o.id, o.no ?? null]));
+  return {
+    kalemler: r.kalemler.map((k, i) => ({
+      malzemeNo: g.kalemler[i]!.malzemeNo,
+      adet: g.kalemler[i]!.adet,
+      tamam: k.tamam,
+      bitis: k.bitis === null ? null : an(k.bitis),
+      planTermini: k.planTerminGun === null ? null : planGunu(r.baslangic, k.planTerminGun),
+      ulasir: k.ulasir,
+      malzeme: k.malzeme.map((m) => ({ ...m, gelis: m.gelis === null || !Number.isFinite(m.gelis) ? null : an(m.gelis) })),
+      satinalma: k.satinalma.map((s) => ({ kod: s.kod, birim: s.birim, miktar: s.miktar, gelis: an(s.gelis), tedarikGun: s.gun })),
+      islemler: k.islemler.map((o) => ({ adim: o.adim, makineId: makine(o.m), fason: o.fason, baslangic: an(o.S), bitis: an(o.C), ayarSaat: o.ayarSaat, islemeSaat: o.islemeSaat, tl: o.tl })),
+      malzemeTl: k.malzemeTl,
+      eksik: k.eksik,
+      yerlesim: Object.fromEntries(Object.entries(k.kilit).map(([id, y]) => [id.slice(id.lastIndexOf('.') + 1), { makineId: makine(y.m), baslangic: an(y.S) }])),
+    })),
+    kayan: r.kayan.map((x) => ({ siparis: x.siparis, emirNo: emirNo.get(x.siparis) ?? null, once: an(x.once), sonra: an(x.sonra), termin: x.termin === null ? null : an(x.termin) })),
+    taslakYerlesimi: Object.entries(r.taslakYeri).map(([id, y]) => {
+      const nokta = id.lastIndexOf('.'); const kalemId = id.slice(0, nokta); const tire = kalemId.lastIndexOf('-');
+      return { taslakId: kalemId.slice(0, tire), kalem: Number(kalemId.slice(tire + 1)), adim: id.slice(nokta + 1), makineId: makine(y.m), baslangic: an(y.S) };
+    }),
+  };
 }

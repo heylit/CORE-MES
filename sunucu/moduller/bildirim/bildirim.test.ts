@@ -190,7 +190,7 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(t.satirlar.map((s) => s.tur), ['istasyonlar.makine-durdu', 'cnc-kurulum.takim-omru']);
     assert.equal(t.satirlar[0]?.varsayilan, true);
     assert.deepEqual((await tercihler('cam')).satirlar.map((s) => s.tur), ['cnc-kurulum.takim-omru']);
-    assert.equal((await tercihler('yonetici')).satirlar.length, 6);
+    assert.equal((await tercihler('yonetici')).satirlar.length, 7);
 
     const d = await istek<BildirimTercihleriCevabi>('bakim', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: true });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));

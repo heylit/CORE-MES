@@ -48,12 +48,12 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
       });
       t = await siparisler.surumVer(db, kisi, t.id, {
         surum: t.surum, fiyatlar: t.satirlar.map((s) => ({ satirId: s.id, birimFiyat: '20' })), iskontoOrani: '10',
-        teslimGun: null, odemeKosulu: null, gecerlilik: null, aciklama: null,
+        teslimGun: null, odemeKosulu: null, gecerlilik: null, aciklama: null, terminTarihi: null, planTaslagi: null,
       });
       t = await siparisler.notluGecis(db, kisi, t.id, 'revizyon', { surum: t.surum, not: 'Fiyat yüksek' });
       t = await siparisler.surumVer(db, kisi, t.id, {
         surum: t.surum, fiyatlar: t.satirlar.map((s) => ({ satirId: s.id, birimFiyat: '15' })), iskontoOrani: '0',
-        teslimGun: null, odemeKosulu: null, gecerlilik: null, aciklama: null,
+        teslimGun: null, odemeKosulu: null, gecerlilik: null, aciklama: null, terminTarihi: null, planTaslagi: null,
       });
       t = await siparisler.kabulEt(db, kisi, t.id, { surum: t.surum, surumNo: 2 });
       const d = await siparisler.siparisDonustur(db, kisi, t.id, {

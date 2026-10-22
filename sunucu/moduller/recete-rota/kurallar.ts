@@ -7,6 +7,7 @@ import { girdiOlabilirMi } from '../rota/disari.ts';
 import type { DurumRotaAdimi, DurumRotaRevizyonu as DurumRotaRevizyonuGirdisi } from '../rota/disari.ts';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
+import { tesisGunBasi, tesisSaati } from '#paylasilan/zaman.ts';
 
 // Reçete ve Rota kayıt deposunun saf kuralları.
 
@@ -801,4 +802,20 @@ export function maliyetCevir(
   malzeme: MaliyetKayitlari, istasyon: MaliyetKayitlari, kisi: MaliyetKayitlari, yazabilir: boolean,
 ): DurumMaliyeti {
   return { yazabilir, malzeme: maliyetHaritasi(malzeme), istasyon: maliyetHaritasi(istasyon), kisi: maliyetHaritasi(kisi) };
+}
+
+// Planın saat ekseni (motor/engine.betik parseT): başlangıç günü 00:00'dan duvar saatiyle saat; gün sayımı takvim günüdür (UTC aritmetiği,
+// yaz saati sayılmaz). An ile eksen arasında çeviri tesisin saat dilimindedir.
+const GUN_MS = 86_400_000;
+const gunMs = (tarih: string): number => { const [y, a, g] = tarih.split('-').map(Number) as [number, number, number]; return Date.UTC(y, a - 1, g); };
+export function planSaati(baslangic: string, an: number | string): number {
+  const d = tesisSaati(typeof an === 'number' ? an : Date.parse(an));
+  return (gunMs(d.slice(0, 10)) - gunMs(baslangic)) / 3_600_000 + Number(d.slice(11, 13)) + Number(d.slice(14, 16)) / 60;
+}
+export function planGunu(baslangic: string, gun: number): string {
+  return new Date(gunMs(baslangic) + gun * GUN_MS).toISOString().slice(0, 10);
+}
+export function planAni(baslangic: string, saat: number): string {
+  const dk = Math.round(saat * 60); const gun = Math.floor(dk / 1440);
+  return new Date(tesisGunBasi(planGunu(baslangic, gun)) + (dk - gun * 1440) * 60_000).toISOString();
 }

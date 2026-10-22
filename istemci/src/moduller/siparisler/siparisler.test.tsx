@@ -11,7 +11,8 @@ import type { SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozle
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
-  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifListesiCevabi,
+  MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
+  TeklifListesiCevabi, TerminDenemesiCevabi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
@@ -46,7 +47,7 @@ const TEKLIF = {
   olusturma: '2026-10-01T09:00:00+03:00', guncelleme: null, surum: 4,
 } satisfies Teklif;
 const SURUM_1 = {
-  surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
+  surumNo: 1, iskontoOrani: '10.00', teslimGun: 14, terminTarihi: null, odemeKosulu: '30 gün', gecerlilik: '2099-01-01', aciklama: 'Kaplama dahil',
   olusturma: '2026-10-02T09:00:00+03:00',
   fiyatlar: [{ satirId: 11, birimFiyat: '10.0000', iskontoluFiyat: '9.0000', tutar: '360.00' }], toplam: '360.00',
   iskontoOnaylayan: null, iskontoOnayAni: null,
@@ -799,5 +800,126 @@ describe('Teklifler', () => {
     sunucuKur(YAZAR);
     ac('/siparisler/teklifler/21/duzenle');
     expect(await screen.findByText('Talep yalnız ilk sürüm verilmeden düzenlenir.')).toBeTruthy();
+  });
+});
+
+describe('Teklif termin ve fiyat (44)', () => {
+  // 65 a: satış rolü dener, fiyat ve maliyet toplamını görür; döküm maliyet okuyanda.
+  const SATISCI: Kullanici = { id: 9, ad: 'Deneme Satisci', islemler: [...KOK, 'siparisler.yaz', 'siparisler.fiyat-oku', 'siparisler.termin-dene'] };
+  const MUDUR: Kullanici = { ...SATISCI, islemler: [...SATISCI.islemler, 'siparisler.maliyet-oku'] };
+  const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', birim: 'adet' };
+  const TEKLIF_KARTLI = { ...TEKLIF_YENI, satirlar: [KARTLI_SATIR] } satisfies TeklifAyrintisi;
+  const DENEME = {
+    durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
+    yetisir: null, onayGerekli: false, satinalmaGerekli: true,
+    kalemler: [{
+      satirId: 11, sira: 1, tanim: 'Deneme Mil 20mm', malzemeNo: 31, adet: '40', plansiz: false, yerlesti: true, bitis: '2099-07-10T16:00:00+03:00',
+      planTermini: '2099-07-14', malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'HM-DNM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
+      birimMaliyet: '10.0000', toplamMaliyet: '400.00', dokum: null, eksikVeri: [],
+    }],
+    maliyetToplami: '400.00', genelGiderSaatBasi: null, kayanlar: [],
+  } satisfies TerminDenemesiCevabi;
+  const DOKUMLU = {
+    ...DENEME, genelGiderSaatBasi: '10.00',
+    kalemler: [{ ...DENEME.kalemler[0]!, dokum: [{ tur: 'malzeme', ad: 'Malzeme', tezgah: null, saat: null, tutar: '100.00' }, { tur: 'isleme', ad: '10', tezgah: 'T1', saat: '2.00', tutar: '300.00' }] }],
+  } satisfies TerminDenemesiCevabi;
+  const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', termin: '2099-07-05', yetisir: false, onayGerekli: true,
+    kayanlar: [{ siparis: 'SS-DNM-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }] } satisfies TerminDenemesiCevabi;
+
+  const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI) => sunucuKur(kullanici, (yontem, yol) => {
+    if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, teklif);
+    if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/termin-denemesi')) return json(200, deneme(yol));
+    if (yontem === 'GET' && yol === '/siparisler/teklifler/21/plan-taslaklari') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
+    if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, TEKLIF_VERILDI);
+    if (yontem === 'POST' && yol === '/siparisler/teklifler/21/deneme-taslagi') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
+    return undefined;
+  });
+
+  it('arkaya ekleme: termin plandan ve geçerlilikten gün olarak yazılır; fiyat maliyet artı kârla önerilir; sürüm plan taslağıyla gider', async () => {
+    const istekler = kur(SATISCI);
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('14.07.2099')).toBeTruthy();
+    expect(screen.getByText('Geçerlilik tarihinden itibaren 14 gün')).toBeTruthy();
+    expect(screen.getByText('Malzeme satın alma ister')).toBeTruthy();
+    const birim = screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/) as HTMLInputElement;
+    await waitFor(() => expect(birim.value).toBe('12,50'));
+    fireEvent.click(screen.getByRole('button', { name: '%40' }));
+    await waitFor(() => expect(birim.value).toBe('14,00'));
+    expect(screen.queryByRole('table', { name: 'Maliyet dökümü' })).toBeNull();
+    expect(screen.queryByLabelText('Teslim süresi (gün)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    expect(await screen.findByText(/geçerlilik tarihi zorunlu/)).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/siparisler/teklifler/21/termin-denemesi?gecerlilik=2099-06-30')).toBe(true));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Teklifi ver' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({
+      yol: '/siparisler/teklifler/21/surum-ver',
+      govde: { surum: 4, fiyatlar: [{ satirId: 11, birimFiyat: '14.00' }], gecerlilik: '2099-06-30', teslimGun: null, terminTarihi: null, planTaslagi: { karOrani: '40', istenenTermin: null } },
+    });
+  });
+
+  it('başka termin: istenen termin sorguya gider; geciken sipariş ve plancı onayı yazılır; sürüm istenen terminle gider', async () => {
+    const istekler = kur(SATISCI, (yol) => (yol.includes('istenenTermin=2099-07-05') ? KAYAN : DENEME));
+    ac('/siparisler/teklifler/21');
+    await screen.findByText('14.07.2099');
+    fireEvent.change(screen.getByLabelText('Geçerlilik tarihi'), { target: { value: '2099-06-30' } });
+    fireEvent.click(screen.getByLabelText(/Başka termin/));
+    fireEvent.change(screen.getByLabelText('İstenen termin'), { target: { value: '2099-07-05' } });
+    expect(await screen.findByText('1 sipariş terminini kaçırır')).toBeTruthy();
+    expect(screen.getByText('Plancı onayı gerekir')).toBeTruthy();
+    expect(screen.getByText('Plan bu termine yetişmiyor')).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'Bitişi değişen siparişler' })).getByText('Gecikir')).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Teklifi ver' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ planTaslagi: { karOrani: '25', istenenTermin: '2099-07-05' } });
+  });
+
+  it('maliyet dökümü yalnız maliyet okuyana görünür; deneme taslağı kârla kaydedilir', async () => {
+    const istekler = kur(MUDUR, () => DOKUMLU);
+    ac('/siparisler/teklifler/21');
+    const dokum = await screen.findByRole('table', { name: 'Maliyet dökümü' });
+    expect(within(dokum).getByText('300,00 TRY')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Deneme taslağı kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/deneme-taslagi', govde: { karOrani: '25', istenenTermin: null } });
+  });
+
+  it('motor bağlı değilse elle: termin tarihi ve fiyat elle girilir, plan taslağı gitmez', async () => {
+    const istekler = kur(SATISCI, () => ({ ...DENEME, durum: 'cozucu-yok', planSurumu: null, planTermini: null, termin: null, terminGun: null, maliyetToplami: null, kalemler: [] }));
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('Termin denemesi kullanılamıyor')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Deneme Mil 20mm birim fiyat/), { target: { value: '11' } });
+    fireEvent.change(screen.getByLabelText('Termin tarihi'), { target: { value: '2099-08-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Teklifi ver' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ fiyatlar: [{ satirId: 11, birimFiyat: '11' }], terminTarihi: '2099-08-01', planTaslagi: null });
+  });
+
+  it('63 b: termin onayı bekleyen teklifte plancı termini onaylar; plan taslakları görünür', async () => {
+    const bekleyen = { ...TEKLIF_VERILDI, durum: 'onay-bekliyor', surumler: [{ ...SURUM_1, iskontoOrani: '5.00', terminTarihi: '2099-07-05' }] } satisfies TeklifAyrintisi;
+    const TASLAK = {
+      id: 3, teklifId: 21, surumNo: 1, tur: 'satis', gorunum: 'onay-bekliyor', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: '2099-07-05', planTermini: '2099-07-14',
+      termin: '2099-07-05', karOrani: null, maliyetToplami: null, kayanSayisi: 1, gecikenSayisi: 1, onayGerekli: true, onaylayan: null, onayAni: null,
+      olusturan: 'Deneme Satisci', olusturma: '2026-10-21T09:00:00+03:00',
+    } satisfies PlanTaslaklariCevabi['taslaklar'][number];
+    const istekler = sunucuKur(PLANLAMACI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, bekleyen);
+      if (yontem === 'GET' && yol === '/siparisler/teklifler/21/plan-taslaklari') return json(200, { taslaklar: [TASLAK] } satisfies PlanTaslaklariCevabi);
+      if (yontem === 'POST' && yol === '/siparisler/teklifler/21/termin-onayla') return json(200, TEKLIF_VERILDI);
+      return undefined;
+    });
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('Termin onayı bekliyor')).toBeTruthy();
+    expect(screen.queryByText('İskonto onayı bekliyor')).toBeNull();
+    expect(screen.getByText('Plancı onayı bekliyor')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Termini onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Termini onayla' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayla' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/termin-onayla', govde: { surum: 4 } });
   });
 });

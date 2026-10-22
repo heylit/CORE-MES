@@ -345,6 +345,7 @@ export interface TeklifSurumSatiri {
   surum_no: number;
   iskonto_orani: string;
   teslim_gun: number | null;
+  termin_tarihi: string | null;
   odeme_kosulu: string | null;
   gecerlilik: string | null;
   aciklama: string | null;
@@ -356,7 +357,7 @@ export interface TeklifSurumSatiri {
 
 export function teklifSurumleri(db: Db, teklifId: number): Promise<TeklifSurumSatiri[]> {
   return db.sorgu<TeklifSurumSatiri>(
-    `SELECT v.id, v.surum_no, v.iskonto_orani, v.teslim_gun, v.odeme_kosulu, v.gecerlilik, v.aciklama, ${zamanMetni('v.olusturma')} AS olusturma,
+    `SELECT v.id, v.surum_no, v.iskonto_orani, v.teslim_gun, v.termin_tarihi, v.odeme_kosulu, v.gecerlilik, v.aciklama, ${zamanMetni('v.olusturma')} AS olusturma,
             o.onaylayan_id, ${zamanMetni('o.an')} AS onay_ani,
             (SELECT coalesce(sum(round(round(f.birim_fiyat * (100 - v.iskonto_orani) / 100, 4) * r.miktar, 2)), 0)::numeric(20,2)
                FROM siparisler_teklif_fiyati f JOIN siparisler_teklif_satiri r ON r.id = f.satir_id WHERE f.surum_id = v.id) AS toplam
@@ -397,14 +398,16 @@ export function teklifFiyatlari(db: Db, teklifId: number): Promise<FiyatSatiri[]
 
 export async function surumEkle(
   db: Db, teklifId: number,
-  g: { iskontoOrani: string; teslimGun: number | null; odemeKosulu: string | null; gecerlilik: string | null; aciklama: string | null },
+  g: {
+    iskontoOrani: string; teslimGun: number | null; terminTarihi: string | null; odemeKosulu: string | null; gecerlilik: string | null; aciklama: string | null;
+  },
   fiyatlar: { satirId: number; birimFiyat: string }[], kisiId: number,
-): Promise<number> {
+): Promise<{ id: number; surumNo: number }> {
   const satir = await db.tek<{ id: number; surum_no: number }>(
-    `INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, iskonto_orani, teslim_gun, odeme_kosulu, gecerlilik, aciklama, olusturan_id)
-     SELECT $1, coalesce(max(surum_no), 0) + 1, $2, $3, $4, $5, $6, $7 FROM siparisler_teklif_surumu WHERE teklif_id = $1
+    `INSERT INTO siparisler_teklif_surumu (teklif_id, surum_no, iskonto_orani, teslim_gun, termin_tarihi, odeme_kosulu, gecerlilik, aciklama, olusturan_id)
+     SELECT $1, coalesce(max(surum_no), 0) + 1, $2, $3, $4, $5, $6, $7, $8 FROM siparisler_teklif_surumu WHERE teklif_id = $1
      RETURNING id, surum_no`,
-    [teklifId, g.iskontoOrani, g.teslimGun, g.odemeKosulu, g.gecerlilik, g.aciklama, kisiId],
+    [teklifId, g.iskontoOrani, g.teslimGun, g.terminTarihi, g.odemeKosulu, g.gecerlilik, g.aciklama, kisiId],
   );
   if (satir === null) throw new Error('Teklif sürümü eklenemedi');
   await db.sorgu(
@@ -412,7 +415,16 @@ export async function surumEkle(
      SELECT $1, k.satir_id, k.birim_fiyat FROM unnest($2::int[], $3::numeric[]) AS k (satir_id, birim_fiyat)`,
     [satir.id, fiyatlar.map((f) => f.satirId), fiyatlar.map((f) => f.birimFiyat)],
   );
-  return satir.surum_no;
+  return { id: satir.id, surumNo: satir.surum_no };
+}
+
+// Son sürümün iskontosu eşiği aşıyor ve onaysızsa iskonto onayı bekler (291 a).
+export async function sonSurumIskontosu(db: Db, teklifId: number): Promise<{ iskonto_orani: string; onayli: boolean } | null> {
+  return db.tek<{ iskonto_orani: string; onayli: boolean }>(
+    `SELECT v.iskonto_orani, o.surum_id IS NOT NULL AS onayli
+       FROM siparisler_teklif_surumu v LEFT JOIN siparisler_teklif_iskonto_onayi o ON o.surum_id = v.id
+      WHERE v.teklif_id = $1 ORDER BY v.surum_no DESC LIMIT 1`, [teklifId],
+  );
 }
 
 export function teklifDurumYaz(
@@ -433,5 +445,139 @@ export function teklifSurumuArtir(db: Db, id: number, surum: number, kisiId: num
   return db.tek<{ id: number }>(
     'UPDATE siparisler_teklif SET guncelleyen_id = $2, guncelleme = now(), surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING id',
     [id, kisiId, surum],
+  );
+}
+
+// ---- Teklif plan taslağı (44, 49) ----
+
+// Gün veritabanının saatinden gelir; geçerlilik karşılaştırmasıyla aynı saat.
+export async function bugun(db: Db): Promise<string> {
+  const s = await db.tek<{ gun: string }>('SELECT current_date::text AS gun');
+  if (s === null) throw new Error('Gün okunamadı');
+  return s.gun;
+}
+
+const YER_TUTAR = "tur = 'satis' AND durum IN ('aktif', 'onay-bekliyor')";
+
+export interface PlanTaslagiYazimi {
+  teklifId: number;
+  surumId: number | null;
+  tur: 'deneme' | 'satis';
+  durum: 'aktif' | 'onay-bekliyor';
+  planSurumu: string | null;
+  gecerlilik: string | null;
+  istenenTermin: string | null;
+  planTermini: string | null;
+  termin: string | null;
+  karOrani: string;
+  maliyetToplami: string | null;
+  kalemler: unknown[];
+  kayanlar: unknown[];
+  kilitler: unknown[];
+  onayGerekli: boolean;
+}
+
+export async function planTaslagiEkle(db: Db, t: PlanTaslagiYazimi, kisiId: number): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO siparisler_teklif_plan_taslagi (teklif_id, surum_id, tur, durum, plan_surumu, gecerlilik, istenen_termin, plan_termini, termin,
+            kar_orani, maliyet_toplami, kalemler, kayanlar, kilitler, onay_gerekli, olusturan_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16) RETURNING id`,
+    [t.teklifId, t.surumId, t.tur, t.durum, t.planSurumu, t.gecerlilik, t.istenenTermin, t.planTermini, t.termin, t.karOrani, t.maliyetToplami,
+      JSON.stringify(t.kalemler), JSON.stringify(t.kayanlar), JSON.stringify(t.kilitler), t.onayGerekli, kisiId],
+  );
+  if (satir === null) throw new Error('Plan taslağı eklenemedi');
+  return satir.id;
+}
+
+export interface YerTutanTaslak { id: number; durum: 'aktif' | 'onay-bekliyor'; istenen_termin: string | null; termin: string | null; gecerli: boolean }
+
+// Teklifin planda yer tutan satış taslağı; çağıran teklifi kilitlemiştir. Geçerliliği geçmişse gecerli false (yeri kalkmıştır).
+export function yerTutanTaslak(db: Db, teklifId: number): Promise<YerTutanTaslak | null> {
+  return db.tek<YerTutanTaslak>(
+    `SELECT id, durum, istenen_termin, termin, gecerlilik >= current_date AS gecerli
+       FROM siparisler_teklif_plan_taslagi WHERE teklif_id = $1 AND ${YER_TUTAR}`, [teklifId],
+  );
+}
+
+// Yerine yenisi gelen ya da teklifi biten satış taslağı kalkar; geçerliliği zaten geçmişse "süresi doldu" olarak kalır.
+export async function yerTutaniKaldir(db: Db, teklifId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE siparisler_teklif_plan_taslagi SET durum = CASE WHEN gecerlilik < current_date THEN 'suresi-doldu' ELSE 'kalkti' END
+      WHERE teklif_id = $1 AND ${YER_TUTAR}`, [teklifId],
+  );
+}
+
+// Yer değişmeden yeni sürüme taşınır: geçerlilik ve kâr yeni sürümündür.
+export async function taslagiSurumeTasi(db: Db, id: number, surumId: number, gecerlilik: string, karOrani: string): Promise<void> {
+  await db.sorgu('UPDATE siparisler_teklif_plan_taslagi SET surum_id = $2, gecerlilik = $3, kar_orani = $4 WHERE id = $1', [id, surumId, gecerlilik, karOrani]);
+}
+
+export function terminOnayiYaz(db: Db, teklifId: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif_plan_taslagi SET durum = 'aktif', onaylayan_id = $2, onay_ani = now()
+      WHERE teklif_id = $1 AND tur = 'satis' AND durum = 'onay-bekliyor' RETURNING id`, [teklifId, kisiId],
+  );
+}
+
+export interface PlanTaslagiSatiri {
+  id: number;
+  teklif_id: number;
+  surum_no: number | null;
+  tur: 'deneme' | 'satis';
+  gorunum: 'deneme' | 'satis' | 'onay-bekliyor' | 'satis-deneme' | 'kalkti';
+  plan_surumu: string | null;
+  gecerlilik: string | null;
+  istenen_termin: string | null;
+  plan_termini: string | null;
+  termin: string | null;
+  kar_orani: string;
+  maliyet_toplami: string | null;
+  kayan_sayisi: number;
+  geciken_sayisi: number;
+  onay_gerekli: boolean;
+  onaylayan_id: number | null;
+  onay_ani: string | null;
+  olusturan_id: number;
+  olusturma: string;
+}
+
+// 49: görünüm okuma anında çıkar; geçerliliği geçen satış taslağı plandan kalkmış satış denemesidir, zamanlanmış iş gerekmez.
+const GORUNUM = `CASE WHEN t.tur = 'deneme' THEN 'deneme'
+                      WHEN t.durum = 'kalkti' THEN 'kalkti'
+                      WHEN t.durum = 'suresi-doldu' OR t.gecerlilik < current_date THEN 'satis-deneme'
+                      WHEN t.durum = 'onay-bekliyor' THEN 'onay-bekliyor'
+                      ELSE 'satis' END`;
+
+export function planTaslaklari(db: Db, teklifId: number): Promise<PlanTaslagiSatiri[]> {
+  return db.sorgu<PlanTaslagiSatiri>(
+    `SELECT t.id, t.teklif_id, v.surum_no, t.tur, ${GORUNUM} AS gorunum, t.plan_surumu, t.gecerlilik, t.istenen_termin, t.plan_termini, t.termin,
+            t.kar_orani, t.maliyet_toplami, jsonb_array_length(t.kayanlar) AS kayan_sayisi,
+            (SELECT count(*) FROM jsonb_array_elements(t.kayanlar) k WHERE (k->>'gecikir')::boolean)::int AS geciken_sayisi,
+            t.onay_gerekli, t.onaylayan_id, ${zamanMetni('t.onay_ani')} AS onay_ani, t.olusturan_id, ${zamanMetni('t.olusturma')} AS olusturma
+       FROM siparisler_teklif_plan_taslagi t LEFT JOIN siparisler_teklif_surumu v ON v.id = t.surum_id
+      WHERE t.teklif_id = $1 ORDER BY t.id DESC`, [teklifId],
+  );
+}
+
+export interface SatisKilidiSatiri {
+  id: number;
+  teklif_id: number;
+  teklif_no: string;
+  gecerlilik: string;
+  termin: string | null;
+  kalemler: { satirId: number; malzemeNo: number | null; adet: string }[];
+  kilitler: { satirId: number; opId: string; tezgah: string; baslangic: string; bitis: string }[];
+}
+
+// Planda yer tutan satış taslakları: geçerliliği sürüyor, teklif açık (red ya da siparişe dönmüş teklifin taslağı zaten kalkmıştır).
+export function satisKilitleri(db: Db): Promise<SatisKilidiSatiri[]> {
+  return db.sorgu<SatisKilidiSatiri>(
+    `SELECT t.id, t.teklif_id, k.no AS teklif_no, t.gecerlilik, t.termin,
+            (SELECT coalesce(jsonb_agg(jsonb_build_object('satirId', e->'satirId', 'malzemeNo', e->'malzemeNo', 'adet', e->'adet')), '[]'::jsonb)
+               FROM jsonb_array_elements(t.kalemler) e WHERE NOT (e->>'plansiz')::boolean) AS kalemler,
+            t.kilitler
+       FROM siparisler_teklif_plan_taslagi t JOIN siparisler_teklif k ON k.id = t.teklif_id
+      WHERE t.tur = 'satis' AND t.durum IN ('aktif', 'onay-bekliyor') AND t.gecerlilik >= current_date
+      ORDER BY t.id`,
   );
 }

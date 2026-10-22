@@ -28,3 +28,10 @@ Bu teslim `sunucu/cekirdek`, `paylasilan` ve `istemci/src/ortak`'a yazmaz. Aşa�
 
 ## Şema
 Göç yok. Planlama durumu `recete_rota_kayit` tablosunda `recete-rota-motoru-v1:planlama` anahtarındadır; anahtar `paylasilan/sozlesme/recete-rota.ts` `ANAHTAR_BICIMI`'ne uyar (DOĞRULANDI, kod; uçtan uca gerçek sunucuyla denenmedi, tarayıcı kanıtı sahte kabukla).
+
+## Satış teklifi denemesi (Y4): kablolama bağı
+
+Siparişlerin teklif konusu (Y3) `siparisler/disari.ts` içinde teklif deneme çözücüsü kaydını tanımlar; karşılığı Reçete ve Rota'nın
+`disari.ts` `teklifDene(db, kullanici, girdi)` işlevidir (girdi ve sonuç türleri aynı dosyada: `TeklifDenemeGirdisi`, `TeklifDenemeSonucu`).
+`sunucu/kablolama.ts`'te bağ kurulur; siparişler Reçete ve Rota'yı ithal etmez. Kaydın biçimi Y3 ile belli olur; biçim farklıysa çevirme
+bağda yapılır, iki modül değişmez. Saatler tesis anı (ISO), günler 'GGGG-AA-GG'dir.

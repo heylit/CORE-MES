@@ -152,14 +152,18 @@ describe('arkon operatör özeti (gerçek PostgreSQL)', () => {
     await kisiAta(o.makineler[0]!, komsu.id);
     const ie = await isEmriKur(o.makineler[0]!, { birimSureDk: '2', bas: 0, bit: 23 });
     const hurdaNedeni = (await sahip().tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('OZ-H1', 'Deneme hurdası', 901) RETURNING id"))!.id;
+    // Sayım günün ortasına yazılır ve sayılar sabit "şimdi" ile okunur: uç gerçek saati kullanır, gece yarısından hemen sonra
+    // "şimdiden bir dakika önce" dünün gününe düşüyordu.
     await sahip().sorgu(`INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, zaman) VALUES
-      ($1, $2, $4, 'saglam', 18, NULL, now() - interval '1 minute'), ($1, $2, $4, 'hurda', 2, $5, now() - interval '1 minute'), ($1, $3, $4, 'saglam', 99, NULL, now() - interval '1 minute')`,
-    [ie.emirId, ben.id, komsu.id, o.istasyonId, hurdaNedeni]);
+      ($1, $2, $4, 'saglam', 18, NULL, $6), ($1, $2, $4, 'hurda', 2, $5, $6), ($1, $3, $4, 'saglam', 99, NULL, $6)`,
+    [ie.emirId, ben.id, komsu.id, o.istasyonId, hurdaNedeni, new Date(gunBasi + 2 * SAAT)]);
+    const hesap = await hesapla(ben.id);
+    assert.deepEqual([hesap.kisi.id, hesap.saglam, hesap.hurda, hesap.kalite], [ben.id, 18, 2, 0.9]);
 
     const kendi = await ozet(ben.cerez);
     assert.equal(kendi.durum, 200, JSON.stringify(kendi.govde));
     assert.equal(operatorOzetiCevabi.safeParse(kendi.govde).success, true);
-    assert.deepEqual([kendi.govde.kisi.id, kendi.govde.saglam, kendi.govde.hurda, kendi.govde.kalite], [ben.id, 18, 2, 0.9]);
+    assert.equal(kendi.govde.kisi.id, ben.id);
     assert.deepEqual(kendi.govde.ekip, [], 'operatöre kişi listesi gelmez');
     assert.deepEqual(kendi.govde.yetkiler.makineler.map((m) => m.id), [o.makineler[0]], 'makine ataması yetkili makinedir');
     assert.deepEqual(kendi.govde.yetkiler.istasyonlar, [], 'istasyon ataması yok');

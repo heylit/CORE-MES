@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   araliktanCikar, arkaArkaya, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
-  bedelCarpani, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
+  adetPayi, bedelCarpani, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
 
@@ -245,6 +245,22 @@ describe('plan kuralları', () => {
     assert.equal(gecikmeMaliyeti(satir({ paraBirimi: 'EUR' }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500);
     assert.equal(gecikmeMaliyeti(satir({ tutar: null, katkiPayi: null }), 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500, '201 a: fiyatsız satır tabanda');
     assert.equal(gecikmeMaliyeti(null, 0.5, { bitisSaat: 10, teslimSaat: 0 }, ayar), 750);
+  });
+
+  test('35 b: taban emrin sipariş satırı adedindeki payıyla ağırlanır; iki yarım emir bir bütün emir kadar taban sayar', () => {
+    const ayar = { tabanSaat: 150, finansmanOraniGun: null, karRiskiOraniGun: 0.3 };
+    const fiyatsiz: MaliyetSatiri = { tutar: null, paraBirimi: 'TRY', cezaOraniGun: null, cezaTavaniOrani: null, katkiPayi: null };
+    assert.equal(adetPayi({ miktar: '20' }, 10), 0.5);
+    assert.equal(adetPayi({ miktar: '20' }, 30), 1, 'satırdan büyük emir payı 1');
+    assert.equal(adetPayi({ miktar: '0' }, 10), 1, 'miktarı bilinmeyen satır');
+    assert.equal(adetPayi(null, 10), 1, 'satırsız emir');
+    assert.equal(gecikmeMaliyeti(fiyatsiz, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar, 0.5), 750);
+    assert.equal(gecikmeMaliyeti(fiyatsiz, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar), 1500, 'pay verilmezse 1');
+    const yarim = { bitDk: 10 * 60, teslimDk: 0, satir: fiyatsiz, carpan: 1, pay: 0.5 };
+    assert.equal(planMaliyeti([yarim, yarim], ayar), planMaliyeti([{ ...yarim, pay: 1 }], ayar), 'bölünen sipariş tabanı iki kez saymaz');
+    // Ceza tabanı aşınca pay cezaya ikinci kez uygulanmaz: ceza emrin tutar payıyla zaten ağırlıdır (225).
+    const cezali: MaliyetSatiri = { tutar: '1200000', paraBirimi: 'TRY', cezaOraniGun: '1', cezaTavaniOrani: null, katkiPayi: null };
+    assert.equal(gecikmeMaliyeti(cezali, 1, { bitisSaat: 10, teslimSaat: 0 }, ayar, 0.5), 5000);
   });
 
   test('6c: planın TL toplamı yerleşen emirlerin maliyet toplamıdır; yerleşmemiş emrin bitişi bilinmez, toplama girmez; çarpan elle yoksa öncelikten', () => {

@@ -139,6 +139,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     planlama_proje: { ...YAZAR, ayar: 200 },
     cam: YAZAR,
     satin_alma: YAZAR,
+    satis: HIC,
     depo: YAZAR,
     operator: HIC,
     insan_kaynaklari: HIC,

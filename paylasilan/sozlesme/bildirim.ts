@@ -39,6 +39,10 @@ export const BILDIRIM_TURLERI = {
   'siparisler.iskonto-onay-bekliyor': {
     baslik: 'Teklif iskonto onayı bekliyor', onem: 'uyari', alanIslemler: ['siparisler.iskonto-onayla'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
   },
+  // 63 b: istenen termini başka siparişi geciktiren satış taslağı plancı onayını bekler.
+  'siparisler.termin-onay-bekliyor': {
+    baslik: 'Teklif termin onayı bekliyor', onem: 'uyari', alanIslemler: ['plan.yaz'], yol: '/siparisler/teklifler', varsayilan: { mesaj: false, eposta: true },
+  },
   'ik.izin-onay-bekliyor': {
     baslik: 'İzin talebi onay bekliyor', onem: 'uyari', alanIslemler: ['ik.izin-onay'], yol: '/ik-islemlerim/onaylar', varsayilan: { mesaj: false, eposta: true },
   },
