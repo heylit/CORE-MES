@@ -53,7 +53,7 @@ function rrCevir(st) {
     if (!a || a.ad !== m.name) y.ad = m.name;
     if (!a || a.grup !== m.stationId) y.grup = m.stationId;
     /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
-    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
     return rrKur(a, y);
   });
   const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
@@ -180,6 +180,14 @@ function tmiTabanKur(D, bugun = duvarSaati(Date.now()).slice(0, 10)) {
    kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
    merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
    Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
+/* 71 b: elle değiştirilmemiş tezgâhın saat ücreti istasyon maliyetini izler; ucretIst istasyondan alınan son ücrettir, ücret ondan farklıysa
+   elle girilmiştir ve korunur. İşareti olmayan eski tezgâh ücreti maliyete eşitse izlemeye girer. Maliyet okunamazsa (satır yok, yetki yok)
+   son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
+function ucretIzle(a, maliyet) {
+  if (maliyet == null) return;
+  const izler = a.ucretIst !== undefined ? a.ucret === a.ucretIst : a.ucret === maliyet;
+  if (izler) { a.ucret = maliyet; a.ucretIst = maliyet; }
+}
 function tmiKaynakIle(st, kaynak, D) {
   const d = kaynak.durum, ek = kaynak.ek || {}, tk = ek.takvim || null;
   const o = Object.assign({}, st);
@@ -210,7 +218,7 @@ function tmiKaynakIle(st, kaynak, D) {
     const ist = new Set(istasyonlar.map(x => x.id));
     o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
       const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
-      const a = eski('tezgahlar', m.id); if (a) y.plan = a;
+      const a = eski('tezgahlar', m.id); if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId)); }
       return y;
     });
   }
