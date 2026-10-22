@@ -98,6 +98,16 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('yalnız saat okuması olan rol saatte okur; plan saatini ve üstlenmeyi almaz', async () => {
+    await islemliKisiEkle('saat_okur', ['saat.oku']);
+    for (const yol of ['/saat/istasyonlar', '/saat/uyarilar', `/saat/emirler/${emirId}`, '/saat/vardiya']) {
+      assert.equal((await istek('saat_okur', 'GET', yol)).durum, 200, yol);
+    }
+    assert.equal((await istek('saat_okur', 'GET', `/saat/istasyonlar/${istasyonId}/siradaki`)).durum, 403);
+    assert.equal(saatUyarilariCevabi.parse((await istek('saat_okur', 'GET', '/saat/uyarilar')).govde).ustlenebilir, false);
+    assert.equal((await istek('saat_okur', 'GET', '/uretim-emirleri')).durum, 403, 'emir listesi sayfası açılmaz');
+  });
+
   test('Fabrika Haritası sayfası olan rol de okur', async () => {
     for (const yol of ['/saat/istasyonlar', '/saat/uyarilar', `/saat/emirler/${emirId}`]) {
       assert.equal((await istek('harita', 'GET', yol)).durum, 200, yol);
