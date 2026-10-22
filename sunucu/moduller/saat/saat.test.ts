@@ -8,7 +8,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatUyarilariCevabi } from '#paylasilan/sozlesme/saat.ts';
+import { saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatSiradakiCevabi, saatUyarilariCevabi, saatVardiyaCevabi } from '#paylasilan/sozlesme/saat.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -547,5 +547,123 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     assert.equal((await tezgahKaresi('onizleme_kisitli', a.ist, 0)).statusCode, 403, 'kapsam disi tezgahin karesi');
     assert.equal(await tezgahOnizlemesi('onizleme_kisitli', b.ist), null, 'kapsamdaki tezgah okunur');
     assert.equal((await tezgahKaresi('oturumsuz', a.ist, 0)).statusCode, 401);
+  });
+  test('vardiya: emir listesini okumayan rol 403; takvimsiz kişide vardiya null, son sekiz saat ve gün sayımı kapsamdaki istasyonlardan', async () => {
+    assert.equal((await istek(null, 'GET', '/saat/vardiya')).durum, 401);
+    assert.equal((await istek('operator', 'GET', '/saat/vardiya')).durum, 403);
+    const c = await istek('planlama_proje', 'GET', '/saat/vardiya');
+    assert.equal(c.durum, 200);
+    const v = saatVardiyaCevabi.parse(c.govde);
+    assert.equal(v.vardiya, null, 'istasyona atanmamış kişinin takvimi yoktur; vardiya uydurulmaz');
+    assert.equal(v.saatlik.length, 8);
+    assert.ok(v.saatlik.every((s, i) => i === 0 || Date.parse(s.baslangic) - Date.parse(v.saatlik[i - 1]!.baslangic) === 3_600_000));
+    assert.equal(v.pencere.baslangic, new Date(tesisGunBasi(tesisGunu(Date.parse(v.zaman)))).toISOString());
+    const ist = saatIstasyonlariCevabi.parse((await istek('planlama_proje', 'GET', '/saat/istasyonlar')).govde);
+    const toplam = ist.istasyonlar.filter((i) => i.bugun !== null);
+    assert.deepEqual(v.bugun, toplam.length === 0 ? null : {
+      saglam: toplam.reduce((t, i) => t + i.bugun!.saglam, 0), hurda: toplam.reduce((t, i) => t + i.bugun!.hurda, 0),
+    });
+    assert.equal((await istek('harita', 'GET', '/saat/vardiya')).durum, 200);
+  });
+
+  test('sıradaki iş: yalnız plan okuyan rol; kapsam dışı istasyon 403; canlı planda en erken bekleyen adım', async () => {
+    const im = await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('SAMP', 'Plan Merkezi') RETURNING id");
+    const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAIP', 'CNC-P', $1) RETURNING id", [im?.id]))!.id;
+    const mk = (await o().sahip.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAKP', 'Tezgah P', $1) RETURNING id", [ist]))!.id;
+    const yol = `/saat/istasyonlar/${ist}/siradaki`;
+    assert.equal((await istek(null, 'GET', yol)).durum, 401);
+    assert.equal((await istek('harita', 'GET', yol)).durum, 403, 'plan okumayan rol plan saatini görmez');
+    assert.equal((await istek('planlama_proje', 'GET', '/saat/istasyonlar/999999/siradaki')).durum, 404);
+    assert.equal(saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki, null, 'canlı planda iş yoksa null');
+
+    const sayi = (Date.now() % 100000) + 50000;
+    await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SA-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+    const urunNo = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'mamul', 'SA-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [`sa-dnm-${sayi}`, sayi, JSON.stringify({ id: `sa-dnm-${sayi}`, com: { ad: 'Deneme mamul' } }), yoneticiId]))!.no;
+    const rev = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme) VALUES ($1, 'mamul', 'ZZ', 'iptal', $2, $2, now()) RETURNING id",
+      [urunNo, yoneticiId]))!.id;
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('SA-TP', 'Plan tipi', 'TAL') RETURNING id"))!.id;
+    const adim = (sira: number) => ({
+      sira, opNo: sira * 10, ad: `Adım ${sira}`, operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: mk }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+    });
+    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['uretim-emirleri.yaz'] };
+    const e = (await o().vt.tx((db) => uretimEmriAc(db, yonetici, {
+      malzemeNo: urunNo, adet: 6, teslim: null, kaynakRotaRevizyonId: rev, projeId, isEmirleri: [adim(1), adim(2)],
+    }))).uretimEmriId;
+    const isler = (await o().sahip.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [e])).map((r) => r.id);
+    const yerlestir = (isEmriId: number, saat: number) => o().sahip.sorgu(
+      `INSERT INTO plan_yerlesimi (is_emri_id, makine_id, baslangic, bitis, yazan_kisi_id)
+       VALUES ($1, $2, now() + make_interval(hours => $3), now() + make_interval(hours => $3 + 1), $4)`, [isEmriId, mk, saat, yoneticiId]);
+    await yerlestir(isler[0]!, 2);
+    await yerlestir(isler[1]!, 4);
+    let s = saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki;
+    assert.deepEqual(s && { opNo: s.opNo, ad: s.ad, adet: s.adet, tezgah: s.tezgah }, { opNo: 10, ad: 'Adım 1', adet: 6, tezgah: 'Tezgah P' });
+
+    // Çalışan adım sıradaki değildir: ilk adım başlayınca sıra ikinci adıma geçer.
+    await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/baslat`)).durum, 200);
+    s = saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki;
+    assert.equal(s?.opNo, 20);
+
+    await islemliKisiEkle('plan_kisitli', ['plan.oku']);
+    const kisi = await o().vt.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'plan_kisitli'");
+    const sm1 = await o().vt.tek<{ id: number }>("SELECT id FROM is_merkezi WHERE kod = 'SAM1'");
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisi?.id, sm1?.id]);
+    assert.equal((await istek('plan_kisitli', 'GET', yol)).durum, 403, 'kapsam dışı istasyonun sırası');
+    assert.equal((await istek('plan_kisitli', 'GET', `/saat/istasyonlar/${istasyonId}/siradaki`)).durum, 200);
+  });
+  test('üstlenme: işlemsiz kişi 403; ilk üstlenen kazanır, ikinci 409; kapsam dışı ve kapanmış uyarı 404; 12 saat sonra başkası üstlenir', async () => {
+    const im = await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('SAMU', 'Üstlenme Merkezi') RETURNING id");
+    const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAIU', 'CNC-U', $1) RETURNING id", [im?.id]))!.id;
+    await o().sahip.sorgu("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAKU', 'Tezgah U', $1)", [ist]);
+    await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);
+    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-U', parcaAd: 'Deneme mil', adet: 2, istasyonId: ist, projeId });
+    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
+    const e = (ac.govde as { emir: { id: number } }).emir.id;
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/baslat`)).durum, 200);
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/durdur`, { durusNedeniId: durusId })).durum, 200);
+
+    await islemliKisiEkle('ustlenen_a', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    await islemliKisiEkle('ustlenen_b', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    await islemliKisiEkle('ustlenen_kisitli', ['sayfa.atolye', 'saat.uyari-ustlen']);
+    const kisitli = await o().vt.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'ustlenen_kisitli'");
+    const sm1 = await o().vt.tek<{ id: number }>("SELECT id FROM is_merkezi WHERE kod = 'SAM1'");
+    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kisitli?.id, sm1?.id]);
+
+    const liste = async (ad: string) => saatUyarilariCevabi.parse((await istek(ad, 'GET', '/saat/uyarilar')).govde);
+    const durus = async (ad: string) => (await liste(ad)).uyarilar.find((u) => u.tur === 'durus' && u.istasyon?.id === ist);
+    const u = await durus('ustlenen_a');
+    assert.ok(u, 'duruş uyarısı listede');
+    assert.equal(u.ustlenen, null);
+    assert.equal((await liste('ustlenen_a')).ustlenebilir, true);
+    assert.equal((await liste('harita')).ustlenebilir, false, 'işlemi olmayan kişide düğme yok');
+
+    const ustlen = (ad: string | null, kimlik: string) => istek(ad, 'POST', '/saat/uyarilar/ustlen', { kimlik });
+    assert.equal((await ustlen(null, u.kimlik)).durum, 401);
+    assert.equal((await ustlen('harita', u.kimlik)).durum, 403, 'işlemsiz kişi üstlenemez');
+    assert.equal((await ustlen('ustlenen_kisitli', u.kimlik)).durum, 404, 'kapsam dışı uyarı görünmez, üstlenilemez');
+    assert.equal((await ustlen('ustlenen_a', 'durus|0||||')).durum, 404, 'olmayan uyarı');
+    assert.equal((await ustlen('ustlenen_a', 'x'.repeat(301))).durum, 400);
+
+    const c = await ustlen('ustlenen_a', u.kimlik);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal(saatUyarilariCevabi.parse(c.govde).uyarilar.find((x) => x.kimlik === u.kimlik)?.ustlenen?.ad, 'Deneme ustlenen_a');
+    assert.equal((await durus('ustlenen_b'))?.ustlenen?.ad, 'Deneme ustlenen_a', 'başkası da üstleneni görür');
+    assert.equal((await ustlen('ustlenen_b', u.kimlik)).durum, 409, 'geçerli üstlenme varken başkası üstlenemez');
+    assert.equal((await ustlen('ustlenen_a', u.kimlik)).durum, 200, 'aynı kişi yeniden üstlenebilir');
+
+    await o().sahip.sorgu("UPDATE saat_uyari_ustlenme SET ustlenme = now() - interval '13 hours' WHERE kimlik = $1", [u.kimlik]);
+    assert.equal((await durus('ustlenen_b'))?.ustlenen, null, 'süresi geçen üstlenme gösterilmez');
+    assert.equal((await ustlen('ustlenen_b', u.kimlik)).durum, 200, 'süresi geçince başkası üstlenir');
+    assert.equal((await durus('ustlenen_a'))?.ustlenen?.ad, 'Deneme ustlenen_b');
+
+    // Üstlenme uyarıyı kapatmaz: duruş kaynağında bitince uyarı listeden düşer ve artık üstlenilemez.
+    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/devam`)).durum, 200);
+    assert.equal(await durus('ustlenen_a'), undefined);
+    assert.equal((await ustlen('ustlenen_a', u.kimlik)).durum, 404);
   });
 });

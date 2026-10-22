@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  birimSaniye, durumBaslangici, emirTezgahi, istasyonDurumu, istasyonlariKur, kalanSaniye, kalibrasyonuGorebilirMi, malzemeHazirMi, pencereBaslangici, uyarilariKur,
+  birimSaniye, durumBaslangici, emirTezgahi, istasyonDurumu, istasyonlariKur, kalanSaniye, kalibrasyonuGorebilirMi, malzemeHazirMi, pencereBaslangici, saatlikSinirlar,
+  gecerliVardiya, siradakiIs, uyarilariKur,
 } from './kurallar.ts';
 import type { KaynakAlet, KaynakEmir, KaynakMakine, KaynakMakineDurumu } from './kurallar.ts';
 
@@ -171,5 +172,35 @@ describe('saat kuralları', () => {
       ['bitti', 1, 'UE-9', null, '2026-10-17T11:00:00+03:00'],
       ['kalibrasyon', null, null, 'Kalibrasyon vadesi geçti', null],
     ]);
+  });
+  test('geçerli vardiya: dün başlayan gece vardiyası sabah sayılır; mola içi vardiyadadır; vardiya dışı ve boş gün null', () => {
+    const gece = { araliklar: [{ baslangic: '2026-10-21T21:00:00.000Z', bitis: '2026-10-22T05:00:00.000Z' }], bitis: '2026-10-22T05:00:00.000Z' };
+    const gunduz = {
+      araliklar: [{ baslangic: '2026-10-22T05:00:00.000Z', bitis: '2026-10-22T09:00:00.000Z' }, { baslangic: '2026-10-22T09:30:00.000Z', bitis: '2026-10-22T13:00:00.000Z' }],
+      bitis: null,
+    };
+    assert.deepEqual(gecerliVardiya([gece, gunduz], '2026-10-22T03:00:00.000Z'), { baslangic: '2026-10-21T21:00:00.000Z', bitis: '2026-10-22T05:00:00.000Z' });
+    assert.deepEqual(gecerliVardiya([gece, gunduz], '2026-10-22T09:10:00.000Z'), { baslangic: '2026-10-22T05:00:00.000Z', bitis: '2026-10-22T13:00:00.000Z' });
+    assert.deepEqual(gecerliVardiya([gece, gunduz], '2026-10-22T05:00:00.000Z')?.baslangic, '2026-10-22T05:00:00.000Z', 'bitiş anı sonraki vardiyadır');
+    assert.equal(gecerliVardiya([gece, gunduz], '2026-10-22T14:00:00.000Z'), null);
+    assert.equal(gecerliVardiya([{ araliklar: [], bitis: null }], '2026-10-22T14:00:00.000Z'), null);
+  });
+
+  test('saatlik sınırlar: son sekiz saatin başı ve şimdi', () => {
+    const s = saatlikSinirlar('2026-10-22T10:25:00.000Z');
+    assert.equal(s.length, 9);
+    assert.equal(s[0], '2026-10-22T03:00:00.000Z');
+    assert.equal(s[7], '2026-10-22T10:00:00.000Z');
+    assert.equal(s[8], '2026-10-22T10:25:00.000Z');
+  });
+
+  test('sıradaki iş: istasyonun makinesinde en erken; çalışan, biten, kişiye ve başka makineye yerleşen sayılmaz', () => {
+    const is = (id: number, adimDurumu: 'bekliyor' | 'calisiyor' | 'tamam' | null) => ({ id, emirNo: `UE-${id}`, opNo: id * 10, ad: `Adım ${id}`, adet: 3, adimDurumu });
+    const isler = [is(1, 'calisiyor'), is(2, 'bekliyor'), is(3, null), is(4, 'tamam'), is(5, 'bekliyor')];
+    const y = (isEmriId: number, makineId: number | null, saat: number) => ({ isEmriId, makineId, baslangic: new Date(Date.UTC(2026, 9, 22, saat)) });
+    const yerlesimler = [y(1, 7, 1), y(4, 7, 2), y(5, null, 3), y(2, 8, 4), y(3, 7, 6), y(2, 7, 5)];
+    assert.equal(siradakiIs(isler, yerlesimler, new Set([7]))?.is.id, 2);
+    assert.equal(siradakiIs(isler, yerlesimler, new Set([9])), null);
+    assert.equal(siradakiIs(isler, [], new Set([7])), null);
   });
 });

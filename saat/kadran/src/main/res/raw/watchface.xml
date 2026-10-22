@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TMI kadrani (375 a). Veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir: acik emir halkasi, dikkat isteyen
-     istasyonlar, kurum logosu. Kisik modda yalniz saat ve tarih kalir; kutucuklar gizlenir. Dokununca Tezgahlar 3B acilir. -->
+<!-- TMI kadrani (375 a, 86). Veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir: acik emir halkasi, uyari sayisi (sol),
+     dikkat isteyen istasyonlar ve durum dagilimi (alt), kurum logosu (ust). Her kutucuk kendi ekranini acar (dokunus verisi
+     uygulamadadir). Kisik modda yalniz saat, tarih ve uyari sayisi kalir, tek renk. Vurgu rengi kadran duzenlemeden secilir. -->
 <WatchFace width="450" height="450">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="10:08:32" />
+    <UserConfigurations>
+        <ColorConfiguration id="vurgu" displayName="@string/vurgu_rengi" defaultValue="0">
+            <ColorOption id="0" displayName="@string/vurgu_sari" colors="#ffffd23f" />
+            <ColorOption id="1" displayName="@string/vurgu_yesil" colors="#ff3cf0a8" />
+            <ColorOption id="2" displayName="@string/vurgu_mavi" colors="#ff4fb3ff" />
+        </ColorConfiguration>
+    </UserConfigurations>
     <Scene backgroundColor="#ff000000">
 
+        <!-- Halka butun kadrani cizer ama yalniz halka bandi dokunulur: ortadaki tuslarla cakismaz. -->
         <ComplicationSlot slotId="0" displayName="Emirler" x="0" y="0" width="450" height="450"
             supportedTypes="RANGED_VALUE EMPTY" isCustomizable="TRUE">
             <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
                 primaryProvider="tmi.saat/tmi.saat.kadran.EmirHalkasi" primaryProviderType="RANGED_VALUE" />
-            <BoundingOval x="0" y="0" width="450" height="450" />
+            <BoundingArc centerX="225" centerY="225" width="428" height="428" thickness="34" startAngle="0" endAngle="360" />
             <Complication type="RANGED_VALUE">
                 <PartDraw x="0" y="0" width="450" height="450">
                     <Arc centerX="225" centerY="225" width="428" height="428" startAngle="0" endAngle="360">
@@ -19,10 +28,10 @@
                     <Arc centerX="225" centerY="225" width="428" height="428" startAngle="0" endAngle="0">
                         <Transform target="endAngle"
                             value="360 * ([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])" />
-                        <Stroke color="#ff3cf0a8" thickness="11" cap="ROUND" />
+                        <Stroke color="[CONFIGURATION.vurgu.0]" thickness="11" cap="ROUND" />
                     </Arc>
                 </PartDraw>
-                <PartText x="105" y="376" width="240" height="30">
+                <PartText x="105" y="388" width="240" height="30">
                     <Text align="CENTER" ellipsis="TRUE">
                         <Font family="SYNC_TO_DEVICE" size="21" color="#ff929cab">
                             <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
@@ -47,7 +56,7 @@
             <Complication type="SHORT_TEXT">
                 <PartText x="0" y="0" width="80" height="50">
                     <Text align="CENTER">
-                        <Font family="SYNC_TO_DEVICE" size="30" weight="BOLD" color="#ffffd23f">
+                        <Font family="SYNC_TO_DEVICE" size="30" weight="BOLD" color="[CONFIGURATION.vurgu.0]">
                             <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
                     </Text>
@@ -57,9 +66,85 @@
             <Variant mode="AMBIENT" target="alpha" value="0" />
         </ComplicationSlot>
 
-        <DigitalClock x="0" y="118" width="450" height="112">
-            <TimeText x="0" y="0" width="450" height="112" align="CENTER" format="hh:mm" hourFormat="24">
-                <Font family="SYNC_TO_DEVICE" size="104" weight="BOLD" color="#fff2f4f7" />
+        <!-- Sol tus (saat 9): acik uyari sayisi. Uyari varsa kirmizi, yoksa gri halka; kisik modda yalniz sayi kalir. -->
+        <ComplicationSlot slotId="3" displayName="Uyarılar" x="38" y="193" width="64" height="64"
+            supportedTypes="RANGED_VALUE EMPTY" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="tmi.saat/tmi.saat.kadran.UyariSayisi" primaryProviderType="RANGED_VALUE" />
+            <BoundingOval x="0" y="0" width="64" height="64" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="uyariVar"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                    </Expressions>
+                    <Compare expression="uyariVar">
+                        <PartDraw x="0" y="0" width="64" height="64">
+                            <Ellipse x="3" y="3" width="58" height="58">
+                                <Fill color="#ff3a1418" />
+                                <Stroke color="#ffff4d5e" thickness="4" />
+                            </Ellipse>
+                            <Variant mode="AMBIENT" target="alpha" value="0" />
+                        </PartDraw>
+                        <PartText x="0" y="12" width="64" height="40">
+                            <Text align="CENTER">
+                                <Font family="SYNC_TO_DEVICE" size="26" weight="BOLD" color="#fff2f4f7">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartDraw x="0" y="0" width="64" height="64">
+                            <Ellipse x="3" y="3" width="58" height="58">
+                                <Stroke color="#ff3b414b" thickness="3" />
+                            </Ellipse>
+                            <Variant mode="AMBIENT" target="alpha" value="0" />
+                        </PartDraw>
+                        <PartText x="0" y="12" width="64" height="40">
+                            <Text align="CENTER">
+                                <Font family="SYNC_TO_DEVICE" size="26" weight="BOLD" color="#ff6b7380">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <!-- Vardiya bitisine kalan (sag tus): halka vardiyanin gecen payi, yazi sistemin kendi geri sayimi (ag istemez). -->
+        <ComplicationSlot slotId="4" displayName="Vardiya" x="348" y="193" width="64" height="64"
+            supportedTypes="RANGED_VALUE EMPTY" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="tmi.saat/tmi.saat.kadran.VardiyaKalan" primaryProviderType="RANGED_VALUE" />
+            <BoundingOval x="0" y="0" width="64" height="64" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="64" height="64">
+                    <Arc centerX="32" centerY="32" width="56" height="56" startAngle="0" endAngle="360">
+                        <Stroke color="#ff3b414b" thickness="3" />
+                    </Arc>
+                    <Arc centerX="32" centerY="32" width="56" height="56" startAngle="0" endAngle="0">
+                        <Transform target="endAngle"
+                            value="360 * ([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])" />
+                        <Stroke color="[CONFIGURATION.vurgu.0]" thickness="4" cap="ROUND" />
+                    </Arc>
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                </PartDraw>
+                <PartText x="2" y="20" width="60" height="24">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#fff2f4f7">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <DigitalClock x="0" y="122" width="450" height="104">
+            <TimeText x="0" y="0" width="450" height="104" align="CENTER" format="hh:mm" hourFormat="24">
+                <Font family="SYNC_TO_DEVICE" size="96" weight="BOLD" color="#fff2f4f7" />
             </TimeText>
         </DigitalClock>
 
@@ -72,26 +157,31 @@
             </Text>
         </PartText>
 
-        <ComplicationSlot slotId="2" displayName="İstasyonlar" x="55" y="282" width="340" height="86"
+        <!-- Alt kutu: dikkat isteyen istasyonlar ve altinda durum dagilimi cubugu (calisiyor / durus / ariza / bosta). Cubugu
+             uygulama cizer ve kucuk gorsel olarak verir: WFF 1'de agirlikli ogeler parca parca cizilemez. -->
+        <ComplicationSlot slotId="2" displayName="İstasyonlar" x="55" y="282" width="340" height="96"
             supportedTypes="LONG_TEXT SHORT_TEXT EMPTY" isCustomizable="TRUE">
             <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
                 primaryProvider="tmi.saat/tmi.saat.kadran.IstasyonOzeti" primaryProviderType="LONG_TEXT" />
-            <BoundingRoundBox x="0" y="0" width="340" height="86" cornerRadius="20" />
+            <BoundingRoundBox x="0" y="0" width="340" height="96" cornerRadius="20" />
             <Complication type="LONG_TEXT">
                 <PartText x="0" y="0" width="340" height="32">
                     <Text align="CENTER" ellipsis="TRUE">
-                        <Font family="SYNC_TO_DEVICE" size="22" color="#ffffd23f">
+                        <Font family="SYNC_TO_DEVICE" size="22" color="[CONFIGURATION.vurgu.0]">
                             <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
                         </Font>
                     </Text>
                 </PartText>
-                <PartText x="0" y="36" width="340" height="44">
+                <PartText x="0" y="34" width="340" height="44">
                     <Text align="CENTER" ellipsis="TRUE" maxLines="2">
                         <Font family="SYNC_TO_DEVICE" size="21" color="#fff2f4f7">
                             <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
                     </Text>
                 </PartText>
+                <PartImage x="50" y="82" width="240" height="8">
+                    <Image resource="[COMPLICATION.SMALL_IMAGE]" />
+                </PartImage>
             </Complication>
             <Complication type="SHORT_TEXT">
                 <PartText x="0" y="20" width="340" height="44">

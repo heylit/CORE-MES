@@ -1,11 +1,12 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { emirParametresi, onizlemeKaresiParametresi, saatDurdurGovdesi, saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatUyarilariCevabi } from '#paylasilan/sozlesme/saat.ts';
+import { emirParametresi, onizlemeKaresiParametresi, saatDurdurGovdesi, saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatSiradakiCevabi, saatUstlenGovdesi, saatUyarilariCevabi, saatVardiyaCevabi } from '#paylasilan/sozlesme/saat.ts';
 import * as servis from './servis.ts';
 
 // Okuma uçları yeni işlem istemez (kart #1631): açık emirleri ve istasyon durumunu zaten okuyan roller (emir listesi,
 // Fabrika Haritası) saatte de görür. Terminal rolü emir listesini okumadığı için burada da yoktur.
 const OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.atolye'] } as const;
+const PLAN_OKUMA = { biri: ['plan.oku', 'plan.yaz'] } as const;
 
 export const uclar = [
   uc({
@@ -64,12 +65,38 @@ export const uclar = [
   }),
   uc({
     yontem: 'GET',
+    yol: '/saat/vardiya',
+    yetki: OKUMA,
+    cevap: saatVardiyaCevabi,
+    isle: ({ db, kullanici }) => servis.vardiya(db, kullanici),
+  }),
+  // Plan saati yalnız planı okuyan rolde (karar 84 a); plan modülünün okuma işlemleriyle aynı küme.
+  uc({
+    yontem: 'GET',
+    yol: '/saat/istasyonlar/:id/siradaki',
+    yetki: PLAN_OKUMA,
+    parametre: emirParametresi,
+    cevap: saatSiradakiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.siradaki(db, kullanici, parametre.id),
+  }),
+  uc({
+    yontem: 'GET',
     yol: '/saat/durus-nedenleri',
     yetki: 'terminal.uret',
     cevap: saatDurusNedenleriCevabi,
     isle: ({ db }) => servis.durusNedenleri(db),
   }),
-  // Yazan tek saat ucu (onaylı kapsam): saat belirteci bunun için oturum modülünde ayrıca açılır.
+  // Üstlenme (karar 79 a): yalnız üstlenir, kapatmaz; saat belirteci bunun için de oturum modülünde ayrıca açılır.
+  uc({
+    yontem: 'POST',
+    yol: '/saat/uyarilar/ustlen',
+    yetki: 'saat.uyari-ustlen',
+    tekrarKorumali: true,
+    govde: saatUstlenGovdesi,
+    cevap: saatUyarilariCevabi,
+    isle: ({ db, kullanici, govde }) => servis.ustlen(db, kullanici, govde.kimlik),
+  }),
+  // Duruş yazma (onaylı kapsam): saat belirteci bunun için oturum modülünde ayrıca açılır.
   uc({
     yontem: 'POST',
     yol: '/saat/emirler/:id/durdur',

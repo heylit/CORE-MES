@@ -5,6 +5,10 @@ Ilk surum yalniz okur. Akis ornektekiyle ayni: ana menu (Istasyonlarim, Uyarilar
 ve tam ekran uyari (yeni uyari gelince acilir). Yazma (durus nedeni, NFC, cagri)
 ve 3B ikinci surumdedir. Ekran duzeni ornek sayfadan gelir (`/mnt/project-files/arastirma/akilli-saat/ornek/`).
 
+Uyari ustlenme (kart #86, karar 79 a): tam ekran uyarida "Ustlen" uyariyi kapatmaz, "ben bakiyorum" der; baskalarinin listesinde
+ustlenen gorunur, ustlenme 12 saat gecerlidir. Dugme yalniz `saat.uyari-ustlen` islemi olan kiside gorunur; saatten yazmak icin
+oturum modulunun saat yazma listesi genisletilmelidir (ayri yama).
+
 Bu klasor npm calisma alanina, `npm run kontrol`'e ve guncelleme adimlarina girmez.
 
 ## Yapi
@@ -97,9 +101,20 @@ Sunucu ve saat birlikte guncellenir: uyari cevabinda istasyon artik bos olabilir
 ## TMI kadrani (Watch Face Format, soru 375 a)
 
 Wear OS 6 (Android 16) kodla cizilen eski tip kadrani reddeder; kadran bu yuzden ayri ve kodsuz bir APK'dir (`kadran/`,
-`res/raw/watchface.xml`). Kadran veri cekemez: acik emir halkasi, dikkat isteyen istasyonlar ve kurum logosu saat uygulamasinin
-veri kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`) gelir. Kutucuga dokununca uygulama Tezgahlar 3B ile acilir.
-Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); kisik modda kadran yalniz saat ve tarihi gosterir.
+`res/raw/watchface.xml`). Kadran veri cekemez: veri saat uygulamasinin kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`)
+gelir. Her kutucuk kendi sayfasini acar:
+
+| Yer | Kutucuk | Dokununca |
+|---|---|---|
+| Dis halka (yalniz halka bandi dokunulur) | TMI Açık emirler | Yonetici ozeti |
+| Ust | TMI Logo | Tezgahlar 3B |
+| Sol tus (saat 9) | TMI Uyarı sayısı: sayi, varsa kirmizi, yoksa gri | Uyarilar |
+| Sag tus (saat 3) | TMI Vardiya bitişi: vardiyanin gecen payi halkada, bitise kalan (sistem sayaci); vardiya disinda bos | Vardiya devri |
+| Alt kutu | TMI İstasyonlar: dikkat isteyenler ve durum cubugu | Istasyonlarim |
+
+Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); uygulama acikken uyari sayisi degisince kadrana hemen bildirir.
+Kisik modda kadran yalniz saat, tarih ve uyari sayisini tek renk gosterir. Vurgu rengi (sari, yesil, mavi) kadran duzenleme
+ekranindan secilir. Yeni tus eklenince kadranda "Duzenle" > kutucuklar ile secilmesi gerekebilir.
 
 ```
 gradle -PimzaDeposu=C:\imza\tmi-saat.jks :uygulama:assembleRelease :kadran:assembleRelease
@@ -135,3 +150,5 @@ kisinin kendi istasyonlarindan biriyse ayrintisini acar. Etiket herhangi bir NFC
 - TMI kadrani gercek saatte denenmedi. Kadran XML'i Google'in Watch Face Format 1 semasina gore gecerlidir (resmi XSD ile denendi);
   kutucuk ifadeleri (`[COMPLICATION.*]`), halkanin 12 yonunden baslamasi ve kadranin uygulama kutucuklarini kendiliginden
   secmesi (`DefaultProviderPolicy primaryProvider`) cihazda denenmedi.
+- Vardiya tusundaki geri sayim yazisinin (`TimeDifferenceComplicationText`) kadranda kendiliginden azalmasi ve "TMI Vardiya"
+  karosunun sutun grafigi cihazda denenmedi.

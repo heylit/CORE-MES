@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="kadran_adi">TMI Kadran</string>
+    <string name="vurgu_rengi">Vurgu rengi</string>
+    <string name="vurgu_sari">Sarı</string>
+    <string name="vurgu_yesil">Yeşil</string>
+    <string name="vurgu_mavi">Mavi</string>
 </resources>

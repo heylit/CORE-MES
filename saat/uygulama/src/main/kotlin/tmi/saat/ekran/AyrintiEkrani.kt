@@ -1,6 +1,14 @@
 package tmi.saat.ekran
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +19,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.focusable
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
@@ -30,7 +37,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Text
-import kotlinx.coroutines.delay
 import tmi.saat.Api
 import tmi.saat.Emir
 import tmi.saat.Istasyon
@@ -41,13 +47,9 @@ import tmi.saat.cekirdek.GeriSayim
 import tmi.saat.cekirdek.IstasyonDurumu
 import tmi.saat.cekirdek.Zaman
 
-// Saniyede bir yenilenen simdi; geri sayimlar ve durum suresi bununla akar.
+// Eski cagiranlar icin: an tek degerdir, okuyan bilesen saniyede bir yeniden kurulur. Yeni ekranlar simdiDurumu + Akan kullanir.
 @Composable
-fun simdiMs(): Long {
-    var simdi by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(1_000); simdi = System.currentTimeMillis() } }
-    return simdi
-}
+fun simdiMs(): Long = simdiDurumu().value
 
 // Emrin parca ve emir geri sayimi tezgahtaki son uretim girisinden; giris yoksa ikisi de null.
 class Sayimlar(val parca: Long?, val emir: Long?)
@@ -59,9 +61,9 @@ fun sayimlar(e: Emir, alindiMs: Long, simdi: Long): Sayimlar {
     return Sayimlar(parca, GeriSayim.emirKalan(parca, e.birimSaniye, e.hedef, e.saglam))
 }
 
-// Ornekteki istasyon ayrintisi: halkada yapilan / hedef, altinda emir ve durum, OEE, takim, parca; "3B" (parca onizlemesi) ve "Sureler" dugmesi,
-// calisan emirde "Durdur" (duruş nedeni secilir).
-// OEE ve takim omru henuz sunucuda yok: ornekteki gibi "veri eksik" ve "-" yazilir, sifir uydurulmaz.
+// Istasyon ayrintisi (82 a): ustte durum renginde serit, halkada emrin kalan suresi (dolu yay yapilan / hedef); asagi kaydirinca
+// durum, emir, tezgah, son durus, bugunku durus ve ek satir; "Durdur", "3B", "Sureler". Doner cerceve komsu istasyona gecer.
+// OEE ve takim omru henuz sunucuda yok: "veri eksik" ve "-" yazilir, sifir uydurulmaz. Operator saat sozlesmesinde yok, gosterilmez.
 @Composable
 fun AyrintiEkrani(
     api: Api,
@@ -79,26 +81,40 @@ fun AyrintiEkrani(
     }
     val durumu = IstasyonDurumu.coz(istasyon.durum)
     val renk = Renkler.durum(durumu)
+    val simdi = simdiDurumu()
     val ozet = istasyon.emir
     if (ozet == null) {
-        AyrintiYerlesimi(istasyon.ad, renk, null, "-", "açık emir yok", geri, komsuyaGec) {
+        AyrintiYerlesimi(istasyon.ad, renk, geri, komsuyaGec, halka = { m -> Halka(null, renk, "-", "açık emir yok", m) }) {
+            Akan(simdi) { an -> DurumSatiri(durumu?.etiket ?: istasyon.durum, istasyon.durumBaslangic, an, renk) }
             Text(istasyon.tezgah?.let { tezgahMetni(it) } ?: "tezgah: veri yok", color = Renkler.soluk, fontSize = 11.sp, maxLines = 1)
-            Text(durumMetni(durumu?.etiket ?: istasyon.durum, istasyon.durumBaslangic, simdiMs()), color = renk, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             BugunDurus(istasyon.durusSaniye)
         }
         return
     }
     val durum by periyodikOku(oturumBitti, ozet.id) { api.emir(ozet.id) }
-    val simdi = simdiMs()
     when (val d = durum) {
         is Yukleme.Bekliyor -> Ileti("Yükleniyor")
         is Yukleme.Hata -> Ileti(d.ileti)
         is Yukleme.Geldi -> {
             val e = d.veri
-            val s = sayimlar(e, d.alindiMs, simdi)
             val oran = e.saglam?.let { it.toFloat() / e.hedef }
-            AyrintiYerlesimi(istasyon.ad, renk, oran, e.saglam?.toString() ?: "-", "/ ${e.hedef} adet", geri, komsuyaGec) {
-                Text((e.tezgah ?: istasyon.tezgah)?.let { tezgahMetni(it) } ?: "tezgah: veri yok", color = Renkler.soluk, fontSize = 11.sp, maxLines = 1)
+            val sureVar = e.birimSaniye != null && e.sonUretimAni != null
+            AyrintiYerlesimi(
+                istasyon.ad, renk, geri, komsuyaGec,
+                halka = { m ->
+                    Akan(simdi) { an ->
+                        val s = sayimlar(e, d.alindiMs, an)
+                        Halka(
+                            oran, renk,
+                            buyuk = if (sureVar) GeriSayim.metin(s.emir) else e.saglam?.toString() ?: "-",
+                            kucuk = if (sureVar) "kalan · ${e.saglam ?: "-"}/${e.hedef}" else "/ ${e.hedef} adet",
+                            modifier = m,
+                        )
+                    }
+                },
+            ) {
+                BayatSatiri(d)
+                Akan(simdi) { an -> DurumSatiri(durumu?.etiket ?: istasyon.durum, istasyon.durumBaslangic ?: e.durumBaslangic, an, renk) }
                 Text(
                     e.op?.let { "OP${it.opNo} ${it.ad}" } ?: "${e.emirNo} · ${e.parcaAd}",
                     fontWeight = FontWeight.SemiBold,
@@ -106,22 +122,24 @@ fun AyrintiEkrani(
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    durumMetni(durumu?.etiket ?: istasyon.durum, istasyon.durumBaslangic ?: e.durumBaslangic, simdi),
-                    color = renk,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                )
-                e.durusNedeni?.let { Text(it, color = Renkler.hata, fontSize = 11.sp, maxLines = 1) }
+                if (e.op != null) Text("${e.emirNo} · ${e.parcaAd}", color = Renkler.soluk, fontSize = 11.sp, maxLines = 1)
+                Text((e.tezgah ?: istasyon.tezgah)?.let { tezgahMetni(it) } ?: "tezgah: veri yok", color = Renkler.soluk, fontSize = 11.sp, maxLines = 1)
+                e.durusNedeni?.let { neden ->
+                    val ne = Zaman.saatDakika(e.durusBaslangic)
+                    Text("son duruş: $neden" + (ne?.let { " · $it" } ?: ""), color = Renkler.hata, fontSize = 11.sp, maxLines = 1)
+                }
                 BugunDurus(istasyon.durusSaniye)
-                EkSatir(
-                    listOfNotNull(
-                        "OEE" to "veri eksik",
-                        "Takım" to "-",
-                        "Parça" to (if (e.birimSaniye == null) "süre yok" else if (e.sonUretimAni == null) "giriş yok" else GeriSayim.metin(s.parca)),
-                        e.hurda?.takeIf { it > 0 }?.let { "Fire" to it.toString() },
-                    ),
-                )
+                Akan(simdi) { an ->
+                    val s = sayimlar(e, d.alindiMs, an)
+                    EkSatir(
+                        listOfNotNull(
+                            "OEE" to "veri eksik",
+                            "Takım" to "-",
+                            "Parça" to (if (e.birimSaniye == null) "süre yok" else if (e.sonUretimAni == null) "giriş yok" else GeriSayim.metin(s.parca)),
+                            e.hurda?.takeIf { it > 0 }?.let { "Fire" to it.toString() },
+                        ),
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(top = 4.dp)) {
                     if (durumu == IstasyonDurumu.CALISIYOR) Dugme("Durdur") { durdur(e.id) }
                     Dugme("3B") { modelAc(e.id) }
@@ -130,6 +148,11 @@ fun AyrintiEkrani(
             }
         }
     }
+}
+
+@Composable
+private fun DurumSatiri(etiket: String, baslangic: String?, an: Long, renk: Color) {
+    Text(durumMetni(etiket, baslangic, an), color = renk, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 }
 
 @Composable
@@ -146,39 +169,49 @@ fun durumMetni(etiket: String, baslangic: String?, simdi: Long): String =
 private fun AyrintiYerlesimi(
     ad: String,
     renk: Color,
-    oran: Float?,
-    buyuk: String,
-    kucuk: String,
     geri: () -> Unit,
     komsuyaGec: (yon: Int) -> Unit,
+    halka: @Composable (Modifier) -> Unit,
     bilgi: @Composable () -> Unit,
 ) {
     // Doner cerceve bir sonraki istasyona gecer (ornekteki gibi); kaydirma birikir, esikte bir adim.
     val odak = remember { FocusRequester() }
     var birikim by remember { mutableFloatStateOf(0f) }
+    val serit by animateColorAsState(renk, tween(300), label = "durum seridi")
     LaunchedEffect(Unit) { odak.requestFocus() }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .onRotaryScrollEvent { olay ->
-                birikim += olay.verticalScrollPixels
-                val yon = Cerceve.adim(birikim)
-                if (yon != 0) {
-                    birikim = 0f
-                    komsuyaGec(yon)
+    Box(Modifier.fillMaxSize()) {
+        // Ustte, yuvarlak camin kenarinda durum renginde serit: ekran acilir acilmaz durum okunur.
+        Canvas(Modifier.fillMaxSize()) {
+            val kalinlik = 6.dp.toPx()
+            drawArc(
+                serit, 235f, 70f, false,
+                Offset(kalinlik, kalinlik), Size(size.width - kalinlik * 2, size.height - kalinlik * 2),
+                style = Stroke(kalinlik, cap = StrokeCap.Round),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .onRotaryScrollEvent { olay ->
+                    birikim += olay.verticalScrollPixels
+                    val yon = Cerceve.adim(birikim)
+                    if (yon != 0) {
+                        birikim = 0f
+                        komsuyaGec(yon)
+                    }
+                    true
                 }
-                true
-            }
-            .focusRequester(odak)
-            .focusable()
-            .kaydirilir()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        UstSatir(ad, geri)
-        Halka(oran, renk, buyuk, kucuk, Modifier.fillMaxWidth(0.42f / 0.75f).padding(top = 2.dp))
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) { bilgi() }
+                .focusRequester(odak)
+                .focusable()
+                .kaydirilir()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            UstSatir(ad, geri)
+            halka(Modifier.fillMaxWidth(0.42f / 0.75f).padding(top = 2.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) { bilgi() }
+        }
     }
 }
 

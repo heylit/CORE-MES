@@ -25,7 +25,7 @@ describe('saat kuralları (kart #1632)', () => {
     assert.equal(saatBelirteciGecerMi('GET', undefined), false);
   });
 
-  test('296 a: belirteçle tek yazma ucu emri durdurmaktır; başka POST ve başka yöntem geçmez', () => {
+  test('296 a: belirteç emri durdurur; başka POST ve başka yöntem geçmez', () => {
     assert.equal(saatBelirteciGecerMi('POST', '/api/saat/emirler/:id/durdur'), true);
     assert.equal(saatBelirteciGecerMi('POST', '/api/saat/emirler/:id/baska'), false);
     assert.equal(saatBelirteciGecerMi('POST', '/api/saat/emirler/:id/durdur/'), false);
@@ -35,6 +35,14 @@ describe('saat kuralları (kart #1632)', () => {
     assert.equal(saatBelirteciGecerMi('PUT', '/api/saat/emirler/:id/durdur'), false);
     assert.equal(saatBelirteciGecerMi('DELETE', '/api/saat/emirler/:id/durdur'), false);
     assert.equal(saatBelirteciGecerMi('POST', undefined), false);
+  });
+
+  test('kart #86, 79 a: belirteç uyarı üstlenmeyi de yazar; komşu yollar ve başka yöntem geçmez', () => {
+    assert.equal(saatBelirteciGecerMi('POST', '/api/saat/uyarilar/ustlen'), true);
+    assert.equal(saatBelirteciGecerMi('POST', '/api/saat/uyarilar'), false);
+    assert.equal(saatBelirteciGecerMi('POST', '/api/saat/uyarilar/ustlen/'), false);
+    assert.equal(saatBelirteciGecerMi('POST', '/api/saat/uyarilar/kapat'), false);
+    assert.equal(saatBelirteciGecerMi('DELETE', '/api/saat/uyarilar/ustlen'), false);
   });
 
   test('yalnız "Bearer <belirteç>" okunur', () => {

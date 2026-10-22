@@ -1,5 +1,6 @@
 package tmi.saat
 
+import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -9,7 +10,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import tmi.saat.cekirdek.Cerceve
+import tmi.saat.kadran.UyariSayisi
+import java.util.UUID
 import tmi.saat.ekran.AyarlarEkrani
 import tmi.saat.ekran.LocalEldiven
 import tmi.saat.ekran.SaatAyarlari
@@ -47,16 +51,21 @@ import tmi.saat.ekran.periyodikOku
 
 class AnaEtkinlik : ComponentActivity() {
     companion object {
-        // Kadrana dokununca uygulama Tezgahlar 3B sayfasiyla acilir.
+        // Kadrandaki her kutucuk kendi sayfasini acar (86, 6.4). Yalniz bu sayfalar kabul edilir; baska deger ana menudur.
         const val ACILIS = "acilis"
         const val VITRIN = "vitrin"
+        const val LISTE = "liste"
+        const val UYARILAR = "uyarilar"
+        const val OZET = "ozet"
+        const val VARDIYA = "vardiya"
+        private val ACILIS_SAYFALARI = setOf(VITRIN, LISTE, UYARILAR, OZET, VARDIYA)
     }
 
     override fun onCreate(durum: Bundle?) {
         super.onCreate(durum)
         val depo = Depo(this)
         val api = Api({ depo.sunucu }) { depo.belirtec }
-        val ilkSayfa = intent?.getStringExtra(ACILIS)?.takeIf { it == VITRIN && durum == null }
+        val ilkSayfa = intent?.getStringExtra(ACILIS)?.takeIf { it in ACILIS_SAYFALARI && durum == null }
         setContent { MaterialTheme(colors = Renkler.tema) { Uygulama(depo, api, ::titret, ilkSayfa) } }
     }
 
@@ -136,7 +145,11 @@ private fun Eslesmis(
     ilkSayfa: String?,
 ) {
     LaunchedEffect(Unit) { ilkSayfa?.let { gezgin.navigate(it) } }
-    val pano by periyodikOku(oturumBitti) { Pano(api.istasyonlar(), api.uyarilar()) }
+    val baglam = LocalContext.current
+    val pano by periyodikOku(oturumBitti) {
+        val liste = api.uyariListesi()
+        Pano(api.istasyonlar(), liste.uyarilar, liste.ustlenebilir)
+    }
     val veri = (pano as? Yukleme.Geldi)?.veri
     // "Gordum" denen uyarilar yalniz bu saatte ve bu acilista duser; sunucuya yazilmaz.
     var gorulen by remember { mutableStateOf(emptySet<String>()) }
@@ -157,6 +170,13 @@ private fun Eslesmis(
         }
         onceki = simdi.toSet()
     }
+    // Uygulama acikken uyari sayisi degisince kadrandaki sayi hemen yenilenir; kapaliyken sistemin 5 dakikalik yenilemesi kalir.
+    val uyariSayisi = veri?.uyarilar?.size
+    LaunchedEffect(uyariSayisi) {
+        if (uyariSayisi != null) {
+            ComplicationDataSourceUpdateRequester.create(baglam, ComponentName(baglam, UyariSayisi::class.java)).requestUpdateAll()
+        }
+    }
     val okunmamis: Yukleme<List<Uyari>> = when (val p = pano) {
         is Yukleme.Geldi -> Yukleme.Geldi(p.veri.uyarilar.filter { anahtar(it) !in gorulen }, p.alindiMs)
         is Yukleme.Hata -> p
@@ -164,7 +184,6 @@ private fun Eslesmis(
     }
     val istasyon = { id: Int? -> veri?.istasyonlar?.firstOrNull { it.id == id } }
     val geri: () -> Unit = { gezgin.popBackStack() }
-    val baglam = LocalContext.current
     val nfcVar = remember { nfcVarMi(baglam) }
 
     SwipeDismissableNavHost(navController = gezgin, startDestination = "ana") {
@@ -180,7 +199,6 @@ private fun Eslesmis(
                 ozetAc = { gezgin.navigate("ozet") },
                 vitrinAc = { gezgin.navigate("vitrin") },
                 nfcAc = if (nfcVar) ({ gezgin.navigate("nfc") }) else null,
-                adresDegistir = adresDegistir,
             )
         }
         composable("vitrin") { VitrinEkrani(api, pano, oturumBitti, geri) { id -> gezgin.navigate("istasyon/$id") } }
@@ -216,11 +234,15 @@ private fun Eslesmis(
         composable("nfc") {
             NfcEkrani(veri?.istasyonlar, geri) { id -> gezgin.navigate("istasyon/$id") { popUpTo("nfc") { inclusive = true } } }
         }
-        composable("vardiya") { VardiyaEkrani(pano, geri) }
+        composable("vardiya") {
+            // Vardiya yalniz bu ekran acikken okunur.
+            val vardiya by periyodikOku(oturumBitti) { api.vardiya() }
+            VardiyaEkrani(pano, vardiya, geri)
+        }
         composable("ozet") {
             OzetEkrani(pano, geri, uyarilariAc = { gezgin.navigate("uyarilar") }, istasyonAc = { id -> gezgin.navigate("istasyon/$id") })
         }
-        composable("ayarlar") { AyarlarEkrani(ayar, ayarDegistir, geri) }
+        composable("ayarlar") { AyarlarEkrani(ayar, ayarDegistir, geri, adresDegistir) }
         composable("uyari") {
             val u = acikUyari
             if (u == null) {
@@ -239,6 +261,20 @@ private fun Eslesmis(
                 gordum = {
                     gorulen = gorulen + anahtar(u)
                     gezgin.popBackStack("ana", inclusive = false)
+                },
+                ustlen = u.kimlik?.takeIf { veri?.ustlenebilir == true && u.ustlenen == null }?.let { kimlik ->
+                    val istekKimligi = UUID.randomUUID().toString()
+                    suspend {
+                        try {
+                            api.uyariUstlen(kimlik, istekKimligi)
+                            null
+                        } catch (e: ApiHatasi.OturumYok) {
+                            oturumBitti()
+                            null
+                        } catch (e: ApiHatasi) {
+                            e.message ?: "Üstlenilemedi"
+                        }
+                    }
                 },
             )
         }

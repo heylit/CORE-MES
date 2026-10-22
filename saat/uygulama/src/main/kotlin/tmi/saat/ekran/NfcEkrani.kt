@@ -45,7 +45,7 @@ import tmi.saat.cekirdek.NfcEtiketi
 fun nfcVarMi(baglam: Context): Boolean =
     baglam.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC) && NfcAdapter.getDefaultAdapter(baglam) != null
 
-private tailrec fun Context.etkinlik(): Activity? = when (this) {
+internal tailrec fun Context.etkinlik(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.etkinlik()
     else -> null
