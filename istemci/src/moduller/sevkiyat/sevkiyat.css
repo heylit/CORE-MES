@@ -299,3 +299,12 @@
 @media (prefers-reduced-motion: no-preference) {
   .tc-sevkiyat-durak[data-vurgu] { transition: outline-color .3s ease; }
 }
+
+/* Malzeme · Teslim panelindeki Sevk bölümü (kart #96): kabuğun penceresinde durur, .tc-sevkiyat kapsayıcısı yoktur. */
+.tc-sevkiyat-urun-sevkleri { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-sevkiyat-urun-sevki {
+  display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: center; justify-content: space-between; padding: var(--b-3) var(--b-4);
+  background: var(--panel-solid); border: thin solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-sevkiyat-urun-sevki > div:first-child { display: grid; gap: var(--b-1); min-width: 0; flex: 1 1 14rem; }
+.tc-sevkiyat-urun-sevki span { color: var(--muted); font-size: var(--yazi-s); }

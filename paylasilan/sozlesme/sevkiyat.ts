@@ -123,6 +123,15 @@ export const bekleyenKaldirCevabi = z.object({ id: z.number().int() });
 // Kısmi sevk (261 a): açık ürün kaydından verilen adet ayrı kayda bölünür; kalan adet eski kayıtta kalır.
 export const bekleyenBolGovdesi = z.object({ adet: ondalikMetinSemasi });
 export const bekleyenBolCevabi = z.object({ id: z.number().int(), yeniId: z.number().int() });
+// Okutulan ürünün sevkleri (kart #96): Malzeme · Teslim panelindeki Sevk bölümü emrin ya da kartın kapanmamış ürün kayıtlarını
+// görür; kayıt işe çevrilmemişse is null'dır (işe çevirmek Sevkiyat ekranındadır).
+export const urunSevkleriSorgusu = z.object({ uretimEmriId: kimlik.optional(), malzemeNo: kimlik.optional() });
+export const urunSevkiSemasi = z.object({
+  bekleyenId: z.number().int(), uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(), malzemeAd: z.string().nullable(),
+  adet: ondalikMetinSemasi.nullable(), firmaAd: z.string().nullable(),
+  is: z.object({ id: z.number().int(), tarih, durum: IS_DURUMU, belgeNo: z.string().nullable() }).nullable(),
+});
+export const urunSevkleriCevabi = z.object({ sevkler: z.array(urunSevkiSemasi) });
 // Elle durum: tamamlandı (yoldaki iş teslim edildi ya da havuzdaki iş elle kapatıldı), yapılamadı (yoldaki iş havuza döner),
 // havuzda (tamamlanan iş yeniden açılır), yolda (yanlış girilen teslim sonucu geri alınır). tarih: ekranın günü.
 export const isDurumuGovdesi = z.object({ durum: z.enum(['tamamlandi', 'yapilamadi', 'havuzda', 'yolda']), tarih, not: bosOlabilir(400) });
@@ -269,6 +278,8 @@ export type IsGuncelleGovdesi = z.input<typeof isGuncelleGovdesi>;
 export type IsCevabi = z.output<typeof isCevabi>;
 export type Bekleyen = z.output<typeof bekleyenSemasi>;
 export type BekleyenlerCevabi = z.output<typeof bekleyenlerCevabi>;
+export type UrunSevki = z.output<typeof urunSevkiSemasi>;
+export type UrunSevkleriCevabi = z.output<typeof urunSevkleriCevabi>;
 export type BekleyenKaynagi = z.output<typeof BEKLEYEN_KAYNAGI>;
 export type BekleyenBolGovdesi = z.output<typeof bekleyenBolGovdesi>;
 export type BekleyenBolCevabi = z.output<typeof bekleyenBolCevabi>;

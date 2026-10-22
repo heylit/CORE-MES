@@ -34,6 +34,7 @@ const BEKLENEN: Record<string, Islem> = {
   'POST /sevkiyat/araclar/:id/guncelle': 'sevkiyat.tanim-yaz',
   'POST /sevkiyat/araclar/:id/pasiflestir': 'sevkiyat.tanim-yaz',
   'GET /sevkiyat/bekleyenler': 'sevkiyat.oku',
+  'GET /sevkiyat/urun-sevkleri': 'sevkiyat.oku',
   'POST /sevkiyat/bekleyenler/:id/ise-cevir': 'sevkiyat.is-yaz',
   'POST /sevkiyat/bekleyenler/:id/kaldir': 'sevkiyat.is-yaz',
   'POST /sevkiyat/bekleyenler/:id/bol': 'sevkiyat.is-yaz',

@@ -489,6 +489,25 @@ export function emirlerinIsleri(db: Db, emirIdleri: readonly number[]): Promise<
   );
 }
 
+// Okutulan ürünün sevkleri (kart #96): emrin ya da kartın kaldırılmamış ürün kayıtları; işe çevrilmişse yalnız kapanmamış
+// (tamamlanmamış, iptal edilmemiş) teslimat işi.
+export interface OkutulanSevkSatiri {
+  bekleyenId: number; uretimEmriId: number | null; malzemeNo: number | null; adet: string | null; firmaId: number | null;
+  isId: number | null; tarih: string | null; durum: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi' | null; belgeNo: string | null;
+}
+export function okutulanSevkler(db: Db, s: { uretimEmriId: number | null; malzemeNo: number | null }): Promise<OkutulanSevkSatiri[]> {
+  return db.sorgu<OkutulanSevkSatiri>(
+    `SELECT b.id AS "bekleyenId", b.uretim_emri_id AS "uretimEmriId", b.malzeme_no AS "malzemeNo", b.adet::text AS adet,
+       COALESCE(b.firma_id, n.firma_id) AS "firmaId", i.id AS "isId", i.tarih::text AS tarih, i.durum, i.belge_no AS "belgeNo"
+     FROM sevkiyat_bekleyen b LEFT JOIN sevkiyat_isi i ON i.id = b.is_id LEFT JOIN sevkiyat_noktasi n ON n.id = i.birakis_noktasi_id
+     WHERE b.kaynak = 'urun' AND b.kaldirildi IS NULL
+       AND ($1::int IS NULL OR b.uretim_emri_id = $1) AND ($2::int IS NULL OR b.malzeme_no = $2)
+       AND (b.is_id IS NULL OR (i.iptal_edildi IS NULL AND i.durum <> 'tamamlandi' AND i.tur = 'teslimat'))
+     ORDER BY b.hazir_zamani, b.id LIMIT 50`,
+    [s.uretimEmriId, s.malzemeNo],
+  );
+}
+
 // Talebin bekleme listesindeki alım satırları (kart #1310); listeden kaldırılanlar yok sayılır, işe çevrilenler de döner.
 export function talebinAlimlari(db: Db, talepId: string): Promise<{ id: number; firmaId: number | null; istenenTarih: string | null; isId: number | null }[]> {
   return db.sorgu(
