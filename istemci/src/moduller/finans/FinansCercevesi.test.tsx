@@ -100,6 +100,23 @@ describe('FinansCercevesi', () => {
     expect(giden).toHaveLength(1);
   });
 
+  // Karar 102 a: çerçevede basılan Ctrl K kabuğun ortak paletini açar (kabuk tuşu pencerede dinler).
+  it('çerçevenin Ctrl K iletisi kabukta Ctrl K olur; başka tuş ya da başka kanal olmaz', async () => {
+    sunucuKur(OKUYAN);
+    ac('/finans/firmalar');
+    const cerceve = await screen.findByTitle('Finans ve Muhasebe', {}, { timeout: 5000 }) as HTMLIFrameElement;
+    const tuslar: string[] = [];
+    const dinle = (o: KeyboardEvent) => { tuslar.push(`${o.ctrlKey ? 'ctrl+' : ''}${o.key}`); };
+    window.addEventListener('keydown', dinle);
+    const yolla = (data: unknown) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data, origin: 'null', source: cerceve.contentWindow })); }); };
+    yolla({ kanal: 'finans', yon: 'kisayol', tus: 'baska' });
+    yolla({ kanal: 'baska', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual([]);
+    yolla({ kanal: 'finans', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual(['ctrl+k']);
+    window.removeEventListener('keydown', dinle);
+  });
+
   it('#544: firma kartındayken ikinci menüdeki Firmalar görünümü yeniden gönderir (kart alt görünüm bildirir)', async () => {
     sunucuKur(OKUYAN);
     ac('/finans/firmalar');
