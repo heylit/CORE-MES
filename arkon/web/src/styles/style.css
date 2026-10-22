@@ -52,10 +52,7 @@ button { font: inherit; color: inherit; }
   background:
     radial-gradient(38% 46% at 47% 58%, color-mix(in srgb, var(--sig) var(--aura-strength), transparent), transparent 70%),
     radial-gradient(28% 32% at 92% 4%, color-mix(in srgb, var(--hazard) 10%, transparent), transparent 70%),
-    radial-gradient(30% 40% at 4% 100%, color-mix(in srgb, var(--sig) 10%, transparent), transparent 70%);
-  animation: breathe 9s ease-in-out infinite; }
-[data-state="running"] .aura { animation-duration: 5s; }
-@keyframes breathe { 0%,100% { opacity: .85; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+    radial-gradient(30% 40% at 4% 100%, color-mix(in srgb, var(--sig) 10%, transparent), transparent 70%); }
 .gridbg { position: fixed; inset: 0; pointer-events: none; z-index: 0;
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 20%, transparent 85%); mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 20%, transparent 85%); }
@@ -83,8 +80,14 @@ button { font: inherit; color: inherit; }
 .mach small { color: var(--muted); font-size: 13px; }
 .sbig { display: flex; align-items: center; gap: 14px; padding: 8px 18px 8px 14px; border-radius: 999px; background: color-mix(in srgb, var(--sig) 14%, transparent); border: 1px solid color-mix(in srgb, var(--sig) 40%, transparent); }
 .sdot { width: 12px; height: 12px; border-radius: 50%; background: var(--sig); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sig) 25%, transparent), 0 0 16px var(--sig); }
-[data-state="running"] .sdot { animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--sig) 0%, transparent), 0 0 22px var(--sig); } }
+/* Sürekli nabız yalnız transform ve opacity değiştirir: gölgeyi canlandırmak her karede yeniden boyar, buzlu paneller her karede yeniden bulanıklaşır.
+   Halka ayrı katmandır (::after); renk --halka ile verilir. */
+.sdot, .tab .n.hot, .cdot, .wbig { position: relative; }
+[data-state="running"] .sdot::after, .tab .n.hot::after, .cdot::after, .wbig::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--halka) 45%, transparent), 0 0 14px var(--halka); animation: halka 1.4s ease-out infinite; }
+.sdot { --halka: var(--sig); } .tab .n.hot { --halka: var(--stop); } .cdot, .wbig { --halka: var(--c); }
+@keyframes halka { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.8); } }
+@keyframes parla { 50% { opacity: 1; } }
 .sname { font-stretch: 112%; font-weight: 800; font-size: 16px; letter-spacing: .1em; text-transform: uppercase; color: var(--sig); }
 .stime { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; }
 .sp { flex: 1; }
@@ -169,10 +172,11 @@ button { font: inherit; color: inherit; }
 .dial .trk { stroke: var(--panel2); }
 .dial .arc { stroke: var(--sig); filter: drop-shadow(0 0 10px var(--sig)); transition: stroke-dasharray .7s cubic-bezier(.2,.8,.2,1); }
 .dial .scr { stroke: var(--stop); transition: stroke-dasharray .7s; }
-.dial .spin { stroke: color-mix(in srgb, var(--sig) 60%, transparent); stroke-dasharray: 2 9; transform-origin: 220px 220px; animation: rot 14s linear infinite; animation-play-state: paused; }
-[data-state="running"] .dial .spin { animation-play-state: running; animation-duration: 3.2s; }
-.dial .spin2 { stroke: var(--edge); stroke-dasharray: 40 14; transform-origin: 220px 220px; animation: rot 30s linear infinite reverse; animation-play-state: paused; }
-[data-state="running"] .dial .spin2 { animation-play-state: running; }
+/* SVG içindeki öğe ayrı katmana çıkmaz, dönerken bütün kadran her karede yeniden boyanır: halkalar yalnız "çalışıyor"a geçişte bir tur döner. */
+.dial .spin { stroke: color-mix(in srgb, var(--sig) 60%, transparent); stroke-dasharray: 2 9; transform-origin: 220px 220px; }
+[data-state="running"] .dial .spin { animation: rot 3.2s cubic-bezier(.2,.8,.2,1) 1; }
+.dial .spin2 { stroke: var(--edge); stroke-dasharray: 40 14; transform-origin: 220px 220px; }
+[data-state="running"] .dial .spin2 { animation: rot 30s linear 1 reverse; }
 @keyframes rot { to { transform: rotate(360deg); } }
 .sweep { position: absolute; inset: 9%; border-radius: 50%; opacity: 0; transition: opacity .6s;
   background: conic-gradient(from 0deg, transparent 0 290deg, color-mix(in srgb, var(--sig) 45%, transparent) 360deg);
@@ -255,7 +259,8 @@ button { font: inherit; color: inherit; }
 .ball { cursor: pointer; opacity: 0; animation: pop .45s cubic-bezier(.2,1.6,.4,1) forwards; }
 @keyframes pop { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
 .ball .o { fill: var(--bp-bg); stroke: var(--done); stroke-width: 2; }
-.ball .p { fill: none; stroke: var(--done); stroke-width: 1.5; opacity: .5; animation: ping 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+/* Teknik resim SVG'dir: balon halkası iki kez yayılıp saydam kalır; sürekli yayılsa bütün resim her karede yeniden boyanır. */
+.ball .p { fill: none; stroke: var(--done); stroke-width: 1.5; opacity: .5; animation: ping 2.4s ease-out 2 forwards; transform-box: fill-box; transform-origin: center; }
 @keyframes ping { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.1); opacity: 0; } }
 .ball text { fill: var(--done); font: 800 14px 'Archivo', system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .ball.sel .o { fill: var(--done); } .ball.sel text { fill: var(--on-sig); }
@@ -519,8 +524,9 @@ a.callbtn { color: var(--hazard-ink); }
 .revbig { display: inline-block; margin-left: 12px; padding: 4px 10px; border-radius: 10px; background: var(--hazard); color: var(--on-hazard); font-size: 15px; letter-spacing: .02em; vertical-align: 8px; }
 .mini { font-size: 12px; color: var(--muted); font-weight: 600; }
 .tag.newt { margin-left: 6px; color: var(--on-sig); background: var(--run); }
-.qc.fresh { border-color: color-mix(in srgb, var(--run) 70%, transparent); box-shadow: 0 0 0 0 var(--run); animation: freshp 1.6s ease-out infinite; }
-@keyframes freshp { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--run) 50%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+.qc.fresh { border-color: color-mix(in srgb, var(--run) 70%, transparent); }
+.qc.fresh::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: 0 0 0 6px color-mix(in srgb, var(--run) 35%, transparent);
+  opacity: 0; animation: parla 1.6s ease-out infinite; }
 .pnote { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--hazard) 12%, transparent); color: var(--hazard-ink); font-size: 13px; font-weight: 600; max-width: 520px; }
 .pnote span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adimtur { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; }
@@ -595,8 +601,9 @@ button.op:hover { border-color: var(--edge2); }
 .stage { gap: 10px; padding-top: 12px; }
 .task { --c: var(--hazard); align-self: stretch; display: flex; align-items: center; gap: 14px; padding: 10px 10px 10px 12px; border-radius: 20px; border-color: color-mix(in srgb, var(--c) 45%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--c) 16%, var(--panel)), var(--panel)); animation: rise .35s cubic-bezier(.2,.8,.2,1); }
 .task.quiet { background: var(--panel); border-color: var(--edge); }
-.task.pulse { animation: rise .35s cubic-bezier(.2,.8,.2,1), taskp 1.8s ease-in-out infinite; }
-@keyframes taskp { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent), 0 0 30px -6px var(--c); } }
+.task.pulse { position: relative; animation: rise .35s cubic-bezier(.2,.8,.2,1); }
+.task.pulse::after, .aw-task::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent), 0 0 30px -6px var(--c); opacity: 0; animation: parla 1.8s ease-in-out infinite; }
 .tk-ic { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--c); color: var(--on-sig); }
 .task.quiet .tk-ic { background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); }
 .tk-tx { flex: 1; min-width: 0; display: grid; }
@@ -605,7 +612,7 @@ button.op:hover { border-color: var(--edge2); }
 .tk-tx small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tk-go { height: 48px; background: var(--c); color: var(--on-sig); border-color: transparent; }
 .task.quiet .tk-go { background: var(--panel2); color: var(--ink); border-color: var(--edge2); }
-.tab .n.hot { background: var(--stop); color: var(--on-sig); animation: pulse 1.4s infinite; }
+.tab .n.hot { background: var(--stop); color: var(--on-sig); }
 .ball.due .o { stroke: var(--hazard); stroke-width: 3; }
 .ball.due text { fill: var(--hazard-ink); }
 .ball.due .p { stroke: var(--hazard); opacity: .9; animation-duration: 1.2s; }
@@ -654,7 +661,7 @@ button.op:hover { border-color: var(--edge2); }
 .aw-bot { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(2 * var(--u, 1vh) * 1.6); }
 .aw-bot > div:nth-child(2) { text-align: center; } .aw-bot > div:nth-child(3) { text-align: right; }
 .aw-bot .over { font-size: calc(1.8 * var(--u, 1vh)); } .aw-bot b { display: block; font-stretch: 112%; font-size: calc(6 * var(--u, 1vh)); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.aw-task { --c: var(--hazard); display: flex; align-items: center; justify-content: center; gap: calc(1.5 * var(--u, 1vh) * 1.6); padding: calc(2 * var(--u, 1vh)); border-radius: calc(3 * var(--u, 1vh)); background: color-mix(in srgb, var(--c) 20%, transparent); border: 2px solid var(--c); color: var(--ink); font-size: calc(4 * var(--u, 1vh)); font-weight: 800; animation: taskp 1.8s infinite; }
+.aw-task { --c: var(--hazard); display: flex; align-items: center; justify-content: center; gap: calc(1.5 * var(--u, 1vh) * 1.6); padding: calc(2 * var(--u, 1vh)); border-radius: calc(3 * var(--u, 1vh)); background: color-mix(in srgb, var(--c) 20%, transparent); border: 2px solid var(--c); color: var(--ink); font-size: calc(4 * var(--u, 1vh)); font-weight: 800; position: relative; }
 .aw-task svg { color: var(--c); }
 .aw-hint { position: absolute; right: calc(3 * var(--u, 1vh) * 1.6); bottom: calc(2 * var(--u, 1vh)); color: var(--faint); font-size: calc(1.6 * var(--u, 1vh)); letter-spacing: .1em; text-transform: uppercase; }
 /* sonraki iş */
@@ -682,7 +689,7 @@ button.op:hover { border-color: var(--edge2); }
 /* çağrı */
 .cchip { --c: var(--hazard); display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent); cursor: pointer; font-weight: 700; font-size: 14px; animation: rise .3s ease; }
 .cchip b { color: var(--c); } .cchip span { color: var(--ink); }
-.cdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); animation: pulse 1.2s infinite; }
+.cdot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
 .ctl-line { --c: var(--hazard); display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-bottom: 18px; position: relative; }
 .cst { display: grid; justify-items: center; gap: 4px; text-align: center; position: relative; color: var(--faint); }
 .cst::before { content: ''; position: absolute; top: 17px; left: -50%; right: 50%; height: 3px; background: var(--edge2); z-index: 0; }
@@ -1036,7 +1043,7 @@ html.mob, html.mob body { overflow: hidden; }
 .warnov { width: min(640px, 100%); display: grid; gap: 18px; border-top: 6px solid var(--c, var(--hazard)); }
 .warnov.l-info { --c: var(--done); } .warnov.l-warn { --c: var(--hazard); } .warnov.l-crit { --c: var(--stop); }
 .warnov .wh { display: flex; align-items: center; gap: 16px; } .warnov h2 { margin: 2px 0 0; font-size: 28px; font-stretch: 112%; }
-.wbig { width: 62px; height: 62px; border-radius: 20px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); animation: pulse 1.6s ease-in-out infinite; }
+.wbig { width: 62px; height: 62px; border-radius: 20px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
 .wis { display: grid; gap: 10px; }
 .wi { display: grid; grid-template-columns: 6px 1fr; column-gap: 14px; padding: 14px 16px; border-radius: 16px; background: var(--panel2); border: 1px solid var(--edge); }
 .wi i { grid-row: span 2; border-radius: 4px; } .wi b { font-size: 20px; line-height: 1.25; } .wi small { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
@@ -1411,8 +1418,9 @@ html[data-op="depo"] .pills { display: none; }
 /* v20 · çevrim halkası: bir tur = bir parça (planlı çevrim süresi) */
 .dial .cycsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .dial .cyct { stroke: var(--edge); }
-.dial .cyca { stroke: color-mix(in srgb, var(--sig) 75%, transparent); stroke-dashoffset: var(--C); animation-name: cycfill; animation-timing-function: linear; animation-fill-mode: forwards; animation-iteration-count: 1; animation-play-state: paused; }
-.dial .cycd { transform-origin: 220px 220px; animation-name: rot; animation-timing-function: linear; animation-fill-mode: forwards; animation-iteration-count: 1; animation-play-state: paused; }
+/* Çizgi ve SVG içi dönüş her adımda yeniden boyanır: halka ve nokta saniyede iki adım ilerler (--adim, CycAnim); süpürme ayrı katmanda akıcı kalır. */
+.dial .cyca { stroke: color-mix(in srgb, var(--sig) 75%, transparent); stroke-dashoffset: var(--C); animation-name: cycfill; animation-timing-function: steps(var(--adim, 1), end); animation-fill-mode: forwards; animation-iteration-count: 1; animation-play-state: paused; }
+.dial .cycd { transform-origin: 220px 220px; animation-name: rot; animation-timing-function: steps(var(--adim, 1), end); animation-fill-mode: forwards; animation-iteration-count: 1; animation-play-state: paused; }
 .dial .cycd circle { fill: var(--sig); filter: drop-shadow(0 0 6px var(--sig)); }
 .dial .sweep { animation-name: rot; animation-timing-function: linear; animation-fill-mode: forwards; animation-iteration-count: 1; animation-play-state: paused; }
 [data-state="running"] .dial .cyca, [data-state="running"] .dial .cycd, [data-state="running"] .dial .sweep { animation-play-state: running; }
@@ -1597,8 +1605,8 @@ table.perm { border-collapse: collapse; width: 100%; min-width: 760px; font-size
 .bgrid { display: grid; gap: 16px; } .bgrp { display: grid; gap: 8px; }
 .btiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .btile { padding: 12px 14px; border-radius: 18px; display: grid; gap: 6px; border-left: 6px solid var(--c); position: relative; }
-.btile.stop { animation: bpulse 2s ease-in-out infinite; }
-@keyframes bpulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--stop) 40%, transparent); } }
+.btile.stop::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--stop) 40%, transparent);
+  opacity: 0; animation: parla 2s ease-in-out infinite; }
 .bth { display: flex; align-items: center; gap: 8px; } .bth b { font-size: 18px; }
 .bst { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; color: var(--c); text-align: right; }
 .bst i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); flex: none; }

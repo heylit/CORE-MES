@@ -61,12 +61,29 @@ export async function download(name, data, type) {
   }
   if (window.ArkonAndroid && window.ArkonAndroid.save) { const u8 = typeof data === 'string' ? new TextEncoder().encode(data) : data; let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); window.ArkonAndroid.save(name, btoa(bin), type || 'application/octet-stream'); return; } const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500); }
 /* performans modu: zayıf tablette bulanıklık ve sürekli animasyonlar kapanır (otomatik ya da elle) */
+let takildi = false;
 export const LITE = {
   auto() { const n = navigator.hardwareConcurrency || 8, m = (navigator as any).deviceMemory || 8; let rm = false; try { rm = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {} return n <= 4 || m <= 3 || rm; },
-  get() { const v = LS.get('lite'); return v === true || v === false ? v : LITE.auto(); },
+  get() { const v = LS.get('lite'); return v === true || v === false ? v : takildi || LITE.auto(); },
   set(v) { LS.set('lite', v); document.documentElement.classList.toggle('lite', v); }
 };
 document.documentElement.classList.toggle('lite', LITE.get());
+/* Elle seçim yoksa takılan cihazda performans modu oturum boyunca açılır: donanım sayısı güçlü görünen tablet de takılabilir.
+   Tarayıcının uzun kare bildirimi dinlenir (ayrı ölçüm döngüsü yok); açılışın ağır ilk saniyeleri sayılmaz, bir kez açılan kapanmaz. */
+const TAKILMA_MS = 100, TAKILMA_SAYISI = 3, TAKILMA_PENCERE_MS = 10000, ACILIS_MS = 5000;
+(function takilmaGozle() {
+  if (typeof PerformanceObserver === 'undefined' || LITE.get()) return;
+  const tur = (PerformanceObserver.supportedEntryTypes || []).includes('long-animation-frame') ? 'long-animation-frame' : 'longtask';
+  let uzun: number[] = [];
+  const g = new PerformanceObserver(l => {
+    if (LS.get('lite') !== null) { g.disconnect(); return; }
+    const simdi = performance.now();
+    for (const e of l.getEntries()) if (e.duration >= TAKILMA_MS && e.startTime >= ACILIS_MS) uzun.push(e.startTime);
+    uzun = uzun.filter(t => simdi - t < TAKILMA_PENCERE_MS);
+    if (uzun.length > TAKILMA_SAYISI) { takildi = true; document.documentElement.classList.add('lite'); g.disconnect(); }
+  });
+  try { g.observe({ type: tur, buffered: true }); } catch (e) {}
+})();
 // Düğme TMI kabuğunun üst çubuğundadır (tüm uygulama için tek); kabuk aynı 'arkon:lite' anahtarını yazar, açık Arkon ekranı yeniden yüklenmeden uyar.
 window.addEventListener('storage', e => { if (e.key === 'arkon:lite') document.documentElement.classList.toggle('lite', LITE.get()); });
 /** Ekran modülleri (Ayarlar sayfasından açılıp kapanır; bu cihazda saklanır) */
