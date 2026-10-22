@@ -15,7 +15,7 @@ Birlestirici konuysan: kod YAZMAZSIN. Isin yazar konularin biraktigi yamalari uy
 Turkce konus, kisa yaz, emoji yok. Kod tanimlayicilari Turkce (ASCII), commit mesaji Ingilizce.
 
 ISE BASLARKEN (her konuda)
-1. Depoyu guncelle; commit kimligini ve `npm run harita` ciktisini (Goc sirasi satiri dahil) yaz. Haritadan kendi parcani ve bagli modulleri bul.
+1. Depoyu guncelle; commit kimligini ve `npm run harita -- --ozet` ciktisini (Son goc satiri dahil) yaz. Ozetten kendi parcani ve bagli modulleri bul; ayrinti icin yalniz kendi modulunun ve gercekten cagirdigin modullerin `npm run harita -- --modul <ad>` ciktisini oku. Tam harita (yaklasik 180 KB) yalniz sahipsiz goc ya da sahibi belirsiz tablo gerektiginde okunur.
 2. Yalniz kendi parcanin klasorlerini ve gercekten cagirdigin disari.ts dosyalarini oku. CLAUDE.md'yi ve bu dosyanin tam metnini oku; SABIT KIMLIKLER ve OS1-OS10 sahiplik maddeleri buradadir ve sahiplik, sema ya da baska module dokunan her iste zorunlu okunur. belgeler/adr, .claude/skills altindaki SKILL.md dosyalari ve kurulum/dis-modul-sartnamesi.md yalniz dokundugun konu icin okunur. Imza, tablo ve sutun adlarini dosyadan oku; tahmin etme.
 3. Sana verilen kararlari numarasiyla say; eksik ya da celisen varsa soyle.
 kurulum/eski-kurallar klasorunu OKUMA ve uygulama; eski sistem kurali gerekiyorsa sor.
@@ -67,9 +67,10 @@ SABIT KIMLIKLER (degismez)
 
 CALISMA DUZENI (2026-10-21, kullanici onayi)
 - Acik konu siniri yok; isler paralel yurur, cakismayi birlesme sirasi yonetir (koordinator sirayi verir, Birlestirici uygular, catisan yamayi sahibi yeniden uretir). Biten konu hemen kapanir; uzayan is icin yeni konu acilir.
-- Yazar yamayi biraktiginda Birlestirici konusuna dogrudan haber verir; koordinator yalniz soru, onay ve durum icin araya girer. Tasima icin kullanicinin yamayi adiyla anan "... tasi, onayli" satiri yine gerekir.
+- Yazar yamayi biraktiginda Birlestirici konusuna dogrudan haber verir; koordinator yalniz soru, onay ve durum icin araya girer.
+- Tasima onayi (2026-10-22, kullanici onayi, verimlilik O2): sade yama icin ayri tasima satiri gerekmez; isin "yaz" onayi tasimayi da kapsar. Sade yama: goc yok; rol x islem, yetki ya da prototip degismiyor; yalniz kendi modulunun klasorlerine yaziyor (paylasilan, cekirdek, araclar, CLAUDE.md, .claude ve .github yok; toplayiciya kayit satiri ekleyen yama da sade degildir); ilk teslim (yeniden uretilmis yama degil). Yazar DEVIR.md'ye "Sade: evet" ya da "Sade: hayir (<neden>)" yazar. Sade olmayan yama icin kullanicinin yamayi adiyla anan "... tasi, onayli" satiri gerekir.
 - Birlesme gunde 1-2 toplu tur; gocsuz ve birbirine dokunmayan yamalar ayni turda girer.
-- Yerelde yalniz kendi modulunun testleri kosar; tam test CI'da kosar.
+- Yerelde yalniz kendi modulunun testleri kosar; tam test CI'da kosar. Iki istisna (2026-10-22, kullanici onayi, verimlilik O7): teslimden once yama guncel `origin/main` uzerine `git am -3` ile uygulanip testler orada kosar (DEVIR.md'deki taban bu commit'tir); paylasilan altina (toplayici kayit satiri dahil) dokunan yama `node --test 'paylasilan/**/*.test.ts'` da kosar.
 - 1 MB'tan buyuk dosyalar (cerceve HTML'leri, OCR, paket.ts) acilmaz; yalniz gereken satir aranir.
 - Proje bellegi kisa tutulur; kapanan kararlar depoya ya da DEVIR'e tasinir.
 
@@ -86,7 +87,7 @@ TESLIM (yazar konular)
 
 BIRLESTIRME (yalniz birlestirici konu)
 - Ucretsiz planda dal korumasi yoktur; kural yine de kesindir: her degisiklik cekme istegiyle girer ve zorunlu `kontrol` (Windows isi dahil) yesil olmadan birlesmez. Bu kurali dolanmaya calisma.
-- Yamayi uygulamak, push etmek ve cekme istegi acmak icin kullanicinin o yamayi ADIYLA anan "... tasi, onayli" satiri gerekir. Uygulamadan once sha256'yi DEVIR.md ile karsilastir ve eklenen satirlari acik depo taramasindan gecir.
+- Yamayi uygulamak, push etmek ve cekme istegi acmak icin kullanicinin o yamayi ADIYLA anan "... tasi, onayli" satiri gerekir. Istisna sade yamadir (CALISMA DUZENI, verimlilik O2): isin kullanici "yaz" onayi ekte gelir; Birlestirici sadeligi farktan denetler (goc dosyasi yok, yalniz modulun klasorleri, rol x islem satiri yok); sade degilse uygulamaz, satir ister. Uygulamadan once sha256'yi DEVIR.md ile karsilastir ve eklenen satirlari acik depo taramasindan gecir.
 - Yalniz CI'i yesil, taslakta olmayan ve sirasi gelmis istek birlesir; taslaktaki istek yazarin hala calistigi istektir, dokunma; boyle bir istegi beklemeden birlestir. Kirmizi olan sahibi konuya nedeniyle geri doner.
 - Birlesmeyi tutanlar: kirmizi CI, yetki acigi, veri kaybi, yanlis sayi ya da para, kirmizi cizgi (gercek veri, gizli ya da sirket bilgisi, dis cagri, onaysiz paket), baska parcanin klasorune yazim, FARK.md'de yazmayan degisiklik. Diger bulgular modulun UYUM-BORCU.md'sine ya da karta yazilir; birlesmeyi tutmaz.
 - Toplayici istisnasi: modulun toplayiciya ya da cekirdek kayit listesine ekledigi ayri commit'in yalniz o modulun kayit satirlari oldugunu ve listenin yapisina dokunmadigini denetle; degilse birlesmeyi tutar.
