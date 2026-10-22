@@ -146,10 +146,15 @@ const TP = (function (dis) {
   /* ---------- karar ve geri al ----------
      Her karar çalışma planına yazılır (dis.yaz). Geri almak panonun kendi listesidir: önceki görünüm geri gelir ve çalışma planına yazılır. */
   function anlik() { return { D: S.D, down: S.down, locks: S.locks, sira: S.sira, gercek: S.gercek, ekMesai: S.ekMesai, olaylar: S.olaylar, plan: S.plan, e: S.e }; }
-  function geriYukle(a) { Object.assign(S, { D: a.D, down: a.down, locks: a.locks, sira: a.sira, gercek: a.gercek || {}, ekMesai: a.ekMesai || [], olaylar: a.olaylar || [], plan: a.plan, e: a.e }); }
+  function geriYukle(a) { Object.assign(S, { D: a.D, down: a.down, locks: a.locks, sira: a.sira, gercek: a.gercek || {}, ekMesai: a.ekMesai || [], olaylar: a.olaylar || [], plan: a.plan, e: a.e });
+    /* geri almak başkasının onaydaki ya da onaylanmış değişikliğini silmez */
+    if (S.plan && U.ekip) { const ok = ekipKilit(), es = Object.keys(S.locks).filter(id => S.locks[id].kim);
+      if (es.length !== Object.keys(ok).length || es.some(id => !ok[id] || ok[id].tur !== S.locks[id].tur)) { const lk = {}; for (const id in S.locks) if (!S.locks[id].kim) lk[id] = S.locks[id]; S.locks = { ...lk, ...ok };
+        const z = coz(Object.entries(ok).map(([id, l]) => [id, l.m, l.S]), { locks: S.locks }); S.plan = z.p; S.e = z.e; } } }
   /* karar çalışma planına yazılır; denemedeyken yalnız denemenin kaydına */
   function yansit(ad, geriYok) {
     if (dnAktif()) { bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur()); dnKaydet(); return; }
+    if (U.ekip) { bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur()); return; }
     const k = dis.yaz(ad, S, geriYok); S.kaynak = k; S.dv = dis.G().dataVer; bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur());
     gunKaydet();
   }
@@ -199,7 +204,7 @@ const TP = (function (dis) {
       : f ? `<span class="tp-durum taslak" title="Canlı plandan farklı">${ic('edit')} Taslak · ${f}<span class="ikincil"> değişiklik</span></span>` : `<span class="tp-durum ayni" title="Çalışma planı canlı planla aynı">${ic('check')} Canlı planla aynı</span>`;
     return `<header class="tp-ust">
       <button class="tp-tus yalin tp-dar-tus" data-a="ray" aria-label="Siparişler">${ic('list')}</button>
-      ${durum}${ony ? `<button class="tp-durum onayda" data-a="onayGit" title="Onay sekmesini aç">${ic('clock')} ${ony} onayda</button>` : ''}
+      ${durum}${ekipVar() ? `<button class="tp-kisiler ust" data-a="ekipAc" title="Bu planda çalışanlar (taklit)"><span class="tp-kisi ben">Sen</span>${U.ekip.L.filter(k => !['bitti', 'bekliyor'].includes(k.faz)).map(k => `<span class="tp-kisi k${k.renk}">${k.bh}</span>`).join('')}</button>` : ''}${ony ? `<button class="tp-durum onayda" data-a="onayGit" title="Onay sekmesini aç">${ic('clock')} ${ony} onayda</button>` : ''}
       <div class="tp-olc">
         <span title="Geciken sipariş"><b class="${o.late ? 'kotu' : 'iyi'}">${o.late}</b> <span class="ad">geciken</span></span>
         <span><b>${sure(o.wT)}</b> <span class="ad">gecikme</span>${c && Math.abs(dW) > 0.1 ? ` <span class="${dW > 0 ? 'kotu' : 'iyi'}">${dW > 0 ? '+' : '−'}${sure(dW)}</span>` : ''}</span>
@@ -222,7 +227,7 @@ const TP = (function (dis) {
       const ac = U.secJob === s.id;
       const roz = s.durum === 'gec' ? `<span class="rozet gec">${sure(s.T)} geç</span>` : s.durum === 'risk' ? `<span class="rozet risk">${sure(s.pay)} pay</span>` : '';
       return `<div class="tp-sip ${s.durum === 'iyi' ? '' : s.durum} ${ac ? 'sec' : ''}" data-a="sip" data-j="${s.id}" draggable="${yazar()}" title="Sürükleyerek sırasını değiştir">
-        <div class="tp-sip-ad"><b>${ic(ac ? 'down' : 'chev-right', 'ok-ac')}${esc(s.id).replace(/\/(\d+)$/, '<i class="parca">/$1</i>')}</b>${roz}<small>${esc(s.ad)} · ${s.j.adet} ad${s.j.oncelik === 1 ? ' · acil' : ''}</small></div>
+        <div class="tp-sip-ad"><b>${ic(ac ? 'down' : 'chev-right', 'ok-ac')}${esc(s.id).replace(/\/(\d+)$/, '<i class="parca">/$1</i>')}</b>${roz}${ekipSiparis(s.id).map(k => `<span class="tp-kisi k${k.renk}" title="${k.ad} (taklit)">${k.bh}</span>`).join('')}<small>${esc(s.ad)} · ${s.j.adet} ad${s.j.oncelik === 1 ? ' · acil' : ''}</small></div>
         <div class="tp-t ${s.bas > s.ur + 0.25 ? 'uyar' : ''}" ${s.bas > s.ur + 0.25 ? 'title="Malzeme tahmini üretim başlangıcından sonra geliyor"' : ''}>${ga(s.bas)}<b>${zs(s.bas)}</b></div>
         <div class="tp-t">${ga(s.ur)}<b>${zs(s.ur)}</b></div>
         <div class="tp-t ${s.durum === 'gec' ? 'gec' : ''}">${ga(s.C)}<b>${zs(s.C)}</b></div>
@@ -474,12 +479,12 @@ const TP = (function (dis) {
     let etk = '';
     if (P && P.etki) { const z = P.etki[r.job] ?? (U.surukle && U.surukle.id === r.id ? 0 : null); if (z != null && P.son[r.job] === r.id) etk = `<span class="tp-etki ${z > 0.24 ? 'kotu' : z < -0.24 ? 'iyi' : 'notr'}" style="left:${x + w}px;top:0">${Math.abs(z) < 0.25 ? '±0' : (z > 0 ? '+' : '−') + sure(z)}</span>`; }
     return `<div class="tp-cubuk ${durum === 'iyi' ? '' : durum} ${r.done ? 'bitti' : ''} ${sabit ? 'sabit' : ''} ${r.fas ? 'fason' : ''} ${sol ? 'soluk' : ''} ${vur ? 'vurgu' : ''} ${sec ? 'secili' : ''} ${kayan ? 'kayan' : ''} ${S.locks[r.id] && S.locks[r.id].tur === 'onay' ? 'onay-kilit' : ''}"
-      data-a="op" data-id="${esc(r.id)}" style="left:${x}px;width:${w}px" title="${esc(r.job)} · ${esc(o.ad || '')} · ${tz(r.S)} → ${tz(r.C)}${ilr != null ? ' · ilerleme %' + Math.round(ilr * 100) : ''}">${dolum}${ayar}${yz}${g ? `<span class="gercek ${sap > 0.5 ? 'sapma' : ''}" title="Atölyeden geldi${sap > 0.5 ? ', plandan ' + Math.round(sap * 60) + ' dk geç' : ''}">${ic('play')}${sap > 0.5 ? '+' + Math.round(sap * 60) + 'dk' : ''}</span>` : ''}${S.locks[r.id] && !S.locks[r.id].kim ? `<span class="kilit">${ic('lock')}</span>` : ''}</div>${etk}`;
+      data-a="op" data-id="${esc(r.id)}" style="left:${x}px;width:${w}px" title="${esc(r.job)} · ${esc(o.ad || '')} · ${tz(r.S)} → ${tz(r.C)}${ilr != null ? ' · ilerleme %' + Math.round(ilr * 100) : ''}">${dolum}${ayar}${yz}${g ? `<span class="gercek ${sap > 0.5 ? 'sapma' : ''}" title="Atölyeden geldi${sap > 0.5 ? ', plandan ' + Math.round(sap * 60) + ' dk geç' : ''}">${ic('play')}${sap > 0.5 ? '+' + Math.round(sap * 60) + 'dk' : ''}</span>` : ''}${ekipRozet(r)}${S.locks[r.id] && !S.locks[r.id].kim ? `<span class="kilit">${ic('lock')}</span>` : ''}</div>${etk}`;
   }
 
   /* ---------- kart (secilen oge, tezgah olayi, gonderim) ---------- */
   function kartAc(tur, veri, ankraj) { U.kart = { tur, veri, ankraj }; cizKart(); }
-  function kartKapat() { U.kart = null; cizKart(); }
+  function kartKapat() { if (U.kart && U.kart.tur === 'gonder' && U.rezerv && U.ekipBen !== 'onayda') { U.rezerv = null; clearTimeout(U.rezervZ); U.kart = null; cizKart(); cizHafif(); return; } U.kart = null; cizKart(); }
   function cizKart() {
     /* odaktaki secim kutusu kaldirilirken blur yeniden cizim tetiklemesin */
     let k = $('#tp-kart'); if (k && k.contains(document.activeElement)) document.activeElement.blur(); k = $('#tp-kart'); if (k) k.remove(); let p = $('#tp-perde'); if (p) p.remove();
@@ -523,6 +528,7 @@ const TP = (function (dis) {
         <div class="satir"><span>Sipariş bitişi / termin</span><b class="${b.durum === 'gec' ? 'rozet gec' : ''}">${tz(b.C)} / ${tz(b.due)}</b></div>
         ${alt.length ? `<label>Başka tezgâhta (sipariş bitişine etkisi)</label><div class="tp-cipler">${alt.map((x, i) => `<button class="tp-cip" data-a="alt" data-i="${i}" title="${esc(x.metin)}">${esc(x.m)} <b class="${x.d < 0 ? 'rozet iyi' : x.d > 0 ? 'rozet gec' : ''}">${Math.abs(x.d) < 0.25 ? '±0' : (x.d < 0 ? '−' : '+') + sure(x.d)}</b></button>`).join('')}</div>` : ''}
         ${ok ? `<p class="tp-not uyari" style="margin-top:var(--b-2)">${ic('lock')} ${ok.kim} (taklit) ${ok.tur === 'onay' ? 'bu değişikliği onaya gönderdi; onay bekliyor, kilitli' : 'değişikliği onaylandı; canlı planda'}.</p>` : sabit ? `<p class="tp-not" style="margin-top:var(--b-2)">${ic('lock')} Donuk bölgede ya da başlamış; taşınmaz.</p>` : ''}
+        ${(U.ekip ? U.ekip.L.filter(k => k.faz === 'calisiyor' && k.op === id) : []).map(k => `<p class="tp-not uyari">${ic('user')} ${k.ad} (taklit) bu işte çalışıyor. Değiştirebilirsin; onayda çakışma sana listelenir.</p>`).join('')}
         ${cizGercek(id, r, o)}
         <div class="eylem">
           ${sabit ? '' : S.locks[id] ? `<button class="tp-tus kucuk" data-a="kilitAc" data-id="${esc(id)}">${ic('lock')} Kilidi aç</button>` : `<button class="tp-tus kucuk" data-a="kilitle" data-id="${esc(id)}" title="Bu saat ve tezgâhta sabit kalır">${ic('lock')} Bu saatte kilitle</button>`}
@@ -561,10 +567,31 @@ const TP = (function (dis) {
           + (on.oner ? '' : '<p class="tp-not uyari">İki yerleşimde de termin tutmuyor: öneri yok, karar senin.</p>') : '<div class="tp-ozet">Hesaplanıyor…</div>'}
         <div class="eylem"><button class="tp-tus ${on && on.sec === on.oner ? 'ana' : ''}" data-a="acilUygula" ${on ? '' : 'disabled'}>${ic('check')} Seçileni plana ekle</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
     },
+    ekipOnay(v) {
+      const k = ekipKisi(v.bh); if (!k) return null; const dw = k.sonra - k.once;
+      return `<h3>${ic('user')} Canlı plan sürüm ${U.ekip.surum} (taklit)<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
+        <p>${k.ad} değişikliğini onaylattı: <b>${esc(k.op)}</b> → ${esc(k.m2)}.</p>
+        <div class="tp-ozet">Taslağın yeni canlı plan üzerinde yeniden hesaplandı: gecikme ${sure(k.once)} → <b class="${dw > 0.1 ? 'kotu' : dw < -0.1 ? 'iyi' : ''}">${sure(k.sonra)}</b></div>
+        <label>Çakışan hamlelerin</label>${k.benim ? `<p class="tp-not uyari">${ic('alert')} ${esc(k.op)}: senin taslağında da değişmişti. Onaylı olan geçerli; seninki düştü.</p>` : '<p class="tp-not">Yok.</p>'}
+        <p class="tp-not">Taklit: uygulamadaki canlı plan değişmedi.</p>
+        <div class="eylem"><button class="tp-tus" data-a="ekipAc">${ic('list')} Ekip ve olaylar</button><button class="tp-tus ana" data-a="kapat" data-oto>Tamam</button></div>`;
+    },
+    ekip() {
+      if (!U.ekip) return null; const saat = t => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const FAZ = { bekliyor: 'henüz yok', bakiyor: 'bakıyor', calisiyor: 'çalışıyor', onayda: 'onay bekliyor', canli: 'onaylandı', red: 'reddedildi', bitti: 'çıktı' };
+      return `<h3>${ic('user')} Ekip (taklit)<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
+        <div class="tp-ekip"><div><span class="tp-kisi ben">Sen</span><span>${U.ekipBen === 'onayda' ? 'onay bekliyor (taklit)' : 'taslak'} · ${farkSay()} değişiklik</span></div>
+        ${U.ekip.L.map(k => `<div><span class="tp-kisi k${k.renk}">${k.bh}</span><span>${k.ad}</span><b>${FAZ[k.faz]}</b><small>${k.op && ['calisiyor', 'onayda', 'canli'].includes(k.faz) ? esc(k.op) + ' → ' + esc(k.m2) : k.j ? esc(k.j) : ''}</small></div>`).join('')}</div>
+        <label>Olaylar</label>${U.ekip.olay.map(o => `<div class="satir"><span>${saat(o.t)}</span><b class="tp-ekip-olay">${esc(o.metin)}</b></div>`).join('') || '<p class="tp-not">Henüz olay yok.</p>'}
+        <p class="tp-not">Kural: dokunmak uyarır, engellemez. Onaya giden adım herkese kilitlenir. Onaylanan herkesin taslağını yeniden hesaplatır; reddedilenin adımı canlıdaki yerine döner. Taklit sürerken çalışma planına yazılmaz.</p>
+        <div class="eylem"><button class="tp-tus" data-a="ortakAc">${ic('x')} Ekip taklidini kapat</button><button class="tp-tus ana" data-a="kapat">Tamam</button></div>`;
+    },
     gonder() {
       const f = farkSay(), b = kozet(S.e), a = S.canliE ? kozet(S.canliE) : null, x = S.canliE ? etki(S.canliE, S.e) : null;
       return `<h3>${ic('upload')} Onaya gönder<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
-        <p class="tp-not">Canlı plan onaylanana kadar değişmez. Çalışma planı kontrolden geçer ve onaya gider; sonucu Onay sekmesinde görürsün.</p>
+        ${U.ekipUyari ? `<p class="tp-not uyari">${ic('alert')} ${esc(U.ekipUyari)}</p>` : ''}
+        ${U.rezerv ? `<p class="tp-not">${ic('lock')} Elle değiştirdiğin ${U.rezerv.ids.length} adım 5 dk senin adına ayrıldı: başkası bunları onaya gönderemez, kendi taslağında oynayabilir (taklit).</p>` : ''}
+        <p class="tp-not">${U.ekip ? 'Ekip taklidi sürüyor: gönderim de taklittir, Onay sekmesine bir şey gitmez.' : 'Canlı plan onaylanana kadar değişmez. Çalışma planı kontrolden geçer ve onaya gider; sonucu Onay sekmesinde görürsün.'}</p>
         ${a ? `<div class="satir"><span>Değişen işlem</span><b>${f}</b></div>
         <div class="satir"><span>Bitişi değişen sipariş</span><b>${x.L.length}</b></div>
         <div class="satir"><span>Geciken sipariş</span><b>${a.late} → ${b.late}</b></div>
@@ -592,6 +619,7 @@ const TP = (function (dis) {
         <label>Ölçek</label><div class="tp-cipler">${OLCEK.map(([z, a]) => `<button class="tp-cip" data-a="zoom" data-v="${z}" aria-pressed="${U.zoom === z}">${a}</button>`).join('')}</div>
         <label>Donuk bölge</label><div class="tp-cipler">${[0, 2, 4, 8, 16, 24].map(x => `<button class="tp-cip" data-a="frz" data-v="${x}" aria-pressed="${S.frz === x}" ${yazar() ? '' : 'disabled'}>${x} sa</button>`).join('')}</div>
         <label>Görünüm</label><div class="tp-cipler"><button class="tp-cip" data-a="gunOzet">${ic('book')} Gün özeti</button><button class="tp-cip" data-a="brifAc">${ic('sun')} Sabah brifingi</button><button class="tp-cip" data-a="atolyeAc">${ic('laptop')} Atölye ekranı</button></div>
+        <label>Birlikte çalışma (taklit)</label><div class="tp-cipler"><button class="tp-cip" data-a="ortakAc" aria-pressed="${!!U.ekip}" ${yazar() ? '' : 'disabled'}>${ic('user')} ${U.ekip ? 'Ekip taklidini kapat' : 'Ekip taklidini başlat (3 kişi)'}</button><button class="tp-cip" data-a="sonSaniye" ${yazar() ? '' : 'disabled'} title="Senin değiştirdiğin işe başkası dokunur ve onaya göndermeyi dener">${ic('clock')} Son saniye sahnesi</button>${U.ekip ? `<button class="tp-cip" data-a="ekipAc">${ic('list')} Ekip ve olaylar</button>` : ''}</div>
         <label>Stüdyo</label><div class="tp-cipler"><button class="tp-cip" data-a="sekmeGit" data-v="onay">${ic('check')} Onay ve canlı</button><button class="tp-cip" data-a="sekmeGit" data-v="pg">${ic('chart')} Plan ve gerçekleşen</button></div>
         <label>Kısayollar</label><p class="tp-not">Ctrl+K komut · Ctrl+Z geri al · Ctrl+Y yinele · Esc kapat · 1-5 ölçek · / ara · taşırken Alt: mıknatıs kapalı</p>
         <p class="tp-not">Her karar çalışma planına yazılır; canlı plan yalnız Onay sekmesinden değişir.</p>
@@ -973,6 +1001,85 @@ Bilgilerinize sunarız.` };
       <header>${ic('laptop')} <b>Atölye</b><span>Canlı plan · sürüm ${G.canliSurum || 0}</span><span class="tp-bosluk"></span><span class="saat">${tz(now)}</span><button class="tp-tus" data-a="atolyeKapat">${ic('x')} Çık</button></header>${govde}</div>`);
   }
 
+  /* ---------- ekip (taklit): üç sahte planlamacı aynı canlı plan üzerinde kendi taslaklarında çalışır ----------
+     varlık rozeti ve yumuşak kilit (uyarı, engel yok); onaya giden adım değişmiş haliyle herkese kilitli;
+     onaylanan canlı sürümü artırır, bütün taslaklar yeniden hesaplanır; reddedilenin adımı canlıdaki yerine döner.
+     Taklit yalnız panonun yerel durumunda yürür: sahte onaylar uygulamaya yazılmaz; sürerken senin kararların da
+     çalışma planına yazılmaz, taklit bitince pano çalışma planına döner. */
+  const EKIP_AD = [['Ayşe K.', 'AK'], ['Burak T.', 'BT'], ['Cem E.', 'CE']];
+  const ekipYeni = () => EKIP_AD.map(([ad, bh], i) => ({ ad, bh, renk: i, faz: 'bekliyor' }));
+  function ekipVar() { return U.ekip && U.ekip.L.some(k => k.faz !== 'bitti'); }
+  function ekipKisi(bh) { return U.ekip && U.ekip.L.find(k => k.bh === bh); }
+  function ekipKilit() { const K = {}; if (!U.ekip) return K;
+    for (const k of U.ekip.L) if (k.kilit) K[k.op] = { m: k.m2, S: k.S2, kim: k.bh, tur: k.kilit }; return K; }
+  function ekipOlay(metin, uyar) { U.ekip.olay.unshift({ t: Date.now(), metin }); if (uyar !== false) bildir(metin + ' (taklit)'); if (U.kart && U.kart.tur === 'ekip') cizKart(); }
+  /* kendi taslağım ekibin kilitleriyle yeniden hesaplanır; dönen adım canlıdaki yerine konur; karar geçmişime girmez */
+  function ekipYansit(don) {
+    const lk = {}; for (const id in S.locks) if (!S.locks[id].kim) lk[id] = S.locks[id]; Object.assign(lk, ekipKilit());
+    const mods = Object.entries(ekipKilit()).map(([id, l]) => [id, l.m, l.S]);
+    if (don && S.canli) { const c = S.canli.ops[don]; if (c) mods.push([don, c.m, c.S]); }
+    const z = coz(mods, { locks: lk }); S.locks = lk; S.plan = z.p; S.e = z.e; U.bugunDurum = {}; U.secenek = null; ciz();
+  }
+  /* başlarken canlı plan yoksa o anki çalışma planı taklidin canlısı sayılır; bitince gerçek canlı yeniden kurulur */
+  function ekipKur() {
+    if (dnAktif()) { bildir('Denemedeyken ekip taklidi açılmaz; önce ana plana dön.'); return false; }
+    if (!S.canli) { S.canli = { ops: clone(S.plan.ops), down: clone(S.down) }; S.canliE = S.e; }
+    U.ekip = { L: ekipYeni(), olay: [], surum: dis.G().canliSurum || 0, geri: S.geri.length }; return true;
+  }
+  function ekipBitir() {
+    ekipDur(); clearTimeout(U.rezervZ); U.rezerv = null; U.ekipUyari = null; U.ekipBen = null; if (!U.ekip) return;
+    const n = U.ekip.geri; U.ekip = null; S.geri = S.geri.slice(0, n); S.ileri = []; S.kaynak = null; S.dv = -1;
+    if ($('#tp-kok')) { esitle(); canliKur(cxAl()); U.bugunDurum = {}; ciz(); }
+  }
+  function ekipBasla() {
+    ekipDur(); const L = siparisler().filter(x => x.durum !== 'iyi' && x.id !== U.secJob), sec = [];
+    for (const x of L) { if (sec.length >= 2) break; for (const r of x.ops) { const o = S.plan.cx.byId[r.id]; if (r.fas || r.done || r.act || r.S < 7 + S.frz + 2 || S.locks[r.id]) continue;
+      const al = (o.c || []).filter(c => !c.fas && c.m !== r.m); if (al.length) { sec.push({ j: x.id, op: r.id, m2: al[0].m, S2: r.S, m3: (al[1] || al[0]).m }); break; } } }
+    if (sec.length < 2) { bildir('Taklit için yeterli iş bulunamadı'); return; }
+    if (!ekipKur()) return;
+    const [A, B] = sec, K = U.ekip.L, [ak, bt, ce] = K, z = U.ekipZ = [];
+    const adim = (ms, f) => z.push(setTimeout(() => { if (U.ekip && U.ekip.L === K && $('#tp-kok')) { f(); cizHafif(); } }, ms));
+    adim(0, () => { Object.assign(ak, { faz: 'bakiyor', j: A.j }); Object.assign(bt, { faz: 'bakiyor', j: B.j }); ekipOlay(`AK ${A.j}, BT ${B.j} siparişine bakıyor`); ciz(); });
+    adim(4000, () => { Object.assign(ce, { faz: 'bakiyor', j: A.j }); ekipOlay(`CE de ${A.j} siparişinde: AK ile aynı yerde, ikisi de uyarıldı`); });
+    adim(7000, () => { Object.assign(ak, { faz: 'calisiyor', op: A.op, m2: A.m2, S2: A.S2 }); Object.assign(bt, { faz: 'calisiyor', op: B.op, m2: B.m2, S2: B.S2 }); ekipOlay(`AK ${A.op}, BT ${B.op} üzerinde çalışıyor (yumuşak kilit)`); });
+    adim(11000, () => { Object.assign(ce, { faz: 'calisiyor', op: A.op, m2: A.m3, S2: A.S2 }); ekipOlay(`CE de ${A.op} işine dokundu: AK ile çakışma uyarısı`); });
+    adim(15000, () => { const r = S.plan.ops[A.op], c = S.canli.ops[A.op]; ak.benim = !!(r && c && (r.m !== c.m || Math.abs(r.S - c.S) > 0.25)); ak.once = kozet(S.e).wT;
+      Object.assign(ak, { faz: 'onayda', kilit: 'onay' }); ekipYansit(); ekipOlay(`AK onaya gönderdi: ${A.op} → ${A.m2} herkese kilitli. CE'nin aynı işteki hamlesi kilide çarptı`); ce.faz = 'bakiyor'; });
+    adim(19000, () => { Object.assign(bt, { faz: 'onayda', kilit: 'onay' }); ekipYansit(); ekipOlay(`BT onaya gönderdi: ${B.op} → ${B.m2} kilitli. Sırada AK'den sonra`); });
+    adim(24000, () => { ak.faz = 'canli'; ak.kilit = 'canli'; U.ekip.surum++;
+      S.canli = { ...S.canli, ops: { ...S.canli.ops, [A.op]: { ...S.plan.ops[A.op] } } }; S.canliE = degerle(bagla({ ops: S.canli.ops, fail: [] }, S.plan.cx), stKur());
+      ekipYansit(); ak.sonra = kozet(S.e).wT; ekipOlay(`AK onaylandı: canlı sürüm ${U.ekip.surum}. Herkesin taslağı yeniden hesaplandı; BT'nin onaydaki taslağı da`); kartAc('ekipOnay', { bh: 'AK' }); });
+    adim(30000, () => { bt.faz = 'red'; bt.kilit = null; ekipYansit(B.op); ekipOlay(`BT reddedildi: ${B.op} kilidi kalktı, canlıdaki yerine döndü`); });
+    adim(34000, () => { ce.faz = 'bitti'; bt.faz = 'bitti'; ekipOlay('BT ve CE çıktı; taslakları kendiliğinden kaydedildi', false); });
+    adim(38000, () => { ak.faz = 'bitti'; ekipOlay('Taklit bitti; "Ekip taklidini kapat" ile pano çalışma planına döner', false); });
+  }
+  /* gönderim rezervasyonu: Onaya gönder kartı açılınca elle değiştirilen adımlar 5 dk senin adına ayrılır; başkası o adımları onaya gönderemez */
+  function elleDegisen() { return Object.keys(S.plan.ops).filter(id => { const l = S.locks[id], c = S.canli && S.canli.ops[id], r = S.plan.ops[id];
+    return !(l && l.kim) && ((l && !l.kim) || (c && r && c.m !== r.m)); }); }
+  function rezervAl() { if (!U.ekip) return; const ids = elleDegisen(); clearTimeout(U.rezervZ); U.rezerv = ids.length ? { ids, bitis: Date.now() + 300000 } : null;
+    if (U.rezerv) U.rezervZ = setTimeout(() => { if (U.ekipBen !== 'onayda') { U.rezerv = null; cizHafif(); } }, 300000); }
+  /* son saniye sahnesi: CE senin elle değiştirdiğin işe dokunur ve 10 sn sonra onaya göndermeyi dener */
+  function ekipSonSaniye() {
+    const ids = elleDegisen(); if (!ids.length) { bildir('Önce bir işi elle başka tezgâha taşı ya da kilitle; sonra sahneyi başlat'); return; }
+    if (!U.ekip && !ekipKur()) return;
+    const id = ids[0], r = S.plan.ops[id], o = S.plan.cx.byId[id], al = (o.c || []).filter(c => !c.fas && c.m !== r.m), m2 = (al[0] || { m: r.m }).m;
+    const ce = ekipKisi('CE'); Object.assign(ce, { faz: 'calisiyor', j: r.job, op: id, m2, S2: r.S, kilit: null }); U.ekipUyari = null;
+    ekipOlay(`CE senin değiştirdiğin ${id} işine dokundu. 10 sn içinde Onaya gönder kartını açarsan adım senin adına ayrılır`); ciz();
+    U.ekipZ = U.ekipZ || []; U.ekipZ.push(setTimeout(() => { if (!U.ekip || !$('#tp-kok')) return;
+      if (U.ekipBen === 'onayda' || (U.rezerv && U.rezerv.ids.includes(id))) { ce.faz = 'bakiyor'; ekipOlay(`CE ${id} işini onaya göndermek istedi ama gönderemedi: sen gönderiyorsun. CE'nin taslağı senin onayından sonra yeniden hesaplanacak`); cizHafif(); }
+      else { Object.assign(ce, { faz: 'onayda', kilit: 'onay' }); U.ekipUyari = `CE senden önce gönderdi: ${id} artık onun onay kilidinde (→ ${m2}). Taslağın yeniden hesaplandı; bu adımdaki hamlen düştü.`; ekipYansit(); ekipOlay(U.ekipUyari); }
+    }, 10000));
+  }
+  function ekipDur() { (U.ekipZ || []).forEach(clearTimeout); U.ekipZ = []; }
+  function ekipTemas(r) { return U.ekip ? U.ekip.L.filter(k => (k.faz === 'bakiyor' && k.j === r.job) || (k.faz === 'calisiyor' && k.op === r.id)) : []; }
+  function ekipRozet(r) {
+    if (!U.ekip) return ''; const T = ekipTemas(r), l = S.locks[r.id], ks = l && l.kim ? ekipKisi(l.kim) : null;
+    return (T.length ? `<span class="tp-kisiler cubukta">${T.map(k => `<span class="tp-kisi k${k.renk}" title="${k.ad} (taklit) ${k.faz === 'bakiyor' ? 'bakıyor' : 'üzerinde çalışıyor'}">${k.bh}</span>`).join('')}</span>` : '')
+      + (ks ? `<span class="tp-kisi k${ks.renk} onay" title="${ks.ad} (taklit): ${l.tur === 'onay' ? 'onay bekliyor' : 'onaylandı'}">${ic(l.tur === 'onay' ? 'clock' : 'check')}${ks.bh}</span>`
+        : U.rezerv && U.rezerv.ids.includes(r.id) ? `<span class="tp-kisi ben rezerv" title="${U.ekipBen === 'onayda' ? 'Senin onayında' : 'Sen gönderiyorsun: 5 dk ayrıldı'}">${ic('clock')}Sen</span>` : '');
+  }
+  function ekipSiparis(j) { return U.ekip ? U.ekip.L.filter(k => k.faz !== 'bitti' && k.faz !== 'red' && (k.j === j || (k.op && S.plan.ops[k.op] && S.plan.ops[k.op].job === j && ['calisiyor', 'onayda'].includes(k.faz)))) : []; }
+
   /* ---------- komut çubuğu (Ctrl+K) ----------
      sözdizimi: nesne eylem değer; nesne sipariş (SP-109), işlem (SP-109.20), tezgâh (T2) ya da genel eylem.
      her adımda sıradaki sözcük önerilir, Tab sözcüğü tamamlar, Enter uygular; plan değiştiren komut karar geçmişine girer, geri alınır.
@@ -1025,9 +1132,9 @@ Bilgilerinize sunarız.` };
     if (yaz) {
       for (const u of S.D.urunler) ekle(['acil', u.id, { n: 20 }, 'adet', { n: 3 }, 'gün'], { ik: 'fire', w: 1.5, alt: u.ad, run: v => { kartAc('acil', { urun: u.id, adet: Math.max(1, Math.round(v[2] || 20)), gun: Math.max(1, Math.round(v[4] || 3)) }); acilOnizle(); } });
       for (const [k, ad, sm, alt] of OLAY) if (k !== 'ariza' && k !== 'acil') ekle(['olay', nrm(ad.split(' ')[0])], { ik: sm, w: 1.5, alt: `${ad} · ${alt}`, run: () => { U.tepki = null; kartAc('olay3', olayVarsayilan(k)); tepkiBaslat(); } });
-      ekle(['deneme'], { ik: 'lab', w: 2, alt: 'şu olursa: ana plandan yeni deneme', run: () => kartAc('dn') });
+      if (!U.ekip) ekle(['deneme'], { ik: 'lab', w: 2, alt: 'şu olursa: ana plandan yeni deneme', run: () => kartAc('dn') });
       if (!dn) {
-        ekle(['iyileştir'], { ik: 'bolt', w: 2, run: () => dis.iyilestir() });
+        if (!U.ekip) ekle(['iyileştir'], { ik: 'bolt', w: 2, run: () => dis.iyilestir() });
         ekle(['donuk', { n: S.frz }, 'sa'], { ik: 'lock', alt: 'ilk saatler taşınmaz', run: v => { const x = Math.max(0, Math.min(48, Math.round(v[1] ?? S.frz))); if (x === S.frz) return; dis.G().w.dondurma = x;
           const st = stKur(), p = bagla({ ops: S.plan.ops, fail: S.plan.fail || [] }, cxAl()); uygula(`Donuk bölge ${x} sa`, { p, e: degerle(p, st) }); } });
         if (f) ekle(['onaya', 'gönder'], { ik: 'upload', w: 2.5, alt: `${f} değişiklik`, run: () => kartAc('gonder') });
@@ -1261,6 +1368,7 @@ Bilgilerinize sunarız.` };
     const r = S.plan.ops[id]; if (!r || S.durum === 'onayda') return;
     const sabit = r.done || r.act || r.S < 7 + S.frz - 1e-6 || r.fas || !!(S.locks[id] && S.locks[id].kim);
     if (S.locks[id] && S.locks[id].kim) bildir(`${S.locks[id].kim} (taklit) ${S.locks[id].tur === 'onay' ? 'onay bekliyor' : 'onaylandı'}: bu iş kilitli`);
+    else { const T = U.ekip ? U.ekip.L.filter(k => k.faz === 'calisiyor' && k.op === id) : []; if (T.length) bildir(`${T.map(k => k.bh).join(', ')} (taklit) bu işte çalışıyor; değiştirirsen çakışma olabilir`); }
     const k0 = panoKonum(ev);
     U.surukle = { id, x0: ev.clientX, y0: ev.clientY, basladi: false, sabit, ofs: k0.t - r.S, m: r.m, t: r.S, son: null, z: null };
   }
@@ -1348,6 +1456,7 @@ Bilgilerinize sunarız.` };
       const a = ev.target.closest('[data-a]'); if (!a) return;
       const ad = a.dataset.a, rc = a.getBoundingClientRect(), ank = { x: rc.left, y: rc.bottom };
       if (YAZMA.has(ad) && !yazar()) { bildir(dis.calisan() ? 'Motor çalışıyor; bitince yeniden deneyin.' : 'Yetkiniz yok (plan.yaz).'); return; }
+      if (U.ekip && (ad === 'iyilestir' || ad === 'taslakSifirla')) { bildir('Ekip taklidi sürerken bu iş kapalı; önce taklidi kapat.'); return; }
       if (DN_YASAK.has(ad) && dnAktif()) { bildir('Denemedesin: bu iş ana plandadır. Önce "Ana plana dön" ya da denemeyi ana plan yap.'); return; }
       switch (ad) {
         case 'op': if (U.yeniSurukle) { U.yeniSurukle = false; return; } opSec(a.dataset.id, { x: ev.clientX, y: ev.clientY }); break;
@@ -1389,7 +1498,7 @@ Bilgilerinize sunarız.` };
         case 'mesaiSec': { const v = U.kart.veri, i = +a.dataset.v; v.kaldir = null; v.ekle = v.ekle === i ? null : i; mesaiOnizle(); break; }
         case 'mesaiKaldir': { const v = U.kart.veri, i = +a.dataset.v; v.ekle = null; v.kaldir = v.kaldir === i ? null : i; mesaiOnizle(); break; }
         case 'mesaiUygula': { const o = U.onizleme; if (!o || o.tur !== 'mesai') break; U.onizleme = null; U.kart = null; uygula(o.ad, { p: o.z.p, e: o.z.e, ekMesai: o.em }); break; }
-        case 'dnAc': case 'dnKarsi': kartAc('dn', null, ank); break;
+        case 'dnAc': case 'dnKarsi': if (U.ekip) { bildir('Ekip taklidi sürerken deneme açılmaz; önce taklidi kapat.'); break; } kartAc('dn', null, ank); break;
         case 'dnYeni': dnYeni(); break;
         case 'dnCik': dnSakla(); kartKapat(); ciz(); break;
         case 'dnDuzenle': dnDuzenle(+a.dataset.i); break;
@@ -1404,8 +1513,11 @@ Bilgilerinize sunarız.` };
         case 'kilitle': { const id = a.dataset.id, r = S.plan.ops[id]; const lk = { ...S.locks, [id]: { m: r.m, S: r.S } }; const z = coz([[id, r.m, r.S]], { locks: lk }); kartKapat(); uygula(`${r.job} kilitlendi`, { p: z.p, e: z.e, locks: lk }); break; }
         case 'kilitAc': { const id = a.dataset.id; const lk = { ...S.locks }; delete lk[id]; const z = coz([], { locks: lk }); kartKapat(); uygula('Kilit açıldı', { p: z.p, e: z.e, locks: lk }); break; }
         case 'iyilestir': kartKapat(); dis.iyilestir(); break;
-        case 'gonder': kartAc('gonder', null, ank); break;
-        case 'gonderOnay': kartKapat(); dis.onaya(); break;
+        case 'gonder': rezervAl(); kartAc('gonder', null, ank); if (U.rezerv) cizHafif(); break;
+        case 'gonderOnay': if (U.ekip) { U.ekipBen = 'onayda'; kartKapat(); ekipOlay(`Sen onaya gönderdin: ${farkSay()} değişiklik${U.rezerv ? ', ' + U.rezerv.ids.length + ' adım senin adına ayrıldı' : ''}`); cizHafif(); break; } kartKapat(); dis.onaya(); break;
+        case 'ortakAc': kartKapat(); if (U.ekip) ekipBitir(); else ekipBasla(); break;
+        case 'ekipAc': kartAc('ekip', null, ank); break;
+        case 'sonSaniye': kartKapat(); ekipSonSaniye(); break;
         case 'onayGit': kartKapat(); dis.sekme('onay'); break;
         case 'sekmeGit': kartKapat(); dis.sekme(a.dataset.v); break;
         case 'gunOzet': kartAc('gun', null, ank); break;
@@ -1505,7 +1617,7 @@ Bilgilerinize sunarız.` };
   /* uygulama sayfayı her çizdiğinde pano yeniden takılır; çalışma planı değiştiyse önce ondan kurulur */
   function tak() {
     const k = $('#tp-kok');
-    if (!k) { kartKapat(); menuKapat(); U.surukle = null; return; }
+    if (!k) { kartKapat(); menuKapat(); U.surukle = null; if (U.ekip) ekipBitir(); return; }
     if (!esitle()) { k.innerHTML = ''; return; }
     dnKur(); gunBasla(); boyut(); ciz(); istekIsle();
   }

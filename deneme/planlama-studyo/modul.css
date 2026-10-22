@@ -3935,3 +3935,22 @@ body.pm-ps-karar .pm-yp-kap { display: none; }
 .tp-komut kbd { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--b-1); padding: 0 var(--b-1); }
 .tp-komut-bos { padding: var(--b-3); }
 @media (max-width: 767px) { .tp-komut { top: var(--b-2); } .tp-komut-alt { display: none; } }
+/* ekip taklidi */
+.tp-kisiler { display: inline-flex; gap: 0; }
+.tp-kisi { display: inline-flex; align-items: center; gap: var(--b-1); padding: 0 var(--b-1); border-radius: var(--yari-tam); background: var(--grafik-2); color: var(--panel-solid); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; line-height: 1.4; }
+.tp-kisi.ben { background: var(--edge2); color: var(--ink); }
+.tp-kisi.k0 { background: var(--grafik-2); } .tp-kisi.k1 { background: var(--grafik); } .tp-kisi.k2 { background: var(--hold); }
+.tp-cubuk .tp-kisiler.cubukta { position: absolute; top: 0; right: 0; z-index: 1; }
+.tp-cubuk > .tp-kisi.onay, .tp-cubuk > .tp-kisi.rezerv { position: absolute; bottom: 0; right: 0; z-index: 1; }
+.tp-cubuk > .tp-kisi.rezerv { background: var(--ink); color: var(--panel-solid); }
+.tp-kisiler.ust { border: 0; background: transparent; padding: 0; cursor: pointer; align-items: center; min-height: var(--dokunma); }
+.tp-kisiler.ust .tp-kisi { box-shadow: 0 0 0 var(--cizgi-orta) var(--panel-solid); }
+.tp-kisiler.ust .tp-kisi:not(.ben) + .tp-kisi { margin-left: calc(-1 * var(--b-1)); }
+.tp-kisiler.ust .ben { margin-right: var(--b-1); }
+@container tp (max-width: 1099px) { .tp-kisiler.ust .ben { display: none; } }
+.tp-ekip { display: grid; gap: var(--b-1); }
+.tp-ekip > div { display: grid; grid-template-columns: auto 1fr auto; gap: 0 var(--b-2); align-items: center; padding: var(--b-1) 0; border-bottom: var(--cizgi-ince) solid var(--edge); font-size: var(--yazi-xs); }
+.tp-ekip small { grid-column: 2 / -1; color: var(--muted); font-family: var(--font-mono); }
+.tp-ekip-olay { font-family: var(--font-ana); font-weight: 400; text-align: left; }
+.tp-sip-ad .tp-kisi { margin-left: var(--b-1); }
+.tp-cubuk.onay-kilit { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--grafik-2) 30%, transparent) 0 var(--b-1), transparent var(--b-1) var(--b-2)); outline: var(--cizgi-orta) solid var(--grafik-2); }
