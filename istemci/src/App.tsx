@@ -7,6 +7,7 @@ import { anaSayfaKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts'
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
 import { KaliciEkranlar } from './ortak/rota/kalici.tsx';
+import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
 import { hataIletisi } from './ortak/veri/api.ts';
 import { baglantiDonusunuDinle } from './ortak/veri/baglanti.ts';
@@ -87,6 +88,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
         anaSayfa={acilis ?? '/'}
         ustEylemler={ustEylemler}
         hizliIsler={hizliIsler}
+        komutlar={komutlar}
         kisiId={kullanici.id}
         cikis={() => cikis.mutate(undefined, { onError: (hata) => bildir('hata', hataIletisi(hata, 'Çıkış yapılamadı')) })}
       >

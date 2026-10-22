@@ -273,7 +273,10 @@ describe('çerçeve köprüsü', () => {
   describe('kabuk görünümü', () => {
     interface GorunumIletisi { kanal: string; surum: number; tip: string; gorunum?: string; sira?: number }
     let gorunumler: GorunumIletisi[];
-    type Tmi = { kaydet: (f: (ad: string) => string) => void; bildir: (ad: string) => void; sayaclar: (s: Record<string, unknown>) => void };
+    type Tmi = {
+      kaydet: (f: (ad: string) => string) => void; bildir: (ad: string) => void; sayaclar: (s: Record<string, unknown>) => void;
+      komutlar: (liste: unknown, calistir: (anahtar: string) => void) => void;
+    };
     const tmi = () => (window as unknown as { tmiGorunum: Tmi }).tmiGorunum;
     const kabuktan = (gorunum: string, sira: number) => {
       window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'tmi-gorunum', surum: 1, tip: 'gorunum', gorunum, sira }, source: window }));
@@ -379,6 +382,50 @@ describe('çerçeve köprüsü', () => {
       tmi().sayaclar(null as unknown as Record<string, unknown>);
       tmi().sayaclar([1] as unknown as Record<string, unknown>);
       expect(sayaclar()).toHaveLength(3);
+    });
+
+    it('KK-22: komut listesi kabuğa tam liste olarak gider; biçime uymayan madde atılır, aynı liste yinelenmez, boş liste grubu kaldırır', () => {
+      cerceveKoprusu(window, AYAR);
+      const komutlar = () => gorunumler.filter((g) => g.tip === 'komutlar') as unknown as { komutlar: { anahtar: string }[] }[];
+      const liste = [
+        { anahtar: 'gun-ozeti', baslik: 'Gün özeti', simge: 'book' },
+        { anahtar: 'ariza', baslik: 'Arıza gir', simge: 'alert', aciklama: 'Tezgâh duruyor', sozcukler: ['bakım'] },
+        { anahtar: 'Buyuk', baslik: 'Geçersiz anahtar', simge: 'book' },
+        { anahtar: 'bos', baslik: '  ', simge: 'book' },
+        { anahtar: 'uzun', baslik: 'x'.repeat(81), simge: 'book' },
+        { anahtar: 'simgesiz', baslik: 'Simgesiz' },
+        { anahtar: 'sozcuk', baslik: 'Sözcük', simge: 'book', sozcukler: Array.from({ length: 9 }, () => 'a') },
+        { anahtar: 'gun-ozeti', baslik: 'İkinci kez', simge: 'book' },
+        null, 'metin',
+      ];
+      tmi().komutlar(liste, () => undefined);
+      tmi().komutlar(liste, () => undefined);
+      expect(komutlar()).toEqual([{ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar: [
+        { anahtar: 'gun-ozeti', baslik: 'Gün özeti', simge: 'book' },
+        { anahtar: 'ariza', baslik: 'Arıza gir', simge: 'alert', aciklama: 'Tezgâh duruyor', sozcukler: ['bakım'] },
+      ] }]);
+      tmi().komutlar(Array.from({ length: 40 }, (_, i) => ({ anahtar: `k${i}`, baslik: `K${i}`, simge: 'book' })), () => undefined);
+      expect(komutlar()[1]!.komutlar).toHaveLength(32);
+      tmi().komutlar([], () => undefined);
+      expect(komutlar()[2]!.komutlar).toEqual([]);
+    });
+
+    it('KK-23: kabuğun seçtiği komut yalnız son bildirilen listede varsa çalışır; listede olmayan, bozuk ya da başka kanaldaki ileti yok sayılır', () => {
+      cerceveKoprusu(window, AYAR);
+      const calisan: string[] = [];
+      const kabuktanKomut = (data: unknown) => { window.dispatchEvent(new MessageEvent('message', { data, source: window })); };
+      tmi().komutlar([{ anahtar: 'gun-ozeti', baslik: 'Gün özeti', simge: 'book' }], (a) => { calisan.push(a); });
+      kabuktanKomut({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
+      expect(calisan).toEqual(['gun-ozeti']);
+      kabuktanKomut({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'geri-al' });
+      kabuktanKomut({ kanal: 'tmi-gorunum', surum: 2, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
+      kabuktanKomut({ kanal: AYAR.kanal, surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
+      kabuktanKomut({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 7 });
+      window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' }, source: null }));
+      expect(calisan).toEqual(['gun-ozeti']);
+      tmi().komutlar([], (a) => { calisan.push(a); });
+      kabuktanKomut({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'gun-ozeti' });
+      expect(calisan).toEqual(['gun-ozeti']);
     });
   });
 });

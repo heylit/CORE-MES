@@ -22,7 +22,13 @@
 //    ve düzenleme sahibin sayfasında yapılır; çerçeve o sayfanın yolunu (kayıt yolu, sorgu dahil) bildirir. Kabuk yalnız
 //    kayıtlı bir sayfaya ya da onun altına gider, geçmişe yeni satır yazar (geri tuşu prototipe döner). `hazir` ve sıra
 //    beklemez; sürümü değiştirmez.
+// 7. `komutlar`: çerçeve o an çalıştırabileceği komutları bildirir; kabuk Ctrl K paletinde "Bu sayfa" grubunda gösterir.
+//    Her ileti öncekinin tamamının yerine geçer; boş liste grubu kaldırır. Kabuk çerçeve kalkınca ya da ekran gizlenince
+//    listeyi kendisi unutur, çerçevenin boş liste yollamasını beklemez. Seçilen komut `komut-calistir` ile anahtarıyla
+//    döner; çerçeve listesinde olmayan anahtarı yok sayar (liste eskimiş olabilir). Yazma sınırları (yetki, onay, deneme)
+//    çerçevededir: o an çalışmayacak komut listeye konmaz. `hazir` ve sıra beklemez; sürümü değiştirmez.
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
+import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
 
 export const CERCEVE_KANALI = 'tmi-gorunum';
 export const CERCEVE_SURUMU = 1;
@@ -32,8 +38,10 @@ interface IletiBasi {
   surum: typeof CERCEVE_SURUMU;
 }
 
-// Kabuktan çerçeveye: bu görünümü göster.
-export type KabuktanIleti = IletiBasi & { tip: 'gorunum'; gorunum: string; sira: number };
+// Kabuktan çerçeveye: bu görünümü göster / kişi bu komutu seçti (kural 7).
+export type KabuktanIleti =
+  | (IletiBasi & { tip: 'gorunum'; gorunum: string; sira: number })
+  | (IletiBasi & { tip: 'komut-calistir'; anahtar: string });
 
 // Çerçeveden kabuğa: dinlemeye başladım / kullanıcı içeride bu görünüme geçti (`sira`: kabuktan alınan son sıra).
 // `sayaclar`: ikinci menünün sayıları (kural 5).
@@ -41,7 +49,18 @@ export type CercevedenIleti =
   | (IletiBasi & { tip: 'hazir' })
   | (IletiBasi & { tip: 'gorunum-degisti'; gorunum: string; sira: number })
   | (IletiBasi & { tip: 'sayaclar'; sayaclar: CerceveSayaclari })
-  | (IletiBasi & { tip: 'sahibe-git'; yol: `/${string}` });
+  | (IletiBasi & { tip: 'sahibe-git'; yol: `/${string}` })
+  | (IletiBasi & { tip: 'komutlar'; komutlar: readonly CerceveKomutu[] });
+
+// Çerçevenin bildirdiği komut. Simge verilmezse ya da sette yoksa kabuk kendi komut simgesini koyar.
+export interface CerceveKomutu {
+  anahtar: string;
+  baslik: string;
+  simge?: SimgeAdi;
+  aciklama?: string;
+  // Başlıkta geçmeyen arama sözcükleri ("arıza", "duruş").
+  sozcukler?: readonly string[];
+}
 
 // Madde anahtarı -> sayı; null ya da yazılmamış anahtar o maddede sayı göstermez.
 export type CerceveSayaclari = Readonly<Record<string, number | null>>;
@@ -51,15 +70,58 @@ export const SAYAC_ANAHTAR_SINIRI = 64;
 export const SAYAC_ANAHTAR_UZUNLUGU = 64;
 // Menü maddesinin anahtar kuralı (paylasilan/sayfa-tanimi.ts); `__proto__` gibi adlar bu yüzden geçemez.
 const SAYAC_ANAHTARI = /^[a-z][a-z0-9-]*$/;
+// Komut listesinin sınırları: bir sayfanın komutu bunun çok altındadır; güvenilmeyen çerçeve paleti dolduramaz.
+export const KOMUT_SINIRI = 40;
+export const KOMUT_ANAHTAR_UZUNLUGU = 64;
+export const KOMUT_BASLIK_UZUNLUGU = 80;
+export const KOMUT_ACIKLAMA_UZUNLUGU = 160;
+export const KOMUT_SOZCUK_SINIRI = 10;
+export const KOMUT_SOZCUK_UZUNLUGU = 40;
 
 const BAS: IletiBasi = { kanal: CERCEVE_KANALI, surum: CERCEVE_SURUMU };
 
-function iletiTipi(veri: unknown): { tip: unknown; gorunum: unknown; sira: unknown; sayaclar: unknown; yol: unknown } | null {
+function iletiTipi(veri: unknown): { tip: unknown; gorunum: unknown; sira: unknown; sayaclar: unknown; yol: unknown; komutlar: unknown; anahtar: unknown } | null {
   if (veri === null || typeof veri !== 'object') return null;
   const v = veri as Record<string, unknown>;
   return v.kanal === CERCEVE_KANALI && v.surum === CERCEVE_SURUMU
-    ? { tip: v.tip, gorunum: v.gorunum, sira: v.sira, sayaclar: v.sayaclar, yol: v.yol }
+    ? { tip: v.tip, gorunum: v.gorunum, sira: v.sira, sayaclar: v.sayaclar, yol: v.yol, komutlar: v.komutlar, anahtar: v.anahtar }
     : null;
+}
+
+const duzNesneMi = (deger: unknown): deger is Record<string, unknown> => {
+  if (deger === null || typeof deger !== 'object' || Array.isArray(deger)) return false;
+  const ilk = Object.getPrototypeOf(deger) as unknown;
+  return (ilk === Object.prototype || ilk === null) && Object.getOwnPropertySymbols(deger).length === 0;
+};
+const doluMetinMi = (deger: unknown, uzunluk: number): deger is string =>
+  typeof deger === 'string' && deger.trim() !== '' && deger.length <= uzunluk;
+const komutAnahtariMi = (deger: unknown): deger is string =>
+  typeof deger === 'string' && deger.length <= KOMUT_ANAHTAR_UZUNLUGU && SAYAC_ANAHTARI.test(deger);
+
+// Tek bozuk komut bütün iletiyi düşürür (sayaçlardaki gibi): yarım liste çerçevenin bildirdiğinden başka bir şey olurdu.
+export function cerceveKomutlariMi(deger: unknown): deger is readonly CerceveKomutu[] {
+  if (!Array.isArray(deger) || deger.length > KOMUT_SINIRI) return false;
+  const anahtarlar = new Set<string>();
+  return deger.every((k: unknown) => {
+    if (!duzNesneMi(k) || !komutAnahtariMi(k.anahtar) || anahtarlar.has(k.anahtar)) return false;
+    anahtarlar.add(k.anahtar);
+    if (!doluMetinMi(k.baslik, KOMUT_BASLIK_UZUNLUGU)) return false;
+    if (k.simge !== undefined && typeof k.simge !== 'string') return false;
+    if (k.aciklama !== undefined && !doluMetinMi(k.aciklama, KOMUT_ACIKLAMA_UZUNLUGU)) return false;
+    return k.sozcukler === undefined || (Array.isArray(k.sozcukler) && k.sozcukler.length <= KOMUT_SOZCUK_SINIRI
+      && k.sozcukler.every((s: unknown) => doluMetinMi(s, KOMUT_SOZCUK_UZUNLUGU)));
+  });
+}
+
+// Doğrulanmış listenin kabuğa ait kopyası: bilinmeyen alan taşınmaz, sette olmayan simge düşer.
+function komutlariKopyala(komutlar: readonly CerceveKomutu[]): CerceveKomutu[] {
+  return komutlar.map((k) => ({
+    anahtar: k.anahtar,
+    baslik: k.baslik,
+    ...(k.simge !== undefined && Object.hasOwn(SIMGELER, k.simge) ? { simge: k.simge } : {}),
+    ...(k.aciklama !== undefined ? { aciklama: k.aciklama } : {}),
+    ...(k.sozcukler !== undefined ? { sozcukler: [...k.sozcukler] } : {}),
+  }));
 }
 
 // Yalnız düz nesne; değer null ya da güvenli aralıkta eksi olmayan tam sayı (NaN, sonsuz, kesirli, metin geçmez).
@@ -80,7 +142,9 @@ const siraMi = (deger: unknown, enAz: number): deger is number => typeof deger =
 
 export function kabuktanIletiMi(veri: unknown): veri is KabuktanIleti {
   const i = iletiTipi(veri);
-  return i !== null && i.tip === 'gorunum' && gorunumMu(i.gorunum) && siraMi(i.sira, 1);
+  return i !== null && (
+    (i.tip === 'gorunum' && gorunumMu(i.gorunum) && siraMi(i.sira, 1))
+    || (i.tip === 'komut-calistir' && komutAnahtariMi(i.anahtar)));
 }
 
 export function cercevedenIletiMi(veri: unknown): veri is CercevedenIleti {
@@ -89,7 +153,8 @@ export function cercevedenIletiMi(veri: unknown): veri is CercevedenIleti {
     i.tip === 'hazir'
     || (i.tip === 'gorunum-degisti' && gorunumMu(i.gorunum) && siraMi(i.sira, 0))
     || (i.tip === 'sayaclar' && cerceveSayaclariMi(i.sayaclar))
-    || (i.tip === 'sahibe-git' && kayitYoluMu(i.yol)));
+    || (i.tip === 'sahibe-git' && kayitYoluMu(i.yol))
+    || (i.tip === 'komutlar' && cerceveKomutlariMi(i.komutlar)));
 }
 
 export interface KabukKoprusuAyari {
@@ -108,12 +173,16 @@ export interface KabukKoprusuAyari {
   // Çerçeve kaydın sahibinin sayfasını istedi (kural 6); biçimi doğrulanmış uygulama içi yol gelir, sayfa kaydını
   // kabuk denetler.
   sahibeGit?: (yol: `/${string}`) => void;
+  // Çerçeve komutlarını bildirdi (kural 7); doğrulanmış ve kopyalanmış liste gelir.
+  komutlar?: (komutlar: readonly CerceveKomutu[]) => void;
 }
 
 export interface KabukKoprusu {
   // Çerçeve hazır değilse saklanır, "hazır" gelince gönderilir; çerçeve yeniden yüklenirse son görünüm yeniden gider.
   // Aynı görünüm yeniden gönderilmez; çerçeve reddedilen bir görünüme sapmışsa gönderilir.
   gorunumGonder: (gorunum: string) => void;
+  // Kişinin paletten seçtiği komutu çerçeveye iletir (kural 7); `hazir` beklemez, çerçeve yoksa düşer.
+  komutCalistir: (anahtar: string) => void;
   kapat: () => void;
 }
 
@@ -146,6 +215,10 @@ export function kabukKoprusuKur(ayar: KabukKoprusuAyari): KabukKoprusu {
       ayar.sahibeGit?.(olay.data.yol);
       return;
     }
+    if (olay.data.tip === 'komutlar') {
+      ayar.komutlar?.(komutlariKopyala(olay.data.komutlar));
+      return;
+    }
     if (olay.data.tip === 'hazir') {
       // Sıra sıfırlanmaz: çerçeve yeniden yüklenmeden de yeniden hazır bildirebilir, eski bildirimleri yeni
       // isteğinkilerden ayıran tek şey sıranın hiç geri dönmemesidir.
@@ -176,6 +249,12 @@ export function kabukKoprusuKur(ayar: KabukKoprusuAyari): KabukKoprusu {
       son = gorunum;
       gonder();
     },
+    komutCalistir: (anahtar) => {
+      const hedef = ayar.cerceve();
+      if (!hedef || !komutAnahtariMi(anahtar)) return;
+      const ileti: KabuktanIleti = { ...BAS, tip: 'komut-calistir', anahtar };
+      hedef.postMessage(ileti, ayar.koken);
+    },
     kapat: () => { pencere.removeEventListener('message', dinle); },
   };
 }
@@ -190,6 +269,8 @@ export interface CerceveKoprusuAyari {
   // Kabuk bu görünümü istedi. Uygulama eşzamansızsa söz döndürülür: çözülene kadar yapılan bildirimler
   // (uygulanmadan önceki görünüm) gönderilmez.
   gorunumIste: (gorunum: string) => void | Promise<void>;
+  // Kişi paletten bu komutu seçti (kural 7). Çerçeve son bildirdiği listede olmayan anahtarı yok sayar.
+  komutCalistir?: (anahtar: string) => void;
   // Kabuktan `gorunum` gelene kadar `hazir`ın yinelenme aralığı (ms) ve en çok kaç kez yineleneceği.
   hazirAraligiMs?: number;
   hazirYinelemeSiniri?: number;
@@ -208,6 +289,9 @@ export interface CerceveKoprusu {
   // Ekleme ve düzenleme için kaydın sahibinin sayfasını ister (kural 6). Uygulama içi yol olmayan değer gönderilmez,
   // hata fırlatır.
   sahibeGit: (yol: string) => void;
+  // O an çalıştırılabilen komutları kabuğa bildirir (kural 7); her çağrı öncekinin yerine geçer, boş liste grubu kaldırır.
+  // Biçime uymayan liste gönderilmez, hata fırlatır.
+  komutlarBildir: (komutlar: readonly CerceveKomutu[]) => void;
   kapat: () => void;
 }
 
@@ -231,6 +315,10 @@ export function cerceveKoprusuKur(ayar: CerceveKoprusuAyari): CerceveKoprusu {
   const gonder = (ileti: CercevedenIleti) => { ust.postMessage(ileti, ayar.koken); };
   const dinle = (olay: MessageEvent) => {
     if (olay.origin !== ayar.koken || olay.source !== ust || !kabuktanIletiMi(olay.data)) return;
+    if (olay.data.tip === 'komut-calistir') {
+      ayar.komutCalistir?.(olay.data.anahtar);
+      return;
+    }
     yinelemeyiBirak();
     alinan = olay.data.sira;
     uygulanan += 1;
@@ -268,6 +356,10 @@ export function cerceveKoprusuKur(ayar: CerceveKoprusuAyari): CerceveKoprusu {
     sahibeGit: (yol) => {
       if (!kayitYoluMu(yol)) throw new TypeError(`Uygulama içi yol değil: ${yol}`);
       gonder({ ...BAS, tip: 'sahibe-git', yol });
+    },
+    komutlarBildir: (komutlar) => {
+      if (!cerceveKomutlariMi(komutlar)) throw new TypeError('Komutlar biçime uymuyor: anahtar, başlık ve sınırlar için cerceve-iletisi.ts kural 7');
+      gonder({ ...BAS, tip: 'komutlar', komutlar: komutlariKopyala(komutlar) });
     },
     kapat: () => {
       yinelemeyiBirak();

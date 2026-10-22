@@ -3966,3 +3966,6 @@ body.pm-ps-karar .pm-yp-kap { display: none; }
 .tp-ekip-olay { font-family: var(--font-ana); font-weight: 400; text-align: left; }
 .tp-sip-ad .tp-kisi { margin-left: var(--b-1); }
 .tp-cubuk.onay-kilit { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--grafik-2) 30%, transparent) 0 var(--b-1), transparent var(--b-1) var(--b-2)); outline: var(--cizgi-orta) solid var(--grafik-2); }
+
+/* Uygulamada (zz31-tmi) palet kabuğundur (102 a): çerçevenin kendi paletini açan düğmeler görünmez. */
+.pm-tmi [data-act="v20-palet"] { display: none; }

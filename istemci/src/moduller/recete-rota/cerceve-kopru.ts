@@ -101,12 +101,20 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
   let dinleyici: ((ad: string) => string) | null = null;
   let bekleyenGorunum: string | null = null;
   let sonSayaclar: string | null = null;
+  let sonKomutlar: string | null = null;
+  let komutAnahtarlari = new Set<string>();
+  let komutCalistir: ((anahtar: string) => void) | null = null;
   const uygula = (ad: string): void => {
     if (dinleyici === null) { bekleyenGorunum = ad; return; }
     son = dinleyici(ad);
   };
   const gorunumGeldi = (veri: unknown): void => {
-    const g = veri as { surum?: unknown; tip?: unknown; gorunum?: unknown; sira?: unknown };
+    const g = veri as { surum?: unknown; tip?: unknown; gorunum?: unknown; sira?: unknown; anahtar?: unknown };
+    // Palette seçilen komut: yalnız son bildirilen listedeki anahtar çalışır; koşulu çerçeve çalıştırmadan önce yeniden denetler.
+    if (g.surum === 1 && g.tip === 'komut-calistir') {
+      if (typeof g.anahtar === 'string' && komutAnahtarlari.has(g.anahtar) && komutCalistir !== null) komutCalistir(g.anahtar);
+      return;
+    }
     if (g.surum !== 1 || g.tip !== 'gorunum' || typeof g.gorunum !== 'string' || g.gorunum === '') return;
     if (typeof g.sira !== 'number' || !Number.isInteger(g.sira) || g.sira < 1) return;
     gorunumAlindi = true;
@@ -142,6 +150,28 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
         if (metin === sonSayaclar) return;
         sonSayaclar = metin;
         ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'sayaclar', sayaclar: temiz }, '*');
+      },
+      // Bu sayfanın komutları kabuğun ortak paletine (karar 103 a): her ileti öncekinin tamamının yerine geçer, boş liste grubu kaldırır;
+      // aynı liste yinelenmez. Kabuk tek bozuk maddede bütün iletiyi düşürdüğü için biçime uymayan madde burada atılır.
+      komutlar: (liste: unknown, calistir: (anahtar: string) => void): void => {
+        const temiz: { anahtar: string; baslik: string; simge: string; aciklama?: string; sozcukler?: string[] }[] = [];
+        const metinMi = (x: unknown, sinir: number): x is string => typeof x === 'string' && x.trim() !== '' && x.length <= sinir;
+        for (const k of Array.isArray(liste) ? liste as unknown[] : []) {
+          if (temiz.length >= 32) break;
+          if (k === null || typeof k !== 'object') continue;
+          const { anahtar, baslik, simge, aciklama, sozcukler } = k as Record<string, unknown>;
+          if (typeof anahtar !== 'string' || anahtar.length > 64 || !/^[a-z][a-z0-9-]*$/.test(anahtar) || temiz.some((t) => t.anahtar === anahtar)) continue;
+          if (!metinMi(baslik, 80) || typeof simge !== 'string' || !/^[a-z][a-z0-9-]*$/.test(simge)) continue;
+          if (aciklama !== undefined && !metinMi(aciklama, 120)) continue;
+          if (sozcukler !== undefined && (!Array.isArray(sozcukler) || sozcukler.length > 8 || !sozcukler.every((z) => metinMi(z, 32)))) continue;
+          temiz.push({ anahtar, baslik, simge, ...(aciklama === undefined ? {} : { aciklama }), ...(sozcukler === undefined ? {} : { sozcukler: [...sozcukler as string[]] }) });
+        }
+        komutCalistir = typeof calistir === 'function' ? calistir : null;
+        komutAnahtarlari = new Set(temiz.map((t) => t.anahtar));
+        const metin = JSON.stringify(temiz);
+        if (metin === sonKomutlar) return;
+        sonKomutlar = metin;
+        ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar: temiz }, '*');
       },
     }),
   });

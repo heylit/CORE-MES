@@ -27,13 +27,13 @@ export interface HizliIsGrubu {
 }
 
 const ANAHTAR_BICIMI = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-type MenuKaynagi = readonly { gruplar: readonly { maddeler: readonly { yol: string; islem: string; veya?: readonly string[] }[] }[] }[];
-type SayfaKaynagi = readonly { yol: string; grup: string }[];
+export type MenuKaynagi = readonly { gruplar: readonly { maddeler: readonly { yol: string; islem: string; veya?: readonly string[] }[] }[] }[];
+export type SayfaKaynagi = readonly { yol: string; grup: string }[];
 
-const maddeyiBul = (menuler: MenuKaynagi, yol: string) =>
+export const maddeyiBul = (menuler: MenuKaynagi, yol: string) =>
   menuler.flatMap((m) => m.gruplar.flatMap((g) => g.maddeler)).find((md) => md.yol === yol);
 // Yolu kapsayan en uzun sayfa kökü: '/stok/mal-kabul' Stok Merkezi'nindir.
-const sayfasiniBul = <S extends { yol: string }>(sayfalar: readonly S[], yol: string): S | undefined =>
+export const sayfasiniBul = <S extends { yol: string }>(sayfalar: readonly S[], yol: string): S | undefined =>
   sayfalar
     .filter((s) => yol === s.yol || yol.startsWith(`${s.yol}/`))
     .sort((a, b) => b.yol.length - a.yol.length)[0];

@@ -25,13 +25,15 @@ export const GENEL_KONULAR: readonly GenelKonu[] = [
   },
   {
     anahtar: 'arama',
-    baslik: 'Hızlı git ve arama (Ctrl K)',
+    baslik: 'Hızlı git, arama ve komut (Ctrl K)',
     simge: 'search',
     metin: [
-      'Üst çubuktaki arama kutusu sayfa, bölüm ve kayıt (emir, malzeme, istasyon) bulur.',
+      'Üst çubuktaki arama kutusu sayfa, bölüm, komut ve kayıt (emir, malzeme, istasyon) bulur.',
+      'Açık sayfanın komutları "Bu sayfa" etiketiyle en üstte durur; kutu boşken de görünür.',
+      'Komut ilgili ekranı ya da pencereyi açar; kaydı yine o ekranda siz yaparsınız.',
       'Klavyede Ctrl K ile açılır; oklarla seçip Enter\'a basın, Esc kapatır.',
     ],
-    sozcukler: ['bul', 'ara', 'ctrl k', 'kısayol'],
+    sozcukler: ['bul', 'ara', 'ctrl k', 'kısayol', 'komut'],
   },
   {
     anahtar: 'ne-oldu',

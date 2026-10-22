@@ -7,10 +7,12 @@ import { CerceveSayacBaglami, type CerceveSayacYazici } from '../rota/cerceve-sa
 import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, type IkinciMenu as IkinciMenuTanimi } from '../rota/ikinci-menu.ts';
 import { gecmisiSil } from '../rota/gezinme-gecmisi.ts';
 import { gorunenHizliIsler, type HizliIs } from '../rota/hizli-isler.ts';
+import { gorunenKomutlar, type Komut } from '../rota/komutlar.ts';
 import { rehberMaddeleri, sayfaRehberleri, type SayfaRehberi } from '../rota/rehber.ts';
 import { GENEL_KONULAR } from '../rota/rehber-genel.ts';
 import { gorunenUstEylemler, type UstEylem } from '../rota/ust-eylemler.ts';
 import { rotaninSayfasi } from '../rota/sayfa.ts';
+import { SayfaKomutBaglami, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
 import { usePerformans } from '../veri/gorunum.ts';
@@ -72,6 +74,8 @@ interface Ozellikler {
   ustEylemler?: readonly UstEylem[];
   // "Ne oldu?" panelinin olayları; uygulama modüllerin bildirdiklerini verir. Kişiye açık olay yoksa düğme çizilmez.
   hizliIsler?: readonly HizliIs[];
+  // Ctrl K paletinin genel komutları; uygulama modüllerin bildirdiklerini verir. İşlemi ve sayfası kişiye açık olan görünür.
+  komutlar?: readonly Komut[];
   // Sayfaların kullanım tarifi (Yardım); uygulama modüllerin bildirdiklerini verir.
   rehberler?: readonly SayfaRehberi[];
   // Verilirse ilk girişte tanıtım önerilir; görüldü bilgisi kişiye göre tutulur.
@@ -83,6 +87,8 @@ const ISLEMSIZ: readonly string[] = [];
 const KAPALISIZ: readonly string[] = [];
 const EYLEMSIZ: readonly UstEylem[] = [];
 const OLAYSIZ: readonly HizliIs[] = [];
+const GENEL_KOMUTSUZ: readonly Komut[] = [];
+const SAYFA_KOMUTSUZ: readonly SayfaKomutu[] = [];
 
 // Kapalı maddeler düşer; maddesi kalmayan grup da düşer (menünün kendisi sayfayla birlikte kalkar).
 function kapaliMaddeleriSuz(menuler: readonly IkinciMenuTanimi[], kapali: readonly string[]): readonly IkinciMenuTanimi[] {
@@ -129,7 +135,7 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
 }
 
 export function Kabuk({
-  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, hizliIsler = OLAYSIZ, rehberler = sayfaRehberleri, kisiId, children,
+  sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, children,
 }: Ozellikler) {
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
@@ -154,6 +160,23 @@ export function Kabuk({
     () => gorunenHizliIsler(hizliIsler, { sayfalar, menuler: ikinciMenuler, islemler }),
     [hizliIsler, sayfalar, ikinciMenuler, islemler],
   );
+  const gorunenKomutListesi = useMemo(
+    () => gorunenKomutlar(komutlar, { sayfalar, menuler: ikinciMenuler, islemler }),
+    [komutlar, sayfalar, ikinciMenuler, islemler],
+  );
+  // Açık sayfanın komutları (sayfa-komutlari.ts): kaynak başına liste, palet kayıt sırasıyla birleştirir.
+  const [sayfaKomutKayitlari, sayfaKomutKayitlariniYaz] = useState<ReadonlyMap<string, readonly SayfaKomutu[]>>(() => new Map());
+  const sayfaKomutYaz = useCallback<SayfaKomutYazici>((kaynak, liste) => {
+    sayfaKomutKayitlariniYaz((onceki) => {
+      if (liste === null && !onceki.has(kaynak)) return onceki;
+      if (liste !== null && onceki.get(kaynak) === liste) return onceki;
+      const yeni = new Map(onceki);
+      if (liste === null) yeni.delete(kaynak);
+      else yeni.set(kaynak, liste);
+      return yeni;
+    });
+  }, []);
+  const sayfaKomutlari = useMemo(() => [...sayfaKomutKayitlari.values()].flat(), [sayfaKomutKayitlari]);
   const tumKutu = useKatman<HTMLDivElement>(tumuAcik, () => tumuYaz(false));
   const [yardimAcik, yardimYaz] = useState(false);
   const [acmaIstekleri, acmaIstekleriYaz] = useState<Readonly<Record<string, number>>>({});
@@ -271,7 +294,14 @@ export function Kabuk({
           {gorunenler.filter((e) => e.yer === 'sol').map((e) => <e.dugme key={e.anahtar} />)}
           <GeziDugmeleri menuler={ikinciMenuler} />
           <h1 className="tc-kabuk-baslik">{baslik}</h1>
-          <GenelArama sayfalar={sayfalar} menuler={ikinciMenuler} islemler={islemler} aramaSayfalari={aramaSayfalari} />
+          <GenelArama
+            sayfalar={sayfalar}
+            menuler={ikinciMenuler}
+            islemler={islemler}
+            aramaSayfalari={aramaSayfalari}
+            komutlar={gorunenKomutListesi}
+            sayfaKomutlari={kapaliAdres ? SAYFA_KOMUTSUZ : sayfaKomutlari}
+          />
           <IsPaneli gruplar={olayGruplari} />
           {gorunenler.filter((e) => e.yer !== 'sol').map((e) => (e.hesapMaddesi === undefined
             ? <e.dugme key={e.anahtar} />
@@ -335,7 +365,11 @@ export function Kabuk({
         <main className="tc-kabuk-icerik" data-cerceveli={cerceveli && !kapaliAdres ? '' : undefined}>
           {kapaliAdres
             ? <DurumKutusu durum="bos" mesaj="Bu sayfa şu an kapalı" />
-            : <CerceveSayacBaglami.Provider value={cerceveSayacYaz}>{children}</CerceveSayacBaglami.Provider>}
+            : (
+              <CerceveSayacBaglami.Provider value={cerceveSayacYaz}>
+                <SayfaKomutBaglami.Provider value={sayfaKomutYaz}>{children}</SayfaKomutBaglami.Provider>
+              </CerceveSayacBaglami.Provider>
+            )}
         </main>
 
         <nav className="tc-kabuk-alt" aria-label="Alt gezinme">

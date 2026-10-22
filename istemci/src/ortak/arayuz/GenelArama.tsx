@@ -4,6 +4,8 @@ import type { Sayfa } from '#paylasilan/sayfalar.ts';
 import { menudeGorunur } from '#paylasilan/sayfalar.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import { ara, aramaDizini, sadelestir } from '../rota/arama-dizini.ts';
+import { komutAra, type Komut } from '../rota/komutlar.ts';
+import type { SayfaKomutu } from '../rota/sayfa-komutlari.ts';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useKayitAramasi, type KayitKaynagi } from '../veri/kayit-aramasi.ts';
@@ -16,23 +18,35 @@ interface Ozellikler {
   islemler: readonly string[];
   // Kişinin görmediği, yalnız kayıtlarını arayabildiği sayfalar: sayfa olarak listelenmez, kayıt kaynağı olur.
   aramaSayfalari?: readonly Sayfa[];
+  // Kişiye açık genel komutlar (modüllerin komutlar.ts bildirimi, süzülmüş).
+  komutlar?: readonly Komut[];
+  // Açık sayfanın o an çalıştırabileceği komutlar; boş sorguda da listelenir.
+  sayfaKomutlari?: readonly SayfaKomutu[];
 }
 
 interface Satir {
   anahtar: string;
-  tur: 'sayfa' | 'madde' | 'kayit';
+  tur: 'sayfa' | 'madde' | 'kayit' | 'komut' | 'sayfa-komutu';
   baslik: string;
   ust: string | null;
   ad: string;
   grup: string | null;
   aciklama: string | null;
-  yol: string;
+  // Sayfa komutunda adres yoktur; seçilince sayfanın işlevi çalışır.
+  yol: string | null;
   simge: SimgeAdi;
+  calistir?: () => void;
 }
 
 const SAYFASIZ: readonly Sayfa[] = [];
+const KOMUTSUZ: readonly Komut[] = [];
+const SAYFA_KOMUTSUZ: readonly SayfaKomutu[] = [];
+// Boş sorguda açık sayfanın komutlarından en çok bu kadarı görünür; yazınca süzülür.
+const BOS_SORGUDA_SAYFA_KOMUTU = 12;
+const SAYFA_KOMUTU_GRUBU = 'Bu sayfa';
+const KOMUT_GRUBU = 'Komut';
 
-const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt' };
+const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt', komut: 'Komut', 'sayfa-komutu': 'Bu sayfanın komutu' };
 
 // Eşleşen parçalar arama dizininin kuralıyla bulunur (Türkçe harf ve büyük-küçük farkı yok): "okut" "Okut"u, "cek" "Çek"i işaretler.
 // Harf harf sadeleştirilir ki işaretin yeri özgün metindeki yerle aynı kalsın.
@@ -63,7 +77,7 @@ function Onizleme({ satir }: { satir: Satir | null }) {
   return (
     <aside className="tc-arama-onizleme" aria-label="Önizleme" onMouseDown={(o) => { o.preventDefault(); }}>
       {satir === null
-        ? <p className="tc-arama-onizleme-bos">Yazdıkça sayfalar, menü maddeleri ve kayıtlar süzülür.</p>
+        ? <p className="tc-arama-onizleme-bos">Yazdıkça sayfalar, menü maddeleri, komutlar ve kayıtlar süzülür.</p>
         : (
           <div className="tc-arama-onizleme-ic" key={satir.anahtar}>
             <span className="tc-arama-onizleme-simge"><Simge ad={satir.simge} boyut="b" /></span>
@@ -73,12 +87,12 @@ function Onizleme({ satir }: { satir: Satir | null }) {
               {satir.ust !== null && <><dt>Yer</dt><dd>{satir.grup === null ? satir.ust : `${satir.ust} › ${satir.grup}`}</dd></>}
               {satir.tur === 'kayit' && satir.grup !== null && <><dt>Modül</dt><dd>{satir.grup}</dd></>}
               {satir.aciklama !== null && <><dt>Açıklama</dt><dd>{satir.aciklama}</dd></>}
-              <dt>Adres</dt><dd className="mono">{satir.yol}</dd>
+              {satir.yol !== null && <><dt>Adres</dt><dd className="mono">{satir.yol}</dd></>}
             </dl>
           </div>
         )}
       <p className="tc-arama-onizleme-tuslar">
-        <kbd className="mono">↑</kbd><kbd className="mono">↓</kbd> gezin <kbd className="mono">Enter</kbd> aç <kbd className="mono">Esc</kbd> kapat
+        <kbd className="mono">↑</kbd><kbd className="mono">↓</kbd> gezin <kbd className="mono">Enter</kbd> {satir?.tur === 'sayfa-komutu' ? 'çalıştır' : 'aç'} <kbd className="mono">Esc</kbd> kapat
       </p>
     </aside>
   );
@@ -92,11 +106,13 @@ function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: S
   });
 }
 
-// Üst çubuktaki arama (Ctrl K). Önce sayfa ve menü maddeleri (sunucuya gitmeden), altında arama ucu olan modüllerin kayıtları. Çerçeveli modülün içindeki tuşlar modülündür: tuş çerçevenin belgesine gider, buraya ulaşmaz.
+// Üst çubuktaki arama ve komut paleti (Ctrl K). Sıra: açık sayfanın komutları ("Bu sayfa"; boş sorguda da görünür), sayfa
+// ve menü maddeleri, modüllerin genel komutları (sunucuya gitmeden), altında arama ucu olan modüllerin kayıtları. Komut
+// yazma yapmaz: genel komut modülün ekranını açar, sayfa komutu sayfanın kendi işlevini çağırır; yetki yine uçtadır. Çerçeveli modülün içindeki tuşlar modülündür: tuş çerçevenin belgesine gider, buraya ulaşmaz.
 // Açılınca kutu ortada komut paleti olur, arkası perdelenir; geniş ekranda sağda seçili sonucun önizlemesi durur. Kutu DOM'da
 // üst çubukta kalır (yalnız görünüşü taşınır): odak, tuş ve ekran okuyucu düzeni kapalı kutuyla aynıdır.
 // Telefonda yalnız simge düğmesi görünür; dokununca palet ekranın üstünde açılır.
-export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ }: Ozellikler) {
+export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ, komutlar = KOMUTSUZ, sayfaKomutlari = SAYFA_KOMUTSUZ }: Ozellikler) {
   const gezin = useNavigate();
   const [sorgu, sorguYaz] = useState('');
   const [acik, acikYaz] = useState(false);
@@ -109,18 +125,34 @@ export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFA
   const sayfaSonuclari = useMemo(() => ara(dizin, sorgu), [dizin, sorgu]);
   const kaynaklar = useMemo(() => kayitKaynaklari([...sayfalar, ...aramaSayfalari]), [sayfalar, aramaSayfalari]);
   const kayitlar = useKayitAramasi(kaynaklar, acik ? sorgu : '');
+  const sayfaKomutSonuclari = useMemo(
+    () => (sorgu.trim() === '' ? sayfaKomutlari.slice(0, BOS_SORGUDA_SAYFA_KOMUTU) : komutAra(sayfaKomutlari, sorgu)),
+    [sayfaKomutlari, sorgu],
+  );
+  const komutSonuclari = useMemo(() => komutAra(komutlar, sorgu), [komutlar, sorgu]);
   const sonuclar = useMemo<Satir[]>(() => [
+    ...sayfaKomutSonuclari.map((k, sira): Satir => ({
+      anahtar: `bu-sayfa#${sira}#${k.anahtar}`, tur: 'sayfa-komutu', baslik: k.baslik, ust: null, ad: k.baslik,
+      grup: SAYFA_KOMUTU_GRUBU, aciklama: k.aciklama, yol: null, simge: k.simge, calistir: k.calistir,
+    })),
     ...sayfaSonuclari.map((s): Satir => ({
       anahtar: s.anahtar, tur: s.ust === null ? 'sayfa' : 'madde', baslik: s.baslik, ust: s.ust,
       ad: s.ust === null ? s.baslik : `${s.ust} › ${s.baslik}`, grup: s.grup, aciklama: null, yol: s.yol, simge: s.simge,
+    })),
+    ...komutSonuclari.map((k): Satir => ({
+      anahtar: `komut#${k.anahtar}`, tur: 'komut', baslik: k.baslik, ust: null, ad: k.baslik, grup: KOMUT_GRUBU,
+      aciklama: k.aciklama, yol: k.yol, simge: k.simge,
     })),
     ...kayitlar.sonuclar.map((k): Satir => ({
       anahtar: k.anahtar, tur: 'kayit', baslik: k.baslik, ust: null, ad: k.baslik, grup: k.kaynak, aciklama: k.aciklama, yol: k.yol,
       simge: kaynaklar.find((y) => y.ad === k.kaynak)?.simge ?? 'search',
     })),
-  ], [sayfaSonuclari, kayitlar.sonuclar, kaynaklar]);
-  const etiket = kaynaklar.length > 0 ? 'Sayfa ya da kayıt ara' : 'Sayfa ya da menü ara';
-  const listeAcik = acik && sorgu.trim() !== '';
+  ], [sayfaKomutSonuclari, sayfaSonuclari, komutSonuclari, kayitlar.sonuclar, kaynaklar]);
+  const komutVar = komutlar.length > 0 || sayfaKomutlari.length > 0;
+  const etiket = komutVar
+    ? (kaynaklar.length > 0 ? 'Sayfa, kayıt ya da komut ara' : 'Sayfa ya da komut ara')
+    : (kaynaklar.length > 0 ? 'Sayfa ya da kayıt ara' : 'Sayfa ya da menü ara');
+  const listeAcik = acik && (sorgu.trim() !== '' || sayfaKomutSonuclari.length > 0);
 
   // Modülün kendi Ctrl K'sı (stokta ve satın almada kendi araması) önce gelir. Kabuk tuşu en önce (yakalama evresinde)
   // görür ve tarayıcının kendi Ctrl K'sını hemen durdurur; modülün dinleyicisi tuşu işlerse (preventDefault çağırırsa)
@@ -149,6 +181,14 @@ export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFA
     kutu.current?.blur();
     void gezin(yol);
   };
+  // Sayfa komutu palet kapandıktan sonra çalışır: açtığı pencere odağı alabilsin.
+  const sec = (satir: Satir) => {
+    if (satir.calistir !== undefined) {
+      kapat();
+      kutu.current?.blur();
+      satir.calistir();
+    } else if (satir.yol !== null) git(satir.yol);
+  };
   const tusla = (o: KeyboardEvent<HTMLInputElement>) => {
     if (o.key === 'Escape') {
       o.preventDefault();
@@ -164,7 +204,7 @@ export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFA
     } else if (o.key === 'Enter') {
       o.preventDefault();
       const hedef = sonuclar[Math.min(secili, sonuclar.length - 1)];
-      if (hedef) git(hedef.yol);
+      if (hedef) sec(hedef);
     }
   };
   const seciliSira = Math.min(secili, sonuclar.length - 1);
@@ -236,7 +276,7 @@ export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFA
               className="tc-arama-sonuc"
               // Tıklama girişten odağı almadan önce seçilsin: kutu kapanmadan gidilir.
               onMouseDown={(o) => { o.preventDefault(); }}
-              onClick={() => { git(s.yol); }}
+              onClick={() => { sec(s); }}
               onMouseEnter={() => { seciliYaz(sira); }}
             >
               <Simge ad={s.simge} boyut="k" />
