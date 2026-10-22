@@ -5,11 +5,12 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type CiktiCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
-  type KayitCiktiCevabi, type KayitSecimi,
+  type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { istasyonKonumlari, konumAdlari, lotEtiketleri } from '../stok/disari.ts';
@@ -17,7 +18,7 @@ import { refakatKarti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, refakatDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -85,6 +86,7 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
     const kodlar = await konumAdlari(db, k.idler);
     return tekli(new Map([...kodlar].map(([id, kod]) => [id, { id, baslik: kod, degerler: konumDegerleri(kod) }])));
   }
+  if (k.tur === 'raf') return tekli(await rafKayitlari(db, k.idler));
   if (k.tur === 'istasyon') {
     // Konumu açılmamış istasyonun teslim kodu yoktur; boş QR basılmaz, eksik sayılır.
     const konumlar = await istasyonKonumlari(db, k.idler);
@@ -111,6 +113,33 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
     sonuc.set(id, lotlar.map((e) => ({ id: e.partiId, baslik: e.lotNo, degerler: lotDegerleri(e) })));
   }
   return sonuc;
+}
+
+// Raf Fabrika Haritası'ndan okunur; bölüm kodu ve bölme/kat sayısı rafın gözlerinden çıkar (gözü olmayan rafta boş kalır).
+// Pasif raf sahada yoktur: seçilmez, etiketi basılmaz (eksik sayılır).
+async function kullanimdakiRaflar(db: Db, istenen: ReadonlySet<number> | null) {
+  const secili = (await raflar(db)).filter((r) => r.aktif && (istenen === null || istenen.has(r.id)));
+  const ids = new Set(secili.map((r) => r.id));
+  const olcu = new Map<number, { salonKodu: string; bolme: number; kat: number }>();
+  for (const g of secili.length === 0 ? [] : await gozler(db)) {
+    if (!ids.has(g.rafId)) continue;
+    const o = olcu.get(g.rafId) ?? { salonKodu: g.salonKodu, bolme: 0, kat: 0 };
+    olcu.set(g.rafId, { salonKodu: o.salonKodu, bolme: Math.max(o.bolme, g.bolme), kat: Math.max(o.kat, g.kat) });
+  }
+  return secili.map((r) => ({ ...r, olcu: olcu.get(r.id) ?? null }));
+}
+
+export async function rafSecenekleri(db: Db): Promise<RaflarCevabi> {
+  const liste = await kullanimdakiRaflar(db, null);
+  return { raflar: liste.map((r) => ({ id: r.id, kod: r.kod, ad: r.ad, salonKodu: r.olcu?.salonKodu ?? null })).sort((a, b) => a.kod.localeCompare(b.kod, 'tr')) };
+}
+
+async function rafKayitlari(db: Db, idler: readonly number[]): Promise<Map<number, KayitDegeri>> {
+  const secili = await kullanimdakiRaflar(db, new Set(idler));
+  return new Map(secili.map((r) => {
+    const o = r.olcu;
+    return [r.id, { id: r.id, baslik: r.kod, degerler: rafDegerleri({ kod: r.kod, ad: r.ad, salonKodu: o?.salonKodu ?? null, bolmeSayisi: o?.bolme ?? 0, katSayisi: o?.kat ?? 0 }) }];
+  }));
 }
 
 export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, secenek: CiktiSecenekleri): Promise<KayitCiktiCevabi> {

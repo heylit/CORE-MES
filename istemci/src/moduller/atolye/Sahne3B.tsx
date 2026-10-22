@@ -3,9 +3,9 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { GozKalemi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { Dugme, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
-import { fabrikaTaslagiKur, kapsamKutusu, taslakKur } from './duzenleyici-durumu.ts';
 import { fabrikayaCevir } from './fabrika.ts';
 import { PlanCizimi } from './PlanCizimi.tsx';
+import { zeminPlaniKur } from './zemin-plani.ts';
 import { SahneMotoru, webglVarMi } from './sahne/motor.ts';
 import type { BolumYerlesimi, Gorunum, KameraYeri } from './sahne/motor.ts';
 import { KucukHarita } from './KucukHarita.tsx';
@@ -90,29 +90,22 @@ function IkiBoyutPlan({ bolumler, canli, secili, sec, rota }: SahneOzellikleri) 
   const durumlar = useMemo(() => new Map<string, MakineDurumu>([...canli].map(([a, c]) => [a, c.durum])), [canli]);
   const yerlesimler = useMemo(() => bolumler.map((b) => b.yerlesim), [bolumler]);
   const fabrika = bolumler.length > 1;
-  const taslak = useMemo(() => (fabrika ? fabrikaTaslagiKur(yerlesimler) : taslakKur(yerlesimler[0] as YerlesimCevabi)), [fabrika, yerlesimler]);
-  const k = kapsamKutusu(taslak);
-  const pay = Math.max(1.5, Math.max(k.x1 - k.x0, k.z1 - k.z0) * 0.05) + (fabrika ? 2.5 : 0);
-  // Taslak anahtarı raf ve alanda yereldir; seçim için kayıtlı kimliğe çevrilir (taslak bölüm sırasıyla kurulur).
-  const kayitliAlanlar = yerlesimler.flatMap((y) => y.alanlar);
-  const rafAnahtari = new Map(taslak.raflar.map((r) => [r.anahtar, `raf:${r.id ?? 0}`]));
-  const alanAnahtari = new Map(taslak.alanlar.map((a, i) => [a.anahtar, `alan:${kayitliAlanlar[i]?.id ?? 0}`]));
-  const geri = new Map([...rafAnahtari, ...alanAnahtari].map(([a, b]) => [b, a]));
+  const plan = useMemo(() => zeminPlaniKur(yerlesimler, fabrika), [fabrika, yerlesimler]);
   const rotaBolumu = rota ? bolumler.find((b) => b.yerlesim.salon.id === rota.salonId) : undefined;
   const rotaNoktalari = rota && rotaBolumu ? rota.noktalar.map((n) => fabrikayaCevir(rotaBolumu.konum, n)) : null;
   const tek = yerlesimler[0];
   return (
     <div className="tc-atolye-sahne-plan">
       <PlanCizimi
-        taslak={taslak}
+        taslak={plan.taslak}
         sutunlar={fabrika ? [] : tek?.salon.sutunlar ?? []}
         satirlar={fabrika ? [] : tek?.salon.satirlar ?? []}
-        secili={secili === null ? null : geri.get(secili) ?? secili}
+        secili={secili === null ? null : plan.taslakta(secili)}
         durumlar={durumlar}
         rota={rotaNoktalari}
-        kutu={{ x: k.x0 - pay, y: k.z0 - pay, g: k.x1 - k.x0 + pay * 2, d: k.z1 - k.z0 + pay * 2 }}
+        kutu={plan.kutu}
         etiket={fabrika ? 'Fabrika planı' : 'Atölye planı'}
-        ogeBas={(anahtar) => sec(rafAnahtari.get(anahtar) ?? alanAnahtari.get(anahtar) ?? (/^(istasyon|makine|bolum):/.test(anahtar) ? anahtar : null))}
+        ogeBas={(anahtar) => sec(plan.kayitli(anahtar))}
         bosBas={() => sec(null)}
       />
     </div>

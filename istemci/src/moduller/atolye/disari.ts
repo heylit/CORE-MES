@@ -19,3 +19,7 @@ export type { DepoYazimi } from './depo-yazimi.ts';
 // Zemin ızgarasındaki öğenin plan simgesi (kart #1304): Stok Merkezi karede haritadaki aynı simgeyi çizer.
 export { ALAN_TURU_ADI } from './kurallar.ts';
 export { ZeminSimgesi } from './ZeminSimgesi.tsx';
+
+// Bütün bölümler tek zeminde, salt okunur (kart #114): Stok Merkezi konum görünümü bunu çizer; veriyi çağıran verir.
+export { FabrikaZemini } from './FabrikaZemini.tsx';
+export type { FabrikaZeminiOzellikleri } from './FabrikaZemini.tsx';

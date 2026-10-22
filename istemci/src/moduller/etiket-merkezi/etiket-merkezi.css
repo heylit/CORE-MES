@@ -23,3 +23,5 @@
 .tc-etk-cip-sil { min-inline-size: var(--dokunma); min-block-size: var(--dokunma); border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; }
 .tc-etk-baglanti { padding: 0; border: 0; background: none; color: var(--ink); text-decoration: underline; cursor: pointer; font: inherit; }
 @media (min-width: 768px) { .tc-etk-duzen { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); } }
+.tc-etk-kayit-secici { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-etk-secim-listesi { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: var(--b-1) var(--b-3); max-block-size: 50vh; overflow: auto; margin: 0; padding: 0; list-style: none; }

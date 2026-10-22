@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  basCevabi, basGovdesi, baskilarCevabi, ciktiCevabi, ciktiSorgusu, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, sablonParametresi, sablonlarCevabi,
+  basCevabi, basGovdesi, baskilarCevabi, ciktiCevabi, ciktiSorgusu, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { bas, baskilar, indir, kayitCiktisi, ornekCikti, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
+import { bas, baskilar, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -29,6 +29,8 @@ export const uclar = [
     cevap: kayitCiktiCevabi,
     isle: ({ db, parametre, sorgu: { tur, id, ...secenek } }) => kayitCiktisi(db, parametre.anahtar, { tur, idler: id }, secenek),
   }),
+  // Raf seçimi gerçek kayıt okumasıdır: kayıt çıktısıyla aynı işlem.
+  uc({ yontem: 'GET', yol: '/etiket-merkezi/raflar', yetki: 'etiket-merkezi.oku', cevap: raflarCevabi, isle: ({ db }) => rafSecenekleri(db) }),
   uc({ yontem: 'GET', yol: '/etiket-merkezi/yazicilar', yetki: YAZICI_OKUMA, cevap: yazicilarCevabi, isle: ({ db }) => yazicilar(db) }),
   uc({
     yontem: 'POST',

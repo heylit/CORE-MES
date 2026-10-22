@@ -212,6 +212,15 @@ export function malzemeDegerleri(o: { id: number; kod: string; ad: string | null
   return { qr: `${KOD_ONEKI.malzeme}:${o.id}`, ad: o.ad, kod: o.kod, kart: `Kart ${o.id}` };
 }
 
+// EM-20 (#116): raf etiketi rafın kodunu, adını ve yerini basar; QR raf önekiyle kurulur. Raf stok konumu değildir
+// (stok gözdedir), okutan taraf rafın gözlerini gösterir.
+export function rafDegerleri(r: { kod: string; ad: string; salonKodu: string | null; bolmeSayisi: number; katSayisi: number }): AlanDegerleri {
+  return {
+    qr: `${KOD_ONEKI.raf}:${r.kod}`, kod: r.kod, ad: r.ad === r.kod ? null : r.ad,
+    yer: birlestir([r.salonKodu, r.bolmeSayisi > 0 && `${r.bolmeSayisi} bölme × ${r.katSayisi} kat`]),
+  };
+}
+
 // EM-16: istasyon etiketi istasyonun stok konum kodunu basar; teslim bu kodla okutulur.
 export function istasyonDegerleri(kod: string, ad: string | null): AlanDegerleri {
   return { qr: `${KOD_ONEKI.konum}:${kod}`, kod, ad };

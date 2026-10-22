@@ -9,17 +9,17 @@ export const DOSYA_UZANTILARI: Record<YaziciDili, string> = { zpl: 'zpl', pplb: 
 export const COZUNURLUKLER = [203, 300] as const;
 export type Cozunurluk = (typeof COZUNURLUKLER)[number];
 
-export const SABLON_TURLERI = ['konum', 'malzeme', 'lot', 'refakat', 'istasyon', 'deneme'] as const;
+export const SABLON_TURLERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'istasyon', 'deneme'] as const;
 export type SablonTuru = (typeof SABLON_TURLERI)[number];
 export const SABLON_TURU_ADLARI: Record<SablonTuru, string> = {
-  konum: 'Konum ve harita kutusu', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'İstasyon', deneme: 'Yazıcı denemesi',
+  konum: 'Konum ve harita kutusu', raf: 'Raf', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'İstasyon', deneme: 'Yazıcı denemesi',
 };
 
 export const EN_COK_ADET = 500;
 
 // Gerçek kayıttan basılan etiketin kaynağı. Stok ekranı seçili konumları adresle gönderir: /etiket-merkezi?tur=konum&id=1,2,3
-// "mal-kabul" o kabulden açılan bütün lotları lot şablonuyla basar.
-export const KAYIT_TURLERI = ['konum', 'lot', 'istasyon', 'refakat', 'malzeme', 'mal-kabul'] as const;
+// "mal-kabul" o kabulden açılan bütün lotları lot şablonuyla basar; "raf" Fabrika Haritası'ndaki raftır (#116).
+export const KAYIT_TURLERI = ['konum', 'raf', 'lot', 'istasyon', 'refakat', 'malzeme', 'mal-kabul'] as const;
 export type KayitTuru = (typeof KAYIT_TURLERI)[number];
 export const EN_COK_KAYIT = 200;
 const kayitId = z.number().int().positive().max(2147483647);
@@ -93,6 +93,12 @@ export const kayitCiktiSorgusu = ciktiSorgusu.extend({
   }),
 });
 export type KayitCiktiSecenekleri = z.output<typeof kayitCiktiSorgusu>;
+
+// Etiket sayfasındaki raf seçimi (#116): Fabrika Haritası'nın kullanımdaki rafları; bölüm kodu rafın gözlerinden gelir.
+export const raflarCevabi = z.object({
+  raflar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), salonKodu: z.string().nullable() })),
+});
+export type RaflarCevabi = z.infer<typeof raflarCevabi>;
 
 // Önizleme, yazıcıya gidenle aynı yerleşimden çıkar: metin satırlara bölünmüş, QR kare matrisiyle gelir.
 export const onizlemeOgesiSemasi = z.discriminatedUnion('tur', [

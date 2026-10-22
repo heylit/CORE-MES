@@ -594,3 +594,7 @@
 .tc-ikiz[data-hareket="yok"] .tc-ikiz-ipucu { animation: none; }
 @media (prefers-reduced-motion: reduce) { .tc-ikiz-ipucu { animation: none; } }
 @media (max-width: 767px) { .tc-ikiz-tuval { height: max(var(--kadran-enaz), var(--ekran-boy-50)); } }
+/* Dışarıya açılan fabrika zemini (#114): kendi kutusunda, ekran yüksekliğiyle sınırlı. */
+.tc-atolye-zemin { position: relative; min-width: 0; height: max(var(--kadran-enaz), var(--ekran-boy-62)); border: thin solid var(--edge); border-radius: var(--yari-1); overflow: hidden; }
+.tc-atolye-zemin .tc-plan { position: absolute; inset: 0; }
+.tc-atolye-zemin .tc-plan-istasyon, .tc-atolye-zemin .tc-plan-raf, .tc-atolye-zemin .tc-plan-alan { cursor: pointer; }

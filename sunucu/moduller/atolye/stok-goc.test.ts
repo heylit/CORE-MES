@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { gocleriUygula } from '#cekirdek/goc.ts';
 import { testSemasiAc } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { alanlar, gozAdresi, gozBul, gozler, raflar } from './disari.ts';
+import { alanlar, fabrikaPlani, gozAdresi, gozBul, gozler, raflar } from './disari.ts';
 
 const GERCEK_KLASOR = fileURLToPath(new URL('../../gocler/', import.meta.url));
 
@@ -124,5 +124,11 @@ describe('stok rafları Fabrika Haritası\'na kopyalanır (kart #686, gerçek Po
     assert.equal((await gozler(vt, salon)).length, 6 + 20);
     assert.deepEqual((await raflar(vt)).filter((r) => r.salonId === salon).map((r) => r.kod), ['AB', 'AN12']);
     assert.deepEqual((await alanlar(vt, salon)).map((a) => a.tur), ['kabul', 'uretim_cikisi', 'depo_zemini']);
+    // Fabrika planı (#114): bölüm fabrikadaki yeriyle, rafları ve stok alanlarıyla; atölye ucuyla aynı veri.
+    const plan = (await fabrikaPlani(vt)).bolumler.find((b) => b.salon.id === salon);
+    assert.ok(plan);
+    assert.deepEqual(plan.raflar.map((r) => r.kod).sort(), ['AB', 'AN12']);
+    assert.deepEqual(plan.alanlar.map((a) => [a.tur, a.genislik]), [['kabul', '12.00'], ['uretim_cikisi', '3.00'], ['depo_zemini', '3.00']]);
+    assert.match(plan.salon.fabrika.x, /^-?\d+\.\d{2}$/);
   });
 });

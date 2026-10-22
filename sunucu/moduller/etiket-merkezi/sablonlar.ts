@@ -3,11 +3,12 @@ import type { Sablon, SablonTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts'
 import type { AlanDegerleri } from './kurallar.ts';
 
 // Hazır şablonlar kodda durur: kullanıcı şablonu gelince bunlar kopyalanıp değiştirilecek. Ölçüler mm.
-// Alan "=" ile başlarsa sabit metindir. Konum kodu 20 karaktere kadar kesilmeden sığar (stok_konum_kod_bicimi, EM-13). Bugünkü baskılarla aynı içerik: konum ve malzeme (stok/Etiketler.tsx),
+// Alan "=" ile başlarsa sabit metindir. Konum kodu 20 karaktere kadar kesilmeden sığar (stok_konum_kod_bicimi, EM-13). Raf etiketi Fabrika Haritası rafından (#116). Bugünkü baskılarla aynı içerik: konum ve malzeme (stok/Etiketler.tsx),
 // lot (stok/LotEtiketi.tsx), refakat kartı (uretim-emirleri/refakat.ts).
 
 export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
   konum: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'Konum kodu' }, { anahtar: 'ad', ad: 'Konum adı' }, { anahtar: 'yer', ad: 'Salon ve kutu türü' }],
+  raf: [{ anahtar: 'qr', ad: 'QR (RAF)' }, { anahtar: 'kod', ad: 'Raf kodu' }, { anahtar: 'ad', ad: 'Raf adı' }, { anahtar: 'yer', ad: 'Bölüm, bölme ve kat' }],
   malzeme: [{ anahtar: 'qr', ad: 'QR (MLZ)' }, { anahtar: 'ad', ad: 'Malzeme adı' }, { anahtar: 'kod', ad: 'Stok kodu' }, { anahtar: 'kart', ad: 'Kart no' }],
   lot: [
     { anahtar: 'qr', ad: 'QR (LOT)' }, { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'malzeme', ad: 'Malzeme' }, { anahtar: 'kart', ad: 'Kart ve tür' },
@@ -33,6 +34,12 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   ] },
   { anahtar: 'konum-100x50', ad: 'Konum 100x50', tur: 'konum', genislik: 100, yukseklik: 50, ogeler: [
     qr(2, 2, 46), metin(50, 4, 48, 18, 7, 'kod', true), metin(50, 24, 48, 10, 4, 'ad'), metin(50, 36, 48, 12, 3.5, 'yer'),
+  ] },
+  { anahtar: 'raf-100x50', ad: 'Raf 100x50', tur: 'raf', genislik: 100, yukseklik: 50, ogeler: [
+    qr(2, 2, 46), metin(50, 4, 48, 18, 9, 'kod', true), metin(50, 24, 48, 10, 4, 'ad'), metin(50, 36, 48, 12, 3.5, 'yer'),
+  ] },
+  { anahtar: 'raf-50x25', ad: 'Raf 50x25', tur: 'raf', genislik: 50, yukseklik: 25, ogeler: [
+    qr(1, 1, 23), metin(25, 2, 24, 10, 5, 'kod', true), metin(25, 14, 24, 9, 2.5, 'yer'),
   ] },
   { anahtar: 'malzeme-50x25', ad: 'Malzeme 50x25', tur: 'malzeme', genislik: 50, yukseklik: 25, ogeler: [
     qr(1, 1, 23), metin(25, 2, 24, 10, 3, 'ad', true), metin(25, 13, 24, 5, 3.5, 'kod', true), metin(25, 19, 24, 4, 2.5, 'kart'),
@@ -62,6 +69,7 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
 // Önizleme ve deneme için uydurma örnek değerler; gerçek kayıt değildir.
 export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
   konum: { qr: `${KOD_ONEKI.konum}:A01-02-3`, kod: 'A01-02-3', ad: 'Örnek raf gözü', yer: 'Salon 1 · Raf gözü' },
+  raf: { qr: `${KOD_ONEKI.raf}:A12`, kod: 'A12', ad: 'Örnek palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' },
   malzeme: { qr: `${KOD_ONEKI.malzeme}:1001`, ad: 'Örnek çelik mil Ø20', kod: 'ORN-0001', kart: 'Kart 1001' },
   lot: {
     qr: `${KOD_ONEKI.lot}:LT-000123`, lotNo: 'LT-000123', malzeme: 'Örnek çelik mil Ø20 · ORN-0001', kart: 'Kart 1001 · Hammadde',
