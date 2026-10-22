@@ -96,10 +96,10 @@ export function saatKoduUret(rastgele: (ust: number) => number): string {
 }
 
 // Belirteç saat okuma uçlarını açar: GET ve /api/saat/ altı. Yazma yalnız adı tek tek sayılan saat uçlarındadır (296 a: emri
-// durdurmak; yetkisi uçtaki işlemdir). Yol, istekteki ham adres değil ucun kayıtlı kalıbıdır; sorgu dizgisi ya da ../ ile
+// durdurmak; kart #86, 79 a: uyarıyı üstlenmek; yetkisi uçtaki işlemdir). Yol, istekteki ham adres değil ucun kayıtlı kalıbıdır; sorgu dizgisi ya da ../ ile
 // başka uca kayamaz.
 const SAAT_YOL_ONEKI = '/api/saat/';
-const SAAT_YAZMA_KALIPLARI: ReadonlySet<string> = new Set(['/api/saat/emirler/:id/durdur']);
+const SAAT_YAZMA_KALIPLARI: ReadonlySet<string> = new Set(['/api/saat/emirler/:id/durdur', '/api/saat/uyarilar/ustlen']);
 
 export function saatBelirteciGecerMi(yontem: string, rotaKalibi: string | undefined): boolean {
   if (rotaKalibi === undefined) return false;
