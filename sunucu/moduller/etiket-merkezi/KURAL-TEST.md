@@ -21,6 +21,7 @@
 | EM-18 malzeme etiketi kart no QR, ad, stok kodu basar | `EM-18`, `EM-U14` |
 | EM-19 mal kabul seçimi lot şablonuyla basılır, deftere lot olarak yazılır; sınır basılan etiket sayısıyla | `EM-11` (kurallar.test.ts), `EM-U14` |
 | EM-17 refakat kartı etiketi emrin refakat kartını basar; termin yoksa "yok", basım tesis günü, işlem sırası tek metin | `EM-17`, `EM-U13` |
+| EM-20 refakat partisinin kartı (kart #127): emrin kartı, QR `RP:<parti>`, başlık emir no-P sıra, lot satırı (lot no, parti, döküm, sertifika); refakat şablonuyla basılır | `EM-17`, `EM-U16` |
 | Okuma yalnız sayfayı görene | `EM-U1` (etiket-merkezi.test.ts, gerçek PostgreSQL) |
 | Çıktı dil, dpi, adet; adet 1-500 | `EM-U2`, `EM-U4` |
 | Ekran: seçimler isteğe gider, sınır dışı adet indirmeyi kapatır | `EtiketMerkezi.test.tsx` |
@@ -32,6 +33,7 @@
 | Lot ve istasyon kayıttan çıktı; konumsuz istasyon eksikte; basılan lot deftere bağlı | `EM-U12` |
 | Malzeme karttan; mal kabul bütün lotlarından, deftere lot olarak; lot etiketinde tür adı | `EM-U14` |
 | Refakat kartı emirden çıktı; olmayan emir eksikte, iptal emir 409; basılan deftere bağlı | `EM-U13` |
+| Refakat partisi kartı stoktan çıktı; iptal ve olmayan kart eksikte; deftere emrin refakat kartı yazılır | `EM-U16` |
 | EM-20: raf etiketi RAF önekiyle; kodla aynı ad ve bilinmeyen ölçü basılmaz (#116) | `kurallar.test.ts` EM-20 |
 | Raf Fabrika Haritası'ndan; bölüm ve bölme/kat gözlerden; pasif ve olmayan raf eksikte; deftere raf; seçim ucu ve kayıt çıktısı `oku` ister | `EM-U15` |
 | Ekran: konum ve raf seçimi toplu ve tek tek, adrese yazılır; konum listesi stok okuması ister; okuması olmayan kartı görmez | `EtiketMerkezi.test.tsx` (#116) |

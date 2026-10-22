@@ -164,8 +164,10 @@ export function kayitUyumHatasi(sablonTuru: string, kayitTuru: KayitTuru | null)
 }
 
 // EM-19: mal kabul seçimi o kabulden açılan lotların etiketidir: lot şablonuyla basılır, deftere lot olarak yazılır (270 a).
+// Refakat partisi refakat şablonuyla basılır, deftere emrin refakat kartı olarak yazılır (kart #127).
 export function kayitSablonTuru(kayitTuru: KayitTuru): SablonTuru {
-  return kayitTuru === 'mal-kabul' ? 'lot' : kayitTuru;
+  if (kayitTuru === 'mal-kabul') return 'lot';
+  return kayitTuru === 'refakat-partisi' ? 'refakat' : kayitTuru;
 }
 
 // EM-12: bir baskıda kayıt sayısı x adet en çok EN_COK_ADET etikettir (yanlışlıkla rulo bitirilmesin).
@@ -245,5 +247,19 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     parti: `Parti: ${parti}`,
     basim: `Basım ${gunAyYil(tesisGunu(basim))}`,
     adimlar: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(' · '),
+    lot: null,
+  };
+}
+
+// EM-20 (kart #127): refakat partisinin kartı emrin kartıdır; QR ve başlık partinin (RP, emir no-P sıra), lot satırı depodan verilen lotun
+// bilgisidir (lot no, tedarikçi partisi, döküm, sertifika).
+export function refakatPartisiDegerleri(
+  k: RefakatKartiCevabi, r: { qr: string; etiket: string }, lot: { lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null }, basim: Date,
+): AlanDegerleri {
+  return {
+    ...refakatDegerleri(k, basim),
+    qr: r.qr,
+    emirNo: r.etiket,
+    lot: birlestir([`Lot ${lot.lotNo}`, lot.tedarikciPartiNo && `Parti ${lot.tedarikciPartiNo}`, lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`]),
   };
 }

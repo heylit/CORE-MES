@@ -13,12 +13,12 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
-import { istasyonKonumlari, konumAdlari, lotEtiketleri } from '../stok/disari.ts';
+import { istasyonKonumlari, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
 import { refakatKarti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -105,6 +105,18 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
     for (const id of k.idler) {
       const kart = await refakatKarti(db, id).catch((h: unknown) => { if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') return null; throw h; });
       if (kart) sonuc.set(id, [{ id, baslik: kart.emirNo, degerler: refakatDegerleri(kart, basim) }]);
+    }
+    return sonuc;
+  }
+  if (k.tur === 'refakat-partisi') {
+    // İptal kart ve olmayan kart basılmaz (eksik); kartın emri iptalse emrin kuralı (409) bütün baskıyı durdurur. Deftere emrin
+    // refakat kartı yazılır: `id` kartın emri, başlık partinin etiketi (emir no-P sıra).
+    const basim = new Date();
+    for (const id of k.idler) {
+      const r = await refakatPartisi(db, id);
+      if (r === null || r.durum === 'iptal') continue;
+      const kart = await refakatKarti(db, r.uretimEmriId).catch((h: unknown) => { if (h instanceof UygulamaHatasi && h.kod === 'BULUNAMADI') return null; throw h; });
+      if (kart) sonuc.set(id, [{ id: r.uretimEmriId, baslik: r.etiket, degerler: refakatPartisiDegerleri(kart, r, r, basim) }]);
     }
     return sonuc;
   }

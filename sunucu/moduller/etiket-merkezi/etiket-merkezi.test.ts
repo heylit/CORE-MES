@@ -367,7 +367,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
   });
 
   // Üretim emri sahibinin açma işleviyle açılır; kart, proje ve işlem tipi sahiplerinin tablolarına doğrudan yazılır.
-  async function emirAc(): Promise<{ id: number; emirNo: string }> {
+  async function emirAc(): Promise<{ id: number; emirNo: string; malzemeNo: number }> {
     const sahip = ortam!.sahip;
     await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('ETK-M-', 0) ON CONFLICT (onek) DO NOTHING");
     const sira = ((await sahip.tek<{ n: number }>('SELECT count(*)::int + 1 AS n FROM malzeme_katalog_karti'))?.n ?? 1);
@@ -396,7 +396,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       });
     });
     const emir = ((await al(yonetici, `/adimli-emirler/${uretimEmriId}`)).json() as { emir: { emirNo: string } }).emir;
-    return { id: uretimEmriId, emirNo: emir.emirNo };
+    return { id: uretimEmriId, emirNo: emir.emirNo, malzemeNo: kart!.no };
   }
 
   test('EM-U13: refakat kartı etiketi üretim emrinin refakat kartından çıkar; olmayan emir eksikte kalır, iptal emir basılmaz; basılan deftere bağlanır', async () => {
@@ -426,6 +426,39 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(yonetici, `/adimli-emirler/${e.id}/iptal`, { surum })).statusCode, 200);
     const iptal = await al(yonetici, adres(String(e.id)));
     assert.equal(iptal.statusCode, 409, iptal.body);
+  });
+
+  test('EM-U16 (kart #127): refakat partisinin kartı emrin kartı, partinin QR ve etiketi, lot satırıyla basılır; iptal kart eksikte kalır; deftere emrin kartı yazılır', async () => {
+    const e = await emirAc();
+    const sahip = ortam!.sahip;
+    // Kart ve lot stoğun tablolarıdır; test kendi kayıtlarını doğrudan açar.
+    const lot = (await sahip.tek<{ id: number }>(
+      "INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, dokum_no, sertifika_no, acan_kisi_id, lot_no) VALUES ($1, 'P-9', 'D-01', 'S-01', $2, $3) RETURNING id",
+      [e.malzemeNo, yoneticiId, `LT-ETK-${e.id}`]))!.id;
+    const kart = async (sira: number, durum: 'acik' | 'iptal') => (await sahip.tek<{ id: number }>(
+      `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, durum, iptal_eden_kisi_id, iptal_zamani)
+       VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 = 'iptal' THEN $5::int END, CASE WHEN $6 = 'iptal' THEN now() END) RETURNING id`,
+      [e.id, sira, e.malzemeNo, lot, yoneticiId, durum]))!.id;
+    const [acik, iptal] = [await kart(1, 'acik'), await kart(2, 'iptal')];
+    const adres = (id: string) => `/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&tur=refakat-partisi&id=${id}`;
+    const r = await al(yonetici, adres(`${acik},${iptal},2147483004`));
+    assert.equal(r.statusCode, 200, r.body);
+    const rc = r.json() as KayitCiktiCevabi;
+    assert.deepEqual(rc.kayitlar, [{ id: e.id, baslik: `${e.emirNo}-P1` }]);
+    assert.deepEqual(rc.eksikler, [iptal, 2147483004]);
+    assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `RP:${acik}`);
+    assert.match(rc.komut, new RegExp(`Lot LT-ETK-${e.id} · Parti P-9 · Döküm D-01 · Sertifika S-01`));
+    assert.match(rc.komut, /10 Torna/);
+    assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=refakat-partisi&id=${acik}`)).statusCode, 400, 'lot şablonu refakat partisi basmaz');
+
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const c = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'refakat-partisi', idler: [acik] } });
+    assert.equal(c.statusCode, 200, c.body);
+    const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
+      'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
+    );
+    assert.deepEqual(kayitlar, [{ kaynak_tur: 'refakat', kaynak_id: e.id }]);
   });
 
   test('EM-U14: malzeme etiketi karttan, mal kabul seçimi o kabulün bütün lotlarından çıkar; mal kabul lotları deftere lot olarak bağlanır', async () => {
