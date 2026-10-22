@@ -49,6 +49,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'ik.izin-talep': 'İzin talep etme',
   'ik.izin-onay': 'İzin onaylama',
   'ik.devam-yaz': 'Devam ve mesai girme',
+  'ik.devam-onay': 'Devam ve mesai onaylama',
   'ik.bordro-kesinlestir': 'Bordro kesinleştirme',
   'ik.bordro-kilit-ac': 'Bordro kilidini açma',
   'ik.bordro-gordum': 'Kendi bordrosunu onaylama',

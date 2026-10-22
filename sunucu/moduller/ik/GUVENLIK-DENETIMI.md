@@ -13,6 +13,7 @@ Ayrıntılı kural -> test eşlemesi: `KURAL-TEST.md`.
 | `POST /ik/izinler/:kimlik/talep` | `ik.izin-talep` | yalnız kendi adına, bekleyen durumda; tarihleri sunucu yazar (IK-3, 9) | "IK-9, IK-3" | aynı test |
 | `POST /ik/izinler/:kimlik/karar` | `ik.izin-onay` | yalnız ekibine; kendine karar yok; sonuçlanmış izin değişmez (IK-5, 6, 7, 8) | "IK-7, IK-8" | "IK-7, IK-8", "IK-5, IK-6" |
 | `POST /ik/pozisyonlar/:kimlik/onayla` | `ik.pozisyon-onay` | dört göz (ayarlı); onaylı pozisyonun kadrosu (IK-10, 11, 12) | "IK-10, IK-11, IK-12" | aynı test; kısıt `ik_pozisyon_dort_goz` |
+| `POST /ik/devam/:kimlik/onay` | `ik.devam-onay` | yalnız onay değişir, içerik okunan hâliyle; sürüm; kendi devam kaydına onay yok; kaydet ucunda yetkisizin onayı "Beklemede"ye döner (IK-77, 78); eksi süre ve bütçe 400 ve kısıt (IK-79) | "IK-77, IK-78", "IK-79" | aynı testler (403, 404, 400) |
 | `GET /ik/veri`, `POST /ik/personel/:kimlik/kaydet` (özel veri) | `ik.ozel-veri-oku` | kan grubu ve engel durumu yetkisiz kişiye dönmez (kişinin kendi kaydı hariç), yetkisiz değişikliği 403, boş gönderim eski değeri korur (IK-73); geçmişte IBAN, ücret, kan grubu ve engel değeri yok (IK-72) | "IK-73", "IK-72" | "IK-73" (403) |
 | `POST /ik/personel/:kimlik/iletisim` | oturum | yalnız kendi personel kaydının iletişim alanları (IK-14) | "IK-14" | aynı test |
 | `POST /ik/bordro/:donem/kesinlestir` | `ik.bordro-kesinlestir` | bordro sunucuda hesaplanır; kesinleşmiş ay `ik.bordro-kilit-ac` ister (IK-15, 16, 17) | "IK-15, IK-16, IK-17" | aynı test |

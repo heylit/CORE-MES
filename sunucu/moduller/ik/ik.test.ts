@@ -24,7 +24,7 @@ type Govde = Record<string, unknown>;
 const ROL_ISLEMLERI: [string, string[]][] = [
   ['insan_kaynaklari', ['ik.oku', 'ik.personel-yaz', 'ik.izin-yaz', 'ik.izin-talep', 'ik.devam-yaz', 'ik.bordro-kesinlestir', 'ik.performans-yaz',
     'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.ayar-yaz']],
-  ['mudur', ['ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay']],
+  ['mudur', ['ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'ik.devam-onay']],
   ['operator', ['ik.izin-talep']],
 ];
 
@@ -468,12 +468,43 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(bagsiz.uyari, undefined, 'kişiye bağlı olmayan personelin zimmeti bilinmez, uyarı uydurulmaz');
   });
 
+  test('IK-77, IK-78: devam onayı ayrı işlemdir; yazan onay veremez, onaycı kendi kaydını onaylamaz, içerik değişince onay düşer', async () => {
+    const devam = (id: string, empId: string, ek: Govde = {}): Govde => ({ id, kind: 'att', empId, tarih: '2026-10-05', tur: 'Fazla mesai', saat: 2, onay: 'Onaylandı', ...ek });
+    const yazilan = await kaydet(c.uzm, 'devam', devam('att_o1', 'emp_a'));
+    assert.equal(yazilan.kayit.govde['onay'], 'Beklemede', 'devam yazma onay veremez');
+    assert.equal(yazilan.uyari, 'Devam kaydı onay bekliyor; onayı devam onay yetkisi olan verir.');
+    await ret(403, 'YETKI_YOK', c.opr, 'POST', '/ik/devam/att_o1/onay', { durum: 'Onaylandı', surum: surumler.get('att_o1') });
+    await ret(403, 'YETKI_YOK', c.uzm, 'POST', '/ik/devam/att_o1/onay', { durum: 'Onaylandı', surum: surumler.get('att_o1') });
+    const onay = await tamam<IkYazCevabi>(c.mud, 'POST', '/ik/devam/att_o1/onay', { durum: 'Onaylandı', surum: surumler.get('att_o1') });
+    surumler.set('att_o1', onay.kayit.surum);
+    assert.deepEqual({ onay: onay.kayit.govde['onay'], saat: onay.kayit.govde['saat'], uyari: onay.uyari }, { onay: 'Onaylandı', saat: 2, uyari: undefined });
+    // Onaylı kaydın açıklaması değişir, onay kalır; süresi değişirse yeniden onay bekler.
+    assert.equal((await kaydet(c.uzm, 'devam', devam('att_o1', 'emp_a', { aciklama: 'Not', onay: 'Onaylandı' }))).kayit.govde['onay'], 'Onaylandı');
+    assert.equal((await kaydet(c.uzm, 'devam', devam('att_o1', 'emp_a', { aciklama: 'Not', saat: 5 }))).kayit.govde['onay'], 'Beklemede');
+    await kaydet(c.uzm, 'devam', devam('att_o2', 'emp_m'));
+    await ret(403, 'YETKI_YOK', c.mud, 'POST', '/ik/devam/att_o2/onay', { durum: 'Onaylandı', surum: surumler.get('att_o2') });
+    await ret(404, 'BULUNAMADI', c.mud, 'POST', '/ik/devam/att_yok/onay', { durum: 'Onaylandı', surum: 1 });
+    // Kendi personel kaydı olmayan onaycı (yönetici) formdan da onaylar.
+    assert.equal((await kaydet(c.yon, 'devam', devam('att_o2', 'emp_m'))).kayit.govde['onay'], 'Onaylandı');
+  });
+
+  test('IK-79: eksi süre ve eksi bütçe sunucuda reddedilir; veritabanı kısıtı doğrulanmış durur', async () => {
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_e1/kaydet', { govde: { id: 'att_e1', kind: 'att', empId: 'emp_a', tarih: '2026-10-06', tur: 'Fazla mesai', saat: -3 }, surum: null });
+    await ret(400, 'DOGRULAMA', c.yon, 'POST', '/ik/departmanlar/dept_e1/kaydet', { govde: { id: 'dept_e1', kind: 'dept', ad: 'Deneme', butce: -5 }, surum: null });
+    await kaydet(c.uzm, 'devam', { id: 'att_e2', kind: 'att', empId: 'emp_a', tarih: '2026-10-06', tur: 'Fazla mesai', saat: 0 });
+    const kisitlar = await vt().sorgu<{ conname: string; convalidated: boolean }>(
+      // Tablo adıyla süzülür: aynı veritabanında başka testin şeması da aynı kısıtı taşır.
+      `SELECT conname, convalidated FROM pg_constraint WHERE conrelid IN ('ik_devam'::regclass, 'ik_departman'::regclass)
+          AND conname IN ('ik_devam_saat_eksi_degil', 'ik_departman_butce_eksi_degil') ORDER BY 1`);
+    assert.deepEqual(kisitlar, [{ conname: 'ik_departman_butce_eksi_degil', convalidated: true }, { conname: 'ik_devam_saat_eksi_degil', convalidated: true }]);
+  });
+
   test('rol x işlem göçü: onaylı dağılım; İK sayfası yalnız İK uzmanında, herkes İK İşlemlerim ile izin talep eder ve bordrosunu onaylar; muhasebe İK kayıtlarını okumaz', () => {
     const rolun = (kod: string) => gocDagilimi.filter((d) => d.kod === kod).map((d) => d.islem);
-    assert.deepEqual(rolun('insan_kaynaklari'), ['ik.ayar-yaz', 'ik.bordro-gordum', 'ik.bordro-kesinlestir', 'ik.bordro-kilit-ac', 'ik.devam-yaz', 'ik.egitim-yaz',
+    assert.deepEqual(rolun('insan_kaynaklari'), ['ik.ayar-yaz', 'ik.bordro-gordum', 'ik.bordro-kesinlestir', 'ik.bordro-kilit-ac', 'ik.devam-onay', 'ik.devam-yaz', 'ik.egitim-yaz',
       'ik.ise-alim-yaz', 'ik.izin-onay', 'ik.izin-talep', 'ik.izin-yaz', 'ik.oku', 'ik.ozel-veri-oku', 'ik.performans-yaz', 'ik.personel-yaz', 'ik.pozisyon-onay',
       'ik.ucret-yaz', 'sayfa.ik', 'sayfa.ik-islemlerim']);
-    assert.deepEqual(rolun('mudur'), ['ik.bordro-gordum', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'sayfa.ik-islemlerim']);
+    assert.deepEqual(rolun('mudur'), ['ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'sayfa.ik-islemlerim']);
     for (const kod of ['planlama_proje', 'operator', 'kalite', 'satin_alma', 'muhasebe_finans', 'idari_isler', 'cam', 'depo', 'bakim', 'sevkiyat']) {
       assert.deepEqual(rolun(kod), ['ik.bordro-gordum', 'ik.izin-talep', 'sayfa.ik-islemlerim'], kod);
     }

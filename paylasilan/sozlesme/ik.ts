@@ -42,6 +42,8 @@ export const ikOnayGovdesi = z.object({ surum: surumSemasi });
 // Bordro onayı okunan bordronun sürümünü taşır: arada yeniden kesinleşen bordro onaylanmaz (IK-43).
 export const ikBordroGordumGovdesi = z.object({ surum: surumSemasi });
 export const ikKararGovdesi = z.object({ durum: z.enum(['Onaylandı', 'Reddedildi']), surum: surumSemasi });
+// Devam kaydının onayı (IK-77, IK-78): onay verilir ya da geri alınır; kaydın içeriği gönderilmez.
+export const ikDevamOnayGovdesi = z.object({ durum: z.enum(['Onaylandı', 'Beklemede']), surum: surumSemasi });
 const iletisimAlani = z.string().trim().max(300);
 export const ikIletisimGovdesi = z.object({
   alanlar: z.object({

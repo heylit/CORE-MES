@@ -8,6 +8,8 @@ export const IK_ISLEMLERI = [
   'ik.izin-talep',
   'ik.izin-onay',
   'ik.devam-yaz',
+  // Devam ve mesai kaydını onaylamak (IK-77): bordroya onaylı kayıt geçer; yazan kendi kaydına onay veremez.
+  'ik.devam-onay',
   'ik.bordro-kesinlestir',
   'ik.bordro-kilit-ac',
   // Çalışanın kendi kesinleşmiş bordrosunu "gördüm" diye onaylaması (IK-40..IK-46); bordroyu değiştirmez.

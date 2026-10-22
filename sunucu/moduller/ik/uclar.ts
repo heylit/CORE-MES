@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import type { Uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  IK_ALAN_ADLARI, ikAyarCevabi, ikAyarKaydetGovdesi, ikBenCevabi, ikBordroGordumGovdesi, ikDonemParametresi, ikIletisimGovdesi, ikIptalGovdesi, ikKararGovdesi,
+  IK_ALAN_ADLARI, ikAyarCevabi, ikAyarKaydetGovdesi, ikBenCevabi, ikBordroGordumGovdesi, ikDevamOnayGovdesi, ikDonemParametresi, ikIletisimGovdesi, ikIptalGovdesi, ikKararGovdesi,
   ikKaydetGovdesi, ikIzinGunuCevabi, ikKisiVardiyasiCevabi, ikKisiVardiyasiSorgusu, ikIzinGunuSorgusu, ikKesinlestirGovdesi, ikKimlikParametresi, ikOnayGovdesi, ikOzetiCevabi, ikPuantajCevabi, ikPuantajSorgusu, ikPuantajYazCevabi, ikPuantajYazGovdesi,
   ikTopluCevabi, ikTopluGovde, ikVeriCevabi, ikYazCevabi,
 } from '#paylasilan/sozlesme/ik.ts';
@@ -42,6 +42,11 @@ export const uclar: Uc[] = [
   uc({
     yontem: 'POST', yol: '/ik/izinler/:kimlik/karar', yetki: 'ik.izin-onay', parametre: ikKimlikParametresi, govde: ikKararGovdesi, cevap: ikYazCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.izinKarar(db, kullanici, parametre.kimlik, govde.durum, govde.surum),
+  }),
+  // Devam kaydının onayı ayrı işlemdir (IK-77, IK-78); onaycının devam yazma işlemi olmayabilir.
+  uc({
+    yontem: 'POST', yol: '/ik/devam/:kimlik/onay', yetki: 'ik.devam-onay', parametre: ikKimlikParametresi, govde: ikDevamOnayGovdesi, cevap: ikYazCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.devamOnayla(db, kullanici, parametre.kimlik, govde.durum, govde.surum),
   }),
   // Kadro talebini onaylamak (pozisyonu açmak) onay işlemidir; onaycının pozisyon yazma işlemi olmayabilir (IK-10).
   uc({

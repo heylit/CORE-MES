@@ -93,6 +93,10 @@ export function kopruKur(istemci: Istemci, islemler: readonly string[], bildir: 
       if (karar) return yazCevabi(await istemci.post<IkYazCevabi>(yol(alan, r.id, 'karar'), { durum: r['durum'], surum }));
       return yazCevabi(await istemci.post<IkYazCevabi>(yol(alan, r.id, 'talep'), { govde: r, surum }));
     }
+    // Devam yazma yetkisi olmayan onaycı yalnız onayı değiştirir; içerik okunan hâliyle kalır (IK-78).
+    if (tur === 'att' && !var_('ik.devam-yaz') && onceki !== null && surum !== null) {
+      return yazCevabi(await istemci.post<IkYazCevabi>(yol(alan, r.id, 'onay'), { durum: r['onay'] === 'Onaylandı' ? 'Onaylandı' : 'Beklemede', surum }));
+    }
     if (tur === 'job' && !var_('ik.ise-alim-yaz') && r['durum'] === 'Açık' && onceki !== null) {
       return yazCevabi(await istemci.post<IkYazCevabi>(yol(alan, r.id, 'onayla'), { surum }));
     }
@@ -130,8 +134,8 @@ export function kopruKur(istemci: Istemci, islemler: readonly string[], bildir: 
     for (const r of ayrik) if (r.kind !== 'pay') turlere.set(r.kind, [...(turlere.get(r.kind) ?? []), r]);
     for (const [tur, liste] of turlere) {
       if (!alanMi(tur)) throw new KopruHatasi(`Bilinmeyen kayıt türü: ${tur}`, 'DOGRULAMA');
-      // İzin talebi ve karar tek tek gider (her biri kendi ucunda); yönetimin toplu yazması alanın toplu ucundadır.
-      if (tur === 'leave' && !var_('ik.izin-yaz')) {
+      // İzin talebi, izin kararı ve devam onayı tek tek gider (her biri kendi ucunda); yönetimin toplu yazması alanın toplu ucundadır.
+      if ((tur === 'leave' && !var_('ik.izin-yaz')) || (tur === 'att' && !var_('ik.devam-yaz'))) {
         for (const r of liste) await tekKaydet(r);
         continue;
       }
