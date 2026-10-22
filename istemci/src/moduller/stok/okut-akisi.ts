@@ -12,6 +12,8 @@ export interface OkutKaynagi {
   statuId: number | null;
   // Alınabilecek serbest miktar (yoldaki düşülmüş).
   miktar: string;
+  // Refakat kartı okutulduysa (kart #123): teslim kartla, emre gider.
+  refakatPartisiId?: number;
 }
 // Nereye adımında okutulan kişi kodu (372 a): teslim kişinin bulunduğu istasyona, yalnız o kişiye gider; sunucu kodu yeniden doğrular.
 export interface KisiHedefi { alici: { kod: string; ad: string | null }; istasyon: { id: number; kod: string; ad: string } }
@@ -34,8 +36,12 @@ function kaynaklar(c: OkutCozCevabi): OkutKaynagi[] | string {
   if (c.tur === 'kisi') return KISI_ILETISI;
   if (c.tur === 'malzeme') {
     const ad = c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;
-    if (c.yerler.length === 0) return `${ad}: alabileceğin bir yerde serbest stok yok.`;
-    return c.yerler.map(({ partiId, partiEtiketi, statuId, miktar, ...yer }) => ({ malzemeId: c.malzeme.id, malzemeAd: ad, birim: c.malzeme.birim, yer, partiId, partiEtiketi, statuId, miktar }));
+    if (c.yerler.length === 0) {
+      if ((c.gelenler?.length ?? 0) > 0) return `${c.refakat?.etiket ?? ad}: sana gelen teslim var; aşağıdan teslim al.`;
+      return `${ad}: alabileceğin bir yerde serbest stok yok.`;
+    }
+    const kart = c.refakat ? { refakatPartisiId: c.refakat.id } : {};
+    return c.yerler.map(({ partiId, partiEtiketi, statuId, miktar, ...yer }) => ({ malzemeId: c.malzeme.id, malzemeAd: ad, birim: c.malzeme.birim, yer, partiId, partiEtiketi, statuId, miktar, ...kart }));
   }
   if (c.satirlar === null) return `${yerAdi(c.yer)} yerinden alamazsın; önce malzemeyi okut.`;
   if (c.satirlar.length === 0) return `${yerAdi(c.yer)} yerinde serbest stok yok.`;
@@ -65,8 +71,9 @@ export function okutuldu(d: OkutDurumu, c: OkutCozCevabi): OkutDurumu {
 // Depo işlemi olan, serbest stoğu istasyon dışı yerler arasında doğrudan taşır (Yerleştir). Öteki her durum teslim kaydıdır: ara alana
 // bırakılan hemen kapanır, istasyona ve depo konumuna giden alan taraf onaylayınca.
 export type OkutYolu = 'tasima' | 'teslim';
+// Refakat kartıyla okutulan malzeme her zaman teslim kaydıyla emre gider; taşımada kartın emri kaybolur.
 export function okutYolu(kaynak: OkutKaynagi, hedef: OkutHedefi, depocu: boolean): OkutYolu {
-  return depocu && !kisiHedefiMi(hedef) && kaynak.statuId === null && kaynak.yer.tur !== 'istasyon' && hedef.tur !== 'istasyon' ? 'tasima' : 'teslim';
+  return depocu && kaynak.refakatPartisiId === undefined && !kisiHedefiMi(hedef) && kaynak.statuId === null && kaynak.yer.tur !== 'istasyon' && hedef.tur !== 'istasyon' ? 'tasima' : 'teslim';
 }
 
 const teslimYeri = (y: OkutYeri): TeslimYeri => (y.istasyonId !== null ? { istasyonId: y.istasyonId } : { konumId: y.konumId });
@@ -84,7 +91,10 @@ export function tasimaGovdesi(kaynak: OkutKaynagi, hedef: OkutYeri, miktar: stri
 }
 // Kaynak kimliği okutma başına bir kez üretilir: bağlantı kopup yeniden gönderilen kayıt ikinci teslim açmaz (karar 95 a).
 export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: string, kaynakKimligi: string): TeslimGonderGovdesi {
-  const ortak = { malzemeId: kaynak.malzemeId, miktar, partiId: kaynak.partiId, statuId: kaynak.statuId, kaynak: teslimYeri(kaynak.yer), not: 'QR okut', kaynakKimligi };
+  const ortak = {
+    malzemeId: kaynak.malzemeId, miktar, partiId: kaynak.partiId, statuId: kaynak.statuId, kaynak: teslimYeri(kaynak.yer), not: 'QR okut', kaynakKimligi,
+    ...(kaynak.refakatPartisiId === undefined ? {} : { refakatPartisiId: kaynak.refakatPartisiId }),
+  };
   return kisiHedefiMi(hedef) ? { ...ortak, hedef: { istasyonId: hedef.istasyon.id }, aliciKodu: hedef.alici.kod } : { ...ortak, hedef: teslimYeri(hedef) };
 }
 

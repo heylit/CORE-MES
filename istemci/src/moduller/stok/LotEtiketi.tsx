@@ -44,7 +44,7 @@ export function lotEtiketHtml(ogeler: { e: LotEtiketi; adet: number }[]): string
   return `<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Lot etiketleri</title><style>@page{size:100mm 50mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#000;background:#fff}.e{width:100mm;height:50mm;padding:3mm;display:flex;gap:3mm;align-items:center;overflow:hidden;break-after:page}.e svg{width:40mm;height:40mm;flex:none}.e div{font-size:8.5pt;line-height:1.25}.e .n{font-family:"Courier New",monospace;font-weight:700;font-size:20pt;margin-bottom:1mm}</style></head><body>${sayfalar}</body></html>`;
 }
 
-function yazdir(html: string) {
+export function yazdir(html: string) {
   const cerceve = document.createElement('iframe');
   cerceve.setAttribute('aria-hidden', 'true');
   cerceve.className = 'tc-stok-gizli-cerceve';

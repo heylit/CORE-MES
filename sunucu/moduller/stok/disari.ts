@@ -126,3 +126,10 @@ export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void 
 // Ters yöndeki haberlerin karşılığı: uretim-emirleri ve sevkiyat stoğu ithal edemez; bağı sunucu/kablolama.ts kurar. Olay komutla
 // aynı işlemde gelir; stoğun reddi komutu da geri alır.
 export { emirAcildiYansit, emirBirlestiYansit, emirBittiYansit, emirIptalYansit, fasonHareketiYansit, fasonSevkiYansit, urunSevkiYansit } from './servis.ts';
+// Refakat partisi (kart #123): Arkon kart QR'ından (`RP:<id>`) emri ve partiyi okur. Yoksa null; yetki denetlemez, çağıran korur.
+export async function refakatPartisi(db: Db, id: number): Promise<{ id: number; uretimEmriId: number; etiket: string; durum: 'acik' | 'iptal' } | null> {
+  const r = await sorgular.refakatPartisiBul(db, id);
+  if (r === null) return null;
+  const { refakat } = await servis.refakatPartisiOku(db, id);
+  return { id: refakat.id, uretimEmriId: refakat.uretimEmriId, etiket: refakat.etiket, durum: refakat.durum };
+}

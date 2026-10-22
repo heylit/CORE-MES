@@ -1268,3 +1268,42 @@ export const fasonaTasinan = async (db: Db, uretimEmriId: number, malzemeId: num
     `SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi
       WHERE tur = 'transfer' AND uretim_emri_id = $1 AND malzeme_id = $2 AND hedef_konum_id = $3 AND aciklama LIKE 'Fason gönderimi%'`,
     [uretimEmriId, malzemeId, yoldaKonumId]))?.m ?? '0';
+
+// ---- Refakat partisi (kart #123): emir + depodan verilen lot ------------------------------------------------------------
+export interface RefakatPartisiHam {
+  id: number; uretimEmriId: number; sira: number; malzemeId: number; partiId: number; lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
+  durum: 'acik' | 'iptal'; surum: number; kayitZamani: string; verilen: string;
+}
+// Verilen: partinin emrine o lottan yapılan teslimler; alınan teslimde alınan, yoldakinde gönderilen miktar.
+const REFAKAT_SECIMI = `SELECT r.id, r.uretim_emri_id AS "uretimEmriId", r.sira, r.malzeme_id AS "malzemeId", r.parti_id AS "partiId", p.lot_no AS "lotNo",
+  p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", r.durum, r.surum, ${zamanMetni('r.kayit_zamani')} AS "kayitZamani",
+  (SELECT COALESCE(sum(CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0) FROM stok_teslim t
+    WHERE t.uretim_emri_id = r.uretim_emri_id AND t.parti_id = r.parti_id AND t.durum IN ('yolda', 'teslim'))::text AS verilen
+  FROM stok_refakat_partisi r JOIN stok_parti p ON p.id = r.parti_id`;
+export const refakatPartisiBul = (db: Db, id: number, kilit = false): Promise<RefakatPartisiHam | null> =>
+  db.tek(`${REFAKAT_SECIMI} WHERE r.id = $1${kilit ? ' FOR UPDATE OF r' : ''}`, [id]);
+export const acikRefakatPartisi = (db: Db, uretimEmriId: number, partiId: number): Promise<RefakatPartisiHam | null> =>
+  db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.parti_id = $2 AND r.durum = 'acik'`, [uretimEmriId, partiId]);
+export const emrinRefakatPartileri = (db: Db, uretimEmriId: number): Promise<RefakatPartisiHam[]> =>
+  db.sorgu(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 ORDER BY r.sira`, [uretimEmriId]);
+// Sıra emir başına artar; aynı emre eşzamanlı iki açılış sırayla girer (kilit işlem sonunda bırakılır).
+export const refakatPartisiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; partiId: number; kisiId: number }): Promise<number | null> => {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_refakat_partisi'), $1)", [r.uretimEmriId]);
+  return (await db.tek<{ id: number }>(
+    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id)
+     SELECT $1, COALESCE(max(sira), 0) + 1, $2, $3, $4 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
+     ON CONFLICT (uretim_emri_id, parti_id) WHERE durum = 'acik' DO NOTHING RETURNING id`,
+    [r.uretimEmriId, r.malzemeId, r.partiId, r.kisiId]))?.id ?? null;
+};
+export const refakatPartisiIptal = (db: Db, id: number, surum: number, kisiId: number): Promise<{ id: number } | null> =>
+  db.tek(
+    `UPDATE stok_refakat_partisi SET durum = 'iptal', iptal_eden_kisi_id = $3, iptal_zamani = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND durum = 'acik' RETURNING id`, [id, surum, kisiId]);
+export const refakatPartisiVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_refakat_partisi WHERE id = $1', [id])) !== null;
+// Partinin emrine o lottan yoldaki teslimler; alan taraf kartı okutunca bunlardan kendisine geleni alır (Soru 118 a).
+export const refakatYoldakiTeslimleri = (db: Db, uretimEmriId: number, partiId: number): Promise<TeslimHam[]> =>
+  db.sorgu(`${TESLIM_SECIMI} WHERE t.durum = 'yolda' AND t.uretim_emri_id = $1 AND t.parti_id = $2 ORDER BY t.gonderim, t.id`, [uretimEmriId, partiId]);
+// Lotun, açık refakat kartı olan emre yoldaki teslimleri: alan taraf lotu değil kartı okutur (kullanıcı akışı 14:16).
+export const kartliYoldakiTeslimler = (db: Db, partiId: number): Promise<TeslimHam[]> =>
+  db.sorgu(`${TESLIM_SECIMI} JOIN stok_refakat_partisi r ON r.uretim_emri_id = t.uretim_emri_id AND r.parti_id = t.parti_id AND r.durum = 'acik'
+    WHERE t.durum = 'yolda' AND t.parti_id = $1 ORDER BY t.gonderim, t.id`, [partiId]);

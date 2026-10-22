@@ -7,6 +7,7 @@ import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { KATALOG_TURLERI } from './malzemeler.ts';
 import { IS_DURUMU } from './sevkiyat.ts';
+import { refakatKartiCevabi } from './uretim-emirleri.ts';
 
 // ---- Sabitler -------------------------------------------------------------------------------------------------
 // Kart türleri malzemelerin sözleşmesinden okunur (sahibi malzemeler); stok kopya tutmaz.
@@ -789,13 +790,46 @@ export type FislerListesi = z.output<typeof fislerSorgusu>;
 export const fislerCevabi = listeCevapSemasi(fisOzeti);
 export type FislerCevabi = z.output<typeof fislerCevabi>;
 
+// ---- Refakat partisi (kart #123): emir + depodan verilen lot. Depo lotu okutup emre ayırınca doğar, kartı basılır; teslim kartla
+// yapılır. Aynı emre aynı lotun kalanı aynı kartla, başka lot yeni kartla gider (Soru 120 b, 116 b).
+export const REFAKAT_PARTISI_DURUMLARI = ['acik', 'iptal'] as const;
+export const refakatPartisi = z.object({
+  id: z.number().int(),
+  // QR metni (`RP:<id>`) ve kartın okunur adı (emir no + sıra, UE-000120-P2).
+  qr: z.string(), etiket: z.string(),
+  uretimEmriId: z.number().int(), emirNo: z.string().nullable(), sira: z.number().int(),
+  malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
+  partiId: z.number().int(), lotNo: z.string(), tedarikciPartiNo: z.string().nullable(), dokumNo: z.string().nullable(), sertifikaNo: z.string().nullable(),
+  // Bu kartla emre verilen: alınan teslimde alınan, yoldakinde gönderilen miktar.
+  verilen: ondalikMetinSemasi,
+  durum: z.enum(REFAKAT_PARTISI_DURUMLARI), surum: surumSemasi, kayitZamani: zamanSemasi,
+});
+export type RefakatPartisi = z.output<typeof refakatPartisi>;
+// Lot iki yoldan gelir (Soru 116 b): okutulan lot etiketi (`LOT:<lot no>`) ya da lot okutularak eklenmiş depo sepeti satırı. Kart
+// etiketi lot yerine geçmez. Sepet satırından açılınca satır sepetten çıkar; malzeme bundan sonra kartla ilerler.
+export const refakatPartisiAcGovdesi = z.object({
+  uretimEmriId: kimlik, lotKodu: z.string().trim().min(1).max(120).optional(), sepetSatirId: buyukKimlik.optional(),
+}).refine((g) => (g.lotKodu === undefined) !== (g.sepetSatirId === undefined), { message: 'Lotu okutun ya da sepetteki lot satırını seçin.', path: ['lotKodu'] });
+export type RefakatPartisiAcGovdesi = z.input<typeof refakatPartisiAcGovdesi>;
+export const refakatPartisiCevabi = z.object({ refakat: refakatPartisi });
+export type RefakatPartisiCevabi = z.output<typeof refakatPartisiCevabi>;
+export const refakatPartileriCevabi = z.object({ partiler: z.array(refakatPartisi) });
+export type RefakatPartileriCevabi = z.output<typeof refakatPartileriCevabi>;
+// Kart: emrin refakat kartı (Üretim Emirleri'nin verisi) partinin QR'ı ve lot bilgisiyle.
+export const refakatPartisiKartiCevabi = z.object({ refakat: refakatPartisi, kart: refakatKartiCevabi });
+export type RefakatPartisiKartiCevabi = z.output<typeof refakatPartisiKartiCevabi>;
+
 // ---- Kod çözümleme (Okut): konum kodu, "LOC:" önekli konum, kart numarası ya da "MLZ:" önekli kart numarası (DEP-55) --------
 export const kodCozSorgusu = z.object({ kod: z.string().trim().min(1).max(80) });
 export const kodCozCevabi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('konum'), konum, bakiyeler: z.array(bakiyeSatiri) }),
   z.object({ tur: z.literal('malzeme'), ozet: malzemeOzetiCevabi.shape.ozet, toplam: ondalikMetinSemasi, bakiyeler: z.array(bakiyeSatiri) }),
   // Okutulan lot: bakiyeler yalnız o lotun gözleridir; düşüm o lottan yapılır.
-  z.object({ tur: z.literal('lot'), parti: z.object({ id: z.number().int(), lotNo: z.string(), etiket: z.string() }), ozet: malzemeOzetiCevabi.shape.ozet, toplam: ondalikMetinSemasi, bakiyeler: z.array(bakiyeSatiri) }),
+  // Refakat kartı okutulunca lotun çözümüne kartın partisi eklenir; gözler lotun bütün gözleridir.
+  z.object({
+    tur: z.literal('lot'), parti: z.object({ id: z.number().int(), lotNo: z.string(), etiket: z.string() }), ozet: malzemeOzetiCevabi.shape.ozet, toplam: ondalikMetinSemasi, bakiyeler: z.array(bakiyeSatiri),
+    refakat: refakatPartisi.optional(),
+  }),
   z.object({ tur: z.literal('bilinmiyor'), kod: z.string() }),
 ]);
 export type KodCozCevabi = z.output<typeof kodCozCevabi>;
@@ -983,6 +1017,8 @@ export const teslimGonderGovdesi = z.object({
   kaynakKimligi: z.string().trim().min(3).max(120),
   // Kişiye teslim (299 b): alacak kişinin gösterdiği kod; sunucu yeniden doğrular, teslimi yalnız o kişi alır.
   aliciKodu: z.string().trim().min(1).max(80).nullable().optional(),
+  // Refakat kartıyla teslim (kart #123): lot ve emir karttan okunur; verilen parti ya da emir kartınkiyle aynı olmalıdır.
+  refakatPartisiId: kimlik.nullable().optional(),
 });
 export type TeslimGonderGovdesi = z.input<typeof teslimGonderGovdesi>;
 // Teslim alan eksi onay veremez (STK-T6): kaynakta yetmezse teslim reddedilir, gönderen düzeltir.
@@ -1068,6 +1104,9 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     yerler: z.array(okutYeri.extend({ partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), statuId: z.number().int().nullable(), kaliteDurumu: z.enum(KALITE_DURUMLARI).optional(), miktar: ondalikMetinSemasi })),
     // Soru 93 a: kapsam dışı istasyonlardaki serbest miktar; buradan teslim gönderilmez, Malzeme iste ile istenir ya da okutarak alınır.
     digerIstasyonlar: z.array(z.object({ istasyonId: z.number().int(), kod: z.string(), ad: z.string(), miktar: ondalikMetinSemasi })).optional(),
+    // Refakat kartı okutulduysa (kart #123): kartın partisi ve kişinin alabileceği, o kartla yoldaki teslimler (Soru 118 a).
+    refakat: refakatPartisi.optional(),
+    gelenler: z.array(teslim).optional(),
   }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.
   z.object({

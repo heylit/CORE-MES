@@ -874,3 +874,27 @@ export function katalogEtiketiStokKodu(ham: string): string | null {
   const p = /^\s*MK\s*:\s*(\S+)\s*$/i.exec(ham);
   return p ? p[1]!.toUpperCase() : null;
 }
+
+// ---- Refakat partisi (kart #123): emir + depodan verilen lot -------------------------------------------------------------
+// Kartın okunur adı emir no ve sıradır (UE-000120-P2); emir no bilinmezse kimlik yazılır, uydurulmaz.
+export const refakatEtiketi = (emirNo: string | null, uretimEmriId: number, sira: number): string => `${emirNo ?? `Emir #${uretimEmriId}`}-P${sira}`;
+// Kart yalnız depoya mal kabulle girmiş lotla açılır; üretim partisi (emrin çıktısı) kaynak olmaz.
+export function refakatLotEngeli(lot: { uretimEmriId: number | null }): string | null {
+  return lot.uretimEmriId !== null ? 'Bu lot bir üretim emrinin çıktısı; refakat kartı depodan verilen lotla açılır.' : null;
+}
+// Hiç teslimi olmayan parti iptal edilir; teslim yapılmışsa iz bozulmasın diye kalır.
+export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string }): string | null {
+  if (r.durum === 'iptal') return 'Refakat kartı zaten iptal.';
+  return binde(r.verilen) > 0n ? 'Bu kartla teslim yapıldı; kart iptal edilemez.' : null;
+}
+// Kartla teslimde malzeme, lot ve emir karttan gelir; gövdede verilen farklıysa teslim reddedilir (yanlış kart ya da yanlış satır).
+export function refakatTeslimEngeli(
+  r: { durum: 'acik' | 'iptal'; malzemeId: number; partiId: number; uretimEmriId: number },
+  g: { malzemeId: number; partiId: number | null | undefined; uretimEmriId: number | null | undefined },
+): string | null {
+  if (r.durum === 'iptal') return 'Refakat kartı iptal edilmiş; geçerli kartı okutun.';
+  if (g.malzemeId !== r.malzemeId) return 'Malzeme refakat kartındakiyle aynı değil.';
+  if (g.partiId !== undefined && g.partiId !== null && g.partiId !== r.partiId) return 'Lot refakat kartındakiyle aynı değil.';
+  if (g.uretimEmriId !== undefined && g.uretimEmriId !== null && g.uretimEmriId !== r.uretimEmriId) return 'Emir refakat kartındakiyle aynı değil.';
+  return null;
+}

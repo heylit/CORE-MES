@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  refakatEtiketi, refakatIptalEngeli, refakatLotEngeli, refakatTeslimEngeli,
   sonrakiIstasyon,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -553,5 +554,21 @@ describe('DEP-64 katalog etiketi', () => {
     assert.equal(siparisBagiEngeli('diger', null), null);
     assert.equal(siparisBagiEngeli('iade', null), null);
     assert.match(siparisBagiEngeli('diger', 5) ?? '', /yalnız satın alma/);
+  });
+  test('kart #123 refakat partisi: etiket emir no ve sıradır; üretim lotu kart açmaz; teslimli ya da iptal kart iptal edilmez; kartla çelişen teslim reddedilir', () => {
+    assert.equal(refakatEtiketi('UE-000120', 120, 2), 'UE-000120-P2');
+    assert.equal(refakatEtiketi(null, 120, 1), 'Emir #120-P1');
+    assert.equal(refakatLotEngeli({ uretimEmriId: null }), null);
+    assert.match(refakatLotEngeli({ uretimEmriId: 5 }) ?? '', /üretim emrinin çıktısı/);
+    assert.equal(refakatIptalEngeli({ durum: 'acik', verilen: '0' }), null);
+    assert.match(refakatIptalEngeli({ durum: 'acik', verilen: '0.5' }) ?? '', /teslim yapıldı/);
+    assert.match(refakatIptalEngeli({ durum: 'iptal', verilen: '0' }) ?? '', /zaten iptal/);
+    const r = { durum: 'acik' as const, malzemeId: 7, partiId: 40, uretimEmriId: 3 };
+    assert.equal(refakatTeslimEngeli(r, { malzemeId: 7, partiId: undefined, uretimEmriId: null }), null);
+    assert.equal(refakatTeslimEngeli(r, { malzemeId: 7, partiId: 40, uretimEmriId: 3 }), null);
+    assert.match(refakatTeslimEngeli(r, { malzemeId: 8, partiId: null, uretimEmriId: null }) ?? '', /Malzeme/);
+    assert.match(refakatTeslimEngeli(r, { malzemeId: 7, partiId: 41, uretimEmriId: null }) ?? '', /Lot/);
+    assert.match(refakatTeslimEngeli(r, { malzemeId: 7, partiId: 40, uretimEmriId: 4 }) ?? '', /Emir/);
+    assert.match(refakatTeslimEngeli({ ...r, durum: 'iptal' }, { malzemeId: 7, partiId: 40, uretimEmriId: 3 }) ?? '', /iptal/);
   });
 });

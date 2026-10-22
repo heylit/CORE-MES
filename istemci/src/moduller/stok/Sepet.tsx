@@ -11,6 +11,7 @@ import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
+import { RefakatAcPenceresi } from './RefakatKarti.tsx';
 import './stok.css';
 import { paneliAc } from './panel-olayi.ts';
 
@@ -64,6 +65,7 @@ function StoktanDusPenceresi({ kapat }: { kapat: () => void }) {
 // taşınır; satır başına yer ve stoktan düşme Taşı ekranındadır.
 export function DepoSepeti() {
   const [hepsi, setHepsi] = useState<KonumSecimi | null>(null);
+  const [karta, setKarta] = useState<SepetSatiri | null>(null);
   const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'sepet'], queryFn: () => api.get<SepetCevabi>('/stok/sepet') });
   const sil = useStokKomutu((g: { id: number }) => api.post<SepetCevabi>(`/stok/sepet/satirlar/${g.id}/sil`, {}), 'Satır kaldırıldı.');
   const tasi = useStokKomutu((g: TeslimGovdesi) => korumaliPost<SepetTeslimCevabi>('/stok/sepet/teslim-et', g), 'Taşındı; fiş yazıldı.', () => setHepsi(null));
@@ -81,11 +83,16 @@ export function DepoSepeti() {
                 <span className="tc-stok-mono">{x.kaynakKonumKod ?? 'En eski giriş'}{x.partiEtiketi ? ` · ${x.partiEtiketi}` : ''}</span>
                 {Number(x.miktar) > Number(x.mevcut) && <Rozet ton="hata">Yetersiz stok</Rozet>}
               </div>
-              <Dugme tur="ikincil" simge="trash" onClick={() => sil.komut.mutate({ id: x.id })}>Kaldır</Dugme>
+              <div className="tc-stok-eylem">
+                {x.partiId !== null && <Dugme tur="ikincil" simge="tag" onClick={() => setKarta(x)}>Refakat kartına geç</Dugme>}
+                <Dugme tur="ikincil" simge="trash" onClick={() => sil.komut.mutate({ id: x.id })}>Kaldır</Dugme>
+              </div>
             </li>
           ))}
         </ul>
       )}
+      {/* Emre ayırma (kart #123, kullanıcı akışı 14:16): lot okutularak eklenen satır karta geçer, sepetten çıkar; malzeme kartla teslim edilir. */}
+      {karta && <RefakatAcPenceresi kaynak={{ sepetSatirId: karta.id }} ad={`${karta.malzemeAd ?? `Kart ${karta.malzemeId}`} · ${karta.partiEtiketi ?? ''}`} kapat={() => setKarta(null)} />}
       {satirlar.length > 0 && (
         <>
           <KonumSecici etiket="Hepsi nereye" deger={hepsi} degistir={setHepsi} />
