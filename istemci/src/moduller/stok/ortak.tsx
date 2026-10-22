@@ -58,7 +58,7 @@ function DepocuCubugu() {
   );
 }
 
-// Sayfa başı: önizlemedeki düzen (başlık, bir satır açıklama, sağda eylemler) ve her ekranda arama (Ctrl+K, /).
+// Sayfa başı: önizlemedeki düzen (başlık, bir satır açıklama, sağda eylemler) ve her ekranda arama (/).
 // 134 a: serbest parça rozetsizdir; karar bekleyen, şartlı ve red parça her bakiye ve teslim satırında görünür.
 const KALITE_ROZETI: Record<Exclude<KaliteDurumu, 'serbest'>, { etiket: string; ton: 'uyari' | 'hata' | 'bilgi' }> = {
   karar_bekliyor: { etiket: 'Karar bekliyor', ton: 'uyari' }, sartli: { etiket: 'Şartlı', ton: 'bilgi' }, red: { etiket: 'Red', ton: 'hata' },

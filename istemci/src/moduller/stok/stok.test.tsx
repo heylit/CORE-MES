@@ -994,7 +994,7 @@ describe('Fabrika Haritası bağı (#686)', () => {
 });
 
 describe('Arama, depocu modu, etiketler', () => {
-  it('Ctrl+K arama penceresini açar; ilk sonuç Enter ile açılır', async () => {
+  it('"/" arama penceresini açar; ilk sonuç Enter ile açılır', async () => {
     sunucuKur(OKUYUCU, {
       'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL),
       'GET /stok/ara': () => json(200, { sonuclar: [{ tur: 'konum', konumId: 9, kod: 'A-03-02', ad: null, satirSayisi: 2 }] }),
@@ -1002,12 +1002,28 @@ describe('Arama, depocu modu, etiketler', () => {
     });
     ac('/stok');
     await screen.findByText('Malzeme çeşidi');
-    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '/' });
     const p = await screen.findByRole('dialog', { name: 'Ara' });
     fireEvent.change(within(p).getByLabelText('Ara'), { target: { value: 'A-03' } });
     expect(await within(p).findByText('A-03-02')).toBeTruthy();
     fireEvent.submit(within(p).getByLabelText('Ara').closest('form')!);
     expect(await screen.findByRole('heading', { name: 'A-03-02' })).toBeTruthy();
+  });
+  // Karar 102 a: Ctrl K yalnız kabuğun ortak paletidir; stok tuşu almaz.
+  it('Ctrl K ve yazı alanındaki "/" stok aramasını açmaz; Ctrl K kabuğa bırakılır', async () => {
+    sunucuKur(OKUYUCU, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok');
+    await screen.findByText('Malzeme çeşidi');
+    for (const ayar of [{ ctrlKey: true }, { metaKey: true }]) {
+      const tus = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true, ...ayar });
+      window.dispatchEvent(tus);
+      expect(tus.defaultPrevented).toBe(false);
+    }
+    const kutu = document.createElement('input');
+    document.body.append(kutu);
+    fireEvent.keyDown(kutu, { key: '/' });
+    kutu.remove();
+    expect(screen.queryByRole('dialog', { name: 'Ara' })).toBeNull();
   });
   it.each([['depocu', DEPOCU], ['müdür', MUDUR]])('Stok Merkezi %s için de depocu açılışıyla gelir; alt çubuk durur, mod seçimi yoktur', async (_ad, kisi) => {
     sunucuKur(kisi, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL), 'GET /stok/sepet': () => json(200, { satirlar: [] }), 'GET /stok/toplamalar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 5 }) });

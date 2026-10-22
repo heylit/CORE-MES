@@ -7,7 +7,8 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RAF_TURU, miktarMetni } from './gorunum.ts';
 
-// Önizlemedeki "her yerden arama" (openSearch): Ctrl+K ya da "/" ile açılır; Enter ilk sonucu açar.
+// Önizlemedeki "her yerden arama" (openSearch): "/" ya da Ara düğmesiyle açılır; Enter ilk sonucu açar. Ctrl K kabuğun ortak
+// paletidir (karar 102 a); konum, raf ve parti oraya kayıt kaynağı olarak geçince bu pencere kalkar (UYUM-BORCU 46).
 // Malzeme adıyla arama malzemeler modülünün arama işlevi gelince eklenir; bugün kart numarası, konum, raf ve parti no.
 const SAYFALAR = [
   ['İş kutusu', '/stok', 'panel ana'], ['Okut', '/stok/okut', 'tara qr barkod'], ['Taşı', '/stok/sepet', 'sepet teslim fiş taşı çıkış'], ['Hazırlık', '/stok/hazirlik', 'toplama sipariş rota liste istek'],
@@ -47,7 +48,7 @@ export function AramaPenceresi({ kapat }: { kapat: () => void }) {
       </form>
       {!gecikmeli ? (
         <div className="tc-stok-form">
-          <p className="tc-stok-not">İpucu: Ctrl + K ya da / ile her stok ekranından açılır. Konum kodu yazarak doğrudan gidebilirsin.</p>
+          <p className="tc-stok-not">İpucu: / ile her stok ekranından açılır. Konum kodu yazarak doğrudan gidebilirsin.</p>
           <div className="tc-stok-ed-ekle">{SAYFALAR.map(([b, y]) => <button key={y} type="button" className="tc-stok-ambalaj" onClick={() => git(y)}><strong>{b}</strong></button>)}</div>
         </div>
       ) : l.length === 0 && !c.isPending ? <p className="tc-stok-not">Sonuç yok. Konum kodu, parti no ya da kart numarası dene. Malzeme adıyla arama Malzeme Kartları'nın arama işlevi gelince açılır.</p> : (
@@ -63,19 +64,19 @@ export function AramaPenceresi({ kapat }: { kapat: () => void }) {
   );
 }
 
-// Kısayol: Ctrl+K (Cmd+K) ya da yazı alanında değilken "/".
+// Kısayol: yazı alanında değilken "/". Ctrl K alınmaz, kabuk paleti açılır.
 export function useAramaKisayolu(ac: () => void) {
   const acRef = useRef(ac);
   acRef.current = ac;
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       const g = e.target as HTMLElement | null, yaziyor = !!g && (g.tagName === 'INPUT' || g.tagName === 'TEXTAREA' || g.tagName === 'SELECT' || g.isContentEditable);
-      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !yaziyor)) { e.preventDefault(); acRef.current(); }
+      if (e.key === '/' && !yaziyor && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); acRef.current(); }
     };
     window.addEventListener('keydown', tus);
     return () => window.removeEventListener('keydown', tus);
   }, []);
 }
 export function AraDugmesi({ ac }: { ac: () => void }) {
-  return <Dugme tur="ikincil" simge="search" onClick={ac} title="Ctrl + K">Ara</Dugme>;
+  return <Dugme tur="ikincil" simge="search" onClick={ac} title="/">Ara</Dugme>;
 }
