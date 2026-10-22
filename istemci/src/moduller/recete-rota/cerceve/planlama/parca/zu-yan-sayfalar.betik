@@ -186,7 +186,9 @@ isciAc = function () {
 /* ---------- ortak hesaplar ---------- */
 const ymVH = (D, id) => { const v = D.vardiyalar.find(x => x.id === id); if (!v) return 0; let h = hm(v.bit) - hm(v.bas); if (h <= 0) h += 24; return h; };
 function ymGecTL(e) { let t = 0; for (const s of S.D.siparisler) { const J = e.J[s.id]; if (J && J.T > 0.05) t += agGecTL(agBedel(S.D, s), J.T); } return t; }
-function ymMesaiTL(D, cx, e) { const Y = ymAyar(); const g = cx.days[e.gun]; const tat = !g || !g.vard.length; return ymVH(D, e.vardiya) * (+D.ayarlar.mesaiUcret || 0) * (tat ? +Y.mesaiCarpan || 1 : 1); }
+/* plan ayarları hiç yazılmamış ya da mesai ücreti girilmemişse bedel bilinmez: null, sıfır sayılmaz */
+const ymMesaiUcret = D => { const u = (D.ayarlar || {}).mesaiUcret; return u == null || u === '' || !isFinite(+u) ? null : +u; };
+function ymMesaiTL(D, cx, e) { const u = ymMesaiUcret(D); if (u == null) return null; const Y = ymAyar(); const g = cx.days[e.gun]; const tat = !g || !g.vard.length; return ymVH(D, e.vardiya) * u * (tat ? +Y.mesaiCarpan || 1 : 1); }
 function ymFasonTL(cx, r) {
   const f = cx.FS[r.m.slice(1)]; const o = cx.byId[r.id]; if (!f || !o) return null; const cl = o.cTum || o.c; const c = cl.find(x => x.m === r.m) || {};
   if (c.opt) { const h = Math.min(...cl.filter(x => !x.fas).map(x => x.run), Infinity); return isFinite(h) && f.saatFiyat != null ? h * f.saatFiyat + (+f.tasima || 0) * o.adet : null; }
@@ -363,9 +365,9 @@ async function ymMesaiOner() {
       U.ymMs.run = `Motor öneriyi ölçüyor ${i + 1}/${l.length}…`; render(); await bekleKisa();
       const stC = { ...stOf(), ekMesai: [...clone(S.ekMesai), l[i]] }; const r = ymOlc(stC);
       const tl = ymMesaiTL(D, cx, l[i]); const dGec = b.gec - r.gec; const dDiger = r.diger - b.diger;
-      liste.push({ ...l[i], saat: ymVH(D, l[i].vardiya), tl, dGec, dDiger, dT: b.e.sumT - r.e.sumT, net: dGec * pdKat(pdDenge()) - tl - dDiger, deger: dar.val[l[i].m] || 0, isler: [...(dar.isler[l[i].m] || [])] });
+      liste.push({ ...l[i], saat: ymVH(D, l[i].vardiya), tl, dGec, dDiger, dT: b.e.sumT - r.e.sumT, net: tl == null ? null : dGec * pdKat(pdDenge()) - tl - dDiger, deger: dar.val[l[i].m] || 0, isler: [...(dar.isler[l[i].m] || [])] });
     }
-    liste.sort((a, b2) => b2.net - a.net);
+    liste.sort((a, b2) => a.net == null || b2.net == null ? (a.net == null) - (b2.net == null) || b2.dGec - a.dGec : b2.net - a.net);
     U.ymMs = { dv: S.dataVer, liste, dar: top.map(m => [m, dar.val[m], [...dar.isler[m]]]) };
   } catch (e) { console.error(e); U.ymMs = { err: 'Öneri hesaplanamadı: ' + e.message }; }
   render();
@@ -373,9 +375,9 @@ async function ymMesaiOner() {
 function sMesaiPlani() {
   const D = S.D; const fg = agFiyatGorur(); const kr = ymKarar(); const cx = cxAl(); const m = U.ymMs && (U.ymMs.run || U.ymMs.err || U.ymMs.dv === S.dataVer) ? U.ymMs : null;
   const Y = ymAyar(); const kab = (S.D.mesaiKarar || []).filter(k => k.karar === 'kabul'); const kim0 = e => kab.find(k => ymAnahtar(k) === ymAnahtar(e));
-  const tlE = e => cx ? ymMesaiTL(D, cx, e) : null; const topTL = S.ekMesai.reduce((a, e) => a + (tlE(e) || 0), 0); const topH = S.ekMesai.reduce((a, e) => a + ymVH(D, e.vardiya), 0);
+  const tlE = e => cx ? ymMesaiTL(D, cx, e) : null; const tlL = S.ekMesai.map(tlE); const topTL = tlL.some(x => x == null) ? null : tlL.reduce((a, x) => a + x, 0); const topH = S.ekMesai.reduce((a, e) => a + ymVH(D, e.vardiya), 0);
   const butce = +(S.param.mesaiHafta ?? W0.mesaiHafta) || 0;
-  const kpi = ymKpi([['clock', 'Planlı ek mesai', `${sayi(topH, 1)} sa`, `${S.ekMesai.length} vardiya`], ['lira', 'Mesai maliyeti', fg ? agTL(topTL) : 'müdürde', `${sayi(D.ayarlar.mesaiUcret, 0)} TL/sa, hafta sonu ×${sayi(Y.mesaiCarpan, 1)}`], ['gauge', 'Haftalık sınır', butce ? `${sayi(butce, 0)} sa` : 'yok', 'Kısıtlar sayfasında']]);
+  const kpi = ymKpi([['clock', 'Planlı ek mesai', `${sayi(topH, 1)} sa`, `${S.ekMesai.length} vardiya`], ['lira', 'Mesai maliyeti', fg ? agTL(topTL) : 'müdürde', `${sayi(ymMesaiUcret(D), 0)} TL/sa, hafta sonu ×${sayi(Y.mesaiCarpan, 1)}`], ['gauge', 'Haftalık sınır', butce ? `${sayi(butce, 0)} sa` : 'yok', 'Kısıtlar sayfasında']]);
   const plan = S.ekMesai.map((e, i) => { const k = kim0(e);
     return `<tr>${td('Tezgâh', `<b class="mono">${esc(e.m)}</b>`)}${td('Gün', esc(fmtDT(D, e.gun * 24).slice(0, 9)))}${td('Vardiya', `${esc(e.vardiya)} · ${sayi(ymVH(D, e.vardiya), 1)} sa`)}${fg ? td('Maliyet', `<span class="mono">${agTL(tlE(e))}</span>`, 'pm-num') : ''}${td('Karar', k ? `${rozet('Kabul', 'tamam')} <span class="pm-kucuk">${esc(k.kim)}${k.net != null && fg ? ` · net ${agTL(k.net)}` : ''}</span>` : rozet('Elle girildi', 'pasif'))}${td('', kr ? dugme('', 'ym-mesai-kaldir', { simge: 'trash', hayalet: true, kucuk: true, ad: 'Kaldır', veri: `data-v="${i}"` }) : '')}</tr>`; }).join('');
   const planKart = kart(`${ic('clock', 'k')} Ek mesai planı`, `${kpi}<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Tezgâh</th><th>Gün</th><th>Vardiya</th>${fg ? '<th class="pm-num">Maliyet</th>' : ''}<th>Karar</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${plan || `<tr><td colspan="6" class="pm-kucuk">Planlı ek mesai yok.</td></tr>`}</tbody></table></div>`);
@@ -385,8 +387,8 @@ function sMesaiPlani() {
   else if (m) {
     const dar = m.dar.length ? `<div class="pm-ym-dar">${m.dar.map(([t, v, l]) => `<span><b class="mono">${esc(t)}</b> 1 saati <b class="mono">${agTLs(v)}</b> <small>${l.length} geç iş: ${esc(l.slice(0, 4).join(', '))}${l.length > 4 ? '…' : ''}</small></span>`).join('')}</div>` : '<p class="pm-kucuk">Tamponsuz kalan geç iş yok; darboğaz görünmüyor.</p>';
     const tr = m.liste.map((a, i) => { const iyi = a.net > 0;
-      return `<tr>${td('Tezgâh', `<b class="mono">${esc(a.m)}</b>`)}${td('Gün', `${esc(fmtDT(D, a.gun * 24).slice(0, 9))} · ${esc(a.vardiya)} ${sayi(a.saat, 1)} sa`)}${td('Gecikme azalır', `<span class="mono">${esc(saat(a.dT))}</span><small class="pm-ag-not mono">${agTL(a.dGec)}</small>`, 'pm-num')}${fg ? td('Mesai', `<span class="mono">${agTL(a.tl)}</span>${Math.abs(a.dDiger) >= 1 ? `<small class="pm-ag-not">ayar ve işleme ${a.dDiger > 0 ? '+' : '−'}${agTL(Math.abs(a.dDiger))}</small>` : ''}`, 'pm-num') + td('Net kazanç', `<b class="mono" data-ton="${iyi ? 'tamam' : 'hata'}">${agTL(a.net)}</b>`, 'pm-num') : ''}
-        ${td('Öneri', iyi ? rozet('Açılsın', 'tamam') : rozet('Ödemiyor', 'pasif'))}${td('', kr ? `<span class="pm-dugmeler">${dugme('Kabul', 'ym-mesai-kabul', { kucuk: true, birincil: iyi, simge: 'check', veri: `data-v="${i}"` })}${dugme('Red', 'ym-mesai-red', { kucuk: true, hayalet: true, simge: 'x', veri: `data-v="${i}"` })}</span>` : '<span class="pm-kucuk">kararı müdür verir</span>')}</tr>`; }).join('');
+      return `<tr>${td('Tezgâh', `<b class="mono">${esc(a.m)}</b>`)}${td('Gün', `${esc(fmtDT(D, a.gun * 24).slice(0, 9))} · ${esc(a.vardiya)} ${sayi(a.saat, 1)} sa`)}${td('Gecikme azalır', `<span class="mono">${esc(saat(a.dT))}</span><small class="pm-ag-not mono">${agTL(a.dGec)}</small>`, 'pm-num')}${fg ? td('Mesai', `<span class="mono">${agTL(a.tl)}</span>${Math.abs(a.dDiger) >= 1 ? `<small class="pm-ag-not">ayar ve işleme ${a.dDiger > 0 ? '+' : '−'}${agTL(Math.abs(a.dDiger))}</small>` : ''}`, 'pm-num') + td('Net kazanç', `<b class="mono" data-ton="${a.net == null ? '' : iyi ? 'tamam' : 'hata'}">${agTL(a.net)}</b>`, 'pm-num') : ''}
+        ${td('Öneri', a.net == null ? rozet('Mesai ücreti yok', 'pasif') : iyi ? rozet('Açılsın', 'tamam') : rozet('Ödemiyor', 'pasif'))}${td('', kr ? `<span class="pm-dugmeler">${dugme('Kabul', 'ym-mesai-kabul', { kucuk: true, birincil: iyi, simge: 'check', veri: `data-v="${i}"` })}${dugme('Red', 'ym-mesai-red', { kucuk: true, hayalet: true, simge: 'x', veri: `data-v="${i}"` })}</span>` : '<span class="pm-kucuk">kararı müdür verir</span>')}</tr>`; }).join('');
     oneri = `${dar}<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Tezgâh</th><th>Gün</th><th class="pm-num">Gecikme azalır</th>${fg ? '<th class="pm-num">Mesai</th><th class="pm-num">Net kazanç</th>' : ''}<th>Öneri</th><th><span class="tc-gizli-etiket">Karar</span></th></tr></thead><tbody>${tr || `<tr><td colspan="7" class="pm-kucuk">Ölçülecek aday yok (reddedilenler tekrar önerilmez).</td></tr>`}</tbody></table></div>`;
   } else oneri = `<p class="pm-kucuk">Öneri için güncel plan gerekir. Plan, darboğaz tezgâhlara ek vardiya açmayı tek tek dener ve her birini motorla ölçer.</p>`;
   const red = (S.D.mesaiKarar || []).filter(k => k.karar === 'red');
