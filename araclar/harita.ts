@@ -545,30 +545,55 @@ export function haritaMetni(harita: Harita, modul: string | null = null, ayrinti
   return bolumler.map((b) => b.join('\n')).join('\n\n');
 }
 
-const KULLANIM = 'Kullanım: npm run harita -- [--modul <modul_adi>]';
+// Konu açılışında okunur: tam harita çok büyük. Modül başına bir satır, sonunda son göç; ayrıntı --modul ile alınır.
+export function ozetMetni(harita: Harita): string {
+  const satirlar = sutunlar(harita.moduller.map((m) => [
+    m.ad,
+    `uç ${m.uclar.length}, işlem ${m.islemler.length}, tablo ${m.tablolar.length}, göç ${m.gocler.length}`,
+    `bağımlı: ${m.bagimli.length > 0 ? m.bagimli.join(', ') : 'yok'}; ona bağımlı: ${m.bagimlilar.length > 0 ? m.bagimlilar.join(', ') : 'yok'}`,
+  ]));
+  const son = harita.gocSirasi.at(-1) ?? 'yok';
+  return [
+    `Modüller (${harita.moduller.length})`,
+    ...girinti(satirlar, '  '),
+    `Son göç: ${son} (toplam ${harita.gocSirasi.length})`,
+    'Ayrıntı: npm run harita -- --modul <modul_adi>; tam harita: npm run harita',
+  ].join('\n');
+}
+
+const KULLANIM = 'Kullanım: npm run harita -- [--modul <modul_adi> | --ozet]';
+
+export type HaritaKipi = { tur: 'tam' } | { tur: 'ozet' } | { tur: 'modul'; modul: string };
 
 // Yanlış yazılmış bayrak yok sayılırsa tek modül isteyen bütün haritayı alır; araç yalnız bildiğini kabul eder.
-export function modulSec(argumanlar: readonly string[]): string | null {
-  if (argumanlar.length === 0) return null;
+export function kipSec(argumanlar: readonly string[]): HaritaKipi {
+  if (argumanlar.length === 0) return { tur: 'tam' };
   const [bayrak, modul, ...fazla] = argumanlar;
+  if (bayrak === '--ozet') {
+    if (modul !== undefined) throw new Error(`Tanınmayan argüman: ${modul}. ${KULLANIM}`);
+    return { tur: 'ozet' };
+  }
   if (bayrak !== '--modul') throw new Error(`Tanınmayan argüman: ${bayrak ?? ''}. ${KULLANIM}`);
   if (fazla.length > 0) throw new Error(`Tanınmayan argüman: ${fazla[0] ?? ''}. ${KULLANIM}`);
   if (!modul || !/^[a-z][a-z0-9-]*$/.test(modul)) throw new Error(KULLANIM);
-  return modul;
+  return { tur: 'modul', modul };
 }
 
 export async function haritaKos(argumanlar: readonly string[], kok: string = KOK): Promise<{ kod: 0 | 1; cikti: string }> {
-  let modul: string | null;
+  let kip: HaritaKipi;
   try {
-    modul = modulSec(argumanlar);
+    kip = kipSec(argumanlar);
   } catch (hata) {
     return { kod: 1, cikti: hata instanceof Error ? hata.message : String(hata) };
   }
   const harita = await haritaTopla(kok);
-  if (modul !== null && !harita.moduller.some((m) => m.ad === modul)) {
+  if (kip.tur === 'ozet') return { kod: 0, cikti: ozetMetni(harita) };
+  if (kip.tur === 'tam') return { kod: 0, cikti: haritaMetni(harita) };
+  const { modul } = kip;
+  if (!harita.moduller.some((m) => m.ad === modul)) {
     return { kod: 1, cikti: `Bilinmeyen modül: ${modul}. Modüller: ${harita.moduller.map((m) => m.ad).join(', ')}. ${KULLANIM}` };
   }
-  return { kod: 0, cikti: haritaMetni(harita, modul, modul === null ? null : await modulAyrintisi(harita, modul, kok)) };
+  return { kod: 0, cikti: haritaMetni(harita, modul, await modulAyrintisi(harita, modul, kok)) };
 }
 
 const dogrudanKosuyor = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);

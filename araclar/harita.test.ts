@@ -197,6 +197,22 @@ test('harita: --modul yalnız o modülün bölümünü basar; bilinmeyen modül 
   }
 });
 
+test('harita --ozet: modül başına tek satır, son göç ve ayrıntının nereden alınacağı; fazla argüman kullanım hatasıdır', async (t) => {
+  const kok = agacKur(t);
+  const { kod, cikti } = await haritaKos(['--ozet'], kok);
+  assert.equal(kod, 0);
+  const satirlar = cikti.split('\n');
+  assert.equal(satirlar[0], 'Modüller (4)');
+  assert.match(satirlar.find((s) => s.trim().startsWith('alfa')) ?? '', /^ {2}alfa\s+uç 2, işlem 2, tablo \d+, göç \d+\s+bağımlı: beta; ona bağımlı: yok$/);
+  assert.match(cikti, /\nSon göç: 20270101000300_cekirdek_islev\.sql \(toplam 4\)\n/);
+  assert.match(cikti, /npm run harita -- --modul <modul_adi>/);
+  assert.equal(cikti.includes('Uçlar ('), false);
+
+  const fazla = await haritaKos(['--ozet', 'alfa'], kok);
+  assert.equal(fazla.kod, 1);
+  assert.match(fazla.cikti, /Kullanım: npm run harita/);
+});
+
 test('harita metni: uç tek satırda, işaret hizalı; boş bölüm yok diye, belirsiz tablo ve göç sırası ortak bölümde yazılır', async (t) => {
   const harita = await haritaTopla(agacKur(t));
   const metin = haritaMetni(harita);
