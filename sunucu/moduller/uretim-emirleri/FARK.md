@@ -186,3 +186,9 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - `GET /adimli-emirler/fason-firmalari` (`uretim-emirleri.yaz`): aktif fason firmalar; emri yazan müşteri ve tedarikçi yetkisi olmadan firma seçer.
 - Ekran: emir ayrıntısında "Operasyon adımları: iç ve dış üretim" tablosu ve değiştirme penceresi.
 - Plan: `planlanacakIsEmirleri` fason adımı yine vermez; her iç adım `fasonBekleGun` taşır (hemen önündeki bitmemiş fason adımların termin toplamı, gönderilmiş adımda ilk gidişten geçen gün düşülerek; kural `fasonBeklemesi`). Plan motoru bu kadar takvim günü bekletir, kapasite tüketmez. Emir dilimi adımın `terminGun` değerini de verir; Reçete ve Rota planı emirdeki iç ya da dış seçimini kullanır.
+
+## Sayımda refakat partisi ve bölme kuralı (kart #125, Soru 121 a; dal 125-uretim-parti-bolme)
+- Göç `20261022151100`: `uretim_sayimi.refakat_partisi_id` (boş olabilir, artı; yabancı anahtar yok, UYUM-BORCU UE-B10). Dolu tabloya boş sütun; eski satırlar boş kalır.
+- `POST /uretim-emirleri/:id/sayim`, `/sayim-ayarla`, `/bitir` gövdesi isteğe bağlı `refakatPartisiId` alır; satıra yazılır. Kalite kararının iki satırı sayımın partisinde kalır (gruplama partiyle). `SaglamSayimOlayi`, `HurdaSayimOlayi`, `KaliteKarariOlayi` `refakatPartisiId` (yoksa null) taşır.
+- Bölme (UE-PB1, UE-PB3'ün yerine): bölünen adım çalışıyor olabilir, yalnız orada henüz sayılmamış adet bölünür (`adet <= elde kalan - adımda sayılan`; sayılan: sağlam, hurda, karar bekleyen, red). Bitmiş adımdan bölünmez; sonraki adımlar başlamamış olmalı. Yeni ileti `BOLME_URETILMIS` (400, alan `adet`); `BOLME_BASLAMIS` metni değişti.
+- İstemci: Reçete ve Rota `emir-komutlari.ts` ve Rota `PartiPaneli.tsx` `bolunebilirAdimlar` çalışan adımı da verir; birleşme adayı yine yalnız başlamamış adımlar. Ekran değişmedi.

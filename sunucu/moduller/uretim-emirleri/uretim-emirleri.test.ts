@@ -1108,7 +1108,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       assert.equal((await sayimYap(emir.id, -1)).durum, 200);
       const kisiId = gelen[0]?.kisiId;
       assert.deepEqual(gelen, ([[3, 'karar_bekliyor'], [2, 'serbest'], [-1, 'serbest']] as const).map(([f, kaliteDurumu]) => (
-        { uretimEmriId: emir.id, isEmriId: null, istasyonId, kisiId, fark: String(f), kaliteDurumu })));
+        { uretimEmriId: emir.id, isEmriId: null, istasyonId, kisiId, fark: String(f), kaliteDurumu, refakatPartisiId: null })));
       assert.deepEqual(toplamlar, [null, 5, 4], 'dinleyici yeni satırı görür; ilk sayım onaya kadar sağlamda değildir');
       reddet = true;
       const once = await toplam(emir.id);
@@ -1146,7 +1146,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       assert.equal((await hurdaYap(emir.id, 2, hurdaId)).durum, 200);
       assert.equal((await hurdaYap(emir.id, -1, hurdaId)).durum, 200);
       const kisiId = gelen[0]?.kisiId;
-      assert.deepEqual(gelen, ['2/2', '-1/1'].map((fark) => ({ uretimEmriId: emir.id, isEmriId: null, istasyonId, kisiId, hurdaNedeniId: hurdaId, fark })),
+      assert.deepEqual(gelen, ['2/2', '-1/1'].map((fark) => ({ uretimEmriId: emir.id, isEmriId: null, istasyonId, kisiId, hurdaNedeniId: hurdaId, fark, refakatPartisiId: null })),
         'dinleyici yeni satırı görür');
       reddet = true;
       const ret = await hurdaYap(emir.id, 1, hurdaId);

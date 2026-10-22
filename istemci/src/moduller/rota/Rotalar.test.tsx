@@ -250,16 +250,18 @@ describe('Üretim emirleri bölümü', () => {
     expect(await screen.findByText('Konum /recete-rota')).toBeTruthy();
   });
 
-  it('#262, #689: bölünen adım ve sonrası başlamamış her adımdan bölünür; birleşme hedefi üst ya da aynı adımdan bölünmüş açık kardeştir, kaynağın ek adımı bitmiş olmalı', () => {
+  it('#262, #689, Soru 121 a: bitmemiş ve sonrası başlamamış her adımdan bölünür; birleşme hedefi üst ya da aynı adımdan bölünmüş açık kardeştir, kaynağın ek adımı bitmiş olmalı', () => {
     const adim = (durum: 'bekliyor' | 'calisiyor' | 'tamam', sira: number) => isEmri(700 + sira, sira * 10, { durum });
     const d = (isEmirleri: AdimliEmirAyrintisi['isEmirleri'], ek: Partial<AdimliEmirAyrintisi> = {}): AdimliEmirAyrintisi => ({ ...AYRINTI, isEmirleri, ...ek });
     const siralar = (x: AdimliEmirAyrintisi) => bolunebilirAdimlar(x).map((a) => a.sira);
     expect(siralar(d([adim('tamam', 1), adim('bekliyor', 2), adim('bekliyor', 3)]))).toEqual([2, 3]);
     expect(siralar(d([adim('bekliyor', 2), adim('bekliyor', 1)]))).toEqual([1, 2]);
-    // PB-K2: önceki adım çalışırken de sonraki başlamamış adımdan bölünür.
-    expect(siralar(d([adim('calisiyor', 1), adim('bekliyor', 2), adim('bekliyor', 3)]))).toEqual([2, 3]);
-    expect(siralar(d([adim('tamam', 1), adim('calisiyor', 2)]))).toEqual([]);
-    expect(siralar(d([adim('tamam', 1), adim('bekliyor', 2), adim('calisiyor', 3)]))).toEqual([]);
+    // PB-K2: önceki adım çalışırken de sonraki başlamamış adımdan bölünür; çalışan adımın kendisi de (Soru 121 a).
+    expect(siralar(d([adim('calisiyor', 1), adim('bekliyor', 2), adim('bekliyor', 3)]))).toEqual([1, 2, 3]);
+    // Soru 121 a: çalışan adımın üretilmemiş adedi bölünür; arkasında başlamış adım varsa bölünmez.
+    expect(siralar(d([adim('tamam', 1), adim('calisiyor', 2)]))).toEqual([2]);
+    expect(siralar(d([adim('tamam', 1), adim('bekliyor', 2), adim('calisiyor', 3)]))).toEqual([3]);
+    expect(siralar(d([adim('calisiyor', 1), adim('calisiyor', 2)]))).toEqual([2]);
     expect(siralar(d([adim('tamam', 1)]))).toEqual([]);
     expect(siralar(d([adim('bekliyor', 1)], { durum: 'bitti' }))).toEqual([]);
     expect(siralar(d([adim('bekliyor', 1)], { arsiv: true }))).toEqual([]);

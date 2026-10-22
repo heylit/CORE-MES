@@ -64,9 +64,11 @@ export const emirGovdesi = z.object({
   })).max(AZAMI_ADIM, `Bir emirde en çok ${AZAMI_ADIM} adım olur.`).optional(),
 });
 
+// Sayılan parçanın refakat partisi (kartı okutulan emir + hammadde lotu; kart #125). Verilmezse sayım partisiz yazılır.
+const refakatPartisiId = KIMLIK.optional();
 // Sağlam adet emir adedinden az ya da fazla olabilir; sıfır geçerli bir sonuçtur.
 // Verilmezse emrin sağlam adedi sayaç toplamıdır; verilirse sayaçla farkı düzeltme olarak deftere girer.
-export const bitirGovdesi = z.object({ saglamAdet: sayac('Sağlam adet').optional() });
+export const bitirGovdesi = z.object({ saglamAdet: sayac('Sağlam adet').optional(), refakatPartisiId });
 
 const SAYIM_ASIMI = `Tek seferde en çok ${AZAMI_SAYIM} adet girilir.`;
 const sayimAdedi = z.number().int('Adet tam sayı olmalı.').min(-AZAMI_SAYIM, SAYIM_ASIMI).max(AZAMI_SAYIM, SAYIM_ASIMI);
@@ -76,17 +78,19 @@ export const sayimGovdesi = z.discriminatedUnion('tur', [
   z.object({
     tur: z.literal('saglam'),
     adet: sayimAdedi.refine((a) => a !== 0, 'Adet sıfır olamaz.'),
+    refakatPartisiId,
   }).strict(),
   z.object({
     tur: z.literal('hurda'),
     adet: sayimAdedi.refine((a) => a !== 0, 'Adet sıfır olamaz.'),
     hurdaNedeniId: KIMLIK.optional(),
+    refakatPartisiId,
   }).strict(),
 ]).superRefine((g, ctx) => {
   if (g.tur === 'hurda' && g.adet > 0 && g.hurdaNedeniId === undefined) ctx.addIssue({ code: 'custom', path: ['hurdaNedeniId'], message: 'Hurda nedeni seçin.' });
 });
 // Tuş takımı mutlak değeri gönderir; farkı sunucu yazar.
-export const sayimAyarlaGovdesi = z.object({ saglam: sayac('Sağlam adet').max(AZAMI_SAYIM, SAYIM_ASIMI) }).strict();
+export const sayimAyarlaGovdesi = z.object({ saglam: sayac('Sağlam adet').max(AZAMI_SAYIM, SAYIM_ASIMI), refakatPartisiId }).strict();
 // Makineli istasyonda çalışılacak makineler (bir ya da birkaç). Verilmezse iş emrine atanmış makine kullanılır; o da yoksa
 // iş makinesiz çalışır ve kilit almaz (insanlı istasyon). Gövdesiz istek de geçerlidir; bilinmeyen alan eski istemcide olduğu gibi yok sayılır.
 export const AZAMI_MAKINE_SECIMI = 20;

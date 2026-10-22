@@ -162,14 +162,15 @@ export interface SayimYazisi {
   hurdaNedeniId: number | null;
   duzeltme: boolean;
   an: string;
+  refakatPartisiId: number | null;
 }
 
 // Satırın bağlandığı iş emri döner (sağlam sayım stoka bu iş emriyle yansır); iş emirsiz eski emirde null.
 export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: number | null }> {
   const satir = await db.tek<{ isEmriId: number | null }>(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${TERMINAL_IS_EMRI('$1')}) RETURNING is_emri_id AS "isEmriId"`,
-    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${TERMINAL_IS_EMRI('$1')}, $9) RETURNING is_emri_id AS "isEmriId"`,
+    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId],
   );
   return { isEmriId: satir?.isEmriId ?? null };
 }
@@ -182,25 +183,27 @@ export async function ilkParcaOnaysiz(db: Db, emirId: number): Promise<boolean> 
   return satir?.yok ?? false;
 }
 
-// Karar bekleyen adet iş emri ve istasyon başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş emrine gider.
-export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; adet: number }
+// Karar bekleyen adet iş emri, istasyon ve refakat partisi başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş
+// emrine ve aynı partiye gider.
+export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; refakatPartisiId: number | null; adet: number }
 
 export function kararBekleyenGruplari(db: Db, emirId: number): Promise<KararGrubu[]> {
   return db.sorgu<KararGrubu>(
-    `SELECT is_emri_id AS "isEmriId", istasyon_id AS "istasyonId", kisi_id AS "kisiId", sum(adet)::int AS adet FROM uretim_sayimi
-      WHERE emir_id = $1 AND tur = 'karar_bekliyor' GROUP BY is_emri_id, istasyon_id, kisi_id HAVING sum(adet) <> 0 ORDER BY min(id)`,
+    `SELECT is_emri_id AS "isEmriId", istasyon_id AS "istasyonId", kisi_id AS "kisiId", refakat_partisi_id AS "refakatPartisiId",
+            sum(adet)::int AS adet FROM uretim_sayimi
+      WHERE emir_id = $1 AND tur = 'karar_bekliyor' GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id HAVING sum(adet) <> 0 ORDER BY min(id)`,
     [emirId],
   );
 }
 
 // Kararın iki satırı aynı iş emrine ve sayan kişiye yazılır (terminal ya da kararı veren değil): üretim sayanın kalır (348 a).
 export function kararSatirlariEkle(
-  db: Db, emirId: number, isEmriId: number | null, kisiId: number, istasyonId: number, tur: 'saglam' | 'red', adet: number, an: string,
+  db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', an: string,
 ): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id)
-     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4), ($1, $2, $3, $7, $6, true, $5::timestamptz, $4)`,
-    [emirId, kisiId, istasyonId, isEmriId, an, adet, tur],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id)
+     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8), ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8)`,
+    [emirId, g.kisiId, g.istasyonId, g.isEmriId, an, g.adet, tur, g.refakatPartisiId],
   );
 }
 

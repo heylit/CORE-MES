@@ -8,7 +8,7 @@ import {
   TERMIN_FASON_DISI, TESLIM_ONCE, acikEmirIhlali, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali, gorunenDurum,
   guvenliUygula, oneDusenYeniAdimlar, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESTIRME_ADIM, BIRLESTIRME_ADIMLAR_FARKLI, BIRLESTIRME_AKRABA_DEGIL, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KENDISI, BIRLESTIRME_KOK,
-  BIRLESTIRME_TASLAK, BOLME_ADET, BOLME_ADIM_YOK, BOLME_BASLAMIS, birlestirmeIhlali, bolmeIhlali, eldekiAdet,
+  BIRLESTIRME_TASLAK, BOLME_ADET, BOLME_ADIM_YOK, BOLME_BASLAMIS, BOLME_URETILMIS, birlestirmeIhlali, bolmeIhlali, eldekiAdet,
   BIRLESME_ADIMI_BASLAMIS, BIRLESME_ADIMI_YOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESME_KOL_ILERLEDI, BIRLESME_PLANI_KOLDA,
   BIRLESME_PLANI_VAR, BIRLESME_PLANI_YOK, BIRLESTIRME_EK_ADIM, BOLME_BIRLESME_ADIMI, EK_ADIM_BASLAMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA,
   EK_ADIM_OP, EK_ADIM_ROTA, EK_ADIM_YERI_YOK, KOL_ALT_PARTILI, KOL_ONCEKI_BITMEDI, birlesmeBeklemeIhlali, birlesmePlaniIhlali,
@@ -182,7 +182,7 @@ describe('uretim-emirleri iş emri kuralları', () => {
     assert.notDeepEqual(malzemeIhtiyaci(6, ie, b, [{ bolunmeSira: 2, adet: 4 }]).map((x) => x.brut), ust.map((x) => x.brut));
   });
 
-  test('parti bölme (UE-PB1, UE-PB3): bölünen ve sonrakiler başlamamış; önceki adımın bitmesi gerekmez; adet elde kalandan az', () => {
+  test('parti bölme (Soru 121 a): bölünen bitmemiş, sonrakiler başlamamış; önceki adımın bitmesi gerekmez; adet elde kalandan az, üretilen bölünmez', () => {
     const d = (ek: Partial<BolmeDurumu> = {}): BolmeDurumu => ({
       durum: 'planli', arsiv: false, adet: 10, ayniSiradanBolunen: 0,
       isEmirleri: [{ sira: 1, opNo: 10, durum: 'tamam', saglamAdet: 9 }, { sira: 2, opNo: 20, durum: 'bekliyor', saglamAdet: null }, { sira: 3, opNo: 30, durum: 'bekliyor', saglamAdet: null }],
@@ -203,8 +203,19 @@ describe('uretim-emirleri iş emri kuralları', () => {
     assert.equal(bolmeIhlali(d(), 3, 9), null);
     assert.equal(bolmeIhlali(d(), 3, 10), BOLME_ADET);
     const calisan = d({ isEmirleri: [{ sira: 1, opNo: 10, durum: 'calisiyor', saglamAdet: null }, { sira: 2, opNo: 20, durum: 'bekliyor', saglamAdet: null }] });
-    assert.equal(bolmeIhlali(calisan, 1, 2), BOLME_BASLAMIS);
     assert.equal(bolmeIhlali(calisan, 2, 2), null, 'çalışan adımın arkasındaki adımdan bölünür');
+    // Soru 121 a: çalışan adımda yalnız üretilmemiş adet bölünür; bitmiş adımdan ve arkası başlamış adımdan bölünmez.
+    const sayilan = (n: number) => ({ ...calisan, bolunenIslenen: n });
+    assert.equal(bolmeIhlali(sayilan(4), 1, 6), null, '10 adetin 4ü sayıldı: 6 bölünür');
+    assert.equal(bolmeIhlali(sayilan(4), 1, 7), BOLME_URETILMIS, 'üretilen bölünemez');
+    assert.equal(bolmeIhlali(sayilan(0), 1, 9), null, 'henüz sayım yoksa üstte en az bir kalır');
+    assert.equal(bolmeIhlali(sayilan(0), 1, 10), BOLME_ADET);
+    assert.equal(bolmeIhlali(sayilan(10), 1, 1), BOLME_URETILMIS, 'hepsi işlendiyse bölünecek adet yok');
+    assert.equal(bolmeIhlali({ ...sayilan(4), isEmirleri: [{ sira: 1, opNo: 10, durum: 'calisiyor', saglamAdet: null }] }, 1, 6), null, 'tek adımlı emir');
+    assert.equal(bolmeIhlali(d({ bolunenIslenen: 8 }), 2, 8), null, 'bekleyen adımda sayım yoktur; işlenen yok sayılır');
+    assert.equal(bolmeIhlali(d(), 1, 1), BOLME_BASLAMIS, 'bitmiş adımdan bölünmez');
+    const arkasiBaslamis = d({ isEmirleri: [{ sira: 1, opNo: 10, durum: 'calisiyor', saglamAdet: null }, { sira: 2, opNo: 20, durum: 'calisiyor', saglamAdet: null }] });
+    assert.equal(bolmeIhlali(arkasiBaslamis, 1, 1), BOLME_BASLAMIS, 'sonraki adım başlamışsa bölünmez');
     assert.equal(bolmeIhlali(d(), 2, 2, 30), null, 'planlı birleşme adımı bölünen adımdan sonra');
     assert.equal(bolmeIhlali(d(), 2, 2, 20), BOLME_BIRLESME_ADIMI, 'bölünen adımın kendisi birleşme adımı olamaz');
     assert.equal(bolmeIhlali(d(), 2, 2, 10), BOLME_BIRLESME_ADIMI);

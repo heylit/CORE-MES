@@ -14,6 +14,8 @@ export interface SaglamSayimOlayi {
   fark: string;
   // karar_bekliyor: ilk parça kararı beklenirken sayılan parça; stok onu aynı partiye karar bekliyor diye yazar (131 b).
   kaliteDurumu: 'serbest' | 'karar_bekliyor';
+  // Sayılan parçanın refakat partisi (kart #125); kartsız sayımda null. Geçerliliğini dinleyen stok denetler.
+  refakatPartisiId: number | null;
 }
 
 export type SaglamSayimDinleyicisi = (db: Db, olay: SaglamSayimOlayi) => Promise<void>;
@@ -46,6 +48,8 @@ export interface HurdaSayimOlayi {
   hurdaNedeniId: number;
   // Ondalık metin: artı hurda, eksi geri alma.
   fark: string;
+  // Sayılan parçanın refakat partisi (kart #125); kartsız sayımda null. Geçerliliğini dinleyen stok denetler.
+  refakatPartisiId: number | null;
 }
 
 export type HurdaSayimDinleyicisi = (db: Db, olay: HurdaSayimOlayi) => Promise<void>;
@@ -74,6 +78,8 @@ export interface KaliteKarariOlayi {
   karar: KaliteKarari;
   // Ondalık metin, artı.
   adet: string;
+  // Sayılan parçanın refakat partisi (kart #125); kartsız sayımda null. Geçerliliğini dinleyen stok denetler.
+  refakatPartisiId: number | null;
 }
 
 export type KaliteKarariDinleyicisi = (db: Db, olay: KaliteKarariOlayi) => Promise<void>;

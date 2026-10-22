@@ -494,7 +494,9 @@ export async function isEmriSureOzeti(db: Db, isEmriId: number, emirId?: number)
 // sayaç toplamıdır; verilirse sayaçla farkı düzeltme satırı olarak yazılır, toplam verilen adede eşitlenir.
 // İş emirli emirde çalışan iş emri biter; iş emri kalırsa emir sıradakinin istasyonunda yeniden planlı olur, son iş emri
 // biterse emir biter (ilk sistemdeki gibi). Defter satırları iş emri bitmeden yazılır: kapsamları çalışan iş emridir.
-export async function emirBitir(db: Db, kisiId: number, id: number, saglamAdet: number | undefined): Promise<{ emir: Emir }> {
+export async function emirBitir(
+  db: Db, kisiId: number, id: number, saglamAdet: number | undefined, refakatPartisiId: number | null = null,
+): Promise<{ emir: Emir }> {
   await ustuOnceKilitle(db, id);
   const emir = await kilitliEmir(db, id);
   const istasyonId = istasyonu(emir);
@@ -516,8 +518,8 @@ export async function emirBitir(db: Db, kisiId: number, id: number, saglamAdet: 
   const kapanis = mevcut + saglamaFark;
   await adimGirdisiniDenetle(db, emir, fark);
   const an = await komutAni(db, id);
-  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true);
-  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an);
+  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId);
+  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId);
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an);
   await sorgular.emrinKatilimlariniKapat(db, id, an);
@@ -541,12 +543,13 @@ export async function emirBitir(db: Db, kisiId: number, id: number, saglamAdet: 
 // Sağlam sayım satırı yazılır, sonra aynı işlemde dinleyicilere bildirilir (kart #1289; stok girişi).
 async function saglamYaz(
   db: Db, emir: { id: number }, kisiId: number, istasyonId: number, adet: number, duzeltme: boolean, an: string, kararBekliyor = false,
+  refakatPartisiId: number | null = null,
 ): Promise<void> {
   const { isEmriId } = await sorgular.sayimEkle(db, {
-    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an,
+    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId,
   });
   await saglamSayimiBildir(db, {
-    uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest',
+    uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest', refakatPartisiId,
   });
 }
 
@@ -569,6 +572,7 @@ export async function emirSayim(
     && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
+  const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;
   if (govde.tur === 'hurda' && govde.adet < 0) {
     const eksi = hurdaToplamIhlali((await sayaclar(db, id)).hurda, govde.adet);
@@ -590,13 +594,13 @@ export async function emirSayim(
     await adimGirdisiniDenetle(db, emir, govde.adet);
   }
   if (govde.tur === 'saglam') {
-    await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor);
+    await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId);
   } else {
     if (hurdaNedeniId === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
     const { isEmriId } = await sorgular.sayimEkle(db, {
-      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id),
+      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId,
     });
-    await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet });
+    await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }
   return emirdenCevap(db, id);
 }
@@ -610,16 +614,19 @@ export async function kararliSayimiSonuclandir(
   await kilitliEmir(db, id);
   const gruplar = await sorgular.kararBekleyenGruplari(db, id);
   const an = await sorgular.anAl(db);
-  const isEmriAdetleri = new Map<number | null, number>();
+  // İş emri ve refakat partisi başına toplanır: stok kararı partinin kendi bakiyesine uygular.
+  const adetler = new Map<string, { isEmriId: number | null; refakatPartisiId: number | null; adet: number }>();
   for (const g of gruplar) {
-    await sorgular.kararSatirlariEkle(db, id, g.isEmriId, g.kisiId, g.istasyonId, karar === 'onay' ? 'saglam' : 'red', g.adet, an);
-    isEmriAdetleri.set(g.isEmriId, (isEmriAdetleri.get(g.isEmriId) ?? 0) + g.adet);
+    await sorgular.kararSatirlariEkle(db, id, g, karar === 'onay' ? 'saglam' : 'red', an);
+    const anahtar = `${String(g.isEmriId)}/${String(g.refakatPartisiId)}`;
+    const o = adetler.get(anahtar) ?? { isEmriId: g.isEmriId, refakatPartisiId: g.refakatPartisiId, adet: 0 };
+    adetler.set(anahtar, { ...o, adet: o.adet + g.adet });
   }
   let toplam = 0;
-  for (const [isEmriId, adet] of isEmriAdetleri) {
+  for (const { isEmriId, refakatPartisiId, adet } of adetler.values()) {
     if (adet === 0) continue;
     if (karar === 'onay') await sorgular.bitmisSaglamaEkle(db, id, isEmriId, adet);
-    await kaliteKarariBildir(db, { uretimEmriId: id, isEmriId, kisiId, karar, adet });
+    await kaliteKarariBildir(db, { uretimEmriId: id, isEmriId, kisiId, karar, adet, refakatPartisiId });
     toplam += adet;
   }
   return { ...(await emirdenCevap(db, id)), adet: toplam };
@@ -633,7 +640,9 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
 }
 
 // Tuş takımı mutlak sağlam değeri gönderir; fark tek düzeltme satırıdır (fark sıfırsa satır yazılmaz).
-export async function emirSayimAyarla(db: Db, kisiId: number, id: number, saglam: number): Promise<{ emir: Emir }> {
+export async function emirSayimAyarla(
+  db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null,
+): Promise<{ emir: Emir }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
@@ -641,7 +650,7 @@ export async function emirSayimAyarla(db: Db, kisiId: number, id: number, saglam
   // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
   await adimGirdisiniDenetle(db, emir, fark);
   const bekleyen = fark > 0 && ((await sayaclar(db, id)).kararBekliyor > 0 || (await sorgular.ilkParcaOnaysiz(db, id)));
-  if (fark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen);
+  if (fark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen, refakatPartisiId);
   return emirdenCevap(db, id);
 }
 

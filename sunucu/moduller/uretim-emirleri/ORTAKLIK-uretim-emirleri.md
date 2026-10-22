@@ -15,3 +15,4 @@
 | Durum listeleri | emir: taslak, planli, basladi, bitti, iptal; iş emri: bekliyor, calisiyor, tamam; fason yönü: gidis, donus | uretim-emirleri; plan okur |
 | Öncelik, başlangıç, teslim | `uretim_emri.oncelik`, `baslangic`, `teslim` | uretim-emirleri; plan yazar (P6) |
 | Duruş ve hurda nedeni | defterlerde | durus-nedenleri |
+| Refakat partisi (emir + hammadde lotu) | `uretim_sayimi.refakat_partisi_id` (FK yok, UE-B10) | stok (`stok_refakat_partisi`) |
