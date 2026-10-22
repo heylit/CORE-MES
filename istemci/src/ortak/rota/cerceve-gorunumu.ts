@@ -1,10 +1,23 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
-import { CERCEVE_KANALI, kabukKoprusuKur, type KabukKoprusu } from './cerceve-iletisi.ts';
+import { CERCEVE_KANALI, kabukKoprusuKur, type CerceveKomutu, type KabukKoprusu } from './cerceve-iletisi.ts';
 import { useCerceveSayacYazici } from './cerceve-sayaclari.ts';
 import { IKINCI_MENU_TANIMLARI, etkinMadde, menuMaddeleri, type IkinciMenu } from './ikinci-menu.ts';
 import { useEkranGorunur } from './kalici.tsx';
+import { cerceveKomutlarindan, useSayfaKomutlari } from './sayfa-komutlari.ts';
+
+const KOMUTSUZ: readonly CerceveKomutu[] = [];
+
+// Çerçevenin bildirdiği komutlar (kural 7) paletin "Bu sayfa" grubuna gider; seçilen komut köprüyle çerçeveye döner.
+// Kaynak adı bileşene özgüdür: aynı modülde iki çerçeve birbirinin listesini silmez. Çerçeve kalkınca liste kabukta silinir.
+function useCerceveKomutlari(kok: string, kopru: { current: KabukKoprusu | null }): (komutlar: readonly CerceveKomutu[]) => void {
+  const [liste, listeYaz] = useState<readonly CerceveKomutu[]>(KOMUTSUZ);
+  const kaynak = `${kok}#${useId()}`;
+  const komutlar = useMemo(() => cerceveKomutlarindan(liste, (anahtar) => { kopru.current?.komutCalistir(anahtar); }), [liste, kopru]);
+  useSayfaKomutlari(kaynak, komutlar);
+  return listeYaz;
+}
 
 // Yalıtılmış çerçevenin kökeni; tarayıcı iletinin kökenini "null" yazar.
 const OPAK_KOKEN = 'null';
@@ -39,12 +52,14 @@ export function useCerceveGorunumu({ cerceve, kok, koken, menuler = IKINCI_MENU_
   const guncel = useRef({ maddeler, gezin });
   guncel.current = { maddeler, gezin };
   const sayaclar = useCerceveSayacYazici(kok);
+  const komutlar = useCerceveKomutlari(kok, kopru);
 
   useEffect(() => {
     const k = kabukKoprusuKur({
       cerceve: () => cerceve.current?.contentWindow,
       koken: koken ?? window.location.origin,
       sayaclar,
+      komutlar,
       sahibeGit: (yol) => { if (sahibinSayfasiMi(yol)) void guncel.current.gezin(yol); },
       gorunumDegisti: (yeni) => {
         // Menüde olmayan görünüm adı adresi değiştirmez ve köprüde kabul edilmiş sayılmaz.
@@ -55,8 +70,8 @@ export function useCerceveGorunumu({ cerceve, kok, koken, menuler = IKINCI_MENU_
       },
     });
     kopru.current = k;
-    return () => { k.kapat(); kopru.current = null; };
-  }, [cerceve, koken, sayaclar]);
+    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); };
+  }, [cerceve, koken, sayaclar, komutlar]);
 
   // Her gezinmede (aynı maddeye yeniden tıklamak dahil) sorulur; köprü aynı görünümü yalnız çerçeve sapmışsa yeniden gönderir.
   useEffect(() => {
@@ -89,6 +104,7 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
   const hedef = useRef({ postMessage: (ileti: unknown) => { yanitla.current?.(ileti); } });
   const kopru = useRef<KabukKoprusu | null>(null);
   const sayaclar = useCerceveSayacYazici(kok);
+  const komutlar = useCerceveKomutlari(kok, kopru);
 
   useEffect(() => {
     const k = kabukKoprusuKur({
@@ -96,6 +112,7 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
       cerceve: () => (yanitla.current === null ? null : hedef.current as unknown as Window),
       koken: OPAK_KOKEN,
       sayaclar,
+      komutlar,
       sahibeGit: (yol) => { if (guncel.current.gorunur && sahibinSayfasiMi(yol)) void guncel.current.gezin(yol); },
       gorunumDegisti: (yeni) => {
         const madde = guncel.current.maddeler.find((m) => m.anahtar === yeni);
@@ -105,8 +122,8 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
       },
     });
     kopru.current = k;
-    return () => { k.kapat(); kopru.current = null; };
-  }, [sayaclar]);
+    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); };
+  }, [sayaclar, komutlar]);
 
   useEffect(() => {
     if (gorunum !== null) kopru.current?.gorunumGonder(gorunum);
