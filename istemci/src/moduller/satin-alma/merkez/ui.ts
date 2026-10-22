@@ -1460,7 +1460,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && $$<HTMLElement>(".menu-list").some(m => !m.hidden)) { closeMenus(); return; }
   if (e.key === "Escape") { if (BULK && !BULK.inline) bulkClose(); else if ($("#modal-root").innerHTML) closeModal(); else if (MK.open) { MK.open = false; renderMarket(); } else $("#gres").hidden = true; }
   if (e.key === "Enter" && t.matches("li[data-act], .card[data-act]")) t.click();
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("#gsearch").focus(); }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z" && UNDO.pending && !t.closest("input, textarea, select, [contenteditable]")) { e.preventDefault(); undoLast(); }
   if (e.key === "Enter" && t.id === "gsearch") { const b = $("#gres button"); if (b) b.click(); }
 });

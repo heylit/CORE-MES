@@ -24,6 +24,24 @@ const YENI = '00000000-0000-4000-8000-000000000102';
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('Merkez bağlama', () => {
+  // Karar 102 a: Ctrl K yalnız kabuğun ortak paletidir; satın alma tuşu almaz, kendi arama kutusu yerinde kalır.
+  it('Ctrl K kabuğa bırakılır: tuş durdurulmaz, odak satın alma aramasına geçmez; arama kutusu yerinde', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    const icerik = kok.querySelector<HTMLElement>('#main')!;
+    for (const ayar of [{ ctrlKey: true }, { metaKey: true }]) {
+      const tus = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true, ...ayar });
+      icerik.dispatchEvent(tus);
+      expect(tus.defaultPrevented).toBe(false);
+    }
+    expect(document.activeElement?.id).not.toBe('gsearch');
+    expect(kok.querySelector('#gsearch')).not.toBeNull();
+    kapat();
+  });
+
   it('ekran yeniden açılınca başka sayfada açılan talep sunucudan alınır; yenileme düşerse eldeki talepler kalır', async () => {
     const cevaplar = [() => json(200, acilis([talep(ILK, 'ST-2026-001')])), () => json(200, acilis([talep(ILK, 'ST-2026-001'), talep(YENI, 'ST-2026-002')])),
       () => json(500, { hata: { kod: 'SUNUCU', ileti: 'x' } })];
