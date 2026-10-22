@@ -7,7 +7,7 @@ const sdmDegisti = (a, b) => (a == null ? null : +a) !== (b == null ? null : +b)
 const sdmTezSecenek = f => () => S.D.tezgahlar.map(t => [t.id, `${t.id} · ${t.ad} · ${f(t)}`]);
 function sdmPlanToplam() {
   const t = tmPlanMaliyet(); if (!t) return null;
-  return { t, top: t.mal - (t.talas || 0) + t.isl + t.ayar + t.gg + t.fas + t.mesTop + t.fin + t.tah + t.gec };
+  return { t, top: t.mal - (t.talas || 0) + t.isl + t.ayar + t.gg + t.fas + (t.mesTop || 0) + t.fin + t.tah + t.gec };
 }
 const sdmKilitKutu = () => ({ simge: 'lock', ad: 'Fiyat ve maliyet', deger: 'Kilitli', not: 'müdür ve yönetici görür ve girer' });
 const sdmKilitIs = () => ({ simge: 'lock', metin: 'Bu sayfadaki tutarları müdür ya da yönetici girer', neden: 'Fiyat, maliyet ve kâr bilgisi yalnız müdür ve yöneticiye açıktır. Planlama sayfaları sizin için açık.', act: 'git', v: 'tahta', dugme: 'Planlama motoru', dsimge: 'gantt' });

@@ -210,7 +210,7 @@ function tmPlanMaliyet() {
   const W = wipHesap(p, stOf(), cx); const MP = ymMesaiPay(p, cx); const t = { mal: 0, talas: 0, isl: 0, ayar: 0, gg: 0, fas: 0, mes: 0, fin: 0, tah: 0, gec: 0, eksik: 0 };
   for (const s of S.D.siparisler) { if (s.havuz) continue; const x = ymSipMaliyet(s, p, cx, W, MP); if (!x) continue; if (x.eksik.length) t.eksik++;
     for (const k of ['mal', 'talas', 'isl', 'ayar', 'gg', 'fas', 'mes', 'gec']) t[k] += +x[k] || 0; if (x.bek) { t.fin += x.bek.fin; t.tah += x.bek.tah; } }
-  t.mesTop = (S.ekMesai || []).reduce((a, e) => a + ymMesaiTL(S.D, cx, e), 0);
+  const ml = (S.ekMesai || []).map(e => ymMesaiTL(S.D, cx, e)); t.mesTop = ml.some(x => x == null) ? null : ml.reduce((a, x) => a + x, 0);
   return t;
 }
 { const mg = YM_GORUNUM.maliyet; YM_GORUNUM.maliyet = () => { const h = mg(); if (!agFiyatGorur()) return h; const t = tmPlanMaliyet(); if (!t) return h;

@@ -204,12 +204,13 @@ function ymTalas(D, s) {
   const t = (kg - +u.netKg) * s.adet; if (!(t > 0)) return { kg: 0, tl: 0 };
   return { kg: t, tl: tl / kg * t };
 }
-/* ek mesai bedeli, mesai vardiyasında o tezgâhta çalışan işlere çalıştıkları saat oranında dağıtılır */
+/* ek mesai bedeli, mesai vardiyasında o tezgâhta çalışan işlere çalıştıkları saat oranında dağıtılır; bedeli bilinmeyen vardiyadaki işin payı null */
 function ymMesaiPay(p, cx) {
   const out = {}; if (!p || !cx) return out; const D = S.D;
   for (const e of S.ekMesai || []) { const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!v) continue; const a = e.gun * 24 + hm(v.bas), b = a + ymVH(D, e.vardiya);
     const pay = {}; let top = 0; for (const r of Object.values(p.ops)) { if (r.m !== e.m) continue; const h = Math.min(b, r.C) - Math.max(a, r.S); if (h > 0) { pay[r.job] = (pay[r.job] || 0) + h; top += h; } }
-    const tl = ymMesaiTL(D, cx, e); if (!top || !tl) continue; for (const j in pay) out[j] = (out[j] || 0) + tl * pay[j] / top; }
+    const tl = ymMesaiTL(D, cx, e); if (!top) continue; if (tl == null) { for (const j in pay) out[j] = null; continue; }
+    for (const j in pay) if (out[j] !== null) out[j] = (out[j] || 0) + tl * pay[j] / top; }
   return out;
 }
 function ymSipMaliyet(s, p, cx, W, MP) {
@@ -227,8 +228,8 @@ function ymSipMaliyet(s, p, cx, W, MP) {
   const erken = J.C != null && due != null ? Math.max(0, due - J.C) : 0;
   const tal = ymTalas(S.D, s); const talas = tal && tal.tl > 0 ? tal.tl : 0;
   const bek = W && W.J[s.id] ? W.J[s.id] : null;
-  const mes = MP ? MP[s.id] || 0 : 0;
-  const top = (mal || 0) - talas + isl + ayar + gg + fas + mes;
+  const mes = MP && MP[s.id] !== undefined ? MP[s.id] : 0; if (mes === null) eksik.push('mesai ücreti');
+  const top = (mal || 0) - talas + isl + ayar + gg + fas + (mes || 0);
   const gec = J.T > 0.05 ? agGecTL(agBedel(S.D, s), J.T) : 0;
   return { mal, talas, talasKg: tal ? tal.kg : null, isl, ayar, gg, mes, fas, fin, bek, top, eksik: [...new Set(eksik)], tutar, gec, T: J.T, erken, kar: tutar == null || eksik.length ? null : tutar - top, net: tutar == null || eksik.length ? null : tutar - top - gec - (fin || 0) - (bek ? bek.tl : 0) };
 }
@@ -333,7 +334,7 @@ function ymOlc(st, mod) {
   const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, yon, cx, true); p0.cx = p0.cx || cx;
   const L = lns(st, p0, null, { ms: 300, seed: 11, free: true }); const e0 = evaluate(p0, st, null, true);
   const p = cmpEv(L.e, e0) > 0 ? L.plan : p0; p.cx = p.cx || cx; slack(p, cx); const e = evaluate(p, st, null, true);
-  return { p, e, cx, gec: ymGecTL(e), diger: e.tl - e.mesaiTL, fail: (p.fail || []).length };
+  return { p, e, cx, gec: ymGecTL(e), diger: e.tl - (e.mesaiTL || 0), fail: (p.fail || []).length };
 }
 /* darboğaz saatinin TL değeri: tezgâhta tamponsuz kalan geç işlerin 1 saatlik gecikme bedelleri toplamı */
 function ymDarbogaz(p, cx, ev) {

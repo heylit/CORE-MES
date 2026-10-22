@@ -391,7 +391,9 @@ function evaluate(plan,st,ref,fast){
     const p0=prev(ref),p1=prev(plan);
     for(const id in plan.ops){const r=plan.ops[id],b=ref.ops[id];if(!b||r.pin)continue;if(b.m!==r.m||(!r.fas&&p0[id]!==p1[id])||Math.abs(b.S-r.S)>8)chg++;}}
   let mesaiH=0;for(const e of st.ekMesai||[]){const v=cx.D.vardiyalar.find(x=>x.id===e.vardiya);if(v){let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;mesaiH+=h;}}
-  const mesaiTL=mesaiH*(+A.mesaiUcret||0);
+  // mesai ücreti girilmemişse ek mesainin bedeli bilinmez (null); amaçtaki TL yalnız bilinen maliyeti toplar
+  const mUc=A.mesaiUcret==null||A.mesaiUcret===''||!isFinite(+A.mesaiUcret)?null:+A.mesaiUcret;
+  const mesaiTL=!mesaiH?0:mUc==null?null:mesaiH*mUc;
   const stab=chg*w.lam;
   let idle=0;const util={};
   if(!fast)for(const m in cx.M){const M=cx.M[m];const a=Object.values(plan.ops).filter(r=>r.m===m).sort((x,y)=>x.S-y.S);
@@ -400,7 +402,7 @@ function evaluate(plan,st,ref,fast){
     for(let i=1;i<a.length;i++){const g0=Math.max(a[i-1].C,st.now),g1=a[i].S;if(g1>g0)idle+=workIn(M.rw,g0,g1);}}
   // sıralı amaç: 1 ağırlıklı gecikme, 2 değişiklik, 3 ayar süresi, 4 bilinen TL maliyet
   // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir
-  const tl=cost+mesaiTL;const lex=[wT,wB,chg,suH,tl];Z=-wT;
+  const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl];Z=-wT;
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
@@ -549,7 +551,7 @@ function propose(st,base,ev,opts={}){
       if(cx.days[d].vard.length&&!cx.days[d].vard.includes('V3')&&ok('V3')&&fits(d,'V3')){c2.ekMesai.push({m,gun:d,vardiya:'V3'});added.push(m+' '+fmtDT(cand.D,d*24).slice(0,9)+' gece');n++;}
       const e=d+1;if(e<HDAYS&&!cx.days[e].vard.length&&fits(e,v1)){c2.ekMesai.push({m,gun:e,vardiya:v1});added.push(m+' '+fmtDT(cand.D,e*24).slice(0,9)+' sabah');n++;}}}
     if(added.length){const p=fill(c2,base,{},Math.min(800,opts.budget||800),fasonM?[{fasonM}]:[]).plan;
-    list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret} TL/sa); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
+    list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret==null||cand.D.ayarlar.mesaiUcret===''?'mesai ücreti girilmemiş':cand.D.ayarlar.mesaiUcret+' TL/sa'}); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
   list.forEach(x=>{x.st=x.st||cand;x.ev=evaluate(x.plan,x.st,base);});
   // fazla mesai yalnız haftalık bütçe tanımlıysa önerilir; bütçe 0 ise gösterilir
   const ok=x=>(+st.w.mesaiHafta>0)||x.id!=='mesai';

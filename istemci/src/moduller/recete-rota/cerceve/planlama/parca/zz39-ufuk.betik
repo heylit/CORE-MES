@@ -5,8 +5,8 @@
      her adım en hızlı tezgâhında (ayar + adet × çevrim) ÷ verim saat, tezgâhın günlük açık saatine bölünüp iş günü olarak; üstüne adım başı
      bekleme. Fason adım fasoncunun süresi + çıkış gününe ortalama bekleme. Başlangıç bugünden önceye düşerse zincir bugüne kaydırılır ve
      sipariş "termine yetişmiyor" sayılır. Bağ, örtüşme ve tezgâh yarışı yok: kaba yüktür, sıra değildir.
-   - Öngörü: Yıllık plan sayfasının tahmin ayarı. "Geçmişten": talepHizi (kapanmış ve açık siparişlerin giriş tarihinden hız); en az
-     12 haftalık giriş yoksa öngörü üretilmez ve sayfa "veri yetersiz" der. "Elle":
+   - Öngörü: Yıllık plan sayfasının tahmin ayarı. "Geçmişten": talepHizi (kapanmış ve açık siparişlerin giriş tarihinden hız); 12 haftadan
+     az giriş varsa hız düşük güvenlidir ve sayfa bunu söyler; hiç giriş yoksa öngörü üretilmez. "Elle":
      aylık aile tahmini ürüne bölünür. Aynı ürün ve aydaki siparişler tahmini tüketir
      (ay tahmini − ay siparişi, sıfırdan küçükse sıfır), kalan ay sonu terminli tek parti olarak aynı geriye zamanlamayla yüke girer. Motora girmez (karar 43 a).
    Kapasite: tezgâhın vardiya ve çalışma günü takviminden, tatil düşülerek, × kullanılabilirlik (Genel gider sayfasındaki verim). Kişi sınırı yok.
@@ -166,8 +166,8 @@ function sUfuk() {
     v.failJ.size ? `Planda adımı planlanamayan ${v.failJ.size} sipariş var; o adımlar yüke girmedi.` : '',
     v.fasN ? `Fason işlemler (${v.fasN}) tezgâh yükü değildir, sayılmadı.` : '',
     U.ufOngoru ? (Y.tahmin === 'elle' ? 'Öngörü: elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.'
-      : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.`
-      : `Öngörü yok: geçmiş veri yetersiz (en az ${TALEP_GECMIS_ENAZ} hafta sipariş girişi gerekir${v.gec.hafta > 0 ? `, ${sayi(v.gec.hafta, 0)} hafta var` : ''}). Termin ve plan hız sayılmaz. Yıllık plan sayfasında "Elle" seçip aylık tahmin girin.`) : 'Öngörü gizli.',
+      : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin ${v.gec.dusuk ? `${sayi(v.gec.hafta, 0)} haftalık girişi, en az ${TALEP_GECMIS_ENAZ} haftaya bölündü (düşük güven, giriş geldikçe düzelir)` : `son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı`}, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Termin ve plan hız sayılmaz. Ayarı Yıllık plan sayfasındadır.`
+      : 'Öngörü yok: sipariş girişi yok. Termin ve plan hız sayılmaz. Yıllık plan sayfasında "Elle" seçip aylık tahmin girin.') : 'Öngörü gizli.',
   ].filter(Boolean).join(' ');
   const ayarK = kart(`${ic('gear', 'k')} Varsayımlar`, `<div class="pm-ym-alanlar"><label class="pm-ym-alan"><span>Adım başı bekleme, iş günü</span>${ymSayi('uf-kuyruk', A.kuyruk, 'Adım başı bekleme, iş günü', { adim: 0.5, max: 10, veri: yaz ? '' : 'disabled' })}</label>
     <div class="pm-ym-alan"><span>Öngörü malzeme talebine</span><div class="pm-seg" role="group" aria-label="Öngörü malzeme talebine">${[['false', 'Girmesin'], ['true', 'Girsin']].map(([k, a]) => `<button type="button" data-act="uf-ongmal" data-v="${k}" aria-pressed="${String(A.ongoruMalzeme) === k}" ${yaz ? '' : 'disabled'}>${a}</button>`).join('')}</div></div></div>
@@ -183,7 +183,7 @@ function ufYukHtml(v, lejl) {
   const kpi = ymKpi([
     ['gantt', 'Plan yükü', `${sayi(top('plan'), 0)} sa`, `ilk ${Math.round(HDAYS / 7)} hafta, motorun planı`],
     ['list', 'Plan dışı sipariş', `${sayi(top('kaba'), 0)} sa`, `${v.kaba.length} sipariş, kaba`],
-    ...(on ? [ylAyar().tahmin !== 'elle' && !v.gec.hiz ? ['chart', 'Öngörü', 'veri yetersiz', `en az ${TALEP_GECMIS_ENAZ} hafta geçmiş gerekir; Yıllık planda elle girilebilir`, 'uyari'] : ['chart', 'Öngörü', `${sayi(top('ongoru'), 0)} sa`, `${v.ong.length} ürün-ay partisi`]] : []),
+    ...(on ? [ylAyar().tahmin !== 'elle' && !v.gec.hiz ? ['chart', 'Öngörü', 'giriş yok', 'sipariş girişi yok; Yıllık planda elle girilebilir', 'uyari'] : ylAyar().tahmin !== 'elle' && v.gec.dusuk ? ['chart', 'Öngörü', `${sayi(top('ongoru'), 0)} sa`, `düşük güven: ${sayi(v.gec.hafta, 0)} hafta giriş`, 'uyari'] : ['chart', 'Öngörü', `${sayi(top('ongoru'), 0)} sa`, `${v.ong.length} ürün-ay partisi`]] : []),
     ['alert', 'Kapasiteyi aşan', `${asim} hücre`, enDolu && enDolu.o > 0 ? `en dolu: ${esc(enDolu.g)} ${esc(v.H[enDolu.i].ad)} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', asim ? 'uyari' : 'tamam'],
     ['clock', 'Termine yetişmeyen', `${gec.length} sipariş`, gec.length ? 'plan dışı; bugün başlasa bile' : 'plan dışı siparişlerde yok', gec.length ? 'hata' : 'tamam'],
   ]);

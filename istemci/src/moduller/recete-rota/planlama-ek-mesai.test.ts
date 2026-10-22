@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
 
-// Ek mesai planı sayfası (zu-yan-sayfalar sMesaiPlani). Kayıttan kurulan çalışmada plan ayarları (D.ayarlar) hiç yazılmamış olabilir;
-// sayfa o zaman açılır ve mesai ücreti bilinmediği için maliyeti uydurmaz, "—" gösterir. Maliyeti yalnız fiyat gören rol görür.
+// Ek mesai planı sayfası (zu-yan-sayfalar sMesaiPlani), motorun mesai bedeli (engine evaluate) ve Maliyetler sayfasının mesai payı. Kayıttan kurulan çalışmada plan ayarları (D.ayarlar) hiç yazılmamış olabilir;
+// sayfa o zaman açılır ve mesai ücreti bilinmediği için maliyeti uydurmaz, "—" gösterir; motor ve sipariş maliyeti de sıfır saymaz. Maliyeti yalnız fiyat gören rol görür.
 // Parçalar sayfanın geri kalanı yerine küçük taklitlerle koşar. Veriler uydurmadır.
 
 type Nesne = Record<string, unknown>;
-interface Sayfa { ac: (ayarlar: Nesne | undefined, rol: string) => string; mesaiTL: (ayarlar: Nesne | undefined) => number | null }
+interface Maliyet { mesaiTL: number | null; tl: number; maliyet: { mes: number | null; eksik: string[] }; plan: { mes: number; mesTop: number | null } }
+interface Sayfa {
+  ac: (ayarlar: Nesne | undefined, rol: string) => string;
+  mesaiTL: (ayarlar: Nesne | undefined) => number | null;
+  maliyet: (ayarlar: Nesne | undefined, ekMesai: Nesne) => Maliyet;
+}
 
 const KAYIT = {
   version: 7, savedAt: 9,
@@ -47,10 +52,12 @@ function sayfaKur(): Sayfa {
     const kart = (b, i, d = '') => '<section>' + b + i + d + '</section>'; const td = (a, i) => '<td>' + i + '</td>';
     const ic = s => '[' + s + ']'; const kip = () => ''; const rozet = a => '<i>' + a + '</i>'; const dugme = a => '<button>' + a + '</button>';
     const pdKatYaz = () => '×1';
+    const agGecTL = () => 0; let bgKararlar = () => []; let mpSatinalmaPlani = () => '';
     const kim = () => ({ ad: 'Ornek', rol: ROL }); const agFiyatGorur = () => ['mudur', 'yonetici'].includes(ROL);
     ${planlamaMotoru()}
     ${planlamaParcasi('zu-yan-sayfalar')}
-    const cxAl = () => compile(stKur(S));
+    ${planlamaParcasi('zv-termin')}
+    const stOf = () => stTamKur(S); const cxAl = () => compile(stKur(S));
     const kur = ayarlar => {
       const g = girdiKur(${JSON.stringify(CALISMA)}, ${JSON.stringify(KAYIT)}, ${JSON.stringify(KAYNAK)}, '2026-10-19');
       S = g.S; if (ayarlar === undefined) delete S.D.ayarlar; else S.D.ayarlar = ayarlar; S.ekMesai = [${JSON.stringify(EK_MESAI)}];
@@ -58,6 +65,11 @@ function sayfaKur(): Sayfa {
     return {
       ac: (ayarlar, rol) => { kur(ayarlar); ROL = rol; return sMesaiPlani(); },
       mesaiTL: ayarlar => { kur(ayarlar); return ymMesaiTL(S.D, cxAl(), S.ekMesai[0]); },
+      maliyet: (ayarlar, ek) => {
+        kur(ayarlar); S.ekMesai = [ek]; const st = stKur(S); const p = schedule(st, 'dagit', null); const e = evaluate(p, st, null, true);
+        p.J = e.J; S.plan = p; const cx = compile(st); const s = S.D.siparisler[0];
+        return { mesaiTL: e.mesaiTL, tl: e.tl, maliyet: ymSipMaliyet(s, p, cx, null, ymMesaiPay(p, cx)), plan: tmPlanMaliyet() };
+      },
     };`;
   return new Function(govde)() as Sayfa;
 }
@@ -91,5 +103,27 @@ describe('ek mesai planı: mesai ücreti', () => {
     expect(h).toContain('müdürde');
     expect(h).not.toContain('Maliyet</th>');
     expect(h).not.toContain(' TL<');
+  });
+
+  // pazartesi gündüz vardiyası: siparişin işlemleri bu pencerede çalışır
+  const PZT = { m: '100', gun: 0, vardiya: '3' };
+
+  it('mesai ücreti yoksa motor ek mesai bedelini sıfır değil bilinmez sayar; amaçtaki TL yalnız bilinen maliyettir', () => {
+    const yok = sayfa.maliyet(undefined, PZT);
+    expect(yok.mesaiTL).toBeNull();
+    const var_ = sayfa.maliyet({ mesaiUcret: 1000 }, PZT);
+    expect(var_.mesaiTL).toBe(8000);
+    expect(var_.tl - yok.tl).toBe(8000);
+  });
+
+  it('mesai ücreti yoksa sipariş maliyetinde mesai payı eksik yazılır, plan toplamında ek mesai bilinmez', () => {
+    const yok = sayfa.maliyet(undefined, PZT);
+    expect(yok.maliyet.mes).toBeNull();
+    expect(yok.maliyet.eksik).toContain('mesai ücreti');
+    expect(yok.plan.mesTop).toBeNull();
+    const var_ = sayfa.maliyet({ mesaiUcret: 1000 }, PZT);
+    expect(var_.maliyet.eksik).not.toContain('mesai ücreti');
+    expect(var_.maliyet.mes).toBeGreaterThan(0);
+    expect(var_.plan.mesTop).toBe(8000);
   });
 });
