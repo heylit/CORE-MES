@@ -12,6 +12,7 @@ izinli ve reddeden yönü birlikte ölçer. Kural testleri `sevkiyat.test.ts` (g
 | `POST /sevkiyat/araclar/ekle`, `/:id/guncelle`, `/:id/pasiflestir` | `sevkiyat.tanim-yaz` | ad ve plaka tekliği; müsaitlik; onaylı plandaki araç değişmez | ad tekliği; müsaitlik | aynı testler; açık soru 12 |
 | `POST /sevkiyat/isler/ekle`, `/:id/guncelle`, `/:id/iptal-et` | `sevkiyat.is-yaz` | fabrika iş noktası olmaz; tür-nokta uyumu; yük; onaylı plandaki iş değişmez | iş kuralları | aynı testler; onaylıda değişiklik reddi |
 | `GET /sevkiyat/bekleyenler` | `sevkiyat.oku` | yalnız okuma | bekleyen.test.ts | operatör 403 |
+| `GET /sevkiyat/urun-sevkleri` (kart #96) | `sevkiyat.oku` | yalnız okuma; emir ya da kart verilir, ikisi birden ya da hiçbiri 400; en çok 50 satır | planlama 200, işe çevrilmemiş ve havuzdaki iş, tamamlanan düşer (bekleyen.test.ts) | operatör 403; parametresiz ve iki parametreli 400 |
 | `POST /sevkiyat/bekleyenler/:id/ise-cevir`, `/:id/kaldir` | `sevkiyat.is-yaz` | kayıt kilitlenir; kapalı kayıt 409; iş kuralları `isler/ekle` ile aynı; kaldıran kişi yazılır | depo 200 | operatör 403; ikinci çevirme 409; 404 |
 | `POST /sevkiyat/isler/:id/durum` | `sevkiyat.is-yaz` | yalnız izinli geçişler; başka plana alınmış işin sonucu geri alınmaz | havuz | havuz; onaylı planda yalnız sonuç |
 | `POST /sevkiyat/planlar/:tarih/dagit`, `/yerlestir`, `/kaydet` | `sevkiyat.plan-yaz` | sürüm (409); onaylı plan kilitli; uç yerleşimi; eşzamanlı ilk kayıt | gün planı | sürüm; eşzamanlı ilk kayıt |

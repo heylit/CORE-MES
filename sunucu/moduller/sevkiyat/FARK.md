@@ -182,3 +182,11 @@ npm run sinir -- --modul sevkiyat → 0 sınır ihlali; göç damgası 0 ihlal; 
 ## Kart #1323: sürüm denetimi
 - Göç `20261014203000_sevkiyat_surum.sql`: `sevkiyat_noktasi`, `sevkiyat_araci`, `sevkiyat_isi` için `surum integer NOT NULL DEFAULT 1` (kullanıcı onayı 14 Ekim, karar kartı "Eklensin"); yoldaki işin değişmezlik tetikleyicisi sürümü içerik saymaz.
 - Güncelleme uçları sürüm ister; her yazma (pasifleştirme, iptal, plana alma, durum) sürümü artırır. Ekran formun açıldığı sürümü gönderir.
+
+## Kart #96: okutulan ürünün sevkleri (soru 92 b, 97 a, 98 a)
+- Yeni okuma ucu `GET /sevkiyat/urun-sevkleri?uretimEmriId=` ya da `?malzemeNo=` (`sevkiyat.oku`): emrin ya da kartın kaldırılmamış ürün
+  kayıtları; işe çevrilmişse yalnız kapanmamış (tamamlanmamış, iptal edilmemiş) teslimat işi. Göç ve rol x işlem değişmedi.
+- İstemci `disari.ts` ilk kez açıldı: `UrunSevkleri` bölümü. Stok'un Malzeme · Teslim paneli Teslim et altında gösterir (kart #95).
+  Yoldaki ya da havuzdaki iş "Teslim edildi", yoldaki iş "Yapılamadı" ile mevcut durum ucundan (`sevkiyat.is-yaz`) ilerletilir;
+  stok düşümü bugünkü olayla (`urunSevkiDinle`) bir kez yapılır. Taslak plandaki ve işe çevrilmemiş kayıtta düğme yok, nedeni yazılır.
+- VARSAYIM: iş durum ucu sürüm almıyor (bugünkü sözleşme); panel ekranın gördüğü durumu göndermez, geçiş kuralları sunucuda.

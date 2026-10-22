@@ -6,7 +6,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   aracCevabi, aracGovdesi, aracGuncelleGovdesi, araclarCevabi, aramaCevabi, aramaSorgusu, bekleyenBolCevabi, bekleyenBolGovdesi, bekleyenKaldirCevabi, bekleyenlerCevabi, dagitGovdesi, gunPlaniCevabi, haritaCevabi, idParametresi, isCevabi,
   isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
-  trafikCevabi, trafikSorgusu,
+  trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { Arac, GunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { aracMaliyetsiz, gunPlaniMaliyetsiz, korunanOranlar, MALIYET_OKUMA, tekRotaMaliyetsiz } from './kurallar.ts';
@@ -60,6 +60,8 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
     }),
 
     // ---------- bekleme listesi (kart #1310) ----------
+    // Okutulan ürünün sevkleri (kart #96): Malzeme · Teslim panelindeki Sevk bölümü okur; durumu iş durum ucu değiştirir.
+    uc({ yontem: 'GET', yol: '/sevkiyat/urun-sevkleri', yetki: 'sevkiyat.oku', sorgu: urunSevkleriSorgusu, cevap: urunSevkleriCevabi, isle: async ({ db, sorgu }) => ({ sevkler: await servis.urunSevkleri(db, sorgu) }) }),
     uc({ yontem: 'GET', yol: '/sevkiyat/bekleyenler', yetki: 'sevkiyat.oku', cevap: bekleyenlerCevabi, isle: async ({ db }) => ({ bekleyenler: await servis.bekleyenleriListele(db) }) }),
     uc({
       yontem: 'POST', yol: '/sevkiyat/bekleyenler/:id/ise-cevir', yetki: 'sevkiyat.is-yaz', tekrarKorumali: true, parametre: idParametresi, govde: isGovdesi, cevap: isCevabi,

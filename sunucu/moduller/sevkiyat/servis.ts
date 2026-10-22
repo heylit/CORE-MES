@@ -4,7 +4,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import type {
   Arac, AracGovdesi, AramaCevabi, Bekleyen, BekleyenBolCevabi, BekleyenBolGovdesi, FirmaSecenegi, DagitGovdesi, GunPlaniCevabi, Harita, IsDurumuGovdesi, IsGovdesi, Is, IsCevabi, KaydetGovdesi, Nokta, NoktaGovdesi,
-  OzetCevabi, RotaHesabi, TekRotaCevabi, TrafikCevabi,
+  OzetCevabi, RotaHesabi, TekRotaCevabi, TrafikCevabi, UrunSevki,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeAdlari } from '../malzemeler/disari.ts';
@@ -407,6 +407,20 @@ export async function bekleyenleriListele(db: Db): Promise<Bekleyen[]> {
     firmaId: b.firmaId, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
     noktaId: b.firmaId === null ? null : noktalar.get(b.firmaId) ?? null,
     adet: b.adet, istenenTarih: b.istenenTarih, hazirZamani: b.hazirZamani,
+  }));
+}
+
+// Okutulan ürünün sevkleri (kart #96): panel emri (lot okutulduysa) ya da kartı verir; ikisi birden ya da hiçbiri verilmez.
+export async function urunSevkleri(db: Db, s: { uretimEmriId?: number | undefined; malzemeNo?: number | undefined }): Promise<UrunSevki[]> {
+  if ((s.uretimEmriId === undefined) === (s.malzemeNo === undefined)) throw dogrulama('Emir ya da kart verilir, ikisi birden değil.', 'uretimEmriId');
+  const satirlar = await sorgu.okutulanSevkler(db, { uretimEmriId: s.uretimEmriId ?? null, malzemeNo: s.malzemeNo ?? null });
+  const emirler = await emirNolari(db, varolan(satirlar.map((b) => b.uretimEmriId)));
+  const malzemeler = await malzemeAdlari(db, varolan(satirlar.map((b) => b.malzemeNo)));
+  const firmalar = await firmaAdlari(db, varolan(satirlar.map((b) => b.firmaId)));
+  return satirlar.map((b) => ({
+    bekleyenId: b.bekleyenId, uretimEmriId: b.uretimEmriId, emirNo: b.uretimEmriId === null ? null : emirler.get(b.uretimEmriId) ?? null,
+    malzemeAd: b.malzemeNo === null ? null : malzemeler.get(b.malzemeNo) ?? null, adet: b.adet, firmaAd: b.firmaId === null ? null : firmalar.get(b.firmaId) ?? null,
+    is: b.isId === null || b.durum === null || b.tarih === null ? null : { id: b.isId, tarih: b.tarih, durum: b.durum, belgeNo: b.belgeNo },
   }));
 }
 

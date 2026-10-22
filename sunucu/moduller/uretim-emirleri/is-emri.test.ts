@@ -10,8 +10,8 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -258,6 +258,17 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       istek<{ emir: AdimliEmirAyrintisi; hareketId: number } & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie2}/${yol}`, govde, ik);
     const fason = (yol: string, govde?: unknown, ik = randomUUID()) => fasonKisi('depo', yol, govde, ik);
     assert.equal((await fasonKisi('operator', 'fason-gidis', { adet: 1 })).durum, 403);
+    // Kart #97: panelin "Fasona gönder" bölümü sıradaki fason iş emrini okur; yalnız gönderebilen okur.
+    const siradaki = async (kisi = 'depo') => istek<SiradakiFasonCevabi>(kisi, 'GET', `/adimli-emirler/${id}/siradaki-fason`);
+    assert.equal((await siradaki('operator')).durum, 403);
+    const s0 = await siradaki();
+    assert.equal(s0.durum, 200, JSON.stringify(s0.govde));
+    assert.deepEqual(siradakiFasonCevabi.parse(s0.govde).fason, {
+      uretimEmriId: id, emirNo: e.emirNo, isEmriId: ie2, opNo: 20, ad: e.isEmirleri[1]!.ad, firma: s0.govde.fason!.firma,
+      gonderilen: 0, donenSaglam: 0, donenHurda: 0, gonderilebilir: 9,
+    });
+    assert.ok(s0.govde.fason!.firma, 'fason firmasının adı okunur');
+    assert.equal((await istek('depo', 'GET', '/adimli-emirler/2147483647/siradaki-fason')).durum, 404);
     assert.equal((await istek('depo', 'GET', `/adimli-emirler/${id}`)).durum, 200, 'depo fason için emri okur');
     assert.equal((await fason('fason-gidis', { adet: 10 })).govde.mesaj, FASON_GIDIS_ASIMI, 'önceki iş emrinden 9 sağlam çıktı');
     const tekrar = randomUUID();
@@ -297,6 +308,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual([e.isEmirleri[1]?.durum, e.isEmirleri[1]?.saglamAdet], ['tamam', 8]);
     assert.equal(await adimAdedi(), 8, 'fasondan 8 sağlam döndü');
     assert.equal(e.siradaki?.id, ie3);
+    assert.equal(siradakiFasonCevabi.parse((await siradaki()).govde).fason, null, 'sırada fason yoksa boş');
 
     // Son iş emri: sayaç sıfırdan başlar, bitince emir biter.
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);

@@ -8,7 +8,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { bekleyenBolCevabi, bekleyenlerCevabi, isCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import { bekleyenBolCevabi, bekleyenlerCevabi, isCevabi, urunSevkleriCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { Bekleyen, Is } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -185,6 +185,18 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.deepEqual([b.adet, b.malzemeNo, b.malzemeAd, b.firmaId], ['7.0000', urunNo, 'Deneme mamul', null]);
     assert.ok(b.emirNo, 'emir numarası okunur');
 
+    // Kart #96: okutulan ürünün sevkleri emirle ya da kartla okunur; işe çevrilmemiş kayıtta iş yoktur.
+    const sevkler = async (sorgu: string) => {
+      const c = await istek('planlama_proje', 'GET', `/sevkiyat/urun-sevkleri?${sorgu}`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return urunSevkleriCevabi.parse(c.govde).sevkler.filter((x) => x.bekleyenId === b.id);
+    };
+    assert.deepEqual(await sevkler(`uretimEmriId=${e.id}`), [{ bekleyenId: b.id, uretimEmriId: e.id, emirNo: b.emirNo, malzemeAd: 'Deneme mamul', adet: '7.0000', firmaAd: null, is: null }]);
+    assert.equal((await sevkler(`malzemeNo=${urunNo}`)).length, 1);
+    assert.equal((await istek('planlama_proje', 'GET', '/sevkiyat/urun-sevkleri')).durum, 400, 'emir ya da kart verilir');
+    assert.equal((await istek('planlama_proje', 'GET', `/sevkiyat/urun-sevkleri?uretimEmriId=${e.id}&malzemeNo=${urunNo}`)).durum, 400, 'ikisi birden verilmez');
+    assert.equal((await istek('operator', 'GET', `/sevkiyat/urun-sevkleri?uretimEmriId=${e.id}`)).durum, 403, 'sevkiyat okuması olmayan göremez');
+
     const musteri = await o().sahip.tek<{ id: number }>("INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam) VALUES ('Deneme Müşteri', 'musteri', 40.2, 29.2) RETURNING id");
     const tarih = (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date + 1, 'YYYY-MM-DD') AS g"))!.g;
     assert.equal((await istek('operator', 'POST', `/sevkiyat/bekleyenler/${b.id}/ise-cevir`, isGovdesi(tarih, musteri!.id))).durum, 403);
@@ -194,6 +206,11 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     const is = isCevabi.parse(c.govde).is;
     assert.deepEqual([is.tarih, is.birakisNoktasiId, is.paletSayisi, is.durum], [tarih, musteri!.id, 2, 'havuzda']);
     assert.equal((await bekleyenler()).some((x) => x.id === b.id), false, 'işe çevrilen listeden düşer');
+    assert.deepEqual((await sevkler(`uretimEmriId=${e.id}`)).map((x) => x.is), [{ id: is.id, tarih, durum: 'havuzda', belgeNo: null }], 'işe çevrilen kayıt işiyle okunur');
+    const kapat = await istek('depo', 'POST', `/sevkiyat/isler/${is.id}/durum`, { durum: 'tamamlandi', tarih, not: null });
+    assert.equal(kapat.durum, 200, JSON.stringify(kapat.govde));
+    assert.deepEqual(await sevkler(`uretimEmriId=${e.id}`), [], 'tamamlanan işin kaydı düşer');
+    assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${is.id}/durum`, { durum: 'havuzda', tarih, not: null })).durum, 200);
     assert.equal((await istek('depo', 'POST', `/sevkiyat/bekleyenler/${b.id}/ise-cevir`, isGovdesi(tarih, musteri!.id))).durum, 409);
     assert.equal((await istek('depo', 'POST', `/sevkiyat/bekleyenler/${b.id}/kaldir`)).durum, 409);
 
