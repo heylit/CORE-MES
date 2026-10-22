@@ -75,4 +75,19 @@ describe('QR okut akışı', () => {
     expect(panelOkutuldu(d, KISI)).toMatchObject({ tur: 'akis', durum: { adim: 'onay' } });
     expect(panelOkutuldu(OKUT_BASI, { tur: 'bilinmiyor', kod: 'ZZZ' })).toEqual({ tur: 'akis', durum: { adim: 'ne', ileti: 'Kod tanınmadı: ZZZ' } });
   });
+  it('kart #123: refakat kartı okutulunca kaynak kartı taşır, yol her zaman teslimdir, gövdeye kart girer; yalnız gelen varsa teslim al söylenir', () => {
+    const refakat = {
+      id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
+      partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: 'D-1', sertifikaNo: null, verilen: '0', durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00',
+    };
+    const kartli = { ...(malzeme([yer(5, 'kabul')]) as Extract<OkutCozCevabi, { tur: 'malzeme' }>), refakat, gelenler: [] };
+    const d = okutuldu(OKUT_BASI, kartli);
+    expect(d).toMatchObject({ adim: 'nereye', kaynak: { refakatPartisiId: 12 } });
+    const k = (d as Extract<typeof d, { adim: 'nereye' }>).kaynak;
+    expect(okutYolu(k, yer(6, 'raf_gozu'), true)).toBe('teslim');
+    expect(teslimGovdesi(k, yer(9, 'istasyon', 3), '2', 'k-1')).toMatchObject({ refakatPartisiId: 12, hedef: { istasyonId: 3 } });
+    expect(teslimGovdesi(kaynak(yer(5, 'kabul')), yer(9, 'istasyon', 3), '2', 'k-1')).not.toHaveProperty('refakatPartisiId');
+    const gelen = { ...kartli, yerler: [], gelenler: [{} as never] };
+    expect(okutuldu(OKUT_BASI, gelen)).toEqual({ adim: 'ne', ileti: 'UE-000001-P1: sana gelen teslim var; aşağıdan teslim al.' });
+  });
 });

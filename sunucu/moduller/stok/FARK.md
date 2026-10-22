@@ -444,3 +444,14 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 | No | Fark | Gerekçe |
 |---|---|---|
 | H1 | Göç `stok_her_gelis_ayri_lot`: `stok_parti_tek` kaldırıldı; mal kabulün her satırı yeni lot açar, aynı tedarikçi parti ya da döküm no ikinci gelişte de ayrı lottur (L3'ün "aynı lota eklenir" kısmı değişti, DEP-21 kalktı). Üretim girişi emrin partisine eklenmeye devam eder (`stok_parti_emir_tek`) | Kullanıcı kararı 22.10 (Soru 119 a): "farklı gün gelse aynı döküm bile olsa farklı lot" |
+
+## Refakat partisi (kart #123)
+
+| No | Fark | Gerekçe |
+|---|---|---|
+| R1 | Göç `stok_refakat_partisi`: yeni tablo; emir + depodan verilen lot, emir başına sıra, açık/iptal. Bir emre bir lot için tek açık parti | Kullanıcı kararları 22.10: Soru 120 b (kart = emir + gelen lot), Soru 122 a (tablo stokun) |
+| R2 | `POST /stok/refakat-partileri/ac` (stok.transfer): lot ya okutulan lot etiketinden (`LOT:`) ya da lot okutularak eklenmiş depo sepeti satırından gelir (satır karta geçince sepetten çıkar); kart etiketi ya da başka kod reddedilir; aynı emir ve lotun açık partisi varsa o döner, başka lot yeni parti açar. Üretim partisi (emrin çıktısı) kart açmaz | Soru 116 b; "aynı lotun kalanı aynı kartla, iz değişmez, sayı artar" |
+| R3 | `GET /stok/refakat-partileri/:id`, `/:id/kart` (stok okuma), `GET /stok/uretim-emirleri/:id/refakat-partileri`; `POST /:id/iptal-et` (stok.transfer) yalnız hiç teslimi olmayan kartta | Kart basımı ve yanlış açılan kartın düzeltilmesi |
+| R4 | `teslimGonder` isteğe bağlı `refakatPartisiId` alır: lot ve emir karttan yazılır; gövdedeki farklı lot, emir ya da malzeme ve iptal kart reddedilir | Teslim kartla yapılır |
+| R5 | İki çözücü `RP:<id>` okur: Okut paneli lotun alabileceği yerlerini, kartın partisini ve kişinin alabileceği, o kartla yoldaki teslimleri verir; Okut sayfası lotun çözümüne kartı ekler Kişiye kartla yoldaki lotun etiketi okutulursa "kartı okutun" denir (400). Okutarak alma kartı da okur | Soru 118 a: alan kartı okutup alır, liste kalır; kullanıcı akışı 14:16 |
+| R6 | İstemci: lot okutma sonucunda ve depo sepetindeki lot satırında "Refakat kartına geç" (emir seçilir); kart 100x150 mm stokun kendi belgesiyle basılır (QR `RP:<id>`, lot, döküm, sertifika); kart okutulunca teslim her zaman teslim kaydıdır (taşıma değil), kartla gelen teslim sonuçtan alınır | Kullanıcı akışı 14:16 |

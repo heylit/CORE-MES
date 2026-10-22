@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { KodCozCevabi, OkutCozCevabi, SepetCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { KodCozCevabi, OkutCozCevabi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.ts';
-import { hataMetni, useIslem, useStokOkur } from './ortak.tsx';
+import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
+import { RefakatAcPenceresi, RefakatKartPenceresi, refakatLotSatiri, refakatMalzemeSatiri } from './RefakatKarti.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
+import { TeslimSatiri } from './TeslimSatiri.tsx';
 
 // Panelde okutulan kod (soru 89): sonuç okuyucunun altında durur, iş buradan seçilir. Gözler, lotlar ve toplam yalnız stok okuması
 // olana (soru 93 a); herkes alabileceği yerdeki serbest miktarı ve kapsamı dışındaki istasyonları görür.
@@ -86,14 +88,35 @@ function DepoSepetineEkle({ c }: { c: Extract<KodCozCevabi, { tur: 'malzeme' | '
   );
 }
 
+// Refakat kartıyla gelen teslim (Soru 118 a): alan kartı okutur, kendisine gelen teslim burada alınır; Teslim al listesi de kalır.
+function KartlaGelenler({ gelenler }: { gelenler: Teslim[] }) {
+  const [alinan, setAlinan] = useState<number[]>([]);
+  const al = useStokKomutu((t: Teslim) => api.post<TeslimCevabi>(`/stok/teslimler/${t.id}/teslim-al`, { surum: t.surum, alinan: t.miktar })
+    .then((c) => { setAlinan((l) => [...l, t.id]); return c; }), 'Teslim alındı.');
+  const kalan = gelenler.filter((t) => !alinan.includes(t.id));
+  if (kalan.length === 0) return alinan.length > 0 ? <p className="tc-stok-bilgi" role="status">Kartla gelen teslim alındı.</p> : null;
+  return (
+    <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Kartla sana gelenler">
+      {kalan.map((t) => (
+        <TeslimSatiri key={t.id} t={t}>
+          <Dugme tur="birincil" simge="download" yukleniyor={al.komut.isPending && al.komut.variables?.id === t.id} onClick={() => al.komut.mutate(t)}>Teslim al</Dugme>
+        </TeslimSatiri>
+      ))}
+      {al.onayPenceresi}
+    </ul>
+  );
+}
+
 export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void }) {
   const c = okunan.cevap;
   const stok = useStokKodCoz(okunan.kod);
   const giris = useIslem('stok.giris'), depocu = useIslem('stok.transfer');
   const cikis = useIslem('stok.cikis'), sevkOkur = useIslem('sevkiyat.oku'), fasoncu = useIslem('uretim-emirleri.fason');
   const sevkeder = cikis || sevkOkur || fasoncu;
+  const [kartAc, setKartAc] = useState(false);
   if (c.tur !== 'malzeme' && c.tur !== 'yer') return null;
   const malzeme = c.tur === 'malzeme' ? c : null;
+  const refakat = malzeme?.refakat ?? null;
   const digerleri = malzeme?.digerIstasyonlar ?? [];
   // Kapsam dışı istasyonun etiketi: oradan okutarak alınır (soru 96 b).
   const uzakIstasyon = c.tur === 'yer' && c.yer.tur === 'istasyon' && c.satirlar === null;
@@ -103,11 +126,13 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
     <section className="tc-stok-is tc-stok-okut-sonuc" aria-label="Okutma sonucu">
       <div className="tc-stok-form">
         <div className="tc-stok-okut-sonuc-bas">
-          <Rozet ton={malzeme ? 'tamam' : 'bilgi'}>{malzeme ? (malzeme.parti ? 'Lot' : 'Malzeme') : KONUM_ETIKETI[c.tur === 'yer' ? c.yer.tur : 'raf_gozu']}</Rozet>
+          <Rozet ton={malzeme ? 'tamam' : 'bilgi'}>{malzeme ? (refakat ? 'Refakat kartı' : malzeme.parti ? 'Lot' : 'Malzeme') : KONUM_ETIKETI[c.tur === 'yer' ? c.yer.tur : 'raf_gozu']}</Rozet>
           <strong>{baslik}</strong>
           {malzeme?.parti && <span className="tc-stok-mono">{malzeme.parti.etiket}</span>}
           <Dugme simge="x" aria-label="Okutma sonucunu kapat" onClick={kapat} />
         </div>
+        {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
+        {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
         {stok.isError && <DurumKutusu durum="hata" mesaj={hataMetni(stok.error)} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">
@@ -124,7 +149,12 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}
           {(digerleri.length > 0 || uzakIstasyon) && <Dugme simge="scan" onClick={() => sec('okutarak-al')}>Okutarak al</Dugme>}
           {depocu && stokCevabi && (stokCevabi.tur === 'malzeme' || stokCevabi.tur === 'lot') && <DepoSepetineEkle key={okunan.kod} c={stokCevabi} />}
+          {depocu && malzeme?.parti && malzeme.parti.uretimEmriId == null && !refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartına geç</Dugme>}
+          {depocu && refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartı</Dugme>}
         </div>
+        {kartAc && malzeme && (refakat
+          ? <RefakatKartPenceresi id={refakat.id} kapat={() => setKartAc(false)} />
+          : <RefakatAcPenceresi kaynak={{ lotKodu: okunan.kod }} ad={`${baslik} · ${malzeme.parti?.etiket ?? ''}`} kapat={() => setKartAc(false)} />)}
       </div>
     </section>
   );
