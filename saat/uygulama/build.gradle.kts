@@ -48,6 +48,20 @@ abstract class KurumKokUret : DefaultTask() {
     }
 }
 
+// Release imzasi (kart #85): anahtar deposu ve parolalar depoda durmaz. Yol `-PimzaDeposu=<depo disi .jks>` ile verilir; parolalar
+// derleyenin kendi ~/.gradle/gradle.properties dosyasindan okunur (saat/gradle.properties depodadir, oraya yazilmaz).
+// Uygulama ve kadran ayni anahtarla imzalanir; anahtar degisirse saat ustune kurmaz.
+val imzaDeposu: File? = providers.gradleProperty("imzaDeposu").orNull?.takeIf { it.isNotBlank() }
+    ?.let { gradle.startParameter.currentDir.resolve(it) }
+
+fun imzaDegeri(ad: String): String? = providers.gradleProperty(ad).orNull?.takeIf { it.isNotEmpty() }
+
+if (imzaDeposu != null) {
+    val depo = rootDir.parentFile.canonicalFile
+    if (!imzaDeposu.isFile) throw GradleException("imzaDeposu dosyasi yok: ${imzaDeposu.path}")
+    if (imzaDeposu.canonicalFile.startsWith(depo)) throw GradleException("imzaDeposu depo disinda olmali: ${imzaDeposu.path}")
+}
+
 if (kurumKok != null) {
     // Kok depo icinde olamaz: kopya yalniz build/ altinda, asli depo disinda kalir.
     val depo = rootDir.parentFile.canonicalFile
@@ -73,9 +87,26 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        if (imzaDeposu != null) {
+            create("kurum") {
+                val parola = imzaDegeri("imzaParolasi") ?: throw GradleException("imzaParolasi yok (~/.gradle/gradle.properties)")
+                storeFile = imzaDeposu
+                storePassword = parola
+                keyAlias = imzaDegeri("imzaAnahtari") ?: throw GradleException("imzaAnahtari yok (~/.gradle/gradle.properties)")
+                // PKCS12 deposunda anahtar parolasi depo parolasiyla aynidir; ayri verilmezse o kullanilir.
+                keyPassword = imzaDegeri("imzaAnahtarParolasi") ?: parola
+            }
+        }
+    }
+
+    // R8 ve kaynak budamasi yalniz release'te: debug derlemesi hizli kalir. Saatte olculen takilmanin buyugu debug derlemesindendi.
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.findByName("kurum")
         }
     }
 
@@ -96,6 +127,11 @@ if (kurumKok != null) {
     androidComponents {
         onVariants { varyant -> varyant.sources.res?.addGeneratedSourceDirectory(uret, KurumKokUret::cikti) }
     }
+}
+
+// Imzasiz release saate kurulmaz: anahtar verilmeden release paketlenmez, sessizce imzasiz APK uretilmez.
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    if (imzaDeposu == null) doFirst { throw GradleException("Release icin -PimzaDeposu=<depo disi .jks> gerekir (saat/README.md).") }
 }
 
 dependencies {

@@ -76,11 +76,12 @@ function AylikStokDegeri() {
 const OKUYAN: readonly Islem[] = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama'];
 
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
-  // Şirket özeti kartlarını stoğu okuyan görür (kart #1085).
-  { anahtar: 'stok-yonetim-deger', sira: 130, bolum: 'yonetim', islem: 'sayfa.stok', veya: OKUYAN, ekran: StokDegeri },
+  // Şirket özeti kartlarını stoğu okuyan görür (kart #1085). Değer kartları finans rakamını görene görünür: değer uçta yalnız
+  // finans.oku ile hesaplanır (#680), öteki okuyanda kart hep boş kalırdı. finans.oku taşıyan her rol stoğu da okur.
+  { anahtar: 'stok-yonetim-deger', sira: 130, bolum: 'yonetim', islem: 'finans.oku', ekran: StokDegeri },
   { anahtar: 'stok-yonetim-kritik', sira: 140, bolum: 'yonetim', islem: 'sayfa.stok', veya: OKUYAN, ekran: KritikEksi },
   { anahtar: 'stok-yonetim-hareket', sira: 620, bolum: 'yonetim', islem: 'sayfa.stok', veya: OKUYAN, ekran: StokHareketi },
-  { anahtar: 'stok-yonetim-aylik-deger', sira: 820, bolum: 'yonetim', islem: 'sayfa.stok', veya: OKUYAN, ekran: AylikStokDegeri },
+  { anahtar: 'stok-yonetim-aylik-deger', sira: 820, bolum: 'yonetim', islem: 'finans.oku', ekran: AylikStokDegeri },
   { anahtar: 'stok-acik-istekler', sira: 200, bolum: 'is', islem: 'stok.transfer', ekran: AcikIstekler },
   { anahtar: 'stok-dusuk', sira: 200, bolum: 'uyari', islem: 'sayfa.stok', veya: OKUYAN, ekran: DusukStok },
   { anahtar: 'stok-eksik-emir', sira: 210, bolum: 'uyari', islem: 'sayfa.stok', veya: OKUYAN, ekran: EksikEmir },

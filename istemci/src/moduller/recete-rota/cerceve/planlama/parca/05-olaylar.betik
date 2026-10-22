@@ -134,11 +134,11 @@ document.addEventListener('submit', e => {
   }
   if (tur === 'kriz') { const { ev, hata } = olayOku(f); if (hata) return hataGoster([hata]); krizHesapla(ev); return; }
   if (tur === 'senaryo-kaydet') {
-    const ad = f.ad.value.trim() || `Senaryo ${S.senaryolar.length + 1}`;
+    const adli = !!f.ad.value.trim(); const ad = f.ad.value.trim() || `Senaryo ${S.senaryolar.length + 1}`;
     if (!S.plan || !planGuncel()) return bildir('Önce güncel veriyle çözün.', 'hata');
     const s = { id: 's' + Date.now().toString(36), ad, durum: 'acik', yazar: kim().ad, zaman: Date.now(), tabanSurum: S.canliSurum, D: clone(S.D), down: clone(S.down), ekMesai: clone(S.ekMesai), locks: clone(S.locks), pref: clone(S.pref), w: clone(S.w), plan: clone(S.plan), ozet: clone(S.plan.ozet), J: clone(S.plan.J) };
     if (f.dataset.sepet && U.taslak && U.taslak.adimlar.length) s.not = 'Sepetten: ' + U.taslak.adimlar.map((x, i) => (i + 1) + '. ' + x.ad).join('; ');
-    S.senaryolar.push(s); if (S.senaryolar.length > 8) S.senaryolar.shift();
+    if (adli) s.adli = true; S.senaryolar.push(s); senKirp(10, s);
     iz('Senaryo kaydedildi', ad); kaydet(); render(); bildir(`"${ad}" kaydedildi.`, 'tamam');
     return;
   }

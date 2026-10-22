@@ -38,7 +38,7 @@ function sdOzet(id) {
 const sdFormKart = (id, f) => `<button type="button" class="pm-sd-fkart" data-act="sd-form" data-v="${esc(id + ':' + f.id)}"><span class="pm-sd-is-sm">${ic(f.simge || 'plus', 'k')}</span><span class="pm-sd-is-m"><b>${esc(f.ad)}</b>${f.ne ? `<small>${esc(f.ne)}</small>` : ''}</span>${ic('chev-right', 'k')}</button>`;
 function sdSonKart() {
   const s = U.sdSon; const yaz = yetkili('plan.yaz');
-  return `<div class="pm-sd-son" role="status"><span class="pm-sd-is-sm">${ic('check', 'k')}</span><span class="pm-sd-is-m"><b>${esc(s.metin)}</b><small>${S.plan && !planGuncel() ? 'Plan bu değişikliği henüz içermiyor. Planı iyileştir deyince yeni plan kurulur; Planlama atölyesinde inceleyip onaya gönderirsiniz.' : 'Kaydedildi.'}</small></span>
+  return `<div class="pm-sd-son" role="status"><span class="pm-sd-is-sm">${ic('check', 'k')}</span><span class="pm-sd-is-m"><b>${esc(s.metin)}</b><small>${S.plan && !planGuncel() ? 'Plan bu değişikliği henüz içermiyor. Planı iyileştir deyince yeni plan kurulur; Planlama stüdyosunda inceleyip onaya gönderirsiniz.' : 'Kaydedildi.'}</small></span>
     <span class="pm-dugmeler">${S.plan && !planGuncel() && yaz ? dugme('Planı iyileştir', 'ekip', { kucuk: true, birincil: true, simge: 'play' }) : ''}${dugme('', 'sd-son-kapat', { kucuk: true, hayalet: true, simge: 'x', ad: 'Kapat' })}</span></div>`;
 }
 function sdGir(id) {
@@ -182,7 +182,7 @@ function sdYardimci() {
     else { const g = gec[0]; durum.push(['clock', 'hata', `${top} siparişten ${gec.length} tanesi geç bitiyor.`, `En çok geciken ${g.s.id}: ${g.T == null ? 'planlanamadı' : saat(g.T) + ' geç'} (termin ${sdZaman(g.s)}).`]); }
   }
   const onay = typeof paOnayda === 'function' ? paOnayda() : []; const fark = typeof paCalismaFarkli === 'function' && paCalismaFarkli();
-  if (onay.length) durum.push(['flag', 'uyari', `Onay bekleyen ${onay.length} plan var.`, kil ? 'Planlama atölyesinde inceleyip onaylayın ya da geri gönderin.' : 'Müdür onaylayınca canlıya geçer.']);
+  if (onay.length) durum.push(['flag', 'uyari', `Onay bekleyen ${onay.length} plan var.`, kil ? 'Planlama stüdyosunda inceleyip onaylayın ya da geri gönderin.' : 'Müdür onaylayınca canlıya geçer.']);
   else if (fark && S.canli) durum.push(['flag', '', 'Üzerinde çalıştığınız plan canlıdan farklı.', 'Canlı plan siz onaya gönderip müdür onaylayana kadar değişmez.']);
   const gorevler = [];
   if (!p && yaz) gorevler.push(['play', 'Planı kur', 'Motor siparişleri sıfırdan yerleştirir.', 'coz', 'sifir']);
@@ -193,7 +193,7 @@ function sdYardimci() {
     gorevler.push(['wrench', 'Tezgâh arızası gir', 'Duran tezgâhın işleri başka tezgâha ya da sonraya kayar.', 'olay-tip', 'ariza']);
     gorevler.push(['box', 'Malzeme gecikti', 'Malzemesi geç gelen işler bekletilir.', 'olay-tip', 'malzeme']);
   }
-  if (p && (yaz || kil)) gorevler.push(['flag', kil && onay.length ? 'Onay bekleyen planı incele' : 'Planı onaya gönder', 'Bütün değişiklikler Planlama atölyesinde karşılaştırılır ve onaylanır.', 'pa-git', '']);
+  if (p && (yaz || kil)) gorevler.push(['flag', kil && onay.length ? 'Onay bekleyen planı incele' : 'Planı onaya gönder', 'Bütün değişiklikler Planlama stüdyosunda karşılaştırılır ve onaylanır.', 'pa-git', '']);
   const sepet = U.taslak ? U.taslak.adimlar : [];
   const son = sepet.slice(-3).map((a, j) => { const i = sepet.length - Math.min(3, sepet.length) + j; return `<li><span class="pm-sd-is-m"><b>${esc(a.ad || 'Değişiklik')}</b>${a.deg ? `<small>${a.deg} iş değişti</small>` : ''}</span>${yaz ? dugme('Geri al', 'taslak-don', { kucuk: true, hayalet: true, simge: 'rotate', veri: `data-v="${i}"`, ipucu: 'Bu değişiklikten öncesine döner' }) : ''}</li>`; }).reverse().join('');
   return `<div class="pm-sd-yrd">
@@ -240,7 +240,7 @@ SADE.ysiparis = {
   nasil: [
     'Plan her siparişin adımlarını rotasındaki tezgâhlara sırayla yerleştirir. Son adımın bittiği saat termini geçerse sipariş geç sayılır.',
     'Bir saatlik gecikmenin önemi siparişin gecikme bedelinden çıkar (ceza, finansman, kâr riski, müşteri sınıfı). Önemli bir siparişi elle çarpanla öne alabilirsiniz.',
-    'Yeni sipariş ya da termin değişikliği planı hemen değiştirmez. Planı iyileştir deyince yeni plan kurulur; canlıya Planlama atölyesinde onaylanınca geçer.',
+    'Yeni sipariş ya da termin değişikliği planı hemen değiştirmez. Planı iyileştir deyince yeni plan kurulur; canlıya Planlama stüdyosunda onaylanınca geçer.',
     'Maliyet ve kâr yalnız müdür ve yöneticide görünür; maliyet plandaki tezgâh, ayar ve fasondan hesaplanır.',
     'Parti bölme, parti taraması ve örtüşme gibi araçlar Tüm ayrıntılar sekmesindedir.',
   ],

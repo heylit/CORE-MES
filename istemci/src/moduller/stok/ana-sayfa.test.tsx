@@ -3,6 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { AylikStokDegeriCevabi, PanelCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { gorunenKartlar } from '../../ortak/rota/ana-sayfa.ts';
 import { anaSayfaKartlari } from './ana-sayfa.tsx';
 import { DEPOCU, json, sunucuKur } from './test-ortak.tsx';
 
@@ -72,9 +73,22 @@ describe('Rol panosu kartları', () => {
     expect(k['stok-dusuk']).toMatchObject({ bolum: 'uyari', islem: 'sayfa.stok' });
     expect(k['stok-dusuk']!.veya).toContain('stok.toplama');
     // #1085: şirket özeti kartlarını stoğu okuyan görür (uyarılarla aynı küme).
-    for (const a of ['stok-yonetim-deger', 'stok-yonetim-kritik', 'stok-yonetim-hareket', 'stok-yonetim-aylik-deger']) {
+    for (const a of ['stok-yonetim-kritik', 'stok-yonetim-hareket']) {
       expect(k[a]).toMatchObject({ bolum: 'yonetim', islem: 'sayfa.stok', veya: k['stok-dusuk']!.veya });
     }
+  });
+
+  it('değer kartları yalnız finans rakamını görene görünür; stoğu okuyan depocu görmez', () => {
+    const k = Object.fromEntries(anaSayfaKartlari.map((x) => [x.anahtar, x]));
+    for (const a of ['stok-yonetim-deger', 'stok-yonetim-aylik-deger']) {
+      expect(k[a]).toMatchObject({ bolum: 'yonetim', islem: 'finans.oku' });
+      expect(k[a]!.veya).toBeUndefined();
+    }
+    const anahtarlari = (islemler: string[]) => gorunenKartlar(anaSayfaKartlari, islemler).map((x) => x.anahtar);
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-deger');
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-aylik-deger');
+    // Şirket özeti bölümü ayrıca bölüm işlemini ister (73 b).
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'finans.oku'])).toEqual(expect.arrayContaining(['stok-yonetim-deger', 'stok-yonetim-aylik-deger']));
   });
 
   it('#1085: şirket özetinde son 7 günün giriş ve çıkışı iki seriyle; değer finans yetkisi olmayana nedeniyle boş; aylık değer boş durumda', async () => {

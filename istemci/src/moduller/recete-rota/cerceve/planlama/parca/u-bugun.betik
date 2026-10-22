@@ -111,7 +111,7 @@ function bgYayin(p) {
   for (const [id, r] of Object.entries(p.ops)) { const e = c.plan.ops[id]; if (!e || e.m !== r.m || Math.abs(e.S - r.S) > 0.25) { deg++; isl.add(r.job); } }
   const o0 = c.plan.ozet, o1 = p.ozet;
   return `<div class="pm-bg-yayin"><p>Yayındaki plan: <b>${esc(c.ad)}</b>, ${esc(c.canliKim || '')}.</p>
-    <ul class="pm-bg-kiyas"><li><small>Yeri değişen iş</small><b class="mono">${deg}</b><span class="pm-kucuk">${isl.size} sipariş</span></li><li><small>Geciken sipariş</small><b class="mono">${o0.late} → ${o1.late}</b></li><li><small>Toplam gecikme</small><b class="mono">${saat(o0.wT)} → ${saat(o1.wT)}</b></li></ul>
+    <ul class="pm-bg-kiyas"><li><small>Yeri değişen iş</small><b class="mono">${deg}</b><span class="pm-kucuk">${isl.size} sipariş</span></li><li><small>Geciken sipariş</small><b class="mono">${o0.late} → ${o1.late}</b></li><li><small>Ağırlıklı gecikme</small><b class="mono">${saat(o0.wT)} → ${saat(o1.wT)}</b></li></ul>
     ${yaz ? bgOnayHtml(true) : ''}${deg ? (yaz ? (bgOnayda() ? '' : `<div class="pm-dugmeler">${dugme('Yeni planı yayınla', 'bg-yayinla', { birincil: true, simge: 'check' })}</div>`) : bgOnayHtml(false)) : '<p class="pm-kucuk">Taslak yayındaki planla aynı.</p>'}</div>`;
 }
 
@@ -161,7 +161,7 @@ function bgEylem(act, v) {
       if (!planGuncel()) { bildir('Önce planı güncelleyin.', 'hata'); return true; }
       for (const x of S.senaryolar) if (x.durum === 'onay') x.durum = 'acik';
       const s = { id: 's' + Date.now().toString(36), ad: `Onay ${fmtDT(S.D, cxAl().st.now).slice(0, 9)} · ${kim().ad}`, durum: 'onay', yazar: kim().ad, zaman: Date.now(), tabanSurum: S.canliSurum, D: clone(S.D), down: clone(S.down), ekMesai: clone(S.ekMesai), locks: clone(S.locks), pref: clone(S.pref), w: clone(S.w), plan: clone(S.plan), ozet: clone(S.plan.ozet), J: clone(S.plan.J) };
-      S.senaryolar.push(s); if (S.senaryolar.length > 8) S.senaryolar.shift();
+      S.senaryolar.push(s); senKirp(10, s);
       iz('Plan onaya gönderildi', s.ad); kaydet(); render(); bildir('Plan müdür onayına gönderildi.', 'tamam'); return true; }
     case 'bg-reddet': { const s = S.senaryolar.find(x => x.id === v); if (s) { s.durum = 'acik'; iz('Plan geri gönderildi', s.ad); kaydet(); render(); } return true; }
     case 'bg-yayinla': {
@@ -169,8 +169,8 @@ function bgEylem(act, v) {
       if (!planGuncel()) { bildir('Önce planı güncelleyin.', 'hata'); return true; }
       const ad = `Yayın ${fmtDT(S.D, cxAl().st.now).slice(0, 9)} · ${S.canliSurum + 1}`;
       const s = { id: 's' + Date.now().toString(36), ad, durum: 'canli', yazar: kim().ad, zaman: Date.now(), tabanSurum: S.canliSurum, D: clone(S.D), down: clone(S.down), ekMesai: clone(S.ekMesai), locks: clone(S.locks), pref: clone(S.pref), w: clone(S.w), plan: clone(S.plan), ozet: clone(S.plan.ozet), J: clone(S.plan.J), canliKim: kim().ad, canliZaman: Date.now() };
-      for (const x of S.senaryolar) if (x.durum === 'canli') x.durum = 'acik';
-      S.senaryolar.push(s); if (S.senaryolar.length > 8) S.senaryolar.shift();
+      for (const x of S.senaryolar) if (x.durum === 'canli') x.durum = 'arsiv';
+      S.senaryolar.push(s); senKirp(10, s);
       S.canli = s.id; S.canliSurum++; iz('Plan yayınlandı', `${ad}`); taslakBitir(); kaydet(); render(); bildir('Plan yayınlandı. Atölye bu planı görür.', 'tamam'); return true; }
   }
   return false;

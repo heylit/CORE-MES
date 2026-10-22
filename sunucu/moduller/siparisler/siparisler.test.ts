@@ -5,7 +5,8 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { SiparisAyrintisi, SiparisListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { SiparisAyrintisi, SiparisListesiCevabi, SiparisOzetiCevabi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -359,5 +360,56 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const sonra = (await oku(yonetici, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
     assert.deepEqual([sonra.durum, sonra.surum], ['taslak', s.surum]);
     assert.equal((await oku(yonetici, '/siparisler')).json<SiparisListesiCevabi>().toplam, once);
+  });
+
+  // Testler aynı veritabanını paylaşır: özet sayıları önce ve sonra okunur, fark ölçülür.
+  test('SIP-16 (76 a) ana sayfa özeti: açık teklif, 7 gün içinde termin, geciken onaylı sipariş ve aylık seri sunucuda sayılır; fiyat taşımaz', async () => {
+    const ozet = async (): Promise<SiparisOzetiCevabi> => {
+      const c = await oku(yonetici, '/siparisler/ozet');
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<SiparisOzetiCevabi>();
+    };
+    const once = await ozet();
+    const gun = (fark: number): string => tesisGunu(Date.now() + fark * 86_400_000);
+    const onayla = async (fark: number): Promise<number> => {
+      const s = await siparisAc();
+      const c = await gonder(yonetici, `/siparisler/${s.id}/onayla`, { surum: s.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      // Termin geçmişe ancak doğrudan yazılır (SIP-07: termin sipariş tarihinden önce olamaz); sayım yalnız terminle ilgilidir.
+      await o().sahip.sorgu('UPDATE siparisler_siparis SET siparis_tarihi = LEAST(siparis_tarihi, $2::date), termin = $2::date WHERE id = $1', [s.id, gun(fark)]);
+      return s.id;
+    };
+    await onayla(-1);
+    await onayla(0);
+    await onayla(6);
+    await onayla(7);
+    // Taslak sipariş termine bakılmadan sayılmaz.
+    const taslak = await siparisAc();
+    await o().sahip.sorgu('UPDATE siparisler_siparis SET siparis_tarihi = $2::date, termin = $2::date WHERE id = $1', [taslak.id, gun(-3)]);
+    const t = await gonder(yonetici, '/siparisler/teklifler/ekle', {
+      firmaId: musteriId, baslik: 'Deneme talebi', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '5' }],
+    });
+    assert.equal(t.statusCode, 200, t.body);
+    const red = await gonder(yonetici, '/siparisler/teklifler/ekle', {
+      firmaId: musteriId, baslik: 'Deneme talebi', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: mamulNo, tanim: 'Deneme parça', miktar: '5' }],
+    });
+    await o().sahip.sorgu("UPDATE siparisler_teklif SET durum = 'red', not_metni = 'Deneme reddi' WHERE id = $1", [red.json<TeklifAyrintisi>().id]);
+
+    const sonra = await ozet();
+    assert.deepEqual(
+      [sonra.acikTeklif - once.acikTeklif, sonra.yaklasanTermin - once.yaklasanTermin, sonra.gecikenSiparis - once.gecikenSiparis],
+      [1, 2, 1],
+    );
+    assert.equal(sonra.aylik.length, 6);
+    assert.equal(sonra.aylik.at(-1)?.ay, gun(0).slice(0, 7));
+    assert.equal(sonra.aylik.reduce((t2, a) => t2 + a.sayi, 0) >= once.aylik.reduce((t2, a) => t2 + a.sayi, 0) + 3, true);
+    assert.equal(JSON.stringify(sonra).includes('Fiyat'), false);
+  });
+
+  test('SIP-16 ret: özet listeyi okuyana açıktır; satış okur, işlemi olmayan rol 403, girişsiz 401', async () => {
+    const satis = (await girisYap('satis')).cerez;
+    assert.equal((await oku(satis, '/siparisler/ozet')).statusCode, 200);
+    assert.equal((await oku(operator, '/siparisler/ozet')).statusCode, 403);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/siparisler/ozet' })).statusCode, 401);
   });
 });

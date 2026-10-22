@@ -4,7 +4,7 @@ import type { IkinciMenuTanimi } from '#paylasilan/sayfa-tanimi.ts';
 // Anahtar planlama sayfasının kimliğidir; plan, studio ve kanban eski bağlantılar için kalır (plan ve kanban planlama motoruna,
 // studio planlama atölyesine açılır).
 export const PLANLAMA_ANAHTARLARI: readonly string[] = [
-  'plan', 'studio', 'kanban', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'sevkiyat',
+  'plan', 'studio', 'kanban', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat',
 ];
 
 // Planlama sayfalarını görme işlemi; Aşama 1'de yalnız yöneticidedir (kullanıcı kararı 353 a). Menü maddesi ve planlama
@@ -45,6 +45,7 @@ export const ONERILEN_IKINCI_MENU = {
       { anahtar: 'terminler', baslik: 'Terminler', yol: '/recete-rota/terminler', simge: 'flag', islem: PLANLAMA_ISLEMI },
       { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/recete-rota/denge', simge: 'gauge', islem: PLANLAMA_ISLEMI },
       { anahtar: 'yillik', baslik: 'Yıllık plan', yol: '/recete-rota/yillik', simge: 'chart', islem: PLANLAMA_ISLEMI },
+      { anahtar: 'ufuk', baslik: 'Ufuk', yol: '/recete-rota/ufuk', simge: 'route', islem: PLANLAMA_ISLEMI },
       { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/recete-rota/sevkiyat', simge: 'truck', islem: PLANLAMA_ISLEMI },
     ] },
   ],

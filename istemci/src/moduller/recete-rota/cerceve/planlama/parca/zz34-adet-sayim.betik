@@ -16,6 +16,10 @@ function sapmaMetni(x) {
   const yan = !x.sonraki ? '' : x.cakisma > 0.01 ? `; sıradaki ${x.sonraki.id} ile ${saat(x.cakisma)} çakışıyor` : x.d < 0 ? `; ${x.r.m} sıradaki ${x.sonraki.id} öncesinde ${saat(-x.cakisma)} boş kalacak` : '';
   return `${x.id} plandan ${ne}${yan}.`;
 }
+function sapmaRozet() {
+  const l = sapmalar(); if (!l.length) return '';
+  return `<button type="button" class="pm-sapma-rozet" data-act="sapma-git" data-v="${esc(l[0].id)}" data-yer="sapma" title="${esc(l.map(sapmaMetni).join(' '))}">${ic('alert', 'k')}<span>Plandan sapma: ${l.length}</span></button>${U.hamle ? '' : dugme('Canlıya göre onar', 'sapma-onar', { kucuk: true, hayalet: true, simge: 'rotate', veri: `data-v="${esc(l[0].id)}" data-yer="sapma-onar"` })}`;
+}
 function sapmaKutu(id) {
   const x = sapmaOf(id); if (!x || Math.abs(x.d) <= sapmaEsik()) return '';
   return `<div class="pm-sapma" role="alert" data-yer="sapma-kutu">${ic('alert', 'k')}<span><b>Plandan sapma.</b> ${esc(sapmaMetni(x))} Plan kendiliğinden değişmez.</span>${dugme('Canlıya göre onar', 'sapma-onar', { kucuk: true, simge: 'rotate', yetki: 'plan.yaz', veri: `data-v="${esc(id)}"` })}</div>`;
@@ -41,5 +45,6 @@ function sapmaOnar(id) {
 }
 { const f0 = tekEylem; tekEylem = function (act, v) {
   if (act === 'sapma-onar') { sapmaOnar(v); return true; }
+  if (act === 'sapma-git') { if (U.sayfa === 'studyo') { U.psSek = 'plan'; U.psSec = [v]; render(); return true; } U.secili = v; render(); return true; }
   return f0.apply(this, arguments);
 }; }

@@ -2,7 +2,7 @@
    Motorun ufku 63 gündür; bu sayfa bir yıla bakar. Ayrıntı yerine aile ve tezgâh grubu düzeyinde çalışır:
    - Dönem: önce 13 hafta haftalık, sonra bir yıla kadar aylık.
    - Aile rotadan çıkar: ürünün en çok süre tutan adımının ayar ailesi. Birim saat, aile ürünlerinin talep ağırlıklı ortalamasıdır.
-   - Talep: açık siparişler termin dönemine konur; tahmin ya "geçmiş" (sipariş defterinin haftalık hızı, büyüme oranıyla) ya da elle girilir.
+   - Talep: açık siparişler termin dönemine konur; tahmin ya "geçmiş" (talepHizi: sipariş giriş hızı, büyüme oranıyla) ya da elle girilir.
      Dönem talebi = max(sipariş, tahmin): sipariş tahmini tüketir, üstüne eklenmez.
    - Karar: dönem üretimi, stok, birikmiş sipariş (geç teslim), grup başına ek mesai, istenirse tezgâh yatırımı (grup başına en çok bir, en erken 3. aydan).
    - Amaç: stok taşıma + geç teslim + ek mesai primi + yatırımın aylık bedeli. Malzeme, fason ve ayar sırası yok sayılır; bir dönemin üretimi
@@ -10,9 +10,19 @@
    - Gölge fiyat: yatırım kararı sabitlenip doğrusal model yeniden çözülür; her grup ve dönemde çok pahalı "acil kapasite" sütunu vardır,
      sütunun indirgenmiş maliyetinden bir saat ek kapasitenin değeri okunur (değer = bedel − indirgenmiş maliyet).
    - Hedef: motor ufkundaki haftalar için ailenin kümülatif üretim hedefi motora küçük bedelle verilebilir (eksik adet × bedel TL toplamına eklenir).
-   Kurallar: TL yalnız müdür ve yönetici görür; ayarları plan.kilitle yetkisi değiştirir. Uydurma veride geçmiş sipariş yok; "geçmiş" tahmini
-   eldeki sipariş defterinin hızıdır (VARSAYIM, uygulamada kapanmış siparişlerden okunmalı). */
+   Kurallar: TL yalnız müdür ve yönetici görür; ayarları plan.kilitle yetkisi değiştirir. */
 const YL_ACIL = 1e5;
+/* Talep hızı: kapanmış (D.kapananSiparisler) ve açık siparişler (D.siparisler) birlikte, sipariş giriş tarihinden (siparisTarihi), son 52 hafta.
+   Açık siparişin termini ya da planı hız sayılmaz: birikmiş iştir, yıla yayılırsa talep uydurur. İlk girişten bugüne 12 haftadan az
+   geçmişse hız yoktur (null); sıfır yazılmaz. Ufuk sayfası da bunu kullanır. */
+const TALEP_GECMIS_ENAZ = 12;
+function talepHizi(D, now) {
+  const l = [...(D.kapananSiparisler || []), ...D.siparisler].map(s => ({ urun: s.urun, q: +s.adet || 0, t: parseT(D, s.siparisTarihi) })).filter(x => x.t != null && x.t <= now && x.t > now - 52 * 168);
+  const hafta = l.length ? Math.min(52, (now - Math.min(...l.map(x => x.t))) / 168) : 0;
+  if (hafta < TALEP_GECMIS_ENAZ) return { hafta, hiz: null };
+  const hiz = {}; for (const x of l) hiz[x.urun] = (hiz[x.urun] || 0) + x.q / hafta;
+  return { hafta, hiz };
+}
 const YL_GUN = 364;
 function ylAyar(D = S.D) {
   return (D.yillik = D.yillik || { tahmin: 'gecmis', buyume: 10, elle: {}, mesaiMaks: 15, gecTL: 0.43, stokTL: 3.9, yatirim: true, teslimAy: 3, hedef: null });
@@ -37,9 +47,9 @@ function ylVeri() {
     const b = Object.entries(say).sort((x, y) => y[1] - x[1])[0]; urunAile[u.id] = b ? b[0] : u.id; urunSaat[u.id] = h; }
   const now = cx.st.now / 24;
   const sip = D.siparisler.map(s => ({ s, t: (parseT(D, s.termin) ?? cx.st.now) / 24 }));
-  const ilk = Math.min(now, ...sip.map(x => (parseT(D, x.s.serbest) ?? cx.st.now) / 24)); const son = Math.max(now + 14, ...sip.map(x => x.t));
-  const haftalik = {}, deger = {}, adetTop = {};
-  for (const { s } of sip) { const f = urunAile[s.urun]; if (!f) continue; haftalik[f] = (haftalik[f] || 0) + s.adet / ((son - ilk) / 7); if (s.gelir != null && s.adet) { deger[f] = (deger[f] || 0) + s.gelir; adetTop[f] = (adetTop[f] || 0) + s.adet; } }
+  const th = talepHizi(D, cx.st.now); const haftalik = {}, deger = {}, adetTop = {};
+  for (const [u, h] of Object.entries(th.hiz || {})) { const f = urunAile[u]; if (f) haftalik[f] = (haftalik[f] || 0) + h; }
+  for (const { s } of sip) { const f = urunAile[s.urun]; if (!f) continue; if (s.gelir != null && s.adet) { deger[f] = (deger[f] || 0) + s.gelir; adetTop[f] = (adetTop[f] || 0) + s.adet; } }
   const aileler = [...new Set(Object.values(urunAile))].filter(f => D.siparisler.some(s => urunAile[s.urun] === f) || (A.elle[f] && Object.values(A.elle[f]).some(x => x > 0)));
   const birimDeger = {}; const ort = Object.values(deger).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(adetTop).reduce((a, b) => a + b, 0));
   for (const f of aileler) birimDeger[f] = adetTop[f] ? deger[f] / adetTop[f] : ort || 1000;
@@ -60,7 +70,7 @@ function ylVeri() {
   const opOr = g => { const tz = D.tezgahlar.filter(t => t.grup === g); return tz.length ? tz.reduce((a, t) => a + (t.opOran ?? 1), 0) / tz.length : 1; };
   const tezKap = { ...kapH }; const sinir = {};
   for (const g in kapH) { if (kisiH[g] == null) { sinir[g] = 'tezgah'; continue; } const k = kisiH[g] / opOr(g); if (k < kapH[g]) { kapH[g] = k; sinir[g] = 'kisi'; } else sinir[g] = 'tezgah'; }
-  return { urunAile, aileler, saat, gruplar: [...gruplar].filter(g => kapH[g] > 0), kapH, tezKap, kisiH, sinir, yeniH, haftalik, birimDeger, sip, now };
+  return { urunAile, aileler, saat, gruplar: [...gruplar].filter(g => kapH[g] > 0), kapH, tezKap, kisiH, sinir, yeniH, haftalik, th, birimDeger, sip, now };
 }
 function ylTalep(v, P) {
   const A = ylAyar(); const fir = {}, tah = {};
@@ -168,6 +178,11 @@ function ylPlanUretim(f, t, h0) { const p = S.plan; if (!p || !p.J) return null;
 
 /* ---------- sayfa ---------- */
 const ylSayi = (k, v, ad, o = {}) => ymSayi('yl-' + k, v, ad, o);
+function ylGecmisNot() {
+  const v = ylVeri(); const th = v && v.th; if (!th) return '';
+  return th.hiz ? `Geçmiş tahmini: kapanmış ve açık siparişlerin son ${sayi(th.hafta, 0)} haftalık giriş hızı; termin ve plan hız sayılmaz.`
+    : `Geçmiş tahmini yok: veri yetersiz (en az ${TALEP_GECMIS_ENAZ} hafta sipariş girişi gerekir${th.hafta > 0 ? `, ${sayi(th.hafta, 0)} hafta var` : ''}); tahmin yalnız siparişlerden. Elle girilebilir.`;
+}
 function sYillik() {
   const A = ylAyar(); const fg = agFiyatGorur(); const yaz = yetkili('plan.kilitle'); const y = U.yl; const bayat = y && y.anah !== ylAnah();
   const dg = dugme(y && y.durum === 'bitti' && !bayat ? 'Yeniden çöz' : 'Yıllık planı çöz', 'yl-coz', { birincil: true, simge: 'cpu' });
@@ -176,7 +191,7 @@ function sYillik() {
   const ayarK = kart(`${ic('gear', 'k')} Varsayımlar`, `<div class="pm-sira"><span class="pm-kucuk">Talep tahmini</span>${seg('tahmin', [['gecmis', 'Geçmişten'], ['elle', 'Elle']])}<span class="pm-kucuk">Yatırım adayları</span>${seg('yatirim', [['true', 'Dene'], ['false', 'Deneme']])}</div>
     <div class="pm-ym-alanlar">${A.tahmin === 'gecmis' ? al('buyume', 'Yıllık büyüme %', { adim: 1, min: -50, max: 200 }) : ''}${al('mesaiMaks', 'Ek mesai sınırı, kapasitenin %', { adim: 1, max: 60 })}
       ${fg ? al('gecTL', 'Geç teslim bedeli, değerin %/gün', { adim: 0.01, max: 5 }) + al('stokTL', 'Stok taşıma, değerin %/ay', { adim: 0.1, max: 20 }) + al('teslimAy', 'Yeni tezgâhın en erken geliş ayı', { adim: 1, min: 1, max: 12 }) : ''}</div>
-    <p class="pm-kucuk">Kaba kapasite planıdır: aile ve tezgâh grubu düzeyinde, sırasız; malzeme, fason ve ayar sırası yok. Kapasite tezgâhın motor ufkundaki açık saatlerinin haftalık ortalaması × kullanılabilirlik %${msSis().verim || 85}; gruptaki kişilerin vardiya saati ÷ operatör oranı daha azsa o. ${A.tahmin === 'gecmis' ? 'Geçmiş tahmini: uydurma veride kapanmış sipariş yok; eldeki sipariş defterinin haftalık hızı kullanıldı.' : 'Elle tahmin aşağıdaki tablodan, aylık adet.'} Bir dönemin talebi sipariş ile tahminin büyüğüdür.</p>`, dg);
+    <p class="pm-kucuk">Kaba kapasite planıdır: aile ve tezgâh grubu düzeyinde, sırasız; malzeme, fason ve ayar sırası yok. Kapasite tezgâhın motor ufkundaki açık saatlerinin haftalık ortalaması × kullanılabilirlik %${msSis().verim || 85}; gruptaki kişilerin vardiya saati ÷ operatör oranı daha azsa o. ${A.tahmin === 'gecmis' ? ylGecmisNot() : 'Elle tahmin aşağıdaki tablodan, aylık adet.'} Bir dönemin talebi sipariş ile tahminin büyüğüdür.</p>`, dg);
   let govde = '';
   if (!y || bayat) govde = kart(`${ic('chart', 'k')} Yıllık plan`, `${bayat ? `<p class="pm-ag-uyari">${ic('alert', 'k')} Veri ya da varsayım değişti; yeniden çözülmeli.</p>` : ''}<p class="pm-kucuk">13 hafta haftalık, sonra bir yıla kadar aylık. HiGHS sayfanın içinde çözer.</p>`);
   else if (y.durum === 'hesap') govde = kart(`${ic('chart', 'k')} Yıllık plan`, `<p class="pm-kucuk" role="status">${ic('cpu', 'k')} ${esc(y.adim || 'Çözülüyor')}…</p>`);
@@ -188,7 +203,7 @@ function sYillik() {
 function ylElleKart(yaz) {
   const v = ylVeri(); if (!v) return ''; const A = ylAyar(); const ay = []; const b = new Date(baseMs(S.D));
   for (let i = 0; i < 13; i++) { const d = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + i, 1)); ay.push([`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`, `${OL_AY[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`]); }
-  const sat = v.aileler.map(f => `<tr>${td('Aile', `<b>${esc(f)}</b><small class="pm-ag-not">geçmiş hızı ${sayi((v.haftalik[f] || 0) * 4.33, 0)}/ay</small>`)}${ay.map(([k, ad]) => td(ad, ylSayi('elle', ((A.elle[f] || {})[k]) ?? '', `${f} ${ad} tahmini`, { adim: 1, max: 1e6, yer: sayi((v.haftalik[f] || 0) * 4.33, 0), veri: `data-f="${esc(f)}" data-ay="${k}" ${yaz ? '' : 'disabled'}` }), 'pm-num')).join('')}</tr>`).join('');
+  const sat = v.aileler.map(f => `<tr>${td('Aile', `<b>${esc(f)}</b><small class="pm-ag-not">geçmiş hızı ${v.th.hiz ? `${sayi((v.haftalik[f] || 0) * 4.33, 0)}/ay` : 'veri yetersiz'}</small>`)}${ay.map(([k, ad]) => td(ad, ylSayi('elle', ((A.elle[f] || {})[k]) ?? '', `${f} ${ad} tahmini`, { adim: 1, max: 1e6, yer: sayi((v.haftalik[f] || 0) * 4.33, 0), veri: `data-f="${esc(f)}" data-ay="${k}" ${yaz ? '' : 'disabled'}` }), 'pm-num')).join('')}</tr>`).join('');
   return kart(`${ic('edit', 'k')} Elle tahmin <span class="pm-kucuk">aylık adet; boş ay tahminsiz sayılır</span>`, `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Aile</th>${ay.map(([, ad]) => `<th class="pm-num">${ad}</th>`).join('')}</tr></thead><tbody>${sat}</tbody></table></div>`, yaz ? dugme('Geçmiş hızını kopyala', 'yl-elle-kopya', { simge: 'download', kucuk: true }) : '');
 }
 function ylSonucHtml(y, fg, yaz) {
@@ -236,7 +251,7 @@ function ylSonucHtml(y, fg, yaz) {
   if (act === 'yl-coz') { ylCoz(); return true; }
   if (act === 'yl-sec') { const k = el.dataset.k; const A = ylAyar(); const val = k === 'yatirim' ? v === 'true' : v; if (A[k] === val) return true;
     degistir('Yıllık plan ayarı', `${k}: ${v}`, () => { A[k] = val; }, 'plan.kilitle', { planKoru: true }); return true; }
-  if (act === 'yl-elle-kopya') { const vv = ylVeri(); if (!vv) return true; const b = new Date(baseMs(S.D));
+  if (act === 'yl-elle-kopya') { const vv = ylVeri(); if (!vv) return true; if (!vv.th.hiz) { bildir(`Geçmiş hızı yok: en az ${TALEP_GECMIS_ENAZ} hafta sipariş girişi gerekir.`, 'hata'); return true; } const b = new Date(baseMs(S.D));
     degistir('Elle tahmin', 'geçmiş hızından kopyalandı', () => { const A = ylAyar(); for (const f of vv.aileler) { A.elle[f] = A.elle[f] || {}; for (let i = 0; i < 13; i++) { const d = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + i, 1)); A.elle[f][`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`] = Math.round((vv.haftalik[f] || 0) * 4.33); } } }, 'plan.kilitle', { planKoru: true }); return true; }
   if (act === 'yl-hedef') { const A = ylAyar(); if (v === '1') { const h = ylHedefKur(); if (!h || !h.hedef.length) { bildir('Önce yıllık plan çözülmeli.', 'hata'); return true; }
       degistir('Yıllık hedef motora verildi', `${h.hedef.length} hafta-aile hedefi`, () => { A.hedef = h; }, 'plan.kilitle'); }

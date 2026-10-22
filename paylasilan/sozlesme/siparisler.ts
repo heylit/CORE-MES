@@ -436,3 +436,16 @@ export type PlanTaslagiTuru = (typeof PLAN_TASLAGI_TURLERI)[number];
 export type PlanTaslagiGorunumu = (typeof PLAN_TASLAGI_GORUNUMLERI)[number];
 export type PlanTaslagi = z.output<typeof planTaslagiSemasi>;
 export type PlanTaslaklariCevabi = z.output<typeof planTaslaklariCevabi>;
+
+// Ana sayfa özeti (kullanıcı kararı 76 a, 22.10.2026): sayılar sunucuda, tesis gününe göre; fiyat taşımaz, okuyan herkese aynıdır.
+// Açık teklif sonuçlanmamış (reddedilmemiş, siparişe dönmemiş) tekliftir. Termin sipariş başlığının terminidir; yalnız onaylı
+// (kapanmamış, iptal edilmemiş) sipariş sayılır. Aylık seri son 6 ay, ayı sipariş tarihinden; onaylanmış ya da kapanmış sipariş.
+export const SIPARIS_OZETI_AY = 6;
+export const YAKLASAN_TERMIN_GUN = 7;
+export const siparisOzetiCevabi = z.object({
+  acikTeklif: z.number().int().nonnegative(),
+  yaklasanTermin: z.number().int().nonnegative(),
+  gecikenSiparis: z.number().int().nonnegative(),
+  aylik: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), sayi: z.number().int().nonnegative() })),
+});
+export type SiparisOzetiCevabi = z.output<typeof siparisOzetiCevabi>;
