@@ -10,6 +10,7 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz } from './kayit-secimi.ts';
+import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme } from './Onizleme.tsx';
 import './etiket-merkezi.css';
 
@@ -186,6 +187,10 @@ function EtiketMerkezi({ bolum }: { bolum: Bolum }) {
   const sablonlar = liste.data.sablonlar.filter((s) => (kayit ? s.tur === kayitSablonTuru(kayit.tur) : (bolum === 'deneme') === (s.tur === 'deneme')));
   const sablon = sablonlar.find((s) => s.anahtar === secili) ?? sablonlar[0];
   return (
+    <>
+    {bolum === 'sablonlar' && !kayit && oturum.data?.islemler.includes('etiket-merkezi.oku') === true && (
+      <KayitSecici sec={(s) => adresYaz(kayitSecimiYaz(adres, s))} />
+    )}
     <Kart baslik={baslik}>
       {kayit && (
         <p className="tc-etk-not">
@@ -210,6 +215,7 @@ function EtiketMerkezi({ bolum }: { bolum: Bolum }) {
         {sablon ? <Cikti key={sablon.anahtar} sablon={sablon} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={kayit} kayitCikar={kayitCikar} /> : <DurumKutusu durum="bos" mesaj="Şablon yok." />}
       </div>
     </Kart>
+    </>
   );
 }
 

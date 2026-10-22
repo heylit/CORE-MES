@@ -44,5 +44,14 @@ Kurgu: /mnt/project-files/arastirma/etiket-merkezi/2026-10-18-etiket-merkezi-kur
   Lot etiketinin kart satırına malzeme türü adı eklendi. Göç: tür CHECK'ine `malzeme` girer.
 - Ekran: `?tur=malzeme&id=…` ve `?tur=mal-kabul&id=…` adresleri; mal kabulde lot çipi çıkarılamaz.
 
+9. Raf etiketi ve sayfada seçim (#116; Soru 106-110; Soru 110 göç onaylı):
+- Kayıt ve şablon türü `raf`: Fabrika Haritası rafı (`atolye/disari.ts` `raflar`, `gozler`); QR `RAF:<raf kodu>`, kod, ad (kodla aynıysa basılmaz),
+  yer "bölüm · N bölme × M kat" (gözlerden). Pasif ve olmayan raf eksik sayılır. Şablonlar `raf-100x50`, `raf-50x25`. Göç `20261022105000`: tür CHECK'ine `raf` girer.
+- Kod sözlüğüne `RAF` öneki (`paylasilan/kod-sozlugu.ts`, ayrı commit): raf stok konumu değildir (stok gözdedir), öneki ayrı. Stok Okut rafı #115 ile çözer; o gelene kadar "bilinmiyor".
+- `GET /etiket-merkezi/raflar` (`etiket-merkezi.oku`): seçim için kullanımdaki raflar ve bölüm kodu.
+- Ekran: Hazır şablonlarda (kayıt seçili değilken, `etiket-merkezi.oku` olana) "Konum ve raf etiketleri" kartı: Raflar ve Konumlar sekmesi, bölüm/depo
+  süzgeci, arama, tek tek işaret, "Görünenleri seç", "Etiketleri hazırla" (en çok 200). Konum listesi stoktan (`GET /stok/konumlar`) okunur;
+  stok okuması olmayan konum sekmesinde not görür, istek atılmaz. Kullanıcı isteği (2026-10-22 09:44): "etiket sayfasında tek tek veya toplu basılabilsin".
+
 Değişmeyen: bugünkü üç baskı ekranı (stok Etiketler, Lot etiketi, Refakat kartı) ve kod sözlüğü. Yeni paket yok (QR matrisi onaylı `qrcode-generator`, TCP `node:net`).
 Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrudan komut yok") 98 evet ile değişti. Üçüncü iç istisna ADR 0014 ve CLAUDE.md'de (#1739); `.env.ornek` satırı da girdi.

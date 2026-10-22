@@ -469,4 +469,52 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(mz.statusCode, 200, mz.body);
     assert.equal((await al(yonetici, adres('lot-100x50', 'mal-kabul', String(mkId)) + '&adet=300')).statusCode, 400, 'iki lot x 300 sınırı aşar');
   });
+  test('EM-U15: raf etiketi Fabrika Haritası rafından RAF önekiyle çıkar; bölüm ve bölme/kat gözlerden gelir; pasif ve olmayan raf eksikte kalır; deftere raf olarak bağlanır (#116)', async () => {
+    const sahip = ortam!.sahip;
+    const salon = (await sahip.tek<{ id: number }>(
+      `INSERT INTO atolye_salon (kod, ad, genislik, derinlik, hucre_boyu, kaydeden_kisi_id) VALUES ('ETKSALON', 'Etiket salonu', 20, 20, 5, $1) RETURNING id`, [yoneticiId],
+    ))!.id;
+    const rafAc = async (kod: string, ad: string, aktif: boolean, bolme: number, kat: number): Promise<number> => {
+      const id = (await sahip.tek<{ id: number }>(
+        `INSERT INTO atolye_raf (salon_id, kod, ad, tur, bolme_sayisi, kat_sayisi, goz_sayisi, bolme_genisligi, derinlik, yukseklik, x, z, donus, aktif)
+         VALUES ($1, $2, $3, 'palet', $4, $5, 1, 1, 1, 2, 5, 5, 0, $6) RETURNING id`, [salon, kod, ad, bolme, kat, aktif],
+      ))!.id;
+      await sahip.sorgu('INSERT INTO atolye_goz (raf_id, bolme, kat, goz) SELECT $1, b, k, 1 FROM generate_series(1, $2::int) b, generate_series(1, $3::int) k', [id, bolme, kat]);
+      return id;
+    };
+    const r1 = await rafAc('E1', 'Etiket palet rafı', true, 3, 2);
+    const r2 = await rafAc('E2', 'E2', true, 1, 1);
+    const pasif = await rafAc('E9', 'Sökülen raf', false, 1, 1);
+    const yok = 2147483007;
+
+    const secim = (await al(yonetici, '/etiket-merkezi/raflar')).json() as { raflar: { id: number; kod: string; salonKodu: string | null }[] };
+    assert.deepEqual(secim.raflar.filter((r) => r.kod.startsWith('E')).map((r) => [r.kod, r.salonKodu]), [['E1', 'ETKSALON'], ['E2', 'ETKSALON']], 'pasif raf seçimde yok');
+
+    const adres = (id: string) => `/etiket-merkezi/sablonlar/raf-100x50/kayit-cikti?dil=zpl&dpi=203&tur=raf&id=${id}`;
+    const c = await al(yonetici, adres(`${r1},${r2},${pasif},${yok}`));
+    assert.equal(c.statusCode, 200, c.body);
+    const cevap = c.json() as KayitCiktiCevabi;
+    assert.deepEqual(cevap.kayitlar, [{ id: r1, baslik: 'E1' }, { id: r2, baslik: 'E2' }]);
+    assert.deepEqual(cevap.eksikler, [pasif, yok]);
+    assert.equal((cevap.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, 'RAF:E1');
+    assert.match(cevap.komut, /ETKSALON · 3 bölme × 2/);
+    assert.match(cevap.komut, /Etiket palet rafı/);
+    assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/konum-50x25/kayit-cikti?dil=zpl&dpi=203&tur=raf&id=${r1}`)).statusCode, 400, 'konum şablonu raf basmaz');
+
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const i = await yaz(yonetici, '/etiket-merkezi/sablonlar/raf-50x25/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'raf', idler: [r1, r2] } });
+    assert.equal(i.statusCode, 200, i.body);
+    const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
+      'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1 ORDER BY kaynak_id', [(i.json() as IndirCevabi).baskiId],
+    );
+    assert.deepEqual(kayitlar, [{ kaynak_tur: 'raf', kaynak_id: r1 }, { kaynak_tur: 'raf', kaynak_id: r2 }]);
+
+    const okuyan = await tekIslemliKisi('rafokur', ['etiket-merkezi.oku']);
+    assert.equal((await al(okuyan, '/etiket-merkezi/raflar')).statusCode, 200);
+    assert.equal((await al(okuyan, adres(String(r1)))).statusCode, 200);
+    const sayfaci = await tekIslemliKisi('rafsayfaci', ['sayfa.etiket-merkezi']);
+    assert.equal((await al(sayfaci, '/etiket-merkezi/raflar')).statusCode, 403);
+    assert.equal((await al(sayfaci, adres(String(r1)))).statusCode, 403);
+  });
 });

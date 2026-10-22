@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import type { Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, noktaya, refakatDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, satirlaraBol, yerlesim } from './kurallar.ts';
+import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, satirlaraBol, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 
@@ -58,7 +58,7 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('EM-7: örnek QR içerikleri kod sözlüğünde şablon türünün kaydına çözülür', () => {
-    const beklenen = { konum: 'konum', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', deneme: 'konum' } as const;
+    const beklenen = { konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'uretim-emri', istasyon: 'konum', deneme: 'konum' } as const;
     for (const [tur, degerler] of Object.entries(ORNEK_DEGERLER)) {
       assert.equal(kodTuru(degerler.qr ?? '').tur, beklenen[tur as keyof typeof beklenen], tur);
     }
@@ -197,6 +197,12 @@ describe('etiket-merkezi kuralları', () => {
   test('EM-16: istasyon etiketi istasyonun stok konum kodunu LOC önekiyle ve istasyon adını basar', () => {
     assert.deepEqual(istasyonDegerleri('IST-CNC-01', 'Deneme tezgâhı'), { qr: 'LOC:IST-CNC-01', kod: 'IST-CNC-01', ad: 'Deneme tezgâhı' });
     assert.equal(istasyonDegerleri('IST-CNC-01', null)['ad'], null);
+  });
+
+  test('EM-20: raf etiketi raf kodunu RAF önekiyle basar; kodla aynı ad ve bilinmeyen ölçü basılmaz (#116)', () => {
+    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'Palet rafı', salonKodu: 'SALON1', bolmeSayisi: 6, katSayisi: 4 }),
+      { qr: 'RAF:A12', kod: 'A12', ad: 'Palet rafı', yer: 'SALON1 · 6 bölme × 4 kat' });
+    assert.deepEqual(rafDegerleri({ kod: 'A12', ad: 'A12', salonKodu: null, bolmeSayisi: 0, katSayisi: 0 }), { qr: 'RAF:A12', kod: 'A12', ad: null, yer: null });
   });
 
   test('EM-17: refakat kartı etiketi üretim emrinin refakat kartı içeriğini basar; QR emir kimliğidir, termin yoksa "yok", basım tesis günüdür', () => {

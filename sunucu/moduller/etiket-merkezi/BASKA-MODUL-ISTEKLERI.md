@@ -7,3 +7,4 @@ Bu PR'a gerekmez; kaynak bağlama PR'ından önce sahiplerine gider.
 - istasyonlar: ad `istasyonAdlari` ile okunur; yeni fonksiyon gerekmedi.
 - stok ve satın alma: mal kabul ekranına "Etiket Merkezi'nde bas" bağlantısı (`?tur=mal-kabul&id=<kabul>`); malzeme ekranına `?tur=malzeme&id=<kart no>`.
 - uretim-emirleri ve lot ekranları: "Etiket Merkezi'nde bas" bağlantısı aynı biçimle (`/etiket-merkezi?tur=<tur>&id=<id,...>`), tür eklendikçe.
+- stok (#115): Okut ve teslimde `RAF:<raf kodu>` okutulunca rafın gözleri listelensin, göz seçilsin (raf stok konumu değildir). Etiket Merkezi rafı Fabrika Haritası raf kimliğiyle basar (#116).

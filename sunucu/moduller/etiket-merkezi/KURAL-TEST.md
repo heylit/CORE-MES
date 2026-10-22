@@ -32,4 +32,7 @@
 | Lot ve istasyon kayıttan çıktı; konumsuz istasyon eksikte; basılan lot deftere bağlı | `EM-U12` |
 | Malzeme karttan; mal kabul bütün lotlarından, deftere lot olarak; lot etiketinde tür adı | `EM-U14` |
 | Refakat kartı emirden çıktı; olmayan emir eksikte, iptal emir 409; basılan deftere bağlı | `EM-U13` |
+| EM-20: raf etiketi RAF önekiyle; kodla aynı ad ve bilinmeyen ölçü basılmaz (#116) | `kurallar.test.ts` EM-20 |
+| Raf Fabrika Haritası'ndan; bölüm ve bölme/kat gözlerden; pasif ve olmayan raf eksikte; deftere raf; seçim ucu ve kayıt çıktısı `oku` ister | `EM-U15` |
+| Ekran: konum ve raf seçimi toplu ve tek tek, adrese yazılır; konum listesi stok okuması ister; okuması olmayan kartı görmez | `EtiketMerkezi.test.tsx` (#116) |
 | Ekran: stok adresi seçili konumlarla açılır, çıkarma adresi günceller, bozuk adres örneğe döner | `EtiketMerkezi.test.tsx`, `kayit-secimi.test.ts` |

@@ -82,6 +82,12 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
     if (yol === '/etiket-merkezi/sablonlar') return json(200, SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
+    if (yol === '/etiket-merkezi/raflar') {
+      return json(200, { raflar: [{ id: 21, kod: 'A1', ad: 'Palet rafı', salonKodu: 'DEPO' }, { id: 22, kod: 'A2', ad: 'A2', salonKodu: 'DEPO' }, { id: 23, kod: 'B1', ad: 'Konsol', salonKodu: 'URETIM' }] });
+    }
+    if (yol === '/stok/konumlar') {
+      return json(200, { satirlar: [{ id: 11, kod: 'R1-01-1-1', ad: null, depoKod: 'ANA' }, { id: 12, kod: 'KABUL', ad: 'Mal kabul', depoKod: 'ANA' }], toplam: 2, sayfa: 1, sayfaBoyu: 500 });
+    }
     const kayitEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/kayit-cikti$/.exec(yol);
     if (kayitEslesme?.[1]) {
       const idler = (url.searchParams.get('id') ?? '').split(',').map(Number);
@@ -329,5 +335,40 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText('Hazır şablonlar')).toBeTruthy();
     await screen.findByText('LT-000123');
     expect(istekler.some((i) => i.includes('kayit-cikti'))).toBe(false);
+  });
+  it('konum ve raf seçimi (#116): bölümün rafları toplu seçilir, seçim adrese raf türüyle yazılır', async () => {
+    const istekler = sunucuKur({ islemler: ['etiket-merkezi.oku'] });
+    ac(<HazirSablonlar />);
+    expect(await screen.findByLabelText('A1 · Palet rafı · DEPO')).toBeTruthy();
+    expect(screen.getByLabelText('A2 · DEPO')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: 'DEPO' } });
+    expect(screen.queryByLabelText('B1 · Konsol · URETIM')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Görünenleri seç (2)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Etiketleri hazırla (2)' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('?tur=raf&id=21%2C22'));
+    expect(await screen.findByText('Raf etiketleri')).toBeTruthy();
+    expect(istekler.some((i) => i.startsWith('/stok/'))).toBe(false);
+  });
+
+  it('konum listesi stok okuması ister; okuyan tek konumu seçip hazırlar, okumayan stoğa istek atmaz', async () => {
+    const istekler = sunucuKur({ islemler: ['etiket-merkezi.oku'] });
+    ac(<HazirSablonlar />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
+    expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
+    expect(istekler.some((i) => i.startsWith('/stok/'))).toBe(false);
+    cleanup();
+    sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.giris'] });
+    ac(<HazirSablonlar />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
+    fireEvent.click(await screen.findByLabelText('KABUL · Mal kabul · ANA'));
+    fireEvent.click(screen.getByRole('button', { name: 'Etiketleri hazırla (1)' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('?tur=konum&id=12'));
+  });
+
+  it('kayıt okuması olmayan seçim kartını görmez', async () => {
+    sunucuKur({ islemler: [] });
+    ac(<HazirSablonlar />);
+    await screen.findByText('LT-000123');
+    expect(screen.queryByText('Konum ve raf etiketleri')).toBeNull();
   });
 });
