@@ -59,9 +59,9 @@ export const ornekVeri = ornekVeriTanimi({
     const goz = (await servis.rafMatrisi(db, raf.id)).gozler[0];
     if (!goz) throw new Error('Stok örnek rafı göz üretmedi.');
 
-    // Çubuk ve levha lotludur (parti zorunlu); yağ sarftır, partisiz girer. Mil ve flansın stoğu yoktur.
+    // Çubuk ve levha lotludur (parti zorunlu); yağ sarftır, partisiz girer. Mil ve flansın stoğu yoktur. Örnekte sipariş yok: "diğer" girişi (soru 104 a).
     await servis.malKabulYap(db, depocu, {
-      tur: 'satin_alma', irsaliyeNo: 'ORN-IRS-1',
+      tur: 'diger', irsaliyeNo: 'ORN-IRS-1',
       satirlar: [
         { malzemeId: cubuk, miktar: '500', konumId: zemin1, parti: { tedarikciPartiNo: 'ORN-L1', dokumNo: 'ORN-D1' } },
         { malzemeId: cubuk, miktar: '300', konumId: goz.konumId, parti: { tedarikciPartiNo: 'ORN-L2', dokumNo: 'ORN-D2' } },
@@ -70,7 +70,7 @@ export const ornekVeri = ornekVeriTanimi({
       ],
     }, () => undefined);
     await servis.malKabulYap(db, depocu, {
-      tur: 'satin_alma', irsaliyeNo: 'ORN-IRS-2',
+      tur: 'diger', irsaliyeNo: 'ORN-IRS-2',
       satirlar: [{ malzemeId: levha, miktar: '80', konumId: zemin2, parti: { tedarikciPartiNo: 'ORN-L4' } }],
     }, () => undefined);
     await servis.tasimaYap(db, depocu.id, { malzemeId: yag, kaynakKonumId: zemin1, hedefKonumId: araAlan, miktar: '20', aciklama: 'Örnek taşıma' });

@@ -1,3 +1,11 @@
+# FARK: stok, siparişsiz satın alma kabulü reddi (kart #99; soru 104 a)
+
+Kullanıcı kararı 2026-10-22: Soru 104 a, davranış değiştiren düzeltme onaylı.
+- `POST /stok/mal-kabul`: `tur: 'satin_alma'` olan her satır sipariş satırı ister; yoksa 400, alan `satirlar.N.siparisSatirId`, ileti "diğer" türünü söyler. Siparişli kabul değişmedi; iade ve diğer değişmedi.
+- Örnek veri ve stok testlerindeki siparişsiz giriş kurguları "diğer" türüne çevrildi (sınadıkları stok davranışı aynı).
+- Mal kabul ekranı: satın alma türünde siparişe bağlanmamış satır varsa göndermeden önce uyarı.
+- Başka modül: `etiket-merkezi` testi (`etiket-merkezi.test.ts` mal kabul kurgusu) siparişsiz satın alma gönderiyor ve kırılır; o modülün kartıyla "diğer"e çevrilmeli (bu dala dokunulmadı).
+
 # FARK: stok, Malzeme · Teslim paneline Okut taşınması, sunucu (kart #95; sorular 89, 93 a, 95 a, 96 a+b, 98 a)
 
 Kullanıcı kararları 2026-10-22: Soru 96 a ve b, b'de telafi 1-4 ile; onaylı kararı (T7) değiştirme, dolu tabloyu değiştiren göç, yetki genişletme ve güvenliği gevşetme onaylı. Soru 98 a davranış değiştiren düzeltme onaylı. Rol x işlem değişmedi.

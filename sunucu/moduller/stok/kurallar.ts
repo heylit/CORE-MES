@@ -239,8 +239,11 @@ export function duzeltmeEngeli(b: { duzeltildi: boolean }): string | null {
 
 // Sipariş bağı (SH1 a): yalnız satın alma kabulünün satırı siparişe bağlanır; teslim bilgisini satın alma bu bağla tutar.
 // Kalanı aşan miktar reddedilmez: depo saydığını yazar, fazlası siparişte "fazla teslim" görünür (kullanıcı kararı).
+// Soru 104 a: satın alma kabulü her satırda sipariş satırıyla yazılır, yoksa mal stoğa girer ama siparişte teslim görünmez.
 export function siparisBagiEngeli(tur: string, siparisSatirId: number | null): string | null {
-  return siparisSatirId !== null && tur !== 'satin_alma' ? 'Sipariş satırı yalnız satın alma kabulünde seçilir.' : null;
+  if (siparisSatirId !== null && tur !== 'satin_alma') return 'Sipariş satırı yalnız satın alma kabulünde seçilir.';
+  if (siparisSatirId === null && tur === 'satin_alma') return 'Satın alma kabulü sipariş satırıyla yapılır; siparişi olmayan malı "diğer" türüyle ve açıklamayla alın.';
+  return null;
 }
 // Mal kabul satırının türü (K-080 c, DEP-58): sipariş satırı hizmet kartınınsa satır fasondan dönüştür (kartı dönen malzeme,
 // giden fason konumundan düşer) ya da satırın kartı da hizmetse saf hizmettir (stok yazmaz, yalnız teslim). Fason bilgisi

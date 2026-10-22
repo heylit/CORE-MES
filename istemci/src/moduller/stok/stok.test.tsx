@@ -398,6 +398,19 @@ describe('Mal kabul', () => {
     const g = istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: { malzemeId: number; miktar: string; parti: { dokumNo: string } | null }[] };
     expect(g.satirlar[0]).toMatchObject({ malzemeId: 901, miktar: '12.5', konumId: 3, parti: { dokumNo: 'D-7' }, ambalaj: { tur: 'kasa', olcu: 'hop', adet: 5 } });
   });
+  it('soru 104 a: siparişsiz satın alma satırında uyarı çıkar; Diğer türünde çıkmaz', async () => {
+    sunucuKur(DEPOCU, {
+      'GET /stok/konumlar': () => json(200, bosListe satisfies KonumlarCevabi),
+      'GET /stok/mal-kabuller': () => json(200, bosListe satisfies MalKabullerCevabi),
+      'GET /stok/acik-siparis-satirlari': () => json(200, { satirlar: [] } satisfies AcikSiparisSatirlariCevabi),
+    });
+    ac('/stok/mal-kabul');
+    expect(screen.queryByText(/her satır bir sipariş satırına bağlanır/)).toBeNull();
+    fireEvent.change(await screen.findByLabelText('Malzeme'), { target: { value: '901' } });
+    expect(await screen.findByText(/her satır bir sipariş satırına bağlanır/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'diger' } });
+    expect(screen.queryByText(/her satır bir sipariş satırına bağlanır/)).toBeNull();
+  });
   it('kart adıyla yazılınca katalogda eşleşen kartları listeler; seçilen kartın numarası gövdeye, adı alana yazılır', async () => {
     const istekler = sunucuKur(DEPOCU, {
       'GET /stok/konumlar': () => json(200, bosListe satisfies KonumlarCevabi),

@@ -358,6 +358,10 @@ export function MalKabul() {
               return bos >= 0 ? l.map((s, i) => (i === bos ? siparistenSatir(s, x) : s)) : [...l, siparistenSatir(bosSatir(), x)];
             })} />}
             <SatirListesi satirlar={satirlar} setSatirlar={setSatirlar} />
+            {/* Soru 104 a: sunucu siparişsiz satın alma satırını reddeder; uyarı göndermeden önce söyler. */}
+            {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
+              <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
+            )}
             <div className="tc-stok-sag"><Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><Dugme tur="ikincil" simge="tag" onClick={() => setEtiketAcik(true)}>Lot etiketlerini bas</Dugme></p>}
           </form>

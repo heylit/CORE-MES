@@ -313,7 +313,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       await o().sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, istasyon_id)
         SELECT d.id, 'IST-' || m.istasyon_id, 'istasyon', m.istasyon_id FROM stok_depo d, makine m WHERE d.kod = 'ANA' AND m.id = $1`, [m1]);
       const k1 = await konum(m1);
-      const kabul = await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: hm, miktar: '30', konumId: k1 }] });
+      const kabul = await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: hm, miktar: '30', konumId: k1 }] });
       assert.equal(kabul.durum, 200, JSON.stringify(kabul.govde));
       const b1 = await terminal(id, 'baslat');
       assert.equal(b1.durum, 200, JSON.stringify(b1.govde));
@@ -377,7 +377,7 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       const kabulKonumu = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
       const miktar = async (malzemeId: number, konumId: number, st: number | null) => Number((await o().sahip.tek<{ m: string }>(
         'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND statu_id IS NOT DISTINCT FROM $3', [malzemeId, konumId, st]))!.m);
-      assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: hm, miktar: '20', konumId: k1 }] })).durum, 200);
+      assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: hm, miktar: '20', konumId: k1 }] })).durum, 200);
       assert.equal((await terminal(id, 'baslat')).durum, 200);
       assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 5 })).durum, 200);
       await ilkParcaOnay(id);

@@ -442,7 +442,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.match(mc.komut, /Deneme mil/);
 
     const kabul = await yaz(yonetici, '/stok/mal-kabul', {
-      tur: 'satin_alma', satirlar: [{ malzemeId: kart, miktar: '5', parti: { tedarikciPartiNo: 'MK-A' } }, { malzemeId: kart, miktar: '7', parti: { tedarikciPartiNo: 'MK-B' } }],
+      tur: 'diger', satirlar: [{ malzemeId: kart, miktar: '5', parti: { tedarikciPartiNo: 'MK-A' } }, { malzemeId: kart, miktar: '7', parti: { tedarikciPartiNo: 'MK-B' } }],
     });
     assert.equal(kabul.statusCode, 200, kabul.body);
     const mkId = (kabul.json() as { belge: { id: number } }).belge.id;
