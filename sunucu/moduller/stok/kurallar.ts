@@ -510,6 +510,33 @@ export function serbestMiktarEngeli(bakiye: string, yolda: string, miktar: strin
   return binde(yolda) > 0n ? `Burada ${s} serbest var (${bindenMetin(binde(yolda))} yolda); fazlası ${eylem}.` : `Burada ${s} var; fazlası ${eylem}.`;
 }
 
+// ---- Malzeme iste: istasyondan istek ve okutarak alma (kart #95, soru 96) ---------------------------------------------------------
+// Soru 98 a: mamul ve yarı mamul elle sevkte stoktan düşülmez; okutulan ürünün sevkiyat işi ilerler ve stok iş durumuyla bir kez düşer.
+// Elle sevk çıkışı yalnız emirsiz malzemede (hammadde, ticari mal vb.) kalır; öteki çıkış nedenleri değişmez.
+export function sevkCikisEngeli(tur: KatalogTuru | string, cikisNedeni: string): string | null {
+  if (cikisNedeni !== 'sevk' || (tur !== 'mamul' && tur !== 'yarimamul')) return null;
+  return 'Mamul ve yarı mamul elle sevk çıkışıyla düşülmez; ürünü okutup Teslim et > Sevk ile sevkiyat işini ilerletin.';
+}
+// İstasyondan istek: teslim yeri istasyon olmalı ve kaynaktan farklı olmalı (o istasyonun yetkilisi teslimi oraya gönderir).
+export function istasyondanIstekEngeli(kaynakIstasyonId: number, hedefIstasyonId: number | null): string | null {
+  if (hedefIstasyonId === null) return 'İstasyondan istenen malzeme bir istasyona teslim edilir; teslim yerini seçin.';
+  if (hedefIstasyonId === kaynakIstasyonId) return 'Malzeme zaten bu istasyonda; başka bir istasyon seçin.';
+  return null;
+}
+// Telafi 1: okutarak yalnız kalitesi serbest stok alınır (karar bekleyen ve red alınmaz; yoldaki ayrılmış serbestMiktarEngeli ile düşülür).
+// K2: başka emrin partisi alınmaz; emirli parti yalnız aynı emir için alınır, emirsiz parti serbesttir.
+export function okutarakAlmaEngeli(s: { kalite: KaliteDurumu; partiEmriId: number | null; uretimEmriId: number | null; kaynakIstasyonId: number; hedefIstasyonId: number }): string | null {
+  if (s.kaynakIstasyonId === s.hedefIstasyonId) return 'Malzeme zaten bu istasyonda.';
+  if (s.kalite !== 'serbest') return 'Kalite kararı bekleyen ya da red parça okutarak alınmaz.';
+  if (s.partiEmriId !== null && s.partiEmriId !== s.uretimEmriId) return 'Bu parti başka bir emrin; yalnız o emir için alınır.';
+  return null;
+}
+// Telafi 3: itiraz süresi alındığı günün vardiya bitişine kadardır; vardiya bitişi yoksa ya da geçtiyse tesis gününün sonuna kadar.
+export function itirazSonu(an: number, vardiyaBitisi: string | null, gunSonu: number): string {
+  const v = vardiyaBitisi === null ? Number.NaN : Date.parse(vardiyaBitisi);
+  return new Date(Number.isFinite(v) && v > an ? v : gunSonu).toISOString();
+}
+
 // ---- Üretim sayımının stoğa yansıması (kart #1289) ------------------------------------------------------------------------------
 export interface IstasyonEmirBakiyesi { partiId: number; statuId: number | null; kaliteDurumu?: KaliteDurumu; miktar: string; ayrilan: string }
 export interface SayimYansimaPlani {

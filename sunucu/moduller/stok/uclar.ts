@@ -15,6 +15,7 @@ import {
   fisAyrintiCevabi, fisCevabi, fislerCevabi, fislerSorgusu, kodCozCevabi, kodCozSorgusu, okutCozCevabi, kisiKoduCevabi, lotEtiketleriCevabi, sepetCevabi, sepetDegistirGovdesi, sepetEkleGovdesi, sepetTeslimCevabi, stoktanDusGovdesi, teslimGovdesi,
   istekTeslimGovdesi, stokOzetiCevabi, malzemeIstegiCevabi, malzemeIstekleriCevabi, malzemeIstekleriSorgusu,
   istasyonSepetiCevabi, istasyonSepetiSorgusu, sepettenKullanGovdesi, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
+  istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -146,6 +147,13 @@ export const uclar = [
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/teslimler/gonder', yetki: 'stok.istek', govde: teslimGonderGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, govde }) => s.teslimGonder(db, kullanici, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/teslimler/:id/teslim-al', yetki: 'stok.istek', parametre: kimlikParametresi, govde: teslimAlGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimAl(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/stok/teslimler/:id/reddet', yetki: 'stok.istek', parametre: kimlikParametresi, govde: teslimReddetGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimReddet(db, kullanici, parametre.id, govde) }),
+  // Soru 96: istasyondan istek (A) ve okutarak alma (B). Kapsam ve iki imza kuralları servis içindedir.
+  uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/malzeme-yerleri', yetki: 'stok.istek', sorgu: malzemeYerleriSorgusu, cevap: malzemeYerleriCevabi, isle: ({ db, sorgu }) => s.malzemeYerleri(db, sorgu.malzemeId) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/malzeme-istekleri/:id/kabul-et', yetki: 'stok.istek', parametre: kimlikParametresi, govde: istekKabulGovdesi, cevap: malzemeIstegiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.istekKabulEt(db, kullanici, parametre.id, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/malzeme-istekleri/:id/reddet', yetki: 'stok.istek', parametre: kimlikParametresi, govde: istekReddetGovdesi, cevap: malzemeIstegiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.istekReddet(db, kullanici, parametre.id, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/okutarak-al', yetki: 'stok.istek', sorgu: okutarakAlSorgusu, cevap: okutarakAlCevabi, isle: ({ db, sorgu }) => s.okutarakAlOnizle(db, sorgu.kod, sorgu.yerKodu) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/teslim-kutusu/okutarak-al', yetki: 'stok.istek', govde: okutarakAlGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, govde }) => s.okutarakAl(db, kullanici, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/teslimler/:id/itiraz', yetki: 'stok.istek', parametre: kimlikParametresi, govde: itirazGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimItiraz(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/stok/teslimler/:id/iptal-et', yetki: 'stok.istek', parametre: kimlikParametresi, govde: surumGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimIptal(db, kullanici, parametre.id, govde) }),
 
   // Depo yerleşimi: düzenleyici tek komutla kaydeder (raf tanımı işlemi). Kare adı dama tahtası içindir.

@@ -8,6 +8,7 @@ import {
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu,
+  sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -523,5 +524,27 @@ describe('DEP-64 katalog etiketi', () => {
     assert.equal(katalogEtiketiStokKodu('MK:HM-ABC-00001'), 'HM-ABC-00001');
     assert.equal(katalogEtiketiStokKodu(' mk : hm-abc-00001 '), 'HM-ABC-00001');
     for (const ham of ['MK:', 'MK: ', 'MLZ:12', 'HM-ABC-00001', 'MK:A B', 'XMK:HM-1']) assert.equal(katalogEtiketiStokKodu(ham), null, ham);
+  });
+  test('soru 98 a: mamul ve yarı mamul elle sevk çıkışıyla düşülmez; emirsiz malzeme ve öteki nedenler değişmez', () => {
+    for (const tur of ['mamul', 'yarimamul']) assert.match(sevkCikisEngeli(tur, 'sevk') ?? '', /sevkiyat işini/, tur);
+    for (const tur of ['hammadde', 'ticari_mal', 'sarf']) assert.equal(sevkCikisEngeli(tur, 'sevk'), null, tur);
+    for (const neden of ['fire', 'numune', 'uretime_sarf', 'diger']) assert.equal(sevkCikisEngeli('mamul', neden), null, neden);
+  });
+
+  test('soru 96: istasyondan istek istasyona gider; okutarak yalnız serbest ve aynı emrin ya da emirsiz partisi alınır; itiraz süresi', () => {
+    assert.match(istasyondanIstekEngeli(3, null) ?? '', /teslim yerini/);
+    assert.match(istasyondanIstekEngeli(3, 3) ?? '', /zaten bu istasyonda/);
+    assert.equal(istasyondanIstekEngeli(3, 4), null);
+    const s = { kalite: 'serbest' as const, partiEmriId: null, uretimEmriId: null, kaynakIstasyonId: 1, hedefIstasyonId: 2 };
+    assert.equal(okutarakAlmaEngeli(s), null);
+    assert.match(okutarakAlmaEngeli({ ...s, hedefIstasyonId: 1 }) ?? '', /zaten/);
+    for (const kalite of ['karar_bekliyor', 'red', 'sartli'] as const) assert.match(okutarakAlmaEngeli({ ...s, kalite }) ?? '', /Kalite/, kalite);
+    assert.match(okutarakAlmaEngeli({ ...s, partiEmriId: 7 }) ?? '', /başka bir emrin/);
+    assert.match(okutarakAlmaEngeli({ ...s, partiEmriId: 7, uretimEmriId: 8 }) ?? '', /başka bir emrin/);
+    assert.equal(okutarakAlmaEngeli({ ...s, partiEmriId: 7, uretimEmriId: 7 }), null);
+    const an = Date.parse('2026-10-22T08:00:00Z'), gunSonu = Date.parse('2026-10-22T21:00:00Z');
+    assert.equal(itirazSonu(an, '2026-10-22T14:30:00Z', gunSonu), '2026-10-22T14:30:00.000Z', 'vardiya bitişi');
+    assert.equal(itirazSonu(an, '2026-10-22T07:00:00Z', gunSonu), '2026-10-22T21:00:00.000Z', 'vardiya bittiyse gün sonu');
+    assert.equal(itirazSonu(an, null, gunSonu), '2026-10-22T21:00:00.000Z', 'takvim yoksa gün sonu');
   });
 });

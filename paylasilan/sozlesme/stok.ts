@@ -892,6 +892,8 @@ export const malzemeIstegi = z.object({
   toplamaId: z.number().int().nullable(), toplamaNo: z.string().nullable(),
   // İsteğe gönderilmiş, henüz teslim alınmamış teslim: istek açık kalır ama depo için iş bitmiştir (Akış A provası D1).
   yoldaTeslim: z.object({ id: z.number().int(), no: z.string() }).nullable().optional(),
+  // Soru 96 a: istek bir istasyondan istendiyse o istasyon (depoya düşmez); reddedildiyse nedeni.
+  kaynakIstasyonId: z.number().int().nullable().optional(), kaynakIstasyonAd: z.string().nullable().optional(), redNedeni: z.string().nullable().optional(),
 });
 export type MalzemeIstegi = z.output<typeof malzemeIstegi>;
 export const malzemeIstekleriSorgusu = z.object({ ...listeSorguAlanlari(['acilis']), durum: z.enum(MALZEME_ISTEGI_DURUMLARI).optional() });
@@ -923,8 +925,42 @@ export const istekAcGovdesi = z.object({
   uretimEmriId: kimlik.nullable().optional(),
   not: bosOlabilir(200),
   kaynakKimligi: z.string().trim().min(3).max(120),
+  // Soru 96 a: verilirse istek o istasyondan istenir; teslim yeri istasyon olmalıdır. Verilmezse depodan.
+  kaynakIstasyonId: kimlik.nullable().optional(),
 });
 export type IstekAcGovdesi = z.input<typeof istekAcGovdesi>;
+// İstasyondan istenen isteği o istasyonun yetkilisi kabul edip teslim gönderir (iki imza korunur: alan teslimi alır) ya da reddeder.
+export const istekKabulGovdesi = z.object({
+  ...beklenenSurum, miktar: miktarSemasi, partiId: buyukKimlik.nullable().optional(), statuId: kimlik.nullable().optional(), kaynakKimligi: z.string().trim().min(3).max(120),
+});
+export type IstekKabulGovdesi = z.input<typeof istekKabulGovdesi>;
+export const istekReddetGovdesi = z.object({ ...beklenenSurum, neden: z.string().trim().min(1, 'Red nedeni yazın.').max(200) });
+export type IstekReddetGovdesi = z.input<typeof istekReddetGovdesi>;
+// "Nerede var" (soru 96 a, 93 a): depodaki kullanılabilir toplam ve istasyonlardaki serbest miktar (yoldaki düşülür, kalitesi serbest).
+export const malzemeYerleriSorgusu = z.object({ malzemeId: kimlik });
+export const malzemeYerleriCevabi = z.object({
+  depo: ondalikMetinSemasi,
+  istasyonlar: z.array(z.object({ istasyonId: z.number().int(), kod: z.string(), ad: z.string(), statuId: z.number().int().nullable(), miktar: ondalikMetinSemasi })),
+});
+export type MalzemeYerleriCevabi = z.output<typeof malzemeYerleriCevabi>;
+// Okutarak al (soru 96 b): alan kişi malzemeyi (ya da lotu) ve aldığı yerin etiketini okutur; sunucu iki kodu yeniden çözer.
+export const okutarakAlSorgusu = z.object({ kod: z.string().trim().min(1).max(120), yerKodu: z.string().trim().min(1).max(120) });
+export const okutarakAlCevabi = z.object({
+  malzeme: z.object({ id: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() }),
+  yer: z.object({ konumId: z.number().int(), istasyonId: z.number().int(), kod: z.string(), ad: z.string() }),
+  satirlar: z.array(z.object({
+    partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), statuId: z.number().int().nullable(), uretimEmriId: z.number().int().nullable(), miktar: ondalikMetinSemasi,
+  })),
+});
+export type OkutarakAlCevabi = z.output<typeof okutarakAlCevabi>;
+export const okutarakAlGovdesi = z.object({
+  kod: z.string().trim().min(1).max(120), yerKodu: z.string().trim().min(1).max(120), istasyonId: kimlik,
+  partiId: buyukKimlik.nullable(), statuId: kimlik.nullable(), miktar: miktarSemasi, uretimEmriId: kimlik.nullable().optional(),
+  kaynakKimligi: z.string().trim().min(3).max(120),
+});
+export type OkutarakAlGovdesi = z.input<typeof okutarakAlGovdesi>;
+export const itirazGovdesi = z.object({ ...beklenenSurum, neden: z.string().trim().min(1, 'İtiraz nedenini yazın.').max(200) });
+export type ItirazGovdesi = z.input<typeof itirazGovdesi>;
 export const TESLIM_DURUMLARI = ['yolda', 'teslim', 'red', 'iptal'] as const;
 export type TeslimDurumu = (typeof TESLIM_DURUMLARI)[number];
 // Teslimin iki ucu: istasyon (konumu kendiliğinden açılır) ya da stok konumu.
@@ -963,6 +999,9 @@ export const teslim = z.object({
   // Kişiye teslimde alacak kişi; boşsa istasyonun ya da deponun yetkilisi alır.
   aliciAd: z.string().nullable(),
   gonderim: zamanSemasi, kapanis: zamanSemasi.nullable(), surum: surumSemasi,
+  // Soru 96 b: okutarak alındı, kaynak onayı yok; kaynak taraf itirazSonu'na kadar itiraz eder. İtiraz geri almaz, iade teslimi açar.
+  okutarak: z.boolean().optional(), itirazSonu: zamanSemasi.nullable().optional(),
+  itiraz: z.object({ neden: z.string(), kisiAd: z.string().nullable(), zaman: zamanSemasi, iadeTeslimId: z.number().int().nullable() }).nullable().optional(),
 });
 export type Teslim = z.output<typeof teslim>;
 export const teslimCevabi = z.object({ teslim });
@@ -972,6 +1011,9 @@ export const teslimKutusuCevabi = z.object({
   gelenler: z.array(teslim),
   gonderdiklerim: z.array(teslim),
   isteklerim: z.array(malzemeIstegi),
+  // Soru 96: kapsamımdaki istasyonlardan istenenler (kabul ya da red bekler) ve okutarak alınan, itiraz süresi süren teslimler.
+  bendenIstenenler: z.array(malzemeIstegi).optional(),
+  okutarakAlinanlar: z.array(teslim).optional(),
   // Kaynak olarak seçilebilen istasyonlar (kişinin kapsamı); hedef olarak bütün aktif istasyonlar ve depo konumları.
   istasyonlar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
   hedefIstasyonlar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
@@ -1023,6 +1065,8 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     malzeme: z.object({ id: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() }),
     parti: z.object({ id: z.number().int(), etiket: z.string() }).nullable(),
     yerler: z.array(okutYeri.extend({ partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(), statuId: z.number().int().nullable(), kaliteDurumu: z.enum(KALITE_DURUMLARI).optional(), miktar: ondalikMetinSemasi })),
+    // Soru 93 a: kapsam dışı istasyonlardaki serbest miktar; buradan teslim gönderilmez, Malzeme iste ile istenir ya da okutarak alınır.
+    digerIstasyonlar: z.array(z.object({ istasyonId: z.number().int(), kod: z.string(), ad: z.string(), miktar: ondalikMetinSemasi })).optional(),
   }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.
   z.object({
@@ -1049,6 +1093,8 @@ export const istasyonSepetiCevabi = z.object({
     // miktar serbest olandır; yolda, gönderilip henüz alınmamış ve burada ayrılmış miktardır (kart #1410).
     statuId: z.number().int().nullable(), miktar: ondalikMetinSemasi, yolda: ondalikMetinSemasi, uretimEmriId: z.number().int().nullable(),
     getiren: z.string().nullable(), gelis: zamanSemasi.nullable(),
+    // Sepet süzgeci (soru 89): satıra son giren hareket üretim (giriş, aynı yerde statü dönüşümü) mi, başka yerden teslim mi; giriş yoksa null.
+    koken: z.enum(['uretim', 'teslim']).nullable().optional(),
     sonraki: z.object({ istasyonId: z.number().int(), kod: z.string().nullable(), ad: z.string(), opNo: z.number().int() }).nullable(),
     sonrakiYok: z.enum(SONRAKI_YOK_NEDENLERI).nullable(),
   })),
