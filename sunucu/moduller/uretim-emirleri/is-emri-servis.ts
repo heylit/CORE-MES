@@ -22,7 +22,7 @@ import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
-  BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
+  BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
 } from './kurallar.ts';
@@ -853,7 +853,7 @@ async function adimiYerineKoy(
   return s.isEmriEkle(db, emirId, await yazi(yer + 1));
 }
 
-// UE-PB1..3, UE-PB8: bölünen adım ve sonrakiler başlamamışsa önceki adımlar bitmeden de bölünür; planlı birleşmeli kol birleşme
+// UE-PB2, UE-PB8, Soru 121 a: bölünen adımın üretilmemiş adedi, sonrakiler başlamamışsa önceki adımlar bitmeden de bölünür; planlı birleşmeli kol birleşme
 // adımına kadar olan iş emirlerini taşır, ek adımlar kola konur. Üstün adedi düşer.
 export async function partiyiBol(
   db: Db, kullanici: Kullanici, id: number,
@@ -869,9 +869,14 @@ export async function partiyiBol(
     .filter((p) => p.bolunmeSira === g.adimSira).reduce((t, p) => t + p.adet, 0);
   const bolunenAdim = kendi.find((i) => i.sira === g.adimSira);
   const gelen = bolunenAdim === undefined ? 0 : await birlesenGelen(db, id, bolunenAdim);
+  // Çalışan adımda sayılan adet üstte kalır; sayım da emri kilitler, arada sayı değişmez.
+  const bolunenIslenen = bolunenAdim === undefined || bolunenAdim.durum === 'bekliyor'
+    ? 0 : (await s.islenenAdetleriGetir(db, [bolunenAdim.id])).get(bolunenAdim.id)?.adet ?? 0;
   const birlesmeOpNo = g.birlesmeOpNo ?? null;
-  const ihlal = bolmeIhlali({ durum: e.durum, arsiv: e.arsiv, adet: e.adet, isEmirleri: kendi, ayniSiradanBolunen, birlesenGelen: gelen }, g.adimSira, g.adet, birlesmeOpNo);
-  if (ihlal === BOLME_ADET) throw dogrulama(ihlal, 'adet');
+  const ihlal = bolmeIhlali(
+    { durum: e.durum, arsiv: e.arsiv, adet: e.adet, isEmirleri: kendi, ayniSiradanBolunen, birlesenGelen: gelen, bolunenIslenen }, g.adimSira, g.adet, birlesmeOpNo,
+  );
+  if (ihlal === BOLME_ADET || ihlal === BOLME_URETILMIS) throw dogrulama(ihlal, 'adet');
   if (ihlal === BOLME_BIRLESME_ADIMI) throw dogrulama(ihlal, 'birlesmeOpNo');
   if (ihlal !== null) throw cakisma(ihlal);
   if (e.malzemeNo === null || e.kaynakRotaRevizyonId === null) throw bulunamadi(EMIR_YOK);

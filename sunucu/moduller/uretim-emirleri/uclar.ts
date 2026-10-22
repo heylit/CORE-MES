@@ -105,7 +105,7 @@ const emirUclari = [
     parametre: emirParametresi,
     govde: bitirGovdesi,
     cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirBitir(db, kullanici.id, parametre.id, govde.saglamAdet),
+    isle: ({ db, kullanici, parametre, govde }) => emirBitir(db, kullanici.id, parametre.id, govde.saglamAdet, govde.refakatPartisiId ?? null),
   }),
   uc({
     yontem: 'POST',
@@ -129,7 +129,7 @@ const emirUclari = [
     govde: sayimAyarlaGovdesi,
     denetim: 'govdesiz',
     cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam),
+    isle: ({ db, kullanici, parametre, govde }) => emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null),
   }),
   uc({
     yontem: 'POST',

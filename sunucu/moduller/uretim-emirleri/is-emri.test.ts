@@ -19,11 +19,11 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   acikEmir, acikEmirler, aralikAdetleri, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
   isEmriSureOzeti,
-  acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
+  acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
 import type { IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
+  ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -792,6 +792,46 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET ust_emir_id = id, bolunme_sira = 1 WHERE id = $1', [alt]), /uretim_emri_kendine_bagli_degil/);
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlestigi_emir_id = $2 WHERE id = $1', [id, alt]), /uretim_emri_birlesen_iptal/, 'iptal olmayan emir birleşmiş sayılmaz');
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlestigi_emir_id = id WHERE id = $1', [torun]), /uretim_emri_birlesen_iptal/, 'kendine birleşmez');
+  });
+
+  test('kart #125, Soru 121 a: çalışan adımda yalnız üretilmemiş adet bölünür, bitmiş adımdan bölünmez; sayım refakat partisini taşır', async () => {
+    const ist = await istasyonKur();
+    const mk = { tur: 'makine' as const, id: await makineKur(ist) };
+    const { uretimEmriId: id } = await ac([adim(1, mk), adim(2, mk), adim(3, mk)], { adet: 10 });
+    const bol = async (adimSira: number, adet: number) => istek<PartiBolCevabi & Hata>(
+      'planlama_proje', 'POST', `/adimli-emirler/${id}/bol`, { adimSira, adet, surum: (await ayrinti(id)).surum }, randomUUID());
+    const saglamPartileri: (number | null)[] = [];
+    const kararPartileri: (number | null)[] = [];
+    const birak = [
+      saglamSayimDinle(async (_db, olay) => { saglamPartileri.push(olay.refakatPartisiId); }),
+      kaliteKarariDinle(async (_db, olay) => { kararPartileri.push(olay.refakatPartisiId); }),
+    ];
+    try {
+      assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+      assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3, refakatPartisiId: 42 })).durum, 200);
+      await ilkParcaOnay(id);
+      assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1 })).durum, 200);
+      assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1, refakatPartisiId: 0 })).durum, 400, 'parti kimliği pozitif');
+    } finally {
+      for (const b of birak) b();
+    }
+    const satirlar = await o().vt.sorgu<{ tur: string; adet: number; p: number | null }>(
+      'SELECT tur, adet, refakat_partisi_id AS p FROM uretim_sayimi WHERE emir_id = $1 ORDER BY id', [id]);
+    assert.deepEqual(satirlar.map((r) => [r.tur, r.adet, r.p]), [['karar_bekliyor', 3, 42], ['karar_bekliyor', -3, 42], ['saglam', 3, 42], ['saglam', 1, null]],
+      'karar satırları sayımın partisinde kalır');
+    assert.deepEqual([saglamPartileri, kararPartileri], [[42, null], [42]]);
+
+    // Adım 1 çalışıyor, 4 adet sayıldı: üretilmemiş 6 adet bölünür, üretilen üstte kalır.
+    const fazla = await bol(1, 7);
+    assert.deepEqual([fazla.durum, fazla.govde.mesaj], [400, BOLME_URETILMIS]);
+    const b = await bol(1, 6);
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.equal(b.govde.emir.adet, 4);
+    const kol = await ayrinti(b.govde.altEmirId);
+    assert.deepEqual([kol.adet, kol.parti?.bolunmeSira, kol.isEmirleri.map((i) => [i.opNo, i.durum])], [6, 1, [[10, 'bekliyor'], [20, 'bekliyor'], [30, 'bekliyor']]]);
+    const bitti = await terminal(`/${id}/bitir`, {});
+    assert.equal(bitti.durum, 200, JSON.stringify(bitti.govde));
+    assert.deepEqual((await bol(1, 1)).govde.mesaj, BOLME_BASLAMIS, 'bitmiş adımdan bölünmez');
   });
 
   test('parti kolu: önceki adım bitmeden bölünür, rework adımıyla yürür, bekleyen birleşme adımında üstü bekletir, son adımında üste katılır', async () => {

@@ -19,11 +19,12 @@ export const EK_ADIM_ETIKETI: Record<EkAdim['tur'], { ad: string; simge: SimgeAd
   rework: { ad: 'Rework', simge: 'rotate' }, tamir: { ad: 'Tamir', simge: 'wrench' }, ek: { ad: 'Ek adım', simge: 'plus' },
 };
 
-// Parti kolu (PB-K2): bölünen adım ve sonrakiler başlamamışsa her adımdan bölünür; önceki adımların bitmesi gerekmez.
+// Parti kolu (PB-K2, Soru 121 a): bölünen adım bitmemiş, sonrakiler başlamamışsa bölünür; çalışan adımda yalnız üretilmemiş adet
+// ayrılır (adedi sunucu denetler). Önceki adımların bitmesi gerekmez.
 export function bolunebilirAdimlar(d: AdimliEmirAyrintisi): Adim[] {
   if (!ACIK.includes(d.durum) || d.arsiv) return [];
   const sirali = sirala(d.isEmirleri);
-  return sirali.filter((a, i) => sirali.slice(i).every((x) => x.durum === 'bekliyor'));
+  return sirali.filter((a, i) => a.durum !== 'tamam' && sirali.slice(i + 1).every((x) => x.durum === 'bekliyor'));
 }
 
 // Alt parti üst emrine ya da aynı adımdan bölünmüş kardeşine birleşir; kendi alt partisi açıksa birleşmez. Kaynağın kalan adımları rotadan

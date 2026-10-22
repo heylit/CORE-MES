@@ -17,15 +17,23 @@ const ACIK = ['taslak', 'planli', 'basladi'];
 const sirala = <T extends { sira: number }>(l: readonly T[]): T[] => [...l].sort((a, b) => a.sira - b.sira);
 const turu = (a: { tur?: string | undefined }): string => a.tur ?? 'rota';
 
-// Bölünen adım ve sonrakiler başlamamışsa her adımdan bölünür; önceki adımların bitmesi gerekmez.
-export function bolunebilirAdimlar(d: AdimliEmirAyrintisi): Adim[] {
+// Kendisi ve sonrakiler başlamamış adımlar.
+function baslamamisAdimlar(d: AdimliEmirAyrintisi): Adim[] {
   if (!ACIK.includes(d.durum) || d.arsiv) return [];
   const sirali = sirala(d.isEmirleri);
   return sirali.filter((_a, i) => sirali.slice(i).every((x) => x.durum === 'bekliyor'));
 }
 
+// Bölünen adım bitmemiş, sonrakiler başlamamışsa bölünür; çalışan adımda yalnız üretilmemiş adet ayrılır (Soru 121 a, adedi sunucu
+// denetler). Önceki adımların bitmesi gerekmez.
+export function bolunebilirAdimlar(d: AdimliEmirAyrintisi): Adim[] {
+  if (!ACIK.includes(d.durum) || d.arsiv) return [];
+  const sirali = sirala(d.isEmirleri);
+  return sirali.filter((a, i) => a.durum !== 'tamam' && sirali.slice(i + 1).every((x) => x.durum === 'bekliyor'));
+}
+
 // Kolun planlı birleşme adımı: bölünen adımdan sonra gelen ve başlamamış adımlar.
-export const birlesmeAdaylari = (d: AdimliEmirAyrintisi, adimSira: number): Adim[] => bolunebilirAdimlar(d).filter((a) => a.sira > adimSira);
+export const birlesmeAdaylari = (d: AdimliEmirAyrintisi, adimSira: number): Adim[] => baslamamisAdimlar(d).filter((a) => a.sira > adimSira);
 
 // Alt parti üst emrine ya da aynı adımdan bölünmüş kardeşine birleşir; kendi alt partisi açıksa birleşmez. Kalan adımlar rotadan gelmeli ve
 // bekliyor olmalı; iki taraf aynı op numarasında beklemeli.
@@ -207,7 +215,7 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const adaylar = bolunebilirAdimlar(d);
       const kol = girdi['kolN'] !== undefined && girdi['kolN'] !== null;
       const adim = kol ? adaylar.find((a) => a.sira === pozitifAdet(girdi['kolN'], 'ayrılma adımı') + 1) : adaylar[0];
-      if (adim === undefined) throw hata(422, 'Bu emir bu adımdan bölünemez: bölünen adım ve sonrası başlamamış olmalı.');
+      if (adim === undefined) throw hata(422, 'Bu emir bu adımdan bölünemez: bölünen adım bitmemiş, sonraki adımlar başlamamış olmalı.');
       let birlesmeOpNo: number | null = null;
       if (kol) {
         const katilma = birlesmeAdaylari(d, adim.sira).find((a) => a.sira === pozitifAdet(girdi['kolM'], 'katılma adımı'));

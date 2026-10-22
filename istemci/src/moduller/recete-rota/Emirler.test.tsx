@@ -370,13 +370,16 @@ describe('Parti kuralları PartiPaneli ile aynı sonucu verir', () => {
   const kur = (durumlar: Array<'bekliyor' | 'calisiyor' | 'tamam'>, ek: Partial<AdimliEmirAyrintisi> = {}): AdimliEmirAyrintisi => ({
     ...ayrinti(emir(1), sunucu([])), isEmirleri: durumlar.map((d, i) => isEmri(i + 1, d)), ...ek,
   });
-  it('bölünebilir adım: kendisi ve sonrakilerin hepsi bekleyen adımlardır; kapalı emir bölünmez', () => {
+  it('bölünebilir adım (Soru 121 a): kendisi bitmemiş, sonrakilerin hepsi bekleyen adımlardır; kapalı emir bölünmez', () => {
     expect(bolunebilirAdimlar(kur(['tamam', 'bekliyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]);
-    expect(bolunebilirAdimlar(kur(['bekliyor', 'calisiyor', 'bekliyor'])).map((a) => a.sira)).toEqual([3]);
+    expect(bolunebilirAdimlar(kur(['bekliyor', 'calisiyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]);
+    expect(bolunebilirAdimlar(kur(['calisiyor', 'calisiyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]); // sonraki başlamışsa bölünmez
+    expect(bolunebilirAdimlar(kur(['tamam', 'tamam', 'bekliyor'])).map((a) => a.sira)).toEqual([3]); // bitmiş adımdan bölünmez
     expect(bolunebilirAdimlar(kur(['bekliyor', 'bekliyor'], { durum: 'bitti' }))).toEqual([]);
   });
   it('birleşme adayı bölünen adımdan sonra gelen bekleyen adımlardır', () => {
     expect(birlesmeAdaylari(kur(['bekliyor', 'bekliyor', 'bekliyor']), 1).map((a) => a.sira)).toEqual([2, 3]);
+    expect(birlesmeAdaylari(kur(['tamam', 'calisiyor', 'bekliyor']), 0).map((a) => a.sira)).toEqual([3]); // çalışan adım birleşme adımı olamaz
   });
   it('birleşme hedefi: ana emir aynı op numarasında bekliyorsa listelenir, ilerlemişse listelenmez', () => {
     const alt = kur(['bekliyor', 'bekliyor'], { id: 9, parti: { ustEmirId: 1, bolunmeSira: 1, altEmirIdleri: [], birlestigiEmirId: null } });

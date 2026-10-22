@@ -458,7 +458,8 @@ export function malzemeIhtiyaci(
 /* ---------------- parti bölme ve birleştirme (kart #262, kullanıcı kararları A ve PB-K1..K6) ---------------- */
 
 export const BOLME_ADIM_YOK = 'Bölünecek adım bu emirde yok.';
-export const BOLME_BASLAMIS = 'Bölünen adım ve sonrakiler başlamamış olmalı.';
+export const BOLME_BASLAMIS = 'Bölünen adım bitmemiş, sonraki adımlar başlamamış olmalı.';
+export const BOLME_URETILMIS = 'Üretilen adet bölünemez: bölünen adet bu adımda henüz üretilmemiş adetten fazla olamaz.';
 export const BOLME_ADET = 'Bölünen adet 1 ile elde kalan adedin bir eksiği arasında olmalı.';
 export const BOLME_BIRLESME_ADIMI = 'Birleşme adımı bu emirde bölünen adımdan sonra gelen bir adım olmalı.';
 export const BIRLESTIRME_KENDISI = 'Parti kendisiyle birleştirilemez.';
@@ -498,6 +499,8 @@ export interface BolmeDurumu {
   ayniSiradanBolunen: number;
   // Bu adımda emre katılmış kolların çıkardığı sağlam: önceki adımın sağlamında yoktur, adıma girmiştir (UE-PB7).
   birlesenGelen?: number;
+  // Bölünen adımda sayılmış adet (sağlam, hurda, karar bekleyen, red): çalışan adımda üretilen bölünemez (kart #125, Soru 121 a).
+  bolunenIslenen?: number;
 }
 
 // Elde kalan: önceki adım bitmişse onun sağlamı ve bu adımda katılan kolların sağlamı, aynı sırada bölünmüş olanlar düşülerek;
@@ -510,15 +513,19 @@ export function eldekiAdet(d: BolmeDurumu, sira: number): number {
   return Math.min(d.adet, gelen);
 }
 
-// UE-PB1, UE-PB3: bölünen adım ve sonrakiler başlamamış olmalı; önceki adımların bitmesi gerekmez. Planlı birleşme adımı bölünen
-// adımdan sonra gelir (UE-PB8).
+// Soru 121 a (UE-PB1, UE-PB3'ün yerine): bölünen adım çalışıyor olabilir, yalnız orada henüz üretilmemiş adet bölünür; bitmiş adımdan
+// bölünmez, sonraki adımlar başlamamış olmalı. Önceki adımların bitmesi gerekmez. Planlı birleşme adımı bölünen adımdan sonra gelir (UE-PB8).
 export function bolmeIhlali(d: BolmeDurumu, adimSira: number, adet: number, birlesmeOpNo: number | null = null): string | null {
   const acik = acikEmirIhlali(d.durum, d.arsiv);
   if (acik !== null) return acik;
-  if (!d.isEmirleri.some((i) => i.sira === adimSira)) return BOLME_ADIM_YOK;
-  if (d.isEmirleri.some((i) => i.sira >= adimSira && i.durum !== 'bekliyor')) return BOLME_BASLAMIS;
+  const bolunen = d.isEmirleri.find((i) => i.sira === adimSira);
+  if (bolunen === undefined) return BOLME_ADIM_YOK;
+  if (bolunen.durum === 'tamam' || d.isEmirleri.some((i) => i.sira > adimSira && i.durum !== 'bekliyor')) return BOLME_BASLAMIS;
   if (birlesmeOpNo !== null && !d.isEmirleri.some((i) => i.opNo === birlesmeOpNo && i.sira > adimSira)) return BOLME_BIRLESME_ADIMI;
-  return Number.isInteger(adet) && adet >= 1 && adet < eldekiAdet(d, adimSira) ? null : BOLME_ADET;
+  const elde = eldekiAdet(d, adimSira);
+  if (!Number.isInteger(adet) || adet < 1 || adet >= elde) return BOLME_ADET;
+  const islenen = bolunen.durum === 'bekliyor' ? 0 : Math.max(d.bolunenIslenen ?? 0, 0);
+  return adet <= elde - islenen ? null : BOLME_URETILMIS;
 }
 
 export interface BirlestirmeTarafi {
