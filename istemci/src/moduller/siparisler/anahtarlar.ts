@@ -1,6 +1,8 @@
 // Yazma sonrası liste önekiyle geçersiz kılınır; ayrıntı yazma cevabından yerine konur.
 export const anahtarlar = {
   siparisListeleri: ['siparisler', 'siparis', 'liste'] as const,
+  // Ana sayfa özeti sipariş listesi önekinin altındadır: sipariş yazınca o da yenilenir.
+  ozet: ['siparisler', 'siparis', 'liste', 'ozet'] as const,
   siparisListe: (sorgu: object) => ['siparisler', 'siparis', 'liste', sorgu] as const,
   siparis: (id: number) => ['siparisler', 'siparis', 'ayrinti', id] as const,
   siparisDuzenle: (id: number) => ['siparisler', 'siparis', 'duzenle', id] as const,

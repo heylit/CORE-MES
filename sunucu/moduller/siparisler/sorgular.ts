@@ -581,3 +581,29 @@ export function satisKilitleri(db: Db): Promise<SatisKilidiSatiri[]> {
       ORDER BY t.id`,
   );
 }
+
+// Ana sayfa özeti tek okumada: gün tesis saatine göre (Europe/Istanbul), istemciden alınmaz.
+export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): Promise<{
+  acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number; aylik: { ay: string; sayi: number }[];
+}> {
+  const sayilar = await db.tek<{ acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number }>(
+    `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
+     SELECT (SELECT count(*) FROM siparisler_teklif WHERE durum NOT IN ('red', 'siparis'))::int AS "acikTeklif",
+            (SELECT count(*) FROM siparisler_siparis, bugun
+              WHERE durum = 'onayli' AND termin >= bugun.gun AND termin < bugun.gun + $1::int)::int AS "yaklasanTermin",
+            (SELECT count(*) FROM siparisler_siparis, bugun WHERE durum = 'onayli' AND termin < bugun.gun)::int AS "gecikenSiparis"`,
+    [yaklasanGun],
+  );
+  const aylik = await db.sorgu<{ ay: string; sayi: number }>(
+    `WITH aylar AS (
+       SELECT generate_series(date_trunc('month', (now() AT TIME ZONE 'Europe/Istanbul')::date) - make_interval(months => $1::int - 1),
+                              date_trunc('month', (now() AT TIME ZONE 'Europe/Istanbul')::date), interval '1 month')::date AS bas
+     )
+     SELECT to_char(a.bas, 'YYYY-MM') AS ay, count(s.id)::int AS sayi
+       FROM aylar a
+       LEFT JOIN siparisler_siparis s ON s.durum IN ('onayli', 'kapandi') AND date_trunc('month', s.siparis_tarihi)::date = a.bas
+      GROUP BY a.bas ORDER BY a.bas`,
+    [ay],
+  );
+  return { ...sayilar!, aylik };
+}

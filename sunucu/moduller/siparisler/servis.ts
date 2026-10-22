@@ -5,10 +5,10 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import { siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
+import { SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
-  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisDurumu, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
+  MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -221,3 +221,5 @@ export async function siparisSatiriOzetleri(db: Db, idler: number[]): Promise<Ma
 export async function siparisinSatirOzetleri(db: Db, siparisId: number): Promise<SiparisSatiriOzeti[]> {
   return satirOzetleri(db, await sorgular.kalemler(db, siparisId));
 }
+
+export const siparisOzeti = (db: Db): Promise<SiparisOzetiCevabi> => sorgular.siparisOzetiSay(db, YAKLASAN_TERMIN_GUN, SIPARIS_OZETI_AY);
