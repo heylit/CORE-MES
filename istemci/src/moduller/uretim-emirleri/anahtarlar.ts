@@ -10,4 +10,5 @@ export const anahtarlar = {
   refakat: (id: number) => ['uretim-emirleri', 'refakat', id] as const,
   adimli: (id: number) => ['uretim-emirleri', 'adimli', id] as const,
   fasonFirmalari: ['uretim-emirleri', 'fason-firmalari'] as const,
+  siradakiFason: (id: number) => ['uretim-emirleri', 'siradaki-fason', id] as const,
 };

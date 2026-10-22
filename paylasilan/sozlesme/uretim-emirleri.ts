@@ -440,6 +440,15 @@ export const birlesmePlaniGovdesi = z.object({ birlesmeOpNo: KIMLIK.nullable(), 
 export const partiBirlestirGovdesi = z.object({ kaynakEmirId: KIMLIK, surum: surumSemasi, kaynakSurum: surumSemasi }).strict();
 
 const fasonAdedi = (ad: string) => z.number().int(`${ad} tam sayı olmalı.`).nonnegative(`${ad} eksi olamaz.`).max(AZAMI_SAYIM);
+// Malzeme · Teslim panelindeki "Fasona gönder" bölümü (kart #97): okutulan emrin sıradaki fason iş emri; sırada fason yoksa null.
+// gonderilebilir: adıma giren adet (ilk adımda emrin adedi); toplam gönderim bunu aşamaz.
+export const siradakiFasonCevabi = z.object({
+  fason: z.object({
+    uretimEmriId: KIMLIK, emirNo: z.string(), isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), firma: z.string().nullable(),
+    gonderilen: z.number().int().nonnegative(), donenSaglam: z.number().int().nonnegative(), donenHurda: z.number().int().nonnegative(),
+    gonderilebilir: z.number().int(),
+  }).nullable(),
+});
 export const fasonGidisGovdesi = z.object({ adet: fasonAdedi('Gönderilen adet').positive('Gönderilen adet sıfırdan büyük olmalı.') }).strict();
 
 const kodluKayit = z.object({ id: KIMLIK, kod: z.string().nullable(), ad: z.string() });
@@ -630,3 +639,4 @@ export type UretimYeriGovdesi = z.input<typeof uretimYeriGovdesi>;
 export type UretimYeri = (typeof URETIM_YERLERI)[number];
 export type FasonFirmalariCevabi = z.output<typeof fasonFirmalariCevabi>;
 export type FasonGidisGovdesi = z.input<typeof fasonGidisGovdesi>;
+export type SiradakiFasonCevabi = z.output<typeof siradakiFasonCevabi>;
