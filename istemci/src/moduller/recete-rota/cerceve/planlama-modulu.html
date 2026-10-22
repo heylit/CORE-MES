@@ -3975,6 +3975,9 @@ body.pm-ps-karar .pm-yp-kap { display: none; }
 .tp-sip-ad .tp-kisi { margin-left: var(--b-1); }
 .tp-cubuk.onay-kilit { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--grafik-2) 30%, transparent) 0 var(--b-1), transparent var(--b-1) var(--b-2)); outline: var(--cizgi-orta) solid var(--grafik-2); }
 
+/* Uygulamada (zz31-tmi) palet kabuğundur (102 a): çerçevenin kendi paletini açan düğmeler görünmez. */
+.pm-tmi [data-act="v20-palet"] { display: none; }
+
 </style>
 </head>
 <body>
@@ -21682,7 +21685,7 @@ const TP = (function (dis) {
     kok.innerHTML = `<div class="tp">${cizUst()}${U.brif ? cizBrif() : ''}${dnAktif() ? cizDnSerit() : ''}<div class="tp-govde ${U.rayAcik ? 'ray-acik' : ''}">${cizRay()}<div class="tp-pano" id="tp-pano">${cizPano()}</div>${cizBugun()}</div></div>`;
     const pano = $('#tp-pano'); if (U.kaydir) { pano.scrollLeft = U.kaydir.x; pano.scrollTop = U.kaydir.y; } else { pano.scrollLeft = Math.max(0, 5 * pph()); }
     pano.addEventListener('scroll', () => { U.kaydir = { x: pano.scrollLeft, y: pano.scrollTop }; }, { passive: true });
-    cizKart(); cizOklar(); bugunHesapla();
+    cizKart(); cizOklar(); bugunHesapla(); paletBildir();
     const l2 = $('#tp-liste'); if (l2 && U.listeY != null) l2.scrollTop = U.listeY;
   }
   function cizUst() {
@@ -22702,6 +22705,37 @@ Bilgilerinize sunarız.` };
       || `<p class="tp-not tp-komut-bos">Eşleşen komut yok. Biçim: <b>nesne eylem değer</b>. Örnek: "SP-109 öne al", "SP-109.20 taşı T3", "T2 arıza 6 sa", "ölçek ay".</p>`;
     const s = $('#tp-komut-L .sec'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' });
   }
+  function olayBaslat(tip, m) {
+    menuKapat(); U.onizleme = null; U.tepki = null; if (U.kart) ciz();
+    if (tip === 'acil') { kartAc('acil', { urun: S.D.urunler[0].id, adet: 20, gun: 3 }); acilOnizle(); } else { kartAc('olay3', olayVarsayilan(tip, m)); tepkiBaslat(); }
+  }
+  /* ---------- ortak palet (uygulamada; 101 a, 103 a) ----------
+     Uygulamada Ctrl K kabuğun paletidir. Pano parametresiz komutlarını oraya sabit liste olarak bildirir; seçilen komut panonun kendi
+     düğmesinin işini yapar ya da kartını açar. Yazamayana, onaydaki plana ve denemede geçmeyen yazan komut bildirilmez. Liste kabuğa
+     gittikten sonra durum değişmiş olabilir: komut çalışmadan önce liste yeniden kurulur, komut onda yoksa çalışmaz. */
+  function paletKomutlari() {
+    if (!acik()) return [];
+    const yaz = yazar() && S.durum !== 'onayda', dn = !!dnAktif(), f = farkSay(), olay = $('#tp-kok [data-a="olay"]'), L = [];
+    const ekle = (anahtar, baslik, simge, kos, aciklama) => L.push({ anahtar, baslik, simge, kos, ...(aciklama ? { aciklama: String(aciklama).slice(0, 120) } : {}) });
+    if (yaz && S.D.tezgahlar.length) ekle('ariza', 'Arıza gir', 'alert', () => olayBaslat('ariza'), 'Tezgâh duruyor; üç tepkiyi gör');
+    if (yaz && S.D.urunler.length) ekle('acil-siparis', 'Acil sipariş', 'fire', () => olayBaslat('acil'), 'Ekle, nereye sığdığını gör');
+    if (yaz && olay) ekle('olaylar', 'Diğer olaylar', 'list', () => menuAc(olay), 'Malzeme, personel ya da fason gecikmesi');
+    if (yaz && !U.ekip) ekle('deneme', 'Deneme', 'lab', () => kartAc('dn'), 'Şu olursa: ana plandan yeni deneme');
+    if (yaz && !dn && !U.ekip) ekle('iyilestir', 'Planı iyileştir', 'bolt', () => { kartKapat(); dis.iyilestir(); });
+    ekle('gun-ozeti', 'Gün özeti', 'book', () => kartAc('gun'));
+    ekle('brifing', 'Sabah brifingi', 'sun', () => { kartKapat(); U.brif = true; U.brifYeni = true; ciz(); });
+    ekle('atolye-ekrani', 'Atölye ekranı', 'laptop', atolyeAc);
+    if (yaz && !dn && dis.farkli()) ekle('onaya-gonder', 'Onaya gönder', 'upload', () => { rezervAl(); kartAc('gonder'); }, f ? `${f} değişiklik` : '');
+    if (yaz && S.geri.length) ekle('geri-al', 'Geri al', 'back', geriAl, S.geri[S.geri.length - 1].ad);
+    if (yaz && S.ileri.length) ekle('yinele', 'Yinele', 'next', yinele);
+    return L;
+  }
+  function paletBildir() {
+    if (!TP_UYG || typeof window.tmiGorunum.komutlar !== 'function') return;
+    window.tmiGorunum.komutlar(paletKomutlari().map(({ kos, ...k }) => k), anahtar => {
+      const k = paletKomutlari().find(x => x.anahtar === anahtar); if (k) { menuKapat(); k.kos(); }
+    });
+  }
   function komutCalis(i) {
     const k = U.komut; if (!k) return; const x = k.L[i]; komutKapat(); if (!x) return;
     const G = dis.G(); G.tpKomut = [x.metin, ...(G.tpKomut || []).filter(m => m !== x.metin)].slice(0, 5); dis.kaydet();
@@ -22730,7 +22764,7 @@ Bilgilerinize sunarız.` };
     const t = document.createElement('div'); t.innerHTML = cizRay(); lst.innerHTML = t.querySelector('#tp-liste').innerHTML; lst.scrollTop = ly;
     const ust = $('.tp-ust'); if (ust) ust.outerHTML = cizUst();
     pano.innerHTML = cizPano(); pano.scrollLeft = px; pano.scrollTop = py;
-    cizKart(); cizOklar();
+    cizKart(); cizOklar(); paletBildir();
   }
   function sipSec(jid) {
     if (U.secJob === jid && !U.secOp) { U.secJob = null; U.secenek = null; cizHafif(); return; }
@@ -22976,8 +23010,7 @@ Bilgilerinize sunarız.` };
         case 'zoom': U.zoom = +a.dataset.v; U.kaydir = null; ciz(); break;
         case 'geri': geriAl(); break;
         case 'olay': menuAc(a); break;
-        case 'olayAc': { const tip = a.dataset.v, m = a.dataset.m; menuKapat(); U.onizleme = null; U.tepki = null; if (U.kart) ciz();
-          if (tip === 'acil') { kartAc('acil', { urun: S.D.urunler[0].id, adet: 20, gun: 3 }); acilOnizle(); } else { kartAc('olay3', olayVarsayilan(tip, m)); tepkiBaslat(); } break; }
+        case 'olayAc': olayBaslat(a.dataset.v, a.dataset.m); break;
         case 'olayDeg': { const k = a.dataset.k; U.kart.veri[k] = OLAY_SAYI.has(k) ? +a.dataset.v : a.dataset.v; tepkiBaslat(); break; }
         case 'tepkiSec': { if (!U.tepki) break; U.tepki.sec = a.dataset.v; const t = tepkiSecili(U.tepki); cizKart(); if (t && t.z) { U.onizleme = { tur: 'olay3' }; onizlemeCiz(t.z, t.ek.down); } break; }
         case 'tepkiUygula': { const v = U.kart.veri, t = tepkiSecili(U.tepki); if (!t || !t.z) break; U.tepki = null; U.onizleme = null; U.kart = null;
@@ -23110,7 +23143,7 @@ Bilgilerinize sunarız.` };
     dnKur(); gunBasla(); boyut(); ciz(); istekIsle();
   }
   bagla2();
-  return { tak, geriAl, istek };
+  return { tak: () => { tak(); paletBildir(); }, geriAl, istek };
 })(tpDis);
 
 /* Plan sekmesi panodur; plan yoksa stüdyonun boş plan ekranı kalır */
@@ -23258,6 +23291,13 @@ if (TMI_ICINDE) {
   kaynakAl();
   /* başlamış adımların sayımı sayfa açıkken de ilerler: sayfaya dönülünce kaynaklar yeniden okunur */
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S) kaynakAl(); });
+}
+/* ---------- TMI içinde: tek palet (102 a) ----------
+   Uygulamada palet kabuğundur. Çerçevenin kendi paleti (v20) açılmaz, onu açan düğmeler ("Ara", "Komutlar") görünmez (stil: .pm-tmi);
+   Ctrl K'yi köprü kabuğa iletir. Panonun komutları kabuğun paletine liste olarak gider (zz36, paletBildir). */
+if (TMI_ICINDE) {
+  v20PaletAc = function () {};
+  document.documentElement.classList.add('pm-tmi');
 }
 
 /* ---------- Değişiklik izi ---------- */
