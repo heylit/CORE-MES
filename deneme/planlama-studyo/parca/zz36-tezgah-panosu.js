@@ -1,15 +1,17 @@
 /* ---------- Tezgâh panosu: stüdyonun Plan sekmesi (kullanıcı 21.10; kararlar 50 a, 51, 52 b, 53, 55 b) ----------
    Çizelge ekranın kendisidir: işi tutup başka saate ya da tezgâha sürükle, etkisi bırakmadan görünür; sipariş listesi solda,
    seçilen siparişin akışı ve çözüm yolları listede açılır. Pano planın ayrı bir kopyası değildir: çalışma planı (S.plan) okunur ve her
-   karar ona yazılır (tpYaz); Onay, Tezgâh, Sipariş, Kriz ve Senaryo sekmeleri olduğu gibi kalır. Eski Plan sekmesinin (zz31) kodu
+   karar ona yazılır (tpYaz). Tezgâh, Sipariş, Kriz masası ve Senaryo sekmelerinin işi panoya geçti (Y3: olay türleri, üç tepki, ek mesai,
+   adlı denemeler); sekmeler menüden kalktı, kodları durur ve onlara giden düğmeler panoya yönlenir. Eski Plan sekmesinin (zz31) kodu
    durur ama çizilmez: zz22, zz34 ve zz35 onun durumunu (psSek, psSec, sStudyoAc) kullanır. Pano kendi adlarını bir kapsam içinde tutar;
    uygulamanın adlarına yalnız tpDis üzerinden erişir. */
-function tpStD(D) { const e = S.D; S.D = D; try { return stOf(); } finally { S.D = e; } }
+/* motor durumu panonun verisiyle kurulur: denemede veri, ek mesai ve olaylar çalışma planınınkinden ayrılabilir */
+function tpSt(o) { const e = { D: S.D, ekMesai: S.ekMesai, olaylar: S.olaylar }; if (o.D) S.D = o.D; if (o.ekMesai) S.ekMesai = o.ekMesai; if (o.olaylar) S.olaylar = o.olaylar; try { return stOf(); } finally { Object.assign(S, e); } }
 /* pano kararı çalışma planına yazar: önceki plan "Planı geri al" için saklanır, veri (bölme, acil, arıza, kilit, gerçekleşen) planla birlikte değişir */
 function tpYaz(ad, L, geriYok) {
-  if (!geriYok) { planGeri.push({ plan: S.plan, locks: S.locks, guncel: planGuncel(), ekMesai: null }); if (planGeri.length > 20) planGeri.shift(); }
+  if (!geriYok) { planGeri.push({ plan: S.plan, locks: S.locks, guncel: planGuncel(), ekMesai: S.ekMesai }); if (planGeri.length > 20) planGeri.shift(); }
   const once = S.plan ? S.plan.ozet : null;
-  S.D = L.D; S.down = clone(L.down); S.locks = clone(L.locks); S.gercek = clone(L.gercek); S.tpSira = L.sira.slice(); S.dataVer++;
+  S.D = L.D; S.down = clone(L.down); S.locks = clone(L.locks); S.gercek = clone(L.gercek); S.ekMesai = clone(L.ekMesai || []); S.olaylar = clone(L.olaylar || []); S.tpSira = L.sira.slice(); S.dataVer++;
   const st = stOf(); const c = canliSen();
   const k = planKaydi(L.plan, st, c && c.plan ? { ops: c.plan.ops } : null);
   S.plan = { ...k, lb: S.plan && S.plan.lb, lbC: S.plan && S.plan.lbC, ilk: S.plan && S.plan.ilk, gunluk: S.plan && S.plan.gunluk, dataVer: S.dataVer, kim: kim().ad, zaman: Date.now(), kaynak: 'elle', oncekiOzet: once, kapali: S.kapali.slice() };
@@ -18,7 +20,10 @@ function tpYaz(ad, L, geriYok) {
   return S.plan;
 }
 const tpDis = {
-  G: () => S, stOf: () => stOf(), stD: D => tpStD(D), cxAl: () => cxAl(), canli: () => canliSen(), yaz: (ad, L, g) => tpYaz(ad, L, g),
+  G: () => S, stX: o => tpSt(o), cxAl: () => cxAl(), canli: () => canliSen(), yaz: (ad, L, g) => tpYaz(ad, L, g),
+  kayit: (p, st) => { const c = canliSen(); return planKaydi(p, st, c && c.plan ? { ops: c.plan.ops } : null); },
+  olayAd: ev => olayAd(ev), kim: () => kim().ad, kaydet: () => kaydet(), iz: (a, b) => iz(a, b), senKirp: s => senKirp(10, s),
+  mesaiButce: () => (typeof MESAI_BUTCE === 'function' ? MESAI_BUTCE() : null),
   ic: (a, b) => ic(a, b), yetki: () => yetkili('plan.yaz'), calisan: () => !!calisan, basladi: j => basladiMi(j),
   onaya: () => paOnayaGonder(), onayda: () => paOnayda().length, farkli: () => paCalismaFarkli(), iyilestir: () => coz('iyilestir'),
   sekme: v => tekEylem('ps-sek', v), render: () => render(), bildir: (m, t, e) => bildir(m, t, e),
@@ -35,7 +40,7 @@ const TP = (function (dis) {
   const SNAP = 0.25;
 
   /* S panonun görünümüdür: D, arızalar, kilitler ve gerçekleşen çalışmadakilerin aynısıdır; plan, motorun kod çözücüsünün sabit noktasıdır ki boş hamle sıfır etki göstersin */
-  const S = { D: null, down: [], locks: {}, sira: [], plan: null, e: null, canli: null, canliE: null, geri: [], ileri: [], gercek: {}, kaynak: null, dv: -1, durum: 'taslak' };
+  const S = { D: null, down: [], locks: {}, sira: [], ekMesai: [], olaylar: [], plan: null, e: null, canli: null, canliE: null, geri: [], ileri: [], gercek: {}, kaynak: null, dv: -1, durum: 'taslak' };
   Object.defineProperty(S, 'frz', { get: () => +dis.G().w.dondurma || 0 });
   const OLCEK = [[24, 'Gün'], [72, '3 gün'], [168, 'Hafta'], [720, 'Ay'], [8760, 'Yıl']];
   const U = { suz: null, zoom: innerWidth < 768 ? 24 : 72, secOp: null, secJob: null, kart: null, ara: '', surukle: null, onizleme: null, rayAcik: false };
@@ -44,20 +49,27 @@ const TP = (function (dis) {
   /* ---------- motor koprusu ---------- */
   /* motorun durumu uygulamanınkidir (stOf); önizleme yalnız veri, arıza, kilit ve gerçekleşeni değiştirir */
   function stKur(ek = {}) {
-    const st = ek.D ? dis.stD(ek.D) : dis.stOf();
-    if (ek.down) st.down = ek.down.map((d, i) => ({ ...d, id: 'd' + i }));
-    if (ek.locks) st.locks = clone(ek.locks);
-    if (ek.gercek) st.gercek = clone(ek.gercek);
+    const st = dis.stX({ D: ek.D || S.D, ekMesai: ek.ekMesai || S.ekMesai, olaylar: ek.olaylar || S.olaylar });
+    st.down = (ek.down || S.down).map((d, i) => ({ ...d, id: 'd' + i }));
+    st.locks = clone(ek.locks || S.locks);
+    st.gercek = clone(ek.gercek || S.gercek);
     return st;
   }
-  const cxAl = () => dis.cxAl();
+  /* çalışma planındayken derleme uygulamanınkidir; denemede panonun verisi farklı olabilir, kendi derlemesi tutulur */
+  let cxY = { k: null, cx: null };
+  function cxAl() {
+    if (!dnAktif()) return dis.cxAl();
+    const k = [S.D, S.down, S.locks, S.gercek, S.ekMesai, S.olaylar, S.frz];
+    if (!cxY.k || k.some((x, i) => x !== cxY.k[i])) cxY = { k, cx: compile(stKur()) };
+    return cxY.cx;
+  }
   function bagla(p, cx) { Object.defineProperty(p, 'cx', { value: cx, enumerable: false, writable: true }); return p; }
   /* bölünen siparişin gecikmesi motorun saydığı gibidir (parça başına); sipariş başına bir kez sayma kararı 35'te bekliyor */
   function degerle(p, st) { return evaluate(p, st, null, true); }
   function kozet(e) { let kar = 0; for (const j in e.J) if (e.J[j].kar != null) kar += e.J[j].kar; return { wT: e.wT, late: e.late, kar }; }
   /* bir hamlenin plani: dondurma bolgesi korunur, kilitler motorda alt sinirdir */
   function coz(mods, ek = {}) {
-    const st = stKur(ek); const cx = ek.D || ek.down || ek.gercek || ek.locks ? compile(st) : cxAl();
+    const st = stKur(ek); const cx = ek.D || ek.down || ek.gercek || ek.locks || ek.ekMesai || ek.olaylar ? compile(st) : cxAl();
     /* yeni islemler kod cozucunun sirasina ancak kimlikleriyle girer; yoksa planin sonuna kalir */
     let ops = S.plan.ops; if (mods.some(([id]) => !ops[id])) { ops = { ...ops }; for (const [id, m, k] of mods) if (!ops[id]) ops[id] = { id, job: id.slice(0, id.lastIndexOf('.')), m, S: k }; }
     const p = lnsDecode(st, { ops, fail: S.plan.fail || [] }, mods, cx, false, true); slack(p, cx); bagla(p, cx);
@@ -66,8 +78,9 @@ const TP = (function (dis) {
   /* çalışma planı başka yerden değiştiyse (Onay, Kriz, Planı kur, geri al) pano ondan yeniden kurulur */
   function esitle() {
     const G = dis.G(); if (!G.plan) { S.plan = null; return false; }
+    if (dnAktif() && S.plan) return true;
     if (S.kaynak === G.plan && S.dv === G.dataVer && S.plan) return true;
-    Object.assign(S, { D: G.D, down: clone(G.down), locks: clone(G.locks), gercek: clone(G.gercek || {}), sira: (G.tpSira || []).filter(j => G.D.siparisler.some(x => x.id === j)) });
+    Object.assign(S, { D: G.D, down: clone(G.down), locks: clone(G.locks), gercek: clone(G.gercek || {}), ekMesai: clone(G.ekMesai || []), olaylar: clone(G.olaylar || []), sira: (G.tpSira || []).filter(j => G.D.siparisler.some(x => x.id === j)) });
     const cx = cxAl(); if (!cx) { S.plan = null; return false; }
     S.plan = bagla({ ops: G.plan.ops, fail: G.plan.fail || [] }, cx); S.e = degerle(S.plan, stKur());
     for (let i = 0; i < 4; i++) { const z = coz([]); const ayni = Object.keys(z.p.ops).every(id => { const a = S.plan.ops[id], b = z.p.ops[id]; return a && a.m === b.m && Math.abs(a.S - b.S) < 1e-6; }); S.plan = z.p; S.e = z.e; if (ayni) break; }
@@ -128,14 +141,18 @@ const TP = (function (dis) {
 
   /* ---------- karar ve geri al ----------
      Her karar çalışma planına yazılır (dis.yaz). Geri almak panonun kendi listesidir: önceki görünüm geri gelir ve çalışma planına yazılır. */
-  function anlik() { return { D: S.D, down: S.down, locks: S.locks, sira: S.sira, gercek: S.gercek, plan: S.plan, e: S.e }; }
-  function geriYukle(a) { Object.assign(S, { D: a.D, down: a.down, locks: a.locks, sira: a.sira, gercek: a.gercek || {}, plan: a.plan, e: a.e }); }
-  function yansit(ad, geriYok) { const k = dis.yaz(ad, S, geriYok); S.kaynak = k; S.dv = dis.G().dataVer; bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur()); }
+  function anlik() { return { D: S.D, down: S.down, locks: S.locks, sira: S.sira, gercek: S.gercek, ekMesai: S.ekMesai, olaylar: S.olaylar, plan: S.plan, e: S.e }; }
+  function geriYukle(a) { Object.assign(S, { D: a.D, down: a.down, locks: a.locks, sira: a.sira, gercek: a.gercek || {}, ekMesai: a.ekMesai || [], olaylar: a.olaylar || [], plan: a.plan, e: a.e }); }
+  /* karar çalışma planına yazılır; denemedeyken yalnız denemenin kaydına */
+  function yansit(ad, geriYok) {
+    if (dnAktif()) { bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur()); dnKaydet(); return; }
+    const k = dis.yaz(ad, S, geriYok); S.kaynak = k; S.dv = dis.G().dataVer; bagla(S.plan, cxAl()); S.e = degerle(S.plan, stKur());
+  }
   function uygula(ad, yeni) {
     if (!yazar()) { bildir('Yetkiniz yok ya da motor çalışıyor.'); return; }
     const once = kozet(S.e);
     S.geri.push({ ...anlik(), ad, t: Date.now(), once: once.wT }); if (S.geri.length > 40) S.geri.shift(); S.ileri = [];
-    for (const k of ['D', 'down', 'locks', 'sira', 'gercek']) if (yeni[k] !== undefined) S[k] = yeni[k];
+    for (const k of ['D', 'down', 'locks', 'sira', 'gercek', 'ekMesai', 'olaylar']) if (yeni[k] !== undefined) S[k] = yeni[k];
     S.plan = yeni.p; S.e = yeni.e;
     const son = kozet(S.e); S.geri[S.geri.length - 1].son = son.wT; U.bugunDurum = {};
     yansit(ad);
@@ -148,9 +165,9 @@ const TP = (function (dis) {
   /* taslağı sıfırlamak çalışma planını canlı plana döndürür; tek adım değildir, ikinci tıkla olur ve geri alınabilir */
   function taslakSifirla() {
     const c = dis.canli(); if (!c || !c.plan) { bildir('Canlı plan yok; sıfırlanacak taban yok.'); return; }
-    const D = c.D ? clone(c.D) : S.D, down = clone(c.down || []), locks = clone(c.locks || {});
-    const st = stKur({ D, down, locks }), cx = compile(st), p = bagla({ ops: clone(c.plan.ops), fail: [] }, cx);
-    uygula('Taslak sıfırlandı: çalışma canlı plana döndü', { p, e: degerle(p, st), D, down, locks, sira: [] });
+    const D = c.D ? clone(c.D) : S.D, down = clone(c.down || []), locks = clone(c.locks || {}), ekMesai = clone(c.ekMesai || []);
+    const st = stKur({ D, down, locks, ekMesai }), cx = compile(st), p = bagla({ ops: clone(c.plan.ops), fail: [] }, cx);
+    uygula('Taslak sıfırlandı: çalışma canlı plana döndü', { p, e: degerle(p, st), D, down, locks, ekMesai, sira: [] });
   }
   function bildir(m, geri) { dis.bildir(m.replace(/<[^>]+>/g, ''), geri ? 'tamam' : '', geri ? { metin: 'Geri al', act: 'tp-geri' } : undefined); }
 
@@ -164,16 +181,16 @@ const TP = (function (dis) {
   function ciz() {
     const kok = $('#tp-kok'); if (!kok || !S.plan) return;
     const lst = $('#tp-liste'); if (lst) U.listeY = lst.scrollTop;
-    kok.innerHTML = `<div class="tp">${cizUst()}<div class="tp-govde ${U.rayAcik ? 'ray-acik' : ''}">${cizRay()}<div class="tp-pano" id="tp-pano">${cizPano()}</div>${cizBugun()}</div></div>`;
+    kok.innerHTML = `<div class="tp">${cizUst()}${dnAktif() ? cizDnSerit() : ''}<div class="tp-govde ${U.rayAcik ? 'ray-acik' : ''}">${cizRay()}<div class="tp-pano" id="tp-pano">${cizPano()}</div>${cizBugun()}</div></div>`;
     const pano = $('#tp-pano'); if (U.kaydir) { pano.scrollLeft = U.kaydir.x; pano.scrollTop = U.kaydir.y; } else { pano.scrollLeft = Math.max(0, 5 * pph()); }
     pano.addEventListener('scroll', () => { U.kaydir = { x: pano.scrollLeft, y: pano.scrollTop }; }, { passive: true });
     cizKart(); cizOklar(); bugunHesapla();
     const l2 = $('#tp-liste'); if (l2 && U.listeY != null) l2.scrollTop = U.listeY;
   }
   function cizUst() {
-    const o = kozet(S.e), f = farkSay(), c = S.canliE ? kozet(S.canliE) : null, yaz = yazar(), farkli = dis.farkli(), ony = dis.onayda();
+    const o = kozet(S.e), f = farkSay(), c = S.canliE ? kozet(S.canliE) : null, yaz = yazar(), farkli = dis.farkli(), ony = dis.onayda(), dn = dnAktif();
     const dW = c ? o.wT - c.wT : 0;
-    const durum = !c ? `<span class="tp-durum taslak" title="Henüz canlıya alınmış plan yok">${ic('edit')} Çalışma<span class="ikincil"> · canlı yok</span></span>`
+    const durum = dn ? `<span class="tp-durum deneme dn-${dn.renk}" title="Deneme: çalışma planı değişmez">${ic('lab')} Deneme ${dn.harf}</span>` : !c ? `<span class="tp-durum taslak" title="Henüz canlıya alınmış plan yok">${ic('edit')} Çalışma<span class="ikincil"> · canlı yok</span></span>`
       : f ? `<span class="tp-durum taslak" title="Canlı plandan farklı">${ic('edit')} Taslak · ${f}<span class="ikincil"> değişiklik</span></span>` : `<span class="tp-durum ayni" title="Çalışma planı canlı planla aynı">${ic('check')} Canlı planla aynı</span>`;
     return `<header class="tp-ust">
       <button class="tp-tus yalin tp-dar-tus" data-a="ray" aria-label="Siparişler">${ic('list')}</button>
@@ -187,9 +204,10 @@ const TP = (function (dis) {
       <div class="tp-grup" role="group" aria-label="Ölçek">${OLCEK.map(([z, a]) => `<button data-a="zoom" data-v="${z}" aria-pressed="${U.zoom === z}">${a}</button>`).join('')}</div>
       <button class="tp-tus yalin ${U.suz ? 'suz-acik' : ''}" data-a="suz" aria-label="Süz: tezgâh, istasyon, üretim emri" title="Süz">${ic('eye')}${U.suz ? `<span class="say">${Object.values(U.suz).filter(Boolean).length}</span>` : ''}</button>
       <div class="tp-grup geri-grup" role="group" aria-label="Geri al"><button data-a="geri" aria-label="Geri al" title="Geri al (Ctrl+Z)" ${S.geri.length && yaz ? '' : 'disabled'}>${ic('back')}</button><button data-a="geriMenu" aria-label="Karar geçmişi ve taslağı sıfırla" title="Karar geçmişi, taslağı sıfırla">${ic('down')}</button></div>
-      <button class="tp-tus" data-a="olay" aria-label="Olay: arıza ya da acil sipariş" ${yaz ? '' : 'disabled'}>${ic('plus')}<span class="metin ikincil">Olay</span></button>
-      <button class="tp-tus" data-a="iyilestir" aria-label="İyileştir" ${yaz ? '' : 'disabled'} title="Motor planı kısa sürede iyileştirir; sonucu alttaki Sonuç kutusunda sen seçersin">${ic('bolt')}<span class="metin ikincil">İyileştir</span></button>
-      ${farkli && yaz ? `<button class="tp-tus ana" data-a="gonder" aria-label="Onaya gönder">${ic('upload')}<span class="metin">Onaya gönder</span>${f ? `<span class="say">${f}</span>` : ''}</button>` : ''}
+      <button class="tp-tus ${dn ? 'deneme dn-' + dn.renk : ''}" data-a="dnAc" aria-label="Şu olursa: denemeler" title="Çalışma planını bozmadan farklı yollar dene ve karşılaştır">${ic('lab')}<span class="metin ikincil">Dene</span>${U.dn && U.dn.L.length ? `<span class="say">${U.dn.L.length}</span>` : ''}</button>
+      <button class="tp-tus" data-a="olay" aria-label="Olay: arıza, acil sipariş, malzeme, personel ya da fason" ${yaz ? '' : 'disabled'}>${ic('plus')}<span class="metin ikincil">Olay</span></button>
+      <button class="tp-tus" data-a="iyilestir" aria-label="İyileştir" ${yaz && !dn ? '' : 'disabled'} title="Motor planı kısa sürede iyileştirir; sonucu alttaki Sonuç kutusunda sen seçersin">${ic('bolt')}<span class="metin ikincil">İyileştir</span></button>
+      ${farkli && yaz && !dn ? `<button class="tp-tus ana" data-a="gonder" aria-label="Onaya gönder">${ic('upload')}<span class="metin">Onaya gönder</span>${f ? `<span class="say">${f}</span>` : ''}</button>` : ''}
       <button class="tp-tus yalin" data-a="dahasi" aria-label="Diğer">${ic('more')}</button>
     </header>`;
   }
@@ -406,7 +424,7 @@ const TP = (function (dis) {
     const u0 = 7, u1 = 7 + U.zoom; const yuk = {}; for (const r of Object.values(plan.ops)) if (isFinite(r.C) && r.S < u1) yuk[r.m] = (yuk[r.m] || 0) + Math.max(0, Math.min(r.C, u1) - Math.max(r.S, u0));
     const oranOf = m => { const M = cx.M[m]; return M ? Math.min(1, (yuk[m] || 0) / Math.max(1, workIn(M.rw, u0, u1))) : 0; };
     let dar = null, darO = 0.85; for (const m of S.D.tezgahlar) { const o = oranOf(m.id); if (o >= darO) { darO = o; dar = m.id; } }
-    const eskiler = P ? P.eski : null, yil = U.zoom >= 8760, f = U.suz;
+    const eskiler = P ? P.eski : null, yil = U.zoom >= 8760, f = U.suz, dnk = P || yil ? {} : dnKatman(k);
     const emirTez = f && f.j ? new Set(Object.values(plan.ops).filter(r => r.job === f.j || r.job.startsWith(f.j + '/')).map(r => r.m)) : null;
     const sat = satirlar().map(R => {
       const M = cx.M[R.m];
@@ -420,7 +438,7 @@ const TP = (function (dis) {
       const oran = oranOf(R.m), darb = dar === R.m;
       return `<div class="tp-satir ${R.son ? 'grup-son' : ''} ${hedef} ${soluk ? 'soluk' : ''}" data-m="${esc(R.m)}">
         <div class="tp-m ${darb ? 'darbogaz' : ''}" data-a="tezgah" data-m="${esc(R.m)}" title="${esc(R.ad)} · görünen sürede doluluk %${Math.round(oran * 100)}${darb ? ' · darboğaz' : ''}"><b>${esc(R.m[0] === '@' ? R.m.slice(1) : R.m)}${M ? `<span class="yuzde">${darb ? ic('fire') : ''}%${Math.round(oran * 100)}</span>` : ''}</b><small>${esc(R.ad)}</small>${M ? `<span class="yuk"><i style="width:${oran * 100}%"></i></span>` : ''}</div>
-        <div class="tp-zaman" style="width:${W}px">${kap}${ar}${eski}${cub}</div></div>`;
+        <div class="tp-zaman" style="width:${W}px">${kap}${ar}${eski}${cub}${dnk[R.m] || ''}</div></div>`;
     }).join('');
     const now = 7, frz = now + S.frz, sol = `calc(${etiketGen()}px + `;
     return `<div class="tp-ic-alan" style="width:${W + etiketGen()}px">
@@ -507,8 +525,6 @@ const TP = (function (dis) {
         </div>
         ${sabit ? '' : '<p class="tp-not" style="margin-top:var(--b-2)">İpucu: çubuğu sürükleyerek başka saate ya da tezgâha taşı; etkisi bırakmadan önce görünür.</p>'}`;
     },
-    olay() { return null; },
-    olay() { return null; },
     suz() {
       const f = U.suz || {}, R = satirlar(), G = [...new Set(R.map(x => x.grup))];
       return `<h3>${ic('eye')} Süz<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
@@ -527,16 +543,6 @@ const TP = (function (dis) {
         <div class="eylem"><button class="tp-tus" data-a="yinele" ${S.ileri.length && yaz ? '' : 'disabled'}>${ic('next')} Yinele</button>
           <button class="tp-tus ${U.sifirOnay ? 'tehlike' : ''}" data-a="taslakSifirla" ${c && c.plan && yaz ? '' : 'disabled'}>${ic('rotate')} ${U.sifirOnay ? 'Eminim, sıfırla' : 'Taslağı sıfırla'}</button></div>
         <p class="tp-not">${!c || !c.plan ? 'Canlı plan yok: sıfırlanacak taban yok.' : U.sifirOnay ? 'Çalışma planı canlı plana döner; bütün taslak değişiklikleri gider. Bu da bir karar olarak listelenir, geri alınabilir.' : 'Sıfırlama tek adım değildir: çalışmayı canlı plana döndürür, onay ister.'}</p>`;
-    },
-    ariza(v) {
-      const ms = S.D.tezgahlar;
-      const on = U.onizleme && U.onizleme.tur === 'ariza' ? U.onizleme : null;
-      return `<h3>${ic('alert')} Arıza bildir<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
-        <label for="tp-ar-m">Tezgâh</label><select id="tp-ar-m" data-ch="ariza" data-oto>${ms.map(m => `<option value="${m.id}" ${m.id === v.m ? 'selected' : ''}>${m.id} · ${esc(m.ad)}</option>`).join('')}</select>
-        <label>Başlangıç</label><div class="tp-cipler">${[[0, 'Şimdi'], [2, '+2 sa'], [8, '+8 sa'], [24, 'Yarın']].map(([x, a]) => `<button class="tp-cip" data-a="arizaBas" data-v="${x}" aria-pressed="${v.bas === x}">${a}</button>`).join('')}</div>
-        <label>Süre</label><div class="tp-cipler">${[2, 4, 8, 16, 24].map(x => `<button class="tp-cip" data-a="arizaSure" data-v="${x}" aria-pressed="${v.sure === x}">${x} sa</button>`).join('')}</div>
-        <div class="tp-ozet">${on ? `${ic('target')} Etki: ${etkiMetni(on.x)}` : 'Hesaplanıyor…'}</div>
-        <div class="eylem"><button class="tp-tus ana" data-a="arizaUygula" ${on ? '' : 'disabled'}>${ic('check')} Plana işle</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
     },
     acil(v) {
       const on = U.onizleme && U.onizleme.tur === 'acil' ? U.onizleme : null;
@@ -580,6 +586,7 @@ const TP = (function (dis) {
       return `<h3>${ic('more')} Diğer<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
         <label>Ölçek</label><div class="tp-cipler">${OLCEK.map(([z, a]) => `<button class="tp-cip" data-a="zoom" data-v="${z}" aria-pressed="${U.zoom === z}">${a}</button>`).join('')}</div>
         <label>Donuk bölge</label><div class="tp-cipler">${[0, 2, 4, 8, 16, 24].map(x => `<button class="tp-cip" data-a="frz" data-v="${x}" aria-pressed="${S.frz === x}" ${yazar() ? '' : 'disabled'}>${x} sa</button>`).join('')}</div>
+        <label>Stüdyo</label><div class="tp-cipler"><button class="tp-cip" data-a="sekmeGit" data-v="onay">${ic('check')} Onay ve canlı</button><button class="tp-cip" data-a="sekmeGit" data-v="pg">${ic('chart')} Plan ve gerçekleşen</button></div>
         <label>Kısayollar</label><p class="tp-not">Ctrl+Z geri al · Ctrl+Y yinele · Esc kapat · 1-5 ölçek · / ara · taşırken Alt: mıknatıs kapalı</p>
         <p class="tp-not">Her karar çalışma planına yazılır; canlı plan yalnız Onay sekmesinden değişir.</p>
         <p class="tp-not">Lejant: kırmızı geç, turuncu riskli (8 sa'ten az pay), çizgili baş ayar, kesikli çerçeve fason, mavi bölge donuk.</p>`;
@@ -590,6 +597,248 @@ const TP = (function (dis) {
         <div class="tp-cipler">${[0, 2, 4, 8, 16, 24].map(x => `<button class="tp-cip" data-a="frz" data-v="${x}" aria-pressed="${S.frz === x}">${x} sa</button>`).join('')}</div>`;
     },
   };
+
+  /* ---------- olaylar ve üç tepki (eski Kriz masası) ----------
+     Olay önce önizlenir; üç tepki aynı olayla hesaplanır: sırayı koru (işler kendi kuyruğunda kayar), motor toparlasın (donuk bölge
+     dışı kısa sürede yeniden düzenlenir), ek mesaiyle toparla (en yakın boş vardiyalar açılır). Plana yalnız seçilen tepki girer. */
+  const OLAY = [['ariza', 'Arıza ya da bakım', 'alert', 'Tezgâh duruyor'], ['acil', 'Acil sipariş', 'fire', 'Ekle, nereye sığdığını gör'], ['malzeme', 'Malzeme gecikti', 'box', 'Satın alma geç geliyor'],
+    ['eksik', 'Personel eksik', 'user', 'Bir vardiyada kişi eksik'], ['fason', 'Fason gecikti', 'truck', 'Fasoncu geç teslim ediyor']];
+  const hmx = s => { const [a, b] = String(s || '0').split(':').map(Number); return a + (b || 0) / 60; };
+  function vardiyaSa(id) { const v = S.D.vardiyalar.find(x => x.id === id); if (!v) return 0; const a = hmx(v.bas); let b = hmx(v.bit); if (b <= a) b += 24; return b - a; }
+  function olayVarsayilan(tip, m) {
+    const D = S.D, t = D.tezgahlar.find(x => x.id === m);
+    if (tip === 'ariza') return { tip, m: m || (U.secOp ? S.plan.ops[U.secOp].m : (D.tezgahlar[1] || D.tezgahlar[0]).id), bas: 0, saat: 4 };
+    if (tip === 'malzeme') return { tip, kod: (D.malzemeler || []).length ? D.malzemeler[0].kod : null, gun: 2 };
+    if (tip === 'eksik') return { tip, gun: Math.floor(7 / 24), vardiya: D.vardiyalar[0].id, grup: (t || D.tezgahlar[0]).grup, n: 1 };
+    return { tip: 'fason', f: (D.fasoncular || []).length ? D.fasoncular[0].id : null, gun: 2 };
+  }
+  /* arıza çalışma planının arızalarına, diğerleri uygulamanın olay listesine eklenir; ikisi de motorun bildiği biçimdir */
+  function olayEk(v) {
+    if (v.tip === 'ariza') { const bas = 7 + v.bas; return { down: [...S.down, { m: v.m, from: bas, to: bas + v.saat }] }; }
+    return { olaylar: [...S.olaylar, { ...v }] };
+  }
+  const olayAdi = v => v.tip === 'ariza' ? `${v.m} arıza ${v.saat} sa` : dis.olayAd(v);
+  const olayEksik = v => (v.tip === 'malzeme' && !v.kod) || (v.tip === 'fason' && !v.f);
+  const mesaiAdi = L => L.map(e => `${e.m} ${gs(e.gun * 24)} ${e.vardiya}`).join(', ');
+  /* boş vardiya: tezgâhın çalışmadığı, donuk bölgeden sonra başlayan ve henüz açılmamış vardiyalar */
+  function vardiyaBos(m, g0, n, em) {
+    const D = S.D, t = D.tezgahlar.find(x => x.id === m); if (!t || !(t.vardiyalar || []).length) return [];
+    const L = [];
+    for (let g = g0; g < g0 + 5 && L.length < n; g++) for (const v of D.vardiyalar)
+      if (L.length < n && !t.vardiyalar.includes(v.id) && g * 24 + hmx(v.bas) >= 7 + S.frz && !em.some(e => e.m === m && e.gun === g && e.vardiya === v.id)) L.push({ m, gun: g, vardiya: v.id });
+    return L;
+  }
+  function yukSirasi(p, grup) {
+    const y = {}; for (const r of Object.values(p.ops)) if (!r.fas && isFinite(r.C) && r.S < 127) y[r.m] = (y[r.m] || 0) + Math.max(0, Math.min(r.C, 127) - Math.max(r.S, 7));
+    return S.D.tezgahlar.filter(t => !grup || t.grup === grup).map(t => t.id).sort((a, b) => (y[b] || 0) - (y[a] || 0));
+  }
+  /* ek mesai tepkisi: arızada arızalı tezgâh ve grubu, personelde o grup, diğerlerinde en dolu tezgâh; olaydan sonraki ilk iki boş vardiya */
+  function mesaiAday(v, p) {
+    const g0 = Math.floor((v.tip === 'ariza' ? 7 + v.bas + v.saat : 7) / 24);
+    const grup = v.tip === 'ariza' ? (S.D.tezgahlar.find(x => x.id === v.m) || {}).grup : v.tip === 'eksik' && v.grup !== 'ayar' ? v.grup : null;
+    for (const m of [...(v.tip === 'ariza' ? [v.m] : []), ...yukSirasi(p, grup)]) { const l = vardiyaBos(m, g0, 2, S.ekMesai); if (l.length) return l; }
+    return [];
+  }
+  /* motor kısa süre toparlar; donuk bölgeye ve kilitlere dokunmaz, sonuç daha iyi değilse plan olduğu gibi kalır */
+  function toparla(z, ms = 600) {
+    const L = lns(z.st, z.p, null, { ms, seed: 7, free: false });
+    if (cmpEv(L.e, z.e) <= 0 || (L.plan.fail || []).length > (z.p.fail || []).length) return z;
+    slack(L.plan, z.p.cx); bagla(L.plan, z.p.cx); return { p: L.plan, st: z.st, e: degerle(L.plan, z.st) };
+  }
+  function* tepkiGen(v) {
+    const ek = olayEk(v), z0 = coz([], ek);
+    yield { k: 'koru', ad: 'Sırayı koru', acik: 'Kimse yer değiştirmez; olaydan etkilenen işler kendi kuyruğunda kayar.', z: z0, ek };
+    const z1 = toparla(z0);
+    yield { k: 'motor', ad: 'Motor toparlasın', acik: 'Donuk bölge dışındaki işler kısa sürede yeniden düzenlenir; başka işlerin sırası da değişebilir.', z: z1, ek };
+    const mes = mesaiAday(v, z1.p);
+    if (!mes.length) { yield { k: 'mesai', ad: 'Ek mesaiyle toparla', acik: 'Uygun boş vardiya yok: ilgili tezgâhlar bütün vardiyalarda çalışıyor.', yok: true }; return; }
+    const ek2 = { ...ek, ekMesai: [...S.ekMesai, ...mes] }, st2 = stKur(ek2), cx2 = compile(st2);
+    const p0 = lnsDecode(st2, { ops: z1.p.ops, fail: z1.p.fail || [] }, [], cx2, false, true); slack(p0, cx2); bagla(p0, cx2);
+    yield { k: 'mesai', ad: 'Ek mesaiyle toparla', acik: `Ek vardiya açılır: ${mesaiAdi(mes)}.`, z: toparla({ p: p0, st: st2, e: degerle(p0, st2) }), ek: ek2 };
+  }
+  const tepkiSecili = T => T && (T.L.find(t => t.k === T.sec) || T.L.find(t => t.k === T.oner) || T.L[0]);
+  function tepkiBaslat() {
+    const v = U.kart.veri, tok = {}; U.tepki = { tok, L: [], bitti: false, sec: null, oner: null };
+    if (olayEksik(v)) { U.tepki.bitti = true; cizKart(); return; }
+    const it = tepkiGen(v);
+    const adim = () => {
+      const T = U.tepki; if (!T || T.tok !== tok) return;
+      let r; try { r = it.next(); } catch (e) { T.bitti = true; T.hata = String(e.message || e); cizKart(); return; }
+      if (r.done) T.bitti = true; else { const t = r.value; if (t.z) t.x = etki(S.e, t.z.e); T.L.push(t); }
+      /* öneri en az gecikmedir; fark 0,1 saatten azsa önceki (daha az değişiklik) kalır */
+      if (T.bitti) { const iyi = T.L.filter(t => t.z); T.oner = iyi.length ? iyi.reduce((a, b) => (b.z.e.wT < a.z.e.wT - 0.1 ? b : a)).k : null; }
+      if (U.kart && U.kart.tur === 'olay3') { cizKart(); const s = tepkiSecili(T); if (s && s.z) { U.onizleme = { tur: 'olay3' }; onizlemeCiz(s.z, s.ek.down); } }
+      if (!T.bitti) setTimeout(adim, 0);
+    };
+    setTimeout(adim, 0);
+  }
+  KART.olay3 = v => {
+    const D = S.D, T = U.tepki, tip = v.tip, gruplar = [...new Set(D.tezgahlar.map(m => m.grup))];
+    const cip = (k, val, ad, cur) => `<button class="tp-cip" data-a="olayDeg" data-k="${k}" data-v="${esc(val)}" aria-pressed="${String(cur) === String(val)}">${ad}</button>`;
+    const sec = (k, id, ad, L, cur) => `<label for="${id}">${ad}</label><select id="${id}" data-ch="olayDeg" data-k="${k}">${L.map(([x, a]) => `<option value="${esc(x)}" ${String(x) === String(cur) ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>`;
+    let alan = '';
+    if (tip === 'ariza') alan = sec('m', 'tp-ol-m', 'Tezgâh', D.tezgahlar.map(m => [m.id, `${m.id} · ${m.ad}`]), v.m)
+      + `<label>Başlangıç</label><div class="tp-cipler">${[[0, 'Şimdi'], [2, '+2 sa'], [8, '+8 sa'], [24, 'Yarın']].map(([x, a]) => cip('bas', x, a, v.bas)).join('')}</div>`
+      + `<label>Süre</label><div class="tp-cipler">${[2, 4, 8, 16, 24].map(x => cip('saat', x, x + ' sa', v.saat)).join('')}</div>`;
+    else if (tip === 'malzeme') alan = (D.malzemeler || []).length ? sec('kod', 'tp-ol-k', 'Malzeme', D.malzemeler.map(m => [m.kod, `${m.kod} · ${m.ad}`]), v.kod)
+      + `<label>Gecikme</label><div class="tp-cipler">${[1, 2, 3, 5, 7].map(x => cip('gun', x, x + ' gün', v.gun)).join('')}</div>` : '<p class="tp-not">Bu veride malzeme yok.</p>';
+    else if (tip === 'eksik') alan = `<label>Gün</label><div class="tp-cipler">${[0, 1, 2].map(x => cip('gun', x, x === 0 ? 'Bugün' : x === 1 ? 'Yarın' : gs(x * 24), v.gun)).join('')}</div>`
+      + sec('vardiya', 'tp-ol-v', 'Vardiya', D.vardiyalar.map(x => [x.id, `${x.id} · ${x.bas}-${x.bit}`]), v.vardiya)
+      + sec('grup', 'tp-ol-g', 'Kimler', [...gruplar.map(g => [g, grupAd(g) + ' operatörü']), ['ayar', 'Ayarcı']], v.grup)
+      + `<label>Eksik kişi</label><div class="tp-cipler">${[1, 2, 3].map(x => cip('n', x, String(x), v.n)).join('')}</div>`;
+    else alan = (D.fasoncular || []).length ? sec('f', 'tp-ol-f', 'Fasoncu', D.fasoncular.map(f => [f.id, `${f.id} · ${f.ad}`]), v.f)
+      + `<label>Ek gün</label><div class="tp-cipler">${[1, 2, 3, 5].map(x => cip('gun', x, x + ' gün', v.gun)).join('')}</div>` : '<p class="tp-not">Bu veride fasoncu yok.</p>';
+    const s = tepkiSecili(T);
+    const kart = t => t.yok ? `<div class="tp-secenek"><div><span class="ust">${esc(t.ad)}</span><small>${esc(t.acik)}</small></div></div>`
+      : `<div class="tp-secenek ${t.k === T.oner ? 'onerilen' : ''}" data-a="tepkiSec" data-v="${t.k}" aria-pressed="${s === t}" role="button" tabindex="0"><div><span class="ust">${s === t ? ic('check') + ' ' : ''}${esc(t.ad)}${t.k === T.oner ? ' <span class="rozet iyi">önerilen</span>' : ''}</span>
+        <small>${esc(t.acik)}</small><small>gecikme <b>${sure(t.z.e.wT)}</b> · geciken ${t.z.e.late} · ${etkiMetni(t.x)}</small></div></div>`;
+    const bek = T && !T.bitti ? Array.from({ length: Math.max(0, 3 - T.L.length) }, () => `<div class="tp-ozet">${ic('rotate')} Hesaplanıyor…</div>`).join('') : '';
+    return `<h3>${ic((OLAY.find(o => o[0] === tip) || OLAY[0])[2])} ${esc((OLAY.find(o => o[0] === tip) || OLAY[0])[1])}<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
+      <div class="tp-cipler">${OLAY.map(([k, ad, sm]) => `<button class="tp-cip" data-a="olayAc" data-v="${k}" aria-pressed="${k === tip}" title="${esc(ad)}">${ic(sm)}</button>`).join('')}</div>
+      ${alan}
+      <label>Üç tepki</label>
+      ${T && T.hata ? `<p class="tp-not uyari">${ic('alert')} Hesaplanamadı: ${esc(T.hata)}</p>` : ''}
+      ${T ? T.L.map(kart).join('') + bek : ''}
+      <p class="tp-not">Olay plana yalnız seçilen tepkiyle birlikte girer; Vazgeç dersen hiçbir şey değişmez.</p>
+      <div class="eylem"><button class="tp-tus ana" data-a="tepkiUygula" ${s && s.z && T.bitti ? '' : 'disabled'}>${ic('check')} Plana işle</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
+  };
+
+  /* ---------- ek mesai (eski Tezgâh sekmesi) ----------
+     Tezgâhın çalışmadığı bir vardiyayı açmak ya da açılmış ek mesaiyi kaldırmak önce önizlenir; haftalık sınır uyarı olarak gösterilir. */
+  function mesaiHafta(em) { const w = {}; for (const e of em) { const k = Math.floor(e.gun / 7); w[k] = (w[k] || 0) + vardiyaSa(e.vardiya); } return w; }
+  function mesaiOnizle() {
+    const v = U.kart.veri; if (v.ekle == null && v.kaldir == null) { U.onizleme = null; cizKart(); return; }
+    const adaylar = vardiyaBos(v.m, Math.floor(7 / 24), 10, S.ekMesai);
+    const em = v.ekle != null ? [...S.ekMesai, adaylar[v.ekle]] : S.ekMesai.filter((e, i) => i !== v.kaldir);
+    const z = toparla(coz([], { ekMesai: em }), 500);
+    U.onizleme = { tur: 'mesai', z, em, x: etki(S.e, z.e), ad: v.ekle != null ? `Ek mesai: ${mesaiAdi([adaylar[v.ekle]])}` : `Ek mesai kaldırıldı: ${mesaiAdi([S.ekMesai[v.kaldir]])}` };
+    cizKart(); onizlemeCiz(z);
+  }
+  KART.mesai = v => {
+    const m = v.m, t = S.D.tezgahlar.find(x => x.id === m) || {}, on = U.onizleme && U.onizleme.tur === 'mesai' ? U.onizleme : null;
+    const adaylar = vardiyaBos(m, Math.floor(7 / 24), 10, S.ekMesai), acik = S.ekMesai.map((e, i) => [e, i]).filter(([e]) => e.m === m);
+    const butce = dis.mesaiButce(), hafta = mesaiHafta(on ? on.em : S.ekMesai), asan = butce ? Object.entries(hafta).filter(([, h]) => h > butce + 1e-9) : [];
+    const buH = hafta[Math.floor(7 / 24 / 7)] || 0;
+    return `<h3>${ic('clock')} Ek mesai · ${esc(m)}<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
+      <p class="tp-not">${esc(t.ad || '')} · çalıştığı vardiyalar: ${esc((t.vardiyalar || []).join(', ') || '—')}</p>
+      <label>Açılabilecek vardiya</label>${adaylar.length ? `<div class="tp-cipler">${adaylar.map((x, i) => `<button class="tp-cip" data-a="mesaiSec" data-v="${i}" aria-pressed="${v.ekle === i}">${gs(x.gun * 24)} ${esc(x.vardiya)}</button>`).join('')}</div>` : '<p class="tp-not">Önümüzdeki beş günde boş vardiya yok.</p>'}
+      ${acik.length ? `<label>Açılmış ek mesai</label><div class="tp-cipler">${acik.map(([e, i]) => `<button class="tp-cip" data-a="mesaiKaldir" data-v="${i}" aria-pressed="${v.kaldir === i}" title="Kaldırmayı dene">${ic('x')} ${gs(e.gun * 24)} ${esc(e.vardiya)}</button>`).join('')}</div>` : ''}
+      ${on ? `<div class="tp-ozet">${ic('target')} ${esc(on.ad)}<br>${etkiMetni(on.x)}</div>` : '<p class="tp-not">Bir vardiya seç; motor kısa süre toparlar ve etkisi burada görünür.</p>'}
+      <p class="tp-not ${asan.length ? 'uyari' : ''}">${asan.length ? ic('alert') + ' Haftalık ek mesai sınırı aşılıyor' : `Bu hafta ek mesai ${sure(buH)}`}${butce ? ` · haftalık sınır ${sure(butce)}` : ''}</p>
+      <div class="eylem"><button class="tp-tus ana" data-a="mesaiUygula" ${on ? '' : 'disabled'}>${ic('check')} Plana işle</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
+  };
+
+  /* ---------- denemeler (eski Senaryo sekmesi) ----------
+     Her deneme ana plandan başlar ve adıyla, karar notuyla senaryo olarak saklanır (S.senaryolar, kaynak 'pano'); çalışma planı değişmez.
+     En çok üç deneme çizelgede kendi renginde görünür, yan yana karşılaştırılır; biri tek kararla ana plan olur. */
+  const DN_AD = ['A', 'B', 'C'];
+  function dnAktif() { return U.dn && U.dn.aktif != null ? U.dn.L[U.dn.aktif] : null; }
+  const dnKayit = id => dis.G().senaryolar.find(x => x.id === id);
+  function dnKur() {
+    if (U.dn) { U.dn.L = U.dn.L.filter(t => dnKayit(t.id)); if (!U.dn.L.length && U.dn.aktif == null) U.dn = null; return U.dn; }
+    const R = dis.G().senaryolar.filter(x => x.kaynak === 'pano' && x.durum === 'acik' && x.plan).slice(0, 3); if (!R.length) return null;
+    U.dn = { ana: null, L: R.map(r => ({ id: r.id, harf: r.dn, renk: Math.max(0, DN_AD.indexOf(r.dn)), snap: null })), aktif: null, gizli: {} };
+    return U.dn;
+  }
+  function dnSnap(r) {
+    const o = { D: r.D, down: r.down || [], locks: r.locks || {}, sira: r.sira || [], gercek: r.gercek || {}, ekMesai: r.ekMesai || [], olaylar: r.olaylar || [] };
+    const st = stKur(o), cx = compile(st), p = bagla({ ops: r.plan.ops, fail: r.plan.fail || [] }, cx);
+    return { ...o, plan: p, e: degerle(p, st), geri: [], ileri: [] };
+  }
+  function dnKaydet() {
+    const t = dnAktif(), r = t && dnKayit(t.id); if (!r) return;
+    const k = dis.kayit(S.plan, stKur());
+    Object.assign(r, { D: S.D, down: S.down, locks: S.locks, sira: S.sira, gercek: S.gercek, ekMesai: S.ekMesai, olaylar: S.olaylar, plan: k, ozet: k.ozet, J: k.J, zaman: Date.now(), hamle: S.geri.length });
+    dis.kaydet();
+  }
+  function dnAnaYukle() {
+    const a = U.dn && U.dn.ana; if (a) { geriYukle(a); S.geri = a.geri; S.ileri = a.ileri; S.kaynak = a.kaynak; S.dv = a.dv; } else S.kaynak = null;
+    esitle();
+  }
+  function dnSakla() { const d = U.dn; if (!d || d.aktif == null) return; dnKaydet(); d.L[d.aktif].snap = { ...anlik(), geri: S.geri, ileri: S.ileri }; d.aktif = null; dnAnaYukle(); }
+  function dnAnaAl() { U.dn.ana = { ...anlik(), geri: S.geri, ileri: S.ileri, kaynak: S.kaynak, dv: S.dv }; }
+  function dnYeni() {
+    const d = dnKur() || (U.dn = { ana: null, L: [], aktif: null, gizli: {} });
+    dnSakla();
+    if (d.L.length >= 3) { bildir('En çok üç deneme; önce birini sil.'); return; }
+    const harf = DN_AD.find(a => !d.L.some(t => t.harf === a)), G = dis.G();
+    const r = { id: 'tp' + Date.now().toString(36), ad: `Deneme ${harf}`, dn: harf, not: '', durum: 'acik', kaynak: 'pano', yazar: dis.kim(), zaman: Date.now(), tabanSurum: G.canliSurum, pref: clone(G.pref || {}), w: clone(G.w) };
+    G.senaryolar.push(r); dis.senKirp(r);
+    dnAnaAl(); d.L.push({ id: r.id, harf, renk: DN_AD.indexOf(harf), snap: null }); d.aktif = d.L.length - 1;
+    S.geri = []; S.ileri = []; U.secJob = U.secOp = null; U.secenek = null;
+    dnKaydet(); kartKapat(); bildir(`Deneme ${harf} ana plandan başladı: taşı, böl, olay ya da ek mesai dene; çalışma planı değişmez.`); ciz();
+  }
+  function dnDuzenle(i) {
+    dnSakla(); const t = U.dn.L[i], r = dnKayit(t.id); if (!r) return;
+    const x = t.snap || dnSnap(r); dnAnaAl(); geriYukle(x); S.geri = x.geri || []; S.ileri = x.ileri || []; U.dn.aktif = i;
+    U.secJob = U.secOp = null; U.secenek = null; kartKapat(); ciz();
+  }
+  function dnSil(i) {
+    const d = U.dn, t = d.L[i]; if (d.aktif === i) { d.aktif = null; dnAnaYukle(); } else if (d.aktif != null && d.aktif > i) d.aktif--;
+    const G = dis.G(), k = G.senaryolar.findIndex(x => x.id === t.id); if (k >= 0) G.senaryolar.splice(k, 1);
+    d.L.splice(i, 1); if (!d.L.length) U.dn = null; dis.kaydet();
+  }
+  function dnPlan(i) { const d = U.dn, t = d.L[i]; if (i === d.aktif) return { plan: S.plan, e: S.e, n: S.geri.length }; const r = dnKayit(t.id); if (!r) return null; if (!t.snap) t.snap = dnSnap(r); return { plan: t.snap.plan, e: t.snap.e, n: r.hamle || 0 }; }
+  function dnUygula(i) {
+    dnSakla(); const t = U.dn.L[i], r = dnKayit(t.id); if (!r) return; const x = t.snap || dnSnap(r);
+    dnSil(i); kartKapat();
+    uygula(`${r.ad} ana plana alındı`, { p: x.plan, e: x.e, D: x.D, down: x.down, locks: x.locks, sira: x.sira, gercek: x.gercek, ekMesai: x.ekMesai, olaylar: x.olaylar });
+    dis.iz('Deneme ana plana alındı', `${r.ad}${r.not ? ' · ' + r.not : ''}`);
+  }
+  /* çizelge katmanı: denemede yer değiştiren işler kendi renginde ana planın üstünde; deneme düzenlenirken ana plandaki yerleri kesik çizgiyle */
+  function dnKatman(k) {
+    const d = U.dn, K = {}; if (!d) return K;
+    const ekle = (m, h) => { K[m] = (K[m] || '') + h; };
+    if (d.aktif != null) { const A = d.ana ? d.ana.plan.ops : {};
+      for (const id in A) { const a = A[id], b = S.plan.ops[id]; if (!isFinite(a.C) || (b && b.m === a.m && Math.abs(b.S - a.S) < 0.25)) continue;
+        ekle(a.m, `<div class="tp-eski ana" style="left:${a.S * k}px;width:${Math.max(2, (a.C - a.S) * k)}px" title="Ana planda: ${esc(a.job)} ${tz(a.S)}"></div>`); }
+      return K; }
+    d.L.forEach(t => { const r = dnKayit(t.id); if (!r || !r.plan || d.gizli[t.harf]) return; const B = r.plan.ops;
+      for (const id in B) { const b = B[id], a = S.plan.ops[id]; if (!isFinite(b.C) || (a && a.m === b.m && Math.abs(a.S - b.S) < 0.25)) continue;
+        const w = Math.max(3, (b.C - b.S) * k);
+        ekle(b.m, `<div class="tp-dn dn-${t.renk}" style="left:${b.S * k}px;width:${w}px" title="${esc(r.ad)}: ${esc(b.job)} · ${tz(b.S)} → ${tz(b.C)}">${w > 18 ? `<b>${t.harf}</b>${w > 70 ? `<span>${esc(b.job)}</span>` : ''}` : ''}</div>`); } });
+    return K;
+  }
+  function cizDnSerit() {
+    const d = U.dn, t = dnAktif(), r = dnKayit(t.id) || {}, a = d.ana ? kozet(d.ana.e) : kozet(S.e), b = kozet(S.e), dw = b.wT - a.wT;
+    return `<div class="tp-serit dn dn-${t.renk}">${ic('lab')} <b>${esc(r.ad || 'Deneme ' + t.harf)}</b><span><span class="ek">ana plandan · </span>${S.geri.length} hamle · gecikme ${sure(a.wT)} → <b class="${dw > 0.1 ? 'kotu' : dw < -0.1 ? 'iyi' : ''}">${sure(b.wT)}</b><span class="ek"> · çalışma planı değişmez</span></span>
+      <span class="tp-bosluk"></span><button class="tp-tus kucuk" data-a="dnKarsi" aria-label="Karşılaştır">${ic('list')}<span class="metin">Karşılaştır</span></button><button class="tp-tus kucuk" data-a="dnCik" aria-label="Ana plana dön">${ic('back')}<span class="metin">Ana plana dön</span></button></div>`;
+  }
+  KART.dn = () => {
+    const d = dnKur(), kap = `<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button>`;
+    if (!d || !d.L.length) return `<h3>${ic('lab')} Şu olursa${kap}</h3>
+      <p class="tp-not">Çalışma planını bozmadan farklı yollar dene. Her deneme ana plandan başlar, adı ve karar notuyla saklanır; en çok üç deneme çizelgede renkleriyle görünür ve yan yana karşılaştırılır.</p>
+      <div class="eylem"><button class="tp-tus ana" data-a="dnYeni" data-oto ${yazar() ? '' : 'disabled'}>${ic('plus')} Deneme A'yı başlat</button></div>`;
+    const ana = d.aktif == null ? { e: S.e } : d.ana, ka = kozet(ana.e), cn = S.canliE ? kozet(S.canliE) : null;
+    const C = d.L.map((t, i) => { const x = dnPlan(i), r = dnKayit(t.id); if (!x || !r) return null; return { t, i, r, n: x.n, k: kozet(x.e), et: etki(ana.e, x.e) }; }).filter(Boolean);
+    const en = C.filter(c => c.et.dW < -0.1 && c.et.dKar >= -1).sort((a, b) => a.et.dW - b.et.dW)[0];
+    const sinif = (v, a, ters) => Math.abs(v - a) < 0.1 ? '' : (v < a) !== !!ters ? 'iyi' : 'kotu';
+    const sut = `<span></span>${cn ? '<b>Canlı</b>' : ''}<b>Çalışma</b>${C.map(c => `<b class="dn-ad dn-${c.t.renk}">${c.t.harf}</b>`).join('')}`;
+    const sat = (ad, f, g, ters) => `<span>${ad}</span>${cn ? `<b>${g(f(cn))}</b>` : ''}<b>${g(f(ka))}</b>${C.map(c => `<b class="${sinif(f(c.k), f(ka), ters)}">${g(f(c.k))}</b>`).join('')}`;
+    const yaz = yazar();
+    return `<h3>${ic('lab')} Denemeler${kap}</h3>
+      <div class="tp-karsi" style="grid-template-columns:1fr repeat(${C.length + 1 + (cn ? 1 : 0)},auto)">${sut}
+        ${sat('Geciken', k => k.late, v => v)}${sat('Toplam gecikme', k => k.wT, sure)}${sat('Kâr', k => k.kar, tl, true)}
+        <span>Bitişi değişen</span>${cn ? '<b>—</b>' : ''}<b>—</b>${C.map(c => `<b>${c.et.L.length}</b>`).join('')}
+        <span>Hamle</span>${cn ? '<b>—</b>' : ''}<b>—</b>${C.map(c => `<b>${c.n}</b>`).join('')}</div>
+      ${C.map(c => `<div class="tp-dn-sat"><b class="dn-ad dn-${c.t.renk}">${c.t.harf}</b><input value="${esc(c.r.ad)}" data-ch="dnAd" data-i="${c.i}" aria-label="Deneme ${c.t.harf} adı" ${yaz ? '' : 'readonly'}>
+        <textarea rows="2" data-ch="dnNot" data-i="${c.i}" placeholder="Karar notu: neden bu deneme?" aria-label="Deneme ${c.t.harf} karar notu" ${yaz ? '' : 'readonly'}>${esc(c.r.not || '')}</textarea>
+        <span class="ozet">${c === en ? '<span class="rozet iyi">en iyi</span> ' : ''}${c.et.L.slice(0, 3).map(q => `${esc(q.j)} <span class="${q.d > 0 ? 'kotu' : 'iyi'}">${q.d > 0 ? '+' : '−'}${sure(q.d)}</span>`).join(' · ') || 'fark yok'}${c.et.dKar < -1 ? ' · <span class="kotu">kâr düşüyor, öneri yok</span>' : ''}</span>
+        <span class="eylem-ic"><button class="tp-tus kucuk yalin" data-a="dnGoster" data-v="${c.t.harf}" aria-pressed="${!d.gizli[c.t.harf]}" title="Çizelgede göster ya da gizle">${ic('eye')}</button>${c.i === d.aktif ? '<span class="tp-not">açık</span>' : `<button class="tp-tus kucuk" data-a="dnDuzenle" data-i="${c.i}" ${yaz ? '' : 'disabled'}>${ic('edit')} Devam et</button>`}<button class="tp-tus kucuk ${c === en ? 'ana' : ''}" data-a="dnUygula" data-i="${c.i}" ${yaz ? '' : 'disabled'}>${ic('check')} Ana plan yap</button><button class="tp-tus kucuk yalin" data-a="dnSil" data-i="${c.i}" aria-label="Sil" ${yaz ? '' : 'disabled'}>${ic('trash')}</button></span></div>`).join('')}
+      <p class="tp-not">"Ana plan yap" denemeyi çalışma planına alır; canlı plan yine yalnız Onay sekmesinden değişir.</p>
+      <div class="eylem"><button class="tp-tus" data-a="dnYeni" ${d.L.length >= 3 || !yaz ? 'disabled' : ''}>${ic('plus')} Yeni deneme</button>${d.aktif != null ? `<button class="tp-tus yalin" data-a="dnCik">${ic('back')} Ana plana dön</button>` : ''}</div>`;
+  };
+
+  /* uygulamanın başka yerlerinden gelen istek (eski stüdyo düğmeleri): pano çizildikten sonra ilgili kart ya da sipariş açılır */
+  let istekBekleyen = null;
+  function istek(tur, v) { istekBekleyen = { tur, v }; }
+  function istekIsle() {
+    const x = istekBekleyen; istekBekleyen = null; if (!x) return;
+    if (x.tur === 'sip' && x.v && S.plan.cx.jobs[x.v]) { U.rayAcik = true; if (U.secJob === x.v && !U.secOp) U.secJob = null; sipSec(x.v); }
+    else if (x.tur === 'tez' && x.v) { U.suz = { m: x.v }; cizHafif(); if (yazar()) kartAc('mesai', { m: x.v, ekle: null, kaldir: null }); }
+    else if (x.tur === 'kriz' && yazar()) { kartAc('olay3', olayVarsayilan('ariza')); tepkiBaslat(); }
+    else if (x.tur === 'sen') kartAc('dn', null);
+  }
 
   /* ---------- eylemler ---------- */
   function opSec(id, ank) {
@@ -677,11 +926,6 @@ const TP = (function (dis) {
     const y = oneAlCoz(jid, false);
     if (!y) { S.sira = L; ciz(); return; }
     uygula(`${jid} sırası değişti`, { p: y.z.p, e: y.z.e, locks: y.lk, sira: L });
-  }
-  function arizaOnizle() {
-    const v = U.kart.veri; const bas = 7 + v.bas; const down = [...S.down, { m: v.m, from: bas, to: bas + v.sure }];
-    const z = coz([], { down }); U.onizleme = { tur: 'ariza', z, down, x: etki(S.e, z.e) };
-    cizKart(); onizlemeCiz(z, down);
   }
   function acilOnizle() {
     const v = U.kart.veri; const D = clone(S.D); let n = D.siparisler.length + 1; while (D.siparisler.some(x => x.id === 'AC-' + String(n).padStart(3, '0'))) n++; const id = 'AC-' + String(n).padStart(3, '0');
@@ -816,13 +1060,18 @@ const TP = (function (dis) {
      Dinleyiciler belgeye bir kez bağlanır ve yalnız pano açıkken iş görür; uygulamanın data-act düğmeleri panonun data-a düğmelerinden ayrıdır. */
   const acik = () => !!document.getElementById('tp-kok') && !!S.plan;
   const bizim = el => !!(el && el.closest && el.closest('#tp-kok, #tp-kart, #tp-perde, #tp-menu, #tp-mperde'));
-  const YAZMA = new Set(['secenek', 'alt', 'kilitle', 'kilitAc', 'frz', 'arizaAc', 'acilAc', 'iyilestir', 'arizaUygula', 'acilUygula', 'olay', 'bolAc', 'bolUygula', 'basladi', 'sayim', 'gonder', 'gonderOnay', 'taslakSifirla', 'geri', 'geriDon', 'yinele']);
+  const YAZMA = new Set(['secenek', 'alt', 'kilitle', 'kilitAc', 'frz', 'olayAc', 'olayDeg', 'tepkiUygula', 'mesaiAc', 'mesaiSec', 'mesaiKaldir', 'mesaiUygula', 'iyilestir', 'acilUygula', 'olay', 'bolAc', 'bolUygula', 'basladi', 'sayim',
+    'gonder', 'gonderOnay', 'taslakSifirla', 'geri', 'geriDon', 'yinele', 'dnYeni', 'dnDuzenle', 'dnUygula', 'dnSil']);
+  /* denemede yalnız plan denenir: atölye kaydı, donuk bölge, onay ve motorun çalışma planı üstündeki işleri ana plandadır */
+  const DN_YASAK = new Set(['iyilestir', 'gonder', 'gonderOnay', 'taslakSifirla', 'frz', 'basladi', 'sayim']);
+  const OLAY_SAYI = new Set(['bas', 'saat', 'gun', 'n']);
   function bagla2() {
     document.addEventListener('click', ev => {
       if (!acik() || !bizim(ev.target)) return;
       const a = ev.target.closest('[data-a]'); if (!a) return;
       const ad = a.dataset.a, rc = a.getBoundingClientRect(), ank = { x: rc.left, y: rc.bottom };
       if (YAZMA.has(ad) && !yazar()) { bildir(dis.calisan() ? 'Motor çalışıyor; bitince yeniden deneyin.' : 'Yetkiniz yok (plan.yaz).'); return; }
+      if (DN_YASAK.has(ad) && dnAktif()) { bildir('Denemedesin: bu iş ana plandadır. Önce "Ana plana dön" ya da denemeyi ana plan yap.'); return; }
       switch (ad) {
         case 'op': if (U.yeniSurukle) { U.yeniSurukle = false; return; } opSec(a.dataset.id, { x: ev.clientX, y: ev.clientY }); break;
         case 'sip': if (ev.target.closest('.tp-ac')) return; sipSec(a.dataset.j); break;
@@ -847,17 +1096,29 @@ const TP = (function (dis) {
         case 'detay': ev.preventDefault(); U.detayAcik = !U.detayAcik; a.parentElement.open = U.detayAcik; break;
         case 'bugun': U.bugunAcik = !U.bugunAcik; { const el = document.querySelector('.tp-bugun'); if (el) el.outerHTML = cizBugun(); } bugunHesapla(); break;
         case 'geriDon': geriDon(+a.dataset.i); if (U.kart && U.kart.tur === 'geri') cizKart(); break;
-        case 'kapat': case 'kapatPerde': kartKapat(); if (U.onizleme) { U.onizleme = null; U.secJob = U.secJob && S.plan.cx.jobs[U.secJob] ? U.secJob : null; ciz(); } if (ad === 'kapat' && !U.kart && a.closest('.tp-ac')) { U.secJob = null; U.secenek = null; cizHafif(); } break;
+        case 'kapat': case 'kapatPerde': U.tepki = null; kartKapat(); if (U.onizleme) { U.onizleme = null; U.secJob = U.secJob && S.plan.cx.jobs[U.secJob] ? U.secJob : null; ciz(); } if (ad === 'kapat' && !U.kart && a.closest('.tp-ac')) { U.secJob = null; U.secenek = null; cizHafif(); } break;
         case 'menuKapat': menuKapat(); break;
         case 'ray': U.rayAcik = !U.rayAcik; ciz(); break;
         case 'zoom': U.zoom = +a.dataset.v; U.kaydir = null; ciz(); break;
         case 'geri': geriAl(); break;
         case 'olay': menuAc(a); break;
-        case 'arizaAc': menuKapat(); U.onizleme = null; kartAc('ariza', { m: a.dataset.m || (U.secOp ? S.plan.ops[U.secOp].m : (S.D.tezgahlar[1] || S.D.tezgahlar[0]).id), bas: 0, sure: 4 }); arizaOnizle(); break;
-        case 'acilAc': menuKapat(); U.onizleme = null; kartAc('acil', { urun: S.D.urunler[0].id, adet: 20, gun: 3 }); acilOnizle(); break;
-        case 'arizaBas': U.kart.veri.bas = +a.dataset.v; arizaOnizle(); break;
-        case 'arizaSure': U.kart.veri.sure = +a.dataset.v; arizaOnizle(); break;
-        case 'arizaUygula': { const o = U.onizleme, v = U.kart.veri; U.onizleme = null; U.kart = null; uygula(`${v.m} arıza ${v.sure} sa`, { p: o.z.p, e: o.z.e, down: o.down }); break; }
+        case 'olayAc': { const tip = a.dataset.v, m = a.dataset.m; menuKapat(); U.onizleme = null; U.tepki = null; if (U.kart) ciz();
+          if (tip === 'acil') { kartAc('acil', { urun: S.D.urunler[0].id, adet: 20, gun: 3 }); acilOnizle(); } else { kartAc('olay3', olayVarsayilan(tip, m)); tepkiBaslat(); } break; }
+        case 'olayDeg': { const k = a.dataset.k; U.kart.veri[k] = OLAY_SAYI.has(k) ? +a.dataset.v : a.dataset.v; tepkiBaslat(); break; }
+        case 'tepkiSec': { if (!U.tepki) break; U.tepki.sec = a.dataset.v; const t = tepkiSecili(U.tepki); cizKart(); if (t && t.z) { U.onizleme = { tur: 'olay3' }; onizlemeCiz(t.z, t.ek.down); } break; }
+        case 'tepkiUygula': { const v = U.kart.veri, t = tepkiSecili(U.tepki); if (!t || !t.z) break; U.tepki = null; U.onizleme = null; U.kart = null;
+          uygula(`${olayAdi(v)} · ${t.ad}`, { p: t.z.p, e: t.z.e, down: t.ek.down, olaylar: t.ek.olaylar, ekMesai: t.ek.ekMesai }); break; }
+        case 'mesaiAc': menuKapat(); U.onizleme = null; kartAc('mesai', { m: a.dataset.m, ekle: null, kaldir: null }); break;
+        case 'mesaiSec': { const v = U.kart.veri, i = +a.dataset.v; v.kaldir = null; v.ekle = v.ekle === i ? null : i; mesaiOnizle(); break; }
+        case 'mesaiKaldir': { const v = U.kart.veri, i = +a.dataset.v; v.ekle = null; v.kaldir = v.kaldir === i ? null : i; mesaiOnizle(); break; }
+        case 'mesaiUygula': { const o = U.onizleme; if (!o || o.tur !== 'mesai') break; U.onizleme = null; U.kart = null; uygula(o.ad, { p: o.z.p, e: o.z.e, ekMesai: o.em }); break; }
+        case 'dnAc': case 'dnKarsi': kartAc('dn', null, ank); break;
+        case 'dnYeni': dnYeni(); break;
+        case 'dnCik': dnSakla(); kartKapat(); ciz(); break;
+        case 'dnDuzenle': dnDuzenle(+a.dataset.i); break;
+        case 'dnUygula': dnUygula(+a.dataset.i); break;
+        case 'dnSil': dnSil(+a.dataset.i); ciz(); break;
+        case 'dnGoster': U.dn.gizli[a.dataset.v] = !U.dn.gizli[a.dataset.v]; cizHafif(); break;
         case 'acilTermin': U.kart.veri.gun = +a.dataset.v; U.kart.veri.sec = null; acilOnizle(); break;
         case 'acilSec': U.kart.veri.sec = a.dataset.v; acilOnizle(); break;
         case 'acilUygula': { const o = U.onizleme; U.onizleme = null; U.kart = null; U.secJob = o.id; uygula(`${o.id} eklendi (${o.sec === 'acil' ? 'öne geçti' : 'boşluklara'})`, { p: o.z.p, e: o.z.e, D: o.D }); secenekBaslat(o.id); ciz(); break; }
@@ -869,6 +1130,7 @@ const TP = (function (dis) {
         case 'gonder': kartAc('gonder', null, ank); break;
         case 'gonderOnay': kartKapat(); dis.onaya(); break;
         case 'onayGit': kartKapat(); dis.sekme('onay'); break;
+        case 'sekmeGit': kartKapat(); dis.sekme(a.dataset.v); break;
         case 'dahasi': kartAc('menu', null, ank); break;
         case 'dondurma': kartAc('dondurma', null, ank); break;
         case 'frz': { const v = +a.dataset.v; if (v === S.frz) break; dis.G().w.dondurma = v; const st = stKur(), p = bagla({ ops: S.plan.ops, fail: S.plan.fail || [] }, cxAl()); kartKapat(); uygula(`Donuk bölge ${v} sa`, { p, e: degerle(p, st) }); break; }
@@ -884,7 +1146,9 @@ const TP = (function (dis) {
       if (!acik() || !bizim(ev.target)) return;
       const c = ev.target.dataset.ch; if (!c) return;
       ev.stopImmediatePropagation();
-      if (c === 'ariza') { U.kart.veri.m = ev.target.value; arizaOnizle(); }
+      if (c === 'olayDeg') { U.kart.veri[ev.target.dataset.k] = ev.target.value; tepkiBaslat(); }
+      if (c === 'dnAd' || c === 'dnNot') { const t = U.dn && U.dn.L[+ev.target.dataset.i], r = t && dnKayit(t.id);
+        if (r && yazar()) { r[c === 'dnAd' ? 'ad' : 'not'] = ev.target.value.trim() || (c === 'dnAd' ? 'Deneme ' + t.harf : ''); dis.kaydet(); if (c === 'dnAd' && dnAktif() === t) { const b = $('.tp-serit.dn > b'); if (b) b.textContent = r.ad; } } }
       if (c === 'acil') { U.kart.veri.sec = null; if (ev.target.id === 'tp-ac-u') U.kart.veri.urun = ev.target.value; else U.kart.veri.adet = +ev.target.value; acilOnizle(); }
       if (c === 'bolN') { const v = U.kart.veri; v.adetler = bolAdet(S.D.siparisler.find(x => x.id === v.j), +ev.target.value); bolOnizle(); }
       /* son parca, degistirilen disindaki parcalardan kalan adedi alir; toplam her zaman siparis adedi kalir */
@@ -910,21 +1174,22 @@ const TP = (function (dis) {
     document.addEventListener('keydown', ev => {
       if (!acik()) return;
       const yut = () => { ev.preventDefault(); ev.stopImmediatePropagation(); };
-      if (ev.target.matches('input, select, textarea')) { if (ev.key === 'Escape' && bizim(ev.target)) { yut(); ev.target.blur(); if (ev.target.closest('#tp-kart')) { kartKapat(); if (U.onizleme) { U.onizleme = null; ciz(); } } } return; }
+      if (ev.target.matches('input, select, textarea')) { if (ev.key === 'Escape' && bizim(ev.target)) { yut(); ev.target.blur(); if (ev.target.closest('#tp-kart')) { U.tepki = null; kartKapat(); if (U.onizleme) { U.onizleme = null; ciz(); } } } return; }
       if (ev.target.closest && ev.target.closest('dialog')) return;
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { yut(); ev.shiftKey ? yinele() : geriAl(); }
       else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { yut(); yinele(); }
-      else if (ev.key === 'Escape') { yut(); if (U.surukle) { U.surukle = null; ciz(); return; } menuKapat(); kartKapat(); U.onizleme = null; U.secOp = null; U.secJob = null; U.secenek = null; ciz(); }
+      else if (ev.key === 'Escape') { yut(); if (U.surukle) { U.surukle = null; ciz(); return; } menuKapat(); U.tepki = null; kartKapat(); U.onizleme = null; U.secOp = null; U.secJob = null; U.secenek = null; ciz(); }
       else if (ev.key === '/' && !ev.ctrlKey && !ev.metaKey) { yut(); const i = $('#tp-ara'); if (i) i.focus(); }
       else if (['1', '2', '3', '4', '5'].includes(ev.key) && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { yut(); U.zoom = OLCEK[+ev.key - 1][0]; U.kaydir = null; ciz(); }
     }, true);
     let zz; addEventListener('resize', () => { if (!acik()) return; clearTimeout(zz); zz = setTimeout(() => { U.kaydir = null; boyut(); ciz(); }, 120); });
   }
   function menuAc(a, m) {
-    menuKapat(); const rc = a.getBoundingClientRect();
+    menuKapat(); const rc = a.getBoundingClientRect(), t = m && S.D.tezgahlar.find(x => x.id === m);
+    const L = t ? [['olayAc', 'ariza', 'alert', `Arıza bildir · ${m}`, 'Tezgâh duruyor; üç tepkiyi gör'], ...((t.vardiyalar || []).length ? [['mesaiAc', '', 'clock', `Ek mesai · ${m}`, 'Boş vardiyayı açmayı dene']] : []),
+      ['olayAc', 'eksik', 'user', 'Personel eksik', `${grupAd(t.grup)} operatörü`]] : OLAY.map(([k, ad, sm, alt]) => ['olayAc', k, sm, ad, alt]);
     document.body.insertAdjacentHTML('beforeend', `<div class="tp-perde" id="tp-mperde" data-a="menuKapat"></div><div class="tp-menu" id="tp-menu" role="menu">
-      <button data-a="arizaAc" ${m ? `data-m="${esc(m)}"` : ''}>${ic('alert')}<span>Arıza bildir${m ? ' · ' + esc(m) : ''}<small>Tezgâh duruyor, plan etkisini gör</small></span></button>
-      ${m ? '' : `<button data-a="acilAc">${ic('fire')}<span>Acil sipariş<small>Ekle, nereye sığdığını gör</small></span></button>`}
+      ${L.map(([x, v, sm, ad, alt]) => `<button data-a="${x}" data-v="${v}" ${m ? `data-m="${esc(m)}"` : ''}>${ic(sm)}<span>${esc(ad)}<small>${esc(alt)}</small></span></button>`).join('')}
     </div>`);
     const mn = $('#tp-menu'); mn.style.left = Math.max(8, Math.min(innerWidth - mn.offsetWidth - 8, rc.left)) + 'px'; mn.style.top = (rc.bottom + 4) + 'px';
   }
@@ -941,10 +1206,10 @@ const TP = (function (dis) {
     const k = $('#tp-kok');
     if (!k) { kartKapat(); menuKapat(); U.surukle = null; return; }
     if (!esitle()) { k.innerHTML = ''; return; }
-    boyut(); ciz();
+    dnKur(); boyut(); ciz(); istekIsle();
   }
   bagla2();
-  return { tak, geriAl };
+  return { tak, geriAl, istek };
 })(tpDis);
 
 /* Plan sekmesi panodur; plan yoksa stüdyonun boş plan ekranı kalır */
@@ -954,4 +1219,21 @@ PS_IPUCU.plan = 'İşi tutup başka saate ya da tezgâha sürükleyin; etkisi b�
 { const te0 = tekEylem; tekEylem = function (act, v, el, e) {
   if (act === 'tp-geri') { TP.geriAl(); return true; }
   return te0(act, v, el, e);
+}; }
+/* Tezgâh, Sipariş, Kriz masası ve Senaryo sekmeleri menüden kalkar (Y3); onlara giden düğmeler (tahtada çift tık, tezgâh stüdyosu, Kriz masasında
+   karşılaştır) Plan sekmesine gelir ve pano ilgili şeyi açar: tezgâhta ek mesai, siparişte akış, krizde olay, senaryoda denemeler. Eski sekmelerin kodu durur. */
+const TP_ESKI = ['tez', 'sip', 'kriz', 'sen'];
+for (const k of TP_ESKI) { const i = PS_SEK.findIndex(x => x[0] === k); if (i >= 0) PS_SEK.splice(i, 1); }
+{ const sa0 = stAc; stAc = function (tur, v) {
+  if (!TP_ESKI.includes(tur) || !S.plan) return sa0.apply(this, arguments);
+  U.sayfa = 'studyo'; U.psSek = 'plan'; U.studyo = null; U.pencere = null; TP.istek(tur, v); render();
+}; }
+/* kalan iki sekme panoyla birlikte çalışır: Onay ve Plan-gerçekleşen tablolarındaki sipariş numarası siparişi panoda açar */
+{ const te0 = tekEylem; tekEylem = function (act, v, el, e) {
+  if ((act === 'tp-sip' || act === 'sip-ac') && v && U.sayfa === 'studyo') { stAc('sip', v); return true; }
+  return te0(act, v, el, e);
+}; }
+{ const pt0 = pgTablo; pgTablo = function () {
+  return pt0.apply(this, arguments).replace(/<tr data-is="([^"]+)"><th scope="row"><span class="mono">([^<]*)<\/span>/g,
+    (m, j, ad) => `<tr data-is="${j}"><th scope="row"><button type="button" class="pm-pa-link mono" data-act="tp-sip" data-v="${j}" title="Panoda aç">${ad}</button>`);
 }; }
