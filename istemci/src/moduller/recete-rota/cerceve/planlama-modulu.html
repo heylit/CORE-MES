@@ -22116,6 +22116,12 @@ const TP = (function (dis) {
         <p class="tp-not">Her karar çalışma planına yazılır; canlı plan yalnız Onay sekmesinden değişir.</p>
         <p class="tp-not">Lejant: kırmızı geç, turuncu riskli (8 sa'ten az pay), çizgili baş ayar, kesikli çerçeve fason, mavi bölge donuk.</p>`;
     },
+    komut(v) {
+      const kotu = v.x.dW > 0.1 || v.x.dKar < -1;
+      return `<h3>${ic('chev-right')} ${esc(v.metin)}<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
+        <p class="tp-not ${kotu ? 'uyari' : ''}">${etkiMetni(v.x)}${kotu ? ' · öneri yok, karar senin' : ''}</p>
+        <div class="tp-cipler"><button class="tp-tus ana" data-a="komutUygula" data-oto>${ic('check')} Uygula</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
+    },
     dondurma() {
       return `<h3>${ic('lock')} Donuk bölge<span class="tp-bosluk"></span><button class="tp-tus kucuk yalin" data-a="kapat" aria-label="Kapat">${ic('x')}</button></h3>
         <p class="tp-not">Şimdiden itibaren bu kadar saatlik işler yerinde kalır; taşıma ve iyileştirme dokunmaz.</p>
@@ -22731,10 +22737,30 @@ Bilgilerinize sunarız.` };
     return L;
   }
   function paletBildir() {
-    if (!TP_UYG || typeof window.tmiGorunum.komutlar !== 'function') return;
+    /* pano kapalıyken listeyi planın genel komutları verir (zz31-tmi-palet) */
+    if (!TP_UYG || typeof window.tmiGorunum.komutlar !== 'function' || !acik()) return;
     window.tmiGorunum.komutlar(paletKomutlari().map(({ kos, ...k }) => k), anahtar => {
       const k = paletKomutlari().find(x => x.anahtar === anahtar); if (k) { menuKapat(); k.kos(); }
     });
+  }
+  /* değer alan komutlar (113 a): kabuğun paletinde yazılan metin panonun komut dilbilgisiyle eşlenir ("SP-109 öne al", "T2 arıza 6 sa").
+     Planı değiştiren komut hemen uygulanmaz: etkisiyle bir kart açılır; "Uygula" panonun düğmeleriyle aynı yoldan yazar (çalışma planı,
+     sürümlü kayıt, geri alınabilir). Yazamayana yazan komut önerilmez (komutAdaylari); uygularken yetki ve plan yeniden denetlenir. */
+  let paletOneri = [];
+  function paletOner(metin) {
+    paletOneri = [];
+    if (!acik() || !String(metin).trim()) return [];
+    const L = komutBul(String(metin)); paletOneri = L.map(x => x.metin);
+    return L.map((x, i) => ({ anahtar: 'oneri-' + i, baslik: x.metin.slice(0, 80), simge: x.c.ik, ...(x.c.alt ? { aciklama: String(x.c.alt).slice(0, 120) } : {}) }));
+  }
+  function paletKomutu(metin) { return metin && acik() ? komutBul(metin).find(x => x.metin === metin) || null : null; }
+  function paletOneriCalis(anahtar) {
+    const metin = paletOneri[+String(anahtar).slice(6)]; const x = paletKomutu(metin);
+    if (!x) { if (metin) bildir(`${metin}: uygulanamıyor`); return; }
+    menuKapat();
+    if (!x.c.on) { x.c.run(x.v); return; }
+    const y = x.c.on(x.v); if (!y) { bildir(`${metin}: uygulanamıyor`); return; }
+    kartAc('komut', { metin, x: etki(S.e, y.z.e) });
   }
   function komutCalis(i) {
     const k = U.komut; if (!k) return; const x = k.L[i]; komutKapat(); if (!x) return;
@@ -23048,6 +23074,8 @@ Bilgilerinize sunarız.` };
         case 'komutAc': if (TP_UYG) break; kartKapat(); komutAc(); break;
         case 'komutSec': komutCalis(+a.dataset.i); break;
         case 'komutKapat': komutKapat(); break;
+        case 'komutUygula': { const v = U.kart && U.kart.veri, x = v && paletKomutu(v.metin), y = x && x.c.on && yazar() && S.durum !== 'onayda' ? x.c.on(x.v) : null;
+          kartKapat(); if (!y) { if (v) bildir(`${v.metin}: uygulanamıyor`); break; } uygula(v.metin, { p: y.z.p, e: y.z.e, ...y.ek }); break; }
         case 'atolyeKapat': atolyeKapat(); break;
         case 'gunlukAc': menuKapat(); kartAc('gunluk', { m: a.dataset.m }, ank); break;
         case 'terminAc': kartAc('termin', { j: a.dataset.j }, ank); break;
@@ -23143,6 +23171,7 @@ Bilgilerinize sunarız.` };
     dnKur(); gunBasla(); boyut(); ciz(); istekIsle();
   }
   bagla2();
+  if (TP_UYG && typeof window.tmiGorunum.komutOnerici === 'function') window.tmiGorunum.komutOnerici(paletOner, paletOneriCalis);
   return { tak: () => { tak(); paletBildir(); }, geriAl, istek };
 })(tpDis);
 
@@ -23294,10 +23323,43 @@ if (TMI_ICINDE) {
 }
 /* ---------- TMI içinde: tek palet (102 a) ----------
    Uygulamada palet kabuğundur. Çerçevenin kendi paleti (v20) açılmaz, onu açan düğmeler ("Ara", "Komutlar") görünmez (stil: .pm-tmi);
-   Ctrl K'yi köprü kabuğa iletir. Panonun komutları kabuğun paletine liste olarak gider (zz36, paletBildir). */
+   Ctrl K'yi köprü kabuğa iletir. Pano açıkken komutları pano verir (zz36, paletBildir); öteki planlama sayfalarında v20 paletinin
+   araçları gider. Ekranlar (Git) kabuğun menü aramasındadır, yinelenmez. Komut yalnız pencere açar ya da geri al ve yinele yapar (101 a):
+   doğrudan planı değiştiren eski komutlar (günü dondur, siparişi öne al) gelmez, sipariş yalnız gösterilir. */
 if (TMI_ICINDE) {
   v20PaletAc = function () {};
   document.documentElement.classList.add('pm-tmi');
+  const tmiGenelKomutlar = () => {
+    const L = [];
+    if (!S || !S.plan || kim().rol === 'operator') return L;
+    const yaz = yetkili('plan.yaz') && !calisan;
+    const ek = (anahtar, baslik, simge, kos, aciklama) => L.push({ anahtar, baslik, simge, kos, ...(aciklama ? { aciklama: String(aciklama).slice(0, 120) } : {}) });
+    if (yaz) ek('oneriler', 'Öneriler', 'bolt', () => v20Ac('oneri'), 'Kabul, ret, değiştir');
+    ek('butun-resim', 'Bütün resim', 'expand', () => eylem('v20-resim'), 'Bütün görünümler tek ekranda');
+    ek('istisnalar', 'İstisnalar', 'alert', () => v20Ac('istisna'), 'Geç, malzeme, yük, kapalı');
+    ek('tezgah-sirasi', 'Tezgâh sırası', 'sort', () => v20Ac('sira'), 'Sürükleyerek sırala');
+    if (yaz) ek('degisim-butcesi', 'Değişim bütçesi', 'gauge', () => v20Ac('butce'), '5, 15, sınırsız');
+    ek('surumler', 'Sürümler', 'book', () => v20Ac('surum'), 'Önceki plana dön');
+    ek('vardiya-devri', 'Vardiya devri', 'user', () => v20Ac('devir'));
+    if (yaz && U.taslak && U.taslak.adimlar.length) ek('geri-al', 'Geri al', 'rotate', v20GeriAl, 'Ctrl Z');
+    if (yaz && V20.ileri.length) ek('yinele', 'Yinele', 'next', v20Yinele, 'Ctrl Shift Z');
+    /* en geç on sipariş: yalnız gösterilir (Bugün sayfasında seçilir) */
+    const gec = Object.entries(S.plan.J || {}).filter(([, x]) => x.T > 0.05).sort((a, b) => b[1].T - a[1].T).slice(0, 10);
+    for (const [j] of gec) {
+      const anahtar = 'goster-' + String(j).toLocaleLowerCase('tr').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!/^[a-z][a-z0-9-]*$/.test(anahtar) || anahtar.length > 64 || L.some(k => k.anahtar === anahtar)) continue;
+      ek(anahtar, `${j} siparişini göster`, 'eye', () => { if (U.sayfa !== 'bugun') { U.sayfa = 'bugun'; render(); } eylem('bg-goster', j); }, 'Geç sipariş');
+    }
+    return L;
+  };
+  const tmiGenelBildir = () => {
+    if (typeof window.tmiGorunum.komutlar !== 'function' || document.getElementById('tp-kok')) return;
+    window.tmiGorunum.komutlar(tmiGenelKomutlar().map(({ kos, ...k }) => k), anahtar => {
+      const k = tmiGenelKomutlar().find(x => x.anahtar === anahtar); if (k) k.kos();
+    });
+  };
+  const r0 = render;
+  render = function () { const x = r0.apply(this, arguments); tmiGenelBildir(); return x; };
 }
 
 /* ---------- Değişiklik izi ---------- */

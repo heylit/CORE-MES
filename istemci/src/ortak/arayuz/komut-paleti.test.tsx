@@ -5,8 +5,11 @@ import { SAYFALAR, type Sayfa } from '#paylasilan/sayfalar.ts';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Komut } from '../rota/komutlar.ts';
+import { CERCEVE_KANALI, CERCEVE_SURUMU } from '../rota/cerceve-iletisi.ts';
+import { KOMUT_METNI_BEKLEME_MS, useYalitilmisGorunum } from '../rota/cerceve-gorunumu.ts';
 import { useSayfaKomutlari, type SayfaKomutu } from '../rota/sayfa-komutlari.ts';
 import { Kabuk } from './Kabuk.tsx';
+import { YalitilmisCerceve } from './YalitilmisCerceve.tsx';
 
 const MENU: IkinciMenu = {
   kok: '/stok',
@@ -58,7 +61,7 @@ const ac = () => { fireEvent.focus(kutu()); };
 const yaz = (metin: string) => { ac(); fireEvent.change(kutu(), { target: { value: metin } }); };
 const secenekler = () => screen.queryAllByRole('option').map((o) => o.getAttribute('aria-label'));
 
-afterEach(() => { cleanup(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe('Ctrl K komutları', () => {
   it('bu sayfanın komutları boş sorguda en üstte listelenir; Enter seçili komutu çalıştırır ve paleti kapatır', () => {
@@ -101,5 +104,70 @@ describe('Ctrl K komutları', () => {
     ac();
     act(() => { fireEvent.click(screen.getByRole('option', { name: 'Sabah brifingi Bu sayfa' })); });
     expect(calis).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Ctrl K: değer alan komutlar (çerçeve önerileri)', () => {
+  const BAS = { kanal: CERCEVE_KANALI, surum: CERCEVE_SURUMU } as const;
+
+  function CerceveliSayfa() {
+    const gorunumIletisi = useYalitilmisGorunum('/stok', [MENU]);
+    return (
+      <YalitilmisCerceve
+        baslik="Pano"
+        sayfa="<!doctype html><html><head></head><body></body></html>"
+        iletiGeldi={(veri, yanitla) => { gorunumIletisi(veri, yanitla); }}
+      />
+    );
+  }
+
+  function kur() {
+    vi.useFakeTimers();
+    ciz(<CerceveliSayfa />);
+    const cerceve = (screen.getByTitle('Pano') as HTMLIFrameElement).contentWindow as Window;
+    const gonderilen = vi.spyOn(cerceve, 'postMessage').mockImplementation(() => undefined);
+    const ilet = (veri: unknown, koken = 'null') => {
+      act(() => { window.dispatchEvent(new MessageEvent('message', { data: veri, origin: koken, source: cerceve })); });
+    };
+    const bekle = () => { act(() => { vi.advanceTimersByTime(KOMUT_METNI_BEKLEME_MS); }); };
+    const metinler = () => gonderilen.mock.calls.map(([v]) => v as { tip: string; metin?: string; sira?: number; anahtar?: string });
+    return { ilet, bekle, metinler };
+  }
+
+  it('izinli: yazım durunca metin çerçeveye gider; son sıranın önerileri "Bu sayfa"da görünür, Enter seçileni çerçeveye yollar', () => {
+    const { ilet, bekle, metinler } = kur();
+    ilet({ ...BAS, tip: 'komutlar', komutlar: [{ anahtar: 'gun-ozeti', baslik: 'Gün özeti' }] });
+    yaz('116');
+    yaz('116 o');
+    expect(metinler().filter((m) => m.tip === 'komut-metni')).toEqual([]);
+    bekle();
+    const sorular = metinler().filter((m) => m.tip === 'komut-metni');
+    expect(sorular.map((m) => m.metin)).toEqual(['116 o']);
+    const sira = sorular[0]!.sira;
+    ilet({ ...BAS, tip: 'komut-onerileri', sira: (sira ?? 0) + 1, komutlar: [{ anahtar: 'yanlis', baslik: 'Yanlış sıra' }] });
+    ilet({ ...BAS, tip: 'komut-onerileri', sira, komutlar: [{ anahtar: 'sp-116-one-al', baslik: 'SP-116 öne al', aciklama: '434,1 sa -> 376,1 sa' }] });
+    expect(secenekler()[0]).toBe('SP-116 öne al 434,1 sa -> 376,1 sa Bu sayfa');
+    expect(secenekler()).not.toContain('Yanlış sıra Bu sayfa');
+    fireEvent.keyDown(kutu(), { key: 'Enter' });
+    expect(metinler().at(-1)).toEqual({ ...BAS, tip: 'komut-calistir', anahtar: 'sp-116-one-al' });
+  });
+
+  it('reddedilen: yeni harf eski öneriyi siler; komut bildirmemiş çerçeveye metin gitmez; palet kapanınca öneri kalmaz', () => {
+    const { ilet, bekle, metinler } = kur();
+    yaz('116');
+    bekle();
+    expect(metinler().filter((m) => m.tip === 'komut-metni')).toEqual([]);
+    ilet({ ...BAS, tip: 'komutlar', komutlar: [{ anahtar: 'gun-ozeti', baslik: 'Gün özeti' }] });
+    bekle();
+    const sira = metinler().filter((m) => m.tip === 'komut-metni').at(-1)?.sira;
+    ilet({ ...BAS, tip: 'komut-onerileri', sira, komutlar: [{ anahtar: 'sp-116-one-al', baslik: 'SP-116 öne al' }] });
+    expect(secenekler()).toContain('SP-116 öne al Bu sayfa');
+    yaz('117');
+    expect(secenekler()).not.toContain('SP-116 öne al Bu sayfa');
+    ilet({ ...BAS, tip: 'komut-onerileri', sira, komutlar: [{ anahtar: 'sp-116-one-al', baslik: 'SP-116 öne al' }] });
+    expect(secenekler()).not.toContain('SP-116 öne al Bu sayfa');
+    fireEvent.keyDown(kutu(), { key: 'Escape' });
+    ac();
+    expect(secenekler()).toEqual(['Gün özeti Bu sayfa']);
   });
 });

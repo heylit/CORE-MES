@@ -1,22 +1,59 @@
-import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { CERCEVE_KANALI, kabukKoprusuKur, type CerceveKomutu, type KabukKoprusu } from './cerceve-iletisi.ts';
 import { useCerceveSayacYazici } from './cerceve-sayaclari.ts';
 import { IKINCI_MENU_TANIMLARI, etkinMadde, menuMaddeleri, type IkinciMenu } from './ikinci-menu.ts';
 import { useEkranGorunur } from './kalici.tsx';
-import { cerceveKomutlarindan, useSayfaKomutlari } from './sayfa-komutlari.ts';
+import { PaletSorgusuBaglami, cerceveKomutlarindan, useSayfaKomutlari } from './sayfa-komutlari.ts';
 
 const KOMUTSUZ: readonly CerceveKomutu[] = [];
 
-// Çerçevenin bildirdiği komutlar (kural 7) paletin "Bu sayfa" grubuna gider; seçilen komut köprüyle çerçeveye döner.
-// Kaynak adı bileşene özgüdür: aynı modülde iki çerçeve birbirinin listesini silmez. Çerçeve kalkınca liste kabukta silinir.
-function useCerceveKomutlari(kok: string, kopru: { current: KabukKoprusu | null }): (komutlar: readonly CerceveKomutu[]) => void {
+// Yazım durunca palet metni bu kadar beklenip çerçeveye sorulur (kural 8): her harf ayrı soru olmasın.
+export const KOMUT_METNI_BEKLEME_MS = 150;
+
+interface CerceveKomutYazicilari {
+  komutlar: (komutlar: readonly CerceveKomutu[]) => void;
+  komutOnerileri: (komutlar: readonly CerceveKomutu[]) => void;
+}
+
+// Çerçevenin bildirdiği komutlar (kural 7) ve yazılana önerdikleri (kural 8) paletin "Bu sayfa" grubuna gider; seçilen
+// komut köprüyle çerçeveye döner. Kaynak adı bileşene özgüdür: aynı modülde iki çerçeve birbirinin listesini silmez.
+// Çerçeve kalkınca ya da ekran gizlenince liste kabukta silinir. Metin yalnız komut listesi bildirmiş çerçeveye sorulur:
+// komutu olmayan modül her harfte ileti almaz.
+function useCerceveKomutlari(kok: string, kopru: { current: KabukKoprusu | null }): CerceveKomutYazicilari {
   const [liste, listeYaz] = useState<readonly CerceveKomutu[]>(KOMUTSUZ);
+  const [oneriler, onerileriYaz] = useState<readonly CerceveKomutu[]>(KOMUTSUZ);
   const kaynak = `${kok}#${useId()}`;
-  const komutlar = useMemo(() => cerceveKomutlarindan(liste, (anahtar) => { kopru.current?.komutCalistir(anahtar); }), [liste, kopru]);
+  const gorunur = useEkranGorunur();
+  const paletSorgusu = useContext(PaletSorgusuBaglami);
+  const calistir = useMemo(() => (anahtar: string) => { kopru.current?.komutCalistir(anahtar); }, [kopru]);
+  const komutlar = useMemo(() => cerceveKomutlarindan(liste, calistir), [liste, calistir]);
+  const oneriKomutlari = useMemo(() => cerceveKomutlarindan(oneriler, calistir, true), [oneriler, calistir]);
   useSayfaKomutlari(kaynak, komutlar);
-  return listeYaz;
+  useSayfaKomutlari(`${kaynak}#oneri`, oneriKomutlari);
+
+  const komutuVar = liste.length > 0;
+  useEffect(() => {
+    if (paletSorgusu === null || !gorunur || !komutuVar) {
+      onerileriYaz(KOMUTSUZ);
+      return undefined;
+    }
+    let zamanlayici: ReturnType<typeof setTimeout> | undefined;
+    const sor = (sorgu: string | null) => {
+      clearTimeout(zamanlayici);
+      // Yeni metin eski önerileri geçersiz kılar: başka metnin önerisi Enter'la çalışmasın.
+      onerileriYaz(KOMUTSUZ);
+      kopru.current?.komutMetni('');
+      if (sorgu === null || sorgu.trim() === '') return;
+      zamanlayici = setTimeout(() => { kopru.current?.komutMetni(sorgu); }, KOMUT_METNI_BEKLEME_MS);
+    };
+    sor(paletSorgusu.deger());
+    const birak = paletSorgusu.dinle(sor);
+    return () => { birak(); clearTimeout(zamanlayici); kopru.current?.komutMetni(''); };
+  }, [paletSorgusu, gorunur, komutuVar, kopru]);
+
+  return useMemo(() => ({ komutlar: listeYaz, komutOnerileri: onerileriYaz }), []);
 }
 
 // Yalıtılmış çerçevenin kökeni; tarayıcı iletinin kökenini "null" yazar.
@@ -52,7 +89,7 @@ export function useCerceveGorunumu({ cerceve, kok, koken, menuler = IKINCI_MENU_
   const guncel = useRef({ maddeler, gezin });
   guncel.current = { maddeler, gezin };
   const sayaclar = useCerceveSayacYazici(kok);
-  const komutlar = useCerceveKomutlari(kok, kopru);
+  const { komutlar, komutOnerileri } = useCerceveKomutlari(kok, kopru);
 
   useEffect(() => {
     const k = kabukKoprusuKur({
@@ -60,6 +97,7 @@ export function useCerceveGorunumu({ cerceve, kok, koken, menuler = IKINCI_MENU_
       koken: koken ?? window.location.origin,
       sayaclar,
       komutlar,
+      komutOnerileri,
       sahibeGit: (yol) => { if (sahibinSayfasiMi(yol)) void guncel.current.gezin(yol); },
       gorunumDegisti: (yeni) => {
         // Menüde olmayan görünüm adı adresi değiştirmez ve köprüde kabul edilmiş sayılmaz.
@@ -70,8 +108,8 @@ export function useCerceveGorunumu({ cerceve, kok, koken, menuler = IKINCI_MENU_
       },
     });
     kopru.current = k;
-    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); };
-  }, [cerceve, koken, sayaclar, komutlar]);
+    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); komutOnerileri(KOMUTSUZ); };
+  }, [cerceve, koken, sayaclar, komutlar, komutOnerileri]);
 
   // Her gezinmede (aynı maddeye yeniden tıklamak dahil) sorulur; köprü aynı görünümü yalnız çerçeve sapmışsa yeniden gönderir.
   useEffect(() => {
@@ -104,7 +142,7 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
   const hedef = useRef({ postMessage: (ileti: unknown) => { yanitla.current?.(ileti); } });
   const kopru = useRef<KabukKoprusu | null>(null);
   const sayaclar = useCerceveSayacYazici(kok);
-  const komutlar = useCerceveKomutlari(kok, kopru);
+  const { komutlar, komutOnerileri } = useCerceveKomutlari(kok, kopru);
 
   useEffect(() => {
     const k = kabukKoprusuKur({
@@ -113,6 +151,7 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
       koken: OPAK_KOKEN,
       sayaclar,
       komutlar,
+      komutOnerileri,
       sahibeGit: (yol) => { if (guncel.current.gorunur && sahibinSayfasiMi(yol)) void guncel.current.gezin(yol); },
       gorunumDegisti: (yeni) => {
         const madde = guncel.current.maddeler.find((m) => m.anahtar === yeni);
@@ -122,8 +161,8 @@ export function useYalitilmisGorunum(kok: string, menuler: readonly IkinciMenu[]
       },
     });
     kopru.current = k;
-    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); };
-  }, [sayaclar, komutlar]);
+    return () => { k.kapat(); kopru.current = null; komutlar(KOMUTSUZ); komutOnerileri(KOMUTSUZ); };
+  }, [sayaclar, komutlar, komutOnerileri]);
 
   useEffect(() => {
     if (gorunum !== null) kopru.current?.gorunumGonder(gorunum);

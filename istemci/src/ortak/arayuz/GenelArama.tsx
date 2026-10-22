@@ -20,8 +20,10 @@ interface Ozellikler {
   aramaSayfalari?: readonly Sayfa[];
   // Kişiye açık genel komutlar (modüllerin komutlar.ts bildirimi, süzülmüş).
   komutlar?: readonly Komut[];
-  // Açık sayfanın o an çalıştırabileceği komutlar; boş sorguda da listelenir.
+  // Açık sayfanın o an çalıştırabileceği komutlar; boş sorguda da listelenir. Önerilerin (değer alan komut) sırası korunur.
   sayfaKomutlari?: readonly SayfaKomutu[];
+  // Paletin sorgusu değişince (kapalıyken null): değer alan komutu öneren sayfa bunu dinler.
+  sorguDegisti?: (sorgu: string | null) => void;
 }
 
 interface Satir {
@@ -112,7 +114,9 @@ function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: S
 // Açılınca kutu ortada komut paleti olur, arkası perdelenir; geniş ekranda sağda seçili sonucun önizlemesi durur. Kutu DOM'da
 // üst çubukta kalır (yalnız görünüşü taşınır): odak, tuş ve ekran okuyucu düzeni kapalı kutuyla aynıdır.
 // Telefonda yalnız simge düğmesi görünür; dokununca palet ekranın üstünde açılır.
-export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ, komutlar = KOMUTSUZ, sayfaKomutlari = SAYFA_KOMUTSUZ }: Ozellikler) {
+export function GenelArama({
+  sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ, komutlar = KOMUTSUZ, sayfaKomutlari = SAYFA_KOMUTSUZ, sorguDegisti,
+}: Ozellikler) {
   const gezin = useNavigate();
   const [sorgu, sorguYaz] = useState('');
   const [acik, acikYaz] = useState(false);
@@ -125,10 +129,13 @@ export function GenelArama({ sayfalar, menuler, islemler, aramaSayfalari = SAYFA
   const sayfaSonuclari = useMemo(() => ara(dizin, sorgu), [dizin, sorgu]);
   const kaynaklar = useMemo(() => kayitKaynaklari([...sayfalar, ...aramaSayfalari]), [sayfalar, aramaSayfalari]);
   const kayitlar = useKayitAramasi(kaynaklar, acik ? sorgu : '');
-  const sayfaKomutSonuclari = useMemo(
-    () => (sorgu.trim() === '' ? sayfaKomutlari.slice(0, BOS_SORGUDA_SAYFA_KOMUTU) : komutAra(sayfaKomutlari, sorgu)),
-    [sayfaKomutlari, sorgu],
-  );
+  // Öneriler sayfanın yazılana verdiği cevaptır: metinle yeniden süzülmez, sabit komutların önünde durur.
+  const sayfaKomutSonuclari = useMemo(() => {
+    const sabit = sayfaKomutlari.filter((k) => k.oneri !== true);
+    if (sorgu.trim() === '') return sabit.slice(0, BOS_SORGUDA_SAYFA_KOMUTU);
+    return [...sayfaKomutlari.filter((k) => k.oneri === true), ...komutAra(sabit, sorgu)];
+  }, [sayfaKomutlari, sorgu]);
+  useEffect(() => { sorguDegisti?.(acik ? sorgu : null); }, [sorguDegisti, acik, sorgu]);
   const komutSonuclari = useMemo(() => komutAra(komutlar, sorgu), [komutlar, sorgu]);
   const sonuclar = useMemo<Satir[]>(() => [
     ...sayfaKomutSonuclari.map((k, sira): Satir => ({
