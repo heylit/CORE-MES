@@ -15,6 +15,13 @@ describe('refakat kartı kodu', () => {
     expect(refakatKodu('UE-004512')).toEqual({ emirNo: 'UE-004512' });
     expect(refakatKodu('ue-004512')).toEqual({ emirNo: 'UE-004512' });
   });
+  it('kart #128: RP:<id> refakat partisi kartıdır (emri sunucu söyler); kartın altındaki UE-000120-P1 elle yazılınca emir numarasıdır', () => {
+    expect(refakatKodu('RP:37')).toEqual({ partiId: 37 });
+    expect(refakatKodu(' rp : 37 ')).toEqual({ partiId: 37 });
+    expect(refakatKodu('UE-000120-P1')).toEqual({ emirNo: 'UE-000120' });
+    expect(refakatKodu('ue-000120-p12')).toEqual({ emirNo: 'UE-000120' });
+    for (const k of ['RP:', 'RP:x', 'RP-37', 'UE-000120-P', 'UE-000120-X1']) expect(refakatKodu(k), k).toBeNull();
+  });
   it('başka kod refakat kartı değildir: eski eşleme (emir no, parça no) sürer', () => {
     for (const k of ['UE:', 'UE:12a', 'LOC:A-01', 'MLZ:5', 'FLN-120', '', 'UE:-3']) expect(refakatKodu(k), k).toBeNull();
   });

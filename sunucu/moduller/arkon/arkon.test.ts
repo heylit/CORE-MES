@@ -238,7 +238,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
     const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali'));
-    assert.equal(okuma.length, 14);
+    assert.equal(okuma.length, 15);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -435,6 +435,29 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const liste = (await istek<BelgelerCevabi>(operator, 'GET', '/arkon/belgeler/pkgs')).govde.belgeler;
     assert.ok(!liste.some((b) => b.kimlik === kimlik));
     assert.equal((await istek<BelgeCevabi>(operator, 'GET', `/arkon/belgeler/pkgs/${kimlik}`)).govde.belge, null);
+  });
+
+  test('kart #128 refakat partisi kartı: RP:<id> okutulunca emir ve kart etiketi sunucudan okunur; bilinmeyen kart 404, rolsüz 403', async () => {
+    const t = await istasyonKur();
+    const emir = await istek<{ emir: { id: number; emirNo: string } }>(yonetici, 'POST', '/uretim-emirleri', {
+      parcaNo: 'DENEME-RP', parcaAd: 'Deneme parçası', adet: 5, istasyonId: t.istasyonId, projeId,
+    });
+    assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
+    const sahip = ortam!.sahip;
+    await sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['ARK-DNM-']);
+    const hm = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('ark-dnm-rp', 'hammadde', 'ARK-DNM-', 90, 'aktif', $1, $2, $2) RETURNING no`,
+      [JSON.stringify({ id: 'ark-dnm-rp', com: { ad: 'Deneme çubuk' } }), yoneticiId]))!.no;
+    const lot = (await sahip.tek<{ id: number }>("INSERT INTO stok_parti (malzeme_id, acan_kisi_id, lot_no) VALUES ($1, $2, 'LT-ARK-RP') RETURNING id", [hm, yoneticiId]))!.id;
+    const kart = (await sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id',
+      [emir.govde.emir.id, hm, lot, yoneticiId]))!.id;
+    const c = await istek<{ id: number; emirId: number; etiket: string; durum: string }>(operator, 'GET', `/arkon/refakat-partileri/${kart}`);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.deepEqual(c.govde, { id: kart, emirId: emir.govde.emir.id, etiket: `${emir.govde.emir.emirNo}-P1`, durum: 'acik' });
+    assert.equal((await istek(operator, 'GET', '/arkon/refakat-partileri/999999999')).durum, 404);
+    assert.equal((await istek(rolsuz, 'GET', `/arkon/refakat-partileri/${kart}`)).durum, 403);
   });
 
   test('malzeme isteği stokta açılır: kart ve miktar zorunlu, yetkiyi stok denetler, durumu stoktan okunur, sonra Arkon\'dan değişmez', async () => {
@@ -783,6 +806,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'GET', yol: '/arkon/son-olaylar' },
     { yontem: 'GET', yol: '/arkon/operator-ozeti' },
     { yontem: 'GET', yol: '/arkon/makine-ayrimlari?emirId=999999999' },
+    { yontem: 'GET', yol: '/arkon/refakat-partileri/999999999' },
     { yontem: 'POST', yol: '/arkon/plan-sira/sirala', govde: { kaynak: { tur: 'makine', id: 999999999 }, onceki: [999999999], yeni: [999999999], planSurumu: 0 } },
     { yontem: 'GET', yol: '/arkon/cizim-merkezi/belgeler' },
     { yontem: 'GET', yol: `/arkon/cizim-merkezi/kontrol?dosyalar=999999999:${OZET}` },
@@ -849,7 +873,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       // Çizim Merkezi'nden alma paketi düzenleyen rolündür (operatörün değil).
       const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral';
       const kabul = await istek(yoneticiyle ? yonetici : operator, uc.yontem, uc.yol, uc.govde);
-      const bulunamaz = uc.yol === `/arkon/dosyalar/${OZET}` || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral';
+      const bulunamaz = uc.yol === `/arkon/dosyalar/${OZET}` || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/refakat-partileri/999999999';
       assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
     }
   });

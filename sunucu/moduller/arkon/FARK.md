@@ -776,3 +776,8 @@ Bu tur şunları varsaydı:
 - Çağrı ekranına beşinci ekip "Ayarcı" eklendi (prototip değişikliği onaylı, 298 b); tek kalan düğme satırı doldurur.
 - Operatörün açtığı çağrı (calls, phase `open`) aynı işlemde TMI bildirim merkezine gider: `bildirim/disari.ts ekipCagrisiBildir`, alıcıyı Sistem Ayarları'ndaki ekip eşlemesi seçer, çağıran almaz. Kabul, yükseltme ve kapatma yeni bildirim açmaz; aynı kayıt (cid) yinelenirse kayıt yazılmadığı için bildirim de yinelenmez.
 - Kural `kurallar.ts cagriBildirimi` (tanınmayan ekip, yersiz ya da kimliksiz çağrı bildirilmez); yer makine kodu, yoksa istasyon kodu.
+
+## Refakat partisi kartı (kart #128)
+- Terminal `RP:<id>` QR'ını okur: emir `GET /arkon/refakat-partileri/:id` ile sunucudan alınır (stok `disari.ts refakatPartisi`), iş açma kuralı aynıdır (emrin bu istasyondaki sıradaki bitmemiş işi açılır, başlatılmaz). İptal kartla iş açılmaz.
+- Bağlantı yokken kart çözülmez; kartın altındaki `UE-000120-P1` elle yazılırsa emir numarası olarak okunur. Eski `UE:<emir>` kartları değişmeden çalışır.
+- Sayımın partiye yazılması bu dalda yok: Üretim Emirleri'nin sayım sütunu (kart #125) gelince terminal okutulan partiyi sayımla gönderir. VARSAYIM: o zamana kadar sayım emre yazılır, parti ayrımı stokta yapılmaz.

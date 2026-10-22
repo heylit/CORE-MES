@@ -4,12 +4,20 @@
 import { tmiPlani } from './tmi-plan';
 
 export type RefakatKodu = { emirId: number } | { emirNo: string };
+// Refakat partisi kartı (kart #128): QR `RP:<parti id>`; emri sunucu söyler (partiden emre). Kartın altındaki `UE-000120-P1` elle
+// yazılırsa emir numarası olarak okunur: bağlantı yokken de iş açılır.
+export type KartKodu = RefakatKodu | { partiId: number };
+// Sunucunun partiden okuduğu emir (GET /arkon/refakat-partileri/:id); iptal kartla iş açılmaz.
+export interface RefakatPartisi { id: number; emirId: number; etiket: string; durum: 'acik' | 'iptal' }
 
-export function refakatKodu(ham: string): RefakatKodu | null {
+export function refakatKodu(ham: string): KartKodu | null {
   const n = String(ham || '').toLocaleUpperCase('tr-TR').replace(/\s+/g, '');
   const kimlik = /^UE:(\d+)$/.exec(n);
   if (kimlik) return { emirId: Number(kimlik[1]) };
-  return /^UE-\d+$/.test(n) ? { emirNo: n } : null;
+  const parti = /^RP:(\d+)$/.exec(n);
+  if (parti) return { partiId: Number(parti[1]) };
+  const no = /^(UE-\d+)(?:-P\d+)?$/.exec(n);
+  return no ? { emirNo: no[1]! } : null;
 }
 
 interface RefakatPaketi { machine?: string; no?: string; tmi?: { emirId?: number; opNo?: number; plan?: unknown } | null }

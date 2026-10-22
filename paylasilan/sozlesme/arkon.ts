@@ -430,6 +430,10 @@ export const makineAyrimlariCevabi = z.object({
   ayrimlar: z.array(z.object({ mc: z.string(), emirNo: z.string(), opNo: z.number().int(), baslangic: zamanSemasi })),
 });
 export type MakineAyrimlariCevabi = z.infer<typeof makineAyrimlariCevabi>;
+// Refakat partisi kartı (kart #128): Arkon `RP:<id>` okutunca emri buradan alır; iş açma kuralı değişmez (emrin bu istasyondaki işi).
+export const refakatPartisiParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const refakatPartisiCevabi = z.object({ id: z.number().int(), emirId: z.number().int(), etiket: z.string(), durum: z.enum(['acik', 'iptal']) });
+export type ArkonRefakatPartisi = z.infer<typeof refakatPartisiCevabi>;
 export const planSiraSurumuCevabi = z.object({ planSurumu: z.number().int().nonnegative() });
 export const planSiralaCevabi = z.object({ taslakId: z.number().int(), taslakAcildi: z.boolean() });
 

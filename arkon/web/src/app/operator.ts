@@ -347,7 +347,16 @@ export function App({ preview }) {
   /* QR / barkod ile iş emri aç */
   const pickByCode = code => {
     const rk = refakatKodu(code);
-    if (rk) {
+    // Refakat partisi kartı (kart #128): emir sunucudan okunur; bağlantı yoksa kartın altındaki emir numarası elle yazılır.
+    if (rk && 'partiId' in rk) {
+      AKStore.Server.refakatPartisi(rk.partiId).then((p) => {
+        if (!p) { beep('nok'); say('Refakat kartı bulunamadı: ' + code, 'alert', 'var(--stop)'); return; }
+        if (p.durum === 'iptal') { beep('nok'); say('Refakat kartı iptal edilmiş: ' + p.etiket, 'alert', 'var(--stop)'); return; }
+        pickByCode('UE:' + p.emirId);
+      }, () => { beep('nok'); say('Kart okunamadı; bağlantı yok. Kartın altındaki emir numarasını yaz (UE-…-P1).', 'alert', 'var(--hold)'); });
+      return;
+    }
+    if (rk && !('partiId' in rk)) {
       const r = refakatIsi(rk, orders, Object.values<any>(pkgsRef.current || {}));
       if (r.tur === 'yok') { beep('nok'); say('Emir bulunamadı: ' + code, 'alert', 'var(--stop)'); return; }
       if (r.tur === 'ac') { isGec(r.sira); setSince(Date.now()); setMv('prod'); say('İş emri açıldı: ' + orders[r.sira].no, 'check', 'var(--run)'); return; }

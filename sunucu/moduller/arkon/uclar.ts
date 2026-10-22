@@ -4,7 +4,7 @@ import {
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
-  merkezBelgeParametresi, merkezBelgeSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
+  merkezBelgeParametresi, merkezBelgeSorgusu, refakatPartisiCevabi, refakatPartisiParametresi, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import * as servis from './servis.ts';
 
@@ -250,6 +250,14 @@ export const uclar = [
     sorgu: makineAyrimlariSorgusu,
     cevap: makineAyrimlariCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.makineAyrimlari(db, kullanici, sorgu.emirId),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/refakat-partileri/:id',
+    yetki: ARKON_SAYFASI,
+    parametre: refakatPartisiParametresi,
+    cevap: refakatPartisiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.refakatPartisi(db, kullanici, parametre.id),
   }),
   uc({
     yontem: 'GET',
