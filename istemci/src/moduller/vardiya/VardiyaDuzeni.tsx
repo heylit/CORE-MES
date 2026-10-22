@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { TakvimCevabi, Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
 import { AcKapa, Dugme, Rozet, Simge } from '../../ortak/arayuz/index.ts';
+import { anahtarlar } from './anahtarlar.ts';
 import { BosVardiya } from './BosVardiya.tsx';
 import { SaatGirdisi, TarihGirdisi } from './ZamanAlani.tsx';
 import { GUNLER, kisaAdlar, saat, tarihMetni } from './gosterim.ts';
@@ -137,9 +139,17 @@ function MolaEkle({ ekle }: { ekle: (m: Mola) => void }) {
 }
 
 function Saatler({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
-  // Güncelleme okunan sürümü taşır; gönderilmeyen alan boşalacağı için kaydın bütün alanları gider.
-  const guncelle = (v: Vardiya, p: Partial<{ ad: string; baslangic: string; bitis: string; molalar: Mola[]; aktif: boolean }>) =>
-    y.mutate({ yol: `/vardiyalar/${v.id}/guncelle`, govde: { ad: v.ad, baslangic: v.baslangic, bitis: v.bitis, molalar: v.molalar, aktif: v.aktif, surum: v.surum, ...p } });
+  const istemci = useQueryClient();
+  const sira = useRef<Promise<unknown>>(Promise.resolve());
+  // Güncelleme okunan sürümü taşır; gönderilmeyen alan boşalacağı için kaydın bütün alanları gider. Kayıtlar sırayla gider ve gövde
+  // gönderim anındaki son hâlden kurulur: art arda iki alan değişince ikincisi eski sürümle 409 almaz, ilkini eski değerle ezmez.
+  const guncelle = (v: Vardiya, p: Partial<{ ad: string; baslangic: string; bitis: string; molalar: Mola[]; aktif: boolean }>) => {
+    sira.current = sira.current.then(() => {
+      const son = istemci.getQueryData<TakvimCevabi>(anahtarlar.takvim)?.vardiyalar.find((x) => x.id === v.id) ?? v;
+      return y.mutateAsync({ yol: `/vardiyalar/${v.id}/guncelle`, govde: { ad: son.ad, baslangic: son.baslangic, bitis: son.bitis, molalar: son.molalar, aktif: son.aktif, surum: son.surum, ...p } })
+        .catch(() => undefined);
+    });
+  };
   return (
     <section className="tc-vr-panel" aria-label="Vardiya saatleri ve molalar">
       <h3>Vardiya saatleri ve molalar</h3>

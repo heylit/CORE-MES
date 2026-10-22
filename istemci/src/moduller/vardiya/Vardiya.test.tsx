@@ -336,6 +336,26 @@ describe('Vardiya', () => {
     expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/vardiyalar/1/guncelle', govde: { baslangic: '09:30', bitis: '16:00', surum: 4 } });
   });
 
+  it('art arda iki saat değişikliği sırayla gider: ikincisi ilkinin yanıtındaki sürüm ve değerle kurulur', async () => {
+    const cagrilar = sunucuKur(PLANLAMA, {
+      'POST /vardiyalar/1/guncelle': () => {
+        const govde = postlar(cagrilar).at(-1)?.govde as { baslangic: string; bitis: string; surum: number };
+        const [ilk, ...diger] = TAKVIM.vardiyalar;
+        return json(200, { ...TAKVIM, vardiyalar: [{ ...ilk!, baslangic: govde.baslangic, bitis: govde.bitis, surum: govde.surum + 1 }, ...diger] } satisfies TakvimCevabi);
+      },
+    });
+    ac();
+    const bas = await screen.findByLabelText('Gündüz başlangıç');
+    const bit = screen.getByLabelText('Gündüz bitiş');
+    fireEvent.change(bas, { target: { value: '22:00' } });
+    fireEvent.blur(bas);
+    fireEvent.change(bit, { target: { value: '06:00' } });
+    fireEvent.blur(bit);
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(2));
+    expect(postlar(cagrilar)[0]).toMatchObject({ govde: { baslangic: '22:00', bitis: '16:00', surum: 4 } });
+    expect(postlar(cagrilar)[1]).toMatchObject({ govde: { baslangic: '22:00', bitis: '06:00', surum: 5 } });
+  });
+
   it('mola satırı düğmeyle açılır; eklenince gövdeye girer, vazgeçilince kapanır', async () => {
     const cagrilar = sunucuKur(PLANLAMA);
     ac();
