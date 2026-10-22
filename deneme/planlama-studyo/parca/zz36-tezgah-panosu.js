@@ -231,7 +231,7 @@ const TP = (function (dis) {
       </div>`;
     };
     return `<aside class="tp-ray" aria-label="Siparişler">
-      <div class="tp-ray-bas">${ic('search')}<input id="tp-ara" placeholder="Sipariş ara" value="${esc(U.ara)}" aria-label="Sipariş ara">
+      <div class="tp-ray-bas">${ic('search')}<input id="tp-ara" placeholder="Sipariş ara · Ctrl+K komut" value="${esc(U.ara)}" aria-label="Sipariş ara"><button class="tp-tus kucuk yalin" data-a="komutAc" aria-label="Komut" title="Komut (Ctrl+K)">${ic('chev-right')}</button>
         ${S.sira.length ? `<button class="tp-tus kucuk" data-a="siraSifirla" title="Elle sırayı bırak, riske göre sırala">${ic('sort')}</button>` : ''}</div>
       <div class="tp-ray-sutun"><span title="${S.sira.length ? 'Elle sıra' : 'En riskli üstte'}">Sipariş</span><span>Başl.</span><span>Üretim</span><span>Bitiş</span><span>Termin</span></div>
       <div class="tp-liste" id="tp-liste">${!L.length ? `<p class="tp-not" style="padding:var(--b-3)">${ic('search')} ${U.suz ? 'Süzgece' : 'Aramaya'} uyan sipariş yok.</p>` : ''}${S.sira.length || U.ara ? L.map(sat).join('') : [['gec', 'Geciken', 'alert'], ['risk', 'Riskli · 8 sa’ten az pay', 'clock'], ['iyi', 'Zamanında', 'check']].map(([d, ad, ik]) => { const G = L.filter(x => x.durum === d); return G.length ? `<div class="tp-ayrac ${d}">${ic(ik)} ${ad}<span>${G.length}</span></div>${G.map(sat).join('')}` : ''; }).join('')}</div>
@@ -593,7 +593,7 @@ const TP = (function (dis) {
         <label>Donuk bölge</label><div class="tp-cipler">${[0, 2, 4, 8, 16, 24].map(x => `<button class="tp-cip" data-a="frz" data-v="${x}" aria-pressed="${S.frz === x}" ${yazar() ? '' : 'disabled'}>${x} sa</button>`).join('')}</div>
         <label>Görünüm</label><div class="tp-cipler"><button class="tp-cip" data-a="gunOzet">${ic('book')} Gün özeti</button><button class="tp-cip" data-a="brifAc">${ic('sun')} Sabah brifingi</button><button class="tp-cip" data-a="atolyeAc">${ic('laptop')} Atölye ekranı</button></div>
         <label>Stüdyo</label><div class="tp-cipler"><button class="tp-cip" data-a="sekmeGit" data-v="onay">${ic('check')} Onay ve canlı</button><button class="tp-cip" data-a="sekmeGit" data-v="pg">${ic('chart')} Plan ve gerçekleşen</button></div>
-        <label>Kısayollar</label><p class="tp-not">Ctrl+Z geri al · Ctrl+Y yinele · Esc kapat · 1-5 ölçek · / ara · taşırken Alt: mıknatıs kapalı</p>
+        <label>Kısayollar</label><p class="tp-not">Ctrl+K komut · Ctrl+Z geri al · Ctrl+Y yinele · Esc kapat · 1-5 ölçek · / ara · taşırken Alt: mıknatıs kapalı</p>
         <p class="tp-not">Her karar çalışma planına yazılır; canlı plan yalnız Onay sekmesinden değişir.</p>
         <p class="tp-not">Lejant: kırmızı geç, turuncu riskli (8 sa'ten az pay), çizgili baş ayar, kesikli çerçeve fason, mavi bölge donuk.</p>`;
     },
@@ -973,6 +973,149 @@ Bilgilerinize sunarız.` };
       <header>${ic('laptop')} <b>Atölye</b><span>Canlı plan · sürüm ${G.canliSurum || 0}</span><span class="tp-bosluk"></span><span class="saat">${tz(now)}</span><button class="tp-tus" data-a="atolyeKapat">${ic('x')} Çık</button></header>${govde}</div>`);
   }
 
+  /* ---------- komut çubuğu (Ctrl+K) ----------
+     sözdizimi: nesne eylem değer; nesne sipariş (SP-109), işlem (SP-109.20), tezgâh (T2) ya da genel eylem.
+     her adımda sıradaki sözcük önerilir, Tab sözcüğü tamamlar, Enter uygular; plan değiştiren komut karar geçmişine girer, geri alınır.
+     panodaki düğmelerle aynı sınırlar: yazma yetkisi, onaydaki plan ve denemede kapalı işler. */
+  function nrm(t) { return String(t).toLocaleLowerCase('tr').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/â/g, 'a'); }
+  const SAYI = /^\d+([.,]\d+)?$/;
+  /* aday: t sözcükleri (sayı yuvası {n}), w ağırlık; run(değerler) yapar, on(değerler) önizler: { z, ek } */
+  function komutAdaylari() {
+    const K = [], f = farkSay(), yaz = yazar() && S.durum !== 'onayda', dn = !!dnAktif();
+    const ekle = (t, o) => K.push({ t, ik: 'chev-right', w: 1, ...o });
+    const L = siparisler(), sira = id => [id, ...L.map(q => q.id).filter(i => i !== id)];
+    for (const x of L) {
+      const w = x.durum === 'gec' ? 3 : x.durum === 'risk' ? 2 : 1, kisa = x.id.replace(/^\D+-?/, ''), alt = `${x.ad} · ${x.durum === 'gec' ? sure(x.T) + ' geç' : x.durum === 'risk' ? sure(x.pay) + ' pay' : 'zamanında'}`;
+      const s = { alias: { 0: [kisa] }, w, alt };
+      ekle([x.id, 'aç'], { ...s, ik: 'list', run: () => { U.rayAcik = true; if (U.secJob !== x.id) sipSec(x.id); } });
+      if (yaz) {
+        ekle([x.id, 'öne', 'al'], { ...s, ik: 'up', on: () => { const y = oneAlCoz(x.id, false); return y && { z: y.z, ek: { locks: y.lk, sira: sira(x.id) } }; } });
+        ekle([x.id, 'hızlı', 'tezgâha', 'ver'], { ...s, w: w - 0.1, ik: 'bolt', on: () => { const y = oneAlCoz(x.id, true); return y && { z: y.z, ek: { locks: y.lk, sira: sira(x.id) } }; } });
+        if (x.j.adet > 1 && !/\/\d+$/.test(x.id) && !dis.basladi(x.id)) ekle([x.id, 'böl', { n: 2 }, 'parça'], { ...s, w: w - 0.3, ik: 'layers', run: v => { const n = Math.max(2, Math.min(4, Math.round(v[2] ?? 2))); const j = S.D.siparisler.find(q => q.id === x.id); kartAc('bol', { j: j.id, adetler: bolAdet(j, n) }); bolOnizle(); } });
+      }
+      if (x.durum !== 'iyi') ekle([x.id, 'termin'], { ...s, w: w - 0.4, ik: 'clock', alt: `${x.ad} · müşteriye gidecek metin`, run: () => { if (U.secJob !== x.id) sipSec(x.id); kartAc('termin', { j: x.id }); } });
+      ekle([x.id, 'süz'], { ...s, w: w - 0.5, ik: 'eye', run: () => suzKoy('j', x.id) });
+    }
+    for (const r of Object.values(S.plan.ops)) {
+      if (!isFinite(r.C) || r.done) continue;
+      const o = S.plan.cx.byId[r.id] || {}, sabit = r.act || r.S < 7 + S.frz - 1e-6 || r.fas || (S.locks[r.id] && S.locks[r.id].kim);
+      const s = { alias: { 0: [r.id.replace(/^\D+-?/, '')] }, w: 0.5, alt: `${o.ad || ''} · ${r.m[0] === '@' ? 'fason' : r.m} · ${tz(r.S)}` };
+      ekle([r.id, 'aç'], { ...s, ik: 'box', run: () => opGit(r.id) });
+      if (!yaz) continue;
+      if (!sabit) for (const c of o.c || []) { if (c.fas || c.m === r.m) continue;
+        ekle([r.id, 'taşı', c.m], { ...s, ik: 'chev-right', alt: `${o.ad || ''} · ${r.m} → ${c.m}`, on: () => { const lk = { ...S.locks }; delete lk[r.id]; return { z: coz([[r.id, c.m, r.S]], { locks: lk }), ek: { locks: lk } }; } }); }
+      if (!sabit && !S.locks[r.id]) ekle([r.id, 'kilitle'], { ...s, ik: 'lock', on: () => { const lk = { ...S.locks, [r.id]: { m: r.m, S: r.S } }; return { z: coz([[r.id, r.m, r.S]], { locks: lk }), ek: { locks: lk } }; } });
+      if (S.locks[r.id] && !S.locks[r.id].kim) ekle([r.id, 'kilidi', 'aç'], { ...s, ik: 'lock', on: () => { const lk = { ...S.locks }; delete lk[r.id]; return { z: coz([], { locks: lk }), ek: { locks: lk } }; } });
+      if (dn) continue;
+      if (!r.fas && r.S <= 7 + S.frz + 1e-6 && !S.gercek[r.id]) ekle([r.id, 'başladı', { n: 0 }, 'dk', 'geç'], { ...s, ik: 'play', on: v => { const gs2 = r.S + (v[2] || 0) / 60, g = { ...S.gercek, [r.id]: { m: r.m, S: gs2, plan: r.S } }; return { z: coz([], { gercek: g }), ek: { gercek: g } }; } });
+      if (S.gercek[r.id]) ekle([r.id, 'sayım', { n: 0 }, 'adet'], { ...s, ik: 'check', on: v => { const n = Math.max(0, Math.min(o.adet, Math.round(v[2] || 0))), c = (o.c || []).find(q => q.m === r.m), g0 = S.gercek[r.id];
+        const g = { ...S.gercek, [r.id]: { ...g0, n, kalan: c && c.cyc ? (o.adet - n) * c.cyc : null, sayim: Math.max(g0.S, 7) } }; return { z: coz([], { gercek: g }), ek: { gercek: g } }; } });
+    }
+    for (const m of S.D.tezgahlar) {
+      const s = { w: 1.2, alt: m.ad };
+      /* arıza da panodaki gibi üç tepkiyle açılır; komut yalnız süreyi doldurur */
+      if (yaz) ekle([m.id, 'arıza', { n: 4 }, 'sa'], { ...s, ik: 'alert', alt: `${m.ad} · şimdi başlar, üç tepkiyi gör`, run: v => { U.tepki = null; kartAc('olay3', { ...olayVarsayilan('ariza', m.id), saat: Math.max(0.5, Math.min(72, v[2] || 4)) }); tepkiBaslat(); } });
+      if (yaz && S.down.some(d => d.m === m.id)) ekle([m.id, 'arıza', 'bitti'], { ...s, ik: 'check', on: () => { const down = S.down.filter(d => d.m !== m.id); return { z: coz([], { down }), ek: { down } }; } });
+      if (yaz && (m.vardiyalar || []).length) ekle([m.id, 'ek', 'mesai'], { ...s, ik: 'clock', alt: `${m.ad} · boş vardiyayı aç`, run: () => { U.onizleme = null; kartAc('mesai', { m: m.id, ekle: null, kaldir: null }); } });
+      ekle([m.id, 'günlük'], { ...s, ik: 'book', run: () => kartAc('gunluk', { m: m.id }) });
+      ekle([m.id, 'süz'], { ...s, ik: 'eye', run: () => suzKoy('m', m.id) });
+    }
+    for (const g of [...new Set(satirlar().map(R => R.grup))]) ekle(['süz', g], { ik: 'eye', alt: 'istasyon', run: () => suzKoy('g', g) });
+    ekle(['süz', 'temizle'], { ik: 'x', run: () => { U.suz = null; cizHafif(); } });
+    if (yaz) {
+      for (const u of S.D.urunler) ekle(['acil', u.id, { n: 20 }, 'adet', { n: 3 }, 'gün'], { ik: 'fire', w: 1.5, alt: u.ad, run: v => { kartAc('acil', { urun: u.id, adet: Math.max(1, Math.round(v[2] || 20)), gun: Math.max(1, Math.round(v[4] || 3)) }); acilOnizle(); } });
+      for (const [k, ad, sm, alt] of OLAY) if (k !== 'ariza' && k !== 'acil') ekle(['olay', nrm(ad.split(' ')[0])], { ik: sm, w: 1.5, alt: `${ad} · ${alt}`, run: () => { U.tepki = null; kartAc('olay3', olayVarsayilan(k)); tepkiBaslat(); } });
+      ekle(['deneme'], { ik: 'lab', w: 2, alt: 'şu olursa: ana plandan yeni deneme', run: () => kartAc('dn') });
+      if (!dn) {
+        ekle(['iyileştir'], { ik: 'bolt', w: 2, run: () => dis.iyilestir() });
+        ekle(['donuk', { n: S.frz }, 'sa'], { ik: 'lock', alt: 'ilk saatler taşınmaz', run: v => { const x = Math.max(0, Math.min(48, Math.round(v[1] ?? S.frz))); if (x === S.frz) return; dis.G().w.dondurma = x;
+          const st = stKur(), p = bagla({ ops: S.plan.ops, fail: S.plan.fail || [] }, cxAl()); uygula(`Donuk bölge ${x} sa`, { p, e: degerle(p, st) }); } });
+        if (f) ekle(['onaya', 'gönder'], { ik: 'upload', w: 2.5, alt: `${f} değişiklik`, run: () => kartAc('gonder') });
+      }
+    }
+    ekle(['gün', 'özeti'], { ik: 'book', w: 2, run: () => kartAc('gun') }); ekle(['brifing'], { ik: 'sun', w: 2, run: () => { U.brif = true; U.brifYeni = true; ciz(); } });
+    ekle(['atölye', 'ekranı'], { ik: 'laptop', w: 2, run: atolyeAc });
+    if (yaz && S.geri.length) ekle(['geri', 'al'], { ik: 'back', w: 2, alt: S.geri[S.geri.length - 1].ad, run: geriAl });
+    if (yaz && S.ileri.length) ekle(['yinele'], { ik: 'chev-right', w: 1, run: yinele });
+    for (const [z, a] of OLCEK) ekle(['ölçek', nrm(a).replace(/\s/g, '')], { ik: 'clock', alt: a, run: () => { U.zoom = z; U.kaydir = null; ciz(); } });
+    return K;
+  }
+  /* yazılan her sözcük adayın aynı sıradaki sözcüğünün başı olmalı (son sözcük yarım olabilir); sayı yuvaya yazılır */
+  function komutEslestir(c, q) {
+    if (!c) return null;
+    const bos = /\s$/.test(q), Q = nrm(q).trim().split(/\s+/).filter(Boolean); if (Q.length > c.t.length) return null;
+    const v = {}; let puan = c.w;
+    for (let i = 0; i < Q.length; i++) {
+      const ct = c.t[i], qt = Q[i], son = i === Q.length - 1 && !bos;
+      if (typeof ct === 'object') { if (!SAYI.test(qt)) return null; v[i] = +qt.replace(',', '.'); puan += 1; continue; }
+      const A = [nrm(ct), ...((c.alias && c.alias[i]) || []).map(nrm)];
+      if (A.some(a => a === qt)) puan += 2; else if (son && A.some(a => a.startsWith(qt))) puan += 1; else return null;
+    }
+    if (bos && Q.length === c.t.length) return null;
+    const metin = c.t.map((x, i) => typeof x === 'object' ? String(v[i] ?? x.n) : x).join(' ');
+    return { c, v, puan, metin, n: Q.length };
+  }
+  function komutBul(q) {
+    const A = komutAdaylari();
+    if (!q.trim()) {
+      const R = [], koy = (x, grup) => { if (x && !R.some(y => y.metin === x.metin)) R.push({ ...x, grup }); };
+      for (const m of dis.G().tpKomut || []) koy(A.map(c => komutEslestir(c, m)).filter(Boolean).find(x => x.metin === m), 'Son');
+      for (const x of siparisler().filter(x => x.durum === 'gec').slice(0, 3)) koy(komutEslestir(A.find(c => c.t[0] === x.id && c.t[1] === 'öne'), x.id + ' öne al'), 'Öneri');
+      const dar = yukOranlari().find(x => x.oran >= 0.85); if (dar) koy(komutEslestir(A.find(c => c.t[0] === dar.m && c.t[1] === 'süz'), dar.m + ' süz'), 'Öneri');
+      for (const t of ['onaya gönder', 'deneme', 'gün özeti']) koy(komutEslestir(A.find(c => c.t.join(' ') === t), t), 'Öneri');
+      return R.slice(0, 9);
+    }
+    return A.map(c => komutEslestir(c, q)).filter(Boolean).sort((a, b) => b.puan - a.puan || a.metin.length - b.metin.length).slice(0, 8);
+  }
+  function komutAc() {
+    if (U.brif) { U.brif = false; const b = $('.tp-brif'); if (b) b.remove(); }
+    menuKapat(); U.komut = { q: '', i: 0, L: komutBul(''), on: {} }; cizKomut(true); const i = $('#tp-komut-q'); if (i) i.focus();
+  }
+  function komutKapat() { U.komut = null; const k = $('#tp-komut'); if (k) k.remove(); const p = $('#tp-komut-perde'); if (p) p.remove(); }
+  function komutYaz(q) { const k = U.komut; k.q = q; k.L = komutBul(q); k.i = 0; cizKomut(); }
+  /* Tab: seçili adayın sıradaki sözcüğünü yazar (kabuktaki gibi sözcük sözcük) */
+  function komutTamamla() {
+    const k = U.komut, x = k.L[k.i]; if (!x) return; const q = k.q, bos = /\s$/.test(q) || !q.trim(), W = x.metin.split(' ');
+    const n = q.trim() ? q.trim().split(/\s+/).length : 0, yaz = W.slice(0, bos ? n + 1 : Math.max(1, n)).join(' ');
+    const yeni = yaz + (yaz.split(' ').length < W.length ? ' ' : ''); const i = $('#tp-komut-q'); i.value = yeni; komutYaz(yeni);
+  }
+  function komutOnizle(x) {
+    const k = U.komut; if (!x || !x.c.on || k.on[x.metin] !== undefined) return;
+    clearTimeout(U.komutZ); U.komutZ = setTimeout(() => { if (!U.komut || U.komut.L[U.komut.i] !== x) return;
+      const y = x.c.on(x.v); U.komut.on[x.metin] = y ? { y, x: etki(S.e, y.z.e) } : null; cizKomut(); }, 90);
+  }
+  /* yazılmış sözcükler kalın, tamamlanacaklar silik */
+  function komutBoya(m, n) { return m.split(' ').map((w, i) => i < n ? esc(w) : `<i>${esc(w)}</i>`).join(' '); }
+  function cizKomut(ilk) {
+    const k = U.komut; if (!k) return;
+    if (ilk || !$('#tp-komut')) { komutKapat(); U.komut = k;
+      document.body.insertAdjacentHTML('beforeend', `<div class="tp-perde" id="tp-komut-perde" data-a="komutKapat"></div><div class="tp-komut" id="tp-komut" role="dialog" aria-label="Komut">
+        <div class="tp-komut-bas">${ic('chev-right')}<div class="tp-komut-alan"><div class="tp-komut-hayal" id="tp-komut-hayal" aria-hidden="true"></div><input id="tp-komut-q" placeholder="SP-109 öne al · T2 arıza 4 sa · ölçek ay" autocomplete="off" spellcheck="false" aria-autocomplete="list" aria-controls="tp-komut-L" aria-label="Komut"></div><kbd>Esc</kbd></div>
+        <div class="tp-komut-L" id="tp-komut-L" role="listbox"></div><div class="tp-komut-alt"><span><kbd>Tab</kbd> tamamla</span><span><kbd>↑↓</kbd> seç</span><span><kbd>Enter</kbd> uygula</span><span>Plan değiştiren komut geri alınır</span></div></div>`); }
+    const x = k.L[k.i], q = k.q;
+    /* hayalet tamamlama: yazılanın devamı silik görünür */
+    const h = $('#tp-komut-hayal'); if (h) { let tam = '';
+      if (x && q.trim()) { const W = x.metin.split(' '), bos = /\s$/.test(q), Q = q.trim().split(/\s+/), n = Q.length;
+        if (bos) tam = W.slice(n).join(' ');
+        else { const a = Q[n - 1], c = W[n - 1] || ''; tam = (nrm(c).startsWith(nrm(a)) ? c.slice(a.length) : '') + (W.length > n ? ' ' + W.slice(n).join(' ') : ''); } }
+      h.innerHTML = `<span>${esc(q)}</span>${esc(tam)}`; }
+    komutOnizle(x);
+    let grup = '';
+    $('#tp-komut-L').innerHTML = k.L.map((c, i) => { const on = k.on[c.metin]; const bas = c.grup && c.grup !== grup ? `<div class="tp-komut-grup">${grup = c.grup}</div>` : '';
+      const onz = i === k.i && c.c.on ? `<small class="on ${on && (on.x.dW > 0.1 || on.x.dKar < -1) ? 'kotu' : on && on.x.dW < -0.1 ? 'iyi' : ''}">${on === undefined ? 'etkisi hesaplanıyor…' : on ? etkiMetni(on.x) + (on.x.dKar < -1 || on.x.dW > 0.1 ? ' · öneri yok, karar senin' : '') : 'Uygulanamıyor: bitişi kısaltmıyor ya da yol yok.'}</small>` : '';
+      return `${bas}<button class="tp-komut-sat ${i === k.i ? 'sec' : ''}" data-a="komutSec" data-i="${i}" role="option" aria-selected="${i === k.i}">${ic(c.c.ik)}<span><b>${komutBoya(c.metin, c.n)}</b>${c.c.alt ? `<small>${esc(c.c.alt)}</small>` : ''}${onz}</span>${i === k.i ? '<kbd>Enter</kbd>' : ''}</button>`; }).join('')
+      || `<p class="tp-not tp-komut-bos">Eşleşen komut yok. Biçim: <b>nesne eylem değer</b>. Örnek: "SP-109 öne al", "SP-109.20 taşı T3", "T2 arıza 6 sa", "ölçek ay".</p>`;
+    const s = $('#tp-komut-L .sec'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' });
+  }
+  function komutCalis(i) {
+    const k = U.komut; if (!k) return; const x = k.L[i]; komutKapat(); if (!x) return;
+    const G = dis.G(); G.tpKomut = [x.metin, ...(G.tpKomut || []).filter(m => m !== x.metin)].slice(0, 5); dis.kaydet();
+    if (x.c.on) { const on = k.on[x.metin] !== undefined ? k.on[x.metin] : (() => { const y = x.c.on(x.v); return y ? { y } : null; })();
+      if (!on) { bildir(`${x.metin}: uygulanamıyor`); return; }
+      kartKapat(); uygula(x.metin, { p: on.y.z.p, e: on.y.z.e, ...on.y.ek }); return; }
+    x.c.run(x.v);
+  }
+
   /* ---------- eylemler ---------- */
   function opSec(id, ank) {
     U.secOp = id; const r = S.plan.ops[id]; U.secJob = r.job; U.alt = null;
@@ -1192,7 +1335,7 @@ Bilgilerinize sunarız.` };
   /* ---------- olay baglama ----------
      Dinleyiciler belgeye bir kez bağlanır ve yalnız pano açıkken iş görür; uygulamanın data-act düğmeleri panonun data-a düğmelerinden ayrıdır. */
   const acik = () => !!document.getElementById('tp-kok') && !!S.plan;
-  const bizim = el => !!(el && el.closest && el.closest('#tp-kok, #tp-kart, #tp-perde, #tp-menu, #tp-mperde, #tp-atolye'));
+  const bizim = el => !!(el && el.closest && el.closest('#tp-kok, #tp-kart, #tp-perde, #tp-menu, #tp-mperde, #tp-atolye, #tp-komut, #tp-komut-perde'));
   const YAZMA = new Set(['secenek', 'alt', 'kilitle', 'kilitAc', 'frz', 'olayAc', 'olayDeg', 'tepkiUygula', 'mesaiAc', 'mesaiSec', 'mesaiKaldir', 'mesaiUygula', 'iyilestir', 'acilUygula', 'olay', 'bolAc', 'bolUygula', 'basladi', 'sayim',
     'gonder', 'gonderOnay', 'taslakSifirla', 'geri', 'geriDon', 'yinele', 'dnYeni', 'dnDuzenle', 'dnUygula', 'dnSil']);
   /* denemede yalnız plan denenir: atölye kaydı, donuk bölge, onay ve motorun çalışma planı üstündeki işleri ana plandadır */
@@ -1269,6 +1412,9 @@ Bilgilerinize sunarız.` };
         case 'brifAc': kartKapat(); U.brif = true; U.brifYeni = true; ciz(); break;
         case 'brifKapat': U.brif = false; { const b = $('.tp-brif'); if (b) b.remove(); } break;
         case 'atolyeAc': atolyeAc(); break;
+        case 'komutAc': kartKapat(); komutAc(); break;
+        case 'komutSec': komutCalis(+a.dataset.i); break;
+        case 'komutKapat': komutKapat(); break;
         case 'atolyeKapat': atolyeKapat(); break;
         case 'gunlukAc': menuKapat(); kartAc('gunluk', { m: a.dataset.m }, ank); break;
         case 'terminAc': kartAc('termin', { j: a.dataset.j }, ank); break;
@@ -1285,6 +1431,7 @@ Bilgilerinize sunarız.` };
     document.addEventListener('input', ev => {
       if (!acik()) return;
       if (ev.target.id === 'tp-ara') { U.ara = ev.target.value; cizHafif(); }
+      else if (ev.target.id === 'tp-komut-q' && U.komut) komutYaz(ev.target.value);
     });
     document.addEventListener('change', ev => {
       if (!acik() || !bizim(ev.target)) return;
@@ -1318,11 +1465,21 @@ Bilgilerinize sunarız.` };
     document.addEventListener('keydown', ev => {
       if (!acik()) return;
       const yut = () => { ev.preventDefault(); ev.stopImmediatePropagation(); };
+      /* Ctrl+K pano açıkken uygulamanın genel paleti yerine panonun komut çubuğunu açar */
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { yut(); if (U.komut) komutKapat(); else komutAc(); return; }
+      if (U.komut && ev.target.id === 'tp-komut-q') {
+        const k = U.komut, n = Math.max(1, k.L.length);
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { yut(); k.i = (k.i + (ev.key === 'ArrowDown' ? 1 : -1) + n) % n; cizKomut(); }
+        else if (ev.key === 'Tab') { yut(); komutTamamla(); }
+        else if (ev.key === 'Enter') { yut(); komutCalis(k.i); }
+        else if (ev.key === 'Escape') { yut(); komutKapat(); }
+        return;
+      }
       if (ev.target.matches('input, select, textarea')) { if (ev.key === 'Escape' && bizim(ev.target)) { yut(); ev.target.blur(); if (ev.target.closest('#tp-kart')) { U.tepki = null; kartKapat(); if (U.onizleme) { U.onizleme = null; ciz(); } } } return; }
       if (ev.target.closest && ev.target.closest('dialog')) return;
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { yut(); ev.shiftKey ? yinele() : geriAl(); }
       else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { yut(); yinele(); }
-      else if (ev.key === 'Escape') { yut(); if (U.atolye) { atolyeKapat(); return; } if (U.brif) { U.brif = false; const b = $('.tp-brif'); if (b) b.remove(); return; } if (U.surukle) { U.surukle = null; ciz(); return; } menuKapat(); U.tepki = null; kartKapat(); U.onizleme = null; U.secOp = null; U.secJob = null; U.secenek = null; ciz(); }
+      else if (ev.key === 'Escape') { yut(); if (U.komut) { komutKapat(); return; } if (U.atolye) { atolyeKapat(); return; } if (U.brif) { U.brif = false; const b = $('.tp-brif'); if (b) b.remove(); return; } if (U.surukle) { U.surukle = null; ciz(); return; } menuKapat(); U.tepki = null; kartKapat(); U.onizleme = null; U.secOp = null; U.secJob = null; U.secenek = null; ciz(); }
       else if (ev.key === '/' && !ev.ctrlKey && !ev.metaKey) { yut(); const i = $('#tp-ara'); if (i) i.focus(); }
       else if (['1', '2', '3', '4', '5'].includes(ev.key) && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { yut(); U.zoom = OLCEK[+ev.key - 1][0]; U.kaydir = null; ciz(); }
     }, true);
