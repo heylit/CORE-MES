@@ -22,6 +22,7 @@ import { MESAJ_ISLEMLERI } from './islemler/mesaj.ts';
 import { MUSTERI_TEDARIKCI_ISLEMLERI } from './islemler/musteri-tedarikci.ts';
 import { NIZAMIYE_ISLEMLERI } from './islemler/nizamiye.ts';
 import { OEE_ISLEMLERI } from './islemler/oee.ts';
+import { PANO_ISLEMLERI } from './islemler/pano.ts';
 import { PLAN_ISLEMLERI } from './islemler/plan.ts';
 import { PROJELER_ISLEMLERI } from './islemler/projeler.ts';
 import { ROTA_ISLEMLERI } from './islemler/rota.ts';
@@ -66,6 +67,7 @@ export const VERI_ISLEMLERI = [
   ...MUSTERI_TEDARIKCI_ISLEMLERI,
   ...NIZAMIYE_ISLEMLERI,
   ...OEE_ISLEMLERI,
+  ...PANO_ISLEMLERI,
   ...PLAN_ISLEMLERI,
   ...PROJELER_ISLEMLERI,
   ...ROTA_ISLEMLERI,

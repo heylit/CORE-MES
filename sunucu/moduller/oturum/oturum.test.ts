@@ -386,6 +386,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.bakim?.push('sayfa.istasyonlar', 'istasyonlar.makine-durumu');
   MATRIS.vardiya_sorumlusu?.push('sayfa.istasyonlar', 'istasyonlar.makine-durumu');
   MATRIS.mudur?.push('istasyonlar.makine-durumu', 'uretim-emirleri.hazirlik-muaf');
+  // 73 b (22.10.2026): ana sayfanın şirket özeti bölümü yalnız yönetici ve müdürdedir.
+  MATRIS.mudur?.push('pano.sirket-ozeti');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet', 'recete-rota.planlama-oku'];
 
