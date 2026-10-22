@@ -154,7 +154,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
   test('bakım rolü Arkon bakım kaydını yazar, Arkon dışında stok sayfasını ve satın alma talebini taşır, işlem isteyen uçlarda 403 alır; operatör ve satın alma bakım kaydı yazamaz', async () => {
     const bakim = await girisYap('bakim');
     assert.equal(await bakimKaydiYaz(bakim), 200);
-    assert.deepEqual([...bakim.islemler].sort(), ['arkon.bakim', 'cnc-kurulum.oku', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'satin-alma.talep-ac', 'sayfa.arkon', 'sayfa.cnc-kurulum', 'sayfa.ik-islemlerim', 'sayfa.mesaj', 'sayfa.stok', 'sayfa.taleplerim', 'stok.istek', 'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac', 'sayfa.istasyonlar', 'istasyonlar.makine-durumu', 'plan.oku', 'cnc-kurulum.takim-degistir'].sort());
+    assert.deepEqual([...bakim.islemler].sort(), ['arkon.bakim', 'cnc-kurulum.oku', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'saat.oku', 'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.arkon', 'sayfa.cnc-kurulum', 'sayfa.ik-islemlerim', 'sayfa.mesaj', 'sayfa.stok', 'sayfa.taleplerim', 'stok.istek', 'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac', 'sayfa.istasyonlar', 'istasyonlar.makine-durumu', 'plan.oku', 'cnc-kurulum.takim-degistir'].sort());
     // Sayfası olan rol okur: aşağıdaki retler boş sistemde kendiliğinden geçmesin.
     assert.equal((await oku(await girisYap('satin_alma'), '/malzeme-katalogu-kartlari')).statusCode, 200);
     assert.equal((await oku(await girisYap('mudur'), '/kisiler')).statusCode, 200);
