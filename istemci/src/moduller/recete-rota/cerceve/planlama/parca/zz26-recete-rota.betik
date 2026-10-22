@@ -4,7 +4,7 @@
    (window.tmiGorunum: kaydet, bildir, sayaclar). Çerçeve her çizimde yeniden kurulmaz: yeniden kurmak durumunu ve kaydırmasını sıfırlar. */
 const RR_SEK = [['orders', 'Üretim emirleri', 'list'], ['stock', 'Stok', 'box'], ['schema', 'Ürün ve rotalar', 'layers'], ['ops', 'Operasyonlar', 'edit'], ['sureler', 'Süreler', 'clock'], ['items', 'Malzemeler', 'cube'], ['res', 'Kaynaklar', 'cpu']];
 /* çerçevenin plan sekmeleri bu modülde planlama sayfalarıdır */
-const RR_PLAN = { plan: 'tahta', studio: 'patolye', kanban: 'tahta', op: 'tahta', sim: 'tahta' };
+const RR_PLAN = { plan: 'tahta', studio: 'studyo', kanban: 'tahta', op: 'tahta', sim: 'tahta' };
 const rrId = ad => 'rr-' + ad;
 const rrMi = id => typeof id === 'string' && id.startsWith('rr-') && RR_SEK.some(x => rrId(x[0]) === id);
 for (const [ad, baslik] of RR_SEK) { const id = rrId(ad); SAYFA_AD[id] = baslik; EKRAN_OF[id] = 'plan'; YAN_ID.add(id); YM_GORUNUM[id] = () => rrYerHtml(ad); }

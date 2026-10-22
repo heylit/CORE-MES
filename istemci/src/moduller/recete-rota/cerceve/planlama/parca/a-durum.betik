@@ -21,8 +21,18 @@ function yukle() {
 }
 function kaydet() {
   try { localStorage.setItem(ANAHTAR, JSON.stringify(S)); } catch (e) {
-    if (S.senaryolar.length > 2) { S.senaryolar.shift(); try { localStorage.setItem(ANAHTAR, JSON.stringify(S)); } catch (e2) { /* yer yok */ } }
+    /* yer yoksa önce kendiliğinden adlanmış taslaklar düşer; korunan planlar silinmez, en eskisinden başlayarak yalnız
+       veri anlık görüntüsü bırakılır (plan ve özet kalır, karşılaştırılabilir) */
+    const dene = () => { try { localStorage.setItem(ANAHTAR, JSON.stringify(S)); return true; } catch (e2) { return false; } };
+    if (typeof senKirp === 'function') { senKirp(0); if (dene()) return kaydetUi(); }
+    for (const x of S.senaryolar.filter(y => !y.hafif && y.id !== S.canli).sort((a, b) => (a.zaman || 0) - (b.zaman || 0))) {
+      for (const k of ['D', 'down', 'ekMesai', 'locks', 'pref', 'w']) delete x[k]; x.hafif = true; if (dene()) return kaydetUi();
+    }
+    if (!dene() && typeof bildir === 'function') bildir('Tarayıcı belleği doldu; son değişiklik kaydedilemedi. Geçmiş planlar silinmedi.', 'hata');
   }
+  kaydetUi();
+}
+function kaydetUi() {
   try { localStorage.setItem(ANAHTAR + '-ui4', JSON.stringify({ sayfa: U.sayfa, zoom: U.zoom, yuk: U.yuk })); } catch (e) { /* yok */ }
 }
 const kim = () => KULLANICILAR.find(k => k.id === S.kullanici) || KULLANICILAR[0];

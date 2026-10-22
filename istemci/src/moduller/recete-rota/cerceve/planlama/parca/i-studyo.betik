@@ -76,7 +76,7 @@ function selale(son) {
       ${kol.map(k => `<div class="pm-selale-kol" data-ipucu="${esc(`${k.ad}: ${k.tur === 'toplam' ? `${k.deger} sa` : `${k.deger} sa değişim`}`)}"><div class="pm-selale-cubuk" data-tur="${k.tur}" style="--alt:${yuzdeS(k.alt, max)};--ust:${yuzdeS(k.ust, max)}"></div><span class="pm-selale-deger mono" style="--ust:${yuzdeS(k.ust, max)}">${k.deger}</span></div>`).join('')}
     </div>
     <div class="pm-selale-etiket">${kol.map(k => `<span>${esc(k.ad)}</span>`).join('')}</div>
-    <div class="pm-lejant"><span><i data-tur="toplam"></i>Toplam gecikme</span><span><i data-tur="azal"></i>Azaltan karar</span><span><i data-tur="art"></i>Artıran karar</span><span><i data-tur="lb"></i>Alt sınır</span></div>
+    <div class="pm-lejant"><span><i data-tur="toplam"></i>Ağırlıklı gecikme</span><span><i data-tur="azal"></i>Azaltan karar</span><span><i data-tur="art"></i>Artıran karar</span><span><i data-tur="lb"></i>Alt sınır</span></div>
   </div>`;
 }
 

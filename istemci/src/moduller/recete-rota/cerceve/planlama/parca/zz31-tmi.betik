@@ -7,8 +7,8 @@ const TMI_ICINDE = typeof window.tmi === 'object' && window.tmi !== null && type
 /* Aşama 1: işlemler yalnız yöneticidedir; denemenin rolü kabuğun yetkisinin yerine geçmez, sunucu yazmayı yine kendi yetkisiyle denetler. */
 const TMI_KULLANICI = 'u5';
 /* İkinci menü anahtarı -> sayfa; listede olmayan sayfa kendi adıyla bildirilir (kabuk menüde olmayanı yok sayar). */
-const TMI_MENU = { plan: 'tahta', studio: 'patolye', kanban: 'tahta' };
-const TMI_SAYFA_ANAHTAR = { tahta: 'plan', patolye: 'studio' };
+const TMI_MENU = { plan: 'tahta', studio: 'studyo', kanban: 'tahta' };
+const TMI_SAYFA_ANAHTAR = { tahta: 'plan', studyo: 'studio', patolye: 'studio' };
 /* Kayıt çevirisi, kaynak birleştirmesi, fason firma, adım adedi ve başlamış adımlar motor klasöründeki girdi.betik'tedir (tmiCevir,
    tmiKaynakIle, tmiFasoncular, tmiAdimAdetleri, tmiCalisanlar, kaynakBirlestir, calisanBirlestir): sunucu planın girdisini aynı kodla kurar. */
 const TMI_KAYNAK = { durum: null, ek: null, bekliyor: false };
