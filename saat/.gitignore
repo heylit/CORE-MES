@@ -4,6 +4,9 @@ local.properties
 *.apk
 *.jks
 *.keystore
+# Release imza deposu depoya girmez (kart #85).
+*.p12
+*.pfx
 # Kurum kok sertifikasi depoya girmez (kart #2045); derlemedeki kopyasi build/ altindadir.
 *.crt
 *.cer
