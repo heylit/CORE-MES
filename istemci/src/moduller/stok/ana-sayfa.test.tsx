@@ -85,9 +85,10 @@ describe('Rol panosu kartları', () => {
       expect(k[a]!.veya).toBeUndefined();
     }
     const anahtarlari = (islemler: string[]) => gorunenKartlar(anaSayfaKartlari, islemler).map((x) => x.anahtar);
-    expect(anahtarlari(['sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-deger');
-    expect(anahtarlari(['sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-aylik-deger');
-    expect(anahtarlari(['sayfa.stok', 'finans.oku'])).toEqual(expect.arrayContaining(['stok-yonetim-deger', 'stok-yonetim-aylik-deger']));
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-deger');
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'stok.giris'])).not.toContain('stok-yonetim-aylik-deger');
+    // Şirket özeti bölümü ayrıca bölüm işlemini ister (73 b).
+    expect(anahtarlari(['pano.sirket-ozeti', 'sayfa.stok', 'finans.oku'])).toEqual(expect.arrayContaining(['stok-yonetim-deger', 'stok-yonetim-aylik-deger']));
   });
 
   it('#1085: şirket özetinde son 7 günün giriş ve çıkışı iki seriyle; değer finans yetkisi olmayana nedeniyle boş; aylık değer boş durumda', async () => {
