@@ -64,7 +64,7 @@ const TP = (function (dis) {
     return cxY.cx;
   }
   function bagla(p, cx) { Object.defineProperty(p, 'cx', { value: cx, enumerable: false, writable: true }); return p; }
-  /* bölünen siparişin gecikmesi motorun saydığı gibidir (parça başına); sipariş başına bir kez sayma kararı 35'te bekliyor */
+  /* bölünen siparişin gecikmesi bu denemenin motorunun saydığı gibidir (parça başına); uygulamada karar 35 b ile taban bedel parçanın adet payıyla sayılır, deneme motoru değişmedi */
   function degerle(p, st) { return evaluate(p, st, null, true); }
   function kozet(e) { let kar = 0; for (const j in e.J) if (e.J[j].kar != null) kar += e.J[j].kar; return { wT: e.wT, late: e.late, kar }; }
   /* bir hamlenin plani: dondurma bolgesi korunur, kilitler motorda alt sinirdir */
@@ -610,7 +610,7 @@ const TP = (function (dis) {
         <label for="tp-bol-n">Parça sayısı</label><div class="tp-cipler">${[2, 3, 4].filter(x => x <= nMax).map(x => `<button class="tp-cip" data-a="bolSay" data-v="${x}" aria-pressed="${n === x}">${x} parça</button>`).join('')}${nMax > 4 ? `<select id="tp-bol-n" data-ch="bolN" aria-label="Parça sayısı">${Array.from({ length: nMax - 1 }, (_, i) => i + 2).map(x => `<option value="${x}" ${x === n ? 'selected' : ''}>${x}</option>`).join('')}</select>` : ''}</div>
         <label>Adetler</label><div class="tp-bol">${v.adetler.map((a, i) => { const q = on && on.P[i]; return `<div class="tp-bol-sat"><span>${i + 1}.</span><input type="number" min="1" max="${j.adet}" value="${a}" data-ch="bol" data-i="${i}" aria-label="${i + 1}. parça adedi"><small>${q ? `${esc(q.m)} · bitiş <b>${tz(q.b.C)}</b> ${roz(q.b)}` : ''}</small></div>`; }).join('')}</div>
         ${hata ? `<p class="tp-not uyari">${ic('alert')} ${hata}</p>` : on ? `<div class="tp-ozet">${ic('target')} Bölmeden bitiş ${tz(on.b0.C)} ${roz(on.b0)}${enGec ? ` · bölünce en geç parça ${tz(enGec.b.C)}` : ''}<br>Diğer siparişler: ${etkiMetni(on.x)}</div>
-          <p class="tp-not">Toplam gecikme her parçanın gecikmesini ayrı sayar; sipariş başına bir kez sayma kararı bekleniyor (35).</p>
+          <p class="tp-not">Bu denemede toplam gecikme her parçanın gecikmesini ayrı sayar. Uygulamada (karar 35 b) taban gecikme bedeli parçanın adet payıyla sayılır.</p>
           ${on.x.dW > 0.1 || on.x.dKar < -1 ? '<p class="tp-not uyari">Bölme toplamda iyileştirmiyor ya da kârı düşürüyor: öneri yok, karar senin.</p>' : ''}` : '<div class="tp-ozet">Hesaplanıyor…</div>'}
         <div class="eylem"><button class="tp-tus ${on && on.x.dW < -0.1 && on.x.dKar >= -1 ? 'ana' : ''}" data-a="bolUygula" ${on && !hata ? '' : 'disabled'}>${ic('check')} ${n} parçaya böl</button><button class="tp-tus" data-a="kapat">Vazgeç</button></div>`;
     },
