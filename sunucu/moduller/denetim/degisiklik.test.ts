@@ -177,7 +177,8 @@ describe('eski/yeni değer defteri (gerçek PostgreSQL)', () => {
     assert.ok(kisili.govde.satirlar.length > 0 && kisili.govde.satirlar.every((s) => s.kisiId === yoneticiId));
     const secenek = await oku<unknown>(mudur, '/denetim-degisiklikleri/suzgecler');
     const cozulen = degisiklikSecenekleriCevabi.parse(secenek.govde);
-    assert.deepEqual(cozulen.tablolar, ['deneme_kart', 'deneme_yetki']);
+    // Modül tablolarının tetikleri (yetki tabloları dahil) fikstür kurulumunu da deftere yazar; yalnız deneme tablolarının varlığı denetlenir.
+    assert.deepEqual(cozulen.tablolar.filter((t) => t.startsWith('deneme_')), ['deneme_kart', 'deneme_yetki']);
     assert.deepEqual(cozulen.kisiler.map((k) => k.id), [yoneticiId]);
   });
 
