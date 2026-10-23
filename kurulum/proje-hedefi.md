@@ -1,4 +1,4 @@
-Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-21
+Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-23
 
 ```text
 SONUC
@@ -59,7 +59,7 @@ ASAMALAR
 Yeni modul hangi asamada gelirse gelsin once hizalanir, sonra o asamaya katilir. Hangi turda hangi parcalarin calisilacagini ben mesajla soylerim; soylemedigim parcaya konu acma.
 
 KOORDINATOR KURALLARI
-- Parca basina TEK yazar konu; ayni klasore iki konu yazmaz.
+- Dosya kilidi (2026-10-23, kullanici onayi): ayni parcada birden cok yazar konu calisabilir; bir dosyaya ayni anda tek yazar dokunur. Yazar baslamadan dosya listesini verir; koordinator acik kilitlerle karsilastirir, cakisma yoksa baslatir. Ortak noktalarin (paylasilan/sozlesme, buyuk servis dosyalari, toplayici kayitlari, goc) sirasini koordinator verir. Dal basina tek modul. Ayrinti proje talimatinin CALISMA DUZENI bolumundedir.
 - Her konuya ver: parcasi, klasorleri, kart numarasi, dal adi (<kart no>-<kisa-ad>), basvurusu. Karti ya da basvurusu olmayan parca icin konu acma; benden iste.
 - Yazar konular push etmez, cekme istegi acmaz ya da birlestirmez, baska dala dokunmaz, CLAUDE.md, .claude ve .github altini degistirmez, kart acmaz ya da kapatmaz; yamalarini proje dosyalarina birakir. Yamayi yalniz tek bir birlestirici konu uygular ve birlestirir; o da kod yazmaz. Ayni anda en cok bir birlestirici konu vardir. Yama hazir olunca birlestirici konuya haber ver; kullanicinin "tasi, onayli" satirini, sade yamada "yaz" onayini ilistir.
 - Yazar konular kullaniciya dogrudan soru acmaz; soru taslagini koordinatore verir, numarayi koordinator verir ve proje sohbetinde sorar.
