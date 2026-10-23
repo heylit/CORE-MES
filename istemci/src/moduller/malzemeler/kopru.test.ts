@@ -20,7 +20,7 @@ const sayfa = (kartlar: Kart[]): KatalogKartlariCevabi => ({
 const KARTLAR = { kartlar: [{ kayit: { id: 'k1', tur: 'hammadde', com: { kod: 'HM-DNM-00001' } }, surum: 4 }] };
 const ozet = { stok_kodu: 'HM-DNM-00001', tur: 'hammadde', onay_durumu: 'taslak', benzersiz_anahtar: 'HM|x', mukerrer_gerekcesi: null, uygulanmayan_zorunlu: ['resim'], stok_adi: 'atılır',
   birim_agirlik_kg: 1.2345, kalite_adi: 'Örnek kalite', form_adi: 'Çubuk', metre_agirlik_kg: 2, aciklama_1: 'Ø50 S235JR', aciklama_2: '', aciklama_3: 'P-1' };
-const kur = () => kopruKur({ kullanici: { id: 7, ad: 'Deneme Açan' }, tema: 'acik' });
+const kur = (islemler: readonly string[] = [...ACAN.islemler, 'satin-alma.oku']) => kopruKur({ kullanici: { id: 7, ad: 'Deneme Açan' }, islemler, tema: 'acik' });
 
 afterEach(() => { vi.unstubAllGlobals(); kartOnbelleginiBosalt(); });
 
@@ -122,7 +122,7 @@ describe('kopru (prototip gömülü modu → TMI uçları)', () => {
     // Başka kişi önbelleği kullanmaz.
     vi.unstubAllGlobals();
     const baska = sunucuKur(ACAN, { 'GET /malzeme-katalogu-kartlari': () => json(200, sayfa([])) });
-    await kopruKur({ kullanici: { id: 8, ad: 'Başka' }, tema: 'acik' })('liste', undefined);
+    await kopruKur({ kullanici: { id: 8, ad: 'Başka' }, islemler: ACAN.islemler, tema: 'acik' })('liste', undefined);
     expect(baska.filter((i) => i.yol.startsWith('/malzeme-katalogu-kartlari')).map((i) => i.yol)).toEqual([`/malzeme-katalogu-kartlari?sayfa=1&sayfaBoyu=${KART_SAYFA_BOYU}`]);
   });
 
@@ -319,6 +319,26 @@ describe('kopru (prototip gömülü modu → TMI uçları)', () => {
       const isle = kur();
       await isle('liste', undefined);
       expect(await isle('kg-fiyatlari', undefined)).toEqual({ fiyatlar: {} });
+    });
+
+    it('195 a: satın alma ya da maliyet okuma işlemi olmayan rolde uç hiç sorulmaz, sonuç null; üç işlemin her biri sorar', async () => {
+      for (const islemler of [ACAN.islemler, [...ACAN.islemler, 'satin-alma.talep-ac', 'stok.giris']]) {
+        const istekler = sunucuKur(ACAN, { [KARTLAR_YOLU]: () => json(200, kartlar) });
+        const isle = kur(islemler);
+        await isle('liste', undefined);
+        expect(await isle('kg-fiyatlari', undefined)).toBeNull();
+        expect(istekler.some((i) => i.yol.startsWith('/satin-alma'))).toBe(false);
+        vi.unstubAllGlobals();
+        kartOnbelleginiBosalt();
+      }
+      for (const islem of ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku']) {
+        sunucuKur(ACAN, { [KARTLAR_YOLU]: () => json(200, kartlar), 'GET /satin-alma-kg-fiyatlari/malzemeler?nolar=11,12': () => json(200, { malzemeler: [] }) });
+        const isle = kur([...ACAN.islemler, islem]);
+        await isle('liste', undefined);
+        expect(await isle('kg-fiyatlari', undefined), islem).toEqual({ fiyatlar: {} });
+        vi.unstubAllGlobals();
+        kartOnbelleginiBosalt();
+      }
     });
 
     it('200 karttan fazlası 200lük parçalarla sorulur; liste okunmadan istek atılmaz', async () => {

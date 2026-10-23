@@ -121,7 +121,7 @@ export function KatalogCercevesi({ gorunum, sinif }: { gorunum: KatalogGorunumu;
   const kullanici = oturum.data;
   const etiketMerkezi = (kullanici?.islemler ?? []).includes('sayfa.etiket-merkezi');
   const isle = useMemo(
-    () => (kullanici ? kopruKur({ kullanici: { id: kullanici.id, ad: kullanici.ad }, tema: tema === 'dark' ? 'koyu' : 'acik' }) : null),
+    () => (kullanici ? kopruKur({ kullanici: { id: kullanici.id, ad: kullanici.ad }, islemler: kullanici.islemler, tema: tema === 'dark' ? 'koyu' : 'acik' }) : null),
     [kullanici, tema],
   );
 
