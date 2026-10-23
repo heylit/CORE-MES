@@ -9,6 +9,7 @@ import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { numaraAl } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
@@ -19,7 +20,8 @@ import {
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, karantinaIstegi, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
-import type { KalibrasyonHazirligi } from './kurallar.ts';
+import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
+import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const dosyaTutamak = dosyaTutamagi(KM_MODULU);
@@ -363,4 +365,34 @@ export async function ilkParcaKararlari(
 // Serbest bırakılacak konum seçimi (önceki konum bilinmediğinde): karantina, hurda, fason ve yolda dışındaki aktif konumlar.
 export async function karantinaHedefKonumlari(db: Db): Promise<{ id: number; kod: string; ad: string | null }[]> {
   return (await karantinaDisiKonumlar(db)).map((k) => ({ id: k.id, kod: k.kod, ad: k.ad }));
+}
+
+// T4 (155 a): başka modülün bulgusundan DÖF açar; aynı kaynak anahtarı ikinci kez gelirse var olan DÖF döner (yeni false). Kayıt
+// genel yazmanın bütün kurallarından geçer (sürüm, geçmiş, kilit); numara Sistem Ayarları'ndaki kalıptan, dolu numara atlanır.
+// Çağıranın işleminde yazar; açan kişi kayıtta yazan olur. Yetkiyi çağıranın ucu denetler.
+export async function dofAc(
+  db: Db, kullanici: Kullanici, istek: DofAcIstegi,
+): Promise<{ kimlik: string; no: string; durum: DofDurumu['durum']; yeni: boolean }> {
+  const ret = dofIstegiReddi(istek);
+  if (ret !== null) throw dogrulama(ILETILER[ret]);
+  const kimlik = dofKimligi(istek.kaynak, istek.kaynakAnahtari);
+  await sorgular.yazmaKilidi(db);
+  const onceki = await sorgular.kayitGovdesi(db, DOF_KOLEKSIYONU, kimlik);
+  if (onceki !== null) {
+    const d = dofDurumu(kimlik, onceki);
+    return { kimlik, no: d.no, durum: d.durum, yeni: false };
+  }
+  const no = await numaraAl(db, 'kalite-merkezi.dof-no', { varMi: (n) => sorgular.noVarMi(db, DOF_KOLEKSIYONU, n) });
+  await kayitYaz(db, kullanici, DOF_KOLEKSIYONU, kimlik, dofGovdesi(istek, no, tesisGunu(Date.now())), null, false);
+  return { kimlik, no, durum: 'Açık', yeni: true };
+}
+
+// Kaynak anahtarı başına DÖF'ün durumu; DÖF'ü açılmamış ya da silinmiş anahtar haritada yoktur. Yetki denetlemez.
+export async function dofDurumlari(db: Db, kaynak: DofKaynagi, anahtarlar: readonly string[]): Promise<Map<string, DofDurumu>> {
+  const kimlikler = new Map(anahtarlar.map((a) => [dofKimligi(kaynak, a), a]));
+  const satirlar = await sorgular.doluKayitlar(db, DOF_KOLEKSIYONU, [...kimlikler.keys()]);
+  return new Map(satirlar.flatMap((s) => {
+    const anahtar = kimlikler.get(s.kimlik);
+    return anahtar === undefined ? [] : [[anahtar, dofDurumu(s.kimlik, s.govde)] as const];
+  }));
 }

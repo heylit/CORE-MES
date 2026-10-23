@@ -14,7 +14,7 @@ Aşağıdaki kavramlar başka modülde de vardır; Aşama 1'de bağlanmaz.
 | Belge, sertifika, fotoğraf | `belge`; dosyalar ortak depoda | `dosya` (bağ: modül `kalite-merkezi`) |
 | Teknik resim, model, balon | `cizim` | planlanan `cizim` (#80), Arkon çizim ekranı |
 | Muayene, lot kabul, SPC | `insp`, `lot`, `spc` | planlanan `kalite` (#78, numune talebi), Arkon `/arkon/kalite` |
-| Uygunsuzluk, DÖF | `ncr`, `capa` | yok |
+| Uygunsuzluk, DÖF | `ncr`, `capa` | kalite-merkezi (155 a, DÖF'ün tek sahibi); denetim-hazirlik bulgudan DÖF'ü `disari.ts` `dofAc` ile açar, `dofDurumlari` ile okur. `capa` alanları: `kaynak`, `kaynakAnahtari`, `kaynakMadde`, `kaynakSeviye`, `kaynakAciklama` |
 | Form şablonu, kontrol listesi | `frm`, `tpl` | planlanan `kontrol-plani` (#74) |
 | Para birimi, birim | kayıt alanlarında metin | `finans`, `malzemeler` |
 | Durum listeleri (NCR durumu, ciddiyet, MRB kararı) | uygulamada sabit | yok |

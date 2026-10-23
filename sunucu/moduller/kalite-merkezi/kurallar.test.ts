@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { KM_DOSYA_SINIRI, cihazGecerliMi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
+import { KM_DOSYA_SINIRI, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -125,6 +125,31 @@ describe('Kalite Merkezi kuralları', () => {
     assert.equal(kapanmisKayitMi('lot', { tip: 'reset', karar: 'Kabul' }), false, 'yeniden başlatma muayene değildir');
     assert.equal(kapanmisKayitMi('capa', null), false, 'yeni kayıt');
     assert.equal(kapanmisKayitMi('lot', null), false, 'yeni kayıt');
+  });
+
+  test('T4 DÖF isteği: kaynak denetim hazırlığı, anahtar 1-200 karakter, başlık dolu, seviye majör ya da minör; kimlik anahtarın özetinden', () => {
+    const i = { kaynak: 'denetim-hazirlik' as const, kaynakAnahtari: 'p|d|8.5.1|metin', baslik: 'x', madde: null, seviye: 'minor' as const, aciklama: null };
+    assert.equal(dofIstegiReddi(i), null);
+    assert.equal(dofIstegiReddi({ ...i, kaynakAnahtari: 'x'.repeat(200) }), null);
+    assert.equal(dofIstegiReddi({ ...i, kaynak: 'portal' as 'denetim-hazirlik' }), 'dofKaynagi');
+    for (const kaynakAnahtari of ['', 'x'.repeat(201)]) assert.equal(dofIstegiReddi({ ...i, kaynakAnahtari }), 'dofKaynagi', kaynakAnahtari);
+    assert.equal(dofIstegiReddi({ ...i, baslik: ' ' }), 'dofBasligi');
+    assert.equal(dofIstegiReddi({ ...i, seviye: 'obs' as 'minor' }), 'dofSeviyesi');
+    assert.match(dofKimligi(i.kaynak, i.kaynakAnahtari), /^capa-[0-9a-f]{40}$/);
+    assert.equal(dofKimligi(i.kaynak, 'a'), dofKimligi(i.kaynak, 'a'));
+    assert.notEqual(dofKimligi(i.kaynak, 'a'), dofKimligi(i.kaynak, 'b'));
+  });
+
+  test('T4 DÖF gövdesi ve durumu: uygulamanın açık DÖF biçimi, madde başlığın önünde; kapalı DÖF kapanış günüyle, öteki durumlar açık', () => {
+    const i = { kaynak: 'denetim-hazirlik' as const, kaynakAnahtari: 'k', baslik: ' B ', madde: ' 7.1 ', seviye: 'major' as const, aciklama: null };
+    assert.deepEqual(dofGovdesi(i, 'DOF-2026-0001', '2026-10-23'), {
+      no: 'DOF-2026-0001', acilis: '2026-10-23', termin: '', baslik: '7.1 B', sorumlu: '', tur: 'Düzeltici', adim: 0, durum: 'Açık',
+      etkinlik: 'Doğrulanmadı', kaynak: 'denetim-hazirlik', kaynakAnahtari: 'k', kaynakMadde: '7.1', kaynakSeviye: 'major', kaynakAciklama: '',
+    });
+    assert.equal(dofGovdesi({ ...i, madde: null }, 'D', '2026-10-23').baslik, 'B');
+    assert.deepEqual(dofDurumu('k', { no: 'D1', durum: 'Kapalı', kapanis: '2026-10-23' }), { kimlik: 'k', no: 'D1', durum: 'Kapalı', kapanis: '2026-10-23' });
+    assert.deepEqual(dofDurumu('k', { durum: 'Kapalı' }), { kimlik: 'k', no: 'k', durum: 'Kapalı', kapanis: null });
+    assert.deepEqual(dofDurumu('k', { no: 'D1', durum: 'Açık', kapanis: '2026-10-23' }), { kimlik: 'k', no: 'D1', durum: 'Açık', kapanis: null });
   });
 
   test('KM-K325 ilk parça bekleyenleri: yalnız karar bekleyen adedi sıfırdan büyük emirler, emir sırasıyla; sayacı olmayan emir yok sayılır', () => {
