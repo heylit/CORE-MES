@@ -19,7 +19,7 @@ import {
   ADIM_YOK, adimGirdiAsimiIhlali, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, PROJE_GECERSIZ, TERMINAL_FASON, acmaIstasyonIhlali,
   adimDegisiyorMu, adimIhlali, ayarIhlali, adimliIptalIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, iptalIhlali, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
-  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, ROTASIZ_EMIR_KAPALI, sayimIhlali, siradakiIsEmri, toplamAsimiIhlali,
+  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, ROTASIZ_EMIR_KAPALI, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
@@ -246,6 +246,12 @@ async function komutBaglami(db: Db, kisiId: number, id: number) {
   await kapsaminda(db, kisiId, istasyonId);
   const [olay] = await sorgular.sonOlaylariGetir(db, [id]);
   return { emir, istasyonId, calisma: calismaDurumu(olay?.olay ?? null) };
+}
+
+async function sayimYetkisiniDenetle(db: Db, kisiId: number, id: number, duzeltebilir: boolean): Promise<void> {
+  if (duzeltebilir) return;
+  const ihlal = sayimYetkiIhlali(await sorgular.adimaKatildiMi(db, id, kisiId), false);
+  if (ihlal !== null) throw yetkiYok(ihlal);
 }
 
 async function sayaclar(db: Db, id: number): Promise<{ saglam: number; hurda: number; kararBekliyor: number }> {
@@ -555,15 +561,19 @@ async function saglamYaz(
 
 // Terminal sayım ucu (denetim #13): ilk parça kararı beklenirken (karar bekleyen adet varken) sağlam sayım karar bekleyene yazılır;
 // uç gövdesi türü seçemez, kararı uçtan atlamak yoktur. Kararı bilen çağıran (Arkon) emirSayim'i kendi seçimiyle çağırır.
-export async function terminalSayimi(db: Db, kisiId: number, id: number, govde: SayimKaydi): Promise<{ emir: Emir; uyari: string | null }> {
+export async function terminalSayimi(
+  db: Db, kisiId: number, id: number, govde: SayimKaydi, duzeltebilir = false,
+): Promise<{ emir: Emir; uyari: string | null }> {
   const bekleyen = govde.tur === 'saglam' && (await sayaclar(db, id)).kararBekliyor > 0;
-  return emirSayim(db, kisiId, id, govde, { kararBekliyor: bekleyen });
+  return emirSayim(db, kisiId, id, govde, { kararBekliyor: bekleyen, katilimDenetimi: { duzeltebilir } });
 }
 
 // kararBekliyor: ilk parça kararı beklenirken sağlam sayım karar bekleyen sayılır (131 b); türü çağıran modül seçer, terminal
 // gövdesi seçemez. Eksi düzeltme karar bekleyen toplamı sıfırın altına indiremez.
+// katilimDenetimi (185 a, TMI sayım uçları): düzeltme işlemi yoksa kişi çalışan adıma başlamış ya da katılmış olmalı. Arkon yolu
+// (disari) bu denetimi taşımaz: Arkon kaydı kendi cihaz ve ekibinden gelir; bağlamada kapanır (UYUM-BORCU).
 export async function emirSayim(
-  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean } = {},
+  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; katilimDenetimi?: { duzeltebilir: boolean } } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
@@ -572,6 +582,7 @@ export async function emirSayim(
     && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
+  if (secenek.katilimDenetimi !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, secenek.katilimDenetimi.duzeltebilir);
   const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;
   if (govde.tur === 'hurda' && govde.adet < 0) {
@@ -642,11 +653,12 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
 
 // Tuş takımı mutlak sağlam değeri gönderir; fark tek düzeltme satırıdır (fark sıfırsa satır yazılmaz).
 export async function emirSayimAyarla(
-  db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null,
+  db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null, duzeltebilir = false,
 ): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
+  await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir);
   const fark = saglam - (await saglamToplami(db, id));
   // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
   await adimGirdisiniDenetle(db, emir, fark);
