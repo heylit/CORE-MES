@@ -3535,6 +3535,8 @@ function siparisleriDoldur(f) {
 }
 
 // Sevk seçimi seçilen siparişin iptal edilmemiş teslimatlarıdır (302 a); sipariş yoksa kapalıdır. Sipariş yeniden değiştiyse eski yanıt yazılmaz.
+// İptal edilmemiş satış faturası olan sevk "Faturalandı" ile seçilemez gösterilir (FNS-68: sevk tek faturayla faturalanır; sunucu da reddeder).
+function sevkFaturasi(sevkId) { return V.belgeler.find((b) => b.tur === 'fatura' && b.durum !== 'iptal' && b.sevkiyatIsiId === sevkId) || null; }
 function sevkleriDoldur(f) {
   const sec = f.querySelector('[name=sevk]'); if (!sec) return;
   const siparis = f.querySelector('[name=siparis]')?.value || '';
@@ -3544,7 +3546,10 @@ function sevkleriDoldur(f) {
   Kopru.istek('satis-sevkleri', { siparisId: Number(siparis) }).then((c) => {
     if ((f.querySelector('[name=siparis]')?.value || '') !== siparis) return;
     const durum = { havuzda: 'Bekliyor', planlandi: 'Planlandı', yolda: 'Yolda', tamamlandi: 'Teslim edildi' };
-    sec.innerHTML = '<option value="">Sevksiz</option>' + c.sevkler.map((s) => `<option value="${s.id}">${fmtD(s.tarih)}${s.belgeNo ? ' · ' + esc(s.belgeNo) : ''} · ${durum[s.durum] || esc(s.durum)}</option>`).join('');
+    sec.innerHTML = '<option value="">Sevksiz</option>' + c.sevkler.map((s) => {
+      const fat = sevkFaturasi(s.id);
+      return `<option value="${s.id}"${fat ? ' disabled' : ''}>${fmtD(s.tarih)}${s.belgeNo ? ' · ' + esc(s.belgeNo) : ''} · ${durum[s.durum] || esc(s.durum)}${fat ? ' · Faturalandı' + (fat.belgeNo ? ' (' + esc(fat.belgeNo) + ')' : '') : ''}</option>`;
+    }).join('');
   }).catch(() => {});
 }
 

@@ -504,6 +504,13 @@ export async function iadeToplami(db: Db, asilId: number, haricId: number): Prom
   return s?.toplam ?? '0';
 }
 
+// FNS-68: sevkin iptal edilmemiş satış faturası. Aynı sevke eşzamanlı iki fatura girmesin diye önce sevk kimliğiyle işlem kilidi alınır.
+export async function sevkFaturasi(db: Db, sevkiyatIsiId: number): Promise<{ id: number; belgeNo: string | null } | null> {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('finans_sevk_faturasi'), $1)", [sevkiyatIsiId]);
+  return db.tek<{ id: number; belgeNo: string | null }>(
+    `SELECT id, belge_no AS "belgeNo" FROM finans_belge WHERE sevkiyat_isi_id = $1 AND tur = 'fatura' AND durum <> 'iptal' ORDER BY id LIMIT 1`, [sevkiyatIsiId]);
+}
+
 export interface SiparisFaturaSatiri {
   siparisId: number; id: number; tur: 'fatura' | 'iade'; belgeNo: string | null; belgeTarihi: string; durum: string; sevkiyatIsiId: number | null;
   iadeBelgeId: number | null; paraBirimi: string; tutar: string; toplam: string; netTl: string; toplamTl: string;
