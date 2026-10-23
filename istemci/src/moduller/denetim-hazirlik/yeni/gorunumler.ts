@@ -73,5 +73,6 @@ export const ALT_BASLIK: Partial<Record<GorunumKodu, string>> = { sim: 'Simülas
 const KARSILIK: Readonly<Record<string, SimgeAdi>> = {
   award: 'target', clip: 'clipboard-check', calcheck: 'clipboard-check', cal: 'clock', repeat: 'rotate', info: 'help', print: 'printer',
   shield: 'lock', brief: 'id-card', bulb: 'help', factory: 'building', globe: 'route', grad: 'book', link: 'route', msg: 'bell', reset: 'rotate',
+  zap: 'bolt', undo: 'rotate', flip: 'rotate', chev: 'chev-right', left: 'chev-left', right: 'chev-right', copy: 'file',
 };
 export const prototipSimgesi = (ad: string): SimgeAdi => KARSILIK[ad] ?? (ad in SIMGELER ? (ad as SimgeAdi) : 'file');

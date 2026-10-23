@@ -22,7 +22,7 @@ describe('dışa aktarma', () => {
     expect(metin).toContain('DTEND;VALUE=DATE:20260611');
     expect(metin).toContain('TRIGGER:-P3D');
     expect(metin).toContain('TRANSP:TRANSPARENT');
-    expect(metin).toContain('Deneme\; A\\,B');
+    expect(metin).toContain('Deneme\\; A\\,B');
   });
 
   it('csv noktalı virgüllü, BOM ile; ayraç ve tırnak kaçırılır', () => {

@@ -4,7 +4,7 @@ import type { Denetim, Profil } from './tipler.ts';
 
 // Dışa aktarma (.ics, .csv, indirme, yazdırma) prototipteki gibi kalır (envanter 7 son satır). Dosya tarayıcıda üretilir; dış servis yok.
 
-const icsKacis = (v: string): string => v.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsKacis = (v: string): string => v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 
 // RFC 5545: satır 75 sekizliği geçmez; devam satırı boşlukla başlar (UTF-8 karakter bölünmez).
 export function icsKatla(satir: string): string {
