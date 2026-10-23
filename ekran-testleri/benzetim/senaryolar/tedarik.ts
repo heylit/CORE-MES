@@ -5,11 +5,11 @@ import type { AdimCiktisi, SenaryoBaglami } from '../senaryo.ts';
 import type { Hesap } from '../../hesaplar.ts';
 
 // Akış C (S2): talep -> satın alma teklif ve karar -> müdür onayı ya da reddi -> sipariş -> mal kabul -> stok hareketi.
-// Örnek hesaplarda satın almacı yok (hesaplar.ts); teklif, karar ve sipariş yöneticinin hesabıyla girilir. Dört göz kuralı
-// kararı vereni onaydan dışlar: karar yöneticinin, onay müdürün olduğu için kural işler.
+// Teklif, karar ve sipariş satın almacının hesabıyla girilir; yetkisi yetmeyen adım reddedilir ve bulgu olur, yöneticiye geçilmez.
+// Dört göz kuralı kararı vereni onaydan dışlar: karar satın almacının, onay müdürün olduğu için kural işler.
 // Uç yolları ve gövdeler `npm run harita -- --modul satin-alma` ve `--modul stok` çıktısından ve paylasilan/sozlesme'den okunmuştur.
 const TALEP_EDEN = 'ornek.depo';
-const SATIN_ALMA = 'ornek.yonetici';
+const SATIN_ALMA = 'ornek.satinalma';
 const ONAYLAYAN = 'ornek.mudur';
 const DEPO = 'ornek.depo';
 
