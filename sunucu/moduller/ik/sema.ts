@@ -2,7 +2,7 @@ import type { IkTuru } from '#paylasilan/sozlesme/ik.ts';
 import {
   ATT_TYPES, COLLARS, EXIT_CODES, HESAP_OPTS, INTV_STATES, INTV_TYPES, LEAVE_STATES, LEAVE_TYPES, LEVELS, RECS, REJECT_REASONS,
   STAGES, TRAIN_TYPES, YEMEK_YONTEM, YOL_YONTEM,
-} from './motor/sabitler.ts';
+} from '#paylasilan/ik-motor/sabitler.ts';
 
 /* İK kayıtlarının tablo karşılığı (kullanıcı kararı 08.10.2026: her alan bir sütun, iç içe listeler alt tabloda).
    Uygulamanın kaydı (`kind`, `id` ve alanlar) bu tanıma göre satırlara ayrılır ve satırlardan yeniden kurulur (eslesme.ts).

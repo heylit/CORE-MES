@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, mock, test } from 'node:test';
-import { today } from './motor/bicim.ts';
+import { today } from '#paylasilan/ik-motor/bicim.ts';
 import { bugun } from './servis.ts';
 
 // "Bugün" tesisin gününe göre sayılır (Europe/Istanbul); sunucunun saat dilimi sonuca karışmaz. UTC'de çalışan sunucuda

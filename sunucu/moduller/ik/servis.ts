@@ -26,7 +26,7 @@ import {
   calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
-import { gunMetni, motorGunu, motorKur } from './motor/arayuz.ts';
+import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 import { TUR_TANIMLARI } from './sema.ts';
 import * as s from './sorgular.ts';
 
