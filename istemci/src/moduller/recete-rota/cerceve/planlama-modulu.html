@@ -5559,6 +5559,90 @@ function stTamKur(S, ek = [], gevset = true, o = {}) {
   return simdiUygula(st, S);
 }
 
+/* ---------- Sunucu çözücüsünün girdisi (ADR 0018 karar 3 ve 5) ----------
+   Asıl plana yazan komutta plan modülü işleri kendi kimlikleriyle verir (anahtar "emir no|OP no", makine kimliği, gerçek an). Bu dosya
+   onları motorun diline çevirir; girdi.betik ve durum.betik ile aynı bağlamda yüklenir (plan-girdisi.ts), sayfa nesnesi kullanmaz.
+   Reçete ve Rota çerçevesi sunucunun emir, malzeme ve rotasını kayda yazmaz (kayıtta bağlanmadan önceki yerel emirler kalır, kart #1185);
+   sunucu bu yüzden kaynak okumasındaki güncel dilimleri kaydın üstüne koyar (çerçevenin baglaUygula'sının ekransız karşılığı). */
+
+/* Kaydın planlama alanları (P) açık çalışmanındır: başlangıç, takvim ve ayarlar sayfada değişir. Dağılan diziler kayıttan kurulur. */
+function sunucuPlani(D0) {
+  const P = {};
+  for (const x of Object.keys(D0 || {})) if (!RR_DAGILAN.includes(x)) P[x] = rrKopya(D0[x]);
+  return P;
+}
+
+/* Dönen: { S, st, baslangic, yerlesmeyen, kimlik } ya da çalışma yoksa null. istek: plan modülünün PlanMotoruIstegi'si, anlar ISO metin.
+   - Yalnız istekte geçen emirler plana girer; havuzdaki (taslak) emir de, istekte geçiyorsa.
+   - Vardiyası tanımsız tezgâhtaki kuyruk işi vardiyasiz'dadır, dizilmez (168 b).
+   - Kuyruktaki işler taban plana tezgâh sırasıyla girer; sıra anahtarı dondurma sınırının ötesindedir (dondurulmaz, sabit kipte dizilir).
+   - Sabit iş gerçek saatiyle bağlanır; motorda karşılığı yoksa tezgâhı o aralıkta kapalı sayılır (başka iş üstüne yerleşmez).
+   - Çalışan adım çerçevedeki gibi sunucunun kalanıyla (calisanBirlestir).
+   - Emrin istekte geçmeyen adımı (bitmiş, fason ya da kişi kaynaklı) şimdi bitmiş sayılır: ardılını bekletmez.
+   Açık çalışmanın denemeye ait parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez; arıza, fazla mesai ve kısıt gevşetmeleri
+   (S.kapali: atölyenin planlama modeli, örneğin ayarcı tutulmuyorsa ayarcı kısıtı kapalı) girer. */
+function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
+  if (!calisma || !calisma.D) return null;
+  const S0 = clone(calisma);
+  tmiTabanKur(S0.D, bugun);
+  baslangicTazele(S0, Date.parse(istek.simdi));
+  Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
+  const nolar = new Set();
+  for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
+  const asil = o => o.status === 'taslak' ? Object.assign({}, o, { status: 'serbest' }) : o;
+  /* girdiKur kaynak okumasını kaydın üstüne yeniden koyar (sunucuKaydi): emir süzgeci okumanın kendisine de uygulanır */
+  const durum0 = kaynak && kaynak.durum ? kaynak.durum : {};
+  const e0 = durum0.emirler;
+  const durum = e0 && Array.isArray(e0.orders) ? Object.assign({}, durum0, { emirler: Object.assign({}, e0, { orders: e0.orders.filter(o => nolar.has(o.no)).map(asil) }) }) : durum0;
+  const k = sunucuKaydi(kayit, durum, S0.D, bugun);
+  k.plan = sunucuPlani(S0.D);
+  k.orders = (k.orders || []).filter(o => nolar.has(o.no)).map(asil);
+  k.savedAt = 0;
+  S0.simdi = tmiSaat(S0.D, istek.simdi);
+  /* çalışan adım plan modülünün verdiğidir; sağlam ve adım adedi kaynak okumasından */
+  const okunan = new Map((Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : []).map(c => [c.anahtar, c]));
+  const calisanlar = istek.calisanlar.filter(c => c.makineId != null).map(c => {
+    const o = okunan.get(c.anahtar) || {};
+    return { anahtar: c.anahtar, makineId: String(c.makineId), baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk, saglam: o.saglam, adet: o.adet };
+  });
+  const g = girdiKur(S0, k, { durum: Object.assign({}, durum, { calisanAdimlar: calisanlar }), ek: kaynak ? kaynak.ek : null }, bugun);
+  if (!g) return null;
+  const st = g.st, D = g.S.D;
+  st.now = Math.max(st.now, tmiSaat(D, istek.simdi));
+  const cx = compile(st);
+  const opOf = tmiIslemler(k, D);
+  const kimlik = {};
+  for (const [a, id] of Object.entries(opOf)) kimlik[id] = a;
+  const yerlesmeyen = [];
+  const ops = {};
+  const frz = st.now + (st.w.dondurma || 0);
+  const sira = new Set();
+  /* 168 b: vardiyası tanımsız tezgâhın işi yerleşmez ama komutu durdurmaz; plan uyarıyla boş bırakır */
+  const vardiyasiz = [];
+  const takvimsiz = m => { const M = cx.M[String(m)]; return !!M && M.rw.length === 0; };
+  istek.kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
+    const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
+    if (takvimsiz(q.makineId)) { vardiyasiz.push(a); return; }
+    const S = frz + 1 + i * 1e-3 + mi * 1e-7;
+    ops[id] = { id, job: cx.byId[id].job, m: String(q.makineId), S, C: S + 1e-7 };
+    sira.add(id);
+  }));
+  const calisan = new Set(Object.keys(st.gercek || {}));
+  for (const x of istek.sabitler) {
+    const id = opOf[x.anahtar], m = String(x.makineId), S = tmiSaat(D, x.baslangic), C = tmiSaat(D, x.bitis);
+    if (S == null || C == null || !cx.M[m]) continue;
+    if (id && cx.byId[id] && !sira.has(id) && !calisan.has(id)) st.gercek[id] = { m, S, C };
+    else st.down.push({ id: 'sabit-' + st.down.length, m, from: S, to: C, neden: 'sabit' });
+  }
+  /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür */
+  for (const o of cx.ops) {
+    if (sira.has(o.id) || st.gercek[o.id] || !o.c.length) continue;
+    const c = o.c.find(x => !x.fas) || o.c[0];
+    ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, fas: c.fas ? 1 : undefined };
+  }
+  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, vardiyasiz, kimlik, sira: [...sira] };
+}
+
 </script>
 <script>
 /* ---- HiGHS kıyası: saat dilimli karışık tamsayılı gevşetme ----
@@ -20020,41 +20104,6 @@ function rrEsitle() {
   }
   const x = r0.apply(this, arguments); rrEsitle(); return x;
 }; }
-/* ---------- Canlı plan Reçete ve Rota kaydında ----------
-   Canlıya alınan planın yerleşimi kaydın tmiCanli alanına yazılır: "emir no|OP no" -> [{makineId, baslangic}]. Çerçeve bunu sunucu
-   yerleşimiyle (220 a) aynı yoldan okur: iş o makinede o saatte başlar, dondurulmuş ya da elle sıralanmış sayılmaz; bu yüzden st.qorder
-   ve st.assign'a yazılmaz (ikisi çerçevede planlamacının elle müdahalesidir). Fason adım atölyede yerleşmez, yazılmaz.
-   Motor saatleri başlangıç gününe göre duvar saatidir; çerçeve yerel saat okur, ISO yerel saatten kurulur. */
-function rrDuvarIso(D, t) {
-  const u = new Date(baseMs(D) + t * 3600000);
-  return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds()).toISOString();
-}
-function rrCanliYerlesim(sen, st) {
-  const P = sen && sen.plan, D = sen && sen.D; if (!P || !P.ops || !D || !D.meta) return null;
-  const y = {};
-  for (const r of Object.values(P.ops)) {
-    if (!r || !r.m || String(r.m).startsWith('@') || !isFinite(r.S)) continue;
-    const id = String(r.id), i = id.lastIndexOf('.'); if (i < 0) continue;
-    const k = id.slice(i + 1), o = (st.orders || []).find(x => x.id === r.job); if (!o) continue;
-    const s = ((st.routes[o.itemId] || {}).steps || []).find(x => x.plan && String(x.plan.k) === k); if (!s) continue;
-    y[`${o.no}|${s.opNo > 0 ? s.opNo : s.seq}`] = [{ makineId: r.m, baslangic: rrDuvarIso(D, r.S) }];
-  }
-  return y;
-}
-const rrCanliAnahtar = () => S && S.canli ? S.canli + '#' + S.canliSurum : '';
-function rrCanliEsitle() {
-  if (!S || RRV.yaziyor || S.rrSavedAt == null) return;
-  const an = rrCanliAnahtar(); if (RRV.canliS === S && RRV.canliK === an) return;
-  const st = rrOku(); if (!st) return;
-  RRV.canliS = S; RRV.canliK = an;
-  const var0 = st.tmiCanli ? st.tmiCanli.id + '#' + st.tmiCanli.surum : '';
-  if (var0 === an) return;
-  const sen = an ? S.senaryolar.find(x => x.id === S.canli) : null;
-  if (sen) st.tmiCanli = { id: sen.id, surum: S.canliSurum, ad: sen.ad, kim: sen.canliKim || '', zaman: sen.canliZaman || Date.now(), yerlesim: rrCanliYerlesim(sen, st) || {} };
-  else delete st.tmiCanli;
-  RRV.yaziyor = true; try { rrYaz(st); } finally { RRV.yaziyor = false; }
-}
-{ const k0 = kaydet; kaydet = function () { const x = k0.apply(this, arguments); try { rrCanliEsitle(); } catch (e) { console.error(e); } return x; }; }
 /* ---------- Görsel sayfa: işin kendisi ortada, düzenleme yanda ----------
    Kullanıcı 20.10 13:13: Özet / Veri gir / Tüm ayrıntılar sekmeleri bir şey anlatmıyor; "Görsel ana alan" seçildi. Sayfa üstte tek cümlelik durum,
    ortada çizelge, tıklanan kalem için yanda (dar ekranda alttan çıkan) panel olur. Panel sayfanın kendi sade formlarını o kaleme dolu açar;
@@ -24374,6 +24423,168 @@ document.addEventListener('change', e => {
   if (c === 'uf-kuyruk') { const A = ufAyar(); const v = +el.value; if (el.value === '' || !isFinite(v) || v < 0 || v > 10) { bildir('0 ile 10 arasında bir sayı girin.', 'hata'); render(); return; }
     if (A.kuyruk === v) return; degistir('Ufuk ayarı', `adım başı bekleme: ${A.kuyruk} → ${v} iş günü`, () => { A.kuyruk = v; }, 'plan.kilitle', { planKoru: true }); }
 }, true);
+/* ---------- Plan onayı sunucuda (H2) ----------
+   Canlı plana tek kapı: stüdyonun denemeleri ve çalışma planı bu sayfada kalır; "Onaya gönder" planı plan modülünde kişiye açılan taslağa yazar
+   ve taslağı onaya gönderir, "Onayla, canlıya al" o taslağı plan modülünün canlıya alma ucuyla alır, "Geri gönder" gerekçeyle geri çevirir.
+   Onay durumu, kimin onaylayabileceği (dört göz) ve sürüm denetimi sunucudadır; bu sayfadaki onay listesi yalnız ortak çalışma kaydının
+   görünüşüdür. Sunucuya gönderilmemiş eski onay kaydı canlıya alınmaz, yeniden onaya gönderilir.
+   Emirler, ürünler ve rotalar sunucunun kaynak okumasından kaydın üstüne konur (motor/emirler.betik sunucuKaydi): kayıtta bağlanmadan
+   önceki yerel emirler kalır, taslağa yazılan iş sunucunun iş emri olmalıdır. Sunucu çözücüsü aynı çeviriyle kurar (ADR 0018). */
+if (TMI_ICINDE) {
+  const SO = { yaziyor: false };
+  /* Siparişin sayfada değiştirilen motor ayarı (gelir, ceza, öncelik) aynı kimlikte korunur: çeviri kaydın plan alt nesnesinden okur. */
+  const sunucuyla = (st, durum, D0) => {
+    if (!durum) return st;
+    const k = sunucuKaydi(st, durum, D0);
+    const eski = id => ((D0 && D0.siparisler) || []).find(x => String(x.id) === String(id));
+    for (const o of k.orders || []) if (!o.plan && eski(o.id)) o.plan = rrKopya(eski(o.id));
+    return k;
+  };
+  const cevir0 = tmiCevir;
+  tmiCevir = function (st, kaynak, D0, bugun) { return cevir0(sunucuyla(st, kaynak && kaynak.durum, D0), kaynak, D0, bugun); };
+  const calisan0 = tmiCalisanlar;
+  tmiCalisanlar = function (durum, st, D, now) { return calisan0(durum, sunucuyla(st, durum, D), D, now); };
+  /* kaynak okuması geldiğinde açık çalışmanın siparişleri de sunucununkiyle değişir (yeni ve kapanan emir) */
+  if (!TMI_KAYNAK_ALANLARI.includes('siparisler')) TMI_KAYNAK_ALANLARI.push('siparisler');
+
+  /* Motor saatleri başlangıç gününe göre duvar saatidir; sayfa yerel saat okur, an yerel saatten kurulur. */
+  const duvarIso = (D, t) => {
+    const u = new Date(baseMs(D) + t * 3600000);
+    return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds()).toISOString();
+  };
+  /* Planın tezgâh kuyrukları plan modülünün diliyle (anahtar "emir no|OP no", makine kimliği). Fason, kişi ve sunucuda karşılığı olmayan
+     iş yazılmaz, sayılır; bitmiş iş yazılmaz. İşin yeri ve sırası planlamacının kararıdır (elle, elleKaynak); saat önizlemedir, son söz
+     sunucunun çözücüsündedir. */
+  function soKuyruklari(a) {
+    const durum = TMI_KAYNAK.durum || {};
+    const st = sunucuyla(rrOku() || TMI_BOS_KAYIT, durum, a.D);
+    const anahtar = {};
+    for (const [k, id] of Object.entries(tmiIslemler(st, a.D))) anahtar[id] = k;
+    const C = durum.planCanli;
+    const planlanacak = C && Array.isArray(C.planlanacak) ? new Set(C.planlanacak) : null;
+    const gruplar = new Map(), yazilamaz = new Set();
+    for (const [id, r] of Object.entries(a.plan.ops || {})) {
+      if (!r || r.done || !isFinite(r.S) || !isFinite(r.C)) continue;
+      const k = anahtar[id], m = String(r.m || '');
+      if (!/^\d+$/.test(m)) { if (!m.startsWith('@')) yazilamaz.add(k || id); continue; }
+      if (!k || (planlanacak && !planlanacak.has(k))) { yazilamaz.add(k || id); continue; }
+      const l = gruplar.get(m) || []; l.push({ k, r }); gruplar.set(m, l);
+    }
+    const simdi = Date.now();
+    const kuyruklar = [...gruplar].map(([m, l]) => {
+      l.sort((p, q) => p.r.S - q.r.S);
+      return { kaynak: { tur: 'makine', id: Number(m) }, baslangic: new Date(Math.max(simdi, Date.parse(duvarIso(a.D, l[0].r.S)))).toISOString(),
+        isler: l.map(({ k, r }) => {
+          const i = k.lastIndexOf('|');
+          return { emirNo: k.slice(0, i), opNo: Number(k.slice(i + 1)), dondurulmus: false, elle: true, elleKaynak: true,
+            onizleme: { baslangic: duvarIso(a.D, r.S), bitis: duvarIso(a.D, r.C) } };
+        }) };
+    });
+    return { kuyruklar, yazilamaz: [...yazilamaz] };
+  }
+  const komut = (ad, govde) => window.tmi.komut(ad, govde);
+  const senaryoBul = (r, f) => ((r && r.sonuc && r.sonuc.senaryolar) || []).filter(f).sort((p, q) => q.id - p.id)[0] || null;
+  /* Plan kişiye yeni taslakta yazılır ve onaya gider. Yarıda kalırsa açılan taslaktan vazgeçilir (onaya gitmemiş taslak). */
+  async function soGonder(a, not) {
+    const { kuyruklar, yazilamaz } = soKuyruklari(a);
+    if (!kuyruklar.length) throw new Error('Plana yazılacak iş yok: sunucuda iş emri ve makinesi olan, bitmemiş iş gerekir.');
+    const t = senaryoBul(await komut('plan-senaryo-ac', { ad: a.ad }), x => x.benim && x.durum === 'acik' && x.ad === a.ad);
+    if (!t) throw new Error('Plan sunucuda açılamadı.');
+    try {
+      const y = ((await komut('plan-senaryo-yaz', { taslak: t.id, kuyruklar })) || {}).sonuc || {};
+      await komut('plan-senaryo-onaya-gonder', { taslak: t.id, not: not || null });
+      return { taslak: t.id, yazilan: y.yazilan || 0, atlanan: y.atlanan || 0, yazilamaz };
+    } catch (h) { komut('plan-senaryo-vazgec', { taslak: t.id }).catch(() => {}); throw h; }
+  }
+  /* Yerini yeni taslak alan eski taslak kapanır (geri gönderilmiş ya da onaydan çekilecek); kapanamazsa plan modülünde açık kalır. */
+  const taslakKapat = async (t, onayda) => {
+    try { if (onayda) await komut('plan-senaryo-onaydan-cek', { taslak: t }); await komut('plan-senaryo-vazgec', { taslak: t }); } catch (h) { console.error(h); }
+  };
+  const hataMetni = (h, yedek) => (h && (h.message || h.hata)) || yedek;
+  const isle = async (is) => {
+    if (SO.yaziyor) { bildir('Önceki istek sürüyor.', 'uyari'); return; }
+    SO.yaziyor = true;
+    try { await is(); } catch (h) { console.error(h); bildir('İşlem tamamlanamadı; sayfayı yenileyip yeniden deneyin.', 'hata'); } finally { SO.yaziyor = false; render(); }
+  };
+  const gonderOzeti = g => `${g.yazilan} iş taslağa yazıldı${g.atlanan ? `, ${g.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş)` : ''}`
+    + `${g.yazilamaz.length ? `; ${g.yazilamaz.length} iş sunucuda karşılığı olmadığı için yazılmadı (${g.yazilamaz.slice(0, 3).join(', ')}${g.yazilamaz.length > 3 ? '…' : ''})` : ''}.`;
+
+  paOnayaGonder = function (id) {
+    if (!yetkili('plan.yaz')) { bildir('Onaya göndermek için plan yazma yetkisi gerekir.', 'hata'); return; }
+    const mevcut = id && id !== 'calisma' ? paAl(id) : null;
+    if (id && id !== 'calisma' && !mevcut) return;
+    const a = mevcut || paCalisma();
+    if (!a) { bildir('Önce planı kurun.', 'hata'); U.sayfa = 'studyo'; U.psSek = 'onay'; render(); return; }
+    if (!a.plan) { bildir('Bu planda yerleşim yok; çalışmaya açıp yeniden kurun.', 'hata'); return; }
+    if (paRedVar(paKontrol(a))) { U.paSec = a.id; U.sayfa = 'studyo'; U.psSek = 'onay'; render(); bildir('Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.', 'hata'); return; }
+    const not = paNot(a.id);
+    const s = mevcut || paSnap(`Onay ${fmtDT(S.D, cxAl().st.now).slice(0, 9)} · ${kim().ad}`, 'onay');
+    isle(async () => {
+      let g;
+      try { g = await soGonder(s, not); } catch (h) { bildir(`Plan onaya gönderilemedi: ${(hataMetni(h, 'sunucuya ulaşılamadı'))}`, 'hata'); return; }
+      if (!mevcut) paEkle(s);
+      if (s.taslak && s.taslak !== g.taslak) taslakKapat(s.taslak, s.durum === 'onay');
+      s.durum = 'onay'; s.taslak = g.taslak; paKararYaz(s, 'onaya', not); if (U.paNot) delete U.paNot[a.id];
+      iz('Plan onaya gönderildi', `${s.ad} · taslak ${g.taslak}`); U.paSec = s.id; kaydet(); U.sayfa = 'studyo'; U.psSek = 'onay'; render();
+      bildir(`Plan onaya gönderildi: ${gonderOzeti(g)} Canlıya onaylayan alır.`, 'tamam');
+    });
+  };
+
+  paYayinla = function (id) {
+    if (!yetkili('plan.canliya-al')) { bildir('Canlıya almak için müdür ya da yönetici yetkisi gerekir.', 'hata'); return; }
+    const a = paAl(id); if (!a || !a.plan) return;
+    if (id !== 'calisma' && (a.durum !== 'onay' || !a.taslak)) { bildir('Bu plan sunucuda onay beklemiyor; önce onaya gönderin.', 'hata'); return; }
+    const K = paKontrol(a); if (paRedVar(K)) { bildir('Plan kontrolden geçmedi; kırmızı maddeler giderilmeden canlıya alınmaz.', 'hata'); return; }
+    const uy = K.filter(k => k[0] === 'uyari').map(k => k[1]);
+    /* Çalışma planı önce onaya gider, sonra aynı kişi onaylar: dört göz açıksa sunucu reddeder, plan onayda kalır. */
+    const al = () => isle(async () => {
+      const cal = id === 'calisma';
+      const s = cal ? paSnap(`Sürüm ${S.canliSurum + 1} · ${fmtDT(S.D, cxAl().st.now).slice(0, 9)}`, 'onay') : a;
+      const not = paNot(id);
+      if (cal) {
+        try { s.taslak = (await soGonder(s, not)).taslak; } catch (h) { bildir(`Plan onaya gönderilemedi: ${(hataMetni(h, 'sunucuya ulaşılamadı'))}`, 'hata'); return; }
+        paEkle(s); paKararYaz(s, 'onaya', not); kaydet();
+      }
+      try { await komut('plan-senaryo-canliya-al', { taslak: s.taslak }); }
+      catch (h) { if (cal) { U.paSec = s.id; render(); } bildir(`Plan canlıya alınamadı${cal ? ', onayda bekliyor' : ''}: ${(hataMetni(h, 'sunucuya ulaşılamadı'))}`, 'hata'); return; }
+      for (const x of S.senaryolar) if (x.id !== s.id && x.durum === 'canli') x.durum = 'arsiv';
+      S.canliSurum++; S.canli = s.id; Object.assign(s, { durum: 'canli', surum: S.canliSurum, canliKim: kim().ad, canliZaman: Date.now() });
+      paKararYaz(s, 'canli', not); if (U.paNot) delete U.paNot[id];
+      (S.paGecmis = S.paGecmis || []).unshift({ surum: S.canliSurum, id: s.id, ad: s.ad, yazar: s.yazar, kim: kim().ad, zaman: Date.now(), ozet: clone(s.ozet) });
+      if (cal) { S.tabanSurum = S.canliSurum; if (U.taslak) U.taslak = { adimlar: [], bas: Date.now() }; }
+      iz('Plan canlıya alındı', `${s.ad} · taslak ${s.taslak}`); U.paSec = 'calisma'; kaydet(); render();
+      bildir('Plan canlıda. Tezgâh kuyrukları, Arkon ve Üretim Terminali bu planı gösterir.', 'tamam');
+    });
+    onayla(uy.length ? 'Uyarılarla canlıya alınsın mı?' : 'Canlıya alınsın mı?', uy.length ? `${a.ad}: ${uy.join('; ')}.` : `"${a.ad}" canlı plan olacak; tezgâh kuyrukları bu plana göre görünür.`, al, { evet: uy.length ? 'Yine de canlıya al' : 'Onayla ve canlıya al' });
+  };
+
+  paGeri = function (id) {
+    if (!yetkili('plan.canliya-al')) return; const s = paAl(id); if (!s || s.durum !== 'onay') return;
+    const neden = paNot(id);
+    if (!neden) { bildir('Geri gönderme nedenini Not alanına yazın.', 'hata'); return; }
+    if (!s.taslak) { s.durum = 'acik'; paKararYaz(s, 'geri', neden); kaydet(); render(); return; }
+    isle(async () => {
+      try { await komut('plan-senaryo-geri-gonder', { taslak: s.taslak, neden }); }
+      catch (h) { bildir(`Plan geri gönderilemedi: ${(hataMetni(h, 'sunucuya ulaşılamadı'))}`, 'hata'); return; }
+      s.durum = 'acik'; paKararYaz(s, 'geri', neden); if (U.paNot) delete U.paNot[id];
+      iz('Plan geri gönderildi', s.ad + ' · ' + neden); kaydet(); render(); bildir(`"${s.ad}" planlamacıya geri gönderildi.`, 'tamam');
+    });
+  };
+
+  /* Sunucudaki taslak da kapanır; onaydaki taslak önce onaydan çekilir. */
+  const vazgec0 = paVazgec;
+  paVazgec = function (id) {
+    const s = paAl(id); if (!s || !yetkili('plan.yaz') || s.id === S.canli) return;
+    if (!s.taslak || s.durum === 'canli' || s.durum === 'arsiv') { vazgec0(id); return; }
+    isle(async () => {
+      try {
+        if (s.durum === 'onay') await komut('plan-senaryo-onaydan-cek', { taslak: s.taslak });
+        await komut('plan-senaryo-vazgec', { taslak: s.taslak });
+      } catch (h) { bildir(`Plandan vazgeçilemedi: ${(hataMetni(h, 'sunucuya ulaşılamadı'))}`, 'hata'); return; }
+      vazgec0(id);
+    });
+  };
+}
 </script>
 </body>
 </html>
