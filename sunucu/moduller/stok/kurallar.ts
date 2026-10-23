@@ -44,6 +44,22 @@ export function dusumKarari(mevcut: string, istenen: string, eksiOnay: boolean):
   if (binde(mevcut) >= binde(istenen)) return { tur: 'yaz', onayliEksi: false };
   return eksiOnay ? { tur: 'yaz', onayliEksi: true } : { tur: 'onay-gerekli', mevcut };
 }
+// 16.1: eksi onayı kalite kararını aşmaz. Gözde istenen parça red ya da karar bekliyorsa eksik serbest bakiyede değil kalitededir;
+// "Yine de yaz" onu serbest olarak taşır ya da düşer ve karantinayı deler.
+export function eksiKaliteEngeli(kalite: readonly { kaliteDurumu: KaliteDurumu; miktar: string }[]): string | null {
+  const toplam = (q: KaliteDurumu): bigint => kalite.filter((x) => x.kaliteDurumu === q).reduce((t, x) => t + binde(x.miktar), 0n);
+  const red = toplam('red'), bekleyen = toplam('karar_bekliyor');
+  if (red <= 0n && bekleyen <= 0n) return null;
+  const neden = [red > 0n ? `${bindenMetin(red)} red (karantinada)` : null, bekleyen > 0n ? `${bindenMetin(bekleyen)} kalite kararı bekliyor` : null].filter(Boolean).join(', ');
+  return `Bu gözdeki parça serbest değil: ${neden}. Eksi onayı kalite kararını aşmaz; serbest bırakma Kalite Merkezi kararıyla olur.`;
+}
+// 21.4: üretim girişi emrin sağlam adedini (bitmemiş emirde adedini) aşmaz. Girilen, emrin bütün üretim girişleridir: terminal sayımı,
+// tamamlama ve elle giriş; geri alınanlar düşülmüştür.
+export function uretimGirisiEngeli(hedefAdet: number, girilen: string, miktar: string): string | null {
+  const kalan = BigInt(hedefAdet) * 1000n - binde(girilen);
+  if (binde(miktar) <= kalan) return null;
+  return `Üretim girişi emrin girilmemiş adedini (${bindenMetin(kalan > 0n ? kalan : 0n)}) aşamaz.`;
+}
 
 // ---- Çıkış önerisi: en eski giriş önce (DEP-05, DEP-06, DEP-07, DEP-08) --------------------------------------------
 export interface OneriSatiri { bakiyeId: number; konumId: number; konumKod: string; konumTur: string; partiId: number | null; partiEtiketi: string | null; miktar: string; ilkGiris: string }
@@ -200,6 +216,34 @@ export function geriAlmaEngeli(h: GeriAlinacak): string | null {
 // Kalite durumunu yalnız Kalite Merkezi yazar (229 a): kaliteyi değiştiren hareket onun kararıdır, stok geri almasıyla çevrilmez (denetim #16).
 export function kaliteKarariHareketiMi(h: { kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null }): boolean {
   return h.kaynakKaliteDurumu !== null && h.hedefKaliteDurumu !== null && h.kaynakKaliteDurumu !== h.hedefKaliteDurumu;
+}
+// Ürün sevkinin hareket açıklaması (235 a); iş kimliği açıklamadan okunur.
+export const sevkAciklamasi = (isId: number, emirNo: string, adim: 'yola' | 'teslim'): string =>
+  `Ürün sevki · iş ${String(isId)} · emir ${emirNo} · ${adim === 'yola' ? 'yola çıktı' : 'teslim edildi'}`;
+const SEVK_TESLIMI = /^Ürün sevki · iş (\d+) · emir .+ · teslim edildi(?: · red parça)?$/;
+// Hareket bir ürün sevkinin teslim çıkışıysa işin kimliği; değilse null.
+export function sevkTeslimIsi(h: { tur: string; cikisNedeni: string | null; aciklama: string | null }): number | null {
+  if (h.tur !== 'cikis' || h.cikisNedeni !== 'sevk' || h.aciklama === null) return null;
+  const m = SEVK_TESLIMI.exec(h.aciklama);
+  return m ? Number(m[1]) : null;
+}
+// Soru 186 a: faturalı sevkin stok çıkışı geri alınmaz; önce fatura iptal edilir ya da tamamı iade edilir. Gelen faturalar iptal
+// edilmemiş olanlardır; bir faturanın iadeleri toplamı faturanın toplamına ulaşmışsa o fatura sevki bağlamaz.
+export interface SevkFaturasi { id: number; tur: 'fatura' | 'iade'; belgeNo: string | null; sevkiyatIsiId: number | null; iadeBelgeId: number | null; toplam: string }
+const kurus = (tutar: string): bigint => {
+  const [tam = '0', kesir = ''] = tutar.trim().split('.');
+  const eksi = tam.startsWith('-');
+  const deger = BigInt(eksi ? tam.slice(1) : tam) * 100n + BigInt(kesir.padEnd(2, '0').slice(0, 2));
+  return eksi ? -deger : deger;
+};
+export function faturaliSevkEngeli(isId: number, faturalar: readonly SevkFaturasi[]): string | null {
+  const acik = faturalar.filter((f) => f.tur === 'fatura' && f.sevkiyatIsiId === isId).filter((f) => {
+    const iade = faturalar.filter((x) => x.tur === 'iade' && x.iadeBelgeId === f.id).reduce((t, x) => t + kurus(x.toplam), 0n);
+    return iade < kurus(f.toplam);
+  });
+  if (acik.length === 0) return null;
+  const nolar = acik.map((f) => f.belgeNo ?? `#${String(f.id)}`).join(', ');
+  return `Sevk faturalandı (${nolar}); stok çıkışı geri alınmaz. Önce faturayı iptal edin ya da iade kesin.`;
 }
 // Geri almanın yönü: kaynak ve hedef yer değiştirir.
 export function tersYon(kaynak: number | null, hedef: number | null): { kaynak: number | null; hedef: number | null } {
