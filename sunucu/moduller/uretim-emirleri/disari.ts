@@ -5,7 +5,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Emir, EmirDurumu, KaliteKarari, KatilimCevabi, RefakatKartiCevabi, SayimKaydi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimlardanGorunum } from './kurallar.ts';
+import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
@@ -54,16 +54,20 @@ export const komutOnbellegiyle = <T>(db: Db, is: () => Promise<T>): Promise<T> =
 export const emirAyar = (db: Db, kullanici: Kullanici, id: number, an?: string): Promise<{ emir: Emir }> =>
   servis.kayitAniyla(db, an, () => servis.emirAyar(db, uretenKisi(kullanici), id));
 // Makine seçimi isteğe bağlı: verilmezse iş emrinin makinesi kullanılır. Makine doluysa CAKISMA, ayrıntısı `MakineDoluAyrintisi`.
-export const emirBaslat = (db: Db, kullanici: Kullanici, id: number, makineIdleri?: readonly number[], an?: string): Promise<{ emir: Emir }> =>
+export const emirBaslat = (db: Db, kullanici: Kullanici, id: number, makineIdleri?: readonly number[], an?: string): Promise<{ emir: Emir; uyari: string | null }> =>
   servis.kayitAniyla(db, an, () => servis.emirBaslat(db, uretenKisi(kullanici), id, makineIdleri));
 export const makineDevral = (db: Db, kullanici: Kullanici, id: number, kullanimId: number, an?: string): Promise<{ emir: Emir }> =>
   servis.kayitAniyla(db, an, () => servis.makineDevral(db, uretenKisi(kullanici), id, kullanimId));
+// Adet verilirse sayım ona eşitlenir: başkasının sayımını düşürmesin diye kişi işe katılmış ya da düzeltme işlemli olmalı (185 a).
 export const emirBitir = (db: Db, kullanici: Kullanici, id: number, saglamAdet?: number, an?: string): Promise<{ emir: Emir }> =>
-  servis.kayitAniyla(db, an, () => servis.emirBitir(db, uretenKisi(kullanici), id, saglamAdet));
+  servis.kayitAniyla(db, an, () => servis.emirBitir(db, uretenKisi(kullanici), id, saglamAdet, null, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)));
 // kararBekliyor: ilk parça kararı beklenirken sayılan parça sağlama katılmaz (131 b); türü çağıran seçer.
+// Eksi sayım (düzeltme) işe katılmamış kişide düzeltme işlemi ister (185 a).
 export const emirSayim = (
   db: Db, kullanici: Kullanici, id: number, govde: SayimKaydi, secenek?: { kararBekliyor?: boolean; an?: string },
-): Promise<{ emir: Emir; uyari: string | null }> => servis.kayitAniyla(db, secenek?.an, () => servis.emirSayim(db, uretenKisi(kullanici), id, govde, secenek));
+): Promise<{ emir: Emir; uyari: string | null }> => servis.kayitAniyla(db, secenek?.an, () => servis.emirSayim(
+  db, uretenKisi(kullanici), id, govde, { kararBekliyor: secenek?.kararBekliyor, duzeltebilir: islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI) },
+));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
 export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari): Promise<{ emir: Emir; adet: number }> =>
   servis.kararliSayimiSonuclandir(db, kisiId, id, karar);

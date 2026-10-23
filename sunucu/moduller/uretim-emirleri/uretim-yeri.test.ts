@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -13,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import { emirBaslat, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
 import type { FasonTahmini, IsEmriGirdisi } from './disari.ts';
 import {
   URETIM_YERI_BASLAMIS, URETIM_YERI_FASON_EKSIK, URETIM_YERI_FASON_HAREKETI, URETIM_YERI_IC_EKSIK, FASON_VARSAYILAN_GUN, fasonBeklemesi, uretimYeriIhlali,
@@ -251,8 +250,7 @@ describe('UE-URY emirde adımın üretim yeri (gerçek PostgreSQL)', () => {
     assert.equal((await yerYaz('planlama_proje', id, { ...fasona, firmaId: null })).govde.mesaj, URETIM_YERI_FASON_EKSIK);
     assert.equal((await yerYaz('planlama_proje', id, { ...fasona, yer: 'ic' })).govde.mesaj, URETIM_YERI_IC_EKSIK);
     assert.equal((await yerYaz('planlama_proje', id, { ...fasona, terminGun: 400 })).durum, 400, 'termin 1-365');
-    const basla = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${id}/baslat`, undefined, randomUUID());
-    assert.equal(basla.durum, 200, JSON.stringify(basla.govde));
+    await o().vt.tx((db) => emirBaslat(db, kullanicilar.get('operator')!, id));
     const sonra = await ayrinti(id);
     const r = await yerYaz('planlama_proje', id, { ...fasona, surum: sonra.surum });
     assert.deepEqual([r.durum, r.govde.mesaj], [409, URETIM_YERI_BASLAMIS]);

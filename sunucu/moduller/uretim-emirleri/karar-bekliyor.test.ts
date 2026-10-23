@@ -10,7 +10,7 @@ import {
 } from './disari.ts';
 import type { KaliteKarariOlayi, SaglamSayimOlayi } from './disari.ts';
 import { SAGLAM_EKSIYE_INER } from './kurallar.ts';
-import { emirAc, emirAyrintisi, emirSayimAyarla, terminalSayimi } from './servis.ts';
+import { emirAc, emirAyrintisi, emirSayimAyarla } from './servis.ts';
 
 // İlk parça kararı beklenirken sayılan parça (131 b, 136 a): sağlama katılmaz, kalite kararıyla sağlama döner ya da redde kalır.
 describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
@@ -93,10 +93,6 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, dogrudan, 'onay'));
     assert.equal(await saglam(dogrudan), 3, 'karar verilmiş emirde sonraki sayım sağlamdır');
 
-    const terminal = await baslamisEmir();
-    await vt().tx((db) => terminalSayimi(db, operator.id, terminal, { tur: 'saglam', adet: 1 }));
-    assert.deepEqual(await sayaclar(terminal), { kararBekliyor: 1, red: 0 });
-
     const ayar = await baslamisEmir();
     const a = await vt().tx((db) => emirSayimAyarla(db, operator.id, ayar, 4));
     assert.equal(a.emir.canli?.saglam, 0);
@@ -150,23 +146,6 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     const b2 = await vt().tx((db) => emirBitir(db, operator, karisik, 1));
     assert.equal(b2.emir.saglamAdet, 1, 'eksi fark önce karar bekleyeni, sonra sağlamı düşer');
     assert.deepEqual(await sayaclar(karisik), { kararBekliyor: 0, red: 0 });
-  });
-
-  test('denetim #13: terminal sayım ucu karar beklerken sağlam sayımı karar bekleyene yazar; karar verilince yine sağlama yazar', async () => {
-    const id = await baslamisEmir();
-    await vt().tx((db) => terminalSayimi(db, operator.id, id, { tur: 'saglam', adet: 2 }));
-    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
-    assert.deepEqual(await sayaclar(id), { kararBekliyor: 0, red: 0 }, 'ilk parça onaylanınca karar bekleyen kalmaz');
-    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 1 }, { kararBekliyor: true }));
-    const { emir } = await vt().tx((db) => terminalSayimi(db, operator.id, id, { tur: 'saglam', adet: 4 }));
-    assert.equal(emir.canli?.saglam, 2, 'uçtan gelen sayım ilk parça kararını atlayamaz');
-    assert.deepEqual(await sayaclar(id), { kararBekliyor: 5, red: 0 });
-    const ayar = await vt().tx((db) => emirSayimAyarla(db, operator.id, id, 10));
-    assert.equal(ayar.emir.canli?.saglam, 2, 'sağlamı ayarlamak da kararı atlatmaz');
-    assert.deepEqual(await sayaclar(id), { kararBekliyor: 13, red: 0 });
-    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
-    const son = await vt().tx((db) => terminalSayimi(db, operator.id, id, { tur: 'saglam', adet: 1 }));
-    assert.deepEqual([(await sayaclar(id))?.kararBekliyor, son.emir.canli?.saglam], [0, 16]);
   });
 
   test('onay karar bekleyeni düzeltme satırıyla sağlama geçirir; stok için sağlam olayı değil karar olayı çıkar', async () => {

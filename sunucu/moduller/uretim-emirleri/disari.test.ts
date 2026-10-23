@@ -246,9 +246,9 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
               (SELECT count(*)::int FROM uretim_olayi WHERE emir_id = $1) AS olay`, [emirId]);
 
   test('işlem: uçların aradığı işlemi taşımayan kullanıcının altı komutu da YETKI_YOK alır ve yazı olmaz; işlemi olanın aynı çağrısı geçer', async () => {
-    // Dışa açık komutun aradığı işlem, aynı komutun ucunda aranan işlemdir.
+    // Dışa açık komutun aradığı işlem, ucu kalan tek terminal komutunun (duraklat) işlemidir; öbür beşinin ucu yoktur (238 H3).
     const komutUclari = uclar.filter((u) => /\/uretim-emirleri\/:id\/(baslat|bitir|sayim|duraklat|devam|durdur)$/.test(u.yol));
-    assert.deepEqual(komutUclari.map((u) => u.yetki), Array.from({ length: 6 }, () => KOMUT_ISLEMI));
+    assert.deepEqual(komutUclari.map((u) => [u.yol, u.yetki]), [['/uretim-emirleri/:id/duraklat', KOMUT_ISLEMI]]);
     // Yükleyici gerçekten ayırıyor: yoksa aşağıdaki retler boş listeden doğardı.
     assert.equal(operator.islemler.includes(KOMUT_ISLEMI), true);
     assert.equal(kaliteci.islemler.includes(KOMUT_ISLEMI), false);
