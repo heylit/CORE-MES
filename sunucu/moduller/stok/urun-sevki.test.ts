@@ -183,10 +183,10 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     await gecis(s, 'planlandi', 'yolda');
     await gecis(s, 'yolda', 'tamamlandi');
     assert.equal(await sevkCikisi(id), 4);
-    const belge = (g: { tur: 'fatura' | 'iade'; tutar: number; iade?: number }) => tek(
+    const belge = (g: { tur: 'fatura' | 'iade'; tutar: number; iade?: number; no?: string }) => tek(
       `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, belge_no, siparis_id, sevkiyat_isi_id, iade_belge_id, olusturan_id)
        VALUES ($1, $2, $3, $4, current_date, current_date, 'TRY', 1, $5, 20, $6, $7, $8, $9, $10) RETURNING id`,
-      [g.tur === 'fatura' ? 'gelir' : 'gider', g.tur, g.tur === 'fatura' ? 'urun_satisi' : 'satis_iadesi', firmaId, g.tutar, g.tur === 'fatura' ? 'DNM-FAT-186' : null,
+      [g.tur === 'fatura' ? 'gelir' : 'gider', g.tur, g.tur === 'fatura' ? 'urun_satisi' : 'satis_iadesi', firmaId, g.tutar, g.tur === 'fatura' ? (g.no ?? 'DNM-FAT-186') : null,
         siparisId, g.tur === 'fatura' ? isId : null, g.iade ?? null, yoneticiId]);
     const fatura = await belge({ tur: 'fatura', tutar: 1000 });
     const cikis = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_hareketi WHERE cikis_nedeni = 'sevk' AND uretim_emri_id = $1", [id]))!.id;
@@ -205,7 +205,8 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
 
     // İptal edilen fatura da bağlamaz.
     await gecis(s, 'yolda', 'tamamlandi');
-    const ikinci = await belge({ tur: 'fatura', tutar: 1000 });
+    // Aynı firmaya iptal edilmemiş iki fatura aynı numarayı taşıyamaz (finans_belge_no_tekil).
+    const ikinci = await belge({ tur: 'fatura', tutar: 1000, no: 'DNM-FAT-186-2' });
     await assert.rejects(gecis(s, 'tamamlandi', 'yolda'), (h: { message: string }) => /DNM-FAT-186/.test(h.message));
     await o().sahip.sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [ikinci, yoneticiId]);
     const yeni = (await o().sahip.tek<{ id: number }>(
