@@ -3,6 +3,12 @@
 export const tmiListesiSaltOkunur = (sunucuda: boolean, hazirlikGorur: boolean, duzenleyebilir: boolean): boolean =>
   sunucuda && hazirlikGorur && !duzenleyebilir;
 
+// Tesisin sahibi TMI İstasyonlar'dır: sunucuya bağlıyken sunucu Arkon'un tesis yazımını reddeder. Düzenleyici (ve örnek yapı) yalnız yerel
+// kiptedir; sunucuda yönetici de salt okunur listeyi görür, düzenleme yeri TMI'dir.
+export const tesisDuzenleyicisi = (sunucuda: boolean, duzenleyebilir: boolean): boolean => !sunucuda && duzenleyebilir;
+export const tesisListesi = (sunucuda: boolean, hazirlikGorur: boolean, duzenleyebilir: boolean): boolean =>
+  sunucuda && (hazirlikGorur || duzenleyebilir);
+
 interface Kayit { id: string; name?: string; active?: boolean }
 export interface TesisIstasyonu extends Kayit { wc?: string; t?: string }
 export interface TesisMakinesi extends Kayit { st?: string; kind?: string }
