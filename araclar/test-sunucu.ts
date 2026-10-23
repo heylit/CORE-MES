@@ -26,14 +26,14 @@ export function parcaOku(deger: string | undefined): string | null {
 }
 
 // CI'da kırmızı test ayrıca uyarı satırı olarak basılır: günlük okunamasa da adı ve iletisi API'den alınır (#641).
-// Desenler tırnaksız: koşu kabuksuzdur, node'un kendi glob'u açar.
+// Desenler tırnaksız: koşu kabuksuzdur, node'un kendi glob'u açar. Test robotunun testleri saftır (ADR 0019): veritabanı istemez.
 export function sunucuTestArgv(eszamanli: number | null, ci = false, parca: string | null = null): string[] {
   return [
     '--import', './araclar/ortam-yukle-goc.ts', '--import', './araclar/kablolama-yukle.ts', '--test',
     ...(eszamanli === null ? [] : [`--test-concurrency=${eszamanli}`]),
     ...(parca === null ? [] : [`--test-shard=${parca}`]),
     ...(ci ? ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=./araclar/test-rapor-github.ts', '--test-reporter-destination=stdout'] : []),
-    'sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts',
+    'sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts', 'ekran-testleri/benzetim/**/*.test.ts',
   ];
 }
 

@@ -2981,7 +2981,18 @@ span[data-ton="hata"] { color: var(--stop); }
 .pm-pa-nokta { display: inline-block; inline-size: var(--b-2); block-size: var(--b-2); border-radius: var(--yari-tam); background: var(--hold); }
 /* çubukta dört ekran: dar ve orta genişlikte yalnız açık ekranın adı yazılır, öbürleri simgeyle kalır */
 @media (max-width: 1399px) { .tc-kabuk-ust .pm-sb-ekran button:not([aria-current]) > span { display: none; } .tc-kabuk-ust .pm-sb-ekran button { padding: 0 var(--b-2); } }
-@media (max-width: 599px) { .tc-kabuk-ust .pm-sb-ekran button > span { display: none; } .tc-kabuk-ust .pm-sb-nb-k span { display: none; } .pm-sb-ekran button .pm-pa-say { margin-left: -2px; } }
+/* dar ekranda nabzın sayısı adıyla kalır ("0 geç"); yalnız sayı anlamını kaybeder */
+@media (max-width: 599px) { .tc-kabuk-ust .pm-sb-ekran button > span { display: none; } .tc-kabuk-ust .pm-sb-nb-k span { font-size: var(--yazi-xs); } .pm-sb-ekran button .pm-pa-say { margin-left: -2px; } }
+/* bildirimin eylem düğmesi metnin altına iner: yanında durunca metin dar sütunda kelime kelime kırılıyordu */
+.tc-bildirim { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--b-2); row-gap: var(--b-1); }
+.tc-bildirim > .tc-dugme { grid-column: 2; grid-row: 2; justify-self: start; }
+.tc-bildirim > .tc-bildirim-kapat { grid-column: 3; grid-row: 1; }
+/* telefonda bildirim tek kısa şerittir: yalnız sonuncusu görünür */
+@media (max-width: 767px) {
+  .tc-bildirimler > .tc-bildirim:not(:last-child) { display: none; }
+  .tc-bildirim { padding-block: var(--b-1); }
+  .tc-bildirim-mesaj { font-size: var(--yazi-s); }
+}
 
 /* Sade sayfa: Özet, Veri gir, Tüm ayrıntılar */
 .pm-sd { display: grid; gap: var(--b-4); min-width: 0; }

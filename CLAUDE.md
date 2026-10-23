@@ -28,6 +28,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Açık işler ve kararlar GitHub ka
 
 ## Kırmızı çizgiler
 - Depoya yalnız kod girer: müşteri adı, parça no, çizim, gerçek veri, parola, anahtar girmez. Telemetri ve dış servis çağrısı yok; yalnız kurum içi üç servis istisna: Logo yardımcısı (ADR 0017, yalnız `logo` modülü, yalnız aynı bilgisayar: 127.0.0.1), SmartES (ADR 0013, yalnız `smartes` modülü) ve etiket yazıcısı (ADR 0014, yalnız `etiket-merkezi` modülü, yalnız TCP 9100, yalnız `TMIV2_ETIKET_YAZICI_AGI` aralığı). Üçünde de adres yalnız `TMIV2_*` ortam değişkenindedir ve kurum içi olmalıdır (Logo için yalnız 127.0.0.1); bağlantı varsayılan olarak kapalıdır.
+  Test robotu istisnası (ADR 0019, karar 174 c): yalnız `ekran-testleri/benzetim/model.ts` dil modeli çağırır (Claude API ya da yerel `claude -p`); yalnız canlı olmayan ortamda, boş ve sentetik veriyle; anahtar yalnız `TMIV2_ROBOT_MODEL_ANAHTARI`'nda; varsayılan kapalı; uygulama ve canlı paketi bu kodu içermez.
 - Eski sistem (`Desktop\Planlama`, veritabanı `tmi`, port 4000) ve `Desktop\TMI_YEDEK` bu deponun
   dışındadır; okunmaz, yazılmaz, bağlanılmaz. Bu sistem yalnız `TMIV2_*` ortam değişkenlerini okur.
 - `git reset --hard` yok; `main`'e zorla gönderme yok. Gönderilmiş iş dalı rebase sonrası aynı adla, yalnız `git push --force-with-lease` ile güncellenir. Birleşmemiş dal silinmez. Yeni bağımlılık kullanıcı onayıyla.
