@@ -2,7 +2,7 @@ import tseslint from 'typescript-eslint';
 
 // Varsayılan yasaktır: listeye yazılmamış yeni paylasilan dosyası kırmızı kalır, unutulan zod dosyası pakete sızmaz.
 // Liste zod taşımadığı bilinen dosyalardır. Yol çözülmez, belirteç metni sınanır: serbest olan yalnız düz yazımdır.
-const ZODSUZ = ['sayfalar', 'hata', 'islemler', 'ortam', 'istek-kimligi', 'tesis-zamani', 'atolye-sabitleri', 'islem-adlari', 'numara', 'sayfa-tanimi', 'ag-araligi', 'sozlesme/kalibrasyon-kurali', 'sozlesme/nizamiye-sabitleri', 'test-fiksturleri/plan-golge'];
+const ZODSUZ = ['sayfalar', 'hata', 'islemler', 'ortam', 'istek-kimligi', 'tesis-zamani', 'atolye-sabitleri', 'islem-adlari', 'numara', 'sayfa-tanimi', 'ag-araligi', 'sozlesme/kalibrasyon-kurali', 'sozlesme/nizamiye-sabitleri', 'sozlesme/emir-turleri', 'test-fiksturleri/plan-golge'];
 const PAYLASILAN_DEGERI = String.raw`^(?:#paylasilan|\..*/paylasilan)/(?!(?:${ZODSUZ.join('|')})\.ts$)`;
 const SOZLESME_MESAJI =
   "istemci paylasilan'ı yalnız tip olarak ithal eder: değer ithali zod'u istemci paketine sokabilir, import type kullan; " +

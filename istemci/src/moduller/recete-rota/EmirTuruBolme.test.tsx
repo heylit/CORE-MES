@@ -65,12 +65,12 @@ const KOL = (qty = 20, n = 2, m = 4, parentId = 'o_eski', id = 'o_kol'): Kayit =
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); yazmaDinleyiciKapat(); });
 
-describe('Emir türü', () => {
-  it('emir türü açarken seçilir (varsayılan Seri), listede görünür ve süzülür; türsüz eski kayıt Seri sayılır', async () => {
+describe('Emir türü Üretim Emirleri sözleşmesindedir', () => {
+  it('emir türü açarken sözleşmedeki adlarla seçilir (varsayılan Seri), listede görünür ve süzülür; türsüz eski kayıt Seri sayılır', async () => {
     const e = await ekranAc();
     expect(e.emirler()[0]!.tur).toBe('seri');
     e.tikla('[data-act="newOrderToggle"]');
-    expect(Array.from(e.belge.querySelectorAll<HTMLOptionElement>('#noTur option')).map((o) => o.textContent)).toEqual(['FAI', 'Seri', 'Prototip', 'Numune']);
+    expect(Array.from(e.belge.querySelectorAll<HTMLOptionElement>('#noTur option')).map((o) => o.textContent)).toEqual(['Seri', 'FAI', 'Numune', 'Prototip', 'Stoğa üretim', 'Rework', 'Bakım ve deneme', 'Fason']);
     expect(e.belge.querySelector<HTMLSelectElement>('#noTur')!.value).toBe('seri');
     e.tikla('[data-act="newOrderToggle"]');
     e.emirAc({ '#noTur': 'fai' });
@@ -81,15 +81,15 @@ describe('Emir türü', () => {
     e.tikla('[data-act="orderTur"][data-v="fai"]');
     expect(e.belge.querySelectorAll('.orow')).toHaveLength(1);
     expect(e.belge.querySelector('.orow .tur')?.textContent).toBe('FAI');
-    e.tikla('[data-act="orderTur"][data-v="numune"]');
+    e.tikla('[data-act="orderTur"][data-v="fason"]');
     expect(e.belge.querySelectorAll('.orow')).toHaveLength(0);
     e.tikla('[data-act="orderTur"][data-v="seri"]');
     expect(e.belge.querySelectorAll('.orow')).toHaveLength(1);
     // Açık emrin ayrıntısında tür değiştirilebilir.
     e.tikla('[data-act="orderTur"][data-v="tum"]');
     e.detayAc('o_eski');
-    e.degis('select[data-f="tur"]', 'numune');
-    expect(e.emirler()[0]!.tur).toBe('numune');
+    e.degis('select[data-f="tur"]', 'rework');
+    expect(e.emirler()[0]!.tur).toBe('rework');
     expect(e.ifade('normalize({orders:[{id:"x",itemId:"i1",qty:1}]}).orders[0].tur')).toBe('seri');
   }, 40000);
 

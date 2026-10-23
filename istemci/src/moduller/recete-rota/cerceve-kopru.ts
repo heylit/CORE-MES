@@ -3,7 +3,9 @@
 // kayıt atölyede ortaktır ve yerel depo köprüsünden geçer. Çerçeve yalıtılmıştır (opak köken): tek kapı kabuğa
 // giden iletidir; kabuk (kopru.ts) yalnız bilinen istek türlerini uca çevirir.
 //
-// Fonksiyon metin olarak sayfaya gömülür (`cerceveBetigi`): dışındaki hiçbir ada başvurmaz, ithal etmez.
+// Fonksiyon metin olarak sayfaya gömülür (`cerceveBetigi`): dışındaki hiçbir ada başvurmaz, ithal etmez. Sayfaya giden sabitler
+// (emir türleri) ayara `cerceveBetigi` içinde konur.
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 
 export interface CerceveAyari {
   // İleti kanalı; modülün adıdır.
@@ -47,6 +49,9 @@ export interface CerceveAyari {
   bedelAyariOkunur?: boolean;
   // HiGHS çözücüsünü kabuktan isteyebilir mi (yalnız planlama çerçevesi, 361 b): `tmi.highs()` -> { betik, wasm }.
   highsOkunur?: boolean;
+  // Emir türleri ve adları Üretim Emirleri sözleşmesinden (emir-turleri.ts); prototip kendi listesini tutmaz. Verilmezse
+  // `cerceveBetigi` sözleşmedekini koyar.
+  emirTurleri?: Readonly<Record<string, string>>;
 }
 
 type Nesne = Record<string, unknown>;
@@ -221,6 +226,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       ...(ayar.bedelAyariOkunur === false ? {} : { bedelAyari: (): Promise<unknown> => istek('bedel-ayari-oku', {}) }),
       ...(ayar.highsOkunur === true ? { highs: (): Promise<unknown> => istek('highs-oku', {}) } : {}),
       kisiAdi: ayar.kisiAdi ?? null,
+      emirTurleri: Object.freeze({ ...(ayar.emirTurleri ?? {}) }),
       // Termini girilmemiş fason adımın süre tahmini: { malzemeNo, operasyonTipiId, firmaId, adet }[] -> { gunler: (number|null)[] }.
       fasonTahminleri: (sorgular: unknown[]): Promise<unknown> => istek('fason-tahmin', { sorgular }),
       // Malzeme yalnız Malzemeler ve Hizmetler'de açılır: çerçeve kabuğa gitmek istediği sayfayı söyler, kabuk yalnız izinli yola gider.
@@ -393,7 +399,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
 
 // Sayfaya gömülecek betik: fonksiyon metni ve ayar JSON'u. `<` ve satır ayırıcılar kaçırılır ki kayıt metni betiği kapatamasın.
 export function cerceveBetigi(ayar: CerceveAyari): string {
-  const json = JSON.stringify(ayar).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  const json = JSON.stringify({ emirTurleri: EMIR_TURU_ADLARI, ...ayar }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   const govde = cerceveKoprusu.toString().replace(/<\/script/gi, '<\\/script');
   return `<script>(${govde})(window, ${json});</script>`;
 }
