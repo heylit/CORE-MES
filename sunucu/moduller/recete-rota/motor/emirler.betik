@@ -52,6 +52,7 @@ function sunucuPlani(D0) {
 
 /* Dönen: { S, st, baslangic, yerlesmeyen, kimlik } ya da çalışma yoksa null. istek: plan modülünün PlanMotoruIstegi'si, anlar ISO metin.
    - Yalnız istekte geçen emirler plana girer; havuzdaki (taslak) emir de, istekte geçiyorsa.
+   - Vardiyası tanımsız tezgâhtaki kuyruk işi vardiyasiz'dadır, dizilmez (168 b).
    - Kuyruktaki işler taban plana tezgâh sırasıyla girer; sıra anahtarı dondurma sınırının ötesindedir (dondurulmaz, sabit kipte dizilir).
    - Sabit iş gerçek saatiyle bağlanır; motorda karşılığı yoksa tezgâhı o aralıkta kapalı sayılır (başka iş üstüne yerleşmez).
    - Çalışan adım çerçevedeki gibi sunucunun kalanıyla (calisanBirlestir).
@@ -90,8 +91,12 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const ops = {};
   const frz = st.now + (st.w.dondurma || 0);
   const sira = new Set();
+  /* 168 b: vardiyası tanımsız tezgâhın işi yerleşmez ama komutu durdurmaz; plan uyarıyla boş bırakır */
+  const vardiyasiz = [];
+  const takvimsiz = m => { const M = cx.M[String(m)]; return !!M && M.rw.length === 0; };
   istek.kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
     const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
+    if (takvimsiz(q.makineId)) { vardiyasiz.push(a); return; }
     const S = frz + 1 + i * 1e-3 + mi * 1e-7;
     ops[id] = { id, job: cx.byId[id].job, m: String(q.makineId), S, C: S + 1e-7 };
     sira.add(id);
@@ -109,5 +114,5 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     const c = o.c.find(x => !x.fas) || o.c[0];
     ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, fas: c.fas ? 1 : undefined };
   }
-  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, kimlik, sira: [...sira] };
+  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, vardiyasiz, kimlik, sira: [...sira] };
 }

@@ -104,6 +104,29 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(r, 'E-3|10')!.baslangic, '2026-10-19T05:00:00.000Z');
   });
 
+  test('168 b: vardiyanın molasında tezgâh çalışmaz; gece vardiyasının molası ertesi güne düşer', async () => {
+    const k = (shifts: unknown[], gun: string) => ({
+      ...KAYNAK,
+      calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, calismaGunleri: Object.fromEntries(['pzt', 'sal', 'car', 'per', 'cum'].map((g) => [g, [gun]])) } },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, cal: { shifts, holidays: [] } } },
+    });
+    // 08:00'den 60 dk iş, 08:30-08:45 mola: 09:15'te biter
+    const gunduz = k([{ id: V, name: 'Gunduz', start: '08:00', end: '16:00', breaks: [{ start: '08:30', end: '08:45' }] }], V);
+    const r = await coz(gunduz, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual([yer(r, 'E-1|10')!.baslangic, yer(r, 'E-1|10')!.bitis], ['2026-10-19T05:00:00.000Z', '2026-10-19T06:15:00.000Z']);
+    // 22:00-06:00 vardiyası, gece 00:30-01:00 mola; simdi 23:00 (20:00Z): ilk iş gece yarısı biter, ikincisi molayı geçip 01:30'da
+    const gece = k([{ id: '4', name: 'Gece', start: '22:00', end: '06:00', breaks: [{ start: '00:30', end: '01:00' }] }], '4');
+    const g = await coz(gece, istek({ simdi: new Date('2026-10-19T20:00:00Z'), kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }] }));
+    assert.equal(yer(g, 'E-1|10')!.bitis, '2026-10-19T21:00:00.000Z');
+    assert.equal(yer(g, 'E-2|10')!.bitis, '2026-10-19T22:30:00.000Z');
+  });
+
+  test('168 b: vardiyası tanımsız tezgâhın işi vardiyasiz\'dadır, ötekiler dizilir', async () => {
+    const k = { ...KAYNAK, calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, calismaGunleri: {} } } };
+    const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual([r.yerlesimler, r.yerlesmeyen, r.vardiyasiz], [[], [], ['E-1|10']]);
+  });
+
   test('çalışma yoksa komut reddedilir', async () => {
     await assert.rejects(coz({ ...KAYNAK, calisma: null }, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] })), /çalışma kaydı/);
   });
@@ -137,7 +160,7 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
-    assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'] });
+    assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [] });
   });
 
   test('planlama sayfasının çalışma kaydı yoksa komut reddedilir', async () => {
