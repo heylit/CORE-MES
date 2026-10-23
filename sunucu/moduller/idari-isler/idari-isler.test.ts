@@ -25,6 +25,7 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
   let idari = { cerez: '', id: 0 };
   let okuyan = { cerez: '', id: 0 };
   let yetkisiz = { cerez: '', id: 0 };
+  let yonetici = { cerez: '', id: 0 };
 
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -71,7 +72,7 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
   before(async () => {
     ortam = await testVeritabaniKur('idari_isler');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
-    await girisYap([]);
+    yonetici = await girisYap([]);
     personel = await girisYap(['idari-isler.talep-ac']);
     personel2 = await girisYap(['idari-isler.talep-ac']);
     idari = await girisYap(['idari-isler.oku', 'idari-isler.talep-ac', 'idari-isler.talep-yonet']);
@@ -86,6 +87,28 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
     assert.deepEqual([t.durum, t.acanKisiId, t.aciklama, t.aciliyet], ['yeni', personel.id, 'Sigorta atıyor', 'acil']);
     assert.notEqual(t.acilma.slice(0, 4), '2020');
     assert.equal(t.acanAd, `Deneme idari-2`);
+  });
+
+  test('IDR-08: numara Sistem Ayarları kalıbından ortak sayaçla gelir; dolu numara atlanır, kalıbı yalnız ayar yetkilisi değiştirir', async () => {
+    const ilk = await talepAc(personel);
+    const m = /^TT-(\d{4})-(\d{3,})$/.exec(ilk.no);
+    assert.ok(m, ilk.no);
+    const [, yil, sira] = m;
+    // Eski sayaçtan kalmış numara sıradakiyle aynıysa yeni talep onu atlar; var olan numara değişmez.
+    const dolu = `TT-${yil}-${String(Number(sira) + 1).padStart(3, '0')}`;
+    await o().sahip.sorgu('UPDATE idari_isler_talep SET no = $2 WHERE id = $1', [ilk.id, dolu]);
+    assert.equal((await talepAc(personel)).no, `TT-${yil}-${String(Number(sira) + 2).padStart(3, '0')}`);
+    const satir = await o().sahip.tek<{ no: string }>('SELECT no FROM idari_isler_talep WHERE id = $1', [ilk.id]);
+    assert.equal(satir?.no, dolu);
+
+    const kalip = (kim: { cerez: string }, deger: string) => gonder(kim.cerez, '/ayarlar/idari-isler.talep-no/degistir', { deger });
+    assert.equal((await kalip(personel, 'IT-{SAYAC:4}')).statusCode, 403);
+    assert.equal((await kalip(yonetici, 'IT-{SAYAC:4}')).statusCode, 200);
+    try {
+      assert.equal((await talepAc(personel)).no, 'IT-0001');
+    } finally {
+      assert.equal((await kalip(yonetici, 'TT-{YYYY}-{SAYAC:3}')).statusCode, 200);
+    }
   });
 
   test('IDR-01 red: işlemi olmayan açamaz (403), girişsiz 401; boş yer ve bilinmeyen kategori 400', async () => {

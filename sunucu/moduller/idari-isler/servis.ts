@@ -12,6 +12,7 @@ import {
   type KontrolGuncelleVerisi, type KontrolKaydi, type Talep, type TalepAcVerisi, type TalepPanosuCevabi, type TaleplerimSuzgeci,
   type YapildiVerisi, type YemekBildirVerisi, type YemekGunuCevabi,
 } from '#paylasilan/sozlesme/idari-isler.ts';
+import { numaraAl } from '../ayarlar/disari.ts';
 import { gununFazlaMesaisi, izinliKisiler } from '../ik/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
@@ -22,7 +23,7 @@ import {
   ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
   TALEP_YOK, YAKIN_GUN, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, gecisHedefi, gecisReddi,
-  geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, talepNo, yapildiSonucu,
+  geriCekmeReddi, gorevGecisReddi, gorevTarihReddi, kmReddi, kontrolGrubu, masrafReddi, plakaBicimle, senden, yapildiSonucu,
   yemekBildirimReddi, yemekKadrosu, yemekSayisi, type GorevKomutu, type TalepKomutu, type YemekHesabi,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -50,9 +51,9 @@ async function talep(db: Db, id: number): Promise<Talep> {
 }
 
 // IDR-01: talep komutu verenin adına açılır; açılma zamanı veritabanından.
+// IDR-08: numara Sistem Ayarları'ndaki kalıptan, ortak sayaçla.
 export async function talepAc(db: Db, kullanici: Kullanici, g: TalepAcVerisi): Promise<Talep> {
-  const yil = await sorgular.buYil(db);
-  const no = talepNo(yil, await sorgular.siradakiNo(db, yil));
+  const no = await numaraAl(db, 'idari-isler.talep-no', { varMi: (n) => sorgular.talepNoVarMi(db, n) });
   return talep(db, await sorgular.talepEkle(db, no, g, kullanici.id));
 }
 
