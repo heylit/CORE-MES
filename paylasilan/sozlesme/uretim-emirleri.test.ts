@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, bitirGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
+  AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
   bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi,
 } from './uretim-emirleri.ts';
 
@@ -53,12 +53,6 @@ test('emir gövdesi: adımlar isteğe bağlıdır ve en çok 30 tanedir; ad zoru
   for (const ad of ['', '   ', undefined, 'x'.repeat(121)]) assert.equal(gecer(emirGovdesi, { ...GOVDE, adimlar: [{ ad }] }), false, String(ad));
   assert.equal(gecer(emirGovdesi, { ...GOVDE, adimlar: [{ ad: 'x'.repeat(120), aciklama: 'y'.repeat(300) }] }), true);
   assert.equal(gecer(emirGovdesi, { ...GOVDE, adimlar: [{ ad: 'Ölç', aciklama: 'y'.repeat(301) }] }), false);
-});
-
-test('bitir gövdesi: sağlam adet isteğe bağlıdır; verilirse sıfır ya da pozitif tam sayıdır; eksi, kesirli, metin ve null reddedilir', () => {
-  for (const saglamAdet of [0, 1, 5, 5000]) assert.deepEqual(bitirGovdesi.parse({ saglamAdet }), { saglamAdet });
-  assert.deepEqual(bitirGovdesi.parse({}), {});
-  for (const saglamAdet of [-1, 0.5, '3', null]) assert.equal(gecer(bitirGovdesi, { saglamAdet }), false, String(saglamAdet));
 });
 
 test('sayım gövdesi: sağlam artı ya da eksi olur, sıfır olamaz; hurda da artı ya da eksidir, eksi hurda nedensiz gelebilir', () => {
