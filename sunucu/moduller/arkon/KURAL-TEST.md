@@ -181,3 +181,4 @@ A3 kırmızı (DOĞRULANDI, yerelde): her düzeltme tek tek geri alınınca ilgi
 | 12.9: kayıt yazmasının 409 reddi TMI bildirimi olur | istemci baglanti.test.ts "kayıt yazmasının 409 reddi söylenir" | aynı test: belge çakışması 409 ve günlük satırı söylenmez |
 | 15.4: açık çağrı kayıttan geri gelir | istemci acik-cagri.test.ts "açık çağrı döner" | aynı dosya: kapanan, başka makinenin, ekibi bilinmeyen ve 12 saatten eski çağrı gelmez |
 | 19.1: eski merkez çiziminde başlatma görevi uyarı olur, rozet değişir | istemci cizim-merkezi.test.ts "Terminalde eski çizim" | aynı test: güncel çizimde ve başlatmayan görevde değişmez |
+| Soru 197 a: merkez çizimi durumunu paketi okuyan her Arkon rolü sorar | merkez-kontrol-okuma.test.ts "operatör ve amir kontrolü okur" | aynı test: Arkon rolü olmayan 403; operatör ve amir merkez listesinde 403 |

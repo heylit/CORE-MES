@@ -803,5 +803,7 @@ Kontrol ucu kapısı (19.1): Soru 197 a, "Soru 197: a, yetki onayli" (2026-10-23
   Arkon'un kendi iletisi kendiliğinden açılan Malzeme · Teslim penceresinin arkasında kalıyordu; TMI bildirimi pencerenin üstündedir.
 - 15.4: terminal açık çağrıyı bu istasyonun çağrı kayıtlarından yeniden kurar (`arkon/web/src/data/acik-cagri.ts`, `operator.ts`); istasyon değişince
   sayfa yeniden yüklendiği için çağrı kayboluyordu. 12 saatten eski çağrı geri gelmez.
-- 19.1: paketin merkez çizimi eskiyse terminal "KALİTE ONAYLI" yerine "ESKİ REVİZYON" ya da "YAYINDAN KALKTI" rozeti gösterir, başlatma görevi
+- 19.1 (ayrı commit: kontrol ucu kapısı, Soru 197 a): paketin merkez çizimi eskiyse terminal "KALİTE ONAYLI" yerine "ESKİ REVİZYON" ya da "YAYINDAN KALKTI" rozeti gösterir, başlatma görevi
   uyarıya ve Çağrı'ya döner (`data/cizim-merkezi.ts eskiCizim, eskiCizimGorevi`, `teknik-resim.ts`, `operator.ts`). Başlatmayı sunucu zaten reddediyordu (denetim #34).
+- 19.1 kapısı (ayrı commit): `GET /arkon/cizim-merkezi/kontrol` paketi okuyabilen bütün Arkon rollerine açıldı (`kurallar.ts merkezDurumunuOkuyabilirMi`);
+  operatör ve amir 403 aldığı için terminal rozeti hiç değişmiyordu. Soru 197 b seçilseydi yalnız bu commit geri alınırdı.

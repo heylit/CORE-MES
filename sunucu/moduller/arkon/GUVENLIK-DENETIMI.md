@@ -46,3 +46,8 @@ Arıza yansıması (AR-15, W7): `POST /arkon/belgeler/maint/:kimlik/yaz` ucunda 
 `istasyonlar/disari.ts makineDurumuYaz` ile, istasyonlar modülünün kendi işlemi (`istasyonlar.yaz` ya da `istasyonlar.makine-durumu`) denetlenerek
 aynı transaction'da yazılır; Arkon rolü bu yetkiyi vermez. İzinli: ariza-makine-durumu.test.ts "bakımcı arıza açınca..."; reddedilen: aynı dosya
 "makine durumu yetkisi olmayan kişinin arıza kaydı yazılır, makine durumu değişmez".
+
+Merkez çizimi durumu (Soru 197 a, W7): `GET /arkon/cizim-merkezi/kontrol` salt okumadır; yetki `sayfa.arkon` (değişmedi), serviste Arkon rolü
+paketi okuyabilmeli (`kurallar.ts merkezDurumunuOkuyabilirMi`: bütün Arkon rolleri). Öncesinde yalnız paket yazanlar (yönetici, planlama, hazırlık,
+kalite). Merkez listesi ve dosya alma paket yazanlarda kalır. İzinli: merkez-kontrol-okuma.test.ts (operatör ve amir 200); reddedilen: aynı test
+(Arkon rolü olmayan 403; operatör ve amir merkez listesinde 403).

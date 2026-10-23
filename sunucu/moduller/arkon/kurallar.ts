@@ -555,6 +555,9 @@ export function yuklemeKotasiHatasi(
 
 // Çizim Merkezi'nden alma (kart #800). Rol, paketi düzenleyenlerdir (Hazırlık ve Çizim stüdyosundan pakete aktarma aynı yazarlarla gider).
 export const merkezdenAlabilirMi = (rol: ArkonRolu): boolean => DEPO_YAZARLARI.pkgs.includes(rol);
+// Soru 197 a: merkez çiziminin güncel olup olmadığını paketi okuyabilen her rol sorar (salt okuma; terminal eski revizyonu başlatmadan önce
+// gösterir). Dosya almak ve listelemek paket yazanlarda kalır.
+export const merkezDurumunuOkuyabilirMi = (rol: ArkonRolu): boolean => okuyabilirMi('pkgs', rol);
 
 const MERKEZ_DOSYA_UZANTISI = { pdf: 'pdf', step: 'step', stl: 'stl', iges: 'igs' } as const;
 export type MerkezDosyaTuru = keyof typeof MERKEZ_DOSYA_UZANTISI;

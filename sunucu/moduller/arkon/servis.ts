@@ -52,7 +52,7 @@ import {
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
-  cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi,
+  cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
   adetEksikMi, araliklariBirlestir, araliklariKes, beklenenTopla, bitenIsBeklenen, girisYokAktifDakika, girisYokMu, isEmriBeklenenAdet, kaynakKarsilastir, kesinBeklenen, kisiBeklenen, makineIzinliMi, toplamOran, uretimOrani,
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
@@ -1788,11 +1788,11 @@ export async function merkezdenDosyaEkle(db: Db, kullanici: Kullanici, belgeId: 
   };
 }
 
-// Pakette kayıtlı merkez dosyalarının merkezdeki yayındaki özetle karşılaştırması ("Yeni revizyon var"). Salt okuma.
+// Pakette kayıtlı merkez dosyalarının merkezdeki yayındaki özetle karşılaştırması ("Yeni revizyon var", terminalde eski revizyon rozeti). Salt okuma.
 export async function merkezKontrol(
   db: Db, kullanici: Kullanici, dosyalar: readonly { belgeId: number; ozet: string }[],
 ): Promise<MerkezKontrolCevabi> {
-  await merkezRoluGerekli(db, kullanici);
+  if (!merkezDurumunuOkuyabilirMi(await rolGerekli(db, kullanici))) throw yetkiYok(ILETILER.okumaRolu);
   const yayinda = new Map<number, string | null>();
   for (const { belgeId } of dosyalar) {
     if (!yayinda.has(belgeId)) yayinda.set(belgeId, (await yayindakiBelgeDosyasi(db, belgeId))?.ozet ?? null);
