@@ -1,0 +1,50 @@
+/* Denetim Hazırlığı P3: performans bölümü. Yalnız tasarım değişkenleri; grafik renkleri sınıftan gelir. */
+.tc-dhd-psuzgec { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-dhd-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-dhd-cipler [aria-pressed='true'] { background: var(--panel2); border-color: var(--edge2); font-weight: 700; }
+.tc-dhd-cipler [aria-pressed='false'] { opacity: .75; }
+.tc-dhd-psayi {
+  display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-4); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-dhd-grafik { inline-size: 100%; min-inline-size: calc(var(--b-6) * 18); block-size: auto; font-size: var(--yazi-xs); fill: var(--muted); }
+.tc-dhd-bant rect { fill-opacity: .06; }
+.tc-dhd-bant text { font-weight: 700; }
+.tc-dhd-bant-iyi { fill: var(--run); }
+.tc-dhd-bant-bilgi { fill: var(--done); }
+.tc-dhd-bant-uyari { fill: var(--hold); }
+.tc-dhd-bant-kotu { fill: var(--stop); }
+.tc-dhd-serit { font-weight: 700; }
+.tc-dhd-cizgi { stroke: var(--edge2); }
+.tc-dhd-kesik { stroke-dasharray: 2 4; }
+.tc-dhd-bugun line { stroke: var(--done); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.tc-dhd-bugun text { fill: var(--done); font-weight: 700; }
+.tc-dhd-seri polyline { fill: none; stroke: var(--tc-dhd-pr); stroke-width: 2; stroke-linejoin: round; }
+.tc-dhd-seri circle { fill: var(--tc-dhd-pr); stroke: var(--panel-solid); stroke-width: 1.5; }
+.tc-dhd-elmas { fill: var(--tc-dhd-pr); stroke: var(--tc-dhd-pr); stroke-width: 2.5; }
+.tc-dhd-elmas.tc-dhd-ici-bos { fill: var(--panel-solid); }
+.tc-dhd-denetim .tc-dhd-dikey { stroke: var(--tc-dhd-pr); stroke-opacity: .35; }
+.tc-dhd-denetim .tc-dhd-dip { fill: var(--tc-dhd-pr); }
+.tc-dhd-bulgusuz { fill: var(--run); stroke: var(--run); stroke-width: 2; }
+.tc-dhd-ici-bos .tc-dhd-bulgusuz { fill: var(--panel-solid); }
+.tc-dhd-sutun-major { fill: var(--stop); stroke: var(--stop); }
+.tc-dhd-sutun-minor { fill: var(--hold); stroke: var(--hold); }
+.tc-dhd-sutun-obs { fill: var(--done); stroke: var(--done); }
+.tc-dhd-sutun { stroke-width: 0; }
+.tc-dhd-ici-bos .tc-dhd-sutun { fill-opacity: .3; stroke-width: 1.5; }
+.tc-dhd-lejant-elmas { background: var(--grafik-2); transform: rotate(45deg); }
+.tc-dhd-lejant-dis { background: var(--hold); }
+.tc-dhd-lejant-ic { background: none; border: var(--cizgi-orta) solid var(--hold); }
+.tc-dhd-icgoru { display: flex; flex-direction: column; gap: var(--b-2); margin-bottom: var(--b-3); }
+.tc-dhd-icgoru p { display: flex; gap: var(--b-2); align-items: flex-start; padding: var(--b-3); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s); }
+.tc-dhd-matris { border-collapse: collapse; inline-size: 100%; font-size: var(--yazi-s); }
+.tc-dhd-matris th, .tc-dhd-matris td { padding: var(--b-2); border-block-end: var(--cizgi-ince) solid var(--edge); text-align: center; }
+.tc-dhd-matris th[scope='row'], .tc-dhd-matris thead th:first-child { text-align: start; }
+.tc-dhd-matris thead th { color: var(--muted); font-weight: 600; }
+.tc-dhd-matris thead small { display: block; font-weight: 400; }
+.tc-dhd-fb { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); justify-content: center; }
+.tc-dhd-pd {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-inline-start: var(--cizgi-kalin) solid var(--tc-dhd-pr, var(--muted)); border-radius: var(--yari-2);
+}
+.tc-dhd-pd > .tc-dugme { margin-inline-start: auto; }

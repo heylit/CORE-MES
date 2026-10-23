@@ -1,0 +1,20 @@
+/* Denetim Hazırlığı P3: ayarlar ve veriler. Yalnız tasarım değişkenleri. */
+.tc-dhd-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 9)), 1fr)); gap: var(--b-3) var(--b-4); }
+.tc-dhd-genis { grid-column: 1 / -1; }
+.tc-dhd-plist { list-style: none; display: flex; flex-direction: column; gap: var(--b-2); margin-top: var(--b-3); }
+.tc-dhd-prow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); padding: var(--b-3); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-dhd-prow > .tc-dhd-iki { flex: 1 1 calc(var(--b-6) * 6); }
+.tc-dhd-prow-acik { border-color: var(--edge2); background: var(--panel2); }
+.tc-dhd-pav {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; inline-size: var(--dokunma); block-size: var(--dokunma);
+  border-radius: var(--yari-1); background: var(--tc-dhd-pr, var(--panel2)); color: var(--ink); font-weight: 700;
+}
+.tc-dhd-durum { display: flex; gap: var(--b-2); align-items: flex-start; padding: var(--b-3); margin-top: var(--b-3); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s); }
+.tc-dhd-sifirla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 9)), 1fr)); gap: var(--b-2); margin-top: var(--b-3); }
+.tc-dhd-tehlike {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); margin-top: var(--b-4); padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--stop); border-radius: var(--yari-2);
+}
