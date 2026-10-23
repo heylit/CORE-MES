@@ -18,7 +18,7 @@ import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuc
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
-  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
+  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
@@ -282,8 +282,9 @@ export async function sil(
 ): Promise<{ surum: number }> {
   const ret = izReddi(koleksiyon, 'sil', false);
   if (ret !== null) throw yetkiYok(ILETILER[ret]);
-  // 229 a: silme yöneticinindir (kullanıcı ve ayar kayıtları dahil).
-  if (!(await kisiBayrakliMi(db, kullanici.id))) throw yetkiYok(ILETILER.silmeYonetici);
+  // 229 a: silme yöneticinindir (kullanıcı ve ayar kayıtları dahil); 260 a: belge, bayrak ve şablon onay işlemiyle de silinir.
+  const onaylaSiler = onaylaSilinirMi(koleksiyon) && islemVarMi(kullanici, 'kalite-merkezi.onayla');
+  if (!onaylaSiler && !(await kisiBayrakliMi(db, kullanici.id))) throw yetkiYok(ILETILER.silmeYonetici);
   await sorgular.yazmaKilidi(db);
   const onceki = await sorgular.kayitGovdesi(db, koleksiyon, kimlik);
   if (onayliFormReddi(koleksiyon, onceki, null)) throw cakisma(ILETILER.onayliForm);

@@ -23,7 +23,7 @@ export const ILETILER = {
   dosyaYok: 'Dosya bulunamadı.',
   yalnizYonetici: 'Kalite Merkezi kullanıcı ve ayar kayıtlarını yalnız yönetici değiştirir.',
   arsivYonetici: 'Kayıtları yalnız yönetici arşive alır.',
-  silmeYonetici: 'Kalite Merkezi kayıtlarını yalnız yönetici siler.',
+  silmeYonetici: 'Bu Kalite Merkezi kaydını yalnız yönetici siler.',
   kaynakOnay: 'Tedarikçi ve form şablonu kayıtlarını onay yetkisi olan değiştirir.',
   onayUcu: 'Onay ve kapanış alanları kayıt yazmayla değişmez; onay yetkisiyle kaydedilir.',
   onayDegeri: 'Onay ya da durum değeri geçersiz.',
@@ -50,6 +50,9 @@ export const yoneticiKoleksiyonuMu = (koleksiyon: string): boolean => YONETICI_K
 // mühendisi) sunucuda onay işlemini ister. Silme ve arşivleme yöneticinindir (uygulamada Kalite yöneticisi).
 const KAYNAK_KOLEKSIYONLARI: readonly string[] = [TEDARIKCI_KOLEKSIYONU, 'tpl'];
 export const kaynakKoleksiyonuMu = (koleksiyon: string): boolean => KAYNAK_KOLEKSIYONLARI.includes(koleksiyon);
+// Soru 260 a: belge, Teknik kütüphane bayrağı ve form şablonu (varsayılana dönüş) onay işlemiyle de silinir; öteki silmeler yöneticinindir.
+const ONAYLA_SILINENLER: readonly string[] = ['belge', 'bayrak', 'tpl'];
+export const onaylaSilinirMi = (koleksiyon: string): boolean => ONAYLA_SILINENLER.includes(koleksiyon);
 
 // Giriş TMI oturumudur: uygulamanın kullanıcı kaydı PIN özeti taşımaz (eski yedekten ya da eski ekrandan gelse de saklanmaz).
 export function pinsiz<T extends Record<string, unknown>>(koleksiyon: string, govde: T): T {

@@ -16,6 +16,7 @@ type Govde = Record<string, unknown>;
 // yazar. Kilit içeriği korur, arşivlemeyi engellemez; arşivlemeyi yalnız yönetici yapar.
 // Soru 229 a (23.10.2026): uygulamanın ekranda rol seviyesiyle sınırladığı işler sunucuda var olan işlemlerle denetlenir: silme ve
 // arşiv yönetici (uygulamada Kalite yöneticisi), tedarikçi ve form şablonu `kalite-merkezi.onayla` (Kalite mühendisi), ayar yönetici.
+// Soru 260 a: belge, bayrak ve şablon silme `kalite-merkezi.onayla` ile de yapılır.
 describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -120,9 +121,8 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
 
   test('Soru 229 a silme: yalnız yönetici siler; onay yetkili kalite personeli ve yalnız yazan 403 alır, kayıt yerinde kalır', async () => {
     const kayitlar: [string, string, Govde][] = [
-      ['ncr', 's_ncr', { no: 'S-NCR', durum: 'Açık' }], ['insp', 's_insp', { no: 'S-MUA', sonuc: 'Beklemede' }], ['belge', 's_belge', { ad: 'sertifika.pdf' }],
-      ['bayrak', 's_bayrak', { yazi: 'K' }], ['cizim', 's_cizim', { parcaNo: 'DENEME-1' }], ['sup', 's_sup', { kod: 'TED-S', ad: 'Deneme tedarikçi' }],
-      ['tpl', 's_tpl', { kod: 'KF-30', rev: '00', dsl: '# Genel' }],
+      ['ncr', 's_ncr', { no: 'S-NCR', durum: 'Açık' }], ['insp', 's_insp', { no: 'S-MUA', sonuc: 'Beklemede' }],
+      ['cizim', 's_cizim', { parcaNo: 'DENEME-1' }], ['sup', 's_sup', { kod: 'TED-S', ad: 'Deneme tedarikçi' }],
     ];
     for (const [koleksiyon, kimlik, govde] of kayitlar) {
       const { surum } = await tamam(c.yon, `${koleksiyon}/${kimlik}/yaz`, { govde, surum: null });
@@ -131,6 +131,19 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
       assert.deepEqual(await kayit(koleksiyon, kimlik), { govde, surum }, koleksiyon);
       await tamam(c.yon, `${koleksiyon}/${kimlik}/sil`, { surum });
       assert.equal((await kayit(koleksiyon, kimlik))?.govde ?? null, null, koleksiyon);
+    }
+  });
+
+  test('Soru 260 a silme: belge, Teknik kütüphane bayrağı ve form şablonunu onay yetkili kalite personeli ve yönetici siler; yalnız yazan 403', async () => {
+    const kayitlar: [string, Govde][] = [['belge', { ad: 'sertifika.pdf' }], ['bayrak', { yazi: 'K' }], ['tpl', { kod: 'KF-30', rev: '00', dsl: '# Genel' }]];
+    for (const [koleksiyon, govde] of kayitlar) {
+      for (const [silen, kimlik] of [[c.kal, `o_${koleksiyon}_k`], [c.yon, `o_${koleksiyon}_y`]] as const) {
+        const { surum } = await tamam(c.yon, `${koleksiyon}/${kimlik}/yaz`, { govde, surum: null });
+        await ret(403, c.mua, `${koleksiyon}/${kimlik}/sil`, { surum });
+        assert.deepEqual(await kayit(koleksiyon, kimlik), { govde, surum }, koleksiyon);
+        await tamam(silen, `${koleksiyon}/${kimlik}/sil`, { surum });
+        assert.equal((await kayit(koleksiyon, kimlik))?.govde ?? null, null, kimlik);
+      }
     }
   });
 
