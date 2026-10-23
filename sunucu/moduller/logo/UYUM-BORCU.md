@@ -55,7 +55,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 23. Fatura okuması siparişi numarasıyla arar, numara `logo_siparis_no` tablosundadır / `logo_giden` yalnız sipariş kimliğini ve Logo kaydını tutar, numarayı değil;
    numara siparişin Logo'da açıldığı turda yazılır, bu değişiklikten önce açılmış sipariş okunmaz (satın alma işi zaten bağlı değil) / satın alma bağlanınca
    gerekirse eski siparişler için numara bir kez doldurulur. `fatura` akışı bu yüzden `baglanmadi`. Fatura yalnız saklanır; Logo'ya fatura ya da irsaliye yazılmaz.
-24. KAPANDI (335, 20.10.2026): kaynak bağlandı. Biten emir `emirBittiYansit` (bağ `sunucu/kablolama.ts`) ile iki fişi (`sarf-fisi`, `uretim-girisi`, belge no
+24. KAPANDI (335, 20.10.2026): kaynak bağlandı. Biten emir `emirBittiYansit` (bağ `sunucu/kablolama.ts`; 233'ten beri fiş hazırlıkta açılır, 27) ile iki fişi (`sarf-fisi`, `uretim-girisi`, belge no
    emir kimliği) `logo_malzeme_fisi_giden`'e bir kez yazar; satırlar gönderimde stoğun `emirMalzemeFisleri` ve üretim emirlerinin `emirHurdalari`
    işlevlerinden okunur (`servis.ts` `emirMalzemeFisiKaynagi`, `kurallar.ts` `emirMalzemeFisi`). Açık kalan VARSAYIM'lar 27'de.
 25. Kapandı: hazırlık ekranı Logo'dan TMI'ya okuma akışında sayıyı "okundu" diye yazar (`gonderilen` okunan kayıt sayısıdır, sözleşme değişmedi).
@@ -63,13 +63,14 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    Eski metin: İşler tek köprü sırasını paylaşır / `isler.ts` `sirali` aynı süreçte köprüye iki isteği aynı anda göndermez (tek COM oturumu); süreçler arası sıra yoktur
    (tek sunucu) / zamanlayıcı ortak kilit verirse oraya taşınır.
 
-27. Malzeme fişi (335) VARSAYIM'ları / emir bitince fiş kuyruğa yalnız `logo.baglanti` ve `logo.malzeme-fisi-gonderimi` açıkken girer (kapalıyken biten emrin fişi sonradan
-   gitmez, Logo'ya elle girilmiş fişler çiftlenmez); fiş numarası emir numarasıdır, iki fiş türünde aynı (Logo'da ayrı numaralanır sayıldı), 16 karakteri
-   aşan numara gövde kuralında reddedilir; tarih ve saat emrin bittiği an (İstanbul); proje kodu gönderilmez; hurda girişte ayrı "Hurda" satırıdır,
-   sarftaki fire stoğun sarfının içindedir; satırı olmayan fiş kuyruktan düşer (denenmiş ya da niyetli fiş sonradan boşalırsa düşmez, gönderilmez, hazırlık sayısında
-   bekler); kartı ya da birimi olmayan satır fişi reddettirir; satırın kartı
-   Logo'ya gitmiş mi bakılmaz (Logo reddeder, geri çekilmeyle yeniden denenir). Fiş gittikten sonraki düzeltme (sayım, hurda) Logo'ya gitmez;
-   istenirse düzeltme fişi ayrı karar. Sonuç yalnız giden kutusundadır, stok hareketine yazılmaz (`stok_hareketi_logo` boş kalır) / bağlamada sahiple.
+27. Malzeme fişi (335, 233 ile değişti) VARSAYIM'ları / iki fiş emrin ilk terminal başlatmasında (`hazirlikTamamlandiYansit`) TMI'de boş açılır, Logo'ya
+   boş fiş gitmez; açılış yalnız `logo.baglanti` ve `logo.malzeme-fisi-gonderimi` açıkken olur (kapalıyken açılmamış emrin fişi emir bitince açılır).
+   Her sağlam ve hurda sayımı fişi işaretler (`bekleyen_degisiklik` sayacı); tur satır özetini (`son_satir_ozeti`) karşılaştırır: aynıysa istek yok,
+   farklıysa Logo'daki fişi siler (`silindi`) ve sonraki turda aynı numarayla yeniden açar, satır sıfırsa yalnız siler. Silme ve aynı numarayla
+   yeniden açma gerçek Logo'da DENENMEDİ (`kurulum/logo-yardimcisi.md` varsayım 6). Fiş numarası emir numarasıdır, iki fiş türünde aynı,
+   16 karakteri aşan numara reddedilir; tarih ve saat fişin TMI'de açıldığı an (İstanbul); proje kodu gönderilmez; hurda girişte ayrı "Hurda"
+   satırıdır, sarftaki fire stoğun sarfının içindedir; kartı ya da birimi olmayan satır fişi reddettirir; satırın kartı Logo'ya gitmiş mi bakılmaz.
+   Sonuç yalnız giden kutusundadır, stok hareketine yazılmaz (`stok_hareketi_logo` boş kalır) / bağlamada sahiple.
 28. Malzeme kartı Açıklama 1-3 (334 a) / `name2`, `name3`, `name4` alan adları ve Logo'daki karşılığı (NAME2-NAME4) DOĞRULANMADI (`KART_ACIKLAMA_ALANLARI`);
    uzunluk kırpılmaz, Logo sınırı BİLMİYORUM. Yalnız kart açılışında gider; ad güncellemesi (`UpdateRich`) açıklamaları taşımaz / gerçek köprüde doğrulanınca.
 

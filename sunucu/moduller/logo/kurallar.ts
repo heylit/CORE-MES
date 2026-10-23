@@ -797,6 +797,11 @@ export function emirMalzemeFisi(id: number, tur: 'sarf-fisi' | 'uretim-girisi', 
   return { id, tur, no: v.emirNo, tarih: v.tarih, saat: v.saat, projeKodu: null, satirlar };
 }
 
+// 233: Logo'daki fişin satırlarının özeti; aynı özet yeniden gönderilmez. Miktar ölçekli sayıyla karşılaştırılır ("2.50" ile "2.5" aynı).
+export function malzemeFisiOzeti(f: GonderilecekMalzemeFisi): string {
+  return JSON.stringify(f.satirlar.map((x) => [x.stokKodu.trim(), ONDALIK.test(x.miktar) ? String(olcekli(x.miktar)) : x.miktar, x.birim.trim(), x.aciklama]));
+}
+
 export function malzemeFisiGovdesi(f: GonderilecekMalzemeFisi): { govde: Record<string, unknown> } | { hata: string } {
   const a = MALZEME_FISI_ALANLARI;
   const no = f.no.trim();

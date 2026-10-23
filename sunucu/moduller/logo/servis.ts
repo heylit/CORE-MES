@@ -10,7 +10,7 @@ import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disa
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
   BELIRSIZ_BEKLEME_MS, eklemeGovdesi, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
-  FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, emirMalzemeFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
+  FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, emirMalzemeFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
 } from './kurallar.ts';
 import type { EmirFisKalemi, GonderilecekKarsilama, GonderilecekMalzemeFisi, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -859,9 +859,17 @@ export async function faturaTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
 
 /* ---------------- Malzeme fişi: sarf ve üretimden giriş (kaynağı stok / üretim emirleri; gelene kadar iş listesinde yok) ---------------- */
 
+// 233: emrin fişi Logo'yla eşitlenir. Kaynak her fiş için bugünkü satırları verir; satırı yoksa `fis` null (numara yine verilir: Logo'daki fiş silinecek).
+export interface EsitlenecekFis {
+  tur: FisTuru;
+  id: number;
+  no: string;
+  fis: GonderilecekMalzemeFisi | null;
+}
+
 // Tur kuyruğu ve sonucu bu arayüzden okur; test sahte kaynakla verir. Gerçek kaynak `emirMalzemeFisiKaynagi`dır.
 export interface MalzemeFisiKaynagi {
-  gidecekler(db: Db, sinir: number): Promise<GonderilecekMalzemeFisi[]>;
+  gidecekler(db: Db, sinir: number): Promise<EsitlenecekFis[]>;
   sonuc(db: Db, tur: FisTuru, id: number, sonuc: { kayitNo: string } | { hata: string }): Promise<void>;
 }
 
@@ -869,11 +877,23 @@ export interface MalzemeFisiTurOrtami extends TurOrtami {
   kaynak: MalzemeFisiKaynagi;
 }
 
-// 335: kuyruk emir bitince girer (`emirBittiYansit`), yalnız "Logo bağlantısı" ve fiş anahtarı açıkken: kapalıyken biten emrin fişi sonradan Logo'ya gitmez, Logo'ya
-// elle girilmiş fişler çiftlenmez. Fiş TMI Üretim Terminali kaydına bağlıdır, Logo iş emrine değil.
+// 233 (okuma teyidi 23.10.2026): fiş hazırlıkta TMI'de boş açılır, Logo'ya gitmez. Yalnız "Logo bağlantısı" ve fiş anahtarı açıkken: kapalıyken
+// hazırlanan emrin fişi sonradan Logo'ya gitmez, Logo'ya elle girilmiş fişler çiftlenmez. Fiş TMI Üretim Terminali kaydına bağlıdır, Logo iş emrine değil.
+const fisAnahtarlariAcik = async (db: Db): Promise<boolean> =>
+  (await sistemAyariOku(db, 'logo.baglanti')) && (await sistemAyariOku(db, 'logo.malzeme-fisi-gonderimi'));
+
+export async function hazirlikTamamlandiYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  if (await fisAnahtarlariAcik(db)) await s.malzemeFisiAc(db, olay.uretimEmriId);
+}
+
+// Sağlam ve hurda sayımı (+1, -1, düzeltme) açık fişi değişti işaretler; satırlar Logo işinin turunda sahiplerinden okunur.
+export async function uretimSayimiYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  await s.malzemeFisiDegisti(db, olay.uretimEmriId, false);
+}
+
+// Emir bitişi son eşitlemedir. Hazırlığı bu kuraldan önce olmuş emrin fişi anahtarlar açıksa burada açılır (335'teki gibi).
 export async function emirBittiYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
-  if (!(await sistemAyariOku(db, 'logo.baglanti')) || !(await sistemAyariOku(db, 'logo.malzeme-fisi-gonderimi'))) return;
-  await s.malzemeFisiKuyrugaAl(db, olay.uretimEmriId);
+  await s.malzemeFisiDegisti(db, olay.uretimEmriId, await fisAnahtarlariAcik(db));
 }
 
 // Fişin satırları gönderim anında sahiplerinden okunur: sarf ve giriş stoktan, hurda üretim emirlerinden. Sonuç yalnız giden kutusundadır
@@ -893,24 +913,22 @@ export function emirMalzemeFisiKaynagi(k: EmirFisKaynaklari): MalzemeFisiKaynagi
       const nolar = await k.emirNolari(db, idler);
       const fisler = await k.emirMalzemeFisleri(db, idler);
       const hurdalar = await k.emirHurdalari(db, idler);
-      const gidecek: GonderilecekMalzemeFisi[] = [];
-      for (const x of kuyruk) {
+      return kuyruk.map((x) => {
         const f = fisler.get(x.emirId);
         const hurda = hurdalar.filter((h) => h.uretimEmriId === x.emirId).map((h) => ({ stokKodu: h.stokKodu, birim: h.birim, miktar: String(h.hurdaAdet) }));
-        const fis = emirMalzemeFisi(x.emirId, x.tur, {
-          emirNo: nolar.get(x.emirId) ?? '', tarih: x.tarih, saat: x.saat, sarf: f?.sarf ?? [], giris: f?.giris ?? [], hurda,
-        });
-        if (fis === null) await s.bosMalzemeFisiniDus(db, x.tur, x.emirId);
-        else gidecek.push(fis);
-      }
-      return gidecek;
+        const no = nolar.get(x.emirId) ?? '';
+        const fis = emirMalzemeFisi(x.emirId, x.tur, { emirNo: no, tarih: x.tarih, saat: x.saat, sarf: f?.sarf ?? [], giris: f?.giris ?? [], hurda });
+        return { tur: x.tur, id: x.emirId, no, fis };
+      });
     },
     async sonuc() {},
   };
 }
 
-// Fişi numarayla arama ucu bilinmiyor: kalkan yalnız niyet ve belirsiz beklemedir (hizmet kartıyla aynı). Sonucu bilinmeyen istekten sonra
+// Açmada fişi numarayla arama yok: kalkan yalnız niyet ve belirsiz beklemedir (hizmet kartıyla aynı). Sonucu bilinmeyen istekten sonra
 // kendiliğinden yeniden gönderilmez; Logo'da kontrol istenir. Turda en çok bir yazma isteği.
+// 233 eşitleme: Logo'daki fişin satırları değiştiyse ya da boşaldıysa fiş önce silinir (Logo'da satır silinmez), sonraki turda aynı numarayla
+// yeniden açılır; değişmediyse istek gitmez.
 export function malzemeFisiTuru(vt: TxAcan, o: MalzemeFisiTurOrtami): Promise<TurSonucu> {
   return turuKos(vt, (db) => malzemeFisiHazirla(db, o));
 }
@@ -920,12 +938,30 @@ async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurS
   if ('tur' in kopru) return kopru;
   for (const f of await o.kaynak.gidecekler(db, KUYRUK_SINIRI)) {
     const g = await s.gidenSatiri(db, f.tur, f.id);
+    const durum = await s.esitlemeDurumu(db, f.tur, f.id);
+    const okunan = durum?.bekleyen ?? 0;
+    const hedef = f.fis === null ? null : malzemeFisiOzeti(f.fis);
+    const logoda = g?.logoKayitNo ?? null;
+    if (logoda !== null && hedef !== null && hedef === durum?.sonSatirOzeti) {
+      await s.esitlendi(db, f.tur, f.id, okunan, hedef);
+      continue;
+    }
+    if (logoda !== null) {
+      if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
+      return fisSilmeAdimi(o, kopru, f, g);
+    }
+    if (f.fis === null) {
+      // Niyeti yazılmış fiş Logo'da açılmış olabilir: kuyrukta kalır, kendiliğinden silinmez ya da düşmez.
+      if (g?.niyetZamani == null) await s.esitlendi(db, f.tur, f.id, okunan, null);
+      continue;
+    }
+    const fis = f.fis;
     const { anahtar, taze, eylem } = await kalkanEylemi(o, f.tur, f.id, g);
     if (eylem === 'bekle') continue;
     const bildir: Bildir<{ hata: string }> = (yazDb, x) => o.kaynak.sonuc(yazDb, f.tur, f.id, x);
     const basarisiz = (sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number): Yazici<TurSonucu> =>
       async (yazDb) => ({ tur: 'malzeme-fisi', no: f.id, sonuc: await basarisizAcma(yazDb, o, f.tur, f.id, g, bildir, sonuc, hata, niyet, bekleme) });
-    const r = malzemeFisiGovdesi(f);
+    const r = malzemeFisiGovdesi(fis);
     if ('hata' in r) return basarisiz('reddedildi', r.hata, undefined)(db);
     if (eylem === 'gonder' && !taze) return basarisiz('reddedildi', SONUCU_BILINMIYOR, undefined)(db);
     if (eylem === 'niyet-yaz') {
@@ -953,6 +989,9 @@ async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurS
             return { tur: 'malzeme-fisi', no: f.id, sonuc: 'yazilamadi' };
           }
           await s.denemeYaz(yazDb, f.tur, f.id, { zaman: simdi, sonuc: 'gonderildi', hata: null, logoKayitNo: kayitNo, niyetZamani: null, sonrakiDeneme: null, basarili: true });
+          await s.esitlendi(yazDb, f.tur, f.id, okunan, hedef);
+          // Sonuç kesin: aynı fişin sonraki eşitlemesi belirsiz bekleme süresini beklemez.
+          o.bellek.acmaIstekleri.delete(anahtar);
           return { tur: 'malzeme-fisi', no: f.id, sonuc: 'gonderildi' };
         };
       }
@@ -962,6 +1001,29 @@ async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurS
     };
   }
   return { tur: 'bos' };
+}
+
+// Silme tekrarlanabilir: fiş yoksa (404) silinmiş sayılır. Sonucu bilinmeyen silme geri çekilmeyle yeniden denenir.
+function fisSilmeAdimi(o: MalzemeFisiTurOrtami, kopru: KopruIstemcisi, f: EsitlenecekFis, g: GidenSatiri | null): KopruAdimi {
+  return async (): Promise<Yazici<TurSonucu>> => {
+    const sil = await kopru.malzemeFisiSil(f.tur, f.no);
+    const simdi = o.saat();
+    if (sil.tur === 'basarili') {
+      return async (yazDb) => {
+        await s.silindiYaz(yazDb, f.tur, f.id, simdi);
+        return { tur: 'malzeme-fisi', no: f.id, sonuc: 'silindi' };
+      };
+    }
+    const hata = kirp(`Logo'daki fiş değişiklik için silinemedi: ${sil.ileti}`);
+    return async (yazDb) => {
+      const b = await kayitNoktasi(yazDb, () => o.kaynak.sonuc(yazDb, f.tur, f.id, { hata }));
+      await s.silmeHatasiYaz(yazDb, f.tur, f.id, {
+        zaman: simdi, sonuc: sil.tur, hata: b.tamam ? hata : kirp(`${hata} ${yazilamadiMetni(b)}`),
+        sonrakiDeneme: new Date(simdi.getTime() + geriCekilmeMs((g?.ardisikHata ?? 0) + 1)),
+      });
+      return { tur: 'malzeme-fisi', no: f.id, sonuc: sil.tur };
+    };
+  };
 }
 
 /* ---------------- Birim seti listesi uçları (LB6 c, LB11 a) ---------------- */
