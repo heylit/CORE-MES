@@ -13,7 +13,7 @@ import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './modull
 import { alimDinle, kaliteAskisiCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import { rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
-import { durumRevizyonlari } from './moduller/rota/disari.ts';
+import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -60,6 +60,7 @@ export function sunucununBaglari(): Bag[] {
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
     bag('emir bitti -> sevkiyat', uretimEmirleri.emirBittiDinle, sevkiyat.emirBittiYansit),
     bag('emir bitti -> logo malzeme fişi', uretimEmirleri.emirBittiDinle, logo.emirBittiYansit),
+    bag('emir bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.emirBittiDinle, rotaEmirBittiYansit),
     bag('fason hareketi -> sevkiyat', uretimEmirleri.fasonHareketiDinle, sevkiyat.fasonHareketiYansit),
     bag('stok yok istekleri -> satın alma', stokYokCozucusu, stok.stokYokIstekleri),
     bag('iş emri tahmini maliyeti -> plan', tahminiMaliyetCozucusu, isEmriTahminiMaliyetleri),
