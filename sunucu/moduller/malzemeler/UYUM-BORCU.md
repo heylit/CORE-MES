@@ -6,7 +6,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İddia işaretleri: DO�
 Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/inceleme/borc/2026-10-17-borc-yeniden-degerlendirme.md`): kısmen kapalı maddenin kalan parçası ayrı sayılır; "KAPANDI" ve "BİLGİ NOTU" sayılmaz.
 - Dondurma sonrası (13): madde 1 (jsonb sütuna), 2 (ekran stili, lint), 4 (ekran kuralları sunucuya; ad/açıklama kalıbı dahil), 5 (belge yükleme), 7 (`unsafe-inline`), 10 B9 (kılavuz yazısı),
   Denetim madde 7 sınırları (rev notu, ham alan yolu), Çekirdek kalıpları: kart listesi sayfalama (#169) ve YM/MM/DB anahtarı, tedarik: kart birimi JSON ve dizinsiz arama, hizmet türü rengi, hizmet standart önerileri.
-- Bağlamada (5): madde 6 bilinen sınır (iç görünüm değişimi adrese yansımaz), Logo birim seti listesi (#339), birimi boş eski kartlar, tedarikçi metni eşleme, tedarikçi yabancı anahtarı.
+- Bağlamada (4): madde 6 bilinen sınır (iç görünüm değişimi adrese yansımaz), birimi boş eski kartlar, tedarikçi metni eşleme, tedarikçi yabancı anahtarı.
 - Kullanıcıda (1): madde 7 cihaz denemesi (indirme, etiket, QR/kamera, pano).
 - Bekleyen (1): Denetim "Ekran borcu" (onay akışı anahtarı bağlıyken herkese kilitli); 18.10.2026'da kullanıcıya sorulmadı, önerilen "böyle kalsın" ile bugünkü gibi kalıyor. Elle stok kodu alanı ve ret nedeni #234 madde 10 ve 18 ile kapandı (Bilinen sınırlar).
 
@@ -149,11 +149,13 @@ Bağlantı işinde (kart #232 kapsamı dışı, kullanıcı kararı 08.10.2026; 
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): Logo bağlantı işi kullanıcı açıkça isteyene kadar kapsam dışı; gerçek veri yok. Bugün aktif olan kartlar: durumu boş kaldı (LG1 = a); Logo'daki karşılıklarıyla kayıt numarası üzerinden eşlenmeleri bağlantı işinde.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): aynı kapsam kararı (LG3 = a). Pasife alınan ya da iptal edilen kartın Logo'ya ne göndereceği (LG3 = a); bu işte yalnız alanlar var.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ad güncellemesi yazıldı ve testli (`disari.ts` `logoyaGuncellemeGidecekMalzemeler`, `malzemeLogoGuncellemeSonucu`; `logo/isler.ts` `malzemeGuncelleme`; test `logo-ad-guncelleme.test.ts`, kart #783). Logo'ya gönderilmiş kartın adı ya da başka alanı sonradan (değişiklik talebiyle) değişirse Logo'daki kaydın güncellenmesi. Bugün kilitli olan yalnız stok kodu, tür ve birim (MKL-3).
-- Logo kart türü ve birim seti değerlerinin kümesi: KISMEN KAPANDI (kart #232, kullanıcı kararı LB7 a, LB2 a, LB9 a; istek kart #207 logo `BASKA-MODUL-ISTEKLERI.md`).
+- Logo kart türü ve birim seti değerlerinin kümesi: KAPANDI (kart #232, kullanıcı kararı LB7 a, LB2 a, LB9 a, 144 a; istek kart #207 logo `BASKA-MODUL-ISTEKLERI.md`).
   Tür karşılığı yalnız `10` hammadde, `11` yarı mamul, `12` mamul, `13` tüketim malı; demirbaş (Logo `4`) gönderilmez, karşılığı boş kalır. Birim karşılığı boşluksuz kod.
   Hem uçta (422/400) hem veritabanında (kısıt `malzeme_logo_karsiligi_izinli`, göç `20261008164500_*`; bozan satır varsa göç sayı ve listeyle durur, veri değişmez).
-  Açık (#339'a bağlı): birim karşılığının Logo modülünün birim seti listesinden seçilmesi ve listede olmayan kayıtlı değerde "geçersiz" rozeti; sunucu yalnız biçime bakar
-  (bağımlılık yönü logo -> malzemeler, ADR 0006). Uymayan kartı gönderimde Logo modülü "hata: geçersiz karşılık" yapar (LB9 a).
+  KAPANDI (144 a, 23.10.2026): birim karşılığı Logo gönderimi sayfasında `GET /logo/birim-setleri` listesinin geçerli kodlarından seçilir; listede olmayan kayıtlı değer
+  tabloda "Geçersiz" rozetiyle görünür, pencerede "(listede yok)" seçeneği olarak korunur. Aynı sayfadaki "Logo birim setleri" kartı listeyi gösterir; `logo.birim-seti-yaz` olan
+  elle ekler ve elle ekleneni kaldırır (LB11 a). Tablo `logo_birim_seti` Logo modülünde kalır (Logo'nun listesinin aynası); birim kavramının ve karşılığın sahibi malzemeler.
+  Test `LogoGonderimi.test.tsx`. Sunucu yalnız biçime bakar (bağımlılık yönü logo -> malzemeler, ADR 0006); uymayan kartı gönderimde Logo modülü "hata: geçersiz karşılık" yapar (LB9 a).
 5. Stok kodu kuralları (kart #230). KULLANICI KARARI (07.10.2026, #227 madde 10, 11, 25): kodu her zaman sunucu verir (önek + sıra); aktif olunca kod ve tür kilitlenir; en çok 24 karakter.
    VARSAYIM (şef önerisiyle ilerledi, kart #230): (a) KAPANDI (borç azaltma 18.10.2026, tekrar): "Bilinen sınırlar" bölümündeki elle stok kodu maddesiyle aynı iş, orada izlenir. Elle kod alanı ekranda duruyor; yazılan kodun yalnız geçerli öneki kullanılır, sayı yok sayılır; alanın kalkması ekran isteği #234 madde 10.
    (b) KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kod yapısı seçimi gömülü modda kilitli (`katalog.html` `name="kodYapisi"` radyosu `|| kilit ? 'disabled'`, `kilit` `onayAyarKilit`'ten). Kabul edilen önek tam olarak ekranın standart yapısıdır (`katalog.html` `kodOnek`, `KOD_DESEN`): `(HM|YM|MM|SF|DB)-[A-Z0-9]{3}-`; tür kısmı kartın türüyle aynı olmalı; serbest önek 400. Ekranın teknik kod yapısı (`kodYapisi: 'teknik'`, ör. `MET-PAS-316L-...`) bu desene uymaz ve reddedilir
