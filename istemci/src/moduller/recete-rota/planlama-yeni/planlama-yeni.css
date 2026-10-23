@@ -1,0 +1,13 @@
+/* Planlama TS ekranı iskeleti (tc-py-). Görünümler kendi önekleriyle gelir (PARCA-SOZLESMESI); ortak çizelge tc-pyc-. Ekran ikinci menünün
+   yanındaki alanı doldurur; kaydırma görünüm alanındadır, şerit üstte sabit kalır. */
+.tc-py { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--bg); }
+.tc-py-ust {
+  display: flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-x: auto;
+  padding: var(--b-2) var(--b-4); border-bottom: var(--cizgi-ince) solid var(--edge); background: var(--panel);
+}
+.tc-py-gorunum { min-height: 0; min-width: 0; overflow: auto; }
+.tc-py-durum { padding: var(--b-5); }
+.tc-py-yer { padding: var(--b-5); }
+@media (max-width: 767px) {
+  .tc-py-ust { padding: var(--b-2); }
+}
