@@ -416,6 +416,26 @@ export interface TeklifDenemeSonucu {
   kalemler: TeklifKalemiSonucu[];
   kayan: Array<{ siparis: string; emirNo: string | null; once: string; sonra: string; termin: string | null }>;
   taslakYerlesimi: Array<{ taslakId: string; kalem: number; adim: string; makineId: string; baslangic: string }>;
+  // Plan şeridi: pencere planın şimdisinden max(termin, geçerlilik) + 2 günün sonuna; termin istenen termin, yoksa kalemlerin en geç plan
+  // termini. Pencere kurulamazsa null.
+  plan: TeklifPlani | null;
+}
+export interface TeklifPlani {
+  baslangic: string;
+  bitis: string;
+  kapaliGunler: string[];
+  hatlar: Array<{ makineId: string; ad: string; fason: boolean }>;
+  bloklar: Array<{
+    makineId: string;
+    tur: 'siparis' | 'satis-taslagi' | 'teklif';
+    is: string;
+    emirNo: string | null;
+    kalem: number | null;
+    adim: string;
+    baslangic: string;
+    bitis: string;
+    gecikir: boolean;
+  }>;
 }
 
 const fasonMu = (m: string): boolean => m.startsWith('@');
@@ -438,7 +458,7 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
     calisma, kayit, kaynak, bugun,
     kalemler: g.kalemler.map((k, i) => ({ id: `TK-${String(i + 1)}`, urun: String(k.malzemeNo), adet: k.adet })),
     termin: g.istenenTermin === null ? null : `${g.istenenTermin} 23:00`,
-    taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await planAyariOku(db)).tamponGun,
+    taslaklar, haric: g.taslakId, tamponGun: g.tamponGun ?? (await planAyariOku(db)).tamponGun, gecerlilik: g.gecerlilik,
   });
   if (r === null) return null;
   const an = (h: number): string => planAni(r.baslangic, h);
@@ -464,5 +484,15 @@ export async function teklifDene(db: Db, kullanici: Kullanici, g: TeklifDenemeGi
       const nokta = id.lastIndexOf('.'); const kalemId = id.slice(0, nokta); const tire = kalemId.lastIndexOf('-');
       return { taslakId: kalemId.slice(0, tire), kalem: Number(kalemId.slice(tire + 1)), adim: id.slice(nokta + 1), makineId: makine(y.m), baslangic: an(y.S) };
     }),
+    plan: r.plan === null ? null : {
+      baslangic: an(r.plan.bas),
+      bitis: an(r.plan.bit),
+      kapaliGunler: r.plan.kapaliGunler,
+      hatlar: r.plan.hatlar.map((h) => ({ makineId: makine(h.m), ad: h.ad, fason: h.fason })),
+      bloklar: r.plan.bloklar.map((b) => ({
+        makineId: makine(b.m), tur: b.tur, is: b.is, emirNo: b.tur === 'siparis' ? emirNo.get(b.is) ?? null : null, kalem: b.kalem,
+        adim: b.adim, baslangic: an(b.S), bitis: an(b.C), gecikir: b.gecikir,
+      })),
+    },
   };
 }
