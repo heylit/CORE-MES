@@ -5,10 +5,10 @@ import type { SenaryoBaglami } from '../senaryo.ts';
 import type { Hesap } from '../../hesaplar.ts';
 
 // S3, akış D: firma, teklif, sipariş, satış faturası ve masraf, tahsilat ve ödeme, rapor okuma.
-// Robotun oturum açtığı hesaplarda satış ve muhasebe yok (hesaplar.ts); satış ve finans adımlarını yönetici atar,
-// sipariş onayı ve eşiği aşan iskonto müdürdedir. Rol ayrımı yetki taramasında (S5) sınanır.
-export const SATIS: Hesap = 'ornek.yonetici';
-export const FINANS: Hesap = 'ornek.yonetici';
+// Her adım işi yapan rolle atılır: teklif ve sipariş satış, firma ve para kaydı muhasebe; sipariş onayı ve eşiği aşan iskonto
+// müdür. Satış rolü firma yazamaz (yalnız musteri-tedarikci.oku), firmayı muhasebe açar.
+export const SATIS: Hesap = 'ornek.satis';
+export const FINANS: Hesap = 'ornek.muhasebe';
 export const MUDUR: Hesap = 'ornek.mudur';
 
 // Eşiği aşan iskonto müdür onayına düşer (siparisler sözleşmesi ISKONTO_ONAY_ESIGI = 10).
@@ -150,9 +150,9 @@ async function ortakVeri(b: SenaryoBaglami, bugun: string): Promise<Ortak | null
 
 async function firmaAc(b: SenaryoBaglami, tur: 'musteri' | 'tedarikci'): Promise<number | null> {
   const ad = tur === 'musteri' ? 'müşteri aç' : 'tedarikçi aç';
-  const c = await b.bekle(SATIS, ad, 'POST', `${API}/musteri-tedarikci/firmalar/ekle`, 200, firmaGovdesi(b.rastgele, tur));
+  const c = await b.bekle(FINANS, ad, 'POST', `${API}/musteri-tedarikci/firmalar/ekle`, 200, firmaGovdesi(b.rastgele, tur));
   if (c === null) return null;
-  return alanGerekli(b, SATIS, `${ad}: kimlik`, sayiAl(kayit(c)['firma'], 'id'), 'cevapta firma.id yok');
+  return alanGerekli(b, FINANS, `${ad}: kimlik`, sayiAl(kayit(c)['firma'], 'id'), 'cevapta firma.id yok');
 }
 
 // Teklif -> sürüm -> (gerekirse müdür iskonto onayı) -> kabul -> sipariş -> müdür onayı. Reddedilen teklif yolu da koşar.
@@ -245,7 +245,7 @@ async function rapor(b: SenaryoBaglami): Promise<void> {
 
 export default senaryo({
   ad: 'finans',
-  roller: [SATIS, MUDUR],
+  roller: [SATIS, FINANS, MUDUR],
   kopya: 2,
   async kos(b) {
     const o = await ortakVeri(b, tesisGunu(Date.now()));
