@@ -14,10 +14,13 @@ type Govde = Record<string, unknown>;
 
 // Soru 228 a (23.10.2026): uygulamanın "Arşive al" komutu kapanmış, sonuçlanmış ve onaylı kaydı yalnız `arsiv` bayrağıyla yeniden
 // yazar. Kilit içeriği korur, arşivlemeyi engellemez; arşivlemeyi yalnız yönetici yapar.
+// Soru 229 a (23.10.2026): uygulamanın ekranda rol seviyesiyle sınırladığı işler sunucuda var olan işlemlerle denetlenir: silme ve
+// arşiv yönetici (uygulamada Kalite yöneticisi), tedarikçi ve form şablonu `kalite-merkezi.onayla` (Kalite mühendisi), ayar yönetici.
+// Soru 260 a: belge, bayrak ve şablon silme `kalite-merkezi.onayla` ile de yapılır.
 describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
-  const c = { yon: '', kal: '' };
+  const c = { yon: '', kal: '', mua: '' };
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam.vt;
@@ -80,6 +83,10 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
     const yon = await girisYap('kma-yon', null, null);
     c.yon = yon.cerez;
     c.kal = (await girisYap('kma-kalite', 'kalite', yon.id)).cerez;
+    // Yalnız okuyup yazan kişi (uygulamada Muayeneci): hiçbir rolde bu ikili tek başına yok, ek işlemle verilir.
+    const mua = await girisYap('kma-muayeneci', 'operator', yon.id);
+    await vt().sorgu("INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, 'kalite-merkezi.oku', $2), ($1, 'kalite-merkezi.yaz', $2)", [mua.id, yon.id]);
+    c.mua = mua.cerez;
   });
   after(async () => {
     await app?.close();
@@ -109,6 +116,71 @@ describe('Kalite Merkezi arşiv ve yetki (gerçek PostgreSQL, gerçek giriş)', 
     for (const [koleksiyon, kimlik, govde, surum] of await kilitliKayitlar('a3')) {
       await ret(403, c.kal, `${koleksiyon}/${kimlik}/yaz`, { govde: { ...govde, arsiv: true }, surum });
       assert.deepEqual(await kayit(koleksiyon, kimlik), { govde, surum }, koleksiyon);
+    }
+  });
+
+  test('Soru 229 a silme: yalnız yönetici siler; onay yetkili kalite personeli ve yalnız yazan 403 alır, kayıt yerinde kalır', async () => {
+    const kayitlar: [string, string, Govde][] = [
+      ['ncr', 's_ncr', { no: 'S-NCR', durum: 'Açık' }], ['insp', 's_insp', { no: 'S-MUA', sonuc: 'Beklemede' }],
+      ['cizim', 's_cizim', { parcaNo: 'DENEME-1' }], ['sup', 's_sup', { kod: 'TED-S', ad: 'Deneme tedarikçi' }],
+    ];
+    for (const [koleksiyon, kimlik, govde] of kayitlar) {
+      const { surum } = await tamam(c.yon, `${koleksiyon}/${kimlik}/yaz`, { govde, surum: null });
+      await ret(403, c.kal, `${koleksiyon}/${kimlik}/sil`, { surum });
+      await ret(403, c.mua, `${koleksiyon}/${kimlik}/sil`, { surum });
+      assert.deepEqual(await kayit(koleksiyon, kimlik), { govde, surum }, koleksiyon);
+      await tamam(c.yon, `${koleksiyon}/${kimlik}/sil`, { surum });
+      assert.equal((await kayit(koleksiyon, kimlik))?.govde ?? null, null, koleksiyon);
+    }
+  });
+
+  test('Soru 260 a silme: belge, Teknik kütüphane bayrağı ve form şablonunu onay yetkili kalite personeli ve yönetici siler; yalnız yazan 403', async () => {
+    const kayitlar: [string, Govde][] = [['belge', { ad: 'sertifika.pdf' }], ['bayrak', { yazi: 'K' }], ['tpl', { kod: 'KF-30', rev: '00', dsl: '# Genel' }]];
+    for (const [koleksiyon, govde] of kayitlar) {
+      for (const [silen, kimlik] of [[c.kal, `o_${koleksiyon}_k`], [c.yon, `o_${koleksiyon}_y`]] as const) {
+        const { surum } = await tamam(c.yon, `${koleksiyon}/${kimlik}/yaz`, { govde, surum: null });
+        await ret(403, c.mua, `${koleksiyon}/${kimlik}/sil`, { surum });
+        assert.deepEqual(await kayit(koleksiyon, kimlik), { govde, surum }, koleksiyon);
+        await tamam(silen, `${koleksiyon}/${kimlik}/sil`, { surum });
+        assert.equal((await kayit(koleksiyon, kimlik))?.govde ?? null, null, kimlik);
+      }
+    }
+  });
+
+  test('Soru 229 a arşiv: açık kayıtta da arşiv bayrağını yalnız yönetici değiştirir; arşivli kaydın içeriği bayrağa dokunmadan yazılır', async () => {
+    const emir = { no: 'IE-1', durum: 'Kapalı', termin: '2024-01-01' };
+    const ilk = await tamam(c.kal, 'emir/r_emir/yaz', { govde: emir, surum: null });
+    await ret(403, c.kal, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: true }, surum: ilk.surum });
+    await ret(403, c.mua, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: true }, surum: ilk.surum });
+    await ret(403, c.kal, 'insp/r_yeni/yaz', { govde: { no: 'MUA-R', sonuc: 'Beklemede', arsiv: true }, surum: null });
+    assert.deepEqual(await kayit('emir', 'r_emir'), { govde: emir, surum: ilk.surum });
+    assert.equal(await kayit('insp', 'r_yeni'), null);
+    const arsivli = await tamam(c.yon, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: true }, surum: ilk.surum });
+    const duzeltildi = await tamam(c.mua, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: true, not: 'ek' }, surum: arsivli.surum });
+    await ret(403, c.kal, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: false, not: 'ek' }, surum: duzeltildi.surum });
+    await ret(403, c.kal, 'emir/r_emir/yaz', { govde: { ...emir, not: 'ek' }, surum: duzeltildi.surum });
+    assert.deepEqual(await kayit('emir', 'r_emir'), { govde: { ...emir, arsiv: true, not: 'ek' }, surum: duzeltildi.surum });
+    await tamam(c.yon, 'emir/r_emir/yaz', { govde: { ...emir, arsiv: false, not: 'ek' }, surum: duzeltildi.surum });
+  });
+
+  test('Soru 229 a kaynak: tedarikçi ve form şablonu yazmak onay işlemini ister; yalnız yazan 403, onay yetkili kalite ve yönetici yazar', async () => {
+    for (const [koleksiyon, govde] of [['sup', { kod: 'TED-K', ad: 'Deneme tedarikçi' }], ['tpl', { kod: 'KF-31', rev: '00', dsl: '# Genel' }]] as const) {
+      await ret(403, c.mua, `${koleksiyon}/k_${koleksiyon}/yaz`, { govde, surum: null });
+      assert.equal(await kayit(koleksiyon, `k_${koleksiyon}`), null, koleksiyon);
+      const ilk = await tamam(c.kal, `${koleksiyon}/k_${koleksiyon}/yaz`, { govde, surum: null });
+      await ret(403, c.mua, `${koleksiyon}/k_${koleksiyon}/yaz`, { govde: { ...govde, not: 'ek' }, surum: ilk.surum });
+      const ikinci = await tamam(c.yon, `${koleksiyon}/k_${koleksiyon}/yaz`, { govde: { ...govde, not: 'ek' }, surum: ilk.surum });
+      assert.deepEqual(await kayit(koleksiyon, `k_${koleksiyon}`), { govde: { ...govde, not: 'ek' }, surum: ikinci.surum }, koleksiyon);
+    }
+    // Öteki kayıtlar yazma işlemiyle kalır: yalnız yazan uygunsuzluk, muayene ve parça yazar.
+    for (const koleksiyon of ['ncr', 'insp', 'parca']) await tamam(c.mua, `${koleksiyon}/k_${koleksiyon}/yaz`, { govde: { no: 'K-1' }, surum: null });
+  });
+
+  test('Soru 229 a ayar: ayar ve kullanıcı kaydını yalnız yönetici yazar; kalite personeli 403', async () => {
+    for (const koleksiyon of ['settings', 'kullanici']) {
+      await ret(403, c.kal, `${koleksiyon}/y_${koleksiyon}/yaz`, { govde: { firma: 'Deneme' }, surum: null });
+      await ret(403, c.mua, `${koleksiyon}/y_${koleksiyon}/yaz`, { govde: { firma: 'Deneme' }, surum: null });
+      await tamam(c.yon, `${koleksiyon}/y_${koleksiyon}/yaz`, { govde: { firma: 'Deneme' }, surum: null });
     }
   });
 });

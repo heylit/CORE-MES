@@ -115,10 +115,10 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const yeni = await akis(c.kal, ikinci.surum);
     assert.deepEqual(yeni.degisiklikler, [{ koleksiyon: 'dev', kimlik: 'd_a1', govde: { kod: 'CHZ-1' }, surum: baska.surum }]);
     assert.equal(yeni.surum, baska.surum);
-    const silindi = await sil(c.kal, 'dev', 'd_a1', baska.surum);
+    const silindi = await sil(c.yon, 'dev', 'd_a1', baska.surum);
     assert.deepEqual((await akis(c.kal, baska.surum)).degisiklikler, [{ koleksiyon: 'dev', kimlik: 'd_a1', govde: null, surum: silindi.surum }]);
     // Olmayan kaydı silmek satır açmaz, akışı değiştirmez.
-    const bos = await sil(c.kal, 'dev', 'olmayan', null);
+    const bos = await sil(c.yon, 'dev', 'olmayan', null);
     assert.equal(bos.surum, silindi.surum);
     assert.deepEqual((await akis(c.kal, silindi.surum)).degisiklikler, []);
     assert.equal((await akis(c.kal, silindi.surum)).surum, silindi.surum);
@@ -139,12 +139,12 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const r = await istek(c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/ncr_s1/yaz', { govde: { no: 'x' }, surum: ilk.surum });
     assert.match((r.json() as { mesaj: string }).mesaj, /siz açtıktan sonra değiştirildi/);
     // Silinen kayda eski sürümle yazılamaz; silindiği bilinerek (null) yeniden açılabilir.
-    const silindi = await sil(c.kal, 'ncr', 'ncr_s1', birinci.surum);
+    const silindi = await sil(c.yon, 'ncr', 'ncr_s1', birinci.surum);
     await ret(409, 'CAKISMA', c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/ncr_s1/yaz', { govde: { no: 'eski' }, surum: birinci.surum });
     const yeniden = await yaz(c.yon, 'ncr', 'ncr_s1', { no: 'NCR-S1', durum: 'Açık' });
     assert.ok(yeniden.surum > silindi.surum);
     await ret(404, 'BULUNAMADI', c.kal, 'POST', '/kalite-merkezi/kayitlar/ncr/hic_yok/yaz', { govde: { no: 'x' }, surum: ilk.surum });
-    await ret(404, 'BULUNAMADI', c.kal, 'POST', '/kalite-merkezi/kayitlar/ncr/hic_yok/sil', { surum: ilk.surum });
+    await ret(404, 'BULUNAMADI', c.yon, 'POST', '/kalite-merkezi/kayitlar/ncr/hic_yok/sil', { surum: ilk.surum });
   });
 
   test('beklenen sürüm, eşzamanlı: aynı sürümle 6 yazmadan yalnız biri geçer, ötekiler 409', async () => {
@@ -266,7 +266,7 @@ describe('Kalite Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     await yaz(c.kal, 'ncr', 'ncr_oz3', { no: 'NCR-OZ3' });
     await onayla(c.yon, 'ncr', 'ncr_oz4', { no: 'NCR-OZ4', durum: 'Kapalı' });
     const oz5 = await yaz(c.kal, 'ncr', 'ncr_oz5', { no: 'NCR-OZ5', durum: 'Açık' });
-    await sil(c.kal, 'ncr', 'ncr_oz5', oz5.surum);
+    await sil(c.yon, 'ncr', 'ncr_oz5', oz5.surum);
     await yaz(c.kal, 'capa', 'capa_oz1', { no: 'DOF-OZ1', durum: 'Açık' });
     const sonra = await tamam<KmOzetCevabi>(c.mud, 'GET', '/kalite-merkezi/ozet');
     assert.equal(sonra.acikUygunsuzluk - once, 3);
