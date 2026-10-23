@@ -18,7 +18,9 @@ export interface SaglamSayimOlayi {
   refakatPartisiId: number | null;
 }
 
-export type SaglamSayimDinleyicisi = (db: Db, olay: SaglamSayimOlayi) => Promise<void>;
+// Dinleyici sayımı reddetmeden operatörü yönlendirebilir (kart #157): dönen uyarı sayım cevabına başlat cevabındaki gibi tek
+// metin olarak eklenir. Uyarı sayımı durdurmaz; durdurması gereken dinleyici reddeder.
+export type SaglamSayimDinleyicisi = (db: Db, olay: SaglamSayimOlayi) => Promise<{ uyari: string | null } | void>;
 
 const dinleyiciler: SaglamSayimDinleyicisi[] = [];
 
@@ -33,9 +35,14 @@ export function saglamSayimDinle(dinleyici: SaglamSayimDinleyicisi): () => void 
 
 export async function saglamSayimiBildir(
   db: Db, olay: Omit<SaglamSayimOlayi, 'fark' | 'kaliteDurumu'> & { fark: number; kaliteDurumu?: SaglamSayimOlayi['kaliteDurumu'] },
-): Promise<void> {
-  if (olay.fark === 0) return;
-  for (const d of [...dinleyiciler]) await d(db, { ...olay, fark: String(olay.fark), kaliteDurumu: olay.kaliteDurumu ?? 'serbest' });
+): Promise<string | null> {
+  if (olay.fark === 0) return null;
+  const uyarilar: string[] = [];
+  for (const d of [...dinleyiciler]) {
+    const sonuc = await d(db, { ...olay, fark: String(olay.fark), kaliteDurumu: olay.kaliteDurumu ?? 'serbest' });
+    if (sonuc?.uyari) uyarilar.push(sonuc.uyari);
+  }
+  return uyarilar.length === 0 ? null : uyarilar.join(' ');
 }
 
 // Hurda sayım olayı: girilen ya da geri alınan hurda, sayımla aynı işlemde dinleyicilere verilir (stok, hurdaya giden parçanın

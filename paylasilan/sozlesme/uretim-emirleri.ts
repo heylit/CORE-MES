@@ -209,6 +209,8 @@ export const emirAyrintiCevabi = z.object({
 export const emirCevabi = z.object({ emir: emirSemasi });
 // Başlatma uyarısı (karar 110 b): girdi istasyonda yokken iş başlar, metin terminalde gösterilir; uyarı yoksa null.
 export const emirBaslatCevabi = z.object({ emir: emirSemasi, uyari: z.string().nullable() });
+// Sayım reddedilmeden yönlendiren uyarı (kart #157), başlat cevabıyla aynı biçimde; uyarı yoksa null.
+export const sayimCevabi = z.object({ emir: emirSemasi, uyari: z.string().nullable() });
 export const adimCevabi = z.object({ emir: emirSemasi, adimlar: z.array(adimSemasi) });
 // Ana sayfa sayıları. Sayım sıfır olabilir, gerçektir. null: planlanacak ve açık için kişinin iş emirli listeyi okuma yetkisi
 // yok; bugün için kişinin bugün sağlam sayımı yok (sıfır uydurulmaz). Gün tesis günüdür.
@@ -302,6 +304,7 @@ export type BitenEmirlerSorgusu = z.input<typeof bitenEmirlerSorgusu>;
 export type EmirAyrintiCevabi = z.output<typeof emirAyrintiCevabi>;
 export type EmirCevabi = z.output<typeof emirCevabi>;
 export type EmirBaslatCevabi = z.output<typeof emirBaslatCevabi>;
+export type SayimCevabi = z.output<typeof sayimCevabi>;
 export type AdimCevabi = z.output<typeof adimCevabi>;
 
 /* ---------------- iş emirli üretim emri (K1, K3; kart #262) ---------------- */
