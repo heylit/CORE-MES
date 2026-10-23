@@ -20,7 +20,7 @@
 - Ctrl K ortak palette (kart #137, karar 102 a): çerçevede basılan Ctrl K uygulamanın aramasına ulaşmadan kabuğa gider (`acilis.ts`, yakalama evresi; paket değişmedi). Paletin "Bu sayfa" grubunda "İK'da ara" komutu uygulamanın aramasını açar. Kalan: uygulama arama sonuçlarını ve düz Türkçe komutlarını dışa vermiyor (paket derlenmiş, `api`'de arama yok); ortak palete öneri olarak (kural 8) geçmesi için İK'nın sonraki tesliminde `api` arama işlevi istenir. O zamana kadar uygulamanın araması Ara düğmesi ve `/` ile yerinde; düğmedeki "Ara (Ctrl+K)" ipucu paket metnidir.
 
 ## Ekranda kalan kurallar (sunucu denetlemez)
-- İzin günü sayımı (tatil ve hafta sonu; sunucu yalnız 0 < gün <= takvim günü sınırını denetler, IK-52), yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;
+- İzin günü sayımı sunucuda da var (GÜNCELLENDİ 23.10.2026, DOĞRULANDI `servis.ts` `izinIsGunuSay` ve `izinIsGunuDenetle`, `GET /ik/izin-gunu`; Soru 55 ve 74): iş günü kişinin Vardiya takviminden sayılır, takvim yoksa yalnız hafta sonu düşer. Ekranda kalanlar: yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;
   yapılacaklar listesi; akıllı arama; ilan metni ve uygunluk kontrolü; Excel aktarımında T.C. kimlik ve IBAN doğrulaması;
   yaka ve kademe önerisi; işe alım aşamaları ve puanlama; performans ortalaması; eğitim takibi. Zimmet 244 a ile İdari İşler'e geçti (#1943, #1963).
 - Sunucu bu kayıtlarda yalnız zorunlu alanları (IK-4), bağlı kaydın varlığını, sürümü ve yetkiyi denetler.
