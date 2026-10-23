@@ -1,7 +1,7 @@
 // Arkon'dan emir açılmaz (A5, kart #541): paket TMI'de açılan emrin (`tmi-ue`) ya da iş emrinin (`tmi-ie`) paketidir. "Yeni paket" TMI'nin
 // emir açma sayfasına götürür; emir açılınca paketi Hazırlık'ta taslak olarak görünür. Sunucu emir dışı yeni paketi zaten reddeder.
-// 'plan': canlı plan ekranı (kart #1257, Hazırlık'ın plan dışı gönderim penceresi).
-export type TmiHedefi = 'emir-ac' | 'plan';
+// 'plan': canlı plan ekranı (kart #1257, Hazırlık'ın plan dışı gönderim penceresi). 'istasyonlar': tesis (iş merkezi, istasyon, makine) TMI'dedir.
+export type TmiHedefi = 'emir-ac' | 'plan' | 'istasyonlar';
 
 // TMI köprüsü (istemci/src/moduller/arkon/baglanti.ts `bagla`) Arkon penceresine `__tmiGit` koyar; köprü yoksa (TMI dışında) false.
 export function tmiyeGit(hedef: TmiHedefi, pencere: Window = window): boolean {
