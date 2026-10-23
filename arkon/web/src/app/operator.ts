@@ -17,10 +17,10 @@ import { ILETI_GITMEDI } from '../data/gonderim-hatasi';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/numune';
 import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
-import { refakatIsi, refakatKodu } from '../data/refakat-okut';
+import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
 import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
 import { CALLS, Fragment, I, ORDERS, REASONS, ST, dur, fmt, html, isPlannedReason, pl, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
-import { Dial, Orbs, Queue, Top } from './bilesenler';
+import { Dial, EtkinKart, Orbs, Queue, Top } from './bilesenler';
 import { FEAT, LS } from './yukleyici';
 import { elleNumuneOlculeri } from '../data/kontrol-plani';
 import { APPMODE, ME, MEU, POLICY, ROLE_L, allowed, can, currentShift, downNow, isStationTablet, machineOf, myStation, stationList } from './ortak-ayarlar';
@@ -36,7 +36,7 @@ import { NumuneOv } from './bakim-raporlar';
 import { Brand, useMob, useTheme } from './baslat';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../data/baslatma-uyarisi';
 import { Ozetim, ozetimGorunur } from './ozetim';
-import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi } from '../data/emir-secimi';
+import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi, kartSeciminiAl } from '../data/emir-secimi';
 import type { EmirSecimiPenceresi } from '../data/emir-secimi';
 
 /* ── app ── */
@@ -97,8 +97,8 @@ export function App({ preview }) {
       const i = out.findIndex(x => (x.pkg && x.pkg.id === p.id) || (!x.pkg && x.no === p.no));
       const base = { no: p.no, part: p.part, op: p.op, due: p.due || '—', urgent: p.priority === 'urgent', target: p.target, cycle: p.cycle, pkg: p };
       const r = !preview && rs && rs[p.id];
-      if (i >= 0) { const prev = out[i]; out[i] = Object.assign({}, prev, base, { fresh: preview ? false : prev.pkg ? (prev.pkg.version !== p.version || prev.fresh) : true, baseGood: prev.pkg ? prev.baseGood : prev.good }, r && !prev.pkg ? { state: r.state || prev.state, good: r.good, scrap: r.scrap, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? r.good, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {} } : null, r && prev.pkg ? { pins: r.pins || prev.pins || [] } : null); }
-      else out = [Object.assign({ state: 'queued', good: 0, scrap: 0, meas: {}, pins: [], fresh: !r && !preview, baseGood: 0 }, r ? { state: r.state || 'queued', good: r.good || 0, scrap: r.scrap || 0, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? 0, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {} } : null, base), ...out];
+      if (i >= 0) { const prev = out[i]; out[i] = Object.assign({}, prev, base, { fresh: preview ? false : prev.pkg ? (prev.pkg.version !== p.version || prev.fresh) : true, baseGood: prev.pkg ? prev.baseGood : prev.good }, r && !prev.pkg ? { state: r.state || prev.state, good: r.good, scrap: r.scrap, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? r.good, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {}, kart: r.kart ?? null } : null, r && prev.pkg ? { pins: r.pins || prev.pins || [] } : null); }
+      else out = [Object.assign({ state: 'queued', good: 0, scrap: 0, meas: {}, pins: [], fresh: !r && !preview, baseGood: 0 }, r ? { state: r.state || 'queued', good: r.good || 0, scrap: r.scrap || 0, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? 0, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {}, kart: r.kart ?? null } : null, base), ...out];
     }
     // TMI'de biten emrin işi terminalde de biter (kart #1194): sayaç kapanır, iş biten işlere geçer.
     out = out.map(x => tmiBitti(x.pkg) && x.state !== 'done' ? Object.assign({}, x, { state: 'done' }) : x);
@@ -147,8 +147,8 @@ export function App({ preview }) {
     }
   };
   const saveT = useRef(anahtarliErteleyici());
-  const saveResult = (x, ping?) => { if (preview || !x || !x.pkg || !isStationTablet()) return; saveT.current(x.pkg.id, async () => { await AKStore.DB.put('results', { id: x.pkg.id, no: x.no, rev: x.pkg.rev, version: x.pkg.version, state: x.state, good: x.good, scrap: x.scrap, baseGood: x.baseGood, meas: x.meas || {}, pins: x.pins || [], acks: x.acks || {}, toolsAt: x.toolsAt || {}, sr: x.sr || {}, at: Date.now() }); AKStore.Bus.send({ type: ping || 'progress', id: x.pkg.id, no: x.no }); }, ping ? 50 : 1500); };
-  useEffect(() => { saveResult(o); }, [o && o.good, o && o.scrap, o && o.state, o && o.acks, o && o.toolsAt, o && o.sr]);
+  const saveResult = (x, ping?) => { if (preview || !x || !x.pkg || !isStationTablet()) return; saveT.current(x.pkg.id, async () => { await AKStore.DB.put('results', { id: x.pkg.id, no: x.no, rev: x.pkg.rev, version: x.pkg.version, state: x.state, good: x.good, scrap: x.scrap, baseGood: x.baseGood, meas: x.meas || {}, pins: x.pins || [], acks: x.acks || {}, toolsAt: x.toolsAt || {}, sr: x.sr || {}, kart: x.kart ?? null, at: Date.now() }); AKStore.Bus.send({ type: ping || 'progress', id: x.pkg.id, no: x.no }); }, ping ? 50 : 1500); };
+  useEffect(() => { saveResult(o); }, [o && o.good, o && o.scrap, o && o.state, o && o.acks, o && o.toolsAt, o && o.sr, o && o.kart]);
   /* iş değiştirme: çalışan eski iş duraklatılır ve olayı yeni işin olaylarından önce gönderilir (is-gecisi.ts) */
   const isGec = (i: number) => {
     const duraklat = gecisteDuraklatilacaklar(orders, i);
@@ -162,9 +162,23 @@ export function App({ preview }) {
   };
 
   // Ctrl K'den gelen emir: listede varsa seçilir; çalışan başka iş varsa duraklatılmaz, seçim yapılmaz ve operatöre söylenir.
+  // Malzeme Teslim'in "İş emrini aç"ı kartla gelir (kart #156): emrin bu istasyondaki bitmemiş işi o kartla açılır; işi yoksa sıradaki adım söylenir.
   const emirIstegi = useRef<number | null>(null);
+  const kartIstegi = useRef<number | null>(null);
   const emirSec = () => {
     const id = emirIstegi.current; if (id === null || preview) return;
+    const kart = kartIstegi.current;
+    if (kart !== null) {
+      const r = refakatIsi(id, orders, Object.values<any>(pkgsRef.current || {}));
+      if (r.tur !== 'ac' && !orders.some(x => x.pkg)) return;
+      emirIstegi.current = null; kartIstegi.current = null;
+      if (r.tur !== 'ac') { beep('nok'); say('Bu emrin bu istasyonda işi yok' + (r.tur === 'baska-istasyon' && r.istasyon ? ', sıradaki adım: ' + r.istasyon : ''), 'alert', 'var(--stop)'); return; }
+      if (r.sira !== ai && o.state === 'running') { say('Çalışan iş var · ' + orders[r.sira].no + ' için önce bu işi duraklat', 'alert', 'var(--hazard)'); return; }
+      setAi(r.sira); setMv('prod');
+      setOrders(l => l.map((x, j) => j === r.sira ? Object.assign({}, x, { kart, fresh: false }) : x));
+      say('İş emri açıldı: ' + orders[r.sira].no + ' · refakat kartıyla', 'check', 'var(--run)');
+      return;
+    }
     const i = emirSirasi(orders, id); if (i < 0) { if (orders.some(x => x.pkg)) emirIstegi.current = null; return; }
     emirIstegi.current = null;
     if (i === ai) return;
@@ -172,8 +186,26 @@ export function App({ preview }) {
     setAi(i);
   };
   const emirSecRef = useRef(emirSec); emirSecRef.current = emirSec;
-  useEffect(() => { const al = () => { const id = emirSeciminiAl(window as EmirSecimiPenceresi); if (id !== null) { emirIstegi.current = id; emirSecRef.current(); } }; al(); window.addEventListener(EMIR_SEC_OLAYI, al); return () => window.removeEventListener(EMIR_SEC_OLAYI, al); }, []);
+  useEffect(() => { const al = () => { const id = emirSeciminiAl(window as EmirSecimiPenceresi), kart = kartSeciminiAl(window as EmirSecimiPenceresi); if (id !== null) { emirIstegi.current = id; kartIstegi.current = kart; emirSecRef.current(); } }; al(); window.addEventListener(EMIR_SEC_OLAYI, al); return () => window.removeEventListener(EMIR_SEC_OLAYI, al); }, []);
   useEffect(() => { emirSec(); }, [orders]);
+  /* refakat kartları (kart #156): bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
+  const [kartlar, setKartlar] = useState<RefakatKarti[]>([]);
+  const kartAnahtari = preview || APPMODE.demo ? '' : kartEmirleri(orders.map(x => ({ state: x.state, emirId: tmiEmirId(x.pkg) }))).join(',');
+  useEffect(() => {
+    if (!kartAnahtari) { setKartlar([]); return; }
+    let bitti = false;
+    const oku = () => AKStore.Server.refakatKartlari(MACHINE, kartAnahtari.split(',').map(Number)).then(l => { if (!bitti) setKartlar(l); }, () => {});
+    oku();
+    const t = setInterval(oku, KART_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [kartAnahtari, MACHINE]);
+  // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
+  const kartlaAc = (i: number, k: RefakatKarti) => {
+    if (i !== ai) { isGec(i); setSince(Date.now()); }
+    setOrders(l => l.map((x, j) => j === i ? Object.assign({}, x, { kart: k.id, fresh: false }) : x));
+    setMv('prod');
+    say('İş emri açıldı: ' + orders[i].no + ' · ' + k.etiket, 'check', 'var(--run)');
+  };
 
   /* iş kuralları (hazırlıktan) */
   const RL = useMemo(() => rulesOf(o.pkg), [o.pkg]);
@@ -310,7 +342,7 @@ export function App({ preview }) {
     if (preview || o.empty || !isStationTablet()) return;
     const p = prevCnt.current; prevCnt.current = { no: o.no, good: o.good, scrap: o.scrap };
     if (!p || p.no !== o.no) return;
-    const base = { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, planMs: o.cycle > 0 ? Math.round(o.cycle * 1000) : null, state: o.state };
+    const base = Object.assign({ machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, planMs: o.cycle > 0 ? Math.round(o.cycle * 1000) : null, state: o.state }, sayimKartAlani(o.kart));
     const cyc = cycRef.current.last ? Math.round(cycRef.current.last) : null;
     if (autoRef.current.cnt) { autoRef.current.cnt = false; return; } // makine verisinden gelen sayım sunucuda zaten kayıtlı
     if (o.good !== p.good) AKStore.Log.add('counts', Object.assign({ kind: 'good', delta: o.good - p.good, cycleMs: o.good > p.good && !toplu ? cyc : null }, base));
@@ -344,30 +376,6 @@ export function App({ preview }) {
     window.addEventListener('arkon-rejected', f); return () => window.removeEventListener('arkon-rejected', f);
   }, []);
   useEffect(() => { const f = (e: any) => say(ILETI_GITMEDI + ' · ' + ((e.detail && e.detail.msg) || ''), 'alert', 'var(--hold)'); window.addEventListener('arkon-ileti-gitmedi', f); return () => window.removeEventListener('arkon-ileti-gitmedi', f); }, []);
-  /* QR / barkod ile iş emri aç */
-  const pickByCode = code => {
-    const rk = refakatKodu(code);
-    // Refakat partisi kartı (kart #128): emir sunucudan okunur; bağlantı yoksa kartın altındaki emir numarası elle yazılır.
-    if (rk && 'partiId' in rk) {
-      AKStore.Server.refakatPartisi(rk.partiId).then((p) => {
-        if (!p) { beep('nok'); say('Refakat kartı bulunamadı: ' + code, 'alert', 'var(--stop)'); return; }
-        if (p.durum === 'iptal') { beep('nok'); say('Refakat kartı iptal edilmiş: ' + p.etiket, 'alert', 'var(--stop)'); return; }
-        pickByCode('UE:' + p.emirId);
-      }, () => { beep('nok'); say('Kart okunamadı; bağlantı yok. Kartın altındaki emir numarasını yaz (UE-…-P1).', 'alert', 'var(--hold)'); });
-      return;
-    }
-    if (rk && !('partiId' in rk)) {
-      const r = refakatIsi(rk, orders, Object.values<any>(pkgsRef.current || {}));
-      if (r.tur === 'yok') { beep('nok'); say('Emir bulunamadı: ' + code, 'alert', 'var(--stop)'); return; }
-      if (r.tur === 'ac') { isGec(r.sira); setSince(Date.now()); setMv('prod'); say('İş emri açıldı: ' + orders[r.sira].no, 'check', 'var(--run)'); return; }
-      beep('nok'); say('Bu emrin bu istasyonda işi yok' + (r.istasyon ? ', sıradaki adım: ' + r.istasyon : ''), 'alert', 'var(--stop)'); return;
-    }
-    const n = String(code || '').trim().toLocaleUpperCase('tr-TR').replace(/\s+/g, '');
-    const i = orders.findIndex(x => [x.no, x.pkg && x.pkg.partNo, x.part].filter(Boolean).some(v => String(v).toLocaleUpperCase('tr-TR').replace(/\s+/g, '') === n || n.endsWith(String(v).toLocaleUpperCase('tr-TR').replace(/\s+/g, ''))));
-    if (i < 0) { beep('nok'); say('Bu kodla iş emri yok: ' + code, 'alert', 'var(--stop)'); return; }
-    isGec(i); setSince(Date.now()); setMv('prod'); say('İş emri açıldı: ' + orders[i].no, 'check', 'var(--run)');
-  };
-  const scanOrder = () => setScan({ title: 'İş emrini okut', hint: 'Refakat kartındaki QR ya da barkod · elle de yazabilirsin', cb: pickByCode });
   useEffect(() => { setSegs(s => { const L = s[s.length - 1]; if (!L) return s; return s.map((x, i) => i === s.length - 1 ? { ...x, t: Math.max(x.t, shiftNow) } : x); }); }, [Math.floor(shiftNow)]);
   /* uzak mod: 30 sn dokunulmazsa */
   useEffect(() => { const f = () => { lastAct.current = Date.now(); }; window.addEventListener('pointerdown', f, true); window.addEventListener('keydown', f, true); return () => { window.removeEventListener('pointerdown', f, true); window.removeEventListener('keydown', f, true); }; }, []);
@@ -564,6 +572,7 @@ export function App({ preview }) {
           <${PlanBanner} st=${MACHINE} o=${o} now=${now} onStop=${code => ok('prod.run') && undoable('Planlı duruş · ' + ((reasonOf(code) || {}).l || ''), 'stop', 'var(--done)', () => go('stopped', code))} />
           ${handover ? html`<div className="handover glass"><${I} n="alert" s=${18} /><div><span className="over">Önceki vardiyadan not</span><b>${handover.note}</b></div><button className="x" onClick=${() => setHandover(null)} aria-label="Kapat"><${I} n="x" s=${16} /></button></div>` : null}
           <div className="glass morder" onClick=${() => setMv('queue')}><div><span className="over">Aktif iş ${o.urgent ? '· ACİL' : ''}</span><b>${o.no}${o.pkg ? html`<span className="revc">Rev ${o.pkg.rev}</span>` : null}</b><small>${o.part} · ${o.op}${adimTuru(o.pkg) ? html` · <span className="tag adim">${adimTuru(o.pkg).etiket}</span>` : null}${parcaEtiketi(o.pkg) ? html` · <span className="tag adim">${parcaEtiketi(o.pkg)}</span>` : null}</small></div>${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${e => { e.stopPropagation(); act('warns'); }} aria-label="Bu işin uyarıları"><${I} n="bell" s=${16} />${RL.warns.filter(w => w.t).length}</button>` : null}<${I} n="next" s=${18} /></div>
+          <${EtkinKart} o=${o} kartlar=${kartlar} />
           ${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}
           ${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}
           <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
@@ -583,7 +592,7 @@ export function App({ preview }) {
         </div>
         ${mv === 'st' && Panel ? html`<div className="mpane mscroll"><${Panel} key=${o.no} api=${stApi} RL=${RL} /></div>` : null}
         <div className="mpane" style=${{ display: mv === 'draw' ? 'flex' : 'none' }}><${BlueprintM} say=${say} theme=${theme} ctl=${ctl} yuklemeYok=${true} /></div>
-        ${mv === 'queue' ? html`<div className="mpane mscroll"><${Queue} orders=${orders} active=${ai} nextNo=${nextOrder && nextOrder.no} aheadNo=${ondeNo} onScan=${preview ? null : scanOrder} onPick=${i => { isGec(i); setSince(Date.now()); setOrders(l => l.map((x, j) => j === i ? Object.assign({}, x, { fresh: false }) : x)); setMv('prod'); }} /></div>` : null}
+        ${mv === 'queue' ? html`<div className="mpane mscroll"><${Queue} orders=${orders} active=${ai} nextNo=${nextOrder && nextOrder.no} aheadNo=${ondeNo} kartlar=${kartlar} onKart=${preview ? null : kartlaAc} onPick=${i => { isGec(i); setSince(Date.now()); setOrders(l => l.map((x, j) => j === i ? Object.assign({}, x, { fresh: false }) : x)); setMv('prod'); }} /></div>` : null}
         ${mv === 'steps' ? html`<div className="mpane mscroll"><${Steps} key=${o.no} steps=${o.pkg && o.pkg.steps} emirId=${tmiEmirId(o.pkg)} preview=${preview} /></div>` : null}
         ${mv === 'ana' ? html`<div className="mpane mscroll"><${ToolsCard} tools=${RL.prod.tools} o=${o} onChange=${changeTool} /><${Analytics} c=${SC} now=${now} o=${o} st=${MACHINE} /></div>` : null}
       </div>
@@ -606,12 +615,13 @@ export function App({ preview }) {
     <div className="app">
       <${Top} state=${o.state} since=${since} theme=${theme} onTheme=${() => setTheme(theme === 'dark' ? 'light' : 'dark')} onCall=${() => setOv('call')} call=${call} onCallOpen=${() => setOv('calltrack')} onAway=${() => setAway(true)} onShift=${() => setOv('shift')} onOzetim=${!preview && ozetimGorunur() ? () => setOv('ozetim') : null} preview=${preview} machine=${MACHINE} onStation=${istasyonAc} ozet=${vardiyaOzeti} />
       <main className="main">
-        <${Queue} orders=${orders} active=${ai} nextNo=${nextOrder && nextOrder.no} aheadNo=${ondeNo} onScan=${preview ? null : scanOrder} onPick=${i => { isGec(i); setSince(Date.now()); setOrders(l => l.map((x, j) => j === i ? Object.assign({}, x, { fresh: false }) : x)); }} />
+        <${Queue} orders=${orders} active=${ai} nextNo=${nextOrder && nextOrder.no} aheadNo=${ondeNo} kartlar=${kartlar} onKart=${preview ? null : kartlaAc} onPick=${i => { isGec(i); setSince(Date.now()); setOrders(l => l.map((x, j) => j === i ? Object.assign({}, x, { fresh: false }) : x)); }} />
         <section className="col">
           <${PlanBanner} st=${MACHINE} o=${o} now=${now} onStop=${code => ok('prod.run') && undoable('Planlı duruş · ' + ((reasonOf(code) || {}).l || ''), 'stop', 'var(--done)', () => go('stopped', code))} />
           ${handover ? html`<div className="handover glass"><${I} n="alert" s=${18} /><div><span className="over">Önceki vardiyadan not · ${handover.by}</span><b>${handover.note}</b></div><button className="x" onClick=${() => setHandover(null)} aria-label="Kapat"><${I} n="x" s=${16} /></button></div>` : null}
           <div className="glass order"><div><span className="over">Aktif iş emri ${o.urgent ? html`<span className="tag urgent" style=${{ marginLeft: 6 }}>Acil</span>` : null}</span><h1>${o.no}${o.pkg ? html`<span className="revbig">Rev ${o.pkg.rev}</span>` : null}</h1><p>${o.part} · ${o.op}</p>${parcaEtiketi(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${parcaEtiketi(o.pkg)}</span></div>` : null}${adimTuru(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${adimTuru(o.pkg).etiket}</span>${adimTuru(o.pkg).aciklama ? html`<span className="adimnot">${adimTuru(o.pkg).aciklama}</span>` : null}</div>` : null}${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}</div>
             <div className="facts">${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${() => act('warns')} title="Bu işin uyarıları"><${I} n="bell" s=${18} />${RL.warns.filter(w => w.t).length}</button>` : null}<div><span className="over">Çevrim</span><b>${o.cycle} sn</b></div><div><span className="over">Termin</span><b>${o.due}</b></div></div></div>
+          <${EtkinKart} o=${o} kartlar=${kartlar} />
           <div className=${'glass stage' + (preview || can('prod.run') ? '' : ' noperm')} title=${preview || can('prod.run') ? null : 'Bu rol üretim kaydı yapamaz'}>
             <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${act} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />

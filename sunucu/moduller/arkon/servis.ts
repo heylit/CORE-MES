@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  ArkonDeposu, ArkonRefakatPartisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
+  ArkonDeposu, ArkonRefakatKarti, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -27,7 +27,7 @@ import {
 } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeAra } from '../malzemeler/disari.ts';
-import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, refakatPartisi as stokRefakatPartisi, uretimGirdiUyarisi } from '../stok/disari.ts';
+import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
 import { adimEtkinSureleriToplu, gecerliTalimat, girdisiEksikRevizyonlar, revizyonGetir } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -50,7 +50,7 @@ import {
   adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
-  icerikSurumu, guvensizCizimleriAyikla, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu,
@@ -1000,16 +1000,19 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
     case 'bitir': is = () => kayitAniyla<unknown>(db, kayitAni, (an) => (yol.yol === 'katilim-ayril' ? katilimAyril(db, kullanici, emir.id, an) : emirBitir(db, kullanici, emir.id, undefined, an))); break;
     case 'saglam': {
       // Karar bekleyen kısım (131 b) TMI'de ayrı satırdır; ikisi aynı kayıt noktasında yazılır, biri reddedilirse ikisi de yazılmaz.
-      const saglam = sayimGovdesi.safeParse({ tur: 'saglam', adet: komut.adet - komut.kararBekliyor });
-      const bekleyen = sayimGovdesi.safeParse({ tur: 'saglam', adet: komut.kararBekliyor });
+      const kart = komut.refakatPartisiId === null ? {} : { refakatPartisiId: komut.refakatPartisiId };
+      const saglam = sayimGovdesi.safeParse({ tur: 'saglam', adet: komut.adet - komut.kararBekliyor, ...kart });
+      const bekleyen = sayimGovdesi.safeParse({ tur: 'saglam', adet: komut.kararBekliyor, ...kart });
+      // Sayımın yönlendiren uyarısı (#157, örn. kartın malzemesi başka konumda) operatöre kaydın uyarısı olarak döner; sayımı durdurmaz.
+      const uyariyla = async (c: Promise<{ uyari: string | null }>) => { ek.uyari = uyariBirlestir(ek.uyari, (await c).uyari); };
       if (komut.kararBekliyor === 0 || !bekleyen.success) {
         if (!saglam.success) return { sonuc: 'reddedildi', neden: saglam.error.issues[0]?.message ?? 'Sayım geçersiz.' };
-        is = () => kayitAniyla(db, kayitAni, (an) => emirSayim(db, kullanici, emir.id, saglam.data, { an }));
+        is = () => kayitAniyla(db, kayitAni, (an) => uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an })));
         break;
       }
       is = () => kayitAniyla(db, kayitAni, async (an) => {
-        if (saglam.success) await emirSayim(db, kullanici, emir.id, saglam.data, { an });
-        return emirSayim(db, kullanici, emir.id, bekleyen.data, { kararBekliyor: true, an });
+        if (saglam.success) await uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an }));
+        await uyariyla(emirSayim(db, kullanici, emir.id, bekleyen.data, { kararBekliyor: true, an }));
       });
       break;
     }
@@ -1022,7 +1025,9 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
     case 'hurda': {
       const neden = komut.nedenKodu === null ? null : (await onbellek.oku('hurdaNedenleri', () => hurdaNedenleriniListele(db, { yalnizAktif: false }))).find((n) => n.kod === komut.nedenKodu);
       if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Hurda nedeni TMI'de yok: ${komut.nedenKodu}.` };
-      const govde = sayimGovdesi.safeParse({ tur: 'hurda', adet: komut.adet, ...(neden === null ? {} : { hurdaNedeniId: neden.id }) });
+      const govde = sayimGovdesi.safeParse({
+        tur: 'hurda', adet: komut.adet, ...(neden === null ? {} : { hurdaNedeniId: neden.id }), ...(komut.refakatPartisiId === null ? {} : { refakatPartisiId: komut.refakatPartisiId }),
+      });
       if (!govde.success) return { sonuc: 'reddedildi', neden: govde.error.issues[0]?.message ?? 'Sayım geçersiz.' };
       is = () => kayitAniyla(db, kayitAni, (an) => emirSayim(db, kullanici, emir.id, govde.data, { an }));
       break;
@@ -1036,7 +1041,7 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
     if (komut.komut === 'basla-ya-da-devam' || komut.komut === 'saglam') {
       const isEmriId = karar.isEmriId ?? (await (komut.komut === 'saglam' ? uretimEmriOzetiOku(db, onbellek, emirId) : uretimEmriOzeti(db, emirId)))?.siradakiIsEmriId ?? null;
       const girdi = await uretimGirdiUyarisi(db, { uretimEmriId: emirId, isEmriId, istasyonId: emir.istasyonId, stokYok: komut.komut === 'saglam' });
-      if (girdi !== null) ek.uyari = ek.uyari == null ? girdi : `${ek.uyari} ${girdi}`;
+      ek.uyari = uyariBirlestir(ek.uyari, girdi);
     }
     return { sonuc: 'yazildi', neden: null, ...ek };
   }
@@ -1105,15 +1110,25 @@ export async function planSiraSurumu(db: Db, kullanici: Kullanici): Promise<{ pl
   return { planSurumu: (await canliSira(db, [])).planSurumu };
 }
 
+// Refakat kartları (kart #156): istasyon kişinin kapsamında olmalı; kart emir başına stoktan okunur, istasyonda satırı olup olmadığıyla.
+export async function refakatKartlari(db: Db, kullanici: Kullanici, istasyonKodu: string, emirIdler: readonly number[]): Promise<{ kartlar: ArkonRefakatKarti[] }> {
+  await rolGerekli(db, kullanici);
+  const istasyon = (await istasyonlar(db, { pasiflerDahil: false })).find((i) => i.kod === istasyonKodu);
+  if (istasyon === undefined) throw bulunamadi('İstasyon bulunamadı.');
+  if (!kapsamdaMi(await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri), istasyon.isMerkeziId)) throw kapsamDisi();
+  const kartlar: ArkonRefakatKarti[] = [];
+  for (const emirId of emirIdler) {
+    for (const k of await emrinRefakatKartlari(db, emirId, istasyon.id)) {
+      kartlar.push({
+        id: k.id, uretimEmriId: emirId, etiket: k.etiket, lotNo: k.lotNo, malzemeKod: k.malzemeKod, malzemeAd: k.malzemeAd, birim: k.birim,
+        verilen: k.verilen, istasyondaSatirVar: k.istasyondaSatirVar, sayilan: k.sayilan, sinir: k.sinir,
+      });
+    }
+  }
+  return { kartlar };
+}
 // 393 d sonrası makine seçicisi: emrin istasyonundaki makinelerin ayrımı, başlatma denetimiyle aynı kuraldan (uretim-emirleri). Ayrım başka
 // emrin numarasını ve saatini taşır: kapsam dışındaki istasyonun ayrımı okunmaz. Emir yoksa ya da istasyonsuzsa seçici bugünkü gibi kalır.
-// Refakat partisi kartından emir (kart #128): kartı görmek emri görmekten fazlasını açmaz; iş açma kuralı istemcide aynıdır.
-export async function refakatPartisi(db: Db, kullanici: Kullanici, id: number): Promise<ArkonRefakatPartisi> {
-  await rolGerekli(db, kullanici);
-  const p = await stokRefakatPartisi(db, id);
-  if (p === null) throw bulunamadi('Refakat kartı bulunamadı.');
-  return { id: p.id, emirId: p.uretimEmriId, etiket: p.etiket, durum: p.durum };
-}
 export async function makineAyrimlari(db: Db, kullanici: Kullanici, emirId: number): Promise<MakineAyrimlariCevabi> {
   await rolGerekli(db, kullanici);
   const emir = await emirOzeti(db, emirId);

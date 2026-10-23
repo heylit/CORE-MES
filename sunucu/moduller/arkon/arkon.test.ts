@@ -8,7 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   ArkonBenCevabi, ArkonKisilerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi, EksikDosyaCevabi,
-  IletilerCevabi, KayitlarCevabi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
+  IletilerCevabi, KayitlarCevabi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, RefakatKartlariCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -437,7 +437,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.equal((await istek<BelgeCevabi>(operator, 'GET', `/arkon/belgeler/pkgs/${kimlik}`)).govde.belge, null);
   });
 
-  test('kart #128 refakat partisi kartı: RP:<id> okutulunca emir ve kart etiketi sunucudan okunur; bilinmeyen kart 404, rolsüz 403', async () => {
+  test('kart #156 refakat kartları: terminal istasyonu ve emirlerle kartları okur; iptal kart yok; bilinmeyen istasyon 404, rolsüz ve kapsam dışı 403, bozuk sorgu 400', async () => {
     const t = await istasyonKur();
     const emir = await istek<{ emir: { id: number; emirNo: string } }>(yonetici, 'POST', '/uretim-emirleri', {
       parcaNo: 'DENEME-RP', parcaAd: 'Deneme parçası', adet: 5, istasyonId: t.istasyonId, projeId,
@@ -453,11 +453,27 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const kart = (await sahip.tek<{ id: number }>(
       'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id',
       [emir.govde.emir.id, hm, lot, yoneticiId]))!.id;
-    const c = await istek<{ id: number; emirId: number; etiket: string; durum: string }>(operator, 'GET', `/arkon/refakat-partileri/${kart}`);
+    const iptal = (await sahip.tek<{ id: number }>(
+      `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id, durum, iptal_eden_kisi_id, iptal_zamani)
+       VALUES ($1, 2, $2, $3, $4, 'iptal', $4, now()) RETURNING id`,
+      [emir.govde.emir.id, hm, lot, yoneticiId]))!.id;
+    const yol = `/arkon/refakat-kartlari?istasyon=${encodeURIComponent(t.istasyon)}&emirler=${emir.govde.emir.id},999999999`;
+    const c = await istek<RefakatKartlariCevabi>(operator, 'GET', yol);
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
-    assert.deepEqual(c.govde, { id: kart, emirId: emir.govde.emir.id, etiket: `${emir.govde.emir.emirNo}-P1`, durum: 'acik' });
-    assert.equal((await istek(operator, 'GET', '/arkon/refakat-partileri/999999999')).durum, 404);
-    assert.equal((await istek(rolsuz, 'GET', `/arkon/refakat-partileri/${kart}`)).durum, 403);
+    assert.deepEqual(c.govde.kartlar.map((k) => [k.id, k.uretimEmriId, k.etiket, k.lotNo]), [[kart, emir.govde.emir.id, `${emir.govde.emir.emirNo}-P1`, 'LT-ARK-RP']]);
+    assert.ok(!c.govde.kartlar.some((k) => k.id === iptal), 'iptal kart listelenmez');
+    assert.equal((await istek(operator, 'GET', `/arkon/refakat-kartlari?istasyon=YOK-ISTASYON&emirler=${emir.govde.emir.id}`)).durum, 404);
+    assert.equal((await istek(rolsuz, 'GET', yol)).durum, 403);
+    assert.equal((await istek(null, 'GET', yol)).durum, 401);
+    for (const bozuk of ['', '0', '1,,2', 'a', Array.from({ length: 51 }, (_, i) => i + 1).join(',')]) {
+      assert.equal((await istek(operator, 'GET', `/arkon/refakat-kartlari?istasyon=${encodeURIComponent(t.istasyon)}&emirler=${bozuk}`)).durum, 400, bozuk);
+    }
+    const disariAdi = kod('rpk');
+    const disariId = await girisliKisiEkle(disariAdi, 'gecici_arkon');
+    const baska = await istasyonKur();
+    const baskaMerkez = (await sahip.tek<{ id: number }>('SELECT is_merkezi_id AS id FROM istasyon WHERE id = $1', [baska.istasyonId]))!.id;
+    await sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [disariId, baskaMerkez]);
+    assert.equal((await istek(await girisCerezi(disariAdi), 'GET', yol)).durum, 403, 'kapsam dışındaki istasyonun kartları okunmaz');
   });
 
   test('malzeme isteği stokta açılır: kart ve miktar zorunlu, yetkiyi stok denetler, durumu stoktan okunur, sonra Arkon\'dan değişmez', async () => {
@@ -806,7 +822,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'GET', yol: '/arkon/son-olaylar' },
     { yontem: 'GET', yol: '/arkon/operator-ozeti' },
     { yontem: 'GET', yol: '/arkon/makine-ayrimlari?emirId=999999999' },
-    { yontem: 'GET', yol: '/arkon/refakat-partileri/999999999' },
+    { yontem: 'GET', yol: '/arkon/refakat-kartlari?istasyon=YOK-ISTASYON&emirler=999999999' },
     { yontem: 'POST', yol: '/arkon/plan-sira/sirala', govde: { kaynak: { tur: 'makine', id: 999999999 }, onceki: [999999999], yeni: [999999999], planSurumu: 0 } },
     { yontem: 'GET', yol: '/arkon/cizim-merkezi/belgeler' },
     { yontem: 'GET', yol: `/arkon/cizim-merkezi/kontrol?dosyalar=999999999:${OZET}` },
@@ -873,7 +889,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       // Çizim Merkezi'nden alma paketi düzenleyen rolündür (operatörün değil).
       const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral';
       const kabul = await istek(yoneticiyle ? yonetici : operator, uc.yontem, uc.yol, uc.govde);
-      const bulunamaz = uc.yol === `/arkon/dosyalar/${OZET}` || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/refakat-partileri/999999999';
+      const bulunamaz = uc.yol === `/arkon/dosyalar/${OZET}` || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol.startsWith('/arkon/refakat-kartlari');
       assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
     }
   });

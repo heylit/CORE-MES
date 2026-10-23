@@ -395,8 +395,12 @@ export const emirParametresiOku = (deger: string | null): number | null => {
   const id = deger === null || !/^[1-9]\d{0,9}$/.test(deger) ? NaN : Number(deger);
   return Number.isSafeInteger(id) ? id : null;
 };
-export function emirSeciminiGonder(pencere: Pick<Window, 'dispatchEvent'> & { __tmiEmirSec?: number }, emirId: number): void {
+// Malzeme Teslim'in "İş emrini aç"ı (kart #156) okutulan refakat kartını da verir: `&kart=<refakat partisi id>`; iş o kartla açılır.
+export const KART_PARAMETRESI = 'kart';
+export function emirSeciminiGonder(pencere: Pick<Window, 'dispatchEvent'> & { __tmiEmirSec?: number; __tmiKartSec?: number }, emirId: number, kartId: number | null = null): void {
   pencere.__tmiEmirSec = emirId;
+  if (kartId === null) delete pencere.__tmiKartSec;
+  else pencere.__tmiKartSec = kartId;
   pencere.dispatchEvent(new Event('tmi-emir-sec'));
 }
 

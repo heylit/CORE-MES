@@ -167,6 +167,34 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
   });
 
+  // Kart #156: terminalde "Aç" ile seçilen refakat kartı sayımla TMI'ye gider; başka emrin kartı reddedilir (denetim stokta).
+  test('kart #156: sayım satırındaki refakat kartı TMI sayımına yazılır; başka emrin kartıyla sayım reddedilir', async () => {
+    await yeniIstasyon();
+    const emir = await emirAc();
+    const baska = await emirAc();
+    const sahip = ortam!.sahip;
+    await sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['YNS-DNM-']);
+    const kimlik = `yns-dnm-${(sayac += 1)}`;
+    const hm = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'hammadde', 'YNS-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [kimlik, sayac, JSON.stringify({ id: kimlik, com: { ad: 'Deneme çubuk' } }), yoneticiId]))!.no;
+    const lot = (await sahip.tek<{ id: number }>('INSERT INTO stok_parti (malzeme_id, acan_kisi_id, lot_no) VALUES ($1, $2, $3) RETURNING id', [hm, yoneticiId, `LT-${kimlik}`]))!.id;
+    const kartAc = async (e: number) => (await sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id', [e, hm, lot, yoneticiId]))!.id;
+    const kart = await kartAc(emir);
+    const yabanci = await kartAc(baska);
+    assert.equal((await ekle(operator, 'events', olay(emir, 'running'))).durum, 200);
+    const kartli = sayim(emir, 'good', 2, { refakatPartisiId: kart });
+    assert.equal((await ekle(operator, 'counts', kartli)).durum, 200);
+    assert.deepEqual(await yansima(String(kartli['cid'])), { sonuc: 'yazildi', neden: null, emir_id: emir });
+    const satirlar = await vt().sorgu<{ refakat_partisi_id: number | null }>('SELECT refakat_partisi_id FROM uretim_sayimi WHERE emir_id = $1', [emir]);
+    assert.ok(satirlar.length > 0 && satirlar.every((r) => r.refakat_partisi_id === kart), JSON.stringify(satirlar));
+    const yanlis = sayim(emir, 'good', 1, { refakatPartisiId: yabanci });
+    assert.equal((await ekle(operator, 'counts', yanlis)).durum, 200);
+    assert.equal((await yansima(String(yanlis['cid'])))?.sonuc, 'reddedildi');
+  });
+
   test('denetim #25: çevrimdışı kuyruktan gelen kayıt TMI\'ye kendi zamanıyla yazılır; emrin son anından eski kayıt kaybolmaz, sunucu saatiyle yazılır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();

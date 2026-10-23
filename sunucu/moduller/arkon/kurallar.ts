@@ -1438,9 +1438,10 @@ export type YansimaKomutu =
   | { komut: 'durdur'; nedenKodu: string }
   | { komut: 'bitir' }
   // kararBekliyor: adetin ilk parça kararı beklenirken sayılan kısmı (131 b); TMI'de sağlama değil karar bekleyene yazılır.
-  | { komut: 'saglam'; adet: number; kararBekliyor: number }
+  // refakatPartisiId: terminalde açık refakat kartı (kart #156); yoksa null ve kartı stok sayımdan bulur.
+  | { komut: 'saglam'; adet: number; kararBekliyor: number; refakatPartisiId: number | null }
   // Eksi hurda düzeltmedir (kart #1194): nedeni verilmezse TMI son hurdanın nedenini yazar.
-  | { komut: 'hurda'; adet: number; nedenKodu: string | null };
+  | { komut: 'hurda'; adet: number; nedenKodu: string | null; refakatPartisiId: number | null };
 
 export interface YansimaKarari {
   // `tmi-ue` paketinde emir; `tmi-ie` paketinde null, emir iş emrinden çözülür (servis.ts `kararinEmri`).
@@ -1485,19 +1486,33 @@ function olayKomutu(satir: Readonly<Record<string, unknown>>): { komut: YansimaK
   }
 }
 
+// Kartın emre ait olduğunu stok sayımda denetler; burada yalnız biçim: pozitif tam sayı değilse kartsız sayılır.
+export const REFAKAT_KARTI_ALANI = 'refakatPartisiId';
+// Kaydın uyarıları (katılım, sayımın yönlendiren uyarısı #157, girdi uyarısı) boşlukla tek iletiye eklenir; aynı ileti iki kez yazılmaz.
+export function uyariBirlestir(var_: string | null | undefined, yeni: string | null | undefined): string | null {
+  if (yeni == null || yeni === '') return var_ ?? null;
+  if (var_ == null || var_ === '') return yeni;
+  return var_.includes(yeni) ? var_ : `${var_} ${yeni}`;
+}
+function sayimKarti(satir: Readonly<Record<string, unknown>>): number | null {
+  const k = satir[REFAKAT_KARTI_ALANI];
+  return typeof k === 'number' && Number.isInteger(k) && k > 0 && k <= 2147483647 ? k : null;
+}
+
 function sayimKomutu(satir: Readonly<Record<string, unknown>>): { komut: YansimaKomutu } | { neden: string } {
   const delta = satir['delta'];
+  const refakatPartisiId = sayimKarti(satir);
   if (typeof delta !== 'number' || !Number.isSafeInteger(delta)) return { neden: 'Sayım farkı tam sayı değil.' };
   if (delta === 0) return { neden: SIFIR_SAYIM };
   if (satir['kind'] === 'good') {
     const bekleyen = satir[KARAR_BEKLIYOR_ALANI];
     const kararBekliyor = typeof bekleyen === 'number' && Number.isSafeInteger(bekleyen) && delta > 0 ? Math.min(Math.max(bekleyen, 0), delta) : 0;
-    return { komut: { komut: 'saglam', adet: delta, kararBekliyor } };
+    return { komut: { komut: 'saglam', adet: delta, kararBekliyor, refakatPartisiId } };
   }
   if (satir['kind'] !== 'scrap') return { neden: 'Sayım türü tanınmıyor.' };
   const kod = kodMetni(satir['reason']);
-  if (delta < 0) return { komut: { komut: 'hurda', adet: delta, nedenKodu: kod } };
-  return kod === null ? { neden: 'Hurda nedeni yok: TMI nedensiz hurda kabul etmez.' } : { komut: { komut: 'hurda', adet: delta, nedenKodu: kod } };
+  if (delta < 0) return { komut: { komut: 'hurda', adet: delta, nedenKodu: kod, refakatPartisiId } };
+  return kod === null ? { neden: 'Hurda nedeni yok: TMI nedensiz hurda kabul etmez.' } : { komut: { komut: 'hurda', adet: delta, nedenKodu: kod, refakatPartisiId } };
 }
 
 // Elle bölünmüş iş (kart #1572): parça kendi adedinden fazla sağlam sayamaz (düzeltme ve hurda serbest). Parça plandan kalktıysa sayım alınmaz.

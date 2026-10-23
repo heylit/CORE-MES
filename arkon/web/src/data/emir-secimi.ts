@@ -3,7 +3,8 @@
 // yüklenmeden önce açılabilir: istek pencerede bekler, operatör ekranı kurulunca okunur.
 export const EMIR_SEC_OLAYI = 'tmi-emir-sec';
 
-export interface EmirSecimiPenceresi { __tmiEmirSec?: number | undefined }
+// `__tmiKartSec`: Malzeme Teslim'den gelen istekte okutulan refakat kartı (kart #156, `?kart=<id>`); emirle birlikte bırakılır.
+export interface EmirSecimiPenceresi { __tmiEmirSec?: number | undefined; __tmiKartSec?: number | undefined }
 
 interface SecilebilirIs { pkg?: { id?: unknown; tmi?: { emirId?: unknown } | null } | null }
 
@@ -17,5 +18,11 @@ export function emirSirasi(isler: readonly SecilebilirIs[], emirId: number): num
 export function emirSeciminiAl(pencere: EmirSecimiPenceresi): number | null {
   const id = pencere.__tmiEmirSec;
   delete pencere.__tmiEmirSec;
+  return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+export function kartSeciminiAl(pencere: EmirSecimiPenceresi): number | null {
+  const id = pencere.__tmiKartSec;
+  delete pencere.__tmiKartSec;
   return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null;
 }
