@@ -123,6 +123,16 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(sira((await teklifAc()).no), sira(a.no) + 1);
   });
 
+  test('teklif numarası kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşan numara kayıt açmaz (422)', async () => {
+    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.teklif-no/degistir', { deger })).statusCode, 200);
+    await kalip('TEK{YY}/{SAYAC:5}');
+    assert.match((await teklifAc()).no, /^TEK\d{2}\/\d{5}$/);
+    await kalip('SATISTEKLIFI-{YYYY}-{SAYAC:3}');
+    const uzun = await gonder(yonetici, '/siparisler/teklifler/ekle', talep());
+    assert.equal(uzun.statusCode, 422, uzun.body);
+    await kalip('TK-{YYYY}-{SAYAC:3}');
+  });
+
   test('SIP-10 (180): teklif fiyatları, iskonto ve toplam yalnız siparisler.fiyat-oku olana gider', async () => {
     let t = await teklifAc();
     t = await komut(t, 'surum-ver', { fiyatlar: fiyatlar(t, '10', '20'), iskontoOrani: '10' });

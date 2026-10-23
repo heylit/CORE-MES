@@ -15,6 +15,8 @@ export const MALZEME_AKTIF_DEGIL = 'Onaylanmamış ya da iptal edilmiş malzeme 
 export const MALZEME_SATILMAZ = 'Bu türdeki kart satılmaz; yalnız mamul, yarı mamul ve ticari mal siparişe girer.';
 export const MUSTERI_NO_KULLANILIYOR = 'Bu müşteri sipariş numarası bu firmada başka bir siparişte kullanılıyor.';
 export const YALNIZ_TASLAK = 'Yalnız taslak sipariş değiştirilir.';
+// Numara Logo fiş numarası olur; kalıp Sistem Ayarları'nda daha uzun numara üretirse kayıt açılmaz.
+export const NUMARA_UZUN = 'Numara kalıbı 16 karakteri aşan numara üretiyor; Sistem Ayarları > Numara kurallarında kalıbı kısaltın.';
 
 // SIP-02: satılan kart türleri. Hizmet ve sarf satış siparişine girmez (VARSAYIM; NOTLAR.md).
 export const SATILAN_TURLER = ['mamul', 'yarimamul', 'ticari_mal'] as const;
