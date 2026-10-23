@@ -107,14 +107,14 @@ describe('köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/bedel-ayari', 'GET /plan/bedel-ayari']);
   });
 
-  it('KOM-02d (265 a): öncelik ve müşteri sınıfı çarpanları öncelik ayarlarıyla plan modülüne gider; bilinmeyen alan gitmez', async () => {
+  it('KOM-02d (265 a, 148 a): öncelik ve müşteri sınıfı çarpanları öncelik ayarlarıyla plan modülüne, yeni taslağa gider; bilinmeyen alan gitmez', async () => {
     const istekler = sunucuKur((_y, _yol, govde) => json(200, govde));
     const ayar = {
       tabanBedelSaat: 250, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6,
       yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7,
     };
-    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, fazla: 1 } });
-    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', ayar]]);
+    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, fazla: 1, taslak: { id: 3, surum: 1 } } });
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', { ...ayar, taslak: null }]]);
   });
 
   it('KOM-02b: fason termin tahmini dörtlüleri tek GET sorgusunda gider; bozuk sorgu istek atmadan 400 ile döner', async () => {
@@ -308,18 +308,27 @@ describe('köprü komutları', () => {
     // Kuyruk yazımı yalnız sırayı taşır: ekran ayar ya da canlıya alma gönderse de gövdeye girmez (ayar /plan/ayar'dan yazılır).
     await isle('komut', { ad: 'plan-senaryo-yaz', govde: { taslak: 9, ayar, kuyruklar, canliyaAl: true, sinsi: 'gecmemeli' } });
     await isle('komut', { ad: 'plan-senaryo-ayar', govde: { taslak: 9, ayar, sinsi: 'gecmemeli' } });
-    await isle('komut', { ad: 'plan-senaryo-canliya-al', govde: { taslak: 9 } });
+    // Onay akışı (H0): onaya gönder notla, geri gönder gerekçeyle, canlıya alma onaydaki taslaktan; ekran sürüm ya da başka alan taşıyamaz.
+    await isle('komut', { ad: 'plan-senaryo-onaya-gonder', govde: { taslak: 9, not: ' Acil iş öne ', surum: 1 } });
+    await isle('komut', { ad: 'plan-senaryo-geri-gonder', govde: { taslak: 9, neden: 'Teslim kayıyor', sinsi: 'gecmemeli' } });
+    await isle('komut', { ad: 'plan-senaryo-onaydan-cek', govde: { taslak: 9 } });
+    await isle('komut', { ad: 'plan-senaryo-canliya-al', govde: { taslak: 9, cakismalariKabul: false } });
     await isle('komut', { ad: 'plan-senaryo-vazgec', govde: { taslak: 9 } });
-    // Ekranın Canlıya al'ı: kuyruğun yazıldığı taslak, okunan plan sürümü korunarak (çakışma kabul edilmez) canlıya alınır.
-    await isle('komut', { ad: 'plan-canliya-al', govde: { taslak: 9, cakismalariKabul: true } });
     expect(yazmalar(istekler).map((i) => [i.yol, i.govde])).toEqual([
       ['/plan/senaryolar', { ad: 'Senaryo 1' }],
       ['/plan/kuyruklari-yaz', { kuyruklar, taslak: { id: 9, surum: 4 } }],
       ['/plan/ayar', { ayar, taslak: { id: 9, surum: 5 } }],
-      ['/plan/senaryolar/9/canliya-al', { surum: 6, cakismalariKabul: true }],
-      ['/plan/senaryolar/9/vazgec', { surum: 7 }],
-      ['/plan/senaryolar/9/canliya-al', { surum: 8, cakismalariKabul: false }],
+      ['/plan/senaryolar/9/onaya-gonder', { surum: 6, not: 'Acil iş öne' }],
+      ['/plan/senaryolar/9/geri-gonder', { surum: 7, neden: 'Teslim kayıyor' }],
+      ['/plan/senaryolar/9/onaydan-cek', { surum: 8 }],
+      ['/plan/senaryolar/9/canliya-al', { surum: 9, cakismalariKabul: true }],
+      ['/plan/senaryolar/9/vazgec', { surum: 10 }],
     ]);
+    // Gerekçesiz geri gönderme kurulmaz; onaysız canlıya alma komutu yoktur (canlıya tek kapı).
+    const yazilan = yazmalar(istekler).length;
+    expect(await isle('komut', { ad: 'plan-senaryo-geri-gonder', govde: { taslak: 9, neden: '  ' } }).then(() => null, sorun)).toEqual({ hata: 'Geçersiz neden: geri gönderme nedenini yaz.', durum: 400 });
+    expect(await isle('komut', { ad: 'plan-canliya-al', govde: { taslak: 9 } }).then(() => null, sorun)).toEqual({ hata: 'Bilinmeyen komut: plan-canliya-al', durum: 400 });
+    expect(yazmalar(istekler)).toHaveLength(yazilan);
     // Okunan taslak istenen değilse hiçbir şey yazılmaz.
     const once = yazmalar(istekler).length;
     expect(await isle('komut', { ad: 'plan-senaryo-yaz', govde: { taslak: 8, ayar: null, kuyruklar } }).then(() => null, sorun)).toEqual({ hata: 'Geçersiz taslak.', durum: 400 });

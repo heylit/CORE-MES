@@ -340,8 +340,12 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const car = tamam(await oku<{ siparisId: number }>('planlama', `/plan/siparisler/${S.sip}/carpan`));
     assert.equal(car.siparisId, S.sip);
     tamam(await oku('mudur', '/plan/bedel-ayari'));
+    // Canlıya yalnız onaydaki taslak alınır; dört göz varsayılan kapalı, gönderen kendisi onaylar.
+    const gonderilen = tamam(await yaz<{ senaryolar: { id: number; durum: string; surum: number }[] }>('planlama', `/plan/senaryolar/${o.taslak.id}/onaya-gonder`,
+      { surum: pl.taslak?.surum ?? o.taslak.surum })).senaryolar.find((x) => x.id === o.taslak!.id)!;
+    assert.equal(gonderilen.durum, 'onayda');
     const ca = tamam(await yaz<{ canli: { emirSayisi: number; isEmriSayisi: number; yerlesen: number } }>('planlama', `/plan/senaryolar/${o.taslak.id}/canliya-al`,
-      { surum: pl.taslak?.surum ?? o.taslak.surum, cakismalariKabul: true }));
+      { surum: gonderilen.surum, cakismalariKabul: true }));
     assert.deepEqual([ca.canli.emirSayisi, ca.canli.isEmriSayisi, ca.canli.yerlesen], [1, 2, 2]);
   }
 

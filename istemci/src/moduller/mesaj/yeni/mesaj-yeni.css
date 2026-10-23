@@ -1,0 +1,71 @@
+/* Çerçeveli sayfa (ikinci menü) içerik alanına dolgusuz yerleşir; kaydırma gövdededir. Sütun minmax(0, 1fr): örtük `auto`
+   sütun gövdedeki geniş içerikle (sekme şeridi, uzun satır) ekran genişliğini aşıyor, 360'ta içerik kırpılıyordu. */
+.tc-my { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; }
+.tc-my-ust {
+  display: flex; align-items: center; gap: var(--b-3); flex-wrap: wrap;
+  padding: var(--b-3) var(--b-5); border-bottom: 1px solid var(--edge);
+}
+.tc-my-ust > .tc-sekmeler { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.tc-my-govde { overflow: auto; padding: var(--b-5); min-height: 0; min-width: 0; }
+.tc-my-durum { padding: var(--b-5); }
+.tc-my-yer-tutucu { padding: var(--b-4) 0; }
+
+/* Kişi rozeti: baş harfler, kişi no'sundan renk. */
+.tc-my-kisi {
+  --c: var(--done);
+  position: relative; display: inline-grid; place-items: center; flex: none;
+  width: var(--b-6); height: var(--b-6); border-radius: 50%;
+  font-size: var(--yazi-xs); font-weight: 800; color: var(--c);
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+.tc-my-kisi-s { width: var(--b-5); height: var(--b-5); }
+.tc-my-kisi-l { width: calc(var(--b-6) * 1.5); height: calc(var(--b-6) * 1.5); font-size: var(--yazi-s); }
+.tc-my-kisi-bos { --c: var(--idle); }
+.tc-my-kisi-bot { --c: var(--hold); }
+.tc-my-renk-0 { --c: var(--run); }
+.tc-my-renk-1 { --c: var(--done); }
+.tc-my-renk-2 { --c: var(--hold); }
+.tc-my-renk-3 { --c: var(--stop); }
+.tc-my-renk-4 { --c: var(--grafik); }
+.tc-my-renk-5 { --c: var(--hazard-ink); }
+.tc-my-renk-6 { --c: var(--bp); }
+.tc-my-renk-7 { --c: var(--idle); }
+.tc-my-nokta {
+  position: absolute; right: calc(var(--pay-ince) * -1); bottom: calc(var(--pay-ince) * -1);
+  width: var(--nokta); height: var(--nokta); border-radius: 50%;
+  background: var(--idle); box-shadow: 0 0 0 var(--pay-ince) var(--panel-solid);
+}
+.tc-my-nokta-acik { background: var(--run); }
+
+/* Kişi seçici */
+.tc-my-secici { display: grid; gap: var(--b-2); }
+.tc-my-secici-etiket { font-size: var(--yazi-s); font-weight: 700; }
+.tc-my-secici-girdi {
+  min-height: var(--dokunma); padding: 0 var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel-solid); color: var(--ink); font: inherit;
+}
+.tc-my-secici-liste { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-my-secenek, .tc-my-cip {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma);
+  padding: var(--b-1) var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-tam);
+  background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-my-cip { cursor: default; }
+.tc-my-cip button { display: inline-grid; place-items: center; border: 0; background: none; color: var(--muted); cursor: pointer; min-width: var(--dokunma); min-height: var(--dokunma); }
+.tc-my-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-my-secilen { display: flex; align-items: center; gap: var(--b-3); }
+.tc-my-soluk { color: var(--muted); font-size: var(--yazi-s); }
+
+/* Ne yapmak istiyorsun */
+.tc-my-yeni { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--acilir-enaz)), 1fr)); gap: var(--b-3); }
+.tc-my-yeni-secenek {
+  display: grid; justify-items: start; gap: var(--b-1); padding: var(--b-4); min-height: var(--dokunma-ana);
+  border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.tc-my-yeni-secenek span { color: var(--muted); font-size: var(--yazi-s); }
+
+@media (max-width: 767px) {
+  .tc-my-ust { padding: var(--b-2) var(--b-4); }
+  .tc-my-govde { padding: var(--b-4); }
+}

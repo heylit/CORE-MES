@@ -65,10 +65,11 @@ export const MOTOR_OKUNAMADI = 'Plan motorunun yerleşimi okunamadı; plan ekran
 export const ONAY_DUGMELERI: readonly string[] = [
   '[data-act="revPanel"][data-v="approve"]', '[data-act="revApprove"]', '[data-act="revApproveOnly"]', '[data-act="revReturn"]', '[data-act="revActivate"]',
 ];
-// Plan modülünün `plan.yaz` işlemine giden düğmeler: plan Canlıya al (kuyruğu yazar; canlıya alma yetkisi yoksa taslakta kalır) ve plan
-// ayarlarının Düzenle yazısı. Senaryonun canlıya alması doğrudan `plan.canliya-al` ister. Yetkisiz kişi 403 almak için basmasın (plan akışı H6).
+// Plan modülünün `plan.yaz` işlemine giden düğmeler: planın Onaya gönder'i (kuyruğu taslağa yazar, taslağı onaya gönderir) ve plan
+// ayarlarının Düzenle yazısı. Yetkisiz kişi 403 almak için basmasın (plan akışı H6).
 export const PLAN_YAZMA_DUGMELERI: readonly string[] = ['[data-act="planYaz"]', '#planCfg .cfg-ed'];
-export const SENARYO_CANLIYA_ALMA_DUGMELERI: readonly string[] = ['[data-act="publishScenario"]'];
+// Senaryonun "Onaya gönder"i (H0): gönderen plan.studyo taşır; canlıya alma yalnız Planlama stüdyosunun Onay sekmesindedir.
+export const SENARYO_GONDERME_DUGMELERI: readonly string[] = ['[data-act="publishScenario"]'];
 // Planlama çerçevesinde denemenin veri araçları: örnek veri yüklemek, içe aktarmak ve sıfırlamak ana tablonun (Reçete ve Rota kaydı)
 // üstüne yazar. Uygulamada veri yalnız Reçete ve Rota bölümlerinden girer.
 export const PLANLAMA_VERI_ARACLARI: readonly string[] = ['[data-act="set-yukle"]', '[data-act="iceri-ac"]', '[data-act="sifirla"]'];
@@ -145,7 +146,7 @@ export function ReceteRotaCercevesi() {
     && (!maliyetYoluMu(pathname) || (kullanici?.islemler.includes(MALIYET_ISLEMI) ?? false));
   const onaylayabilir = kullanici?.islemler.includes('rota.onayla') ?? false;
   const planYazabilir = kullanici?.islemler.includes('plan.yaz') ?? false;
-  const canliyaAlabilir = kullanici?.islemler.includes('plan.canliya-al') ?? false;
+  const senaryoGonderebilir = kullanici?.islemler.includes('plan.studyo') ?? false;
   const bedelAyariOkunur = kullanici?.islemler.some((i) => BEDEL_OKUMA_ISLEMLERI.includes(i)) ?? false;
 
   useEffect(() => {
@@ -215,12 +216,12 @@ export function ReceteRotaCercevesi() {
       gizliSeciciler: planlama ? PLANLAMA_VERI_ARACLARI : [
         ...(onaylayabilir ? [] : ONAY_DUGMELERI),
         ...(planYazabilir ? [] : PLAN_YAZMA_DUGMELERI),
-        ...(canliyaAlabilir ? [] : SENARYO_CANLIYA_ALMA_DUGMELERI),
+        ...(senaryoGonderebilir ? [] : SENARYO_GONDERME_DUGMELERI),
       ],
       bedelAyariOkunur,
       highsOkunur: planlama,
     }), prototip.yaziStili, prototip.sonStil, planlama ? PLANLAMA_POLITIKASI : undefined);
-  }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, canliyaAlabilir, bedelAyariOkunur]);
+  }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, senaryoGonderebilir, bedelAyariOkunur]);
   const kartTaslakAcabilir = kullanici?.islemler.includes('rota.yaz') ?? false;
   const bedelAyariYazabilir = kullanici?.islemler.includes('plan.bedel-ayari') ?? false;
   // Emir açılışında proje seçimi (224): köprü pencereyi sorar, cevabı bekler. Pencere başka bir istek gelince açık kalırsa önceki

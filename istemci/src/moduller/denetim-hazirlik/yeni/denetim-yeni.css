@@ -1,0 +1,24 @@
+/* Denetim Hazırlığı yeni ekranı: iskelet. Yalnız tasarım değişkenleri; parçaların kendi dosyası kendi klasöründedir. */
+.tc-dhy { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-dhy-alt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); color: var(--muted); }
+.tc-dhy-gezinme { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-dhy-gezinme > * { max-width: 100%; overflow-x: auto; }
+.tc-dhy-icerik { min-width: 0; }
+.tc-dhy-bant {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-3) var(--b-4); border-radius: var(--yari-3); background: var(--panel2); color: var(--stop);
+}
+
+/* Ortak ton sınıfları (prototip iyi / uyarı / kötü / bilgi / soluk); parçalar renk yazmaz, bunu kullanır. */
+.tc-dhy-ton-iyi { color: var(--run); }
+.tc-dhy-ton-uyari { color: var(--hold); }
+.tc-dhy-ton-kotu { color: var(--stop); }
+.tc-dhy-ton-bilgi { color: var(--done); }
+.tc-dhy-ton-soluk { color: var(--muted); }
+
+/* Yazdırma alanı (disa-aktar.ts yazdir): baskıda yalnız bu alan görünür. */
+.tc-dhy-yazdirma-alani { display: none; }
+@media print {
+  body.tc-dhy-yazdiriliyor > :not(.tc-dhy-yazdirma-alani) { display: none; }
+  body.tc-dhy-yazdiriliyor > .tc-dhy-yazdirma-alani { display: block; }
+}

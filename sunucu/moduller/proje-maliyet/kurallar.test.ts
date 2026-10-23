@@ -5,7 +5,7 @@ import {
   projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani,
 } from './kurallar.ts';
 import type { IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
-import { beklemeFinansmani, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
+import { beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 
@@ -210,6 +210,25 @@ describe('proje-maliyet kuralları', () => {
     assert.deepEqual(['genel_gider' in kisi.plan, 'genel_gider' in kisi.gercek, 'genelGider' in kisi.ucretler], [false, false, false]);
     assert.equal('genel_gider' in isEmriKaydi(girdi({ kaynakTur: 'fason' }), '2026-10-19').plan, false);
     assert.equal(isEmriKaydi(girdi({ kaynakTur: null }), '2026-10-19').plan.genel_gider, 180);
+  });
+
+  test('H8 tek genel gider kuralı: makine ve atanmamış adım yük alır, kişi ve fason almaz; oran ya da süre yoksa null', () => {
+    assert.deepEqual((['makine', null, 'kisi', 'fason'] as const).map(genelGiderYukAlir), [true, true, false, false]);
+    const oran = { saatBasi: 120, amortismanDahil: true };
+    assert.equal(genelGiderTutari(90, oran), 180);
+    assert.equal(genelGiderTutari(null, oran), null);
+    assert.equal(genelGiderTutari(90, null), null);
+  });
+
+  test('H8 genel gider eksikleri (PM-22, PM-32): oran yoksa yalnız yük alan adım varken; amortisman içermeyen oran bildirilir', () => {
+    const tam = { saatBasi: 120, amortismanDahil: true };
+    assert.deepEqual(genelGiderEksikleri(['makine', 'fason'], tam), []);
+    assert.deepEqual(genelGiderEksikleri(['makine', 'fason'], null), ['genel_gider_orani_yok']);
+    assert.deepEqual(genelGiderEksikleri([null], null), ['genel_gider_orani_yok']);
+    assert.deepEqual(genelGiderEksikleri(['kisi', 'fason'], null), []);
+    assert.deepEqual(genelGiderEksikleri([], null), []);
+    assert.deepEqual(genelGiderEksikleri(['makine'], { ...tam, amortismanDahil: false }), ['amortisman_dahil_degil']);
+    assert.deepEqual(genelGiderEksikleri(['kisi'], { ...tam, amortismanDahil: false }), ['amortisman_dahil_degil']);
   });
 
   test('PM-23: tahmini maliyet işleme + ayar + fason planı; işçilik ve genel gider girmez, yok kalem sıfır, bilinmeyen kalem null', () => {

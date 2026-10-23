@@ -169,16 +169,17 @@ export function eklenenKimlikler(eski: unknown, yeni: unknown): string[] {
 // Portal rolü TMI rolünden gelir (kart #931): kişinin TMI işlemleri prototipin izinlerine çevrilir. Prototip rolü
 // onay adımlarını adla eşleştirdiği için en yetkili bölümün rol adı verilir; izinler bütün bölümlerin birleşimidir.
 const BOLUM_YETKILERI = [
-  { islem: 'portal.satinalma', rol: 'Satın alma müdürü', izinler: ['purchase', 'receive', 'partners', 'contracts', 'reports', 'approve'] },
+  // Satın alma da teslim alma izni almaz (238, H1): mal kabul stok hareketi, parti ve giriş muayenesiyle Stok > Mal kabul'dedir.
+  { islem: 'portal.satinalma', rol: 'Satın alma müdürü', izinler: ['purchase', 'partners', 'contracts', 'reports', 'approve'] },
   { islem: 'portal.finans', rol: 'Finans müdürü', izinler: ['finance', 'partners', 'reports', 'approve', 'contracts'] },
   { islem: 'portal.satis', rol: 'Satış müdürü', izinler: ['sales', 'partners', 'contracts', 'reports', 'approve'] },
-  // Kalite teslim alma izni almaz: mal kabul TMI'da stok modülündedir; izinle satın alma siparişleri menüde açılırdı (kart #1162).
+  // Kalite de teslim alma izni almaz (kart #1162): izinle satın alma siparişleri menüde açılırdı.
   { islem: 'portal.kalite', rol: 'Kalite mühendisi', izinler: ['quality', 'partners', 'docs'] },
 ] as const;
 // Satın alma siparişini yalnız satın almada onay yetkisi olan onaylar (kullanıcı kararı 16.10.2026): onay yetkisi olmayan satın
 // almacı prototipin "Satın alma uzmanı" rolünü alır; onay adımı rol adıyla eşleştiği için müdür adımını onaylayamaz.
 const SATIN_ALMA_ONAYI = 'satin-alma.onayla';
-const SATIN_ALMA_UZMANI = { islem: 'portal.satinalma', rol: 'Satın alma uzmanı', izinler: ['purchase', 'receive', 'partners', 'contracts', 'reports'] } as const;
+const SATIN_ALMA_UZMANI = { islem: 'portal.satinalma', rol: 'Satın alma uzmanı', izinler: ['purchase', 'partners', 'contracts', 'reports'] } as const;
 export const TAM_YETKI_ISLEMI = 'portal.yonet';
 export const TAM_YETKILI_ROL = 'Genel müdür';
 const BOLUMSUZ_ROL = 'Gözlemci';
@@ -221,9 +222,9 @@ export function rolDegisiyorMu(yol: string, eski: Veri | null, yeni: Veri): bool
 const KOLEKSIYON_IZINLERI: Readonly<Record<string, readonly string[]>> = {
   requests: ['sales'],
   rfqs: ['purchase'], bids: ['purchase'], priceReqs: ['purchase'],
-  orders: ['sales', 'purchase', 'receive', 'finance'],
+  orders: ['sales', 'purchase', 'finance'],
   catalog: ['sales', 'purchase'],
-  ncrs: ['quality', 'receive'],
+  ncrs: ['quality'],
   payments: ['finance'], cheques: ['finance'], recons: ['finance'],
   contracts: ['contracts', 'sales', 'purchase'],
   parties: ['partners', 'purchase'],
@@ -242,12 +243,13 @@ export function bolumYazabilirMi(yol: string, kisiId: number, izinler: readonly 
     if (eski?.['partyId'] === 'firm' || yeni?.['partyId'] === 'firm') return false;
     return izinler.includes('partners');
   }
-  // Siparişi yalnız türünün bölümü açar ya da türünü değiştirir (mal kabul ve finans var olan siparişe sevk, kabul, fatura yazar).
+  // Siparişi yalnız türünün bölümü açar ya da türünü değiştirir (finans var olan siparişe fatura yazar).
   if (koleksiyon === 'orders' && (eski === null || eski['type'] !== yeni?.['type'])) {
     const tur = yeni?.['type'] ?? eski?.['type'];
     return izinler.includes(tur === 'sales' ? 'sales' : 'purchase');
   }
-  // Var olan siparişe türünün bölümü yazar: satışa sevk ve fatura, satın almaya teslim alma ve fatura (kart #1162).
+  // Var olan siparişe türünün bölümü yazar: satışa sevk ve fatura, satın almaya fatura (kart #1162); satın alma teslimi
+  // portalda alınmaz (satinAlmaTeslimiReddi).
   if (koleksiyon === 'orders' && parcalar(yol).length === 2) return SIPARIS_YAZMA[siparisTuru(eski)].some((i) => izinler.includes(i));
   const gerekli = koleksiyon === undefined ? undefined : KOLEKSIYON_IZINLERI[koleksiyon];
   return gerekli === undefined || gerekli.some((i) => izinler.includes(i));
@@ -255,7 +257,7 @@ export function bolumYazabilirMi(yol: string, kisiId: number, izinler: readonly 
 
 type SiparisTuru = 'sales' | 'purchase';
 const siparisTuru = (veri: Veri | null): SiparisTuru => (veri?.['type'] === 'sales' ? 'sales' : 'purchase');
-const SIPARIS_YAZMA: Readonly<Record<SiparisTuru, readonly string[]>> = { sales: ['sales', 'finance'], purchase: ['purchase', 'receive', 'finance'] };
+const SIPARIS_YAZMA: Readonly<Record<SiparisTuru, readonly string[]>> = { sales: ['sales', 'finance'], purchase: ['purchase', 'finance'] };
 
 // Bölüm okuma izni sunucuda (kart #1162): satış ve satın alma kayıtlarını yalnız o bölüm, finans ve raporlar okur. Satın alma
 // siparişini kalite de okur (uygunsuzluk kaydı teslim alınmış siparişe açılır). Listede olmayan koleksiyon okuma işlemiyle açıktır.
@@ -265,8 +267,8 @@ const KOLEKSIYON_OKUMA: Readonly<Record<string, readonly string[]>> = {
   catalog: ['sales', 'purchase', 'finance', 'reports'],
 };
 const SIPARIS_OKUMA: Readonly<Record<SiparisTuru, readonly string[]>> = {
-  sales: ['sales', 'receive', 'finance', 'reports'],
-  purchase: ['purchase', 'receive', 'finance', 'reports', 'quality'],
+  sales: ['sales', 'finance', 'reports'],
+  purchase: ['purchase', 'finance', 'reports', 'quality'],
 };
 
 // veri null ise (belge yok ya da alt belge) sipariş için iki türden birinin izni yeter.
@@ -280,6 +282,21 @@ export function bolumOkuyabilirMi(yol: string, izinler: readonly string[], veri:
   }
   const gerekli = p[0] === undefined ? undefined : KOLEKSIYON_OKUMA[p[0]];
   return gerekli === undefined || biri(gerekli);
+}
+
+// Satın alma siparişinin sevkiyatı portalda teslim alınmaz (238, H1): portal belgesindeki "teslim alındı" stok hareketi, parti ve
+// giriş muayenesi açmaz; mal kabul Stok > Mal kabul'dedir. Tam yetki de geçemez. Önceden teslim alınmış sevkiyat olduğu gibi kalır.
+export const SATIN_ALMA_TESLIMI_REDDI = 'Satın alma teslimi portalda alınmaz; Stok > Mal kabul ekranında alın.';
+
+export function satinAlmaTeslimiReddi(yol: string, eski: Veri | null, yeni: Veri | null): string | null {
+  const p = parcalar(yol);
+  if (p[0] !== 'orders' || p.length !== 2 || yeni === null || siparisTuru(yeni) !== 'purchase') return null;
+  const teslimler = (v: Veri | null): Veri[] => {
+    const liste = v?.['deliveries'];
+    return Array.isArray(liste) ? liste.filter((d): d is Veri => duzNesneMi(d) && d['status'] === 'received') : [];
+  };
+  const once = new Set(teslimler(eski).map((d) => JSON.stringify(d['id'] ?? null)));
+  return teslimler(yeni).some((d) => !once.has(JSON.stringify(d['id'] ?? null))) ? SATIN_ALMA_TESLIMI_REDDI : null;
 }
 
 export function portalKullanicisi(kisi: KurucuKisi, simdiMs: number, rol: PortalRolu, unvan: string = rol.role): BaslangicBelgesi {

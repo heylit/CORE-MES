@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi, planOnce, siralamaIstegi, tmiPlani } from '../../../../arkon/web/src/data/tmi-plan.ts';
+import { adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi, planOnce, siraOnayi, siralamaIstegi, tmiPlani } from '../../../../arkon/web/src/data/tmi-plan.ts';
 
 // Kart #199 (A4): rotalı işin paketi operatöre yalnız yayında ve canlı planda iş emrinin kaynağına yerleşmişse düşer.
-const ie = (status: string, plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; zorunlu?: boolean; taslakta?: boolean } | null) => ({ status, tmi: { isEmriId: 4, plan } });
+const ie = (status: string, plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; zorunlu?: boolean; taslakta?: boolean; siraOnayi?: 'taslakta' | 'onayda' } | null) => ({ status, tmi: { isEmriId: 4, plan } });
 const CANLI = { canli: true, sira: 2, eslesiyor: true };
 
 describe('Arkon rotalı işin plan durumu', () => {
@@ -107,5 +107,16 @@ describe('Arkon rotalı işin plan durumu', () => {
     expect(await siralamayiGonder(istek, 7, red(409, 'Plan değişti: ekranı yenileyip yeniden sıralayın.')))
       .toEqual({ sonuc: 'hata', ileti: 'Plan değişti: ekranı yenileyip yeniden sıralayın.', yenile: true });
     expect(await siralamayiGonder(istek, 7, red(403, 'Yetki yok'))).toEqual({ sonuc: 'hata', ileti: 'Yetki yok', yenile: false });
+  });
+  it('taslaktaki sıra (147 a): yalnız canlı işte etiketlenir, sıralamayı ve operatöre düşmeyi değiştirmez', () => {
+    expect(siraOnayi(ie('published', { ...CANLI, siraOnayi: 'taslakta' }))).toBe('taslakta');
+    expect(siraOnayi(ie('published', { ...CANLI, siraOnayi: 'onayda' }))).toBe('onayda');
+    expect(siraOnayi(ie('published', CANLI))).toBe(null);
+    expect(siraOnayi(ie('published', { canli: false, sira: null, eslesiyor: false, siraOnayi: 'onayda' }))).toBe(null);
+    expect(siraOnayi({ status: 'published' })).toBe(null);
+    const bekleyen = ie('published', { ...CANLI, siraOnayi: 'onayda' });
+    expect(operatoreAcik(bekleyen)).toBe(true);
+    expect(planEtiketi(bekleyen)).toBe(null);
+    expect(planOnce(bekleyen, ie('published', { ...CANLI, sira: 1 }))).toBeGreaterThan(0);
   });
 });

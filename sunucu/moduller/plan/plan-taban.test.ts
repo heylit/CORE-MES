@@ -8,6 +8,13 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 // 33 a (kullanıcı kararı, 2026-10-21): taban plan, adımın ilk canlıya alınan yeri; canlıya almayla aynı işlemde yazılır, hiç değişmez.
 describe('plan (gerçek PostgreSQL): taban plan', () => {
   const { c, tamam, istek, yeniAdim, isEmirleriAc, planOku, yer, tg, taslaktaOner, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let ortam: TestVeritabani | undefined;
   let makineA = 0;
   let makineB = 0;
@@ -16,8 +23,8 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
   const sahip = () => ortam!.sahip;
   const taban = (isEmriIdleri: number[]) => ortam!.vt.tx((db) => tabanPlani(db, { isEmriIdleri }));
   const reddedilir = (sql: string, params: unknown[] = []) => assert.rejects(sahip().sorgu(sql, params), /yalnız ekleme|değişmez/);
-  const canliyaAl = (p: PlanCevabi, cerez = c.mudur) =>
-    tamam<SenaryolarCevabi>(cerez, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+  const canliyaAl = async (p: PlanCevabi, cerez = c.mudur) =>
+    tamam<SenaryolarCevabi>(cerez, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
   const planSurumu = async () => (await sahip().tek<{ surum: number }>('SELECT surum FROM plan_durumu'))!.surum;
 
   test('33-1: ilk canlıya almada adımın yeri, yeni canlı sürüm, senaryo ve kişi tabana yazılır; emirle okunur', async () => {
@@ -89,8 +96,9 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
     const p1 = await taslaktaOner(c.planlama);
     const p2 = await taslaktaOner(c.planlama2);
     assert.notEqual(p1.taslak!.id, p2.taslak!.id);
-    const cevaplar = await Promise.all([p1, p2].map((p) =>
-      istek(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true })));
+    const surumlar = [await gonder(p1.taslak!.id, p1.taslak!.surum), await gonder(p2.taslak!.id, p2.taslak!.surum, c.planlama2)];
+    const cevaplar = await Promise.all([p1, p2].map((p, i) =>
+      istek(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: surumlar[i], cakismalariKabul: true })));
     assert.deepEqual(cevaplar.map((x) => x.statusCode), [200, 200]);
     const t = await taban([ie!]);
     assert.equal(t.length, 1);
@@ -102,9 +110,12 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
   test('33-5: yetkisiz canlıya alma tabana yazmaz; vazgeçilen taslak tabana yazmaz', async () => {
     const [ie] = await isEmirleriAc([yeniAdim()]);
     const p = await taslaktaOner();
-    const red = await istek(c.operator, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    const gonderilen = await gonder(p.taslak!.id, p.taslak!.surum);
+    const red = await istek(c.operator, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: gonderilen, cakismalariKabul: true });
     assert.equal(red.statusCode, 403);
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    const cekilen = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaydan-cek`, { surum: gonderilen }))
+      .senaryolar.find((x) => x.id === p.taslak!.id)!.surum;
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: cekilen });
     assert.deepEqual(await taban([ie!]), []);
   });
 });

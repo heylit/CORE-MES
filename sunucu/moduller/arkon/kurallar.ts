@@ -331,7 +331,11 @@ export function adimTuruAlanlari(tur: string | undefined, ekAciklama: string | n
 // (`planSirasiYaz`) gider: plan kuyruğu kaynak başınadır, bir istasyonda birden çok makine olabilir.
 interface PlanKaynagi { tur: string; id: number }
 // taslakta: canlıda yok ama açık bir plan taslağında yerleşmiş (uyarı "canlıya alınmadı" der).
-export interface TmiPlanDurumu { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak: PlanKaynagi | null; zorunlu: boolean; taslakta?: true }
+// siraOnayi (147 a): canlı işin sırası bir taslakta değişmiş; sıra canlıya ancak taslak onaylanıp canlıya alınınca geçer, ekran bunu gösterir.
+export type SiraOnayi = 'taslakta' | 'onayda';
+export interface TmiPlanDurumu {
+  canli: boolean; sira: number | null; eslesiyor: boolean; kaynak: PlanKaynagi | null; zorunlu: boolean; taslakta?: true; siraOnayi?: SiraOnayi;
+}
 export const PLANSIZ: TmiPlanDurumu = { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: true };
 
 // Yerleşimler canlı plandaki başlangıç sırasıyla gelir (plan `canliSira`).
@@ -387,6 +391,20 @@ export function planSirasiTasinacaklar(onceki: readonly number[], yeni: readonly
   const tasinacak = yeni.filter((x) => !sabit.has(x));
   const eski = onceki.filter((x) => !sabit.has(x));
   return tasinacak.some((x, i) => x !== eski[i]) ? tasinacak : 'planSiraDegismedi';
+}
+
+// Sırası taslakta değişmiş iş emirleri: onaydaki taslak açıktakinden önce gelir (onay bekleyen sıra, kişinin yeni denemesiyle gizlenmez).
+export function siraOnaylari(bekleyen: readonly { isEmriId: number; durum: 'acik' | 'onayda' }[]): Map<number, SiraOnayi> {
+  const sonuc = new Map<number, SiraOnayi>();
+  for (const b of bekleyen) if (b.durum === 'onayda' || !sonuc.has(b.isEmriId)) sonuc.set(b.isEmriId, b.durum === 'onayda' ? 'onayda' : 'taslakta');
+  return sonuc;
+}
+// Yalnız canlı plandaki işin sırası bekleyebilir; canlıda olmayan iş zaten "taslakta" ya da "planlanmadı" der.
+export function siraOnayiniYaz(planlar: Map<number, TmiPlanDurumu>, onaylar: ReadonlyMap<number, SiraOnayi>): void {
+  for (const [id, siraOnayi] of onaylar) {
+    const d = planlar.get(id);
+    if (d?.canli) planlar.set(id, { ...d, siraOnayi });
+  }
 }
 
 export const planSiralayabilirMi = (rol: ArkonRolu): boolean => rol === 'admin' || (yetkiMatrisi()[rol] ?? []).includes('plan.edit');

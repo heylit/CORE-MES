@@ -1,12 +1,19 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { calisanAdimlar, canliOzeti } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde seçilen makine ve makine ayrımı (393 d)', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, isEmriDurumu, planOku, yer, taslaktaOner, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let istasyonB = 0;
   let operatorId = 0;
   let ortam: TestVeritabani | undefined;
@@ -16,7 +23,7 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     await ortam!.sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [operatorId, istasyonB]);
   });
 
-  const canliyaAl = (p: PlanCevabi) => tamam<PlanCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+  const canliyaAl = async (p: PlanCevabi) => tamam<PlanCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
   const dakika = 60_000;
 
   test('emrin ilk adımı çalışırken başlamamış 2. ve 3. adım motorca yeniden yerleştirilir ve canlıya geçer', async () => {

@@ -7,7 +7,9 @@ import { bolunmusMu } from './parca';
 export interface PlanKaynagi { tur: 'makine' | 'kisi'; id: number }
 // `zorunlu` yazılmamış (eski) plan durumu A4 kuralıyla okunur.
 // taslakta: canlıda yok, açık bir plan taslağında yerleşmiş; taslak canlıya alınınca iş canlıya geçer.
-export interface TmiPlan { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: PlanKaynagi | null; zorunlu?: boolean; taslakta?: boolean }
+// siraOnayi (147 a): canlı işin sırası bir plan taslağında değişmiş; ekrandaki ve operatördeki sıra, taslak onaylanıp canlıya alınana dek canlınınkidir.
+export type SiraOnayi = 'taslakta' | 'onayda';
+export interface TmiPlan { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: PlanKaynagi | null; zorunlu?: boolean; taslakta?: boolean; siraOnayi?: SiraOnayi }
 export interface PlanliPaket { id?: string; status?: string; tmi?: { isEmriId?: number; plan?: TmiPlan | null; bolunmus?: boolean; parca?: object } | null }
 
 // Sunucu açık iş emrinin paketine her okumada `tmi.plan` yazar; bitmiş (ya da plan dışı kalmış) iş emrinin paketinde plan yoktur ve
@@ -33,8 +35,16 @@ export function planEtiketi(p: PlanliPaket | null | undefined): PlanEtiketi | nu
   return p!.status === 'draft' ? 'hazirlik-bekliyor' : null;
 }
 
+// Taslaktaki sıra değişikliğinin etiketi: onaya gönderilmemiş taslak ile onay bekleyen ayrı söylenir; ikisinde de sıra henüz canlı değildir.
+export const SIRA_ONAYI: Record<SiraOnayi, string> = { taslakta: 'Sıra taslakta · onaya gönderilmedi', onayda: 'Sıra onay bekliyor' };
+export function siraOnayi(p: PlanliPaket | null | undefined): SiraOnayi | null {
+  const d = tmiPlani(p);
+  return d && d.canli && (d.siraOnayi === 'taslakta' || d.siraOnayi === 'onayda') ? d.siraOnayi : null;
+}
+
 /* Sıra (A4, kullanıcı kararı "b"): canlı planda yerleşmiş TMI işi plan sırasıyla önce gelir (aynı istasyondaki makineler kendi sırasıyla
-   iç içe), öteki paketler ardından kendi kuralıyla (Planlama'nın `seq`'i, termin). Taslağa yazılan sıra müdür canlıya alana dek görünmez. */
+   iç içe), öteki paketler ardından kendi kuralıyla (Planlama'nın `seq`'i, termin). Taslağa yazılan sıra onaylanıp canlıya alınana dek
+   sıralamaya girmez; yalnız etiketiyle (`siraOnayi`) görünür. */
 const planliSira = (p: PlanliPaket | null | undefined): TmiPlan | null => {
   const d = tmiPlani(p);
   return d && d.canli && d.sira != null ? d : null;

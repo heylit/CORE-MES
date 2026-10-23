@@ -123,3 +123,18 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - Şema, uç, işlem ve paket yok. Plan TL toplamı ve TL iyileştirmesinin sonuçları değişir.
 - VARSAYIM: öncelik sınıfının saatlik bedeli (`gecikmeBedeli`, `emirBedelleri`) değişmedi: oran saatliktir, toplam değildir; payla ağırlansa küçük parça daha düşük sınıfa düşerdi.
 - Testler: `kurallar.test.ts` 35 b (saf); `plan-bedel.test.ts` 35 b (gerçek PostgreSQL, satır 10/20/40 adette taban 1, 1/2, 1/4).
+## Onay adımı (H1, H5; 2026-10-23)
+- Kullanıcı kararları: hedef (canlı plana tek kapı), 146 (dört göz ayarı, varsayılan kapalı), 147 a (Arkon sırası onaya gider), 148 a (bedel ayarı ve elle çarpan taslağa). Sözleşme H0'da (`PLAN_ONAY_KOMUTLARI`, `SENARYO_DURUMLARI`, `onay`, `yapabilir`, taslak gövdeleri).
+- Göç `20261023201500_plan_onay.sql`: senaryo durumuna `onayda` ve defter türüne `bedel_ayari`, `siparis_carpani` (CHECK genişler); kapanış kısıtı ve iki koruma tetikleyicisi onaydakini kapalı saymaz; yeni boş tablolar `plan_senaryo_onay_kaydi` (yalnız ekleme), `plan_senaryo_bedel_ayari`, `plan_senaryo_siparis_carpani`. Dolu tabloya sütun eklenmedi.
+- Uçlar: `onaya-gonder`, `onaydan-cek` (plan.studyo), `geri-gonder` (plan.canliya-al). `canliya-al` yalnız onaydaki taslaktan. Yeni işlem ve rol yok.
+- Davranış değişikliği: açık taslak doğrudan canlıya alınmaz; `POST /plan/bedel-ayari` ve `POST /plan/siparisler/:id/carpan` taslağa yazar ve `PlanCevabi` döner (taslak kimliğiyle); `GET /plan/bedel-ayari?taslak=` ve `GET /plan/siparisler/:id/bant?taslak=` taslağınkini okur.
+- `canliyaAl`: taslağın ayarı ve bedel ayarı tek güncellemeyle canlıya (geçmişe canlıya alma başına tek satır); taslaktaki çarpanlar yazanı ve gerekçesiyle `plan_siparis_carpani`'ya.
+- `disari.ts` `bekleyenSiralar` (Arkon H6): açık ya da onaydaki taslakta kaldırılmamış sıralama değişikliği olan iş emirleri.
+- Senaryo listesi onaydakini açıklarla birlikte üstte gösterir, etkisini hesaplar; ikinci menü stüdyo sayacı açık ve onaydakileri sayar.
+- Bağımlılık: plan -> ayarlar `disari.ts` (`sistemAyariOku`); ayarlar plana bağlı değil.
+
+## Vardiyasız tezgâh (168 b, 2026-10-23)
+- Sunucu motoru (`PlanMotoruCozucusu`) dönüşünde `vardiyasiz` (anahtar "emir no|OP no") taşıyabilir. `sunucuMotoru` bu işleri hata saymaz, yer vermez, ayrı döndürür.
+- Kuyruk yaz: vardiyasız işin taslaktaki yeri kalkar, yazılmaz; komut 200. Canlıya al: vardiyasız işin taslak yeri canlıya geçmez, canlıdaki hâli kalır, tabanı yazılmaz.
+- Plan cevabı: motor kayıtlıyken makinesinin takvimi olmayan yerleşmemiş işin nedeni "Tezgâhın vardiyası tanımsız."; takvimsiz uyarısı "vardiya takvimi yok; işleri yerleşmedi." Motor kayıtsızken bugünkü metin.
+- VARSAYIM: neden, işin atanmış makinesinin takvimi olup olmadığından okunur (motorun listesi saklanmaz); kuyruk yazımında taslaktaki eski yerin kalkması iş yerleşmemiş görünsün diyedir.

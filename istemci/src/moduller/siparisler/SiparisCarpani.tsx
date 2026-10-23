@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { Link } from 'react-router-dom';
+import type { PlanCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { SiparisAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -15,14 +16,14 @@ const SINIF_ADI = { yuksek: 'Yüksek', normal: 'Normal', dusuk: 'Düşük' } as 
 const tlMetni = (n: number): string => n.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 const emirlerMetni = (b: Bant): string => b.emirler.map((e) => `${e.emirNo} ${SINIF_ADI[e.sinif]} (${tlMetni(e.bedel)} TL/saat)`).join(', ');
 
-// 306 a: kayıttan önceki ve sonraki bant karşılaştırılır; çarpan sınırı aşmadıysa kullanıcı neden sıranın değişmediğini görür.
+// 306 a: canlı bant ile çarpanın yazıldığı taslağın bandı karşılaştırılır; çarpan sınırı aşmadıysa kullanıcı neden sıranın değişmediğini görür.
 function bantFarki(once: Bant, sonra: Bant): string {
   const onceki = new Map(once.emirler.map((e) => [e.uretimEmriId, e.sinif]));
   const degisen = sonra.emirler.filter((e) => onceki.has(e.uretimEmriId) && onceki.get(e.uretimEmriId) !== e.sinif);
   if (degisen.length === 0) {
-    return `Bant değişmedi: ${emirlerMetni(sonra)}. Yüksek için bedel ${tlMetni(sonra.yuksekSiniri)} TL/saat ve üstü, Düşük için ${tlMetni(sonra.dusukSiniri)} TL/saat ve altı olmalı.`;
+    return `Taslakta bant değişmez: ${emirlerMetni(sonra)}. Yüksek için bedel ${tlMetni(sonra.yuksekSiniri)} TL/saat ve üstü, Düşük için ${tlMetni(sonra.dusukSiniri)} TL/saat ve altı olmalı.`;
   }
-  return `Bant değişti: ${degisen.map((e) => `${e.emirNo} ${SINIF_ADI[onceki.get(e.uretimEmriId)!]} → ${SINIF_ADI[e.sinif]}`).join(', ')}.`;
+  return `Taslakta bant değişir: ${degisen.map((e) => `${e.emirNo} ${SINIF_ADI[onceki.get(e.uretimEmriId)!]} → ${SINIF_ADI[e.sinif]}`).join(', ')}.`;
 }
 
 const carpanMetni = (c: number): string => `×${c.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`;
@@ -35,6 +36,7 @@ const SUTUNLAR: Sutun<Kayit>[] = [
 ];
 
 // Elle çarpan (195 a): siparişin gecikme bedelini plan için çarpar. Veri Plan uçlarındadır; kayıt yalnız eklenir, geçmiş silinmez.
+// 148 a: çarpan önce plan taslağına yazılır; geçmiş ve geçerli çarpan canlıdır, taslak onaylanıp canlıya alınınca değişir.
 export function SiparisCarpani({ siparis }: { siparis: SiparisAyrintisi }) {
   const gorur = useCarpanGorur();
   const sinir = useCarpanSiniri();
@@ -51,16 +53,21 @@ export function SiparisCarpani({ siparis }: { siparis: SiparisAyrintisi }) {
     queryFn: () => api.get<SiparisBandiCevabi>(`/plan/siparisler/${siparis.id}/bant`),
     enabled: gorur && bantGorur,
   });
-  const [kayitOncesi, kayitOncesiYaz] = useState<{ bant: Bant; an: number } | null>(null);
+  const [taslak, taslakYaz] = useState<number | null>(null);
+  const taslakBantSorgu = useQuery({
+    queryKey: [...anahtarlar.siparisBandi(siparis.id), 'taslak', taslak],
+    queryFn: () => api.get<SiparisBandiCevabi>(`/plan/siparisler/${siparis.id}/bant?taslak=${String(taslak)}`),
+    enabled: gorur && bantGorur && taslak !== null,
+  });
   const acik = siparis.durum === 'taslak' || siparis.durum === 'onayli';
   const gecerli = sorgu.data?.gecerli ?? null;
   const bant = bantSorgu.data?.bant ?? null;
-  const fark = kayitOncesi !== null && bant !== null && bantSorgu.dataUpdatedAt > kayitOncesi.an ? bantFarki(kayitOncesi.bant, bant) : null;
+  const taslakBant = taslakBantSorgu.data?.bant ?? null;
+  const fark = bant !== null && taslakBant !== null ? bantFarki(bant, taslakBant) : null;
   if (!gorur) return null;
 
-  const kaydedildi = () => {
-    const an = Date.now();
-    kayitOncesiYaz(bant === null ? null : { bant, an });
+  const kaydedildi = (id: number) => {
+    taslakYaz(id);
     void istemci.invalidateQueries({ queryKey: anahtarlar.siparisBandi(siparis.id) });
   };
 
@@ -76,6 +83,11 @@ export function SiparisCarpani({ siparis }: { siparis: SiparisAyrintisi }) {
             {sorgu.isSuccess && (gecerli === null
               ? <p className="tc-sp-ipucu">Elle çarpan verilmedi; plan çarpanı 1 sayar.</p>
               : <p className="tc-sp-ipucu"><strong>{carpanMetni(gecerli.carpan)}</strong>{` ${gecerli.gerekce}`}</p>)}
+            {taslak !== null && (
+              <p className="tc-sp-ipucu" role="status">
+                Yeni çarpan plan taslağında; taslak onaylanıp canlıya alınınca geçerli olur. <Link to="/recete-rota/studio">Plan stüdyosu</Link>
+              </p>
+            )}
             {fark !== null
               ? <p className="tc-sp-ipucu" role="status">{fark}</p>
               : bantSorgu.isSuccess && (bant === null
@@ -105,7 +117,7 @@ function carpanHatasi(metin: string): string | null {
   return null;
 }
 
-function CarpanFormu({ siparis, sinir, kapat, kaydedildi }: { siparis: SiparisAyrintisi; sinir: number; kapat: () => void; kaydedildi: () => void }) {
+function CarpanFormu({ siparis, sinir, kapat, kaydedildi }: { siparis: SiparisAyrintisi; sinir: number; kapat: () => void; kaydedildi: (taslak: number) => void }) {
   const kimlik = useId();
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -115,11 +127,11 @@ function CarpanFormu({ siparis, sinir, kapat, kaydedildi }: { siparis: SiparisAy
   const [hatalar, hatalarYaz] = useState<{ carpan?: string; gerekce?: string }>({});
   const komut = useMutation({
     mutationFn: (govde: { carpan: number; gerekce: string }) =>
-      gonder<SiparisCarpaniCevabi>(`/plan/siparisler/${siparis.id}/carpan`, govde),
+      gonder<PlanCevabi>(`/plan/siparisler/${siparis.id}/carpan`, { ...govde, taslak: null }),
     onSuccess: (cevap) => {
-      istemci.setQueryData(anahtarlar.siparisCarpani(siparis.id), cevap);
-      bildir('tamam', 'Çarpan kaydedildi.');
-      kaydedildi();
+      bildir('tamam', 'Çarpan plan taslağına yazıldı; onaydan sonra geçerli olur.');
+      if (cevap.taslak !== null) kaydedildi(cevap.taslak.id);
+      void istemci.invalidateQueries({ queryKey: anahtarlar.siparisCarpani(siparis.id) });
       kapat();
     },
   });

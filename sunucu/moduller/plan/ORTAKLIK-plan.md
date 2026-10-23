@@ -12,7 +12,7 @@
 | Teslim | okunur (üretim emri teslimi) | uretim-emirleri |
 | Öncelik | yok (sıralama teslim, emir, sıra); öncelik alanı gelirse motora girer | uretim-emirleri (yok) |
 | Takvim, vardiya | yok (sürekli çalışma, P-B3) | vardiya, mesai |
-| Senaryo durumu | `plan_senaryosu.durum` (acik, canliya_alindi, vazgecildi) | - |
+| Senaryo durumu | `plan_senaryosu.durum` (acik, onayda, canliya_alindi, vazgecildi) | - |
 | Plan sürümü | `plan_durumu.surum` | - |
 
 ## Taban plan (33 a)
@@ -20,3 +20,12 @@
 |---|---|---|
 | Taban plan (adımın ilk canlı yeri) | `plan_taban` (is_emri_id, uretim_emri_id, makine_id, kisi_id, baslangic, bitis, plan_surumu, senaryo_id, yazan_kisi_id, zaman) | plan (sahibi, 33 a); Reçete ve Rota `tabanPlani` ile okur |
 | İş emri, üretim emri | `plan_taban.is_emri_id`, `plan_taban.uretim_emri_id` (FK yok: taban emirden sonra da kalır) | uretim-emirleri |
+
+## Onay adımı (146, 147 a, 148 a)
+| Kavram | Planda | Sahibi / öteki yer |
+|---|---|---|
+| Plan onay geçişleri | `plan_senaryo_onay_kaydi` (senaryo_id, islem, kisi_id, metin, dort_gozsuz, zaman) | plan; dört göz ayarı `plan.dort-goz` ayarlar modülünde (değeri), tanımı paylasilan/ayarlar |
+| Kişi | `plan_senaryo_onay_kaydi.kisi_id`, `plan_senaryo_siparis_carpani.kisi_id` -> `kisi` | kisiler |
+| Taslak bedel ayarı | `plan_senaryo_bedel_ayari` (plan_ayari bedel sütunlarının kopyası) | plan |
+| Sipariş | `plan_senaryo_siparis_carpani.siparis_id` -> `siparisler_siparis` | siparisler |
+| Bekleyen Arkon sırası | okunur: `plan_senaryo_degisikligi` (tur sirala) | plan; Arkon `bekleyenSiralar` ile okur |
