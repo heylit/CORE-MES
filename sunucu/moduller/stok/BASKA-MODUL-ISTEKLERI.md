@@ -76,3 +76,8 @@ Mal kabulde depocu kartı müşteri parça no, teknik resim no, tedarikçi kodu 
 
 - Lotsuz düşüm ve "teslim edilmeden başka istasyondan" notu bugün yalnız hareket açıklamasında. İstenen: sayım cevabı `uyari` alanını taşısın; stok `uretimSayimiYansit` sonucundan uyarıyı verir. Dal 11'de yazılır.
 
+## bildirim ve kisiler: Dal 8'in ortak dosya değişiklikleri (kart #155)
+
+- `paylasilan/sozlesme/bildirim.ts`: iki yeni tür `stok.birakildi` (bilgi) ve `stok.teslim-suresi-doldu` (uyarı); `bildirim/kurallar.test.ts` beklenen liste buna göre güncellendi.
+- `kisiler/rol-dagilimi.test.ts`: stok taşıma yoklaması `GET /stok/sepet` yerine `POST /stok/sepet/teslim-et` (sepet herkese açıldı, Soru 133).
+- Kablolama: sayım uyarısı için `disari.ts uretimSayimiYansitUyarili` hazır; kablolamanın ona geçmesi Dal 11 tarafında.

@@ -291,7 +291,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     fireEvent.change(within(pencere).getByLabelText(/Kod/), { target: { value: KISI_KODU } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Bul' }));
     await waitFor(() => expect((screen.getByRole('combobox', { name: /^Nereye/ }) as HTMLSelectElement).value).toBe('i:1'));
-    expect(screen.getByText('Alıcı: Deneme Alıcı; teslimi yalnız o alır.')).toBeTruthy();
+    expect(screen.getByText('Alıcı: Deneme Alıcı; istasyonundaki herkes de alabilir.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Teslim et' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ hedef: { istasyonId: 1 }, aliciKodu: KISI_KODU }));
     fireEvent.change(screen.getByRole('combobox', { name: /^Nereye/ }), { target: { value: 'k:5' } });

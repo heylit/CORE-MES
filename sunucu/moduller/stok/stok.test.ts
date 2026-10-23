@@ -924,7 +924,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     await malKabul(a, '10'); await malKabul(b, '3');
     const zemin = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur: 'depo_zemini', kod: 'D-T1' });
     const z = zemin.govde.konum.id;
-    assert.equal((await istek('satin_alma', 'GET', '/stok/sepet')).durum, 403);
+    // Soru 133: sepet herkesindir (stok.istek); depo işlemi olmayan rol de kendi sepetini görür.
+    assert.equal((await istek('satin_alma', 'GET', '/stok/sepet')).durum, 200);
     assert.equal((await depo('POST', '/stok/sepet/satir-ekle', { malzemeId: a, miktar: '4' })).durum, 200);
     assert.equal((await depo('POST', '/stok/sepet/satir-ekle', { malzemeId: a, miktar: '2' })).durum, 200);
     const sep = await depo<{ satirlar: { id: number; malzemeId: number; miktar: string; mevcut: string }[] }>('POST', '/stok/sepet/satir-ekle', { malzemeId: b, miktar: '5' });

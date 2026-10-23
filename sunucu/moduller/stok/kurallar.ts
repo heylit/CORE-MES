@@ -458,9 +458,11 @@ export function teslimKapanisEngeli(durum: TeslimDurumu): string | null {
 // (depo) geleni depo işlemi olan alır ya da reddeder; gönderen kendi gönderdiğini teslim almaz.
 export type TeslimAlani = { tur: 'istasyon'; kapsamda: boolean } | { tur: 'depo'; depoIslemi: boolean };
 // STK-T8 (299 b): kişiye yazılan teslimi yalnız o kişi alır ya da reddeder.
+// Soru 133: kişiye teslim istasyona teslimdir; istasyonun kapsamındaki herkes alır (299 b'deki "yalnız o kişi" kalktı).
+// Kişisiz hedef (depo) kişiye bağlanmaz; baskasinaGeliyor yalnız istasyon dışı hedefte reddeder.
 export function teslimAlmaEngeli(gonderenBenMi: boolean, alan: TeslimAlani, baskasinaGeliyor = false): string | null {
   if (gonderenBenMi) return 'Kendi gönderdiğiniz teslimi alamazsınız; karşı taraf alır.';
-  if (baskasinaGeliyor) return 'Bu teslim başka bir kişiye geliyor.';
+  if (baskasinaGeliyor && alan.tur !== 'istasyon') return 'Bu teslim başka bir kişiye geliyor.';
   if (alan.tur === 'istasyon' ? !alan.kapsamda : !alan.depoIslemi) return 'Bu teslim size gelmiyor.';
   return null;
 }
@@ -934,3 +936,10 @@ export function refakatBaglamaEngeli(
   if (lot.malzemeId !== r.malzemeId) return 'Lot kartın malzemesinden değil.';
   return null;
 }
+
+// Yolda süresi (Soru 133, ayar `stok.yolda-suresi-dk`): süre boşsa teslim kendiliğinden düşmez. Döner: sürenin bittiği an ya da null.
+export function yoldaSureSonu(gonderim: string, dakika: number | null): string | null {
+  if (dakika === null || dakika <= 0) return null;
+  return new Date(Date.parse(gonderim) + dakika * 60_000).toISOString();
+}
+

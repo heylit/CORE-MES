@@ -419,7 +419,7 @@ function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslan
         <Secim etiket="Nereye" bosSecenek="Hedef seçin" secenekler={hedefler} value={hedef} onChange={(o) => hedefSec(o.target.value)} required
           ipucu={secili?.sonraki ? `Rotada sonraki: ${secili.sonraki.ad} (OP ${secili.sonraki.opNo})` : undefined} />
       </div>
-      {alici && hedefGecerli && <p className="tc-stok-bilgi" role="status">Alıcı: {alici.ad ?? 'okutulan kişi'}; teslimi yalnız o alır.</p>}
+      {alici && hedefGecerli && <p className="tc-stok-bilgi" role="status">Alıcı: {alici.ad ?? 'okutulan kişi'}; istasyonundaki herkes de alabilir.</p>}
       {alici && hedef !== '' && !hedefGecerli && (
         <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{alici.ad ?? 'Okutulan kişi'} buradan teslim edilebilecek bir istasyonda değil; listeden bir hedef seçin.</p>
       )}
@@ -453,14 +453,14 @@ const SONRAKI_YOK: Record<NonNullable<IstasyonSepetiSatiri['sonrakiYok']>, strin
 
 // İstasyon sepeti (kart #1353): istasyona teslim alınan ve orada üretilen malzeme, getiren ya da üreten kişiyle. Kapsamdaki
 // herkes görür ve gönderebilir; sayımla statü dönüşümü de burada görünür (stok aynı istasyon konumundadır).
-// Soru 89 ve 95 a: sepette hepsi görünür; Üretilen ve Teslim alınan süzer (satıra son giren hareket). Depo sepeti yalnız stok.transfer olana.
+// Soru 89 ve 95 a: sepette hepsi görünür; Üretilen ve Teslim alınan süzer (satıra son giren hareket). Sepetim herkesin kendi sepetidir (Soru 133).
 type SepetSuzgeci = 'hepsi' | 'uretim' | 'teslim' | 'depo';
 const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
-  { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Depo sepeti' },
+  { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Sepetim' },
 ];
 function Sepet({ kutu, depoSepeti }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean }) {
   const depocu = useIslem('stok.transfer');
-  const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti && depocu ? 'depo' : 'hepsi');
+  const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
   const [istasyon, setIstasyon] = useState(() => String(kutu.buradakiIstasyonId ?? kutu.istasyonlar[0]?.id ?? ''));
   const istasyonId = Number(istasyon);
   const sepet = useQuery({
@@ -470,7 +470,7 @@ function Sepet({ kutu, depoSepeti }: { kutu: TeslimKutusuCevabi; depoSepeti: boo
   });
   const suzgecler = (
     <div className="tc-stok-eylem" role="group" aria-label="Sepet süzgeci">
-      {SUZGECLER.filter((x) => x.anahtar !== 'depo' || depocu).map((x) => (
+      {SUZGECLER.map((x) => (
         <Dugme key={x.anahtar} tur={suzgec === x.anahtar ? 'birincil' : 'ikincil'} aria-pressed={suzgec === x.anahtar} onClick={() => setSuzgec(x.anahtar)}>{x.baslik}</Dugme>
       ))}
     </div>

@@ -19,6 +19,7 @@ export function TeslimSatiri({ t, children }: { t: Teslim; children?: ReactNode 
         {t.aliciAd && <span>Alıcı: {t.aliciAd}</span>}
         {t.aciklama && <span>{t.aciklama}</span>}
         {t.redNedeni && <span>Red: {t.redNedeni}</span>}
+        {t.durum === 'yolda' && t.sureSonu && <span>Alınmazsa {zamanMetni(t.sureSonu)} iptal olur; stok kaynakta kalır</span>}
         {children}
       </div>
       <Rozet ton={d.ton}>{d.etiket}</Rozet>

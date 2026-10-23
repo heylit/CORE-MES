@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import {
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
   sonrakiIstasyon,
-  baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
+  baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
@@ -53,7 +53,9 @@ describe('stok kuralları (saf)', () => {
     assert.equal(teslimAlmaEngeli(false, { tur: 'istasyon', kapsamda: true }), null);
     assert.notEqual(teslimAlmaEngeli(false, { tur: 'istasyon', kapsamda: false }), null);
     assert.notEqual(teslimAlmaEngeli(false, { tur: 'depo', depoIslemi: false }), null);
-    assert.equal(teslimAlmaEngeli(false, { tur: 'istasyon', kapsamda: true }, true), 'Bu teslim başka bir kişiye geliyor.', 'STK-T8 kişiye teslim');
+    assert.equal(teslimAlmaEngeli(false, { tur: 'istasyon', kapsamda: true }, true), null, 'Soru 133: kişiye teslimi istasyon da alır');
+    assert.notEqual(teslimAlmaEngeli(false, { tur: 'istasyon', kapsamda: false }, true), null, 'kapsam dışı yine alamaz');
+    assert.equal(teslimAlmaEngeli(false, { tur: 'depo', depoIslemi: true }, true), 'Bu teslim başka bir kişiye geliyor.');
     const istek = { durum: 'stok_yok' as const, malzemeId: 1, istasyonId: 7 };
     const teslim = { malzemeId: 1, hedefIstasyonId: 7, depoIslemi: true };
     assert.equal(istekliTeslimEngeli(istek, teslim), null);
@@ -602,5 +604,9 @@ describe('DEP-64 katalog etiketi', () => {
     assert.match(refakatBaglamaEngeli(r, lot, 1) ?? '', /değişti/);
     assert.match(refakatBaglamaEngeli(r, { ...lot, uretimEmriId: 5 }, 2) ?? '', /üretim emrinin çıktısı/);
     assert.match(refakatBaglamaEngeli(r, { ...lot, malzemeId: 8 }, 2) ?? '', /malzemesinden değil/);
+  });
+  test('Soru 133 yolda süresi: ayar boşsa süre yok; varsa gönderimden dakika sonra', () => {
+    assert.equal(yoldaSureSonu('2026-10-23T10:00:00.000Z', null), null);
+    assert.equal(yoldaSureSonu('2026-10-23T10:00:00.000Z', 90), '2026-10-23T11:30:00.000Z');
   });
 });
