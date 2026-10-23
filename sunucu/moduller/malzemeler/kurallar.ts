@@ -261,8 +261,8 @@ export function kartRotaIcerigiDegistiMi(kayitli: Nesne, gelen: Nesne): boolean 
 export const ROTALI_KART_ILETISI = 'Bu kartın rotası var; operasyon ve reçete Reçete ve Rota\'da düzenlenir.';
 
 // UYUM-BORCU madde 4: hammaddenin ölçüsü ekranın kuralıyla (`katalog.html` `FORMS`, `dimVals`, `dimsErr`) sunucuda da denetlenir; doğrudan API kaydı da aynı sınırı tutar.
-// Yalnız tutarlılık: form ya da ölçü geldiyse form bilinmeli, formun her ölçüsü sıfırdan büyük sayı olmalı, form kendi sınırını tutmalı. Ailenin, kalitenin ve ölçünün
-// hiç gelmemesi sunucuda denetlenmez (ekrandan gevşek; açık borç). Kayıtlı kartta yalnız form ya da ölçü değişince bakılır: eski kayıt düzenlemeye kilitlenmez.
+// Form bilinmeli, formun her ölçüsü sıfırdan büyük sayı olmalı, form kendi sınırını tutmalı; ölçüsüz hammadde de reddedilir (157 a, ekranın ölçü adımı gibi).
+// Kayıtlı kartta yalnız form ya da ölçü değişince bakılır: eski kayıt düzenlemeye kilitlenmez.
 type OlcuSiniri = (o: Record<string, number>) => string | null;
 const HAMMADDE_FORMLARI: Readonly<Record<string, { olculer: readonly string[]; sinir?: OlcuSiniri }>> = {
   levha: { olculer: ['t', 'w', 'l'] },
@@ -287,8 +287,6 @@ function olcuHatasi(kayit: Nesne): string | null {
   const form = kayit['form'];
   const dims = kayit['dims'];
   const formVar = typeof form === 'string' && form !== '';
-  const olcuVar = nesneMi(dims) && Object.keys(dims).length > 0;
-  if (!formVar && !olcuVar) return null;
   const tanim = formVar && Object.hasOwn(HAMMADDE_FORMLARI, form) ? HAMMADDE_FORMLARI[form] : undefined;
   if (!tanim) return 'Bir form seç.';
   const o: Record<string, number> = {};
@@ -302,9 +300,10 @@ function olcuHatasi(kayit: Nesne): string | null {
 export function hammaddeOlcuHatasi(kayitli: Nesne | null, gelen: Nesne): string | null {
   const talep = gelen['talep'];
   const adaylar = nesneMi(talep) && nesneMi(talep['yeni']) ? [gelen, talep['yeni']] : [gelen];
+  const taban = kayitli && hammaddeMi(kayitli) ? kayitli : null;
   for (const k of adaylar) {
     if (!hammaddeMi(k)) continue;
-    if (kayitli && olcuBilgisi(kayitli) === olcuBilgisi(k)) continue;
+    if (taban && olcuBilgisi(taban) === olcuBilgisi(k)) continue;
     const hata = olcuHatasi(k);
     if (hata) return hata;
   }
@@ -384,6 +383,116 @@ export function katalogYeniOnek(
 // MKK-10: ekran hammadde ve sarf kartı için her zaman anahtar üretir; yarı mamul, mamul ve demirbaşta resim, müşteri ya da
 // seri girilmemişse üretemez (null kabul).
 export const katalogAnahtarZorunluMu = (tur: string): boolean => tur === 'hammadde' || tur === 'sarf';
+
+/* ---------------- Sihirbazın zorunlu adımları ve benzersiz anahtar sunucuda (B11, 157 a) ---------------- */
+
+const kartAdaylari = (gelen: Nesne): Nesne[] => {
+  const talep = gelen['talep'];
+  return nesneMi(talep) && nesneMi(talep['yeni']) ? [gelen, talep['yeni']] : [gelen];
+};
+const doluMu = (v: unknown): boolean => !(v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0));
+const gAlani = (kayit: Nesne, k: string): unknown => (nesneMi(kayit['g']) ? kayit['g'][k] : undefined);
+// Boş değerler eşittir: kuraldan önce alanı hiç yazılmamış kart, ekran boş metin gönderdiğinde değişmiş sayılmaz.
+const bossaNull = (v: unknown): unknown => (doluMu(v) ? v : null);
+const kaliteBilgisi = (kayit: Nesne): string =>
+  kararliMetin({ grade: bossaNull(kayit['grade']), ozel: kayit['grade'] === '__ozel' && nesneMi(kayit['custom']) ? bossaNull(kayit['custom']['ad']) : null });
+const kaliteVarMi = (kayit: Nesne): boolean =>
+  kayit['grade'] === '__ozel' ? nesneMi(kayit['custom']) && doluMu(kayit['custom']['ad']) : doluMu(kayit['grade']);
+
+// Ekranın ilk iki adımı (`stepOk` 0 ve 1): aile ve kalite seçilmeden ölçüye geçilmez. Kalitenin ailenin listesinde olup olmadığı ekranın tablosundadır;
+// sunucu yalnız seçilmiş olmasına bakar. Yeni kartta ve alan değişince; kayıtlı eksik kart, alan değişmedikçe kaydolur.
+export function hammaddeTanimHatasi(kayitli: Nesne | null, gelen: Nesne): { alan: string; mesaj: string } | null {
+  const taban = kayitli && hammaddeMi(kayitli) ? kayitli : null;
+  for (const k of kartAdaylari(gelen)) {
+    if (!hammaddeMi(k)) continue;
+    if ((!taban || bossaNull(taban['fam']) !== bossaNull(k['fam'])) && !doluMu(k['fam'])) return { alan: 'kayit.fam', mesaj: 'Malzeme ailesini seçin.' };
+    if ((!taban || kaliteBilgisi(taban) !== kaliteBilgisi(k)) && !kaliteVarMi(k)) return { alan: 'kayit.grade', mesaj: 'Kaliteyi seçin.' };
+  }
+  return null;
+}
+
+// Ekranın yerleşik zorunlu alanları (`katalog.html` `ALAN.*` ve `SARF_KAT` `gerekli: true`, koşulsuz olanlar; `alanZorunlu`): ayar `kurallar[tür].zorunlu`
+// false ile kapatabilir, adı kapatamaz. Hizmette ad çeşitten kurulduğu için zorunlu değildir; "Diğer" çeşidin adı zorunludur.
+const YERLESIK_ZORUNLU: Readonly<Record<string, readonly string[]>> = {
+  yarimamul: ['ad', 'tip'], mamul: ['ad'], ticari_mal: ['ad'], demirbas: ['ad', 'alis'], hizmet: ['yon', 'cesit'],
+};
+const SARF_ZORUNLU: Readonly<Record<string, readonly string[]>> = {
+  kaynak: ['tur', 'sinif'], takim: ['tur'], asindirici: ['tur'], kimyasal: ['tur'], kkd: ['tur'], baglanti: ['tur'], ambalaj: ['tur'], genel: ['tur'],
+};
+const ALAN_ADLARI: Readonly<Record<string, string>> = {
+  ad: 'ad', tip: 'parça tipi', alis: 'alış tarihi', yon: 'hizmet yönü', cesit: 'çeşit', cesitAd: 'çeşit adı', tur: 'tür', sinif: 'sınıf / standart',
+};
+function yerlesikZorunlular(kayit: Nesne, tur: string): string[] {
+  if (tur === 'sarf') {
+    const kat = gAlani(kayit, 'kat');
+    return typeof kat === 'string' && Object.hasOwn(SARF_ZORUNLU, kat) ? [...SARF_ZORUNLU[kat]!] : [];
+  }
+  const liste = [...(YERLESIK_ZORUNLU[tur] ?? [])];
+  if (tur === 'hizmet' && gAlani(kayit, 'cesit') === 'Diğer') liste.push('cesitAd');
+  return liste;
+}
+
+// Ekranın ilk adımı (`gStepOk` 0): sarf, demirbaş ve hizmet kategorisiz kaydolmaz; kategorinin listede açık olması ayrı denetimdir.
+// Taban: aynı tür ve aynı kategoriyle kayıtlı kart; tür ya da kategori değişince yeni kart gibi bakılır, aynı kalan eksik alan sorulmaz.
+export function kartZorunluAlanEksigi(
+  kayitli: { kayit: Nesne; tur: string } | null, gelen: Nesne, tur: string, malzemeAyari: Record<string, unknown> | null,
+): { alan: string; mesaj: string } | null {
+  const kurallar = malzemeAyari?.['kurallar'];
+  const kural = nesneMi(kurallar) ? kurallar[tur] : undefined;
+  const ayar = nesneMi(kural) && nesneMi(kural['zorunlu']) ? kural['zorunlu'] : {};
+  for (const k of kartAdaylari(gelen)) {
+    const taban = kayitli && kayitli.tur === tur && gAlani(kayitli.kayit, 'kat') === gAlani(k, 'kat') ? kayitli.kayit : null;
+    if (KATEGORILI_TURLER.has(tur) && kartKategorisi(k, tur) === null && !(taban && kartKategorisi(taban, tur) === null)) {
+      return { alan: 'kayit.g.kat', mesaj: 'Kategori seçin.' };
+    }
+    const eksik = yerlesikZorunlular(k, tur)
+      .filter((a) => a === 'ad' || ayar[a] !== false)
+      .filter((a) => !doluMu(gAlani(k, a)) && !(taban && !doluMu(gAlani(taban, a))));
+    if (eksik.length) return { alan: `kayit.g.${eksik[0]}`, mesaj: `Zorunlu alan boş: ${eksik.map((a) => ALAN_ADLARI[a] ?? a).join(', ')}.` };
+  }
+  return null;
+}
+
+// Ekranın varsayılan benzersiz anahtarı (`katalog.html` `kartAnahtari`, `_nm`, `_ak`, `_gImza`) sunucuda kurulur; ekranın gönderdiği anahtar okunmaz.
+// Hizmetin anahtarı çeşit tablosuna (`HZ_KAT`, `hzImza`) bağlıdır: undefined döner, ekranınki kalır (açık borç). Kurulamayan anahtar null.
+const nm = (v: unknown): string => String(v ?? '').toLocaleLowerCase('tr').replace(/[^a-z0-9çğıöşü]/g, '');
+const anahtarSayisi = (v: unknown): string => (typeof v === 'number' && Number.isFinite(v) ? String(Math.round(v * 1000) / 1000) : '');
+const varMi = (v: unknown): boolean => v !== undefined && v !== null && v !== '' && v !== 0 && v !== false && !Number.isNaN(v);
+export function katalogSunucuAnahtari(tur: string, kayit: Nesne): string | null | undefined {
+  const g = nesneMi(kayit['g']) ? kayit['g'] : {};
+  if (tur === 'hammadde') {
+    const form = kayit['form'];
+    const ozelMi = kayit['grade'] === '__ozel';
+    if (!(ozelMi ? nesneMi(kayit['custom']) && varMi(kayit['custom']['ad']) : varMi(kayit['grade'])) || typeof form !== 'string' || !Object.hasOwn(HAMMADDE_FORMLARI, form)) return null;
+    const ozel = nesneMi(kayit['custom']) ? kayit['custom'] : {};
+    const gk = ozelMi ? nm(varMi(ozel['kod']) ? ozel['kod'] : ozel['ad']) : nm(kayit['grade']);
+    const dims = nesneMi(kayit['dims']) ? kayit['dims'] : {};
+    const opts = nesneMi(kayit['opts']) ? kayit['opts'] : {};
+    return ['HM', String(kayit['fam'] ?? ''), gk, form, HAMMADDE_FORMLARI[form]!.olculer.map((k) => anahtarSayisi(dims[k])).join('x'),
+      nm(varMi(opts['durum']) ? opts['durum'] : ''), nm(varMi(opts['yuzey']) ? opts['yuzey'] : '')].join('|');
+  }
+  if (tur === 'yarimamul' || tur === 'mamul') {
+    const on = tur === 'mamul' ? 'MM' : 'YM';
+    if (varMi(g['resim'])) return [on, 'R', nm(g['resim']), nm(varMi(g['rev']) ? g['rev'] : '')].join('|');
+    if (varMi(g['musteri'])) return [on, 'M', nm(g['musteri'])].join('|');
+    return null;
+  }
+  if (tur === 'sarf') {
+    if (!varMi(g['kat'])) return null;
+    const imza = JSON.stringify(Object.keys(g).filter((k) => !['depoYeri', 'marka', 'urunKodu'].includes(k)).sort()
+      .map((k) => [k, Array.isArray(g[k]) ? [...(g[k] as unknown[])].sort() : nm(g[k])]));
+    return `SF|${String(g['kat'])}|${imza}`;
+  }
+  if (tur === 'hizmet') return undefined;
+  if (tur === 'ticari_mal') return varMi(g['urunKodu']) ? ['TM', nm(varMi(g['marka']) ? g['marka'] : ''), nm(g['urunKodu'])].join('|') : null;
+  if (tur === 'demirbas') {
+    if (varMi(g['seri'])) return ['DB', nm(varMi(g['marka']) ? g['marka'] : ''), nm(g['seri'])].join('|');
+    if (varMi(g['plaka'])) return `DB|P|${nm(g['plaka'])}`;
+    if (varMi(g['sasi'])) return `DB|S|${nm(g['sasi'])}`;
+    return null;
+  }
+  return null;
+}
 
 // MKK-16: çakışma alanları tür ayarındadır (`malzeme` ayarı `kurallar[tür].cakisma`, kullanıcı kartı "Uyarı ve engel" 15.10.2026).
 // Liste varsa benzersiz anahtarı sunucu o alanlardan kurar; alanlardan biri boşsa kartın anahtarı yoktur (denetlenmez).

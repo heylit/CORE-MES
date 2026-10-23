@@ -8,6 +8,8 @@ import type { KatalogKartiKaydetCevabi } from '#paylasilan/sozlesme/malzemeler.t
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { katalogSunucuAnahtari } from './kurallar.ts';
+import { tamKart, tohumOlcusu } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -71,7 +73,8 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
     const kimlik = ek.kimlik ?? `onb${++sayac}`;
     return {
       kimlik, surum: null, stokKodu: null, ek,
-      icerik: { id: kimlik, tur: ek.tur ?? 'hammadde', fam: 'metal', com: { kod: ek.kod ?? 'HM-ONY-00001', ad: `Onay kart ${kimlik}`, birim: 'adet' }, opts: { koruma: ['Koruyucu folyo'] } },
+      // `anahtar` sunucunun kurduğu anahtarın tohumudur (B11): aynı tohumlu iki kart aynı malzemedir.
+      icerik: tamKart({ id: kimlik, tur: ek.tur ?? 'hammadde', fam: 'metal', com: { kod: ek.kod ?? 'HM-ONY-00001', ad: `Onay kart ${kimlik}`, birim: 'adet' }, opts: { koruma: ['Koruyucu folyo'] } }, ek.anahtar?.trim() || kimlik),
       onay: { durum: 'taslak' },
     };
   };
@@ -226,9 +229,12 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
   test('2: onay yetkisi olmayan aktif kartın içeriğini ya da benzersiz anahtarını değiştirip aktif bırakamaz', async () => {
     const k = await aktifKart({ anahtar: 'HM|metal|iki-anahtar' });
     await reddedilir(403, 'YETKI_YOK', yazar, k, 'aktif', { opts: { koruma: ['Sessiz değişiklik'] } });
-    await reddedilir(403, 'YETKI_YOK', yazar, k, 'aktif', {}, { benzersiz_anahtar: 'HM|metal|baska' });
     await reddedilir(403, 'YETKI_YOK', yazar, k, 'aktif', { fam: 'plastik' });
-    assert.deepEqual(await satir(k), { onay_durumu: 'aktif', surum: k.surum, benzersiz_anahtar: 'HM|metal|iki-anahtar' });
+    const anahtar = katalogSunucuAnahtari('hammadde', k.icerik);
+    assert.deepEqual(await satir(k), { onay_durumu: 'aktif', surum: k.surum, benzersiz_anahtar: anahtar });
+    // B11: ekranın gönderdiği anahtar okunmaz; yalnız anahtarı farklı gövde kartı değiştirmez.
+    await kaydet(yazar, k, 'aktif', {}, { benzersiz_anahtar: 'HM|metal|baska' });
+    assert.equal((await satir(k))?.benzersiz_anahtar, anahtar);
     // Onaycı kendi yetkisiyle yazar; yazar değişmemiş kartı (yalnız talep/rev/updatedAt farkıyla) yeniden gönderebilir.
     await kaydet(onayci, k, 'aktif', { opts: { koruma: ['Onaylı değişiklik'] } });
     await kaydet(yazar, k, 'aktif', { rev: [{ t: 1 }], updatedAt: 1 });
@@ -292,10 +298,13 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
 
   /* ---------------- çekirdek kalıplarından güvenlik ve tutarlılık olanlar ---------------- */
 
-  test('MKK-10: hammadde ve sarf kartında benzersiz anahtar zorunlu; diğer türlerde ekran anahtarı üretemeyebilir (null kabul)', async () => {
-    await reddedilir(400, 'DOGRULAMA', yazar, yeni({ anahtar: null }), 'onayda');
-    await reddedilir(400, 'DOGRULAMA', yazar, yeni({ anahtar: '   ' }), 'onayda');
-    await reddedilir(400, 'DOGRULAMA', yazar, yeni({ tur: 'sarf', kod: 'SF-KYN-00001', anahtar: null }), 'onayda');
+  test('MKK-10, B11: hammadde ve sarf anahtarını sunucu karttan kurar, ekranın boş anahtarı yok sayılır; diğer türlerde anahtar olmayabilir (null kabul)', async () => {
+    for (const k of [yeni({ anahtar: null }), yeni({ anahtar: '   ' }), yeni({ tur: 'sarf', kod: 'SF-KYN-00001', anahtar: null })]) {
+      await kaydet(yazar, k, 'onayda');
+      const anahtar = katalogSunucuAnahtari(String(k.icerik['tur']), k.icerik);
+      assert.ok(anahtar);
+      assert.equal((await satir(k))?.benzersiz_anahtar, anahtar);
+    }
     await kaydet(yazar, yeni({ tur: 'mamul', kod: 'MM-URN-00001', anahtar: null }), 'onayda');
     await kaydet(yazar, yeni({ tur: 'demirbas', kod: 'DB-OLC-00001', anahtar: null }), 'onayda');
   });
@@ -355,12 +364,13 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
 
   test('MKK-10: yarış katmanı: aynı anahtarlı iki kart, servisi atlayan doğrudan yazmada bile dizinle engellenir (gerekçeli ve pasif olan geçer)', async () => {
     const k = await aktifKart({ anahtar: 'HM|metal|dizin' });
+    const anahtar = katalogSunucuAnahtari('hammadde', k.icerik);
     const kisi = (await vt().tek<{ id: number }>('SELECT acan_kisi_id AS id FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]))!.id;
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-DZN-', 0) ON CONFLICT DO NOTHING");
     const ekle = (kimlik: string, sira: number, durum: string, gerekce: string | null) => vt().sorgu(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, benzersiz_anahtar, mukerrer_gerekcesi, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
-       VALUES ($1, 'hammadde', 'HM-DZN-', $2, 'HM|metal|dizin', $3, $4, '{}'::jsonb, $5, $5)`,
-      [kimlik, sira, gerekce, durum, kisi],
+       VALUES ($1, 'hammadde', 'HM-DZN-', $2, $6, $3, $4, '{}'::jsonb, $5, $5)`,
+      [kimlik, sira, gerekce, durum, kisi, anahtar],
     );
     await assert.rejects(ekle('dizin-a', 1, 'taslak', null), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_anahtar_tek');
     await ekle('dizin-b', 2, 'taslak', 'Ayrı müşteri');
@@ -375,8 +385,8 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
 
   // Ön denetim kaydedilmemiş kartı göremez; yarışı dizin tutar. Kaybeden genel "aynı bilgilerle kayıt var" değil, kartın iletisini almalı.
   test('MKK-10: anahtar dizinine takılan kayıt kartın iletisiyle 409 alır; tutan kart kaydedilmeden önce ön denetimi geçmiş olsa bile', async () => {
-    const anahtar = 'HM|metal|yaris-ileti';
-    const k = yeni({ anahtar });
+    const k = yeni({ anahtar: 'HM|metal|yaris-ileti' });
+    const anahtar = katalogSunucuAnahtari('hammadde', k.icerik);
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-YRI-', 0) ON CONFLICT DO NOTHING");
     const { bekleyen } = await vt().tx(async (db) => {
       await db.sorgu(
@@ -435,11 +445,10 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
     await kaydet(sorumlu.cerez, k, 'onayda', { opts: { koruma: ['Onaylı değişiklik'] } });
   });
 
-  test('MKK-4: dört göz açıkken onaylayan içeriği, anahtarı ya da gerekçeyi değiştirip onaylayamaz; ekranın onayla gövdesi geçer (yönetici olmayan onaycıyla)', async () => {
+  test('MKK-4: dört göz açıkken onaylayan içeriği ya da gerekçeyi değiştirip onaylayamaz (anahtar sunucunun, B11); ekranın onayla gövdesi geçer (yönetici olmayan onaycıyla)', async () => {
     const k = yeni();
     await kaydet(yazar, k, 'onayda');
     await reddedilir(403, 'YETKI_YOK', sorumlu.cerez, k, 'aktif', { opts: { koruma: ['Gizli değişiklik'] } });
-    await reddedilir(403, 'YETKI_YOK', sorumlu.cerez, k, 'aktif', {}, { benzersiz_anahtar: 'HM|metal|gizli' });
     await reddedilir(403, 'YETKI_YOK', sorumlu.cerez, k, 'aktif', {}, { mukerrer_gerekcesi: 'sonradan' });
     assert.equal((await satir(k))?.onay_durumu, 'onayda');
     // `onayUygula('onayla')` yalnız onay, rev ve updatedAt'ı değiştirir.
@@ -592,7 +601,7 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
     // Anahtar değişirse gerekçe korunmaz: gerekçesiz mükerrer 409.
     assert.equal(a.ek.anahtar, 'HM|metal|talepli');
     await aktifKart({ anahtar: 'HM|metal|diger' });
-    await reddedilir(409, 'CAKISMA', sorumlu.cerez, b, 'aktif', {}, { mukerrer_gerekcesi: null, benzersiz_anahtar: 'HM|metal|diger' });
+    await reddedilir(409, 'CAKISMA', sorumlu.cerez, b, 'aktif', { dims: { d: 20, l: tohumOlcusu('HM|metal|diger') } }, { mukerrer_gerekcesi: null });
   });
 
   test('MKK-15: talep uygulanınca onaylayan sunucudan basılır (istemcinin yazdığı yok sayılır)', async () => {

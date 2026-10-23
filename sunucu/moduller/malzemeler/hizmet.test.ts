@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { logoyaGidecekMalzemeler, malzemeAra, malzemeOzetleri } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -24,7 +25,7 @@ describe('Hizmet kartı (kart #163, MH1-MH5, gerçek PostgreSQL)', () => {
     return ortam.vt;
   };
   const istek = async (yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<LightMyRequestResponse> =>
-    app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }) });
+    app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }) });
   async function tamam<T>(yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<T> {
     const c = await istek(yontem, url, govde);
     assert.equal(c.statusCode, 200, `${yontem} ${url}: ${c.body}`);

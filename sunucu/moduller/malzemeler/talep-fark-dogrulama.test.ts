@@ -8,6 +8,7 @@ import type { KatalogKartiKaydetCevabi } from '#paylasilan/sozlesme/malzemeler.t
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tamGovde } from './test-kart.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -30,7 +31,7 @@ describe('Değişiklik talebi: sunucu farkı doğrular (gerçek PostgreSQL, ger�
     return ortam.vt;
   };
   const istek = (cerezi: string, url: string, govde: unknown): Promise<LightMyRequestResponse> =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerezi }, payload: govde as object });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerezi }, payload: tamGovde(url, govde) as object });
   const rolId = async (kod: string): Promise<number> => (await vt().tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]))!.id;
   async function girisYap(kullaniciAdi: string, rolKodu: string, aktor?: number): Promise<{ id: number; cerez: string }> {
     const yoneticiRolu = await rolId('yonetici');
