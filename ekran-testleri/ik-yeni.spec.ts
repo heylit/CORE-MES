@@ -51,6 +51,24 @@ test.describe('P1 personel', () => {
   });
 });
 // P2 izin-devam
+test.describe('P2 izin ve devam', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('İzinler, Devam ve mesai ve Puantaj açılır; okumada yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni/izinler');
+    await expect(page.getByRole('heading', { name: 'İzinler' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Talepler', selected: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Takvim' }).click();
+    await expect(page.getByRole('group', { name: 'Ay' })).toBeVisible();
+    await ac('/ik/yeni/devam');
+    await expect(page.getByRole('heading', { name: 'Devam ve mesai' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Puantaj' }).click();
+    await expect(page.getByRole('tab', { name: 'Puantaj', selected: true })).toBeVisible();
+    await expect(page.getByText('Puantaj yükleniyor')).toHaveCount(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P3 bordro
 // P4 isealim
 // P5 analiz
