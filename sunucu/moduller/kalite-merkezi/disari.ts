@@ -7,6 +7,10 @@ export { ilkParcaKararlari } from './servis.ts';
 // Askıdaki tedarikçi (karar 87): Satın alma tedarikçinin kalite onayını buradan okur. Uygulamanın tedarikçisinde firma kimliği yoktur; ad
 // ve kod döner, firmaya eşleme okuyanındır. Yetkiyi çağıranın ucu denetler.
 export { kaliteAskisindakiTedarikciler } from './servis.ts';
+// Tedarikçi onay durumu (236 a): durumun sahibi Kalite Merkezi'dir. Satın alma firma kimliğiyle okur; kaydı olmayan firma haritada
+// yoktur. Firma kimliği olmayan eski kayıt kod ya da adla bağlanır (kurallar.ts). Yetkiyi çağıranın ucu denetler.
+export { tedarikciOnayDurumlari } from './servis.ts';
+export type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 // Kalibrasyon hazırlığı (262 a): Üretim emirlerinin hazırlık kapısı emir başına buradan okur. Emrin cihazları emrin muayenelerindedir;
 // cihazı olmayan emir seçili değildir (secildi false). Geçerliliği kalibrasyon modülü verir. Yetki denetlemez.
 export { kalibrasyonHazirlikDurumlari } from './servis.ts';

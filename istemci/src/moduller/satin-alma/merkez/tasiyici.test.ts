@@ -210,11 +210,25 @@ describe('TMI taşıyıcısı', () => {
   it('SAT-41 S5 a: finansta pasif firma ekrana active:false gelir; seçim listelerinde adın yanına (pasif) yazılır, aktifte ve bilinmeyende yazılmaz', () => {
     const ted: Tedarikci = {
       firmaId: 3, ad: 'Deneme Tedarik', vergiNo: null, yetkili: null, telefon: null, eposta: null, sehir: null, firmaAktif: true, firmaSurum: 2,
-      durum: 'onayli', puan: 4, notlar: '', kategoriler: [], degerlendirmeler: [], surum: 1, olusturma: '2026-10-01T08:00:00.000Z',
+      durum: 'onayli', kaliteDurumu: null, puan: 4, notlar: '', kategoriler: [], degerlendirmeler: [], surum: 1, olusturma: '2026-10-01T08:00:00.000Z',
     };
     const aktif = tedarikciEkrana(ted);
     const pasif = tedarikciEkrana({ ...ted, firmaId: 4, firmaAktif: false });
     expect([aktif.active, pasif.active]).toEqual([true, false]);
     expect([pasifEki(aktif), pasifEki(pasif), pasifEki({})]).toEqual(['', ' (pasif)', '']);
+  });
+
+  it('236 a: ekranın tedarikçi durumu Kalite Merkezi onayından türer; Aday ve Askıda askıda işaretlenir, kaydı olmayan onaylı sayılır', () => {
+    const ted: Tedarikci = {
+      firmaId: 5, ad: 'Deneme Kalite', vergiNo: null, yetkili: null, telefon: null, eposta: null, sehir: null, firmaAktif: true, firmaSurum: 1,
+      durum: 'askida', kaliteDurumu: null, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: 1, olusturma: '2026-10-01T08:00:00.000Z',
+    };
+    const durumu = (kaliteDurumu: Tedarikci['kaliteDurumu']) => { const e = tedarikciEkrana({ ...ted, kaliteDurumu }); return [e.status, e.kaliteDurumu]; };
+    // Satın almanın eski durum sütunu (burada askida) ekranın durumunu belirlemez.
+    expect(durumu(null)).toEqual(['approved', null]);
+    expect(durumu('Onaylı')).toEqual(['approved', 'Onaylı']);
+    expect(durumu('Şartlı onaylı')).toEqual(['trial', 'Şartlı onaylı']);
+    expect(durumu('Aday')).toEqual(['suspended', 'Aday']);
+    expect(durumu('Askıda')).toEqual(['suspended', 'Askıda']);
   });
 });

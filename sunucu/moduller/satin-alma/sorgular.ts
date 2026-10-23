@@ -493,12 +493,6 @@ export function tedarikcileriOku(db: Db, firmaId: number | null = null): Promise
   return db.sorgu<TedarikciSatiri>(`SELECT firma_id AS "firmaId", durum, puan, notlar, surum, ${ISO('olusturma')} AS olusturma FROM satin_alma_tedarikci
     WHERE ($1::int IS NULL OR firma_id = $1) ORDER BY firma_id`, [firmaId]);
 }
-// SAT-76: verilen firmalardan askıdaki tedarikçiler; tedarikçi kaydı olmayan firma askıda sayılmaz.
-export async function askidakiTedarikciler(db: Db, firmaIdler: readonly number[]): Promise<number[]> {
-  if (firmaIdler.length === 0) return [];
-  return (await db.sorgu<{ firmaId: number }>("SELECT firma_id AS \"firmaId\" FROM satin_alma_tedarikci WHERE firma_id = ANY($1::int[]) AND durum = 'askida' ORDER BY firma_id",
-    [[...firmaIdler]])).map((x) => x.firmaId);
-}
 export function tedarikciKategorileriOku(db: Db, firmaId: number | null = null): Promise<{ firmaId: number; kategori: string }[]> {
   return db.sorgu('SELECT firma_id AS "firmaId", kategori FROM satin_alma_tedarikci_kategorisi WHERE ($1::int IS NULL OR firma_id = $1) ORDER BY firma_id, sira, kategori', [firmaId]);
 }
@@ -507,12 +501,13 @@ export function degerlendirmeleriOku(db: Db, firmaId: number | null = null): Pro
     FROM satin_alma_tedarikci_degerlendirmesi WHERE ($1::int IS NULL OR firma_id = $1) ORDER BY firma_id, tarih, olusturma`, [firmaId]);
 }
 export function tedarikciEkle(db: Db, t: TedarikciKaydetYazimi): Promise<{ firmaId: number } | null> {
-  return db.tek(`INSERT INTO satin_alma_tedarikci (firma_id, durum, puan, notlar) VALUES ($1, $2, $3, $4) ON CONFLICT (firma_id) DO NOTHING RETURNING firma_id AS "firmaId"`,
-    [t.firmaId, t.durum, t.puan, t.notlar]);
+  // 236 a: durum sütunu yazılmaz (onay durumu Kalite Merkezi'nindir); yeni satır sütunun varsayılanını alır.
+  return db.tek(`INSERT INTO satin_alma_tedarikci (firma_id, puan, notlar) VALUES ($1, $2, $3) ON CONFLICT (firma_id) DO NOTHING RETURNING firma_id AS "firmaId"`,
+    [t.firmaId, t.puan, t.notlar]);
 }
 export function tedarikciGuncelle(db: Db, t: TedarikciKaydetYazimi, surum: number): Promise<{ firmaId: number } | null> {
-  return db.tek(`UPDATE satin_alma_tedarikci SET durum = $2, puan = $3, notlar = $4, surum = surum + 1, guncelleme = now()
-    WHERE firma_id = $1 AND surum = $5 RETURNING firma_id AS "firmaId"`, [t.firmaId, t.durum, t.puan, t.notlar, surum]);
+  return db.tek(`UPDATE satin_alma_tedarikci SET puan = $2, notlar = $3, surum = surum + 1, guncelleme = now()
+    WHERE firma_id = $1 AND surum = $4 RETURNING firma_id AS "firmaId"`, [t.firmaId, t.puan, t.notlar, surum]);
 }
 export async function tedarikciVarMi(db: Db, firmaId: number): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_tedarikci WHERE firma_id = $1', [firmaId])) !== null;
