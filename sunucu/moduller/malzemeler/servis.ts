@@ -22,7 +22,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -379,6 +379,8 @@ export async function katalogKartiKaydet(
     throw gecersiz('Hizmet kartının yönü yalnız hiç aktif olmamış taslakta değişir; öteki yön için yeni kart açın.');
   }
   if (kayitli && kartRotaIcerigiDegistiMi(kayitli.kayit, g.kayit) && await rotasiVarMi(db, kayitli.no)) throw cakisma(ROTALI_KART_ILETISI);
+  const tanimHatasi = hammaddeTanimHatasi(kayitli?.kayit ?? null, g.kayit);
+  if (tanimHatasi) throw dogrulama(tanimHatasi.mesaj, tanimHatasi.alan);
   const olcuHatasi = hammaddeOlcuHatasi(kayitli?.kayit ?? null, g.kayit);
   if (olcuHatasi) throw dogrulama(olcuHatasi, 'kayit.dims');
   // 323 b: alış birimi, stok birimi gibi (SH4 a) yalnız yeni ya da değişmişse listede aranır.
@@ -408,11 +410,17 @@ export async function katalogKartiKaydet(
       throw dogrulama(`"${kat}" kategorisi listede yok ya da kapalı; listedeki bir kategoriyi seçin ya da kategoriyi Malzeme ayarlarından açın.`, 'kayit.g.kat');
     }
   }
-  const dortGozAcik = await dortGozAcikMi(db);
-  // Ekranın türe göre kurduğu anahtar her zaman saklanır; türün çakışma alanı seçiliyse geçerli anahtarı sunucu o alanlardan kurar (MKK-16).
-  const varsayilanAnahtar = g.ozet.benzersiz_anahtar?.trim() || null;
   const malzemeAyari = await katalogMalzemeAyari(db);
+  const zorunluEksigi = kartZorunluAlanEksigi(kayitli, g.kayit, tur, malzemeAyari);
+  if (zorunluEksigi) throw dogrulama(zorunluEksigi.mesaj, zorunluEksigi.alan);
+  const dortGozAcik = await dortGozAcikMi(db);
+  // Türün varsayılan anahtarını sunucu ekranın kuralıyla kurar (B11); yalnız hizmette ekranınki kalır. Türün çakışma alanı seçiliyse
+  // geçerli anahtar o alanlardan kurulur (MKK-16). Kuraldan önce anahtarı kurulamayan içerikle kaydolmuş kart (ör. ölçüsüz hammadde)
+  // kayıtlı anahtarını korur: eski kayıt kilitlenmez.
   const cakismaAlanlari = katalogCakismaAlanlari(malzemeAyari, tur);
+  const sunucuAnahtari = katalogSunucuAnahtari(tur, g.kayit);
+  const eskiAnahtar = kayitli && kayitli.tur === tur && !cakismaAlanlari ? kayitli.benzersizAnahtar : null;
+  const varsayilanAnahtar = sunucuAnahtari === undefined ? g.ozet.benzersiz_anahtar?.trim() || null : sunucuAnahtari ?? eskiAnahtar;
   const anahtar = cakismaAlanlari ? katalogKuralAnahtari(tur, cakismaAlanlari, g.kayit) : varsayilanAnahtar;
   // Ekranın değişiklik talebi uygulanınca `mukerrerOnay` düşer (`talepOlustur`); anahtar aynıysa kayıtlı gerekçe korunur,
   // yoksa gerekçeli mükerrer kart bir daha güncellenemezdi.

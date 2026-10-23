@@ -10,6 +10,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { logoyaGidecekMalzemeler } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -31,7 +32,7 @@ describe('334 a: ekranın Açıklama 1, 2, 3 değeri kartta saklanır ve Logo ku
       ozet: { benzersiz_anahtar: tur === 'hammadde' ? `hm|ack|${kimlik}` : null, mukerrer_gerekcesi: null, ...ozetEki },
       surum,
     };
-    const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, govde)) as object });
+    const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
     assert.equal(c.statusCode, 200, c.body);
     return (c.json() as KatalogKartiKaydetCevabi).surum;
   }

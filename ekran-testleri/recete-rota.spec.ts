@@ -67,9 +67,9 @@ test('planlama sayfasını açmak ortak kayda yazmaz (aynı anda açan ikinci ki
 });
 
 test.describe('planlama işlemi olmayan', () => {
-  test.use({ hesap: 'ornek.planlama' });
+  test.use({ hesap: 'ornek.kalite' });
 
-  test('planlama sayfası açılmaz, menüde görünmez (353 a)', async ({ page, ac }) => {
+  test('planlama sayfası açılmaz, menüde görünmez (353 a, 195 a)', async ({ page, ac }) => {
     await ac('/recete-rota/plan');
     await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
@@ -78,5 +78,21 @@ test.describe('planlama işlemi olmayan', () => {
     const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
     await expect(menu.locator('a[href="/recete-rota/schema"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/recete-rota/plan"]')).toHaveCount(0);
+  });
+});
+
+// 195 a: planlama rolü planlama sayfalarını görür; maliyet ve kâr sayfaları birim maliyet okumasını ister (200 a).
+test.describe('planlama rolü', () => {
+  test.use({ hesap: 'ornek.planlama' });
+
+  test('planlama sayfası açılır; maliyet sayfası açılmaz, menüde görünmez', async ({ page, ac }) => {
+    await ac('/recete-rota/maliyet');
+    await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await ac('/recete-rota/plan');
+    await cerceve(page);
+    const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+    await expect(menu.locator('a[href="/recete-rota/plan"]').first()).toBeAttached();
+    await expect(menu.locator('a[href="/recete-rota/maliyet"]')).toHaveCount(0);
   });
 });

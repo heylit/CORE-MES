@@ -11,6 +11,7 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { firmaKodu } from './disari.ts';
 import { katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogFirmaOneki } from './kurallar.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -44,7 +45,7 @@ describe('Mamul stok kodu firma koduyla (kart #652, gerçek PostgreSQL)', () => 
     return ortam.vt;
   };
   const istek = async (url: string, govde: unknown) =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload: (await surumlu(vt(), url, govde)) as object });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
   const genel = (deger: Record<string, unknown>) => istek('/malzeme-katalogu-ayarlari/genel/kaydet', { deger });
   const kaydet = async (kimlik: string, tur: string, kod: string): Promise<string> => {
     const c = await istek(`/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {

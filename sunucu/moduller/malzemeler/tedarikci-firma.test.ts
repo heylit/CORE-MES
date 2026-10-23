@@ -10,6 +10,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -27,7 +28,7 @@ describe('Tedarikçi Müşteriler ve Tedarikçiler firmasından seçilir (kart #
   // Tekrar korumalı uç (finans firma ekleme) kimliksiz isteği reddeder; her yazma kendi istek kimliğiyle gider.
   const istek = async (yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<LightMyRequestResponse> =>
     app.inject({
-      method: yontem, url: `/api${url}`, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }),
+      method: yontem, url: `/api${url}`, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }),
       headers: yontem === 'POST' ? { cookie: yonetici, 'istek-kimligi': randomUUID() } : { cookie: yonetici },
     });
   async function tamam<T>(yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<T> {

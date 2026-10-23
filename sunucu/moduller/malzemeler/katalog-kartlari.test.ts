@@ -12,6 +12,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { malzemeKullanilabilirMi, malzemeOzeti } from './disari.ts';
 import { uclar } from './uclar.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -32,7 +33,7 @@ describe('Malzeme Kataloğu kartları (gerçek PostgreSQL, gerçek giriş)', () 
     app.inject({
       method: yontem, url: `/api${url}`,
       ...(cerezi === null ? {} : { headers: { cookie: cerezi } }),
-      ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }),
+      ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }),
     });
   async function tamam<T>(cerezi: string, yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<T> {
     const c = await istek(cerezi, yontem, url, govde);

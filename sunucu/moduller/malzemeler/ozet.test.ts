@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -28,7 +29,7 @@ describe('Malzemeler pano özeti (kart #489, gerçek PostgreSQL)', () => {
     return String(c.headers['set-cookie']).split(';')[0] ?? '';
   };
   async function tamam<T>(cerez: string, yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<T> {
-    const c = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: cerez }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }) });
+    const c = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: cerez }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }) });
     assert.equal(c.statusCode, 200, `${yontem} ${url}: ${c.body}`);
     return c.json() as T;
   }

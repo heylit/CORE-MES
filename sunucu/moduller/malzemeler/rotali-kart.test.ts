@@ -9,6 +9,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { rotaRevizyonlariCozucusu } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -25,7 +26,7 @@ describe('233 a: rotası olan kartın operasyon ve reçetesi kartta değişmez (
     return ortam.vt;
   };
   async function istek(yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<{ statusCode: number; json: () => unknown; body: string }> {
-    return app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }) });
+    return app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }) });
   }
   const OPS = [{ no: 10, kod: 'TRN', ad: 'Tornalama' }, { no: 20, kod: 'FRZ', ad: 'Frezeleme' }];
   const BOM = [{ ref: null, ad: 'Örnek kalem', miktar: 1, birim: 'adet', fire: '' }];
