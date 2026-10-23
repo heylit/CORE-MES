@@ -2297,8 +2297,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const bekleyenKart = async () => lotBekleyenKartlarCevabi.parse((await istek('depo', 'GET', '/stok/lot-bekleyen-kartlar')).govde).kartlar.find((k) => k.refakat.uretimEmriId === e);
     const bagla = (id: number, kod: string, surum: number) => istek<{ hata?: { mesaj: string } }>('depo', 'POST', `/stok/refakat-partileri/${id}/lota-bagla`, { kod, surum });
 
-    // İki sayım aynı istisna kartına yazılır; eksi istasyonda partisiz kalır.
-    await saglam('1');
+    // İki sayım aynı istisna kartına yazılır; eksi istasyonda partisiz kalır. Sayım durmaz, cevap uyarı taşır (kart #157).
+    assert.match((await saglam('1')).uyari ?? '', /^Stokta yok; istisna kartı .*-P1 açıldı\./);
     await saglam('2');
     const ka = (await istasyonKonumu(a.id))!;
     assert.equal(await bakiye(hm, ka), '-6.000');
@@ -2372,7 +2372,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const r = (await istek<RefakatPartisiCevabi>('depo', 'POST', '/stok/refakat-partileri/ac', { uretimEmriId: e, lotKodu: `LOT:${lot.lot_no}` })).govde.refakat;
     const t = await gonder('depo', { malzemeId: hm, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: c.id }, refakatPartisiId: r.id });
     assert.equal((await istek('operator', 'POST', `/stok/teslimler/${t.govde.teslim.id}/teslim-al`, { surum: t.govde.teslim.surum, alinan: '10' })).durum, 200);
-    await o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId: op10!, istasyonId: a.id, kisiId: kisiler.get('operator')!, fark: '2', refakatPartisiId: r.id }));
+    const sayim = await o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId: op10!, istasyonId: a.id, kisiId: kisiler.get('operator')!, fark: '2', refakatPartisiId: r.id }));
+    assert.equal(sayim.uyari, 'Kartın malzemesi başka istasyonda; teslim edilmeden düşüldü, malzemeyi teslim alın.');
     const kc = (await istasyonKonumu(c.id))!;
     assert.equal(await bakiye(hm, kc), '6.000');
     // Arkon kart listesi (kart #156): kartın lotu c'de, kartla sayılan parça a'da durur; boş istasyonda satır yok.

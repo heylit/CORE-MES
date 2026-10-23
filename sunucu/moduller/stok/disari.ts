@@ -106,7 +106,9 @@ export async function sonHareketler(db: Db, sinir = 100): Promise<Hareket[]> {
 // alan saglamAdet). Yetki denetlemez.
 export type { AdimStatusuCozucusu, UretimSayimiYansimasi } from './servis.ts';
 export const uretimGirdiUyarisi = (db: Db, g: Parameters<typeof servis.uretimGirdiUyarisi>[1]): Promise<string | null> => servis.uretimGirdiUyarisi(db, g);
-export const uretimSayimiYansit = (db: Db, g: servis.UretimSayimiYansimasi): Promise<void> => servis.uretimSayimiYansit(db, g);
+export const uretimSayimiYansit = async (db: Db, g: servis.UretimSayimiYansimasi): Promise<void> => { await servis.uretimSayimiYansit(db, g); };
+// Aynısı, sayım cevabına giden uyarıyla (kart #157): dinleyici dönüş alınca kablolama buna geçer; o zamana kadar uyarı yalnız harekette.
+export const uretimSayimiYansitUyarili = (db: Db, g: servis.UretimSayimiYansimasi): Promise<{ uyari: string | null }> => servis.uretimSayimiYansit(db, g);
 // İlk parça kararı (131 b): emrin karar bekleyen parçası serbest ya da red olur.
 export const kaliteKarariYansit = (db: Db, g: servis.KaliteKarariYansimasi): Promise<void> => servis.kaliteKarariYansit(db, g);
 // Hurda sayımının girdisi: hurdaya ayrılan parçanın HM'si istasyondaki emrin stoğundan fire çıkışıyla düşer; eksi fark geri alır. Yetki denetlemez.
