@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  BOT, KURULUM_ISARETI, ORNEK_KANAL, ornekYazimlar, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, kisiAnahtari, silmeEngeli,
+  BOT, KURULUM_ISARETI, ORNEK_KANAL, ornekYazimlar, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, kisiAnahtari, OKUMA_ILETISI, silmeEngeli,
   sorgula, sonParca, URETIM_ADEDI_ILETISI, ustYolu, yazmaEngeli, zamanliGonderenler,
 } from './kurallar.ts';
 import type { DepoBelgesi, YazmaIstegi } from './kurallar.ts';
@@ -154,8 +154,58 @@ describe('mesaj yazma hakkı (KD-050)', () => {
     assert.notEqual(silmeEngeli('tasks/t1', mevcut, '7', false), null);
     assert.equal(silmeEngeli(ileti, mevcut, '9', false), null);
     assert.equal(silmeEngeli(ileti, mevcut, '7', true), null);
-    assert.equal(silmeEngeli('orders/o1', mevcut, '7', false), null);
+    assert.equal(silmeEngeli('ortak/o1', mevcut, '7', false), null);
     assert.equal(silmeEngeli('tasks/t1', null, '7', false), null);
+  });
+
+  test('BD-Y9 (225 a): sipariş, otomatik uyarı, e-posta ve tetik yalnız sahibince ya da yöneticice değiştirilir ve silinir; siparişin durumu herkese açık', () => {
+    const siparis = { by: '9', no: '1', status: 'sirada' };
+    assert.equal(engel({ yol: 'orders/o1', mevcut: siparis, veri: { status: 'sevk', last: { by: '7', t: 'durumu değiştirdi' } } }), null);
+    assert.notEqual(engel({ yol: 'orders/o1', mevcut: siparis, veri: { status: 'sevk', last: { by: '8', t: 'durumu değiştirdi' } } }), null);
+    assert.notEqual(engel({ yol: 'orders/o1', mevcut: siparis, veri: { no: '2', status: 'sevk' } }), null);
+    assert.notEqual(engel({ yol: 'orders/o1', mevcut: siparis, kip: 'tam', veri: { ...siparis, status: 'sevk' } }), null);
+    assert.notEqual(silmeEngeli('orders/o1', siparis, '7', false), null);
+    assert.equal(engel({ yol: 'orders/o1', mevcut: siparis, ben: '9', veri: { no: '2' } }), null);
+    assert.equal(engel({ yol: 'orders/o1', mevcut: siparis, yonetici: true, veri: { no: '2' } }), null);
+    assert.equal(silmeEngeli('orders/o1', siparis, '7', true), null);
+    for (const yol of ['kurallar/r1', 'eposta/e1', 'tetikler/k1']) {
+      const mevcut = { by: '9', status: 'sirada', on: true };
+      assert.notEqual(engel({ yol, mevcut, veri: { status: 'sevk' } }), null, yol);
+      assert.notEqual(engel({ yol, mevcut, veri: { on: false } }), null, yol);
+      assert.notEqual(engel({ yol, mevcut, kip: 'tam', veri: { by: '7', status: 'sevk' } }), null, yol);
+      assert.notEqual(silmeEngeli(yol, mevcut, '7', false), null, yol);
+      assert.equal(engel({ yol, mevcut, ben: '9', veri: { status: 'sevk', on: false } }), null, yol);
+      assert.equal(engel({ yol, mevcut, yonetici: true, veri: { status: 'sevk', on: false } }), null, yol);
+      assert.equal(silmeEngeli(yol, mevcut, '9', false), null, yol);
+      assert.equal(silmeEngeli(yol, mevcut, '7', true), null, yol);
+      assert.equal(engel({ yol: `${yol}x`, kip: 'tam', veri: { by: '7', status: 'sirada' } }), null, yol);
+    }
+    assert.equal(engel({ yol: 'tetikler/k2', mevcut: {}, kip: 'tam', veri: { rule: 'r1', ts: 1, by: '7' } }), null);
+  });
+
+  test('BD-Y10 (225 a): kanalın adı ve silinmesi açanındır; başkası yalnız son ileti özetini, anmayı ve @herkes zamanını yazar', () => {
+    const kanal = { name: 'uretim', topic: 'x', emoji: 'e', createdAt: 1, createdBy: '9', lastAt: 1, lastBy: '9' };
+    assert.equal(engel({ yol: 'channels/uretim', mevcut: kanal, veri: { lastAt: 2, lastBy: '7', lastText: 'merhaba', mentions: { '8': 2 } } }), null);
+    assert.equal(engel({ yol: 'channels/uretim', mevcut: kanal, veri: { everyone: 2, everyoneBy: '7' } }), null);
+    assert.notEqual(engel({ yol: 'channels/uretim', mevcut: kanal, veri: { name: 'baska', topic: 'y' } }), null);
+    assert.notEqual(engel({ yol: 'channels/uretim', mevcut: kanal, veri: { createdBy: '7' } }), null);
+    assert.notEqual(engel({ yol: 'channels/uretim', mevcut: kanal, kip: 'tam', veri: { ...kanal, createdBy: '7' } }), null);
+    assert.notEqual(silmeEngeli('channels/uretim', kanal, '7', false), null);
+    assert.equal(engel({ yol: 'channels/uretim', mevcut: kanal, ben: '9', veri: { name: 'baska' } }), null);
+    assert.equal(engel({ yol: 'channels/uretim', mevcut: kanal, yonetici: true, veri: { name: 'baska' } }), null);
+    assert.equal(silmeEngeli('channels/uretim', kanal, '9', false), null);
+    assert.equal(silmeEngeli('channels/uretim', kanal, '7', true), null);
+    assert.equal(engel({ yol: 'channels/yeni', kip: 'tam', veri: { name: 'yeni', createdBy: '7', lastBy: '7' } }), null);
+    assert.notEqual(engel({ yol: 'channels/yeni', kip: 'tam', veri: { name: 'yeni', createdBy: '9' } }), null);
+  });
+
+  test('BD-Y11 (225 a): okundu belgesi yalnız o kişiye yazılır ve silinir; yönetici de başkasınınkini yazamaz', () => {
+    assert.equal(engel({ yol: 'okuma/7', kip: 'tam', veri: { c: { genel: 1 } } }), null);
+    assert.equal(engel({ yol: 'okuma/9', kip: 'tam', veri: { c: { genel: 1 } } }), OKUMA_ILETISI);
+    assert.equal(engel({ yol: 'okuma/9', yonetici: true, veri: { c: { genel: 1 } } }), OKUMA_ILETISI);
+    assert.equal(silmeEngeli('okuma/7', { c: {} }, '7', false), null);
+    assert.equal(silmeEngeli('okuma/9', { c: {} }, '7', false), OKUMA_ILETISI);
+    assert.equal(silmeEngeli('okuma/9', { c: {} }, '7', true), OKUMA_ILETISI);
   });
 });
 
