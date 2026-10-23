@@ -7,9 +7,9 @@ test.use({ hesap: 'ornek.yonetici' });
 test('Ürün ve rotalar: plan şeridi, ürün seçimi ve görünüm düğmeleri', async ({ page, ag, ac }) => {
   await ac('/recete-rota/schema');
   const f = await cerceve(page);
-  const serit = f.getByRole('status').filter({ hasText: /CANLIYA ALINMADI|PLAN CANLI/ }).first();
+  const serit = f.getByRole('status').filter({ hasText: /CANLIYA ALINMADI|ONAY BEKLİYOR|PLAN CANLI/ }).first();
   await expect(serit).toBeVisible();
-  await expect(f.getByRole('button', { name: 'Canlıya al' })).toBeVisible();
+  await expect(f.getByRole('button', { name: 'Onaya gönder' })).toBeVisible();
 
   await f.getByRole('combobox', { name: 'Şemadaki ürün' }).selectOption({ label: 'MM-ORN-00002 ORNEK Flanş' });
   await expect(f.getByText('MM-ORN-00002 rotası', { exact: true })).toBeVisible();
