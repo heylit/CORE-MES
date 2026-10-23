@@ -1,4 +1,4 @@
-Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-21
+Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-10-23
 
 ```text
 Bu proje TMI CORE V2'nin (CNC atolyesi uretim planlama ve izlenebilirlik sistemi) parcalarinin yazildigi ve birlestirildigi projedir.
@@ -10,7 +10,7 @@ DEPO VE DEVIR
 
 ROLUN
 Koordinatorsen: rolun ve sinirlarin projenin hedefinde yazilidir; asagidaki yazar kurallari actigin konular icindir, her konuya parcasini, klasorlerini, kart numarasini, dal adini ve basvurusunu verirsin. Goc damgasini tek elden sen verirsin.
-Yazar konuysan: SEF DEGILSIN; tek bir parcanin yazarisin. Sef ve ajan duzeni (kurulum/sef-duzeni.md: ajan dagitma, birlestirme, kart acma, CLAUDE.md ve .claude duzenleme) sana uygulanmaz. CLAUDE.md'nin geri kalani (temel kural, kirmizi cizgiler, yapi kurallari) ve kurulum/dis-modul-sartnamesi.md senin icin gecerlidir.
+Yazar konuysan: SEF DEGILSIN; tek bir parcanin yazarisin (ayni parcada baska yazarlar da olabilir; dosya kilidi CALISMA DUZENI'ndedir). Sef ve ajan duzeni (kurulum/sef-duzeni.md: ajan dagitma, birlestirme, kart acma, CLAUDE.md ve .claude duzenleme) sana uygulanmaz. CLAUDE.md'nin geri kalani (temel kural, kirmizi cizgiler, yapi kurallari) ve kurulum/dis-modul-sartnamesi.md senin icin gecerlidir.
 Birlestirici konuysan: kod YAZMAZSIN. Isin yazar konularin biraktigi yamalari uygulamak, dal push etmek, cekme istegi acmak, siraya koymak ve birlestirmektir; kurallarin "BIRLESTIRME" bolumundedir. Baska hicbir konu push etmez, cekme istegi acmaz ya da birlestirmez, main'e yazmaz.
 Turkce konus, kisa yaz, emoji yok. Kod tanimlayicilari Turkce (ASCII), commit mesaji Ingilizce.
 
@@ -18,6 +18,7 @@ ISE BASLARKEN (her konuda)
 1. Depoyu guncelle; commit kimligini ve `npm run harita -- --ozet` ciktisini (Son goc satiri dahil) yaz. Ozetten kendi parcani ve bagli modulleri bul; ayrinti icin yalniz kendi modulunun ve gercekten cagirdigin modullerin `npm run harita -- --modul <ad>` ciktisini oku. Tam harita (yaklasik 180 KB) yalniz sahipsiz goc ya da sahibi belirsiz tablo gerektiginde okunur.
 2. Yalniz kendi parcanin klasorlerini ve gercekten cagirdigin disari.ts dosyalarini oku. CLAUDE.md'yi ve bu dosyanin tam metnini oku; SABIT KIMLIKLER ve OS1-OS10 sahiplik maddeleri buradadir ve sahiplik, sema ya da baska module dokunan her iste zorunlu okunur. belgeler/adr, .claude/skills altindaki SKILL.md dosyalari ve kurulum/dis-modul-sartnamesi.md yalniz dokundugun konu icin okunur. Imza, tablo ve sutun adlarini dosyadan oku; tahmin etme.
 3. Sana verilen kararlari numarasiyla say; eksik ya da celisen varsa soyle.
+4. Dosya kilidi: yazmaya baslamadan dokunacagin dosyalarin listesini koordinatore ver ve onay bekle; liste sonradan genislerse yeni dosyalar icin yeniden sor.
 kurulum/eski-kurallar klasorunu OKUMA ve uygulama; eski sistem kurali gerekiyorsa sor.
 
 KURALLAR
@@ -48,7 +49,7 @@ SABIT KIMLIKLER (degismez)
 - firma: musteri_tedarikci_firma.id (musteri-tedarikci); ana menude ayri sayfa, finans, satin alma, sevkiyat ve otekiler buradan beslenir; firmanin cok adresi (fatura, teslim, sube) ve koordinati vardir (2026-10-13, kart #1164)
 - kisi: kisiler; istasyon ve makine: istasyonlar
 - uretim emri mamul ya da yari mamul icin acilir, altinda is emirleri vardir; rotanin her adimi bir is emridir ve istasyon is emrine aittir (uretim-emirleri). Rotadan emre kopyalamayi rota ucu tetikler ve adimlari verir; emri uretim-emirleri yazar. Rota tanimdir.
-- uretim-emirleri 2026-10-12'de projeye alindi; artik bu projede tek yazar konusu tarafindan yazilir.
+- uretim-emirleri 2026-10-12'de projeye alindi; artik bu projede yazar konular tarafindan dosya kilidiyle yazilir.
 - operator ekrani Arkon'dur; mal kabul stok modulundedir; faturanin asil kaydi Logo'dadir.
 - Asama 2 sahiplik kararlari (2026-10-08, OS1-OS10). Baglama (yabanci anahtar, kopyalarin kaldirilmasi) Asama 2'de yapilir; o zamana kadar veri bugunku yerinde kalir:
   - rota ayri moduldur; recete ve operasyon sirasinin sahibi rotadir (2026-10-08, RT1 a; OS1 degisti); malzemelerdeki recete Asama 2'de kalkar. Malzeme kartindaki operasyon listesi ise kalir ve kart onaylaninca Rota'ya tek yonlu taslak rota olarak aktarilir; asil kayit Rota'dadir (2026-10-12, kart #688, "Karttan aktar"). Operasyon tipi istasyonlarda kalir.
@@ -67,6 +68,8 @@ SABIT KIMLIKLER (degismez)
 
 CALISMA DUZENI (2026-10-21, kullanici onayi)
 - Acik konu siniri yok; isler paralel yurur, cakismayi birlesme sirasi yonetir (koordinator sirayi verir, Birlestirici uygular, catisan yamayi sahibi yeniden uretir). Biten konu hemen kapanir; uzayan is icin yeni konu acilir.
+- Hiz (2026-10-23, kullanici istegi): butun gorev ve konularda paralel yapilabilen is paralel yapilir. Bir isin farkli modullere dusen dallari ayri yazar konularina bolunur; ortak sozlesme once yazilir, yazarlar onunla ayni anda baslar. Bir dali bekleyen is beklerken bagimsiz kismi surer.
+- Dosya kilidi (2026-10-23, kullanici onayi; "parca basina tek yazar" kuralinin yerine): ayni modulde birden cok yazar calisabilir. Yazar baslamadan dokunacagi dosyalarin listesini koordinatore verir; koordinator acik kilitlerle karsilastirir, cakisma yoksa baslatir. Bir dosyaya ayni anda tek yazar dokunur; kilit yama main'e girince kalkar. Ortak noktalar (paylasilan/sozlesme, buyuk servis dosyalari, toplayici kayitlari, goc) icin sira koordinatorden alinir. Cakisma cikarsa sonra giren yamayi yazari yeniden uretir. Dal basina tek modul kurali aynen kalir.
 - Yazar yamayi biraktiginda Birlestirici konusuna dogrudan haber verir; koordinator yalniz soru, onay ve durum icin araya girer.
 - Tasima onayi (2026-10-22, kullanici onayi, verimlilik O2): sade yama icin ayri tasima satiri gerekmez; isin "yaz" onayi tasimayi da kapsar. Sade yama: goc yok; rol x islem, yetki ya da prototip degismiyor; yalniz kendi modulunun klasorlerine yaziyor (paylasilan, cekirdek, araclar, CLAUDE.md, .claude ve .github yok; toplayiciya kayit satiri ekleyen yama da sade degildir); ilk teslim (yeniden uretilmis yama degil). Yazar DEVIR.md'ye "Sade: evet" ya da "Sade: hayir (<neden>)" yazar. Sade olmayan yama icin Satir yuku maddesi gecerlidir.
 - Satir yuku (2026-10-23, kullanici onayi): sade olmayan yamada da ayri tasima satiri istenmez. Isin "yaz" onayi ve soruda verilen onay turleri (goc, rol x islem, yetki, prototip, arac, .github vb.) tasimayi da kapsar. Birlestirici yamanin DEVIR.md'sindeki onay satirlarini (kullanici mesaj id'siyle) denetler; yamanin degisikligi onaylanan turlerin disina cikiyorsa durur ve sorar. Yeniden uretilmis yama da ayni onayla tasinir.
