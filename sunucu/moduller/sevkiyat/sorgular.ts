@@ -395,6 +395,17 @@ export async function urunFirmalariniYaz(db: Db, isIdleri: readonly number[]): P
       WHERE b.is_id = i.id AND b.kaynak = 'urun' AND i.id = ANY($1::int[])`, [[...isIdleri]],
   );
 }
+// İptal edilen işin yükü bekleme listesine döner (17.2). Ürün ve alım kaydı iptal edilen işte kalır (sevk geçmişi, 302 a), yükü yeni açık
+// kayda geçer: ürün parçası kök kaydı gösterir, sevk anı müşterisi taşınmaz. Fason kaydı gönderim başına tektir; işten çözülür.
+export async function isinBekleyenleriniCoz(db: Db, isId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, talep_id, firma_id, malzeme_no, adet, istenen_tarih, hazir_zamani, ust_bekleyen_id)
+     SELECT kaynak, uretim_emri_id, talep_id, CASE WHEN kaynak = 'alim' THEN firma_id END, malzeme_no, adet, istenen_tarih, hazir_zamani,
+       CASE WHEN kaynak = 'urun' THEN COALESCE(ust_bekleyen_id, id) END
+       FROM sevkiyat_bekleyen WHERE is_id = $1 AND kaynak IN ('urun', 'alim')`, [isId],
+  );
+  await db.sorgu("UPDATE sevkiyat_bekleyen SET is_id = NULL WHERE is_id = $1 AND kaynak = 'fason'", [isId]);
+}
 export function bekleyeniKaldir(db: Db, id: number, kisiId: number): Promise<unknown> {
   return db.sorgu('UPDATE sevkiyat_bekleyen SET kaldirildi = now(), kaldiran_kisi_id = $2 WHERE id = $1 AND is_id IS NULL AND kaldirildi IS NULL', [id, kisiId]);
 }

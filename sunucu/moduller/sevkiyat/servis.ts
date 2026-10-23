@@ -281,6 +281,7 @@ export async function isIptalEt(db: Db, id: number): Promise<Is> {
   if (!isDuzenlenebilir(onceki.durum as IsDurumu)) throw gecersiz(DUZENLENEMEZ_IS);
   const plan = await sorgu.planKilitle(db, onceki.tarih), planda = plan !== null && isDegistirilebilir(plan.onaylandi !== null) && await sorgu.isPlandaMi(db, plan.id, id);
   if (plan && planda) { await sorgu.isiPlandanCikar(db, id); await sorgu.planSurumunuArtir(db, plan.id, plan.amac); }
+  await sorgu.isinBekleyenleriniCoz(db, id);
   return isCevabi((await sorgu.isIptalEt(db, id))!);
 }
 
