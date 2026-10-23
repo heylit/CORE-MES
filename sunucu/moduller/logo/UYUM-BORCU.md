@@ -40,8 +40,13 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 17. "Logo'da kontrol edin" hatasıyla duran talep ya da hizmet kartı / kullanıcı Logo'daki kaydın numarasını elle bağlayamıyor / sahibin ekranı /
    bağlamada sahip modül "Logo kayıt no gir" ya da "yeniden gönder" işlemi verir; logo tarafı niyeti siler.
 
-18. Kapandı (kart #941): satış işi portalın dört işleviyle `isler.ts` listesinde; portal firması finans firmasına firma koduyla bağlanır,
-   kod yoksa `firmaId` boş gelir ve teklif "Firmanın Logo cari kodu yok" olur.
+18. Kapandı (H10, soru 238 ve 265 a): satış işinin kaynağı Siparişler'in dört işlevidir (`siparisler/disari.ts`); Portal sırası
+   (`portal_logo_gonderim`) artık okunmaz, satırları ve `logo_giden`'deki `satis-teklifi`/`satis-siparisi` izleri silinmez. Kalkan anahtarı
+   `siparisler-teklifi`/`siparisler-siparisi`. Müşteriye verilen her teklif sürümü ayrı Logo teklifidir (ilk sürüm teklif no, sonrakiler `-R<n>`);
+   sipariş onaylanınca kabul edilen sürümün teklifinden açılır.
+   Açık: tekliften gelmeyen Siparişler siparişi Logo'ya gitmez / Logo satış siparişini yalnız tekliften açar (not 2.7) / bağlamada ya kendiliğinden
+   teklif açılır ya da kullanıcı kararı. Sipariş satırı teklif satırına sıra ve kartla bağlanır; taslakta değişen satır "teklif satırı Logo'da yok" hatası alır.
+   Kur Siparişler'de tutulmaz, dövizli teklif kursuz gider.
 19. Satış teklifi cevabının satır kabı ve `GET /api/SalesOffer/{ref}` biçimi VARSAYIM; `SalesOffer/customer` bulamayınca 404 VARSAYIM / `kopru.ts` /
    gerçek köprüyle denenince yalnız bu dosya değişir; o zamana kadar `logo.satis-gonderimi` kapalı.
 

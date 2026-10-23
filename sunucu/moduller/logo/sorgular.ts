@@ -4,7 +4,8 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
 export type FisTuru = 'sarf-fisi' | 'uretim-girisi';
-export type BelgeTuru = 'malzeme' | 'hizmet' | 'malzeme-guncelleme' | 'siparis' | 'siparis-guncelleme' | 'siparis-kapatma' | 'siparis-iptal' | 'talep' | 'karsilama' | 'satis-teklifi' | 'satis-siparisi' | FisTuru;
+export type BelgeTuru = 'malzeme' | 'hizmet' | 'malzeme-guncelleme' | 'siparis' | 'siparis-guncelleme' | 'siparis-kapatma' | 'siparis-iptal' | 'talep' | 'karsilama' | 'satis-teklifi' | 'satis-siparisi'
+  | 'siparisler-teklifi' | 'siparisler-siparisi' | FisTuru;
 export type GidenSonucu = 'gonderildi' | 'zaten-vardi' | 'reddedildi' | 'yetkisiz' | 'ulasilamadi' | 'belirsiz' | 'yazilamadi';
 
 export interface GidenSatiri {
