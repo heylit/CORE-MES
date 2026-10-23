@@ -111,4 +111,21 @@ describe('finans prototipi: iade ve sipariş seçimi (260 a)', () => {
     const govde = istekler.find((i) => i.tip === 'belge-ekle')?.veri['govde'] as Record<string, unknown>;
     expect([govde['siparisId'], govde['sevkiyatIsiId']]).toEqual([3, 11]);
   });
+
+  it('iptal edilmemiş satış faturası olan sevk "Faturalandı" yazar ve seçilemez (FNS-68)', async () => {
+    const { p } = await ac();
+    await vi.waitFor(() => { expect(degerlendir(p, 'V !== null')).toBe(true); });
+    degerlendir(p, `V.belgeler.push(${JSON.stringify(belge({ id: 3, belgeNo: 'SF-3', sevkiyatIsiId: 11 }))}, ${JSON.stringify(belge({ id: 4, belgeNo: 'SF-4', sevkiyatIsiId: 12, durum: 'iptal' }))})`);
+    olay(p, 'satis', 'Deneme Müşteri');
+    const f = p.document.getElementById('flowForm') as HTMLFormElement;
+    await vi.waitFor(() => { expect(f.querySelector('select[name=siparis]')?.textContent).toContain('SS-2026-001'); });
+    const siparisSec = f.querySelector('select[name=siparis]') as HTMLSelectElement;
+    siparisSec.value = '3';
+    siparisSec.dispatchEvent(new p.Event('change', { bubbles: true }));
+    const sevk = f.querySelector('select[name=sevk]') as HTMLSelectElement;
+    await vi.waitFor(() => { expect(sevk.textContent).toContain('IR-5'); });
+    const secenek = (id: string) => sevk.querySelector(`option[value="${id}"]`) as HTMLOptionElement;
+    expect([secenek('11').disabled, secenek('11').textContent]).toEqual([true, '8 Eki · IR-5 · Teslim edildi · Faturalandı (SF-3)']);
+    expect([secenek('12').disabled, secenek('12').textContent?.includes('Faturalandı')]).toEqual([false, false]);
+  });
 });
