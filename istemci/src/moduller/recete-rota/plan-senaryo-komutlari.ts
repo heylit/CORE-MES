@@ -95,9 +95,6 @@ export const planSenaryoKomutlari = (oku: PlanOku): Readonly<Record<string, Plan
     // Onaylayanın canlıya alması: yalnız onaydaki taslak. Onaylayan farkı ekranda incelediği için canlı arada değiştiyse de alınır (senaryonun
     // hâli geçerli olur).
     'plan-senaryo-canliya-al': { hafif: true, hazirla: async (g) => onayIstegi('canliya-al', g, { cakismalariKabul: true }) },
-    // Reçete ve Rota motor ekranının Canlıya al'ı: kuyruğun az önce yazıldığı taslak. Canlı arada değiştiyse alınmaz (ekran eski planla yazdı).
-    // Plan modülü onaydaki olmayan taslağı reddeder; ekranın onaya göndermesi H3 ile gelir.
-    'plan-canliya-al': { hafif: true, hazirla: async (g) => onayIstegi('canliya-al', g, { cakismalariKabul: false }) },
     // Dondurma plan modülünündür (plan.kilitle): hangi işin donacağını plan ayarındaki gün sayısıyla plan modülü seçer.
     'plan-dondur': {
       hafif: true,
