@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PLAN_ISLEMLERI } from '../islemler/plan.ts';
 import { IS_EMRI_TURLERI } from './uretim-emirleri.ts';
 
 const KIMLIK = z.number().int().positive().max(2_147_483_647);
@@ -181,11 +182,44 @@ export const onizlemeCevabi = z.object({
 });
 
 export const HIZLI_DENEMELER = ['acil', 'ariza', 'gun', 'oncelik'] as const;
+
+// Plan onay akışı: canlı plana tek kapı. Planı etkileyen her yazma kişinin taslağına (senaryo) gider; taslak onaya gönderilir, onaylayan
+// canlıya alır ya da gerekçeyle geri gönderir. onayda senaryo donmuştur: plan yazmaları ona yazılmaz (açık olmayan taslak reddedilir), sahibin
+// yeni yazması yeni taslak açar; sahibi değiştirmek isterse önce onaydan çeker.
+export const SENARYO_DURUMLARI = ['acik', 'onayda', 'canliya_alindi', 'vazgecildi'] as const;
+export type SenaryoDurumu = (typeof SENARYO_DURUMLARI)[number];
+
+// Onaylayan (146): gönderen de onaylayabilir; `plan.dort-goz` ayarı açıksa onaylayan gönderenden başkası olmalıdır (varsayılan kapalı).
+export const PLAN_ONAY_SECIMLERI: Readonly<{ arkonSirasiOnayaGider: boolean; bedelTaslagaGirer: boolean }> = {
+  // 147 a: Arkon kuyruk sırası taslağa düşer, onayla canlıya geçer.
+  arkonSirasiOnayaGider: true,
+  // 148 a: bedel ayarı ve sipariş elle çarpanı taslağa girer (bedelAyariTaslakGovdesi, siparisCarpaniTaslakGovdesi).
+  bedelTaslagaGirer: true,
+};
+
+// Senaryo durum geçişleri: her biri ayrı uç ve ayrı işlem; gövdede okunan senaryo sürümü denetlenir. Kişi yetkisi (sahip mi, onaylayabilir mi)
+// sunucuda denetlenir; ekran yalnız cevaptaki `yapabilir` bayraklarına bakar. Yeni işlem adı yoktur: gönderen stüdyo işlemini, onaylayan canlıya
+// alma işlemini taşır.
+export const PLAN_ONAY_KOMUTLARI = {
+  'onaya-gonder': { yol: '/plan/senaryolar/:id/onaya-gonder', islem: 'plan.studyo', durumdan: 'acik', duruma: 'onayda', kim: 'sahip' },
+  'onaydan-cek': { yol: '/plan/senaryolar/:id/onaydan-cek', islem: 'plan.studyo', durumdan: 'onayda', duruma: 'acik', kim: 'sahip' },
+  'geri-gonder': { yol: '/plan/senaryolar/:id/geri-gonder', islem: 'plan.canliya-al', durumdan: 'onayda', duruma: 'acik', kim: 'onaylayan' },
+  'canliya-al': { yol: '/plan/senaryolar/:id/canliya-al', islem: 'plan.canliya-al', durumdan: 'onayda', duruma: 'canliya_alindi', kim: 'onaylayan' },
+} as const satisfies Record<string, { yol: string; islem: (typeof PLAN_ISLEMLERI)[number]; durumdan: SenaryoDurumu; duruma: SenaryoDurumu; kim: 'sahip' | 'onaylayan' }>;
+export type PlanOnayKomutu = keyof typeof PLAN_ONAY_KOMUTLARI;
+
+// Son gönderme ve son geri gönderme; hiç gönderilmemiş senaryoda null. Geri gönderilen senaryo açıktır, neden sahibine görünür.
+export const senaryoOnayi = z.object({
+  gonderen: z.string().nullable(), gonderme: zaman, not: z.string().nullable(),
+  geriGonderen: z.string().nullable(), geriGonderme: zaman.nullable(), geriNeden: z.string().nullable(),
+});
+// Okuyan kişinin bu senaryoda yapabileceği geçişler (durum, sahiplik, işlem ve dört göz ayarı birlikte); ekran düğmeyi buna göre gösterir.
+export const senaryoYapabilir = z.object({ onayaGonder: z.boolean(), onaydanCek: z.boolean(), geriGonder: z.boolean(), canliyaAl: z.boolean() });
 export const senaryoDegisikligi = z.object({ id: KIMLIK, tur: z.string(), ozet: z.string(), yazma: zaman });
 export const senaryolarCevabi = z.object({
   canli: planGostergeleri, canliSurum: z.number().int(),
   senaryolar: z.array(z.object({
-    id: KIMLIK, ad: z.string(), aciklama: z.string().nullable(), durum: z.enum(['acik', 'canliya_alindi', 'vazgecildi']), acan: z.string().nullable(),
+    id: KIMLIK, ad: z.string(), aciklama: z.string().nullable(), durum: z.enum(SENARYO_DURUMLARI), acan: z.string().nullable(),
     benim: z.boolean(), acilma: zaman, surum: z.number().int(), tabanPlanSurumu: z.number().int(), canliDegisti: z.boolean(),
     gostergeler: planGostergeleri.nullable(), degisiklikler: z.array(senaryoDegisikligi),
     // Canlıya göre etkisi: tarihi değişen emirler, yükü değişen istasyonlar, senaryoda yeni uyarılar.
@@ -196,12 +230,18 @@ export const senaryolarCevabi = z.object({
     }).nullable(),
     // Canlıya alınamayan (sahibi modülün komutu bağlanınca yazılacak) değişiklikler.
     bekleyenler: z.array(z.string()),
+    // Onay akışı alanları sunucu onay adımını kurana dek gelmez; gelmeyen `yapabilir` hiçbir geçişe izin vermez.
+    onay: senaryoOnayi.nullable().optional(),
+    yapabilir: senaryoYapabilir.optional(),
   })),
 });
 export const senaryoGovdesi = z.object({ ad: z.string().trim().min(1, 'Senaryoya ad ver.').max(80), aciklama: z.string().trim().max(500).nullish() });
 export const senaryoBilgiGovdesi = senaryoGovdesi.extend({ surum: KIMLIK });
 export const senaryoSurumGovdesi = z.object({ surum: KIMLIK });
 export const hizliGovdesi = senaryoSurumGovdesi.extend({ tur: z.enum(HIZLI_DENEMELER) });
+export const onayaGonderGovdesi = senaryoSurumGovdesi.extend({ not: z.string().trim().max(500).nullish() });
+export const geriGonderGovdesi = senaryoSurumGovdesi.extend({ neden: z.string().trim().min(1, 'Geri gönderme nedenini yaz.').max(500) });
+export const onaydanCekGovdesi = senaryoSurumGovdesi;
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
@@ -295,6 +335,9 @@ export const siparisCarpaniGovdesi = z.object({
     .refine((v) => Math.round(v * 100) === v * 100, 'Çarpan en çok iki ondalık olmalı.'),
   gerekce: z.string().trim().min(1, 'Gerekçe yaz.').max(500),
 });
+// 148 a: bedel ayarı ve elle çarpan da taslağa yazılır; taslak verilmezse kişiye yeni taslak açılır (taslakGovdesi gibi).
+export const bedelAyariTaslakGovdesi = bedelAyariGovdesi.extend({ taslak: taslakGirdisi });
+export const siparisCarpaniTaslakGovdesi = siparisCarpaniGovdesi.extend({ taslak: taslakGirdisi });
 const siparisCarpani = z.object({ carpan: z.number(), gerekce: z.string(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), zaman });
 // Geçmiş yeniden eskiye; geçerli çarpan ilk satırdır, kayıt yoksa null.
 export const siparisCarpaniCevabi = z.object({ siparisId: KIMLIK, gecerli: siparisCarpani.nullable(), gecmis: z.array(siparisCarpani) });
@@ -335,3 +378,7 @@ export type BedelAyari = z.output<typeof bedelAyari>;
 export type BedelAyariGovdesi = z.output<typeof bedelAyariGovdesi>;
 export type SiparisCarpaniCevabi = z.output<typeof siparisCarpaniCevabi>;
 export type HizliDeneme = (typeof HIZLI_DENEMELER)[number];
+export type SenaryoOnayi = z.output<typeof senaryoOnayi>;
+export type SenaryoYapabilir = z.output<typeof senaryoYapabilir>;
+export type OnayaGonderGovdesi = z.output<typeof onayaGonderGovdesi>;
+export type GeriGonderGovdesi = z.output<typeof geriGonderGovdesi>;
