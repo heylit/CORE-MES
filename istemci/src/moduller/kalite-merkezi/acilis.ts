@@ -323,13 +323,13 @@ export const SERBEST_MIKTAR_BETIGI = String.raw`(function () {
   };
 })();`;
 
-// Giriş TMI oturumudur, ayrı PIN yoktur (yazılı onay 2026-10-16). Uygulamanın kullanıcısı oturumdaki kişidir; rolü uygulamanın
-// kullanıcı kaydından (kimliği "tmi-<kişi>") gelir, kaydı olmayan ya da pasif kişi Muayeneci, TMI yöneticisi Kalite yöneticisidir.
+// Giriş TMI oturumudur, ayrı PIN yoktur (yazılı onay 2026-10-16). Uygulamanın kullanıcısı oturumdaki kişidir. Rolü TMI işleminden
+// gelir (195 a, B18): TMI yöneticisi Kalite yöneticisi, `kalite-merkezi.onayla` taşıyan Kalite mühendisi, öteki Muayeneci. Uygulamanın
+// kullanıcı kaydındaki rol kullanılmaz: kapama ve MRB kararını sunucu da yalnız onay işlemiyle kabul eder.
 // Uygulamanın giriş kapısı (sayfa.ts) bunu çağırır; uygulamadan önce tanımlanır, uygulamanın değişkenlerini çağrıldığında okur.
 export const KIMLIK_BETIGI = String.raw`function tmiKullanici() {
   var A = window.__TMI_KM, T = A.kisi, uid = 'tmi-' + T.id;
-  var r = (S.kullanici || []).find(function (x) { return x._id === uid && x.aktif !== false; });
-  var rol = A.yonetici ? 'Kalite yöneticisi' : (r && ROLLER.indexOf(r.rol) >= 0 ? r.rol : 'Muayeneci');
+  var rol = A.yonetici ? 'Kalite yöneticisi' : (A.onaylayabilir ? 'Kalite mühendisi' : 'Muayeneci');
   if (!USER || USER._id !== uid) { ME.dolduran = T.ad; ME.muayeneci = T.ad; }
   USER = { _id: uid, ad: T.ad, rol: rol };
 }`;
@@ -354,7 +354,7 @@ export const KULLANICI_BETIGI = String.raw`function openUser(id) {
     await save('kullanici', rec);
     closeModal(true);
     toast('Kullanıcı kaydedildi');
-  }, '<div class="note mt">Giriş TMI oturumuyla yapılır. TMI yöneticisi her zaman Kalite yöneticisidir; burada rolü verilmeyen kişi Muayeneci sayılır.</div>');
+  }, '<div class="note mt">Giriş TMI oturumuyla yapılır. Rol TMI yetkisinden gelir: TMI yöneticisi Kalite yöneticisi, kalite onay yetkisi olan Kalite mühendisi, öteki Muayeneci; burada seçilen rol uygulanmaz.</div>');
 }`;
 
 // Onaylı formun onayını geri alma (kullanıcı kararı 17.10.2026, "Eklensin"): form listesindeki düğme yalnız onay işlemi olana

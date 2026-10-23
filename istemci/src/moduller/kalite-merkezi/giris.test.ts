@@ -69,7 +69,7 @@ function uygulama(kimlik: KmKimlikCevabi, kullanicilar: Record<string, unknown>[
 const KISI = { id: 7, ad: 'Deneme Kişi' };
 
 describe('Kalite Merkezi girişi TMI oturumundandır', () => {
-  it('PIN ekranı açılmaz: kullanıcı oturumdaki kişidir; rolü "tmi-<kişi>" kaydından, kaydı yoksa Muayeneci', () => {
+  it('PIN ekranı açılmaz: kullanıcı oturumdaki kişidir; rolü TMI işleminden, uygulamanın kullanıcı kaydından değil (195 a)', () => {
     const yok = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'u_eski', ad: 'Eski', rol: 'Kalite yöneticisi', pin: 'x' }]);
     expect(yok.authGate()).toBe(true);
     expect(yok.login.hidden).toBe(true);
@@ -78,15 +78,20 @@ describe('Kalite Merkezi girişi TMI oturumundandır', () => {
     expect(yok.chip.innerHTML).toContain('Deneme Kişi');
     expect(yok.chip.innerHTML).not.toContain('logout');
 
-    const rollu = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'Kayıttaki Ad', rol: 'Kalite mühendisi', aktif: true }]);
-    rollu.authGate();
-    expect(rollu.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' });
-    expect(rollu.can('onay')).toBe(true);
-    expect(rollu.can('kullanici')).toBe(false);
+    // Kayıtta Kalite mühendisi yazsa da onay işlemi olmayan Muayenecidir: kayıt rol vermez.
+    const kayitli = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'Kayıttaki Ad', rol: 'Kalite mühendisi', aktif: true }]);
+    kayitli.authGate();
+    expect(kayitli.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Muayeneci' });
+    expect(kayitli.can('onay')).toBe(false);
 
-    const pasif = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'x', rol: 'Kalite yöneticisi', aktif: false }]);
-    pasif.authGate();
-    expect(pasif.kullanici()?.rol).toBe('Muayeneci');
+    // Kaydı olmasa da (ya da Muayeneci yazsa da) kalite-merkezi.onayla taşıyan Kalite mühendisidir: NCR, DÖF kapatır ve MRB kararı verir.
+    for (const kullanicilar of [[], [{ _id: 'tmi-7', ad: 'x', rol: 'Muayeneci', aktif: true }]]) {
+      const onayci = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: true }, kullanicilar);
+      onayci.authGate();
+      expect(onayci.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' });
+      expect(onayci.can('onay')).toBe(true);
+      expect(onayci.can('kullanici')).toBe(false);
+    }
   });
 
   it('kullanıcı kaydı olmasa da yetki denetimi açıktır; TMI yöneticisi her zaman Kalite yöneticisidir', () => {
