@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { IsaretKutusu } from '../../../ortak/arayuz/Alan.tsx';
 import { Tablo, type Sutun, type TabloSuzgeci } from '../../../ortak/arayuz/Tablo.tsx';
 import { Rozet } from '../../../ortak/arayuz/Rozet.tsx';
+import { useArsivGorunumu } from './ArsivGorunumu.tsx';
 import { rozetTonu } from './bicim.ts';
 import type { KmTon } from './kurallar.ts';
 import type { KmKayit } from './tipler.ts';
@@ -14,7 +14,7 @@ interface Ozellikler<T extends KmKayit> {
   ara?: (satir: T) => string;
   aramaYeri?: string;
   suzgec?: { etiket: string; secenekler: readonly TabloSuzgeci[]; ilk: string; uyar: (satir: T, deger: string) => boolean };
-  // Arşivlenebilen listede arşivli kayıtlar gizlidir; "Arşivi göster" ile görünür.
+  // Arşivlenebilen listede arşivli kayıtlar gizlidir; Arşiv ekranındaki genel anahtarla görünür (uygulamadaki arsivF).
   arsivli?: boolean;
   csv?: string;
   ac?: (satir: T) => void;
@@ -22,11 +22,11 @@ interface Ozellikler<T extends KmKayit> {
   sag?: ReactNode;
 }
 
-// Uygulamanın liste kalıbı: arama ve süzgeç (UI.f), arşivi göster, CSV indir, satıra tıklayınca kayıt açılır.
+// Uygulamanın liste kalıbı: arama ve süzgeç (UI.f), arşiv süzgeci, CSV indir, satıra tıklayınca kayıt açılır.
 export function KayitListesi<T extends KmKayit>({ etiket, satirlar, sutunlar, ara, aramaYeri, suzgec, arsivli = false, csv, ac, bos, sag }: Ozellikler<T>) {
   const [aranan, arananYaz] = useState('');
   const [secili, seciliYaz] = useState(suzgec?.ilk ?? '');
-  const [arsivGoster, arsivGosterYaz] = useState(false);
+  const { goster: arsivGoster } = useArsivGorunumu();
   const gorunen = useMemo(() => {
     let L = arsivli && !arsivGoster ? satirlar.filter((r) => !r.arsiv) : [...satirlar];
     if (suzgec && secili) L = L.filter((r) => suzgec.uyar(r, secili));
@@ -34,7 +34,6 @@ export function KayitListesi<T extends KmKayit>({ etiket, satirlar, sutunlar, ar
     if (ara && q) L = L.filter((r) => ara(r).toLocaleLowerCase('tr').includes(q));
     return L;
   }, [satirlar, arsivli, arsivGoster, suzgec, secili, ara, aranan]);
-  const arsivSayisi = arsivli ? satirlar.filter((r) => r.arsiv).length : 0;
 
   return (
     <Tablo<T>
@@ -50,7 +49,6 @@ export function KayitListesi<T extends KmKayit>({ etiket, satirlar, sutunlar, ar
         ...(csv ? { csv: { ad: csv } } : {}),
         sag: (
           <>
-            {arsivSayisi > 0 && <IsaretKutusu etiket={`Arşivi göster (${arsivSayisi})`} checked={arsivGoster} onChange={(o) => arsivGosterYaz(o.target.checked)} />}
             <span className="tc-km-soluk">{gorunen.length} kayıt</span>
             {sag}
           </>

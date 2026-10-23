@@ -13,13 +13,13 @@ describe('Kalite Merkezi yeni ekran kabuğu', () => {
   it('bölüm sekmelerini ve yazana Yeni menüsünü gösterir', async () => {
     kmAc('', YONETICI);
     expect(await screen.findByRole('tab', { name: /Uygunsuzluk/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Yeni/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Yeni kayıt' })).toBeTruthy();
   });
 
   it('yalnız okuyana Yeni menüsü çıkmaz', async () => {
     kmAc('', OKUYAN);
     await screen.findByRole('tab', { name: /Uygunsuzluk/ });
-    expect(screen.queryByRole('button', { name: /Yeni/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yeni kayıt' })).toBeNull();
   });
 
   it('bilinmeyen görünümde iletiyi gösterir', async () => {

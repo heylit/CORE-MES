@@ -1,9 +1,9 @@
 /* Yeni Kalite Merkezi ekranı: yalnız tasarım değişkenleri. Belge (pv) biçimi kâğıt düzenidir (203 a). */
-.tc-km { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-km { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); min-width: 0; }
 .tc-km-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); justify-content: space-between; }
 .tc-km-ust > .tc-sekmeler { flex: 1 1 auto; min-width: 0; }
 .tc-km-ust-eylem { display: flex; gap: var(--b-2); align-items: center; }
-.tc-km-govde { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-km-govde { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
 .tc-km-atolye { font-size: var(--yazi-l); }
 .tc-km-atolye .tc-dugme { min-height: var(--dokunma-ana); }
 
@@ -28,6 +28,7 @@
   background: var(--panel2); font-size: var(--yazi-xs); font-weight: 700;
 }
 .tc-km-adim { display: grid; gap: var(--b-3); }
+.tc-km-adim[hidden] { display: none; }
 .tc-km-soru { margin: 0; font-size: var(--yazi-l); }
 .tc-km-ipucu { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
 .tc-km-alanlar { display: grid; grid-template-columns: 1fr; gap: var(--b-3); }

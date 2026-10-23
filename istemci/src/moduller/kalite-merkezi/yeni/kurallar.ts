@@ -1,3 +1,5 @@
+import { kalibrasyonDurumu } from '#paylasilan/sozlesme/kalibrasyon-kurali.ts';
+import type { Durum } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import { ALAN_AD, KAPALI, MRB_KARAR_BEKLIYOR } from './sabitler.ts';
 import type {
   Cihaz, Dof, IzDegisikligi, KmGecis, KmGorunum, KmKayit, KmKoleksiyonu, Lot, Muayene, Ncr, Karakteristik, OlcumSerisi, ParcaKarti, Resim, Tedarikci,
@@ -44,16 +46,32 @@ export type KmTon = 'iyi' | 'uyari' | 'kotu' | 'bilgi' | '';
 
 export interface CihazDurumu { metin: string; ton: KmTon; sonraki?: string; kalan?: number; kullanilir: boolean }
 
+// Vade ve durum Kalibrasyon modülünün tek kuralıyla (bugünkü ekranla aynı): sunucu Kalibrasyonun gününe göre hesapladığı durumu
+// cihazla gönderir, ölçüm denetimi de onu kullanır; alan yoksa (Kalibrasyonda eşi olmayan eski kayıt) kural burada koşar.
+const DURUM_METNI: Record<Durum, { metin: string; ton: KmTon; kullanilir: boolean }> = {
+  'kullanim-disi': { metin: 'Kullanım dışı', ton: '', kullanilir: false },
+  'kayit-yok': { metin: 'Kayıt yok', ton: 'kotu', kullanilir: false },
+  gecmis: { metin: 'Süresi doldu', ton: 'kotu', kullanilir: false },
+  yaklasan: { metin: 'Yaklaşıyor', ton: 'uyari', kullanilir: true },
+  gecerli: { metin: 'Geçerli', ton: 'iyi', kullanilir: true },
+};
+const DURUMLAR = new Set(Object.keys(DURUM_METNI));
+
 export function devDurumu(d: Cihaz | null | undefined, simdi: string = bugun()): CihazDurumu {
   if (!d) return { metin: '—', ton: '', kullanilir: false };
-  if (d.kullanimDisi) return { metin: 'Kullanım dışı', ton: '', kullanilir: false };
-  if (!d.sonKal) return { metin: 'Kayıt yok', ton: 'kotu', kullanilir: false };
-  const sonraki = ayEkle(d.sonKal, d.periyot || 12);
-  const kalan = gunKaldi(sonraki, simdi) ?? 0;
-  if (kalan < 0) return { metin: 'Süresi doldu', ton: 'kotu', sonraki, kalan, kullanilir: false };
-  if (kalan <= 30) return { metin: 'Yaklaşıyor', ton: 'uyari', sonraki, kalan, kullanilir: true };
-  return { metin: 'Geçerli', ton: 'iyi', sonraki, kalan, kullanilir: true };
+  const r = typeof d.kalibrasyonDurumu === 'string' && DURUMLAR.has(d.kalibrasyonDurumu)
+    ? { durum: d.kalibrasyonDurumu as Durum, vade: d.kalibrasyonVadesi ?? null, kalanGun: typeof d.kalibrasyonKalanGun === 'number' ? d.kalibrasyonKalanGun : null }
+    : kalibrasyonDurumu({
+      kullanimDisi: d.kullanimDisi === true, sonTarih: d.sonKal || null, bugun: simdi,
+      ...(Number(d.periyotGun) > 0 ? { periyotGun: Number(d.periyotGun) } : { periyotAy: Number(d.periyot || 12) }),
+    });
+  const m = DURUM_METNI[r.durum];
+  if (r.durum === 'kullanim-disi' || r.durum === 'kayit-yok') return { ...m };
+  return { ...m, ...(r.vade ? { sonraki: r.vade } : {}), ...(r.kalanGun === null ? {} : { kalan: r.kalanGun }) };
 }
+
+// Periyot metni: Kalibrasyonda gün tutulan cihaz gün, öteki ay gösterilir.
+export const periyotMetni = (d: Cihaz): string => (Number(d.periyotGun) > 0 ? `${Number(d.periyotGun)} gün` : `${d.periyot || 12} ay`);
 
 export const tedarikciNcr = (s: Tedarikci, ncr: readonly Ncr[], simdi: string = bugun()): number =>
   ncr.filter((x) => x.tedarikci === s._id && icinde(x.tarih, 365, simdi)).length;

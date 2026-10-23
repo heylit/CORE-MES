@@ -23,6 +23,9 @@ describe('cihaz, tedarikçi, DÖF', () => {
     expect(devDurumu({ _id: 'd', sonKal: '2025-04-01', periyot: 12 }, BUGUN)).toMatchObject({ metin: 'Yaklaşıyor', kullanilir: true, sonraki: '2026-04-01' });
     expect(devDurumu({ _id: 'd', sonKal: '2026-01-01', periyot: 12 }, BUGUN).metin).toBe('Geçerli');
     expect(devDurumu({ _id: 'd', kullanimDisi: true, sonKal: '2026-01-01' }, BUGUN).kullanilir).toBe(false);
+    expect(devDurumu({ _id: 'd', sonKal: '2026-01-01', periyot: 12, kalibrasyonDurumu: 'gecmis', kalibrasyonVadesi: '2026-02-01', kalibrasyonKalanGun: -5 }, BUGUN))
+      .toMatchObject({ metin: 'Süresi doldu', sonraki: '2026-02-01', kalan: -5, kullanilir: false });
+    expect(devDurumu({ _id: 'd', sonKal: '2026-03-10', periyotGun: 10 }, BUGUN)).toMatchObject({ metin: 'Yaklaşıyor', sonraki: '2026-03-20', kalan: 5 });
   });
 
   it('tedarikçi riski ve sınıfı', () => {

@@ -50,7 +50,9 @@ export interface KalibrasyonGecmisi { tarih?: string; sonuc?: string; sertifika?
 export interface Cihaz extends KmKayit {
   kod?: string; ad?: string; tip?: string; marka?: string; seri?: string; lokasyon?: string; aralik?: string; cozunurluk?: string;
   sonKal?: string; periyot?: number | null; periyotGerekce?: string; lab?: string; izlenebilirlik?: string; sertifika?: string;
-  kullanimDisi?: boolean; gecmis?: KalibrasyonGecmisi[]; kalibrasyonDurumu?: string;
+  kullanimDisi?: boolean; gecmis?: KalibrasyonGecmisi[]; periyotGun?: number | null;
+  // Kalibrasyonun sunucuda hesapladığı durum (329 a); yoksa kural istemcide koşar.
+  kalibrasyonDurumu?: string; kalibrasyonVadesi?: string | null; kalibrasyonKalanGun?: number | null;
 }
 
 export interface Tedarikci extends KmKayit {
@@ -83,7 +85,7 @@ export interface IzKaydi extends KmKayit {
   t?: string; kim?: string; rol?: string; islem?: string; col?: string; id?: string; no?: string; degisen?: IzDegisikligi[]; gerekce?: string;
 }
 
-export interface BelgeBagi { col: string; id: string; no?: string; balon?: number | string }
+export interface BelgeBagi { col: string; id: string; no?: string; parcaNo?: string; balon?: number | string | null }
 
 export interface BelgeKaydi extends KmKayit {
   ad?: string; assetId?: string; mime?: string; boyut?: number; tarih?: string; yukleyen?: string; tur?: string; belgeNo?: string;
@@ -96,7 +98,7 @@ export interface Emir extends KmKayit {
 }
 
 export interface Bayrak extends KmKayit {
-  yazi?: string; sekil?: string; anlam?: string; sinif?: string; karakteristik?: string; kanal?: string; firma?: string;
+  metin?: string; sekil?: string; anlam?: string; sinif?: string; ozel?: string; kanal?: string; firma?: string;
 }
 
 // `settings/genel`: firma başlığı, form yürürlüğü ve varsayılan AQL. `settings/maturity` yalnız korunur (ekranı yok).

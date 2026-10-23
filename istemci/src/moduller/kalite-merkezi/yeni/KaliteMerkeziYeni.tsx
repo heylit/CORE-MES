@@ -7,6 +7,7 @@ import { Dugme } from '../../../ortak/arayuz/Dugme.tsx';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { BOLUMLER, ESKI_YOL, GORUNUMLER, gorunumTanimi, gorunumYolu, type KmBolumu, type KmGecis, type KmGorunum } from './sekmeler.ts';
+import { ArsivGorunumuSaglayici } from './ArsivGorunumu.tsx';
 import { OnizlemeSaglayici } from './Onizleme.tsx';
 import { kmTercihi, tercihYaz, useKmVerisi, type KmVerisi } from './veri.ts';
 import { useKmYetkisi } from './yetki.ts';
@@ -22,6 +23,9 @@ function sayilariHesapla(veri: KmVerisi): Sayilar {
   }
   return s;
 }
+
+// Uygulamanın secCounts'u: Parçalar, Resim ve modeller, Raporlar bölümünde sayı yoktur (alt sekmede olsa da).
+const SAYISIZ_BOLUMLER: ReadonlySet<KmBolumu> = new Set(['parca', 'resim', 'rapor']);
 
 const rozetli = (baslik: string, c: { n: number } | undefined) => (c && c.n > 0 ? `${baslik} · ${c.n}` : baslik);
 
@@ -72,6 +76,7 @@ function Icerik() {
   const bolum = tanim.bolum;
   const bolumGorunumleri = GORUNUMLER.filter((g) => g.bolum === bolum);
   const bolumSayisi = (b: KmBolumu) => {
+    if (SAYISIZ_BOLUMLER.has(b)) return undefined;
     const l = GORUNUMLER.filter((g) => g.bolum === b).map((g) => sayilar[g.anahtar]).filter((c) => c !== undefined);
     return l.length ? { n: l.reduce((a, c) => a + c.n, 0), kotu: l.some((c) => c.kotu) } : undefined;
   };
@@ -120,7 +125,9 @@ export function KaliteMerkeziYeni() {
   return (
     <YeniEkranKapisi>
       <OnizlemeSaglayici>
-        <Icerik />
+        <ArsivGorunumuSaglayici>
+          <Icerik />
+        </ArsivGorunumuSaglayici>
       </OnizlemeSaglayici>
     </YeniEkranKapisi>
   );
