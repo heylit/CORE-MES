@@ -85,6 +85,25 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     assert.ok(k.bitis !== null && Date.parse(k.bitis) > SIMDI);
   });
 
+  test('plan şeridi tesis anıyla döner: sipariş bloğunda emir no, teklif bloğu kalemin işlemiyle aynı yerde', async () => {
+    const r = await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI));
+    const p = r?.plan;
+    assert.ok(p);
+    // geçerlilik 2026-10-30 (gün 11) + 2 gün, plan termini daha erken: pencere 2026-11-02 00:00 tesis saatinde biter
+    assert.equal(p.bitis, planAni('2026-10-19', 14 * 24));
+    // pencere planın şimdisinden başlar: çalışmada simdi yoksa motorunki, başlangıç günü 07:00
+    assert.equal(p.baslangic, planAni('2026-10-19', 7));
+    assert.ok(p.kapaliGunler.includes('2026-10-24') && p.kapaliGunler.includes('2026-10-25'));
+    assert.deepEqual(p.hatlar, [{ makineId: String(makineId), ad: 'Deneme torna 1', fason: false }]);
+    const islem = r.kalemler[0]!.islemler[0]!;
+    assert.deepEqual(p.bloklar.filter((b) => b.tur === 'teklif'), [{
+      makineId: String(makineId), tur: 'teklif', is: 'teklif', emirNo: null, kalem: 1, adim: '10', baslangic: islem.baslangic, bitis: islem.bitis, gecikir: false,
+    }]);
+    const siparis = p.bloklar.filter((b) => b.tur === 'siparis');
+    assert.ok(siparis.length > 0);
+    assert.ok(siparis.every((b) => b.is === 'O1' && b.emirNo === 'E-1' && b.kalem === null));
+  });
+
   test('geçerli satış taslağı yerinde kalır, süresi dolan taslak denemeye girmez', async () => {
     const yer = { makineId: String(makineId), baslangic: '2026-10-28T05:00:00.000Z' };
     const taslak = (id: string, gecerlilik: string) => ({ id, gecerlilik, kalemler: [{ malzemeNo: 50, adet: 2, termin: '2026-11-06', yerlesim: { 10: yer } }] });

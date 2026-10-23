@@ -31,6 +31,8 @@ export interface DenemeIstegi {
   taslaklar: TeklifTaslagi[];
   haric: string | null;
   tamponGun: number;
+  // Plan şeridinin penceresi için teklifin geçerlilik günü ('GGGG-AA-GG').
+  gecerlilik?: string | null;
 }
 export interface DenemeIslemi { id: string; adim: string; m: string; fason: boolean; S: number; C: number; ayarSaat: number; islemeSaat: number; tl: number | null }
 export interface DenemeKalemi {
@@ -53,6 +55,15 @@ export interface DenemeSonucu {
   kalemler: DenemeKalemi[];
   kayan: Array<{ siparis: string; once: number; sonra: number; termin: number | null }>;
   taslakYeri: Record<string, { m: string; S: number }>;
+  plan: DenemePlani | null;
+}
+// Plan şeridi; saatler yine planın ekseninde. Fason hattın kimliği '@' ile başlar.
+export interface DenemePlani {
+  bas: number;
+  bit: number;
+  kapaliGunler: string[];
+  hatlar: Array<{ m: string; ad: string; fason: boolean }>;
+  bloklar: Array<{ m: string; fason: boolean; tur: 'siparis' | 'satis-taslagi' | 'teklif'; is: string; kalem: number | null; adim: string; S: number; C: number; gecikir: boolean }>;
 }
 
 const ISCI = `

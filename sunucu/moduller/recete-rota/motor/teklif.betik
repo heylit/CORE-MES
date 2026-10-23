@@ -22,7 +22,7 @@ function teklifSiparis(s, id, urun, adet, termin, oncelik) {
 }
 /* st: plan girdisi (girdiKur), taban: mevcut plan ({ ops }) ya da null. istek: { kalemler: [{ id, urun, adet }], termin: 'GGGG-AA-GG SS:DD' | null,
    taslaklar: [{ id, kalemler: [{ id, urun, adet, termin }], yerlesim: { islemId: { m, S } } }], haric: düzenlenen taslak kimliği | null,
-   tamponGun: plan termini için bitişe eklenen gün }. */
+   tamponGun: plan termini için bitişe eklenen gün, gecerlilik: 'GGGG-AA-GG' | null (plan şeridinin penceresi için) }. */
 function teklifDene(st0, taban0, istek) {
   const s = clone(st0); const taban = taban0 && taban0.ops ? clone({ ops: taban0.ops }) : null;
   s.D.satinalma = Array.isArray(s.D.satinalma) ? s.D.satinalma : [];
@@ -91,7 +91,41 @@ function teklifDene(st0, taban0, istek) {
   /* satış taslaklarının bu denemedeki yeri: kilitliyse kilidin yeri, değilse motorun verdiği */
   const taslakYeri = {};
   for (const t of istek.taslaklar || []) if (t.id !== istek.haric) for (const r of Object.values(p.ops)) if (t.kalemler.some(k => k.id === r.job)) taslakYeri[r.id] = { m: r.m, S: r.S };
-  return { simdi: s.now, kalemler, kayan, taslakYeri };
+  return { simdi: s.now, kalemler, kayan, taslakYeri, plan: teklifPlani(s, cx, p, e, istek, kalemler) };
+}
+/* Plan şeridi: pencere planın "şimdi"sinden, istenen termin (yoksa kalemlerin en geç plan termini) ile geçerliliğin büyüğü + 2 günün sonuna
+   kadar; pencereyle kesişmeyen blok verilmez. Kapalı gün takvimin çalışma günü olmayan ya da tatil olan günüdür. Fason hattı yalnız bloğu
+   varsa çizilir. Gecikme yalnız siparişin kendi termininedir. Pencere kurulamazsa null. */
+function teklifPlani(s, cx, p, e, istek, kalemler) {
+  if (!teklifGunAdi(s.D, 0) || !isFinite(s.now)) return null;
+  const gunu = t => { const h = parseT(s.D, t); return h == null ? null : Math.floor(h / 24); };
+  const sinir = [istek.termin != null ? gunu(istek.termin) : null, gunu(istek.gecerlilik)];
+  if (istek.termin == null) for (const k of kalemler) sinir.push(k.planTerminGun);
+  const son = Math.max(...sinir.filter(x => x != null && isFinite(x)));
+  if (!isFinite(son)) return null;
+  const bas = s.now, bit = Math.min(HDAYS * 24, (son + 3) * 24);
+  if (!(bit > bas)) return null;
+  const kapali = [];
+  for (let d = Math.floor(bas / 24); d * 24 < bit; d++) {
+    const g = teklifGunAdi(s.D, d);
+    if (!((s.D.calismaGunleri || {})[g.ad] || []).length || (s.D.tatiller || []).includes(g.iso)) kapali.push(g.iso);
+  }
+  const teklifKalem = {}; istek.kalemler.forEach((k, i) => { teklifKalem[k.id] = i + 1; });
+  const taslakKalem = {};
+  for (const t of istek.taslaklar || []) if (t.id !== istek.haric) t.kalemler.forEach((k, i) => { taslakKalem[k.id] = { is: t.id, kalem: i + 1 }; });
+  const bloklar = Object.values(p.ops).filter(r => isFinite(r.S) && isFinite(r.C) && r.C > bas && r.S < bit).sort((a, b) => a.S - b.S || (a.id < b.id ? -1 : 1)).map(r => {
+    const y = { m: r.m, fason: !!r.fas, adim: r.id.slice(r.id.lastIndexOf('.') + 1), S: r.S, C: r.C };
+    if (teklifKalem[r.job]) return { ...y, tur: 'teklif', is: 'teklif', kalem: teklifKalem[r.job], gecikir: false };
+    const t = taslakKalem[r.job];
+    if (t) return { ...y, tur: 'satis-taslagi', is: t.is, kalem: t.kalem, gecikir: false };
+    const j = e.J[r.job]; const due = cx.jobs[r.job] ? cx.jobs[r.job].due : null;
+    return { ...y, tur: 'siparis', is: r.job, kalem: null, gecikir: !!(j && due != null && isFinite(j.C) && j.C > due + 1e-6) };
+  });
+  const fasonAd = id => { const f = (s.D.fasoncular || []).find(x => String(x.id) === id); return f && f.ad ? f.ad : id; };
+  const fasonlar = [...new Set(bloklar.filter(b => b.fason).map(b => b.m))].sort();
+  const hatlar = (s.D.tezgahlar || []).map(m => ({ m: m.id, ad: m.ad || m.id, fason: false }))
+    .concat(fasonlar.map(m => ({ m, ad: fasonAd(m.slice(1)), fason: true })));
+  return { bas, bit, kapaliGunler: kapali, hatlar, bloklar };
 }
 /* Çalışmanın tabanı: canlıya alınmış senaryonun planı, yoksa çalışmanın planı. */
 function teklifTabani(S) {

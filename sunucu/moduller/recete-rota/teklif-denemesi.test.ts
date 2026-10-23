@@ -122,6 +122,45 @@ describe('satış teklifi denemesi (Y4)', () => {
     assert.ok(k.eksik.includes('reçetede hammadde yok'));
   });
 
+  test('plan şeridi: pencere şimdiden max(termin, geçerlilik) + 2 günün sonuna; kapalı günler, tezgâhlar sırayla ve blok türleri döner', async () => {
+    // termin yok: pencerenin sonu kalemin plan termini ile geçerliliğin büyüğü (2026-11-06 = gün 18) + 2 gün
+    const r = await teklifDenemesi(istek({ gecerlilik: '2026-11-06' }));
+    const k = r?.kalemler[0];
+    assert.ok(r?.plan && k?.planTerminGun != null);
+    assert.equal(r.plan.bas, r.simdi);
+    assert.equal(r.plan.bit, (Math.max(18, k.planTerminGun) + 3) * 24);
+    for (const g of ['2026-10-24', '2026-10-25', '2026-10-31', '2026-11-01']) assert.ok(r.plan.kapaliGunler.includes(g), g);
+    assert.ok(!r.plan.kapaliGunler.includes('2026-10-20'));
+    assert.deepEqual(r.plan.hatlar.map((h) => [h.m, h.fason]), [['100', false], ['101', false]]);
+    const teklif = r.plan.bloklar.filter((b) => b.tur === 'teklif');
+    assert.deepEqual(teklif.map((b) => [b.is, b.kalem, b.adim, b.m, b.S, b.C]), [['teklif', 1, '10', '100', k.islemler[0]?.S, k.islemler[0]?.C]]);
+    const siparis = r.plan.bloklar.filter((b) => b.tur === 'siparis');
+    assert.deepEqual([...new Set(siparis.map((b) => b.is))].sort(), ['O1', 'O2']);
+    assert.ok(siparis.every((b) => b.kalem === null && !b.gecikir));
+    assert.ok(r.plan.bloklar.every((b) => b.C > r.plan!.bas && b.S < r.plan!.bit));
+  });
+
+  test('plan şeridi: pencere dışındaki blok verilmez; satış taslağı bloğu taslak kimliği ve kalem sırasıyla gelir', async () => {
+    const yer = { 'ST-1-1.10': { m: '100', S: 10 * 24 + 8 } };
+    const taslak = { id: 'ST-1', kalemler: [{ id: 'ST-1-1', urun: '50', adet: 4, termin: '2026-11-06 23:00' }], yerlesim: yer };
+    // termin 2026-10-22 (gün 3), geçerlilik yok: pencere gün 5 sonunda biter, gün 10'daki taslak dışarıda kalır
+    const kisa = await teklifDenemesi(istek({ termin: '2026-10-22 23:00', taslaklar: [taslak] }));
+    assert.equal(kisa?.plan?.bit, 6 * 24);
+    assert.ok(!kisa.plan.bloklar.some((b) => b.tur === 'satis-taslagi'));
+    const uzun = await teklifDenemesi(istek({ termin: '2026-10-22 23:00', taslaklar: [taslak], gecerlilik: '2026-11-06' }));
+    assert.deepEqual(uzun?.plan?.bloklar.filter((b) => b.tur === 'satis-taslagi').map((b) => [b.is, b.kalem, b.adim, b.m, b.S]), [['ST-1', 1, '10', '100', 10 * 24 + 8]]);
+  });
+
+  test('plan şeridi: termini geçen sipariş gecikir diye işaretlenir', async () => {
+    // O1 başlangıç günü 17:00'de bitmeli ama 40 adet 20 saat işler: hiçbir yerleşim ona ulaşamaz
+    const kayit = { ...KAYIT, orders: KAYIT.orders.map((o) => (o.id === 'O1' ? { ...o, qty: 40, due: '2026-10-19' } : o)) };
+    const r = await teklifDenemesi(istek({ calisma: calismaKur(), kayit, gecerlilik: '2026-11-06' }));
+    const bloklar = r?.plan?.bloklar ?? [];
+    assert.ok(bloklar.some((b) => b.is === 'O1'));
+    assert.ok(bloklar.filter((b) => b.is === 'O1').every((b) => b.gecikir));
+    assert.ok(bloklar.filter((b) => b.is === 'O2').every((b) => !b.gecikir));
+  });
+
   test('çalışma yoksa null; süre aşılırsa reddedilir', async () => {
     assert.equal(await teklifDenemesi(istek({ calisma: null })), null);
     await assert.rejects(teklifDenemesi(istek({}), 1), /ms içinde bitmedi/);
