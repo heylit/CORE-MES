@@ -497,6 +497,23 @@ namespace LogoYardimcisi
             Esit(400, C(s, "POST", "/api/MaterialSlip/AddConsumption", g).Durum, "geçersiz saat");
         }
 
+        static void T_malzeme_fisi_numarayla_bulunur_silinir_ve_yeniden_acilir()
+        {
+            var s = Logo();
+            Esit(404, C(s, "GET", "/api/MaterialSlip/Consumption/find/UE-2026-010", null).Durum, "açılmamış fiş yok");
+            var c = C(s, "POST", "/api/MaterialSlip/AddConsumption", Fis(12, "UE-2026-010"));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Dogru(Basari(C(s, "GET", "/api/MaterialSlip/Consumption/find/UE-2026-010", null)), "açılan fiş bulunur");
+            Esit(404, C(s, "GET", "/api/MaterialSlip/ProductionEntry/find/UE-2026-010", null).Durum, "öbür tür ayrı numaralanır");
+            Esit(404, C(s, "DELETE", "/api/MaterialSlip/ProductionEntry/UE-2026-010", null).Durum, "öbür türün fişi silinmez");
+            Dogru(Basari(C(s, "DELETE", "/api/MaterialSlip/Consumption/UE-2026-010", null)), "silinir");
+            Dogru(s.Cagrilar.Last().StartsWith("Sil " + Nesne.MalzemeFisi + " "), "Logo Objects Delete");
+            Esit(404, C(s, "GET", "/api/MaterialSlip/Consumption/find/UE-2026-010", null).Durum, "silinen fiş bulunmaz");
+            Esit(404, C(s, "DELETE", "/api/MaterialSlip/Consumption/UE-2026-010", null).Durum, "ikinci silme yok sayılmaz, 404");
+            Dogru(Basari(C(s, "POST", "/api/MaterialSlip/AddConsumption", Fis(12, "UE-2026-010"))), "aynı numarayla yeniden açılır");
+            Esit(400, C(s, "DELETE", "/api/MaterialSlip/Consumption/" + new string('9', 17), null).Durum, "çok uzun numara");
+        }
+
         /* ---------------- Hata eşleme ---------------- */
 
         static void T_oturum_acilamazsa_503_koparsa_500_bilinmeyen_yol_404()
