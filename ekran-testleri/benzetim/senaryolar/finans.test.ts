@@ -88,6 +88,10 @@ function sahteSunucu(): { istemci: (h: string) => RolIstemcisi; cagrilar: string
   const isle = (yontem: string, yol: string, govde: unknown, hesap: string): unknown => {
     const y = yol.replace(/\/\d+/g, '/:id').replace(/\?.*$/, '');
     const g = govde as Record<string, unknown>;
+    // İşi yapan rol: teklif satışta, firma ve para kaydı muhasebede (onaylar aşağıda, müdür).
+    const rol = y.startsWith('/api/siparisler/teklifler') && !y.endsWith('/iskonto-onayla') ? 'ornek.satis'
+      : y.startsWith('/api/finans/') || y.startsWith('/api/musteri-tedarikci/') ? 'ornek.muhasebe' : null;
+    if (rol !== null && hesap !== rol) throw new Error(`${yontem} ${y} ${hesap} ile atıldı, beklenen ${rol}`);
     switch (`${yontem} ${y}`) {
       case 'GET /api/finans/kdv-oranlari': return { satirlar: [{ oran: '0.00', gecerlilikBaslangic: '2023-07-10', gecerlilikBitis: null }, { oran: '20.00', gecerlilikBaslangic: '2023-07-10', gecerlilikBitis: null }] };
       case 'GET /api/finans/hesaplar': return { satirlar: [{ id: 7, tur: 'banka', paraBirimi: 'TRY', aktif: true }] };
@@ -160,10 +164,10 @@ describe('finans senaryosu: akış', () => {
     assert.deepEqual(dusen.map((a) => `${a.adim}: ${a.ileti ?? ''}`), []);
     const yollar = new Set(cagrilar);
     for (const beklenen of [
-      'ornek.yonetici POST /api/siparisler/teklifler/:id/reddet',
+      'ornek.satis POST /api/siparisler/teklifler/:id/reddet',
       'ornek.mudur POST /api/siparisler/teklifler/:id/iskonto-onayla',
       'ornek.mudur POST /api/siparisler/:id/onayla',
-      'ornek.yonetici POST /api/finans/odemeler/ekle',
+      'ornek.muhasebe POST /api/finans/odemeler/ekle',
       'ornek.mudur GET /api/siparisler/ozet',
     ]) assert.ok(yollar.has(beklenen), `${beklenen} çağrılmadı`);
   });
