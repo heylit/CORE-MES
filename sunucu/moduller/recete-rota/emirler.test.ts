@@ -5,15 +5,17 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { emirleriCevir } from './kurallar.ts';
 import type { EmirKaydi } from './kurallar.ts';
@@ -52,6 +54,23 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     cerezler.set(kullaniciAdi, String(c.headers['set-cookie']).split(';')[0] ?? '');
   }
 
+  // Terminal komutlarının HTTP ucu yok (238 H3): terminal onları Arkon üzerinden uretim-emirleri/disari.ts ile yapar.
+  const terminalKomutu = async (id: number, yol: string, govde?: unknown): Promise<{ durum: number; govde: { mesaj?: string } }> => {
+    const k = kullanicilar.get('operator')!;
+    const komut = yol.replace(/^\//, '');
+    try {
+      await o().vt.tx((db) => {
+        if (komut === 'baslat') return emirBaslat(db, k, id);
+        if (komut === 'bitir') return emirBitir(db, k, id, (govde as { saglamAdet?: number } | undefined)?.saglamAdet);
+        if (komut === 'sayim') return emirSayim(db, k, id, sayimGovdesi.parse(govde));
+        throw new Error(`bilinmeyen komut ${yol}`);
+      });
+      return { durum: 200, govde: {} };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() };
+      throw h;
+    }
+  };
   async function kisiEkle(kullaniciAdi: string, rolKodu: string): Promise<void> {
     const rol = await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rolKodu]);
     const yoneticiRolu = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
@@ -168,7 +187,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
   test('EMR-2: terminalde başlatılan iş emri çalışıyor, sayılan adet ilerleme, bitirilen tamam görünür; emir üretimde, bitince tamam ve doneAt dolu (Faz 5)', async () => {
     const id = await emirAc(10);
     const adimAnahtari = (sira: number) => `${String(id)}|root|${String(sira)}`;
-    const terminal = (yol: string, govde?: unknown) => istek('operator', 'POST', `/uretim-emirleri/${id}${yol}`, govde);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
 
     assert.equal((await terminal('/baslat')).durum, 200);
     let s = await siparis(id);
@@ -201,7 +220,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
 
   test('EMR-9 (391 a): başlamış adım kalanı, makinesi, sağlam sayacı ve emir adedi plan modülünden gelir; biten adım listede yoktur', async () => {
     const id = await emirAc(10);
-    const terminal = (yol: string, govde?: unknown) => istek('operator', 'POST', `/uretim-emirleri/${id}${yol}`, govde);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
     const no = (await siparis(id)).emir.no;
     const opNo = (await ayrinti(id)).isEmirleri[0]?.opNo;
     const calisan = async () => (await durum('yonetici')).calisanAdimlar?.find((a) => a.anahtar === `${no}|${String(opNo)}`);
@@ -223,7 +242,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
 
   test('EMR-10 (24 a): sonraki adımın adedi önceki adımın hurdası kadar düşer; tek kaynak uretim-emirleri, farksız adım gelmez', async () => {
     const id = await emirAc(10);
-    const terminal = (yol: string, govde?: unknown) => istek('operator', 'POST', `/uretim-emirleri/${id}${yol}`, govde);
+    const terminal = (yol: string, govde?: unknown) => terminalKomutu(id, yol, govde);
     const no = (await siparis(id)).emir.no;
     const [op1, op2, op3] = (await ayrinti(id)).isEmirleri.map((i) => `${no}|${String(i.opNo)}`);
     const adetler = async () => (await durum('yonetici')).adimAdetleri ?? {};

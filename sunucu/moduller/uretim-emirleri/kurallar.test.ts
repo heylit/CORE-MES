@@ -4,10 +4,10 @@ import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
-  BASLATMA_DURUMU, BITIRME_DURUMU, IPTAL_DURUMU, DURAKLI_DURDUR, MAKINEDE_AYNI_IS, MAKINE_DOLU, ISTASYON_PASIF_ACMA, ISTASYON_PASIF_BASLATMA, ISTASYON_YOK,
+  BASLATMA_DURUMU, BITIRME_DURUMU, DURAKLI_DURDUR, MAKINEDE_AYNI_IS, MAKINE_DOLU, ISTASYON_PASIF_ACMA, ISTASYON_PASIF_BASLATMA, ISTASYON_YOK,
   AYAR_PLANLI_DEGIL, AYAR_YINELENDI, REFAKAT_IPTAL, adimliOzetSay, ayarIhlali, isEmriSureOzeti, refakatIhlali, refakatQrMetni,
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
-  durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, iptalIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
+  durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali,
 } from './kurallar.ts';
@@ -29,11 +29,6 @@ describe('üretim emri kuralları', () => {
   test('yalnız başlamış emir biter', () => {
     assert.equal(bitirmeIhlali('basladi'), null);
     for (const d of digerleri('basladi')) assert.equal(bitirmeIhlali(d), BITIRME_DURUMU, d);
-  });
-
-  test('yalnız planlı emir iptal edilir', () => {
-    assert.equal(iptalIhlali('planli'), null);
-    for (const d of digerleri('planli')) assert.equal(iptalIhlali(d), IPTAL_DURUMU, d);
   });
 
   test('emir yalnız aktif istasyona açılır', () => {
