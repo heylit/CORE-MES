@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteAskisindakiFirmalar, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 
@@ -220,17 +220,13 @@ test('SAT-76: askıdaki tedarikçi denetimi yalnız yeni siparişin firmasına b
   assert.equal(askidakiTedarikciReddi(['Deneme A']), ILETILER.askidakiTedarikci(['Deneme A']));
 });
 
-test('E-13: Kalite Merkezi askısı firmaya iki tarafta kod varsa kodla, yoksa adla eşlenir; boşluk ve büyük-küçük harf sayılmaz', () => {
-  const firmalar = [
-    { id: 1, kod: 'TED-1', ad: 'Deneme Bir' }, { id: 2, kod: null, ad: 'Deneme İki' }, { id: 3, kod: 'TED-3', ad: 'Deneme Üç' }, { id: 4, kod: 'TED-4', ad: 'Deneme Dört' },
-  ];
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, []), []);
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, [{ kod: ' ted-1 ', ad: 'Başka Ad' }]), [1]);
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, [{ kod: 'TED-9', ad: 'deneme iki' }]), [2]);
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, [{ kod: null, ad: '  DENEME ÜÇ ' }]), [3]);
-  // İki tarafta da kod varsa ad tutsa bile kod belirler: aynı adlı başka firma askıya girmez.
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, [{ kod: 'TED-9', ad: 'Deneme Dört' }]), []);
-  assert.deepEqual(kaliteAskisindakiFirmalar(firmalar, [{ kod: null, ad: '' }]), []);
+test('236 a: Kalite Merkezi onayı Aday ya da Askıda olan tedarikçiye sipariş reddedilir; Onaylı, Şartlı onaylı ve kaydı olmayan reddedilmez', () => {
+  assert.equal(kaliteSiparisReddi('Aday'), true);
+  assert.equal(kaliteSiparisReddi('Askıda'), true);
+  assert.equal(kaliteSiparisReddi('Onaylı'), false);
+  assert.equal(kaliteSiparisReddi('Şartlı onaylı'), false);
+  assert.equal(kaliteSiparisReddi(null), false);
+  assert.equal(kaliteSiparisReddi(undefined), false);
 });
 
 test('257 a: kartlı kalem kartın birimiyle girilir; birimsiz kart, kartsız kalem ve birimi değişmeyen eski kalem serbest', () => {

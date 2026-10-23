@@ -299,15 +299,18 @@ export function kisininIstasyonu(atamalar: readonly { istasyonId: number; yuzde:
   return secilen?.istasyonId ?? null;
 }
 
-// Resmî tatiller (sabit tarihli; bayramlar her yıl değiştiği için elle eklenir).
-export const SABIT_RESMI_TATILLER: readonly { ay: number; gun: number; ad: string }[] = [
-  { ay: 1, gun: 1, ad: 'Yılbaşı' }, { ay: 4, gun: 23, ad: 'Ulusal Egemenlik ve Çocuk Bayramı' }, { ay: 5, gun: 1, ad: 'Emek ve Dayanışma Günü' },
-  { ay: 5, gun: 19, ad: 'Atatürk\'ü Anma, Gençlik ve Spor Bayramı' }, { ay: 7, gun: 15, ad: 'Demokrasi ve Millî Birlik Günü' },
-  { ay: 8, gun: 30, ad: 'Zafer Bayramı' }, { ay: 10, gun: 29, ad: 'Cumhuriyet Bayramı' },
-];
-
-export const resmiTatiller = (yil: number): { tarih: string; ad: string }[] =>
-  SABIT_RESMI_TATILLER.map((t) => ({ tarih: `${yil}-${String(t.ay).padStart(2, '0')}-${String(t.gun).padStart(2, '0')}`, ad: t.ad }));
+// VR-28 (soru 142 b): resmî tatilin sahibi İK'dır; takvim İK'nın tatillerini ve Vardiya'nın kendi günlerini birleştirir. Vardiya yeni tatil
+// yazmaz; 142'den önce girilmiş tatil satırı tatil kalır (planlama yalnız tatili tatil sayar) ve Vardiya'dan silinebilir. Aynı gün İK'da
+// tatilse İK'nın satırı görünür (bordro ve fazla mesai türü bunu ister). İK satırı `kaynak: 'ik'` taşır; Vardiya'nın kendi satırı alansızdır.
+export interface TakvimGunu { tarih: string; tur: 'tatil' | 'kapali'; ad: string | null; kaynak?: 'ik' }
+export function takvimGunleriniBirlestir(
+  kendi: readonly { tarih: string; tur: 'tatil' | 'kapali'; ad: string | null }[], tatiller: readonly { tarih: string; ad: string | null }[],
+): TakvimGunu[] {
+  const gunler = new Map<string, TakvimGunu>();
+  for (const g of kendi) gunler.set(g.tarih, { tarih: g.tarih, tur: g.tur, ad: g.ad });
+  for (const t of tatiller) gunler.set(t.tarih, { tarih: t.tarih, tur: 'tatil', ad: t.ad, kaynak: 'ik' });
+  return [...gunler.values()].sort((a, b) => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0));
+}
 
 // VR-03: bugünden önceki tarih geçmiştir (tarih metinleri karşılaştırılabilir).
 export const gecmisMi = (tarih: string, bugun: string): boolean => tarih < bugun;
@@ -324,6 +327,23 @@ export function fazlaMesaiHatasi(g: Omit<FazlaMesaiTanimi, 'tarih' | 'kisiIdleri
   if (g.kapsam === 'is-merkezi' && (g.isMerkeziId === null || g.istasyonId !== null)) return { ileti: 'İş merkezi seçilmeli.', alan: 'isMerkeziId' };
   if (g.kapsam === 'istasyon' && (g.istasyonId === null || g.isMerkeziId !== null)) return { ileti: 'İstasyon seçilmeli.', alan: 'istasyonId' };
   return null;
+}
+
+// VR-29 (W8, 18.1): kişinin son çalışma günü. İK çıkış günü çalışma günüdür (puantaj da yalnız sonrasını reddeder). Pasif kişi bugünden
+// itibaren çalışmaz; geçmiş günleri değişmez, çünkü Arkon emek verimi ve OEE geçmiş ayları da takvimden okur. Sınır yoksa null.
+export function sonCalismaGunu(k: { aktif: boolean; cikisTarihi: string | null; bugun: string }): string | null {
+  const pasifSonu = k.aktif ? null : tarihEkle(k.bugun, -1);
+  if (pasifSonu === null) return k.cikisTarihi;
+  return k.cikisTarihi === null || pasifSonu < k.cikisTarihi ? pasifSonu : k.cikisTarihi;
+}
+
+export const ayrildiMi = (sonGun: string | null, tarih: string): boolean => sonGun !== null && tarih > sonGun;
+
+// VR-29: ayrılmış (son çalışma gününden sonraki tarih) ya da pasif kişiye fazla mesai yazılmaz.
+export function fazlaMesaiKisiHatasi(tarih: string, kisiler: readonly { kisiId: number; sonGun: string | null }[]): KuralHatasi | null {
+  return kisiler.some((k) => ayrildiMi(k.sonGun, tarih))
+    ? { ileti: 'İşten ayrılmış ya da pasif kişiye fazla mesai yazılamaz.', alan: 'kisiIdleri' }
+    : null;
 }
 
 // VR-24: kaynağa uyan fazla mesailer. Kişi takvimine yalnız listesinde olduğu kayıtlar; öbür kaynaklara iş merkezi kaydı o merkeze ve

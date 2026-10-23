@@ -11,7 +11,7 @@
 | VR-07 | Çalışma aralıkları: molalar dışarıda, önceki günden taşan gece vardiyası dahil, aralık dışı kesilir, bitişikler birleşir | kurallar.test.ts "VR-07..." (iki test); vardiya.test.ts "VR-07, VR-08 (K3)..." |
 | VR-08 | Kaynak -> iş merkezi (makine istasyonundan, kişi en büyük yüzdeli atamadan); kişinin vardiyası varsa yalnız o; bağlanamayan null | kurallar.test.ts "VR-08..." (iki test); vardiya.test.ts "VR-07, VR-08 (K3)..." |
 | VR-09 | Tesis geneli yazma yalnız iş merkezi kısıtı olmayan kişide; matris ve kişi vardiyası kapsamla | vardiya.test.ts "VR-01, VR-04, VR-09...", "VR-07, VR-08 (K3)..." |
-| VR-10 | Temizle: geçmiş günler yalnız geçmiş yazma işlemiyle silinir | vardiya.test.ts "VR-02, VR-03, VR-10..." |
+| VR-10 | Temizle: Vardiya'nın kendi günleri silinir, İK tatilleri kalır; geçmiş günler yalnız geçmiş yazma işlemiyle silinir | vardiya.test.ts "VR-02, VR-03, VR-10..." |
 | VR-11 | Planlı duruşun hedefi kapsamına uyar: tesiste hedef yok, iş merkezinde yalnız iş merkezi, istasyonda yalnız istasyon | kurallar.test.ts "VR-11..."; vardiya.test.ts "VR-11, VR-12, VR-14..." |
 | VR-12 | Dakika hassasiyeti, bitiş başlangıçtan sonra; tekrarlı duruş 24 saatten kısa, haftalıkta en az bir gün, tekrar bitişi başlangıçtan önce değil | kurallar.test.ts "VR-12..."; vardiya.test.ts "VR-11, VR-12, VR-14..." (400) |
 | VR-13 | Tesis geneli duruş yalnız iş merkezi kısıtı olmayan kişide; iş merkezi ve istasyon duruşu kişinin kapsamında | vardiya.test.ts "VR-13..." |
@@ -31,3 +31,5 @@
 | Kısıt | `vardiya_ad_tekil`, `vardiya_sure_var`, `vardiya_matrisi_gun`, yabancı anahtarlar | vardiya.test.ts (aynı ad 409, olmayan iş merkezi ve kişi 409); `vardiya_planli_durus_*` denetimleri ve yabancı anahtarlar (VR-11..14 testleri) |
 | VR-17 | Arkon vardiyaları `disari.vardiyaTanimlari` ile okur | arkon.test.ts "A7-V1" |
 | A7 kopya | Arkon vardiyaları bir kez kopyalanır; aynı ad korunur; bozuk satır ve mola atlanır; Arkon belgesi değişmez | arkon-kopya-goc.test.ts (iki test) |
+| VR-28 | (soru 142 b) Resmî tatilin sahibi İK: takvim günleri `ik/disari.resmiTatilGunleri` ile İK tatilleri + Vardiya'nın kendi günleridir (İK satırı `kaynak: 'ik'`); 142'den önce girilmiş Vardiya tatili tatil kalır ve Vardiya'dan silinir, aynı gün İK tatili kazanır; Vardiya tatil yazmaz (400), İK tatilini silmez (404); `resmi-tatiller` ucu yok | kurallar.test.ts "VR-28..."; vardiya.test.ts "VR-02, VR-03, VR-10, VR-28..."; istemci Vardiya.test.tsx "soru 142 b, 160 a..." |
+| VR-29 | (W8, 18.1) Kişinin son çalışma günü İK çıkış günüdür (`ik/disari.kisilerinCikisTarihleri`), pasif kişide dün; sonrası kişi takviminde 0 dakika ve `ayrildi: true` (vardiya ve fazla mesai yok), günlük mesaide ve vardiya personelinde yok; o güne fazla mesai 400. Pasifin geçmiş günleri değişmez. Plan, Arkon, OEE, saat, stok ve İdari İşler aynı takvimi okur | kurallar.test.ts "VR-29..." (iki test); vardiya.test.ts "VR-29 (W8, 18.1)..." |

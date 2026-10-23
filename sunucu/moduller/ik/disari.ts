@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
-import { FAZLA_MESAI_TURLERI } from './kurallar.ts';
-import { gunDevamKisiNolari, izinliKisiNolari } from './sorgular.ts';
+import { FAZLA_MESAI_TURLERI, resmiTatilTarihleri } from './kurallar.ts';
+import { gunDevamKisiNolari, izinliKisiNolari, kisilerinCikisSatirlari, resmiTatilListesi } from './sorgular.ts';
 
 // IK-54: o gün onaylı izinde ya da raporda olan kişilerin kimlikleri (kisi.id); anomali hesabında bu kişiler beklenene girmez.
 // Eşleme personel kartındaki "TMI kullanıcısı" alanıdır (ik_personel.kisi_id); bu alanı boş personelin izni sayılmaz.
@@ -12,6 +12,22 @@ export function izinliKisiler(db: Db, tarih: string): Promise<number[]> {
 // Onay beklemede olan da sayılır (yemek önceden planlanır); eşleme ve bağsız personel IK-54 ile aynı.
 export function gununFazlaMesaisi(db: Db, tarih: string): Promise<number[]> {
   return gunDevamKisiNolari(db, tarih, FAZLA_MESAI_TURLERI);
+}
+
+// IK-80 (soru 142 b): resmî tatillerin sahibi İK'dır. Vardiya takvimi tatil günlerini buradan okur; bordro aynı listeyi kullanır.
+// İK ayarı hiç kaydedilmediyse liste boştur: bordro motorunun varsayılan listesi kimsenin girmediği günleri takvimde kapatmasın.
+// Tarihler YYYY-AA-GG, aralık iki ucu dahil, tarih sırasıyla. Yetki denetlemez.
+export async function resmiTatilGunleri(db: Db, baslangic: string, bitis: string): Promise<{ tarih: string; ad: string | null }[]> {
+  return resmiTatilTarihleri((await resmiTatilListesi(db)) ?? [], baslangic, bitis);
+}
+
+// W8 (18.1): işten çıkan kişi çıkış tarihinden sonra takvimde ve kapasitede yoktur; Vardiya bu tarihi buradan okur. Çıkış günü çalışma
+// günüdür (puantaj da yalnız sonrasını reddeder). Personel kaydı olmayan kişi haritada yoktur; çıkışı girilmemiş personel null. Tek sorgu,
+// boş dizide sorgu atılmaz. Yetki denetlemez.
+export async function kisilerinCikisTarihleri(db: Db, kisiIdleri: readonly number[]): Promise<Map<number, string | null>> {
+  const tekil = [...new Set(kisiIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await kisilerinCikisSatirlari(db, tekil)).map((r) => [r.kisi_id, r.cikis_tarihi]));
 }
 
 // Kart #1322 (Arkon Operatör Özetim): kişinin fazla mesaisi, izinleri ve kalan yıllık izni. Kişi `ik_personel.kisi_id` ile eşleşir; bağı yoksa

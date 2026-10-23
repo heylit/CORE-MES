@@ -1,7 +1,11 @@
+import { lazy } from 'react';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { PdksDosyaAktar } from '../nizamiye/disari.ts';
 import { IkCercevesi, IkIslemlerimCercevesi } from './IkCercevesi.tsx';
-import { IkYeniIk, IkYeniIslemlerim } from './yeni/IkYeni.tsx';
+
+// Yeni ekran motoru ve parçalarıyla yalnız açılınca yüklenir (eski çerçevenin paketi gibi).
+const IkYeniIk = lazy(async () => ({ default: (await import('./yeni/IkYeni.tsx')).IkYeniIk }));
+const IkYeniIslemlerim = lazy(async () => ({ default: (await import('./yeni/IkYeni.tsx')).IkYeniIslemlerim }));
 
 // Bir sayfanın bütün maddeleri aynı çerçeveye gider; görünümü adres belirler (paylasilan/sayfalar/ik.ts). İK İşlemlerim ayrı
 // ekrandır: iki sayfa arasında geçişte çerçeve yeniden kurulur. PDKS aktarımı Nizamiye'nin ekranıdır, çerçevenin görünümü değil;

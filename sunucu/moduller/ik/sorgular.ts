@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { IkTuru } from '#paylasilan/sozlesme/ik.ts';
 import type { Deger, SatirDegeri, Satirlar } from './eslesme.ts';
-import type { Degisiklik } from './kurallar.ts';
+import type { Degisiklik, ResmiTatilSatiri } from './kurallar.ts';
 import {
   DONEM_ALANLARI, GENEL_AYAR_ALANLARI, GOREV_ALANLARI, KANAL_ALANLARI, PLAN_ALANLARI, PLAN_KADRO_ALANLARI, PRIM_ALANLARI, SORU_SETI_ALANLARI,
   TESVIK_ALANLARI, TUR_TANIMLARI,
@@ -243,6 +243,12 @@ export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
   };
 }
 
+// IK-80: İK ayarı hiç kaydedilmediyse null.
+export async function resmiTatilListesi(db: Db): Promise<ResmiTatilSatiri[] | null> {
+  if ((await db.tek("SELECT 1 AS var FROM ik_genel_ayar WHERE anahtar = 'genel'")) === null) return null;
+  return db.sorgu<ResmiTatilSatiri>('SELECT yil, ay, gun, ad FROM ik_resmi_tatil ORDER BY sira');
+}
+
 export interface AyarYazimi {
   genel: SatirDegeri;
   tatiller: SatirDegeri[];
@@ -470,6 +476,14 @@ export async function kisilerinIzinSatirlari(
     [[...kisiIdleri], baslangic, bitis],
   );
   return satirlar.map((r) => ({ ...r, gun: r.gun === null ? null : Number(r.gun) }));
+}
+
+// Kişilerin İK çıkış tarihleri tek sorguda: iptal edilmemiş, kişiye bağlı personel; çıkışı girilmemiş personel null ile döner.
+export function kisilerinCikisSatirlari(db: Db, kisiIdleri: readonly number[]): Promise<{ kisi_id: number; cikis_tarihi: string | null }[]> {
+  return db.sorgu<{ kisi_id: number; cikis_tarihi: string | null }>(
+    'SELECT kisi_id, cikis_tarihi FROM ik_personel WHERE kisi_id = ANY($1::int[]) AND NOT iptal ORDER BY kisi_id',
+    [[...kisiIdleri]],
+  );
 }
 
 export interface PersonelKartiSatiri {

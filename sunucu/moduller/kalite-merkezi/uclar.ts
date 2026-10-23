@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import type { Uc } from '#cekirdek/uc.ts';
 import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
-  kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmYazGovdesi,
+  kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 
@@ -70,6 +70,14 @@ export const uclar: Uc[] = [
     parametre: kmDosyaParametresi,
     cevap: kmKarantinaPartileriCevabi,
     isle: ({ db, parametre }) => servis.karantinaPartileri(db, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/tedarikci-firmalari',
+    // 236 a: tedarikçi kaydının firma seçicisi. Tedarikçi kaydını onay yetkisi olan yazar; liste de onunla açılır.
+    yetki: 'kalite-merkezi.onayla',
+    cevap: kmTedarikciFirmalariCevabi,
+    isle: async ({ db }) => ({ firmalar: await servis.tedarikciFirmaSecenekleri(db) }),
   }),
   uc({
     yontem: 'GET',

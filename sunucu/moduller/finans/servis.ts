@@ -126,6 +126,7 @@ const PARA_KISITLARI: KisitEslemesi = {
   finans_belge_firma_gerekli: { ileti: 'Faturalı belgede firma zorunludur.', alan: 'firmaId' },
   finans_belge_faturasiz_kategori: { ileti: 'Faturasız belge yalnız personel, SGK, vergi, faiz ve kredi anapara kategorilerinde açılır.', alan: 'kategori' },
   finans_belge_kategori: { ileti: 'Kategori belgenin yönüne uymuyor.', alan: 'kategori' },
+  finans_belge_no_tekil: { ileti: 'Bu belge no bu firmada zaten var.', alan: 'belgeNo' },
   finans_belge_vade: { ileti: 'Vade belge tarihinden önce olamaz.', alan: 'vade' },
   finans_belge_tevkifat: { ileti: 'Tevkifat payı 1 ile paydası arasında olmalı; ikisi birlikte girilir.', alan: 'tevkifatPay' },
   finans_belge_kur: { ileti: 'TRY belgede kur 1\'dir.', alan: 'kur' },

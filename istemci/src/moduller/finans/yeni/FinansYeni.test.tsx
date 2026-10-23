@@ -18,6 +18,9 @@ const acikBolum = async (ad: string) => {
   await screen.findByRole('region', { name: ad });
   if (screen.queryByRole('tablist')) expect(screen.getByRole('tab', { selected: true }).textContent).toContain(ad);
 };
+// Günlük skor açılışta kendiliğinden yazılır; kayıt testleri onu saymaz.
+const kayitYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol !== '/finans/skorlar/kaydet');
+
 // Finans verisinin son okuması şirket adıdır; okununca bölüm veriyle çizilir.
 const okundu = async (istekler: readonly Istek[]) => {
   await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
@@ -78,8 +81,8 @@ describe('yeni finans ekranı: Kayıt gir', () => {
     fireEvent.change(within(form).getByLabelText(/Müşteri/), { target: { value: MUSTERI } });
     fireEvent.change(within(form).getByLabelText(/^Tutar/), { target: { value: '1000' } });
     fireEvent.click(within(form).getByRole('button', { name: /Satışı kaydet/ }));
-    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1));
-    const yazma = istekler.find((i) => i.yontem === 'POST')!;
+    await waitFor(() => expect(kayitYazmalari(istekler)).toHaveLength(1));
+    const yazma = kayitYazmalari(istekler)[0]!;
     expect(yazma.yol).toBe('/finans/belgeler/ekle');
     expect(yazma.govde).toMatchObject({ yon: 'gelir', tur: 'fatura', firmaId: 1, tutar: 1000, paraBirimi: 'TRY' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -97,6 +100,26 @@ describe('yeni finans ekranı: Kayıt gir', () => {
     const form = screen.getByRole('dialog');
     fireEvent.click(within(form).getByRole('button', { name: /Satışı kaydet/ }));
     await within(form).findByText(/Firmayı listeden seçin/);
+    expect(kayitYazmalari(istekler)).toEqual([]);
+  });
+});
+
+describe('yeni finans ekranı: günlük skor', () => {
+  it('yazma yetkisi olan açınca bugünün skoru bir kez kaydedilir', async () => {
+    const istekler = sunucuKur(YAZAN, { 'POST /finans/skorlar/kaydet': () => json(200, {}) });
+    finansAc();
+    await okundu(istekler);
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/finans/skorlar/kaydet')).toHaveLength(1));
+    const skor = istekler.find((i) => i.yol === '/finans/skorlar/kaydet')!.govde as { gun: string; skor: number; nakit: number };
+    expect(skor.skor).toBeGreaterThanOrEqual(0);
+    expect(skor.skor).toBeLessThanOrEqual(100);
+    expect(typeof skor.nakit).toBe('number');
+  });
+
+  it('yalnız okuyan açınca skor yazılmaz', async () => {
+    const istekler = sunucuKur(OKUYAN);
+    finansAc();
+    await okundu(istekler);
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 });

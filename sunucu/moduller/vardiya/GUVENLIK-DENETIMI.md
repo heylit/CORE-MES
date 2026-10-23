@@ -13,10 +13,9 @@ Her yazma ayrı uç, kendi şeması ve `vardiya.yaz` işlemiyle; kişi ve zaman 
 | POST /vardiya-matrisi/hafta-uygula | vardiya.yaz | VR-09; matris kilidi; VR-06 | planlama uygular | operatör 403, kısıtlı 403, olmayan kaynak 404 |
 | POST /vardiya-matrisi/toplu-yaz | vardiya.yaz | VR-18; her merkez kapsamda (ret ayrıntısıyla); matris kilidi; yabancı anahtar; tekil liste | planlama ekler, kaldırır, ayarlar; kısıtlı kendi merkezine | operatör 403, kısıtlı listede başka merkez 403 ve hiçbiri yazılmaz, olmayan merkez 400, olmayan vardiya 409, boş vardiya ve yinelenen merkez 400 |
 | POST /vardiya-matrisi/kopyala | vardiya.yaz | VR-19; her hedef kapsamda; matris kilidi | planlama seçilene kopyalar, seçilmeyen değişmez | operatör 403, kısıtlı başka merkeze 403, kaynak hedefte 400, olmayan kaynak 404 |
-| POST /takvim-gunleri | vardiya.yaz | VR-09; VR-03 | planlama gelecek gün, yönetici geçmiş gün | operatör 403, planlama geçmiş 403, kısıtlı 403 |
-| POST /takvim-gunleri/:tarih/kaldir | vardiya.yaz | VR-09; VR-03 | planlama gelecek gün | planlama geçmiş 403, olmayan 404 |
-| POST /takvim-gunleri/resmi-tatiller | vardiya.yaz | VR-09; geçmiş tarih atlanır | planlama 2099 ekler | (VR-09 aynı denetim) |
-| POST /takvim-gunleri/temizle | vardiya.yaz | VR-09; VR-10 | yönetici hepsini siler | operatör 403; planlama geçmişi silemez (kalır) |
+| POST /takvim-gunleri | vardiya.yaz | VR-09; VR-03; VR-28 yalnız kapalı gün | planlama gelecek gün, yönetici geçmiş gün | operatör 403, planlama geçmiş 403, kısıtlı 403, tatil 400 |
+| POST /takvim-gunleri/:tarih/kaldir | vardiya.yaz | VR-09; VR-03; VR-28 İK tatili burada silinmez | planlama gelecek gün | planlama geçmiş 403, olmayan ve İK tatili 404 |
+| POST /takvim-gunleri/temizle | vardiya.yaz | VR-09; VR-10 (yalnız Vardiya'nın kendi günleri) | yönetici hepsini siler, İK tatilleri kalır | operatör 403; planlama geçmişi silemez (kalır) |
 | POST /kisi-vardiyalari/:kisiId/belirle | vardiya.yaz | kişinin iş merkezi kapsamı; yabancı anahtar | planlama yazar ve kaldırır | operatör 403, kısıtlı başka merkezdeki kişiye 403, olmayan kişi 409 |
 | POST /kisi-vardiyalari/toplu-belirle | vardiya.yaz | VR-20; her kişinin iş merkezi kapsamda (ret ayrıntısıyla); yabancı anahtar | planlama yazar ve kaldırır, kısıtlı iş merkezsiz kişiye | operatör 403, kısıtlı listede başka merkezdeki kişi 403 ve hiçbiri yazılmaz, boş liste 400, olmayan kişi 409 |
 | GET /planli-duruslar | oturum | sayfalı | operatör okur | - |

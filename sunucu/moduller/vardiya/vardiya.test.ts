@@ -21,6 +21,8 @@ const PAROLA = 'dogru-parola-1';
 const OLMAYAN_ID = 2147483647;
 // Testin tarihleri bugünden bağımsızdır: geçmiş 2000, gelecek 2099 yılındadır.
 const CARSAMBA = '2099-10-07';
+// Testin İK listesine yazdığı her yıl 29 Ekim; 2098'de çarşamba.
+const IK_TATILI = '2098-10-29';
 
 interface Rol { id: number; ad: string }
 interface Cevap<T> { durum: number; govde: T }
@@ -259,26 +261,45 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     assert.equal((await okunan()).find((k) => k.kisiId === personel), undefined);
   });
 
-  test('VR-02, VR-03, VR-10: tatil o günü kapatır; geçmiş tarih ayrı yetki ister; temizle geçmişi yalnız yetkiliyle siler', async () => {
+  test('VR-02, VR-03, VR-10, VR-28: kapalı gün o günü kapatır; geçmiş tarih ayrı yetki ister; temizle geçmişi yalnız yetkiliyle siler; tatil İK\'dan gelir', async () => {
     const v = await vardiyaAc();
     await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 3, vardiyaId: v.id, acik: true });
     assert.equal(await vt().tx((db) => calismaSuresi(db, merkezA, CARSAMBA)), 480);
-    const t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/takvim-gunleri', { tarih: CARSAMBA, tur: 'tatil', ad: 'Deneme' });
-    assert.deepEqual(t.gunler.find((g) => g.tarih === CARSAMBA), { tarih: CARSAMBA, tur: 'tatil', ad: 'Deneme' });
+    const t = await tamam<TakvimCevabi>(c.planlama, 'POST', '/takvim-gunleri', { tarih: CARSAMBA, tur: 'kapali', ad: 'Deneme' });
+    assert.deepEqual(t.gunler.find((g) => g.tarih === CARSAMBA), { tarih: CARSAMBA, tur: 'kapali', ad: 'Deneme' });
     assert.equal(await vt().tx((db) => calismaSuresi(db, merkezA, CARSAMBA)), 0);
+    // VR-28: Vardiya tatil yazamaz; İK'nın tatili (her yıl 29 Ekim) takvimde tatildir, buradan kaldırılmaz.
+    await vt().tx(async (db) => {
+      await db.sorgu("INSERT INTO ik_genel_ayar (anahtar, guncelleyen_kisi_id) VALUES ('genel', $1)", [yoneticiId]);
+      await db.sorgu("INSERT INTO ik_resmi_tatil (sira, yil, ay, gun, ad) VALUES (1, NULL, 10, 29, 'Cumhuriyet Bayramı')");
+    });
+    assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri', { tarih: '2099-10-09', tur: 'tatil', ad: 'Deneme' })).durum, 400);
+    assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri/resmi-tatiller', { yil: 2099 })).durum, 404);
+    assert.equal(await vt().tx((db) => calismaSuresi(db, merkezA, IK_TATILI)), 0, 'İK tatili (çarşamba) o günü kapatır');
+    const takvim = await vt().tx((db) => calismaTakvimleri(db, [{ tur: 'is-merkezi', id: merkezA }], { baslangic: IK_TATILI, bitis: IK_TATILI }));
+    assert.deepEqual(takvim.get(`is-merkezi:${merkezA}`)?.gunler, [{ tarih: IK_TATILI, dakika: 0, kapali: { tur: 'tatil', ad: 'Cumhuriyet Bayramı' } }]);
+    assert.equal((await istek(c.planlama, 'POST', `/takvim-gunleri/${IK_TATILI}/kaldir`)).durum, 404);
     assert.equal((await istek(c.operator, 'POST', '/takvim-gunleri', { tarih: '2099-10-08', tur: 'kapali' })).durum, 403);
     assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri', { tarih: '2000-01-03', tur: 'kapali' })).durum, 403);
     assert.equal((await istek(c.yonetici, 'POST', '/takvim-gunleri', { tarih: '2000-01-03', tur: 'kapali' })).durum, 200);
     assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri/2000-01-03/kaldir')).durum, 403);
     assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri/2099-12-30/kaldir')).durum, 404);
     assert.equal((await istek(c.planlama, 'POST', `/takvim-gunleri/${CARSAMBA}/kaldir`)).durum, 200);
-    const r = await tamam<TakvimCevabi>(c.planlama, 'POST', '/takvim-gunleri/resmi-tatiller', { yil: 2099 });
-    assert.equal(r.gunler.filter((g) => g.tarih.startsWith('2099-')).length, 7);
+    await tamam(c.planlama, 'POST', '/takvim-gunleri', { tarih: '2099-10-14', tur: 'kapali' });
     assert.equal((await istek(c.operator, 'POST', '/takvim-gunleri/temizle')).durum, 403);
+    const kapalilar = (r: TakvimCevabi): string[] => r.gunler.filter((g) => g.kaynak !== 'ik').map((g) => g.tarih);
     const p = await tamam<TakvimCevabi>(c.planlama, 'POST', '/takvim-gunleri/temizle');
-    assert.deepEqual(p.gunler.map((g) => g.tarih), ['2000-01-03']);
+    assert.deepEqual(kapalilar(p), ['2000-01-03']);
     const y = await tamam<TakvimCevabi>(c.yonetici, 'POST', '/takvim-gunleri/temizle');
-    assert.deepEqual(y.gunler, []);
+    assert.deepEqual(kapalilar(y), []);
+    assert.ok(y.gunler.length > 0 && y.gunler.every((g) => g.kaynak === 'ik'), 'İK tatilleri temizlenmez');
+    // 142'den önce Vardiya'ya girilmiş tatil satırı tatil kalır (planlama yalnız tatili tatil sayar) ve Vardiya'dan silinir.
+    await vt().tx(async (db) => { await db.sorgu("INSERT INTO vardiya_takvim_gunu (tarih, tur, ad) VALUES ('2099-10-21', 'tatil', 'Eski')"); });
+    assert.deepEqual((await tamam<TakvimCevabi>(c.planlama, 'GET', '/vardiya-takvimi')).gunler.find((g) => g.tarih === '2099-10-21'), { tarih: '2099-10-21', tur: 'tatil', ad: 'Eski' });
+    const eski = await vt().tx((db) => calismaTakvimleri(db, [{ tur: 'is-merkezi', id: merkezA }], { baslangic: '2099-10-21', bitis: '2099-10-21' }));
+    assert.deepEqual(eski.get(`is-merkezi:${merkezA}`)?.gunler, [{ tarih: '2099-10-21', dakika: 0, kapali: { tur: 'tatil', ad: 'Eski' } }]);
+    assert.equal((await istek(c.planlama, 'POST', '/takvim-gunleri/2099-10-21/kaldir')).durum, 200);
+    await vt().tx(async (db) => { await db.sorgu('DELETE FROM ik_resmi_tatil'); await db.sorgu('DELETE FROM ik_genel_ayar'); });
     // Stüdyonun canlıya alması aynı kuralla yazar (disari).
     await vt().tx(async (db) => {
       await assert.rejects(gunYaz(db, { id: kisiler['planlama']!, ad: 'Deneme', islemler: ['vardiya.yaz'] }, { tarih: '2000-02-01', tur: 'kapali' }), /yetkin yok/);
@@ -718,6 +739,55 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       for (const cerez of [c.operator, amirA, c.kisitli]) assert.equal(await durum(cerez), 403);
       for (const cerez of [c.operator, amirA]) assert.equal(await durum(cerez, 'makine', makineA), 200);
       assert.equal(await durum(c.operator, 'is-merkezi', merkezB), 200);
+    });
+
+    test('VR-29 (W8, 18.1): İK çıkış gününden sonra kişi takvimi 0 ve "ayrıldı", günlük mesaide yok, fazla mesai reddedilir; pasif kişi bugünden itibaren aynı, geçmişi değişmez', async () => {
+      // 2099-11-10 salı (çıkış günü, çalışır), 11-11 çarşamba (ayrıldı). Vardiya 08:00-16:00 molasız: 480 dakika.
+      const CIKIS = '2099-11-10';
+      const SONRA = '2099-11-11';
+      const v = await vardiyaAc();
+      for (const gun of [2, 3]) await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun, vardiyaId: v.id, acik: true });
+      const id = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme ayrılan', kullaniciAdi: 'vr29-ayrilan', parola: PAROLA }));
+      await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: id, yuzde: '100.00' });
+      await tamam(c.yonetici, 'POST', '/ik/personel/emp_vr29/kaydet',
+        { govde: { id: 'emp_vr29', kind: 'emp', ad: 'Deneme', soyad: 'Ayrılan', isMerkeziId: merkezA, kisiId: id, cikisTarihi: CIKIS }, surum: null });
+      const kisiTakvimi = async (bas: string, bit: string) =>
+        (await tamam<CalismaTakvimiCevabi>(c.planlama, 'GET', `/calisma-takvimi?tur=kisi&id=${id}&baslangic=${bas}&bitis=${bit}`)).takvim!;
+      const mesaidekiler = async (tarih: string) =>
+        (await tamam<GunlukMesaiCevabi>(c.yonetici, 'GET', `/gunluk-mesai?tarih=${tarih}`)).satirlar.map((x) => x.kisiId);
+      const personelde = async () => (await tamam<VardiyaPersoneliCevabi>(c.planlama, 'GET', '/vardiya-personeli')).personel.some((p) => p.kisiId === id);
+      const mesai = (tarih: string) => istek<FazlaMesaiCevabi>(c.planlama, 'POST', '/fazla-mesai',
+        { tarih, baslangic: '18:00', bitis: '20:00', kapsam: 'istasyon', istasyonId: istasyonA, kisiIdleri: [id] }, kimlikli());
+
+      let t = await kisiTakvimi(CIKIS, SONRA);
+      assert.deepEqual(t.gunler.map((g) => [g.tarih, g.dakika, g.ayrildi]), [[CIKIS, 480, undefined], [SONRA, 0, true]]);
+      assert.deepEqual(sureler(t.araliklar), [480]);
+      const istasyonGunu = await tamam<CalismaTakvimiCevabi>(c.planlama, 'GET', `/calisma-takvimi?tur=istasyon&id=${istasyonA}&baslangic=${SONRA}&bitis=${SONRA}`);
+      assert.equal(istasyonGunu.takvim!.gunler[0]!.dakika, 480, 'istasyon etkilenmez');
+      assert.ok((await mesaidekiler(CIKIS)).includes(id));
+      assert.ok(!(await mesaidekiler(SONRA)).includes(id));
+      assert.ok(await personelde(), 'çıkışı ileri tarihli kişi bugün listede');
+      // Çıkıştan sonraki güne fazla mesai yazılmaz; çıkış günü yazılır. Kuralın ötesinde kayıt kalmaz.
+      const red = await mesai(SONRA);
+      assert.equal(red.durum, 400, JSON.stringify(red.govde));
+      const kabul = await mesai(CIKIS);
+      assert.equal(kabul.durum, 200, JSON.stringify(kabul.govde));
+      assert.deepEqual((await kisiTakvimi(SONRA, SONRA)).gunler[0]!.fazlaMesaiDakika, undefined);
+      await tamam(c.planlama, 'POST', `/fazla-mesai/${kabul.govde.fazlaMesai.id}/iptal`, { surum: kabul.govde.fazlaMesai.surum });
+
+      // Pasif kişi: bugünden itibaren ayrılmış; geçmiş gün (2000) değişmez, vardiya personelinde yok, gelecek güne fazla mesai yok.
+      const ESKI = '2000-01-04';
+      const eskiDakika = (await kisiTakvimi(ESKI, ESKI)).gunler[0]!.dakika;
+      const kayit = (await tamam<{ kisiler: { id: number; surum: number }[] }>(c.yonetici, 'GET', '/kisiler')).kisiler.find((k) => k.id === id)!;
+      await tamam(c.yonetici, 'POST', `/kisiler/${id}/pasife-al`, { surum: kayit.surum });
+      t = await kisiTakvimi(CIKIS, CIKIS);
+      assert.deepEqual([t.gunler[0]!.dakika, t.gunler[0]!.ayrildi, t.araliklar], [0, true, []]);
+      assert.deepEqual((await kisiTakvimi(ESKI, ESKI)).gunler[0], { tarih: ESKI, dakika: eskiDakika, kapali: null });
+      assert.equal(eskiDakika, 480);
+      assert.equal(await personelde(), false);
+      assert.ok(!(await mesaidekiler(CIKIS)).includes(id));
+      assert.equal((await mesai(CIKIS)).durum, 400);
+      for (const gun of [2, 3]) await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun, vardiyaId: v.id, acik: false });
     });
   });
 });

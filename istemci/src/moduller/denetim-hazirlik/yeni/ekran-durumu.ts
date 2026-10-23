@@ -23,9 +23,10 @@ export function ilkEkranDurumu(p: Profil): EkranDurumu {
     ux: p.ux,
     onbHide: p.onbHide,
     pw: { iso9001: programEkrani(p, 'iso9001'), as9100: programEkrani(p, 'as9100'), eydep: programEkrani(p, 'eydep') },
-    kys: { tab: p.kys.tab, sv: p.kys.sv, fl: p.kys.fl, tp: p.kys.tp, filter: p.kys.filter },
+    kys: { tab: p.kys.tab, sv: p.kys.sv, fl: p.kys.fl, tp: p.kys.tp, filter: p.kys.filter, dok: '' },
     kal: { view: p.kal.view, filter: p.kal.filter, q: p.kal.q, month: p.kal.month },
     ic: { tab: p.ic.tab },
+    takvim: { yeniDenetim: false },
   };
 }
 

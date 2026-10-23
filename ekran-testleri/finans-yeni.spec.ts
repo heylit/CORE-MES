@@ -6,8 +6,11 @@ test.describe('F0 iskelet', () => {
     await ac('/finans/yeni');
     const ekran = page.locator('.tc-fy');
     await expect(ekran.getByRole('heading', { name: 'Ana sayfa', level: 2 })).toBeVisible();
-    await expect(page.getByRole('tablist', { name: 'Finans bölümleri' })).toBeVisible();
+    const sekmeler = page.getByRole('tablist', { name: 'Finans bölümleri' });
+    await expect(sekmeler).toBeVisible();
     await expect(ekran.getByRole('button', { name: 'Kayıt gir' })).toBeEnabled({ timeout: 15_000 });
+    // Kaydıran kutuda şerit büzülmez: sekmeler dokunma yüksekliğinde kalır.
+    expect((await sekmeler.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
   });
@@ -23,7 +26,8 @@ test.describe('F0 iskelet', () => {
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await form.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(form).toBeHidden();
-    expect(ag.yazmalar).toEqual([]);
+    // Açılışta yalnız günlük skor yazılır (prototipteki gibi); form vazgeçilince yazma gitmez.
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 

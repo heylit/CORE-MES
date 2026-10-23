@@ -21,9 +21,9 @@ export function gorunumAdresi(g: Gorunum): string { return `${KOK}/${VIEW_HASH[g
 
 // Görünüm değiştirme (prototipin setView'i). `secenek` hedef görünüme geçecek küçük bilgidir (orn. Takım Ömrü'nün kipi); hedef
 // görünüm useGecisSecenegi ile bir kez alır.
-// Bilinen geçiş seçenekleri: Ana Sayfa'dan Takım Ömrü'ne tezgâh ve cep (prototipin hLifeGo'su), Hazırlık'a son adım (prGo).
+// Bilinen geçiş seçenekleri: Ana Sayfa'dan Takım Ömrü'ne tezgâh ve cep (prototipin hLifeGo'su), Hazırlık'a son adım ya da program adımı (prGo).
 export interface OmurGecisi { tezgah: string; cep?: number | string | null }
-export interface HazirlikGecisi { adim: 'son' }
+export interface HazirlikGecisi { adim: 'son' | 'prog' }
 
 // Ekran başka sayfadayken gizli kalır; o sürede son görünüm korunur, `burada` yanlıştır (gizliyken yönlendirme yapılmaz).
 let gecisSecenegi: { gorunum: Gorunum; deger: unknown } | null = null;

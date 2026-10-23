@@ -63,7 +63,7 @@ describe('vardiya örnek verisi, boş takvim', { timeout: 90_000 }, () => {
   });
   after(async () => { await kaldir?.(); });
 
-  test('boş takvime resmî tatil eklenmez (takvim kurulumun parçası)', async () => {
+  test('boş takvime kapalı gün eklenmez (takvim kurulumun parçası; tatiller İK\'dan gelir)', async () => {
     if (!vt) throw new Error('Test veritabanı açılamadı.');
     assert.equal((await ornekVeriYukle(vt, zincir, secenek)).durum, 'yuklendi');
     assert.deepEqual((await vt.tx((db) => takvim(db))).gunler, []);

@@ -76,7 +76,8 @@ export const vardiyaSemasi = z.object({
 export const takvimCevabi = z.object({
   vardiyalar: z.array(vardiyaSemasi),
   matris: z.array(z.object({ isMerkeziId: kimlik, gun: z.number().int(), vardiyaId: kimlik })),
-  gunler: z.array(z.object({ tarih: tarihSemasi, tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable() })),
+  // Soru 142 b: kaynak 'ik' İK'nın resmî tatilidir, Vardiya'dan silinmez; alan yoksa Vardiya'nın kendi günüdür.
+  gunler: z.array(z.object({ tarih: tarihSemasi, tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable(), kaynak: z.literal('ik').optional() })),
   isMerkezleri: z.array(z.object({ id: kimlik, kod: z.string(), ad: z.string(), aktif: z.boolean(), haftalikDakika: z.number().int() })),
   kisiVardiyalari: z.array(z.object({ kisiId: kimlik, vardiyaId: kimlik })),
   // Vardiya kadrosu (tek tanım): iş merkezi x vardiya kişileri; istasyon, makine ve ekip ataması sayılır, vardiyası seçilmeyen kişi iş merkezinin
@@ -113,6 +114,8 @@ export const kaynakTakvimiSemasi = z.object({
     kapali: z.object({ tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable() }).nullable(),
     // Yalnız kişi takviminde: kişi o gün onaylı izinde (İK); gün 0 dakikadır (VR-25).
     izinli: z.boolean().optional(),
+    // Yalnız kişi takviminde (VR-29): kişi işten ayrılmış (İK çıkış gününden sonra) ya da pasif (bugünden itibaren); gün 0 dakikadır.
+    ayrildi: z.boolean().optional(),
     // Günün dakikasına giren planlı fazla mesai (vardiyayla örtüşmeyen kısım, duruş düşülmüş); yalnız sıfırdan büyükse yazılır.
     // Kişi takviminde İK'nın onaylı fazla mesai saatiyle aynı gün birlikte sayılmamalıdır: plan varsa plan esastır.
     fazlaMesaiDakika: z.number().int().optional(),

@@ -16,16 +16,16 @@ import type {
 import { AZAMI_TAKVIM_GUNU, takvimGunuGovdesi } from '#paylasilan/sozlesme/vardiya.ts';
 import type { planliDurusListeSorgusu } from '#paylasilan/sozlesme/vardiya.ts';
 import { durusNedeniGetir } from '../durus-nedenleri/disari.ts';
-import { kisilerinIzinleri } from '../ik/disari.ts';
+import { kisilerinCikisTarihleri, kisilerinIzinleri, resmiTatilGunleri } from '../ik/disari.ts';
 import {
   aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir,
   makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
-  aralik, araliklardanCikar, atamaPayi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
-  kisininIstasyonu, molaDenetle, netDakika, resmiTatiller, takvimAraliklari, tarihEkle, vardiyaKadrosu as kadroHesapla,
+  aralik, araliklardanCikar, atamaPayi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
+  kisininIstasyonu, molaDenetle, netDakika, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
-import type { KadroAtamasi, KadroSatiri, MatrisSatiri } from './kurallar.ts';
+import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import * as s from './sorgular.ts';
 
@@ -103,6 +103,17 @@ export async function calisirMakineSayilari(db: Db): Promise<Map<number, number>
   return sonuc;
 }
 
+// VR-28: takvim günleri = Vardiya'nın kendi günleri + İK'nın resmî tatilleri (aralık iki ucu dahil). Aralıksız okuma (takvim ekranı,
+// `takvimGunleri`) İK tatillerini geçen yılın başından gelecek yılın sonuna kadar açar: her yıl tekrarlayan tatilin sonu yoktur.
+async function gunleriOku(db: Db, baslangic?: string, bitis?: string): Promise<TakvimGunu[]> {
+  let bas = baslangic; let bit = bitis;
+  if (bas === undefined || bit === undefined) {
+    const yil = Number((await s.bugun(db)).slice(0, 4));
+    bas = `${String(yil - 1)}-01-01`; bit = `${String(yil + 1)}-12-31`;
+  }
+  return takvimGunleriniBirlestir(await s.gunler(db), await resmiTatilGunleri(db, bas, bit));
+}
+
 export async function takvim(db: Db): Promise<TakvimCevabi> {
   const vardiyalar = await vardiyaListesi(db);
   const matris = await s.matris(db);
@@ -112,7 +123,7 @@ export async function takvim(db: Db): Promise<TakvimCevabi> {
   return {
     vardiyalar,
     matris,
-    gunler: await s.gunler(db),
+    gunler: await gunleriOku(db),
     isMerkezleri: (await isMerkezleri(db, { pasiflerDahil: true })).map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, haftalikDakika: haftalik(m.id) })),
     kisiVardiyalari: await s.kisiVardiyalari(db),
     kadro: (await vardiyaKadrosu(db)).map(({ isMerkeziId, vardiyaId, kisiIdleri }) => ({ isMerkeziId, vardiyaId, kisiIdleri })),
@@ -216,6 +227,8 @@ export async function matrisKopyala(db: Db, kullanici: Kullanici, g: MatrisKopya
 
 export async function gunYaz(db: Db, kullanici: Kullanici, girdi: TakvimGunuGovdesi): Promise<TakvimCevabi> {
   const g = takvimGunuGovdesi.parse(girdi);
+  // VR-28: Vardiya yalnız kapalı gün yazar; resmî tatil İK ayarlarından girilir.
+  if (g.tur === 'tatil') throw dogrulama('Resmî tatiller İK ayarlarından girilir; burada yalnız kapalı gün eklenir.', 'tur');
   await tesisGeneliDenetle(db, kullanici);
   await gecmisDenetle(db, kullanici, g.tarih);
   await s.gunYaz(db, g);
@@ -229,15 +242,7 @@ export async function gunSil(db: Db, kullanici: Kullanici, tarih: string): Promi
   return takvim(db);
 }
 
-// Sabit tarihli resmî tatiller eklenir; bugünden önceki tarihler atlanır (geçmişe dokunmaz).
-export async function resmiTatilleriEkle(db: Db, kullanici: Kullanici, yil: number): Promise<TakvimCevabi> {
-  await tesisGeneliDenetle(db, kullanici);
-  const bugun = await s.bugun(db);
-  for (const t of resmiTatiller(yil)) if (!gecmisMi(t.tarih, bugun)) await s.gunYaz(db, { tarih: t.tarih, tur: 'tatil', ad: t.ad });
-  return takvim(db);
-}
-
-// VR-10: bütün tatil ve kapalı günler silinir; geçmiş tarihli olanlar yalnız geçmiş yazma işlemiyle, yoksa kalır.
+// VR-10: Vardiya'nın bütün günleri silinir (İK tatilleri kalır); geçmiş tarihli olanlar yalnız geçmiş yazma işlemiyle, yoksa kalır.
 export async function tatilleriTemizle(db: Db, kullanici: Kullanici): Promise<TakvimCevabi> {
   await tesisGeneliDenetle(db, kullanici);
   await s.gunleriSil(db, kullanici.islemler.includes(GECMIS) ? null : await s.bugun(db));
@@ -297,17 +302,29 @@ const kisininAtamalari = (a: { istasyon: KisiIstasyonu[]; digerleri: KisiIstasyo
   return kendi.length > 0 ? kendi : a.digerleri.filter((x) => x.kisiId === kisiId);
 };
 
-// İstasyon ataması olmayan kişi makine ya da ekip atamasıyla listeye girer: kadroda sayılan herkes listede görünür.
-export async function vardiyaPersoneli(db: Db): Promise<VardiyaPersoneliCevabi> {
+// VR-29: kişilerin son çalışma günü (İK çıkış tarihi, pasif kişide dün); sınırı olmayan kişi null. Kişi kaydı yoksa yalnız İK'ya bakılır.
+async function sonCalismaGunleri(db: Db, kisiIdleri: readonly number[]): Promise<Map<number, string | null>> {
+  if (kisiIdleri.length === 0) return new Map();
+  const aktif = new Map((await kisileriListele(db)).map((k) => [k.id, k.aktif]));
+  const cikislar = await kisilerinCikisTarihleri(db, kisiIdleri);
+  const bugun = await s.bugun(db);
+  return new Map(kisiIdleri.map((id) => [id, sonCalismaGunu({ aktif: aktif.get(id) ?? true, cikisTarihi: cikislar.get(id) ?? null, bugun })]));
+}
+
+// İstasyon ataması olmayan kişi makine ya da ekip atamasıyla listeye girer: kadroda sayılan herkes listede görünür. VR-29: tarihte
+// (verilmezse bugün) işten ayrılmış kişi listede yoktur; pasif kişi bugünden itibaren yoktur, geçmiş günün mesaisinde görünür.
+export async function vardiyaPersoneli(db: Db, tarih?: string): Promise<VardiyaPersoneliCevabi> {
   const tumu = await kisiAtamalari(db);
   const istasyonMerkezi = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.isMerkeziId]));
   const vardiyasi = new Map((await s.kisiVardiyalari(db)).map((k) => [k.kisiId, k.vardiyaId]));
   const idler = [...new Set([...tumu.istasyon, ...tumu.digerleri].map((a) => a.kisiId))];
   const adlar = await kisiAdlari(db, idler);
+  const gun = tarih ?? await s.bugun(db);
+  const sonGun = await sonCalismaGunleri(db, idler);
   const personel = idler.flatMap((kisiId) => {
     const istasyonId = kisininIstasyonu(kisininAtamalari(tumu, kisiId));
     const ad = adlar.get(kisiId);
-    if (istasyonId === null || ad === undefined) return [];
+    if (istasyonId === null || ad === undefined || ayrildiMi(sonGun.get(kisiId) ?? null, gun)) return [];
     return [{ kisiId, ad, istasyonId, isMerkeziId: istasyonMerkezi.get(istasyonId) ?? null, vardiyaId: vardiyasi.get(kisiId) ?? null }];
   });
   return { personel: personel.sort((a, b) => a.ad.localeCompare(b.ad, 'tr') || a.kisiId - b.kisiId) };
@@ -348,12 +365,14 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
   const kisiVardiyasi = new Map((await s.kisiVardiyalari(db)).map((k) => [k.kisiId, k.vardiyaId]));
   const vardiyalar = new Map((await vardiyaListesi(db)).map((v) => [v.id, v]));
   const matris = await s.matris(db);
-  const gunler = new Map((await s.gunler(db)).map((g) => [g.tarih, g]));
+  // Önceki günden taşan gece vardiyası için bir gün önce de okunur.
+  const gunler = new Map((await gunleriOku(db, tarihEkle(aralik.baslangic, -1), aralik.bitis)).map((g) => [g.tarih, g]));
   const kapali = new Set(gunler.keys());
   const duruslar = await s.takvimDuruslari(db, aralik.baslangic, gunSayisi);
   // Önceki günün fazla mesaisi gece yarısını geçip aralığa taşabilir: bir gün önceden okunur.
   const fazlaMesailer = await s.fazlaMesailer(db, tarihEkle(aralik.baslangic, -1), tarihEkle(aralik.baslangic, gunSayisi - 1), false);
   const izinliler = await izinGunleri(db, kaynaklar, aralik.baslangic, gunSayisi);
+  const sonGunler = await sonCalismaGunleri(db, [...new Set(kaynaklar.filter((k) => k.tur === 'kisi').map((k) => k.id))]);
   // Makinenin istasyonu tek okumada; pasif makine listede yoktur, tek tek okunur.
   const makineIstasyonu = new Map(kaynaklar.some((k) => k.tur === 'makine') ? (await aktifMakineler(db)).map((m) => [m.id, m.istasyonId]) : []);
 
@@ -391,9 +410,13 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
     // VR-25: kişi tam gün onaylı izindeyse o gün çalışmaz (vardiya da fazla mesai de); kısmi izin (soru 54) aşağıda düşülür.
     const izinOranlari = kisiId === null ? new Map<string, number>() : izinliler.get(kisiId) ?? new Map<string, number>();
     const izinli = (tarih: string) => izinOranlari.get(tarih) === 1;
+    // VR-29: son çalışma gününden sonra kişinin vardiyası da fazla mesaisi de yoktur (izinli gün gibi 0 dakika, ayrı işaretle).
+    const sonGun = kisiId === null ? null : sonGunler.get(kisiId) ?? null;
+    const ayrildi = (tarih: string) => ayrildiMi(sonGun, tarih);
+    const calismaz = (tarih: string) => izinli(tarih) || ayrildi(tarih);
     const uyanMesailer = fazlaMesaiUyanlar(fazlaMesailer, { isMerkeziId: bag.isMerkeziId, istasyonId: bag.istasyonId, kisiId });
-    const gununVardiyalariniVer = (tarih: string) => (izinli(tarih) ? [] : gununVardiyalari(tarih, bag.isMerkeziId, matris, vardiyalar, kapali, bag.vardiyaId));
-    const gununMesaileriniVer = (tarih: string) => (izinli(tarih) ? [] : uyanMesailer.filter((f) => f.tarih === tarih).map(fazlaMesaiVardiyasi));
+    const gununVardiyalariniVer = (tarih: string) => (calismaz(tarih) ? [] : gununVardiyalari(tarih, bag.isMerkeziId, matris, vardiyalar, kapali, bag.vardiyaId));
+    const gununMesaileriniVer = (tarih: string) => (calismaz(tarih) ? [] : uyanMesailer.filter((f) => f.tarih === tarih).map(fazlaMesaiVardiyasi));
     const hepsiniVer = (tarih: string) => [...gununVardiyalariniVer(tarih), ...gununMesaileriniVer(tarih)];
     const planliDuruslar = kaynagaUyanlar(duruslar, bag.isMerkeziId, bag.istasyonId).flatMap((d) => durusAraliklari(d, aralik.baslangic, gunSayisi));
     // Soru 54: kısmi izinli saatler duruş gibi çıkar; fazla mesai izinden etkilenmez (izinli kısım yalnız vardiyanın içindedir).
@@ -433,6 +456,7 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
           return {
             tarih, dakika, kapali: g ? { tur: g.tur, ad: g.ad } : null,
             ...(izinli(tarih) ? { izinli: true } : {}),
+            ...(ayrildi(tarih) ? { ayrildi: true } : {}),
             ...(fazlaMesaiDakika > 0 ? { fazlaMesaiDakika } : {}),
           };
         }),
@@ -500,7 +524,7 @@ export async function basladigiGunTakvimleri(db: Db, kaynaklar: readonly TakvimK
 // Günlük mesai: vardiya personeli (istasyona atanmış kişiler) ve her birinin o gün başlayan vardiyaları tek okumada. İki gün okunur:
 // gece yarısını geçen vardiya ertesi sabaha kadar görünsün.
 export async function gunlukMesai(db: Db, tarih: string): Promise<GunlukMesaiCevabi> {
-  const { personel } = await vardiyaPersoneli(db);
+  const { personel } = await vardiyaPersoneli(db, tarih);
   const hesaplar = await takvimleriHesapla(db, personel.map((p) => ({ tur: 'kisi' as const, id: p.kisiId })), { baslangic: tarih, bitis: tarihEkle(tarih, 1) }, 1);
   return {
     tarih,
@@ -521,7 +545,7 @@ export async function calismaSuresi(db: Db, isMerkeziId: number, tarih: string):
   return (await calismaTakvimi(db, { tur: 'is-merkezi', id: isMerkeziId }, { baslangic: tarih, bitis: tarih }))?.gunler[0]?.dakika ?? 0;
 }
 
-export const takvimGunleri = (db: Db): Promise<s.TakvimGunuSatiri[]> => s.gunler(db);
+export const takvimGunleri = (db: Db): Promise<TakvimGunu[]> => gunleriOku(db);
 // İş merkezi x haftanın günü x vardiya (takvim cevabındaki `matris` satırları); yalnız okur.
 export const vardiyaMatrisi = (db: Db): Promise<MatrisSatiri[]> => s.matris(db);
 
@@ -716,9 +740,10 @@ async function fazlaMesaiKapsamiDenetle(db: Db, kullanici: Kullanici, f: { isMer
   if (disi.length) throw topluKapsamDisi({ kisiIdleri: disi });
 }
 
-// VR-21 kural, VR-22 kapsam, VR-23 geçmiş tarih (VR-03 gibi).
+// VR-21 kural, VR-22 kapsam, VR-23 geçmiş tarih (VR-03 gibi), VR-29 ayrılmış ya da pasif kişi.
 async function fazlaMesaiDenetle(db: Db, kullanici: Kullanici, g: FazlaMesaiGirdisi): Promise<void> {
-  const hata = fazlaMesaiHatasi(g);
+  const sonGunler = await sonCalismaGunleri(db, g.kisiIdleri);
+  const hata = fazlaMesaiHatasi(g) ?? fazlaMesaiKisiHatasi(g.tarih, g.kisiIdleri.map((kisiId) => ({ kisiId, sonGun: sonGunler.get(kisiId) ?? null })));
   if (hata) throw dogrulama(hata.ileti, hata.alan);
   await gecmisDenetle(db, kullanici, g.tarih);
   await fazlaMesaiKapsamiDenetle(db, kullanici, g);

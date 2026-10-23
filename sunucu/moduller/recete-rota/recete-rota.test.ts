@@ -6,6 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi, KapasiteCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
@@ -414,6 +415,34 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const k = (await istek(tam, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(yalniz))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(ikisi))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
+  });
+
+  // W8 (18.1): kişi payı Plan ile aynı tanımdan (Vardiya `isMerkeziKisiPaylari`); işten ayrıldığı günler izinli gibi gider.
+  test('RR-19: kapasite kişi payını Vardiya tek tanımından alır (makine ataması sayılır, pasif kişi gelmez); İK çıkışından sonraki günler izinli', async () => {
+    const gun = (n: number) => tesisGunu(Date.now() + n * 86_400_000);
+    const yaz = async (url: string, payload: unknown) => {
+      const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: tam, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, payload: payload as object });
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json() as unknown;
+    };
+    const m = (await vt().tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad, aciklama, aktif) VALUES ('RRW-A', 'RRW-A', NULL, true) RETURNING id"))!.id;
+    const ist = (await vt().tek<{ id: number }>(
+      "INSERT INTO istasyon (kod, ad, is_merkezi_id, tip, uretim_alani, aktif) VALUES ('RRW-A1', 'RRW-A1', $1, 'talasli', false, true) RETURNING id", [m]))!.id;
+    const makine = (await yaz('/makineler', { kod: 'RRW-M1', ad: 'RRW makine', istasyonId: ist }) as { id: number }).id;
+    const kisi = async (ad: string) => vt().tx((db) => yoneticiOlustur(db, { ad: `RRW ${ad}`, kullaniciAdi: `rrw${ad}`, parola: PAROLA }));
+    const [makineci, ayrilan, pasif] = [await kisi('makineci'), await kisi('ayrilan'), await kisi('pasif')];
+    await yaz(`/makineler/${makine}/kisiler/ata`, { kisiId: makineci, yuzde: '40.00' });
+    for (const k of [ayrilan, pasif]) await yaz(`/istasyonlar/${ist}/kisiler/ata`, { kisiId: k, yuzde: '100.00' });
+    await yaz('/ik/personel/emp_rrw/kaydet', { govde: { id: 'emp_rrw', kind: 'emp', ad: 'RRW', soyad: 'Ayrılan', isMerkeziId: m, kisiId: ayrilan, cikisTarihi: gun(5) }, surum: null });
+    const kayit = ((await istek(tam, 'GET', '/kisiler')).json() as { kisiler: { id: number; surum: number }[] }).kisiler.find((k) => k.id === pasif)!;
+    await yaz(`/kisiler/${pasif}/pasife-al`, { surum: kayit.surum });
+
+    const k = (await istek(tam, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
+    const satir = (id: number) => k.kisiler?.find((x) => x.id === String(id));
+    assert.deepEqual(satir(makineci)?.paylar, [{ wcId: String(m), pay: 0.4 }], 'yalnız makine ataması olan kişi Plan gibi sayılır');
+    assert.equal(satir(pasif), undefined, 'pasif kişi kapasitede yok');
+    const izinli = satir(ayrilan)!.izinli;
+    assert.deepEqual([izinli.includes(gun(5)), izinli[0], izinli.length], [false, gun(6), KAPASITE_GUNU - 6]);
   });
 
   // Birim maliyetler finanstadır (kart #1187): durum dilimi finans.maliyet-oku ister, yazma finans.yonet ister.
