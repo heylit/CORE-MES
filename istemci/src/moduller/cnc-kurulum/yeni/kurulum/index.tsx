@@ -1,0 +1,5 @@
+import { YerTutucu } from '../YerTutucu.tsx';
+
+// P1 yazarı doldurur (devir-heylit/ts-cnc/PARCA-SOZLESMESI.md); bileşen adları sabittir, kabuk bunları ithal eder.
+export function Kurulum() { return <YerTutucu ad="Kurulum" />; }
+export function Hazirlik() { return <YerTutucu ad="Hazırlık" />; }
