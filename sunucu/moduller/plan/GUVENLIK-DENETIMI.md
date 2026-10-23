@@ -15,9 +15,18 @@ Test: U = `sunucu/moduller/plan/plan-*.test.ts` (gerçek PostgreSQL; ortak kurul
 | POST /plan/kuyruk/sirala | plan.yaz | Plan sürümü; yerleşimler o kaynakta; kilitli ve başlamış değil; çakışma | U kuyruk testi | U kuyruk testi (başka kaynak 400) |
 | POST /plan/senaryolar | plan.studyo | Tekrar korumalı; canlının kopyası; taban plan sürümü | U P4 | U P4 (operatör 403) |
 | POST /plan/senaryolar/:id/oner, /tasi, /vazgec | plan.studyo | Açık senaryo; taşıma kuralları (aktif, kapsam, başlamış, kilitli, çakışma) senaryo içinde; canlı değişmez | U P4 | U P4 (canlı değişmedi doğrulaması) |
-| POST /plan/senaryolar/:id/canliya-al | plan.canliya-al | Canlı plan değiştiyse açık onay (409); kapsam; her kaynak aktif; başlamış işler canlıdaki hâliyle; kaynak iş emrine yazılır; taban plan aynı işlemde, kişi ve zaman sunucudan, yalnız eklenir (33 a) | U P4 (müdür, onaylı); U 33-1, 33-4 | U P4 (onaysız 409, operatör 403); U 33-3 (değiştirme, silme, ikinci satır), 33-5 (operatör 403, vazgeçilen) |
+| POST /plan/senaryolar/:id/canliya-al | plan.canliya-al | PL-ONAY: yalnız onaydaki taslak (açık 409); dört göz açıkken son gönderen alamaz (403); senaryo sürümü; canlı plan değiştiyse açık onay (409); kapsam; her kaynak aktif; başlamış işler canlıdaki hâliyle; kaynak iş emrine yazılır; taslağın ayarı ve bedel ayarı tek güncellemeyle, taslaktaki elle çarpanlar yazanıyla geçmişe (148 a); onay kaydı ve taban plan aynı işlemde, kişi ve zaman sunucudan, yalnız eklenir (33 a) | U P4 (müdür, onaylı); U 33-1, 33-4; U PL-ONAY; U 146 (başkası, dört göz kapalıyken gönderen) | U PL-ONAY (açık taslak 409, operatör 403, eski sürüm 409); U 146 (dört göz 403); U P4 (onaysız 409, operatör 403); U 33-3, 33-5 |
+| POST /plan/senaryolar/:id/onaya-gonder | plan.studyo | PL-ONAY: yalnız sahip, yalnız açık taslak; senaryo sürümü; not en çok 500; onay kaydı yalnız eklenir; onaydaki taslağa plan yazılmaz (409), taslaksız yazma yeni taslak açar | U PL-ONAY | U PL-ONAY ret (başkası 403, operatör 403, stüdyosuz 403, onaydaki 409, vazgeçilen 409, eski sürüm 409) |
+| POST /plan/senaryolar/:id/onaydan-cek | plan.studyo | PL-ONAY: yalnız sahip, yalnız onaydaki taslak; senaryo sürümü; taslak açık olur | U PL-ONAY | U PL-ONAY ret (açık 409, başkası 403) |
+| POST /plan/senaryolar/:id/geri-gonder | plan.canliya-al | PL-ONAY: yalnız onaydaki taslak; neden zorunlu (boş 400, kısıt `plan_senaryo_onay_kaydi_neden`); dört göz açıkken son gönderen geri gönderemez; taslak açık olur, canlı değişmez | U PL-ONAY | U PL-ONAY (boş neden 400); U PL-ONAY ret (açık 409, operatör 403); U 146 (403) |
+| POST /plan/bedel-ayari | plan.bedel-ayari | 148 a: taslağa yazılır (taslak verilmezse kişiye açılır; verilirse açık, kişinin, okunan sürümde); değerler sınırlı; defter değer taşımaz (237 a); canlıya onayla geçer | U 210 a; U 148 a | U 210 a (planlama 403, sınır dışı 400) |
+| GET /plan/bedel-ayari | plan.yaz, plan.bedel-ayari ya da siparisler.fiyat-oku | Taslak verilirse taslağın bedeli (taslak yoksa 404) | U 210 a, 148 a | U 6b (kalite, operatör 403) |
+| POST /plan/siparisler/:id/carpan | plan.yaz ya da siparisler.onayla | 148 a: taslağa yazılır; plan.yaz 2'ye, siparisler.onayla 3'e kadar; gerekçe zorunlu; sipariş yoksa 404; canlıya onayla, yazanı ve gerekçesiyle yalnız eklenen geçmişe; defter çarpanı ve gerekçeyi taşımaz | U 6a | U 6a (planlama 2,5 403, kalite 403, sınır ve gerekçe 400, yok 404) |
 
 Kullanıcı metni (senaryo adı, iş adı) React metni olarak basılır; HTML/SVG yorumlanmaz (çizelgede SVG yalnız sayılarla çizilir).
+
+Dört göz ayarı (`plan.dort-goz`, varsayılan kapalı, 146) sunucuda okunur; kapalıyken gönderenin kendi onayı kayıtta `dort_gozsuz` diye işaretlenir.
+Onaylayan kuralı (sahip mi, gönderen mi, işlem, durum, dört göz) `kurallar.ts` `onayGecisiReddi`'ndedir; senaryo cevabındaki `yapabilir` aynı kuraldan çıkar.
 
 ## Yalnız ekranda kalan kurallar
 - Sürükle-bırakın hedef başlangıcı (sütun sonu) ekranda hesaplanır; sunucu yine çakışma ve kuralları denetler.

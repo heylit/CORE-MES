@@ -7,6 +7,13 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 // Canlı ve önceki planlar hiçbir zaman silinmez (kullanıcı kararı, 2026-10-21): göç 20261019154000.
 describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   const { c, tamam, istek, yeniAdim, isEmirleriAc, planOku, yer, tg, taslaktaOner, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let ortam: TestVeritabani | undefined;
   let makineA = 0;
   let makineB = 0;
@@ -18,7 +25,7 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
   const reddedilir = (sql: string, params: unknown[] = []) => assert.rejects(sahip().sorgu(sql, params), /yalnız ekleme|değişmez/);
 
   async function canliyaAl(p: PlanCevabi): Promise<number> {
-    await tamam<SenaryolarCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    await tamam<SenaryolarCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     return p.taslak!.id;
   }
 
@@ -114,11 +121,16 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     const say = async () => (await sahip().tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_ayari_gecmisi'))!.n;
     const once = await say();
     const eski = await tamam<Record<string, unknown>>(c.mudur, 'GET', '/plan/bedel-ayari');
-    await tamam(c.mudur, 'POST', '/plan/bedel-ayari', { ...eski, tabanBedelSaat: 175 });
+    // 148 a: bedel ayarı taslaktan canlıya alınınca geçer; canlıya alma başına tek geçmiş satırı.
+    const bedelYaz = async (govde: Record<string, unknown>) => {
+      const p = await tamam<PlanCevabi>(c.mudur, 'POST', '/plan/bedel-ayari', { ...govde, taslak: null });
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum, c.mudur), cakismalariKabul: true });
+    };
+    await bedelYaz({ ...eski, tabanBedelSaat: 175 });
     assert.equal(await say(), once + 1);
     const son = (await sahip().tek<{ satir: Record<string, unknown> }>('SELECT satir FROM plan_ayari_gecmisi ORDER BY id DESC LIMIT 1'))!.satir;
     assert.equal(Number(son['taban_bedel_saat']), eski['tabanBedelSaat']);
-    await tamam(c.mudur, 'POST', '/plan/bedel-ayari', eski);
+    await bedelYaz(eski);
     assert.equal(await say(), once + 2);
     await sahip().sorgu('UPDATE plan_ayari SET kural = kural');
     assert.equal(await say(), once + 2, 'değişmeyen güncelleme geçmiş üretmez');

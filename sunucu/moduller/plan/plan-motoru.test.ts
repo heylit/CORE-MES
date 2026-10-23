@@ -1,6 +1,6 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { CanliyaAlCevabi, KuyrukYazCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliyaAlCevabi, KuyrukYazCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { planMotoruCozucusu } from './disari.ts';
 import type { PlanMotoruIstegi } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
@@ -9,6 +9,13 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 // çözücüden yazar, Motor A önermez; kayıtsızken bugünkü yol (öteki plan testleri).
 describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let makineB = 0;
   before(() => { ({ makineB } = durum()); });
   after(() => { planMotoruCozucusu(null); });
@@ -90,13 +97,13 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
     kur();
     try {
       kip = 'yerlesmeyen';
-      const red = await istek(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+      const red = await istek(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: await gonder(taslakId, p.taslak!.surum), cakismalariKabul: true });
       assert.equal(red.statusCode, 409, red.body);
       assert.equal((await planOku(taslakId)).taslak?.id, taslakId, 'taslak açık kalır');
 
       kip = 'tamam';
       istekler.length = 0;
-      const r = await tamam<CanliyaAlCevabi>(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: (await planOku(taslakId)).taslak!.surum, cakismalariKabul: true });
+      const r = await tamam<CanliyaAlCevabi>(c.mudur, 'POST', `/plan/senaryolar/${taslakId}/canliya-al`, { surum: await gonder(taslakId, (await planOku(taslakId)).taslak!.surum), cakismalariKabul: true });
       const ist = istekler.at(-1)!;
       const kuyruk = ist.kuyruklar.find((q) => q.makineId === makineB)!;
       assert.ok(kuyruk.anahtarlar.includes(b1) && kuyruk.anahtarlar.includes(b3));

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   araliktanCikar, arkaArkaya, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
-  adetPayi, bedelCarpani, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
+  adetPayi, bedelCarpani, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
 
@@ -530,5 +530,23 @@ describe('öncelik bandı sınırları (306 a)', () => {
     assert.deepEqual(s, { yuksek: 225, dusuk: 90 });
     assert.deepEqual([...oncelikSiniflari(bedeller, { yuksek: 1.5, dusuk: 0.6 })], [[1, 2], [2, 2], [3, 1], [4, 2]]);
     assert.deepEqual(bantSinirlari(new Map(), { yuksek: 1.5, dusuk: 0.6 }), { yuksek: 0, dusuk: 0 });
+  });
+
+  test('PL-ONAY (146): sahip açık taslağı gönderir ve onaydakini çeker; onaylayan onaydakini alır ya da geri gönderir; dört göz gönderenin onayını keser', () => {
+    const b = { durum: 'acik' as const, sahipMi: true, gonderenMi: false, studyo: true, canliyaAlir: true, dortGozAcik: false };
+    assert.deepEqual(onayGecisleri(b), { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false });
+    assert.match(onayGecisiReddi('canliya-al', b)!, /onayda değil/);
+    assert.match(onayGecisiReddi('onaya-gonder', { ...b, sahipMi: false })!, /başka bir planlamacının/);
+    assert.match(onayGecisiReddi('onaya-gonder', { ...b, studyo: false })!, /stüdyosu yetkisi/);
+    const onayda = { ...b, durum: 'onayda' as const, gonderenMi: true };
+    assert.deepEqual(onayGecisleri(onayda), { onayaGonder: false, onaydanCek: true, geriGonder: true, canliyaAl: true }, 'dört göz kapalı: gönderen de onaylar');
+    assert.deepEqual(onayGecisleri({ ...onayda, dortGozAcik: true }), { onayaGonder: false, onaydanCek: true, geriGonder: false, canliyaAl: false });
+    assert.match(onayGecisiReddi('canliya-al', { ...onayda, dortGozAcik: true })!, /Dört göz/);
+    assert.equal(onayGecisiReddi('canliya-al', { ...onayda, dortGozAcik: true, sahipMi: false, gonderenMi: false }), null, 'başkası onaylar');
+    assert.match(onayGecisiReddi('geri-gonder', { ...onayda, canliyaAlir: false })!, /canlıya alma yetkisi/);
+    assert.match(onayGecisiReddi('onaya-gonder', onayda)!, /onaydan çek/);
+    for (const durum of ['canliya_alindi', 'vazgecildi'] as const) {
+      assert.deepEqual(onayGecisleri({ ...b, durum }), { onayaGonder: false, onaydanCek: false, geriGonder: false, canliyaAl: false });
+    }
   });
 });

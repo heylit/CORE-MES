@@ -11,6 +11,15 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', () => {
   const { c, vt, istek, tamam, mamulAc, yeniAdim, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
+  const cek = async (id: number, surum: number, sahip = c.planlama) =>
+    (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaydan-cek`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
   let ortam: TestVeritabani | undefined;
   let yoneticiId = 0;
   let denemeProjeId = 0;
@@ -92,13 +101,13 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     const d = s.degisiklikler.find((x) => x.tur === 'acil_emir')!;
     assert.deepEqual(s.bekleyenler, [], 'acil sipariş artık canlıya geçer');
     {
-      const r = await istek(c.planlama, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+      const r = await istek(c.planlama, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
       assert.equal(r.statusCode, 400);
       assert.match(r.body, /acilMusteriler/);
-      const k = await istek(c.kalite, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true, acilMusteriler: [{ degisiklikId: d.id, firmaId: firma }] });
+      const k = await istek(c.kalite, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true, acilMusteriler: [{ degisiklikId: d.id, firmaId: firma }] });
       assert.equal(k.statusCode, 403, 'kalitede sipariş yazma yok');
     }
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true, acilMusteriler: [{ degisiklikId: d.id, firmaId: firma }] });
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true, acilMusteriler: [{ degisiklikId: d.id, firmaId: firma }] });
     const sp = (await ortam!.sahip.tek<{ id: number; durum: string; firma_id: number; kdv_orani: string; miktar: string; birim_fiyat: string | null; satir: number }>(
       `SELECT s.id, s.durum, s.firma_id, s.kdv_orani::text, k.miktar::text, k.birim_fiyat::text, k.id AS satir FROM siparisler_siparis s
          JOIN siparisler_siparis_satiri k ON k.siparis_id = s.id WHERE s.firma_id = $1`, [firma]))!;
@@ -129,8 +138,8 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
       assert.deepEqual(l.bekleyenler, [], `${tur} denemesi artık canlıya geçer`);
       return { s: l, d: l.degisiklikler.find((x) => x.tur !== 'oner')! };
     };
-    const canliyaAl = (cerez: string, s: { id: number; surum: number }) =>
-      istek(cerez, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    const canliyaAl = async (cerez: string, s: { id: number; surum: number }) =>
+      istek(cerez, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
 
     const o = await dene('Öncelik 281', 'oncelik');
     const { emirId } = await veri(o.d.id);
@@ -188,10 +197,11 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
       'UPDATE plan_senaryo_yerlesimi SET baslangic = $3, bitis = $3::timestamptz + interval \'10 minutes\' WHERE senaryo_id = $1 AND is_emri_id = $2',
       [p.taslak!.id, a2!, new Date(Date.parse(yer(p, a1!).baslangic) - 600_000).toISOString()]);
     p = await planOku(p.taslak!.id);
-    const al = await istek(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    const gonderilen = await gonder(p.taslak!.id, p.taslak!.surum);
+    const al = await istek(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: gonderilen, cakismalariKabul: true });
     assert.equal(al.statusCode, 409, al.body);
     assert.match(al.body, /sıraya aykırı/);
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: await cek(p.taslak!.id, gonderilen) });
 
     const [b1] = await isEmirleriAc([yeniAdim()]);
     const canli = await planOku();
