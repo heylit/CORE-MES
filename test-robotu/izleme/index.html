@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Robot izleme</title>
+  <link rel="stylesheet" href="/stil.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-liste" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-canli" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-egilim" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7"/></symbol>
+    <symbol id="i-ara" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+    <symbol id="i-yorum" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-geri" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-gecti" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-dustu" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+    <symbol id="i-baglanmamis" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 4 8M8 12h4M2 2l20 20"/></symbol>
+    <symbol id="i-ek" viewBox="0 0 24 24"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+  </svg>
+  <header class="ust">
+    <h1><svg class="ikon"><use href="#i-canli"/></svg> Robot izleme</h1>
+    <nav class="menu" aria-label="Ekranlar">
+      <a href="#/" data-menu="kosular" aria-label="Koşular"><svg class="ikon"><use href="#i-liste"/></svg><span>Koşular</span></a>
+      <a href="#/egilim" data-menu="egilim" aria-label="Eğilim"><svg class="ikon"><use href="#i-egilim"/></svg><span>Eğilim</span></a>
+      <a href="#/ara-sira" data-menu="ara-sira" aria-label="Ara sıra düşenler"><svg class="ikon"><use href="#i-ara"/></svg><span>Ara sıra düşenler</span></a>
+    </nav>
+  </header>
+  <main id="icerik" class="icerik" aria-live="polite"></main>
+  <script src="/chart.js"></script>
+  <script type="module" src="/uygulama.js"></script>
+</body>
+</html>
