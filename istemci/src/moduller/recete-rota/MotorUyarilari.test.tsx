@@ -9,15 +9,20 @@ import { YAZAR, ac, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
 const UYARI = 'Personel kısıtı açık ama tanımlı personel yok; personel sınırı uygulanmadı.';
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
+// Planlama çerçevesi motor yerleşimini istemez (sunucu onu bütün planı yeniden hesaplayarak kurar); uyarıyı motorsuz uçtan okur.
+const istenen: string[] = [];
 function sunucu(uyarilar: string[]): void {
+  istenen.length = 0;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     const yontem = secenek?.method ?? 'GET';
+    istenen.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [] } satisfies KayitlarCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, { wcs: [], stations: [], machines: [], people: [] });
     if (yontem === 'GET' && yol === '/plan/motor-yerlesimi') return json(200, { ekranYerlesimi: null, uyarilar });
+    if (yontem === 'GET' && yol === '/plan/motor-uyarilari') return json(200, { uyarilar });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
 }
@@ -37,13 +42,15 @@ const gizli = (cerceve: HTMLElement): boolean => cerceve.closest('[hidden]') !==
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); yazmaDinleyiciKapat(); });
 
 describe('plan motorunun uyarıları (307 a)', () => {
-  it('MU-1: plan sekmesinde motorun uyarısı kalıcı yazılır, plan çizilmeye devam eder', async () => {
+  it('MU-1: plan sekmesinde motorun uyarısı kalıcı yazılır, plan çizilmeye devam eder; motor yerleşimi istenmez', async () => {
     sunucu([UYARI]);
     ac('/recete-rota/plan');
     const cerceve = await durumOkut();
     const serit = await screen.findByRole('status', { name: 'Plan motoru uyarıları' });
     expect(serit.textContent).toContain(UYARI);
     expect(gizli(cerceve)).toBe(false);
+    expect(istenen).toContain('GET /plan/motor-uyarilari');
+    expect(istenen).not.toContain('GET /plan/motor-yerlesimi');
   }, 40000);
 
   it('MU-2: uyarı yoksa ya da ürün sekmesindeyken şerit çıkmaz', async () => {
@@ -59,5 +66,8 @@ describe('plan motorunun uyarıları (307 a)', () => {
     await durumOkut();
     await new Promise((r) => { setTimeout(r, 300); });
     expect(screen.queryByText(UYARI)).toBeNull();
+    // Reçete ve Rota çerçevesi yerleşimi çizer: o motoru okumaya devam eder.
+    expect(istenen).toContain('GET /plan/motor-yerlesimi');
+    expect(istenen).not.toContain('GET /plan/motor-uyarilari');
   }, 40000);
 });

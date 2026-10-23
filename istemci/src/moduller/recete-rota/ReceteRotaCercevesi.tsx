@@ -234,6 +234,7 @@ export function ReceteRotaCercevesi() {
   const isle = useMemo(() => kopruKur(CIHAZ_ANAHTARLARI, {
     kartTaslakAcabilir,
     highsVerilir: () => acikTur.current === 'planlama',
+    yerlesimCizilmez: () => acikTur.current === 'planlama',
     bedelAyariYazabilir,
     motorDurumu: (okunamadi) => { if (okunamadi) bildir('hata', MOTOR_OKUNAMADI); },
     planVerisi: setPlanVerisiYok,

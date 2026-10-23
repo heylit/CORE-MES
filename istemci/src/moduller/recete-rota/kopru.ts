@@ -10,7 +10,7 @@ import { STATU_KOMUTLARI } from './statu-komutlari.ts';
 import { highsYukle } from './highs.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
 import type { DurumCevabi, KapasiteCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { BedelAyari, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
@@ -276,11 +276,13 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
 // çizer (öncelik teslimden önce) ve sunucunun sırasından ayrılabilir; kabuk bunu kullanıcıya söyler.
 // motorUyarilari: motorun uygulayamadığı kısıtlar (307 a), her okunan yerleşimde; liste değişince çağrılır. Okunamayan yerleşimde dokunulmaz.
 // highsVerilir: açık çerçeve HiGHS alabilir mi (yalnız planlama çerçevesi, 361 b); verilmezse istek reddedilir.
+// yerlesimCizilmez: açık çerçeve motorun yerleşimini çizmez (planlama çerçevesi): yerleşim hiç istenmez, çünkü sunucu onu her okumada
+// bütün planı yeniden hesaplayarak kurar; yalnız uyarılar motorsuz okunur. Yerleşim okunmadığı için motorDurumu çağrılmaz.
 export function kopruKur(
   cihazAnahtarlari: readonly string[] = [],
   secenek: {
     kartTaslakAcabilir?: boolean; bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
-    motorUyarilari?: (uyarilar: readonly string[]) => void; highsVerilir?: () => boolean;
+    motorUyarilari?: (uyarilar: readonly string[]) => void; highsVerilir?: () => boolean; yerlesimCizilmez?: () => boolean;
   } = {},
 ): KopruIsleyici {
   // Çerçeve kayıtları okuduğu andaki sürümler: güncelleme bu sürümle gider, başkası arada yazdıysa sahibi 409 döner. Her başarılı
@@ -313,8 +315,11 @@ export function kopruKur(
       (c) => { motorDurumu(false); motorUyarilari(c.uyarilar); return c.ekranYerlesimi ?? null; },
       () => { motorDurumu(true); return null; },
     );
+  // Okunamazsa uyarı listesine dokunulmaz (yerleşimdeki gibi).
+  const yalnizUyariOku = (): Promise<null> =>
+    api.get<MotorUyarilariCevabi>('/plan/motor-uyarilari').then((c) => { motorUyarilari(c.uyarilar); return null; }, () => null);
   const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null }> =>
-    Promise.all([api.get<DurumCevabi>('/recete-rota/durum'), motorYerlesimiOku()])
+    Promise.all([api.get<DurumCevabi>('/recete-rota/durum'), secenek.yerlesimCizilmez?.() === true ? yalnizUyariOku() : motorYerlesimiOku()])
       .then(([d, planYerlesim]) => {
         maliyetAnlik = d.maliyet;
         secenek.planVerisi?.(d.stations === null || d.machines === null || d.wcs === null);
