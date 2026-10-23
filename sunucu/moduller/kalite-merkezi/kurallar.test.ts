@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { KM_DOSYA_SINIRI, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
+import { KM_DOSYA_SINIRI, arsivDegisiyor, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -23,6 +23,32 @@ describe('Kalite Merkezi kuralları', () => {
     }
     assert.deepEqual(onayDegisiklikleri('ncr', { mrb: 'Hurda' }, { mrb: 'Hurda', tanim: 'x' }), [], 'karar değişmedi');
     assert.equal(onayDegeriGecerliMi('ncr', { mrb: 3 }), false);
+  });
+
+  test('Soru 228 a arşiv: yalnız arşiv bayrağı ve yazma damgası değişen yazma arşivlemedir; içerik, sıra dışı alan ya da bayrak dışı değer değildir', () => {
+    const kapali = { no: 'NCR-1', durum: 'Kapalı', mrb: 'Hurda', chars: [{ ad: 'A', olcum: '1' }], guncelleme: '2026-01-01T00:00:00.000Z' };
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: true, guncelleme: '2026-10-23T10:00:00.000Z' }), true);
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: true }), true, 'damga aynı');
+    assert.equal(yalnizArsivDegisiyor(kapali, { no: 'NCR-1', durum: 'Kapalı', mrb: 'Hurda', chars: [{ ad: 'A', olcum: '1' }], arsiv: true }), true, 'damga düştü');
+    assert.equal(yalnizArsivDegisiyor({ ...kapali, arsiv: true }, { ...kapali, arsiv: false }), true, 'arşivden çıkarma');
+    assert.equal(yalnizArsivDegisiyor({ mrb: 'Hurda', no: 'NCR-1', durum: 'Kapalı' }, { durum: 'Kapalı', no: 'NCR-1', mrb: 'Hurda', arsiv: true }), true, 'alan sırası');
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: true, mrb: 'Tamir' }), false, 'içerik değişti');
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: true, chars: [{ ad: 'A', olcum: '2' }] }), false, 'iç içe içerik değişti');
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: true, ek: 'x' }), false, 'alan eklendi');
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: { not: 'x' } }), false, 'bayrak içerik taşıyamaz');
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali, arsiv: 'evet' }), false);
+    assert.equal(yalnizArsivDegisiyor(kapali, { ...kapali }), false, 'bayrak değişmedi');
+    assert.equal(yalnizArsivDegisiyor({ ...kapali, arsiv: true }, { ...kapali, arsiv: true, guncelleme: 'x' }), false, 'yalnız damga');
+    assert.equal(yalnizArsivDegisiyor(null, { arsiv: true }), false, 'yeni kayıt');
+  });
+
+  test('Soru 229 a: onay işlemi isteyen kaynak kayıtları tedarikçi ve form şablonudur; arşiv bayrağının değişmesi yeni kayıtta da sayılır', () => {
+    assert.deepEqual(['sup', 'tpl', 'ncr', 'insp', 'parca', 'bayrak', 'settings'].filter(kaynakKoleksiyonuMu), ['sup', 'tpl']);
+    assert.deepEqual(['belge', 'bayrak', 'tpl', 'sup', 'ncr', 'cizim', 'settings', 'kullanici'].filter(onaylaSilinirMi), ['belge', 'bayrak', 'tpl']);
+    assert.equal(arsivDegisiyor(null, { no: 'x' }), false);
+    assert.equal(arsivDegisiyor(null, { arsiv: true }), true);
+    assert.equal(arsivDegisiyor({ arsiv: true }, { arsiv: true, not: 'ek' }), false);
+    assert.equal(arsivDegisiyor({ arsiv: true }, { not: 'ek' }), true);
   });
 
   test('iz dışındaki koleksiyonda dolu kaydın üstüne yazılır ve silinir', () => {

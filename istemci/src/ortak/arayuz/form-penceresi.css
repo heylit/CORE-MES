@@ -1,0 +1,7 @@
+.tc-fpencere-form { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-fpencere-hata {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); margin-bottom: var(--b-4);
+  padding: var(--b-3); border: 1px solid var(--stop); border-radius: var(--yari-2); color: var(--ink);
+  background: color-mix(in srgb, var(--stop) 10%, var(--panel2));
+}
+.tc-fpencere-hata p { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }

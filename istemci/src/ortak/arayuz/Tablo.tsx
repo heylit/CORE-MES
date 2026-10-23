@@ -1,5 +1,8 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import type { SimgeAdi } from '../tasarim/simgeler.ts';
+import { csvIndir, type CsvDegeri } from '../veri/csv.ts';
 import { sonrakiSiralama, type Siralama } from '../veri/liste-durumu.ts';
+import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
 import { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
@@ -16,6 +19,23 @@ export interface Sutun<S> {
   kirilmaz?: boolean;
   // Sütun sıralanabilir; sıralama alanı `anahtar`dır. Tabloya `siralamaDegistir` verilmemişse etkisizdir.
   sirala?: boolean;
+  // CSV'deki değeri. Verilmezse hücre metin ya da sayıysa o yazılır, değilse boş kalır; false sütunu CSV'ye almaz (eylem sütunu).
+  csv?: ((satir: S) => CsvDegeri) | false;
+}
+
+export interface TabloSuzgeci {
+  deger: string;
+  baslik: string;
+  simge?: SimgeAdi;
+}
+
+// Araç çubuğu yalnız denetimleri çizer; arama ve süzme ekranın işidir (istemcide ya da sunucuda).
+export interface TabloAraci<S> {
+  arama?: { deger: string; degistir: (deger: string) => void; etiket?: string; yerTutucu?: string };
+  suzgec?: { etiket: string; secenekler: readonly TabloSuzgeci[]; secili: string; sec: (deger: string) => void };
+  // Ekranda görünen satırlar aktarılır; sayfalı listede bütün liste isteniyorsa `satirlar` verilir.
+  csv?: { ad: string; satirlar?: readonly S[] };
+  sag?: ReactNode;
 }
 
 const SIRA_METNI = { artan: 'artan sıralı', azalan: 'azalan sıralı' } as const;
@@ -34,12 +54,67 @@ interface Ozellikler<S> {
   sayfalama?: Omit<SayfalamaOzellikleri, 'satirSayisi'>;
   // Yeni sayfa beklenirken eski satırlar yerinde kalır ve soluk görünür.
   mesgul?: boolean;
+  // Verilince tablonun üstünde arama, süzgeç çipleri ve CSV düğmesi çizilir; boş listede de görünür (aramayı geri almak için).
+  arac?: TabloAraci<S>;
+}
+
+function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
+  if (typeof s.csv === 'function') return s.csv(satir);
+  const icerik = s.hucre(satir);
+  return typeof icerik === 'string' || typeof icerik === 'number' ? icerik : null;
+}
+
+export function tabloCsvSatirlari<S>(sutunlar: readonly Sutun<S>[], satirlar: readonly S[]): { basliklar: string[]; satirlar: CsvDegeri[][] } {
+  const alinan = sutunlar.filter((s) => s.csv !== false);
+  return { basliklar: alinan.map((s) => s.baslik), satirlar: satirlar.map((satir) => alinan.map((s) => csvHucresi(s, satir))) };
+}
+
+function AracCubugu<S>({ arac, sutunlar, satirlar }: { arac: TabloAraci<S>; sutunlar: readonly Sutun<S>[]; satirlar: readonly S[] }) {
+  const { arama, suzgec, csv, sag } = arac;
+  const aktarilan = csv?.satirlar ?? satirlar;
+  return (
+    <div className="tc-tablo-arac">
+      {arama && (
+        <div className="tc-tablo-arama">
+          <Girdi
+            etiket={arama.etiket ?? 'Ara'} type="search" value={arama.deger} placeholder={arama.yerTutucu ?? 'Ara'}
+            onChange={(o) => { arama.degistir(o.target.value); }}
+          />
+        </div>
+      )}
+      {suzgec && suzgec.secenekler.length > 0 && (
+        <div className="tc-tablo-cipler" role="group" aria-label={suzgec.etiket}>
+          {suzgec.secenekler.map((c) => (
+            <Dugme key={c.deger} simge={c.simge} aria-pressed={c.deger === suzgec.secili} onClick={() => { suzgec.sec(c.deger); }}>
+              {c.baslik}
+            </Dugme>
+          ))}
+        </div>
+      )}
+      {(csv || sag) && (
+        <div className="tc-tablo-arac-sag">
+          {sag}
+          {csv && (
+            <Dugme
+              simge="download" disabled={aktarilan.length === 0}
+              onClick={() => {
+                const { basliklar, satirlar: veri } = tabloCsvSatirlari(sutunlar, aktarilan);
+                csvIndir(csv.ad, basliklar, veri);
+              }}
+            >
+              CSV
+            </Dugme>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Tablo kabına sığmayınca her satır karta döner; sütun başlığı hücrenin önünde yazılır, sütun gizlenmez.
 // Eşik ekran genişliği değildir: aynı ekranda dar tablo sığar, geniş tablo sığmaz; ölçü içerikten gelir.
 export function Tablo<S>({
-  etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false,
+  etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
 }: Ozellikler<S>) {
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
@@ -81,7 +156,9 @@ export function Tablo<S>({
   };
   const alt = sayfalama && <Sayfalama {...sayfalama} degistir={sayfaDegistir} satirSayisi={satirlar.length} />;
 
-  if (bos) return <><DurumKutusu durum="bos" mesaj={bosMesaj} />{alt}</>;
+  const ust = arac && <AracCubugu arac={arac} sutunlar={sutunlar} satirlar={satirlar} />;
+
+  if (bos) return <>{ust}<DurumKutusu durum="bos" mesaj={bosMesaj} />{alt}</>;
 
   const siralanan = siralamaDegistir ? sutunlar.filter((s) => s.sirala) : [];
   const yon = (s: Sutun<S>) => (siralama?.alan === s.anahtar ? siralama.yon : null);
@@ -94,6 +171,7 @@ export function Tablo<S>({
 
   return (
     <>
+      {ust}
       <div ref={kap} className="tc-tablo-kap" data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (

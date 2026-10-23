@@ -48,3 +48,11 @@
   content: attr(data-baslik); flex: none; text-align: left;
   font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
 }
+
+.tc-tablo-arac { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2) var(--b-3); margin: 0 0 var(--b-3); min-width: 0; }
+.tc-tablo-arama { flex: 1 1 calc(var(--b-6) * 8); min-width: 0; }
+/* Arama kutusunun etiketi görünmez; ekran okuyucu okur. */
+.tc-tablo-arama .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-tablo-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; }
+.tc-tablo-cipler [aria-pressed="true"] { border-color: var(--hazard-ink); }
+.tc-tablo-arac-sag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-left: auto; }
