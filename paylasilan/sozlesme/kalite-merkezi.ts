@@ -80,6 +80,14 @@ const kmKisi = z.object({ id: z.number().int(), ad: z.string() });
 // `onaylayabilir`: kişide onay işlemi var; uygulama "Onayı geri al" düğmesini yalnız ona gösterir (sunucu ayrıca denetler).
 export const kmKimlikCevabi = z.object({ kisi: kmKisi, yonetici: z.boolean(), kisiler: z.array(kmKisi), onaylayabilir: z.boolean() });
 
+// 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; satın alma durumu firma kimliğiyle okur. Değerler uygulamanın seçenekleridir.
+export const KM_TEDARIKCI_DURUMLARI = ['Onaylı', 'Şartlı onaylı', 'Aday', 'Askıda'] as const;
+export type KmTedarikciDurumu = (typeof KM_TEDARIKCI_DURUMLARI)[number];
+// Tedarikçi kaydının bağlanacağı firmalar: Müşteri-Tedarikçi'nin aktif tedarikçi firmaları. Kayıt `firmaId` alanında firma kimliğini tutar.
+export const kmTedarikciFirmalariCevabi = z.object({
+  firmalar: z.array(z.object({ id: z.number().int().positive(), kod: z.string().nullable(), ad: z.string() })),
+});
+
 // İlk parça (FAI) kararı (229 a): emrin karar bekleyen sayımı onayda sağlama, retde redde geçer; `adet` geçen parça sayısıdır.
 export const kmIlkParcaParametresi = z.object({ uretimEmriId: z.coerce.number().int().positive() });
 export const kmIlkParcaGovdesi = z.object({ karar: z.enum(KALITE_KARARLARI) });
@@ -117,6 +125,7 @@ export type KmGeriYukleCevabi = z.output<typeof kmGeriYukleCevabi>;
 export type KmDosyaCevabi = z.output<typeof kmDosyaCevabi>;
 export type KmOzetCevabi = z.output<typeof kmOzetCevabi>;
 export type KmKimlikCevabi = z.output<typeof kmKimlikCevabi>;
+export type KmTedarikciFirmalariCevabi = z.output<typeof kmTedarikciFirmalariCevabi>;
 export type KmKarantinaKonumlariCevabi = z.output<typeof kmKarantinaKonumlariCevabi>;
 export type KmIlkParcaBekleyenCevabi = z.output<typeof kmIlkParcaBekleyenCevabi>;
 export type KmGecmisCevabi = z.output<typeof kmGecmisCevabi>;

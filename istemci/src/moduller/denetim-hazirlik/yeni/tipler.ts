@@ -233,9 +233,12 @@ export interface EkranDurumu {
   ux: 'rehber' | 'uzman';
   onbHide: boolean;
   pw: Record<ProgramKodu, ProgramEkrani>;
-  kys: { tab: KysSekmesi; sv: string; fl: string; tp: string; filter: string };
+  // dok: başka bölümden açılması istenen doküman (KYS açınca okur ve boşaltır).
+  kys: { tab: KysSekmesi; sv: string; fl: string; tp: string; filter: string; dok?: string };
   kal: { view: string; filter: string; q: string; month: string };
   ic: { tab: string };
+  // Başka bölümden "Denetim ekle" ile gelindi: takvim yeni denetim formunu açar ve alanı kapatır.
+  takvim?: { yeniDenetim: boolean };
 }
 
 // Durağan içerik (icerik/). Simge adları prototipin adlarıdır; ekran ortak simgeye çevirir.

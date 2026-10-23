@@ -10,7 +10,7 @@ import * as logo from './moduller/logo/disari.ts';
 import { musteriSiniflari } from './moduller/musteri-tedarikci/disari.ts';
 import { acilSiparisOnaylandi, canliMakineAyrimlari, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, tahminiMaliyetCozucusu } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteAskisiCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, kaliteDurumuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import { rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit } from './moduller/rota/disari.ts';
@@ -71,7 +71,7 @@ export function sunucununBaglari(): Bag[] {
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, receteRota.teklifDene),
     bag('stok değer grupları -> satın alma kg stok değeri', stokMiktariCozucusu, stok.degerGrubuToplamlari),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
-    bag('kalite askısı -> satın alma siparişi', kaliteAskisiCozucusu, kaliteMerkezi.kaliteAskisindakiTedarikciler),
+    bag('kalite onay durumu -> satın alma siparişi', kaliteDurumuCozucusu, kaliteMerkezi.tedarikciOnayDurumlari),
     bag('vardiya takvimi -> İK puantaj', ik.puantajTakvimCozucusu, vardiya.calismaTakvimleri),
     bag('vardiya aralıkları -> İK puantaj', ik.puantajAralikCozucusu, vardiya.basladigiGunTakvimleri),
     bag('vardiya tanımları -> İK kişi sayfası', ik.vardiyaTanimCozucusu, vardiya.vardiyaTanimlari),

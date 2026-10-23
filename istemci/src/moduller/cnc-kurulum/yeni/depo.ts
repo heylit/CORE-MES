@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { defaults, DURUM_ANAHTARI, durumOku, type CncDurumu } from './durum.ts';
+import { acilisVarsayimlari, defaults, DURUM_ANAHTARI, durumOku, type CncDurumu } from './durum.ts';
 
 // Prototipin kapanış düzeni korunur: durum tek nesnedir, görünümler ve hesaplar onu doğrudan okur ve yerinde değiştirir, sonra
 // `save()` der (prototipteki gibi). `state` canlı bağdır: yeniden kurulumda (emir seçimi) yeni nesneyi gösterir.
@@ -19,6 +19,8 @@ const degisimDinleyicileri = new Set<() => void>();
 // Kabuk açılışta ve emir seçiminden sonra çağırır: kayıt metni durum olur, kalıcı yazma bu işleve gider.
 export function durumKur(metin: string | null | undefined, yaz: Yazici | null): void {
   state = durumOku(metin);
+  // Prototipteki gibi varsayılanlar yazılmaz; ilk değişiklikle kayda girer.
+  acilisVarsayimlari(state);
   yazici = yaz;
   for (const d of degisimDinleyicileri) d();
   bildir();
