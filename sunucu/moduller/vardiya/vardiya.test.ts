@@ -740,5 +740,54 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       for (const cerez of [c.operator, amirA]) assert.equal(await durum(cerez, 'makine', makineA), 200);
       assert.equal(await durum(c.operator, 'is-merkezi', merkezB), 200);
     });
+
+    test('VR-29 (W8, 18.1): İK çıkış gününden sonra kişi takvimi 0 ve "ayrıldı", günlük mesaide yok, fazla mesai reddedilir; pasif kişi bugünden itibaren aynı, geçmişi değişmez', async () => {
+      // 2099-11-10 salı (çıkış günü, çalışır), 11-11 çarşamba (ayrıldı). Vardiya 08:00-16:00 molasız: 480 dakika.
+      const CIKIS = '2099-11-10';
+      const SONRA = '2099-11-11';
+      const v = await vardiyaAc();
+      for (const gun of [2, 3]) await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun, vardiyaId: v.id, acik: true });
+      const id = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme ayrılan', kullaniciAdi: 'vr29-ayrilan', parola: PAROLA }));
+      await tamam(c.yonetici, 'POST', `/istasyonlar/${istasyonA}/kisiler/ata`, { kisiId: id, yuzde: '100.00' });
+      await tamam(c.yonetici, 'POST', '/ik/personel/emp_vr29/kaydet',
+        { govde: { id: 'emp_vr29', kind: 'emp', ad: 'Deneme', soyad: 'Ayrılan', isMerkeziId: merkezA, kisiId: id, cikisTarihi: CIKIS }, surum: null });
+      const kisiTakvimi = async (bas: string, bit: string) =>
+        (await tamam<CalismaTakvimiCevabi>(c.planlama, 'GET', `/calisma-takvimi?tur=kisi&id=${id}&baslangic=${bas}&bitis=${bit}`)).takvim!;
+      const mesaidekiler = async (tarih: string) =>
+        (await tamam<GunlukMesaiCevabi>(c.yonetici, 'GET', `/gunluk-mesai?tarih=${tarih}`)).satirlar.map((x) => x.kisiId);
+      const personelde = async () => (await tamam<VardiyaPersoneliCevabi>(c.planlama, 'GET', '/vardiya-personeli')).personel.some((p) => p.kisiId === id);
+      const mesai = (tarih: string) => istek<FazlaMesaiCevabi>(c.planlama, 'POST', '/fazla-mesai',
+        { tarih, baslangic: '18:00', bitis: '20:00', kapsam: 'istasyon', istasyonId: istasyonA, kisiIdleri: [id] }, kimlikli());
+
+      let t = await kisiTakvimi(CIKIS, SONRA);
+      assert.deepEqual(t.gunler.map((g) => [g.tarih, g.dakika, g.ayrildi]), [[CIKIS, 480, undefined], [SONRA, 0, true]]);
+      assert.deepEqual(sureler(t.araliklar), [480]);
+      const istasyonGunu = await tamam<CalismaTakvimiCevabi>(c.planlama, 'GET', `/calisma-takvimi?tur=istasyon&id=${istasyonA}&baslangic=${SONRA}&bitis=${SONRA}`);
+      assert.equal(istasyonGunu.takvim!.gunler[0]!.dakika, 480, 'istasyon etkilenmez');
+      assert.ok((await mesaidekiler(CIKIS)).includes(id));
+      assert.ok(!(await mesaidekiler(SONRA)).includes(id));
+      assert.ok(await personelde(), 'çıkışı ileri tarihli kişi bugün listede');
+      // Çıkıştan sonraki güne fazla mesai yazılmaz; çıkış günü yazılır. Kuralın ötesinde kayıt kalmaz.
+      const red = await mesai(SONRA);
+      assert.equal(red.durum, 400, JSON.stringify(red.govde));
+      const kabul = await mesai(CIKIS);
+      assert.equal(kabul.durum, 200, JSON.stringify(kabul.govde));
+      assert.deepEqual((await kisiTakvimi(SONRA, SONRA)).gunler[0]!.fazlaMesaiDakika, undefined);
+      await tamam(c.planlama, 'POST', `/fazla-mesai/${kabul.govde.fazlaMesai.id}/iptal`, { surum: kabul.govde.fazlaMesai.surum });
+
+      // Pasif kişi: bugünden itibaren ayrılmış; geçmiş gün (2000) değişmez, vardiya personelinde yok, gelecek güne fazla mesai yok.
+      const ESKI = '2000-01-04';
+      const eskiDakika = (await kisiTakvimi(ESKI, ESKI)).gunler[0]!.dakika;
+      const kayit = (await tamam<{ kisiler: { id: number; surum: number }[] }>(c.yonetici, 'GET', '/kisiler')).kisiler.find((k) => k.id === id)!;
+      await tamam(c.yonetici, 'POST', `/kisiler/${id}/pasife-al`, { surum: kayit.surum });
+      t = await kisiTakvimi(CIKIS, CIKIS);
+      assert.deepEqual([t.gunler[0]!.dakika, t.gunler[0]!.ayrildi, t.araliklar], [0, true, []]);
+      assert.deepEqual((await kisiTakvimi(ESKI, ESKI)).gunler[0], { tarih: ESKI, dakika: eskiDakika, kapali: null });
+      assert.equal(eskiDakika, 480);
+      assert.equal(await personelde(), false);
+      assert.ok(!(await mesaidekiler(CIKIS)).includes(id));
+      assert.equal((await mesai(CIKIS)).durum, 400);
+      for (const gun of [2, 3]) await tamam(c.planlama, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun, vardiyaId: v.id, acik: false });
+    });
   });
 });

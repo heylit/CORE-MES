@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  aralik, araliklardanCikar, atamaPayi, durusAraliklari, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, takvimGunleriniBirlestir,
+  aralik, araliklardanCikar, atamaPayi, ayrildiMi, durusAraliklari, fazlaMesaiKisiHatasi, sonCalismaGunu, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, takvimGunleriniBirlestir,
   kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari,
 } from './kurallar.ts';
 
@@ -285,5 +285,23 @@ describe('vardiya kuralları', () => {
     assert.equal(kisiTakvimiGorunur({ ...bos, amirVeyaPlanlama: true, kapsamda: true }), true);
     assert.equal(kisiTakvimiGorunur({ ...bos, amirVeyaPlanlama: true }), false);
     assert.equal(kisiTakvimiGorunur({ ...bos, kapsamda: true }), false);
+  });
+
+  test('VR-29: son çalışma günü İK çıkış günüdür; pasif kişide dün (çıkış daha önceyse çıkış); çıkış günü çalışılır, sonrası ayrıldı', () => {
+    const bugun = '2026-10-23';
+    assert.equal(sonCalismaGunu({ aktif: true, cikisTarihi: null, bugun }), null);
+    assert.equal(sonCalismaGunu({ aktif: true, cikisTarihi: '2026-11-10', bugun }), '2026-11-10');
+    assert.equal(sonCalismaGunu({ aktif: false, cikisTarihi: null, bugun }), '2026-10-22');
+    assert.equal(sonCalismaGunu({ aktif: false, cikisTarihi: '2026-11-10', bugun }), '2026-10-22');
+    assert.equal(sonCalismaGunu({ aktif: false, cikisTarihi: '2026-09-30', bugun }), '2026-09-30');
+    assert.deepEqual(['2026-11-09', '2026-11-10', '2026-11-11'].map((t) => ayrildiMi('2026-11-10', t)), [false, false, true]);
+    assert.equal(ayrildiMi(null, '2099-01-01'), false);
+  });
+
+  test('VR-29: fazla mesai ayrılmış kişiye reddedilir, çıkış günü ve sınırsız kişi geçer', () => {
+    const kisiler = [{ kisiId: 1, sonGun: null }, { kisiId: 2, sonGun: '2026-11-10' }];
+    assert.equal(fazlaMesaiKisiHatasi('2026-11-10', kisiler), null);
+    assert.deepEqual(fazlaMesaiKisiHatasi('2026-11-11', kisiler), { ileti: 'İşten ayrılmış ya da pasif kişiye fazla mesai yazılamaz.', alan: 'kisiIdleri' });
+    assert.equal(fazlaMesaiKisiHatasi('2026-11-11', []), null);
   });
 });
