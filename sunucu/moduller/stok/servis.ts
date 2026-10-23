@@ -45,7 +45,8 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAdlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeKgFiyatlari, ortalamaAlisFiyatlari, siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../satin-alma/disari.ts';
 import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
-import { emirlerinSevkleri } from '../sevkiyat/disari.ts';
+import { siparisFaturalari } from '../finans/disari.ts';
+import { emirlerinSevkleri, sevkIsiOzeti } from '../sevkiyat/disari.ts';
 import type { FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
@@ -58,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
   AYRILMIS_KONUM_TURLERI,
@@ -959,6 +960,14 @@ export async function uretimGirisi(db: Db, kisiId: number, g: UretimGirisiKomutu
   const emir = Number(g.uretimEmriId);
   await emirVarDenetle(db, emir);
   const miktar = bindenMetin(binde(g.miktar));
+  // 21.4: emrin kendi ürünü sayım ve tamamlamayla da girer; elle giriş adedi aşmaz. Tamamlamayla aynı kilit: eşzamanlı iki giriş
+  // sınırı birlikte aşamaz. Emrin ürünü olmayan yarı mamulün emirdeki miktarı adetten çıkmaz, sınırsız kalır.
+  const e = await uretimEmriOzeti(db, emir);
+  if (e !== null && e.malzemeNo === malzemeId) {
+    await sorgular.emirTamamlamaKilidi(db, emir);
+    const asim = uretimGirisiEngeli(e.saglamAdet ?? e.adet, await sorgular.emirUretimGirisi(db, emir, malzemeId), miktar);
+    if (asim) throw dogrulama(asim, 'miktar');
+  }
   return korumali(async () => {
     const parti = await partiBulVeyaAc(db, { malzemeId, tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, uretimEmriId: emir, kisiId });
     const id = await sorgular.hareketYaz(db, hareket({ tur: 'giris', malzemeId, miktar, kisiId, partiId: parti, partiSecimi: 'giris', hedefKonumId: konumId, girisKaynagi: 'uretim', uretimEmriId: emir }));
@@ -1117,6 +1126,12 @@ async function sevkCikisiniDenetle(db: Db, malzemeIdler: readonly number[], ciki
     if (engel) throw gecersiz(`${o.ad ?? o.kod ?? `#${id}`}: ${engel}`);
   }
 }
+// 16.1: eksik varken gözdeki red ya da karar bekleyen parça eksi onayıyla da serbest yazılmaz.
+async function eksiKaliteDenetle(db: Db, a: { malzemeId: number; konumId: number; partiId: number | null }, mevcut: string, miktar: string): Promise<void> {
+  if (binde(mevcut) >= binde(miktar)) return;
+  const engel = eksiKaliteEngeli(await sorgular.gozdekiKullanilamazKalite(db, a.malzemeId, a.konumId, a.partiId));
+  if (engel) throw gecersiz(engel);
+}
 function dusumDenetle(mevcut: string, miktar: string, eksiOnay: boolean): boolean {
   const k = dusumKarari(mevcut, miktar, eksiOnay);
   if (k.tur === 'onay-gerekli') throw onayGerekli(`Yetersiz stok. Mevcut: ${k.mevcut}. Yine de yazmak için onaylayın; bakiye eksiye düşer.`, { mevcut: k.mevcut });
@@ -1139,6 +1154,7 @@ export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<
   return korumali(async () => {
     const b = await sorgular.bakiyeKilitle(db, malzemeId, konumId, p.partiId, null, kalite);
     await yoldakiniYemesin(db, b?.miktar ?? '0', { malzemeId, konumId, partiId: p.partiId, kalite }, miktar);
+    if (kalite === 'serbest') await eksiKaliteDenetle(db, { malzemeId, konumId, partiId: p.partiId }, b?.miktar ?? '0', miktar);
     const onayliEksi = dusumDenetle(b?.miktar ?? '0', miktar, g.eksiOnay === true);
     const emir = g.uretimEmriId === undefined || g.uretimEmriId === null ? null : Number(g.uretimEmriId);
     // Karar bekleyen ve red parça rezerveye girmez (135): ayrılanı ne yer ne düşürür.
@@ -1181,6 +1197,7 @@ export async function tasimaYap(db: Db, kisiId: number, g: TasimaKomutu): Promis
     await siraliKilitle(db, { malzemeId, konumId: kaynak, partiId: p.partiId }, { malzemeId, konumId: hedef, partiId: p.partiId });
     const b = await sorgular.bakiyeKilitle(db, malzemeId, kaynak, p.partiId);
     await yoldakiniYemesin(db, b?.miktar ?? '0', { malzemeId, konumId: kaynak, partiId: p.partiId, kalite: 'serbest' }, miktar);
+    await eksiKaliteDenetle(db, { malzemeId, konumId: kaynak, partiId: p.partiId }, b?.miktar ?? '0', miktar);
     const onayliEksi = dusumDenetle(b?.miktar ?? '0', miktar, g.eksiOnay === true);
     const id = await sorgular.hareketYaz(db, hareket({ tur: 'transfer', malzemeId, miktar, kisiId, partiId: p.partiId, partiSecimi: p.secim, kaynakKonumId: kaynak, hedefKonumId: hedef, onayliEksi, aciklama: g.aciklama ?? null }));
     await bakiyeDegistir(db, { malzemeId, konumId: kaynak, partiId: p.partiId, fark: -binde(miktar) });
@@ -1383,11 +1400,22 @@ export async function sayimYap(db: Db, kisiId: number, g: SayimKomutu): Promise<
 }
 
 // ---- Geri alma (DEP-17, DEP-18, DEP-19, DEP-53) --------------------------------------------------------------------------------
+// Soru 186 a: ürün sevkinin teslim çıkışı, iş faturalıyken ne elle ne sevkiyatın teslim geri almasıyla çevrilir. Fatura siparişe ve
+// işe bağlıdır (Finans); işin siparişi sevkiyattan okunur.
+async function faturaliSevkDenetle(db: Db, h: { tur: string; cikisNedeni: string | null; aciklama: string | null }): Promise<void> {
+  const isId = sevkTeslimIsi(h);
+  if (isId === null) return;
+  const siparisId = (await sevkIsiOzeti(db, isId))?.siparisId ?? null;
+  if (siparisId === null) return;
+  const engel = faturaliSevkEngeli(isId, (await siparisFaturalari(db, [siparisId])).get(siparisId) ?? []);
+  if (engel) throw cakisma(engel);
+}
 async function tersCevir(db: Db, kisiId: number, hareketId: number, eksiOnay: boolean, aciklama: string | null, malKabulDuzeltmesi = false): Promise<number> {
   const h = await sorgular.hareketBul(db, hareketId);
   if (!h) throw bulunamadi('Hareket bulunamadı.');
   const engel = geriAlmaEngeli({ tur: h.tur, geriAlindi: h.geriAlindi, malKabulSatiriMi: h.malKabulSatiriMi && !malKabulDuzeltmesi, disCagriMi: kaliteKarariHareketiMi(h) });
   if (engel) throw cakisma(engel);
+  await faturaliSevkDenetle(db, h);
   const y = tersYon(h.kaynakKonumId, h.hedefKonumId);
   return korumali(async () => {
     let onayliEksi = false;
@@ -1566,6 +1594,7 @@ async function sepetiAyir(db: Db, kisiId: number, eksiOnay: boolean): Promise<{ 
     if (s.kaynakKonumId !== null) {
       const b = await sorgular.bakiyeKilitle(db, s.malzemeId, s.kaynakKonumId, s.partiId);
       const mevcut = b?.miktar ?? '0', yeterli = binde(mevcut) >= binde(s.miktar);
+      await eksiKaliteDenetle(db, { malzemeId: s.malzemeId, konumId: s.kaynakKonumId, partiId: s.partiId }, mevcut, s.miktar);
       if (!yeterli) eksikler.push({ malzemeId: s.malzemeId, mevcut: bindenMetin(binde(mevcut)), istenen: bindenMetin(binde(s.miktar)) });
       ayirmalar.push({ satirId: s.id, malzemeId: s.malzemeId, konumId: s.kaynakKonumId, partiId: s.partiId, partiSecimi: s.partiId === null ? null : 'kisi', miktar: bindenMetin(binde(s.miktar)), onayliEksi: !yeterli });
       continue;
@@ -4280,8 +4309,6 @@ export async function fasonSevkiYansit(db: Db, olay: FasonSevkiOlayi): Promise<v
 // sevk çıkışıyla düşer; geri dönüşler bu hareketleri geri alır, parça geldiği konuma döner. Lot, statü ve kalite korunur. Firmasız
 // noktada Yolda adımı yoktur: teslim parçayı bulunduğu konumdan düşer. Red parça çıkar, hareketin açıklaması bunu söyler (147 b).
 // İş kimliği açıklamadadır: geri alma aynı işin hareketlerini bulur, aynı emrin başka işine dokunmaz.
-const sevkAciklamasi = (isId: number, emirNo: string, adim: 'yola' | 'teslim'): string =>
-  `Ürün sevki · iş ${String(isId)} · emir ${emirNo} · ${adim === 'yola' ? 'yola çıktı' : 'teslim edildi'}`;
 const RED_EKI = ' · red parça';
 
 // Taşınan ya da düşülen red parça miktarı döner: sevkiyat uyarıyı kullanıcıya gösterir.

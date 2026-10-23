@@ -1203,6 +1203,12 @@ export const uretimGirdiKaynaklari = (
              OR ($2::int IS NOT NULL AND k.tur = 'kabul') OR ($4 AND k.tur IN ('istasyon', 'uretim_cikisi')))
       ORDER BY (b.konum_id = $3) DESC, (p.uretim_emri_id IS NOT NULL AND p.uretim_emri_id = $5) DESC, b.ilk_giris, b.id`,
     [malzemeId, statuId, istasyonKonumId, digerIstasyonlar, uretimEmriId, tumKalite]);
+// Gözde bir partinin (lotsuzda lotsuz bakiyenin) red ve karar bekleyen toplamı, her statüde (16.1: eksi onayı kaliteyi aşmaz).
+export const gozdekiKullanilamazKalite = (db: Db, malzemeId: number, konumId: number, partiId: number | null): Promise<{ kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
+  db.sorgu(
+    `SELECT kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar FROM stok_bakiye
+      WHERE malzeme_id = $1 AND konum_id = $2 AND parti_id IS NOT DISTINCT FROM $3 AND kalite_durumu IN ('red', 'karar_bekliyor') AND miktar > 0
+      GROUP BY kalite_durumu ORDER BY kalite_durumu`, [malzemeId, konumId, partiId]);
 // Konumda bir parçanın serbest olmayan kalite durumlarındaki toplamı (üretimde uyarı, 135).
 export const konumKaliteToplamlari = (db: Db, konumId: number, malzemeId: number, statuId: number | null): Promise<{ kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
   db.sorgu(
