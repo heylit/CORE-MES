@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -79,7 +80,9 @@ export function ikAc(adres: string, { kullanici = IK_YONETICI, veri }: { kullani
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
-          <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+          <Suspense fallback={null}>
+            <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+          </Suspense>
         </MemoryRouter>
       </BildirimSaglayici>
     </QueryClientProvider>,

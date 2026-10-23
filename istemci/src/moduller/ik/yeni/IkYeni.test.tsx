@@ -4,7 +4,7 @@ import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { rotalar } from '../rotalar.tsx';
 import { GORUNUMLER, adrestenGorunum, gorunumAdresi } from './gorunumler.ts';
-import { motorKur, ikSabitleri } from './motor.ts';
+import { ikBicimi, ikSabitleri, motorKur } from './motor.ts';
 import { YER_TUTUCU_ILETISI } from './ortak/YerTutucu.tsx';
 import { CALISAN, IK_OKUYAN, IK_YONETICI, KAPISIZ, MUDUR, ikAc, ornekVeri } from './test-ortak.tsx';
 
@@ -28,9 +28,13 @@ describe('İK yeni ekran: rotalar ve adresler', () => {
     expect(adrestenGorunum('/ik', 'yok')).toBeNull();
   });
 
-  it('motor kararı gelene kadar motor ve sabitler yoktur; ekranda kopya hesap yazılmaz', () => {
-    expect(motorKur([], null)).toBeNull();
-    expect(ikSabitleri()).toBeNull();
+  it('motor ve sabitler ortak kaynaktan gelir (211 a); kaynak yoksa null döner', () => {
+    const motor = motorKur([{ id: 'emp_a', kind: 'emp', ad: 'Ayşe', soyad: 'Örnek', iseGiris: '2020-01-06', brutMaas: 50000 }], null);
+    expect(motor?.fullName(motor.activeEmps()[0])).toBe('Ayşe Örnek');
+    expect(ikSabitleri()?.STAGES).toContain('İşe alındı');
+    expect(ikBicimi()?.validIBAN('TR00')).toBe(false);
+    expect(motorKur([], null, undefined, null)).toBeNull();
+    expect(ikSabitleri(null)).toBeNull();
   });
 });
 
