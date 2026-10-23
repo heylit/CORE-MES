@@ -212,7 +212,8 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
         okuma: gecer(await oku(o, '/stok/sayim-bekleyenler')),
         giris: gecer(await gonder(o, '/stok/mal-kabul', {})),
         cikis: gecer(await gonder(o, '/stok/sepet/stoktan-dus', {})),
-        transfer: gecer(await oku(o, '/stok/sepet')),
+        // Sepet herkese açıldı (Soru 133); depo taşıması (sepetten konuma) stok.transfer'de kaldı.
+        transfer: gecer(await gonder(o, '/stok/sepet/teslim-et', {})),
         sayim: gecer(await gonder(o, '/stok/sayim', {})),
         tanim: gecer(await gonder(o, '/stok/yerlesim/kaydet', {})),
         geriAl: gecer(await gonder(o, '/stok/hareketler/999999999/geri-al', {})),
