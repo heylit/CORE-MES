@@ -12,7 +12,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar; Aşama 2 tablosun
 | İş merkezi | kaydın veri kapsamı | `ik_personel.is_merkezi_id`, `ik_pozisyon.is_merkezi_id` | istasyonlar (`is_merkezi`) | yabancı anahtar `is_merkezi (id)`; doğru yön |
 | Departman | ad, kod, gider hesabı, yönetici | `ik_departman` | yok (`kisi.gorev` serbest metin) | yalnız ik |
 | Pozisyon, kadro | başlık, departman, ilan | `ik_pozisyon`, `ik_pozisyon_yayini` | yok | yalnız ik |
-| Resmi tatil | tarih, ad | `ik_resmi_tatil`, `ik_genel_ayar` tatiller | vardiya (`vardiya_takvim_gunu`) | aynı kavram; tek kaynak Aşama 2'de (öneri: vardiya) |
+| Resmi tatil | tarih, ad | `ik_resmi_tatil`, `ik_genel_ayar` tatiller | vardiya (okur) | sahibi İK (soru 142 b); Vardiya takvimi `disari.resmiTatilGunleri` ile okur, kendi kopyasını tutmaz |
 | Devam, fazla mesai, devamsızlık | personel, tarih, tür, saat, onay | `ik_devam` | vardiya (günlük mesai sayfası), Arkon operatör günlüğü | vardiyanın ORTAKLIK'ı "mesai: yok"; sahiplik sorulacak |
 | Giriş-çıkış (gerçekleşen çalışma) | personel x gün durum, giriş, çıkış saati (kart #1571) | `ik_puantaj` | vardiya (beklenen saatler, planlı fazla mesai), Arkon operatör günlüğü, terminal oturumları | sahibi ik (kullanıcı kararı 16.10.2026); vardiya planı `kablolama.ts` ters bağıyla okunur |
 | İzin | tür, tarih aralığı, gün, durum | `ik_izin` | vardiya takvimi (planda kullanılabilirlik) | Aşama 2'de plan ve vardiya okur |

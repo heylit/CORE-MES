@@ -232,6 +232,26 @@ export function izinGunuDenetle(gun: number, isGunu: number): KuralHatasi | null
   return null;
 }
 
+// IK-80 (soru 142 b): resmî tatil listesinin sahibi İK'dır; Vardiya takvimi ve izin sayımı bu listeyi okur. Yılı boş satır her yıl
+// tekrarlar. Takvimde olmayan gün (29 Şubat artık olmayan yılda, 31 Nisan) atlanır; aynı gün iki kez yazılmışsa ilki kalır.
+export interface ResmiTatilSatiri { yil: number | null; ay: number; gun: number; ad: string }
+export function resmiTatilTarihleri(satirlar: readonly ResmiTatilSatiri[], baslangic: string, bitis: string): { tarih: string; ad: string | null }[] {
+  const sonuc = new Map<string, string | null>();
+  const ilkYil = Number(baslangic.slice(0, 4));
+  const sonYil = Number(bitis.slice(0, 4));
+  const iki = (n: number): string => String(n).padStart(2, '0');
+  for (const t of satirlar) {
+    for (let yil = t.yil ?? ilkYil; yil <= (t.yil ?? sonYil); yil++) {
+      const d = new Date(Date.UTC(yil, t.ay - 1, t.gun));
+      if (d.getUTCFullYear() !== yil || d.getUTCMonth() !== t.ay - 1 || d.getUTCDate() !== t.gun) continue;
+      const tarih = `${String(yil).padStart(4, '0')}-${iki(t.ay)}-${iki(t.gun)}`;
+      if (tarih < baslangic || tarih > bitis || sonuc.has(tarih)) continue;
+      sonuc.set(tarih, t.ad.trim() || null);
+    }
+  }
+  return [...sonuc].sort(([a], [b]) => (a < b ? -1 : 1)).map(([tarih, ad]) => ({ tarih, ad }));
+}
+
 // Soru 75: Vardiya'nın takvim hesabıyla aynı seçim (iş merkezi x hafta günü, yalnız açık vardiya, seçili vardiya varsa yalnız o).
 export interface VardiyaTanimi { id: number; ad: string; baslangic: string; bitis: string; aktif: boolean }
 export interface VardiyaMatrisSatiri { isMerkeziId: number; gun: number; vardiyaId: number }
