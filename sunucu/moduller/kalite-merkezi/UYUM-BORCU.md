@@ -1,6 +1,9 @@
 # Uyum borcu (kalite-merkezi)
 
 ## Bağlamada kapanacak
+- Tedarikçi onay durumu (236 a): satın alma `tedarikciOnayDurumlari` ile firma kimliğinden okumaya geçince (A3) eski ihraç
+  `kaliteAskisindakiTedarikciler` ve onun sorgusu `onayiOlanlar` kullanılmaz olur; ayrı küçük yamayla kalkar. Firma kimliği olmayan eski
+  `sup` kayıtları kod ya da adla bağlanmaya devam eder; kayıtlar düzenlenip firma seçildikçe eşleme gereksizleşir.
 - İlk parça kararı (325 a) ve kayıt geçmişi (326 a) ekranları paketi değiştirmeden enjekte betikle eklendi. İlk parça bölümü ayrı bir
   ikinci menü maddesi değil, Bugün görünümünün başındadır (menü tanımı bu işin dokunma alanı dışındaydı); ayrı madde istenirse menü
   tanımı ve görünüm adı çekirdek turunda eklenir. Geçmiş bölümünde alan adları uygulamanın ham anahtarlarıdır (tanim, durum), formdaki

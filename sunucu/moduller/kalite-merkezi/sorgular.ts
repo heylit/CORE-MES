@@ -134,6 +134,17 @@ export function onayiOlanlar(db: Db, koleksiyon: string, onay: string): Promise<
   );
 }
 
+// 236 a: tedarikçi kayıtlarının firma bağı ve onayı. Firma kimliği yalnız pozitif tam sayıysa okunur (sunucu yazarken denetler).
+export function tedarikciKayitlari(db: Db, koleksiyon: string): Promise<{ firmaId: number | null; kod: string | null; ad: string; onay: string | null }[]> {
+  return db.sorgu(
+    `SELECT CASE WHEN jsonb_typeof(govde->'firmaId') = 'number' AND (govde->>'firmaId') ~ '^[1-9][0-9]{0,9}$' AND (govde->>'firmaId')::bigint <= 2147483647
+                 THEN (govde->>'firmaId')::int END AS "firmaId",
+            nullif(btrim(govde->>'kod'), '') AS kod, btrim(coalesce(govde->>'ad', '')) AS ad, govde->>'onay' AS onay
+     FROM kalite_merkezi_belge WHERE koleksiyon = $1 AND govde IS NOT NULL ORDER BY kimlik`,
+    [koleksiyon],
+  );
+}
+
 export async function karantinaYaz(db: Db, ncrKimlik: string, stokHareketiId: number, kisiId: number): Promise<void> {
   await db.sorgu('INSERT INTO kalite_merkezi_karantina (ncr_kimlik, stok_hareketi_id, kisi_id) VALUES ($1, $2, $3)', [ncrKimlik, stokHareketiId, kisiId]);
 }

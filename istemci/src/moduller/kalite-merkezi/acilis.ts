@@ -544,3 +544,58 @@ export const OLCU_ALETI_BETIGI = String.raw`(function () {
     return yer < 0 ? NOT + h : h.slice(0, yer) + NOT + h.slice(yer);
   };
 })();`;
+
+// 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; satın alma durumu firma kimliğiyle okur. Uygulamanın tedarikçi formuna
+// (Firma adımı, adın ardına) Müşteri-Tedarikçi'nin aktif tedarikçi firmalarından seçici eklenir; seçim kaydın `firmaId` alanına sayı
+// olarak yazılır, "Bağlı değil" null'dır. Bağlı firma listede yoksa (sonradan pasifleşmiş) seçenek olarak korunur. Liste onay yetkisiyle
+// açılır; açılamazsa seçicide yalnız mevcut bağ kalır. Firmanın geçerliliğini sunucu denetler.
+export const FIRMA_SECICI_BETIGI = String.raw`(function () {
+  if (typeof formModal !== 'function') return;
+  var oncekiFetch = window.fetch;
+  var asil = formModal;
+  var liste = null;
+  function yukle() {
+    if (liste !== null) return Promise.resolve(liste);
+    return oncekiFetch('api/tedarikci-firmalari').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (j && Array.isArray(j.firmalar)) liste = j.firmalar;
+      return liste || [];
+    }, function () { return []; });
+  }
+  function tedarikciFormuMu(alanlar) {
+    var k = alanlar.map(function (a) { return a && a.k; });
+    return ['kod', 'ad', 'onay', 'kritik'].every(function (x) { return k.indexOf(x) >= 0; }) && k.indexOf('firmaId') < 0;
+  }
+  function sonrasina(dizi, once, oge) {
+    var i = dizi.indexOf(once);
+    var y = dizi.slice();
+    y.splice(i < 0 ? y.length : i + 1, 0, oge);
+    return y;
+  }
+  window.tmiFirmaSecimi = function (firmalar, mevcut) {
+    var secenek = [['', 'Bağlı değil']].concat(firmalar.map(function (f) { return [String(f.id), f.ad + (f.kod ? ' (' + f.kod + ')' : '')]; }));
+    if (mevcut !== '' && !secenek.some(function (o) { return o[0] === mevcut; })) secenek.push([mevcut, 'Firma #' + mevcut + ' (listede yok)']);
+    return { k: 'firmaId', label: 'Firma kartı (Müşteri-Tedarikçi)', type: 'select', options: secenek, hint: 'Satın alma onay durumunu bu firmaya uygular' };
+  };
+  window.tmiFirmaDegeri = function (v) {
+    if (v === '' || v === null || v === undefined) return null;
+    var n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  };
+  formModal = function (baslik, alanlar, ilk, kaydet, ek, secenek) {
+    if (!Array.isArray(alanlar) || !tedarikciFormuMu(alanlar) || !secenek || !Array.isArray(secenek.steps)) return asil.apply(this, arguments);
+    var self = this;
+    var mevcut = ilk && typeof ilk.firmaId === 'number' ? String(ilk.firmaId) : '';
+    yukle().then(function (firmalar) {
+      var alan = window.tmiFirmaSecimi(firmalar, mevcut);
+      var yeniAlanlar = [];
+      alanlar.forEach(function (a) { yeniAlanlar.push(a); if (a.k === 'ad') yeniAlanlar.push(alan); });
+      var adimlar = secenek.steps.map(function (s) {
+        return (s.keys || []).indexOf('ad') >= 0 ? Object.assign({}, s, { keys: sonrasina(s.keys, 'ad', 'firmaId') }) : s;
+      });
+      var ilkHal = ilk ? Object.assign({}, ilk, { firmaId: mevcut }) : ilk;
+      asil.call(self, baslik, yeniAlanlar, ilkHal, function (d) {
+        return kaydet.call(this, Object.assign({}, d, { firmaId: window.tmiFirmaDegeri(d.firmaId) }));
+      }, ek, Object.assign({}, secenek, { steps: adimlar }));
+    });
+  };
+})();`;

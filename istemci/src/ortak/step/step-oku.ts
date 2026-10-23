@@ -6,8 +6,8 @@ export type { StepAgi } from './step-isci.ts';
 
 // STEP dosyasını ayrı iş parçacığında üçgen ağlarına çevirir (atölye ve CNC Kurulum aynı çeviriciyi kullanır). Dosya bu cihazda
 // kalır; çevirici paketin kendi wasm'ıdır, dışarıya istek yoktur. `veri` iş parçacığına aktarılır, çağıranda boşalır.
-// ayrinti: çizgisel sapmanın modelin kutu boyuna oranı.
-export function stepOku(veri: ArrayBuffer, ayrinti: number): Promise<StepAgi[]> {
+// ayrinti: çizgisel sapmanın modelin kutu boyuna oranı; aci: açısal sapma (radyan, verilmezse 0,5).
+export function stepOku(veri: ArrayBuffer, ayrinti: number, aci?: number): Promise<StepAgi[]> {
   return new Promise((coz, reddet) => {
     const isci = new StepIsci();
     isci.onmessage = (o: MessageEvent<StepCevabi>) => {
@@ -17,7 +17,7 @@ export function stepOku(veri: ArrayBuffer, ayrinti: number): Promise<StepAgi[]> 
       coz(c.aglar);
     };
     isci.onerror = (o) => { isci.terminate(); reddet(new Error(o.message || 'STEP çevirici açılamadı.')); };
-    const istek: StepIstegi = { wasm: new URL(wasmAdresi, document.baseURI).href, veri, ayrinti };
+    const istek: StepIstegi = { wasm: new URL(wasmAdresi, document.baseURI).href, veri, ayrinti, ...(aci === undefined ? {} : { aci }) };
     isci.postMessage(istek, [veri]);
   });
 }
