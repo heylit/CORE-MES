@@ -3,6 +3,7 @@ import { ARKON_AYARLARI } from './ayarlar/arkon.ts';
 import { KABUK_AYARLARI } from './ayarlar/kabuk.ts';
 import { ETIKET_MERKEZI_AYARLARI } from './ayarlar/etiket-merkezi.ts';
 import { GUVENLIK_AYARLARI } from './ayarlar/guvenlik.ts';
+import { IDARI_ISLER_AYARLARI } from './ayarlar/idari-isler.ts';
 import { IK_AYARLARI } from './ayarlar/ik.ts';
 import { LOGO_AYARLARI } from './ayarlar/logo.ts';
 import { MALZEMELER_AYARLARI } from './ayarlar/malzemeler.ts';
@@ -24,6 +25,7 @@ export const AYAR_TANIMLARI = {
   ...KABUK_AYARLARI,
   ...ETIKET_MERKEZI_AYARLARI,
   ...GUVENLIK_AYARLARI,
+  ...IDARI_ISLER_AYARLARI,
   ...IK_AYARLARI,
   ...LOGO_AYARLARI,
   ...MALZEMELER_AYARLARI,

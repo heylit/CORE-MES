@@ -8,7 +8,7 @@
 | IDR-04 red nedeni zorunlu (`idari_isler_talep_red_nedeni`) | `IDR-04 ...`, `kısıtlar ...`; istemci `reddetmek neden ister ...` |
 | IDR-05 personel yalnız kendi taleplerini görür; pano ve Bugün yalnız `oku` | `IDR-05 ...`, `IDR-05 pano ve Bugün ...`; istemci `... kökte kendi taleplerini görür` |
 | IDR-07 başkasına atama yalnız etkin kişiye | `IDR-07 ...` |
-| IDR-08 numara TT-yıl-sıra, yıl başına sayaç, tekil | `kurallar.test.ts` `IDR-08 ...` |
+| IDR-08 numara Sistem Ayarları kalıbından (varsayılan TT-yıl-sıra), ortak sayaç, dolu numara atlanır, tekil | `idari-isler.test.ts` `IDR-08 ...` |
 | IDR-09 Bugün sırası: acil, yeni, yapılan; grupta eski önce | `kurallar.test.ts` `IDR-09 ...` |
 | IDR-10 Bugün: yeni talepler ve kişinin üstlendikleri | `kurallar.test.ts` `IDR-10 ...`, `idari-isler.test.ts` `IDR-10 Bugün ...` |
 | Yapılan talep üstlenensiz olamaz (`idari_isler_talep_yapiliyor_ustlenen`) | `kısıtlar ...` |

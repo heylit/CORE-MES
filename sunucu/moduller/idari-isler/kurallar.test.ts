@@ -6,7 +6,7 @@ import {
   KM_GERI, aracBugundeMi, aracUyarilari, kmReddi, plakaBicimle,
   HESAP_DEGISTI, NEDEN_GEREK, SAYI_EKSI, YEMEK_GECMIS, YEMEK_ILERI, yemekBildirimReddi, yemekKadrosu, yemekSayisi,
   ATIK_MIKTARI, MIKTAR_ARTI, SONRAKI_GEREK, SONRAKI_ONCE, YALNIZ_ATIK_MIKTARI, YAPILMA_GELECEK, bugundeMi, bugunSirasi, gecisHedefi, gecisReddi,
-  geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, talepNo, tarihEkle, yapildiSonucu,
+  geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, tarihEkle, yapildiSonucu,
 } from './kurallar.ts';
 import {
   CIKIS_KM_GERI, DONUS_KM_GERI, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN, aracVerilemezMi, cikisKmReddi, donusKmReddi,
@@ -33,11 +33,6 @@ const talep = (degisen: Partial<Talep>): Talep => ({
 });
 
 describe('idari-isler kuralları', () => {
-  test('IDR-08: talep numarası yıl ve en az üç haneli sıradır', () => {
-    assert.equal(talepNo(2026, 1), 'TT-2026-001');
-    assert.equal(talepNo(2026, 1234), 'TT-2026-1234');
-  });
-
   test('IDR-02: izinli geçişler hedef durumu verir; son durumdan geçiş yoktur', () => {
     assert.equal(gecisReddi('yeni', 'ustlen'), null);
     assert.equal(gecisHedefi('ustlen'), 'yapiliyor');

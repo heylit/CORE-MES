@@ -33,6 +33,8 @@
 | Dosya bağı uygulamanın resim, model ve belge türlerini kabul eder | "dosya bağı uygulamanın yüklediği resim, model ve belge türlerini kabul eder" |
 | Özet: açık uygunsuzluk "Kapalı" dışındaki dolu NCR'dir; okuma işlemi ister; `disari.ts` aynı sayıyı verir | "özet: ..." |
 | Onay ve kapanış alanları (form onayı, NCR/DÖF kapanışı, tedarikçi onayı) genel yazmayla değişmez (403, alan `onay`) | "onay alanları: ..." |
+| MRB kararı onay alanıdır (195 a): "Karar bekliyor" ya da boş serbest, karar vermek ve değiştirmek onay ucundan; yalnız yazan (Muayeneci) karar veremez ve kapatamaz, `kalite-merkezi.onayla` taşıyan verir | "195 a MRB kararı onaydır: ..." (`kurallar.test.ts`), "Muayeneci uygunsuzluğu açar ...", "kalite-merkezi.onayla taşıyan kalite ..." (`kapama-yetkisi.test.ts`) |
+| Uygulama rolü TMI işleminden: yönetici Kalite yöneticisi, onay işlemi Kalite mühendisi, öteki Muayeneci; uygulamanın kullanıcı kaydı rol vermez (195 a) | "PIN ekranı açılmaz: ..." (`istemci/.../giris.test.ts`), "kimlik ucu: ..." (`kapama-yetkisi.test.ts`) |
 | Onay ucu `kalite-merkezi.onayla` ve `.yaz` ister; onaylayan ve gün sunucudan; değer uygulamanın seçeneklerinden (kullanıcı kararı 17.10.2026) | "onay ucu: ..." |
 | Onaylı form kilitlidir: yazma, onay ucu ve silme 409; değişiklik onay geri alınarak (kullanıcı kararı 16.10.2026) | "onaylı form kilidi: ..." |
 | Onay geri alma onay işlemi ister, yalnız onaylı formda ve beklenen sürümle; geri alan ve saat sunucudan (kullanıcı kararı 17.10.2026) | "onay geri alma: ..." |

@@ -313,6 +313,13 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
 
     // Son iş emri: sayaç sıfırdan başlar, bitince emir biter.
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    // Bulgu 15.2: emrin başlaması ilk iş emrinin başlamasıdır; sonraki iş emrinin başlatılması onu ezmez.
+    const zamanlar = await o().vt.tek<{ emir: Date; ilk: Date; son: Date }>(
+      `SELECT e.baslama AS emir, i1.baslama AS ilk, i3.baslama AS son FROM uretim_emri e, uretim_emirleri_is_emri i1, uretim_emirleri_is_emri i3
+        WHERE e.id = $1 AND i1.id = $2 AND i3.id = $3`, [id, ie1, ie3]);
+    assert.ok(zamanlar);
+    assert.equal(zamanlar.emir.getTime(), zamanlar.ilk.getTime());
+    assert.ok(zamanlar.son.getTime() >= zamanlar.ilk.getTime());
     const canli = (await istek<{ emir: Emir }>('operator', 'GET', `/uretim-emirleri/${id}`)).govde.emir.canli;
     assert.equal(canli?.saglam, 0, 'yeni iş emrinin sayacı sıfırdır');
     assert.equal(canli?.calisma, 'calisiyor');

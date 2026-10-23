@@ -49,6 +49,9 @@ export interface CerceveAyari {
   stokKartiBaglayabilir?: boolean;
   // Bağlı kalemin azalan adedi stoktan düşer (164 b); yoksa azaltma bağlı kalemde gizlenir.
   stokDusebilir?: boolean;
+  // Açık emir listesini görme yetkisi (`ben` cevabındaki emirGorebilir). false ise liste istenmez ve alan salt okunur
+  // kalır: sunucu isteği reddederdi, sayfa açılışında reddedilen istek hata gibi görünür.
+  emirGorebilir?: boolean;
 }
 
 // Toplu aktarım listesindeki makine: ad ve numara prototipin gösterdiğiyle aynıdır.
@@ -244,6 +247,7 @@ export function cerceveKoprusu(
     const etiket = (e: EmirSecenegi): string => `${operasyon(e)} · ${e.parcaNo} ${e.parcaAd} · ${String(e.adet)} adet · ${e.istasyon}`;
     let secenekler: EmirSecenegi[] | null = null;
     let listeHatasi = false;
+    const listeYetkisi = ayar.emirGorebilir !== false;
     const secili = (): EmirSecenegi | null => {
       const metin = has(emirAnahtari) ? degerler[emirAnahtari] : undefined;
       if (metin === undefined) return null;
@@ -779,8 +783,9 @@ export function cerceveKoprusu(
       girdi.id = 'tmiEmir';
       girdi.setAttribute('list', 'tmiEmirler');
       girdi.autocomplete = 'off';
-      girdi.placeholder = listeHatasi ? 'Emir listesi alınamadı' : secenekler?.length === 0 ? 'Açık üretim emri yok' : 'Emir no ya da parça no yazın';
-      girdi.readOnly = !ayar.yazabilir;
+      girdi.placeholder = !listeYetkisi ? 'Emir listesini görme yetkiniz yok' : listeHatasi ? 'Emir listesi alınamadı'
+        : secenekler?.length === 0 ? 'Açık üretim emri yok' : 'Emir no ya da parça no yazın';
+      girdi.readOnly = !ayar.yazabilir || !listeYetkisi;
       girdi.value = gorunenDeger();
       const liste = belge.createElement('datalist');
       liste.id = 'tmiEmirler';
@@ -820,10 +825,12 @@ export function cerceveKoprusu(
     };
     const izle = (): void => { yerlestir(); adimIzle(); hazirlikEmriCiz(); };
     const yenidenKur = (): void => { w.document.getElementById('tmiEmirCubugu')?.remove(); yerlestir(); hazirlikEmriCiz(); };
-    istek<{ emirler: EmirSecenegi[] }>('emirler', {}).then(
-      (c) => { secenekler = c.emirler; yenidenKur(); },
-      () => { secenekler = []; listeHatasi = true; yenidenKur(); },
-    );
+    if (listeYetkisi) {
+      istek<{ emirler: EmirSecenegi[] }>('emirler', {}).then(
+        (c) => { secenekler = c.emirler; yenidenKur(); },
+        () => { secenekler = []; listeHatasi = true; yenidenKur(); },
+      );
+    }
     if (w.document.readyState === 'complete') izle();
     else w.addEventListener('load', izle, { once: true });
   }

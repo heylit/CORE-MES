@@ -5,8 +5,8 @@ Oturumsuz istek her uçta 401 (çekirdek; DN-S3 iki okuma ucu için ölçer).
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
-| `GET /durus-nedenleri` | `biri: sayfa.durus-nedenleri, sayfa.terminal` | `yalnizAktif` pasifleri süzer (DN-06); önerilen kod pasifler dahil hesaplanır (DN-09) | DN-S4, DN-06 | DN-S4 (yalnız `sayfa.arkon` 403), DN-S3 (oturumsuz 401) |
-| `GET /hurda-nedenleri` | `biri: sayfa.durus-nedenleri, sayfa.terminal` | aynı | DN-S4 | DN-S4, DN-S3 |
+| `GET /durus-nedenleri` | `biri: sayfa.durus-nedenleri, sayfa.terminal, sayfa.vardiya` (195 a) | `yalnizAktif` pasifleri süzer (DN-06); önerilen kod pasifler dahil hesaplanır (DN-09) | DN-S4, DN-06 | DN-S4 (yalnız `sayfa.arkon` 403; `sayfa.vardiya` okur, yazamaz), DN-S3 (oturumsuz 401) |
+| `GET /hurda-nedenleri` | `biri: sayfa.durus-nedenleri, sayfa.terminal, sayfa.vardiya` (195 a) | aynı | DN-S4 | DN-S4, DN-S3 |
 | `POST /durus-nedenleri` | `durus-nedenleri.yaz` | kod biçimi ve tekilliği (DN-03, kısıt), kategori (DN-01), çağrı yalnız plansızda, ekip ve gecikme birlikte (DN-07, kısıt); sıra sona | DN-01 | DN-S3, DN-S3 rol taraması (403), DN-03 (409), DN-07, DN-01 (kategori 400) |
 | `POST /durus-nedenleri/:id/guncelle` | `durus-nedenleri.yaz` | aynı kurallar; planlıya çevirmede çağrı silinir (DN-08); kod değişir, id sabit (DN-S2); silme yok, pasife alınır (DN-05) | DN-08, DN-S2, DN-05 | DN-S3 (403), DN-S2 (başkasının kodu 409), DN-S4 (okuma yetkisi yazmaz) |
 | `POST /hurda-nedenleri` | `durus-nedenleri.yaz` | kod biçimi ve tekilliği (DN-04); yalnız kod, ad, etkinlik, sıra (DN-11) | DN-04, DN-11 | DN-S3 (403), DN-04 (409) |

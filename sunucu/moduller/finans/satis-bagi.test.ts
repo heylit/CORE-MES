@@ -143,6 +143,28 @@ describe('finans satış faturası bağı ve iade (gerçek PostgreSQL)', () => {
     await reddet({ siparisId: onayli, sevkiyatIsiId: 999999 }, /Sevk işi bulunamadı/, 'sevkiyatIsiId');
   });
 
+  test('FNS-68: bir sevk tek satış faturasıyla faturalanır; iade ve iptal edilmiş fatura sayılmaz; eşzamanlı ikinci fatura reddedilir', async () => {
+    const onayli = await siparis('onayli');
+    const nokta = await tek("INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam) VALUES ('Deneme Tek Fatura Noktası', 'musteri', 40, 29) RETURNING id", []);
+    const teslimat = () => tek("INSERT INTO sevkiyat_isi (tarih, istenen_tarih, tur, birakis_noktasi_id, agirlik_kilogram, palet_sayisi) VALUES ($1, $1, 'teslimat', $2, 10, 1) RETURNING id", [TARIH, nokta]);
+    const sevk = await teslimat();
+    const ilk = tamam(await ekle({ siparisId: onayli, sevkiyatIsiId: sevk, belgeNo: 'SF-TEK-1' })).belge;
+    await reddet({ siparisId: onayli, sevkiyatIsiId: sevk, belgeNo: 'SF-TEK-2' }, /zaten faturalandı \(SF-TEK-1\)/, 'sevkiyatIsiId');
+    const iade = tamam(await ekle({ yon: 'gider', tur: 'iade', kategori: 'satis_iadesi', iadeBelgeId: ilk.id, tutar: 100 })).belge;
+    assert.equal(iade.sevkiyatIsiId, sevk);
+    await reddet({ siparisId: onayli, sevkiyatIsiId: sevk }, /zaten faturalandı/, 'sevkiyatIsiId');
+    tamam(await istek('POST', `/finans/belgeler/${iade.id}/iptal`, { surum: iade.surum, neden: 'Deneme' }));
+    tamam(await istek('POST', `/finans/belgeler/${ilk.id}/iptal`, { surum: ilk.surum, neden: 'Deneme' }));
+    assert.equal(tamam(await ekle({ siparisId: onayli, sevkiyatIsiId: sevk })).belge.sevkiyatIsiId, sevk);
+    await reddet({ siparisId: onayli, sevkiyatIsiId: sevk }, /zaten faturalandı/, 'sevkiyatIsiId');
+
+    const yeni = await teslimat();
+    const sonuclar = await Promise.all([ekle({ siparisId: onayli, sevkiyatIsiId: yeni }), ekle({ siparisId: onayli, sevkiyatIsiId: yeni })]);
+    assert.deepEqual(sonuclar.map((c) => c.durum).sort(), [200, 400], JSON.stringify(sonuclar.map((c) => c.govde)));
+    const n = await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM finans_belge WHERE sevkiyat_isi_id = $1 AND tur = 'fatura' AND durum <> 'iptal'", [yeni]);
+    assert.equal(n?.n, 1);
+  });
+
   test('FNS-67: iade ters yönde, aynı firma ve para biriminde; sipariş ve sevki asıldan alır; toplamı asılı geçmez', async () => {
     const s = await siparis('onayli');
     const asil = tamam(await ekle({ siparisId: s })).belge;

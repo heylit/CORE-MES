@@ -252,7 +252,7 @@ async function satisBagiDenetle(db: Db, g: G<typeof belgeEkleGovdesi>): Promise<
   if (hata) throw dogrulama(hata, g.siparisId === null ? 'sevkiyatIsiId' : 'siparisId');
   if (g.sevkiyatIsiId === null) return;
   if (sevkIsiOzetiCozucu === null) throw new Error('Sevk işi özeti çözücüsü kayıtlı değil (kablolama).');
-  const sevkHatasi = sevkBagiHatasi(g, await sevkIsiOzetiCozucu(db, g.sevkiyatIsiId));
+  const sevkHatasi = sevkBagiHatasi(g, await sevkIsiOzetiCozucu(db, g.sevkiyatIsiId), await sorgular.sevkFaturasi(db, g.sevkiyatIsiId));
   if (sevkHatasi) throw dogrulama(sevkHatasi, 'sevkiyatIsiId');
 }
 

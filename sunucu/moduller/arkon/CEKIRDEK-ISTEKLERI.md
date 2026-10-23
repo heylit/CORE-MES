@@ -26,3 +26,7 @@
    (`GET /bildirimler/cagri-yonlendirme`) `ayarlar.yaz` ister, operatör ve Arkon rollü kişi okuyamaz. İstek: `GET /bildirimler/cagri-yonlendirme/benim`,
    yetki oturum, yalnız oturumdaki kişinin rollerinden çıkan ekip listesi (`{ ekipler: CagriEkibi[] }`). Gelince banner `CALL_ROLES` yerine bunu okur
    ve kopya kalkar. O zamana dek ayarcı `lead` (vardiya amiri) eşlemesiyle görünür (UYUM-BORCU).
+9. **Bildirim katmanı terminalin ana düğmesini örtüyor (12.9, W7).** `istemci/src/ortak/arayuz/bildirim.css` `.tc-bildirimler` sağ altta duruyor;
+   768 genişlikte Arkon terminalinin ana düğmesinin (İlk parça, Başlat) üstüne biniyor ve hata bildirimi kapatılana kadar kalıyor (resim
+   F2/o2-durum.png). İstek: dar ve orta genişlikte bildirimler üstte dursun ya da hata bildirimi ana içerik düğmelerini örtmesin. Z sırası
+   doğru (bildirim 60, pencere 40); Arkon tarafı ret iletisini artık bu katmana gönderiyor.

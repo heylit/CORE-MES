@@ -69,7 +69,7 @@ function uygulama(kimlik: KmKimlikCevabi, kullanicilar: Record<string, unknown>[
 const KISI = { id: 7, ad: 'Deneme Kişi' };
 
 describe('Kalite Merkezi girişi TMI oturumundandır', () => {
-  it('PIN ekranı açılmaz: kullanıcı oturumdaki kişidir; rolü "tmi-<kişi>" kaydından, kaydı yoksa Muayeneci', () => {
+  it('PIN ekranı açılmaz: kullanıcı oturumdaki kişidir; rolü TMI işleminden, uygulamanın kullanıcı kaydından değil (195 a)', () => {
     const yok = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'u_eski', ad: 'Eski', rol: 'Kalite yöneticisi', pin: 'x' }]);
     expect(yok.authGate()).toBe(true);
     expect(yok.login.hidden).toBe(true);
@@ -78,15 +78,20 @@ describe('Kalite Merkezi girişi TMI oturumundandır', () => {
     expect(yok.chip.innerHTML).toContain('Deneme Kişi');
     expect(yok.chip.innerHTML).not.toContain('logout');
 
-    const rollu = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'Kayıttaki Ad', rol: 'Kalite mühendisi', aktif: true }]);
-    rollu.authGate();
-    expect(rollu.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' });
-    expect(rollu.can('onay')).toBe(true);
-    expect(rollu.can('kullanici')).toBe(false);
+    // Kayıtta Kalite mühendisi yazsa da onay işlemi olmayan Muayenecidir: kayıt rol vermez.
+    const kayitli = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'Kayıttaki Ad', rol: 'Kalite mühendisi', aktif: true }]);
+    kayitli.authGate();
+    expect(kayitli.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Muayeneci' });
+    expect(kayitli.can('onay')).toBe(false);
 
-    const pasif = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'x', rol: 'Kalite yöneticisi', aktif: false }]);
-    pasif.authGate();
-    expect(pasif.kullanici()?.rol).toBe('Muayeneci');
+    // Kaydı olmasa da (ya da Muayeneci yazsa da) kalite-merkezi.onayla taşıyan Kalite mühendisidir: NCR, DÖF kapatır ve MRB kararı verir.
+    for (const kullanicilar of [[], [{ _id: 'tmi-7', ad: 'x', rol: 'Muayeneci', aktif: true }]]) {
+      const onayci = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: true }, kullanicilar);
+      onayci.authGate();
+      expect(onayci.kullanici()).toEqual({ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' });
+      expect(onayci.can('onay')).toBe(true);
+      expect(onayci.can('kullanici')).toBe(false);
+    }
   });
 
   it('kullanıcı kaydı olmasa da yetki denetimi açıktır; TMI yöneticisi her zaman Kalite yöneticisidir', () => {
@@ -100,31 +105,19 @@ describe('Kalite Merkezi girişi TMI oturumundandır', () => {
     expect(yonetici.can('kullanici')).toBe(true);
   });
 
-  it('kullanıcı formu PIN istemez; kişi TMI kişileri arasından seçilir, kayıt "tmi-<kişi>" kimliğiyle PIN alanı olmadan yazılır', async () => {
-    const u = uygulama(
-      { kisi: KISI, yonetici: true, kisiler: [KISI, { id: 9, ad: 'İkinci Kişi' }], onaylayabilir: true },
-      [{ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi', pin: 'eski-ozet' }],
-    );
-    u.authGate();
-    u.openUser();
-    const [yeni] = u.formlar;
-    expect(yeni?.alanlar.map((a) => a.k)).toEqual(['kisi', 'rol', 'aktif']);
-    expect(yeni?.alanlar[0]?.options).toEqual([['', 'Seçin'], ['9', 'İkinci Kişi']]);
-    await yeni?.kaydet({ kisi: '9', rol: 'Kalite mühendisi', aktif: true });
-    expect(u.kayitlar).toEqual([['kullanici', { ad: 'İkinci Kişi', rol: 'Kalite mühendisi', aktif: true, _id: 'tmi-9' }]]);
-
-    u.openUser('tmi-7');
-    const duzenle = u.formlar[1];
-    expect(duzenle?.alanlar.map((a) => a.k)).toEqual(['ad', 'rol', 'aktif']);
-    await duzenle?.kaydet({ ad: 'Deneme Kişi', rol: 'Muayeneci', aktif: true });
-    expect(u.kayitlar[1]).toEqual(['kullanici', { _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Muayeneci', aktif: true }]);
-  });
-
-  it('yönetici olmayan kullanıcı formunu açamaz', () => {
-    const u = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'x', rol: 'Kalite mühendisi' }]);
-    u.authGate();
-    u.openUser();
-    expect(u.formlar).toEqual([]);
+  it('200 a: kullanıcı formu kalktı; yönetici de form açamaz, liste ve ekleme düğmesi sayfada yok, not rolün TMI yetkisinden geldiğini söyler', () => {
+    for (const kimlik of [{ kisi: KISI, yonetici: true, kisiler: [KISI], onaylayabilir: true }, { kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }]) {
+      const u = uygulama(kimlik, [{ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' }]);
+      u.authGate();
+      u.openUser();
+      u.openUser('tmi-7');
+      expect(u.formlar).toEqual([]);
+      expect(u.kayitlar).toEqual([]);
+    }
+    const sayfa = kur({ kisi: KISI, yonetici: true, kisiler: [], onaylayabilir: true }).join('\n');
+    expect(sayfa).not.toContain('Kullanıcı ekle</button>');
+    expect(sayfa).toContain('const L=[];');
+    expect(sayfa).toContain('<b>Rol TMI yetkisinden gelir.</b>');
   });
 
   it('paketin PIN yerleri değişmişse sayfa kurulmaz; kurulmuş sayfada PIN ile giriş metni kalmaz', () => {

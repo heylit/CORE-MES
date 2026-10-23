@@ -15,6 +15,10 @@ import { MAKINE_DURUMU_ISLEMLERI } from './kurallar.ts';
 
 // Tanım listeleri tesis sayfasının verisidir; yazan rol de yazdığını okur (kişi kısıtları sayfası iş merkezlerini listeler).
 const OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz'] } as const;
+// Reçete ve Rota yalnız gösterdiği iş merkezi, istasyon ve makine listesini okur (195 a); öteki tanım listeleri açılmaz.
+const LISTE_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.recete-rota'] } as const;
+// Fabrika Haritası makine durumunu çizer (195 a).
+const DURUM_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.atolye'] } as const;
 // Ana sayfa kartı yalnız sayı alır (#483); operatör terminalden, vardiya ve personel sayfası olan da görür.
 // Duran makine bakımın işidir; Arkon bakım işlemiyle de okunur.
 const MAKINE_DURUMU = { biri: MAKINE_DURUMU_ISLEMLERI } as const;
@@ -24,7 +28,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/is-merkezleri',
-    yetki: OKUMA,
+    yetki: LISTE_OKUMA,
     sorgu: pasifSorgusu,
     cevap: isMerkezleriCevabi,
     isle: async ({ db, sorgu }) => ({ isMerkezleri: await servis.isMerkezleri(db, sorgu.pasifler) }),
@@ -32,7 +36,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/istasyonlar',
-    yetki: OKUMA,
+    yetki: LISTE_OKUMA,
     sorgu: pasifSorgusu,
     cevap: istasyonlarCevabi,
     isle: async ({ db, sorgu }) => ({ istasyonlar: await servis.istasyonKayitlari(db, sorgu.pasifler) }),
@@ -48,7 +52,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/makineler',
-    yetki: OKUMA,
+    yetki: LISTE_OKUMA,
     sorgu: makineSorgusu,
     cevap: makinelerCevabi,
     isle: async ({ db, sorgu }) => ({
@@ -356,7 +360,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/makine-durumlari',
-    yetki: OKUMA,
+    yetki: DURUM_OKUMA,
     cevap: makineDurumlariCevabi,
     isle: async ({ db }) => ({ durumlar: await servis.makineDurumlari(db) }),
   }),

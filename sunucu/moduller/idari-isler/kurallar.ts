@@ -8,11 +8,6 @@ export const TALEP_YOK = 'Talep bulunamadı.';
 export const KISI_YOK = 'Kişi bulunamadı ya da pasif.';
 export const YALNIZ_ACAN = 'Talebi yalnız açan kişi geri çekebilir.';
 
-// IDR-08: talep numarası yıl ve yıl içi sıradan: TT-2026-001.
-export function talepNo(yil: number, sira: number): string {
-  return `TT-${yil}-${String(sira).padStart(3, '0')}`;
-}
-
 // IDR-02: durum geçişleri. Kapanan, reddedilen ve geri çekilen talep son durumdadır.
 export type TalepKomutu = 'ustlen' | 'birak' | 'kapat' | 'reddet' | 'geri-cek';
 const GECISLER: Readonly<Record<TalepKomutu, { kaynak: readonly TalepDurumu[]; hedef: TalepDurumu }>> = {

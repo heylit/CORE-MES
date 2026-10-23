@@ -446,7 +446,8 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.deepEqual([f.belge.siparisId, f.belge.sevkiyatIsiId], [S.sip, S.sevkIs]);
 
     const muh = tamam(await oku<ProjeMaliyet>('muhasebe', `/proje-maliyet/${S.proje}`));
-    assert.deepEqual([muh.fiyatGorunur, muh.gelir, muh.katkiPayi], [false, null, null]);
+    // Muhasebe faturayı siparişle karşılaştırmak için fiyatı görür (195 a); katkı payı müdürde olduğu gibi henüz yok.
+    assert.deepEqual([muh.fiyatGorunur, Number(muh.gelir), muh.katkiPayi], [true, 2500, null]);
     const mud = tamam(await oku<ProjeMaliyet>('mudur', `/proje-maliyet/${S.proje}`));
     assert.equal(mud.fiyatGorunur, true);
     assert.equal(Number(mud.gelir), 2500);

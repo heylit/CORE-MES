@@ -150,6 +150,30 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(operator, 'GET', '/istasyonlar/secim')).durum, 200);
   });
 
+  test('yetki (195 a): Reçete ve Rota iş merkezi, istasyon ve makine listesini; Fabrika Haritası makine durumunu okur; öteki tanımlar kapalı', async () => {
+    const rol = async (kod: string): Promise<number> => {
+      const r = await vt().tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]);
+      if (!r) throw new Error(`${kod} rolü yok`);
+      return r.id;
+    };
+    await girisliKisiEkle('kalite195', await rol('kalite'));
+    await girisliKisiEkle('depo195', await rol('depo'));
+    const kalite = await girisCerezi('kalite195');
+    const depo = await girisCerezi('depo195');
+    for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler', '/makine-durumlari']) assert.equal((await istek(kalite, 'GET', yol)).durum, 200, yol);
+    assert.equal((await istek(depo, 'GET', '/makine-durumlari')).durum, 200);
+    for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler']) {
+      const red = await istek(depo, 'GET', yol);
+      assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], yol);
+    }
+    for (const yol of ['/operasyon-tipleri', '/istasyon-plan-ayarlari', '/kisi-yetkinlikleri', '/ekipler']) {
+      const red = await istek(kalite, 'GET', yol);
+      assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], yol);
+    }
+    const yazma = await istek(kalite, 'POST', '/is-merkezleri', { kod: yeniKod('IM'), ad: 'Yetkisiz' });
+    assert.deepEqual([yazma.durum, hataKodu(yazma)], [403, 'YETKI_YOK']);
+  });
+
   test('IS16: pano özeti (#483): yalnız sayı; terminal, vardiya ya da istasyonlar sayfası olan okur, olmayan 403; yalnız durumu çalışır girilen makine çalışır; personel Vardiya > Personel ile aynı kaynaktan', async () => {
     const rolKimligi = async (kod: string): Promise<number> => {
       const rol = await vt().tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod]);

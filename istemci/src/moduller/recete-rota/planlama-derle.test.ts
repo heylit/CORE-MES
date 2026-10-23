@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { IKINCI_MENU_TANIMLARI } from '../../ortak/rota/ikinci-menu.ts';
 import { ORTAK_STIL_YERI, PARCA_SIRASI, SIMGE_YERI, planlamaSayfasi, sayfaGuncelMi } from './planlama-derle.ts';
-import { ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI, planlamaYoluMu } from './planlama-menusu.ts';
+import { MALIYET_ANAHTARLARI, MALIYET_ISLEMI, ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI, maliyetYoluMu, planlamaYoluMu } from './planlama-menusu.ts';
 import { planlamaSayfasiKur } from './planlama-sayfasi.ts';
 import { rotalar } from './rotalar.tsx';
 
@@ -71,10 +71,19 @@ describe('planlama menüsü', () => {
     for (const a of PLANLAMA_ANAHTARLARI) expect(yollar.has(`/recete-rota/${a}`)).toBe(true);
   });
 
-  it('önerilen menü çekirdekteki menüyle aynıdır; planlama maddeleri yalnız planlama işlemini ister (353 a)', () => {
+  it('önerilen menü çekirdekteki menüyle aynıdır; planlama maddeleri planlama işlemini, maliyet maddeleri maliyet okumasını ister (195 a)', () => {
     expect(IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota')).toEqual(ONERILEN_IKINCI_MENU);
     const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = ONERILEN_IKINCI_MENU.gruplar.flatMap((g) => [...g.maddeler]);
     const planlama = maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI);
-    expect(planlama.map((m) => m.anahtar)).toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban'));
+    expect(planlama.map((m) => m.anahtar)).toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
+    expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(MALIYET_ANAHTARLARI);
+    expect(MALIYET_ANAHTARLARI.every((a) => PLANLAMA_ANAHTARLARI.includes(a))).toBe(true);
+  });
+
+  it('maliyet yolları planlama yollarının alt kümesidir', () => {
+    expect(maliyetYoluMu('/recete-rota/maliyet')).toBe(true);
+    expect(maliyetYoluMu('/recete-rota/denge/x')).toBe(true);
+    expect(maliyetYoluMu('/recete-rota/terminler')).toBe(false);
+    expect(maliyetYoluMu('/recete-rota/maliyetx')).toBe(false);
   });
 });
