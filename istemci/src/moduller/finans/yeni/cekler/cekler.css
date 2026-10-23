@@ -1,0 +1,4 @@
+/* Çek ve senet: düzeltme penceresindeki salt okunur bilgi. Ortak parçalar plan/plan.css'tedir. */
+.tc-fc-bilgi { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3), 1fr)); gap: var(--b-2) var(--b-4); margin: 0 0 var(--b-3); }
+.tc-fc-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-fc-bilgi dd { margin: 0; overflow-wrap: anywhere; }
