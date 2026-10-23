@@ -63,5 +63,14 @@ test.describe('P2 KYS', () => {
 });
 
 test.describe('P3 ic denetim, takvim, performans, kalibrasyon, ayarlar', () => {
-  // P3 yazar.
+  test('beş ekran açılır, sayfa yatay taşmaz; yıkıcı ayarlar yöneticide görünür', async ({ page, ag, ac }) => {
+    const ekranlar = [['ic-denetim', 'İç denetim'], ['takvim', 'Takvim'], ['performans', 'Performans'], ['kalibrasyon', 'Kalibrasyon'], ['ayarlar', 'Ayarlar']] as const;
+    for (const [yol, sekme] of ekranlar) {
+      await ac(`/denetim-hazirlik/yeni/${yol}`);
+      await expect(page.getByRole('tablist', { name: 'Bölümler' }).getByRole('tab', { name: sekme, selected: true })).toBeVisible();
+      expect((await tasmaOlc(page)).belge, `${yol}: yatay taşma`).toBeLessThanOrEqual(0);
+    }
+    await expect(page.getByRole('heading', { name: 'Sıfırlama' })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
 });
