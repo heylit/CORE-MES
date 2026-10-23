@@ -1,3 +1,11 @@
+# FARK: ekransız uçlar kaldırıldı ve sayım düzeltme yetkisi, kart #238 (H3, H4; soru 266 a)
+
+- Kaldırılan uçlar: `POST /uretim-emirleri` (iş emirsiz emir açma), `/:id/iptal`, `/:id/baslat`, `/:id/bitir`, `/:id/sayim`, `/:id/devam`, `/:id/durdur`, `/:id/sayim-ayarla`. Hiçbir ekran çağırmıyordu; başlat, devam, durdur, bitir ve sayım Arkon'dan `disari.ts` ile gelir. Çağıranı kalmayan servis işlevleri (`rotasizEmirAc`, `emirIptal`, `terminalSayimi`, `emirSayimAyarla`), `iptalIhlali` kuralı ve uçsuz sözleşmeler (`bitirGovdesi`, `makineSecimiGovdesi`, `emirBaslatCevabi`, `sayimAyarlaGovdesi`, `sayimCevabi`) de gitti.
+- İş emirsiz emir artık açılmaz ve iptal edilmez; iptal yalnız iş emirli emirde (`POST /adimli-emirler/:id/iptal`).
+- H4: `disari.emirSayim` eksi sayımda, `disari.emirBitir` adet verilince kişinin çalışan adıma katılımını ya da `uretim-emirleri.sayim-duzelt` işlemini ister (185 a). Artı sayım denetlenmez.
+- `disari.emirBaslat` dönüş tipi servisin zaten verdiği `uyari` alanını bildirir.
+- Şema, göç, işlem ve rol değişmedi.
+
 # FARK: Malzeme · Teslim panelinde Fasona gönder, kart #97 (sorular 92 b, 97 a; dal 97-fasona-gonder)
 
 - Yeni okuma ucu `GET /adimli-emirler/:id/siradaki-fason` (`uretim-emirleri.fason`): emrin sıradaki iş emri fason ise adım, firma ve gidiş özeti (giden, dönen sağlam, hurda, gönderilebilir); değilse, emir taslak ya da açık emir kuralına takılıyorsa `fason: null`. Yan etkisiz, kilit almaz.
