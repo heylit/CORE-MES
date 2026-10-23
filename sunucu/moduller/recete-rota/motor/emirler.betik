@@ -5,7 +5,7 @@
    sunucu bu yüzden kaynak okumasındaki güncel dilimleri kaydın üstüne koyar (çerçevenin baglaUygula'sının ekransız karşılığı). */
 
 /* Tezgâh ve ürünün motor ayarları (plan alt nesnesi) önce açık çalışmadan (planlama sayfasının düzenlediği), yoksa kayıttan alınır. */
-function sunucuKaydi(kayit, durum, D0) {
+function sunucuKaydi(kayit, durum, D0, bugun) {
   const k = rrKopya(kayit && kayit.items ? kayit : TMI_BOS_KAYIT);
   const d = durum || {};
   const urun0 = id => ((D0 && D0.urunler) || []).find(u => String(u.id) === id) || null;
@@ -37,7 +37,8 @@ function sunucuKaydi(kayit, durum, D0) {
   }
   const e = d.emirler;
   if (e && Array.isArray(e.orders)) {
-    k.orders = e.orders.map(x => ({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start, due: x.due || x.start, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }));
+    /* tarihsiz emir çerçevedeki gibi (uyumlaEmirler) bugünden başlar ve bugüne biter */
+    k.orders = e.orders.map(x => ({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || x.start || bugun, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }));
   }
   return k;
 }
@@ -55,17 +56,18 @@ function sunucuPlani(D0) {
    - Sabit iş gerçek saatiyle bağlanır; motorda karşılığı yoksa tezgâhı o aralıkta kapalı sayılır (başka iş üstüne yerleşmez).
    - Çalışan adım çerçevedeki gibi sunucunun kalanıyla (calisanBirlestir).
    - Emrin istekte geçmeyen adımı (bitmiş, fason ya da kişi kaynaklı) şimdi bitmiş sayılır: ardılını bekletmez.
-   Açık çalışmanın denemeye ait parçaları (kilit, olay, elle gerçekleşen, kısıt gevşetme) asıl plana girmez; arıza ve fazla mesai girer. */
+   Açık çalışmanın denemeye ait parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez; arıza, fazla mesai ve kısıt gevşetmeleri
+   (S.kapali: atölyenin planlama modeli, örneğin ayarcı tutulmuyorsa ayarcı kısıtı kapalı) girer. */
 function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   if (!calisma || !calisma.D) return null;
   const S0 = clone(calisma);
   tmiTabanKur(S0.D, bugun);
   baslangicTazele(S0, Date.parse(istek.simdi));
-  Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, kapali: [], rrSavedAt: -1 });
+  Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
   const nolar = new Set();
   for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
   const durum = kaynak && kaynak.durum ? kaynak.durum : {};
-  const k = sunucuKaydi(kayit, durum, S0.D);
+  const k = sunucuKaydi(kayit, durum, S0.D, bugun);
   k.plan = sunucuPlani(S0.D);
   k.orders = (k.orders || []).filter(o => nolar.has(o.no)).map(o => o.status === 'taslak' ? Object.assign({}, o, { status: 'serbest' }) : o);
   k.savedAt = 0;

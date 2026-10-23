@@ -90,6 +90,20 @@ describe('sunucu plan çözücüsü', () => {
     assert.ok(yer(r, 'E-1|10'));
   });
 
+  test('tarihsiz emir bugünden başlar; ayarlı adım ayarcı kısıtıyla ayarcı yoksa yerleşmez, sayfada kısıt kapalıysa yerleşir', async () => {
+    const ayarli = { ...adim(10, 30), setup: 30 };
+    const k = (kapali: string[]) => ({
+      ...KAYNAK, calisma: { ...KAYNAK.calisma, kapali },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, routes: { 50: { base: null, steps: [ayarli] } },
+        emirler: { orders: [{ ...emir('3', 'E-3'), start: null, due: null }], opStatus: {}, opProg: {} } } },
+    });
+    const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-3|10'] }] });
+    assert.deepEqual((await coz(k([]), i)).yerlesmeyen, ['E-3|10']);
+    const r = await coz(k(['ayarci']), i);
+    assert.deepEqual(r.yerlesmeyen, []);
+    assert.equal(yer(r, 'E-3|10')!.baslangic, '2026-10-19T05:00:00.000Z');
+  });
+
   test('çalışma yoksa komut reddedilir', async () => {
     await assert.rejects(coz({ ...KAYNAK, calisma: null }, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] })), /çalışma kaydı/);
   });
