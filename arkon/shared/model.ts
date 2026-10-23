@@ -79,7 +79,9 @@ export interface Order {
   no: string; part: string; op: string; due: string; state: OrderState; target: number; good: number; scrap: number; cycle: number;
   urgent?: boolean; baseGood?: number; meas?: Record<string, Meas>; pins?: Pin[]; acks?: Record<string, any>; toolsAt?: Record<string, number>; sr?: Record<string, any>;
   pkg?: Pkg; fresh?: boolean; empty?: boolean; startedAt?: Ms; pendingReq?: string | null; pendingItems?: number[] | null; pendingAt?: Ms;
-  lastDecision?: { status: string; bad?: string; note?: string; at: Ms; ack?: boolean } | null; toolEvt?: any; ready?: any; [k: string]: unknown;
+  lastDecision?: { status: string; bad?: string; note?: string; at: Ms; ack?: boolean } | null; toolEvt?: any; ready?: any;
+  /** "Aç" ile seçilen refakat kartı (kart #156); sayım satırına refakatPartisiId olarak gider */
+  kart?: number | null; [k: string]: unknown;
 }
 export interface SampleRequest {
   id: Id; pkgId: Id; no: string; part: string; rev: string; machine: Id; by: string; at: Ms; reason: string; items: number[]; crit: boolean; cnt: number;
@@ -99,7 +101,7 @@ export interface Logi { id: Id; kind: 'req' | 'out'; st: Id; wc?: Id | null; to?
 /* ── üretim kayıtları (yalnız eklenir) ── */
 interface LogBase { cid: string; at: Ms; userId?: string | null; userName?: string | null; machine?: Id | null; wc?: Id | null }
 export interface LogEvent extends LogBase { mc?: Id | null; orderNo?: string | null; pkgId?: Id | null; state: OrderState | 'none'; reason?: string | null; planned?: boolean | null; src?: 'op' | 'auto' | null }
-export interface LogCount extends LogBase { mc?: Id | null; orderNo?: string | null; pkgId?: Id | null; kind: 'good' | 'scrap'; delta: number; cycleMs?: number | null; planMs?: number | null; reason?: string | null; src?: 'op' | 'auto' | null }
+export interface LogCount extends LogBase { mc?: Id | null; orderNo?: string | null; pkgId?: Id | null; kind: 'good' | 'scrap'; delta: number; cycleMs?: number | null; planMs?: number | null; reason?: string | null; src?: 'op' | 'auto' | null; refakatPartisiId?: number | null }
 export interface LogMeas extends LogBase { pkgId: Id; orderNo?: string | null; itemId: number; nom: string; lsl: number; usl: number; value: number | null; attr?: string | null; ok: boolean; src?: 'op' | 'quality' | 'cmm'; partCnt?: number | null; reqId?: string | null }
 export interface LogCall extends LogBase { mc?: Id | null; callId: string; team: CallTeam; phase: 'open' | 'ack' | 'esc' | 'done' | 'cancel'; note?: string | null }
 export interface LogAudit extends LogBase { area: string; action: string; target: string; detail?: string | null }

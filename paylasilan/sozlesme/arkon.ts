@@ -430,10 +430,23 @@ export const makineAyrimlariCevabi = z.object({
   ayrimlar: z.array(z.object({ mc: z.string(), emirNo: z.string(), opNo: z.number().int(), baslangic: zamanSemasi })),
 });
 export type MakineAyrimlariCevabi = z.infer<typeof makineAyrimlariCevabi>;
-// Refakat partisi kartı (kart #128): Arkon `RP:<id>` okutunca emri buradan alır; iş açma kuralı değişmez (emrin bu istasyondaki işi).
-export const refakatPartisiParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
-export const refakatPartisiCevabi = z.object({ id: z.number().int(), emirId: z.number().int(), etiket: z.string(), durum: z.enum(['acik', 'iptal']) });
-export type ArkonRefakatPartisi = z.infer<typeof refakatPartisiCevabi>;
+// Refakat kartları (kart #156, Soru 134): Arkon'da okutma yoktur; terminal sıradaki işlerin kartlarını tek okumada alır, iş "Aç" ile kartla
+// açılır. `istasyon` terminalin istasyon kodudur (kartın o istasyonda satırı var mı); `emirler` en çok 50 üretim emri kimliği.
+export const refakatKartlariSorgusu = z.object({
+  istasyon: z.string().min(1).max(64),
+  emirler: z.string().regex(/^[1-9]\d{0,9}(,[1-9]\d{0,9}){0,49}$/, 'Emirler virgülle ayrılmış kimlikler olmalı (en çok 50).')
+    .transform((metin) => [...new Set(metin.split(',').map(Number))])
+    .refine((l) => l.every((id) => id <= 2147483647), 'Emir kimliği geçersiz.'),
+});
+// İstisna kartının lotu yoktur (null). `sayilan` ve `sinir` (Soru 132) hesaplanamıyorsa null: sınır gösterilmez.
+export const refakatKartiSemasi = z.object({
+  id: z.number().int(), uretimEmriId: z.number().int(), etiket: z.string(), lotNo: z.string().nullable(),
+  malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), verilen: z.string(),
+  istasyondaSatirVar: z.boolean(), sayilan: z.number().nullable(), sinir: z.number().nullable(),
+});
+export const refakatKartlariCevabi = z.object({ kartlar: z.array(refakatKartiSemasi) });
+export type ArkonRefakatKarti = z.infer<typeof refakatKartiSemasi>;
+export type RefakatKartlariCevabi = z.infer<typeof refakatKartlariCevabi>;
 export const planSiraSurumuCevabi = z.object({ planSurumu: z.number().int().nonnegative() });
 export const planSiralaCevabi = z.object({ taslakId: z.number().int(), taslakAcildi: z.boolean() });
 

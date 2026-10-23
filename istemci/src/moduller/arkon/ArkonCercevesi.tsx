@@ -11,7 +11,7 @@ import { cikistaCalistir, useCikis, useOturum } from '../../ortak/veri/oturum.ts
 import { useTema } from '../../ortak/veri/tema.ts';
 import { yerelVeriyiTemizle } from '../../../../arkon/web/src/data/yerel-temizlik.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { EMIR_PARAMETRESI, bagla, emirParametresiOku, emirSeciminiGonder, temayiUygula, tohumla } from './baglanti.ts';
+import { EMIR_PARAMETRESI, KART_PARAMETRESI, bagla, emirParametresiOku, emirSeciminiGonder, temayiUygula, tohumla } from './baglanti.ts';
 import type { MakineDoluRedi } from './baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from './MakineDevralPenceresi.tsx';
 import './arkon.css';
@@ -147,6 +147,7 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
   // değişir) ve bırakılınca adresten silinir: yenilemede yeniden seçmez.
   const [arama, aramaYaz] = useSearchParams();
   const secilecekEmir = kok === URETIM_TERMINALI_YOLU ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
+  const secilecekKart = secilecekEmir === null ? null : emirParametresiOku(arama.get(KART_PARAMETRESI));
   const yuklu = useRef(false);
   // Adresten silme bir sonraki çizimde görünür; arada gelen ikinci yükleme ya da etki aynı isteği yeniden göndermesin.
   const gonderilenEmir = useRef<number | null>(null);
@@ -155,8 +156,8 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
     const pencere = cerceve.current?.contentWindow;
     if (secilecekEmir === null || !pencere || !yuklu.current || gonderilenEmir.current === secilecekEmir) return;
     gonderilenEmir.current = secilecekEmir;
-    emirSeciminiGonder(pencere, secilecekEmir);
-    aramaYaz((a) => { const y = new URLSearchParams(a); y.delete(EMIR_PARAMETRESI); return y; }, { replace: true });
+    emirSeciminiGonder(pencere, secilecekEmir, secilecekKart);
+    aramaYaz((a) => { const y = new URLSearchParams(a); y.delete(EMIR_PARAMETRESI); y.delete(KART_PARAMETRESI); return y; }, { replace: true });
   };
   const emirGonderRef = useRef(emirGonder);
   emirGonderRef.current = emirGonder;

@@ -1480,7 +1480,18 @@ html[data-op="depo"] .pills { display: none; }
 .rdot.on i { background: var(--run); box-shadow: 0 0 8px var(--run); } .rdot.off i { background: var(--stop); } .rdot.off { color: var(--stop); } .rdot.pend i { background: var(--hold); } .rdot.pend { color: var(--hold); }
 /* operatör: iş emri okut */
 .qhead { align-items: center; gap: 8px; } .qhead .over { margin-left: auto; }
-.qscan { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--edge2); background: var(--panel2); color: var(--ink); font: 700 12.5px inherit; cursor: pointer; }
+/* Refakat kartları (kart #156): işin altında istasyondaki kartlar ve "Aç"; etkin kart işin başlığının altında. */
+.qcw { display: grid; gap: 6px; }
+.qkartlar { display: grid; gap: 6px; padding-left: 14px; }
+.qkart { display: grid; grid-template-columns: 16px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--panel2); color: var(--ink); }
+.qkart.on { border-color: color-mix(in srgb, var(--run) 60%, transparent); }
+.qkb { display: grid; min-width: 0; } .qkb b { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; } .qkb small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qks { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); } .qks.dolu { color: var(--hazard); font-weight: 700; }
+.qkac { height: 32px; min-width: 52px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--edge2); background: var(--panel); color: var(--ink); font: 700 12.5px inherit; cursor: pointer; }
+.qkac:disabled { cursor: default; color: var(--run); border-color: color-mix(in srgb, var(--run) 50%, transparent); }
+.etkinkart { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--edge2); background: var(--panel2); }
+.etkinkart b { font-family: 'JetBrains Mono', monospace; font-size: 13px; } .etkinkart small { color: var(--muted); font-size: 12px; }
+.etkinkart.dolu { border-color: color-mix(in srgb, var(--hazard) 70%, transparent); } .etkinkart.dolu small, .etkinkart.dolu .qks { color: var(--hazard); font-weight: 700; }
 /* ayarlar */
 .setmain { grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); }
 .setcard.wide { grid-column: 1 / -1; }

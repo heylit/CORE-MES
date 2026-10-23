@@ -5,7 +5,7 @@ import {
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
   hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
-  yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
+  yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
@@ -441,21 +441,39 @@ test('131 b: kapı açıkken ilk sağlamdan sonrası karar bekler; düzeltme ve 
   assert.equal(kararBekleyenAdet(sag(-1), 4), 0);
   assert.equal(kararBekleyenAdet(sag(2, 'scrap'), 4), 0);
   const sayim = (ek: Record<string, unknown>) => yansimaKarari('counts', { pkgId: 'tmi-ue-7', kind: 'good', ...ek }).komut;
-  assert.deepEqual(sayim({ delta: 3, [KARAR_BEKLIYOR_ALANI]: 2 }), { komut: 'saglam', adet: 3, kararBekliyor: 2 });
-  assert.deepEqual(sayim({ delta: 3, [KARAR_BEKLIYOR_ALANI]: 9 }), { komut: 'saglam', adet: 3, kararBekliyor: 3 }, 'adetten fazlası beklemez');
-  assert.deepEqual(sayim({ delta: -1, [KARAR_BEKLIYOR_ALANI]: 1 }), { komut: 'saglam', adet: -1, kararBekliyor: 0 });
-  assert.deepEqual(sayim({ delta: 2, [KARAR_BEKLIYOR_ALANI]: '2' }), { komut: 'saglam', adet: 2, kararBekliyor: 0 });
+  assert.deepEqual(sayim({ delta: 3, [KARAR_BEKLIYOR_ALANI]: 2 }), { komut: 'saglam', adet: 3, kararBekliyor: 2, refakatPartisiId: null });
+  assert.deepEqual(sayim({ delta: 3, [KARAR_BEKLIYOR_ALANI]: 9 }), { komut: 'saglam', adet: 3, kararBekliyor: 3, refakatPartisiId: null }, 'adetten fazlası beklemez');
+  assert.deepEqual(sayim({ delta: -1, [KARAR_BEKLIYOR_ALANI]: 1 }), { komut: 'saglam', adet: -1, kararBekliyor: 0, refakatPartisiId: null });
+  assert.deepEqual(sayim({ delta: 2, [KARAR_BEKLIYOR_ALANI]: '2' }), { komut: 'saglam', adet: 2, kararBekliyor: 0, refakatPartisiId: null });
   assert.equal(KARAR_BEKLIYOR_ALANI in kayitGovdesi({ kind: 'good', delta: 2, [KARAR_BEKLIYOR_ALANI]: 2 }, { id: 1, ad: 'A' }, 1), false, 'istemcinin alanı atılır');
 });
 
 test('toplu giriş (kart #1046) olağan sayımdır: N sağlam ve nedenli N hurda TMI\'ye aynı adetle gider; nedensiz hurda ve 0 adet yansımaz', () => {
   const sayim = (ek: Record<string, unknown>) => yansimaKarari('counts', { pkgId: 'tmi-ie-41', ...ek });
-  assert.deepEqual(sayim({ kind: 'good', delta: 12, cycleMs: null }).komut, { komut: 'saglam', adet: 12, kararBekliyor: 0 });
-  assert.deepEqual(sayim({ kind: 'scrap', delta: 3, reason: 'H-01', cycleMs: null }).komut, { komut: 'hurda', adet: 3, nedenKodu: 'H-01' });
+  assert.deepEqual(sayim({ kind: 'good', delta: 12, cycleMs: null }).komut, { komut: 'saglam', adet: 12, kararBekliyor: 0, refakatPartisiId: null });
+  assert.deepEqual(sayim({ kind: 'scrap', delta: 3, reason: 'H-01', cycleMs: null }).komut, { komut: 'hurda', adet: 3, nedenKodu: 'H-01', refakatPartisiId: null });
   const nedensiz = sayim({ kind: 'scrap', delta: 3, reason: null });
   assert.equal(nedensiz.komut, null);
   assert.match(nedensiz.neden ?? '', /Hurda nedeni yok/);
   assert.deepEqual([sayim({ kind: 'good', delta: 0 }).komut, sayim({ kind: 'good', delta: 0 }).neden], [null, SIFIR_SAYIM]);
+});
+
+test('kart #156: sayım satırındaki refakat kartı komuta geçer; biçimi bozuk kart kartsız sayılır (emre aitliği stok denetler)', () => {
+  const sayim = (ek: Record<string, unknown>) => yansimaKarari('counts', { pkgId: 'tmi-ie-41', ...ek }).komut;
+  assert.deepEqual(sayim({ kind: 'good', delta: 2, [REFAKAT_KARTI_ALANI]: 37 }), { komut: 'saglam', adet: 2, kararBekliyor: 0, refakatPartisiId: 37 });
+  assert.deepEqual(sayim({ kind: 'scrap', delta: 1, reason: 'H-01', [REFAKAT_KARTI_ALANI]: 37 }), { komut: 'hurda', adet: 1, nedenKodu: 'H-01', refakatPartisiId: 37 });
+  assert.deepEqual(sayim({ kind: 'good', delta: -1, [REFAKAT_KARTI_ALANI]: 37 }), { komut: 'saglam', adet: -1, kararBekliyor: 0, refakatPartisiId: 37 }, 'düzeltme de kartla gider');
+  for (const k of ['37', 0, -4, 1.5, 2147483648, null, {}]) {
+    assert.deepEqual(sayim({ kind: 'good', delta: 2, [REFAKAT_KARTI_ALANI]: k }), { komut: 'saglam', adet: 2, kararBekliyor: 0, refakatPartisiId: null }, String(k));
+  }
+});
+
+test('#157: kaydın uyarıları tek iletiye eklenir; boş uyarı eklenmez, aynı ileti tekrarlanmaz', () => {
+  assert.equal(uyariBirlestir(null, null), null);
+  assert.equal(uyariBirlestir(undefined, 'Kartın malzemesi başka konumda.'), 'Kartın malzemesi başka konumda.');
+  assert.equal(uyariBirlestir('A.', ''), 'A.');
+  assert.equal(uyariBirlestir('A.', 'B.'), 'A. B.');
+  assert.equal(uyariBirlestir('A. B.', 'B.'), 'A. B.');
 });
 
 // Operatöre düşme (kart #199, A4): rotalı iş canlı planda iş emrinin kaynağına yerleşmeden başlatılmaz.
@@ -557,7 +575,7 @@ test('parça olayı: öteki parça çalışırken iş emri değişmez; biten par
   assert.deepEqual(parcaOlayKarari(bitir, 2, ['paused']).komut, { komut: 'duraklat' });
   assert.deepEqual(parcaOlayKarari(bitir, 3, ['done']).komut, { komut: 'duraklat' }, 'üçüncü parçanın olayı yok');
   assert.deepEqual(parcaOlayKarari(bitir, 3, ['done', 'done']), bitir);
-  const saglam = k({ komut: 'saglam', adet: 3, kararBekliyor: 0 });
+  const saglam = k({ komut: 'saglam', adet: 3, kararBekliyor: 0, refakatPartisiId: null });
   assert.deepEqual(parcaOlayKarari(saglam, 2, ['running']), saglam);
 });
 

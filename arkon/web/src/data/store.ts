@@ -3,7 +3,7 @@ import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from './anomali';
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from './cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
-import type { RefakatPartisi } from './refakat-okut';
+import type { RefakatKarti } from './refakat-karti';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
 import { depoOkunur } from './depo-okuma';
@@ -496,8 +496,12 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async operatorOzeti(donem: OzetDonemi, kisiId?: number | null): Promise<OperatorOzeti> { return api('GET', '/operator-ozeti?donem=' + donem + (kisiId ? '&kisiId=' + kisiId : '')); },
     /** 393 d: emrin istasyonundaki makinelerin ayrımı (başlatmayı reddettirecek olanlar); sunucunun başlatma denetimiyle aynı kural */
     async makineAyrimlari(emirId: number): Promise<MakineAyrimlari | undefined> { return api('GET', '/makine-ayrimlari?emirId=' + emirId); },
-    /** refakat partisi kartı (kart #128): QR partiyi taşır, emri sunucu söyler; kart yoksa undefined */
-    async refakatPartisi(id: number): Promise<RefakatPartisi | undefined> { return api('GET', '/refakat-partileri/' + id); },
+    /** refakat kartları (kart #156): istasyonun sıradaki işlerinin emirlerine ait açık kartlar, istasyonda satırı olup olmadığıyla */
+    async refakatKartlari(istasyon: string, emirler: readonly number[]): Promise<RefakatKarti[]> {
+      if (!emirler.length) return [];
+      const c = await api('GET', '/refakat-kartlari?istasyon=' + encodeURIComponent(istasyon) + '&emirler=' + emirler.join(','));
+      return (c && c.kartlar) || [];
+    },
     /** TMI emrinin talimat adımları; işaret TMI'ye yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
     async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, { tamam }); },

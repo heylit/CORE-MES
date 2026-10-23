@@ -7,6 +7,8 @@ import { halkaPaylari, kalanAdet } from '../data/sayac-halkasi';
 import { adimTuru } from '../data/adim-turu';
 import { parcaEtiketi } from '../data/parca';
 import { bitenleriAyir } from '../data/biten-is';
+import { tmiEmirId } from '../data/tmi-adim';
+import { istasyondakiKartlar, kartDoldu, sinirMetni } from '../data/refakat-karti';
 
 /* ── top bar ── */
 export function Top({ state, since, theme, onTheme, onCall, call, onCallOpen, onAway, onShift, onOzetim = null, preview, machine, onStation, ozet = null }) {
@@ -41,17 +43,32 @@ export function MiniRing({ v, c }) {
   return html`<div className="ring-mini"><svg width="52" height="52"><circle cx="26" cy="26" r=${r} fill="none" stroke="var(--edge2)" strokeWidth="4" />
     <circle cx="26" cy="26" r=${r} fill="none" stroke=${c} strokeWidth="4" strokeLinecap="round" strokeDasharray=${C} strokeDashoffset=${C * (1 - v)} style=${{ transition: 'stroke-dashoffset .6s' }} /></svg><span>${Math.round(v * 100)}%</span></div>`;
 }
-export function Queue({ orders, active, onPick, nextNo, aheadNo = null, onScan }) {
-  const kart = kuyrukKarti(active, onPick, nextNo, aheadNo), { acik, biten } = bitenleriAyir(orders);
+// Kart #156 (Soru 134): okutma yoktur; her bitmemiş işin altında bu istasyonda satırı olan refakat kartları durur, "Aç" işi o kartla açar.
+export function Queue({ orders, active, onPick, nextNo, aheadNo = null, kartlar = [], onKart = null }) {
+  const kart = kuyrukKarti(active, onPick, nextNo, aheadNo, kartlar, onKart), { acik, biten } = bitenleriAyir(orders);
   return html`<div className="col">
-    <div className="qhead"><b>İş emirleri</b><span className="over">${orders.filter(o => o.state !== 'done').length} açık</span>${onScan ? html`<button className="qscan" onClick=${onScan} title="İş kartını okut (QR / barkod)"><${I} n="scan" s=${16} />Okut</button>` : null}</div>
+    <div className="qhead"><b>İş emirleri</b><span className="over">${orders.filter(o => o.state !== 'done').length} açık</span></div>
     <div className="queue">${acik.map(kart)}${biten.length ? html`<div className="qsub over">Biten işler · ${biten.length}</div>` : null}${biten.map(kart)}</div>
   </div>`;
 }
-const kuyrukKarti = (active, onPick, nextNo, aheadNo) => ([o, i]) => html`<button key=${o.no} className=${'qc ' + (i === active ? 'sel ' : '') + (o.fresh ? 'fresh' : '')} onClick=${() => onPick(i)}>
+const kuyrukKarti = (active, onPick, nextNo, aheadNo, kartlar, onKart) => ([o, i]) => {
+  const liste = onKart && o.state !== 'done' ? istasyondakiKartlar(kartlar, tmiEmirId(o.pkg)) : [];
+  const dugme = html`<button key=${o.no} className=${'qc ' + (i === active ? 'sel ' : '') + (o.fresh ? 'fresh' : '')} onClick=${() => onPick(i)}>
       <${MiniRing} v=${o.good / o.target} c=${ST[o.state].c} />
       <div><div className="no">${o.no}${o.pkg ? html`<span className="revc">Rev ${o.pkg.rev}</span>` : null}${o.fresh ? html`<span className="tag newt">Yeni</span>` : null}</div><div className="pt">${o.part}${o.urgent ? html`<span className="tag urgent">Acil</span>` : null}</div>
       <div className="mt"><span>${o.op}</span><span>Termin ${o.due}</span></div>${parcaEtiketi(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${parcaEtiketi(o.pkg)}</span></div>` : null}${adimTuru(o.pkg) ? html`<div className="adimtur"><span className="tag adim">${adimTuru(o.pkg).etiket}</span>${adimTuru(o.pkg).aciklama ? html`<span className="adimnot">${adimTuru(o.pkg).aciklama}</span>` : null}</div>` : null}<div style=${{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><${Chip} s=${o.state} />${o.no === nextNo ? html`<span className="chip" style=${{ '--c': 'var(--done)' }}><i></i>Sıradaki · hazırlık ${readyCount(o)}/4</span>` : null}${o.no === aheadNo ? html`<span className="chip" style=${{ '--c': 'var(--hazard)' }}><i></i>Öne alındı</span>` : null}</div></div></button>`;
+  if (!liste.length) return dugme;
+  return html`<div key=${o.no} className="qcw">${dugme}<div className="qkartlar" role="list" aria-label=${o.no + ' refakat kartları'}>${liste.map(k => html`<div key=${k.id} role="listitem" className=${'qkart' + (o.kart === k.id ? ' on' : '')}>
+      <${I} n="tag" s=${16} /><div className="qkb"><b>${k.etiket}</b><small>${k.lotNo ?? 'Lot bekliyor'}${k.malzemeKod ? ' · ' + k.malzemeKod : ''}</small></div>${sinirMetni(k) ? html`<span className=${'qks' + (kartDoldu(k) ? ' dolu' : '')}>${sinirMetni(k)}</span>` : null}
+      <button className="qkac" onClick=${() => onKart(i, k)} disabled=${i === active && o.kart === k.id} aria-label=${k.etiket + ' kartıyla aç'}>${i === active && o.kart === k.id ? 'Açık' : 'Aç'}</button></div>`)}</div></div>`;
+};
+
+// Etkin kart ve "sayılan / sınır" (Soru 132 yumuşak kilit: dolunca söylenir, sayım durmaz). Kart listede yoksa (bağlantı yok) yalnız numarası.
+export function EtkinKart({ o, kartlar }) {
+  if (!o || !o.kart) return null;
+  const k = kartlar.find(x => x.id === o.kart), sinir = k ? sinirMetni(k) : null, dolu = !!k && kartDoldu(k);
+  return html`<div className=${'etkinkart' + (dolu ? ' dolu' : '')} role="status"><${I} n="tag" s=${16} /><span className="over">Refakat kartı</span><b>${k ? k.etiket : '#' + o.kart}</b>${k && k.lotNo === null ? html`<small>Lot bekliyor</small>` : null}${sinir ? html`<span className="qks">${sinir}</span>` : null}${dolu ? html`<small>Kart doldu; sıradaki kartı açın</small>` : null}</div>`;
+}
 
 /* ── dial ── */
 /* ── Çevrim halkası: bir tur = bir parçanın planlı çevrim süresi (birim üretim süresi) ──
