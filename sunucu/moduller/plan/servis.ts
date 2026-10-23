@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  CanliYerlesimCevabi, CanliyaAlCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  CanliYerlesimCevabi, CanliyaAlCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
@@ -1500,6 +1500,20 @@ export async function karsilastir(db: Db, k: Kullanici, taslak?: number): Promis
       return { geciken: g.geciken, darbogaz: g.darbogaz?.ad ?? null, maliyetTl: g.maliyetTl };
     });
   return { secenekler: r.map((x) => ({ ...x, sonBitis: x.sonBitisDk === null ? null : tarih(b, x.sonBitisDk).toISOString() })) };
+}
+
+// motorYerlesimi'nin uyarıları, motor koşulmadan: bütün işleri okuyup planı yeniden hesaplamak açılışı bekletiyordu. Personel sayısı
+// personelVerisi ile aynı süzgeçten (kaynağı olan iş merkezi, aktif kişi payı, kullanıcının izinli iş merkezleri); kısıt kapalıysa başka okuma yok.
+export async function motorUyarilariOku(db: Db, k: Kullanici, taslak?: number): Promise<MotorUyarilariCevabi> {
+  const hedef = taslak ?? null;
+  await hedefDenetle(db, hedef);
+  const ayar = await s.ayarOku(db, hedef);
+  if (!ayar.personelKisiti) return { uyarilar: motorUyarilari({ personelKisiti: false, personelMerkeziSayisi: 0 }) };
+  const kaynaklar = await kaynaklariOku(db, new Map());
+  const merkezIdleri = new Set([...kaynaklar.values()].flatMap((x) => (x.isMerkeziId === null ? [] : [x.isMerkeziId])));
+  const izinli = await kisininIzinliIsMerkezleri(db, k.id);
+  const personelli = [...(await merkezPersoneli(db, kaynaklar)).keys()].filter((id) => merkezIdleri.has(id) && (izinli.length === 0 || izinli.includes(id)));
+  return { uyarilar: motorUyarilari({ personelKisiti: true, personelMerkeziSayisi: personelli.length }) };
 }
 
 // 220 a: motorun yerleşimi yazılmadan döner; ekran (Reçete ve Rota > Plan) kendi hesabı yerine bunu çizer. Sabitler yerinde kalır.

@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, bedelAyariGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, bedelAyariGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi,
@@ -25,6 +25,8 @@ export const uclar = [
   // 220 a: ekranın çizdiği motor yerleşimi; yazmaz. Plan ekranını açan (Reçete ve Rota sayfası) ya da plan yazan okur (232 a).
   uc({ yontem: 'GET', yol: '/plan/motor-yerlesimi', yetki: { biri: ['sayfa.recete-rota', 'plan.yaz'] }, sorgu: planSorgusu, cevap: motorYerlesimiCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.motorYerlesimi(db, kullanici, sorgu.taslak) }),
+  uc({ yontem: 'GET', yol: '/plan/motor-uyarilari', yetki: { biri: ['sayfa.recete-rota', 'plan.yaz'] }, sorgu: planSorgusu, cevap: motorUyarilariCevabi,
+    isle: ({ db, kullanici, sorgu }) => servis.motorUyarilariOku(db, kullanici, sorgu.taslak) }),
   uc({ yontem: 'GET', yol: '/plan/canli-yerlesim', yetki: PLAN_OKUR, sorgu: canliYerlesimSorgusu, cevap: canliYerlesimCevabi,
     isle: ({ db, sorgu }) => servis.canliYerlesim(db, sorgu.isEmirleri) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
