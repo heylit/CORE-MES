@@ -262,6 +262,20 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(iptaller.satirlar.every((s) => s.durum === 'iptal'));
   });
 
+  test('numara kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşan numara kayıt açmaz (422), var olan numara değişmez', async () => {
+    const once = await siparisAc();
+    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.siparis-no/degistir', { deger })).statusCode, 200);
+    await kalip('SAT{YY}{AA}{SAYAC:4}');
+    const yeni = await siparisAc();
+    assert.match(yeni.no, /^SAT\d{4}0001$/);
+    await kalip('SATISSIPARIS-{YYYY}-{SAYAC:3}');
+    const uzun = await gonder(yonetici, '/siparisler/ekle', govde());
+    assert.equal(uzun.statusCode, 422, uzun.body);
+    assert.match(uzun.body, /16 karakter/);
+    await kalip('SS-{YYYY}-{SAYAC:3}');
+    assert.equal((await oku(yonetici, `/siparisler/${once.id}`)).json<SiparisAyrintisi>().no, once.no);
+  });
+
   test('SIP-02 seçim: kart seçenekleri yalnız aktif satılan türleri verir, aramayla süzülür; işlemi olmayan rol 403', async () => {
     const c = await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=SIP-DNM');
     assert.equal(c.statusCode, 200, c.body);

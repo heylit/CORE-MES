@@ -14,7 +14,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
+  FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
   kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
@@ -26,6 +26,7 @@ import type { TeklifAlanlari, TeklifBaslikSatiri } from './sorgular.ts';
 const KISITLAR = {
   siparisler_teklif_firma: { ileti: FIRMA_YOK, alan: 'firmaId' },
   siparisler_teklif_satiri_malzeme: { ileti: 'Malzeme kartı bulunamadı.', alan: 'malzemeNo' },
+  siparisler_teklif_no_bicim: NUMARA_UZUN,
 } as const;
 
 async function cevir(db: Db, satirlar: TeklifBaslikSatiri[]): Promise<Teklif[]> {

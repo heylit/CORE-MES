@@ -15,7 +15,7 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
   malzemeReddi,
 } from './kurallar.ts';
 import type { DurumKomutu } from './kurallar.ts';
@@ -27,6 +27,7 @@ const KISITLAR = {
   siparisler_siparis_musteri_no_tekil: { ileti: MUSTERI_NO_KULLANILIYOR, alan: 'musteriSiparisNo' },
   siparisler_siparis_tarih_sirasi: { ileti: 'Termin sipariş tarihinden önce olamaz.', alan: 'termin' },
   siparisler_siparis_firma: { ileti: FIRMA_YOK, alan: 'firmaId' },
+  siparisler_siparis_no_bicim: NUMARA_UZUN,
 } as const;
 
 async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
