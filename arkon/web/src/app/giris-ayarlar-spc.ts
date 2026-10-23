@@ -13,7 +13,8 @@ import { Brand, navGo, useTheme } from './baslat';
 import { gomuluMu } from './gomulu';
 import { YETKI_KILIDI, yetkilerTmide } from '../data/tmi-yetkileri';
 import { cagridanArizaAc } from '../data/ariza-ustlenme';
-import { tesisGruplari, tmiListesiSaltOkunur } from '../data/tmi-listeleri';
+import { tesisDuzenleyicisi, tesisGruplari, tesisListesi, tmiListesiSaltOkunur } from '../data/tmi-listeleri';
+import { tmiyeGit } from '../data/yeni-paket';
 
 /* ══════════ GİRİŞ, AYARLAR, SPC, RAPOR ══════════ */
 /* ── giriş: kişiyi seç, PIN gir ── */
@@ -311,6 +312,7 @@ function PlantList() {
       </div>`)}${!g.istasyonlar.length ? html`<small className="muted">İstasyon yok.</small>` : null}</div>
     </div>`)}
     ${KILIT('Tesis TMI\'de İstasyonlar sayfasından değiştirilir.')}
+    ${gomuluMu() ? html`<button className="btn" onClick=${() => tmiyeGit('istasyonlar')}><${I} n="layers" s=${18} />İstasyonlar sayfasını aç</button>` : null}
   </div>`;
 }
 function ReasonList() {
@@ -371,9 +373,9 @@ export function SettingsApp() {
   const [theme, setTheme] = useTheme();
   const [feat, setFeat] = useState(FEAT.get()), [lite, setLite] = useState(LITE.get()), [toast, setToast] = useState(null), [opName, setOpName] = useState(LS.get('opName') || '');
   const st = useSrv(), me = MEU(), admin = !me || me.role === 'admin';
-  const tesisOkur = tmiListesiSaltOkunur(st.mode === 'server', can('page.prep'), can('adm.plant'));
+  const tesisDuzenler = tesisDuzenleyicisi(st.mode === 'server', can('adm.plant')), tesisOkur = tesisListesi(st.mode === 'server', can('page.prep'), can('adm.plant'));
   const nedenOkur = tmiListesiSaltOkunur(nedenlerTmide(), can('page.prep'), false);
-  const SET_TABS: [string, string, () => boolean][] = [['genel', 'Genel', () => true], ['tesis', 'Tesis', () => can('adm.plant') || tesisOkur], ['kisi', 'Kişiler ve yetkiler', () => can('adm.users') || admin], ['uretim', 'Üretim', () => can('adm.shifts') || can('adm.reasons') || nedenOkur], ['sistem', 'Sistem', () => can('adm.backup') || can('adm.audit') || can('adm.plant')]];
+  const SET_TABS: [string, string, () => boolean][] = [['genel', 'Genel', () => true], ['tesis', 'Tesis', () => tesisDuzenler || tesisOkur], ['kisi', 'Kişiler ve yetkiler', () => can('adm.users') || admin], ['uretim', 'Üretim', () => can('adm.shifts') || can('adm.reasons') || nedenOkur], ['sistem', 'Sistem', () => can('adm.backup') || can('adm.audit') || can('adm.plant')]];
   const [stab, setStab] = useState(() => { const t = LS.get('setTab'); return SET_TABS.some(x => x[0] === t && x[2]()) ? t : 'genel'; });
   const [needLogin, setNeedLogin] = useState(false);
   useEffect(() => { AKStore.Auth.required().then(setNeedLogin); }, []);
@@ -409,7 +411,7 @@ export function SettingsApp() {
 
         </${Fragment}>` : null}
         ${stab === 'tesis' ? html`<${Fragment}>
-        ${can('adm.plant') ? card('Tesis', 'İş merkezleri, istasyonlar, makineler', html`<${PlantEditor} say=${say} />`, true) : null}
+        ${tesisDuzenler ? card('Tesis', 'İş merkezleri, istasyonlar, makineler', html`<${PlantEditor} say=${say} />`, true) : null}
         ${tesisOkur ? card('Tesis', 'İş merkezleri, istasyonlar, makineler', html`<${PlantList} />`, true) : null}
         </${Fragment}>` : null}
         ${stab === 'kisi' ? html`<${Fragment}>
