@@ -2,8 +2,9 @@ import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
 // Reçete ve Rota Motoru tek sayfadır; içerik prototipin kendisidir ve yalıtılmış çerçevede açılır. Prototipin bölümleri
 // ikinci menüdedir (kullanıcı kararı, kart #1031); madde anahtarı prototipin sekme kimliğidir, çerçeveye görünüm adı olarak gider.
-// Menüde eski Rota'nın yerindedir (kullanıcı kararı, 13.10.2026). Planlama maddeleri yalnız planlama sayfalarını görme işlemini
-// ister; Aşama 1'de bu işlem yalnız yöneticidedir (kullanıcı kararı 353 a). Planlama ayrı çerçevede açılır
+// Menüde eski Rota'nın yerindedir (kullanıcı kararı, 13.10.2026). Planlama maddeleri planlama sayfalarını görme işlemini ister
+// (yönetici, müdür ve planlama; kullanıcı kararı 195 a); maliyet ve kâr gösteren üçü birim maliyet okumasını ister, planlama rolü
+// maliyet görmez (200 a). Planlama ayrı çerçevede açılır
 // (istemci/src/moduller/recete-rota/planlama-menusu.ts); kanban menüde yoktur, adresi planlama motoruna gider.
 export const RECETE_ROTA_SAYFALARI = [
   { yol: '/recete-rota', islem: 'sayfa.recete-rota', baslik: 'Reçete ve Rota', simge: 'tool', grup: 'Tanımlar', sira: 10 },
@@ -28,13 +29,13 @@ export const RECETE_ROTA_IKINCI_MENU = {
       { anahtar: 'plan', baslik: 'Planlama motoru', yol: '/recete-rota/plan', simge: 'gantt', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'studio', baslik: 'Planlama atölyesi', yol: '/recete-rota/studio', simge: 'flag', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'ysiparis', baslik: 'Siparişler', yol: '/recete-rota/ysiparis', simge: 'list', islem: 'recete-rota.planlama-oku' },
-      { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/recete-rota/maliyet', simge: 'lira', islem: 'recete-rota.planlama-oku' },
-      { anahtar: 'giderler', baslik: 'Genel gider', yol: '/recete-rota/giderler', simge: 'layers', islem: 'recete-rota.planlama-oku' },
+      { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/recete-rota/maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
+      { anahtar: 'giderler', baslik: 'Genel gider', yol: '/recete-rota/giderler', simge: 'layers', islem: 'finans.maliyet-oku' },
       { anahtar: 'mesaiplan', baslik: 'Ek mesai planı', yol: '/recete-rota/mesaiplan', simge: 'clock', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'fasonplan', baslik: 'Fason planı', yol: '/recete-rota/fasonplan', simge: 'truck', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'malzplan', baslik: 'Malzeme satın alma planı', yol: '/recete-rota/malzplan', simge: 'box', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'terminler', baslik: 'Terminler', yol: '/recete-rota/terminler', simge: 'flag', islem: 'recete-rota.planlama-oku' },
-      { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/recete-rota/denge', simge: 'gauge', islem: 'recete-rota.planlama-oku' },
+      { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/recete-rota/denge', simge: 'gauge', islem: 'finans.maliyet-oku' },
       { anahtar: 'yillik', baslik: 'Yıllık plan', yol: '/recete-rota/yillik', simge: 'chart', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'ufuk', baslik: 'Ufuk', yol: '/recete-rota/ufuk', simge: 'route', islem: 'recete-rota.planlama-oku' },
       { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/recete-rota/sevkiyat', simge: 'truck', islem: 'recete-rota.planlama-oku' },

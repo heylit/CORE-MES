@@ -225,7 +225,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
 
   // Kullanıcı kararı RC1 R8-R12 (kart #223): firma kartı finans rakamlarından ayrı açılır.
   // Yazma uçlarına boş gövde gider: yetkili rol şemaya takılır (400), yetkisiz rol yetkiye (403); hiçbir kayıt yazılmaz.
-  test('finans: rakamları muhasebe ve müdür okur, yazımı ve yönetimi muhasebe yapar; firma kartını satın alma ve planlama da yazar, depo okur', async () => {
+  test('finans: rakamları muhasebe ve müdür okur, yazımı ve yönetimi muhasebe yapar; firma kartını satın alma ve planlama da yazar, depo ve kalite okur', async () => {
     const BEKLENEN: Record<string, { sayfa: boolean; finansOku: number; finansYaz: number; finansYonet: number; firmaOku: number; firmaYaz: number }> = {
       yonetici: { sayfa: true, finansOku: 200, finansYaz: 400, finansYonet: 400, firmaOku: 200, firmaYaz: 400 },
       muhasebe_finans: { sayfa: true, finansOku: 200, finansYaz: 400, finansYonet: 400, firmaOku: 200, firmaYaz: 400 },
@@ -233,7 +233,8 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
       satin_alma: { sayfa: true, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 200, firmaYaz: 400 },
       planlama_proje: { sayfa: true, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 200, firmaYaz: 400 },
       depo: { sayfa: false, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 200, firmaYaz: 403 },
-      kalite: { sayfa: false, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 403, firmaYaz: 403 },
+      // Firma seçicisi ve tedarikçi için okur (kullanıcı kararı 195 a, 23.10.2026).
+      kalite: { sayfa: false, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 200, firmaYaz: 403 },
       operator: { sayfa: false, finansOku: 403, finansYaz: 403, finansYonet: 403, firmaOku: 403, firmaYaz: 403 },
     };
     for (const [kod, beklenen] of Object.entries(BEKLENEN)) {
