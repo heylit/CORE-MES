@@ -115,6 +115,7 @@ export function CncKurulumCercevesi() {
       saatDilimi: TESIS_SAAT_DILIMI,
       stokKartiBaglayabilir: hazirlik.ben.stokKartiBaglayabilir,
       stokDusebilir: hazirlik.ben.stokDusebilir,
+      emirGorebilir: hazirlik.ben.emirGorebilir,
       ...(acilisGorunumu !== null ? { acilisGorunumu } : {}),
     }));
   }, [prototip, hazirlik, acilisGorunumu]);

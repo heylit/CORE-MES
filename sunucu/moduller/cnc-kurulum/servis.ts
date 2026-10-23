@@ -45,6 +45,7 @@ export function ben(kullanici: Kullanici): BenCevabi {
     kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir, hazirlikOnaylayabilir: !yazabilir && kullanici.islemler.includes(ISLEM_HAZIRLIK),
     takimDegistirebilir: kullanici.islemler.includes(ISLEM_TAKIM),
     stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kullanici.islemler.includes(ISLEM_KART_YAZ),
+    emirGorebilir: emirGorebilirMi(kullanici),
   };
 }
 
@@ -99,6 +100,8 @@ export async function stokKartiBagla(db: Db, g: StokKartiBaglaGovdesi): Promise<
 // Emir listesini üretim emirleri ekranında görebilen görür (GET /uretim-emirleri ile aynı işlemler): CNC okuma yetkisi tek
 // başına emir listesini açmaz.
 const EMIR_OKUMA: readonly string[] = [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.stok', 'sayfa.atolye'];
+// `ben` aynı denetimi bildirir: çerçeve göremeyeceği listeyi istemez (reddedilen istek sayfa açılışında hata gibi görünüyordu).
+const emirGorebilirMi = (kullanici: Kullanici): boolean => kullanici.islemler.some((i) => EMIR_OKUMA.includes(i));
 
 // Seçenek iş emridir (266 a); istasyonu olmayan (atanmamış ya da fason) iş emri kurulumda seçilmez.
 const secenek = (i: AcikIsEmri, istasyon: string): EmirSecenegi => ({
@@ -106,7 +109,7 @@ const secenek = (i: AcikIsEmri, istasyon: string): EmirSecenegi => ({
 });
 
 export async function emirler(db: Db, kullanici: Kullanici): Promise<EmirlerCevabi> {
-  if (!kullanici.islemler.some((i) => EMIR_OKUMA.includes(i))) throw yetkiYok();
+  if (!emirGorebilirMi(kullanici)) throw yetkiYok();
   const liste = (await acikIsEmirleri(db)).filter((i) => i.istasyonId !== null);
   const adlar = await istasyonAdlari(db, [...new Set(liste.map((i) => i.istasyonId ?? 0))]);
   return { emirler: liste.map((i) => secenek(i, adlar.get(i.istasyonId ?? 0) ?? '')) };
