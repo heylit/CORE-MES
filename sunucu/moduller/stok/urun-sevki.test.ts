@@ -164,6 +164,56 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     assert.deepEqual(await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_hareketi WHERE uretim_emri_id = $1', [id]), once);
   });
 
+  test('Soru 186 a: faturalı sevkin teslim çıkışı ne elle ne sevkiyatla geri alınır; kısmi iade yetmez, tam iade ya da iptal açar', async () => {
+    const id = await bitenEmir(4);
+    const firmaId = await musteriKur();
+    const tek = async (sql: string, p: unknown[]): Promise<number> => (await o().sahip.tek<{ id: number }>(sql, p))!.id;
+    sayac += 1;
+    const siparisId = await tek(
+      `INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id, onaylayan_id, onay_zamani)
+       VALUES ($1, 'onayli', $2, current_date, current_date + 30, 20, $3, $3, now()) RETURNING id`, [`SS-2026-${String(900 + sayac)}`, firmaId, yoneticiId]);
+    const satirId = await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 4, 250) RETURNING id', [siparisId, urunNo]);
+    await o().sahip.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $2 WHERE id = $1', [id, satirId]);
+    const nokta = await tek("INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, firma_id) VALUES ('Deneme Alıcı Noktası', 'musteri', 40, 29, $1) RETURNING id", [firmaId]);
+    const isId = await tek("INSERT INTO sevkiyat_isi (tarih, istenen_tarih, tur, birakis_noktasi_id, agirlik_kilogram, palet_sayisi) VALUES (current_date, current_date, 'teslimat', $1, 10, 1) RETURNING id", [nokta]);
+    // Biten emir bekleme listesine düşer; satır yoksa açılır.
+    const bagli = await o().sahip.sorgu('UPDATE sevkiyat_bekleyen SET is_id = $2 WHERE uretim_emri_id = $1 AND is_id IS NULL RETURNING id', [id, isId]);
+    if (bagli.length === 0) await o().sahip.sorgu("INSERT INTO sevkiyat_bekleyen (kaynak, uretim_emri_id, adet, is_id) VALUES ('urun', $1, 4, $2)", [id, isId]);
+    const s: UrunSevkSatiri = { isId, uretimEmriId: id, adet: '4', firmaId };
+    await gecis(s, 'planlandi', 'yolda');
+    await gecis(s, 'yolda', 'tamamlandi');
+    assert.equal(await sevkCikisi(id), 4);
+    const belge = (g: { tur: 'fatura' | 'iade'; tutar: number; iade?: number }) => tek(
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, belge_no, siparis_id, sevkiyat_isi_id, iade_belge_id, olusturan_id)
+       VALUES ($1, $2, $3, $4, current_date, current_date, 'TRY', 1, $5, 20, $6, $7, $8, $9, $10) RETURNING id`,
+      [g.tur === 'fatura' ? 'gelir' : 'gider', g.tur, g.tur === 'fatura' ? 'urun_satisi' : 'satis_iadesi', firmaId, g.tutar, g.tur === 'fatura' ? 'DNM-FAT-186' : null,
+        siparisId, g.tur === 'fatura' ? isId : null, g.iade ?? null, yoneticiId]);
+    const fatura = await belge({ tur: 'fatura', tutar: 1000 });
+    const cikis = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_hareketi WHERE cikis_nedeni = 'sevk' AND uretim_emri_id = $1", [id]))!.id;
+    const engel = 'Sevk faturalandı (DNM-FAT-186); stok çıkışı geri alınmaz. Önce faturayı iptal edin ya da iade kesin.';
+
+    const elle = await istek<{ mesaj: string }>('depo', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {});
+    assert.deepEqual([elle.durum, elle.govde.mesaj], [409, engel]);
+    assert.equal((await istek('depo', 'POST', '/stok/hareketler/geri-al', { hareketIdler: [cikis] })).durum, 409);
+    await assert.rejects(gecis(s, 'tamamlandi', 'yolda'), (h: { message: string }) => h.message === engel);
+    await belge({ tur: 'iade', tutar: 500, iade: fatura });
+    assert.equal((await istek('depo', 'POST', `/stok/hareketler/${String(cikis)}/geri-al`, {})).durum, 409, 'kısmi iade yetmez');
+    assert.equal(await sevkCikisi(id), 4);
+    await belge({ tur: 'iade', tutar: 500, iade: fatura });
+    await gecis(s, 'tamamlandi', 'yolda');
+    assert.equal(await sevkCikisi(id), 0, 'tam iadeden sonra sevkiyat teslimi geri alır');
+
+    // İptal edilen fatura da bağlamaz.
+    await gecis(s, 'yolda', 'tamamlandi');
+    const ikinci = await belge({ tur: 'fatura', tutar: 1000 });
+    await assert.rejects(gecis(s, 'tamamlandi', 'yolda'), (h: { message: string }) => /DNM-FAT-186/.test(h.message));
+    await o().sahip.sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [ikinci, yoneticiId]);
+    const yeni = (await o().sahip.tek<{ id: number }>(
+      "SELECT h.id FROM stok_hareketi h WHERE h.cikis_nedeni = 'sevk' AND h.uretim_emri_id = $1 AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)", [id]))!.id;
+    assert.equal((await istek('depo', 'POST', `/stok/hareketler/${String(yeni)}/geri-al`, {})).durum, 200);
+    assert.equal(await sevkCikisi(id), 0);
+  });
+
   test('firmasız noktada Yolda adımı yok, teslim bulunduğu konumdan düşer; yetmeyen ve adedi bilinmeyen sevk reddedilir, hiçbir şey yazılmaz', async () => {
     const id = await bitenEmir(3);
     const s: UrunSevkSatiri = { isId: ++isNo, uretimEmriId: id, adet: '2', firmaId: null };

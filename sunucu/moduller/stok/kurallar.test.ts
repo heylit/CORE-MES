@@ -10,6 +10,7 @@ import {
   kaynaklardanAl, uretimAdimPlani, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
+  eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -608,5 +609,43 @@ describe('DEP-64 katalog etiketi', () => {
   test('Soru 133 yolda süresi: ayar boşsa süre yok; varsa gönderimden dakika sonra', () => {
     assert.equal(yoldaSureSonu('2026-10-23T10:00:00.000Z', null), null);
     assert.equal(yoldaSureSonu('2026-10-23T10:00:00.000Z', 90), '2026-10-23T11:30:00.000Z');
+  });
+});
+
+describe('stok kuralları: test bulguları 16.1, 21.4, 17.3 (saf)', () => {
+  test('16.1 eksiKaliteEngeli: red ya da karar bekleyen parça varken eksi onayı açmaz; yalnız serbest ve şartlı kalite engellemez', () => {
+    assert.equal(eksiKaliteEngeli([]), null);
+    assert.equal(eksiKaliteEngeli([{ kaliteDurumu: 'sartli', miktar: '3.000' }]), null);
+    assert.equal(eksiKaliteEngeli([{ kaliteDurumu: 'red', miktar: '0.000' }]), null);
+    assert.match(eksiKaliteEngeli([{ kaliteDurumu: 'red', miktar: '10.000' }]) ?? '', /^Bu gözdeki parça serbest değil: 10 red \(karantinada\)\. Eksi onayı kalite kararını aşmaz/);
+    assert.match(eksiKaliteEngeli([{ kaliteDurumu: 'karar_bekliyor', miktar: '2.500' }, { kaliteDurumu: 'red', miktar: '1' }]) ?? '',
+      /1 red \(karantinada\), 2\.5 kalite kararı bekliyor/);
+  });
+  test('21.4 uretimGirisiEngeli: girilenle birlikte adedi aşan giriş reddedilir, sınırdaki geçer; aşılmışsa kalan 0 yazılır', () => {
+    assert.equal(uretimGirisiEngeli(5, '0', '5'), null);
+    assert.equal(uretimGirisiEngeli(5, '4.000', '1'), null);
+    assert.equal(uretimGirisiEngeli(5, '5.000', '5'), 'Üretim girişi emrin girilmemiş adedini (0) aşamaz.');
+    assert.equal(uretimGirisiEngeli(5, '2.000', '3.001'), 'Üretim girişi emrin girilmemiş adedini (3) aşamaz.');
+    assert.equal(uretimGirisiEngeli(5, '7.000', '1'), 'Üretim girişi emrin girilmemiş adedini (0) aşamaz.');
+  });
+  test('17.3 sevkTeslimIsi: yalnız ürün sevkinin teslim çıkışı işini verir; yola çıkış, elle sevk ve başka açıklama null', () => {
+    const teslim = sevkAciklamasi(42, 'UE-2026-0007', 'teslim');
+    assert.equal(sevkTeslimIsi({ tur: 'cikis', cikisNedeni: 'sevk', aciklama: teslim }), 42);
+    assert.equal(sevkTeslimIsi({ tur: 'cikis', cikisNedeni: 'sevk', aciklama: `${teslim} · red parça` }), 42);
+    assert.equal(sevkTeslimIsi({ tur: 'transfer', cikisNedeni: null, aciklama: sevkAciklamasi(42, 'UE-2026-0007', 'yola') }), null);
+    assert.equal(sevkTeslimIsi({ tur: 'cikis', cikisNedeni: 'sevk', aciklama: 'Elle sevk' }), null);
+    assert.equal(sevkTeslimIsi({ tur: 'cikis', cikisNedeni: 'diger', aciklama: teslim }), null);
+    assert.equal(sevkTeslimIsi({ tur: 'cikis', cikisNedeni: 'sevk', aciklama: null }), null);
+  });
+  test('Soru 186 a faturaliSevkEngeli: işe bağlı iptal edilmemiş fatura geri almayı durdurur; tamamı iade edilmişse ya da başka işe bağlıysa durdurmaz', () => {
+    const f = (id: number, ek: Partial<Parameters<typeof faturaliSevkEngeli>[1][number]> = {}) =>
+      ({ id, tur: 'fatura' as const, belgeNo: `FAT-${String(id)}`, sevkiyatIsiId: 7, iadeBelgeId: null, toplam: '1200.00', ...ek });
+    const iade = (id: number, asil: number, toplam: string) => ({ id, tur: 'iade' as const, belgeNo: null, sevkiyatIsiId: null, iadeBelgeId: asil, toplam });
+    assert.equal(faturaliSevkEngeli(7, []), null);
+    assert.equal(faturaliSevkEngeli(7, [f(1, { sevkiyatIsiId: 8 }), f(2, { sevkiyatIsiId: null })]), null);
+    assert.equal(faturaliSevkEngeli(7, [f(1)]), 'Sevk faturalandı (FAT-1); stok çıkışı geri alınmaz. Önce faturayı iptal edin ya da iade kesin.');
+    assert.match(faturaliSevkEngeli(7, [f(1), iade(2, 1, '1199.99')]) ?? '', /FAT-1/, 'kısmi iade yetmez');
+    assert.equal(faturaliSevkEngeli(7, [f(1), iade(2, 1, '600'), iade(3, 1, '600.00')]), null);
+    assert.match(faturaliSevkEngeli(7, [f(1), iade(2, 1, '1200'), f(4, { belgeNo: null })]) ?? '', /\(#4\)/);
   });
 });

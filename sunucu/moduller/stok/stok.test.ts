@@ -272,6 +272,35 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual((await o().vt.tx((db) => sorgular.bakiyeDefterFarki(db))).filter((f) => f.malzemeId === k), []);
   });
 
+  test('16.1: NCR ile yerinde red olan parti eksi onayıyla da taşınmaz, düşülmez, sepetle gitmez; serbest eksikte eksi onayı sürer', async () => {
+    const k = await kart('sarf');
+    assert.equal((await malKabul(k, '6')).durum, 200);
+    const kabul = await konumId('KABUL');
+    const p = (await o().vt.tek<{ id: number }>('SELECT parti_id AS id FROM stok_bakiye WHERE malzeme_id = $1', [k]))!.id;
+    const zemin = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur: 'depo_zemini', kod: `NCR-161-${kartSira}`, ad: null });
+    assert.equal(zemin.durum, 200, JSON.stringify(zemin.govde));
+    const z = zemin.govde.konum.id;
+    await o().vt.tx((db) => partiKaliteDurumuYap(db, kisiler.get('depo')!, { partiId: p, hedef: 'red', aciklama: 'NCR deneme' }));
+    const engel = /^Bu gözdeki parça serbest değil: 6 red \(karantinada\)\. Eksi onayı kalite kararını aşmaz/;
+
+    const tasi = await depo<Hata>('POST', '/stok/tasima', { malzemeId: k, partiId: p, kaynakKonumId: kabul, hedefKonumId: z, miktar: '6', eksiOnay: true });
+    assert.equal(tasi.durum, 422, JSON.stringify(tasi.govde));
+    assert.match(tasi.govde.mesaj, engel);
+    const cik = await depo<Hata>('POST', '/stok/cikis', { malzemeId: k, partiId: p, konumId: kabul, miktar: '1', cikisNedeni: 'diger', eksiOnay: true });
+    assert.deepEqual([cik.durum, engel.test(cik.govde.mesaj)], [422, true], JSON.stringify(cik.govde));
+    const ekle = await depo<Hata & { satirlar: { id: number }[] }>('POST', '/stok/sepet/satir-ekle', { malzemeId: k, kaynakKonumId: kabul, partiId: p, miktar: '6' });
+    assert.equal(ekle.durum, 200, JSON.stringify(ekle.govde));
+    const sepet = await depo<Hata>('POST', '/stok/sepet/teslim-et', { hedefKonumId: z, eksiOnay: true });
+    assert.deepEqual([sepet.durum, engel.test(sepet.govde.mesaj)], [422, true], JSON.stringify(sepet.govde));
+    const dus = await depo<Hata>('POST', '/stok/sepet/stoktan-dus', { cikisNedeni: 'diger', eksiOnay: true });
+    assert.deepEqual([dus.durum, engel.test(dus.govde.mesaj)], [422, true], JSON.stringify(dus.govde));
+    for (const x of ekle.govde.satirlar) assert.equal((await depo('POST', `/stok/sepet/satirlar/${String(x.id)}/sil`, {})).durum, 200);
+    const durumlar = await o().vt.sorgu<{ k: number; q: string; m: string }>(
+      'SELECT konum_id AS k, kalite_durumu AS q, sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND miktar <> 0 GROUP BY 1, 2', [k]);
+    assert.deepEqual(durumlar.map((r) => [r.k, r.q, r.m]), [[kabul, 'red', '6.000']], 'hiçbir şey yazılmaz');
+    assert.deepEqual((await o().vt.tx((db) => sorgular.bakiyeDefterFarki(db))).filter((f) => f.malzemeId === k), []);
+  });
+
   test('denetim #15: karantinadaki parça depoda yalnız hurdaya taşınır ya da fire çıkışıyla düşer; serbest bırakmayı Kalite Merkezi çağırır', async () => {
     const k = await kart('sarf');
     assert.equal((await malKabul(k, '6')).durum, 200);
@@ -768,6 +797,25 @@ describe('stok (gerçek PostgreSQL)', () => {
     partiIziCevabi.parse(iz.govde);
     assert.deepEqual(iz.govde.emirler, [e]);
     assert.deepEqual(iz.govde.sevkler, [], 'emri sevk edilmemiş partinin izinde sevk uydurulmaz');
+  });
+
+  test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan kart sınırsız', async () => {
+    const e = await emir();
+    const m = await kart('mamul');
+    await o().sahip.sorgu('UPDATE uretim_emri SET malzeme_no = $2 WHERE id = $1', [e, m]);
+    const gir = (malzemeId: number, miktar: string) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: e, malzemeId, miktar });
+    assert.equal((await gir(m, '6')).durum, 200);
+    const asan = await gir(m, '6');
+    assert.deepEqual([asan.durum, asan.govde.mesaj], [400, 'Üretim girişi emrin girilmemiş adedini (4) aşamaz.'], JSON.stringify(asan.govde));
+    assert.equal((await gir(m, '4')).durum, 200);
+    assert.equal((await gir(m, '1')).govde.mesaj, 'Üretim girişi emrin girilmemiş adedini (0) aşamaz.');
+    assert.equal(await bakiye(m, 'URETIM'), '10.000');
+    // Geri alınan giriş yer açar.
+    const h = (await o().vt.tek<{ id: number }>("SELECT id FROM stok_hareketi WHERE malzeme_id = $1 AND tur = 'giris' ORDER BY id DESC LIMIT 1", [m]))!.id;
+    assert.equal((await mudur('POST', `/stok/hareketler/${String(h)}/geri-al`, {})).durum, 200);
+    assert.equal((await gir(m, '4')).durum, 200);
+    const baska = await kart('yarimamul');
+    assert.equal((await gir(baska, '11')).durum, 200, 'emrin ürünü olmayan yarı mamul sınırsız');
   });
 
   test('kart #1338 akış süresi okumaları: emrin, partisinin ve tesliminin hareketleri tekrarsız ve sıralı; parti giriş zamanı', async () => {
