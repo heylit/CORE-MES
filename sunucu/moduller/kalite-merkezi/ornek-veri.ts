@@ -3,7 +3,7 @@ import { ornekVeriTanimi } from '#cekirdek/ornek-veri.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeOzeti, ornekMalzemeNo, type OrnekMalzemeAnahtari } from '../malzemeler/disari.ts';
-import { yaz } from './servis.ts';
+import { onayla, yaz } from './servis.ts';
 import { ornekKaydiVarMi } from './sorgular.ts';
 
 // "ORNEK Atölye" hikayesinin kalite kayıtları (kart #906): üç mamulün parça kartı, Mil'in final muayenesi (kabul), Flanş'ın
@@ -84,12 +84,13 @@ export const ornekVeri = ornekVeriTanimi({
       not: 'Örnek proses muayenesi; delik çapı tolerans dışı.', aqlPlan: '', gchk: [], fchk: [], faiNeden: '', faiKapsam: '',
       sonuc: 'Ret', cizimId: '',
     });
-    await kaydet('ncr', 'ORN-NCR-1', {
+    // MRB kararı onaydır (195 a): kararlı uygunsuzluk onay yoluyla yazılır.
+    await onayla(db, kisi, 'ncr', 'ORN-NCR-1', {
       no: 'ORN-NCR-0001', tarih: baglam.gun, kaynak: 'Proses muayene', ciddiyet: 'Majör', parcaNo: flans.no, parcaAdi: flans.ad,
       rev: 'A', lot: 'ORN-LOT-002', proje: '', emir: '', miktar: 2, hataTipi: 'Boyutsal', tedarikci: '', sorumlu: KALITECI_ADI,
       durum: 'DÖF açıldı', tanim: 'Gereksinim Ø12 H7 (12,000-12,018); ölçülen 12,031. Numunede 2 parça tolerans dışı.',
-      mrb: 'Yeniden işle', mrbGerekce: 'Örnek karar: delik yeniden işlenip tekrar ölçülecek.',
-    });
+      mrb: 'Yeniden işle', mrbGerekce: 'Örnek karar: delik yeniden işlenip tekrar ölçülecek.', guncelleme,
+    }, null);
     await kaydet('capa', 'ORN-DOF-1', {
       no: 'ORN-DOF-0001', ncrRef: 'ORN-NCR-1', acilis: baglam.gun, termin: gunEkle(baglam.gun, 30),
       baslik: 'Flanş delik çapı tolerans dışı', sorumlu: KALITECI_ADI, tur: 'Düzeltici', yontem: '5 Neden', adim: 3, durum: 'Açık',
