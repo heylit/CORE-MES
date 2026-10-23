@@ -42,6 +42,8 @@ namespace LogoYardimcisi
         static readonly Regex TeklifOku = new Regex("^/api/SalesOffer/([0-9]+)$");
         static readonly Regex TekliftenSiparis = new Regex("^/api/SalesOffer/([0-9]+)/toOrder$");
         static readonly Regex MalzemeFisiYaz = new Regex("^/api/MaterialSlip/(AddConsumption|AddProductionEntry)$");
+        static readonly Regex MalzemeFisiBul = new Regex("^/api/MaterialSlip/(Consumption|ProductionEntry)/find/([^/]+)$");
+        static readonly Regex MalzemeFisiKayit = new Regex("^/api/MaterialSlip/(Consumption|ProductionEntry)/([^/]+)$");
 
         // Oturum açılamadıysa istek Logo'ya gitmemiştir (503); çağrı sırasında koptuysa ya da beklenmeyen hata olduysa sonuç bilinmez (500).
         // Beklenmeyen hatanın iletisi (SQL sunucu adı taşıyabilir) cevaba girmez, yalnız günlüğe tür adıyla yazılır.
@@ -84,6 +86,11 @@ namespace LogoYardimcisi
                 if ((m = KarsilamaSiparis.Match(yol)).Success) return KarsilamalariOku(RefCoz(m));
                 if ((m = SatisMusterisi.Match(yol)).Success) return SatisMusterisiOku(Coz(m, 1));
                 if ((m = TeklifOku.Match(yol)).Success) return TeklifSatirlari(RefCoz(m));
+                if ((m = MalzemeFisiBul.Match(yol)).Success)
+                {
+                    var f = oku.MalzemeFisi(Coz(m, 2), FisTuru(m));
+                    return Bul(f == null ? 0 : f.Ref, "Slip not found");
+                }
             }
             else if (yontem == "POST")
             {
@@ -107,6 +114,7 @@ namespace LogoYardimcisi
             else if (yontem == "DELETE")
             {
                 if ((m = KarsilamaSiparis.Match(yol)).Success) return KarsilamalariKaldir(RefCoz(m));
+                if ((m = MalzemeFisiKayit.Match(yol)).Success) return MalzemeFisiSil(FisTuru(m), Coz(m, 2));
             }
             return Cevap.Hata(404, "Not found");
         }
@@ -125,6 +133,11 @@ namespace LogoYardimcisi
             int r;
             if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out r) || r <= 0) throw new GecersizIstek("Kayıt numarası geçersiz.");
             return r;
+        }
+
+        static int FisTuru(Match m)
+        {
+            return m.Groups[1].Value == "Consumption" ? 12 : 13;
         }
 
         static Cevap Bul(int kayit, string yokIletisi)
@@ -1039,6 +1052,19 @@ namespace LogoYardimcisi
             var f = new List<string>();
             SatirlariKarsilastir(f, satirlar, okunan);
             return f.Count > 0 ? DogrulamaTutmadi("Malzeme fişi", b.Ref, f) : Cevap.Basari(b.Ref);
+        }
+
+        // 233: TMI fişi Logo'da silip aynı numarayla yeniden açar (Logo'da satır silme yok) ve miktar sıfıra inince siler.
+        // Delete Logo Objects ile; sonra SQL'den fişin gittiği doğrulanır. Gerçek Logo'da denenmedi (kurulum/logo-yardimcisi.md).
+        Cevap MalzemeFisiSil(int tur, string no)
+        {
+            if (no.Length > FisNoEnCok) throw new GecersizIstek("Fiş numarası çok uzun.");
+            var b = oku.MalzemeFisi(no, tur);
+            if (b == null) return Cevap.Hata(404, "Slip not found");
+            var h = yaz.Sil(Nesne.MalzemeFisi, b.Ref);
+            if (h != null) return Cevap.Ret(h);
+            if (oku.MalzemeFisi(no, tur) != null) return Cevap.Hata(500, "Logo silmeyi onayladı ama malzeme fişi SQL'de duruyor; işlendiği bilinmiyor.");
+            return Cevap.Basari(b.Ref);
         }
     }
 }

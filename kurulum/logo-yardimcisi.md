@@ -128,6 +128,13 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   kapalı gelir. Hizmet "var mı" ucu yardımcıda vardır (`GET /api/PurchaseService|SalesService/exists/{kod}`); sonucu bilinmeyen gönderim
   önce bununla okunur. Açmadan önce deneme firmasında bir kartla deneyin.
 
+## Malzeme fişi (sarf ve üretimden giriş)
+
+- Açma `POST /api/MaterialSlip/AddConsumption` (sarf, TRCODE 12) ve `AddProductionEntry` (üretimden giriş, 13); numara emir numarasıdır, aynı numara ikinci kez açılmaz.
+- Numarayla bulma `GET /api/MaterialSlip/{Consumption|ProductionEntry}/find/{no}` (SQL, `STFICHE` FICHENO + TRCODE); yoksa 404.
+- Silme `DELETE /api/MaterialSlip/{Consumption|ProductionEntry}/{no}` (Logo Objects `Delete`), sonra fişin SQL'den gittiği doğrulanır; yoksa 404.
+  TMI miktar değişince fişi silip aynı numarayla yeniden açar (Logo'da satır silme yok), miktar sıfıra inince siler (233).
+
 ## Gerçek Logo'ya geçmeden önce
 
 1. Yardımcıyı derleyin, `test` ile sahte Logo testlerinin geçtiğini görün.
@@ -150,6 +157,7 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 3. Talep fişi satırlarında `INTERNAL_REFERENCE` okunabilir (satır eşleme ve karşılama için).
 4. Malzeme XML'indeki `FACTORY_PARAMS` bloğu rehberin ölçülmüş örneğinden alındı.
 5. Logo bilgisayarında .NET Framework 4.x kurulu; yardımcı yönetici olmadan kullanıcı süreci olarak çalışır.
+6. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
 
 TMI tarafındaki eski varsayımlar (cevap zarfı, 60 saniye, 5 dakika bekleme, kart türleri, sipariş alanları) yardımcının sözleşmesiyle aynıdır;
 yardımcı bunları `kopru.ts`'in beklediği biçimde döner (`Islemler.cs`).
