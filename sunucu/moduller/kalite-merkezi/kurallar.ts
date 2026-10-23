@@ -22,6 +22,9 @@ export const ILETILER = {
   izSilinmez: 'Değişiklik izi kayıtları silinemez.',
   dosyaYok: 'Dosya bulunamadı.',
   yalnizYonetici: 'Kalite Merkezi kullanıcı ve ayar kayıtlarını yalnız yönetici değiştirir.',
+  arsivYonetici: 'Kayıtları yalnız yönetici arşive alır.',
+  silmeYonetici: 'Bu Kalite Merkezi kaydını yalnız yönetici siler.',
+  kaynakOnay: 'Tedarikçi ve form şablonu kayıtlarını onay yetkisi olan değiştirir.',
   onayUcu: 'Onay ve kapanış alanları kayıt yazmayla değişmez; onay yetkisiyle kaydedilir.',
   onayDegeri: 'Onay ya da durum değeri geçersiz.',
   onayliForm: 'Onaylanmış form değiştirilemez ve silinemez; önce onayı geri alın.',
@@ -42,6 +45,14 @@ export const ILETILER = {
 // Uygulamanın rolleri ve ayarları bu kayıtlardadır; giriş TMI oturumu olduğu için onları yalnız yönetici değiştirir.
 const YONETICI_KOLEKSIYONLARI: readonly string[] = ['kullanici', 'settings'];
 export const yoneticiKoleksiyonuMu = (koleksiyon: string): boolean => YONETICI_KOLEKSIYONLARI.includes(koleksiyon);
+
+// Soru 229 a: uygulamanın ekranda rol seviyesiyle sınırladığı kaynak kayıtları (tedarikçi ve form şablonu; uygulamada Kalite
+// mühendisi) sunucuda onay işlemini ister. Silme ve arşivleme yöneticinindir (uygulamada Kalite yöneticisi).
+const KAYNAK_KOLEKSIYONLARI: readonly string[] = [TEDARIKCI_KOLEKSIYONU, 'tpl'];
+export const kaynakKoleksiyonuMu = (koleksiyon: string): boolean => KAYNAK_KOLEKSIYONLARI.includes(koleksiyon);
+// Soru 260 a: belge, Teknik kütüphane bayrağı ve form şablonu (varsayılana dönüş) onay işlemiyle de silinir; öteki silmeler yöneticinindir.
+const ONAYLA_SILINENLER: readonly string[] = ['belge', 'bayrak', 'tpl'];
+export const onaylaSilinirMi = (koleksiyon: string): boolean => ONAYLA_SILINENLER.includes(koleksiyon);
 
 // Giriş TMI oturumudur: uygulamanın kullanıcı kaydı PIN özeti taşımaz (eski yedekten ya da eski ekrandan gelse de saklanmaz).
 export function pinsiz<T extends Record<string, unknown>>(koleksiyon: string, govde: T): T {
@@ -179,6 +190,22 @@ export function kapanmisKayitMi(koleksiyon: string, govde: Record<string, unknow
   if (koleksiyon === 'insp') return SONUCLU_MUAYENE.includes(alan('sonuc'));
   if (koleksiyon === LOT_KOLEKSIYONU) return alan('karar') !== '' && alan('tip') !== 'reset';
   return false;
+}
+
+// 228 a: uygulamanın "Arşive al" komutu kapanmış, sonuçlanmış ve onaylı kaydı listeden kaldırmak için yalnız `arsiv` bayrağını
+// ve kendi yazma damgasını (`guncelleme`) değiştirerek yeniden yazar. Kilitli içerik değişmediği için bu yazma kilide takılmaz;
+// bayrak yalnız açık ya da kapalıdır, içerik taşıyamaz. Bayrağı yalnız yönetici değiştirir (229 a; uygulamada Kalite yöneticisi).
+export const ARSIV_ALANI = 'arsiv';
+const ARSIV_DISI = new Set([ARSIV_ALANI, 'guncelleme']);
+const arsivDisi = (g: Record<string, unknown>): string =>
+  JSON.stringify(sirali(Object.fromEntries(Object.entries(g).filter(([k]) => !ARSIV_DISI.has(k)))));
+export const arsivDegisiyor = (onceki: Record<string, unknown> | null, yeni: Record<string, unknown>): boolean =>
+  !ayni(onceki?.[ARSIV_ALANI], yeni[ARSIV_ALANI]);
+export function yalnizArsivDegisiyor(onceki: Record<string, unknown> | null, yeni: Record<string, unknown>): boolean {
+  if (onceki === null) return false;
+  const bayrak = yeni[ARSIV_ALANI];
+  if (bayrak !== undefined && typeof bayrak !== 'boolean') return false;
+  return arsivDegisiyor(onceki, yeni) && arsivDisi(onceki) === arsivDisi(yeni);
 }
 
 // KM-K85 (kullanıcı kararı 85, 19.10.2026): kalibrasyonu geçersiz cihazla ölçüm sunucuda reddedilir. Cihaz uygulamanın `dev`

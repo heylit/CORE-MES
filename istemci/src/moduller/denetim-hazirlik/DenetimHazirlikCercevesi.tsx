@@ -11,6 +11,7 @@ import type { CerceveAyari } from './cerceve-kopru.ts';
 import { ekBetikler } from './ek-betikler.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { OLCU_ALETI_YOLU, olcuAletiBetigi } from './olcu-aleti.ts';
+import { yonetimDugmeleriBetigi } from './yonetim-dugmeleri.ts';
 import { gomuluYaziStili } from './yazi-tipleri.ts';
 import './denetim-hazirlik.css';
 
@@ -127,7 +128,8 @@ export function DenetimHazirlikCercevesi() {
       // Açık her sekme sürekli istek atar; değişiklik damgası 10 sn gecikmeyle de yeter.
       yoklamaMs: 10_000,
       azamiEkBayt: AZAMI_EK_BAYT,
-    }) + ekBetik + olcuAletiBetigi({ kanal: KANAL, depoAnahtari: OLCU_ALETI_DEPO_ANAHTARI, yoklamaMs: 20_000, aletler }), yaziStili);
+    }) + ekBetik + olcuAletiBetigi({ kanal: KANAL, depoAnahtari: OLCU_ALETI_DEPO_ANAHTARI, yoklamaMs: 20_000, aletler })
+      + yonetimDugmeleriBetigi(ben.yonetici), yaziStili);
   }, [prototip, yaziStili, ekBetik, hazirlik, ilkTema]);
   const isle = useMemo(() => kopruKur(), []);
 

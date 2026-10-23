@@ -92,7 +92,8 @@ describe('biten iş plana girmez', () => {
   });
 
   it('sunucunun iş emri durumu varsa kayıttaki kopyanın yerine o okunur', async () => {
-    const durum = { emirler: { orders: [{ id: 'O4', status: 'tamam' }], opStatus: {} } };
+    // sunucunun emir listesi tamdır (13.1: emirler kaydın üstüne konur); O2 sunucuda sürüyor, O4 bitmiş
+    const durum = { emirler: { orders: KAYIT.orders.map((o) => ({ ...o, status: o.id === 'O4' ? 'tamam' : 'uretimde' })), opStatus: {} } };
     const m = motor(KAYIT, { durum, ek: null }); m.ac();
     await new Promise((coz) => { setTimeout(coz, 0); });
     expect(m.st().D.siparisler.map((s) => s.id)).toEqual(['O1', 'O2', 'O3']);
