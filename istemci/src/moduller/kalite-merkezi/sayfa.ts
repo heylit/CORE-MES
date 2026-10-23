@@ -1,7 +1,7 @@
 import { yalitimOnBetigi } from '../../ortak/arayuz/index.ts';
 import { kalibrasyonKuraliBetigi } from '../kalibrasyon/disari.ts';
 import type { KmKimlikCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { GECMIS_BETIGI, ILK_PARCA_BETIGI, KARANTINA_HEDEF_BETIGI, KILIT_BETIGI, SERBEST_MIKTAR_BETIGI, KIMLIK_BETIGI, KULLANICI_BETIGI, OLCU_ALETI_BETIGI, ONAY_GERI_BETIGI, ON_BETIK, PALET_BETIGI, SON_BETIK } from './acilis.ts';
+import { FIRMA_SECICI_BETIGI, GECMIS_BETIGI, ILK_PARCA_BETIGI, KARANTINA_HEDEF_BETIGI, KILIT_BETIGI, SERBEST_MIKTAR_BETIGI, KIMLIK_BETIGI, KULLANICI_BETIGI, OLCU_ALETI_BETIGI, ONAY_GERI_BETIGI, ON_BETIK, PALET_BETIGI, SON_BETIK } from './acilis.ts';
 
 // Çerçeve dışarıya hiçbir istek atamaz (connect-src yalnız çerçevenin kendi blob/data içeriği). 3B model okuyucu (occt) ve yazı
 // tanıma (tesseract) WebAssembly ve bağlama kodunda Function yapıcısı kullanır, ikisi de blob adresli çalışanda koşar: bunlar
@@ -165,7 +165,7 @@ export function sayfaKur(a: SayfaAyari): string {
   s = konumda(s, s.indexOf('<head>'), '<head>', `<head>\n${bas}`);
   const pdfWasm = `<script type="application/json" id="${PDF_WASM_KIMLIGI}">${betikIcin(JSON.stringify(a.pdfWasm ?? {}))}</script>`;
   s = konumda(s, s.indexOf('</head>'), '</head>', `${GOMULU_STIL}\n${pdfWasm}\n</head>`);
-  s = konumda(s, s.lastIndexOf('</body>'), '</body>', `<script>\n${KULLANICI_BETIGI}\n${ONAY_GERI_BETIGI}\n${KILIT_BETIGI}\n${KARANTINA_HEDEF_BETIGI}\n${SERBEST_MIKTAR_BETIGI}\n${ILK_PARCA_BETIGI}\n${GECMIS_BETIGI}\n${OLCU_ALETI_BETIGI}\n</script>\n<script>${SON_BETIK}</script>\n<script>${PALET_BETIGI}</script>\n</body>`);
+  s = konumda(s, s.lastIndexOf('</body>'), '</body>', `<script>\n${KULLANICI_BETIGI}\n${ONAY_GERI_BETIGI}\n${KILIT_BETIGI}\n${KARANTINA_HEDEF_BETIGI}\n${SERBEST_MIKTAR_BETIGI}\n${ILK_PARCA_BETIGI}\n${GECMIS_BETIGI}\n${OLCU_ALETI_BETIGI}\n${FIRMA_SECICI_BETIGI}\n</script>\n<script>${SON_BETIK}</script>\n<script>${PALET_BETIGI}</script>\n</body>`);
   s = birKez(s, '<!--km-grafik-->', `<script>${betikIcerigi('grafik', a.grafik)}</script>`);
   for (const k of KITAPLIK_KIMLIKLERI) {
     s = birKez(s, `<!--km-kitaplik:${k}-->`, `<script type="text/x-lib" id="${k}">${betikIcerigi(k, a.kitapliklar[k])}</script>`);

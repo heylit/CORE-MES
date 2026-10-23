@@ -128,6 +128,46 @@ describe('veri katmanı', () => {
   });
 });
 
+function Secenekli() {
+  const d = useDenetim();
+  return (
+    <>
+      <p>{d.profil.profile.firma || 'adsız'}</p>
+      <p>{`dok:${d.ekran.kys.dok ?? ''} yeni:${String(d.ekran.takvim?.yeniDenetim ?? false)} sekme:${d.ekran.kys.tab}`}</p>
+      <p>{d.geriAlinabilir ? 'geri-alinabilir' : 'geri-yok'}</p>
+      <button type="button" onClick={() => { d.degistir('Puan', (t) => { t.profile.firma = 'Sessiz'; }, { sessiz: true }); }}>sessiz</button>
+      <button type="button" onClick={() => { d.degistir('Firma', (t) => { t.profile.firma = 'Metinli'; }, { bildirim: 'Firma adı kaydedildi' }); }}>metinli</button>
+      <button type="button" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'd1' }); }}>dokuman</button>
+      <button type="button" onClick={() => { d.git('takvim', { yeniDenetim: true }); }}>takvim</button>
+    </>
+  );
+}
+
+describe('bağlam seçenekleri (P1 R1-R2, P2 F19, P1 F5)', () => {
+  it('sessiz değişiklik bildirim çıkarmaz ama geri alınabilir; bildirim metni etiketten ayrı verilebilir', async () => {
+    sahteSunucu({ depo: ornekDepo() });
+    await baglamlaAc(<Secenekli />);
+    await screen.findByText('adsız');
+    fireEvent.click(screen.getByText('sessiz'));
+    expect(screen.getByText('Sessiz')).toBeTruthy();
+    expect(screen.queryByText('Puan')).toBeNull();
+    expect(screen.getByText('geri-alinabilir')).toBeTruthy();
+    fireEvent.click(screen.getByText('metinli'));
+    expect(screen.getByText('Firma adı kaydedildi')).toBeTruthy();
+    expect(screen.queryByText('Firma')).toBeNull();
+  });
+
+  it('git belirli dokümanı ve yeni denetim formunu ekran durumuna yazar', async () => {
+    sahteSunucu({ depo: ornekDepo() });
+    await baglamlaAc(<Secenekli />);
+    expect(await screen.findByText('dok: yeni:false sekme:nedir')).toBeTruthy();
+    fireEvent.click(screen.getByText('dokuman'));
+    expect(screen.getByText('dok:d1 yeni:false sekme:uret')).toBeTruthy();
+    fireEvent.click(screen.getByText('takvim'));
+    expect(screen.getByText('dok:d1 yeni:true sekme:uret')).toBeTruthy();
+  });
+});
+
 describe('yetki (izinli ve reddedilen)', () => {
   it('yazma yetkisi olmayan kişide değişiklik yapılmaz, istek gitmez; Geri al menüsü yok', async () => {
     const sunucu = sahteSunucu({ depo: ornekDepo(), yazabilir: false, yonetici: false });

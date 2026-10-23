@@ -88,6 +88,8 @@ export interface Supplier {
   city: string;
   taxNo: string;
   status: SupplierStatus;
+  /** Kalite Merkezi'nin onay durumu (236 a); sunucudan gelir, yazılmaz. Kaydı yoksa null. */
+  kaliteDurumu?: string | null;
   /** Finans firma kartının aktifliği; sunucudan gelir, yazılmaz. Boşsa bilinmiyor (pasif sayılmaz). */
   active?: boolean;
   rating: number;

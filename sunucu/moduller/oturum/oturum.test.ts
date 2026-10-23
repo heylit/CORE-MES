@@ -402,6 +402,12 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.sevkiyat?.push('musteri-tedarikci.oku');
   MATRIS.muhasebe_finans?.push('siparisler.fiyat-oku', 'sayfa.projeler');
   MATRIS.vardiya_sorumlusu?.push('sayfa.vardiya', 'vardiya.yaz', 'uretim-emirleri.sayim-duzelt');
+  // Rol düzeltmeleri (237, 267 a ve 272 1a, 23.10.2026): Portal'ın satış onayı sevkiyattan satışa geçer; satış sevk ve projeyi okur,
+  // müdür rotadan emir açar, termin onayı plan.yaz'dan ayrılır.
+  MATRIS.sevkiyat?.splice(MATRIS.sevkiyat.indexOf('portal.satis'), 1);
+  MATRIS.satis?.push(...PORTAL, 'portal.satis', 'projeler.oku', 'sevkiyat.oku', 'siparisler.termin-onayla');
+  MATRIS.mudur?.push('rota.emre-kopyala', 'siparisler.termin-onayla');
+  MATRIS.planlama_proje?.push('siparisler.termin-onayla');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 
@@ -496,7 +502,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     ], { vt: vt(), kimlik: kimlikCozucu(vt()), denetle: denetimYaz });
     const BEKLENEN: Record<string, { yaz: number; uret: number; kopya: number }> = {
       yonetici: { yaz: 200, uret: 200, kopya: 200 },
-      mudur: { yaz: 200, uret: 200, kopya: 403 },
+      mudur: { yaz: 200, uret: 200, kopya: 200 },
       planlama_proje: { yaz: 200, uret: 403, kopya: 200 },
       operator: { yaz: 403, uret: 200, kopya: 403 },
       kalite: { yaz: 403, uret: 403, kopya: 403 },

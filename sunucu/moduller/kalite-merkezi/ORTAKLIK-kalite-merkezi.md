@@ -6,7 +6,7 @@ Aşağıdaki kavramlar başka modülde de vardır; Aşama 1'de bağlanmaz.
 | Kavram | Burada (koleksiyon: alanlar, VARSAYIM: formlardan okunduğu kadarıyla) | Depodaki sahibi |
 |---|---|---|
 | Ölçüm cihazı, kalibrasyon kaydı | `dev`: kod, ad, tip, seri no, lokasyon, son/sonraki kalibrasyon, izlenebilirlik | `kalibrasyon` (olcu_aleti, olcu_aleti_turu) |
-| Tedarikçi | `sup`: ad, sertifikalar, PPM | `finans` (firma) |
+| Tedarikçi | `sup`: ad, kod, `firmaId` (236 a), onay, sertifikalar, PPM | firma: `musteri-tedarikci` (`musteri_tedarikci_firma`, kayıt `firmaId` ile bağlanır); onay durumu: kalite-merkezi (236 a, tek sahip; satın alma `disari.ts` `tedarikciOnayDurumlari` ile okur) |
 | Parça | `parca` ve kayıtlardaki parça no, revizyon | `malzemeler` |
 | İş emri / sipariş | `emir`: no, parça no (ERP CSV aktarımı) | `uretim-emirleri`; ERP: `logo` |
 | Kişi, rol, PIN | `kullanici` (Muayeneci, Kalite mühendisi, Kalite yöneticisi) | `kisiler`, `oturum` |
