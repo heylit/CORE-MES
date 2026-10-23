@@ -149,7 +149,7 @@ function brYaris(v, sec) {
 function brYorum(v) {
   const l = []; const n = v.sip.length; const gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T);
   if (v.yok.length) l.push({ sm: 'alert', ton: 'hata', m: brYokMetni(v) });
-  l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
+  if (n) l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
   /* geç siparişleri en çok ne bekletiyor */
   const bek = {}; for (const s of gec) for (const [k, ad, x] of s.kaynak) if (k !== 'isleme') bek[ad] = (bek[ad] || 0) + x;
   const bk = Object.entries(bek).sort((a, b) => b[1] - a[1]);
@@ -208,7 +208,8 @@ const BR_LEJ = {
 function brCevap(v, id) {
   const n = v.sip.length, gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T); const top = gec.reduce((a, s) => a + s.T, 0);
   switch (id) {
-    case 'ozet': return `${v.yok.length ? brYokMetni(v) + ' Yerleşen ' : ''}${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
+    case 'ozet': if (!n) return `${brYokMetni(v)} Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
+      return `${v.yok.length ? brYokMetni(v) + ' Yerleşen ' : ''}${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
     case 'bekle': { const l = brBekleVeri(v).sort((a, b) => b.bek - a.bek); const x = l[0]; return x && x.bek > 0.5 ? `En çok bekleme <b>${esc(BR_GRUP_AD[x.id] || x.id)}</b> grubunda: ${brSa(x.bek)}${x.bekG > 0.5 ? `, bunun <b>${brSa(x.bekG)}</b>'i geç siparişlerin` : ''}.` : 'Belirgin bir bekleme yok.'; }
     case 'yuk': { const gt = brGunOrt(v).map(x => x == null ? -1 : x); const d = gt.indexOf(Math.max(...gt)); const enT = v.u.slice().sort((a, b) => b[1].u - a[1].u)[0]; return `En yoğun gün <b>${esc(v.gunAd[d])} ${esc(fmtDT(S.D, v.T0 + d * (v.kova || 1) * 24 + 1).slice(0, 5))}</b> (ortalama %${Math.round(gt[d] * 100)}). Plan boyunca en dolu tezgâh <b>${esc(enT ? enT[0] : '—')}</b>${enT ? ` (%${Math.round(enT[1].u * 100)})` : ''}.`; }
     case 'sure': { const y = (BR.yor || []).find(x => x.sm === 'clock'); return y ? y.m : ''; }
