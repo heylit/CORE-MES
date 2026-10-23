@@ -28,7 +28,7 @@ import type {
   TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { malzemeIstegiAcGirdisi, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type LotBekleyenKartlarCevabi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { malzemeIstegiAcGirdisi, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type LotBekleyenKartlarCevabi, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -700,18 +700,23 @@ export async function partiListesi(db: Db, s: PartilerListesi): Promise<SayfaliL
   const l = await sayfaliListe(s, { say: () => sorgular.partiSay(db, suzgec), satirlar: (d) => sorgular.partiler(db, suzgec, s, d) });
   return { ...l, satirlar: await partileriCevir(db, l.satirlar) };
 }
-// Parti izi (DEP-25, DEP-48): partinin bütün hareketleri, çıktığı (ya da üretildiği) üretim emirleri ve o emirlerin sevkleri.
+// Parti izi (DEP-25, DEP-48, Dal 9): partinin bütün hareketleri, çıktığı (ya da üretildiği) ve kartlarının üretim emirleri, o emirlerin
+// sevkleri; lotun kartları, kartlarla üretilen partiler ve sevk çıkışları.
 export async function partiIzi(db: Db, id: number): Promise<PartiIziCevabi> {
   const p = await sorgular.partiBul(db, id);
   if (!p) throw bulunamadi('Parti bulunamadı.');
   const h = await sorgular.hareketler(db, { partiId: id }, { sirala: 'zaman', yon: 'artan' }, { sinir: 500, atla: 0 });
-  const emirler = [...new Set([...(p.uretimEmriId === null ? [] : [p.uretimEmriId]), ...h.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId]))])];
+  const kartlar = await refakatPartileriCevir(db, await sorgular.refakatPartileriBul(db, await sorgular.lotunKartlari(db, id)));
+  const emirler = [...new Set([
+    ...(p.uretimEmriId === null ? [] : [p.uretimEmriId]), ...h.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])), ...kartlar.map((k) => k.uretimEmriId),
+  ])];
   const sevkler = await emirlerinSevkleri(db, emirler);
   return {
     parti: (await partileriCevir(db, [p]))[0]!, hareketler: await hareketleriCevir(db, h), emirler,
     sevkler: emirler.flatMap((e) => (sevkler.get(e) ?? []).map((x) => ({
       emirId: e, isId: x.isId, gun: x.tarih, durum: x.durum, adet: x.adet, firmaId: x.firmaId, firmaAdi: x.firmaAdi,
     }))),
+    kartlar, ...(await kartlarinCiktiVeSevkleri(db, kartlar.map((k) => k.id))),
   };
 }
 
@@ -4265,19 +4270,27 @@ export async function refakatIzi(db: Db, id: number): Promise<RefakatIziCevabi> 
     ustler.push(x);
     u = x.ustRefakatPartisiId;
   }
-  const [altlar, birlesenler, ayniLot, ciktilar, sevkler] = [
+  const [altlar, birlesenler, ayniLot] = [
     await sorgular.altRefakatPartileri(db, r.id), await sorgular.birlesenRefakatPartileri(db, r.id),
     r.partiId === null ? [] : (await sorgular.lotunRefakatPartileri(db, r.partiId)).filter((x) => x.id !== r.id),
-    await sorgular.refakatCiktilari(db, soy), await sorgular.refakatSevkleri(db, soy),
   ];
-  const ozetler = await malzemeOzetleri(db, [...ciktilar.map((c) => c.malzemeId), ...sevkler.map((x) => x.malzemeId)]);
-  const nolar = await emirNoHaritasi(db, sevkler.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])));
-  const malzeme = (m: number) => { const o = ozetler.get(m); return { malzemeId: m, malzemeKod: o?.kod ?? null, malzemeAd: o?.ad ?? null, birim: o?.birim ?? null }; };
+  const { ciktilar, sevkCikislari } = await kartlarinCiktiVeSevkleri(db, soy);
   const cevir = (l: RefakatPartisiHam[]) => refakatPartileriCevir(db, l);
   return {
     refakat: (await cevir([r]))[0]!, ustler: await cevir(ustler), altlar: await cevir(altlar), birlesenler: await cevir(birlesenler), ayniLot: await cevir(ayniLot),
+    ciktilar, sevkler: sevkCikislari,
+  };
+}
+// Kartlarla sayılan üretim partileri (eldekiyle) ve bu partilerden yapılmış sevk çıkışları; kart izi ve lot izi ortak okur.
+async function kartlarinCiktiVeSevkleri(db: Db, kartlar: readonly number[]): Promise<{ ciktilar: RefakatCiktisi[]; sevkCikislari: RefakatSevki[] }> {
+  if (kartlar.length === 0) return { ciktilar: [], sevkCikislari: [] };
+  const [ciktilar, sevkler] = [await sorgular.refakatCiktilari(db, kartlar), await sorgular.refakatSevkleri(db, kartlar)];
+  const ozetler = await malzemeOzetleri(db, [...ciktilar.map((c) => c.malzemeId), ...sevkler.map((x) => x.malzemeId)]);
+  const nolar = await emirNoHaritasi(db, sevkler.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])));
+  const malzeme = (m: number) => { const o = ozetler.get(m); return { malzemeId: m, malzemeKod: o?.kod ?? null, malzemeAd: o?.ad ?? null, birim: o?.birim ?? null }; };
+  return {
     ciktilar: ciktilar.map((c) => ({ partiId: c.partiId, lotNo: c.lotNo, refakatPartisiId: c.refakatPartisiId, ...malzeme(c.malzemeId), eldeki: bindenMetin(binde(c.eldeki)) })),
-    sevkler: sevkler.map((x) => ({
+    sevkCikislari: sevkler.map((x) => ({
       hareketId: x.hareketId, zaman: x.zaman, partiId: x.partiId, lotNo: x.lotNo, ...malzeme(x.malzemeId), miktar: bindenMetin(binde(x.miktar)),
       emirNo: x.uretimEmriId === null ? null : emirNoDe(nolar, x.uretimEmriId), aciklama: x.aciklama,
     })),

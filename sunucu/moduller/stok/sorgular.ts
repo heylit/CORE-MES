@@ -1352,6 +1352,16 @@ export const refakatSoyu = async (db: Db, id: number): Promise<number[]> =>
        SELECT id, 0 FROM stok_refakat_partisi WHERE id = $1
        UNION ALL SELECT r.id, g.derinlik + 1 FROM gelen g JOIN stok_refakat_partisi r ON r.birlestigi_refakat_partisi_id = g.id WHERE g.derinlik < 20)
      SELECT id FROM ust UNION SELECT id FROM gelen`, [id])).map((r) => r.id);
+// Lotun kartları (lot izi): lotu taşıyan kartlar, parti üretim partisiyse onu üreten kart, bunların alt (kol) kartları ve bunlara
+// (dolaylı) birleşenler. Lota bağlanırken başka karta birleşen istisna kartı lotu almaz; birleşme bağıyla gelir.
+export const lotunKartlari = async (db: Db, partiId: number): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(
+    `WITH RECURSIVE k(id, derinlik) AS (
+       SELECT r.id, 0 FROM stok_refakat_partisi r
+        WHERE r.parti_id = $1 OR r.id = (SELECT p.refakat_partisi_id FROM stok_parti p WHERE p.id = $1)
+       UNION SELECT r.id, k.derinlik + 1 FROM k JOIN stok_refakat_partisi r ON r.ust_refakat_partisi_id = k.id OR r.birlestigi_refakat_partisi_id = k.id
+        WHERE k.derinlik < 20)
+     SELECT DISTINCT id FROM k ORDER BY id`, [partiId])).map((r) => r.id);
 export interface RefakatCiktisiHam { partiId: number; lotNo: string; malzemeId: number; refakatPartisiId: number; eldeki: string }
 // Kartlarla sayılan üretim partileri ve bugün elde kalanı (bütün konumlar; kalite durumu ayrılmaz).
 export const refakatCiktilari = (db: Db, kartlar: readonly number[]): Promise<RefakatCiktisiHam[]> =>
