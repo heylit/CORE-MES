@@ -76,7 +76,8 @@ export const vardiyaSemasi = z.object({
 export const takvimCevabi = z.object({
   vardiyalar: z.array(vardiyaSemasi),
   matris: z.array(z.object({ isMerkeziId: kimlik, gun: z.number().int(), vardiyaId: kimlik })),
-  gunler: z.array(z.object({ tarih: tarihSemasi, tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable() })),
+  // Soru 142 b: kaynak 'ik' İK'nın resmî tatilidir, Vardiya'dan silinmez; alan yoksa Vardiya'nın kendi günüdür.
+  gunler: z.array(z.object({ tarih: tarihSemasi, tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable(), kaynak: z.literal('ik').optional() })),
   isMerkezleri: z.array(z.object({ id: kimlik, kod: z.string(), ad: z.string(), aktif: z.boolean(), haftalikDakika: z.number().int() })),
   kisiVardiyalari: z.array(z.object({ kisiId: kimlik, vardiyaId: kimlik })),
   // Vardiya kadrosu (tek tanım): iş merkezi x vardiya kişileri; istasyon, makine ve ekip ataması sayılır, vardiyası seçilmeyen kişi iş merkezinin
