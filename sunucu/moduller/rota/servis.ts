@@ -1139,6 +1139,10 @@ async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullable<Awai
     ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, talimatSurumu: a.talimatSurumu,
     kontrolListesi: kontrolListesi(metinler.get(a.opNo) ?? null),
+    // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
+    firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
+    // İş emrinin adayı makine ya da kişidir; istasyon adayı emirde karşılıksızdır, adımın istasyonu zaten başlıktır.
+    adaylar: a.adaylar.flatMap((x) => (x.kaynak.tur === 'istasyon' ? [] : [{ kaynak: { tur: x.kaynak.tur, id: x.kaynak.id }, ayarSuresiDk: x.ayarSuresiDk, birimSureDk: x.birimSureDk }])),
     // Adımın girenleri emre kopyalanır: stok üretim sayımında adımın girdisini bunlardan sarf eder; yoksa sayım yalnız ürün girişi olur.
     bilesenler: a.bilesenler.map((b) => ({ malzemeNo: b.malzemeId, miktar: String(b.miktar), fireYuzde: String(b.fireYuzde) })),
   }));
