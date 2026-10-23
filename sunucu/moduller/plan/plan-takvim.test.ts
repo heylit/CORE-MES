@@ -113,9 +113,9 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: 'Tatilli gün', aciklama: null })).senaryolar.find((x) => x.ad === 'Tatilli gün')!;
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/hizli`, { tur: 'gun', surum: s.surum })).senaryolar.find((x) => x.id === s.id)!;
     const tatil = s.degisiklikler.find((d) => d.tur === 'gun_kapat')!.ozet.slice(0, 10);
-    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: tatil, tur: 'tatil', ad: 'Deneme bayram' });
+    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: tatil, tur: 'kapali', ad: 'Deneme bayram' });
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
-    assert.deepEqual(await gunu(tatil), { tarih: tatil, tur: 'tatil', ad: 'Deneme bayram' });
+    assert.deepEqual(await gunu(tatil), { tarih: tatil, tur: 'kapali', ad: 'Deneme bayram' });
     await tamam(c.yonetici, 'POST', `/takvim-gunleri/${tatil}/kaldir`);
   });
 
@@ -124,7 +124,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-D', ad: 'Deneme D', isMerkeziId: merkez.id })).id;
     const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MD', ad: 'Deneme makine D', istasyonId: ist })).id;
     const yarin = tesisGunu(tesisGunBasi(tesisGunu(Date.now())) + 36 * 3600_000);
-    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'tatil', ad: 'Deneme tatil' });
+    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'kapali', ad: 'Deneme tatil' });
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine } })], 1000);
     const p = await taslaktaOner();
     const y = yer(p, i1!);
@@ -143,7 +143,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const gun = tesisGunu(gece);
     assert.notEqual(gun, new Date(gece).toISOString().slice(0, 10), 'an UTC\'de bir gün geride');
     const yarin = tesisGunu(tesisGunBasi(gun) + 36 * 3600_000);
-    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'tatil', ad: 'Deneme tatil' });
+    await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'kapali', ad: 'Deneme tatil' });
     // 30 + 720 * 2 = 1470 dk: tesiste 00:30'da başlayan iş gün bitince 60 dk artar; artan dakika tatilden sonra işler.
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine } })], 720);
     mock.timers.enable({ apis: ['Date'], now: gece });
