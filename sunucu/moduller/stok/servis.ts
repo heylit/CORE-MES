@@ -1153,6 +1153,19 @@ export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<
     return { hareketIdler: [id], onayliEksi, ...(karar === null ? {} : { uyari: karar.uyari }) };
   });
 }
+// CNC takım stoğu (153 a, 164 b): kurulumda değişen takım ya da kullanılan uç seti kartın serbest bakiyesinden, ilk giren önce
+// (çıkış önerisiyle) düşer. Yetmezse hiç düşülmez, eksiye inilmez; mevcut miktar döner. Yetkiyi çağıran korur.
+export type CncTakimCikisiSonucu = { yeterli: true; hareketIdler: number[] } | { yeterli: false; mevcut: string };
+export async function cncTakimCikisi(db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<CncTakimCikisiSonucu> {
+  const oneri = await cikisOnerisiOku(db, g.malzemeId, g.miktar);
+  if (!oneri.yeterli) return { yeterli: false, mevcut: oneri.mevcut };
+  const hareketIdler: number[] = [];
+  for (const o of oneri.oneriler) {
+    const c = await cikisYap(db, kisiId, { malzemeId: g.malzemeId, konumId: o.konumId, partiId: o.partiId, miktar: o.miktar, cikisNedeni: 'diger', aciklama: g.aciklama.slice(0, 200) });
+    hareketIdler.push(...c.hareketIdler);
+  }
+  return { yeterli: true, hareketIdler };
+}
 export async function tasimaYap(db: Db, kisiId: number, g: TasimaKomutu): Promise<HareketCevabi> {
   const malzemeId = Number(g.malzemeId);
   const kaynak = Number(g.kaynakKonumId);

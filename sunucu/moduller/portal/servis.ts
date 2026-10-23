@@ -10,10 +10,10 @@ import { onayLimitleri } from '../satin-alma/disari.ts';
 import { malzemeNoKoddan, malzemeOzeti } from '../malzemeler/disari.ts';
 import { kabulEt, notluGecis, siparisDonustur, siparisEkle, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle } from '../siparisler/disari.ts';
 import {
-  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
+  FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, kilitAlinirMi, rolDegisiyorMu, siparisDonusumu, siparisSatirlari, siparisTeklifi, sonParca, sorgula, sozlesmeSiparisi, talepDuzenlemesi, talepTeklifi, teklifAcilisi, teklifAdimlari, ustYolu,
 } from './kurallar.ts';
-import type { DepoBelgesi, OdaKaydi, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
+import type { DepoBelgesi, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Akış: yetkiyi uç verir; burada kişiye özel alan, sürüm denetimi ve birleştirme uygulanır.
@@ -21,6 +21,8 @@ import * as sorgular from './sorgular.ts';
 const ISLEM_YAZ = 'portal.yaz';
 const ISLEM_YONET = 'portal.yonet';
 const SIPARIS_YAZ = 'siparisler.yaz';
+// Onaya bağlı kayıtlar (prototipin AP_KIND koleksiyonları; IBAN yalnız onayla değişir, onayGeregi denetler).
+const ONAYLI_KOLEKSIYONLAR = new Set(['orders', 'payments', 'contracts', 'priceReqs', 'requests']);
 
 function erisimDenetle(kullanici: Kullanici, yol: string): void {
   if (!erisebilirMi(yol, kullanici.id)) throw yetkiYok('Bu kayıt başka bir kişiye özeldir.');
@@ -75,19 +77,51 @@ function rolDenetle(yol: string, eski: Veri | null, yeni: Veri): void {
   if (rolDegisiyorMu(yol, eski, yeni)) throw yetkiYok('Portal rolü TMI rolünden gelir; burada değiştirilemez.');
 }
 
-// Onay kaydı ve onay bekleyen kayıt (kart #1583): karar onay ucundadır; genel yazma kararı taklit edemez.
+async function onayKurallariOku(db: Db): Promise<OnayKurallari> {
+  return onayKurallari((await sorgular.belgeGetir(db, ONAY_AYAR_YOLU))?.veri ?? null, await onayLimitleri(db));
+}
+
+// Onay adımlarını prototip rol adıyla eşler; açanın rolü portal kullanıcısındadır (yalnız sunucu yazar, rolDegisiyorMu).
+async function portalRolAdi(db: Db, kullaniciKimligi: unknown): Promise<string> {
+  const rol = typeof kullaniciKimligi === 'string' ? (await sorgular.belgeGetir(db, `users/${kullaniciKimligi}`))?.veri['role'] : undefined;
+  return typeof rol === 'string' ? rol : '';
+}
+
+// Onay kaydı ve onay bekleyen kayıt (kart #1583): karar onay ucundadır; genel yazma kararı taklit edemez. Adım zinciri sunucunun
+// hesabıdır (B8): açılışta zincir, onaysız yazıda onay gereği, etkide kaydın bugünkü değeri denetlenir.
 async function onayDenetle(db: Db, kullanici: Kullanici, yol: string, eski: Veri | null, yeni: Veri | null): Promise<void> {
   const red = onayYazimiReddi(yol, eski, yeni, sonParca(portalKullaniciYolu(kullanici.id)));
   if (red !== null) throw yetkiYok(red);
   if (yeni === null) return;
+  const rol = portalRolu(kullanici.islemler).role;
+  if (onayBelgesiMi(yol)) {
+    if (eski !== null) return;
+    const tur = yeni['kind'];
+    const kayitYolu = tur === 'pricereq' ? `priceReqs/${String(yeni['refId'])}` : tur === 'contract' ? `contracts/${String(yeni['refId'])}` : null;
+    const kayit = kayitYolu === null ? null : (await sorgular.belgeGetir(db, kayitYolu))?.veri ?? null;
+    const acilisReddi = onayAcilisReddi(yeni, kayit, await onayKurallariOku(db), rol);
+    if (acilisReddi !== null) throw yetkiYok(acilisReddi);
+    return;
+  }
+  let kurallar: OnayKurallari | null = null;
+  const kurallariAl = async (): Promise<OnayKurallari> => (kurallar ??= await onayKurallariOku(db));
   const gerek = onayGeregi(yol, eski, yeni);
-  if (gerek === null) return;
+  if (gerek === null) {
+    if (!ONAYLI_KOLEKSIYONLAR.has(yol.split('/')[0] ?? '')) return;
+    const onaysiz = onaysizYaziReddi(yol, eski, yeni, await kurallariAl(), rol);
+    if (onaysiz !== null) throw yetkiYok(onaysiz);
+    return;
+  }
   if ('red' in gerek) throw yetkiYok(gerek.red);
   const onay = 'onayKimligi' in gerek
     ? (await sorgular.belgeGetir(db, onayYolu(gerek.onayKimligi)))?.veri ?? null
     : sonOnay((await sorgular.koleksiyonBelgeleri(db, ONAY_KOLEKSIYONU)).map((b) => b.veri), gerek.refCol, gerek.refId, gerek.tur);
   if (!onayGeregiKarsilaniyorMu(onay, gerek.sonuc)) throw yetkiYok('Onay bekleyen kaydın onay durumu yalnız onay kararıyla değişir.');
+  if (onay === null) return;
+  const etkiReddi = onayEtkisiReddi(yol, eski, yeni, onay, await kurallariAl(), await portalRolAdi(db, onay['requestedBy']));
+  if (etkiReddi !== null) throw yetkiYok(etkiReddi);
 }
+
 
 function bolumDenetle(kullanici: Kullanici, yol: string, eski: Veri | null, yeni: Veri | null): void {
   if (!bolumYazabilirMi(yol, kullanici.id, portalRolu(kullanici.islemler).tmiIzinler, eski, yeni)) {

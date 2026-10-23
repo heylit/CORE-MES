@@ -24,7 +24,11 @@ export const kayitlarCevabi = z.object({ kayitlar: z.array(kayitSemasi) });
 export const kisiSemasi = z.object({ id: z.number().int(), ad: z.string() });
 // hazirlikOnaylayabilir: yazma işlemi olmadan yalnız hazırlık onayları kaydedilir (sunucu öteki alanları almaz).
 // takimDegistirebilir: takım değişimi ve kullanım düzeltmesi sunucuya gider (yoksa yalnız açık sekmede kalır).
-export const benCevabi = z.object({ kisi: kisiSemasi, yazabilir: z.boolean(), hazirlikOnaylayabilir: z.boolean(), takimDegistirebilir: z.boolean() });
+// stokDusebilir: stok kartına bağlı kalemin azalan adedi stoktan düşer; stokKartiBaglayabilir: kalemi stok kartına bağlar (malzemeler.yaz).
+export const benCevabi = z.object({
+  kisi: kisiSemasi, yazabilir: z.boolean(), hazirlikOnaylayabilir: z.boolean(), takimDegistirebilir: z.boolean(), stokDusebilir: z.boolean(),
+  stokKartiBaglayabilir: z.boolean(),
+});
 
 export const yazGovdesi = z.object({
   anahtar,
@@ -110,6 +114,20 @@ export const takimOlaylariGovdesi = z.object({
 // yazilan: deftere giren olay sayısı (yüklü olmayan cep ve değişmeyen düzeltme yazılmaz).
 export const takimOlaylariCevabi = z.object({ yazilan: z.number().int().nonnegative() });
 
+// Takım stoğu stoktadır (153 a). Prototipin kütüphane kalemi (`inv` anahtarı) malzeme kartına bağlanır (163 b); bağlı kalemin adedi
+// okurken stoğun kullanılabilir miktarıdır, kalemde `tmiStok` işaretiyle gelir. Prototipte azalan adet (takım değişimi, uç seti,
+// elle azaltma) stoktan düşer (164 b); artış stoğa girmez (giriş Stok ekranından).
+export const KUTUPHANE_KIMLIGI = /^[A-Za-z0-9_.-]{1,64}$/;
+const kutuphaneKimligi = z.string().regex(KUTUPHANE_KIMLIGI, 'Geçersiz kütüphane kimliği.');
+export const stokDusGovdesi = z.object({ kimlik: kutuphaneKimligi, miktar: z.number().int().min(1).max(10000) });
+export const stokDusCevabi = z.object({ hareketSayisi: z.number().int().nonnegative() });
+export const stokKartlariSorgusu = z.object({ metin: z.string().trim().max(100).optional(), sayfa: z.coerce.number().int().min(1).max(10000).default(1) });
+export const stokKartiSemasi = z.object({ malzemeId: z.number().int(), kod: z.string(), ad: z.string().nullable(), birim: z.string().nullable() });
+export const stokKartlariCevabi = z.object({ kartlar: z.array(stokKartiSemasi), toplam: z.number().int().nullable() });
+// malzemeId null bağı kaldırır.
+export const stokKartiBaglaGovdesi = z.object({ kimlik: kutuphaneKimligi, malzemeId: z.number().int().positive().nullable() });
+export const stokKartiBaglaCevabi = z.object({ kart: stokKartiSemasi.nullable() });
+
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
@@ -128,3 +146,10 @@ export type KurulumTamamGovdesi = z.output<typeof kurulumTamamGovdesi>;
 export type KurulumTamamCevabi = z.output<typeof kurulumTamamCevabi>;
 export type TakimOlaylariGovdesi = z.output<typeof takimOlaylariGovdesi>;
 export type TakimOlaylariCevabi = z.output<typeof takimOlaylariCevabi>;
+export type StokDusGovdesi = z.output<typeof stokDusGovdesi>;
+export type StokDusCevabi = z.output<typeof stokDusCevabi>;
+export type StokKartlariSorgusu = z.output<typeof stokKartlariSorgusu>;
+export type StokKarti = z.output<typeof stokKartiSemasi>;
+export type StokKartlariCevabi = z.output<typeof stokKartlariCevabi>;
+export type StokKartiBaglaGovdesi = z.output<typeof stokKartiBaglaGovdesi>;
+export type StokKartiBaglaCevabi = z.output<typeof stokKartiBaglaCevabi>;

@@ -20,7 +20,8 @@
 7. **`arkon.yansima-yeniden` rol satırları (#243, 3. tur N2).** İşlem bu dalda: `paylasilan/islemler/arkon.ts`.
    Kullanıcı kararı: `mudur` ve `planlama_proje` rollerine verilsin; A2 (bu dal) birleştikten sonra çekirdeğin bekleyen
    rol isteğiyle girer. Bu işlem de Arkon rolü değildir (`arkonRoluBul` sırasına girmez); 1. ve 2. maddedeki uyarı geçerli.
-8. **Çağrı bannerı için "hangi ekip çağrılarını alırım" okuması (298).** Ekip çağrısının alıcısı TMI'de bildirim modülünün ekip eşlemesindedir
+8. **Çağrı bannerı için "hangi ekip çağrılarını alırım" okuması (298). KARŞILANDI:** uç bildirim modülünde, banner onu okur (UYUM-BORCU çağrı bannerı).
+   Önceki kayıt: Ekip çağrısının alıcısı TMI'de bildirim modülünün ekip eşlemesindedir
    (`bildirim_cagri_alicisi`); Arkon'un tarayıcıdaki bannerı ise `giris-ayarlar-spc.ts` `CALL_ROLES` kopyasıyla süzüyor (iki kaynak). Eşleme ucu
    (`GET /bildirimler/cagri-yonlendirme`) `ayarlar.yaz` ister, operatör ve Arkon rollü kişi okuyamaz. İstek: `GET /bildirimler/cagri-yonlendirme/benim`,
    yetki oturum, yalnız oturumdaki kişinin rollerinden çıkan ekip listesi (`{ ekipler: CagriEkibi[] }`). Gelince banner `CALL_ROLES` yerine bunu okur

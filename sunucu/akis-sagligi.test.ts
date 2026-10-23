@@ -130,7 +130,11 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
   test('2 malzeme kartı: planlama yazar ve onaya gönderir, kendi onayı 403, kalite onaylar', async () => {
     const kartAc = async (kimlik: string, tur: 'hammadde' | 'mamul', kod: string, ad: string, ops?: unknown[]): Promise<number> => {
       const govde = (durum: string, surum: number | null) => ({
-        kayit: { id: kimlik, tur, fam: 'metal', com: { kod, ad, birim: 'adet' }, ...(ops ? { ops } : {}), onay: { durum } },
+        // Malzeme sihirbazının zorunlu alanları (malzemeler B11): hammaddede aile, kalite ve ölçü; mamulde ad.
+        kayit: {
+          id: kimlik, tur, fam: 'metal', com: { kod, ad, birim: 'adet' }, ...(ops ? { ops } : {}), onay: { durum },
+          ...(tur === 'hammadde' ? { grade: 'S235', form: 'cubuk', dims: { d: 50, l: 6000 } } : { g: { ad } }),
+        },
         ozet: { stok_kodu: kod, tur, onay_durumu: durum, benzersiz_anahtar: `${tur}|deneme|${kimlik}`, mukerrer_gerekcesi: null }, surum,
       });
       const yol = `/malzeme-katalogu-kartlari/${kimlik}/kaydet`;
