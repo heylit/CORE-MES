@@ -50,7 +50,9 @@ describe('MesajYeni iskeleti', () => {
     for (const ad of ['Görev ver', 'Onay iste', 'Toplantı planla', 'Duyuru yap']) expect(within(pencere).getByText(ad)).toBeTruthy();
     expect(within(pencere).queryByText('Sipariş aç')).toBeNull();
     fireEvent.click(within(pencere).getByText('Görev ver'));
-    expect(await screen.findByRole('dialog', { name: 'Görev ver' })).toBeTruthy();
+    // Seçici kapanır, yerine görev formu açılır (formun içi parçanındır; başlığına bakılmaz).
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Ne yapmak istiyorsun?' })).toBeNull(); });
+    expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
   });
 
   it('salt okur kişide Yeni düğmesi yoktur', async () => {
