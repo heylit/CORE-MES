@@ -145,3 +145,53 @@ test.describe('F3 raporlar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+// F1: Kayıtlar ve Firmalar. Veriden bağımsız: ekran açılır, süzgeç ve liste gelir, yatay taşma yok, yazma gitmez.
+// Genişlikler (360, 768, 1280) yapılandırmadaki projelerdendir.
+test.describe('F1 kayıtlar ve firmalar', () => {
+  test("Kayıtlar: süzgeç, arama ve Excel'e aktar; taşma yok", async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/kayitlar');
+    const ekran = page.locator('.tc-fy');
+    const suzgec = ekran.getByRole('group', { name: 'Kayıt süzgeci' });
+    await expect(suzgec).toBeVisible({ timeout: 15_000 });
+    await expect(ekran.getByLabel('Kayıtlarda ara')).toBeVisible();
+    await expect(ekran.getByRole('button', { name: "Excel'e aktar" })).toBeVisible();
+    await suzgec.getByRole('button', { name: /^Geciken/ }).click();
+    await expect(suzgec.getByRole('button', { name: /^Geciken/ })).toHaveAttribute('aria-pressed', 'true');
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Firmalar: liste, süzgeç ve firma kartı; taşma yok', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/firmalar');
+    const ekran = page.locator('.tc-fy');
+    const tur = ekran.getByRole('group', { name: 'Firma türü' });
+    await expect(tur).toBeVisible({ timeout: 15_000 });
+    await tur.getByRole('button', { name: 'Tümü' }).click();
+    await expect(ekran.getByRole('button', { name: /Yeni firma/ })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    const satir = ekran.getByRole('table', { name: 'Firmalar' }).getByRole('row').nth(1);
+    if (await satir.isVisible()) {
+      await satir.click();
+      await expect(ekran.getByRole('heading', { name: 'Kimlik' })).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await ekran.getByRole('button', { name: 'Firmalar', exact: true }).click();
+      await expect(tur).toBeVisible();
+    }
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Firmalar: yeni firma formu açılır, Vazgeç ile kapanır, yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/firmalar');
+    await page.locator('.tc-fy').getByRole('button', { name: /Yeni firma/ }).click();
+    const form = page.getByRole('dialog', { name: 'Yeni firma' });
+    await expect(form.getByLabel('Vergi no')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await form.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(form).toBeHidden();
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
