@@ -3,7 +3,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, bitirGovdesi, durdurGovdesi, emirAyrintiCevabi, emirBaslatCevabi, emirCevabi, emirGovdesi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
-  emirlerSorgusu, sayimAyarlaGovdesi, sayimGovdesi,
+  emirlerSorgusu, sayimAyarlaGovdesi, sayimCevabi, sayimGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineSecimiGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
@@ -116,7 +116,7 @@ const emirUclari = [
     parametre: emirParametresi,
     govde: sayimGovdesi,
     denetim: 'govdesiz',
-    cevap: emirCevabi,
+    cevap: sayimCevabi,
     isle: ({ db, kullanici, parametre, govde }) => terminalSayimi(db, kullanici.id, parametre.id, govde),
   }),
   uc({
@@ -128,7 +128,7 @@ const emirUclari = [
     parametre: emirParametresi,
     govde: sayimAyarlaGovdesi,
     denetim: 'govdesiz',
-    cevap: emirCevabi,
+    cevap: sayimCevabi,
     isle: ({ db, kullanici, parametre, govde }) => emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null),
   }),
   uc({

@@ -540,22 +540,22 @@ export async function emirBitir(
   return emirdenCevap(db, id);
 }
 
-// Sağlam sayım satırı yazılır, sonra aynı işlemde dinleyicilere bildirilir (kart #1289; stok girişi).
+// Sağlam sayım satırı yazılır, sonra aynı işlemde dinleyicilere bildirilir (kart #1289; stok girişi). Dinleyicilerin uyarısı döner.
 async function saglamYaz(
   db: Db, emir: { id: number }, kisiId: number, istasyonId: number, adet: number, duzeltme: boolean, an: string, kararBekliyor = false,
   refakatPartisiId: number | null = null,
-): Promise<void> {
+): Promise<string | null> {
   const { isEmriId } = await sorgular.sayimEkle(db, {
     emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId,
   });
-  await saglamSayimiBildir(db, {
+  return saglamSayimiBildir(db, {
     uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest', refakatPartisiId,
   });
 }
 
 // Terminal sayım ucu (denetim #13): ilk parça kararı beklenirken (karar bekleyen adet varken) sağlam sayım karar bekleyene yazılır;
 // uç gövdesi türü seçemez, kararı uçtan atlamak yoktur. Kararı bilen çağıran (Arkon) emirSayim'i kendi seçimiyle çağırır.
-export async function terminalSayimi(db: Db, kisiId: number, id: number, govde: SayimKaydi): Promise<{ emir: Emir }> {
+export async function terminalSayimi(db: Db, kisiId: number, id: number, govde: SayimKaydi): Promise<{ emir: Emir; uyari: string | null }> {
   const bekleyen = govde.tur === 'saglam' && (await sayaclar(db, id)).kararBekliyor > 0;
   return emirSayim(db, kisiId, id, govde, { kararBekliyor: bekleyen });
 }
@@ -564,7 +564,7 @@ export async function terminalSayimi(db: Db, kisiId: number, id: number, govde: 
 // gövdesi seçemez. Eksi düzeltme karar bekleyen toplamı sıfırın altına indiremez.
 export async function emirSayim(
   db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean } = {},
-): Promise<{ emir: Emir }> {
+): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
   // Onaysız emirde sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
@@ -593,8 +593,9 @@ export async function emirSayim(
     if (ihlalEksi !== null) throw cakisma(ihlalEksi);
     await adimGirdisiniDenetle(db, emir, govde.adet);
   }
+  let uyari: string | null = null;
   if (govde.tur === 'saglam') {
-    await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId);
+    uyari = await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId);
   } else {
     if (hurdaNedeniId === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
     const { isEmriId } = await sorgular.sayimEkle(db, {
@@ -602,7 +603,7 @@ export async function emirSayim(
     });
     await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }
-  return emirdenCevap(db, id);
+  return { ...(await emirdenCevap(db, id)), uyari };
 }
 
 // Emrin karar bekleyen sayımı kalite kararıyla kapanır: onayda sağlama, retde redde geçer; her iş emrinde iki düzeltme satırı yazılır
@@ -642,7 +643,7 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
 // Tuş takımı mutlak sağlam değeri gönderir; fark tek düzeltme satırıdır (fark sıfırsa satır yazılmaz).
 export async function emirSayimAyarla(
   db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null,
-): Promise<{ emir: Emir }> {
+): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
@@ -650,8 +651,8 @@ export async function emirSayimAyarla(
   // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
   await adimGirdisiniDenetle(db, emir, fark);
   const bekleyen = fark > 0 && ((await sayaclar(db, id)).kararBekliyor > 0 || (await sorgular.ilkParcaOnaysiz(db, id)));
-  if (fark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen, refakatPartisiId);
-  return emirdenCevap(db, id);
+  const uyari = fark === 0 ? null : await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen, refakatPartisiId);
+  return { ...(await emirdenCevap(db, id)), uyari };
 }
 
 export async function emirDuraklat(db: Db, kisiId: number, id: number): Promise<{ emir: Emir }> {

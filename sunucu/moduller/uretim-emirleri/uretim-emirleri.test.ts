@@ -891,7 +891,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
 
   // ---------------- sayım, duruş, hurda (#151 dilim 1) ----------------
 
-  type EmirCevabiHata = { emir: Emir } & Hata;
+  type EmirCevabiHata = { emir: Emir; uyari?: string | null } & Hata;
   const komut = (id: number, yol: string, kim = 'operator', govde?: unknown) =>
     istek<EmirCevabiHata>(kisiCerezi(kim), 'POST', `/uretim-emirleri/${id}/${yol}`, govde);
   const sayimYap = (id: number, adet: number, kim = 'operator') => komut(id, 'sayim', kim, { tur: 'saglam', adet });
@@ -1127,6 +1127,37 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal((await sayimYap(ikinci.id, 1)).durum, 200, 'dinleyici yokken sayım bugünkü gibi yazılır');
     assert.equal(gelen.length, sayi);
     assert.equal((await toplam(ikinci.id)).n, 1);
+  });
+
+  test('sayım uyarısı (#157): dinleyicinin uyarıları sayım ve ayarlama cevabına birleşir; uyarısız ya da void dinleyicide null; hurda uyarı almaz', async () => {
+    const { emir } = await baslatilmis();
+    await nedenleriKur();
+    await ilkParcaOnay(emir.id);
+    let uyari: string | null = 'stokta yok, istisna kartı K-1';
+    let ikinciUyari: string | null = null;
+    const birakUyaran = saglamSayimDinle(async () => ({ uyari }));
+    const birakSessiz = saglamSayimDinle(async () => undefined);
+    const birakIkinci = saglamSayimDinle(async () => ({ uyari: ikinciUyari }));
+    try {
+      const sayim = await sayimYap(emir.id, 1);
+      assert.deepEqual([sayim.durum, sayim.govde.uyari], [200, 'stokta yok, istisna kartı K-1']);
+      assert.equal(sayim.govde.emir.id, emir.id, 'emir cevabı bugünkü gibi gelir');
+      ikinciUyari = 'teslim edilmeden başka istasyondan';
+      const ayar = await ayarla(emir.id, 9);
+      assert.deepEqual([ayar.durum, ayar.govde.uyari], [200, 'stokta yok, istisna kartı K-1 teslim edilmeden başka istasyondan']);
+      uyari = null;
+      ikinciUyari = null;
+      assert.equal((await sayimYap(emir.id, 1)).govde.uyari, null, 'uyarısız dinleyicide null');
+      assert.equal((await ayarla(emir.id, 10)).govde.uyari, null, 'fark sıfır: dinleyici koşmaz, uyarı null');
+      uyari = 'gitmemeli';
+      const hurda = await hurdaYap(emir.id, 1, hurdaId);
+      assert.deepEqual([hurda.durum, hurda.govde.uyari], [200, null], 'hurda sağlam dinleyicisine gitmez');
+    } finally {
+      birakUyaran();
+      birakSessiz();
+      birakIkinci();
+    }
+    assert.equal((await sayimYap(emir.id, 1)).govde.uyari, null, 'dinleyici yokken uyarı null');
   });
 
   test('hurda sayım olayı: hurda ve geri alması nedeniyle aynı işlemde dinleyiciye gider; sağlam gitmez; ret hurdayı geri alır', async () => {
