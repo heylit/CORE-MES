@@ -61,14 +61,14 @@ Yeni modul hangi asamada gelirse gelsin once hizalanir, sonra o asamaya katilir.
 KOORDINATOR KURALLARI
 - Dosya kilidi (2026-10-23, kullanici onayi): ayni parcada birden cok yazar konu calisabilir; bir dosyaya ayni anda tek yazar dokunur. Yazar baslamadan dosya listesini verir; koordinator acik kilitlerle karsilastirir, cakisma yoksa baslatir. Ortak noktalarin (paylasilan/sozlesme, buyuk servis dosyalari, toplayici kayitlari, goc) sirasini koordinator verir. Dal basina tek modul. Ayrinti proje talimatinin CALISMA DUZENI bolumundedir.
 - Her konuya ver: parcasi, klasorleri, kart numarasi, dal adi (<kart no>-<kisa-ad>), basvurusu. Karti ya da basvurusu olmayan parca icin konu acma; benden iste.
-- Yazar konular push etmez, cekme istegi acmaz ya da birlestirmez, baska dala dokunmaz, CLAUDE.md, .claude ve .github altini degistirmez, kart acmaz ya da kapatmaz; yamalarini proje dosyalarina birakir. Yamayi yalniz tek bir birlestirici konu uygular ve birlestirir; o da kod yazmaz. Ayni anda en cok bir birlestirici konu vardir. Yama hazir olunca birlestirici konuya haber ver; kullanicinin "tasi, onayli" satirini, sade yamada "yaz" onayini ilistir.
+- Yazar konular push etmez, cekme istegi acmaz ya da birlestirmez, baska dala dokunmaz, CLAUDE.md, .claude ve .github altini degistirmez, kart acmaz ya da kapatmaz; yamalarini proje dosyalarina birakir. Yamayi yalniz tek bir birlestirici konu uygular ve birlestirir; o da kod yazmaz. Ayni anda en cok bir birlestirici konu vardir. Yama hazir olunca birlestirici konuya haber ver; kullanicinin "tasi, onayli" satirini, sade yamada isin onayini ilistir.
 - Yazar konular kullaniciya dogrudan soru acmaz; soru taslagini koordinatore verir, numarayi koordinator verir ve proje sohbetinde sorar.
 - Her degisiklik cekme istegiyle girer ve `kontrol` testi (Windows dahil) yesil olmadan birlesemez.
 - Toplayici dosyalara (paylasilan/sayfalar.ts, paylasilan/islemler.ts ve benzerleri) ve rol x islem satirlarina cekirdek konusu yazar; modul konusu istek verir. Dar istisna proje talimatindadir; birlestirici bunun yalniz o modulun kaydi oldugunu denetler.
 - Birlesme sirasi bir karara bagliysa koordinator sirayi birlestirici konuya acikca yazar; birlestirici sirayi bozmaz. Goc damgasini koordinator verir.
 - Cekirdek ya da ortak arayuz degisince etkilenen konulara haber ver; onlar guncel ana dali alir.
 - Bir parcanin baska parcadan istegi o parcanin sahibi konuya iletilir; isteyen konu kendisi yazmaz.
-- Yazar konu once listesini verir (ne yazacagi, hangi kartlar, borc siniflari); ben "yaz" demeden is baslamaz.
+- Yazar konu once dosya listesini verir (ne yazacagi, hangi kartlar, borc siniflari); kilit verilince is baslar.
 - Karar gereken yerde (dolu tabloyu degistiren sema, yetki modeli, yeni paket, sahiplik, onayli kararla celisme; ayrica proje talimatindaki ONAY listesi) konu durur ve bana sorulur: soru, neden, secenekler, oneri, kopya satiri. Karara bagli olmayan kisim surer. Eski sistem kurallari uygulanmaz, sorulur.
 - Iyilestirme ya da eksik gorursen yazma; bana tek satirla oner.
 - Is bitmis konuyu kapat; bos bekleyen konu tutma.
