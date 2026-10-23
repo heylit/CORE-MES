@@ -5,9 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { ModelKaynakBicimi } from '#paylasilan/sozlesme/atolye.ts';
 import { modelSahnesi } from './model.ts';
-import type { StepCevabi, StepIstegi } from './step-isci.ts';
-import StepIsci from './step-isci.ts?worker&inline';
-import wasmAdresi from 'occt-import-js/dist/occt-import-js.wasm?url';
+import { stepOku } from '../../../ortak/step/step-oku.ts';
 
 // Yükleme öncesi dönüşüm (STEP, STL, GLTF -> GLB). Dosya kullanıcının cihazında çevrilir; sunucuya yalnız GLB gider,
 // dışarıya istek yoktur (çevirici paketin kendi wasm'ı). Yalnız model kütüphanesi açılınca iner.
@@ -39,31 +37,21 @@ async function glbYaz(kok: Object3D): Promise<Uint8Array> {
   return new Uint8Array(sonuc);
 }
 
-function stepCevir(veri: ArrayBuffer, ayrinti: StepAyrintisi): Promise<Group> {
-  return new Promise((coz, reddet) => {
-    const isci = new StepIsci();
-    isci.onmessage = (o: MessageEvent<StepCevabi>) => {
-      isci.terminate();
-      const c = o.data;
-      if ('hata' in c) { reddet(new Error(c.hata)); return; }
-      const kok = new Group();
-      for (const a of c.aglar) {
-        const g = new BufferGeometry();
-        g.setAttribute('position', new BufferAttribute(a.konum, 3));
-        if (a.normal) g.setAttribute('normal', new BufferAttribute(a.normal, 3));
-        g.setIndex(new BufferAttribute(a.dizin, 1));
-        if (!a.normal) g.computeVertexNormals();
-        const renk = a.renk ? new Color(a.renk[0], a.renk[1], a.renk[2]) : VARSAYILAN_RENK;
-        const m = new Mesh(g, new MeshStandardMaterial({ color: renk, roughness: 0.5, metalness: 0.2 }));
-        m.name = a.ad;
-        kok.add(m);
-      }
-      coz(kok);
-    };
-    isci.onerror = (o) => { isci.terminate(); reddet(new Error(o.message || 'STEP çevirici açılamadı.')); };
-    const istek: StepIstegi = { wasm: new URL(wasmAdresi, document.baseURI).href, veri, ayrinti: STEP_AYRINTISI[ayrinti] };
-    isci.postMessage(istek, [veri]);
-  });
+async function stepCevir(veri: ArrayBuffer, ayrinti: StepAyrintisi): Promise<Group> {
+  const aglar = await stepOku(veri, STEP_AYRINTISI[ayrinti]);
+  const kok = new Group();
+  for (const a of aglar) {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new BufferAttribute(a.konum, 3));
+    if (a.normal) g.setAttribute('normal', new BufferAttribute(a.normal, 3));
+    g.setIndex(new BufferAttribute(a.dizin, 1));
+    if (!a.normal) g.computeVertexNormals();
+    const renk = a.renk ? new Color(a.renk[0], a.renk[1], a.renk[2]) : VARSAYILAN_RENK;
+    const m = new Mesh(g, new MeshStandardMaterial({ color: renk, roughness: 0.5, metalness: 0.2 }));
+    m.name = a.ad;
+    kok.add(m);
+  }
+  return kok;
 }
 
 // Yüklenecek dosyayı GLB'ye çevirir. GLB olduğu gibi kalır (yalnız okunabildiği sınanır).
