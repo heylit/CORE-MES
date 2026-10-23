@@ -40,6 +40,7 @@ const ADIM_KAYNAK_TURLERI = [...KAYNAK_TURLERI, 'fason'] as const;
 const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
 const KULLANIMLAR = ['tek', 'paralel'] as const;
 const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
+const SURE_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
 
 const kaynak = <T extends string>(v: unknown, izinli: readonly T[], alan: string): { tur: T; id: number } | null => {
   if (v === null || v === undefined) return null;
@@ -82,6 +83,11 @@ function adim(a: Nesne): Nesne {
 const revizyonYolu = (girdi: Nesne, komut: string): string => `/rota/revizyonlar/${String(tamSayi(girdi['revizyonId'], 'revizyon'))}/${komut}`;
 const surumGovdesi = (girdi: Nesne): Nesne => ({ surum: tamSayi(girdi['surum'], 'sürüm') });
 const basit = (komut: string): RotaKomutu => ({ hafif: true, hazirla: (g) => ({ yol: revizyonYolu(g, komut), govde: surumGovdesi(g) }) });
+const olcumYolu = (girdi: Nesne, ek: string): string => `/rota/adimlar/${String(tamSayi(girdi['adimId'], 'adım'))}/gerceklesen-sure${ek}`;
+// Ölçümün tür, makine ve okunan son satırı (169 c): okunanId ekranın gördüğü son satırdır, arada yazan varsa sahibi 409 döner.
+const olcumGovdesi = (g: Nesne): Nesne => ({
+  tur: secenek(g['tur'], SURE_TURLERI, 'süre türü'), makineId: tamSayiVeyaBos(g['makineId'], 'makine'), okunanId: tamSayiVeyaBos(g['okunanId'], 'okunan satır'),
+});
 
 export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
   // Taslak açma tekrar korumalıdır (sahibinde); kaynak yürürlükteki revizyon ya da boş rotadır.
@@ -108,6 +114,16 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
   'rota-geri-gonder': basit('geri-gonder'),
   'rota-yururluge-al': basit('yururluge-al'),
   'rota-iptal': basit('iptal'),
+  // Süreler (169 c, 171 a): elle girilen değer ölçümdür, boş değer bekleyen ölçümü boşaltır; kabul ölçümü ürünün taslağına teorik süre
+  // olarak yazar (değeri sahibi ölçüm satırından alır, ekran süre göndermez). İkisi de defter satırı yazdığı için tekrar korumalıdır.
+  'rota-olcum-yaz': {
+    hafif: true,
+    hazirla: (g) => ({ yol: olcumYolu(g, ''), govde: { ...olcumGovdesi(g), sureDk: sayiVeyaBos(g['sureDk'], 'süre') }, tekrarKorumali: true }),
+  },
+  'rota-olcum-kabul': {
+    hafif: true,
+    hazirla: (g) => ({ yol: olcumYolu(g, '/kabul'), govde: { ...olcumGovdesi(g), olcumId: tamSayi(g['olcumId'], 'ölçüm') }, tekrarKorumali: true }),
+  },
   'rota-onayla': {
     hafif: true,
     hazirla: (g) => ({ yol: revizyonYolu(g, 'onayla'), govde: { ...surumGovdesi(g), yururlugeAl: g['yururlugeAl'] === true } }),
