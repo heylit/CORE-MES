@@ -65,7 +65,6 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
 
 // Parça yazarları kendi bölümlerini doldurur (PARCA-SOZLESMESI); bölüm boşken atlanır.
 for (const [parca, gorunumler] of [
-  ['P2 Kütüphane, Tanımlar, Ana Sayfa', 'Kütüphane, Tanımlar, Ana Sayfa'],
   ['P3 Ham Malzeme ve G-Kod', 'Ham Malzeme, G-Kod Sim.'],
   ['P4 Oto-CAM', 'Oto-CAM'],
   ['P5 Takım Ömrü', 'Takım Ömrü'],
@@ -76,3 +75,82 @@ for (const [parca, gorunumler] of [
     });
   });
 }
+
+// P2: kütüphane, Tanımlar ve Ana Sayfa (prototip 17883-18432, 21794-21896). Eklenen kalem ve tezgâh test sonunda silinir.
+test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
+  test('Kütüphane: yeni kalem, liste görünümünde adet, Stok CSV ve silme', async ({ page, ac }) => {
+    const ad = `Deneme kalem ${String(Date.now())}`;
+    await ac('/cnc-kurulum/yeni/kutuphane');
+    await expect(page.getByText('Hangi tezgâhta aktif')).toBeVisible();
+    await page.getByRole('button', { name: 'Yeni kalem' }).click();
+    await page.getByLabel('Ad', { exact: true }).fill(ad);
+    await page.getByLabel('Başlangıç stok adedi').fill('4');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(page.getByRole('heading', { name: ad })).toBeVisible();
+    await expect(page.getByLabel('Toplam adet')).toHaveValue('4');
+
+    await page.getByRole('button', { name: 'Artır' }).click();
+    await expect(page.getByLabel('Toplam adet')).toHaveValue('5');
+
+    await page.getByRole('searchbox', { name: 'Kütüphanede ara' }).fill(ad);
+    await page.getByRole('button', { name: 'Liste' }).click();
+    const adet = page.getByLabel(`${ad}: adet`);
+    await expect(adet).toHaveValue('5');
+    await adet.fill('2');
+    await adet.press('Enter');
+    await expect(adet).toHaveValue('2');
+
+    const indirme = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Stok CSV' }).click();
+    expect((await indirme).suggestedFilename()).toMatch(/^CNC_Stok_\d{4}-\d{2}-\d{2}\.csv$/);
+
+    await page.getByRole('button', { name: new RegExp(ad) }).first().click();
+    await page.getByRole('button', { name: 'Sil', exact: true }).click();
+    const onay = page.getByRole('dialog', { name: 'Kalemi sil' });
+    await expect(onay).toContainText(`“${ad}” kütüphaneden silinsin mi?`);
+    await onay.getByRole('button', { name: 'Sil' }).click();
+    await expect(page.getByText('Filtreye uyan malzeme yok').first()).toBeVisible();
+  });
+
+  test('Tanımlar: özel tezgâh eklenir, Kütüphane süzgecinde görünür, silinir', async ({ page, ac }) => {
+    const ad = `Deneme tezgah ${String(Date.now())}`;
+    await ac('/cnc-kurulum/yeni/kutuphane');
+    await page.getByRole('button', { name: 'Tanımlar' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Tanımlar' });
+    await pencere.getByRole('button', { name: 'Yeni tezgâh' }).click();
+    await pencere.getByLabel('Ad', { exact: true }).fill(ad);
+    await pencere.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(pencere.getByText(ad)).toBeVisible();
+    await pencere.getByRole('tab', { name: 'İş Malzemeleri' }).click();
+    await expect(pencere.getByRole('button', { name: 'Yeni malzeme' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('combobox', { name: 'Tezgâh' })).toContainText(ad);
+
+    await page.getByRole('button', { name: 'Tanımlar' }).click();
+    await pencere.locator('tr').filter({ hasText: ad }).getByRole('button', { name: 'Sil' }).click();
+    await page.getByRole('dialog', { name: 'Tezgâhı sil' }).getByRole('button', { name: 'Sil' }).click();
+    await expect(pencere.getByText(ad)).toHaveCount(0);
+  });
+
+  test('Ana Sayfa: sayı kartları, tezgâh kartları ve görünümlere geçiş', async ({ page, ac }) => {
+    await ac('/cnc-kurulum/yeni/ana-sayfa');
+    await expect(page.getByRole('heading', { name: 'Ana sayfa' })).toBeVisible();
+    for (const baslik of ['Tezgâhlar', 'Ömrü dolan takım', 'Yakında değişecek', 'Depo uyarısı', 'Bugünkü üretim']) {
+      await expect(page.getByText(baslik, { exact: true }).first()).toBeVisible();
+    }
+    await expect(page.getByRole('button', { name: 'Hazırla' }).first()).toBeVisible();
+    await page.getByRole('link', { name: /Depo uyarısı/ }).click();
+    await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/kutuphane$/);
+  });
+
+  for (const genislik of [360, 768, 1280]) {
+    test(`${String(genislik)} genişlikte Kütüphane ve Ana Sayfa yatay taşmaz`, async ({ page, ac }) => {
+      await page.setViewportSize({ width: genislik, height: 900 });
+      for (const yol of ['kutuphane', 'ana-sayfa']) {
+        await ac(`/cnc-kurulum/yeni/${yol}`);
+        await expect(page.getByRole('tablist', { name: 'CNC Kurulum görünümleri' })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      }
+    });
+  }
+});
