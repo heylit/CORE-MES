@@ -5,8 +5,8 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import type { Db } from '#cekirdek/db.ts';
-import { gununFazlaMesaisi, izinliKisiler, kisilerinIzinleri, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from './disari.ts';
-import { iptalEt, kaydet } from './servis.ts';
+import { gununFazlaMesaisi, izinliKisiler, kisilerinIzinleri, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, resmiTatilGunleri } from './disari.ts';
+import { ayarKaydet, iptalEt, kaydet } from './servis.ts';
 
 type Govde = Record<string, unknown>;
 
@@ -162,5 +162,28 @@ describe('İK disari: kişisel özet okumaları, kart #1322 (gerçek PostgreSQL)
     });
     assert.equal(await vt.tx((db) => kisininKalanIzni(db, kisi.c, '2026-10-14')), null);
     await assert.rejects(vt.tx((db) => kisininKalanIzni(db, kisi.a, '14.10.2026')), /YYYY-AA-GG/);
+  });
+});
+
+describe('İK disari: resmî tatil günleri (IK-80, gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  before(async () => { ortam = await testVeritabaniKur('ik_disari_tatil'); });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('IK-80: ayar kaydedilmemişse bordronun varsayılan listesi, kaydedilmişse İK listesi okunur; her yıl tekrarlayan satır her yıla açılır', async () => {
+    const vt = ortam!.vt;
+    const varsayilan = await vt.tx((db) => resmiTatilGunleri(db, '2026-10-01', '2026-10-31'));
+    assert.deepEqual(varsayilan, [{ tarih: '2026-10-29', ad: 'Cumhuriyet Bayramı' }]);
+    await vt.tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: 'Deneme tatil', kullaniciAdi: 'ik-disari-tatil', parola: 'dogru-parola-1' });
+      const yon = (await kullaniciYukle(db, id)) as Kullanici;
+      await ayarKaydet(db, yon, { tatiller: '01-01 Yılbaşı\n2027-03-10 Deneme Bayramı\n02-29 Artık gün' }, null);
+    });
+    assert.deepEqual(await vt.tx((db) => resmiTatilGunleri(db, '2026-10-01', '2026-10-31')), [], 'kaydedilmiş liste varsayılanın yerine geçer');
+    assert.deepEqual(await vt.tx((db) => resmiTatilGunleri(db, '2026-12-31', '2028-03-01')), [
+      { tarih: '2027-01-01', ad: 'Yılbaşı' }, { tarih: '2027-03-10', ad: 'Deneme Bayramı' }, { tarih: '2028-01-01', ad: 'Yılbaşı' }, { tarih: '2028-02-29', ad: 'Artık gün' },
+    ]);
+    await vt.tx(async (db) => { await db.sorgu('DELETE FROM ik_resmi_tatil'); });
+    assert.deepEqual(await vt.tx((db) => resmiTatilGunleri(db, '2026-01-01', '2026-12-31')), [], 'boş kaydedilmiş liste tatilsizdir');
   });
 });

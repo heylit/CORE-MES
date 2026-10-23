@@ -95,3 +95,7 @@ kaynağı teslimde yok). Kaynak yeniden derlenirse aynı değişiklik kaynağa t
   göç `20261019120000_ik_zimmet_kaldir.sql` önce `idari_isler_zimmet_ik_kopyala()` çağırır). Paketin zimmet ekranları `uygulama/yama/ik_zimmet_yamasi.py` ile kalktı.
 - IK-74 açık zimmeti `idari-isler/disari.ts kisilerinAcikZimmetleri`'nden `servis.ts acikZimmetCozucusu` ile okur (`kablolama.ts`; İdari İK'yı okuduğu için ters bağ).
   Personel kişiye bağlı değilse zimmet bilinmez, uyarı çıkmaz. Uyarı demirbaş no ve marka/modeli sayar.
+
+## Karar 142 b (23.10.2026)
+- Resmî tatil listesinin sahibi İK. IK-80: `disari.ts resmiTatilGunleri(db, baslangic, bitis): Promise<{ tarih; ad }[]>`; Vardiya takvimi bunu okur.
+  Kayıtlı ayar yoksa bordro motorunun varsayılan listesi (`motor/sabitler.ts`) kullanılır; bordro ile takvim aynı listeyi görür. Göç yok, ekran değişmedi.

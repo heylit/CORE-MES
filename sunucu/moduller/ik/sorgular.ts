@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { IkTuru } from '#paylasilan/sozlesme/ik.ts';
 import type { Deger, SatirDegeri, Satirlar } from './eslesme.ts';
-import type { Degisiklik } from './kurallar.ts';
+import type { Degisiklik, ResmiTatilSatiri } from './kurallar.ts';
 import {
   DONEM_ALANLARI, GENEL_AYAR_ALANLARI, GOREV_ALANLARI, KANAL_ALANLARI, PLAN_ALANLARI, PLAN_KADRO_ALANLARI, PRIM_ALANLARI, SORU_SETI_ALANLARI,
   TESVIK_ALANLARI, TUR_TANIMLARI,
@@ -241,6 +241,12 @@ export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
     planKadrosu: await db.sorgu<SatirDegeri>(`SELECT ${kolonlar(PLAN_KADRO_ALANLARI)} FROM ik_maliyet_plani_kadrosu t ORDER BY t.sira`),
     donemler: donemler.map((d) => ({ satir: d, dilimler: ayir(dilimler, d['no']), primler: ayir(primler, d['no']), tesvikler: ayir(tesvikler, d['no']) })),
   };
+}
+
+// IK-80: kayıtlı ayar yoksa (null) bordro motoru varsayılan listeyi kullanır; çağıran da ona düşer.
+export async function resmiTatilListesi(db: Db): Promise<ResmiTatilSatiri[] | null> {
+  if ((await db.tek("SELECT 1 AS var FROM ik_genel_ayar WHERE anahtar = 'genel'")) === null) return null;
+  return db.sorgu<ResmiTatilSatiri>('SELECT yil, ay, gun, ad FROM ik_resmi_tatil ORDER BY sira');
 }
 
 export interface AyarYazimi {
