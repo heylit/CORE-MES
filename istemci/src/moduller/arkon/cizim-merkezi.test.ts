@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MERKEZDEN_EKLENIR, merkezBagi, merkezDosyasiniKoy, merkezKontrolIstegi, merkezUyarilari } from '../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { ESKI_CIZIM, MERKEZDEN_EKLENIR, eskiCizim, eskiCizimGorevi, merkezBagi, merkezDosyasiniKoy, merkezKontrolIstegi, merkezUyarilari } from '../../../../arkon/web/src/data/cizim-merkezi.ts';
 import { cevapla } from './baglanti.ts';
 import type { Istemci, IstekGirdisi } from './baglanti.ts';
 
@@ -80,5 +80,31 @@ describe('Arkon dosyaları Çizim Merkezi\'nden (kart #800)', () => {
 describe('Dosya ekleme yolu (Terminal kural 2/5)', () => {
   it('boş dosya alanı dosyanın yalnız belge merkezinden eklendiğini söyler', () => {
     expect(MERKEZDEN_EKLENIR).toBe('Dosyalar TMI belge merkezinden eklenir');
+  });
+});
+
+// 19.1: yeni revizyon yayındayken terminal eski çizimi "KALİTE ONAYLI" göstermez; başlatma görevi uyarıya döner.
+describe('Terminalde eski çizim', () => {
+  const oz = (c: string) => c.repeat(64);
+  const files = [{ kind: 'pdf', name: 'a.pdf', merkez: 3, merkezOzet: oz('a') }, { kind: 'step', name: 'b.step', merkez: 4, merkezOzet: oz('b') }, { kind: 'pdf', name: 'yerel.pdf' }];
+
+  it('merkez dosyalarından biri eskiyse durumu döner; yeni revizyon yayından kalkmaya üstündür; güncel ya da yerel dosyada null', () => {
+    expect(eskiCizim(files, {})).toBeNull();
+    expect(eskiCizim(files, { 4: 'yayindan-kalkti' })).toBe('yayindan-kalkti');
+    expect(eskiCizim(files, { 4: 'yayindan-kalkti', 3: 'yeni-revizyon' })).toBe('yeni-revizyon');
+    expect(eskiCizim(files, { 9: 'yeni-revizyon' })).toBeNull();
+    expect(eskiCizim(null, { 3: 'yeni-revizyon' })).toBeNull();
+    expect(ESKI_CIZIM['yeni-revizyon'].rozet).toBe('ESKİ REVİZYON');
+  });
+
+  it('başlatan görev (başlat, devam, yeniden başlat) uyarıya ve çağrıya döner; öteki görevler ve güncel çizim değişmez', () => {
+    const baslat = { act: 'start', t: 'İşi başlat' };
+    expect(eskiCizimGorevi(baslat, null)).toBe(baslat);
+    for (const act of ['start', 'resume', 'restart']) {
+      expect(eskiCizimGorevi({ act }, 'yeni-revizyon')).toMatchObject({ t: 'Çizimin yeni revizyonu yayında', act: 'call', tone: 'var(--stop)' });
+    }
+    const say = { act: 'sample' };
+    expect(eskiCizimGorevi(say, 'yeni-revizyon')).toBe(say);
+    expect(eskiCizimGorevi(null, 'yeni-revizyon')).toBeNull();
   });
 });

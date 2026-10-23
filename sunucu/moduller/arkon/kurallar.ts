@@ -952,6 +952,24 @@ export function arizaCagrisi(depo: ArkonDeposu, govde: unknown, onceki: unknown)
   return typeof cagri === 'string' && cagri !== '' ? cagri : null;
 }
 
+// AR-15: Bakım'da açılan arıza makineyi TMI'de arızalı yapar, "Kapat · makine hazır" çalışır yapar (plan, Saat ve başlatma denetimi makine
+// durumunu okur). Makine belgedeki `mc` (TMI makine kodu); boşsa istasyonun (`st`) tek makinesi çözülür. Açılış yeni belgede, kapanış açık
+// belgenin kapanmasındadır; başka her yazım (not, sebep düzeltme) durumu değiştirmez.
+export interface ArizaGecisi { durum: 'ariza' | 'calisir'; makine: string | null; istasyon: string | null; baslik: string }
+const arizaKapali = (g: unknown): boolean => alanOku(g, 'status') === 'done';
+const doluMetin = (d: unknown): string | null => (typeof d === 'string' && d.trim() !== '' ? d.trim() : null);
+export function arizaMakineGecisi(depo: ArkonDeposu, govde: unknown, onceki: unknown): ArizaGecisi | null {
+  if (depo !== 'maint' || alanOku(govde, 'type') !== 'ariza') return null;
+  const durum = onceki === undefined ? (arizaKapali(govde) ? null : 'ariza')
+    : !arizaKapali(onceki) && arizaKapali(govde) ? 'calisir' : null;
+  if (durum === null) return null;
+  return { durum, makine: doluMetin(alanOku(govde, 'mc')), istasyon: doluMetin(alanOku(govde, 'st')), baslik: doluMetin(alanOku(govde, 'title')) ?? '' };
+}
+// Kapanışta makine yalnız bu arıza yüzünden arızalıysa çalışır olur: aynı makinede açık başka arıza varsa ya da makine elle bakıma alınmışsa kalır.
+export const acikArizaMi = (g: unknown, makine: string): boolean =>
+  alanOku(g, 'type') === 'ariza' && !arizaKapali(g) && alanOku(g, 'mc') === makine;
+export const ARIZA_ACIKLAMASI = (baslik: string): string => (baslik === '' ? 'Arkon Bakım arızası' : `Arkon Bakım: ${baslik}`).slice(0, 200);
+
 // Çalışma kuralı (kv/policy, `{ v: Policy }`): kalite onayı zorunlu mu. Kayıt yoksa Arkon varsayılanı (POLICY0) kapalıdır.
 export const onayZorunluMu = (politika: unknown): boolean => alanOku(alanOku(politika, 'v'), 'approval') === true;
 
