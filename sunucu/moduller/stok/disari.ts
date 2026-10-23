@@ -133,10 +133,12 @@ export interface RefakatPartisiOzeti {
   // Depodan verilen lot (Etiket Merkezi kartın lot satırını basar, kart #127).
   lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
 }
+// Lot bekleyen (istisna) kart da null döner: lotsuz kartla iş açılmaz ve lot satırı basılmaz (Soru 129; Etiket Merkezi isteği BASKA-MODUL-ISTEKLERI'nde).
 export async function refakatPartisi(db: Db, id: number): Promise<RefakatPartisiOzeti | null> {
   const r = await sorgular.etkinRefakatPartisiBul(db, id);
   if (r === null) return null;
   const { refakat } = await servis.refakatPartisiOku(db, r.id);
+  if (refakat.lotNo === null) return null;
   return {
     id: refakat.id, uretimEmriId: refakat.uretimEmriId, etiket: refakat.etiket, qr: refakat.qr, durum: refakat.durum,
     lotNo: refakat.lotNo, tedarikciPartiNo: refakat.tedarikciPartiNo, dokumNo: refakat.dokumNo, sertifikaNo: refakat.sertifikaNo,

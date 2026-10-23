@@ -17,7 +17,7 @@ import {
   istasyonSepetiCevabi, istasyonSepetiSorgusu, sepettenKullanGovdesi, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { refakatIziCevabi, refakatKolAcGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import * as s from './servis.ts';
@@ -116,6 +116,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/refakat-partileri/:id/kart', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartisiKartiCevabi, isle: ({ db, parametre }) => s.refakatPartisiKarti(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/refakat-partileri/:id/iz', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatIziCevabi, isle: ({ db, parametre }) => s.refakatIzi(db, parametre.id) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/refakat-partileri/:id/kol-ac', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: refakatKolAcGovdesi, cevap: refakatPartisiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.refakatKolKartiAc(db, kullanici.id, parametre.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/refakat-partileri/:id/lota-bagla', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: refakatLotaBaglaGovdesi, cevap: refakatLotaBaglaCevabi, isle: ({ db, kullanici, parametre, govde }) => s.refakatLotaBagla(db, kullanici.id, parametre.id, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/lot-bekleyen-kartlar', yetki: OKUMA, cevap: lotBekleyenKartlarCevabi, isle: ({ db }) => s.lotBekleyenKartlar(db) }),
   uc({ yontem: 'POST', yol: '/stok/refakat-partileri/:id/iptal-et', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: surumGovdesi, cevap: refakatPartisiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.refakatPartisiIptal(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/refakat-partileri', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartileriCevabi, isle: ({ db, parametre }) => s.emrinRefakatPartileri(db, parametre.id) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/stoktan-dus', yetki: 'stok.cikis', govde: stoktanDusGovdesi, cevap: fisCevabi, isle: ({ db, kullanici, govde }) => s.stoktanDus(db, kullanici.id, govde) }),

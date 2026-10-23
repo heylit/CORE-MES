@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
   sonrakiIstasyon,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -590,5 +590,17 @@ describe('DEP-64 katalog etiketi', () => {
     assert.match(refakatKolEngeli(ust, { ...kol, ustEmirId: 7 }) ?? '', /alt parti değil/);
     assert.match(refakatKolEngeli(ust, { ...kol, ustEmirId: null }) ?? '', /alt parti değil/);
     assert.match(refakatKolEngeli(ust, { ...kol, durum: 'bitti' }) ?? '', /bitti/);
+  });
+  test('kart #154 istisna kartı: lotsuz kartla teslim olmaz; yalnız açık, birleşmemiş, lotsuz kart aynı sürümle mal kabul lotuna bağlanır', () => {
+    const r = { durum: 'acik' as const, malzemeId: 7, partiId: null, uretimEmriId: 3, birlestigiRefakatPartisiId: null, surum: 2 };
+    assert.match(refakatTeslimEngeli(r, { malzemeId: 7, partiId: undefined, uretimEmriId: null }) ?? '', /lot bekliyor/);
+    const lot = { uretimEmriId: null, malzemeId: 7 };
+    assert.equal(refakatBaglamaEngeli(r, lot, 2), null);
+    assert.match(refakatBaglamaEngeli({ ...r, durum: 'iptal' }, lot, 2) ?? '', /iptal/);
+    assert.match(refakatBaglamaEngeli({ ...r, birlestigiRefakatPartisiId: 9 }, lot, 2) ?? '', /birleşti/);
+    assert.match(refakatBaglamaEngeli({ ...r, partiId: 40 }, lot, 2) ?? '', /lotu var/);
+    assert.match(refakatBaglamaEngeli(r, lot, 1) ?? '', /değişti/);
+    assert.match(refakatBaglamaEngeli(r, { ...lot, uretimEmriId: 5 }, 2) ?? '', /üretim emrinin çıktısı/);
+    assert.match(refakatBaglamaEngeli(r, { ...lot, malzemeId: 8 }, 2) ?? '', /malzemesinden değil/);
   });
 });

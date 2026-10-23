@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import qrcode from 'qrcode-generator';
-import type { RefakatIziCevabi, RefakatKolAcGovdesi, RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
+import type {
+  RefakatIziCevabi, RefakatKolAcGovdesi, RefakatLotaBaglaCevabi, RefakatLotaBaglaGovdesi, RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi,
+} from '#paylasilan/sozlesme/stok.ts';
+import { Dugme, DurumKutusu, Girdi, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EmirSecici } from './EmirSecici.tsx';
@@ -14,8 +16,9 @@ import './stok.css';
 
 // Refakat partisi (kart #123): depo lotu okutup emre ayırınca kart basılır; teslim kartla yapılır, alan kartı okutur.
 // Veri yoksa satır basılmaz.
+// İstisna kartının (Soru 129) lotu depo bağlayana kadar boştur.
 export const refakatLotSatiri = (r: RefakatPartisi): string =>
-  [`Lot ${r.lotNo}`, r.dokumNo && `Döküm ${r.dokumNo}`, r.tedarikciPartiNo && `Parti ${r.tedarikciPartiNo}`, r.sertifikaNo && `Sertifika ${r.sertifikaNo}`].filter(Boolean).join(' · ');
+  [r.lotNo === null ? 'Lot bekliyor (istisna kartı)' : `Lot ${r.lotNo}`, r.dokumNo && `Döküm ${r.dokumNo}`, r.tedarikciPartiNo && `Parti ${r.tedarikciPartiNo}`, r.sertifikaNo && `Sertifika ${r.sertifikaNo}`].filter(Boolean).join(' · ');
 export const refakatMalzemeSatiri = (r: RefakatPartisi): string =>
   [r.malzemeAd ?? `Kart ${r.malzemeId}`, r.malzemeKod, `verilen ${birimliMiktar(r.verilen, r.birim)}`].filter(Boolean).join(' · ');
 
@@ -107,6 +110,26 @@ function AltPartiKartiAc({ r, ac }: { r: RefakatPartisi; ac: (id: number) => voi
   );
 }
 
+// Lota bağlama (Soru 129, 131 a): depo gerçek lotu ya da eksik malzemenin geldiği refakat kartını okutur; lotsuz düşümler o lottan
+// yeniden düşülür. Lot yetmezse yeten kısım bağlanır, kalan bekler.
+function LotaBagla({ r, bagladi }: { r: RefakatPartisi; bagladi: (id: number) => void }) {
+  const [kod, setKod] = useState('');
+  const [sonuc, setSonuc] = useState<RefakatLotaBaglaCevabi | null>(null);
+  const komut = useStokKomutu((g: RefakatLotaBaglaGovdesi) => korumaliPost<RefakatLotaBaglaCevabi>(`/stok/refakat-partileri/${r.id}/lota-bagla`, g).then((c) => {
+    setSonuc(c); setKod(''); bagladi(c.refakat.id); return c;
+  }), 'Lota bağlandı.');
+  return (
+    <section className="tc-stok-form" aria-label="Lota bağla">
+      <h3 className="tc-stok-alt-baslik">Lota bağla</h3>
+      <p className="tc-stok-not">Malzeme stokta yokken sayıldı; düşüm lotsuz yapıldı. Gerçek lotu ya da malzemenin geldiği refakat kartını okutun.</p>
+      <Girdi etiket="Lot etiketi ya da refakat kartı" value={kod} onChange={(e) => setKod(e.target.value)} />
+      {sonuc && Number(sonuc.bekleyen) > 0 && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="status">{birimliMiktar(sonuc.baglanan, r.birim)} bağlandı; lotta yetmeyen {birimliMiktar(sonuc.bekleyen, r.birim)} bekliyor.</p>}
+      {komut.komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(komut.komut.error)}</p>}
+      <div><Dugme simge="tag" disabled={kod.trim() === ''} yukleniyor={komut.komut.isPending} onClick={() => komut.komut.mutate({ kod: kod.trim(), surum: r.surum })}>Lota bağla</Dugme></div>
+    </section>
+  );
+}
+
 // Kartı göster, bas; hiç teslimi olmayan kart iptal edilir.
 export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: () => void }) {
   const [id, setId] = useState(ilkId);
@@ -114,11 +137,12 @@ export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: 
   const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.', kapat);
   const r = q.data?.refakat;
   const merkez = useIslem('sayfa.etiket-merkezi');
+  const depocu = useIslem('stok.transfer');
   const yonlendir = useNavigate();
   return (
     <Pencere acik kapat={kapat} baslik={r ? `Refakat kartı ${r.etiket}` : 'Refakat kartı'} tur="yan"
       alt={<>
-        {merkez && r?.durum === 'acik' && (
+        {merkez && r?.durum === 'acik' && r.partiId !== null && (
           <Dugme tur="ikincil" simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
         )}
         {r && r.durum === 'acik' && Number(r.verilen) === 0 && (
@@ -137,11 +161,13 @@ export function RefakatKartPenceresi({ id: ilkId, kapat }: { id: number; kapat: 
               <span>{refakatLotSatiri(r)}</span>
               <span>{refakatMalzemeSatiri(r)}</span>
               {r.ust && <span>Üst kart {r.ust.etiket}</span>}
+              {r.lotaBaglanmaZamani && <span>İstisna kartıydı; {zamanMetni(r.lotaBaglanmaZamani)} lota bağlandı.</span>}
               {r.birlestigi && <span>{r.birlestigi.etiket} kartına birleşti; okutulunca o kart açılır.</span>}
               {r.durum === 'iptal' && <span>Kart iptal edildi.</span>}
             </div>
           </div>
-          {r.durum === 'acik' && r.birlestigi === null && <AltPartiKartiAc r={r} ac={setId} />}
+          {depocu && r.durum === 'acik' && r.birlestigi === null && r.partiId === null && <LotaBagla r={r} bagladi={setId} />}
+          {r.durum === 'acik' && r.birlestigi === null && r.partiId !== null && <AltPartiKartiAc r={r} ac={setId} />}
           <RefakatIzi id={r.id} git={setId} />
         </div>
       )}

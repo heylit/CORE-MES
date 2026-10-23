@@ -2,14 +2,15 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import type {
-  AdimToplaGovdesi, CikisOnerisiCevabi, IstekTeslimGovdesi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
+  AdimToplaGovdesi, CikisOnerisiCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { belirsizMiktarVar, ISTEK_ACIK as ACIK, ISTEK_DURUMU, istekDurumu, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
+import { belirsizMiktarVar, birimliMiktar, ISTEK_ACIK as ACIK, ISTEK_DURUMU, istekDurumu, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
+import { RefakatKartPenceresi } from './RefakatKarti.tsx';
 import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
@@ -400,12 +401,36 @@ function ListeAyrintisi({ id }: { id: number }) {
   );
 }
 
+// Lot bekleyen kartlar (Soru 129): malzeme stokta yokken yapılan sayımın istisna kartları. Kart açılır, lota bağlanır ya da basılır.
+function LotBekleyenKartlar() {
+  const [acik, setAcik] = useState<number | null>(null);
+  const l = useQuery({ queryKey: [...anahtarlar.hepsi, 'lot-bekleyen-kartlar'], queryFn: () => api.get<LotBekleyenKartlarCevabi>('/stok/lot-bekleyen-kartlar') });
+  if (l.isPending || (l.isSuccess && l.data.kartlar.length === 0)) return null;
+  type Satir = LotBekleyenKartlarCevabi['kartlar'][number];
+  return (
+    <Kart baslik="Lot bekleyen kartlar">
+      {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
+        <Tablo etiket="Lot bekleyen kartlar" satirlar={l.data.kartlar} satirAnahtari={(x: Satir) => x.refakat.id} bosMesaj="Lot bekleyen kart yok."
+          sutunlar={[
+            { anahtar: 'kart', baslik: 'Kart', mono: true, kirilmaz: true, hucre: (x: Satir) => x.refakat.etiket },
+            { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x: Satir) => x.refakat.malzemeAd ?? x.refakat.malzemeKod ?? `Kart ${x.refakat.malzemeId}` },
+            { anahtar: 'bekleyen', baslik: 'Lotsuz düşülen', hizala: 'sag', hucre: (x: Satir) => birimliMiktar(x.bekleyen, x.refakat.birim) },
+            { anahtar: 'zaman', baslik: 'Açıldı', hucre: (x: Satir) => zamanMetni(x.refakat.kayitZamani) },
+            { anahtar: 'eylem', baslik: '', hucre: (x: Satir) => <Dugme simge="tag" onClick={() => setAcik(x.refakat.id)}>Aç</Dugme> },
+          ]} />
+      )}
+      {acik !== null && <RefakatKartPenceresi id={acik} kapat={() => { setAcik(null); void l.refetch(); }} />}
+    </Kart>
+  );
+}
+
 export function Hazirlik() {
   const { id } = useParams();
   if (id) return <ListeAyrintisi id={Number(id)} />;
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Hazırlık" alt="Üretimden gelen istekler ve toplama listeleri tek yerde. İstekleri seç, liste aç, raf sırasıyla topla; toplanan teslim yerine taşınır." />
+      <LotBekleyenKartlar />
       <Istekler />
       <Listeler />
     </section>

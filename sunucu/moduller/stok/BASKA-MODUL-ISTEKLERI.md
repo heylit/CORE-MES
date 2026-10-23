@@ -66,3 +66,13 @@ Birim kapandı: özet `birim` taşıyor, stok ekranları gösteriyor (Aşama 2 t
 
 Mal kabulde depocu kartı müşteri parça no, teknik resim no, tedarikçi kodu ya da eski kodla da bulmak ister. Bugün `katalogMalzemeAra` (`sunucu/moduller/malzemeler/sorgular.ts`, `ARAMA_KOSULU`) yalnız `stok_kodu`, `kayit.com.ad` ve `no` ile arar; katalog ekranının kendi araması `com.ted`, `com.tkod`, `com.eskiKod` alanlarına da bakar.
 İstek: imza değişmeden (`malzemeAra(db, { metin, ... })`) arama koşuluna `kayit.com.tkod`, `kayit.com.eskiKod` ve müşteri parça no / teknik resim no alanları eklensin (alan yolları malzemeler sahibinden okunmalı; DOĞRULANMADI). Stok tarafında değişiklik gerekmez.
+
+## etiket-merkezi ve arkon: lotsuz istisna kartı (kart #154, Soru 129)
+
+- Bugün `stok/disari.ts` `refakatPartisi(db, id)` lotsuz (istisna) kart için null döner; tip değişmedi, çünkü iki modül `lotNo`'yu dolu bekliyor.
+- İstenen (Aşama 2): Etiket Merkezi lotsuz kartı "Lot bekliyor" yazarak bassın; Arkon kart listesinde lotsuz kartı göstersin (Dal 10, #156). İkisi için `disari.ts` `partiId`, `lotNo` boş olabilen ayrı bir okuma verir.
+
+## uretim-emirleri: sayım cevabında stok uyarısı (kart #157, Dal 11)
+
+- Lotsuz düşüm ve "teslim edilmeden başka istasyondan" notu bugün yalnız hareket açıklamasında. İstenen: sayım cevabı `uyari` alanını taşısın; stok `uretimSayimiYansit` sonucundan uyarıyı verir. Dal 11'de yazılır.
+
