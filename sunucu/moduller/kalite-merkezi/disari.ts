@@ -11,3 +11,7 @@ export { kaliteAskisindakiTedarikciler } from './servis.ts';
 // cihazı olmayan emir seçili değildir (secildi false). Geçerliliği kalibrasyon modülü verir. Yetki denetlemez.
 export { kalibrasyonHazirlikDurumlari } from './servis.ts';
 export type { KalibrasyonHazirligi } from './kurallar.ts';
+// DÖF (155 a): DÖF'ün tek sahibi Kalite Merkezi'dir. Denetim hazırlığı bulgusundan DÖF'ü buradan açar (aynı kaynak anahtarı ikinci DÖF
+// açmaz, var olanı döner) ve kaynak anahtarı başına durumunu buradan okur. Yetkiyi çağıranın ucu denetler; açan kişi kayıtta yazan olur.
+export { dofAc, dofDurumlari } from './servis.ts';
+export type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';

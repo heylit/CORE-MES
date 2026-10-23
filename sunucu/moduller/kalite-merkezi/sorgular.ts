@@ -212,3 +212,20 @@ export function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string, sinir: 
     [koleksiyon, kimlik, sinir],
   );
 }
+
+// Koleksiyonda bu numarayı taşıyan dolu kayıt var mı (ortak sayaç dolu numarayı atlar).
+export async function noVarMi(db: Db, koleksiyon: string, no: string): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM kalite_merkezi_belge WHERE koleksiyon = $1 AND govde IS NOT NULL AND btrim(govde->>'no') = $2) AS var`,
+    [koleksiyon, no],
+  );
+  return satir?.var ?? false;
+}
+
+// Verilen kimliklerin dolu kayıtları; silinmiş ya da olmayan kimlik dönmez.
+export function doluKayitlar(db: Db, koleksiyon: string, kimlikler: readonly string[]): Promise<{ kimlik: string; govde: Record<string, unknown> }[]> {
+  return db.sorgu(
+    'SELECT kimlik, govde FROM kalite_merkezi_belge WHERE koleksiyon = $1 AND kimlik = ANY($2::text[]) AND govde IS NOT NULL',
+    [koleksiyon, [...kimlikler]],
+  );
+}

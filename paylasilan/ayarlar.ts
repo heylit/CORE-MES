@@ -5,6 +5,7 @@ import { ETIKET_MERKEZI_AYARLARI } from './ayarlar/etiket-merkezi.ts';
 import { GUVENLIK_AYARLARI } from './ayarlar/guvenlik.ts';
 import { IDARI_ISLER_AYARLARI } from './ayarlar/idari-isler.ts';
 import { IK_AYARLARI } from './ayarlar/ik.ts';
+import { KALITE_MERKEZI_AYARLARI } from './ayarlar/kalite-merkezi.ts';
 import { LOGO_AYARLARI } from './ayarlar/logo.ts';
 import { MALZEMELER_AYARLARI } from './ayarlar/malzemeler.ts';
 import { NIZAMIYE_AYARLARI } from './ayarlar/nizamiye.ts';
@@ -27,6 +28,7 @@ export const AYAR_TANIMLARI = {
   ...GUVENLIK_AYARLARI,
   ...IDARI_ISLER_AYARLARI,
   ...IK_AYARLARI,
+  ...KALITE_MERKEZI_AYARLARI,
   ...LOGO_AYARLARI,
   ...MALZEMELER_AYARLARI,
   ...NIZAMIYE_AYARLARI,
