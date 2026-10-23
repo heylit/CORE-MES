@@ -16,8 +16,10 @@ for (const genislik of GENISLIKLER) {
   });
 }
 
+// Kapı sınanırken kişi portal sayfasını görebilmelidir: sayfayı göremeyene rota hiç kurulmaz ve kapı iletisine varılmaz
+// (satış rolünde sayfa.portal yok). Kalite rolü portalı görür, yeni ekran kapısından geçemez.
 test.describe('kapı', () => {
-  test.use({ hesap: 'ornek.satis' });
+  test.use({ hesap: 'ornek.kalite' });
   test('Portal yeni ekran: kapıdan geçemeyen kişiye hazırlanıyor der', async ({ page, ac }) => {
     await ac('/portal/yeni');
     await expect(page.getByText('Bu ekran hazırlanıyor')).toBeVisible();
