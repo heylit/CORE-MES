@@ -586,6 +586,89 @@ describe('çerçeve köprüsü', () => {
     });
   });
 
+  describe('takım stoğu (163 b, 164 b)', () => {
+    const KART = { malzemeId: 4, kod: 'DB-1', ad: 'Freze 10' };
+    const durum = JSON.stringify({ machine: 'f5a', inv: { 'f-10': { qty: 6, min: 1, loc: '', tmiStok: KART }, 'u-2': { qty: 3, min: 0, loc: '' } } });
+    // Prototipin Kütüphane ayrıntısı: seçili satır `tr.cur`, adet alanı ve düğmeleri `.sgrid` içinde.
+    const ayrintiCiz = (kimlik: string) => {
+      document.querySelector('#libList tr.cur')?.classList.remove('cur');
+      document.querySelector(`#libList tr[data-key="${kimlik}"]`)!.classList.add('cur');
+      document.getElementById('libDetail')!.innerHTML = '<h3>Kalem</h3><div class="sgrid"><div class="stp"><button data-a="q-">−</button><input id="lQty" value="6"><button data-a="q+">+</button></div></div><div class="sh">Hangi tezgâhta aktif</div>';
+    };
+    beforeEach(() => {
+      document.body.innerHTML = '<table id="libList"><tr data-key="f-10" data-id="f-10"></tr><tr data-key="u-2" data-id="lv_u-2"></tr></table><section id="libDetail"></section>';
+      ayrintiCiz('f-10');
+      cevaplar = (tip) => (tip === 'stok-kartlari' ? { ok: true, veri: { kartlar: [KART, { malzemeId: 9, kod: 'SF-3', ad: 'Uç' }], toplam: 25 } }
+        : tip === 'hazirlik' ? { ok: true, veri: { onaylar: [] } } : tip === 'emirler' ? { ok: true, veri: { emirler: [] } } : { ok: true, veri: { kart: null } });
+    });
+    afterEach(() => { document.body.innerHTML = ''; });
+    const bolum = () => document.getElementById('tmiStokKarti');
+    const gizli = (a: string) => document.querySelector(`#libDetail button[data-a="${a}"]`)!.hasAttribute('hidden');
+
+    it('KK-30: bağlı kalemde kart görünür, adet salt okunur, artırma gizlidir; azaltma yalnız stoktan düşebilende kalır; bağsız kalemde kart bağlayamayana bölüm yoktur', async () => {
+      cerceveKoprusu(window, { ...AYAR, degerler: { [ANAHTAR]: { deger: durum, surum: 3 } }, stokDusebilir: true }, glbYaz);
+      await vi.advanceTimersByTimeAsync(10);
+      expect([...bolum()!.querySelectorAll('.srow > *')].map((e) => e.textContent)).toEqual(['DB-1', 'Freze 10']);
+      expect(bolum()!.previousElementSibling?.className).toBe('sgrid');
+      expect((document.getElementById('lQty') as HTMLInputElement).readOnly).toBe(true);
+      expect([gizli('q+'), gizli('q-')]).toEqual([true, false]);
+      expect(bolum()!.querySelector('[data-tmi]')).toBeNull();
+      // Prototip ayrıntıyı yeniden çizince bölüm geri gelir; bağsız kalemde bölüm ve kısıt yoktur.
+      ayrintiCiz('f-10');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(bolum()).not.toBeNull();
+      ayrintiCiz('u-2');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(bolum()).toBeNull();
+      expect((document.getElementById('lQty') as HTMLInputElement).readOnly).toBe(false);
+      expect([gizli('q+'), gizli('q-')]).toEqual([false, false]);
+      document.body.innerHTML = '<table id="libList"><tr data-key="f-10"></tr></table><section id="libDetail"></section>';
+      ayrintiCiz('f-10');
+      cerceveKoprusu(window, { ...AYAR, degerler: { [ANAHTAR]: { deger: durum, surum: 3 } } }, glbYaz);
+      await vi.advanceTimersByTimeAsync(10);
+      expect([gizli('q+'), gizli('q-')]).toEqual([true, true]);
+    });
+
+    it('KK-31: kartı yazabilen kişi kalemi arayıp bağlar, kartını değiştirir ya da bağı kaldırır; bağlama bekleyen yazmalardan sonra gider, ret iletisi görünür', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      cerceveKoprusu(window, { ...AYAR, degerler: { [ANAHTAR]: { deger: durum, surum: 3 } }, stokKartiBaglayabilir: true }, glbYaz);
+      await vi.advanceTimersByTimeAsync(10);
+      const dugme = (ad: string) => [...bolum()!.querySelectorAll('button')].find((b) => b.textContent === ad)!;
+      ayrintiCiz('u-2');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(bolum()!.textContent).toContain('Stok kartına bağlı değil');
+      dugme('Stok kartına bağla').click();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(giden.filter((g) => g.tip === 'stok-kartlari').map((g) => g.veri)).toEqual([{ metin: '', sayfa: 1 }]);
+      expect([...bolum()!.querySelectorAll('[data-tmi-kart]')].map((r) => r.textContent)).toEqual(['DB-1Freze 10', 'SF-3Uç']);
+      expect(bolum()!.textContent).toContain('25 karttan ilk 2 gösteriliyor');
+      // Yazılan arama beklemeden sonra gider; alan odağını korur.
+      const girdi = document.getElementById('tmiStokAra') as HTMLInputElement;
+      girdi.focus();
+      girdi.value = 'uç';
+      girdi.dispatchEvent(new Event('input', { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(400);
+      expect(giden.filter((g) => g.tip === 'stok-kartlari').map((g) => g.veri['metin'])).toEqual(['', 'uç']);
+      expect(document.activeElement?.id).toBe('tmiStokAra');
+      // Bağlama, önce bekleyen değişiklik yazılınca gider.
+      eylemYap();
+      window.localStorage.setItem(ANAHTAR, durum.replace('"qty":3', '"qty":2'));
+      (bolum()!.querySelector('[data-tmi-kart="9"]') as HTMLElement).click();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(giden.map((g) => g.tip).filter((t) => t === 'kayit-yaz' || t === 'stok-karti-bagla')).toEqual(['kayit-yaz', 'stok-karti-bagla']);
+      expect(giden.find((g) => g.tip === 'stok-karti-bagla')?.veri).toEqual({ kimlik: 'u-2', malzemeId: 9 });
+      // Bağlı kalemde kart değiştirilir ya da bağ kaldırılır; ret iletisi bölümde görünür.
+      ayrintiCiz('f-10');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(bolum()!.querySelector('[data-tmi-kart]')).toBeNull();
+      cevaplar = (tip) => (tip === 'stok-karti-bagla' ? { ok: false, durum: 403, hata: 'Yetkiniz yok.' } : { ok: true, veri: { kayit: { surum: 40 } } });
+      dugme('Bağı kaldır').click();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(giden.filter((g) => g.tip === 'stok-karti-bagla').map((g) => g.veri)).toEqual([{ kimlik: 'u-2', malzemeId: 9 }, { kimlik: 'f-10', malzemeId: null }]);
+      expect(bolum()!.querySelector('.cwarn')?.textContent).toBe('Yetkiniz yok.');
+    });
+  });
+
   // Salt onay kipi pencereye yakalama dinleyicisi koyar ve kaldırmaz: bu blok dosyanın sonunda kalmalı.
   describe('salt onay (yalnız hazırlık onayı olan kişi)', () => {
     it('KK-29: üst çubuk sığmayınca düğmeler "Diğer" menüsünde toplanır; menü açılır, dışarı tıklayınca kapanır; sığınca menü kalkar', async () => {

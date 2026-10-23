@@ -6,8 +6,8 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Hepsi `cnc_kurulu
 |---|---|---|
 | istasyon / tezgâh | `machine` (seçili), `customMachines`, `mo` (tezgâh değer düzeltmeleri), `mstat` | istasyonlar |
 | malzeme (iş parçası) | `material`, `customMats`, `matO`, `stock.mat` | malzemeler |
-| takım, tutucu, aparat (kütüphane) | `custom`, `tools`, `byType`, `active` | malzemeler (takım kartı) |
-| stok miktarı | `inv` (miktar, en az), `gstock`, `gstockMan` | stok |
+| takım, tutucu, aparat (kütüphane) | `custom`, `tools`, `byType`, `active`; kalem kimliği (`inv` anahtarı) sarf ya da demirbaş kartına bağlanır | malzemeler (takım kartı) |
+| stok miktarı | `inv` (miktar, en az, konum). Bağlı kalemde (`inv[...].tmiStok`: malzeme id, kod, ad) miktar okurken `stok` kullanılabilir miktarıdır, azalış `stok` çıkışıdır (153 a, 164 b); bağ `malzeme_katalog_karti.cnc_kutuphane_kimligi` (malzemeler, 163 b). `gstock`, `gstockMan` G-kod benzetiminin ham ölçüsüdür, stok değildir | stok (bağlı kalemde sahibi) |
 | ölçü aleti | `gauges` | kalibrasyon |
 | sarf malzemesi | `cons` | malzemeler / stok |
 | takım ömrü ve aşınma | `life`, `wear`, `wearLog` | bakım (Arkon) / stok |

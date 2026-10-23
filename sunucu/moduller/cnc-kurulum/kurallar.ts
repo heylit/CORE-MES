@@ -288,6 +288,23 @@ export function asinmaBindir(durum: unknown, sayaclar: readonly { cep: number; t
   return { ...durum, wear: asinma };
 }
 
+// Takım stoğu (153 a, 163 b): stok kartına bağlı kalemin adedi okurken stoğun kullanılabilir miktarıdır; kalemin kritik seviyesi
+// ve yeri prototipte kalır, örnek işareti düşer. Stoğu hiç olmayan kart için adet null'dır (prototip "stok girilmemiş" der, sıfır
+// uydurulmaz). `tmiStok` köprüye kalemin bağlı olduğunu söyler.
+export interface StokKalemi { kimlik: string; malzemeId: number; kod: string; ad: string | null; miktar: string | null }
+export function stokBindir(durum: unknown, kalemler: readonly StokKalemi[]): unknown {
+  if (!nesneMi(durum) || kalemler.length === 0) return durum;
+  const envanter: Nesne = nesneMi(durum['inv']) ? { ...durum['inv'] } : {};
+  for (const k of kalemler) {
+    const kayitli = envanter[k.kimlik];
+    const onceki: Nesne = nesneMi(kayitli) ? { ...kayitli } : { min: 0, loc: '' };
+    delete onceki['demo'];
+    const miktar = k.miktar === null ? null : Number(k.miktar);
+    envanter[k.kimlik] = { ...onceki, qty: miktar !== null && Number.isFinite(miktar) ? miktar : null, tmiStok: { malzemeId: k.malzemeId, kod: k.kod, ad: k.ad } };
+  }
+  return { ...durum, inv: envanter };
+}
+
 // 311 a: elle üretim kaydı (`wearLog`a yeni satır) üretim emrine gitmez; adet yalnız Üretim Terminali'nden girilir. Satır
 // zamanıyla (`ts`) tanınır; geri alma (satır düşmesi) ve eski satırlar geçer.
 export function elleUretimKaydiVarMi(onceki: unknown, yeni: unknown): boolean {
