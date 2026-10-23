@@ -1626,6 +1626,10 @@ button.pm-gy-ad:hover { background: var(--panel2); }
 .pm-at-kilavuz li span b { margin-right: 4px; }
 @media (max-width: 900px) { .pm-at-arac .tc-dugme > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
 @media (max-width: 600px) { .pm-at-sorun { align-self: start; } .pm-at-kart:has(.pm-at-kilavuz) { max-height: 46%; } .pm-at:has(.pm-at-kilavuz) .pm-at-sorun { display: none; } .pm-at-sorun[data-acik] { width: calc(100% - 2 * var(--b-2)); max-height: 60%; } }
+/* Kılavuz açılışta kendiliğinden açılır; haritanın üstündeki katmanların (özet, keşif, tahta, görünüm şeridi) altında kalıp okunmuyordu.
+   Açıkken hepsinin üstündedir; geniş ekranda görünüm şeridinin altından başlar. */
+.pm-at > .pm-at-kart:has(.pm-at-kilavuz) { z-index: 9; }
+@media (min-width: 601px) { .pm-at > .pm-at-kart:has(.pm-at-kilavuz) { margin-top: calc(var(--dokunma) + 3 * var(--b-2)); max-height: calc(100% - var(--dokunma) - 3 * var(--b-2)); } }
 
 /* v23: Komuta paneli */
 .pm-km { width: min(360px, calc(100% - 2 * var(--b-2))); align-self: stretch; gap: var(--b-3); padding: 0; }
