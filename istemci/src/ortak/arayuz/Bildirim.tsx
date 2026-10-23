@@ -7,20 +7,33 @@ import './bildirim.css';
 
 export type BildirimTonu = 'tamam' | 'bilgi' | 'hata';
 
+// Bildirimin tek düğmesi (Geri al gibi). Basılınca iş yapılır ve bildirim kapanır.
+export interface BildirimEylemi {
+  etiket: string;
+  yap: () => void;
+}
+
+export interface BildirimSecenegi {
+  eylem?: BildirimEylemi;
+}
+
 interface Kayit {
   no: number;
   ton: BildirimTonu;
   mesaj: string;
+  eylem?: BildirimEylemi;
 }
 
 interface Baglam {
-  bildir: (ton: BildirimTonu, mesaj: string) => void;
+  bildir: (ton: BildirimTonu, mesaj: string, secenek?: BildirimSecenegi) => void;
 }
 
 const BildirimBaglami = createContext<Baglam | null>(null);
 
 const SIMGE: Record<BildirimTonu, SimgeAdi> = { tamam: 'check', bilgi: 'bell', hata: 'alert' };
 export const BILDIRIM_SURESI_MS = 4000;
+// Eylemli bildirim daha uzun kalır: düğmeye yetişmek için iletiyi okumak gerekir.
+export const EYLEMLI_BILDIRIM_SURESI_MS = 8000;
 
 export function BildirimSaglayici({ children }: { children: ReactNode }) {
   const [kayitlar, kayitYaz] = useState<Kayit[]>([]);
@@ -35,10 +48,12 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
   }, []);
 
   // Hata kullanıcı kapatana kadar kalır: okunmadan kaybolan hata tekrar işe yol açar.
-  const bildir = useCallback((ton: BildirimTonu, mesaj: string) => {
+  const bildir = useCallback((ton: BildirimTonu, mesaj: string, secenek?: BildirimSecenegi) => {
     const no = ++sayac.current;
-    kayitYaz((onceki) => [...onceki, { no, ton, mesaj }]);
-    if (ton !== 'hata') zamanlayicilar.current.set(no, setTimeout(() => kaldir(no), BILDIRIM_SURESI_MS));
+    const eylem = secenek?.eylem;
+    kayitYaz((onceki) => [...onceki, { no, ton, mesaj, eylem }]);
+    const sure = eylem ? EYLEMLI_BILDIRIM_SURESI_MS : BILDIRIM_SURESI_MS;
+    if (ton !== 'hata') zamanlayicilar.current.set(no, setTimeout(() => kaldir(no), sure));
   }, [kaldir]);
 
   useEffect(() => {
@@ -56,6 +71,11 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
           <div key={k.no} className={`tc-bildirim tc-bildirim-${k.ton}`} role={k.ton === 'hata' ? 'alert' : 'status'}>
             <Simge ad={SIMGE[k.ton]} />
             <p className="tc-bildirim-mesaj">{k.mesaj}</p>
+            {k.eylem && (
+              <button type="button" className="tc-bildirim-eylem" onClick={() => { kaldir(k.no); k.eylem?.yap(); }}>
+                {k.eylem.etiket}
+              </button>
+            )}
             <button type="button" className="tc-bildirim-kapat" onClick={() => kaldir(k.no)} aria-label="Bildirimi kapat">
               <Simge ad="x" boyut="k" />
             </button>
