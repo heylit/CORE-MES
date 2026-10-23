@@ -330,3 +330,34 @@ export function kaynakDagilimi(adaylar: readonly AdayKaydi[]): { kaynak: string;
   }
   return [...m].map(([kaynak, v]) => ({ kaynak, ...v })).sort((a, b) => b.basvuru - a.basvuru);
 }
+
+export function goreliGun(gun: string, bugun: string): string {
+  const n = gunFarki(bugun, gun);
+  if (n === 0) return 'Bugün';
+  if (n === 1) return 'Yarın';
+  if (n === -1) return 'Dün';
+  return n > 0 ? `${n} gün sonra` : `${-n} gün önce`;
+}
+
+// Planlı görüşmeler güne göre gruplanır (tarih ve saat sırasıyla).
+export function gunlereGore<G extends GorusmeKaydi>(gs: readonly G[]): { gun: string; gorusmeler: G[] }[] {
+  const gruplar: { gun: string; gorusmeler: G[] }[] = [];
+  for (const g of [...gs].sort((a, b) => anahtar(a).localeCompare(anahtar(b)))) {
+    const gun = (g.tarih ?? '').slice(0, 10);
+    const son = gruplar.at(-1);
+    if (son && son.gun === gun) son.gorusmeler.push(g);
+    else gruplar.push({ gun, gorusmeler: [g] });
+  }
+  return gruplar;
+}
+
+export function yaklasanGorusmeler<G extends GorusmeKaydi>(gs: readonly G[], adayVar: (id: string | undefined) => boolean, bugun: string): G[] {
+  return gs.filter((i) => i.durum === 'Planlandı' && tarihMi(i.tarih) && i.tarih.slice(0, 10) >= bugun && adayVar(i.candId));
+}
+
+export function sonTamamlananlar<G extends GorusmeKaydi>(gs: readonly G[], adayVar: (id: string | undefined) => boolean, bugun: string, gunSayisi = 30): G[] {
+  const sinir = gunEkle(bugun, -gunSayisi);
+  return gs
+    .filter((i) => gorusmeTamamMi(i) && tarihMi(i.tarih) && i.tarih.slice(0, 10) >= sinir && adayVar(i.candId))
+    .sort((a, b) => (b.tarih ?? '').localeCompare(a.tarih ?? ''));
+}

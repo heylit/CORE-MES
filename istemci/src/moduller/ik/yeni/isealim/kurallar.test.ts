@@ -3,7 +3,8 @@ import {
   adayPuani, asamaTonu, degerlendirilebilirMi, degerlendirmeBekleyenler, departmanOrtalamalari, donemler, durumDegisimi, egitimGostergeleri,
   egitimSuz, enYuksekler, gorusmeSonrasiAsama, iseAlimGostergeleri, isgEksikler, kanalMetni, kanalSuresiDoldu, kaynakDagilimi, komsuAsama,
   kriterOrtalamalari, kriterPuani, oneriOzeti, performansSonucu, performansSuz, pozisyonKopyasi, pozisyonSirala, puanMetni, puanOrtalamasi,
-  sertifikaDurumu, sonrakiGorusme, sonucDagilimi, surecteMi, yayinIsaretle, yayinKapat, yayindakiKanallar,
+  sertifikaDurumu, sonrakiGorusme, sonucDagilimi, surecteMi, yayinIsaretle, yayinKapat, yayindakiKanallar, goreliGun, gunlereGore,
+  yaklasanGorusmeler, sonTamamlananlar,
 } from './kurallar.ts';
 
 const ASAMALAR = ['Başvuru', 'Ön görüşme', 'Mülakat', 'Teklif', 'İşe alındı', 'Reddedildi'];
@@ -164,4 +165,25 @@ describe('pozisyon', () => {
     const m = kanalMetni('Kod: IK-1\nBasvuru: https://ornek.test/kariyer', 'IK-1', 'KN', 'https://ornek.test/kariyer', (a) => `${a}?kaynak=kn`);
     expect(m).toBe('Kod: IK-1-KN\nBasvuru: https://ornek.test/kariyer?kaynak=kn');
   });
+});
+
+describe('gorusme takvimi', () => {
+  const gs = [
+    { id: 'a', candId: 'c', tarih: '2026-10-24', saat: '14:00', durum: 'Planlandı' },
+    { id: 'b', candId: 'c', tarih: '2026-10-24', saat: '09:00', durum: 'Planlandı' },
+    { id: 'c', candId: 'x', tarih: '2026-10-25', durum: 'Planlandı' },
+    { id: 'd', candId: 'c', tarih: '2026-10-01', durum: 'Tamamlandı' },
+    { id: 'e', candId: 'c', tarih: '2026-08-01', durum: 'Tamamlandı' },
+  ];
+  const var_ = (id: string | undefined) => id === 'c';
+  it('goreli gun', () => {
+    expect(goreliGun('2026-10-23', BUGUN)).toBe('Bugün');
+    expect(goreliGun('2026-10-24', BUGUN)).toBe('Yarın');
+    expect(goreliGun('2026-10-20', BUGUN)).toBe('3 gün önce');
+  });
+  it('yaklasanlar adayi olanlar, gunlere gore saat sirasiyla', () => {
+    const y = yaklasanGorusmeler(gs, var_, BUGUN);
+    expect(gunlereGore(y)).toEqual([{ gun: '2026-10-24', gorusmeler: [gs[1], gs[0]] }]);
+  });
+  it('son 30 gun tamamlananlar', () => expect(sonTamamlananlar(gs, var_, BUGUN).map((g) => g.id)).toEqual(['d']));
 });
