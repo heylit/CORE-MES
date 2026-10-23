@@ -72,4 +72,22 @@ test.describe('P2 izin ve devam', () => {
 // P3 bordro
 // P4 isealim
 // P5 analiz
+test.describe('P5 analiz', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('Pano, Yapılacaklar, Raporlar ve Değişiklik günlüğü açılır; okurken yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/ik/yeni');
+    await expect(page.getByRole('heading', { name: 'Pano' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Yapılacaklar' }).click();
+    await expect(page.getByRole('heading', { name: 'Yapılacaklar' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Raporlar' }).click();
+    await expect(page.getByRole('heading', { name: 'Raporlar' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Değişiklik günlüğü' }).click();
+    await expect(page).toHaveURL(/\/ik\/yeni\/gunluk$/);
+    await page.getByRole('searchbox', { name: 'Günlükte ara' }).fill('bu metin hiçbir kayıtta yok');
+    await expect(page.getByText(/Bu ölçütlerde değişiklik yok/)).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P6 islemlerim
