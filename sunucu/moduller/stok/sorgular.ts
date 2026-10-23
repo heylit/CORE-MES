@@ -367,7 +367,8 @@ export const refakatCiktiPartisiAc = async (
 // Kartın lotu ve kartla sayılan parçaların partileri: sayım bunları önce kullanır.
 export const refakatStokPartileri = async (db: Db, kartlar: readonly number[]): Promise<number[]> =>
   (await db.sorgu<{ id: number }>(
-    'SELECT parti_id AS id FROM stok_refakat_partisi WHERE id = ANY($1::int[]) UNION SELECT id FROM stok_parti WHERE refakat_partisi_id = ANY($1::int[])', [kartlar],
+    `SELECT parti_id AS id FROM stok_refakat_partisi WHERE id = ANY($1::int[]) AND parti_id IS NOT NULL
+     UNION SELECT id FROM stok_parti WHERE refakat_partisi_id = ANY($1::int[])`, [kartlar],
   )).map((r) => r.id);
 // Partinin kaynağı (Soru 126 b): mal kabul lotu (emirsiz) ya da kartla sayılmış üretim partisi; ikisi de değilse kartsız emir partisi.
 export const partiKaynagi = (db: Db, id: number): Promise<{ uretimEmriId: number | null; refakatPartisiId: number | null; malzemeId: number } | null> =>
@@ -1292,17 +1293,18 @@ export const fasonaTasinan = async (db: Db, uretimEmriId: number, malzemeId: num
 
 // ---- Refakat partisi (kart #123): emir + depodan verilen lot ------------------------------------------------------------
 export interface RefakatPartisiHam {
-  id: number; uretimEmriId: number; sira: number; malzemeId: number; partiId: number; lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
+  id: number; uretimEmriId: number; sira: number; malzemeId: number; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
   durum: 'acik' | 'iptal'; surum: number; kayitZamani: string; verilen: string;
-  ustRefakatPartisiId: number | null; birlestigiRefakatPartisiId: number | null; birlesmeZamani: string | null;
+  ustRefakatPartisiId: number | null; birlestigiRefakatPartisiId: number | null; birlesmeZamani: string | null; lotaBaglanmaZamani: string | null;
 }
 // Verilen: partinin emrine o lottan yapılan teslimler; alınan teslimde alınan, yoldakinde gönderilen miktar.
 const REFAKAT_SECIMI = `SELECT r.id, r.uretim_emri_id AS "uretimEmriId", r.sira, r.malzeme_id AS "malzemeId", r.parti_id AS "partiId", p.lot_no AS "lotNo",
   p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", r.durum, r.surum, ${zamanMetni('r.kayit_zamani')} AS "kayitZamani",
   r.ust_refakat_partisi_id AS "ustRefakatPartisiId", r.birlestigi_refakat_partisi_id AS "birlestigiRefakatPartisiId", ${zamanMetni('r.birlesme_zamani')} AS "birlesmeZamani",
+  ${zamanMetni('r.lota_baglanma_zamani')} AS "lotaBaglanmaZamani",
   (SELECT COALESCE(sum(CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0) FROM stok_teslim t
     WHERE t.uretim_emri_id = r.uretim_emri_id AND t.parti_id = r.parti_id AND t.durum IN ('yolda', 'teslim'))::text AS verilen
-  FROM stok_refakat_partisi r JOIN stok_parti p ON p.id = r.parti_id`;
+  FROM stok_refakat_partisi r LEFT JOIN stok_parti p ON p.id = r.parti_id`;
 export const refakatPartisiBul = (db: Db, id: number, kilit = false): Promise<RefakatPartisiHam | null> =>
   db.tek(`${REFAKAT_SECIMI} WHERE r.id = $1${kilit ? ' FOR UPDATE OF r' : ''}`, [id]);
 export const refakatPartileriBul = (db: Db, idler: readonly number[]): Promise<RefakatPartisiHam[]> =>
@@ -1372,6 +1374,65 @@ export const refakatPartisiIptal = (db: Db, id: number, surum: number, kisiId: n
     `UPDATE stok_refakat_partisi SET durum = 'iptal', iptal_eden_kisi_id = $3, iptal_zamani = now(), surum = surum + 1
       WHERE id = $1 AND surum = $2 AND durum = 'acik' RETURNING id`, [id, surum, kisiId]);
 export const refakatPartisiVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_refakat_partisi WHERE id = $1', [id])) !== null;
+// ---- İstisna kartı (Soru 129, 131 a): lotsuz kart, lotsuz düşümleri ve lota bağlanması --------------------------------------------
+export const acikIstisnaKarti = (db: Db, uretimEmriId: number, malzemeId: number): Promise<RefakatPartisiHam | null> =>
+  db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.malzeme_id = $2 AND r.parti_id IS NULL AND r.durum = 'acik' AND r.birlestigi_refakat_partisi_id IS NULL`,
+    [uretimEmriId, malzemeId]);
+export const istisnaKartiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; kisiId: number }): Promise<number | null> => {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_refakat_partisi'), $1)", [r.uretimEmriId]);
+  return (await db.tek<{ id: number }>(
+    `INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id)
+     SELECT $1, COALESCE(max(sira), 0) + 1, $2, NULL, $3 FROM stok_refakat_partisi WHERE uretim_emri_id = $1
+     ON CONFLICT (uretim_emri_id, malzeme_id) WHERE parti_id IS NULL AND durum = 'acik' AND birlestigi_refakat_partisi_id IS NULL DO NOTHING RETURNING id`,
+    [r.uretimEmriId, r.malzemeId, r.kisiId]))?.id ?? null;
+};
+export const istisnaDusumuYaz = async (db: Db, refakatPartisiId: number, hareketId: number): Promise<void> => {
+  await db.sorgu('INSERT INTO stok_refakat_istisna_dusumu (refakat_partisi_id, hareket_id) VALUES ($1, $2)', [refakatPartisiId, hareketId]);
+};
+export const istisnaDusumuMu = async (db: Db, hareketId: number): Promise<boolean> =>
+  (await db.tek('SELECT 1 FROM stok_refakat_istisna_dusumu WHERE hareket_id = $1 AND lot_hareket_id IS NULL', [hareketId])) !== null;
+// Sayım düzeltmesi lotsuz düşümü geri alınca bağ ya kalan çıkışa taşınır ya da (tamamı geri alındıysa ve bağlanmadıysa) silinir.
+export const istisnaDusumuTasi = async (db: Db, hareketId: number, yeniHareketId: number | null): Promise<void> => {
+  if (yeniHareketId === null) await db.sorgu('DELETE FROM stok_refakat_istisna_dusumu WHERE hareket_id = $1 AND lot_hareket_id IS NULL', [hareketId]);
+  else await db.sorgu('UPDATE stok_refakat_istisna_dusumu SET hareket_id = $2 WHERE hareket_id = $1 AND lot_hareket_id IS NULL', [hareketId, yeniHareketId]);
+};
+export interface IstisnaDusumuHam { id: number; hareketId: number; miktar: string; konumId: number; isEmriId: number | null; aciklama: string | null }
+// Kartın bağlanmamış lotsuz düşümleri, eskiden yeniye.
+export const istisnaDusumleri = (db: Db, refakatPartisiId: number): Promise<IstisnaDusumuHam[]> =>
+  db.sorgu(
+    `SELECT d.id, h.id AS "hareketId", h.miktar::text AS miktar, h.kaynak_konum_id AS "konumId", h.is_emri_id AS "isEmriId", h.aciklama
+       FROM stok_refakat_istisna_dusumu d JOIN stok_hareketi h ON h.id = d.hareket_id
+      WHERE d.refakat_partisi_id = $1 AND d.lot_hareket_id IS NULL
+        AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)
+      ORDER BY h.id`, [refakatPartisiId]);
+export const istisnaDusumuBagla = async (db: Db, id: number, geriAlmaHareketId: number, lotHareketId: number): Promise<void> => {
+  await db.sorgu('UPDATE stok_refakat_istisna_dusumu SET geri_alma_hareket_id = $2, lot_hareket_id = $3 WHERE id = $1', [id, geriAlmaHareketId, lotHareketId]);
+};
+export interface LotBekleyenKartHam { id: number; bekleyen: string }
+// Lot bekleyen kartlar: açık, birleşmemiş, lotsuz kartlar ve bağlanmamış lotsuz düşüm toplamı.
+export const lotBekleyenKartlar = (db: Db): Promise<LotBekleyenKartHam[]> =>
+  db.sorgu(
+    `SELECT r.id, COALESCE((SELECT sum(h.miktar) FROM stok_refakat_istisna_dusumu d JOIN stok_hareketi h ON h.id = d.hareket_id
+                             WHERE d.refakat_partisi_id = r.id AND d.lot_hareket_id IS NULL
+                               AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)), 0)::text AS bekleyen
+       FROM stok_refakat_partisi r
+      WHERE r.parti_id IS NULL AND r.durum = 'acik' AND r.birlestigi_refakat_partisi_id IS NULL
+      ORDER BY r.kayit_zamani, r.id`);
+export const refakatLotaBagla = (db: Db, id: number, partiId: number, kisiId: number): Promise<{ id: number } | null> =>
+  db.tek(
+    `UPDATE stok_refakat_partisi SET parti_id = $2, lota_baglayan_kisi_id = $3, lota_baglanma_zamani = now(), surum = surum + 1
+      WHERE id = $1 AND parti_id IS NULL AND durum = 'acik' AND birlestigi_refakat_partisi_id IS NULL RETURNING id`, [id, partiId, kisiId]);
+// Lotun bağlamada düşülebilecek serbest bakiyesi (yoldaki teslime ayrılan düşülür): tercih edilen konum önce, sonra en eski giriş.
+// Hurda, karantina, sevkiyat, fason ve yolda konumları alınmaz.
+export const lotunBaglamaBakiyeleri = (db: Db, partiId: number, tercihKonumId: number): Promise<{ konumId: number; serbest: string }[]> =>
+  db.sorgu(
+    `SELECT b.konum_id AS "konumId",
+            (b.miktar - COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id AND t.malzeme_id = b.malzeme_id
+                                  AND t.parti_id = b.parti_id AND t.statu_id IS NULL AND t.kalite_durumu = b.kalite_durumu), 0))::text AS serbest
+       FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+      WHERE b.parti_id = $1 AND b.statu_id IS NULL AND b.kalite_durumu = 'serbest' AND b.miktar > 0
+        AND k.tur NOT IN ('fason', 'yolda', ${AYRILMIS_SQL})
+      ORDER BY (b.konum_id = $2) DESC, b.ilk_giris NULLS LAST, b.id`, [partiId, tercihKonumId]);
 // Partinin emrine o lottan yoldaki teslimler; alan taraf kartı okutunca bunlardan kendisine geleni alır (Soru 118 a).
 export const refakatYoldakiTeslimleri = (db: Db, uretimEmriId: number, partiId: number): Promise<TeslimHam[]> =>
   db.sorgu(`${TESLIM_SECIMI} WHERE t.durum = 'yolda' AND t.uretim_emri_id = $1 AND t.parti_id = $2 ORDER BY t.gonderim, t.id`, [uretimEmriId, partiId]);

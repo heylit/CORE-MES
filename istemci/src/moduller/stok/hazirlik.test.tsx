@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { focusManager } from '@tanstack/react-query';
-import type { CikisOnerisiCevabi, MalzemeIstegi, TeslimKutusuCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { CikisOnerisiCevabi, LotBekleyenKartlarCevabi, MalzemeIstegi, TeslimKutusuCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -201,5 +201,37 @@ describe('Hazırlık: malzeme istekleri', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzeme-istekleri': () => json(200, liste([])), 'GET /stok/toplamalar': () => json(200, BOS_LISTELER) });
     ac('/stok/istekler');
     expect(await screen.findByRole('heading', { name: 'Hazırlık' })).toBeTruthy();
+  });
+});
+
+describe('Hazırlık: lot bekleyen kartlar (kart #154)', () => {
+  it('lotsuz düşülen kartlar listelenir, Aç kartı açar; liste boşken bölüm görünmez', async () => {
+    const kart = {
+      id: 12, qr: 'RP:12', etiket: 'UE-000001-P2', uretimEmriId: 1, emirNo: 'UE-000001', sira: 2, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
+      partiId: null, lotNo: null, tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '0', durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-23T08:00:00+03:00',
+      lotaBaglanmaZamani: null, ust: null, birlestigi: null, birlesmeZamani: null,
+    };
+    const cevap: LotBekleyenKartlarCevabi = { kartlar: [{ refakat: kart, bekleyen: '4' }] };
+    sunucuKur(DEPOCU, {
+      'GET /stok/lot-bekleyen-kartlar': () => json(200, cevap),
+      'GET /stok/malzeme-istekleri': () => json(200, liste([])),
+      'GET /stok/toplamalar': () => json(200, BOS_LISTELER),
+      'GET /stok/refakat-partileri/12/kart': () => json(200, { refakat: kart, kart: { emirId: 1, qr: 'UE:1', emirNo: 'UE-000001', urun: { kod: 'P-1', ad: 'Deneme parça' }, adet: 10, teslim: null, parti: { ustEmirNo: null, bolunmeSira: null }, adimlar: [] } }),
+    });
+    ac('/stok/hazirlik');
+    const tablo = await screen.findByRole('table', { name: 'Lot bekleyen kartlar' });
+    const satir = within(tablo).getByText('UE-000001-P2').closest('tr')!;
+    expect(within(satir).getByText(/4/)).toBeTruthy();
+    fireEvent.click(within(satir).getByRole('button', { name: 'Aç' }));
+    expect(await screen.findByRole('region', { name: 'Lota bağla' })).toBeTruthy();
+    cleanup();
+    sunucuKur(DEPOCU, {
+      'GET /stok/lot-bekleyen-kartlar': () => json(200, { kartlar: [] }),
+      'GET /stok/malzeme-istekleri': () => json(200, liste([])),
+      'GET /stok/toplamalar': () => json(200, BOS_LISTELER),
+    });
+    ac('/stok/hazirlik');
+    await screen.findByText(/Üretimden gelen istekler/);
+    await waitFor(() => expect(screen.queryByRole('table', { name: 'Lot bekleyen kartlar' })).toBeNull());
   });
 });

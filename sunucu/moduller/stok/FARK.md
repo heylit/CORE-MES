@@ -472,3 +472,16 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 - `GET /stok/refakat-partileri/:id/iz`: kart, üst zinciri, alt kartlar, birleşenler, aynı lotun diğer kartları, soyun üretim partileri ve bugün eldekiler, bu partilerden geri alınmamış sevk çıkışları.
 - Sözleşme: `refakatPartisi` `ust`, `birlestigi` (`{id, etiket}` ya da null) ve `birlesmeZamani` alanlarını taşır. `uretim-emirleri` `UretimEmriOzeti` `ustEmirId` verir.
 - İstemci: refakat kartı penceresinde üst kart ve birleşme satırı, "Alt parti kartı" bölümü (yalnız bu emrin doğrudan kolları listelenir; `EmirSecici` isteğe bağlı süzgeç alır) ve "İz" bölümü; kart adına basınca pencere o kartı gösterir.
+
+## İstisna kartı ve lota bağlama (kart #154; dal 129-istisna-karti; Soru 128, 129, 131 a, 132)
+- Göç `20261023093300` (dolu tablo `stok_refakat_partisi`, Soru 131 a onaylı): `parti_id` boş olabilir; boş `lota_baglayan_kisi_id`, `lota_baglanma_zamani` (birlikte dolar, yalnız lotlu kartta). Emir ve malzeme başına tek açık lotsuz kart (`stok_refakat_partisi_istisna_tek`). Yeni tablo `stok_refakat_istisna_dusumu` (kart, lotsuz düşüm hareketi tekil, bağlanınca geri alma ve lottan düşüm hareketi). Satır değişmez.
+- Soru 129: sayımın statüsüz girdisi istasyonda, depoda ve (kart ya da emir partisiyse) başka istasyonda yoksa sayım durmaz: eksik, istasyonda partisiz onaylı eksi düşülür ve emrin o malzemedeki istisna kartına yazılır (yoksa açılır). Hareket açıklaması "stokta yok, istisna kartı <etiket>". Karar 110 b'deki "stok eksiye inmez" bu yolda kalkar (onaylı çelişme).
+- Başka istasyondaki kart malzemesi: ilk geçişte yetmezse kartın partileri (kart yoksa statülü malzemede emrin partileri) başka istasyondan "teslim edilmeden başka istasyondan" notuyla düşülür. Yabancı lot başka istasyondan alınmaz.
+- Kartsız sayım kartı kaynaktan bulur: çıktı, malzemenin çoğunu veren lotun kartına (yoksa açılır), kartlı üretim partisinin kartına ya da istisna kartına girer; kartsız emir partisi yalnız kart bulunamazsa açılır. Not yazılmaz (kart operatörün seçimi değil).
+- Sayım düzeltmesi lotsuz düşümü geri alırsa kalan onaylı eksiyle yeniden yazılır ve bağ ona geçer; kalan yoksa bağ silinir.
+- `POST /stok/refakat-partileri/:id/lota-bagla` (`stok.transfer`, tekrar korumalı, gövde `{kod, surum}`): kod lot etiketi ya da refakat kartıdır. Her lotsuz düşüm geri alınır, aynı miktar lottan (önce düşümün istasyonundan) emre sarf yazılır, iş emri korunur. Lot bir düşüme yetmezse durur, kalan bekler. Hepsi bağlanınca kart lotu alır; emrin o lotla açık kartı varsa ona birleşir. Rezerve sınırı uygulanmaz: toplam stok değişmez.
+- `GET /stok/lot-bekleyen-kartlar` (okuma): bağlanmamış düşümü olan kartlar ve bekleyen miktar.
+- Lotsuz kartla teslim reddedilir ("lot bekliyor"); okutmada kod çözme lotsuz kartı atlar; `disari.ts refakatPartisi` lotsuz kart için null döner; lotsuz karttan alt parti kartı açılmaz.
+- Sözleşme: `refakatPartisi.partiId`, `lotNo` boş olabilir; `lotaBaglanmaZamani`. Yeni `lotBekleyenKartlarCevabi`, `refakatLotaBaglaGovdesi`, `refakatLotaBaglaCevabi`.
+- İstemci: Hazırlık'ta "Lot bekleyen kartlar" tablosu (Aç kartı açar); kart penceresinde "Lot bekliyor (istisna kartı)", depocuya "Lota bağla" bölümü, bağlanmış kartta "İstisna kartıydı; … lota bağlandı." Lotsuz kartta Etiket Merkezi tuşu gizli.
+

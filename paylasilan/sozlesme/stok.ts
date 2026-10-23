@@ -800,7 +800,9 @@ export const refakatPartisi = z.object({
   qr: z.string(), etiket: z.string(),
   uretimEmriId: z.number().int(), emirNo: z.string().nullable(), sira: z.number().int(),
   malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
-  partiId: z.number().int(), lotNo: z.string(), tedarikciPartiNo: z.string().nullable(), dokumNo: z.string().nullable(), sertifikaNo: z.string().nullable(),
+  // İstisna kartının (Soru 129, 131 a) lotu, depo bağlayana kadar boştur; bağlanınca zamanı yazılır.
+  partiId: z.number().int().nullable(), lotNo: z.string().nullable(), tedarikciPartiNo: z.string().nullable(), dokumNo: z.string().nullable(), sertifikaNo: z.string().nullable(),
+  lotaBaglanmaZamani: zamanSemasi.nullable(),
   // Bu kartla emre verilen: alınan teslimde alınan, yoldakinde gönderilen miktar.
   verilen: ondalikMetinSemasi,
   durum: z.enum(REFAKAT_PARTISI_DURUMLARI), surum: surumSemasi, kayitZamani: zamanSemasi,
@@ -834,6 +836,15 @@ export const refakatPartisiAcGovdesi = z.object({
 export type RefakatPartisiAcGovdesi = z.input<typeof refakatPartisiAcGovdesi>;
 export const refakatPartisiCevabi = z.object({ refakat: refakatPartisi });
 export type RefakatPartisiCevabi = z.output<typeof refakatPartisiCevabi>;
+// Lot bekleyen kartlar (Soru 129): lotsuz istisna kartları ve bağlanmamış lotsuz düşüm toplamı (kartın malzemesinin biriminde).
+export const lotBekleyenKartlarCevabi = z.object({ kartlar: z.array(z.object({ refakat: refakatPartisi, bekleyen: ondalikMetinSemasi })) });
+export type LotBekleyenKartlarCevabi = z.output<typeof lotBekleyenKartlarCevabi>;
+// Lota bağlama: okutulan lot etiketi ya da (eksik malzeme başka kartın malzemesiyse) o refakat kartı. Lot yetmezse yeten düşümler
+// bağlanır, kalan bekler; hepsi bağlanınca kart o lotu alır ya da emrin aynı lotlu kartına birleşir.
+export const refakatLotaBaglaGovdesi = z.object({ kod: z.string().trim().min(1).max(120), surum: surumSemasi });
+export type RefakatLotaBaglaGovdesi = z.input<typeof refakatLotaBaglaGovdesi>;
+export const refakatLotaBaglaCevabi = z.object({ refakat: refakatPartisi, baglanan: ondalikMetinSemasi, bekleyen: ondalikMetinSemasi });
+export type RefakatLotaBaglaCevabi = z.output<typeof refakatLotaBaglaCevabi>;
 export const refakatPartileriCevabi = z.object({ partiler: z.array(refakatPartisi) });
 export type RefakatPartileriCevabi = z.output<typeof refakatPartileriCevabi>;
 // Kart: emrin refakat kartı (Üretim Emirleri'nin verisi) partinin QR'ı ve lot bilgisiyle.

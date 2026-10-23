@@ -909,12 +909,28 @@ export function refakatKolEngeli(
 }
 // Kartla teslimde malzeme, lot ve emir karttan gelir; gövdede verilen farklıysa teslim reddedilir (yanlış kart ya da yanlış satır).
 export function refakatTeslimEngeli(
-  r: { durum: 'acik' | 'iptal'; malzemeId: number; partiId: number; uretimEmriId: number },
+  r: { durum: 'acik' | 'iptal'; malzemeId: number; partiId: number | null; uretimEmriId: number },
   g: { malzemeId: number; partiId: number | null | undefined; uretimEmriId: number | null | undefined },
 ): string | null {
   if (r.durum === 'iptal') return 'Refakat kartı iptal edilmiş; geçerli kartı okutun.';
+  if (r.partiId === null) return 'Bu kart lot bekliyor; kartla teslimden önce depo kartı lota bağlar.';
   if (g.malzemeId !== r.malzemeId) return 'Malzeme refakat kartındakiyle aynı değil.';
   if (g.partiId !== undefined && g.partiId !== null && g.partiId !== r.partiId) return 'Lot refakat kartındakiyle aynı değil.';
   if (g.uretimEmriId !== undefined && g.uretimEmriId !== null && g.uretimEmriId !== r.uretimEmriId) return 'Emir refakat kartındakiyle aynı değil.';
+  return null;
+}
+
+// İstisna kartı (Soru 129, 131 a): yalnız açık, birleşmemiş, lotsuz kart bağlanır; lot mal kabulle girmiş ve kartın malzemesinden olmalı.
+// Sürüm, kartı başka biri bu arada bağladıysa ikinci bağlamayı durdurur.
+export function refakatBaglamaEngeli(
+  r: { durum: 'acik' | 'iptal'; partiId: number | null; malzemeId: number; birlestigiRefakatPartisiId: number | null; surum: number },
+  lot: { uretimEmriId: number | null; malzemeId: number }, surum: number,
+): string | null {
+  if (r.durum === 'iptal') return 'Refakat kartı iptal edilmiş.';
+  if (r.birlestigiRefakatPartisiId !== null) return 'Kart başka karta birleşti; birleştiği kartı açın.';
+  if (r.partiId !== null) return 'Bu kartın lotu var; yalnız lot bekleyen kart bağlanır.';
+  if (r.surum !== surum) return 'Kart bu sırada değişti; listeyi yenileyip yeniden deneyin.';
+  if (lot.uretimEmriId !== null) return 'Bu lot bir üretim emrinin çıktısı; kart depodan verilen lota bağlanır.';
+  if (lot.malzemeId !== r.malzemeId) return 'Lot kartın malzemesinden değil.';
   return null;
 }

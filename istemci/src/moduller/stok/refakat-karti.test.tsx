@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const KART: RefakatPartisi = {
   id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
-  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00',
+  partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', durum: 'acik', surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
   ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const KOL: RefakatPartisi = { ...KART, id: 13, qr: 'RP:13', etiket: 'UE-000001/1-P1', uretimEmriId: 2, emirNo: 'UE-000001/1', verilen: '0', ust: { id: 12, etiket: 'UE-000001-P1' } };
@@ -65,5 +65,36 @@ describe('Refakat kartı: alt parti ve iz (kart #126)', () => {
     goster(13);
     expect(await screen.findByText(/UE-000001-P1 kartına birleşti/)).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Alt parti kartı' })).toBeNull();
+  });
+});
+
+describe('Refakat kartı: istisna kartı (kart #154)', () => {
+  it('lotsuz kart lot bekliyor der; depocu lotu okutup bağlar, yetmeyen kalanı söyler; alt parti kartı ve Etiket Merkezi yok', async () => {
+    const lotsuz: RefakatPartisi = { ...KART, partiId: null, lotNo: null, verilen: '0', surum: 3 };
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/refakat-partileri/12/kart': () => json(200, kartCevabi(lotsuz)),
+      'GET /stok/refakat-partileri/12/iz': () => json(200, { ...IZ, refakat: lotsuz, altlar: [], ayniLot: [], ciktilar: [] }),
+      'POST /stok/refakat-partileri/12/lota-bagla': () => json(200, { refakat: lotsuz, baglanan: '2', bekleyen: '4' }),
+    });
+    goster(12);
+    expect(await screen.findByText(/Lot bekliyor \(istisna kartı\)/)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Alt parti kartı' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Etiket Merkezi/ })).toBeNull();
+    const bolum = screen.getByRole('region', { name: 'Lota bağla' });
+    fireEvent.change(within(bolum).getByLabelText('Lot etiketi ya da refakat kartı'), { target: { value: ' LOT:LT-000041 ' } });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Lota bağla' }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ kod: 'LOT:LT-000041', surum: 3 }));
+    expect(await within(bolum).findByRole('status')).toHaveProperty('textContent', expect.stringMatching(/bağlandı; lotta yetmeyen .*4.* bekliyor/));
+  });
+
+  it('lotlu kartta lota bağlama yok; bağlanmış istisna kartı bağlanma zamanını söyler', async () => {
+    const bagli: RefakatPartisi = { ...KART, lotaBaglanmaZamani: '2026-10-23T09:00:00+03:00' };
+    sunucuKur(DEPOCU, {
+      'GET /stok/refakat-partileri/12/kart': () => json(200, kartCevabi(bagli)),
+      'GET /stok/refakat-partileri/12/iz': () => json(200, { ...IZ, refakat: bagli }),
+    });
+    goster(12);
+    expect(await screen.findByText(/İstisna kartıydı; .* lota bağlandı\./)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Lota bağla' })).toBeNull();
   });
 });
