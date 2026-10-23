@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { Kayit, Statu, StatuKarti, StatuTanimi, StatuTanimiKaydetGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { Kayit, Statu, StatuTanimi, StatuTanimiKaydetGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { AdimBagiSatiri, JsondanSatirlar } from './kurallar.ts';
 
 // Reçete ve Rota kayıt deposunun SQL'i. Sürüm tek sayaçtan gelir.
@@ -162,18 +162,6 @@ export async function statuTanimiGuncelle(db: Db, kimlik: string, g: StatuTanimi
     `UPDATE recete_rota_statu_tanimi SET kod = $2, ad = $3, tur = $4, renk = $5, surum = surum + 1, guncelleyen_kisi_id = $6, guncellendi = now()
       WHERE kimlik = $1 AND (kod, ad, tur, renk) IS DISTINCT FROM ($2, $3, $4, $5)`,
     [kimlik, g.code, g.name, g.kind, g.color, kisiId]);
-}
-
-export async function statuKartlari(db: Db): Promise<StatuKarti[]> {
-  return db.sorgu<StatuKarti>('SELECT malzeme_id::text AS "itemId", statu AS status FROM recete_rota_statu_karti ORDER BY malzeme_id, statu');
-}
-
-export async function statuKartiEkle(db: Db, malzemeId: number, statu: string, kisiId: number): Promise<void> {
-  await db.sorgu('INSERT INTO recete_rota_statu_karti (malzeme_id, statu, guncelleyen_kisi_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [malzemeId, statu, kisiId]);
-}
-
-export async function statuKartiSil(db: Db, malzemeId: number, statu: string): Promise<void> {
-  await db.sorgu('DELETE FROM recete_rota_statu_karti WHERE malzeme_id = $1 AND statu = $2', [malzemeId, statu]);
 }
 
 // Silinen statü bağlardan da kalkar (ekranın silmesiyle aynı): adımın statü bağı boşalır, giren statüsü ve statülü kart silinir.

@@ -276,10 +276,6 @@ export const statuTanimiParametresi = z.object({ id: statuTanimiKimligi });
 export const statuTanimiKaydetGovdesi = statuTanimiAlanlari.extend({ beklenenSurum: z.number().int().positive().nullable() });
 export const statuTanimiSilGovdesi = z.object({ beklenenSurum: z.number().int().positive() });
 export const statuTanimiCevabi = z.object({ statuses: z.array(statuTanimiSemasi) });
-// Statülü kart (prototipte `statusCards`): kartın hangi statüyle ayrı satır olarak listeleneceği. Tablo tek kaynaktır; açma ve kaldırma komutla.
-export const statuKartiSemasi = z.object({ itemId: kimlikMetni, status: statuTanimiKimligi });
-export const statuKartiGovdesi = z.object({ malzemeId: z.number().int().positive(), statu: statuTanimiKimligi });
-export const statuKartlariCevabi = z.object({ statusCards: z.array(statuKartiSemasi) });
 
 export const durumCevabi = z.object({
   items: z.array(durumMalzemeSemasi).nullable(),
@@ -315,8 +311,6 @@ export const durumCevabi = z.object({
   planCanli: planCanliOzeti.optional(),
   // Elle tanımlanan statüler, sırasıyla (tablodan). Alan eski sürümde yoktu.
   statuses: z.array(statuTanimiSemasi).optional(),
-  // Statülü kartlar (tablodan). Alan eski sürümde yoktu.
-  statusCards: z.array(statuKartiSemasi).optional(),
   // Son stok hareketleri, eskiden yeniye; stok okuma yetkisi yoksa null.
   moves: z.array(durumHareketSemasi).nullable(),
   // Malzeme listesi üst sınırda kesildiyse true (kalan kartlar okunmadı).
@@ -369,8 +363,6 @@ export type StatulerCevabi = z.output<typeof statulerCevabi>;
 export type StatuTanimi = z.output<typeof statuTanimiSemasi>;
 export type StatuTanimiKaydetGovdesi = z.output<typeof statuTanimiKaydetGovdesi>;
 export type StatuTanimiCevabi = z.output<typeof statuTanimiCevabi>;
-export type StatuKarti = z.output<typeof statuKartiSemasi>;
-export type StatuKartlariCevabi = z.output<typeof statuKartlariCevabi>;
 
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
