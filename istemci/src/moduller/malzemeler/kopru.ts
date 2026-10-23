@@ -13,6 +13,8 @@ export type KopruIsleyici = (tip: string, veri: unknown) => Promise<unknown>;
 
 interface Baglam {
   kullanici: { id: number; ad: string };
+  // Oturumdaki kişinin işlemleri: yetkisi olmayan okuma hiç sorulmaz (195 a). Çerçeveye gitmez.
+  islemler: readonly string[];
   tema: 'acik' | 'koyu';
 }
 
@@ -56,10 +58,13 @@ export const KART_SAYFA_BOYU = 200;
 type KartKaydi = { no: number; kayit: Nesne; surum: number };
 
 // Kartın birim fiyatı satın almanın kg fiyatındandır (kullanıcı isteği 19.10.2026). Fiyat karta yazılmaz, yalnız ekranda gösterilir.
-// Uç satın alma ya da maliyet okuma yetkisi ister: yetkisi olmayan rolde ya da uç okunamazsa sonuç null'dır ve ekran satırı hiç çizmez;
-// yetkili rolde fiyatı olmayan kart haritada yoktur, ekran boş tutarı "—" yazar. Sorulacak kart yoksa yetki bilinmez: null.
+// Uç satın alma ya da maliyet okuma yetkisi ister: yetkisi olmayan rolde uç hiç sorulmaz (195 a: 403 bırakılmaz), uç okunamazsa da
+// sonuç null'dır ve ekran satırı hiç çizmez; yetkili rolde fiyatı olmayan kart haritada yoktur, ekran boş tutarı "—" yazar.
+// Sorulacak kart yoksa yetki bilinmez: null.
 export type KgFiyati = Pick<MalzemeKgFiyatlariCevabi['malzemeler'][number], 'kgFiyati' | 'birimFiyati' | 'paraBirimi' | 'gecerlilik'>;
 const KG_FIYATI_PARCASI = 200;
+// Ucun yetkisiyle aynı liste (sunucu/moduller/satin-alma/uclar.ts KG_FIYATI_OKUR).
+export const KG_FIYATI_ISLEMLERI = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 const hammaddeMi = (kayit: Nesne): boolean => kayit['tur'] === undefined || kayit['tur'] === null || kayit['tur'] === '' || kayit['tur'] === 'hammadde';
 
 async function kgFiyatlari(kartlar: readonly { kimlik: string; no: number }[]): Promise<{ fiyatlar: Record<string, KgFiyati> } | null> {
@@ -159,7 +164,7 @@ export function kopruKur(b: Baglam): KopruIsleyici {
         return kartlar.map((k) => (stok ? stokluKayit(k.kayit, stok.get(String(k.kayit['id']))) : k.kayit));
       }
       case 'kg-fiyatlari':
-        return kgFiyatlari(hammaddeler);
+        return KG_FIYATI_ISLEMLERI.some((i) => b.islemler.includes(i)) ? kgFiyatlari(hammaddeler) : null;
       // 233 a: rotası olan kartın Operasyonlar ve Reçete adımı salt okunur çizilir. Okunamazsa null: ekran düzenlemeyi açık bırakır, sunucu yine reddeder.
       case 'kart-no':
         return typeof veri === 'string' ? kartNolari.get(veri) ?? null : null;
