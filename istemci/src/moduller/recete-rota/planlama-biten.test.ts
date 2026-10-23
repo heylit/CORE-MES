@@ -1,0 +1,105 @@
+import { describe, expect, it } from 'vitest';
+import { planlamaMotoru, planlamaParcasi } from './planlama-derle.ts';
+
+// Biten iş plana girmez: biten ve iptal emir motorun girdisinden düşer, biten adımın ardılı onu beklemez. Çalışmanın verisi (S.D) değişmez.
+// Motor, kayıt çevirisi (zz27) ve TMI uyarlaması (zz31) gerçek; sayfanın geri kalanı küçük taklit. Veriler uydurmadır.
+
+type Nesne = Record<string, unknown>;
+interface Op { id: string; pr: unknown[]; matYok: boolean }
+interface Motor {
+  bitenler: (emirler: unknown, D: unknown) => { siparis: Nesne; adim: Nesne };
+  derle: (st: unknown) => { ops: Op[]; jobs: Record<string, unknown> };
+  ac: () => void;
+  st: () => Nesne & { D: { siparisler: { id: string }[] }; bitti?: Nesne };
+  S: () => Nesne & { D: { siparisler: { id: string }[] } };
+}
+
+function motor(kayit: Nesne, kaynak: { durum: Nesne; ek: Nesne | null } | null): Motor {
+  const govde = `
+    let S = null; let U = { sayfa: 'tahta', hamle: null }; const geriAl = [];
+    const RR = { el: null }; const SAYFA_AD = {}; const VERI = {}; let hsKaynak = null; let rrYerlestir = null; let calisan = null;
+    const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
+    const sayi = (x, n) => Number(x).toFixed(n); const saat = x => sayi(x, 1) + ' sa'; const esc = x => String(x); const ic = a => '[' + a + ']';
+    const dugme = (ad, act) => '<button data-act="' + act + '">' + ad + '</button>'; const yetkili = () => true;
+    function bildir() {} function iz() {} function kaydet() {} function render() {} function ozetTazele() {}
+    function yukle() { return null; }
+    function yeniCalisma() { return { D: null, dataVer: 0, gercek: {}, kapali: [], down: [], ekMesai: [], locks: {}, olaylar: [], w: { famK: 0.3, mat: 'sert', dondurma: 0 }, param: {} }; }
+    function stOf(ek = [], gevset = true) { return stTamKur(S, ek, gevset); } function coz() {}
+    const cxAl = () => compile(stOf());
+    let tekEylem = () => false;
+    ${planlamaMotoru()}
+    ${planlamaParcasi('zz27-rr-veri')}
+    ${planlamaParcasi('zz31-tmi')}
+    return {
+      bitenler: tmiBitenler, derle: st => compile(st),
+      ac: () => { S = yeniCalisma(); S.D = tmiCevir(rrOku(), null, null, '2026-10-19'); render(); },
+      st: () => JSON.parse(JSON.stringify(stOf())), S: () => JSON.parse(JSON.stringify(S)),
+    };`;
+  const depo = new Map<string, string>([['recete-rota-motoru-v1', JSON.stringify(kayit)]]);
+  const localStorage = { getItem: (k: string) => depo.get(k) ?? null, setItem: (k: string, v: string) => { depo.set(k, v); } };
+  const window = { tmi: { kaynakOku: () => Promise.resolve(kaynak) }, tmiGorunum: { kaydet: () => undefined, bildir: () => undefined } };
+  const belge = { addEventListener: () => undefined, visibilityState: 'visible' };
+  return new Function('window', 'localStorage', 'console', 'document', govde)(window, localStorage, { error: () => undefined }, belge) as Motor;
+}
+
+const adim = (id: string, seq: number): Nesne => ({ id, seq, opNo: seq, opId: '13', stationId: '10', setup: 30, cycle: 6, alts: [], altTimes: {}, ins: [] });
+const KAYIT = {
+  version: 7, savedAt: 9,
+  items: [{ id: '50', code: 'MM-1', name: 'Ornek urun', type: 'mamul' }],
+  opdefs: [{ id: '13', name: 'Tornalama' }],
+  machines: [{ id: '100', code: 'T1', name: 'Torna 1', stationId: '10' }],
+  routes: { 50: { base: null, steps: [adim('50-o20', 20), adim('50-o10', 10), adim('50-o30', 30)] } },
+  orders: [
+    { id: 'O1', no: 'E-1', itemId: '50', qty: 10, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'uretimde' },
+    { id: 'O2', no: 'E-2', itemId: '50', qty: 4, start: '2026-10-19', due: '2026-11-04', priority: 1, status: 'tamam' },
+    { id: 'O3', no: 'E-3', itemId: '50', qty: 4, start: '2026-10-19', due: '2026-11-04', priority: 1, status: 'uretimde' },
+    { id: 'O4', no: 'E-4', itemId: '50', qty: 4, start: '2026-10-19', due: '2026-11-04', priority: 1, status: 'serbest' },
+  ],
+  opStatus: { 'O1|root|1': 'tamam', 'O1|root|2': 'calisiyor', 'O3|root|1': 'tamam', 'O3|root|2': 'tamam', 'O3|root|3': 'tamam' },
+  cal: { shifts: [{ id: '3', start: '08:00', end: '16:00' }], holidays: [] },
+  wcs: [{ id: 'w-atolye', week: { 1: ['3'], 2: ['3'], 3: ['3'], 4: ['3'], 5: ['3'] } }],
+};
+
+describe('biten iş plana girmez', () => {
+  it('biten ve iptal emir düşer; biten adım sırasıyla rotadaki adıma (seq sırası) bağlanır; bütün adımı biten emir de düşer', () => {
+    const m = motor(KAYIT, null); m.ac();
+    const D = m.S().D;
+    const b = m.bitenler({ orders: [...KAYIT.orders, { id: 'O5', status: 'iptal' }], opStatus: KAYIT.opStatus }, D);
+    expect(b.siparis).toEqual({ O2: 1, O3: 1, O5: 1 });
+    expect(b.adim).toEqual({ 'O1.10': 1 });
+    expect(m.bitenler(null, D)).toEqual({ siparis: {}, adim: {} });
+  });
+
+  it('motor biten adımı kurmaz; ardılı onu beklemez ve malzemeyi ilk adım gibi beklemez', () => {
+    const m = motor(KAYIT, null); m.ac();
+    const st = m.st();
+    expect(st.D.siparisler.map((s) => s.id)).toEqual(['O1', 'O4']);
+    expect(st.bitti).toEqual({ 'O1.10': 1 });
+    const cx = m.derle(st);
+    const o1 = cx.ops.filter((o) => o.id.startsWith('O1.'));
+    expect(o1.map((o) => o.id)).toEqual(['O1.20', 'O1.30']);
+    expect(o1[0]).toMatchObject({ pr: [], matYok: true });
+    expect(o1[1]?.matYok).toBe(false);
+    expect(cx.ops.filter((o) => o.id.startsWith('O4.')).every((o) => !o.matYok)).toBe(true);
+  });
+
+  it('çalışmanın verisi değişmez: biten emir S.D de kalır, yalnız motorun girdisinden düşer', () => {
+    const m = motor(KAYIT, null); m.ac();
+    m.st();
+    expect(m.S().D.siparisler.map((s) => s.id)).toEqual(['O1', 'O2', 'O3', 'O4']);
+  });
+
+  it('sunucunun iş emri durumu varsa kayıttaki kopyanın yerine o okunur', async () => {
+    const durum = { emirler: { orders: [{ id: 'O4', status: 'tamam' }], opStatus: {} } };
+    const m = motor(KAYIT, { durum, ek: null }); m.ac();
+    await new Promise((coz) => { setTimeout(coz, 0); });
+    expect(m.st().D.siparisler.map((s) => s.id)).toEqual(['O1', 'O2', 'O3']);
+  });
+
+  it('biten yoksa st olduğu gibi kalır (bitti alanı eklenmez)', () => {
+    const m = motor({ ...KAYIT, opStatus: {}, orders: KAYIT.orders.map((o) => ({ ...o, status: 'serbest' })) }, null); m.ac();
+    const st = m.st();
+    expect(st.bitti).toBeUndefined();
+    expect(st.D.siparisler).toHaveLength(4);
+  });
+});

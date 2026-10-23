@@ -271,6 +271,31 @@ function tmiAdimAdetleri(durum, st, D) {
   for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
   return y;
 }
+/* Biten iş (inceleme 1): biten ve iptal emir plana girmez; biten adım motorda st.bitti ile düşer (ardılı onu beklemez). Kaynak sunucunun iş
+   emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
+   rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
+function tmiBitenler(emirler, D) {
+  const y = { siparis: {}, adim: {} };
+  if (!emirler || typeof emirler !== 'object') return y;
+  for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
+  const durum = emirler.opStatus || {};
+  const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
+  for (const s of (D && D.siparisler) || []) {
+    const rota = (urun[s.urun] || {}).rota || [];
+    if (y.siparis[s.id] || !rota.length) continue;
+    const biten = rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
+    if (biten.length === rota.length) y.siparis[s.id] = 1;
+    else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
+  }
+  return y;
+}
+/* Planın girdisinden biten işi düşürür (st yerinde değişir); biten yoksa st olduğu gibi kalır. */
+function bitenUygula(st, b) {
+  if (!b || !st || !st.D) return st;
+  if (Object.keys(b.siparis).length) st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]);
+  if (Object.keys(b.adim).length) st.bitti = Object.assign({}, st.bitti || {}, b.adim);
+  return st;
+}
 /* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine
    (sipariş.adım) kayıttaki emir ve rota adımından çevrilir; karşılığı olmayan adım (rotasız emir, emirde değişen adım) gelmez. Saatler
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
