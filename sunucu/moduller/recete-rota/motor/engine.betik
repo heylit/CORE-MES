@@ -77,10 +77,13 @@ function compile(st){
   // işlemler
   const ops=[],jobs={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
+  const bitti=st.bitti||{};
   for(const j of D.siparisler){const u=urun[j.urun];if(!u)continue;
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
+      /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
+      if(bitti[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
       const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
@@ -90,8 +93,9 @@ function compile(st){
         c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
-      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x};
+      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
+      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
+        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
@@ -179,7 +183,7 @@ function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
   let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
   if(j.rel!=null&&j.rel>s){s=j.rel;why={t:'serbest'};}
-  if(!o.pr.length){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
+  if(!o.pr.length&&!o.matYok){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
   if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
   const tas=+A.tasimaSaat||0;
   for(const [pid,ty] of o.pr){const p=P[pid];if(!p)return null;
@@ -370,7 +374,7 @@ function evaluate(plan,st,ref,fast){
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
-      if(!fast&&!o.pr.length&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      if(!fast&&!o.pr.length&&!o.matYok&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
@@ -407,6 +411,7 @@ function evaluate(plan,st,ref,fast){
   // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir
   const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl];Z=-wT;
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
+  if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
