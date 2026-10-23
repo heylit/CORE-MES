@@ -2,7 +2,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { URL as NodeURL } from 'node:url';
 import { createContext, runInContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
-import { ON_BETIK, SON_BETIK, VERI_KANALI } from './acilis.ts';
+import { ON_BETIK, PALET_BETIGI, SON_BETIK, VERI_KANALI } from './acilis.ts';
 
 // Çerçeve betikleri ayrı bir bağlamda, çerçevenin penceresini taklit eden nesneyle koşulur. Blob ve URL tarayıcınınki gibi
 // olsun diye Node'unkilerdir (jsdom'unkinde createObjectURL yok, Blob'u Response okuyamaz).
@@ -132,5 +132,76 @@ describe('Kalite Merkezi görünüm betiği (tmi-gorunum)', () => {
     w.giden.length = 0;
     (w.baglam['closeModal'] as () => void)();
     expect(w.giden).toEqual([]);
+  });
+});
+
+// Karar 102 a: Ctrl K kabuğun ortak paletidir; uygulamanın palet öğeleri paletin "Bu sayfa" grubuna ve önerilerine gider.
+describe('Kalite Merkezi palet betiği (ortak Ctrl K)', () => {
+  function uygulama() {
+    const tuslar: ((e: unknown) => void)[] = [];
+    const dinleyiciler: ((e: { source: unknown; data: unknown }) => void)[] = [];
+    const ncr = vi.fn();
+    const kayit = vi.fn();
+    const kapat = vi.fn();
+    const durum = { islemBasligi: 'Uygunsuzluk kaydet (NCR)' };
+    const h = (g: string, t: string, s = '') => `${g} ${t} ${s}`.toLocaleLowerCase('tr');
+    const w = pencere({
+      addEventListener: (ad: string, f: (e: never) => void, yakalama?: boolean) => {
+        if (ad === 'message') dinleyiciler.push(f as (e: { source: unknown; data: unknown }) => void);
+        if (ad === 'keydown' && yakalama === true) tuslar.push(f as (e: unknown) => void);
+      },
+      closeCmd: kapat,
+      cmdItems: () => ({
+        A: [
+          { g: 'İşlem', t: durum.islemBasligi, f: ncr, h: h('İşlem', durum.islemBasligi) },
+          { g: 'Git', t: 'Bugün', f: vi.fn(), h: h('Git', 'Bugün') },
+        ],
+        R: [{ g: 'NCR', t: 'NCR-001 P-100', s: 'Ölçü, Açık', f: kayit, h: h('NCR', 'NCR-001 P-100', 'Ölçü, Açık') }],
+      }),
+    });
+    w.kos(PALET_BETIGI);
+    const gonder = (data: unknown, source: unknown = w.ust) => { for (const f of dinleyiciler) f({ source, data }); };
+    return { w, tuslar, gonder, ncr, kayit, kapat, durum };
+  }
+  const tus = (ayar: Record<string, unknown>) => {
+    const e = { key: 'k', ctrlKey: false, metaKey: false, altKey: false, ...ayar, onlendi: false, durdu: false, preventDefault() { e.onlendi = true; }, stopImmediatePropagation() { e.durdu = true; } };
+    return e;
+  };
+
+  it('Ctrl K uygulamaya ulaşmadan kabuğa gider; Ctrl Alt K ve Ctrl J gitmez', () => {
+    const { w, tuslar } = uygulama();
+    w.giden.length = 0;
+    for (const ayar of [{ ctrlKey: true }, { metaKey: true, key: 'K' }]) {
+      const e = tus(ayar);
+      for (const f of tuslar) f(e);
+      expect([e.onlendi, e.durdu]).toEqual([true, true]);
+    }
+    for (const ayar of [{ ctrlKey: true, altKey: true }, { ctrlKey: true, key: 'j' }]) {
+      const e = tus(ayar);
+      for (const f of tuslar) f(e);
+      expect(e.onlendi).toBe(false);
+    }
+    expect(w.giden).toEqual([
+      { hedef: 'http://tmi', ileti: { kanal: VERI_KANALI, yon: 'kisayol', tus: 'arama' } },
+      { hedef: 'http://tmi', ileti: { kanal: VERI_KANALI, yon: 'kisayol', tus: 'arama' } },
+    ]);
+  });
+
+  it('"İşlem" grubu listelenir; yazılana işlem ve kayıt önerilir; seçilen çalışır, bilinmeyen ya da değişmiş öğe ve yabancı kaynak çalışmaz', () => {
+    const { w, gonder, ncr, kayit, kapat, durum } = uygulama();
+    expect(w.giden[0]?.ileti).toEqual({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar: [{ anahtar: 'komut-0', baslik: 'Uygunsuzluk kaydet (NCR)', aciklama: 'İşlem' }] });
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-metni', metin: 'ncr', sira: 2 });
+    expect(w.giden.at(-1)?.ileti).toEqual({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-onerileri', sira: 2, komutlar: [
+      { anahtar: 'oneri-0', baslik: 'Uygunsuzluk kaydet (NCR)', aciklama: 'İşlem' }, { anahtar: 'oneri-1', baslik: 'NCR-001 P-100', aciklama: 'Ölçü, Açık' },
+    ] });
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-7' });
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-1' }, {});
+    expect(kayit).not.toHaveBeenCalled();
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'oneri-1' });
+    expect(kayit).toHaveBeenCalledOnce();
+    expect(kapat).toHaveBeenCalledOnce();
+    durum.islemBasligi = 'Başka işlem';
+    gonder({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-calistir', anahtar: 'komut-0' });
+    expect(ncr).not.toHaveBeenCalled();
   });
 });

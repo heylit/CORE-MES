@@ -20,3 +20,4 @@ Sınıflar: TUTAN, ETKİLEYEN, SONRA.
 14. ETKİLEYEN: deftere yalnız dosya yazıcısı seçilerek yapılan indirme yazılır ("indirildi"); önizlemedeki düğme "Önizleme için indir (<dosya>, deftere yazılmaz)" adını taşır (koordinatör kararı b, 19.10).
 10. ETKİLEYEN: "gönderildi" yazıcının bağlantıyı kabul ettiğini gösterir; etiketin çıktığını göstermez (yazıcıdan durum okunmaz).
 11. SONRA: Argox OS-214 USB'de (100): doğrudan baskı yok, dosya indirilir. PPLB komutları cihazda doğrulanmadı.
+15. VARSAYIM (kart #127): refakat partisinin baskısı deftere emrin refakat kartı olarak yazılır (`kaynak_tur = 'refakat'`, emir kimliği); hangi partinin basıldığı defterde yok. Ayrı tür için dolu tabloya kısıt göçü gerekir (sorulur). Geri alma maliyeti: göç ve tek satır.

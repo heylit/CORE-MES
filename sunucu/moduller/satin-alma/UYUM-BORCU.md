@@ -150,6 +150,7 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
 
 43. KISMEN KAPANDI (kart #160, finansın "faiz finanstan" isteği): ayarlar cevabındaki güncel aylık faiz (`ayarlariKur`), finansın `faizler(db, bugun)` okumasındaki geçerli orandan gelir; o para birimi için finansta oran yoksa `satin_alma_kur.aylik_faiz_yuzdesi` kalır, başka hiçbir hesap değişmedi (kural `aylikFaiz`, testler `satin-alma.test.ts` Kart 160, `hesap-kayit.test.ts`).
   AÇIK kalan: teklif ve siparişte o gün kullanılan faizin kendi kaydında saklanması (sütun gerekir, göç; çekirdek şeridi) ve ayar ekranındaki faiz alanının yalnız gösterilmesi (ekran işi). Not: ayar formu görünen finans faizini kaydette `satin_alma_kur`a geri yazar; finans oranı sonradan düşse bile satın almanın yedek oranı o değerdir.
+44. [bağlama] Kart #135 (karar 102 a): satın alma Ctrl K'yı almaz, kabuğun ortak paleti açılır; üst çubuktaki "Satın almada ara" kutusu (talep, malzeme, tedarikçi) prototipteki yerinde kalır. Kalan: talep, malzeme ve tedarikçi araması ortak palete kayıt kaynağı olarak (`paylasilan/sayfalar/satin-alma.ts` `aramaUcu`, sunucuda okuma yetkisi, izinli ve reddedilen test); geçince kutunun kalıp kalmayacağı kullanıcıya sorulur (prototip değişikliği).
 
 ## Bağlamada kapanmayacak (bilgi)
 

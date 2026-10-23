@@ -17,6 +17,7 @@
 - Uygulamanın üst çubuğu (konum, Ara, Görünüm, Yardım) çerçevenin içinde kalır; TMI'nin sayfa başlığı çubuğu ayrıca üstte durur.
 - 360/768/1280 genişlik: uygulamanın kendi duyarlı düzeni; dar ekranda TMI ikinci menüsü şeride döner, uygulamanınki gizlidir.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): tema iletisi `istemci/src/moduller/ik/IkCercevesi.tsx:51` `yon: 'tema'`. Tema değişince çerçeve yeniden kurulmaz; tema çerçeveye iletiyle gider, açık form korunur (borç 177).
+- Ctrl K ortak palette (kart #137, karar 102 a): çerçevede basılan Ctrl K uygulamanın aramasına ulaşmadan kabuğa gider (`acilis.ts`, yakalama evresi; paket değişmedi). Paletin "Bu sayfa" grubunda "İK'da ara" komutu uygulamanın aramasını açar. Kalan: uygulama arama sonuçlarını ve düz Türkçe komutlarını dışa vermiyor (paket derlenmiş, `api`'de arama yok); ortak palete öneri olarak (kural 8) geçmesi için İK'nın sonraki tesliminde `api` arama işlevi istenir. O zamana kadar uygulamanın araması Ara düğmesi ve `/` ile yerinde; düğmedeki "Ara (Ctrl+K)" ipucu paket metnidir.
 
 ## Ekranda kalan kurallar (sunucu denetlemez)
 - İzin günü sayımı (tatil ve hafta sonu; sunucu yalnız 0 < gün <= takvim günü sınırını denetler, IK-52), yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;

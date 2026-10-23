@@ -121,6 +121,83 @@ export const SON_BETIK = String.raw`(function () {
   yineleyici = setInterval(function () { if (kalan-- <= 0) { yinelemeyiBirak(); return; } gonder({ tip: 'hazir' }); }, 250);
 })();`;
 
+// 3. Uygulamadan SONRA (karar 102 a): Ctrl K kabuğun ortak paletidir. Çerçevede basılan tuş uygulamanın komut paletine ulaşmadan
+//    (yakalama evresi) kabuğa gider. Uygulamanın palet öğeleri (`cmdItems`) ortak palete iki yoldan gider: "İşlem" grubu paletin
+//    "Bu sayfa" grubunda (kural 7), yazılanın sonuçları (işlem ve kayıt, en çok 8) öneri olarak (kural 8). Seçilen anahtar yalnız
+//    son listede ya da son önerilerdeyse ve uygulamada aynı yerde aynı başlıkla duruyorsa çalışır.
+export const PALET_BETIGI = String.raw`(function () {
+  'use strict';
+  var A = window.__TMI_KM || {};
+  var UST = window.parent;
+  var GK = 'tmi-gorunum';
+  window.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || String(e.key).toLocaleLowerCase('tr') !== 'k') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    UST.postMessage({ kanal: 'tmi-kalite-merkezi', yon: 'kisayol', tus: 'arama' }, A.koken);
+  }, true);
+  function ogeler() {
+    try {
+      var o = cmdItems();
+      return { A: o && Array.isArray(o.A) ? o.A : [], R: o && Array.isArray(o.R) ? o.R : [] };
+    } catch (h) { return { A: [], R: [] }; }
+  }
+  function islemler() { return ogeler().A.filter(function (x) { return x && x.g === 'İşlem'; }).slice(0, 40); }
+  function aranan(metin) {
+    var tok = String(metin).toLocaleLowerCase('tr').split(/\s+/).filter(Boolean);
+    var uyar = function (x) { return x && typeof x.h === 'string' && tok.every(function (t) { return x.h.indexOf(t) >= 0; }); };
+    var o = ogeler();
+    return o.A.filter(uyar).slice(0, 8).concat(o.R.filter(uyar)).slice(0, 8);
+  }
+  function baslik(x) { return String((x && x.t) || '').trim().slice(0, 80); }
+  function komut(x, anahtar) {
+    var b = baslik(x);
+    if (!b) return null;
+    var k = { anahtar: anahtar, baslik: b };
+    var a = String(x.s || x.g || '').trim().slice(0, 160);
+    if (a) k.aciklama = a;
+    return k;
+  }
+  var listelenen = new Map();
+  var onerilen = new Map();
+  function gonder(m) { m.kanal = GK; m.surum = 1; UST.postMessage(m, A.koken); }
+  function bildir() {
+    listelenen = new Map();
+    var komutlar = [];
+    islemler().forEach(function (x, i) { var k = komut(x, 'komut-' + i); if (k) { listelenen.set(k.anahtar, k.baslik); komutlar.push(k); } });
+    gonder({ tip: 'komutlar', komutlar: komutlar });
+  }
+  function oner(metin, sira) {
+    onerilen = new Map();
+    var komutlar = [];
+    aranan(metin).forEach(function (x, i) { var k = komut(x, 'oneri-' + i); if (k) { onerilen.set(k.anahtar, { metin: metin, baslik: k.baslik }); komutlar.push(k); } });
+    gonder({ tip: 'komut-onerileri', sira: sira, komutlar: komutlar });
+  }
+  function calistir(anahtar) {
+    var oneri = onerilen.get(anahtar);
+    var b = listelenen.has(anahtar) ? listelenen.get(anahtar) : oneri && oneri.baslik;
+    if (!b) return;
+    var liste = listelenen.has(anahtar) ? islemler() : aranan(oneri.metin);
+    var x = liste[Number(anahtar.slice(anahtar.lastIndexOf('-') + 1))];
+    if (!x || baslik(x) !== b || typeof x.f !== 'function') return;
+    if (typeof closeCmd === 'function') closeCmd();
+    x.f();
+  }
+  var gorunumAlindi = false;
+  window.addEventListener('message', function (e) {
+    if (e.source !== UST) return;
+    var m = e.data;
+    if (!m || m.kanal !== GK || m.surum !== 1) return;
+    if (m.tip === 'komut-calistir' && typeof m.anahtar === 'string') calistir(m.anahtar);
+    else if (m.tip === 'komut-metni' && typeof m.metin === 'string' && m.metin.trim() !== '' && typeof m.sira === 'number') oner(m.metin, m.sira);
+    else if (m.tip === 'gorunum' && !gorunumAlindi) { gorunumAlindi = true; bildir(); }
+  });
+  // Liste görünüm gelene kadar yinelenir: kabuğun dinleyicisi kurulmadan yollanan ilk ileti kaybolabilir.
+  bildir();
+  var kalan = 20;
+  var yineleyici = setInterval(function () { if (gorunumAlindi || kalan-- <= 0) { clearInterval(yineleyici); return; } bildir(); }, 250);
+})();`;
+
 // 258 a (19.10.2026): kapanmış NCR ve sonuçlanmış (Kabul, Ret) muayene sunucuda kilitlidir; uygulamanın kalite mühendisine açtığı
 // "kilidi aç" yolu sunucuda reddedileceği için gösterilmez. Öteki kayıtların kilidi uygulamanındır.
 export const KILIT_BETIGI = String.raw`(function () {

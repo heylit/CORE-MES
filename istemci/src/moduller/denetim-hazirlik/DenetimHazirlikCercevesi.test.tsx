@@ -63,6 +63,8 @@ describe('DenetimHazirlikCercevesi', () => {
     expect(belge).not.toContain('calendar.google.com');
     expect(belge).not.toContain('>Google Takvim</a>');
     expect(belge).toContain('Takvime ekle');
+    // Ortak Ctrl K paleti (karar 102 a): prototip palet öğelerini köprüye açar.
+    expect(belge).toContain('window.__paletOgeleri=function(q){return palItems(q);};');
     // Köprü prototipin betiğinden önce koşar.
     expect(belge.indexOf('"kanal":"denetim-hazirlik"')).toBeGreaterThan(-1);
     expect(belge.indexOf('"kanal":"denetim-hazirlik"')).toBeLessThan(belge.indexOf('<body'));
@@ -70,6 +72,23 @@ describe('DenetimHazirlikCercevesi', () => {
     const ek = await ekBetikler();
     expect(belge.indexOf(ek.slice(0, 200))).toBeGreaterThan(-1);
     expect(belge.indexOf(ek.slice(0, 200))).toBeLessThan(belge.indexOf('<body'));
+  });
+
+  // Karar 102 a: çerçevede basılan Ctrl K kabuğun ortak paletini açar (kabuk tuşu pencerede dinler).
+  it('çerçevenin Ctrl K iletisi kabukta Ctrl K olur; başka tuş ya da başka kanal olmaz', async () => {
+    sunucuKur(YONETICI);
+    ac('/denetim-hazirlik');
+    const cerceve = await screen.findByTitle('Denetim Hazırlığı', {}, { timeout: 5000 }) as HTMLIFrameElement;
+    const tuslar: string[] = [];
+    const dinle = (o: KeyboardEvent) => { tuslar.push(`${o.ctrlKey ? 'ctrl+' : ''}${o.key}`); };
+    window.addEventListener('keydown', dinle);
+    const gonder = (data: unknown) => { window.dispatchEvent(new MessageEvent('message', { data, origin: 'null', source: cerceve.contentWindow })); };
+    gonder({ kanal: 'denetim-hazirlik', yon: 'kisayol', tus: 'baska' });
+    gonder({ kanal: 'baska', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual([]);
+    gonder({ kanal: 'denetim-hazirlik', yon: 'kisayol', tus: 'arama' });
+    expect(tuslar).toEqual(['ctrl+k']);
+    window.removeEventListener('keydown', dinle);
   });
 
   it('boş depoda yönetici açınca başlangıç kurulumunu bir kez çağırır', async () => {

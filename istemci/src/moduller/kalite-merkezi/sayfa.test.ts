@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KARANTINA_HEDEF_BETIGI, KILIT_BETIGI, ON_BETIK, SON_BETIK } from './acilis.ts';
+import { KARANTINA_HEDEF_BETIGI, KILIT_BETIGI, ON_BETIK, PALET_BETIGI, SON_BETIK } from './acilis.ts';
 import { kalibrasyonKuraliBetigi } from '../kalibrasyon/disari.ts';
 import { CIHAZ_DURUMU_YERI, GOMULU_STIL, ICERIK_POLITIKASI, KAYDET_YERI, KITAPLIK_KIMLIKLERI, SUNUCU_KOSULU, sayfaKur, type KitaplikKimligi } from './sayfa.ts';
 import { KM_PAKETI } from './uygulama/paket.ts';
@@ -26,6 +26,7 @@ describe('Kalite Merkezi çerçeve sayfası', () => {
     expect(sayfa.indexOf('window.__TMI_KM={"koken":"http://localhost:4101","kisi":{"id":7,"ad":"Deneme Kişi"}')).toBeLessThan(uygulama);
     expect(sayfa.indexOf(ON_BETIK)).toBeLessThan(uygulama);
     expect(sayfa.indexOf(SON_BETIK)).toBeGreaterThan(uygulama);
+    expect(sayfa.indexOf(PALET_BETIGI)).toBeGreaterThan(uygulama);
     expect(sayfa.indexOf(KILIT_BETIGI)).toBeGreaterThan(uygulama);
     expect(sayfa.indexOf(KARANTINA_HEDEF_BETIGI)).toBeGreaterThan(uygulama);
     expect(sayfa).not.toContain(SUNUCU_KOSULU);

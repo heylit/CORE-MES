@@ -15,9 +15,9 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'parti', ad: 'Parti, döküm, sertifika' }, { anahtar: 'giris', ad: 'Giriş, miktar, belge' },
   ],
   refakat: [
-    { anahtar: 'qr', ad: 'QR (UE)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' },
+    { anahtar: 'qr', ad: 'QR (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' },
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
-    { anahtar: 'adimlar', ad: 'İşlem sırası' },
+    { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   deneme: [{ anahtar: 'qr', ad: 'QR' }, { anahtar: 'yazici', ad: 'Dil ve çözünürlük' }],
@@ -50,8 +50,8 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   ] },
   { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [
     qr(4, 4, 40), metin(46, 4, 50, 4, 2.8, '=REFAKAT KARTI'), metin(46, 9, 50, 14, 6, 'emirNo', true), metin(46, 24, 50, 9, 3.5, 'urunAd', true),
-    metin(46, 34, 50, 4, 2.8, 'urunKod'), metin(46, 39, 50, 4, 2.8, 'adetTermin'), metin(4, 46, 92, 4, 2.8, 'parti'),
-    kutu(4, 52, 92, 0.3), metin(4, 54, 92, 86, 3, 'adimlar'), metin(4, 142, 46, 4, 2.5, 'basim'), metin(50, 142, 46, 4, 2.5, 'emirNo'),
+    metin(46, 34, 50, 4, 2.8, 'urunKod'), metin(46, 39, 50, 4, 2.8, 'adetTermin'), metin(4, 46, 92, 4, 2.8, 'parti'), metin(4, 51, 92, 4, 2.8, 'lot', true),
+    kutu(4, 57, 92, 0.3), metin(4, 59, 92, 81, 3, 'adimlar'), metin(4, 142, 46, 4, 2.5, 'basim'), metin(50, 142, 46, 4, 2.5, 'emirNo'),
   ] },
   { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
     qr(2, 2, 46), metin(50, 4, 48, 18, 7, 'kod', true), metin(50, 26, 48, 20, 5, 'ad'),
@@ -78,7 +78,7 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
   refakat: {
     qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01',
     adetTermin: 'Adet 40 · Termin 30.10.2026', parti: 'Parti: Ana emir', basim: 'Basım 18.10.2026',
-    adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
+    adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol', lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
   },
   istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
   deneme: { qr: `${KOD_ONEKI.konum}:DENEME`, yazici: null },

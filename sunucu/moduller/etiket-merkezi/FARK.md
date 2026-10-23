@@ -55,3 +55,9 @@ Kurgu: /mnt/project-files/arastirma/etiket-merkezi/2026-10-18-etiket-merkezi-kur
 
 Değişmeyen: bugünkü üç baskı ekranı (stok Etiketler, Lot etiketi, Refakat kartı) ve kod sözlüğü. Yeni paket yok (QR matrisi onaylı `qrcode-generator`, TCP `node:net`).
 Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrudan komut yok") 98 evet ile değişti. Üçüncü iç istisna ADR 0014 ve CLAUDE.md'de (#1739); `.env.ornek` satırı da girdi.
+
+## Refakat partisi kartı lotla (kart #127; dal 127-refakat-sablon-lot)
+- Yeni kayıt türü `refakat-partisi` (stoktaki refakat partisi kimliği; `?tur=refakat-partisi&id=…`): refakat şablonuyla basılır. Emrin kart satırları Üretim Emirleri'nden, QR (`RP:<parti>`), başlık (emir no-P sıra) ve lot satırı stoktan (`refakatPartisi`, `disari.ts`).
+- Refakat şablonuna `lot` alanı (lot no, parti, döküm, sertifika); hazır `refakat-100x150` şablonunda parti satırının altında. Emirden basılan kartta (`tur=refakat`) lot satırı boştur.
+- İptal ve olmayan kart eksikte kalır. Defterde (`etiket_merkezi_baski_kaydi`) kartın emri `refakat` olarak yazılır; göç yok.
+- Stok refakat kartı penceresinde "Etiket Merkezi'nde bas" (yalnız `sayfa.etiket-merkezi` olan görür); stoğun kendi yazdır tuşu kalır.

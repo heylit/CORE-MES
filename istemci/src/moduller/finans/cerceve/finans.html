@@ -2848,6 +2848,46 @@ const GOMULU = (() => {
 })();
 const yetkiVar = (islem) => !!GOMULU && Array.isArray(GOMULU.islemler) && GOMULU.islemler.includes(islem);
 
+// Finansın paleti ortak palete gider (karar 102 a): "Kayıt" ve "Komut" grupları paletin "Bu sayfa" grubunda (kural 7),
+// yazılanın bütün sonuçları (cari dahil) öneri olarak (kural 8, en çok 8). Seçilen anahtar yalnız son listede ya da son
+// önerilerdeyse ve paletin aynı yerinde aynı başlık duruyorsa çalışır. Firma kapsamında palet kapalıdır: liste boş gider.
+const OrtakPalet = {
+  listelenen: new Map(),
+  onerilen: new Map(),
+  ogeler() { try { return GOMULU.kapsam === 'firma' ? [] : paletteItems(); } catch { return []; } },
+  komutOgeleri() { return this.ogeler().filter(it => it.g === 'Kayıt' || it.g === 'Komut').slice(0, 40); },
+  aranan(q) {
+    const toks = fold(q).split(/\s+/).filter(Boolean);
+    return this.ogeler().filter(it => { const h = fold(it.t + ' ' + it.s + ' ' + it.g); return toks.every(t => h.includes(t)); }).slice(0, 8);
+  },
+  komut(it, anahtar) {
+    const baslik = String(it.t || '').trim().slice(0, 80), aciklama = String(it.s || it.g || '').trim().slice(0, 160);
+    return baslik ? { anahtar, baslik, ...(aciklama ? { aciklama } : {}) } : null;
+  },
+  bildir() {
+    this.listelenen = new Map();
+    const komutlar = [];
+    this.komutOgeleri().forEach((it, i) => { const k = this.komut(it, 'komut-' + i); if (k) { this.listelenen.set(k.anahtar, k.baslik); komutlar.push(k); } });
+    window.parent.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar }, GOMULU.koken);
+  },
+  oner(metin, sira) {
+    this.onerilen = new Map();
+    const komutlar = [];
+    this.aranan(metin).forEach((it, i) => { const k = this.komut(it, 'oneri-' + i); if (k) { this.onerilen.set(k.anahtar, { metin, baslik: k.baslik }); komutlar.push(k); } });
+    window.parent.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komut-onerileri', sira, komutlar }, GOMULU.koken);
+  },
+  calistir(anahtar) {
+    const oneri = this.onerilen.get(anahtar), baslik = this.listelenen.get(anahtar) ?? (oneri && oneri.baslik);
+    if (baslik === undefined) return;
+    const liste = this.listelenen.has(anahtar) ? this.komutOgeleri() : this.aranan(oneri.metin);
+    const it = liste[Number(anahtar.slice(anahtar.lastIndexOf('-') + 1))];
+    if (!it || String(it.t || '').trim().slice(0, 80) !== baslik || typeof it.run !== 'function') return;
+    closePalette();
+    if (!$("#drawer").hidden) closeDrawer();
+    it.run();
+  },
+};
+
 const Kopru = {
   sira: 0,
   bekleyen: new Map(),
@@ -2874,12 +2914,14 @@ function altGorunumBildir() {
 const Gorunum = {
   alinan: 0, uygulanan: 0, alindi: false, yineleyici: null,
   hazir() {
-    const gonder = () => window.parent.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'hazir' }, GOMULU.koken);
+    // Komut listesi her `hazir`la gider: kabuğun dinleyicisi kurulmadan yollanan ilk ileti kaybolabilir.
+    const gonder = () => { window.parent.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'hazir' }, GOMULU.koken); OrtakPalet.bildir(); };
     gonder();
     let kalan = 20;
     this.yineleyici = setInterval(() => { if (this.alindi || kalan-- <= 0) { clearInterval(this.yineleyici); return; } gonder(); }, 250);
   },
   al(ad, sira) {
+    if (!this.alindi) OrtakPalet.bildir();
     this.alindi = true;
     clearInterval(this.yineleyici);
     this.alinan = sira;
@@ -2909,6 +2951,8 @@ if (GOMULU) {
       return;
     }
     if (m.kanal === 'tmi-gorunum' && m.surum === 1 && m.tip === 'gorunum' && typeof m.gorunum === 'string' && Number.isInteger(m.sira) && m.sira >= 1) Gorunum.al(m.gorunum, m.sira);
+    if (m.kanal === 'tmi-gorunum' && m.surum === 1 && m.tip === 'komut-calistir' && typeof m.anahtar === 'string') OrtakPalet.calistir(m.anahtar);
+    if (m.kanal === 'tmi-gorunum' && m.surum === 1 && m.tip === 'komut-metni' && typeof m.metin === 'string' && m.metin.trim() !== '' && Number.isInteger(m.sira)) OrtakPalet.oner(m.metin, m.sira);
     // Tema değişince çerçeve yeniden kurulmaz (açık form kaybolmasın); renkler tasarım değişkeninden gelir. Grafik renkleri
     // çizimde okunur: ekranda doldurulan alan yoksa görünüm yeniden çizilir, varsa grafik sonraki çizimde yeni temayı alır.
     if (m.kanal === 'finans' && m.yon === 'tema' && (m.tema === 'dark' || m.tema === 'light')) {
@@ -2916,13 +2960,18 @@ if (GOMULU) {
       if ($('#drawer').hidden && !document.querySelector('#main input, #main textarea, #main select')) render();
     }
   });
+  // Ctrl K kabuğun ortak paletidir (karar 102 a): çerçevede basılan tuş finansın paletine ulaşmadan kabuğa gider.
   // Firma kapsamında finans kısayolları (yeni kayıt, komut paleti) kapalıdır: o veriler bu kapsamda yok.
   window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLocaleLowerCase('tr') === 'k') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      window.parent.postMessage({ kanal: 'finans', yon: 'kisayol', tus: 'arama' }, GOMULU.koken);
+      return;
+    }
     if (GOMULU.kapsam !== 'firma') return;
     const tag = (e.target && e.target.tagName || '').toLowerCase();
     const yazi = ['input', 'textarea', 'select'].includes(tag);
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); }
-    else if (!yazi && (e.key === '/' || e.key.toLowerCase() === 'n')) { e.preventDefault(); e.stopImmediatePropagation(); }
+    if (!yazi && (e.key === '/' || e.key.toLowerCase() === 'n')) { e.preventDefault(); e.stopImmediatePropagation(); }
     else if (e.key === 'Escape' && !$('#drawer').hidden) { e.stopImmediatePropagation(); fKapat(); }
   }, true);
 }

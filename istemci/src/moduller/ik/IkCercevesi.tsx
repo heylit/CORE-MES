@@ -9,7 +9,7 @@ import { kopruKur, KopruHatasi } from './kopru.ts';
 import { sayfaKur } from './sayfa.ts';
 import './ik.css';
 
-interface Istek { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown }
+interface Istek { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown; tus?: unknown }
 type Yanitla = (ileti: unknown) => void;
 
 // İK uygulaması değiştirilmeden yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); sayfaları TMI'nin ikinci
@@ -56,6 +56,11 @@ export function IkCercevesi({ kok = '/ik' }: { kok?: string }) {
   const iletiGeldi = (veri: unknown, yanitla: Yanitla) => {
     if (gorunumIletisi(veri, yanitla)) return;
     const m = veri as Istek | null;
+    // Çerçevede basılan Ctrl K (karar 102 a): kabuğun arama kutusu pencerenin tuş olayını dinler; aynı tuş burada yeniden verilir.
+    if (m?.kanal === VERI_KANALI && m.yon === 'kisayol' && m.tus === 'arama') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+      return;
+    }
     if (kopru === null || !m || m.kanal !== VERI_KANALI || m.yon !== 'istek' || typeof m.tip !== 'string') return;
     yanit.current = yanitla;
     kopru.isle(m.tip, m.veri).then(

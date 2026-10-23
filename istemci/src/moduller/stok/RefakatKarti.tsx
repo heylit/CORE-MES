@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import qrcode from 'qrcode-generator';
 import type { RefakatPartisi, RefakatPartisiAcGovdesi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
@@ -8,7 +9,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { EmirSecici } from './EmirSecici.tsx';
 import { birimliMiktar } from './gorunum.ts';
 import { yazdir } from './LotEtiketi.tsx';
-import { hataMetni, korumaliPost, useStokKomutu } from './ortak.tsx';
+import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
 
 // Refakat partisi (kart #123): depo lotu okutup emre ayırınca kart basılır; teslim kartla yapılır, alan kartı okutur.
@@ -58,9 +59,14 @@ export function RefakatKartPenceresi({ id, kapat }: { id: number; kapat: () => v
   const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`) });
   const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.', kapat);
   const r = q.data?.refakat;
+  const merkez = useIslem('sayfa.etiket-merkezi');
+  const yonlendir = useNavigate();
   return (
     <Pencere acik kapat={kapat} baslik={r ? `Refakat kartı ${r.etiket}` : 'Refakat kartı'} tur="yan"
       alt={<>
+        {merkez && r?.durum === 'acik' && (
+          <Dugme tur="ikincil" simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
+        )}
         {r && r.durum === 'acik' && Number(r.verilen) === 0 && (
           <Dugme tur="ikincil" simge="x" yukleniyor={iptal.komut.isPending} onClick={() => iptal.komut.mutate({ surum: r.surum })}>Kartı iptal et</Dugme>
         )}

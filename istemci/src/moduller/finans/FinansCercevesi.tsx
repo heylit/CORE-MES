@@ -110,7 +110,12 @@ export function FinansCercevesi({ sabitGorunum }: Ozellikler = {}) {
         return;
       }
     } else if (gorunumIletisi(veri, yanitla)) return;
-    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown } | null;
+    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown; tus?: unknown } | null;
+    // Çerçevede basılan Ctrl K: kabuğun arama kutusu pencerenin tuş olayını dinler; aynı tuş burada yeniden verilir.
+    if (m?.kanal === 'finans' && m.yon === 'kisayol' && m.tus === 'arama') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+      return;
+    }
     if (!m || m.kanal !== 'finans' || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
     const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: 'finans', yon: 'yanit', id: m.id, ...govde }); };
     isle(m.tip, m.veri).then(

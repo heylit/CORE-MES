@@ -21,12 +21,14 @@ async function dosyaOku(yol: string): Promise<Blob | null> {
   return r.ok ? r.blob() : null;
 }
 
-interface Istek { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown }
+interface Istek { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown; tus?: unknown }
 
 // 329 a: ölçü aletleri Kalibrasyonda yönetilir; uygulamanın ekleme ve düzenleme yolları kullanıcıyı oraya gönderir. Çerçeve adres
 // veremez: yalnız bu tek hedefe gidilir.
 export const KALIBRASYON_YOLU = '/kalibrasyon';
 export const kalibrasyonaGitIstegiMi = (m: Istek | null): boolean => m !== null && m.kanal === VERI_KANALI && m.yon === 'istek' && m.tip === 'kalibrasyona-git';
+// Çerçevede basılan Ctrl K (karar 102 a, acilis.ts PALET_BETIGI): kabuğun arama kutusu pencerenin tuş olayını dinler; aynı tuş kabukta yeniden verilir.
+export const kisayolIstegiMi = (m: Istek | null): boolean => m !== null && m.kanal === VERI_KANALI && m.yon === 'kisayol' && m.tus === 'arama';
 
 // Kalite Merkezi değiştirilmeden yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); menü kabuktadır
 // (ikinci menü). Uygulamanın yerel sunucuya attığı istekler köprüyle TMI uçlarına gider.
@@ -74,6 +76,10 @@ export function KaliteMerkeziCercevesi() {
     if (gorunumIletisi(veri, yanitla)) return;
     const m = veri as Istek | null;
     if (kalibrasyonaGitIstegiMi(m)) { void gezin(KALIBRASYON_YOLU); return; }
+    if (kisayolIstegiMi(m)) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+      return;
+    }
     if (!m || m.kanal !== VERI_KANALI || m.yon !== 'istek' || m.tip !== 'api' || typeof m.id !== 'number') return;
     const g = m.veri as Partial<ApiIstegi> | null;
     if (!g || typeof g.adres !== 'string' || typeof g.yontem !== 'string') return;

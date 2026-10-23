@@ -3,6 +3,8 @@
 //    kabuktaki köprü (kopru.ts) onları TMI uçlarına çevirir. Çerçeve hiçbir adrese istek atmaz (içerik politikası kapatır).
 // 2. Görünüm: kabuğun ikinci menüsüyle `tmi-gorunum` sözleşmesi (istemci/src/ortak/rota/cerceve-iletisi.ts kuralları,
 //    elle yazımı): hazır yinelemesi, gelen görünümün uygulanması, kullanıcının içerideki geçişinin bildirilmesi.
+// 3. Ctrl K (karar 102 a): kabuğun ortak paletidir; çerçevede basılan tuş uygulamanın aramasına ulaşmadan kabuğa gider.
+//    Uygulamanın araması "İK'da ara" komutuyla paletin "Bu sayfa" grubundan açılır (uygulama arama sonuçlarını dışa vermez).
 // Ayar, kabuğun sayfaya yazdığı `window.__TMI_IK` nesnesidir: { koken, tema, kapali }. Sonraki tema değişikliği `tmi-ik-veri`
 // kanalında `tema` iletisiyle gelir.
 export const VERI_KANALI = 'tmi-ik-veri';
@@ -72,11 +74,27 @@ export const CERCEVE_ACILISI = String.raw`(function () {
   var yineleyici = null;
   function gonder(m) { m.kanal = GK; m.surum = GS; UST.postMessage(m, KOKEN); }
   function yinelemeyiBirak() { clearInterval(yineleyici); yineleyici = null; }
+  // Komut listesi her hazır iletisiyle gider: kabuğun dinleyicisi kurulmadan yollanan ilk ileti kaybolabilir.
   function hazirBildir() {
     yinelemeyiBirak();
     gonder({ tip: 'hazir' });
+    komutlariBildir();
     var kalan = 20;
-    yineleyici = setInterval(function () { if (kalan-- <= 0) { yinelemeyiBirak(); return; } gonder({ tip: 'hazir' }); }, 250);
+    yineleyici = setInterval(function () { if (kalan-- <= 0) { yinelemeyiBirak(); return; } gonder({ tip: 'hazir' }); komutlariBildir(); }, 250);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || String(e.key).toLocaleLowerCase('tr') !== 'k') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    UST.postMessage({ kanal: VERI, yon: 'kisayol', tus: 'arama' }, KOKEN);
+  }, true);
+  var KOMUTLAR = [{ anahtar: 'ik-ara', baslik: 'İK\'da ara', aciklama: 'Personel, izin, bordro; düz Türkçe komut', sozcukler: ['personel', 'izin', 'bordro', 'kıdem', 'brüt'] }];
+  function komutlariBildir() { gonder({ tip: 'komutlar', komutlar: el ? KOMUTLAR : [] }); }
+  function komutCalistir(anahtar) {
+    if (anahtar !== 'ik-ara' || !el || !el.shadowRoot) return;
+    var d = el.shadowRoot.querySelector('[data-act="search"]');
+    if (d) d.click();
   }
 
   window.addEventListener('message', function (e) {
@@ -92,6 +110,7 @@ export const CERCEVE_ACILISI = String.raw`(function () {
       return;
     }
     if (m.kanal === VERI && m.yon === 'degisti') { yamaUygula(m.veri); return; }
+    if (m.kanal === GK && m.surum === GS && m.tip === 'komut-calistir') { komutCalistir(m.anahtar); return; }
     // Tema değişince çerçeve yeniden kurulmaz (açık form kaybolmasın); yalnız uygulamanın tema niteliği değişir.
     if (m.kanal === VERI && m.yon === 'tema' && (m.tema === 'dark' || m.tema === 'light')) {
       TEMA = m.tema;

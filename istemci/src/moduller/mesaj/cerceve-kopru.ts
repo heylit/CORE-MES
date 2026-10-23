@@ -56,9 +56,14 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
   let gorunumAlindi = false;
   w.addEventListener('message', (olay: MessageEvent) => {
     if (olay.source !== ust) return;
-    const m = olay.data as { kanal?: unknown; yon?: unknown; id?: unknown; ok?: unknown; veri?: unknown; hata?: unknown; durum?: unknown; tip?: unknown } | null;
+    const m = olay.data as { kanal?: unknown; yon?: unknown; id?: unknown; ok?: unknown; veri?: unknown; hata?: unknown; durum?: unknown; tip?: unknown; anahtar?: unknown } | null;
     if (m === null || typeof m !== 'object') return;
-    if (m.kanal === 'tmi-gorunum' && m.tip === 'gorunum') { gorunumAlindi = true; return; }
+    if (m.kanal === 'tmi-gorunum' && m.tip === 'gorunum') {
+      if (!gorunumAlindi) komutlariBildir();
+      gorunumAlindi = true;
+      return;
+    }
+    if (m.kanal === 'tmi-gorunum' && m.tip === 'komut-calistir') { komutCalistir(m.anahtar); return; }
     if (m.kanal !== ayar.kanal || m.yon !== 'yanit' || typeof m.id !== 'number') return;
     const b = bekleyen.get(m.id);
     if (b === undefined) return;
@@ -70,12 +75,42 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
     }
   });
 
+  // ----- Ctrl K ve ortak palet (karar 102 a) -----
+  // Ctrl K kabuğun ortak paletidir: çerçevede basılan tuş prototipin kendi aramasına ulaşmadan (yakalama evresi) kabuğa gider.
+  w.addEventListener('keydown', (o: KeyboardEvent) => {
+    if (!(o.ctrlKey || o.metaKey) || o.altKey || o.key.toLocaleLowerCase('tr') !== 'k') return;
+    o.preventDefault();
+    o.stopImmediatePropagation();
+    ust.postMessage({ kanal: ayar.kanal, yon: 'kisayol', tus: 'arama' }, '*');
+  }, true);
+  // Bu sayfanın komutları paletin "Bu sayfa" grubunda görünür (kural 7); seçilen komut prototipin kendi düğmesi (data-act)
+  // tıklanmış gibi çalışır. Prototipin arama penceresi düğmesiyle yerinde kalır.
+  const KOMUTLAR: readonly { anahtar: string; baslik: string; aciklama: string; simge: string; sozcukler: string[]; eylem: string }[] = [
+    { anahtar: 'mesaj-ara', baslik: 'Mesajlarda ara', aciklama: 'Kanal, mesaj, görev, toplantı, sipariş ve onay', simge: 'search', sozcukler: ['mesaj', 'kanal', 'görev', 'toplantı'], eylem: 'search' },
+  ];
+  const komutlariBildir = (): void => {
+    ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'komutlar', komutlar: KOMUTLAR.map(({ anahtar, baslik, aciklama, simge, sozcukler }) => ({ anahtar, baslik, aciklama, simge, sozcukler })) }, '*');
+  };
+  const komutCalistir = (anahtar: unknown): void => {
+    const k = KOMUTLAR.find((x) => x.anahtar === anahtar);
+    if (k === undefined || w.document.body === null) return;
+    const d = w.document.createElement('button');
+    d.type = 'button';
+    d.hidden = true;
+    d.dataset['act'] = k.eylem;
+    w.document.body.appendChild(d);
+    d.click();
+    d.remove();
+  };
+
   // Kabuğun görünüm sözleşmesi: `hazir` görünüm gelene kadar yinelenir. Prototip tek görünümdür, gelen görünüm yalnız alınır.
+  // Komut listesi her `hazir`la gider: kabuğun dinleyicisi kurulmadan yollanan ilk ileti kaybolabilir.
   let hazirKalan = 20;
   const hazir = (): void => {
     if (gorunumAlindi || hazirKalan <= 0) return;
     hazirKalan -= 1;
     ust.postMessage({ kanal: 'tmi-gorunum', surum: 1, tip: 'hazir' }, '*');
+    komutlariBildir();
     w.setTimeout(hazir, 250);
   };
   hazir();
