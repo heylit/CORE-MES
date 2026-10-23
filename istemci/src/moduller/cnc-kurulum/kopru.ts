@@ -1,5 +1,6 @@
 import type {
-  EmirSecCevabi, EmirlerCevabi, HazirlikCevabi, KurulumTamamCevabi, SilCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi,
+  EmirSecCevabi, EmirlerCevabi, HazirlikCevabi, KurulumTamamCevabi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKartiBaglaCevabi,
+  StokKartlariCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -100,17 +101,45 @@ export function takimOlaylariniBul(onceki: unknown, yeni: unknown, tezgah: strin
   return olaylar;
 }
 
+// Stok kartına bağlı kütüphane kalemi (163 b) okurken stoğun kullanılabilir miktarıyla ve `tmiStok` işaretiyle gelir. Prototip
+// adedi takım değişiminde, uç setinde ve elle azaltmada düşürür: köprü son gönderilenle karşılaştırır, azalan adet stoktan düşer
+// (164 b). Artış stoğa girmez (giriş Stok ekranından; sonraki açılışta stoğun miktarı gelir). Bağ ya da kart değiştiyse fark yoktur.
+const KUTUPHANE_KIMLIGI = /^[A-Za-z0-9_.-]{1,64}$/;
+function stokluKalemler(durum: unknown): Map<string, { malzemeId: unknown; qty: number }> {
+  const sonuc = new Map<string, { malzemeId: unknown; qty: number }>();
+  for (const [kimlik, deger] of Object.entries(nesne(nesne(durum)['inv']))) {
+    const k = nesne(deger), bag = nesne(k['tmiStok']);
+    if (typeof bag['malzemeId'] === 'number' && typeof k['qty'] === 'number' && Number.isFinite(k['qty'])) sonuc.set(kimlik, { malzemeId: bag['malzemeId'], qty: k['qty'] });
+  }
+  return sonuc;
+}
+export function stokDususleriniBul(onceki: unknown, yeni: unknown): StokDusGovdesi[] {
+  const eski = stokluKalemler(onceki);
+  const dusus: StokDusGovdesi[] = [];
+  for (const [kimlik, y] of stokluKalemler(yeni)) {
+    const o = eski.get(kimlik);
+    if (o === undefined || o.malzemeId !== y.malzemeId || !KUTUPHANE_KIMLIGI.test(kimlik)) continue;
+    const miktar = Math.round(o.qty - y.qty);
+    if (miktar >= 1) dusus.push({ kimlik, miktar: Math.min(miktar, 10000) });
+  }
+  return dusus;
+}
+
 // Yazma işlemi olmayan hazırlık onaylayıcısının kaydı onay ucuna gider; sunucu yalnız onay alanlarını alır. Genel kayıt ucu
 // onayları değiştiren durumu reddeder (kart #1583): yazabilen kişinin onayı önce kendi onay ucuna, sonra bütün durum kayıt
 // ucuna gider. ilkDurum, açılışta okunan durum kaydıdır (onayların değişip değişmediği ona göre anlaşılır). Emir seçilince
 // sunucu kurulumu değiştirir: yenile çerçeveyi yeni kayıtlarla yeniden kurar. Takım değiştirebilen kişinin değişim ve
-// düzeltmesi takım ucuna gider (yazma işlemi olmasa da); yoksa yalnız açık sekmede kalır.
+// düzeltmesi takım ucuna gider (yazma işlemi olmasa da); yoksa yalnız açık sekmede kalır. Stoktan düşebilen kişinin bağlı
+// kalemdeki azalışı stok ucuna gider; yoksa yalnız açık sekmede kalır. Kalem stok kartına bağlanınca çerçeve Kütüphane'de
+// yeniden kurulur (adet stoktan gelir).
 export function kopruKur(
-  model?: ModelKoprusu, yalnizHazirlik = false, ilkDurum?: string, yenile?: () => void, takimDegistirebilir = false,
+  model?: ModelKoprusu, yalnizHazirlik = false, ilkDurum?: string, yenile?: (gorunum?: string) => void, takimDegistirebilir = false,
+  stokDusebilir = false,
 ): KopruIsleyici {
   const ilk = ayristir(ilkDurum);
   let sonOnay = onayIzi(ilk);
   let sonAsinma = ilk;
+  let sonStok = ilk;
   const tezgah = typeof nesne(ilk)['machine'] === 'string' ? nesne(ilk)['machine'] as string : null;
   // Durum yazıldıktan sonra olaylar kuyruğa girer: reddedilen durumun (eski sürüm, büyük kayıt) olayı yazılmaz, sonraki yazımda
   // gider. Kuyruk istek kimliğiyle gider (uç tekrar korumalı: fark iki kez yazılmaz); ağ ya da sunucu hatasında kuyrukta kalır ve
@@ -127,6 +156,21 @@ export function kopruKur(
         if (!(e instanceof ApiHatasi) || e.durum < 400 || e.durum >= 500) return;
       }
       bekleyen.shift();
+    }
+  }
+  // Takım olaylarının kuyruğuyla aynı kural: durum yazılınca gider, ağ ve sunucu hatasında kalır, uç reddederse (yetersiz stok,
+  // bağı kalkmış kalem) bırakılır. Stok çıkışı tekrar korumalıdır: aynı düşüş iki kez yazılmaz.
+  const bekleyenDusus: { govde: StokDusGovdesi; kimlik: string }[] = [];
+  async function stokDususleriniYaz(dusus: StokDusGovdesi[], deger: unknown): Promise<void> {
+    for (const govde of dusus) bekleyenDusus.push({ govde, kimlik: yeniIstekKimligi() });
+    sonStok = deger;
+    for (let oge = bekleyenDusus[0]; oge !== undefined; oge = bekleyenDusus[0]) {
+      try {
+        await api.post<StokDusCevabi>('/cnc-kurulum/takimlar/stok-dus', oge.govde, { istekKimligi: oge.kimlik });
+      } catch (e) {
+        if (!(e instanceof ApiHatasi) || e.durum < 400 || e.durum >= 500) return;
+      }
+      bekleyenDusus.shift();
     }
   }
   async function durumuYaz(v: Nesne): Promise<YazCevabi> {
@@ -150,8 +194,25 @@ export function kopruKur(
       case 'kayit-yaz': {
         const olaylar = takimDegistirebilir && v['anahtar'] === DURUM_ANAHTARI && v['bicim'] !== 'metin'
           ? takimOlaylariniBul(sonAsinma, v['deger'], tezgah) : null;
+        const dusus = stokDusebilir && !yalnizHazirlik && v['anahtar'] === DURUM_ANAHTARI && v['bicim'] !== 'metin' ? stokDususleriniBul(sonStok, v['deger']) : null;
         const cevap = await durumuYaz(v);
         if (olaylar !== null) await takimOlaylariniYaz(olaylar, v['deger']);
+        if (dusus !== null) await stokDususleriniYaz(dusus, v['deger']);
+        return cevap;
+      }
+      case 'stok-kartlari': {
+        const sorgu = new URLSearchParams({ sayfa: String(typeof v['sayfa'] === 'number' && Number.isInteger(v['sayfa']) && v['sayfa'] > 0 ? v['sayfa'] : 1) });
+        if (typeof v['metin'] === 'string' && v['metin'].trim() !== '') sorgu.set('metin', v['metin'].trim().slice(0, 100));
+        return api.get<StokKartlariCevabi>(`/cnc-kurulum/takimlar/stok-kartlari?${sorgu.toString()}`);
+      }
+      case 'stok-karti-bagla': {
+        const kimlik = metin(v['kimlik'], 'kütüphane kimliği');
+        if (!KUTUPHANE_KIMLIGI.test(kimlik)) throw new Error('Geçersiz kütüphane kimliği.');
+        const malzemeId = v['malzemeId'] === null ? null : v['malzemeId'];
+        if (malzemeId !== null && (typeof malzemeId !== 'number' || !Number.isInteger(malzemeId) || malzemeId < 1)) throw new Error('Geçersiz stok kartı.');
+        const cevap = await api.post<StokKartiBaglaCevabi>('/cnc-kurulum/takimlar/stok-karti', { kimlik, malzemeId });
+        // Yanıt çerçeveye gittikten sonra yeniden kurulur: adet ve bağ okumayla gelir.
+        setTimeout(() => { yenile?.('lib'); }, 0);
         return cevap;
       }
       case 'kayit-sil': {

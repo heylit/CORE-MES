@@ -449,4 +449,13 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     await waitFor(() => { expect(e.bildirim()).toContain('elde kalan adedin bir eksiği'); });
     expect(e.ifade<{ metin: string } | null>('EB.uyari')).toMatchObject({ metin: 'Bölünen adet 1 ile elde kalan adedin bir eksiği arasında olmalı.' });
   }, 40000);
+
+  it('emir türleri sözleşmedeki adlarıyla gelir: sekiz tür seçilir, sunucudaki Fason emir Fason görünür', async () => {
+    const s = sunucu([emir(501, { tur: 'fason' })]);
+    const e = await ekranAc(s);
+    await waitFor(() => { expect(e.b.querySelectorAll('.orow')).toHaveLength(1); });
+    expect(e.b.querySelector('.orow .tur')?.textContent).toBe('Fason');
+    fireEvent.click(e.al('[data-act="newOrderToggle"]'));
+    expect(Array.from(e.al<HTMLSelectElement>('#noTur').options).map((o) => o.textContent)).toEqual(['Seri', 'FAI', 'Numune', 'Prototip', 'Stoğa üretim', 'Rework', 'Bakım ve deneme', 'Fason']);
+  }, 40000);
 });
