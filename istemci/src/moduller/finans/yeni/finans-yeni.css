@@ -1,0 +1,40 @@
+/* Yeni finans ekranı: yalnız tasarım değişkenleri. Çekmece formu tek sütundur (yan pencere dardır). */
+/* Finans kökü çerçevelidir: kabuğun içerik alanı dolgusuz ve kaydırmasızdır; yeni ekran dolguyu ve kaydırmayı kendi yapar. */
+.tc-fy { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; height: 100%; overflow-y: auto; padding: var(--b-5); }
+.tc-fy-icerik { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fy-bolum { min-width: 0; }
+.tc-fy-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-fy-olaylar { display: flex; flex-direction: column; gap: var(--b-3); }
+
+.tc-fy-form { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fy-form-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-fy-alanlar, .tc-fy-grup { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-fy-alt-baslik { margin: 0; font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
+.tc-fy-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+.tc-fy-serit { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-fy-serit-etiket { font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
+.tc-fy-serit-dugmeler, .tc-fy-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-fy-serit-dugme {
+  min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2);
+  background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.tc-fy-serit-dugme[aria-pressed="true"] { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); font-weight: 700; }
+.tc-fy-serit-dugme:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+.tc-fy-faturalar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.tc-fy-fatura, .tc-fy-satir {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
+  min-height: var(--dokunma); padding: var(--b-1) 0; border-bottom: 1px solid var(--edge);
+}
+.tc-fy-fatura { cursor: pointer; }
+.tc-fy-satir > :first-child, .tc-fy-fatura > span { min-width: 0; overflow-wrap: anywhere; }
+.tc-fy-tutar { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-fy-cek { display: flex; flex-direction: column; gap: var(--b-2); }
+
+.tc-fy-gizli-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 479px) {
+  .tc-fy { padding: var(--b-3); }
+}
