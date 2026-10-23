@@ -1373,6 +1373,20 @@ export function katilimAc(db: Db, emirId: number, isEmriId: number | null, kisiI
   );
 }
 
+// Kişinin emrin çalışan adımında (iş emirsiz emirde emrin kendisinde) başlatma ya da katılma aralığı var mı; aralık kapanmış olabilir.
+export async function adimaKatildiMi(db: Db, emirId: number, kisiId: number): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM uretim_emirleri_katilim k
+        WHERE k.emir_id = $1 AND k.kisi_id = $2
+          AND (k.is_emri_id IN (SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND durum = 'calisiyor')
+               OR (k.is_emri_id IS NULL AND NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1)))
+     ) AS var`,
+    [emirId, kisiId],
+  );
+  return satir?.var === true;
+}
+
 export function katilimKapat(db: Db, id: number, kapanis: KatilimKapanisi, an: string): Promise<unknown> {
   return db.sorgu(
     'UPDATE uretim_emirleri_katilim SET cikis = GREATEST($3::timestamptz, giris), kapanis = $2 WHERE id = $1 AND cikis IS NULL', [id, kapanis, an],
