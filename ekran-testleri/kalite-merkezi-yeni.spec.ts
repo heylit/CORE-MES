@@ -65,7 +65,9 @@ test.describe('yönetici', () => {
       await ac('/kalite-merkezi/yeni/olcum-analizi');
       await expect(page.getByRole('heading', { name: 'Ölçüm analizi (SPC)' })).toBeVisible();
       await ac('/kalite-merkezi/yeni/is-emirleri');
-      await expect(page.getByRole('table', { name: 'İş emirleri ve siparişler' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'İş emirleri ve siparişler' })).toBeVisible();
+      // Örnek veride iş emri yoksa liste boş durumunu gösterir; varsa tablo.
+      await expect(page.getByRole('table', { name: 'İş emirleri ve siparişler' }).or(page.getByRole('status').filter({ hasText: 'CSV olarak aktarabilir' }))).toBeVisible();
     });
   });
   test.describe('K3 Uygunsuzluk, DÖF, Formlar', () => {});
