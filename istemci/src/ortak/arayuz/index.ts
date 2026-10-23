@@ -16,7 +16,8 @@ export { Kabuk } from './Kabuk.tsx';
 export { PinPenceresi } from './PinPenceresi.tsx';
 export { Karsilama } from './Karsilama.tsx';
 export { AcilisGosterisi, AcilisOnizleme } from './Acilis.tsx';
-export { Tablo, type Sutun } from './Tablo.tsx';
+export { Tablo, tabloCsvSatirlari, type Sutun, type TabloAraci, type TabloSuzgeci } from './Tablo.tsx';
+export { SayfaBasligi, type BirincilEylem } from './SayfaBasligi.tsx';
 export { Sayfalama, type SayfalamaOzellikleri } from './Sayfalama.tsx';
 export { CokSatir, Girdi, IsaretKutusu, Secim, type Secenek } from './Alan.tsx';
 export { AcKapa } from './AcKapa.tsx';
@@ -26,7 +27,10 @@ export { ParolaPenceresi } from './ParolaPenceresi.tsx';
 export { Menu, type MenuOgesi } from './Menu.tsx';
 export { OnayPenceresi } from './OnayPenceresi.tsx';
 export { Sekmeler, type Sekme } from './Sekmeler.tsx';
-export { BildirimSaglayici, useBildirim, type BildirimTonu } from './Bildirim.tsx';
+export {
+  BildirimSaglayici, useBildirim, type BildirimEylemi, type BildirimSecenegi, type BildirimTonu,
+} from './Bildirim.tsx';
+export { FormPenceresi } from './FormPenceresi.tsx';
 export type { MakineDurumu } from './durum.ts';
 export { TusTakimi } from './TusTakimi.tsx';
 export { Kadran, KadranEtiketi } from './Kadran.tsx';
