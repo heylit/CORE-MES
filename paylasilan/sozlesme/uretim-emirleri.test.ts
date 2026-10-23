@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, bitirGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
-  bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimAyarlaGovdesi, sayimGovdesi,
+  bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi,
 } from './uretim-emirleri.ts';
 
 const GOVDE = { parcaNo: 'P-1', parcaAd: 'Deneme Parça', adet: 5, istasyonId: 3, projeId: 7 };
@@ -85,27 +85,21 @@ test('sayım gövdesi: hurda nedensiz yazılmaz; sağlam sayım hurda nedeni ta�
   assert.equal(gecer(sayimGovdesi, { tur: 'saglam', adet: 1, hurdaNedeniId: 4 }), false);
 });
 
-test('sayım ve ayarla: tek istekte adet en çok bir milyondur (artı ve eksi); sınırın kendisi geçer, bir fazlası reddedilir', () => {
+test('sayım: tek istekte adet en çok bir milyondur (artı ve eksi); sınırın kendisi geçer, bir fazlası reddedilir', () => {
   assert.equal(AZAMI_SAYIM, 1_000_000);
   for (const adet of [AZAMI_SAYIM, -AZAMI_SAYIM]) assert.equal(gecer(sayimGovdesi, { tur: 'saglam', adet }), true, String(adet));
   for (const adet of [AZAMI_SAYIM + 1, -AZAMI_SAYIM - 1]) assert.equal(gecer(sayimGovdesi, { tur: 'saglam', adet }), false, String(adet));
   assert.equal(gecer(sayimGovdesi, { tur: 'hurda', adet: AZAMI_SAYIM, hurdaNedeniId: 4 }), true);
   assert.equal(gecer(sayimGovdesi, { tur: 'hurda', adet: AZAMI_SAYIM + 1, hurdaNedeniId: 4 }), false);
-  assert.equal(gecer(sayimAyarlaGovdesi, { saglam: AZAMI_SAYIM }), true);
-  assert.equal(gecer(sayimAyarlaGovdesi, { saglam: AZAMI_SAYIM + 1 }), false);
 });
 
-test('ayarla, durdur ve adım gövdeleri fazladan alanı sessizce atmaz, reddeder', () => {
-  assert.equal(gecer(sayimAyarlaGovdesi, { saglam: 3, hurda: 9 }), false);
+test('durdur ve adım gövdeleri fazladan alanı sessizce atmaz, reddeder', () => {
   assert.equal(gecer(durdurGovdesi, { durusNedeniId: 6, aciklama: 'x' }), false);
   assert.equal(gecer(adimTamamlaGovdesi, { tamam: true, adimId: 2 }), false);
   assert.equal(gecer(sayimGovdesi, { tur: 'hurda', adet: 1, hurdaNedeniId: 4, not: 'x' }), false);
 });
 
-test('ayarla, durdur ve adım gövdeleri: sayaç sıfır ya da pozitiftir; duruş nedeni ve işaret zorunludur', () => {
-  for (const saglam of [0, 1, 250]) assert.deepEqual(sayimAyarlaGovdesi.parse({ saglam }), { saglam });
-  for (const saglam of [-1, 1.5, '3', null, undefined]) assert.equal(gecer(sayimAyarlaGovdesi, { saglam }), false, String(saglam));
-
+test('durdur ve adım gövdeleri: duruş nedeni ve işaret zorunludur', () => {
   assert.deepEqual(durdurGovdesi.parse({ durusNedeniId: 6 }), { durusNedeniId: 6 });
   for (const durusNedeniId of [undefined, null, 0, -2, '6']) assert.equal(gecer(durdurGovdesi, { durusNedeniId }), false, String(durusNedeniId));
 

@@ -3,18 +3,17 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
-  emirlerSorgusu, sayimAyarlaGovdesi, sayimCevabi,
+  emirlerSorgusu,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
-import { SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import {
   adimTamamla, anaSayfaOzeti, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
-  emirSayimAyarla, izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
+  izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
 const ADIMLI_OKUMA = { biri: ADIMLI_OKUMA_ISLEMLERI } as const;
@@ -67,19 +66,6 @@ const emirUclari = [
     govde: makineDevralGovdesi,
     cevap: emirCevabi,
     isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/sayim-ayarla',
-    yetki: 'terminal.uret',
-    // Terminal bunu sayım kuyruğunda yeniden dener: arada başka cihazın sayımı geldiyse geç gelen kopya onu ezmesin.
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: sayimAyarlaGovdesi,
-    denetim: 'govdesiz',
-    cevap: sayimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) =>
-      emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)),
   }),
   uc({
     yontem: 'POST',
