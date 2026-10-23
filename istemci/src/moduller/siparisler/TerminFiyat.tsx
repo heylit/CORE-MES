@@ -4,10 +4,12 @@ import type { MaliyetKalemi, TeklifAyrintiCevabi, TerminDenemesiCevabi, TerminDe
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
+import { AdetTablosu } from './AdetTablosu.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
+import { PlanSeridi } from './PlanSeridi.tsx';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
 type TerminTuru = 'plan' | 'farkli';
@@ -113,6 +115,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
       istemci.setQueryData(anahtarlar.teklif(cevap.id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.teklifListeleri });
       void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(cevap.id) });
+      void istemci.invalidateQueries({ queryKey: anahtarlar.atolyeTaslaklari });
       const no = cevap.sonSurumNo === null ? 'Sürüm verildi' : `Sürüm ${cevap.sonSurumNo} verildi`;
       bildir('tamam', cevap.durum === 'onay-bekliyor' ? `${no}; onay bekliyor.` : planliRef.current ? `${no}; satış taslağı planda yer tutuyor.` : `${no}.`);
     },
@@ -226,6 +229,9 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               {d.terminTuru === 'farkli' && <Girdi etiket="İstenen termin" type="date" {...form.alan('istenenTermin')} />}
             </div>
             <TerminSonucu deneme={deneme.isFetching && c === undefined ? 'yukleniyor' : deneme.isError ? hataIletisi(deneme.error, 'Termin denemesi yapılamadı.') : c} />
+            {planli && c !== undefined && (c.plan === null
+              ? <p className="tc-sp-ipucu">Planlama motoru plan verisi vermedi; şerit çizilmez.</p>
+              : <PlanSeridi plan={c.plan} termin={c.termin} gecerlilik={c.gecerlilik} />)}
           </section>
         )}
 
@@ -255,6 +261,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               <div className="tc-sp-genel"><dt>İskontolu net kâr</dt><dd>{tumMaliyet && net !== null && maliyet !== null ? tutarMetni(net - maliyet, pb) : '—'}</dd></div>
             </dl>
             {!tumMaliyet && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
+            <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} />
           </>
         ) : (
           <ol className="tc-sp-kalemler">

@@ -13,6 +13,9 @@ export const anahtarlar = {
   // Deneme sunucuda koşar; geçerlilik ve istenen terminle ayrı önbelleklenir.
   teklifDenemesi: (id: number, sorgu: object) => ['siparisler', 'teklif', 'deneme', id, sorgu] as const,
   planTaslaklari: (id: number) => ['siparisler', 'teklif', 'plan-taslaklari', id] as const,
+  adetDenemesi: (id: number, sorgu: object) => ['siparisler', 'teklif', 'adet', id, sorgu] as const,
+  // Bütün tekliflerin satış taslakları; sürüm verilince ve termin onaylanınca yenilenir.
+  atolyeTaslaklari: ['siparisler', 'teklif', 'atolye-taslaklari'] as const,
   // Projeler modülünün verisi; sipariş ayrıntısında yalnız okunur.
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
   // Plan modülünün elle çarpanı (195 a); sipariş ayrıntısında okunur ve yazılır.

@@ -582,6 +582,42 @@ export function satisKilitleri(db: Db): Promise<SatisKilidiSatiri[]> {
   );
 }
 
+export interface AtolyeTaslagiSatiri {
+  id: number;
+  teklif_id: number;
+  teklif_no: string;
+  firma_id: number;
+  para_birimi: string;
+  gorunum: 'satis' | 'onay-bekliyor' | 'satis-deneme';
+  kalemler: { tanim: string; adet: string }[];
+  termin: string | null;
+  gecerlilik: string | null;
+  kar_orani: string;
+  tutar: string | null;
+  olusturan_id: number;
+  olusturma: string;
+}
+
+// Atölyedeki satış taslakları: yer tutan ve onay bekleyenler, sonra son 30 günde süresi dolanlar. Yerine yenisi gelen (kalktı) gösterilmez.
+// Tutar sürümün iskonto sonrası toplamıdır (fiyat tablosu ve satır miktarı); fiyatı eksik satır varsa null.
+export function atolyeTaslaklari(db: Db): Promise<AtolyeTaslagiSatiri[]> {
+  return db.sorgu<AtolyeTaslagiSatiri>(
+    `SELECT t.id, t.teklif_id, k.no AS teklif_no, k.firma_id, k.para_birimi, ${GORUNUM} AS gorunum,
+            (SELECT coalesce(jsonb_agg(jsonb_build_object('tanim', e->'tanim', 'adet', e->'adet') ORDER BY (e->>'sira')::int), '[]'::jsonb)
+               FROM jsonb_array_elements(t.kalemler) e) AS kalemler,
+            t.termin, t.gecerlilik, t.kar_orani,
+            (SELECT CASE WHEN count(f.satir_id) = count(*) THEN round(sum(f.birim_fiyat * s.miktar) * (1 - v.iskonto_orani / 100), 2)::text END
+               FROM siparisler_teklif_satiri s LEFT JOIN siparisler_teklif_fiyati f ON f.satir_id = s.id AND f.surum_id = v.id
+              WHERE s.teklif_id = t.teklif_id) AS tutar,
+            t.olusturan_id, ${zamanMetni('t.olusturma')} AS olusturma
+       FROM siparisler_teklif_plan_taslagi t
+       JOIN siparisler_teklif k ON k.id = t.teklif_id
+       JOIN siparisler_teklif_surumu v ON v.id = t.surum_id
+      WHERE t.tur = 'satis' AND t.durum <> 'kalkti' AND t.gecerlilik >= current_date - 30
+      ORDER BY (t.durum IN ('aktif', 'onay-bekliyor') AND t.gecerlilik >= current_date) DESC, t.termin NULLS LAST, t.id`,
+  );
+}
+
 // Ana sayfa özeti tek okumada: gün tesis saatine göre (Europe/Istanbul), istemciden alınmaz.
 export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): Promise<{
   acikTeklif: number; yaklasanTermin: number; gecikenSiparis: number; aylik: { ay: string; sayi: number }[];

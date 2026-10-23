@@ -380,6 +380,27 @@ export const kayanSiparisSemasi = z.object({
   termin: tarihSemasi.nullable(),
   gecikir: z.boolean(),
 });
+// Plan denemesi şeridi (örnek sayfa): denemenin yerleşimi tezgâh başına; plandaki siparişler, yer tutan satış taslakları ve bu teklif.
+// Pencere plan anından termin ya da geçerliliğin iki gün sonrasına kadardır. Motor plan verisi vermezse null.
+export const PLAN_BLOGU_TURLERI = ['siparis', 'satis-taslagi', 'teklif'] as const;
+export const planBloguSemasi = z.object({
+  makineId: z.string(),
+  tur: z.enum(PLAN_BLOGU_TURLERI),
+  // Sipariş: emir no; satış taslağı: teklif no; bu teklif: kalem sırası ve adım.
+  etiket: z.string(),
+  kalem: z.number().int().nullable(),
+  adim: z.string(),
+  baslangic: zamanSemasi,
+  bitis: zamanSemasi,
+  gecikir: z.boolean(),
+});
+export const planSeridiSemasi = z.object({
+  baslangic: zamanSemasi,
+  bitis: zamanSemasi,
+  kapaliGunler: z.array(tarihSemasi),
+  hatlar: z.array(z.object({ makineId: z.string(), ad: z.string(), fason: z.boolean() })),
+  bloklar: z.array(planBloguSemasi),
+});
 export const terminDenemesiCevabi = z.object({
   durum: z.enum(['hazir', 'cozucu-yok']),
   planSurumu: z.string().nullable(),
@@ -397,7 +418,39 @@ export const terminDenemesiCevabi = z.object({
   maliyetToplami: tutar,
   genelGiderSaatBasi: tutar,
   kayanlar: z.array(kayanSiparisSemasi),
+  plan: planSeridiSemasi.nullable(),
 });
+
+// Adet değişirse (örnek sayfa): bütün kartlı kalemler aynı çarpanla, arkaya eklenerek ayrı ayrı denenir; fiyat istemcide seçili kârla.
+export const ADET_CARPANLARI = ['0.5', '1', '2', '4'] as const;
+export const adetDenemesiSorgusu = z.object({ gecerlilik: tarihSemasi.optional().transform((t) => t ?? null) });
+export const adetDenemesiSatiriSemasi = z.object({
+  carpan: z.enum(ADET_CARPANLARI),
+  kalemler: z.array(z.object({ satirId: z.number().int(), adet: ondalikMetinSemasi, birimMaliyet: tutar })),
+  termin: tarihSemasi.nullable(),
+  maliyetToplami: tutar,
+});
+export const adetDenemesiCevabi = z.object({ durum: z.enum(['hazir', 'cozucu-yok']), satirlar: z.array(adetDenemesiSatiriSemasi) });
+
+// Atölyedeki satış taslakları (örnek sayfa): yer tutan, plancı onayı bekleyen ve son 30 günde süresi dolan bütün satış taslakları.
+export const ATOLYE_TASLAGI_GORUNUMLERI = ['satis', 'onay-bekliyor', 'satis-deneme'] as const;
+export const atolyeTaslagiSemasi = z.object({
+  id: z.number().int(),
+  teklifId: z.number().int(),
+  teklifNo: z.string(),
+  firmaAd: z.string().nullable(),
+  paraBirimi: z.string(),
+  gorunum: z.enum(ATOLYE_TASLAGI_GORUNUMLERI),
+  kalemler: z.array(z.object({ tanim: z.string(), adet: ondalikMetinSemasi })),
+  termin: tarihSemasi.nullable(),
+  gecerlilik: tarihSemasi.nullable(),
+  // Fiyat görmeyene null: kâr ve sürümün iskonto sonrası tutarı.
+  karOrani: tutar,
+  tutar,
+  olusturan: z.string().nullable(),
+  olusturma: zamanSemasi,
+});
+export const atolyeTaslaklariCevabi = z.object({ taslaklar: z.array(atolyeTaslagiSemasi) });
 
 export const PLAN_TASLAGI_TURLERI = ['deneme', 'satis'] as const;
 // Görünüm okuma anında çıkar: geçerliliği geçen satış taslağı plandan kalkmış "satış denemesi"dir (49); yerine yenisi gelen "kalktı".
@@ -436,6 +489,15 @@ export type PlanTaslagiTuru = (typeof PLAN_TASLAGI_TURLERI)[number];
 export type PlanTaslagiGorunumu = (typeof PLAN_TASLAGI_GORUNUMLERI)[number];
 export type PlanTaslagi = z.output<typeof planTaslagiSemasi>;
 export type PlanTaslaklariCevabi = z.output<typeof planTaslaklariCevabi>;
+export type PlanBloguTuru = (typeof PLAN_BLOGU_TURLERI)[number];
+export type PlanBlogu = z.output<typeof planBloguSemasi>;
+export type PlanSeridi = z.output<typeof planSeridiSemasi>;
+export type AdetCarpani = (typeof ADET_CARPANLARI)[number];
+export type AdetDenemesiSuzgeci = z.output<typeof adetDenemesiSorgusu>;
+export type AdetDenemesiSatiri = z.output<typeof adetDenemesiSatiriSemasi>;
+export type AdetDenemesiCevabi = z.output<typeof adetDenemesiCevabi>;
+export type AtolyeTaslagi = z.output<typeof atolyeTaslagiSemasi>;
+export type AtolyeTaslaklariCevabi = z.output<typeof atolyeTaslaklariCevabi>;
 
 // Ana sayfa özeti (kullanıcı kararı 76 a, 22.10.2026): sayılar sunucuda, tesis gününe göre; fiyat taşımaz, okuyan herkese aynıdır.
 // Açık teklif sonuçlanmamış (reddedilmemiş, siparişe dönmemiş) tekliftir. Termin sipariş başlığının terminidir; yalnız onaylı

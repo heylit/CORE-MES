@@ -10,6 +10,20 @@ const DENEME = {
   durum: 'hazir', planSurumu: '1', gecerlilik: null, istenenTermin: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: null,
   yetisir: null, onayGerekli: false, satinalmaGerekli: true, maliyetToplami: '400.00', genelGiderSaatBasi: '10.00',
   kayanlar: [{ siparis: 'ORN-SS-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }],
+  plan: {
+    baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-20T00:00:00+03:00', kapaliGunler: ['2099-07-05', '2099-07-12'],
+    hatlar: [{ makineId: 'ORN-T1', ad: 'Örnek torna', fason: false }, { makineId: 'ORN-T2', ad: 'Örnek freze', fason: false }],
+    bloklar: [
+      { makineId: 'ORN-T1', tur: 'siparis', etiket: 'ORN-SS-1', kalem: null, adim: '10', baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-04T10:00:00+03:00', gecikir: true },
+      { makineId: 'ORN-T2', tur: 'satis-taslagi', etiket: 'TK-2099-001', kalem: 1, adim: '20', baslangic: '2099-07-03T08:00:00+03:00', bitis: '2099-07-06T08:00:00+03:00', gecikir: false },
+      { makineId: 'ORN-T1', tur: 'teklif', etiket: 'Bu teklif', kalem: 1, adim: '10', baslangic: '2099-07-08T08:00:00+03:00', bitis: '2099-07-10T16:00:00+03:00', gecikir: false },
+    ],
+  },
+};
+const ADET = {
+  durum: 'hazir',
+  satirlar: [['0.5', '20.000', '2099-07-12', '13.0000', '260.00'], ['1', '40.000', '2099-07-14', '10.0000', '400.00'], ['2', '80.000', '2099-07-18', '8.0000', '640.00'], ['4', '160.000', '2099-07-25', '7.0000', '1120.00']]
+    .map(([carpan, adet, termin, birim, toplam]) => ({ carpan, termin, maliyetToplami: toplam, kalemler: [{ satirId: 0, adet, birimMaliyet: birim }] })),
 };
 
 // Örnek veriden müşteri firması ve satılan kart seçilir; teklif API'den açılır (ekran kaydı yazmaz, yalnız çizer).
@@ -43,9 +57,16 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
       }],
     }),
   }));
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/adet-denemesi**`, (r) => r.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ ...ADET, satirlar: ADET.satirlar.map((s) => ({ ...s, kalemler: s.kalemler.map((k) => ({ ...k, satirId: t.satirId })) })) }),
+  }));
   await ac(`/siparisler/teklifler/${String(t.id)}`);
   const form = page.getByRole('form', { name: 'Sürüm formu' });
   await expect(form.getByText('14.07.2099').first()).toBeVisible();
+  await expect(form.getByRole('region', { name: 'Plan denemesi' })).toBeVisible();
+  await expect(form.getByRole('table', { name: 'Adet değişirse' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Atölyedeki satış taslakları' })).toBeVisible();
   await expect(form.getByRole('group', { name: 'Kâr oranı' })).toBeVisible();
   await expect(form.getByRole('table', { name: 'Maliyet dökümü' })).toBeVisible();
   await expect(form.getByLabel(new RegExp(`^${t.tanim} birim fiyat`))).toHaveValue('12,50');

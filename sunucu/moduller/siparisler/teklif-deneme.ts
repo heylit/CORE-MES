@@ -1,11 +1,15 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { DenemeTaslagiVerisi, PlanTaslagi, PlanTaslagiVerisi, TerminDenemesiCevabi, TerminDenemesiSuzgeci } from '#paylasilan/sozlesme/siparisler.ts';
+import { ADET_CARPANLARI } from '#paylasilan/sozlesme/siparisler.ts';
+import type {
+  AdetCarpani, AdetDenemesiCevabi, AtolyeTaslagi, AdetDenemesiSatiri, AdetDenemesiSuzgeci, DenemeTaslagiVerisi, PlanTaslagi, PlanTaslagiVerisi, TerminDenemesiCevabi, TerminDenemesiSuzgeci,
+} from '#paylasilan/sozlesme/siparisler.ts';
 import { genelGiderOrani } from '../finans/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { firmaAdlari } from '../musteri-tedarikci/disari.ts';
 import {
-  DENENECEK_KALEM_YOK, TEKLIF_YOK, TERMIN_CIKMADI, TERMIN_DENEMESI_YOK, denemeCevabi, kilitler, motorSonucu, motorTaslaklari, yenidenYerlesirMi,
+  DENENECEK_KALEM_YOK, TEKLIF_YOK, TERMIN_CIKMADI, TERMIN_DENEMESI_YOK, adetSatirlari, carpilmisAdet, denemeCevabi, kilitler, motorSonucu, motorTaslaklari, yenidenYerlesirMi,
 } from './kurallar.ts';
 import type { DenemeSonucu, MotorGirdisi, MotorSonucu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -19,15 +23,16 @@ export type TeklifDenemeCozucusu = (db: Db, kullanici: Kullanici, girdi: MotorGi
 let cozucu: TeklifDenemeCozucusu | null = null;
 export function teklifDenemeCozucusuKaydet(c: TeklifDenemeCozucusu | null): void { cozucu = c; }
 
-async function dene(db: Db, kullanici: Kullanici, teklifId: number, g: { gecerlilik: string | null; istenenTermin: string | null }, haric: number | null): Promise<{
-  cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | null;
-}> {
-  const satirlar = await sorgular.talepSatirlari(db, teklifId);
+async function dene(
+  db: Db, kullanici: Kullanici, teklifId: number, g: { gecerlilik: string | null; istenenTermin: string | null }, haric: number | null, carpan: AdetCarpani = '1',
+): Promise<{ cevap: TerminDenemesiCevabi; sonuc: DenemeSonucu | null }> {
+  const satirlar = (await sorgular.talepSatirlari(db, teklifId)).map((s) => ({ ...s, miktar: carpilmisAdet(s.miktar, carpan) }));
   // 64 a: teklifin bütün kartlı kalemleri tek denemede birlikte yerleşir.
   const kalemler = satirlar.flatMap((s) => (s.malzeme_no === null ? [] : [{ satirId: s.id, malzemeNo: s.malzeme_no, adet: Number(s.miktar) }]));
   const bugun = await sorgular.bugun(db);
   let sonuc: DenemeSonucu | null = null;
   if (kalemler.length > 0 && cozucu !== null) {
+    const yerTutanlar = await satisTaslagiKilitleri(db);
     const r = await cozucu(db, kullanici, {
       kalemler: kalemler.map((k) => ({ malzemeNo: k.malzemeNo, adet: k.adet })),
       // Geçerlilik henüz seçilmediyse deneme bugünün planına göredir.
@@ -36,9 +41,9 @@ async function dene(db: Db, kullanici: Kullanici, teklifId: number, g: { gecerli
       istenenTermin: g.istenenTermin,
       // Bu teklifin yer tutan satış taslağı denemede yok sayılır: yeniden denenen teklif kendi yerine takılmaz.
       taslakId: haric === null ? null : String(haric),
-      taslaklar: motorTaslaklari(await satisTaslagiKilitleri(db)),
+      taslaklar: motorTaslaklari(yerTutanlar),
     });
-    sonuc = r === null ? null : motorSonucu(kalemler.map((k) => k.satirId), r);
+    sonuc = r === null ? null : motorSonucu(kalemler.map((k) => k.satirId), r, new Map(yerTutanlar.map((t) => [String(t.taslakId), t.teklifNo])));
   }
   const oran = await genelGiderOrani(db, bugun);
   const cevap = denemeCevabi(
@@ -50,6 +55,22 @@ async function dene(db: Db, kullanici: Kullanici, teklifId: number, g: { gecerli
 
 async function teklifVar(db: Db, id: number): Promise<void> {
   if (!(await sorgular.teklifVarMi(db, id))) throw bulunamadi(TEKLIF_YOK);
+}
+
+// Adet değişirse (örnek sayfa): teklif yarım, aynı, iki ve dört kat adetle arkaya eklenerek ayrı ayrı denenir; motor her çarpanda bir kez koşar.
+export async function adetDenemesi(db: Db, kullanici: Kullanici, id: number, g: AdetDenemesiSuzgeci): Promise<AdetDenemesiCevabi> {
+  await teklifVar(db, id);
+  const yer = await sorgular.yerTutanTaslak(db, id);
+  const satirlar: AdetDenemesiSatiri[] = [];
+  for (const carpan of ADET_CARPANLARI) {
+    const { cevap } = await dene(db, kullanici, id, { gecerlilik: g.gecerlilik, istenenTermin: null }, yer?.id ?? null, carpan);
+    if (cevap.durum === 'cozucu-yok') return { durum: 'cozucu-yok', satirlar: [] };
+    satirlar.push({
+      carpan, termin: cevap.planTermini, maliyetToplami: cevap.maliyetToplami,
+      kalemler: cevap.kalemler.filter((k) => !k.plansiz).map((k) => ({ satirId: k.satirId, adet: k.adet, birimMaliyet: k.birimMaliyet })),
+    });
+  }
+  return { durum: 'hazir', satirlar: adetSatirlari(satirlar) };
 }
 
 export async function terminDenemesi(db: Db, kullanici: Kullanici, id: number, g: TerminDenemesiSuzgeci): Promise<TerminDenemesiCevabi> {
@@ -128,6 +149,17 @@ export async function planTaslaklari(db: Db, id: number): Promise<PlanTaslagi[]>
     kayanSayisi: t.kayan_sayisi, gecikenSayisi: t.geciken_sayisi, onayGerekli: t.onay_gerekli,
     onaylayan: t.onaylayan_id === null ? null : (adlar.get(t.onaylayan_id) ?? null), onayAni: t.onay_ani,
     olusturan: adlar.get(t.olusturan_id) ?? null, olusturma: t.olusturma,
+  }));
+}
+
+// Atölyedeki satış taslakları (örnek sayfa): bütün tekliflerin planda yer tutan ve yakın zamanda süresi dolan taslakları.
+export async function atolyeTaslaklari(db: Db): Promise<AtolyeTaslagi[]> {
+  const satirlar = await sorgular.atolyeTaslaklari(db);
+  const firmalar = await firmaAdlari(db, satirlar.map((t) => t.firma_id));
+  const adlar = await kisiAdlari(db, satirlar.map((t) => t.olusturan_id));
+  return satirlar.map((t) => ({
+    id: t.id, teklifId: t.teklif_id, teklifNo: t.teklif_no, firmaAd: firmalar.get(t.firma_id) ?? null, paraBirimi: t.para_birimi, gorunum: t.gorunum, kalemler: t.kalemler,
+    termin: t.termin, gecerlilik: t.gecerlilik, karOrani: t.kar_orani, tutar: t.tutar, olusturan: adlar.get(t.olusturan_id) ?? null, olusturma: t.olusturma,
   }));
 }
 

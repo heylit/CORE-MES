@@ -5,12 +5,13 @@ import type { PlanTaslaklariCevabi, SiparisDonusumCevabi, TeklifAyrintiCevabi } 
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
 import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { TerminFiyat } from './TerminFiyat.tsx';
-import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
+import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
 type Satir = TeklifAyrintiCevabi['satirlar'][number];
@@ -26,6 +27,7 @@ export function TeklifAyrinti() {
   const yazabilir = useYazabilir();
   const iskontoOnaylar = useIskontoOnaylar();
   const fiyatGorur = useFiyatGorur();
+  const terminDener = useTerminDener();
   const terminOnaylar = useTerminOnaylar();
   const donustur = useKorumaliGonderim();
   const [dialog, dialogYaz] = useState<Dialog | null>(null);
@@ -57,7 +59,7 @@ export function TeklifAyrinti() {
 
   const komut = useMutation({
     mutationFn: ({ yol, govde }: { yol: string; govde: object; basari: string }) => api.post<TeklifAyrintiCevabi>(`/siparisler/teklifler/${id}/${yol}`, govde),
-    onSuccess: (cevap, { basari }) => { yenile(cevap); void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(id) }); bildir('tamam', basari); kapat(); },
+    onSuccess: (cevap, { basari }) => { yenile(cevap); void istemci.invalidateQueries({ queryKey: anahtarlar.planTaslaklari(id) }); void istemci.invalidateQueries({ queryKey: anahtarlar.atolyeTaslaklari }); bildir('tamam', basari); kapat(); },
     onError: (h) => hatayiYaz(h, 'İşlem yapılamadı.'),
   });
   const siparise = useMutation({
@@ -234,6 +236,7 @@ export function TeklifAyrinti() {
           </Kart>
         </div>
       </div>
+      {(terminDener || terminOnaylar) && <AtolyeTaslaklari />}
 
       <OnayPenceresi
         acik={dialog === 'kabul' && son !== null}

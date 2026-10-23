@@ -11,7 +11,7 @@ import type { SiparisBandiCevabi, SiparisCarpaniCevabi } from '#paylasilan/sozle
 import type { Proje, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
-  MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
+  AdetDenemesiCevabi, AtolyeTaslaklariCevabi, MalzemeSecenekleriCevabi, PlanTaslaklariCevabi, Siparis, SiparisAyrintisi, SiparisListesiCevabi, SiparisDonusumCevabi, Teklif, TeklifAyrintiCevabi, TeklifAyrintisi,
   TeklifListesiCevabi, TerminDenemesiCevabi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -817,8 +817,33 @@ describe('Teklif termin ve fiyat (44)', () => {
       planTermini: '2099-07-14', malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'HM-DNM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
       birimMaliyet: '10.0000', toplamMaliyet: '400.00', dokum: null, eksikVeri: [],
     }],
-    maliyetToplami: '400.00', genelGiderSaatBasi: null, kayanlar: [],
+    maliyetToplami: '400.00', genelGiderSaatBasi: null, kayanlar: [], plan: null,
   } satisfies TerminDenemesiCevabi;
+  const SERITLI = {
+    ...DENEME,
+    plan: {
+      baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-20T00:00:00+03:00', kapaliGunler: ['2099-07-05'],
+      hatlar: [{ makineId: 'T1', ad: 'Deneme Torna', fason: false }, { makineId: 'F1', ad: 'Deneme Fasoncu', fason: true }],
+      bloklar: [
+        { makineId: 'T1', tur: 'siparis', etiket: 'S-DNM-1', kalem: null, adim: '10', baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-02T08:00:00+03:00', gecikir: true },
+        { makineId: 'T1', tur: 'satis-taslagi', etiket: 'TK-2099-007', kalem: 1, adim: '10', baslangic: '2099-07-03T08:00:00+03:00', bitis: '2099-07-04T08:00:00+03:00', gecikir: false },
+        { makineId: 'T1', tur: 'teklif', etiket: 'Bu teklif', kalem: 1, adim: '10', baslangic: '2099-07-08T08:00:00+03:00', bitis: '2099-07-10T16:00:00+03:00', gecikir: false },
+      ],
+    },
+  } satisfies TerminDenemesiCevabi;
+  const ADET = {
+    durum: 'hazir',
+    satirlar: (['0.5', '1', '2', '4'] as const).map((carpan, i) => ({
+      carpan, termin: ['2099-07-12', '2099-07-14', '2099-07-18', '2099-07-25'][i] ?? null, maliyetToplami: ['260.00', '400.00', '640.00', '1120.00'][i] ?? null,
+      kalemler: [{ satirId: 11, adet: ['20.000', '40.000', '80.000', '160.000'][i] ?? '0', birimMaliyet: ['13.0000', '10.0000', '8.0000', '7.0000'][i] ?? null }],
+    })),
+  } satisfies AdetDenemesiCevabi;
+  const ATOLYE = {
+    taslaklar: [{
+      id: 5, teklifId: 7, teklifNo: 'TK-2099-007', firmaAd: 'Deneme Firma B', paraBirimi: 'TRY', gorunum: 'satis', kalemler: [{ tanim: 'Deneme Flans', adet: '12.000' }],
+      termin: '2099-07-09', gecerlilik: '2099-06-30', karOrani: '20.00', tutar: '1500.00', olusturan: 'Deneme Satisci', olusturma: '2026-10-21T09:00:00+03:00',
+    }],
+  } satisfies AtolyeTaslaklariCevabi;
   const DOKUMLU = {
     ...DENEME, genelGiderSaatBasi: '10.00',
     kalemler: [{ ...DENEME.kalemler[0]!, dokum: [{ tur: 'malzeme', ad: 'Malzeme', tezgah: null, saat: null, tutar: '100.00' }, { tur: 'isleme', ad: '10', tezgah: 'T1', saat: '2.00', tutar: '300.00' }] }],
@@ -832,7 +857,48 @@ describe('Teklif termin ve fiyat (44)', () => {
     if (yontem === 'GET' && yol === '/siparisler/teklifler/21/plan-taslaklari') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, TEKLIF_VERILDI);
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/deneme-taslagi') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
+    if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/adet-denemesi')) return json(200, ADET);
+    if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, ATOLYE);
     return undefined;
+  });
+
+  it('plan denemesi şeridi: tezgâh başına sipariş, satış taslağı ve bu teklif çizilir; fason yalnız işi varsa; plan verisi yoksa not', async () => {
+    kur(SATISCI, () => SERITLI);
+    ac('/siparisler/teklifler/21');
+    const serit = await screen.findByRole('region', { name: 'Plan denemesi' });
+    expect(within(serit).getByRole('img', { name: 'Deneme Torna: S-DNM-1, TK-2099-007, Bu teklif' })).toBeTruthy();
+    expect(within(serit).queryByText('Deneme Fasoncu')).toBeNull();
+    expect(within(serit).getByText('Gecikiyor')).toBeTruthy();
+    cleanup();
+    kur(SATISCI);
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText('Planlama motoru plan verisi vermedi; şerit çizilmez.')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Plan denemesi' })).toBeNull();
+  });
+
+  it('adet değişirse: yarım, aynı, iki, dört kat; birim fiyat maliyet artı seçili kâr; kâr değişince tablo da değişir', async () => {
+    const istekler = kur(SATISCI);
+    ac('/siparisler/teklifler/21');
+    const tablo = await screen.findByRole('table', { name: 'Adet değişirse' });
+    expect(within(tablo).getByText('160')).toBeTruthy();
+    expect(within(tablo).getByText('25.07.2099')).toBeTruthy();
+    // %25 kâr: 13 TL birim maliyet 16,25 TL; 400 TL maliyet 500 TL toplam.
+    expect(within(tablo).getByText('16,25 TRY')).toBeTruthy();
+    expect(within(tablo).getByText('500,00 TRY')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '%40' }));
+    await waitFor(() => expect(within(tablo).getByText('560,00 TRY')).toBeTruthy());
+    expect(istekler.filter((i) => i.yol.startsWith('/siparisler/teklifler/21/adet-denemesi'))).toHaveLength(1);
+    expect(yazmalar(istekler)).toHaveLength(0);
+  });
+
+  it('atölyedeki satış taslakları: bütün tekliflerin taslakları teklif, firma, termin ve tutarla; satırdan teklife gidilir', async () => {
+    kur(SATISCI);
+    ac('/siparisler/teklifler/21');
+    const tablo = await screen.findByRole('table', { name: 'Atölyedeki satış taslakları' });
+    expect(within(tablo).getByText('TK-2099-007')).toBeTruthy();
+    expect(within(tablo).getByText('Deneme Firma B')).toBeTruthy();
+    expect(within(tablo).getByText('Deneme Flans × 12')).toBeTruthy();
+    expect(within(tablo).getByText('1.500,00 TRY')).toBeTruthy();
   });
 
   it('arkaya ekleme: termin plandan ve geçerlilikten gün olarak yazılır; fiyat maliyet artı kârla önerilir; sürüm plan taslağıyla gider', async () => {
@@ -910,6 +976,7 @@ describe('Teklif termin ve fiyat (44)', () => {
       if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, bekleyen);
       if (yontem === 'GET' && yol === '/siparisler/teklifler/21/plan-taslaklari') return json(200, { taslaklar: [TASLAK] } satisfies PlanTaslaklariCevabi);
       if (yontem === 'POST' && yol === '/siparisler/teklifler/21/termin-onayla') return json(200, TEKLIF_VERILDI);
+      if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, { taslaklar: [] } satisfies AtolyeTaslaklariCevabi);
       return undefined;
     });
     ac('/siparisler/teklifler/21');
