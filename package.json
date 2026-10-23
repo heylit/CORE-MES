@@ -40,7 +40,7 @@
     "test:istemci": "vitest run --config istemci/vite.config.ts",
     "test:modul": "node araclar/test-modul.ts",
     "test": "npm run test:sunucu && npm run test:istemci",
-    "lint:ts": "node --max-old-space-size=8192 node_modules/eslint/bin/eslint.js .",
+    "lint:ts": "node araclar/lint-parcala.ts",
     "lint:css": "stylelint \"istemci/**/*.css\"",
     "lint": "npm run lint:ts && npm run lint:css",
     "kontrol": "npm run tip && npm run sinir && npm run lint && npm run test",
