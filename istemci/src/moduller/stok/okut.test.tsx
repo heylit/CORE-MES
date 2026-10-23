@@ -135,7 +135,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     await okut(pencere, 'MLZ:901');
     await within(pencere).findByText(/Torna 1 \(T1\) · İstasyon/);
     expect(await okutVeBekle(pencere, 'KSI-7', /Deneme Alıcı · Torna 2 \(T2\)/)).toBeTruthy();
-    expect(within(pencere).getByText('Alıcı: Deneme Alıcı; teslimi yalnız o alır.')).toBeTruthy();
+    expect(within(pencere).getByText('Alıcı: Deneme Alıcı; istasyonundaki herkes de alabilir.')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Teslim et' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ kaynak: { istasyonId: 1 }, hedef: { istasyonId: 2 }, aliciKodu: 'KSI-7' }));
     expect(await within(pencere).findByText('TS-000002 yolda; Deneme Alıcı teslim alınca kapanır.')).toBeTruthy();
@@ -145,12 +145,12 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     ciz(OPERATOR);
     const pencere = await pencereAc();
     await okut(pencere, 'KSI-7');
-    expect(await within(pencere).findByText('Alıcı: Deneme Alıcı; teslimi yalnız o alır.')).toBeTruthy();
+    expect(await within(pencere).findByText('Alıcı: Deneme Alıcı; istasyonundaki herkes de alabilir.')).toBeTruthy();
     expect(within(pencere).getByRole('tab', { name: 'Teslim et' }).getAttribute('aria-selected')).toBe('true');
     expect((within(pencere).getByLabelText(/Nereye/) as HTMLSelectElement).value).toBe('i:2');
     await okut(pencere, 'KSI-8');
     expect(await within(pencere).findByText(/Uzak Alıcı buradan teslim edilebilecek bir istasyonda değil/)).toBeTruthy();
-    expect(within(pencere).queryByText(/teslimi yalnız o alır/)).toBeNull();
+    expect(within(pencere).queryByText(/istasyonundaki herkes de alabilir/)).toBeNull();
     expect((within(pencere).getByRole('button', { name: 'Teslim et' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

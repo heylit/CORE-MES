@@ -324,7 +324,8 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     expect(within(within(panel).getByRole('list', { name: 'Freze 2 sepeti' })).getAllByRole('listitem').map((l) => l.textContent)).toEqual([expect.stringMatching(/Eldiven/)]);
     fireEvent.click(within(panel).getByRole('button', { name: 'Teslim alınan' }));
     expect(within(within(panel).getByRole('list', { name: 'Freze 2 sepeti' })).getAllByRole('listitem').map((l) => l.textContent)).toEqual([expect.stringMatching(/Deneme cubuk/)]);
-    expect(within(panel).queryByRole('button', { name: 'Depo sepeti' })).toBeNull();
+    // Herkese sepet (Soru 133): operatör de kendi sepetini görür; açılmadan okunmaz.
+    expect(within(panel).getByRole('button', { name: 'Sepetim' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/stok/sepet')).toBe(false);
   });
 
@@ -337,8 +338,8 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     const panel = await screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
     expect(await screen.findByText('Sayfa')).toBeTruthy();
     expect(within(panel).getByRole('tab', { name: 'Sepet' }).getAttribute('aria-selected')).toBe('true');
-    expect(within(panel).getByRole('button', { name: 'Depo sepeti' }).getAttribute('aria-pressed')).toBe('true');
-    const satir = within(await within(panel).findByRole('list', { name: 'Depo sepeti' })).getAllByRole('listitem')[0]!;
+    expect(within(panel).getByRole('button', { name: 'Sepetim' }).getAttribute('aria-pressed')).toBe('true');
+    const satir = within(await within(panel).findByRole('list', { name: 'Sepetim' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/A-01-02 · TP-1/)).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Hepsini taşı' })).toHaveProperty('disabled', true);
     fireEvent.click(within(satir).getByRole('button', { name: 'Kaldır' }));

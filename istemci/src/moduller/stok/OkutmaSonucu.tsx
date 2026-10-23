@@ -7,6 +7,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.ts';
 import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
 import { RefakatAcPenceresi, RefakatKartPenceresi, refakatLotSatiri, refakatMalzemeSatiri } from './RefakatKarti.tsx';
+import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 
@@ -132,6 +133,7 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           <Dugme simge="x" aria-label="Okutma sonucunu kapat" onClick={kapat} />
         </div>
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
+        {refakat && malzeme?.kartSatirlari && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
         {stok.isError && <DurumKutusu durum="hata" mesaj={hataMetni(stok.error)} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
@@ -145,6 +147,7 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           </ul>
         )}
         <div className="tc-stok-eylem">
+          {refakat && <IsEmriniAc r={refakat} />}
           {malzeme && giris && <Dugme tur="birincil" simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}
           {(digerleri.length > 0 || uzakIstasyon) && <Dugme simge="scan" onClick={() => sec('okutarak-al')}>Okutarak al</Dugme>}

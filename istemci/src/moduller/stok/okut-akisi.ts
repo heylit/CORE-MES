@@ -90,8 +90,10 @@ export function tasimaGovdesi(kaynak: OkutKaynagi, hedef: OkutYeri, miktar: stri
   return { malzemeId: kaynak.malzemeId, kaynakKonumId: kaynak.yer.konumId, partiId: kaynak.partiId, hedefKonumId: hedef.konumId, miktar, aciklama: 'QR okut' };
 }
 // Kaynak kimliği okutma başına bir kez üretilir: bağlantı kopup yeniden gönderilen kayıt ikinci teslim açmaz (karar 95 a).
-export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: string, kaynakKimligi: string): TeslimGonderGovdesi {
+// birak: taşıyan varışta bıraktı (Soru 133); teslim anında kapanır, hedef taraf süre içinde itiraz eder.
+export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: string, kaynakKimligi: string, birak = false): TeslimGonderGovdesi {
   const ortak = {
+    ...(birak ? { birak: true } : {}),
     malzemeId: kaynak.malzemeId, miktar, partiId: kaynak.partiId, statuId: kaynak.statuId, kaynak: teslimYeri(kaynak.yer), not: 'QR okut', kaynakKimligi,
     ...(kaynak.refakatPartisiId === undefined ? {} : { refakatPartisiId: kaynak.refakatPartisiId }),
   };
