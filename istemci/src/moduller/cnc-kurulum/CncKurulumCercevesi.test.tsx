@@ -26,7 +26,7 @@ function sunucuKur(
     istekler.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/cnc-kurulum/ben') return json(200, {
-      kisi: { id: kullanici.id, ad: kullanici.ad }, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, ...yetki,
+      kisi: { id: kullanici.id, ad: kullanici.ad }, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, emirGorebilir: true, ...yetki,
     } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/cnc-kurulum/kayitlar') return json(200, { kayitlar } satisfies KayitlarCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -93,6 +93,18 @@ describe('CncKurulumCercevesi', () => {
     ac('/cnc-kurulum');
     const yazar = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
     expect(yazar.getAttribute('srcdoc') ?? '').toContain('"stokKartiBaglayabilir":false,"stokDusebilir":false');
+  }, 60000);
+
+  it('emir listesi yetkisi çerçeveye geçer; yoksa kapalıdır (182 a)', async () => {
+    sunucuKur(YAZAR, [], { yazabilir: false, hazirlikOnaylayabilir: true, emirGorebilir: false });
+    ac('/cnc-kurulum');
+    const operator = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
+    expect(operator.getAttribute('srcdoc') ?? '').toContain('"emirGorebilir":false');
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('/cnc-kurulum');
+    const yazar = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
+    expect(yazar.getAttribute('srcdoc') ?? '').toContain('"emirGorebilir":true');
   }, 60000);
 
   it('Çizimlere yazabilen kişide de çerçevede aktarım düğmesi yoktur: makine eşleştirme Çizim Merkezi\'ndedir', async () => {
