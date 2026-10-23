@@ -33,6 +33,9 @@
   Sunucu kapalı NCR'yi ve Kabul/Ret sonuçlu muayeneyi kilitler; uygulamanın "kalite mühendisi kilidi açar" yolu artık sunucuda 409 alır; ekran kapanmış NCR ve sonuçlanmış muayenede kilit açmayı göstermez, düzeltmenin yeni kayıtla yapılacağını söyler (`acilis.ts` `KILIT_BETIGI`).
   KAPANDI (bağlama B16, 23.10.2026): kapanmış DÖF ve kararı verilmiş lot kabul kaydı da sunucuda aynı kilittedir (`kurallar.ts` `kapanmisKayitMi`; ekranın `KILIT_BETIGI` karşılığı ikinci yamada); form onayı sunucuda ayrıca kilitli.
   Kalan: DÖF kapanış koşulları (8D adımı 8, etkinlik "Etkin", kök neden dolu) yalnız ekrandadır; sunucuya alınması ayrı madde.
+- DÖF tek sahip (155 a, bağlama T4, 23.10.2026): denetim hazırlığının açtığı DÖF burada `capa` kaydıdır; numarası Sistem Ayarları'ndaki
+  `kalite-merkezi.dof-no` kalıbından. Uygulamanın kendi DÖF formu numarayı hâlâ tarayıcıda (`nextNo`) verir: sunucu dolu numarayı atladığı için
+  çakışmaz, ama iki numara kaynağı vardır; formun da sunucudan numara alması bağlamada ayrı iş. Bulguda termin ve sorumlu yoktur, boş metin yazılır.
 - Ortak kavramlar uygulamanın kendi kopyasında (ORTAKLIK): ölçüm cihazı (kalibrasyon), tedarikçi (finans firma), parça (malzemeler),
   iş emri (uretim-emirleri), kullanıcı (kisiler), belge (dosya), resim (cizim, #80), kalite ölçümü (#78, Arkon kalite ekranı).
 - Ana menü ve ikinci menü: uygulamanın geniş ekrandaki sol menüsü gizli, ikinci menü kabukta. Kapandı (kullanıcı kararı 17.10.2026):

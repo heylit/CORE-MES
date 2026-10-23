@@ -10,6 +10,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { malzemeAdlari, malzemeOzeti } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -47,7 +48,7 @@ describe('Malzemeler denetim özeti ve dışa verilen özet (gerçek PostgreSQL,
     return { id, cerez: String(c.headers['set-cookie']).split(';')[0] ?? '' };
   }
   const gonder = async (o: Oturum, url: string, govde?: unknown): Promise<LightMyRequestResponse> =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }) });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }) });
   const denetim = (yol: string, anahtar: string, deger: string): Promise<DenetimSatiri[]> => vt().sorgu<DenetimSatiri>(
     `SELECT kisi_id, yontem, yol, parametre, govde, govde::text AS metin FROM denetim_kaydi WHERE yol = $1 AND parametre ->> $2 = $3 ORDER BY id`,
     [yol, anahtar, deger]);

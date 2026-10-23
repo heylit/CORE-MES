@@ -11,6 +11,7 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { malzemeOperasyonlari, operasyonluAktifKartlar } from './disari.ts';
 import { kartOperasyonlari } from './kurallar.ts';
+import { tamGovde } from './test-kart.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -51,10 +52,10 @@ describe('malzemeOperasyonlari (kart #688, gerçek PostgreSQL)', () => {
     const kaydet = async (kimlik: string, ops?: unknown[]): Promise<number> => {
       const c = await app.inject({
         method: 'POST', url: `/api/malzeme-katalogu-kartlari/${kimlik}/kaydet`, headers: { cookie: cerez },
-        payload: {
+        payload: tamGovde('/malzeme-katalogu-kartlari/x/kaydet', {
           kayit: { id: kimlik, tur: 'yarimamul', com: { kod: 'YM-TAL-00000', birim: 'adet' }, onay: { durum: 'taslak' }, ...(ops ? { ops } : {}) },
           ozet: { benzersiz_anahtar: `yarimamul|ops|${kimlik}`, mukerrer_gerekcesi: null }, surum: null,
-        },
+        }) as object,
       });
       assert.equal(c.statusCode, 200, c.body);
       const kod = (c.json() as KatalogKartiKaydetCevabi).stok_kodu;
@@ -72,10 +73,10 @@ describe('malzemeOperasyonlari (kart #688, gerçek PostgreSQL)', () => {
     const kaydet = async (kimlik: string, tur: 'yarimamul' | 'mamul' | 'hammadde', ops: unknown[]): Promise<number> => {
       const c = await app.inject({
         method: 'POST', url: `/api/malzeme-katalogu-kartlari/${kimlik}/kaydet`, headers: { cookie: cerez },
-        payload: {
+        payload: tamGovde('/malzeme-katalogu-kartlari/x/kaydet', {
           kayit: { id: kimlik, tur, com: { kod: { yarimamul: 'YM-TAL-00000', mamul: 'MM-MAY-00000', hammadde: 'HM-PAS-00000' }[tur], birim: 'adet' }, onay: { durum: 'taslak' }, ops },
           ozet: { benzersiz_anahtar: `${tur}|aktif|${kimlik}`, mukerrer_gerekcesi: null }, surum: null,
-        },
+        }) as object,
       });
       assert.equal(c.statusCode, 200, c.body);
       return (await vt.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))!.no;

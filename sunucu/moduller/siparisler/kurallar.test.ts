@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
-  duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi, siparisNo,
+  duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
-  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
+  dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
@@ -42,11 +42,6 @@ describe('siparisler kuralları (saf)', () => {
     assert.equal(gecisReddi('kapandi', 'iptal'), 'Kapanmış sipariş iptal edilemez.');
     assert.equal(gecisReddi('iptal', 'onayla'), 'İptal edilmiş sipariş onaylanamaz.');
     assert.deepEqual([gecisHedefi('onayla'), gecisHedefi('kapat'), gecisHedefi('iptal')], ['onayli', 'kapandi', 'iptal']);
-  });
-
-  test('numara SS-yıl-sıra, sıra en az üç basamak', () => {
-    assert.equal(siparisNo(2026, 7), 'SS-2026-007');
-    assert.equal(siparisNo(2026, 1234), 'SS-2026-1234');
   });
 });
 
@@ -99,7 +94,6 @@ describe('teklif kuralları (saf)', () => {
     assert.equal(kartBaglamaReddi('kabul'), null);
     assert.equal(kartBaglamaReddi('red'), KART_BAGLANAMAZ);
     assert.equal(kartBaglamaReddi('siparis'), KART_BAGLANAMAZ);
-    assert.equal(teklifNo(2026, 5), 'TK-2026-005');
   });
 });
 

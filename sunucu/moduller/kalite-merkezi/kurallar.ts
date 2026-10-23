@@ -1,4 +1,5 @@
 import { DOSYA_TURLERI } from '#paylasilan/sozlesme/dosya.ts';
+import { createHash } from 'node:crypto';
 import type { KaliteMerkeziKoleksiyonu, KmOnayReddiAlani } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 
@@ -33,6 +34,9 @@ export const ILETILER = {
   serbestMiktarSifir: 'Serbest bırakılan miktar sıfırdan büyük olmalı.',
   serbestMiktarAsim: 'Serbest bırakılan miktar partinin kullanılabilir red miktarını aşıyor.',
   karantinadaAcikNcr: 'Parti karantinada kaldı: başka açık NCR tutuyor.',
+  dofKaynagi: 'DÖF kaynağı ya da kaynak anahtarı geçersiz.',
+  dofBasligi: 'DÖF başlığı boş olamaz.',
+  dofSeviyesi: 'DÖF açılan bulgunun seviyesi majör ya da minör olmalı.',
 } as const;
 
 // Uygulamanın rolleri ve ayarları bu kayıtlardadır; giriş TMI oturumu olduğu için onları yalnız yönetici değiştirir.
@@ -167,7 +171,7 @@ export function onayliFormReddi(koleksiyon: string, onceki: Record<string, unkno
 // B16: uygulamanın ekranda kilitlediği kapanmış DÖF ve kararı verilmiş lot kabul kaydı da aynı kilittedir (uygulamanın `isLocked`
 // kuralı). Lot kararı formun hesabıdır; "yeniden başlat" (`tip: reset`) kaydı muayene değildir, kilitlenmez.
 const SONUCLU_MUAYENE: readonly string[] = ['Kabul', 'Ret'];
-const DOF_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'capa';
+export const DOF_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'capa';
 const LOT_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'lot';
 export function kapanmisKayitMi(koleksiyon: string, govde: Record<string, unknown> | null): boolean {
   const alan = (a: string): string => (typeof govde?.[a] === 'string' ? (govde[a] as string).trim() : '');
@@ -406,4 +410,45 @@ export function ilkParcaBekleyenleri(emirler: readonly BekleyenEmir[], sayaclar:
       return kararBekleyenAdet > 0 ? [{ uretimEmriId: e.id, emirNo: e.emirNo, parcaNo: e.parcaNo, parcaAd: e.parcaAd, adet: e.adet, kararBekleyenAdet }] : [];
     })
     .sort((a, b) => a.uretimEmriId - b.uretimEmriId);
+}
+
+// T4 (155 a): DÖF'ün tek sahibi Kalite Merkezi'dir. Başka modül (denetim hazırlığı) bulgusundan DÖF'ü buradan açar ve durumunu
+// buradan okur; kendi DÖF'ünü tutmaz. Açılan kayıt uygulamanın DÖF formundaki biçimdedir ve kaynağıyla kaynak anahtarını taşır;
+// aynı anahtar ikinci DÖF açmaz. Bulgunun maddesi başlığın önüne yazılır (uygulamanın DÖF listesi başlığı gösterir); seviye ve
+// açıklama kaynak alanlarında durur. Bulguda termin ve sorumlu yoktur: boş metin yazılır, uygulama DÖF'ü düzenlerken ister.
+export const DOF_KAYNAKLARI = ['denetim-hazirlik'] as const;
+export type DofKaynagi = (typeof DOF_KAYNAKLARI)[number];
+export const DOF_SEVIYELERI = ['major', 'minor'] as const;
+export interface DofAcIstegi {
+  kaynak: DofKaynagi; kaynakAnahtari: string; baslik: string; madde: string | null; seviye: (typeof DOF_SEVIYELERI)[number];
+  aciklama: string | null;
+}
+export const DOF_ANAHTAR_SINIRI = 200;
+
+export function dofIstegiReddi(i: DofAcIstegi): 'dofKaynagi' | 'dofBasligi' | 'dofSeviyesi' | null {
+  if (!(DOF_KAYNAKLARI as readonly string[]).includes(i.kaynak)) return 'dofKaynagi';
+  if (typeof i.kaynakAnahtari !== 'string' || i.kaynakAnahtari === '' || i.kaynakAnahtari.length > DOF_ANAHTAR_SINIRI) return 'dofKaynagi';
+  if (metin(i.baslik) === '') return 'dofBasligi';
+  return (DOF_SEVIYELERI as readonly string[]).includes(i.seviye) ? null : 'dofSeviyesi';
+}
+
+// Kimlik kaynak ve anahtarın özetinden türer: aynı anahtar aynı kimliğe düşer, eşzamanlı iki açış ikinci kaydı açamaz. Anahtar
+// serbest metindir (bulgunun maddesi ve metni); kimlik biçimine sığmadığı için özeti alınır.
+export const dofKimligi = (kaynak: string, kaynakAnahtari: string): string =>
+  `capa-${createHash('sha256').update(`${kaynak}\n${kaynakAnahtari}`).digest('hex').slice(0, 40)}`;
+
+export function dofGovdesi(i: DofAcIstegi, no: string, gun: string): Record<string, unknown> {
+  const madde = metin(i.madde);
+  return {
+    no, acilis: gun, termin: '', baslik: madde === '' ? metin(i.baslik) : `${madde} ${metin(i.baslik)}`, sorumlu: '', tur: 'Düzeltici', adim: 0,
+    durum: 'Açık', etkinlik: 'Doğrulanmadı', kaynak: i.kaynak, kaynakAnahtari: i.kaynakAnahtari, kaynakMadde: madde, kaynakSeviye: i.seviye,
+    kaynakAciklama: metin(i.aciklama),
+  };
+}
+
+export interface DofDurumu { kimlik: string; no: string; durum: 'Açık' | 'Kapalı'; kapanis: string | null }
+export function dofDurumu(kimlik: string, govde: Record<string, unknown>): DofDurumu {
+  const kapali = kapanmisKayitMi(DOF_KOLEKSIYONU, govde);
+  const kapanis = metin(govde.kapanis);
+  return { kimlik, no: metin(govde.no) || kimlik, durum: kapali ? 'Kapalı' : 'Açık', kapanis: kapali && kapanis !== '' ? kapanis : null };
 }

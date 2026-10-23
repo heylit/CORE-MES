@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { katalogKodOneki, katalogOnekiTureUyarMi, katalogStokKodu, katalogStokKoduSigarMi } from './kurallar.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -86,7 +87,7 @@ describe('Malzemeler stok kodu kuralları (gerçek PostgreSQL, gerçek giriş)',
     return { id, cerez: String(c.headers['set-cookie']).split(';')[0] ?? '' };
   }
   const gonder = async (o: Oturum, url: string, govde: unknown): Promise<LightMyRequestResponse> =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, payload: (await surumlu(vt(), url, govde)) as object });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
   const durumu = (c: LightMyRequestResponse): { durum: number; kod?: string } =>
     ({ durum: c.statusCode, ...(c.statusCode === 200 ? {} : { kod: c.json().kod as string }) });
 
@@ -297,10 +298,13 @@ describe('Malzemeler stok kodu kuralları (gerçek PostgreSQL, gerçek giriş)',
     assert.equal(r.stok_kodu, 'SF-RDD-00001');
   });
 
-  test('Kural 4: benzersiz anahtar zorunluluğu yeni türe göre denetlenir (iki yönde)', async () => {
+  test('Kural 4, B11: tür değişince yeni türün kuralları yeni kart gibi denetlenir (iki yönde)', async () => {
     const m = yeniKart('mamul', 'MM-ANH-00001');
     await kaydet(yazar, m, 'taslak', { anahtar: null });
-    assert.deepEqual(durumu(await gonder(yazar, yol(m), govde(m, 'taslak', { ozetTuru: 'hammadde', kod: 'HM-ANH-00001', anahtar: null }))), { durum: 400, kod: 'DOGRULAMA' });
+    // Mamulden hammaddeye: kalitesiz ve ölçüsüz gövde 400. Gövde tamamlanmadan, doğrudan gönderilir.
+    const eksik = govde(m, 'taslak', { ozetTuru: 'hammadde', kod: 'HM-ANH-00001', anahtar: null });
+    const c = await app.inject({ method: 'POST', url: `/api${yol(m)}`, headers: { cookie: yazar.cerez }, payload: eksik });
+    assert.deepEqual(durumu(c), { durum: 400, kod: 'DOGRULAMA' });
     assert.equal((await satir(m))?.tur, 'mamul');
     const h = yeniKart('hammadde', 'HM-ANI-00001');
     await kaydet(yazar, h, 'taslak');
