@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { EvSahipleriCevabi, HabersizGovdesi, KapiCevabi, KimlikTuru, Neden, OnerilerCevabi, Ziyaret } from '#paylasilan/sozlesme/nizamiye.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EvetHayir } from './EvetHayir.tsx';
 import { useKomut } from './komut.ts';
@@ -34,8 +35,11 @@ export function Habersiz() {
   const [kartSira, kartSiraYaz] = useState(0);
   const [bitti, bittiYaz] = useState<Ziyaret | null>(null);
 
-  const kapi = useQuery({ queryKey: anahtarlar.kapi, queryFn: () => api.get<KapiCevabi>('/nizamiye/kapi') });
-  const evler = useQuery({ queryKey: anahtarlar.evSahipleri, queryFn: () => api.get<EvSahipleriCevabi>('/nizamiye/ev-sahipleri') });
+  // Habersiz giriş yazmadır (195 a): adresle açan okuyucu formu ve ev sahibi listesini istemez; sunucu da reddeder.
+  const oturum = useOturum();
+  const yazabilir = oturum.data?.islemler.includes('nizamiye.yaz') === true;
+  const kapi = useQuery({ queryKey: anahtarlar.kapi, queryFn: () => api.get<KapiCevabi>('/nizamiye/kapi'), enabled: yazabilir });
+  const evler = useQuery({ queryKey: anahtarlar.evSahipleri, queryFn: () => api.get<EvSahipleriCevabi>('/nizamiye/ev-sahipleri'), enabled: yazabilir });
   const aranan = ad.trim();
   const oneri = useQuery({
     queryKey: anahtarlar.oneriler(aranan),
@@ -54,6 +58,14 @@ export function Habersiz() {
           <Link to="/nizamiye" className="tc-dugme tc-dugme-birincil tc-dugme-ana"><Simge ad="building" />Kapıya dön</Link>
         </div>
       </Kart>
+    );
+  }
+  if (oturum.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (!yazabilir) {
+    return (
+      <DurumKutusu durum="bos" mesaj="Habersiz ziyaretçi girişi için yetkiniz yok.">
+        <Link to="/nizamiye" className="tc-dugme tc-dugme-ikincil tc-dugme-normal"><Simge ad="chev-left" />Kapıya dön</Link>
+      </DurumKutusu>
     );
   }
   if (kapi.isPending || evler.isPending) return <DurumKutusu durum="yukleniyor" />;
