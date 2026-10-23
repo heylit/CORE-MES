@@ -128,7 +128,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
          ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.emre-kopyala'),
          ('mudur', 'rota.onayla'),
          ('planlama_proje', 'plan.yaz'), ('planlama_proje', 'plan.kilitle'), ('planlama_proje', 'plan.studyo'), ('planlama_proje', 'plan.canliya-al'),
-         ('mudur', 'plan.canliya-al')) AS m (kod, islem)
+         ('mudur', 'plan.studyo'), ('mudur', 'plan.canliya-al')) AS m (kod, islem)
        ON CONFLICT DO NOTHING`,
     ));
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kart Onaycısı', kullaniciAdi: 'kartonay', parola: PAROLA }));
@@ -198,9 +198,19 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     if (canliyaAl && yaz.statusCode === 200) await canliyaYaz(yaz.json<KuyrukYazCevabi>().taslak, cerez);
     return yaz;
   }
+  // Canlıya yalnız onaydaki taslak alınır (H1): önce onaya gönderilir; dört göz kapalıyken gönderen kendisi onaylar.
   async function canliyaYaz(taslak: number, cerez = c.planlama) {
-    const { surum } = (await tamam<PlanCevabi>(cerez, 'GET', `/plan?taslak=${String(taslak)}`)).taslak!;
-    await tamam(cerez, 'POST', `/plan/senaryolar/${String(taslak)}/canliya-al`, { surum, cakismalariKabul: false });
+    const surum = async () => (await tamam<PlanCevabi>(cerez, 'GET', `/plan?taslak=${String(taslak)}`)).taslak!.surum;
+    await tamam(cerez, 'POST', `/plan/senaryolar/${String(taslak)}/onaya-gonder`, { surum: await surum() });
+    await tamam(cerez, 'POST', `/plan/senaryolar/${String(taslak)}/canliya-al`, { surum: await surum(), cakismalariKabul: false });
+  }
+  // Ekranın onay düğmeleri: önce onaya gönder, sonra canlıya al; ikisi de tekrar korumalı.
+  async function onaylaCanliyaAl(komutlar: ReturnType<typeof planSenaryoKomutlari>, taslak: number) {
+    for (const ad of ['plan-senaryo-onaya-gonder', 'plan-senaryo-canliya-al']) {
+      const r = await komutlar[ad]!.hazirla({ taslak });
+      assert.equal(r.tekrarKorumali, true);
+      await tamam(c.planlama, 'POST', r.yol, r.govde);
+    }
   }
 
   const GUN_MS = 86_400_000;
@@ -274,7 +284,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual([k.taslak, k.canli, k.yazilan], [a.taslak.id, false, 2]);
     assert.deepEqual(await ozetKuyrugu(anahtar), [], 'canlıya alınmadan canlı değişmez');
     const komutlar = planSenaryoKomutlari((yol) => tamam(c.planlama, 'GET', yol));
-    await gonder(await komutlar['plan-canliya-al']!.hazirla({ taslak: k.taslak }));
+    await onaylaCanliyaAl(komutlar, k.taslak);
     assert.deepEqual(await ozetKuyrugu(anahtar), anahtar);
     assert.equal((await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).ayar.tamponGun, ayar.tamponGun, 'canlı ayar taslaktan gelir');
   });
@@ -297,21 +307,21 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const d = await gonder<PlanCevabi>(await komutlar['plan-dondur']!.hazirla({ taslak: k.taslak }));
     assert.equal(d.taslak?.id, k.taslak, 'ekranın az önce yazdığı taslağa');
     assert.equal((await canlidaDonmus()).some(([, donmus]) => donmus), false, 'canlıya alınmadan canlı değişmez');
-    await gonder(await komutlar['plan-canliya-al']!.hazirla({ taslak: d.taslak!.id }));
+    await onaylaCanliyaAl(komutlar, d.taslak!.id);
     assert.deepEqual(await canlidaDonmus(), idler.map((id) => [id, true]));
 
     // Tek işin dondurması: taslak verilmezse plan modülü yeni taslak açar; iş emri canlı plandan anahtarıyla bulunur.
     const tek = await gonder<PlanCevabi>(await komutlar['plan-is-dondurmayi-kaldir']!.hazirla({ anahtar: anahtar[0] }));
     assert.ok(tek.taslakAcildi);
-    await gonder(await komutlar['plan-canliya-al']!.hazirla({ taslak: tek.taslak!.id }));
+    await onaylaCanliyaAl(komutlar, tek.taslak!.id);
     assert.deepEqual(await canlidaDonmus(), [[idler[0], false], [idler[1], true]]);
     await assert.rejects(komutlar['plan-is-dondurmayi-kaldir']!.hazirla({ anahtar: anahtar[0] }), /dondurulmuş değil/);
 
     const hepsi = await gonder<PlanCevabi>(await komutlar['plan-dondurmayi-kaldir']!.hazirla({}));
-    await gonder(await komutlar['plan-canliya-al']!.hazirla({ taslak: hepsi.taslak!.id }));
+    await onaylaCanliyaAl(komutlar, hepsi.taslak!.id);
     assert.deepEqual(await canlidaDonmus(), idler.map((id) => [id, false]));
     const geri = await gonder<PlanCevabi>(komutIstegi(PLAN_STOK_KOMUTLARI['plan-ayar']!, { ayar: onceki.ayar }));
-    await gonder(await komutlar['plan-canliya-al']!.hazirla({ taslak: geri.taslak!.id }));
+    await onaylaCanliyaAl(komutlar, geri.taslak!.id);
   });
 
   test('CA-2 (#1424, kullanıcı kararı): fason iş emri planda kapasite tüketmez; sonraki iç adım fason termini kadar bekler, öneride de kuyruk yazımında da', async () => {
@@ -432,11 +442,15 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const onceki = await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari');
     const yeni = { ...onceki, tabanBedelSaat: onceki.tabanBedelSaat + 1, finansmanOraniGun: null };
     const r = komutIstegi(PLAN_STOK_KOMUTLARI['plan-bedel-ayari']!, { ...yeni, fazla: 1 });
-    assert.deepEqual([r.yol, r.tekrarKorumali, r.govde], ['/plan/bedel-ayari', true, yeni]);
+    assert.deepEqual([r.yol, r.tekrarKorumali, r.govde], ['/plan/bedel-ayari', true, { ...yeni, taslak: null }]);
     assert.equal((await istek(c.planlama, 'POST', r.yol, r.govde)).statusCode, 403);
-    assert.deepEqual(await tamam<BedelAyari>(c.mudur, 'POST', r.yol, r.govde), yeni);
+    // 148 a: bedel ayarı taslağa yazılır, onayla canlıya geçer.
+    const t = (await tamam<PlanCevabi>(c.mudur, 'POST', r.yol, r.govde)).taslak!.id;
+    assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', `/plan/bedel-ayari?taslak=${String(t)}`), yeni);
+    assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari'), onceki, 'onaya kadar canlı değişmez');
+    await canliyaYaz(t, c.mudur);
     assert.deepEqual(await tamam<BedelAyari>(c.planlama, 'GET', '/plan/bedel-ayari'), yeni);
-    await tamam(c.mudur, 'POST', r.yol, onceki);
+    await canliyaYaz((await tamam<PlanCevabi>(c.mudur, 'POST', r.yol, { ...onceki, taslak: null })).taslak!.id, c.mudur);
   });
 });
 
