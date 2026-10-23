@@ -26,6 +26,8 @@ import { elleNumuneOlculeri } from '../data/kontrol-plani';
 import { APPMODE, ME, MEU, POLICY, ROLE_L, allowed, can, currentShift, downNow, isStationTablet, machineOf, myStation, stationList } from './ortak-ayarlar';
 import { gomuluMu } from './gomulu';
 import { BlueprintM } from './teknik-resim';
+import { useMerkezUyarilari } from './cizim-merkezi';
+import { eskiCizim, eskiCizimGorevi } from '../data/cizim-merkezi';
 import { otomatikNumuneOlculeri } from '../data/otomatik-numune';
 import { Analytics, AwayView, CallChip, CallOv, CallTrackOv, DoneOv, NextPrepOv, NumOv, MakineSecici, PlanBanner, ReasonOv, ScrapOv, TopluPanel, ShiftOv, Steps, TaskCard, beep, dueControls, firstGate, ilkParcaKalemleri, nextTask, pctS, readyCount, sampItems, sampOf, shiftCalc, shiftStart, useShiftLog } from './operator-parcalar';
 import { LVL, ToolsCard, WarnOv, nearEdge, rulesOf } from './kurallar';
@@ -38,6 +40,7 @@ import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../data/baslatma-uyaris
 import { Ozetim, ozetimGorunur } from './ozetim';
 import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi, kartSeciminiAl } from '../data/emir-secimi';
 import type { EmirSecimiPenceresi } from '../data/emir-secimi';
+import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur } from '../data/acik-cagri';
 
 /* ── app ── */
 export function App({ preview }) {
@@ -283,15 +286,18 @@ export function App({ preview }) {
     acik: ilkAcik || (!preview && yenidenAcik), yeniden: !ilkAcik && !preview && yenidenAcik, sayilan: ilkSayilan,
     kararBekleyen: kararBekleyenSayisi(ilkAcik, ilkSayilan, ilkAcik && ilkKarari === 'ret'),
   };
+  // 19.1: paketin merkez çizimi eskiyse başlatma görevi uyarıya döner, resimde "KALİTE ONAYLI" yerine eskilik rozeti çıkar.
+  const mUyari = useMerkezUyarilari(o.pkg ? o.pkg.files : null);
+  const cizimEski = eskiCizim(o.pkg && o.pkg.files, mUyari);
   const task0 = nextTask(o, D, nextOrder, ilk);
-  const task = task0 && task0.key && snooze[task0.key] > now ? nextTask(Object.assign({}, o, { _skip: true }), D, null, ilk) : task0;
+  const task = eskiCizimGorevi(task0 && task0.key && snooze[task0.key] > now ? nextTask(Object.assign({}, o, { _skip: true }), D, null, ilk) : task0, cizimEski);
 
   const ctl = useMemo(() => o && o.pkg ? {
-    key: o.pkg.id + ':' + o.pkg.version, files: o.pkg.files, primary: o.pkg.primary, derived: o.pkg.derived, cfg: o.pkg.readCfg, bal: o.pkg.plan, setBal: () => {}, readOnly: true, noMeasure: true, aletZorunlu: !preview, opIds: opIds, onFocusMode: setFocusMode,
+    key: o.pkg.id + ':' + o.pkg.version, files: o.pkg.files, primary: o.pkg.primary, derived: o.pkg.derived, cfg: o.pkg.readCfg, bal: o.pkg.plan, setBal: () => {}, readOnly: true, eskiCizim: cizimEski, noMeasure: true, aletZorunlu: !preview, opIds: opIds, onFocusMode: setFocusMode,
     meas: o.meas || {}, retGerekcesi: retGerekcesiMetni(o.lastDecision), focus, due: D.due.map(b => b.id), pins: o.pins || [],
     setMeas: m => { const nm = typeof m === 'function' ? m(o.meas || {}) : m; for (const k in nm) if (nm[k] && nm[k].cnt == null) { nm[k] = Object.assign({}, nm[k], { cnt: o.good, who: 'op', by: ME() }); const ok = nm[k].ok; shiftRef.current[ok ? 'mOk' : 'mNok']++; if (!preview) logMeas(o.pkg, o.pkg.plan.find(b => String(b.id) === String(k)), nm[k], { src: 'op', orderNo: o.no, machine: MACHINE }); } const snap = { meas: o.meas || {} }; setOrders(l => l.map((x, i) => i === aiRef.current ? Object.assign({}, x, { meas: nm }) : x)); saveResult(Object.assign({}, o, { meas: nm }), 'result'); setTimeout(() => setToast(t => t && Object.assign({}, t, { undo: () => { setOrders(l => l.map((x, i) => i === aiRef.current ? Object.assign({}, x, { meas: snap.meas }) : x)); saveResult(Object.assign({}, o, { meas: snap.meas }), 'result'); say('Ölçüm geri alındı', 'rotate', 'var(--idle)'); } })), 0); },
     onPin: preview ? null : p => { const pin = Object.assign({ id: 'p' + Date.now(), by: ME() + ' · ' + MACHINE, at: Date.now(), status: 'open' }, p); const pins = (o.pins || []).concat([pin]); setOrders(l => l.map((x, i) => i === aiRef.current ? Object.assign({}, x, { pins }) : x)); saveResult(Object.assign({}, o, { pins }), 'feedback'); say('Not hazırlığa gönderildi', 'flag', 'var(--hazard)'); }
-  } : undefined, [o && o.pkg && o.pkg.id, o && o.pkg && o.pkg.version, o && o.meas, o && o.lastDecision, o && o.pins, o && o.no, focus, dueKey, RL, opIds.join(',')]);
+  } : undefined, [o && o.pkg && o.pkg.id, o && o.pkg && o.pkg.version, o && o.meas, o && o.lastDecision, o && o.pins, o && o.no, focus, dueKey, RL, opIds.join(','), cizimEski]);
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
   useEffect(() => { document.documentElement.setAttribute('data-state', o.state); }, [o.state]);
@@ -479,6 +485,17 @@ export function App({ preview }) {
   };
   /* çağrı simülasyonu */
   const callTimers = useRef<any[]>([]);
+  // 15.4: istasyon değişince sayfa yeniden yüklenir; bu istasyonun açık çağrısı kayıttan geri gelir (ekranda yeni çağrı açılmışsa ona dokunulmaz).
+  useEffect(() => {
+    if (preview || APPMODE.demo) return;
+    let canli = true;
+    AKStore.Log.query('calls', { machine: MACHINE, from: Date.now() - CAGRI_GERIYE_MS }).then(rows => {
+      const a = canli ? acikCagri(rows || [], MACHINE, Date.now()) : null;
+      const ekip = a && CALLS.find(c => c.k === a.ekip);
+      if (a && ekip) setCall(x => x || cagriyiKur(ekip, a));
+    }).catch(() => {});
+    return () => { canli = false; };
+  }, []);
   const startCall = (c, note?) => {
     callTimers.current.forEach(clearTimeout); beep('call');
     const who = APPMODE.demo ? { bakim: 'Emre D.', kalite: 'Zeynep A.', malzeme: 'Hakan T.', amir: 'Serkan Y.' }[c.k] : null;
