@@ -47,15 +47,68 @@ export const kayitIcerigiCevabi = z.object({
   govde: z.unknown().transform((d) => d ?? null),
 });
 
+// Eski/yeni değer defteri (392 a). Liste değerleri TAŞIMAZ: yalnız hangi tablonun hangi satırında hangi alanların değiştiği.
+// Eski ve yeni değer içeriktir; kayıt gövdesiyle aynı yetkiyle (`denetim.govde-oku`) ayrı uçtan okunur.
+export const DEGISIKLIK_ISLEMLERI = ['ekle', 'guncelle', 'sil'] as const;
+
+export const degisiklikListesiSorgusu = z.object({
+  ...sayfaSorguAlanlari,
+  kisi: z.coerce.number().int().positive().max(2147483647).optional(),
+  baslangic: tarihSemasi.optional(),
+  bitis: tarihSemasi.optional(),
+  tablo: z.string().trim().regex(/^[a-z_][a-z0-9_]{0,62}$/).optional(),
+}).superRefine((s, ctx) => {
+  if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
+  }
+});
+
+export const degisiklikSatiri = z.object({
+  id: z.number().int(),
+  zaman: zamanSemasi,
+  // Göçle ya da arka işle yapılan değişimde kişi yoktur.
+  kisiId: z.number().int().nullable(),
+  kisiAd: z.string().nullable(),
+  tablo: z.string(),
+  anahtar: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+  islem: z.enum(DEGISIKLIK_ISLEMLERI),
+  alanAdlari: z.array(z.string()),
+});
+
+export const degisiklikListesiCevabi = listeCevapSemasi(degisiklikSatiri);
+
+export const degisiklikSecenekleriCevabi = z.object({
+  kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+  tablolar: z.array(z.string()),
+});
+
+// Maskelenmiş eski ve yeni değer; eklemede eski, silmede yeni null'dır.
+export const degisiklikIcerigiCevabi = z.object({
+  id: z.number().int(),
+  alanlar: z.array(z.object({
+    alan: z.string(),
+    eski: z.unknown().transform((d) => d ?? null),
+    yeni: z.unknown().transform((d) => d ?? null),
+  })),
+});
+
 export type KayitListesiSorgusu = z.input<typeof kayitListesiSorgusu>;
 export type KayitSatiri = z.output<typeof kayitSatiri>;
 export type KayitListesiCevabi = z.output<typeof kayitListesiCevabi>;
 export type SuzgecSecenekleriCevabi = z.output<typeof suzgecSecenekleriCevabi>;
 export type KayitIcerigiCevabi = z.output<typeof kayitIcerigiCevabi>;
+export type DegisiklikListesiSorgusu = z.input<typeof degisiklikListesiSorgusu>;
+export type DegisiklikSatiri = z.output<typeof degisiklikSatiri>;
+export type DegisiklikListesiCevabi = z.output<typeof degisiklikListesiCevabi>;
+export type DegisiklikSecenekleriCevabi = z.output<typeof degisiklikSecenekleriCevabi>;
+export type DegisiklikIcerigiCevabi = z.output<typeof degisiklikIcerigiCevabi>;
 
 // Ekranın tipli çağrısı (istemci/src/ortak/veri/uc-cagrisi.ts).
 export interface DenetimUclari {
   'GET /denetim-kayitlari': { sorgu: KayitListesiSorgusu; cevap: KayitListesiCevabi };
   'GET /denetim-kayitlari/suzgecler': { cevap: SuzgecSecenekleriCevabi };
   'GET /denetim-kayitlari/:id/govde': { cevap: KayitIcerigiCevabi };
+  'GET /denetim-degisiklikleri': { sorgu: DegisiklikListesiSorgusu; cevap: DegisiklikListesiCevabi };
+  'GET /denetim-degisiklikleri/suzgecler': { cevap: DegisiklikSecenekleriCevabi };
+  'GET /denetim-degisiklikleri/:id/icerik': { cevap: DegisiklikIcerigiCevabi };
 }

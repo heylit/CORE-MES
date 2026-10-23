@@ -37,3 +37,16 @@ export function kimlikParametreleri(parametre: unknown): Record<string, number> 
     Object.entries(parametre).filter(([ad, deger]) => KIMLIK_ADI.test(ad) && !gizliAnahtarMi(ad) && Number.isSafeInteger(deger)),
   ) as Record<string, number>;
 }
+
+export interface DegisiklikAlani { alan: string; eski: unknown; yeni: unknown }
+
+// Defter alanı "sutun" ya da jsonb sütununda "sutun.anahtar"dır; gizli adlı alanın iki değeri de çıkmaz. Alan adı kalır ki
+// neyin değiştiği görülsün. Değer nesneyse içindeki gizli adlar da maskelenir. Sıra alan adına göre (kararlı görünüm).
+export function degisiklikAlanlari(alanlar: Record<string, { eski?: unknown; yeni?: unknown }>): DegisiklikAlani[] {
+  return Object.entries(alanlar)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([alan, { eski = null, yeni = null }]) => {
+      const gizli = alan.split('.').some(gizliAnahtarMi);
+      return { alan, eski: gizli && eski !== null ? '[gizli]' : gizle(eski), yeni: gizli && yeni !== null ? '[gizli]' : gizle(yeni) };
+    });
+}

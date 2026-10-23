@@ -6,12 +6,16 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { kararliJson } from '#cekirdek/tekrar.ts';
 import type { DenetimGirdisi, Denetle } from '#cekirdek/uc.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import type { KayitSatiri, SuzgecSecenekleriCevabi, kayitListesiSorgusu } from '#paylasilan/sozlesme/denetim.ts';
+import type {
+  DegisiklikSatiri, DegisiklikSecenekleriCevabi, KayitSatiri, SuzgecSecenekleriCevabi, degisiklikListesiSorgusu,
+  kayitListesiSorgusu,
+} from '#paylasilan/sozlesme/denetim.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { gizle, kimlikParametreleri } from './kurallar.ts';
+import { type DegisiklikAlani, degisiklikAlanlari, gizle, kimlikParametreleri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 type KayitListesiSorgusuCikti = z.output<typeof kayitListesiSorgusu>;
+type DegisiklikListesiSorgusuCikti = z.output<typeof degisiklikListesiSorgusu>;
 
 export interface GovdeOzeti {
   _ozet: { boyut: number; sha256: string };
@@ -81,4 +85,34 @@ export async function kayitIcerigi(db: Db, id: number): Promise<{ id: number; pa
   const kayit = await sorgular.kayitIcerigi(db, id);
   if (!kayit) throw bulunamadi('Denetim kaydı bulunamadı.');
   return { id: kayit.id, parametre: gizle(kayit.parametre), govde: gizle(kayit.govde) };
+}
+
+export async function degisiklikListesi(db: Db, sorgu: DegisiklikListesiSorgusuCikti): Promise<SayfaliListe<DegisiklikSatiri>> {
+  const s: sorgular.DegisiklikSuzgeci = {
+    kisi: sorgu.kisi ?? null, baslangic: sorgu.baslangic ?? null, bitis: sorgu.bitis ?? null, tablo: sorgu.tablo ?? null,
+  };
+  return sayfaliListe(sorgu, {
+    say: () => sorgular.degisiklikSay(db, s),
+    satirlar: async (dilim) => {
+      const ham = await sorgular.degisiklikler(db, s, dilim);
+      const adlar = await kisiAdlari(db, ham.flatMap((d) => (d.kisi_id === null ? [] : [d.kisi_id])));
+      return ham.map((d) => ({
+        id: d.id, zaman: d.zaman, kisiId: d.kisi_id, kisiAd: d.kisi_id === null ? null : adlar.get(d.kisi_id) ?? null,
+        tablo: d.tablo, anahtar: d.anahtar, islem: d.islem, alanAdlari: d.alan_adlari,
+      }));
+    },
+  });
+}
+
+export async function degisiklikSecenekleri(db: Db): Promise<DegisiklikSecenekleriCevabi> {
+  const adlar = await kisiAdlari(db, await sorgular.degisiklikKisileri(db));
+  const kisiler = [...adlar].map(([id, ad]) => ({ id, ad })).sort((a, b) => a.ad.localeCompare(b.ad, 'tr') || a.id - b.id);
+  return { kisiler, tablolar: await sorgular.degisiklikTablolari(db) };
+}
+
+// Değer okurken maskelenir: defter tetikle yazılır ve maskeleme kuralı sonradan genişleyebilir.
+export async function degisiklikIcerigi(db: Db, id: number): Promise<{ id: number; alanlar: DegisiklikAlani[] }> {
+  const kayit = await sorgular.degisiklikIcerigi(db, id);
+  if (!kayit) throw bulunamadi('Değişiklik kaydı bulunamadı.');
+  return { id: kayit.id, alanlar: degisiklikAlanlari(kayit.alanlar) };
 }

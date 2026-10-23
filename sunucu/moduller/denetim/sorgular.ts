@@ -76,3 +76,56 @@ export async function denetimDurumu(db: Db): Promise<DenetimDurumuSatiri> {
   );
   return satir ?? { yazilir: false, degismez: false, sonKayit: null };
 }
+
+export interface DegisiklikSuzgeci {
+  kisi: number | null;
+  baslangic: string | null;
+  bitis: string | null;
+  tablo: string | null;
+}
+
+const DEGISIKLIK_SUZGECI = `FROM denetim_degisiklik d
+  WHERE ($1::int IS NULL OR d.kisi_id = $1)
+    AND ($2::date IS NULL OR d.zaman >= $2::date)
+    AND ($3::date IS NULL OR d.zaman < $3::date + 1)
+    AND ($4::text IS NULL OR d.tablo = $4)`;
+
+const degisiklikSuzgecDegerleri = (s: DegisiklikSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.tablo];
+
+export async function degisiklikSay(db: Db, s: DegisiklikSuzgeci): Promise<number> {
+  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${DEGISIKLIK_SUZGECI}`, degisiklikSuzgecDegerleri(s)))?.toplam ?? 0;
+}
+
+export interface DegisiklikSatiriHam {
+  id: number;
+  zaman: string;
+  kisi_id: number | null;
+  tablo: string;
+  anahtar: Record<string, number | string | boolean>;
+  islem: 'ekle' | 'guncelle' | 'sil';
+  alan_adlari: string[];
+}
+
+// Değerler bu sorguda seçilmez: liste yalnız alan adlarını taşır.
+export function degisiklikler(db: Db, s: DegisiklikSuzgeci, dilim: Dilim): Promise<DegisiklikSatiriHam[]> {
+  return db.sorgu<DegisiklikSatiriHam>(
+    `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.tablo, d.anahtar, d.islem,
+            ARRAY(SELECT k FROM jsonb_object_keys(d.alanlar) AS k ORDER BY k) AS alan_adlari ${DEGISIKLIK_SUZGECI}
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $5 OFFSET $6`,
+    [...degisiklikSuzgecDegerleri(s), dilim.sinir, dilim.atla],
+  );
+}
+
+export async function degisiklikKisileri(db: Db): Promise<number[]> {
+  return (await db.sorgu<{ kisi_id: number }>('SELECT DISTINCT kisi_id FROM denetim_degisiklik WHERE kisi_id IS NOT NULL')).map((s) => s.kisi_id);
+}
+
+export async function degisiklikTablolari(db: Db): Promise<string[]> {
+  return (await db.sorgu<{ tablo: string }>('SELECT DISTINCT tablo FROM denetim_degisiklik ORDER BY tablo')).map((s) => s.tablo);
+}
+
+export function degisiklikIcerigi(db: Db, id: number): Promise<{ id: number; alanlar: Record<string, { eski?: unknown; yeni?: unknown }> } | null> {
+  return db.tek<{ id: number; alanlar: Record<string, { eski?: unknown; yeni?: unknown }> }>(
+    'SELECT id, alanlar FROM denetim_degisiklik WHERE id = $1', [id],
+  );
+}

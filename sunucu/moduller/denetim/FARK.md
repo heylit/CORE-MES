@@ -44,3 +44,16 @@ Yok.
 
 ## Onaylı kararlar
 - N4: sınırlar 8 alan, 512 bayt, 100 satır; `_ek` gövdenin parçasıdır, yalnız `denetim.govde-oku` görür (ADR 0008).
+
+# FARK: denetim, eski/yeni değer defteri (392 a; dal ga1-denetim-defteri; Güvenlik Merkezi)
+
+## Eklenen
+- Göç `20261023194500_denetim_degisiklik_defteri.sql`: yalnız ekleme `denetim_degisiklik` tablosu ve ortak tetik işlevi
+  `denetim_degisiklik_yaz(<anahtar sütunları>, <dışarıdaki sütunlar>...)`. Yeni ve boş tablo; dolu tablo değişmez. Modüller kendi tablolarına
+  kendi göçleriyle bağlar. Kişi, yazma ucunun transaction başında verdiği `tmiv2.kisi_id` oturum değişkenidir; göç ve arka işte boştur.
+- Uçlar: `GET /denetim-degisiklikleri` ve `/suzgecler` (`denetim.oku`; değer taşımaz, yalnız alan adları),
+  `GET /denetim-degisiklikleri/:id/icerik` (`denetim.govde-oku`; eski ve yeni değer, okurken maskeli). Yeni işlem ve rol satırı yok.
+- Ekran: Denetim Kaydı'nda "Görünüm" süzgeci (Komutlar / Değişiklikler); değişiklik satırı açılınca alan, eski, yeni listesi.
+
+## Onaylı kararlar
+- 392 a (dolu tablo göçü), 257 a (kapsam), 258 a (rol ve kişi-iş merkezi de deftere), 259 a (ekran görünümü, prototip değişikliği).

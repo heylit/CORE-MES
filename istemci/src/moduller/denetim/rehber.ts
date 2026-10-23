@@ -7,11 +7,12 @@ export const rehber: readonly SayfaRehberi[] = [
     nasil: [
       '"Kişi", "Başlangıç", "Bitiş" ve "İşlem" süzgeçlerini seçin; "Temizle" sıfırlar.',
       'Satıra tıklayın; yan pencerede ayrıntı açılır.',
+      '"Görünüm"den "Değişiklikler"i seçin: üretim emri, iş emri, sipariş satırı, malzeme kartı, yetki ve ayar kayıtlarında hangi alanın neyden neye değiştiği listelenir.',
     ],
     sinirlar: [
       'Kayıt değiştirilemez ve silinemez.',
-      'İçeriği görmek ayrı yetki ister; parola ve PIN deftere "[gizli]" yazılır.',
+      'İçeriği ve eski/yeni değeri görmek ayrı yetki ister; parola ve PIN "[gizli]" görünür.',
     ],
-    sozcukler: ['log', 'kayıt defteri', 'iz', 'kim yaptı'],
+    sozcukler: ['log', 'kayıt defteri', 'iz', 'kim yaptı', 'eski değer', 'değişiklik geçmişi'],
   },
 ];
