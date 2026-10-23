@@ -62,13 +62,16 @@ export function satisBagiHatasi(belge: { yon: Yon; tur: string; firmaId: number 
 
 // FNS-68 (260 a): faturaya iptal edilmemiş teslimat sevki bağlanır; sevkin bilinen müşterisi ve siparişi faturanınkidir.
 // Sevkiyat bilmediğini null verir (noktası firmasız, ürünsüz ya da siparişsiz iş); bilinmeyen alan bağı engellemez.
+// Bir sevk tek satış faturasıyla faturalanır; iptal edilen fatura ve iadeler sayılmaz (iade asılın sevkini taşır).
 export function sevkBagiHatasi(fatura: { firmaId: number | null; siparisId: number | null },
-  sevk: { tur: string; firmaId: number | null; siparisId: number | null; iptal: boolean } | null): string | null {
+  sevk: { tur: string; firmaId: number | null; siparisId: number | null; iptal: boolean } | null,
+  oncekiFatura: { belgeNo: string | null } | null = null): string | null {
   if (sevk === null) return 'Sevk işi bulunamadı.';
   if (sevk.iptal) return 'İptal edilmiş sevk işine fatura bağlanmaz.';
   if (sevk.tur !== 'teslimat') return 'Faturaya yalnız teslimat sevki bağlanır.';
   if (sevk.firmaId !== null && sevk.firmaId !== fatura.firmaId) return 'Faturanın firması sevkin müşterisi değil.';
   if (sevk.siparisId !== null && sevk.siparisId !== fatura.siparisId) return 'Sevk başka bir siparişin.';
+  if (oncekiFatura !== null) return `Bu sevk zaten faturalandı${oncekiFatura.belgeNo ? ` (${oncekiFatura.belgeNo})` : ''}; önce o faturayı iptal edin.`;
   return null;
 }
 

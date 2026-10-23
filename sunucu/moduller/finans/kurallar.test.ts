@@ -273,6 +273,9 @@ test('FNS-68: faturaya iptal edilmemiş teslimat sevki bağlanır; bilinen firma
   for (const tur of ['alim', 'aktarma']) assert.match(sevkBagiHatasi(fatura, { ...sevk, tur }) ?? '', /yalnız teslimat/);
   assert.match(sevkBagiHatasi(fatura, { ...sevk, firmaId: 8 }) ?? '', /sevkin müşterisi değil/);
   assert.match(sevkBagiHatasi(fatura, { ...sevk, siparisId: 4 }) ?? '', /başka bir siparişin/);
+  assert.equal(sevkBagiHatasi(fatura, sevk, null), null);
+  assert.match(sevkBagiHatasi(fatura, sevk, { belgeNo: 'SF-1' }) ?? '', /zaten faturalandı \(SF-1\)/);
+  assert.match(sevkBagiHatasi(fatura, sevk, { belgeNo: null }) ?? '', /^Bu sevk zaten faturalandı; önce/);
 });
 
 test('302 a: satış formu siparişin iptal edilmemiş sevk işlerini iş başına bir kez, geldiği sırayla gösterir', () => {
