@@ -4026,16 +4026,19 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
 /* ---- derleme: takvim, havuz, işlemler ---- */
 function compile(st){
   const D=st.D,A=D.ayarlar;
-  const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit)}]));
+  const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit),mol:(v.molalar||[]).map(x=>[hm(x.bas),hm(x.bit)])}]));
   const tatil=new Set((D.tatiller||[]).map(s=>Math.floor(parseT(D,s)/24)));
   const days=[];for(let d=0;d<HDAYS;d++){const wd=wdOf(D,d);days.push({wd,tatil:tatil.has(d),vard:tatil.has(d)?[]:(D.calismaGunleri[wd]||[])});}
   const inst=(d,sid)=>{const v=vs[sid];if(!v)return null;const a=d*24+v.bas;let b=d*24+v.bit;if(b<=a)b+=24;return [a,b];};
+  /* 168 b: vardiyanın molaları; gece vardiyasında vardiya başından önceki saat ertesi güne düşer. Mola yalnız kendi vardiyasından düşülür:
+     aynı saatte açık başka vardiya tezgâhı çalıştırır. Işıksız tezgâh molada da işler (rw). */
+  const molalar=(d,sid)=>{const v=vs[sid];if(!v||!v.mol.length)return [];return v.mol.map(([x,y])=>{let a=d*24+x;if(a<d*24+v.bas)a+=24;let b=d*24+y;if(b<=a)b+=24;return [a,b];});};
   const ek=st.ekMesai||[];
   const M={};
   for(const m of D.tezgahlar){
     const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
-    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(w);}
-    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(w);}
+    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(days[d].vard.length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
@@ -4919,9 +4922,10 @@ function rrCevir(st) {
     return rrKur(a, y);
   });
   /* takvim: vardiya, çalışma günü ve tatil değişmemişse asıl kayıt */
-  const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit }));
-  const vrr = ((st.cal && st.cal.shifts) || []).map(v => ({ id: v.id, start: v.start, end: v.end }));
-  if (!rrEsit(vref, vrr)) P.vardiyalar = vrr.map(v => Object.assign({}, (P.vardiyalar || []).find(x => x.id === v.id) || {}, { id: v.id, bas: v.start, bit: v.end }));
+  /* 168 b: vardiyanın molaları (Vardiya modülü) motora geçer; motor molada tezgâhı çalıştırmaz */
+  const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit, molalar: v.molalar || [] }));
+  const vrr = ((st.cal && st.cal.shifts) || []).map(v => ({ id: v.id, start: v.start, end: v.end, molalar: (v.breaks || []).map(b => ({ bas: b.start, bit: b.end })) }));
+  if (!rrEsit(vref, vrr)) P.vardiyalar = vrr.map(v => Object.assign({}, (P.vardiyalar || []).find(x => x.id === v.id) || {}, { id: v.id, bas: v.start, bit: v.end, molalar: v.molalar }));
   const wc = (st.wcs || []).find(w => w.id === RR_WC) || (st.wcs || [])[0];
   if (wc && wc.week) {
     const cg0 = P.calismaGunleri || {}; const cg = {};

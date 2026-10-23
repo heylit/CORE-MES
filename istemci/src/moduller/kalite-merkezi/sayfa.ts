@@ -37,7 +37,9 @@ const KAYDET_TABANLI =
   'const body={...obj};delete body._id;window.__TMI_KM_TABAN={c:col,id:id,t:obj.guncelleme};body.guncelleme=new Date().toISOString();';
 
 // Cihazın kalibrasyon vadesi ve durumu Kalibrasyon modülünün kuralıyla hesaplanır (tek kural); uygulamanın metinleri, renkleri
-// ve "ölçümde kullanılabilir" bayrağı aynı kalır.
+// ve "ölçümde kullanılabilir" bayrağı aynı kalır. Sunucu cihazla birlikte Kalibrasyonun kendi gününe göre hesapladığı durumu
+// gönderir (`kalibrasyonDurumu`, `kalibrasyonVadesi`, `kalibrasyonKalanGun`); ölçüm denetimi (KM-K88) o durumla yapıldığı için ekran
+// da onu gösterir, tarayıcı saati kaymış olsa da ikisi ayrışmaz. Alan yoksa (Kalibrasyonda eşi olmayan eski kayıt) kural yerelde koşar.
 export const CIHAZ_DURUMU_YERI = `function devStatus(d){
   if(!d)return{t:'—',c:''};
   if(d.kullanimDisi)return{t:'Kullanım dışı',c:'',use:false};
@@ -47,9 +49,9 @@ export const CIHAZ_DURUMU_YERI = `function devStatus(d){
   if(k<=30)return{t:'Yaklaşıyor',c:'warn',next,k,use:true};
   return{t:'Geçerli',c:'ok',next,k,use:true};
 }`;
-const CIHAZ_DURUMU_KURALLI = `function devStatus(d){
+export const CIHAZ_DURUMU_KURALLI = `function devStatus(d){
   if(!d)return{t:'—',c:''};
-  const r=window.TMI_KALIBRASYON.durum(Object.assign({kullanimDisi:!!d.kullanimDisi,sonTarih:d.sonKal||null,bugun:TODAY()},d.periyotGun>0?{periyotGun:Number(d.periyotGun)}:{periyotAy:Number(d.periyot||12)}));
+  const r=typeof d.kalibrasyonDurumu==='string'?{durum:d.kalibrasyonDurumu,vade:d.kalibrasyonVadesi||null,kalanGun:typeof d.kalibrasyonKalanGun==='number'?d.kalibrasyonKalanGun:null}:window.TMI_KALIBRASYON.durum(Object.assign({kullanimDisi:!!d.kullanimDisi,sonTarih:d.sonKal||null,bugun:TODAY()},d.periyotGun>0?{periyotGun:Number(d.periyotGun)}:{periyotAy:Number(d.periyot||12)}));
   const next=r.vade,k=r.kalanGun;
   if(r.durum==='kullanim-disi')return{t:'Kullanım dışı',c:'',use:false};
   if(r.durum==='kayit-yok')return{t:'Kayıt yok',c:'bad',use:false};

@@ -79,6 +79,22 @@ describe('Kalite Merkezi kayıt geçmişi ve kilit (gerçek PostgreSQL)', () => 
     assert.deepEqual(await gecmis('insp_k1'), [{ surum: mua.surum, govde: { no: 'MUA-K1', sonuc: 'Beklemede' }, yazan: birinci.id, degistiren: birinci.id }]);
   });
 
+  test('B16 kilit: kapalı DÖF ve kararı verilmiş lot kabul kaydı yazılamaz, onaylanamaz ve silinemez (409); açık DÖF ve yeniden başlatma yazılır', async () => {
+    const dof = await yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 3 });
+    const ilerledi = await yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 8 }, dof.surum);
+    const kapali = await o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Kapalı', adim: 8 }, ilerledi.surum));
+    await reddedilir(yaz(birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Kapalı', adim: 8, aksiyon: 'ek' }, kapali.surum), 'CAKISMA');
+    await reddedilir(o().vt.tx((db) => servis.onayla(db, birinci, 'capa', 'capa_k1', { no: 'DOF-K1', durum: 'Açık', adim: 8 }, kapali.surum)), 'CAKISMA');
+    await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'capa', 'capa_k1', kapali.surum)), 'CAKISMA');
+
+    const lot = await yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', karar: 'Ret' });
+    await reddedilir(yaz(birinci, 'lot', 'lot_k1', { no: 'LOT-K1', karar: 'Kabul' }, lot.surum), 'CAKISMA');
+    await reddedilir(o().vt.tx((db) => servis.sil(db, birinci, 'lot', 'lot_k1', lot.surum)), 'CAKISMA');
+    await yaz(birinci, 'lot', 'lot_k2', { no: 'LOT-K2', karar: 'Kabul', yenidenSunum: true });
+    const reset = await yaz(birinci, 'lot', 'lot_r1', { no: 'RESET-1', tip: 'reset', anahtar: 'a' });
+    await yaz(birinci, 'lot', 'lot_r1', { no: 'RESET-1', tip: 'reset', anahtar: 'b' }, reset.surum);
+  });
+
   // 326 a: geçmiş ekranı bu uçtan okunur; salt okunur, yeniden eskiye, kişi adlarıyla.
   test('KM-K326 geçmiş ucu: önceki hâller yeniden eskiye, kişi adları ve zamanla gelir; silen kişi de görünür; yetkisiz 403, olmayan kayıtta boş', async () => {
     const giris = async (kullaniciAdi: string): Promise<string> => {

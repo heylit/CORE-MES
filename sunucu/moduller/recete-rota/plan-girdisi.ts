@@ -59,6 +59,8 @@ export interface CozumGirdisi {
   baslangic: string;
   // Motorda karşılığı olmayan kuyruk işleri (rotasız emir, emirde değişen adım, Reçete ve Rota'da ürünü olmayan emir).
   yerlesmeyen: string[];
+  // Vardiyası tanımsız tezgâhtaki kuyruk işleri (168 b): dizilmez; plan komutu durmaz, uyarıyla boş bırakır.
+  vardiyasiz: string[];
   // Motorun işlem kimliği -> istekteki anahtar.
   kimlik: Record<string, string>;
   // Kuyruktaki işlerin motor kimlikleri.

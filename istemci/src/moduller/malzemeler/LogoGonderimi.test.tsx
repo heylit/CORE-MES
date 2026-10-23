@@ -3,12 +3,14 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
+import type { BirimSetleriCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { LogoDurumuCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { LogoGonderimi } from './LogoGonderimi.tsx';
 
 const TANIMCI: Kullanici = { id: 1, ad: 'Deneme Tanımcı', islemler: ['sayfa.malzemeler', 'malzemeler.tanim-yaz'] };
 const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: ['sayfa.malzemeler'] };
+const YONETICI: Kullanici = { id: 3, ad: 'Deneme Yönetici', islemler: ['sayfa.malzemeler', 'malzemeler.tanim-yaz', 'logo.birim-seti-yaz'] };
 
 const durum = (yazabilir: boolean): LogoDurumuCevabi => ({
   kartlar: [
@@ -26,14 +28,27 @@ const durum = (yazabilir: boolean): LogoDurumuCevabi => ({
     { cesit: 'tur', tmiDegeri: 'demirbas', logoDegeri: null },
     { cesit: 'tur', tmiDegeri: 'ticari_mal', logoDegeri: null },
     { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: 'KG' },
+    { cesit: 'birim', tmiDegeri: 'saat', logoDegeri: 'ESKI' },
+    { cesit: 'birim', tmiDegeri: 'sefer', logoDegeri: null },
   ],
   kartTuruSecenekleri: [{ kod: '10', ad: 'Hammadde' }, { kod: '11', ad: 'Yarı mamul' }, { kod: '12', ad: 'Mamul' }, { kod: '13', ad: 'Tüketim malı' }, { kod: '1', ad: 'Ticari mal' }],
   karsilikYazabilir: yazabilir,
 });
 
+// Köprü listesi okunmuş: KG ve ADET geçerli; ESKI listede yok; EL1 elle eklenmiş ama köprü listesinde değil.
+const BIRIM_SETLERI: BirimSetleriCevabi = {
+  setler: [
+    { kod: 'ADET', ad: 'Adet', elle: false, kopruListesinde: true, gecerli: true },
+    { kod: 'EL1', ad: null, elle: true, kopruListesinde: false, gecerli: false },
+    { kod: 'KG', ad: 'Kilogram', elle: true, kopruListesinde: true, gecerli: true },
+  ],
+  sonOkuma: '2026-10-08T10:00:00+00:00',
+  baglanti: 'acik',
+};
+
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 
-function sunucuKur(kullanici: Kullanici) {
+function sunucuKur(kullanici: Kullanici, setler: BirimSetleriCevabi = BIRIM_SETLERI) {
   const yazilanlar: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -42,6 +57,12 @@ function sunucuKur(kullanici: Kullanici) {
     if (yol === '/malzeme-logo-karsiliklari/kaydet' && secenek?.method === 'POST') {
       yazilanlar.push(JSON.parse(String(secenek.body)));
       return json(200, { id: 'x' });
+    }
+    if (yol === '/logo/birim-setleri') return json(200, setler);
+    if (yol.startsWith('/logo/birim-setleri/') && secenek?.method === 'POST') {
+      yazilanlar.push({ yol, govde: JSON.parse(String(secenek.body)) });
+      if (yol === '/logo/birim-setleri/KG/kaldir') return json(422, { kod: 'GECERSIZ', mesaj: 'Birim seti KG bir birim karşılığında kullanılıyor; önce karşılığı değiştirin.' });
+      return json(200, { kod: 'x' });
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
   }));
@@ -107,7 +128,7 @@ describe('LogoGonderimi (kart #232)', () => {
     expect(yazilanlar).toEqual([]);
   });
 
-  it('tanım yazan karşılığı yazar: tür dört Logo kart türünden seçilir, birim kodu yazılır; boş bırakılan değer null gider', async () => {
+  it('tanım yazan karşılığı yazar: tür dört Logo kart türünden, birim geçerli Logo birim setlerinden seçilir; boş seçilen değer null gider', async () => {
     const yazilanlar = sunucuKur(TANIMCI);
     ac();
     const tur = await screen.findByRole('table', { name: 'Tür karşılıkları' });
@@ -123,9 +144,75 @@ describe('LogoGonderimi (kart #232)', () => {
     const birim = screen.getByRole('table', { name: 'Birim karşılıkları' });
     fireEvent.click(within(birim).getByText('kg'));
     const ikinci = await screen.findByRole('dialog');
-    fireEvent.change(within(ikinci).getByRole('textbox'), { target: { value: '   ' } });
+    const birimSecimi = await within(ikinci).findByRole('combobox');
+    expect(within(ikinci).queryByRole('textbox')).toBeNull();
+    expect(within(birimSecimi).getAllByRole('option').map((o) => o.textContent)).toEqual(['Boş', 'ADET Adet', 'KG Kilogram']);
+    fireEvent.change(birimSecimi, { target: { value: '' } });
     fireEvent.click(within(ikinci).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilanlar[1]).toEqual({ cesit: 'birim', tmiDegeri: 'kg', logoDegeri: null }));
+  });
+
+  it('LB9 a (soru 144 a): listede olmayan kayıtlı birim karşılığı "Geçersiz" rozetiyle görünür; pencerede değer korunur ve geçerli koda çevrilebilir', async () => {
+    const yazilanlar = sunucuKur(TANIMCI);
+    ac();
+    const birim = await screen.findByRole('table', { name: 'Birim karşılıkları' });
+    const satir = (tmi: string) => within(birim).getAllByRole('row').find((r) => within(r).queryByText(tmi) !== null)!;
+    await waitFor(() => expect(within(satir('saat')).getByText('Geçersiz')).toBeTruthy());
+    expect(within(satir('kg')).queryByText('Geçersiz')).toBeNull();
+    expect(within(satir('sefer')).getByText('Boş')).toBeTruthy();
+    fireEvent.click(within(birim).getByText('saat'));
+    const pencere = await screen.findByRole('dialog');
+    const secim = await within(pencere).findByRole('combobox');
+    expect((secim as HTMLSelectElement).value).toBe('ESKI');
+    expect(within(secim).getAllByRole('option').map((o) => o.textContent)).toEqual(['Boş', 'ESKI (listede yok)', 'ADET Adet', 'KG Kilogram']);
+    fireEvent.change(secim, { target: { value: 'ADET' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazilanlar).toEqual([{ cesit: 'birim', tmiDegeri: 'saat', logoDegeri: 'ADET' }]));
+  });
+
+  it('birim seti listesi boşsa pencere bunu söyler; seçenek yalnız "Boş"', async () => {
+    sunucuKur(TANIMCI, { setler: [], sonOkuma: null, baglanti: 'kapali' });
+    ac();
+    const birim = await screen.findByRole('table', { name: 'Birim karşılıkları' });
+    fireEvent.click(within(birim).getByText('sefer'));
+    const pencere = await screen.findByRole('dialog');
+    const secim = await within(pencere).findByRole('combobox');
+    expect(within(secim).getAllByRole('option').map((o) => o.textContent)).toEqual(['Boş']);
+    expect(within(pencere).getByText('Logo birim seti listesi boş; listeye kod eklenince seçilebilir.')).toBeTruthy();
+    expect(await screen.findByText(/Logo bağlantısı kapalı\. Liste Logo'dan henüz okunmadı/)).toBeTruthy();
+  });
+
+  it('Logo birim setleri listesi sayfada görünür; yönetici olmayan ekleyemez ve kaldıramaz (LB11 a)', async () => {
+    sunucuKur(TANIMCI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Logo birim setleri' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    expect(satirlar.map((s) => within(s).getAllByRole('cell')[0]?.textContent)).toEqual(['ADET', 'EL1', 'KG']);
+    expect(within(satirlar[0]!).getByText('Logo listesi')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('Geçersiz')).toBeTruthy();
+    expect(within(satirlar[2]!).getByText('Logo listesi, Elle')).toBeTruthy();
+    expect(within(tablo).queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Birim seti ekle' })).toBeNull();
+  });
+
+  it('yönetici birim seti ekler ve elle ekleneni kaldırır; köprüden gelen satırda kaldır yok; sunucunun reddi bildirilir (LB11 a)', async () => {
+    const yazilanlar = sunucuKur(YONETICI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Logo birim setleri' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    expect(within(satirlar[0]!).queryByRole('button')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Birim seti ekle' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Kod/ }), { target: { value: ' EL2 ' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }]));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(within(satirlar[1]!).getByRole('button', { name: 'EL1 kaldır' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
+    await waitFor(() => expect(yazilanlar[1]).toEqual({ yol: '/logo/birim-setleri/EL1/kaldir', govde: {} }));
+    fireEvent.click(within(satirlar[2]!).getByRole('button', { name: 'KG kaldır' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
+    expect(await screen.findByText('Birim seti KG bir birim karşılığında kullanılıyor; önce karşılığı değiştirin.')).toBeTruthy();
   });
 
   it('TM2 (kart #1218): ticari malın tek seçeneği 1 Ticari mal; öteki türlerde 1 yok', async () => {

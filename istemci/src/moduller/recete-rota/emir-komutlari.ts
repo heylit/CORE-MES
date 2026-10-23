@@ -1,53 +1,20 @@
 import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
-import type { AdimliEmirAyrintisi, AdimliEmirCevabi, AdimliEmirOzeti, AdimliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimliEmirAyrintisi, AdimliEmirCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 
 // Emir komutları (kart #1185): prototipin emir eylemleri sahibi modüllerin VAR OLAN uçlarına gider. Emir yalnız yürürlükteki rota
 // revizyonundan açılır: prototip revizyon seçmez, köprü ürünün yürürlükteki revizyonunu kendisi okur. Emrin sürümü ekranın yüklediği
 // değerdir (girdi `surum`): yazmadan önce okunsaydı arada başka yerde yapılan değişiklik ezilirdi. Kural, yetki ve sürüm denetimi
 // sahibindedir (uç reddederse iletisi çerçeveye taşınır).
-// Parti kuralları (bolunebilirAdimlar, birlesmeAdaylari, birlesmeHedefleri) rota ekranındaki PartiPaneli'nin kurallarıdır; burada kopya,
-// çünkü bir modül ötekinin ekran kodunu ithal etmez. Sunucu aynı kuralı uygular; fark çıkarsa sunucunun reddi geçerlidir.
+// Bölme, kol ve geri katma kuralları Üretim Emirleri'nindir: köprü yalnız prototipin adım sırasını sahibinin adımına (sıra, op numarası)
+// çevirir, uygunluğa sahibinin ucu karar verir.
 type Nesne = Record<string, unknown>;
 type Adim = AdimliEmirAyrintisi['isEmirleri'][number];
 export interface EmirHazirKomut { yol: string; govde: Nesne; tekrarKorumali?: boolean }
 export interface EmirKomutu { hazirla: (girdi: Nesne) => Promise<EmirHazirKomut> }
 
-const ACIK = ['taslak', 'planli', 'basladi'];
 const sirala = <T extends { sira: number }>(l: readonly T[]): T[] => [...l].sort((a, b) => a.sira - b.sira);
-const turu = (a: { tur?: string | undefined }): string => a.tur ?? 'rota';
-
-// Kendisi ve sonrakiler başlamamış adımlar.
-function baslamamisAdimlar(d: AdimliEmirAyrintisi): Adim[] {
-  if (!ACIK.includes(d.durum) || d.arsiv) return [];
-  const sirali = sirala(d.isEmirleri);
-  return sirali.filter((_a, i) => sirali.slice(i).every((x) => x.durum === 'bekliyor'));
-}
-
-// Bölünen adım bitmemiş, sonrakiler başlamamışsa bölünür; çalışan adımda yalnız üretilmemiş adet ayrılır (Soru 121 a, adedi sunucu
-// denetler). Önceki adımların bitmesi gerekmez.
-export function bolunebilirAdimlar(d: AdimliEmirAyrintisi): Adim[] {
-  if (!ACIK.includes(d.durum) || d.arsiv) return [];
-  const sirali = sirala(d.isEmirleri);
-  return sirali.filter((a, i) => a.durum !== 'tamam' && sirali.slice(i + 1).every((x) => x.durum === 'bekliyor'));
-}
-
-// Kolun planlı birleşme adımı: bölünen adımdan sonra gelen ve başlamamış adımlar.
-export const birlesmeAdaylari = (d: AdimliEmirAyrintisi, adimSira: number): Adim[] => baslamamisAdimlar(d).filter((a) => a.sira > adimSira);
-
-// Alt parti üst emrine ya da aynı adımdan bölünmüş kardeşine birleşir; kendi alt partisi açıksa birleşmez. Kalan adımlar rotadan gelmeli ve
-// bekliyor olmalı; iki taraf aynı op numarasında beklemeli.
-export function birlesmeHedefleri(d: AdimliEmirAyrintisi, emirler: readonly AdimliEmirOzeti[]): AdimliEmirOzeti[] {
-  const p = d.parti;
-  if (!p || p.ustEmirId === null || p.altEmirIdleri.length > 0 || !ACIK.includes(d.durum) || d.arsiv) return [];
-  const kalan = sirala(d.isEmirleri).filter((a) => a.durum !== 'tamam');
-  const ilk = kalan[0];
-  if (ilk === undefined || kalan.some((a) => a.durum !== 'bekliyor' || turu(a) !== 'rota')) return [];
-  return emirler.filter((e) => e.id !== d.id && ACIK.includes(e.durum) && !e.arsiv
-    && (e.id === p.ustEmirId || (e.parti?.ustEmirId === p.ustEmirId && e.parti.bolunmeSira === p.bolunmeSira))
-    && (e.durum === 'taslak') === (d.durum === 'taslak')
-    && e.siradaki?.durum === 'bekliyor' && e.siradaki.opNo === ilk.opNo);
-}
+const siradaki = (d: AdimliEmirAyrintisi, sira: number): Adim | undefined => d.isEmirleri.find((a) => a.sira === sira);
 
 const hata = (durum: number, mesaj: string): ApiHatasi => new ApiHatasi(durum, { kod: durum === 404 ? 'BULUNAMADI' : 'GECERSIZ', mesaj });
 const kimlik = (v: unknown, alan: string): number => {
@@ -212,19 +179,20 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const id = kimlik(girdi['id'], 'emir');
       const adet = pozitifAdet(girdi['adet'], 'adet');
       const d = await emirOku(id);
-      const adaylar = bolunebilirAdimlar(d);
       const kol = girdi['kolN'] !== undefined && girdi['kolN'] !== null;
-      const adim = kol ? adaylar.find((a) => a.sira === pozitifAdet(girdi['kolN'], 'ayrılma adımı') + 1) : adaylar[0];
-      if (adim === undefined) throw hata(422, 'Bu emir bu adımdan bölünemez: bölünen adım bitmemiş, sonraki adımlar başlamamış olmalı.');
+      // Kolsuz parti emrin bulunduğu adımdan (bitmemiş ilk adım) ayrılır; bitmemiş adım yoksa son adım gider ve sahibi reddeder.
+      const sirali = sirala(d.isEmirleri);
+      const adimSira = kol ? pozitifAdet(girdi['kolN'], 'ayrılma adımı') + 1 : (sirali.find((a) => a.durum !== 'tamam') ?? sirali.at(-1))?.sira;
+      if (adimSira === undefined) throw hata(422, 'Emrin adımı yok; önce adım ekleyin.');
       let birlesmeOpNo: number | null = null;
       if (kol) {
-        const katilma = birlesmeAdaylari(d, adim.sira).find((a) => a.sira === pozitifAdet(girdi['kolM'], 'katılma adımı'));
-        if (katilma === undefined) throw hata(422, 'Kolun katılma adımı bölünen adımdan sonra gelen, başlamamış bir adım olmalı.');
+        const katilma = siradaki(d, pozitifAdet(girdi['kolM'], 'katılma adımı'));
+        if (katilma === undefined) throw hata(422, 'Kolun katılma adımı bu emirde yok.');
         birlesmeOpNo = katilma.opNo;
       }
-      const ekAdimlar = kolaEkAdimlar(girdi['ekAdimlar'], d, adim.sira, birlesmeOpNo);
+      const ekAdimlar = kolaEkAdimlar(girdi['ekAdimlar'], d, adimSira, birlesmeOpNo);
       return {
-        yol: `/adimli-emirler/${String(id)}/bol`, govde: { adimSira: adim.sira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}) },
+        yol: `/adimli-emirler/${String(id)}/bol`, govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}) },
         tekrarKorumali: true,
       };
     },
@@ -238,23 +206,22 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       if (ustId === null) throw hata(422, 'Bu emir bir alt emir değil.');
       let birlesmeOpNo: number | null = null;
       if (girdi['m'] !== null && girdi['m'] !== undefined) {
-        const ana = await emirOku(ustId);
-        const adim = birlesmeAdaylari(ana, 0).find((a) => a.sira === pozitifAdet(girdi['m'], 'katılma adımı'));
-        if (adim === undefined) throw hata(422, 'Katılma adımı ana emirde başlamamış bir adım olmalı.');
+        const adim = siradaki(await emirOku(ustId), pozitifAdet(girdi['m'], 'katılma adımı'));
+        if (adim === undefined) throw hata(422, 'Katılma adımı ana emirde yok.');
         birlesmeOpNo = adim.opNo;
       }
       return { yol: `/adimli-emirler/${String(id)}/birlesme-plani`, govde: { birlesmeOpNo, surum: ekranSurumu(girdi) }, tekrarKorumali: true };
     },
   },
-  // Alt emri ana emre (ya da aynı adımdan bölünmüş kardeşine) geri katar: kaynak alt emir kapanır, adedi hedefe geçer.
+  // Alt emri ana emre geri katar: kaynak alt emir kapanır, adedi ana emre geçer. Hedefin sürümü yazmadan önce okunur: ekran ana emrin
+  // sürümünü komuta koymaz.
   'emir-birlestir': {
     hazirla: async (girdi) => {
       const id = kimlik(girdi['id'], 'emir');
       const d = await emirOku(id);
-      const liste = (await api.get<AdimliListeCevabi>('/adimli-emirler')).emirler;
-      const hedefler = birlesmeHedefleri(d, liste);
-      const hedef = hedefler.find((e) => e.id === d.parti?.ustEmirId) ?? hedefler[0];
-      if (hedef === undefined) throw hata(422, 'Bu alt emir şu an geri katılamaz: kalan adımları başlamamış ve ana emirle aynı adımda bekliyor olmalı.');
+      const ustId = d.parti?.ustEmirId ?? null;
+      if (ustId === null) throw hata(422, 'Bu emir bir alt emir değil.');
+      const hedef = await emirOku(ustId);
       return {
         yol: `/adimli-emirler/${String(hedef.id)}/birlestir`, govde: { kaynakEmirId: d.id, surum: hedef.surum, kaynakSurum: ekranSurumu(girdi) }, tekrarKorumali: true,
       };

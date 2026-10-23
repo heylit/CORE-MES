@@ -53,7 +53,11 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     const tur = ek.tur ?? 'hammadde';
     const onek = tur === 'sarf' ? 'SF' : 'HM';
     await tamam(`/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-      kayit: { id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-LGB-00001`, ad: `Logo deneme ${kimlik}`, birim: ek.birim ?? 'kg' }, onay: { durum: 'aktif' } },
+      // Kart, malzeme sihirbazının zorunlu alanlarıyla açılır (malzemeler B11): hammaddede aile, kalite ve kart başına ayrı ölçü; sarfta kategori ve tür.
+      kayit: {
+        id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-LGB-00001`, ad: `Logo deneme ${kimlik}`, birim: ek.birim ?? 'kg' }, onay: { durum: 'aktif' },
+        ...(tur === 'sarf' ? { g: { kat: 'genel', tur: `Logo deneme ${kimlik}` } } : { grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 + sayac } }),
+      },
       ozet: {
         benzersiz_anahtar: `${tur}|metal|${kimlik}`, mukerrer_gerekcesi: null,
         ...(ek.aciklamalar ? { aciklama_1: ek.aciklamalar[0], aciklama_2: ek.aciklamalar[1], aciklama_3: ek.aciklamalar[2] } : {}),
@@ -84,7 +88,7 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
   async function hizmetKart(yon: 'Alınan' | 'Verilen'): Promise<{ no: number; kod: string }> {
     const kimlik = `lbh${++hizmetSayac}`;
     await tamam(`/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-      kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-FSN-00001', ad: `Hizmet ${kimlik}`, birim: 'saat' }, g: { kat: 'fason', yon }, onay: { durum: 'aktif' } },
+      kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-FSN-00001', ad: `Hizmet ${kimlik}`, birim: 'saat' }, g: { kat: 'fason', yon, cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
       ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null },
       surum: null,
     });
