@@ -245,6 +245,41 @@ describe('mesaj belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(yonetici, 'POST', '/mesaj/belge/sil', { yol }).then((c) => c.json() as { silindi: boolean })).silindi, true);
   });
 
+  test('BD-18 (225 a): başkasının siparişi, uyarısı ve kanalı yalnız sahibince ya da yöneticice değişir; okundu yalnız kişinin kendisine', async () => {
+    const ben = String(yazarId);
+    const oteki = String(ikinciYazarId);
+    const ek = yeniKoleksiyon();
+    const siparis = `orders/${ek}`;
+    const kural = `kurallar/${ek}`;
+    const kanal = `channels/${ek}`;
+    assert.equal((await yaz(yazar, { yol: siparis, kip: 'tam', veri: { no: '1', target: 10, qty: {}, by: ben, status: 'sirada' } })).statusCode, 200);
+    assert.equal((await yaz(yazar, { yol: kural, kip: 'tam', veri: { type: 'task_late', cid: ek, params: {}, on: true, by: ben } })).statusCode, 200);
+    assert.equal((await yaz(yazar, { yol: kanal, kip: 'tam', veri: { name: ek, topic: 'konu', createdBy: ben, lastBy: ben, lastAt: 1 } })).statusCode, 200);
+
+    assert.equal((await yaz(ikinciYazar, { yol: siparis, kip: 'birlestir', veri: { status: 'sevk', last: { by: oteki, t: 'durumu değiştirdi' } } })).statusCode, 403);
+    assert.equal((await yaz(ikinciYazar, { yol: kural, kip: 'birlestir', veri: { on: false } })).statusCode, 403);
+    assert.equal((await yaz(ikinciYazar, { yol: kanal, kip: 'birlestir', veri: { name: 'baska', topic: 'değişti' } })).statusCode, 403);
+    for (const yol of [siparis, kural, kanal]) assert.equal((await istek(ikinciYazar, 'POST', '/mesaj/belge/sil', { yol })).statusCode, 403, yol);
+    assert.equal((await yaz(ikinciYazar, { yol: kanal, kip: 'birlestir', veri: { lastAt: 2, lastBy: oteki, lastText: 'merhaba' } })).statusCode, 200);
+
+    const okunan = async (yol: string) => (await istek(okur, 'GET', `/mesaj/belge?yol=${yol}`).then((c) => c.json() as { belge: Belge })).belge.veri;
+    assert.equal((await okunan(siparis)).status, 'sirada');
+    assert.equal((await okunan(kural)).on, true);
+    assert.deepEqual([(await okunan(kanal)).name, (await okunan(kanal)).lastBy], [ek, oteki]);
+
+    assert.equal((await yaz(yazar, { yol: siparis, kip: 'birlestir', veri: { status: 'uretimde' } })).statusCode, 200);
+    assert.equal((await yaz(yonetici, { yol: kural, kip: 'birlestir', veri: { on: false } })).statusCode, 200);
+    assert.equal((await yaz(yonetici, { yol: kanal, kip: 'birlestir', veri: { topic: 'yönetici' } })).statusCode, 200);
+    assert.equal((await istek(yazar, 'POST', '/mesaj/belge/sil', { yol: siparis })).statusCode, 200);
+    assert.equal((await istek(yonetici, 'POST', '/mesaj/belge/sil', { yol: kanal })).statusCode, 200);
+
+    assert.equal((await yaz(yazar, { yol: `okuma/${ben}`, kip: 'tam', veri: { c: { [ek]: 1 } } })).statusCode, 200);
+    assert.equal((await yaz(ikinciYazar, { yol: `okuma/${ben}`, kip: 'tam', veri: { c: { [ek]: 9 } } })).statusCode, 403);
+    assert.equal((await yaz(yonetici, { yol: `okuma/${ben}`, kip: 'birlestir', veri: { c: { [ek]: 9 } } })).statusCode, 403);
+    assert.equal((await istek(ikinciYazar, 'POST', '/mesaj/belge/sil', { yol: `okuma/${ben}` })).statusCode, 403);
+    assert.deepEqual((await okunan(`okuma/${ben}`)).c, { [ek]: 1 });
+  });
+
   test('BD-15: örnek veri kisiler zinciriyle kanal ve iki ileti kurar, başlangıç kanallarını kurmaz; ikinci koşu yüklü der', async () => {
     for (const yol of ['channels/genel', 'channels/duyurular']) await istek(yonetici, 'POST', '/mesaj/belge/sil', { yol });
     const liste = (await modulOrnekVerileriniKesfet()).filter((t) => t.modul === 'kisiler' || t.modul === 'mesaj');

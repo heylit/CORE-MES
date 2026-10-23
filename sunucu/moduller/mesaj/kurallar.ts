@@ -147,15 +147,24 @@ const IZ_ALANLARI = ['last', 'lastEntry'] as const;
 const KISI_HARITALARI = ['ack', 'votes', 'rsvp', 'qty'] as const;
 
 // Sahipli belgelerde başkasının birleştirebileceği alanlar; içerik (metin, silindi, ek, başlık) yalnız sahibinde ve yöneticide.
+// Kanala ileti atan, kanalın son ileti özetini, anmalarını ve @herkes zamanını yazar; adı, konusu, simgesi kanalı açanındır.
+// Sipariş, otomatik uyarı, e-posta kuyruğu ve tetik kaydını başkası hiç değiştirmez.
 const BASKASININ_ALANLARI: Readonly<Record<string, readonly string[]>> = {
   ileti: ['rx'],
   duyurular: ['ack', 'mid'],
   approvals: ['votes', 'last'],
   toplantilar: ['rsvp', 'last'],
   zamanli: ['status', 'sentAt', 'sendAt', 'lastSent'],
+  channels: ['lastAt', 'lastBy', 'lastText', 'lastTs', 'mentions', 'everyone', 'everyoneBy'],
+  orders: [],
+  kurallar: [],
+  eposta: [],
+  tetikler: [],
 };
 // Görevler ortak düzenlenir (prototip her yazara açar), silinmeleri yalnız sahibine ve yöneticiye açıktır.
 const SILMESI_SAHIPLI = new Set([...Object.keys(BASKASININ_ALANLARI), 'tasks']);
+// Kanalın sahibi onu açandır; öteki sahipli kayıtlarda `by`.
+const SAHIP_ALANI: Readonly<Record<string, string>> = { channels: 'createdBy' };
 
 export function koleksiyonTuru(yol: string): string | null {
   const p = parcalar(yol);
@@ -164,7 +173,19 @@ export function koleksiyonTuru(yol: string): string | null {
 }
 
 const metinMi = (d: unknown): d is string => typeof d === 'string';
-const sahibi = (veri: Veri | null): string | null => (veri !== null && metinMi(veri.by) ? veri.by : null);
+const sahipAlani = (tur: string | null): string => (tur === null ? 'by' : SAHIP_ALANI[tur] ?? 'by');
+const sahibi = (tur: string | null, veri: Veri | null): string | null => {
+  const d = veri?.[sahipAlani(tur)];
+  return metinMi(d) ? d : null;
+};
+
+// Okundu belgesi `okuma/<kişi>` yalnız o kişinindir; yönetici de başkasının okundu bilgisini yazamaz.
+export const OKUMA_ILETISI = 'Başka bir kişinin okundu bilgisi yazılamaz.';
+function okumaDenetle(yol: string, ben: string): string | null {
+  const p = parcalar(yol);
+  if (p[0] !== 'okuma' || p.length !== 2) return null;
+  return p[1] === ben || p[1] === kisiAnahtari(ben) ? null : OKUMA_ILETISI;
+}
 
 function kanalOf(yol: string, veri: Veri, mevcut: Veri | null): string | null {
   const p = parcalar(yol);
@@ -254,9 +275,16 @@ function kisiHaritalariDenetle(i: YazmaIstegi): string | null {
 
 function sahiplikDenetle(i: YazmaIstegi): string | null {
   const tur = koleksiyonTuru(i.yol);
-  const sahip = sahibi(i.mevcut);
-  if (i.yonetici || tur === null || sahip === null || !SILMESI_SAHIPLI.has(tur)) return null;
-  if (metinMi(i.veri.by) && i.veri.by !== sahip) return 'Kaydın sahibi değiştirilemez.';
+  if (i.yonetici || tur === null || !SILMESI_SAHIPLI.has(tur)) return null;
+  const alan = sahipAlani(tur);
+  const yeniSahip = i.veri[alan];
+  const sahip = sahibi(tur, i.mevcut);
+  // `by` gönderen denetiminde; öteki sahip alanı (kanalı açan) yeni kayıtta yazanın kendisi olmalı.
+  if (sahip === null) {
+    const baskasiAdina = i.mevcut === null && alan !== 'by' && metinMi(yeniSahip) && yeniSahip !== i.ben;
+    return baskasiAdina ? 'Kayıt başka bir kişi adına açılamaz.' : null;
+  }
+  if (metinMi(yeniSahip) && yeniSahip !== sahip) return 'Kaydın sahibi değiştirilemez.';
   const izinli = BASKASININ_ALANLARI[tur];
   if (sahip === i.ben || izinli === undefined) return null;
   if (i.kip === 'tam') return 'Başkasının kaydı yalnız sahibince ya da yöneticice değiştirilir.';
@@ -294,12 +322,14 @@ function uretimAdediDenetle(i: YazmaIstegi): string | null {
 
 // Yazılabilirse null, değilse nedeni.
 export function yazmaEngeli(i: YazmaIstegi): string | null {
-  return uretimAdediDenetle(i) ?? sahiplikDenetle(i) ?? gonderenDenetle(i) ?? kisiHaritalariDenetle(i);
+  return okumaDenetle(i.yol, i.ben) ?? uretimAdediDenetle(i) ?? sahiplikDenetle(i) ?? gonderenDenetle(i) ?? kisiHaritalariDenetle(i);
 }
 
 export function silmeEngeli(yol: string, mevcut: Veri | null, ben: string, yonetici: boolean): string | null {
+  const okuma = okumaDenetle(yol, ben);
+  if (okuma !== null) return okuma;
   const tur = koleksiyonTuru(yol);
-  const sahip = sahibi(mevcut);
+  const sahip = sahibi(tur, mevcut);
   if (yonetici || tur === null || sahip === null || sahip === ben || !SILMESI_SAHIPLI.has(tur)) return null;
   return 'Başkasının kaydı yalnız sahibince ya da yöneticice silinir.';
 }
