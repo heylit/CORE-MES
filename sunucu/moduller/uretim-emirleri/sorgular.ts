@@ -103,7 +103,13 @@ export async function emirEkle(db: Db, g: Omit<EmirKaydi, 'projeId'> & { projeId
 
 export function baslamayiYaz(db: Db, id: number, an: string): Promise<unknown> {
   // İş emirli emirde önceki iş emrinden kalan çalışma hâli sıfırlanır: başlayan iş olaysızdır, yani çalışıyordur.
-  return db.sorgu(`UPDATE uretim_emri SET durum = 'basladi', baslama = $2::timestamptz, calisma = 'calisiyor', surum = surum + 1 WHERE id = $1`, [id, an]);
+  // Emrin başlaması ilk adımın başlamasıdır: sonraki adımın başlatılması onu ezmez (bulgu 15.2).
+  return db.sorgu(
+    `UPDATE uretim_emri SET durum = 'basladi', calisma = 'calisiyor', surum = surum + 1,
+            baslama = COALESCE((SELECT min(baslama) FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1), $2::timestamptz)
+      WHERE id = $1`,
+    [id, an],
+  );
 }
 
 export function bitisiYaz(db: Db, id: number, saglamAdet: number, an: string): Promise<unknown> {
