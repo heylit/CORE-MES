@@ -4,7 +4,8 @@ import { modulOrnekVerileriniKesfet, ornekVeriYukle } from '#cekirdek/ornek-veri
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
-import { ornekTckn } from './ornek-veri.ts';
+import { ibanGecerliMi, tcknGecerliMi } from './kurallar.ts';
+import { ornekIban, ornekTckn } from './ornek-veri.ts';
 import { veriGetir } from './servis.ts';
 
 test('örnek T.C. kimlik açıkça uydurma ve denetim haneleri doğru', () => {
@@ -16,6 +17,16 @@ test('örnek T.C. kimlik açıkça uydurma ve denetim haneleri doğru', () => {
     assert.equal(d.slice(0, 10).reduce((a, b) => a + b, 0) % 10, d[10]);
   }
   assert.equal(new Set(Array.from({ length: 10 }, (_, i) => ornekTckn(i + 1))).size, 10);
+  for (let i = 1; i <= 10; i++) assert.equal(tcknGecerliMi(ornekTckn(i)), true, 'IK-82');
+});
+
+test('örnek IBAN açıkça uydurma, sunucudaki biçim denetiminden geçer (IK-82)', () => {
+  for (let i = 1; i <= 10; i++) {
+    const iban = ornekIban(i);
+    assert.match(iban, /^TR\d{2} 0000 0000 0000 0000 0000 \d{2}$/);
+    assert.equal(ibanGecerliMi(iban), true, iban);
+  }
+  assert.equal(new Set(Array.from({ length: 10 }, (_, i) => ornekIban(i + 1))).size, 10);
 });
 
 describe('İK örnek verisi (göçlü test şeması, gerekir zinciriyle)', () => {

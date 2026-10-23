@@ -21,7 +21,7 @@ import type { Govde, IzinUcu, KuralHatasi } from './kurallar.ts';
 import {
   EKIP_ALANLARI, FAZLA_MESAI_TURLERI, IS_GUNU_IZIN_TURLERI, GIZLI_AYARLAR, IK_ALANLARI, IK_YAZMA_ISLEMLERI, ILETISIM_ALANLARI, YONETICI_ALANLARI, alanlariSec, ayarDegisikligiDenetle,
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
-  iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
+  iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
   calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
@@ -273,6 +273,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   }
   if (g.tur === 'emp' && g.uc !== 'iletisim') firlat(ucretDenetle(onceki, yeni, islemler));
   if (g.tur === 'emp') {
+    firlat(kimlikIbanDenetle(onceki, yeni));
     firlat(ozelVeriDenetle(onceki, yeni, islemler));
     Object.assign(yeni, ozelVeriyiKoru(onceki, yeni, islemler));
   }

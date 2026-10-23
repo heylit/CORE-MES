@@ -10,7 +10,7 @@ import { varMi } from './sorgular.ts';
 
 /* Örnek atölyenin İK kayıtları: on iki örnek kişinin personel kartı, organizasyon, izin, devam, eğitim.
    Kayıtlar servis üzerinden yazılır (kurallar, kapsam ve geçmiş gerçek yazımdaki gibi işler). Ücret, T.C. kimlik ve IBAN
-   açıkça uydurmadır: T.C. kimlik 1000000 ile başlar, IBAN sıfırlarla doludur, banka adı "ORNEK". */
+   açıkça uydurmadır: T.C. kimlik 1000000 ile başlar, IBAN'ın banka ve hesap haneleri sıfırlarla doludur, banka adı "ORNEK". */
 
 const ILK_KIMLIK = 'orn_emp_01';
 
@@ -64,6 +64,14 @@ export function ornekTckn(sira: number): string {
   return `${d.join('')}${d10}${d11}`;
 }
 
+// Banka ve hesap haneleri sıfır, son iki hane sıra; kontrol haneleri mod 97 ile hesaplanır ki sunucudaki biçim denetiminden (IK-82) geçsin.
+export function ornekIban(sira: number): string {
+  const hesap = `${'0'.repeat(20)}${iki(sira)}`;
+  let kalan = 0;
+  for (const c of `${hesap}292700`) kalan = (kalan * 10 + Number(c)) % 97;
+  return `TR${String(98 - kalan).padStart(2, '0')}${hesap}`.replace(/(.{4})/g, '$1 ').trim();
+}
+
 function gunEkle(gun: string, ek: number): string {
   const t = new Date(`${gun}T00:00:00Z`);
   t.setUTCDate(t.getUTCDate() + ek);
@@ -111,7 +119,7 @@ async function yukle(db: Db, baglam: OrnekVeriBaglami): Promise<void> {
       iseGiris: gunEkle(gun, -365 * (1 + (i % 4)) - 30 * i), sozlesmeTuru: 'Belirsiz süreli',
       calismaSekli: k.yaka === 'Mavi yaka' ? 'Vardiyalı' : 'Ofis', durum: 'Aktif', lokasyon: 'ORNEK Atölye',
       telefon: `0500 000 00 ${iki(i + 1)}`, eposta: `${k.kullaniciAdi}@ornek.invalid`,
-      tckn: ornekTckn(i + 1), brutMaas: k.maas, banka: 'ORNEK Bankası', iban: `TR00 0000 0000 0000 0000 0000 ${iki(i + 1)}`,
+      tckn: ornekTckn(i + 1), brutMaas: k.maas, banka: 'ORNEK Bankası', iban: ornekIban(i + 1),
       kisiId: kisiNo.get(k.kullaniciAdi)!, isMerkeziId: merkez,
       ...(k.yonetici === null ? {} : { yoneticiId: kimlikOf.get(k.yonetici)! }),
     };

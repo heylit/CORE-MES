@@ -645,3 +645,38 @@ export function fazlaTuru(fazlaDakika: number | null, gun: { dakika: number; kap
   if (gun !== null && !gun.izinli && (gun.kapali === 'kapali' || gun.dakika === 0)) return 'Hafta tatili çalışması';
   return 'Fazla mesai';
 }
+
+/* ---------------- kimlik ve banka biçimi: IK-82 (B13) ---------------- */
+// Veritabanı kısıtı yalnız haneleri denetler; denetim haneleri burada. Ekranın formu ve Excel aktarımı aynı algoritmayı uygular,
+// sunucu API'den gelen yazmayı da reddeder. Kural öncesinden kalan geçersiz değer, başka alan değişince kaydı kilitlemez.
+export function tcknGecerliMi(v: string): boolean {
+  if (!/^[1-9]\d{10}$/.test(v)) return false;
+  const h = [...v].map(Number);
+  const tek = h[0]! + h[2]! + h[4]! + h[6]! + h[8]!;
+  const cift = h[1]! + h[3]! + h[5]! + h[7]!;
+  if ((((tek * 7 - cift) % 10) + 10) % 10 !== h[9]) return false;
+  return h.slice(0, 10).reduce((t, n) => t + n, 0) % 10 === h[10];
+}
+
+// TR IBAN: boşluk yok sayılır (veritabanı kısıtı ik_personel_iban_bicimi gibi); 26 karakter ve ISO 13616 mod 97 denetimi.
+export function ibanGecerliMi(v: string): boolean {
+  const d = v.replaceAll(' ', '');
+  if (!/^TR\d{24}$/.test(d)) return false;
+  const sayi = (d.slice(4) + d.slice(0, 4)).replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let kalan = 0;
+  for (const c of sayi) kalan = (kalan * 10 + Number(c)) % 97;
+  return kalan === 1;
+}
+
+export function kimlikIbanDenetle(onceki: Govde | null, yeni: Govde): KuralHatasi | null {
+  const alanlar = [
+    ['tckn', tcknGecerliMi, 'Geçerli bir T.C. kimlik numarası girin (11 hane).'],
+    ['iban', ibanGecerliMi, 'Geçerli bir TR IBAN girin (26 karakter).'],
+  ] as const;
+  for (const [alan, gecerli, mesaj] of alanlar) {
+    const v = bos(yeni[alan]);
+    if (v === null || esitMi(v, bos(onceki?.[alan]))) continue;
+    if (typeof v !== 'string' || !gecerli(v)) return dogrulama(mesaj, `govde.${alan}`);
+  }
+  return null;
+}

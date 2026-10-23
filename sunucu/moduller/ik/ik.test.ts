@@ -102,7 +102,7 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     // İK uzmanı yalnız Merkez 1'de yetkili (iş merkezi kapsamı); yönetici kısıtsız.
     await ortam.vt.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2)', [kim.uzm, im1]);
     await kaydet(c.yon, 'personel', personel('emp_m', { sicilNo: '2001', brutMaas: 90000, kisiId: kim.mud }));
-    await kaydet(c.yon, 'personel', personel('emp_a', { sicilNo: '3001', yoneticiId: 'emp_m', brutMaas: 33030, tckn: '10000000146', iban: 'TR00 0000 0000 0000 0000 0000 00', kisiId: kim.opr }));
+    await kaydet(c.yon, 'personel', personel('emp_a', { sicilNo: '3001', yoneticiId: 'emp_m', brutMaas: 33030, tckn: '10000000146', iban: 'TR47 0000 0000 0000 0000 0000 00', kisiId: kim.opr }));
     await kaydet(c.yon, 'personel', personel('emp_b', { sicilNo: '3002', brutMaas: 50000, kisiId: kim.opr2 }));
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
@@ -329,7 +329,7 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('IK-51: değişiklik geçmişi okuyanın kapsamıyla süzülür; kapsam dışı kişinin ücret ve banka geçmişi görünmez', async () => {
     await kaydet(c.yon, 'personel', personel('emp_g2', { isMerkeziId: im2, brutMaas: 40000 }));
-    await kaydet(c.yon, 'personel', personel('emp_g2', { isMerkeziId: im2, brutMaas: 45000, iban: 'TR00 0000 0000 0000 0000 0000 01' }));
+    await kaydet(c.yon, 'personel', personel('emp_g2', { isMerkeziId: im2, brutMaas: 45000, iban: 'TR20 0000 0000 0000 0000 0000 01' }));
     await kaydet(c.yon, 'personel', personel('emp_g1', { brutMaas: 40000 }));
     await kaydet(c.yon, 'personel', personel('emp_g1', { brutMaas: 45000 }));
     const uzm = (await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri')).gecmis.map((g) => g.rid);
@@ -385,10 +385,10 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
   });
 
   test('IK-72: IBAN, ücret, kan grubu ve engel durumunun değeri geçmişe yazılmaz; eski satırın değeri okurken gizlenir', async () => {
-    const IBAN = 'TR00 0000 0000 0000 0000 0000 72';
+    const IBAN = 'TR43 0000 0000 0000 0000 0000 72';
     await kaydet(c.yon, 'personel', personel('emp_gz', { sicilNo: '7201', brutMaas: 40000, iban: IBAN, kanGrubu: 'A Rh+', engelDurumu: 'Yok' }));
     const r = await kaydet(c.yon, 'personel', personel('emp_gz', {
-      sicilNo: '7201', brutMaas: 41000, iban: 'TR00 0000 0000 0000 0000 0000 73', kanGrubu: 'B Rh+', engelDurumu: '3. derece (%40–59)', telefon: '0500 000 00 72',
+      sicilNo: '7201', brutMaas: 41000, iban: 'TR16 0000 0000 0000 0000 0000 73', kanGrubu: 'B Rh+', engelDurumu: '3. derece (%40–59)', telefon: '0500 000 00 72',
     }));
     const degisen = r.gecmis[0]!.changes;
     for (const f of ['brutMaas', 'iban', 'kanGrubu', 'engelDurumu']) assert.deepEqual(degisen.find((d) => d.f === f), { f, big: true, gizli: true }, f);
@@ -497,6 +497,24 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
       `SELECT conname, convalidated FROM pg_constraint WHERE conrelid IN ('ik_devam'::regclass, 'ik_departman'::regclass)
           AND conname IN ('ik_devam_saat_eksi_degil', 'ik_departman_butce_eksi_degil') ORDER BY 1`);
     assert.deepEqual(kisitlar, [{ conname: 'ik_departman_butce_eksi_degil', convalidated: true }, { conname: 'ik_devam_saat_eksi_degil', convalidated: true }]);
+  });
+
+  test('IK-82: T.C. kimlik ve IBAN biçimi sunucuda denetlenir; tek kayıt ve toplu aktarım aynı kurala girer, kayıtlı eski değer kilitlenmez', async () => {
+    // Uydurma, algoritmadan geçen değerler; gerçek kişi ya da hesap değildir.
+    await kaydet(c.uzm, 'personel', personel('emp_k1', { tckn: '10000003048', iban: 'TR200000000000000000000001' }));
+    await kaydet(c.uzm, 'personel', personel('emp_k2', { tckn: '', iban: '' }));
+    for (const [alan, deger] of [['tckn', '10000000147'], ['tckn', '01000000146'], ['tckn', '1000000014'], ['tckn', 10000000146], ['iban', 'TR21 0000 0000 0000 0000 0000 01'], ['iban', 'DE00 0000 0000 0000 0000 00']] as const) {
+      const r = await istek(c.uzm, 'POST', '/ik/personel/emp_k3/kaydet', { govde: personel('emp_k3', { [alan]: deger }), surum: null });
+      const { kod, alan: hataAlani } = r.json() as { kod?: string; alan?: string };
+      assert.deepEqual({ durum: r.statusCode, kod, alan: hataAlani }, { durum: 400, kod: 'DOGRULAMA', alan: `govde.${alan}` }, String(deger));
+    }
+    await ret(400, 'DOGRULAMA', c.yon, 'POST', '/ik/personel/toplu-kaydet', { kayitlar: [{ kimlik: 'emp_k4', govde: personel('emp_k4', { tckn: '10000000147' }), surum: null }] });
+    assert.equal(await vt().tek("SELECT 1 FROM ik_personel WHERE kimlik IN ('emp_k3', 'emp_k4')"), null, 'reddedilen kayıt yazılmaz');
+    // Kural öncesinden kalan (hane biçimi doğru, denetim hanesi yanlış) değer, başka alan değişince kaydı kilitlemez; değeri değiştiren geçerli değer verir.
+    await vt().sorgu("UPDATE ik_personel SET tckn = '10000000147', iban = 'TR00 0000 0000 0000 0000 0000 01', surum = surum + 1 WHERE kimlik = 'emp_k2'");
+    surumler.set('emp_k2', (await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri')).kayitlar.find((k) => k.kimlik === 'emp_k2')!.surum);
+    await kaydet(c.uzm, 'personel', personel('emp_k2', { tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01', telefon: '0500 000 00 80' }));
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/personel/emp_k2/kaydet', kaydetGovdesi(personel('emp_k2', { tckn: '10000000136', iban: 'TR00 0000 0000 0000 0000 0000 01' })));
   });
 
   test('rol x işlem göçü: onaylı dağılım; İK sayfası yalnız İK uzmanında, herkes İK İşlemlerim ile izin talep eder ve bordrosunu onaylar; muhasebe İK kayıtlarını okumaz', () => {

@@ -5,7 +5,8 @@ import {
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
   enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinOnayBildirimi,
-  kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, turDenetle, ucretDenetle, yillikMesaiSiniri,
+  ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
+  ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
 import type { Govde, IzinGecisi } from './kurallar.ts';
 import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -348,5 +349,27 @@ describe('IK-80: resmî tatil tarihleri', () => {
     ]);
     assert.deepEqual(resmiTatilTarihleri([{ yil: null, ay: 5, gun: 1, ad: '' }], '2026-05-02', '2026-04-30'), []);
     assert.deepEqual(resmiTatilTarihleri([{ yil: null, ay: 5, gun: 1, ad: ' ' }], '2026-05-01', '2026-05-01'), [{ tarih: '2026-05-01', ad: null }]);
+  });
+});
+
+// Uydurma, algoritmadan geçen değerler; gerçek kişi ya da hesap değildir.
+describe('IK-82: T.C. kimlik ve IBAN biçimi', () => {
+  test('T.C. kimlik: 11 hane, ilk hane sıfır değil, iki denetim hanesi', () => {
+    assert.equal(tcknGecerliMi('10000000146'), true);
+    for (const v of ['10000000147', '10000000136', '01000000146', '1000000014', '100000001460', '1000000014a', '']) assert.equal(tcknGecerliMi(v), false, v);
+  });
+  test('IBAN: TR ve 24 hane, boşluk yok sayılır, mod 97', () => {
+    for (const v of ['TR200000000000000000000001', 'TR20 0000 0000 0000 0000 0000 01']) assert.equal(ibanGecerliMi(v), true, v);
+    for (const v of ['TR210000000000000000000001', 'TR00 0000 0000 0000 0000 0000 01', 'TR2000000000000000000000001', 'TR2000000000000000000000A1', 'tr20 0000 0000 0000 0000 0000 01', 'DE00000000000000000000', '']) assert.equal(ibanGecerliMi(v), false, v);
+  });
+  test('yalnız yeni ya da değişen değer denetlenir; boş değer serbest', () => {
+    const p = (ek: Govde): Govde => ({ id: 'emp_a', kind: 'emp', ad: 'A', soyad: 'B', ...ek });
+    assert.equal(kimlikIbanDenetle(null, p({ tckn: '10000000146', iban: 'TR20 0000 0000 0000 0000 0000 01' })), null);
+    assert.equal(kimlikIbanDenetle(null, p({ tckn: '', iban: null })), null);
+    assert.deepEqual(kimlikIbanDenetle(null, p({ tckn: '10000000147' })), { kod: 'DOGRULAMA', mesaj: 'Geçerli bir T.C. kimlik numarası girin (11 hane).', alan: 'govde.tckn' });
+    assert.equal(kimlikIbanDenetle(null, p({ iban: 'TR00' }))?.alan, 'govde.iban');
+    assert.equal(kimlikIbanDenetle(null, p({ tckn: 10000000146 }))?.alan, 'govde.tckn', 'sayı olarak gelen değer metin değildir');
+    assert.equal(kimlikIbanDenetle(p({ tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01' }), p({ tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01', telefon: '0500' })), null, 'kayıtlı eski değer kilitlenmez');
+    assert.equal(kimlikIbanDenetle(p({ tckn: '10000000147' }), p({ tckn: '10000000136' }))?.alan, 'govde.tckn', 'değişen değer denetlenir');
   });
 });

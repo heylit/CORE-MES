@@ -21,10 +21,12 @@
 
 ## Ekranda kalan kurallar (sunucu denetlemez)
 - İzin günü sayımı sunucuda da var (GÜNCELLENDİ 23.10.2026, DOĞRULANDI `servis.ts` `izinIsGunuSay` ve `izinIsGunuDenetle`, `GET /ik/izin-gunu`; Soru 55 ve 74): iş günü kişinin Vardiya takviminden sayılır, takvim yoksa yalnız hafta sonu düşer. Ekranda kalanlar: yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;
-  yapılacaklar listesi; akıllı arama; ilan metni ve uygunluk kontrolü; Excel aktarımında T.C. kimlik ve IBAN doğrulaması;
+  yapılacaklar listesi; akıllı arama; ilan metni ve uygunluk kontrolü;
   yaka ve kademe önerisi; işe alım aşamaları ve puanlama; performans ortalaması; eğitim takibi. Zimmet 244 a ile İdari İşler'e geçti (#1943, #1963).
 - Sunucu bu kayıtlarda yalnız zorunlu alanları (IK-4), bağlı kaydın varlığını, sürümü ve yetkiyi denetler.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kesinleşme sunucu motoruyla (`ik/servis.ts` `motorKur`, `motor.payroll`). Bordro hesabı hem ekranda (tahmin) hem sunucuda (kesinleştirme) yapılır; kesinleşen sonuç sunucunundur.
+- KAPANDI (B13, 23.10.2026): T.C. kimlik ve IBAN denetim haneleri personel kaydında ve toplu kayıtta (Excel aktarımı) sunucuda da denetlenir (IK-82, `kurallar.ts` `kimlikIbanDenetle`); hane biçimini veritabanı kısıtı (`ik_personel_tckn_bicimi`, `ik_personel_iban_bicimi`) zaten tutuyordu. Kural yalnız yeni ya da değişen değerde uygulanır; kural öncesinden kalan değer kaydı kilitlemez.
+- 151 a (23.10.2026): tazminat ve fazla mesai hesaplayıcıları, maliyet planı, işe alım puanı, performans ortalaması, yaka ve kademe önerisi, akıllı arama ve ilan metni hesap ya da öneridir; tarayıcıda kalır, borç sayılmaz. T.C. kimlik ve IBAN sunucuya geçer (B13); izin bakiyesi ve hak ediş ayrı iş (B14).
 
 ## JSON sütunlar
 KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ik göçlerinde `jsonb` yok (`grep -c jsonb sunucu/gocler/*_ik_*.sql` hepsi 0). Yok (v2, kullanıcı kararı 08.10.2026). Değişiklik geçmişindeki alan değeri (`ik_kayit_gecmisi_alani.onceki`, `sonraki`) metin
