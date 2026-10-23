@@ -4,6 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
+import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   AcikEmirlerCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
@@ -23,7 +24,7 @@ import {
   ILETILER, ISLEM, emirAcikMi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, VARSAYILAN_AYLIK_FAIZ, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
-  askidakiTedarikciReddi, birimFiyati, kaliteAskisindakiFirmalar, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
+  askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -126,11 +127,12 @@ async function tedarikcileriKur(db: Db, firmaId: number | null = null): Promise<
   const kategoriler = await s.tedarikciKategorileriOku(db, firmaId);
   const degerlendirmeler = await s.degerlendirmeleriOku(db, firmaId);
   const kisiler = await kisiAdlari(db, degerlendirmeler.map((d) => d.kisiId).filter((x): x is number => x !== null));
+  const kalite = await kaliteDurumlari(db, satirlar.map((t) => t.firmaId));
   return satirlar.map((t) => {
     const f = firmalar.get(t.firmaId);
     return {
       firmaId: t.firmaId, ad: f?.ad ?? '', vergiNo: f?.vergiNo ?? null, yetkili: null, telefon: f?.telefon ?? null,
-      eposta: f?.ePosta ?? null, sehir: f?.il ?? null, firmaAktif: f?.aktif ?? false, firmaSurum: f?.surum ?? null, durum: t.durum, puan: t.puan, notlar: t.notlar,
+      eposta: f?.ePosta ?? null, sehir: f?.il ?? null, firmaAktif: f?.aktif ?? false, firmaSurum: f?.surum ?? null, durum: t.durum, kaliteDurumu: kalite.get(t.firmaId) ?? null, puan: t.puan, notlar: t.notlar,
       kategoriler: kategoriler.filter((k) => k.firmaId === t.firmaId).map((k) => k.kategori),
       degerlendirmeler: degerlendirmeler.filter((d) => d.firmaId === t.firmaId).map(({ firmaId: _f, ...d }) => ({ ...d, kisiAdi: ad(kisiler, d.kisiId) })),
       surum: t.surum, olusturma: t.olusturma,
@@ -236,7 +238,7 @@ async function teklifFirmalariniDenetle(db: Db, gelen: TalepYazimi['teklifler'],
   const firmalar = await firmaOzetleri(db, yeniler);
   if (yeniler.some((id) => !tedarikciOlabilir(firmalar.get(id) ?? null))) throw gecersiz(ILETILER.firmaPasif);
   // Kayıtsız firma teklif alınca Tedarikçiler'e nötr başlangıçla eklenir; var olan kayıt değişmez.
-  for (const firmaId of new Set(yeniler)) await s.tedarikciEkle(db, { firmaId, durum: 'deneme', puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null });
+  for (const firmaId of new Set(yeniler)) await s.tedarikciEkle(db, { firmaId, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null });
 }
 
 // B-001, B-010: kararı veren ve karar tarihi, senaryonun kişisi ve zamanı sunucunundur. Karar özü değişmediyse önceki kişi ve tarih
@@ -362,21 +364,24 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
   return talebim(await talepAc(db, k, t, izYaz));
 }
 
-// E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; askı listesini sunucu açılışında kablolama kaydeder (ADR 0006).
-// Kayıtsız süreçte (çözücüyü kurmayan araç ya da test) yalnız satın almanın kendi askısı denetlenir.
-export type KaliteAskisiCozucusu = (db: Db) => Promise<readonly { kod: string | null; ad: string }[]>;
-let kaliteAskisiCozucu: KaliteAskisiCozucusu | null = null;
-export function kaliteAskisiCozucusuKaydet(cozucu: KaliteAskisiCozucusu | null): void { kaliteAskisiCozucu = cozucu; }
+// E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; tedarikçi onay durumunu sunucu açılışında kablolama kaydeder (ADR 0006).
+// Kayıtsız süreçte (çözücüyü kurmayan araç ya da test) kalite durumu bilinmez: denetlenmez ve gösterimde null'dır.
+export type KaliteDurumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, KmTedarikciDurumu>>;
+let kaliteDurumuCozucu: KaliteDurumuCozucusu | null = null;
+export function kaliteDurumuCozucusuKaydet(cozucu: KaliteDurumuCozucusu | null): void { kaliteDurumuCozucu = cozucu; }
+const kaliteDurumlari = async (db: Db, firmaIdler: readonly number[]): Promise<ReadonlyMap<number, KmTedarikciDurumu>> =>
+  kaliteDurumuCozucu === null || firmaIdler.length === 0 ? new Map() : kaliteDurumuCozucu(db, firmaIdler);
 
-// SAT-76, E-13 (250 a): tedarikçi satın almada ya da Kalite Merkezi'nde askıdaysa yeni sipariş verilmez. Ad firma kartından okunur;
-// kartı olmayan firmanın kimliği yazılır.
+// SAT-76, E-13 (236 a): tedarikçinin Kalite Merkezi onayı "Aday" ya da "Askıda" ise yeni sipariş verilmez. Durum firma kimliğiyle okunur;
+// satın almanın eski durum sütunu bakılmaz. Ad firma kartından okunur; kartı olmayan firmanın kimliği yazılır.
 async function askidakiTedarikciyiDenetle(db: Db, eski: Talep, yeni: TalepYazimi): Promise<void> {
   const yeniler = yeniSiparisFirmalari(eski, yeni);
   if (yeniler.length === 0) return;
-  const firmalar = await firmaOzetleri(db, yeniler);
-  const kalitede = kaliteAskisiCozucu === null ? [] : kaliteAskisindakiFirmalar([...firmalar.values()], await kaliteAskisiCozucu(db));
-  const askida = new Set([...await s.askidakiTedarikciler(db, yeniler), ...kalitede]);
-  const red = askidakiTedarikciReddi(yeniler.filter((id) => askida.has(id)).map((id) => firmalar.get(id)?.ad ?? `#${id}`));
+  const durumlar = await kaliteDurumlari(db, yeniler);
+  const reddedilen = yeniler.filter((id) => kaliteSiparisReddi(durumlar.get(id)));
+  if (reddedilen.length === 0) return;
+  const firmalar = await firmaOzetleri(db, reddedilen);
+  const red = askidakiTedarikciReddi(reddedilen.map((id) => `${firmalar.get(id)?.ad ?? `#${id}`} (${durumlar.get(id)})`));
   if (red !== null) throw gecersiz(red);
 }
 

@@ -21,7 +21,7 @@ import {
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
-import { kaliteAskisindakiTedarikciler } from '../kalite-merkezi/disari.ts';
+import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
 import { ILETILER } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
 
@@ -110,7 +110,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   // Test sonunda firma pasif bırakılır: firma arama testi yalnız aktif firmaları sayar.
   async function tedarikciFirma(ad: string): Promise<{ id: number; pasifle: () => Promise<void> }> {
     const f = tamam<{ firma: { id: number; surum: number } }>(await istek(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', { ad, tur: 'tedarikci' })).firma;
-    tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: f.id, durum: 'onayli', puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null }));
+    tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: f.id, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null }));
     return { id: f.id, pasifle: async () => { tamam(await istek(c.yonetici, 'POST', `/finans/firmalar/${f.id}/pasif`, { surum: f.surum })); } };
   }
 
@@ -162,7 +162,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     })).id;
     for (const id of [firmaA, firmaB]) {
       tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', {
-        firmaId: id, durum: 'onayli', puan: 4, notlar: '', kategoriler: ['Bakım'], degerlendirmeler: [], surum: null,
+        firmaId: id, puan: 4, notlar: '', kategoriler: ['Bakım'], degerlendirmeler: [], surum: null,
       }));
     }
   });
@@ -624,61 +624,78 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s.durum, 'siparis_verildi');
   });
 
-  test('SAT-76: askıdaki tedarikçiye sipariş verilmez, ileti tedarikçiyi adlandırır; askıdan çıkınca verilir; var olan sipariş askıdan etkilenmez', async () => {
-    const x = await tedarikciFirma('Deneme Askı Tedarik');
-    const durumYaz = async (durum: 'onayli' | 'askida') => {
-      const kayit = tamam<{ tedarikciler: Tedarikci[] }>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((y) => y.firmaId === x.id)!;
-      tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', {
-        firmaId: x.id, durum, puan: kayit.puan, notlar: kayit.notlar, kategoriler: kayit.kategoriler, degerlendirmeler: kayit.degerlendirmeler, surum: kayit.surum,
-      }));
-    };
+  // 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; satın alma firma kimliğiyle okur, kendi durum sütunu siparişi engellemez.
+  const kararliOnayli = async (firmaId: number, ad: string): Promise<{ onayli: Talep; siparis: { teklifId: string; siparisNo: string; siparisTarihi: string; beklenenTeslim: null } }> => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
-    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
-    const q = teklif(x.id, [[k1, '10'], [k2, '5']], { tedarikciAdi: 'Deneme Askı Tedarik' });
+    const [k1] = t.kalemler.map((k) => k.id) as [string];
+    const q = teklif(firmaId, [[k1, '10']], { tedarikciAdi: ad });
     const onayda = tamam<Talep>(await kaydet(c.sa, {
       ...govde(t), durum: 'onayda', teklifler: [q],
       karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
     }));
-    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
-    await durumYaz('askida');
-    const siparis = { teklifId: q.id, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null };
-    const red = await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
-    assert.equal(red.statusCode, 422);
-    assert.ok(red.body.includes(ILETILER.askidakiTedarikci(['Deneme Askı Tedarik'])), red.body);
-    assert.equal(tamam<{ talepler: Talep[] }>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((y) => y.id === t.id)?.durum, 'onayda');
-    await durumYaz('onayli');
-    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
+    return { onayli: tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] })), siparis: { teklifId: q.id, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null } };
+  };
+  const kaliteKaydi = (kimlik: string) => async (govdesi: Record<string, unknown>, surum: number | null): Promise<number> =>
+    tamam<{ surum: number }>(await istek(c.yonetici, 'POST', `/kalite-merkezi/kayitlar/sup/${kimlik}/onayla`, { govde: govdesi, surum })).surum;
+
+  test('SAT-76 (236 a): Kalite Merkezi onayı Aday ya da Askıda olan tedarikçiye sipariş verilmez; Onaylı ve Şartlı onaylıya verilir; var olan sipariş etkilenmez', async () => {
+    servis.kaliteDurumuCozucusuKaydet(tedarikciOnayDurumlari);
+    const x = await tedarikciFirma('Deneme Askı Tedarik');
+    // Kalite kaydının adı firmadan farklı: bağ yalnız firma kimliğidir.
+    const kalite = kaliteKaydi('sup_sat76');
+    const { onayli, siparis } = await kararliOnayli(x.id, 'Deneme Askı Tedarik');
+    let surum = await kalite({ ad: 'Kalitedeki başka ad', onay: 'Aday', firmaId: x.id }, null);
+    const sipariset = (t: Talep) => kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [siparis] } });
+    for (const onay of ['Aday', 'Askıda']) {
+      if (onay !== 'Aday') surum = await kalite({ ad: 'Kalitedeki başka ad', onay, firmaId: x.id }, surum);
+      const red = await sipariset(onayli);
+      assert.equal(red.statusCode, 422, onay);
+      assert.ok(red.body.includes(ILETILER.askidakiTedarikci([`Deneme Askı Tedarik (${onay})`])), red.body);
+    }
+    assert.equal(tamam<{ talepler: Talep[] }>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((y) => y.id === onayli.id)?.durum, 'onayda');
+    const goster = async () => tamam<{ tedarikciler: Tedarikci[] }>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((y) => y.firmaId === x.id)!;
+    assert.equal((await goster()).kaliteDurumu, 'Askıda');
+    surum = await kalite({ ad: 'Kalitedeki başka ad', onay: 'Şartlı onaylı', firmaId: x.id }, surum);
+    assert.equal((await goster()).kaliteDurumu, 'Şartlı onaylı');
+    const s = tamam<Talep>(await sipariset(onayli));
     assert.equal(s.durum, 'siparis_verildi');
     // Sipariş verildikten sonra askıya alınan tedarikçinin siparişi düzenlenir (beklenen teslim).
-    await durumYaz('askida');
+    surum = await kalite({ ad: 'Kalitedeki başka ad', onay: 'Askıda', firmaId: x.id }, surum);
     const sonra = tamam<Talep>(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: s.karar!.siparisler.map((y) => ({ ...y, beklenenTeslim: '2026-11-02' })) } }));
     assert.equal(sonra.karar?.siparisler[0]?.beklenenTeslim, '2026-11-02');
-    await durumYaz('onayli');
+    await kalite({ ad: 'Kalitedeki başka ad', onay: 'Onaylı', firmaId: x.id }, surum);
     await x.pasifle();
   });
 
-  test('E-13: Kalite Merkezi\'nde askıdaki tedarikçiye de sipariş verilmez; kalite onayı dönünce verilir', async () => {
-    servis.kaliteAskisiCozucusuKaydet(kaliteAskisindakiTedarikciler);
-    const x = await tedarikciFirma('Deneme Kalite Askı');
-    const kalite = async (onay: string, surum: number | null) =>
-      tamam<{ surum: number }>(await istek(c.yonetici, 'POST', '/kalite-merkezi/kayitlar/sup/sup_e13/onayla', { govde: { ad: ' deneme kalite ASKI ', kod: '', onay }, surum }));
-    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
-    const [k1] = t.kalemler.map((k) => k.id) as [string];
-    const q = teklif(x.id, [[k1, '10']], { tedarikciAdi: 'Deneme Kalite Askı' });
-    const onayda = tamam<Talep>(await kaydet(c.sa, {
-      ...govde(t), durum: 'onayda', teklifler: [q],
-      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
+  test('236 a: satın almanın eski durum alanı siparişi engellemez ve yazılmaz; Kalite Merkezi kaydı olmayan tedarikçiye sipariş verilir', async () => {
+    servis.kaliteDurumuCozucusuKaydet(tedarikciOnayDurumlari);
+    const x = await tedarikciFirma('Deneme Eski Durum');
+    const once = tamam<{ tedarikciler: Tedarikci[] }>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((y) => y.firmaId === x.id)!;
+    assert.equal(once.kaliteDurumu, null);
+    // Eski istemcinin gönderdiği durum yok sayılır.
+    const yazilan = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', {
+      firmaId: x.id, durum: 'askida', puan: once.puan, notlar: once.notlar, kategoriler: once.kategoriler, degerlendirmeler: once.degerlendirmeler, surum: once.surum,
     }));
-    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
-    const ilk = await kalite('Askıda', null);
-    const siparis = { teklifId: q.id, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null };
-    const red = await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
-    assert.equal(red.statusCode, 422);
-    assert.ok(red.body.includes(ILETILER.askidakiTedarikci(['Deneme Kalite Askı'])), red.body);
-    await kalite('Onaylı', ilk.surum);
+    assert.equal(yazilan.durum, once.durum);
+    await vt().sorgu("UPDATE satin_alma_tedarikci SET durum = 'askida' WHERE firma_id = $1", [x.id]);
+    const { onayli, siparis } = await kararliOnayli(x.id, 'Deneme Eski Durum');
     const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
     assert.equal(s.durum, 'siparis_verildi');
-    servis.kaliteAskisiCozucusuKaydet(null);
+    await x.pasifle();
+  });
+
+  test('E-13 (236 a): firma kimliği olmayan eski Kalite Merkezi kaydı adla bağlanır ve siparişi engeller; onay dönünce verilir', async () => {
+    servis.kaliteDurumuCozucusuKaydet(tedarikciOnayDurumlari);
+    const x = await tedarikciFirma('Deneme Kalite Askı');
+    const kalite = kaliteKaydi('sup_e13');
+    const { onayli, siparis } = await kararliOnayli(x.id, 'Deneme Kalite Askı');
+    const ilk = await kalite({ ad: ' deneme kalite ASKI ', kod: '', onay: 'Askıda' }, null);
+    const red = await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
+    assert.equal(red.statusCode, 422);
+    assert.ok(red.body.includes(ILETILER.askidakiTedarikci(['Deneme Kalite Askı (Askıda)'])), red.body);
+    await kalite({ ad: ' deneme kalite ASKI ', kod: '', onay: 'Onaylı' }, ilk);
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
+    assert.equal(s.durum, 'siparis_verildi');
     await x.pasifle();
   });
 
@@ -1367,12 +1384,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await kaydet(c.sa, { ...govde(t), durum: 'teklif_isteniyor', teklifler: [q] }));
     const sonra = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis'));
     const ted = sonra.tedarikciler.find((x) => x.firmaId === f)!;
-    assert.deepEqual([ted.ad, ted.durum, ted.puan, ted.notlar, ted.kategoriler, ted.degerlendirmeler], [ad, 'deneme', 3, '', [], []]);
+    assert.deepEqual([ted.ad, ted.kaliteDurumu, ted.puan, ted.notlar, ted.kategoriler, ted.degerlendirmeler], [ad, null, 3, '', [], []]);
     assert.equal(sonra.firmaKartlari.some((x) => x.id === f), false);
   });
 
   test('SAT-41: tedarikçi finansta kayıtlı aktif firmadır ve bir kez eklenir; firma alanları finanstan gelir; yalnız yaz işlemi ekler', async () => {
-    const tedarikci = { firmaId: firmaPasif, durum: 'deneme', puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null };
+    const tedarikci = { firmaId: firmaPasif, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null };
     assert.equal((await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', tedarikci)).statusCode, 422);
     assert.equal((await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { ...tedarikci, firmaId: 999999 })).statusCode, 422);
     assert.equal((await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { ...tedarikci, firmaId: firmaMusteri })).statusCode, 422);
@@ -1382,12 +1399,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const a = acilis.tedarikciler.find((x) => x.firmaId === firmaA)!;
     assert.deepEqual([a.ad, a.sehir, a.firmaAktif, typeof a.firmaSurum], ['Deneme Tedarik A', null, true, 'number']);
     const d = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', {
-      firmaId: firmaA, durum: 'onayli', puan: 5, notlar: 'İyi', kategoriler: ['Bakım', 'Rulman'],
+      firmaId: firmaA, puan: 5, notlar: 'İyi', kategoriler: ['Bakım', 'Rulman'],
       degerlendirmeler: [{ id: randomUUID(), tarih: '2026-10-07', puan: 5, metin: 'Zamanında', degerlendiren: 'Deneme Değerlendiren' }], surum: a.surum,
     }));
     assert.deepEqual([d.puan, d.kategoriler, d.degerlendirmeler[0]?.kisiAdi], [5, ['Bakım', 'Rulman'], 'Deneme satinalma']);
     // Kategoriler girildiği sırayla döner (alfabetik değil).
-    const ters = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: firmaA, durum: 'onayli', puan: 5, notlar: '', kategoriler: ['Rulman', 'Bakım'], degerlendirmeler: [], surum: d.surum }));
+    const ters = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: firmaA, puan: 5, notlar: '', kategoriler: ['Rulman', 'Bakım'], degerlendirmeler: [], surum: d.surum }));
     assert.deepEqual(ters.kategoriler, ['Rulman', 'Bakım']);
   });
 
@@ -1410,7 +1427,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const f = tamam<{ firma: { id: number; surum: number } }>(await istek(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', {
       ad: 'Deneme Sonra Pasif', tur: 'tedarikci', vergiNo: '1234567890', il: 'Deneme İli', telefon: '000 000 00 00', ePosta: 'deneme@ornek.test',
     })).firma;
-    tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: f.id, durum: 'deneme', puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null }));
+    tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: f.id, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null }));
     tamam(await istek(c.yonetici, 'POST', `/finans/firmalar/${f.id}/pasif`, { surum: f.surum }));
     const t = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((x) => x.firmaId === f.id)!;
     assert.deepEqual([t.ad, t.vergiNo, t.sehir, t.telefon, t.eposta, t.yetkili, t.firmaAktif], ['Deneme Sonra Pasif', '1234567890', 'Deneme İli', '000 000 00 00', 'deneme@ornek.test', null, false]);

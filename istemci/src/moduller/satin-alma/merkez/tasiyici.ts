@@ -32,11 +32,12 @@ const DURUM: Record<RequestStatus, Talep['durum']> = {
   draft: 'taslak', rfq: 'teklif_isteniyor', eval: 'degerlendirme', approval: 'onayda', ordered: 'siparis_verildi', received: 'teslim_alindi', cancelled: 'iptal',
 };
 const ONCELIK: Record<Priority, Talep['oncelik']> = { low: 'dusuk', normal: 'normal', urgent: 'acil' };
-const TED_DURUM: Record<SupplierStatus, Tedarikci['durum']> = { approved: 'onayli', trial: 'deneme', suspended: 'askida' };
+// 236 a: tedarikçinin onay durumu Kalite Merkezi'nindir; ekranın durumu ondan türer ve yazılmaz. "Aday" ve "Askıda" tedarikçiye sipariş
+// verilmez (ekranda askıda işareti); kaydı olmayan tedarikçi engellenmez.
+const KALITE_EKRAN_DURUMU: Record<NonNullable<Tedarikci['kaliteDurumu']>, SupplierStatus> = { 'Onaylı': 'approved', 'Şartlı onaylı': 'trial', 'Aday': 'suspended', 'Askıda': 'suspended' };
 const ters = <A extends string, B extends string>(r: Record<A, B>) => Object.fromEntries(Object.entries(r).map(([a, b]) => [b, a])) as Record<B, A>;
 const DURUM_T = ters(DURUM);
 const ONCELIK_T = ters(ONCELIK);
-const TED_DURUM_T = ters(TED_DURUM);
 const KALITE_T: Record<'sorunsuz' | 'kismi_sorun' | 'red_iade', Quality> = { sorunsuz: 'ok', kismi_sorun: 'partial', red_iade: 'rejected' };
 
 // Ekran sayıyla çalışır; sunucuya ondalık metin gider (bilimsel gösterim yok, sondaki sıfırlar atılır).
@@ -130,7 +131,7 @@ export function tedarikciEkrana(t: Tedarikci): Supplier {
   sunucudaki.suppliers.add(id);
   return {
     id, name: t.ad, categories: t.kategoriler, contact: t.yetkili ?? '', phone: t.telefon ?? '', email: t.eposta ?? '', city: t.sehir ?? '',
-    taxNo: t.vergiNo ?? '', status: TED_DURUM_T[t.durum], active: t.firmaAktif, rating: t.puan, notes: t.notlar,
+    taxNo: t.vergiNo ?? '', status: t.kaliteDurumu === null ? 'approved' : KALITE_EKRAN_DURUMU[t.kaliteDurumu], kaliteDurumu: t.kaliteDurumu, active: t.firmaAktif, rating: t.puan, notes: t.notlar,
     evals: t.degerlendirmeler.map((d) => ({ id: d.id, date: d.tarih, rating: d.puan, text: d.metin, name: d.degerlendiren, by: kullaniciEkle(d.kisiId, d.kisiAdi) })),
     createdAt: ms(t.olusturma), version: t.surum,
   };
@@ -319,7 +320,7 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
     return;
   }
   // Tedarikçi: firma kartı finansındır, orada düzenlenir; burada seçilir ya da ortak listeye açılır (firmaEkle). Ekrandaki kimlik firma kimliğidir.
-  // Satın alma yalnız kendi alanlarını (durum, puan, not, kategori, değerlendirme) yazar.
+  // Satın alma yalnız kendi alanlarını (puan, not, kategori, değerlendirme) yazar; onay durumu Kalite Merkezi'nindir.
   const s = d as Supplier | null;
   if (s === null) {
     if (sunucudaki.suppliers.has(id)) await uc.post('/satin-alma-tedarikcileri/:id/sil', { parametre: { id: Number(id) }, ...sure });
@@ -329,7 +330,7 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
   const yeni = !sunucudaki.suppliers.has(id);
   const firmaId = Number(id);
   const t = await uc.post('/satin-alma-tedarikcileri/kaydet', { govde: {
-    firmaId, durum: TED_DURUM[s.status], puan: s.rating, notlar: s.notes ?? '', kategoriler: s.categories ?? [],
+    firmaId, puan: s.rating, notlar: s.notes ?? '', kategoriler: s.categories ?? [],
     degerlendirmeler: (s.evals ?? []).map((e) => ({ id: e.id, tarih: e.date, puan: e.rating, metin: e.text ?? '', degerlendiren: e.name ?? '' })),
     surum: yeni ? null : (s.version ?? 1),
   }, ...sure });
