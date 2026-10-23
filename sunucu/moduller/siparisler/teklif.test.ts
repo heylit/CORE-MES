@@ -6,6 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { SiparisAyrintisi, SiparisDonusumCevabi, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifListesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -112,6 +113,14 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(operator, `/siparisler/teklifler/${t.id}/surum-ver`, { surum: t.surum, fiyatlar: fiyatlar(t) })).statusCode, 403);
     assert.equal((await app.inject({ method: 'GET', url: '/api/siparisler/teklifler' })).statusCode, 401);
     assert.equal((await oku(yonetici, '/siparisler/teklifler')).json<TeklifListesiCevabi>().toplam, once);
+  });
+
+  test('numara ortak sayaçtan gelir; sayaç baştan başlasa da dolu numara atlanır', async () => {
+    const a = await teklifAc();
+    const sira = (no: string) => Number(no.split('-')[2]);
+    assert.match(a.no, new RegExp(`^TK-${tesisGunu(Date.now()).slice(0, 4)}-\\d{3,}$`));
+    await o().sahip.sorgu("DELETE FROM ayar_numara_sayaci WHERE anahtar = 'siparisler.teklif-no'");
+    assert.equal(sira((await teklifAc()).no), sira(a.no) + 1);
   });
 
   test('SIP-10 (180): teklif fiyatları, iskonto ve toplam yalnız siparisler.fiyat-oku olana gider', async () => {

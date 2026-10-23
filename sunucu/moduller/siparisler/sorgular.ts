@@ -114,16 +114,8 @@ export async function siparisVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 AS var FROM siparisler_siparis WHERE id = $1', [id])) !== null;
 }
 
-// Yıl başına sıra: satır kilidiyle artar; eşzamanlı iki açılış aynı numarayı alamaz.
-export async function siradakiNo(db: Db, yil: number): Promise<number> {
-  const satir = await db.tek<{ son_sira: number }>(
-    `INSERT INTO siparisler_numara_sayaci (yil, son_sira) VALUES ($1, 1)
-     ON CONFLICT (yil) DO UPDATE SET son_sira = siparisler_numara_sayaci.son_sira + 1
-     RETURNING son_sira`,
-    [yil],
-  );
-  if (satir === null) throw new Error('Sipariş sırası alınamadı');
-  return satir.son_sira;
+export async function siparisNoVarMi(db: Db, no: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM siparisler_siparis WHERE no = $1', [no])) !== null;
 }
 
 export interface BaslikAlanlari {
@@ -274,16 +266,8 @@ export async function teklifVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 AS var FROM siparisler_teklif WHERE id = $1', [id])) !== null;
 }
 
-// Teklif numarasının yılı açılış anının yılıdır (kurum saat dilimi).
-export async function siradakiTeklifNo(db: Db): Promise<{ yil: number; sira: number }> {
-  const satir = await db.tek<{ yil: number; son_sira: number }>(
-    `INSERT INTO siparisler_teklif_sayaci (yil, son_sira)
-     VALUES (extract(year FROM now() AT TIME ZONE 'Europe/Istanbul')::smallint, 1)
-     ON CONFLICT (yil) DO UPDATE SET son_sira = siparisler_teklif_sayaci.son_sira + 1
-     RETURNING yil::int AS yil, son_sira`,
-  );
-  if (satir === null) throw new Error('Teklif sırası alınamadı');
-  return { yil: satir.yil, sira: satir.son_sira };
+export async function teklifNoVarMi(db: Db, no: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM siparisler_teklif WHERE no = $1', [no])) !== null;
 }
 
 export interface TeklifAlanlari {
