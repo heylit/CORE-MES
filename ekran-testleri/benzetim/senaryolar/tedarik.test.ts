@@ -82,7 +82,7 @@ function sahteSunucu(bozuk: { malKabul?: number } = {}): { istemci: (h: Hesap) =
   let satirNo = 100;
   const acik: Record<string, unknown>[] = [];
   const hareketler: Record<string, unknown>[] = [];
-  const kisi: Record<string, number> = { 'ornek.yonetici': 1, 'ornek.mudur': 2, 'ornek.depo': 3 };
+  const kisi: Record<string, number> = { 'ornek.satinalma': 1, 'ornek.mudur': 2, 'ornek.depo': 3 };
   const cevap = (durum: number, govde: unknown): Promise<Cevap> => Promise.resolve({ durum, govde });
   const istemci = (h: Hesap): RolIstemcisi => ({
     istek(yontem, yol, govde) {
@@ -154,8 +154,8 @@ describe('tedarik senaryosu', () => {
     assert.deepEqual(adimlar.filter((a) => a.sonuc !== 'gecti').map((a) => `${a.adim}: ${a.ileti ?? ''}`), []);
     const onay = adimlar.slice(0, 11).map((a) => `${a.rol} ${a.adim}`);
     assert.deepEqual(onay, [
-      'ornek.depo malzeme kartı seç', 'ornek.depo talep aç', 'ornek.yonetici talebi iş kutusunda bul', 'ornek.yonetici teklif gir',
-      'ornek.yonetici karar ver, onaya gönder', 'ornek.mudur onay bekleyen talebi aç', 'ornek.mudur talebi onayla', 'ornek.yonetici sipariş ver',
+      'ornek.depo malzeme kartı seç', 'ornek.depo talep aç', 'ornek.satinalma talebi iş kutusunda bul', 'ornek.satinalma teklif gir',
+      'ornek.satinalma karar ver, onaya gönder', 'ornek.mudur onay bekleyen talebi aç', 'ornek.mudur talebi onayla', 'ornek.satinalma sipariş ver',
       'ornek.depo açık sipariş satırını bul', 'ornek.depo mal kabul', 'ornek.depo stok hareketini gör',
     ]);
     assert.deepEqual(adimlar.slice(12).map((a) => a.adim).slice(6), [
