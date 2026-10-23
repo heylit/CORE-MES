@@ -21,16 +21,21 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
   after(() => { planMotoruCozucusu(null); });
 
   const istekler: PlanMotoruIstegi[] = [];
-  let kip: 'tamam' | 'baska-makine' | 'yerlesmeyen' = 'tamam';
+  let kip: 'tamam' | 'baska-makine' | 'yerlesmeyen' | 'vardiyasiz' = 'tamam';
+  // 168 b: vardiyasiz kipte bu anahtarlar vardiyası tanımsız tezgâhtadır; motor onları yerleştirmez, ayrı döndürür.
+  let vardiyasizlar: string[] = [];
   // Her kuyruk sırasıyla, tam dakikadan, işi 30 dakika: sonuç girdiden belirlidir.
   const taban = Math.ceil((Date.now() + 10 * 3600_000) / 60_000) * 60_000;
   const saat = (n: number) => ({ baslangic: new Date(taban + n * 30 * 60_000).toISOString(), bitis: new Date(taban + (n + 1) * 30 * 60_000).toISOString() });
   const kur = () => planMotoruCozucusu(async (_db, i) => {
     istekler.push(i);
     if (kip === 'yerlesmeyen') return { yerlesimler: [], yerlesmeyen: i.kuyruklar.flatMap((q) => q.anahtarlar) };
+    const disari = kip === 'vardiyasiz' ? new Set(vardiyasizlar) : new Set<string>();
     return {
-      yerlesimler: i.kuyruklar.flatMap((q) => q.anahtarlar.map((anahtar, n) => ({ anahtar, makineId: kip === 'baska-makine' ? q.makineId + 1 : q.makineId, ...saat(n) }))),
+      yerlesimler: i.kuyruklar.flatMap((q) => q.anahtarlar.filter((a) => !disari.has(a))
+        .map((anahtar, n) => ({ anahtar, makineId: kip === 'baska-makine' ? q.makineId + 1 : q.makineId, ...saat(n) }))),
       yerlesmeyen: [],
+      ...(kip === 'vardiyasiz' ? { vardiyasiz: i.kuyruklar.flatMap((q) => q.anahtarlar.filter((a) => disari.has(a))) } : {}),
     };
   });
   const anahtar = async (id: number) => (await vt().tx((db) => db.tek<{ emirNo: string; opNo: number }>(
@@ -120,6 +125,46 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
       assert.equal(yer(canli, j2!).baslangic, yer(p, j2!).baslangic, 'kilitli iş yerinde');
     } finally {
       kip = 'tamam';
+      planMotoruCozucusu(null);
+    }
+  });
+
+  test('168 b: vardiyası tanımsız tezgâhın işi komutu durdurmaz; kuyruk yaz onu yazmaz, plan yerleşmemiş ve nedenini gösterir; canlıya al onu geçirmez', async () => {
+    const kaynak = { tur: 'makine' as const, id: makineB };
+    const [k1] = await isEmirleriAc([yeniAdim({ kaynak })]);
+    const [k2] = await isEmirleriAc([yeniAdim({ kaynak })]);
+    const a1 = await anahtar(k1!), a2 = await anahtar(k2!);
+    const canliOnce = await planOku();
+    kur();
+    try {
+      kip = 'vardiyasiz';
+      vardiyasizlar = [`${a2.emirNo}|${a2.opNo}`];
+      const r = await tamam<KuyrukYazCevabi>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
+        kuyruklar: [{ kaynak, baslangic: new Date(Date.now() + 3600_000).toISOString(), isler: [
+          { ...a1, dondurulmus: false, elle: false, onizleme: saat(0) }, { ...a2, dondurulmus: false, elle: false, onizleme: saat(1) },
+        ] }],
+      });
+      assert.equal(r.yazilan, 1, 'vardiyasız iş yazılmaz');
+      const p = await planOku(r.taslak);
+      assert.deepEqual([yer(p, k1!).baslangic, yer(p, k1!).bitis], [saat(0).baslangic, saat(0).bitis]);
+      assert.equal(yer(p, k2!), undefined);
+      assert.equal(p.yerlesmemis.find((x) => x.isEmriId === k2)?.neden, 'Tezgâhın vardiyası tanımsız.');
+      assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; işleri yerleşmedi/.test(u)), JSON.stringify(p.uyarilar));
+
+      // Canlıya alma: taslakta yeri kalmış vardiyasız iş (motor yine ayırır) canlıya geçmez; canlıdaki hâli kalır.
+      await vt().tx((db) => db.sorgu(
+        `INSERT INTO plan_senaryo_yerlesimi (senaryo_id, is_emri_id, makine_id, baslangic, bitis, kilitli, dondurulmus, elle_kaynak)
+         VALUES ($1, $2, $3, $4, $5, false, false, false)`, [r.taslak, k2, makineB, saat(4).baslangic, saat(4).bitis]));
+      istekler.length = 0;
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${r.taslak}/canliya-al`, { surum: await gonder(r.taslak, (await planOku(r.taslak)).taslak!.surum), cakismalariKabul: true });
+      const sira = istekler.at(-1)!.kuyruklar.find((q) => q.makineId === makineB)!.anahtarlar.filter((x) => !vardiyasizlar.includes(x));
+      assert.ok(istekler.at(-1)!.kuyruklar.some((q) => q.anahtarlar.includes(vardiyasizlar[0]!)), 'vardiyasız iş motora gider');
+      const canli = await planOku();
+      assert.equal(yer(canli, k1!).baslangic, saat(sira.indexOf(`${a1.emirNo}|${a1.opNo}`)).baslangic, 'yerleşen iş canlıda');
+      assert.equal(yer(canli, k2!)?.baslangic, yer(canliOnce, k2!)?.baslangic, 'vardiyasız işin canlısı değişmez');
+    } finally {
+      kip = 'tamam';
+      vardiyasizlar = [];
       planMotoruCozucusu(null);
     }
   });

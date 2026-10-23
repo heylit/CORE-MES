@@ -132,3 +132,9 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - `disari.ts` `bekleyenSiralar` (Arkon H6): açık ya da onaydaki taslakta kaldırılmamış sıralama değişikliği olan iş emirleri.
 - Senaryo listesi onaydakini açıklarla birlikte üstte gösterir, etkisini hesaplar; ikinci menü stüdyo sayacı açık ve onaydakileri sayar.
 - Bağımlılık: plan -> ayarlar `disari.ts` (`sistemAyariOku`); ayarlar plana bağlı değil.
+
+## Vardiyasız tezgâh (168 b, 2026-10-23)
+- Sunucu motoru (`PlanMotoruCozucusu`) dönüşünde `vardiyasiz` (anahtar "emir no|OP no") taşıyabilir. `sunucuMotoru` bu işleri hata saymaz, yer vermez, ayrı döndürür.
+- Kuyruk yaz: vardiyasız işin taslaktaki yeri kalkar, yazılmaz; komut 200. Canlıya al: vardiyasız işin taslak yeri canlıya geçmez, canlıdaki hâli kalır, tabanı yazılmaz.
+- Plan cevabı: motor kayıtlıyken makinesinin takvimi olmayan yerleşmemiş işin nedeni "Tezgâhın vardiyası tanımsız."; takvimsiz uyarısı "vardiya takvimi yok; işleri yerleşmedi." Motor kayıtsızken bugünkü metin.
+- VARSAYIM: neden, işin atanmış makinesinin takvimi olup olmadığından okunur (motorun listesi saklanmaz); kuyruk yazımında taslaktaki eski yerin kalkması iş yerleşmemiş görünsün diyedir.
