@@ -240,6 +240,11 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
   // Prototipin durumu ortaktır: hazırlık testleri durum anahtarını sırayla kullanır, her biri son sürümden devam eder.
   const durumSurumu = async (): Promise<number | null> => (await kayit(okur, DURUM_ANAHTARI))?.surum ?? null;
   type Onay = { adim: string; olay: string; imza: string | null; kisi: { id: number; ad: string }; zaman: string };
+  // Son onay bütün adım onaylarının sırayla birleşik imzasıyla verilir (hazırlık sırası); testler kuralı geçen tam hazırlık kullanır.
+  const TAM_ONAY: Record<string, string> = {
+    machine: 'm1', prog: 'm1|P', fixture: 'm1|f', jaw: 'm1|j', material: 'm1|mt', zero: 'm1|z', T1: 'm1|P|1|t1', cool: 'm1|c', gauges: 'm1|g', cons: 'm1|s',
+  };
+  const TAM_IMZA = 'm1#m1|P#m1|f#m1|j#m1|mt#m1|z#m1|P|1|t1#m1|c#m1|g#m1|s#10';
   const onaylar = async (): Promise<Onay[]> => {
     const c = await istek(okur, 'GET', '/cnc-kurulum/hazirlik');
     assert.equal(c.statusCode, 200, c.body);
@@ -254,12 +259,12 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal(c1.statusCode, 200, c1.body);
     const surum = (c1.json() as { kayit: Kayit }).kayit.surum;
     // Gövde yalnız onay alanlarını taşır; fazladan gelen hazırlık alanları (kaynak, adet) alınmaz.
-    const gelen = { done: { machine: 'imza1' }, src: 'P2.h', qty: 500, fin: { ts: 1, sig: 'x' }, at: 2 };
+    const gelen = { done: TAM_ONAY, src: 'P2.h', qty: 500, fin: { ts: 1, sig: TAM_IMZA }, at: 2 };
     const c2 = await hazirlikYaz(onaylayan, { hazirlik: gelen, beklenenSurum: surum });
     assert.equal(c2.statusCode, 200, c2.body);
     assert.deepEqual((await kayit(okur, DURUM_ANAHTARI))?.deger, {
       machine: 'f5a', inv: { t1: { qty: 3 } },
-      prep: { done: { machine: 'imza1' }, src: 'P1.h', qty: 10, fin: { ts: 1, sig: 'x' }, at: 2 },
+      prep: { done: TAM_ONAY, src: 'P1.h', qty: 10, fin: { ts: 1, sig: TAM_IMZA }, at: 2 },
     });
     const son = (c2.json() as { kayit: Kayit }).kayit.surum;
     // Sürüm denetimi aynen geçerlidir; bütün durum gövdesi, sürümsüz (yeni kayıt) yazma, tam yazma ve silme reddedilir.
@@ -272,7 +277,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     // birbirine açılmaz.
     assert.equal((await hazirlikYaz(yazar, { hazirlik: gelen, beklenenSurum: son })).statusCode, 403);
     assert.equal((await yazarOnayla(onaylayan, { hazirlik: gelen, beklenenSurum: son })).statusCode, 403);
-    const ayni = await yazarOnayla(yazar, { hazirlik: { done: { machine: 'imza1' }, fin: { sig: 'x', ts: 1 }, at: 2 }, beklenenSurum: son });
+    const ayni = await yazarOnayla(yazar, { hazirlik: { done: TAM_ONAY, fin: { sig: TAM_IMZA, ts: 1 }, at: 2 }, beklenenSurum: son });
     assert.equal(ayni.statusCode, 200, ayni.body);
     assert.equal((ayni.json() as { kayit: Kayit }).kayit.surum, son);
     assert.equal((await hazirlikYaz(yetkisiz, { hazirlik: gelen, beklenenSurum: son })).statusCode, 403);
@@ -311,8 +316,8 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     const durumu = (id: number) => vt().tx((db) => isEmriHazirlikDurumu(db, id));
     assert.deepEqual(await durumu(emirId), { durum: 'suruyor', zaman: null, secildi: true });
     // Son onay: emir için tamamlanma zamanı okunur; geri alınınca düşer.
-    await onay({ T1: 't1b' }, { ts: 5, sig: 'hepsi' });
-    assert.deepEqual((await onaylar()).map((o) => [o.adim, o.olay]), [['T1', 'onay'], ['final', 'tamam']]);
+    await onay(TAM_ONAY, { ts: 5, sig: TAM_IMZA });
+    assert.deepEqual((await onaylar()).filter((o) => ['T1', 'final'].includes(o.adim)).map((o) => [o.adim, o.olay]).sort(), [['T1', 'onay'], ['final', 'tamam']]);
     const tamam = await durumu(emirId);
     assert.deepEqual([tamam.durum, typeof tamam.zaman, tamam.secildi], ['tamam', 'string', true]);
     assert.deepEqual(await durumu(emirId + 1), { durum: 'yok', zaman: null, secildi: false });
@@ -453,7 +458,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await emirSec(yazar, op10)).statusCode, 200);
     const temizle = await yazarOnayla(yazar, { hazirlik: { done: {}, fin: null }, beklenenSurum: await durumSurumu() });
     assert.equal(temizle.statusCode, 200, temizle.body);
-    const tamam = await yazarOnayla(yazar, { hazirlik: { done: { machine: 'm1' }, fin: { ts: 1, sig: 'hepsi' } }, beklenenSurum: await durumSurumu() });
+    const tamam = await yazarOnayla(yazar, { hazirlik: { done: TAM_ONAY, fin: { ts: 1, sig: TAM_IMZA } }, beklenenSurum: await durumSurumu() });
     assert.equal(tamam.statusCode, 200, tamam.body);
     const durumlar = await vt().tx((db) => isEmriHazirlikDurumlari(db, [op10, op20]));
     assert.deepEqual([durumlar.get(op10)?.durum, durumlar.get(op10)?.secildi, durumlar.get(op20)], ['tamam', true, { durum: 'yok', zaman: null, secildi: false }]);
@@ -471,6 +476,36 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, eskiOp))).secildi, false);
     assert.equal((await istek(yazar, 'POST', '/cnc-kurulum/kurulum-tamam', { beklenenSurum: await durumSurumu() })).statusCode, 400);
   });
+  test('CK-22: son onay bütün adımlar aynı imzayla onaylanmadan verilmez (hazırlık sırası); kayıt ve defter değişmez, geri alma geçer', async () => {
+    const emirId = await acikEmirAc('P-SIRA');
+    assert.equal((await emirSec(yazar, emirId)).statusCode, 200);
+    const temizle = await yazarOnayla(yazar, { hazirlik: { done: {}, fin: null }, beklenenSurum: await durumSurumu() });
+    assert.equal(temizle.statusCode, 200, temizle.body);
+    const { cons: _sarf, ...eksik } = TAM_ONAY;
+    const reddedilenler = [
+      { done: eksik, fin: { ts: 1, sig: TAM_IMZA } },
+      { done: { ...TAM_ONAY, T1: 'm1|P|1|t2' }, fin: { ts: 1, sig: TAM_IMZA } },
+      { done: TAM_ONAY, fin: { ts: 1, sig: 'hepsi' } },
+    ];
+    for (const [i, hazirlik] of reddedilenler.entries()) {
+      const surum = await durumSurumu();
+      for (const [cerez, gonder] of [[onaylayan, hazirlikYaz], [yazar, yazarOnayla]] as const) {
+        const c = await gonder(cerez, { hazirlik, beklenenSurum: surum });
+        assert.deepEqual([c.statusCode, (c.json() as { kod?: string }).kod], [422, 'GECERSIZ'], `${String(i)}: ${c.body}`);
+      }
+      assert.equal(await durumSurumu(), surum);
+    }
+    assert.deepEqual(await onaylar(), []);
+    assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, emirId))).durum, 'yok');
+    // Adımlar aynı imzayla onaylıysa son onay verilir; sonra bir adımın geri alınması ve son onayın kaldırılması reddedilmez.
+    const tamam = await hazirlikYaz(onaylayan, { hazirlik: { done: TAM_ONAY, fin: { ts: 1, sig: TAM_IMZA } }, beklenenSurum: await durumSurumu() });
+    assert.equal(tamam.statusCode, 200, tamam.body);
+    assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, emirId))).durum, 'tamam');
+    assert.equal((await hazirlikYaz(onaylayan, { hazirlik: { done: eksik }, beklenenSurum: await durumSurumu() })).statusCode, 200);
+    assert.equal((await hazirlikYaz(onaylayan, { hazirlik: { done: {}, fin: null }, beklenenSurum: await durumSurumu() })).statusCode, 200);
+    assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, emirId))).durum, 'suruyor');
+  });
+
   test('CK-19 (311 a): elle üretim satırı eklenen durum 403 ve kayıt değişmez; satırı aynı kalan yazma geçer', async () => {
     const yazDurum = async (deger: Record<string, unknown>) => yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: await durumSurumu() });
     const durum = { ...((await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown> | undefined ?? {}), wearLog: [] };
