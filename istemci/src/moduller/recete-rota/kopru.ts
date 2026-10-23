@@ -13,6 +13,7 @@ import type { DurumCevabi, KapasiteCevabi, SilCevabi, YazCevabi } from '#paylasi
 import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 
@@ -164,8 +165,13 @@ export interface KaynakEki {
 // Sahibinin kendi okuma uçları (KAYNAK_OKUMALARI): sürüm ve tam kayıt buradan gelir. Biri okunamazsa (yetki yok) o koleksiyon null kalır;
 // o türün güncellemesi "okunmadı" diye reddedilir, öteki türler etkilenmez.
 // Vardiya takvimi aynı okumadan çıkar (vardiyalar koleksiyonu da /vardiya-takvimi'dir): uç bir kez okunur.
-async function anlikOku(): Promise<{ anlik: KaynakAnlik; takvim: TakvimEki | null }> {
-  const ham = await Promise.all(KAYNAK_OKUMALARI.map((o) => api.get<unknown>(o.yol).catch(() => null)));
+// `islemler` verilirse (oturumdaki kişininki) yetkisi bilinen okumadan geçmeyen uç sorulmaz; verilmezse hepsi sorulur.
+type IslemListesi = readonly string[] | undefined;
+const okuyabilir = (gereken: readonly string[] | undefined, islemler: IslemListesi): boolean =>
+  gereken === undefined || islemler === undefined || gereken.some((i) => islemler.includes(i));
+
+async function anlikOku(islemler: IslemListesi): Promise<{ anlik: KaynakAnlik; takvim: TakvimEki | null }> {
+  const ham = await Promise.all(KAYNAK_OKUMALARI.map((o) => (okuyabilir(o.islemler, islemler) ? api.get<unknown>(o.yol).catch(() => null) : null)));
   const anlik: Record<string, KaynakKoleksiyonu | null> = { ...BOS_ANLIK };
   KAYNAK_OKUMALARI.forEach((o, i) => {
     try { anlik[o.koleksiyon] = ham[i] === null ? null : koleksiyonKur(ham[i], o.alan, o.anahtar); } catch { anlik[o.koleksiyon] = null; }
@@ -201,13 +207,20 @@ export interface StokBakiyesi { konumId: number; konumKod: string; partiId: numb
 export interface StokMalzemesi { kirilim: Array<{ statuId: number | null; miktar: string }>; bakiyeler: StokBakiyesi[] }
 export interface StokOkumasi { statuler: StokStatusu[] | null; malzemeler: Record<string, StokMalzemesi | null> | null }
 const AZAMI_STOK_KARTI = 200;
+// Stok bakiyesini sayfası ya da stok işlemi olan okur (sahibinin OKUMA kuralı); öteki kişiye sorulmaz (195 a), dilim null kalır.
+// İstemci paylaşılanı yalnız tip olarak ithal eder; liste sahibinin listesiyle tip denetiminde birebir tutar.
+const STOK_ISLEM_KOPYASI = [
+  'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir',
+] as const satisfies typeof STOK_ISLEMLERI;
+const STOK_OKUMA_ISLEMLERI: readonly string[] = ['sayfa.stok', ...STOK_ISLEM_KOPYASI];
 
-async function stokOku(girdi: Nesne): Promise<StokOkumasi> {
+async function stokOku(girdi: Nesne, islemler: IslemListesi): Promise<StokOkumasi> {
   const kimlikler = girdi['malzemeIdler'];
   if (!Array.isArray(kimlikler) || kimlikler.length > AZAMI_STOK_KARTI) throw new Error('Geçersiz malzeme listesi.');
   const idler = [...new Set(kimlikler.map((k) => pozitifTamSayi(k, 'malzeme')))];
   const statuler = await api.get<{ statuler: StokStatusu[] }>('/recete-rota/statuler')
     .then((c) => c.statuler.map((x) => ({ id: x.id, malzemeNo: x.malzemeNo, kaynakAdim: x.kaynakAdim, ad: x.ad })), () => null);
+  if (!okuyabilir(STOK_OKUMA_ISLEMLERI, islemler)) return { statuler, malzemeler: null };
   let yetkiYok = false;
   const okunan = await Promise.all(idler.map(async (id) => {
     try {
@@ -284,6 +297,7 @@ export function kopruKur(
   secenek: {
     kartTaslakAcabilir?: boolean; bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
     motorUyarilari?: (uyarilar: readonly string[]) => void; highsVerilir?: () => boolean; yerlesimCizilmez?: () => boolean;
+    islemler?: readonly string[];
   } = {},
 ): KopruIsleyici {
   // Çerçeve kayıtları okuduğu andaki sürümler: güncelleme bu sürümle gider, başkası arada yazdıysa sahibi 409 döner. Her başarılı
@@ -361,7 +375,7 @@ export function kopruKur(
       case 'durum-oku':
         return ilkDurumOku();
       case 'stok-oku':
-        return stokOku(v);
+        return stokOku(v, secenek.islemler);
       // Canlı plan sürümü (hafif): ekran kısa aralıkla sorar, başkası canlıya aldıysa uyarır.
       case 'plan-surum':
         return api.get<unknown>('/plan/surum');
@@ -387,7 +401,7 @@ export function kopruKur(
       // güvenli tarafta (409) reddedilir; tersi sırada ekranın görmediği değişikliğin üstüne yazılırdı.
       case 'kaynak-oku':
         return sirala(async () => {
-          const [okunan, kapasite] = await Promise.all([anlikOku(), kapasiteOku()]);
+          const [okunan, kapasite] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku()]);
           anlik = okunan.anlik;
           return { durum: await durumOku(), ek: ekOzeti(anlik, okunan.takvim, kapasite) };
         });
@@ -406,7 +420,7 @@ export function kopruKur(
           // Rota komutları sık koşar ve kaynak sürümlerine dokunmaz: yalnız bağlı durum yeniden okunur.
           if ('hafif' in tanim) return { sonuc, durum: await durumOku().catch(() => null), ek: null };
           // Komut uygulandı; durum okunamazsa komut başarısız sayılmaz (çerçeve `kaynakOku()` ile yeniden ister). Sürümler önce okunur.
-          const [okunan, kapasite] = await Promise.all([anlikOku(), kapasiteOku()]);
+          const [okunan, kapasite] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku()]);
           anlik = okunan.anlik;
           const durum = await durumOku().catch(() => null);
           return { sonuc, durum, ek: ekOzeti(anlik, okunan.takvim, kapasite) };

@@ -77,13 +77,17 @@ function yolDegeri(ad: string, ham: unknown): string {
 }
 
 // Sürüm ve tam kayıt sahibinin kendi okuma uçlarından gelir (durum ucu sürüm taşımaz). Okuma yetkisi yoksa o koleksiyon null kalır.
-export const KAYNAK_OKUMALARI: ReadonlyArray<{ readonly koleksiyon: keyof KaynakAnlik; readonly yol: string; readonly alan: string; readonly anahtar: string }> = [
+// `islemler`: sahibinin uç yetkisi (biri yeter). Bilinen işlemleri taşımayan kişiye uç hiç sorulmaz (195 a, 403 bırakılmaz); alan
+// yoksa uç sayfayı gören herkese açıktır.
+export const KAYNAK_OKUMALARI: ReadonlyArray<{
+  readonly koleksiyon: keyof KaynakAnlik; readonly yol: string; readonly alan: string; readonly anahtar: string; readonly islemler?: readonly string[];
+}> = [
   { koleksiyon: 'isMerkezleri', yol: '/is-merkezleri', alan: 'isMerkezleri', anahtar: 'id' },
   { koleksiyon: 'istasyonlar', yol: '/istasyonlar', alan: 'istasyonlar', anahtar: 'id' },
   { koleksiyon: 'makineler', yol: '/makineler', alan: 'makineler', anahtar: 'id' },
-  { koleksiyon: 'kisiler', yol: '/kisiler', alan: 'kisiler', anahtar: 'id' },
+  { koleksiyon: 'kisiler', yol: '/kisiler', alan: 'kisiler', anahtar: 'id', islemler: ['kisiler.oku'] },
   { koleksiyon: 'vardiyalar', yol: '/vardiya-takvimi', alan: 'vardiyalar', anahtar: 'id' },
-  { koleksiyon: 'planAyarlari', yol: '/istasyon-plan-ayarlari', alan: 'ayarlar', anahtar: 'istasyonId' },
+  { koleksiyon: 'planAyarlari', yol: '/istasyon-plan-ayarlari', alan: 'ayarlar', anahtar: 'istasyonId', islemler: ['sayfa.istasyonlar', 'istasyonlar.yaz'] },
   { koleksiyon: 'makineDurumlari', yol: '/makine-durumlari', alan: 'durumlar', anahtar: 'makineId' },
 ];
 
