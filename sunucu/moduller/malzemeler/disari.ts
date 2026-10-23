@@ -1,3 +1,8 @@
+import type { Db } from '#cekirdek/db.ts';
+import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
+import type { KatalogKartDurumu } from '#paylasilan/sozlesme/malzemeler.ts';
+import { cncKimligiYaz, cncKimlikliKartlar, katalogMalzemeOzeti } from './sorgular.ts';
+
 // malzemeAdlari: adı olmayan kart koduyla yer alır; olmayan kimlik haritada yok. malzemeOzeti: `birim` kartta yoksa null.
 export { malzemeAdlari, malzemeOzeti, malzemeKullanilabilirMi } from './servis.ts';
 // Bağlama tur 1 (kart #163): toplu özet (olmayan kimlik haritada yok), metinle sayfalı arama (stok ve rota için tek imza),
@@ -36,3 +41,18 @@ export { rotaRevizyonlariCozucusuKaydet as rotaRevizyonlariCozucusu } from './se
 // stoka kartın biriminde düşer. Yetki denetlemez.
 export { malzemeBirimDonusumleri } from './servis.ts';
 export type { MalzemeBirimDonusumu } from './servis.ts';
+// CNC takım stoğu (153 a, 163 b): prototipin kütüphane kimliği karta bağlanır; CNC kurulumu stoğu bu bağla okur. Kart seçimi
+// `malzemeAra` (sarf, demirbaş) ile. Yetki denetlemez; bağı yazan çağıran kart yazma işlemini korur.
+export interface CncKimlikliMalzeme { malzemeId: number; kod: string; ad: string | null; birim: string | null; onayDurumu: KatalogKartDurumu }
+// Kimlik listesi verilmezse bütün bağlı kartlar döner (CNC kurulumu kütüphanesini sunucuda bilmez).
+export async function cncKimlikliMalzemeler(db: Db, kimlikler?: readonly string[]): Promise<Map<string, CncKimlikliMalzeme>> {
+  if (kimlikler?.length === 0) return new Map();
+  return new Map((await cncKimlikliKartlar(db, kimlikler === undefined ? null : [...new Set(kimlikler)])).map((k) => [k.cncKimligi, { malzemeId: k.id, kod: k.kod, ad: k.ad, birim: k.birim, onayDurumu: k.onayDurumu }]));
+}
+// Kimlik başka kartta bağlıysa oradan kalkar; null kartın bağını kaldırır. Bağı kalkan önceki kart döner.
+export async function cncKimligiBagla(db: Db, malzemeId: number, kimlik: string | null): Promise<{ oncekiMalzemeId: number | null }> {
+  const r = await cncKimligiYaz(db, malzemeId, kimlik);
+  if (r.bagli) return { oncekiMalzemeId: r.oncekiNo };
+  if ((await katalogMalzemeOzeti(db, malzemeId)) === null) throw bulunamadi('Malzeme kartı bulunamadı.');
+  throw gecersiz('CNC kütüphanesine yalnız sarf ve demirbaş kartı bağlanır.');
+}

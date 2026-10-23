@@ -42,12 +42,20 @@ birlikte ne ayrı yazılabilir ne ayrı teslim alınabilir.
      listedeki sırayla koşar.
    - Test, modül dosyalarının yüklenirken bağ kurmadığını ve listenin eksiksiz olduğunu denetler
      (`sunucu/kablolama.test.ts`).
-   Bugünkü bağlar (28, 19.10.2026; kaynak `sunucununBaglari`): uretim-emirleri -> stok (emir açıldı, sağlam sayım, hurda sayım,
-   kalite kararı, emir bitti, iptal, birleşti, fason hareketi), sevkiyat -> stok (fason sevki, ürün sevki), Reçete ve Rota -> stok
-   (adım statüsü, adım çıktısı ve statü listesi çözücüleri), uretim-emirleri -> sevkiyat (emir bitti, fason hareketi), stok -> satın
-   alma (stok yok istekleri, değer grubu toplamları), iş emri tahmini maliyeti ve üretim emri malzeme maliyeti -> plan, satın alma ->
-   sevkiyat (alım), kalite askısı -> satın alma siparişi, vardiya -> İK (çalışma takvimi, başladığı gün takvimi, vardiya tanımları,
-   vardiya matrisi), siparişler -> finans (sipariş özeti, satış siparişleri), idari işler -> İK (açık zimmetler).
+   Bugünkü bağlar (41, 23.10.2026; kaynak `sunucununBaglari`):
+   - uretim-emirleri -> stok: emir açıldı, sağlam sayım, hurda sayım, kalite kararı, emir bitti, iptal, birleşti, fason hareketi.
+   - uretim-emirleri -> cnc-kurulum: sağlam ve hurda sayım (takım ömrü).
+   - uretim-emirleri -> sevkiyat: emir bitti, fason hareketi. uretim-emirleri -> logo: emir bitti (malzeme fişi).
+   - sevkiyat -> stok: fason sevki, ürün sevki.
+   - stok <- Reçete ve Rota: adım statüsü, adım çıktısı ve statü listesi çözücüleri.
+   - malzemeler <- Reçete ve Rota: rota revizyonları.
+   - satın alma <- stok: stok yok istekleri, stok değer grupları. satın alma -> sevkiyat: alım. satın alma <- Kalite Merkezi: kalite askısı.
+   - plan <- iş emri tahmini maliyeti, üretim emri malzeme maliyeti, müşteri sınıfı çözücüleri; siparişler -> plan: sipariş onaylandı (acil sipariş).
+   - uretim-emirleri <- plan: makine ayrımı. siparişler <- Reçete ve Rota: teklif denemesi (planlama motoru).
+   - İK <- vardiya: çalışma takvimi, başladığı gün takvimi, vardiya tanımları, vardiya matrisi. İK <- idari işler: açık zimmetler.
+   - finans <- siparişler: sipariş özeti, satış siparişleri. finans <- sevkiyat: sevk işi özeti, siparişin sevkleri.
+   - uretim-emirleri <- başlatma hazırlığı çözücüleri: CNC kurulumu (iş emri), çizim revizyonu (Arkon), kalibrasyon (Kalite Merkezi).
+   Liste bu belgede özetlenir; tek kaynak `sunucu/kablolama.ts`'tir. Sayı farkı çıkarsa dosya geçerlidir.
    Yeni bağ ancak bu listeye eklenerek kurulur; davranış ve ekran bu kalıptan etkilenmez.
 
 ## Katman tablosu

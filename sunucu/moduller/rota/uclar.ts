@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, taslakAcGovdesi,
-  urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
+  urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import {
   agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
@@ -145,7 +145,7 @@ export const uclar = [
     cevap: surelerCevabi,
     isle: ({ db, parametre, sorgu }) => sureler(db, parametre.id, sorgu.makineId ?? null),
   }),
-  // Gerçekleşen süre elle girilir; defter yalnız eklenir (yinelenen istek iki satır yazmasın).
+  // Ölçüm elle girilir ya da boşaltılır; defter yalnız eklenir (yinelenen istek iki satır yazmasın).
   uc({
     yontem: 'POST',
     yol: '/rota/adimlar/:id/gerceklesen-sure',
@@ -156,7 +156,7 @@ export const uclar = [
     cevap: surelerCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gerceklesenSureYaz(db, kullanici, parametre.id, govde),
   }),
-  // Terminal önerisi kabul edilince plana geçer (S4 a); öneri satırı değişmez, kabul yeni satırdır.
+  // Ölçüm kabul edilince taslağın teorik süresi olur (169 c); plan revizyon yürürlüğe girince kullanır.
   uc({
     yontem: 'POST',
     yol: '/rota/adimlar/:id/gerceklesen-sure/kabul',
@@ -164,7 +164,7 @@ export const uclar = [
     yetki: 'rota.yaz',
     parametre: adimParametresi,
     govde: gerceklesenKabulGovdesi,
-    cevap: surelerCevabi,
+    cevap: gerceklesenKabulCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gerceklesenKabulEt(db, kullanici, parametre.id, govde),
   }),
   uc({

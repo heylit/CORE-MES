@@ -9,7 +9,7 @@ Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yo
 | GET /portal/damga | `portal.oku` ya da `.yaz` | yalnız sayaç | BD-01 | BD-21 |
 | GET /portal/sorgu | `portal.oku` ya da `.yaz` | kişiye özel alan (BD-2), koşul/sıra/sınır sunucuda, bölümün okuyamadığı satış ve satın alma kaydı listeden düşer (kart #1162) | BD-04, BD-17 | BD-06, BD-07, BD-17 |
 | GET /portal/belge | `portal.oku` ya da `.yaz` | kişiye özel alan, bölüm okuma izni: satış teklifi, satın alma teklif ve fiyat talebi, katalog ve türüne göre sipariş bölümü olmayana 403 (kart #1162) | BD-01, BD-17 | BD-06, BD-17 |
-| POST /portal/belge/yaz | `portal.yaz` | yol biçimi (kısıt), kişiye özel alan, beklenen sürüm 409, kayıt kişisi ve zamanı sunucudan, yeni "kim yaptı" alanı başka portal kullanıcısı olamaz, TMI kişisinin rol ve izinleri değiştirilemez, koleksiyona yalnız ilgili bölüm izni yazar (KD-063), var olan siparişe yalnız türünün bölümü ve finans yazar (kart #1162) | BD-01, BD-02, BD-14, BD-16, BD-17 | BD-03, BD-06, BD-07, BD-09, BD-14, BD-15, BD-16 |
+| POST /portal/belge/yaz | `portal.yaz` | yol biçimi (kısıt), kişiye özel alan, beklenen sürüm 409, kayıt kişisi ve zamanı sunucudan, yeni "kim yaptı" alanı başka portal kullanıcısı olamaz, TMI kişisinin rol ve izinleri değiştirilemez, koleksiyona yalnız ilgili bölüm izni yazar (KD-063), var olan siparişe yalnız türünün bölümü ve finans yazar (kart #1162), onay adım zinciri sunucunun hesabıdır ve onay gerektiren kayıt onaysız ya da düşük tutarlı onayla yazılamaz (B8) | BD-01, BD-02, BD-14, BD-16, BD-17, BD-24 | BD-03, BD-06, BD-07, BD-09, BD-14, BD-15, BD-16, BD-24 |
 | POST /portal/belge/sil | `portal.yaz` | kişiye özel alan, bölüm izni, sayaç | BD-05 | BD-06, BD-16 |
 | POST /portal/belge/kilitle | `portal.yaz` | başkasının geçerli kilidi verilmez; kilit verisinde de başka kişi adına kimlik reddedilir; bölüm izni | BD-08 | BD-08, BD-16 |
 | GET /portal/kisiler | `portal.oku` ya da `.yaz` | yalnız etkin kişilerin no ve adı (kisiler/disari.ts) | BD-21 | BD-21 |
@@ -20,7 +20,7 @@ Bütün uçlar çalışan oturumu ister; dış (müşteri, tedarikçi) giriş yo
 | GET /portal/ekler/:id | `portal.oku` ya da `.yaz` | 32 hex kimlik | BD-10 | BD-10 (olmayan ek 404) |
 
 ## Yalnız ekranda kalan kurallar
-Prototipin iş kuralları (onay limitleri, müşteri/tedarikçi görünürlüğü `visible`, sipariş ve ödeme durum geçişleri) tarayıcıdadır;
+Prototipin iş kuralları (müşteri/tedarikçi görünürlüğü `visible`, sipariş ve ödeme durum geçişleri) tarayıcıdadır; onay adımı hesabı sunucudadır (B8), limit değerleri portal ayarındadır;
 `UYUM-BORCU.md`. Genel yazma ucu (`/portal/belge/yaz` her koleksiyona yazar) proje kuralı 7 ile çelişir; Aşama 2'de koleksiyon başına ayrı komut.
 
 ## Eksik testler (UYUM-BORCU'ya yazıldı)

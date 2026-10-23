@@ -18,6 +18,23 @@ export function erisebilirMi(yol: string, kisiId: number): boolean {
   return p.length >= 3 && p[2] === String(kisiId);
 }
 
+// Genel depo ucu yalnız prototipin kalıcı yerel depo anahtarlarına açıktır (istemcideki `YEREL.onekler` ile aynı): prototip
+// başka koleksiyon kullanmaz, uç başka yola yazma ve okuma kapısı olmasın. Kök ortak (`yerel`) ya da kişisel
+// (`data/users/<kişi>/yerel/anahtarlar`); anahtar köprüde kodlanır, öneklerde kodlanan karakter yoktur.
+export const YEREL_ONEKLERI: readonly string[] = ['kalite-denetim'];
+const KISISEL_KOK_UZUNLUGU = 5;
+
+export function izinliKoleksiyonMu(koleksiyon: string): boolean {
+  const p = parcalar(koleksiyon);
+  if (p.length === 1) return p[0] === 'yerel';
+  return p.length === KISISEL_KOK_UZUNLUGU && p[0] === 'data' && p[1] === 'users' && p[3] === 'yerel' && p[4] === 'anahtarlar';
+}
+
+export function izinliBelgeMi(yol: string): boolean {
+  const anahtar = sonParca(yol);
+  return izinliKoleksiyonMu(ustYolu(yol)) && YEREL_ONEKLERI.some((o) => anahtar.startsWith(o));
+}
+
 // Ortak kayıt: prototipin yerel deposu (`yerel/<anahtar>`) bütün yazarların birlikte düzenlediği tek durumdur; aynı anda
 // yazmayı sürüm denetimi korur. Öteki her var olan belgeyi yalnız oluşturan kişi değiştirir ya da siler (kişiye özel alan
 // zaten yalnız sahibine açıktır).

@@ -6,7 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { bekleyenTerminal, degisimOrani, etkinAdimSuresi, gecerliGerceklesen, gerceklesenDenetle, kabulDenetle, sureAyrimi, taslakSureleri, teorikAyrim, terminalOnerileri } from './kurallar.ts';
+import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import type { GerceklesenSatiri } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
@@ -318,73 +318,75 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.equal(degisimOrani(0, 0.5), null);
   });
   const satir = (p: Partial<GerceklesenSatiri> & Pick<GerceklesenSatiri, 'id'>): GerceklesenSatiri => ({ tur: 'islem', makineId: null, sureDk: 1, kaynak: 'elle', ...p });
-  test('RT-73: tür başına son elle ya da kabul satırı geçerlidir; terminal satırı öneridir, plan kullanmaz', () => {
-    const g = gecerliGerceklesen([satir({ id: 1, sureDk: 3 }), satir({ id: 2, sureDk: 4, kaynak: 'kabul' }), satir({ id: 3, sureDk: 9, kaynak: 'terminal' })], null);
-    assert.deepEqual(g.islem, { id: 2, sureDk: 4, kaynak: 'kabul' });
-    assert.equal(g.hazirlik, null);
-    assert.equal(gecerliGerceklesen([satir({ id: 3, sureDk: 9, kaynak: 'terminal' })], null).islem, null);
+  test('RT-74: plan yalnız teorik süreyle çalışır; birim süre işlem + değişimdir, işlem yoksa birim süre yoktur', () => {
+    assert.deepEqual(etkinAdimSuresi({ hazirlikDk: 30, islemDk: 2, degisimDk: 0.5 }), { ayarSuresiDk: 30, birimSureDk: 2.5, islemSuresiDk: 2, degisimSuresiDk: 0.5 });
+    assert.equal(etkinAdimSuresi({ hazirlikDk: 30, islemDk: 2, degisimDk: null }).birimSureDk, 2);
+    assert.equal(etkinAdimSuresi({ hazirlikDk: null, islemDk: null, degisimDk: 0.5 }).birimSureDk, null);
   });
-  test('RT-73: boş süreli son satır teoriğe dönüştür; makinenin satırı yoksa ya da boşsa makinesiz satır geçerlidir', () => {
-    assert.equal(gecerliGerceklesen([satir({ id: 1, sureDk: 3 }), satir({ id: 2, sureDk: null })], null).islem, null);
-    const satirlar = [satir({ id: 1, sureDk: 3 }), satir({ id: 2, sureDk: 5, makineId: 7 })];
-    assert.equal(gecerliGerceklesen(satirlar, 7).islem?.sureDk, 5);
-    assert.equal(gecerliGerceklesen(satirlar, 8).islem?.sureDk, 3);
-    assert.equal(gecerliGerceklesen(satirlar, null).islem?.sureDk, 3);
-    assert.equal(gecerliGerceklesen([...satirlar, satir({ id: 3, sureDk: null, makineId: 7 })], 7).islem?.sureDk, 3);
-  });
-  test('RT-74: etkin süre tür başına gerçekleşen varsa o, yoksa teoriktir; işlem yoksa birim süre yoktur', () => {
-    const teorik = { hazirlikDk: 30, islemDk: 2, degisimDk: 0.5 };
-    const yok = { hazirlik: null, islem: null, degisim: null };
-    assert.deepEqual(etkinAdimSuresi(teorik, yok), {
-      ayarSuresiDk: 30, birimSureDk: 2.5, islemSuresiDk: 2, degisimSuresiDk: 0.5, baz: { hazirlik: 'teorik', islem: 'teorik', degisim: 'teorik' },
-    });
-    const g = etkinAdimSuresi(teorik, { ...yok, hazirlik: { sureDk: 45 }, islem: { sureDk: 1.8 } });
-    assert.deepEqual([g.ayarSuresiDk, g.birimSureDk, g.baz.hazirlik, g.baz.islem, g.baz.degisim], [45, 2.3, 'gerceklesen', 'gerceklesen', 'teorik']);
-    assert.equal(etkinAdimSuresi({ hazirlikDk: 30, islemDk: 2, degisimDk: null }, yok).birimSureDk, 2);
-    assert.equal(etkinAdimSuresi({ hazirlikDk: null, islemDk: null, degisimDk: 0.5 }, yok).birimSureDk, null);
-  });
-  test('RT-75: gerçekleşen işlem süresi sıfır olamaz; hazırlık ve değişim sıfır, boş süre geçer', () => {
+  test('RT-75: ölçülen işlem (birim) süresi sıfır olamaz; hazırlık ve değişim sıfır, boş süre geçer', () => {
     assert.equal(gerceklesenDenetle('islem', 0), 'Gerçekleşen işlem süresi sıfırdan büyük olmalı.');
     assert.equal(gerceklesenDenetle('islem', 1.2), null);
     assert.equal(gerceklesenDenetle('islem', null), null);
     assert.equal(gerceklesenDenetle('hazirlik', 0), null);
     assert.equal(gerceklesenDenetle('degisim', 0), null);
   });
-  test('RT-76: terminal önerisi ölçülen net birim süreden etkin değişim düşülerek bulunur; ölçülmeyen ya da sıfıra inen işlem öneri değildir', () => {
-    assert.deepEqual(terminalOnerileri({ hazirlikDk: 20, netBirimDk: 3 }, 0.5), { hazirlik: 20, islem: 2.5 });
-    assert.deepEqual(terminalOnerileri({ hazirlikDk: 0, netBirimDk: 3 }, null), { hazirlik: 0, islem: 3 });
-    assert.deepEqual(terminalOnerileri({ hazirlikDk: null, netBirimDk: null }, 0.5), { hazirlik: null, islem: null });
-    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.4 }, 0.5).islem, null);
-    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.5 }, 0.5).islem, null);
-    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.3 }, 0.1).islem, 0.2);
+  test('RT-76: terminal ölçümü net birim süredir (değişim dahil); ölçülmeyen ya da sıfır süre ölçüm değildir', () => {
+    assert.deepEqual(terminalOlcumleri({ hazirlikDk: 20, netBirimDk: 3 }), { hazirlik: 20, islem: 3 });
+    assert.deepEqual(terminalOlcumleri({ hazirlikDk: 0, netBirimDk: 0.3 }), { hazirlik: 0, islem: 0.3 });
+    assert.deepEqual(terminalOlcumleri({ hazirlikDk: null, netBirimDk: null }), { hazirlik: null, islem: null });
+    assert.equal(terminalOlcumleri({ hazirlikDk: null, netBirimDk: 0 }).islem, null);
   });
-  test('RT-77: bekleyen öneri görünümün son elle ya da kabul satırından sonraki son terminal satırıdır; makinesiz görünüm her makineninkini gösterir', () => {
+  test('RT-73: bekleyen ölçüm son boşaltmadan sonraki son dolu elle ya da terminal satırıdır; makinesiz görünüm her makineninkini gösterir', () => {
     const t = (id: number, p: Partial<GerceklesenSatiri> = {}) => satir({ id, kaynak: 'terminal', ...p });
-    assert.equal(bekleyenTerminal([t(1), t(2, { sureDk: 4 })], null).islem?.id, 2);
-    assert.equal(bekleyenTerminal([t(1), satir({ id: 2, kaynak: 'kabul' })], null).islem, null);
-    assert.equal(bekleyenTerminal([satir({ id: 1 }), t(2)], null).islem?.id, 2);
-    assert.equal(bekleyenTerminal([t(1, { tur: 'hazirlik' })], null).islem, null);
+    const bos = (id: number, p: Partial<GerceklesenSatiri> = {}) => satir({ id, sureDk: null, ...p });
+    assert.equal(bekleyenOlcum([t(1), t(2, { sureDk: 4 })], null).islem?.id, 2);
+    assert.equal(bekleyenOlcum([t(1), satir({ id: 2 })], null).islem?.id, 2, 'elle ölçüm de ölçümdür');
+    assert.equal(bekleyenOlcum([t(1), satir({ id: 2, kaynak: 'kabul' })], null).islem?.id, 1, 'kabul ölçümü kapatmaz; boşaltma yürürlükte');
+    assert.equal(bekleyenOlcum([t(1), bos(2)], null).islem, null);
+    assert.equal(bekleyenOlcum([bos(1), t(2)], null).islem?.id, 2);
+    assert.equal(bekleyenOlcum([t(1, { tur: 'hazirlik' })], null).islem, null);
     const makineli = [t(1, { makineId: 7 }), t(2, { makineId: 8 })];
-    assert.equal(bekleyenTerminal(makineli, null).islem?.id, 2);
-    assert.equal(bekleyenTerminal(makineli, 7).islem?.id, 1);
-    assert.equal(bekleyenTerminal([t(1)], 7).islem?.id, 1);
-    // Makineye özgü kabul makinesiz görünümün önerisini kapatmaz; makinesiz kabul makine görünümününkini de kapatır.
-    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 7, kaynak: 'kabul' })], null).islem?.id, 1);
-    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 7, kaynak: 'kabul' })], 7).islem, null);
-    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, kaynak: 'kabul' })], 7).islem, null);
-    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 8, kaynak: 'kabul' })], 7).islem?.id, 1);
+    assert.equal(bekleyenOlcum(makineli, null).islem?.id, 2);
+    assert.equal(bekleyenOlcum(makineli, 7).islem?.id, 1);
+    assert.equal(bekleyenOlcum([t(1)], 7).islem?.id, 1);
+    // Makineye özgü kapatma makinesiz görünümün ölçümünü kapatmaz; makinesiz kapatma makine görünümününkini de kapatır.
+    assert.equal(bekleyenOlcum([t(1, { makineId: 7 }), bos(2, { makineId: 7 })], null).islem?.id, 1);
+    assert.equal(bekleyenOlcum([t(1, { makineId: 7 }), bos(2, { makineId: 7 })], 7).islem, null);
+    assert.equal(bekleyenOlcum([t(1, { makineId: 7 }), bos(2)], 7).islem, null);
+    assert.equal(bekleyenOlcum([t(1, { makineId: 7 }), bos(2, { makineId: 8 })], 7).islem?.id, 1);
   });
-  test('RT-77: yalnız bu adımın bu türdeki terminal satırı kabul edilir; makineye özgü kabul başka makinenin ölçümünü almaz', () => {
+  test('RT-77: yalnız bu adımın bu türdeki ölçümü kabul edilir; makineye özgü kabul başka makinenin ölçümünü almaz', () => {
     const hedef = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: null };
-    const oneri = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: 7, kaynak: 'terminal' as const };
-    assert.equal(kabulDenetle(oneri, hedef), null);
-    assert.equal(kabulDenetle(oneri, { ...hedef, makineId: 7 }), null);
-    assert.equal(kabulDenetle({ ...oneri, makineId: null }, { ...hedef, makineId: 7 }), null);
-    assert.equal(kabulDenetle(oneri, { ...hedef, makineId: 8 }), 'Öneri başka makinenin ölçümü.');
-    assert.equal(kabulDenetle({ ...oneri, kaynak: 'elle' }, hedef), 'Yalnız terminal önerisi kabul edilir.');
+    const olcum = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: 7, kaynak: 'terminal' as const, sureDk: 3 };
+    assert.equal(kabulDenetle(olcum, hedef), null);
+    assert.equal(kabulDenetle({ ...olcum, kaynak: 'elle' }, hedef), null);
+    assert.equal(kabulDenetle(olcum, { ...hedef, makineId: 7 }), null);
+    assert.equal(kabulDenetle({ ...olcum, makineId: null }, { ...hedef, makineId: 7 }), null);
+    assert.equal(kabulDenetle(olcum, { ...hedef, makineId: 8 }), 'Ölçüm başka makinenin.');
+    assert.equal(kabulDenetle({ ...olcum, kaynak: 'kabul' }, hedef), 'Yalnız ölçülmüş süre kabul edilir.');
+    assert.equal(kabulDenetle({ ...olcum, kaynak: 'elle', sureDk: null }, hedef), 'Yalnız ölçülmüş süre kabul edilir.');
     for (const fark of [{ malzemeId: 2 }, { opNo: 20 }, { tur: 'hazirlik' as const }]) {
-      assert.equal(kabulDenetle({ ...oneri, ...fark }, hedef), 'Öneri bu adımın bu süresine ait değil.');
+      assert.equal(kabulDenetle({ ...olcum, ...fark }, hedef), 'Ölçüm bu adımın bu süresine ait değil.');
     }
+  });
+  test('RT-78: kabul hazırlığı ayar süresine yazar; işlem ölçümü birim süredir, değişim korunur; değişim ölçümü birimi değiştirir', () => {
+    const ayrik = { ayarSuresiDk: 30, birimSureDk: 2.5, islemSuresiDk: 2, degisimSuresiDk: 0.5 };
+    assert.deepEqual(kabulSureleri(ayrik, 'hazirlik', 20), { ...ayrik, ayarSuresiDk: 20 });
+    assert.deepEqual(kabulSureleri(ayrik, 'islem', 3), { ...ayrik, birimSureDk: 3, islemSuresiDk: 2.5 });
+    assert.deepEqual(kabulSureleri(ayrik, 'degisim', 0.3), { ...ayrik, birimSureDk: 2.3, degisimSuresiDk: 0.3 });
+    assert.deepEqual(kabulSureleri(ayrik, 'islem', 0.5), { ileti: 'Ölçülen birim süre değişim süresinden uzun olmalı.' });
+    const ayrilmamis = { ayarSuresiDk: 30, birimSureDk: 2.5, islemSuresiDk: null, degisimSuresiDk: null };
+    assert.deepEqual(kabulSureleri(ayrilmamis, 'islem', 3), { ...ayrilmamis, birimSureDk: 3 });
+    assert.deepEqual(kabulSureleri(ayrilmamis, 'degisim', 0.5), { ...ayrilmamis, islemSuresiDk: 2.5, degisimSuresiDk: 0.5, birimSureDk: 3 });
+    assert.deepEqual(kabulSureleri({ ...ayrilmamis, birimSureDk: null }, 'degisim', 0.5), { ileti: 'Birim süresi olmayan adıma değişim süresi yazılmaz.' });
+  });
+  test('RT-79: yürürlüğe giren revizyonda teorik süresi değişen türler boşaltılır; yeni adımda dolu her tür değişmiş sayılır', () => {
+    const eski = { ayarSuresiDk: 30, birimSureDk: 2.5, islemSuresiDk: 2, degisimSuresiDk: 0.5 };
+    assert.deepEqual(degisenTurler(eski, eski), []);
+    assert.deepEqual(degisenTurler(eski, { ...eski, ayarSuresiDk: 20 }), ['hazirlik']);
+    assert.deepEqual(degisenTurler(eski, { ...eski, birimSureDk: 3, islemSuresiDk: 2.5 }), ['islem']);
+    assert.deepEqual(degisenTurler(eski, { ...eski, birimSureDk: 2.3, degisimSuresiDk: 0.3 }), ['islem', 'degisim']);
+    assert.deepEqual(degisenTurler(null, { ayarSuresiDk: 10, birimSureDk: 2, islemSuresiDk: null, degisimSuresiDk: null }), ['hazirlik', 'islem']);
   });
 });
 

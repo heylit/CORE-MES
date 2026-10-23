@@ -105,6 +105,10 @@ export async function harfler(db: Db, malzemeId: number): Promise<string[]> {
   return (await db.sorgu<{ harf: string }>('SELECT harf FROM rota_revizyonu WHERE malzeme_id = $1', [malzemeId])).map((s) => s.harf);
 }
 
+export function acikRevizyon(db: Db, malzemeId: number): Promise<{ id: number; durum: RevizyonDurumu } | null> {
+  return db.tek("SELECT id, durum FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')", [malzemeId]);
+}
+
 export async function acikRevizyonVarMi(db: Db, malzemeId: number): Promise<boolean> {
   return (await db.tek<{ var: boolean }>(
     "SELECT EXISTS (SELECT 1 FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')) AS var",
@@ -406,6 +410,15 @@ export async function kaydetYaz(db: Db, id: number, aciklama: string | null, kis
     [id, kisiId],
   );
   return surumArtir(db, id, 'aciklama = $2', [aciklama]);
+}
+
+// Taslağı içerik dışında değiştirmeden düzenleyen olarak işaretler ve sürümü artırır (ölçüm kabulü, 169 c).
+export async function duzenlemeYaz(db: Db, id: number, kisiId: number): Promise<number> {
+  await db.sorgu(
+    `INSERT INTO rota_revizyonu_duzenleyen (revizyon_id, kisi_id) VALUES ($1, $2) ON CONFLICT (revizyon_id, kisi_id) DO NOTHING`,
+    [id, kisiId],
+  );
+  return surumArtir(db, id, '', []);
 }
 
 async function surumArtir(db: Db, id: number, ek: string, degerler: readonly unknown[]): Promise<number> {

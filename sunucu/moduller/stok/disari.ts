@@ -3,6 +3,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { stokDurumu, type StokDurumu } from './kurallar.ts';
+import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -65,6 +66,11 @@ export async function partiGirisZamanlari(db: Db, partiIdler: number[]): Promise
 // Tarih partinin ilk kaydıdır. Belge Çizimler'de tutulur; dosyası Çizimler'in okuma ucundan verilir.
 export const sonPartiler = (db: Db, malzemeId: number, sinir = 10) => servis.sonPartiler(db, malzemeId, Math.min(Math.max(1, sinir), 50));
 
+// CNC takım stoğu (153 a, 164 b): CNC kurulumu takım değişimini ve uç seti kullanımını kartın serbest bakiyesinden düşer
+// (ilk giren önce, eksiye inmez; yetmezse hiç düşmez). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
+export type { CncTakimCikisiSonucu } from './servis.ts';
+export const cncTakimCikisi = (db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<servis.CncTakimCikisiSonucu> =>
+  servis.cncTakimCikisi(db, kisiId, g);
 // Kalıp: kisiAdlari. Boş dizide sorgu atılmaz; olmayan kimlik haritada yoktur; pasif konum da koduyla döner.
 export async function konumAdlari(db: Db, idler: number[]): Promise<Map<number, string>> {
   if (idler.length === 0) return new Map();
@@ -136,19 +142,24 @@ export interface RefakatPartisiOzeti {
   lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
 }
 // Emrin kartları (Arkon kart listesi, kart #156): açık ve birleşmemiş kartlar sırayla; istisna kartı lotsuz gelir. istasyondaSatirVar,
-// kartın malzemesi verilen istasyonda duruyor mu. sayilan ve sinir (Soru 132) hesaplanana kadar null; null'da sınır gösterilmez.
+// kartın malzemesi verilen istasyonda duruyor mu. sayilan ve sinir (Soru 132) üretim emirlerinin hesabıdır; null'da sınır gösterilmez.
 export interface RefakatKartiOzeti {
   id: number; etiket: string; qr: string; durum: 'acik' | 'iptal'; lotNo: string | null;
-  malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string;
+  // malzemeNo: kartın malzemesinin katalog numarası (iş emri girdileri bununla tutulur). verilenNet: kart sınırının girdisi (Soru 136 a); verilen ile aynıdır (Soru 137 a), alan Arkon ve üretim emirleri okuduğu için kalır.
+  malzemeNo: number; malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string; verilenNet: string;
   istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
 }
 export async function emrinRefakatKartlari(db: Db, uretimEmriId: number, istasyonId: number | null): Promise<RefakatKartiOzeti[]> {
   const { partiler } = await servis.emrinRefakatPartileri(db, uretimEmriId);
   const acik = partiler.filter((r) => r.durum === 'acik' && r.birlestigi === null);
   const burada = istasyonId === null ? new Set<number>() : await sorgular.istasyondaSatiriOlanKartlar(db, acik.map((r) => r.id), istasyonId);
+  // Sınır üretim emirlerinin hesabıdır (Soru 136 a); haritada olmayan kartta (adımsız emir) sayılan ve sınır null kalır.
+  const sayim = acik.length === 0 ? new Map<number, { sayilan: number; sinir: number | null }>()
+    : await refakatKartiSayimlari(db, uretimEmriId, istasyonId, acik.map((r) => ({ id: r.id, malzemeNo: r.malzemeId, verilen: r.verilen })));
   return acik.map((r) => ({
-    id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
-    istasyondaSatirVar: burada.has(r.id), sayilan: null, sinir: null,
+    id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeNo: r.malzemeId, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
+    verilenNet: r.verilen,
+    istasyondaSatirVar: burada.has(r.id), sayilan: sayim.get(r.id)?.sayilan ?? null, sinir: sayim.get(r.id)?.sinir ?? null,
   }));
 }
 // Lot bekleyen (istisna) kart da null döner: lotsuz kartla iş açılmaz ve lot satırı basılmaz (Soru 129; Etiket Merkezi isteği BASKA-MODUL-ISTEKLERI'nde).

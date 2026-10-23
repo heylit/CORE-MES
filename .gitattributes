@@ -17,3 +17,7 @@
 FARK.md merge=union
 GUVENLIK-DENETIMI.md merge=union
 UYUM-BORCU.md merge=union
+
+# Test robotu canli paketine girmez (ADR 0019): paket `git archive` ile cikar.
+ekran-testleri/benzetim/ export-ignore
+test-robotu/ export-ignore

@@ -9,7 +9,7 @@ import { KATALOG_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KatalogMalzemeOzeti, KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenTuru, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
+  AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
   KaynakOzeti, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
@@ -26,9 +26,9 @@ import type { EmirBittiOlayi } from '../uretim-emirleri/disari.ts';
 import {
   YAZ, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
   girdiEksigi, girdiOlabilirMi, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
-  bekleyenTerminal, degisimOrani, dortGozEngeli, etkinAdimSuresi, gecerliGerceklesen, gerceklesenDenetle, kabulDenetle, taslakSureleri, teorikAyrim, terminalOnerileri,
+  bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
 } from './kurallar.ts';
-import type { AgacRotasi, EtkinAdimSuresi, FarkAdimi, GerceklesenSatiri } from './kurallar.ts';
+import type { AdimSureleri, AgacRotasi, EtkinAdimSuresi, FarkAdimi, GerceklesenSatiri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from './sorgular.ts';
 
@@ -656,15 +656,21 @@ export async function onayla(db: Db, kullanici: Kullanici, id: number, surum: nu
   const dortGozsuz = !dortGozAcik && dortGozEngeli({ kisiId: kullanici.id, gonderenKisiId: r.gonderenKisiId, duzenleyenKisiIdleri: r.duzenleyenKisiIdleri, dortGozAcik: true });
   const yeniSurum = await s.onaylaYaz(db, id, kullanici.id, dortGozsuz);
   if (!yururlugeAl) return cevap(id, 'onayli', yeniSurum);
-  await s.yururluktekiniOnayliYap(db, r.malzemeId);
-  return cevap(id, 'yururlukte', await s.yururlugeAlYaz(db, id, kullanici.id));
+  return yururlugeGir(db, kullanici, r);
 }
 
 export async function yururlugeAl(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<KomutCevabi> {
   const { r } = await komutIcinAl(db, kullanici, id, 'yururluge-al', surum);
   await onayDenetimi(db, r);
+  return yururlugeGir(db, kullanici, r);
+}
+
+async function yururlugeGir(db: Db, kullanici: Kullanici, r: RevizyonSatiri): Promise<KomutCevabi> {
+  const onceki = await s.yururluktekiRevizyonId(db, r.malzemeId);
   await s.yururluktekiniOnayliYap(db, r.malzemeId);
-  return cevap(id, 'yururlukte', await s.yururlugeAlYaz(db, id, kullanici.id));
+  const surum = await s.yururlugeAlYaz(db, r.id, kullanici.id);
+  await olcumleriBosalt(db, kullanici.id, r.malzemeId, onceki, r.id);
+  return cevap(r.id, 'yururlukte', surum);
 }
 
 export async function iptal(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<KomutCevabi> {
@@ -738,21 +744,17 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
     adimlar: adimTeorikSureleri(icerik).map((a, i) => {
       const g = gorunum[i]!;
       const satirlar = gerceklesenSatirlari(kayitlar, a.opNo);
-      const gecerli = gecerliGerceklesen(satirlar, makineId);
-      const etkin = etkinAdimSuresi(a.teorik, gecerli);
-      const kayit = (tur: GerceklesenTuru) => {
-        const x = gecerli[tur];
-        const k = x === null ? undefined : kayitById.get(x.id);
-        return x === null || k === undefined ? null
-          : { id: x.id, sureDk: ondalikMetin(x.sureDk), kaynak: x.kaynak, yazan: { id: k.kisiId, ad: adlar.get(k.kisiId) ?? null }, zaman: k.zaman };
-      };
+      const etkin = etkinAdimSuresi(a.teorik);
       const son = (tur: GerceklesenTuru) => satirlar.filter((x) => x.tur === tur && x.makineId === makineId).at(-1)?.id ?? null;
-      const bekleyen = bekleyenTerminal(satirlar, makineId);
-      const oneri = (tur: GerceklesenTuru) => {
+      const bekleyen = bekleyenOlcum(satirlar, makineId);
+      const olcum = (tur: GerceklesenTuru) => {
         const x = bekleyen[tur];
         const k = x === null ? undefined : kayitById.get(x.id);
-        return x === null || x.sureDk === null || k === undefined || k.isEmriId === null
-          ? null : { id: x.id, sureDk: ondalikMetin(x.sureDk), isEmriId: k.isEmriId, makineId: x.makineId, zaman: k.zaman };
+        if (x === null || x.sureDk === null || k === undefined || k.kaynak === 'kabul') return null;
+        return {
+          id: x.id, sureDk: ondalikMetin(x.sureDk), kaynak: k.kaynak, isEmriId: k.isEmriId, makineId: x.makineId,
+          yazan: { id: k.kisiId, ad: adlar.get(k.kisiId) ?? null }, zaman: k.zaman,
+        };
       };
       const oran = degisimOrani(etkin.islemSuresiDk, etkin.degisimSuresiDk);
       return {
@@ -762,12 +764,11 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
         teorik: {
           hazirlikDk: g.ayarSuresiDk, islemDk: g.islemSuresiDk, degisimDk: g.degisimSuresiDk, degisimOraniYuzde: g.degisimOraniYuzde,
         },
-        gerceklesen: { hazirlik: kayit('hazirlik'), islem: kayit('islem'), degisim: kayit('degisim') },
         sonKayit: { hazirlik: son('hazirlik'), islem: son('islem'), degisim: son('degisim') },
-        oneri: { hazirlik: oneri('hazirlik'), islem: oneri('islem'), degisim: oneri('degisim') },
+        olcum: { hazirlik: olcum('hazirlik'), islem: olcum('islem'), degisim: olcum('degisim') },
         etkin: {
           hazirlikDk: metinMi(etkin.ayarSuresiDk), birimSureDk: metinMi(etkin.birimSureDk), islemDk: metinMi(etkin.islemSuresiDk),
-          degisimDk: metinMi(etkin.degisimSuresiDk), degisimOraniYuzde: metinMi(oran, 2), baz: etkin.baz,
+          degisimDk: metinMi(etkin.degisimSuresiDk), degisimOraniYuzde: metinMi(oran, 2),
         },
         fason: a.fason,
       };
@@ -775,15 +776,17 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
   };
 }
 
-// Elle giriş (RT-73, RT-75): defter yalnız eklenir; okunan satır son satır değilse başkası yazmıştır (eski sürüm).
-// Fason adımın dakika süresi yoktur (FS4 a); gerçekleşen süre de girilmez.
+const FASON_SURESIZ = 'Fason adıma gerçekleşen süre girilmez; termin günüyle izlenir.';
+
+// Elle ölçüm (RT-73, RT-75): defter yalnız eklenir; boş süre bekleyen ölçümü boşaltır. Okunan satır son satır değilse başkası yazmıştır
+// (eski sürüm). Fason adımın dakika süresi yoktur (FS4 a); ölçüm de girilmez.
 export async function gerceklesenSureYaz(
   db: Db, kullanici: Kullanici, adimId: number, g: { tur: GerceklesenTuru; sureDk: number | null; makineId: number | null; okunanId: number | null },
 ): Promise<SurelerCevabi> {
   const adim = await s.adimKunyesi(db, adimId);
   if (adim === null) throw bulunamadi('Rota adımı bulunamadı.');
   const icerik = await s.icerikOku(db, adim.revizyonId);
-  if (icerik.adimlar.find((a) => a.id === adimId)?.kaynak?.tur === 'fason') throw gecersiz('Fason adıma gerçekleşen süre girilmez; termin günüyle izlenir.');
+  if (icerik.adimlar.find((a) => a.id === adimId)?.kaynak?.tur === 'fason') throw gecersiz(FASON_SURESIZ);
   const ret = gerceklesenDenetle(g.tur, g.sureDk);
   if (ret) throw dogrulama(ret, 'sureDk');
   await s.gerceklesenKilitle(db, adim.malzemeId, adim.opNo);
@@ -796,35 +799,92 @@ export async function gerceklesenSureYaz(
   return sureler(db, adim.revizyonId, g.makineId);
 }
 
-// Terminal önerisinin kabulü (S4 a): önerinin değeri kabul satırı olarak eklenir, ölçüldüğü iş emrini taşır. Sürüm denetimi elle girişle
-// aynıdır (okunan son satır).
+const ONAYDA_KABUL = 'Bu ürünün açık revizyonu onayda; kabul için önce geri gönderin ya da onaylayın.';
+
+// Kabul (RT-77, RT-78; 169 c): ölçüm ürünün açık taslağına, yoksa yürürlükteki revizyondan açılan taslağa teorik süre olarak yazılır;
+// kabul eden taslağın düzenleyenidir, onay dört gözle başkasınındır. Makine verilirse o makinenin (adımın kaynağı ya da adayı) süresi
+// değişir. Terminal ölçümünde kabul satırı ölçülen iş emriyle yazılır (elle ölçümün iş emri yoktur, kayıt revizyondadır). Ölçüm
+// revizyon yürürlüğe girince boşaltılır (RT-79), plan o zamana kadar yürürlükteki süreyle çalışır.
 export async function gerceklesenKabulEt(
-  db: Db, kullanici: Kullanici, adimId: number, g: { tur: GerceklesenTuru; terminalId: number; makineId: number | null; okunanId: number | null },
-): Promise<SurelerCevabi> {
+  db: Db, kullanici: Kullanici, adimId: number, g: { tur: GerceklesenTuru; olcumId: number; makineId: number | null; okunanId: number | null },
+): Promise<GerceklesenKabulCevabi> {
   const adim = await s.adimKunyesi(db, adimId);
   if (adim === null) throw bulunamadi('Rota adımı bulunamadı.');
-  const icerik = await s.icerikOku(db, adim.revizyonId);
-  if (icerik.adimlar.find((a) => a.id === adimId)?.kaynak?.tur === 'fason') throw gecersiz('Fason adıma gerçekleşen süre girilmez; termin günüyle izlenir.');
   await s.gerceklesenKilitle(db, adim.malzemeId, adim.opNo);
-  const satir = await s.gerceklesenSatiri(db, g.terminalId);
-  if (satir === null) throw bulunamadi('Terminal önerisi bulunamadı.');
-  const ret = kabulDenetle(satir, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
+  const satir = await s.gerceklesenSatiri(db, g.olcumId);
+  if (satir === null) throw bulunamadi('Ölçüm bulunamadı.');
+  const ret = kabulDenetle({ ...satir, sureDk: sayiMi(satir.sureDk) }, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
   if (ret) throw gecersiz(ret);
   const son = await s.sonGerceklesenId(db, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
   if (son !== g.okunanId) throw eskiSurum();
-  await kisitKorumali(
-    { rota_gerceklesen_sure_makine: { ileti: 'Makine bulunamadı.', alan: 'makineId' } },
-    () => s.gerceklesenEkle(db, {
+  const acik = await s.acikRevizyon(db, adim.malzemeId);
+  if (acik !== null && acik.durum !== 'taslak') throw cakisma(ONAYDA_KABUL);
+  let taslakId = acik?.id ?? null;
+  if (taslakId === null) {
+    const yururlukte = await s.yururluktekiRevizyonId(db, adim.malzemeId);
+    if (yururlukte === null) throw gecersiz('Ürünün yürürlükte rotası yok; ölçüm kabul edilemez.');
+    taslakId = (await taslagiAc(db, kullanici.id, adim.malzemeId, { tur: 'revizyon', revizyonId: yururlukte })).id;
+  }
+  await s.revizyonKilitle(db, taslakId);
+  const yazimlar = icerikYazimlari(await s.icerikOku(db, taslakId));
+  const hedef = yazimlar.find((a) => a.opNo === adim.opNo);
+  if (hedef === undefined) throw gecersiz('Açık taslakta bu operasyon yok.');
+  if (hedef.kaynak?.tur === 'fason') throw gecersiz(FASON_SURESIZ);
+  const aday = g.makineId === null || (hedef.kaynak?.tur === 'makine' && hedef.kaynak.id === g.makineId)
+    ? null : hedef.adaylar.find((x) => x.kaynak.tur === 'makine' && x.kaynak.id === g.makineId);
+  if (aday === undefined) throw gecersiz('Makine bu adımın kaynağı ya da adayı değil.');
+  const yer = aday ?? hedef;
+  const yeni = kabulSureleri({
+    ayarSuresiDk: sayiMi(yer.ayarSuresiDk === null ? null : String(yer.ayarSuresiDk)), birimSureDk: sayiMi(yer.birimSureDk === null ? null : String(yer.birimSureDk)),
+    islemSuresiDk: sayiMi(yer.islemSuresiDk === null ? null : String(yer.islemSuresiDk)), degisimSuresiDk: sayiMi(yer.degisimSuresiDk === null ? null : String(yer.degisimSuresiDk)),
+  }, g.tur, Number(satir.sureDk));
+  if ('ileti' in yeni) throw gecersiz(yeni.ileti);
+  Object.assign(yer, yeni);
+  await s.icerikSil(db, taslakId);
+  await adimlariYaz(db, taslakId, adim.malzemeId, yazimlar);
+  const surum = await s.duzenlemeYaz(db, taslakId, kullanici.id);
+  if (satir.isEmriId !== null) {
+    await s.gerceklesenEkle(db, {
       malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId, sureDk: satir.sureDk, kisiId: kullanici.id, kaynak: 'kabul', isEmriId: satir.isEmriId,
-    }),
-  );
-  return sureler(db, adim.revizyonId, g.makineId);
+    });
+  }
+  return { taslak: cevap(taslakId, 'taslak', surum), sureler: await sureler(db, taslakId, g.makineId) };
 }
 
-// Emir bitti (B38, bağı kablolama.ts kurar): biten her makine ya da kişi iş emrinin ölçümü rotaya terminal önerisi olarak yazılır;
-// plan önerisi kullanmaz, planlamacı kabul eder (S4 a). Ölçüm makinedeyse öneri o makineye özgüdür. Rotada olmayan adım (ek adım),
-// fason adım, ölçülmemiş süre ve önceden ölçülmüş iş emri atlanır. Olay komutla aynı işlemdedir: burada ret emri bitirmeyi geri alır,
-// bu yüzden eksik veri reddedilmez, atlanır.
+// RT-79 (171 a): yürürlüğe giren revizyonda teorik süresi öncekinden farklı türlerin bekleyen ölçümü boş elle satırıyla boşaltılır. Adımın
+// kendi süresi makinesiz görünümü ve adımın makinesinin ölçümünü, aday süresi o makinenin ölçümünü kapatır. Bekleyen ölçümü olmayan yere satır yazılmaz.
+async function olcumleriBosalt(db: Db, kisiId: number, malzemeId: number, eskiId: number | null, yeniId: number): Promise<void> {
+  const yeni = await s.icerikOku(db, yeniId);
+  const eski = eskiId === null ? null : await s.icerikOku(db, eskiId);
+  const kayitlar = await s.gerceklesenSureler(db, malzemeId, yeni.adimlar.map((a) => a.opNo));
+  const sureleri = (x: { ayarSuresiDk: string | null; birimSureDk: string | null; islemSuresiDk: string | null; degisimSuresiDk: string | null }): AdimSureleri => ({
+    ayarSuresiDk: sayiMi(x.ayarSuresiDk), birimSureDk: sayiMi(x.birimSureDk), islemSuresiDk: sayiMi(x.islemSuresiDk), degisimSuresiDk: sayiMi(x.degisimSuresiDk),
+  });
+  for (const a of yeni.adimlar) {
+    const o = eski?.adimlar.find((x) => x.opNo === a.opNo);
+    const yerler: { makineId: number | null; turler: GerceklesenTuru[] }[] = [];
+    const kendi = degisenTurler(o ? sureleri(o) : null, sureleri(a));
+    yerler.push({ makineId: null, turler: kendi });
+    if (a.kaynak?.tur === 'makine') yerler.push({ makineId: a.kaynak.id, turler: kendi });
+    for (const x of yeni.adaylar.filter((y) => y.adimId === a.id && y.kaynak.tur === 'makine')) {
+      const ox = o === undefined ? undefined : eski?.adaylar.find((y) => y.adimId === o.id && y.kaynak.tur === 'makine' && y.kaynak.id === x.kaynak.id);
+      yerler.push({ makineId: x.kaynak.id, turler: degisenTurler(ox ? sureleri(ox) : null, sureleri(x)) });
+    }
+    const satirlar = gerceklesenSatirlari(kayitlar, a.opNo);
+    for (const { makineId, turler } of yerler) {
+      const bekleyen = bekleyenOlcum(makineId === null ? satirlar : satirlar.filter((x) => x.makineId === makineId), makineId);
+      for (const tur of turler) {
+        if (bekleyen[tur] === null) continue;
+        await s.gerceklesenEkle(db, { malzemeId, opNo: a.opNo, tur, makineId, sureDk: null, kisiId });
+      }
+    }
+  }
+}
+
+// Emir bitti (B38, bağı kablolama.ts kurar): biten her makine ya da kişi iş emrinin ölçümü rotaya terminal ölçümü olarak yazılır;
+// plan kullanmaz, planlamacı kabul eder (169 c). Ölçüm makinedeyse o makineye özgüdür. Rotada olmayan adım (ek adım), fason adım,
+// ölçülmemiş süre ve önceden ölçülmüş iş emri atlanır. Olay komutla aynı işlemdedir: burada ret emri bitirmeyi geri alır, bu yüzden
+// eksik veri reddedilmez, atlanır.
 export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
   const emir = await uretimEmriOzeti(db, olay.uretimEmriId);
   if (emir === null || emir.malzemeNo === null) return;
@@ -833,32 +893,25 @@ export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<voi
   const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
   const adaylar = ayrinti.isEmirleri.filter((i) => i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.has(i.opNo));
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
-  const etkinler = new Map<number | null, Map<number, EtkinAdimSuresi>>();
   for (const i of adaylar) {
     if (olculmus.has(i.id)) continue;
     const makineId = i.kaynak?.tur === 'makine' ? i.kaynak.id : null;
-    let etkin = etkinler.get(makineId);
-    if (etkin === undefined) {
-      etkin = emir.kaynakRotaRevizyonId === null ? new Map() : await adimEtkinSureleri(db, emir.kaynakRotaRevizyonId, makineId);
-      etkinler.set(makineId, etkin);
-    }
-    const oneri = terminalOnerileri(await isEmriSureOzeti(db, i.id), etkin.get(i.opNo)?.degisimSuresiDk ?? null);
+    const olcum = terminalOlcumleri(await isEmriSureOzeti(db, i.id));
     for (const tur of ['hazirlik', 'islem'] as const) {
-      const sureDk = oneri[tur];
+      const sureDk = olcum[tur];
       if (sureDk === null) continue;
       await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId: olay.kisiId, kaynak: 'terminal', isEmriId: i.id });
     }
   }
 }
 
-// Plan için etkin süre (S4 a): gerçekleşen yalnız elle girildiyse ya da kabul edildiyse kullanılır, yoksa teorik. OP numarasıyla döner;
-// fason adım dönmez (dakika süresi yoktur). Makine verilirse önce o makinenin gerçekleşen süresi.
-export async function adimEtkinSureleri(db: Db, revizyonId: number, makineId: number | null = null): Promise<Map<number, EtkinAdimSuresi>> {
+// Plan için etkin süre (169 c): yalnız teorik; ölçüm teoriğe kabul ve revizyonla geçer. OP numarasıyla döner; fason adım dönmez (dakika
+// süresi yoktur). Makine parametresi bugünkü çağıranlar içindir; süre makineye göre değişmez.
+export async function adimEtkinSureleri(db: Db, revizyonId: number, _makineId: number | null = null): Promise<Map<number, EtkinAdimSuresi>> {
   const r = await s.revizyonOku(db, revizyonId);
   if (!r) return new Map();
   const adimlar = adimTeorikSureleri(await s.icerikOku(db, revizyonId)).filter((a) => !a.fason);
-  const kayitlar = await s.gerceklesenSureler(db, r.malzemeId, adimlar.map((a) => a.opNo));
-  return new Map(adimlar.map((a) => [a.opNo, etkinAdimSuresi(a.teorik, gecerliGerceklesen(gerceklesenSatirlari(kayitlar, a.opNo), makineId))]));
+  return new Map(adimlar.map((a) => [a.opNo, etkinAdimSuresi(a.teorik)]));
 }
 
 // adimEtkinSureleri'nin toplu hâli: i. sonuç i. isteğindir; istek sayısından bağımsız sabit sayıda sorgu (Arkon operatör özeti iş başına çağırıyordu).
@@ -868,18 +921,10 @@ export async function adimEtkinSureleriToplu(
   if (istekler.length === 0) return [];
   const satirlar = new Map((await s.revizyonlariOku(db, [...new Set(istekler.map((x) => x.revizyonId))])).map((r) => [r.id, r]));
   const icerikler = await s.iceriklerOku(db, [...satirlar.keys()]);
-  const kayitlar = new Map<number, s.GerceklesenKaydi[]>();
-  for (const k of await s.urunlerinGerceklesenSureleri(db, [...new Set([...satirlar.values()].map((r) => r.malzemeId))])) {
-    let urun = kayitlar.get(k.malzemeId);
-    if (!urun) kayitlar.set(k.malzemeId, urun = []);
-    urun.push(k);
-  }
-  return istekler.map(({ revizyonId, makineId }) => {
-    const r = satirlar.get(revizyonId);
-    if (!r) return new Map();
+  return istekler.map(({ revizyonId }) => {
+    if (!satirlar.has(revizyonId)) return new Map();
     const adimlar = adimTeorikSureleri(icerikler.get(revizyonId) ?? { adimlar: [], adaylar: [], bilesenler: [], yanUrunler: [] }).filter((a) => !a.fason);
-    const urun = kayitlar.get(r.malzemeId) ?? [];
-    return new Map(adimlar.map((a) => [a.opNo, etkinAdimSuresi(a.teorik, gecerliGerceklesen(gerceklesenSatirlari(urun, a.opNo), makineId))]));
+    return new Map(adimlar.map((a) => [a.opNo, etkinAdimSuresi(a.teorik)]));
   });
 }
 
