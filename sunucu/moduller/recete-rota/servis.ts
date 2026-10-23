@@ -380,6 +380,21 @@ const kayitDegeri = (k: { bicim: string; deger?: unknown } | null): unknown => {
   try { return JSON.parse(k.deger) as unknown; } catch { return null; }
 };
 
+// ADR 0018: sunucu plan motoru bir kullanıcı adına değil sunucunun içinde okur (Soru 150 a): aynı girdi her kullanıcıda aynı planı verir.
+// Okunan veri kimseye dönmez; çözücü yalnız saat verir. Yazma işlemi taşımaz.
+const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
+  id: 0, ad: 'plan motoru',
+  islemler: [...new Set([...MALZEME_OKUMA, ...ISTASYON_OKUMA, ...KISI_OKUMA, ...STOK_OKUMA, ...ROTA_OKUMA, ...EMIR_OKUMA, ...MALIYET_OKUMA])],
+};
+export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
+// Planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çalışma yoktur: null.
+export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null> {
+  const calisma = kayitDegeri(await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: unknown } | null;
+  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
+  const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
+  return { calisma, kayit, kaynak: await kaynakOku(db, PLAN_MOTORU_OKUYUCUSU) };
+}
+
 export interface TeklifKalemiGirdisi { malzemeNo: number; adet: number }
 // Satış taslağı siparişlerin kaydıdır; kilitli yeri adım başına makine ve başlangıç anı. Süresi dolan taslak verilmez ya da süzülür.
 export interface SatisTaslagiGirdisi {

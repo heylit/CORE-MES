@@ -24,6 +24,8 @@ export async function receteRotaStatuleri(db: Db): Promise<Statu[]> {
 // Ortak plan motoru (ADR 0018): plan modülünün çözücüsü ve kıyas testi buradan çalıştırır; motorun girdisi bu modülün iç biçimidir.
 export { motorYukle, planCoz, SUNUCU_KIPLERI } from './plan-motoru.ts';
 export type { Motor, MotorDurumu, MotorPlani, MotorYerlesimi, PlanIstegi, SunucuKipi } from './plan-motoru.ts';
+// plan/disari.ts planMotoruCozucusu kaydının karşılığı; bağ sunucu/kablolama.ts'te kurulur.
+export { sunucuPlanCozucusu } from './plan-cozucusu.ts';
 
 // Satış teklifi denemesi (Y4): siparişlerin teklif çözücüsü kaydının karşılığı; bağ sunucu/kablolama.ts'te kurulur.
 export { teklifDene } from './servis.ts';
