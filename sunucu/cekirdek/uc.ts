@@ -510,6 +510,11 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           let ek: readonly DenetimSecimi[] | undefined;
           let ekHatasi: string | null = null;
           try {
+            // Değişiklik defterinin tetikleri yazanı buradan okur (392 a). Yerel ayar transaction bitince düşer: havuzdaki
+            // bağlantı sonraki isteğe kişi taşımaz. Kimliksiz yazma, göç ve arka iş ayarı boş bırakır; defterde kişi boş kalır.
+            if (yazma && kullanici !== null) {
+              await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(kullanici.id)]);
+            }
             if (tekrar !== undefined && tekrarIstegi !== null) {
               const sakli = await anahtarAyir(tekrar, db, tekrarIstegi);
               // Saklı cevap dönerken işleyici ve denetim koşmaz: komut bir kez uygulanmış, bir kez kaydedilmiştir.
