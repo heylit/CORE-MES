@@ -98,3 +98,50 @@ test.describe('F4 ana sayfa ve ayarlar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('F3 raporlar', () => {
+  test('beş rapor açılır: başlık, içerik, yatay taşma yok, hata ve yazma yok', async ({ page, ag, ac }) => {
+    const ekran = page.locator('.tc-fy');
+    for (const [yol, baslik, icerik] of [
+      ['durum', 'Durum ve öneriler', page.getByRole('region', { name: 'Öneriler', exact: true })],
+      ['gelir-tablosu', 'Gelir tablosu', page.getByRole('table', { name: 'Gelir tablosu' })],
+      ['karar-araclari', 'Karar araçları', page.getByLabel('Aylık sabit gider')],
+      ['ay-sonu', 'Ay sonu kapanışı', page.getByRole('checkbox').first()],
+      ['tahminler', 'Tahminler ve doğruluk', page.getByRole('heading', { name: 'Teknik ayrıntılar' })],
+    ] as const) {
+      await ac(`/finans/yeni/${yol}`);
+      await expect(ekran.getByRole('heading', { name: baslik, level: 2 })).toBeVisible();
+      await expect(icerik).toBeVisible({ timeout: 15_000 });
+      expect((await tasmaOlc(page)).belge, yol).toBeLessThanOrEqual(0);
+    }
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('ana akış: süzgeç, dönem, hesap makinesi ve "Nasıl hesaplandı?" yazmadan çalışır', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/gelir-tablosu');
+    const tablo = page.getByRole('table', { name: 'Gelir tablosu' });
+    await expect(tablo.getByRole('columnheader')).toHaveCount(8, { timeout: 15_000 });
+    await page.getByRole('button', { name: '12 ay' }).click();
+    await expect(tablo.getByRole('columnheader')).toHaveCount(14);
+
+    await ac('/finans/yeni/karar-araclari');
+    const sabit = page.getByLabel('Aylık sabit gider');
+    await sabit.fill('840000');
+    await expect(page.getByText('2.000 adet')).toBeVisible();
+
+    await ac('/finans/yeni/durum');
+    const oneriler = page.getByRole('region', { name: 'Öneriler', exact: true });
+    await expect(oneriler).toBeVisible({ timeout: 15_000 });
+    await oneriler.getByRole('button', { name: /^Tümü/ }).click();
+    const nasil = oneriler.getByRole('button', { name: 'Nasıl hesaplandı?' }).first();
+    if (await nasil.count()) {
+      await nasil.click();
+      await expect(page.getByRole('heading', { name: 'Teknik ayrıntılar' })).toBeVisible({ timeout: 15_000 });
+      await expect(page).toHaveURL(/\/finans\/yeni\/tahminler#m-/);
+    }
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
