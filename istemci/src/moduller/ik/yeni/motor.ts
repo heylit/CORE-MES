@@ -23,10 +23,17 @@ export interface BilinenYuz {
   activeEmps(): Personel[];
   sortedEmps(): Personel[];
   sortedDepts(): Departman[];
+  // a..b (ikisi dahil) gün sayısı; isGunuIle verilirse yalnız iş günleri (pazar, ayarda kapalıysa cumartesi ve tatiller hariç).
+  countDays(a: Date | null, b: Date | null, isGunuIle?: boolean): number;
+  isWorkday(gun: Date): boolean;
+  isHoliday(gun: Date): boolean;
+  // Bugünün parametre dönemindeki geçerli ayarlar (genel ayar + dönem).
+  S(): Record<string, unknown>;
 }
 
 export { MOTOR_ISLEVLERI };
-export type IkMotoru = BilinenYuz & { [Ad in (typeof MOTOR_ISLEVLERI)[number]]: (...a: readonly unknown[]) => unknown };
+type Digerleri = { [Ad in (typeof MOTOR_ISLEVLERI)[number]]: (...a: readonly unknown[]) => unknown };
+export type IkMotoru = BilinenYuz & Omit<Digerleri, keyof BilinenYuz>;
 
 // Motorun sabit listeleri (paylasilan/ik-motor/sabitler.ts); seçenek listeleri buradan okunur, parça kendi kopyasını yazmaz.
 export type { IkSabitleri };

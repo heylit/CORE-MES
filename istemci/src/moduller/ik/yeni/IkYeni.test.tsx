@@ -5,7 +5,6 @@ import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { rotalar } from '../rotalar.tsx';
 import { GORUNUMLER, adrestenGorunum, gorunumAdresi } from './gorunumler.ts';
 import { ikBicimi, ikSabitleri, motorKur } from './motor.ts';
-import { YER_TUTUCU_ILETISI } from './ortak/YerTutucu.tsx';
 import { CALISAN, IK_OKUYAN, IK_YONETICI, KAPISIZ, MUDUR, ikAc, ornekVeri } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -49,7 +48,6 @@ describe('İK yeni ekran: kapı ve gezinme', () => {
     ikAc('/ik/yeni/izinler');
     expect(await screen.findByRole('tab', { name: 'İzinler', selected: true })).toBeTruthy();
     for (const ad of ['Pano', 'Yapılacaklar', 'Personel', 'Bordro', 'İşe alım', 'Değişiklik günlüğü', 'Ayarlar', 'PDKS aktar']) expect(sekme(ad)).toBeTruthy();
-    expect(screen.getByText(YER_TUTUCU_ILETISI)).toBeTruthy();
     fireEvent.click(sekme('Bordro') as HTMLElement);
     expect(await screen.findByRole('tab', { name: 'Bordro', selected: true })).toBeTruthy();
   });
