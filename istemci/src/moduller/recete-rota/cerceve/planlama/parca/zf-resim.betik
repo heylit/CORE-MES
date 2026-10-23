@@ -10,7 +10,12 @@ function brVeri() {
   const p = gosterilen(); if (!p || !p.ops) return null;
   if (BR.v && BR.v.p === p && BR.v.dv === S.dataVer) return BR.v;
   const cx = cxAl(); const now = rsSimdi(); const D = S.D;
-  const isler = S.D.siparisler.filter(s => !s.havuz && p.J && p.J[s.id] && cx.jobs[s.id]);
+  const isler0 = S.D.siparisler.filter(s => !s.havuz && p.J && p.J[s.id] && cx.jobs[s.id]);
+  /* adımı yerleşmeyen sipariş bitmiş ya da zamanında sayılmaz (bitişi yok; kayıtlı planda Infinity null olur): özet ve çizimler yalnız
+     tam yerleşenle kurulur, yerleşmeyen ayrı sayılır */
+  const eksik = s => cx.jobs[s.id].ops.filter(o => { const r = p.ops[o.id]; return !r || !isFinite(r.S) || !isFinite(r.C); }).length;
+  const yok = isler0.map(s => ({ id: s.id, adim: eksik(s) })).filter(x => x.adim > 0 || p.J[x.id].C == null || !isFinite(p.J[x.id].C));
+  const isler = isler0.filter(s => !yok.some(x => x.id === s.id));
   const ops = Object.values(p.ops).filter(r => isFinite(r.S) && isFinite(r.C));
   const T0 = Math.floor(now / 24) * 24;
   const H1 = Math.ceil(Math.max(now + 24 * 7, ...isler.map(s => Math.max(p.J[s.id].C || 0, cx.jobs[s.id].due || 0))) / 24) * 24;
@@ -31,7 +36,7 @@ function brVeri() {
     const g = Array.from({ length: gun }, (_, d) => { const a = T0 + d * 24, b = a + 24; const acik = acikS(a, b); if (acik < 0.01) return null; let busy = 0; for (const r of ops) if (r.m === t.id) busy += acikS(Math.max(a, r.S), Math.min(b, r.C)); return busy / acik; }); return { m: t.id, grup: t.grup, g }; });
   const gunAd = Array.from({ length: gun }, (_, d) => fmtDT(D, T0 + d * 24 + 1).slice(6, 9));
   const u = Object.entries(p.util || {}).filter(([m, x]) => m[0] !== '@' && x && x.n);
-  BR.v = { p, dv: S.dataVer, cx, now, T0, H1, gun, gunAd, gruplar, sip, yuk, u, ops, oz: p.ozet };
+  BR.v = { p, dv: S.dataVer, cx, now, T0, H1, gun, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((a, x) => a + x.adim, 0), yuk, u, ops, oz: p.ozet };
   return BR.v;
 }
 /* sayıdan sonra Türkçe ek: okunuşun son hecesine göre ünlü uyumu (20'si, 6'sı, %9'unda) */
@@ -49,12 +54,18 @@ U.brT = null;
 const brX = (v, t) => Math.max(0, Math.min(1, (t - v.T0) / (v.H1 - v.T0)));
 const brSa = h => `${sayi(h, h < 10 ? 1 : 0)} sa`;
 
+/* yerleşmeyen iş: sayı ve sebep (motor "planlanamadı: kaynak ya da ufuk" der; ayrıntı uyarılarda) */
+function brYokMetni(v) {
+  if (!v.yok.length) return '';
+  return `<b>${v.yok.length}</b> siparişin <b>${v.yokAdim}</b> adımı yerleşmedi (kaynak ya da ufuk yetmedi): ${v.yok.slice(0, 4).map(x => `<b class="mono">${esc(x.id)}</b>`).join(', ')}${v.yok.length > 4 ? '…' : ''}. Bu siparişler bitmiş ya da zamanında sayılmaz.`;
+}
 function brKpi(v) {
   const n = v.sip.length, gec = v.sip.filter(s => s.gec), zam = n - gec.length; const top = gec.reduce((a, s) => a + s.T, 0);
   const ort = v.u.length ? v.u.reduce((a, [, x]) => a + x.u, 0) / v.u.length : null; const dar = v.u.slice().sort((a, b) => b[1].u - a[1].u)[0];
   const kar = [
-    ['list', 'Sipariş', n, '', 'planda'],
-    ['check', 'Zamanında', zam, `%${Math.round(zam / Math.max(1, n) * 100)}`, 'termininden önce biter', 'tamam'],
+    ['list', 'Sipariş', n + v.yok.length, '', v.yok.length ? `${n} tanesi tam yerleşti` : 'planda'],
+    ...(v.yok.length ? [['alert', 'Yerleşmedi', v.yok.length, `${v.yokAdim} adım`, 'kaynak ya da ufuk yetmedi', 'hata']] : []),
+    ['check', 'Zamanında', zam, `%${Math.round(zam / Math.max(1, n + v.yok.length) * 100)}`, 'termininden önce biter', 'tamam'],
     ['alert', 'Geç', gec.length, brSa(top), 'toplam gecikme', gec.length ? 'hata' : 'tamam'],
     ['gauge', 'Ortalama doluluk', ort == null ? null : Math.round(ort * 100), '%', 'çalışan tezgâhlarda'],
     ['cpu', 'En yoğun tezgâh', dar ? dar[0] : '—', dar ? `%${Math.round(dar[1].u * 100)}` : '', dar ? (BR_GRUP_AD[brGrup(dar[0])] || '') : '', 'uyari'],
@@ -137,7 +148,8 @@ function brYaris(v, sec) {
 /* veriden yorum: her madde bir gözlem ve bir yön */
 function brYorum(v) {
   const l = []; const n = v.sip.length; const gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T);
-  l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
+  if (v.yok.length) l.push({ sm: 'alert', ton: 'hata', m: brYokMetni(v) });
+  l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
   /* geç siparişleri en çok ne bekletiyor */
   const bek = {}; for (const s of gec) for (const [k, ad, x] of s.kaynak) if (k !== 'isleme') bek[ad] = (bek[ad] || 0) + x;
   const bk = Object.entries(bek).sort((a, b) => b[1] - a[1]);
@@ -161,7 +173,7 @@ function brYorumHtml(v, l) { return `<ol class="pm-br-yorum">${l.map(x => `<li d
 function brCanli(v, t) {
   const cal = v.ops.filter(r => r.S <= t && r.C > t); const tz = new Set(cal.filter(r => r.m[0] !== '@').map(r => r.m)); const sp = new Set(cal.map(r => r.job));
   const biten = v.sip.filter(s => s.C <= t).length;
-  return `<b class="mono">${esc(fmtDT(S.D, t))}</b><span><b>${tz.size}</b> tezgâh çalışıyor</span><span><b>${sp.size}</b> sipariş üretimde</span><span><b>${biten}</b>/${v.sip.length} sipariş bitti</span>`;
+  return `<b class="mono">${esc(fmtDT(S.D, t))}</b><span><b>${tz.size}</b> tezgâh çalışıyor</span><span><b>${sp.size}</b> sipariş üretimde</span><span><b>${biten}</b>/${v.sip.length + v.yok.length} sipariş bitti</span>${v.yok.length ? `<span data-ton="hata"><b>${v.yok.length}</b> yerleşmedi</span>` : ''}`;
 }
 
 /* ---------- tahtadaki yerleri ----------
@@ -196,7 +208,7 @@ const BR_LEJ = {
 function brCevap(v, id) {
   const n = v.sip.length, gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T); const top = gec.reduce((a, s) => a + s.T, 0);
   switch (id) {
-    case 'ozet': return `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
+    case 'ozet': return `${v.yok.length ? brYokMetni(v) + ' Yerleşen ' : ''}${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
     case 'bekle': { const l = brBekleVeri(v).sort((a, b) => b.bek - a.bek); const x = l[0]; return x && x.bek > 0.5 ? `En çok bekleme <b>${esc(BR_GRUP_AD[x.id] || x.id)}</b> grubunda: ${brSa(x.bek)}${x.bekG > 0.5 ? `, bunun <b>${brSa(x.bekG)}</b>'i geç siparişlerin` : ''}.` : 'Belirgin bir bekleme yok.'; }
     case 'yuk': { const gt = brGunOrt(v).map(x => x == null ? -1 : x); const d = gt.indexOf(Math.max(...gt)); const enT = v.u.slice().sort((a, b) => b[1].u - a[1].u)[0]; return `En yoğun gün <b>${esc(v.gunAd[d])} ${esc(fmtDT(S.D, v.T0 + d * (v.kova || 1) * 24 + 1).slice(0, 5))}</b> (ortalama %${Math.round(gt[d] * 100)}). Plan boyunca en dolu tezgâh <b>${esc(enT ? enT[0] : '—')}</b>${enT ? ` (%${Math.round(enT[1].u * 100)})` : ''}.`; }
     case 'sure': { const y = (BR.yor || []).find(x => x.sm === 'clock'); return y ? y.m : ''; }
@@ -305,7 +317,7 @@ function brTurNot(id) {
   const v = brVeri(); const y = BR.yor || (v ? brYorum(v) : []); if (!v) return '';
   const n = v.sip.length, gec = v.sip.filter(s => s.gec).length;
   switch (id) {
-    case 'genel': return `Tahtanın tamamı: ortada atölye, çevresinde planın özeti. ${n} sipariş, ${gec ? `${gec}${brEk(gec, 'i')} geç` : 'hepsi zamanında'}.`;
+    case 'genel': return `Tahtanın tamamı: ortada atölye, çevresinde planın özeti. ${n + v.yok.length} sipariş, ${v.yok.length ? `${v.yok.length} tanesi yerleşmedi, ` : ''}${gec ? `${gec}${brEk(gec, 'i')} geç` : v.yok.length ? 'yerleşenler zamanında' : 'hepsi zamanında'}.`;
     case 'ozet': return y[0] ? y[0].m : '';
     case 'bekle': return `${brCevap(v, 'bekle')} ${(y.find(x => x.sm === 'target') || {}).m || ''}`;
     case 'atolye': { const t = rsT(); const cal = v.ops.filter(r => r.S <= t && r.C > t && r.m[0] !== '@'); return `Zaman akıyor: <b>${new Set(cal.map(r => r.m)).size}</b> tezgâh çalışıyor, parçalar istasyonlar arasında ilerliyor. Göstergeler ve yarış aynı anda değişir.`; }
