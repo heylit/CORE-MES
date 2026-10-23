@@ -15,7 +15,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi, emirIptalEt, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, cikisYap, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
-import { emirlerinNetSarfi, emirMalzemeFisleri, istasyonKonumlari, malzemeStokDurumlari, numuneTeslimi } from './disari.ts';
+import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, malzemeStokDurumlari, numuneTeslimi } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
 // Malzeme · Teslim (kart #1208): STK-T1 (stok yok), STK-T2 (yalnız yoldayken kapanır), STK-T3 (iptal gönderenin),
@@ -2375,6 +2375,12 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     await o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId: op10!, istasyonId: a.id, kisiId: kisiler.get('operator')!, fark: '2', refakatPartisiId: r.id }));
     const kc = (await istasyonKonumu(c.id))!;
     assert.equal(await bakiye(hm, kc), '6.000');
+    // Arkon kart listesi (kart #156): kartın lotu c'de, kartla sayılan parça a'da durur; boş istasyonda satır yok.
+    const liste = (istasyonId: number | null) => o().vt.tx((db) => emrinRefakatKartlari(db, e, istasyonId));
+    assert.deepEqual((await liste(c.id)).map((k) => [k.id, k.lotNo, k.istasyondaSatirVar, k.sinir]), [[r.id, lot.lot_no, true, null]]);
+    assert.deepEqual((await liste(a.id)).map((k) => k.istasyondaSatirVar), [true]);
+    assert.deepEqual((await liste((await istasyon()).id)).map((k) => k.istasyondaSatirVar), [false]);
+    assert.deepEqual((await liste(null)).map((k) => k.istasyondaSatirVar), [false]);
     const h = (await o().vt.tek<{ aciklama: string }>("SELECT aciklama FROM stok_hareketi WHERE tur = 'cikis' AND uretim_emri_id = $1 AND kaynak_konum_id = $2", [e, kc]))!;
     assert.match(h.aciklama, /teslim edilmeden başka istasyondan$/);
     assert.equal((await o().sahip.tek<{ n: number }>(

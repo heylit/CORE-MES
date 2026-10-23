@@ -133,6 +133,22 @@ export interface RefakatPartisiOzeti {
   // Depodan verilen lot (Etiket Merkezi kartın lot satırını basar, kart #127).
   lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null;
 }
+// Emrin kartları (Arkon kart listesi, kart #156): açık ve birleşmemiş kartlar sırayla; istisna kartı lotsuz gelir. istasyondaSatirVar,
+// kartın malzemesi verilen istasyonda duruyor mu. sayilan ve sinir (Soru 132) hesaplanana kadar null; null'da sınır gösterilmez.
+export interface RefakatKartiOzeti {
+  id: number; etiket: string; qr: string; durum: 'acik' | 'iptal'; lotNo: string | null;
+  malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string;
+  istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
+}
+export async function emrinRefakatKartlari(db: Db, uretimEmriId: number, istasyonId: number | null): Promise<RefakatKartiOzeti[]> {
+  const { partiler } = await servis.emrinRefakatPartileri(db, uretimEmriId);
+  const acik = partiler.filter((r) => r.durum === 'acik' && r.birlestigi === null);
+  const burada = istasyonId === null ? new Set<number>() : await sorgular.istasyondaSatiriOlanKartlar(db, acik.map((r) => r.id), istasyonId);
+  return acik.map((r) => ({
+    id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
+    istasyondaSatirVar: burada.has(r.id), sayilan: null, sinir: null,
+  }));
+}
 // Lot bekleyen (istisna) kart da null döner: lotsuz kartla iş açılmaz ve lot satırı basılmaz (Soru 129; Etiket Merkezi isteği BASKA-MODUL-ISTEKLERI'nde).
 export async function refakatPartisi(db: Db, id: number): Promise<RefakatPartisiOzeti | null> {
   const r = await sorgular.etkinRefakatPartisiBul(db, id);

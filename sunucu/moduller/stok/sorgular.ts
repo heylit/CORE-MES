@@ -1313,6 +1313,13 @@ export const acikRefakatPartisi = (db: Db, uretimEmriId: number, partiId: number
   db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.parti_id = $2 AND r.durum = 'acik'`, [uretimEmriId, partiId]);
 export const emrinRefakatPartileri = (db: Db, uretimEmriId: number): Promise<RefakatPartisiHam[]> =>
   db.sorgu(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 ORDER BY r.sira`, [uretimEmriId]);
+// İstasyonda satırı olan kartlar: kartın lotu ya da kartla sayılmış üretim partisi istasyonun konumunda artı bakiyede.
+export const istasyondaSatiriOlanKartlar = async (db: Db, kartIdler: readonly number[], istasyonId: number): Promise<Set<number>> =>
+  new Set((await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT r.id FROM stok_refakat_partisi r
+       JOIN stok_bakiye b ON b.miktar > 0 AND (b.parti_id = r.parti_id OR b.parti_id IN (SELECT p.id FROM stok_parti p WHERE p.refakat_partisi_id = r.id))
+       JOIN stok_konum k ON k.id = b.konum_id AND k.istasyon_id = $2
+      WHERE r.id = ANY($1::int[])`, [kartIdler, istasyonId])).map((x) => x.id));
 // Sıra emir başına artar; aynı emre eşzamanlı iki açılış sırayla girer (kilit işlem sonunda bırakılır).
 export const refakatPartisiAc = async (db: Db, r: { uretimEmriId: number; malzemeId: number; partiId: number; kisiId: number; ustRefakatPartisiId?: number | null }): Promise<number | null> => {
   await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('stok_refakat_partisi'), $1)", [r.uretimEmriId]);
