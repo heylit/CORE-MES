@@ -34,13 +34,16 @@ Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/in
      kategori yalnız doluysa açık listede mi (`kategoriAcikMi`); stok kodu biçimi, önek-tür uyumu, firma kodu ve sıra (`katalogKodOneki`, `katalogOnekiTureUyarMi`, `katalogFirmaOneki`, `katalogFirmaKoduGecerliMi`, `katalogStokKodu`);
      mükerrer anahtar ve gerekçe (sunucu daha katı: en az 10 karakter, `mukerrerGerekcesiKisaMi`; ama yalnız anahtar eşitliğine bakar, ekranın ölçü toleransı ve eşdeğer kalite eşleşmesi yok); net ağırlık (`katalogNetAgirlikKg`); rota numaralama (`kartOperasyonlari`).
      Hammadde formu ve ölçüleri (`hammaddeOlcuHatasi`, ekranın `dimsErr` ve `FORMS.*.chk` kuralıyla aynı: form listede, her ölçü sayı ve > 0, et kalınlığı sınırları); yalnız yeni kartta ve form ya da ölçü değişince, kayıtlı veri kilitlenmez.
-   - Yalnız ekranda: hammadde aile/kalite/ölçü adımları ve ileri düğmesi engeli (`stepOk`, `gStepOk`, `gEksik`); ayarda zorunlu işaretli olmayan yerleşik zorunlu alanlar (ör. ad) ve kategori seçimi;
-     GTIN biçimi ve kontrol hanesi (`gtinGecerli`); açıklama uzunluğu ve büyük harf (`aciklamaOtomatik`); ölçü aralığı uyarıları (`DIMRULES`),
+   - Yalnız ekranda: GTIN biçimi ve kontrol hanesi (`gtinGecerli`); açıklama uzunluğu ve büyük harf (`aciklamaOtomatik`); ölçü aralığı uyarıları (`DIMRULES`),
      form/seçenek uyumu (`compatIssues`); kart uyarıları (net > brüt, ATEX belgesi, SDS ve raf ömrü, maks. devir, demirbaş tarihleri, kalibrasyon, hurda çıkışı; `gUyarilar`);
-     hammadde otomatik ve teknik kodu (`autoKod`, `teknikKod`), kod grubu türetmesi; benzersiz anahtarın içeriği (`kartAnahtari`; sunucu yalnız hammadde ve sarfta zorunluluğuna bakar); birim ağırlık, reçete, maliyet ve amortisman hesabı;
+     hammadde otomatik ve teknik kodu (`autoKod`, `teknikKod`), kod grubu türetmesi; hizmetin benzersiz anahtarı (`hzImza`, çeşit tablosuna bağlı); kalitenin ailenin listesinde olması ve koşullu (`kosul`) zorunlu alanlar; birim ağırlık, reçete, maliyet ve amortisman hesabı;
      Excel içe aktarma denetimlerinin hepsi (`xlSatirdanKart` 12 hata ve 14 uyarı satırı, `xlPlan` 4 hata satırı; sunucuda içe aktarma yolu yok, kart kaydet ucundan geçer).
    - Yalnız sunucuda: aktif tedarikçi firma, hizmet ve ticari malın reçeteye girmemesi (`katalogBilesenOlamayanKodlar`), alan uzunlukları (sözleşme), stok kodu en çok 24 karakter (`STOK_KODU_EN_COK`), MKK geçiş, talep, sürüm ve iptal kuralları.
-   - Açık kalan borç (ölçü kuralı, koordinatör kararı b, 20.10.2026): formu ve ölçüsü olmayan hammadde API'den kaydolur (ekran ölçü adımında durdurur); aile ve kalite sunucuda zorunlu değil. GTIN sunucuya alınmadı (ekranda yalnız uyarı).
+   - KAPANDI (B11 ve 157 a, 23.10.2026, davranış değişikliği onaylı): hammadde aile, kalite ve ölçü adımları (`stepOk`), yerleşik zorunlu alanlar ve kategori seçimi (`gStepOk`, `alanZorunlu`; `hammaddeTanimHatasi`,
+     `hammaddeOlcuHatasi`, `kartZorunluAlanEksigi`) sunucuda; yalnız yeni kartta ve alan değişince, kayıtlı eksik kart kilitlenmez. Benzersiz anahtarın içeriği hizmet dışında sunucuda kurulur (`katalogSunucuAnahtari`,
+     ekranın `kartAnahtari` kuralı); ekranın gönderdiği anahtar okunmaz. Testler `kart-kurallari.test.ts`, `olcu-kurali.test.ts`. Koordinatör kararı b (20.10.2026) bu kararla kalktı.
+   - Kalır, borç sayılmaz (151 a, 23.10.2026): GTIN, açıklama biçimi, ölçü aralığı uyarıları (`DIMRULES`), kart uyarıları (`gUyarilar`), form/seçenek uyumu (`compatIssues`; ekran kaydı engellemez, yalnız uyarır),
+     ağırlık, maliyet ve amortisman hesabı ile Excel içe aktarma uyarıları hesap ve uyarıdır; tarayıcıda kalır. Koruma kuralları (B11, 157 a dahil) sunucuya geçer.
 5. Kapalı özellik: belge yükleme `kopru.ts` içinde hata verir (dosya saklama yok). Uyum: dosya saklama önkoşul (Ç4).
    DOĞRULANDI (19.10.2026, `grep -c -E "jsdelivr|cdnjs" katalog.html` = 0): ekran dosyasında dış kitaplık adresi kalmadı. Çerçeve politikası
    `default-src 'none'; script-src 'unsafe-inline'; ... connect-src 'none'` (`MalzemeKatalogu.tsx` `POLITIKA`); test `MalzemeKatalogu.test.tsx`.
