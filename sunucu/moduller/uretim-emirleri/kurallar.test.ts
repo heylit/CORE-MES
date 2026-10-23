@@ -9,12 +9,18 @@ import {
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, iptalIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
+  SAYIM_KATILIMSIZ, sayimYetkiIhlali,
 } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
 
 describe('üretim emri kuralları', () => {
+  test('185 a: sayımı işe katılan ya da düzeltme işlemi olan yazar', () => {
+    assert.equal(sayimYetkiIhlali(true, false), null);
+    assert.equal(sayimYetkiIhlali(false, true), null);
+    assert.equal(sayimYetkiIhlali(false, false), SAYIM_KATILIMSIZ);
+  });
   test('yalnız planlı emir başlar', () => {
     assert.equal(baslatmaIhlali('planli'), null);
     for (const d of digerleri('planli')) assert.equal(baslatmaIhlali(d), BASLATMA_DURUMU, d);

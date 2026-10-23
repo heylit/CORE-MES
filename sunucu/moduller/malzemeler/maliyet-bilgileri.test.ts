@@ -10,6 +10,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kullanilanKaliteler, malzemeMaliyetBilgileri } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -24,7 +25,7 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     return ortam.vt;
   };
   async function tamam<T>(yontem: 'GET' | 'POST', url: string, govde?: unknown): Promise<T> {
-    const c = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, govde)) as object }) });
+    const c = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: yonetici }, ...(govde === undefined ? {} : { payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object }) });
     assert.equal(c.statusCode, 200, `${yontem} ${url}: ${c.body}`);
     return c.json() as T;
   }
@@ -36,7 +37,9 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     sira += 1;
     const kimlik = `mb${sira}`;
     const onek = { hammadde: 'HM-MLB', sarf: 'SF-MLB', mamul: 'MM-MLB', yarimamul: 'YM-MLB' }[tur] ?? 'HM-MLB';
-    const kayit = { id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-0000${sira}`, birim: 'adet' }, onay: { durum }, ...ek };
+    // Boy sıradan: aynı kalite ve formlu kartlar ayrı malzemedir (sunucunun benzersiz anahtarı, B11).
+    const dims = ek['dims'] !== null && typeof ek['dims'] === 'object' ? { dims: { ...(ek['dims'] as object), l: 1000 + sira } } : {};
+    const kayit = { id: kimlik, tur, fam: 'metal', com: { kod: `${onek}-0000${sira}`, birim: 'adet' }, onay: { durum }, ...ek, ...dims };
     await tamam<KatalogKartiKaydetCevabi>('POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
       kayit, ozet: { benzersiz_anahtar: `${tur}|mb|${kimlik}`, mukerrer_gerekcesi: null, ...ozetEki }, surum: null,
     });
@@ -79,9 +82,12 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     const once = await vt().tx((db) => kullanilanKaliteler(db));
     await kaydet({ grade: 'ORNEK-Z9', form: 'cubuk', dims: OLCU.cubuk });
     await kaydet({ grade: 'ORNEK-Z9', form: 'cubuk', dims: OLCU.cubuk });
-    await kaydet({ grade: 'ORNEK-Z9' });
     await kaydet({ grade: 'ORNEK-Z9', form: 'levha', dims: OLCU.levha }, 'taslak');
-    await kaydet({ form: 'cubuk', dims: OLCU.cubuk });
+    // Kuraldan (157 a) önce kaydolmuş formsuz ve kalitesiz kartlar: yeni kart olarak açılamazlar, veride durabilirler.
+    const formsuz = await kaydet({ grade: 'ORNEK-Z9', form: 'cubuk', dims: OLCU.cubuk });
+    const kalitesiz = await kaydet({ grade: 'ORNEK-Z8', form: 'cubuk', dims: OLCU.cubuk });
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = kayit - 'form' - 'dims' WHERE no = $1", [formsuz]);
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET kayit = kayit - 'grade' WHERE no = $1", [kalitesiz]);
     const sonra = await vt().tx((db) => kullanilanKaliteler(db));
     const z9 = sonra.filter((k) => k.kaliteKodu === 'ORNEK-Z9');
     assert.deepEqual(z9, [
@@ -113,7 +119,7 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
       const kayit = { id: 'mb-sifir', tur: 'hammadde', fam: 'metal', com: { kod: 'HM-MLB-09999', birim: 'adet' }, onay: { durum: 'aktif' } };
       const c = await app.inject({
         method: 'POST', url: '/api/malzeme-katalogu-kartlari/mb-sifir/kaydet', headers: { cookie: yonetici },
-        payload: { kayit, ozet: { benzersiz_anahtar: 'hammadde|mb|sifir', mukerrer_gerekcesi: null, birim_agirlik_kg }, surum: null },
+        payload: tamGovde('/malzeme-katalogu-kartlari/mb-sifir/kaydet', { kayit, ozet: { benzersiz_anahtar: 'hammadde|mb|sifir', mukerrer_gerekcesi: null, birim_agirlik_kg }, surum: null }) as object,
       });
       assert.equal(c.statusCode, 400, c.body);
     }

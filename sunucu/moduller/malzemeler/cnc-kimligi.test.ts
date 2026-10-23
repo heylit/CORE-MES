@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { cncKimligiBagla, cncKimlikliMalzemeler } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -34,7 +35,7 @@ describe('163 b: CNC kütüphane kimliği malzeme kartına bağlanır (gerçek P
   });
   async function kaydet(kimlik: string, tur: string, ad: string, surum: number | null): Promise<number> {
     const url = `/malzeme-katalogu-kartlari/${kimlik}/kaydet`;
-    const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, govde(kimlik, tur, ad, surum))) as object });
+    const c = await app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, tamGovde(url, govde(kimlik, tur, ad, surum)))) as object });
     assert.equal(c.statusCode, 200, c.body);
     return (c.json() as KatalogKartiKaydetCevabi).surum;
   }

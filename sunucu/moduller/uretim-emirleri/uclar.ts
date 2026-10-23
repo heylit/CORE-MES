@@ -9,6 +9,7 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineSecimiGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
+import { SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import {
@@ -117,7 +118,7 @@ const emirUclari = [
     govde: sayimGovdesi,
     denetim: 'govdesiz',
     cevap: sayimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => terminalSayimi(db, kullanici.id, parametre.id, govde),
+    isle: ({ db, kullanici, parametre, govde }) => terminalSayimi(db, kullanici.id, parametre.id, govde, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)),
   }),
   uc({
     yontem: 'POST',
@@ -129,7 +130,8 @@ const emirUclari = [
     govde: sayimAyarlaGovdesi,
     denetim: 'govdesiz',
     cevap: sayimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null),
+    isle: ({ db, kullanici, parametre, govde }) =>
+      emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)),
   }),
   uc({
     yontem: 'POST',

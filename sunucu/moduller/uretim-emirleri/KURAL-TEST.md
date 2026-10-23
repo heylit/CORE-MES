@@ -55,5 +55,6 @@ K: `is-emri-kurallar.test.ts` (saf), U: `is-emri.test.ts` (gerçek PostgreSQL), 
 
 | UE-URY | Açık emirde yalnız başlamamış ve fasona gönderimi olmayan adım içeriye ya da fasona alınır; fasonda firma (aktif, fason işaretli) ve termin 1-365 zorunlu, içeride verilmez; rota değişmez; geri alınca önceki makine ve süreler döner; her değişim kişi ve zamanla yalnız eklenir | `uretim-yeri.test.ts` (saf kural, izinli ve reddedilen uç), `UretimYerleri.test.tsx` | uretim_emirleri_is_emri_fason_suresiz, _fason_istasyonsuz, _termin_fasonda; uretim_emirleri_uretim_yeri_degisimi_fason_terminli, _degismez |
 | UE20 | Karar 86 b: iş başlatmada (terminal, makine devralma, Arkon) başlatan kişinin o istasyonda geçerli yetkinliği yoksa ya da süresi dolduysa 403 ve emir değişmez; yönetici bayraklı kişi muaftır; işe katılma denetlenmez (ekip üyeliği ister) | `kurallar.ts` `baslatmaYetkinlikIhlali`; `uretim-emirleri.test.ts` UE20 (yetkinsiz red, yetkin başlatır, süresi dolan red) | yok |
+| UE-S185 | Soru 185 a: TMI sayım uçlarında sayımı yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; `uretim-emirleri.sayim-duzelt` işlemi olan (yönetici, vardiya sorumlusu) düzeltir; öteki operatör ve müdür 403, satır yazılmaz | `kurallar.ts` `sayimYetkiIhlali`; `uretim-emirleri.test.ts` "185 a" | yok |
 
 Bağsız kural: yok.

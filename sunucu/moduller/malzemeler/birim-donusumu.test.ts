@@ -10,6 +10,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { malzemeBirimDonusumleri } from './disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -30,7 +31,7 @@ describe('323 b: kartta alış birimi ve katsayısı (1 alış birimi = N stok b
       ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null },
       surum,
     };
-    return app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, govde)) as object });
+    return app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: yonetici }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
   }
   async function kaydet(kimlik: string, comEki: Record<string, unknown>, surum: number | null): Promise<number> {
     const c = await gonder(kimlik, comEki, surum);

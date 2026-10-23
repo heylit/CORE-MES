@@ -1,6 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { MUAF_TUTULABILEN_MADDELER } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { CalismaDurumu, EmirDurumu, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
 
 export type IstasyonDurumu = 'yok' | 'pasif' | 'aktif';
 
@@ -15,6 +16,10 @@ export const KAPSAM_DISI = 'Bu istasyonun iş merkezinde çalışma yetkiniz yok
 // UE20 (karar 86 b): istasyonda bugün geçerli yetkinliği olmayan kişi iş başlatamaz; bütün işlemleri taşıyan yönetici rolü muaftır.
 export const YETKINLIK_YOK = 'Bu istasyonda geçerli yetkinlik kaydınız yok; iş başlatılamaz. Yetkinlik İstasyonlar > Personel sekmesinden verilir.';
 export const baslatmaYetkinlikIhlali = (yetkin: boolean, muaf: boolean): string | null => (yetkin || muaf ? null : YETKINLIK_YOK);
+// Soru 185 a: sayımı yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; düzeltme işlemi olan (yönetici, vardiya sorumlusu) da yazar.
+export const SAYIM_DUZELTME_ISLEMI = 'uretim-emirleri.sayim-duzelt' satisfies Islem;
+export const SAYIM_KATILIMSIZ = 'Bu işe başlamadınız ya da katılmadınız; sayımı işteki kişi, yönetici ya da vardiya sorumlusu girer.';
+export const sayimYetkiIhlali = (katilmis: boolean, duzeltebilir: boolean): string | null => (katilmis || duzeltebilir ? null : SAYIM_KATILIMSIZ);
 export const KATILIM_CALISMIYOR = 'Yalnız çalışan işe katılınır; iş duraklatılmış ya da durdurulmuşsa önce devam ettirin.';
 export const KATILIM_ACIK = 'Bu işte zaten çalışıyorsunuz.';
 export const KATILIM_YOK = 'Bu işte açık ya da duraklatılmış çalışmanız yok.';
