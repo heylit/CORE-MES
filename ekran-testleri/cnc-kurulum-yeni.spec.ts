@@ -18,9 +18,48 @@ test.describe('iskelet', () => {
   });
 });
 
+test.describe('P1 Kurulum ve Hazırlık', () => {
+  // Bugünkü akış (prototip 17512-17882, 20916-21793): çark adım adım iner, Hazırlık seçili kurulumun adımlarını sırayla açar.
+  // Bakmak ve gezinmek sunucuya yazmaz (kayıt ilk kullanıcı eyleminden sonra ve yalnız değişince yazılır).
+  test('Kurulum: çark ok tuşlarıyla adım değiştirir, kurulum kartı ve önizleme açıktır', async ({ page, ac, ag }) => {
+    await ac('/cnc-kurulum/yeni/kurulum');
+    await expect(page.getByText(/^ADIM 1 \//)).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByText(/^ADIM 2 \//)).toBeVisible();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByText(/^ADIM 1 \//)).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Magazin' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: /Üretim emri/ })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Hazırlık: adımlar sırayla açılır, rayda gruplar vardır, son adım denemedir', async ({ page, ac, ag }) => {
+    await ac('/cnc-kurulum/yeni/hazirlik');
+    await expect(page.getByText(/^HAZIRLIK · ADIM 1 \//)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Geri' })).toBeDisabled();
+    await page.getByRole('button', { name: 'İleri' }).click();
+    await expect(page.getByText(/^HAZIRLIK · ADIM 2 \//)).toBeVisible();
+    await page.getByRole('button', { name: /Deneme/ }).click();
+    await expect(page.getByText('Kesim ve takım ömrü denemesi').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hazırlık formu' }).or(page.getByText('Onay kaydı')).first()).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  for (const genislik of [360, 768, 1280]) {
+    test(`Kurulum ve Hazırlık ${String(genislik)} genişlikte taşmaz, panel erişilir`, async ({ page, ac }) => {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      for (const yol of ['kurulum', 'hazirlik']) {
+        await ac(`/cnc-kurulum/yeni/${yol}`);
+        await expect(page.locator('.tc-ck-yan')).toBeAttached();
+        if (genislik < 768) await expect(page.locator('.tc-ck-cekmece')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      }
+    });
+  }
+});
+
 // Parça yazarları kendi bölümlerini doldurur (PARCA-SOZLESMESI); bölüm boşken atlanır.
 for (const [parca, gorunumler] of [
-  ['P1 Kurulum ve Hazırlık', 'Kurulum, Hazırlık'],
   ['P2 Kütüphane, Tanımlar, Ana Sayfa', 'Kütüphane, Tanımlar, Ana Sayfa'],
   ['P3 Ham Malzeme ve G-Kod', 'Ham Malzeme, G-Kod Sim.'],
   ['P4 Oto-CAM', 'Oto-CAM'],
