@@ -482,6 +482,7 @@ button { font: inherit; color: inherit; }
 
 /* ── v4: hazırlık stüdyosu ── */
 .src.lock { color: var(--run); border-color: color-mix(in srgb, var(--run) 50%, transparent); }
+.src.eski { color: var(--stop); border-color: color-mix(in srgb, var(--stop) 50%, transparent); }
 .prepmode { --sig: var(--hazard); color: var(--hazard-ink); }
 .prepmode .sname { color: var(--hazard-ink); }
 .syncs { display: flex; gap: 8px; }

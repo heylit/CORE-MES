@@ -14,6 +14,7 @@ import { Step3D, fileHash, isModelName, processModel } from './model-3b';
 import { beep } from './operator-parcalar';
 import { AletSecimi, olcumAletiBul, useOlcumAletleri } from './olcum-aleti-secimi';
 import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../data/olcum-aleti';
+import { ESKI_CIZIM } from '../data/cizim-merkezi';
 
 /* ── teknik resim paneli ── */
 export const SAMPLES = [
@@ -372,7 +373,7 @@ export function Blueprint({ say, theme, ctl, yuklemeYok = false }: { say: any; t
           ${edit && edit.isNew ? html`<g transform=${'translate(' + edit.x + ' ' + edit.y + ') scale(' + U + ')'}><circle r="16" className="ghost" /></g>` : null}
         </svg></div></div>`}
     <div className="bp-top">
-      <div className="bp-title"><b>${doc.name}${doc.rev ? html`<span className="rev">REV ${doc.rev}</span>` : null}<span className="src">${doc.mk || badge}</span>${RO ? html`<span className="src lock"><${I} n="check" s=${11} w=${3} /> KALİTE ONAYLI</span>` : null}</b><span className="mono">${doc.sub}</span>
+      <div className="bp-title"><b>${doc.name}${doc.rev ? html`<span className="rev">REV ${doc.rev}</span>` : null}<span className="src">${doc.mk || badge}</span>${RO && ctl.eskiCizim ? html`<span className="src eski"><${I} n="alert" s=${11} w=${3} /> ${ESKI_CIZIM[ctl.eskiCizim].rozet}</span>` : RO ? html`<span className="src lock"><${I} n="check" s=${11} w=${3} /> KALİTE ONAYLI</span>` : null}</b><span className="mono">${doc.sub}</span>
         ${doc.kind === 'step' || pkgModel ? html`<div className="segs"><button className=${'seg ' + (!mode3d ? 'on' : '')} onClick=${() => setMode3d(false)}><${I} n="ruler" s=${16} />Teknik resim</button><button className=${'seg ' + (mode3d ? 'on' : '')} onClick=${open3d}><${I} n="cube" s=${16} />3B model</button></div>` : null}
         ${doc.kind === 'pdf' && doc.pages > 1 ? html`<div className="segs"><button className="seg" disabled=${doc.page <= 1} onClick=${() => showPdfPage(doc.page - 1, doc.file, doc.baseKey).then(() => setBusy(null))}>‹</button><span className="mono" style=${{ padding: '0 8px' }}>${doc.page} / ${doc.pages}</span><button className="seg" disabled=${doc.page >= doc.pages} onClick=${() => showPdfPage(doc.page + 1, doc.file, doc.baseKey).then(() => setBusy(null))}>›</button></div>` : null}
       </div>

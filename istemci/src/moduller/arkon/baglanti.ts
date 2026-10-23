@@ -288,15 +288,17 @@ export async function cevapla(istemci: Istemci, g: IstekGirdisi, cikis?: () => v
 }
 
 // Arkon ekranı sunucunun yazma reddini çoğu yerde göstermez, çevrimdışı kuyruk da reddedilen öğeyi sessizce düşürür (UYUM-BORCU "Sessiz kayıp").
-// Köprü her reddedilen yazmayı TMI bildirimiyle söyler. Söylenmeyenler: okuma; çakışma (409, Arkon güncel belgeyle yeniden dener);
+// Köprü her reddedilen yazmayı TMI bildirimiyle söyler. Söylenmeyenler: okuma; belge çakışması (409, Arkon güncel belgeyle yeniden dener;
+// kaydın 409'u ise TMI kuralı reddidir ve söylenir: Arkon'un kendi iletisi kendiliğinden açılan TMI penceresinin arkasında kalır, 12.9);
 // oturum düşmesi (401, giriş ekranı açılır); bulunamadı (404, Arkon "yok" sayar); günlük kaydı (audit: günlüğü sunucu yazar, ekranın
 // her değişiklikte gönderdiği satır her zaman reddedilir); giriş ve çıkış.
 const SESSIZ_DURUMLAR: ReadonlySet<number> = new Set([401, 404, 409]);
 const NE_YAZILDI: Record<string, string> = { doc: 'Belge', log: 'Kayıt', bus: 'İleti', blob: 'Dosya' };
 
 export function reddiBildirimi(yontem: string, yol: string, cevap: Cevap): string | null {
-  if (yontem === 'GET' || cevap.durum < 400 || SESSIZ_DURUMLAR.has(cevap.durum)) return null;
+  if (yontem === 'GET' || cevap.durum < 400) return null;
   const [ilk, ikinci] = yol.split('/').filter(Boolean).map(decodeURIComponent);
+  if (SESSIZ_DURUMLAR.has(cevap.durum) && !(cevap.durum === 409 && ilk === 'log')) return null;
   if (ilk === undefined || NE_YAZILDI[ilk] === undefined) return null;
   if (ilk === 'log' && ikinci === 'audit') return null;
   if (ilk === 'blob' && ikinci === 'missing') return null;

@@ -41,3 +41,13 @@ Makine devralma (#1148): `POST /arkon/makine-devral`, yetki `oturum` + serviste 
 Makine ayrımları (393 d sonrası): `GET /arkon/makine-ayrimlari?emirId=`, yetki `{ biri: [sayfa.arkon, sayfa.uretim-terminali, sayfa.kuyruk] }`, salt okuma; serviste Arkon rolü ve emrin istasyonunun iş merkezi kapsamı (dışı 403; ayrım başka emrin numarasını ve saatini taşır). Kural uretim-emirleri `makineAyrimlari`'ndan gelir (başlatma denetimiyle aynı); ekrandaki kilit kolaylıktır, son söz başlatma komutundadır. Emir yoksa ya da istasyonsuzsa boş cevap. İzinli: makine-ayrimi.test.ts "planın makinesi döner...", "reddedilen..." (kapsamındaki 200). Ret: aynı test (rolsüz 403, sayfasız 403, oturumsuz 401, kapsam dışı 403, emirId=0 400).
 
 Ekip çağrısı bildirimi (298): `POST /arkon/kayitlar/calls/ekle` ucunda yeni yetki yok; kaydı yazabilen Arkon rolü (calls yazarları) çağrı açınca aynı işlemde `ekipCagrisiBildir` çağrılır. Alıcıyı istemci değil bildirim modülünün eşlemesi seçer, çağıran almaz; başlık ve metin kullanıcı metnidir, bildirim merkezi kaçırarak basar. Yalnız `open` aşaması ve tanınan ekip; yinelenen kayıt (cid) yazılmadığı için bildirim yinelenmez. İzinli ve ret: cagri-bildirimi.test.ts (alıcı müdür; kalite ve çağıran almaz; ack/esc/done ve yinelenen kayıt yeni bildirim açmaz; tanınmayan ekip açmaz).
+
+Arıza yansıması (AR-15, W7): `POST /arkon/belgeler/maint/:kimlik/yaz` ucunda yeni yetki yok. Arıza açılınca ya da kapanınca makine durumu
+`istasyonlar/disari.ts makineDurumuYaz` ile, istasyonlar modülünün kendi işlemi (`istasyonlar.yaz` ya da `istasyonlar.makine-durumu`) denetlenerek
+aynı transaction'da yazılır; Arkon rolü bu yetkiyi vermez. İzinli: ariza-makine-durumu.test.ts "bakımcı arıza açınca..."; reddedilen: aynı dosya
+"makine durumu yetkisi olmayan kişinin arıza kaydı yazılır, makine durumu değişmez".
+
+Merkez çizimi durumu (Soru 197 a, W7): `GET /arkon/cizim-merkezi/kontrol` salt okumadır; yetki `sayfa.arkon` (değişmedi), serviste Arkon rolü
+paketi okuyabilmeli (`kurallar.ts merkezDurumunuOkuyabilirMi`: bütün Arkon rolleri). Öncesinde yalnız paket yazanlar (yönetici, planlama, hazırlık,
+kalite). Merkez listesi ve dosya alma paket yazanlarda kalır. İzinli: merkez-kontrol-okuma.test.ts (operatör ve amir 200); reddedilen: aynı test
+(Arkon rolü olmayan 403; operatör ve amir merkez listesinde 403).
