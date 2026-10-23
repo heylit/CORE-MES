@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
@@ -10,9 +11,9 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { saatDurusNedenleriCevabi, saatEmriCevabi, saatIstasyonlariCevabi, saatOnizlemesiCevabi, saatSiradakiCevabi, saatUyarilariCevabi, saatVardiyaCevabi } from '#paylasilan/sozlesme/saat.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirDevam, emirDurdur, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -66,6 +67,32 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
 
   let projeId = 0;
 
+  // İş emirsiz emir yalnız test kurulumunda doğrudan yazılır: ekranlı açma Reçete ve Rota'dadır.
+  async function emirYaz(g: { parcaNo: string; parcaAd: string; adet: number; istasyonId: number }): Promise<number> {
+    return (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [g.parcaNo, g.parcaAd, g.adet, g.istasyonId, yoneticiId, projeId]))!.id;
+  }
+
+  // Başlatma, devam, durdurma ve bitirmenin ekranı Arkon'dur ve uretim-emirleri/disari.ts'ten girer: test kişinin yetkisiyle çağırır.
+  async function uretim(ad: string, id: number, komut: 'baslat' | 'devam' | 'durdur' | 'bitir', g: { durusNedeniId?: number; saglamAdet?: number } = {}) {
+    try {
+      await o().vt.tx(async (db) => {
+        const kisi = await db.tek<{ id: number }>('SELECT id FROM kisi WHERE kullanici_adi = $1', [ad]);
+        const k = kisi === null ? null : await kullaniciYukle(db, kisi.id);
+        if (k === null) throw new Error(`kişi yok: ${ad}`);
+        if (komut === 'baslat') return emirBaslat(db, k, id);
+        if (komut === 'devam') return emirDevam(db, k, id);
+        if (komut === 'durdur') return emirDurdur(db, k, id, g.durusNedeniId ?? 0);
+        return emirBitir(db, k, id, g.saglamAdet);
+      });
+      return { durum: 200, govde: undefined as unknown };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() as unknown };
+      throw h;
+    }
+  }
+
   before(async () => {
     ortam = await testVeritabaniKur('saat');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
@@ -85,9 +112,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     await ortam.sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi', [istasyonId]);
     makineId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAK1', 'Tezgah', $1) RETURNING id", [istasyonId]))!.id;
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-1', parcaAd: 'Deneme flanş', adet: 5, istasyonId, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    emirId = (ac.govde as { emir: { id: number } }).emir.id;
+    emirId = await emirYaz({ parcaNo: 'DNM-1', parcaAd: 'Deneme flanş', adet: 5, istasyonId });
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -131,13 +156,13 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
   });
 
   test('başlayan emir "calisiyor" ve sayacı sıfırdan açılır; duruşta istasyon "durdu" ve nedeniyle uyarı olur', async () => {
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emirId}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', emirId, 'baslat')).durum, 200);
     let ist = saatIstasyonlariCevabi.parse((await istek('planlama_proje', 'GET', '/saat/istasyonlar')).govde);
     assert.deepEqual(ist.istasyonlar.find((i) => i.id === istasyonId)?.durum, 'calisiyor');
     let emir = saatEmriCevabi.parse((await istek('planlama_proje', 'GET', `/saat/emirler/${emirId}`)).govde);
     assert.deepEqual([emir.calisma, emir.saglam, emir.hurda], ['calisiyor', 0, 0]);
 
-    const d = await istek('operator', 'POST', `/uretim-emirleri/${emirId}/durdur`, { durusNedeniId: durusId });
+    const d = await uretim('operator', emirId, 'durdur', { durusNedeniId: durusId });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     ist = saatIstasyonlariCevabi.parse((await istek('planlama_proje', 'GET', '/saat/istasyonlar')).govde);
     assert.equal(ist.istasyonlar.find((i) => i.id === istasyonId)?.durum, 'durdu');
@@ -165,9 +190,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
       "INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAK2', 'Tezgah 2', $1) RETURNING id", [istasyon2]))!.id;
     await o().sahip.sorgu(
       "INSERT INTO istasyonlar_makine_durumu (makine_id, durum, aciklama, degistiren_kisi_id) VALUES ($1, 'bakim', 'Yağlama', $2)", [makine2, yoneticiId]);
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-3', parcaAd: 'Deneme burç', adet: 3, istasyonId: istasyon2, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    const emir2 = (ac.govde as { emir: { id: number } }).emir.id;
+    const emir2 = await emirYaz({ parcaNo: 'DNM-3', parcaAd: 'Deneme burç', adet: 3, istasyonId: istasyon2 });
 
     await islemliKisiEkle('kisitli', ['sayfa.atolye']);
     const kisi = await o().vt.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'kisitli'");
@@ -231,12 +254,12 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     let emir = await emirNoAl(e1);
     assert.deepEqual([emir.op, emir.tezgah, emir.siradaki, emir.malzemeHazir, emir.durumBaslangic],
       [null, { ad: 'Tezgah SAI3', tur: 'CNC' }, { opNo: 10, ad: 'Adım 1', adet: 4 }, null, null]);
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e1}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', e1, 'baslat')).durum, 200);
     emir = await emirNoAl(e1);
     assert.deepEqual([emir.op, emir.siradaki, emir.birimSaniye], [{ opNo: 10, ad: 'Adım 1' }, { opNo: 10, ad: 'Adım 1', adet: 4 }, 90]);
     // Geri sayım tezgâhta ilk üretim girilince başlar: giriş yokken son üretim anı yoktur.
     assert.equal(emir.sonUretimAni, null);
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e1}/durdur`, { durusNedeniId: durusId })).durum, 200);
+    assert.equal((await uretim('operator', e1, 'durdur', { durusNedeniId: durusId })).durum, 200);
     emir = await emirNoAl(e1);
     assert.notEqual(emir.durumBaslangic, null);
     assert.equal(emir.durumBaslangic, emir.durusBaslangic);
@@ -279,10 +302,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
   });
 
   test('duruş yazma: terminal.uret yetkisiz kişi durduramaz, başka iş merkezindeki emir durdurulamaz (normal oturum)', async () => {
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-D1', parcaAd: 'Deneme pim', adet: 4, istasyonId, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    const emir = (ac.govde as { emir: { id: number } }).emir.id;
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emir}/baslat`)).durum, 200);
+    const emir = await emirYaz({ parcaNo: 'DNM-D1', parcaAd: 'Deneme pim', adet: 4, istasyonId });
+    assert.equal((await uretim('operator', emir, 'baslat')).durum, 200);
     assert.equal((await istek(null, 'POST', `/saat/emirler/${emir}/durdur`, { durusNedeniId: durusId })).durum, 401);
     assert.equal((await istek('harita', 'POST', `/saat/emirler/${emir}/durdur`, { durusNedeniId: durusId })).durum, 403);
     const hala = saatEmriCevabi.parse((await istek('planlama_proje', 'GET', `/saat/emirler/${emir}`)).govde);
@@ -291,10 +312,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const im2 = await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('SAM9', 'Yazma Dışı Merkez') RETURNING id");
     const ist2 = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAI9', 'CNC-09', $1) RETURNING id", [im2?.id]))!.id;
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi', [ist2]);
-    const ac2 = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-D2', parcaAd: 'Deneme vida', adet: 2, istasyonId: ist2, projeId });
-    assert.equal(ac2.durum, 200, JSON.stringify(ac2.govde));
-    const emir2 = (ac2.govde as { emir: { id: number } }).emir.id;
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emir2}/baslat`)).durum, 200);
+    const emir2 = await emirYaz({ parcaNo: 'DNM-D2', parcaAd: 'Deneme vida', adet: 2, istasyonId: ist2 });
+    assert.equal((await uretim('operator', emir2, 'baslat')).durum, 200);
 
     await islemliKisiEkle('durdurucu', ['terminal.uret']);
     const kisi = await o().vt.tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'durdurucu'");
@@ -309,10 +328,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const sm1 = await o().vt.tek<{ id: number }>("SELECT id FROM is_merkezi WHERE kod = 'SAM1'");
     const bos = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAI8', 'CNC-08', $1) RETURNING id", [sm1?.id]))!.id;
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi', [bos]);
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-D3', parcaAd: 'Deneme somun', adet: 3, istasyonId: bos, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    const emir = (ac.govde as { emir: { id: number } }).emir.id;
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emir}/baslat`)).durum, 200);
+    const emir = await emirYaz({ parcaNo: 'DNM-D3', parcaAd: 'Deneme somun', adet: 3, istasyonId: bos });
+    assert.equal((await uretim('operator', emir, 'baslat')).durum, 200);
     const liste = await istek('operator', 'GET', '/saat/durus-nedenleri');
     assert.equal(liste.durum, 200);
     assert.ok(saatDurusNedenleriCevabi.parse(liste.govde).nedenler.some((n) => n.id === durusId && n.ad === 'Malzeme bekleniyor'));
@@ -331,10 +348,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const sm1 = await o().vt.tek<{ id: number }>("SELECT id FROM is_merkezi WHERE kod = 'SAM1'");
     const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAI7', 'CNC-07', $1) RETURNING id", [sm1?.id]))!.id;
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi', [ist]);
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-D4', parcaAd: 'Deneme rondela', adet: 3, istasyonId: ist, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    const emir = (ac.govde as { emir: { id: number } }).emir.id;
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emir}/baslat`)).durum, 200);
+    const emir = await emirYaz({ parcaNo: 'DNM-D4', parcaAd: 'Deneme rondela', adet: 3, istasyonId: ist });
+    assert.equal((await uretim('operator', emir, 'baslat')).durum, 200);
     const gonder = (kimlik: string | null) => app.inject({
       method: 'POST', url: `/api/saat/emirler/${emir}/durdur`, payload: { durusNedeniId: durusId },
       headers: { cookie: cerezler.get('durdurucu') ?? '', ...(kimlik === null ? {} : { [ISTEK_KIMLIGI_BASLIGI]: kimlik }) },
@@ -353,12 +368,11 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
 
   test('olmayan ve iptal edilmiş emir 404', async () => {
     assert.equal((await istek('planlama_proje', 'GET', '/saat/emirler/999999')).durum, 404);
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-2', parcaAd: 'Deneme mil', adet: 2, istasyonId, projeId });
-    const yeni = (ac.govde as { emir: { id: number; surum: number } }).emir;
-    assert.equal((await istek('planlama_proje', 'GET', `/saat/emirler/${yeni.id}`)).durum, 200);
-    const iptal = await istek('yonetici', 'POST', `/uretim-emirleri/${yeni.id}/iptal`, { surum: yeni.surum });
-    assert.equal(iptal.durum, 200, JSON.stringify(iptal.govde));
-    assert.equal((await istek('planlama_proje', 'GET', `/saat/emirler/${yeni.id}`)).durum, 404);
+    const yeni = await emirYaz({ parcaNo: 'DNM-2', parcaAd: 'Deneme mil', adet: 2, istasyonId });
+    assert.equal((await istek('planlama_proje', 'GET', `/saat/emirler/${yeni}`)).durum, 200);
+    // İş emirsiz emrin iptal komutu yoktur; iptal hâli doğrudan yazılır.
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now(), surum = surum + 1 WHERE id = $1", [yeni]);
+    assert.equal((await istek('planlama_proje', 'GET', `/saat/emirler/${yeni}`)).durum, 404);
   });
 
   // B verileri: çalışmaya geçiş anı, duruş saniyesi ve pencere, biten emir uyarısı (uretim-emirleri/disari.ts Saat okumaları).
@@ -370,9 +384,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     return { ist, im };
   }
   async function bEmri(ist: number, parcaNo: string): Promise<number> {
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo, parcaAd: `Deneme ${parcaNo}`, adet: 5, istasyonId: ist, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    return (ac.govde as { emir: { id: number } }).emir.id;
+    return emirYaz({ parcaNo, parcaAd: `Deneme ${parcaNo}`, adet: 5, istasyonId: ist });
   }
   const istasyonSatiri = async (ad: string, ist: number) =>
     saatIstasyonlariCevabi.parse((await istek(ad, 'GET', '/saat/istasyonlar')).govde).istasyonlar.find((i) => i.id === ist);
@@ -383,7 +395,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const calisan = await bEmri(a.ist, 'DNM-B1');
     const bekleyen = await bEmri(b.ist, 'DNM-B2');
     const once = Date.now();
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${calisan}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', calisan, 'baslat')).durum, 200);
     const sonra = Date.now();
     const satir = await istasyonSatiri('planlama_proje', a.ist);
     assert.equal(satir?.durum, 'calisiyor');
@@ -401,7 +413,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const a = await bIstasyonu('SAB3');
     const b = await bIstasyonu('SAB4');
     const emirA = await bEmri(a.ist, 'DNM-B3');
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emirA}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', emirA, 'baslat')).durum, 200);
     const neden = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('SA-D2', 'Pencere duruşu', 'plansiz', 952) RETURNING id"))!.id;
     const T = Date.now();
@@ -422,7 +434,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const a = await bIstasyonu('SAB9');
     const b = await bIstasyonu('SAB10');
     const emirA = await bEmri(a.ist, 'DNM-B9');
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${emirA}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', emirA, 'baslat')).durum, 200);
     const sayim = (adet: number, zaman: string) => o().sahip.sorgu(
       `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, zaman) VALUES ($1, $2, $3, 'saglam', $4, $5)`,
       [emirA, yoneticiId, a.ist, adet, zaman]);
@@ -441,8 +453,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const emirB = await bEmri(b.ist, 'DNM-B6');
     const acik = await bEmri(a.ist, 'DNM-B7');
     for (const id of [emirA, emirB]) {
-      assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${id}/baslat`)).durum, 200);
-      const bit = await istek('operator', 'POST', `/uretim-emirleri/${id}/bitir`, { saglamAdet: 5 });
+      assert.equal((await uretim('operator', id, 'baslat')).durum, 200);
+      const bit = await uretim('operator', id, 'bitir', { saglamAdet: 5 });
       assert.equal(bit.durum, 200, JSON.stringify(bit.govde));
     }
     const noOku = async (id: number) => (await o().sahip.tek<{ emir_no: string }>('SELECT emir_no FROM uretim_emri WHERE id = $1', [id]))!.emir_no;
@@ -615,7 +627,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
 
     // Çalışan adım sıradaki değildir: ilk adım başlayınca sıra ikinci adıma geçer.
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/baslat`)).durum, 200);
+    assert.equal((await uretim('operator', e, 'baslat')).durum, 200);
     s = saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki;
     assert.equal(s?.opNo, 20);
 
@@ -631,11 +643,9 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAIU', 'CNC-U', $1) RETURNING id", [im?.id]))!.id;
     await o().sahip.sorgu("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAKU', 'Tezgah U', $1)", [ist]);
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);
-    const ac = await istek('yonetici', 'POST', '/uretim-emirleri', { parcaNo: 'DNM-U', parcaAd: 'Deneme mil', adet: 2, istasyonId: ist, projeId });
-    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
-    const e = (ac.govde as { emir: { id: number } }).emir.id;
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/baslat`)).durum, 200);
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/durdur`, { durusNedeniId: durusId })).durum, 200);
+    const e = await emirYaz({ parcaNo: 'DNM-U', parcaAd: 'Deneme mil', adet: 2, istasyonId: ist });
+    assert.equal((await uretim('operator', e, 'baslat')).durum, 200);
+    assert.equal((await uretim('operator', e, 'durdur', { durusNedeniId: durusId })).durum, 200);
 
     await islemliKisiEkle('ustlenen_a', ['sayfa.atolye', 'saat.uyari-ustlen']);
     await islemliKisiEkle('ustlenen_b', ['sayfa.atolye', 'saat.uyari-ustlen']);
@@ -672,7 +682,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     assert.equal((await durus('ustlenen_a'))?.ustlenen?.ad, 'Deneme ustlenen_b');
 
     // Üstlenme uyarıyı kapatmaz: duruş kaynağında bitince uyarı listeden düşer ve artık üstlenilemez.
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/devam`)).durum, 200);
+    assert.equal((await uretim('operator', e, 'devam')).durum, 200);
     assert.equal(await durus('ustlenen_a'), undefined);
     assert.equal((await ustlen('ustlenen_a', u.kimlik)).durum, 404);
   });

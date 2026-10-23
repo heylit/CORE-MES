@@ -42,6 +42,15 @@ describe('arkon (gerçek PostgreSQL)', () => {
     return String(cevap.headers['set-cookie']).split(';')[0] ?? '';
   }
 
+  // İş emirsiz emrin açma ucu yok (238 H3): kurulum emri doğrudan yazar.
+  const emirYaz = async (g: { parcaNo: string; parcaAd: string; adet: number; istasyonId: number; projeId: number }) => {
+    const emir = (await ortam!.sahip.tek<{ id: number; emirNo: string }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id)
+       VALUES ($1, $2, $3, $4, (SELECT min(id) FROM kisi), $5) RETURNING id, emir_no AS "emirNo"`,
+      [g.parcaNo, g.parcaAd, g.adet, g.istasyonId, g.projeId]))!;
+    return { durum: 200, govde: { emir } };
+  };
+
   async function istek<T = unknown>(cerez: string | null, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
     const cevap = await app.inject({
       method: yontem,
@@ -389,7 +398,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('TMI\'deki açık emir Hazırlık\'ta taslak paket görünür; paket kaydedilince kayıtlı belge geçerlidir', async () => {
     const t = await istasyonKur();
-    const emir = await istek<{ emir: { id: number; emirNo: string } }>(yonetici, 'POST', '/uretim-emirleri', {
+    const emir = await emirYaz({
       parcaNo: 'DENEME-1', parcaAd: 'Deneme parçası', adet: 25, istasyonId: t.istasyonId, projeId,
     });
     assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
@@ -414,7 +423,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
   // Adım 1 (kart #199): rotalı emrin paketi iş emri başınadır (`tmi-ie`, yansima.test.ts); emir başına `tmi-ue` taslağı yalnız rotasız emirdedir.
   test('malzeme kartlı (rotalı) emrin emir başına taslak paketi yoktur; tek okuma da null döner', async () => {
     const t = await istasyonKur();
-    const emir = await istek<{ emir: { id: number } }>(yonetici, 'POST', '/uretim-emirleri', {
+    const emir = await emirYaz({
       parcaNo: 'DENEME-MN', parcaAd: 'Deneme parçası', adet: 5, istasyonId: t.istasyonId, projeId,
     });
     assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
@@ -439,7 +448,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('kart #156 refakat kartları: terminal istasyonu ve emirlerle kartları okur; iptal kart yok; bilinmeyen istasyon 404, rolsüz ve kapsam dışı 403, bozuk sorgu 400', async () => {
     const t = await istasyonKur();
-    const emir = await istek<{ emir: { id: number; emirNo: string } }>(yonetici, 'POST', '/uretim-emirleri', {
+    const emir = await emirYaz({
       parcaNo: 'DENEME-RP', parcaAd: 'Deneme parçası', adet: 5, istasyonId: t.istasyonId, projeId,
     });
     assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
@@ -715,7 +724,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       const id = await belgeAc('Baslatma Revizyonu', pdf('bas-a'), 'bas.pdf', true);
       const kayit = (await istek<MerkezEkleCevabi>(yonetici, 'POST', `/arkon/cizim-merkezi/belgeler/${id}/ekle`)).govde.kayit;
       const t = await istasyonKur();
-      const emir = (await istek<{ emir: { id: number; emirNo: string } }>(yonetici, 'POST', '/uretim-emirleri', {
+      const emir = (await emirYaz({
         parcaNo: 'DENEME-CZ', parcaAd: 'Deneme parçası', adet: 5, istasyonId: t.istasyonId, projeId,
       })).govde.emir;
       const paket = `tmi-ue-${emir.id}`;

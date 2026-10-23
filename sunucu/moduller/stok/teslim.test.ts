@@ -2,17 +2,21 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import type { Db } from '#cekirdek/db.ts';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { gelecekSepetCevabi, isMalzemeleriCevabi, kodCozCevabi, lotBekleyenKartlarCevabi, refakatIziCevabi, refakatLotaBaglaCevabi, refakatKartSatirlariCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, sepetTeslimEtCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SepetTeslimEtCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, KodCozCevabi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi, IstekMalzemeleriCevabi, MalzemeIstegiCevabi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutCozCevabi, TeslimCevabi, TeslimKutusuCevabi, ToplamaAyrintiCevabi, UretimHazirligiCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirIptalEt, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, emirBaslat, emirBitir, emirIptalEt, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, cikisYap, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, suresiDolanTeslimleriIptal, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
 import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, malzemeStokDurumlari, numuneTeslimi } from './disari.ts';
@@ -59,6 +63,21 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const c = await app.inject({ method: yontem, url: `/api${yol}`, headers: baslik, ...(govde === undefined ? {} : { payload: govde as object }) });
     return { durum: c.statusCode, govde: (c.body ? c.json() : undefined) as T };
   }
+  // Başlatma ve sayımın HTTP ucu yok (238 H3); terminal bunları Arkon üzerinden uretim-emirleri/disari.ts ile yapar.
+  async function uretim<T>(kim: string, is: (db: Db, k: Kullanici) => Promise<T>): Promise<Cevap<T>> {
+    try {
+      return { durum: 200, govde: await o().vt.tx(async (db) => is(db, (await kullaniciYukle(db, kisiler.get(kim)!))!)) };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() as T };
+      throw h;
+    }
+  }
+  const terminalKomutu = (kim: string, e: number, yol: string, govde?: unknown) => uretim(kim, (db, k) => {
+    if (yol === '/baslat') return emirBaslat(db, k, e);
+    if (yol === '/bitir') return emirBitir(db, k, e, (govde as { saglamAdet?: number } | undefined)?.saglamAdet);
+    if (yol === '/sayim') return emirSayim(db, k, e, sayimGovdesi.parse(govde));
+    throw new Error(`bilinmeyen komut ${yol}`);
+  });
   async function kisiEkle(ad: string, rolKodu: string): Promise<void> {
     const rol = await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rolKodu]);
     const yonetici = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
@@ -571,7 +590,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const [ka, kb, kc] = [await istasyonKonumu(a.id), await istasyonKonumu(b.id), await istasyonKonumu(c.id)];
     const sayi = async (m: number, k: number | null, st: number | null = null) => Number(k === null ? 0 : (await bakiye(m, k, st)) ?? '0');
     const terminal = async (yol: string, govde?: unknown) => {
-      const r = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${e}${yol}`, govde);
+      const r = await terminalKomutu('operator', e, yol, govde);
       assert.equal(r.durum, 200, `${yol}: ${JSON.stringify(r.govde)}`);
     };
     // Başlatmadan önce hazırlık: eksik girdiye istasyon isteği açılır; depo isteği teslim eder, istasyon teslim alır (kart #1289).
@@ -899,7 +918,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const kabul = await kabulKonumu();
     const sayi = async (m: number, k: number | null, st: number | null = null) => Number(k === null ? 0 : (await bakiye(m, k, st)) ?? '0');
     const terminal = async (yol: string, govde?: unknown) => {
-      const r = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${e}${yol}`, govde);
+      const r = await terminalKomutu('operator', e, yol, govde);
       assert.equal(r.durum, 200, `${yol}: ${JSON.stringify(r.govde)}`);
     };
 
@@ -959,7 +978,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const t = await gonder('depo', { malzemeId: hm, miktar: '2', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } });
     assert.equal((await istek('operator', 'POST', `/stok/teslimler/${t.govde.teslim.id}/teslim-al`, { surum: t.govde.teslim.surum, alinan: '2' })).durum, 200);
     const terminal = async (yol: string, govde?: unknown) => {
-      const r = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${e}${yol}`, govde);
+      const r = await terminalKomutu('operator', e, yol, govde);
       assert.equal(r.durum, 200, `${yol}: ${JSON.stringify(r.govde)}`);
     };
     await terminal('/baslat');
@@ -993,7 +1012,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
       assert.equal(r.durum, 200, JSON.stringify(r.govde));
     };
     const terminal = async (e: number, yol: string, govde?: unknown) => {
-      const r = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${e}${yol}`, govde);
+      const r = await terminalKomutu('operator', e, yol, govde);
       assert.equal(r.durum, 200, `${yol}: ${JSON.stringify(r.govde)}`);
     };
 
@@ -1060,14 +1079,14 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     await malKabul(hm, '1');
     const kabul = await kabulKonumu();
     const { uretimEmriId: e } = await ac(await makineKur(a.id));
-    const b = await istek<{ uyari: string | null } & Hata>('operator', 'POST', `/uretim-emirleri/${e}/baslat`);
+    const b = await uretim('operator', (db, k) => emirBaslat(db, k, e));
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     const [ist] = await istekler(e);
     assert.deepEqual([ist?.durum, ist?.istasyon, ist?.miktar, ist?.aciklama.startsWith('Malzeme eksikken üretim başladı')], ['stok_yok', a.id, '10.000', true], 'eksik iz: istasyona istek');
     assert.match(b.govde.uyari ?? '', new RegExp(`^Malzeme eksik: .*\\(istek ${ist!.no}\\)\\. İş başladı`), 'cevapta uyarı ve istek no');
     const ka = await istasyonKonumu(a.id);
     assert.deepEqual([await bakiye(hm, kabul), ka === null ? null : await bakiye(hm, ka)], ['1.000', null], 'başlatma stok yazmaz');
-    assert.equal((await istek('operator', 'POST', `/uretim-emirleri/${e}/sayim`, { tur: 'saglam', adet: 3 })).durum, 200);
+    assert.equal((await uretim('operator', (db, k) => emirSayim(db, k, e, { tur: 'saglam', adet: 3 }))).durum, 200);
     assert.equal(await bakiye(hm, kabul), null, 'sayım bulunan 1 kg\'ı düşer');
     const kaSonra = (await istasyonKonumu(a.id))!;
     assert.equal(await bakiye(hm, kaSonra), '-5.000', 'eksik 5 kg istasyonda lotsuz eksi düşer');
@@ -1082,7 +1101,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const t = await gonder('depo', { malzemeId: hm, miktar: '10', kaynak: { konumId: kabul }, hedef: { istasyonId: c.id } });
     assert.equal((await istek('operator', 'POST', `/stok/teslimler/${t.govde.teslim.id}/teslim-al`, { surum: t.govde.teslim.surum, alinan: '10' })).durum, 200);
     const { uretimEmriId: e2 } = await ac(await makineKur(c.id));
-    const b2 = await istek<{ uyari: string | null } & Hata>('operator', 'POST', `/uretim-emirleri/${e2}/baslat`);
+    const b2 = await uretim('operator', (db, k) => emirBaslat(db, k, e2));
     assert.deepEqual([b2.durum, b2.govde.uyari, (await istekler(e2)).length], [200, null, 0], 'girdi istasyondaysa uyarı ve istek yok');
   });
 

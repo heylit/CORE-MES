@@ -5,16 +5,18 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { bekleyenlerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { Bekleyen } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { FasonIsleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, fasonEksikGonderimSayisi, uretimGirisi } from './servis.ts';
 
@@ -105,7 +107,23 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
   const kullanici = (ad: string): Kullanici => kullanicilar.get(ad)!;
   // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler; fasona gidecek adet onaydan sonra sayılır.
   const ilkParcaOnay = (id: number) => o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
-  const terminal = (id: number, yol: string, govde?: unknown) => istek<{ mesaj?: string }>('operator', 'POST', `/uretim-emirleri/${id}/${yol}`, govde);
+  // Terminal komutlarının HTTP ucu yok (238 H3): terminal onları Arkon üzerinden uretim-emirleri/disari.ts ile yapar.
+  const terminal = async (id: number, yol: string, govde?: unknown): Promise<Cevap<{ mesaj?: string }>> => {
+    const k = kullanicilar.get('operator')!;
+    const komut = yol.replace(/^\//, '');
+    try {
+      await o().vt.tx((db) => {
+        if (komut === 'baslat') return emirBaslat(db, k, id);
+        if (komut === 'bitir') return emirBitir(db, k, id, (govde as { saglamAdet?: number } | undefined)?.saglamAdet);
+        if (komut === 'sayim') return emirSayim(db, k, id, sayimGovdesi.parse(govde));
+        throw new Error(`bilinmeyen komut ${yol}`);
+      });
+      return { durum: 200, govde: {} };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() };
+      throw h;
+    }
+  };
   const fason = (id: number, isEmriId: number, yol: string, govde?: unknown) =>
     istek<{ hareketId: number; mesaj?: string }>('depo', 'POST', `/adimli-emirler/${id}/is-emirleri/${isEmriId}/${yol}`, govde);
   const bekleyenler = async (): Promise<Bekleyen[]> => {

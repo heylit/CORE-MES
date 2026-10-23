@@ -11,7 +11,6 @@ export const ISTASYON_PASIF_ACMA = 'Pasif istasyona emir açılamaz.';
 export const ISTASYON_PASIF_BASLATMA = 'Emrin istasyonu pasif; emir başlatılamaz.';
 export const BASLATMA_DURUMU = 'Yalnız planlı emir başlatılır.';
 export const BITIRME_DURUMU = 'Yalnız başlamış emir bitirilir.';
-export const IPTAL_DURUMU = 'Yalnız planlı emir iptal edilir; başlamış, bitmiş ya da iptal edilmiş emir iptal edilemez.';
 export const KAPSAM_DISI = 'Bu istasyonun iş merkezinde çalışma yetkiniz yok.';
 // UE20 (karar 86 b): istasyonda bugün geçerli yetkinliği olmayan kişi iş başlatamaz; bütün işlemleri taşıyan yönetici rolü muaftır.
 export const YETKINLIK_YOK = 'Bu istasyonda geçerli yetkinlik kaydınız yok; iş başlatılamaz. Yetkinlik İstasyonlar > Personel sekmesinden verilir.';
@@ -40,7 +39,6 @@ export const baslatmaIhlali = (durum: EmirDurumu): string | null => (durum === '
 export const bitirmeIhlali = (durum: EmirDurumu): string | null => (durum === 'basladi' ? null : BITIRME_DURUMU);
 export const ROTASIZ_EMIR_KAPALI = 'Rotasız üretim emri ayarlardan kapalı: emri Reçete ve Rota\'dan açın.';
 
-export const iptalIhlali = (durum: EmirDurumu): string | null => (durum === 'planli' ? null : IPTAL_DURUMU);
 
 export const acmaIstasyonIhlali = (durum: IstasyonDurumu): string | null => {
   if (durum === 'yok') return ISTASYON_YOK;
