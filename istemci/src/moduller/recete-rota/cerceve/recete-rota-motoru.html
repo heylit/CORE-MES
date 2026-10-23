@@ -1231,14 +1231,15 @@ function blank(){
   return {version:7, name:"Yeni fabrika", items:[], wcs:[], stations:[], opdefs:[], routes:{}, cal:blankCal(),
     settings:{orderItem:null, orderQty:100, start:null, due:null, useStock:true, peopleLimit:true}, moves:[], machines:[], people:[], orders:[], opStatus:{}, assign:{}, qorder:{}, frozen:{}, opProg:{}, splitManual:{}, statuses:DEF_STATUSES(), statusStock:{}, statusCards:[], routeRevs:[], gercekSure:{}, savedAt:0};
 }
-/* ================= Emir türü ve bölme: saf kurallar =================
-   Durum bilmez; her kural {ok:true,...} ya da {ok:false, ileti} döner. Parti = miktarla bölünen alt emir; kol = ana emrin N. adımından
-   sonra ayrılıp M. adımında yeniden bağlanan alt emir (N+1..M-1 adımlarını kendisi taşır). Operasyon parçası bölme (splitOp) ayrı bir şeydir. */
-const EMIR_TURLERI = {fai:"FAI", seri:"Seri", prototip:"Prototip", numune:"Numune"};
+/* ================= Emir türü ve bölme =================
+   Parti = miktarla bölünen alt emir; kol = ana emrin N. adımından sonra ayrılıp M. adımında yeniden bağlanan alt emir (N+1..M-1 adımlarını
+   kendisi taşır). Operasyon parçası bölme (splitOp) ayrı bir şeydir. Tür listesi ve bölme kuralları Üretim Emirleri'nindir: türleri köprü
+   sözleşmedeki adlarıyla verir (tmi.emirTurleri), bölme, kol ve geri katma kararını sahibinin ucu verir (ekran yalnız seçimi toplar ve
+   iletisini gösterir). Köprü türleri vermezse prototipin dört türü kullanılır; köprüsüz açılışta bölme yapılmaz. */
+const EMIR_TURLERI = (typeof window.tmi === "object" && window.tmi !== null && window.tmi.emirTurleri) || {fai:"FAI", seri:"Seri", prototip:"Prototip", numune:"Numune"};
 const turOf = o => (o && EMIR_TURLERI[o.tur]) ? o.tur : "seri";
 const MAX_PARTI = 20;
 const miktarMetni = q => String(Math.round(q*1000)/1000).replace(".", ",");
-const yakinMi = (a, b) => Math.abs(a-b) <= 1e-6;
 const hataMi = ileti => ({ok:false, ileti});
 /* "30 20", "30; 20", "30+20" ya da "30, 20" -> sayılar; virgül ondalık ayracıdır, ayraç boşluk ; + */
 function miktarListesiOku(metin){
@@ -1251,103 +1252,10 @@ function miktarListesiOku(metin){
   }
   return {ok:true, liste};
 }
-/* Emir açarken partiler: elle miktar verilirse toplam emir miktarına eşit olmalı; yoksa sayıya göre eşit bölünür (artan ilk partide). İlk parti ana emirde kalır. */
-function partiMiktarlari(toplam, sayi, liste){
-  if (!(toplam > 0)) return hataMi("Emir miktarı sıfırdan büyük olmalı.");
-  if (Array.isArray(liste) && liste.length) {
-    if (liste.length > MAX_PARTI) return hataMi(`En çok ${MAX_PARTI} parti açılabilir.`);
-    if (liste.some(q=>!(q > 0))) return hataMi("Parti miktarlarının her biri sıfırdan büyük olmalı.");
-    const t = liste.reduce((a,b)=>a+b, 0);
-    if (!yakinMi(t, toplam)) return hataMi(`Parti miktarları toplamı (${miktarMetni(t)}) emir miktarına (${miktarMetni(toplam)}) eşit olmalı.`);
-    return {ok:true, parcalar:liste.slice()};
-  }
-  const n = Math.round(sayi);
-  if (!(n >= 1) || n > MAX_PARTI) return hataMi(`Parti sayısı 1 ile ${MAX_PARTI} arasında olmalı.`);
-  if (n === 1) return {ok:true, parcalar:[toplam]};
-  if (Number.isInteger(toplam)) {
-    if (n > toplam) return hataMi(`Parti sayısı (${n}) emir miktarını (${miktarMetni(toplam)}) aşamaz.`);
-    const b = Math.floor(toplam/n), p = new Array(n).fill(b); p[0] += toplam - b*n; return {ok:true, parcalar:p};
-  }
-  const b = Math.round(toplam/n*1000)/1000, p = new Array(n).fill(b); p[0] = Math.round((toplam - b*(n-1))*1000)/1000;
-  return p[0] > 0 ? {ok:true, parcalar:p} : hataMi("Miktar bu parti sayısına bölünemez.");
-}
-const BITIK_DURUM = {tamam:"Tamamlanan", iptal:"İptal edilen"};
-/* Var olan emri miktarla bölme (başlamış, kollu ve kol emri de): ana emirde en az bir miktar kalır, toplam korunur.
-   Başlamış emirde uyarı onayı istenir (onayGerek); parça bölünmüş adım varsa önce birleştirilmelidir. */
-function emirMiktarBol(g){
-  const {qty, bolunen, durum, baslamis, onay, parcaVar, enBuyukKol} = g;
-  if (BITIK_DURUM[durum]) return hataMi(`${BITIK_DURUM[durum]} emir bölünemez.`);
-  if (!Array.isArray(bolunen) || !bolunen.length) return hataMi("Alt emir miktarını gir.");
-  if (bolunen.length > MAX_PARTI) return hataMi(`En çok ${MAX_PARTI} alt emir açılabilir.`);
-  if (bolunen.some(q=>!(q > 0))) return hataMi("Alt emir miktarlarının her biri sıfırdan büyük olmalı.");
-  const t = bolunen.reduce((a,b)=>a+b, 0);
-  if (t > qty + 1e-6) return hataMi(`Alt emir miktarları toplamı (${miktarMetni(t)}) emir miktarını (${miktarMetni(qty)}) aşıyor.`);
-  if (yakinMi(t, qty)) return hataMi(`Ana emirde en az bir miktar kalmalı: toplam ${miktarMetni(qty)} bölünemez.`);
-  const kalan = Math.round((qty - t)*1e6)/1e6;
-  if (enBuyukKol > 0 && enBuyukKol >= kalan - 1e-6) return hataMi(`Kol miktarı (${miktarMetni(enBuyukKol)}) ana emirde kalan miktardan (${miktarMetni(kalan)}) küçük olmalı; önce kolu küçültün ya da geri alın.`);
-  if (baslamis && parcaVar) return hataMi("Operasyon parçası bölünmüş adım var; önce parçaları birleştirin.");
-  if (baslamis && !onay) return {ok:false, onayGerek:true, ileti:"Üretime başlamış emir: tamamlanan adımlar alt emirlerde de tamamlanmış sayılır, devam eden adımların ilerlemesi miktara oranla dağıtılır. Onaylamak için \"Miktarla böl\" düğmesine yeniden bas."};
-  return {ok:true, kalan, parcalar:bolunen.slice()};
-}
+const BOLME_BAGSIZ = "Bölme, kol ve geri katma Üretim Emirleri'ne bağlıyken yapılır.";
 /* Kolun taşıdığı adımlar (0 tabanlı sıra): N+1..M-1 */
 const kolIcinde = (kol, j) => j >= kol.n && j <= kol.m - 2;
 const kolAraligiGecerli = (n, m, adimSayisi) => Number.isInteger(n) && Number.isInteger(m) && n >= 1 && m - n >= 2 && m <= adimSayisi;
-/* Aynı ayrılma noktasından çıkan kollar iç içe ya da örtüşen aralıkla da olabilir; farklı noktadan çıkanlar yalnız uç noktayı paylaşabilir (ayrılma ve birleşme adımı başka kolun taşıdığı adım olamaz) */
-const kolCakisir = (k, n, m) => k.n !== n && n < k.m && k.n < m;
-/* Bir aralıktaki en kalabalık adımda kolların taşıdığı toplam miktar: her adımda ana emirde en az bir miktar kalmalı */
-function kolYuku(kollar, n, m){ let yuk = 0; for (let a = n + 1; a <= m - 1; a++) yuk = Math.max(yuk, (kollar||[]).filter(k=>a > k.n && a < k.m).reduce((t,k)=>t+k.qty, 0)); return yuk; }
-/* N. adımdan sonra q adetle ayrılıp M. adımda ana emre bağlanan kol; ana emirde kalan miktar aynı adımları kendi yapar.
-   g.qty: emrin miktarı; g.ust: emrin kendi adım aralığı {lo,hi} (ana emirde 1..adım sayısı, kol emrinde kolun adımları);
-   g.mevcut: {n,m,qty} mevcut kollar; g.baslamisAdimlar: üretimi başlamış adımların 1 tabanlı sırası. */
-function kolDogrula(g){
-  const {durum, adimSayisi, n, m, q, qty, mevcut, baslamisAdimlar} = g;
-  if (BITIK_DURUM[durum]) return hataMi(`${BITIK_DURUM[durum]} emirden kol ayrılamaz.`);
-  if (!(adimSayisi >= 3)) return hataMi("Kol için rotada en az 3 adım olmalı.");
-  if (!Number.isInteger(n) || !Number.isInteger(m)) return hataMi("Ayrılma ve birleşme adımı tam sayı olmalı.");
-  if (n < 1) return hataMi("Ayrılma adımı 1 ya da daha büyük olmalı.");
-  if (m > adimSayisi) return hataMi(`Birleşme adımı rotadaki adım sayısını (${adimSayisi}) aşamaz.`);
-  if (m <= n) return hataMi(`Birleşme adımı (${m}) ayrılma adımından (${n}) sonra olmalı.`);
-  if (m - n < 2) return hataMi("Kol en az bir adım taşımalı: birleşme adımı ayrılma adımından en az 2 sonra olmalı.");
-  const ust = g.ust;
-  if (ust && (n < ust.lo || m > ust.hi)) return hataMi(`Kol bu emrin adımları (${ust.lo}..${ust.hi}) içinde kalmalı.`);
-  if (!Number.isFinite(q)) return hataMi("Kol miktarını gir.");
-  if (!(q > 0)) return hataMi("Kol miktarı sıfırdan büyük olmalı.");
-  const basladi = (baslamisAdimlar||[]).find(s=>s > n && s < m);
-  if (basladi) return hataMi(`${basladi}. adımın üretimi başlamış ya da bitmiş; bu adım kola alınamaz.`);
-  const cakisan = (mevcut||[]).find(k=>kolCakisir(k, n, m));
-  if (cakisan) return hataMi(`Bu aralık ${cakisan.n}. adımdan ayrılan mevcut kolla çakışıyor.`);
-  const kalan = qty - kolYuku(mevcut, n, m);
-  if (q >= kalan - 1e-6) return hataMi(`Kol miktarı (${miktarMetni(q)}) ana emirde kalan miktarı (${miktarMetni(kalan)}) aşıyor; ana emirde en az bir miktar kalmalı.`);
-  return {ok:true};
-}
-/* Kolu M' adımında ana emre bağlama (erken ya da geç): kol yeni birleşme adımından önceki adımları taşır */
-function kolBirlestirDogrula(g){
-  const {n, mEski, mYeni, adimSayisi, kolBaslamis, anaBaslamis, mevcut, kolKolMax, durum, q, qty, ust} = g;
-  if (BITIK_DURUM[durum]) return hataMi(`${BITIK_DURUM[durum]} kol yeniden bağlanamaz.`);
-  if (!Number.isInteger(mYeni)) return hataMi("Birleşme adımı tam sayı olmalı.");
-  if (mYeni === mEski) return hataMi(`Kol zaten ${mEski}. adımda birleşiyor.`);
-  if (mYeni > adimSayisi) return hataMi(`Birleşme adımı rotadaki adım sayısını (${adimSayisi}) aşamaz.`);
-  if (mYeni <= n) return hataMi(`Birleşme adımı (${mYeni}) ayrılma adımından (${n}) sonra olmalı.`);
-  if (mYeni - n < 2) return hataMi("Kol en az bir adım taşımalı: birleşme adımı ayrılma adımından en az 2 sonra olmalı.");
-  if (ust && mYeni > ust.hi) return hataMi(`Birleşme adımı bağlı olduğu emrin adımları (${ust.lo}..${ust.hi}) içinde kalmalı.`);
-  const kb = Math.max(0, ...(kolBaslamis||[]));
-  if (kb >= mYeni) return hataMi(`Kol ${kb}. adımın üretimine başlamış; en erken ${kb + 1}. adımda birleşebilir.`);
-  const ab = Math.max(0, ...(anaBaslamis||[]));
-  if (ab >= Math.min(mEski, mYeni)) return hataMi(`Ana emir ${ab}. adıma gelmiş; kol ${mYeni}. adımda ana emre bağlanamaz.`);
-  const cakisan = (mevcut||[]).find(k=>kolCakisir(k, n, mYeni));
-  if (cakisan) return hataMi(`Bu aralık ${cakisan.n}. adımdan ayrılan mevcut kolla çakışıyor.`);
-  if (Number.isFinite(qty) && q + kolYuku(mevcut, n, mYeni) >= qty - 1e-6) return hataMi(`Kol miktarı (${miktarMetni(q)}) bu aralıkta ana emirde kalan miktarı (${miktarMetni(qty - kolYuku(mevcut, n, mYeni))}) aşıyor; ana emirde en az bir miktar kalmalı.`);
-  if (kolKolMax > mYeni - 1) return hataMi(`Kolun alt kolu ${kolKolMax}. adıma kadar uzanıyor; birleşme adımı ${kolKolMax + 1} ya da sonrası olmalı.`);
-  return {ok:true};
-}
-/* Alt emri ana emre geri katma ya da kolu geri alma: ikisi de üretime başlamamış olmalı; alt emrin kolu varsa önce o geri alınır */
-function altGeriDogrula(g){
-  const {kolMu, altDurum, altBaslamis, anaDurum, altKolVar} = g;
-  if (altBaslamis || altDurum==="tamam") return hataMi("Üretime başlamış ya da tamamlanmış alt emir geri alınamaz.");
-  if (altKolVar) return hataMi("Alt emrin kolları var; önce kolları geri alın.");
-  if (BITIK_DURUM[anaDurum]) return hataMi(`${BITIK_DURUM[anaDurum]} ana emre ${kolMu ? "kol geri alınamaz" : "miktar geri katılamaz"}.`);
-  return {ok:true};
-}
 function abbrOf(name){ const s = String(name||"OP").toLocaleUpperCase("tr-TR").replace(/[^A-ZÇĞİÖŞÜ0-9]/g,""); return s.slice(0,3) || "OP"; }
 /* Eski sürüm (reçete + rota ayrı) verisini birleşik yapıya taşı */
 function migrate(o){
@@ -3424,12 +3332,6 @@ const dEnd = (P, x) => finishDate(P.base, x);
 function initials(name){ return String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toLocaleUpperCase("tr-TR"); }
 
 /* ================= Üretim emirleri ================= */
-/* Alt emir: ana emrin tarih, öncelik, tür ve durumunu alır; ana emre bağlıdır */
-function altEmirAc(ana, ek){
-  const o = Object.assign({id:uid("o"), no:nextOrderNo(), itemId:ana.itemId, qty:0, start:ana.start, due:ana.due, priority:ana.priority||3, status:ana.status, tur:turOf(ana), note:ana.note||"", created:Date.now(), parentId:ana.id}, ek);
-  if (ana.rev) o.rev = ana.rev;
-  st.orders.push(o); return o;
-}
 function emirSil(id){
   st.orders = st.orders.filter(o=>o.id!==id);
   for (const m of [st.opStatus, st.assign, st.opProg, st.frozen, st.splitManual]) for (const k of Object.keys(m)) if (k.startsWith(id+"|")) delete m[k];
@@ -3440,18 +3342,8 @@ function kollariEsitle(ana){
 }
 /* Emrin altındaki bütün kollar (kolun kolu dahil) */
 function kolSoyu(id){ const r = []; for (const k of st.orders) if (k.parentId===id && k.kol) r.push(k, ...kolSoyu(k.id)); return r; }
-/* Aynı aralıktaki kolların miktar toplamı ana emrin miktarından küçük kalmalı: en kötü aralığın toplamı */
-function enBuyukKolToplami(parentId, haric){ const ks = st.orders.filter(k=>k.parentId===parentId && k.kol && k.id!==haric); return ks.length ? kolYuku(ks.map(k=>({n:k.kol.n, m:k.kol.m, qty:k.qty})), 0, Math.max(...ks.map(k=>k.kol.m)) + 1) : 0; }
 /* Emrin kendi adım aralığı (1 tabanlı): ana emirde bütün rota, kol emrinde kolun taşıdığı adımlar */
 function emirAraligi(o){ return o.kol ? {lo:o.kol.n+1, hi:o.kol.m-1} : {lo:1, hi:emirAdimlari(o).length}; }
-/* Bölünen emrin ilerlemesi alt emirlere dağıtılır: biten adım alt emirde de biter, ilerleyen adım miktara oranla paylaşılır */
-function emirIlerlemeDagit(anaId, altlar, eskiQty, kalan){
-  const onek = anaId+"|"; let var0 = false;
-  for (const k of Object.keys(st.opStatus)) if (k.startsWith(onek) && st.opStatus[k]==="tamam") { for (const a of altlar) st.opStatus[a.id+"|"+k.slice(onek.length)] = "tamam"; var0 = true; }
-  for (const k of Object.keys(st.opProg||{})) if (k.startsWith(onek) && st.opProg[k] > EPS) { const p = st.opProg[k], son = k.slice(onek.length);
-    for (const a of altlar) st.opProg[a.id+"|"+son] = p*a.qty/eskiQty; st.opProg[k] = p*kalan/eskiQty; var0 = true; }
-  return var0;
-}
 function nextOrderNo(){ const y = todayIso().slice(0,4); let max = 0; for (const o of st.orders) { const m = String(o.no||"").match(/^UE-(\d{4})-(\d+)$/); if (m && m[1]===y) max = Math.max(max, +m[2]); } return `UE-${y}-${String(max+1).padStart(3,"0")}`; }
 function tabOrders(){
   const P = curPlan();
@@ -3511,7 +3403,7 @@ function orderRow(o, P, derin=0){
       <span><span class="ostat s-${o.status}">${OSTAT[o.status]}</span></span>
       <span class="chev" aria-hidden="true">${open?"▾":"▸"}</span>
     </button>
-    ${alt && ["taslak","serbest","uretimde"].includes(o.status) ? `<div class="or-eylem">${o.kol?`<button type="button" class="btn sm ghost" data-act="katilAc" data-id="${o.id}">Katılma adımını değiştir</button>`:""}<button type="button" class="btn sm ghost" data-act="emirAltGeri" data-id="${o.id}">${o.kol?"Kolu geri al":"Ana emre geri kat"}</button><button type="button" class="btn sm ghost" data-act="bolGit" data-id="${o.id}">Bu emri de böl</button></div>` : ""}
+    ${alt && emirBagli() && ["taslak","serbest","uretimde"].includes(o.status) ? `<div class="or-eylem">${o.kol?`<button type="button" class="btn sm ghost" data-act="katilAc" data-id="${o.id}">Katılma adımını değiştir</button>`:""}<button type="button" class="btn sm ghost" data-act="emirAltGeri" data-id="${o.id}">${o.kol?"Kolu geri al":"Ana emre geri kat"}</button><button type="button" class="btn sm ghost" data-act="bolGit" data-id="${o.id}">Bu emri de böl</button></div>` : ""}
     ${open?`<div class="or-body">${orderCard(o, P)}</div>`:""}
   </div>`;
 }
@@ -3529,8 +3421,8 @@ function baslamisAdimlar(o){
     return Object.keys(st.opStatus).some(var0) || Object.keys(st.opProg||{}).some(k=>var0(k) && st.opProg[k] > EPS) ? i+1 : 0; }).filter(Boolean);
 }
 /* ================= Bölme ekranı: parti ve kol seçimi, önizleme =================
-   Kurallar yukarıdaki saf fonksiyonlardadır (emirMiktarBol, kolDogrula, kolBirlestirDogrula, partiMiktarlari); burası yalnız seçimi toplar,
-   önizlemeyi çizer ve onayda aynı kurallarla uygular. Durum ui.bolme[hedef]: hedef emir kimliği, yeni emir formu için "yeni". */
+   Burası yalnız seçimi toplar ve önizlemeyi çizer; geçerliliğe Üretim Emirleri'nin ucu karar verir (reddin iletisi uyarı satırında kalır).
+   Durum ui.bolme[hedef]: hedef emir kimliği, yeni emir formu için "yeni". */
 const BOLME_IKON = {
   kol:`<svg class="bl-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v12M6 15a6 6 0 0 0 6-6V3M6 21v-6M18 3v18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   parti:`<svg class="bl-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
@@ -3542,7 +3434,6 @@ function bolmeDurum(h){
   ui.bolme = ui.bolme || {};
   return ui.bolme[h] = ui.bolme[h] || {tur:h==="yeni" ? "tek" : null, n:null, m:null, kolQ:"", partiler:["",""], ekler:[]};
 }
-function bolmeDegisti(h){ if (String(ui.armed||"").startsWith("bolBasladi:")) ui.armed = null; }
 const adimAdi = s => { const d = s && opdef(s.opId); return d ? d.abbr : "?"; };
 const adimIstasyon = s => { const t = s && station(s.stationId); return t ? t.name : ""; };
 /* Üretilen ürünler: yeni emir formundaki ürün seçicisiyle aynı sıra */
@@ -3554,13 +3445,12 @@ function bolmeBaglam(h){
     const itemId = elI ? elI.value : (s.itemId && prods.some(p=>p.id===s.itemId) ? s.itemId : (prods.some(p=>p.id===ui.root) ? ui.root : (prods[0]||{}).id));
     const o = {id:"yeni", itemId, status:elS ? elS.value : (s.stat||"serbest"), qty:num(elQ ? elQ.value : (s.qtyT==null ? "100" : s.qtyT))};
     const adimlar = emirAdimlari(o);
-    return {o, yeni:true, adimlar, qty:o.qty, durum:o.status, aralik:{lo:1, hi:adimlar.length}, mevcut:[], bas:[], baslamis:false, parcaVar:false, enBuyukKol:0};
+    return {o, yeni:true, adimlar, qty:o.qty, durum:o.status, aralik:{lo:1, hi:adimlar.length}, mevcut:[], bas:[]};
   }
   const o = order(h); if (!o) return null;
   const adimlar = emirAdimlari(o);
-  return {o, yeni:false, adimlar, qty:o.qty, durum:o.status, aralik:emirAraligi(o), bas:baslamisAdimlar(o), baslamis:emirBaslamis(o),
-    mevcut:st.orders.filter(x=>x.parentId===o.id && x.kol).map(x=>({n:x.kol.n, m:x.kol.m, qty:x.qty})),
-    parcaVar:Object.keys(st.splitManual).some(k=>k.startsWith(o.id+"|")), enBuyukKol:enBuyukKolToplami(o.id)};
+  return {o, yeni:false, adimlar, qty:o.qty, durum:o.status, aralik:emirAraligi(o), bas:baslamisAdimlar(o),
+    mevcut:st.orders.filter(x=>x.parentId===o.id && x.kol).map(x=>({n:x.kol.n, m:x.kol.m, qty:x.qty}))};
 }
 /* Parti kutuları: boş kutu açılmaz; her dolu kutu tek bir sayı olmalı */
 function bolmePartiOku(s){
@@ -3576,9 +3466,8 @@ function bolmePartiOku(s){
 }
 /* Önizleme: satır = emir, sütun = rota adımı, hücre = o emrin o adımda yapacağı miktar (boş: o adımı yapmaz) */
 function bolmeHesapla(h){
-  const s = bolmeDurum(h), g = bolmeBaglam(h), r = {tur:s.tur, g, hazir:false, ileti:"", bilgi:false, ipucu:"", uyari:"", kalan:null, satirlar:[]};
+  const s = bolmeDurum(h), g = bolmeBaglam(h), r = {tur:s.tur, g, hazir:false, ileti:"", bilgi:false, ipucu:"", kalan:null, satirlar:[]};
   if (!g || !s.tur || s.tur==="tek") return r;
-  const N = g.adimlar.length;
   if (!(g.qty > 0)) { r.ileti = "Emir miktarı sıfırdan büyük olmalı."; r.bilgi = true; return r; }
   const bitti = j => !g.yeni && !!g.adimlar[j-1] && st.opStatus[opKey(g.o.id, "root", g.adimlar[j-1].id)]==="tamam";
   const yukte = (kollar, j) => kollar.filter(k=>j > k.n && j < k.m).reduce((t,k)=>t+k.qty, 0);
@@ -3589,12 +3478,10 @@ function bolmeHesapla(h){
     if (s.n==null) { r.ipucu = "Önce kolun ayrılacağı adıma dokun."; return r; }
     if (s.m==null) { r.ipucu = "Şimdi ana emre birleşeceği adıma dokun."; return r; }
     const q = sayiOku(s.kolQ);
-    if (q > 0) r.kalan = yuvarla6(g.qty - kolYuku([...g.mevcut, {n:s.n, m:s.m, qty:q}], s.n, s.m));
-    const temel = {durum:g.durum, adimSayisi:N, n:s.n, m:s.m, qty:g.qty, ust:g.aralik, mevcut:g.mevcut, baslamisAdimlar:g.bas};
-    let kd = kolDogrula({...temel, q:q > 0 ? q : 1e-9});
-    if (kd.ok) { kd = kolDogrula({...temel, q}); if (!kd.ok && !Number.isFinite(q)) r.bilgi = true; }
-    if (!kd.ok) { r.ileti = kd.ileti; return r; }
+    if (!(q > 0)) { r.ileti = "Kol miktarını gir."; r.bilgi = true; return r; }
     const tum = [...g.mevcut, {n:s.n, m:s.m, qty:q}];
+    let yuk = 0; for (let j = s.n + 1; j < s.m; j++) yuk = Math.max(yuk, yukte(tum, j));
+    r.kalan = yuvarla6(g.qty - yuk);
     r.hazir = true;
     r.satirlar = [satir(anaAd, "ana", j=>icinde(j) ? yuvarla6(g.qty - yukte(tum, j)) : null, true),
       {...satir("Yeni kol", "kol", j=>j > s.n && j < s.m ? q : null, false), bos:j=>j <= s.n ? "ana emirde" : j >= s.m ? "katıldı" : ""}];
@@ -3602,15 +3489,12 @@ function bolmeHesapla(h){
   }
   const p = bolmePartiOku(s);
   if (!p.ok) { r.ileti = p.ileti; return r; }
-  const top = p.liste.reduce((a,b)=>a+b, 0);
-  if (p.liste.length && top < g.qty - 1e-6) r.kalan = yuvarla6(g.qty - top);
-  const kural = emirMiktarBol({qty:g.qty, bolunen:p.liste, durum:g.durum, baslamis:g.baslamis, onay:true, parcaVar:g.parcaVar, enBuyukKol:g.enBuyukKol});
-  if (!kural.ok) { r.ileti = kural.ileti; r.bilgi = !p.liste.length; return r; }
-  if (g.baslamis) { const w = emirMiktarBol({qty:g.qty, bolunen:p.liste, durum:g.durum, baslamis:true, onay:false, parcaVar:g.parcaVar, enBuyukKol:g.enBuyukKol}); if (w.onayGerek) r.uyari = w.ileti.split(" Onaylamak için")[0]; }
+  if (!p.liste.length) { r.ileti = "Alt emir miktarını gir."; r.bilgi = true; return r; }
+  r.kalan = yuvarla6(g.qty - p.liste.reduce((a,b)=>a+b, 0));
   r.hazir = true;
   const kolEmri = !!g.o.kol;
-  r.satirlar = [satir(anaAd, "ana", j=>icinde(j) ? yuvarla6(kural.kalan - yukte(g.mevcut, j)) : null, true),
-    ...kural.parcalar.map((q, i)=>satir(`${kolEmri ? "Kol" : "Parti"} ${p.sira[i]+1}`, kolEmri ? "kol" : "parti", j=>icinde(j) ? q : null, true))];
+  r.satirlar = [satir(anaAd, "ana", j=>icinde(j) ? yuvarla6(r.kalan - yukte(g.mevcut, j)) : null, true),
+    ...p.liste.map((q, i)=>satir(`${kolEmri ? "Kol" : "Parti"} ${p.sira[i]+1}`, kolEmri ? "kol" : "parti", j=>icinde(j) ? q : null, true))];
   return r;
 }
 function bolmeOnizleme(r){
@@ -3620,7 +3504,7 @@ function bolmeOnizleme(r){
   return `<div class="bl-onizle"><h4>Bölünce ne olacak</h4>
     <div class="tbl-wrap"><table class="bl-tablo"><thead><tr><th scope="col">Emir</th>${baslik}</tr></thead><tbody>${govde}</tbody></table></div>
     <p class="bl-ipuc">Her hücre, o emrin o adımda yapacağı miktardır; boş hücre emrin o adımı yapmadığını gösterir.${g.yeni ? " Emir bu şekilde bölünmüş olarak açılır." : " Değişiklik Plan stüdyosuna taslak olarak gider; onaylanınca canlı plana geçer."}</p>
-    ${r.uyari ? `<p class="bl-uyari">${BOLME_IKON.uyari}<span>${esc(r.uyari)}</span></p>` : ""}</div>`;
+</div>`;
 }
 function bolmeAlt(h){
   const s = bolmeDurum(h); if (!s.tur || s.tur==="tek") return "";
@@ -3630,10 +3514,9 @@ function bolmeAlt(h){
   if (r.ileti) html += `<p class="bl-uyari ${r.bilgi ? "bilgi" : ""}" role="status">${BOLME_IKON.uyari}<span>${esc(r.ileti)}</span></p>`;
   if (r.hazir) html += bolmeOnizleme(r);
   if (h!=="yeni") {
-    const onay = ui.armed==="bolBasladi:"+h;
     html += `<div class="bl-dugmeler">${s.tur==="kol"
       ? `<button type="button" class="btn primary" data-act="emirBolKol" data-id="${h}">Kolu ayır ve onaya gönder</button>`
-      : `<button type="button" class="btn primary" data-act="emirBolMiktar" data-id="${h}">${onay ? "Başlamış emri onayla: partilere böl ve onaya gönder" : "Partilere böl ve onaya gönder"}</button>`}
+      : `<button type="button" class="btn primary" data-act="emirBolMiktar" data-id="${h}">Partilere böl ve onaya gönder</button>`}
       <button type="button" class="btn ghost" data-act="bolmeKapat" data-h="${h}">Vazgeç</button></div>`;
   }
   return html;
@@ -3646,6 +3529,7 @@ function bolmeSerit(h, s, g){
   }).join("")}</div>`;
 }
 function bolmeAlani(h){
+  if (!emirBagli()) return h==="yeni" ? "" : `<p class="bl-ipuc" data-bolme="${h}">${esc(BOLME_BAGSIZ)}</p>`;
   const s = bolmeDurum(h), g = bolmeBaglam(h); if (!g) return "";
   const yeni = h==="yeni", az = g.adimlar.length < 3;
   const turler = (yeni ? [["tek", "Tek emir", ""]] : []).concat([["parti", "Partilere böl", "parti"], ["kol", "Kol ayır", "kol"]]);
@@ -3742,11 +3626,11 @@ function emirYapisi(o){
     <div class="oc-grid eyap-grid">${fld("Emir türü", sel(`o:${o.id}:tur`,"order",o.id,"tur",Object.keys(EMIR_TURLERI).map(k=>`<option value="${k}" ${k===turOf(o)?"selected":""}>${EMIR_TURLERI[k]}</option>`).join(""),{label:"Emir türü"}))}</div>
     ${o.parentId ? `<p class="hint">${o.kol ? `Kol emri: ana emrin ${o.kol.n}. adımından sonra ${qf(o.qty)} adetle ayrılır, ${o.kol.m}. adımında ana emre yeniden bağlanır; ${o.kol.m-o.kol.n===2 ? (o.kol.n+1)+". adımı" : (o.kol.n+1)+".."+(o.kol.m-1)+". adımları"} bu emir, ana emir de kalan miktarla yapar.` : "Alt emir: ana emre bağlı parti."}
       ${ana ? `<button class="btn sm ghost" data-act="emirGit" data-id="${ana.id}">Ana emir ${esc(ana.no)}</button>` : "Ana emri silinmiş."}
-      <button class="btn sm" data-act="emirAltGeri" data-id="${o.id}">${o.kol ? "Kolu geri al" : "Ana emre geri kat"}</button></p>` : ""}
+      ${emirBagli() ? `<button class="btn sm" data-act="emirAltGeri" data-id="${o.id}">${o.kol ? "Kolu geri al" : "Ana emre geri kat"}</button>` : ""}</p>` : ""}
     ${o.kol && acik ? `<div class="bl-katil"><h4 class="dh">Katılma adımı</h4>
       <p class="hint">Bu kol ana emre ${o.kol.m} ${esc(adimAdi(emirAdimlari(o)[o.kol.m-1]))} adımında katılır.</p>
-      <button type="button" class="btn sm" data-act="katilAc" data-id="${o.id}" aria-expanded="${ui.katil===o.id}">Katılma adımını değiştir</button>
-      ${ui.katil===o.id ? `<p class="bl-ipuc">Kolun ana emre katılacağı yeni adıma dokun; seçim hemen uygulanır.</p>${katilmaSeridi(o)}` : ""}</div>` : ""}
+      ${emirBagli() ? `<button type="button" class="btn sm" data-act="katilAc" data-id="${o.id}" aria-expanded="${ui.katil===o.id}">Katılma adımını değiştir</button>
+      ${ui.katil===o.id ? `<p class="bl-ipuc">Kolun ana emre katılacağı yeni adıma dokun; seçim hemen uygulanır.</p>${katilmaSeridi(o)}` : ""}` : ""}</div>` : ""}
     ${altlar.length ? `<p class="hint">${altlar.length} alt emir listede bu emrin altında görünür.</p>` : ""}
     ${partiler.length ? `<p class="hint">Parti toplamı: ana emir ${qf(o.qty)} + alt emirler ${qf(toplam-o.qty)} = ${qf(toplam)}</p>` : ""}
     ${acik ? `<h4 class="dh">Böl</h4>${bolmeAlani(o.id)}` : ""}
@@ -5432,9 +5316,7 @@ function onChange(e){
   if (s==="order" && o.kol && ["start","due","priority","status","rev"].includes(f)) { toast("Kol bu alanı ana emirden alır."); queueRender(); return; }
   if (s==="order" && f==="qty") {
     const ana = o.parentId ? order(o.parentId) : null;
-    if (o.kol && !(v > 0)) { toast("Kol miktarı sıfırdan büyük olmalı."); el.value = nv(o.qty); return; }
-    if (o.kol && ana && v + kolYuku(st.orders.filter(x=>x.parentId===ana.id && x.kol && x.id!==o.id).map(x=>({n:x.kol.n, m:x.kol.m, qty:x.qty})), o.kol.n, o.kol.m) >= ana.qty - 1e-6) { toast(`Kol miktarı ana emirde kalan miktardan küçük olmalı (ana emir ${qf(ana.qty)}).`); el.value = nv(o.qty); return; }
-    if (enBuyukKolToplami(o.id) > 0 && enBuyukKolToplami(o.id) >= v - 1e-6) { toast(`Emir miktarı kolların toplamından (${qf(enBuyukKolToplami(o.id))}) büyük olmalı.`); el.value = nv(o.qty); return; }
+    if (ana || st.orders.some(x=>x.parentId===o.id)) { toast("Bölünmüş emrin miktarı burada değişmez. "+BOLME_BAGSIZ); el.value = nv(o.qty); return; }
   }
   if (s==="step" && f==="stationId" && o.stationId!==v) delete o.machineId;
   if (s==="step" && f==="stationId" && v && o.fasonId) { o.fasonId = null; o.terminGun = null; }
@@ -5684,92 +5566,35 @@ function act(a, d){
     if (!produced(itemId)) { toast("Rotası olan bir ürün seç."); return; }
     if (!(qty>0)) { toast("Miktar sıfırdan büyük olmalı."); return; }
     if (!validDate(start) || !validDate(due)) { toast("Başlangıç ve teslim tarihini gir."); return; }
-    const bs = bolmeDurum("yeni");
     const o = {id:uid("o"), no:nextOrderNo(), itemId, qty, start, due, priority:+$("#noPrio").value||3, status:$("#noStat").value, tur:$("#noTur").value, note:($("#noNote").value||"").trim(), created:Date.now()};
-    let parcalar = [], kol = null, kolQ = 0;
-    if (bs.tur==="parti") {
-      const p = bolmePartiOku(bs); if (!p.ok) { toast(esc(p.ileti)); return; }
-      const r = emirMiktarBol({qty, bolunen:p.liste, durum:o.status, baslamis:false, onay:true, parcaVar:false, enBuyukKol:0}); if (!r.ok) { toast(esc(r.ileti)); return; }
-      o.qty = r.kalan; parcalar = r.parcalar;
-    } else if (bs.tur==="kol") {
-      if (bs.n==null || bs.m==null) { toast("Kol için ayrılma ve birleşme adımını rota şeridinden seç."); return; }
-      kolQ = sayiOku(bs.kolQ);
-      const kd = kolDogrula({durum:o.status, adimSayisi:emirAdimlari(o).length, n:bs.n, m:bs.m, q:kolQ, qty:o.qty, ust:emirAraligi(o), mevcut:[], baslamisAdimlar:[]}); if (!kd.ok) { toast(esc(kd.ileti)); return; }
-      kol = {n:bs.n, m:bs.m};
-    }
     st.orders.push(o);
-    parcalar.forEach(q=>altEmirAc(o, {qty:q}));
-    if (kol) altEmirAc(o, {qty:kolQ, kol});
-    delete ui.bolme.yeni;
+    if (ui.bolme) delete ui.bolme.yeni;
     ui.openOrder = o.id; ui.orderFilter = "aktif"; ui.orderTur = "tum"; ui.newOrder = false; save(); render();
-    const altN = st.orders.filter(x=>x.parentId===o.id).length;
-    if (altN) toast(`<b>${esc(o.no)}</b> açıldı: ${altN} alt emir bağlı.`);
     return;
   }
   if (a==="orderTur") { ui.orderTur = d.v; render(); return; }
   if (a==="emirGit") { const x = order(d.id); if (!x) return; ui.tab = "orders"; ui.orderTur = "tum"; ui.orderFilter = "tum"; ui.openOrder = x.id; render(); return; }
-  if (a==="bolmeTur") { const s = bolmeDurum(d.h); s.tur = (d.h!=="yeni" && s.tur===d.v) ? null : d.v; bolmeDegisti(d.h); bolmeYenile(d.h); return; }
+  if (a==="bolmeTur") { const s = bolmeDurum(d.h); s.tur = (d.h!=="yeni" && s.tur===d.v) ? null : d.v; bolmeYenile(d.h); return; }
   if (a==="bolmeAdim") {
     const s = bolmeDurum(d.h), i = +d.i;
     if (s.n==null || s.m!=null) { s.n = i; s.m = null; } else s.m = i;
-    bolmeDegisti(d.h); bolmeYenile(d.h); return;
+    bolmeYenile(d.h); return;
   }
-  if (a==="bolmeTemizle") { const s = bolmeDurum(d.h); s.n = null; s.m = null; bolmeDegisti(d.h); bolmeYenile(d.h); return; }
+  if (a==="bolmeTemizle") { const s = bolmeDurum(d.h); s.n = null; s.m = null; bolmeYenile(d.h); return; }
   if (a==="bolmeEkEkle") { const s = bolmeDurum(d.h); s.ekler = s.ekler || []; if (s.ekler.length < 20) s.ekler.push({tur:"rework", sonra:null, ad:"", opId:"", ayar:"", birim:"", aciklama:""}); bolmeYenile(d.h); return; }
   if (a==="bolmeEkCikar") { const s = bolmeDurum(d.h); (s.ekler || []).splice(+d.i, 1); bolmeYenile(d.h); return; }
-  if (a==="bolmePartiEkle") { const s = bolmeDurum(d.h); if (s.partiler.length < MAX_PARTI) s.partiler.push(""); bolmeDegisti(d.h); bolmeYenile(d.h); return; }
-  if (a==="bolmePartiCikar") { const s = bolmeDurum(d.h); if (s.partiler.length > 1) s.partiler.pop(); bolmeDegisti(d.h); bolmeYenile(d.h); return; }
+  if (a==="bolmePartiEkle") { const s = bolmeDurum(d.h); if (s.partiler.length < MAX_PARTI) s.partiler.push(""); bolmeYenile(d.h); return; }
+  if (a==="bolmePartiCikar") { const s = bolmeDurum(d.h); if (s.partiler.length > 1) s.partiler.pop(); bolmeYenile(d.h); return; }
   if (a==="bolmeEsit") {
     const s = bolmeDurum(d.h), g = bolmeBaglam(d.h); if (!g) return;
-    const r = partiMiktarlari(g.qty, s.partiler.length+1, []); if (!r.ok) { toast(esc(r.ileti)); return; }
-    s.partiler = r.parcalar.slice(1).map(miktarMetni); bolmeDegisti(d.h); bolmeYenile(d.h); return;
+    /* Eşit pay: artan ana emirde kalır. Geçerliliğe sahibinin ucu karar verir. */
+    const b = Math.floor(g.qty/(s.partiler.length+1)); if (!(b >= 1)) { toast("Miktar bu parti sayısına bölünemez."); return; }
+    s.partiler = s.partiler.map(()=>miktarMetni(b)); bolmeYenile(d.h); return;
   }
   if (a==="bolmeKapat") { delete ui.bolme[d.h]; ui.armed = null; bolmeYenile(d.h); return; }
   if (a==="bolGit") { const x = order(d.id); if (!x) return; ui.tab = "orders"; ui.orderTur = "tum"; ui.orderFilter = "tum"; ui.openOrder = x.id; render(); const el = document.querySelector(`[data-bolme="${x.id}"]`); if (el && el.scrollIntoView) el.scrollIntoView({block:"center"}); return; }
   if (a==="katilAc") { const x = order(d.id); if (!x || !x.kol) return; ui.katil = ui.katil===x.id ? null : x.id; ui.tab = "orders"; ui.orderTur = "tum"; ui.orderFilter = "tum"; ui.openOrder = x.id; render(); return; }
-  if (a==="emirBolMiktar") {
-    const o = order(d.id); if (!o) return;
-    const bs = bolmeDurum(o.id), p = bolmePartiOku(bs); if (!p.ok) { toast(esc(p.ileti)); return; }
-    const ana = o.kol ? order(o.parentId) : null;
-    if (o.kol && !ana) { toast("Kolun ana emri silinmiş; bölünemez."); return; }
-    const anahtar = "bolBasladi:"+o.id;
-    const r = emirMiktarBol({qty:o.qty, bolunen:p.liste, durum:o.status, baslamis:emirBaslamis(o), onay:ui.armed===anahtar, parcaVar:Object.keys(st.splitManual).some(k=>k.startsWith(o.id+"|")),
-      enBuyukKol:enBuyukKolToplami(o.id)});
-    if (!r.ok) { if (r.onayGerek) { ui.armed = anahtar; bolmeYenile(o.id); toast(esc(r.ileti.split(" Onaylamak için")[0])+" Onaylamak için düğmeye yeniden bas."); } else toast(esc(r.ileti)); return; }
-    ui.armed = null; delete ui.bolme[o.id];
-    const eski = o.qty; o.qty = r.kalan;
-    /* kol emri bölününce aynı aralıkta kardeş kol açılır (ana emrin kalanı aynı kalır); diğerleri ana emre bağlı parti olur */
-    const yeni = r.parcalar.map(q=>o.kol ? altEmirAc(ana, {qty:q, kol:{n:o.kol.n, m:o.kol.m}}) : altEmirAc(o, {qty:q}));
-    const pr = emirIlerlemeDagit(o.id, yeni, eski, o.qty);
-    save(); render(); toast(`<b>${esc(o.no)}</b> bölündü: ${qf(o.qty)} kaldı, ${yeni.length} alt emirde ${qf(r.parcalar.reduce((x,y)=>x+y,0))}.${pr?" Tamamlanan adımlar alt emirlerde de tamamlanmış sayıldı.":""}`); return;
-  }
-  if (a==="emirBolKol") {
-    const o = order(d.id); if (!o) return;
-    const bs = bolmeDurum(o.id);
-    if (bs.n==null || bs.m==null) { toast("Önce kolun ayrılacağı ve birleşeceği adımı rota şeridinden seç."); return; }
-    const n = bs.n, m = bs.m, q = sayiOku(bs.kolQ);
-    const kd = kolDogrula({durum:o.status, adimSayisi:emirAdimlari(o).length, n, m, q, qty:o.qty, ust:emirAraligi(o), mevcut:st.orders.filter(x=>x.parentId===o.id && x.kol).map(x=>({n:x.kol.n, m:x.kol.m, qty:x.qty})), baslamisAdimlar:baslamisAdimlar(o)});
-    if (!kd.ok) { toast(esc(kd.ileti)); return; }
-    delete ui.bolme[o.id];
-    const k = altEmirAc(o, {qty:q, kol:{n, m}});
-    save(); render(); toast(`<b>${esc(k.no)}</b> kolu ${qf(q)} adetle ${n}. adımdan sonra ayrıldı, ${m}. adımda <b>${esc(o.no)}</b> emrine yeniden bağlanır.`); return;
-  }
-  if (a==="emirKolBirlestir") {
-    const k = order(d.id), ana = k && k.kol ? order(k.parentId) : null; if (!k || !ana) return;
-    const mYeni = d.m==null || d.m==="" ? NaN : Number(d.m);
-    const kd = kolBirlestirDogrula({durum:k.status, n:k.kol.n, mEski:k.kol.m, mYeni, adimSayisi:emirAdimlari(k).length, kolBaslamis:baslamisAdimlar(k), anaBaslamis:baslamisAdimlar(ana),
-      q:k.qty, qty:ana.qty, ust:emirAraligi(ana), mevcut:st.orders.filter(x=>x.parentId===ana.id && x.kol && x.id!==k.id).map(x=>({n:x.kol.n, m:x.kol.m, qty:x.qty})), kolKolMax:Math.max(0, ...st.orders.filter(x=>x.parentId===k.id && x.kol).map(x=>x.kol.m))});
-    if (!kd.ok) { toast(esc(kd.ileti)); return; }
-    const eski = k.kol.m; k.kol.m = mYeni; ui.katil = null;
-    save(); render(); toast(`<b>${esc(k.no)}</b> ${eski}. adım yerine ${mYeni}. adımda <b>${esc(ana.no)}</b> emrine bağlanır.`); return;
-  }
-  if (a==="emirAltGeri") {
-    const k = order(d.id), ana = k && k.parentId ? order(k.parentId) : null; if (!k || !ana) return;
-    const gd = altGeriDogrula({kolMu:!!k.kol, altDurum:k.status, altBaslamis:emirBaslamis(k), anaDurum:ana.status, altKolVar:st.orders.some(x=>x.parentId===k.id && x.kol)}); if (!gd.ok) { toast(esc(gd.ileti)); return; }
-    if (!k.kol) ana.qty += k.qty;
-    emirSil(k.id); ui.openOrder = ana.id; save(); render();
-    toast(k.kol ? `<b>${esc(k.no)}</b> kolu geri alındı; adımlar <b>${esc(ana.no)}</b> emrine döndü.` : `<b>${esc(k.no)}</b> ana emre geri katıldı: ${esc(ana.no)} şimdi ${qf(ana.qty)}.`); return;
-  }
+  if (["emirBolMiktar","emirBolKol","emirKolBirlestir","emirAltGeri"].includes(a)) { toast(esc(BOLME_BAGSIZ)); return; }
   if (a==="orderFromSchema") {
     const itemId = ui.root; if (!produced(itemId)) { toast("Önce ürünün rotasını kur."); return; }
     const o = {id:uid("o"), no:nextOrderNo(), itemId, qty:st.settings.orderQty, start:st.settings.start, due:st.settings.due, priority:3, status:"serbest", note:"", tur:"seri", created:Date.now()};
@@ -5862,7 +5687,7 @@ document.addEventListener("input", e=>{
   const t = e.target; if (!t || !t.dataset || !st) return;
   const gir = t.dataset.bolmeGirdi;
   if (gir==="ek") { bolmeEkYaz(t); return; }
-  if (gir) { const h = t.dataset.h, bs = bolmeDurum(h); if (gir==="kolQ") bs.kolQ = t.value; else bs.partiler[+t.dataset.i] = t.value; bolmeDegisti(h); bolmeAltGuncelle(h); return; }
+  if (gir) { const h = t.dataset.h, bs = bolmeDurum(h); if (gir==="kolQ") bs.kolQ = t.value; else bs.partiler[+t.dataset.i] = t.value; bolmeAltGuncelle(h); return; }
   if (t.id==="noQty") { const bs = bolmeDurum("yeni"); bs.qtyT = t.value; if (bs.tur!=="tek") bolmeYenile("yeni"); }
 });
 function bolmeEkYaz(t){
@@ -6176,16 +6001,15 @@ function emirAct(a, d){
       });
       return true;
     }
-    const bs = bolmeDurum("yeni"), o = {id:"yeni", itemId, qty, start, due, status:$("#noStat").value};
+    const bs = bolmeDurum("yeni"), o = {status:$("#noStat").value};
     let parcalar = [], kol = null, kolQ = 0;
     if (bs.tur === "parti") {
       const p = bolmePartiOku(bs); if (!p.ok) { toast(esc(p.ileti)); return true; }
-      const r = emirMiktarBol({qty, bolunen:p.liste, durum:o.status, baslamis:false, onay:true, parcaVar:false, enBuyukKol:0}); if (!r.ok) { toast(esc(r.ileti)); return true; }
-      parcalar = r.parcalar;
+      if (!p.liste.length) { toast("Alt emir miktarını gir."); return true; }
+      parcalar = p.liste;
     } else if (bs.tur === "kol") {
       if (bs.n == null || bs.m == null) { toast("Kol için ayrılma ve birleşme adımını rota şeridinden seç."); return true; }
       kolQ = sayiOku(bs.kolQ);
-      const kd = kolDogrula({durum:o.status, adimSayisi:emirAdimlari(o).length, n:bs.n, m:bs.m, q:kolQ, qty, ust:{lo:1, hi:emirAdimlari(o).length}, mevcut:[], baslamisAdimlar:[]}); if (!kd.ok) { toast(esc(kd.ileti)); return true; }
       kol = {n:bs.n, m:bs.m};
     }
     (async () => {
@@ -6196,20 +6020,20 @@ function emirAct(a, d){
       for (const q of parcalar) { const b = await emirKomut("emir-bol", {id, adet:q, surum:emirSurum(id)}); if (!b.ok) { tamam = false; break; } }
       if (tamam && kol) tamam = (await emirKomut("emir-bol", {id, adet:kolQ, kolN:kol.n, kolM:kol.m, surum:emirSurum(id)})).ok;
       delete ui.bolme.yeni; ui.openOrder = id; ui.orderFilter = "aktif"; ui.orderTur = "tum"; ui.newOrder = false; render();
+      /* Emir açıldıktan sonra bölmeyi sahibi reddederse emir bölünmemiş kalır; iletisi uyarı satırındadır. */
       if (tamam) toast("Emir açıldı" + (parcalar.length || kol ? ": alt emirler bağlandı." : "."));
+      else toast("Emir açıldı ama bölünemedi; emrin içinden yeniden böl.");
     })();
     return true;
   }
   if (a === "emirBolMiktar") {
     const o = order(d.id); if (!o) return true;
     const bs = bolmeDurum(o.id), p = bolmePartiOku(bs); if (!p.ok) { toast(esc(p.ileti)); return true; }
-    const anahtar = "bolBasladi:" + o.id;
-    const r = emirMiktarBol({qty:o.qty, bolunen:p.liste, durum:o.status, baslamis:emirBaslamis(o), onay:ui.armed === anahtar, parcaVar:Object.keys(st.splitManual).some(k => k.startsWith(o.id + "|")), enBuyukKol:enBuyukKolToplami(o.id)});
-    if (!r.ok) { if (r.onayGerek) { ui.armed = anahtar; bolmeYenile(o.id); toast(esc(r.ileti.split(" Onaylamak için")[0]) + " Onaylamak için düğmeye yeniden bas."); } else toast(esc(r.ileti)); return true; }
+    if (!p.liste.length) { toast("Alt emir miktarını gir."); return true; }
     const ekAdimlar = bolmeEkAdimlari(bs);
-    if (ekAdimlar.length && r.parcalar.length !== 1) { toast("Rework, tamir ya da ek adım yalnız tek parti ayrılırken eklenir; partileri tek tek ayır."); return true; }
-    ui.armed = null; delete ui.bolme[o.id];
-    (async () => { for (const q of r.parcalar) { const b = await emirKomut("emir-bol", {id:o.id, adet:q, surum:emirSurum(o.id), ...(ekAdimlar.length ? {ekAdimlar} : {})}); if (!b.ok) return; } toast(`<b>${esc(o.no)}</b> bölündü: ${r.parcalar.length} alt emir açıldı.`); })();
+    if (ekAdimlar.length && p.liste.length !== 1) { toast("Rework, tamir ya da ek adım yalnız tek parti ayrılırken eklenir; partileri tek tek ayır."); return true; }
+    delete ui.bolme[o.id];
+    (async () => { for (const q of p.liste) { const b = await emirKomut("emir-bol", {id:o.id, adet:q, surum:emirSurum(o.id), ...(ekAdimlar.length ? {ekAdimlar} : {})}); if (!b.ok) return; } toast(`<b>${esc(o.no)}</b> bölündü: ${p.liste.length} alt emir açıldı.`); })();
     return true;
   }
   if (a === "emirBolKol") {
@@ -6217,8 +6041,6 @@ function emirAct(a, d){
     const bs = bolmeDurum(o.id);
     if (bs.n == null || bs.m == null) { toast("Önce kolun ayrılacağı ve birleşeceği adımı rota şeridinden seç."); return true; }
     const n = bs.n, m = bs.m, q = sayiOku(bs.kolQ);
-    const kd = kolDogrula({durum:o.status, adimSayisi:emirAdimlari(o).length, n, m, q, qty:o.qty, ust:emirAraligi(o), mevcut:st.orders.filter(x => x.parentId === o.id && x.kol).map(x => ({n:x.kol.n, m:x.kol.m, qty:x.qty})), baslamisAdimlar:baslamisAdimlar(o)});
-    if (!kd.ok) { toast(esc(kd.ileti)); return true; }
     const ekAdimlar = bolmeEkAdimlari(bs);
     delete ui.bolme[o.id];
     emirKomut("emir-bol", {id:o.id, adet:q, kolN:n, kolM:m, surum:emirSurum(o.id), ekAdimlar}, `Kol ${qf(q)} adetle ${n}. adımdan sonra ayrıldı, ${m}. adımda ${o.no} emrine yeniden bağlanır.${ekAdimlar.length ? ` Kola ${ekAdimlar.length} ek adım kondu.` : ""}`);
@@ -6227,16 +6049,12 @@ function emirAct(a, d){
   if (a === "emirKolBirlestir") {
     const k = order(d.id), ana = k && k.kol ? order(k.parentId) : null; if (!k || !ana) return true;
     const mYeni = d.m == null || d.m === "" ? NaN : Number(d.m);
-    const kd = kolBirlestirDogrula({durum:k.status, n:k.kol.n, mEski:k.kol.m, mYeni, adimSayisi:emirAdimlari(k).length, kolBaslamis:baslamisAdimlar(k), anaBaslamis:baslamisAdimlar(ana),
-      q:k.qty, qty:ana.qty, ust:emirAraligi(ana), mevcut:st.orders.filter(x => x.parentId === ana.id && x.kol && x.id !== k.id).map(x => ({n:x.kol.n, m:x.kol.m, qty:x.qty})), kolKolMax:Math.max(0, ...st.orders.filter(x => x.parentId === k.id && x.kol).map(x => x.kol.m))});
-    if (!kd.ok) { toast(esc(kd.ileti)); return true; }
     ui.katil = null;
     emirKomut("emir-katilma", {id:k.id, m:mYeni, surum:emirSurum(k.id)}, `${k.no} ${mYeni}. adımda ${ana.no} emrine bağlanır.`);
     return true;
   }
   if (a === "emirAltGeri") {
     const k = order(d.id), ana = k && k.parentId ? order(k.parentId) : null; if (!k || !ana) return true;
-    const gd = altGeriDogrula({kolMu:!!k.kol, altDurum:k.status, altBaslamis:emirBaslamis(k), anaDurum:ana.status, altKolVar:st.orders.some(x => x.parentId === k.id && x.kol)}); if (!gd.ok) { toast(esc(gd.ileti)); return true; }
     emirKomut("emir-birlestir", {id:k.id, surum:emirSurum(k.id)}, `${k.no} ${ana.no} emrine geri katıldı.`).then(r => { if (r.ok) { ui.openOrder = ana.id; render(); } });
     return true;
   }

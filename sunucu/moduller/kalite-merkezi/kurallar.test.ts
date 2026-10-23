@@ -97,9 +97,20 @@ describe('Kalite Merkezi kuralları', () => {
     assert.equal(kapanmisKayitMi('insp', { sonuc: 'Ret' }), true);
     for (const g of [{ durum: 'Açık' }, { durum: 'MRB değerlendirmesinde' }, {}]) assert.equal(kapanmisKayitMi('ncr', g), false, JSON.stringify(g));
     for (const g of [{ sonuc: 'Beklemede' }, { sonuc: '' }, {}]) assert.equal(kapanmisKayitMi('insp', g), false, JSON.stringify(g));
-    assert.equal(kapanmisKayitMi('capa', { durum: 'Kapalı' }), false, 'karar yalnız NCR ve muayene');
-    assert.equal(kapanmisKayitMi('lot', { sonuc: 'Kabul' }), false);
+    assert.equal(kapanmisKayitMi('frm', { durum: 'Kapalı' }), false, 'form kilidi ayrı kuraldadır');
     assert.equal(kapanmisKayitMi('ncr', null), false, 'yeni kayıt');
+  });
+
+  test('B16 kilit: kapalı DÖF ve kararı verilmiş lot kabul kaydı kapanmıştır; açık DÖF, kararsız lot ve yeniden başlatma kaydı değil', () => {
+    assert.equal(kapanmisKayitMi('capa', { durum: 'Kapalı' }), true);
+    assert.equal(kapanmisKayitMi('capa', { durum: ' Kapalı ' }), true, 'kırpılır');
+    for (const g of [{ durum: 'Açık' }, {}]) assert.equal(kapanmisKayitMi('capa', g), false, JSON.stringify(g));
+    assert.equal(kapanmisKayitMi('lot', { karar: 'Kabul' }), true);
+    assert.equal(kapanmisKayitMi('lot', { karar: 'Ret' }), true);
+    for (const g of [{ karar: '' }, { karar: '  ' }, { sonuc: 'Kabul' }, {}]) assert.equal(kapanmisKayitMi('lot', g), false, JSON.stringify(g));
+    assert.equal(kapanmisKayitMi('lot', { tip: 'reset', karar: 'Kabul' }), false, 'yeniden başlatma muayene değildir');
+    assert.equal(kapanmisKayitMi('capa', null), false, 'yeni kayıt');
+    assert.equal(kapanmisKayitMi('lot', null), false, 'yeni kayıt');
   });
 
   test('KM-K325 ilk parça bekleyenleri: yalnız karar bekleyen adedi sıfırdan büyük emirler, emir sırasıyla; sayacı olmayan emir yok sayılır', () => {
@@ -163,7 +174,8 @@ describe('Kalite Merkezi kuralları', () => {
   // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; uygulamanın cihaz listesi ondan gelir, eski `dev` kayıtları silinmez.
   describe('329 a ölçü aleti listesi (Kalibrasyon -> cihaz kaydı)', () => {
     const alet = (id: number, no: string, ek: Record<string, unknown> = {}) => ({
-      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null, kayitlar: [], ...ek,
+      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null,
+      durum: 'kayit-yok' as const, vade: null, kalanGun: null, kayitlar: [], ...ek,
     });
 
     test('kimlik biçimi: kal-<alet kimliği>; yalnız bu biçim alet kimliği sayılır', () => {
@@ -173,7 +185,7 @@ describe('Kalite Merkezi kuralları', () => {
 
     test('alanlar Kalibrasyon\'dan gelir; karşılığı olmayanlar boş kalır, sıfır ya da uydurma değer yazılmaz', () => {
       const [satir] = olcuAletleriListesi([alet(3, 'OC-3', {
-        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01',
+        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01', durum: 'gecerli', vade: '2027-03-01', kalanGun: 129,
         kayitlar: [
           { tarih: '2025-03-01', sonuc: 'uygun', sertifikaNo: 'S-1', aciklama: null },
           { tarih: '2026-03-01', sonuc: 'uygun', sertifikaNo: 'S-2', aciklama: 'sapma yok' },
@@ -183,6 +195,7 @@ describe('Kalite Merkezi kuralları', () => {
       assert.deepEqual(satir?.govde, {
         kod: 'OC-3', ad: 'Dış çap', tip: 'Mikrometre', lokasyon: 'CNC-2', aralik: '0-25 mm', sonKal: '2026-03-01',
         periyot: 365 / 30, periyotGun: 365, sertifika: 'S-2', kullanimDisi: false, kalibrasyondan: true,
+        kalibrasyonDurumu: 'gecerli', kalibrasyonVadesi: '2027-03-01', kalibrasyonKalanGun: 129,
         gecmis: [
           { tarih: '2025-03-01', sonuc: 'Uygun', sertifika: 'S-1', not: '' },
           { tarih: '2026-03-01', sonuc: 'Uygun', sertifika: 'S-2', not: 'sapma yok' },

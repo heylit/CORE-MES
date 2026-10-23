@@ -426,13 +426,14 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
   });
 
   test('BD-21: iskonto onayına bağlı teklif onay karara bağlanmadan bekleyen onaydan çıkamaz (kart #1583)', async () => {
-    const satici = await islemliKisi('onaysatici', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satis', 'siparisler.yaz']);
+    // Satış müdürü kendi iskontosunu onaya göndermez (autoSkip); iki bölümlü "Müdür" gönderir.
+    const satici = await islemliKisi('onaysatici', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satis', 'portal.finans', 'siparisler.yaz']);
     assert.equal((await istek(satici.cerez, 'POST', '/portal/ben/hazirla')).statusCode, 200);
     const ben = `tmi-${String(satici.id)}`;
     assert.equal((await yaz(satici.cerez, { yol: 'requests/r1583', kip: 'tam', veri: talep({ no: 'TT-1583', status: 'new', pendingApproval: 'ad1583', versions: [] }) })).statusCode, 200);
     const onay = {
       kind: 'discount', refCol: 'requests', refId: 'r1583', requestedBy: ben, at: '2026-10-16T10:00:00.000Z', status: 'pending',
-      steps: [{ role: 'Satış müdürü', status: 'pending' }], history: [],
+      payload: { version: { prices: [1], discount: 30 } }, steps: [{ role: 'Satış müdürü', status: 'pending' }], history: [],
     };
     assert.equal((await yaz(satici.cerez, { yol: 'approvals/ad1583', kip: 'tam', veri: onay })).statusCode, 200);
     const surumlu = { no: 'TT-1583', status: 'quoted', pendingApproval: null, versions: [{ v: 1, prices: [1], discount: 30 }] };
@@ -440,6 +441,49 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(yonetici, 'POST', '/portal/onaylar/ad1583/karar', { onay: true })).statusCode, 200);
     const sonra = await yaz(satici.cerez, { yol: 'requests/r1583', kip: 'tam', veri: surumlu });
     assert.equal(sonra.statusCode, 200, sonra.body);
+  });
+
+  test('BD-24: onay adımlarını sunucu hesaplar; onay gerektiren kayıt onaysız ve düşük tutarlı onayla geçemez (B8)', async () => {
+    const uzman = await islemliKisi('b8uzman', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satinalma']);
+    const mudur = await islemliKisi('b8mudur', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satis', 'portal.finans']);
+    for (const k of [uzman.cerez, mudur.cerez, yonetici]) assert.equal((await istek(k, 'POST', '/portal/ben/hazirla')).statusCode, 200);
+    const uzmanId = `tmi-${String(uzman.id)}`;
+    const kod = (r: { statusCode: number }) => r.statusCode;
+    const karar = (kimlik: string) => istek(yonetici, 'POST', `/portal/onaylar/${kimlik}/karar`, { onay: true });
+    // Satın alma limitleri tanımsız: satın almanın varsayılanları (50 000 / 250 000).
+    const siparis = (tutar: number, ek: Record<string, unknown> = {}) => ({ type: 'purchase', no: 'SA-B8', items: [{ name: 'Mil', qty: 1, price: tutar }], ...ek });
+    const onay = (refId: string, tutar: number, roller: string[]) => ({
+      kind: 'po', refCol: 'orders', refId, no: 'ONY-B8', amount: tutar, requestedBy: uzmanId, at: '2026-10-23T10:00:00.000Z', status: 'pending',
+      steps: roller.map((role) => ({ role, status: 'pending' })), history: [],
+    });
+
+    // Onaysız yazı: büyük sipariş onaya gitmeden kaydedilmez; genel müdür onaya göndermez (prototipin autoSkip kuralı).
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8a', kip: 'tam', veri: siparis(300000) })), 403);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8a', kip: 'tam', veri: siparis(300000, { approvalState: 'approved' }) })), 403);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8k', kip: 'tam', veri: siparis(40000) })), 200);
+    assert.equal(kod(await yaz(yonetici, { yol: 'orders/b8y', kip: 'tam', veri: siparis(300000) })), 200);
+
+    // Açılış: zincir sunucunun hesabıyla aynı olmalı.
+    const eksik = await yaz(uzman.cerez, { yol: 'approvals/b8a', kip: 'tam', veri: onay('b8a', 300000, ['Satın alma müdürü']) });
+    assert.equal(eksik.statusCode, 403);
+    assert.match(eksik.body, /Satın alma müdürü → Genel müdür/);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'approvals/b8a', kip: 'tam', veri: onay('b8a', 40000, ['Satın alma müdürü']) })), 403);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'approvals/b8a', kip: 'tam', veri: onay('b8a', 300000, ['Satın alma müdürü', 'Genel müdür']) })), 200);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8a', kip: 'tam', veri: siparis(300000, { approvalState: 'pending' }) })), 200);
+
+    // Etki: düşük tutarla açılıp onaylanan onay büyütülmüş siparişi onaylatmaz; tutarı uyan sipariş onaylanır.
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'approvals/b8b', kip: 'tam', veri: onay('b8b', 60000, ['Satın alma müdürü']) })), 200);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8b', kip: 'tam', veri: siparis(60000, { approvalState: 'pending' }) })), 200);
+    assert.equal(kod(await karar('b8b')), 200);
+    const buyutulmus = await yaz(uzman.cerez, { yol: 'orders/b8b', kip: 'tam', veri: siparis(300000, { approvalState: 'approved' }) });
+    assert.equal(buyutulmus.statusCode, 403);
+    assert.match(buyutulmus.body, /Genel müdür/);
+    assert.equal(kod(await yaz(uzman.cerez, { yol: 'orders/b8b', kip: 'tam', veri: siparis(60000, { approvalState: 'approved' }) })), 200);
+
+    // Giden ödeme limit üstündeyse onaysız gönderilmez; onaya bekletilerek yazılır.
+    const odeme = (durum: string) => ({ direction: 'out', status: durum, amount: 200000, partyId: 's1' });
+    assert.equal(kod(await yaz(mudur.cerez, { yol: 'payments/b8', kip: 'tam', veri: odeme('sent') })), 403);
+    assert.equal(kod(await yaz(mudur.cerez, { yol: 'payments/b8', kip: 'tam', veri: odeme('awaiting') })), 200);
   });
 
   test('BD-22: fiyat ve maliyet yalnız fiyat ve finans yetkisiyle görünür (karar 180); fiyatsız yazı gizli değeri silmez', async () => {

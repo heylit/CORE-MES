@@ -17,6 +17,8 @@ Yok. Para kuralları (belge, ödeme, dağıtım, mahsup, çek, hesap, virman), d
 | Tevkifatlı belgede prototipin KDV ekranları etkin oranla hesaplar | `cerceve/finans.html` (tam kip dönüştürücüsü) | Prototip KDV'yi tutar x oran olarak tutar; belgenin sunucudaki toplamı doğru, KDV ekranındaki tevkifat ayrımı yaklaşıktır. |
 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): borç değil; sunucu her dağıtım satırını ayrıca denetliyor, ekrandaki yalnız öneri. Dağıtım planı (en eski vadeden başlayarak) | tam kip katmanı | Sunucu her satırın sınırını ayrıca denetler. |
 
+Kalır (151 a, 23.10.2026): ilk üç satır hesap ve gösterimdir, yazmayı korumaz; tarayıcıda kalır, borç sayılmaz. Skor yalnız geçmiş gösterimidir: `finans_skor` tablosunu yalnız finans ekranı okur (`GET /finans/skorlar`), başka modül, kural ya da kablolama okumaz.
+
 ## Ekran (yol A, kullanıcı kararı: ekran olduğu gibi)
 
 | Konu | Dosya | Neden |

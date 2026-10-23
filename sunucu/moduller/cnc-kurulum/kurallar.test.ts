@@ -4,7 +4,7 @@ import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   asinmaBindir,
   elleUretimKaydiVarMi,
-  degerBicimeUyarMi, emirAnligi, emirDurumu, hazirlikAyniMi, kurulumIzi, hazirlikOlaylari, hazirlikOnaylariDegistiMi, hazirlikOnaylariniBindir, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, surumUyarMi,
+  degerBicimeUyarMi, emirAnligi, emirDurumu, hazirlikAyniMi, kurulumIzi, hazirlikOlaylari, hazirlikOnaylariDegistiMi, hazirlikOnaylariniBindir, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sonOnayAdimlariTamamMi, sonOnaySiraDisiMi, surumUyarMi,
   kurulumYukleri, sayimKullanimi, takimDurumu, takimOlayiSatirlari,
 } from './kurallar.ts';
 
@@ -166,5 +166,35 @@ describe('cnc-kurulum kuralları (saf)', () => {
       { cep: 0, takimKimligi: 't-a', tur: 'degisim', dk: 0, adet: 0 },
       { cep: 0, takimKimligi: 't-a', tur: 'duzeltme', dk: 2, adet: 1 },
     ]);
+  });
+
+  test('CK-K24: son onay imzası bütün adım onaylarının sırayla birleşimidir; takım kesimi magazin ya da takım onaylarının dizilişi', () => {
+    const done = { machine: 'm', prog: 'm|P#1', fixture: 'm|f', jaw: 'm|j', material: 'm|x', zero: 'm|z', cool: 'm|c', gauges: 'm|g', cons: 'm|s' };
+    const imza = (takim: string, adet = '10') => `m#m|P#1#m|f#m|j#m|x#m|z#${takim}#m|c#m|g#m|s#${adet}`;
+    const durum = (d: Record<string, unknown>, sig: unknown) => ({ machine: 'm', prep: { done: d, fin: { ts: 1, sig } } });
+    const takimli = { ...done, T3: 'm|P#1|3|a', T1: 'm|P#1|1|b', T9: 'eski' };
+    // Program adı '#' taşısa da, takım onayları anahtar sırasından farklı dizilse de, eski takım onayı fazladan dursa da geçer.
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, imza('m|P#1|1|b#m|P#1|3|a'))), true);
+    assert.equal(sonOnayAdimlariTamamMi(durum({ ...done, mag: 'm|a,b' }, imza('m|a,b'))), true);
+    // Eksik adım, imzası tutmayan ya da iki kez kullanılan takım, adetsiz imza, boş ya da dize olmayan onay reddedilir.
+    const { zero: _z, ...sifirsiz } = takimli;
+    assert.equal(sonOnayAdimlariTamamMi(durum(sifirsiz, imza('m|P#1|1|b#m|P#1|3|a'))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, imza('m|P#1|1|b#m|P#1|3|c'))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, imza('m|P#1|1|b#m|P#1|1|b'))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, imza(''))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, imza('m|P#1|1|b#m|P#1|3|a', ''))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum({ ...takimli, cool: '' }, imza('m|P#1|1|b#m|P#1|3|a'))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum({ ...takimli, cool: 1 }, imza('m|P#1|1|b#m|P#1|3|a'))), false);
+    assert.equal(sonOnayAdimlariTamamMi(durum(takimli, 5)), false);
+    assert.equal(sonOnayAdimlariTamamMi({ prep: { done: takimli, fin: null } }), false);
+    // Kural yalnız yeni ya da imzası değişen son onaya uygulanır; kayıtlı son onay ve geri alma geçer.
+    const eksikOnay = durum(sifirsiz, 'x#10');
+    assert.equal(sonOnaySiraDisiMi({}, eksikOnay), true);
+    assert.equal(sonOnaySiraDisiMi(eksikOnay, eksikOnay), false);
+    assert.equal(sonOnaySiraDisiMi(eksikOnay, { prep: { done: {}, fin: null } }), false);
+    assert.equal(sonOnaySiraDisiMi({}, durum(takimli, imza('m|P#1|1|b#m|P#1|3|a'))), false);
+    // Takım imzaları ortak önek taşısa da arama sınırda kalır, yanlış dizilişi reddeder.
+    const cok = Object.fromEntries(Array.from({ length: 120 }, (_, i) => [`T${String(i + 1)}`, 'a']));
+    assert.equal(sonOnayAdimlariTamamMi(durum({ ...done, ...cok }, imza(`${Array(120).fill('a').join('#')}#b`))), false);
   });
 });

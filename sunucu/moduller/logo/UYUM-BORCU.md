@@ -80,3 +80,6 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    (satın alma #790 bunları tutmuyor). İstenirse talep için düzenleme ve iptal kuyruğu, siparişteki gibi ayrı karar.
 8. Satış: teklifin bütün satırları siparişe dönünce teklif durumunu 4 yazmak (not 2.7: Logo kendisi değiştirmez), teklif ve satış siparişi
    düzenleme (`PUT /api/SalesOffer/{ref}`, `/order/{ref}`) ve silme yazılmadı; istenirse ayrı karar.
+
+## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
+- Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /logo/birim-setleri`, `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a); bu uçlar malzemelerin Logo ekranına bağlanacak.
