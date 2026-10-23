@@ -58,7 +58,8 @@ Kırmızı: kod testlerle aynı turda yazıldı; kırmızı her kural için kodu
 | LOGO-O11..12 fatura: yalnız Logo'ya gitmiş ve numarası bilinen sipariş, sıralı, turda `FATURA_TUR_SINIRI`, 404 boş, tekrar okumada çift satır yok; 401'de ilk istekte durur | `LOGO-O11`, `LOGO-O12` | görüldü değil |
 | LOGO-O13..15 malzeme fişi: kapalıyken istek yok; niyet, sonra doğru uç ve gövde; çift gönderim yok; sonucu bilinmeyen yinelenmez; 401 ve ağ hatasında tur düşmez, neden sahibine yazılır | `LOGO-O13`, `LOGO-O14`, `LOGO-O15` | görüldü değil |
 | LOGO-O16 emir fişi (335): sarf net sarf; giriş sağlam + ayrı "Hurda" satırı; sıfır satır düşer; boş fiş null; kartsız ya da birimsiz satır fişi reddettirir | `okuma-kurallar.test.ts` `LOGO-O16` | görüldü değil |
-| LOGO-O17 biten emir: anahtar kapalıyken kuyruğa girmez; açıkken iki fiş bir kez; satırlar sahiplerinden, boş fiş düşer; fiş bir kez gider | `okuma.test.ts` `LOGO-O17` | görüldü değil |
+| LOGO-O17 biten emir (335, 233): anahtar kapalıyken fiş açılmaz; açıkken iki fiş bir kez; satırlar sahiplerinden; boş fiş istek göndermeden eşitlenir; satırları değişmeyen fiş yeniden gitmez; niyetli boş fiş kuyrukta kalır | `okuma.test.ts` `LOGO-O17` | görüldü değil |
+| LOGO-O18 artımlı fiş (233): hazırlıkta TMI'de boş açılır (anahtar kapalıyken açılmaz), Logo'ya gitmez; sağlam ve hurda sayımı açık fişi işaretler; satırlar değişince fiş silinir (`DELETE /api/MaterialSlip/...`) ve aynı numarayla açılır; değişmeyen sayım istek göndermez; sıfırda silinir, sonraki +1'de yeniden açılır; silme reddinde kayıt no kalır, geri çekilmeyle yeniden denenir | `okuma.test.ts` `LOGO-O18` | görüldü değil |
 | LGB-5 (334 a) kartın Açıklama 1-3'ü `name2`-`name4` ile gider, boşsa alan yok | `kurallar.test.ts` `LGB-5 (334 a)` | görüldü değil |
 | LGS-20 (genişledi) ad güncellemesi yalnız `logo.malzeme-guncelleme-gonderimi` açıkken; kapalıyken kuyruk okunmaz, istek yok | `siparis.test.ts` `LGS-20` | görüldü değil |
 
