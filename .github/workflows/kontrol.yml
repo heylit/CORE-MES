@@ -1,12 +1,10 @@
 name: kontrol
 
 on:
+  # Yol süzgeci yok: ana dala giren her birleşmenin kendi koşusu olur, birleştirme kapısı yalnız belge taşıyan birleşmede
+  # hiç açılmayan koşuyu beklemez. Yalnız belge değiştiyse ağır işleri `kapsam` atlar.
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'kurulum/**'
-      - 'belgeler/**'
   pull_request:
   # Ana dalda ya da bir dalda elle yeniden koşu: boş commit ya da istek kapatıp açma gerekmez.
   workflow_dispatch:
@@ -39,8 +37,8 @@ env:
   TMIV2_TEST_ESZAMANLI: 8
 
 # Tek iş 21 dakika sürüyordu; işler ayrı makinelerde aynı anda koşar (#1219). Dal korumasının beklediği `kontrol` en sondaki
-# toplayıcı iştir: bir iş bile yeşil değilse kırmızı biter. Çekme isteğinde `kapsam` işinin atladığı test işi "atlandı"
-# sayılır; ana dala gönderimde her iş koşar.
+# toplayıcı iştir: bir iş bile yeşil değilse kırmızı biter. `kapsam` işinin atladığı test işi "atlandı" sayılır; çekme
+# isteğinde ve ana dala gönderimde aynı sınıflama kullanılır, elle koşuda her iş koşar.
 jobs:
   # Değişen dosyalara göre hangi ağır işlerin koşacağı. Bilinmeyen her yol (paylasilan, araclar, paketler, yapılandırma,
   # iş akışı) her şeyi koşturur. Sunucu testleri arkon/web ve istemci/src'den dosya ithal eder: ithal edilen istemci
@@ -60,17 +58,28 @@ jobs:
         shell: bash
         env:
           OLAY: ${{ github.event_name }}
+          ONCE: ${{ github.event.before }}
         run: |
-          if [ "$OLAY" != "pull_request" ]; then
-            printf 'sunucu=true\nistemci=true\nekran=true\n' >> "$GITHUB_OUTPUT"; exit 0
-          fi
+          hepsi() { printf 'sunucu=true\nistemci=true\nekran=true\n' | tee -a "$GITHUB_OUTPUT"; exit 0; }
+          case "$OLAY" in
+            pull_request) taban=HEAD^1 ;;
+            # Bir gönderim birden çok commit taşıyabilir: fark gönderimden önceki uca göre alınır. O uç yoksa ya da
+            # alınamazsa daraltılmaz, her iş koşar.
+            push)
+              case "$ONCE" in ''|*[!0]*) ;; *) hepsi ;; esac
+              [ -n "$ONCE" ] && git fetch --no-tags --depth=1 origin "$ONCE" || hepsi
+              taban=$ONCE ;;
+            *) hepsi ;;
+          esac
           sunucu=false; istemci=false; ekran=false
           # Süreç ikamesindeki hata yutulur ve testler sessizce atlanırdı: liste önce alınır, alınamazsa iş düşer.
-          degisenler=$(git diff --name-only HEAD^1 HEAD)
+          degisenler=$(git diff --name-only "$taban" HEAD)
           sunucunun_istemcisi=$(grep -rhoE "(\.\./)+istemci/src/[A-Za-z0-9_./-]+\.tsx?" sunucu araclar paylasilan --include=*.ts \
             | sed -E 's#^(\.\./)+##' | xargs -r -n1 dirname | sort -u || true)
           while IFS= read -r yol; do
             [ -z "$yol" ] && continue
+            # Ana dalda her yerdeki .md belgedir; çekme isteği modül klasöründeki .md için testleri yine koşturur.
+            if [ "$OLAY" = push ]; then case "$yol" in *.md) echo "$yol"; continue ;; esac; fi
             case "$yol" in
               belgeler/*|kurulum/*) ;;
               */*) case "$yol" in
