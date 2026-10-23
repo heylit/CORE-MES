@@ -75,8 +75,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/siparisler/:id/carpan', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, cevap: siparisCarpaniCevabi,
     isle: ({ db, parametre }) => servis.siparisCarpani(db, parametre.id) }),
   // 306 a: çarpanın düştüğü bant; bedel TL olduğundan çarpanla aynı okurlar.
-  uc({ yontem: 'GET', yol: '/plan/siparisler/:id/bant', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, cevap: siparisBandiCevabi,
-    isle: ({ db, kullanici, parametre }) => servis.siparisBandi(db, kullanici, parametre.id) }),
+  uc({ yontem: 'GET', yol: '/plan/siparisler/:id/bant', yetki: PLAN_BEDELI_OKUR, parametre: siparisParametresi, sorgu: planSorgusu,
+    cevap: siparisBandiCevabi, isle: ({ db, kullanici, parametre, sorgu }) => servis.siparisBandi(db, kullanici, parametre.id, sorgu.taslak ?? null) }),
   uc({ yontem: 'POST', yol: '/plan/siparisler/:id/carpan', yetki: { biri: ['plan.yaz', 'siparisler.onayla'] }, tekrarKorumali: true, parametre: siparisParametresi,
     govde: siparisCarpaniTaslakGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, parametre, govde: { taslak, ...g } }) => servis.siparisCarpaniYaz(db, kullanici, parametre.id, taslak ?? null, g) }),

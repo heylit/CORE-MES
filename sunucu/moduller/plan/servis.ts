@@ -1365,10 +1365,11 @@ const sinifEsigi = (b: Baglam) => ({ yuksek: b.bedelAyari.yuksekEsigi, dusuk: b.
 const emirSiniflari = (b: Baglam): Map<number, 1 | 2 | 3> => oncelikSiniflari(emirBedelleri(b), sinifEsigi(b));
 
 // 306 a: siparişin plandaki emirlerinin bedeli ve bandı; bant sınırları bütün plan emirleriyle. Planda emri yoksa bant null. Sipariş
-// yoksa 404.
-export async function siparisBandi(db: Db, k: Kullanici, siparisId: number): Promise<SiparisBandiCevabi> {
+// yoksa 404. taslak verilirse taslaktaki çarpan ve bedel ayarıyla (148 a: çarpan önce taslağa yazılır).
+export async function siparisBandi(db: Db, k: Kullanici, siparisId: number, taslak: number | null = null): Promise<SiparisBandiCevabi> {
   await siparisAyrintisi(db, siparisId);
-  const b = await baglamKur(db, k, null);
+  await hedefDenetle(db, taslak);
+  const b = await baglamKur(db, k, taslak);
   const bedel = emirBedelleri(b);
   const sinif = oncelikSiniflari(bedel, sinifEsigi(b));
   const emirler = new Map<number, string>();

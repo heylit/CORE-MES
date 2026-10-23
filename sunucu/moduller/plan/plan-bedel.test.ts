@@ -117,6 +117,9 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
     // 148 a: çarpan önce taslaktadır; taslakta bedele girer, canlı geçmiş onaya kadar boştur.
     const t = await tamam<PlanCevabi>(c.planlama, 'POST', yol, { carpan: 2, gerekce: 'Teslim öne alındı', taslak });
     assert.equal((await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol)).gecerli, null, 'taslaktaki çarpan canlıda yok');
+    const bedelOf = async (sorgu: string) => (await tamam<SiparisBandiCevabi>(c.planlama, 'GET', `/plan/siparisler/${sp}/bant${sorgu}`)).bant?.emirler[0]?.bedel;
+    assert.deepEqual([await bedelOf(''), await bedelOf(`?taslak=${t.taslak!.id}`)], [150, 300], 'bant taslakta taslağın çarpanıyla, canlıda canlıyla');
+    assert.equal((await istek(c.planlama, 'GET', `/plan/siparisler/${sp}/bant?taslak=999999`)).statusCode, 404);
     await canliyaGecir(c.planlama, t);
     await carpanYaz(c.mudur, sp, 3, 'Müşteri hattı durdu');
     const son = await tamam<SiparisCarpaniCevabi>(c.mudur, 'GET', yol);
