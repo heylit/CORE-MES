@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -278,13 +278,48 @@ describe('PortalCercevesi', () => {
     expect(bolumler('Kalite mühendisi', ['docs', 'partners', 'quality'])).toEqual([['home', 'quality', 'partners'], false, false, true]);
     expect(bolumler('Satış müdürü', ['approve', 'contracts', 'partners', 'reports', 'sales'])).toEqual(
       [['home', 'approvals', 'sales', 'quality', 'partners', 'reports'], true, false, true]);
-    expect(bolumler('Satın alma müdürü', ['approve', 'contracts', 'partners', 'purchase', 'receive', 'reports'])).toEqual(
-      [['home', 'approvals', 'sales', 'purchase', 'quality', 'finance', 'partners', 'reports'], true, true, true]);
+    // Teslim alma izni kalktı (238, H1): satın alma satış siparişlerini görmez.
+    expect(bolumler('Satın alma müdürü', ['approve', 'contracts', 'partners', 'purchase', 'reports'])).toEqual(
+      [['home', 'approvals', 'purchase', 'quality', 'finance', 'partners', 'reports'], false, true, true]);
     // Doğrudan açılan satış siparişi sayfası kaliteye yetki iletisi gösterir.
     bolumler('Kalite mühendisi', ['docs', 'partners', 'quality']);
     pencere.eval(`UI.view='sorders';render(true)`);
     expect(pencere.document.body.textContent).toContain('Bu sayfaya erişim yetkiniz yok');
     pencere.close();
+  });
+
+  it('satın alma sevkiyatı portalda teslim alınmaz; kart Stok > Mal kabul\'e götürür, satış sevkiyatı teslim alınır (238, H1)', async () => {
+    sunucuKur(YONETICI);
+    ac('/portal');
+    const cerceve = await screen.findByTitle('Müşteri ve Tedarikçi Portalı', {}, { timeout: 5000 });
+    const Sinif = (globalThis as unknown as { jsdom: { constructor: JsdomSinifi } }).jsdom.constructor;
+    const pencere = new Sinif(cerceve.getAttribute('srcdoc') ?? '', { url: 'https://cerceve.invalid/', runScripts: 'dangerously', pretendToBeVisual: true }).window;
+    await new Promise((bitti) => { pencere.setTimeout(bitti, 0); });
+    const gidilen: string[] = [];
+    Object.defineProperty(pencere, 'tmiGit', { configurable: true, value: (yol: string) => { gidilen.push(yol); } });
+    pencere.eval(`S.users={'tmi-5':{id:'tmi-5',partyId:'firm',name:'Deneme Kişi',role:'Satın alma müdürü',tmiIzinler:['purchase','reports'],tmiRoller:[],active:true,prefs:{mute:{}}}};
+      const kalem=[{name:'Kalem',qty:5,unit:'adet',price:1}];const yolda=[{id:'d1',no:'IRS-1',shipDate:'2026-10-20',qtys:[5],photos:[],status:'in_transit',by:'s1'}];
+      S.orders={sa1:{id:'sa1',no:'SA-1',type:'purchase',partyId:'s1',title:'Kalem',items:kalem,currency:'TRY',vat:0.2,createdAt:'2026-10-01T00:00:00.000Z',promisedDate:'2026-10-25',deliveries:yolda,invoices:[],history:[],status:'open'}};
+      COLS.forEach(c=>liveLoaded.add(c));window.scrollTo=()=>{};go('order','sa1');render(true)`);
+    const belge = pencere.document;
+    expect(belge.querySelector('[data-act="receive"]')).toBeNull();
+    const dugme = belge.querySelector<HTMLButtonElement>('[data-act="malkabul"]');
+    expect(dugme?.textContent).toContain('Mal kabul');
+    expect(belge.body.textContent).toContain('Stok > Mal kabul ekranında teslim alın');
+    dugme?.click();
+    expect(gidilen).toEqual(['/stok/mal-kabul']);
+    // Bildirimden tek tıkla teslim alma da satın alma siparişinde kapalıdır.
+    expect(pencere.eval(`JSON.stringify(magicState({action:{kind:'receive',id:'sa1',did:'d1'}}))`)).toContain('Mal kabul');
+    pencere.close();
+
+    // Kabuk yalnız izinli yola gider.
+    const kaynak = document.querySelector<HTMLIFrameElement>('iframe[title="Müşteri ve Tedarikçi Portalı"]')!.contentWindow as Window;
+    const gonder = (yol: string) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'portal', yon: 'git', yol }, origin: 'null', source: kaynak })); }); };
+    gonder('/kisiler');
+    gonder('/stok/mal-kabul/../../kisiler');
+    expect(screen.queryByText('Başka sayfa')).toBeNull();
+    gonder('/stok/mal-kabul');
+    await screen.findByText('Başka sayfa');
   });
 
   it('sipariş onay basamakları satın alma limitlerinden gelen eşiklerle "üstü" kuralıyla düşer; eşik yoksa iki adım da istenir', async () => {

@@ -20,5 +20,6 @@ Dosyalar: `sunucu/moduller/portal/kurallar.test.ts` (saf, 8), `sunucu/moduller/p
 | BD-13 Yerel depo önekli anahtarı yazar; ortak kapsamda çatışma uyarır ve durur | köprü | `CK-01`, `CK-02` |
 | BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `sayfayı görmeyen kişiye yetki iletisi gösterir, uçlara gitmez` |
 | BD-15 Onay adımları sunucuda (B8): onay kaydı yalnız sunucunun hesapladığı zincirle açılır (prototipin stepsFor ve autoSkip kuralı, limitler portal ayarında, sipariş eşikleri satın alma limitinden); onay gerektiren yeni satın alma siparişi, giden ödeme, onaylı sözleşme, fiyat artışı ve iskontolu sürüm onaysız yazılamaz; onayın etkisi kaydın bugünkü değerinin istediği adımları ister | servis (`onayAcilisReddi`, `onaysizYaziReddi`, `onayEtkisiReddi`) | `BD-K35`, `BD-K36`, `BD-K37`, `BD-24` |
+| BD-16 Satın alma siparişinin sevkiyatı portalda teslim alınmaz (238, H1); tam yetki de geçemez. Satın almada teslim alma izni yoktur; çerçevedeki kart Stok > Mal kabul'e götürür, kabuk yalnız izinli yola gider | servis (`satinAlmaTeslimiReddi`), `portalRolu`, çerçeve köprüsü (`tmiGit`) | `BD-K38`, `BD-25`, `satın alma sevkiyatı portalda teslim alınmaz; kart Stok > Mal kabul'e götürür, satış sevkiyatı teslim alınır (238, H1)` |
 
 Prototipin öteki iş kuralları (ekranda kalanlar) `UYUM-BORCU.md`'dedir; bunlar için sunucu testi yoktur.
