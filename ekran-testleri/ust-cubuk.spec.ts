@@ -74,7 +74,7 @@ test.describe('yetkisiz sayfa', () => {
   test.use({ hesap: 'ornek.operator1' });
   test('yetkisi olmayan sayfanın adresinde üst çubuk o sayfanın adını göstermez', async ({ page, ac }) => {
     await ac('/finans');
-    await expect(page.getByText('Sayfa bulunamadı').first()).toBeVisible();
+    await expect(page.getByText('Yetkiniz yok').first()).toBeVisible();
     await expect(page.locator('h1.tc-kabuk-baslik')).not.toHaveText('Finans ve Muhasebe');
   });
 });

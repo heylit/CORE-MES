@@ -42,3 +42,17 @@ export function etkinMadde<M extends { yol: string }>(maddeler: readonly M[], ad
   }
   return secilen;
 }
+
+// Adresle açılış menüyle aynı kuralı izler (195 a): adresin düştüğü alt maddeyi göremeyen kişi o bölümü adresle de açamaz. Madde
+// sayfanın menüsünden, süzülmeden bulunur. Kök madde kapatmaz: sayfa kendi işlemiyle açılır (talep açan herkes İdari İşler'i görür,
+// kök maddesi ise idari-isler.oku ister). Menüsü olmayan ya da hiçbir maddeye düşmeyen adres de burada kapanmaz.
+export function adresMaddesiKapaliMi(tanimlar: readonly IkinciMenu[], adres: string, islemler: readonly string[]): boolean {
+  let tanim: IkinciMenu | null = null;
+  for (const t of tanimlar) {
+    const kapsar = adres === t.kok || adres.startsWith(`${t.kok}/`);
+    if (kapsar && (tanim === null || t.kok.length > tanim.kok.length)) tanim = t;
+  }
+  if (tanim === null) return false;
+  const madde = etkinMadde(menuMaddeleri(tanim), adres);
+  return madde !== null && madde.yol !== tanim.kok && !maddeGorunurMu(madde, islemler);
+}
