@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gizle, gizliAnahtarMi, kimlikParametreleri } from './kurallar.ts';
+import { degisiklikAlanlari, gizle, gizliAnahtarMi, kimlikParametreleri } from './kurallar.ts';
 
 test('parola alanları iç içe yapıda da gizlenir; diğer alanlar aynen kalır', () => {
   const girdi = { kullaniciAdi: 'ali', parola: 'gizli1', kisiler: [{ ad: 'A', yeniParola: 'gizli2', adet: 0 }], not: null };
@@ -71,4 +71,20 @@ test('IBAN, maaş, ücret geçmişi, kan grubu, engel durumu, adres, telefon ve 
     'adresler', 'adresTuru', 'telefonlar', 'dogumYeri', 'tarih'];
   assert.deepEqual(gizli.filter((ad) => !gizliAnahtarMi(ad)), []);
   assert.deepEqual(acik.filter(gizliAnahtarMi), []);
+});
+
+test('değişiklik alanları ada göre sıralanır; gizli adlı sütun ya da jsonb anahtarının iki değeri de maskelenir', () => {
+  const alanlar = degisiklikAlanlari({
+    'kayit.parola': { eski: 'g1', yeni: 'g2' },
+    adet: { eski: 5, yeni: 7 },
+    pin: { eski: null, yeni: 'g3' },
+    'kayit.ic': { eski: { token: 'g4', not: 'açık' }, yeni: null },
+  });
+  assert.deepEqual(alanlar, [
+    { alan: 'adet', eski: 5, yeni: 7 },
+    { alan: 'kayit.ic', eski: { token: '[gizli]', not: 'açık' }, yeni: null },
+    { alan: 'kayit.parola', eski: '[gizli]', yeni: '[gizli]' },
+    { alan: 'pin', eski: null, yeni: '[gizli]' },
+  ]);
+  assert.deepEqual(degisiklikAlanlari({ adet: {} }), [{ alan: 'adet', eski: null, yeni: null }]);
 });
