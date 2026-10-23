@@ -231,11 +231,18 @@ jobs:
 
   # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
   # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
+  # Parçalara bölünür ki ekran işi CI süresini belirleyen iş olmasın; her parça kendi veritabanında koşar, oturum kurulumu her
+  # parçada yeniden koşar. Üç parça iki parçadan kısa sürmüyordu: testler süreye göre değil sayıya göre bölünür ve ağır olanlar
+  # bir parçada toplanıyordu.
   ekran:
     needs: kapsam
     if: needs.kapsam.outputs.ekran == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        parca: [1, 2]
     services:
       postgres:
         image: postgres:18
@@ -271,12 +278,12 @@ jobs:
       - run: npm run goc
       - run: npm run ekran:hazirla
       - run: npm run derle:istemci
-      - run: npm run ekran
+      - run: npm run ekran -- --shard=${{ matrix.parca }}/2
       - name: Düşen testlerin görüntü ve izleri
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ekran-sonuc
+          name: ekran-sonuc-${{ matrix.parca }}
           path: /tmp/tmiv2-ekran/sonuc
           retention-days: 7
           if-no-files-found: ignore
