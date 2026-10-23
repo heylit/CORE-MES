@@ -8,6 +8,13 @@ import { PAROLA, planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let makineA = 0;
   let makineB = 0;
   before(() => { ({ makineA, makineB } = durum()); });
@@ -94,11 +101,11 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/hizli`, { tur: 'gun', surum: s.surum })).senaryolar.find((x) => x.id === s.id)!;
     const tarih = s.degisiklikler.find((d) => d.tur === 'gun_kapat')!.ozet.slice(0, 10);
     {
-      const r = await istek(c.kalite, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+      const r = await istek(c.kalite, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
       assert.equal(r.statusCode, 403);
       assert.match(r.body, /vardiya yazma yetkisi/);
     }
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
     const gunu = async (t: string) => (await tamam<{ gunler: { tarih: string; tur: string; ad: string | null }[] }>(c.planlama, 'GET', '/vardiya-takvimi')).gunler.find((g) => g.tarih === t);
     assert.deepEqual(await gunu(tarih), { tarih, tur: 'kapali', ad: 'Plan stüdyosu' });
     await tamam(c.yonetici, 'POST', `/takvim-gunleri/${tarih}/kaldir`);
@@ -107,7 +114,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/hizli`, { tur: 'gun', surum: s.surum })).senaryolar.find((x) => x.id === s.id)!;
     const tatil = s.degisiklikler.find((d) => d.tur === 'gun_kapat')!.ozet.slice(0, 10);
     await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: tatil, tur: 'tatil', ad: 'Deneme bayram' });
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.id}/canliya-al`, { surum: await gonder(s.id, s.surum), cakismalariKabul: true });
     assert.deepEqual(await gunu(tatil), { tarih: tatil, tur: 'tatil', ad: 'Deneme bayram' });
     await tamam(c.yonetici, 'POST', `/takvim-gunleri/${tatil}/kaldir`);
   });
@@ -160,7 +167,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     p = (await isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: ileri })).json<PlanCevabi>();
     assert.equal(await isEmriMakinesi(i1!), makineA, 'taslak iş emrini değiştirmez');
     assert.equal((await istek(c.mudur, 'POST', '/plan/oner', { taslak: tg(p) })).statusCode, 403, 'müdür taslağa yazamaz');
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     assert.deepEqual(yer(await planOku(), i1!).kaynak, { tur: 'makine', id: makineB });
     assert.equal(await isEmriMakinesi(i1!), makineB);
   });

@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import type { BedelAyari, BedelAyariGovdesi, PlanAyari } from '#paylasilan/sozlesme/plan.ts';
+import type { BedelAyari, BedelAyariGovdesi, PlanAyari, SenaryoDurumu } from '#paylasilan/sozlesme/plan.ts';
 import type { Kaynak } from './kurallar.ts';
 
 // Hedef: null canlı plan, sayı taslak (senaryo). Canlıya yalnız canlıya alma yazar (P6).
@@ -90,9 +90,17 @@ export async function yersizBolmeler(db: Db, hedef: Hedef): Promise<Map<number, 
 export async function taslaktakiIsEmirleri(db: Db, isEmriIdleri: readonly number[]): Promise<number[]> {
   const r = await db.sorgu<{ id: number }>(
     `SELECT DISTINCT y.is_emri_id AS id FROM plan_senaryo_yerlesimi y JOIN plan_senaryosu s ON s.id = y.senaryo_id
-      WHERE s.durum = 'acik' AND y.is_emri_id = ANY($1::int[])`, [isEmriIdleri]);
+      WHERE s.durum IN ('acik', 'onayda') AND y.is_emri_id = ANY($1::int[])`, [isEmriIdleri]);
   return r.map((x) => x.id);
 }
+
+// Kaldırılmamış sıralama değişikliği iş emrini içeren açık ya da onaydaki taslaklar (Arkon: sıra değişikliği onay bekliyor, 147 a).
+export const bekleyenSiralar = async (db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; senaryoId: number; durum: 'acik' | 'onayda' }[]> =>
+  (isEmriIdleri.length === 0 ? [] : db.sorgu(
+    `SELECT DISTINCT i.id AS "isEmriId", s.id AS "senaryoId", s.durum
+       FROM plan_senaryo_degisikligi d JOIN plan_senaryosu s ON s.id = d.senaryo_id CROSS JOIN LATERAL unnest(d.is_emri_idleri) AS i (id)
+      WHERE d.tur = 'sirala' AND d.kaldirma IS NULL AND s.durum IN ('acik', 'onayda') AND i.id = ANY($1::int[])
+      ORDER BY 1, 2`, [[...isEmriIdleri]]));
 
 // Taslağa yazma: iş emri başına tek yerleşim (eskisi parçalarıyla silinir); parçası verilen iş bölünmüş yazılır.
 export async function yerlesimYaz(db: Db, senaryoId: number, y: YerlesimSatiri): Promise<void> {
@@ -192,20 +200,22 @@ export const ayarYaz = (db: Db, senaryoId: number, a: PlanAyari) =>
       WHERE senaryo_id = $1`,
     [senaryoId, a.kural, a.yon, a.tamponGun, a.dondurmaGun, a.personelKisiti, a.taslakEmirler],
   );
+// Taslağın ayarı ve (148 a) varsa bedel ayarı tek güncellemeyle canlıya geçer: geçmişe canlıya alma başına tek satır düşer.
 export const ayariCanliyaYaz = (db: Db, senaryoId: number, kisiId: number) =>
-  db.sorgu(`UPDATE plan_ayari SET ${AYAR_ATA}, degistiren_kisi_id = $2, degisme = now() FROM plan_senaryo_ayari k WHERE k.senaryo_id = $1`, [senaryoId, kisiId]);
+  db.sorgu(`UPDATE plan_ayari SET ${AYAR_ATA}, ${BEDEL_ATA}, degistiren_kisi_id = $2, degisme = now()
+              FROM plan_senaryo_ayari k LEFT JOIN plan_senaryo_bedel_ayari b ON b.senaryo_id = k.senaryo_id WHERE k.senaryo_id = $1`, [senaryoId, kisiId]);
 export const ayariCanlidanAl = (db: Db, senaryoId: number) =>
   db.sorgu(`UPDATE plan_senaryo_ayari SET ${AYAR_ATA} FROM plan_ayari k WHERE plan_senaryo_ayari.senaryo_id = $1`, [senaryoId]);
 
 /* ---------------- taslak (senaryo) ---------------- */
 
 export interface SenaryoSatiri {
-  id: number; ad: string; aciklama: string | null; durum: 'acik' | 'canliya_alindi' | 'vazgecildi'; tabanPlanSurumu: number; surum: number;
+  id: number; ad: string; aciklama: string | null; durum: SenaryoDurumu; tabanPlanSurumu: number; surum: number;
   acanKisiId: number; acilma: string;
 }
 const SENARYO = `id, ad, aciklama, durum, taban_plan_surumu AS "tabanPlanSurumu", surum, acan_kisi_id AS "acanKisiId", to_json(acilma) #>> '{}' AS acilma`;
 export const senaryolar = (db: Db): Promise<SenaryoSatiri[]> =>
-  db.sorgu(`SELECT ${SENARYO} FROM plan_senaryosu ORDER BY (durum = 'acik') DESC, id DESC LIMIT 20`);
+  db.sorgu(`SELECT ${SENARYO} FROM plan_senaryosu ORDER BY (durum IN ('acik', 'onayda')) DESC, id DESC LIMIT 20`);
 export const senaryo = (db: Db, id: number, kilit = false): Promise<SenaryoSatiri | null> =>
   db.tek(`SELECT ${SENARYO} FROM plan_senaryosu WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 // Kişinin bugünkü canlı plandan açtığı en son açık taslak (A4: başka ekrandan gelen sıralama ona yazılır). Daha eski canlıdan açılmış
@@ -218,7 +228,7 @@ export const sonCanliyaAlma = (db: Db): Promise<{ zaman: string; kisiId: number 
   db.tek(`SELECT to_json(kapanma) #>> '{}' AS zaman, kapatan_kisi_id AS "kisiId" FROM plan_senaryosu
            WHERE durum = 'canliya_alindi' ORDER BY kapanma DESC, id DESC LIMIT 1`);
 export const acikSenaryoSayisi = async (db: Db): Promise<number> =>
-  (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_senaryosu WHERE durum = 'acik'"))!.n;
+  (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_senaryosu WHERE durum IN ('acik', 'onayda')"))!.n;
 
 const CANLIYI_KOPYALA = `INSERT INTO plan_senaryo_yerlesimi (${SY_SUTUN})
   SELECT $1, is_emri_id, makine_id, kisi_id, baslangic, bitis, kilitli, dondurulmus, elle_sira, elle_istasyon_id, elle_kaynak FROM plan_yerlesimi`;
@@ -252,14 +262,21 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
   await db.sorgu(`INSERT INTO plan_senaryo_degisikligi (senaryo_id, tur, ozet, is_emri_idleri, veri, yazan_kisi_id)
                   SELECT $2, tur, ozet, is_emri_idleri, veri, yazan_kisi_id FROM plan_senaryo_degisikligi WHERE senaryo_id = $1 AND kaldirma IS NULL ORDER BY id`,
   [kaynakId, id]);
+  await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $2, ${BEDEL_SUTUN} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
+  await db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, ${CARPAN_SUTUN}) SELECT $2, ${CARPAN_SUTUN} FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1`,
+    [kaynakId, id]);
   return id;
 }
 
 export const senaryoBilgiYaz = (db: Db, id: number, ad: string, aciklama: string | null) =>
   db.sorgu('UPDATE plan_senaryosu SET ad = $2, aciklama = $3, surum = surum + 1 WHERE id = $1', [id, ad, aciklama]);
 export const senaryoSurumArtir = (db: Db, id: number) => db.sorgu('UPDATE plan_senaryosu SET surum = surum + 1 WHERE id = $1', [id]);
+// Canlıya yalnız onaydaki, vazgeçme yalnız açık taslak kapanır.
 export const senaryoKapat = (db: Db, id: number, durum: 'canliya_alindi' | 'vazgecildi', kisiId: number) =>
-  db.sorgu("UPDATE plan_senaryosu SET durum = $2, kapanma = now(), kapatan_kisi_id = $3, surum = surum + 1 WHERE id = $1 AND durum = 'acik'", [id, durum, kisiId]);
+  db.sorgu('UPDATE plan_senaryosu SET durum = $2, kapanma = now(), kapatan_kisi_id = $3, surum = surum + 1 WHERE id = $1 AND durum = $4',
+    [id, durum, kisiId, durum === 'canliya_alindi' ? 'onayda' : 'acik']);
+export const senaryoDurumYaz = (db: Db, id: number, durumdan: 'acik' | 'onayda', duruma: 'acik' | 'onayda') =>
+  db.sorgu('UPDATE plan_senaryosu SET durum = $3, surum = surum + 1 WHERE id = $1 AND durum = $2', [id, durumdan, duruma]);
 export const tabanYenile = (db: Db, id: number) =>
   db.sorgu('UPDATE plan_senaryosu SET taban_plan_surumu = (SELECT surum FROM plan_durumu), surum = surum + 1 WHERE id = $1', [id]);
 
@@ -270,6 +287,8 @@ export async function senaryoSifirla(db: Db, id: number, kisiId: number): Promis
   await db.sorgu(CANLIYI_KOPYALA, [id]);
   await db.sorgu(CANLI_PARCALARI_KOPYALA, [id]);
   await ayariCanlidanAl(db, id);
+  await bedelTaslaktanSil(db, id);
+  await carpanTaslaktanSil(db, id, null);
   await db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $2, kaldirma = now() WHERE senaryo_id = $1 AND kaldirma IS NULL', [id, kisiId]);
   await tabanYenile(db, id);
 }
@@ -306,6 +325,26 @@ export const degisiklikKaldir = (db: Db, senaryoId: number, ids: readonly number
   db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $3, kaldirma = now() WHERE senaryo_id = $1 AND id = ANY($2::int[]) AND kaldirma IS NULL',
     [senaryoId, [...ids], kisiId]);
 
+/* ---------------- onay kaydı (146, 147 a) ---------------- */
+
+export type OnayIslemi = 'onaya_gonder' | 'onaydan_cek' | 'geri_gonder' | 'canliya_al';
+export const onayKaydiEkle = (db: Db, senaryoId: number, islem: OnayIslemi, kisiId: number, metin: string | null, dortGozsuz = false) =>
+  db.sorgu('INSERT INTO plan_senaryo_onay_kaydi (senaryo_id, islem, kisi_id, metin, dort_gozsuz) VALUES ($1, $2, $3, $4, $5)',
+    [senaryoId, islem, kisiId, metin, dortGozsuz]);
+export interface OnaySatiri {
+  senaryoId: number; gonderenKisiId: number; gonderme: string; not: string | null;
+  geriGonderenKisiId: number | null; geriGonderme: string | null; geriNeden: string | null;
+}
+// Senaryonun son gönderme kaydı ve ondan sonraki son geri gönderme; hiç gönderilmemiş senaryo listede yok.
+export const sonOnaylar = (db: Db, senaryoIdleri: readonly number[]): Promise<OnaySatiri[]> =>
+  db.sorgu(`SELECT g.senaryo_id AS "senaryoId", g.kisi_id AS "gonderenKisiId", to_json(g.zaman) #>> '{}' AS gonderme, g.metin AS "not",
+                   r.kisi_id AS "geriGonderenKisiId", to_json(r.zaman) #>> '{}' AS "geriGonderme", r.metin AS "geriNeden"
+              FROM (SELECT DISTINCT ON (senaryo_id) * FROM plan_senaryo_onay_kaydi
+                     WHERE senaryo_id = ANY($1::int[]) AND islem = 'onaya_gonder' ORDER BY senaryo_id, id DESC) g
+              LEFT JOIN LATERAL (SELECT kisi_id, zaman, metin FROM plan_senaryo_onay_kaydi
+                                  WHERE senaryo_id = g.senaryo_id AND islem = 'geri_gonder' AND id > g.id ORDER BY id DESC LIMIT 1) r ON true`,
+  [[...senaryoIdleri]]);
+
 /* ---------------- bedel ayarı (209 a) ---------------- */
 
 const BEDEL_SUTUNLARI: Record<keyof BedelAyari, string> = {
@@ -314,11 +353,17 @@ const BEDEL_SUTUNLARI: Record<keyof BedelAyari, string> = {
   dusukCarpani: 'dusuk_carpani', sinifACarpani: 'sinif_a_carpani', sinifBCarpani: 'sinif_b_carpani', sinifCCarpani: 'sinif_c_carpani',
 };
 const BEDEL_ANAHTARLARI = Object.keys(BEDEL_SUTUNLARI) as (keyof BedelAyari)[];
+// Taslakta bedel satırı yoksa (b boş) canlı değer kalır; finansman oranı null olabildiği için COALESCE değil.
+const BEDEL_ATA = Object.values(BEDEL_SUTUNLARI).map((x) => `${x} = CASE WHEN b.senaryo_id IS NULL THEN plan_ayari.${x} ELSE b.${x} END`).join(', ');
 
-export async function bedelAyariOku(db: Db): Promise<BedelAyari> {
-  const r = (await db.tek<Record<keyof BedelAyari, string | null>>(
-    `SELECT ${BEDEL_ANAHTARLARI.map((k) => `${BEDEL_SUTUNLARI[k]} AS "${k}"`).join(', ')} FROM plan_ayari`,
-  ))!;
+const BEDEL_SUTUN = Object.values(BEDEL_SUTUNLARI).join(', ');
+const BEDEL_SEC = BEDEL_ANAHTARLARI.map((k) => `${BEDEL_SUTUNLARI[k]} AS "${k}"`).join(', ');
+
+// Taslağın bedel ayarı (148 a): taslakta bedel değişikliği yoksa canlınınki.
+export async function bedelAyariOku(db: Db, hedef: Hedef = null): Promise<BedelAyari> {
+  const r = (hedef === null ? null : await db.tek<Record<keyof BedelAyari, string | null>>(
+    `SELECT ${BEDEL_SEC} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [hedef],
+  )) ?? (await db.tek<Record<keyof BedelAyari, string | null>>(`SELECT ${BEDEL_SEC} FROM plan_ayari`))!;
   const sayi = (k: keyof BedelAyari) => Number(r[k]);
   return {
     tabanBedelSaat: sayi('tabanBedelSaat'), finansmanOraniGun: r.finansmanOraniGun === null ? null : Number(r.finansmanOraniGun),
@@ -328,20 +373,22 @@ export async function bedelAyariOku(db: Db): Promise<BedelAyari> {
   };
 }
 
-// Verilmeyen alan yazılmaz (bedelAyariGovdesi): finansman oranı null verilebildiği için yalnız undefined atlanır.
-export function bedelAyariYaz(db: Db, a: BedelAyariGovdesi, kisiId: number) {
+// 148 a: taslağa yazma. Satır ilk değişiklikte canlının kopyası olarak açılır, verilen alanlar üstüne yazılır. Verilmeyen alan yazılmaz:
+// finansman oranı null verilebildiği için yalnız undefined atlanır.
+export async function bedelTaslagaYaz(db: Db, senaryoId: number, a: BedelAyariGovdesi): Promise<void> {
+  await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $1, ${BEDEL_SUTUN} FROM plan_ayari ON CONFLICT DO NOTHING`, [senaryoId]);
   const alanlar = BEDEL_ANAHTARLARI.filter((k) => a[k] !== undefined);
-  return db.sorgu(
-    `UPDATE plan_ayari SET ${alanlar.map((k, i) => `${BEDEL_SUTUNLARI[k]} = $${i + 1}`).join(', ')}, degistiren_kisi_id = $${alanlar.length + 1}, degisme = now()`,
-    [...alanlar.map((k) => a[k]), kisiId],
+  if (alanlar.length === 0) return;
+  await db.sorgu(
+    `UPDATE plan_senaryo_bedel_ayari SET ${alanlar.map((k, i) => `${BEDEL_SUTUNLARI[k]} = $${i + 2}`).join(', ')} WHERE senaryo_id = $1`,
+    [senaryoId, ...alanlar.map((k) => a[k])],
   );
 }
+export const bedelTaslaktanSil = (db: Db, senaryoId: number) => db.sorgu('DELETE FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1', [senaryoId]);
 
 /* ---------------- elle çarpan (195 a) ---------------- */
 
 export interface CarpanSatiri { carpan: string; gerekce: string; kisiId: number; zaman: string }
-export const carpanEkle = (db: Db, siparisId: number, carpan: number, gerekce: string, kisiId: number) =>
-  db.sorgu('INSERT INTO plan_siparis_carpani (siparis_id, carpan, gerekce, kisi_id) VALUES ($1, $2, $3, $4)', [siparisId, carpan, gerekce, kisiId]);
 export const carpanGecmisi = (db: Db, siparisId: number) =>
   db.sorgu<CarpanSatiri>(
     `SELECT carpan, gerekce, kisi_id AS "kisiId", to_json(zaman) #>> '{}' AS zaman FROM plan_siparis_carpani WHERE siparis_id = $1 ORDER BY id DESC`,
@@ -357,3 +404,20 @@ export async function gecerliCarpanlar(db: Db, siparisIdler: number[]): Promise<
   );
   return new Map(r.map((x) => [x.siparisId, Number(x.carpan)]));
 }
+
+// 148 a: taslaktaki çarpan, sipariş başına son yazılan. Canlıya alınınca yazanı ve gerekçesiyle geçmişe eklenir.
+const CARPAN_SUTUN = 'siparis_id, carpan, gerekce, kisi_id, zaman';
+export const carpanTaslagaYaz = (db: Db, senaryoId: number, siparisId: number, carpan: number, gerekce: string, kisiId: number) =>
+  db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, siparis_id, carpan, gerekce, kisi_id) VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (senaryo_id, siparis_id) DO UPDATE SET carpan = EXCLUDED.carpan, gerekce = EXCLUDED.gerekce, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+  [senaryoId, siparisId, carpan, gerekce, kisiId]);
+export const carpanTaslaktanSil = (db: Db, senaryoId: number, siparisId: number | null) =>
+  db.sorgu('DELETE FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1 AND ($2::int IS NULL OR siparis_id = $2)', [senaryoId, siparisId]);
+export async function taslakCarpanlari(db: Db, senaryoId: number): Promise<Map<number, number>> {
+  const r = await db.sorgu<{ siparisId: number; carpan: string }>(
+    'SELECT siparis_id AS "siparisId", carpan FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1', [senaryoId]);
+  return new Map(r.map((x) => [x.siparisId, Number(x.carpan)]));
+}
+export const carpanlariCanliyaYaz = (db: Db, senaryoId: number) =>
+  db.sorgu(`INSERT INTO plan_siparis_carpani (siparis_id, carpan, gerekce, kisi_id)
+            SELECT siparis_id, carpan, gerekce, kisi_id FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1 ORDER BY siparis_id`, [senaryoId]);
