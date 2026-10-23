@@ -17,6 +17,7 @@
 .tc-stok-is-hata { border-left-color: var(--stop); }
 .tc-stok-is-tamam { border-left-color: var(--run); }
 .tc-stok-not { color: var(--muted); font-size: var(--yazi-s); margin: 0; }
+.tc-stok-bag { font: inherit; cursor: pointer; background: none; border: 0; padding: 0; color: var(--done); font-weight: 600; text-align: left; }
 .tc-stok-form { display: grid; gap: var(--b-4); }
 .tc-stok-iki { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
 .tc-stok-satir {

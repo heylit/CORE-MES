@@ -1333,6 +1333,8 @@ export interface UretimEmriOzeti {
   teslim: string | null;
   // Yalnız bitmiş emirde dolu (son iş emrinin sağlamı); stok tamamlaması çıktıyı bununla girer.
   saglamAdet: number | null;
+  // Bölünmüş partide (kol) üst emir; stok kolun refakat kartını üst emrin kartından açar (kart #126).
+  ustEmirId: number | null;
   // Bitmemiş ilk iş emri; iş emirsiz ya da bitmiş emirde null.
   siradakiIsEmriId: number | null;
   // Emrin açıldığı rota revizyonu; rotasız emirde null. Statü revizyona aittir.
@@ -1363,7 +1365,7 @@ export async function uretimEmriOzeti(db: Db, id: number): Promise<UretimEmriOze
   return {
     id: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, durum: gorunenDurum(e.durum, kendi.some((i) => i.durum !== 'bekliyor')),
     arsiv: e.arsiv, oncelik: e.oncelik, baslangic: e.baslangic, teslim: e.teslim, saglamAdet: e.saglamAdet, siradakiIsEmriId: siradakiIsEmri(kendi)?.id ?? null,
-    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, siparisSatiriId: e.siparisSatiriId,
+    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, siparisSatiriId: e.siparisSatiriId, ustEmirId: e.ustEmirId,
   };
 }
 

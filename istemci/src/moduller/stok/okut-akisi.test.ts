@@ -79,6 +79,7 @@ describe('QR okut akışı', () => {
     const refakat = {
       id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'kg',
       partiId: 40, lotNo: 'LT-000040', tedarikciPartiNo: null, dokumNo: 'D-1', sertifikaNo: null, verilen: '0', durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00',
+      ust: null, birlestigi: null, birlesmeZamani: null,
     };
     const kartli = { ...(malzeme([yer(5, 'kabul')]) as Extract<OkutCozCevabi, { tur: 'malzeme' }>), refakat, gelenler: [] };
     const d = okutuldu(OKUT_BASI, kartli);

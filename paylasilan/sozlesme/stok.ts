@@ -793,6 +793,7 @@ export type FislerCevabi = z.output<typeof fislerCevabi>;
 // ---- Refakat partisi (kart #123): emir + depodan verilen lot. Depo lotu okutup emre ayırınca doğar, kartı basılır; teslim kartla
 // yapılır. Aynı emre aynı lotun kalanı aynı kartla, başka lot yeni kartla gider (Soru 120 b, 116 b).
 export const REFAKAT_PARTISI_DURUMLARI = ['acik', 'iptal'] as const;
+const refakatBagi = z.object({ id: z.number().int(), etiket: z.string() });
 export const refakatPartisi = z.object({
   id: z.number().int(),
   // QR metni (`RP:<id>`) ve kartın okunur adı (emir no + sıra, UE-000120-P2).
@@ -803,8 +804,28 @@ export const refakatPartisi = z.object({
   // Bu kartla emre verilen: alınan teslimde alınan, yoldakinde gönderilen miktar.
   verilen: ondalikMetinSemasi,
   durum: z.enum(REFAKAT_PARTISI_DURUMLARI), surum: surumSemasi, kayitZamani: zamanSemasi,
+  // Kart #126: alt parti (kol) kartı üst emrin kartından açılır; birleşen kolun kartı birleştiği karta yönlenir (okutma, teslim, sayım).
+  ust: refakatBagi.nullable(), birlestigi: refakatBagi.nullable(), birlesmeZamani: zamanSemasi.nullable(),
 });
 export type RefakatPartisi = z.output<typeof refakatPartisi>;
+export const refakatKolAcGovdesi = z.object({ uretimEmriId: kimlik });
+export type RefakatKolAcGovdesi = z.input<typeof refakatKolAcGovdesi>;
+// İz (kart #126): kartın lotu (kartta), üst ve alt kartları, birleşenler, aynı lotun başka kartları, kartlarla sayılan üretim
+// partileri ve bugün eldekiler, bu partilerden yapılmış sevkler. Kartlar kartın kendisi, üstleri ve ona birleşenlerdir.
+export const refakatIziCevabi = z.object({
+  refakat: refakatPartisi,
+  ustler: z.array(refakatPartisi), altlar: z.array(refakatPartisi), birlesenler: z.array(refakatPartisi), ayniLot: z.array(refakatPartisi),
+  ciktilar: z.array(z.object({
+    partiId: z.number().int(), lotNo: z.string(), refakatPartisiId: z.number().int(),
+    malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), eldeki: ondalikMetinSemasi,
+  })),
+  sevkler: z.array(z.object({
+    hareketId: z.number().int(), zaman: zamanSemasi, partiId: z.number().int(), lotNo: z.string(),
+    malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
+    miktar: ondalikMetinSemasi, emirNo: z.string().nullable(), aciklama: z.string().nullable(),
+  })),
+});
+export type RefakatIziCevabi = z.output<typeof refakatIziCevabi>;
 // Lot iki yoldan gelir (Soru 116 b): okutulan lot etiketi (`LOT:<lot no>`) ya da lot okutularak eklenmiş depo sepeti satırı. Kart
 // etiketi lot yerine geçmez. Sepet satırından açılınca satır sepetten çıkar; malzeme bundan sonra kartla ilerler.
 export const refakatPartisiAcGovdesi = z.object({
