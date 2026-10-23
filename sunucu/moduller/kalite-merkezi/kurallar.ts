@@ -27,7 +27,7 @@ export const ILETILER = {
   onayliDegil: 'Form onaylı değil; geri alınacak onay yok.',
   formYok: 'Form bulunamadı.',
   gecersizCihaz: 'Kalibrasyonu geçersiz cihazla ölçüm kaydedilemez.',
-  kapanmisKayit: 'Kapanmış uygunsuzluk ve sonuçlanmış muayene değiştirilemez ve silinemez; düzeltme yeni kayıtla yapılır.',
+  kapanmisKayit: 'Kapanmış uygunsuzluk ve DÖF, sonuçlanmış muayene ve lot kabul kaydı değiştirilemez ve silinemez; düzeltme yeni kayıtla yapılır.',
   karantinadaNcrDisiRed: 'Parti karantinada kaldı: NCR dışı red var.',
   serbestMiktarParti: 'Serbest bırakılan miktar bu NCR\'nin bırakabileceği bir partiye ait değil.',
   serbestMiktarSifir: 'Serbest bırakılan miktar sıfırdan büyük olmalı.',
@@ -158,11 +158,16 @@ export function onayliFormReddi(koleksiyon: string, onceki: Record<string, unkno
 
 // KM-K89 (258 a, 19.10.2026): kapanmış NCR ve sonuçlanmış (Kabul, Ret) muayene kilitlidir; yazma, onay ve silme reddedilir, düzeltme
 // yeni kayıtla yapılır. Yedekten geri yükleme kilide bakmaz: yöneticinin işidir ve önceki hâl geçmişte kalır.
+// B16: uygulamanın ekranda kilitlediği kapanmış DÖF ve kararı verilmiş lot kabul kaydı da aynı kilittedir (uygulamanın `isLocked`
+// kuralı). Lot kararı formun hesabıdır; "yeniden başlat" (`tip: reset`) kaydı muayene değildir, kilitlenmez.
 const SONUCLU_MUAYENE: readonly string[] = ['Kabul', 'Ret'];
+const DOF_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'capa';
+const LOT_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'lot';
 export function kapanmisKayitMi(koleksiyon: string, govde: Record<string, unknown> | null): boolean {
   const alan = (a: string): string => (typeof govde?.[a] === 'string' ? (govde[a] as string).trim() : '');
-  if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU) return alan('durum') === UYGUNSUZLUK_KAPALI;
+  if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU || koleksiyon === DOF_KOLEKSIYONU) return alan('durum') === UYGUNSUZLUK_KAPALI;
   if (koleksiyon === 'insp') return SONUCLU_MUAYENE.includes(alan('sonuc'));
+  if (koleksiyon === LOT_KOLEKSIYONU) return alan('karar') !== '' && alan('tip') !== 'reset';
   return false;
 }
 
@@ -187,7 +192,7 @@ export function cihazGecerliMi(cihaz: Record<string, unknown> | null, aletDuruml
 // kayıtları silinmez. Ölçüm kaydı cihazı kimliğiyle tutar: aynı kodlu eski kaydın kimliği korunur, yeni aletin kimliği `kal-<alet>`tir.
 export interface OlcuAleti {
   id: number; no: string; tur: string; ad: string | null; olcmeAraligi: string | null; yer: string | null; periyotGun: number;
-  kullanimDisi: boolean; sonKalibrasyon: string | null;
+  kullanimDisi: boolean; sonKalibrasyon: string | null; durum: AletDurumu; vade: string | null; kalanGun: number | null;
   kayitlar: readonly { tarih: string; sonuc: 'uygun' | 'uygunsuz'; sertifikaNo: string | null; aciklama: string | null }[];
 }
 export interface CihazKaydi { kimlik: string; govde: Record<string, unknown> }
@@ -202,6 +207,8 @@ export function kalibrasyonAletKimligi(kimlik: string): number | null {
 
 // Kalibrasyonda karşılığı olmayan alanlar (marka, seri, çözünürlük, laboratuvar, izlenebilirlik) hiç yazılmaz; metin alanları
 // boş metindir, sıfır ya da uydurma değer yazılmaz. Periyot ay olarak gün / 30'dur ve yuvarlanmaz; durum `periyotGun` ile hesaplanır.
+// B17: durum, vade ve kalan gün Kalibrasyonun veritabanı gününe göre hesapladığıdır; ölçüm denetimi (KM-K88) de bu durumu kullanır,
+// ekran onu gösterir ve tarayıcı saatiyle ayrışmaz. Eşi olmayan eski kayıtta bu alanlar yoktur (ekran kuralı yerelde koşar).
 export function olcuAletiGovdesi(a: OlcuAleti): Record<string, unknown> {
   const sonUygun = [...a.kayitlar].reverse().find((k) => k.sonuc === 'uygun' && k.tarih === a.sonKalibrasyon);
   return {
@@ -217,6 +224,9 @@ export function olcuAletiGovdesi(a: OlcuAleti): Record<string, unknown> {
     kullanimDisi: a.kullanimDisi,
     gecmis: a.kayitlar.map((k) => ({ tarih: k.tarih, sonuc: k.sonuc === 'uygun' ? 'Uygun' : 'Uygun değil', sertifika: k.sertifikaNo ?? '', not: k.aciklama ?? '' })),
     kalibrasyondan: true,
+    kalibrasyonDurumu: a.durum,
+    kalibrasyonVadesi: a.vade,
+    kalibrasyonKalanGun: a.kalanGun,
   };
 }
 

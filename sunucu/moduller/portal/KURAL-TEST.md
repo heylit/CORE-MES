@@ -19,5 +19,6 @@ Dosyalar: `sunucu/moduller/portal/kurallar.test.ts` (saf, 8), `sunucu/moduller/p
 | BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | içerik politikası | `prototipi içerik politikasıyla, köprüyle ve dış yazı tipi bağlantısı olmadan yalıtılmış çerçevede açar`, `sayfaKur dış yazı tipi bağlantısını çıkarır, politikayı ve betiği başa koyar` |
 | BD-13 Yerel depo önekli anahtarı yazar; ortak kapsamda çatışma uyarır ve durur | köprü | `CK-01`, `CK-02` |
 | BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `sayfayı görmeyen kişiye yetki iletisi gösterir, uçlara gitmez` |
+| BD-15 Onay adımları sunucuda (B8): onay kaydı yalnız sunucunun hesapladığı zincirle açılır (prototipin stepsFor ve autoSkip kuralı, limitler portal ayarında, sipariş eşikleri satın alma limitinden); onay gerektiren yeni satın alma siparişi, giden ödeme, onaylı sözleşme, fiyat artışı ve iskontolu sürüm onaysız yazılamaz; onayın etkisi kaydın bugünkü değerinin istediği adımları ister | servis (`onayAcilisReddi`, `onaysizYaziReddi`, `onayEtkisiReddi`) | `BD-K35`, `BD-K36`, `BD-K37`, `BD-24` |
 
-Prototipin kendi iş kuralları (ekranda kalanlar) `UYUM-BORCU.md`'dedir; bunlar için sunucu testi yoktur.
+Prototipin öteki iş kuralları (ekranda kalanlar) `UYUM-BORCU.md`'dedir; bunlar için sunucu testi yoktur.

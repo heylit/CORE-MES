@@ -77,7 +77,7 @@ describe('satin-alma fason süresi tahmini ve grafik ucu (gerçek PostgreSQL)', 
     assert.equal(ayar.statusCode, 200, ayar.body);
     const kart = await app.inject({
       method: 'POST', url: '/api/malzeme-katalogu-kartlari/fs-kart-1/kaydet', headers: { cookie: cerezYonetici, 'istek-kimligi': crypto.randomUUID() },
-      payload: { kayit: { id: 'fs-kart-1', tur: 'hammadde', fam: 'metal', com: { kod: 'HM-SAT-00001', ad: 'Deneme mil', birim: 'adet' }, onay: { durum: 'aktif' } }, ozet: { benzersiz_anahtar: 'hammadde|fason-sure|fs-kart-1', mukerrer_gerekcesi: null }, surum: null },
+      payload: { kayit: { id: 'fs-kart-1', tur: 'hammadde', fam: 'metal', grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 }, com: { kod: 'HM-SAT-00001', ad: 'Deneme mil', birim: 'adet' }, onay: { durum: 'aktif' } }, ozet: { benzersiz_anahtar: 'hammadde|fason-sure|fs-kart-1', mukerrer_gerekcesi: null }, surum: null },
     });
     assert.equal(kart.statusCode, 200, kart.body);
     malzemeNo = (await ortam.sahip.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'fs-kart-1'"))!.no;

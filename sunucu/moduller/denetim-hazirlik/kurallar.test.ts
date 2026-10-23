@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu,
+  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -74,6 +74,15 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 7, 7), true);
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 8, 7), false);
     assert.equal(degistirebilirMi('channels/genel/msgs/m1', 8, null), false);
+  });
+
+  test('BD-K10 (B7): genel depo yalnız prototipin önekli yerel depo anahtarına açık; ortak ya da kişisel kök', () => {
+    assert.equal(izinliKoleksiyonMu('yerel'), true);
+    assert.equal(izinliKoleksiyonMu('data/users/7/yerel/anahtarlar'), true);
+    for (const k of ['deneme', 'data', 'data/users/7/yerel', 'yerel/kalite-denetim-v4/alt', 'data/users/7/baska/anahtarlar']) assert.equal(izinliKoleksiyonMu(k), false, k);
+    assert.equal(izinliBelgeMi('yerel/kalite-denetim-v4'), true);
+    assert.equal(izinliBelgeMi('data/users/7/yerel/anahtarlar/kalite-denetim-v4'), true);
+    for (const y of ['yerel/iso9001-denetim-v3', 'deneme/kalite-denetim-v4', 'yerel/kalite-denetim-v4/alt/b1', 'data/users/7/prefs']) assert.equal(izinliBelgeMi(y), false, y);
   });
 
   // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; prototipin cihaz listesi ondan salt okunur gelir.
