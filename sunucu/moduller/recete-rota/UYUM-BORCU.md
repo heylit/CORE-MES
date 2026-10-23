@@ -49,7 +49,14 @@ Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritaban
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 
 ## Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
-- Motor girdisini kuran çevirici (`zz27-rr-veri.betik` `rrDenemeyeCevir` ve bağlıları) hâlâ tarayıcıda; sunucuya `motor/` altına taşınmadan
-  `planMotoruCozucusu` karşılığı yazılamaz; bağ `sunucu/kablolama.ts`'te yok (DOĞRULANDI 23.10.2026). Çalışan adımlar çerçeveye bağlandı (GÜNCELLENDİ 23.10.2026, DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
-- Kıyas testi (`oner` ile ortak motor, aynı uydurma veri) plan modülünde yazılacak; farklar kullanıcıya sorulur.
+- Çevirici sunucuda (DOĞRULANDI 23.10.2026: `plan-cozucusu.ts` `sunucuPlanCozucusu`, `motor/emirler.betik` `sunucuCozumGirdisi`, `disari.ts`ten verilir). Girdi planlama
+  sayfasının çalışması, kayıt ve kaynak okumasıdır; çalışma kaydı yoksa çözücü 409 verir. Bağ `sunucu/kablolama.ts`'te yok: plan bugünkü `oner` yolundadır.
+  Çalışan adımlar çerçeveye bağlandı (DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
+- Kıyas yapıldı (plan `plan-kiyas.test.ts`, uydurma veri): vardiyalı senaryoda 8 işin 8'i iki motorda aynı (168 b ile motor vardiya molasını düşer). Kalan farklar:
+  (1) vardiyası tanımsız tezgâhın işi çözücüde `vardiyasiz` listesinde döner; plan bu alanı okumaz, iş eksik sayılır ve komut 409 olur;
+  (2) sunucu iş merkezi haftasını ve kişi vardiyasını okumaz (takvim eki null): çalışma günleri sayfanın tek takviminden; 159 b ile ayarcı sınırı sunucuda uygulanmaz, uyarı plana gelmez.
+- Çözücü varsayımları: eski revizyonla açılmış ya da rotasız emrin farklı adımı yerleşmez; istekte geçmeyen adım "şimdi bitmiş" sayılır; motorda karşılığı olmayan
+  sabit iş tezgâhı o aralıkta kapatır; açık çalışmanın deneme parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez, kısıt gevşetmeleri girer.
+- Nasıl uyumlanır: plan `vardiyasiz`ı okur (168 b plan yaması), sonra bağ `bag('plan motoru -> plan', ...)` kurulur ve plan testlerinin saat beklentileri güncellenir;
+  takvim eki sunucuda okunur.
 - Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.
