@@ -627,3 +627,100 @@ export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): 
   );
   return { ...sayilar!, aylik };
 }
+
+// ---- Logo gönderim sırası (H10, soru 238). Aynı iş ikinci kez eklenmez.
+
+export async function logoTeklifSirasinaEkle(db: Db, teklifId: number, surumNo: number | null): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no)
+     SELECT 'teklif', $1, coalesce($2::smallint, max(surum_no)) FROM siparisler_teklif_surumu WHERE teklif_id = $1
+     ON CONFLICT ON CONSTRAINT siparisler_logo_gonderim_tek DO NOTHING`,
+    [teklifId, surumNo],
+  );
+}
+
+export async function logoSiparisSirasinaEkle(db: Db, teklifId: number, surumNo: number, siparisId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO siparisler_logo_gonderim (tur, teklif_id, surum_no, siparis_id) VALUES ('siparis', $1, $2, $3)
+     ON CONFLICT ON CONSTRAINT siparisler_logo_gonderim_tek DO NOTHING`,
+    [teklifId, surumNo, siparisId],
+  );
+}
+
+export interface LogoTeklifSirasi {
+  id: number; teklif_id: number; no: string; surum_no: number; tarih: string; gecerlilik: string | null; para_birimi: string; firma_id: number;
+  iskonto_orani: string; termin_tarihi: string | null;
+}
+
+// Bekleyen satır hatalıların önüne geçer: kalıcı reddedilen satırlar sınırı doldurup yeni teklifi bekletmez.
+export function logoyaGidecekTeklifSiralari(db: Db, sinir: number): Promise<LogoTeklifSirasi[]> {
+  return db.sorgu<LogoTeklifSirasi>(
+    `SELECT g.id, g.teklif_id, t.no, g.surum_no, (v.olusturma AT TIME ZONE 'Europe/Istanbul')::date::text AS tarih, v.gecerlilik::text AS gecerlilik,
+            t.para_birimi, t.firma_id, v.iskonto_orani, v.termin_tarihi::text AS termin_tarihi
+       FROM siparisler_logo_gonderim g
+       JOIN siparisler_teklif t ON t.id = g.teklif_id
+       JOIN siparisler_teklif_surumu v ON v.teklif_id = g.teklif_id AND v.surum_no = g.surum_no
+      WHERE g.tur = 'teklif' AND g.durum <> 'gonderildi' ORDER BY g.durum = 'hata', g.id LIMIT $1`,
+    [sinir],
+  );
+}
+
+export interface LogoTeklifSatiri { satir_id: number; malzeme_no: number | null; miktar: string; birim_fiyat: string }
+
+export function logoTeklifSatirlari(db: Db, teklifId: number, surumNo: number): Promise<LogoTeklifSatiri[]> {
+  return db.sorgu<LogoTeklifSatiri>(
+    `SELECT r.id AS satir_id, r.malzeme_no, r.miktar, f.birim_fiyat
+       FROM siparisler_teklif_satiri r
+       JOIN siparisler_teklif_surumu v ON v.teklif_id = r.teklif_id AND v.surum_no = $2
+       JOIN siparisler_teklif_fiyati f ON f.surum_id = v.id AND f.satir_id = r.id
+      WHERE r.teklif_id = $1 ORDER BY r.sira`,
+    [teklifId, surumNo],
+  );
+}
+
+export interface LogoSiparisSirasi { id: number; teklif_id: number; siparis_id: number; no: string; tarih: string; teklif_kayit_no: string; teklif_refleri: Record<string, unknown> }
+
+// Sipariş onaylanınca ve teklifi Logo'da açıldıktan sonra gider; taslak sipariş düzenlenebilir ya da iptal edilebilir.
+export function logoyaGidecekSiparisSiralari(db: Db, sinir: number): Promise<LogoSiparisSirasi[]> {
+  return db.sorgu<LogoSiparisSirasi>(
+    `SELECT g.id, g.teklif_id, g.siparis_id, s.no, s.siparis_tarihi::text AS tarih, t.logo_kayit_no AS teklif_kayit_no, t.satir_refleri AS teklif_refleri
+       FROM siparisler_logo_gonderim g
+       JOIN siparisler_siparis s ON s.id = g.siparis_id
+       JOIN siparisler_logo_gonderim t ON t.tur = 'teklif' AND t.teklif_id = g.teklif_id AND t.surum_no = g.surum_no
+      WHERE g.tur = 'siparis' AND g.durum <> 'gonderildi' AND t.durum = 'gonderildi' AND s.durum IN ('onayli', 'kapandi')
+      ORDER BY g.durum = 'hata', g.id LIMIT $1`,
+    [sinir],
+  );
+}
+
+export interface LogoSiparisSatiri { satir_id: number; miktar: string; termin: string | null; teklif_satir_id: number | null }
+
+// Tekliften açılan siparişin satırı teklif satırıyla aynı sırada ve aynı karttadır; sonradan değişen satır teklif satırına bağlanmaz.
+export function logoSiparisSatirlari(db: Db, siparisId: number, teklifId: number): Promise<LogoSiparisSatiri[]> {
+  return db.sorgu<LogoSiparisSatiri>(
+    `SELECT s.id AS satir_id, s.miktar, s.termin::text AS termin, r.id AS teklif_satir_id
+       FROM siparisler_siparis_satiri s
+       LEFT JOIN siparisler_teklif_satiri r ON r.teklif_id = $2 AND r.sira = s.sira AND r.malzeme_no = s.malzeme_no
+      WHERE s.siparis_id = $1 ORDER BY s.sira`,
+    [siparisId, teklifId],
+  );
+}
+
+// Başka bir Logo kaydıyla gönderilmiş satır yeniden yazılmaz.
+export async function logoBasarisiYaz(db: Db, tur: 'teklif' | 'siparis', id: number, kayitNo: string, refler: Record<string, string>): Promise<boolean> {
+  return (await db.sorgu<{ id: number }>(
+    `UPDATE siparisler_logo_gonderim
+        SET durum = 'gonderildi', logo_kayit_no = $3, satir_refleri = $4::jsonb, hata = NULL, gonderildi = now()
+      WHERE id = $1 AND tur = $2 AND (logo_kayit_no IS NULL OR logo_kayit_no = $3)
+      RETURNING id`,
+    [id, tur, kayitNo, JSON.stringify(refler)],
+  )).length > 0;
+}
+
+export async function logoHatasiYaz(db: Db, tur: 'teklif' | 'siparis', id: number, hata: string): Promise<void> {
+  await db.sorgu(
+    `UPDATE siparisler_logo_gonderim SET durum = 'hata', hata = left($3, 2000)
+      WHERE id = $1 AND tur = $2 AND durum <> 'gonderildi' AND hata IS DISTINCT FROM left($3, 2000)`,
+    [id, tur, hata],
+  );
+}
