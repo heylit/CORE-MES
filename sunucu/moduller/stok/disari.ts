@@ -139,15 +139,18 @@ export interface RefakatPartisiOzeti {
 // kartın malzemesi verilen istasyonda duruyor mu. sayilan ve sinir (Soru 132) hesaplanana kadar null; null'da sınır gösterilmez.
 export interface RefakatKartiOzeti {
   id: number; etiket: string; qr: string; durum: 'acik' | 'iptal'; lotNo: string | null;
-  malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string;
+  // malzemeNo: kartın malzemesinin katalog numarası (iş emri girdileri bununla tutulur). verilenNet: kart sınırının girdisi (Soru 136 a).
+  malzemeNo: number; malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string; verilenNet: string;
   istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
 }
 export async function emrinRefakatKartlari(db: Db, uretimEmriId: number, istasyonId: number | null): Promise<RefakatKartiOzeti[]> {
   const { partiler } = await servis.emrinRefakatPartileri(db, uretimEmriId);
   const acik = partiler.filter((r) => r.durum === 'acik' && r.birlestigi === null);
   const burada = istasyonId === null ? new Set<number>() : await sorgular.istasyondaSatiriOlanKartlar(db, acik.map((r) => r.id), istasyonId);
+  const net = acik.length === 0 ? new Map<number, string>() : await sorgular.kartlarinNetVerileni(db, acik.map((r) => r.id));
   return acik.map((r) => ({
-    id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
+    id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeNo: r.malzemeId, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
+    verilenNet: net.get(r.id) ?? '0',
     istasyondaSatirVar: burada.has(r.id), sayilan: null, sinir: null,
   }));
 }
