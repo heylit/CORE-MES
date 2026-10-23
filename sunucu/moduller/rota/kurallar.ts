@@ -509,6 +509,43 @@ export function gecerliGerceklesen(satirlar: readonly GerceklesenSatiri[], makin
   return { hazirlik: sec('hazirlik'), islem: sec('islem'), degisim: sec('degisim') };
 }
 
+// Kabul bekleyen terminal önerisi (S4 a): tür başına bu görünümde geçerli olabilecek son elle ya da kabul satırından sonra yazılmış son
+// terminal satırı. Makinesiz görünüm her makinenin ölçümünü gösterir, makineye özgü kararlar onu kapatmaz; makine görünümü o makinenin
+// ve makinesiz ölçümü gösterir, makinesiz karar da onu kapatır (gecerliGerceklesen makinesiz satıra düşer).
+export function bekleyenTerminal(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
+  const sec = (tur: GerceklesenTuru): GerceklesenSatiri | null => {
+    const turun = [...satirlar].filter((x) => x.tur === tur).sort((a, b) => a.id - b.id);
+    const sinir = turun.filter((x) => x.kaynak !== 'terminal' && (x.makineId === null || x.makineId === makineId)).at(-1)?.id ?? 0;
+    return turun.filter((x) => x.kaynak === 'terminal' && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId)).at(-1) ?? null;
+  };
+  return { hazirlik: sec('hazirlik'), islem: sec('islem'), degisim: sec('degisim') };
+}
+
+export interface KabulSatiri { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi }
+
+// Kabul edilen satır bu adımın, bu türün terminal önerisi olmalı; makineye özgü kabul başka makinenin ölçümünü almaz.
+export function kabulDenetle(
+  satir: KabulSatiri, hedef: { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null },
+): string | null {
+  if (satir.kaynak !== 'terminal') return 'Yalnız terminal önerisi kabul edilir.';
+  if (satir.malzemeId !== hedef.malzemeId || satir.opNo !== hedef.opNo || satir.tur !== hedef.tur) return 'Öneri bu adımın bu süresine ait değil.';
+  if (hedef.makineId !== null && satir.makineId !== null && satir.makineId !== hedef.makineId) return 'Öneri başka makinenin ölçümü.';
+  return null;
+}
+
+// Terminal önerisi (B38): iş emrinin ölçülen net birim süresi toplam çevrimdir; iş emrinde işlem ve değişim ayrımı yoktur (B40).
+// İşlem önerisi ondan adımın etkin değişim süresi düşülerek bulunur. Ölçülemeyen ya da sıfıra inen işlem öneri değildir (RT-75);
+// hazırlık ayar olayı yoksa ölçülmemiştir.
+export function terminalOnerileri(
+  olcum: { hazirlikDk: number | null; netBirimDk: number | null }, degisimDk: number | null,
+): { hazirlik: number | null; islem: number | null } {
+  const islem = olcum.netBirimDk === null ? null : (onbinde(olcum.netBirimDk) - onbinde(degisimDk ?? 0)) / 10_000;
+  return {
+    hazirlik: olcum.hazirlikDk === null || olcum.hazirlikDk < 0 ? null : onbinde(olcum.hazirlikDk) / 10_000,
+    islem: islem === null || islem <= 0 ? null : islem,
+  };
+}
+
 export interface TeorikSureler { hazirlikDk: number | null; islemDk: number | null; degisimDk: number | null }
 export interface EtkinAdimSuresi {
   ayarSuresiDk: number | null;

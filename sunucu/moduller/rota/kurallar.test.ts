@@ -6,7 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { degisimOrani, etkinAdimSuresi, gecerliGerceklesen, gerceklesenDenetle, sureAyrimi, taslakSureleri, teorikAyrim } from './kurallar.ts';
+import { bekleyenTerminal, degisimOrani, etkinAdimSuresi, gecerliGerceklesen, gerceklesenDenetle, kabulDenetle, sureAyrimi, taslakSureleri, teorikAyrim, terminalOnerileri } from './kurallar.ts';
 import type { GerceklesenSatiri } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
@@ -349,6 +349,42 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.equal(gerceklesenDenetle('islem', null), null);
     assert.equal(gerceklesenDenetle('hazirlik', 0), null);
     assert.equal(gerceklesenDenetle('degisim', 0), null);
+  });
+  test('RT-76: terminal önerisi ölçülen net birim süreden etkin değişim düşülerek bulunur; ölçülmeyen ya da sıfıra inen işlem öneri değildir', () => {
+    assert.deepEqual(terminalOnerileri({ hazirlikDk: 20, netBirimDk: 3 }, 0.5), { hazirlik: 20, islem: 2.5 });
+    assert.deepEqual(terminalOnerileri({ hazirlikDk: 0, netBirimDk: 3 }, null), { hazirlik: 0, islem: 3 });
+    assert.deepEqual(terminalOnerileri({ hazirlikDk: null, netBirimDk: null }, 0.5), { hazirlik: null, islem: null });
+    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.4 }, 0.5).islem, null);
+    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.5 }, 0.5).islem, null);
+    assert.equal(terminalOnerileri({ hazirlikDk: null, netBirimDk: 0.3 }, 0.1).islem, 0.2);
+  });
+  test('RT-77: bekleyen öneri görünümün son elle ya da kabul satırından sonraki son terminal satırıdır; makinesiz görünüm her makineninkini gösterir', () => {
+    const t = (id: number, p: Partial<GerceklesenSatiri> = {}) => satir({ id, kaynak: 'terminal', ...p });
+    assert.equal(bekleyenTerminal([t(1), t(2, { sureDk: 4 })], null).islem?.id, 2);
+    assert.equal(bekleyenTerminal([t(1), satir({ id: 2, kaynak: 'kabul' })], null).islem, null);
+    assert.equal(bekleyenTerminal([satir({ id: 1 }), t(2)], null).islem?.id, 2);
+    assert.equal(bekleyenTerminal([t(1, { tur: 'hazirlik' })], null).islem, null);
+    const makineli = [t(1, { makineId: 7 }), t(2, { makineId: 8 })];
+    assert.equal(bekleyenTerminal(makineli, null).islem?.id, 2);
+    assert.equal(bekleyenTerminal(makineli, 7).islem?.id, 1);
+    assert.equal(bekleyenTerminal([t(1)], 7).islem?.id, 1);
+    // Makineye özgü kabul makinesiz görünümün önerisini kapatmaz; makinesiz kabul makine görünümününkini de kapatır.
+    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 7, kaynak: 'kabul' })], null).islem?.id, 1);
+    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 7, kaynak: 'kabul' })], 7).islem, null);
+    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, kaynak: 'kabul' })], 7).islem, null);
+    assert.equal(bekleyenTerminal([t(1, { makineId: 7 }), satir({ id: 2, makineId: 8, kaynak: 'kabul' })], 7).islem?.id, 1);
+  });
+  test('RT-77: yalnız bu adımın bu türdeki terminal satırı kabul edilir; makineye özgü kabul başka makinenin ölçümünü almaz', () => {
+    const hedef = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: null };
+    const oneri = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: 7, kaynak: 'terminal' as const };
+    assert.equal(kabulDenetle(oneri, hedef), null);
+    assert.equal(kabulDenetle(oneri, { ...hedef, makineId: 7 }), null);
+    assert.equal(kabulDenetle({ ...oneri, makineId: null }, { ...hedef, makineId: 7 }), null);
+    assert.equal(kabulDenetle(oneri, { ...hedef, makineId: 8 }), 'Öneri başka makinenin ölçümü.');
+    assert.equal(kabulDenetle({ ...oneri, kaynak: 'elle' }, hedef), 'Yalnız terminal önerisi kabul edilir.');
+    for (const fark of [{ malzemeId: 2 }, { opNo: 20 }, { tur: 'hazirlik' as const }]) {
+      assert.equal(kabulDenetle({ ...oneri, ...fark }, hedef), 'Öneri bu adımın bu süresine ait değil.');
+    }
   });
 });
 

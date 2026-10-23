@@ -323,3 +323,11 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
   - VARSAYIM: gerçekleşen süre ürün + OP numarasına bağlıdır, revizyona değil (yeni revizyon kaybetmez). Geri alma: yeni tablo, ucuz.
   - VARSAYIM: yetki `rota.yaz` (yeni işlem yok, rol x işlem değişmez). Geri alma: tek satır.
   - VARSAYIM: kaynak listesinde `kabul` de var (S4 a "kabul et" için); terminal ve kabul satırları bağlamada yazılır (A7a).
+- Terminalden gerçekleşen süre (bağlama B1, borç B38; göç yok):
+  - Emir bitince (`disari.ts` `emirBittiYansit`, bağı `kablolama.ts`) rotada olan her makine ya da kişi iş emrinin ölçümü (`isEmriSureOzeti`) terminal önerisi
+    olarak yazılır (RT-76): hazırlık ve işlem, iş emriyle; makine iş emrinde öneri o makineye özgüdür. Plan öneriyi kullanmaz (S4 a).
+  - `GET /rota/revizyonlar/:id/sureler` adım başına `oneri` (tür başına kabul bekleyen terminal satırı) taşır; `POST /rota/adimlar/:id/gerceklesen-sure/kabul`
+    (`rota.yaz`) öneriyi kabul satırı yapar (RT-77).
+  - VARSAYIM: iş emrinde işlem ve değişim ayrımı yoktur (B40); ölçülen net birim süre toplam çevrimdir, işlem önerisi ondan adımın etkin değişim süresi düşülerek
+    bulunur, değişim önerilmez. Geri alma: tek işlev.
+  - VARSAYIM: öneri yalnız emir bitince yazılır (iş emri bitişinde olay yok); yazan kişi emri bitirendir. Geri alma: dinleyici.

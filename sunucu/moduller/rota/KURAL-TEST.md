@@ -71,6 +71,8 @@ K: saf kural testi (`sunucu/moduller/rota/kurallar.test.ts`), U: akış ve uç t
 | RT-73 | Geçerli gerçekleşen süre tür başına son elle ya da kabul satırıdır; terminal satırı öneridir; makineye özgü satır yalnız o makinede; boş süre teoriğe döndürür. | K: RT-73 (iki test)<br>U: RT-73, RT-74; U: RT-73 (terminal) | rota_gerceklesen_sure_degismez, rota_gerceklesen_sure_is_emri |
 | RT-74 | Etkin süre tür başına gerçekleşen varsa o, yoksa teoriktir; birim süre işlem + değişim, işlem yoksa boş. | K: RT-74<br>U: RT-73, RT-74 (disari `adimEtkinSureleri`) | yok |
 | RT-75 | Gerçekleşen işlem süresi sıfır olamaz; elle giriş okunan son satırla yazılır, arada yazan varsa 409. | K: RT-75<br>U: RT-75 | rota_gerceklesen_sure_islem_pozitif |
+| RT-76 | Emir bitince rotada olan her makine ya da kişi iş emrinin ölçümü terminal önerisi olur: hazırlık ayar ile başlatma arası, işlem net birim süreden adımın etkin değişimi düşülerek; ölçüm makinedeyse öneri o makineye özgüdür; ölçülmeyen, sıfıra inen ve ikinci kez gelen yazılmaz. | K: RT-76<br>U: RT-76 | rota_gerceklesen_sure_is_emri, rota_gerceklesen_sure_terminal_dolu |
+| RT-77 | Bekleyen öneri görünümün son elle ya da kabul satırından sonraki son terminal satırıdır; kabul yalnız bu adımın bu türdeki terminal satırını, değeri ve iş emriyle, okunan son satırla yazar. | K: RT-77 (iki test)<br>U: RT-77 (iki test) | rota_gerceklesen_sure_degismez |
 
 Bağsız kural: yok.
 

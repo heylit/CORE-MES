@@ -2,11 +2,11 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, taslakAcGovdesi,
-  urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
+  urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import {
   agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
-  karttanTaslaklar, talimatListesi, talimatYaz, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
+  karttanTaslaklar, talimatListesi, talimatYaz, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
 export const uclar = [
@@ -155,6 +155,17 @@ export const uclar = [
     govde: gerceklesenSureGovdesi,
     cevap: surelerCevabi,
     isle: ({ db, kullanici, parametre, govde }) => gerceklesenSureYaz(db, kullanici, parametre.id, govde),
+  }),
+  // Terminal önerisi kabul edilince plana geçer (S4 a); öneri satırı değişmez, kabul yeni satırdır.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/adimlar/:id/gerceklesen-sure/kabul',
+    tekrarKorumali: true,
+    yetki: 'rota.yaz',
+    parametre: adimParametresi,
+    govde: gerceklesenKabulGovdesi,
+    cevap: surelerCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => gerceklesenKabulEt(db, kullanici, parametre.id, govde),
   }),
   uc({
     yontem: 'GET',

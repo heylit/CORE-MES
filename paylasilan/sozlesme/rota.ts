@@ -322,8 +322,21 @@ export const gerceklesenSureGovdesi = z.object({
   okunanId: KIMLIK.nullable(),
 });
 
+// Terminal önerisinin kabulü: önerinin değeri kabul satırı olarak yazılır. Makine boşsa kabul operasyonun her kaynağı içindir;
+// okunanId elle girişteki gibidir.
+export const gerceklesenKabulGovdesi = z.object({
+  tur: gerceklesenTuru,
+  terminalId: KIMLIK,
+  makineId: KIMLIK.nullable(),
+  okunanId: KIMLIK.nullable(),
+});
+
 const gerceklesenKaydi = z.object({
   id: KIMLIK, sureDk: ondalikMetinSemasi, kaynak: z.enum(GERCEKLESEN_KAYNAKLARI), yazan: adliKayit, zaman,
+});
+// Kabul bekleyen terminal ölçümü: bu görünümdeki son elle ya da kabul satırından sonra yazılmış son terminal satırı.
+const terminalOnerisi = z.object({
+  id: KIMLIK, sureDk: ondalikMetinSemasi, isEmriId: KIMLIK, makineId: KIMLIK.nullable(), zaman,
 });
 const turBasina = <T extends z.ZodTypeAny>(t: T) => z.object({ hazirlik: t, islem: t, degisim: t });
 
@@ -346,6 +359,7 @@ export const surelerCevabi = z.object({
     gerceklesen: turBasina(gerceklesenKaydi.nullable()),
     // Elle girişte okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
     sonKayit: turBasina(KIMLIK.nullable()),
+    oneri: turBasina(terminalOnerisi.nullable()),
     // Planın kullanacağı süre: tür başına gerçekleşen varsa o, yoksa teorik.
     etkin: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
@@ -386,6 +400,7 @@ export type SeceneklerCevabi = z.output<typeof seceneklerCevabi>;
 export type TalimatlarCevabi = z.output<typeof talimatlarCevabi>;
 export type KomutCevabi = z.output<typeof komutCevabi>;
 export type GerceklesenSureGovdesi = z.input<typeof gerceklesenSureGovdesi>;
+export type GerceklesenKabulGovdesi = z.input<typeof gerceklesenKabulGovdesi>;
 export type SurelerCevabi = z.output<typeof surelerCevabi>;
 export type GerceklesenTuru = (typeof GERCEKLESEN_TURLERI)[number];
 export type GerceklesenKaynagi = (typeof GERCEKLESEN_KAYNAKLARI)[number];
