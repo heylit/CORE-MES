@@ -50,3 +50,6 @@
 |---|---|---|---|
 | P-B27 | `planMotoruCozucusu` kablolama.ts'te bağlı değil: çözücüyü (girdiyi sunucuda kuran çevirici) Reçete ve Rota sonraki yamasında verir; o güne kadar asıl plan Motor A'da | Hayır | R&R çözücüsü gelince `bag('plan motoru -> plan', ...)` |
 | P-B28 | Çözücü kayıtlıyken parçalı ya da kişi kaynaklı kuyruk yazımı Motor A yolundan gider (çözücü cevabı parça ve kişi taşımıyor); canlıya almada bölünmüş iş ve kişi kaynaklı iş yeniden dizilmez, sabit kalır | Hayır | Çözücü parça ve kişi kaynağı verince |
+
+## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
+- Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /plan/canli-yerlesim`, `POST /plan/senaryolar/:id/{canliyi-al, cogalt, degisiklikleri-at}`. Senaryo uçları plan stüdyosunun sunucu yarısıdır; stüdyo bugün sunucuya bağlı değil (`degerlendirme/sistem-uyum/plan-akisi.md`).

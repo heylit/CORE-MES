@@ -17,7 +17,7 @@ describe('sunucu testleri eşzamanlılığı', () => {
     const bayrak = argv.indexOf('--test-concurrency=8');
     assert.ok(bayrak > argv.indexOf('--test'));
     assert.ok(bayrak < argv.indexOf('sunucu/**/*.test.ts'));
-    assert.deepEqual(argv.slice(-3), ['sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts']);
+    assert.deepEqual(argv.slice(-4), ['sunucu/**/*.test.ts', 'araclar/**/*.test.ts', 'paylasilan/**/*.test.ts', 'ekran-testleri/benzetim/**/*.test.ts']);
   });
 
   test('sayı olmayan, sıfır ya da üst sınırı aşan değer reddedilir: sessizce varsayılana düşmez', () => {

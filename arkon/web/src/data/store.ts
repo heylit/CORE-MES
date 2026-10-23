@@ -4,6 +4,8 @@ import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from './cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
 import type { RefakatKarti } from './refakat-karti';
+import { cagriEkipleriniAl } from './cagri-ekiplerim';
+import type { CagriEkiplerim } from './cagri-ekiplerim';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
 import { depoOkunur } from './depo-okuma';
@@ -501,6 +503,10 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
       if (!emirler.length) return [];
       const c = await api('GET', '/refakat-kartlari?istasyon=' + encodeURIComponent(istasyon) + '&emirler=' + emirler.join(','));
       return (c && c.kartlar) || [];
+    },
+    /** çağrı bandı (298): oturumdaki kişinin aldığı ekip çağrıları; okunamazsa null (bant hepsini gösterir) */
+    async cagriEkiplerim(): Promise<CagriEkiplerim> {
+      try { return cagriEkipleriniAl(await api('GET', '/cagri-ekiplerim')); } catch { return null; }
     },
     /** TMI emrinin talimat adımları; işaret TMI'ye yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
