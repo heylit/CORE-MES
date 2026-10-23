@@ -1,9 +1,12 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   benCevabi, emirSecCevabi, emirSecGovdesi, emirlerCevabi, hazirlikCevabi, hazirlikOnayGovdesi, kayitlarCevabi, kurulumTamamCevabi,
-  kurulumTamamGovdesi, silCevabi, silGovdesi, takimOlaylariCevabi, takimOlaylariGovdesi, yazCevabi, yazGovdesi,
+  kurulumTamamGovdesi, silCevabi, silGovdesi, stokDusCevabi, stokDusGovdesi, stokKartiBaglaCevabi, stokKartiBaglaGovdesi, stokKartlariCevabi,
+  stokKartlariSorgusu, takimOlaylariCevabi, takimOlaylariGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
-import { ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, takimOlaylari, yaz } from './servis.ts';
+import {
+  ben, emirSec, emirler, hazirlik, hazirlikOnayla, kayitlar, kurulumTamam, sil, stokDus, stokKartiBagla, stokKartlari, takimOlaylari, yaz,
+} from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/cnc-kurulum/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -90,6 +93,33 @@ export const uclar = [
     govde: takimOlaylariGovdesi,
     cevap: takimOlaylariCevabi,
     isle: ({ db, kullanici, govde }) => takimOlaylari(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cnc-kurulum/takimlar/stok-dus',
+    // 164 b: stok kartına bağlı kalemin prototipte azalan adedi stoktan düşer; yinelenen istek ikinci kez düşmez.
+    tekrarKorumali: true,
+    yetki: 'cnc-kurulum.stok-dus',
+    govde: stokDusGovdesi,
+    cevap: stokDusCevabi,
+    isle: ({ db, kullanici, govde }) => stokDus(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cnc-kurulum/takimlar/stok-kartlari',
+    yetki: 'malzemeler.yaz',
+    sorgu: stokKartlariSorgusu,
+    cevap: stokKartlariCevabi,
+    isle: ({ db, sorgu }) => stokKartlari(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cnc-kurulum/takimlar/stok-karti',
+    // 163 b: kalemin stok kartı bağı kart verisidir; kartı yazan kurar.
+    yetki: 'malzemeler.yaz',
+    govde: stokKartiBaglaGovdesi,
+    cevap: stokKartiBaglaCevabi,
+    isle: ({ db, govde }) => stokKartiBagla(db, govde),
   }),
   uc({
     yontem: 'GET',

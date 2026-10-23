@@ -172,7 +172,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
   });
 
   test('CK-08: ben kişiyi ve yazma bayrağını döner', async () => {
-    assert.deepEqual((await istek(yazar, 'GET', '/cnc-kurulum/ben')).json(), { kisi: { id: yazarId, ad: 'Deneme yazar' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false });
+    assert.deepEqual((await istek(yazar, 'GET', '/cnc-kurulum/ben')).json(), { kisi: { id: yazarId, ad: 'Deneme yazar' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false });
     assert.equal(((await istek(okur, 'GET', '/cnc-kurulum/ben')).json() as { yazabilir: boolean }).yazabilir, false);
   });
 
@@ -504,6 +504,64 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await hazirlikYaz(onaylayan, { hazirlik: { done: eksik }, beklenenSurum: await durumSurumu() })).statusCode, 200);
     assert.equal((await hazirlikYaz(onaylayan, { hazirlik: { done: {}, fin: null }, beklenenSurum: await durumSurumu() })).statusCode, 200);
     assert.equal((await vt().tx((db) => isEmriHazirlikDurumu(db, emirId))).durum, 'suruyor');
+  });
+
+  test('CK-23 (153 a, 163 b, 164 b): bağlı kalemin adedi stoktan okunur; azalan adet stoktan düşer, yetmezse düşmez; bağı kart yazan kurar', async () => {
+    const yonetici = await girisCerezi('yonetici');
+    const yaz2 = (cerez: string, yol: string, govde: unknown) =>
+      app.inject({ method: 'POST', url: `/api${yol}`, headers: { cookie: cerez, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, payload: govde as object });
+    await ortam!.sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['CNC-STK-']);
+    const kartAc = async (sira: number, tur = 'sarf'): Promise<number> => (await ortam!.sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, $2, 'CNC-STK-', $3, 'aktif', $4, $5, $5) RETURNING no`,
+      [`cnc-stk-${String(sira)}`, tur, sira, JSON.stringify({ id: `cnc-stk-${String(sira)}`, com: { ad: `Freze ${String(sira)}`, birim: 'adet' } }), yoneticiId]))!.no;
+    const takim = await kartAc(1), bos = await kartAc(2), ham = await kartAc(3, 'hammadde');
+    assert.equal((await yaz2(yonetici, '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: takim, miktar: '5' }] })).statusCode, 200);
+    // Durumda kalemin kendi adedi ve örnek işareti var; bağdan önce okunan aynen döner.
+    const temel = (await kayit(okur, DURUM_ANAHTARI))?.deger as Record<string, unknown>;
+    const durum = { ...temel, inv: { em10: { qty: 40, min: 2, loc: 'Dolap A', demo: 1 }, dr5: { qty: 3, min: 0, loc: '' } } };
+    assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: durum, beklenenSurum: (await kayit(okur, DURUM_ANAHTARI))?.surum ?? null })).statusCode, 200);
+    const envanter = async () => ((await kayit(okur, DURUM_ANAHTARI))?.deger as { inv: Record<string, Record<string, unknown>> }).inv;
+    assert.deepEqual((await envanter())['em10'], { qty: 40, min: 2, loc: 'Dolap A', demo: 1 });
+
+    // Bağ yalnız kart yazan (malzemeler.yaz) kişide; kart arama da öyle. Hammadde bağlanmaz.
+    const bagla = (cerez: string, kimlik: string, malzemeId: number | null) => istek(cerez, 'POST', '/cnc-kurulum/takimlar/stok-karti', { kimlik, malzemeId });
+    assert.equal((await bagla(yazar, 'em10', takim)).statusCode, 403);
+    assert.equal((await istek(yazar, 'GET', '/cnc-kurulum/takimlar/stok-kartlari')).statusCode, 403);
+    assert.equal((await bagla(yonetici, 'em10', ham)).statusCode, 422);
+    assert.equal((await bagla(yonetici, 'a b', takim)).statusCode, 400);
+    const ara = await istek(yonetici, 'GET', '/cnc-kurulum/takimlar/stok-kartlari?metin=Freze');
+    assert.deepEqual((ara.json() as { kartlar: { malzemeId: number }[] }).kartlar.map((k) => k.malzemeId).sort(), [takim, bos].sort());
+    const b1 = await bagla(yonetici, 'em10', takim);
+    assert.equal(b1.statusCode, 200, b1.body);
+    assert.equal((b1.json() as { kart: { malzemeId: number } }).kart.malzemeId, takim);
+    assert.equal((await bagla(yonetici, 'em11', bos)).statusCode, 200);
+    // Okurken bağlı kalemin adedi stoğun kullanılabilir miktarıdır; kritik seviye ve yer kalır, örnek işareti düşer. Stoğu hiç olmayan
+    // kartın adedi null'dır; bağsız kalem dokunulmaz.
+    const inv = await envanter();
+    assert.deepEqual(inv['em10'], { qty: 5, min: 2, loc: 'Dolap A', tmiStok: { malzemeId: takim, kod: inv['em10']?.['tmiStok'] && (inv['em10']['tmiStok'] as { kod: string }).kod, ad: 'Freze 1' } });
+    assert.deepEqual(inv['em11'], { min: 0, loc: '', qty: null, tmiStok: { malzemeId: bos, kod: (inv['em11']?.['tmiStok'] as { kod: string }).kod, ad: 'Freze 2' } });
+    assert.deepEqual(inv['dr5'], { qty: 3, min: 0, loc: '' });
+
+    // Stoktan düşme ayrı işlem (yalnız yönetici); bağsız kalem ve yetmeyen stok 422, stok değişmez.
+    const dus = (cerez: string, kimlik: string, miktar: number) => yaz2(cerez, '/cnc-kurulum/takimlar/stok-dus', { kimlik, miktar });
+    assert.equal((await dus(yazar, 'em10', 1)).statusCode, 403);
+    assert.equal((await dus(yonetici, 'dr5', 1)).statusCode, 422);
+    assert.equal((await dus(yonetici, 'em10', 6)).statusCode, 422);
+    assert.equal((await dus(yonetici, 'em10', 0)).statusCode, 400);
+    assert.equal((await envanter())['em10']?.['qty'], 5);
+    const d = await dus(yonetici, 'em10', 2);
+    assert.deepEqual([d.statusCode, d.json()], [200, { hareketSayisi: 1 }]);
+    assert.equal((await envanter())['em10']?.['qty'], 3);
+    const hareket = await vt().tek<{ neden: string; aciklama: string; kisi: number }>(
+      "SELECT cikis_nedeni AS neden, aciklama, kisi_id AS kisi FROM stok_hareketi WHERE malzeme_id = $1 AND tur = 'cikis'", [takim]);
+    assert.deepEqual([hareket?.neden, hareket?.aciklama.startsWith('CNC kurulum · em10'), hareket?.kisi], ['diger', true, yoneticiId]);
+    // Bağı kaldırınca kalem prototipin kendi adediyle kalır (yazılan son durumdaki).
+    assert.deepEqual((await bagla(yonetici, 'em10', null)).json(), { kart: null });
+    assert.equal((await envanter())['em10']?.['qty'], 40);
+    assert.deepEqual((await istek(yonetici, 'GET', '/cnc-kurulum/ben')).json(), {
+      kisi: { id: yoneticiId, ad: 'Deneme Yönetici' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: true, stokDusebilir: true, stokKartiBaglayabilir: true,
+    });
   });
 
   test('CK-19 (311 a): elle üretim satırı eklenen durum 403 ve kayıt değişmez; satırı aynı kalan yazma geçer', async () => {
