@@ -40,10 +40,12 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
   yazılmamış kayda bağ BAGIMLI_KAYIT döner. Excel aktarımı yönetici bağı yazmadığı için etkilenmez.
 
 ## Susturma ve dosya
-- `sunucu/moduller/ik/motor/bicim.ts`, `sabitler.ts`, `motor.ts`: `// @ts-nocheck` (ekrandaki motorun JavaScript kopyası).
-  Tipli yüz `motor/arayuz.ts`. Motor "bugün"ü kendisi okur (dönem durumu, güncel ücret); kural fonksiyonları saat okumaz.
-  Kopyanın ekrandaki motordan ayrışmadığını `motor-esitlik.test.ts` ölçer: aynı girdide bordro, izin bakiyesi, dönemler ve
-  netten brüt iki motorda aynı çıkmalı (borç 186). Paket ya da kopya tek başına değişirse test kırılır.
+- Motor tek kaynaktır (211 a): `paylasilan/ik-motor/` (`motor.ts`, `sabitler.ts`, `bicim.ts`), sunucu ve yeni TS ekranı aynı kodu
+  kullanır. Üç dosyada `// @ts-nocheck` sürer (ik-modulu kaynağının JavaScript'i); tipli yüz `paylasilan/ik-motor/arayuz.ts`.
+  Bağlamada kapanacak: iç tipleme (motor tiplenince `@ts-nocheck` kalkar, `arayuz.ts`'teki `unknown` dönüşler daralır).
+  Motor "bugün"ü kendisi okur (dönem durumu, güncel ücret); kural fonksiyonları saat okumaz.
+  Eski çerçevenin paketi (`istemci/src/moduller/ik/uygulama/paket.ts`) alıma kadar kendi derlemesini taşır; ayrışmadığını
+  `motor-esitlik.test.ts` ölçer (borç 186). Alımda paket kalkınca test de kalkar.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): paket dinamik ithalle yalnız sayfada yüklenir (`IkCercevesi.tsx:30` `import('./uygulama/paket.ts')`). Üretilmiş büyük dosyalar: `paket.ts` (yaklaşık 0,55 MB), `yazi.ts` (yaklaşık 0,13 MB). Yalnız İK sayfası açılınca yüklenir.
 
 ## Kapalı özellikler (TMI içinde)

@@ -1,6 +1,6 @@
 import { EslesmeHatasi, okumaDegeri, yazimDegeri } from './eslesme.ts';
 import type { SatirDegeri } from './eslesme.ts';
-import { DONEM_ANAHTARLARI } from './motor/arayuz.ts';
+import { DONEM_ANAHTARLARI } from '#paylasilan/ik-motor/arayuz.ts';
 import {
   AYAR_LISTE_ANAHTARLARI, DONEM_ALANLARI, GENEL_AYAR_ALANLARI, GOREV_ALANLARI, KANAL_ALANLARI, PLAN_ALANLARI, PLAN_KADRO_ALANLARI, PRIM_ALANLARI,
   SORU_SETI_ALANLARI, TESVIK_ALANLARI,
