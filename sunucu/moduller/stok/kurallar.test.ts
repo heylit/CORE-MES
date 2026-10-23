@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
-  sonrakiIstasyon,
+  sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
@@ -647,5 +647,21 @@ describe('stok kuralları: test bulguları 16.1, 21.4, 17.3 (saf)', () => {
     assert.match(faturaliSevkEngeli(7, [f(1), iade(2, 1, '1199.99')]) ?? '', /FAT-1/, 'kısmi iade yetmez');
     assert.equal(faturaliSevkEngeli(7, [f(1), iade(2, 1, '600'), iade(3, 1, '600.00')]), null);
     assert.match(faturaliSevkEngeli(7, [f(1), iade(2, 1, '1200'), f(4, { belgeNo: null })]) ?? '', /\(#4\)/);
+  });
+
+  test('statü arama ve tanımlı statüler (K-X8): ad, malzeme ve mamül koduyla bulunur; stoklu statü tanımlı satırına düşmez', () => {
+    const st = [
+      { id: 3, malzemeNo: 'ym-01', ad: 'OP 10 Torna', urunKodu: 'MM-9' },
+      { id: 1, malzemeNo: 'YM-01', ad: 'OP 20 İşleme', urunKodu: null },
+      { id: 2, malzemeNo: 'YM-02', ad: 'OP 10 Torna', urunKodu: 'MM-9' },
+    ];
+    assert.deepEqual(statuAramasi(st, ' op 10 '), [3, 2]);
+    assert.deepEqual(statuAramasi(st, 'işleme'), [1]);
+    assert.deepEqual(statuAramasi(st, 'mm-9'), [3, 2]);
+    assert.deepEqual(statuAramasi(st, '  '), []);
+    assert.deepEqual(statuKodlari(st), ['YM-01', 'YM-02']);
+    assert.deepEqual(stoksuzStatuler(st, 'YM-01', [{ statuId: null }, { statuId: 3 }]), [{ statuId: 1 }]);
+    assert.deepEqual(stoksuzStatuler(st, 'YM-01', []), [{ statuId: 1 }, { statuId: 3 }]);
+    assert.deepEqual(stoksuzStatuler(st, 'HM-1', []), []);
   });
 });

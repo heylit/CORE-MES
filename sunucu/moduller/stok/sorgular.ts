@@ -444,22 +444,33 @@ export function hareketler(db: Db, s: HareketSuzgeci, sira: SiralamaIstegi<'zama
 
 // ---- Malzeme gözüyle stok ----------------------------------------------------------------------------------------------------
 // serbest: statüsüz bakiye (kritik seviye ona göre); statülü miktar üretimdeki yarı parçadır, kullanılabilir stok sayılmaz.
-export interface MalzemeStokHam { malzemeId: number; toplam: string; serbest: string; kritikSeviye: string | null; konumSayisi: number; konumlar: { kod: string; katNo: number | null; miktar: string }[] }
+// statude: yalnız statü kimliği dolu bakiye; karantina ya da kabuldeki statüsüz miktar statüde sayılmaz.
+export interface MalzemeStokHam { malzemeId: number; toplam: string; serbest: string; statude: string; kritikSeviye: string | null; konumSayisi: number; konumlar: { kod: string; katNo: number | null; miktar: string }[] }
 // adlaBulunan: metnin ad ya da stok koduyla eşleştiği kartlar (malzemeler `malzemeAra`); kart tablosu stokun değil.
-export interface MalzemeSuzgeci { durum?: 'kritik' | 'eksi' | 'kabulde' | undefined; metin?: string | undefined; adlaBulunan?: number[] | undefined }
+// statuIdleri: metnin adıyla eşleştiği statüler; o statüde bakiyesi olan malzeme bulunur.
+// statuluKartlar: tanımlı statüsü olan kartlar (statü Reçete ve Rota'nın); bakiyesi ve ayarı olmasa da listeye girer. Metin varken
+// yalnız metne uyan statülerin kartlarıdır (metin süzgecini de geçer).
+export interface MalzemeSuzgeci {
+  durum?: 'kritik' | 'eksi' | 'kabulde' | 'statulu' | undefined; metin?: string | undefined; adlaBulunan?: number[] | undefined;
+  statuIdleri?: number[] | undefined; statuluKartlar?: number[] | undefined;
+}
 const KONUM_ETIKETLERI = (malzeme: string): string => `COALESCE((SELECT json_agg(json_build_object('kod', x.kod, 'katNo', x.kat_no, 'miktar', x.miktar::text) ORDER BY x.miktar DESC)
   FROM (SELECT k.kod, k.kat_no, b.miktar FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = ${malzeme} ORDER BY b.miktar DESC, k.kod LIMIT 3) x), '[]'::json)`;
-const MALZEME_KAYNAGI = `FROM (SELECT malzeme_id FROM stok_bakiye UNION SELECT malzeme_id FROM stok_malzeme_ayari) m
+const malzemeKaynagi = (ekKartlar = '') => `FROM (SELECT malzeme_id FROM stok_bakiye UNION SELECT malzeme_id FROM stok_malzeme_ayari${ekKartlar}) m
   LEFT JOIN stok_malzeme_ayari a ON a.malzeme_id = m.malzeme_id
-  LEFT JOIN LATERAL (SELECT COALESCE(sum(b.miktar), 0) AS toplam, COALESCE(sum(b.miktar) FILTER (WHERE b.statu_id IS NULL AND b.${KULLANILABILIR_SQL}), 0) AS serbest, count(DISTINCT b.konum_id)::int AS konumlar, bool_or(b.miktar < 0) AS eksi,
-      bool_or(k.tur = 'kabul') AS kabulde FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = m.malzeme_id) t ON true`;
+  LEFT JOIN LATERAL (SELECT COALESCE(sum(b.miktar), 0) AS toplam, COALESCE(sum(b.miktar) FILTER (WHERE b.statu_id IS NULL AND b.${KULLANILABILIR_SQL}), 0) AS serbest,
+      COALESCE(sum(b.miktar) FILTER (WHERE b.statu_id IS NOT NULL), 0) AS statude, count(DISTINCT b.konum_id)::int AS konumlar, bool_or(b.miktar < 0) AS eksi,
+      bool_or(k.tur = 'kabul') AS kabulde, bool_or(b.statu_id IS NOT NULL AND b.miktar <> 0) AS statulu FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = m.malzeme_id) t ON true`;
+const MALZEME_KAYNAGI = malzemeKaynagi();
 const malzemeSuzgeci = (s: MalzemeSuzgeci) => ({
-  sql: `${MALZEME_KAYNAGI} WHERE ($1::text IS NULL OR ($1 = 'kritik' AND a.kritik_seviye IS NOT NULL AND t.serbest <= a.kritik_seviye)
-        OR ($1 = 'eksi' AND t.eksi) OR ($1 = 'kabulde' AND t.kabulde))
-        AND ($2::text IS NULL OR m.malzeme_id::text = $2 OR m.malzeme_id = ANY($3::int[]) OR EXISTS (SELECT 1 FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+  sql: `${malzemeKaynagi(' UNION SELECT unnest($5::int[])')} WHERE ($1::text IS NULL OR ($1 = 'kritik' AND a.kritik_seviye IS NOT NULL AND t.serbest <= a.kritik_seviye)
+        OR ($1 = 'eksi' AND t.eksi) OR ($1 = 'kabulde' AND t.kabulde) OR ($1 = 'statulu' AND (t.statulu OR m.malzeme_id = ANY($5::int[]))))
+        AND ($2::text IS NULL OR m.malzeme_id::text = $2 OR m.malzeme_id = ANY($3::int[]) OR m.malzeme_id = ANY($5::int[])
+          OR EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.malzeme_id = m.malzeme_id AND b.statu_id = ANY($4::int[]) AND b.miktar <> 0)
+          OR EXISTS (SELECT 1 FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
           LEFT JOIN stok_parti p ON p.id = b.parti_id WHERE b.malzeme_id = m.malzeme_id
           AND (k.kod ILIKE '%' || $2 || '%' OR p.lot_no ILIKE '%' || $2 || '%' OR p.tedarikci_parti_no ILIKE '%' || $2 || '%' OR p.dokum_no ILIKE '%' || $2 || '%')))`,
-  p: [s.durum ?? null, s.metin ?? null, s.adlaBulunan ?? []],
+  p: [s.durum ?? null, s.metin ?? null, s.adlaBulunan ?? [], s.statuIdleri ?? [], s.statuluKartlar ?? []],
 });
 export const MALZEME_SIRALAMASI: SiralamaTanimi<'malzeme' | 'toplam'> = { sutunlar: { malzeme: 'm.malzeme_id', toplam: 't.toplam' }, ikincil: 'm.malzeme_id' };
 export async function malzemeSay(db: Db, s: MalzemeSuzgeci): Promise<number> {
@@ -469,13 +480,14 @@ export async function malzemeSay(db: Db, s: MalzemeSuzgeci): Promise<number> {
 export function malzemeStoklari(db: Db, s: MalzemeSuzgeci, sira: SiralamaIstegi<'malzeme' | 'toplam'>, d: Dilim): Promise<MalzemeStokHam[]> {
   const f = malzemeSuzgeci(s);
   return db.sorgu(
-    `SELECT m.malzeme_id AS "malzemeId", t.toplam::text AS toplam, t.serbest::text AS serbest, a.kritik_seviye AS "kritikSeviye", t.konumlar AS "konumSayisi",
+    `SELECT m.malzeme_id AS "malzemeId", t.toplam::text AS toplam, t.serbest::text AS serbest, t.statude::text AS statude, a.kritik_seviye AS "kritikSeviye", t.konumlar AS "konumSayisi",
        ${KONUM_ETIKETLERI('m.malzeme_id')} AS konumlar ${f.sql}
-     ORDER BY ${siralamaSql(MALZEME_SIRALAMASI, sira)} LIMIT $4 OFFSET $5`, [...f.p, d.sinir, d.atla]);
+     ORDER BY ${siralamaSql(MALZEME_SIRALAMASI, sira)} LIMIT $6 OFFSET $7`, [...f.p, d.sinir, d.atla]);
 }
 export const kartStoklari = (db: Db, idler: readonly number[]): Promise<MalzemeStokHam[]> => db.sorgu(
   `SELECT m.id AS "malzemeId", COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = m.id), 0)::text AS toplam,
      COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = m.id AND statu_id IS NULL AND ${KULLANILABILIR_SQL}), 0)::text AS serbest,
+     COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = m.id AND statu_id IS NOT NULL), 0)::text AS statude,
      (SELECT kritik_seviye FROM stok_malzeme_ayari WHERE malzeme_id = m.id) AS "kritikSeviye",
      (SELECT count(DISTINCT konum_id)::int FROM stok_bakiye WHERE malzeme_id = m.id) AS "konumSayisi",
      ${KONUM_ETIKETLERI('m.id')} AS konumlar
@@ -483,6 +495,7 @@ export const kartStoklari = (db: Db, idler: readonly number[]): Promise<MalzemeS
 export const malzemeStoku = (db: Db, malzemeId: number): Promise<MalzemeStokHam | null> => db.tek(
   `SELECT $1::int AS "malzemeId", COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = $1), 0)::text AS toplam,
      COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = $1 AND statu_id IS NULL AND ${KULLANILABILIR_SQL}), 0)::text AS serbest,
+     COALESCE((SELECT sum(miktar) FROM stok_bakiye WHERE malzeme_id = $1 AND statu_id IS NOT NULL), 0)::text AS statude,
      (SELECT kritik_seviye FROM stok_malzeme_ayari WHERE malzeme_id = $1) AS "kritikSeviye",
      (SELECT count(DISTINCT konum_id)::int FROM stok_bakiye WHERE malzeme_id = $1) AS "konumSayisi",
      ${KONUM_ETIKETLERI('$1')} AS konumlar`, [malzemeId]);

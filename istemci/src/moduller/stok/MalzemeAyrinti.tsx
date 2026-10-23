@@ -191,13 +191,15 @@ export function MalzemeAyrinti() {
   const s = m.data.satir;
   // Statülü stok çıkışa, taşımaya ve sepete kapalıdır (STK-S3); işlemler yalnız serbest satırda görünür.
   const serbestBakiyeler = m.data.bakiyeler.filter((b) => b.statuId === null);
-  const statuluVar = m.data.statuKirilimi.some((k) => k.statuId !== null);
-  type Kirilim = MalzemeAyrintiCevabi['statuKirilimi'][number];
+  // Rota tanımında açılmış ama stoğu olmayan statü salt okunur satırdır: miktar uydurulmaz, işlem yoktur.
+  type Kirilim = { statuId: number | null; miktar: string | null; ilkGiris: string | null };
+  const kirilim: Kirilim[] = [...m.data.statuKirilimi, ...m.data.tanimliStatuler.map((t) => ({ statuId: t.statuId, miktar: null, ilkGiris: null }))];
+  const statuluVar = kirilim.some((k) => k.statuId !== null);
   const kirilimSutunlari: Sutun<Kirilim>[] = [
-    { anahtar: 'statu', baslik: 'Statü', hucre: (k) => (k.statuId === null ? 'Serbest' : <Rozet>{statuAdi(k.statuId)}</Rozet>) },
-    { anahtar: 'giris', baslik: 'Statüye giriş', kirilmaz: true, hucre: (k) => zamanMetni(k.ilkGiris) },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (k) => <strong>{miktarMetni(k.miktar)}</strong> },
-    { anahtar: 'rezerve', baslik: 'Rezerve', hizala: 'sag', hucre: (k) => miktarMetni(String(rezerveToplami(m.data.rezerveler, k.statuId))) },
+    { anahtar: 'statu', baslik: 'Statü', hucre: (k) => (k.statuId === null ? 'Serbest' : <Rozet ton={k.miktar === null ? 'pasif' : 'bilgi'}>{statuAdi(k.statuId)}</Rozet>) },
+    { anahtar: 'giris', baslik: 'Statüye giriş', kirilmaz: true, hucre: (k) => (k.ilkGiris === null ? '—' : zamanMetni(k.ilkGiris)) },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (k) => (k.miktar === null ? <span className="tc-stok-alt">Tanımlı, stok yok</span> : <strong>{miktarMetni(k.miktar)}</strong>) },
+    { anahtar: 'rezerve', baslik: 'Rezerve', hizala: 'sag', hucre: (k) => (k.miktar === null ? '—' : miktarMetni(String(rezerveToplami(m.data.rezerveler, k.statuId)))) },
   ];
   const rezerveSutunlari: Sutun<Rezerve>[] = [
     { anahtar: 'statu', baslik: 'Statü', hucre: (r) => <Rozet>{statuAdi(r.statuId)}</Rozet> },
@@ -238,7 +240,7 @@ export function MalzemeAyrinti() {
           {tanimlar && <Dugme simge="tool" onClick={() => setIslem({ tur: 'ayar' })}>Stok ayarı</Dugme>}
         </>} />
       <Kart baslik="Bakiye satırları"><Tablo etiket="Bakiye satırları" sutunlar={sutunlar} satirlar={m.data.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu malzemenin stoğu yok." /></Kart>
-      {statuluVar && <Kart baslik="Statü kırılımı"><Tablo etiket="Statü kırılımı" sutunlar={kirilimSutunlari} satirlar={m.data.statuKirilimi} satirAnahtari={(k) => k.statuId ?? 0} /></Kart>}
+      {statuluVar && <Kart baslik="Statü kırılımı"><Tablo etiket="Statü kırılımı" sutunlar={kirilimSutunlari} satirlar={kirilim} satirAnahtari={(k) => k.statuId ?? 0} /></Kart>}
       {rezerveVar && (
         <Kart baslik="Rezerve" sag={ayirabilir ? <Dugme simge="lock" onClick={() => setIslem({ tur: 'rezerve-et' })}>Rezerve et</Dugme> : undefined}>
           <p className="tc-stok-not">Emir açılırken ya da statüye geçerken ayrılan malzeme yalnız o emirde kullanılır. Emir kapanınca ya da iptal edilince ayrılan kalkar.</p>

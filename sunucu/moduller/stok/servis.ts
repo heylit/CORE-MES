@@ -54,7 +54,7 @@ import {
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
-  binde, bindenMetin, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, ilkGirisBirlesik, kalanAmbalajAdedi, partiDenetimi, partiEtiketi, partiGereksinimi, statuDegisimiEngeli, statuKirilimi, stokDegeri, stoklanirMi,
+  binde, bindenMetin, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, ilkGirisBirlesik, kalanAmbalajAdedi, partiDenetimi, partiEtiketi, partiGereksinimi, statuAramasi, statuDegisimiEngeli, statuKirilimi, statuKodlari, stokDegeri, stoksuzStatuler, stoklanirMi,
   bolmeNo, malKabulGozOnerisi, partiSec, rafGozleri, rotaSirala, sayimFarki, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, stokDurumu, tersYon,
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
@@ -534,7 +534,7 @@ async function rezerveToplamlari(db: Db, malzemeIdler: number[]): Promise<Map<nu
 function malzemeSatiri(h: sorgular.MalzemeStokHam, o: KatalogMalzemeOzeti | undefined | null, rezerve: bigint): MalzemeStokSatiri {
   return {
     malzemeId: h.malzemeId, ad: o?.ad ?? null, stokKodu: o?.kod ?? null, tur: o?.tur ?? null, birim: o?.birim ?? null,
-    toplam: bindenMetin(binde(h.toplam)), serbest: bindenMetin(binde(h.serbest)), kritikSeviye: h.kritikSeviye, durum: stokDurumu(h.serbest, h.kritikSeviye), konumSayisi: h.konumSayisi,
+    toplam: bindenMetin(binde(h.toplam)), serbest: bindenMetin(binde(h.serbest)), statude: bindenMetin(binde(h.statude)), kritikSeviye: h.kritikSeviye, durum: stokDurumu(h.serbest, h.kritikSeviye), konumSayisi: h.konumSayisi,
     rezerve: bindenMetin(rezerve),
     konumlar: h.konumlar.map((k) => ({ ...k, miktar: bindenMetin(binde(k.miktar)) })),
   };
@@ -557,11 +557,21 @@ export async function malzemeListesi(db: Db, s: MalzemelerListesi): Promise<Sayf
   if (s.kapsam === 'kartlar') return kartListesi(db, s);
   // Ad ve stok koduyla eşleşen kartların ilk 200'ü süzgece girer; fazlası daha uzun metinle daraltılır.
   const adlaBulunan = s.metin ? (await malzemeAra(db, { metin: s.metin, sayfa: 1, sayfaBoyu: 200 })).satirlar.map((x) => x.id) : undefined;
-  const suzgec = { durum: s.durum, metin: s.metin, adlaBulunan };
+  // Statülü süzgeç tanımlı statüsü olan kartı stoğu olmasa da getirir; metin statü adıyla da aranır (K-X8).
+  const tum = s.durum === 'statulu' || s.metin ? (await statuler(db)).statuler : [];
+  const statuIdleri = s.metin ? statuAramasi(tum, s.metin) : [];
+  const kaynak = s.metin ? tum.filter((x) => statuIdleri.includes(x.id)) : tum;
+  const statuluKartlar = await kartlarKoddan(db, statuKodlari(kaynak));
+  const suzgec = { durum: s.durum, metin: s.metin, adlaBulunan, statuIdleri, statuluKartlar };
   const l = await sayfaliListe(s, { say: () => sorgular.malzemeSay(db, suzgec), satirlar: (d) => sorgular.malzemeStoklari(db, suzgec, s, d) });
   const ozetler = await malzemeOzetleri(db, l.satirlar.map((h) => h.malzemeId));
   const rezerve = await rezerveToplamlari(db, l.satirlar.map((h) => h.malzemeId));
   return { ...l, satirlar: l.satirlar.map((h) => malzemeSatiri(h, ozetler.get(h.malzemeId), rezerve.get(h.malzemeId) ?? 0n)) };
+}
+async function kartlarKoddan(db: Db, kodlar: readonly string[]): Promise<number[]> {
+  const idler: number[] = [];
+  for (const kod of kodlar) { const no = await malzemeNoKoddan(db, kod); if (no !== null) idler.push(no); }
+  return idler;
 }
 export async function malzemeOzetiOku(db: Db, id: number): Promise<MalzemeOzetiCevabi> {
   const o = await malzemeOzeti(db, id);
@@ -578,10 +588,12 @@ export async function malzemeAyrintisi(db: Db, id: number): Promise<MalzemeAyrin
   const son = await sorgular.hareketler(db, { malzemeId: id }, {}, { sinir: 5, atla: 0 });
   const { zeminMetni } = await zeminDurumu(db);
   const nolar = await emirNoHaritasi(db, b.map((x) => x.uretimEmriId));
+  const kirilim = statuKirilimi(b);
   return {
     satir: malzemeSatiri(h!, o, (await rezerveToplamlari(db, [id])).get(id) ?? 0n),
     bakiyeler: b.map((x) => ({ ...bakiyeSatiri(x, ad, nolar), zemin: zeminMetni(x.konumId) })),
-    statuKirilimi: statuKirilimi(b),
+    statuKirilimi: kirilim,
+    tanimliStatuler: stoksuzStatuler((await statuler(db)).statuler, o.kod, kirilim),
     rezerveler: (await rezerveListesi(db, id)).rezerveler,
     bekleyenler: (await bekleyenEmirler(db, id)).map((e) => ({ uretimEmriId: e.uretimEmriId, emirNo: e.emirNo, miktar: bindenMetin(e.bekleyen) })),
     ayar: {
