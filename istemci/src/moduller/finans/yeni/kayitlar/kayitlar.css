@@ -1,0 +1,19 @@
+/* F1 (Kayıtlar ve Firmalar) ortak sınıfları: yalnız tasarım değişkenleri. */
+.tc-fk { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fk-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-fk-not[data-ton="iyi"] { color: var(--run); }
+.tc-fk-not[data-ton="uyari"] { color: var(--hold); }
+.tc-fk-not[data-ton="risk"] { color: var(--stop); }
+
+.tc-fk-arac { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); min-width: 0; margin-top: var(--b-3); }
+.tc-fk-cipler, .tc-fk-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; }
+.tc-fk-arama { flex: 1 1 var(--acilir-enaz); min-width: 0; }
+.tc-fk-sayi { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.tc-fk-ay { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-fk-ay-baslik { margin: 0; font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
+.tc-fk-daha { display: flex; justify-content: center; }
+.tc-fk-arti { color: var(--run); }
+.tc-fk-eksi { color: var(--stop); }
+
+.tc-fk-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
