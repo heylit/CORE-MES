@@ -25,6 +25,7 @@ const PAKET = 100;
 const ILETISIM = ['telefon', 'eposta', 'adres', 'acilKisi', 'acilYakinlik', 'acilTelefon'] as const;
 export const ESKI_SURUM_ILETISI = 'Kayıt siz açtıktan sonra değişmiş; güncel hali yüklendi, yeniden deneyin.';
 
+export const PUANTAJ_ONEKI = ['ik', 'yeni', 'puantaj'] as const;
 export const ikAnahtarlari = {
   veri: ['ik', 'yeni', 'veri'] as const,
   puantaj: (ay: string, personel: string | null) => ['ik', 'yeni', 'puantaj', ay, personel] as const,
@@ -244,9 +245,16 @@ export function useIkKomutu(): IkKomutlari & { calisiyor: boolean } {
     },
   });
   const sar = useCallback(<A extends unknown[], R>(f: (...a: A) => Promise<R>) => (...a: A): Promise<R> => mutasyon.mutateAsync(() => f(...a)) as Promise<R>, [mutasyon]);
+  // Puantaj depoya girmez: yazınca açık ayların sorguları yeniden okunur.
+  const puantajYazSar = sar(komutlar.puantajYaz);
+  const puantajYaz = useCallback(async (gunler: readonly IkPuantajGunuGirdisi[]) => {
+    const c = await puantajYazSar(gunler);
+    await sorgu.invalidateQueries({ queryKey: PUANTAJ_ONEKI });
+    return c;
+  }, [puantajYazSar, sorgu]);
   return {
     kaydet: sar(komutlar.kaydet), topluKaydet: sar(komutlar.topluKaydet), iptal: sar(komutlar.iptal), ayarKaydet: sar(komutlar.ayarKaydet),
-    bordroKesinlestir: sar(komutlar.bordroKesinlestir), bordroGordum: sar(komutlar.bordroGordum), puantajYaz: sar(komutlar.puantajYaz),
+    bordroKesinlestir: sar(komutlar.bordroKesinlestir), bordroGordum: sar(komutlar.bordroGordum), puantajYaz,
     calisiyor: mutasyon.isPending,
   };
 }

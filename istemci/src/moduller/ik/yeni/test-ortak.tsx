@@ -1,10 +1,13 @@
+import { Suspense } from 'react';
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { IkBen, IkKayit, IkVeriCevabi } from '#paylasilan/sozlesme/ik.ts';
+import type {
+  IkBen, IkIzinGunuCevabi, IkKayit, IkKisiVardiyasiCevabi, IkOzetiCevabi, IkPuantajCevabi, IkPuantajYazCevabi, IkVeriCevabi,
+} from '#paylasilan/sozlesme/ik.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-ekran.tsx';
@@ -52,13 +55,30 @@ export function ornekVeri(ben: Partial<IkBen> = {}): IkVeriCevabi {
 export interface Yazma { yol: string; govde: unknown }
 
 // Uçları taklit eder: oturum, /ik/veri ve yazmalar. Yazma cevabı gönderilen gövdeyi bir sürüm artırıp döner.
-export function sunucuKur(kullanici: Kullanici, veri: IkVeriCevabi = ornekVeri()): Yazma[] {
+// Okuma uçlarının varsayılan cevapları; test `okumalar` ile yolu (sorgusuz) verip değiştirir. Değerler sınama içindir.
+export type Okumalar = Record<string, (sorgu: URLSearchParams) => unknown>;
+const VARSAYILAN_OKUMALAR: Okumalar = {
+  '/ik/puantaj': (q) => ({ ay: q.get('ay') ?? '2026-10', gunler: [], kisiler: [] } satisfies IkPuantajCevabi),
+  '/ik/izin-gunu': () => ({ isGunu: 5 } satisfies IkIzinGunuCevabi),
+  '/ik/kisi-vardiyasi': () => ({ vardiya: null } satisfies IkKisiVardiyasiCevabi),
+  '/ik/ozet': () => ({ izinli: 1, raporlu: 0 } satisfies IkOzetiCevabi),
+};
+
+export function sunucuKur(kullanici: Kullanici, veri: IkVeriCevabi = ornekVeri(), okumalar: Okumalar = {}): Yazma[] {
   const yazmalar: Yazma[] = [];
+  const uclar = { ...VARSAYILAN_OKUMALAR, ...okumalar };
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
-    const yol = new URL(adres, 'http://yerel').pathname.replace(/^\/api/, '');
+    const url = new URL(adres, 'http://yerel');
+    const yol = url.pathname.replace(/^\/api/, '');
     const json = (g: unknown, durum = 200) => new Response(JSON.stringify(g), { status: durum });
     if (yol === '/oturum') return json({ kullanici } satisfies OturumCevabi);
     if (yol === '/ik/veri') return json(veri);
+    const oku = istek?.method === 'POST' ? undefined : uclar[yol];
+    if (oku) return json(oku(url.searchParams));
+    if (yol === '/ik/puantaj/yaz') {
+      yazmalar.push({ yol, govde: JSON.parse(String(istek?.body ?? 'null')) as unknown });
+      return json({ kayitlar: [], silinen: [] } satisfies IkPuantajYazCevabi);
+    }
     if (istek?.method === 'POST') {
       const govde: unknown = JSON.parse(String(istek.body ?? 'null'));
       yazmalar.push({ yol, govde });
@@ -72,14 +92,16 @@ export function sunucuKur(kullanici: Kullanici, veri: IkVeriCevabi = ornekVeri()
   return yazmalar;
 }
 
-export function ikAc(adres: string, { kullanici = IK_YONETICI, veri }: { kullanici?: Kullanici; veri?: IkVeriCevabi } = {}) {
-  const yazmalar = sunucuKur(kullanici, veri);
+export function ikAc(adres: string, { kullanici = IK_YONETICI, veri, okumalar }: { kullanici?: Kullanici; veri?: IkVeriCevabi; okumalar?: Okumalar } = {}) {
+  const yazmalar = sunucuKur(kullanici, veri, okumalar);
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const sonuc = render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
-          <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+          <Suspense fallback={null}>
+            <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+          </Suspense>
         </MemoryRouter>
       </BildirimSaglayici>
     </QueryClientProvider>,
