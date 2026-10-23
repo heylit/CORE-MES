@@ -4,6 +4,7 @@ import {
   PLAN_ONAY_KOMUTLARI, SENARYO_DURUMLARI, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, senaryolarCevabi,
   siparisCarpaniTaslakGovdesi,
 } from './plan.ts';
+import { AYAR_TANIMLARI } from '../ayarlar.ts';
 
 const gosterge = {
   emirSayisi: 0, isEmriSayisi: 0, yerlesen: 0, geciken: 0, zamanindaYuzde: null, ortAtolyeGun: null, darbogaz: null, enDoluKaynak: null, personelGun: null,
@@ -51,12 +52,18 @@ test('geri gönderme gerekçe ister, onaya gönderme notu isteğe bağlıdır; i
   assert.deepEqual(geriGonderGovdesi.parse({ surum: 3, neden: ' Teslim kayıyor ' }), { surum: 3, neden: 'Teslim kayıyor' });
 });
 
-test('bedel ayarı ve elle çarpan taslağa yazılırken taslak alanı zorunludur (yeni taslak için null)', () => {
-  assert.equal(bedelAyariTaslakGovdesi.safeParse({
-    tabanBedelSaat: 100, finansmanOraniGun: null, karRiskiOraniGun: 0.1, yuksekEsigi: 2, dusukEsigi: 0.5,
-  }).success, false);
-  assert.equal(bedelAyariTaslakGovdesi.safeParse({
-    tabanBedelSaat: 100, finansmanOraniGun: null, karRiskiOraniGun: 0.1, yuksekEsigi: 2, dusukEsigi: 0.5, taslak: null,
-  }).success, true);
-  assert.equal(siparisCarpaniTaslakGovdesi.safeParse({ carpan: 1.5, gerekce: 'Acil', taslak: { id: 4, surum: 2 } }).success, true);
+test('bedel ayarı ve elle çarpan gövdesi taslağı taşır; taslaksız eski gövde de geçer', () => {
+  const ayar = { tabanBedelSaat: 100, finansmanOraniGun: null, karRiskiOraniGun: 0.1, yuksekEsigi: 2, dusukEsigi: 0.5 };
+  assert.equal(bedelAyariTaslakGovdesi.parse(ayar).taslak, undefined);
+  assert.equal(bedelAyariTaslakGovdesi.parse({ ...ayar, taslak: null }).taslak, null);
+  assert.equal(bedelAyariTaslakGovdesi.safeParse({ ...ayar, taslak: { id: 4 } }).success, false);
+  assert.deepEqual(siparisCarpaniTaslakGovdesi.parse({ carpan: 1.5, gerekce: 'Acil', taslak: { id: 4, surum: 2 } }).taslak, { id: 4, surum: 2 });
+  assert.equal(siparisCarpaniTaslakGovdesi.safeParse({ carpan: 1.5, gerekce: 'Acil' }).success, true);
+});
+
+test('plan dört göz kuralı kayıtlı ayardır ve varsayılan kapalıdır', () => {
+  const tanim = AYAR_TANIMLARI['plan.dort-goz'];
+  assert.equal(tanim.tur, 'boolean');
+  assert.equal(tanim.varsayilan, false);
+  assert.equal(tanim.modul, 'plan');
 });

@@ -335,9 +335,10 @@ export const siparisCarpaniGovdesi = z.object({
     .refine((v) => Math.round(v * 100) === v * 100, 'Çarpan en çok iki ondalık olmalı.'),
   gerekce: z.string().trim().min(1, 'Gerekçe yaz.').max(500),
 });
-// 148 a: bedel ayarı ve elle çarpan da taslağa yazılır; taslak verilmezse kişiye yeni taslak açılır (taslakGovdesi gibi).
-export const bedelAyariTaslakGovdesi = bedelAyariGovdesi.extend({ taslak: taslakGirdisi });
-export const siparisCarpaniTaslakGovdesi = siparisCarpaniGovdesi.extend({ taslak: taslakGirdisi });
+// 148 a: bedel ayarı ve elle çarpan da taslağa yazılır; taslak null ise kişiye yeni taslak açılır (taslakGovdesi gibi). Alanı göndermeyen
+// eski ekran 400 almasın diye isteğe bağlıdır; gönderilmeyen alanın nereye yazılacağını sunucu belirler.
+export const bedelAyariTaslakGovdesi = bedelAyariGovdesi.extend({ taslak: taslakGirdisi.optional() });
+export const siparisCarpaniTaslakGovdesi = siparisCarpaniGovdesi.extend({ taslak: taslakGirdisi.optional() });
 const siparisCarpani = z.object({ carpan: z.number(), gerekce: z.string(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), zaman });
 // Geçmiş yeniden eskiye; geçerli çarpan ilk satırdır, kayıt yoksa null.
 export const siparisCarpaniCevabi = z.object({ siparisId: KIMLIK, gecerli: siparisCarpani.nullable(), gecmis: z.array(siparisCarpani) });
