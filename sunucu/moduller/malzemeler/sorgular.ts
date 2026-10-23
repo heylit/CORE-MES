@@ -229,6 +229,22 @@ export function katalogMalzemeOzetleri(db: Db, nolar: number[]): Promise<Katalog
   return db.sorgu<KatalogMalzemeOzeti>(`SELECT ${OZET_SECIMI} WHERE k.no = ANY($1::int[])`, [nolar]);
 }
 
+// CNC takım stoğu (163 b): kütüphane kimliği bağlı kartlar; iptal kart da döner (stoğu durur), durumu çağıran görür.
+export function cncKimlikliKartlar(db: Db, kimlikler: readonly string[]): Promise<(KatalogMalzemeOzeti & { cncKimligi: string })[]> {
+  return db.sorgu(`SELECT ${OZET_SECIMI.replace(' AS "hizmetYonu"', ' AS "hizmetYonu", k.cnc_kutuphane_kimligi AS "cncKimligi"')}
+     WHERE k.cnc_kutuphane_kimligi = ANY($1::text[]) ORDER BY k.no`, [kimlikler]);
+}
+
+// Kimlik başka kartta bağlıysa oradan kalkar (tekil); null kartın bağını kaldırır. Kart yoksa ya da türü sarf ve demirbaş değilse
+// satır dönmez. Önceki kart (bağı kalkan) döner.
+export async function cncKimligiYaz(db: Db, no: number, kimlik: string | null): Promise<{ bagli: boolean; oncekiNo: number | null }> {
+  const once = kimlik === null ? null : await db.tek<{ no: number }>(
+    `UPDATE malzeme_katalog_karti SET cnc_kutuphane_kimligi = NULL WHERE cnc_kutuphane_kimligi = $1 AND no <> $2 RETURNING no`, [kimlik, no]);
+  const bag = await db.tek<{ no: number }>(
+    `UPDATE malzeme_katalog_karti SET cnc_kutuphane_kimligi = $2 WHERE no = $1 AND ($2::text IS NULL OR tur IN ('sarf', 'demirbas')) RETURNING no`, [no, kimlik]);
+  return { bagli: bag !== null, oncekiNo: once?.no ?? null };
+}
+
 // Metin stok kodunda ya da adda (büyük-küçük harf duyarsız) geçer; yalnız rakamsa kart no'su da eşleşir. Sıra: stok kodu, no.
 export async function katalogMalzemeAra(
   db: Db, g: { metin: string | null; turler: readonly string[]; yalnizAktif: boolean; hizmetYonu: string | null; sinir: number; atla: number },
