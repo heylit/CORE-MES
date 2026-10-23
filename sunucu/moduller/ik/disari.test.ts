@@ -5,7 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import type { Db } from '#cekirdek/db.ts';
-import { gununFazlaMesaisi, izinliKisiler, kisilerinIzinleri, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, resmiTatilGunleri } from './disari.ts';
+import { gununFazlaMesaisi, izinliKisiler, kisilerinCikisTarihleri, kisilerinIzinleri, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, resmiTatilGunleri } from './disari.ts';
 import { ayarKaydet, iptalEt, kaydet } from './servis.ts';
 
 type Govde = Record<string, unknown>;
@@ -183,5 +183,43 @@ describe('İK disari: resmî tatil günleri (IK-80, gerçek PostgreSQL)', () => 
     ]);
     await vt.tx(async (db) => { await db.sorgu('DELETE FROM ik_resmi_tatil'); });
     assert.deepEqual(await vt.tx((db) => resmiTatilGunleri(db, '2026-01-01', '2026-12-31')), [], 'boş kaydedilmiş liste tatilsizdir');
+  });
+});
+
+describe('İK disari: kişilerin çıkış tarihleri (W8, gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  const kisi: Record<'cikan' | 'kalan' | 'iptalli' | 'bagsiz', number> = { cikan: 0, kalan: 0, iptalli: 0, bagsiz: 0 };
+
+  before(async () => {
+    ortam = await testVeritabaniKur('ik_disari_cikis');
+    await ortam.vt.tx(async (db) => {
+      const [im] = await db.sorgu<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('IKD4', 'Merkez') RETURNING id");
+      const yonId = await yoneticiOlustur(db, { ad: 'Deneme yönetici', kullaniciAdi: 'ik-cikis-yon', parola: 'dogru-parola-1' });
+      for (const k of Object.keys(kisi) as (keyof typeof kisi)[]) {
+        kisi[k] = await yoneticiOlustur(db, { ad: `Deneme ${k}`, kullaniciAdi: `ik-cikis-${k}`, parola: 'dogru-parola-1' });
+      }
+      const yon = (await kullaniciYukle(db, yonId)) as Kullanici;
+      const personel = (id: string, ek: Govde): Govde => ({ id, kind: 'emp', ad: id, soyad: 'Deneme', isMerkeziId: im!.id, ...ek });
+      await kaydet(db, yon, 'personel', 'emp_cikan', personel('emp_cikan', { kisiId: kisi.cikan, cikisTarihi: '2026-11-10' }), null);
+      await kaydet(db, yon, 'personel', 'emp_kalan', personel('emp_kalan', { kisiId: kisi.kalan }), null);
+      const eski = await kaydet(db, yon, 'personel', 'emp_eski', personel('emp_eski', { kisiId: kisi.iptalli, cikisTarihi: '2026-01-31' }), null);
+      await iptalEt(db, yon, 'personel', 'emp_eski', eski.kayit.surum);
+      await kaydet(db, yon, 'personel', 'emp_yeni', personel('emp_yeni', { kisiId: kisi.iptalli }), null);
+    });
+  });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('çıkış tarihi kişiye bağlı, iptal edilmemiş personelden döner; çıkışsız personel null, personeli olmayan kişi haritada yok; tek sorgu', async () => {
+    const vt = ortam!.vt;
+    let sorgu = 0;
+    const harita = await vt.tx((db) => kisilerinCikisTarihleri({
+      sorgu: (sql, p) => { sorgu += 1; return db.sorgu(sql, p); },
+      tek: (sql, p) => { sorgu += 1; return db.tek(sql, p); },
+    } satisfies Db, [kisi.cikan, kisi.kalan, kisi.iptalli, kisi.bagsiz, kisi.cikan]));
+    assert.equal(sorgu, 1);
+    assert.deepEqual(harita, new Map<number, string | null>([[kisi.cikan, '2026-11-10'], [kisi.kalan, null], [kisi.iptalli, null]]));
+    let bosSorgu = 0;
+    const bos = await vt.tx((db) => kisilerinCikisTarihleri({ sorgu: (sql, p) => { bosSorgu += 1; return db.sorgu(sql, p); }, tek: db.tek.bind(db) }, []));
+    assert.deepEqual([bos.size, bosSorgu], [0, 0]);
   });
 });

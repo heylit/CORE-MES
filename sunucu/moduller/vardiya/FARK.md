@@ -90,3 +90,9 @@ Taban: main e0b591f. Başvuru: ilk sistem `ilk-sistem-kodu/sunucu/moduller/vardi
 - Sözleşme: `takvimCevabi.gunler[].kaynak` (isteğe bağlı, yalnız 'ik') eklendi; ekran İK satırını bununla ayırır. Vardiya'nın kendi satırı değişmedi.
 - Ekran (160 a, prototip değişikliği onaylı): "Resmî tatilleri ekle" kalktı; İK tatilleri bayrakla, silinemez satır; "Tarih ekle" kapalı gün ekler;
   "Tümünü temizle" yalnız Vardiya'nın kendi günleri varken görünür ve onları siler; ipucu "Resmî tatiller İK ayarlarından girilir".
+
+## W8 çıkan personel (23.10.2026, test bulgusu 18.1)
+- VR-29: kişi takvimi (`calismaTakvimleri`, `basladigiGunTakvimleri`, günlük mesai) İK çıkış gününden sonrasını ve pasif kişide bugünden sonrasını 0 dakika okur;
+  gün `ayrildi: true` taşır (sözleşmede isteğe bağlı alan, mevcut alanlar değişmedi). Pasif kişi null dönmez: geçmiş ayların emek verimi ve OEE'si bozulmasın.
+- `GET /vardiya-personeli` bugün ayrılmış kişiyi, `GET /gunluk-mesai` o gün ayrılmış kişiyi listelemez. Fazla mesai ayrılmış kişiyi içerirse 400.
+- Göç yok, ekran değişmedi (gün işareti ekranda henüz gösterilmiyor).

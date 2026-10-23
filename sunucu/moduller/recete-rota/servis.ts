@@ -16,7 +16,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { emirDilimi, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  aktifMakineler, istasyonKisiAtamalari, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, makineKisiAtamalari, operasyonTipleri, planAyarlari,
+  aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
@@ -26,7 +26,7 @@ import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururlukt
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
-import { calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
+import { calismaTakvimleri, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
@@ -260,7 +260,8 @@ export async function durum(
 }
 
 // Plan kapasitesi (kart #1324): Vardiya'nın iş merkezi, istasyon ve kişi takvimlerinden prototipin kendi vardiya hesabına eklediği farklar
-// tek okumada. Kişi, istasyon ataması olan aktif istasyonların kişileridir; takvimi okunamayan (iş merkezine bağlanamayan) kaynak gelmez.
+// tek okumada. Kişi ve payı Vardiya'nın tek tanımıdır (`isMerkeziKisiPaylari`, Plan da bunu okur: aktif kişi; istasyon, makine ve ekip
+// ataması); takvimi okunamayan (iş merkezine bağlanamayan) kaynak gelmez. W8: işten ayrıldığı günler (VR-29) izinli gibi 0 gider.
 export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now()): Promise<KapasiteCevabi> {
   const istasyonOkur = yetkiliMi(kullanici, ISTASYON_OKUMA);
   const kisiOkur = yetkiliMi(kullanici, KISI_OKUMA) && istasyonOkur;
@@ -268,22 +269,13 @@ export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now())
   const bitis = new Date(Date.parse(`${baslangic}T00:00:00Z`) + (KAPASITE_GUNU - 1) * 86_400_000).toISOString().slice(0, 10);
   const merkezler = istasyonOkur ? await isMerkezleri(db, { pasiflerDahil: false }) : [];
   const istasyonListesi = istasyonOkur ? await istasyonlar(db, { pasiflerDahil: false }) : [];
-  const istasyonMerkezi = new Map(istasyonListesi.map((i) => [i.id, i.isMerkeziId]));
   const paylar = new Map<number, Map<number, number>>();
-  // 13.4: makineye atanan kişi de o makinenin istasyonunun iş merkezine pay verir (istasyon ataması gibi)
-  const makineIstasyonu = new Map(kisiOkur ? (await aktifMakineler(db)).flatMap((m) => (m.istasyonId === null ? [] : [[m.id, m.istasyonId] as const])) : []);
-  const atamalar = kisiOkur
-    ? [...await istasyonKisiAtamalari(db), ...(await makineKisiAtamalari(db)).flatMap((a) => {
-      const istasyonId = makineIstasyonu.get(a.makineId);
-      return istasyonId === undefined ? [] : [{ istasyonId, kisiId: a.kisiId, yuzde: a.yuzde }];
-    })]
-    : [];
-  for (const a of atamalar) {
-    const m = istasyonMerkezi.get(a.istasyonId);
-    if (m === undefined || m === null) continue;
-    const l = paylar.get(a.kisiId) ?? new Map<number, number>();
-    l.set(m, (l.get(m) ?? 0) + Math.round(Number(a.yuzde) * 100));
-    paylar.set(a.kisiId, l);
+  for (const [m, kisiler] of kisiOkur ? await isMerkeziKisiPaylari(db) : []) {
+    for (const [kisiId, sent] of kisiler) {
+      const l = paylar.get(kisiId) ?? new Map<number, number>();
+      l.set(m, sent);
+      paylar.set(kisiId, l);
+    }
   }
   const takvimler = await calismaTakvimleri(db, [
     ...merkezler.map((m) => ({ tur: 'is-merkezi' as const, id: m.id })),
@@ -309,7 +301,7 @@ export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now())
         if (t === null) return [];
         return [{
           id: String(kisiId),
-          izinli: t.gunler.filter((g) => g.izinli === true).map((g) => g.tarih),
+          izinli: t.gunler.filter((g) => g.izinli === true || g.ayrildi === true).map((g) => g.tarih),
           fazlaMesai: fazlaMesai(`kisi:${kisiId}`),
           paylar: [...l].filter(([, sent]) => sent > 0).map(([m, sent]) => ({ wcId: String(m), pay: sent / 10000 })),
         }];
