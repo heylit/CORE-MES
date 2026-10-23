@@ -26,8 +26,8 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
 5. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): yabancı anahtar geldi, göç `20261009024000_satin_alma_katalog_malzeme_bagi.sql` "FOREIGN KEY (malzeme_no) REFERENCES malzeme_katalog_karti (no)".
    Eski metin: `satin_alma_katalog.malzeme_id` yabancı anahtarı kaldırıldı. DOĞRULANDI: teslim `REFERENCES malzeme` diyordu; `malzeme` tablosu depoda `20261007154341_malzemeler_eski_kart_kaldir.sql` ile
    düşürüldü (yeni kimlik `malzeme_katalog_karti.no`). Sütun düz `bigint`, bugün kullanılmıyor (`sorgular.ts` yalnız okur). Uyum: katalog senkronu kararlaştırılınca hedef (`malzeme_katalog_karti.no`) ve bağ ayrı göçle.
-   GÜNCELLENDİ (tur 4, kullanıcı kararı SA4): sütun `malzeme_no integer` oldu (göç `20261008133000`), yabancı anahtarsız. Teslim `REFERENCES malzeme_katalog_karti (no)`
-   diyordu; anahtar Aşama 2'de ayrı göçle gelir. Teslimin "olmayan numara reddedilir" testi sütun türü denetimine çevrildi; anahtar gelince geri döner.
+   Ara durum (tur 4, kullanıcı kararı SA4, geçti): sütun `malzeme_no integer` oldu (göç `20261008133000`) ve bir süre yabancı anahtarsız kaldı.
+   Bugün (DOĞRULANDI 23.10.2026): anahtar göç `20261009024000` ile kuruldu, sütun `NOT NULL`; kopya `kod`, `ad`, `birim` sütunları göç `20261019108500` ile kalktı.
 6. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): rol satırları göç `20261009065000_kisiler_satin_alma_islemleri.sql` ile girdi (satin_alma, mudur, muhasebe_finans; talep-ac beş rolde); firma satırları #1164 ile musteri-tedarikci'de.
    Eski metin: Rol x işlem satırları yok: işlemler yalnız bayraklı yöneticide (rol göçü yazılmadı). DOĞRULANDI: `satin-alma.oku/yaz/talep-ac/onayla/teslim-al/ayar` ve dört sayfa işlemi
    `paylasilan/islemler/satin-alma.ts` ve `sayfalar/satin-alma.ts`'te (kart #254 ile girdi). Teslimin önerdiği matris (`CEKIRDEK-ISTEKLERI.md` Ç3) onay bekler; girince

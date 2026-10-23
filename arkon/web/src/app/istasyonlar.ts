@@ -9,7 +9,9 @@ import { Num, Seg, Sw, nearEdge } from './kurallar';
 import { DB, newPkg, uidg } from './hazirlik';
 import { navGo } from './baslat';
 import { muayeneNumunePlani } from '../data/muayene-lotu';
-import { tmiPaketiMi } from '../data/yeni-paket';
+import { tmiPaketiMi, tmiyeGit } from '../data/yeni-paket';
+import { AKStore } from '../data/store';
+import { gomuluMu } from './gomulu';
 
 /* ══════════ İSTASYON TİPLERİ: talaşlı, kalite, depo, markalama, boya, montaj ══════════ */
 export const OPTYPES = {
@@ -426,7 +428,9 @@ export function StationPicker({ cur, onPick, onClose }) {
     <div className="dh"><div><span className="over">Bu cihaz</span><b style=${{ display: 'block', fontSize: 24 }}>Hangi istasyonda?</b></div><button className="x" onClick=${onClose} aria-label="Kapat"><${I} n="x" s=${18} /></button></div>
     <p className="muted">İş paketleri istasyona göre gelir; ekran açılan işin türüne göre şekillenir.${u && u.wcs && u.wcs.length && u.role !== 'admin' ? ' Yalnız yetkili olduğun iş merkezleri gösteriliyor.' : ''}${!can('prod.station') ? ' Yalnız çalışabildiğin istasyonlar gösteriliyor.' : ''}</p>
     ${!L.length && !can('prod.station') ? html`<div className="glass empty" style=${{ padding: 24 }}><${I} n="layers" s=${36} /><b>Size atanmış istasyon yok</b><small className="muted">Amirinize bildirin.</small></div>` : null}
-    ${!L.length && can('prod.station') ? html`<div className="glass empty" style=${{ padding: 24 }}><${I} n="layers" s=${36} /><b>Tanımlı istasyon yok</b><small className="muted">Yönetici Ayarlar › Tesis yapısı bölümünden iş merkezi ve istasyon eklemeli.</small>${can('adm.plant') ? html`<a className="btn" href="#ayarlar" onClick=${e => { navGo(e, 'ayarlar'); onClose(); }} style=${{ textDecoration: 'none', color: 'inherit' }}><${I} n="gear" s=${18} />Tesis yapısını aç</a>` : null}</div>` : null}
+    ${!L.length && can('prod.station') ? html`<div className="glass empty" style=${{ padding: 24 }}><${I} n="layers" s=${36} /><b>Tanımlı istasyon yok</b>${AKStore.status().mode === 'server'
+      ? html`<small className="muted">İş merkezi, istasyon ve makine TMI'de İstasyonlar sayfasından tanımlanır.</small>${can('adm.plant') && gomuluMu() ? html`<button className="btn" onClick=${() => { if (tmiyeGit('istasyonlar')) onClose(); }}><${I} n="layers" s=${18} />İstasyonlar sayfasını aç</button>` : null}`
+      : html`<small className="muted">Yönetici Ayarlar › Tesis yapısı bölümünden iş merkezi ve istasyon eklemeli.</small>${can('adm.plant') ? html`<a className="btn" href="#ayarlar" onClick=${e => { navGo(e, 'ayarlar'); onClose(); }} style=${{ textDecoration: 'none', color: 'inherit' }}><${I} n="gear" s=${18} />Tesis yapısını aç</a>` : null}`}</div>` : null}
     ${groups.map(g => html`<div key=${g.wc} className="stgrp"><span className="over">${g.name}${g.wc ? ' · ' + g.wc : ''}</span><div className="stpick">${g.list.map(m => { const t = OPTYPES[m.t || 'cnc'] || OPTYPES.cnc; return html`<button key=${m.id} className=${'tp ' + (m.id === cur ? 'on' : '')} onClick=${() => onPick(m.id)}><${I} n=${t.i} s=${22} /><b>${m.id}</b><small>${m.name}${m.mcs.length ? ' · ' + (m.mcs.length === 1 ? m.mcs[0].name : m.mcs.length + ' makine') : ''}</small></button>`; })}</div></div>`)}
   </div></div>`;
 }

@@ -406,7 +406,7 @@ export function emirSeciminiGonder(pencere: Pick<Window, 'dispatchEvent'> & { __
 
 export const ONIZLEME_SALT_OKUR = 'Önizlemede kayıt yapılmaz; istek TMI\'ye gönderilmedi.';
 // Arkon'un TMI'de açtırabileceği sayfalar (A5, kart #541): yalnız bu listedeki hedef açılır, çerçeve TMI'de yol seçemez.
-export const TMI_HEDEFLERI: Readonly<Record<string, string>> = { 'emir-ac': '/recete-rota', plan: '/recete-rota/plan' };
+export const TMI_HEDEFLERI: Readonly<Record<string, string>> = { 'emir-ac': '/recete-rota', plan: '/recete-rota/plan', istasyonlar: '/istasyonlar' };
 
 export const BASKA_SUNUCU = "TMI CORE yalnız kendi sunucusuna bağlanır; başka sunucuya istek gönderilmedi.";
 
