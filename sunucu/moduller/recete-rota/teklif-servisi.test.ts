@@ -3,6 +3,8 @@ import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
+import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { planAyariOku } from '../plan/disari.ts';
@@ -13,6 +15,9 @@ import * as sorgular from './sorgular.ts';
 
 // Teklif denemesi servisi: kayıtlar veritabanından, tezgâh ve takvim sahiplerinden okunur; saatler tesis anına çevrilir. Çözücünün
 // kendisi teklif-denemesi.test.ts'te sınanır. Veriler uydurmadır.
+// Ürün, rota ve emir burada kayıttan gelir: kullanıcı onların sahiplerini okuyamaz, okunamayan dilim kayıttaki gibi kalır. Okuyabilseydi
+// sahiplerin (boş) kayıtları kaydın üstüne konurdu (13.1); o yol plan-girdisi-emirler.test.ts'te.
+const OKUNMAYAN = new Set<string>(['sayfa.malzemeler', 'sayfa.rota', ...ROTA_ISLEMLERI, ...ADIMLI_OKUMA_ISLEMLERI]);
 
 describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -27,7 +32,7 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
   before(async () => {
     ortam = await testVeritabaniKur('recete_rota_teklif');
     const yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: 'dogru-parola-1' }));
-    kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
+    kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: ISLEMLER.filter((i) => !OKUNMAYAN.has(i)) };
     const s = ortam.sahip;
     const im = await s.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('TK-IM', 'Deneme merkezi') RETURNING id");
     const ist = await s.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('TK-IS', 'Deneme torna', $1, true) RETURNING id", [im!.id]);

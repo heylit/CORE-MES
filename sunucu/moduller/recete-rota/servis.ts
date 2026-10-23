@@ -16,7 +16,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { emirDilimi, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  aktifMakineler, istasyonKisiAtamalari, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, operasyonTipleri, planAyarlari,
+  aktifMakineler, istasyonKisiAtamalari, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, makineKisiAtamalari, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
@@ -270,7 +270,15 @@ export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now())
   const istasyonListesi = istasyonOkur ? await istasyonlar(db, { pasiflerDahil: false }) : [];
   const istasyonMerkezi = new Map(istasyonListesi.map((i) => [i.id, i.isMerkeziId]));
   const paylar = new Map<number, Map<number, number>>();
-  for (const a of kisiOkur ? await istasyonKisiAtamalari(db) : []) {
+  // 13.4: makineye atanan kişi de o makinenin istasyonunun iş merkezine pay verir (istasyon ataması gibi)
+  const makineIstasyonu = new Map(kisiOkur ? (await aktifMakineler(db)).flatMap((m) => (m.istasyonId === null ? [] : [[m.id, m.istasyonId] as const])) : []);
+  const atamalar = kisiOkur
+    ? [...await istasyonKisiAtamalari(db), ...(await makineKisiAtamalari(db)).flatMap((a) => {
+      const istasyonId = makineIstasyonu.get(a.makineId);
+      return istasyonId === undefined ? [] : [{ istasyonId, kisiId: a.kisiId, yuzde: a.yuzde }];
+    })]
+    : [];
+  for (const a of atamalar) {
     const m = istasyonMerkezi.get(a.istasyonId);
     if (m === undefined || m === null) continue;
     const l = paylar.get(a.kisiId) ?? new Map<number, number>();
@@ -370,7 +378,8 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     gorev = {};
     for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
   }
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev } };
+  // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici) } };
 }
 
 // Çerçeve kaydı metin olarak da yazabilir (yerel depo değeri); metin biçimli değer JSON olarak okunur.
