@@ -398,6 +398,24 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(yetkisiz, 'GET', '/recete-rota/kapasite')).statusCode, 403);
   });
 
+  // 13.4: makineye atanan kişi kapasite listesinde, makinenin istasyonunun iş merkezinde pay sahibidir.
+  test('RR-18b: makineye atanan kişi kapasitede makinenin iş merkezine pay verir; istasyon atamasıyla birlikte toplanır', async () => {
+    const m = (await vt().tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad, aciklama, aktif) VALUES ('RRM-A', 'RRM-A', NULL, true) RETURNING id"))!.id;
+    const ist = (await vt().tek<{ id: number }>(
+      "INSERT INTO istasyon (kod, ad, is_merkezi_id, tip, uretim_alani, aktif) VALUES ('RRM-A1', 'RRM-A1', $1, 'talasli', false, true) RETURNING id", [m]))!.id;
+    const mk = (await vt().tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id, aktif) VALUES ('RRM-MK', 'RRM makine', $1, true) RETURNING id", [ist]))!.id;
+    const [yalniz, ikisi] = [
+      await vt().tx((db) => yoneticiOlustur(db, { ad: 'RRM makineci', kullaniciAdi: 'rrmmakineci', parola: PAROLA })),
+      await vt().tx((db) => yoneticiOlustur(db, { ad: 'RRM iki atama', kullaniciAdi: 'rrmiki', parola: PAROLA })),
+    ];
+    assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: yalniz, yuzde: '60.00' })).statusCode, 200);
+    assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: ikisi, yuzde: '40.00' })).statusCode, 200);
+    assert.equal((await istek(tam, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: ikisi, yuzde: '20.00' })).statusCode, 200);
+    const k = (await istek(tam, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
+    assert.deepEqual(k.kisiler?.find((x) => x.id === String(yalniz))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
+    assert.deepEqual(k.kisiler?.find((x) => x.id === String(ikisi))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
+  });
+
   // Birim maliyetler finanstadır (kart #1187): durum dilimi finans.maliyet-oku ister, yazma finans.yonet ister.
   test('RR-16: maliyet dilimi finans.maliyet-oku olana gelir, olmayana null; yazma finans.yonet ister ve dilimde sürümle görünür; satırı olmayan kalem haritada yoktur', async () => {
     const durumOku = async (cerez: string): Promise<DurumCevabi> => {
