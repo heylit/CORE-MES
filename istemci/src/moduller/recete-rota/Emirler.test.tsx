@@ -5,7 +5,7 @@ import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BenCevabi, DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { AcilisSecenekleri, AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
-import { birlesmeAdaylari, birlesmeHedefleri, bolunebilirAdimlar } from './emir-komutlari.ts';
+import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import type { EmirSecimiSor } from './kopru.ts';
 import { YAZAR, ac, prototipiCalistir, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -355,6 +355,36 @@ describe('Emir bölümü Üretim Emirleri\'ne bağlıdır (kart #1185)', () => {
     ] } });
   }, 40000);
 
+  it('EMR-C7d: bölme önizlemesi yalnız seçimi çizer; kol iki dokunuşla, partiler kutularla seçilir, eşit pay artanı ana emirde bırakır', async () => {
+    const s = sunucu([emir(501, { surum: 5 })]);
+    const e = await ekranAc(s);
+    await waitFor(() => { expect(e.b.querySelectorAll('.orow')).toHaveLength(1); });
+    const ozet = () => Array.from(e.b.querySelectorAll('[data-bolme="501"] .bl-tablo tbody tr')).map((tr) => [tr.querySelector('th')!.textContent, ...Array.from(tr.querySelectorAll('td')).map((td) => td.textContent ?? '')]);
+    const gir = (k: string, v: string) => { const el = e.al<HTMLInputElement>(k); el.value = v; fireEvent.input(el); };
+    const kalan = () => e.al<HTMLInputElement>('[data-bolme="501"] [data-bolme-kalan]').value;
+    fireEvent.click(e.al('[data-act="orderDetail"][data-id="501"]'));
+    fireEvent.click(e.al('[data-act="bolmeTur"][data-h="501"][data-v="kol"]'));
+    fireEvent.click(e.al('[data-act="bolmeAdim"][data-h="501"][data-i="1"]'));
+    fireEvent.click(e.al('[data-act="bolmeAdim"][data-h="501"][data-i="3"]'));
+    expect(e.al('[data-bolme="501"] .bl-uyari').textContent).toContain('Kol miktarını gir.');
+    gir('[data-bolme="501"] [data-bolme-girdi="kolQ"]', '5');
+    expect(kalan()).toBe('15');
+    expect(ozet()).toEqual([['UE-2030-501', '20', '15', '20'], ['Yeni kol', 'ana emirde', '5', 'katıldı']]);
+    fireEvent.click(e.al('[data-act="bolmeTur"][data-h="501"][data-v="parti"]'));
+    gir('[data-bolme="501"] [data-bolme-girdi="parti"][data-i="0"]', '4');
+    gir('[data-bolme="501"] [data-bolme-girdi="parti"][data-i="1"]', '3');
+    expect(kalan()).toBe('13');
+    expect(ozet()).toEqual([['UE-2030-501', '13', '13', '13'], ['Parti 1', '4', '4', '4'], ['Parti 2', '3', '3', '3']]);
+    fireEvent.click(e.al('[data-act="bolmePartiEkle"][data-h="501"]'));
+    fireEvent.click(e.al('[data-act="bolmeEsit"][data-h="501"]'));
+    expect(Array.from(e.b.querySelectorAll<HTMLInputElement>('[data-bolme="501"] [data-bolme-girdi="parti"]')).map((i) => i.value)).toEqual(['5', '5', '5']);
+    expect(kalan()).toBe('5');
+    expect(e.al('[data-act="emirBolMiktar"][data-id="501"]').textContent).toBe('Partilere böl ve onaya gönder');
+    fireEvent.click(e.al('[data-act="emirBolMiktar"][data-id="501"]'));
+    await waitFor(() => { expect(s.yazmalar).toHaveLength(3); });
+    expect(s.yazmalar.map((y) => [y.yol, y.govde['adet']])).toEqual([['/adimli-emirler/501/bol', 5], ['/adimli-emirler/501/bol', 5], ['/adimli-emirler/501/bol', 5]]);
+  }, 40000);
+
   it('EMR-C8: emir alanları ve terminal işleri bağlı modda burada değiştirilmez', async () => {
     const s = sunucu([emir(501)]);
     const e = await ekranAc(s);
@@ -366,25 +396,57 @@ describe('Emir bölümü Üretim Emirleri\'ne bağlıdır (kart #1185)', () => {
   }, 40000);
 });
 
-describe('Parti kuralları PartiPaneli ile aynı sonucu verir', () => {
+describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirleri karar verir', () => {
   const kur = (durumlar: Array<'bekliyor' | 'calisiyor' | 'tamam'>, ek: Partial<AdimliEmirAyrintisi> = {}): AdimliEmirAyrintisi => ({
     ...ayrinti(emir(1), sunucu([])), isEmirleri: durumlar.map((d, i) => isEmri(i + 1, d)), ...ek,
   });
-  it('bölünebilir adım (Soru 121 a): kendisi bitmemiş, sonrakilerin hepsi bekleyen adımlardır; kapalı emir bölünmez', () => {
-    expect(bolunebilirAdimlar(kur(['tamam', 'bekliyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]);
-    expect(bolunebilirAdimlar(kur(['bekliyor', 'calisiyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]);
-    expect(bolunebilirAdimlar(kur(['calisiyor', 'calisiyor', 'bekliyor'])).map((a) => a.sira)).toEqual([2, 3]); // sonraki başlamışsa bölünmez
-    expect(bolunebilirAdimlar(kur(['tamam', 'tamam', 'bekliyor'])).map((a) => a.sira)).toEqual([3]); // bitmiş adımdan bölünmez
-    expect(bolunebilirAdimlar(kur(['bekliyor', 'bekliyor'], { durum: 'bitti' }))).toEqual([]);
+  const oku = (emirler: AdimliEmirAyrintisi[]) => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const e = emirler.find((x) => adres.endsWith(`/adimli-emirler/${String(x.id)}`));
+      return e ? json(200, { emir: e }) : json(404, { kod: 'BULUNAMADI', mesaj: 'Emir bulunamadı.' });
+    }));
+  };
+  const hazirla = (ad: string, girdi: Record<string, unknown>) => EMIR_KOMUTLARI[ad]!.hazirla(girdi);
+
+  it('kolsuz parti bitmemiş ilk adımdan ayrılır; sonraki adım başlamış olsa da istek gider, karar sahibinindir', async () => {
+    oku([kur(['tamam', 'calisiyor', 'calisiyor'])]);
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3 })).govde).toEqual({ adimSira: 2, adet: 2, surum: 3, birlesmeOpNo: null });
+    oku([kur(['tamam', 'tamam'])]);
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3 })).govde).toMatchObject({ adimSira: 2 });
+    oku([kur([])]);
+    await expect(hazirla('emir-bol', { id: 1, adet: 2, surum: 3 })).rejects.toThrow('Emrin adımı yok');
   });
-  it('birleşme adayı bölünen adımdan sonra gelen bekleyen adımlardır', () => {
-    expect(birlesmeAdaylari(kur(['bekliyor', 'bekliyor', 'bekliyor']), 1).map((a) => a.sira)).toEqual([2, 3]);
-    expect(birlesmeAdaylari(kur(['tamam', 'calisiyor', 'bekliyor']), 0).map((a) => a.sira)).toEqual([3]); // çalışan adım birleşme adımı olamaz
+
+  it('kol ayrılma adımından sonraki adımdan bölünür, katılma op numarası emrin adımındandır; çalışan adım ekranda engellenmez', async () => {
+    oku([kur(['bekliyor', 'calisiyor', 'calisiyor'])]);
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3 })).govde).toMatchObject({ adimSira: 2, birlesmeOpNo: 30 });
+    await expect(hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 9 })).rejects.toThrow('Kolun katılma adımı bu emirde yok.');
   });
-  it('birleşme hedefi: ana emir aynı op numarasında bekliyorsa listelenir, ilerlemişse listelenmez', () => {
-    const alt = kur(['bekliyor', 'bekliyor'], { id: 9, parti: { ustEmirId: 1, bolunmeSira: 1, altEmirIdleri: [], birlestigiEmirId: null } });
-    const ana = (opNo: number) => ({ ...(({ isEmirleri: _i, eski: _e, ...o }) => o)(ayrinti(emir(1), sunucu([]))), siradaki: { id: 1, opNo, ad: 'x', durum: 'bekliyor' as const, kaynak: null, istasyon: null } });
-    expect(birlesmeHedefleri(alt, [ana(10)]).map((e) => e.id)).toEqual([1]);
-    expect(birlesmeHedefleri(alt, [ana(20)])).toEqual([]);
+
+  it('katılma adımı ana emrin adımıdır; başlamış adım ekranda engellenmez', async () => {
+    const parti = { ustEmirId: 1, bolunmeSira: 2, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: 30 };
+    oku([kur(['tamam', 'calisiyor', 'bekliyor']), kur(['bekliyor'], { id: 9, parti })]);
+    expect(await hazirla('emir-katilma', { id: 9, m: 2, surum: 4 })).toMatchObject({ yol: '/adimli-emirler/9/birlesme-plani', govde: { birlesmeOpNo: 20, surum: 4 } });
+    await expect(hazirla('emir-katilma', { id: 9, m: 7, surum: 4 })).rejects.toThrow('Katılma adımı ana emirde yok.');
   });
+
+  it('geri katmanın hedefi üst emirdir ve sürümü yazmadan önce okunur; ana emir ilerlemiş olsa da istek gider', async () => {
+    const parti = { ustEmirId: 1, bolunmeSira: 1, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null };
+    oku([kur(['tamam', 'calisiyor', 'bekliyor'], { surum: 7 }), kur(['bekliyor', 'bekliyor', 'bekliyor'], { id: 9, parti })]);
+    expect(await hazirla('emir-birlestir', { id: 9, surum: 2 })).toMatchObject({ yol: '/adimli-emirler/1/birlestir', govde: { kaynakEmirId: 9, surum: 7, kaynakSurum: 2 } });
+    await expect(hazirla('emir-birlestir', { id: 1, surum: 7 })).rejects.toThrow('Bu emir bir alt emir değil.');
+  });
+
+  it('ekran bölmeyi önceden reddetmez: ana emir kadar kol miktarı sahibine gider, reddin iletisi uyarı satırında kalır', async () => {
+    const s = sunucu([emir(501, { surum: 5 })], { ret: { yol: '/bol', durum: 422, mesaj: 'Bölünen adet 1 ile elde kalan adedin bir eksiği arasında olmalı.' } });
+    const e = await ekranAc(s);
+    await waitFor(() => { expect(e.b.querySelectorAll('.orow')).toHaveLength(1); });
+    e.ifade('(Object.assign(bolmeDurum("501"), {tur:"kol", n:1, m:3, kolQ:"20"}), 1)');
+    expect(e.ifade<{ ileti: string; hazir: boolean; kalan: number }>('(({ileti, hazir, kalan}) => ({ileti, hazir, kalan}))(bolmeHesapla("501"))')).toEqual({ ileti: '', hazir: true, kalan: 0 });
+    e.ifade('(baglaAct("emirBolKol", {id:"501"}), 1)');
+    await waitFor(() => { expect(s.yazmalar).toHaveLength(1); });
+    expect(s.yazmalar[0]).toMatchObject({ yol: '/adimli-emirler/501/bol', govde: { adimSira: 2, adet: 20, birlesmeOpNo: 30 } });
+    await waitFor(() => { expect(e.bildirim()).toContain('elde kalan adedin bir eksiği'); });
+    expect(e.ifade<{ metin: string } | null>('EB.uyari')).toMatchObject({ metin: 'Bölünen adet 1 ile elde kalan adedin bir eksiği arasında olmalı.' });
+  }, 40000);
 });
