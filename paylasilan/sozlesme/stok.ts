@@ -740,11 +740,17 @@ export const sepetSatiri = z.object({
   miktar: ondalikMetinSemasi,
   mevcut: ondalikMetinSemasi,
   eklenme: zamanSemasi,
+  // Herkese sepet (Soru 133): satırın kartı ve hedefi (istasyon ya da konum); hedef sepete eklerken önerilir, Teslim et'te değişebilir.
+  refakat: z.object({ id: z.number().int(), etiket: z.string() }).nullable().optional(),
+  hedef: z.object({ konumId: z.number().int(), kod: z.string(), ad: z.string().nullable(), istasyonId: z.number().int().nullable() }).nullable().optional(),
 });
 export type SepetSatiri = z.output<typeof sepetSatiri>;
 export const sepetCevabi = z.object({ satirlar: z.array(sepetSatiri) });
 export type SepetCevabi = z.output<typeof sepetCevabi>;
-export const sepetEkleGovdesi = z.object({ malzemeId: kimlik, miktar: miktarSemasi, kaynakKonumId: kimlik.optional(), partiId: buyukKimlik.nullable().optional() });
+export const sepetEkleGovdesi = z.object({
+  malzemeId: kimlik, miktar: miktarSemasi, kaynakKonumId: kimlik.optional(), partiId: buyukKimlik.nullable().optional(),
+  statuId: kimlik.nullable().optional(), refakatPartisiId: kimlik.nullable().optional(), hedef: z.union([z.object({ istasyonId: kimlik }).strict(), z.object({ konumId: kimlik }).strict()]).nullable().optional(),
+});
 export type SepetEkleGovdesi = z.input<typeof sepetEkleGovdesi>;
 export type SepetEkleKomutu = z.output<typeof sepetEkleGovdesi>;
 export const sepetDegistirGovdesi = z.object({ miktar: miktarSemasi });
@@ -756,6 +762,19 @@ export const teslimGovdesi = z.object({
   aciklama: bosOlabilir(200), eksiOnay: z.boolean().optional(),
 }).refine((g) => g.hedefKonumId !== undefined || (g.satirHedefleri?.length ?? 0) > 0, { message: 'Teslim yerini seçin.', path: ['hedefKonumId'] });
 export type TeslimGovdesi = z.input<typeof teslimGovdesi>;
+// Sepetten Teslim et (Soru 133, herkes): her satır hedefine "yolda" teslim olur; hedefi verilmeyen satır kaydındaki hedefe gider.
+// Kart, satırın kartıdır. Satır teslim açılınca sepetten düşer; açılamayan satır nedeniyle döner, sepette kalır.
+export const sepetTeslimEtGovdesi = z.object({
+  satirlar: z.array(z.object({ satirId: buyukKimlik, hedef: z.union([z.object({ istasyonId: kimlik }).strict(), z.object({ konumId: kimlik }).strict()]).optional() })).min(1).max(200),
+  aliciKodu: z.string().trim().min(1).max(80).nullable().optional(),
+  kaynakKimligi: z.string().trim().min(3).max(120),
+});
+export type SepetTeslimEtGovdesi = z.input<typeof sepetTeslimEtGovdesi>;
+export const sepetTeslimEtCevabi = z.object({
+  teslimler: z.array(z.object({ satirId: z.number().int(), teslimNo: z.string() })),
+  kalanlar: z.array(z.object({ satirId: z.number().int(), neden: z.string() })),
+});
+export type SepetTeslimEtCevabi = z.output<typeof sepetTeslimEtCevabi>;
 export type TeslimKomutu = z.output<typeof teslimGovdesi>;
 export const stoktanDusGovdesi = z.object({ cikisNedeni: z.enum(CIKIS_NEDENLERI), uretimEmriId: kimlik.optional(), aciklama: bosOlabilir(200), eksiOnay: z.boolean().optional() });
 export type StoktanDusGovdesi = z.input<typeof stoktanDusGovdesi>;
@@ -855,6 +874,23 @@ export const refakatLotaBaglaGovdesi = z.object({ kod: z.string().trim().min(1).
 export type RefakatLotaBaglaGovdesi = z.input<typeof refakatLotaBaglaGovdesi>;
 export const refakatLotaBaglaCevabi = z.object({ refakat: refakatPartisi, baglanan: ondalikMetinSemasi, bekleyen: ondalikMetinSemasi });
 export type RefakatLotaBaglaCevabi = z.output<typeof refakatLotaBaglaCevabi>;
+// Kartın satırları (Soru 128): kartın malzemesi rota boyunca nerede. Hammadde satırı kartla verilen lotun bakiyesi, adım satırı kartın
+// üretim partisinin bakiyesi (statü adımı söyler). miktar konumdaki bakiye; yolda, oradan gönderilmiş ama alınmamış kısım.
+// alinabilir: kalitesi serbest ve yoldaki düşülünce artı kalan (okutarak alınır, sepete eklenir, bırakılır).
+export const refakatKartSatiri = z.object({
+  konumId: z.number().int(), konumKod: z.string(), konumAd: z.string().nullable(), konumTur: z.enum(KONUM_TURLERI), istasyonId: z.number().int().nullable(),
+  malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
+  partiId: z.number().int(), partiEtiketi: z.string(), statuId: z.number().int().nullable(), kaliteDurumu: z.enum(KALITE_DURUMLARI),
+  miktar: ondalikMetinSemasi, yolda: ondalikMetinSemasi, alinabilir: ondalikMetinSemasi,
+});
+export type RefakatKartSatiri = z.output<typeof refakatKartSatiri>;
+export const refakatKartSatirlariCevabi = z.object({ refakat: refakatPartisi, satirlar: z.array(refakatKartSatiri) });
+export type RefakatKartSatirlariCevabi = z.output<typeof refakatKartSatirlariCevabi>;
+// Serbest Al (Soru 133): kartı okutan, kartın bir satırından kendi istasyonuna alır; kaynak onayı yok, kaynak taraf itiraz eder (96 b).
+export const kartlaAlGovdesi = z.object({
+  konumId: kimlik, partiId: buyukKimlik, statuId: kimlik.nullable(), miktar: miktarSemasi, istasyonId: kimlik, kaynakKimligi: z.string().trim().min(3).max(120),
+});
+export type KartlaAlGovdesi = z.input<typeof kartlaAlGovdesi>;
 export const refakatPartileriCevabi = z.object({ partiler: z.array(refakatPartisi) });
 export type RefakatPartileriCevabi = z.output<typeof refakatPartileriCevabi>;
 // Kart: emrin refakat kartı (Üretim Emirleri'nin verisi) partinin QR'ı ve lot bilgisiyle.
@@ -1061,6 +1097,9 @@ export const teslimGonderGovdesi = z.object({
   aliciKodu: z.string().trim().min(1).max(80).nullable().optional(),
   // Refakat kartıyla teslim (kart #123): lot ve emir karttan okunur; verilen parti ya da emir kartınkiyle aynı olmalıdır.
   refakatPartisiId: kimlik.nullable().optional(),
+  // Bırakınca teslim (Soru 133): taşıyan varışta bırakır; teslim anında kapanır, yolda olmaz. Hedef taraf süre içinde itiraz eder.
+  // Depo rafına yalnız depo bırakır; başkasının depoya bıraktığı kabul alanına düşer.
+  birak: z.boolean().optional(),
 });
 export type TeslimGonderGovdesi = z.input<typeof teslimGonderGovdesi>;
 // Teslim alan eksi onay veremez (STK-T6): kaynakta yetmezse teslim reddedilir, gönderen düzeltir.
@@ -1079,6 +1118,8 @@ export const teslim = z.object({
   gonderim: zamanSemasi, kapanis: zamanSemasi.nullable(), surum: surumSemasi,
   // Soru 96 b: okutarak alındı, kaynak onayı yok; kaynak taraf itirazSonu'na kadar itiraz eder. İtiraz geri almaz, iade teslimi açar.
   okutarak: z.boolean().optional(), itirazSonu: zamanSemasi.nullable().optional(),
+  // Yolda süresi (Soru 133, ayar `stok.yolda-suresi-dk`): bu andan sonra teslim "süre doldu" diye iptal olur; ayar boşsa null.
+  sureSonu: zamanSemasi.nullable().optional(),
   itiraz: z.object({ neden: z.string(), kisiAd: z.string().nullable(), zaman: zamanSemasi, iadeTeslimId: z.number().int().nullable() }).nullable().optional(),
 });
 export type Teslim = z.output<typeof teslim>;
@@ -1149,6 +1190,8 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     // Refakat kartı okutulduysa (kart #123): kartın partisi ve kişinin alabileceği, o kartla yoldaki teslimler (Soru 118 a).
     refakat: refakatPartisi.optional(),
     gelenler: z.array(teslim).optional(),
+    // Kartın satırları (Soru 128): kart okutulunca gelir; okutma yetkisi olan herkes görür (stok okuması gerekmez).
+    kartSatirlari: z.array(refakatKartSatiri).optional(),
   }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.
   z.object({
