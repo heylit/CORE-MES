@@ -388,9 +388,16 @@ function stKur(S, ek = [], gevset = true) {
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
     w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
   };
-  for (const k of new Set([...(gevset ? S.kapali : []), ...ek])) if (GEVSEK[k]) GEVSEK[k](st);
+  const kapali = new Set([...(gevset ? S.kapali : []), ...ek]);
+  for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
+  /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
+  if (!kapali.has('ayarci') && ayarciYok(D)) { GEVSEK.ayarci(st); st.ayarciYok = true; }
   for (const ev of S.olaylar || []) applyEvent(st, ev);
   return st;
+}
+function ayarciYok(D) {
+  const v = new Set((D.vardiyalar || []).map(x => x.id));
+  return !(D.personel || []).some(p => p.ayar && v.has(p.vardiya));
 }
 /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi); başlangıç günü 07:00'den önce değildir. */
 function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; }
