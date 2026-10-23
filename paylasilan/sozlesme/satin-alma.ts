@@ -4,6 +4,7 @@ import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
+import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
 // alt kayıt kimlikleri istemcide üretilen uuid'dir. Tutarlar ondalık metindir (float yok).
@@ -275,7 +276,10 @@ export const tedarikciSemasi = z.object({
   firmaAktif: z.boolean(),
   // Finans özetinde firma sürümü yok; finans verene kadar boş (satın alma firmayı yazmaz).
   firmaSurum: surumSemasi.nullable(),
+  // 236 a: satın almanın eski durum sütunu; artık yazılmaz ve siparişi engellemez, yalnız gösterilir.
   durum: z.enum(TEDARIKCI_DURUMLARI),
+  // 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; kaydı yoksa null. "Aday" ve "Askıda" tedarikçiye sipariş verilmez.
+  kaliteDurumu: z.enum(KM_TEDARIKCI_DURUMLARI).nullable(),
   puan: z.number().int().min(1).max(5),
   notlar: z.string(),
   kategoriler: z.array(z.string()),
@@ -288,7 +292,6 @@ export const tedarikciSemasi = z.object({
 });
 export const tedarikciKaydetGovdesi = z.object({
   firmaId: firmaKimligi,
-  durum: z.enum(TEDARIKCI_DURUMLARI),
   puan: z.number().int().min(1).max(5),
   notlar: metin(2000),
   kategoriler: z.array(z.string().trim().min(1).max(60)).max(50),

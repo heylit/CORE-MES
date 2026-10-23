@@ -1,7 +1,7 @@
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import type {
   KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmGecmisCevabi, KmGeriYukleCevabi, KmIlkParcaBekleyenCevabi, KmIlkParcaCevabi, KmIlkParcaGovdesi, KmGeriYukleGovdesi, KmKarantinaKonumlariCevabi, KmKarantinaPartileriCevabi, KmOnayGeriAlGovdesi, KmOnaylaGovdesi, KmOnayReddiAlani, KmSilGovdesi,
-  KmOnaylaCevabi, KmSurumCevabi, KmYazGovdesi,
+  KmOnaylaCevabi, KmSurumCevabi, KmTedarikciFirmalariCevabi, KmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
 import type { api } from '../../ortak/veri/api.ts';
@@ -175,6 +175,10 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => 
     // NCR kapanışında serbest bırakılacak konum seçimi (partinin önceki konumu bilinmediğinde; KARANTINA_HEDEF_BETIGI).
     if (ilk === 'karantina-konumlari' && ikinci === undefined && g.yontem === 'GET') {
       return tamam(await istemci.get<KmKarantinaKonumlariCevabi>('/kalite-merkezi/karantina-konumlari'));
+    }
+    // Tedarikçi formunun firma seçicisi (236 a; FIRMA_SECICI_BETIGI).
+    if (ilk === 'tedarikci-firmalari' && ikinci === undefined && g.yontem === 'GET') {
+      return tamam(await istemci.get<KmTedarikciFirmalariCevabi>('/kalite-merkezi/tedarikci-firmalari'));
     }
     // NCR kapanışında parti başına serbest bırakılacak miktar (320 a; SERBEST_MIKTAR_BETIGI).
     if (ilk === 'karantina-partileri' && ikinci !== undefined && p.length === 3 && g.yontem === 'GET') {

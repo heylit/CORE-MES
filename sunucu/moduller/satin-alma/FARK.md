@@ -454,3 +454,14 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
 - Talep açma (`talep/TalepAc.tsx`) ve satın alma merkezindeki kalem ile siparişteki kalemi değiştirme miktarları `istemci/src/ortak/veri/miktar.ts` ile okunur: "12.5" = "12,5", virgül varsa nokta binliktir ("1.250,5" = 1250,5). Virgülsüz "1.250" belirsizdir (soru 71): gönderilmez, ortak ileti gösterilir.
 - Merkezdeki miktar girdisi binliksiz yazılır (1250); ekranın kendi yazdığı değer yeniden okununca belirsiz sayılmaz. Fiyat girişleri değişmedi.
 - Sunucu, göç, uç ve rol x işlem yok.
+
+# FARK: satin-alma, tedarikçi onay durumu Kalite Merkezi'nden firma kimliğiyle (236 a; 23.10.2026)
+- Tedarikçi onay durumunun tek sahibi Kalite Merkezi'dir. SAT-76 denetimi durumu `kalite-merkezi/disari` `tedarikciOnayDurumlari` ile firma
+  kimliğinden okur (bağ `sunucu/kablolama.ts`, çözücü `kaliteDurumuCozucusu`). Onayı "Aday" ya da "Askıda" olan tedarikçiye yeni sipariş 422
+  alır; ileti firmayı ve durumu adlandırır. Kalite Merkezi'nde kaydı olmayan firma reddedilmez.
+- Ad ve kod eşlemesi (`kaliteAskisindakiFirmalar`) satın almadan kalktı; firma kimliği olmayan eski kalite kaydı için Kalite Merkezi'nde sürer.
+- `satin_alma_tedarikci.durum` artık yazılmaz ve siparişi engellemez (sütun düşürülmedi; 19.10.2026 notundaki "kendi askıda durumu da kalır"
+  kuralının yerine geçer). Kayıt gövdesinde `durum` alanı kalktı; cevapta eski değer ve yeni `kaliteDurumu` (yoksa null) gelir.
+- Ekran: tedarikçi formundaki durum seçimi salt okunur "Kalite onayı" alanı oldu; liste ve kartta etiket Kalite Merkezi durumudur. Ekranın
+  iç durumu kalite durumundan türer (Aday ve Askıda askıda işaretlenir). Göç, rol x işlem ve paket yok.
+

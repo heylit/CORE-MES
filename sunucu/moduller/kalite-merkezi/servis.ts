@@ -8,11 +8,13 @@ import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
+import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
 import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuclandir } from '../uretim-emirleri/disari.ts';
 import {
@@ -20,6 +22,7 @@ import {
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
+import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -54,6 +57,29 @@ export async function ozet(db: Db): Promise<KmOzetCevabi> {
 
 export function kaliteAskisindakiTedarikciler(db: Db): Promise<{ kimlik: string; kod: string | null; ad: string }[]> {
   return sorgular.onayiOlanlar(db, TEDARIKCI_KOLEKSIYONU, TEDARIKCI_ASKIDA);
+}
+
+// 236 a: istenen firmaların Kalite Merkezi onay durumu (kurallar.ts tedarikciOnayDurumlari). Kaydı olmayan firma haritada yoktur.
+export async function tedarikciOnayDurumlari(db: Db, firmaIdler: readonly number[]): Promise<Map<number, KmTedarikciDurumu>> {
+  const istenen = new Set(firmaIdler);
+  if (istenen.size === 0) return new Map();
+  const firmalar = (await tumFirmalar(db)).filter((f) => istenen.has(f.id));
+  return onayDurumlari(await sorgular.tedarikciKayitlari(db, TEDARIKCI_KOLEKSIYONU), firmalar);
+}
+
+export async function tedarikciFirmaSecenekleri(db: Db): Promise<KmTedarikciFirmalariCevabi['firmalar']> {
+  return tedarikciFirmalari(await tumFirmalar(db));
+}
+
+// 236 a: tedarikçi kaydının firması değiştiyse firma Müşteri-Tedarikçi'de aktif tedarikçi olmalıdır. Değişmeyen bağ (firma sonradan
+// pasifleşse de) kaydın öteki alanlarının yazılmasını engellemez.
+async function tedarikciFirmasiniDenetle(db: Db, koleksiyon: string, onceki: Govde | null, govde: Govde): Promise<void> {
+  if (koleksiyon !== TEDARIKCI_KOLEKSIYONU) return;
+  const yeni = tedarikciFirmaKimligi(govde);
+  if (yeni === 'gecersiz') throw dogrulama(ILETILER.tedarikciFirmasi, TEDARIKCI_FIRMA_ALANI);
+  if (yeni === null || yeni === tedarikciFirmaKimligi(onceki)) return;
+  const f = await firmaOzeti(db, yeni);
+  if (f === null || !tedarikciFirmasiMi(f)) throw dogrulama(ILETILER.tedarikciFirmasi, TEDARIKCI_FIRMA_ALANI);
 }
 
 // Beklenen sürüm null ise kayıt yok sayılır: dolu kayıt varsa 409. Sayıysa dolu kaydın sürümü o olmalıdır; arada yazılmış ya
@@ -168,6 +194,7 @@ async function kayitYaz(
   }
   if (onay && degisen.length > 0) govde = sunucuOnayi(koleksiyon, onceki, govde, onayKisisi(kullanici));
   await olcumCihazlariniDenetle(db, koleksiyon, onceki, govde);
+  await tedarikciFirmasiniDenetle(db, koleksiyon, onceki, govde);
   let surum: number;
   if (beklenen === null) {
     const yeni = await sorgular.yeniYaz(db, koleksiyon, kimlik, govde, kullanici.id);
