@@ -10,6 +10,9 @@ import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
+import {
+  logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
+} from '../siparisler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { satisIsi } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
@@ -23,7 +26,7 @@ import type { LogoyaGidecekSatisTeklifi, SatisKaynagi, SatisTurOrtami, SiparisLo
 const PAROLA = 'dogru-parola-1';
 const TEST_ISTEK_SURESI_MS = 5000;
 
-// Portalın disari.ts işlevleri gelene kadar kaynak test içinde tutulur (UYUM-BORCU "bağlamada kapanacak"). Sonucu alan belge kuyruktan çıkar.
+// Kaynak test içinde sahte tutulur; Siparişler'in sırası siparisler/logo-gonderim.test.ts'te denenir. Sonucu alan belge kuyruktan çıkar.
 type Sonuclu = { kayitNo: string | null; satirRefleri: { satirId: number; logoSatirRef: string }[] | null; hata: string | null };
 interface SahteKaynak extends SatisKaynagi {
   teklifler: Map<number, LogoyaGidecekSatisTeklifi & Sonuclu>;
@@ -131,8 +134,8 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
   test('LGT-7 kabul: teklif niyetle, satış müşterisi denetiminden sonra açılır; satırlar teklif kaydından okunup bağlanır; sonra sipariş tekliften açılır', async () => {
     const t = teklifEkle();
     const bellek = yeniSurecBellegi();
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-teklifi-niyet', no: t.id });
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-teklifi', no: t.id, sonuc: 'gonderildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi-niyet', no: t.id });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'gonderildi' });
     const logo = kopru.satisTeklifleri.get(t.no)!;
     assert.deepEqual(kopru.istekler.map((i) => `${i.yontem} ${i.yol}`), [
       'GET /api/SalesOffer/customer/M-DENEME-01', 'POST /api/SalesOffer/AddRich', `GET /api/SalesOffer/${logo.ref}`,
@@ -146,8 +149,8 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
       id: sid, no: 'SS-2026-001', tarih: '2026-10-13', teklifKayitNo: x.kayitNo, kayitNo: null, satirRefleri: null, hata: null,
       satirlar: [{ satirId: 901, teklifSatirRef: x.satirRefleri![0]!.logoSatirRef, miktar: '6', termin: null }],
     });
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-siparisi-niyet', no: sid });
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-siparisi', no: sid, sonuc: 'gonderildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-siparisi-niyet', no: sid });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-siparisi', no: sid, sonuc: 'gonderildi' });
     const sip = kopru.satisSiparisleri.get('SS-2026-001')!;
     assert.equal(sip.teklifRef, logo.ref);
     assert.deepEqual(sip.govde, { number: 'SS-2026-001', date: '13.10.2026', orderStatus: 4, lines: [{ offerLineRef: logo.satirlar[0], quantity: 6 }] });
@@ -159,13 +162,13 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     const yok = teklifEkle({ firmaId: await firma('M-CRM-YOK') });
     const bellek = yeniSurecBellegi();
     await tur(ortami(bellek));
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-teklifi', no: yok.id, sonuc: 'reddedildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: yok.id, sonuc: 'reddedildi' });
     assert.deepEqual(yazmalar(), []);
     assert.match(kaynak.teklifler.get(yok.id)?.hata ?? '', /M-CRM-YOK Logo'da satış müşterisi \(CRM\) olarak tanımlı değil/);
     kaynak.teklifler.delete(yok.id);
     const kodsuz = teklifEkle({ firmaId: null });
     const once = kopru.istekler.length;
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-teklifi', no: kodsuz.id, sonuc: 'reddedildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: kodsuz.id, sonuc: 'reddedildi' });
     assert.equal(kopru.istekler.length, once);
     assert.equal(kaynak.teklifler.get(kodsuz.id)?.hata, 'Firmanın Logo cari kodu yok.');
   });
@@ -175,13 +178,13 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
     kopru.senaryo = 'cevap-kayboldu';
     const bellek = yeniSurecBellegi();
     await tur(ortami(bellek));
-    assert.deepEqual(await tur(ortami(bellek)), { tur: 'satis-teklifi', no: t.id, sonuc: 'belirsiz' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'belirsiz' });
     kopru.senaryo = 'basari';
     simdi += 60_000;
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'bos' });
     simdi += BELIRSIZ_BEKLEME_MS;
     for (const b of [bellek, yeniSurecBellegi()]) {
-      assert.deepEqual(await tur(ortami(b)), { tur: 'satis-teklifi', no: t.id, sonuc: 'reddedildi' });
+      assert.deepEqual(await tur(ortami(b)), { tur: 'siparisler-teklifi', no: t.id, sonuc: 'reddedildi' });
       simdi += 3600_000;
     }
     assert.equal(kopru.satisTeklifAcilan.get(t.no), 1, 'Logo\'da tek teklif');
@@ -194,8 +197,42 @@ describe('Logo satış gönderimi (teklif, tekliften sipariş), sahte köprü ve
       id: sid, no: 'SS-2026-002', tarih: '2026-10-13', teklifKayitNo: null, kayitNo: null, satirRefleri: null, hata: null,
       satirlar: [{ satirId: 911, teklifSatirRef: null, miktar: '1', termin: null }],
     });
-    assert.deepEqual(await tur(ortami()), { tur: 'satis-siparisi', no: sid, sonuc: 'reddedildi' });
+    assert.deepEqual(await tur(ortami()), { tur: 'siparisler-siparisi', no: sid, sonuc: 'reddedildi' });
     assert.equal(kopru.istekler.length, 0);
     assert.equal(kaynak.siparisler.get(sid)?.hata, 'Siparişin teklifi Logo\'da yok.');
+  });
+
+  test('LGT-11 kaynak Siparişler: verilen teklif sürümü Logo\'ya gider, sonucu Siparişler sırasına yazılır; Portal sırasındaki teklif gitmez', async () => {
+    const siparislerKaynagi: SatisKaynagi = {
+      teklifGidecekler: logoyaGidecekSatisTeklifleri, teklifSonucu: satisTeklifiLogoSonucu,
+      siparisGidecekler: logoyaGidecekSatisSiparisleri, siparisSonucu: satisSiparisiLogoSonucu,
+    };
+    const sahip = ortam!.sahip;
+    await sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('LGT-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kart = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       SELECT 'lgt-dnm-1', 'mamul', 'LGT-DNM-', 1, 'aktif', $1, id, id FROM kisi ORDER BY id LIMIT 1 RETURNING no`,
+      [JSON.stringify({ id: 'lgt-dnm-1', com: { ad: 'Deneme mamul', birim: 'adet' } })],
+    ))!.no;
+    const portal = (await sahip.tek<{ id: number }>(
+      "INSERT INTO portal_logo_gonderim (tur, belge_yol, teklif_surumu) VALUES ('teklif', 'requests/lgt-deneme', 1) RETURNING id",
+    ))!.id;
+    let t = await tamam<{ id: number; no: string; surum: number; satirlar: { id: number }[] }>('/siparisler/teklifler/ekle', {
+      firmaId, baslik: 'Logo satış denemesi', istenenTarih: null, aciklama: null, satirlar: [{ malzemeNo: kart, tanim: 'Deneme parça', miktar: '3' }],
+    });
+    t = await tamam(`/siparisler/teklifler/${t.id}/surum-ver`, { surum: t.surum, fiyatlar: [{ satirId: t.satirlar[0]!.id, birimFiyat: '50' }], iskontoOrani: '0' });
+    const sira = (await sahip.tek<{ id: number }>("SELECT id FROM siparisler_logo_gonderim WHERE tur = 'teklif' AND teklif_id = $1", [t.id]))!.id;
+
+    const o = { ...ortami(), kaynak: siparislerKaynagi };
+    assert.deepEqual(await satisTuru(vt(), o), { tur: 'siparisler-teklifi-niyet', no: sira });
+    const sonuc = await satisTuru(vt(), o);
+    assert.deepEqual(sonuc, { tur: 'siparisler-teklifi', no: sira, sonuc: 'gonderildi' });
+    const logo = kopru.satisTeklifleri.get(t.no)!;
+    const yazilan = await sahip.tek<{ durum: string; logo_kayit_no: string; satir_refleri: Record<string, string> }>(
+      'SELECT durum, logo_kayit_no, satir_refleri FROM siparisler_logo_gonderim WHERE id = $1', [sira]);
+    assert.deepEqual(yazilan, { durum: 'gonderildi', logo_kayit_no: String(logo.ref), satir_refleri: { [String(t.satirlar[0]!.id)]: String(logo.satirlar[0]) } });
+    assert.deepEqual(await satisTuru(vt(), o), { tur: 'bos' });
+    assert.equal(yazmalar().length, 1);
+    assert.deepEqual(await sahip.tek('SELECT durum FROM portal_logo_gonderim WHERE id = $1', [portal]), { durum: 'bekliyor' });
   });
 });

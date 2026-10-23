@@ -5,9 +5,9 @@ import {
   karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaIptalGidecekSiparisler,
   logoyaKapatmaGidecekSiparisler, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu, talepLogoSonucu,
 } from '../satin-alma/disari.ts';
+import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
 import { emirMalzemeFisleri } from '../stok/disari.ts';
 import { emirHurdalari, emirNolari } from '../uretim-emirleri/disari.ts';
-import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../portal/disari.ts';
 import { ortamKoprusu } from './baglanti.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
 import { BEKLEME_NEDENLERI, emirMalzemeFisiKaynagi, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeTuru, satinAlmaTuru, satisTuru, yeniSurecBellegi } from './servis.ts';
@@ -47,7 +47,7 @@ export function satinAlmaIsi(kaynak: SatinAlmaKaynagi): IsTanimi {
   return kopruIsi('logo-satin-alma-gonderimi', IS_ARALIGI_MS, (vt) => satinAlmaTuru(vt, { kopru: ortamKoprusu, bellek: siparisBellegi, saat: () => new Date(), kaynak }));
 }
 
-// Satış işi (teklif, tekliden sipariş): kaynağı portalın disari.ts işlevleridir (kart #941).
+// Satış işi (teklif, tekliften sipariş): kaynağı Siparişler'in disari.ts işlevleridir.
 export function satisIsi(kaynak: SatisKaynagi): IsTanimi {
   const satisBellegi = yeniSurecBellegi();
   return kopruIsi('logo-satis-gonderimi', IS_ARALIGI_MS, (vt) => satisTuru(vt, { kopru: ortamKoprusu, bellek: satisBellegi, saat: () => new Date(), kaynak }));
