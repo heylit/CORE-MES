@@ -18,7 +18,7 @@ import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuc
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
-  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, karantinaIstegi, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
+  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
@@ -156,8 +156,11 @@ async function kayitYaz(
   const onceki = await sorgular.kayitGovdesi(db, koleksiyon, kimlik);
   const ret = izReddi(koleksiyon, 'yaz', onceki !== null);
   if (ret !== null) throw cakisma(ILETILER[ret]);
-  if (onayliFormReddi(koleksiyon, onceki, govde)) throw cakisma(ILETILER.onayliForm);
-  if (kapanmisKayitMi(koleksiyon, onceki)) throw cakisma(ILETILER.kapanmisKayit);
+  // 228 a: arşivleme kilitli içeriği değiştirmez; kilidin yerine yönetici denetlenir.
+  const kilitliArsiv = (onayliFormMu(koleksiyon, onceki) || kapanmisKayitMi(koleksiyon, onceki)) && yalnizArsivDegisiyor(onceki, govde);
+  if (kilitliArsiv && !(await kisiBayrakliMi(db, kullanici.id))) throw yetkiYok(ILETILER.arsivYonetici);
+  if (!kilitliArsiv && onayliFormReddi(koleksiyon, onceki, govde)) throw cakisma(ILETILER.onayliForm);
+  if (!kilitliArsiv && kapanmisKayitMi(koleksiyon, onceki)) throw cakisma(ILETILER.kapanmisKayit);
   const degisen = onayDegisiklikleri(koleksiyon, onceki, govde);
   if (!onay && degisen.length > 0) {
     throw new UygulamaHatasi('YETKI_YOK', ILETILER.onayUcu, { alan: ONAY_ALANI_HATASI, ayrinti: { alanlar: degisen } });
