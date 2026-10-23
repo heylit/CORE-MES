@@ -32,7 +32,9 @@ test.describe('yönetici', () => {
     test('Terimler araması süzer; kütüphanede sabit bölümler görünür', async ({ page, ac }) => {
       await ac('/kalite-merkezi/yeni/terimler');
       await page.getByLabel('Terim ara').fill('Cpk');
-      await expect(page.getByText('Süreç yeteneği', { exact: false })).toBeVisible();
+      // Arama açıklamada da arar: Cp'nin açıklaması Cpk geçtiği için o da kalır; terim adı tam eşleşmeyle bakılır.
+      await expect(page.getByText('Cpk', { exact: true })).toBeVisible();
+      await expect(page.getByText('Cp', { exact: true })).toBeVisible();
       await expect(page.getByText('Kabul edilebilir kalite seviyesi', { exact: false })).toHaveCount(0);
       await ac('/kalite-merkezi/yeni/kutuphane');
       await expect(page.getByRole('heading', { name: 'Geometrik toleranslar (ASME Y14.5 / ISO 1101)' })).toBeVisible();
