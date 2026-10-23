@@ -14,7 +14,8 @@ export const MALZEMELER_IKINCI_MENU = {
   gruplar: [
     { maddeler: [
       { anahtar: 'new', baslik: 'Yeni kart', yol: '/malzemeler/yeni', simge: 'plus', islem: 'malzemeler.yaz' },
-      { anahtar: 'cat', baslik: 'Katalog', yol: '/malzemeler', simge: 'list', islem: 'sayfa.malzemeler' },
+      { anahtar: 'cat', baslik: 'Katalog', yol: '/malzemeler', simge: 'list', islem: 'sayfa.malzemeler',
+        okur: ['/malzeme-katalogu-ayarlari', '/malzeme-katalogu-kartlari', '/stok/malzeme-kart-bilgileri'] },
     ] },
     { baslik: 'Tanımlar', maddeler: [
       { anahtar: 'tpl', baslik: 'Şablonlar', yol: '/malzemeler/sablonlar', simge: 'grid', islem: 'sayfa.malzemeler' },

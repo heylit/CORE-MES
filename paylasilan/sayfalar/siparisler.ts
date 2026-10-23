@@ -13,8 +13,8 @@ export const SIPARISLER_IKINCI_MENU = {
   gruplar: [
     {
       maddeler: [
-        { anahtar: 'siparisler', baslik: 'Satış siparişleri', yol: '/siparisler', simge: 'list', islem: 'siparisler.oku' },
-        { anahtar: 'teklifler', baslik: 'Teklifler', yol: '/siparisler/teklifler', simge: 'edit', islem: 'siparisler.oku' },
+        { anahtar: 'siparisler', baslik: 'Satış siparişleri', yol: '/siparisler', simge: 'list', islem: 'siparisler.oku', okur: ['/siparisler', '/musteri-tedarikci/firmalar/secim'] },
+        { anahtar: 'teklifler', baslik: 'Teklifler', yol: '/siparisler/teklifler', simge: 'edit', islem: 'siparisler.oku', okur: ['/siparisler/teklifler', '/musteri-tedarikci/firmalar/secim'] },
       ],
     },
     {
