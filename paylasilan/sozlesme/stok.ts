@@ -28,7 +28,7 @@ export const CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger
 export const AMBALAJ_TURLERI = ['kasa', 'koli', 'palet', 'bidon', 'makara'] as const;
 export const HAREKET_TURLERI = ['giris', 'cikis', 'transfer', 'sayim_fazla', 'sayim_eksik', 'geri_alma'] as const;
 export const LOGO_ESLESME_DURUMLARI = ['irsaliye_bekleniyor', 'eslesti', 'fark_var'] as const;
-export const STOK_DURUMLARI = ['kritik', 'eksi', 'kabulde'] as const;
+export const STOK_DURUMLARI = ['kritik', 'eksi', 'kabulde', 'statulu'] as const;
 
 export type MalzemeTuru = (typeof MALZEME_TURLERI)[number];
 export type KonumTuru = (typeof KONUM_TURLERI)[number];
@@ -327,6 +327,8 @@ export const malzemeStokSatiri = z.object({
   toplam: ondalikMetinSemasi,
   // Statüsüz (kullanılabilir) miktar; toplamdan farkı üretimde statü almış yarı parçadır. Durum serbest miktara göredir.
   serbest: ondalikMetinSemasi,
+  // Yalnız statü kimliği dolu bakiyenin toplamı; karantinadaki ya da kabuldeki statüsüz miktar buna girmez.
+  statude: ondalikMetinSemasi,
   // Statüdeki malzemeden açık üretim emirlerine ayrılan (rezerve); statüdekinin parçasıdır.
   rezerve: ondalikMetinSemasi,
   kritikSeviye: ondalikMetinSemasi.nullable(),
@@ -354,6 +356,8 @@ export const malzemeAyrintiCevabi = z.object({
   bakiyeler: z.array(bakiyeSatiri),
   // Toplam stoğun statü kırılımı (#1108): önce serbest (statuId null), sonra statüler kimlik sırasıyla; stoğu olmayan statü yok.
   statuKirilimi: z.array(z.object({ statuId: z.number().int().nullable(), miktar: ondalikMetinSemasi, ilkGiris: zamanSemasi })),
+  // Rota tanımında bu karta açılmış ama stoğu olmayan statüler (salt okunur); ad ve renk `GET /stok/statuler`'dan.
+  tanimliStatuler: z.array(z.object({ statuId: z.number().int() })),
   // Statüdeki malzemenin açık üretim emirlerine ayrılanı (rezerve); ayrılmayan statülü kısmı aynı ürün + OP'nin herhangi bir emri kullanır.
   rezerveler: z.lazy(() => rezerveSatirlari),
   // Açılışta "Stoktan rezerve et" denen ve bu malzemeden ayrılanı ihtiyacına yetmeyen açık emirler, ayrılma sırasıyla (mal kabulde gelen

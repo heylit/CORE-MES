@@ -22,7 +22,7 @@ const BAKIYE = {
   id: 11, malzemeId: 901, malzemeAd: 'Deneme sac', konumId: 3, konumKod: 'A-01-02', partiId: 4, partiEtiketi: 'TP-1 · döküm D-7',
   miktar: '3.000', ilkGiris: '2026-10-01T08:00:00+03:00', ambalaj: null, statuId: null,
 } satisfies BakiyeSatiri;
-const SATIR: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '3', serbest: '3', rezerve: '0', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 4, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '3' }] };
+const SATIR: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '3', serbest: '3', statude: '0', rezerve: '0', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 4, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '3' }] };
 const PANEL = {
   malzemeCesidi: 8, gozDolu: 6, gozToplam: 28, kritik: 1, eksi: 1, kabulde: 2, toplamaBekleyen: 3,
   gunluk: [{ gun: '2026-10-06', giris: 2, cikis: 1 }, { gun: '2026-10-07', giris: 5, cikis: 3 }],
@@ -30,7 +30,7 @@ const PANEL = {
   raflar: [{ rafId: 1, kod: 'A', tur: 'palet', dolu: 4, toplam: 12 }], sonHareketler: [], stokDegeri: null, fiyatsizKart: 0, guncelDeger: null, guncelFiyatsizKart: 0, guncelAyri: { kalite: null, hurda: null, fason: null, yolda: null, diger: null, toplam: null }, degerGorunur: false,
 } satisfies PanelCevabi;
 const AYRINTI = {
-  satir: SATIR, bakiyeler: [BAKIYE], ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null }, sonHareketler: [], statuKirilimi: [], rezerveler: [], bekleyenler: [],
+  satir: SATIR, bakiyeler: [BAKIYE], ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null }, sonHareketler: [], statuKirilimi: [], tanimliStatuler: [], rezerveler: [], bekleyenler: [],
 } satisfies MalzemeAyrintiCevabi;
 
 describe('İş kutusu', () => {
@@ -163,7 +163,7 @@ describe('Malzemeler', () => {
     expect(await screen.findByText(/stoklanır malzeme kartı; stoğu olmayanlar 0 görünür/)).toBeTruthy();
   });
   it('statülü stokta emirlere ayrılan (rezerve) statüdekinin yanında yazılır', async () => {
-    sunucuKur(OKUYUCU, { 'GET /stok/malzemeler': () => json(200, { satirlar: [{ ...SATIR, toplam: '5', serbest: '3', rezerve: '1.5' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL) });
+    sunucuKur(OKUYUCU, { 'GET /stok/malzemeler': () => json(200, { satirlar: [{ ...SATIR, toplam: '5', serbest: '3', statude: '2', rezerve: '1.5' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL) });
     ac('/stok/malzemeler');
     expect(await screen.findByText(/statüde 2 kg · rezerve 1,5 kg · toplam 5 kg/)).toBeTruthy();
   });

@@ -31,12 +31,17 @@ const SUTUNLAR = (sec: (m: MalzemeStokSatiri, t: HizliIslemTuru) => void): Sutun
       <span><span className="tc-stok-mono">{m.stokKodu ?? `no ${m.malzemeId}`}</span> · {m.tur ? MALZEME_TURU[m.tur] : '—'} {m.durum === 'kritik' || m.durum === 'eksi' ? <Rozet ton={DURUM_ETIKETI[m.durum].ton}>{DURUM_ETIKETI[m.durum].etiket}</Rozet> : null}</span></span>
   ) },
   { anahtar: 'konum', baslik: 'Konumlar', hucre: (m) => <KonumEtiketleri m={m} /> },
-  // Büyük sayı serbest stoktur; üretimde statü almış yarı parça (statüde) ve onun emirlere ayrılanı (rezerve) ayrıca yazılır.
+  // Büyük sayı serbest stoktur; üretimde statü almış yarı parça (statüde, yalnız statülü bakiye) ve onun emirlere ayrılanı (rezerve)
+  // ayrıca yazılır. Karantina ya da kabuldeki statüsüz miktar statüde sayılmaz; toplamdan farkı kalite dışıdır.
   { anahtar: 'toplam', baslik: 'Stok', hizala: 'sag', sirala: true, hucre: (m) => (
     <span className="tc-stok-ad">
       <strong className={`tc-stok-buyuk-miktar ${m.durum === 'eksi' ? 'tc-stok-eksi' : m.durum === 'kritik' ? 'tc-stok-uyari-yazi' : ''}`}>{birimliMiktar(m.serbest, m.birim)}</strong>
       {m.serbest !== m.toplam && (
-        <span>statüde {birimliMiktar((Number(m.toplam) - Number(m.serbest)).toFixed(3), m.birim)}{Number(m.rezerve) > 0 ? ` · rezerve ${birimliMiktar(m.rezerve, m.birim)}` : ''} · toplam {birimliMiktar(m.toplam, m.birim)}</span>
+        <span>{[
+          Number(m.statude) !== 0 ? `statüde ${birimliMiktar(m.statude, m.birim)}` : null,
+          Number(m.rezerve) > 0 ? `rezerve ${birimliMiktar(m.rezerve, m.birim)}` : null,
+          `toplam ${birimliMiktar(m.toplam, m.birim)}`,
+        ].filter(Boolean).join(' · ')}</span>
       )}
     </span>
   ) },
@@ -69,6 +74,7 @@ export function Malzemeler() {
     { anahtar: 'kritik', baslik: `Kritik${say(p.data?.kritik)}` },
     { anahtar: 'eksi', baslik: `Eksi bakiye${say(p.data?.eksi)}` },
     { anahtar: 'kabulde', baslik: `Rafa yerleşmemiş${say(p.data?.kabulde)}` },
+    { anahtar: 'statulu', baslik: 'Statülü' },
     { anahtar: 'kartlar', baslik: 'Bütün kartlar' },
   ] as const;
   const kartlar = liste.suzgecler.kapsam === 'kartlar';
@@ -82,7 +88,7 @@ export function Malzemeler() {
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
       <div className="tc-stok-arac">
-        <Girdi etiket="Ara" placeholder="Ad, stok kodu, konum kodu, parti no ya da kart numarası" value={arama} onChange={(e) => setArama(e.target.value)} />
+        <Girdi etiket="Ara" placeholder="Ad, stok kodu, statü, konum kodu, parti no ya da kart numarası" value={arama} onChange={(e) => setArama(e.target.value)} />
       </div>
       <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Durum" sekmeler={sekmeler} secili={kartlar ? 'kartlar' : liste.suzgecler.durum} sec={(d) => liste.suzgecDegistir(d === 'kartlar' ? { durum: '', kapsam: 'kartlar' } : { durum: d, kapsam: '' })} /></div>
       <Kart>
