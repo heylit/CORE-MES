@@ -152,7 +152,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     for (const [sira, ad, birim, durum] of [[1, 'Deneme tekrar kalemi', 'adet', 'aktif'], [2, 'Deneme eldiven', 'çift', 'aktif'], [3, 'Deneme taslak kart', 'adet', 'taslak'], [4, 'Deneme fikstür kalemi', 'adet', 'aktif'], [5, 'Deneme eşzamanlı kalem', 'adet', 'aktif']] as const) {
       const kimlik = `sa-kart-${sira}`;
       tamam(await istek(c.yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-        kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod: `HM-SAT-0000${sira}`, ad, birim }, onay: { durum } },
+        // Malzeme sihirbazının zorunlu alanları (malzemeler B11): aile, kalite ve kart başına ayrı ölçü.
+        kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 + sira }, com: { kod: `HM-SAT-0000${sira}`, ad, birim }, onay: { durum } },
         ozet: { benzersiz_anahtar: `hammadde|satin-alma|${kimlik}`, mukerrer_gerekcesi: null }, surum: null,
       }));
     }
@@ -367,7 +368,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   test('SAT-75 #1192: hizmet talebi yalnız alınan hizmet kartını listeler ve kabul eder; malzeme talebi hizmeti, hizmet talebi malzemeyi reddeder', async () => {
     const hizmetKart = async (kimlik: string, yon: 'Alınan' | 'Verilen'): Promise<number> => {
       tamam(await istek(c.yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-        kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-SAT-00001', ad: `Deneme hizmet ${yon}`, birim: 'saat' }, g: { kat: 'fason', yon }, onay: { durum: 'aktif' } },
+        kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-SAT-00001', ad: `Deneme hizmet ${yon}`, birim: 'saat' }, g: { kat: 'fason', yon, cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
         ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
       }));
       return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik])))!.no;
@@ -396,7 +397,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   test('SAT-75: katalog ve tam talep uçları da yalnız satın alınabilir kartı bağlar (fiziksel ya da alınan hizmet); eski bağ korunur', async () => {
     const hizmetKart = async (kimlik: string, yon: 'Alınan' | 'Verilen'): Promise<number> => {
       tamam(await istek(c.yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-        kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-SAT-00001', ad: `Deneme hizmet ${kimlik}`, birim: 'saat' }, g: { kat: 'fason', yon }, onay: { durum: 'aktif' } },
+        kayit: { id: kimlik, tur: 'hizmet', com: { kod: 'HZ-SAT-00001', ad: `Deneme hizmet ${kimlik}`, birim: 'saat' }, g: { kat: 'fason', yon, cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
         ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
       }));
       return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik])))!.no;
@@ -2000,7 +2001,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       const { s, a } = await bolunmusSiparis();
       assert.match(siparisi(s, a).no ?? '', /^DS-\d{3}$/);
       const kart = tamam<{ stok_kodu: string }>(await istek(c.yonetici, 'POST', '/malzeme-katalogu-kartlari/sa-kart-7/kaydet', {
-        kayit: { id: 'sa-kart-7', tur: 'hammadde', fam: 'metal', com: { kod: 'HM-SAT-00009', ad: 'Deneme numara kalemi', birim: 'adet' }, onay: { durum: 'aktif' } },
+        kayit: { id: 'sa-kart-7', tur: 'hammadde', fam: 'metal', grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1007 }, com: { kod: 'HM-SAT-00009', ad: 'Deneme numara kalemi', birim: 'adet' }, onay: { durum: 'aktif' } },
         ozet: { benzersiz_anahtar: 'hammadde|satin-alma|sa-kart-7', mukerrer_gerekcesi: null }, surum: null,
       }));
       const kat = tamam<KatalogKaydi>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', {
