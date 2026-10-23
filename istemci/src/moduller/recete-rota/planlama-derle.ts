@@ -26,9 +26,9 @@ export const PARCA_SIRASI: readonly (string | null)[] = [
   'zz5-olcek-her-yer', null, 'zz6-maliyet-mesai', 'zz7-malzeme-one', 'zz8-boy', 'zz9-yillik', 'zz10-elle-bolme', 'zz11-parti-tarama',
   'zz12-montaj', 'zz13-ayar-sifir', 'zz14-qmin-kasa', 'zz15-ayar-one', 'zz16-ortusme', 'zz17-oto-akis', 'zz18-montaj-arama',
   'zz20-kayan-pencere', 'zz21-hiz', 'zz22-plan-atolyesi', 'zz24-sade', 'zz25-sade-takvim', 'zz25-sade-maliyet', 'zz25-sade-plan',
-  'zz26-recete-rota', 'zz27-rr-veri', 'zz28-rr-canli', 'zz29-gorsel', 'zz30-isi', 'zz31-studyo', 'zz32-tek-studyo', 'zz33-studyo-ux',
+  'zz26-recete-rota', 'zz27-rr-veri', 'zz29-gorsel', 'zz30-isi', 'zz31-studyo', 'zz32-tek-studyo', 'zz33-studyo-ux',
   'zz34-adet-sayim', 'zz35-plan-gercek', 'zz36-tezgah-panosu', 'zz31-tmi', 'zz31-tmi-palet', null, '03-katman', null, 'e-coz', null,
-  'f-olay-bas', '04-eylemler', 'g-surukle', null, '05-olaylar', 'zz39-ufuk',
+  'f-olay-bas', '04-eylemler', 'g-surukle', null, '05-olaylar', 'zz39-ufuk', 'zz40-sunucu-onay',
 ];
 
 const MODUL = dirname(fileURLToPath(import.meta.url));
@@ -52,8 +52,9 @@ export function planlamaBetigi(kok: string = KAYNAK): string {
   return PARCA_SIRASI.map((p) => (p === null ? '' : planlamaParcasi(p, kok))).join('\n');
 }
 
+// emirler: sunucunun emir, ürün ve rotası kaydın üstüne (sunucuKaydi); sayfa taslağa sunucu çözücüsünün çevirisiyle yazar (zz40).
 export function planlamaMotoru(kok: string = MOTOR): string {
-  return ['engine', 'kisitlar', 'girdi', 'durum'].map((m) => oku(join(kok, `${m}.betik`))).join('\n');
+  return ['engine', 'kisitlar', 'girdi', 'durum', 'emirler'].map((m) => oku(join(kok, `${m}.betik`))).join('\n');
 }
 
 export function planlamaSayfasi(kok: string = KAYNAK): string {
