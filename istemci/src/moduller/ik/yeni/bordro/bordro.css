@@ -1,0 +1,63 @@
+/* P3 (bordro, hesaplamalar, maliyet planı, ayarlar) ekranlarının küçük parçaları; renk yalnız tasarım değişkeninden. */
+/* Sayfa kökü ve çocukları daralabilir: geniş tablo kendi içinde kayar, sayfayı genişletmez. */
+.tc-ikb { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-ikb > *, .tc-ikb-yigin > *, .tc-ikb-iki > *, .tc-ikb-hesap-izgara > * { min-width: 0; }
+/* Bordro tablosunda ad sütunu girdilerin arasında kaybolmasın (çerçevede ad sütunu daralmazdı). */
+.tc-ikb .tc-ik-kisi { min-width: 10rem; }
+.tc-ikb-yigin, .tc-ikb-hesap, .tc-ikb-alanlar { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ikb-iki, .tc-ikb-hesap-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-4); align-items: start; }
+.tc-ikb-bolum {
+  display: grid; gap: var(--b-3); min-width: 0; padding: var(--b-4);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel); color: var(--ink);
+}
+.tc-ikb-arac, .tc-ikb-kaydet, .tc-ikb-donem-satir, .tc-ikb-secenekler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ikb-bosluk { flex: 1 1 auto; }
+.tc-ikb-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--b-3); }
+.tc-ikb-soluk, .tc-ikb-alt, .tc-ikb-alt-not, .tc-ikb-dayanak { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ikb-not, .tc-ikb-aciklama, .tc-ikb-kilit {
+  display: flex; gap: var(--b-2); align-items: flex-start; margin: 0; padding: var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+}
+.tc-ikb-aciklama { display: grid; }
+.tc-ikb-baglanti {
+  padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; cursor: pointer;
+}
+.tc-ikb-girdi {
+  width: 6rem; max-width: 100%; min-height: var(--dokunma); padding: 0 var(--b-2);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel); color: var(--ink); font: inherit; text-align: right;
+}
+.tc-ikb-girdi-kisa { width: 4rem; }
+.tc-ikb-girdi-metin { width: 100%; text-align: left; }
+.tc-ikb-girdi:disabled { color: var(--muted); }
+.tc-ikb-kaydir { overflow-x: auto; min-width: 0; }
+.tc-ikb-tablo, .tc-ikb-adimlar { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tc-ikb-tablo th, .tc-ikb-tablo td, .tc-ikb-adimlar th, .tc-ikb-adimlar td {
+  padding: var(--b-2); border-bottom: 1px solid var(--edge); text-align: left; vertical-align: top;
+}
+.tc-ikb-tablo td + td, .tc-ikb-tablo th + th, .tc-ikb-adimlar td:last-child { text-align: right; white-space: nowrap; }
+.tc-ikb-tablo tfoot td, .tc-ikb-adim-toplam td, .tc-ikb-adim-toplam th, .tc-ikb-top { font-weight: 700; }
+.tc-ikb-adim-baslik th { color: var(--muted); font-size: var(--yazi-xs); text-transform: uppercase; }
+.tc-ikb-adimlar small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ikb-pusula { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); margin: 0; }
+.tc-ikb-pusula dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.tc-ikb-dl-cift { display: contents; }
+.tc-ikb-secenek {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-ikb-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-ikb-liste li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); }
+.tc-ikb-liste-duzen { display: grid; gap: var(--b-2); }
+.tc-ikb-detay summary { min-height: var(--dokunma); cursor: pointer; }
+.tc-ikb-isaret, .tc-ikb-turetilen { display: grid; gap: var(--b-1); }
+.tc-ikb-turetilen b { font-variant-numeric: tabular-nums; }
+.tc-ikb-donem { display: grid; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-ikb-donem[data-kilitli] { border-color: var(--edge2); }
+.tc-ikb-kaydet { position: sticky; bottom: 0; padding: var(--b-3); border-top: 1px solid var(--edge); background: var(--panel); }
+@media (max-width: 1023px) {
+  .tc-ikb-hesap-izgara { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .tc-ikb-iki { grid-template-columns: 1fr; }
+  .tc-ikb-bolum { padding: var(--b-3); }
+}

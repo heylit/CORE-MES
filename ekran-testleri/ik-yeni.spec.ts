@@ -70,6 +70,27 @@ test.describe('P2 izin ve devam', () => {
   });
 });
 // P3 bordro
+test.describe('P3 bordro', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  // Proje genişlikleri (360, 768, 1280) her sayfada: başlık görünür, sayfa yatay taşmaz.
+  test('bordro, hesaplamalar, maliyet planı ve ayarlar açılır; taşma, yazma ve ağ hatası yok', async ({ page, ag, ac }) => {
+    for (const [yol, ad] of [['bordro', 'Bordro'], ['hesaplamalar', 'Hesaplamalar'], ['maliyet-plani', 'Maliyet planı'], ['ayarlar', 'Ayarlar']] as const) {
+      await ac(`/ik/yeni/${yol}`);
+      await expect(page.getByRole('heading', { name: ad, level: 2 })).toBeVisible();
+      // Kabuk taşanı kırpar; bu yüzden sayfa kökünün kendisi ölçülür (geniş tablo kendi içinde kayar).
+      const tasma = await page.locator('.tc-ikb').first().evaluate((k) => Math.max(k.scrollWidth - k.clientWidth, k.getBoundingClientRect().right - window.innerWidth));
+      expect(tasma, yol).toBeLessThanOrEqual(1);
+    }
+    await page.getByRole('tab', { name: 'Ücret, vergi ve SGK' }).click();
+    await expect(page.getByText('Parametre dönemi', { exact: false }).first()).toBeVisible();
+    await ac('/ik/yeni/hesaplamalar');
+    await page.getByRole('tab', { name: 'Net → brüt' }).click();
+    await expect(page.getByText('Sonuç', { exact: true })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});
 // P4 isealim
 // P5 analiz
 // P6 islemlerim
