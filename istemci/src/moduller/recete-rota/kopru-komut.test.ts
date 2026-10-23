@@ -556,4 +556,22 @@ describe('köprü: plan motoru okunamadı uyarısı (denetim 22)', () => {
     await kopruKur([], { motorDurumu: (o) => { durumlar.push(o); } })('durum-oku', {});
     expect(durumlar).toEqual([]);
   });
+
+  it('MO-3: yerleşimi çizmeyen çerçeve motoru istemez; uyarıyı motorsuz uçtan okur, okunamayınca listeye ve motor durumuna dokunmaz', async () => {
+    let uyari = 200;
+    const istekler = sunucuKur((_y, yol) => {
+      if (yol === '/recete-rota/durum') return json(200, DURUM);
+      if (yol === '/plan/motor-uyarilari') return uyari === 200 ? json(200, { uyarilar: ['Kısıt uygulanmadı.'] }) : json(uyari, { kod: 'SUNUCU', mesaj: 'Hata.' });
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' });
+    });
+    const durumlar: boolean[] = [];
+    const listeler: (readonly string[])[] = [];
+    const isle = kopruKur([], { yerlesimCizilmez: () => true, motorDurumu: (o) => { durumlar.push(o); }, motorUyarilari: (u) => { listeler.push(u); } });
+    expect(await isle('durum-oku', {})).toMatchObject({ planYerlesim: null });
+    uyari = 503;
+    expect(await isle('durum-oku', {})).toMatchObject({ planYerlesim: null });
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`).filter((x) => x.includes('/plan/'))).toEqual(['GET /plan/motor-uyarilari', 'GET /plan/motor-uyarilari']);
+    expect(listeler).toEqual([['Kısıt uygulanmadı.']]);
+    expect(durumlar).toEqual([]);
+  });
 });
