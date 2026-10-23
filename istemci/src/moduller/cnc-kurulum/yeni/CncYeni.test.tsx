@@ -10,7 +10,7 @@ import { YENI_EKRAN_ILETISI, YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-
 import { rotalar } from '../rotalar.tsx';
 import { state } from './depo.ts';
 
-// Kişi adları uydurmadır.
+// Kişi adları uydurmadır. Testler görünüm içeriğine bakmaz (parçalar doldurur); yalnız kabuğu, adresi ve şeridi sınar.
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yonetici', islemler: ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz', YENI_EKRAN_ISLEMI] };
 const KULLANICI: Kullanici = { id: 2, ad: 'Deneme Kullanici', islemler: ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz'] };
 const OKUMASIZ: Kullanici = { id: 3, ad: 'Deneme Okumasiz', islemler: [YENI_EKRAN_ISLEMI] };
@@ -56,7 +56,7 @@ describe('CncYeni', () => {
   it('kök adres Ana Sayfa görünümüne düşer; görünüm şeridi prototipin sırasıyla gelir, kayıt duruma kurulur', async () => {
     sunucuKur(YONETICI, [{ anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { machine: 't2' }, surum: 4 }]);
     ac('/cnc-kurulum/yeni');
-    expect(await screen.findByText('Ana Sayfa görünümü hazırlanıyor.', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/ana-sayfa');
     expect(screen.getAllByRole('tab').map((s) => s.textContent)).toEqual(
       ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Oto-CAM', 'G-Kod Sim.', 'Takım Ömrü'],
@@ -69,7 +69,7 @@ describe('CncYeni', () => {
     const istekler = sunucuKur(YONETICI);
     ac('/cnc-kurulum/yeni/ana-sayfa');
     fireEvent.click(await screen.findByRole('tab', { name: 'Takım Ömrü' }, { timeout: 10000 }));
-    expect(await screen.findByText('Takım Ömrü görünümü hazırlanıyor.')).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Takım Ömrü', selected: true })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/takim-omru');
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
@@ -84,7 +84,7 @@ describe('CncYeni', () => {
   it('yalnız hazırlık onayı olan kişi Hazırlık görünümünde açılır, öteki görünümler ve Tanımlar yoktur', async () => {
     sunucuKur(YONETICI, [], { yazabilir: false, hazirlikOnaylayabilir: true });
     ac('/cnc-kurulum/yeni/kurulum');
-    expect(await screen.findByText('Hazırlık görünümü hazırlanıyor.', {}, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Hazırlık', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/hazirlik');
     expect(screen.getAllByRole('tab').map((s) => s.textContent)).toEqual(['Hazırlık']);
     expect(screen.queryByRole('button', { name: /Tanımlar/ })).toBeNull();
