@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, cokBuyuk, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
+import { cakisma, cokBuyuk, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
@@ -12,7 +12,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
-  hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, surumUyarMi, takimDurumu, takimOlayiSatirlari,
+  hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, surumUyarMi, takimDurumu, takimOlayiSatirlari,
 } from './kurallar.ts';
 import type { TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -29,6 +29,7 @@ const CAKISMA_ILETISI = 'Kurulum kayıtları siz açtıktan sonra başka bir ki�
 const BUYUK_ILETISI = 'Kurulum kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
 const ONAY_UCU_ILETISI = 'Hazırlık onayları yalnız hazırlık onayıyla değiştirilir.';
 const URETIM_ADEDI_ILETISI = 'Üretim adedi yalnız Üretim Terminali\'nden girilir.';
+const SIRA_ILETISI = 'Son onay için hazırlığın bütün adımları onaylanmış olmalıdır.';
 const EMIR_ILETISI = 'Üretim emri ve emirlerin kurulumları yalnız emir seçimiyle değişir.';
 // Emir ve emirlerin saklanan kurulumları genel uçtan yazılmaz, silinmez: emir değişince kurulum emre saklanmadan değişirdi.
 const emirKaydiMi = (anahtar: string): boolean => anahtar === EMIR_ANAHTARI || anahtar.startsWith(EMIR_ANLIK_ONEKI);
@@ -87,6 +88,7 @@ async function kaydet(db: Db, kullanici: Kullanici, g: YazGovdesi, yalnizHazirli
   if (yalnizHazirlik && onceki === null) throw yetkiYok();
   const deger = yalnizHazirlik ? hazirlikOnaylariniBindir(onceki, g.deger) : g.deger;
   if (deger === null) throw dogrulama('Hazırlık onayı okunamadı.', 'deger');
+  if (yalnizHazirlik && sonOnaySiraDisiMi(onceki, deger)) throw gecersiz(SIRA_ILETISI);
   if (!yalnizHazirlik && g.anahtar === DURUM_ANAHTARI && hazirlikOnaylariDegistiMi(onceki, deger)) throw yetkiYok(ONAY_UCU_ILETISI);
   if (!yalnizHazirlik && g.anahtar === DURUM_ANAHTARI && elleUretimKaydiVarMi(onceki, deger)) throw yetkiYok(URETIM_ADEDI_ILETISI);
   if (yalnizHazirlik && hazirlikAyniMi(onceki, deger)) {
