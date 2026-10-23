@@ -107,14 +107,14 @@ describe('köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/bedel-ayari', 'GET /plan/bedel-ayari']);
   });
 
-  it('KOM-02d (265 a): öncelik ve müşteri sınıfı çarpanları öncelik ayarlarıyla plan modülüne gider; bilinmeyen alan gitmez', async () => {
+  it('KOM-02d (265 a, 148 a): öncelik ve müşteri sınıfı çarpanları öncelik ayarlarıyla plan modülüne, yeni taslağa gider; bilinmeyen alan gitmez', async () => {
     const istekler = sunucuKur((_y, _yol, govde) => json(200, govde));
     const ayar = {
       tabanBedelSaat: 250, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6,
       yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5, sinifACarpani: 1.5, sinifBCarpani: 1, sinifCCarpani: 0.7,
     };
-    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, fazla: 1 } });
-    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', ayar]]);
+    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, fazla: 1, taslak: { id: 3, surum: 1 } } });
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', { ...ayar, taslak: null }]]);
   });
 
   it('KOM-02b: fason termin tahmini dörtlüleri tek GET sorgusunda gider; bozuk sorgu istek atmadan 400 ile döner', async () => {
