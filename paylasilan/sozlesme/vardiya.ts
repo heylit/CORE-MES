@@ -114,6 +114,8 @@ export const kaynakTakvimiSemasi = z.object({
     kapali: z.object({ tur: z.enum(['tatil', 'kapali']), ad: z.string().nullable() }).nullable(),
     // Yalnız kişi takviminde: kişi o gün onaylı izinde (İK); gün 0 dakikadır (VR-25).
     izinli: z.boolean().optional(),
+    // Yalnız kişi takviminde (VR-29): kişi işten ayrılmış (İK çıkış gününden sonra) ya da pasif (bugünden itibaren); gün 0 dakikadır.
+    ayrildi: z.boolean().optional(),
     // Günün dakikasına giren planlı fazla mesai (vardiyayla örtüşmeyen kısım, duruş düşülmüş); yalnız sıfırdan büyükse yazılır.
     // Kişi takviminde İK'nın onaylı fazla mesai saatiyle aynı gün birlikte sayılmamalıdır: plan varsa plan esastır.
     fazlaMesaiDakika: z.number().int().optional(),

@@ -329,6 +329,23 @@ export function fazlaMesaiHatasi(g: Omit<FazlaMesaiTanimi, 'tarih' | 'kisiIdleri
   return null;
 }
 
+// VR-29 (W8, 18.1): kişinin son çalışma günü. İK çıkış günü çalışma günüdür (puantaj da yalnız sonrasını reddeder). Pasif kişi bugünden
+// itibaren çalışmaz; geçmiş günleri değişmez, çünkü Arkon emek verimi ve OEE geçmiş ayları da takvimden okur. Sınır yoksa null.
+export function sonCalismaGunu(k: { aktif: boolean; cikisTarihi: string | null; bugun: string }): string | null {
+  const pasifSonu = k.aktif ? null : tarihEkle(k.bugun, -1);
+  if (pasifSonu === null) return k.cikisTarihi;
+  return k.cikisTarihi === null || pasifSonu < k.cikisTarihi ? pasifSonu : k.cikisTarihi;
+}
+
+export const ayrildiMi = (sonGun: string | null, tarih: string): boolean => sonGun !== null && tarih > sonGun;
+
+// VR-29: ayrılmış (son çalışma gününden sonraki tarih) ya da pasif kişiye fazla mesai yazılmaz.
+export function fazlaMesaiKisiHatasi(tarih: string, kisiler: readonly { kisiId: number; sonGun: string | null }[]): KuralHatasi | null {
+  return kisiler.some((k) => ayrildiMi(k.sonGun, tarih))
+    ? { ileti: 'İşten ayrılmış ya da pasif kişiye fazla mesai yazılamaz.', alan: 'kisiIdleri' }
+    : null;
+}
+
 // VR-24: kaynağa uyan fazla mesailer. Kişi takvimine yalnız listesinde olduğu kayıtlar; öbür kaynaklara iş merkezi kaydı o merkeze ve
 // istasyonlarına, istasyon kaydı yalnız o istasyona ve makinelerine (planlı duruşun kapsam kuralı gibi, VR-15).
 export function fazlaMesaiUyanlar<F extends FazlaMesaiTanimi>(

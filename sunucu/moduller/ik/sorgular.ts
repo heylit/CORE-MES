@@ -478,6 +478,14 @@ export async function kisilerinIzinSatirlari(
   return satirlar.map((r) => ({ ...r, gun: r.gun === null ? null : Number(r.gun) }));
 }
 
+// Kişilerin İK çıkış tarihleri tek sorguda: iptal edilmemiş, kişiye bağlı personel; çıkışı girilmemiş personel null ile döner.
+export function kisilerinCikisSatirlari(db: Db, kisiIdleri: readonly number[]): Promise<{ kisi_id: number; cikis_tarihi: string | null }[]> {
+  return db.sorgu<{ kisi_id: number; cikis_tarihi: string | null }>(
+    'SELECT kisi_id, cikis_tarihi FROM ik_personel WHERE kisi_id = ANY($1::int[]) AND NOT iptal ORDER BY kisi_id',
+    [[...kisiIdleri]],
+  );
+}
+
 export interface PersonelKartiSatiri {
   ad: string;
   soyad: string;
