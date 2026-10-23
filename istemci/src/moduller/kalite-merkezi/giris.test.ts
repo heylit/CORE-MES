@@ -105,31 +105,19 @@ describe('Kalite Merkezi girişi TMI oturumundandır', () => {
     expect(yonetici.can('kullanici')).toBe(true);
   });
 
-  it('kullanıcı formu PIN istemez; kişi TMI kişileri arasından seçilir, kayıt "tmi-<kişi>" kimliğiyle PIN alanı olmadan yazılır', async () => {
-    const u = uygulama(
-      { kisi: KISI, yonetici: true, kisiler: [KISI, { id: 9, ad: 'İkinci Kişi' }], onaylayabilir: true },
-      [{ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi', pin: 'eski-ozet' }],
-    );
-    u.authGate();
-    u.openUser();
-    const [yeni] = u.formlar;
-    expect(yeni?.alanlar.map((a) => a.k)).toEqual(['kisi', 'rol', 'aktif']);
-    expect(yeni?.alanlar[0]?.options).toEqual([['', 'Seçin'], ['9', 'İkinci Kişi']]);
-    await yeni?.kaydet({ kisi: '9', rol: 'Kalite mühendisi', aktif: true });
-    expect(u.kayitlar).toEqual([['kullanici', { ad: 'İkinci Kişi', rol: 'Kalite mühendisi', aktif: true, _id: 'tmi-9' }]]);
-
-    u.openUser('tmi-7');
-    const duzenle = u.formlar[1];
-    expect(duzenle?.alanlar.map((a) => a.k)).toEqual(['ad', 'rol', 'aktif']);
-    await duzenle?.kaydet({ ad: 'Deneme Kişi', rol: 'Muayeneci', aktif: true });
-    expect(u.kayitlar[1]).toEqual(['kullanici', { _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Muayeneci', aktif: true }]);
-  });
-
-  it('yönetici olmayan kullanıcı formunu açamaz', () => {
-    const u = uygulama({ kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }, [{ _id: 'tmi-7', ad: 'x', rol: 'Kalite mühendisi' }]);
-    u.authGate();
-    u.openUser();
-    expect(u.formlar).toEqual([]);
+  it('200 a: kullanıcı formu kalktı; yönetici de form açamaz, liste ve ekleme düğmesi sayfada yok, not rolün TMI yetkisinden geldiğini söyler', () => {
+    for (const kimlik of [{ kisi: KISI, yonetici: true, kisiler: [KISI], onaylayabilir: true }, { kisi: KISI, yonetici: false, kisiler: [], onaylayabilir: false }]) {
+      const u = uygulama(kimlik, [{ _id: 'tmi-7', ad: 'Deneme Kişi', rol: 'Kalite mühendisi' }]);
+      u.authGate();
+      u.openUser();
+      u.openUser('tmi-7');
+      expect(u.formlar).toEqual([]);
+      expect(u.kayitlar).toEqual([]);
+    }
+    const sayfa = kur({ kisi: KISI, yonetici: true, kisiler: [], onaylayabilir: true }).join('\n');
+    expect(sayfa).not.toContain('Kullanıcı ekle</button>');
+    expect(sayfa).toContain('const L=[];');
+    expect(sayfa).toContain('<b>Rol TMI yetkisinden gelir.</b>');
   });
 
   it('paketin PIN yerleri değişmişse sayfa kurulmaz; kurulmuş sayfada PIN ile giriş metni kalmaz', () => {

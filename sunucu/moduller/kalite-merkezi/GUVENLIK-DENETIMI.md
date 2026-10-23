@@ -23,4 +23,5 @@ sunucudan yazılır. İşlemler hiçbir role verilmedi (Aşama 1): yalnız yöne
   Kalite yöneticisi, `kalite-merkezi.onayla` Kalite mühendisi, öteki Muayeneci. Ekranın rol kısıtları yalnız ekrandadır; sunucuda karşılığı
   onay alanlarıdır (form onayı, NCR ve DÖF kapanışı, MRB kararı, tedarikçi onayı) ve onay ucunun `kalite-merkezi.onayla` istemesidir
   (`kapama-yetkisi.test.ts`).
+- Uygulamanın kullanıcı formu, listesi ve ekleme düğmesi kalktı (200 a); `kullanici` kayıtları rol vermez, okunmaz.
 - Sürüm denetimi (#1323): sunucu beklenen sürümü zorunlu ister. Uygulama sürüm tutmaz; beklenen sürümü köprü gönderir (akışta gördüğü son sürüm). Formun açıldığı hâlden sonra akışla gelen değişikliği köprü, uygulamanın `guncelleme` alanıyla yakalar: bu denetim tarayıcıdadır, sunucuda değil.
