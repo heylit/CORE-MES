@@ -1,11 +1,12 @@
-/* Çerçeveli sayfa (ikinci menü) içerik alanına dolgusuz yerleşir; kaydırma gövdededir. */
-.tc-my { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; }
+/* Çerçeveli sayfa (ikinci menü) içerik alanına dolgusuz yerleşir; kaydırma gövdededir. Sütun minmax(0, 1fr): örtük `auto`
+   sütun gövdedeki geniş içerikle (sekme şeridi, uzun satır) ekran genişliğini aşıyor, 360'ta içerik kırpılıyordu. */
+.tc-my { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; }
 .tc-my-ust {
   display: flex; align-items: center; gap: var(--b-3); flex-wrap: wrap;
   padding: var(--b-3) var(--b-5); border-bottom: 1px solid var(--edge);
 }
 .tc-my-ust > .tc-sekmeler { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
-.tc-my-govde { overflow: auto; padding: var(--b-5); min-height: 0; }
+.tc-my-govde { overflow: auto; padding: var(--b-5); min-height: 0; min-width: 0; }
 .tc-my-durum { padding: var(--b-5); }
 .tc-my-yer-tutucu { padding: var(--b-4) 0; }
 
