@@ -3,6 +3,7 @@
 import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
   EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
+  RefakatKartlariCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -258,6 +259,11 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   if (ilk === 'makine-ayrimlari' && g.yontem === 'GET') {
     const q = new URLSearchParams({ emirId: g.sorgu.get('emirId') ?? '' });
     return tamam(await istemci.get<MakineAyrimlariCevabi>(`/arkon/makine-ayrimlari?${q.toString()}`));
+  }
+  // Kart #156: işin altındaki refakat kartları; istasyon ve emirler olduğu gibi geçer, doğrulamayı TMI ucu yapar.
+  if (ilk === 'refakat-kartlari' && g.yontem === 'GET') {
+    const q = new URLSearchParams({ istasyon: g.sorgu.get('istasyon') ?? '', emirler: g.sorgu.get('emirler') ?? '' });
+    return tamam(await istemci.get<RefakatKartlariCevabi>(`/arkon/refakat-kartlari?${q.toString()}`));
   }
   if (ilk === 'plan-sira' && g.yontem === 'POST') return tamam(await istemci.post('/arkon/plan-sira/sirala', govdeyiOku(g.govde)));
   if (ilk === 'plan-sira' && g.yontem === 'GET') return tamam(await istemci.get('/arkon/plan-sira/surum'));
