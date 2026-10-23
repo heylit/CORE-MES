@@ -68,17 +68,20 @@ test('Satın Alma grubu menüde Stok ile Kalite arasındadır; tek sayfadır, b�
   );
 });
 
-// 353 a: planlama maddeleri (eski Plan ve Plan stüdyosu dahil) yalnız planlama sayfalarını görme işlemini ister; o işlemi
-// göç hiçbir role vermez, yönetici bütün işlemleri aldığı için yalnız o görür. Öteki maddeler sayfa işlemini ister.
-test('Reçete ve Rota ikinci menüsünde planlama maddeleri recete-rota.planlama-oku ister, öteki maddeler sayfa işlemini', () => {
+// 195 a: planlama maddeleri (eski Plan ve Plan stüdyosu dahil) planlama sayfalarını görme işlemini ister; o işlem yönetici, müdür
+// ve planlamadadır. Maliyet ve kâr gösteren üç madde birim maliyet okumasını ister (planlama rolü maliyet görmez, 200 a). Öteki
+// maddeler sayfa işlemini ister.
+test('Reçete ve Rota ikinci menüsünde planlama maddeleri recete-rota.planlama-oku, maliyet maddeleri finans.maliyet-oku, öteki maddeler sayfa işlemini ister', () => {
   const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
   assert.ok(menu);
   const planlama = menu.gruplar.find((g) => g.baslik === 'Planlama')?.maddeler ?? [];
   assert.deepEqual(planlama.map((m) => m.anahtar),
     ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat']);
+  const maliyet = ['maliyet', 'giderler', 'denge'];
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
-  assert.deepEqual(maddeler.filter((m) => m.islem === 'recete-rota.planlama-oku'), planlama);
-  assert.ok(maddeler.filter((m) => m.islem !== 'recete-rota.planlama-oku').every((m) => m.islem === 'sayfa.recete-rota'));
+  assert.deepEqual(maddeler.filter((m) => m.islem === 'finans.maliyet-oku').map((m) => m.anahtar), maliyet);
+  assert.deepEqual(maddeler.filter((m) => m.islem === 'recete-rota.planlama-oku'), planlama.filter((m) => !maliyet.includes(m.anahtar)));
+  assert.ok(maddeler.filter((m) => !['recete-rota.planlama-oku', 'finans.maliyet-oku'].includes(m.islem)).every((m) => m.islem === 'sayfa.recete-rota'));
   assert.ok(maddeler.every((m) => m.veya === undefined));
 });
 
