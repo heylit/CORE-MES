@@ -1318,12 +1318,15 @@ export interface RefakatPartisiHam {
   durum: 'acik' | 'iptal'; surum: number; kayitZamani: string; verilen: string;
   ustRefakatPartisiId: number | null; birlestigiRefakatPartisiId: number | null; birlesmeZamani: string | null; lotaBaglanmaZamani: string | null;
 }
-// Verilen: partinin emrine o lottan yapılan teslimler; alınan teslimde alınan, yoldakinde gönderilen miktar.
+// Verilen (Soru 137 a): partinin emrine o lottan depo konumlarından üretim tarafına yapılan teslimler eksi depoya dönenler; istasyonlar
+// arası teslim yeniden sayılmaz. Alınan teslimde alınan, yoldakinde gönderilen miktar.
 const REFAKAT_SECIMI = `SELECT r.id, r.uretim_emri_id AS "uretimEmriId", r.sira, r.malzeme_id AS "malzemeId", r.parti_id AS "partiId", p.lot_no AS "lotNo",
   p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", r.durum, r.surum, ${zamanMetni('r.kayit_zamani')} AS "kayitZamani",
   r.ust_refakat_partisi_id AS "ustRefakatPartisiId", r.birlestigi_refakat_partisi_id AS "birlestigiRefakatPartisiId", ${zamanMetni('r.birlesme_zamani')} AS "birlesmeZamani",
   ${zamanMetni('r.lota_baglanma_zamani')} AS "lotaBaglanmaZamani",
-  (SELECT COALESCE(sum(CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0) FROM stok_teslim t
+  (SELECT COALESCE(sum((CASE WHEN tk.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END - CASE WHEN th.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END)
+      * CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0)
+     FROM stok_teslim t JOIN stok_konum tk ON tk.id = t.kaynak_konum_id JOIN stok_konum th ON th.id = t.hedef_konum_id
     WHERE t.uretim_emri_id = r.uretim_emri_id AND t.parti_id = r.parti_id AND t.durum IN ('yolda', 'teslim'))::text AS verilen
   FROM stok_refakat_partisi r LEFT JOIN stok_parti p ON p.id = r.parti_id`;
 export const refakatPartisiBul = (db: Db, id: number, kilit = false): Promise<RefakatPartisiHam | null> =>
@@ -1334,18 +1337,6 @@ export const acikRefakatPartisi = (db: Db, uretimEmriId: number, partiId: number
   db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.parti_id = $2 AND r.durum = 'acik'`, [uretimEmriId, partiId]);
 export const emrinRefakatPartileri = (db: Db, uretimEmriId: number): Promise<RefakatPartisiHam[]> =>
   db.sorgu(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 ORDER BY r.sira`, [uretimEmriId]);
-// Kartın net verileni (Soru 136 a, kart sınırı): depo konumlarından üretim tarafına giden teslimler eksi depoya dönenler; istasyonlar
-// arası teslim sayılmaz. Alınan teslimde alınan, yoldakinde gönderilen miktar (verilen ile aynı ölçü).
-export const kartlarinNetVerileni = async (db: Db, kartIdler: readonly number[]): Promise<Map<number, string>> =>
-  new Map((await db.sorgu<{ id: number; net: string }>(
-    `SELECT r.id, COALESCE(sum(CASE WHEN k.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END * CASE WHEN h.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 0 ELSE 1 END
-         * CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END
-       - CASE WHEN k.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 0 ELSE 1 END * CASE WHEN h.tur IN ('raf_gozu', 'kabul', 'depo_zemini') THEN 1 ELSE 0 END
-         * CASE t.durum WHEN 'teslim' THEN t.alinan ELSE t.miktar END), 0)::text AS net
-       FROM stok_refakat_partisi r
-       LEFT JOIN stok_teslim t ON t.uretim_emri_id = r.uretim_emri_id AND t.parti_id = r.parti_id AND t.durum IN ('yolda', 'teslim')
-       LEFT JOIN stok_konum k ON k.id = t.kaynak_konum_id LEFT JOIN stok_konum h ON h.id = t.hedef_konum_id
-      WHERE r.id = ANY($1::int[]) GROUP BY r.id`, [kartIdler])).map((x) => [x.id, x.net]));
 // İstasyonda satırı olan kartlar: kartın lotu ya da kartla sayılmış üretim partisi istasyonun konumunda artı bakiyede.
 export const istasyondaSatiriOlanKartlar = async (db: Db, kartIdler: readonly number[], istasyonId: number): Promise<Set<number>> =>
   new Set((await db.sorgu<{ id: number }>(

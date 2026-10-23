@@ -2169,10 +2169,10 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const bildirim = await o().vt.tek<{ n: number }>("SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'stok.teslim-suresi-doldu' AND kisi_id = $1", [kisiler.get('op_8a')]);
     assert.equal(bildirim?.n, 1);
 
-    // Kart sınırının girdisi (Soru 136 a): istasyonlar arası teslim ve iade net verilene girmez; verilen bugün onları da toplar.
+    // Verilen (Soru 136 a, 137 a): istasyonlar arası teslim ve iade girmez; depodan verilen 10.
     const [ozet] = await o().vt.tx((db) => emrinRefakatKartlari(db, e, null));
-    assert.equal(ozet?.verilenNet, '10.000');
-    assert.ok(Number(ozet?.verilen) > 10, 'verilen istasyonlar arası teslimi de sayar (Soru 137)');
+    assert.deepEqual([ozet?.verilen, ozet?.verilenNet], ['10', '10']);
+    assert.equal(refakatPartisiCevabi.parse((await istek('depo', 'GET', `/stok/refakat-partileri/${r.id}`)).govde).refakat.verilen, '10');
   });
   test('kart #126 sayım partiye: kartla sayımda hammadde kartın lotundan işlenir, parça kartın partisine girer; geçersiz kart sayımı reddeder', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
@@ -2473,7 +2473,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(await bakiye(hm, kc), '6.000');
     // Arkon kart listesi (kart #156): kartın lotu c'de, kartla sayılan parça a'da durur; boş istasyonda satır yok.
     const liste = (istasyonId: number | null) => o().vt.tx((db) => emrinRefakatKartlari(db, e, istasyonId));
-    assert.deepEqual((await liste(c.id)).map((k) => [k.id, k.lotNo, k.istasyondaSatirVar, k.sinir, k.malzemeNo, k.verilenNet]), [[r.id, lot.lot_no, true, 5, hm, '10.000']], 'sınır: net verilen 10 / parça başı 2 (Soru 136 a)');
+    assert.deepEqual((await liste(c.id)).map((k) => [k.id, k.lotNo, k.istasyondaSatirVar, k.sinir, k.malzemeNo, k.verilenNet]), [[r.id, lot.lot_no, true, 5, hm, '10']], 'sınır: net verilen 10 / parça başı 2 (Soru 136 a)');
     assert.deepEqual((await liste(a.id)).map((k) => k.istasyondaSatirVar), [true]);
     assert.deepEqual((await liste((await istasyon()).id)).map((k) => k.istasyondaSatirVar), [false]);
     assert.deepEqual((await liste(null)).map((k) => k.istasyondaSatirVar), [false]);

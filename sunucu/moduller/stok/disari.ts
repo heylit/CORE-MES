@@ -140,7 +140,7 @@ export interface RefakatPartisiOzeti {
 // kartın malzemesi verilen istasyonda duruyor mu. sayilan ve sinir (Soru 132) üretim emirlerinin hesabıdır; null'da sınır gösterilmez.
 export interface RefakatKartiOzeti {
   id: number; etiket: string; qr: string; durum: 'acik' | 'iptal'; lotNo: string | null;
-  // malzemeNo: kartın malzemesinin katalog numarası (iş emri girdileri bununla tutulur). verilenNet: kart sınırının girdisi (Soru 136 a).
+  // malzemeNo: kartın malzemesinin katalog numarası (iş emri girdileri bununla tutulur). verilenNet: kart sınırının girdisi (Soru 136 a); verilen ile aynıdır (Soru 137 a), alan Arkon ve üretim emirleri okuduğu için kalır.
   malzemeNo: number; malzemeKod: string | null; malzemeAd: string | null; birim: string | null; verilen: string; verilenNet: string;
   istasyondaSatirVar: boolean; sayilan: number | null; sinir: number | null;
 }
@@ -148,13 +148,12 @@ export async function emrinRefakatKartlari(db: Db, uretimEmriId: number, istasyo
   const { partiler } = await servis.emrinRefakatPartileri(db, uretimEmriId);
   const acik = partiler.filter((r) => r.durum === 'acik' && r.birlestigi === null);
   const burada = istasyonId === null ? new Set<number>() : await sorgular.istasyondaSatiriOlanKartlar(db, acik.map((r) => r.id), istasyonId);
-  const net = acik.length === 0 ? new Map<number, string>() : await sorgular.kartlarinNetVerileni(db, acik.map((r) => r.id));
   // Sınır üretim emirlerinin hesabıdır (Soru 136 a); haritada olmayan kartta (adımsız emir) sayılan ve sınır null kalır.
   const sayim = acik.length === 0 ? new Map<number, { sayilan: number; sinir: number | null }>()
-    : await refakatKartiSayimlari(db, uretimEmriId, istasyonId, acik.map((r) => ({ id: r.id, malzemeNo: r.malzemeId, verilen: net.get(r.id) ?? '0' })));
+    : await refakatKartiSayimlari(db, uretimEmriId, istasyonId, acik.map((r) => ({ id: r.id, malzemeNo: r.malzemeId, verilen: r.verilen })));
   return acik.map((r) => ({
     id: r.id, etiket: r.etiket, qr: r.qr, durum: r.durum, lotNo: r.lotNo, malzemeNo: r.malzemeId, malzemeKod: r.malzemeKod, malzemeAd: r.malzemeAd, birim: r.birim, verilen: r.verilen,
-    verilenNet: net.get(r.id) ?? '0',
+    verilenNet: r.verilen,
     istasyondaSatirVar: burada.has(r.id), sayilan: sayim.get(r.id)?.sayilan ?? null, sinir: sayim.get(r.id)?.sinir ?? null,
   }));
 }
