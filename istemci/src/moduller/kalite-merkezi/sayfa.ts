@@ -69,7 +69,7 @@ export const PIN_YERLERI: readonly (readonly [string, string])[] = [
   ['<button class="link" onclick="logout()">Çıkış</button>', ''],
   ['Giriş PIN ile yapılır; kayıtlardaki "kim yaptı" bilgisi buradan gelir.', 'Giriş TMI oturumuyla yapılır; kayıtlardaki "kim yaptı" bilgisi oturumdaki kişidir.'],
   ['<b>Kimlik doğrulama kapalı.</b> Herkes her işlemi yapabilir ve kayıtlarda isim, formlara yazılan addan alınır. İlk kullanıcıyı (kalite yöneticisi) eklediğiniz anda giriş zorunlu olur.',
-    '<b>Rol verilmiş kullanıcı yok.</b> TMI yöneticisi Kalite yöneticisidir; öteki kişiler Muayeneci sayılır.'],
+    '<b>Rol TMI yetkisinden gelir.</b> TMI yöneticisi Kalite yöneticisi, kalite onay yetkisi olan Kalite mühendisi, öteki kişiler Muayenecidir.'],
   ['Not: PIN girişi kişiyi tanımlamak ve hesap verebilirlik içindir. Tek bilgisayar modunda veriler tarayıcıda durduğu için kararlı bir saldırgana karşı koruma sağlamaz; yerel sunucu modunda değişiklik izi sunucuda silinemez şekilde tutulur.',
     'Not: Giriş TMI oturumuyla yapılır; kullanıcı ve ayar kayıtlarını yalnız TMI yöneticisi değiştirir. Değişiklik izi sunucuda silinemez şekilde tutulur.'],
 ];

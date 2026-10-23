@@ -69,6 +69,9 @@ interface OnayAlani {
 }
 const kapanmamis = (kapali: string) => (onceki: Deger, yeni: Deger): boolean => onceki !== kapali && yeni !== kapali;
 const FORM_SERBEST: readonly Deger[] = [undefined, 'Taslak', 'Onay bekliyor'];
+// MRB kararı da karardır (195 a, B18): kararsız hâl ("Karar bekliyor" ya da boş) kaydı dolduranındır, karar onay ucundan girer.
+// Değer serbest metin kalır: eski kayıtlar kısa adla ("Tamir") durur ve KM-K90 kararı baş eşleşmeyle okur.
+const MRB_KARARSIZ: readonly Deger[] = [undefined, null, '', 'Karar bekliyor'];
 // Genel yazmanın onay alanı reddi bu alan adıyla döner: köprü aynı kaydı onay ucuna gönderir.
 export const ONAY_ALANI_HATASI: KmOnayReddiAlani = 'onay';
 export const FORM_ONAYLANDI = 'Onaylandı';
@@ -84,7 +87,10 @@ export const ONAY_ALANLARI: Readonly<Partial<Record<KaliteMerkeziKoleksiyonu, Re
     onayGeriAlan: { degerler: null },
     onayGeriAlmaZamani: { degerler: null },
   },
-  ncr: { durum: { degerler: ['Açık', 'MRB değerlendirmesinde', 'DÖF açıldı', UYGUNSUZLUK_KAPALI], serbest: kapanmamis(UYGUNSUZLUK_KAPALI) } },
+  ncr: {
+    durum: { degerler: ['Açık', 'MRB değerlendirmesinde', 'DÖF açıldı', UYGUNSUZLUK_KAPALI], serbest: kapanmamis(UYGUNSUZLUK_KAPALI) },
+    mrb: { degerler: null, serbest: (o, y) => MRB_KARARSIZ.includes(o) && MRB_KARARSIZ.includes(y) },
+  },
   capa: { durum: { degerler: ['Açık', 'Kapalı'], serbest: kapanmamis('Kapalı') } },
   sup: { onay: { degerler: ['Onaylı', 'Şartlı onaylı', 'Aday', TEDARIKCI_ASKIDA] } },
 };
