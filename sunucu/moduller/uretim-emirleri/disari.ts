@@ -63,7 +63,7 @@ export const emirBitir = (db: Db, kullanici: Kullanici, id: number, saglamAdet?:
 // kararBekliyor: ilk parça kararı beklenirken sayılan parça sağlama katılmaz (131 b); türü çağıran seçer.
 export const emirSayim = (
   db: Db, kullanici: Kullanici, id: number, govde: SayimKaydi, secenek?: { kararBekliyor?: boolean; an?: string },
-): Promise<{ emir: Emir }> => servis.kayitAniyla(db, secenek?.an, () => servis.emirSayim(db, uretenKisi(kullanici), id, govde, secenek));
+): Promise<{ emir: Emir; uyari: string | null }> => servis.kayitAniyla(db, secenek?.an, () => servis.emirSayim(db, uretenKisi(kullanici), id, govde, secenek));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
 export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari): Promise<{ emir: Emir; adet: number }> =>
   servis.kararliSayimiSonuclandir(db, kisiId, id, karar);
