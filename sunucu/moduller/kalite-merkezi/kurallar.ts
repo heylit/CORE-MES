@@ -27,7 +27,7 @@ export const ILETILER = {
   onayliDegil: 'Form onaylı değil; geri alınacak onay yok.',
   formYok: 'Form bulunamadı.',
   gecersizCihaz: 'Kalibrasyonu geçersiz cihazla ölçüm kaydedilemez.',
-  kapanmisKayit: 'Kapanmış uygunsuzluk ve sonuçlanmış muayene değiştirilemez ve silinemez; düzeltme yeni kayıtla yapılır.',
+  kapanmisKayit: 'Kapanmış uygunsuzluk ve DÖF, sonuçlanmış muayene ve lot kabul kaydı değiştirilemez ve silinemez; düzeltme yeni kayıtla yapılır.',
   karantinadaNcrDisiRed: 'Parti karantinada kaldı: NCR dışı red var.',
   serbestMiktarParti: 'Serbest bırakılan miktar bu NCR\'nin bırakabileceği bir partiye ait değil.',
   serbestMiktarSifir: 'Serbest bırakılan miktar sıfırdan büyük olmalı.',
@@ -158,11 +158,16 @@ export function onayliFormReddi(koleksiyon: string, onceki: Record<string, unkno
 
 // KM-K89 (258 a, 19.10.2026): kapanmış NCR ve sonuçlanmış (Kabul, Ret) muayene kilitlidir; yazma, onay ve silme reddedilir, düzeltme
 // yeni kayıtla yapılır. Yedekten geri yükleme kilide bakmaz: yöneticinin işidir ve önceki hâl geçmişte kalır.
+// B16: uygulamanın ekranda kilitlediği kapanmış DÖF ve kararı verilmiş lot kabul kaydı da aynı kilittedir (uygulamanın `isLocked`
+// kuralı). Lot kararı formun hesabıdır; "yeniden başlat" (`tip: reset`) kaydı muayene değildir, kilitlenmez.
 const SONUCLU_MUAYENE: readonly string[] = ['Kabul', 'Ret'];
+const DOF_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'capa';
+const LOT_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'lot';
 export function kapanmisKayitMi(koleksiyon: string, govde: Record<string, unknown> | null): boolean {
   const alan = (a: string): string => (typeof govde?.[a] === 'string' ? (govde[a] as string).trim() : '');
-  if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU) return alan('durum') === UYGUNSUZLUK_KAPALI;
+  if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU || koleksiyon === DOF_KOLEKSIYONU) return alan('durum') === UYGUNSUZLUK_KAPALI;
   if (koleksiyon === 'insp') return SONUCLU_MUAYENE.includes(alan('sonuc'));
+  if (koleksiyon === LOT_KOLEKSIYONU) return alan('karar') !== '' && alan('tip') !== 'reset';
   return false;
 }
 
