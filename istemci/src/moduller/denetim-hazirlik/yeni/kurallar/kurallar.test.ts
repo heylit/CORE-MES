@@ -5,7 +5,7 @@ import { bosProfil, depoOku, yeniDenetim } from '../normalize.ts';
 import type { Cihaz, Surec } from '../tipler.ts';
 import { bugunListesi, gecikmisSayisi } from './bugun.ts';
 import { haftalariKur } from './hafta.ts';
-import { icBaslat, icBitir, icOtomatikPlan, icPlanSatirlari, icVadesiGelenler } from './ic-denetim.ts';
+import { icBaslat, icBitir, sahaBaslat, SAHA_SABLONLARI, icOtomatikPlan, icPlanSatirlari, icVadesiGelenler } from './ic-denetim.ts';
 import { cihazDurumu } from './kalibrasyon.ts';
 import { kysGecikti } from './kys.ts';
 import { ozNotu, ozSonrakiVade, ozTurBaslat, ozTurBitir } from './oz.ts';
@@ -86,6 +86,20 @@ describe('iç denetim', () => {
     expect(a?.res.minor).toBe(1);
     expect(p.audits.some((x) => x.parent === a?.id && x.sub === 'ncr')).toBe(true);
     expect(icVadesiGelenler(p)).toHaveLength(0);
+  });
+});
+
+describe('saha turu', () => {
+  it('şablondan tur açar, denetçi KYS sorumlusu, açık iş olur; bilinmeyen şablonda null', () => {
+    const p = bosProfil();
+    p.kys.roles['kys'] = { kisi: 'Deneme Sorumlu', vekil: '' };
+    const t0 = SAHA_SABLONLARI[0];
+    if (!t0) throw new Error('şablon yok');
+    const id = sahaBaslat(p, t0.id);
+    expect(p.ic.cur).toBe(`s:${String(id)}`);
+    expect(p.ic.saha[0]).toMatchObject({ tpl: t0.id, by: 'Deneme Sorumlu', done: false, date: '2026-06-15' });
+    expect(p.ic.saha[0]?.items).toHaveLength(t0.items.length);
+    expect(sahaBaslat(p, 'yok')).toBeNull();
   });
 });
 

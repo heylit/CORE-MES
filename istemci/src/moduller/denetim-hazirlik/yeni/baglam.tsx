@@ -17,6 +17,10 @@ import { KOK, useDepoYazici, YETKI_ILETISI, type KayitDurumu, type Yukleme } fro
 
 // Parçaların tek veri kapısı (PARCA-SOZLESMESI): kayıt, ekran durumu, gezinme, geri alma, bildirim ve yetki buradan gelir; parça `api` çağırmaz.
 
+export interface DegistirSecenegi { sessiz?: boolean; bildirim?: string }
+// dokuman: KYS'de açılacak doküman (ekran.kys.dok); yeniDenetim: takvimde yeni denetim formu (ekran.takvim.yeniDenetim).
+export interface GitSecenegi { program?: ProgramKodu; kys?: KysSekmesi; dokuman?: string; yeniDenetim?: boolean }
+
 export interface DenetimBaglami {
   depo: Depo;
   profil: Profil;
@@ -27,10 +31,12 @@ export interface DenetimBaglami {
   gorunum: GorunumKodu;
   ekran: EkranDurumu;
   ekranDegistir: (f: (e: EkranDurumu) => void) => void;
-  degistir: (etiket: string | null, f: (taslak: Profil) => void) => void;
+  // etiket: geri al yığınındaki ad. Bildirim varsayılan olarak etiketi "Geri al" ile gösterir; `bildirim` başka metin verir, `sessiz` bildirimi
+  // kapatır (adım yine geri alınabilir, Ctrl Z ile).
+  degistir: (etiket: string | null, f: (taslak: Profil) => void, secenek?: DegistirSecenegi) => void;
   depoDegistir: (etiket: string | null, f: (taslak: Depo) => void) => void;
   programSec: (k: ProgramKodu) => void;
-  git: (kod: GorunumKodu, secenek?: { program?: ProgramKodu; kys?: KysSekmesi }) => void;
+  git: (kod: GorunumKodu, secenek?: GitSecenegi) => void;
   geriAl: () => void;
   geriAlinabilir: boolean;
   bildir: (metin: string, secenek?: { geriAl?: boolean; ton?: 'tamam' | 'bilgi' | 'hata' }) => void;
@@ -99,7 +105,7 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
   }, [ortakBildir]);
 
   const depoYaz = yazici.yaz;
-  const degistir = useCallback<DenetimBaglami['degistir']>((etiket, f) => {
+  const degistir = useCallback<DenetimBaglami['degistir']>((etiket, f, secenek) => {
     if (!yetki.yazabilir) { ortakBildir('hata', YETKI_ILETISI); return; }
     const d = sonDepo.current;
     const p = etkinProfil(d);
@@ -110,7 +116,7 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
     const yeni: Depo = { ...d, data: { ...d.data, [d.active]: taslak } };
     sonDepo.current = yeni;
     depoYaz(yeni);
-    if (etiket) bildir(etiket, { geriAl: true });
+    if (etiket && !secenek?.sessiz) bildir(secenek?.bildirim ?? etiket, { geriAl: true });
   }, [yetki.yazabilir, ortakBildir, depoYaz, bildir]);
 
   const depoDegistir = useCallback<DenetimBaglami['depoDegistir']>((etiket, f) => {
@@ -141,10 +147,12 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
   const programSec = useCallback((k: ProgramKodu) => { ekranDegistir((e) => { e.program = k; }); }, [ekranDegistir]);
 
   const git = useCallback<DenetimBaglami['git']>((hedef, secenek) => {
-    if (secenek?.program || secenek?.kys) {
+    if (secenek?.program || secenek?.kys || secenek?.dokuman || secenek?.yeniDenetim) {
       ekranDegistir((e) => {
         if (secenek.program) e.program = secenek.program;
         if (secenek.kys) e.kys.tab = secenek.kys;
+        if (secenek.dokuman) e.kys.dok = secenek.dokuman;
+        if (secenek.yeniDenetim) e.takvim = { yeniDenetim: true };
       });
     }
     void gezin(`${KOK}/yeni/${gorunum(hedef).yol}`);
