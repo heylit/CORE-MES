@@ -357,6 +357,24 @@ export function statuKirilimi(b: readonly { statuId: number | null; miktar: stri
   }
   return [...t].filter(([, v]) => v.miktar !== 0n).sort(([a], [c]) => (a ?? 0) - (c ?? 0)).map(([statuId, v]) => ({ statuId, miktar: bindenMetin(v.miktar), ilkGiris: v.ilkGiris }));
 }
+// Statü Reçete ve Rota'nın rota tanımından gelir (recete_rota_statu); stok yalnız kimliğini tutar. Statü kartına malzeme numarası
+// metniyle bağlıdır (yabancı anahtar yok): kart kodu büyük harfe çevrilip karşılaştırılır, malzemeler de kodu böyle arar.
+export interface StatuOzeti { id: number; malzemeNo: string; ad: string; urunKodu: string | null }
+const statuKodu = (kod: string): string => kod.trim().toLocaleUpperCase('tr-TR');
+// Metnin statü adında, statünün malzeme kodunda ya da mamül kodunda geçtiği statüler ("OP 10" gibi).
+export function statuAramasi(statuler: readonly StatuOzeti[], metin: string): number[] {
+  const m = metin.trim().toLocaleLowerCase('tr-TR');
+  if (m === '') return [];
+  return statuler.filter((s) => [s.ad, s.malzemeNo, s.urunKodu ?? ''].some((x) => x.toLocaleLowerCase('tr-TR').includes(m))).map((s) => s.id);
+}
+// Statülerin bağlı olduğu kart kodları, tekrarsız.
+export const statuKodlari = (statuler: readonly StatuOzeti[]): string[] => [...new Set(statuler.map((s) => statuKodu(s.malzemeNo)).filter((k) => k !== ''))];
+// Kartın tanımlı ama stoğu olmayan statüleri, kimlik sırasıyla (ayrıntıda salt okunur "tanımlı, stok yok" satırı).
+export function stoksuzStatuler(statuler: readonly StatuOzeti[], kartKodu: string, kirilim: readonly { statuId: number | null }[]): { statuId: number }[] {
+  const kod = statuKodu(kartKodu);
+  const stoklu = new Set(kirilim.flatMap((k) => (k.statuId === null ? [] : [k.statuId])));
+  return statuler.filter((s) => statuKodu(s.malzemeNo) === kod && !stoklu.has(s.id)).map((s) => s.id).sort((a, b) => a - b).map((statuId) => ({ statuId }));
+}
 
 // ---- Stok değeri (kullanıcı kararı 12.10.2026, #544: ağırlıklı ortalama alış fiyatı) ------------------------------------------
 // Değer = her kartın pozitif toplamı x birim fiyat (TRY; servis ağırlıklı ortalama alış fiyatını verir). Fiyatı (ya da TRY karşılığı) olmayan stoklu kart değere katılmaz,

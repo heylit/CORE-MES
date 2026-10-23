@@ -12,10 +12,10 @@ export const NIZAMIYE_IKINCI_MENU = {
   sayacUcu: '/nizamiye/menu-sayaclari',
   gruplar: [
     { maddeler: [
-      { anahtar: 'kapi', baslik: 'Kapı', yol: '/nizamiye', simge: 'scan', islem: 'nizamiye.oku' },
-      { anahtar: 'kartlar', baslik: 'Kart rafı', yol: '/nizamiye/kartlar', simge: 'tag', islem: 'nizamiye.oku' },
-      { anahtar: 'gecmis', baslik: 'Geçmiş', yol: '/nizamiye/gecmis', simge: 'clock', islem: 'nizamiye.oku' },
-      { anahtar: 'acil', baslik: 'Acil durum listesi', yol: '/nizamiye/acil-durum', simge: 'alert', islem: 'nizamiye.oku' },
+      { anahtar: 'kapi', baslik: 'Kapı', yol: '/nizamiye', simge: 'scan', islem: 'nizamiye.oku', okur: ['/nizamiye/kapi'] },
+      { anahtar: 'kartlar', baslik: 'Kart rafı', yol: '/nizamiye/kartlar', simge: 'tag', islem: 'nizamiye.oku', okur: ['/nizamiye/kartlar'] },
+      { anahtar: 'gecmis', baslik: 'Geçmiş', yol: '/nizamiye/gecmis', simge: 'clock', islem: 'nizamiye.oku', okur: ['/nizamiye/gecmis'] },
+      { anahtar: 'acil', baslik: 'Acil durum listesi', yol: '/nizamiye/acil-durum', simge: 'alert', islem: 'nizamiye.oku', okur: ['/nizamiye/acil-durum'] },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;
