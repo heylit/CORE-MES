@@ -45,6 +45,10 @@ export interface CerceveAyari {
   saatDilimi?: string;
   // Çerçeve yeniden kurulunca açılacak görünüm (emir seçimi Kurulum'da yapılır; yeniden kurulan çerçeve orada kalmalı).
   acilisGorunumu?: string;
+  // Kütüphane kalemini stok kartına bağlayabilir (163 b; malzeme kartı yazma işlemi). Bağlı kalemin adedi stoktan gelir.
+  stokKartiBaglayabilir?: boolean;
+  // Bağlı kalemin azalan adedi stoktan düşer (164 b); yoksa azaltma bağlı kalemde gizlenir.
+  stokDusebilir?: boolean;
 }
 
 // Toplu aktarım listesindeki makine: ad ve numara prototipin gösterdiğiyle aynıdır.
@@ -950,6 +954,183 @@ export function cerceveKoprusu(
     };
     if (w.document.readyState === 'complete') kur();
     else w.addEventListener('load', kur, { once: true });
+    if (w.document.readyState === 'complete') izle();
+    else w.addEventListener('load', izle, { once: true });
+  }
+
+  // ----- takım stoğu (153 a) -----
+  // Stok kartına bağlı kütüphane kalemi okurken stoğun kullanılabilir miktarıyla ve `tmiStok` işaretiyle gelir. Prototip
+  // değiştirilmez: Kütüphane ayrıntısı her çiziminde kalemin stok kartı bölümü yeniden eklenir. Bağlı kalemde adet stoktan gelir:
+  // alan salt okunur, artırma gizlidir (giriş ve sayım Stok ekranından); stoktan düşemeyen kişide azaltma da gizlidir (düşüş
+  // yalnız açık sekmede kalırdı). Kartı yazabilen kişi kalemi bağlar, kartını değiştirir ya da bağı kaldırır; bağ yazılınca kabuk
+  // çerçeveyi Kütüphane'de yeniden kurar (adet okumayla gelir).
+  if (!ayar.toplu) {
+    type StokKarti = { malzemeId: number; kod: string; ad: string | null };
+    const KIMLIK = /^[A-Za-z0-9_.-]{1,64}$/;
+    const bagliKart = (kimlik: string): StokKarti | null => {
+      try {
+        const inv = (JSON.parse(degerler[ayar.durumAnahtari] ?? '{}') as { inv?: Record<string, { tmiStok?: Partial<StokKarti> } | null> }).inv ?? {};
+        const bag = Object.prototype.hasOwnProperty.call(inv, kimlik) ? inv[kimlik]?.tmiStok : undefined;
+        return bag !== undefined && typeof bag.malzemeId === 'number' && typeof bag.kod === 'string'
+          ? { malzemeId: bag.malzemeId, kod: bag.kod, ad: typeof bag.ad === 'string' ? bag.ad : null } : null;
+      } catch { return null; }
+    };
+    // Arama kalem başınadır; ayrıntı yeniden çizilince aynı kalemde açık kalır.
+    let arama: { kimlik: string; metin: string; kartlar: StokKarti[]; toplam: number | null; ileti: string } | null = null;
+    let aramaSayaci = 0;
+    let aramaZamani: number | undefined;
+    let yazmada = false;
+    const ciz = (): void => {
+      const belge = w.document;
+      const ayrinti = belge.getElementById('libDetail');
+      const izgara = ayrinti?.querySelector('.sgrid');
+      const kimlik = belge.querySelector('#libList tr.cur')?.getAttribute('data-key') ?? null;
+      // Arama sonucu gelince bölüm yeniden çizilir; yazılan alan odağını ve imlecini kaybetmez.
+      const onceki = belge.activeElement instanceof w.HTMLInputElement && belge.activeElement.id === 'tmiStokAra' ? belge.activeElement.selectionStart : null;
+      belge.getElementById('tmiStokKarti')?.remove();
+      if (ayrinti === null || ayrinti === undefined || izgara === null || izgara === undefined || kimlik === null || !KIMLIK.test(kimlik)) return;
+      const bag = bagliKart(kimlik);
+      if (bag !== null) {
+        const adet = ayrinti.querySelector<HTMLInputElement>('#lQty');
+        if (adet !== null) { adet.readOnly = true; adet.title = 'Adet Stok modülünden gelir.'; }
+        ayrinti.querySelector<HTMLElement>('button[data-a="q+"]')?.setAttribute('hidden', '');
+        if (ayar.stokDusebilir !== true) ayrinti.querySelector<HTMLElement>('button[data-a="q-"]')?.setAttribute('hidden', '');
+      }
+      if (bag === null && ayar.stokKartiBaglayabilir !== true) return;
+      if (arama !== null && arama.kimlik !== kimlik) arama = null;
+      const kutu = belge.createElement('div');
+      kutu.id = 'tmiStokKarti';
+      const baslik = belge.createElement('div');
+      baslik.className = 'sh';
+      baslik.textContent = 'Stok kartı';
+      kutu.appendChild(baslik);
+      const not = (metin: string, sinif = 'note'): void => {
+        const p = belge.createElement('p');
+        p.className = sinif;
+        p.textContent = metin;
+        kutu.appendChild(p);
+      };
+      if (bag !== null) {
+        const satir = belge.createElement('div');
+        satir.className = 'srow';
+        const kod = belge.createElement('span');
+        kod.textContent = bag.kod;
+        const ad = belge.createElement('b');
+        ad.textContent = bag.ad ?? '';
+        satir.append(kod, ad);
+        kutu.appendChild(satir);
+        not(ayar.stokDusebilir === true
+          ? 'Adet stoktan gelir; değişimde ve azaltmada düşen adet stoktan çıkar. Giriş ve sayım Stok ekranından.'
+          : 'Adet stoktan gelir; giriş, çıkış ve sayım Stok ekranından.');
+      } else {
+        not('Stok kartına bağlı değil; adet yalnız bu kurulumda tutulur.');
+      }
+      const bagla = (malzemeId: number | null): void => {
+        if (yazmada) return;
+        yazmada = true;
+        if (arama !== null) arama.ileti = 'Kaydediliyor…';
+        ciz();
+        void bosalt().then(() => istek('stok-karti-bagla', { kimlik, malzemeId })).then(
+          // Kabuk çerçeveyi yeniden kurar; bölüm o ana kadar bağın eski halini gösterir.
+          () => { yazmada = false; arama = null; ciz(); },
+          (h: Hata) => {
+            yazmada = false;
+            arama = { kimlik, metin: arama?.metin ?? '', kartlar: arama?.kartlar ?? [], toplam: arama?.toplam ?? null, ileti: h.message };
+            ciz();
+          },
+        );
+      };
+      if (ayar.stokKartiBaglayabilir === true && arama === null) {
+        const dugmeler = belge.createElement('div');
+        dugmeler.className = 'lbtns';
+        const ac = belge.createElement('button');
+        ac.type = 'button';
+        ac.setAttribute('data-tmi', 'stok-ac');
+        ac.textContent = bag === null ? 'Stok kartına bağla' : 'Kartı değiştir';
+        ac.addEventListener('click', () => { arama = { kimlik, metin: '', kartlar: [], toplam: null, ileti: '' }; ara(''); });
+        dugmeler.appendChild(ac);
+        if (bag !== null) {
+          const kaldir = belge.createElement('button');
+          kaldir.type = 'button';
+          kaldir.className = 'danger';
+          kaldir.setAttribute('data-tmi', 'stok-kaldir');
+          kaldir.textContent = 'Bağı kaldır';
+          kaldir.addEventListener('click', () => { if (w.confirm('Kalemin stok kartı bağı kaldırılsın mı? Adet bundan sonra yalnız bu kurulumda tutulur.')) bagla(null); });
+          dugmeler.appendChild(kaldir);
+        }
+        kutu.appendChild(dugmeler);
+      }
+      if (ayar.stokKartiBaglayabilir === true && arama !== null) {
+        const etiket = belge.createElement('label');
+        etiket.className = 'loc';
+        etiket.textContent = 'Sarf ya da demirbaş kartı ara';
+        const girdi = belge.createElement('input');
+        girdi.id = 'tmiStokAra';
+        girdi.type = 'search';
+        girdi.placeholder = 'Kod ya da ad';
+        girdi.maxLength = 100;
+        girdi.value = arama.metin;
+        girdi.addEventListener('input', () => {
+          if (arama !== null) arama.metin = girdi.value;
+          if (aramaZamani !== undefined) w.clearTimeout(aramaZamani);
+          aramaZamani = w.setTimeout(() => { ara(girdi.value); }, 300);
+        });
+        etiket.appendChild(girdi);
+        kutu.appendChild(etiket);
+        for (const k of arama.kartlar) {
+          const satir = belge.createElement('div');
+          satir.className = `srow${bag?.malzemeId === k.malzemeId ? ' on' : ''}`;
+          satir.setAttribute('role', 'button');
+          satir.tabIndex = 0;
+          satir.setAttribute('data-tmi-kart', String(k.malzemeId));
+          const kod = belge.createElement('span');
+          kod.textContent = k.kod;
+          const ad = belge.createElement('b');
+          ad.textContent = k.ad ?? '';
+          satir.append(kod, ad);
+          satir.addEventListener('click', () => { if (bag?.malzemeId !== k.malzemeId) bagla(k.malzemeId); });
+          satir.addEventListener('keydown', (olay) => { if (olay.key === 'Enter') { olay.preventDefault(); satir.click(); } });
+          kutu.appendChild(satir);
+        }
+        if (arama.ileti !== '') not(arama.ileti, 'cwarn');
+        else if (arama.toplam !== null && arama.toplam > arama.kartlar.length) not(`${String(arama.toplam)} karttan ilk ${String(arama.kartlar.length)} gösteriliyor; aramayı daraltın.`);
+        const dugmeler = belge.createElement('div');
+        dugmeler.className = 'lbtns';
+        const vazgec = belge.createElement('button');
+        vazgec.type = 'button';
+        vazgec.setAttribute('data-tmi', 'stok-vazgec');
+        vazgec.textContent = 'Vazgeç';
+        vazgec.addEventListener('click', () => { arama = null; ciz(); });
+        dugmeler.appendChild(vazgec);
+        kutu.appendChild(dugmeler);
+      }
+      izgara.after(kutu);
+      const odak = kutu.querySelector<HTMLInputElement>('#tmiStokAra');
+      if (odak !== null && (onceki !== null || (arama?.metin === '' && arama.kartlar.length === 0))) {
+        odak.focus();
+        if (onceki !== null) odak.setSelectionRange(onceki, onceki);
+      }
+    };
+    const ara = (metin: string): void => {
+      const a = arama;
+      if (a === null) return;
+      a.metin = metin;
+      a.ileti = 'Aranıyor…';
+      ciz();
+      aramaSayaci += 1;
+      const no = aramaSayaci;
+      istek<{ kartlar: StokKarti[]; toplam: number | null }>('stok-kartlari', { metin, sayfa: 1 }).then(
+        (c) => { if (no !== aramaSayaci || arama !== a) return; a.kartlar = c.kartlar; a.toplam = c.toplam; a.ileti = c.kartlar.length === 0 ? 'Uyan kart yok.' : ''; ciz(); },
+        (h: Hata) => { if (no !== aramaSayaci || arama !== a) return; a.ileti = h.message; ciz(); },
+      );
+    };
+    const izle = (): void => {
+      const ayrinti = w.document.getElementById('libDetail');
+      if (ayrinti === null) return;
+      // Yalnız ayrıntının kendi çizimi izlenir (bölümün eklenmesi de bir çizimdir; bölüm varken yeniden çizilmez).
+      new w.MutationObserver(() => { if (w.document.getElementById('tmiStokKarti') === null) ciz(); }).observe(ayrinti, { childList: true });
+      ciz();
+    };
     if (w.document.readyState === 'complete') izle();
     else w.addEventListener('load', izle, { once: true });
   }

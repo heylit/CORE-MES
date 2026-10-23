@@ -17,7 +17,7 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 function sunucuKur(
   kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitlar'] = [],
-  yetki: Pick<BenCevabi, 'yazabilir' | 'hazirlikOnaylayabilir'> = { yazabilir: true, hazirlikOnaylayabilir: false },
+  yetki: Partial<BenCevabi> & Pick<BenCevabi, 'yazabilir' | 'hazirlikOnaylayabilir'> = { yazabilir: true, hazirlikOnaylayabilir: false },
 ): string[] {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
@@ -25,7 +25,9 @@ function sunucuKur(
     const yontem = secenek?.method ?? 'GET';
     istekler.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
-    if (yontem === 'GET' && yol === '/cnc-kurulum/ben') return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, takimDegistirebilir: false, ...yetki } satisfies BenCevabi);
+    if (yontem === 'GET' && yol === '/cnc-kurulum/ben') return json(200, {
+      kisi: { id: kullanici.id, ad: kullanici.ad }, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, ...yetki,
+    } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/cnc-kurulum/kayitlar') return json(200, { kayitlar } satisfies KayitlarCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -79,6 +81,18 @@ describe('CncKurulumCercevesi', () => {
     ac('/cnc-kurulum');
     const okuyan = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
     expect(okuyan.getAttribute('srcdoc') ?? '').toContain('"yazabilir":false');
+  }, 60000);
+
+  it('stok kartı bağlama ve stoktan düşme yetkisi çerçeveye geçer; yoksa kapalıdır (163 b, 164 b)', async () => {
+    sunucuKur(YAZAR, [], { yazabilir: true, hazirlikOnaylayabilir: false, stokDusebilir: true, stokKartiBaglayabilir: true });
+    ac('/cnc-kurulum');
+    const yonetici = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
+    expect(yonetici.getAttribute('srcdoc') ?? '').toContain('"stokKartiBaglayabilir":true,"stokDusebilir":true');
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('/cnc-kurulum');
+    const yazar = await screen.findByTitle('CNC Kurulum Motoru', {}, { timeout: 20000 });
+    expect(yazar.getAttribute('srcdoc') ?? '').toContain('"stokKartiBaglayabilir":false,"stokDusebilir":false');
   }, 60000);
 
   it('Çizimlere yazabilen kişide de çerçevede aktarım düğmesi yoktur: makine eşleştirme Çizim Merkezi\'ndedir', async () => {
