@@ -7,7 +7,7 @@ import { tarihEkle } from './kurallar.ts';
 import * as servis from './servis.ts';
 
 // İki vardiya, iş merkezlerinin haftalık düzeni, operatörlerin vardiyası, bir planlı bakım duruşu.
-// Çalışma takvimi (resmî tatiller) kurulumun parçasıdır; örnek veri yazmaz, kullanıcı Takvim'den ekler.
+// Kapalı günler kurulumun parçasıdır; örnek veri yazmaz, kullanıcı Takvim'den ekler. Resmî tatiller İK ayarından gelir (soru 142 b).
 // Kayıtlar servis komutlarıyla örnek yönetici adına yazılır: kapsam, geçmiş tarih ve mola kuralları uçtakiyle aynı denetlenir.
 export const ORNEK_ONEKI = 'Örnek ';
 const GUNDUZ = { ad: 'Örnek Gündüz', baslangic: '08:00', bitis: '16:00', molalar: [{ baslangic: '12:00', bitis: '12:30' }], aktif: true };

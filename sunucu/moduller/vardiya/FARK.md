@@ -80,3 +80,13 @@ Taban: main e0b591f. Başvuru: ilk sistem `ilk-sistem-kodu/sunucu/moduller/vardi
 - Çalışma takvimi (`/vardiya/takvim`) kaynak listesine istasyon ve aktif makine eklendi (V-B6): istasyonlar `GET /istasyonlar/secim` (oturumlu herkes), makineler `GET /makineler` (`sayfa.istasyonlar` ya da `istasyonlar.yaz`; yetkisiz okumada yalnız makine seçenekleri eksik kalır). `GET /calisma-takvimi` istasyon ve makine takvimini zaten veriyordu (`tur=istasyon|makine`); sunucu, sözleşme ve yetki değişmedi. İstasyonsuz makinede takvim yoktur (null), süreklilik uydurulmaz.
 - Dar ekran: çalışma takvimi tablosu kaydırılabilir kapta, 480 px altında panel sıkılaşır, form alanı ve düğmeler satırı doldurur (`vardiya.css`). Tarayıcıda denenmedi, yalnız CSS incelemesi ve vitest.
 - Günlük mesai Vardiya ikinci menüsünde `/vardiya/mesai` yolundadır (menü doğrulaması madde yolunun kök altında olmasını ister); aynı ekran ana menüdeki `/mesai`'de de açılır.
+
+## Karar 142 b, 160 a (23.10.2026)
+- Resmî tatilin sahibi İK (VR-28). Takvim günleri `ik/disari.ts resmiTatilGunleri` ile İK tatillerini ve Vardiya'nın kendi günlerini birleştirir;
+  aynı gün İK tatili kazanır. Aralıksız okuma (`/vardiya-takvimi`, `disari.takvimGunleri`) İK tatillerini geçen yılın başından gelecek yılın sonuna kadar açar.
+- Vardiya tatil yazmaz: `POST /takvim-gunleri` `tur: 'tatil'` 400; `POST /takvim-gunleri/resmi-tatiller` ucu ve sabit tatil listesi (`SABIT_RESMI_TATILLER`, `resmiTatiller`) kalktı.
+- Göç yok. 142'den önce girilmiş `tatil` satırı tatil okunmaya devam eder ve Vardiya'dan silinebilir (kullanıcı kararı 23.10.2026 14:19; neden: Reçete ve
+  Rota planlama sayfası yalnız `tatil`i tatil sayar, `kapali`yı saymaz).
+- Sözleşme: `takvimCevabi.gunler[].kaynak` (isteğe bağlı, yalnız 'ik') eklendi; ekran İK satırını bununla ayırır. Vardiya'nın kendi satırı değişmedi.
+- Ekran (160 a, prototip değişikliği onaylı): "Resmî tatilleri ekle" kalktı; İK tatilleri bayrakla, silinemez satır; "Tarih ekle" kapalı gün ekler;
+  "Tümünü temizle" yalnız Vardiya'nın kendi günleri varken görünür ve onları siler; ipucu "Resmî tatiller İK ayarlarından girilir".
