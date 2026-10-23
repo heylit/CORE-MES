@@ -183,10 +183,17 @@ describe('Kaynaklar komutları sahibi modüllerin uçlarına yazar (gerçek Post
   test('KK-04: vardiya ve tatil köprüde yazılmaz; Vardiya\'da yazılanı durum ucu gösterir', async () => {
     for (const ad of ['vardiya-ekle', 'vardiya-guncelle', 'tatil-ekle', 'tatil-kaldir', 'resmi-tatilleri-ekle']) assert.equal(Object.hasOwn(KAYNAK_KOMUTLARI, ad), false, ad);
     await sahibineYaz('/vardiyalar', { ad: 'KK sabah', baslangic: '07:00', bitis: '15:00', molalar: [{ baslangic: '11:00', bitis: '11:30' }], aktif: true });
-    await sahibineYaz('/takvim-gunleri', { tarih: '2099-05-01', ad: 'KK emek', tur: 'tatil' });
-    const d = await durumOku(tam);
-    assert.deepEqual(d.cal.shifts.filter((v) => v.name === 'KK sabah').map((v) => [v.start, v.end]), [['07:00', '15:00']]);
-    assert.equal(d.cal.holidays.includes('2099-05-01'), true);
+    // Soru 142 b: tatilin sahibi İK'dır; Vardiya takvimi İK listesini okur (aralıksız okuma gelecek yılı da kapsar).
+    const yil = new Date().getUTCFullYear() + 1;
+    await vt().sorgu("INSERT INTO ik_genel_ayar (anahtar, guncelleyen_kisi_id) VALUES ('genel', $1) ON CONFLICT DO NOTHING", [yoneticiId]);
+    await vt().sorgu("INSERT INTO ik_resmi_tatil (sira, yil, ay, gun, ad) VALUES (1, $1, 5, 1, 'KK emek')", [yil]);
+    try {
+      const d = await durumOku(tam);
+      assert.deepEqual(d.cal.shifts.filter((v) => v.name === 'KK sabah').map((v) => [v.start, v.end]), [['07:00', '15:00']]);
+      assert.equal(d.cal.holidays.includes(`${String(yil)}-05-01`), true);
+    } finally {
+      await vt().sorgu('DELETE FROM ik_resmi_tatil WHERE sira = 1');
+    }
   });
 
   test('KK-05: iki yerden düzenlemede ikinci kaydeden sürüm uyarısı alır (409, eski sürüm); kayıt ilk kaydedenin değerinde kalır; yenileyince geçer', async () => {
