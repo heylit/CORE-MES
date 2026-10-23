@@ -8,9 +8,9 @@ Kayıt zamanı ve kişi: tesis tablolarında zaman ve kişi sütunu yok; kim ve 
 
 | Uç | İşlem | Sunucu kuralı | İzinli test | Reddeden test |
 |---|---|---|---|---|
-| GET /is-merkezleri | `biri: sayfa.istasyonlar, istasyonlar.yaz` (#247) | yok | `yetki (IS8)…`: planlama ve yazan rol 200 | aynı test: operatör 403 YETKI_YOK, oturumsuz 401 |
-| GET /istasyonlar | `biri: sayfa.istasyonlar, istasyonlar.yaz` (#247) | aktif tanımı: istasyon ve iş merkezi aktif (IS7) | aynı + `IS7` | aynı test |
-| GET /makineler | `biri: sayfa.istasyonlar, istasyonlar.yaz` (#247) | pasif makine varsayılan gizli | aynı + `ARK-IST-09` | aynı test |
+| GET /is-merkezleri | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.recete-rota` (#247, 195 a) | yok | `yetki (IS8)…`: planlama ve yazan rol 200; `yetki (195 a)…`: kalite 200 | aynı test: operatör 403 YETKI_YOK, oturumsuz 401; `yetki (195 a)…`: depo 403 |
+| GET /istasyonlar | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.recete-rota` (#247, 195 a) | aktif tanımı: istasyon ve iş merkezi aktif (IS7) | aynı + `IS7` | aynı test |
+| GET /makineler | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.recete-rota` (#247, 195 a) | pasif makine varsayılan gizli | aynı + `ARK-IST-09` | aynı test |
 | GET /operasyon-tipleri | `biri: sayfa.istasyonlar, istasyonlar.yaz` | pasif yalnız `pasifler=true` ile | `yetki (IS8)…`, `IS13` | aynı test: operatör 403, oturumsuz 401 |
 | GET /istasyon-kisileri, /makine-kisileri, /ekip-uyeleri | `biri: sayfa.istasyonlar, istasyonlar.yaz` | o tarihte geçerli, iptal edilmemiş satırlar | `yetki (IS8)…`, `IK2` | `yetki (IS8)…`: operatör 403, oturumsuz 401 |
 | GET /ekipler | `biri: sayfa.istasyonlar, istasyonlar.yaz` | pasif yalnız `pasifler=true` ile | `IK7` | `yetki (IS8)…`, `IK7`: operatör 403 |
@@ -20,7 +20,8 @@ Kayıt zamanı ve kişi: tesis tablolarında zaman ve kişi sütunu yok; kim ve 
 | GET /kisi-is-merkezleri/:kisiId | `oturum` + serviste | kişi kendisini, başkasını yalnız `istasyonlar.yaz` okur; yetki varlıktan önce (IS2, IS6) | `IS2` | `IS2`: başkası 403; `IS6` |
 
 Kapandı (#247, IS8): üç tanım listesi sayfası olan ya da yazan role açık; yazan rol kişi kısıtları sayfasında iş merkezlerini okur. Seçim ucu oturumla kalır (İ1). DOĞRULANDI: işlemi yalnız `uclar.ts`'ten oturuma çevirmek testi düşürüyor (1 fail).
-| GET /istasyon-plan-ayarlari, /makine-durumlari, /kisi-yetkinlikleri (#409) | `biri: sayfa.istasyonlar, istasyonlar.yaz` | yok | `yetki (IS8)…`: planlama ve yazan rol 200 | aynı test: operatör 403, oturumsuz 401 |
+| GET /istasyon-plan-ayarlari, /kisi-yetkinlikleri (#409) | `biri: sayfa.istasyonlar, istasyonlar.yaz` | yok | `yetki (IS8)…`: planlama ve yazan rol 200 | aynı test: operatör 403, oturumsuz 401; `yetki (195 a)…`: kalite 403 |
+| GET /makine-durumlari (#409) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.atolye` (195 a: Fabrika Haritası) | yok | `yetki (IS8)…`; `yetki (195 a)…`: kalite ve depo 200 | `yetki (IS8)…`: operatör 403, oturumsuz 401 |
 | GET /istasyonlar/pano-ozeti (#483) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.terminal, sayfa.vardiya, sayfa.personel` | yok; yalnız sayı, kayıt ve ad dökmez | `IS16`: operatör, idari işler ve yazan rol 200 | aynı test: finans 403, oturumsuz 401 |
 | GET /istasyonlar/ara (#1221) | `biri: sayfa.istasyonlar, istasyonlar.yaz` | sorgu 2-60 harf, en çok 5 satır, `%` joker değil | `arama/arama.test.ts` istasyon ve makine | aynı dosya: işlemsiz 403, oturumsuz 401 |
 
