@@ -470,8 +470,6 @@ export const partiSevki = z.object({
   firmaAdi: z.string().nullable(),
 });
 export type PartiSevki = z.output<typeof partiSevki>;
-export const partiIziCevabi = z.object({ parti, hareketler: z.array(hareket), emirler: z.array(z.number().int()), sevkler: z.array(partiSevki) });
-export type PartiIziCevabi = z.output<typeof partiIziCevabi>;
 // Partiye bağlı belge (Çizim merkezi kaydı); dosya stok'un `/stok/partiler/:id/belgeler/:belgeId` ucundan açılır.
 export const partiBelgesi = z.object({ id: z.number().int(), ad: z.string(), tur: z.string(), harf: z.string().nullable() });
 export type PartiBelgesi = z.output<typeof partiBelgesi>;
@@ -812,22 +810,34 @@ export const refakatPartisi = z.object({
 export type RefakatPartisi = z.output<typeof refakatPartisi>;
 export const refakatKolAcGovdesi = z.object({ uretimEmriId: kimlik });
 export type RefakatKolAcGovdesi = z.input<typeof refakatKolAcGovdesi>;
+// Kartlarla sayılan üretim partisi ve bugün eldeki; kartların üretim partilerinden yapılmış, geri alınmamış sevk çıkışı.
+export const refakatCiktisi = z.object({
+  partiId: z.number().int(), lotNo: z.string(), refakatPartisiId: z.number().int(),
+  malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), eldeki: ondalikMetinSemasi,
+});
+export type RefakatCiktisi = z.output<typeof refakatCiktisi>;
+export const refakatSevki = z.object({
+  hareketId: z.number().int(), zaman: zamanSemasi, partiId: z.number().int(), lotNo: z.string(),
+  malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
+  miktar: ondalikMetinSemasi, emirNo: z.string().nullable(), aciklama: z.string().nullable(),
+});
+export type RefakatSevki = z.output<typeof refakatSevki>;
 // İz (kart #126): kartın lotu (kartta), üst ve alt kartları, birleşenler, aynı lotun başka kartları, kartlarla sayılan üretim
 // partileri ve bugün eldekiler, bu partilerden yapılmış sevkler. Kartlar kartın kendisi, üstleri ve ona birleşenlerdir.
 export const refakatIziCevabi = z.object({
   refakat: refakatPartisi,
   ustler: z.array(refakatPartisi), altlar: z.array(refakatPartisi), birlesenler: z.array(refakatPartisi), ayniLot: z.array(refakatPartisi),
-  ciktilar: z.array(z.object({
-    partiId: z.number().int(), lotNo: z.string(), refakatPartisiId: z.number().int(),
-    malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(), eldeki: ondalikMetinSemasi,
-  })),
-  sevkler: z.array(z.object({
-    hareketId: z.number().int(), zaman: zamanSemasi, partiId: z.number().int(), lotNo: z.string(),
-    malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), birim: z.string().nullable(),
-    miktar: ondalikMetinSemasi, emirNo: z.string().nullable(), aciklama: z.string().nullable(),
-  })),
+  ciktilar: z.array(refakatCiktisi),
+  sevkler: z.array(refakatSevki),
 });
 export type RefakatIziCevabi = z.output<typeof refakatIziCevabi>;
+// Lot izi (Dal 9): partinin hareketleri, emirleri ve sevk işleri; lotun kartları (lotu taşıyan, üreten, kol ve birleşen kartlar),
+// bu kartlarla sayılan üretim partileri ve eldekileri, bu partilerden yapılmış sevk çıkışları.
+export const partiIziCevabi = z.object({
+  parti, hareketler: z.array(hareket), emirler: z.array(z.number().int()), sevkler: z.array(partiSevki),
+  kartlar: z.array(refakatPartisi), ciktilar: z.array(refakatCiktisi), sevkCikislari: z.array(refakatSevki),
+});
+export type PartiIziCevabi = z.output<typeof partiIziCevabi>;
 // Lot iki yoldan gelir (Soru 116 b): okutulan lot etiketi (`LOT:<lot no>`) ya da lot okutularak eklenmiş depo sepeti satırı. Kart
 // etiketi lot yerine geçmez. Sepet satırından açılınca satır sepetten çıkar; malzeme bundan sonra kartla ilerler.
 export const refakatPartisiAcGovdesi = z.object({
