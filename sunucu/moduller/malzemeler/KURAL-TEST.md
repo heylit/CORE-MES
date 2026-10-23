@@ -133,3 +133,14 @@ MKK-1..MKK-15'in testleri `katalog-onay-baglama.test.ts`, `katalog-kartlari.test
 | Kart listesi sayfalı; sayfalar her kartı bir kez verir, araya düşen iptal kart atlatmaz; sayfa boyu üst sınırı 500 (#1323) | "Liste sayfalıdır: sayfalar kart numarası sırasıyla bütün kartları bir kez verir; araya düşen iptal ve düzenleme kart atlatmaz" |
 | "sonra" ile yalnız değişen kartlar; iptal gövdesiz (#1323) | "Önbellek: \"sonra\" verilince yalnız o andan (5 dakika payıyla) sonra değişen kartlar gelir; iptal gövdesiz gelir; bozuk an 400" |
 | Köprü sayfaları birleştirir, oturum önbelleğinde yalnız değişenleri ister (#1323) | "liste sayfa sayfa okunur, sayfalar birleşir; ...", "önbellek: sayfa yeniden açılınca yalnız ilk sayfanın anından sonra değişenler istenir; ..." |
+
+## Sihirbazın zorunlu adımları ve benzersiz anahtar sunucuda (B11, 157 a), `kart-kurallari.test.ts`, `olcu-kurali.test.ts`, `kurallar.test.ts`
+- Aile ve kalite (157 a): saf `157 a: hammaddede aile ve kalite yeni kartta zorunlu; ...` (ret: ailesiz, kalitesiz, adsız özel kalite, silinen alan, talebin önerdiği kart; izin: kayıtlı eksik kart, boş metin değişiklik sayılmaz)
+- Ölçü (157 a): `geçerli ölçü kaydolur; ölçüsüz yeni kart (157 a), bilinmeyen form, ...` (ret), `157 a: kuraldan önce ölçüsüz kaydolmuş kart ölçüsü değişmedikçe kaydolur; ölçüsü silinen kart 400` (izin ve ret)
+- Yerleşik zorunlu alanlar ve kategori: saf `B11: yerleşik zorunlu alanlar ve kategori; ...` (ret: ad, parça tipi, alış tarihi, sarf türü ve kaynak sınıfı, hizmet çeşidi ve "Diğer" adı, kategorisiz sarf/demirbaş/hizmet; izin: ayarın kapattığı alan, kayıtlı eksik kart; tür ya da kategori değişince yeni kart gibi)
+- Uç: `ret: ailesiz, kalitesiz ya da ölçüsüz hammadde ve zorunlu alanı ya da kategorisi boş kart 400, kart yazılmaz` (ret, altı gövde), `izinli: kuraldan önce eksik kaydolmuş kart ...` (izin ve ret)
+- Anahtar: saf `B11: benzersiz anahtar ekranın kartAnahtari kuralıyla sunucuda kurulur ...` (örnekler ekranın işlevinden), uç `izinli: tam kart kaydolur; anahtar sunucunundur, ekranın gönderdiği okunmaz`,
+  `ret: aynı malzemeyi farklı ekran anahtarıyla açmak mükerrer denetimini atlatamaz (409); ...`, `izinli: hizmette ekranın anahtarı kalır`; değişen testler `katalog-onay-baglama.test.ts` MKK-10 ve 2, `cakisma-kurali.test.ts`
+- Ekranla karşılaştırma: sunucunun anahtarı `katalog.html` `kartAnahtari` ile 20 000 rastgele kartta karşılaştırıldı, fark yok (23.10.2026, yerelde; ekranın tablosunda olmayan kalite dışarıda: ekran o kartta anahtar kuramaz).
+- Test kartları: `test-kart.ts` (`tamGovde`) eski test gövdelerini türün zorunlu alanlarıyla tamamlar; yeni kuralların testleri gövdeyi tamamlamadan gönderir.
+- Bozma: servisten aile/kalite denetimi, zorunlu alan denetimi ya da sunucu anahtarı ayrı ayrı kaldırılınca `kart-kurallari.test.ts` 2, 2 ve 3 testle düşüyor (23.10.2026, yerelde denendi).

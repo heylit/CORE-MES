@@ -379,12 +379,13 @@ test('214 a: net parça ağırlığı yalnız mamul ve yarı mamulde, kartın ne
   assert.equal(katalogNetAgirlikKg('mamul', {}), null);
 });
 
-test('UYUM-BORCU 4: hammadde ölçüsü ekranın kuralıyla; form ya da ölçü gelmezse ve kayıtlı kartta değişmezse bakılmaz', () => {
+test('UYUM-BORCU 4, 157 a: hammadde ölçüsü ekranın kuralıyla; ölçüsüz yeni kart da reddedilir, kayıtlı kartta değişmeyen ölçüye bakılmaz', () => {
   const hm = (form: unknown, dims: unknown, ek: Record<string, unknown> = {}) => ({ tur: 'hammadde', form, dims, ...ek });
   assert.equal(hammaddeOlcuHatasi(null, hm('cubuk', { d: 50, l: 6000 })), null);
   assert.equal(hammaddeOlcuHatasi(null, hm('boru', { D: 48.3, t: 2.6, l: 6000 })), null);
-  assert.equal(hammaddeOlcuHatasi(null, { tur: 'hammadde', fam: 'metal' }), null);
-  assert.equal(hammaddeOlcuHatasi(null, hm(null, {})), null);
+  assert.equal(hammaddeOlcuHatasi(null, { tur: 'hammadde', fam: 'metal' }), 'Bir form seç.');
+  assert.equal(hammaddeOlcuHatasi(null, hm(null, {})), 'Bir form seç.');
+  assert.equal(hammaddeOlcuHatasi(null, { fam: 'metal' }), 'Bir form seç.', 'türsüz kart hammaddedir');
   assert.equal(hammaddeOlcuHatasi(null, hm('yok', { d: 1 })), 'Bir form seç.');
   assert.equal(hammaddeOlcuHatasi(null, hm('toString', { d: 1 })), 'Bir form seç.');
   assert.equal(hammaddeOlcuHatasi(null, hm(null, { d: 1 })), 'Bir form seç.');

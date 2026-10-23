@@ -8,6 +8,7 @@ import type { KatalogKartiKaydetCevabi, KatalogKartlariCevabi } from '#paylasila
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -44,7 +45,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     return { id, cerez: String(c.headers['set-cookie']).split(';')[0] ?? '', islemler: c.json().kullanici.islemler as string[] };
   }
   const gonder = async (o: Oturum, url: string, govde: unknown): Promise<LightMyRequestResponse> =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, payload: (await surumlu(vt(), url, govde)) as object });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: o.cerez }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
   const oku = (o: Oturum): Promise<LightMyRequestResponse> =>
     app.inject({ method: 'GET', url: '/api/malzeme-katalogu-kartlari', headers: { cookie: o.cerez } });
 

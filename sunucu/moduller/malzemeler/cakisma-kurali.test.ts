@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 import {
   katalogAnahtarCakismalari, katalogCakismaAlanlari, katalogCakismaListesiGecerliMi, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar,
@@ -55,13 +56,13 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
     return ortam.vt;
   };
   const istek = async (url: string, govde: unknown) =>
-    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload: (await surumlu(vt(), url, govde)) as object });
+    app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload: (await surumlu(vt(), url, tamGovde(url, govde))) as object });
   const ayar = (cakisma: string[] | undefined) =>
     istek('/malzeme-katalogu-ayarlari/malzeme/kaydet', { deger: cakisma === undefined ? {} : { kurallar: { mamul: { ad: '{musteri}', cakisma } } } });
   const surumler = new Map<string, number>();
   const kaydet = async (kimlik: string, musteri: string, gerekce: string | null = null) => {
     const c = await istek(`/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-      kayit: { id: kimlik, tur: 'mamul', com: { kod: 'MM-GEN-00000', ad: `Parça ${kimlik}`, birim: 'adet' }, g: { musteri }, onay: { durum: 'taslak' } },
+      kayit: { id: kimlik, tur: 'mamul', com: { kod: 'MM-GEN-00000', ad: `Parça ${kimlik}`, birim: 'adet' }, g: { musteri, resim: kimlik }, onay: { durum: 'taslak' } },
       ozet: { benzersiz_anahtar: `mamul|resim|${kimlik}`, mukerrer_gerekcesi: gerekce }, surum: surumler.get(kimlik) ?? null,
     });
     if (c.statusCode === 200) surumler.set(kimlik, (c.json() as KatalogKartiKaydetCevabi).surum);
@@ -82,11 +83,12 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  test('liste yokken ekranın anahtarı geçerlidir ve varsayılan anahtar olarak da saklanır', async () => {
+  // Varsayılan anahtarı sunucu kurar (B11): resim no ile kart başına ayrıdır, ekranın gönderdiği okunmaz.
+  test('liste yokken sunucunun varsayılan anahtarı geçerlidir ve varsayılan anahtar olarak da saklanır', async () => {
     assert.equal((await kaydet('c1', 'Müşteri A')).statusCode, 200);
     assert.equal((await kaydet('c2', 'Müşteri A')).statusCode, 200, 'varsayılan kuralda anahtarlar farklı');
     const k = await anahtarlar();
-    assert.deepEqual(k['c1'], { b: 'mamul|resim|c1', v: 'mamul|resim|c1' });
+    assert.deepEqual(k['c1'], { b: 'MM|R|c1|', v: 'MM|R|c1|' });
   });
 
   test('yeni kural var olan etkin kartları çakıştırıyorsa ayar yazılmaz ve anahtarlar değişmez', async () => {
@@ -94,7 +96,7 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
     assert.equal(c.statusCode, 409, c.body);
     assert.match(c.body, /MM-/);
     const k = await anahtarlar();
-    assert.equal(k['c1']?.b, 'mamul|resim|c1');
+    assert.equal(k['c1']?.b, 'MM|R|c1|');
     const kayitli = await vt().tx((db) => db.sorgu<{ deger: unknown }>(`SELECT deger FROM malzeme_katalog_ayari WHERE anahtar = 'malzeme'`));
     assert.ok(!JSON.stringify(kayitli).includes('"cakisma"'), 'ayar geri alındı');
   });
@@ -104,7 +106,7 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
     assert.equal((await ayar(['musteri'])).statusCode, 200);
     const k = await anahtarlar();
     assert.equal(k['c1']?.b, 'K|mamul|musteri=müşteria');
-    assert.equal(k['c1']?.v, 'mamul|resim|c1', 'varsayılan anahtar saklı kalır');
+    assert.equal(k['c1']?.v, 'MM|R|c1|', 'varsayılan anahtar saklı kalır');
   });
 
   test('aynı müşteri kodlu yeni kart (büyük-küçük harf ve boşluk farkıyla) engellenir; gerekçeyle kaydedilir', async () => {
@@ -112,7 +114,7 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
     assert.equal(c.statusCode, 409, c.body);
     assert.equal((await kaydet('c3', 'müşteri  a', 'Ayrı kart gerekli')).statusCode, 200);
     assert.equal((await kaydet('c4', 'Müşteri B')).statusCode, 200);
-    assert.equal((await anahtarlar())['c4']?.v, 'mamul|resim|c4');
+    assert.equal((await anahtarlar())['c4']?.v, 'MM|R|c4|');
   });
 
   test('alanı boş kart denetlenmez', async () => {
@@ -125,7 +127,7 @@ describe('Çakışma alanları sunucu engeli (MKK-16, gerçek PostgreSQL)', () =
     assert.equal((await anahtarlar())['c1']?.b, 'K|mamul|musteri=müşteria');
     assert.equal((await ayar([])).statusCode, 200);
     const k = await anahtarlar();
-    for (const id of ['c1', 'c2', 'c3', 'c4', 'c5']) assert.equal(k[id]?.b, `mamul|resim|${id}`, id);
+    for (const id of ['c1', 'c2', 'c3', 'c4', 'c5']) assert.equal(k[id]?.b, `MM|R|${id}|`, id);
   });
 
   test('geçersiz çakışma listesi reddedilir', async () => {
