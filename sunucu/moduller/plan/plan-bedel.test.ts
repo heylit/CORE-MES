@@ -1,6 +1,6 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { KarsilastirmaCevabi, MotorYerlesimiCevabi, PlanCevabi, SiparisBandiCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, PlanCevabi, SiparisBandiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from '../proje-maliyet/disari.ts';
 import { karRiskiOraniGun, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, tahminiMaliyetCozucusu } from './disari.ts';
 import { PERSONEL_TANIMSIZ } from './kurallar.ts';
@@ -184,16 +184,21 @@ describe('plan (gerçek PostgreSQL): öncelik, bedel ve maliyet', () => {
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
     }
     assert.deepEqual(m.uyarilar, [], 'kısıt kapalıyken uyarı yok');
+    assert.deepEqual((await tamam<MotorUyarilariCevabi>(c.kalite, 'GET', '/plan/motor-uyarilari')).uyarilar, [], 'motorsuz okuma da aynı');
     // 307 a: kısıt açıkken personel verisi olan iş merkezi yoksa motor sınırlamaz; ekran bunu uyarıdan bilir.
     const q = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: null, ayar: { ...p.ayar, personelKisiti: true } });
     try {
       const mk = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', `/plan/motor-yerlesimi?taslak=${String(q.taslak!.id)}`);
       assert.deepEqual(mk.uyarilar, q.personelYuku.length === 0 ? [PERSONEL_TANIMSIZ] : []);
+      const mu = await tamam<MotorUyarilariCevabi>(c.planlama, 'GET', `/plan/motor-uyarilari?taslak=${String(q.taslak!.id)}`);
+      assert.deepEqual(mu.uyarilar, mk.uyarilar, 'motorsuz okuma motorun uyarısını verir');
     } finally {
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${q.taslak!.id}/vazgec`, { surum: q.taslak!.surum });
     }
     assert.equal((await istek(c.kalite, 'GET', '/plan/motor-yerlesimi?taslak=999999')).statusCode, 404);
     assert.equal((await istek(c.operator, 'GET', '/plan/motor-yerlesimi')).statusCode, 403, 'plan ekranını açamayan okuyamaz');
+    assert.equal((await istek(c.kalite, 'GET', '/plan/motor-uyarilari?taslak=999999')).statusCode, 404);
+    assert.equal((await istek(c.operator, 'GET', '/plan/motor-uyarilari')).statusCode, 403, 'plan ekranını açamayan uyarıyı da okuyamaz');
   });
 
   test('6c: planın TL toplamını yalnız fiyatı gören görür (180); finansman oranı toplamı artırır; karşılaştırma her kuralın toplamını verir', async () => {
