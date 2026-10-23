@@ -11,7 +11,8 @@ interface Motor {
   derle: (st: unknown) => { ops: Op[]; jobs: Record<string, unknown> };
   ac: () => void;
   st: () => Nesne & { D: { siparisler: { id: string }[] }; bitti?: Nesne };
-  S: () => Nesne & { D: { siparisler: { id: string }[] } };
+  S: () => Nesne & { D: { siparisler: { id: string; termin?: unknown }[] } };
+  geri: () => Nesne & { name: string; orders: Nesne[]; routes: Record<string, { steps: Nesne[] }> };
 }
 
 function motor(kayit: Nesne, kaynak: { durum: Nesne; ek: Nesne | null } | null): Motor {
@@ -34,6 +35,7 @@ function motor(kayit: Nesne, kaynak: { durum: Nesne; ek: Nesne | null } | null):
       bitenler: tmiBitenler, derle: st => compile(st),
       ac: () => { S = yeniCalisma(); S.D = tmiCevir(rrOku(), null, null, '2026-10-19'); render(); },
       st: () => JSON.parse(JSON.stringify(stOf())), S: () => JSON.parse(JSON.stringify(S)),
+      geri: () => JSON.parse(JSON.stringify(rrDenemedenKur(S.D, rrOku()))),
     };`;
   const depo = new Map<string, string>([['recete-rota-motoru-v1', JSON.stringify(kayit)]]);
   const localStorage = { getItem: (k: string) => depo.get(k) ?? null, setItem: (k: string, v: string) => { depo.set(k, v); } };
@@ -135,5 +137,29 @@ describe('ayarcı sınırı (Soru 159 b)', () => {
     const r = girdi([], ['ayarci']);
     expect(r.st.ayarciYok).toBeUndefined();
     expect(r.uyari).not.toContain('Ayarcı');
+  });
+});
+
+// Kayıttaki boş değer gidiş dönüşte uydurulmaz: teslimi boş emir termin almaz, geri çevirmede teslim boş kalır; fason adımın boş
+// süreleri 0 olmaz; kaydın adı çalışmanın adıyla ezilmez.
+describe('kayıt gidiş dönüşü veriyi değiştirmez', () => {
+  const fason = { id: '50-o20', seq: 20, opNo: 20, opId: '14', stationId: null, machineId: null, fasonId: '7', terminGun: 3, setup: null, proc: null, cycle: null, alts: [], altTimes: {}, ins: [] };
+  const kayit = {
+    ...KAYIT, name: 'Ornek atolye', opdefs: [...KAYIT.opdefs, { id: '14', name: 'Kaplama' }], opStatus: {},
+    routes: { 50: { base: null, steps: [adim('50-o10', 10), fason] } },
+    orders: [{ id: 'O9', no: 'E-9', itemId: '50', qty: 5, start: '2026-10-19', due: null, priority: 0, status: 'serbest' }],
+  };
+
+  it('teslimi boş emrin termini boş kalır ("null 17:00" yazılmaz)', () => {
+    const m = motor(kayit, null); m.ac();
+    expect(m.S().D.siparisler[0]?.termin).toBeNull();
+  });
+
+  it('geri çevirmede teslim, fason süreleri ve kayıt adı olduğu gibi kalır', () => {
+    const m = motor(kayit, null); m.ac();
+    const g = m.geri();
+    expect(g.name).toBe('Ornek atolye');
+    expect(g.orders[0]?.['due']).toBeNull();
+    expect(g.routes['50']?.steps[1]).toMatchObject({ setup: null, proc: null, cycle: null });
   });
 });
