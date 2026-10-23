@@ -1,10 +1,9 @@
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import temel from '../../playwright.config.ts';
 import { HESAPLAR } from '../../hesaplar.ts';
 import { haritaUclariniOku, ornekYol, oturumluYazmalar, yetkisizYazmalar } from '../harita-uclari.ts';
-import { senaryo } from '../senaryo.ts';
+import { oturumsuzIstemci, senaryo } from '../senaryo.ts';
 import type { HaritaUcu } from '../harita-uclari.ts';
 import type { SenaryoBaglami } from '../senaryo.ts';
 import type { Hesap } from '../../hesaplar.ts';
@@ -47,22 +46,15 @@ async function rolTaramasi(b: SenaryoBaglami, rol: Hesap, uclar: readonly Harita
   }
 }
 
-// Oturumsuz istemci senaryo arayüzünde yok (istek yazıldı); çerezsiz istek doğrudan atılır, kayıtta ilk role yazılır.
+// Kayıttaki rol alanı Hesap'tır: oturumsuz adımlar ilk role yazılır, adım adı "oturumsuz" ile ayrılır.
 async function oturumsuzTarama(b: SenaryoBaglami, uclar: readonly HaritaUcu[]): Promise<void> {
-  const kok = temel.use?.baseURL;
-  const rol = HESAPLAR[0];
-  if (kok === undefined) {
-    await b.adim(rol, 'yetki: oturumsuz tarama', () => Promise.resolve({ sonuc: 'dustu', ileti: 'baseURL yok' }));
-    return;
-  }
+  const istemci = oturumsuzIstemci();
   for (const u of ornekle(b, oturumluYazmalar(uclar))) {
     const yol = `/api${ornekYol(u.yol)}`;
-    await b.adim(rol, `yetki: oturumsuz ${u.yontem} ${u.yol} reddedilir`, async () => {
-      const c = await fetch(new URL(yol, kok), {
-        method: u.yontem, headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(30_000),
-      });
-      const ortak = { yontem: u.yontem, yol, beklenen: '401', gelen: String(c.status) };
-      return c.status === 401 ? ortak : { ...ortak, sonuc: 'dustu', ileti: (await c.text()).slice(0, 400) };
+    await b.adim(HESAPLAR[0], `yetki: oturumsuz ${u.yontem} ${u.yol} reddedilir`, async () => {
+      const c = await istemci.istek(u.yontem, yol, {});
+      const ortak = { yontem: u.yontem, yol, beklenen: '401', gelen: String(c.durum) };
+      return c.durum === 401 ? ortak : { ...ortak, sonuc: 'dustu', ileti: JSON.stringify(c.govde).slice(0, 400) };
     });
   }
 }
