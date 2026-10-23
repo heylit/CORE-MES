@@ -195,3 +195,62 @@ test.describe('F1 kayıtlar ve firmalar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('F2 çek ve senet, nakit planı, bütçe, vergi', () => {
+  const BOLUMLER = [
+    { yol: 'cekler', baslik: 'Çek ve senet', ozet: 'Çek özeti', kart: 'Takipteki çek ve senetler' },
+    { yol: 'nakit', baslik: 'Nakit planı', ozet: 'Nakit riski', kart: 'Siparişten beklenen ödemeler' },
+    { yol: 'butce', baslik: 'Bütçe', ozet: 'Bütçe özeti', kart: 'Görsel karşılaştırma' },
+    { yol: 'vergi', baslik: 'Vergi takvimi', ozet: 'KDV özeti', kart: 'KDV dönem tablosu' },
+  ] as const;
+  // Yazan kullanıcı ekranı açınca günlük skor kaydı gidebilir (F0); bölümlerin kendisi yazma göndermez.
+  const bolumYazmalari = (yazmalar: readonly string[]) => yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet');
+  for (const b of BOLUMLER) {
+    test(`${b.baslik}: özet, kartlar ve grafik açılır; yatay taşma ve yazma yok`, async ({ page, ag, ac }) => {
+      await ac(`/finans/yeni/${b.yol}`);
+      const ekran = page.locator('.tc-fy');
+      await expect(ekran.getByRole('heading', { name: b.baslik, level: 2, exact: true })).toBeVisible();
+      await expect(ekran.getByLabel(b.ozet)).toBeVisible({ timeout: 15_000 });
+      await expect(ekran.getByRole('heading', { name: b.kart })).toBeVisible();
+      if (b.yol !== 'nakit') await expect(ekran.locator('.tc-fc-grafik canvas').first()).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      expect(bolumYazmalari(ag.yazmalar)).toEqual([]);
+      expect(ag.hatalar).toEqual([]);
+    });
+  }
+
+  test('Nakit planı: hafta hafta plana geçer, varsayım değişince yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/nakit');
+    const ekran = page.locator('.tc-fy');
+    await ekran.getByRole('button', { name: 'Hafta hafta plan' }).click();
+    await expect(ekran.getByRole('heading', { name: 'Varsayımlar' }).or(ekran.getByText('Tahmin için kayıt gerekiyor.'))).toBeVisible();
+    if (await ekran.getByRole('heading', { name: 'Varsayımlar' }).isVisible()) {
+      await ekran.getByRole('slider', { name: /Tahsilat gecikmesi/ }).fill('30');
+      await expect(ekran.getByText(/Tahsilat gecikmesi: 30 gün/)).toBeVisible();
+    }
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(bolumYazmalari(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Çek ve senet: Durum güncelle olay çekmecesini açar, Vazgeç ile kapanır; yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/cekler');
+    const ekran = page.locator('.tc-fy');
+    await ekran.getByRole('button', { name: 'Durum güncelle' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Çekin durumu değişti' });
+    await expect(pencere).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await page.keyboard.press('Escape');
+    await expect(pencere).toBeHidden();
+    const duzenle = ekran.getByRole('button', { name: /çekini düzenle/ }).first();
+    if (await duzenle.isVisible()) {
+      await duzenle.click();
+      const form = page.getByRole('dialog', { name: 'Çek / senedi düzenle' });
+      await expect(form.getByLabel('Vade')).toBeVisible();
+      await form.getByRole('button', { name: 'Vazgeç' }).click();
+      await expect(form).toBeHidden();
+    }
+    expect(bolumYazmalari(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
