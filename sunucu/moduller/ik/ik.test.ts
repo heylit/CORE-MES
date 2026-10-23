@@ -13,7 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { acikZimmetCozucusu } from './disari.ts';
-import { motorKur } from './motor/arayuz.ts';
+import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 
 const PAROLA = 'dogru-parola-1';

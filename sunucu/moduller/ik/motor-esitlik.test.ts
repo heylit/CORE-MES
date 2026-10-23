@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { IK_PAKETI } from '../../../istemci/src/moduller/ik/uygulama/paket.ts';
-import { createEngine, createMemoryDb } from './motor/motor.ts';
+import { createEngine, createMemoryDb } from '#paylasilan/ik-motor/motor.ts';
 
 // Sunucudaki motor ekrandakinin elle kopyasıdır ve tip denetimi kapalıdır (borç 186): ikisi ayrışırsa sunucunun
 // kesinleştirdiği bordro ekranda görülen tutardan sapar. Bu test aynı girdide iki motorun aynı sonucu verdiğini ölçer.

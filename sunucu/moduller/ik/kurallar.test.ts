@@ -8,7 +8,7 @@ import {
   kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, personelBul, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
 import type { Govde, IzinGecisi } from './kurallar.ts';
-import { motorKur } from './motor/arayuz.ts';
+import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
 
 const izin = (durum: string, ek: Govde = {}): Govde => ({ id: 'leave_1', kind: 'leave', empId: 'emp_a', tur: 'Yıllık izin', baslangic: '2026-11-02', bitis: '2026-11-04', gun: 3, durum, ...ek });
 const gecis = (g: Partial<IzinGecisi>): IzinGecisi => ({ onceki: null, yeni: izin('Beklemede'), islemler: [], benimPersonel: null, uc: 'kaydet', ekipte: false, ...g });

@@ -1,7 +1,7 @@
 // @ts-nocheck
-// Ekrandaki (çerçevedeki uygulama) hesap motorunun aynısıdır: bordro, izin, tazminat ve parametre dönemi hesapları
-// sunucuda da aynı sonucu versin diye tek kaynaktan kopyalanır (kaynak: ik-modulu src/core). Tipler arayuz.ts'tedir;
-// bu dosyada tip denetimi kapalıdır (UYUM-BORCU.md).
+// İK hesap motorunun tek kaynağıdır (211 a): bordro, izin, tazminat ve parametre dönemi hesaplarını ekran (tahmin) ve sunucu
+// (kesinleştirme) aynı koddan yapar (kaynak: ik-modulu src/core). Tipli yüz arayuz.ts'tedir; bu dosyada tip denetimi
+// tipleme bitene kadar kapalıdır (sunucu/moduller/ik/UYUM-BORCU.md).
 /**
  * İK Modülü – hesap motoru.
  *
