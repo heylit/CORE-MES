@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 import { YAZAR, ac, sunucuKur, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
-import { PLANLAMA_ISLEMI } from './planlama-menusu.ts';
+import { MALIYET_ISLEMI, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); yazmaDinleyiciKapat(); });
 
@@ -44,7 +44,7 @@ describe('planlama çerçevesi', () => {
     expect(belge).not.toContain('[data-act=\\"revApprove\\"]');
   }, 30000);
 
-  // 353 a: planlama sayfaları yalnız planlama işlemiyle açılır; Reçete ve Rota yazarı bölümleri görür, planlamayı görmez.
+  // 353 a, 195 a: planlama sayfaları yalnız planlama işlemiyle açılır; Reçete ve Rota yazarı bölümleri görür, planlamayı görmez.
   it('planlama işlemi olmayan Reçete ve Rota yazarına planlama çerçevesi kurulmaz, kayıt okunmaz; Reçete ve Rota bölümü açılır', async () => {
     const yazar = { ...YAZAR, islemler: YAZAR.islemler.filter((i) => i !== PLANLAMA_ISLEMI) };
     const istekler = sunucuKur(yazar, [KAYIT]);
@@ -56,6 +56,19 @@ describe('planlama çerçevesi', () => {
     sunucuKur(yazar, [KAYIT]);
     ac('/recete-rota/schema');
     expect(await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 })).toBeTruthy();
+  }, 40000);
+
+  // 195 a: maliyet ve kâr gösteren planlama sayfası birim maliyet okumasını da ister; planlama rolü maliyet görmez (200 a).
+  it('maliyet okuması olmayan planlamacıya maliyet sayfası kurulmaz, kayıt okunmaz; maliyet okumasıyla açılır', async () => {
+    const istekler = sunucuKur(YAZAR, [KAYIT]);
+    ac('/recete-rota/maliyet');
+    expect(await screen.findByText('Bu bölümü görme yetkiniz yok.', {}, { timeout: 20000 })).toBeTruthy();
+    expect(screen.queryByTitle('Planlama')).toBeNull();
+    expect(istekler).not.toContain('GET /recete-rota/kayitlar');
+    cleanup();
+    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, MALIYET_ISLEMI] }, [KAYIT]);
+    ac('/recete-rota/maliyet');
+    expect(await screen.findByTitle('Planlama', {}, { timeout: 20000 })).toBeTruthy();
   }, 40000);
 
   it('Reçete ve Rota bölümünden planlama sayfasına geçişte eski çerçeve bekler, sonra kayıt yeniden okunup planlama açılır', async () => {
