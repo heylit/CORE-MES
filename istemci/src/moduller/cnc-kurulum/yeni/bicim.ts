@@ -27,3 +27,18 @@ export function num(v: unknown, d?: number): number | undefined {
   const x = Number.parseFloat(String(v ?? '').replace(',', '.'));
   return Number.isNaN(x) ? d : x;
 }
+
+export function esc(s: unknown): string {
+  const harf: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  return String(s ?? '').replace(/[&<>"]/g, (c) => harf[c] ?? c);
+}
+
+// Tuval yazısı için yazı ailesi (prototipin FONT ve MONO'su); ortak tasarımın aileleri okunur, yoksa prototipinki.
+function aile(degisken: string, yedek: string): string {
+  try {
+    const d = getComputedStyle(document.documentElement).getPropertyValue(degisken).trim();
+    return d || yedek;
+  } catch { return yedek; }
+}
+export const FONT = aile('--font-ana', '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif');
+export const MONO = aile('--font-mono', 'Consolas, "SF Mono", Menlo, monospace');
