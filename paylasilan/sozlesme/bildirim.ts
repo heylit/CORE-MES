@@ -64,6 +64,12 @@ export const BILDIRIM_TURLERI = {
   'stok.okutarak-alindi': {
     baslik: 'Malzeme okutarak alındı', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
   },
+  'stok.birakildi': {
+    baslik: 'Malzeme bırakıldı', onem: 'bilgi', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
+  'stok.teslim-suresi-doldu': {
+    baslik: 'Teslimin yolda süresi doldu', onem: 'uyari', alanIslemler: [], yol: '/stok', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;

@@ -770,6 +770,7 @@ export const sepetTeslimEtGovdesi = z.object({
   kaynakKimligi: z.string().trim().min(3).max(120),
 });
 export type SepetTeslimEtGovdesi = z.input<typeof sepetTeslimEtGovdesi>;
+export type SepetTeslimEtKomutu = z.output<typeof sepetTeslimEtGovdesi>;
 export const sepetTeslimEtCevabi = z.object({
   teslimler: z.array(z.object({ satirId: z.number().int(), teslimNo: z.string() })),
   kalanlar: z.array(z.object({ satirId: z.number().int(), neden: z.string() })),

@@ -737,17 +737,26 @@ export const bakiyeDefterFarki = (db: Db): Promise<{ malzemeId: number; konumId:
    WHERE COALESCE(b.miktar, 0) <> COALESCE(d.toplam, 0)`);
 
 // ---- Sepet ve fiş ----------------------------------------------------------------------------------------------------------
-export interface SepetHam { id: number; malzemeId: number; kaynakKonumId: number | null; kaynakKonumKod: string | null; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null; miktar: string; eklenme: string }
+export interface SepetHam {
+  id: number; malzemeId: number; kaynakKonumId: number | null; kaynakKonumKod: string | null; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null; miktar: string; eklenme: string;
+  refakatPartisiId: number | null; hedefKonumId: number | null; hedefKonumKod: string | null; hedefKonumAd: string | null; hedefIstasyonId: number | null;
+}
 const SEPET_SECIMI = `SELECT s.id, s.malzeme_id AS "malzemeId", s.kaynak_konum_id AS "kaynakKonumId", k.kod AS "kaynakKonumKod", s.parti_id AS "partiId",
-  p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId", s.miktar, ${zamanMetni('s.eklenme')} AS eklenme
-  FROM stok_sepet_satiri s LEFT JOIN stok_konum k ON k.id = s.kaynak_konum_id LEFT JOIN stok_parti p ON p.id = s.parti_id`;
+  p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId", s.miktar, ${zamanMetni('s.eklenme')} AS eklenme,
+  s.refakat_partisi_id AS "refakatPartisiId", s.hedef_konum_id AS "hedefKonumId", hk.kod AS "hedefKonumKod", hk.ad AS "hedefKonumAd", hk.istasyon_id AS "hedefIstasyonId"
+  FROM stok_sepet_satiri s LEFT JOIN stok_konum k ON k.id = s.kaynak_konum_id LEFT JOIN stok_parti p ON p.id = s.parti_id LEFT JOIN stok_konum hk ON hk.id = s.hedef_konum_id`;
 export const sepetSatirlari = (db: Db, kisiId: number, kilit = false): Promise<SepetHam[]> =>
   db.sorgu(`${SEPET_SECIMI} WHERE s.kisi_id = $1 ORDER BY s.id${kilit ? ' FOR UPDATE OF s' : ''}`, [kisiId]);
-export const sepeteEkle = async (db: Db, s: { kisiId: number; malzemeId: number; kaynakKonumId: number | null; partiId: number | null; miktar: string }): Promise<number> =>
+// Aynı satır yeniden eklenince miktar toplanır; yeni kart ve hedef verilmişse onlar geçer, verilmemişse eskisi kalır.
+export const sepeteEkle = async (db: Db, s: {
+  kisiId: number; malzemeId: number; kaynakKonumId: number | null; partiId: number | null; miktar: string; refakatPartisiId?: number | null; hedefKonumId?: number | null;
+}): Promise<number> =>
   (await db.tek<{ id: number }>(
-    `INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, parti_id, miktar) VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT ON CONSTRAINT stok_sepet_satiri_tek DO UPDATE SET miktar = stok_sepet_satiri.miktar + EXCLUDED.miktar RETURNING id`,
-    [s.kisiId, s.malzemeId, s.kaynakKonumId, s.partiId, s.miktar],
+    `INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, parti_id, miktar, refakat_partisi_id, hedef_konum_id) VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT ON CONSTRAINT stok_sepet_satiri_tek DO UPDATE SET miktar = stok_sepet_satiri.miktar + EXCLUDED.miktar,
+       refakat_partisi_id = COALESCE(EXCLUDED.refakat_partisi_id, stok_sepet_satiri.refakat_partisi_id),
+       hedef_konum_id = COALESCE(EXCLUDED.hedef_konum_id, stok_sepet_satiri.hedef_konum_id) RETURNING id`,
+    [s.kisiId, s.malzemeId, s.kaynakKonumId, s.partiId, s.miktar, s.refakatPartisiId ?? null, s.hedefKonumId ?? null],
   ))!.id;
 export const sepetMiktari = (db: Db, id: number, kisiId: number, miktar: string): Promise<{ id: number } | null> =>
   db.tek('UPDATE stok_sepet_satiri SET miktar = $3 WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId, miktar]);
@@ -972,6 +981,13 @@ export const adiGecenKonumlar = (db: Db, sozcuk: string): Promise<{ id: number; 
 // Teslim hedefi olabilen depo konumları: rafsız depo alanları (kabul, depo zemini); raf gözüne yerleştirme depo işidir.
 export const teslimDepoKonumlari = (db: Db): Promise<{ id: number; kod: string; ad: string | null }[]> =>
   db.sorgu("SELECT id, kod, ad FROM stok_konum WHERE aktif AND tur IN ('kabul', 'depo_zemini') ORDER BY kod");
+// Depo dışından bırakılan malın düştüğü yer (Soru 133): ilk etkin mal kabul alanı.
+export const ilkKabulKonumu = async (db: Db): Promise<number | null> =>
+  (await db.tek<{ id: number }>("SELECT id FROM stok_konum WHERE aktif AND tur = 'kabul' ORDER BY kod, id LIMIT 1"))?.id ?? null;
+// Yolda süresi dolan, okutarak alınmamış teslimler; çoklu çalışan iş aynı satırı iki kez iptal etmesin diye kilitli ve atlamalı.
+export const suresiDolanTeslimler = (db: Db, dakika: number): Promise<TeslimHam[]> =>
+  db.sorgu(`${TESLIM_SECIMI} WHERE t.durum = 'yolda' AND NOT t.okutarak AND t.gonderim + $1 * interval '1 minute' < now()
+    ORDER BY t.gonderim, t.id LIMIT 200 FOR UPDATE OF t SKIP LOCKED`, [dakika]);
 export const teslimAraAlanlari = (db: Db): Promise<{ id: number; kod: string; ad: string | null }[]> =>
   db.sorgu("SELECT id, kod, ad FROM stok_konum WHERE aktif AND tur = 'ara_alan' ORDER BY kod");
 export const konumdakiPartiler = async (db: Db, malzemeId: number, konumId: number, statuId: number | null, kalite: KaliteDurumu = 'serbest'): Promise<(number | null)[]> =>
@@ -984,12 +1000,14 @@ export const yoldakiGelenler = (db: Db, hedefIstasyonlar: number[] | null, depoD
   db.sorgu(`${TESLIM_SECIMI} JOIN stok_konum h ON h.id = t.hedef_konum_id
     WHERE t.durum = 'yolda' AND ((h.istasyon_id IS NOT NULL AND ($1::int[] IS NULL OR h.istasyon_id = ANY($1::int[]))) OR ($2 AND h.istasyon_id IS NULL))
     ORDER BY t.gonderim, t.id LIMIT 100`, [hedefIstasyonlar, depoDahil]);
-// Kapsamdaki istasyonlardan okutarak alınmış, itiraz süresi bitmemiş teslimler (soru 96 b, telafi 3); null ise bütün istasyonlar.
-export const okutarakAlinanlar = (db: Db, kaynakIstasyonlar: number[] | null): Promise<TeslimHam[]> =>
-  db.sorgu(`${TESLIM_SECIMI} JOIN stok_konum k ON k.id = t.kaynak_konum_id
-    WHERE t.okutarak AND t.durum = 'teslim' AND t.itiraz_nedeni IS NULL AND t.itiraz_sonu > now()
-      AND k.istasyon_id IS NOT NULL AND ($1::int[] IS NULL OR k.istasyon_id = ANY($1::int[]))
-    ORDER BY t.kapanis DESC, t.id DESC LIMIT 50`, [kaynakIstasyonlar]);
+// Bir ucu kapsamdaki istasyonda olan onaysız teslimler, itiraz süresi bitmemiş (soru 96 b, telafi 3): okutarak alınan kaynak tarafa,
+// bırakılan hedef tarafa düşer (Soru 133); kişinin kendi kapattığı görünmez. null ise bütün istasyonlar.
+export const okutarakAlinanlar = (db: Db, istasyonlar: number[] | null, kisiId: number): Promise<TeslimHam[]> =>
+  db.sorgu(`${TESLIM_SECIMI} JOIN stok_konum k ON k.id = t.kaynak_konum_id JOIN stok_konum h ON h.id = t.hedef_konum_id
+    WHERE t.okutarak AND t.durum = 'teslim' AND t.itiraz_nedeni IS NULL AND t.itiraz_sonu > now() AND t.kapatan_kisi_id IS DISTINCT FROM $2
+      AND (k.istasyon_id IS NOT NULL OR h.istasyon_id IS NOT NULL)
+      AND ($1::int[] IS NULL OR k.istasyon_id = ANY($1::int[]) OR h.istasyon_id = ANY($1::int[]))
+    ORDER BY t.kapanis DESC, t.id DESC LIMIT 50`, [istasyonlar, kisiId]);
 // İtiraz yalnız bir kez ve süre içinde yazılır; geri alma yapmaz, iade teslimi ayrıca bağlanır.
 export const itirazYaz = (db: Db, id: number, surum: number, k: { neden: string; kisiId: number }): Promise<{ id: number } | null> =>
   db.tek(
@@ -1006,6 +1024,9 @@ export const teslimKapat = (db: Db, id: number, surum: number, k: { durum: 'tesl
     `UPDATE stok_teslim SET durum = $3, alinan = $4, red_nedeni = $5, hareket_id = $6, kapatan_kisi_id = $7, kapanis = now(), surum = surum + 1
       WHERE id = $1 AND surum = $2 AND durum = 'yolda' RETURNING id`,
     [id, surum, k.durum, k.alinan, k.redNedeni, k.hareketId, k.kisiId]);
+// Kapanan teslime neden notu: red nedeni yalnız reddin alanıdır (stok_teslim_red_tutarli), iptalin nedeni açıklamaya yazılır.
+export const teslimeNotYaz = (db: Db, id: number, not: string): Promise<unknown> =>
+  db.sorgu("UPDATE stok_teslim SET aciklama = left($2 || coalesce(' · ' || aciklama, ''), 200) WHERE id = $1", [id, not]);
 // Kaynaktaki yoldaki teslimler (kart #1410): gönderim ve kullanım bunları düşerek serbest miktarı bulur.
 export const yoldaAyrilan = async (db: Db, malzemeId: number, konumId: number, partiId: number | null, statuId: number | null, kalite: KaliteDurumu = 'serbest'): Promise<string> =>
   (await db.tek<{ m: string }>(`SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_teslim WHERE durum = 'yolda' AND kaynak_konum_id = $2 AND malzeme_id = $1
@@ -1457,3 +1478,23 @@ export const refakatYoldakiTeslimleri = (db: Db, uretimEmriId: number, partiId: 
 export const kartliYoldakiTeslimler = (db: Db, partiId: number): Promise<TeslimHam[]> =>
   db.sorgu(`${TESLIM_SECIMI} JOIN stok_refakat_partisi r ON r.uretim_emri_id = t.uretim_emri_id AND r.parti_id = t.parti_id AND r.durum = 'acik'
     WHERE t.durum = 'yolda' AND t.parti_id = $1 ORDER BY t.gonderim, t.id`, [partiId]);
+
+// Kartın satırları (Soru 128): kartla verilen lotun üretim yerlerindeki (istasyon, üretim çıkışı, ara alan, fason) ve kartın üretim
+// partilerinin her yerdeki artı bakiyesi; depodaki lot henüz karta verilmemiştir. yolda, o satırdan gönderilmiş ama alınmamış kısım.
+export interface KartSatiriHam {
+  konumId: number; konumKod: string; konumAd: string | null; konumTur: KonumTuru; istasyonId: number | null; malzemeId: number; partiId: number; lotNo: string;
+  statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string; yolda: string;
+}
+export const kartSatirlari = (db: Db, kartId: number): Promise<KartSatiriHam[]> =>
+  db.sorgu(
+    `SELECT b.konum_id AS "konumId", k.kod AS "konumKod", k.ad AS "konumAd", k.tur AS "konumTur", k.istasyon_id AS "istasyonId", b.malzeme_id AS "malzemeId",
+            b.parti_id AS "partiId", p.lot_no AS "lotNo", b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu", sum(b.miktar)::text AS miktar,
+            COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id AND t.malzeme_id = b.malzeme_id
+                       AND t.parti_id = b.parti_id AND t.statu_id IS NOT DISTINCT FROM b.statu_id AND t.kalite_durumu = b.kalite_durumu), 0)::text AS yolda
+       FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id JOIN stok_parti p ON p.id = b.parti_id
+      WHERE b.miktar > 0
+        AND (p.refakat_partisi_id = $1
+             OR (b.parti_id = (SELECT r.parti_id FROM stok_refakat_partisi r WHERE r.id = $1) AND k.tur IN ('istasyon', 'uretim_cikisi', 'ara_alan', 'fason', 'yolda')))
+      GROUP BY b.konum_id, k.kod, k.ad, k.tur, k.istasyon_id, b.malzeme_id, b.parti_id, p.lot_no, p.refakat_partisi_id, b.statu_id, b.kalite_durumu
+      ORDER BY (p.refakat_partisi_id IS NULL) DESC, b.statu_id NULLS FIRST, k.kod`, [kartId]);
+
