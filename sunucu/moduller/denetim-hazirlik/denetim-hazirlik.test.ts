@@ -240,6 +240,36 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     const izinli = yeniBelge();
     assert.equal((await yaz(yazar, { yol: izinli, kip: 'tam', veri: { deger: 'x' } })).statusCode, 200);
   });
+  test('BD-16 (226 a): ortak kaydı silen ya da boşaltan yazma ve silme yönetim ister; olağan düzenleme yazara açık', async () => {
+    const depo = (profiller: Record<string, unknown>) => ({ deger: JSON.stringify({ active: Object.keys(profiller)[0], order: Object.keys(profiller), data: profiller }) });
+    const dolu = { profile: { firma: 'Deneme A' }, audits: [], pw: {} };
+    const bos = { profile: { firma: '' }, audits: [], pw: {} };
+    const yol = yeniBelge();
+    const sil = (cerez: string) => istek(cerez, 'POST', '/denetim-hazirlik/belge/sil', { yol });
+    const oku = async (): Promise<Belge | null> => ((await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yol}`)).json() as { belge: Belge | null }).belge;
+
+    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: depo({ a: dolu }) })).statusCode, 200);
+    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: depo({ a: dolu, b: bos }) })).statusCode, 200, 'profil ekleme');
+    assert.equal((await yaz(yazar, { yol, kip: 'birlestir', veri: depo({ a: { ...dolu, audits: [{ id: 'd1' }] }, b: bos }) })).statusCode, 200, 'düzenleme');
+    const once = await oku();
+
+    const reddedilen = [
+      await yaz(yazar, { yol, kip: 'tam', veri: depo({ a: dolu }) }),
+      await yaz(yazar, { yol, kip: 'tam', veri: depo({ a: bos, b: bos }) }),
+      await yaz(yazar, { yol, kip: 'birlestir', veri: { deger: '{bozuk' } }),
+      await istek(yazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol, sahip: 's', sureMs: 30_000, veri: depo({ x: bos }) }),
+      await sil(yazar),
+    ];
+    assert.deepEqual(reddedilen.map((c) => c.statusCode), [403, 403, 403, 403, 403]);
+    assert.match(reddedilen[0]?.body ?? '', /yalnız yönetici/);
+    assert.deepEqual(await oku(), once, 'reddedilen istek kaydı değiştirmez');
+
+    assert.equal((await yaz(yonetici, { yol, kip: 'tam', veri: depo({ a: dolu }) })).statusCode, 200, 'yönetici profil siler');
+    assert.equal((await yaz(yonetici, { yol, kip: 'tam', veri: depo({ x: bos }) })).statusCode, 200, 'yönetici sıfırlar');
+    assert.equal((await sil(yonetici)).statusCode, 200, 'yönetici tümünü siler');
+    assert.equal(await oku(), null);
+  });
+
   // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; prototipin cihaz listesi ondan salt okunur gelir.
   test('329 a ölçü aletleri: liste Kalibrasyon kayıtlarını verir; okuma yetkisi ister, yazma ucu yok', async () => {
     assert.equal((await istek(yetkisiz, 'GET', '/denetim-hazirlik/olcu-aletleri')).statusCode, 403);

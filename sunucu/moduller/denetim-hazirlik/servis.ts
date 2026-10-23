@@ -8,6 +8,7 @@ import { kisileriListele } from '../kisiler/disari.ts';
 import {
   OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
   KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
+  yonetimGerekirMi,
 } from './kurallar.ts';
 import type { OdaKaydi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -32,6 +33,13 @@ function belgeDenetle(kullanici: Kullanici, yol: string): void {
 function sahiplikDenetle(kullanici: Kullanici, yol: string, mevcut: KilitliBelge | null): void {
   if (mevcut !== null && !degistirebilirMi(yol, kullanici.id, mevcut.olusturanKisiId)) {
     throw yetkiYok('Bu kaydı yalnız oluşturan kişi değiştirebilir ya da silebilir.');
+  }
+}
+
+// 226 a: uç yazma yetkisini verir; ortak kaydı silen ya da boşaltan sonuç ayrıca yönetim ister (kural `yonetimGerekirMi`).
+function yonetimDenetle(kullanici: Kullanici, yol: string, eski: Veri | null, yeni: Veri | null): void {
+  if (!kullanici.islemler.includes(ISLEM_YONET) && yonetimGerekirMi(yol, eski, yeni)) {
+    throw yetkiYok('Profil silme, sıfırlama ve bütün kaydı silme yalnız yönetici tarafından yapılabilir.');
   }
 }
 
@@ -65,13 +73,16 @@ export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Pro
     if (mevcut === null) throw bulunamadi('Güncellenecek kayıt yok.');
     veri = derinBirlestir(mevcut.veri, g.veri);
   }
+  yonetimDenetle(kullanici, g.yol, mevcut?.veri ?? null, veri);
   const belge = await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
   return { belge, damga: belge.surum };
 }
 
 export async function belgeSil(db: Db, kullanici: Kullanici, yol: string): Promise<{ silindi: boolean; damga: number }> {
   belgeDenetle(kullanici, yol);
-  sahiplikDenetle(kullanici, yol, await sorgular.belgeKilitle(db, yol));
+  const mevcut = await sorgular.belgeKilitle(db, yol);
+  sahiplikDenetle(kullanici, yol, mevcut);
+  yonetimDenetle(kullanici, yol, mevcut?.veri ?? null, null);
   const silindi = await sorgular.belgeSil(db, yol);
   return { silindi, damga: await sorgular.damga(db) };
 }
@@ -87,6 +98,7 @@ export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sa
   }
   if (mevcut === null || g.veri !== undefined) {
     const veri = derinBirlestir(mevcut?.veri ?? {}, g.veri ?? {});
+    yonetimDenetle(kullanici, g.yol, mevcut?.veri ?? null, veri);
     await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
   }
   const kilit = await sorgular.kilitYaz(db, g.yol, g.sahip, g.sureMs);
