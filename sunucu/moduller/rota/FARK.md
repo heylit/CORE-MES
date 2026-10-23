@@ -326,8 +326,12 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Terminalden gerçekleşen süre (bağlama B1, borç B38; göç yok):
   - Emir bitince (`disari.ts` `emirBittiYansit`, bağı `kablolama.ts`) rotada olan her makine ya da kişi iş emrinin ölçümü (`isEmriSureOzeti`) terminal önerisi
     olarak yazılır (RT-76): hazırlık ve işlem, iş emriyle; makine iş emrinde öneri o makineye özgüdür. Plan öneriyi kullanmaz (S4 a).
-  - `GET /rota/revizyonlar/:id/sureler` adım başına `oneri` (tür başına kabul bekleyen terminal satırı) taşır; `POST /rota/adimlar/:id/gerceklesen-sure/kabul`
-    (`rota.yaz`) öneriyi kabul satırı yapar (RT-77).
-  - VARSAYIM: iş emrinde işlem ve değişim ayrımı yoktur (B40); ölçülen net birim süre toplam çevrimdir, işlem önerisi ondan adımın etkin değişim süresi düşülerek
-    bulunur, değişim önerilmez. Geri alma: tek işlev.
+  - Kabul teoriğe yazar (169 c): elle ve terminal satırı ölçümdür, plan yalnız teoriği kullanır (RT-74). `GET /rota/revizyonlar/:id/sureler` adım başına `olcum`
+    (tür başına bekleyen ölçüm) taşır; `POST /rota/adimlar/:id/gerceklesen-sure/kabul` (`rota.yaz`) ölçümü ürünün açık taslağına, yoksa yürürlükteki revizyondan
+    açılan yeni taslağa teorik süre olarak yazar ve `{ taslak, sureler }` döner (RT-77, RT-78); onay mevcut revizyon akışıyla (dört göz) verilir.
+  - Ölçüm toplam birim süredir, değişim düşülmez (170 b); adım ayrılmışsa kabulde işlem = ölçüm − değişim (RT-78).
+  - Elle giriş de ölçümdür, teoriğe yalnız kabulle geçer (171 a); revizyon yürürlüğe girince teorik süresi değişen türün ölçümü boşalır, eski teorik eski revizyonda kalır (RT-79).
+    Bu, RT-73'ün "geçerli gerçekleşen süre son elle ya da kabul satırıdır" kararını değiştirir (onaylı kararla çelişme 171 a ile onaylı).
+  - VARSAYIM: onaydaki revizyon varken kabul 409 döner (açık revizyon tektir, RT-02). Geri alma: tek koşul.
+  - VARSAYIM: elle ölçümün kabulü kabul satırı yazmaz (tablo kabul satırını iş emrine bağlar); izi taslağın düzenleyeni ve sürüm defteridir. Geri alma: göçle sütun gevşetme.
   - VARSAYIM: öneri yalnız emir bitince yazılır (iş emri bitişinde olay yok); yazan kişi emri bitirendir. Geri alma: dinleyici.

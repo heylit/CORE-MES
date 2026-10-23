@@ -307,14 +307,15 @@ export const karttanTaslaklarCevabi = z.object({ acilan: z.number().int().nonneg
 /* ---------------- süreler (teorik ve gerçekleşen) ---------------- */
 
 export const GERCEKLESEN_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
-// elle: planlamacı girer; terminal: iş emrinden ölçülen öneri (plan kullanmaz); kabul: planlamacının kabul ettiği terminal değeri.
+// Defter (169 c, 171 a): elle ve terminal satırı ölçümdür, plan kullanmaz; kabul, ölçümün teorik süreye yazıldığı kaydıdır. "İşlem" ölçümü
+// değişim dahil birim süredir (170 b).
 export const GERCEKLESEN_KAYNAKLARI = ['elle', 'terminal', 'kabul'] as const;
 export const gerceklesenTuru = z.enum(GERCEKLESEN_TURLERI);
 export const adimParametresi = z.object({ id: yolKimligi });
 export const surelerSorgusu = z.object({ makineId: z.coerce.number().pipe(KIMLIK).optional() });
 
-// Elle giriş: süre boşsa o tür teoriğe döner. okunanId, yazarın gördüğü son satırdır (tür ve makine için; hiç yoksa null): arada
-// başkası yazdıysa reddedilir. Makine boşsa süre operasyonun her kaynağı içindir.
+// Elle ölçüm: süre boşsa o türün bekleyen ölçümü boşaltılır. okunanId, yazarın gördüğü son satırdır (tür ve makine için; hiç yoksa null):
+// arada başkası yazdıysa reddedilir. Makine boşsa ölçüm operasyonun her kaynağı içindir.
 export const gerceklesenSureGovdesi = z.object({
   tur: gerceklesenTuru,
   sureDk: sure(99_999).nullable(),
@@ -322,27 +323,26 @@ export const gerceklesenSureGovdesi = z.object({
   okunanId: KIMLIK.nullable(),
 });
 
-// Terminal önerisinin kabulü: önerinin değeri kabul satırı olarak yazılır. Makine boşsa kabul operasyonun her kaynağı içindir;
-// okunanId elle girişteki gibidir.
+// Ölçümün kabulü: değer ürünün açık taslağına (yoksa yürürlükteki revizyondan açılan taslağa) teorik süre olarak yazılır. Makine boşsa
+// adımın kendi süresi, makine verilirse o makinenin (adımın kaynağı ya da adayı) süresi değişir; okunanId elle girişteki gibidir.
 export const gerceklesenKabulGovdesi = z.object({
   tur: gerceklesenTuru,
-  terminalId: KIMLIK,
+  olcumId: KIMLIK,
   makineId: KIMLIK.nullable(),
   okunanId: KIMLIK.nullable(),
 });
 
-const gerceklesenKaydi = z.object({
-  id: KIMLIK, sureDk: ondalikMetinSemasi, kaynak: z.enum(GERCEKLESEN_KAYNAKLARI), yazan: adliKayit, zaman,
-});
-// Kabul bekleyen terminal ölçümü: bu görünümdeki son elle ya da kabul satırından sonra yazılmış son terminal satırı.
-const terminalOnerisi = z.object({
-  id: KIMLIK, sureDk: ondalikMetinSemasi, isEmriId: KIMLIK, makineId: KIMLIK.nullable(), zaman,
+// Bekleyen ölçüm: bu görünümdeki son boşaltmadan (boş elle satırı) sonraki son elle ya da terminal satırı; kabul edilen ölçüm revizyon
+// yürürlüğe girene kadar görünür. Terminal satırı ölçüldüğü iş emrini taşır.
+const olcumKaydi = z.object({
+  id: KIMLIK, sureDk: ondalikMetinSemasi, kaynak: z.enum(['elle', 'terminal']), isEmriId: KIMLIK.nullable(), makineId: KIMLIK.nullable(),
+  yazan: adliKayit, zaman,
 });
 const turBasina = <T extends z.ZodTypeAny>(t: T) => z.object({ hazirlik: t, islem: t, degisim: t });
 
 export const surelerCevabi = z.object({
   revizyon: revizyonBaglantisi.extend({ durum: revizyonDurumu, malzemeId: MALZEME_KIMLIGI }),
-  // Gerçekleşen süreler bu makine içindir (verilmediyse makinesiz satırlar).
+  // Ölçümler bu makine içindir (verilmediyse her makinenin ölçümü).
   makineId: KIMLIK.nullable(),
   adimlar: z.array(z.object({
     adimId: KIMLIK,
@@ -355,20 +355,20 @@ export const surelerCevabi = z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), islemDk: ondalikMetinSemasi.nullable(), degisimDk: ondalikMetinSemasi.nullable(),
       degisimOraniYuzde: ondalikMetinSemasi.nullable(),
     }),
-    // Plan için geçerli gerçekleşen süre (elle ya da kabul); yoksa null.
-    gerceklesen: turBasina(gerceklesenKaydi.nullable()),
-    // Elle girişte okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
+    // Elle girişte ve kabulde okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
     sonKayit: turBasina(KIMLIK.nullable()),
-    oneri: turBasina(terminalOnerisi.nullable()),
-    // Planın kullanacağı süre: tür başına gerçekleşen varsa o, yoksa teorik.
+    olcum: turBasina(olcumKaydi.nullable()),
+    // Planın kullandığı süre: teorik (169 c).
     etkin: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
       islemDk: ondalikMetinSemasi.nullable(), degisimDk: ondalikMetinSemasi.nullable(), degisimOraniYuzde: ondalikMetinSemasi.nullable(),
-      baz: turBasina(z.enum(['teorik', 'gerceklesen'])),
     }),
     fason: z.boolean(),
   })),
 });
+
+// Kabulün yazdığı taslak ve onun süreleri; plan yeni süreyi taslak yürürlüğe girince kullanır.
+export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi });
 
 export type RevizyonDurumu = z.output<typeof revizyonDurumu>;
 export type Bagimlilik = z.output<typeof bagimlilik>;
@@ -401,6 +401,7 @@ export type TalimatlarCevabi = z.output<typeof talimatlarCevabi>;
 export type KomutCevabi = z.output<typeof komutCevabi>;
 export type GerceklesenSureGovdesi = z.input<typeof gerceklesenSureGovdesi>;
 export type GerceklesenKabulGovdesi = z.input<typeof gerceklesenKabulGovdesi>;
+export type GerceklesenKabulCevabi = z.output<typeof gerceklesenKabulCevabi>;
 export type SurelerCevabi = z.output<typeof surelerCevabi>;
 export type GerceklesenTuru = (typeof GERCEKLESEN_TURLERI)[number];
 export type GerceklesenKaynagi = (typeof GERCEKLESEN_KAYNAKLARI)[number];
