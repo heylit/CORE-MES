@@ -485,3 +485,12 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 - Sözleşme: `refakatPartisi.partiId`, `lotNo` boş olabilir; `lotaBaglanmaZamani`. Yeni `lotBekleyenKartlarCevabi`, `refakatLotaBaglaGovdesi`, `refakatLotaBaglaCevabi`.
 - İstemci: Hazırlık'ta "Lot bekleyen kartlar" tablosu (Aç kartı açar); kart penceresinde "Lot bekliyor (istisna kartı)", depocuya "Lota bağla" bölümü, bağlanmış kartta "İstisna kartıydı; … lota bağlandı." Lotsuz kartta Etiket Merkezi tuşu gizli.
 
+
+## Emrin kart listesi Arkon'a (kart #155, #156; dal 155-malzeme-teslim-kart)
+- `disari.ts emrinRefakatKartlari(db, uretimEmriId, istasyonId)`: açık ve birleşmemiş kartlar sırayla, istisna kartı `lotNo: null` ile; `istasyondaSatirVar` kartın lotu ya da kartla sayılmış üretim partisi o istasyonda artı bakiyede mi. `sayilan` ve `sinir` (Soru 132) bu commit'te null.
+- Sayım uyarısı (kart #157 için): `servis.uretimSayimiYansit` `{ uyari }` döner; metinler: "Stokta yok; istisna kartı … açıldı. Depo kartı lota bağlar.", "Kartın malzemesi depoda / başka istasyonda; teslim edilmeden düşüldü, malzemeyi teslim alın.", "Parça Yeni kart … kartına girdi; yeni kartı ve malzemeyi teslim alın." `disari.ts uretimSayimiYansitUyarili` uyarıyı verir; `uretimSayimiYansit` (kablolamadaki) `void` kalır, dinleyici tipi değişince kablolama uyarılıya geçer.
+
+## Lot izi (kart #162; dal 162-lot-izi; refakat kartı Dal 9)
+- `GET /stok/partiler/:id/iz` (okuma, uç aynı) yeni alanlar taşır: `kartlar` (lotu taşıyan kartlar; parti üretim partisiyse onu üreten kart; bunların alt kartları ve onlara birleşenler, lota bağlanırken başka karta birleşen lotsuz istisna kartı dahil), `ciktilar` (bu kartlarla sayılan üretim partileri ve bugün eldeki), `sevkCikislari` (bu partilerden geri alınmamış sevk çıkışları). Kartların emirleri `emirler`e, dolayısıyla `sevkler`e (sevk işleri) de girer.
+- Sözleşme: `refakatCiktisi`, `refakatSevki` adlı şemalar çıkarıldı; `refakatIziCevabi.ciktilar` ve `sevkler` bunları kullanır (şekil aynı). `partiIziCevabi` refakat bölümünün altına taşındı.
+- İstemci: `PartiIziPenceresi` (imza aynı) "Refakat kartları", "Üretilen partiler" ve "Sevk çıkışları" tablolarını, ardından mevcut "Üretim emirleri" ve "Sevkler"i gösterir. Lot okutmasından açılması Dal 8'dedir.
