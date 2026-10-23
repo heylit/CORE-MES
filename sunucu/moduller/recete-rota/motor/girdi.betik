@@ -129,7 +129,9 @@ function rrCevir(st) {
     if (!a || a.id !== o.id) y.id = o.id;
     if (!a || a.urun !== o.itemId) y.urun = o.itemId;
     if (!a || a.adet !== o.qty) y.adet = +o.qty;
-    if (!a || rrTarih(a.termin) !== o.due) y.termin = o.due + ' ' + (rrSaat(a && a.termin) || '17:00');
+    /* teslim yoksa termin de yoktur (kural 5): "null 17:00" ya da uydurma tarih yazılmaz */
+    const due = rrTarih(o.due) || null;
+    if (!a || (rrTarih(a.termin) || null) !== due) y.termin = due ? due + ' ' + (rrSaat(a && a.termin) || '17:00') : null;
     if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
     if (!a || a.oncelik !== o.priority) y.oncelik = +o.priority || 0;
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
