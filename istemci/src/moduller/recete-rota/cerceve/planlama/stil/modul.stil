@@ -3969,3 +3969,7 @@ body.pm-ps-karar .pm-yp-kap { display: none; }
 
 /* Uygulamada (zz31-tmi) palet kabuğundur (102 a): çerçevenin kendi paletini açan düğmeler görünmez. */
 .pm-tmi [data-act="v20-palet"] { display: none; }
+/* Uygulamada (zz31-tmi) sayfa kabuğun içindedir: ana menü, ikinci menü, alt menü ve hesap kabuğundur. Çerçeve kendi menülerini,
+   deneme notunu ve denemenin kullanıcı değiştiricisini çizmez; içerik bütün genişliği alır. */
+.pm-tmi .tc-kabuk-menu, .pm-tmi .tc-kabuk-alt, .pm-tmi .pm-ym-serit, .pm-tmi .tc-kabuk-hesap { display: none; }
+.pm-tmi .tc-kabuk { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ust" "icerik"; }
