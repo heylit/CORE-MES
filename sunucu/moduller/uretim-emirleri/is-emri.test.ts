@@ -21,6 +21,7 @@ import {
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
+import { refakatKartiSayimlari } from './disari.ts';
 import type { IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
@@ -792,6 +793,44 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET ust_emir_id = id, bolunme_sira = 1 WHERE id = $1', [alt]), /uretim_emri_kendine_bagli_degil/);
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlestigi_emir_id = $2 WHERE id = $1', [id, alt]), /uretim_emri_birlesen_iptal/, 'iptal olmayan emir birleşmiş sayılmaz');
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlestigi_emir_id = id WHERE id = $1', [torun]), /uretim_emri_birlesen_iptal/, 'kendine birleşmez');
+  });
+
+  test('Soru 132, 136 a: kartın sayılanı adımda tükettiğidir; girdili adımda sınır verilen bölü girdi, sonraki adımda önceki adımın kartlı sağlamı', async () => {
+    const ist1 = await istasyonKur();
+    const ist2 = await istasyonKur();
+    const { uretimEmriId: id } = await ac([
+      adim(1, { tur: 'makine', id: await makineKur(ist1) }, { bilesenler: [{ malzemeNo: hammaddeNo, miktar: '2.5' }] }),
+      adim(2, { tur: 'makine', id: await makineKur(ist2) }),
+    ], { adet: 10 });
+    const kartAc = async (sira: number) => {
+      const lot = (await o().sahip.tek<{ id: number }>(
+        'INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, acan_kisi_id, lot_no) VALUES ($1, $2, $3, $4) RETURNING id', [hammaddeNo, `TP-S-${id}-${sira}`, yoneticiId, `LT-S-${id}-${sira}`]))!.id;
+      return (await o().sahip.tek<{ id: number }>(
+        'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [id, sira, hammaddeNo, lot, yoneticiId]))!.id;
+    };
+    const a = await kartAc(1);
+    const b = await kartAc(2);
+    const [ie1, ie2] = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [id])).map((r) => r.id);
+    const say = (isEmriId: number | undefined, istasyonId: number, tur: string, adet: number, kart: number) => o().sahip.sorgu(
+      `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id)
+       VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 = 'hurda' THEN (SELECT min(id) FROM hurda_nedeni) END, false, now(), $6, $7)`,
+      [id, yoneticiId, istasyonId, tur, adet, isEmriId, kart]);
+    const oku = async (istasyonId: number | null) => Object.fromEntries([...(await o().vt.tx((db) => refakatKartiSayimlari(db, id, istasyonId, [
+      { id: a, malzemeNo: hammaddeNo, verilen: '12.500' },
+      { id: b, malzemeNo: hammaddeNo, verilen: '5' },
+      { id: 999999, malzemeNo: null, verilen: '0' },
+    ]))).entries()].map(([k, v]) => [k === a ? 'a' : k === b ? 'b' : 'istisna', [v.sayilan, v.sinir]]));
+
+    assert.deepEqual(await oku(ist1), { a: [0, 5], b: [0, 2], istisna: [0, null] }, '12,5 / 2,5 = 5; 5 / 2,5 = 2; malzemesiz kartta sınır yok');
+    await say(ie1, ist1, 'saglam', 3, a);
+    await say(ie1, ist1, 'hurda', 1, a);
+    await say(ie1, ist1, 'karar_bekliyor', 1, a);
+    await say(ie1, ist1, 'saglam', 3, b);
+    assert.deepEqual(await oku(ist1), { a: [5, 5], b: [3, 2], istisna: [0, null] }, 'hurda ve karar bekleyen de tüketir; sınır aşılınca da sayılan yazılır');
+    assert.deepEqual(await oku(null), await oku(ist1), 'istasyonsuz okuma terminaldeki adımdır');
+    await say(ie2, ist2, 'saglam', 2, a);
+    assert.deepEqual(await oku(ist2), { a: [2, 3], b: [0, 3], istisna: [0, 0] }, 'ikinci adımda sınır önceki adımın kartlı sağlamı');
+    assert.equal((await o().vt.tx((db) => refakatKartiSayimlari(db, id, ist1, []))).size, 0);
   });
 
   test('kart #125, Soru 121 a: çalışan adımda yalnız üretilmemiş adet bölünür, bitmiş adımdan bölünmez; sayım refakat partisini taşır', async () => {

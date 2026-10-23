@@ -23,7 +23,7 @@ import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
-  ekAdimKaldirIhlali, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
+  ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir } from './emir-olaylari.ts';
@@ -1316,6 +1316,29 @@ export async function emirlerinMalzemeIhtiyaci(db: Db, emirIdleri: readonly numb
       bilesenler.filter((b) => kendiIdleri.has(b.isEmriId)).map((b) => ({ isEmriId: b.isEmriId, malzemeNo: b.malzemeNo, miktar: Number(b.miktar), fireYuzde: Number(b.fireYuzde) })),
       birlesmeSiralari(dogrudanAltPartiler(agac, e.id), kendi),
     ).map((m) => ({ malzemeNo: m.malzemeNo, opNo: m.opNo, brut: m.brut.toFixed(4) })));
+  }
+  return sonuc;
+}
+
+// Refakat kartlarının sayılanı ve sınırı (Soru 132, 136 a). Kartla verilen malzemeyi stok bilir ve çağırırken verir; bu modül stoku
+// okumaz (ADR 0006). sayilan, kartla adımda tüketilen parça (hurda dahil); iş emirsiz emirde ya da adımı bulunmayan emirde harita boştur.
+export interface KartSayimi { sayilan: number; sinir: number | null }
+export async function refakatKartiSayimlari(
+  db: Db, uretimEmriId: number, istasyonId: number | null, kartlar: readonly { id: number; malzemeNo: number | null; verilen: string }[],
+): Promise<Map<number, KartSayimi>> {
+  const sonuc = new Map<number, KartSayimi>();
+  if (kartlar.length === 0) return sonuc;
+  const adimlar = await s.isEmirleriGetir(db, [uretimEmriId]);
+  const adim = kartAdimi(adimlar, istasyonId);
+  if (adim === null) return sonuc;
+  const girdiler = (await s.bilesenleriGetir(db, [adim.id])).map((b) => ({ isEmriId: b.isEmriId, malzemeNo: b.malzemeNo, miktar: Number(b.miktar) }));
+  const sayimlar = await s.kartSayimlariGetir(db, uretimEmriId, kartlar.map((k) => k.id));
+  const sayim = (kartId: number, isEmriId: number) => sayimlar.find((x) => x.kartId === kartId && x.isEmriId === isEmriId);
+  for (const k of kartlar) {
+    sonuc.set(k.id, {
+      sayilan: sayim(k.id, adim.id)?.toplam ?? 0,
+      sinir: kartSiniri(adimlar, adim.id, girdiler, { malzemeNo: k.malzemeNo, verilen: Number(k.verilen) }, (i) => sayim(k.id, i)?.saglam ?? 0),
+    });
   }
   return sonuc;
 }

@@ -881,3 +881,31 @@ export function kayitAniIhlali(an: string, sonAn: string | null, simdi: string):
   if (sonAn !== null && t < Date.parse(sonAn)) return KAYIT_ANI_ESKI;
   return null;
 }
+
+/* ---------------- refakat kartının adet sınırı (Soru 132, 136 a) ---------------- */
+
+// Kartın bir adımdaki sınırı. Adımın girdisi kartın malzemesiyse sınır kartla verilen malzemeden çıkan parçadır; değilse önceki adımda
+// bu kartla sayılan sağlamdır (karar bekleyen ve red sonraki adıma geçmez). Sarf tanımsız ilk adımda sınır yoktur (null).
+// Sınır yumuşaktır: dolunca ekran uyarır, sayım durmaz.
+export function kartSiniri(
+  adimlar: readonly { id: number; sira: number }[],
+  adimId: number,
+  girdiler: readonly { isEmriId: number; malzemeNo: number; miktar: number }[],
+  kart: { malzemeNo: number | null; verilen: number },
+  oncekiSaglam: (isEmriId: number) => number,
+): number | null {
+  const girdi = kart.malzemeNo === null ? undefined : girdiler.find((g) => g.isEmriId === adimId && g.malzemeNo === kart.malzemeNo);
+  // Ondalık bölmede 2,5 / 0,5 gibi tam sonuç 4,9999... çıkmasın: kuruşun altı yuvarlanır.
+  if (girdi !== undefined && girdi.miktar > 0) return Math.max(0, Math.floor(kart.verilen / girdi.miktar + 1e-9));
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  const i = sirali.findIndex((a) => a.id === adimId);
+  const onceki = i > 0 ? sirali[i - 1] : undefined;
+  return onceki === undefined ? null : oncekiSaglam(onceki.id);
+}
+
+// Kartın sayıldığı adım: istasyondaki çalışan iş emri, yoksa istasyonun sıradaki iş emri; istasyon verilmezse ya da istasyonda
+// bekleyen iş yoksa emrin terminaldeki adımı.
+export function kartAdimi<T extends { sira: number; durum: IsEmriDurumu; istasyonId: number | null }>(isEmirleri: readonly T[], istasyonId: number | null): T | null {
+  const burada = istasyonId === null ? [] : isEmirleri.filter((i) => i.istasyonId === istasyonId);
+  return burada.find((i) => i.durum === 'calisiyor') ?? siradakiIsEmri(burada) ?? isEmirleri.find((i) => i.durum === 'calisiyor') ?? siradakiIsEmri(isEmirleri);
+}

@@ -335,6 +335,10 @@ export type { FasonGecmisSatiri } from './sorgular.ts';
 export const emirMalzemeIhtiyaci = isEmri.emirMalzemeIhtiyaci;
 export const emirlerinMalzemeIhtiyaci = isEmri.emirlerinMalzemeIhtiyaci;
 
+// Stok, emrin refakat kartlarına (Arkon kart listesi) sayılanı ve sınırı buradan alır; kartla verilen miktarı kendisi verir. Yetki denetlemez.
+export const refakatKartiSayimlari = isEmri.refakatKartiSayimlari;
+export type { KartSayimi } from './is-emri-servis.ts';
+
 // Malzeme · Teslim (kart #1208): kişinin açık işinin istasyonu, "nereden" kendiliğinden dolsun diye. Yetki denetlemez.
 export const acikIstasyon = (db: Db, kisiId: number): Promise<number | null> => kisininAcikIstasyonu(db, kisiId);
 
