@@ -264,5 +264,9 @@ Açık:
 - Bilinen sınır: alanlar prototipten sonra eklenen betiktedir (`birim-donusumu-eki.ts`, `s5` ve `gTicariHTML` sarılır). Alış birimi seçenekleri ekranın bütün birim listelerinin birleşimidir; Excel aktarımı, föy ve değişiklik karşılaştırması alanları göstermez.
   Eski kartlar boş kalır (314). Satın almada siparişin birimi ve stoka çeviri Satın alma şeridindedir.
 
+## CNC kütüphane kimliği (T3; 153 a, 163 b, 165 a, 23.10.2026)
+- Sarf ya da demirbaş kartı bir CNC kurulum kütüphane kalemine bağlanır: `malzeme_katalog_karti.cnc_kutuphane_kimligi` (boş olabilir, biçim ve tür kısıtı, kısmi tekil dizin). Bağlı kalemin adedi stoktan gelir, azalışı stoktan düşer (cnc-kurulum ve stok). Okuma ve yazma `disari.ts` `cncKimlikliMalzemeler`, `cncKimligiBagla`; yetki çağıranda (cnc-kurulum ucu `malzemeler.yaz` ister).
+- Bilinen sınır: bağ Malzemeler ekranında görünmez ve buradan kurulmaz; yalnız CNC kurulum Kütüphanesindeki köprü bölümünden. Bağ kartın sürümünü artırmaz, kartın değişiklik geçmişine girmez (kim, ne zaman cnc-kurulum ucunun denetim kaydında). Veri taşınmaz (165 a): eski kalemler bağsız başlar. Katalog kaleminin adı yalnız motorda; kartın adı elle girilir. VARSAYIM: iptal kart da bağlı kalabilir (stoğu durabilir). Bağlamada: kart ayrıntısında bağın gösterilmesi.
+
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /malzeme-birimleri`. Birimin sahibi malzemeler (144 a).

@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { test } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 import { robotAyariOku } from './ayar.ts';
+import { OKUYUCU, gunSonuDenetle } from './degismezler.ts';
 import { gunleriKos } from './gun-dongusu.ts';
 import { KosuKaydi } from './kayit.ts';
 import { senaryolariKesfet } from './kesif.ts';
+import { kesifKur, kesifModeli, playwrightSurucusu } from './kesif-kipi.ts';
 import { modelKoprusuKur } from './model.ts';
 import { DOSYA, adimSatiriOku } from './sozlesme.ts';
 import { yorumIstemi } from './yorum.ts';
@@ -28,7 +30,7 @@ function taban(): string | null {
 }
 
 // Koşu tek test: günler sırayla, her gün senaryolar aynı anda. Süre gün ve senaryo sayısına bağlıdır; sınır yok.
-test('test robotu', async ({ playwright, baseURL }) => {
+test('test robotu', async ({ playwright, browser, baseURL }) => {
   test.setTimeout(0);
   const ayar = robotAyariOku(process.env, DEPO_KOKU);
   const senaryolar = await senaryolariKesfet(process.env['TMIV2_ROBOT_SENARYO']);
@@ -41,7 +43,8 @@ test('test robotu', async ({ playwright, baseURL }) => {
   console.log(`Koşu klasörü: ${kayit.klasor}`);
 
   const baglamlar = new Map<Hesap, APIRequestContext>();
-  for (const h of roller) baglamlar.set(h, await playwright.request.newContext({ baseURL, storageState: oturumDosyasi(h) }));
+  // Gün sonu değişmezlerini okuyan hesap senaryo süzgecinden bağımsız açılır; yoksa denetim "bağlanmamış" kalır.
+  for (const h of new Set([...roller, OKUYUCU])) baglamlar.set(h, await playwright.request.newContext({ baseURL, storageState: oturumDosyasi(h) }));
   const istemci = (h: Hesap): RolIstemcisi => ({
     async istek(yontem, yol, govde) {
       const baglam = baglamlar.get(h);
@@ -59,8 +62,12 @@ test('test robotu', async ({ playwright, baseURL }) => {
     },
   });
 
+  const kesif = kesifKur({ kayit, model: kesifModeli(ayar.model, kayit), surucu: playwrightSurucusu(browser, baseURL ?? ''), roller, tohum: ayar.tohum });
   try {
-    await gunleriKos({ kayit, senaryolar, istemci, tohum: ayar.tohum, gunSayisi: ayar.gunSayisi, esZamanli: ayar.esZamanli });
+    await gunleriKos({
+      kayit, senaryolar, istemci, tohum: ayar.tohum, gunSayisi: ayar.gunSayisi, esZamanli: ayar.esZamanli,
+      gunSonu: async (gun) => { await gunSonuDenetle({ kayit, istemci, gun }); await kesif.tur(gun); },
+    });
     kayit.bitir('bitti');
   } catch (hata) {
     kayit.bitir('durdu', hata instanceof Error ? hata.message : String(hata));
