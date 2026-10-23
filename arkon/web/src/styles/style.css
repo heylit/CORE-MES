@@ -1881,3 +1881,16 @@ table.rtbl { min-width: 0; } .rtbl td.num, .rtbl th.num { text-align: right; fon
 .pmain > .col { gap: 10px; }
 .pmain > .col > .queue { flex: 1; min-height: 0; }
 .pmain .qc.pk { padding: 10px 12px; }
+/* Hizalama (kısa ve dar iş ekranı): uzun iş emri no tek satırda küçülür, Rev rozeti numaranın yanında kalır; kadranın üst ve alt
+   yazıları halkanın dışında durur; ana düğmenin halesi Toplu giriş kartının üstüne binmez. */
+.order { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.order > div:first-child { container-type: inline-size; }
+.order h1 { display: block; font-size: clamp(18px, 5.4cqi, 30px); overflow-wrap: anywhere; }
+.order h1 .revbig { white-space: nowrap; vertical-align: middle; }
+.morder > div { container-type: inline-size; }
+.morder b { font-size: clamp(15px, 5.6cqi, 20px); overflow-wrap: anywhere; }
+.sayac .dial { width: min(100cqh - 56px, 100cqw - 216px, 520px); }
+.stage .sayac .dlabel.l2, .stage .sayac .dlabel.r2 { top: auto; bottom: calc(100% + 4px); }
+.stage .sayac .dlabel.l, .stage .sayac .dlabel.r { bottom: auto; top: calc(100% + 4px); }
+.stage > .toplu { position: relative; z-index: 1; }
+.stage > .orbs { margin-top: 22px; }
