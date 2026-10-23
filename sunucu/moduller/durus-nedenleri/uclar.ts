@@ -9,8 +9,9 @@ import {
   hurdaNedeniGuncelle, hurdaNedeniOlustur, hurdaNedenleriCevabi as hurdaListesi,
 } from './servis.ts';
 
-// Nedenleri kendi sayfası ve terminal (duruş ve hurda seçimi) okur. Arkon ve üretim emirleri `disari.ts` ile okur; o yol uçtan geçmez.
-const OKUMA = { biri: ['sayfa.durus-nedenleri', 'sayfa.terminal'] } as const;
+// Nedenleri kendi sayfası, terminal (duruş ve hurda seçimi) ve Vardiya'nın planlı duruş ekranı (195 a) okur. Arkon ve üretim emirleri
+// `disari.ts` ile okur; o yol uçtan geçmez.
+const OKUMA = { biri: ['sayfa.durus-nedenleri', 'sayfa.terminal', 'sayfa.vardiya'] } as const;
 
 export const uclar = [
   uc({
