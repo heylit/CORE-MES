@@ -14,6 +14,7 @@ import { LISTELER } from './veri.ts';
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
 export const KAPI = 'kisiler.rol-yonet';
 export const YAZAN = kisi(1, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yaz', 'musteri-tedarikci.oku']);
+export const YONETEN = kisi(5, [KAPI, 'sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'musteri-tedarikci.oku']);
 export const OKUYAN = kisi(2, [KAPI, 'sayfa.finans', 'finans.oku', 'musteri-tedarikci.oku']);
 export const FIRMACI = kisi(3, [KAPI, 'sayfa.finans', 'musteri-tedarikci.oku']);
 export const KAPISIZ = kisi(4, ['sayfa.finans', 'finans.oku', 'finans.yaz']);

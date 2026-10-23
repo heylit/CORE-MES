@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createContext, runInContext, type Context } from 'node:vm';
 import { prototipYukle } from '../prototip.ts';
-import { finansMotoru, type FinansMotoru, type MotorDurumu, type SiparisKalemi } from './motor.ts';
+import { finansMotoru, gross, type FinansMotoru, type MotorDurumu, type SiparisKalemi } from './motor.ts';
 import { genisDurum, ornekDurum, ORNEK_BUGUN } from './ornek-veri.ts';
 
 // Yeni motor prototipin motoruyla aynı girdide aynı sonucu vermeli (F0 kabulü). Prototip bloğu ayrı bağlamda koşar,
@@ -86,4 +86,23 @@ describe('motor eşitliği: geniş verinin anlamlı olduğu', () => {
     expect(k.cash).not.toBeNull();
     expect(k.sales).not.toBeNull();
   });
+});
+
+it('düzenli ödemenin ay içinde ödenmiş sayılması (recPaidIn) aynı', () => {
+  const m = finansMotoru(ORNEK_BUGUN);
+  const durum = genisDurum(m);
+  const gider = durum.tx.filter((t) => t.type === 'gider');
+  const t = gider[gider.length - 1]!;
+  const ym = t.date.slice(0, 7);
+  // Biri aynı kategoride yakın tutarlı ödemeyle, biri bağlı kayıtla eşleşir; üçüncüsü hiçbirine uymaz.
+  durum.recurring = [
+    { id: 'r1', name: 'Eşleşen', cat: t.cat, amount: Math.round(gross(t)), day: 5 },
+    { id: 'r2', name: 'Uzak', cat: t.cat, amount: Math.round(gross(t) * 3), day: 5 },
+    { id: 'r3', name: 'Başka', cat: 'Başka kategori', amount: 100, day: 5 },
+  ] as typeof durum.recurring;
+  const e = eskiMotor(durum, ORNEK_BUGUN), y = yeniMotor(durum, ORNEK_BUGUN);
+  const aylar = [ym, ORNEK_BUGUN.slice(0, 7)];
+  const yeni = y.durum.recurring.flatMap((r) => aylar.map((a) => y.recPaidIn(r, a)));
+  expect(yeni[0]).toBe(true);
+  expect(yeni).toEqual(eski(e, `state.recurring.flatMap((r) => ${JSON.stringify(aylar)}.map((a) => recPaidIn(r, a)))`));
 });
