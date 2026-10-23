@@ -131,8 +131,26 @@ jobs:
       - name: Göç damgası ve var olan göç (ana dala gönderim)
         if: github.event_name == 'push'
         run: node araclar/goc-damgasi.ts HEAD^1 HEAD^1
-      - run: npm run lint
+      - run: npm run lint:css
       - run: npm run derle:istemci
+
+  # Tip bilgili eslint tek süreçte bütün tsconfig programlarını kurar ve 4 GB yığını aşıyordu (#143). Dosyalar programa ve
+  # modül klasörüne göre parçalanır (araclar/lint-parcala.ts); her parça ayrı makinede kendi programını kurar.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        parca: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --max-old-space-size=4096 araclar/lint-parcala.ts --parca ${{ matrix.parca }}/4
 
   istemci-test:
     needs: kapsam
@@ -310,7 +328,7 @@ jobs:
 
   kontrol:
     if: always()
-    needs: [kapsam, tip, denetim, istemci-test, sunucu-test, ekran, windows]
+    needs: [kapsam, tip, denetim, lint, istemci-test, sunucu-test, ekran, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -321,4 +339,5 @@ jobs:
           echo "$SONUCLAR" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # Atlanan iş yalnız kapsam yeşilse kabul edilir; kapsam düşerse ona bağlı işler de atlanır.
           echo "$SONUCLAR" | jq -e '.kapsam.result == "success" and .tip.result == "success" and .denetim.result == "success"
+            and .lint.result == "success"
             and all(.[]; .result == "success" or .result == "skipped")' > /dev/null
