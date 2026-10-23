@@ -10,7 +10,7 @@ import {
 } from './disari.ts';
 import type { KaliteKarariOlayi, SaglamSayimOlayi } from './disari.ts';
 import { SAGLAM_EKSIYE_INER } from './kurallar.ts';
-import { emirAc, emirAyrintisi, emirSayimAyarla } from './servis.ts';
+import { emirAc, emirAyrintisi } from './servis.ts';
 
 // İlk parça kararı beklenirken sayılan parça (131 b, 136 a): sağlama katılmaz, kalite kararıyla sağlama döner ya da redde kalır.
 describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
@@ -92,11 +92,6 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.deepEqual(await sayaclar(dogrudan), { kararBekliyor: 2, red: 0 });
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, dogrudan, 'onay'));
     assert.equal(await saglam(dogrudan), 3, 'karar verilmiş emirde sonraki sayım sağlamdır');
-
-    const ayar = await baslamisEmir();
-    const a = await vt().tx((db) => emirSayimAyarla(db, operator.id, ayar, 4));
-    assert.equal(a.emir.canli?.saglam, 0);
-    assert.deepEqual(await sayaclar(ayar), { kararBekliyor: 4, red: 0 });
 
     const ret = await baslamisEmir();
     await vt().tx((db) => emirSayim(db, operator, ret, { tur: 'saglam', adet: 1 }));

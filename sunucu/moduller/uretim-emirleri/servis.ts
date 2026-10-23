@@ -623,22 +623,6 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
   return sonuc;
 }
 
-// Tuş takımı mutlak sağlam değeri gönderir; fark tek düzeltme satırıdır (fark sıfırsa satır yazılmaz).
-export async function emirSayimAyarla(
-  db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null, duzeltebilir = false,
-): Promise<{ emir: Emir; uyari: string | null }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
-  const ihlal = sayimIhlali(emir.durum, calisma);
-  if (ihlal !== null) throw cakisma(ihlal);
-  await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir);
-  const fark = saglam - (await saglamToplami(db, id));
-  // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
-  await adimGirdisiniDenetle(db, emir, fark);
-  const bekleyen = fark > 0 && ((await sayaclar(db, id)).kararBekliyor > 0 || (await sorgular.ilkParcaOnaysiz(db, id)));
-  const uyari = fark === 0 ? null : await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen, refakatPartisiId);
-  return { ...(await emirdenCevap(db, id)), uyari };
-}
-
 export async function emirDuraklat(db: Db, kisiId: number, id: number): Promise<{ emir: Emir }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   const ihlal = duraklatmaIhlali(emir.durum, calisma);

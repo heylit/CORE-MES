@@ -555,7 +555,6 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual([asim.durum, asim.govde.mesaj], [409, ADIM_GIRDI_ASIMI], 'OP10 4 sağlam verdi');
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3 })).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 2 })).govde.mesaj, ADIM_GIRDI_ASIMI);
-    assert.equal((await terminal(`/${id}/sayim-ayarla`, { saglam: 5 })).govde.mesaj, ADIM_GIRDI_ASIMI);
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 5 })).govde.mesaj, ADIM_GIRDI_ASIMI);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -1 })).durum, 200, 'düşürmek serbest');
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 4 })).durum, 200);

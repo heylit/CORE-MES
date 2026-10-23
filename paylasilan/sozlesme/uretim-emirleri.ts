@@ -90,8 +90,6 @@ export const sayimGovdesi = z.discriminatedUnion('tur', [
 ]).superRefine((g, ctx) => {
   if (g.tur === 'hurda' && g.adet > 0 && g.hurdaNedeniId === undefined) ctx.addIssue({ code: 'custom', path: ['hurdaNedeniId'], message: 'Hurda nedeni seçin.' });
 });
-// Tuş takımı mutlak değeri gönderir; farkı sunucu yazar.
-export const sayimAyarlaGovdesi = z.object({ saglam: sayac('Sağlam adet').max(AZAMI_SAYIM, SAYIM_ASIMI), refakatPartisiId }).strict();
 // Makineli istasyonda çalışılacak makineler (bir ya da birkaç). Verilmezse iş emrine atanmış makine kullanılır; o da yoksa
 // iş makinesiz çalışır ve kilit almaz (insanlı istasyon). Gövdesiz istek de geçerlidir; bilinmeyen alan eski istemcide olduğu gibi yok sayılır.
 export const AZAMI_MAKINE_SECIMI = 20;
@@ -210,8 +208,6 @@ export const emirAyrintiCevabi = z.object({
 export const emirCevabi = z.object({ emir: emirSemasi });
 // Başlatma uyarısı (karar 110 b): girdi istasyonda yokken iş başlar, metin terminalde gösterilir; uyarı yoksa null.
 export const emirBaslatCevabi = z.object({ emir: emirSemasi, uyari: z.string().nullable() });
-// Sayım reddedilmeden yönlendiren uyarı (kart #157), başlat cevabıyla aynı biçimde; uyarı yoksa null.
-export const sayimCevabi = z.object({ emir: emirSemasi, uyari: z.string().nullable() });
 export const adimCevabi = z.object({ emir: emirSemasi, adimlar: z.array(adimSemasi) });
 // Ana sayfa sayıları. Sayım sıfır olabilir, gerçektir. null: planlanacak ve açık için kişinin iş emirli listeyi okuma yetkisi
 // yok; bugün için kişinin bugün sağlam sayımı yok (sıfır uydurulmaz). Gün tesis günüdür.
@@ -288,7 +284,6 @@ export type EmirGovdesi = z.input<typeof emirGovdesi>;
 export type BitirGovdesi = z.input<typeof bitirGovdesi>;
 export type SayimKaydi = z.output<typeof sayimGovdesi>;
 export type SayimGovdesi = z.input<typeof sayimGovdesi>;
-export type SayimAyarlaGovdesi = z.input<typeof sayimAyarlaGovdesi>;
 export type DurdurGovdesi = z.input<typeof durdurGovdesi>;
 export type MakineSecimiGovdesi = z.input<typeof makineSecimiGovdesi>;
 export type MakineDoluAyrintisi = z.output<typeof makineDoluAyrintisi>;
@@ -305,7 +300,6 @@ export type BitenEmirlerSorgusu = z.input<typeof bitenEmirlerSorgusu>;
 export type EmirAyrintiCevabi = z.output<typeof emirAyrintiCevabi>;
 export type EmirCevabi = z.output<typeof emirCevabi>;
 export type EmirBaslatCevabi = z.output<typeof emirBaslatCevabi>;
-export type SayimCevabi = z.output<typeof sayimCevabi>;
 export type AdimCevabi = z.output<typeof adimCevabi>;
 
 /* ---------------- iş emirli üretim emri (K1, K3; kart #262) ---------------- */
