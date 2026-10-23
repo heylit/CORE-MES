@@ -8,6 +8,7 @@ import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.
 import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
 import { RefakatAcPenceresi, RefakatKartPenceresi, refakatLotSatiri, refakatMalzemeSatiri } from './RefakatKarti.tsx';
 import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';
+import { PartiIziPenceresi } from './PartiIzi.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 
@@ -115,6 +116,8 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
   const cikis = useIslem('stok.cikis'), sevkOkur = useIslem('sevkiyat.oku'), fasoncu = useIslem('uretim-emirleri.fason');
   const sevkeder = cikis || sevkOkur || fasoncu;
   const [kartAc, setKartAc] = useState(false);
+  const [izAcik, setIzAcik] = useState(false);
+  const okur = useStokOkur();
   if (c.tur !== 'malzeme' && c.tur !== 'yer') return null;
   const malzeme = c.tur === 'malzeme' ? c : null;
   const refakat = malzeme?.refakat ?? null;
@@ -154,7 +157,9 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           {depocu && stokCevabi && (stokCevabi.tur === 'malzeme' || stokCevabi.tur === 'lot') && <DepoSepetineEkle key={okunan.kod} c={stokCevabi} />}
           {depocu && malzeme?.parti && malzeme.parti.uretimEmriId == null && !refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartına geç</Dugme>}
           {depocu && refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartı</Dugme>}
+          {okur && malzeme?.parti && <Dugme tur="ikincil" simge="truck" onClick={() => setIzAcik(true)}>Lot izi</Dugme>}
         </div>
+        {izAcik && malzeme?.parti && <PartiIziPenceresi partiId={malzeme.parti.id} lotNo={malzeme.parti.etiket} kapat={() => setIzAcik(false)} />}
         {kartAc && malzeme && (refakat
           ? <RefakatKartPenceresi id={refakat.id} kapat={() => setKartAc(false)} />
           : <RefakatAcPenceresi kaynak={{ lotKodu: okunan.kod }} ad={`${baslik} · ${malzeme.parti?.etiket ?? ''}`} kapat={() => setKartAc(false)} />)}

@@ -7,6 +7,7 @@ import type { RefakatKartSatiri, RefakatPartisi, SepetCevabi, SepetSatiri, Tesli
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { IsEmriniAc, KartSatirlari } from './KartSatirlari.tsx';
 import { DepoSepeti } from './Sepet.tsx';
+import { OkutmaSonucu } from './OkutmaSonucu.tsx';
 import { teslimGovdesi } from './okut-akisi.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
 
@@ -101,5 +102,21 @@ describe('Sepetim (Soru 133)', () => {
     expect(screen.queryByRole('button', { name: 'Refakat kartına geç' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Teslim et' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ satirlar: [{ satirId: 3 }] }));
+  });
+
+  it('Lot izi okutulan kartın lotunun izini açar; stok okuması olmayan görmez', async () => {
+    const cevap = { tur: 'malzeme' as const, malzeme: { id: 901, kod: 'HM-1', ad: 'Deneme sac', birim: 'kg' }, parti: { id: 40, etiket: 'LT-000040' }, yerler: [], refakat: KART, kartSatirlari: [] };
+    const istekler = sunucuKur({ ...OPERATOR, islemler: ['stok.istek', 'sayfa.stok'] }, {
+      'GET /stok/kod-coz': () => json(200, { tur: 'bilinmiyor', kod: 'RP:12' }),
+      'GET /stok/partiler/40/iz': () => json(200, { parti: null }),
+    });
+    ciz(<OkutmaSonucu okunan={{ kod: 'RP:12', cevap }} sec={() => {}} kapat={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Lot izi' }));
+    await waitFor(() => expect(istekler.some((x) => x.yol === '/stok/partiler/40/iz')).toBe(true));
+    cleanup();
+    sunucuKur(OPERATOR, {});
+    ciz(<OkutmaSonucu okunan={{ kod: 'RP:12', cevap }} sec={() => {}} kapat={() => {}} />);
+    await screen.findByText('Deneme sac');
+    expect(screen.queryByRole('button', { name: 'Lot izi' })).toBeNull();
   });
 });
