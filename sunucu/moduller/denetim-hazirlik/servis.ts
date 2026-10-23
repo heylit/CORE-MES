@@ -7,7 +7,7 @@ import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
   OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi,
-  KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, kilitAlinirMi, sonParca, sorgula, ustYolu,
+  KURULUM_ISARETI, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
 } from './kurallar.ts';
 import type { OdaKaydi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -22,6 +22,12 @@ function erisimDenetle(kullanici: Kullanici, yol: string): void {
   if (!erisebilirMi(yol, kullanici.id)) throw yetkiYok('Bu kayıt başka bir kişiye özeldir.');
 }
 
+const DEPO_DISI = 'Bu uç yalnız denetim hazırlığı kaydına açıktır.';
+function belgeDenetle(kullanici: Kullanici, yol: string): void {
+  if (!izinliBelgeMi(yol)) throw yetkiYok(DEPO_DISI);
+  erisimDenetle(kullanici, yol);
+}
+
 // Kimlik oturumdan gelir; gövdedeki hiçbir alan sahipliği belirlemez.
 function sahiplikDenetle(kullanici: Kullanici, yol: string, mevcut: KilitliBelge | null): void {
   if (mevcut !== null && !degistirebilirMi(yol, kullanici.id, mevcut.olusturanKisiId)) {
@@ -32,6 +38,7 @@ function sahiplikDenetle(kullanici: Kullanici, yol: string, mevcut: KilitliBelge
 export async function sorgu(
   db: Db, kullanici: Kullanici, k: { koleksiyon: string; filtreler?: Filtre[] | undefined; sira?: Sira | undefined; sinir?: number | undefined },
 ): Promise<SorguCevabi> {
+  if (!izinliKoleksiyonMu(k.koleksiyon)) throw yetkiYok(DEPO_DISI);
   erisimDenetle(kullanici, k.koleksiyon);
   const belgeler = sorgula(await sorgular.koleksiyonBelgeleri(db, k.koleksiyon), {
     ...(k.filtreler === undefined ? {} : { filtreler: k.filtreler }),
@@ -42,12 +49,12 @@ export async function sorgu(
 }
 
 export async function belgeOku(db: Db, kullanici: Kullanici, yol: string): Promise<BelgeCevabi> {
-  erisimDenetle(kullanici, yol);
+  belgeDenetle(kullanici, yol);
   return { belge: await sorgular.belgeGetir(db, yol), damga: await sorgular.damga(db) };
 }
 
 export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Promise<BelgeCevabi> {
-  erisimDenetle(kullanici, g.yol);
+  belgeDenetle(kullanici, g.yol);
   const mevcut = await sorgular.belgeKilitle(db, g.yol);
   sahiplikDenetle(kullanici, g.yol, mevcut);
   if (g.beklenenSurum !== undefined && (mevcut?.surum ?? null) !== g.beklenenSurum) {
@@ -63,7 +70,7 @@ export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Pro
 }
 
 export async function belgeSil(db: Db, kullanici: Kullanici, yol: string): Promise<{ silindi: boolean; damga: number }> {
-  erisimDenetle(kullanici, yol);
+  belgeDenetle(kullanici, yol);
   sahiplikDenetle(kullanici, yol, await sorgular.belgeKilitle(db, yol));
   const silindi = await sorgular.belgeSil(db, yol);
   return { silindi, damga: await sorgular.damga(db) };
@@ -71,7 +78,7 @@ export async function belgeSil(db: Db, kullanici: Kullanici, yol: string): Promi
 
 // Belge yoksa boş gövdeyle açılır; kilit verisi verildiyse belgeye birleşir.
 export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sahip: string; sureMs: number; veri?: Veri | undefined }): Promise<KilitCevabi> {
-  erisimDenetle(kullanici, g.yol);
+  belgeDenetle(kullanici, g.yol);
   const mevcut = await sorgular.belgeKilitle(db, g.yol);
   sahiplikDenetle(kullanici, g.yol, mevcut);
   const simdi = await sorgular.simdiMs(db);

@@ -58,7 +58,7 @@ export function CncKurulumCercevesi() {
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
   // Emir seçimiyle yeniden kurulan çerçeve, seçimin yapıldığı Kurulum görünümünde açılır.
-  const [emirSecildi, setEmirSecildi] = useState(false);
+  const [acilisGorunumu, setAcilisGorunumu] = useState<string | null>(null);
   const gorunumIletisi = useYalitilmisGorunum(KOK);
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false;
@@ -113,16 +113,22 @@ export function CncKurulumCercevesi() {
       secimAnahtari: `${ONEK}secim`,
       saltOnay: !hazirlik.ben.yazabilir && hazirlik.ben.hazirlikOnaylayabilir,
       saatDilimi: TESIS_SAAT_DILIMI,
-      ...(emirSecildi ? { acilisGorunumu: 'setup' } : {}),
+      stokKartiBaglayabilir: hazirlik.ben.stokKartiBaglayabilir,
+      stokDusebilir: hazirlik.ben.stokDusebilir,
+      ...(acilisGorunumu !== null ? { acilisGorunumu } : {}),
     }));
-  }, [prototip, hazirlik, emirSecildi]);
+  }, [prototip, hazirlik, acilisGorunumu]);
   const yalnizHazirlik = hazirlik !== null && !hazirlik.ben.yazabilir && hazirlik.ben.hazirlikOnaylayabilir;
   const ilkDurum = hazirlik?.degerler[`${ONEK}v1`]?.deger;
   // Emir değişince kayıtlar yeniden okunur ve çerçeve yeniden kurulur (kurulum emir başınadır).
+  // Stok kartı bağlanınca da yeniden kurulur; çerçeve Kütüphane'de açılır.
   const takimDegistirebilir = hazirlik?.ben.takimDegistirebilir ?? false;
+  const stokDusebilir = hazirlik?.ben.stokDusebilir ?? false;
   const isle = useMemo(
-    () => kopruKur({}, yalnizHazirlik, ilkDurum, () => { setHazirlik(null); setEmirSecildi(true); setDeneme((d) => d + 1); }, takimDegistirebilir),
-    [yalnizHazirlik, ilkDurum, takimDegistirebilir],
+    () => kopruKur({}, yalnizHazirlik, ilkDurum, (gorunum = 'setup') => {
+      setHazirlik(null); setAcilisGorunumu(gorunum); setDeneme((d) => d + 1);
+    }, takimDegistirebilir, stokDusebilir),
+    [yalnizHazirlik, ilkDurum, takimDegistirebilir, stokDusebilir],
   );
 
   // Kaynak ve köken denetimini YalitilmisCerceve yapar (yalnız bu çerçeve, opak köken); burada yalnız bilinen kanallar geçer.

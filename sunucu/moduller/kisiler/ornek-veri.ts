@@ -24,6 +24,7 @@ export const ORNEK_KISILER = [
   // Planlama ayarcıyı kişinin görevinden okur (tam "Ayarcı"); ayarı olan adım ayarcısız yerleşmez. TMI'de ayarcı rolü yok: tezgâhta çalışır.
   { kullaniciAdi: 'ornek.ayarci1', ad: 'Örnek Ayarcı Bir', sicilNo: 'ORN-015', gorev: 'Ayarcı', rol: 'operator' },
   { kullaniciAdi: 'ornek.ayarci2', ad: 'Örnek Ayarcı İki', sicilNo: 'ORN-016', gorev: 'Ayarcı', rol: 'operator' },
+  { kullaniciAdi: 'ornek.satis', ad: 'Örnek Satışçı', sicilNo: 'ORN-017', gorev: 'Satış uzmanı', rol: 'satis' },
 ] as const;
 
 async function rolNo(db: Db, kod: string): Promise<number> {
