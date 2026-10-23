@@ -86,6 +86,8 @@ jobs:
             case "$yol" in
               belgeler/*|kurulum/*) ;;
               */*) case "$yol" in
+                     # Test robotu (ADR 0019) ekran işinde değil, sunucu test işinde ve Windows işinde koşar.
+                     ekran-testleri/benzetim/*) sunucu=true ;;
                      ekran-testleri/*) ekran=true ;;
                      sunucu/*) sunucu=true; ekran=true ;;
                      arkon/*) sunucu=true; istemci=true; ekran=true ;;
@@ -300,8 +302,8 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Uygulama kurumda Windows'ta çalışır: bekçi, yedek ve güncelleyici orada da denenir. Yalnız işletme betiklerinin testleri
-  # koşar; atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce atlanırsa iş yine yeşil görünür.
+  # Uygulama kurumda Windows'ta çalışır: bekçi, yedek ve güncelleyici orada da denenir. Yalnız işletme betiklerinin ve test
+  # robotunun testleri koşar; atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce atlanırsa iş yine yeşil görünür.
   # PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
   windows:
     needs: kapsam
@@ -337,10 +339,10 @@ jobs:
             -c "CREATE DATABASE $TMIV2_PG_TEST_DATABASE"
           "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_TEST_DATABASE" \
             -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
-      - name: İşletme betiklerinin testleri
+      - name: İşletme betiklerinin ve test robotunun testleri
         run: |
           node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test --test-reporter=tap \
-            araclar/bekci.test.ts araclar/guncelleyici.test.ts araclar/yedek.test.ts 2>&1 | tee test-cikti.txt
+            araclar/bekci.test.ts araclar/guncelleyici.test.ts araclar/yedek.test.ts 'ekran-testleri/benzetim/**/*.test.ts' 2>&1 | tee test-cikti.txt
           test "${PIPESTATUS[0]}" -eq 0
           grep -qx '# skipped 0' test-cikti.txt && grep -qx '# todo 0' test-cikti.txt \
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
