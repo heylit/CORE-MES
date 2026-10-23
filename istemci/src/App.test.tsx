@@ -326,6 +326,25 @@ describe('App modul rotalari', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  // 195 a: menüde göremediği alt maddeyi adresle açan kişi ekranı değil yetki iletisini görür; maddeyi gören açar.
+  it('alt maddenin islemi olmayan kisi o maddeyi adresle acamaz; islemi olan acar', async () => {
+    const StokAyarlari = () => <p>Stok ayarları</p>;
+    const ayarli = [...rotalar, { yol: '/stok/ayarlar', ekran: StokAyarlari }];
+    await ac(STOK_GOREN, '/stok/ayarlar', ayarli);
+    expect(screen.getByRole('status').textContent).toContain('Bu bölümü görme yetkiniz yok');
+    expect(screen.queryByText('Stok ayarları')).toBeNull();
+    cleanup();
+
+    await ac({ ...STOK_GOREN, islemler: ['sayfa.stok', 'stok.tanim'] }, '/stok/ayarlar', ayarli);
+    expect(screen.getByText('Stok ayarları')).toBeTruthy();
+  });
+
+  it('rotasi olmayan kayitli sayfanin adresi gormeyene yetki iletisi verir, bulunamadi demez', async () => {
+    await ac(IKI_SAYFA, '/uretim-terminali', rotalar);
+    expect(screen.getByRole('status').textContent).toContain('Bu sayfayı görme yetkiniz yok');
+    expect(screen.queryByText('Sayfa bulunamadı')).toBeNull();
+  });
+
   it('sayfanin alt yolu da yalniz o sayfayi gorene acilir', async () => {
     await ac(STOK_GOREN, '/stok/5', rotalar);
     expect(screen.getByText('Stok kaydı')).toBeTruthy();

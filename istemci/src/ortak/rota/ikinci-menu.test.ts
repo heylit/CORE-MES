@@ -4,7 +4,7 @@ import { islemMi } from '#paylasilan/islemler.ts';
 import { SAYFA_YOLLARI, ikinciMenulerinHatalari } from '#paylasilan/sayfalar.ts';
 import { SIMGELER } from '../tasarim/simgeler.ts';
 import { modulRotalari } from './kesif.ts';
-import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, etkinMadde, ikinciMenuyuSuz, menuMaddeleri, type IkinciMenu } from './ikinci-menu.ts';
+import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, adresMaddesiKapaliMi, etkinMadde, ikinciMenuyuSuz, menuMaddeleri, type IkinciMenu } from './ikinci-menu.ts';
 
 const MENU: IkinciMenu = {
   kok: '/ornek',
@@ -82,6 +82,23 @@ describe('etkin madde', () => {
 // Menüde olup rotası olmayan madde tıklanınca "sayfa bulunamadı" açardı.
 const rotasizMaddeler = (menuler: readonly IkinciMenu[], rotalar: readonly { yol: string }[]): string[] =>
   menuler.flatMap((menu) => menuMaddeleri(menu)).map((m) => m.yol).filter((yol) => !rotalar.some((r) => matchPath(r.yol, yol) !== null));
+
+// 195 a: adresle açılış menüdeki süzgeçle aynıdır; kök madde sayfa işlemiyle açılır.
+describe('adres koruması', () => {
+  const TANIMLAR = [MENU];
+  it('alt maddeyi göremeyen kişiye o adres ve alt adresleri kapalıdır; görebilene açıktır', () => {
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornek/ayar', ['sayfa.ornek'])).toBe(true);
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornek/ayar/3', ['sayfa.ornek'])).toBe(true);
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornek/ayar', ['sayfa.ornek', 'ornek.yonet'])).toBe(false);
+  });
+
+  it('kök madde, maddeye düşmeyen alt adres ve menüsüz adres kapanmaz', () => {
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornek', [])).toBe(false);
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornek/kayit/5', [])).toBe(false);
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/ornekx/ayar', [])).toBe(false);
+    expect(adresMaddesiKapaliMi(TANIMLAR, '/baska', [])).toBe(false);
+  });
+});
 
 describe('bildirilen ikinci menüler', () => {
   it('her madde yolunun modül rotalarında karşılığı vardır', () => {

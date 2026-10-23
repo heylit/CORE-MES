@@ -6,6 +6,7 @@ import { AcilisGosterisi, AnaSayfa, BildirimSaglayici, DurumKutusu, HataSiniri, 
 import { anaSayfaKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts';
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
+import { IKINCI_MENU_TANIMLARI, adresMaddesiKapaliMi } from './ortak/rota/ikinci-menu.ts';
 import { KaliciEkranlar } from './ortak/rota/kalici.tsx';
 import { komutlar } from './ortak/rota/komutlar.ts';
 import { ustEylemler } from './ortak/rota/ust-eylemler.ts';
@@ -43,6 +44,25 @@ function EkranAlani({ children }: { children: ReactNode }) {
       <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>{children}</Suspense>
     </HataSiniri>
   );
+}
+
+// Menüde göremediği bölümü adresle açan kişi ekranı değil "yetkiniz yok" görür (195 a); menüdeki süzgeçle aynı kural.
+function AdresKorumasi({ islemler, children }: { islemler: readonly string[]; children: ReactNode }) {
+  const { pathname } = useLocation();
+  if (adresMaddesiKapaliMi(IKINCI_MENU_TANIMLARI, pathname, islemler)) {
+    return <Kart baslik="Yetkiniz yok"><DurumKutusu durum="bos" mesaj="Bu bölümü görme yetkiniz yok." /></Kart>;
+  }
+  return children;
+}
+
+// Rotası olmayan adres: kayıtlı ama kişinin göremediği sayfaysa (ör. /terminal yönlendirmesinin hedefi) yetki, değilse yokluk söylenir.
+function SayfaYok({ islemler }: { islemler: readonly string[] }) {
+  const { pathname } = useLocation();
+  const sayfa = SAYFALAR.find((s) => pathname === s.yol || pathname.startsWith(`${s.yol}/`));
+  if (sayfa !== undefined && !islemler.includes(sayfa.islem)) {
+    return <Kart baslik="Yetkiniz yok"><DurumKutusu durum="bos" mesaj="Bu sayfayı görme yetkiniz yok." /></Kart>;
+  }
+  return <Kart baslik="Sayfa bulunamadı"><DurumKutusu durum="bos" mesaj="Aradığınız sayfa yok ya da yetkiniz yok" /></Kart>;
 }
 
 function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar: readonly AnaSayfaKarti[] }) {
@@ -93,6 +113,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
         cikis={() => cikis.mutate(undefined, { onError: (hata) => bildir('hata', hataIletisi(hata, 'Çıkış yapılamadı')) })}
       >
         <EkranAlani>
+          <AdresKorumasi islemler={kullanici.islemler}>
           <Routes>
             <Route path="/" element={<AnaSayfa kartlar={kartlar} islemler={panoIslemleri} ad={kullanici.ad} />} />
             {plan.ekranlar.map((r) => (
@@ -101,11 +122,9 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
             {plan.yerTutucular.map((s) => (
               <Route key={s.yol} path={s.yol} element={<YapimAsamasinda baslik={s.baslik} />} />
             ))}
-            <Route
-              path="*"
-              element={<Kart baslik="Sayfa bulunamadı"><DurumKutusu durum="bos" mesaj="Aradığınız sayfa yok ya da yetkiniz yok" /></Kart>}
-            />
+            <Route path="*" element={<SayfaYok islemler={kullanici.islemler} />} />
           </Routes>
+          </AdresKorumasi>
         </EkranAlani>
         <KaliciEkranlar rotalar={plan.ekranlar.filter((r) => r.kalici === true)} />
       </Kabuk>

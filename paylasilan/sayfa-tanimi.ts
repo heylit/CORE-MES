@@ -49,6 +49,10 @@ export interface IkinciMenuMaddesi<S extends string = string, I extends string =
   // Bunlardan biri de yeter (uçtaki `yetki: { biri }` gibi): tek işlem birden çok rolün gördüğü maddeyi anlatamıyordu.
   // `islem` ayrı alan kalır ki onu okuyan kod listeyi bilmeden de maddeyi fazla göstermesin.
   veya?: readonly I[];
+  // Görünümün açılışta zorunlu çağırdığı okuma uçları (api yolu, uçtaki yazımıyla). Maddeyi gören her rol bunları geçebilmelidir:
+  // menüde görünüp verisi 403 veren sayfa olmasın (195 a). Yetkisizde boş kalan isteğe bağlı okuma buraya yazılmaz. Test
+  // sunucudadır (`sunucu/menu-okuma.test.ts`): rolleri göçlerden, uç yetkisini uç tanımından okur.
+  okur?: readonly `/${string}`[];
 }
 
 export const maddeGorunurMu = (madde: Pick<IkinciMenuMaddesi, 'islem' | 'veya'>, islemler: readonly string[]): boolean =>
@@ -144,6 +148,11 @@ export function ikinciMenuHatalari(tanim: IkinciMenuTanimi, baglam: IkinciMenuBa
       if (madde.baslik.trim() === '') hatalar.push(`madde başlığı boş: ${madde.yol}`);
       if (!simgeGecerli(madde.simge)) hatalar.push(`madde simgesi geçersiz: "${madde.simge}" (${madde.yol})`);
       if (madde.veya !== undefined && madde.veya.length === 0) hatalar.push(`madde veya listesi boş (gerekmiyorsa alan hiç yazılmaz): ${madde.yol}`);
+      if (madde.okur !== undefined) {
+        if (madde.okur.length === 0) hatalar.push(`madde okur listesi boş (gerekmiyorsa alan hiç yazılmaz): ${madde.yol}`);
+        if (new Set(madde.okur).size !== madde.okur.length) hatalar.push(`madde okur listesinde yinelenen uç var: ${madde.yol}`);
+        for (const uc of madde.okur) if (!MENU_YOLU.test(uc)) hatalar.push(`okunan uç yol biçiminde değil: ${uc} (${madde.yol})`);
+      }
       for (const islem of [madde.islem, ...(madde.veya ?? [])]) {
         if (!baglam.islemMi(islem)) hatalar.push(`madde işlemi kayıtlı değil: ${islem} (${madde.yol})`);
       }

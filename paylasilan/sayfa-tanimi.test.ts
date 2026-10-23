@@ -64,6 +64,13 @@ test('sade görünüm: tercih adı biçimli, en az bir madde, maddeler menüde o
   assert.match(hatalar({ ...GECERLI, sade: { tercih: 'Depocu Modu', maddeler: ['liste'] } }), /tercih adı biçime uymuyor/);
 });
 
+test('okur listesi: uç yolu biçiminde, yinelenmeden; liste boş yazılmaz', () => {
+  assert.equal(hatalar(maddeyle({ okur: ['/ornek/kutular', '/baska/secim'] })), '');
+  assert.match(hatalar(maddeyle({ okur: [] })), /madde okur listesi boş/);
+  assert.match(hatalar(maddeyle({ okur: ['/ornek/kutular', '/ornek/kutular'] })), /okur listesinde yinelenen uç var: \/ornek\/kutular/);
+  assert.match(hatalar(maddeyle({ okur: ['/ornek/:id'] })), /okunan uç yol biçiminde değil: \/ornek\/:id/);
+});
+
 test('madde görünürlüğü: işlemi ya da veya listesinden biri yeter; hiçbiri yoksa görünmez', () => {
   assert.equal(maddeGorunurMu({ islem: 'ornek.oku' }, ['ornek.oku']), true);
   assert.equal(maddeGorunurMu({ islem: 'ornek.oku' }, ['ornek.yaz']), false);
