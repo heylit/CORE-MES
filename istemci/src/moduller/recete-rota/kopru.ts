@@ -12,6 +12,7 @@ import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './k
 import type { DurumCevabi, KapasiteCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 
@@ -372,6 +373,14 @@ export function kopruKur(
       case 'highs-oku':
         if (secenek.highsVerilir?.() !== true) throw new Error('Geçersiz istek: HiGHS bu çerçevede açık değil.');
         return highsYukle();
+      // Süreler bölümü (169 c): revizyonun teorik süresi, plan için etkin süresi ve tür başına bekleyen ölçümü; makine verilirse o makinenin
+      // görünümü. Sahibi rota modülüdür; ekran adımı OP numarasıyla eşler.
+      case 'sure-oku': {
+        if (!tamSayi(v['revizyonId'])) throw new Error('Geçersiz revizyon.');
+        const makine = v['makineId'];
+        if (makine !== null && makine !== undefined && !tamSayi(makine)) throw new Error('Geçersiz makine.');
+        return api.get<SurelerCevabi>(`/rota/revizyonlar/${String(v['revizyonId'])}/sureler${tamSayi(makine) ? `?makineId=${String(makine)}` : ''}`);
+      }
       case 'fason-tahmin':
         return api.get<unknown>(`/recete-rota/fason-tahminleri?s=${fasonTahminSorgusu(v['sorgular'])}`);
       // Bağlı durum ve sürümler: sürümler durumdan ÖNCE okunur; arada biri yazarsa sürüm eski, durum yeni kalır ve güncelleme

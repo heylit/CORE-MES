@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { IkinciMenuMaddesi } from '#paylasilan/sayfa-tanimi.ts';
@@ -29,6 +30,35 @@ declare global {
     // Arkon'un index.html'i açılırken bunu çağırır (modül betiklerinden önce): veri bağlantısı Arkon başlamadan kurulur.
     __tmiArkonBagla?: (pencere: Window & typeof globalThis) => void;
   }
+}
+
+type ArkonPenceresi = Window & typeof globalThis;
+interface KopruKaydi { readonly cerceve: RefObject<HTMLIFrameElement | null>; readonly bagla: (pencere: ArkonPenceresi) => void }
+// Aynı anda birden çok Arkon çerçevesi yaşar: kalıcı Üretim Terminali gizlenir ama kalkmaz; Kuyruk, Arkon MES ve Sistem Ayarları da
+// kendi çerçevesini kurar. Köprü tek genel addır; çağrı, çağıran pencerenin çerçevesinin köprüsüne gider. Bir çerçeve kalkınca
+// ötekilerin köprüsü silinmez: silinseydi yeniden yüklenen terminal köprüsüz açılır, Arkon kendi şeridiyle ve TMI bağlantısı olmadan çalışırdı.
+const kopruler: KopruKaydi[] = [];
+
+export function kopruSec(pencere: Window, ust: Window = window): KopruKaydi | null {
+  try {
+    // Önizleme Arkon'un içindeki ikinci çerçevededir: üst pencerelere çıkılarak TMI'deki çerçeve bulunur.
+    for (let w: Window | null | undefined = pencere; w && w !== ust; w = w.parent === w ? null : w.parent) {
+      const cerceve = w.frameElement;
+      const kayit = cerceve ? kopruler.find((k) => k.cerceve.current === cerceve) : undefined;
+      if (kayit) return kayit;
+    }
+  } catch { /* başka kökene çıkılamaz; son kurulan çerçeveye düşülür */ }
+  return kopruler.at(-1) ?? null;
+}
+
+export function kopruKaydet(kayit: KopruKaydi, ust: Window = window): () => void {
+  kopruler.push(kayit);
+  ust.__tmiArkonBagla = (pencere) => { kopruSec(pencere, ust)?.bagla(pencere); };
+  return () => {
+    const sira = kopruler.indexOf(kayit);
+    if (sira >= 0) kopruler.splice(sira, 1);
+    if (kopruler.length === 0) delete ust.__tmiArkonBagla;
+  };
 }
 
 const hashSayfasi = (hash: string): string => decodeURIComponent(hash.replace(/^#/, ''));
@@ -122,7 +152,7 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
         tema: temaRef.current,
       });
     } catch { /* depolama kapalıysa Arkon kendi girişini gösterir */ }
-    window.__tmiArkonBagla = (pencere) => {
+    const kopruyuKaldir = kopruKaydet({ cerceve, bagla: (pencere) => {
       // Çerçeve kendi içinde yeniden yüklenince eski sayfanın olay akışı sahipsiz kalır.
       baglantiyiKapat.current();
       const benVerisi = benRef.current;
@@ -134,10 +164,10 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
         uyari: (ileti) => bildirRef.current('bilgi', `TMI CORE: ${ileti}`),
         git: (yol) => { void gezinRef.current(yol); },
       });
-    };
+    } });
     ilkAdresYaz((a) => a ?? `${ARKON_ADRESI}#${encodeURIComponent(sayfaRef.current)}`);
     hazirYaz(true);
-    return () => { delete window.__tmiArkonBagla; };
+    return kopruyuKaldir;
   }, [kisi]);
 
   // Başka sayfaya geçince ve çıkışta çerçeve kalkar; olay akışı TMI penceresinde döndüğünden burada kapatılmazsa her ziyaret bir döngü daha ekler.

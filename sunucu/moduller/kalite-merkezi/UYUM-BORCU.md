@@ -24,9 +24,15 @@
   durumunu hâlâ kendi `dev` kaydının son kalibrasyon tarihinden gösterir ve ölçüm cihazını kendi listesinden önerir; ikisi ayrıştığında
   ekranın "geçerli" dediği cihazla ölçüm sunucuda reddedilir. Ekranın durumu kalibrasyondan köprüyle alması bağlamada. Mevcut cihazlar
   kalibrasyona bir kez girilmelidir (kullanıcıya soruda söylendi).
+  KAPANDI (bağlama B17, 23.10.2026): cihaz listesi 329 a'dan beri Kalibrasyondan gelir ve ekran durumu Kalibrasyon kuralıyla hesaplıyordu,
+  ama günü tarayıcı saatinden alıyordu. Artık sunucu her cihaza Kalibrasyonun veritabanı gününe göre hesapladığı durumu, vadeyi ve kalan
+  günü koyar (`kurallar.ts` `olcuAletiGovdesi`: `kalibrasyonDurumu`, `kalibrasyonVadesi`, `kalibrasyonKalanGun`); ekranın `devStatus`'u
+  onu gösterir (`sayfa.ts` `CIHAZ_DURUMU_KURALLI`), ölçüm denetimi de aynı durumla karar verir. Eşi olmayan eski kayıtta alan yoktur, kural
+  yerelde koşar ve "Kayıt yok" der. Kalan: liste 15 sn'de bir yoklanır; gün dönümünde durum en çok bir yoklama gecikir.
 - Kayıt geçmişi ve kilit (258 a, 19.10.2026): geçmiş `kalite_merkezi_belge_gecmisi` tablosunda, ekranı yok (okuma ucu istenirse ayrı iş).
   Sunucu kapalı NCR'yi ve Kabul/Ret sonuçlu muayeneyi kilitler; uygulamanın "kalite mühendisi kilidi açar" yolu artık sunucuda 409 alır; ekran kapanmış NCR ve sonuçlanmış muayenede kilit açmayı göstermez, düzeltmenin yeni kayıtla yapılacağını söyler (`acilis.ts` `KILIT_BETIGI`).
-  Uygulamanın DÖF, lot ve form kilidi yalnız ekrandadır (form onayı sunucuda ayrıca kilitli). Ekran metni bağlamada.
+  KAPANDI (bağlama B16, 23.10.2026): kapanmış DÖF ve kararı verilmiş lot kabul kaydı da sunucuda aynı kilittedir (`kurallar.ts` `kapanmisKayitMi`; ekranın `KILIT_BETIGI` karşılığı ikinci yamada); form onayı sunucuda ayrıca kilitli.
+  Kalan: DÖF kapanış koşulları (8D adımı 8, etkinlik "Etkin", kök neden dolu) yalnız ekrandadır; sunucuya alınması ayrı madde.
 - Ortak kavramlar uygulamanın kendi kopyasında (ORTAKLIK): ölçüm cihazı (kalibrasyon), tedarikçi (finans firma), parça (malzemeler),
   iş emri (uretim-emirleri), kullanıcı (kisiler), belge (dosya), resim (cizim, #80), kalite ölçümü (#78, Arkon kalite ekranı).
 - Ana menü ve ikinci menü: uygulamanın geniş ekrandaki sol menüsü gizli, ikinci menü kabukta. Kapandı (kullanıcı kararı 17.10.2026):

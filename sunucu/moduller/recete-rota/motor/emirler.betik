@@ -1,0 +1,118 @@
+/* ---------- Sunucu çözücüsünün girdisi (ADR 0018 karar 3 ve 5) ----------
+   Asıl plana yazan komutta plan modülü işleri kendi kimlikleriyle verir (anahtar "emir no|OP no", makine kimliği, gerçek an). Bu dosya
+   onları motorun diline çevirir; girdi.betik ve durum.betik ile aynı bağlamda yüklenir (plan-girdisi.ts), sayfa nesnesi kullanmaz.
+   Reçete ve Rota çerçevesi sunucunun emir, malzeme ve rotasını kayda yazmaz (kayıtta bağlanmadan önceki yerel emirler kalır, kart #1185);
+   sunucu bu yüzden kaynak okumasındaki güncel dilimleri kaydın üstüne koyar (çerçevenin baglaUygula'sının ekransız karşılığı). */
+
+/* Tezgâh ve ürünün motor ayarları (plan alt nesnesi) önce açık çalışmadan (planlama sayfasının düzenlediği), yoksa kayıttan alınır. */
+function sunucuKaydi(kayit, durum, D0, bugun) {
+  const k = rrKopya(kayit && kayit.items ? kayit : TMI_BOS_KAYIT);
+  const d = durum || {};
+  const urun0 = id => ((D0 && D0.urunler) || []).find(u => String(u.id) === id) || null;
+  const maliyet = id => { const g = d.maliyet && d.maliyet.malzeme && d.maliyet.malzeme[id]; return g && g.paraBirimi === 'TRY' ? Number(g.birimMaliyet) : null; };
+  if (Array.isArray(d.items)) {
+    const eski = new Map((k.items || []).map(x => [String(x.id), x]));
+    k.items = d.items.map(s => {
+      const o = eski.get(s.id) || {};
+      const plan = urun0(s.id) || o.plan;
+      return Object.assign({}, o, { id: s.id, code: s.code, name: s.name, type: s.type, unit: s.unit || '', cost: maliyet(s.id), stock: s.stock == null ? 0 : s.stock }, plan ? { plan } : {});
+    });
+  }
+  if (Array.isArray(d.opdefs)) k.opdefs = d.opdefs.map(s => ({ id: s.id, code: s.code, name: s.name }));
+  if (d.routes && Array.isArray(d.routeRevs)) {
+    k.routes = Object.assign({}, k.routes || {});
+    const eskiAdim = (id, s) => ((((kayit && kayit.routes) || {})[id] || {}).steps || []).find(x => x.id === s.id) || null;
+    for (const id of new Set(d.routeRevs.map(r => r.itemId))) {
+      const r = d.routes[id]; if (!r) { delete k.routes[id]; continue; }
+      const u = urun0(id);
+      const steps = (r.steps || []).slice().sort((p, q) => p.seq - q.seq).map(s => {
+        /* çerçevenin süre kuralı (sureNormalle): çevrim işlem + değişim; işlem yoksa birim süre */
+        const sayi = v => typeof v === 'number' && isFinite(v) && v >= 0 ? v : null;
+        const proc = s.proc === undefined ? (sayi(s.cycle) || 0) : sayi(s.proc), chg = s.proc === undefined ? null : sayi(s.chg);
+        const plan = (u && (u.rota || []).find((x, j) => rrSeq(x, j) === s.seq)) || (eskiAdim(id, s) || {}).plan;
+        return Object.assign({}, s, { proc, chg, cycle: (proc || 0) + (chg || 0), depQty: s.depQty > 0 ? s.depQty : 1, minLot: s.minLot || 0, alts: (s.alts || []).slice(), altTimes: Object.assign({}, s.altTimes || {}), ins: (s.ins || []).map(x => ({ itemId: x.itemId, qty: x.qty })) }, plan ? { plan } : {});
+      });
+      k.routes[id] = { base: (k.routes[id] && k.routes[id].base) || 1, steps };
+    }
+  }
+  const e = d.emirler;
+  if (e && Array.isArray(e.orders)) {
+    /* tarihsiz emir çerçevedeki gibi (uyumlaEmirler) bugünden başlar ve bugüne biter */
+    k.orders = e.orders.map(x => ({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || x.start || bugun, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }));
+  }
+  return k;
+}
+
+/* Kaydın planlama alanları (P) açık çalışmanındır: başlangıç, takvim ve ayarlar sayfada değişir. Dağılan diziler kayıttan kurulur. */
+function sunucuPlani(D0) {
+  const P = {};
+  for (const x of Object.keys(D0 || {})) if (!RR_DAGILAN.includes(x)) P[x] = rrKopya(D0[x]);
+  return P;
+}
+
+/* Dönen: { S, st, baslangic, yerlesmeyen, kimlik } ya da çalışma yoksa null. istek: plan modülünün PlanMotoruIstegi'si, anlar ISO metin.
+   - Yalnız istekte geçen emirler plana girer; havuzdaki (taslak) emir de, istekte geçiyorsa.
+   - Vardiyası tanımsız tezgâhtaki kuyruk işi vardiyasiz'dadır, dizilmez (168 b).
+   - Kuyruktaki işler taban plana tezgâh sırasıyla girer; sıra anahtarı dondurma sınırının ötesindedir (dondurulmaz, sabit kipte dizilir).
+   - Sabit iş gerçek saatiyle bağlanır; motorda karşılığı yoksa tezgâhı o aralıkta kapalı sayılır (başka iş üstüne yerleşmez).
+   - Çalışan adım çerçevedeki gibi sunucunun kalanıyla (calisanBirlestir).
+   - Emrin istekte geçmeyen adımı (bitmiş, fason ya da kişi kaynaklı) şimdi bitmiş sayılır: ardılını bekletmez.
+   Açık çalışmanın denemeye ait parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez; arıza, fazla mesai ve kısıt gevşetmeleri
+   (S.kapali: atölyenin planlama modeli, örneğin ayarcı tutulmuyorsa ayarcı kısıtı kapalı) girer. */
+function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
+  if (!calisma || !calisma.D) return null;
+  const S0 = clone(calisma);
+  tmiTabanKur(S0.D, bugun);
+  baslangicTazele(S0, Date.parse(istek.simdi));
+  Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
+  const nolar = new Set();
+  for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
+  const durum = kaynak && kaynak.durum ? kaynak.durum : {};
+  const k = sunucuKaydi(kayit, durum, S0.D, bugun);
+  k.plan = sunucuPlani(S0.D);
+  k.orders = (k.orders || []).filter(o => nolar.has(o.no)).map(o => o.status === 'taslak' ? Object.assign({}, o, { status: 'serbest' }) : o);
+  k.savedAt = 0;
+  S0.simdi = tmiSaat(S0.D, istek.simdi);
+  /* çalışan adım plan modülünün verdiğidir; sağlam ve adım adedi kaynak okumasından */
+  const okunan = new Map((Array.isArray(durum.calisanAdimlar) ? durum.calisanAdimlar : []).map(c => [c.anahtar, c]));
+  const calisanlar = istek.calisanlar.filter(c => c.makineId != null).map(c => {
+    const o = okunan.get(c.anahtar) || {};
+    return { anahtar: c.anahtar, makineId: String(c.makineId), baslangic: c.baslangic, sayimAni: c.sayimAni, kalanVerimliDk: c.kalanVerimliDk, saglam: o.saglam, adet: o.adet };
+  });
+  const g = girdiKur(S0, k, { durum: Object.assign({}, durum, { calisanAdimlar: calisanlar }), ek: kaynak ? kaynak.ek : null }, bugun);
+  if (!g) return null;
+  const st = g.st, D = g.S.D;
+  st.now = Math.max(st.now, tmiSaat(D, istek.simdi));
+  const cx = compile(st);
+  const opOf = tmiIslemler(k, D);
+  const kimlik = {};
+  for (const [a, id] of Object.entries(opOf)) kimlik[id] = a;
+  const yerlesmeyen = [];
+  const ops = {};
+  const frz = st.now + (st.w.dondurma || 0);
+  const sira = new Set();
+  /* 168 b: vardiyası tanımsız tezgâhın işi yerleşmez ama komutu durdurmaz; plan uyarıyla boş bırakır */
+  const vardiyasiz = [];
+  const takvimsiz = m => { const M = cx.M[String(m)]; return !!M && M.rw.length === 0; };
+  istek.kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
+    const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
+    if (takvimsiz(q.makineId)) { vardiyasiz.push(a); return; }
+    const S = frz + 1 + i * 1e-3 + mi * 1e-7;
+    ops[id] = { id, job: cx.byId[id].job, m: String(q.makineId), S, C: S + 1e-7 };
+    sira.add(id);
+  }));
+  const calisan = new Set(Object.keys(st.gercek || {}));
+  for (const x of istek.sabitler) {
+    const id = opOf[x.anahtar], m = String(x.makineId), S = tmiSaat(D, x.baslangic), C = tmiSaat(D, x.bitis);
+    if (S == null || C == null || !cx.M[m]) continue;
+    if (id && cx.byId[id] && !sira.has(id) && !calisan.has(id)) st.gercek[id] = { m, S, C };
+    else st.down.push({ id: 'sabit-' + st.down.length, m, from: S, to: C, neden: 'sabit' });
+  }
+  /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür */
+  for (const o of cx.ops) {
+    if (sira.has(o.id) || st.gercek[o.id] || !o.c.length) continue;
+    const c = o.c.find(x => !x.fas) || o.c[0];
+    ops[o.id] = { id: o.id, job: o.job, m: c.m, S: st.now, Su: st.now, C: st.now, lot1: st.now, su: 0, run: 0, fas: c.fas ? 1 : undefined };
+  }
+  return { st, baslangic: D.meta.baslangic, taban: { ops }, yerlesmeyen, vardiyasiz, kimlik, sira: [...sira] };
+}

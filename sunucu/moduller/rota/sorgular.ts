@@ -105,6 +105,10 @@ export async function harfler(db: Db, malzemeId: number): Promise<string[]> {
   return (await db.sorgu<{ harf: string }>('SELECT harf FROM rota_revizyonu WHERE malzeme_id = $1', [malzemeId])).map((s) => s.harf);
 }
 
+export function acikRevizyon(db: Db, malzemeId: number): Promise<{ id: number; durum: RevizyonDurumu } | null> {
+  return db.tek("SELECT id, durum FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')", [malzemeId]);
+}
+
 export async function acikRevizyonVarMi(db: Db, malzemeId: number): Promise<boolean> {
   return (await db.tek<{ var: boolean }>(
     "SELECT EXISTS (SELECT 1 FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')) AS var",
@@ -408,6 +412,15 @@ export async function kaydetYaz(db: Db, id: number, aciklama: string | null, kis
   return surumArtir(db, id, 'aciklama = $2', [aciklama]);
 }
 
+// Taslağı içerik dışında değiştirmeden düzenleyen olarak işaretler ve sürümü artırır (ölçüm kabulü, 169 c).
+export async function duzenlemeYaz(db: Db, id: number, kisiId: number): Promise<number> {
+  await db.sorgu(
+    `INSERT INTO rota_revizyonu_duzenleyen (revizyon_id, kisi_id) VALUES ($1, $2) ON CONFLICT (revizyon_id, kisi_id) DO NOTHING`,
+    [id, kisiId],
+  );
+  return surumArtir(db, id, '', []);
+}
+
 async function surumArtir(db: Db, id: number, ek: string, degerler: readonly unknown[]): Promise<number> {
   const satir = await db.tek<{ surum: number }>(
     `UPDATE rota_revizyonu SET surum = surum + 1${ek ? `, ${ek}` : ''} WHERE id = $1 RETURNING surum`,
@@ -515,13 +528,14 @@ export interface GerceklesenKaydi {
   makineId: number | null;
   sureDk: string | null;
   kaynak: GerceklesenKaynagi;
+  isEmriId: number | null;
   kisiId: number;
   zaman: string;
 }
 
 export function gerceklesenSureler(db: Db, malzemeId: number, opNolari: readonly number[]): Promise<GerceklesenKaydi[]> {
   return db.sorgu<GerceklesenKaydi>(
-    `SELECT id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+    `SELECT id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
        FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND op_no = ANY($2::int[]) ORDER BY op_no, tur, id`,
     [malzemeId, opNolari],
   );
@@ -529,7 +543,7 @@ export function gerceklesenSureler(db: Db, malzemeId: number, opNolari: readonly
 
 export function urunlerinGerceklesenSureleri(db: Db, malzemeIdleri: readonly number[]): Promise<(GerceklesenKaydi & { malzemeId: number })[]> {
   return db.sorgu(
-    `SELECT malzeme_id AS "malzemeId", id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+    `SELECT malzeme_id AS "malzemeId", id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
        FROM rota_gerceklesen_sure WHERE malzeme_id = ANY($1::int[]) ORDER BY malzeme_id, op_no, tur, id`,
     [malzemeIdleri],
   );
@@ -545,12 +559,33 @@ export async function sonGerceklesenId(db: Db, g: { malzemeId: number; opNo: num
 }
 
 export async function gerceklesenEkle(db: Db, g: {
-  malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; sureDk: number | null; kisiId: number;
+  malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; sureDk: number | string | null; kisiId: number;
+  kaynak?: GerceklesenKaynagi; isEmriId?: number | null;
 }): Promise<void> {
   await db.sorgu(
-    `INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, tur, makine_id, sure_dk, kaynak, kisi_id) VALUES ($1, $2, $3, $4, $5, 'elle', $6)`,
-    [g.malzemeId, g.opNo, g.tur, g.makineId, g.sureDk, g.kisiId],
+    `INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, tur, makine_id, sure_dk, kaynak, is_emri_id, kisi_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [g.malzemeId, g.opNo, g.tur, g.makineId, g.sureDk, g.kaynak ?? 'elle', g.isEmriId ?? null, g.kisiId],
   );
+}
+
+export interface GerceklesenSatirKaydi { id: number; malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; sureDk: string | null; kaynak: GerceklesenKaynagi; isEmriId: number | null }
+
+export function gerceklesenSatiri(db: Db, id: number): Promise<GerceklesenSatirKaydi | null> {
+  return db.tek(
+    `SELECT id, malzeme_id AS "malzemeId", op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId"
+       FROM rota_gerceklesen_sure WHERE id = $1`,
+    [id],
+  );
+}
+
+// Terminal ölçümü yazılmış iş emirleri: aynı iş emri ikinci kez öneri yazmaz.
+export async function olculmusIsEmirleri(db: Db, isEmriIdleri: readonly number[]): Promise<Set<number>> {
+  if (isEmriIdleri.length === 0) return new Set();
+  const satirlar = await db.sorgu<{ isEmriId: number }>(
+    `SELECT DISTINCT is_emri_id AS "isEmriId" FROM rota_gerceklesen_sure WHERE kaynak = 'terminal' AND is_emri_id = ANY($1::int[])`,
+    [isEmriIdleri],
+  );
+  return new Set(satirlar.map((x) => x.isEmriId));
 }
 
 export function adimGirenSayilari(db: Db, revizyonIdleri: readonly number[]): Promise<{ revizyonId: number; opNo: number; bagimlilik: Bagimlilik; girenSayisi: number }[]> {

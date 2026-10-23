@@ -101,6 +101,58 @@ export function hazirlikOlaylari(onceki: unknown, yeni: unknown): HazirlikOlayi[
   return olaylar;
 }
 
+// Hazırlık sırası: prototip son onayı bütün adımlar onaylanmadan vermez (`prConfirm`). Son onayın imzası adım imzalarının
+// sırayla birleşimidir (`prAllSig`): tezgâh, program, bağlama, çene, malzeme, sıfırlama, takımlar, soğutma, ölçüm, sarf ve
+// parti adedi; her adımın onayı da o adımın imzasıdır. Takım adımlarını program belirler, sunucu programı okumaz: takım
+// kesimi magazin onayına ya da takım onaylarının (T<n>) bir dizilişine eşit olmalıdır. Program, ham ölçü ve takım uygunluğu
+// denetimleri (`prChecks`) ekranda kalır.
+const SIRA_ONCE = ['machine', 'prog', 'fixture', 'jaw', 'material', 'zero'] as const;
+const SIRA_SONRA = ['cool', 'gauges', 'cons'] as const;
+const TAKIM_ADIMI = /^T\d+$/;
+// Takım imzaları takım numarasını taşır, dizilişi tek anlamlıdır; sınır yalnız bozuk gövdeye karşıdır.
+const AZAMI_DENEME = 10_000;
+
+function takimDizilisiMi(kesim: string, imzalar: readonly string[]): boolean {
+  let deneme = 0;
+  const dene = (konum: number, kullanilan: ReadonlySet<number>): boolean => {
+    for (const [i, imza] of imzalar.entries()) {
+      if (kullanilan.has(i) || imza === '' || !kesim.startsWith(imza, konum)) continue;
+      deneme += 1;
+      if (deneme > AZAMI_DENEME) return false;
+      const son = konum + imza.length;
+      if (son === kesim.length) return true;
+      if (kesim[son] === '#' && dene(son + 1, new Set([...kullanilan, i]))) return true;
+    }
+    return false;
+  };
+  return dene(0, new Set());
+}
+
+export function sonOnayAdimlariTamamMi(durum: unknown): boolean {
+  const h = hazirlikOf(durum);
+  const imza = nesneMi(h['fin']) ? h['fin']['sig'] : undefined;
+  const done = nesneMi(h['done']) ? h['done'] : {};
+  if (typeof imza !== 'string') return false;
+  const onay = (adim: string): string | null => (typeof done[adim] === 'string' && done[adim] !== '' ? done[adim] : null);
+  const once = SIRA_ONCE.map(onay), sonra = SIRA_SONRA.map(onay);
+  if (once.includes(null) || sonra.includes(null)) return false;
+  const adet = imza.lastIndexOf('#');
+  if (adet < 0 || adet === imza.length - 1) return false;
+  const govde = imza.slice(0, adet), bas = `${once.join('#')}#`, kuyruk = `#${sonra.join('#')}`;
+  if (govde.length < bas.length + kuyruk.length || !govde.startsWith(bas) || !govde.endsWith(kuyruk)) return false;
+  const takimlar = govde.slice(bas.length, govde.length - kuyruk.length);
+  const magazin = onay('mag');
+  if (magazin !== null && takimlar === magazin) return true;
+  const takimImzalari = Object.keys(done).filter((a) => TAKIM_ADIMI.test(a)).map(onay).filter((i): i is string => i !== null);
+  return takimDizilisiMi(takimlar, takimImzalari);
+}
+
+// Kural yalnız yeni verilen ya da imzası değişen son onaya uygulanır: kayıtlı son onay ve onayın geri alınması geçer.
+export function sonOnaySiraDisiMi(onceki: unknown, yeni: unknown): boolean {
+  const yeniSon = sonImza(hazirlikOf(yeni));
+  return yeniSon !== null && yeniSon !== sonImza(hazirlikOf(onceki)) && !sonOnayAdimlariTamamMi(yeni);
+}
+
 // Üretim emri başına tutulan alanlar (kullanıcı kararı 17.10.2026, "Seçimler emre"): seçimler, parça bilgisi ve hazırlık
 // onayları. Tezgâh ve malzeme tanımları, kütüphane, stok ve takım ömrü atölyede ortaktır, emirle değişmez.
 export const EMIR_ALANLARI = ['machine', 'material', 'coolant', 'byType', 'wcs', 'tools', 'gauges', 'cons', 'meta', 'prep'] as const;
@@ -234,6 +286,23 @@ export function asinmaBindir(durum: unknown, sayaclar: readonly { cep: number; t
   }
   asinma[tezgah] = kayitlar;
   return { ...durum, wear: asinma };
+}
+
+// Takım stoğu (153 a, 163 b): stok kartına bağlı kalemin adedi okurken stoğun kullanılabilir miktarıdır; kalemin kritik seviyesi
+// ve yeri prototipte kalır, örnek işareti düşer. Stoğu hiç olmayan kart için adet null'dır (prototip "stok girilmemiş" der, sıfır
+// uydurulmaz). `tmiStok` köprüye kalemin bağlı olduğunu söyler.
+export interface StokKalemi { kimlik: string; malzemeId: number; kod: string; ad: string | null; miktar: string | null }
+export function stokBindir(durum: unknown, kalemler: readonly StokKalemi[]): unknown {
+  if (!nesneMi(durum) || kalemler.length === 0) return durum;
+  const envanter: Nesne = nesneMi(durum['inv']) ? { ...durum['inv'] } : {};
+  for (const k of kalemler) {
+    const kayitli = envanter[k.kimlik];
+    const onceki: Nesne = nesneMi(kayitli) ? { ...kayitli } : { min: 0, loc: '' };
+    delete onceki['demo'];
+    const miktar = k.miktar === null ? null : Number(k.miktar);
+    envanter[k.kimlik] = { ...onceki, qty: miktar !== null && Number.isFinite(miktar) ? miktar : null, tmiStok: { malzemeId: k.malzemeId, kod: k.kod, ad: k.ad } };
+  }
+  return { ...durum, inv: envanter };
 }
 
 // 311 a: elle üretim kaydı (`wearLog`a yeni satır) üretim emrine gitmez; adet yalnız Üretim Terminali'nden girilir. Satır

@@ -20,8 +20,8 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 ## Oturtmada eklenen (kart #742)
 | Kural / konu | İstisna | Nasıl uyumlanır |
 |---|---|---|
-| Genel depo ucu yok (proje kuralı 7) | `/denetim-hazirlik/belge/yaz` ve `/sorgu` her koleksiyona yazar, okur. | Aşama 2: koleksiyon başına adı belli uç ve işlem. |
-| Onaylı kayıt değişmez | Kesinleşmiş denetim ve DÖF kaydı sunucuda kilitli değil. | Aşama 2: kayıt tablosunda durum ve sunucu kuralı. |
+| KAPANDI (B7, 23.10.2026): Genel depo ucu yok (proje kuralı 7) | Uç yalnız prototipin önekli yerel depo anahtarına (`yerel/kalite-denetim*`, kişisel kökte de) yazar, siler, kilitler ve okur; öteki yol 403 (KURAL-TEST BD-15). Prototip başka koleksiyon kullanmaz; tek koleksiyon için ayrı uç açılmadı (VARSAYIM, geri alma ucuz). | Kayıt tablolara ayrıştırılınca kayıt başına uç ve işlem. |
+| Onaylı kayıt değişmez (B7, Soru 162 a, 23.10.2026: şimdilik kilit yok) | Prototipte kesinleşme durumu yok: denetim `plan` ya da `done`; tamamlanmış denetimde "Sonucu düzenle" ve "Sil" prototipin akışıdır. Bütün durum tek belgede yazıldığı için sunucu reddi aynı yazmadaki ilgisiz değişiklikleri de düşürür; kilit konmadı. DÖF kilidi kalite-merkezi'nindir (Soru 155 a, B16/T4). | Kayıt tablolara ayrıştırılınca kayıt başına durum ve sunucu kuralı. |
 | Ad yakınlığı | Depodaki `denetim` modülü (istek defteri `denetim_kaydi`) başka kavramdır; bu modülün adı, tablo öneki (`denetim_hazirlik_`), işlemleri ve yolu ayrıdır. | Gerekmez; ikisi birleşmez. |
 
 ## Ölçü aletleri tek kaynak: Kalibrasyon (kart 329 a, kullanıcı onayı 20.10.2026)

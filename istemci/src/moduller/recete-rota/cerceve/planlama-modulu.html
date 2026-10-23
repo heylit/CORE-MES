@@ -2989,7 +2989,18 @@ span[data-ton="hata"] { color: var(--stop); }
 .pm-pa-nokta { display: inline-block; inline-size: var(--b-2); block-size: var(--b-2); border-radius: var(--yari-tam); background: var(--hold); }
 /* çubukta dört ekran: dar ve orta genişlikte yalnız açık ekranın adı yazılır, öbürleri simgeyle kalır */
 @media (max-width: 1399px) { .tc-kabuk-ust .pm-sb-ekran button:not([aria-current]) > span { display: none; } .tc-kabuk-ust .pm-sb-ekran button { padding: 0 var(--b-2); } }
-@media (max-width: 599px) { .tc-kabuk-ust .pm-sb-ekran button > span { display: none; } .tc-kabuk-ust .pm-sb-nb-k span { display: none; } .pm-sb-ekran button .pm-pa-say { margin-left: -2px; } }
+/* dar ekranda nabzın sayısı adıyla kalır ("0 geç"); yalnız sayı anlamını kaybeder */
+@media (max-width: 599px) { .tc-kabuk-ust .pm-sb-ekran button > span { display: none; } .tc-kabuk-ust .pm-sb-nb-k span { font-size: var(--yazi-xs); } .pm-sb-ekran button .pm-pa-say { margin-left: -2px; } }
+/* bildirimin eylem düğmesi metnin altına iner: yanında durunca metin dar sütunda kelime kelime kırılıyordu */
+.tc-bildirim { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--b-2); row-gap: var(--b-1); }
+.tc-bildirim > .tc-dugme { grid-column: 2; grid-row: 2; justify-self: start; }
+.tc-bildirim > .tc-bildirim-kapat { grid-column: 3; grid-row: 1; }
+/* telefonda bildirim tek kısa şerittir: yalnız sonuncusu görünür */
+@media (max-width: 767px) {
+  .tc-bildirimler > .tc-bildirim:not(:last-child) { display: none; }
+  .tc-bildirim { padding-block: var(--b-1); }
+  .tc-bildirim-mesaj { font-size: var(--yazi-s); }
+}
 
 /* Sade sayfa: Özet, Veri gir, Tüm ayrıntılar */
 .pm-sd { display: grid; gap: var(--b-4); min-width: 0; }
@@ -4026,16 +4037,19 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
 /* ---- derleme: takvim, havuz, işlemler ---- */
 function compile(st){
   const D=st.D,A=D.ayarlar;
-  const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit)}]));
+  const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit),mol:(v.molalar||[]).map(x=>[hm(x.bas),hm(x.bit)])}]));
   const tatil=new Set((D.tatiller||[]).map(s=>Math.floor(parseT(D,s)/24)));
   const days=[];for(let d=0;d<HDAYS;d++){const wd=wdOf(D,d);days.push({wd,tatil:tatil.has(d),vard:tatil.has(d)?[]:(D.calismaGunleri[wd]||[])});}
   const inst=(d,sid)=>{const v=vs[sid];if(!v)return null;const a=d*24+v.bas;let b=d*24+v.bit;if(b<=a)b+=24;return [a,b];};
+  /* 168 b: vardiyanın molaları; gece vardiyasında vardiya başından önceki saat ertesi güne düşer. Mola yalnız kendi vardiyasından düşülür:
+     aynı saatte açık başka vardiya tezgâhı çalıştırır. Işıksız tezgâh molada da işler (rw). */
+  const molalar=(d,sid)=>{const v=vs[sid];if(!v||!v.mol.length)return [];return v.mol.map(([x,y])=>{let a=d*24+x;if(a<d*24+v.bas)a+=24;let b=d*24+y;if(b<=a)b+=24;return [a,b];});};
   const ek=st.ekMesai||[];
   const M={};
   for(const m of D.tezgahlar){
     const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
-    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(w);}
-    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(w);}
+    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(days[d].vard.length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
@@ -4067,10 +4081,13 @@ function compile(st){
   // işlemler
   const ops=[],jobs={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
+  const bitti=st.bitti||{};
   for(const j of D.siparisler){const u=urun[j.urun];if(!u)continue;
     const due=parseT(D,j.termin),rel=parseT(D,j.serbest);
     jobs[j.id]={...j,due,rel,ops:[]};
     for(const o of u.rota){const id=j.id+'.'+o.k,x=(st.sapma&&st.sapma[id])||1;
+      /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
+      if(bitti[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
       const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
@@ -4080,8 +4097,9 @@ function compile(st){
         c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
-      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x};
+      const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
+      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
+        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length};
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
@@ -4169,7 +4187,7 @@ function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
   let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
   if(j.rel!=null&&j.rel>s){s=j.rel;why={t:'serbest'};}
-  if(!o.pr.length){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
+  if(!o.pr.length&&!o.matYok){const mr=cx.mat.res[o.job];if(st.w.mat==='sert'&&mr&&mr.ready>s){s=mr.ready;why={t:'malzeme'};}}
   if(!o.program&&cx.progRel>s){s=cx.progRel;why={t:'program'};}
   const tas=+A.tasimaSaat||0;
   for(const [pid,ty] of o.pr){const p=P[pid];if(!p)return null;
@@ -4360,7 +4378,7 @@ function evaluate(plan,st,ref,fast){
       if(r.fas){if(r.cost==null)miss.push('fason fiyatı');else fc+=r.cost;if(r.m==='@'+A.fasonTalas)fas++;}
       else{const M=cx.M[r.m];if(M.ucret==null)miss.push(r.m+' saat ücreti');else{mc+=r.run*(1-(M.pay||0))*M.ucret;sc+=r.su*(M.ucret+(+A.ayarciUcret||0));}}
       suH+=r.su;if(r.su>0&&!r.done)suN++;if(r.famHit)famN++;
-      if(!fast&&!o.pr.length&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
+      if(!fast&&!o.pr.length&&!o.matYok&&!r.pin){const mr=cx.mat.res[jid];if(mr&&r.S<mr.ready-1e-9)warn.push({t:'malzeme',j:jid,txt:isFinite(mr.ready)?`${jid}: malzeme ${fmtDT(cx.D,mr.ready)} geliyor, iş ${fmtDT(cx.D,r.S)} başlıyor`:`${jid}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D,r.S)} başlıyor`});}
       if(!fast&&!o.program&&!r.pin&&r.S<cx.progRel)warn.push({t:'program',j:jid,txt:`${o.id}: NC program hazır değil`});}
     const comp=nIn===nOps;if(!comp)C=Infinity;
     const due=j.due;const T=due==null||!isFinite(C)?(isFinite(C)?0:null):Math.max(0,C-due);const E=due==null||!isFinite(C)?0:Math.min(120,Math.max(0,due-C));
@@ -4397,6 +4415,7 @@ function evaluate(plan,st,ref,fast){
   // tampon ihlali gecikme riskinin ölçüsüdür, gecikmenin hemen ardından gelir
   const tl=cost+(mesaiTL||0);const lex=[wT,wB,chg,suH,tl];Z=-wT;
   for(const r of Object.values(plan.ops))if(r.kilit&&r.downHit)warn.push({t:'kilit',j:r.job,txt:`${r.id}: kilitli saatte tezgâhta arıza ya da bakım var; iş ${fmtDT(cx.D,r.S)} kilidinde başlıyor, arıza süresince duruyor`});
+  if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
@@ -4909,7 +4928,9 @@ function rrCevir(st) {
     if (!a || a.id !== o.id) y.id = o.id;
     if (!a || a.urun !== o.itemId) y.urun = o.itemId;
     if (!a || a.adet !== o.qty) y.adet = +o.qty;
-    if (!a || rrTarih(a.termin) !== o.due) y.termin = o.due + ' ' + (rrSaat(a && a.termin) || '17:00');
+    /* teslim yoksa termin de yoktur (kural 5): "null 17:00" ya da uydurma tarih yazılmaz */
+    const due = rrTarih(o.due) || null;
+    if (!a || (rrTarih(a.termin) || null) !== due) y.termin = due ? due + ' ' + (rrSaat(a && a.termin) || '17:00') : null;
     if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
     if (!a || a.oncelik !== o.priority) y.oncelik = +o.priority || 0;
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
@@ -4919,9 +4940,10 @@ function rrCevir(st) {
     return rrKur(a, y);
   });
   /* takvim: vardiya, çalışma günü ve tatil değişmemişse asıl kayıt */
-  const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit }));
-  const vrr = ((st.cal && st.cal.shifts) || []).map(v => ({ id: v.id, start: v.start, end: v.end }));
-  if (!rrEsit(vref, vrr)) P.vardiyalar = vrr.map(v => Object.assign({}, (P.vardiyalar || []).find(x => x.id === v.id) || {}, { id: v.id, bas: v.start, bit: v.end }));
+  /* 168 b: vardiyanın molaları (Vardiya modülü) motora geçer; motor molada tezgâhı çalıştırmaz */
+  const vref = (P.vardiyalar || []).map(v => ({ id: v.id, start: v.bas, end: v.bit, molalar: v.molalar || [] }));
+  const vrr = ((st.cal && st.cal.shifts) || []).map(v => ({ id: v.id, start: v.start, end: v.end, molalar: (v.breaks || []).map(b => ({ bas: b.start, bit: b.end })) }));
+  if (!rrEsit(vref, vrr)) P.vardiyalar = vrr.map(v => Object.assign({}, (P.vardiyalar || []).find(x => x.id === v.id) || {}, { id: v.id, bas: v.start, bit: v.end, molalar: v.molalar }));
   const wc = (st.wcs || []).find(w => w.id === RR_WC) || (st.wcs || [])[0];
   if (wc && wc.week) {
     const cg0 = P.calismaGunleri || {}; const cg = {};
@@ -5050,6 +5072,31 @@ function tmiAdimAdetleri(durum, st, D) {
   for (const [k, n] of Object.entries(a)) if (opOf[k]) y[opOf[k]] = n;
   return y;
 }
+/* Biten iş (inceleme 1): biten ve iptal emir plana girmez; biten adım motorda st.bitti ile düşer (ardılı onu beklemez). Kaynak sunucunun iş
+   emri durumu (durum.emirler) ya da kayıttaki kopyası: { orders: [{ id, status }], opStatus: { "emir|root|sıra": durum } }. Sıra adımın
+   rotadaki yeridir (1'den, seq sırasıyla; iş emirleri rotadan bu sırayla açılır). Bütün adımı biten emir de düşer. */
+function tmiBitenler(emirler, D) {
+  const y = { siparis: {}, adim: {} };
+  if (!emirler || typeof emirler !== 'object') return y;
+  for (const o of emirler.orders || []) if (o && (o.status === 'tamam' || o.status === 'iptal')) y.siparis[String(o.id)] = 1;
+  const durum = emirler.opStatus || {};
+  const urun = Object.fromEntries(((D && D.urunler) || []).map(u => [u.id, u]));
+  for (const s of (D && D.siparisler) || []) {
+    const rota = (urun[s.urun] || {}).rota || [];
+    if (y.siparis[s.id] || !rota.length) continue;
+    const biten = rota.filter((a, i) => durum[`${s.id}|root|${i + 1}`] === 'tamam');
+    if (biten.length === rota.length) y.siparis[s.id] = 1;
+    else for (const a of biten) y.adim[`${s.id}.${a.k}`] = 1;
+  }
+  return y;
+}
+/* Planın girdisinden biten işi düşürür (st yerinde değişir); biten yoksa st olduğu gibi kalır. */
+function bitenUygula(st, b) {
+  if (!b || !st || !st.D) return st;
+  if (Object.keys(b.siparis).length) st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]);
+  if (Object.keys(b.adim).length) st.bitti = Object.assign({}, st.bitti || {}, b.adim);
+  return st;
+}
 /* Başlamış adımlar (391 a): kalanın tek kaynağı sunucudur (durum.calisanAdimlar, anahtar "emir no|OP no"). Anahtar planın işlem kimliğine
    (sipariş.adım) kayıttaki emir ve rota adımından çevrilir; karşılığı olmayan adım (rotasız emir, emirde değişen adım) gelmez. Saatler
    terminalin gerçek saatleridir: sayfanın "şimdi"si (stOf now) planın başlangıç günü 07:00'de sabit kalır, ona bağlanan kalan gerçek
@@ -5142,9 +5189,16 @@ function stKur(S, ek = [], gevset = true) {
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
     w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
   };
-  for (const k of new Set([...(gevset ? S.kapali : []), ...ek])) if (GEVSEK[k]) GEVSEK[k](st);
+  const kapali = new Set([...(gevset ? S.kapali : []), ...ek]);
+  for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
+  /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
+  if (!kapali.has('ayarci') && ayarciYok(D)) { GEVSEK.ayarci(st); st.ayarciYok = true; }
   for (const ev of S.olaylar || []) applyEvent(st, ev);
   return st;
+}
+function ayarciYok(D) {
+  const v = new Set((D.vardiyalar || []).map(x => x.id));
+  return !(D.personel || []).some(p => p.ayar && v.has(p.vardiya));
 }
 /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi); başlangıç günü 07:00'den önce değildir. */
 function simdiUygula(st, S) { if (S && S.simdi != null && isFinite(+S.simdi) && +S.simdi > st.now) st.now = +S.simdi; return st; }
@@ -11493,7 +11547,10 @@ function atCiz() {
   const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return true;
   const dpr = window.devicePixelRatio || 1;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  /* görünüm değişince (Özet, Harita, tam ekran) tuval boyu değişir: açık kılavuzun örnek kutusu yeni boşluğa yeniden ortalanır */
+  const boyDegisti = AT.boyut && (AT.boyut[0] !== W || AT.boyut[1] !== H);
   AT.boyut = [W, H]; if (!AT.kam) atSigdir(W, H);
+  if (boyDegisti && AT.kilavuz) requestAnimationFrame(atKilavuzKamera);
   const g = AT.g; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   if (!AT.kam) return;
   const R = atRenkler(); const s0 = atSahne(); const s = AT.onizle ? AT.onizle : s0; const t = rsT(); if (!AT.kam) atSigdir(W, H); const k = AT.kam.k;
@@ -11748,7 +11805,7 @@ function atBul(sx, sy) {
 function atBagla() {
   const cv = document.getElementById('at-cv'); if (!cv) { AT.cv = null; return; }
   if (cv === AT.cv) return; let ilk = false; if (!AT.girdi) { if (!AT_AZ()) AT.giris = performance.now(); AT.girdi = true; try { ilk = !localStorage.getItem('pm-at-kilavuz-v1'); } catch (e) { } } AT.cv = cv;
-  if (ilk) setTimeout(() => { if (AT.cv === cv && !U.secJob && !U.rsTez) atKilavuz(true); }, 1500); AT.g = cv.getContext('2d'); AT.boyut = [cv.clientWidth, cv.clientHeight];
+  if (ilk) setTimeout(() => { if (AT.cv === cv && !U.secJob && !U.rsTez) atKilavuz(true); }, 1500); AT.g = cv.getContext('2d'); AT.boyut = [cv.clientWidth, cv.clientHeight]; if (AT.kilavuz) requestAnimationFrame(atKilavuzKamera);
   const yer = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   let bas = null; const ptr = new Map();
   cv.addEventListener('pointerdown', e => {
@@ -11839,13 +11896,18 @@ function atUc(h) { if (!h || !AT.kam) return; const a = { ...AT.kam }; const t0 
 
 function atKilavuz(ac) {
   AT.kilavuz = ac; try { localStorage.setItem('pm-at-kilavuz-v1', '1'); } catch (e) { }
-  if (ac) { U.secJob = null; U.gySec = null; U.rsTez = null; const s = atSahne(); AT.ornek = atOrnek(s, rsT()); const a = s.ist[AT.ornek];
-    if (a && AT.boyut) { const [W, H] = AT.boyut; const dar = W < 600; const ust = (document.querySelector('.pm-at-ust') || {}).offsetHeight || 0, alt = (document.querySelector('.pm-at-alt') || {}).offsetHeight || 0;
-      /* örnek kutu, kılavuz kartının ve araç çubuklarının dışında kalan boş alanın ortasına gelir */
-      const sag = dar ? W : W - Math.min(340, W * 0.4) - 16, ust2 = ust + 8, alt2 = dar ? H * 0.52 : H - alt - 8;
-      const k = Math.max(0.4, Math.min(1.5, (sag - 16) / (AT_KW + 110), (alt2 - ust2) / (AT_KH + 70)));
-      atUc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k }); } }
+  if (ac) { U.secJob = null; U.gySec = null; U.rsTez = null; AT.ornek = atOrnek(atSahne(), rsT()); atKilavuzKamera(); }
   render();
+}
+function atKilavuzKamera() {
+  if (!AT.kilavuz || !AT.kam) return;
+  const a = atSahne().ist[AT.ornek];
+  if (!a || !AT.boyut) return;
+  const [W, H] = AT.boyut; const dar = W < 600; const ust = (document.querySelector('.pm-at-ust') || {}).offsetHeight || 0, alt = (document.querySelector('.pm-at-alt') || {}).offsetHeight || 0;
+  /* örnek kutu, kılavuz kartının ve araç çubuklarının dışında kalan boş alanın ortasına gelir */
+  const sag = dar ? W : W - Math.min(340, W * 0.4) - 16, ust2 = ust + 8, alt2 = dar ? H * 0.52 : H - alt - 8;
+  const k = Math.max(0.4, Math.min(1.5, (sag - 16) / (AT_KW + 110), (alt2 - ust2) / (AT_KH + 70)));
+  atUc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k });
 }
 const atTekEski = tekEylem;
 tekEylem = function (act, v, el, e) {
@@ -12902,7 +12964,12 @@ function brVeri() {
   const p = gosterilen(); if (!p || !p.ops) return null;
   if (BR.v && BR.v.p === p && BR.v.dv === S.dataVer) return BR.v;
   const cx = cxAl(); const now = rsSimdi(); const D = S.D;
-  const isler = S.D.siparisler.filter(s => !s.havuz && p.J && p.J[s.id] && cx.jobs[s.id]);
+  const isler0 = S.D.siparisler.filter(s => !s.havuz && p.J && p.J[s.id] && cx.jobs[s.id]);
+  /* adımı yerleşmeyen sipariş bitmiş ya da zamanında sayılmaz (bitişi yok; kayıtlı planda Infinity null olur): özet ve çizimler yalnız
+     tam yerleşenle kurulur, yerleşmeyen ayrı sayılır */
+  const eksik = s => cx.jobs[s.id].ops.filter(o => { const r = p.ops[o.id]; return !r || !isFinite(r.S) || !isFinite(r.C); }).length;
+  const yok = isler0.map(s => ({ id: s.id, adim: eksik(s) })).filter(x => x.adim > 0 || p.J[x.id].C == null || !isFinite(p.J[x.id].C));
+  const isler = isler0.filter(s => !yok.some(x => x.id === s.id));
   const ops = Object.values(p.ops).filter(r => isFinite(r.S) && isFinite(r.C));
   const T0 = Math.floor(now / 24) * 24;
   const H1 = Math.ceil(Math.max(now + 24 * 7, ...isler.map(s => Math.max(p.J[s.id].C || 0, cx.jobs[s.id].due || 0))) / 24) * 24;
@@ -12923,7 +12990,7 @@ function brVeri() {
     const g = Array.from({ length: gun }, (_, d) => { const a = T0 + d * 24, b = a + 24; const acik = acikS(a, b); if (acik < 0.01) return null; let busy = 0; for (const r of ops) if (r.m === t.id) busy += acikS(Math.max(a, r.S), Math.min(b, r.C)); return busy / acik; }); return { m: t.id, grup: t.grup, g }; });
   const gunAd = Array.from({ length: gun }, (_, d) => fmtDT(D, T0 + d * 24 + 1).slice(6, 9));
   const u = Object.entries(p.util || {}).filter(([m, x]) => m[0] !== '@' && x && x.n);
-  BR.v = { p, dv: S.dataVer, cx, now, T0, H1, gun, gunAd, gruplar, sip, yuk, u, ops, oz: p.ozet };
+  BR.v = { p, dv: S.dataVer, cx, now, T0, H1, gun, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((a, x) => a + x.adim, 0), yuk, u, ops, oz: p.ozet };
   return BR.v;
 }
 /* sayıdan sonra Türkçe ek: okunuşun son hecesine göre ünlü uyumu (20'si, 6'sı, %9'unda) */
@@ -12941,12 +13008,18 @@ U.brT = null;
 const brX = (v, t) => Math.max(0, Math.min(1, (t - v.T0) / (v.H1 - v.T0)));
 const brSa = h => `${sayi(h, h < 10 ? 1 : 0)} sa`;
 
+/* yerleşmeyen iş: sayı ve sebep (motor "planlanamadı: kaynak ya da ufuk" der; ayrıntı uyarılarda) */
+function brYokMetni(v) {
+  if (!v.yok.length) return '';
+  return `<b>${v.yok.length}</b> siparişin <b>${v.yokAdim}</b> adımı yerleşmedi (kaynak ya da ufuk yetmedi): ${v.yok.slice(0, 4).map(x => `<b class="mono">${esc(x.id)}</b>`).join(', ')}${v.yok.length > 4 ? '…' : ''}. Bu siparişler bitmiş ya da zamanında sayılmaz.`;
+}
 function brKpi(v) {
   const n = v.sip.length, gec = v.sip.filter(s => s.gec), zam = n - gec.length; const top = gec.reduce((a, s) => a + s.T, 0);
   const ort = v.u.length ? v.u.reduce((a, [, x]) => a + x.u, 0) / v.u.length : null; const dar = v.u.slice().sort((a, b) => b[1].u - a[1].u)[0];
   const kar = [
-    ['list', 'Sipariş', n, '', 'planda'],
-    ['check', 'Zamanında', zam, `%${Math.round(zam / Math.max(1, n) * 100)}`, 'termininden önce biter', 'tamam'],
+    ['list', 'Sipariş', n + v.yok.length, '', v.yok.length ? `${n} tanesi tam yerleşti` : 'planda'],
+    ...(v.yok.length ? [['alert', 'Yerleşmedi', v.yok.length, `${v.yokAdim} adım`, 'kaynak ya da ufuk yetmedi', 'hata']] : []),
+    ['check', 'Zamanında', zam, `%${Math.round(zam / Math.max(1, n + v.yok.length) * 100)}`, 'termininden önce biter', 'tamam'],
     ['alert', 'Geç', gec.length, brSa(top), 'toplam gecikme', gec.length ? 'hata' : 'tamam'],
     ['gauge', 'Ortalama doluluk', ort == null ? null : Math.round(ort * 100), '%', 'çalışan tezgâhlarda'],
     ['cpu', 'En yoğun tezgâh', dar ? dar[0] : '—', dar ? `%${Math.round(dar[1].u * 100)}` : '', dar ? (BR_GRUP_AD[brGrup(dar[0])] || '') : '', 'uyari'],
@@ -13029,7 +13102,8 @@ function brYaris(v, sec) {
 /* veriden yorum: her madde bir gözlem ve bir yön */
 function brYorum(v) {
   const l = []; const n = v.sip.length; const gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T);
-  l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
+  if (v.yok.length) l.push({ sm: 'alert', ton: 'hata', m: brYokMetni(v) });
+  if (n) l.push({ sm: gec.length ? 'alert' : 'check', ton: gec.length ? 'hata' : 'tamam', m: gec.length ? `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç. En çok geciken <b>${esc(gec[0].id)}</b> (${esc(gec[0].urun)}), termininden <b>${brSa(gec[0].T)}</b> sonra bitiyor.` : `${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin hepsi termininden önce bitiyor.`, act: gec.length ? 'br-git-sip' : null, v: gec.length ? gec[0].id : null, ad: 'Tahtada göster' });
   /* geç siparişleri en çok ne bekletiyor */
   const bek = {}; for (const s of gec) for (const [k, ad, x] of s.kaynak) if (k !== 'isleme') bek[ad] = (bek[ad] || 0) + x;
   const bk = Object.entries(bek).sort((a, b) => b[1] - a[1]);
@@ -13053,7 +13127,7 @@ function brYorumHtml(v, l) { return `<ol class="pm-br-yorum">${l.map(x => `<li d
 function brCanli(v, t) {
   const cal = v.ops.filter(r => r.S <= t && r.C > t); const tz = new Set(cal.filter(r => r.m[0] !== '@').map(r => r.m)); const sp = new Set(cal.map(r => r.job));
   const biten = v.sip.filter(s => s.C <= t).length;
-  return `<b class="mono">${esc(fmtDT(S.D, t))}</b><span><b>${tz.size}</b> tezgâh çalışıyor</span><span><b>${sp.size}</b> sipariş üretimde</span><span><b>${biten}</b>/${v.sip.length} sipariş bitti</span>`;
+  return `<b class="mono">${esc(fmtDT(S.D, t))}</b><span><b>${tz.size}</b> tezgâh çalışıyor</span><span><b>${sp.size}</b> sipariş üretimde</span><span><b>${biten}</b>/${v.sip.length + v.yok.length} sipariş bitti</span>${v.yok.length ? `<span data-ton="hata"><b>${v.yok.length}</b> yerleşmedi</span>` : ''}`;
 }
 
 /* ---------- tahtadaki yerleri ----------
@@ -13088,7 +13162,8 @@ const BR_LEJ = {
 function brCevap(v, id) {
   const n = v.sip.length, gec = v.sip.filter(s => s.gec).sort((a, b) => b.T - a.T); const top = gec.reduce((a, s) => a + s.T, 0);
   switch (id) {
-    case 'ozet': return `${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
+    case 'ozet': if (!n) return `${brYokMetni(v)} Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
+      return `${v.yok.length ? brYokMetni(v) + ' Yerleşen ' : ''}${n} siparişin <b>${n - gec.length}</b>${brEk(n - gec.length, 'i')} zamanında${gec.length ? `, <b>${gec.length}</b>${brEk(gec.length, 'i')} geç (toplam ${brSa(top)})` : ''}. Son işin bitişi: <b>${esc(fmtDT(S.D, v.oz.Cmax))}</b>.`;
     case 'bekle': { const l = brBekleVeri(v).sort((a, b) => b.bek - a.bek); const x = l[0]; return x && x.bek > 0.5 ? `En çok bekleme <b>${esc(BR_GRUP_AD[x.id] || x.id)}</b> grubunda: ${brSa(x.bek)}${x.bekG > 0.5 ? `, bunun <b>${brSa(x.bekG)}</b>'i geç siparişlerin` : ''}.` : 'Belirgin bir bekleme yok.'; }
     case 'yuk': { const gt = brGunOrt(v).map(x => x == null ? -1 : x); const d = gt.indexOf(Math.max(...gt)); const enT = v.u.slice().sort((a, b) => b[1].u - a[1].u)[0]; return `En yoğun gün <b>${esc(v.gunAd[d])} ${esc(fmtDT(S.D, v.T0 + d * (v.kova || 1) * 24 + 1).slice(0, 5))}</b> (ortalama %${Math.round(gt[d] * 100)}). Plan boyunca en dolu tezgâh <b>${esc(enT ? enT[0] : '—')}</b>${enT ? ` (%${Math.round(enT[1].u * 100)})` : ''}.`; }
     case 'sure': { const y = (BR.yor || []).find(x => x.sm === 'clock'); return y ? y.m : ''; }
@@ -13197,7 +13272,7 @@ function brTurNot(id) {
   const v = brVeri(); const y = BR.yor || (v ? brYorum(v) : []); if (!v) return '';
   const n = v.sip.length, gec = v.sip.filter(s => s.gec).length;
   switch (id) {
-    case 'genel': return `Tahtanın tamamı: ortada atölye, çevresinde planın özeti. ${n} sipariş, ${gec ? `${gec}${brEk(gec, 'i')} geç` : 'hepsi zamanında'}.`;
+    case 'genel': return `Tahtanın tamamı: ortada atölye, çevresinde planın özeti. ${n + v.yok.length} sipariş, ${v.yok.length ? `${v.yok.length} tanesi yerleşmedi, ` : ''}${gec ? `${gec}${brEk(gec, 'i')} geç` : v.yok.length ? 'yerleşenler zamanında' : 'hepsi zamanında'}.`;
     case 'ozet': return y[0] ? y[0].m : '';
     case 'bekle': return `${brCevap(v, 'bekle')} ${(y.find(x => x.sm === 'target') || {}).m || ''}`;
     case 'atolye': { const t = rsT(); const cal = v.ops.filter(r => r.S <= t && r.C > t && r.m[0] !== '@'); return `Zaman akıyor: <b>${new Set(cal.map(r => r.m)).size}</b> tezgâh çalışıyor, parçalar istasyonlar arasında ilerliyor. Göstergeler ve yarış aynı anda değişir.`; }
@@ -19781,6 +19856,8 @@ function rrDenemedenKur(D0, onceki) {
       const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
       /* termin günü adımındır, fasoncunun süresi bütün adımlarının en büyüğü olabilir: aynı firmadaki adımın kendi günü korunur */
       if (o.fason && eA && eA.fasonId === o.fason && eA.terminGun != null) y.terminGun = eA.terminGun;
+      /* fason adımın süresi çerçevede yoktur (motor 0 okur): kayıttaki boş süre 0'a çevrilip yazılmaz */
+      if (o.fason && eA) for (const k of ['setup', 'proc', 'cycle']) if (eA[k] == null && !y[k]) y[k] = eA[k];
       return Object.assign({}, eA || { id: 'p-' + u.id + '-' + o.k, outItem: '', outStatus: '', rejectPct: 0, outs: [], transfer: 0, resetup: true }, y, { seq, ins: [], plan: rrKopya(o) });
     });
     for (const b of u.bilesenler || []) {
@@ -19804,13 +19881,16 @@ function rrDenemedenKur(D0, onceki) {
   const bas = rrTarih(D.meta && D.meta.baslangic);
   const orders = (D.siparisler || []).map(s => {
     const e = es('orders', s.id);
-    return Object.assign({}, e || { no: s.id, tur: 'seri', created: 0 }, { id: s.id, itemId: s.urun, qty: s.adet, start: rrTarih(s.serbest) || bas, due: rrTarih(s.termin), priority: s.oncelik, status: s.havuz ? 'taslak' : (e && e.status && e.status !== 'taslak' ? e.status : 'serbest'), note: s.ad || '', plan: rrKopya(s) });
+    /* termini olmayan siparişin teslimi boş kalır (boş metin değil) */
+    const due = rrTarih(s.termin) || (e && e.due === '' ? '' : null);
+    return Object.assign({}, e || { no: s.id, tur: 'seri', created: 0 }, { id: s.id, itemId: s.urun, qty: s.adet, start: rrTarih(s.serbest) || bas, due, priority: s.oncelik, status: s.havuz ? 'taslak' : (e && e.status && e.status !== 'taslak' ? e.status : 'serbest'), note: s.ad || '', plan: rrKopya(s) });
   });
   const week = {}; for (const [g, n] of Object.entries(RR_GUN)) week[n] = ((D.calismaGunleri || {})[g] || []).slice();
   const wcE = es('wcs', RR_WC);
   const wcs = [Object.assign({}, wcE || { code: 'IM-10', name: 'Atölye' }, { id: RR_WC, week })];
   const cal = { shifts: (D.vardiyalar || []).map(v => ({ id: v.id, name: v.id + ' vardiyası', start: v.bas, end: v.bit, breaks: [] })), holidays: (D.tatiller || []).slice() };
-  const st = Object.assign({}, onceki || {}, { version: 7, name: (D.meta && D.meta.ad) || 'Atölye', items, wcs, stations, opdefs, routes, cal, machines, people, orders, plan });
+  /* kaydın adı Reçete ve Rota'nındır; çalışmanın adı (meta.ad) onu ezmez */
+  const st = Object.assign({}, onceki || {}, { version: 7, name: (onceki && onceki.name) || (D.meta && D.meta.ad) || 'Atölye', items, wcs, stations, opdefs, routes, cal, machines, people, orders, plan });
   if (!onceki) Object.assign(st, { settings: { orderItem: null, orderQty: 100, start: bas || null, due: null, useStock: true, peopleLimit: true }, moves: [], opStatus: {}, assign: {}, qorder: {}, frozen: {}, opProg: {}, splitManual: {}, statusStock: {}, statusCards: [], routeRevs: [], gercekSure: {} });
   else st.routeRevs = (onceki.routeRevs || []).filter(r => routes[r.itemId]).map(r => r.status === 'yururlukte' ? Object.assign({}, r, { data: rrKopya(routes[r.itemId]) }) : r);
   return st;
@@ -23279,6 +23359,17 @@ if (TMI_ICINDE) {
     }
     return coz0.apply(this, arguments);
   };
+  /* biten iş plana girmez (girdi.betik tmiBitenler): sunucunun iş emri durumu, okunamadıysa kayıttaki kopyası. Çalışmanın verisi (S.D)
+     değişmez, yalnız motorun girdisi süzülür: ana kayda bir şey yazılmaz. */
+  let bitenOn = { k: null, D: null, v: null, b: null };
+  const bitenler = () => {
+    const e = TMI_KAYNAK.durum && TMI_KAYNAK.durum.emirler ? TMI_KAYNAK.durum.emirler : null;
+    const k = e || 'kayit:' + S.rrSavedAt;
+    if (bitenOn.k !== k || bitenOn.D !== S.D || bitenOn.v !== S.dataVer) bitenOn = { k, D: S.D, v: S.dataVer, b: tmiBitenler(e || rrOku(), S.D) };
+    return bitenOn.b;
+  };
+  const stOf0 = stOf;
+  stOf = function () { const st = stOf0.apply(this, arguments); return S && S.D ? bitenUygula(st, bitenler()) : st; };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
   const yc0 = yeniCalisma;

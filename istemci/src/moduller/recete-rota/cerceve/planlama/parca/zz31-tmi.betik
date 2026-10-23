@@ -69,6 +69,17 @@ if (TMI_ICINDE) {
     }
     return coz0.apply(this, arguments);
   };
+  /* biten iş plana girmez (girdi.betik tmiBitenler): sunucunun iş emri durumu, okunamadıysa kayıttaki kopyası. Çalışmanın verisi (S.D)
+     değişmez, yalnız motorun girdisi süzülür: ana kayda bir şey yazılmaz. */
+  let bitenOn = { k: null, D: null, v: null, b: null };
+  const bitenler = () => {
+    const e = TMI_KAYNAK.durum && TMI_KAYNAK.durum.emirler ? TMI_KAYNAK.durum.emirler : null;
+    const k = e || 'kayit:' + S.rrSavedAt;
+    if (bitenOn.k !== k || bitenOn.D !== S.D || bitenOn.v !== S.dataVer) bitenOn = { k, D: S.D, v: S.dataVer, b: tmiBitenler(e || rrOku(), S.D) };
+    return bitenOn.b;
+  };
+  const stOf0 = stOf;
+  stOf = function () { const st = stOf0.apply(this, arguments); return S && S.D ? bitenUygula(st, bitenler()) : st; };
   const yk0 = yukle;
   yukle = function () { const x = yk0(); if (x) tmiTabanKur(x.D); return x; };
   const yc0 = yeniCalisma;
