@@ -4,7 +4,7 @@ import type { KomutTanimi } from './kaynak-komutlari.ts';
 // Tablo zod taşımaz (kaynak-komutlari.ts ile aynı neden); sunucu testi aynı tabloyla sahibin ucunu dener.
 export const PLAN_STOK_KOMUTLARI: Readonly<Record<string, KomutTanimi>> = {
   // Plan: prototipin hesapladığı kuyruk sırası, atama ve dondurma yalnız kişinin taslağına yazılır (`taslak` verilmezse yeni taslak açılır).
-  // Ayar `plan-ayar` ile, canlıya alma `plan-canliya-al` ile ayrı yazılır: kuyruk yazımı ayar ve canlıya alma taşımaz. `planSurumu`: ekranın
+  // Ayar `plan-ayar` ile ayrı yazılır; canlıya alma yalnız taslağın onayıyla (Planlama stüdyosu). `planSurumu`: ekranın
   // okuduğu canlı plan sürümü; arada başkası canlıya aldıysa plan modülü 409 döner (eşzamanlı planlama koruması). Terminal sırayı canlı plandan okur.
   'plan-yaz': { yol: '/plan/kuyruklari-yaz', alanlar: ['kuyruklar', 'planSurumu', 'taslak'], tekrarKorumali: true },
   // Plan ayarı yalnız plan modülünün ayar ucundan yazılır, kişiye yeni açılan taslağa; canlı ayar taslak canlıya alınınca değişir.
