@@ -5115,21 +5115,81 @@ function tmiCalisanlar(durum, st, D, now) {
   }
   return y;
 }
+/* Ürün, malzeme, rota ve emrin sahibi Malzemeler, Rota ve Üretim Emirleri'dir. Reçete ve Rota çerçevesi bunları kayda yazmaz (kayıtta
+   bağlanmadan önceki yerel emirler kalır, kart #1185); planlama sayfası da sunucu çözücüsü de kaynak okumasındaki güncel dilimleri kaydın
+   üstüne koyar (13.1: sonradan açılan emir plana girer). Okunamayan dilim (yetki yok) kayıttaki gibi kalır. Biten ve iptal edilen emir
+   plana girmez. Tezgâh, ürün ve emrin motor ayarları (plan alt nesnesi) önce açık çalışmadan (planlama sayfasının düzenlediği), yoksa
+   kayıttan alınır. */
+function sunucuKaydi(kayit, durum, D0, bugun) {
+  const k = rrKopya(kayit && kayit.items ? kayit : TMI_BOS_KAYIT);
+  const d = durum || {};
+  const urun0 = id => ((D0 && D0.urunler) || []).find(u => String(u.id) === id) || null;
+  const maliyet = id => { const g = d.maliyet && d.maliyet.malzeme && d.maliyet.malzeme[id]; return g && g.paraBirimi === 'TRY' ? Number(g.birimMaliyet) : null; };
+  if (Array.isArray(d.items)) {
+    const eski = new Map((k.items || []).map(x => [String(x.id), x]));
+    k.items = d.items.map(s => {
+      const o = eski.get(s.id) || {};
+      const plan = urun0(s.id) || o.plan;
+      return Object.assign({}, o, { id: s.id, code: s.code, name: s.name, type: s.type, unit: s.unit || '', cost: maliyet(s.id), stock: s.stock == null ? 0 : s.stock }, plan ? { plan } : {});
+    });
+  }
+  if (Array.isArray(d.opdefs)) k.opdefs = d.opdefs.map(s => ({ id: s.id, code: s.code, name: s.name }));
+  if (d.routes && Array.isArray(d.routeRevs)) {
+    k.routes = Object.assign({}, k.routes || {});
+    const eskiAdim = (id, s) => ((((kayit && kayit.routes) || {})[id] || {}).steps || []).find(x => x.id === s.id) || null;
+    for (const id of new Set(d.routeRevs.map(r => r.itemId))) {
+      const r = d.routes[id]; if (!r) { delete k.routes[id]; continue; }
+      const u = urun0(id);
+      const steps = (r.steps || []).slice().sort((p, q) => p.seq - q.seq).map(s => {
+        /* çerçevenin süre kuralı (sureNormalle): çevrim işlem + değişim; işlem yoksa birim süre */
+        const sayi = v => typeof v === 'number' && isFinite(v) && v >= 0 ? v : null;
+        const proc = s.proc === undefined ? (sayi(s.cycle) || 0) : sayi(s.proc), chg = s.proc === undefined ? null : sayi(s.chg);
+        const plan = (u && (u.rota || []).find((x, j) => rrSeq(x, j) === s.seq)) || (eskiAdim(id, s) || {}).plan;
+        return Object.assign({}, s, { proc, chg, cycle: (proc || 0) + (chg || 0), depQty: s.depQty > 0 ? s.depQty : 1, minLot: s.minLot || 0, alts: (s.alts || []).slice(), altTimes: Object.assign({}, s.altTimes || {}), ins: (s.ins || []).map(x => ({ itemId: x.itemId, qty: x.qty })) }, plan ? { plan } : {});
+      });
+      k.routes[id] = { base: (k.routes[id] && k.routes[id].base) || 1, steps };
+    }
+  }
+  const e = d.emirler;
+  if (e && Array.isArray(e.orders)) {
+    /* tarihsiz emir çerçevedeki gibi (uyumlaEmirler) bugünden başlar ve bugüne biter */
+    const sip0 = id => ((D0 && D0.siparisler) || []).find(s => String(s.id) === id) || null;
+    const eskiEmir = new Map((k.orders || []).map(x => [String(x.id), x]));
+    k.orders = e.orders.filter(x => x.status !== 'tamam' && x.status !== 'iptal').map(x => {
+      const plan = sip0(x.id) || (eskiEmir.get(x.id) || {}).plan;
+      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || x.start || bugun, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, plan ? { plan } : {});
+    });
+  }
+  return k;
+}
+
 /* Kayıttan çalışma verisi (D): kaynak okuması varsa tezgâh, kişi, takvim, fason firma ve adım adedi ondan; yoksa kayıttaki gibi.
    D0 açık çalışmanın verisidir: başlangıç ve motor ayarları (plan alt nesnesi) aynı kimlikte korunur. */
 function tmiCevir(st, kaynak, D0, bugun) {
   const k = kaynak && kaynak.durum ? kaynak : null;
-  const D = rrCevir(k ? tmiKaynakIle(st, k, D0) : st);
+  const D = rrCevir(k ? tmiKaynakIle(sunucuKaydi(st, k.durum, D0, bugun || duvarSaati(Date.now()).slice(0, 10)), k, D0) : st);
   if (!D.meta && D0 && D0.meta) D.meta = rrKopya(D0.meta);
   tmiTabanKur(D, bugun);
   const firmalar = k && k.durum.fasonFirms;
   if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, D0);
   const adet = tmiAdimAdetleri(k && k.durum, st, D); if (adet) D.opAdet = adet;
+  const kp = k && k.ek && k.ek.kapasite;
+  if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
   return D;
 }
+/* 13.4: kişinin onaylı izni (İK, Vardiya'nın kişi takvimiyle; /recete-rota/kapasite izinli günleri) motorda devamsızlıktır. Sunucudan
+   gelen gün işaretlidir ve her okumada yeniden kurulur; planlamacının elle girdiği devamsızlık kalır. */
+function tmiDevamsizlik(eski, kisiler) {
+  const elle = (eski || []).filter(d => !d.sunucu);
+  const elleGun = new Set(elle.map(d => (d.personel || d.kisi) + '@' + d.gun));
+  const yeni = [];
+  for (const p of kisiler) for (const gun of p.izinli || []) if (!elleGun.has(p.id + '@' + gun)) yeni.push({ personel: String(p.id), gun, sunucu: true });
+  return [...elle, ...yeni];
+}
 
-/* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrCevir grupMak), makine gelince adımlar yeniden kurulmalı */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'fasoncular', 'opAdet'];
+/* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrCevir grupMak), makine gelince adımlar yeniden kurulmalı. Malzeme ve
+   sipariş kaynak okumasındaki sunucu kayıtlarındandır (sunucuKaydi). */
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik'];
 /* Kaynaklar açık çalışmaya (D0) yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Dönen: değişen alanlar. */
 function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   const D = tmiCevir(kayit && kayit.items ? kayit : TMI_BOS_KAYIT, kaynak, D0, bugun);
