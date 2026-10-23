@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import {
   KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, bolumOkuyabilirMi, bolumYazabilirMi, kalemKodu, logoNiyetleri, ondalikMetni, portalRolu, portalUnvani, talepTeklifi, rolDegisiyorMu, canliEsler, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, esikleriBindir, siparisEsikleri, kilitAlinirMi, sorgula, sonParca, ustYolu, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, sonOnay,
-  acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi,
+  acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi, satinAlmaTeslimiReddi, SATIN_ALMA_TESLIMI_REDDI,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -174,12 +174,12 @@ describe('portal bölüm izni (KD-063)', () => {
     assert.equal(bolumYazabilirMi('ncrs/n1', 5, portalRolu(['portal.kalite']).tmiIzinler, null, {}), true);
   });
 
-  test('BD-K12: siparişi yalnız türünün bölümü açar; mal kabul ve finans var olan siparişe yazar ama tür değiştiremez', () => {
+  test('BD-K12: siparişi yalnız türünün bölümü açar; finans var olan siparişe yazar ama tür değiştiremez', () => {
     const kalite = portalRolu(['portal.kalite']).tmiIzinler;
     const satis = portalRolu(['portal.satis']).tmiIzinler;
     assert.equal(bolumYazabilirMi('orders/o1', 5, kalite, null, { type: 'sales' }), false);
     assert.equal(bolumYazabilirMi('orders/o1', 5, kalite, null, { type: 'purchase' }), false);
-    // Kalite var olan siparişe de yazmaz (kart #1162): teslim almayı satın alma, faturayı finans yazar; satış siparişine satın alma yazmaz.
+    // Kalite var olan siparişe de yazmaz (kart #1162): satın alma siparişini satın alma, faturayı finans yazar; satış siparişine satın alma yazmaz.
     const satinalma = portalRolu(['portal.satinalma']).tmiIzinler;
     const finans = portalRolu(['portal.finans']).tmiIzinler;
     assert.equal(bolumYazabilirMi('orders/o1', 5, kalite, { type: 'purchase' }, { type: 'purchase', deliveries: [1] }), false);
@@ -192,6 +192,23 @@ describe('portal bölüm izni (KD-063)', () => {
     assert.equal(bolumYazabilirMi('orders/o1', 5, satis, null, { type: 'sales' }), true);
     assert.equal(bolumYazabilirMi('orders/o1', 5, satis, null, { type: 'purchase' }), false);
     assert.equal(bolumYazabilirMi('requests/q1', 5, kalite, null, {}), false);
+  });
+
+  test('BD-K38: satın alma teslimi portalda alınmaz; satın almada teslim alma izni yok, satış sevkiyatı ve eski teslim değişmez (238, H1)', () => {
+    assert.equal(portalRolu(['portal.satinalma', 'satin-alma.onayla']).tmiIzinler.includes('receive'), false);
+    assert.equal(portalRolu(['portal.satinalma']).tmiIzinler.includes('receive'), false);
+    const yolda = { id: 'd1', status: 'in_transit' };
+    const alindi = { id: 'd1', status: 'received' };
+    const eski = { type: 'purchase', deliveries: [yolda] };
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', eski, { type: 'purchase', deliveries: [alindi] }), SATIN_ALMA_TESLIMI_REDDI);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', eski, { type: 'purchase', deliveries: [yolda, { id: 'd2', status: 'received' }] }), SATIN_ALMA_TESLIMI_REDDI);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', null, { type: 'purchase', deliveries: [alindi] }), SATIN_ALMA_TESLIMI_REDDI);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', eski, { deliveries: [alindi] }), SATIN_ALMA_TESLIMI_REDDI);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', eski, { type: 'purchase', deliveries: [yolda], invoices: [1] }), null);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', { type: 'purchase', deliveries: [alindi] }, { type: 'purchase', deliveries: [alindi], invoices: [1] }), null);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', { type: 'sales', deliveries: [yolda] }, { type: 'sales', deliveries: [alindi] }), null);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1/notlar/n1', eski, { type: 'purchase', deliveries: [alindi] }), null);
+    assert.equal(satinAlmaTeslimiReddi('orders/o1', eski, null), null);
   });
 
   test('BD-K13: satış ve satın alma kayıtlarını kalite okuyamaz; bölümü, finans ve tam yetki okur; kalite satın alma siparişini okur (kart #1162)', () => {

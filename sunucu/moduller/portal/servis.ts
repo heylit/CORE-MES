@@ -11,7 +11,7 @@ import { malzemeNoKoddan, malzemeOzeti } from '../malzemeler/disari.ts';
 import { kabulEt, notluGecis, siparisDonustur, siparisEkle, surumVer, teklifAyrintisi, teklifDurumlari, teklifEkle, teklifGuncelle } from '../siparisler/disari.ts';
 import {
   FIYAT_OKU, KURULUM_ISARETI, ONAY_AYAR_YOLU, ONAY_KOLEKSIYONU, onayAcilisReddi, onayBelgesiMi, onayEtkisiReddi, onayGeregi, onayKurallari, onaysizYaziReddi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, onayYolu, sonOnay, baslangicBelgeleri, esikleriBindir, bolumOkuyabilirMi, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, bolumYazabilirMi, canliEsler, eklenenKimlikler, kalemKodu, logoNiyetleri, portalKullaniciYolu, portalKullanicisi, portalRolu, portalUnvani, derinBirlestir,
-  durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, kilitAlinirMi, rolDegisiyorMu, siparisDonusumu, siparisSatirlari, siparisTeklifi, sonParca, sorgula, sozlesmeSiparisi, talepDuzenlemesi, talepTeklifi, teklifAcilisi, teklifAdimlari, ustYolu,
+  durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, kilitAlinirMi, rolDegisiyorMu, satinAlmaTeslimiReddi, siparisDonusumu, siparisSatirlari, siparisTeklifi, sonParca, sorgula, sozlesmeSiparisi, talepDuzenlemesi, talepTeklifi, teklifAcilisi, teklifAdimlari, ustYolu,
 } from './kurallar.ts';
 import type { DepoBelgesi, OdaKaydi, OnayKurallari, PortalSatisTeklifi, PortalTeklifTalebi, TeklifAdimi, Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -75,6 +75,11 @@ async function kimlikDenetle(db: Db, kullanici: Kullanici, eski: Veri | null, ye
 
 function rolDenetle(yol: string, eski: Veri | null, yeni: Veri): void {
   if (rolDegisiyorMu(yol, eski, yeni)) throw yetkiYok('Portal rolü TMI rolünden gelir; burada değiştirilemez.');
+}
+
+function teslimDenetle(yol: string, eski: Veri | null, yeni: Veri): void {
+  const red = satinAlmaTeslimiReddi(yol, eski, yeni);
+  if (red !== null) throw yetkiYok(red);
 }
 
 async function onayKurallariOku(db: Db): Promise<OnayKurallari> {
@@ -143,6 +148,7 @@ export async function belgeYaz(db: Db, kullanici: Kullanici, g: YazGovdesi): Pro
   veri = gizliAlanlariKoru(g.yol, mevcut?.veri ?? null, veri, kullanici.islemler);
   await kimlikDenetle(db, kullanici, mevcut?.veri ?? null, veri);
   rolDenetle(g.yol, mevcut?.veri ?? null, veri);
+  teslimDenetle(g.yol, mevcut?.veri ?? null, veri);
   bolumDenetle(kullanici, g.yol, mevcut?.veri ?? null, veri);
   await onayDenetle(db, kullanici, g.yol, mevcut?.veri ?? null, veri);
   const belge = await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
@@ -187,6 +193,7 @@ export async function kilitle(db: Db, kullanici: Kullanici, g: { yol: string; sa
     const veri = gizliAlanlariKoru(g.yol, mevcut?.veri ?? null, derinBirlestir(mevcut?.veri ?? {}, g.veri ?? {}), kullanici.islemler);
     await kimlikDenetle(db, kullanici, mevcut?.veri ?? null, veri);
     rolDenetle(g.yol, mevcut?.veri ?? null, veri);
+    teslimDenetle(g.yol, mevcut?.veri ?? null, veri);
     await onayDenetle(db, kullanici, g.yol, mevcut?.veri ?? null, veri);
     await sorgular.belgeYaz(db, { yol: g.yol, ust: ustYolu(g.yol), kimlik: sonParca(g.yol), veri, kisiId: kullanici.id });
     await logoSirasinaEkle(db, g.yol, mevcut?.veri ?? null, veri);

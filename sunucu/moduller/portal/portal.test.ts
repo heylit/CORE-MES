@@ -307,6 +307,25 @@ describe('portal belge deposu (gerçek PostgreSQL)', () => {
     assert.equal(kod(await yaz(yonetici, { yol: 'requests/bd16', kip: 'tam', veri: talep() })), 200);
   });
 
+  test('BD-25: satın alma teslimi portalda alınmaz (238, H1); satın almacı ve tam yetki reddedilir, sevk ve fatura yazılır, eski teslim kalır', async () => {
+    const alici = await islemliKisi('portalalici25', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satinalma', 'satin-alma.onayla']);
+    const kod = (r: { statusCode: number }) => r.statusCode;
+    const yolda = { id: 'd1', status: 'in_transit', qtys: [5] };
+    const alindi = { ...yolda, status: 'received', acceptedQtys: [5], rejectedQtys: [0] };
+    assert.equal(kod(await yaz(alici.cerez, { yol: 'orders/bd25', kip: 'tam', veri: { type: 'purchase', deliveries: [yolda] } })), 200);
+    const red = await yaz(alici.cerez, { yol: 'orders/bd25', kip: 'birlestir', veri: { deliveries: [alindi] } });
+    assert.equal(red.statusCode, 403, red.body);
+    assert.match(red.body, /Mal kabul/);
+    assert.equal(kod(await yaz(yonetici, { yol: 'orders/bd25', kip: 'birlestir', veri: { deliveries: [alindi] } })), 403);
+    assert.equal(kod(await istek(yonetici, 'POST', '/portal/belge/kilitle', { yol: 'orders/bd25', sahip: 's', sureMs: 1000, veri: { deliveries: [alindi] } })), 403);
+    assert.equal(kod(await yaz(yonetici, { yol: 'orders/bd25b', kip: 'tam', veri: { type: 'purchase', deliveries: [alindi] } })), 403);
+    const okunan = await istek(alici.cerez, 'GET', '/portal/belge?yol=orders%2Fbd25');
+    assert.deepEqual((okunan.json() as { belge: Belge }).belge.veri['deliveries'], [yolda]);
+    assert.equal(kod(await yaz(alici.cerez, { yol: 'orders/bd25', kip: 'birlestir', veri: { invoices: [{ no: 'F1' }] } })), 200);
+    // Satış siparişinin sevkiyatı (müşteri teslimi) bu kurala girmez.
+    assert.equal(kod(await yaz(yonetici, { yol: 'orders/bd25s', kip: 'tam', veri: { type: 'sales', deliveries: [alindi] } })), 200);
+  });
+
   test('BD-17: kalite satış ve satın alma kayıtlarını okuyamaz (kart #1162); liste süzülür, tek kayıt 403; bölümü okur', async () => {
     const satici = await islemliKisi('portalsatici17', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satis', 'siparisler.yaz']);
     const alici = await islemliKisi('portalalici17', ['sayfa.portal', 'portal.oku', 'portal.yaz', 'portal.satinalma']);

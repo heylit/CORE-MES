@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/portal.ts';
 import { DurumKutusu, YalitilmisCerceve, type TemaEslemesi } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -23,6 +24,8 @@ const KANAL = 'portal';
 // Sunucu sınırıyla aynı (paylasilan/sozlesme/portal.ts AZAMI_EK_BAYT); istemci sözleşmeyi değer olarak ithal etmez.
 const AZAMI_EK_BAYT = 700 * 1024;
 const OKUMA_ISLEMLERI = ['sayfa.portal', 'portal.oku', 'portal.yaz'];
+// Çerçevenin gidebildiği kabuk sayfaları: satın alma teslimi Stok > Mal kabul'de alınır (238, H1).
+const GIDILEBILIR_YOLLAR: readonly string[] = ['/stok/mal-kabul'];
 // 315 a: zemin, yüzey, yazı, çizgi, durum renkleri ve kenar çubuğu kabuğun tasarım değişkenlerinden gelir; taraf renkleri
 // (firma, müşteri, tedarikçi) ve grafik dizisi prototipte kalır.
 const TEMA_ESLEMESI: TemaEslemesi = {
@@ -230,11 +233,16 @@ export function PortalCercevesi() {
     }) + ekBetik, yaziStili, kurumAdi);
   }, [prototip, yaziStili, ekBetik, hazirlik, ilkTema, kurumAdi]);
   const isle = useMemo(() => kopruKur(), []);
+  const git = useNavigate();
 
   // Kaynak ve köken denetimini YalitilmisCerceve yapar (yalnız bu çerçeve, opak köken); burada yalnız bilinen kanallar geçer.
   const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
     if (gorunumIletisi(veri, yanitla)) return;
-    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown } | null;
+    const m = veri as { kanal?: unknown; yon?: unknown; id?: unknown; tip?: unknown; veri?: unknown; yol?: unknown } | null;
+    if (m?.kanal === KANAL && m.yon === 'git') {
+      if (typeof m.yol === 'string' && GIDILEBILIR_YOLLAR.includes(m.yol)) void git(m.yol);
+      return;
+    }
     if (!m || m.kanal !== KANAL || m.yon !== 'istek' || typeof m.tip !== 'string' || typeof m.id !== 'number') return;
     const yanit = (govde: Record<string, unknown>) => { yanitla({ kanal: KANAL, yon: 'yanit', id: m.id, ...govde }); };
     isle(m.tip, m.veri).then(
