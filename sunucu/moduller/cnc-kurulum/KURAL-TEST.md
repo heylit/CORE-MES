@@ -22,5 +22,6 @@ Dosyalar: `sunucu/moduller/cnc-kurulum/kurallar.test.ts` (saf, 4), `sunucu/modul
 | CK-15 Toplu aktarım (kart #1196): çerçeve toplu kipte düğme koymaz, kayıt yazmaz, listeyi yollar, istenen makineyi üretir | köprü | `KK-12`, `KP-04`, `KP-05`, `TA-02`, `TA-03` |
 | CK-16 Eşleştirilen model yayınlanır ve istasyona bağlanır; yayınlama yetkisi yoksa taslak kalır; Çizim Merkezi'ne yazamayan sayfayı açamaz | ekran + Çizim Merkezi uçları (`cizimler.yayinla`, `cizimler.yaz`, CZ-14) | `MA-04`, `MA-05`, `TA-01`, `TA-04` |
 | CK-17 STEP okuyucusu (WASM) açılışta yüklenmez; ilk STEP açılışında bir kez yüklenir, ikincide yeniden yüklenmez; yükleme hatası anlaşılır iletiyle döner | köprü | `PRT-01`, `SO-01`, `SO-02`, `SO-03`, `SO-04`, `KK-15` |
+| CK-18 Hazırlık sırası: son onay yalnız bütün adımlar (tezgâh, program, bağlama, çene, malzeme, sıfırlama, takımlar ya da magazin, soğutma, ölçüm, sarf) son onayın imzasıyla aynı imzayla onaylıyken verilir; aksi 422 ve kayıt, defter değişmez. Yalnız yeni ya da imzası değişen son onaya uygulanır; adım geri alma ve son onayı kaldırma geçer. Program, ham ölçü ve takım uygunluğu denetimleri ekranda kalır | servis (onay uçları) + `sonOnaySiraDisiMi` | `CK-K24`, `CK-22` |
 
-Prototipin kendi iş kuralları (kesme verisi, stok hesabı, takım ömrü, hazırlık sırası) ekranda kalır (UYUM-BORCU.md); bunlar için sunucu testi yoktur.
+Prototipin öteki iş kuralları (kesme verisi, stok hesabı, takım ömrü) ekranda kalır (UYUM-BORCU.md); bunlar için sunucu testi yoktur. Hazırlık sırası CK-18'dedir.
