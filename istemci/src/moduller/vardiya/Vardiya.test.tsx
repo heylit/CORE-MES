@@ -19,7 +19,10 @@ const TAKVIM: TakvimCevabi = {
     { id: 2, ad: 'Akşam', baslangic: '16:00', bitis: '00:00', aktif: true, surum: 1, molalar: [], netDakika: 480 },
   ],
   matris: [{ isMerkeziId: 10, gun: 1, vardiyaId: 1 }, { isMerkeziId: 10, gun: 1, vardiyaId: 2 }, { isMerkeziId: 11, gun: 2, vardiyaId: 2 }],
-  gunler: [{ tarih: '2026-01-01', tur: 'tatil', ad: 'Yılbaşı' }, { tarih: '2026-10-29', tur: 'tatil', ad: 'Cumhuriyet Bayramı' }],
+  gunler: [
+    { tarih: '2026-01-01', tur: 'tatil', ad: 'Yılbaşı', kaynak: 'ik' }, { tarih: '2026-10-29', tur: 'tatil', ad: 'Cumhuriyet Bayramı', kaynak: 'ik' },
+    { tarih: '2026-11-02', tur: 'kapali', ad: 'Bakım' }, { tarih: '2026-11-03', tur: 'tatil', ad: 'Eski' },
+  ],
   isMerkezleri: [
     { id: 10, kod: 'IM-A', ad: 'Deneme A', aktif: true, haftalikDakika: 450 },
     { id: 11, kod: 'IM-B', ad: 'Deneme B', aktif: true, haftalikDakika: 480 },
@@ -90,7 +93,7 @@ describe('Vardiya', () => {
     ]);
   });
 
-  it('haftayı uygula ve tatilleri temizle iki adımlıdır: ilk dokunuş sorar, ikincisi gönderir', async () => {
+  it('haftayı uygula ve kapalı günleri temizle iki adımlıdır: ilk dokunuş sorar, ikincisi gönderir', async () => {
     const cagrilar = sunucuKur(PLANLAMA);
     ac();
     const kopya = (await screen.findAllByRole('button', { name: 'Bu düzeni diğerlerine kopyala' }))[0]!;
@@ -101,9 +104,29 @@ describe('Vardiya', () => {
     expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/vardiya-matrisi/hafta-uygula', govde: { kaynakIsMerkeziId: 10 } });
     fireEvent.click(screen.getByRole('button', { name: 'Tümünü temizle' }));
     expect(postlar(cagrilar)).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Emin misin? Hepsini sil' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Emin misin? Buradaki günlerin hepsini sil' }));
     await waitFor(() => expect(postlar(cagrilar)).toHaveLength(2));
     expect(postlar(cagrilar)[1]!.yol).toBe('/takvim-gunleri/temizle');
+  });
+
+  it('soru 142 b, 160 a: resmî tatil İK\'dan gelir, burada silinmez; Vardiya kapalı gün ekler, kendi günlerini (eski tatil dahil) kaldırır', async () => {
+    const cagrilar = sunucuKur(PLANLAMA);
+    ac();
+    await screen.findByText('29.10.2026 · Resmî tatil · Cumhuriyet Bayramı');
+    expect(screen.queryByRole('button', { name: 'Resmî tatilleri ekle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '2026-10-29 gününü kaldır' })).toBeNull();
+    expect(screen.getByText('03.11.2026 · Tatil · Eski')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026-11-03 gününü kaldır' })).toBeTruthy();
+    expect(screen.getByText('Resmî tatiller İK ayarlarından girilir; burada yalnız kapalı gün eklenir. Geçmiş tarihli günler ayrı yetkiyle değişir.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '2026-11-02 gününü kaldır' }));
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(1));
+    expect(postlar(cagrilar)[0]!.yol).toBe('/takvim-gunleri/2026-11-02/kaldir');
+    fireEvent.change(screen.getByLabelText('Kapalı gün tarihi'), { target: { value: '04.11.2026' } });
+    fireEvent.blur(screen.getByLabelText('Kapalı gün tarihi'));
+    fireEvent.change(screen.getByLabelText('Kapalı gün adı'), { target: { value: 'Sayım' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tarih ekle' }));
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(2));
+    expect(postlar(cagrilar)[1]).toMatchObject({ yol: '/takvim-gunleri', govde: { tarih: '2026-11-04', tur: 'kapali', ad: 'Sayım' } });
   });
 
   it('yeni vardiya istek kimliğiyle gider; güncelleme okunan sürümü ve bütün alanları taşır', async () => {
@@ -144,8 +167,9 @@ describe('Vardiya', () => {
     expect(screen.queryByRole('button', { name: 'Tümünü temizle' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bu düzeni diğerlerine kopyala' })).toBeNull();
     expect((screen.getByRole('switch', { name: 'Gündüz kullanımda' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('01.01.2026 · Yılbaşı').closest('li')?.className).toContain('tc-vr-gecmis');
-    expect(screen.getByText('29.10.2026 · Cumhuriyet Bayramı').closest('li')?.className).not.toContain('tc-vr-gecmis');
+    expect(screen.getByText('01.01.2026 · Resmî tatil · Yılbaşı').closest('li')?.className).toContain('tc-vr-gecmis');
+    expect(screen.getByText('29.10.2026 · Resmî tatil · Cumhuriyet Bayramı').closest('li')?.className).not.toContain('tc-vr-gecmis');
+    expect(screen.queryByRole('button', { name: '2026-11-02 gününü kaldır' })).toBeNull();
   });
 
   it('vardiya başına personel: çalışan ama kimsesiz vardiya işaretlenir, vardiyası seçilmeyen kişi o vardiyada sayılır; vardiya seçimi kişinin vardiyasını yazar', async () => {

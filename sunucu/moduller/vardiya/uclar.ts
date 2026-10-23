@@ -3,7 +3,7 @@ import {
   calismaTakvimiCevabi, calismaTakvimiSorgusu, fazlaMesaiCevabi, fazlaMesaiGovdesi, fazlaMesaiGuncelleGovdesi, fazlaMesaiIptalGovdesi, fazlaMesaiListeCevabi, fazlaMesaiListeSorgusu,
   fazlaMesaiParametresi, gunlukMesaiCevabi, gunlukMesaiSorgusu, haftaUygulaGovdesi, kisiParametresi, kisiVardiyasiGovdesi, kisiVardiyasiTopluGovdesi, matrisGovdesi, matrisKopyalaGovdesi, matrisTopluGovdesi, planliDurusCevabi,
   planliDurusGovdesi, planliDurusGuncelleGovdesi, planliDurusKaldirCevabi, planliDurusKaldirGovdesi, planliDurusListeCevabi, planliDurusListeSorgusu, planliDurusParametresi,
-  resmiTatilGovdesi, takvimCevabi, takvimGunuGovdesi, vardiyaPersoneliCevabi, tarihParametresi, vardiyaGovdesi, vardiyaGuncelleGovdesi,
+  takvimCevabi, takvimGunuGovdesi, vardiyaPersoneliCevabi, tarihParametresi, vardiyaGovdesi, vardiyaGuncelleGovdesi,
   vardiyaParametresi,
 } from '#paylasilan/sozlesme/vardiya.ts';
 import * as servis from './servis.ts';
@@ -60,10 +60,6 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/takvim-gunleri/:tarih/kaldir', yetki: 'vardiya.yaz', parametre: tarihParametresi, cevap: takvimCevabi,
     isle: ({ db, kullanici, parametre }) => servis.gunSil(db, kullanici, parametre.tarih),
-  }),
-  uc({
-    yontem: 'POST', yol: '/takvim-gunleri/resmi-tatiller', yetki: 'vardiya.yaz', govde: resmiTatilGovdesi, cevap: takvimCevabi,
-    isle: ({ db, kullanici, govde }) => servis.resmiTatilleriEkle(db, kullanici, govde.yil),
   }),
   uc({
     yontem: 'POST', yol: '/takvim-gunleri/temizle', yetki: 'vardiya.yaz', cevap: takvimCevabi,

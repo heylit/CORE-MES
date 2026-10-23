@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  aralik, araliklardanCikar, atamaPayi, durusAraliklari, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, resmiTatiller,
+  aralik, araliklardanCikar, atamaPayi, durusAraliklari, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, takvimGunleriniBirlestir,
   kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari,
 } from './kurallar.ts';
 
@@ -87,11 +87,20 @@ describe('vardiya kuralları', () => {
     assert.equal(kisininIstasyonu([]), null);
   });
 
-  test('VR-03: bugünden önceki tarih geçmiştir; resmî tatiller sabit tarihlerdir; tarih aritmetiği ay ve yıl geçer', () => {
+  test('VR-28: takvim İK tatillerini ve Vardiya günlerini birleştirir; eski Vardiya tatili tatil kalır; aynı gün İK tatili kazanır', () => {
+    assert.deepEqual(takvimGunleriniBirlestir(
+      [{ tarih: '2026-10-29', tur: 'kapali', ad: 'Bakım' }, { tarih: '2026-05-01', tur: 'tatil', ad: 'Eski kayıt' }, { tarih: '2026-12-31', tur: 'kapali', ad: null }],
+      [{ tarih: '2026-10-29', ad: 'Cumhuriyet Bayramı' }, { tarih: '2026-01-01', ad: 'Yılbaşı' }],
+    ), [
+      { tarih: '2026-01-01', tur: 'tatil', ad: 'Yılbaşı', kaynak: 'ik' }, { tarih: '2026-05-01', tur: 'tatil', ad: 'Eski kayıt' },
+      { tarih: '2026-10-29', tur: 'tatil', ad: 'Cumhuriyet Bayramı', kaynak: 'ik' }, { tarih: '2026-12-31', tur: 'kapali', ad: null },
+    ]);
+    assert.deepEqual(takvimGunleriniBirlestir([], []), []);
+  });
+
+  test('VR-03: bugünden önceki tarih geçmiştir; tarih aritmetiği ay ve yıl geçer', () => {
     assert.equal(gecmisMi('2026-10-06', '2026-10-07'), true);
     assert.equal(gecmisMi('2026-10-07', '2026-10-07'), false);
-    assert.deepEqual(resmiTatiller(2026).map((t) => t.tarih).slice(-2), ['2026-08-30', '2026-10-29']);
-    assert.equal(resmiTatiller(2027).length, 7);
     assert.equal(tarihEkle('2026-12-31', 1), '2027-01-01');
     assert.equal(tarihEkle('2026-03-01', -1), '2026-02-28');
     assert.equal(gunFarki('2026-10-01', '2026-10-31'), 31);

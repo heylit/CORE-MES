@@ -192,27 +192,31 @@ function Saatler({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
   );
 }
 
+// Soru 142 b, 160 a: resmî tatilin sahibi İK'dır; burada görünür ama değişmez. Vardiya yalnız kapalı gün ekler; kendi günlerini (142'den önce
+// girilmiş tatil dahil) siler.
 function Tatiller({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
   const [tarih, tarihYaz] = useState('');
   const [ad, adYaz] = useState('');
+  const ikMi = (g: TakvimCevabi['gunler'][number]): boolean => g.kaynak === 'ik';
+  const kendiVar = t.gunler.some((g) => !ikMi(g));
   return (
     <section className="tc-vr-panel" aria-label="Tatiller ve kapalı günler">
       <h3>Tatiller ve kapalı günler ({t.gunler.length})</h3>
       {yaz && (
         <div className="tc-vr-satir">
-          <TarihGirdisi aria-label="Tatil tarihi" deger={tarih} degistir={tarihYaz} bosOlabilir />
-          <input className="tc-alan-kutu" aria-label="Tatil adı" placeholder="Ad (isteğe bağlı)" maxLength={80} value={ad} onChange={(e) => adYaz(e.target.value)} />
-          <Dugme simge="plus" onClick={() => { if (!tarih) return; y.mutate({ yol: '/takvim-gunleri', govde: { tarih, tur: 'tatil', ad: ad.trim() || null } }); tarihYaz(''); adYaz(''); }}>Tarih ekle</Dugme>
-          <Dugme simge="flag" onClick={() => y.mutate({ yol: '/takvim-gunleri/resmi-tatiller', govde: { yil: Number(t.bugun.slice(0, 4)) } })}>Resmî tatilleri ekle</Dugme>
+          <TarihGirdisi aria-label="Kapalı gün tarihi" deger={tarih} degistir={tarihYaz} bosOlabilir />
+          <input className="tc-alan-kutu" aria-label="Kapalı gün adı" placeholder="Ad (isteğe bağlı)" maxLength={80} value={ad} onChange={(e) => adYaz(e.target.value)} />
+          <Dugme simge="plus" onClick={() => { if (!tarih) return; y.mutate({ yol: '/takvim-gunleri', govde: { tarih, tur: 'kapali', ad: ad.trim() || null } }); tarihYaz(''); adYaz(''); }}>Tarih ekle</Dugme>
         </div>
       )}
-      {t.gunler.length === 0 ? <p className="tc-vr-ipucu">Tatil eklenmedi.</p> : (
+      {t.gunler.length === 0 ? <p className="tc-vr-ipucu">Tatil ya da kapalı gün yok.</p> : (
         <ul className="tc-vr-gunler">
           {t.gunler.map((g) => (
             <li key={g.tarih} className={`tc-vr-gun${g.tarih < t.bugun ? ' tc-vr-gecmis' : ''}`}>
-              <span>{tarihMetni(g.tarih)}{g.tur === 'kapali' ? ' · Kapalı' : ''}{g.ad ? ` · ${g.ad}` : ''}</span>
-              {yaz && (
-                <button type="button" className="tc-vr-sil" aria-label={`${g.tarih} tatilini kaldır`}
+              {ikMi(g) && <Simge ad="flag" boyut="k" />}
+              <span>{tarihMetni(g.tarih)}{ikMi(g) ? ' · Resmî tatil' : g.tur === 'kapali' ? ' · Kapalı' : ' · Tatil'}{g.ad ? ` · ${g.ad}` : ''}</span>
+              {yaz && !ikMi(g) && (
+                <button type="button" className="tc-vr-sil" aria-label={`${g.tarih} gününü kaldır`}
                   onClick={() => y.mutate({ yol: `/takvim-gunleri/${g.tarih}/kaldir` })}><Simge ad="x" boyut="k" /></button>
               )}
             </li>
@@ -220,12 +224,12 @@ function Tatiller({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
         </ul>
       )}
       {/* Toplu silme ekleme düğmelerinden ayrı, listenin altında durur: yanlışlıkla dokunulmasın. */}
-      {yaz && t.gunler.length > 0 && (
+      {yaz && kendiVar && (
         <div className="tc-vr-satir">
-          <IkiAdimli tehlike etiket="Tümünü temizle" onayEtiketi="Emin misin? Hepsini sil" gonder={() => y.mutate({ yol: '/takvim-gunleri/temizle' })} />
+          <IkiAdimli tehlike etiket="Tümünü temizle" onayEtiketi="Emin misin? Buradaki günlerin hepsini sil" gonder={() => y.mutate({ yol: '/takvim-gunleri/temizle' })} />
         </div>
       )}
-      <p className="tc-vr-ipucu">Ramazan ve Kurban Bayramı tarihleri her yıl değiştiği için onları tarih seçerek ekle. Geçmiş tarihli günler ayrı yetkiyle değişir.</p>
+      <p className="tc-vr-ipucu">Resmî tatiller İK ayarlarından girilir; burada yalnız kapalı gün eklenir. Geçmiş tarihli günler ayrı yetkiyle değişir.</p>
     </section>
   );
 }

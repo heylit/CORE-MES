@@ -5,7 +5,7 @@ import {
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
   enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinOnayBildirimi,
-  kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, personelBul, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
+  kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, turDenetle, ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
 import type { Govde, IzinGecisi } from './kurallar.ts';
 import { motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -333,5 +333,20 @@ describe('soru 75: kişinin haftalık vardiya planı', () => {
     assert.deepEqual(izinOnayBildirimi(null, izin('Beklemede'), '')?.metin, 'Yıllık izin · 2026-11-02 - 2026-11-04', 'ad yoksa atlanır');
     assert.equal(izinOnayBildirimi(izin('Beklemede'), izin('Beklemede', { gun: 2 }), 'Ad'), null);
     assert.equal(izinOnayBildirimi(null, izin('Onaylandı'), 'Ad'), null);
+  });
+});
+
+describe('IK-80: resmî tatil tarihleri', () => {
+  test('IK-80: yılı boş satır aralıktaki her yıla açılır; takvimde olmayan gün atlanır; aynı gün bir kez, ilk adla; aralık iki ucu dahil', () => {
+    const satirlar = [
+      { yil: null, ay: 1, gun: 1, ad: 'Yılbaşı' }, { yil: null, ay: 2, gun: 29, ad: 'Artık' }, { yil: 2027, ay: 1, gun: 1, ad: 'Yinelenen' },
+      { yil: 2026, ay: 4, gun: 31, ad: 'Olmayan' }, { yil: null, ay: 10, gun: 29, ad: ' Cumhuriyet Bayramı ' },
+    ];
+    assert.deepEqual(resmiTatilTarihleri(satirlar, '2026-10-29', '2028-02-29'), [
+      { tarih: '2026-10-29', ad: 'Cumhuriyet Bayramı' }, { tarih: '2027-01-01', ad: 'Yılbaşı' }, { tarih: '2027-10-29', ad: 'Cumhuriyet Bayramı' },
+      { tarih: '2028-01-01', ad: 'Yılbaşı' }, { tarih: '2028-02-29', ad: 'Artık' },
+    ]);
+    assert.deepEqual(resmiTatilTarihleri([{ yil: null, ay: 5, gun: 1, ad: '' }], '2026-05-02', '2026-04-30'), []);
+    assert.deepEqual(resmiTatilTarihleri([{ yil: null, ay: 5, gun: 1, ad: ' ' }], '2026-05-01', '2026-05-01'), [{ tarih: '2026-05-01', ad: null }]);
   });
 });

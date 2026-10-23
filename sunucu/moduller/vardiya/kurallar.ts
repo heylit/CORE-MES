@@ -299,15 +299,18 @@ export function kisininIstasyonu(atamalar: readonly { istasyonId: number; yuzde:
   return secilen?.istasyonId ?? null;
 }
 
-// Resmî tatiller (sabit tarihli; bayramlar her yıl değiştiği için elle eklenir).
-export const SABIT_RESMI_TATILLER: readonly { ay: number; gun: number; ad: string }[] = [
-  { ay: 1, gun: 1, ad: 'Yılbaşı' }, { ay: 4, gun: 23, ad: 'Ulusal Egemenlik ve Çocuk Bayramı' }, { ay: 5, gun: 1, ad: 'Emek ve Dayanışma Günü' },
-  { ay: 5, gun: 19, ad: 'Atatürk\'ü Anma, Gençlik ve Spor Bayramı' }, { ay: 7, gun: 15, ad: 'Demokrasi ve Millî Birlik Günü' },
-  { ay: 8, gun: 30, ad: 'Zafer Bayramı' }, { ay: 10, gun: 29, ad: 'Cumhuriyet Bayramı' },
-];
-
-export const resmiTatiller = (yil: number): { tarih: string; ad: string }[] =>
-  SABIT_RESMI_TATILLER.map((t) => ({ tarih: `${yil}-${String(t.ay).padStart(2, '0')}-${String(t.gun).padStart(2, '0')}`, ad: t.ad }));
+// VR-28 (soru 142 b): resmî tatilin sahibi İK'dır; takvim İK'nın tatillerini ve Vardiya'nın kendi günlerini birleştirir. Vardiya yeni tatil
+// yazmaz; 142'den önce girilmiş tatil satırı tatil kalır (planlama yalnız tatili tatil sayar) ve Vardiya'dan silinebilir. Aynı gün İK'da
+// tatilse İK'nın satırı görünür (bordro ve fazla mesai türü bunu ister). İK satırı `kaynak: 'ik'` taşır; Vardiya'nın kendi satırı alansızdır.
+export interface TakvimGunu { tarih: string; tur: 'tatil' | 'kapali'; ad: string | null; kaynak?: 'ik' }
+export function takvimGunleriniBirlestir(
+  kendi: readonly { tarih: string; tur: 'tatil' | 'kapali'; ad: string | null }[], tatiller: readonly { tarih: string; ad: string | null }[],
+): TakvimGunu[] {
+  const gunler = new Map<string, TakvimGunu>();
+  for (const g of kendi) gunler.set(g.tarih, { tarih: g.tarih, tur: g.tur, ad: g.ad });
+  for (const t of tatiller) gunler.set(t.tarih, { tarih: t.tarih, tur: 'tatil', ad: t.ad, kaynak: 'ik' });
+  return [...gunler.values()].sort((a, b) => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0));
+}
 
 // VR-03: bugünden önceki tarih geçmiştir (tarih metinleri karşılaştırılabilir).
 export const gecmisMi = (tarih: string, bugun: string): boolean => tarih < bugun;

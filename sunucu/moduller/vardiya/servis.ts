@@ -16,16 +16,16 @@ import type {
 import { AZAMI_TAKVIM_GUNU, takvimGunuGovdesi } from '#paylasilan/sozlesme/vardiya.ts';
 import type { planliDurusListeSorgusu } from '#paylasilan/sozlesme/vardiya.ts';
 import { durusNedeniGetir } from '../durus-nedenleri/disari.ts';
-import { kisilerinIzinleri } from '../ik/disari.ts';
+import { kisilerinIzinleri, resmiTatilGunleri } from '../ik/disari.ts';
 import {
   aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir,
   makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
   aralik, araliklardanCikar, atamaPayi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
-  kisininIstasyonu, molaDenetle, netDakika, resmiTatiller, takvimAraliklari, tarihEkle, vardiyaKadrosu as kadroHesapla,
+  kisininIstasyonu, molaDenetle, netDakika, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
-import type { KadroAtamasi, KadroSatiri, MatrisSatiri } from './kurallar.ts';
+import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import * as s from './sorgular.ts';
 
@@ -103,6 +103,17 @@ export async function calisirMakineSayilari(db: Db): Promise<Map<number, number>
   return sonuc;
 }
 
+// VR-28: takvim günleri = Vardiya'nın kendi günleri + İK'nın resmî tatilleri (aralık iki ucu dahil). Aralıksız okuma (takvim ekranı,
+// `takvimGunleri`) İK tatillerini geçen yılın başından gelecek yılın sonuna kadar açar: her yıl tekrarlayan tatilin sonu yoktur.
+async function gunleriOku(db: Db, baslangic?: string, bitis?: string): Promise<TakvimGunu[]> {
+  let bas = baslangic; let bit = bitis;
+  if (bas === undefined || bit === undefined) {
+    const yil = Number((await s.bugun(db)).slice(0, 4));
+    bas = `${String(yil - 1)}-01-01`; bit = `${String(yil + 1)}-12-31`;
+  }
+  return takvimGunleriniBirlestir(await s.gunler(db), await resmiTatilGunleri(db, bas, bit));
+}
+
 export async function takvim(db: Db): Promise<TakvimCevabi> {
   const vardiyalar = await vardiyaListesi(db);
   const matris = await s.matris(db);
@@ -112,7 +123,7 @@ export async function takvim(db: Db): Promise<TakvimCevabi> {
   return {
     vardiyalar,
     matris,
-    gunler: await s.gunler(db),
+    gunler: await gunleriOku(db),
     isMerkezleri: (await isMerkezleri(db, { pasiflerDahil: true })).map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, haftalikDakika: haftalik(m.id) })),
     kisiVardiyalari: await s.kisiVardiyalari(db),
     kadro: (await vardiyaKadrosu(db)).map(({ isMerkeziId, vardiyaId, kisiIdleri }) => ({ isMerkeziId, vardiyaId, kisiIdleri })),
@@ -216,6 +227,8 @@ export async function matrisKopyala(db: Db, kullanici: Kullanici, g: MatrisKopya
 
 export async function gunYaz(db: Db, kullanici: Kullanici, girdi: TakvimGunuGovdesi): Promise<TakvimCevabi> {
   const g = takvimGunuGovdesi.parse(girdi);
+  // VR-28: Vardiya yalnız kapalı gün yazar; resmî tatil İK ayarlarından girilir.
+  if (g.tur === 'tatil') throw dogrulama('Resmî tatiller İK ayarlarından girilir; burada yalnız kapalı gün eklenir.', 'tur');
   await tesisGeneliDenetle(db, kullanici);
   await gecmisDenetle(db, kullanici, g.tarih);
   await s.gunYaz(db, g);
@@ -229,15 +242,7 @@ export async function gunSil(db: Db, kullanici: Kullanici, tarih: string): Promi
   return takvim(db);
 }
 
-// Sabit tarihli resmî tatiller eklenir; bugünden önceki tarihler atlanır (geçmişe dokunmaz).
-export async function resmiTatilleriEkle(db: Db, kullanici: Kullanici, yil: number): Promise<TakvimCevabi> {
-  await tesisGeneliDenetle(db, kullanici);
-  const bugun = await s.bugun(db);
-  for (const t of resmiTatiller(yil)) if (!gecmisMi(t.tarih, bugun)) await s.gunYaz(db, { tarih: t.tarih, tur: 'tatil', ad: t.ad });
-  return takvim(db);
-}
-
-// VR-10: bütün tatil ve kapalı günler silinir; geçmiş tarihli olanlar yalnız geçmiş yazma işlemiyle, yoksa kalır.
+// VR-10: Vardiya'nın bütün günleri silinir (İK tatilleri kalır); geçmiş tarihli olanlar yalnız geçmiş yazma işlemiyle, yoksa kalır.
 export async function tatilleriTemizle(db: Db, kullanici: Kullanici): Promise<TakvimCevabi> {
   await tesisGeneliDenetle(db, kullanici);
   await s.gunleriSil(db, kullanici.islemler.includes(GECMIS) ? null : await s.bugun(db));
@@ -348,7 +353,8 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
   const kisiVardiyasi = new Map((await s.kisiVardiyalari(db)).map((k) => [k.kisiId, k.vardiyaId]));
   const vardiyalar = new Map((await vardiyaListesi(db)).map((v) => [v.id, v]));
   const matris = await s.matris(db);
-  const gunler = new Map((await s.gunler(db)).map((g) => [g.tarih, g]));
+  // Önceki günden taşan gece vardiyası için bir gün önce de okunur.
+  const gunler = new Map((await gunleriOku(db, tarihEkle(aralik.baslangic, -1), aralik.bitis)).map((g) => [g.tarih, g]));
   const kapali = new Set(gunler.keys());
   const duruslar = await s.takvimDuruslari(db, aralik.baslangic, gunSayisi);
   // Önceki günün fazla mesaisi gece yarısını geçip aralığa taşabilir: bir gün önceden okunur.
@@ -521,7 +527,7 @@ export async function calismaSuresi(db: Db, isMerkeziId: number, tarih: string):
   return (await calismaTakvimi(db, { tur: 'is-merkezi', id: isMerkeziId }, { baslangic: tarih, bitis: tarih }))?.gunler[0]?.dakika ?? 0;
 }
 
-export const takvimGunleri = (db: Db): Promise<s.TakvimGunuSatiri[]> => s.gunler(db);
+export const takvimGunleri = (db: Db): Promise<TakvimGunu[]> => gunleriOku(db);
 // İş merkezi x haftanın günü x vardiya (takvim cevabındaki `matris` satırları); yalnız okur.
 export const vardiyaMatrisi = (db: Db): Promise<MatrisSatiri[]> => s.matris(db);
 
