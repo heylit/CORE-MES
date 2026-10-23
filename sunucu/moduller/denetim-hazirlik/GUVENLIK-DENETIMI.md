@@ -1,6 +1,6 @@
 # denetim-hazirlik: güvenlik denetimi
 
-Kaynak: `sunucu/moduller/denetim-hazirlik/uclar.ts`, `servis.ts`; testler `denetim-hazirlik.test.ts` (BD-01..BD-15). Kural numaraları KURAL-TEST.md'dedir.
+Kaynak: `sunucu/moduller/denetim-hazirlik/uclar.ts`, `servis.ts`; testler `denetim-hazirlik.test.ts` (BD-01..BD-16). Kural numaraları KURAL-TEST.md'dedir.
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
@@ -8,9 +8,9 @@ Kaynak: `sunucu/moduller/denetim-hazirlik/uclar.ts`, `servis.ts`; testler `denet
 | `GET /denetim-hazirlik/damga` | `.oku` ya da `.yaz` | sayaç okuması | BD-01 | BD-07 |
 | `GET /denetim-hazirlik/sorgu` | `.oku` ya da `.yaz` | yalnız prototip koleksiyonu (BD-15), yol biçimi (BD-1), kişiye özel alan (BD-2), koşul ve sınır sunucuda (BD-5) | BD-04 | BD-06, BD-07, BD-09, BD-15 |
 | `GET /denetim-hazirlik/belge` | `.oku` ya da `.yaz` | BD-15, BD-1, BD-2 | BD-01 | BD-06, BD-09, BD-15 |
-| `POST /denetim-hazirlik/belge/yaz` | `.yaz` | BD-15, BD-1, BD-2, sürüm (BD-4), damga (BD-6), kişi ve zaman sunucudan | BD-01, BD-02, BD-03 | BD-03 (409), BD-06, BD-07 (sayfa işlemiyle 403), BD-15 |
-| `POST /denetim-hazirlik/belge/sil` | `.yaz` | BD-15, BD-1, BD-2, BD-6 | BD-05 | BD-07, BD-15 |
-| `POST /denetim-hazirlik/belge/kilitle` | `.yaz` | BD-15, kilit (BD-8) | BD-08 | BD-08 (başkasının geçerli kilidi), BD-15 |
+| `POST /denetim-hazirlik/belge/yaz` | `.yaz` | BD-15, BD-1, BD-2, sürüm (BD-4), damga (BD-6), kişi ve zaman sunucudan; ortak kaydı boşaltan ya da profil silen yazma `.yonet` (BD-16) | BD-01, BD-02, BD-03, BD-16 | BD-03 (409), BD-06, BD-07 (sayfa işlemiyle 403), BD-15, BD-16 |
+| `POST /denetim-hazirlik/belge/sil` | `.yaz` | BD-15, BD-1, BD-2, BD-6; dolu ortak kaydın silinmesi `.yonet` (BD-16) | BD-05, BD-16 | BD-07, BD-15, BD-16 |
+| `POST /denetim-hazirlik/belge/kilitle` | `.yaz` | BD-15, kilit (BD-8), kilit gövdesi BD-16 | BD-08 | BD-08 (başkasının geçerli kilidi), BD-15, BD-16 |
 | `GET /denetim-hazirlik/kisiler` | `.oku` ya da `.yaz` | yalnız etkin kişilerin no ve adı (`kisiler/disari.ts`) | BD-07 | BD-07 |
 | `POST /denetim-hazirlik/kurulum` | `.yonet` (yalnız yönetici) | işaret belgesi varsa kurmaz (BD-10) | BD-11 | BD-11 (`.yaz` ile 403) |
 | `GET /denetim-hazirlik/oda` | `.oku` ya da `.yaz` | yalnız son 45 sn (BD-11) | BD-12 | BD-07 |
@@ -22,4 +22,5 @@ Prototipin iş kuralları (denetim programı, bulgu, DÖF, kapanış) ekrandadı
 
 ## Bilinen açık (bağlamada kapanacak)
 - KAPANDI (B7): genel belge deposu ucu artık yalnız prototipin kaydına açık (BD-15); prototip başka koleksiyon kullanmadığı için ayrı uç açılmadı. Kayıt tablolara ayrıştırılınca kayıt başına uç gelir.
+- KAPANDI (226 a): profil silme, "Tümünü sil" ve dolu kaydı boşaltan yazma yalnız yönetici (BD-16). Silme, sıfırlama ve yedekten yükleme düğmeleri ekranda yalnız yöneticiye görünür.
 - Onaylı ya da kesinleşmiş kayıt kavramı sunucuda yok; tamamlanmış denetim kaydı yazma yetkisi olan herkesçe değiştirilebilir. Prototipin akışı budur; kilit kayıt tablosuyla gelir (Soru 162 a, UYUM-BORCU).
