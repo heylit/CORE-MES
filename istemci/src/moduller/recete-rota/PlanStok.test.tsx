@@ -787,7 +787,7 @@ describe('Plan öncelik ayarları plan ayarlarının yanında (plan.bedel-ayari)
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
     expect(s.bedelYazilan ?? []).toEqual([]);
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
-    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ tabanBedelSaat: 300, finansmanOraniGun: null, karRiskiOraniGun: 0.25, yuksekEsigi: 1.5, dusukEsigi: 0.6, ...CARPANLAR }]); });
+    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ tabanBedelSaat: 300, finansmanOraniGun: null, karRiskiOraniGun: 0.25, yuksekEsigi: 1.5, dusukEsigi: 0.6, ...CARPANLAR, taslak: null }]); });
     await waitFor(() => { expect(e.bildirim()).toContain('Öncelik ayarları kaydedildi'); });
     expect(e.al<HTMLInputElement>('#bedelAyari input[data-bedel="tabanBedelSaat"]').value).toBe('300');
     s.bedelCevabi = () => json(403, { kod: 'YETKISIZ', mesaj: 'Bu işlem için yetkiniz yok.' });
@@ -808,7 +808,7 @@ describe('Plan öncelik ayarları plan ayarlarının yanında (plan.bedel-ayari)
     fireEvent.input(e.al<HTMLInputElement>('#bedelAyari input[data-bedel="sinifACarpani"]'), { target: { value: '1,8' } });
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
-    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ ...BEDEL, sinifACarpani: 1.8 }]); });
+    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ ...BEDEL, sinifACarpani: 1.8, taslak: null }]); });
   }, 60000);
 });
 

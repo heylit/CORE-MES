@@ -9,14 +9,15 @@ export const PLAN_STOK_KOMUTLARI: Readonly<Record<string, KomutTanimi>> = {
   'plan-yaz': { yol: '/plan/kuyruklari-yaz', alanlar: ['kuyruklar', 'planSurumu', 'taslak'], tekrarKorumali: true },
   // Plan ayarı yalnız plan modülünün ayar ucundan yazılır, kişiye yeni açılan taslağa; canlı ayar taslak canlıya alınınca değişir.
   'plan-ayar': { yol: '/plan/ayar', alanlar: ['ayar'], sabit: { taslak: null }, tekrarKorumali: true },
-  // Plan öncelik ayarları canlıdır, taslağa gitmez: bütün siparişlerin sırasını değiştirir, plan.bedel-ayari ister. Öncelik ve müşteri sınıfı
-  // çarpanları (265 a) aynı uçtan gider; aralık ve yetki denetimi plan modülündedir.
+  // Plan öncelik ayarları bütün siparişlerin sırasını değiştirir, plan.bedel-ayari ister; 148 a: kişiye açılan yeni taslağa yazılır, canlıya
+  // taslağın onayıyla geçer. Öncelik ve müşteri sınıfı çarpanları (265 a) aynı uçtan gider; aralık ve yetki denetimi plan modülündedir.
   'plan-bedel-ayari': {
     yol: '/plan/bedel-ayari',
     alanlar: [
       'tabanBedelSaat', 'finansmanOraniGun', 'karRiskiOraniGun', 'yuksekEsigi', 'dusukEsigi',
       'yuksekCarpani', 'normalCarpani', 'dusukCarpani', 'sinifACarpani', 'sinifBCarpani', 'sinifCCarpani',
     ],
+    sabit: { taslak: null },
     tekrarKorumali: true,
   },
   // Stok: bitmiş emrin kalan sarfı ve çıktısı (prototipin "emri tamamla"sı). `:id` üretim emrinin sayı kimliğidir.
