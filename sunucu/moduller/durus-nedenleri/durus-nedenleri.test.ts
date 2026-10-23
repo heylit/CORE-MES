@@ -312,7 +312,7 @@ describe('durus-nedenleri (gerçek PostgreSQL)', () => {
     assert.equal((await hurdaGuncelle(hurda, { aktif: false })).statusCode, 200);
   });
 
-  test('DN-S4: nedenleri yalnız kendi sayfası ya da terminal okur; ikisi de olmayan rol 403 alır', async () => {
+  test('DN-S4: nedenleri yalnız kendi sayfası, terminal ya da Vardiya sayfası okur; üçü de olmayan rol 403 alır', async () => {
     const durus = await durusAc();
     const hurda = await hurdaAc();
     const okur = async (cerez: string) => [
@@ -322,14 +322,18 @@ describe('durus-nedenleri (gerçek PostgreSQL)', () => {
     const sayfa = await tekIslemliKisi('dn-sayfa', 'sayfa.durus-nedenleri');
     const terminal = await tekIslemliKisi('dn-terminal', 'sayfa.terminal');
     const arkon = await tekIslemliKisi('dn-arkon', 'sayfa.arkon');
+    // 195 a: Vardiya > Planlı duruşlar neden listesini okur (İK ve idari işler).
+    const vardiya = await tekIslemliKisi('dn-vardiya', 'sayfa.vardiya');
     assert.deepEqual(await okur(sayfa), [200, 200]);
     assert.deepEqual(await okur(terminal), [200, 200]);
+    assert.deepEqual(await okur(vardiya), [200, 200]);
     assert.deepEqual(await okur(arkon), [403, 403]);
     const liste = (await istek(terminal, 'GET', '/durus-nedenleri')).json<{ nedenler: Durus[] }>();
     assert.equal(liste.nedenler.some((n) => n.id === durus.id), true);
     // Okuma yetkisi yazma vermez.
     assert.equal((await durusGuncelle(durus, {}, sayfa)).statusCode, 403);
     assert.equal((await hurdaGuncelle(hurda, {}, terminal)).statusCode, 403);
+    assert.equal((await durusGuncelle(durus, {}, vardiya)).statusCode, 403);
   });
 
   test('DN-S5: disari.ts okuması uç yetkisinden geçmez; HTTP ile okuyamayan Arkon da nedenleri sunucuda alır', async () => {
