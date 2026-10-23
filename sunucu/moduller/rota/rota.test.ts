@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { adimBilesenleri, adimEtkinSureleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { isler } from './isler.ts';
 
@@ -824,6 +824,36 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       { isEmriId: ilk, malzemeNo: hm, miktar: '2.5', fireYuzde: '5' },
       { isEmriId: ikinci, malzemeNo: hm, miktar: '1', fireYuzde: '0' },
     ]);
+  });
+
+  test('250 a: emre kopyada adımın fire payı, paralel kullanımı, en küçük partisi, yeniden ayarı ve makine/kişi adayları iş emrine geçer; istasyon adayı geçmez; ihtiyaç adım firesiyle büyür', async () => {
+    const hm = ortakHammadde;
+    const adaylar = [
+      { kaynak: { tur: 'makine' as const, id: makineB }, ayarSuresiDk: 20, birimSureDk: 3 },
+      { kaynak: { tur: 'istasyon' as const, id: istasyonB }, ayarSuresiDk: null, birimSureDk: null },
+    ];
+    const yid = await yururlugeAlinmisRota(await mamulAc(), [
+      yeniAdim({ firePayiYuzde: 20, makineKullanimi: 'paralel', enKucukParca: 4, yenidenAyar: false, adaylar, bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }),
+      yeniAdim(),
+    ]);
+    const e = await istek(c.planlama, 'POST', `/rota/revizyonlar/${yid}/emre-kopyala`, { projeId: denemeProjeId, adet: 8, teslim: null });
+    assert.equal(e.statusCode, 200, e.body);
+    const { uretimEmriId, isEmriIdleri } = e.json<{ uretimEmriId: number; isEmriIdleri: number[] }>();
+    const [ilk, ikinci] = isEmriIdleri;
+    const ie = await vt().tx((db) => db.sorgu<{ id: number; fire: string; kullanim: string; enKucuk: number | null; yenidenAyar: boolean }>(
+      `SELECT id, fire_payi_yuzde::float8::text AS fire, makine_kullanimi AS kullanim, en_kucuk_parca AS "enKucuk", yeniden_ayar AS "yenidenAyar"
+         FROM uretim_emirleri_is_emri WHERE id = ANY($1::int[]) ORDER BY sira`, [isEmriIdleri]));
+    assert.deepEqual(ie, [
+      { id: ilk, fire: '20', kullanim: 'paralel', enKucuk: 4, yenidenAyar: false },
+      { id: ikinci, fire: '0', kullanim: 'tek', enKucuk: null, yenidenAyar: true },
+    ]);
+    const ad = await vt().tx((db) => db.sorgu<{ isEmriId: number; makineId: number | null; kisiId: number | null; ayar: string | null; birim: string | null }>(
+      `SELECT is_emri_id AS "isEmriId", makine_id AS "makineId", kisi_id AS "kisiId", ayar_suresi_dk::float8::text AS ayar, birim_sure_dk::float8::text AS birim
+         FROM uretim_emirleri_is_emri_adayi WHERE is_emri_id = ANY($1::int[]) ORDER BY id`, [isEmriIdleri]));
+    assert.deepEqual(ad, [{ isEmriId: ilk, makineId: makineB, kisiId: null, ayar: '20', birim: '3' }]);
+    // Emir adedi istenen sağlam çıktıdır: %20 fireli adımın girdisi 8 / 0,8 = 10 adet için, firesiz adımınki 8 adet için.
+    const ihtiyac = (await vt().tx((db) => emirlerinMalzemeIhtiyaci(db, [uretimEmriId]))).get(uretimEmriId);
+    assert.deepEqual(ihtiyac?.map((m) => [m.malzemeNo, m.brut]), [[hm, '10.0000'], [hm, '8.0000']]);
   });
 
   test('#861: emre kopyala gövdesindeki projeId üretim emrine gider; pasif ya da olmayan proje reddedilir; projeId verilmezse seri emir açılmaz (224)', async () => {
