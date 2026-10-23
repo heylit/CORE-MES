@@ -78,9 +78,9 @@ describe('acil sipariş denemesinde müşteri seçimi (286 b)', () => {
   it('AMS-2: acil deneme yoksa pencere açılmaz, gövde değişmez; vazgeçilirse canlıya alınmaz', async () => {
     const { yazmalar } = sunucu([{ id: 42, tur: 'ariza', ozet: 'Arıza denemesi' }]);
     ac('/recete-rota');
-    await canliyaAlIste('plan-canliya-al');
+    await canliyaAlIste();
     await waitFor(() => { expect(yazmalar).toHaveLength(1); });
-    expect(yazmalar[0]!.govde).toEqual({ surum: 3, cakismalariKabul: false });
+    expect(yazmalar[0]!.govde).toEqual({ surum: 3, cakismalariKabul: true });
     expect(screen.queryByRole('dialog')).toBeNull();
     cleanup();
     vi.unstubAllGlobals();

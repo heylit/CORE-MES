@@ -2097,8 +2097,9 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // A4 denetim bulguları: Arkon rolü `plan.edit` ister (plan.yaz yetmez); yerinden oynamayan iş (kilitli, dondurulmuş) varken
-  // kuyruğun geri kalanı sıralanır; müdür canlıya alınca Arkon yeni sırayı canlı plandan okur.
-  test('Arkon Planlama sırası: kilitli iş yerinde kalınca öteki işler sıralanır, yerinden oynatılırsa reddedilir; canlıya alınınca paket sırası değişir', async () => {
+  // kuyruğun geri kalanı sıralanır. 147 a: sıra taslakta kalır, paket bunu `siraOnayi` ile söyler (taslakta, onayda); taslak onaylanıp
+  // canlıya alınınca Arkon yeni sırayı canlı plandan okur ve etiket kalkar.
+  test('Arkon Planlama sırası: kilitli iş yerinde kalınca öteki işler sıralanır, yerinden oynatılırsa reddedilir; onay bekleyen sıra pakette görünür, canlıya alınınca paket sırası değişir', async () => {
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
     const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
     const kaynak = await makinesi(ie1!);
@@ -2108,7 +2109,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const sirala = async (cerez: string, onceki: number[], yeni: number[]) => istek<{ taslakId: number; taslakAcildi: boolean }>(
       cerez, 'POST', '/arkon/plan-sira/sirala', { kaynak, onceki, yeni, planSurumu: await planSurumuOku() });
     const amir = await kisiKur(`pl${(sayac += 1)}`, ['arkon.amir', 'sayfa.arkon', 'plan.yaz']);
-    const planlamaci = await kisiKur(`pl${(sayac += 1)}`, ['arkon.planlama', 'sayfa.arkon', 'plan.yaz']);
+    const planlamaci = await kisiKur(`pl${(sayac += 1)}`, ['arkon.planlama', 'sayfa.arkon', 'plan.yaz', 'plan.studyo']);
     const ret = await sirala(amir, [ie1!, ie3!, ie2!], [ie1!, ie2!, ie3!]);
     assert.equal(ret.durum, 403, 'plan.yaz var, Arkon rolünde plan.edit yok');
     assert.match(JSON.stringify(ret.govde), /İş sırasını değiştirme yetkiniz yok/);
@@ -2121,11 +2122,21 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       'SELECT is_emri_id AS id FROM plan_senaryo_yerlesimi WHERE senaryo_id = $1 AND elle_sira IS NOT NULL ORDER BY elle_sira', [c.govde.taslakId]);
     assert.deepEqual(taslak.map((x) => x.id), [ie2, ie3], 'kilitli iş plana gitmez');
     const sira = async (ie: number) => (tmiPlani((await paketler()).get(ieKimligi(ie))?.govde) as { sira: number }).sira;
+    const onay = async () => {
+      const liste = await paketler();
+      return [ie1!, ie2!, ie3!].map((ie) => (tmiPlani(liste.get(ieKimligi(ie))?.govde) as { siraOnayi?: string }).siraOnayi ?? null);
+    };
     assert.deepEqual([await sira(ie1!), await sira(ie3!), await sira(ie2!)], [1, 2, 3], 'taslak canlıya alınmadı');
-    const surum = (await ortam!.sahip.tek<{ surum: number }>('SELECT surum FROM plan_senaryosu WHERE id = $1', [c.govde.taslakId]))!.surum;
-    const al = await istek(yonetici, 'POST', `/plan/senaryolar/${c.govde.taslakId}/canliya-al`, { surum, cakismalariKabul: true });
+    assert.deepEqual(await onay(), [null, 'taslakta', 'taslakta'], 'yalnız taşınan işler; kilitli iş taslağa gitmedi');
+    const surumu = async () => (await ortam!.sahip.tek<{ surum: number }>('SELECT surum FROM plan_senaryosu WHERE id = $1', [c.govde.taslakId]))!.surum;
+    const gonder = await istek(planlamaci, 'POST', `/plan/senaryolar/${c.govde.taslakId}/onaya-gonder`, { surum: await surumu() });
+    assert.equal(gonder.durum, 200, JSON.stringify(gonder.govde));
+    assert.deepEqual(await onay(), [null, 'onayda', 'onayda']);
+    assert.deepEqual([await sira(ie1!), await sira(ie3!), await sira(ie2!)], [1, 2, 3], 'onay bekleyen sıra canlı değil');
+    const al = await istek(yonetici, 'POST', `/plan/senaryolar/${c.govde.taslakId}/canliya-al`, { surum: await surumu(), cakismalariKabul: true });
     assert.equal(al.durum, 200, JSON.stringify(al.govde));
     assert.deepEqual([await sira(ie1!), await sira(ie2!), await sira(ie3!)], [1, 2, 3], 'canlıya alınınca yeni sıra');
+    assert.deepEqual(await onay(), [null, null, null], 'canlıya alınan sıra artık beklemiyor');
   });
 
   // Kart #199 (3b): makinede çalışan işin önüne iş alınabilir, operatör öndeki işe geçince çalışan duraklatılır; dondurulmuş başlamış iş yerinde kalır.

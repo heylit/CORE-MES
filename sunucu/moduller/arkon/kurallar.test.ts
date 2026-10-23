@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -487,6 +487,20 @@ test('plan durumu: kaynak başına sıra, makinede aynı makine, kişide yalnız
   assert.deepEqual(d.get(4), { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'kisi', id: 9 }, zorunlu: true });
   assert.equal(d.get(5), undefined);
   assert.equal(planDurumlari([yer(1, 'kisi', 9)], new Map([[1, null]])).get(1)?.eslesiyor, false);
+});
+
+// 147 a: taslakta sırası değişen canlı iş etiketlenir; onaydaki taslak açıktakinden önce gelir, canlıda olmayan iş etiketlenmez.
+test('sıra onayı: onayda açıktan önce gelir; yalnız canlı işe yazılır', () => {
+  const o = siraOnaylari([{ isEmriId: 1, durum: 'acik' }, { isEmriId: 1, durum: 'onayda' }, { isEmriId: 1, durum: 'acik' }, { isEmriId: 2, durum: 'acik' }, { isEmriId: 3, durum: 'onayda' }]);
+  assert.deepEqual([...o], [[1, 'onayda'], [2, 'taslakta'], [3, 'onayda']]);
+  assert.equal(siraOnaylari([]).size, 0);
+  const canli = { canli: true, sira: 1, eslesiyor: true, kaynak: { tur: 'makine', id: 5 }, zorunlu: true };
+  const planlar = new Map<number, TmiPlanDurumu>([[1, canli], [2, { ...PLANSIZ, taslakta: true }], [4, canli]]);
+  siraOnayiniYaz(planlar, o);
+  assert.deepEqual(planlar.get(1), { ...canli, siraOnayi: 'onayda' });
+  assert.equal(planlar.get(2)?.siraOnayi, undefined, 'canlıda olmayan iş');
+  assert.equal(planlar.has(3), false, 'planda olmayan iş eklenmez');
+  assert.deepEqual(planlar.get(4), canli);
 });
 
 test('başlatma reddi: yalnız bekleyen iş emrinin running olayında, plan canlı ve eşleşmiyorsa', () => {

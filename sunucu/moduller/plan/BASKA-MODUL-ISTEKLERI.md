@@ -33,3 +33,11 @@ Madde 1-3 karşılandı (#414). Kalanlar:
 ## Yük testi (2026-10-18) sonrası: toplu okuma
 - rota: `revizyonlar(db: Db, idler: readonly number[]): Promise<Map<number, RotaRevizyonu>>` (`revizyonGetir` ile aynı biçim); bugün farklı
   revizyon başına üç sorgu.
+
+## Onay adımı (H1, H5; 2026-10-23)
+- recete-rota (istemci): `plan-canliya-al` ve `plan-senaryo-canliya-al` önce `onaya-gonder` çağırmalı ya da onaya gönderme komutuna dönmeli (H2/H3); `plan-bedel-ayari` gövdesine `taslak` (yoksa null) eklenir, cevap `PlanCevabi`.
+- recete-rota (sunucu testleri): `plan-senaryo-komut.test.ts`, `canliya-al.test.ts` canlıya almadan önce taslağı onaya gönderir.
+- siparisler (istemci): `SiparisCarpani.tsx` çarpanı taslağa yazar (`taslak: null`), cevap `PlanCevabi`; ekran çarpanın onayla geçeceğini söyler.
+- arkon: `yansima.test.ts` canlıya almadan önce onaya gönderir; operatöre bekleyen sıra `bekleyenSiralar` ile (H6).
+- çekirdek: `sunucu/akis-sagligi.test.ts` canlıya almadan önce onaya gönderir; bedel ve çarpan taslaktan.
+- paylasilan (H0 ikinci yama): `plan.dort-goz` ayar tanımı; `bedelAyariTaslakGovdesi` ve `siparisCarpaniTaslakGovdesi`'nde `taslak` isteğe bağlı.

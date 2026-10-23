@@ -1425,7 +1425,7 @@ function rotaSecimModali(){
   modal(`<h3>Rota değişikliği hangi emirlere uygulansın?</h3>
     <p class="hint">Bu emirler eski rotayla açıldı. Seçilen emirlere yeni rota uygulanır; başlamış ya da bitmiş adımlar değişmez. Seçilmeyen emir açıldığı rotada kalır.</p>
     <div class="tbl-wrap"><table class="rota-secim"><thead><tr><th><span class="sr-only">Seç</span></th><th>Emir</th><th>Durum</th><th>Etki</th></tr></thead><tbody>${A.map(satir).join("")}</tbody></table></div>
-    <div class="btnrow" style="margin-top:12px"><button class="btn primary" data-act="rotaSecimUygula">${ico("plan")}Seçilenlere uygula ve canlıya al</button><button class="btn" data-act="closeModal">Vazgeç</button></div>`);
+    <div class="btnrow" style="margin-top:12px"><button class="btn primary" data-act="rotaSecimUygula">${ico("plan")}Seçilenlere uygula ve onaya gönder</button><button class="btn" data-act="closeModal">Vazgeç</button></div>`);
 }
 async function rotaSecimUygula(){
   const secilen = Array.from(document.querySelectorAll("#modal [data-rg]")).filter(x => x.checked && !x.disabled).map(x => x.dataset.rg);
@@ -3758,8 +3758,8 @@ function enginePanel(P){
       <button class="btn sm" data-act="freezePlan" ${(S.freezeDays||0)>0?"":"disabled"}>Önümüzdeki ${S.freezeDays||0} günü dondur</button>
       ${Object.keys(st.frozen).length?`<button class="btn sm ghost" data-act="unfreezeAll">${ui.armed==="unfreeze"?"Emin misin? Dondurmayı kaldır":"Dondurmayı kaldır"}</button>`:""}
       <span class="hint" style="font-size:.8rem;flex-basis:100%">Dondurulan işlerin istasyonu, miktarı ve başlangıç saati sabit kalır; yeni emir, öncelik ya da kural değişikliği yalnızca bölgenin dışını etkiler. Atölyeye günlük plan verirken dondurman önerilir. Önceki adımı geciken dondurulmuş iş, ancak o adım bitince başlar.</span></div>
-    ${planBagli()?`<div class="frzbar"><span class="lbl" style="margin:0">Canlı plan</span><button class="btn sm primary" data-act="planYaz">Canlıya al</button>
-      <span class="hint" style="font-size:.8rem;flex-basis:100%">Bu sayfanın hesapladığı makine kuyruklarını (sıra, atama, dondurma) ve plan ayarını canlı plana yazar; Üretim Terminali ve Arkon Hazırlık sırayı oradan okur. Canlıya alınmamış değişiklik üstteki şeritte görünür. Saatleri plan modülü makinenin verimi ve takvimiyle kurar; başlamış, kilitli ya da dondurulmuş iş yerinde kalır. Canlıya alma yetkin yoksa plan taslağa yazılır.</span></div>`:""}
+    ${planBagli()?`<div class="frzbar"><span class="lbl" style="margin:0">Canlı plan</span><button class="btn sm primary" data-act="planYaz">Onaya gönder</button>
+      <span class="hint" style="font-size:.8rem;flex-basis:100%">Bu sayfanın hesapladığı makine kuyruklarını (sıra, atama, dondurma) ve plan ayarını plan taslağına yazar ve taslağı onaya gönderir; onaylayan Planlama stüdyosunda canlıya alınca Üretim Terminali ve Arkon Hazırlık sırayı oradan okur. Canlıya alınmamış değişiklik üstteki şeritte görünür. Saatleri plan modülü makinenin verimi ve takvimiyle kurar; başlamış, kilitli ya da dondurulmuş iş yerinde kalır.</span></div>`:""}
     ${manual.length?`<p class="hint" style="margin-top:6px">${manual.length} istasyonda Kanban'dan elle verilen sıra kuralın yerine geçiyor (${manual.map(k=>esc(station(k).code)).join(", ")}). <button class="linkbtn" data-act="clearQueues">${ui.armed==="clearq"?"Emin misin? Elle sıraları sil":"Elle sıraları temizle"}</button></p>`:""}
     ${ui.cmp?`<div class="tbl-wrap" style="margin-top:12px"><table class="cmp"><thead><tr><th>Kural</th><th>Yön</th><th class="n">Geciken</th><th class="n">Ağırlıklı gecikme</th><th class="n">Ort. atölyede kalma</th><th class="n">Ort. akış</th><th>Son bitiş</th><th></th></tr></thead><tbody>
       ${ui.cmp.map((c,i)=>`<tr class="${i===0?"best":""} ${cur(c.rule,c.dir)?"curr":""}"><td><b>${esc(RULES[c.rule].n)}</b>${i===0?` <span class="tagb">en iyi</span>`:""}</td><td>${esc(DIRS[c.dir].n)}</td><td class="n">${c.k.late}</td><td class="n">${fmt(c.k.wt,1)} gün</td><td class="n">${fmt(c.k.shop,1)} gün</td><td class="n">${fmt(c.k.flow,1)} gün</td><td>${fmtDate(finishDate(c.base, c.k.end))}</td><td>${cur(c.rule,c.dir)?`<span class="hint" style="font-size:.8rem">Kullanılıyor</span>`:`<button class="btn sm" data-act="applyPlan" data-rule="${c.rule}" data-dir="${c.dir}">Uygula</button>`}</td></tr>`).join("")}
@@ -4767,7 +4767,7 @@ function guarded(name, fn){
   if (!seenIntro) { try { localStorage.setItem(SCN_KEY+":intro","1"); } catch(e) {}
     modal(`<h3>Değişikliğin bir taslağa alındı</h3>
       <p>Canlı plan atölyenin uyguladığı plandır, o yüzden doğrudan değişmez. Yaptığın değişiklik <b>"${esc(scnMeta(id).name)}"</b> adlı taslak senaryoya yazıldı ve artık bu taslak üzerindesin.</p>
-      <ul class="sc-ch"><li>Üstteki mavi şerit taslakta olduğunu ve sonucun canlıdan iyi mi kötü mü olduğunu gösterir.</li><li>İstediğin kadar değişiklik yap; hepsi bu taslağa yazılır.</li><li>Beğenirsen "Onayla ve canlıya al", beğenmezsen Plan stüdyosundan sil.</li></ul>
+      <ul class="sc-ch"><li>Üstteki mavi şerit taslakta olduğunu ve sonucun canlıdan iyi mi kötü mü olduğunu gösterir.</li><li>İstediğin kadar değişiklik yap; hepsi bu taslağa yazılır.</li><li>Beğenirsen "Onaya gönder", beğenmezsen Plan stüdyosundan sil. Canlıya onaylayan alır.</li></ul>
       <div class="btnrow"><button class="btn primary" data-act="closeModal">Anladım</button><button class="btn" data-act="tab" data-tab="studio" onclick="closeModal()">Plan stüdyosuna git</button></div>`);
   } else toast(`<b>Taslağa alındı:</b> ${esc(scnMeta(id).name)}. Canlı plan değişmedi.`);
 }
@@ -4899,7 +4899,7 @@ function scnCard(m, LP){
       ${(P.kpi.unplanned||0)>(LP.kpi.unplanned||0)?`<p class="badt" style="font-size:.82rem;margin-top:4px">${P.kpi.unplanned} adım planlanamıyor (makine ya da vardiya yok); tarihler yanıltıcı olabilir.</p>`:""}</div></div>
     <div class="btnrow" style="margin-top:10px">
       ${open?`<button class="btn sm" data-act="exitStudio">Taslaktan çık</button>`:`<button class="btn sm" data-act="openScenario" data-id="${m.id}">${eski?"Aç ve görüntüle":"Aç ve düzenle"}</button>`}
-      <button class="btn sm primary" data-act="publishScenario" data-id="${m.id}"${kapali}>${ui.armed==="pub:"+m.id?"Emin misin? Canlıya al":"Onayla ve canlıya al"}</button>
+      <button class="btn sm primary" data-act="publishScenario" data-id="${m.id}"${kapali}>${ui.armed==="pub:"+m.id?"Emin misin? Onaya gönder":"Onaya gönder"}</button>
       <button class="btn sm ghost" data-act="dupScenario" data-id="${m.id}"${kapali}>Çoğalt</button>
       <button class="btn sm ghost danger" data-act="delScenario" data-id="${m.id}">${ui.armed==="dels:"+m.id?"Emin misin?":"Sil"}</button>
     </div></div>`;
@@ -4915,7 +4915,7 @@ function tabStudio(){
     <div class="how">
       <div><span class="hn">1</span><b>Canlı plan korunur</b><p>Atölye ve Kanban canlı planı uygular. Canlı plan kendiliğinden değişmez.</p></div>
       <div><span class="hn">2</span><b>Değişiklikler senaryoya yazılır</b><p>Herhangi bir sekmede bir şey değiştirdiğinde ya da aşağıdan bir deneme seçtiğinde bir senaryo oluşur. İstediğin kadar senaryo deneyebilirsin.</p></div>
-      <div><span class="hn">3</span><b>Karşılaştır, onayla</b><p>Her senaryonun sonucu canlıyla yan yana görünür. Beğendiğini "Onayla ve canlıya al" ile uygula, diğerlerini sil.</p></div>
+      <div><span class="hn">3</span><b>Karşılaştır, onayla</b><p>Her senaryonun sonucu canlıyla yan yana görünür. Beğendiğini "Onaya gönder" ile onaya gönder, diğerlerini sil. Canlıya Planlama stüdyosunda onaylayan alır.</p></div>
     </div>
     <div class="modebox ${act?"scn":""}">${act?`<span class="sb-badge">TASLAK</span> <b>"${esc(scnMeta(act).name)}"</b> senaryosu üzerinde çalışıyorsun. Sekmelerde yaptığın her değişiklik buna yazılır; canlı plan değişmez. <button class="btn sm" data-act="exitStudio">Taslaktan çık, canlıyı gör</button>`
       :`<span class="sb-badge live">CANLI</span> Şu an canlı planı görüyorsun. Bir değişiklik yaptığında otomatik olarak bir senaryoya geçilir. <button class="btn sm" data-act="newScenario">Boş senaryo aç</button>`}</div>
@@ -4928,10 +4928,10 @@ function tabStudio(){
       <div class="order">${fld("Senaryo adı", `<input data-s="scnname" data-id="${act}" data-f="name" value="${esc(scnMeta(act).name)}" aria-label="Senaryo adı"${eskiSenaryo(scnMeta(act))?" disabled":""}>`)}${fld("Not", `<input data-s="scnname" data-id="${act}" data-f="note" value="${esc(scnMeta(act).note||"")}" placeholder="Bu senaryoda neyi deniyorsun?" aria-label="Senaryo notu" style="min-width:22rem"${eskiSenaryo(scnMeta(act))?" disabled":""}>`)}</div>
       <h4 class="dh">Tüm değişiklikler (${changes.length})</h4>
       ${changes.length?`<div class="chg">${Object.keys(groups).map(g=>`<div class="chg-g"><b>${esc(g)}</b><ul>${groups[g].map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`).join("")}</div>`:`<p class="hint">Henüz değişiklik yok.</p>`}
-      ${conf.length?`<p class="hint warnbox">Bu senaryo açıldıktan sonra canlıda da değişen ${conf.length} kayıt var; canlıya alırsan senaryodaki hâli geçerli olur. <button class="linkbtn" data-act="rebaseScenario" data-id="${act}">Canlıdaki son değişiklikleri senaryoya al</button></p>`
+      ${conf.length?`<p class="hint warnbox">Bu senaryo açıldıktan sonra canlıda da değişen ${conf.length} kayıt var; onaylanırsa senaryodaki hâli geçerli olur. <button class="linkbtn" data-act="rebaseScenario" data-id="${act}">Canlıdaki son değişiklikleri senaryoya al</button></p>`
         : planJSON(A.base)!==planJSON(liveState()) ? `<p class="hint warnbox">Canlı plan bu senaryo açıldıktan sonra değişti. <button class="linkbtn" data-act="rebaseScenario" data-id="${act}">Canlıdaki son değişiklikleri senaryoya al</button></p>` : ""}
       <h4 class="dh">Canlıya göre etkisi</h4>${impactHTML(LP, curPlan())}
-      <div class="btnrow scn-acts"><button class="btn primary" data-act="publishScenario" data-id="${act}"${eskiSenaryo(scnMeta(act))?" disabled":""}>${ui.armed==="pub:"+act?"Emin misin? Canlıya al":"Onayla ve canlıya al"}</button><button class="btn" data-act="discardScenario" data-id="${act}"${eskiSenaryo(scnMeta(act))?" disabled":""}>${ui.armed==="disc:"+act?"Emin misin? Değişiklikleri at":"Değişiklikleri at"}</button><button class="btn ghost" data-act="exitStudio">Taslaktan çık</button></div>
+      <div class="btnrow scn-acts"><button class="btn primary" data-act="publishScenario" data-id="${act}"${eskiSenaryo(scnMeta(act))?" disabled":""}>${ui.armed==="pub:"+act?"Emin misin? Onaya gönder":"Onaya gönder"}</button><button class="btn" data-act="discardScenario" data-id="${act}"${eskiSenaryo(scnMeta(act))?" disabled":""}>${ui.armed==="disc:"+act?"Emin misin? Değişiklikleri at":"Değişiklikleri at"}</button><button class="btn ghost" data-act="exitStudio">Taslaktan çık</button></div>
     </div>`:""}
   </section>`;
 }
@@ -4955,7 +4955,7 @@ function studioBar(){
   const eski = eskiSenaryo(m);
   return `<div class="studio-bar"><div class="wrap"><span class="sb-badge">TASLAK</span><b>${esc(m.name)}</b><span class="hint">${eski?"Eski senaryo, yalnız görüntülenir.":"Canlı plan değişmedi."}</span>
     <span>Zamanında %${fmt(SP.kpi.onTime*100,0)} <small>(canlı %${fmt(LP.kpi.onTime*100,0)})</small>, geciken ${SP.kpi.late} <small>(canlı ${LP.kpi.late})</small></span><span class="vpill v-${v.k}">${v.t}</span>
-    <span class="grow1"></span><button class="btn sm" data-act="tab" data-tab="studio">Sonucu gör</button><button class="btn sm primary" data-act="publishScenario" data-id="${ui.studio}"${eski?" disabled":""}>${ui.armed==="pub:"+ui.studio?"Emin misin?":"Onayla ve canlıya al"}</button><button class="btn sm ghost" data-act="exitStudio">Taslaktan çık</button></div></div>`;
+    <span class="grow1"></span><button class="btn sm" data-act="tab" data-tab="studio">Sonucu gör</button><button class="btn sm primary" data-act="publishScenario" data-id="${ui.studio}"${eski?" disabled":""}>${ui.armed==="pub:"+ui.studio?"Emin misin?":"Onaya gönder"}</button><button class="btn sm ghost" data-act="exitStudio">Taslaktan çık</button></div></div>`;
 }
 function studioAct(a, d){
   if (a==="whatIf") { runWhatIf(d.v); return true; }
@@ -4972,7 +4972,7 @@ function studioAct(a, d){
     studio.data[d.id] = {base:L, cur:normalize(cur)}; if (ui.studio===d.id) { st = studio.data[d.id].cur; invalidate(); } studioPersist(d.id); senaryoTaslaginaYazSonra(d.id); render(); toast(`Senaryo canlının son hâline göre yenilendi${cf.length?`; ${cf.length} kayıtta senaryodaki hâl korundu`:""}.`); return true; }
   if (a==="publishScenario") { const k = "pub:"+d.id; if (ui.armed!==k) { ui.armed = k; render(); return true; } ui.armed = null;
     const s0 = studio.data[d.id]; if (!s0 || eskiSenaryo(scnMeta(d.id))) return true; if (ui.studio===d.id) save();
-    if (planBagli() && scnMeta(d.id).taslak) { senaryoCanliyaAl(d.id); return true; }
+    if (planBagli() && scnMeta(d.id).taslak) { senaryoOnayaGonder(d.id); return true; }
     senaryoYereldeCanliyaAl(d.id); if (planBagli()) planYaz({sessiz:true});
     return true; }
   return false;
@@ -4988,16 +4988,16 @@ function senaryoYereldeCanliyaAl(id){
   studioRemove(id); ui.tab = "plan"; render();
   toast(`<b>${esc(nm0)}</b> canlı plana aktarıldı.${cf.length?` ${cf.length} kayıtta canlıdaki sonraki değişikliğin üzerine yazıldı.`:""}`);
 }
-/* Taslak önce senaryonun son hâliyle yazılır, sonra plan modülü onu canlıya alır (plan.canliya-al ister). Başaramazsa senaryo olduğu gibi kalır. */
-async function senaryoCanliyaAl(id){
+/* Canlıya tek kapı: taslak senaryonun son hâliyle yazılır ve onaya gönderilir; canlıya onaylayan Planlama stüdyosunda alır. Onaydaki taslak
+   donmuştur (plan modülü yazmayı reddeder): senaryo bu ekranda kalır, sonraki değişiklik yeni senaryo gerektirir. Başaramazsa senaryo olduğu gibi kalır. */
+async function senaryoOnayaGonder(id){
   const t = scnMeta(id).taslak;
   clearTimeout(SENARYO_YAZ.timer); PLANB.yaziyor = true; render();
-  try { await senaryoTaslaginaYaz(id, true); await window.tmi.komut("plan-senaryo-canliya-al", {taslak:t}); }
-  catch (h) { toast(esc((h && h.message) || "Senaryo canlıya alınamadı.")); return; }
+  try { await senaryoTaslaginaYaz(id, true); await window.tmi.komut("plan-senaryo-onaya-gonder", {taslak:t}); }
+  catch (h) { toast(esc((h && h.message) || "Senaryo onaya gönderilemedi.")); return; }
   finally { PLANB.yaziyor = false; render(); }
-  if (!studio.data[id]) return;
-  senaryoYereldeCanliyaAl(id);
-  PLANB.canliKur = true; await baglaYukle(); render();
+  const m = scnMeta(id); if (m) { m.onayda = true; studioPersist(); }
+  toast(`<b>${esc((m && m.name) || "Senaryo")}</b> onaya gönderildi. Canlı plan, onaylayan Planlama stüdyosunda canlıya alınca değişir.`);
 }
 
 /* ================= Stok ================= */
@@ -6062,7 +6062,7 @@ function emirAct(a, d){
 }
 /* ================= Bağlı plan ve stok hareketleri (kart #1186) =================
    Plan motoru bu sayfada çalışır; sunucudaki plan motoru değişmez. Plan ayarı sunucudan okunur (durum.settings) ve değiştikçe plan modülüne
-   yazılır; "Planı sunucuya yaz" bu sayfanın hesapladığı makine kuyruklarını (sıra, atama, dondurma) plan modülüne yazar ve canlıya almayı dener.
+   yazılır; "Planı sunucuya yaz" bu sayfanın hesapladığı makine kuyruklarını (sıra, atama, dondurma) plan modülüne yazar ve taslağı onaya gönderir.
    Üretim Terminali sırayı canlı plandan okur. Saatleri plan modülü makinenin verimi ve takvimiyle kurar (kuyruk sırası bu sayfanındır).
    VARSAYIM (emirler bağlaması, kart #1185): emir kimliği sunucu emrinin sayı kimliği, emir no `uretim_emri.emir_no`, adım sırası (seq)
    sunucudaki op numarasıdır. Sunucu emri olmayan, makinesi sunucu makinesi olmayan ve başlamış ya da bitmiş iş yazılmaz. */
@@ -6119,14 +6119,16 @@ async function bedelKaydet(){
   ui.armed = null; BEDEL.yaziyor = true; render();
   try {
     const r = await window.tmi.komut("plan-bedel-ayari", yeni);
-    BEDEL.ayar = r && r.sonuc || yeni; BEDEL.taslak = {};
-    toast("Öncelik ayarları kaydedildi. Siparişlerin önceliği yeniden hesaplanır.");
+    /* 148 a: ayar kişiye açılan taslağa yazılır (cevap taslağın planıdır); canlıya taslağın onayıyla geçer. */
+    const t = r && r.sonuc && r.sonuc.taslak;
+    BEDEL.ayar = yeni; BEDEL.taslak = {};
+    toast(`Öncelik ayarları taslağa yazıldı${t && t.id ? ` (taslak ${esc(t.id)})` : ""}. Siparişlerin önceliği taslak onaylanıp canlıya alınınca değişir.`);
   } catch (h) {
     toast(esc((h && h.message) || "Öncelik ayarları yazılamadı."));
   }
   BEDEL.yaziyor = false; render();
 }
-const PLANB = {imza:"", bekleyen:false, yaziyor:false, degisti:null, canliKur:true, eskiBolme:new Map()};
+const PLANB = {imza:"", bekleyen:false, yaziyor:false, degisti:null, canliKur:true, eskiBolme:new Map(), onayda:null};
 /* Eşzamanlı planlama (kullanıcı kararı 16.10.2026, "Koruma + uyarı"): yazma okunan canlı plan sürümünü taşır; arada başkası canlıya aldıysa
    plan modülü 409 döner ve hiçbir şey yazılmaz. Ekran sürümü kısa aralıkla sorar; değiştiyse ve kullanıcı bir alana yazmıyorsa şeritte
    söyler. Yerel değişiklik silinmez: kullanıcı "Yenile" ile canlı planı okuyunca yeniden canlıya alabilir. */
@@ -6270,10 +6272,10 @@ function elleSiraDusenler(){
   }
   return dusen;
 }
-/* Canlıya al: önce taslak yazılır (değiştiyse ayar /plan/ayar ile kişiye açılan taslağa, kuyruk aynı taslağa), sonra plan modülü o taslağı
-   canlıya alır. Canlıya alma reddedilirse (yetki) plan taslakta kalır ve Plan sayfasından canlıya alınır. */
+/* Onaya gönder: önce taslak yazılır (değiştiyse ayar /plan/ayar ile kişiye açılan taslağa, kuyruk aynı taslağa), sonra taslak onaya gider;
+   canlıya onaylayan Planlama stüdyosunda alır. Gönderme reddedilirse (yetki) plan taslakta kalır. */
 /* Dondurma plan modülünündür (plan.kilitle). Bağlıyken düğmeler plan modülünün dondurma uçlarına gider: canlıda ekranın kuyruğu taslağa,
-   dondurma aynı taslağa yazılır ve taslak canlıya alınır (ekranın dondurması canlıdan kurulur); senaryoda senaryonun taslağına yazılır ve
+   dondurma aynı taslağa yazılır ve taslak onaya gider (ekranın dondurması canlıdan kurulur, onaylanınca görünür); senaryoda senaryonun taslağına yazılır ve
    ekrandaki dondurma senaryoda kalır. Bağlı değilse false döner, dondurma yalnız bu ekranda yapılır. */
 function dondurmaYaz(komut, girdi, ozet){
   if (!planBagli()) return false;
@@ -6297,9 +6299,9 @@ function canlidaDonmus(an){
   return !!(C && Array.isArray(C.kuyruklar) && C.kuyruklar.some(q => q.isler.some(x => x.anahtar === an && x.dondurulmus)));
 }
 async function planYaz(opts){
-  if (ui.studio) { toast("Taslak senaryodasın: önce üstteki \"Onayla ve canlıya al\" ile senaryoyu onayla ya da taslaktan çık."); return; }
+  if (ui.studio) { toast("Taslak senaryodasın: önce üstteki \"Onaya gönder\" ile senaryoyu onaya gönder ya da taslaktan çık."); return; }
   const kuyruklar = planKuyruklari(), dondurma = opts.dondurma || null;
-  if (!kuyruklar.length && !dondurma) { if (!opts.sessiz) toast("Canlıya alınacak makine kuyruğu yok: sunucu emri ve sunucu makinesi olan, başlamamış iş gerekir."); return; }
+  if (!kuyruklar.length && !dondurma) { if (!opts.sessiz) toast("Onaya gönderilecek makine kuyruğu yok: sunucu emri ve sunucu makinesi olan, başlamamış iş gerekir."); return; }
   const ayar = planAyariSunucu(), govde = {kuyruklar}, surum = planSurumu();
   if (surum !== null) govde.planSurumu = surum;
   PLANB.yaziyor = true; render();
@@ -6314,18 +6316,20 @@ async function planYaz(opts){
       if (p.taslak) taslak = p.taslak.id;
       donmus = Array.isArray(p.yerlesimler) ? p.yerlesimler.filter(y => y.dondurulmus).length : null;
     }
-    try { r = await window.tmi.komut("plan-canliya-al", {taslak}); }
+    /* Canlıya tek kapı: taslak onaya gider, canlıya onaylayan Planlama stüdyosunda alır. Gönderme reddedilirse (yetki) plan taslakta kalır. */
+    try { r = await window.tmi.komut("plan-senaryo-onaya-gonder", {taslak}); PLANB.onayda = {taslak, zaman:Date.now()}; }
     catch (h) { if (h && h.durum === 403) taslakta = (h && h.message) || ""; else throw h; }
-    PLANB.bekleyen = false; PLANB.canliKur = true;
+    /* Onaydaki ayar canlı değildir: ekrandaki ayar Yenile ya da onay sonrası canlı okunana dek kalır. */
+    if (taslakta !== null) PLANB.bekleyen = false;
     if (r && r.durum) baglaUygula(r.durum); else await baglaYukle();
-    const ozet = dondurma ? `<b>${dondurma.ozet}</b>${donmus !== null ? ` Planda ${donmus} iş dondurulmuş.` : ""}`
-      : `<b>${c.yazilan || 0} iş plana yazıldı.</b>${c.atlanan ? ` ${c.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş).` : ""}`;
-    toast(`${ozet} ${taslakta !== null ? `Canlıya alınamadı${taslakta ? ` (${esc(taslakta)})` : ""}: plan taslağa yazıldı, Plan sayfasından canlıya alınır.` : "Üretim Terminali bu sırayı kullanır."}`);
+    const ozet = dondurma ? `<b>${dondurma.ozet}</b>${donmus !== null ? ` Taslakta ${donmus} iş dondurulmuş.` : ""}`
+      : `<b>${c.yazilan || 0} iş taslağa yazıldı.</b>${c.atlanan ? ` ${c.atlanan} iş yerinde kaldı (başlamış, kilitli ya da dondurulmuş).` : ""}`;
+    toast(`${ozet} ${taslakta !== null ? `Onaya gönderilemedi${taslakta ? ` (${esc(taslakta)})` : ""}: plan taslakta kaldı.` : "Taslak onaya gönderildi; onaylanıp canlıya alınınca Üretim Terminali bu sırayı kullanır."}`);
   } catch (h) {
     /* Başkası canlıya aldı: yazılan bir şey yok; ekrandaki değişiklik ve ayar korunur (bekleyen kalır, sunucu ayarı üstüne yazılmaz). */
     if (h && h.durum === 409 && h.eskiSurum) {
       PLANB.degisti = PLANB.degisti || {kisi:null, zaman:null};
-      toast("Plan başkası tarafından değişti, ekranı yenileyin. Değişikliklerin bu ekranda duruyor; yeniledikten sonra yeniden canlıya alabilirsin.");
+      toast("Plan başkası tarafından değişti, ekranı yenileyin. Değişikliklerin bu ekranda duruyor; yeniledikten sonra yeniden onaya gönderebilirsin.");
     } else { PLANB.bekleyen = false; toast(esc((h && h.message) || "Plan yazılamadı.")); await baglaYukle(); }
   } finally { PLANB.yaziyor = false; render(); }
 }
@@ -6364,9 +6368,9 @@ function planSeridi(){
   const kutu = (tur, rozet, govde) => `<div class="plan-serit ${tur}" role="status"><div class="wrap">${rozet}${govde}<span class="grow1"></span>${sonM}</div></div>`;
   const uyari = `<span class="ps-rozet">${ico("plan")}CANLIYA ALINMADI</span>`;
   if (ui.studio) return kutu("bekliyor", uyari, `<span>Taslak senaryodasın; buradaki değişiklikler canlı planda değil. Terminal ve Arkon Hazırlık canlı planı kullanır.</span>`);
-  if (PLANB.yaziyor) return kutu("bekliyor", uyari, `<span>Canlıya alınıyor…</span>`);
+  if (PLANB.yaziyor) return kutu("bekliyor", uyari, `<span>Onaya gönderiliyor…</span>`);
   if (PLANB.degisti) { const g = PLANB.degisti, kim = [g.kisi, g.zaman ? planZamani(g.zaman) : ""].filter(Boolean).join(", ");
-    return kutu("bekliyor", `<span class="ps-rozet">${ico("plan")}PLAN DEĞİŞTİ</span>`, `<span>Plan başkası tarafından canlıya alındı${kim ? ` (${esc(kim)})` : ""}. Ekranı yenileyin; yenilemeden canlıya alma reddedilir.</span><button class="btn sm primary" data-act="planYenile">Yenile</button>`); }
+    return kutu("bekliyor", `<span class="ps-rozet">${ico("plan")}PLAN DEĞİŞTİ</span>`, `<span>Plan başkası tarafından canlıya alındı${kim ? ` (${esc(kim)})` : ""}. Ekranı yenileyin; yenilemeden onaya gönderme reddedilir.</span><button class="btn sm primary" data-act="planYenile">Yenile</button>`); }
   const A = rotaGuncelAdaylari(), kalan = ui.rotaKalan || new Set(), karar = A.filter(a => !kalan.has(`${a.o.id}|${a.f.yeni.id}`)).length;
   const rk = A.length - karar ? `<span>${A.length - karar} emir açıldığı rotada kaldı (yürürlükte yeni rota var).</span>` : "";
   const f = planFarki(), n = (f ? f.yok + f.farkli : 0) + karar;
@@ -6380,9 +6384,11 @@ function planSeridi(){
   const ys = (Array.isArray(C.yersizBolmeler) ? C.yersizBolmeler : []).map(y => y.anahtar.replace("|", " OP "));
   const ysM = ys.length ? `<span class="warnt">${ys.length} bölünmüş iş canlı planda yerleştirilemedi (${ilk3(ys)}): bölme duruyor; kaldırmak için iş kartında "Parçaları birleştir" ve canlıya al.</span>` : "";
   const bu = by + ebM + ysM;
-  if (!n) return kutu("canli", `<span class="ps-rozet">${ico("plan")}PLAN CANLI</span>`, `<span>Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.</span>${rk}${ey}${mz}${bu}${es}`);
+  if (!n) { PLANB.onayda = null; return kutu("canli", `<span class="ps-rozet">${ico("plan")}PLAN CANLI</span>`, `<span>Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.</span>${rk}${ey}${mz}${bu}${es}`); }
   const parca = [f && f.yok ? `${f.yok} iş canlı planda yok` : "", f && f.farkli ? `${f.farkli} iş canlıda başka sırada ya da makinede` : "", karar ? `${karar} emrin rotası değişti` : ""].filter(Boolean).join(", ");
-  return kutu("bekliyor", uyari, `<b>${n} değişiklik bekliyor</b><span>${parca}. Canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.</span>${rk}${ey}${mz}${bu}${es}<button class="btn sm primary" data-act="planYaz">Canlıya al</button>`);
+  const on = PLANB.onayda;
+  if (on) return kutu("bekliyor", `<span class="ps-rozet">${ico("plan")}ONAY BEKLİYOR</span>`, `<b>${n} değişiklik onayda</b><span>${parca}. Plan ${esc(planZamani(on.zaman))} onaya gönderildi; onaylanıp canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.</span>${rk}${ey}${mz}${bu}${es}<button class="btn sm" data-act="planYaz">Yeniden onaya gönder</button>`);
+  return kutu("bekliyor", uyari, `<b>${n} değişiklik bekliyor</b><span>${parca}. Onaylanıp canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.</span>${rk}${ey}${mz}${bu}${es}<button class="btn sm primary" data-act="planYaz">Onaya gönder</button>`);
 }
 /* Stok (kart #1186): emri tamamlama stoğa gider (kalan sarf ve çıktı); sayım düzeltmesi seçilen konum ve parti bakiyesine yazılır. */
 function stokEmriTamamla(o){

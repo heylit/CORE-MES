@@ -1,6 +1,7 @@
 // Plan kuralları (saf). Zaman ekseni dakikadır (0 = şimdi); takvim verilmezse sürekli çalışma (UYUM-BORCU: vardiya gelince takvim).
 
-import { ELLE_CARPAN } from '#paylasilan/sozlesme/plan.ts';
+import { ELLE_CARPAN, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
+import type { PlanOnayKomutu, SenaryoDurumu, SenaryoYapabilir } from '#paylasilan/sozlesme/plan.ts';
 
 export interface Kaynak { tur: 'makine' | 'kisi'; id: number }
 export const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
@@ -833,3 +834,25 @@ export function karsilastir(kurallar: readonly Kural[], calistir: (k: Kural) => 
 // Dondurma (prototip "dondurulmuş bölge"): şimdiden N gün içinde başlayan, değişebilir yerleşimler.
 export const dondurulacaklar = <Y extends Aralik & { isEmriId: number }>(y: readonly Y[], gun: number, simdi: number, degisebilir: (id: number) => boolean): Y[] =>
   y.filter((x) => degisebilir(x.isEmriId) && x.baslangic < simdi + gun * GUN_DK);
+
+// PL-ONAY (hedef 23.10.2026, 146): canlı plana tek kapı. Sahip (taslağı açan, stüdyo işlemiyle) açık taslağını onaya gönderir ve onaydakini
+// geri çeker; canlıya alma işlemini taşıyan onaydaki taslağı canlıya alır ya da geri gönderir. Dört göz ayarı açıkken son gönderen onaylayan
+// olamaz. Geçiş yapılamıyorsa nedeni döner; ekranın bayrakları (`yapabilir`) aynı kuraldan çıkar.
+export interface OnayBaglami {
+  durum: SenaryoDurumu; sahipMi: boolean; gonderenMi: boolean; studyo: boolean; canliyaAlir: boolean; dortGozAcik: boolean;
+}
+export function onayGecisiReddi(komut: PlanOnayKomutu, b: OnayBaglami): string | null {
+  const k = PLAN_ONAY_KOMUTLARI[komut];
+  if (k.kim === 'sahip' ? !b.studyo : !b.canliyaAlir) return k.kim === 'sahip' ? 'Taslağı onaya göndermek plan stüdyosu yetkisi ister.' : 'Onaylamak planı canlıya alma yetkisi ister.';
+  if (b.durum !== k.durumdan) {
+    if (k.durumdan === 'onayda') return b.durum === 'acik' ? 'Taslak onayda değil; önce onaya gönderilmeli.' : 'Senaryo kapanmış.';
+    return b.durum === 'onayda' ? 'Taslak onayda; değiştirmek için önce onaydan çek.' : 'Senaryo kapanmış; yalnız açık taslak onaya gider.';
+  }
+  if (k.kim === 'sahip' && !b.sahipMi) return 'Bu senaryo başka bir planlamacının taslağı.';
+  if (k.kim === 'onaylayan' && b.dortGozAcik && b.gonderenMi) return 'Dört göz kuralı açık: onaya gönderdiğin taslağı başka biri onaylar.';
+  return null;
+}
+export const onayGecisleri = (b: OnayBaglami): SenaryoYapabilir => ({
+  onayaGonder: onayGecisiReddi('onaya-gonder', b) === null, onaydanCek: onayGecisiReddi('onaydan-cek', b) === null,
+  geriGonder: onayGecisiReddi('geri-gonder', b) === null, canliyaAl: onayGecisiReddi('canliya-al', b) === null,
+});

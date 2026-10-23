@@ -1,7 +1,7 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ESKI_SURUM_NEDENI } from '#paylasilan/hata.ts';
-import type { CanliYerlesimCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliYerlesimCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AdimGirdisi } from '#paylasilan/sozlesme/rota.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { canliOzeti, canliSira, kuyruguSirala } from './disari.ts';
@@ -11,6 +11,13 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
   const { c, vt, istek, tamam, yeniAdim, ayrinti, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
+  // gönderilmez.
+  const gonder = async (id: number, surum: number, sahip = c.planlama) => {
+    const s = (await tamam<SenaryolarCevabi>(sahip, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === id);
+    if (s?.durum === 'onayda') return s.surum;
+    return (await tamam<SenaryolarCevabi>(sahip, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum })).senaryolar.find((x) => x.id === id)!.surum;
+  };
   let app: FastifyInstance;
   let makineA = 0;
   let makineB = 0;
@@ -20,7 +27,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     const [i2] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     const canli = await planOku();
     const okunan = await vt().tx((db) => canliSira(db, [i2!, i1!, 999_999]));
     assert.equal(okunan.planSurumu, canli.surum);
@@ -54,7 +61,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
   test('#522: GET /plan/canli-yerlesim planı görenle canlı yerleşimi okur, taslağı göstermez; oturumsuz 401, bozuk liste 400', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     const canli = await planOku();
     const oku = () => tamam<CanliYerlesimCevabi>(c.cam, 'GET', `/plan/canli-yerlesim?isEmirleri=${i1},999999`);
     const once = await oku();
@@ -79,7 +86,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     const [i2] = await isEmirleriAc([yeniAdim()]);
     let p = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: p.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     const once = await vt().tx((db) => canliSira(db, [i1!, i2!]));
     assert.deepEqual(once.yerlesimler.map((y) => y.isEmriId), [i1, i2]);
     const kaynak = once.yerlesimler[0]!.kaynak;
@@ -106,7 +113,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     await assert.rejects(yaz(planlamaci, [i1!, i2!]), { kod: 'CAKISMA' });
 
     const s = await planOku(ilk.taslakId);
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.taslak!.id}/canliya-al`, { surum: s.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.taslak!.id}/canliya-al`, { surum: await gonder(s.taslak!.id, s.taslak!.surum), cakismalariKabul: true });
     assert.deepEqual((await vt().tx((db) => canliSira(db, [i1!, i2!]))).yerlesimler.map((y) => y.isEmriId), [i2, i1], 'canlıya alınınca yeni sıra');
   });
 
@@ -118,7 +125,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const [i3] = await isEmirleriAc([b()]);
     const hepsi = [i1!, i2!, i3!];
     const ilk = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${ilk.taslak!.id}/canliya-al`, { surum: ilk.taslak!.surum, cakismalariKabul: true });
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${ilk.taslak!.id}/canliya-al`, { surum: await gonder(ilk.taslak!.id, ilk.taslak!.surum), cakismalariKabul: true });
     const canli = await planOku();
     const kaynak = { tur: 'makine' as const, id: makineB };
     const ad = (id: number) => ({ emirNo: yer(canli, id).emirNo, opNo: yer(canli, id).opNo });
@@ -130,7 +137,10 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
       const yazma = await yaz(cerez, govde);
       if (yazma.statusCode !== 200) return { yazma, canliya: yazma };
       const id = yazma.json<{ taslak: number }>().taslak;
-      const surum = (await planOku(id, cerez)).taslak!.surum;
+      // PL-ONAY: yazan önce onaya gönderir; gönderemeyen (stüdyo yetkisi yok) canlıya da alamaz.
+      const gonderme = await istek(cerez, 'POST', `/plan/senaryolar/${id}/onaya-gonder`, { surum: (await planOku(id, cerez)).taslak!.surum });
+      if (gonderme.statusCode !== 200) return { yazma, canliya: gonderme };
+      const surum = gonderme.json<SenaryolarCevabi>().senaryolar.find((x) => x.id === id)!.surum;
       return { yazma, canliya: await istek(cerez, 'POST', `/plan/senaryolar/${id}/canliya-al`, { surum, cakismalariKabul: false }) };
     };
     const sira = async () => (await vt().tx((db) => canliSira(db, hepsi))).yerlesimler;

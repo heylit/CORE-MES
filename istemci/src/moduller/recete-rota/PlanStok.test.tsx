@@ -47,8 +47,8 @@ interface Sunucu {
   stok: Array<{ yol: string; govde: Record<string, unknown> }>; stokCevabi: () => Response;
   // Plan stüdyosu: plan modülünün taslakları ve onlara giden istekler.
   taslaklar: Array<{ id: number; ad: string; durum: string; benim: boolean; surum: number; ayar?: Record<string, unknown> }>; studyo: Array<{ yol: string; govde: Record<string, unknown> }>;
-  // POST /plan/ayar ve taslağın canlıya alınması (verilmezse plan modülü gibi davranır).
-  ayarlar: Array<{ govde: Record<string, unknown>; kimlik: string | undefined }>; canliyaAlCevabi?: () => Response;
+  // POST /plan/ayar, taslağın onaya gönderilmesi ve canlıya alınması (verilmezse plan modülü gibi davranır).
+  ayarlar: Array<{ govde: Record<string, unknown>; kimlik: string | undefined }>; canliyaAlCevabi?: () => Response; onayaCevabi?: () => Response;
   // Dondurma uçları ve planın (taslak ya da canlı) iş emri yerleşimleri.
   dondurma: Array<{ yol: string; govde: Record<string, unknown> }>; yerlesimler: Array<{ isEmriId: number; emirNo: string; opNo: number; dondurulmus: boolean }>;
   // Plan öncelik ayarları (GET/POST /plan/bedel-ayari); yazma cevabı verilmezse plan modülü gibi kaydeder.
@@ -110,13 +110,16 @@ function fetchKur(s: Sunucu): void {
       s.yerlesimler = s.yerlesimler.map((y) => (yol === '/plan/dondur' ? { ...y, dondurulmus: true } : tek === null || y.isEmriId === Number(tek[1]) ? { ...y, dondurulmus: false } : y));
       return json(200, { taslak: { id: t.id, surum: t.surum }, taslakAcildi: g === null, yerlesimler: s.yerlesimler });
     }
-    const taslakKomutu = yontem === 'POST' ? /^\/plan\/senaryolar\/(\d+)\/(canliya-al|vazgec)$/.exec(yol) : null;
+    const taslakKomutu = yontem === 'POST' ? /^\/plan\/senaryolar\/(\d+)\/(canliya-al|vazgec|onaya-gonder)$/.exec(yol) : null;
     if (taslakKomutu) {
       s.studyo.push({ yol, govde });
       const t = s.taslaklar.find((x) => x.id === Number(taslakKomutu[1]));
       if (t === undefined || t.surum !== govde['surum']) return json(409, { kod: 'CAKISMA', mesaj: 'Eski sürüm.' });
       if (taslakKomutu[2] === 'canliya-al' && s.canliyaAlCevabi) { const c = s.canliyaAlCevabi(); if (c.status !== 200) return c; }
-      t.durum = taslakKomutu[2] === 'vazgec' ? 'vazgecildi' : 'canliya_alindi';
+      if (taslakKomutu[2] === 'onaya-gonder' && s.onayaCevabi) { const c = s.onayaCevabi(); if (c.status !== 200) return c; }
+      // Plan modülü (H1): canlıya yalnız onaydaki taslak alınır; onaya giden taslak donar.
+      if (taslakKomutu[2] === 'canliya-al' && t.durum !== 'onayda') return json(409, { kod: 'CAKISMA', mesaj: 'Taslak onayda değil; önce onaya gönderilmeli.' });
+      t.durum = { vazgec: 'vazgecildi', 'onaya-gonder': 'onayda', 'canliya-al': 'canliya_alindi' }[taslakKomutu[2]!]!;
       const a = taslakKomutu[2] === 'canliya-al' ? t.ayar : undefined;
       if (a) s.ayar = { rule: a['kural'] as 'edd', dir: a['yon'] as 'geri', buffer: a['tamponGun'] as number, freezeDays: a['dondurmaGun'] as number, peopleLimit: a['personelKisiti'] as boolean, planDrafts: a['taslakEmirler'] as boolean };
       return json(200, { senaryolar: s.taslaklar });
@@ -192,7 +195,7 @@ describe('Plan ayarı ve kuyrukları plan modülüne yazılır (kart #1186)', ()
     expect(e.ifade('[st.settings.rule, st.settings.dir, st.settings.buffer, st.settings.freezeDays, st.settings.peopleLimit, ui.planDrafts]')).toEqual(['edd', 'geri', 3, 1, false, true]);
   }, 40000);
 
-  it('PLS-2: ayar değişince kendiliğinden yazılmaz; Canlıya al ayarı /plan/ayar ile taslağa, kuyruğu aynı taslağa yazar, sonra taslağı canlıya alır', async () => {
+  it('PLS-2: ayar değişince kendiliğinden yazılmaz; Onaya gönder ayarı /plan/ayar ile taslağa, kuyruğu aynı taslağa yazar, sonra taslağı onaya gönderir; canlı değişmez', async () => {
     const s = sunucuKur();
     const e = await ekranAc(s);
     e.calistir('st.settings.rule = "fifo"; st.settings.buffer = 1.5; save()');
@@ -205,31 +208,32 @@ describe('Plan ayarı ve kuyrukları plan modülüne yazılır (kart #1186)', ()
     e.calistir(KAYNAK_KUR); e.calistir('ui.tab = "plan"; render()');
     const kuyruklar = e.ifade<unknown[]>('planKuyruklari()');
     fireEvent.click(e.al('[data-act="planYaz"]'));
-    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/90/canliya-al']); }, { timeout: 5000 });
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/90/onaya-gonder']); }, { timeout: 5000 });
     expect(s.ayarlar.map((x) => x.govde)).toEqual([{ ayar: { kural: 'fifo', yon: 'geri', tamponGun: 1.5, dondurmaGun: 1, personelKisiti: false, taslakEmirler: true }, taslak: null }]);
     expect(s.ayarlar[0]?.kimlik).toBeTruthy();
-    // Kuyruk yazımı yalnız sırayı taşır: ayar ve canlıya alma ayrı uçlardandır.
+    // Kuyruk yazımı yalnız sırayı taşır: ayar ve onaya gönderme ayrı uçlardandır.
     expect(s.plan.map((x) => x.govde)).toEqual([{ kuyruklar, taslak: { id: 90, surum: 1 } }]);
-    expect(s.studyo[0]?.govde).toEqual({ surum: 2, cakismalariKabul: false });
-    await waitFor(() => { expect(s.ayar.rule).toBe('fifo'); });
-    await waitFor(() => { expect(e.bildirim()).toContain('2 iş plana yazıldı'); });
+    expect(s.studyo[0]?.govde).toEqual({ surum: 2, not: null });
+    await waitFor(() => { expect(e.bildirim()).toContain('2 iş taslağa yazıldı. Taslak onaya gönderildi'); });
+    // Canlı ayar onaylanıp canlıya alınınca değişir (Planlama stüdyosu).
+    expect([s.ayar.rule, s.taslaklar.find((t) => t.id === 90)?.durum]).toEqual(['edd', 'onayda']);
     expect(e.ifade('[st.settings.rule, st.settings.buffer]')).toEqual(['fifo', 1.5]);
   }, 40000);
 
-  it('PLS-3: canlıya alma reddedilirse plan taslakta kalır ve kullanıcı bilgilendirilir; kuyruk yeniden yazılmaz', async () => {
+  it('PLS-3: onaya gönderme reddedilirse plan taslakta kalır ve kullanıcı bilgilendirilir; kuyruk yeniden yazılmaz', async () => {
     const s = sunucuKur();
-    s.canliyaAlCevabi = () => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' });
+    s.onayaCevabi = () => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' });
     const e = await ekranAc(s);
     e.calistir(KAYNAK_KUR); e.calistir('ui.tab = "plan"; render()');
     fireEvent.click(e.al('[data-act="planYaz"]'));
-    await waitFor(() => { expect(e.bildirim()).toContain('taslağa yazıldı'); }, { timeout: 5000 });
-    // Ayar değişmediği için /plan/ayar'a gidilmez; kuyruk yeni taslağa yazılır, o taslak canlıya alınmak istenir.
+    await waitFor(() => { expect(e.bildirim()).toContain('Onaya gönderilemedi (Bu işlem için yetkiniz yok.): plan taslakta kaldı.'); }, { timeout: 5000 });
+    // Ayar değişmediği için /plan/ayar'a gidilmez; kuyruk yeni taslağa yazılır, o taslak onaya gönderilmek istenir.
     expect([s.ayarlar.length, s.plan.length, s.plan[0]?.govde['taslak']]).toEqual([0, 1, undefined]);
-    expect(s.studyo).toEqual([{ yol: '/plan/senaryolar/9/canliya-al', govde: { surum: 1, cakismalariKabul: false } }]);
+    expect(s.studyo).toEqual([{ yol: '/plan/senaryolar/9/onaya-gonder', govde: { surum: 1, not: null } }]);
     expect(s.taslaklar.find((t) => t.id === 9)?.durum).toBe('acik');
   }, 40000);
 
-  it('PLS-3b: kuyruk yazımı reddedilirse canlıya alınmaz; ayar sunucudaki değere döner', async () => {
+  it('PLS-3b: kuyruk yazımı reddedilirse onaya gönderilmez; ayar sunucudaki değere döner', async () => {
     const r = sunucuKur();
     r.planCevabi = () => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' });
     const e2 = await ekranAc(r);
@@ -255,7 +259,7 @@ describe('Plan ayarı ve kuyrukları plan modülüne yazılır (kart #1186)', ()
     fireEvent.click(e.al('[data-act="planYaz"]'));
     await waitFor(() => { expect(s.plan).toHaveLength(1); });
     expect(s.plan[0]?.govde).toEqual({ kuyruklar });
-    await waitFor(() => { expect(e.bildirim()).toContain('2 iş plana yazıldı'); });
+    await waitFor(() => { expect(e.bildirim()).toContain('2 iş taslağa yazıldı'); });
     // Başlamış iş sunucuda sabittir: gönderilmez.
     e.calistir('st.opStatus["41|root|p1"] = "calisiyor"; invalidate()');
     expect(e.ifade<Array<{ isler: unknown[] }>>('planKuyruklari()')[0]?.isler).toHaveLength(1);
@@ -267,17 +271,17 @@ describe('Plan ayarı ve kuyrukları plan modülüne yazılır (kart #1186)', ()
     e.calistir(KAYNAK_KUR); e.calistir('st.orders = st.orders.filter(o => o.id !== "41"); invalidate(); ui.tab = "plan"; render()');
     expect(e.ifade<unknown[]>('planKuyruklari()')).toEqual([]);
     fireEvent.click(e.al('[data-act="planYaz"]'));
-    expect(e.bildirim()).toContain('alınacak makine kuyruğu yok');
+    expect(e.bildirim()).toContain('Onaya gönderilecek makine kuyruğu yok');
     expect(s.plan).toHaveLength(0);
   }, 40000);
 
-  // Plan akışı denemesi H6: yazma işlemi olmayan kişi "Canlıya al" ve ayar "Düzenle"yi görmez (sunucu yine reddeder). plan.yaz olup
-  // plan.canliya-al olmayan kişi plan Canlıya al'ı görür (plan taslağa yazılır), senaryonun canlıya almasını görmez.
-  it('PLS-40: Canlıya al ve ayar düzenleme yalnız işlemi olana görünür', async () => {
+  // Plan akışı denemesi H6: yazma işlemi olmayan kişi "Onaya gönder" ve ayar "Düzenle"yi görmez (sunucu yine reddeder). Senaryonun
+  // "Onaya gönder"i plan.studyo taşıyana görünür (H0: gönderen stüdyo işlemiyle çalışır); canlıya alma bu ekranda yoktur.
+  it('PLS-40: Onaya gönder ve ayar düzenleme yalnız işlemi olana görünür', async () => {
     const gorunur = async (islemler: Islem[]): Promise<Record<string, boolean>> => {
       const e = await ekranAc({ ...sunucuKur(), islemler });
       e.calistir(KAYNAK_KUR); e.calistir('ui.tab = "plan"; render()');
-      e.b.body.insertAdjacentHTML('beforeend', '<button data-act="publishScenario">Onayla ve canlıya al</button>');
+      e.b.body.insertAdjacentHTML('beforeend', '<button data-act="publishScenario">Onaya gönder</button>');
       const bak = (k: string): boolean => { const el = e.al(k); return e.b.defaultView!.getComputedStyle(el).display !== 'none'; };
       const sonuc = { canliyaAl: bak('[data-act="planYaz"]'), duzenle: bak('#planCfg .cfg-ed'), senaryo: bak('[data-act="publishScenario"]') };
       if (dinleyici !== null) window.removeEventListener('message', dinleyici);
@@ -287,7 +291,8 @@ describe('Plan ayarı ve kuyrukları plan modülüne yazılır (kart #1186)', ()
     };
     expect(await gorunur([...YAZAR.islemler])).toEqual({ canliyaAl: false, duzenle: false, senaryo: false });
     expect(await gorunur([...YAZAR.islemler, 'plan.yaz'])).toEqual({ canliyaAl: true, duzenle: true, senaryo: false });
-    expect(await gorunur([...YAZAR.islemler, 'plan.yaz', 'plan.canliya-al'])).toEqual({ canliyaAl: true, duzenle: true, senaryo: true });
+    expect(await gorunur([...YAZAR.islemler, 'plan.yaz', 'plan.canliya-al'])).toEqual({ canliyaAl: true, duzenle: true, senaryo: false });
+    expect(await gorunur([...YAZAR.islemler, 'plan.yaz', 'plan.studyo'])).toEqual({ canliyaAl: true, duzenle: true, senaryo: true });
   }, 60000);
 });
 
@@ -346,22 +351,24 @@ const canliKur = (
 const serit = (e: { b: Document }) => e.b.querySelector('.plan-serit')?.textContent ?? '';
 
 describe('Plan durumu şeridi ve Kanban uyarıları', () => {
-  it('PLS-9: canlıda olmayan iş "canlıya alınmadı" der; şeritteki Canlıya al kuyruğu canlıya yazar, sonra şerit "plan canlı" ve son canlıya almayı gösterir', async () => {
+  it('PLS-9: canlıda olmayan iş "canlıya alınmadı" der; şeritteki Onaya gönder kuyruğu taslağa yazıp onaya gönderir, şerit "onay bekliyor" der; onaylanınca "plan canlı"', async () => {
     const s = sunucuKur();
     s.canli = canliKur([]);
-    s.planCevabi = () => {
-      const kuyruklar = (s.plan.at(-1)?.govde['kuyruklar'] ?? []) as Kuyruk[];
-      s.canli = canliKur(kuyruklar.map((q) => ({ makineId: q.kaynak.id, isler: q.isler.map((x) => ({ anahtar: `${x.emirNo}|${x.opNo}` })) })));
-      return json(200, { taslak: 9, canli: true, yazilan: 2, atlanan: 0 });
-    };
     const e = await ekranAc(s);
     e.calistir(KAYNAK_KUR); e.calistir('ui.tab = "items"; render()');
     expect(serit(e)).toContain('CANLIYA ALINMADI');
     expect(serit(e)).toContain('2 iş canlı planda yok');
     expect(serit(e)).toContain('Deneme Planlamacı');
     fireEvent.click(e.al('.plan-serit [data-act="planYaz"]'));
-    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/canliya-al']); });
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/onaya-gonder']); });
     expect(s.plan.map((x) => 'canliyaAl' in x.govde)).toEqual([false]);
+    await waitFor(() => { expect(serit(e)).toContain('ONAY BEKLİYOR'); });
+    expect(serit(e)).toContain('2 değişiklik onayda');
+    expect(e.al('.plan-serit [data-act="planYaz"]').textContent).toBe('Yeniden onaya gönder');
+    // Onaylayan Planlama stüdyosunda canlıya alır; ekran canlıyı yeniden okuyunca plan canlıdır.
+    const kuyruklar = (s.plan.at(-1)?.govde['kuyruklar'] ?? []) as Kuyruk[];
+    s.canli = canliKur(kuyruklar.map((q) => ({ makineId: q.kaynak.id, isler: q.isler.map((x) => ({ anahtar: `${x.emirNo}|${x.opNo}` })) })));
+    e.calistir('baglaYukle()');
     await waitFor(() => { expect(serit(e)).toContain('PLAN CANLI'); });
     expect(e.b.querySelector('.plan-serit [data-act="planYaz"]')).toBeNull();
   }, 40000);
@@ -377,29 +384,29 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     await waitFor(() => { expect(serit(e)).toContain('PLAN CANLI'); });
   }, 40000);
 
-  it('PLS-11: taslak senaryodayken Canlıya al sunucuya yazmaz, ne yapılacağını söyler', async () => {
+  it('PLS-11: taslak senaryodayken Onaya gönder canlı kuyruğu yazmaz, ne yapılacağını söyler', async () => {
     const s = sunucuKur();
     s.canli = canliKur([]);
     const e = await ekranAc(s);
     e.calistir(KAYNAK_KUR); e.calistir('studioAct("newScenario", {}); ui.tab = "plan"; render()');
     expect(serit(e)).toContain('Taslak senaryodasın');
     fireEvent.click(e.al('.frzbar [data-act="planYaz"]'));
-    expect(e.bildirim()).toContain('Onayla ve canlıya al');
+    expect(e.bildirim()).toContain('"Onaya gönder" ile senaryoyu onaya gönder');
     // Senaryonun plan taslağı açılır ve senaryonun hâli ona yazılır; canlıya yazılmaz.
     await waitFor(() => { expect(s.plan).toHaveLength(1); });
     expect([s.plan[0] && 'canliyaAl' in s.plan[0].govde, s.plan[0]?.govde['taslak']]).toEqual([false, { id: 70, surum: 1 }]);
   }, 40000);
 
-  it('PLS-13: plan taslağı açılmadan onaylanan senaryo eskisi gibi canlı plana yazılır; sonra gelen taslak kapanır', async () => {
+  it('PLS-13: plan taslağı açılmadan gönderilen senaryonun kuyruğu yeni taslağa yazılıp onaya gider; sonra gelen taslak kapanır', async () => {
     const s = sunucuKur();
     s.canli = canliKur([]);
     const e = await ekranAc(s);
     e.calistir(KAYNAK_KUR); e.calistir('studioAct("newScenario", {}); const id = ui.studio; studioAct("publishScenario", {id}); studioAct("publishScenario", {id})');
-    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toContain('/plan/senaryolar/9/canliya-al'); });
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toContain('/plan/senaryolar/9/onaya-gonder'); });
     expect([s.plan.length, s.plan[0] && 'canliyaAl' in s.plan[0].govde]).toEqual([1, false]);
     expect((s.plan[0]?.govde['kuyruklar'] as unknown[]).length).toBe(1);
-    // Canlıya alınan, kuyruğun yazıldığı taslaktır; senaryonun sonradan gelen taslağı kapanır.
-    await waitFor(() => { expect(s.taslaklar.map((t) => [t.id === 9, t.durum])).toEqual(expect.arrayContaining([[true, 'canliya_alindi'], [false, 'vazgecildi']])); });
+    // Onaya giden, kuyruğun yazıldığı taslaktır; senaryonun sonradan gelen taslağı kapanır.
+    await waitFor(() => { expect(s.taslaklar.map((t) => [t.id === 9, t.durum])).toEqual(expect.arrayContaining([[true, 'onayda'], [false, 'vazgecildi']])); });
     expect(s.taslaklar).toHaveLength(2);
   }, 40000);
 
@@ -517,7 +524,7 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     await waitFor(() => { expect(s.plan.map((x) => x.govde['taslak'])).toEqual([{ id: 70, surum: 1 }]); });
   }, 40000);
 
-  it('PLS-21: elle sıra, dondurma ve elle makine ataması canlı plandan kurulur (dondurulan iş canlıdaki saatinde durur); yerel değişiklik ara yenilemede kalır, kendi canlıya almasından sonra canlıdan yeniden kurulur', async () => {
+  it('PLS-21: elle sıra, dondurma ve elle makine ataması canlı plandan kurulur (dondurulan iş canlıdaki saatinde durur); yerel değişiklik ara yenilemede ve onaya gönderince kalır, canlı yeniden kurulunca canlıdan gelir', async () => {
     const s = sunucuKur();
     const canli = (): NonNullable<DurumCevabi['planCanli']> => ({ ...canliKur([]), kuyruklar: [{ makineId: 31, isler: [
       { anahtar: 'UE-2030-001|10', dondurulmus: true, sabit: false, elle: false, baslangic: '2030-03-05T10:00:00', bitis: '2030-03-05T12:00:00' },
@@ -539,10 +546,14 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     e.calistir('planYaz({kuyruk:true})');
     await waitFor(() => { expect(s.plan).toHaveLength(1); });
     expect((s.plan[0]?.govde['kuyruklar'] as Array<{ isler: Array<{ opNo: number; elleKaynak: boolean }> }>)[0]?.isler.map((i) => [i.opNo, i.elleKaynak])).toEqual([[10, false], [20, true]]);
+    // Onaya gönderilen plan canlı değildir: ekrandaki değişiklik kalır; canlı yeniden kurulunca (Yenile) canlıdan gelir.
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/onaya-gonder']); });
+    expect(e.ifade<unknown>('st.qorder')).toEqual({});
+    e.calistir('PLANB.canliKur = true; baglaYukle()');
     await waitFor(() => { expect(e.ifade<unknown>('st.qorder')).toEqual({ s1: ['41|root|p2'] }); });
   }, 40000);
 
-  it('PLS-22: yeni senaryo plan modülünde taslak açar; senaryodaki makine ataması o taslağa yazılır, canlıya yazılmaz; onay taslağı plan modülüyle canlıya alır', async () => {
+  it('PLS-22: yeni senaryo plan modülünde taslak açar; senaryodaki makine ataması o taslağa yazılır, canlıya yazılmaz; Onaya gönder taslağı son hâliyle onaya gönderir', async () => {
     const s = sunucuKur();
     s.canli = canliKur([]);
     const e = await ekranAc(s);
@@ -559,10 +570,13 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     expect([elle(s.plan[0]!.govde), elle(yazim)]).toEqual([[[10, false], [20, false]], [[10, false], [20, true]]]);
     expect(s.plan.every((x) => !('canliyaAl' in x.govde))).toBe(true);
     e.calistir('const k = ui.studio; studioAct("publishScenario", {id:k}); studioAct("publishScenario", {id:k})');
-    await waitFor(() => { expect(s.studyo.at(-1)).toEqual({ yol: '/plan/senaryolar/70/canliya-al', govde: { surum: 4, cakismalariKabul: true } }); });
+    await waitFor(() => { expect(s.studyo.at(-1)).toEqual({ yol: '/plan/senaryolar/70/onaya-gonder', govde: { surum: 4, not: null } }); });
     expect(s.plan.at(-1)?.govde['taslak']).toEqual({ id: 70, surum: 3 });
-    await waitFor(() => { expect(e.ifade<unknown>('[ui.studio, studio.list.length]')).toEqual([null, 0]); });
-    expect(s.taslaklar[0]?.durum).toBe('canliya_alindi');
+    await waitFor(() => { expect(e.bildirim()).toContain('onaya gönderildi'); });
+    // Canlıya alma bu ekranda yoktur: senaryo durur, canlı onaylayan Planlama stüdyosunda canlıya alınca değişir.
+    expect(e.ifade<unknown>('[studio.list.length, scnMeta(studio.list[0].id).onayda]')).toEqual([1, true]);
+    expect(s.taslaklar[0]?.durum).toBe('onayda');
+    expect(s.studyo.some((x) => x.yol.endsWith('/canliya-al'))).toBe(false);
   }, 40000);
 
   it('PLS-22b: senaryoda ayar değişince ayar senaryonun taslağına /plan/ayar ile bir kez yazılır; kuyruk yazımı ayar taşımaz', async () => {
@@ -659,6 +673,9 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     fireEvent.click(e.al('.plan-serit [data-act="planYaz"]'));
     await waitFor(() => { expect(s.plan).toHaveLength(1); });
     expect(parcalar(s.plan[0]?.govde)).toEqual([[10, { no: 1, adet: 25 }], [10, { no: 2, adet: 25 }], [20, null]]);
+    // Onaylanıp canlıya alınınca (taklitte yazılan hemen canlıdır) ekran canlıyı yeniden kurar.
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/onaya-gonder']); });
+    e.calistir('PLANB.canliKur = true; baglaYukle()');
     await waitFor(() => { expect(serit(e)).toContain('PLAN CANLI'); });
     expect(serit(e)).not.toContain('eski kaydında');
     // Hurdalı adım: parçaların toplamı adımın plandaki adedidir (48), ekranın adım miktarı değil.
@@ -689,7 +706,7 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     expect(e.ifade<boolean[]>('["41|root|p1~1", "41|root|p2"].map(k => bolmeYersizMi(curPlan().sched.find(x => x.opKey === k).op))')).toEqual([true, false]);
   }, 40000);
 
-  it('PLS-27: Dondur düğmeleri plan modülünün dondurma uçlarına gider: kuyruk taslağa, dondurma aynı taslağa, sonra taslak canlıya alınır; ekranın dondurması canlıdan kurulur', async () => {
+  it('PLS-27: Dondur düğmeleri plan modülünün dondurma uçlarına gider: kuyruk taslağa, dondurma aynı taslağa, sonra taslak onaya gider; ekranın dondurması canlıdan kurulur', async () => {
     const s = sunucuKur();
     s.yerlesimler = [{ isEmriId: 501, emirNo: 'UE-2030-001', opNo: 10, dondurulmus: false }, { isEmriId: 502, emirNo: 'UE-2030-001', opNo: 20, dondurulmus: false }];
     const canli = () => ({ ...canliKur([]), kuyruklar: [{ makineId: 31, isler: s.yerlesimler.map((y, i) => ({
@@ -697,12 +714,12 @@ describe('Plan durumu şeridi ve Kanban uyarıları', () => {
     const e = await ekranAc(s);
     e.calistir(KAYNAK_KUR); e.calistir('ui.tab = "plan"; render()');
     fireEvent.click(e.al('[data-act="freezePlan"]'));
-    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/canliya-al']); }, { timeout: 5000 });
+    await waitFor(() => { expect(s.studyo.map((x) => x.yol)).toEqual(['/plan/senaryolar/9/onaya-gonder']); }, { timeout: 5000 });
     expect(s.plan).toHaveLength(1);
     expect(s.dondurma).toEqual([{ yol: '/plan/dondur', govde: { taslak: { id: 9, surum: 1 } } }]);
-    expect(s.studyo[0]?.govde).toEqual({ surum: 2, cakismalariKabul: false });
-    await waitFor(() => { expect(e.bildirim()).toContain('Önümüzdeki 1 gün donduruldu. Planda 2 iş dondurulmuş.'); });
-    // Ekran kendi başına dondurmaz: dondurma canlıya alınan plandan gelir.
+    expect(s.studyo[0]?.govde).toEqual({ surum: 2, not: null });
+    await waitFor(() => { expect(e.bildirim()).toContain('Önümüzdeki 1 gün donduruldu. Taslakta 2 iş dondurulmuş.'); });
+    // Ekran kendi başına dondurmaz: dondurma onaylanıp canlıya alınan plandan gelir.
     expect(e.ifade<unknown>('Object.keys(st.frozen)')).toEqual([]);
     s.canli = canli();
     e.calistir('PLANB.canliKur = true; baglaYukle()');
@@ -787,8 +804,8 @@ describe('Plan öncelik ayarları plan ayarlarının yanında (plan.bedel-ayari)
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
     expect(s.bedelYazilan ?? []).toEqual([]);
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
-    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ tabanBedelSaat: 300, finansmanOraniGun: null, karRiskiOraniGun: 0.25, yuksekEsigi: 1.5, dusukEsigi: 0.6, ...CARPANLAR }]); });
-    await waitFor(() => { expect(e.bildirim()).toContain('Öncelik ayarları kaydedildi'); });
+    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ tabanBedelSaat: 300, finansmanOraniGun: null, karRiskiOraniGun: 0.25, yuksekEsigi: 1.5, dusukEsigi: 0.6, ...CARPANLAR, taslak: null }]); });
+    await waitFor(() => { expect(e.bildirim()).toContain('Öncelik ayarları taslağa yazıldı'); });
     expect(e.al<HTMLInputElement>('#bedelAyari input[data-bedel="tabanBedelSaat"]').value).toBe('300');
     s.bedelCevabi = () => json(403, { kod: 'YETKISIZ', mesaj: 'Bu işlem için yetkiniz yok.' });
     yaz('dusukEsigi', '0,5');
@@ -808,7 +825,7 @@ describe('Plan öncelik ayarları plan ayarlarının yanında (plan.bedel-ayari)
     fireEvent.input(e.al<HTMLInputElement>('#bedelAyari input[data-bedel="sinifACarpani"]'), { target: { value: '1,8' } });
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
     fireEvent.click(e.al('[data-act="bedelKaydet"]'));
-    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ ...BEDEL, sinifACarpani: 1.8 }]); });
+    await waitFor(() => { expect(s.bedelYazilan).toEqual([{ ...BEDEL, sinifACarpani: 1.8, taslak: null }]); });
   }, 60000);
 });
 

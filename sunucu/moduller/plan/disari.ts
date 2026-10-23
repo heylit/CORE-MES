@@ -3,7 +3,7 @@
 // canlıya alana kadar `canliSira`da görünmez.
 import type { Db } from '#cekirdek/db.ts';
 import type { PlanAyari } from '#paylasilan/sozlesme/plan.ts';
-import { ayarOku, bedelAyariOku, tabanOku, type TabanSatiri } from './sorgular.ts';
+import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, tabanOku, type TabanSatiri } from './sorgular.ts';
 import {
   malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
@@ -42,3 +42,8 @@ export { acilSiparisOnaylandi } from './servis.ts';
 export const tabanPlani = (db: Db, g: { uretimEmriIdleri?: readonly number[]; isEmriIdleri?: readonly number[] }): Promise<TabanSatiri[]> =>
   tabanOku(db, g);
 export type { TabanSatiri };
+
+// 147 a: Arkon'un kuyruk sırası taslağa düşer ve onayla canlıya geçer. İş emrini içeren, kaldırılmamış sıralama değişikliği olan açık ya da
+// onaydaki taslaklar; Arkon operatöre "sıra onay bekliyor" gösterir. Boş girdi boş döner.
+export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; senaryoId: number; durum: 'acik' | 'onayda' }[]> =>
+  bekleyenSiraSatirlari(db, isEmriIdleri);
