@@ -5,9 +5,10 @@ import type { Hesap } from '../../hesaplar.ts';
 
 // S4: aynı kayda aynı anda iki yazma. Biri geçer, öbürü 409 alır; ikisinin de geçmesi kaydın iki kez yazıldığını gösterir (bulgu).
 // Uçlar: uretim-emirleri modülü (`npm run harita -- --modul uretim-emirleri`). Gövdeler paylasilan/sozlesme/uretim-emirleri.ts.
-// Hesap listesinde tek operatör ve tek planlamacı var: ikinci planlamacı yönetici, iki operatör aynı hesabın iki ayrı isteğidir.
+// Hesap listesinde tek planlamacı var: ikinci planlamacı yönetici.
 const PLANLAMACILAR = ['ornek.planlama', 'ornek.yonetici'] as const satisfies readonly Hesap[];
-const OPERATOR: Hesap = 'ornek.operator1';
+const OPERATORLER = ['ornek.operator1', 'ornek.operator2'] as const satisfies readonly Hesap[];
+const [OPERATOR] = OPERATORLER;
 const ONCELIKLER = [1, 2, 3, 4] as const;
 
 export interface PlanlanacakEmir {
@@ -168,7 +169,7 @@ async function terminalYarisi(b: SenaryoBaglami, ad: string, emirId: number, kom
   const yazYolu = `${okuYolu}/${komut}`;
   const once = olaySayisi(await b.bekle(OPERATOR, `${komut} öncesi defteri oku`, 'GET', okuYolu, 200), komut);
   if (once === null) return false;
-  const gecti = await b.adim(OPERATOR, ad, async () => yarisCiktisi(yazYolu, await yaris(b, [OPERATOR, OPERATOR], yazYolu, [undefined, undefined])));
+  const gecti = await b.adim(OPERATOR, ad, async () => yarisCiktisi(yazYolu, await yaris(b, OPERATORLER, yazYolu, [undefined, undefined])));
   await b.adim(OPERATOR, `${komut} defterde tek satır`, async () => {
     const c = await b.rol(OPERATOR).istek('GET', okuYolu);
     const sonra = olaySayisi(c.govde, komut);
@@ -184,6 +185,7 @@ async function terminalYarisi(b: SenaryoBaglami, ad: string, emirId: number, kom
 
 async function operatorYarisi(b: SenaryoBaglami): Promise<void> {
   // Operatör emir listesini okuyamaz (terminal.uret yalnız tek emri okur); çalışan emri planlamacı bulur.
+  // İki operatör de emrin istasyonunda olmalı; örnek verinin başlamış emri ikisinin ortak istasyonundadır.
   const listeGovdesi = await b.bekle(PLANLAMACILAR[0], 'çalışan emirleri oku', 'GET', '/api/uretim-emirleri?durum=basladi', 200);
   if (listeGovdesi === null) return;
   const emir = calisanEmirSec(listeGovdesi, b.rastgele);
@@ -200,7 +202,7 @@ async function operatorYarisi(b: SenaryoBaglami): Promise<void> {
 
 export default senaryo({
   ad: 'cakisma',
-  roller: [...PLANLAMACILAR, OPERATOR],
+  roller: [...PLANLAMACILAR, ...OPERATORLER],
   kopya: 1,
   async kos(b) {
     // İki yarış ayrı emirlerdedir; aynı anda koşar.

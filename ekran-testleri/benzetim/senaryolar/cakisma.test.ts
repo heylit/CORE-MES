@@ -126,7 +126,9 @@ describe('cakisma senaryosu', () => {
     assert.deepEqual(satirlar.filter((a) => a.sonuc !== 'gecti').map((a) => `${a.adim}: ${a.ileti ?? ''}`), []);
     assert.ok(satirlar.some((a) => a.adim === 'bayat sürümle yeniden yazar' && a.gelen === '409'));
     assert.equal(cagrilar.filter((c) => c.endsWith('/oncelik')).length, 3);
-    assert.deepEqual(cagrilar.filter((c) => /\/(duraklat|devam)$/.test(c)).map((c) => c.split('/').at(-1)), ['duraklat', 'duraklat', 'devam', 'devam']);
+    const komutlar = cagrilar.filter((c) => /\/(duraklat|devam)$/.test(c));
+    assert.deepEqual(komutlar.map((c) => c.split('/').at(-1)), ['duraklat', 'duraklat', 'devam', 'devam']);
+    assert.deepEqual(komutlar.map((c) => c.split(' ')[0]), ['ornek.operator1', 'ornek.operator2', 'ornek.operator1', 'ornek.operator2']);
   });
 
   it('denetimsiz sunucuda iki kez yazma bulgu olarak düşer', async () => {
