@@ -148,6 +148,11 @@ export async function emrinSonAni(db: Db, emirId: number): Promise<string | null
   return satir?.an ?? null;
 }
 
+// Emrin terminalden başlatma kaydı var mı (hazırlık olayı emir başına bir kez verilir).
+export async function baslatmaKaydiVarMi(db: Db, emirId: number): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>("SELECT EXISTS (SELECT 1 FROM uretim_kaydi WHERE emir_id = $1 AND olay = 'baslat') AS var", [emirId]))!.var;
+}
+
 export function kayitEkle(
   db: Db, emirId: number, kisiId: number, istasyonId: number, olay: 'baslat' | 'bitir', saglamAdet: number | null,
   an: string,
