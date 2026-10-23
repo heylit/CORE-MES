@@ -1,6 +1,6 @@
 // Proje maliyet kuralları (197 a, 194 a). Saf: veritabanı ve saat yok. Tutarlar TRY, KDV hariç; tarihler tesis günü (YYYY-AA-GG).
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
-import type { KalemSatiri, MaliyetKalemi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import type { EksikVeri, KalemSatiri, MaliyetKalemi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
 
 export const SAPAN_IS_EMRI_SAYISI = 5;
 
@@ -258,9 +258,32 @@ export function defteriUygula(kayitlar: readonly MaliyetKaydi[], defter: Readonl
   });
 }
 
+// H8 (K-D6): genel gider kuralı tek yerdedir; proje maliyeti ve teklif maliyeti (Siparişler, kablolamayla) aynı işlevleri kullanır.
+export type AdimKaynagi = 'makine' | 'kisi' | 'fason' | null;
+export interface GenelGiderOraniGirdisi { saatBasi: number; amortismanDahil: boolean }
+export type GenelGiderEksigi = Extract<EksikVeri, 'genel_gider_orani_yok' | 'amortisman_dahil_degil'>;
+
+// PM-21 (206 a): oran makine saatine bölündüğü için yükü makine ya da makinesi atanmamış adım alır (o da istasyon saatiyle hesaplanır);
+// kişi ve fason adımı almaz.
+export function genelGiderYukAlir(kaynak: AdimKaynagi): boolean {
+  return kaynak !== 'fason' && kaynak !== 'kisi';
+}
+
+// PM-21: yük = (işleme + ayar) dakikası x saat başı oran. Oran ya da süre bilinmiyorsa null.
+export function genelGiderTutari(dakika: number | null, oran: GenelGiderOraniGirdisi | null): number | null {
+  return saatTutari(dakika, oran?.saatBasi ?? null);
+}
+
+// PM-22, PM-32 (211 a, E-9): yük alan adım varken oran yoksa kalem bilinmez; oran amortismanı içermiyorsa amortisman hiçbir kalemde yoktur
+// ve bu bildirilir. Yük alan adım yoksa oranın yokluğu eksik sayılmaz.
+export function genelGiderEksikleri(kaynaklar: readonly AdimKaynagi[], oran: GenelGiderOraniGirdisi | null): GenelGiderEksigi[] {
+  if (oran === null) return kaynaklar.some(genelGiderYukAlir) ? ['genel_gider_orani_yok'] : [];
+  return oran.amortismanDahil ? [] : ['amortisman_dahil_degil'];
+}
+
 export interface IsEmriGirdisi {
   isEmri: { isEmriId: number; emirNo: string; opNo: number; istasyonAd: string | null; bitisZamani: string | null };
-  kaynakTur: 'makine' | 'kisi' | 'fason' | null;
+  kaynakTur: AdimKaynagi;
   durum: 'bekliyor' | 'calisiyor' | 'tamam';
   adet: number;
   saglam: number | null;
@@ -270,7 +293,7 @@ export interface IsEmriGirdisi {
   // TRY'ye çevrilmiş ücretler; null girilmemiş ya da kuru yok.
   istasyonSaat: number | null;
   // Finansın genel gider yük oranı (206 a); null girilmemiş.
-  genelGider: { saatBasi: number; amortismanDahil: boolean } | null;
+  genelGider: GenelGiderOraniGirdisi | null;
   kisiSaat: ReadonlyMap<number, number | null>;
   // Bağlı fason satırları ve TRY toplamı (satır yoksa boş liste; kuru olmayan satır varsa toplam null).
   fason: { satirlar: { tutar: string; paraBirimi: string }[]; toplam: number | null };
@@ -282,9 +305,7 @@ export interface IsEmriGirdisi {
 // işçiliğin planı yoktur (null, toplamdan çıkar). Gerçek: makine kullanımı ve ayar süresi x istasyon maliyeti, katılım x kişi maliyeti.
 // Başlamamış işin gerçeği sıfırdır; başlamış işte ayar olayı yoksa ayar bilinmez. Fasonun planı da gerçeği de bağlı fason siparişidir;
 // fason adımında sipariş yoksa plan bilinmez, gerçek sıfırdır.
-// PM-21 (206 a, 211 a): genel gider istasyon saatine, işleme ve ayar saati x saat başı genel gider olarak yüklenir (makine atanmamış adım
-// da istasyon saatiyle hesaplandığı için yük alır); oran makine saatine bölündüğü için kişi ve fason adımı yük almaz. Oran ya da süre
-// bilinmiyorsa null.
+// Genel gider PM-21 işlevleriyle yüklenir.
 export function isEmriKaydi(g: IsEmriGirdisi, bugun: string): MaliyetKaydi {
   const basladi = g.durum !== 'bekliyor';
   const plan: KalemTutarlari = {};
@@ -298,13 +319,12 @@ export function isEmriKaydi(g: IsEmriGirdisi, bugun: string): MaliyetKaydi {
     gercek.ayar = !basladi ? 0 : ayarSn === null ? null : saatTutari(ayarSn / 60, g.istasyonSaat);
     gercek.iscilik = iscilikTutari((g.sure?.katilim ?? []).map((k) => ({ dakika: k.saniye / 60, saatMaliyeti: g.kisiSaat.get(k.kisiId) ?? null })));
   }
-  const yukAlir = g.kaynakTur !== 'fason' && g.kaynakTur !== 'kisi';
+  const yukAlir = genelGiderYukAlir(g.kaynakTur);
   if (yukAlir) {
-    const saatBasi = g.genelGider?.saatBasi ?? null;
     const planDk = g.birimSureDk === null || g.ayarSureDk === null ? null : g.birimSureDk * g.adet + g.ayarSureDk;
-    plan.genel_gider = saatTutari(planDk, saatBasi);
+    plan.genel_gider = genelGiderTutari(planDk, g.genelGider);
     const ayarSn = g.sure?.ayarSn ?? null;
-    gercek.genel_gider = !basladi ? 0 : ayarSn === null ? null : saatTutari(((g.sure?.islemeSn ?? 0) + ayarSn) / 60, saatBasi);
+    gercek.genel_gider = !basladi ? 0 : ayarSn === null ? null : genelGiderTutari(((g.sure?.islemeSn ?? 0) + ayarSn) / 60, g.genelGider);
   }
   if (g.fason.satirlar.length > 0) {
     plan.fason = g.fason.toplam;

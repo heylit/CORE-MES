@@ -16,7 +16,7 @@ import { emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri, isEmriSureleri, projenin
 import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
 import { defterdekiIsEmirleri, defterOku, defterYaz } from './sorgular.ts';
 import {
-  beklemeFinansmani, defteriUygula, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
+  beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
 import type { GelirPayi, MalzemeBileseni, MaliyetKaydi, TalasAdedi } from './kurallar.ts';
 
@@ -40,9 +40,7 @@ async function maliyetKayitlari(
   const sira = await canliSira(db, idler);
   // Açık işte bugünün oranı; bitmiş işin oranı defterde dondurulur (199 a).
   const genelGider = await genelGiderOrani(db, bugun);
-  if (genelGider === null && isler.some((i) => i.kaynakTur !== 'fason' && i.kaynakTur !== 'kisi')) eksikler.add('genel_gider_orani_yok');
-  // 211 a: amortisman yalnız genel giderde; oran onu içermiyorsa hiçbir kalemde yoktur (E-9).
-  if (genelGider !== null && !genelGider.amortismanDahil) eksikler.add('amortisman_dahil_degil');
+  for (const e of genelGiderEksikleri(isler.map((i) => i.kaynakTur), genelGider)) eksikler.add(e);
   const kurlar = new Map<string, number | null>();
   const tlye = async (tutar: string, paraBirimi: string): Promise<number | null> => {
     if (!kurlar.has(paraBirimi)) kurlar.set(paraBirimi, await kurGetir(db, paraBirimi, bugun).then((k) => (k === null ? null : Number(k.kur))));

@@ -23,8 +23,8 @@
 | PM-19 | Defter yalnız ekleme; aynı iş emri ikinci kez yazılmaz; ücretler satırda | proje-maliyet.test.ts "PM-19"; ekran yalnız okur: ProjeMaliyeti.test.tsx |
 | PM-18 (kural) | İş emri kaydı: plan rota süresi x istasyon saat maliyeti, gerçek ölçülen süre; başlamamış iş 0, ayar olayı yoksa ayar null, işçilik planı null; fason siparişten | kurallar.test.ts "PM-18" |
 | PM-20 | Projenin iş emri bağlı: istasyon maliyeti yoksa eksik bildirilir; varsa plan 900, gerçek 0 | proje-maliyet.test.ts "PM-20" |
-| PM-21 (kural) | Genel gider (206 a): makine ya da makinesi atanmamış istasyon adımına (işleme + ayar) saati x saat başı oran; kişi ve fason adımı yük almaz; oran ya da süre yoksa null | kurallar.test.ts "PM-21" |
-| PM-22 | Finans oranı girilince genel gider kalemi toplama girer; oran yoksa `genel_gider_orani_yok` ve kalem toplam dışı | proje-maliyet.test.ts "PM-20", "PM-22" |
+| PM-21 (kural) | Genel gider (206 a): makine ya da makinesi atanmamış istasyon adımına (işleme + ayar) saati x saat başı oran; kişi ve fason adımı yük almaz; oran ya da süre yoksa null. H8: kural tek yerde (`genelGiderYukAlir`, `genelGiderTutari`), `disari.ts` ile teklif maliyetine de verilir | kurallar.test.ts "PM-21", "H8 tek genel gider kuralı" |
+| PM-22 | Finans oranı girilince genel gider kalemi toplama girer; oran yoksa `genel_gider_orani_yok` ve kalem toplam dışı | proje-maliyet.test.ts "PM-20", "PM-22"; kurallar.test.ts "H8 genel gider eksikleri" |
 | PM-23 (kural) | Tahmini iş emri maliyeti = işleme + ayar + fason planı; işçilik ve genel gider girmez; biri bilinmiyorsa null | kurallar.test.ts "PM-23" |
 | PM-24 | `disari.ts` `isEmriTahminiMaliyetleri`: istasyon ücretiyle 900; ücret yoksa null; bulunmayan iş emri haritada yok | proje-maliyet.test.ts "PM-24" |
 | PM-25 (kural) | Malzeme planı = Σ brüt x birim fiyat - talaş; talaş = kütük kg - adet x net kg (en az 0), kg ağırlıklı talaş fiyatı; fiyat yoksa null, talaş verisi eksikse düşülmez | kurallar.test.ts "PM-25" |
@@ -34,7 +34,7 @@
 | PM-29 (kural) | Bekleme finansmanı = taban (dahil malzeme, işleme, ayar, fason, işçilik; genel gider değil) x günlük faiz x kaydın gününden tahsilata gün; plan tahsilatı en geç plan tarihi + vade; gerçekte açık projede bugün, bitmişte en geç gerçek tarih + vade, bugünle sınırlı; faiz ya da plan tarihi yoksa o taraf null | kurallar.test.ts "PM-29" |
 | PM-30 | TL faizi yoksa `faiz_yok`, vadesiz siparişte `vade_yok`; plan tarihi yoksa finansman planı null, başlamamış işte gerçek 0 | proje-maliyet.test.ts "PM-30" |
 | PM-31 (kural) | Gerçek talaş (E-5): açık emirde yalnız ilk adımı geçen adet işlenmiş ve parçada sayılır; bitmiş emirde bütün kütük işlenmiş, parçada son adımın sağlamı kalır (hurda metali talaş) | kurallar.test.ts "PM-31" |
-| PM-32 | Genel gider oranı amortismanı içermiyorsa `amortisman_dahil_degil` bildirilir (E-9) | proje-maliyet.test.ts "PM-22", "PM-32" |
+| PM-32 | Genel gider oranı amortismanı içermiyorsa `amortisman_dahil_degil` bildirilir (E-9) | proje-maliyet.test.ts "PM-22", "PM-32"; kurallar.test.ts "H8 genel gider eksikleri" |
 | PM-33 | `disari.ts` `uretimEmriMalzemeMaliyetleri`: emrin planlanan malzemesi PM-25 kuralıyla; bileşensiz 0, fiyatsız null, bulunmayan emir yok | proje-maliyet.test.ts "PM-33" |
 | PM-34 | Kâr riski oranı plan bedel ayarından (`karRiskiOraniGun`); sabit 0,3 kalktı (227 a) | proje-maliyet.test.ts "PM-34" |
 | PM-35 | Defteri sunucu işi yazar (236 a): biten iş emri yazılır, donduran boş; ikinci tur yazmaz; açık iş emri ve ekran açılışı yazmaz | proje-maliyet.test.ts "PM-35" |
