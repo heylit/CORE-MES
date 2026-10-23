@@ -13,6 +13,8 @@ import { Brand, navGo, useTheme } from './baslat';
 import { gomuluMu } from './gomulu';
 import { YETKI_KILIDI, yetkilerTmide } from '../data/tmi-yetkileri';
 import { cagridanArizaAc } from '../data/ariza-ustlenme';
+import { CAGRI_EKIPLERIM_YENILEME_MS, cagriBanaMi } from '../data/cagri-ekiplerim';
+import type { CagriEkiplerim } from '../data/cagri-ekiplerim';
 import { tesisDuzenleyicisi, tesisGruplari, tesisListesi, tmiListesiSaltOkunur } from '../data/tmi-listeleri';
 import { tmiyeGit } from '../data/yeni-paket';
 
@@ -53,15 +55,22 @@ export function LoginApp({ onDone, lock, onCancel }) {
 }
 
 /* ── başka istasyondan gelen çağrı (kalite, hazırlık ekranlarında görünür) ── */
-/** Çağrı bu kişiye mi? Üstlenme yetkisi olan, çağrılan ekibin rolündeki kişiler (yönetici ve vardiya amiri hepsini görür); çağrıyı yapan istasyon hariç */
-// Ekip -> Arkon rolü eşlemesi bannerin geçici kopyasıdır; asıl yönlendirme TMI bildirim modülündedir (298, CEKIRDEK-ISTEKLERI 8).
-// Ayarcı varsayılanda müdüre gider; müdürün Arkon rolü (vardiya amiri, yönetici) bütün çağrıları zaten görür.
-export const CALL_ROLES = { bakim: ['maint'], kalite: ['quality'], malzeme: ['plan'], amir: ['lead'], ayarci: ['lead'] };
-export const callForMe = m => { if (!can('prod.ack') || (m.machine && m.machine === LS.get('station') && (location.hash || '#') === '#')) return false; const u = MEU(); if (!u || u.role === 'admin' || u.role === 'lead') return true; const R = CALL_ROLES[m.k]; return !R || R.includes(u.role) || !Object.values<any>(CALL_ROLES).some(x => x.includes(u.role)); };
+/** Çağrı bu kişiye mi? Üstlenme yetkisi olan ve TMI yönlendirmesi çağrılan ekibi ona veren kişi (yönetici ve vardiya amiri hepsini görür); çağrıyı yapan istasyon hariç */
+export const callForMe = (m, ekiplerim: CagriEkiplerim) => { if (!can('prod.ack') || (m.machine && m.machine === LS.get('station') && (location.hash || '#') === '#')) return false; const u = MEU(); return cagriBanaMi(m.k, u && u.role, ekiplerim); };
 export function CallBanner({ cur }) {
   const [list, setList] = useState([]);
+  // Bus dinleyicisi bir kez kurulur; yönlendirme ref'ten okunur ki yenilenen liste dinleyiciyi yeniden kurmadan geçerli olsun.
+  // Yönlendirme kişiye bağlıdır; kişi değişince yeniden okunur.
+  const ekiplerim = useRef<CagriEkiplerim>(null), kisiId = (MEU() || {}).id;
+  useEffect(() => {
+    let bitti = false; ekiplerim.current = null;
+    const oku = () => AKStore.Server.cagriEkiplerim().then(l => { if (!bitti) ekiplerim.current = l; });
+    oku();
+    const t = setInterval(oku, CAGRI_EKIPLERIM_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [kisiId]);
   useEffect(() => Bus.on(m => {
-    if (m.type === 'call' && callForMe(m)) { beep('call'); setList(l => l.filter(x => x.t0 !== m.t0).concat([m]).slice(-4)); }
+    if (m.type === 'call' && callForMe(m, ekiplerim.current)) { beep('call'); setList(l => l.filter(x => x.t0 !== m.t0).concat([m]).slice(-4)); }
     if (m.type === 'call-ack' || m.type === 'call-done') setList(l => l.filter(x => x.t0 !== m.t0));
   }), [cur]);
   useEffect(() => { if (!list.length) return; const t = setTimeout(() => setList(l => l.filter(x => Date.now() - x.t0 < 30 * 60e3)), 30000); return () => clearTimeout(t); }, [list]);

@@ -4,6 +4,7 @@ import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
   EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
+import type { CagriEkiplerimCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { AdimCevabi, EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -212,6 +213,8 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     await istemci.post('/arkon/iletiler', { ileti: govde?.msg, kaynak: typeof govde?.c === 'string' ? govde.c : kaynak });
     return tamam({ ok: true });
   }
+  // 298: çağrı bandının alıcısı TMI bildirim yönlendirmesindedir; yalnız oturumdaki kişinin ekipleri döner.
+  if (ilk === 'cagri-ekiplerim' && g.yontem === 'GET') return tamam(await istemci.get<CagriEkiplerimCevabi>('/bildirimler/cagri-yonlendirme/benim'));
   if (ilk === 'anomaliler' && g.yontem === 'GET') return tamam(await istemci.get<AnomaliCevabi>('/arkon/anomaliler'));
   if (ilk === 'anomali-istatistik' && g.yontem === 'GET') {
     // Yalnız dönem ve tarih geçer; doğrulamayı TMI ucu yapar.
