@@ -5,6 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ucEnvanteri, yetkiMetni } from '#cekirdek/uc.ts';
 import type { UcOzeti } from '#cekirdek/uc.ts';
 import { modulBasinaUclar } from '#cekirdek/uygulama.ts';
+import { KABLOLAMA, etkiKos, kablolamaOku } from './etki.ts';
+import type { KablolamaBagi } from './etki.ts';
 import { dinamikSqlGocleri, disariImzalari, ekranCagrilari, sutunMetni, tabloSutunlari } from './harita-ayrinti.ts';
 import type { EkranCagrilari, Imzalar, TabloSutunlari } from './harita-ayrinti.ts';
 import { dosyalariTopla, modulIthalleri, modulKenarlari, testDosyasiMi } from './sinir-denetimi.ts';
@@ -68,6 +70,8 @@ export interface Harita {
 export interface ModulAyrintisi {
   imzalar: Imzalar;
   cagrilar: EkranCagrilari;
+  // Kablolama dosyası yoksa null: bölüm basılmaz.
+  baglar: KablolamaBagi[] | null;
 }
 
 const KOK = fileURLToPath(new URL('../', import.meta.url));
@@ -407,7 +411,10 @@ export async function haritaTopla(kok: string = KOK): Promise<Harita> {
 
 export async function modulAyrintisi(harita: Harita, modul: string, kok: string = KOK): Promise<ModulAyrintisi> {
   const uclar = harita.moduller.flatMap((m) => m.uclar.map((u) => ({ modul: m.ad, yontem: u.yontem, yol: u.yol })));
-  return { imzalar: await disariImzalari(kok, modul), cagrilar: await ekranCagrilari(kok, modul, uclar) };
+  const baglar = existsSync(join(kok, KABLOLAMA))
+    ? (await kablolamaOku(kok)).filter((b) => b.kanca.modul === modul || b.karsilik.modul === modul)
+    : null;
+  return { imzalar: await disariImzalari(kok, modul), cagrilar: await ekranCagrilari(kok, modul, uclar), baglar };
 }
 
 const girinti = (satirlar: string[], bosluk: string): string[] => satirlar.map((s) => `${bosluk}${s}`.trimEnd());
@@ -475,6 +482,11 @@ function ayrintiMetni(m: ModulHaritasi, harita: Harita, ayrinti: ModulAyrintisi)
       ...dinamikSatiri(harita),
       ...sayili('Dışa açık imzalar', ayrinti.imzalar.imzalar, ayrinti.imzalar.cozulemeyen.map((ad) => `çözülemedi  ${ad}`)),
     );
+    // İthal grafiğinde görünmeyen ters yönlü bağlar (ADR 0006): olayı ya da çözücüyü tutan ve ona işlev veren modül.
+    if (ayrinti.baglar !== null) {
+      satirlar.push(...sayili('Olay ve çözücü bağları', ayrinti.baglar.map((b) =>
+        `${b.kanca.modul}.${b.kanca.ad} <- ${b.karsilik.modul}.${b.karsilik.ad}  '${b.ad}' (${KABLOLAMA}:${String(b.satir)})`), []));
+    }
   }
   if (m.istemci) {
     // "Doğrudan": ortak veri dosyası ya da başka modülün ekranı üzerinden giden çağrı sayılmaz, ithal yolu anılır.
@@ -561,14 +573,21 @@ export function ozetMetni(harita: Harita): string {
   ].join('\n');
 }
 
-const KULLANIM = 'Kullanım: npm run harita -- [--modul <modul_adi> | --ozet]';
+const KULLANIM = 'Kullanım: npm run harita -- [--modul <modul_adi> | --ozet | --etki [<dosya> ...]]';
 
-export type HaritaKipi = { tur: 'tam' } | { tur: 'ozet' } | { tur: 'modul'; modul: string };
+export type HaritaKipi = { tur: 'tam' } | { tur: 'ozet' } | { tur: 'modul'; modul: string } | { tur: 'etki'; dosyalar: string[] };
 
 // Yanlış yazılmış bayrak yok sayılırsa tek modül isteyen bütün haritayı alır; araç yalnız bildiğini kabul eder.
 export function kipSec(argumanlar: readonly string[]): HaritaKipi {
   if (argumanlar.length === 0) return { tur: 'tam' };
   const [bayrak, modul, ...fazla] = argumanlar;
+  // Dosya verilmezse dalın değişikliği alınır.
+  if (bayrak === '--etki') {
+    const dosyalar = argumanlar.slice(1);
+    const bayrakli = dosyalar.find((d) => d.startsWith('-'));
+    if (bayrakli !== undefined) throw new Error(`Tanınmayan argüman: ${bayrakli}. ${KULLANIM}`);
+    return { tur: 'etki', dosyalar };
+  }
   if (bayrak === '--ozet') {
     if (modul !== undefined) throw new Error(`Tanınmayan argüman: ${modul}. ${KULLANIM}`);
     return { tur: 'ozet' };
@@ -585,6 +604,14 @@ export async function haritaKos(argumanlar: readonly string[], kok: string = KOK
     kip = kipSec(argumanlar);
   } catch (hata) {
     return { kod: 1, cikti: hata instanceof Error ? hata.message : String(hata) };
+  }
+  // Etki tam haritayı kurmaz: uç keşfi ve göç ayrıştırması gerekmez.
+  if (kip.tur === 'etki') {
+    try {
+      return { kod: 0, cikti: await etkiKos(kip.dosyalar, kok) };
+    } catch (hata) {
+      return { kod: 1, cikti: hata instanceof Error ? hata.message : String(hata) };
+    }
   }
   const harita = await haritaTopla(kok);
   if (kip.tur === 'ozet') return { kod: 0, cikti: ozetMetni(harita) };
