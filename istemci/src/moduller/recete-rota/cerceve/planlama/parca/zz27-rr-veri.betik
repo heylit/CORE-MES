@@ -36,6 +36,8 @@ function rrDenemedenKur(D0, onceki) {
       const y = rrAdimYerli(o, grupOf, null, fasonGun); y.opId = opOf(ad, y);
       /* termin günü adımındır, fasoncunun süresi bütün adımlarının en büyüğü olabilir: aynı firmadaki adımın kendi günü korunur */
       if (o.fason && eA && eA.fasonId === o.fason && eA.terminGun != null) y.terminGun = eA.terminGun;
+      /* fason adımın süresi çerçevede yoktur (motor 0 okur): kayıttaki boş süre 0'a çevrilip yazılmaz */
+      if (o.fason && eA) for (const k of ['setup', 'proc', 'cycle']) if (eA[k] == null && !y[k]) y[k] = eA[k];
       return Object.assign({}, eA || { id: 'p-' + u.id + '-' + o.k, outItem: '', outStatus: '', rejectPct: 0, outs: [], transfer: 0, resetup: true }, y, { seq, ins: [], plan: rrKopya(o) });
     });
     for (const b of u.bilesenler || []) {
@@ -59,13 +61,16 @@ function rrDenemedenKur(D0, onceki) {
   const bas = rrTarih(D.meta && D.meta.baslangic);
   const orders = (D.siparisler || []).map(s => {
     const e = es('orders', s.id);
-    return Object.assign({}, e || { no: s.id, tur: 'seri', created: 0 }, { id: s.id, itemId: s.urun, qty: s.adet, start: rrTarih(s.serbest) || bas, due: rrTarih(s.termin), priority: s.oncelik, status: s.havuz ? 'taslak' : (e && e.status && e.status !== 'taslak' ? e.status : 'serbest'), note: s.ad || '', plan: rrKopya(s) });
+    /* termini olmayan siparişin teslimi boş kalır (boş metin değil) */
+    const due = rrTarih(s.termin) || (e && e.due === '' ? '' : null);
+    return Object.assign({}, e || { no: s.id, tur: 'seri', created: 0 }, { id: s.id, itemId: s.urun, qty: s.adet, start: rrTarih(s.serbest) || bas, due, priority: s.oncelik, status: s.havuz ? 'taslak' : (e && e.status && e.status !== 'taslak' ? e.status : 'serbest'), note: s.ad || '', plan: rrKopya(s) });
   });
   const week = {}; for (const [g, n] of Object.entries(RR_GUN)) week[n] = ((D.calismaGunleri || {})[g] || []).slice();
   const wcE = es('wcs', RR_WC);
   const wcs = [Object.assign({}, wcE || { code: 'IM-10', name: 'Atölye' }, { id: RR_WC, week })];
   const cal = { shifts: (D.vardiyalar || []).map(v => ({ id: v.id, name: v.id + ' vardiyası', start: v.bas, end: v.bit, breaks: [] })), holidays: (D.tatiller || []).slice() };
-  const st = Object.assign({}, onceki || {}, { version: 7, name: (D.meta && D.meta.ad) || 'Atölye', items, wcs, stations, opdefs, routes, cal, machines, people, orders, plan });
+  /* kaydın adı Reçete ve Rota'nındır; çalışmanın adı (meta.ad) onu ezmez */
+  const st = Object.assign({}, onceki || {}, { version: 7, name: (onceki && onceki.name) || (D.meta && D.meta.ad) || 'Atölye', items, wcs, stations, opdefs, routes, cal, machines, people, orders, plan });
   if (!onceki) Object.assign(st, { settings: { orderItem: null, orderQty: 100, start: bas || null, due: null, useStock: true, peopleLimit: true }, moves: [], opStatus: {}, assign: {}, qorder: {}, frozen: {}, opProg: {}, splitManual: {}, statusStock: {}, statusCards: [], routeRevs: [], gercekSure: {} });
   else st.routeRevs = (onceki.routeRevs || []).filter(r => routes[r.itemId]).map(r => r.status === 'yururlukte' ? Object.assign({}, r, { data: rrKopya(routes[r.itemId]) }) : r);
   return st;

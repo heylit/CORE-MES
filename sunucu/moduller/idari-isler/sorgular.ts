@@ -29,22 +29,9 @@ const SECIM = `SELECT t.id, t.no, t.kategori, t.yer, t.aciklama, t.aciliyet, t.d
                       t.sonuc_notu, t.surum
                  FROM idari_isler_talep t`;
 
-export async function siradakiNo(db: Db, yil: number): Promise<number> {
-  const satir = await db.tek<{ son_sira: number }>(
-    `INSERT INTO idari_isler_numara_sayaci (yil, son_sira) VALUES ($1, 1)
-     ON CONFLICT (yil) DO UPDATE SET son_sira = idari_isler_numara_sayaci.son_sira + 1
-     RETURNING son_sira`,
-    [yil],
-  );
-  if (satir === null) throw new Error('Talep sırası alınamadı');
-  return satir.son_sira;
-}
-
-// Numaranın yılı tesis gününden (veritabanı oturumunun saat dilimi tesisinkidir).
-export async function buYil(db: Db): Promise<number> {
-  const satir = await db.tek<{ yil: number }>('SELECT extract(year FROM current_date)::int AS yil');
-  if (satir === null) throw new Error('Yıl okunamadı');
-  return satir.yil;
+// Ortak sayaç kalıp değişince eski bir numaraya denk gelebilir; dolu numara atlanır.
+export async function talepNoVarMi(db: Db, no: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM idari_isler_talep WHERE no = $1', [no])) !== null;
 }
 
 export async function talepEkle(db: Db, no: string, g: TalepAcVerisi, kisiId: number): Promise<number> {

@@ -6,7 +6,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İddia işaretleri: DO�
 Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/inceleme/borc/2026-10-17-borc-yeniden-degerlendirme.md`): kısmen kapalı maddenin kalan parçası ayrı sayılır; "KAPANDI" ve "BİLGİ NOTU" sayılmaz.
 - Dondurma sonrası (13): madde 1 (jsonb sütuna), 2 (ekran stili, lint), 4 (ekran kuralları sunucuya; ad/açıklama kalıbı dahil), 5 (belge yükleme), 7 (`unsafe-inline`), 10 B9 (kılavuz yazısı),
   Denetim madde 7 sınırları (rev notu, ham alan yolu), Çekirdek kalıpları: kart listesi sayfalama (#169) ve YM/MM/DB anahtarı, tedarik: kart birimi JSON ve dizinsiz arama, hizmet türü rengi, hizmet standart önerileri.
-- Bağlamada (5): madde 6 bilinen sınır (iç görünüm değişimi adrese yansımaz), Logo birim seti listesi (#339), birimi boş eski kartlar, tedarikçi metni eşleme, tedarikçi yabancı anahtarı.
+- Bağlamada (4): madde 6 bilinen sınır (iç görünüm değişimi adrese yansımaz), birimi boş eski kartlar, tedarikçi metni eşleme, tedarikçi yabancı anahtarı.
 - Kullanıcıda (1): madde 7 cihaz denemesi (indirme, etiket, QR/kamera, pano).
 - Bekleyen (1): Denetim "Ekran borcu" (onay akışı anahtarı bağlıyken herkese kilitli); 18.10.2026'da kullanıcıya sorulmadı, önerilen "böyle kalsın" ile bugünkü gibi kalıyor. Elle stok kodu alanı ve ret nedeni #234 madde 10 ve 18 ile kapandı (Bilinen sınırlar).
 
@@ -34,13 +34,16 @@ Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/in
      kategori yalnız doluysa açık listede mi (`kategoriAcikMi`); stok kodu biçimi, önek-tür uyumu, firma kodu ve sıra (`katalogKodOneki`, `katalogOnekiTureUyarMi`, `katalogFirmaOneki`, `katalogFirmaKoduGecerliMi`, `katalogStokKodu`);
      mükerrer anahtar ve gerekçe (sunucu daha katı: en az 10 karakter, `mukerrerGerekcesiKisaMi`; ama yalnız anahtar eşitliğine bakar, ekranın ölçü toleransı ve eşdeğer kalite eşleşmesi yok); net ağırlık (`katalogNetAgirlikKg`); rota numaralama (`kartOperasyonlari`).
      Hammadde formu ve ölçüleri (`hammaddeOlcuHatasi`, ekranın `dimsErr` ve `FORMS.*.chk` kuralıyla aynı: form listede, her ölçü sayı ve > 0, et kalınlığı sınırları); yalnız yeni kartta ve form ya da ölçü değişince, kayıtlı veri kilitlenmez.
-   - Yalnız ekranda: hammadde aile/kalite/ölçü adımları ve ileri düğmesi engeli (`stepOk`, `gStepOk`, `gEksik`); ayarda zorunlu işaretli olmayan yerleşik zorunlu alanlar (ör. ad) ve kategori seçimi;
-     GTIN biçimi ve kontrol hanesi (`gtinGecerli`); açıklama uzunluğu ve büyük harf (`aciklamaOtomatik`); ölçü aralığı uyarıları (`DIMRULES`),
+   - Yalnız ekranda: GTIN biçimi ve kontrol hanesi (`gtinGecerli`); açıklama uzunluğu ve büyük harf (`aciklamaOtomatik`); ölçü aralığı uyarıları (`DIMRULES`),
      form/seçenek uyumu (`compatIssues`); kart uyarıları (net > brüt, ATEX belgesi, SDS ve raf ömrü, maks. devir, demirbaş tarihleri, kalibrasyon, hurda çıkışı; `gUyarilar`);
-     hammadde otomatik ve teknik kodu (`autoKod`, `teknikKod`), kod grubu türetmesi; benzersiz anahtarın içeriği (`kartAnahtari`; sunucu yalnız hammadde ve sarfta zorunluluğuna bakar); birim ağırlık, reçete, maliyet ve amortisman hesabı;
+     hammadde otomatik ve teknik kodu (`autoKod`, `teknikKod`), kod grubu türetmesi; hizmetin benzersiz anahtarı (`hzImza`, çeşit tablosuna bağlı); kalitenin ailenin listesinde olması ve koşullu (`kosul`) zorunlu alanlar; birim ağırlık, reçete, maliyet ve amortisman hesabı;
      Excel içe aktarma denetimlerinin hepsi (`xlSatirdanKart` 12 hata ve 14 uyarı satırı, `xlPlan` 4 hata satırı; sunucuda içe aktarma yolu yok, kart kaydet ucundan geçer).
    - Yalnız sunucuda: aktif tedarikçi firma, hizmet ve ticari malın reçeteye girmemesi (`katalogBilesenOlamayanKodlar`), alan uzunlukları (sözleşme), stok kodu en çok 24 karakter (`STOK_KODU_EN_COK`), MKK geçiş, talep, sürüm ve iptal kuralları.
-   - Açık kalan borç (ölçü kuralı, koordinatör kararı b, 20.10.2026): formu ve ölçüsü olmayan hammadde API'den kaydolur (ekran ölçü adımında durdurur); aile ve kalite sunucuda zorunlu değil. GTIN sunucuya alınmadı (ekranda yalnız uyarı).
+   - KAPANDI (B11 ve 157 a, 23.10.2026, davranış değişikliği onaylı): hammadde aile, kalite ve ölçü adımları (`stepOk`), yerleşik zorunlu alanlar ve kategori seçimi (`gStepOk`, `alanZorunlu`; `hammaddeTanimHatasi`,
+     `hammaddeOlcuHatasi`, `kartZorunluAlanEksigi`) sunucuda; yalnız yeni kartta ve alan değişince, kayıtlı eksik kart kilitlenmez. Benzersiz anahtarın içeriği hizmet dışında sunucuda kurulur (`katalogSunucuAnahtari`,
+     ekranın `kartAnahtari` kuralı); ekranın gönderdiği anahtar okunmaz. Testler `kart-kurallari.test.ts`, `olcu-kurali.test.ts`. Koordinatör kararı b (20.10.2026) bu kararla kalktı.
+   - Kalır, borç sayılmaz (151 a, 23.10.2026): GTIN, açıklama biçimi, ölçü aralığı uyarıları (`DIMRULES`), kart uyarıları (`gUyarilar`), form/seçenek uyumu (`compatIssues`; ekran kaydı engellemez, yalnız uyarır),
+     ağırlık, maliyet ve amortisman hesabı ile Excel içe aktarma uyarıları hesap ve uyarıdır; tarayıcıda kalır. Koruma kuralları (B11, 157 a dahil) sunucuya geçer.
 5. Kapalı özellik: belge yükleme `kopru.ts` içinde hata verir (dosya saklama yok). Uyum: dosya saklama önkoşul (Ç4).
    DOĞRULANDI (19.10.2026, `grep -c -E "jsdelivr|cdnjs" katalog.html` = 0): ekran dosyasında dış kitaplık adresi kalmadı. Çerçeve politikası
    `default-src 'none'; script-src 'unsafe-inline'; ... connect-src 'none'` (`MalzemeKatalogu.tsx` `POLITIKA`); test `MalzemeKatalogu.test.tsx`.
@@ -149,11 +152,13 @@ Bağlantı işinde (kart #232 kapsamı dışı, kullanıcı kararı 08.10.2026; 
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): Logo bağlantı işi kullanıcı açıkça isteyene kadar kapsam dışı; gerçek veri yok. Bugün aktif olan kartlar: durumu boş kaldı (LG1 = a); Logo'daki karşılıklarıyla kayıt numarası üzerinden eşlenmeleri bağlantı işinde.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): aynı kapsam kararı (LG3 = a). Pasife alınan ya da iptal edilen kartın Logo'ya ne göndereceği (LG3 = a); bu işte yalnız alanlar var.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ad güncellemesi yazıldı ve testli (`disari.ts` `logoyaGuncellemeGidecekMalzemeler`, `malzemeLogoGuncellemeSonucu`; `logo/isler.ts` `malzemeGuncelleme`; test `logo-ad-guncelleme.test.ts`, kart #783). Logo'ya gönderilmiş kartın adı ya da başka alanı sonradan (değişiklik talebiyle) değişirse Logo'daki kaydın güncellenmesi. Bugün kilitli olan yalnız stok kodu, tür ve birim (MKL-3).
-- Logo kart türü ve birim seti değerlerinin kümesi: KISMEN KAPANDI (kart #232, kullanıcı kararı LB7 a, LB2 a, LB9 a; istek kart #207 logo `BASKA-MODUL-ISTEKLERI.md`).
+- Logo kart türü ve birim seti değerlerinin kümesi: KAPANDI (kart #232, kullanıcı kararı LB7 a, LB2 a, LB9 a, 144 a; istek kart #207 logo `BASKA-MODUL-ISTEKLERI.md`).
   Tür karşılığı yalnız `10` hammadde, `11` yarı mamul, `12` mamul, `13` tüketim malı; demirbaş (Logo `4`) gönderilmez, karşılığı boş kalır. Birim karşılığı boşluksuz kod.
   Hem uçta (422/400) hem veritabanında (kısıt `malzeme_logo_karsiligi_izinli`, göç `20261008164500_*`; bozan satır varsa göç sayı ve listeyle durur, veri değişmez).
-  Açık (#339'a bağlı): birim karşılığının Logo modülünün birim seti listesinden seçilmesi ve listede olmayan kayıtlı değerde "geçersiz" rozeti; sunucu yalnız biçime bakar
-  (bağımlılık yönü logo -> malzemeler, ADR 0006). Uymayan kartı gönderimde Logo modülü "hata: geçersiz karşılık" yapar (LB9 a).
+  KAPANDI (144 a, 23.10.2026): birim karşılığı Logo gönderimi sayfasında `GET /logo/birim-setleri` listesinin geçerli kodlarından seçilir; listede olmayan kayıtlı değer
+  tabloda "Geçersiz" rozetiyle görünür, pencerede "(listede yok)" seçeneği olarak korunur. Aynı sayfadaki "Logo birim setleri" kartı listeyi gösterir; `logo.birim-seti-yaz` olan
+  elle ekler ve elle ekleneni kaldırır (LB11 a). Tablo `logo_birim_seti` Logo modülünde kalır (Logo'nun listesinin aynası); birim kavramının ve karşılığın sahibi malzemeler.
+  Test `LogoGonderimi.test.tsx`. Sunucu yalnız biçime bakar (bağımlılık yönü logo -> malzemeler, ADR 0006); uymayan kartı gönderimde Logo modülü "hata: geçersiz karşılık" yapar (LB9 a).
 5. Stok kodu kuralları (kart #230). KULLANICI KARARI (07.10.2026, #227 madde 10, 11, 25): kodu her zaman sunucu verir (önek + sıra); aktif olunca kod ve tür kilitlenir; en çok 24 karakter.
    VARSAYIM (şef önerisiyle ilerledi, kart #230): (a) KAPANDI (borç azaltma 18.10.2026, tekrar): "Bilinen sınırlar" bölümündeki elle stok kodu maddesiyle aynı iş, orada izlenir. Elle kod alanı ekranda duruyor; yazılan kodun yalnız geçerli öneki kullanılır, sayı yok sayılır; alanın kalkması ekran isteği #234 madde 10.
    (b) KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kod yapısı seçimi gömülü modda kilitli (`katalog.html` `name="kodYapisi"` radyosu `|| kilit ? 'disabled'`, `kilit` `onayAyarKilit`'ten). Kabul edilen önek tam olarak ekranın standart yapısıdır (`katalog.html` `kodOnek`, `KOD_DESEN`): `(HM|YM|MM|SF|DB)-[A-Z0-9]{3}-`; tür kısmı kartın türüyle aynı olmalı; serbest önek 400. Ekranın teknik kod yapısı (`kodYapisi: 'teknik'`, ör. `MET-PAS-316L-...`) bu desene uymaz ve reddedilir
@@ -258,6 +263,10 @@ Açık:
   ikisi birlikte dolu ya da boştur, alış birimi stok biriminden farklı ve birim listesinde olmalıdır (yeni ya da değişmişse), katsayı sıfırdan büyük, en çok 6 ondalıktır. Satın alma `malzemeBirimDonusumleri` (disari.ts) ile okur.
 - Bilinen sınır: alanlar prototipten sonra eklenen betiktedir (`birim-donusumu-eki.ts`, `s5` ve `gTicariHTML` sarılır). Alış birimi seçenekleri ekranın bütün birim listelerinin birleşimidir; Excel aktarımı, föy ve değişiklik karşılaştırması alanları göstermez.
   Eski kartlar boş kalır (314). Satın almada siparişin birimi ve stoka çeviri Satın alma şeridindedir.
+
+## CNC kütüphane kimliği (T3; 153 a, 163 b, 165 a, 23.10.2026)
+- Sarf ya da demirbaş kartı bir CNC kurulum kütüphane kalemine bağlanır: `malzeme_katalog_karti.cnc_kutuphane_kimligi` (boş olabilir, biçim ve tür kısıtı, kısmi tekil dizin). Bağlı kalemin adedi stoktan gelir, azalışı stoktan düşer (cnc-kurulum ve stok). Okuma ve yazma `disari.ts` `cncKimlikliMalzemeler`, `cncKimligiBagla`; yetki çağıranda (cnc-kurulum ucu `malzemeler.yaz` ister).
+- Bilinen sınır: bağ Malzemeler ekranında görünmez ve buradan kurulmaz; yalnız CNC kurulum Kütüphanesindeki köprü bölümünden. Bağ kartın sürümünü artırmaz, kartın değişiklik geçmişine girmez (kim, ne zaman cnc-kurulum ucunun denetim kaydında). Veri taşınmaz (165 a): eski kalemler bağsız başlar. Katalog kaleminin adı yalnız motorda; kartın adı elle girilir. VARSAYIM: iptal kart da bağlı kalabilir (stoğu durabilir). Bağlamada: kart ayrıntısında bağın gösterilmesi.
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /malzeme-birimleri`. Birimin sahibi malzemeler (144 a).

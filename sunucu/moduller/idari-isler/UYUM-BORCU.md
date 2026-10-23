@@ -18,6 +18,7 @@
 - Araç görevi: bildirim merkezi bağlanınca onay ve red talep edene bildirim olarak gider; bugün durum Araç talebim'de görülür.
 - Filo: Sevkiyat'ın `sevkiyat_araci` kaydı plaka ile araç kartına bağlanacak (172 a); bugün iki liste.
 - Filo: araç simgesi ortak sette yok; `truck` kullanıldı (Çekirdek §13 isteği, araba).
+- Talep numarası Sistem Ayarları'ndaki ortak sayaçtan (143 a); `idari_isler_numara_sayaci` artık okunmaz ve yazılmaz. Kaldıran göç dolu tabloyu sildiği için onayla, ayrı göçle.
 
 - Araç masrafı: proje ve finans bağı (masrafın projeye ya da gider hesabına yazılması) bağlamada; bugün yalnız araç başına liste ve yıl toplamı.
 - Zimmet: İK zimmet alanını kaldırır, IK-74 çıkış uyarısını `kisilerinAcikZimmetleri` ile okur, `ik_zimmet`'i kaldıran göçünde önce

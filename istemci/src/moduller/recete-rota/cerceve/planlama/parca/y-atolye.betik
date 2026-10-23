@@ -121,7 +121,10 @@ function atCiz() {
   const W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return true;
   const dpr = window.devicePixelRatio || 1;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  /* görünüm değişince (Özet, Harita, tam ekran) tuval boyu değişir: açık kılavuzun örnek kutusu yeni boşluğa yeniden ortalanır */
+  const boyDegisti = AT.boyut && (AT.boyut[0] !== W || AT.boyut[1] !== H);
   AT.boyut = [W, H]; if (!AT.kam) atSigdir(W, H);
+  if (boyDegisti && AT.kilavuz) requestAnimationFrame(atKilavuzKamera);
   const g = AT.g; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   if (!AT.kam) return;
   const R = atRenkler(); const s0 = atSahne(); const s = AT.onizle ? AT.onizle : s0; const t = rsT(); if (!AT.kam) atSigdir(W, H); const k = AT.kam.k;
@@ -376,7 +379,7 @@ function atBul(sx, sy) {
 function atBagla() {
   const cv = document.getElementById('at-cv'); if (!cv) { AT.cv = null; return; }
   if (cv === AT.cv) return; let ilk = false; if (!AT.girdi) { if (!AT_AZ()) AT.giris = performance.now(); AT.girdi = true; try { ilk = !localStorage.getItem('pm-at-kilavuz-v1'); } catch (e) { } } AT.cv = cv;
-  if (ilk) setTimeout(() => { if (AT.cv === cv && !U.secJob && !U.rsTez) atKilavuz(true); }, 1500); AT.g = cv.getContext('2d'); AT.boyut = [cv.clientWidth, cv.clientHeight];
+  if (ilk) setTimeout(() => { if (AT.cv === cv && !U.secJob && !U.rsTez) atKilavuz(true); }, 1500); AT.g = cv.getContext('2d'); AT.boyut = [cv.clientWidth, cv.clientHeight]; if (AT.kilavuz) requestAnimationFrame(atKilavuzKamera);
   const yer = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   let bas = null; const ptr = new Map();
   cv.addEventListener('pointerdown', e => {
@@ -467,13 +470,18 @@ function atUc(h) { if (!h || !AT.kam) return; const a = { ...AT.kam }; const t0 
 
 function atKilavuz(ac) {
   AT.kilavuz = ac; try { localStorage.setItem('pm-at-kilavuz-v1', '1'); } catch (e) { }
-  if (ac) { U.secJob = null; U.gySec = null; U.rsTez = null; const s = atSahne(); AT.ornek = atOrnek(s, rsT()); const a = s.ist[AT.ornek];
-    if (a && AT.boyut) { const [W, H] = AT.boyut; const dar = W < 600; const ust = (document.querySelector('.pm-at-ust') || {}).offsetHeight || 0, alt = (document.querySelector('.pm-at-alt') || {}).offsetHeight || 0;
-      /* örnek kutu, kılavuz kartının ve araç çubuklarının dışında kalan boş alanın ortasına gelir */
-      const sag = dar ? W : W - Math.min(340, W * 0.4) - 16, ust2 = ust + 8, alt2 = dar ? H * 0.52 : H - alt - 8;
-      const k = Math.max(0.4, Math.min(1.5, (sag - 16) / (AT_KW + 110), (alt2 - ust2) / (AT_KH + 70)));
-      atUc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k }); } }
+  if (ac) { U.secJob = null; U.gySec = null; U.rsTez = null; AT.ornek = atOrnek(atSahne(), rsT()); atKilavuzKamera(); }
   render();
+}
+function atKilavuzKamera() {
+  if (!AT.kilavuz || !AT.kam) return;
+  const a = atSahne().ist[AT.ornek];
+  if (!a || !AT.boyut) return;
+  const [W, H] = AT.boyut; const dar = W < 600; const ust = (document.querySelector('.pm-at-ust') || {}).offsetHeight || 0, alt = (document.querySelector('.pm-at-alt') || {}).offsetHeight || 0;
+  /* örnek kutu, kılavuz kartının ve araç çubuklarının dışında kalan boş alanın ortasına gelir */
+  const sag = dar ? W : W - Math.min(340, W * 0.4) - 16, ust2 = ust + 8, alt2 = dar ? H * 0.52 : H - alt - 8;
+  const k = Math.max(0.4, Math.min(1.5, (sag - 16) / (AT_KW + 110), (alt2 - ust2) / (AT_KH + 70)));
+  atUc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k });
 }
 const atTekEski = tekEylem;
 tekEylem = function (act, v, el, e) {
