@@ -334,28 +334,9 @@ export const KIMLIK_BETIGI = String.raw`function tmiKullanici() {
   USER = { _id: uid, ad: T.ad, rol: rol };
 }`;
 
-// Uygulamadan SONRA: kullanıcı formu PIN yerine TMI kişisini seçtirir (uygulamanınkinin yerine geçer; sunucu kullanıcı kaydını
-// yalnız yöneticiden alır ve PIN alanını saklamaz). Ad, rol ve durum alanları uygulamanınkiyle aynıdır.
-export const KULLANICI_BETIGI = String.raw`function openUser(id) {
-  if (!need('kullanici')) return;
-  var u = id ? (S.kullanici || []).find(function (x) { return x._id === id; }) : null;
-  var K = window.__TMI_KM.kisiler || [];
-  var atanan = (S.kullanici || []).map(function (x) { return x._id; });
-  var secenek = [['', 'Seçin']].concat(K.filter(function (k) { return atanan.indexOf('tmi-' + k.id) < 0; })
-    .map(function (k) { return [String(k.id), k.ad]; }));
-  var F = [u ? { k: 'ad', label: 'Ad soyad', req: 1, w: 'h' } : { k: 'kisi', label: 'Kişi', type: 'select', req: 1, w: 'h', options: secenek },
-    { k: 'rol', label: 'Rol', type: 'select', options: ROLLER, def: 'Muayeneci' },
-    { k: 'aktif', label: 'Durum', type: 'bool', boolLabel: 'Aktif', def: true }];
-  formModal(u ? u.ad + ' düzenle' : 'Kullanıcı ekle', F, u ? Object.assign({}, u) : null, async function (d) {
-    var k = u ? null : K.find(function (x) { return String(x.id) === d.kisi; });
-    if (!u && !k) { toast('Kişi seçin.', 'bad'); return; }
-    var rec = Object.assign({}, u || {}, { ad: u ? d.ad : k.ad, rol: d.rol, aktif: d.aktif, _id: u ? u._id : 'tmi-' + k.id });
-    delete rec.pin;
-    await save('kullanici', rec);
-    closeModal(true);
-    toast('Kullanıcı kaydedildi');
-  }, '<div class="note mt">Giriş TMI oturumuyla yapılır. Rol TMI yetkisinden gelir: TMI yöneticisi Kalite yöneticisi, kalite onay yetkisi olan Kalite mühendisi, öteki Muayeneci; burada seçilen rol uygulanmaz.</div>');
-}`;
+// Uygulamadan SONRA: uygulamanın kullanıcı formu açılmaz (200 a). Rol TMI işleminden gelir (KIMLIK_BETIGI); form, liste ve ekleme
+// düğmesi sayfadan kalkar (sayfa.ts PIN_YERLERI), bu tanım uygulamanınkinin yerine geçip kalan çağrıları da boşa düşürür.
+export const KULLANICI_BETIGI = String.raw`function openUser() {}`;
 
 // Onaylı formun onayını geri alma (kullanıcı kararı 17.10.2026, "Eklensin"): form listesindeki düğme yalnız onay işlemi olana
 // görünür (sayfa.ts). Onay sunucuda geri alınır; form taslağa döner, geri alan ve saat sunucudan yazılır, liste akışla yenilenir.
