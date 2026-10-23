@@ -1,7 +1,7 @@
 import type { Pkg as PkgT } from '@shared/model';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../data/cakisma';
 import { AKStore } from '../data/store';
-import { ISTASYONSUZ_GONDERIM, PLAN_ETIKETI, gonderimUyarisi, istasyonsuzMu, planEtiketi, rotaEksigi, tmiPlani } from '../data/tmi-plan';
+import { ISTASYONSUZ_GONDERIM, PLAN_ETIKETI, SIRA_ONAYI, gonderimUyarisi, istasyonsuzMu, planEtiketi, rotaEksigi, siraOnayi, tmiPlani } from '../data/tmi-plan';
 import type { GonderimUyarisi } from '../data/tmi-plan';
 import { sablonUygula, tmiPaketiMi, tmiyeGit } from '../data/yeni-paket';
 import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla } from '../data/paket-grup';
@@ -51,9 +51,10 @@ export const tmiIsEmri = p => String((p && p.id) || '').startsWith('tmi-ie-');
 const TMI_KILIT = 'TMI planından gelir';
 // Rotalı işin plan durumu (data/tmi-plan.ts): operatöre yalnız canlı planda eşleşen iş düşer; sıra canlı plandandır.
 const PLAN_RENGI = { planlanmadi: 'var(--idle)', 'kaynak-farkli': 'var(--stop)', 'hazirlik-bekliyor': 'var(--hold)' };
+const SIRA_RENGI = { taslakta: 'var(--idle)', onayda: 'var(--hold)' };
 export const PlanChip = ({ p, sira = false }) => {
-  const e = planEtiketi(p), d = tmiPlani(p);
-  return html`${e ? html`<span className="chip" style=${{ '--c': PLAN_RENGI[e] }}><${I} n=${e === 'hazirlik-bekliyor' ? 'clock' : 'alert'} s=${12} />${PLAN_ETIKETI[e]}</span>` : null}${sira && d && d.canli && d.sira ? html`<span className="mini">Plan sırası ${d.sira}</span>` : null}`;
+  const e = planEtiketi(p), d = tmiPlani(p), o = siraOnayi(p);
+  return html`${e ? html`<span className="chip" style=${{ '--c': PLAN_RENGI[e] }}><${I} n=${e === 'hazirlik-bekliyor' ? 'clock' : 'alert'} s=${12} />${PLAN_ETIKETI[e]}</span>` : null}${o ? html`<span className="chip" style=${{ '--c': SIRA_RENGI[o] }} title="Sıra canlıya plan onaylanıp canlıya alınınca geçer"><${I} n="clock" s=${12} />${SIRA_ONAYI[o]}</span>` : null}${sira && d && d.canli && d.sira ? html`<span className="mini">Plan sırası ${d.sira}</span>` : null}`;
 };
 export function newPkg(): PkgT {
   const n = new Date(); const no = 'İE-' + n.getFullYear() + '-' + String(4900 + Math.floor(Math.random() * 99)).padStart(5, '0');
