@@ -224,7 +224,8 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
     audit('plan', moved ? 'istasyon değişti' : 'sıra değişti', p.no, moved ? p.machine + ' → ' + st : st + ' · ' + (idx + 1) + '. sıra');
     say(moved ? p.no + ' → ' + st : p.no + ' sırası güncellendi', 'check', 'var(--run)'); reload();
   };
-  // Rotalı TMI işinin sırası planındır (A4): plan taslağına yazılır, ekran ve operatör müdür canlıya alınca değişir.
+  // Rotalı TMI işinin sırası planındır (A4, 147 a): plan taslağına yazılır; ekran ve operatör taslak onaylanıp canlıya alınınca değişir,
+  // o zamana dek kart "Sıra taslakta" ya da "Sıra onay bekliyor" der.
   const planaSirala = async (p, st, beforeId) => {
     if (!tmiPlani(p).canli) { say('Plana yerleşmemiş iş sıralanamaz', 'x', 'var(--stop)'); return; }
     const once = sortL(items.filter(x => x.machine === st)), yeni = once.filter(x => x.id !== p.id);
@@ -234,7 +235,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
   const planaGonder = async (p, st, istek) => {
     if (!istek) { say('Plan sırası değişmedi', 'check', 'var(--idle)'); return; }
     const r = await siralamayiGonder(istek, planSurumu, AKStore.Plan.sirala);
-    if (r.sonuc === 'yazildi') { audit('plan', 'plan taslağına sıra', p.no, st); say('Taslağa yazıldı · canlıya alınınca geçerli', 'check', 'var(--run)'); return; }
+    if (r.sonuc === 'yazildi') { audit('plan', 'plan taslağına sıra', p.no, st); say('Sıra taslağa yazıldı · onaylanıp canlıya alınınca geçerli', 'clock', 'var(--hold)'); reload(); return; }
     say(r.ileti, 'x', 'var(--stop)'); if (r.yenile) await yenile();
   };
   const step = (p, st, dir) => { const L = sortL(items.filter(x => x.machine === st));
