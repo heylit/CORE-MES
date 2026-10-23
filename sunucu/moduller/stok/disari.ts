@@ -65,6 +65,11 @@ export async function partiGirisZamanlari(db: Db, partiIdler: number[]): Promise
 // Tarih partinin ilk kaydıdır. Belge Çizimler'de tutulur; dosyası Çizimler'in okuma ucundan verilir.
 export const sonPartiler = (db: Db, malzemeId: number, sinir = 10) => servis.sonPartiler(db, malzemeId, Math.min(Math.max(1, sinir), 50));
 
+// CNC takım stoğu (153 a, 164 b): CNC kurulumu takım değişimini ve uç seti kullanımını kartın serbest bakiyesinden düşer
+// (ilk giren önce, eksiye inmez; yetmezse hiç düşmez). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
+export type { CncTakimCikisiSonucu } from './servis.ts';
+export const cncTakimCikisi = (db: Db, kisiId: number, g: { malzemeId: number; miktar: string; aciklama: string }): Promise<servis.CncTakimCikisiSonucu> =>
+  servis.cncTakimCikisi(db, kisiId, g);
 // Kalıp: kisiAdlari. Boş dizide sorgu atılmaz; olmayan kimlik haritada yoktur; pasif konum da koduyla döner.
 export async function konumAdlari(db: Db, idler: number[]): Promise<Map<number, string>> {
   if (idler.length === 0) return new Map();
