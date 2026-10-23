@@ -49,3 +49,29 @@ export function merkezDosyasiniKoy<T extends MerkezDosyasi>(
 
 // Pakete ve stüdyoya dosya yalnız belge merkezinden eklenir; yerel yükleme ve örnek dosya yoktur.
 export const MERKEZDEN_EKLENIR = 'Dosyalar TMI belge merkezinden eklenir';
+
+// 19.1: paketin merkez çizimi eskiyse terminal "KALİTE ONAYLI" yerine bunu gösterir ve başlatma yerine uyarı verir. Başlatmayı sunucu zaten
+// reddeder (denetim #34); ekran yalnız önceden söyler. Birden çok dosyada yeni revizyon yayından kalkmaya üstündür.
+export type EskiCizim = 'yeni-revizyon' | 'yayindan-kalkti';
+export const ESKI_CIZIM: Record<EskiCizim, { rozet: string; baslik: string }> = {
+  'yeni-revizyon': { rozet: 'ESKİ REVİZYON', baslik: 'Çizimin yeni revizyonu yayında' },
+  'yayindan-kalkti': { rozet: 'YAYINDAN KALKTI', baslik: 'Çizim yayından kalktı' },
+};
+export function eskiCizim(files: readonly MerkezDosyasi[] | null | undefined, uyari: Readonly<Record<number, string>>): EskiCizim | null {
+  let sonuc: EskiCizim | null = null;
+  for (const f of files || []) {
+    const bag = merkezBagi(f);
+    const d = bag === null ? undefined : uyari[bag.belgeId];
+    if (d === 'yeni-revizyon') return d;
+    if (d === 'yayindan-kalkti') sonuc = d;
+  }
+  return sonuc;
+}
+const BASLATAN = new Set(['start', 'resume', 'restart']);
+export function eskiCizimGorevi<T extends { act?: string | null }>(gorev: T | null, durum: EskiCizim | null) {
+  if (durum === null || gorev === null || !BASLATAN.has(gorev.act ?? '')) return gorev;
+  return {
+    tone: 'var(--stop)', icon: 'alert', t: ESKI_CIZIM[durum].baslik,
+    d: 'Hazırlık paketi güncellenmeden iş başlatılamaz · hazırlığı çağır', act: 'call', btn: 'Çağrı', key: 'eski-cizim',
+  };
+}

@@ -172,7 +172,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
   });
 
   test('CK-08: ben kişiyi ve yazma bayrağını döner', async () => {
-    assert.deepEqual((await istek(yazar, 'GET', '/cnc-kurulum/ben')).json(), { kisi: { id: yazarId, ad: 'Deneme yazar' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false });
+    assert.deepEqual((await istek(yazar, 'GET', '/cnc-kurulum/ben')).json(), { kisi: { id: yazarId, ad: 'Deneme yazar' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false, stokKartiBaglayabilir: false, emirGorebilir: false });
     assert.equal(((await istek(okur, 'GET', '/cnc-kurulum/ben')).json() as { yazabilir: boolean }).yazabilir, false);
   });
 
@@ -213,6 +213,18 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal(emirler.some((e) => e.id === op20 || e.id === kapaliOp), false);
     assert.equal((await istek(okur, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
     assert.equal((await istek(yetkisiz, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
+  });
+
+  test('CK-11b (182 a): ben emir listesinin açık olup olmadığını uçla aynı denetimle söyler', async () => {
+    const emirGorebilir = async (cerez: string) => ((await istek(cerez, 'GET', '/cnc-kurulum/ben')).json() as { emirGorebilir: boolean }).emirGorebilir;
+    const { cerez: operator } = await islemliKisi('emirsizoperator', ['sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.hazirlik-onayla']);
+    assert.equal(await emirGorebilir(operator), false);
+    assert.equal((await istek(operator, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
+    for (const [ad, islem] of [['emirliuretim', 'sayfa.uretim-emirleri'], ['emirlistok', 'sayfa.stok'], ['emirliatolye', 'sayfa.atolye']] as const) {
+      const { cerez } = await islemliKisi(ad, ['sayfa.cnc-kurulum', islem]);
+      assert.equal(await emirGorebilir(cerez), true, islem);
+      assert.equal((await istek(cerez, 'GET', '/cnc-kurulum/emirler')).statusCode, 200, islem);
+    }
   });
 
   // Kurulum testlerinin açık emirleri tek istasyonda açılır.
@@ -560,7 +572,7 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual((await bagla(yonetici, 'em10', null)).json(), { kart: null });
     assert.equal((await envanter())['em10']?.['qty'], 40);
     assert.deepEqual((await istek(yonetici, 'GET', '/cnc-kurulum/ben')).json(), {
-      kisi: { id: yoneticiId, ad: 'Deneme Yönetici' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: true, stokDusebilir: true, stokKartiBaglayabilir: true,
+      kisi: { id: yoneticiId, ad: 'Deneme Yönetici' }, yazabilir: true, hazirlikOnaylayabilir: false, takimDegistirebilir: true, stokDusebilir: true, stokKartiBaglayabilir: true, emirGorebilir: true,
     });
   });
 

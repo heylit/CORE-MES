@@ -68,8 +68,11 @@ export const PIN_YERLERI: readonly (readonly [string, string])[] = [
   ['setInterval(()=>{if(!USER||!authOn())return;', 'setInterval(()=>{if(!USER||!authOn()||window.__TMI_KM)return;'],
   ['<button class="link" onclick="logout()">Çıkış</button>', ''],
   ['Giriş PIN ile yapılır; kayıtlardaki "kim yaptı" bilgisi buradan gelir.', 'Giriş TMI oturumuyla yapılır; kayıtlardaki "kim yaptı" bilgisi oturumdaki kişidir.'],
+  // Kullanıcı kaydı rol vermez (195 a); liste ve ekleme düğmesi kalkar, yerine rolün TMI yetkisinden geldiğini söyleyen not durur (200 a).
+  ["const L=[...(S.kullanici||[])].sort((a,b)=>a.ad.localeCompare(b.ad,'tr'));", 'const L=[];'],
+  ['<button class="btn" onclick="openUser()">Kullanıcı ekle</button>', ''],
   ['<b>Kimlik doğrulama kapalı.</b> Herkes her işlemi yapabilir ve kayıtlarda isim, formlara yazılan addan alınır. İlk kullanıcıyı (kalite yöneticisi) eklediğiniz anda giriş zorunlu olur.',
-    '<b>Rol verilmiş kullanıcı yok.</b> TMI yöneticisi Kalite yöneticisidir; öteki kişiler Muayeneci sayılır.'],
+    '<b>Rol TMI yetkisinden gelir.</b> TMI yöneticisi Kalite yöneticisi, kalite onay yetkisi olan Kalite mühendisi, öteki kişiler Muayenecidir. Yetki Personel sayfasında rolle verilir.'],
   ['Not: PIN girişi kişiyi tanımlamak ve hesap verebilirlik içindir. Tek bilgisayar modunda veriler tarayıcıda durduğu için kararlı bir saldırgana karşı koruma sağlamaz; yerel sunucu modunda değişiklik izi sunucuda silinemez şekilde tutulur.',
     'Not: Giriş TMI oturumuyla yapılır; kullanıcı ve ayar kayıtlarını yalnız TMI yöneticisi değiştirir. Değişiklik izi sunucuda silinemez şekilde tutulur.'],
 ];

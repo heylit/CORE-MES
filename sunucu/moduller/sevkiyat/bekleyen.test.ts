@@ -409,6 +409,71 @@ describe('sevkiyat bekleme listesi (gerçek PostgreSQL)', () => {
     assert.deepEqual(await o().vt.tx((db) => siparisinSevkleri(db, 2147483647)), [], '302 a: olmayan siparişte boş liste');
   });
 
+  test('17.2: iptal edilen işin ürün, fason ve alım yükü bekleme listesine döner; iptal edilen sevk siparişte işaretli kalır', async () => {
+    const m = await makineKur();
+    const { uretimEmriId: emirId } = await o().vt.tx((db) => uretimEmriAc(db, kullanici('planlama_proje'), {
+      projeId: denemeProjeId, malzemeNo: urunNo, adet: 4, teslim: null, kaynakRotaRevizyonId: revizyonId, isEmirleri: [adim(1, { tur: 'makine', id: m })],
+    }));
+    assert.equal((await terminal(emirId, 'baslat')).durum, 200);
+    assert.equal((await terminal(emirId, 'sayim', { tur: 'saglam', adet: 4 })).durum, 200);
+    await ilkParcaOnay(emirId);
+    assert.equal((await terminal(emirId, 'bitir', {})).durum, 200);
+    const kok = (await bekleyenler()).find((x) => x.kaynak === 'urun' && x.uretimEmriId === emirId)!;
+    const firmaId = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('İptal Alıcı', 'musteri', $1) RETURNING id", [yoneticiId]))!.id;
+    const nokta = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, firma_id) VALUES ('İptal Noktası', 'musteri', 39.97, 32.77, $1) RETURNING id", [firmaId]))!.id;
+    const tarih = (await o().sahip.tek<{ g: string }>("SELECT to_char(current_date + 7, 'YYYY-MM-DD') AS g"))!.g;
+    const is = isCevabi.parse((await istek('depo', 'POST', `/sevkiyat/bekleyenler/${kok.id}/ise-cevir`, isGovdesi(tarih, nokta))).govde).is;
+    // Yola çıkıp havuza dönen işte sevk anı müşterisi yazılmıştır; dönen yük müşterisiz açılır.
+    await o().vt.tx((db) => servis.isDurumuDegistir(db, is.id, { durum: 'tamamlandi', tarih, not: null }, yoneticiId));
+    await o().vt.tx((db) => servis.isDurumuDegistir(db, is.id, { durum: 'havuzda', tarih, not: null }, yoneticiId));
+    assert.equal((await bekleyenler()).some((x) => x.uretimEmriId === emirId), false);
+
+    assert.equal((await istek('operator', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 403);
+    assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${is.id}/iptal-et`)).durum, 200);
+    const donen = (await bekleyenler()).filter((x) => x.uretimEmriId === emirId);
+    assert.deepEqual(donen.map((x) => [x.kaynak, x.adet, x.hazirZamani, x.firmaId]), [['urun', '4.0000', kok.hazirZamani, null]], 'ürün listeye döner');
+    const yer = (await o().vt.tx((db) => emirlerinSevkDurumu(db, [emirId]))).get(emirId)!;
+    assert.deepEqual([yer.isId, yer.kaldirildi], [null, null], 'emir sevk edilmemiş görünür');
+    // Test düzeneği: emri bir sipariş satırına bağlar.
+    const siparisId = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO siparisler_siparis (no, durum, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id)
+       VALUES ('SS-2026-902', 'taslak', $1, current_date, current_date + 30, 20, $2) RETURNING id`, [firmaId, yoneticiId]))!.id;
+    const satirId = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 1, $2, 4, 5) RETURNING id', [siparisId, urunNo]))!.id;
+    await o().sahip.sorgu('UPDATE uretim_emri SET siparis_satiri_id = $2 WHERE id = $1', [emirId, satirId]);
+    assert.deepEqual((await o().vt.tx((db) => siparisinSevkleri(db, siparisId))).map((x) => [x.isId, x.iptal, x.firmaId]), [[is.id, true, firmaId]], '302 a: iptal edilen sevk işaretli kalır');
+    const yeniIs = isCevabi.parse((await istek('depo', 'POST', `/sevkiyat/bekleyenler/${donen[0]!.id}/ise-cevir`, isGovdesi(tarih, nokta))).govde).is;
+    assert.equal((await bekleyenler()).some((x) => x.uretimEmriId === emirId), false, 'dönen yük yeniden işe çevrilir');
+    assert.deepEqual((await o().vt.tx((db) => emirlerinSevkleri(db, [emirId]))).get(emirId)!.map((x) => [x.isId, x.adet]), [[yeniIs.id, '4.0000']]);
+
+    // Fason gönderimi: noktalı firmada iş kendiliğinden açılır; iptalde gönderim listede bekler.
+    const f = await fasonFirmaKur(true);
+    const e = await fasonluEmir(f.firmaId);
+    const g = await fason(e.id, e.fasonIsEmriId, 'fason-gidis', { adet: 2 });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    const fasonIsi = (await o().sahip.tek<{ isId: number }>('SELECT is_id AS "isId" FROM sevkiyat_bekleyen WHERE fason_hareket_id = $1', [g.govde.hareketId]))!.isId;
+    assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${fasonIsi}/iptal-et`)).durum, 200);
+    const fasonKaydi = (await bekleyenler()).filter((x) => x.kaynak === 'fason' && x.uretimEmriId === e.id);
+    assert.deepEqual(fasonKaydi.map((x) => [x.firmaId, x.adet]), [[f.firmaId, '2.0000']]);
+
+    // Alım: işe çevrilen alım iptalde aynı firma ve günle döner; talebin eşitlemesi dönen kaydı ikinci kez açmaz.
+    const talepId = randomUUID();
+    await o().sahip.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, 17, 'Deneme talep', $2, $2, 'siparis_verildi')", [talepId, yoneticiId]);
+    const tedarikci = await fasonFirmaKur(true);
+    const alimOlayi = { talepId, talepNo: 'T-17', alimlar: [{ firmaId: tedarikci.firmaId, istenenTarih: tarih }], kisiId: yoneticiId };
+    await o().vt.tx((db) => servis.alimYansit(db, alimOlayi));
+    const alim = (await bekleyenler()).find((x) => x.kaynak === 'alim' && x.talepId === talepId)!;
+    const alimGovdesi = { ...isGovdesi(tarih, nokta), tur: 'alim', alisNoktasiId: tedarikci.noktaId, birakisNoktasiId: null };
+    const c = await istek<{ is: Is }>('depo', 'POST', `/sevkiyat/bekleyenler/${alim.id}/ise-cevir`, alimGovdesi);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.equal((await istek('depo', 'POST', `/sevkiyat/isler/${isCevabi.parse(c.govde).is.id}/iptal-et`)).durum, 200);
+    await o().vt.tx((db) => servis.alimYansit(db, alimOlayi));
+    const alimlar = (await bekleyenler()).filter((x) => x.kaynak === 'alim' && x.talepId === talepId);
+    assert.deepEqual(alimlar.map((x) => [x.firmaId, x.istenenTarih]), [[tedarikci.firmaId, tarih]]);
+  });
+
   test('261 a: ürün kaydı bölünür, parçalar ayrı işlere gider; müşteri sevk anında kayda yazılır; emrin sevk yeri geride kalan parçadır', async () => {
     const m = await makineKur();
     const { uretimEmriId: emirId } = await o().vt.tx((db) => uretimEmriAc(db, kullanici('planlama_proje'), {

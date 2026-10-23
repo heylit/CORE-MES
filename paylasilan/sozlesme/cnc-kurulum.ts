@@ -25,9 +25,10 @@ export const kisiSemasi = z.object({ id: z.number().int(), ad: z.string() });
 // hazirlikOnaylayabilir: yazma işlemi olmadan yalnız hazırlık onayları kaydedilir (sunucu öteki alanları almaz).
 // takimDegistirebilir: takım değişimi ve kullanım düzeltmesi sunucuya gider (yoksa yalnız açık sekmede kalır).
 // stokDusebilir: stok kartına bağlı kalemin azalan adedi stoktan düşer; stokKartiBaglayabilir: kalemi stok kartına bağlar (malzemeler.yaz).
+// emirGorebilir: açık emir listesi (GET /cnc-kurulum/emirler) bu kişiye açıktır; değilse çerçeve listeyi hiç istemez.
 export const benCevabi = z.object({
   kisi: kisiSemasi, yazabilir: z.boolean(), hazirlikOnaylayabilir: z.boolean(), takimDegistirebilir: z.boolean(), stokDusebilir: z.boolean(),
-  stokKartiBaglayabilir: z.boolean(),
+  stokKartiBaglayabilir: z.boolean(), emirGorebilir: z.boolean(),
 });
 
 export const yazGovdesi = z.object({

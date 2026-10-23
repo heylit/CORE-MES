@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { KM_DOSYA_SINIRI, cihazGecerliMi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
+import { KM_DOSYA_SINIRI, cihazGecerliMi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -9,6 +9,20 @@ describe('Kalite Merkezi kuralları', () => {
     assert.equal(izReddi('iz', 'yaz', true), 'izDegismez');
     assert.equal(izReddi('iz', 'sil', false), 'izSilinmez');
     assert.equal(izReddi('iz', 'sil', true), 'izSilinmez');
+  });
+
+  test('195 a MRB kararı onaydır: kararsız hâl serbest, karar vermek ve değiştirmek onay ucundan; değer metin olmalı', () => {
+    for (const [o, y] of [[undefined, 'Karar bekliyor'], ['Karar bekliyor', 'Karar bekliyor'], ['', undefined], [null, 'Karar bekliyor']] as const) {
+      assert.deepEqual(onayDegisiklikleri('ncr', o === undefined ? {} : { mrb: o }, y === undefined ? {} : { mrb: y }), [], `${String(o)} -> ${String(y)}`);
+    }
+    for (const karar of ['Olduğu gibi kullan (müşteri onaylı)', 'Tamir (müşteri onaylı)', 'Tamir', 'Yeniden işle', 'Hurda', 'Tedarikçiye iade']) {
+      assert.deepEqual(onayDegisiklikleri('ncr', { mrb: 'Karar bekliyor' }, { mrb: karar }), ['mrb'], karar);
+      assert.deepEqual(onayDegisiklikleri('ncr', null, { mrb: karar }), ['mrb'], `yeni kayıt ${karar}`);
+      assert.deepEqual(onayDegisiklikleri('ncr', { mrb: karar }, { mrb: 'Karar bekliyor' }), ['mrb'], `geri alma ${karar}`);
+      assert.equal(onayDegeriGecerliMi('ncr', { mrb: karar }), true, karar);
+    }
+    assert.deepEqual(onayDegisiklikleri('ncr', { mrb: 'Hurda' }, { mrb: 'Hurda', tanim: 'x' }), [], 'karar değişmedi');
+    assert.equal(onayDegeriGecerliMi('ncr', { mrb: 3 }), false);
   });
 
   test('iz dışındaki koleksiyonda dolu kaydın üstüne yazılır ve silinir', () => {

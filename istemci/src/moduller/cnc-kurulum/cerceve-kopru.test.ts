@@ -518,6 +518,21 @@ describe('çerçeve köprüsü', () => {
       expect(giden.filter((g) => g.tip === 'emirler')).toHaveLength(0);
     });
 
+    it('KK-18b (182 a): emir listesini göremeyen kişide liste istenmez, alan salt okunur ve nedenini söyler; görebilende istenir', async () => {
+      cevaplar = (tip) => (tip === 'emirler' ? { ok: true, veri: { emirler: EMIRLER } } : { ok: true, veri: {} });
+      cerceveKoprusu(window, { ...AYAR, yazabilir: true, emirAnahtari: EMIR, emirGorebilir: false }, glbYaz);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(giden.filter((g) => g.tip === 'emirler')).toHaveLength(0);
+      expect(girdi().readOnly).toBe(true);
+      expect(girdi().placeholder).toBe('Emir listesini görme yetkiniz yok');
+      document.body.innerHTML = '<div id="sheet"><div class="meta"></div></div>';
+      giden = [];
+      cerceveKoprusu(window, { ...AYAR, yazabilir: true, emirAnahtari: EMIR, emirGorebilir: true }, glbYaz);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(giden.filter((g) => g.tip === 'emirler')).toHaveLength(1);
+      expect(girdi().readOnly).toBe(false);
+    });
+
     it('KK-22: alan kurulum görünümünde sahnenin üstünde ayrı çubuktur; panel yeniden çizilince çoğalmaz; açık emir yoksa alan bunu söyler', async () => {
       document.body.innerHTML = '<div id="stage"></div><aside id="side"><section id="detail"><h3>Tezgah</h3></section><div id="sideScroll"><div id="sheet"></div></div></aside>';
       kartCiz();

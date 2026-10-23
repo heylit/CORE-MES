@@ -8,6 +8,7 @@ import type { AcilDurumCevabi, KapiCevabi, KartlarCevabi, PdksCihaz, Ziyaret } f
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { AcilDurum } from './AcilDurum.tsx';
 import { Kapi } from './Kapi.tsx';
+import { Habersiz } from './Habersiz.tsx';
 import { KartRafi } from './KartRafi.tsx';
 import { ayarEkranlari } from './ayar-ekranlari.tsx';
 import { PdksDosyaAktar } from './PdksAktar.tsx';
@@ -68,6 +69,7 @@ function sunucuKur(islemler: Islem[], acil: AcilDurumCevabi = ACIL) {
     if (yol === '/nizamiye/kartlar') return json(200, KARTLAR);
     if (yol === '/nizamiye/pdks/cihazlar') return json(200, { cihazlar: [CIHAZ] });
     if (yol === '/nizamiye/acil-durum') return json(200, acil);
+    if (yol === '/nizamiye/ev-sahipleri') return json(200, { kisiler: [] });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
   return gonderilenler;
@@ -135,6 +137,25 @@ describe('Kapı konsolu', () => {
     expect(screen.queryByRole('button', { name: 'Çıkış' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Habersiz ziyaretçi/ })).toBeNull();
     expect(screen.getByRole('link', { name: /ACİL DURUM/ })).toBeTruthy();
+  });
+});
+
+describe('Habersiz ziyaretçi (195 a)', () => {
+  const istenenler = () => vi.mocked(fetch).mock.calls.map(([adres]) => new URL(String(adres), 'http://yerel').pathname.replace('/api', ''));
+
+  it('nizamiye.yaz olmadan adresle açılınca "yetkiniz yok" der; ev sahibi ve kapı listesi istenmez', async () => {
+    sunucuKur(['nizamiye.oku']);
+    ac(<Habersiz />);
+    expect(await screen.findByText('Habersiz ziyaretçi girişi için yetkiniz yok.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Kapıya dön/ })).toBeTruthy();
+    expect(istenenler()).toEqual(['/oturum']);
+  });
+
+  it('nizamiye.yaz ile ev sahibi ve kapı listesi istenir', async () => {
+    sunucuKur(GOREVLI);
+    ac(<Habersiz />);
+    await waitFor(() => expect(istenenler()).toEqual(expect.arrayContaining(['/nizamiye/kapi', '/nizamiye/ev-sahipleri'])));
+    expect(screen.queryByText('Habersiz ziyaretçi girişi için yetkiniz yok.')).toBeNull();
   });
 });
 

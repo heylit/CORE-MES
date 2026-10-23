@@ -239,6 +239,15 @@ describe('sessiz kayıp: reddedilen yazma TMI bildirimiyle söylenir', () => {
     expect(reddiBildirimi('POST', '/blob/missing', r(400))).toBeNull();
   });
 
+  // 12.9: kaydın 409'u sürüm çakışması değil TMI kuralı reddidir (ör. çizimin yeni revizyonu yayında); Arkon'un kendi iletisi kendiliğinden
+  // açılan TMI penceresinin (Malzeme · Teslim) arkasında kalır, TMI bildirimi pencerenin üstündedir.
+  it('reddiBildirimi: kayıt yazmasının 409 reddi söylenir; belge çakışması söylenmez', () => {
+    const r = { durum: 409, govde: { error: 'Çizimin yeni revizyonu yayında: Flanş. Hazırlık paketi yeni revizyonla güncellemeden iş başlatılamaz.' } };
+    expect(reddiBildirimi('POST', '/log/events', r)).toBe('Kayıt kaydedilmedi (events): Çizimin yeni revizyonu yayında: Flanş. Hazırlık paketi yeni revizyonla güncellemeden iş başlatılamaz.');
+    expect(reddiBildirimi('PUT', '/doc/results/r1', r)).toBeNull();
+    expect(reddiBildirimi('POST', '/log/audit', r)).toBeNull();
+  });
+
   it('bagla: çerçevenin yazması reddedilince bildirim çağrılır, başarılı yazmada çağrılmaz', async () => {
     const { istemci } = istemciKur({
       'POST /arkon/belgeler/pkgs/red/yaz': new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Paket kalite onayı olmadan yayınlanamaz.' }),

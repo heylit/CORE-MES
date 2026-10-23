@@ -323,39 +323,20 @@ export const SERBEST_MIKTAR_BETIGI = String.raw`(function () {
   };
 })();`;
 
-// Giriş TMI oturumudur, ayrı PIN yoktur (yazılı onay 2026-10-16). Uygulamanın kullanıcısı oturumdaki kişidir; rolü uygulamanın
-// kullanıcı kaydından (kimliği "tmi-<kişi>") gelir, kaydı olmayan ya da pasif kişi Muayeneci, TMI yöneticisi Kalite yöneticisidir.
+// Giriş TMI oturumudur, ayrı PIN yoktur (yazılı onay 2026-10-16). Uygulamanın kullanıcısı oturumdaki kişidir. Rolü TMI işleminden
+// gelir (195 a, B18): TMI yöneticisi Kalite yöneticisi, `kalite-merkezi.onayla` taşıyan Kalite mühendisi, öteki Muayeneci. Uygulamanın
+// kullanıcı kaydındaki rol kullanılmaz: kapama ve MRB kararını sunucu da yalnız onay işlemiyle kabul eder.
 // Uygulamanın giriş kapısı (sayfa.ts) bunu çağırır; uygulamadan önce tanımlanır, uygulamanın değişkenlerini çağrıldığında okur.
 export const KIMLIK_BETIGI = String.raw`function tmiKullanici() {
   var A = window.__TMI_KM, T = A.kisi, uid = 'tmi-' + T.id;
-  var r = (S.kullanici || []).find(function (x) { return x._id === uid && x.aktif !== false; });
-  var rol = A.yonetici ? 'Kalite yöneticisi' : (r && ROLLER.indexOf(r.rol) >= 0 ? r.rol : 'Muayeneci');
+  var rol = A.yonetici ? 'Kalite yöneticisi' : (A.onaylayabilir ? 'Kalite mühendisi' : 'Muayeneci');
   if (!USER || USER._id !== uid) { ME.dolduran = T.ad; ME.muayeneci = T.ad; }
   USER = { _id: uid, ad: T.ad, rol: rol };
 }`;
 
-// Uygulamadan SONRA: kullanıcı formu PIN yerine TMI kişisini seçtirir (uygulamanınkinin yerine geçer; sunucu kullanıcı kaydını
-// yalnız yöneticiden alır ve PIN alanını saklamaz). Ad, rol ve durum alanları uygulamanınkiyle aynıdır.
-export const KULLANICI_BETIGI = String.raw`function openUser(id) {
-  if (!need('kullanici')) return;
-  var u = id ? (S.kullanici || []).find(function (x) { return x._id === id; }) : null;
-  var K = window.__TMI_KM.kisiler || [];
-  var atanan = (S.kullanici || []).map(function (x) { return x._id; });
-  var secenek = [['', 'Seçin']].concat(K.filter(function (k) { return atanan.indexOf('tmi-' + k.id) < 0; })
-    .map(function (k) { return [String(k.id), k.ad]; }));
-  var F = [u ? { k: 'ad', label: 'Ad soyad', req: 1, w: 'h' } : { k: 'kisi', label: 'Kişi', type: 'select', req: 1, w: 'h', options: secenek },
-    { k: 'rol', label: 'Rol', type: 'select', options: ROLLER, def: 'Muayeneci' },
-    { k: 'aktif', label: 'Durum', type: 'bool', boolLabel: 'Aktif', def: true }];
-  formModal(u ? u.ad + ' düzenle' : 'Kullanıcı ekle', F, u ? Object.assign({}, u) : null, async function (d) {
-    var k = u ? null : K.find(function (x) { return String(x.id) === d.kisi; });
-    if (!u && !k) { toast('Kişi seçin.', 'bad'); return; }
-    var rec = Object.assign({}, u || {}, { ad: u ? d.ad : k.ad, rol: d.rol, aktif: d.aktif, _id: u ? u._id : 'tmi-' + k.id });
-    delete rec.pin;
-    await save('kullanici', rec);
-    closeModal(true);
-    toast('Kullanıcı kaydedildi');
-  }, '<div class="note mt">Giriş TMI oturumuyla yapılır. TMI yöneticisi her zaman Kalite yöneticisidir; burada rolü verilmeyen kişi Muayeneci sayılır.</div>');
-}`;
+// Uygulamadan SONRA: uygulamanın kullanıcı formu açılmaz (200 a). Rol TMI işleminden gelir (KIMLIK_BETIGI); form, liste ve ekleme
+// düğmesi sayfadan kalkar (sayfa.ts PIN_YERLERI), bu tanım uygulamanınkinin yerine geçip kalan çağrıları da boşa düşürür.
+export const KULLANICI_BETIGI = String.raw`function openUser() {}`;
 
 // Onaylı formun onayını geri alma (kullanıcı kararı 17.10.2026, "Eklensin"): form listesindeki düğme yalnız onay işlemi olana
 // görünür (sayfa.ts). Onay sunucuda geri alınır; form taslağa döner, geri alan ve saat sunucudan yazılır, liste akışla yenilenir.
