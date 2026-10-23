@@ -20,6 +20,12 @@
   width: var(--dokunma); height: var(--dokunma);
   border: 0; border-radius: var(--yari-1); background: transparent; color: var(--muted); cursor: pointer;
 }
+.tc-bildirim-eylem {
+  flex: none; min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 0; border-radius: var(--yari-1); background: transparent; color: var(--hazard-ink);
+  font-weight: 700; cursor: pointer;
+}
+.tc-bildirim-eylem:hover { background: var(--panel2); }
 
 /* Telefonda alt gezinme çubuğunun üstünde, tam genişlikte durur. */
 @media (max-width: 767px) {
