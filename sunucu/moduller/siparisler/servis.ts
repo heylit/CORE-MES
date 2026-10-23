@@ -10,12 +10,13 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
 } from '#paylasilan/sozlesme/siparisler.ts';
+import { numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
-  malzemeReddi, siparisNo,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
+  malzemeReddi,
 } from './kurallar.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
@@ -26,6 +27,7 @@ const KISITLAR = {
   siparisler_siparis_musteri_no_tekil: { ileti: MUSTERI_NO_KULLANILIYOR, alan: 'musteriSiparisNo' },
   siparisler_siparis_tarih_sirasi: { ileti: 'Termin sipariş tarihinden önce olamaz.', alan: 'termin' },
   siparisler_siparis_firma: { ileti: FIRMA_YOK, alan: 'firmaId' },
+  siparisler_siparis_no_bicim: NUMARA_UZUN,
 } as const;
 
 async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
@@ -91,7 +93,7 @@ export async function siparisEkle(db: Db, kullanici: Kullanici, g: SiparisEkleVe
   if (fiyatRet !== null) throw yetkiYok(fiyatRet);
   await firmayiDenetle(db, g.firmaId, null);
   await kalemleriDenetle(db, g);
-  const no = siparisNo(Number(g.siparisTarihi.slice(0, 4)), await sorgular.siradakiNo(db, Number(g.siparisTarihi.slice(0, 4))));
+  const no = await numaraAl(db, 'siparisler.siparis-no', { varMi: (n) => sorgular.siparisNoVarMi(db, n) });
   const id = await kisitKorumali(KISITLAR, () => sorgular.siparisEkle(db, no, baslik(g), kullanici.id));
   await sorgular.kalemleriYaz(db, id, g.satirlar);
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.
