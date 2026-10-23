@@ -21,6 +21,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'cnc-kurulum.yaz': 'CNC kurulum kayıtlarını düzenleme',
   'cnc-kurulum.hazirlik-onayla': 'CNC kurulum hazırlık adımlarını onaylama',
   'cnc-kurulum.takim-degistir': 'Takım değişimini ve kullanımını kaydetme',
+  'cnc-kurulum.stok-dus': 'CNC takım kullanımını stoktan düşme',
   'recete-rota.oku': 'Reçete ve rota kayıtlarını görme',
   'recete-rota.yaz': 'Reçete ve rota kayıtlarını düzenleme',
   'recete-rota.planlama-oku': 'Planlama sayfalarını görme',

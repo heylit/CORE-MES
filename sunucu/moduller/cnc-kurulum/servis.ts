@@ -1,20 +1,23 @@
 import { createHash } from 'node:crypto';
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, cokBuyuk, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
+import { cakisma, cokBuyuk, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI, SECIM_ANAHTARI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type {
   BenCevabi, EmirSecCevabi, EmirSecenegi, EmirSecGovdesi, EmirlerCevabi, HazirlikCevabi, HazirlikOnayGovdesi, KayitlarCevabi,
-  KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi, YazGovdesi,
+  KurulumDurumu, KurulumTamamCevabi, KurulumTamamGovdesi, SilCevabi, StokDusCevabi, StokDusGovdesi, StokKarti, StokKartiBaglaCevabi, StokKartiBaglaGovdesi,
+  StokKartlariCevabi, StokKartlariSorgusu, TakimOlaylariCevabi, TakimOlaylariGovdesi, YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { cncKimligiBagla, cncKimlikliMalzemeler, malzemeAra } from '../malzemeler/disari.ts';
+import { cncTakimCikisi, stokMiktarlari } from '../stok/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
-  hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, surumUyarMi, takimDurumu, takimOlayiSatirlari,
+  hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
 } from './kurallar.ts';
-import type { TakimDurumu } from './kurallar.ts';
+import type { StokKalemi, TakimDurumu } from './kurallar.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { acikIsEmri, acikIsEmirleri } from '../uretim-emirleri/disari.ts';
 import type { AcikIsEmri } from '../uretim-emirleri/disari.ts';
@@ -25,10 +28,13 @@ import * as sorgular from './sorgular.ts';
 const ISLEM_YAZ = 'cnc-kurulum.yaz';
 const ISLEM_HAZIRLIK = 'cnc-kurulum.hazirlik-onayla';
 const ISLEM_TAKIM = 'cnc-kurulum.takim-degistir';
+const ISLEM_STOK_DUS = 'cnc-kurulum.stok-dus';
+const ISLEM_KART_YAZ = 'malzemeler.yaz';
 const CAKISMA_ILETISI = 'Kurulum kayıtları siz açtıktan sonra başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 const BUYUK_ILETISI = 'Kurulum kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
 const ONAY_UCU_ILETISI = 'Hazırlık onayları yalnız hazırlık onayıyla değiştirilir.';
 const URETIM_ADEDI_ILETISI = 'Üretim adedi yalnız Üretim Terminali\'nden girilir.';
+const SIRA_ILETISI = 'Son onay için hazırlığın bütün adımları onaylanmış olmalıdır.';
 const EMIR_ILETISI = 'Üretim emri ve emirlerin kurulumları yalnız emir seçimiyle değişir.';
 // Emir ve emirlerin saklanan kurulumları genel uçtan yazılmaz, silinmez: emir değişince kurulum emre saklanmadan değişirdi.
 const emirKaydiMi = (anahtar: string): boolean => anahtar === EMIR_ANAHTARI || anahtar.startsWith(EMIR_ANLIK_ONEKI);
@@ -38,6 +44,7 @@ export function ben(kullanici: Kullanici): BenCevabi {
   return {
     kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir, hazirlikOnaylayabilir: !yazabilir && kullanici.islemler.includes(ISLEM_HAZIRLIK),
     takimDegistirebilir: kullanici.islemler.includes(ISLEM_TAKIM),
+    stokDusebilir: kullanici.islemler.includes(ISLEM_STOK_DUS), stokKartiBaglayabilir: kullanici.islemler.includes(ISLEM_KART_YAZ),
   };
 }
 
@@ -45,9 +52,48 @@ export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
   const liste = await sorgular.kayitlar(db);
   const secili = await seciliIsEmri(db);
   const istasyonId = secili === null ? null : (await acikIsEmri(db, secili.isEmriId))?.istasyonId ?? null;
-  if (istasyonId === null) return { kayitlar: liste };
-  const sayaclar = await takimOmruDurumlari(db, [istasyonId]);
-  return { kayitlar: liste.map((k) => (k.anahtar === DURUM_ANAHTARI && k.bicim === 'json' ? { ...k, deger: asinmaBindir(k.deger, sayaclar) } : k)) };
+  const sayaclar = istasyonId === null ? [] : await takimOmruDurumlari(db, [istasyonId]);
+  const stok = await stokKalemleri(db);
+  return { kayitlar: liste.map((k) => (k.anahtar === DURUM_ANAHTARI && k.bicim === 'json' ? { ...k, deger: stokBindir(asinmaBindir(k.deger, sayaclar), stok) } : k)) };
+}
+
+// ---- Takım stoğu (153 a, 163 b, 164 b): kalemin adedi stoktan okunur, azalan adet stoktan düşer, bağı kart yazan kurar.
+async function stokKalemleri(db: Db): Promise<StokKalemi[]> {
+  const kartlar = await cncKimlikliMalzemeler(db);
+  const miktarlar = await stokMiktarlari(db, [...kartlar.values()].map((k) => k.malzemeId));
+  return [...kartlar].map(([kimlik, k]) => ({ kimlik, malzemeId: k.malzemeId, kod: k.kod, ad: k.ad, miktar: miktarlar.get(k.malzemeId)?.kullanilabilir ?? null }));
+}
+
+const stokKarti = (k: { malzemeId: number; kod: string; ad: string | null; birim: string | null }): StokKarti =>
+  ({ malzemeId: k.malzemeId, kod: k.kod, ad: k.ad, birim: k.birim });
+
+// Bağlı olmayan kalem stoktan düşmez (prototipin kendi adedidir); stok yetmezse hiç düşmez, eksiye inilmez.
+export async function stokDus(db: Db, kullanici: Kullanici, g: StokDusGovdesi): Promise<StokDusCevabi> {
+  const kart = (await cncKimlikliMalzemeler(db, [g.kimlik])).get(g.kimlik);
+  if (kart === undefined) throw gecersiz('Bu kalem stok kartına bağlı değil.');
+  const emir = await seciliIsEmri(db);
+  const aciklama = `CNC kurulum · ${g.kimlik}${emir === null ? '' : ` · iş emri ${String(emir.isEmriId)}`}`;
+  const r = await cncTakimCikisi(db, kullanici.id, { malzemeId: kart.malzemeId, miktar: String(g.miktar), aciklama });
+  if (!r.yeterli) throw gecersiz(`Stokta yeterli ${kart.kod} yok (kullanılabilir: ${r.mevcut}); stoktan düşülmedi.`);
+  return { hareketSayisi: r.hareketIdler.length };
+}
+
+// Bağlanabilen kartlar: aktif sarf ve demirbaş (takım, tutucu, bağlama).
+export async function stokKartlari(db: Db, s: StokKartlariSorgusu): Promise<StokKartlariCevabi> {
+  const r = await malzemeAra(db, { metin: s.metin ?? null, turler: ['sarf', 'demirbas'], yalnizAktif: true, sayfa: s.sayfa, sayfaBoyu: 20 });
+  return { kartlar: r.satirlar.map((k) => stokKarti({ malzemeId: k.id, kod: k.kod, ad: k.ad, birim: k.birim })), toplam: r.toplam };
+}
+
+// Bağ kart verisidir (malzemeler.yaz); kim, ne zaman uç denetiminde.
+export async function stokKartiBagla(db: Db, g: StokKartiBaglaGovdesi): Promise<StokKartiBaglaCevabi> {
+  if (g.malzemeId === null) {
+    const kart = (await cncKimlikliMalzemeler(db, [g.kimlik])).get(g.kimlik);
+    if (kart !== undefined) await cncKimligiBagla(db, kart.malzemeId, null);
+    return { kart: null };
+  }
+  await cncKimligiBagla(db, g.malzemeId, g.kimlik);
+  const kart = (await cncKimlikliMalzemeler(db, [g.kimlik])).get(g.kimlik);
+  return { kart: kart === undefined ? null : stokKarti(kart) };
 }
 
 // Emir listesini üretim emirleri ekranında görebilen görür (GET /uretim-emirleri ile aynı işlemler): CNC okuma yetkisi tek
@@ -87,6 +133,7 @@ async function kaydet(db: Db, kullanici: Kullanici, g: YazGovdesi, yalnizHazirli
   if (yalnizHazirlik && onceki === null) throw yetkiYok();
   const deger = yalnizHazirlik ? hazirlikOnaylariniBindir(onceki, g.deger) : g.deger;
   if (deger === null) throw dogrulama('Hazırlık onayı okunamadı.', 'deger');
+  if (yalnizHazirlik && sonOnaySiraDisiMi(onceki, deger)) throw gecersiz(SIRA_ILETISI);
   if (!yalnizHazirlik && g.anahtar === DURUM_ANAHTARI && hazirlikOnaylariDegistiMi(onceki, deger)) throw yetkiYok(ONAY_UCU_ILETISI);
   if (!yalnizHazirlik && g.anahtar === DURUM_ANAHTARI && elleUretimKaydiVarMi(onceki, deger)) throw yetkiYok(URETIM_ADEDI_ILETISI);
   if (yalnizHazirlik && hazirlikAyniMi(onceki, deger)) {

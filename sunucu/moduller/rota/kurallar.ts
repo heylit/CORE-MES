@@ -494,19 +494,72 @@ export function gerceklesenDenetle(tur: GerceklesenTuru, sureDk: number | null):
 }
 
 export interface GerceklesenSatiri { id: number; tur: GerceklesenTuru; makineId: number | null; sureDk: number | null; kaynak: GerceklesenKaynagi }
-export interface GecerliGerceklesen { id: number; sureDk: number; kaynak: 'elle' | 'kabul' }
 
-// RT-73: geçerli gerçekleşen süre tür başına son satırdır. Plan için yalnız elle ve kabul satırı sayılır (S4 a); terminal satırı
-// öneridir. Makine verilirse önce o makinenin son satırı, o yoksa ya da boşa çekilmişse makinesiz son satır. Boş süre: teoriğe dönülmüş.
-export function gecerliGerceklesen(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GecerliGerceklesen | null> {
-  const sec = (tur: GerceklesenTuru): GecerliGerceklesen | null => {
-    const adaylar = [...satirlar].filter((x) => x.tur === tur && x.kaynak !== 'terminal').sort((a, b) => a.id - b.id);
-    const son = (m: number | null) => adaylar.filter((x) => x.makineId === m).at(-1);
-    const makineninki = makineId === null ? undefined : son(makineId);
-    const satir = makineninki && makineninki.sureDk !== null ? makineninki : son(null);
-    return satir && satir.sureDk !== null && satir.kaynak !== 'terminal' ? { id: satir.id, sureDk: satir.sureDk, kaynak: satir.kaynak } : null;
+// Defterde ölçüm, dolu elle ya da terminal satırıdır; boş elle satırı (boşaltma) ölçümleri kapatır. Kabul satırı kapatmaz: ölçüm revizyon
+// yürürlüğe girince boşaltılır (169 c, 171 a).
+const olcumMu = (x: Pick<GerceklesenSatiri, 'sureDk' | 'kaynak'>): boolean => x.sureDk !== null && (x.kaynak === 'terminal' || x.kaynak === 'elle');
+const kapatirMi = (x: GerceklesenSatiri): boolean => x.kaynak === 'elle' && x.sureDk === null;
+
+// RT-73: bekleyen ölçüm tür başına bu görünümdeki son boşaltmadan sonraki son ölçümdür. Makinesiz görünüm her makinenin ölçümünü
+// gösterir, makineye özgü kapatma onu kapatmaz; makine görünümü o makinenin ve makinesiz ölçümü gösterir, makinesiz kapatma da onu kapatır.
+export function bekleyenOlcum(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
+  const sec = (tur: GerceklesenTuru): GerceklesenSatiri | null => {
+    const turun = [...satirlar].filter((x) => x.tur === tur).sort((a, b) => a.id - b.id);
+    const sinir = turun.filter((x) => kapatirMi(x) && (x.makineId === null || x.makineId === makineId)).at(-1)?.id ?? 0;
+    return turun.filter((x) => olcumMu(x) && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId)).at(-1) ?? null;
   };
   return { hazirlik: sec('hazirlik'), islem: sec('islem'), degisim: sec('degisim') };
+}
+
+export interface KabulSatiri { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi; sureDk: number | null }
+
+// RT-77: kabul edilen satır bu adımın bu türdeki ölçümü (dolu elle ya da terminal satırı) olmalı; makineye özgü kabul başka makinenin
+// ölçümünü almaz.
+export function kabulDenetle(
+  satir: KabulSatiri, hedef: { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null },
+): string | null {
+  if (!olcumMu(satir)) return 'Yalnız ölçülmüş süre kabul edilir.';
+  if (satir.malzemeId !== hedef.malzemeId || satir.opNo !== hedef.opNo || satir.tur !== hedef.tur) return 'Ölçüm bu adımın bu süresine ait değil.';
+  if (hedef.makineId !== null && satir.makineId !== null && satir.makineId !== hedef.makineId) return 'Ölçüm başka makinenin.';
+  return null;
+}
+
+// RT-76: terminal ölçümü (B38). İş emrinin net birim süresi değişim dahil toplam çevrimdir (170 b); "işlem" türü ölçüldüğünde birim süredir.
+// Ölçülemeyen ya da sıfır birim süre ölçüm değildir (RT-75); hazırlık ayar olayı yoksa ölçülmemiştir.
+export function terminalOlcumleri(olcum: { hazirlikDk: number | null; netBirimDk: number | null }): { hazirlik: number | null; islem: number | null } {
+  return {
+    hazirlik: olcum.hazirlikDk === null || olcum.hazirlikDk < 0 ? null : onbinde(olcum.hazirlikDk) / 10_000,
+    islem: olcum.netBirimDk === null || olcum.netBirimDk <= 0 ? null : onbinde(olcum.netBirimDk) / 10_000,
+  };
+}
+
+export interface AdimSureleri { ayarSuresiDk: number | null; birimSureDk: number | null; islemSuresiDk: number | null; degisimSuresiDk: number | null }
+
+// RT-78: kabul ölçümü teorik süreye yazar (169 c). Hazırlık ayar süresidir. "İşlem" ölçümü birim süredir (170 b): değişim korunur, işlem
+// birimden değişim düşülerek bulunur; ayrılmamış adım ayrılmamış kalır. Değişim ölçümü değişimi değiştirir, birim işlem + değişim olur;
+// ayrılmamış adımda işlem bugünkü birim süredir (RT-71). Birim değişimden kısa olamaz.
+export function kabulSureleri(eski: AdimSureleri, tur: GerceklesenTuru, deger: number): AdimSureleri | { ileti: string } {
+  const sayi = (x: number): number => x / 10_000;
+  if (tur === 'hazirlik') return { ...eski, ayarSuresiDk: deger };
+  if (tur === 'islem') {
+    if (eski.islemSuresiDk === null) return { ...eski, birimSureDk: deger };
+    const islem = onbinde(deger) - onbinde(eski.degisimSuresiDk ?? 0);
+    if (islem <= 0) return { ileti: 'Ölçülen birim süre değişim süresinden uzun olmalı.' };
+    return { ...eski, birimSureDk: deger, islemSuresiDk: sayi(islem) };
+  }
+  const islem = eski.islemSuresiDk ?? eski.birimSureDk;
+  if (islem === null) return { ileti: 'Birim süresi olmayan adıma değişim süresi yazılmaz.' };
+  return { ...eski, islemSuresiDk: islem, degisimSuresiDk: deger, birimSureDk: sayi(onbinde(islem) + onbinde(deger)) };
+}
+
+// RT-79: revizyon yürürlüğe girince teorik süresi değişen türün ölçümü boşaltılır (171 a). İşlem türü birim ya da işlem süresiyle değişir.
+export function degisenTurler(eski: AdimSureleri | null, yeni: AdimSureleri): GerceklesenTuru[] {
+  const farkli = (a: number | null | undefined, b: number | null): boolean => (a ?? null) !== b;
+  const turler: GerceklesenTuru[] = [];
+  if (farkli(eski?.ayarSuresiDk, yeni.ayarSuresiDk)) turler.push('hazirlik');
+  if (farkli(eski?.birimSureDk, yeni.birimSureDk) || farkli(eski?.islemSuresiDk, yeni.islemSuresiDk)) turler.push('islem');
+  if (farkli(eski?.degisimSuresiDk, yeni.degisimSuresiDk)) turler.push('degisim');
+  return turler;
 }
 
 export interface TeorikSureler { hazirlikDk: number | null; islemDk: number | null; degisimDk: number | null }
@@ -515,25 +568,16 @@ export interface EtkinAdimSuresi {
   birimSureDk: number | null;
   islemSuresiDk: number | null;
   degisimSuresiDk: number | null;
-  baz: Record<GerceklesenTuru, 'teorik' | 'gerceklesen'>;
 }
 
-// RT-74: etkin süre tür başına gerçekleşen varsa o, yoksa teoriktir; birim süre işlem + değişimdir, değişim bilinmiyorsa işlem.
-// İşlem bilinmiyorsa birim süre yoktur (sıfır uydurulmaz).
-export function etkinAdimSuresi(teorik: TeorikSureler, g: Record<GerceklesenTuru, { sureDk: number } | null>): EtkinAdimSuresi {
-  const hazirlik = g.hazirlik?.sureDk ?? teorik.hazirlikDk;
-  const islem = g.islem?.sureDk ?? teorik.islemDk;
-  const degisim = g.degisim?.sureDk ?? teorik.degisimDk;
+// RT-74: plan yalnız teorik süreyle çalışır (169 c); ölçüm teoriğe ancak kabul ve revizyonla geçer. Birim süre işlem + değişimdir, değişim
+// bilinmiyorsa işlem; işlem bilinmiyorsa birim süre yoktur (sıfır uydurulmaz).
+export function etkinAdimSuresi(teorik: TeorikSureler): EtkinAdimSuresi {
   return {
-    ayarSuresiDk: hazirlik,
-    birimSureDk: islem === null ? null : (onbinde(islem) + onbinde(degisim ?? 0)) / 10_000,
-    islemSuresiDk: islem,
-    degisimSuresiDk: degisim,
-    baz: {
-      hazirlik: g.hazirlik ? 'gerceklesen' : 'teorik',
-      islem: g.islem ? 'gerceklesen' : 'teorik',
-      degisim: g.degisim ? 'gerceklesen' : 'teorik',
-    },
+    ayarSuresiDk: teorik.hazirlikDk,
+    birimSureDk: teorik.islemDk === null ? null : (onbinde(teorik.islemDk) + onbinde(teorik.degisimDk ?? 0)) / 10_000,
+    islemSuresiDk: teorik.islemDk,
+    degisimSuresiDk: teorik.degisimDk,
   };
 }
 

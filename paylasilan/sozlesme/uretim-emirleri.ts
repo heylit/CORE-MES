@@ -3,6 +3,7 @@ import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { EMIR_TURLERI, EMIR_TURU_ADLARI } from './emir-turleri.ts';
 
 // Taslak planlanmamış emirdir ("Plana al" planlı yapar). Ekrandaki adlar: taslak, serbest (planlı), üretimde (başladı), tamamlanan (bitti).
 export const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] as const;
@@ -319,11 +320,7 @@ export const FASON_YONLERI = ['gidis', 'donus'] as const;
 // Rotadan gelen adım 'rota'dır; kola sonradan konan adım rework, tamir ya da ek adımdır (PB-K1).
 export const IS_EMRI_TURLERI = ['rota', 'rework', 'tamir', 'ek'] as const;
 export const EK_ADIM_TURLERI = ['rework', 'tamir', 'ek'] as const;
-// Emrin türü (kart #699): emrin ne için açıldığını söyleyen etikettir; iş emri adım türünden (IS_EMRI_TURLERI) ayrıdır, kural değiştirmez.
-export const EMIR_TURLERI = ['seri', 'fai', 'numune', 'prototip', 'stok', 'rework', 'bakim_deneme', 'fason'] as const;
-export const EMIR_TURU_ADLARI: Record<(typeof EMIR_TURLERI)[number], string> = {
-  seri: 'Seri', fai: 'FAI', numune: 'Numune', prototip: 'Prototip', stok: 'Stoğa üretim', rework: 'Rework', bakim_deneme: 'Bakım ve deneme', fason: 'Fason',
-};
+export { EMIR_TURLERI, EMIR_TURU_ADLARI };
 
 export const isEmriDurumu = z.enum(IS_EMRI_DURUMLARI);
 export const atanabilirKaynak = z.object({ tur: z.enum(ATANABILIR_KAYNAK_TURLERI), id: KIMLIK });

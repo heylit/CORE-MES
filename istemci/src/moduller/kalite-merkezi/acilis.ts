@@ -204,8 +204,9 @@ export const KILIT_BETIGI = String.raw`(function () {
   var asilKilit = guardEdit;
   guardEdit = function (col, rec, cb) {
     var alan = function (a) { return rec && typeof rec[a] === 'string' ? rec[a].trim() : ''; };
-    if ((col === 'ncr' && alan('durum') === 'Kapalı') || (col === 'insp' && (alan('sonuc') === 'Kabul' || alan('sonuc') === 'Ret'))) {
-      toast('Kapanmış uygunsuzluk ve sonuçlanmış muayene değiştirilemez; düzeltme yeni kayıtla yapılır.', 'bad');
+    if (((col === 'ncr' || col === 'capa') && alan('durum') === 'Kapalı') || (col === 'insp' && (alan('sonuc') === 'Kabul' || alan('sonuc') === 'Ret'))
+      || (col === 'lot' && alan('karar') !== '' && alan('tip') !== 'reset')) {
+      toast('Kapanmış uygunsuzluk ve DÖF, sonuçlanmış muayene ve lot kabul kaydı değiştirilemez; düzeltme yeni kayıtla yapılır.', 'bad');
       return;
     }
     return asilKilit.apply(this, arguments);
