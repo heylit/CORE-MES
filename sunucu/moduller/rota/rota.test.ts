@@ -9,14 +9,14 @@ import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  AdimGirdisi, AgacCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
+  AdimGirdisi, AgacCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, adimEtkinSureleriToplu, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { isler } from './isler.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -966,31 +966,28 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       await assert.rejects(vt().tx((db) => db.sorgu('UPDATE rota_adimi SET islem_suresi_dk = 1 WHERE revizyon_id = $1', [id])), /rota_adimi_sure_ayrimi/);
     });
 
-    test('RT-73, RT-74, S4 a: elle girilen gerçekleşen süre planın etkin süresi olur; boş giriş teoriğe döndürür', async () => {
+    test('RT-73, RT-74, 169 c: elle ölçüm planın süresini değiştirmez, bekleyen ölçüm olur; boş giriş ölçümü boşaltır', async () => {
       const urun = await mamulAc();
       const rev = await yururlugeAlinmisRota(urun, [yeniAdim({ ayarSuresiDk: 30, birimSureDk: null, islemSuresiDk: 2, degisimSuresiDk: 0.5 })]);
       const once = await sureler(rev);
       const adim = once.adimlar[0]!;
       assert.deepEqual(adim.teorik, { hazirlikDk: '30.00', islemDk: '2.0000', degisimDk: '0.5000', degisimOraniYuzde: '25' });
-      assert.deepEqual([adim.etkin.hazirlikDk, adim.etkin.birimSureDk, adim.etkin.baz.islem], ['30', '2.5', 'teorik']);
-      assert.equal(adim.gerceklesen.islem, null);
-      const g = await yaz(adim.adimId, { tur: 'islem', sureDk: 1.8 });
+      assert.deepEqual([adim.etkin.hazirlikDk, adim.etkin.birimSureDk, adim.olcum.islem], ['30', '2.5', null]);
+      const g = await yaz(adim.adimId, { tur: 'islem', sureDk: 2.8 });
       assert.equal(g.statusCode, 200, g.body);
       const sonra = g.json<SurelerCevabi>().adimlar[0]!;
-      assert.deepEqual([sonra.etkin.birimSureDk, sonra.etkin.degisimOraniYuzde, sonra.etkin.baz.islem, sonra.gerceklesen.islem?.sureDk, sonra.gerceklesen.islem?.kaynak], ['2.3', '27.78', 'gerceklesen', '1.8', 'elle']);
-      assert.equal(sonra.gerceklesen.islem?.yazan.ad, 'Deneme planlama');
-      // Teorik süre değişmez (onaylı revizyon kilitli); plan disari.ts'ten aynı etkin süreyi okur.
-      assert.equal(sonra.teorik.islemDk, '2.0000');
-      const etkin = await vt().tx((db) => adimEtkinSureleri(db, rev));
-      assert.deepEqual([etkin.get(adim.opNo)?.birimSureDk, etkin.get(adim.opNo)?.ayarSuresiDk], [2.3, 30]);
-      // Makineye özgü süre yalnız o makinede geçerlidir.
+      assert.deepEqual([sonra.olcum.islem?.sureDk, sonra.olcum.islem?.kaynak, sonra.olcum.islem?.isEmriId, sonra.etkin.birimSureDk], ['2.8', 'elle', null, '2.5']);
+      assert.equal(sonra.olcum.islem?.yazan.ad, 'Deneme planlama');
+      assert.equal((await vt().tx((db) => adimEtkinSureleri(db, rev))).get(adim.opNo)?.birimSureDk, 2.5, 'plan teorik süreyle çalışır');
+      // Makineye özgü ölçüm o makinenin ve makinesiz görünümde görünür; teorik değişmez.
       const m = await yaz(adim.adimId, { tur: 'hazirlik', sureDk: 40, makineId: makineA });
       assert.equal(m.statusCode, 200, m.body);
-      assert.equal((await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]?.etkin.hazirlikDk, '40');
-      assert.equal((await sureler(rev)).adimlar[0]?.etkin.hazirlikDk, '30');
+      const makinede = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+      assert.deepEqual([makinede.olcum.hazirlik?.sureDk, makinede.olcum.hazirlik?.makineId, makinede.etkin.hazirlikDk], ['40', makineA, '30']);
+      assert.equal((await sureler(rev, c.operator, `?makineId=${makineB}`)).adimlar[0]?.olcum.hazirlik, null);
       const geri = await yaz(adim.adimId, { tur: 'islem', sureDk: null, okunanId: sonra.sonKayit.islem });
       assert.equal(geri.statusCode, 200, geri.body);
-      assert.deepEqual([geri.json<SurelerCevabi>().adimlar[0]?.etkin.birimSureDk, geri.json<SurelerCevabi>().adimlar[0]?.gerceklesen.islem], ['2.5', null]);
+      assert.deepEqual([geri.json<SurelerCevabi>().adimlar[0]?.etkin.birimSureDk, geri.json<SurelerCevabi>().adimlar[0]?.olcum.islem], ['2.5', null]);
     });
 
     test('RT-74b: adimEtkinSureleriToplu her istek için adimEtkinSureleri ile aynıdır, sırayı korur; sorgu sayısı istek sayısıyla artmaz', async () => {
@@ -999,7 +996,6 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       const rev = await yururlugeAlinmisRota(urun, [yeniAdim({ ayarSuresiDk: 30, birimSureDk: 2 }), yeniAdim({ ayarSuresiDk: 10, birimSureDk: 1 })]);
       const rev2 = await yururlugeAlinmisRota(urun2, [yeniAdim({ ayarSuresiDk: 5, birimSureDk: 3 })]);
       const adim = (await sureler(rev)).adimlar[0]!;
-      assert.equal((await yaz(adim.adimId, { tur: 'islem', sureDk: 1.5 })).statusCode, 200);
       assert.equal((await yaz(adim.adimId, { tur: 'hazirlik', sureDk: 40, makineId: makineA })).statusCode, 200);
       const yok = 2147483000;
       const sorguSay = async <T,>(f: (db: Parameters<Parameters<ReturnType<typeof vt>['tx']>[0]>[0]) => Promise<T>): Promise<[T, number]> => vt().tx(async (db) => {
@@ -1012,21 +1008,170 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       const [toplu, coklu] = await sorguSay((db) => adimEtkinSureleriToplu(db, istekler));
       assert.equal(toplu.length, istekler.length);
       for (const [i, x] of istekler.entries()) assert.deepEqual(toplu[i], await vt().tx((db) => adimEtkinSureleri(db, x.revizyonId, x.makineId)));
-      assert.deepEqual([toplu[0]?.get(adim.opNo)?.ayarSuresiDk, toplu[2]?.get(adim.opNo)?.ayarSuresiDk, toplu[3]], [30, 40, new Map()]);
+      assert.deepEqual([toplu[0]?.get(adim.opNo)?.ayarSuresiDk, toplu[2]?.get(adim.opNo)?.ayarSuresiDk, toplu[1]?.get(1)?.birimSureDk ?? toplu[1]?.values().next().value?.birimSureDk, toplu[3]], [30, 30, 3, new Map()]);
       const [, tekli] = await sorguSay((db) => adimEtkinSureleriToplu(db, [istekler[0]!]));
       assert.equal(coklu, tekli);
       assert.deepEqual(await vt().tx((db) => adimEtkinSureleriToplu(db, [])), []);
     });
 
-    test('RT-73: terminal satırı öneridir; plan yalnız elle ve kabul satırını kullanır', async () => {
+    test('RT-73: terminal satırı iş emri bağı olmadan yazılamaz', async () => {
       const urun = await mamulAc();
       const rev = await yururlugeAlinmisRota(urun, [yeniAdim({ birimSureDk: 2 })]);
       const adim = (await sureler(rev)).adimlar[0]!;
-      // Terminal satırı bağlamada yazılır (A7a); burada iş emri bağı olmadan yazılamadığı da sınanır.
       await assert.rejects(vt().tx((db) => db.sorgu(
         `INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, tur, sure_dk, kaynak, kisi_id) VALUES ($1, $2, 'islem', 9, 'terminal', $3)`, [urun, adim.opNo, operatorId],
       )), /rota_gerceklesen_sure_is_emri/);
-      assert.equal((await sureler(rev)).adimlar[0]?.etkin.baz.islem, 'teorik');
+      assert.equal((await sureler(rev)).adimlar[0]?.olcum.islem, null);
+    });
+
+    // Emir bitti dinleyicisini bu dosya kendisi bağlar; sunucuda bağ kablolama.ts'tedir. Aynı iş emri ikinci kez ölçüm yazmadığı için
+    // iki bağ birlikte kurulu olsa da satır yinelenmez.
+    describe('terminal ölçümü, kabul ve yürürlükte boşaltma (B38, 169 c)', () => {
+      let birak: (() => void) | undefined;
+      before(async () => {
+        birak = emirBittiDinle(emirBittiYansit);
+        // UE20: başlatan istasyonda yetkin olmalı; yetkinlik istasyonlar modülünündür, kurulum doğrudan yazar.
+        await ortam!.sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2), ($1, $3) ON CONFLICT DO NOTHING', [operatorId, istasyonA, istasyonB]);
+      });
+      after(() => { birak?.(); });
+      const kabulEt = (adimId: number, govde: Record<string, unknown>, cerez = c.planlama, kimlik: string | null = randomUUID()) =>
+        istek(cerez, 'POST', `/rota/adimlar/${adimId}/gerceklesen-sure/kabul`, { makineId: null, okunanId: null, ...govde }, kimlik);
+
+      // Rotadaki adımla aynı OP numarasında makine iş emri açılır; terminal ayar, başlat ve sayım geçmiş anlarla yazılır, ilk parça
+      // onayı ve bitirme şimdidir (hazırlık 20 dk, 10 sağlam 30 dk'da: net birim 3 dk). Girdi verilmez: stok başlatmayı durdurmasın.
+      async function olculmusEmir(urun: number, rev: number, opNo: number, makineId: number): Promise<{ emirId: number; isEmriId: number }> {
+        const simdi = Date.now();
+        const an = (dk: number) => new Date(simdi + dk * 60_000).toISOString();
+        return vt().tx(async (db) => {
+          const planlamaci = await kullaniciYukle(db, (await db.tek<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme planlama'"))!.id);
+          const operator = await kullaniciYukle(db, operatorId);
+          const { uretimEmriId: emirId, isEmriIdleri } = await uretimEmriAc(db, planlamaci!, {
+            malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, projeId: denemeProjeId,
+            isEmirleri: [{
+              sira: 1, opNo, ad: 'Deneme adım', operasyonTipiId: tip('TRN'), kaynak: { tur: 'makine', id: makineId }, ayarSuresiDk: '30', birimSureDk: '2.5',
+              terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
+            }],
+          });
+          await emirAyar(db, operator!, emirId, an(-50));
+          await emirBaslat(db, operator!, emirId, undefined, an(-30));
+          await emirSayim(db, operator!, emirId, { tur: 'saglam', adet: 10 }, { an: an(-1) });
+          await kararliSayimiSonuclandir(db, yoneticiId, emirId, 'onay');
+          await emirBitir(db, operator!, emirId);
+          return { emirId, isEmriId: isEmriIdleri[0]! };
+        });
+      }
+      const ayrikAdim = () => yeniAdim({ ayarSuresiDk: 30, birimSureDk: null, islemSuresiDk: 2, degisimSuresiDk: 0.5 });
+
+      test('RT-76: emir bitince makine iş emrinin ölçümü (net birim, değişim dahil) o makineye özgü terminal ölçümü olur; plan kullanmaz, aynı iş emri ikinci kez yazılmaz', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim()]);
+        const adim = (await sureler(rev)).adimlar[0]!;
+        const { emirId, isEmriId } = await olculmusEmir(urun, rev, adim.opNo, makineA);
+        const satirlar = await vt().tx((db) => db.sorgu<{ tur: string; makineId: number | null; sureDk: string; kaynak: string; isEmriId: number; kisiId: number }>(
+          `SELECT tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId"
+             FROM rota_gerceklesen_sure WHERE malzeme_id = $1 ORDER BY id`, [urun],
+        ));
+        assert.deepEqual(satirlar.map((x) => [x.tur, x.makineId, Number(x.sureDk), x.kaynak, x.isEmriId, x.kisiId]), [
+          ['hazirlik', makineA, 20, 'terminal', isEmriId, operatorId], ['islem', makineA, 3, 'terminal', isEmriId, operatorId],
+        ]);
+        const makinede = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        assert.deepEqual([makinede.olcum.islem?.sureDk, makinede.olcum.islem?.kaynak, makinede.olcum.islem?.isEmriId, makinede.olcum.islem?.makineId, makinede.olcum.hazirlik?.sureDk, makinede.olcum.degisim],
+          ['3', 'terminal', isEmriId, makineA, '20', null]);
+        assert.equal((await sureler(rev)).adimlar[0]?.olcum.islem?.sureDk, '3', 'makinesiz görünüm her makinenin ölçümünü gösterir');
+        assert.equal((await sureler(rev, c.operator, `?makineId=${makineB}`)).adimlar[0]?.olcum.islem, null);
+        assert.equal((await vt().tx((db) => adimEtkinSureleri(db, rev, makineA))).get(adim.opNo)?.birimSureDk, 2.5);
+        await vt().tx((db) => emirBittiYansit(db, { uretimEmriId: emirId, saglamAdet: 10, kisiId: operatorId }));
+        const adet = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_gerceklesen_sure WHERE malzeme_id = $1', [urun]));
+        assert.equal(adet?.n, 2);
+      });
+
+      test('RT-77, RT-78, RT-79: kabul yürürlükteki revizyondan taslak açar, teorik süreye yazar; plan yürürlüğe kadar eskiyle çalışır, yürürlükte ölçüm boşalır', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim()]);
+        const adim = (await sureler(rev)).adimlar[0]!;
+        const { isEmriId } = await olculmusEmir(urun, rev, adim.opNo, makineA);
+        const once = (await sureler(rev)).adimlar[0]!;
+        const k = await kabulEt(adim.adimId, { tur: 'islem', olcumId: once.olcum.islem!.id, okunanId: once.sonKayit.islem });
+        assert.equal(k.statusCode, 200, k.body);
+        const { taslak, sureler: ts } = k.json<GerceklesenKabulCevabi>();
+        assert.notEqual(taslak.id, rev);
+        assert.equal(taslak.durum, 'taslak');
+        const t0 = ts.adimlar[0]!;
+        assert.deepEqual([t0.teorik.islemDk, t0.teorik.degisimDk, t0.etkin.birimSureDk, t0.teorik.hazirlikDk], ['2.5000', '0.5000', '3', '30.00'], '170 b: birim ölçülen toplam, değişim korunur');
+        assert.equal(t0.olcum.islem?.sureDk, '3', 'ölçüm yürürlüğe kadar görünür');
+        assert.equal((await vt().tx((db) => adimEtkinSureleri(db, rev))).get(adim.opNo)?.birimSureDk, 2.5, 'plan yürürlükteki revizyonla çalışır');
+        const kabul = await vt().tx((db) => db.tek<{ isEmriId: number; makineId: number | null; sureDk: string }>(
+          `SELECT is_emri_id AS "isEmriId", makine_id AS "makineId", sure_dk AS "sureDk" FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND kaynak = 'kabul'`, [urun],
+        ));
+        assert.deepEqual([kabul?.isEmriId, kabul?.makineId, Number(kabul?.sureDk)], [isEmriId, null, 3]);
+        // İkinci kabul aynı açık taslağa yazar.
+        const h = await kabulEt(t0.adimId, { tur: 'hazirlik', olcumId: t0.olcum.hazirlik!.id, okunanId: t0.sonKayit.hazirlik });
+        assert.equal(h.statusCode, 200, h.body);
+        assert.equal(h.json<GerceklesenKabulCevabi>().taslak.id, taslak.id);
+        assert.equal(h.json<GerceklesenKabulCevabi>().sureler.adimlar[0]?.teorik.hazirlikDk, '20.00');
+        // Kabul eden düzenleyendir: dört gözle onayı başkası verir.
+        const gonder = await komut(taslak.id, 'onaya-gonder', { surum: h.json<GerceklesenKabulCevabi>().taslak.surum }, c.planlama);
+        assert.equal(gonder.statusCode, 200, gonder.body);
+        const t1 = h.json<GerceklesenKabulCevabi>().sureler.adimlar[0]!;
+        assert.equal((await kabulEt(t1.adimId, { tur: 'islem', olcumId: t1.olcum.islem!.id, okunanId: t1.sonKayit.islem })).statusCode, 409, 'onaydaki revizyona kabul yazılmaz');
+        const onay = await komut(taslak.id, 'onayla', { surum: gonder.json<KomutCevabi>().surum, yururlugeAl: true }, c.mudur);
+        assert.equal(onay.statusCode, 200, onay.body);
+        assert.equal((await vt().tx((db) => adimEtkinSureleri(db, taslak.id))).get(adim.opNo)?.birimSureDk, 3);
+        for (const ek of ['', `?makineId=${makineA}`]) {
+          const sonra = (await sureler(taslak.id, c.operator, ek)).adimlar[0]!;
+          assert.deepEqual([sonra.olcum.islem, sonra.olcum.hazirlik], [null, null], `yürürlükte ölçüm boşalır ${ek}`);
+        }
+        // Eski teorik eski revizyonda kalır.
+        assert.equal((await sureler(rev)).adimlar[0]?.teorik.islemDk, '2.0000');
+      });
+
+      test('RT-78: makineye özgü kabul adayın süresine yazar; yürürlükte yalnız o makinenin ölçümü boşalır, değişmeyen tür kalır', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [yeniAdim({
+          ayarSuresiDk: 30, birimSureDk: 2.5, kaynak: { tur: 'makine', id: makineB },
+          adaylar: [{ kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 25, birimSureDk: 2.4 }],
+        })]);
+        const adim = (await sureler(rev)).adimlar[0]!;
+        await olculmusEmir(urun, rev, adim.opNo, makineA);
+        const once = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        const k = await kabulEt(adim.adimId, { tur: 'islem', olcumId: once.olcum.islem!.id, makineId: makineA, okunanId: once.sonKayit.islem });
+        assert.equal(k.statusCode, 200, k.body);
+        const { taslak } = k.json<GerceklesenKabulCevabi>();
+        const ayr = await ayrinti(taslak.id);
+        assert.deepEqual([ayr.adimlar[0]?.birimSureDk, ayr.adimlar[0]?.adaylar[0]?.birimSureDk, ayr.adimlar[0]?.adaylar[0]?.ayarSuresiDk], ['2.5000', '3.0000', '25.00']);
+        const gonder = await komut(taslak.id, 'onaya-gonder', { surum: taslak.surum }, c.planlama);
+        assert.equal((await komut(taslak.id, 'onayla', { surum: gonder.json<KomutCevabi>().surum, yururlugeAl: true }, c.mudur)).statusCode, 200);
+        const sonra = (await sureler(taslak.id, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        assert.deepEqual([sonra.olcum.islem, sonra.olcum.hazirlik?.sureDk], [null, '20'], 'hazırlık kabul edilmedi, ölçümü kalır');
+      });
+
+      test('RT-77, sürüm, yetki ve tekrar: rota.yaz olmayan, eski okunan satır, başka adımın ya da türün satırı, boşaltma satırı, başka makine reddedilir; yinelenen istek tek taslak yazar', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim(), yeniAdim({ ad: 'İkinci' })]);
+        const [adim, ikinci] = (await sureler(rev)).adimlar as [SurelerCevabi['adimlar'][number], SurelerCevabi['adimlar'][number]];
+        await olculmusEmir(urun, rev, adim.opNo, makineA);
+        const once = (await sureler(rev)).adimlar[0]!;
+        const olcumId = once.olcum.islem!.id;
+        for (const cerez of [c.operator, c.kalite, c.cam]) assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId }, cerez)).statusCode, 403);
+        assert.equal((await kabulEt(ikinci.adimId, { tur: 'islem', olcumId })).statusCode, 422);
+        assert.equal((await kabulEt(adim.adimId, { tur: 'hazirlik', olcumId })).statusCode, 422);
+        assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId, makineId: makineB })).statusCode, 422);
+        assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId: 2_147_483_000 })).statusCode, 404);
+        assert.equal((await kabulEt(2_147_483_000, { tur: 'islem', olcumId })).statusCode, 404);
+        const bos = await yaz(adim.adimId, { tur: 'degisim', sureDk: null });
+        assert.equal(bos.statusCode, 200, bos.body);
+        const bosId = bos.json<SurelerCevabi>().adimlar[0]!.sonKayit.degisim!;
+        assert.equal((await kabulEt(adim.adimId, { tur: 'degisim', olcumId: bosId, okunanId: bosId })).statusCode, 422);
+        const kimlik = randomUUID();
+        assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId, okunanId: once.sonKayit.islem }, c.planlama, kimlik)).statusCode, 200);
+        assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId, okunanId: once.sonKayit.islem }, c.planlama, kimlik)).statusCode, 200);
+        const adet = await vt().tx((db) => db.tek<{ kabul: number; taslak: number }>(
+          `SELECT (SELECT count(*)::int FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND kaynak = 'kabul') AS kabul,
+                  (SELECT count(*)::int FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'taslak') AS taslak`, [urun],
+        ));
+        assert.deepEqual(adet, { kabul: 1, taslak: 1 });
+        assert.equal((await kabulEt(adim.adimId, { tur: 'islem', olcumId, okunanId: null })).statusCode, 409, 'arada yazılmış satır varken eski okunanla kabul edilmez');
+      });
     });
 
     test('RT-75, sürüm, yetki ve tekrar: sıfır işlem, eski okunan satır, rota.yaz olmayan kişi ve fason adım reddedilir; yinelenen istek tek satır yazar', async () => {
