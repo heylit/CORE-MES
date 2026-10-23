@@ -64,11 +64,20 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     });
   }
 
+  const kartZorunlulari = (tur: string, sira: number): Record<string, unknown> => ({
+    hammadde: { grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 + sira } },
+    mamul: { g: { ad: `Deneme mamul ${sira}` } },
+    yarimamul: { g: { ad: `Deneme yarimamul ${sira}`, tip: 'Talaşlı işlenmiş parça' } },
+    ticari_mal: { g: { ad: `Deneme ticari_mal ${sira}` } },
+    hizmet: { g: { kat: 'fason', yon: 'Alınan', cesit: 'Talaşlı imalat' } },
+  } as Record<string, Record<string, unknown>>)[tur] ?? {};
   async function kartAc(tur: 'mamul' | 'hammadde'): Promise<number> {
     const kimlik = `ca${++sayac}`;
+    // Kart, malzeme sihirbazının zorunlu alanlarıyla açılır (malzemeler B11): hammaddede aile, kalite ve kart başına ayrı ölçü.
+    const zorunlu = kartZorunlulari(tur, sayac);
     const kod = `${tur === 'hammadde' ? 'HM' : 'MM'}-CAL-00001`;
     const govde = (d: string, surum: number | null) => ({
-      kayit: { id: kimlik, tur, fam: 'metal', com: { kod, ad: `Deneme ${tur} ${sayac}`, birim: 'adet' }, onay: { durum: d } },
+      kayit: { id: kimlik, tur, fam: 'metal', com: { kod, ad: `Deneme ${tur} ${sayac}`, birim: 'adet' }, onay: { durum: d }, ...zorunlu },
       ozet: { stok_kodu: kod, tur, onay_durumu: d, benzersiz_anahtar: `${tur}|${kimlik}`, mukerrer_gerekcesi: null },
       surum,
     });
