@@ -25,8 +25,8 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
   let okur = '';
   let yetkisiz = '';
   let sayac = 0;
-  // Her test kendi koleksiyonunda çalışır; ötekinin bıraktığına yaslanmaz.
-  const yeniKoleksiyon = (): string => `deneme${String(++sayac)}`;
+  // Uç yalnız prototipin kaydına açıktır (`yerel/kalite-denetim*`); her test kendi anahtarında çalışır, ötekinin bıraktığına yaslanmaz.
+  const yeniBelge = (): string => `yerel/kalite-denetim-t${String(++sayac)}`;
 
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -77,84 +77,87 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
   after(async () => { await ortam?.kaldir(); });
 
   test('BD-01: yazılan belge aynen okunur; tam yazma gövdeyi değiştirir; her yazma damgayı ilerletir', async () => {
-    const k = yeniKoleksiyon();
+    const yol = yeniBelge();
     const once = await damga();
-    const ilk = await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { ad: 'bir', ic: { x: 1 } } });
+    const ilk = await yaz(yazar, { yol, kip: 'tam', veri: { ad: 'bir', ic: { x: 1 } } });
     assert.equal(ilk.statusCode, 200, ilk.body);
-    const ikinci = await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { ad: 'iki' } });
+    const ikinci = await yaz(yazar, { yol, kip: 'tam', veri: { ad: 'iki' } });
     const belge = (ikinci.json() as { belge: Belge }).belge;
-    assert.deepEqual({ ...belge, surum: 0 }, { yol: `${k}/b1`, kimlik: 'b1', veri: { ad: 'iki' }, surum: 0 });
+    assert.deepEqual({ ...belge, surum: 0 }, { yol, kimlik: yol.split('/')[1], veri: { ad: 'iki' }, surum: 0 });
     assert.equal(belge.surum > once, true);
     assert.equal(await damga(), belge.surum);
-    const okunan = await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${k}/b1`);
+    const okunan = await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yol}`);
     assert.deepEqual((okunan.json() as { belge: Belge }).belge, belge);
   });
 
   test('BD-02: birleştirme iç içe alanı korur; olmayan belgeye birleştirme 404', async () => {
-    const k = yeniKoleksiyon();
-    await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { rx: { a: 1 }, t: 'x' } });
-    const cevap = await yaz(yazar, { yol: `${k}/b1`, kip: 'birlestir', veri: { rx: { b: 2 } } });
+    const yol = yeniBelge();
+    await yaz(yazar, { yol, kip: 'tam', veri: { rx: { a: 1 }, t: 'x' } });
+    const cevap = await yaz(yazar, { yol, kip: 'birlestir', veri: { rx: { b: 2 } } });
     assert.deepEqual((cevap.json() as { belge: Belge }).belge.veri, { rx: { a: 1, b: 2 }, t: 'x' });
-    const yok = await yaz(yazar, { yol: `${k}/yok`, kip: 'birlestir', veri: { a: 1 } });
+    const yokYol = yeniBelge();
+    const yok = await yaz(yazar, { yol: yokYol, kip: 'birlestir', veri: { a: 1 } });
     assert.equal(yok.statusCode, 404);
-    assert.deepEqual(await sorgu(okur, k).then((l) => l.map((b) => b.kimlik)), ['b1']);
+    assert.equal((await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yokYol}`).then((c) => c.json() as { belge: Belge | null })).belge, null);
   });
 
   test('BD-03: sürüm beklenen değilse yazma 409 ve belge değişmez; null beklenen yalnız yeni belgede geçer', async () => {
-    const k = yeniKoleksiyon();
-    const ilk = await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { v: 1 }, beklenenSurum: null });
+    const yol = yeniBelge();
+    const ilk = await yaz(yazar, { yol, kip: 'tam', veri: { v: 1 }, beklenenSurum: null });
     assert.equal(ilk.statusCode, 200, ilk.body);
     const surum = (ilk.json() as { belge: Belge }).belge.surum;
-    assert.equal((await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { v: 2 }, beklenenSurum: null })).statusCode, 409);
-    assert.equal((await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { v: 3 }, beklenenSurum: surum - 1 })).statusCode, 409);
-    assert.equal((await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: { v: 4 }, beklenenSurum: surum })).statusCode, 200);
-    assert.deepEqual((await sorgu(okur, k)).map((b) => b.veri), [{ v: 4 }]);
+    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: { v: 2 }, beklenenSurum: null })).statusCode, 409);
+    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: { v: 3 }, beklenenSurum: surum - 1 })).statusCode, 409);
+    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: { v: 4 }, beklenenSurum: surum })).statusCode, 200);
+    assert.deepEqual((await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yol}`).then((c) => c.json() as { belge: Belge })).belge.veri, { v: 4 });
   });
 
-  test('BD-04: sorgu koşulu, sırası ve sınırı sunucuda uygulanır; alt koleksiyon üst koleksiyona karışmaz', async () => {
-    const k = yeniKoleksiyon();
-    for (const [id, ts] of [['a', 3], ['b', 1], ['c', 2]] as const) await yaz(yazar, { yol: `${k}/${id}`, kip: 'tam', veri: { ts, tur: id === 'b' ? 'x' : 'y' } });
-    await yaz(yazar, { yol: `${k}/a/alt/z`, kip: 'tam', veri: { ts: 0 } });
+  test('BD-04: sorgu koşulu, sırası ve sınırı sunucuda uygulanır', async () => {
+    const grup = yeniBelge();
+    for (const [id, ts] of [['a', 3], ['b', 1], ['c', 2]] as const) await yaz(yazar, { yol: `${grup}${id}`, kip: 'tam', veri: { ts, grup, tur: id === 'b' ? 'x' : 'y' } });
+    const kimlik = (k: string): string => k.slice(-1);
     const sira = encodeURIComponent(JSON.stringify({ alan: 'ts', yon: 'desc' }));
-    const filtre = encodeURIComponent(JSON.stringify([{ alan: 'tur', islec: '==', deger: 'y' }]));
-    assert.deepEqual((await sorgu(okur, k, `&sira=${sira}&sinir=2`)).map((b) => b.kimlik), ['a', 'c']);
-    assert.deepEqual((await sorgu(okur, k, `&filtreler=${filtre}`)).map((b) => b.kimlik), ['a', 'c']);
-    assert.deepEqual((await sorgu(okur, `${k}/a/alt`)).map((b) => b.kimlik), ['z']);
+    const grubu = encodeURIComponent(JSON.stringify([{ alan: 'grup', islec: '==', deger: grup }]));
+    const filtre = encodeURIComponent(JSON.stringify([{ alan: 'grup', islec: '==', deger: grup }, { alan: 'tur', islec: '==', deger: 'y' }]));
+    assert.deepEqual((await sorgu(okur, 'yerel', `&filtreler=${grubu}&sira=${sira}&sinir=2`)).map((b) => kimlik(b.kimlik)), ['a', 'c']);
+    assert.deepEqual((await sorgu(okur, 'yerel', `&filtreler=${filtre}`)).map((b) => kimlik(b.kimlik)), ['a', 'c']);
   });
 
   test('BD-05: silme belgeyi kaldırır, damgayı ilerletir; ikinci silme silmedi der', async () => {
-    const k = yeniKoleksiyon();
-    await yaz(yazar, { yol: `${k}/b1`, kip: 'tam', veri: {} });
+    const yol = yeniBelge();
+    await yaz(yazar, { yol, kip: 'tam', veri: {} });
     const once = await damga();
-    const sil = await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol: `${k}/b1` });
+    const sil = await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol });
     assert.deepEqual(sil.json(), { silindi: true, damga: once + 1 });
-    assert.equal((await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol: `${k}/b1` }).then((c) => c.json() as { silindi: boolean })).silindi, false);
-    assert.deepEqual(await sorgu(okur, k), []);
+    assert.equal((await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol }).then((c) => c.json() as { silindi: boolean })).silindi, false);
+    assert.equal((await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yol}`).then((c) => c.json() as { belge: Belge | null })).belge, null);
   });
 
   test('BD-06: kişiye özel alan başkasına kapalı (okuma ve yazma 403), sahibine açık', async () => {
-    const yol = `data/users/${String(yazarId)}/prefs`;
+    const kok = `data/users/${String(yazarId)}/yerel/anahtarlar`;
+    const yol = `${kok}/kalite-denetim-tercih`;
     assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: { tema: 'koyu' } })).statusCode, 200);
     assert.equal((await yaz(yonetici, { yol, kip: 'tam', veri: { tema: 'acik' } })).statusCode, 403);
     assert.equal((await istek(yonetici, 'GET', `/denetim-hazirlik/belge?yol=${yol}`)).statusCode, 403);
-    assert.equal((await istek(yonetici, 'GET', '/denetim-hazirlik/sorgu?koleksiyon=data')).statusCode, 200);
+    assert.equal((await istek(yonetici, 'GET', `/denetim-hazirlik/sorgu?koleksiyon=${kok}`)).statusCode, 403);
     const kendi = await istek(yazar, 'GET', `/denetim-hazirlik/belge?yol=${yol}`);
     assert.deepEqual((kendi.json() as { belge: Belge }).belge.veri, { tema: 'koyu' });
+    assert.deepEqual((await sorgu(yazar, kok)).map((b) => b.kimlik), ['kalite-denetim-tercih']);
   });
 
   test('BD-07: yazma denetim-hazirlik.yaz ister, okuma denetim-hazirlik.oku ya da yaz ister; sayfa işlemi yalnız kimliği okur', async () => {
-    const k = yeniKoleksiyon();
-    assert.equal((await yaz(okur, { yol: `${k}/b1`, kip: 'tam', veri: {} })).statusCode, 403);
-    assert.equal((await yaz(yetkisiz, { yol: `${k}/b1`, kip: 'tam', veri: {} })).statusCode, 403);
-    assert.equal((await istek(yetkisiz, 'GET', `/denetim-hazirlik/sorgu?koleksiyon=${k}`)).statusCode, 403);
-    assert.equal((await istek(okur, 'GET', `/denetim-hazirlik/sorgu?koleksiyon=${k}`)).statusCode, 200);
+    const yol = yeniBelge();
+    assert.equal((await yaz(okur, { yol, kip: 'tam', veri: {} })).statusCode, 403);
+    assert.equal((await yaz(yetkisiz, { yol, kip: 'tam', veri: {} })).statusCode, 403);
+    assert.equal((await istek(yetkisiz, 'GET', '/denetim-hazirlik/sorgu?koleksiyon=yerel')).statusCode, 403);
+    assert.equal((await istek(okur, 'GET', '/denetim-hazirlik/sorgu?koleksiyon=yerel')).statusCode, 200);
     const ben = (await istek(yetkisiz, 'GET', '/denetim-hazirlik/ben')).json() as { yazabilir: boolean; yonetici: boolean };
     assert.deepEqual([ben.yazabilir, ben.yonetici], [false, false]);
     assert.equal((await istek(yazar, 'GET', '/denetim-hazirlik/ben').then((c) => c.json() as { yazabilir: boolean })).yazabilir, true);
   });
 
   test('BD-08: kilit başkasına geçerliyken verilmez, aynı sahibe yeniden verilir; kilit gövdesi belgeye birleşir', async () => {
-    const yol = `${yeniKoleksiyon()}/is1`;
+    const yol = yeniBelge();
     const al = (sahip: string, veri?: Record<string, unknown>) =>
       istek(yazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol, sahip, sureMs: 30_000, ...(veri ? { veri } : {}) }).then((c) => c.json() as { alindi: boolean; bitis: string | null });
     assert.equal((await al('sekme-1', { durum: 'isleniyor' })).alindi, true);
@@ -214,24 +217,28 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(esler.find((e) => e.kisiId === yazarId)?.durum, { yaziyor: 'genel' });
   });
 
-  test('BD-13: var olan belgeyi yalnız oluşturan değiştirir, siler ya da kilitler; ortak kayıt (yerel) bütün yazarlara açık', async () => {
-    const yol = `${yeniKoleksiyon()}/ileti1`;
-    assert.equal((await yaz(yazar, { yol, kip: 'tam', veri: { metin: 'ilk', by: yazarId } })).statusCode, 200);
-    const reddedilen = [
-      await yaz(ikinciYazar, { yol, kip: 'tam', veri: { metin: 'sahte', by: yazarId } }),
-      await yaz(ikinciYazar, { yol, kip: 'birlestir', veri: { okundu: true } }),
-      await istek(ikinciYazar, 'POST', '/denetim-hazirlik/belge/sil', { yol }),
-      await istek(ikinciYazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol, sahip: 's', sureMs: 30_000, veri: { metin: 'sahte' } }),
-    ];
-    assert.deepEqual(reddedilen.map((c) => c.statusCode), [403, 403, 403, 403]);
-    const okunan = await istek(okur, 'GET', `/denetim-hazirlik/belge?yol=${yol}`);
-    assert.deepEqual((okunan.json() as { belge: Belge }).belge.veri, { metin: 'ilk', by: yazarId });
-    assert.equal((await yaz(yazar, { yol, kip: 'birlestir', veri: { metin: 'duzeltildi' } })).statusCode, 200);
-    assert.equal((await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol })).statusCode, 200);
-
-    const ortak = `yerel/deneme-${String(++sayac)}`;
+  test('BD-13: ortak kayıt (yerel) bütün yazarlara açık', async () => {
+    const ortak = yeniBelge();
     assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: { deger: '1' } })).statusCode, 200);
     assert.equal((await yaz(ikinciYazar, { yol: ortak, kip: 'tam', veri: { deger: '2' } })).statusCode, 200);
+  });
+
+  test('BD-15 (B7): genel depo ucu prototip kaydı dışındaki yola yazmaz, silmez, kilitlemez ve okumaz (403)', async () => {
+    const yasak = ['deneme/b1', 'yerel/baska-anahtar', `${yeniBelge()}/alt/b1`, `data/users/${String(yazarId)}/prefs`, `data/users/${String(yazarId)}/yerel/anahtarlar/baska`];
+    for (const yol of yasak) {
+      const cevaplar = [
+        await yaz(yazar, { yol, kip: 'tam', veri: { deger: 'x' } }),
+        await istek(yazar, 'POST', '/denetim-hazirlik/belge/sil', { yol }),
+        await istek(yazar, 'POST', '/denetim-hazirlik/belge/kilitle', { yol, sahip: 's', sureMs: 30_000 }),
+        await istek(yazar, 'GET', `/denetim-hazirlik/belge?yol=${yol}`),
+      ];
+      assert.deepEqual(cevaplar.map((c) => c.statusCode), [403, 403, 403, 403], yol);
+    }
+    for (const koleksiyon of ['deneme', 'data', `${yeniBelge()}/alt`, `data/users/${String(yazarId)}/baska/anahtarlar`]) {
+      assert.equal((await istek(yazar, 'GET', `/denetim-hazirlik/sorgu?koleksiyon=${koleksiyon}`)).statusCode, 403, koleksiyon);
+    }
+    const izinli = yeniBelge();
+    assert.equal((await yaz(yazar, { yol: izinli, kip: 'tam', veri: { deger: 'x' } })).statusCode, 200);
   });
   // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; prototipin cihaz listesi ondan salt okunur gelir.
   test('329 a ölçü aletleri: liste Kalibrasyon kayıtlarını verir; okuma yetkisi ister, yazma ucu yok', async () => {

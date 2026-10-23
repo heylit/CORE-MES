@@ -41,7 +41,8 @@ describe('satın alma: stokta olmayan malzeme istekleri (kart #435, gerçek Post
   async function kartAc(sira: number, ad: string, birim: string): Promise<number> {
     const kimlik = `sy-kart-${sira}`;
     const r = await post(c.yonetici, `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-      kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod: `HM-SYI-0000${sira}`, ad, birim }, onay: { durum: 'aktif' } },
+      // Malzeme sihirbazının zorunlu alanları (malzemeler B11): aile, kalite ve kart başına ayrı ölçü.
+      kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 + sira }, com: { kod: `HM-SYI-0000${sira}`, ad, birim }, onay: { durum: 'aktif' } },
       ozet: { benzersiz_anahtar: `hammadde|stok-yok|${kimlik}`, mukerrer_gerekcesi: null }, surum: null,
     });
     assert.equal(r.statusCode, 200, r.body);

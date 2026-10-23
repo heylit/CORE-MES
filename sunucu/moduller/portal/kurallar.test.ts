@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 import {
   KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, bolumOkuyabilirMi, bolumYazabilirMi, kalemKodu, logoNiyetleri, ondalikMetni, portalRolu, portalUnvani, talepTeklifi, rolDegisiyorMu, canliEsler, derinBirlestir,
   durumYamala, erisebilirMi, talepKimligi, teklifDurumuBindir, fiyatGizle, gizliAlanlariKoru, islemOkuyabilirMi, esikleriBindir, siparisEsikleri, kilitAlinirMi, sorgula, sonParca, ustYolu, onayGeregi, onayGeregiKarsilaniyorMu, onayKarari, onayYazimiReddi, sonOnay,
+  acaninAdimlari, onayAcilisReddi, onayAdimlari, onayEtkisiReddi, onayKurallari, onaysizYaziReddi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -361,6 +362,93 @@ describe('portal bölüm izni (KD-063)', () => {
     const korunan = gizliAlanlariKoru('requests/q1', talep, talepYazisi, []);
     assert.deepEqual(dizi(korunan['versions']).map((v) => v['note']), [talep.versions[0]?.note, 'yeni']);
     assert.deepEqual(korunan['history'], talep.history);
+  });
+  // B8: prototipin stepsFor ve autoSkip kuralı sunucuda. Limitler: satın alma varsayılanları 50 000 / 250 000 ve portal varsayılanları.
+  const LIMIT = [{ azamiTutar: '50000' }, { azamiTutar: '250000' }, { azamiTutar: null }];
+  const R = onayKurallari(null, LIMIT);
+  const adimlar = (roller: string[]) => roller.map((role) => ({ role, status: 'pending' }));
+
+  test('BD-K35: onay adımları tutar, iskonto ve fiyat farkıyla eşiklerden hesaplanır; açanın kendi adımı düşer, genel müdür onaya göndermez', () => {
+    assert.deepEqual(R, { payFin: 150000, discMgr: 10, priceMgr: 5, contractGM: 2000000, priceTol: 1, poMgr: 50000, poGM: 250000 });
+    assert.equal(onayKurallari({ rules: { payFin: 1000, poMgr: 1 } }, [])['payFin'], 1000);
+    assert.equal(onayKurallari({ rules: { payFin: 1000, poMgr: 1 } }, [])['poMgr'], undefined, 'belgedeki sipariş eşiği geçmez');
+    assert.deepEqual(onayAdimlari('po', { tutar: 50000 }, R), []);
+    assert.deepEqual(onayAdimlari('po', { tutar: 50000.01 }, R), ['Satın alma müdürü']);
+    assert.deepEqual(onayAdimlari('po', { tutar: 300000 }, R), ['Satın alma müdürü', 'Genel müdür']);
+    assert.deepEqual(onayAdimlari('po', { tutar: 10 }, onayKurallari(null, [])), ['Satın alma müdürü', 'Genel müdür'], 'tanımsız eşik adımı ister');
+    assert.deepEqual(onayAdimlari('po', { tutar: Number.NaN }, R), ['Satın alma müdürü', 'Genel müdür'], 'fiyatsız kalem');
+    assert.deepEqual(onayAdimlari('payment', { tutar: 150000 }, R), []);
+    assert.deepEqual(onayAdimlari('payment', { tutar: 150001 }, R), ['Finans müdürü']);
+    assert.deepEqual(onayAdimlari('discount', { iskonto: 10 }, R), []);
+    assert.deepEqual(onayAdimlari('discount', { iskonto: 12 }, R), ['Satış müdürü']);
+    assert.deepEqual(onayAdimlari('pricereq', { fark: 6 }, R), ['Satın alma müdürü']);
+    assert.deepEqual(onayAdimlari('contract', { tutar: 1, sozlesmeTuru: 'sales' }, R), ['Satış müdürü']);
+    assert.deepEqual(onayAdimlari('contract', { tutar: 3000000, sozlesmeTuru: 'purchase' }, R), ['Satın alma müdürü', 'Genel müdür']);
+    assert.deepEqual(onayAdimlari('iban', {}, R), ['Muhasebe', 'Finans müdürü']);
+    assert.deepEqual(onayAdimlari('bilinmeyen', {}, R), []);
+    assert.deepEqual(acaninAdimlari('po', { tutar: 300000 }, R, 'Satın alma müdürü'), ['Genel müdür']);
+    assert.deepEqual(acaninAdimlari('po', { tutar: 300000 }, R, 'Genel müdür'), []);
+    assert.deepEqual(acaninAdimlari('iban', {}, R, 'Genel müdür'), ['Muhasebe', 'Finans müdürü']);
+    assert.deepEqual(acaninAdimlari('po', { tutar: 300000 }, R, 'Müdür'), ['Satın alma müdürü', 'Genel müdür']);
+  });
+
+  test('BD-K36: onay kaydı yalnız sunucunun hesapladığı adım zinciriyle açılır', () => {
+    const po = { kind: 'po', amount: 300000, steps: adimlar(['Satın alma müdürü', 'Genel müdür']) };
+    assert.equal(onayAcilisReddi(po, null, R, 'Satın alma uzmanı'), null);
+    assert.match(onayAcilisReddi({ ...po, steps: adimlar(['Satın alma müdürü']) }, null, R, 'Satın alma uzmanı') ?? '', /beklenen: Satın alma müdürü → Genel müdür/);
+    assert.match(onayAcilisReddi({ ...po, amount: 100 }, null, R, 'Satın alma uzmanı') ?? '', /gerektirmiyor/);
+    assert.notEqual(onayAcilisReddi(po, null, R, 'Satın alma müdürü'), null, 'kendi adımı düşer');
+    const iskonto = { kind: 'discount', payload: { version: { discount: 30 } }, steps: adimlar(['Satış müdürü']) };
+    assert.equal(onayAcilisReddi(iskonto, null, R, 'Müdür'), null);
+    assert.notEqual(onayAcilisReddi({ ...iskonto, payload: { version: { discount: 5 } } }, null, R, 'Müdür'), null);
+    const fiyat = { kind: 'pricereq', steps: adimlar(['Satın alma müdürü']) };
+    assert.equal(onayAcilisReddi(fiyat, { oldPrice: 100, newPrice: 110 }, R, 'Satın alma uzmanı'), null);
+    assert.notEqual(onayAcilisReddi(fiyat, { oldPrice: 100, newPrice: 102 }, R, 'Satın alma uzmanı'), null);
+    const sozlesme = { kind: 'contract', amount: 10, steps: adimlar(['Satış müdürü']) };
+    assert.equal(onayAcilisReddi(sozlesme, null, R, 'Müdür'), null, 'kayıt henüz yoksa iki türden biri');
+    assert.equal(onayAcilisReddi(sozlesme, { type: 'sales' }, R, 'Müdür'), null);
+    assert.notEqual(onayAcilisReddi(sozlesme, { type: 'purchase' }, R, 'Müdür'), null);
+    assert.equal(onayAcilisReddi({ kind: 'iban', steps: adimlar(['Muhasebe', 'Finans müdürü']) }, null, R, 'Genel müdür'), null);
+  });
+
+  test('BD-K37: onay gerektiren kayıt onaysız yazılamaz; onayın etkisi kaydın bugünkü değerinin istediği adımları ister', () => {
+    const buyuk = { type: 'purchase', items: [{ qty: 10, price: 30000 }] };
+    const uzman = 'Satın alma uzmanı';
+    assert.notEqual(onaysizYaziReddi('orders/o1', null, buyuk, R, uzman), null);
+    assert.equal(onaysizYaziReddi('orders/o1', null, { ...buyuk, approvalState: 'pending' }, R, uzman), null);
+    assert.notEqual(onaysizYaziReddi('orders/o1', null, { ...buyuk, approvalState: 'approved' }, R, uzman), null);
+    assert.equal(onaysizYaziReddi('orders/o1', null, buyuk, R, 'Genel müdür'), null);
+    assert.equal(onaysizYaziReddi('orders/o1', null, { type: 'purchase', items: [{ qty: 1, price: 10 }] }, R, uzman), null);
+    assert.equal(onaysizYaziReddi('orders/o1', null, { type: 'sales', items: [{ qty: 10, price: 6000 }] }, R, uzman), null);
+    assert.equal(onaysizYaziReddi('orders/o1', buyuk, { ...buyuk, note: 'x' }, R, uzman), null, 'yalnız yeni sipariş');
+    assert.notEqual(onaysizYaziReddi('payments/p1', null, { direction: 'out', status: 'sent', amount: 200000 }, R, 'Satış müdürü'), null);
+    assert.equal(onaysizYaziReddi('payments/p1', null, { direction: 'out', status: 'awaiting', amount: 200000 }, R, 'Satış müdürü'), null);
+    assert.equal(onaysizYaziReddi('payments/p1', null, { direction: 'in', status: 'sent', amount: 200000 }, R, 'Satış müdürü'), null);
+    assert.notEqual(onaysizYaziReddi('contracts/k1', null, { type: 'sales', approval: 'approved', lines: [{ qty: 1, price: 5 }] }, R, uzman), null);
+    assert.equal(onaysizYaziReddi('contracts/k1', null, { type: 'purchase', approval: 'approved', lines: [{ qty: 1, price: 5 }] }, R, 'Satın alma müdürü'), null);
+    assert.equal(onaysizYaziReddi('contracts/k1', null, { type: 'sales', approval: 'pending' }, R, uzman), null);
+    const fiyat = { oldPrice: 100, newPrice: 110, status: 'open' };
+    assert.notEqual(onaysizYaziReddi('priceReqs/r1', fiyat, { ...fiyat, status: 'approved' }, R, uzman), null);
+    assert.equal(onaysizYaziReddi('priceReqs/r1', fiyat, { ...fiyat, newPrice: 102, status: 'approved' }, R, uzman), null);
+    const talep = { versions: [{ v: 1, discount: 0 }] };
+    const surum2 = { versions: [{ v: 1, discount: 0 }, { v: 2, discount: 30 }] };
+    assert.notEqual(onaysizYaziReddi('requests/q1', talep, surum2, R, 'Müdür'), null);
+    assert.notEqual(onaysizYaziReddi('requests/q1', { ...talep, pendingApproval: 'a1' }, { ...surum2, pendingApproval: 'a1' }, R, 'Müdür'), null, 'bekleyen onay kalırken sürüm eklenemez');
+    assert.equal(onaysizYaziReddi('requests/q1', talep, { versions: [...talep.versions, { v: 2, discount: 5 }] }, R, 'Müdür'), null);
+
+    const onay = { kind: 'po', requestedBy: 'tmi-1', status: 'approved', steps: adimlar(['Satın alma müdürü']) };
+    const kucuk = { type: 'purchase', items: [{ qty: 1, price: 60000 }], approvalState: 'pending' };
+    assert.equal(onayEtkisiReddi('orders/o1', kucuk, { ...kucuk, approvalState: 'approved' }, onay, R, uzman), null);
+    assert.match(onayEtkisiReddi('orders/o1', kucuk, { ...buyuk, approvalState: 'approved' }, onay, R, uzman) ?? '', /Genel müdür/);
+    assert.equal(onayEtkisiReddi('orders/o1', kucuk, { ...buyuk, approvalState: 'rejected' }, onay, R, uzman), null, 'ret etkisi denetlenmez');
+    const odeme = { kind: 'payment', status: 'approved', steps: adimlar(['Finans müdürü']) };
+    assert.equal(onayEtkisiReddi('payments/p1', { status: 'awaiting', amount: 200000 }, { status: 'sent', amount: 200000 }, odeme, R, 'Satış müdürü'), null);
+    const sozlesme = { kind: 'contract', status: 'approved', steps: adimlar(['Satış müdürü']) };
+    assert.notEqual(onayEtkisiReddi('contracts/k1', { approval: 'pending' }, { type: 'purchase', approval: 'approved', lines: [] }, sozlesme, R, uzman), null);
+    const iskonto = { kind: 'discount', status: 'approved', steps: adimlar(['Satış müdürü']) };
+    assert.equal(onayEtkisiReddi('requests/q1', { ...talep, pendingApproval: 'a1' }, { ...surum2, pendingApproval: null }, iskonto, R, 'Müdür'), null);
+    assert.notEqual(onayEtkisiReddi('requests/q1', { ...talep, pendingApproval: 'a1' }, { ...surum2, pendingApproval: null }, { ...iskonto, status: 'rejected' }, R, 'Müdür'), null);
+    assert.equal(onayEtkisiReddi('requests/q1', { ...talep, pendingApproval: 'a1' }, { ...talep, pendingApproval: null }, { ...iskonto, status: 'rejected' }, R, 'Müdür'), null);
   });
 });
 

@@ -97,9 +97,20 @@ describe('Kalite Merkezi kuralları', () => {
     assert.equal(kapanmisKayitMi('insp', { sonuc: 'Ret' }), true);
     for (const g of [{ durum: 'Açık' }, { durum: 'MRB değerlendirmesinde' }, {}]) assert.equal(kapanmisKayitMi('ncr', g), false, JSON.stringify(g));
     for (const g of [{ sonuc: 'Beklemede' }, { sonuc: '' }, {}]) assert.equal(kapanmisKayitMi('insp', g), false, JSON.stringify(g));
-    assert.equal(kapanmisKayitMi('capa', { durum: 'Kapalı' }), false, 'karar yalnız NCR ve muayene');
-    assert.equal(kapanmisKayitMi('lot', { sonuc: 'Kabul' }), false);
+    assert.equal(kapanmisKayitMi('frm', { durum: 'Kapalı' }), false, 'form kilidi ayrı kuraldadır');
     assert.equal(kapanmisKayitMi('ncr', null), false, 'yeni kayıt');
+  });
+
+  test('B16 kilit: kapalı DÖF ve kararı verilmiş lot kabul kaydı kapanmıştır; açık DÖF, kararsız lot ve yeniden başlatma kaydı değil', () => {
+    assert.equal(kapanmisKayitMi('capa', { durum: 'Kapalı' }), true);
+    assert.equal(kapanmisKayitMi('capa', { durum: ' Kapalı ' }), true, 'kırpılır');
+    for (const g of [{ durum: 'Açık' }, {}]) assert.equal(kapanmisKayitMi('capa', g), false, JSON.stringify(g));
+    assert.equal(kapanmisKayitMi('lot', { karar: 'Kabul' }), true);
+    assert.equal(kapanmisKayitMi('lot', { karar: 'Ret' }), true);
+    for (const g of [{ karar: '' }, { karar: '  ' }, { sonuc: 'Kabul' }, {}]) assert.equal(kapanmisKayitMi('lot', g), false, JSON.stringify(g));
+    assert.equal(kapanmisKayitMi('lot', { tip: 'reset', karar: 'Kabul' }), false, 'yeniden başlatma muayene değildir');
+    assert.equal(kapanmisKayitMi('capa', null), false, 'yeni kayıt');
+    assert.equal(kapanmisKayitMi('lot', null), false, 'yeni kayıt');
   });
 
   test('KM-K325 ilk parça bekleyenleri: yalnız karar bekleyen adedi sıfırdan büyük emirler, emir sırasıyla; sayacı olmayan emir yok sayılır', () => {

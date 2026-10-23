@@ -453,7 +453,7 @@ export function kalemKodu(kalem: PortalSatisKalemi, firmaKimligi: string | null,
 
 export const ONAY_KOLEKSIYONU = 'approvals';
 export const onayYolu = (kimlik: string): string => `${ONAY_KOLEKSIYONU}/${kimlik}`;
-const onayBelgesiMi = (yol: string): boolean => { const p = parcalar(yol); return p.length === 2 && p[0] === ONAY_KOLEKSIYONU; };
+export const onayBelgesiMi = (yol: string): boolean => { const p = parcalar(yol); return p.length === 2 && p[0] === ONAY_KOLEKSIYONU; };
 
 // Kararla değişen ya da onayın neyi onayladığını belirleyen alanlar; açıldıktan sonra genel yazmayla değişmez.
 const ONAY_KORUNAN_ALANLAR = ['kind', 'refCol', 'refId', 'amount', 'payload', 'requestedBy', 'at', 'no', 'steps', 'status'] as const;
@@ -549,6 +549,122 @@ export function sonOnay(onaylar: readonly Veri[], refCol: string, refId: string,
 export function onayGeregiKarsilaniyorMu(onay: Veri | null, sonuc: 'approved' | 'rejected' | 'karar'): boolean {
   const durum = onay?.['status'];
   return sonuc === 'karar' ? typeof durum === 'string' && KARARLAR.has(durum) : durum === sonuc;
+}
+
+// ---- Onay adımları (B8). Prototipin stepsFor ve autoSkip kuralları sunucuda: tarayıcının yazdığı adım zinciri sunucunun hesabıyla
+// karşılaştırılır, onay gerektiren kayıt onaysız yazılamaz. Limitler portal ayar belgesinde kalır (soru 156 b); sipariş eşikleri
+// satın alma limit tablosundan bindirilir (esikleriBindir).
+
+export const ONAY_VARSAYILANLARI: Readonly<Record<string, number>> = { payFin: 150000, discMgr: 10, priceMgr: 5, contractGM: 2000000, priceTol: 1 };
+export type OnayKurallari = Readonly<Record<string, unknown>>;
+export interface OnayGirdisi { tutar?: number; iskonto?: number; fark?: number; sozlesmeTuru?: unknown }
+
+// Prototipin rules() birleşimi: varsayılan, belgede saklanan, üstüne limit tablosunun eşikleri (tanımsız eşik alan olarak yoktur).
+export function onayKurallari(ayar: Veri | null, limitler: readonly { azamiTutar: string | null }[]): OnayKurallari {
+  const kurallar = ayar !== null && duzNesneMi(ayar['rules']) ? ayar['rules'] : {};
+  const { poMgr: _m, poGM: _g, ...digerleri } = kurallar;
+  return { ...ONAY_VARSAYILANLARI, ...digerleri, ...siparisEsikleri(limitler) };
+}
+
+// Karşılaştırmalar prototiptekiyle aynı JavaScript dönüşümüyle: tanımsız eşik NaN olur; "<= değil" adımı ister, ">" istemez.
+const esik = (R: OnayKurallari, ad: string): number => Number(R[ad]);
+const SATIN_ALMA_MUDURU = 'Satın alma müdürü';
+
+export function onayAdimlari(tur: string, g: OnayGirdisi, R: OnayKurallari): string[] {
+  const tutar = g.tutar ?? Number.NaN;
+  if (tur === 'po') return [...(tutar <= esik(R, 'poMgr') ? [] : [SATIN_ALMA_MUDURU]), ...(tutar <= esik(R, 'poGM') ? [] : [TAM_YETKILI_ROL])];
+  if (tur === 'payment') return tutar > esik(R, 'payFin') ? ['Finans müdürü'] : [];
+  if (tur === 'iban') return ['Muhasebe', 'Finans müdürü'];
+  if (tur === 'discount') return (g.iskonto ?? 0) > esik(R, 'discMgr') ? ['Satış müdürü'] : [];
+  if (tur === 'pricereq') return (g.fark ?? Number.NaN) > esik(R, 'priceMgr') ? [SATIN_ALMA_MUDURU] : [];
+  if (tur === 'contract') return [g.sozlesmeTuru === 'sales' ? 'Satış müdürü' : SATIN_ALMA_MUDURU, ...(tutar > esik(R, 'contractGM') ? [TAM_YETKILI_ROL] : [])];
+  return [];
+}
+
+// autoSkip: açanın kendi rolündeki adım düşer, genel müdür hiç onaya göndermez; IBAN değişikliği her zaman iki adımdır.
+export function acaninAdimlari(tur: string, g: OnayGirdisi, R: OnayKurallari, rol: string): string[] {
+  const adimlar = onayAdimlari(tur, g, R);
+  if (tur === 'iban') return adimlar;
+  return rol === TAM_YETKILI_ROL ? [] : adimlar.filter((a) => a !== rol);
+}
+
+const sayi = (v: unknown): number => (v === null || v === undefined ? Number.NaN : Number(v));
+const toplam = (satirlar: unknown, fiyat: (s: Veri) => number): number =>
+  (Array.isArray(satirlar) ? satirlar : []).reduce<number>((t, s) => t + (duzNesneMi(s) ? Number(s['qty']) * fiyat(s) : Number.NaN), 0);
+// oNet ve cValue: fiyatı boş kalem tutarı NaN yapar (prototipte de sipariş onaya gider).
+export const siparisTutari = (v: Veri): number => toplam(v['items'], (s) => sayi(s['price']));
+export const sozlesmeTutari = (v: Veri): number => toplam(v['lines'], (s) => Number(s['price']));
+const fiyatFarki = (v: Veri): number => ((Number(v['newPrice']) - Number(v['oldPrice'])) / Number(v['oldPrice'])) * 100;
+const sonSurum = (v: Veri | null): Veri | null => {
+  const s = Array.isArray(v?.['versions']) ? v['versions'] : [];
+  const son: unknown = s[s.length - 1];
+  return duzNesneMi(son) ? son : null;
+};
+const surumSayisi = (v: Veri | null): number => (Array.isArray(v?.['versions']) ? v['versions'].length : 0);
+const nesne = (v: unknown): Veri | null => (duzNesneMi(v) ? v : null);
+const iskonto = (surum: Veri | null): number => Number(surum?.['discount']) || 0;
+export const adimRolleri = (onay: Veri): string[] =>
+  (Array.isArray(onay['steps']) ? onay['steps'] : []).map((a) => (duzNesneMi(a) && typeof a['role'] === 'string' ? a['role'] : ''));
+const ayniZincir = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((r, i) => r === b[i]);
+
+// Açılış: zincir, onayın kendi alanlarından (tutar, iskonto) ve bağlı kayıttan (fiyat farkı, sözleşme türü) hesaplanır. Sözleşme kaydı
+// onayla aynı anda yazıldığı için henüz yoksa iki türden birine uyması yeter; tür, onayın etkisi yazılırken kayıttan denetlenir.
+export function onayAcilisReddi(onay: Veri, kayit: Veri | null, R: OnayKurallari, rol: string): string | null {
+  const tur = String(onay['kind'] ?? '');
+  const tutar = sayi(onay['amount']);
+  const girdi: OnayGirdisi = { tutar, iskonto: iskonto(nesne(nesne(onay['payload'])?.['version'])) };
+  if (tur === 'pricereq' && kayit !== null) girdi.fark = fiyatFarki(kayit);
+  const adaylar = tur === 'contract' && kayit === null
+    ? [acaninAdimlari(tur, { tutar, sozlesmeTuru: 'sales' }, R, rol), acaninAdimlari(tur, { tutar, sozlesmeTuru: 'purchase' }, R, rol)]
+    : [acaninAdimlari(tur, tur === 'contract' ? { tutar, sozlesmeTuru: kayit?.['type'] } : girdi, R, rol)];
+  const roller = adimRolleri(onay);
+  if (adaylar.some((a) => ayniZincir(a, roller))) return null;
+  const beklenen = adaylar[0] ?? [];
+  return beklenen.length === 0
+    ? 'Bu kayıt onay kuralına göre onay gerektirmiyor.'
+    : `Onay adımları onay kuralına uymuyor; beklenen: ${beklenen.join(' → ')}.`;
+}
+
+// Onay gerektiren kayıt onaysız yazılamaz (prototipin beforePut ve sözleşme, fiyat artışı ve iskonto akışları). Onay bekleyen
+// kaydın geçişi onayGeregi ile denetlenir; burada yalnız onay hiç açılmadan yapılan yazılar.
+export function onaysizYaziReddi(yol: string, eski: Veri | null, yeni: Veri, R: OnayKurallari, rol: string): string | null {
+  const [koleksiyon, kimlik, ...fazla] = parcalar(yol);
+  if (kimlik === undefined || fazla.length > 0) return null;
+  const gerekir = (tur: string, g: OnayGirdisi): boolean => acaninAdimlari(tur, g, R, rol).length > 0;
+  if (koleksiyon === 'orders' && eski === null && yeni['type'] === 'purchase' && yeni['approvalState'] !== 'pending'
+    && gerekir('po', { tutar: siparisTutari(yeni) })) return 'Sipariş tutarı onay limitini aşıyor; sipariş onaya gönderilmeden kaydedilemez.';
+  if (koleksiyon === 'payments' && eski === null && yeni['direction'] === 'out' && yeni['status'] === 'sent'
+    && gerekir('payment', { tutar: sayi(yeni['amount']) })) return 'Ödeme tutarı onay limitini aşıyor; ödeme onaya gönderilmeden gönderilemez.';
+  if (koleksiyon === 'contracts' && yeni['approval'] === 'approved' && eski?.['approval'] !== 'approved' && eski?.['approval'] !== 'pending'
+    && gerekir('contract', { tutar: sozlesmeTutari(yeni), sozlesmeTuru: yeni['type'] })) return 'Sözleşme iç onaydan geçmeden onaylı sayılamaz.';
+  if (koleksiyon === 'priceReqs' && yeni['status'] === 'approved' && eski?.['status'] !== 'approved' && metin(eski?.['pendingApproval']) === null
+    && gerekir('pricereq', { fark: fiyatFarki(yeni) })) return 'Fiyat artışı onay sınırını aşıyor; onaya gönderilmeden onaylanamaz.';
+  // Bekleyen onayı karara bağlayan yazı (bekleyen kimlik kalkar) onayEtkisiReddi ile denetlenir; öteki her yeni sürüm burada.
+  const bekleyen = eski === null ? null : metin(eski['pendingApproval']);
+  if (koleksiyon === 'requests' && eski !== null && surumSayisi(yeni) > surumSayisi(eski) && (bekleyen === null || yeni['pendingApproval'] === bekleyen)
+    && gerekir('discount', { iskonto: iskonto(sonSurum(yeni)) })) return 'İskonto onay sınırını aşıyor; sürüm onaya gönderilmeden müşteriye gidemez.';
+  return null;
+}
+
+// Onayın etkisi (onaylı sipariş, gönderilen ödeme, imzalanan sözleşme, uygulanan fiyat, iskontolu sürüm) yazılırken kaydın bugünkü
+// değerinin istediği adımlar onayda verilmiş olmalı: onay düşük tutarla açılıp kayıt büyütülemez. Açanın rolü onu kaydında.
+// null: denetlenecek etki yok.
+export function onayEtkisiReddi(yol: string, eski: Veri | null, yeni: Veri, onay: Veri, R: OnayKurallari, acanRolu: string): string | null {
+  const [koleksiyon] = parcalar(yol);
+  const tur = String(onay['kind'] ?? '');
+  let girdi: OnayGirdisi | null = null;
+  if (koleksiyon === 'orders' && yeni['approvalState'] === 'approved') girdi = { tutar: siparisTutari(yeni) };
+  else if (koleksiyon === 'payments' && yeni['status'] === 'sent') girdi = { tutar: sayi(yeni['amount']) };
+  else if (koleksiyon === 'contracts' && yeni['approval'] === 'approved') girdi = { tutar: sozlesmeTutari(yeni), sozlesmeTuru: yeni['type'] };
+  else if (koleksiyon === 'priceReqs' && yeni['status'] === 'approved') girdi = { fark: fiyatFarki(yeni) };
+  else if (koleksiyon === 'requests' && surumSayisi(yeni) > surumSayisi(eski)) {
+    if (onay['status'] !== 'approved') return 'İskonto onayı reddedildi; sürüm müşteriye gidemez.';
+    girdi = { iskonto: iskonto(sonSurum(yeni)) };
+  }
+  if (girdi === null) return null;
+  const roller = adimRolleri(onay);
+  const eksik = acaninAdimlari(tur, girdi, R, acanRolu).filter((r) => !roller.includes(r));
+  return eksik.length === 0 ? null : `Kaydın bugünkü değeri ${eksik.join(', ')} onayını da istiyor; kaydı yeniden onaya gönderin.`;
 }
 
 // ---- Siparişler bağı (soru 148, 162). Teklif ve siparişin sahibi Siparişler'dir; Portal talebi açılırken orada teklif olur. Firma

@@ -26,7 +26,8 @@
   kalibrasyona bir kez girilmelidir (kullanıcıya soruda söylendi).
 - Kayıt geçmişi ve kilit (258 a, 19.10.2026): geçmiş `kalite_merkezi_belge_gecmisi` tablosunda, ekranı yok (okuma ucu istenirse ayrı iş).
   Sunucu kapalı NCR'yi ve Kabul/Ret sonuçlu muayeneyi kilitler; uygulamanın "kalite mühendisi kilidi açar" yolu artık sunucuda 409 alır; ekran kapanmış NCR ve sonuçlanmış muayenede kilit açmayı göstermez, düzeltmenin yeni kayıtla yapılacağını söyler (`acilis.ts` `KILIT_BETIGI`).
-  Uygulamanın DÖF, lot ve form kilidi yalnız ekrandadır (form onayı sunucuda ayrıca kilitli). Ekran metni bağlamada.
+  KAPANDI (bağlama B16, 23.10.2026): kapanmış DÖF ve kararı verilmiş lot kabul kaydı da sunucuda aynı kilittedir (`kurallar.ts` `kapanmisKayitMi`; ekranın `KILIT_BETIGI` karşılığı ikinci yamada); form onayı sunucuda ayrıca kilitli.
+  Kalan: DÖF kapanış koşulları (8D adımı 8, etkinlik "Etkin", kök neden dolu) yalnız ekrandadır; sunucuya alınması ayrı madde.
 - Ortak kavramlar uygulamanın kendi kopyasında (ORTAKLIK): ölçüm cihazı (kalibrasyon), tedarikçi (finans firma), parça (malzemeler),
   iş emri (uretim-emirleri), kullanıcı (kisiler), belge (dosya), resim (cizim, #80), kalite ölçümü (#78, Arkon kalite ekranı).
 - Ana menü ve ikinci menü: uygulamanın geniş ekrandaki sol menüsü gizli, ikinci menü kabukta. Kapandı (kullanıcı kararı 17.10.2026):

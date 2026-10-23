@@ -258,3 +258,6 @@ Açık:
   ikisi birlikte dolu ya da boştur, alış birimi stok biriminden farklı ve birim listesinde olmalıdır (yeni ya da değişmişse), katsayı sıfırdan büyük, en çok 6 ondalıktır. Satın alma `malzemeBirimDonusumleri` (disari.ts) ile okur.
 - Bilinen sınır: alanlar prototipten sonra eklenen betiktedir (`birim-donusumu-eki.ts`, `s5` ve `gTicariHTML` sarılır). Alış birimi seçenekleri ekranın bütün birim listelerinin birleşimidir; Excel aktarımı, föy ve değişiklik karşılaştırması alanları göstermez.
   Eski kartlar boş kalır (314). Satın almada siparişin birimi ve stoka çeviri Satın alma şeridindedir.
+
+## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
+- Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /malzeme-birimleri`. Birimin sahibi malzemeler (144 a).
