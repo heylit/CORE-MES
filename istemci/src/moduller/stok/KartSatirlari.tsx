@@ -76,8 +76,9 @@ function SatirIslemi({ r, s, bitti }: { r: RefakatPartisi; s: RefakatKartSatiri;
           <Dugme tur="birincil" simge="download" disabled={miktar.trim() === ''} yukleniyor={al.komut.isPending}
             onClick={() => al.komut.mutate({ konumId: s.konumId, partiId: s.partiId, statuId: s.statuId, miktar: m, istasyonId, kaynakKimligi: kimlik })}>Teslim al</Dugme>
         )}
-        <Dugme simge="box" disabled={miktar.trim() === ''} yukleniyor={sepete.komut.isPending}
-          onClick={() => sepete.komut.mutate({ malzemeId: s.malzemeId, miktar: m, kaynakKonumId: s.konumId, partiId: s.partiId, statuId: s.statuId, refakatPartisiId: r.id })}>Sepete ekle</Dugme>
+        {/* Sepet satırı statü tutmaz (STK-S3): adım statüsündeki parça Teslim al ya da okutup Teslim et ile gider. */}
+        {s.statuId === null && <Dugme simge="box" disabled={miktar.trim() === ''} yukleniyor={sepete.komut.isPending}
+          onClick={() => sepete.komut.mutate({ malzemeId: s.malzemeId, miktar: m, kaynakKonumId: s.konumId, partiId: s.partiId, refakatPartisiId: r.id })}>Sepete ekle</Dugme>}
       </div>
       {al.onayPenceresi}{sepete.onayPenceresi}
     </div>

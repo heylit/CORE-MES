@@ -21,4 +21,8 @@ export const STOK_AYARLARI = {
   'stok.lot-no': {
     modul: 'stok', tur: 'numara', varsayilan: 'LT-{SAYAC:6}', alanlar: [], baslik: 'Lot numarası', aciklama: `${ACIKLAMA} Mal kabulde ve üretim girişinde her yeni partiye verilir.`,
   },
+  'stok.yolda-suresi-dk': {
+    modul: 'stok', tur: 'sayi', varsayilan: null, enAz: 1, enCok: 10080, ondalik: 0, baslik: 'Yolda süresi (dakika)',
+    aciklama: 'Gönderilip bu süre içinde alınmayan teslim "süre doldu" notuyla iptal olur, stok kaynakta kalır, istek yeniden açılır. Boşsa teslim kendiliğinden düşmez.',
+  },
 } as const satisfies Record<string, AyarTanimi>;
