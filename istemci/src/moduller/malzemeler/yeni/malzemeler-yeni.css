@@ -1,0 +1,10 @@
+.tc-myeni {
+  display: flex;
+  flex-direction: column;
+  gap: var(--b-4);
+  min-width: 0;
+}
+
+.tc-myeni-govde {
+  min-width: 0;
+}
