@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import temel from '../playwright.config.ts';
 import type { Rastgele } from './tohum.ts';
 import type { AdimTuru, Sonuc } from './sozlesme.ts';
 import type { Hesap } from '../hesaplar.ts';
@@ -11,6 +13,29 @@ export interface Cevap {
 
 export interface RolIstemcisi {
   istek(yontem: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', yol: string, govde?: unknown): Promise<Cevap>;
+}
+
+// Çerezsiz istemci: oturum isteyen ucun 401 verdiğini sınamak için. Rol istemcisiyle aynı biçimde gönderir (gövde JSON,
+// yazmada istek kimliği); kök verilmezse robotun açtığı yerel arayüz. Adımı kayda yine bir rol adıyla düşer.
+export function oturumsuzIstemci(kok: string | undefined = temel.use?.baseURL): RolIstemcisi {
+  if (kok === undefined) throw new Error('Oturumsuz istemci için kök adres yok');
+  return {
+    async istek(yontem, yol, govde) {
+      const c = await fetch(new URL(yol, kok), {
+        method: yontem,
+        headers: {
+          ...(govde === undefined ? {} : { 'content-type': 'application/json' }),
+          ...(yontem === 'GET' ? {} : { 'istek-kimligi': randomUUID() }),
+        },
+        ...(govde === undefined ? {} : { body: JSON.stringify(govde) }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const metin = await c.text();
+      let veri: unknown = metin;
+      try { veri = JSON.parse(metin); } catch { /* düz metin cevap olduğu gibi kalır */ }
+      return { durum: c.status, govde: veri };
+    },
+  };
 }
 
 export interface AdimCiktisi {
