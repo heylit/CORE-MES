@@ -64,3 +64,27 @@ test.describe('M2 işler, takvim, siparişler', () => {
     }
   }
 });
+
+test.describe('M3 Bugün ve Ayarlar', () => {
+  const tasma = () => document.documentElement.scrollWidth - document.documentElement.clientWidth;
+
+  for (const genislik of [360, 768, 1280]) {
+    test(`Bugün ${genislik} genişlikte özet ve gün şeridiyle taşmadan açılır`, async ({ page, ac }) => {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      await ac('/mesaj/yeni');
+      await expect(page.getByRole('heading', { name: 'Bugün', level: 2 })).toBeVisible();
+      await expect(page.getByRole('group', { name: 'Bugünün akışı' })).toBeVisible();
+      expect(await page.evaluate(tasma), 'yatay taşma').toBeLessThanOrEqual(0);
+    });
+
+    test(`Ayarlar ${genislik} genişlikte bölümleriyle taşmadan açılır`, async ({ page, ac }) => {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      await ac('/mesaj/yeni/ayarlar');
+      for (const ad of ['Bildirim ve hatırlatmalar', 'Zamanlanmış mesajlar', 'Otomatik uyarılar', 'Dışa aktar']) {
+        await expect(page.getByRole('heading', { name: ad })).toBeVisible();
+      }
+      await expect(page.getByRole('button', { name: 'Uyarı ekle' })).toBeVisible();
+      expect(await page.evaluate(tasma), 'yatay taşma').toBeLessThanOrEqual(0);
+    });
+  }
+});
