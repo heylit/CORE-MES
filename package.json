@@ -48,7 +48,8 @@
     "ekran": "playwright test -c ekran-testleri --grep-invert @degisecek",
     "ekran:degisecek": "playwright test -c ekran-testleri --grep @degisecek",
     "robot": "playwright test -c ekran-testleri/benzetim/playwright.config.ts",
-    "robot:test": "node --test ekran-testleri/benzetim/*.test.ts"
+    "robot:test": "node --test ekran-testleri/benzetim/*.test.ts",
+    "robot:izle": "node test-robotu/izleme/sunucu.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
