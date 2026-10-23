@@ -93,7 +93,7 @@ describe('plan stüdyosu komutları plan modülünün uçlarına (gerçek Postgr
     await assert.rejects(komutlar['plan-senaryo-ac']!.hazirla({ ad: ' ' }), /Geçersiz senaryo adı/);
     await assert.rejects(komutlar['plan-senaryo-geri-gonder']!.hazirla({ taslak: 3, neden: ' ' }), /Geçersiz neden/);
     await assert.rejects(komutlar['plan-senaryo-ayar']!.hazirla({ taslak: 3, ayar: [] }), /Geçersiz ayar/);
-    await assert.rejects(komutlar['plan-canliya-al']!.hazirla({ taslak: 0 }), /Geçersiz taslak/);
+    await assert.rejects(komutlar['plan-senaryo-canliya-al']!.hazirla({ taslak: 0 }), /Geçersiz taslak/);
     await assert.rejects(komutlar['plan-dondur']!.hazirla({ taslak: 'yeni' }), /Geçersiz taslak/);
     await assert.rejects(komutlar['plan-is-dondurmayi-kaldir']!.hazirla({ anahtar: 'UE-1' }), /Geçersiz iş/);
   });
