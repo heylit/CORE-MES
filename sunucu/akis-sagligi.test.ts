@@ -464,7 +464,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const mamul = tamam(await oku<Iz>('depo', `/stok/partiler/${S.mmParti}/iz`));
     assert.deepEqual(mamul.emirler, [S.emir]);
     assert.deepEqual(mamul.hareketler.map((x) => [x.tur, Number(x.miktar), x.girisKaynagi]), [['giris', MAMUL_ADET, 'uretim'], ['transfer', MAMUL_ADET, null], ['cikis', MAMUL_ADET, null]]);
-    assert.deepEqual(Object.keys(mamul).sort(), ['emirler', 'hareketler', 'parti', 'sevkler']);
+    assert.deepEqual(Object.keys(mamul).sort(), ['ciktilar', 'emirler', 'hareketler', 'kartlar', 'parti', 'sevkCikislari', 'sevkler']);
     assert.deepEqual(mamul.sevkler.map((x) => [x.emirId, x.isId, x.firmaId]), [[S.emir, S.sevkIs, S.musteri]]);
     const ham = tamam(await oku<Iz>('depo', `/stok/partiler/${S.hmParti}/iz`));
     assert.equal(ham.parti.tedarikciPartiNo, 'TP-DENEME-1');
