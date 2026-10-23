@@ -8,14 +8,14 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   SiparisDonusumVerisi, Teklif, TeklifAyrintisi, TeklifDurumu, TeklifEkleVerisi, TeklifGuncelleVerisi, TeklifListesiSuzgeci, TeklifSurumuVerisi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
-  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
+  kartBaglamaReddi, kartsizSatirReddi, malzemeReddi, onayHedefi, talepDuzenlemeReddi, dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi,
 } from './kurallar.ts';
 import type { TeklifKomutu } from './kurallar.ts';
 import { siparisEkle } from './servis.ts';
@@ -97,8 +97,8 @@ const alanlar = (g: TeklifEkleVerisi): TeklifAlanlari => ({
 export async function teklifEkle(db: Db, kullanici: Kullanici, g: TeklifEkleVerisi): Promise<TeklifAyrintisi> {
   await firmayiDenetle(db, g.firmaId, null);
   await kartlariDenetle(db, g.satirlar.map((s) => s.malzemeNo), (i) => `satirlar.${i}.malzemeNo`);
-  const { yil, sira } = await sorgular.siradakiTeklifNo(db);
-  const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, teklifNo(yil, sira), alanlar(g), kullanici.id));
+  const no = await numaraAl(db, 'siparisler.teklif-no', { varMi: (n) => sorgular.teklifNoVarMi(db, n) });
+  const id = await kisitKorumali(KISITLAR, () => sorgular.teklifEkle(db, no, alanlar(g), kullanici.id));
   await sorgular.talepSatirlariniYaz(db, id, g.satirlar);
   return teklifAyrintisi(db, id);
 }

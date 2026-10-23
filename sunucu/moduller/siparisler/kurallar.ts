@@ -67,11 +67,6 @@ export function aramaKalibi(ara: string | undefined): string | null {
   return `%${m.replace(/[\\%_]/g, (k) => `\\${k}`)}%`;
 }
 
-// Numara: SS-yıl-sıra, sıra en az üç basamak (satın almanın SP kalıbı).
-export function siparisNo(yil: number, sira: number): string {
-  return `SS-${yil}-${String(sira).padStart(3, '0')}`;
-}
-
 // ---- Satış teklifi ----
 
 export const TEKLIF_YOK = 'Teklif bulunamadı.';
@@ -147,10 +142,6 @@ export function kartsizSatirReddi(malzemeNolari: readonly (number | null)[]): st
 
 export function kartBaglamaReddi(durum: TeklifDurumu): string | null {
   return durum === 'red' || durum === 'siparis' ? KART_BAGLANAMAZ : null;
-}
-
-export function teklifNo(yil: number, sira: number): string {
-  return `TK-${yil}-${String(sira).padStart(3, '0')}`;
 }
 
 // SIP-10 (180): fiyat, iskonto, tutar ve toplamlar yalnız fiyat ve maliyet görene gider; görmeyene null (sıfır uydurulmaz).
