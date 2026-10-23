@@ -148,9 +148,7 @@ describe('köprü komutları', () => {
 
   it('KOM-05: komut tablosu yalnız bilinen komutları ve sahibinin yollarını gösterir', () => {
     expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['operasyon-tipi-ekle', 'operasyon-tipi-duzenle', 'statu-degistir', 'maliyet-yaz', ...Object.keys(KAYNAK_KOMUTLARI), ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
-    expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-karti-ac', 'statu-karti-kaldir', 'statu-tanimi-kaydet', 'statu-tanimi-sil']);
-    expect(STATU_KOMUTLARI['statu-karti-ac']!.hazirla({ malzemeId: '12', statu: 'KKB', fazla: 1 })).toEqual({ yol: '/recete-rota/statu-kartlari/ac', govde: { malzemeId: 12, statu: 'KKB' } });
-    expect(() => STATU_KOMUTLARI['statu-karti-kaldir']!.hazirla({ malzemeId: 'i1', statu: 'KKB' })).toThrow('Geçersiz kart.');
+    expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-tanimi-kaydet', 'statu-tanimi-sil']);
     expect(STATU_KOMUTLARI['statu-tanimi-kaydet']!.hazirla({ id: 'S3', code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null, fazla: 1 }))
       .toEqual({ yol: '/recete-rota/statu-tanimlari/S3/kaydet', govde: { code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null } });
     expect(STATU_KOMUTLARI['statu-tanimi-sil']!.hazirla({ id: 'S3', beklenenSurum: 2 })).toEqual({ yol: '/recete-rota/statu-tanimlari/S3/sil', govde: { beklenenSurum: 2 } });
