@@ -26,7 +26,7 @@ import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
-import { emirBittiBildir, emirIptalBildir } from './emir-olaylari.ts';
+import { emirBittiBildir, emirIptalBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { AdimSatiri, EmirSatiri, KayitSatiri } from './sorgular.ts';
 
@@ -460,9 +460,12 @@ export async function emirBaslat(db: Db, kisiId: number, id: number, makineIdler
   const an = await komutAni(db, id);
   await sorgular.baslamayiYaz(db, id, an);
   if (isEmri !== null) await sorgular.isEmriBaslat(db, isEmri.id, an);
+  const ilkBaslatma = !(await sorgular.baslatmaKaydiVarMi(db, id));
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'baslat', null, an);
   await yeriTut(db, id, isEmri?.id ?? null, yer, kisiId, an);
   await sorgular.katilimAc(db, id, isEmri?.id ?? null, kisiId, istasyonId, an);
+  // Hazırlık denetiminden geçen ilk terminal başlatması; adımsız eski emir ve sonraki adımlar olay vermez.
+  if (isEmri !== null && ilkBaslatma) await hazirlikTamamlandiBildir(db, { uretimEmriId: id, kisiId });
   return { ...(await emirdenCevap(db, id)), uyari: denetim.uyarilar.length === 0 ? null : denetim.uyarilar.join(' ') };
 }
 

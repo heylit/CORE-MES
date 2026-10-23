@@ -19,7 +19,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   acikEmir, acikEmirler, aralikAdetleri, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
   isEmriSureOzeti,
-  acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
+  acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
 import { refakatKartiSayimlari } from './disari.ts';
 import type { IsEmriGirdisi, SayimKirilimi } from './disari.ts';
@@ -1164,6 +1164,23 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       birak();
     }
     assert.deepEqual(gelen, [isEmriIdleri[0]]);
+  });
+
+  test('hazırlık tamamlandı olayı (233): emir başına bir kez, ilk iş emri başlarken; reddedilen başlatma ve sonraki adım olay vermez', async () => {
+    const ist = await istasyonKur();
+    const makine = await makineKur(ist);
+    const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: makine }), adim(2, { tur: 'makine', id: makine })], { adet: 5 });
+    const gelen: number[] = [];
+    const birak = hazirlikTamamlandiDinle(async (_db, olay) => { gelen.push(olay.uretimEmriId); });
+    try {
+      assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+      assert.notEqual((await terminal(`/${id}/baslat`)).durum, 200, 'çalışan emir yeniden başlamaz');
+      assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 5 })).durum, 200);
+      assert.equal((await terminal(`/${id}/baslat`)).durum, 200, 'ikinci adım başlar');
+    } finally {
+      birak();
+    }
+    assert.deepEqual(gelen, [id]);
   });
 
   test('biten iş emirleri (borç 90): pencerede biten iş emri sağlamı ve istasyonuyla gelir; istasyon süzgeci ve pencere dışı', async () => {
