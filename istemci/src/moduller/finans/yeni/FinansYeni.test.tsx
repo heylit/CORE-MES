@@ -4,7 +4,7 @@ import { firmaEtiketleri } from './akislar.ts';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { SEKMELER } from './sekmeler.ts';
-import { FIRMACI, finansAc, json, KAPISIZ, OKUYAN, sunucuKur, YAZAN } from './test-ortak.tsx';
+import { FIRMACI, finansAc, json, KAPISIZ, OKUYAN, sunucuKur, YAZAN, type Istek } from './test-ortak.tsx';
 import { finansiKur } from './veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -12,7 +12,17 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 // Firma 1'in listede görünen etiketi (aynı adlı iki firma kodla ayrılır).
 const MUSTERI = firmaEtiketleri(finansiKur(ornekHamVeri()).V, 'gelir').find((e) => e.includes('M1'))!;
 
-const okundu = () => waitFor(() => expect(screen.getByText(/Ana sayfa: bu bölüm yeni ekranda hazırlanıyor/)).toBeTruthy());
+// Bölüm içerikleri parçalarca doldurulur: testler yer tutucu metnine değil, seçili sekmeye ve bölümün çizilmesine bakar.
+// Tek bölüm görenlerde sekme şeridi çizilmez; bölüm yine adıyla açılır.
+const acikBolum = async (ad: string) => {
+  await screen.findByRole('region', { name: ad });
+  if (screen.queryByRole('tablist')) expect(screen.getByRole('tab', { selected: true }).textContent).toContain(ad);
+};
+// Finans verisinin son okuması şirket adıdır; okununca bölüm veriyle çizilir.
+const okundu = async (istekler: readonly Istek[]) => {
+  await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+  await acikBolum('Ana sayfa');
+};
 
 describe('yeni finans ekranı: kapı', () => {
   it('kapı işlemi olmayana yeni ekran açılmaz, finans verisi okunmaz', async () => {
@@ -24,9 +34,9 @@ describe('yeni finans ekranı: kapı', () => {
   });
 
   it('kapı işlemi olana açılır; sekmeler ikinci menünün sırasıyla gelir', async () => {
-    sunucuKur(OKUYAN);
+    const istekler = sunucuKur(OKUYAN);
     finansAc();
-    await okundu();
+    await okundu(istekler);
     const sekmeler = within(screen.getByRole('tablist', { name: 'Finans bölümleri' })).getAllByRole('tab').map((s) => s.textContent);
     // Okuyan: Genel gider (finans.maliyet-oku) ve Ayarlar (finans.yonet) görünmez.
     expect(sekmeler).toEqual(SEKMELER.filter((s) => !['genel-gider', 'ayarlar'].includes(s.anahtar)).map((s) => s.baslik));
@@ -35,7 +45,7 @@ describe('yeni finans ekranı: kapı', () => {
   it('yalnız firma yetkisi olan Firmalar sekmesine düşer, rakam okunmaz', async () => {
     const istekler = sunucuKur(FIRMACI);
     finansAc();
-    await screen.findByText(/Firmalar: bu bölüm yeni ekranda hazırlanıyor/);
+    await acikBolum('Firmalar');
     expect(istekler.some((i) => i.yol === '/finans/belgeler')).toBe(false);
   });
 
@@ -48,16 +58,16 @@ describe('yeni finans ekranı: kapı', () => {
 
 describe('yeni finans ekranı: Kayıt gir', () => {
   it('finans.yaz yoksa "Kayıt gir" görünmez', async () => {
-    sunucuKur(OKUYAN);
+    const istekler = sunucuKur(OKUYAN);
     finansAc();
-    await okundu();
+    await okundu(istekler);
     expect(screen.queryByRole('button', { name: /Kayıt gir/ })).toBeNull();
   });
 
   it('finans.yaz varsa görünür; olay seçilir, form doğru uca tek komut gönderir', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/belgeler/ekle': () => json(200, { belge: {} }) });
     finansAc();
-    await okundu();
+    await okundu(istekler);
     const dugme = await screen.findByRole('button', { name: /Kayıt gir/ });
     await waitFor(() => expect((dugme as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(dugme);
@@ -78,7 +88,7 @@ describe('yeni finans ekranı: Kayıt gir', () => {
   it('eksik girişte uca gitmez, nedenini formda söyler', async () => {
     const istekler = sunucuKur(YAZAN);
     finansAc();
-    await okundu();
+    await okundu(istekler);
     const dugme = await screen.findByRole('button', { name: /Kayıt gir/ });
     await waitFor(() => expect((dugme as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(dugme);
