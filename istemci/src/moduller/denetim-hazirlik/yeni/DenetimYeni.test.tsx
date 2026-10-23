@@ -7,7 +7,19 @@ import { depoOku } from './normalize.ts';
 import { baglamlaAc, ekraniAc, ornekDepo, sahteSunucu, YONETICI } from './test-ortak.tsx';
 import { CATISMA_ILETISI, YAZMA_GECIKMESI_MS } from './veri.ts';
 import { yikiciIzinli } from './yonetim.ts';
-import { YER_TUTUCU_ILETISI } from './YerTutucu.tsx';
+
+// Kabuk testi parçaların içeriğinden bağımsızdır: parça ekranları kendi adını yazan sahte bileşenle değiştirilir; parça dosyasını
+// doldurunca bu test kırılmaz.
+vi.mock('./bugun/index.tsx', () => ({ Bugun: () => <p>parca:Bugun</p> }));
+vi.mock('./program/index.tsx', () => Object.fromEntries(
+  ['GenelBakis', 'Simulasyon', 'OzDegerlendirme', 'HaftalikProgram', 'MulakatKartlari', 'Aksiyonlar', 'Rehber'].map((ad) => [ad, () => <p>{`parca:${ad}`}</p>]),
+));
+vi.mock('./kys/index.tsx', () => ({ Kys: () => <p>parca:Kys</p> }));
+vi.mock('./ic-denetim/index.tsx', () => ({ IcDenetim: () => <p>parca:IcDenetim</p> }));
+vi.mock('./takvim/index.tsx', () => ({ Takvim: () => <p>parca:Takvim</p> }));
+vi.mock('./performans/index.tsx', () => ({ Performans: () => <p>parca:Performans</p> }));
+vi.mock('./kalibrasyon/index.tsx', () => ({ Kalibrasyon: () => <p>parca:Kalibrasyon</p> }));
+vi.mock('./ayarlar/index.tsx', () => ({ Ayarlar: () => <p>parca:Ayarlar</p> }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); window.localStorage.clear(); });
 
@@ -27,7 +39,7 @@ describe('DenetimYeni kapı ve kabuk', () => {
     expect(await screen.findByRole('tablist', { name: 'Bölümler' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Bugün' })).toBeTruthy();
     expect(screen.getByText('Kaydedildi')).toBeTruthy();
-    expect(screen.getByText(YER_TUTUCU_ILETISI)).toBeTruthy();
+    expect(screen.getByText('parca:Bugun')).toBeTruthy();
     expect(screen.getByRole('button', { name: /diğer işlemler/ })).toBeTruthy();
   });
 
@@ -39,8 +51,10 @@ describe('DenetimYeni kapı ve kabuk', () => {
     expect(screen.getByRole('tab', { name: 'Simülasyon', selected: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'AS9100' }));
     expect(await screen.findByRole('heading', { name: /AS9100D: Simülasyon/ })).toBeTruthy();
+    expect(screen.getByText('parca:Simulasyon')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Rehber' }));
     expect(await screen.findByRole('heading', { name: /Denetim rehberi/ })).toBeTruthy();
+    expect(screen.getByText('parca:Rehber')).toBeTruthy();
     expect(screen.queryByRole('tablist', { name: 'Alt sekmeler' })).toBeNull();
   });
 
