@@ -82,6 +82,8 @@ const CARPAN_VAR = {
 } satisfies SiparisCarpaniCevabi;
 const PLANLAMACI: Kullanici = { id: 4, ad: 'Deneme Planlamaci', islemler: [...KOK, 'plan.yaz'] };
 
+// 148 a: çarpan plan taslağına yazılır; cevap planın kendisidir, burada yalnız taslak kimliği okunur.
+const TASLAGA_YAZILDI = { taslak: { id: 9, surum: 1 } };
 // 306 a: bant Plan ucundadır; örnekte eşik 337,5, 225 ve 315 ikisi de Normal.
 const bantVerisi = (bedel: number, sinif: 'yuksek' | 'normal' | 'dusuk') => ({
   siparisId: 5, bant: { yuksekSiniri: 337.5, dusukSiniri: 100, emirler: [{ uretimEmriId: 9, emirNo: 'UE-DNM-9', bedel, sinif }] },
@@ -379,8 +381,8 @@ describe('Sipariş ayrıntısında elle çarpan (195 a)', () => {
     expect(await screen.findByText('Elle çarpan verilmedi; plan çarpanı 1 sayar.')).toBeTruthy();
   });
 
-  it('planlamacı 2 üstünde uyarı görür; gerekçesiz istek gitmez; çarpan ve gerekçe gövdede gider', async () => {
-    const istekler = sunucuKur(PLANLAMACI, (yontem, yol) => (yontem === 'POST' && yol === '/plan/siparisler/5/carpan' ? json(200, CARPAN_VAR) : undefined));
+  it('planlamacı 2 üstünde uyarı görür; gerekçesiz istek gitmez; çarpan ve gerekçe yeni plan taslağına gider (148 a)', async () => {
+    const istekler = sunucuKur(PLANLAMACI, (yontem, yol) => (yontem === 'POST' && yol === '/plan/siparisler/5/carpan' ? json(200, TASLAGA_YAZILDI) : undefined));
     ac('/siparisler/5');
     fireEvent.click(await screen.findByRole('button', { name: 'Çarpan ver' }));
     const pencere = await screen.findByRole('dialog', { name: 'Öncelik çarpanı ver' });
@@ -393,18 +395,19 @@ describe('Sipariş ayrıntısında elle çarpan (195 a)', () => {
     fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
-    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/plan/siparisler/5/carpan', govde: { carpan: 1.5, gerekce: 'Deneme gerekce' } });
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/plan/siparisler/5/carpan', govde: { carpan: 1.5, gerekce: 'Deneme gerekce', taslak: null } });
     expect(yazmalar(istekler)[0]!.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(await screen.findByText('Ilk deneme')).toBeTruthy();
+    expect(await screen.findByText(/Yeni çarpan plan taslağında; taslak onaylanıp canlıya alınınca geçerli olur\./)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Plan stüdyosu' }).getAttribute('href')).toBe('/recete-rota/studio');
+    expect(screen.getByText('Elle çarpan verilmedi; plan çarpanı 1 sayar.')).toBeTruthy();
   });
 
-  it('306 a: bant görünür; kayıt bandı aşmazsa "bant değişmedi" ve eşik, aşarsa değişim yazılır', async () => {
-    const kaydet = async (bantlar: SiparisBandiCevabi[]) => {
-      let sira = 0;
+  it('306 a: bant görünür; kayıttan sonra canlı bant taslağınkiyle karşılaştırılır: aşmazsa "değişmez" ve eşik, aşarsa değişim yazılır', async () => {
+    const kaydet = async (taslakBandi: SiparisBandiCevabi) => {
       sunucuKur(PLANLAMACI, (yontem, yol) => {
-        if (yontem === 'POST' && yol === '/plan/siparisler/5/carpan') return json(200, CARPAN_VAR);
-        if (yontem === 'GET' && yol === '/plan/siparisler/5/bant') return json(200, bantlar[Math.min(sira++, bantlar.length - 1)]);
+        if (yontem === 'POST' && yol === '/plan/siparisler/5/carpan') return json(200, TASLAGA_YAZILDI);
+        if (yontem === 'GET' && yol === '/plan/siparisler/5/bant?taslak=9') return json(200, taslakBandi);
         return undefined;
       });
       ac('/siparisler/5');
@@ -415,11 +418,11 @@ describe('Sipariş ayrıntısında elle çarpan (195 a)', () => {
       fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekce' } });
       fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     };
-    await kaydet([bantVerisi(225, 'normal'), bantVerisi(315, 'normal')]);
-    expect(await screen.findByText('Bant değişmedi: UE-DNM-9 Normal (315 TL/saat). Yüksek için bedel 337,5 TL/saat ve üstü, Düşük için 100 TL/saat ve altı olmalı.')).toBeTruthy();
+    await kaydet(bantVerisi(315, 'normal'));
+    expect(await screen.findByText('Taslakta bant değişmez: UE-DNM-9 Normal (315 TL/saat). Yüksek için bedel 337,5 TL/saat ve üstü, Düşük için 100 TL/saat ve altı olmalı.')).toBeTruthy();
     cleanup();
-    await kaydet([bantVerisi(225, 'normal'), bantVerisi(450, 'yuksek')]);
-    expect(await screen.findByText('Bant değişti: UE-DNM-9 Normal → Yüksek.')).toBeTruthy();
+    await kaydet(bantVerisi(450, 'yuksek'));
+    expect(await screen.findByText('Taslakta bant değişir: UE-DNM-9 Normal → Yüksek.')).toBeTruthy();
   });
 
   it('planda emri olmayan siparişte bant hesaplanmadığı yazılır', async () => {
