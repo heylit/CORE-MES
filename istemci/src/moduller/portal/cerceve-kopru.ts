@@ -471,6 +471,10 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
     },
   });
   try { Object.defineProperty(w, 'claude', { configurable: true, value: claude }); } catch { /* yetenek yok sayılır */ }
+
+  // Satın alma teslimi Stok > Mal kabul'dedir (238, H1): çerçeve kabuğa gitmek istediği sayfayı söyler, kabuk yalnız izinli yola gider.
+  const git = (yol: string): void => { ust.postMessage({ kanal: ayar.kanal, yon: 'git', yol }, '*'); };
+  try { Object.defineProperty(w, 'tmiGit', { configurable: true, value: git }); } catch { /* bağlantı yok sayılır */ }
 }
 
 // Sayfaya gömülecek betik: fonksiyon metni ve ayar JSON'u. `<` ve satır ayırıcılar kaçırılır ki kişi adı betiği kapatamasın.
