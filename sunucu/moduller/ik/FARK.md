@@ -100,3 +100,6 @@ kaynağı teslimde yok). Kaynak yeniden derlenirse aynı değişiklik kaynağa t
 - Resmî tatil listesinin sahibi İK. IK-80: `disari.ts resmiTatilGunleri(db, baslangic, bitis): Promise<{ tarih; ad }[]>`; Vardiya takvimi bunu okur.
   İK ayarı hiç kaydedilmediyse liste boştur (bordro motoru o durumda kendi varsayılan listesini kullanır; takvime girmez ki kimsenin girmediği gün kapanmasın).
   Göç yok, ekran değişmedi.
+
+## W8 çıkan personel (23.10.2026)
+- IK-81: `disari.ts kisilerinCikisTarihleri(db, kisiIdleri): Promise<Map<kisiId, tarih | null>>`; Vardiya takvimi çıkış gününden sonrasını kapatır. Göç yok, ekran değişmedi.
