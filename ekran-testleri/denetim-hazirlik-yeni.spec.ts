@@ -19,7 +19,26 @@ test.describe('Y0 iskelet', () => {
 });
 
 test.describe('P1 bugun ve program', () => {
-  // P1 yazar.
+  // Her genişlik projesinde (360, 768, 1280) P1 görünümleri açılır, içerik çizilir, sayfa yatay taşmaz.
+  const GORUNUMLER: readonly [string, RegExp][] = [
+    ['bugun', /Yapılacaklar/], ['genel-bakis', /Sıradaki adımlar/], ['simulasyon', /Puanınız/], ['oz-degerlendirme', /Kapsama/],
+    ['haftalik-program', /Uçtan uca iz sürme/], ['mulakat-kartlari', /İlerleme/], ['aksiyonlar', /Rapor|Aksiyon planı/], ['rehber', /Bulgu nasıl yazılır/],
+  ];
+  test('P1 görünümleri açılır, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    for (const [yol, metin] of GORUNUMLER) {
+      await ac(`/denetim-hazirlik/yeni/${yol}`);
+      await expect(page.getByText(metin).first(), `${yol}: içerik`).toBeVisible();
+      expect((await tasmaOlc(page)).belge, `${yol}: yatay taşma`).toBeLessThanOrEqual(0);
+    }
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('simülasyonda puan ölçeği beş seçenekle çizilir', async ({ page, ac }) => {
+    await ac('/denetim-hazirlik/yeni/simulasyon');
+    const olcek = page.getByRole('group', { name: 'Puan' });
+    await expect(olcek.getByRole('button')).toHaveCount(5);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  });
 });
 
 test.describe('P2 KYS', () => {
