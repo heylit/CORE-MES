@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 import { robotAyariOku } from './ayar.ts';
+import { gunSonuDenetle } from './degismezler.ts';
 import { gunleriKos } from './gun-dongusu.ts';
 import { KosuKaydi } from './kayit.ts';
 import { senaryolariKesfet } from './kesif.ts';
@@ -60,7 +61,10 @@ test('test robotu', async ({ playwright, baseURL }) => {
   });
 
   try {
-    await gunleriKos({ kayit, senaryolar, istemci, tohum: ayar.tohum, gunSayisi: ayar.gunSayisi, esZamanli: ayar.esZamanli });
+    await gunleriKos({
+      kayit, senaryolar, istemci, tohum: ayar.tohum, gunSayisi: ayar.gunSayisi, esZamanli: ayar.esZamanli,
+      gunSonu: async (gun) => { await gunSonuDenetle({ kayit, istemci, gun }); },
+    });
     kayit.bitir('bitti');
   } catch (hata) {
     kayit.bitir('durdu', hata instanceof Error ? hata.message : String(hata));
