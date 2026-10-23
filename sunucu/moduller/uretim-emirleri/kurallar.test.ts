@@ -8,7 +8,7 @@ import {
   AYAR_PLANLI_DEGIL, AYAR_YINELENDI, REFAKAT_IPTAL, adimliOzetSay, ayarIhlali, isEmriSureOzeti, refakatIhlali, refakatQrMetni,
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, iptalIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
-  KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali,
+  KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
 } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
@@ -204,5 +204,41 @@ describe('adım girdisi (denetim #31)', () => {
     assert.equal(adimGirdiAsimiIhlali(4, 3, 1), null);
     assert.equal(adimGirdiAsimiIhlali(4, 6, -1), null);
     assert.equal(adimGirdiAsimiIhlali(null, 1000, 5), null);
+  });
+});
+
+describe('refakat kartı sınırı (Soru 132, 136 a)', () => {
+  const adimlar = [{ id: 12, sira: 2 }, { id: 11, sira: 1 }, { id: 13, sira: 3 }];
+  const girdiler = [{ isEmriId: 11, malzemeNo: 7, miktar: 0.5 }, { isEmriId: 13, malzemeNo: 8, miktar: 3 }];
+  const saglam = new Map([[11, 40], [12, 38]]);
+  const sinir = (adimId: number, malzemeNo: number | null, verilen: number) =>
+    kartSiniri(adimlar, adimId, girdiler, { malzemeNo, verilen }, (i) => saglam.get(i) ?? 0);
+
+  test('girdisi kartın malzemesi olan adımda verilen bölü girdi, aşağı yuvarlanır', () => {
+    assert.equal(sinir(11, 7, 2.5), 5, 'ondalık bölme 4,999 vermez');
+    assert.equal(sinir(11, 7, 2.4), 4);
+    assert.equal(sinir(11, 7, 0), 0);
+  });
+  test('girdisi başka malzeme ya da girdisiz adımda önceki adımın kartlı sağlamı', () => {
+    assert.equal(sinir(12, 7, 100), 40);
+    assert.equal(sinir(13, 7, 100), 38, 'girdi kartın malzemesi değil: önceki adım');
+    assert.equal(sinir(13, 8, 9), 3, 'ara adımda kartın malzemesi girerse malzemeden');
+  });
+  test('ilk adımda sarf yoksa ya da kart malzemesizse sınır yok', () => {
+    assert.equal(sinir(11, 9, 100), null);
+    assert.equal(sinir(11, null, 100), null);
+    assert.equal(kartSiniri(adimlar, 11, [{ isEmriId: 11, malzemeNo: 7, miktar: 0 }], { malzemeNo: 7, verilen: 5 }, () => 0), null, 'sıfır girdi sarf sayılmaz');
+  });
+  test('kartın adımı: istasyonda çalışan, yoksa istasyonun sıradakisi, yoksa emrin terminaldeki adımı', () => {
+    const ie = [
+      { id: 1, sira: 1, durum: 'tamam' as const, istasyonId: 5 },
+      { id: 2, sira: 2, durum: 'calisiyor' as const, istasyonId: 6 },
+      { id: 3, sira: 3, durum: 'bekliyor' as const, istasyonId: 5 },
+    ];
+    assert.equal(kartAdimi(ie, 6)?.id, 2);
+    assert.equal(kartAdimi(ie, 5)?.id, 3, 'bitmiş adım atlanır');
+    assert.equal(kartAdimi(ie, null)?.id, 2);
+    assert.equal(kartAdimi(ie, 99)?.id, 2);
+    assert.equal(kartAdimi(ie.map((i) => ({ ...i, durum: 'tamam' as const })), 5), null);
   });
 });

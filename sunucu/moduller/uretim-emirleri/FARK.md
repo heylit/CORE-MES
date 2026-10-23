@@ -192,3 +192,8 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - `POST /uretim-emirleri/:id/sayim`, `/sayim-ayarla`, `/bitir` gövdesi isteğe bağlı `refakatPartisiId` alır; satıra yazılır. Kalite kararının iki satırı sayımın partisinde kalır (gruplama partiyle). `SaglamSayimOlayi`, `HurdaSayimOlayi`, `KaliteKarariOlayi` `refakatPartisiId` (yoksa null) taşır.
 - Bölme (UE-PB1, UE-PB3'ün yerine): bölünen adım çalışıyor olabilir, yalnız orada henüz sayılmamış adet bölünür (`adet <= elde kalan - adımda sayılan`; sayılan: sağlam, hurda, karar bekleyen, red). Bitmiş adımdan bölünmez; sonraki adımlar başlamamış olmalı. Yeni ileti `BOLME_URETILMIS` (400, alan `adet`); `BOLME_BASLAMIS` metni değişti.
 - İstemci: Reçete ve Rota `emir-komutlari.ts` ve Rota `PartiPaneli.tsx` `bolunebilirAdimlar` çalışan adımı da verir; birleşme adayı yine yalnız başlamamış adımlar. Ekran değişmedi.
+
+## Refakat kartının adet sınırı (kart #172, Soru 132 ve 136 a; dal 172-kart-siniri)
+- `disari.refakatKartiSayimlari(db, uretimEmriId, istasyonId, kartlar[{ id, malzemeNo, verilen }])` -> `Map<kartId, { sayilan, sinir }>`. Stok kartla verilen net miktarı verir; bu modül stoku okumaz (ADR 0006). Uç, göç, yetki değişmedi.
+- Adım: istasyonda çalışan iş emri, yoksa istasyonun sıradakisi, yoksa emrin terminaldeki adımı. `sayilan`: kartla o adımda sayılan bütün parça (sağlam, hurda, karar bekleyen, red).
+- `sinir`: adımın girdisi kartın malzemesiyse `floor(verilen / parça başı girdi)` (fire eklenmez, stok düşümüyle aynı miktar); değilse önceki adımda bu kartla sayılan sağlam; ilk adımda sarf yoksa null. Sınır yumuşaktır, sayımı durdurmaz (Soru 132).
