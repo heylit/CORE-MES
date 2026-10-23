@@ -61,7 +61,8 @@ describe('recete-rota fason termin tahmini ucu (gerçek PostgreSQL)', () => {
     firmaId = ((await yaz('/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Fason', tur: 'tedarikci' })) as { firma: { id: number } }).firma.id;
     await yaz('/malzeme-katalogu-ayarlari/genel/kaydet', { deger: { onayAkisi: false } });
     await yaz('/malzeme-katalogu-kartlari/ft-kart-1/kaydet', {
-      kayit: { id: 'ft-kart-1', tur: 'hammadde', fam: 'metal', com: { kod: 'HM-FTA-00001', ad: 'Deneme mil', birim: 'adet' }, onay: { durum: 'aktif' } },
+      // Malzeme sihirbazının zorunlu alanları (malzemeler B11): aile, kalite ve ölçü.
+      kayit: { id: 'ft-kart-1', tur: 'hammadde', fam: 'metal', grade: 'S235', form: 'cubuk', dims: { d: 20, l: 1000 }, com: { kod: 'HM-FTA-00001', ad: 'Deneme mil', birim: 'adet' }, onay: { durum: 'aktif' } },
       ozet: { benzersiz_anahtar: 'hammadde|fason-tahmin|ft-kart-1', mukerrer_gerekcesi: null }, surum: null,
     });
     malzemeNo = (await ortam.sahip.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'ft-kart-1'"))!.no;

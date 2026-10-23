@@ -174,7 +174,8 @@ describe('Kalite Merkezi kuralları', () => {
   // 329 a: ölçü aletlerinin tek kaynağı Kalibrasyon; uygulamanın cihaz listesi ondan gelir, eski `dev` kayıtları silinmez.
   describe('329 a ölçü aleti listesi (Kalibrasyon -> cihaz kaydı)', () => {
     const alet = (id: number, no: string, ek: Record<string, unknown> = {}) => ({
-      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null, kayitlar: [], ...ek,
+      id, no, tur: 'Kumpas', ad: null, olcmeAraligi: null, yer: null, periyotGun: 365, kullanimDisi: false, sonKalibrasyon: null,
+      durum: 'kayit-yok' as const, vade: null, kalanGun: null, kayitlar: [], ...ek,
     });
 
     test('kimlik biçimi: kal-<alet kimliği>; yalnız bu biçim alet kimliği sayılır', () => {
@@ -184,7 +185,7 @@ describe('Kalite Merkezi kuralları', () => {
 
     test('alanlar Kalibrasyon\'dan gelir; karşılığı olmayanlar boş kalır, sıfır ya da uydurma değer yazılmaz', () => {
       const [satir] = olcuAletleriListesi([alet(3, 'OC-3', {
-        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01',
+        tur: 'Mikrometre', ad: 'Dış çap', olcmeAraligi: '0-25 mm', yer: 'CNC-2', periyotGun: 365, sonKalibrasyon: '2026-03-01', durum: 'gecerli', vade: '2027-03-01', kalanGun: 129,
         kayitlar: [
           { tarih: '2025-03-01', sonuc: 'uygun', sertifikaNo: 'S-1', aciklama: null },
           { tarih: '2026-03-01', sonuc: 'uygun', sertifikaNo: 'S-2', aciklama: 'sapma yok' },
@@ -194,6 +195,7 @@ describe('Kalite Merkezi kuralları', () => {
       assert.deepEqual(satir?.govde, {
         kod: 'OC-3', ad: 'Dış çap', tip: 'Mikrometre', lokasyon: 'CNC-2', aralik: '0-25 mm', sonKal: '2026-03-01',
         periyot: 365 / 30, periyotGun: 365, sertifika: 'S-2', kullanimDisi: false, kalibrasyondan: true,
+        kalibrasyonDurumu: 'gecerli', kalibrasyonVadesi: '2027-03-01', kalibrasyonKalanGun: 129,
         gecmis: [
           { tarih: '2025-03-01', sonuc: 'Uygun', sertifika: 'S-1', not: '' },
           { tarih: '2026-03-01', sonuc: 'Uygun', sertifika: 'S-2', not: 'sapma yok' },
