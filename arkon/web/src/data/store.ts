@@ -102,6 +102,11 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   async function sha256(u: Bytes): Promise<string> { try { if (crypto.subtle) return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', u as BufferSource)), b => b.toString(16).padStart(2, '0')).join(''); } catch (e: any) {} return sha256js(u); }
 
   /* ── sunucu bağlantısı ── */
+  // TMI kabuğundaki yeni ekran (istemci arkon/yeni) çerçevesiz çalışır: istekler pencerenin fetch'i ve EventSource'u yerine verilen
+  // taşıyıcıya gider. Taşıyıcı verilmezse (Arkon'un kendi sayfası, çerçeve) pencereninkiler kullanılır.
+  export interface Tasiyici { fetch: (adres: string, ayar?: RequestInit) => Promise<Response>; EventSource: new (adres: string) => EventSource }
+  let tasiyici: Tasiyici | null = null;
+  const getir = (adres: string, ayar?: RequestInit): Promise<Response> => (tasiyici ? tasiyici.fetch(adres, ayar) : fetch(adres, ayar));
   interface Srv { on: boolean; base: string | null; online: boolean; cid: string; pending: number; es: EventSource | null; lastErr: string }
   const SRV: Srv = { on: false, base: null, online: false, cid: uid(), pending: 0, es: null, lastErr: '' };
   let session: Session | null = LS.get('session'); // { token, user: { id, name, role }, srv }
@@ -114,7 +119,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     const h: Record<string, any> = {}, tok = session && session.token; if (tok) h.Authorization = 'Bearer ' + tok;
     let b = body as BodyInit | undefined; if (body !== undefined && !(body instanceof Uint8Array) && !(body instanceof Blob)) { h['Content-Type'] = 'application/json'; b = JSON.stringify(body); }
     let r: Response;
-    try { r = await withTimeout(fetch(SRV.base + '/api' + p + (p.includes('?') ? '&' : '?') + 'c=' + SRV.cid, { method, headers: h, body: b }), opt.timeout || 20000); }
+    try { r = await withTimeout(getir(SRV.base + '/api' + p + (p.includes('?') ? '&' : '?') + 'c=' + SRV.cid, { method, headers: h, body: b }), opt.timeout || 20000); }
     catch (e: any) { if (SRV.online) { SRV.online = false; SRV.lastErr = 'Sunucuya ulaşılamıyor'; emit(); } const er = new ApiError('Sunucuya ulaşılamıyor'); er.offline = true; throw er; }
     if (!SRV.online) { SRV.online = true; SRV.lastErr = ''; emit(); setTimeout(flush, 50); }
     if (r.status === 401 && !opt.noAuth && tok && session && session.token === tok) { setSession(null); cikisTemizligi(); window.dispatchEvent(new Event('arkon-logout')); }
@@ -425,8 +430,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   window.addEventListener('storage', e => { if (e.key === 'arkon:ping' && e.newValue) { try { deliver(JSON.parse(e.newValue)); } catch (x) {} } });
   function openBus() {
     if (SRV.es) { SRV.es.close(); SRV.es = null; }
-    if (!SRV.on || !session || !session.token || typeof EventSource === 'undefined') return;
-    const es = new EventSource(SRV.base + '/api/bus?t=' + encodeURIComponent(session.token) + '&c=' + SRV.cid);
+    if (!SRV.on || !session || !session.token || (!tasiyici && typeof EventSource === 'undefined')) return;
+    const es = new (tasiyici ? tasiyici.EventSource : EventSource)(SRV.base + '/api/bus?t=' + encodeURIComponent(session.token) + '&c=' + SRV.cid);
     es.onopen = () => { if (!SRV.online) { SRV.online = true; SRV.lastErr = ''; emit(); } flush(); };
     es.onerror = () => { if (SRV.online) { SRV.online = false; SRV.lastErr = 'Sunucuya ulaşılamıyor'; emit(); } };
     es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logSubs.forEach(f => { try { f(m.kind, null); } catch (x) {} }); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: ret })); deliver(m); } catch (x) {} };
@@ -449,7 +454,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   };
 
   /* ── başlangıç: sunucu var mı? ── */
-  async function probe(base: string, ms = 2500): Promise<HealthRes | null> { try { const r = await withTimeout(fetch(base.replace(/\/$/, '') + '/api/health', { cache: 'no-store' }), ms); const j = await r.json(); return j && j.app === 'arkon-mes' ? j : null; } catch (e: any) { return null; } }
+  async function probe(base: string, ms = 2500): Promise<HealthRes | null> { try { const r = await withTimeout(getir(base.replace(/\/$/, '') + '/api/health', { cache: 'no-store' }), ms); const j = await r.json(); return j && j.app === 'arkon-mes' ? j : null; } catch (e: any) { return null; } }
   async function init() {
     const saved = LS.get('server');
     const cands: string[] = saved ? [saved] : (/^https?:$/.test(location.protocol) && location.hostname !== 'arkon.local' ? [location.origin] : []);
@@ -546,5 +551,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     sirala: (g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }) => api('POST', '/plan-sira', g),
     surum: (): Promise<{ planSurumu: number }> => api('GET', '/plan-sira'),
   };
-  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, init, status, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
+  // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, TMI'de çıkıp başka
+  // kişiyle girilince kuyruk öğeleri önceki kişinin adına yazılmasın (çerçeve her açılışta yeniden yüklendiği için bunu kendiliğinden yapar).
+  function tasiyiciKur(t: Tasiyici | null): void { tasiyici = t; session = LS.get('session'); emit(); }
+  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, init, status, tasiyiciKur, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
 (window as any).AKStore = AKStore;

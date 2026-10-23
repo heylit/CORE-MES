@@ -422,7 +422,7 @@ export const TMI_HEDEFLERI: Readonly<Record<string, string>> = { 'emir-ac': '/re
 export const BASKA_SUNUCU = "TMI CORE yalnız kendi sunucusuna bağlanır; başka sunucuya istek gönderilmedi.";
 
 // Başka sunucuya açılmak istenen olay akışı: bağlantı kurulmaz, Arkon kopmuş akış gibi görür.
-function kapaliIletim(): AnlikIletim {
+export function kapaliIletim(): AnlikIletim {
   const iletim: AnlikIletim = { onopen: null, onmessage: null, onerror: null, readyState: 2, close: () => {} };
   setTimeout(() => iletim.onerror?.(new Event('error')), 0);
   return iletim;

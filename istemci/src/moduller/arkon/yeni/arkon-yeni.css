@@ -1,0 +1,11 @@
+/* Arkon'un yeni ekranı (TS geçişi): sekmeler, bağlantı şeridi ve sayfa alanı. Parçalar kendi klasöründeki önekli css'i kullanır. */
+.tc-ay { display: grid; gap: var(--b-4); padding: var(--b-4); min-width: 0; }
+.tc-ay-serit {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-2) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+}
+.tc-ay-baglanti { display: inline-flex; align-items: center; }
+.tc-ay-icerik { display: grid; gap: var(--b-4); min-width: 0; }
+@media (max-width: 767px) {
+  .tc-ay { padding: var(--b-3); }
+}
