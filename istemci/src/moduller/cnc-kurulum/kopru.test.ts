@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
-import { kopruKur, takimOlaylariniBul } from './kopru.ts';
+import { kopruKur, stokDususleriniBul, takimOlaylariniBul } from './kopru.ts';
 
 interface Istek { yol: string; govde: unknown }
 
@@ -158,5 +158,101 @@ describe('CNC köprüsü: takım değişimi (300 a)', () => {
     expect(istekler).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/olaylar', '/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/olaylar', '/cnc-kurulum/kayitlar/yaz']);
     expect(kimlikler[0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(kimlikler[1]).toBe(kimlikler[0]);
+  });
+});
+
+describe('CNC köprüsü: takım stoğu (164 b)', () => {
+  const bag = { malzemeId: 4, kod: 'DB-1', ad: 'Freze' };
+  const stok = (inv: Record<string, unknown>) => ({ machine: 'm1', inv });
+  const ILK = stok({ 'f-10': { qty: 5, min: 1, loc: '', tmiStok: bag }, 'u-2': { qty: 9, min: 0, loc: '' } });
+  const AZALAN = stok({ 'f-10': { qty: 3, min: 1, loc: '', tmiStok: bag }, 'u-2': { qty: 2, min: 0, loc: '' } });
+
+  it('KP-10: yalnız stok kartına bağlı kalemin azalışı düşüştür; artış, bağsız kalem, kart değişimi ve yeni bağ düşüş değildir', () => {
+    expect(stokDususleriniBul(ILK, AZALAN)).toEqual([{ kimlik: 'f-10', miktar: 2 }]);
+    expect(stokDususleriniBul(ILK, stok({ 'f-10': { qty: 8, tmiStok: bag } }))).toEqual([]);
+    expect(stokDususleriniBul(ILK, stok({ 'f-10': { qty: 1, tmiStok: { ...bag, malzemeId: 5 } } }))).toEqual([]);
+    expect(stokDususleriniBul(stok({}), AZALAN)).toEqual([]);
+    expect(stokDususleriniBul(ILK, stok({ 'f-10': { qty: null, tmiStok: bag } }))).toEqual([]);
+    // Kesirli stok miktarında yuvarlanır; yarımdan az düşüş yoktur.
+    expect(stokDususleriniBul(stok({ a: { qty: 2.5, tmiStok: bag } }), stok({ a: { qty: 1.5, tmiStok: bag } }))).toEqual([{ kimlik: 'a', miktar: 1 }]);
+    expect(stokDususleriniBul(stok({ a: { qty: 2.5, tmiStok: bag } }), stok({ a: { qty: 2.2, tmiStok: bag } }))).toEqual([]);
+  });
+
+  it('KP-11: düşüş durum yazıldıktan sonra istek kimliğiyle stok ucuna bir kez gider; işlemi olmayanınki ve onaylayıcınınki gitmez', async () => {
+    const kimlikler: (string | null)[] = [];
+    const istekler: Istek[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      istekler.push({ yol: adres.replace('/api', ''), govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : null });
+      if (adres.endsWith('/stok-dus')) kimlikler.push(new Headers(secenek?.headers).get('istek-kimligi'));
+      return new Response(JSON.stringify(adres.endsWith('/stok-dus') ? { hareketSayisi: 1 } : { kayit: { surum: 4 } }), { status: 200 });
+    }));
+    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, false, true);
+    await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
+    await isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 4 });
+    expect(istekler.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/stok-dus', '/cnc-kurulum/kayitlar/yaz']);
+    expect(istekler[1]?.govde).toEqual({ kimlik: 'f-10', miktar: 2 });
+    expect(kimlikler[0]).toMatch(/^[0-9a-f-]{36}$/);
+    const digerleri = sunucuKur();
+    await kopruKur({}, false, JSON.stringify(ILK))('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
+    await kopruKur({}, true, JSON.stringify(ILK), undefined, false, true)('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: AZALAN, beklenenSurum: 3 });
+    expect(digerleri.map((i) => i.yol)).toEqual(['/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/hazirlik/onayla']);
+  });
+
+  it('KP-12: durum reddedilirse düşüş gitmez; uç reddederse (yetersiz stok) bırakılır, ağ hatasında aynı kimlikle yeniden denenir', async () => {
+    const istekler: string[] = [];
+    const kimlikler: (string | null)[] = [];
+    const cevaplar: Record<string, (number | 'ag')[]> = { '/cnc-kurulum/kayitlar/yaz': [409], '/cnc-kurulum/takimlar/stok-dus': ['ag', 200, 422] };
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      istekler.push(yol);
+      const durum = cevaplar[yol]?.shift() ?? 200;
+      if (yol.endsWith('/stok-dus')) kimlikler.push(new Headers(secenek?.headers).get('istek-kimligi'));
+      if (durum === 'ag') throw new TypeError('ağ');
+      const govde = yol.endsWith('/stok-dus') ? { hareketSayisi: 1 } : { kayit: { surum: 4 } };
+      return new Response(JSON.stringify(durum === 200 ? govde : { kod: 'GECERSIZ', mesaj: 'Stok yetmiyor.' }), { status: durum });
+    }));
+    const isle = kopruKur({}, false, JSON.stringify(ILK), undefined, false, true);
+    const yaz = (deger: unknown) => isle('kayit-yaz', { anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger, beklenenSurum: 3 });
+    await expect(yaz(AZALAN)).rejects.toBeInstanceOf(ApiHatasi);
+    expect(await yaz(AZALAN)).toEqual({ kayit: { surum: 4 } });
+    await yaz(AZALAN);
+    await yaz(stok({ 'f-10': { qty: 0, tmiStok: bag } }));
+    await yaz(stok({ 'f-10': { qty: 0, tmiStok: bag } }));
+    expect(istekler).toEqual([
+      '/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/stok-dus', '/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/stok-dus',
+      '/cnc-kurulum/kayitlar/yaz', '/cnc-kurulum/takimlar/stok-dus', '/cnc-kurulum/kayitlar/yaz',
+    ]);
+    expect(kimlikler[1]).toBe(kimlikler[0]);
+    expect(kimlikler[2]).not.toBe(kimlikler[0]);
+  });
+
+  it('KP-13: kart arama sorguyla okur; bağlama ucuna gider ve çerçeve Kütüphane görünümünde yeniden kurulur; geçersiz kimlik ve kart istek göndermez', async () => {
+    vi.useFakeTimers();
+    try {
+      const istekler: Istek[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+        istekler.push({ yol: adres.replace('/api', ''), govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : null });
+        return new Response(JSON.stringify(adres.includes('/stok-kartlari') ? { kartlar: [], toplam: 0 } : { kart: null }), { status: 200 });
+      }));
+      const yenile = vi.fn();
+      const isle = kopruKur({}, false, undefined, yenile);
+      await isle('stok-kartlari', { metin: ' freze ', sayfa: 2 });
+      await isle('stok-kartlari', {});
+      await isle('stok-karti-bagla', { kimlik: 'f-10', malzemeId: 4 });
+      await isle('stok-karti-bagla', { kimlik: 'f-10', malzemeId: null });
+      await vi.runAllTimersAsync();
+      expect(yenile.mock.calls).toEqual([['lib'], ['lib']]);
+      const hatalar = await Promise.all([
+        isle('stok-karti-bagla', { kimlik: 'a b', malzemeId: 4 }), isle('stok-karti-bagla', { kimlik: 'f-10', malzemeId: 1.5 }),
+        isle('stok-karti-bagla', { kimlik: 'f-10' }),
+      ].map((p) => p.then(() => null, (e: unknown) => (e instanceof Error ? e.message : e))));
+      expect(hatalar).toEqual(['Geçersiz kütüphane kimliği.', 'Geçersiz stok kartı.', 'Geçersiz stok kartı.']);
+      expect(istekler).toEqual([
+        { yol: '/cnc-kurulum/takimlar/stok-kartlari?sayfa=2&metin=freze', govde: null },
+        { yol: '/cnc-kurulum/takimlar/stok-kartlari?sayfa=1', govde: null },
+        { yol: '/cnc-kurulum/takimlar/stok-karti', govde: { kimlik: 'f-10', malzemeId: 4 } },
+        { yol: '/cnc-kurulum/takimlar/stok-karti', govde: { kimlik: 'f-10', malzemeId: null } },
+      ]);
+    } finally { vi.useRealTimers(); }
   });
 });

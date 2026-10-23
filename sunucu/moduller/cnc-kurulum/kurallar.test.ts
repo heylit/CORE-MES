@@ -4,7 +4,7 @@ import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import {
   asinmaBindir,
   elleUretimKaydiVarMi,
-  degerBicimeUyarMi, emirAnligi, emirDurumu, hazirlikAyniMi, kurulumIzi, hazirlikOlaylari, hazirlikOnaylariDegistiMi, hazirlikOnaylariniBindir, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sonOnayAdimlariTamamMi, sonOnaySiraDisiMi, surumUyarMi,
+  degerBicimeUyarMi, emirAnligi, emirDurumu, hazirlikAyniMi, kurulumIzi, hazirlikOlaylari, hazirlikOnaylariDegistiMi, hazirlikOnaylariniBindir, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sonOnayAdimlariTamamMi, sonOnaySiraDisiMi, stokBindir, surumUyarMi,
   kurulumYukleri, sayimKullanimi, takimDurumu, takimOlayiSatirlari,
 } from './kurallar.ts';
 
@@ -196,5 +196,20 @@ describe('cnc-kurulum kuralları (saf)', () => {
     // Takım imzaları ortak önek taşısa da arama sınırda kalır, yanlış dizilişi reddeder.
     const cok = Object.fromEntries(Array.from({ length: 120 }, (_, i) => [`T${String(i + 1)}`, 'a']));
     assert.equal(sonOnayAdimlariTamamMi(durum({ ...done, ...cok }, imza(`${Array(120).fill('a').join('#')}#b`))), false);
+  });
+
+  test('CK-K25 (153 a): bağlı kalemin adedi stoktan, kritik seviye ve yer prototipten; stoksuz kart null; bağsız kalem ve durum dışı değer aynen', () => {
+    const durum = { machine: 'm', inv: { a: { qty: 9, min: 2, loc: 'A', demo: 1 }, b: { qty: 4, min: 0, loc: '' } } };
+    const kart = (kimlik: string, miktar: string | null) => ({ kimlik, malzemeId: 7, kod: 'SF-1', ad: 'Freze', miktar });
+    assert.deepEqual(stokBindir(durum, [kart('a', '3.5'), kart('c', null)]), {
+      machine: 'm',
+      inv: {
+        a: { qty: 3.5, min: 2, loc: 'A', tmiStok: { malzemeId: 7, kod: 'SF-1', ad: 'Freze' } }, b: { qty: 4, min: 0, loc: '' },
+        c: { min: 0, loc: '', qty: null, tmiStok: { malzemeId: 7, kod: 'SF-1', ad: 'Freze' } },
+      },
+    });
+    assert.deepEqual(stokBindir({ machine: 'm' }, [kart('a', '-1')]), { machine: 'm', inv: { a: { min: 0, loc: '', qty: -1, tmiStok: { malzemeId: 7, kod: 'SF-1', ad: 'Freze' } } } });
+    assert.equal(stokBindir(durum, []), durum);
+    assert.equal(stokBindir('x', [kart('a', '1')]), 'x');
   });
 });
