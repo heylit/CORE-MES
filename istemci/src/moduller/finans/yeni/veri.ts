@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SatisSevkleriCevabi, SatisSiparisleriCevabi } from '#paylasilan/sozlesme/finans.ts';
 import type { SirketAdiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -7,7 +7,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/iste
 import { yolKur } from '../../../ortak/veri/uc-cagrisi.ts';
 import { useYetki, type Yetki } from '../../../ortak/veri/yetki.ts';
 import type { Komut } from './akislar.ts';
-import { durumKur, verileriHazirla, type FinansHamVerisi, type HazirVeri } from './donustur.ts';
+import { durumKur, verileriHazirla, yuvarla, type FinansHamVerisi, type HazirVeri } from './donustur.ts';
 import { finansMotoru, type FinansMotoru } from './motor.ts';
 
 // Yeni finans ekranının veri katmanı. Okuma bugünkü `finans-yukle` sırasıyla aynıdır (18 liste, ayar, amortisman, kur
@@ -97,6 +97,33 @@ export function useFinansKomutu() {
     },
     onSettled: () => istemci.invalidateQueries({ queryKey: ['finans'] }),
   });
+}
+
+// Günlük sağlık skoru (prototipte tam kipteki recordHistory): veri açılınca bugünün skoru yoksa bir kez sunucuya yazılır;
+// skor geçmişi ve tahmin karnesi bu kayıtlardan beslenir. Skor hesaplanamıyorsa ya da bugün yazılmışsa komut yoktur.
+export function gunlukSkorKomutu(motor: FinansMotoru): Komut | null {
+  const A = motor.runAnalysis();
+  if (A.score === null || motor.durum.history.some((h) => h.d === motor.bugun)) return null;
+  return {
+    uc: 'POST /finans/skorlar/kaydet', tekrar: false, basari: 'Skor kaydedildi.',
+    govde: { gun: motor.bugun, skor: A.score, nakit: yuvarla(motor.cashToday()) },
+  };
+}
+
+// Yazma yetkisi olan açınca koşar; başarısızlık sessizdir (prototipte de öyle), ertesi açılışta yeniden denenir.
+export function useGunlukSkor(finans: FinansVerisi | null, yazabilir: boolean): void {
+  const yazilan = useRef<FinansMotoru | null>(null);
+  useEffect(() => {
+    if (!finans || !yazabilir || yazilan.current === finans.motor) return;
+    yazilan.current = finans.motor;
+    const k = gunlukSkorKomutu(finans.motor);
+    if (!k) return;
+    const { motor } = finans;
+    komutGonder(k).then(() => {
+      const g = k.govde as { gun: string; skor: number; nakit: number };
+      motor.durum.history.push({ d: g.gun, score: g.skor, cash: g.nakit, src: 'sunucu' });
+    }).catch(() => {});
+  }, [finans, yazabilir]);
 }
 
 export const satisSiparisleriOku = (firmaId: number): Promise<SatisSiparisleriCevabi> =>
