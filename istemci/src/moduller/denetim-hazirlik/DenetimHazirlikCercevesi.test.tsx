@@ -10,6 +10,7 @@ import { IKINCI_MENU_TANIMLARI, menuMaddeleri } from '../../ortak/rota/ikinci-me
 import { sayfaKur, yerelDegerler, YEREL } from './DenetimHazirlikCercevesi.tsx';
 import { anahtarParcasi } from './cerceve-kopru.ts';
 import { ekBetikler } from './ek-betikler.ts';
+import { YONETIM_DUGMELERI_BETIGI } from './yonetim-dugmeleri.ts';
 import { rotalar } from './rotalar.tsx';
 
 // Kişi adları uydurmadır.
@@ -17,7 +18,7 @@ const YONETICI: Kullanici = { id: 5, ad: 'Deneme Yönetici', islemler: ['sayfa.d
 const YETKISIZ: Kullanici = { id: 6, ad: 'Deneme Yetkisiz', islemler: ['sayfa.ayarlar'] };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function sunucuKur(kullanici: Kullanici, kurulumGerekli = false): string[] {
+function sunucuKur(kullanici: Kullanici, kurulumGerekli = false, yonetici = true): string[] {
   const istekler: string[] = [];
   let kuruldu = !kurulumGerekli;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
@@ -26,7 +27,7 @@ function sunucuKur(kullanici: Kullanici, kurulumGerekli = false): string[] {
     istekler.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/denetim-hazirlik/ben') {
-      return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: true, yonetici: true, kurulumGerekli: !kuruldu } satisfies BenCevabi);
+      return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: true, yonetici, kurulumGerekli: !kuruldu } satisfies BenCevabi);
     }
     if (yontem === 'POST' && yol === '/denetim-hazirlik/kurulum') { kuruldu = true; return json(200, { kurulan: 1 }); }
     if (yontem === 'GET' && yol.startsWith('/denetim-hazirlik/sorgu')) return json(200, { belgeler: [], damga: 0 } satisfies SorguCevabi);
@@ -89,6 +90,20 @@ describe('DenetimHazirlikCercevesi', () => {
     gonder({ kanal: 'denetim-hazirlik', yon: 'kisayol', tus: 'arama' });
     expect(tuslar).toEqual(['ctrl+k']);
     window.removeEventListener('keydown', dinle);
+  });
+
+  // 226 a: silme, sıfırlama ve yedekten yükleme düğmeleri yalnız yöneticide görünür (kural yonetim-dugmeleri.test.ts'de sınanır).
+  it('yönetici olmayana yönetim düğmelerini gizleyen betik prototipten önce gömülür; yöneticiye gömülmez', async () => {
+    sunucuKur(YONETICI, false, false);
+    ac('/denetim-hazirlik');
+    const yazar = (await screen.findByTitle('Denetim Hazırlığı', {}, { timeout: 5000 })).getAttribute('srcdoc') ?? '';
+    expect(yazar.indexOf(YONETIM_DUGMELERI_BETIGI)).toBeGreaterThan(-1);
+    expect(yazar.indexOf(YONETIM_DUGMELERI_BETIGI)).toBeLessThan(yazar.indexOf('<body'));
+    cleanup();
+    sunucuKur(YONETICI);
+    ac('/denetim-hazirlik');
+    const yonetici = (await screen.findByTitle('Denetim Hazırlığı', {}, { timeout: 5000 })).getAttribute('srcdoc') ?? '';
+    expect(yonetici).not.toContain(YONETIM_DUGMELERI_BETIGI);
   });
 
   it('boş depoda yönetici açınca başlangıç kurulumunu bir kez çağırır', async () => {

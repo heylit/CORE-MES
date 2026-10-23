@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu,
+  KURULUM_ISARETI, ODA_SURESI_MS, baslangicBelgeleri, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, ustYolu, yonetimGerekirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -123,6 +123,45 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
       assert.equal(a?.per, 100 / 30);
       assert.deepEqual([a?.st, a?.res, a?.cert], ['disi', 'red', 'S-X']);
       assert.deepEqual(a?.hist.map((h) => h.res), ['red', 'uygun']);
+    });
+  });
+
+  // 226 a: prototip deposu metni `{ active, order, data: { id: profil } }`.
+  describe('BD-K11 (226 a): ortak kaydı silen ya da boşaltan sonuç yönetim ister', () => {
+    const depo = (profiller: Record<string, unknown>) => ({ deger: JSON.stringify({ active: Object.keys(profiller)[0], order: Object.keys(profiller), data: profiller }) });
+    const bos = { profile: { firma: '' }, audits: [], pw: { iso9001: { ans: {} } } };
+    const dolu = { profile: { firma: 'Deneme A' }, audits: [], pw: {} };
+    const cevapli = { profile: { firma: '' }, audits: [], pw: { as9100: { ans: { q1: 2 } } } };
+    const takvimli = { profile: {}, audits: [{ id: 'a1' }] };
+    const ORTAK = 'yerel/kalite-denetim-v4';
+
+    test('kayıt özeti profil ve dolu profil sayar; belge yoksa sıfır, okunamazsa null', () => {
+      assert.deepEqual(kayitOzeti(depo({ a: dolu, b: bos, c: cevapli, d: takvimli })), { profil: 4, dolu: 3 });
+      assert.deepEqual(kayitOzeti(null), { profil: 0, dolu: 0 });
+      for (const v of [{}, { deger: 3 }, { deger: '{bozuk' }, { deger: '[1]' }, { deger: '{"data":[]}' }]) assert.equal(kayitOzeti(v), null, JSON.stringify(v));
+    });
+
+    test('reddedilen: profil silme, tümünü silme, dolu kaydı boşaltma ya da okunamaz kılma, dolu kaydı silme', () => {
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu, b: bos }), depo({ a: dolu })), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: bos, b: bos }), depo({ a: bos })), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu }), depo({ x: bos })), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: cevapli, b: takvimli }), depo({ a: bos, b: bos })), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu }), { deger: '{bozuk' }), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu }), {}), true);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: bos }), null), true);
+    });
+
+    test('izinli: olağan düzenleme, profil ekleme ve kopyalama, yeni kayıt, boş kaydı düzenleme, okunamayan eski kayıt, kişisel kök', () => {
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu }), depo({ a: cevapli })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu, b: cevapli }), depo({ a: bos, b: cevapli })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: dolu }), depo({ a: dolu, b: dolu })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: bos }), depo({ a: dolu })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, depo({ a: bos }), depo({ a: bos })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, null, depo({ a: bos })), false);
+      assert.equal(yonetimGerekirMi(ORTAK, null, null), false);
+      assert.equal(yonetimGerekirMi(ORTAK, { deger: '1' }, { deger: '2' }), false);
+      assert.equal(yonetimGerekirMi(ORTAK, { deger: '1' }, null), false);
+      assert.equal(yonetimGerekirMi('data/users/7/yerel/anahtarlar/kalite-denetim-v4', depo({ a: dolu }), null), false);
     });
   });
 });

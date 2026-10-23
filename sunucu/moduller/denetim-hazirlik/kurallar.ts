@@ -46,6 +46,46 @@ export function degistirebilirMi(yol: string, kisiId: number, olusturanKisiId: n
 
 const duzNesneMi = (d: unknown): d is Veri => d !== null && typeof d === 'object' && !Array.isArray(d);
 
+// 226 a: ortak kayıt prototipin bütün profillerini tek belgede tutar (`veri.deger` içinde `{ data: { <id>: profil } }` metni); kural
+// yazmanın sonucuna bakar. Profil sayısını düşüren (profil silme, "Tümünü sil") ya da dolu kaydı
+// boşaltan ya da okunamaz kılan yazma ve dolu kaydın silinmesi yönetim ister. Okunamayan eski kayıt korunacak veri sayılmaz.
+// "Dolu" prototipin `isEmptyProfile` tanımıdır: firma adı, takvim ya da bir programda cevap, işaret, not.
+const PROGRAM_ALANLARI = ['ans', 'checks', 'docs', 'cards', 'trace', 'notes'] as const;
+const doluNesneMi = (d: unknown): boolean => duzNesneMi(d) && Object.keys(d).length > 0;
+
+function doluProfilMi(p: unknown): boolean {
+  if (!duzNesneMi(p)) return false;
+  const bilgi = p['profile'];
+  if (duzNesneMi(bilgi) && typeof bilgi['firma'] === 'string' && bilgi['firma'] !== '') return true;
+  if (Array.isArray(p['audits']) && p['audits'].length > 0) return true;
+  const pw = p['pw'];
+  return duzNesneMi(pw) && Object.values(pw).some((w) => duzNesneMi(w) && PROGRAM_ALANLARI.some((k) => doluNesneMi(w[k])));
+}
+
+export interface KayitOzeti { profil: number; dolu: number }
+
+// Belge yoksa sıfır; `deger` prototip deposu olarak okunamıyorsa null.
+export function kayitOzeti(veri: Veri | null): KayitOzeti | null {
+  if (veri === null) return { profil: 0, dolu: 0 };
+  const deger = veri['deger'];
+  if (typeof deger !== 'string') return null;
+  let depo: unknown;
+  try { depo = JSON.parse(deger); } catch { return null; }
+  if (!duzNesneMi(depo) || !duzNesneMi(depo['data'])) return null;
+  const profiller = Object.values(depo['data']);
+  return { profil: profiller.length, dolu: profiller.filter(doluProfilMi).length };
+}
+
+// `yeni` null ise silmedir.
+export function yonetimGerekirMi(yol: string, eski: Veri | null, yeni: Veri | null): boolean {
+  if (parcalar(yol)[0] !== ORTAK_KOK || eski === null) return false;
+  const once = kayitOzeti(eski);
+  if (once === null || once.profil === 0) return false;
+  const sonra = kayitOzeti(yeni);
+  if (sonra === null) return once.dolu > 0;
+  return sonra.profil < once.profil || (once.dolu > 0 && sonra.dolu === 0);
+}
+
 // İç içe nesneler birleşir; dizi ve öteki her değer alanı olduğu gibi değiştirir. Girdiler değişmez.
 export function derinBirlestir(hedef: Veri, yama: Veri): Veri {
   const sonuc: Veri = { ...hedef };
