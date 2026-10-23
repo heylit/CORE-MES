@@ -136,6 +136,8 @@ export function ReceteRotaCercevesi() {
   const [motorUyarilari, setMotorUyarilari] = useState<readonly string[]>([]);
   const uyariGorunur = !planGizli && motorUyarilari.length > 0 && PLAN_SEKMELERI.test(pathname);
   const kullanici = oturum.data;
+  // Köprü yetkisi bilinen okumayı işlemi olmayana sormaz (195 a).
+  const islemler = kullanici?.islemler;
   // Planlama sayfası ayrıca planlama işlemini, maliyet sayfası birim maliyet okumasını da ister (195 a); işlemi olmayana çerçeve
   // kurulmaz, kayıt okunmaz.
   const girebilir = (kullanici?.islemler.some((i) => OKUMA_ISLEMLERI.includes(i)) ?? false)
@@ -249,7 +251,8 @@ export function ReceteRotaCercevesi() {
       acilRef.current?.coz(null);
       setAcil({ denemeler, coz });
     }),
-  }), [kartTaslakAcabilir, bedelAyariYazabilir, bildir]);
+    ...(islemler === undefined ? {} : { islemler }),
+  }), [kartTaslakAcabilir, bedelAyariYazabilir, bildir, islemler]);
 
   // Kaynak ve köken denetimini YalitilmisCerceve yapar (yalnız bu çerçeve, opak köken); burada yalnız bilinen kanallar geçer.
   const iletiGeldi = (veri: unknown, yanitla: (ileti: unknown) => void) => {
