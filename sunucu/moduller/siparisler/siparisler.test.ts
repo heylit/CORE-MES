@@ -100,7 +100,7 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('yetki: yönetici açar ve okur; işlemi olmayan rol okuyamaz ve yazamaz (403), kayıt açılmaz; girişsiz 401', async () => {
     const s = await siparisAc();
-    assert.match(s.no, /^SS-2026-\d{3,}$/);
+    assert.match(s.no, /^SS-\d{4}-\d{3,}$/);
     assert.equal(s.durum, 'taslak');
     assert.equal((await oku(yonetici, `/siparisler/${s.id}`)).statusCode, 200);
     const once = (await oku(yonetici, '/siparisler')).json<SiparisListesiCevabi>().toplam;
@@ -245,18 +245,35 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ musteriSiparisNo: no }))).statusCode, 200);
   });
 
-  test('numara yıl başına artar ve tekildir; liste durum ve aramayla süzülür', async () => {
+  test('numara ortak sayaçtan artar ve tekildir; yılı kayıt anının yılıdır; dolu numara atlanır; liste durum ve aramayla süzülür', async () => {
     const a = await siparisAc();
     const b = await siparisAc();
     const sira = (no: string) => Number(no.split('-')[2]);
     assert.equal(sira(b.no), sira(a.no) + 1);
     const eski = await siparisAc({ siparisTarihi: '2025-12-30', termin: '2026-01-10' });
-    assert.match(eski.no, /^SS-2025-/);
+    assert.match(eski.no, new RegExp(`^SS-${tesisGunu(Date.now()).slice(0, 4)}-`));
+    // Sayaç baştan başlasa da var olan numara yeniden verilmez (eski sayaçtan gelen numaralar böyle korunur).
+    await o().sahip.sorgu("DELETE FROM ayar_numara_sayaci WHERE anahtar = 'siparisler.siparis-no'");
+    assert.equal(sira((await siparisAc()).no), sira(eski.no) + 1);
     const liste = (await oku(yonetici, `/siparisler?ara=${encodeURIComponent(b.no)}`)).json<SiparisListesiCevabi>();
     assert.deepEqual(liste.satirlar.map((s) => s.id), [b.id]);
     const iptaller = (await oku(yonetici, '/siparisler?durum=iptal&sayfaBoyu=200')).json<SiparisListesiCevabi>();
     assert.ok(iptaller.satirlar.length > 0);
     assert.ok(iptaller.satirlar.every((s) => s.durum === 'iptal'));
+  });
+
+  test('numara kalıbı Sistem Ayarları\'ndan değişir; 16 karakteri aşan numara kayıt açmaz (422), var olan numara değişmez', async () => {
+    const once = await siparisAc();
+    const kalip = async (deger: string) => assert.equal((await gonder(yonetici, '/ayarlar/siparisler.siparis-no/degistir', { deger })).statusCode, 200);
+    await kalip('SAT{YY}{AA}{SAYAC:4}');
+    const yeni = await siparisAc();
+    assert.match(yeni.no, /^SAT\d{4}0001$/);
+    await kalip('SATISSIPARIS-{YYYY}-{SAYAC:3}');
+    const uzun = await gonder(yonetici, '/siparisler/ekle', govde());
+    assert.equal(uzun.statusCode, 422, uzun.body);
+    assert.match(uzun.body, /16 karakter/);
+    await kalip('SS-{YYYY}-{SAYAC:3}');
+    assert.equal((await oku(yonetici, `/siparisler/${once.id}`)).json<SiparisAyrintisi>().no, once.no);
   });
 
   test('SIP-02 seçim: kart seçenekleri yalnız aktif satılan türleri verir, aramayla süzülür; işlemi olmayan rol 403', async () => {

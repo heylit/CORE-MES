@@ -10,3 +10,4 @@
 - Ekran ve ikinci menü: `istemci/src/moduller/siparisler`, `paylasilan/sayfalar/siparisler.ts`.
 - Portal köprüsü: Portal siparişi ve teklifi `disari.ts` ile okur ve yazar (`portal/servis.ts`).
 - `uretim_emri.siparis_satiri_id`: `20261019085000_uretim_emirleri_siparis_satiri.sql`.
+- Sipariş ve teklif numarası Sistem Ayarları'ndaki ortak sayaçtan (`siparisler.siparis-no`, `siparisler.teklif-no`; 143 a). Var olan numaralar değişmez, dolu numara atlanır. `siparisler_numara_sayaci` ve `siparisler_teklif_sayaci` artık yazılmaz; silinmeleri ayrı karar.

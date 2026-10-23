@@ -183,7 +183,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
     // Kullanıcı kararları 174 a ve 182 a.
     'nizamiye',
     // Kullanıcı kararı 216 a.
-    'idari-isler');
+    'idari-isler',
+    // Kullanıcı kararı 195 a.
+    'uretim-terminali');
   // Onaylayan rol yazmayı da taşır: onay, kartı kaydeden uçtan geçer.
   const MALZEME_ONAYI = ['malzemeler.yaz', 'malzemeler.onayla'];
   // Arkon rolü tek TMI işlemiyle verilir (kullanıcı kararı 07.10.2026); Arkon sayfası yalnız Arkon rolü olan rollerdedir.
@@ -392,8 +394,16 @@ describe('oturum (gerçek PostgreSQL)', () => {
   for (const rol of ['mudur', 'planlama_proje', 'kalite', 'vardiya_sorumlusu', 'bakim']) MATRIS[rol]?.push('saat.uyari-ustlen');
   MATRIS.vardiya_sorumlusu?.push('saat.oku');
   MATRIS.bakim?.push('saat.oku');
+  // Ortak yetki matrisi (195 a, 23.10.2026; 353 a ve 65 a ile çelişme onaylı). Sayım düzeltmesi müdüre verilmez (185 a).
+  MATRIS.mudur?.push('recete-rota.planlama-oku');
+  MATRIS.planlama_proje?.push('recete-rota.planlama-oku');
+  MATRIS.kalite?.push('musteri-tedarikci.oku');
+  // Sipariş listesindeki firma seçicisi (201 a, 23.10.2026).
+  MATRIS.sevkiyat?.push('musteri-tedarikci.oku');
+  MATRIS.muhasebe_finans?.push('siparisler.fiyat-oku', 'sayfa.projeler');
+  MATRIS.vardiya_sorumlusu?.push('sayfa.vardiya', 'vardiya.yaz', 'uretim-emirleri.sayim-duzelt');
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
-    'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet', 'recete-rota.planlama-oku'];
+    'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 
   const girisIslemleri = async (kullaniciAdi: string): Promise<string[]> => {
     const cevap = await giris(kullaniciAdi, PAROLA);
