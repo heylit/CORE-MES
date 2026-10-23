@@ -5,7 +5,7 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { PlanTaslaklariCevabi, TeklifAyrintisi, TerminDenemesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { AdetDenemesiCevabi, AtolyeTaslaklariCevabi, PlanTaslaklariCevabi, TeklifAyrintisi, TerminDenemesiCevabi } from '#paylasilan/sozlesme/siparisler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -31,6 +31,7 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
   let mamulNo = 0;
   const istekler: TeklifDenemeGirdisi[] = [];
   let geciktirir = false;
+  let planVer = false;
 
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -55,6 +56,22 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
         siparis: 'p-1', emirNo: 'S-DENEME', once: '2099-07-01T10:00:00+03:00', sonra: geciktirir ? '2099-07-04T10:00:00+03:00' : '2099-07-02T10:00:00+03:00',
         termin: '2099-07-02T23:00:00+03:00',
       }],
+      // Şerit: plandaki sipariş, yer tutan satış taslakları ve bu teklif aynı tezgâhta.
+      plan: !planVer ? null : {
+        baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-08-02T00:00:00+03:00', kapaliGunler: ['2099-07-05'],
+        hatlar: [{ makineId: 'T1', ad: 'Tezgah 1', fason: false }],
+        bloklar: [
+          { makineId: 'T1', tur: 'siparis', is: 'p-1', emirNo: 'S-DENEME', kalem: null, adim: '10', baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-02T08:00:00+03:00', gecikir: false },
+          ...istek.taslaklar.map((t) => ({
+            makineId: 'T1', tur: 'satis-taslagi' as const, is: t.id, emirNo: null, kalem: 1, adim: '10',
+            baslangic: '2099-07-03T08:00:00+03:00', bitis: '2099-07-04T08:00:00+03:00', gecikir: false,
+          })),
+          ...istek.kalemler.map((_k, i) => ({
+            makineId: 'T1', tur: 'teklif' as const, is: 'teklif', emirNo: null, kalem: i + 1, adim: '10',
+            baslangic: '2099-07-08T08:00:00+03:00', bitis: '2099-07-10T16:00:00+03:00', gecikir: false,
+          })),
+        ],
+      },
     });
   }
 
@@ -132,7 +149,7 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
       [yoneticiId],
     );
   });
-  beforeEach(() => { teklifDenemeCozucusu(sahteCozucu); istekler.length = 0; geciktirir = false; });
+  beforeEach(() => { teklifDenemeCozucusu(sahteCozucu); istekler.length = 0; geciktirir = false; planVer = false; });
   after(async () => { teklifDenemeCozucusu(null); await app?.close(); await ortam?.kaldir(); });
 
   test('motor kayıtsızken: deneme "cozucu-yok" der, plan taslaklı sürüm 422; elle sürüm termin tarihiyle verilir', async () => {
@@ -310,5 +327,67 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.equal((await oku(satis.cerez, '/musteri-tedarikci/firmalar/secim')).statusCode, 200);
     const mudur = await girisYap('mudur');
     assert.equal((await oku(mudur.cerez, `/siparisler/teklifler/${t.id}/termin-denemesi`)).json<TerminDenemesiCevabi>().kalemler[0]?.dokum?.length, 3);
+  });
+
+  test('TKL-19 plan şeridi: motorun plan verisi geçer; sipariş emir noyla, satış taslağı teklif noyla, bu teklif adıyla; motor vermezse null', async () => {
+    let a = await teklifAc(false);
+    a = await komut(a, 'surum-ver', satisSurumu(a));
+    const b = await teklifAc(false);
+    assert.equal((await oku(yonetici, `/siparisler/teklifler/${b.id}/termin-denemesi`)).json<TerminDenemesiCevabi>().plan, null);
+    planVer = true;
+    const d = (await oku(yonetici, `/siparisler/teklifler/${b.id}/termin-denemesi`)).json<TerminDenemesiCevabi>();
+    assert.deepEqual([d.plan?.hatlar.map((h) => h.ad), d.plan?.kapaliGunler], [['Tezgah 1'], ['2099-07-05']]);
+    const bloklar = d.plan?.bloklar ?? [];
+    assert.deepEqual(bloklar.filter((x) => x.tur !== 'satis-taslagi').map((x) => [x.tur, x.etiket, x.kalem]), [['siparis', 'S-DENEME', null], ['teklif', 'Bu teklif', 1]]);
+    assert.ok(bloklar.some((x) => x.tur === 'satis-taslagi' && x.etiket === a.no), 'yer tutan taslak teklif noyla');
+    assert.ok(bloklar.every((x) => x.tur !== 'satis-taslagi' || x.etiket.startsWith('TK-')), 'taslak kimliği sızmaz');
+  });
+
+  test('TKL-20 adet değişirse: yarım, aynı, iki ve dört kat arkaya eklenerek ayrı denenir; aynı adet tekrarlanmaz; maliyet yetkiye göre; motor yoksa cozucu-yok', async () => {
+    const t = await teklifAc();
+    const c = await oku(yonetici, `/siparisler/teklifler/${t.id}/adet-denemesi?gecerlilik=${GECERLILIK}`);
+    assert.equal(c.statusCode, 200, c.body);
+    const a = c.json<AdetDenemesiCevabi>();
+    assert.deepEqual(istekler.map((i) => [i.kalemler.map((k) => k.adet), i.istenenTermin, i.gecerlilik]), [[[5], null, GECERLILIK], [[10], null, GECERLILIK], [[20], null, GECERLILIK], [[40], null, GECERLILIK]]);
+    assert.deepEqual(a.satirlar.map((x) => [x.carpan, x.kalemler.map((k) => k.adet), x.termin]), [
+      ['0.5', ['5.000'], PLAN_TERMINI], ['1', ['10.000'], PLAN_TERMINI], ['2', ['20.000'], PLAN_TERMINI], ['4', ['40.000'], PLAN_TERMINI],
+    ]);
+    // Sahte motor her adette aynı tutarı verir: birim maliyet adetle düşer (380 / adet).
+    assert.deepEqual(a.satirlar.map((x) => x.kalemler[0]?.birimMaliyet), ['76.0000', '38.0000', '19.0000', '9.5000']);
+    const tek = await gonder(yonetici, '/siparisler/teklifler/ekle', { firmaId: musteriId, baslik: 'Tek adet', satirlar: [{ malzemeNo: mamulNo, tanim: 'Tek parça', miktar: '1' }] });
+    const tekId = tek.json<TeklifAyrintisi>().id;
+    assert.deepEqual((await oku(yonetici, `/siparisler/teklifler/${tekId}/adet-denemesi`)).json<AdetDenemesiCevabi>().satirlar.map((x) => x.carpan), ['1', '2', '4']);
+    const maliyetsiz = await rolluGiris(['siparisler.oku', 'siparisler.termin-dene']);
+    const m = (await oku(maliyetsiz, `/siparisler/teklifler/${t.id}/adet-denemesi`)).json<AdetDenemesiCevabi>();
+    assert.deepEqual([m.satirlar[1]?.termin, m.satirlar[1]?.maliyetToplami, m.satirlar[1]?.kalemler[0]?.birimMaliyet], [PLAN_TERMINI, null, null]);
+    assert.equal((await oku(planlama.cerez, `/siparisler/teklifler/${t.id}/adet-denemesi`)).statusCode, 403);
+    teklifDenemeCozucusu(null);
+    assert.deepEqual((await oku(yonetici, `/siparisler/teklifler/${t.id}/adet-denemesi`)).json<AdetDenemesiCevabi>(), { durum: 'cozucu-yok', satirlar: [] });
+  });
+
+  test('TKL-21 atölyedeki satış taslakları: yer tutan, onay bekleyen ve son 30 günde süresi dolan; kalkan ve eskisi yok; tutar ve kâr fiyat görene', async () => {
+    const atolye = async (cerez = yonetici) => {
+      const c = await oku(cerez, '/siparisler/satis-taslaklari');
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<AtolyeTaslaklariCevabi>().taslaklar;
+    };
+    let a = await teklifAc();
+    a = await komut(a, 'surum-ver', satisSurumu(a));
+    const sat = (await atolye()).find((x) => x.teklifId === a.id);
+    // 5 TL x (10 + 5) adet, iskontosuz.
+    assert.deepEqual([sat?.teklifNo, sat?.firmaAd, sat?.gorunum, sat?.kalemler, sat?.termin, sat?.karOrani, sat?.tutar], [
+      a.no, 'Deneme Firma TDN', 'satis', [{ tanim: 'Deneme parça A', adet: '10.000' }, { tanim: 'Kartı açılmamış parça', adet: '5.000' }], PLAN_TERMINI, '25.00', '75.00',
+    ]);
+    const fiyatsiz = (await atolye(planlama.cerez)).find((x) => x.teklifId === a.id);
+    assert.deepEqual([fiyatsiz?.teklifNo, fiyatsiz?.karOrani, fiyatsiz?.tutar], [a.no, null, null]);
+    await o().sahip.sorgu('UPDATE siparisler_teklif_plan_taslagi SET gecerlilik = current_date - 10 WHERE teklif_id = $1', [a.id]);
+    assert.equal((await atolye()).find((x) => x.teklifId === a.id)?.gorunum, 'satis-deneme');
+    await o().sahip.sorgu('UPDATE siparisler_teklif_plan_taslagi SET gecerlilik = current_date - 31 WHERE teklif_id = $1', [a.id]);
+    assert.equal((await atolye()).find((x) => x.teklifId === a.id), undefined);
+    let b = await teklifAc(false);
+    b = await komut(b, 'surum-ver', satisSurumu(b));
+    b = await komut(b, 'surum-ver', { fiyatlar: fiyatlar(b), terminTarihi: '2099-08-01' });
+    assert.equal((await atolye()).find((x) => x.teklifId === b.id), undefined, 'kalkan taslak listede yok');
+    assert.equal((await oku(operator, '/siparisler/satis-taslaklari')).statusCode, 403);
   });
 });

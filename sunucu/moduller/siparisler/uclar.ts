@@ -2,12 +2,12 @@ import { uc } from '#cekirdek/uc.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import {
-  denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
+  adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
   teklifSurumuGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
-import type { PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { AdetDenemesiCevabi, AtolyeTaslagi, PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { FIYAT_YETKISI_YOK, denemeSuzgeci, siparisAyrintisiFiyatsiz, siparisFiyatsiz, teklifFiyatsiz } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as deneme from './teklif-deneme.ts';
@@ -26,6 +26,16 @@ const maliyetGorusu = (k: Kullanici) => ({ toplam: fiyatGorur(k) || islemVarMi(k
 const taslakCevabi = (k: Kullanici) => async (l: Promise<PlanTaslagi[]>) => {
   const toplam = maliyetGorusu(k).toplam;
   return { taslaklar: (await l).map((t) => (toplam ? t : { ...t, karOrani: null, maliyetToplami: null })) };
+};
+// Adet tablosunda maliyet denemedeki görünüşle aynıdır: toplamı görmeyene birim ve toplam maliyet gitmez.
+const adetCevabi = (k: Kullanici) => async (c: Promise<AdetDenemesiCevabi>): Promise<AdetDenemesiCevabi> => {
+  const a = await c;
+  if (maliyetGorusu(k).toplam) return a;
+  return { ...a, satirlar: a.satirlar.map((s) => ({ ...s, maliyetToplami: null, kalemler: s.kalemler.map((m) => ({ ...m, birimMaliyet: null })) })) };
+};
+const atolyeCevabi = (k: Kullanici) => async (l: Promise<AtolyeTaslagi[]>) => {
+  const gorur = fiyatGorur(k);
+  return { taslaklar: (await l).map((t) => (gorur ? t : { ...t, karOrani: null, tutar: null })) };
 };
 
 // Taslağı `siparisler.yaz` açar ve düzenler; onay, kapatma ve iptal `siparisler.onayla` ister (onaylı kayıt onaysız değişmez).
@@ -207,6 +217,22 @@ export const uclar = [
     sorgu: terminDenemesiSorgusu,
     cevap: terminDenemesiCevabi,
     isle: async ({ db, kullanici, parametre, sorgu }) => denemeSuzgeci(await deneme.terminDenemesi(db, kullanici, parametre.id, sorgu), maliyetGorusu(kullanici)),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/teklifler/:id/adet-denemesi',
+    yetki: TERMIN_ISLEMI,
+    parametre: idParametresi,
+    sorgu: adetDenemesiSorgusu,
+    cevap: adetDenemesiCevabi,
+    isle: ({ db, kullanici, parametre, sorgu }) => adetCevabi(kullanici)(deneme.adetDenemesi(db, kullanici, parametre.id, sorgu)),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/satis-taslaklari',
+    yetki: 'siparisler.oku',
+    cevap: atolyeTaslaklariCevabi,
+    isle: ({ db, kullanici }) => atolyeCevabi(kullanici)(deneme.atolyeTaslaklari(db)),
   }),
   uc({
     yontem: 'POST',

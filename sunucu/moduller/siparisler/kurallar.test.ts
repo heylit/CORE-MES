@@ -5,7 +5,7 @@ import {
   duzenlemeReddi, firmaReddi, gecisHedefi, gecisReddi, malzemeReddi, siparisNo,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, teklifNo,
-  GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, onayHedefi, yenidenYerlesirMi,
+  GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -127,7 +127,7 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
   });
 
   test('TKL-13 kartlı kalemler tek denemede: plan termini en geç kalemin; kartsız plansız; yerleşmeyen varsa termin yok; motor yoksa cozucu-yok', () => {
-    const sonuc: DenemeSonucu = { planSurumu: '412', kalemler: [kalem(1), kalem(2, { planTermini: '2099-07-20' })], kayanlar: [] };
+    const sonuc: DenemeSonucu = { planSurumu: '412', kalemler: [kalem(1), kalem(2, { planTermini: '2099-07-20' })], kayanlar: [], plan: null };
     const c = denemeCevabi([satir(1, 11), satir(2, 12), satir(3, null)], sonuc, g);
     assert.equal(c.durum, 'hazir');
     assert.equal(c.planTermini, '2099-07-20');
@@ -151,7 +151,7 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
 
   test('TKL-13 (48 b, 63 b) istenen termin: termin odur, yetişip yetişmediği plandan; başka siparişi geciktiriyorsa plancı onayı', () => {
     const kayan = { siparis: 'S-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-03T10:00:00+03:00', termin: '2099-07-02', gecikir: true };
-    const sonuc: DenemeSonucu = { planSurumu: null, kalemler: [kalem(1, { planTermini: '2099-07-08' })], kayanlar: [kayan] };
+    const sonuc: DenemeSonucu = { planSurumu: null, kalemler: [kalem(1, { planTermini: '2099-07-08' })], kayanlar: [kayan], plan: null };
     const c = denemeCevabi([satir(1, 11)], sonuc, { ...g, istenenTermin: '2099-07-05' });
     assert.equal(c.termin, '2099-07-05');
     assert.equal(c.planTermini, '2099-07-08');
@@ -174,7 +174,7 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
   });
 
   test('TKL-16 (180, 65 a) maliyet toplamı fiyat görene, döküm ve genel gider oranı maliyet okuyana; termin herkese', () => {
-    const c = denemeCevabi([satir(1, 11)], { planSurumu: null, kalemler: [kalem(1)], kayanlar: [] }, g);
+    const c = denemeCevabi([satir(1, 11)], { planSurumu: null, kalemler: [kalem(1)], kayanlar: [], plan: null }, g);
     const hic = denemeSuzgeci(c, { toplam: false, dokum: false });
     assert.equal(hic.termin, c.termin);
     assert.equal(hic.maliyetToplami, null);
@@ -194,7 +194,7 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(yenidenYerlesirMi({ istenenTermin: null, gecerli: true }, '2099-07-05'), true);
     assert.equal(yenidenYerlesirMi({ istenenTermin: '2099-07-05', gecerli: true }, null), true);
     assert.equal(yenidenYerlesirMi({ istenenTermin: null, gecerli: false }, null), true);
-    assert.deepEqual(kilitler({ planSurumu: null, kalemler: [kalem(1)], kayanlar: [] }).map((k) => [k.satirId, k.opId, k.tezgah]), [[1, '1.10', 'T1']]);
+    assert.deepEqual(kilitler({ planSurumu: null, kalemler: [kalem(1)], kayanlar: [], plan: null }).map((k) => [k.satirId, k.opId, k.tezgah]), [[1, '1.10', 'T1']]);
   });
 
   test('TKL-18 motor sonucu satırlara sırayla eşlenir; kayan siparişin gecikmesi anla, termini günle; taslak kilidi motora adım başına gider', () => {
@@ -222,5 +222,23 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
         10: { makineId: 'T1', baslangic: '2099-07-01T08:00:00+03:00' }, 20: { makineId: 'T2', baslangic: '2099-07-02T08:00:00+03:00' },
       } }],
     }]);
+  });
+
+  test('TKL-19 şerit etiketi: sipariş emir noyla (yoksa kimlikle), satış taslağı teklif noyla, bu teklif adıyla; plan yoksa null', () => {
+    const b = { makineId: 'T1', kalem: null, adim: '10', baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-01T10:00:00+03:00', gecikir: false };
+    const p = { baslangic: '2099-07-01T08:00:00+03:00', bitis: '2099-07-20T00:00:00+03:00', kapaliGunler: [], hatlar: [{ makineId: 'T1', ad: 'Tezgah 1', fason: false }], bloklar: [
+      { ...b, tur: 'siparis' as const, is: 'p-1', emirNo: 'E-1' }, { ...b, tur: 'siparis' as const, is: 'p-2', emirNo: null },
+      { ...b, tur: 'satis-taslagi' as const, is: '5', emirNo: null }, { ...b, tur: 'teklif' as const, is: 'teklif', emirNo: null, kalem: 1 },
+    ] };
+    assert.deepEqual(planSeridi(p, new Map([['5', 'TK-2099-001']]))?.bloklar.map((x) => x.etiket), ['E-1', 'p-2', 'TK-2099-001', 'Bu teklif']);
+    assert.equal(planSeridi(undefined, new Map()), null);
+    assert.equal(planSeridi(null, new Map()), null);
+  });
+
+  test('TKL-20 adet çarpanı: 1 olduğu gibi, ötekiler tam adede yuvarlanır (en az 1); aynı adeti veren çarpan tekrarlanmaz, teklifin kendi adedi kalır', () => {
+    assert.deepEqual([carpilmisAdet('10.000', '0.5'), carpilmisAdet('10.000', '1'), carpilmisAdet('3.000', '0.5'), carpilmisAdet('1.000', '0.5'), carpilmisAdet('2.500', '4')],
+      ['5.000', '10.000', '2.000', '1.000', '10.000']);
+    const satir = (carpan: '0.5' | '1' | '2' | '4', adet: string) => ({ carpan, termin: null, maliyetToplami: null, kalemler: [{ satirId: 1, adet, birimMaliyet: null }] });
+    assert.deepEqual(adetSatirlari([satir('0.5', '1.000'), satir('1', '1.000'), satir('2', '2.000'), satir('4', '4.000')]).map((x) => x.carpan), ['1', '2', '4']);
   });
 });

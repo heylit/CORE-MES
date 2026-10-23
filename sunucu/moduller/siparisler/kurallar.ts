@@ -2,7 +2,7 @@
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { ISKONTO_ONAY_ESIGI } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
-  MaliyetKalemi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
+  AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
   TerminDenemesiKalemi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 
@@ -224,6 +224,7 @@ export interface DenemeSonucu {
   planSurumu: string | null;
   kalemler: DenemeKalemi[];
   kayanlar: { siparis: string; once: string; sonra: string; termin: string | null; gecikir: boolean }[];
+  plan: PlanSeridi | null;
 }
 
 const tl = (n: number | null): string | null => (n === null || !Number.isFinite(n) ? null : n.toFixed(2));
@@ -306,7 +307,27 @@ export function denemeCevabi(
     maliyetToplami: planli.length === 0 ? null : tl(toplamVeyaNull(planli.map((k) => (k.toplamMaliyet === null ? null : Number(k.toplamMaliyet))))),
     genelGiderSaatBasi: tl(g.genelGiderSaatBasi),
     kayanlar,
+    plan: sonuc?.plan ?? null,
   };
+}
+
+// Adet değişirse: çarpan 1 kalemi olduğu gibi bırakır; ötekiler tam adede yuvarlanır, en az 1 (örnek sayfa: yarım, iki ve dört kat).
+export function carpilmisAdet(miktar: string, carpan: AdetCarpani): string {
+  if (carpan === '1') return miktar;
+  return Math.max(1, Math.round(Number(miktar) * Number(carpan))).toFixed(3);
+}
+
+// Aynı adetleri veren çarpan tabloyu tekrarlamaz (ör. tek adetlik teklifte yarım kat); teklifin kendi adedi (çarpan 1) hep kalır.
+export function adetSatirlari(satirlar: readonly AdetDenemesiSatiri[]): AdetDenemesiSatiri[] {
+  const anahtar = (s: AdetDenemesiSatiri): string => s.kalemler.map((k) => Number(k.adet)).join('|');
+  const gorulen = new Set(satirlar.filter((s) => s.carpan === '1').map(anahtar));
+  return satirlar.filter((s) => {
+    if (s.carpan === '1') return true;
+    const a = anahtar(s);
+    if (gorulen.has(a)) return false;
+    gorulen.add(a);
+    return true;
+  });
 }
 
 // TKL-16 (180, 65 a): maliyet toplamı fiyat ya da maliyet görene, döküm ve genel gider oranı yalnız maliyet okuyana gider; görmeyene null.
@@ -351,16 +372,41 @@ export interface MotorSonucu {
     eksik: string[];
   }[];
   kayan: { siparis: string; emirNo: string | null; once: string; sonra: string; termin: string | null }[];
+  // Plan denemesi şeridi; Reçete ve Rota vermiyorsa yoktur.
+  plan?: MotorPlani | null;
 }
+export interface MotorPlani {
+  baslangic: string;
+  bitis: string;
+  kapaliGunler: string[];
+  hatlar: { makineId: string; ad: string; fason: boolean }[];
+  bloklar: {
+    makineId: string; tur: PlanBloguTuru; is: string; emirNo: string | null; kalem: number | null; adim: string; baslangic: string; bitis: string; gecikir: boolean;
+  }[];
+}
+
+// Şerit etiketi: sipariş emir noyla, satış taslağı teklif noyla bilinir (taslak kimliği yalnız siparişlerin iç anahtarıdır).
+export function planSeridi(p: MotorPlani | null | undefined, teklifNolari: ReadonlyMap<string, string>): PlanSeridi | null {
+  if (p === undefined || p === null) return null;
+  return {
+    baslangic: p.baslangic, bitis: p.bitis, kapaliGunler: p.kapaliGunler, hatlar: p.hatlar,
+    bloklar: p.bloklar.map((b) => ({
+      makineId: b.makineId, tur: b.tur, kalem: b.kalem, adim: b.adim, baslangic: b.baslangic, bitis: b.bitis, gecikir: b.gecikir,
+      etiket: b.tur === 'siparis' ? (b.emirNo ?? b.is) : b.tur === 'satis-taslagi' ? (teklifNolari.get(b.is) ?? b.is) : TEKLIF_ETIKETI,
+    })),
+  };
+}
+export const TEKLIF_ETIKETI = 'Bu teklif';
 
 const enGecAn = (anlar: readonly (string | null)[]): string | null =>
   anlar.reduce<string | null>((a, x) => (x === null || (a !== null && Date.parse(a) >= Date.parse(x)) ? a : x), null);
 
 // Motor sonucunu teklifin satırlarına çevirir: kalem sırası denemeye verilen sırayla aynıdır. Kayan siparişin termini motorda
 // tesis anıdır; gün olarak ilk on karakteri alınır, gecikme anla karşılaştırılır.
-export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu): DenemeSonucu {
+export function motorSonucu(satirIdleri: readonly number[], r: MotorSonucu, teklifNolari: ReadonlyMap<string, string> = new Map()): DenemeSonucu {
   return {
     planSurumu: null,
+    plan: planSeridi(r.plan, teklifNolari),
     kalemler: r.kalemler.flatMap((k, i) => {
       const satirId = satirIdleri[i];
       if (satirId === undefined) return [];

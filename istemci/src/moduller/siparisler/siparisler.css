@@ -69,6 +69,29 @@
 .tc-sp-kar { display: grid; gap: var(--b-3); min-width: 0; }
 .tc-sp-kar-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 
+/* Plan denemesi şeridi, adet tablosu (örnek sayfa): konum SVG koordinatıdır; renk ve ölçü yalnız tasarım değişkenleriyle. */
+.tc-sp-serit { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-sp-serit-lejant { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-sp-serit-lejant span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-sp-serit-lejant svg { width: var(--b-3); height: var(--b-2); }
+.tc-sp-serit-izler { display: flex; flex-direction: column; gap: var(--b-1); overflow-x: auto; min-width: 0; }
+.tc-sp-serit-satir { display: grid; grid-template-columns: minmax(calc(var(--b-6) * 2), 1fr) minmax(calc(var(--b-6) * 7), 5fr); gap: var(--b-2); align-items: center; }
+.tc-sp-serit-ad { display: flex; flex-direction: column; min-width: 0; }
+.tc-sp-serit-ad b, .tc-sp-serit-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-sp-serit-ad small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-sp-serit-iz { width: 100%; height: var(--b-5); border: 1px solid var(--edge); border-radius: var(--b-1); }
+.tc-sp-serit-eksen { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--yazi-xs); font-family: var(--font-mono); }
+.tc-sp-kapali { fill: var(--edge); opacity: .35; }
+.tc-sp-blok-siparis { fill: var(--idle); }
+.tc-sp-blok-satis-taslagi { fill: var(--hold); }
+.tc-sp-blok-teklif { fill: var(--run); }
+.tc-sp-blok-gec { fill: var(--stop); }
+.tc-sp-cizgi-termin, .tc-sp-cizgi-gecerlilik { stroke-width: 2; vector-effect: non-scaling-stroke; }
+.tc-sp-cizgi-termin { stroke: var(--run); }
+.tc-sp-cizgi-gecerlilik { stroke: var(--hazard); stroke-dasharray: 3 2; }
+.tc-sp-alt-baslik { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-2); margin: 0; font-size: var(--yazi-m); }
+.tc-sp-guclu { font-weight: 700; }
+
 @media (max-width: 1099px) {
   .tc-sp-iki { grid-template-columns: minmax(0, 1fr); }
 }
