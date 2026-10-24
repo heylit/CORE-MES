@@ -1141,7 +1141,7 @@ export function finansMotoru(baslangic?: string) {
     // Durum yerinde değiştiyse önbellek bu çağrıyla düşer.
     degisti(): void { stateRev++; },
     setToday, emptyState, normalize,
-    cashToday, monthly, completeMonths, openItems, aging, workingDays, fixedFlows, forecast, weekIndex,
+    cashToday, monthly, completeMonths, openItems, aging, workingDays, recPaidIn, fixedFlows, forecast, weekIndex,
     siparisPlani, siparisDahilKapanis, siparisBuHafta, salesProfile, taxCalendar,
     customerStats, markovAR, monteCarlo, altman, dupont, anomalies, ratios, alerts,
     runAnalysis, findings, summarize, compactReport, recordHistory,

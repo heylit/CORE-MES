@@ -1,0 +1,7 @@
+/* Görünüm kökü kabuğun ızgara öğesidir: geniş tablo sayfayı değil kendi kabını taşırsın (360 ve 768). */
+.tc-km2-emirler { min-width: 0; }
+.tc-km2-kod { font-family: var(--font-mono); font-weight: 600; }
+.tc-km2-iki { display: block; font-size: var(--yazi-s); color: var(--muted); }
+.tc-km2-bolum { margin: var(--b-5) 0 var(--b-2); font-size: var(--yazi-m); }
+.tc-km2-emir-parca { margin: 0 0 var(--b-3); }
+.tc-km2-ekler { margin-top: var(--b-4); }
