@@ -154,3 +154,10 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
 - Eski sayfaya göre kalan farklar (Soru 457 4-7 a, onaylı): hesap kayıtlı çalışmayla (kaydedilmemiş değişiklik sürüm denetiminde 409);
   bilinmeyen ek mesai ücreti 0 değil null; uydurma varsayılan yok (maliyet ve mesai sistemi, örnek talaş fiyatı); "şimdi" sunucudan.
 - Tutar, maliyet, kâr ve TL farkı yalnız `finans.maliyet-oku` taşıyana (180 a, 200 a); taşımayana bu alanlar null, sipariş kârı 403.
+
+## Bitiş tarihi akışı sunucuda (455/2 a)
+- Planlama çalışması (`:planlama`) kaydedilirken siparişin bitiş tarihi akışını (`sevkIz`, her yeni planda ayrı satır) sunucu yazar
+  (`kurallar.ts` `bitisAkisiEkle`, `servis.ts` `yaz`). Kural sayfanınkiyle aynı: plan güncel olmalı, havuz atlanır, 0,5 sa altı kayma eklenmez,
+  sipariş başına son 50 satır.
+- Sayfaya göre farklar: satırın zamanı ve kişisi sunucudandır (sayfa planın `kim` alanını öne alıyordu); gönderilen değer akışı taşımıyorsa
+  kayıttaki akış korunur. Eski sayfa kendi satırını yazmayı sürdürür; aynı bitiş ikinci kez eklenmez. Sözleşme ve göç değişmedi.

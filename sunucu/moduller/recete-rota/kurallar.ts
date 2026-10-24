@@ -819,3 +819,51 @@ export function planAni(baslangic: string, saat: number): string {
   const dk = Math.round(saat * 60); const gun = Math.floor(dk / 1440);
   return new Date(tesisGunBasi(planGunu(baslangic, gun)) + (dk - gun * 1440) * 60_000).toISOString();
 }
+
+// Termin, planın saat ekseninde (motor/engine.betik parseT): tarih ya da "tarih saat" duvar saatidir; sayı zaten eksendedir.
+export function terminSaati(baslangic: string, termin: unknown): number | null {
+  if (typeof termin === 'number') return Number.isFinite(termin) ? termin : null;
+  if (typeof termin !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/.exec(termin.trim());
+  if (!m) return null;
+  return (Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] ?? 0), Number(m[5] ?? 0)) - gunMs(baslangic)) / 3_600_000;
+}
+
+// Bitiş tarihi akışı (455/2 a): plan kaydedilirken siparişin son bitişi öncekinden yarım saat ya da daha çok oynadıysa ayrı satır eklenir,
+// üstüne yazılmaz. Kural planlama sayfasınınkiyle aynıdır (zx-sevkiyat svKaydet): plan güncel değilse (veri planından sonra değişti) satır
+// düşmez, havuzdaki sipariş atlanır, sipariş başına son 50 satır kalır. Sayfa aynı bitişi kendisi eklediyse ikinci satır düşmez. Gönderilen
+// değer akışı taşımıyorsa kayıttakinin üstüne eklenir; akış kaybolmaz. Zaman ve kişi sunucudandır.
+const BITIS_KAYMASI_SAAT = 0.5;
+const BITIS_AKISI_EN_COK = 50;
+const PLAN_KAYNAK_ADLARI: Record<string, string> = {
+  sifir: 'Sıfırdan kur', iyilestir: 'Mevcut planı iyileştir', onar: 'Canlıya göre onar', oneri: 'Çözücü önerisi', ekip: 'Ekip: motor + HiGHS',
+};
+export interface BitisSatiri { C: number; t: number; kaynak: string; kim: string; due: number | null }
+export function bitisAkisiEkle(yeni: unknown, eski: unknown, kim: string, an: number): unknown {
+  const c = nesne(yeni);
+  const plan = nesne(c?.['plan']);
+  const J = nesne(plan?.['J']);
+  const D = nesne(c?.['D']);
+  const baslangic = nesne(D?.['meta'])?.['baslangic'];
+  const siparisler = D?.['siparisler'];
+  if (!c || !plan || !J || plan['dataVer'] !== c['dataVer'] || !Array.isArray(siparisler) || typeof baslangic !== 'string') return yeni;
+  const kaynakKodu = typeof plan['kaynak'] === 'string' && plan['kaynak'] !== '' ? plan['kaynak'] : 'plan';
+  const kaynak = PLAN_KAYNAK_ADLARI[kaynakKodu] ?? kaynakKodu;
+  const onceki = nesne(c['sevkIz']) ?? nesne(nesne(eski)?.['sevkIz']) ?? {};
+  const akis: Record<string, unknown> = { ...onceki };
+  let degisti = c['sevkIz'] === undefined && Object.keys(onceki).length > 0;
+  for (const s of siparisler as unknown[]) {
+    const sip = nesne(s);
+    const id = sip?.['id'];
+    if (!sip || sip['havuz'] || (typeof id !== 'string' && typeof id !== 'number')) continue;
+    const bitis = nesne(J[String(id)])?.['C'];
+    if (typeof bitis !== 'number' || !Number.isFinite(bitis)) continue;
+    const l = Array.isArray(akis[String(id)]) ? (akis[String(id)] as unknown[]) : [];
+    const son = nesne(l[l.length - 1])?.['C'];
+    if (typeof son === 'number' && Math.abs(son - bitis) < BITIS_KAYMASI_SAAT) continue;
+    const satir: BitisSatiri = { C: bitis, t: an, kaynak, kim, due: terminSaati(baslangic, sip['termin']) };
+    akis[String(id)] = [...l, satir].slice(-BITIS_AKISI_EN_COK);
+    degisti = true;
+  }
+  return degisti ? { ...c, sevkIz: akis } : yeni;
+}

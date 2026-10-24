@@ -71,3 +71,7 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Sayfanın kartları henüz bu uca bağlı değil; yeni Planlama ekranı (motor tarayıcıda yok) bağlanınca eski tarayıcı yolu kalkar.
 - Süre: 60 emir / 180 adımlık uydurma veride plan seçenekleri 10 s sürdü (ölçüldü). Çok daha büyük veride 25 s sınırı aşılıp 503 dönebilir;
   o durumda #583'ün iki adımlı düzeni (POST başlatır, transaction dışı GET sonucu verir) bu uca da uygulanır.
+
+## Bağlamada kapanacak: bitiş tarihi akışı (455/2 a)
+- Akış yalnız `yaz` ucundan kaydedilen planda düşer. Plan başka yoldan kaydedilirse (sunucu çözücüsü, P5) o yol da `bitisAkisiEkle`yi çağırmalı.
+- Eski sayfanın `svKaydet`i (zx-sevkiyat) yeni ekran gelince kalkar; o zamana kadar ikisi aynı kuralla yazar.
