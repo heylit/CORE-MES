@@ -3,6 +3,7 @@ import { DurumKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
+import { CizelgeGorunumu } from './cizelge/CizelgeGorunumu.tsx';
 import { HaritaGorunumu } from './harita/HaritaGorunumu.tsx';
 import type { HaritaKomutu } from './harita/Harita.tsx';
 import { KilavuzKarti } from './harita/Kilavuz.tsx';
@@ -119,11 +120,12 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const sabit = (c as Record<string, unknown>).nbSabit;
   const sabitAd = sabit && typeof sabit === 'object' && typeof (sabit as Record<string, unknown>).ad === 'string' ? (sabit as Record<string, string>).ad ?? null : null;
   const d: OzetDurumu = { nasil, acikGrup, secJob, secTez: secim.tezgah, zaman };
-  const cubuk = (
+  const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
-      donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc}
+      donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
       baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => kisayolAc(true), planYaz: yetki.planYaz }} />
   );
+  const cubuk = cubukKur(false);
 
   return (
     <div className="tc-pym" data-gorunum={gorunum}>
@@ -134,7 +136,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} />
       ) : (
         <>
-          {cubuk}
+          {(gorunum !== 'cizelge' || !p || !v) && cubuk}
           {!p || !v ? (
             <div className="tc-pym-bos"><DurumKutusu durum="bos" mesaj={`Henüz plan yok. ${MOTOR_NOTU}`} /></div>
           ) : gorunum === 'genel' ? (
@@ -144,6 +146,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 kilavuzKapat={() => kilavuzAc(false)}
               tezGrup={tezGrup} nasilAc={nasilAc} grupAc={grupAc} sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} buyut={() => gorunumSec('atolye')} ciftTik={ciftTik} />
             </>
+          ) : gorunum === 'cizelge' ? (
+            // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
+            <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
+              planYaz={yetki.planYaz} planKilitle={yetki.planYaz} studyo={studyo} ust={cubukKur(true)} />
           ) : gorunum !== 'atolye' ? (
             <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{GORUNUM_AD[gorunum]}: {HAZIRLANIYOR}</p></div>
           ) : null}

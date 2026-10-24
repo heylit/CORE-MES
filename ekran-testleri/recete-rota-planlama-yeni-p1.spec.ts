@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './ortak.ts';
 
-// Planlama P1a (kart #536): Planlama motoru kabuğu, plan çubuğu ve nabız, görünüm ve dönem çubuğu, Başka menüsü, Özet'in altı bölümü ve
+// Planlama P1a-P1c (kart #536): Planlama motoru kabuğu, plan çubuğu ve nabız, görünüm ve dönem çubuğu, Başka menüsü, Özet'in altı bölümü ve
 // Yapılacaklar. Örnek veride çözülmüş plan olabilir de olmayabilir de; test iki hali de kabul eder, yazma göndermez (genişlikler aynı
 // veritabanında paralel koşar). Motor gerektiren düğmeler yerinde ve pasiftir (357 b).
 test.use({ hesap: 'ornek.yonetici' });
@@ -87,6 +87,36 @@ test.describe('P1b Tezgâh haritası', () => {
     await tasmaz(page);
     await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);
+    await tasmaz(page);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
+
+test.describe('P1c Çizelge', () => {
+  test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, tam ekran; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText('Planlama çalışması yok.')).first()).toBeVisible();
+    if (await page.getByText('Planlama çalışması yok.').isVisible()) { await tasmaz(page); return; }
+    await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
+    if (await page.getByText(/Henüz plan yok/).first().isVisible()) { await tasmaz(page); return; }
+    const arac = page.getByRole('toolbar', { name: 'Plan araçları' });
+    await expect(arac).toBeVisible();
+    await expect(arac.getByRole('button', { name: /Başka/ })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Çizelge, hafta' })).toBeVisible();
+    await tasmaz(page);
+    await arac.getByRole('button', { name: 'Gün', exact: true }).click();
+    await expect(page.getByRole('region', { name: /^Gün katmanı: / })).toBeVisible();
+    await tasmaz(page);
+    await arac.getByRole('button', { name: 'Ay', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Çizelge, ay' })).toBeVisible();
+    await arac.getByRole('tab', { name: 'Siparişler' }).click();
+    await expect(page.getByText(/Siparişler: Hazırlanıyor/)).toBeVisible();
+    await arac.getByRole('tab', { name: 'Tezgâhlar' }).click();
+    const cizelge = page.getByRole('region', { name: 'Çizelge', exact: true });
+    await arac.getByRole('button', { name: 'Tam ekran', exact: true }).click();
+    await expect(cizelge).toHaveAttribute('data-tam', '');
+    await page.keyboard.press('Escape');
+    await expect(cizelge).not.toHaveAttribute('data-tam', '');
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
