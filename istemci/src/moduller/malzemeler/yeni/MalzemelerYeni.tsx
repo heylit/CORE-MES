@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DurumKutusu, Sekmeler } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { DIS_SAYFALAR, malzemeEtiketiYolu } from '../gorunumler.ts';
+import { GenelAyarPenceresi } from './ayarlar/index.tsx';
 import { BOLUMLER, YENI_KOK, adrestekiBolum, bolumYolu, type Bolum, type Gezinti } from './sekmeler.ts';
+import { useBirimSistemi } from './tercihler.ts';
 import { useKatalogOrtami } from './veri.ts';
 import { useMalzemeYetkisi } from './yetki.ts';
 import './malzemeler-yeni.css';
@@ -47,6 +49,7 @@ function Icerik() {
   const git = useGezinti();
   const yonlendir = useNavigate();
   const bolum = adrestekiBolum(parca);
+  const [ayarAcik, ayarAcikYaz] = useState(false);
 
   if (ortam.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (ortam.isError) return <DurumKutusu durum="hata" mesaj="Malzeme ayarları okunamadı." yenile={() => void ortam.refetch()} />;
@@ -62,9 +65,35 @@ function Icerik() {
         secili={bolum}
         sec={(b) => { void yonlendir(bolumYolu(b)); }}
       />
+      <UstBas qrAc={() => { void yonlendir(`${YENI_KOK}?qr=1`); }} ayarAc={() => ayarAcikYaz(true)} />
       <div className="tc-myeni-govde">
         {tanim ? <tanim.ekran ortam={ortam.data} yetki={yetki} git={git} /> : <DurumKutusu durum="bos" mesaj="Bu bölümü görme yetkin yok." />}
       </div>
+      {ayarAcik && <GenelAyarPenceresi ortam={ortam.data} yetki={yetki} git={git} kapat={() => ayarAcikYaz(false)} />}
     </div>
+  );
+}
+
+// Prototipin üst başı: her görünümde aynı büyük başlık ve açıklama; sağda QR okut, Ayarlar ve birim düğmeleri, altında kayıt yeri notu.
+function UstBas({ qrAc, ayarAc }: { qrAc: () => void; ayarAc: () => void }) {
+  const [birim, birimYaz] = useBirimSistemi();
+  return (
+    <header className="tc-myeni-ust">
+      <div className="tc-myeni-ust-bas">
+        <h1>Malzemeler ve Hizmetler</h1>
+        <p className="tc-myeni-ust-aciklama">
+          Hammadde, yarı mamul, mamul, sarf malzemesi, demirbaş, ticari mal ve hizmetleri adım adım tanımla. Her kayıt kodlu bir katalog kalemine dönüşür.
+        </p>
+      </div>
+      <div className="tc-myeni-ust-sag">
+        <div className="tc-myeni-araclar" role="group" aria-label="Birim sistemi">
+          <button type="button" title="Etiketteki QR kodunu okut" onClick={qrAc}>QR okut</button>
+          <button type="button" title="Onay akışı, kod, QR ve mükerrer tarama" onClick={ayarAc}>Ayarlar</button>
+          <button type="button" aria-pressed={birim === 'met'} onClick={() => birimYaz('met')}>mm, kg</button>
+          <button type="button" aria-pressed={birim === 'imp'} onClick={() => birimYaz('imp')}>in, lb</button>
+        </div>
+        <p className="tc-myeni-not">Kartlar TMI veritabanında</p>
+      </div>
+    </header>
   );
 }

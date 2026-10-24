@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  Dugme, DurumKutusu, Rozet, SayfaBasligi, Tablo, useBildirim, type MenuOgesi, type Sutun,
-} from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Rozet, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { kgFmt, perM2Fmt, perMFmt, YOK } from '../bicim.ts';
 import { KatalogSimgesi } from '../ortak/KatalogSimgesi.tsx';
 import { ONAY, TURLER } from '../sabitler/index.ts';
@@ -14,14 +12,14 @@ import { useBirimSistemi } from '../tercihler.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import { kayitHatasi, useKartIptal, useKartKaydet, useKartlar, useKgFiyatlari } from '../veri.ts';
 import { Birlestir } from './Birlestir.tsx';
-import { birlesmeCsvMetni, katalogCsvMetni, katalogJsonMetni } from './disa-aktarma.ts';
+import { katalogCsvMetni, katalogJsonMetni } from './disa-aktarma.ts';
 import { dosyaIndir } from './dosya.ts';
 import { EtiketPenceresi, etiketlenebilir } from './EtiketPenceresi.tsx';
 import { ExcelPenceresi } from './ExcelPenceresi.tsx';
 import { Karsilastirma } from './Karsilastirma.tsx';
 import { KartPenceresi } from './KartPenceresi.tsx';
 import {
-  karsilastirilabilir, metinListesi, sayac, sayacMetni, secimiBuda, suzulmus, topluOnaylanabilir, type FiltreSecimi,
+  karsilastirilabilir, metinListesi, secimiBuda, suzulmus, topluOnaylanabilir, type FiltreSecimi,
 } from './liste.ts';
 import { kimlikOf } from './liste.ts';
 import { OnayRozeti, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
@@ -37,7 +35,10 @@ type AcikPencere =
   | { tur: 'qr' }
   | { tur: 'excel' };
 
+// 465/3: liste 50 satırlık sayfalarla kalır (eski ekranda tek liste).
 const SAYFA_BOYU = 50;
+// Prototip süzgeç kutusunu bu genişliğin altında kapalı açar (kart listesi hemen görünsün).
+const DAR_EKRAN = '(max-width: 980px)';
 
 function agirlikAlti(x: KartKaydi, b: KuralBaglami): string {
   const g = x.g ?? {};
@@ -115,12 +116,11 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const kaydet = useKartKaydet();
   const iptal = useKartIptal();
   const { bildir } = useBildirim();
-  const [birim, birimYaz] = useBirimSistemi();
+  const [birim] = useBirimSistemi();
   const [adres, adresYaz] = useSearchParams();
   const [ara, araYaz] = useState('');
   const [sec, secYaz] = useState<FiltreSecimi>({});
-  // Süzgeçler geniş ekranda yanda açık başlar; dar ekranda listenin üstünü kaplamasın diye kapalı (düğmeyle açılır).
-  const [suzgecAcik, suzgecAcikYaz] = useState(() => window.matchMedia?.('(min-width: 1024px)').matches ?? true);
+  const [suzgecAcik, suzgecAcikYaz] = useState(() => !(window.matchMedia?.(DAR_EKRAN).matches ?? false));
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(new Set());
   const [sayfa, sayfaYaz] = useState(1);
   const [pencere, pencereYaz] = useState<AcikPencere | null>(null);
@@ -137,6 +137,13 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
 
   useEffect(() => { seciliYaz((s) => secimiBuda(s, kartlar)); }, [kartlar]);
   useEffect(() => { sayfaYaz(1); }, [ara, sec]);
+  // Üst baştaki "QR okut" katalogu `?qr=1` ile açar; pencere açılınca adres temizlenir.
+  const qrIstendi = adres.get('qr') !== null;
+  useEffect(() => {
+    if (!qrIstendi) return;
+    pencereYaz({ tur: 'qr' });
+    adresYaz((a) => { const y = new URLSearchParams(a); y.delete('qr'); return y; }, { replace: true });
+  }, [qrIstendi, adresYaz]);
 
   const bul = (kimlik: string) => kartlar.find((k) => k.kimlik === kimlik);
   const kartKimligi = adres.get('kart');
@@ -203,22 +210,10 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   if (kartlarSorgusu.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (kartlarSorgusu.isError) return <DurumKutusu durum="hata" yenile={() => void kartlarSorgusu.refetch()} />;
 
-  const s = sayac(kartlar, b);
   const gorunenKayitlar = liste.map((k) => k.kayit);
   const onaylanabilir = topluOnaylanabilir(secili, kartlar, b).length;
   const bosKatalog = kartlar.length === 0;
-  const eylemler: MenuOgesi[] = [
-    { anahtar: 'qr', baslik: 'QR okut', simge: 'scan', sec: () => pencereYaz({ tur: 'qr' }) },
-    { anahtar: 'excel', baslik: 'Excel: şablon, dışa ve içe aktar', simge: 'grid', sec: () => pencereYaz({ tur: 'excel' }) },
-    { anahtar: 'csv', baslik: 'CSV dışa aktar', simge: 'download', pasif: bosKatalog, sec: () => dosyaIndir('malzeme-katalogu.csv', katalogCsvMetni(gorunenKayitlar, b)) },
-    { anahtar: 'json', baslik: 'JSON dışa aktar', simge: 'download', pasif: bosKatalog, sec: () => dosyaIndir('malzeme-katalogu.json', katalogJsonMetni(gorunenKayitlar, b)) },
-    { anahtar: 'birlesme', baslik: 'Birleştirme listesini indir', simge: 'download', sec: () => {
-      if (!K.birlesmeListesi(kayitlar, b).length) { bildir('bilgi', 'Henüz birleştirilmiş kart yok.'); return; }
-      dosyaIndir('birlestirme-listesi.csv', birlesmeCsvMetni(kayitlar, b));
-    } },
-    { anahtar: 'birim', baslik: birim === 'met' ? 'Birim: in, lb' : 'Birim: mm, kg', simge: 'ruler', sec: () => birimYaz(birim === 'met' ? 'imp' : 'met') },
-    { anahtar: 'ayarlar', baslik: 'Ayarlar', simge: 'gear', sec: () => git.ayarlar('genel') },
-  ];
+  const suzgecSayisi = K.filtreEtiketleri(sec, b).length;
 
   const pencereler = (() => {
     if (!pencere) return null;
@@ -246,21 +241,26 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
 
   return (
     <div className="tc-mk">
-      <SayfaBasligi
-        baslik="Katalog" simge="box" alt={sayacMetni(s)} eylemler={eylemler}
-        birincil={yetki.yaz ? { etiket: 'Yeni kart', simge: 'plus', yap: () => git.yeniKart() } : undefined}
-      />
+      <div className="tc-mk-araclar">
+        <input
+          className="tc-alan-kutu tc-mk-ara" type="search" value={ara} onChange={(o) => araYaz(o.target.value)}
+          placeholder="Kod, ad, ERP kodu, açıklama veya tedarikçi ara" aria-label="Katalogda ara"
+        />
+        <span className="tc-mk-ara-bosluk" />
+        <Dugme tur="birincil" onClick={() => pencereYaz({ tur: 'excel' })}>Excel: şablon, dışa ve içe aktar</Dugme>
+        <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.csv', katalogCsvMetni(gorunenKayitlar, b))}>CSV dışa aktar</Dugme>
+        <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.json', katalogJsonMetni(gorunenKayitlar, b))}>JSON dışa aktar</Dugme>
+      </div>
       {bosKatalog ? (
         <DurumKutusu durum="bos" mesaj="Katalog boş.">
           {yetki.yaz && <Dugme tur="birincil" simge="plus" onClick={() => git.yeniKart()}>Yeni malzeme</Dugme>}
         </DurumKutusu>
       ) : (
-        <div className="tc-mk-duzen" data-suzgec={suzgecAcik ? 'acik' : undefined}>
-          {suzgecAcik && (
-            <aside className="tc-mk-yan">
-              <Suzgecler liste={metinTabani} sec={sec} degistir={secYaz} b={b} />
-            </aside>
-          )}
+        <div className="tc-mk-duzen">
+          <details className="tc-mk-yan" open={suzgecAcik} onToggle={(o) => suzgecAcikYaz(o.currentTarget.open)}>
+            <summary>Süzgeçler{suzgecSayisi ? ` (${suzgecSayisi})` : ''}</summary>
+            <aside aria-label="Süzgeçler"><Suzgecler liste={metinTabani} sec={sec} degistir={secYaz} b={b} /></aside>
+          </details>
           <div className="tc-mk-ana">
             <AktifSuzgecler sec={sec} adet={liste.length} degistir={secYaz} b={b} />
             {secili.size > 0 && (
@@ -284,14 +284,6 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
               satirSec={(k) => kartAc(k.kimlik)}
               bosMesaj="Arama ve süzgeçlerle eşleşen kart yok."
               sayfalama={{ sayfa, sayfaBoyu: SAYFA_BOYU, toplam: liste.length, degistir: sayfaYaz }}
-              arac={{
-                arama: { deger: ara, degistir: araYaz, etiket: 'Katalogda ara', yerTutucu: 'Kod, ad, ERP kodu, açıklama veya tedarikçi ara' },
-                sag: (
-                  <Dugme simge="list" aria-pressed={suzgecAcik} onClick={() => suzgecAcikYaz((a) => !a)}>
-                    Süzgeçler{K.filtreEtiketleri(sec, b).length ? ` (${K.filtreEtiketleri(sec, b).length})` : ''}
-                  </Dugme>
-                ),
-              }}
             />
           </div>
         </div>
