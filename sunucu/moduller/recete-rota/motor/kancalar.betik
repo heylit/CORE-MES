@@ -404,3 +404,5 @@ function kayanPencereKur() {
   }
 }
 kayanPencereKur();
+/* sayfanın işçisi her girdide ağırlıkları ve TL amacını girdiden alır (zu TL_ISCI, zw PD_ISCI); sunucunun çözücüsü ve değerlendirmesi de */
+function stHazirla(st) { if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); } return st; }
