@@ -75,7 +75,24 @@ test.describe('yönetici', () => {
       await expect(page.getByRole('table', { name: 'İş emirleri ve siparişler' }).or(page.getByRole('status').filter({ hasText: 'CSV olarak aktarabilir' }))).toBeVisible();
     });
   });
-  test.describe('K3 Uygunsuzluk, DÖF, Formlar', () => {});
+  test.describe('K3 Uygunsuzluk, DÖF, Formlar', () => {
+    const GORUNUMLER = [
+      ['uygunsuzluklar', /Uygunsuzluklar \(NCR\)/],
+      ['dof', /DÖF \/ 8D/],
+      ['formlar', /Formlar ve kontrol listeleri/],
+    ] as const;
+
+    for (const [yol, baslik] of GORUNUMLER) {
+      for (const genislik of [360, 768, 1280]) {
+        test(`${yol} ${genislik} genişlikte açılır, yatay taşmaz`, async ({ page, ac }) => {
+          await page.setViewportSize({ width: genislik, height: 800 });
+          await ac(`/kalite-merkezi/yeni/${yol}`);
+          await expect(page.getByRole('heading', { name: baslik })).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+        });
+      }
+    }
+  });
   test.describe('K4 Kaynaklar ve Raporlar', () => {
     for (const [yol, baslik] of [
       ['cihazlar', 'Ölçüm cihazları'], ['tedarikciler', 'Tedarikçi kalitesi'], ['belgeler', 'Belgeler ve sertifikalar'],

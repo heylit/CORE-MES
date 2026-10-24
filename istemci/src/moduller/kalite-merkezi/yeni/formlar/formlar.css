@@ -1,0 +1,46 @@
+/* Formlar: katalog kartları, doldurma penceresi, tasarım alanı ve belge satırları. Yalnız tasarım değişkenleri. */
+.tc-km3-arac { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: flex-end; }
+.tc-km3-arac > .tc-alan { flex: 1 1 var(--orb-3); min-width: 0; }
+.tc-km3-grup { display: grid; gap: var(--b-2); }
+.tc-km3-grup-baslik { margin: 0; font-size: var(--yazi-m); }
+.tc-km3-kartlar { display: grid; grid-template-columns: 1fr; gap: var(--b-3); }
+.tc-km3-kart {
+  display: grid; gap: var(--b-2); align-content: start; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel); min-width: 0;
+}
+.tc-km3-kart-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+.tc-km3-kart-sayi { margin-left: auto; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km3-kart-ad { margin: 0; font-size: var(--yazi-m); }
+.tc-km3-kart-dugme { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tc-km3-kart-dugme:hover { text-decoration: underline; }
+.tc-km3-kart-metin { margin: 0; font-size: var(--yazi-s); }
+.tc-km3-kayit-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; margin-top: var(--b-4); }
+
+.tc-km3-tablo { display: grid; gap: var(--b-2); justify-items: start; }
+.tc-km3-tablo .tc-km-tablo-kap { width: 100%; }
+.tc-km3-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.tc-km3-tasarim { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); }
+.tc-km3-tasarim-yan { display: grid; gap: var(--b-2); align-content: start; min-width: 0; }
+.tc-km3-dsl textarea { font-family: var(--font-mono); }
+.tc-km3-etiket { margin: 0; font-size: var(--yazi-s); font-weight: 600; }
+.tc-km3-yardim { padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); font-size: var(--yazi-xs); }
+.tc-km3-yardim ul { margin: var(--b-1) 0; padding-left: var(--b-4); }
+.tc-km3-yardim p { margin: 0; }
+
+.pv .tc-km3-belge-ad { width: 32%; }
+.pv .tc-km3-belge-bos-uzun { height: var(--orb-1); }
+.pv .tc-km3-belge-satir { height: var(--b-5); }
+.pv .tc-km3-belge-isaret { width: var(--orb-1); text-align: center; }
+.pv .tc-km3-belge-eh { width: var(--orb-2); }
+.pv .tagp { max-width: calc(var(--orb-3) * 4); margin: 0 auto; padding: var(--b-3); border: var(--cizgi-kalin) solid var(--ink); }
+.pv .tag-h { display: flex; justify-content: space-between; font-size: var(--yazi-xs); }
+.pv .tag-st { margin: var(--b-2) 0; padding: var(--b-1); border: var(--cizgi-kalin) double var(--ink); font-size: var(--yazi-3xl); font-weight: 700; text-align: center; }
+
+@media (min-width: 768px) {
+  .tc-km3-kartlar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-km3-tasarim { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (min-width: 1100px) {
+  .tc-km3-kartlar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
