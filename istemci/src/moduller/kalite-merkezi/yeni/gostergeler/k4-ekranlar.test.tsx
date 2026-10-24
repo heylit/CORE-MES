@@ -89,7 +89,8 @@ describe('Belgeler', () => {
 describe('Kalite göstergeleri', () => {
   it('göstergeleri çizer; okuyana kayıt düğmesi çıkmaz', async () => {
     kmAc('gostergeler', OKUYAN, { ncr: [{ _id: 'n', tarih: BUGUN, durum: 'Açık', ciddiyet: 'Kritik', hataTipi: 'Boyutsal' }] });
-    expect(await screen.findByText('İlk geçiş oranı', { selector: '.tc-km4-kpi-baslik' })).toBeTruthy();
+    // Terim işaretlenince başlık metni bölünür; metin bütün olarak aranır.
+    expect(await screen.findByText((_, el) => !!el?.matches('.tc-km4-kpi-baslik') && el.textContent === 'İlk geçiş oranı')).toBeTruthy();
     expect(screen.getByText('Açık uygunsuzluk')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Muayene kaydet/ })).toBeNull();
   });
