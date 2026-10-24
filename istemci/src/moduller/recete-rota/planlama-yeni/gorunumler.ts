@@ -1,6 +1,8 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { MALIYET_ANAHTARLARI, ONERILEN_IKINCI_MENU } from '../planlama-menusu.ts';
+import type { CalismaKomutu } from './kayit.ts';
+import type { PlanlamaCalismasi } from './tipler.ts';
 import type { PlanlamaDeposu } from './veri.ts';
 import type { PlanlamaYetkisi } from './yetki.ts';
 
@@ -13,9 +15,12 @@ export type PlanlamaGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'];
 // Kök adres Planlama motoru'dur (ikinci menünün ilk planlama maddesi).
 export const ACILIS: PlanlamaGorunumu = 'plan';
 
-// Her görünüme verilen ortak özellikler. `git` başka görünüme geçer; `yenile` açılış okumalarını yeniden yapar.
+// Her görünüme verilen ortak özellikler. `git` başka görünüme geçer; `yenile` açılış okumalarını yeniden yapar. `calisma` çalışmanın güncel
+// halidir (değişiklikten sonra yenisi gelir; `depo.calisma` açılıştakidir). `komut` yazma yetkisi yoksa ya da çalışma kaydı yoksa null'dır.
 export interface PlanlamaEkranOzellikleri {
   depo: PlanlamaDeposu;
+  calisma: PlanlamaCalismasi | null;
+  komut: CalismaKomutu | null;
   yetki: PlanlamaYetkisi;
   git: (g: PlanlamaGorunumu) => void;
   yenile: () => void;
