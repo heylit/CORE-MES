@@ -4,14 +4,16 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 
 // Eski planlama yan sayfalarının "Veri gir" sihirbazı (zz24-sade.betik sdSihirbaz; tasarım koruma): sekmenin içinde açılır; adım şeridi,
 // her adımda yalnız o adımın alanları, sonda "Kontrol et" özeti; Vazgeç, Geri, İleri, Kaydet. Değerler adımlar arasında korunur. Alan
-// denetimi eski formOku iletileriyle yapılır.
+// denetimi eski formOku iletileriyle yapılır. Dolu değerle ve belli bir adımdan açılabilir (eski isFormAc ve gvFormAc).
 
 export type SihirbazDegeri = Record<string, string | boolean>;
 export interface SihirbazAlani {
-  k: string; ad: string; tur: 'secim' | 'sayi' | 'evet';
+  k: string; ad: string; tur: 'secim' | 'sayi' | 'evet' | 'metin' | 'tarih';
   secenekler?: readonly (readonly [string, string])[]; zorunlu?: boolean; min?: number; max?: number; adim?: number; tam?: boolean; ipucu?: string;
 }
 export interface SihirbazAdimi { ad: string; ne?: string; k: readonly string[] }
+// Dolu açılış: değerler ilk değerin üstüne yazılır; adım verilmezse değer varsa ilk adım atlanır.
+export interface SihirbazAcilisi { deg?: SihirbazDegeri; adim?: number }
 export interface SihirbazTanimi {
   id: string; ad: string; simge: SimgeAdi; ne: string;
   // Alanlar değerlere göre değişebilir (seçilen aileye göre ipucu gibi).
@@ -52,9 +54,19 @@ function degerYaz(a: SihirbazAlani, v: string | boolean | undefined): string {
   return v;
 }
 
-export function Sihirbaz({ tanim, vazgec, bitti }: { tanim: SihirbazTanimi; vazgec: () => void; bitti: (metin: string) => void }) {
-  const [adim, adimYaz] = useState(0);
-  const [d, dYaz] = useState<SihirbazDegeri>(tanim.ilk);
+function acilisKur(tanim: SihirbazTanimi, acilis: SihirbazAcilisi | undefined): { adim: number; d: SihirbazDegeri } {
+  const deg = acilis?.deg ?? {};
+  const d = { ...tanim.ilk(), ...deg };
+  const adim = Math.max(0, Math.min(acilis?.adim ?? (Object.keys(deg).length ? 1 : 0), tanim.adimlar.length));
+  return { adim, d: adim >= 1 ? tanim.ileri?.(d, 0) ?? d : d };
+}
+
+export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
+  tanim: SihirbazTanimi; acilis?: SihirbazAcilisi; vazgec: () => void; bitti: (metin: string) => void;
+}) {
+  const [ilk] = useState(() => acilisKur(tanim, acilis));
+  const [adim, adimYaz] = useState(ilk.adim);
+  const [d, dYaz] = useState<SihirbazDegeri>(ilk.d);
   const [hata, hataYaz] = useState<string[]>([]);
   const { adimlar } = tanim;
   const alanlar = tanim.alanlar(d);
@@ -92,6 +104,12 @@ export function Sihirbaz({ tanim, vazgec, bitti }: { tanim: SihirbazTanimi; vazg
       return (
         <Secim key={a.k} etiket={a.ad} ipucu={a.ipucu} required={a.zorunlu} bosSecenek="Seçiniz" value={typeof v === 'string' ? v : ''}
           secenekler={(a.secenekler ?? []).map(([k, ad]) => ({ deger: k, baslik: ad }))} onChange={(o) => { degistir(a.k, o.target.value); }} />
+      );
+    }
+    if (a.tur === 'metin' || a.tur === 'tarih') {
+      return (
+        <Girdi key={a.k} etiket={a.ad} ipucu={a.ipucu} required={a.zorunlu} type={a.tur === 'tarih' ? 'date' : 'text'}
+          placeholder={a.tur === 'metin' ? a.ipucu : undefined} value={typeof v === 'string' ? v : ''} onChange={(o) => { degistir(a.k, o.target.value); }} />
       );
     }
     return (

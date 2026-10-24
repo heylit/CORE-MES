@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { SadeSayfa, alanHatalari, type SadeTanimi, type SihirbazTanimi } from './index.ts';
+import { SadeSayfa, Sihirbaz, alanHatalari, type SadeTanimi, type SihirbazTanimi } from './index.ts';
 
 // Değerler uydurmadır.
 afterEach(() => { cleanup(); });
@@ -116,6 +116,50 @@ describe('Sade kabuk', () => {
     fireEvent.click(dugme('Kaydet'));
     expect(screen.getByRole('alert').textContent).toBe('Hiçbir şey değişmedi.');
     expect(kaydet).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sihirbaz açılışı ve metin, tarih alanları', () => {
+  const notFormu = (kaydet = vi.fn()): SihirbazTanimi => ({
+    id: 'not', ad: 'Not ekle', simge: 'edit', ne: 'Gün ve açıklama.',
+    alanlar: () => [
+      { k: 'yer', ad: 'Yer', tur: 'secim', zorunlu: true, secenekler: [['y1', 'Birinci yer'], ['y2', 'İkinci yer']] },
+      { k: 'gun', ad: 'Gün', tur: 'tarih', zorunlu: true },
+      { k: 'aciklama', ad: 'Açıklama', tur: 'metin', ipucu: 'Kısa yazın' },
+    ],
+    adimlar: [{ ad: 'Yer', k: ['yer'] }, { ad: 'Ayrıntı', k: ['gun', 'aciklama'] }],
+    ilk: () => ({ yer: '', gun: '', aciklama: '' }),
+    ileri: (d, adim) => (adim === 0 ? { ...d, aciklama: `${String(d.yer)} için` } : undefined),
+    sonuc: 'not eklenir.', kaydet, bitti: () => 'Not eklendi',
+  });
+
+  it('dolu değerle açılınca ilk adım atlanır ve ileri çalışır; tarih boşsa eski ileti, doluysa özette görünür', () => {
+    const kaydet = vi.fn();
+    const t: SadeTanimi = { ...sayfa([notFormu(kaydet)]), yapilacak: (g) => [{ simge: 'edit', metin: 'Not', dugme: { ad: 'Ekle', simge: 'plus', yap: () => { g.form('not', { deg: { yer: 'y2' } }); } } }] };
+    render(<SadeSayfa tanim={t} />);
+    fireEvent.click(dugme('Ekle'));
+    expect(document.querySelector('[aria-current="step"]')?.textContent).toBe('2Ayrıntı');
+    const aciklama = screen.getByRole('textbox', { name: /Açıklama/ }) as HTMLInputElement;
+    expect(aciklama.value).toBe('y2 için');
+    expect(aciklama.placeholder).toBe('Kısa yazın');
+    const gun = screen.getByLabelText(/Gün/) as HTMLInputElement;
+    expect(gun.type).toBe('date');
+    fireEvent.click(dugme('İleri'));
+    expect(screen.getByRole('alert').textContent).toBe('Gün boş olamaz.');
+    fireEvent.change(gun, { target: { value: '2026-11-02' } });
+    fireEvent.click(dugme('İleri'));
+    expect([...document.querySelectorAll('.tc-sade-ozet dd')].map((x) => x.textContent)).toEqual(['İkinci yer', '2026-11-02', 'y2 için']);
+    fireEvent.click(dugme('Kaydet'));
+    expect(kaydet).toHaveBeenCalledWith({ yer: 'y2', gun: '2026-11-02', aciklama: 'y2 için' });
+  });
+
+  it('verilen adımdan açılır; değer yoksa baştan', () => {
+    const { unmount } = render(<Sihirbaz tanim={notFormu()} acilis={{ deg: { yer: 'y1' }, adim: 0 }} vazgec={() => {}} bitti={() => {}} />);
+    expect(document.querySelector('[aria-current="step"]')?.textContent).toBe('1Yer');
+    expect((screen.getByLabelText(/Yer/) as HTMLSelectElement).value).toBe('y1');
+    unmount();
+    render(<Sihirbaz tanim={notFormu()} vazgec={() => {}} bitti={() => {}} />);
+    expect(document.querySelector('[aria-current="step"]')?.textContent).toBe('1Yer');
   });
 });
 

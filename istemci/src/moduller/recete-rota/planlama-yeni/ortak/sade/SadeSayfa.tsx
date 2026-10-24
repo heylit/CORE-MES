@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Dugme, Sekmeler, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import { Sihirbaz, type SihirbazTanimi } from './Sihirbaz.tsx';
+import { Sihirbaz, type SihirbazAcilisi, type SihirbazTanimi } from './Sihirbaz.tsx';
 import './sade.css';
 
 // Eski planlama yan sayfalarının sade kabuğu (zz24-sade.betik sdSayfa; tasarım koruma): başlık ve açıklama, üç sekme. Özet (durum kutuları,
@@ -15,8 +15,8 @@ export interface SadeIs {
   dugme?: { ad: string; simge: SimgeAdi; yap: () => void; birincil?: boolean };
 }
 export type SadeSekme = 'ozet' | 'gir' | 'tum';
-// Özetteki işlerin düğmeleri: bir formu açar ya da sekmeye geçer.
-export interface SadeGecis { form: (id: string) => void; sekme: (s: SadeSekme) => void }
+// Özetteki işlerin düğmeleri: bir formu (gerekirse dolu ve belli adımdan) açar ya da sekmeye geçer.
+export interface SadeGecis { form: (id: string, acilis?: SihirbazAcilisi) => void; sekme: (s: SadeSekme) => void }
 
 export interface SadeTanimi {
   ad: string; simge: SimgeAdi; ne: string;
@@ -73,11 +73,16 @@ function SonKart({ metin, kapat }: { metin: string; kapat: () => void }) {
 export function SadeSayfa({ tanim }: { tanim: SadeTanimi }) {
   const [sek, sekYaz] = useState<SadeSekme>('ozet');
   const [formId, formIdYaz] = useState<string | null>(null);
+  // Her açılış sihirbazı baştan kurar (aynı form başka değerle yeniden açılabilir).
+  const [acilis, acilisYaz] = useState<{ no: number; deger?: SihirbazAcilisi }>({ no: 0 });
   const [son, sonYaz] = useState<string | null>(null);
   const { formlar } = tanim;
   const secili: SadeSekme = sek === 'gir' && !formlar.length ? 'ozet' : sek;
   const sekmeyeGec = (s: SadeSekme): void => { sekYaz(s); if (s !== 'gir') formIdYaz(null); };
-  const formAc = (id: string): void => { if (!formlar.some((f) => f.id === id)) return; sekYaz('gir'); formIdYaz(id); sonYaz(null); };
+  const formAc = (id: string, deger?: SihirbazAcilisi): void => {
+    if (!formlar.some((f) => f.id === id)) return;
+    sekYaz('gir'); formIdYaz(id); acilisYaz((a) => ({ no: a.no + 1, deger })); sonYaz(null);
+  };
   const acik = secili === 'gir' ? formlar.find((f) => f.id === formId) ?? null : null;
   const sekmeler = [
     { anahtar: 'ozet' as const, baslik: 'Özet', simge: 'eye' as const },
@@ -90,7 +95,7 @@ export function SadeSayfa({ tanim }: { tanim: SadeTanimi }) {
   let govde: ReactNode;
   if (secili === 'tum') govde = tanim.tum();
   else if (acik) {
-    govde = <Sihirbaz key={acik.id} tanim={acik} vazgec={() => { formIdYaz(null); }} bitti={(m) => { formIdYaz(null); sonYaz(m); }} />;
+    govde = <Sihirbaz key={`${acik.id}-${acilis.no}`} tanim={acik} acilis={acilis.deger} vazgec={() => { formIdYaz(null); }} bitti={(m) => { formIdYaz(null); sonYaz(m); }} />;
   } else if (secili === 'gir') {
     govde = (
       <>
