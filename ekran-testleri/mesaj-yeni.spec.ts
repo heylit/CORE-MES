@@ -72,6 +72,8 @@ test.describe('M3 Bugün ve Ayarlar', () => {
     test(`Bugün ${genislik} genişlikte özet ve gün şeridiyle taşmadan açılır`, async ({ page, ac }) => {
       await page.setViewportSize({ width: genislik, height: 800 });
       await ac('/mesaj/yeni');
+      // Kök yol kişinin son görünümüne döner (eski ekranla ortak tercih); başka testler onu değiştirdiği için Bugün sekmesi seçilir.
+      await page.getByRole('tablist', { name: 'Mesaj bölümleri' }).getByRole('tab', { name: /^Bugün/ }).click();
       await expect(page.getByRole('heading', { name: 'Bugün', level: 2 })).toBeVisible();
       await expect(page.getByRole('group', { name: 'Bugünün akışı' })).toBeVisible();
       expect(await page.evaluate(tasma), 'yatay taşma').toBeLessThanOrEqual(0);
