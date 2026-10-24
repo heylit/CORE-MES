@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
+  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, taslakAcGovdesi,
   urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import {
-  agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
+  agac, emreKopyala, emreUygula, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   karttanTaslaklar, talimatListesi, talimatYaz, taslakAc, urunRevizyonlari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
@@ -106,6 +106,17 @@ export const uclar = [
     yetki: 'rota.yaz',
     cevap: karttanTaslaklarCevabi,
     isle: ({ db, gunluk }) => karttanTaslaklar(db, gunluk),
+  }),
+  // Yeni kartta kaynak ürün seçimi (#500): kart yazan (Malzemeler sihirbazı) da rota yazan da ister. Açılan her zaman taslaktır.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/kopya-iste',
+    tekrarKorumali: true,
+    yetki: { biri: ['malzemeler.yaz', 'rota.yaz'] },
+    parametre: urunParametresi,
+    govde: kopyaIsteGovdesi,
+    cevap: kopyaIstegiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kopyaIste(db, kullanici, parametre.urunId, govde.kaynakUrunId),
   }),
   uc({
     yontem: 'POST',
