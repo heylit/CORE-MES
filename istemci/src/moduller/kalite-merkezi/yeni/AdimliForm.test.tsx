@@ -133,3 +133,14 @@ describe('AdimliForm kontrol maddeleri ve taslak', () => {
     expect(await screen.findByText(/Soru 0 \/ 3/)).toBeTruthy();
   });
 });
+
+describe('AdimliForm ikinci kaydet ve pencere', () => {
+  it('ikinci düğme zorunlu alanı denetlemeden kaydeder; kaydet etiketi değişir', async () => {
+    const taslak = vi.fn();
+    const kaydet = ac(vi.fn(), { ikinciKaydet: { etiket: 'Taslak kaydet', yap: taslak }, kaydetMetni: 'Kaydet ve onaya gönder', pencere: 'tam' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Taslak kaydet' }));
+    await waitFor(() => expect(taslak).toHaveBeenCalledTimes(1));
+    expect(kaydet).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Kaydet ve onaya gönder' })).toBeTruthy();
+  });
+});

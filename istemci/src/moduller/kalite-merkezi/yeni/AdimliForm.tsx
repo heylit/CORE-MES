@@ -64,6 +64,10 @@ interface Ozellikler {
   // Yeni kayıtta yarım form bu anahtarla 7 gün saklanır; null ya da düzenlemede saklanmaz.
   taslak?: string | null;
   kapat: () => void;
+  // Zorunlu alan denetimi olmadan kaydeden ikinci düğme (Formlar'daki "Taslak kaydet").
+  ikinciKaydet?: { etiket: string; yap: (d: FormVerisi) => Promise<void> | void };
+  kaydetMetni?: string;
+  pencere?: 'yan' | 'tam';
 }
 
 export const TASLAK_ONEKI = 'kym-taslak:';
@@ -111,7 +115,7 @@ export function eksikler(alanlar: readonly KmAlan[], d: FormVerisi): KmAlan[] {
 
 // Uygulamanın adımlı penceresi (steppedModal): adım çubuğu, zorunlu sayacı, kontrol ve kaydet adımı, taslak, Ctrl+Enter, Geçmiş.
 // Dört alandan az tek adımlı formda kontrol adımı yoktur (uygulamadaki kısa form).
-export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denetle, sonuc, onizleme, gecmis, taslak = null, kapat }: Ozellikler) {
+export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denetle, sonuc, onizleme, gecmis, taslak = null, kapat, ikinciKaydet, kaydetMetni = 'Kaydet', pencere = 'yan' }: Ozellikler) {
   const { bildir } = useBildirim();
   const { veri } = useKmVerisi();
   const kimlik = useId();
@@ -277,6 +281,18 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
     }
   };
 
+  const ikinciKaydetDene = async () => {
+    if (!ikinciKaydet) return;
+    kaydediliyorYaz(true);
+    try {
+      await ikinciKaydet.yap(toplanan());
+    } catch (e) {
+      bildir('hata', hataIletisi(e, 'Kayıt kaydedilemedi. Bağlantıyı kontrol edip yeniden deneyin.'));
+    } finally {
+      kaydediliyorYaz(false);
+    }
+  };
+
   const tus = (o: KeyboardEvent) => {
     if (tekTek && !o.nativeEvent.isComposing) {
       const t = o.target as HTMLElement;
@@ -414,6 +430,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
   const alt = (
     <>
       <Dugme tur="ikincil" onClick={kapatmayiDene} className={tekTek ? 'tc-km-fq-dar-gizli' : undefined}>Vazgeç</Dugme>
+      {ikinciKaydet && <Dugme tur="ikincil" yukleniyor={kaydediliyor} onClick={() => void ikinciKaydetDene()}>{ikinciKaydet.etiket}</Dugme>}
       {gecmis && <Dugme tur="ikincil" simge="clock" onClick={() => gecmisAcikYaz(true)} className={tekTek ? 'tc-km-fq-dar-gizli' : undefined}>Geçmiş</Dugme>}
       {onizleme && <Dugme tur="ikincil" simge="eye" aria-pressed={onizlemeAcik} onClick={() => onizlemeAcikYaz(!onizlemeAcik)}
         className={tekTek ? 'tc-km-fq-dar-gizli' : undefined}>Önizle</Dugme>}
@@ -421,7 +438,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
       {!tekAdim && !tekTek && <Dugme tur="ikincil" simge="chev-left" disabled={adim === 0} onClick={() => git(adim - 1)}>Geri</Dugme>}
       {!tekTek && adim < sonAdim && <Dugme simge="chev-right" onClick={() => git(adim + 1)}>İleri</Dugme>}
       <Dugme tur={adim === sonAdim ? 'birincil' : 'ikincil'} yukleniyor={kaydediliyor} onClick={() => void kaydetDene()}
-        className={tekTek && soru !== OZET ? 'tc-km-fq-dar-gizli' : undefined}>Kaydet</Dugme>
+        className={tekTek && soru !== OZET ? 'tc-km-fq-dar-gizli' : undefined}>{kaydetMetni}</Dugme>
       {tekTek && (
         <span className="tc-km-fq-gezinme">
           <Dugme tur="ikincil" disabled={soru !== OZET && siradaki <= 0} onClick={onceki}>‹ Geri</Dugme>
@@ -442,7 +459,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
 
   return (
     <>
-      <Pencere acik kapat={kapatmayiDene} baslik={baslik} tur="yan" alt={alt}>
+      <Pencere acik kapat={kapatmayiDene} baslik={baslik} tur={pencere} alt={alt}>
         <div ref={govde} className={`tc-km-form${tekTek ? ' tc-km-fq-acik' : ''}`} onKeyDown={tus}>
           {!tekAdim && (
             <div className="tc-km-fq-ust">
