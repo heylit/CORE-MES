@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { ORNEK_AYAR } from './ornek-veri.ts';
 import { YONETICI, json, sunucuKur, yeniIstemci } from './test-ortak.tsx';
-import type { KartKaydi } from './tipler.ts';
+import { kayitTamamla, type KartKaydi } from './tipler.ts';
 import {
   firmaAra, kayitHatasi, kartlariOku, ortamKur, stokluKayit, useAyarKaydet, useKartKaydet, useKartlar, useKgFiyatlari, yolParcasi,
 } from './veri.ts';
@@ -99,5 +99,17 @@ describe('veri katmanı', () => {
     expect(kayitHatasi(new ApiHatasi(400, { kod: 'GECERSIZ', mesaj: 'Kategori yok.', alan: 'kayit.g.kat' })).kod).toBe('kategori-yok');
     expect(kayitHatasi(new ApiHatasi(400, { kod: 'GECERSIZ', mesaj: 'Kısa.', alan: 'ozet.mukerrer_gerekcesi' })).kod).toBe('gerekce-kisa');
     expect(kayitHatasi(new Error('x'))).toEqual({ kod: null, ileti: 'Kayıt yapılamadı, birazdan tekrar dene.' });
+  });
+
+  test('kayitTamamla: eksik alan taslağın boş değeriyle dolar, olan alan ve bilinmeyen alan kalır', () => {
+    const k = kayitTamamla({ tur: 'hammadde', fam: 'metal', com: { kod: 'HM-1', ad: '' } as never, ozel: 5 });
+    expect(k.opts).toEqual({});
+    expect(k.dims).toEqual({});
+    expect(k.com.sertifika).toEqual([]);
+    expect(k.com.kod).toBe('HM-1');
+    expect(k.fam).toBe('metal');
+    expect(k['ozel']).toBe(5);
+    expect(k.kodManual).toBe(true);
+    expect(k.adManual).toBe(false);
   });
 });

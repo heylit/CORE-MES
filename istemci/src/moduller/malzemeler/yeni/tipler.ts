@@ -80,6 +80,19 @@ export interface KartKaydi {
 }
 
 // Kaydet ucunun özeti (`katalogKartiOzeti`); ekranın hesapladığı değerler, sunucu yeniden denetler.
+// Sunucudaki kart eski biçimde ya da eksik alanla gelebilir (örnek: hammaddede `opts` yok). Eksik alan taslağın boş değeriyle
+// (prototipin newDraft'ı) doldurulur, olan alan olduğu gibi kalır; böylece kural çekirdeği eksik alanda düşmez. kodManual ve adManual
+// prototipin kartTamamla'sıyla aynı: yoksa elle yazılmış kod ya da ad varsa elle sayılır.
+export function kayitTamamla(x: Partial<KartKaydi> & Nesne): KartKaydi {
+  const com: TicariBilgi = { kod: '', ad: '', std: '', ted: '', birim: '', sertifika: [], not: '', ...(x.com ?? {}) };
+  return {
+    ...x,
+    tur: x.tur ?? 'hammadde', g: x.g ?? {}, bom: x.bom ?? [], ops: x.ops ?? [], fam: x.fam ?? null, cls: x.cls ?? null, grade: x.grade ?? null,
+    custom: { ad: '', kod: '', std: '', eq: '', p: {}, ...(x.custom ?? {}) }, stds: x.stds ?? [], form: x.form ?? null, dims: x.dims ?? {}, tol: x.tol ?? '',
+    opts: x.opts ?? {}, ov: x.ov ?? {}, extra: x.extra ?? [], com, kodManual: x.kodManual ?? Boolean(com.kod), adManual: x.adManual ?? Boolean(com.ad),
+  };
+}
+
 export interface KartOzeti {
   stok_kodu: string | null;
   tur: KatalogTuru;

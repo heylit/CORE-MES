@@ -9,7 +9,7 @@ import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { ApiHatasi, api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import {
-  GENEL_VARSAYILAN, bosMalzemeAyari, type Firma, type GenelAyar, type KartKaydi, type KartOzeti, type KatalogKarti, type KatalogOrtami, type MalzemeAyari,
+  GENEL_VARSAYILAN, bosMalzemeAyari, kayitTamamla, type Firma, type GenelAyar, type KartKaydi, type KartOzeti, type KatalogKarti, type KatalogOrtami, type MalzemeAyari,
   type Nesne, type RotaSablonu, type Sablon,
 } from './tipler.ts';
 
@@ -88,7 +88,7 @@ export async function butunKartlar(kisiId: number): Promise<KatalogKarti[]> {
     an ??= c.an;
     for (const x of c.satirlar) {
       if (x.kayit === null) kartlar.delete(x.kimlik);
-      else kartlar.set(x.kimlik, { kimlik: x.kimlik, no: x.no, surum: x.surum, kayit: x.kayit as unknown as KartKaydi });
+      else kartlar.set(x.kimlik, { kimlik: x.kimlik, no: x.no, surum: x.surum, kayit: kayitTamamla(x.kayit as Nesne) });
     }
     if (c.satirlar.length < c.sayfaBoyu || (c.toplam !== null && c.sayfa * c.sayfaBoyu >= c.toplam)) break;
   }

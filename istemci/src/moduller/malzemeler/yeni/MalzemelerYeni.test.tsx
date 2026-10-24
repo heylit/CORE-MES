@@ -19,7 +19,6 @@ describe('MalzemelerYeni', () => {
     const sekmeler = await screen.findAllByRole('tab');
     expect(sekmeler.map((s) => s.textContent)).toEqual(['Yeni kart', 'Katalog', 'Şablonlar', 'Malzeme ayarları', 'Kılavuz']);
     expect(screen.getByRole('tab', { name: 'Katalog' }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('Katalog bölümü hazırlanıyor')).toBeTruthy();
   });
 
   test('yalnız okuyan Yeni kart sekmesini görmez; adresle gelse de bölüm açılmaz', async () => {
@@ -32,8 +31,10 @@ describe('MalzemelerYeni', () => {
   test('yazan Yeni kart bölümünü adresinden açar; eski ekranın yolu yakalamaz', async () => {
     sunucuKur(YAZAN);
     yeniEkranAc('/malzemeler/yeni-ekran/kart');
-    expect(await screen.findByText('Yeni kart bölümü hazırlanıyor')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Yeni kart' }).getAttribute('aria-selected')).toBe('true');
+    // Bölümün içeriği M1'indir; burada yalnız seçili sekme ve yetki engelinin olmadığı denetlenir.
+    expect((await screen.findByRole('tab', { name: 'Yeni kart' })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('Bu bölümü görme yetkin yok.')).toBeNull();
+    expect(screen.queryByText('Bu bölüm yok.')).toBeNull();
   });
 
   test('tanımsız bölüm "yok" der', async () => {

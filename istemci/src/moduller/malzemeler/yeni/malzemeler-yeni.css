@@ -8,3 +8,20 @@
 .tc-myeni-govde {
   min-width: 0;
 }
+
+/* Tür ve aile rengi: parça yalnız `data-tur` / `data-aile` niteliğini yazar; prototipin sabit renkleri yerine tasarım değişkeni (203 a). */
+[data-tur] { --tur-renk: var(--muted); }
+[data-tur="hammadde"] { --tur-renk: var(--done); }
+[data-tur="yarimamul"] { --tur-renk: var(--run); }
+[data-tur="mamul"] { --tur-renk: var(--hazard-ink); }
+[data-tur="sarf"] { --tur-renk: var(--grafik-2); }
+[data-tur="demirbas"] { --tur-renk: var(--idle); }
+[data-tur="hizmet"] { --tur-renk: var(--grafik); }
+[data-tur="ticari_mal"] { --tur-renk: var(--hold); }
+[data-aile] { --aile-renk: var(--bp); }
+[data-aile="metal"] { --aile-renk: var(--done); }
+[data-aile="plastik"] { --aile-renk: var(--run); }
+[data-aile="kompozit"] { --aile-renk: var(--grafik-2); }
+[data-aile="ahsap"] { --aile-renk: var(--hold); }
+[data-aile="cam"], [data-aile="seramik"] { --aile-renk: var(--grafik); }
+[data-aile="elastomer"] { --aile-renk: var(--hazard-ink); }
