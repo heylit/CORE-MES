@@ -137,3 +137,20 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
   `kilitKoy`, `tMach`). Alt sınır, baş-kuyruk ve MIP gevşetmesi kilidin yerini sabit sayar.
 - Kilit saatinde arıza ya da bakım varsa iş kilitte başlar, arıza süresince durur; plan uyarılarında "Kilit" satırı çıkar.
 - Saati geçmiş (şimdiden önce) ve başlamamış kilit eskisi gibi yalnız tezgâhı bağlar.
+
+## Planlama değerlendirmesi (Soru 357 a; kart #547)
+- Yeni uç `GET /recete-rota/planlama-degerlendirmesi?surum=&istek=` (sözleşme `degerlendirmeSorgusu`, `degerlendirmeCevabi`): oturum ve
+  `recete-rota.planlama-oku` ister; salt okunur, kayıt yazmaz, zaman sunucudan. Girdi planlama çalışması ucunun birleştirdiğidir (288 a); `surum`
+  çalışma kaydınınkiyle uyuşmazsa 409. Türler: plan seçenekleri, teklif termin seçenekleri, termin uzatma önerisi, malzeme termin listesi,
+  malzeme öne çekme, partiyi böl, sipariş maliyet ve kâr.
+- Motor kancaları sayfanın parçalarından olduğu gibi `motor/kancalar.betik`e alındı (TL toplamı, fason kararı, WIP, termin, malzeme, hedef,
+  montaj, ayar, örtüşme); kart hesapları `motor/degerlendir.betik`te. Sayfa ve `planlama-modulu.html` değişmedi.
+- Eski sayfaya göre farklar (kullanıcı onayı bekler):
+  1. Plan seçeneklerinde LNS araması yok; denge konumları kural tabanlı planla kurulur.
+  2. Partiyi bölde kısa arama yok.
+  3. Ek mesai adayları aramasız ölçülür.
+  4. Hesap kayıtlı çalışmayla yapılır; kaydedilmemiş değişiklik sürüm denetimine takılır.
+  5. Bilinmeyen ek mesai ücreti 0 değil null; toplamı ve net kârı da null yapar.
+  6. Uydurma varsayılan yok (maliyet ve mesai sistemi, örnek talaş fiyatları): tanımlı değilse yalın hesap.
+  7. "Şimdi" tarayıcıdan değil sunucudan.
+- Tutar, maliyet, kâr ve TL farkı yalnız `finans.maliyet-oku` taşıyana (180 a, 200 a); taşımayana bu alanlar null, sipariş kârı 403.

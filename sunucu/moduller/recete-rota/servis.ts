@@ -392,15 +392,23 @@ export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null>
 // birleştirirdi; aynı betik burada aynı girdiyle koşar, sayfa birleşmiş çalışmayı okur. Kaynak okuması çağıranın yetkisiyledir (çerçevedeki
 // gibi: okuyamadığı dilim kayıttaki gibi kalır). Takvim eki çerçevenin okuduğu vardiya takviminden kurulur (o uç yalnız oturum ister).
 export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  const k = await planlamaGirdisi(db, kullanici);
+  if (k.girdi === null) return { calisma: null, surum: k.surum };
+  const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
+  return { calisma: g === null ? null : g.S, surum: k.surum };
+}
+
+// Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki
+// dahil). Değerlendirme ucu (Soru 357 a) aynı girdiyle hesaplar. Çalışma yoksa (ya da kaydın biçimi eskiyse) girdi null; sürüm kaydınındır.
+export async function planlamaGirdisi(db: Db, kullanici: Kullanici): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null }> {
   const satir = await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI);
   const calisma = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
   const surum = satir?.surum ?? null;
-  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return { calisma: null, surum };
+  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return { surum, girdi: null };
   const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
   const kaynak = await kaynakOku(db, kullanici);
   const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
-  const g = planGirdisi({ calisma, kayit, kaynak: { durum: kaynak.durum, ek }, bugun: tesisGunu(simdi) }, simdi);
-  return { calisma: g === null ? null : g.S, surum };
+  return { surum, girdi: { calisma, kayit, kaynak: { durum: kaynak.durum, ek } } };
 }
 
 // Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.

@@ -1,0 +1,252 @@
+/* ---------- Planlama sayfasının motor kancaları (Soru 357 a) ----------
+   Planlama sayfası motoru yalın koşturmaz: plan TL amacı, fason kararı, bekleme maliyeti, malzeme ve fason terminleri, belli olmayan
+   malzeme (1650 4 c), yıllık hedef, montaj bağı, partide ayar sıfırlama, ayarı parça gelmeden yapma ve örtüşme motorun işlevlerini sarar;
+   aynı kod sayfanın işçisine de verilir (cerceve/planlama/parca: zu-yan-sayfalar TL_ISCI, zv-termin, zz-karar-1650, zz3, zz9, zz12, zz13,
+   zz15, zz16; sıra işçidekidir). Değerlendirme ucu bu dosyayı motorun ardından yükler; parçalar burada olduğu gibidir. Zaman bütçeli
+   aramanın sarmalayıcıları (zz18, zz20) ve işçinin sabit adımlı saati alınmaz: değerlendirme aramasızdır. */
+
+function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4] + (e.lex[2] || 0) * (TL_AMAC.chgTL || 0); }
+/* müdürün fason kararı: kabul edilen iş yalnız talaş fasonunda, reddedilen yalnız tezgâhta yapılabilir */
+function fasonKararUygula(cx, st) {
+  const k = st && st.D && st.D.fasonKarar; if (!k) return;
+  for (const o of cx.ops) { const x = k[o.id]; if (!x || !o.c.some(c => c.opt)) continue;
+    fasonZorla(o, x.karar === 'kabul');
+    /* sonraki karar önceki kilidi ve tezgâh isteğini geçersiz kılar: kilit eski tezgâhı gösteriyorsa iş hiç yerleşemezdi */
+    for (const t of [st.locks, st.pref]) { const y = t && t[o.id]; if (y && !o.c.some(c => c.m === (y.m || y))) delete t[o.id]; } }
+}
+/* zorlanan talaş fasonu rotadaki fason adımı gibi tek seçenek olur: motor isteğe bağlı fasonu ancak tezgâh seçeneğinin yanında yerleştirir */
+function fasonZorla(o, disari) {
+  const l = disari ? o.c.filter(c => c.opt).map(c => ({ m: c.m, fas: 1 })) : o.c.filter(c => !c.opt); if (!l.length) return;
+  o.cTum = o.cTum || o.c; o.c = l;
+}
+/* ---------- Erken sevk kabul eden sipariş (değerlendirme 16:55, 1D) ----------
+   Vade varsayılan olarak terminde başlar (16:50, 3 b). Erken sevki kabul eden müşterinin siparişinde vade üretim bitince başlar:
+   erken biten işin parası erken gelir. Bayrak sipariştedir; varsayılan hayır. */
+/* bekleme maliyeti plandan, üç yerde: malzemenin hazır olmasından ilk adıma, adımlar arası (öncülün bitişinden adımın başlamasına),
+   son adımdan termine (mamul). Bekleyen değer = malzeme + o ana kadar biten adımların maliyeti (dağıtılmış bekleme gideri faizlenmez).
+   Finansman ve bozulma bu değer üstünden, alan ve elleçleme palet sayısından. Elleçleme yalnız bekleme eşiği aşınca (ara stoka inip geri alınınca).
+   Palet sayısı yukarı yuvarlanır: yarım palet de bütün palet yeri kaplar. */
+function wipHesap(plan, st, cx) {
+  const P = st.wipP; const out = { tl: 0, fin: 0, alan: 0, ell: 0, risk: 0, tah: 0, saat: 0, J: {} }; if (!P) return out;
+  const by = {}; for (const id in plan.ops) { const r = plan.ops[id]; (by[r.job] = by[r.job] || []).push(r); }
+  const U0 = Object.fromEntries((st.D.urunler || []).map(u => [u.id, u]));
+  for (const j in by) {
+    const job = cx.jobs[j]; if (!job) continue; const u = U0[job.urun] || {};
+    const pa = Math.ceil(job.adet / (+u.paletAdet || P.paletAdet)); const m2 = +(u.paletM2 ?? P.paletM2); const ts = +(u.tasimaSa ?? P.tasimaSa);
+    const mr = cx.mat.res[j]; const mal = mr && mr.fiyat != null ? mr.fiyat : 0;
+    const l = by[j].map(r => { let c = 0; if (r.fas) c = r.cost || 0; else { const M = cx.M[r.m]; if (M && M.ucret != null) c = r.run * (1 - (M.pay || 0)) * M.ucret + r.su * (M.ucret + (+cx.A.ayarciUcret || 0)); } return { r, c }; }).sort((a, b) => a.r.C - b.r.C);
+    const deger = t => { let v = mal; for (const x of l) { if (x.r.C <= t + 1e-9) v += x.c; else break; } return v; };
+    const z = { tl: 0, fin: 0, alan: 0, ell: 0, risk: 0, tah: 0, saat: 0, ilk: 0, ara: 0, son: 0 };
+    const say = (W, V, yer) => { if (!(W > 0.25)) return; const g = W / 24;
+      const fin = V * P.fin / 100 * g, risk = P.alfaAc ? V * P.alfa / 100 * g : 0, alan = P.alanAc ? pa * m2 * P.alan * g : 0, ell = P.ellAc && yer === 'ara' && W >= P.esik ? pa * ts * P.loj : 0;
+      z.fin += fin; z.risk += risk; z.alan += alan; z.ell += ell; z.saat += W; z[yer] += fin + risk + alan + ell; };
+    const hazir = Math.max(st.now, mr && isFinite(mr.ready) ? mr.ready : st.now);
+    for (const x of l) { const o = cx.byId[x.r.id]; if (!o || x.r.done) continue;
+      if (!o.pr.length) { if (mal > 0) say(x.r.S - hazir, mal, 'ilk'); continue; }
+      let cp = -Infinity; for (const [p] of o.pr) { const q = plan.ops[p]; if (q) cp = Math.max(cp, q.C); } if (!isFinite(cp)) continue;
+      say(x.r.S - Math.max(cp, st.now), deger(cp), 'ara'); }
+    /* vade üretim bitince başlıyorsa erken biten iş beklemez, parası erken gelir: termine kalan gün kadar tahsilat finansmanı kazanılır.
+       Geç biten işin geç tahsilatı gecikme bedelinin finansman payındadır, burada ikinci kez sayılmaz. */
+    if (job.due != null && l.length === job.ops.length) { const C = l[l.length - 1].r.C;
+      const vb = P.erken && P.erken[j] ? 'bitis' : P.vadeBas;
+      if (vb === 'termin') say(job.due - Math.max(C, st.now), deger(C), 'son');
+      else if (job.gelir != null && job.due > C + 0.25) z.tah = -(+job.gelir) * P.fin / 100 * (job.due - Math.max(C, st.now)) / 24; }
+    z.tl = z.fin + z.risk + z.alan + z.ell + z.tah; out.J[j] = z; for (const k of ['tl', 'fin', 'alan', 'ell', 'risk', 'tah', 'saat']) out[k] += z[k];
+  }
+  return out;
+}
+function tlAmacUygula() {
+  if (self.__tlAmac) return; self.__tlAmac = 1;
+  const c0 = cmpEv, w0 = lexWhy, k0 = compile, e0 = evaluate; const CX = new WeakMap();
+  evaluate = function (plan, st, ref, fast) {
+    const e = e0(plan, st, ref, fast);
+    if (st && st.wipP && st.wipP.ac) { const cx = plan.cx || CX.get(st) || compile(st); const w = wipHesap(plan, st, cx); e.wip = w; e.tl += w.tl; e.lex[4] += w.tl; }
+    return e;
+  };
+  cmpEv = function (a, b) {
+    if (!TL_AMAC.ac) return c0(a, b);
+    const d = tlToplam(b) - tlToplam(a); if (Math.abs(d) > 1) return d > 0 ? 1 : -1;
+    for (const i of [2, 3]) { const x = b.lex[i] - a.lex[i]; if (Math.abs(x) > LEX_EPS[i]) return x > 0 ? 1 : -1; }
+    return 0;
+  };
+  lexWhy = function (a, b) {
+    if (!TL_AMAC.ac) return w0(a, b);
+    if (Math.abs(tlToplam(b) - tlToplam(a)) > 1) return 0;
+    for (const i of [2, 3]) if (Math.abs(b.lex[i] - a.lex[i]) > LEX_EPS[i]) return i;
+    return -1;
+  };
+  compile = function (st) { const cx = k0(st); fasonKararUygula(cx, st); if (st && typeof st === 'object') CX.set(st, cx); return cx; };
+  /* talaşlı fason fiyatı işin tezgâh süresinden çıkar; fasona zorlanan işte tezgâh seçenekleri kaldırıldığı için süre tam listeden alınır */
+  const f0 = tFason;
+  tFason = function (o, c, cx, ctx, b) { const r = f0(o, c, cx, ctx, b); if (r && r.cost == null && o.cTum && o.cTum.some(x => x.opt && x.m === c.m)) { const f = cx.FS[c.m.slice(1)]; const h = Math.min(...o.cTum.filter(x => !x.fas).map(x => x.run), Infinity); if (f && isFinite(h) && f.saatFiyat != null) r.cost = h * f.saatFiyat; } return r; };
+}
+tlAmacUygula();
+const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
+/* motora bağlanan kısım (ana iş parçacığı ve işçi): genel gider her tezgâh saatine yük olarak, termin uyarıları, fason dönüşü */
+function terminUygula() {
+  if (self.__tmU) return; self.__tmU = 1;
+  const e0 = evaluate;
+  evaluate = function (plan, st, ref, fast) {
+    const e = e0(plan, st, ref, fast); if (!st) return e;
+    if (st.ggP > 0) { let h = 0; for (const id in plan.ops) { const r = plan.ops[id]; if (!r.fas) h += (+r.run || 0) + (+r.su || 0); } const g = h * st.ggP; e.gg = g; e.tl += g; e.lex[4] += g; }
+    if (!fast && e.warn) {
+      /* uyarı yalnız terminsiz satırdan malzeme alan ve ondan önce başlayan işe: stoktan karşılanan iş etkilenmez */
+      const cx = plan.cx || compile(st); const D = st.D;
+      for (const x of cx.mat.po) { const p = D.satinalma[x.i]; if (!p || !p.yakin) continue;
+        for (const j of new Set(x.jobs.map(u => u.j))) { let b = Infinity; for (const o of (cx.jobs[j] || { ops: [] }).ops) { const r = plan.ops[o.id]; if (r && !r.done && !o.pr.length) b = Math.min(b, r.S); }
+          if (!(b < x.t - 1e-9)) continue;
+          e.warn.push({ t: 'Termin yok', j, gelis: x.t, kod: p.kod, txt: `${j}: ${p.kod} ${p.tm === 'yok' ? 'siparişinin termini girilmedi, sipariş yok sayıldı' : 'için sipariş verilmedi'}; en erken geliş ${fmtDT(D, x.t)}, iş ${fmtDT(D, b)} başlıyor. İşi ileri atmak gerekebilir.` }); } }
+      for (const w of st.tmUyari || []) e.warn.push(w); }
+    return e;
+  };
+  const f0 = tFason;
+  tFason = function (o, c, cx, ctx, b) {
+    const r = f0(o, c, cx, ctx, b); const A = cx.st.tmP; if (!r || !A) return r;
+    const k = cx.st.D.fasonTermin && cx.st.D.fasonTermin[o.id]; const T = k ? parseT(cx.st.D, k) : null;
+    const C = T != null ? Math.max(r.S + 1, T) : r.S + tmSureFas(cx.FS[c.m.slice(1)], o.adet, A);
+    r.C = r.lot1 = C; r.run = C - r.S; return r;
+  };
+}
+terminUygula();
+/* ana iş parçacığı ve işçi: belli olmayan gelişte malzeme hazır sayılır (iş başlar), uyarı motorun malzeme uyarısıyla aynı metinle verilir */
+function matKarmaUygula() {
+  const c0 = compile;
+  compile = function (st, ...a) {
+    const cx = c0(st, ...a);
+    if (st && st.w && st.w.matKarma && cx && cx.mat) for (const j in cx.mat.res) { const r = cx.mat.res[j];
+      const belli = r.det.every(d => !d.eksikQ && d.use.every(u => u.k !== 'sa' || !((st.D.satinalma || [])[u.i] || {}).tm));
+      if (!belli && r.ready > st.now) { r.readyU = r.ready; r.ready = st.now; } }
+    /* tezgâh seçimi TL ile: motorun puanı (1−α)·bitiş·1000 + α·maliyet + λ; α ve λ, bir saatin değeri siparişlerin ortanca gecikme bedeli (× denge katsayısı)
+       ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */
+    if (st && st.w && !st.w.tezgahEski && st.tlAmac && st.tlAmac.ac && cx && cx.jobs) {
+      const orta = l => { const a = l.filter(x => x > 0 && isFinite(x)).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : null; };
+      const bl = Object.values(cx.jobs).map(j => isAgirligi(j) * (st.tlAmac.birim || 5) * (st.tlAmac.kT || 1)); const V = bl.length ? bl.reduce((x, y) => x + y, 0) / bl.length : null;
+      const ucr = orta(Object.values(cx.M).map(M => +M.ucret)); const ay = +(cx.A && cx.A.ayarciUcret) || 0;
+      const su = orta(cx.ops.map(o => Math.min(...o.c.filter(c => !c.fas).map(c => c.su)))); 
+      const chg = st.w.chgTezgah != null ? +st.w.chgTezgah : su != null && ucr != null ? su * (ucr + ay) : null;
+      if (V != null) { st.w.alpha = 1000 / (1000 + V); if (chg != null) st.w.lam = chg * st.w.alpha; st.w.tezgahTL = { V, chg }; }
+    }
+    return cx;
+  };
+  const e0 = evaluate;
+  evaluate = function (plan, st, ref, fast) {
+    const e = e0(plan, st, ref, fast);
+    if (fast || !st || !st.w || !st.w.matKarma || !e.warn) return e;
+    const cx = plan.cx || compile(st); const ilk = {};
+    for (const id in plan.ops) { const r = plan.ops[id], o = cx.byId[id]; if (!o || o.pr.length || r.pin) continue; if (ilk[r.job] == null || r.S < ilk[r.job]) ilk[r.job] = r.S; }
+    for (const j in cx.mat.res) { const m = cx.mat.res[j]; if (m.readyU == null || ilk[j] == null || ilk[j] >= m.readyU - 1e-9) continue;
+      e.warn.push({ t: 'malzeme', j, txt: isFinite(m.readyU) ? `${j}: malzeme tahminen ${fmtDT(cx.D, m.readyU)} geliyor, iş ${fmtDT(cx.D, ilk[j])} başlıyor` : `${j}: malzeme eksik (stok ve sipariş yetmiyor), iş ${fmtDT(cx.D, ilk[j])} başlıyor` }); }
+    return e;
+  };
+}
+matKarmaUygula();
+function hedefUygula() {
+  if (self.__yHedef) return; self.__yHedef = 1;
+  const c0 = compile;
+  compile = function (st) {
+    const cx = c0.apply(this, arguments); const H = st && st.yHedef; if (!H || !cx || !cx.jobs) return cx;
+    const aileler = {}; for (const [aile, t, k] of H.hedef) (aileler[aile] = aileler[aile] || []).push([t, k]);
+    for (const aile in aileler) { const l = aileler[aile].sort((a, b) => a[0] - b[0]);
+      const isler = Object.keys(H.isler).filter(j => H.isler[j][0] === aile && cx.jobs[j]).sort((a, b) => (cx.jobs[a].due ?? 1e9) - (cx.jobs[b].due ?? 1e9));
+      let top = 0, i = 0;
+      for (const j of isler) { top += H.isler[j][1]; while (i < l.length && l[i][1] < top - H.isler[j][1] + 1e-9) i++; if (i >= l.length) break;
+        const jo = cx.jobs[j]; const t = l[i][0]; const d = jo.dueB == null ? jo.due : jo.dueB; if (d == null || t < d) { jo.dueB = t; jo.yHedef = t; } } }
+    return cx;
+  };
+}
+hedefUygula();
+function montajUygula() {
+  if (self.__mtBag) return; self.__mtBag = 1;
+  const c0 = compile;
+  compile = function (st) {
+    const cx = c0.apply(this, arguments); const B = st && st.montaj; if (!B || !cx || !cx.jobs) return cx;
+    const kok = id => String(id).split('/')[0]; const no = id => { const i = id.indexOf('/'); return i < 0 ? 0 : +id.slice(i + 1); };
+    const gr = {}; for (const jid in cx.jobs) (gr[kok(jid)] = gr[kok(jid)] || []).push(jid);
+    for (const g in gr) gr[g].sort((a, b) => no(a) - no(b));
+    const aralik = l => { let a = 0; return l.map(j => { const n = +cx.jobs[j].adet || 0; const r = [j, a, a + n]; a += n; return r; }); };
+    const son = jid => { const ic = new Set(cx.jobs[jid].ops.map(o => o.id)); return cx.jobs[jid].ops.filter(o => !(cx.succ[o.id] || []).some(([s]) => ic.has(s))).map(o => o.id); };
+    for (const ck of Object.keys(B).sort((a, b) => B[a].derin - B[b].derin)) {
+      const b = B[ck]; const ust = gr[b.ust], alt = gr[ck]; if (!ust || !alt) continue;
+      const A2 = aralik(alt);
+      for (const [pj, , e] of aralik(ust)) {
+        const op = cx.byId[pj + '.' + b.adim]; if (!op) continue; const gerek = e * b.birim;
+        const bek = A2.filter(([, ca]) => ca < gerek - 1e-9);
+        for (const [cj] of bek) for (const sid of son(cj)) { if (op.pr.some(([p]) => p === sid)) continue; op.pr.push([sid, 'b']); (cx.succ[sid] = cx.succ[sid] || []).push([op.id, 'b']); }
+        const pjob = cx.jobs[pj]; const d = pjob.dueB == null ? pjob.due : pjob.dueB; if (d == null) continue;
+        let kuyruk = 0; const gor = new Set(); const yig = [op.id];
+        while (yig.length) { const id = yig.pop(); if (gor.has(id)) continue; gor.add(id); const o = cx.byId[id]; const m = o.c.filter(c => !c.fas);
+          kuyruk += m.length ? Math.min(...m.map(c => (c.run || 0) + (c.su || 0))) : 24;
+          for (const [s] of cx.succ[id] || []) if (cx.byId[s] && cx.byId[s].job === pj) yig.push(s); }
+        const t = d - kuyruk;
+        for (const [cj] of bek) { const cjob = cx.jobs[cj]; if (cjob.dueB == null || t < cjob.dueB) { cjob.dueB = t; cjob.mtTermin = t; } }
+      }
+    }
+    return cx;
+  };
+}
+montajUygula();
+/* ---------- Bölünen partide ayar sıfırlama ----------
+   Tezgâhta bir önceki iş aynı iş emrinin aynı adımının başka partisiyse bağlama ve takım sökülmemiştir; ayar ve ilk parça onayı
+   yeniden yapılmaz. Arada tezgâhın boş beklemesi ayarı bozmaz, araya başka iş girerse ayar ödenir. Motor yerleştirmeyi tezgâh
+   boşaldıktan sonra yaptığı için tezgâhın son işi, zamanda bir önceki iştir. Parti kökü ilk "/" öncesidir (SP-116/2 -> SP-116). */
+function ayarSifirKur() {
+  if (self.__aySif) return; self.__aySif = 1;
+  const eski = tMach;
+  tMach = function (o, c, cx, ctx, b, fast) {
+    const L = !self.__aySifKapali && c.su > 0 && ctx.lastId && ctx.lastId[c.m];
+    if (L) { const i = L.lastIndexOf('.'), lj = L.slice(0, i);
+      if (L.slice(i + 1) === o.k && lj !== o.job && lj.split('/')[0] === o.job.split('/')[0]) return eski({ ...o, aile: '', fai: false }, { ...c, su: 0 }, cx, ctx, b, fast); }
+    return eski(o, c, cx, ctx, b, fast);
+  };
+}
+ayarSifirKur();
+/* ---------- Ayarı parça gelmeden yapma (parti bölme planı adım 3) ----------
+   Motor adımın başlangıcını ayarın başlangıcı sayar ve onu öncül adımdan parça gelince başlatır (predBound). Sahada ayar,
+   tezgâh boşsa parça gelmeden yapılır. Açıkken öncülden gelen sınır ayar bitişine (işlemeye başlama) uygulanır: ayar tezgâhın
+   boşaldığı andan başlayabilir, işleme parçanın geliş anından önce başlamaz. Örtüşmeli bağın bitiş koşulu (bitiş >= öncül bitişi
+   + taşıma + son transfer partisi) motorda zaten var ve değişmez. Malzeme, serbest bırakma, NC programı ve kilit sınırları ayarın
+   başlangıcına uygulanmaya devam eder. Kapalıyken motorun davranışı aynen kalır. */
+function ayarOneKur() {
+  if (self.__ayOne) return; self.__ayOne = 1;
+  const eskiPB = predBound, eskiTM = tMach, eskiTF = tFason;
+  /* fasonda ayar yok: gönderim parçanın gelişinden önce olamaz */
+  tFason = function (o, c, cx, ctx, b) { return eskiTF(o, c, cx, ctx, b && b.gel != null ? { ...b, s: Math.max(b.s, b.gel) } : b); };
+  predBound = function (o, cx, ctx) {
+    const b = eskiPB(o, cx, ctx); if (!b || !cx.st.ayariOneAl || !o.pr.length) return b;
+    const st = cx.st, A = cx.A, P = ctx.P, j = cx.jobs[o.job], tas = +A.tasimaSaat || 0;
+    let gel = -Infinity;
+    for (const [pid, ty] of o.pr) { const p = P[pid]; if (!p) return b; gel = Math.max(gel, ty === 'o' && !p.fas ? p.lot1 + tas : p.C + (p.fas ? 0 : tas)); }
+    let s = st.now; if (j.rel != null && j.rel > s) s = j.rel; if (!o.program && cx.progRel > s) s = cx.progRel;
+    const lk = st.locks[o.id]; if (lk && lk.S > s) s = lk.S;
+    if (gel <= s + 1e-9) return b;
+    return { ...b, s, gel };
+  };
+  tMach = function (o, c, cx, ctx, b, fast) {
+    if (!b || b.gel == null) return eskiTM(o, c, cx, ctx, b, fast);
+    let bb = { ...b, s: Math.max(b.s, b.gel - (c.su || 0) - (o.fai ? c.cyc || 0 : 0)) }, r = null;
+    for (let i = 0; i < 12; i++) { r = eskiTM(o, c, cx, ctx, bb, fast); if (!r || r.Su >= b.gel - 1e-6) break; bb = { ...bb, s: bb.s + Math.max(b.gel - r.Su, 1e-3) }; }
+    if (r && r.Su < b.gel - 1e-6) return eskiTM(o, c, cx, ctx, { ...b, s: b.gel }, fast);
+    return r;
+  };
+}
+ayarOneKur();
+/* ---------- Örtüşmeyi otomatik açma (parti bölme planı adım 4) ----------
+   Rotada "örtüşebilir" işaretli bağlar motorca örtüşmeye çevrilebilir; öteki bağlara (ısıl işlem, kalite onayı gibi) dokunulmaz.
+   Açılan örtüşme iş emrinin kaydında tutulur (ortus), ürünün rotası değişmez; bölünen partiler kaydı kopyaladığı için kararı taşır.
+   S.D.ortusAcik yalnız deneme sırasında geçici olarak kullanılır.
+   Deneme: geciken iş emirleri sırayla, kısa aramayla örtüşmeli ve örtüşmesiz ölçülür; iş emrinin gecikmesi düşer ve plan TL'si
+   artmazsa önerilir. Örtüşme ek ayar üretmez. Uygulamayı planlamacı yapar, geri alınabilir. */
+function ortusUygula() {
+  if (self.__orBag) return; self.__orBag = 1;
+  const c0 = compile;
+  compile = function (st) {
+    const cx = c0(st); const A = st && st.D && st.D.ortusAcik;
+    let deg = false;
+    for (const o of cx.ops) { const j = cx.jobs[o.job]; if (!j || !(j.ortus || (A && (A[o.job] || A[o.job.split('/')[0]])))) continue;
+      const u = (st.D.urunler || []).find(z => z.id === j.urun); const a = u && u.rota.find(x => x.k === o.k); if (!a || !a.ortusebilir) continue;
+      o.pr = o.pr.map(([p, t]) => [p, t === 'b' && p.slice(0, p.lastIndexOf('.')) === o.job ? 'o' : t]); deg = true; }
+    if (deg) { const succ = {}; for (const o of cx.ops) for (const [p, t] of o.pr) (succ[p] = succ[p] || []).push([o.id, t]); cx.succ = succ; }
+    return cx;
+  };
+}
+ortusUygula();
