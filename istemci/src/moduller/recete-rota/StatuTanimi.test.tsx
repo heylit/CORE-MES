@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, DurumCevabi, KayitlarCevabi, StatuKarti, StatuTanimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, DurumCevabi, KayitlarCevabi, StatuTanimi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { YAZAR, ac, prototipiCalistir, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -9,12 +9,12 @@ import { YAZAR, ac, prototipiCalistir, yazmaDinleyiciKapat } from './test-yardim
 // Elle tanımlanan statü tablodan okunur, komutla yazılır (geçiş planı adım 4). Veriler uydurmadır.
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-const durumKur = (statuses: StatuTanimi[], statusCards: StatuKarti[]): DurumCevabi => ({
+const durumKur = (statuses: StatuTanimi[]): DurumCevabi => ({
   items: [{ id: '12', kayitNo: 12, code: 'MM-001', name: 'Deneme mamul', type: 'mamul', unit: 'adet', cost: null, stock: 0, min: 0, aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }],
   units: null, opdefs: null, wcs: null, stations: null, machines: null, people: null, routes: null, routeRevs: null, fasonFirms: null,
   cal: { shifts: [], holidays: [] }, emirler: null, maliyet: null,
   settings: { rule: 'oncelik', dir: 'ileri', buffer: 2, freezeDays: 0, peopleLimit: false, planDrafts: true },
-  moves: null, malzemeKesildi: false, statuses, statusCards,
+  moves: null, malzemeKesildi: false, statuses,
 });
 // Yerel kayıtta eski ad ve tabloda olmayan statü: ekran tablodakini gösterir.
 const depo = () => ({
@@ -23,13 +23,12 @@ const depo = () => ({
   statusCards: [{ id: 'c1', itemId: '12', status: 'RET' }],
 });
 
-interface Sunucu { statuses: StatuTanimi[]; statusCards: StatuKarti[]; istekler: Array<{ yol: string; govde: Record<string, unknown> }>; cevap?: (yol: string) => Response | null }
+interface Sunucu { statuses: StatuTanimi[]; istekler: Array<{ yol: string; govde: Record<string, unknown> }>; cevap?: (yol: string) => Response | null }
 const sunucuKur = (): Sunucu => ({
   statuses: [
     { id: 'KKB', code: 'KKB', name: 'Kalite bekliyor', kind: 'kalite', color: '#9A7400', surum: 1 },
     { id: 'RET', code: 'RET', name: 'Ret / hurda', kind: 'ret', color: '#C8102E', surum: 3 },
   ],
-  statusCards: [{ itemId: '12', status: 'KKB' }],
   istekler: [],
 });
 
@@ -41,15 +40,8 @@ function fetchKur(s: Sunucu): void {
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [{ anahtar: ONEK, bicim: 'json', deger: depo(), surum: 1 }] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, durumKur(s.statuses, s.statusCards));
+    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, durumKur(s.statuses));
     if (yontem === 'GET' && yol === '/recete-rota/statuler') return json(200, { statuler: [] });
-    if (yontem === 'POST' && (yol === '/recete-rota/statu-kartlari/ac' || yol === '/recete-rota/statu-kartlari/kaldir')) {
-      s.istekler.push({ yol, govde });
-      const k = { itemId: String(govde['malzemeId']), status: govde['statu'] as string };
-      s.statusCards = s.statusCards.filter((x) => !(x.itemId === k.itemId && x.status === k.status));
-      if (yol.endsWith('/ac')) s.statusCards.push(k);
-      return json(200, { statusCards: s.statusCards });
-    }
     const m = /^\/recete-rota\/statu-tanimlari\/([^/]+)\/(kaydet|sil)$/.exec(yol);
     if (yontem === 'POST' && m) {
       s.istekler.push({ yol, govde });
@@ -136,19 +128,17 @@ describe('Statü tanımı tablodan okunur, komutla yazılır', () => {
     expect(e.al<HTMLInputElement>('[data-s="statusdef"][data-id="KKB"][data-f="name"]').value).toBe('Kalite bekliyor');
   }, 40000);
 
-  it('STT-5: statülü kartlar tablodan gelir (yereldeki kart gösterilmez); açma ve kaldırma komutla gider', async () => {
+  it('STT-5: statü yalnız rotadan gelir (Soru 256 a): yereldeki elle açılmış statülü kart görünmez, elle kart açma ve yerel statü atlatma yoktur', async () => {
     const s = sunucuKur();
     const e = await ekranAc(s);
-    const kartlar = () => e.ifade<Array<{ itemId: string; status: string }>>('st.statusCards').map((c) => `${c.itemId}/${c.status}`);
-    expect(kartlar()).toEqual(['12/KKB']);
+    expect(e.ifade<unknown[]>('statusCardsOf("12")')).toEqual([]);
+    expect(e.b.querySelector('[data-act="scOpen"]')).toBeNull();
+    expect(e.b.querySelector('[data-s="scnew"]')).toBeNull();
     e.calistir('act("createStatusCard", {item:"12", st:"RET"})');
-    await waitFor(() => { expect(kartlar()).toEqual(['12/KKB', '12/RET']); });
-    e.calistir('act("delStatusCard", {item:"12", st:"KKB"})');
-    await waitFor(() => { expect(kartlar()).toEqual(['12/RET']); });
-    expect(s.istekler).toEqual([
-      { yol: '/recete-rota/statu-kartlari/ac', govde: { malzemeId: 12, statu: 'RET' } },
-      { yol: '/recete-rota/statu-kartlari/kaldir', govde: { malzemeId: 12, statu: 'KKB' } },
-    ]);
+    e.calistir('ui.tab = "stock"; render()');
+    expect(e.b.querySelector('[data-act="moveStatus"]')).toBeNull();
+    expect(e.b.body.textContent).toContain('Statülü stok Stok Merkezi\'nde tutulur; burada girilmez.');
+    expect(s.istekler).toEqual([]);
   }, 40000);
 
   it('STT-4: silme onaydan sonra komutla gider; başarıda statü yerel bağlardan da kalkar', async () => {

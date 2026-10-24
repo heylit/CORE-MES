@@ -45,7 +45,6 @@ export function ornekDurum(): DurumCevabi {
     maliyet: null,
     settings: { rule: 'oncelik', dir: 'ileri', buffer: 0, freezeDays: 0, peopleLimit: false, planDrafts: false },
     statuses: [],
-    statusCards: [],
     moves: [],
     malzemeKesildi: false,
   };
