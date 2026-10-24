@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { FisGonderimSekli, LogoFisBilgisi, LogoFisDurumu, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 
 // Logo bağlantısı kuralları (kart #207). Saf: saat ve ağ dışarıdan gelir.
 // Köprü sözleşmesinin bilinen kısmı yalnız burada ve kopru.ts'tedir; kılavuzun kendisi depoya girmez.
@@ -747,15 +748,38 @@ export function faturalariAyikla(govde: unknown): FaturaKaydi[] | null {
   return [...kayitlar.values()];
 }
 
-/* ---------------- Malzeme fişi: sarf (TRCODE 12) ve üretimden giriş (TRCODE 13) ---------------- */
+/* ---------------- Malzeme fişi (kaynağı stok; 294 c, 298 a) ---------------- */
 
-export const MALZEME_FISI_TURU = Object.freeze({ 'sarf-fisi': 12, 'uretim-girisi': 13 } as const);
+// Sarf 12 ve üretimden giriş 13 köprü notundadır. DOĞRULANMADI (298 a, gerçek Logo'da denenecek): fire 11, ambar transferi 25,
+// sayım fazlası 50, sayım eksiği 51. Bu dört tür ayarda kapalı gelir.
+export const MALZEME_FISI_TURU = Object.freeze({
+  'sarf-fisi': 12, 'uretim-girisi': 13, 'fire-fisi': 11, 'ambar-fisi': 25, 'sayim-fazlasi': 50, 'sayim-eksigi': 51,
+} as const);
+export type LogoFisTuru = keyof typeof MALZEME_FISI_TURU;
+export const LOGO_FIS_TURLERI = Object.keys(MALZEME_FISI_TURU) as LogoFisTuru[];
+// Yardımcının uç adı: POST /api/MaterialSlip/Add{ad}, DELETE /api/MaterialSlip/{ad}/{no}. Yeni dördü yardımcıda kart #494 ile açılır.
+export const MALZEME_FISI_UCU: Readonly<Record<LogoFisTuru, string>> = Object.freeze({
+  'sarf-fisi': 'Consumption', 'uretim-girisi': 'ProductionEntry', 'fire-fisi': 'Scrap', 'ambar-fisi': 'WarehouseTransfer',
+  'sayim-fazlasi': 'CountSurplus', 'sayim-eksigi': 'CountShortage',
+});
+// Stoktaki fiş türü -> giden kutusundaki belge türü ve gönderim şekli ayarı.
+export const STOK_FISI_LOGO_TURU: Readonly<Record<MalzemeFisiTuru, LogoFisTuru>> = Object.freeze({
+  sarf: 'sarf-fisi', uretim_girisi: 'uretim-girisi', fire: 'fire-fisi', ambar: 'ambar-fisi', sayim_fazlasi: 'sayim-fazlasi', sayim_eksigi: 'sayim-eksigi',
+});
+export const FIS_GONDERIM_AYARI = Object.freeze({
+  sarf: 'logo.malzeme-fisi-sarf', uretim_girisi: 'logo.malzeme-fisi-uretim-girisi', fire: 'logo.malzeme-fisi-fire', ambar: 'logo.malzeme-fisi-ambar',
+  sayim_fazlasi: 'logo.malzeme-fisi-sayim-fazlasi', sayim_eksigi: 'logo.malzeme-fisi-sayim-eksigi',
+} as const satisfies Record<MalzemeFisiTuru, string>);
+// Ayar değeri sabit listedendir; bilinmeyen değer kapalı sayılır (fiş gitmez).
+export const gonderimSekli = (deger: string): FisGonderimSekli => (deger === 'otomatik' || deger === 'elle' ? deger : 'kapali');
+
 // DOĞRULANMADI: alan adları köprü notundaki etiketlerdir; satırların kabı (TRANSACTIONS dizisi), TIME biçimi (HH:mm:ss), LINE_NUMBER'ın
-// 1'den başlaması ve birim çevrimi (1/1) VARSAYILDI. Doğrulanınca yalnız bu harita ve malzemeFisiGovdesi değişir.
+// 1'den başlaması ve birim çevrimi (1/1) VARSAYILDI. Ambar transferinin kaynak ve hedef ambar alanları (SOURCE_WH, DEST_WH; başlıkta ve
+// satırda) VARSAYIM. Doğrulanınca yalnız bu harita ve malzemeFisiGovdesi değişir.
 export const MALZEME_FISI_ALANLARI = Object.freeze({
   tur: 'TYPE', no: 'NUMBER', tarih: 'DATE', saat: 'TIME', grup: 'GROUP', toplamlar: 'CURRSEL_TOTALS', proje: 'PROJECT_CODE', satirlar: 'TRANSACTIONS',
   kod: 'ITEM_CODE', miktar: 'QUANTITY', birim: 'UNIT_CODE', carpan1: 'UNIT_CONV1', carpan2: 'UNIT_CONV2', satirTuru: 'LINE_TYPE', satirNo: 'LINE_NUMBER',
-  aciklama: 'DESCRIPTION',
+  aciklama: 'DESCRIPTION', kaynakAmbar: 'SOURCE_WH', hedefAmbar: 'DEST_WH',
 });
 // Başlık GROUP 3 (malzeme fişi), CURRSEL_TOTALS 1; satır türü 0 (malzeme).
 const MALZEME_FISI_GRUBU = 3;
@@ -763,43 +787,50 @@ const MALZEME_FISI_ACIKLAMA_EN_COK = 50;
 
 export interface GonderilecekMalzemeFisi {
   id: number;
-  tur: 'sarf-fisi' | 'uretim-girisi';
+  tur: LogoFisTuru;
   no: string;
   tarih: string;
   // HH:mm:ss; yoksa TIME gönderilmez.
   saat: string | null;
   projeKodu: string | null;
-  satirlar: readonly { satirId: number; stokKodu: string; miktar: string; birim: string; aciklama: string | null }[];
+  satirlar: readonly {
+    satirId: number; stokKodu: string; miktar: string; birim: string; aciklama: string | null;
+    // Yalnız ambar transferinde; Logo ambar no.
+    kaynakAmbarNo?: number | null; hedefAmbarNo?: number | null;
+  }[];
 }
 
-// 335: emir başına tek sarf ve tek üretimden giriş fişi; numara emir numarasıdır (iki fiş türü Logo'da ayrı numaralanır, VARSAYIM). Sarf stoktaki
-// net sarftır (fire dahil); üretimden giriş net girişe emrin mamul hurdasını ayrı "Hurda" satırıyla ekler. Kartı ya da birimi olmayan satır boş
-// metinle kalır: gövde kuralı fişi nedeniyle reddeder, sessizce düşmez. Satırı olmayan fiş null (gönderilecek bir şey yok).
-export interface EmirFisKalemi { stokKodu: string | null; birim: string | null; miktar: string }
-export interface EmirFisVerisi {
-  emirNo: string;
+// Stoktaki fiş ve satırları. Fire gönderimi kapalıyken emrin fire satırları sarf fişine eklenir (önceki gibi fire sarfın içinde).
+export interface StokFisi {
+  id: number;
+  tur: MalzemeFisiTuru;
+  no: string;
   tarih: string;
-  saat: string | null;
-  sarf: readonly EmirFisKalemi[];
-  giris: readonly EmirFisKalemi[];
-  hurda: readonly EmirFisKalemi[];
+  saat: string;
+  satirlar: readonly StokFisSatiri[];
 }
-export const HURDA_SATIRI_ACIKLAMASI = 'Hurda';
+export interface StokFisSatiri { stokKodu: string | null; birim: string | null; miktar: string; aciklama: string | null; kaynakAmbarNo: number | null; hedefAmbarNo: number | null }
 
-export function emirMalzemeFisi(id: number, tur: 'sarf-fisi' | 'uretim-girisi', v: EmirFisVerisi): GonderilecekMalzemeFisi | null {
-  const kalemler = tur === 'sarf-fisi'
-    ? v.sarf.map((k) => ({ k, aciklama: null }))
-    : [...v.giris.map((k) => ({ k, aciklama: null })), ...v.hurda.map((k) => ({ k, aciklama: HURDA_SATIRI_ACIKLAMASI }))];
-  const satirlar = kalemler
-    .filter(({ k }) => !ONDALIK.test(k.miktar) || olcekli(k.miktar) !== 0n)
-    .map(({ k, aciklama }, i) => ({ satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama }));
+// Kartı ya da birimi olmayan satır boş metinle kalır: gövde kuralı fişi nedeniyle reddeder, sessizce düşmez. Satırı olmayan fiş null
+// (gönderilecek bir şey yok; Logo'da açıksa silinir).
+export function stokFisindenLogoFisi(f: StokFisi, ekSatirlar: readonly StokFisSatiri[] = []): GonderilecekMalzemeFisi | null {
+  const ambar = f.tur === 'ambar';
+  const satirlar = [...f.satirlar, ...ekSatirlar]
+    .filter((k) => !ONDALIK.test(k.miktar) || olcekli(k.miktar) !== 0n)
+    .map((k, i) => ({
+      satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama: k.aciklama,
+      ...(ambar ? { kaynakAmbarNo: k.kaynakAmbarNo, hedefAmbarNo: k.hedefAmbarNo } : {}),
+    }));
   if (satirlar.length === 0) return null;
-  return { id, tur, no: v.emirNo, tarih: v.tarih, saat: v.saat, projeKodu: null, satirlar };
+  return { id: f.id, tur: STOK_FISI_LOGO_TURU[f.tur], no: f.no, tarih: f.tarih, saat: f.saat, projeKodu: null, satirlar };
 }
 
 // 233: Logo'daki fişin satırlarının özeti; aynı özet yeniden gönderilmez. Miktar ölçekli sayıyla karşılaştırılır ("2.50" ile "2.5" aynı).
 export function malzemeFisiOzeti(f: GonderilecekMalzemeFisi): string {
-  return JSON.stringify(f.satirlar.map((x) => [x.stokKodu.trim(), ONDALIK.test(x.miktar) ? String(olcekli(x.miktar)) : x.miktar, x.birim.trim(), x.aciklama]));
+  return JSON.stringify(f.satirlar.map((x) => {
+    const satir: unknown[] = [x.stokKodu.trim(), ONDALIK.test(x.miktar) ? String(olcekli(x.miktar)) : x.miktar, x.birim.trim(), x.aciklama];
+    return f.tur === 'ambar-fisi' ? [...satir, x.kaynakAmbarNo ?? null, x.hedefAmbarNo ?? null] : satir;
+  }));
 }
 
 export function malzemeFisiGovdesi(f: GonderilecekMalzemeFisi): { govde: Record<string, unknown> } | { hata: string } {
@@ -810,6 +841,10 @@ export function malzemeFisiGovdesi(f: GonderilecekMalzemeFisi): { govde: Record<
   if (tarih === null) return { hata: 'Fiş tarihi yok.' };
   if (f.saat !== null && !/^\d{2}:\d{2}:\d{2}$/.test(f.saat)) return { hata: 'Fiş saati HH:mm:ss olmalı.' };
   if (f.satirlar.length === 0) return { hata: 'Fişin satırı yok.' };
+  const ambar = f.tur === 'ambar-fisi';
+  const ciftler = new Set(f.satirlar.map((x) => `${x.kaynakAmbarNo ?? ''}>${x.hedefAmbarNo ?? ''}`));
+  // Logo ambar fişi başlıkta tek kaynak ve hedef ambar taşır (VARSAYIM); birden çok depo çifti olan fiş bölünmez, reddedilir.
+  if (ambar && ciftler.size > 1) return { hata: 'Fişte birden çok depo çifti var; Logo ambar fişi tek kaynak ve hedef ambar taşır.' };
   const proje = f.projeKodu?.trim() ?? '';
   const satirlar: Record<string, unknown>[] = [];
   for (const [i, x] of f.satirlar.entries()) {
@@ -821,6 +856,11 @@ export function malzemeFisiGovdesi(f: GonderilecekMalzemeFisi): { govde: Record<
     const satir: Record<string, unknown> = {
       [a.kod]: kod, [a.miktar]: Number(metne(olcekli(x.miktar))), [a.birim]: logoBirimKodu(x.birim), [a.carpan1]: 1, [a.carpan2]: 1, [a.satirTuru]: 0, [a.satirNo]: sira,
     };
+    if (ambar) {
+      if (x.kaynakAmbarNo == null || x.hedefAmbarNo == null) return { hata: `Satır ${sira}: deponun Logo ambar no'su yok.` };
+      satir[a.kaynakAmbar] = x.kaynakAmbarNo;
+      satir[a.hedefAmbar] = x.hedefAmbarNo;
+    }
     const aciklama = x.aciklama?.trim() ?? '';
     if (aciklama !== '') satir[a.aciklama] = aciklama.slice(0, MALZEME_FISI_ACIKLAMA_EN_COK);
     if (proje !== '') satir[a.proje] = proje;
@@ -831,8 +871,42 @@ export function malzemeFisiGovdesi(f: GonderilecekMalzemeFisi): { govde: Record<
   govde[a.grup] = MALZEME_FISI_GRUBU;
   govde[a.toplamlar] = 1;
   if (proje !== '') govde[a.proje] = proje;
+  if (ambar) {
+    govde[a.kaynakAmbar] = f.satirlar[0]!.kaynakAmbarNo;
+    govde[a.hedefAmbar] = f.satirlar[0]!.hedefAmbarNo;
+  }
   govde[a.satirlar] = satirlar;
   return { govde };
+}
+
+// Stokta fişin Logo durumu (295 a). Giden kutusu satırı, türün gönderim şekli ve kanal (bağlantı ve ana anahtar) durumundan çıkar.
+export interface FisDurumSorusu { tur: MalzemeFisiTuru; degisiklik: number; satirVar: boolean; id: number }
+export interface FisGidenDurumu {
+  kaynakDegisiklik: number; bekleyen: number; istekBekliyor: boolean; logoKayitNo: string | null; sonSonuc: string | null; sonHata: string | null;
+  sonDeneme: Date | null; sonrakiDeneme: Date | null; denemeSayisi: number; ardisikHata: number;
+}
+const BASARILI_SONUCLAR = new Set(['gonderildi', 'zaten-vardi', 'silindi']);
+export function logoFisDurumu(
+  q: FisDurumSorusu, g: FisGidenDurumu | null, o: { sekil: FisGonderimSekli; fireSekli: FisGonderimSekli; kanalAcik: boolean; enBuyukFisId: number },
+): LogoFisBilgisi {
+  const deneme = {
+    kayitNo: g?.logoKayitNo ?? null, sonDeneme: g?.sonDeneme?.toISOString() ?? null, sonrakiDeneme: g?.sonrakiDeneme?.toISOString() ?? null,
+    denemeSayisi: g?.denemeSayisi ?? 0, ardisikHata: g?.ardisikHata ?? 0,
+  };
+  const bilgi = (durum: LogoFisDurumu, neden: string | null): LogoFisBilgisi => ({ durum, gonderimSekli: o.sekil, neden, ...deneme });
+  if (q.tur === 'fire' && o.sekil === 'kapali') return bilgi('gonderilmez', 'Fire gönderimi kapalı; fire satırları emrin sarf fişiyle gider.');
+  if (o.sekil === 'kapali') return bilgi('gonderilmez', 'Bu fiş türünün Logo gönderimi kapalı.');
+  if (g === null) {
+    if (q.id <= o.enBuyukFisId) return bilgi('gonderilmez', 'Fiş Logo kuyruğuna alınmadı (Logo izlemeye başlamadan önce açıldı ve o günden beri değişmedi).');
+    return bilgi('bekliyor', o.kanalAcik ? 'Logo işi fişi sıraya alacak.' : 'Logo bağlantısı ya da malzeme fişi gönderimi kapalı.');
+  }
+  if (g.sonSonuc !== null && !BASARILI_SONUCLAR.has(g.sonSonuc)) return bilgi('hata', g.sonHata);
+  const degisti = g.bekleyen > 0 || g.kaynakDegisiklik < q.degisiklik;
+  if (!q.satirVar && g.logoKayitNo === null) return bilgi('gonderilmez', 'Fişte satır yok; boş fiş Logo\'ya gitmez.');
+  if (!degisti && g.logoKayitNo !== null) return bilgi('gonderildi', null);
+  if (!o.kanalAcik) return bilgi('bekliyor', 'Logo bağlantısı ya da malzeme fişi gönderimi kapalı.');
+  if (o.sekil === 'elle' && !g.istekBekliyor) return bilgi('bekliyor', 'Elle gönderim: Gönder ile gider.');
+  return bilgi('bekliyor', g.logoKayitNo !== null ? 'Değişti; Logo\'daki fiş yenilenecek.' : 'Sırada.');
 }
 
 /* ---------------- Bağlantı hazırlığı ve canlı kontrol ---------------- */
@@ -871,9 +945,9 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'satis', yon: 'tmi-logo', baslik: 'Satış teklifi ve siparişi', kaynak: 'bagli', ayarlar: ['logo.satis-gonderimi'],
     belgeTurleri: ['siparisler-teklifi', 'siparisler-siparisi'],
     aciklama: 'Siparişler\'de müşteriye verilen her teklif sürümü SalesOffer olarak, onaylanan sipariş kabul edilen sürümün teklifinden açılır.' },
-  { anahtar: 'malzeme-fisi', yon: 'tmi-logo', baslik: 'Sarf ve üretimden giriş fişi', kaynak: 'bagli', ayarlar: ['logo.malzeme-fisi-gonderimi'],
-    belgeTurleri: ['sarf-fisi', 'uretim-girisi'],
-    aciklama: 'Biten üretim emri, anahtar açıkken, MaterialSlip AddConsumption (12) ve AddProductionEntry (13) ile emir başına bir kez gider; satırlar stoktaki net sarf ve giriş ile emrin hurdasıdır.' },
+  { anahtar: 'malzeme-fisi', yon: 'tmi-logo', baslik: 'Malzeme fişi', kaynak: 'bagli', ayarlar: ['logo.malzeme-fisi-gonderimi'],
+    belgeTurleri: [...LOGO_FIS_TURLERI],
+    aciklama: 'Stok\'taki malzeme fişleri (sarf, üretimden giriş, fire, sayım fazlası ve eksiği, ambar transferi) MaterialSlip uçlarıyla gider; her türün gönderim şekli (kapalı, otomatik, elle) ayrı ayardadır. Değişen fiş Logo\'da silinip aynı numarayla yeniden açılır.' },
   { anahtar: 'birim-setleri', yon: 'logo-tmi', baslik: 'Birim seti listesi', kaynak: 'bagli', ayarlar: [], belgeTurleri: [],
     aciklama: 'Saatte bir Lookup/unitsets okunur; malzeme gönderiminde birim karşılığı buna göre denetlenir.' },
   { anahtar: 'mal-kabul', yon: 'logo-tmi', baslik: 'Mal kabul (irsaliye satırları)', kaynak: 'bagli', ayarlar: ['logo.mal-kabul-okumasi'], belgeTurleri: [], okuma: 'mal-kabul',
