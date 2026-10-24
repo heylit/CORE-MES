@@ -35,6 +35,24 @@ describe('İK yeni ekran: rotalar ve adresler', () => {
     expect(motorKur([], null, undefined, null)).toBeNull();
     expect(ikSabitleri(null)).toBeNull();
   });
+
+  it('tipli yüzün dönüş biçimi motorla aynı (ISTEK-P1)', () => {
+    const motor = motorKur([{ id: 'emp_a', kind: 'emp', ad: 'Ayşe', soyad: 'Örnek', iseGiris: '2020-01-06', brutMaas: 50000 }], null);
+    const ayse = motor?.activeEmps()[0];
+    if (!motor || !ayse) throw new Error('motor yok');
+    const bakiye = motor.leaveBalance(ayse, new Date(2026, 4, 1));
+    expect(bakiye.rows.map((r) => r.k)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(bakiye.rows[0]?.ann).toBeInstanceOf(Date);
+    expect(typeof bakiye.rows[0]?.note).toBe('string');
+    expect(motor.settingsList('primler').every((p) => typeof p.id === 'string' && typeof p.kidem === 'boolean')).toBe(true);
+    expect(motor.tesvikById('t0')?.tur).toBe('yok');
+    for (const p of motor.settingsList('primler')) expect(motor.primDesc(p)).toMatch(/;/);
+    expect(Array.isArray(motor.empPrims(ayse))).toBe(true);
+    expect(motor.curBrut(ayse)).toBe(50000);
+    expect(Object.keys(motor.benefitCfg(ayse, 'yemek')).sort()).toEqual(['deger', 'hesap', 'kisisel', 'yontem']);
+    expect(motor.docList().length).toBeGreaterThan(0);
+    expect(motor.missingDocs(ayse)).toEqual(motor.docList());
+  });
 });
 
 describe('İK yeni ekran: kapı ve gezinme', () => {
