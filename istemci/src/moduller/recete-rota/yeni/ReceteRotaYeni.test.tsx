@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 // Bölüm içerikleri parçalarca doldurulur: testler yer tutucu metnine değil, seçili sekmeye, bölgenin adına ve parçanın işaretine bakar.
 const acikBolum = async (ad: string) => {
   const bolge = await screen.findByRole('region', { name: ad });
-  expect(screen.getByRole('tab', { selected: true }).textContent).toContain(ad);
+  expect(within(screen.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' })).getByRole('tab', { selected: true }).textContent).toContain(ad);
   return bolge;
 };
 const durumOkundu = (istekler: readonly Istek[]) => waitFor(() => expect(istekler.some((i) => i.yol === '/recete-rota/durum')).toBe(true));
