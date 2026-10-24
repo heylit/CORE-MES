@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BEN, KISI_A, ORNEK_ZAMAN, ornekBelgeler } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, YONETICI, mesajAc, sunucuKur, type SahteSunucu } from '../test-ortak.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Otomatik uyarılar (M3) her açılışta koşar; örnek görevin son tarihi sabit güne bağlı olduğundan saat geçince "görev gecikti" iletisi
+// kanala düşer ve okundu yazmasının bekleme süresini yeniden başlatır. Saat örnek günün sabahına alınır, zamanlayıcılar gerçek kalır.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-23T08:00:00Z')); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 // Uydurma veri: örnek belgelere bu dosyanın iletileri eklenir.
 const T = ORNEK_ZAMAN;
