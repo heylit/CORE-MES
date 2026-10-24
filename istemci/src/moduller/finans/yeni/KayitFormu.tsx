@@ -15,7 +15,7 @@ import { kisaTarih, paraMetni, tl } from './bicim.ts';
 import { firmaEtiketi, HESAP_TURU_ADI, sayi, TEVKIFATLAR, type Hesap, type HazirVeri, type SunucuCeki } from './donustur.ts';
 import { addDays, diffDays, gross, ymLong } from './motor.ts';
 import { OlaySecici } from './OlaySecici.tsx';
-import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, type FinansVerisi } from './veri.ts';
+import { satisSevkleriOku, satisSiparisleriOku, useFinansKomutu, useFinansYetkisi, type FinansVerisi } from './veri.ts';
 
 // Sunucunun alan adı formdakiyle aynı değil: hata ilgili alanın altına düşsün diye çevrilir.
 const SUNUCU_ALANLARI: Record<string, keyof AkisDegerleri> = {
@@ -506,13 +506,14 @@ function sonucuGonder(sonuc: KomutSonucu, komut: ReturnType<typeof useFinansKomu
 function CekDugmeleri({ finans, cek, ekAc }: { finans: FinansVerisi; cek: SunucuCeki; ekAc: (durum: CekDurumu) => void }) {
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();
+  const { yonet } = useFinansYetkisi();
   const tikla = (durum: CekDurumu) => {
     if (cekEkAlanIster(durum)) { ekAc(durum); return; }
     sonucuGonder(cekDurumKomutu(finans.V, finans.motor, cek, durum), komut, bildir);
   };
   return (
     <div className="tc-fy-dugmeler">
-      {cekDugmeleri(cek).map((b) => (
+      {cekDugmeleri(cek, yonet).map((b) => (
         <Dugme key={b.durum} tur={b.tehlike ? 'tehlike' : 'ikincil'} yukleniyor={komut.isPending} onClick={() => tikla(b.durum)}>{b.baslik}</Dugme>
       ))}
     </div>

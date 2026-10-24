@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import type { OlayTuru } from './akislar.ts';
 import { KayitCekmecesi } from './KayitFormu.tsx';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
-import { json, sunucuKur, YAZAN } from './test-ortak.tsx';
+import { json, sunucuKur, YAZAN, YONETEN } from './test-ortak.tsx';
 import { finansiKur } from './veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -56,12 +56,25 @@ describe('KayitCekmecesi', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
-  it('çekin durumu: portföydeki çekte dört düğme, verilende yalnız "Ödendi"; tahsile verme doğrudan gider', async () => {
+  const cekDugmeleriOku = (p: HTMLElement) => {
+    const satirlar = within(p).getAllByText(/vade/).map((e) => e.closest('.tc-fy-cek') as HTMLElement);
+    return { satirlar, dugmeler: satirlar.map((s) => within(s).getAllByRole('button').map((b) => b.textContent)) };
+  };
+
+  it('çekin durumu: finans.yonet olana portföydeki çekte "Karşılıksız çıktı" da görünür', async () => {
+    sunucuKur(YONETEN);
+    const p = ac('cekdurum');
+    await waitFor(() => expect(cekDugmeleriOku(p).dugmeler).toContainEqual(['Bankaya tahsile verdim', 'Tahsil edildi', 'Ciro ettim', 'Karşılıksız çıktı']));
+  });
+
+  it('çekin durumu: yalnız yazana üç düğme (karşılıksız uç finans.yonet ister), verilende "Ödendi"; tahsile verme doğrudan gider', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/cekler/1/tahsile-ver': () => json(200, {}) });
     const p = ac('cekdurum');
-    const satirlar = within(p).getAllByText(/vade/).map((e) => e.closest('.tc-fy-cek') as HTMLElement);
-    const dugmeler = satirlar.map((s) => within(s).getAllByRole('button').map((b) => b.textContent));
-    expect(dugmeler).toContainEqual(['Bankaya tahsile verdim', 'Tahsil edildi', 'Ciro ettim', 'Karşılıksız çıktı']);
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
+    await new Promise((r) => setTimeout(r, 0));
+    const { satirlar, dugmeler } = cekDugmeleriOku(p);
+    expect(dugmeler).toContainEqual(['Bankaya tahsile verdim', 'Tahsil edildi', 'Ciro ettim']);
+    expect(dugmeler.flat()).not.toContain('Karşılıksız çıktı');
     expect(dugmeler).toContainEqual(['Ödendi']);
     const portfoy = satirlar.find((s) => within(s).queryByRole('button', { name: 'Bankaya tahsile verdim' }) && s.textContent?.includes('5.000'))!;
     fireEvent.click(within(portfoy).getByRole('button', { name: 'Bankaya tahsile verdim' }));
