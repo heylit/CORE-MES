@@ -24,7 +24,7 @@ Sipariş işi kişisizdir (ADR 0010 karar 7); satın almaya yalnız sonuç işle
 Veri kapsamı yok (iş merkezine bağlı değil). Uç yazmaları tekrar korumalı değil (ekleme ve kaldırma yinelendiğinde sonuç aynı). Sürüm: `logo_giden` yalnız tur kilidi altında yazılır.
 | Hazırlık ve canlı deneme (`GET /logo/hazirlik`, `GET /logo/hazirlik/kontrol`) | `saglik.ayrinti-oku` (yalnız yönetici); yeni işlem yok; anahtar değeri cevaba girmez, yalnız "tanımlı"; deneme yalnız GET, Logo'ya yazma yok; deneme ucu işlem dışı (uzun dış çağrı okuma işlemini tutmaz) | `hazirlik.test.ts` uç testleri | yetkisize 403, oturumsuza 401 |
 | Okuma akışları (mal kabul, cari ve ambar, fatura) | yeni uç, işlem, rol ya da sayfa yok; yalnız zamanlanmış iş; Logo'ya yalnız GET; "Logo bağlantısı" + akışın kendi anahtarı (varsayılan kapalı) + köprü değişkenleri; okunan veri yalnız saklanır; istek sıralı, süre 60 sn; Logo'ya SQL yok | `LOGO-O6`, `LOGO-O9`, `LOGO-O11` (yalnız GET) | `LOGO-O4`, `LOGO-O5` (kapalıyken istek yok), `LOGO-O8`, `LOGO-O10`, `LOGO-O12` (401, ağ) |
-| Malzeme fişi gönderimi | ayar `logo.malzeme-fisi-gonderimi` kapalı; kaynağı olmadığı için iş listesinde yok; niyet kalkanı, sonucu bilinmeyen fiş yinelenmez | `LOGO-O13` | `LOGO-O4`, `LOGO-O14`, `LOGO-O15` |
+| Malzeme fişi gönderimi | ayar `logo.malzeme-fisi-gonderimi` kapalı ve tür başına şekil (yalnız `ayarlar.yaz`, yalnız yönetici); niyet kalkanı, sonucu bilinmeyen fiş kendiliğinden yinelenmez; elle gönderim isteği stokta `stok.malzeme-fisi-gonder` ile, sürümlü (kart #492) | `LOGO-O13`, `LOGO-O17`, `LOGO-O18` | `LOGO-O4`, `LOGO-O14`, `LOGO-O15`, `LOGO-O17` (kapalı tür, istek yokken elle tür) |
 
 ## Yalnız ekranda kalan kurallar
 Yok.

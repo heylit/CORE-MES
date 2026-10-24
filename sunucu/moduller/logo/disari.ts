@@ -1,2 +1,2 @@
-// Ters yöndeki bağ (335, 233): üretim emirleri logoyu ithal edemez; hazırlık, sayım ve emir bitti olaylarını sunucu/kablolama.ts buraya bağlar.
-export { emirBittiYansit, hazirlikTamamlandiYansit, uretimSayimiYansit } from './servis.ts';
+// Ters yöndeki bağ (293 a): stok logoyu ithal edemez; fişin Logo durumunu sunucu/kablolama.ts stoğa bu çözücüyle bağlar.
+export { malzemeFisiLogoDurumlari } from './servis.ts';
