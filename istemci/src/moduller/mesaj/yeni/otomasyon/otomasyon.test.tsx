@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor } from '@testing-library/react';
-import { BEN, KISI_A, KISI_B, ornekBelgeler } from '../ornek-veri.ts';
+import { BEN, KISI_A, KISI_B, ORNEK_ZAMAN, ornekBelgeler } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, mesajAc, sunucuKur, type SahteSunucu } from '../test-ortak.tsx';
 
-// Örnek veri sabit güne bağlı (görev son tarihi, yarınki toplantı); saat o günün sabahına alınır, zamanlayıcılar gerçek kalır.
-beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-23T08:00:00Z')); });
+// Örnek veri sabit güne bağlı (görev son tarihi, yarınki toplantı); saat örnek ana alınır, zamanlayıcılar gerçek kalır.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(ORNEK_ZAMAN); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 // İlk tur açılıştan 2,5 sn, veri değişikliği turu 1,5 sn sonra koşar; bekleme bunları kapsar.
