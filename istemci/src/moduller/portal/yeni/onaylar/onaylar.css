@@ -1,0 +1,29 @@
+/* Portal TS ekranı, onaylar parçası. Yalnız tasarım değişkenleri; önek tc-pt-onaylar-. */
+.tc-pt-onaylar { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-pt-onaylar-liste { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+
+.tc-pt-onaylar-kart { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding-bottom: var(--b-3); border-bottom: 1px solid var(--edge); }
+.tc-pt-onaylar-kart:last-child { padding-bottom: 0; border-bottom: 0; }
+.tc-pt-onaylar-kart-bas { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-pt-onaylar-kart-bas > div { min-width: 0; overflow-wrap: anywhere; }
+.tc-pt-onaylar-kart-bas a { color: var(--ink); }
+.tc-pt-onaylar-no { margin-left: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); font-family: var(--font-mono); }
+.tc-pt-onaylar-bilgi { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-pt-onaylar-bilgi b { color: var(--ink); }
+.tc-pt-onaylar-not { margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+
+.tc-pt-onaylar-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pt-onaylar-adimlar li {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); padding: var(--b-1) var(--b-2);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); font-size: var(--yazi-s);
+}
+.tc-pt-onaylar-adimlar small, .tc-pt-onaylar-adim-notu { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-onaylar-adim-notu { margin: 0; overflow-wrap: anywhere; }
+
+.tc-pt-onaylar-eylemler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pt-onaylar-eski { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+
+.tc-pt-onaylar-kurallar, .tc-pt-onaylar-gecmis { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pt-onaylar-kurallar li, .tc-pt-onaylar-gecmis li { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-pt-onaylar-kurallar small, .tc-pt-onaylar-gecmis small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-onaylar-ayar { align-self: start; display: inline-flex; align-items: center; min-height: var(--dokunma); color: var(--ink); }
