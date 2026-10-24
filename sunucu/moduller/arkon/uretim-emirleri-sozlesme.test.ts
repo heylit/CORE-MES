@@ -39,6 +39,15 @@ describe('arkon <- uretim-emirleri/disari.ts sözleşmesi (gerçek PostgreSQL)',
   const uretici = (): Kullanici => ({ id: yoneticiId, ad: 'Deneme Yönetici', islemler: [KOMUT_ISLEMI] });
   const yetkisiz = (): Kullanici => ({ id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['sayfa.arkon'] });
 
+  // İş emirsiz emrin açma ucu yok (238 H3): kurulum emri doğrudan yazar.
+  const emirYaz = async (g: { parcaNo: string; parcaAd: string; adet: number; istasyonId: number; projeId: number }) => {
+    const emir = (await ortam!.sahip.tek<{ id: number; emirNo: string }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id)
+       VALUES ($1, $2, $3, $4, (SELECT min(id) FROM kisi), $5) RETURNING id, emir_no AS "emirNo"`,
+      [g.parcaNo, g.parcaAd, g.adet, g.istasyonId, g.projeId]))!;
+    return { durum: 200, govde: { emir } };
+  };
+
   async function istek<T>(yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<T> {
     const c = await app.inject({ method: yontem, url: `/api${yol}`, headers: { cookie: yonetici, ...(yontem === 'POST' && yol === '/uretim-emirleri' ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) }, ...(govde === undefined ? {} : { payload: govde as object }) });
     assert.equal(c.statusCode, 200, c.body);
@@ -54,7 +63,7 @@ describe('arkon <- uretim-emirleri/disari.ts sözleşmesi (gerçek PostgreSQL)',
   }
 
   async function emirAc(istasyonId: number): Promise<number> {
-    return (await istek<{ emir: { id: number } }>('POST', '/uretim-emirleri', { parcaNo: `SP-${(sayac += 1)}`, parcaAd: 'Sözleşme', adet: 100, istasyonId, projeId })).emir.id;
+    return (await emirYaz({ parcaNo: `SP-${(sayac += 1)}`, parcaAd: 'Sözleşme', adet: 100, istasyonId, projeId })).govde.emir.id;
   }
 
   const calistir = <T>(is: (db: Db) => Promise<T>): Promise<T> => vt().tx(is);

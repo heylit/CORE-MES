@@ -1,32 +1,30 @@
 import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import { bulunamadi, cakisma, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
   AdimCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
   aktifIstasyonlar, calisirMakineler, ekipler, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
-import { projeGetir } from '../projeler/disari.ts';
 import {
-  ADIM_YOK, adimGirdiAsimiIhlali, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, PROJE_GECERSIZ, TERMINAL_FASON, acmaIstasyonIhlali,
-  adimDegisiyorMu, adimIhlali, ayarIhlali, adimliIptalIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
-  duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, iptalIhlali, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
-  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, ROTASIZ_EMIR_KAPALI, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
+  ADIM_YOK, adimGirdiAsimiIhlali, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
+  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
+  duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
+  adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
-import { emirBittiBildir, emirIptalBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
+import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { AdimSatiri, EmirSatiri, KayitSatiri } from './sorgular.ts';
 
@@ -314,32 +312,13 @@ export async function emirAyrintisi(db: Db, id: number): Promise<EmirAyrintiCeva
   return { emir, kayitlar, adimlar: await adimlariCevir(db, id), kolHurdasi };
 }
 
-
-// Uçtan açılan rotasız emir: ayar açık olmalı ve emir aktif bir projeye bağlanmalı (224, denetim #27).
-export async function rotasizEmirAc(db: Db, kisiId: number, govde: EmirKaydi): Promise<{ emir: Emir }> {
-  if (!(await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'))) throw cakisma(ROTASIZ_EMIR_KAPALI);
-  if ((await projeGetir(db, govde.projeId))?.durum !== 'aktif') throw dogrulama(PROJE_GECERSIZ, 'projeId');
-  return emirAc(db, kisiId, govde);
-}
-
-// Denetimsiz yazıcı: yalnız rotasizEmirAc ve test kurulumları çağırır.
+// Denetimsiz yazıcı: yalnız test kurulumları çağırır (iş emirsiz emir).
 export async function emirAc(db: Db, kisiId: number, govde: Omit<EmirKaydi, 'projeId'> & { projeId?: number }): Promise<{ emir: Emir }> {
   const ihlal = acmaIstasyonIhlali(await istasyonDurumu(db, govde.istasyonId));
   if (ihlal !== null) throw dogrulama(ihlal, 'istasyonId');
   const id = await sorgular.emirEkle(db, govde, kisiId);
   // Adımlar emirle aynı işlemde, dizideki sırayla 1..n bitişik yazılır.
   for (const [i, adim] of (govde.adimlar ?? []).entries()) await sorgular.adimEkle(db, id, i + 1, adim.ad, adim.aciklama);
-  return emirdenCevap(db, id);
-}
-
-export async function emirIptal(db: Db, id: number, surum: number, kisiId: number): Promise<{ emir: Emir }> {
-  const emir = await kilitliEmir(db, id);
-  if (emir.surum !== surum) throw eskiSurum();
-  const ihlal = iptalIhlali(emir.durum)
-    ?? (emir.malzemeNo === null ? null : adimliIptalIhlali(emir.durum, false, await baslamisIsEmriVar(db, id)));
-  if (ihlal !== null) throw cakisma(ihlal);
-  await sorgular.iptaliYaz(db, id);
-  await emirIptalBildir(db, { uretimEmriId: id, kisiId });
   return emirdenCevap(db, id);
 }
 
@@ -503,8 +482,9 @@ export async function isEmriSureOzeti(db: Db, isEmriId: number, emirId?: number)
 // sayaç toplamıdır; verilirse sayaçla farkı düzeltme satırı olarak yazılır, toplam verilen adede eşitlenir.
 // İş emirli emirde çalışan iş emri biter; iş emri kalırsa emir sıradakinin istasyonunda yeniden planlı olur, son iş emri
 // biterse emir biter (ilk sistemdeki gibi). Defter satırları iş emri bitmeden yazılır: kapsamları çalışan iş emridir.
+// duzeltebilir verilirse (dışarıdan gelen komut) verilen adet sayımı ezdiği için emirSayim'deki eksi sayım denetimine tabidir.
 export async function emirBitir(
-  db: Db, kisiId: number, id: number, saglamAdet: number | undefined, refakatPartisiId: number | null = null,
+  db: Db, kisiId: number, id: number, saglamAdet: number | undefined, refakatPartisiId: number | null = null, duzeltebilir?: boolean,
 ): Promise<{ emir: Emir }> {
   await ustuOnceKilitle(db, id);
   const emir = await kilitliEmir(db, id);
@@ -512,6 +492,7 @@ export async function emirBitir(
   await kapsaminda(db, kisiId, istasyonId);
   const ihlal = bitirmeIhlali(emir.durum);
   if (ihlal !== null) throw cakisma(ihlal);
+  if (saglamAdet !== undefined && duzeltebilir !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir);
   const calisan = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
   if (calisan !== null) await birlesmeAdimiBiterMi(db, id, calisan);
   const mevcut = await saglamToplami(db, id);
@@ -562,21 +543,12 @@ async function saglamYaz(
   });
 }
 
-// Terminal sayım ucu (denetim #13): ilk parça kararı beklenirken (karar bekleyen adet varken) sağlam sayım karar bekleyene yazılır;
-// uç gövdesi türü seçemez, kararı uçtan atlamak yoktur. Kararı bilen çağıran (Arkon) emirSayim'i kendi seçimiyle çağırır.
-export async function terminalSayimi(
-  db: Db, kisiId: number, id: number, govde: SayimKaydi, duzeltebilir = false,
-): Promise<{ emir: Emir; uyari: string | null }> {
-  const bekleyen = govde.tur === 'saglam' && (await sayaclar(db, id)).kararBekliyor > 0;
-  return emirSayim(db, kisiId, id, govde, { kararBekliyor: bekleyen, katilimDenetimi: { duzeltebilir } });
-}
-
 // kararBekliyor: ilk parça kararı beklenirken sağlam sayım karar bekleyen sayılır (131 b); türü çağıran modül seçer, terminal
 // gövdesi seçemez. Eksi düzeltme karar bekleyen toplamı sıfırın altına indiremez.
-// katilimDenetimi (185 a, TMI sayım uçları): düzeltme işlemi yoksa kişi çalışan adıma başlamış ya da katılmış olmalı. Arkon yolu
-// (disari) bu denetimi taşımaz: Arkon kaydı kendi cihaz ve ekibinden gelir; bağlamada kapanır (UYUM-BORCU).
+// duzeltebilir verilirse (dışarıdan gelen komut) eksi sayım başkasının sayımını düşürebileceği için kişinin çalışan adıma başlamış
+// ya da katılmış olmasını, değilse düzeltme işlemini ister (185 a). Artı sayım Arkon'un kendi cihaz ve ekibinden gelir.
 export async function emirSayim(
-  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; katilimDenetimi?: { duzeltebilir: boolean } } = {},
+  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
   const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
   // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
@@ -585,7 +557,7 @@ export async function emirSayim(
     && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
-  if (secenek.katilimDenetimi !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, secenek.katilimDenetimi.duzeltebilir);
+  if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir);
   const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;
   if (govde.tur === 'hurda' && govde.adet < 0) {
@@ -652,22 +624,6 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
   if (idler.length === 0) return sonuc;
   for (const { emirId, ...s } of await sorgular.kararSayaclariGetir(db, idler)) sonuc.set(emirId, s);
   return sonuc;
-}
-
-// Tuş takımı mutlak sağlam değeri gönderir; fark tek düzeltme satırıdır (fark sıfırsa satır yazılmaz).
-export async function emirSayimAyarla(
-  db: Db, kisiId: number, id: number, saglam: number, refakatPartisiId: number | null = null, duzeltebilir = false,
-): Promise<{ emir: Emir; uyari: string | null }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
-  const ihlal = sayimIhlali(emir.durum, calisma);
-  if (ihlal !== null) throw cakisma(ihlal);
-  await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir);
-  const fark = saglam - (await saglamToplami(db, id));
-  // Denetim #13: ilk parça kararı beklenirken artış karar bekleyene yazılır; ayarlama kararı atlatmaz.
-  await adimGirdisiniDenetle(db, emir, fark);
-  const bekleyen = fark > 0 && ((await sayaclar(db, id)).kararBekliyor > 0 || (await sorgular.ilkParcaOnaysiz(db, id)));
-  const uyari = fark === 0 ? null : await saglamYaz(db, emir, kisiId, istasyonId, fark, true, await sorgular.anAl(db), bekleyen, refakatPartisiId);
-  return { ...(await emirdenCevap(db, id)), uyari };
 }
 
 export async function emirDuraklat(db: Db, kisiId: number, id: number): Promise<{ emir: Emir }> {
@@ -752,10 +708,6 @@ export async function adimTamamla(db: Db, kisiId: number, emirId: number, adimId
     await sorgular.adimOlayiEkle(db, adimId, kisiId, tamam ? 'tamamla' : 'geri-al', await sorgular.anAl(db));
   }
   return { emir: (await emirdenCevap(db, emirId)).emir, adimlar: await adimlariCevir(db, emirId) };
-}
-
-async function baslamisIsEmriVar(db: Db, emirId: number): Promise<boolean> {
-  return (await sorgular.isEmirleriGetir(db, [emirId])).some((i) => i.durum !== 'bekliyor');
 }
 
 export async function anaSayfaOzeti(db: Db, kisiId: number, listeyiOkur: boolean): Promise<OzetCevabi> {

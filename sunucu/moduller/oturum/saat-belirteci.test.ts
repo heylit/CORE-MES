@@ -248,7 +248,7 @@ describe('saat eşleşmesi ve belirteci (gerçek PostgreSQL)', () => {
     assert.equal((await belirtecli(b, 'GET', '/uretim-emirleri?x=/api/saat/istasyonlar')).durum, 401);
     assert.equal((await belirtecli(b, 'GET', '/hesabim/saat-cihazlari')).durum, 401);
     assert.equal((await belirtecli(b, 'POST', '/hesabim/saat-onayla', { kod: '123456' })).durum, 401);
-    assert.equal((await belirtecli(b, 'POST', '/uretim-emirleri', { parcaNo: 'X', parcaAd: 'X', adet: 1, istasyonId: 1 })).durum, 401);
+    assert.equal((await belirtecli(b, 'POST', '/uretim-emirleri/1/duraklat', { surum: 1 })).durum, 401);
     const oturum = await belirtecli(b, 'GET', '/oturum');
     assert.deepEqual(oturum.govde, { kullanici: null });
     assert.equal((await belirtecli('b'.repeat(43), 'GET', '/saat/istasyonlar')).durum, 401);

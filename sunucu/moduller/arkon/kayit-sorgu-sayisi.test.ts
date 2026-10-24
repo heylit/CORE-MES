@@ -46,6 +46,15 @@ describe('arkon kayıt ekleme satır başına sorgu sayısı (gerçek PostgreSQL
     return ortam.vt;
   };
 
+  // İş emirsiz emrin açma ucu yok (238 H3): kurulum emri doğrudan yazar.
+  const emirYaz = async (g: { parcaNo: string; parcaAd: string; adet: number; istasyonId: number; projeId: number }) => {
+    const emir = (await ortam!.sahip.tek<{ id: number; emirNo: string }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id)
+       VALUES ($1, $2, $3, $4, (SELECT min(id) FROM kisi), $5) RETURNING id, emir_no AS "emirNo"`,
+      [g.parcaNo, g.parcaAd, g.adet, g.istasyonId, g.projeId]))!;
+    return { durum: 200, govde: { emir } };
+  };
+
   async function istek<T>(yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<T> {
     const cevap = await app.inject({
       method: yontem, url: `/api${yol}`,
@@ -106,7 +115,7 @@ describe('arkon kayıt ekleme satır başına sorgu sayısı (gerçek PostgreSQL
     const ist = await istek<{ id: number }>('POST', '/istasyonlar', { kod: 'SQI', ad: 'Sorgu istasyonu', isMerkeziId: merkez.id, tip: 'talasli' });
     // UE20: iş başlatan test kişileri bu istasyonda yetkindir.
     await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi', [ist.id]);
-    const emirAc = async (no: string) => (await istek<{ emir: { id: number } }>('POST', '/uretim-emirleri', { parcaNo: no, parcaAd: 'Sorgu', adet: 500, istasyonId: ist.id, projeId })).emir.id;
+    const emirAc = async (no: string) => (await emirYaz({ parcaNo: no, parcaAd: 'Sorgu', adet: 500, istasyonId: ist.id, projeId })).govde.emir.id;
     calisanEmir = await emirAc('SQ-1');
     bekleyenEmir = await emirAc('SQ-2');
     await istek('POST', '/arkon/kayitlar/events/ekle', { satirlar: [{ cid: 'sq-basla', pkgId: `tmi-ue-${calisanEmir}`, state: 'running' }], kaynak: 'sq' });

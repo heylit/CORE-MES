@@ -74,10 +74,13 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     return girisCerezi(kullaniciAdi);
   }
 
+  const iptalYaz = (id: number) => ortam!.sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now(), surum = surum + 1 WHERE id = $1", [id]);
+
   async function emirAc(): Promise<number> {
-    const e = await istek<{ emir: { id: number } }>(yonetici, 'POST', '/uretim-emirleri', { parcaNo: `YP-${(sayac += 1)}`, parcaAd: 'Yansıma', adet: 500, istasyonId, projeId });
-    assert.equal(e.durum, 200, JSON.stringify(e.govde));
-    return e.govde.emir.id;
+    // İş emirsiz emrin açma ucu yok (238 H3): yalnız kurulum için doğrudan yazılır.
+    return (await ortam!.sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [`YP-${(sayac += 1)}`, 'Yansıma', 500, istasyonId, yoneticiId, projeId]))!.id;
   }
 
   // Aynı istasyonda tek başlamış emir olur: her test kendi istasyonunu kurar.
@@ -914,8 +917,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       const y = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(id)}/yaz`, { taban: 0, govde: { id: pk(id), status: 'draft', machine: benimKod }, kaynak: 'k3' });
       assert.equal(y.durum, 200, JSON.stringify(y.govde));
     }
-    const surumOku = async (id: number) => (await istek<{ emir: { surum: number } }>(yonetici, 'GET', `/uretim-emirleri/${id}`)).govde.emir.surum;
-    for (const id of [iptal, iptal2]) assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${id}/iptal`, { surum: await surumOku(id) })).durum, 200);
+    for (const id of [iptal, iptal2]) await iptalYaz(id);
     const yon = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['arkon.yonetici'] as never };
     const okunan: { sql: string; p: readonly unknown[] }[] = [];
     const liste = (await vt().tx((db) => belgeler(sayimli(db, okunan), yon, 'pkgs'))).map((b) => b.kimlik);
@@ -1675,8 +1677,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       const y = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(id)}/yaz`, { taban: 0, govde: { id: pk(id), status: 'draft', machine: istasyonKodu }, kaynak: 'y1' });
       assert.equal(y.durum, 200, JSON.stringify(y.govde));
     }
-    const surum = (await istek<{ emir: { surum: number } }>(yonetici, 'GET', `/uretim-emirleri/${iptal}`)).govde.emir.surum;
-    assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${iptal}/iptal`, { surum })).durum, 200);
+    await iptalYaz(iptal);
     const liste = (await istek<{ belgeler: { kimlik: string }[] }>(yonetici, 'GET', '/arkon/belgeler/pkgs')).govde.belgeler.map((b) => b.kimlik);
     assert.ok(!liste.includes(pk(iptal)), 'iptal edilen emrin paketi listede');
     assert.ok(liste.includes(pk(acik)), 'açık emrin paketi listede değil');

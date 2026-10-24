@@ -1,20 +1,19 @@
 import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, bitirGovdesi, durdurGovdesi, emirAyrintiCevabi, emirBaslatCevabi, emirCevabi, emirGovdesi,
+  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
-  emirlerSorgusu, sayimAyarlaGovdesi, sayimCevabi, sayimGovdesi,
+  emirlerSorgusu,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
-  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineSecimiGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
-import { SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import {
-  adimTamamla, anaSayfaOzeti, durusDagilimi, emirAyar, emirAyrintisi, emirBaslat, emirBitir, emirDevam, emirDuraklat, emirDurdur, emirIptal, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, rotasizEmirAc, sonOlaylar,
-  emirSayimAyarla, izlemeListesi, terminalSayimi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
+  adimTamamla, anaSayfaOzeti, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
+  izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
 const ADIMLI_OKUMA = { biri: ADIMLI_OKUMA_ISLEMLERI } as const;
@@ -50,25 +49,6 @@ const emirUclari = [
     cevap: emirAyrintiCevabi,
     isle: ({ db, parametre }) => emirAyrintisi(db, parametre.id),
   }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri',
-    yetki: 'uretim-emirleri.yaz',
-    // Ağ kopup yeniden gönderilen istek ikinci emir açmasın (emir no kimlikten üretilir, tekil anahtar yok).
-    tekrarKorumali: true,
-    govde: emirGovdesi,
-    cevap: emirCevabi,
-    isle: ({ db, kullanici, govde }) => rotasizEmirAc(db, kullanici.id, govde),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/iptal',
-    yetki: 'uretim-emirleri.yaz',
-    parametre: emirParametresi,
-    govde: adimliIptalGovdesi,
-    cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirIptal(db, parametre.id, govde.surum, kullanici.id),
-  }),
   // Ayar sıradaki işin ayarını başlatır; başlatma kapatır.
   uc({
     yontem: 'POST',
@@ -77,17 +57,6 @@ const emirUclari = [
     parametre: emirParametresi,
     cevap: emirCevabi,
     isle: ({ db, kullanici, parametre }) => emirAyar(db, kullanici.id, parametre.id),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/baslat',
-    yetki: 'terminal.uret',
-    // Terminal bağlantı gelince aynı kimlikle yeniden gönderir: ulaşmış komut ikinci kez uygulanmaz (kart #1323).
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: makineSecimiGovdesi,
-    cevap: emirBaslatCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirBaslat(db, kullanici.id, parametre.id, govde?.makineIdleri),
   }),
   uc({
     yontem: 'POST',
@@ -100,67 +69,12 @@ const emirUclari = [
   }),
   uc({
     yontem: 'POST',
-    yol: '/uretim-emirleri/:id/bitir',
-    yetki: 'terminal.uret',
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: bitirGovdesi,
-    cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirBitir(db, kullanici.id, parametre.id, govde.saglamAdet, govde.refakatPartisiId ?? null),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/sayim',
-    yetki: 'terminal.uret',
-    // Gövde fark taşır: yeniden gönderilen dokunuş ikinci kez sayılmasın.
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: sayimGovdesi,
-    denetim: 'govdesiz',
-    cevap: sayimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => terminalSayimi(db, kullanici.id, parametre.id, govde, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/sayim-ayarla',
-    yetki: 'terminal.uret',
-    // Terminal bunu sayım kuyruğunda yeniden dener: arada başka cihazın sayımı geldiyse geç gelen kopya onu ezmesin.
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: sayimAyarlaGovdesi,
-    denetim: 'govdesiz',
-    cevap: sayimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) =>
-      emirSayimAyarla(db, kullanici.id, parametre.id, govde.saglam, govde.refakatPartisiId ?? null, islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI)),
-  }),
-  uc({
-    yontem: 'POST',
     yol: '/uretim-emirleri/:id/duraklat',
     yetki: 'terminal.uret',
     tekrarKorumali: true,
     parametre: emirParametresi,
     cevap: emirCevabi,
     isle: ({ db, kullanici, parametre }) => emirDuraklat(db, kullanici.id, parametre.id),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/devam',
-    yetki: 'terminal.uret',
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: makineSecimiGovdesi,
-    cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirDevam(db, kullanici.id, parametre.id, govde?.makineIdleri),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/uretim-emirleri/:id/durdur',
-    yetki: 'terminal.uret',
-    tekrarKorumali: true,
-    parametre: emirParametresi,
-    govde: durdurGovdesi,
-    cevap: emirCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emirDurdur(db, kullanici.id, parametre.id, govde.durusNedeniId),
   }),
   uc({
     yontem: 'POST',
