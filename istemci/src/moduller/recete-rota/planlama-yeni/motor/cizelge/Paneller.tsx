@@ -10,6 +10,8 @@ import {
   type Denge, type Derleme, type OkunanPlan, type Sorun, type SorunTonu,
 } from '../kurallar.ts';
 import { degisken, HAZIRLANIYOR, MetinYaz, MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
+import { IsDenetci, OpDenetci, TezgahDenetci } from './Denetci.tsx';
+import { Dg } from './Dugme.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 
 // Çizelgenin yan panelleri (t-tekyer.betik solPanel ve sagPanel): solda sepet ve havuz, sağda yardımcı (zz24-sade sdYardimci, altında
@@ -17,16 +19,6 @@ import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 export type SolPanelAdi = 'sepet' | 'havuz';
 export type SagPanelAdi = 'yardimci' | 'ayrinti';
 const PANEL_AD: Record<SolPanelAdi | SagPanelAdi, string> = { sepet: 'Sepet', havuz: 'Havuz', yardimci: 'Yardımcı', ayrinti: 'Ayrıntı' };
-
-interface DugmeOzu { simge?: SimgeAdi; birincil?: boolean; tehlike?: boolean; hayalet?: boolean; yap?: (() => void) | null; not?: string }
-function Dg({ ad, simge, birincil, tehlike, hayalet, yap, not = MOTOR_NOTU }: DugmeOzu & { ad: string }) {
-  const sinif = `tc-dugme tc-pym-kucuk${birincil ? ' tc-dugme-birincil' : ''}${tehlike ? ' tc-dugme-tehlike' : ''}${hayalet ? ' tc-pym-hayalet' : ''}`;
-  return (
-    <button type="button" className={sinif} aria-disabled={yap ? undefined : 'true'} title={yap ? undefined : `${ad}: ${not}`} onClick={yap ?? undefined}>
-      {simge && <Simge ad={simge} boyut="k" />}{ad}
-    </button>
-  );
-}
 
 function PanelBasi<T extends string>({ secili, sekmeler, sec, kapat }: { secili: T; sekmeler: [T, SimgeAdi][]; sec: (x: T) => void; kapat: () => void }) {
   return (
@@ -107,12 +99,15 @@ interface SagOzellikleri {
   sag: SagPanelAdi; sagSec: (x: SagPanelAdi) => void; kapat: () => void;
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null;
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; secim: PlanlamaSecimi; secJob: string | null;
-  sipSec: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
+  sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
+  opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;
   if (o.sag === 'yardimci') govde = <><SadeYardimci {...o} /><details className="tc-pym-sd-teknik"><summary><Simge ad="gear" boyut="k" />Teknik ayrıntılar (uzman)</summary><TeknikYardimci {...o} /></details></>;
-  else if (o.secim.adim || o.secJob || o.secim.tezgah) govde = <p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{o.secim.tezgah && !o.secim.adim && !o.secJob ? 'Tezgâh' : o.secim.adim ? 'İş' : 'Sipariş'} ayrıntısı: {HAZIRLANIYOR}</p>;
+  else if (o.secim.adim && o.p.ops[o.secim.adim]) govde = <OpDenetci key={o.secim.adim} id={o.secim.adim} {...o} />;
+  else if (o.secJob && o.c.D.siparisler.some((s) => s.id === o.secJob)) govde = <IsDenetci jid={o.secJob} {...o} />;
+  else if (o.secim.tezgah) govde = <TezgahDenetci m={o.secim.tezgah} {...o} />;
   else govde = <KararPaneli {...o} />;
   return (
     <aside className="tc-pym-tbk-sag" aria-label={o.sag === 'yardimci' ? 'Plan yardımcısı' : 'Ayrıntı'}>
@@ -240,7 +235,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
 
 // Karar paneli (n-karar.betik sorunPaneli): sorunlar önem sırasıyla, gecikmenin kaynağı, hızlı işler. Seçim varken ayrıntı gelir.
 const SOR_SIRA: Record<SorunTonu, number> = { hata: 0, uyari: 1, bilgi: 2 };
-function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, sipSec, mercekSec, kapat }: SagOzellikleri) {
+function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapat }: SagOzellikleri) {
   const l = [...sor].sort((a, b) => SOR_SIRA[a.ton] - SOR_SIRA[b.ton]);
   const kay = useMemo(() => gecikmeKaynaklari(c, p, cx).liste.slice(0, 5), [c, p, cx]); const enb = kay[0]?.v || 1;
   return (
@@ -258,7 +253,7 @@ function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, sipSec, mercekSec, ka
                 <b className="tc-pym-sor-baslik">{x.baslik}</b>
                 <p className="tc-pym-sor-metin"><MetinYaz m={x.metin} /></p>
                 <div className="tc-pym-dugmeler">
-                  {x.eylemler.map((e) => { const y = eylemYapisi(e, { c, komut, sipSec }); return <Dg key={e.ad} ad={e.ad} birincil={e.birincil} yap={y.yap} not={y.not} />; })}
+                  {x.eylemler.map((e) => { const y = eylemYapisi(e, { c, komut, sipSec: isAc }); return <Dg key={e.ad} ad={e.ad} birincil={e.birincil} yap={y.yap} not={y.not} />; })}
                 </div>
               </div>
             </li>

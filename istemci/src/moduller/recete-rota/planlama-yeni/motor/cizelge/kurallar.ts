@@ -5,6 +5,12 @@ import { acikSaat, AY_AD, saatOku, saatYaz, type Derleme, type OkunanPlan, type 
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
+// Kapasitesiz en erken bitiş (c-masa: p.lbC): çözücünün kayda yazdığı alt sınır; yoksa ya da sonlu değilse null.
+export function kapasitesizEnErken(c: PlanlamaCalismasi, j: string): number | null {
+  const l = c.plan?.lbC; const x = l && typeof l === 'object' ? (l as Record<string, unknown>)[j] : null;
+  return typeof x === 'number' && Number.isFinite(x) ? x : null;
+}
+
 // Tezgâh satırlarının sırası (o-tahta tbYerlesim kart): düz nesne, sayı biçimli kimlikler önce küçükten büyüğe, ötekiler grup sırasıyla.
 export function tezgahSirasi(D: PlanVerisi, p: OkunanPlan, cx: Derleme): string[] {
   const kart: Record<string, true> = {};
@@ -205,3 +211,26 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
   const termin = s ? saatOku(D, s.termin) : null;
   return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin };
 }
+
+// --- ayrıntı (c-masa opDenetci, o-tahta tbTezPaneli) ---
+// Uygun tezgâhlar ve süreleri, motorun derlemesiyle aynı hesap (engine.betik: arıza payı, verim, adımın adedi); fasonda süre yoktur.
+// Motorun öğrendiği süre sapması istemcide yoktur; süre onsuz hesaplanır.
+export interface Aday { m: string; sure: number | null }
+export function adaylar(c: PlanlamaCalismasi, cx: Derleme, id: string): Aday[] {
+  const o = cx.byId[id]; if (!o) return [];
+  const D = cx.g.D; const j = D.siparisler.find((s) => s.id === o.job);
+  const k = id.slice(o.job.length + 1); const adim = D.urunler.find((u) => u.id === j?.urun)?.rota?.find((x) => String(x.k) === k);
+  const opAdet = D.opAdet && typeof D.opAdet === 'object' ? (D.opAdet as Record<string, unknown>)[id] : undefined;
+  const adet = opAdet != null && Number.isFinite(Number(opAdet)) ? Number(opAdet) : Number(j?.adet) || 0;
+  const acilPay = Number(c.param.acilPay) || 0;
+  return o.c.map((m): Aday => {
+    if (m.startsWith('@')) return { m, sure: null };
+    const t = adim?.tezgahlar?.find((x) => x.id === m); const M = D.tezgahlar.find((x) => x.id === m);
+    const arizaGun = Number(M?.arizaGun) || 0;
+    const pay = c.param.tampon ? Math.min(0.35, (arizaGun > 0 ? (Number(M?.onarimSaat) || 0) / (arizaGun * 24) : 0) + acilPay) : 0;
+    const cyc = (Number(t?.cevrim) || 0) / 60 / (1 - pay); const verim = Number(M?.verim) || 1;
+    return { m, sure: (Number(t?.ayar) || 0) / 60 + (adet * cyc) / verim };
+  });
+}
+// Tezgâhın planlı işleri başlangıç sırasıyla.
+export const tezgahKuyrugu = (p: OkunanPlan, m: string): PlanIslemi[] => yerlesen(p).filter((r) => r.m === m).sort((a, b) => a.S - b.S);

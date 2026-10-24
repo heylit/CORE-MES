@@ -90,7 +90,15 @@ export function CizelgeGorunumu(o: Ozellikler) {
       <Simge ad={simge} boyut="k" /><span>{PANEL_AD[panel]}</span>{n > 0 && <b className="tc-pym-mono tc-pym-tb-say">{n}</b>}
     </button>
   );
-  const sipSec = useCallback((j: string) => { sec({ siparis: j, adim: null, tezgah: null }); }, [sec]);
+  // Yardımcının "siparişine bak"ı siparişi Siparişler merceğinde açar (masayaGit); karar panelinin Ayrıntı'sı siparişin ilk planlı
+  // işini seçer (sec-is, tbAdimGit 0).
+  const sipSec = useCallback((j: string) => { sec({ siparis: j, adim: null, tezgah: null }); setMercek('zaman'); }, [sec]);
+  const isAc = useCallback((j: string) => {
+    const ilk = (cx.jobs[j]?.ops ?? []).map((x) => p.ops[x.id]).find((r) => r && Number.isFinite(r.C));
+    sec(ilk ? { adim: ilk.id, siparis: null, tezgah: null } : { siparis: j, adim: null, tezgah: null });
+  }, [sec, p, cx]);
+  const secimTemizle = useCallback(() => { sec({ adim: null, siparis: null }); }, [sec]);
+  const tezKapat = useCallback(() => { sec({ tezgah: null }); }, [sec]);
 
   let govde: ReactNode;
   if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} />;
@@ -130,7 +138,8 @@ export function CizelgeGorunumu(o: Ozellikler) {
         <div className="tc-pym-tb" data-mercek={mercek}>{govde}</div>
         {sag && (
           <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null}
-            planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} solAc={solAc} mercekSec={setMercek} />
+            planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={setMercek}
+            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} />
         )}
       </div>
     </section>

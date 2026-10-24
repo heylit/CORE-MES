@@ -131,6 +131,17 @@ test.describe('P1c Çizelge', () => {
     await page.getByRole('complementary', { name: 'Sepet' }).getByRole('tab', { name: 'Havuz' }).click();
     await expect(page.getByRole('complementary', { name: 'Havuz' })).toBeVisible();
     await tasmaz(page);
+    await arac.getByRole('button', { name: 'Havuz', exact: true }).click();
+    await arac.getByRole('tab', { name: 'Siparişler' }).click();
+    const is = page.getByRole('region', { name: 'Plan çizelgesi' }).locator('.tc-pym-g-is').first();
+    if (await is.count()) {
+      await is.click();
+      const neden = page.getByText('Neden bu saatte:');
+      if (!(await neden.isVisible())) await arac.getByRole('button', { name: 'Ayrıntı', exact: true }).click();
+      await expect(neden).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Siparişin adımları' })).toBeVisible();
+      await tasmaz(page);
+    }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
