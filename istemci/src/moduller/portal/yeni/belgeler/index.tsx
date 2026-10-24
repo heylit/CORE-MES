@@ -1,5 +1,5 @@
 import type { Gorunumler } from '../sekmeler.ts';
+import { BelgeListesi } from './BelgeListesi.tsx';
 
 // Firma belgeleri parçası (P2). Görünüm: docs.
-// Yazılana kadar boş: kabuk bu adda "hazırlanıyor" gösterir.
-export const gorunumler: Gorunumler = {};
+export const gorunumler: Gorunumler = { docs: BelgeListesi };
