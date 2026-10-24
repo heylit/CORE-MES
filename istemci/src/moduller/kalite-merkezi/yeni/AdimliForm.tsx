@@ -32,6 +32,8 @@ export interface KmAlan {
   enAz?: number;
   enCok?: number;
   adim?: string;
+  // Formun kendi gizlediği alan (bugün türe göre gizlenen FAI alanları gibi): iki kipte de çizilmez, sorulmaz, zorunlu sayılmaz.
+  gorunur?: (d: FormVerisi) => boolean;
 }
 
 export type FormVerisi = Record<string, unknown>;
@@ -110,7 +112,7 @@ export function ilkDegerler(alanlar: readonly KmAlan[], ilk: FormVerisi | null |
 }
 
 export function eksikler(alanlar: readonly KmAlan[], d: FormVerisi): KmAlan[] {
-  return alanlar.filter((a) => a.zorunlu && bosMu(d[a.k]));
+  return alanlar.filter((a) => a.zorunlu && (!a.gorunur || a.gorunur(d)) && bosMu(d[a.k]));
 }
 
 // Uygulamanın adımlı penceresi (steppedModal): adım çubuğu, zorunlu sayacı, kontrol ve kaydet adımı, taslak, Ctrl+Enter, Geçmiş.
@@ -343,6 +345,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
   };
 
   const alanCiz = (a: KmAlan) => {
+    if (a.gorunur && !a.gorunur(d)) return null;
     const v = d[a.k];
     const hata = hatali.has(a.k) ? 'Bu alan zorunlu.' : undefined;
     const ortak = { etiket: a.etiket, ipucu: a.ipucu, hata, name: a.k, required: a.zorunlu };

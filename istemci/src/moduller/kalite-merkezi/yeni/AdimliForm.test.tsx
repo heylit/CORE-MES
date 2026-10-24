@@ -144,3 +144,23 @@ describe('AdimliForm ikinci kaydet ve pencere', () => {
     expect(screen.getByRole('button', { name: 'Kaydet ve onaya gönder' })).toBeTruthy();
   });
 });
+
+describe('AdimliForm formun gizlediği alan', () => {
+  it('gorunur false iken alan iki kipte de çizilmez ve zorunlu sayılmaz', async () => {
+    localStorage.setItem('kym-me', JSON.stringify({ formMode: 'liste' }));
+    const kaydet = ac(vi.fn(), {
+      alanlar: [
+        { k: 'tur', etiket: 'Tür', tur: 'secim', secenekler: ['Giriş', 'FAI'], zorunlu: true },
+        { k: 'faiNeden', etiket: 'FAI nedeni', zorunlu: true, gorunur: (d) => d.tur === 'FAI' },
+      ],
+      ilk: { tur: 'Giriş' },
+    });
+    await screen.findByLabelText(/Tür/);
+    expect(screen.queryByLabelText(/FAI nedeni/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Tür/), { target: { value: 'FAI' } });
+    expect(screen.getByLabelText(/FAI nedeni/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Tür/), { target: { value: 'Giriş' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(kaydet).toHaveBeenCalledTimes(1));
+  });
+});

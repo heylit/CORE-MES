@@ -40,7 +40,8 @@ export function otomatikMi(s: KmSoru, yeni: boolean, acilis: FormVerisi, onDolgu
   return k !== 'durum' && onDolgu !== null && dolu(onDolgu[k]);
 }
 
-export const soruGorunur = (s: KmSoru, d: FormVerisi): boolean => s.tur !== 'alan' || !KOSUL[s.alan.k] || KOSUL[s.alan.k]!(d);
+export const soruGorunur = (s: KmSoru, d: FormVerisi): boolean =>
+  s.tur !== 'alan' || ((!s.alan.gorunur || s.alan.gorunur(d)) && (!KOSUL[s.alan.k] || KOSUL[s.alan.k]!(d)));
 
 export const zorunluSoru = (s: KmSoru | undefined): boolean => s?.tur === 'alan' && !!s.alan.zorunlu;
 

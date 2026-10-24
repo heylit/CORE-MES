@@ -17,6 +17,7 @@ describe('tek tek sor kuralları', () => {
   it('koşullu soru bağlı yanıta göre görünür', () => {
     expect(soruGorunur(q[2]!, { mrb: 'Karar bekliyor' })).toBe(false);
     expect(soruGorunur(q[2]!, { mrb: 'Hurda' })).toBe(true);
+    expect(soruGorunur({ tur: 'alan', alan: { k: 'x', etiket: 'X', gorunur: () => false }, adim: 0 }, {})).toBe(false);
   });
 
   it('yeni kayıtta dolu otomatik alan ve ön dolgu sorulmaz', () => {
