@@ -30,6 +30,13 @@ export interface EmirAcildiOlayi {
   stoktanRezerve: boolean;
 }
 
+// Hazırlık tamamlandı (233, 264 2a): emrin ilk iş emri hazırlık denetiminden geçip başladı. Emir başına bir kez; Logo emrin boş sarf ve
+// üretimden giriş fişini burada açar.
+export interface HazirlikTamamlandiOlayi {
+  uretimEmriId: number;
+  kisiId: number;
+}
+
 export interface FasonHareketiOlayi {
   // Ayrıntı fasonHareketiOzeti ile okunur.
   hareketId: number;
@@ -44,6 +51,7 @@ export type FasonHareketiDinleyicisi = Dinleyici<FasonHareketiOlayi>;
 export type EmirIptalDinleyicisi = Dinleyici<EmirIptalOlayi>;
 export type EmirAcildiDinleyicisi = Dinleyici<EmirAcildiOlayi>;
 export type EmirBirlestiDinleyicisi = Dinleyici<EmirBirlestiOlayi>;
+export type HazirlikTamamlandiDinleyicisi = Dinleyici<HazirlikTamamlandiOlayi>;
 
 function kayit<T>() {
   const dinleyiciler: Dinleyici<T>[] = [];
@@ -66,6 +74,7 @@ const fason = kayit<FasonHareketiOlayi>();
 const iptal = kayit<EmirIptalOlayi>();
 const acildi = kayit<EmirAcildiOlayi>();
 const birlesti = kayit<EmirBirlestiOlayi>();
+const hazirlik = kayit<HazirlikTamamlandiOlayi>();
 
 export const emirBittiDinle = bitti.dinle;
 export const emirBittiBildir = bitti.bildir;
@@ -77,3 +86,5 @@ export const emirAcildiDinle = acildi.dinle;
 export const emirAcildiBildir = acildi.bildir;
 export const emirBirlestiDinle = birlesti.dinle;
 export const emirBirlestiBildir = birlesti.bildir;
+export const hazirlikTamamlandiDinle = hazirlik.dinle;
+export const hazirlikTamamlandiBildir = hazirlik.bildir;

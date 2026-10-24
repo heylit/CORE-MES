@@ -39,9 +39,11 @@ export interface KopruIstemcisi {
   ambarListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
   // Siparişin faturaları; 404 "fatura yok" sayılır (VARSAYIM).
   faturaOku(siparisNo: string): Promise<OkumaSonucu<FaturaKaydi[]>>;
-  // Malzeme fişi (sarf TRCODE 12, üretimden giriş TRCODE 13). Fişi numarayla arama ucu bilinmiyor (BİLMİYORUM): kalkan yalnız niyettir.
+  // Malzeme fişi (sarf TRCODE 12, üretimden giriş TRCODE 13). Açmada kalkan yalnız niyettir (yardımcının numarayla bulma ucu TMI'de kullanılmıyor).
   sarfFisiEkle(govde: Record<string, unknown>): Promise<KopruSonucu>;
   uretimGirisiEkle(govde: Record<string, unknown>): Promise<KopruSonucu>;
+  // 233: fişi numarasıyla siler (değişen fiş silinip aynı numarayla yeniden açılır); 404 "fiş yok" başarı sayılır (logicalRef null).
+  malzemeFisiSil(tur: 'sarf-fisi' | 'uretim-girisi', no: string): Promise<KopruSonucu>;
   // Hizmet "var mı" yolu verildi mi; verilmediyse hizmet açma çift gönderim kalkanının yalnız niyet kısmıyla yapılır.
   readonly hizmetVarMiYoluVar: boolean;
   // Bağlantı kontrolü: yalnız GET, ham durum ve gövde; ağ hatası yorumlanmış döner.
@@ -190,6 +192,11 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     },
     async uretimGirisiEkle(govde) {
       return yorumla(await istek('POST', '/api/MaterialSlip/AddProductionEntry', govde));
+    },
+    async malzemeFisiSil(tur, no) {
+      const c = await istek('DELETE', `/api/MaterialSlip/${tur === 'sarf-fisi' ? 'Consumption' : 'ProductionEntry'}/${encodeURIComponent(no)}`);
+      if (!('tur' in c) && c.durum === 404) return { tur: 'basarili', logicalRef: null };
+      return yorumla(c);
     },
     async malzemeVarMi(kod) {
       return yorumla(await istek('GET', `/api/Material/exists/${encodeURIComponent(kod)}`));
