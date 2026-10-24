@@ -16,7 +16,7 @@ import type { AddressInfo } from 'node:net';
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
 // Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404). Malzeme fişi: POST
-// /api/MaterialSlip/AddConsumption ve AddProductionEntry. Hepsinin cevap biçimi VARSAYIM.
+// /api/MaterialSlip/AddConsumption ve AddProductionEntry, DELETE /api/MaterialSlip/{Consumption|ProductionEntry}/{no}. Hepsinin cevap biçimi VARSAYIM.
 
 export type SahteSenaryo =
   // Kart açılır, numarası döner.
@@ -227,6 +227,18 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         kopru.malzemeFisleri.push({ uc: fis[1] ?? '', no: fisNo, ref, govde });
         if (kopru.senaryo === 'cevap-kayboldu') { istek.socket.destroy(); return; }
         json(cevap, 200, { success: true, logicalRef: ref, error: null, validate: null });
+        return;
+      }
+      // 233: fişi numarasıyla silme; yoksa 404. Doğrulama senaryosunda Logo silmeyi reddeder.
+      const fisSil = /^\/api\/MaterialSlip\/(Consumption|ProductionEntry)\/(.+)$/.exec(yol);
+      if (istek.method === 'DELETE' && fisSil) {
+        if (kopru.senaryo === 'dogrulama') { json(cevap, 200, { success: false, logicalRef: 0, error: 'Delete false', validate: null }); return; }
+        const uc = fisSil[1] === 'Consumption' ? 'AddConsumption' : 'AddProductionEntry';
+        const no = decodeURIComponent(fisSil[2] ?? '');
+        const i = kopru.malzemeFisleri.findIndex((f) => f.uc === uc && f.no === no);
+        const silinen = i < 0 ? undefined : kopru.malzemeFisleri.splice(i, 1)[0];
+        if (silinen) json(cevap, 200, { success: true, logicalRef: silinen.ref, error: null, validate: null });
+        else json(cevap, 404, { success: false, logicalRef: 0, error: 'Slip not found', validate: null });
         return;
       }
       const siparisBul = /^\/api\/PurchaseOrder\/find\/(.+)$/.exec(yol);
