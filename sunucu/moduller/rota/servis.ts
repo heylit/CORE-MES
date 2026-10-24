@@ -10,7 +10,7 @@ import type { KatalogMalzemeOzeti, KatalogTuru } from '#paylasilan/sozlesme/malz
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimKaynakOzeti, AgacCevabi, Bagimlilik, FarkCevabi, GerceklesenKabulCevabi, GerceklesenTuru, KaydetGovdesiCikti, SurelerCevabi, KomutCevabi, KullanimCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu,
-  KaynakOzeti, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
+  KaynakOzeti, KopyaIstegiCevabi, RevizyonKomutu, RevizyonOzetiCevabi, RotaListesiCevabi, Sablon, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunOzeti, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -516,8 +516,21 @@ async function adimlariYaz(db: Db, revizyonId: number, malzemeId: number, adimla
 }
 
 const TASLAK_ACIK = 'Bu ürünün açık bir revizyonu var; önce onu bitirin ya da iptal edin.';
+const ROTA_VAR = 'Bu ürünün rotası var; başka üründen kopya yalnız ilk rota için istenir.';
 
-type TaslakKaynagi = { tur: 'revizyon'; revizyonId: number } | { tur: 'standart' } | { tur: 'bos' } | { tur: 'kart' } | { tur: 'sablon'; sablonId: number };
+type TaslakKaynagi =
+  | { tur: 'revizyon'; revizyonId: number } | { tur: 'standart' } | { tur: 'bos' } | { tur: 'kart' } | { tur: 'sablon'; sablonId: number }
+  | { tur: 'urun'; urunId: number };
+
+// Başka ürünün revizyonu hedefe taşınırken hedefte kullanılmış numara boşaltılır (yeni numara alır); hedef kendi reçetesinde bileşen olamaz.
+async function baskaUruneAdimlar(db: Db, kaynakRevizyonId: number, hedefUrunId: number): Promise<YeniAdim[]> {
+  const kullanilmis = new Set(await s.kullanilmisOpNolari(db, hedefUrunId));
+  const adimlar = icerikYazimlari(await s.icerikOku(db, kaynakRevizyonId)).map((a) => (a.opNo !== null && kullanilmis.has(a.opNo) ? { ...a, opNo: null } : a));
+  if (adimlar.some((a) => a.bilesenler.some((b) => b.malzemeId === hedefUrunId))) {
+    throw gecersiz('Hedef ürün bu reçetede bileşen; kendisini bileşen olarak alamaz.');
+  }
+  return adimlar;
+}
 
 export function taslakAc(db: Db, kullanici: Kullanici, urunId: number, kaynak: TaslakKaynagi): Promise<KomutCevabi> {
   return taslagiAc(db, kullanici.id, urunId, kaynak);
@@ -527,9 +540,24 @@ export function taslakAc(db: Db, kullanici: Kullanici, urunId: number, kaynak: T
 // bu yüzden Rota'nın işi kartları tarar. Rotası (herhangi bir revizyonu) olan kart atlanır: taslak bir kez açılır, silinse de
 // yeniden açılmaz. Taslağı açan, kartı onaylayan kişidir. Bir kartın reddi ötekileri durdurmaz; ret günlüğe yazılır.
 // Reçete ve Rota açılırken de koşar (POST /rota/karttan-taslaklar): kart yeni onaylandıysa tarama beklenmeden rota taslağı görünür.
+// Kopya isteği olan kart (#500) karttan önce, isteğin kaynağından açılır; açanı isteği bırakandır. İstek açılınca da açılamayınca da
+// silinir: açılamayan istek her taramada yeniden denenmez, kartın operasyonları varsa ilk taslak onlardan açılır.
 export async function karttanTaslaklar(db: Db, gunluk: Gunluk): Promise<{ acilan: number }> {
   const rotali = new Set(await s.rotasiOlanMalzemeler(db));
   let acilan = 0;
+  const istekler = await s.kopyaIstekleri(db);
+  const hedefler = await urunOzetleri(db, istekler.map((i) => i.hedefId));
+  for (const i of istekler) {
+    if (!rotali.has(i.hedefId) && hedefler.get(i.hedefId)?.onayDurumu !== 'aktif') continue;
+    if (!rotali.has(i.hedefId)) {
+      const sonuc = await kayitNoktasi(db, () => taslagiAc(db, i.isteyenKisiId, i.hedefId, { tur: 'urun', urunId: i.kaynakId }));
+      if (sonuc.tamam) {
+        acilan += 1;
+        rotali.add(i.hedefId);
+      } else gunluk.uyar(`Rota: kart ${i.hedefId} için ${i.kaynakId} ürününden kopya açılamadı: ${sonuc.hata.message}`);
+    }
+    await s.kopyaIstegiSil(db, i.hedefId);
+  }
   for (const k of await operasyonluAktifKartlar(db)) {
     if (rotali.has(k.no)) continue;
     const sonuc = await kayitNoktasi(db, () => taslagiAc(db, k.kisiId, k.no, { tur: 'kart' }));
@@ -575,6 +603,11 @@ async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: Tas
       bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
       enKucukParca: null, yenidenAyar: true, adaylar: [], bilesenler: [], yanUrunler: [],
     }));
+  } else if (kaynak.tur === 'urun') {
+    if ((await s.harfler(db, urunId)).length > 0) throw cakisma(ROTA_VAR);
+    kaynakId = await s.yururluktekiRevizyonId(db, kaynak.urunId);
+    if (kaynakId === null) throw gecersiz('Kaynak ürünün yürürlükte rotası yok.');
+    adimlar = await baskaUruneAdimlar(db, kaynakId, urunId);
   }
   const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId });
   await adimlariYaz(db, id, urunId, adimlar);
@@ -686,17 +719,35 @@ export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUru
   if (await s.acikRevizyonVarMi(db, hedefUrunId)) throw cakisma(TASLAK_ACIK);
   const harf = revizyonHarfi(await s.harfler(db, hedefUrunId));
   if (harf === null) throw gecersiz('Bu ürünün revizyon harfleri tükendi.');
-  let adimlar: YeniAdim[] = icerikYazimlari(await s.icerikOku(db, id));
-  if (hedefUrunId !== r.malzemeId) {
-    const kullanilmis = new Set(await s.kullanilmisOpNolari(db, hedefUrunId));
-    adimlar = adimlar.map((a) => (a.opNo !== null && kullanilmis.has(a.opNo) ? { ...a, opNo: null } : a));
-    if (adimlar.some((a) => a.bilesenler.some((b) => b.malzemeId === hedefUrunId))) {
-      throw gecersiz('Hedef ürün bu reçetede bileşen; kendisini bileşen olarak alamaz.');
-    }
-  }
+  const adimlar = hedefUrunId === r.malzemeId ? icerikYazimlari(await s.icerikOku(db, id)) : await baskaUruneAdimlar(db, id, hedefUrunId);
   const yeni = await s.revizyonEkle(db, { malzemeId: hedefUrunId, malzemeTuru: turu(hedef), harf, acanKisiId: kullanici.id, kaynakRevizyonId: id });
   await adimlariYaz(db, yeni, hedefUrunId, adimlar);
   return cevap(yeni, 'taslak', 1);
+}
+
+// Yeni kartta "reçete ve rotayı şu üründen al" (#500). Kart yazan da rota yazan da ister; kopya her zaman taslaktır, ilerletmek
+// rota.yaz, yürürlüğe almak rota.onayla ister. Kart kullanımdaysa taslak hemen açılır; değilse istek bekler, kart kullanıma girince
+// karttanTaslaklar açar. Aynı karta yeni istek öncekinin yerine geçer.
+export async function kopyaIste(db: Db, kullanici: Kullanici, hedefUrunId: number, kaynakUrunId: number): Promise<KopyaIstegiCevabi> {
+  if (hedefUrunId === kaynakUrunId) throw dogrulama('Kaynak ürün kartın kendisi olamaz.', 'kaynakUrunId');
+  const ozetler = await urunOzetleri(db, [hedefUrunId, kaynakUrunId]);
+  const hedef = ozetler.get(hedefUrunId);
+  if (!hedef) throw bulunamadi('Malzeme kartı bulunamadı.');
+  if (!rotaliTurMu(hedef.tur)) throw gecersiz('Rota yalnız mamul ya da yarımamul kartına kurulur.');
+  if (hedef.onayDurumu === 'pasif') throw gecersiz('Kart kullanımda değil.');
+  const kaynak = ozetler.get(kaynakUrunId);
+  if (!kaynak) throw dogrulama('Kaynak ürün bulunamadı.', 'kaynakUrunId');
+  if (kaynak.onayDurumu !== 'aktif' || (await s.yururluktekiRevizyonId(db, kaynakUrunId)) === null) {
+    throw dogrulama('Kaynak ürün kullanımda ve yürürlükte rotalı olmalı.', 'kaynakUrunId');
+  }
+  if ((await s.harfler(db, hedefUrunId)).length > 0) throw cakisma(ROTA_VAR);
+  if (hedef.onayDurumu !== 'aktif') {
+    await s.kopyaIstegiYaz(db, hedefUrunId, kaynakUrunId, kullanici.id);
+    return { durum: 'bekliyor', revizyon: null };
+  }
+  const revizyon = await taslagiAc(db, kullanici.id, hedefUrunId, { tur: 'urun', urunId: kaynakUrunId });
+  await s.kopyaIstegiSil(db, hedefUrunId);
+  return { durum: 'acildi', revizyon };
 }
 
 export async function talimatYaz(

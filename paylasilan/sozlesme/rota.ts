@@ -118,6 +118,8 @@ export const kaydetGovdesi = z.object({
 export const surumGovdesi = z.object({ surum: KIMLIK });
 export const onaylaGovdesi = z.object({ surum: KIMLIK, yururlugeAl: z.boolean() });
 export const kopyalaGovdesi = z.object({ hedefUrunId: MALZEME_KIMLIGI });
+// Yeni kartta seçilen ürünün yürürlükteki rotası (#500): kart kullanımdaysa hemen, değilse kart onaylanınca taslak olarak açılır.
+export const kopyaIsteGovdesi = z.object({ kaynakUrunId: MALZEME_KIMLIGI });
 // okunanSurum: yazarın gördüğü son talimat sürümü (hiç yoksa null); arada başkası yazdıysa reddedilir.
 export const talimatYazGovdesi = z.object({ opNo: KIMLIK, metin: metin(AZAMI_TALIMAT, 'Talimat metni zorunlu.'), okunanSurum: KIMLIK.nullable() });
 
@@ -303,6 +305,8 @@ export const talimatlarCevabi = z.object({
 export const komutCevabi = z.object({ id: KIMLIK, durum: revizyonDurumu, surum: KIMLIK });
 // Karttan kendiliğinden açılan ilk rota taslaklarının sayısı (#688).
 export const karttanTaslaklarCevabi = z.object({ acilan: z.number().int().nonnegative() });
+// acildi: taslak açıldı (revizyon dolu); bekliyor: kart henüz kullanımda değil, istek kaydedildi (revizyon null).
+export const kopyaIstegiCevabi = z.object({ durum: z.enum(['acildi', 'bekliyor']), revizyon: komutCevabi.nullable() });
 
 /* ---------------- süreler (teorik ve gerçekleşen) ---------------- */
 
@@ -384,6 +388,8 @@ export type TaslakAcGovdesi = z.input<typeof taslakAcGovdesi>;
 export type SurumGovdesi = z.input<typeof surumGovdesi>;
 export type OnaylaGovdesi = z.input<typeof onaylaGovdesi>;
 export type KopyalaGovdesi = z.input<typeof kopyalaGovdesi>;
+export type KopyaIsteGovdesi = z.input<typeof kopyaIsteGovdesi>;
+export type KopyaIstegiCevabi = z.output<typeof kopyaIstegiCevabi>;
 export type SablonYazGovdesi = z.input<typeof sablonYazGovdesi>;
 export type SablonKaydetGovdesi = z.input<typeof sablonKaydetGovdesi>;
 export type Sablon = z.output<typeof sablonSemasi>;

@@ -101,6 +101,25 @@ export async function rotasiOlanMalzemeler(db: Db): Promise<number[]> {
   return (await db.sorgu<{ id: number }>('SELECT DISTINCT malzeme_id AS id FROM rota_revizyonu')).map((s) => s.id);
 }
 
+// Kart kullanıma girince açılacak kopya istekleri (#500); kart başına en çok bir istek, sonuncusu geçerlidir.
+export function kopyaIstekleri(db: Db): Promise<{ hedefId: number; kaynakId: number; isteyenKisiId: number }[]> {
+  return db.sorgu(
+    'SELECT hedef_malzeme_id AS "hedefId", kaynak_malzeme_id AS "kaynakId", isteyen_kisi_id AS "isteyenKisiId" FROM rota_kopya_istegi ORDER BY olusturma, hedef_malzeme_id',
+  );
+}
+
+export async function kopyaIstegiYaz(db: Db, hedefId: number, kaynakId: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO rota_kopya_istegi (hedef_malzeme_id, kaynak_malzeme_id, isteyen_kisi_id) VALUES ($1, $2, $3)
+     ON CONFLICT (hedef_malzeme_id) DO UPDATE SET kaynak_malzeme_id = EXCLUDED.kaynak_malzeme_id, isteyen_kisi_id = EXCLUDED.isteyen_kisi_id, olusturma = now()`,
+    [hedefId, kaynakId, kisiId],
+  );
+}
+
+export async function kopyaIstegiSil(db: Db, hedefId: number): Promise<void> {
+  await db.sorgu('DELETE FROM rota_kopya_istegi WHERE hedef_malzeme_id = $1', [hedefId]);
+}
+
 export async function harfler(db: Db, malzemeId: number): Promise<string[]> {
   return (await db.sorgu<{ harf: string }>('SELECT harf FROM rota_revizyonu WHERE malzeme_id = $1', [malzemeId])).map((s) => s.harf);
 }
