@@ -25,7 +25,15 @@ Iskelet dosyalari (tek sahip: iskelet): `PlanlamaYeni.tsx`, `gorunumler.ts`, `yo
 ## Iskeletin sabit imzalari (parcalar kullanir, degistirmez)
 - `gorunumler.ts`: `PlanlamaEkranOzellikleri { depo: PlanlamaDeposu; calisma: PlanlamaCalismasi | null; komut: CalismaKomutu | null; yetki: PlanlamaYetkisi;
   git(g: PlanlamaGorunumu): void; yenile(): void }`. `calisma` guncel haldir (`depo.calisma` acilistaki); `komut` yazma izni ya da calisma kaydi yoksa null.
-  `PlanlamaGorunumu` ikinci menu anahtarlaridir. `gorunumAcik(g, yetki)`: maliyet, giderler, denge `finans.maliyet-oku` ister (200 a, 195 a);
+  `PlanlamaGorunumu` ikinci menu anahtarlaridir.
+- `gorunumler.ts`, gorunumler arasi ortak durum (eski ekranin `U.olcek`/`U.olKay`, `U.secJob`, `U.gySec`, `U.rsTez`, `U.rsT`'si; 453.5, 451/6, 452/7):
+  `olcek: PlanlamaOlcegi { olcek: DonemOlcegi; kayma }`, `olcekSec(o)`, `kaydir(n)`, `secim: PlanlamaSecimi { siparis; adim; tezgah; zaman }`, `sec(kismi)`.
+  `DONEM_OLCEKLERI` (`gun` Gun, `hafta` Hafta, `ay` Ay, `yil` Yil), acilis `ACILIS_OLCEGI` (Hafta, kayma 0; eski zs-olcek-ortak), `BOS_SECIM`.
+  `olcekSec` kaymayi sifirlar; `kaydir(0)` bugune doner, baska sayi kaymaya eklenir (eski `ol-kay`). `sec` yalniz verilen alanlari degistirir; secimi
+  kaldirmak icin alan `null` verilir. `zaman` plan saatidir (`calisma.D` ekseni; null su an). Kimlikler: `siparis` siparis no, `adim` plan adimi
+  (`CozulmusPlan.ops` anahtari), `tezgah` tezgah kodu. Donem dugmesi olan her gorunum (Gun/Hafta/Ay/Yil, onceki/sonraki) bunu kullanir, kendi
+  donem durumunu tutmaz; secim gosteren gorunum secili siparisi, adimi ve tezgahi buradan okur ve yazar. Durum gorunum degisince korunur, sayfa
+  yenilenince acilis haline doner (eski ekranda da kaydedilmezdi), calismaya ve sunucuya yazilmaz; secili kimlik calismada yoksa gorunum yok sayar. `gorunumAcik(g, yetki)`: maliyet, giderler, denge `finans.maliyet-oku` ister (200 a, 195 a);
   ekran seritte gostermez, adresle acilirsa yetki iletisi cikar.
 - `veri.ts`: `PlanlamaDeposu { ben; calisma: PlanlamaCalismasi | null; calismaSurumu: number | null; receteRotaKaydi: unknown; durum: DurumCevabi | null;
   planSurumu: PlanSurumCevabi | null; senaryolar: SenaryolarCevabi | null; motorUyarilari: string[] | null; okunamayan }`.
