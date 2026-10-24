@@ -12,8 +12,9 @@ export interface SihirbazAlani {
   secenekler?: readonly (readonly [string, string])[]; zorunlu?: boolean; min?: number; max?: number; adim?: number; tam?: boolean; ipucu?: string;
 }
 export interface SihirbazAdimi { ad: string; ne?: string; k: readonly string[] }
-// Dolu açılış: değerler ilk değerin üstüne yazılır; adım verilmezse değer varsa ilk adım atlanır.
-export interface SihirbazAcilisi { deg?: SihirbazDegeri; adim?: number }
+// Dolu açılış: değerler ilk değerin üstüne yazılır; adım verilmezse değer varsa ilk adım atlanır. `geriSiniri` ile Geri başlangıç adımının altına
+// inmez (eski ısı haritası formu, isBas).
+export interface SihirbazAcilisi { deg?: SihirbazDegeri; adim?: number; geriSiniri?: boolean }
 export interface SihirbazTanimi {
   id: string; ad: string; simge: SimgeAdi; ne: string;
   // Alanlar değerlere göre değişebilir (seçilen aileye göre ipucu gibi).
@@ -67,6 +68,7 @@ export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
   const [ilk] = useState(() => acilisKur(tanim, acilis));
   const [adim, adimYaz] = useState(ilk.adim);
   const [d, dYaz] = useState<SihirbazDegeri>(ilk.d);
+  const taban = acilis?.geriSiniri ? ilk.adim : 0;
   const [hata, hataYaz] = useState<string[]>([]);
   const { adimlar } = tanim;
   const alanlar = tanim.alanlar(d);
@@ -149,7 +151,7 @@ export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
         <div className="tc-sade-alt">
           <Dugme simge="x" onClick={vazgec}>Vazgeç</Dugme>
           <span className="tc-sade-ara" />
-          {adim > 0 && <Dugme simge="up" onClick={() => { hataYaz([]); adimYaz(adim - 1); }}>Geri</Dugme>}
+          {adim > taban && <Dugme simge="up" onClick={() => { hataYaz([]); adimYaz(adim - 1); }}>Geri</Dugme>}
           {adim < n ? <Dugme tur="birincil" simge="next" onClick={ileri}>İleri</Dugme> : <Dugme tur="birincil" simge="check" type="submit">Kaydet</Dugme>}
         </div>
       </form>
