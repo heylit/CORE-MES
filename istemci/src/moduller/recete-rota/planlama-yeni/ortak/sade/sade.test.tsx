@@ -153,6 +153,17 @@ describe('Sihirbaz açılışı ve metin, tarih alanları', () => {
     expect(kaydet).toHaveBeenCalledWith({ yer: 'y2', gun: '2026-11-02', aciklama: 'y2 için' });
   });
 
+  it('geri sınırı: önceki adımlar bitmiş görünür, Geri başlangıç adımında yoktur, sonraki adımda vardır', () => {
+    render(<Sihirbaz tanim={notFormu()} acilis={{ deg: { yer: 'y1' }, geriSiniri: true }} vazgec={() => {}} bitti={() => {}} />);
+    expect(document.querySelector('[data-bitti]')?.textContent).toBe('Yer');
+    expect(screen.queryByRole('button', { name: 'Geri' })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Gün/), { target: { value: '2026-11-02' } });
+    fireEvent.click(dugme('İleri'));
+    fireEvent.click(dugme('Geri'));
+    expect(document.querySelector('[aria-current="step"]')?.textContent).toBe('2Ayrıntı');
+    expect(screen.queryByRole('button', { name: 'Geri' })).toBeNull();
+  });
+
   it('verilen adımdan açılır; değer yoksa baştan', () => {
     const { unmount } = render(<Sihirbaz tanim={notFormu()} acilis={{ deg: { yer: 'y1' }, adim: 0 }} vazgec={() => {}} bitti={() => {}} />);
     expect(document.querySelector('[aria-current="step"]')?.textContent).toBe('1Yer');
