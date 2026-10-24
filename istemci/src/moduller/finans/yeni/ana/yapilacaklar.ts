@@ -23,12 +23,6 @@ export interface IsKalemi {
 
 export const GRUPLAR: readonly (readonly [string, 0 | 1 | 2])[] = [['Gecikmiş', 0], ['Bu hafta', 1], ['30 gün içinde', 2]];
 
-// Motorun iç işlevidir (dışarı verilmez); düzenli ödemenin bu ay girilip girilmediği aynı ölçütle bakılır.
-function buAyOdendi(tx: readonly Islem[], r: DuzenliOdeme, ym: string): boolean {
-  const a = Number(r.amount) || 0;
-  return tx.some((t) => t.type === 'gider' && t.date.slice(0, 7) === ym && (t.recId === r.id || (!t.recId && t.cat === r.cat && Math.abs(gross(t) - a) <= a * 0.2)));
-}
-
 const enEski = (ts: readonly Islem[]) => ts.reduce((a, t) => (t.due < a ? t.due : a), '9');
 
 export function yapilacaklar(motor: FinansMotoru): IsKalemi[] {
@@ -82,7 +76,7 @@ export function yapilacaklar(motor: FinansMotoru): IsKalemi[] {
   const ym = bugun.slice(0, 7);
   for (const r of s.recurring) {
     const d = ym + '-' + pad(Math.min(Number(r.day) || 1, 28));
-    if (d >= bugun && d <= w7 && !buAyOdendi(s.tx, r, ym)) {
+    if (d >= bugun && d <= w7 && !motor.recPaidIn(r, ym)) {
       items.push({
         g: 1, date: d, kind: 'out', baslik: r.name, alt: `Düzenli ödeme · ayın ${r.day}. günü`, tutar: Number(r.amount) || 0,
         eylemler: r._duzenliId === undefined ? [] : [{ tur: 'duzenli', etiket: 'Ödendi', duzenliId: r._duzenliId, birincil: true }],
