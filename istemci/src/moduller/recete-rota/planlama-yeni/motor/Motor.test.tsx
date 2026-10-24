@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
-import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -17,13 +18,21 @@ const DEPO = { durum: null } as unknown as PlanlamaDeposu;
 function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
-  const oz: PlanlamaEkranOzellikleri = {
+  const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile: vi.fn(),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
-    olcek: ACILIS_OLCEGI, olcekSec: vi.fn(), kaydir: vi.fn(), secim: BOS_SECIM, sec: vi.fn(),
   };
-  render(<PlanlamaMotoru {...oz} />);
+  render(<Iskelet {...oz} />);
   return { git };
+}
+// İskeletin ortak ölçek ve seçimi (PlanlamaYeni.tsx'teki gibi).
+function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
+  const [olcek, setOlcek] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
+  const [secim, setSecim] = useState<PlanlamaSecimi>(BOS_SECIM);
+  return (
+    <PlanlamaMotoru {...oz} olcek={olcek} olcekSec={(x) => setOlcek({ olcek: x, kayma: 0 })} kaydir={(n) => setOlcek((x) => ({ ...x, kayma: n === 0 ? 0 : x.kayma + n }))}
+      secim={secim} sec={(x) => setSecim((y) => ({ ...y, ...x }))} />
+  );
 }
 const komutKur = (c: PlanlamaCalismasi) => {
   const yazilan: PlanlamaCalismasi[] = [];
@@ -73,14 +82,55 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('group', { name: /^Plan nabzı, 20\.10 Sal$/ })).toBeTruthy();
   });
 
-  it('Başka menüsü açılır; kartlar sonraki teslimde, sayfalar yeni ekranda yok', () => {
+  it('Başka menüsü açılır; kartlar sonraki teslimde, sayfalar yeni ekranda yok; gecikme kaynağı ve kısayollar açılır', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
     const menu = screen.getByRole('menu');
     expect(within(menu).getByRole('menuitem', { name: /Bugünün kararları/ }).getAttribute('title')).toContain(YOK_NOTU);
-    expect(within(menu).getAllByRole('menuitem').every((x) => x.getAttribute('aria-disabled') === 'true')).toBe(true);
-    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(within(menu).getByRole('menuitem', { name: /Siparişler/ }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }));
     expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    expect(screen.getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('menuitem', { name: /Klavye kısayolları/ }));
+    expect(screen.getByRole('dialog', { name: 'Klavye kısayolları' }).textContent).toContain('Seçilene göre Düzenle menüsü');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Klavye kısayolları' })).toBeNull();
+  });
+
+  it('Harita görünümü: tuval, okuma, yakınlık, oynatıcı ve zaman şeridi; şerit siparişi seçer, H ve G görünüm değiştirir', () => {
+    ac();
+    fireEvent.keyDown(window, { key: 'h' });
+    const h = screen.getByRole('region', { name: 'Tezgâh haritası' });
+    expect(within(h).getByRole('img', { name: /Atölye haritası/ })).toBeTruthy();
+    expect(within(h).getByRole('toolbar', { name: 'Görünüm' })).toBeTruthy();
+    fireEvent.click(within(h).getByRole('button', { name: /Haritayı okuma/ }));
+    expect(within(h).getByRole('list', { name: 'Haritanın açıklaması' })).toBeTruthy();
+    expect(within(h).getByRole('group', { name: 'Yakınlık' })).toBeTruthy();
+    expect(within(h).getByRole('button', { name: 'Oynat' })).toBeTruthy();
+    expect(within(h).getByRole('button', { name: /4 sa\/sn/ })).toBeTruthy();
+    fireEvent.click(within(h).getByRole('button', { name: /4 sa\/sn/ }));
+    expect(within(h).getByRole('button', { name: /1 gün\/sn/ })).toBeTruthy();
+    expect((within(h).getByRole('slider', { name: 'Zaman imleci' }) as HTMLInputElement).max).toBe('168');
+    const bit = within(h).getByRole('button', { name: '3' });
+    expect(bit.getAttribute('title')).toBe('3 bitiş 24.10 Cmt 11:38 · termine yetişiyor');
+    fireEvent.click(bit);
+    expect(bit.hasAttribute('data-secili')).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(bit.hasAttribute('data-secili')).toBe(false);
+    fireEvent.keyDown(window, { key: 'g' });
+    expect(screen.getByRole('region', { name: 'Plan nasıl gidiyor?' })).toBeTruthy();
+  });
+
+  it('kılavuz Başka menüsünden haritada açılır, Anladım kapatır', () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }));
+    const k = screen.getByRole('complementary', { name: 'Kılavuz' });
+    expect(k.textContent).toContain('Örnek: 1.');
+    expect(within(k).getAllByRole('listitem')).toHaveLength(6);
+    fireEvent.click(within(k).getByRole('button', { name: 'Anladım' }));
+    expect(screen.queryByRole('complementary', { name: 'Kılavuz' })).toBeNull();
   });
 
   it('Yapılacaklar: kararlar ve eylemleri; çalışmaya yalnız degistir ile yazar', () => {

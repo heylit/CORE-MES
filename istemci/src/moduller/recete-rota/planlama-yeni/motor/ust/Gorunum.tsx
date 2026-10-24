@@ -1,7 +1,7 @@
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { donemAdi, DONEMLER, type Donem } from '../kurallar.ts';
-import { BaskaMenusu } from './BaskaMenusu.tsx';
+import { BaskaMenusu, type BaskaDurumu } from './BaskaMenusu.tsx';
 
 // Görünüm seçici (zj-gorunum sgHtml, zo-kontrol, zn-kesif, zs-olcek-ortak olOrtak): Özet, Harita, Çizelge, Keşfet ve Stüdyo; dönem
 // tek ayardır, bütün görünümleri birlikte geçirir. Dönem grubundaki ikinci Stüdyo kalktı (459/2 b); dar ekranda çubuk alt satıra sarar (459/3 b).
@@ -15,8 +15,8 @@ const GORUNUMLER: [TahtaGorunumu, string, SimgeAdi, string][] = [
 
 interface Ozellikler {
   gorunum: TahtaGorunumu; sec: (g: TahtaGorunumu) => void; studyo: () => void;
-  donem: Donem; kayma: number; donemSec: (d: Donem) => void; kaydir: (k: number) => void; donemYazi: string;
-  menuAcik: boolean; menuAc: (v: boolean) => void;
+  donem: Donem; donemSec: (d: Donem) => void; kaydir: (n: number) => void; donemYazi: string;
+  menuAcik: boolean; menuAc: (v: boolean) => void; baska: BaskaDurumu;
 }
 
 export function Gorunum(o: Ozellikler) {
@@ -34,11 +34,11 @@ export function Gorunum(o: Ozellikler) {
         </button>
       </div>
       <div className="tc-pym-sg-sec tc-pym-ol-ortak" role="group" aria-label="Dönem" title={`Dönem: ${o.donemYazi}`}>
-        <button type="button" className="tc-pym-ol-kay" title={`Önceki ${ad}`} aria-label={`Önceki ${ad}`} onClick={() => o.kaydir(o.kayma - 1)}><Simge ad="chev-left" boyut="k" /></button>
+        <button type="button" className="tc-pym-ol-kay" title={`Önceki ${ad}`} aria-label={`Önceki ${ad}`} onClick={() => o.kaydir(-1)}><Simge ad="chev-left" boyut="k" /></button>
         {DONEMLER.map(([k, n]) => <button key={k} type="button" aria-pressed={o.donem === k} onClick={() => o.donemSec(k)}>{n}</button>)}
-        <button type="button" className="tc-pym-ol-kay" title={`Sonraki ${ad}`} aria-label={`Sonraki ${ad}`} onClick={() => o.kaydir(o.kayma + 1)}><Simge ad="chev-right" boyut="k" /></button>
+        <button type="button" className="tc-pym-ol-kay" title={`Sonraki ${ad}`} aria-label={`Sonraki ${ad}`} onClick={() => o.kaydir(1)}><Simge ad="chev-right" boyut="k" /></button>
       </div>
-      <span className="tc-pym-sg-baska-kap"><BaskaMenusu acik={o.menuAcik} ac={o.menuAc} /></span>
+      <span className="tc-pym-sg-baska-kap"><BaskaMenusu acik={o.menuAcik} ac={o.menuAc} {...o.baska} /></span>
     </div>
   );
 }
