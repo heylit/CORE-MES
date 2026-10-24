@@ -1,0 +1,32 @@
+/* Malzeme satın alma planı (P4, tc-pyz-). Grafik yatayda kayar; sayfa taşmaz. */
+.tc-pyz { display: flex; flex-direction: column; gap: var(--b-4); padding: var(--b-4); min-width: 0; }
+.tc-pyz-kucuk { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pyz-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-4); margin-bottom: var(--b-3); min-width: 0; }
+.tc-pyz-ust > * { max-width: 100%; overflow-x: auto; }
+.tc-pyz-kutular { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--pano-kart-enaz) * 0.8)), 1fr)); gap: var(--b-2); margin-bottom: var(--b-3); }
+.tc-pyz-not { display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-pyz-not[data-ton="uyari"] { color: var(--hold); }
+.tc-pyz-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-bottom: var(--b-3); }
+.tc-pyz-bos { color: var(--faint); }
+
+.tc-pyz-grafik { margin: 0 0 var(--b-3); min-width: 0; }
+.tc-pyz-sutunlar { display: flex; gap: var(--b-1); margin: 0; padding: 0 0 var(--b-1); list-style: none; overflow-x: auto; }
+.tc-pyz-sutun {
+  flex: 1 0 calc(var(--b-6) * 1.5); display: flex; flex-direction: column; align-items: stretch; gap: var(--b-1); min-width: calc(var(--b-6) * 1.5);
+  font-size: var(--yazi-xs); text-align: center;
+}
+.tc-pyz-sutun b { min-height: var(--b-4); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-pyz-sutun small { color: var(--muted); white-space: nowrap; }
+.tc-pyz-sutun small[data-ton="hata"] { color: var(--stop); font-weight: 700; }
+.tc-pyz-cubuk { display: block; width: 100%; height: calc(var(--b-6) * 4); border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-pyz-cubuk rect[data-kaynak="stok"], .tc-pyz-gosterge li[data-kaynak="stok"] .tc-pyz-isaret { fill: var(--grafik-2); background: var(--grafik-2); }
+.tc-pyz-cubuk rect[data-kaynak="acik"], .tc-pyz-gosterge li[data-kaynak="acik"] .tc-pyz-isaret { fill: var(--grafik); background: var(--grafik); }
+.tc-pyz-cubuk rect[data-kaynak="yeni"], .tc-pyz-gosterge li[data-kaynak="yeni"] .tc-pyz-isaret { fill: var(--hazard); background: var(--hazard); }
+.tc-pyz-gosterge { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); margin: var(--b-2) 0 0; padding: 0; list-style: none; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pyz-gosterge li { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pyz-gosterge b { color: var(--ink); }
+.tc-pyz-isaret { width: var(--b-2); height: var(--b-2); border-radius: var(--yari-1); }
+
+@media (max-width: 767px) {
+  .tc-pyz { padding: var(--b-2); gap: var(--b-3); }
+}
