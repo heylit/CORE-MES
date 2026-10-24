@@ -929,7 +929,7 @@ export async function fisDegisiklikleriniAl(db: Db, k: StokFisKaynaklari): Promi
     if (sayfa.length < FIS_AKISI_SAYFASI || !sonuncu) break;
     konum = { zaman: sonuncu.degisiklikZamani, id: sonuncu.id };
   }
-  if (son !== null && Date.parse(son.zaman) > Date.parse(imlec.zaman)) await s.fisImleciYaz(db, { zaman: son.zaman, fisId: son.id, enBuyukFisId: enBuyuk });
+  if (son !== null) await s.fisImleciYaz(db, { zaman: son.zaman, fisId: son.id, enBuyukFisId: enBuyuk });
   else if (enBuyuk > imlec.enBuyukFisId) await s.fisImleciYaz(db, { ...imlec, enBuyukFisId: enBuyuk });
   return sayi;
 }
