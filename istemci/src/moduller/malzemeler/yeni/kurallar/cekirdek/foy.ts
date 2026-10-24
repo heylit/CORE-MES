@@ -70,7 +70,7 @@ export function specHTML__0(d: Taslak, compact?: unknown): string {
 }
 export function specMD__0(d: Taslak): string {
     const s = specData(d);
-    const L = [`# ${s.ad}`, '', `**Kod:** ${s.kod}  `, `**Aile / sınıf:** ${s.f!.ad} / ${s.c ? s.c.ad : ''}  `, `**Kalite:** ${s.g ? s.g.ad : ''}  `, `**Standart:** ${s.std || '-'}`, ''];
+    const L = [`# ${s.ad}`, '', `**Kod:** ${s.kod}  `, `**Aile / sınıf:** ${s.f ? s.f.ad : ''} / ${s.c ? s.c.ad : ''}  `, `**Kalite:** ${s.g ? s.g.ad : ''}  `, `**Standart:** ${s.std || '-'}`, ''];
     if (Object.keys(s.eq).length) {
         L.push('## Eşdeğerler ve diğer adlar', '');
         Object.entries(s.eq).forEach(([k, v]) => L.push(`- ${k}: ${v}`));
@@ -96,7 +96,7 @@ export function specMD__0(d: Taslak): string {
     }
     if (s.props.length) {
         L.push('## Teknik özellikler', '', '| Özellik | Değer | Birim |', '|---|---|---|');
-        s.props.forEach(p => L.push(`| ${p.ad}${p.ch ? ' *' : ''} | ${isNum(p.v) ? fmt(p.v) : p.v} | ${p.u} |`));
+        s.props.forEach(p => L.push(`| ${p.ad}${p.ch ? ' *' : ''} | ${isNum(p.v) ? fmt(p.v) : p.v} | ${p.u ?? ''} |`));
         if (s.props.some(p => p.ch))
             L.push('', '\\* Kalite değerinden değiştirildi.');
         L.push('');

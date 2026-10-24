@@ -36,7 +36,7 @@ export type BirlesmeKarti = Taslak & {
   docs?: KartBelgesi[];
   birlesen?: KartBaglantisi[];
   yerine?: KartBaglantisi;
-  onay?: OnayBilgisi & { pasif?: Kisi & { neden?: string } };
+  onay?: OnayBilgisi;
 };
 export interface BirlesmeSatiri { eski_kod: string; eski_ad: string; yeni_kod: string; tarih: string; neden: string }
 interface KaliteEslesmesi { i: number; n: number; h: HizliAday[] }
@@ -283,15 +283,18 @@ export function varsayilanlariUygula(d: Taslak): Taslak { const v = ((MA.v.varsa
 export function birlestir(asil: BirlesmeKarti, digerleri: BirlesmeKarti[], neden?: string | null): BirlesmeKarti[] {
     const k = _kim();
     const a: BirlesmeKarti = clone(asil);
-    const kodlar = digerleri.map(x => x.com.kod);
-    a.birlesen = [...(a.birlesen || []), ...digerleri.map(x => ({ id: x.id, kod: x.com.kod, t: k.t }))];
+    // Ticari bilgisi olmayan eski kayıt da birleşir; asıl kart boş ticari bilgiyle başlar.
+    if (!a.com)
+        a.com = newDraft().com;
+    const kodlar = digerleri.map(x => x.com?.kod);
+    a.birlesen = [...(a.birlesen || []), ...digerleri.map(x => ({ id: x.id, kod: x.com?.kod, t: k.t }))];
     const docs = [...(a.docs || [])];
     digerleri.forEach(x => (x.docs || []).forEach(dc => { if (!docs.some(y => y.id === dc.id))
         docs.push(dc); }));
     a.docs = docs;
     a.com.sertifika = [...new Set([...(a.com.sertifika || []), ...digerleri.flatMap(x => (x.com && x.com.sertifika) || [])])];
     if (!a.com.eskiKod) {
-        const e = digerleri.map(x => x.com.eskiKod).filter(Boolean);
+        const e = digerleri.map(x => x.com?.eskiKod).filter(Boolean);
         if (e.length)
             a.com.eskiKod = e[0];
     }
@@ -308,7 +311,7 @@ export function birlestir(asil: BirlesmeKarti, digerleri: BirlesmeKarti[], neden
     });
     return [a, ...d];
 }
-export function birlesmeListesi(liste?: readonly BirlesmeKarti[] | null): BirlesmeSatiri[] { liste = liste || _katalog(); return liste.filter(x => x.yerine).map(x => ({ eski_kod: x.com.kod, eski_ad: x.com.ad, yeni_kod: x.yerine!.kod, tarih: x.yerine!.t ? new Date(x.yerine!.t).toISOString().slice(0, 10) : '', neden: (x.onay && x.onay.pasif && x.onay.pasif.neden) || '' })); }
+export function birlesmeListesi(liste?: readonly BirlesmeKarti[] | null): BirlesmeSatiri[] { liste = liste || _katalog(); return liste.filter(x => x.yerine).map(x => ({ eski_kod: x.com?.kod, eski_ad: x.com?.ad, yeni_kod: x.yerine!.kod, tarih: x.yerine!.t ? new Date(x.yerine!.t).toISOString().slice(0, 10) : '', neden: (x.onay && x.onay.pasif && x.onay.pasif.neden) || '' })); }
 export function stokOzeti__5(x: BirlesmeKarti): Sozluk<unknown> { const o: Sozluk<unknown> = stokOzeti__4(x); o.benzersiz_anahtar = kartAnahtari(x); o.eski_kod = (x.com && x.com.eskiKod) || ''; if (x.yerine)
     o.yerine_kod = x.yerine.kod; if (x.birlesen && x.birlesen.length)
     o.birlesen_kodlar = x.birlesen.map(b => b.kod); return o; }

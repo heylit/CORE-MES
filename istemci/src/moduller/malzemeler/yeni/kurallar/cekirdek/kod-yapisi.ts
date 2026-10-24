@@ -73,7 +73,7 @@ export function teknikKod(d: Taslak = D): string {
     return '';
 }
 export function autoKod(d: Taslak = D): string { return AYAR.kodYapisi === 'teknik' ? autoKod__1(d) : siradakiKod(d); }
-export function variantKod(vd: Taslak, ekstra?: string[]): string { if (AYAR.kodYapisi === 'teknik' || D.kodManual)
+export function variantKod(vd: Taslak, ekstra?: string[]): string { if (AYAR.kodYapisi === 'teknik' || vd.kodManual)
     return variantKod__0(vd); return siradakiKod(vd, ekstra || []); }
 export function _sigdir(s: string | null | undefined, n?: number): string {
     s = String(s || '').replace(/\s+/g, ' ').trim();

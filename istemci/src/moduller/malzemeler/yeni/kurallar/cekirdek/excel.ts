@@ -179,6 +179,9 @@ export function xlKolonlar(tur: TurAdi): XlKolon[] {
         ..._xlAlanBirlesik(katlar.filter(([k, c]) => (c.alanlar || []).length).map(([k, c]) => [c.ad, c.alanlar])), birim, ted, depo, ...son];
 }
 export function xlSatir(x: Taslak, tur: TurAdi): XlSatirVerisi {
+    // Ticari bilgisi olmayan eski kart boş ticari bilgiyle yazılır; kod, ad ve standart hesapları com'u okur.
+    if (!x.com)
+        x = { ...x, com: newDraft().com };
     const kol = xlKolonlar(tur);
     const r: XlSatirVerisi = {};
     const g: Sozluk<unknown> = x.g || {};
@@ -601,9 +604,9 @@ export function xlCalismaKitabi<K = XlKitap>(ExcelJS: { Workbook: new () => K },
 export function xlOrnek(tur: TurAdi): XlSatirVerisi {
     const o: XlSatirVerisi = { islem: 'Atla' };
     if (tur === 'hammadde')
-        Object.assign(o, { 'com.ad': '', 'aileSinif': FAMS.metal ? aileSinifAd('metal', 'islah') : '', 'grade': '42CRMO4', 'stds': 'EN 10083-3, ASTM A29/A29M', 'form': 'Yuvarlak çubuk', 'dims.d': 50, 'dims.l': 6000, 'tol': 'EN 10060', 'opts.durum': 'Islah (+QT)', 'opts.yuzey': 'Siyah (hadde)', 'com.ted': 'Örnek Çelik A.Ş.', 'com.birim': 'adet', 'com.sertifika': 'EN 10204 3.1', 'com.not': 'ÖRNEK SATIR — okunmaz' });
+        Object.assign(o, { 'com.ad': '', 'aileSinif': FAMS.metal && FAMS.metal.classes.islah ? aileSinifAd('metal', 'islah') : '', 'grade': '42CRMO4', 'stds': 'EN 10083-3, ASTM A29/A29M', 'form': 'Yuvarlak çubuk', 'dims.d': 50, 'dims.l': 6000, 'tol': 'EN 10060', 'opts.durum': 'Islah (+QT)', 'opts.yuzey': 'Siyah (hadde)', 'com.ted': 'Örnek Çelik A.Ş.', 'com.birim': 'adet', 'com.sertifika': 'EN 10204 3.1', 'com.not': 'ÖRNEK SATIR — okunmaz' });
     if (tur === 'yarimamul')
-        Object.assign(o, { 'g.ad': 'Motor bağlantı braketi', 'g.tip': (ALAN.ym_tanim!.find(a => a.k === 'tip') || { opts: [''] }).opts![0], 'g.resim': 'TR-2045-01', 'g.rev': 'A', 'g.net': 1.25, 'ops': '10 TST; 20 TRN; 30 FRZ; 40 BM', 'com.birim': 'adet', 'g.tedarik': 'Üretim', 'com.not': 'ÖRNEK SATIR — okunmaz' });
+        Object.assign(o, { 'g.ad': 'Motor bağlantı braketi', 'g.tip': ((ALAN.ym_tanim || []).find(a => a.k === 'tip')?.opts || [''])[0], 'g.resim': 'TR-2045-01', 'g.rev': 'A', 'g.net': 1.25, 'ops': '10 TST; 20 TRN; 30 FRZ; 40 BM', 'com.birim': 'adet', 'g.tedarik': 'Üretim', 'com.not': 'ÖRNEK SATIR — okunmaz' });
     if (tur === 'mamul')
         Object.assign(o, { 'g.ad': 'Hidrolik güç ünitesi', 'g.model': 'HGU-7,5', 'g.marka': 'Örnek', 'ops': '10 MNT; 20 FNT; 30 PKT', 'com.birim': 'adet', 'g.gtin': '8690000000005', 'g.gtip': '8412.21', 'g.mensei': 'Türkiye', 'com.not': 'ÖRNEK SATIR — okunmaz' });
     if (tur === 'sarf')
@@ -618,8 +621,8 @@ export function xlSatirlariOku(sayfalar: XlSayfalar): XlOkunanSatir[] {
     const out: XlOkunanSatir[] = [];
     // XL_SAYFA'nın anahtarları malzeme türleridir.
     for (const [tur, ad] of Object.entries(XL_SAYFA) as [TurAdi, string][]) {
-        // Ad eşleşmezse anahtar String ile prototipteki gibi "undefined" olur.
-        const rows = sayfalar[ad] || sayfalar[String(Object.keys(sayfalar).find(k => _nm(k) === _nm(ad)))];
+        const benzer = Object.keys(sayfalar).find(k => _nm(k) === _nm(ad));
+        const rows = sayfalar[ad] || (benzer === undefined ? undefined : sayfalar[benzer]);
         if (!rows || !rows.length)
             continue;
         const kol = xlKolonlar(tur);

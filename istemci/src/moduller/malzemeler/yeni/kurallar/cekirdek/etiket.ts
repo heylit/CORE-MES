@@ -29,13 +29,15 @@ export function wrapTxt(t: unknown, max: number, lines: number): string[] { cons
     else
         cur = (cur + ' ' + x).trim();
 } if (cur)
-    out.push(cur); if (out.length > lines) {
+    out.push(cur); if (lines < 1)
+    return []; if (out.length > lines) {
     out.length = lines;
     out[lines - 1] = out[lines - 1]!.slice(0, max - 1) + '…';
 } return out; }
 export function labelSVG__0(x: Taslak, [W, H]: readonly [number, number]): string {
     const s = specData(x);
-    const fam = (FAMS[x.fam as string] || FAMS.diger)!;
+    // Ailesi tanımsız kartta şerit çizilmez; etiket yine basılır.
+    const famRenk = (FAMS[x.fam as string] || FAMS.diger)?.c ?? 'none';
     const pad = 2.5, qs = H - 2 * pad;
     const qrTxt = qrMetni(x);
     const tx = pad + qs + 2.5, tw = W - tx - pad;
@@ -58,5 +60,5 @@ export function labelSVG__0(x: Taslak, [W, H]: readonly [number, number]): strin
     meta.forEach(l => { t += `<text x="${tx}" y="${y.toFixed(2)}" font-size="${f3.toFixed(2)}" fill="#333">${xesc(l)}</text>`; y += f3 * 1.2; });
     if (foot)
         t += `<text x="${tx}" y="${(H - pad).toFixed(2)}" font-size="${f3.toFixed(2)}" fill="#333">${xesc(foot.length > mx(f3) ? foot.slice(0, mx(f3) - 1) + '…' : foot)}</text>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}" font-family="'Barlow Condensed','Arial Narrow',Arial,sans-serif"><rect width="${W}" height="${H}" fill="#fff"/><rect width="1.4" height="${H}" fill="${fam.c}"/><path d="${qrPath(qrTxt, pad, pad, qs)}" fill="#000"/>${t}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}" font-family="'Barlow Condensed','Arial Narrow',Arial,sans-serif"><rect width="${W}" height="${H}" fill="#fff"/><rect width="1.4" height="${H}" fill="${famRenk}"/><path d="${qrPath(qrTxt, pad, pad, qs)}" fill="#000"/>${t}</svg>`;
 }
