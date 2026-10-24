@@ -1,0 +1,54 @@
+/* Kalite Merkezi Bugün (K1). Kısayollar ve özet şeridi genişliğe göre sütun sayısını kendisi seçer: 360'ta iki, 1280'de beş. */
+.tc-km1-bugun { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-km1-soluk { color: var(--muted); font-weight: normal; }
+
+.tc-km1-kisayollar { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3.4), 1fr)); }
+.tc-km1-kisayol {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); min-height: var(--dokunma-ana);
+  padding: var(--b-3) var(--b-4); text-align: start; cursor: pointer; font: inherit; color: var(--ink);
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km1-kisayol:hover { border-color: var(--edge2); }
+.tc-km1-kisayol:focus-visible { outline: var(--cizgi) solid var(--done); }
+.tc-km1-kisayol small { color: var(--muted); font-size: var(--yazi-xs); }
+/* İlk kısayol (Ölçüm yap) uygulamada da öne çıkan iştir. */
+.tc-km1-kisayol:first-child { background: var(--done); border-color: var(--done); color: var(--on-sig); }
+.tc-km1-kisayol:first-child small { color: inherit; }
+
+.tc-km1-serit {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3.4), 1fr));
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); overflow: hidden;
+}
+.tc-km1-serit-oge {
+  display: flex; align-items: baseline; gap: var(--b-2); min-height: var(--dokunma); padding: var(--b-3) var(--b-4);
+  font: inherit; color: var(--muted); text-align: start; cursor: pointer; background: none; border: 0;
+  box-shadow: inset var(--cizgi-ince) var(--cizgi-ince) 0 var(--edge);
+}
+.tc-km1-serit-oge:hover { background: var(--panel2); }
+.tc-km1-serit-oge:focus-visible { outline: var(--cizgi) solid var(--done); outline-offset: calc(var(--cizgi) * -1); }
+.tc-km1-serit-oge b { font-size: var(--yazi-xl); color: var(--ink); font-variant-numeric: tabular-nums; }
+.tc-km1-serit-oge b[data-ton="uyari"] { color: var(--hold); }
+.tc-km1-serit-oge b[data-ton="hata"] { color: var(--stop); }
+
+.tc-km1-grup { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-km1-grup-baslik { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-km1-daha { margin: 0; font-size: var(--yazi-xs); }
+.tc-km1-liste {
+  list-style: none; margin: 0; padding: 0; overflow: hidden;
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km1-gorev {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
+  padding: var(--b-3) var(--b-4); border-top: var(--cizgi-ince) solid var(--edge);
+}
+.tc-km1-gorev:first-child { border-top: 0; }
+.tc-km1-gorev[data-oncelik="0"] { box-shadow: inset var(--b-1) 0 0 var(--stop); }
+.tc-km1-gorev[data-oncelik="1"] { box-shadow: inset var(--b-1) 0 0 var(--hold); }
+.tc-km1-gorev-metin { display: grid; gap: var(--b-1); flex: 1 1 calc(var(--dokunma) * 5); min-width: 0; overflow-wrap: anywhere; }
+.tc-km1-gorev-metin small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km1-gorev-eylem { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); }
+
+/* Atölye modu (kabuk yazıyı ve düğmeleri büyütür): kısayollar ve iş satırları da büyür. */
+.tc-km-atolye .tc-km1-bugun .tc-km1-kisayol { min-height: calc(var(--dokunma-ana) * 2); padding: var(--b-5); }
+.tc-km-atolye .tc-km1-bugun .tc-km1-kisayol b { font-size: var(--yazi-xl); }
+.tc-km-atolye .tc-km1-bugun .tc-km1-gorev { padding: var(--b-4); }

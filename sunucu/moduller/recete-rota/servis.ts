@@ -8,7 +8,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
-  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, SilCevabi, Statu, StatulerCevabi, StatuKartlariCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
+  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
   YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -100,21 +100,6 @@ export async function statuTanimiSil(db: Db, kimlik: string, beklenenSurum: numb
   if (mevcut !== beklenenSurum) throw eskiSurum();
   await sorgular.statuTanimiSil(db, kimlik);
   return { statuses: await sorgular.statuTanimlari(db) };
-}
-
-// Statülü kart: açma ve kaldırma tekrarlanabilir (aynı kart ikinci kez açılmaz, olmayan kaldırılırsa bir şey olmaz); cevap güncel listedir.
-const KART_KISITLARI = {
-  recete_rota_statu_karti_malzeme_id_fkey: { ileti: 'Kart katalogda yok.', alan: 'malzemeId' },
-  recete_rota_statu_karti_statu_fkey: { ileti: 'Statü tanımlı değil; sayfayı yenileyin.', alan: 'statu' },
-} as const;
-export async function statuKartiEkle(db: Db, kullanici: Kullanici, malzemeId: number, statu: string): Promise<StatuKartlariCevabi> {
-  await kisitKorumali(KART_KISITLARI, () => sorgular.statuKartiEkle(db, malzemeId, statu, kullanici.id));
-  return { statusCards: await sorgular.statuKartlari(db) };
-}
-
-export async function statuKartiSil(db: Db, malzemeId: number, statu: string): Promise<StatuKartlariCevabi> {
-  await sorgular.statuKartiSil(db, malzemeId, statu);
-  return { statusCards: await sorgular.statuKartlari(db) };
 }
 
 export async function fasonTahminleri(
@@ -253,7 +238,6 @@ export async function durum(
     settings: ayarCevir(ayar),
     planCanli: await canliOzeti(db),
     statuses: await sorgular.statuTanimlari(db),
-    statusCards: await sorgular.statuKartlari(db),
     moves: hareketler === null ? null : hareketleriCevir(hareketler, statuAnahtari),
     malzemeKesildi: kesildi,
   };

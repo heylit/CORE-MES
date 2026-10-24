@@ -1,0 +1,19 @@
+/* Kalite Merkezi Teknik kütüphane (K1): işaret kartları genişliğe göre bir ile üç sütun arası dizilir. */
+.tc-km1-kutuphane { display: grid; gap: var(--b-5); min-width: 0; }
+.tc-km1-bolum { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-km1-bolum h3 { margin: 0; font-size: var(--yazi-m); }
+.tc-km1-soluk { color: var(--muted); }
+.tc-km1-bolum > .tc-km1-soluk, .tc-km1-kaynak { margin: 0; font-size: var(--yazi-s); }
+.tc-km1-islemler { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-km1-isaretler { display: grid; gap: var(--b-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--dokunma) * 7)), 1fr)); }
+.tc-km1-isaret {
+  display: flex; gap: var(--b-3); align-items: flex-start; padding: var(--b-3);
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km1-isaret > div { min-width: 0; overflow-wrap: anywhere; }
+.tc-km1-isaret p { margin: var(--b-1) 0 0; font-size: var(--yazi-s); }
+.tc-km1-isaret-simge {
+  flex: none; display: inline-grid; place-items: center; min-width: var(--dokunma); min-height: var(--dokunma);
+  font-size: var(--yazi-l); font-family: var(--font-mono); background: var(--panel2); border-radius: var(--yari-1);
+}
+.tc-km1-olcum { color: var(--muted); }

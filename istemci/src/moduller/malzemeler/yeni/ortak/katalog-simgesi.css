@@ -1,0 +1,4 @@
+.tc-ksimge { flex: none; display: block; }
+.tc-ksimge-k { width: var(--b-4); height: var(--b-4); }
+.tc-ksimge-o { width: var(--b-5); height: var(--b-5); }
+.tc-ksimge-b { width: var(--b-6); height: var(--b-6); }

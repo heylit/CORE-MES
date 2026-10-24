@@ -105,28 +105,15 @@ describe('recete-rota statü tanımı komutları (gerçek PostgreSQL)', () => {
     assert.equal((await gonder('/recete-rota/statu-tanimlari/SIL/sil', { beklenenSurum: 1 })).statusCode, 404);
   });
 
-  test('ST-5: statülü kart komutla açılır ve kaldırılır (tekrar zararsız); tanımsız statü ve katalogda olmayan kart reddedilir; JSON kaydı kartı silmez', async () => {
+  test('ST-5: statü yalnız rota tanımından gelir (Soru 256 a): elle statülü kart açma ve kaldırma ucu yoktur, durum statülü kart taşımaz', async () => {
     const mm = await kartAc();
-    const kartlar = async () => {
-      const headers: Record<string, string> = { cookie: cerez };
-      const r = await app.inject({ method: 'GET', url: '/api/recete-rota/durum', headers });
-      return ((r.json() as DurumCevabi).statusCards ?? []).filter((x) => x.itemId === String(mm)).map((x) => x.status);
-    };
-    for (let i = 0; i < 2; i++) {
-      const r = await gonder('/recete-rota/statu-kartlari/ac', { malzemeId: mm, statu: 'KKB' });
-      assert.equal(r.statusCode, 200, r.body);
+    for (const yol of ['/recete-rota/statu-kartlari/ac', '/recete-rota/statu-kartlari/kaldir']) {
+      assert.equal((await gonder(yol, { malzemeId: mm, statu: 'KKB' })).statusCode, 404, yol);
     }
-    assert.deepEqual(await kartlar(), ['KKB']);
-    const yok = await gonder('/recete-rota/statu-kartlari/ac', { malzemeId: mm, statu: 'TANIMSIZ' });
-    assert.notEqual(yok.statusCode, 200);
-    assert.match(yok.body, /Statü tanımlı değil/);
-    const katalogDisi = await gonder('/recete-rota/statu-kartlari/ac', { malzemeId: 999999999, statu: 'KKB' });
-    assert.match(katalogDisi.body, /Kart katalogda yok/);
-    await belgeYaz({ statusCards: [{ itemId: String(mm), status: 'RET' }] });
-    assert.deepEqual(await kartlar(), ['KKB', 'RET'], 'belgeden yalnız eksik kart eklenir, belgede olmayan silinmez');
-    assert.equal((await gonder('/recete-rota/statu-kartlari/kaldir', { malzemeId: mm, statu: 'KKB' })).statusCode, 200);
-    assert.equal((await gonder('/recete-rota/statu-kartlari/kaldir', { malzemeId: mm, statu: 'KKB' })).statusCode, 200);
-    assert.deepEqual(await kartlar(), ['RET']);
+    await belgeYaz({ statusCards: [{ itemId: String(mm), status: 'KKB' }] });
+    const r = await app.inject({ method: 'GET', url: '/api/recete-rota/durum', headers: { cookie: cerez } });
+    assert.equal(r.statusCode, 200);
+    assert.ok(!('statusCards' in (r.json() as Record<string, unknown>)), 'eski belgedeki statülü kart durumda görünmez');
   });
 
   test('ST-4: oturumsuz 401', async () => {
