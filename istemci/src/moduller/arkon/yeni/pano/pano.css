@@ -3,8 +3,6 @@
 .tc-ay3-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); min-width: 0; }
 .tc-ay3-ad { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); font-weight: 700; color: var(--ink); }
 .tc-ay3-bosluk { flex: 1 1 auto; }
-.tc-ay3-saat { display: grid; justify-items: end; line-height: 1.1; color: var(--ink); }
-.tc-ay3-saat small { color: var(--muted); font-size: var(--yazi-xs); }
 
 [data-renk="run"] { --c: var(--run); }
 [data-renk="stop"] { --c: var(--stop); }
@@ -42,7 +40,7 @@
 .tc-ay3-mono { font-family: var(--font-mono); }
 
 /* Pano: özet kutuları, istasyon karoları, yan liste */
-.tc-ay3-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); gap: var(--b-3); }
+.tc-ay3-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--damga-dar)), 1fr)); gap: var(--b-3); }
 .tc-ay3-ozet-kutu { display: grid; gap: var(--b-1); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel); }
 .tc-ay3-ozet-kutu b { font-size: var(--yazi-2xl); color: var(--c, var(--ink)); }
 .tc-ay3-ozet-kutu small { color: var(--muted); }
@@ -52,7 +50,8 @@
 .tc-ay3-karo { border-left: var(--cizgi-kalin) solid var(--sig); }
 .tc-ay3-karo[data-plansiz] { background: color-mix(in srgb, var(--stop) 8%, var(--panel)); }
 .tc-ay3-karo-ust { display: flex; justify-content: space-between; gap: var(--b-2); align-items: center; }
-.tc-ay3-karo-durum { color: var(--sig-yazi); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-ay3-karo-durum { display: inline-flex; align-items: center; gap: var(--b-1); margin-left: auto; color: var(--sig-yazi); font-size: var(--yazi-xs); font-weight: 700; text-align: right; }
+.tc-ay3-karo-durum > i { flex: none; width: var(--nokta); height: var(--nokta); border-radius: 50%; background: var(--sig); }
 .tc-ay3-karo-alt, .tc-ay3-bayraklar { display: flex; flex-wrap: wrap; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay3-uyari { color: var(--hold); font-weight: 700; }
 .tc-ay3-yan { display: grid; gap: var(--b-3); }
@@ -94,6 +93,14 @@
 .tc-ay3-gun svg { width: var(--dokunma); height: var(--dokunma-x24); }
 .tc-ay3-gun .tc-ay3-beklenen { fill: var(--edge); }
 .tc-ay3-gun .tc-ay3-uretilen { fill: var(--c, var(--run)); }
+
+/* TV modu: pano yazıları büyür (eski html.tv) */
+html.tc-ay-tv .tc-ay3-karo b { font-size: var(--yazi-m); }
+html.tc-ay-tv .tc-ay3-karo .tc-ay3-karo-ust b { font-size: var(--yazi-xl); }
+html.tc-ay-tv .tc-ay3-karo-durum { font-size: var(--yazi-s); }
+html.tc-ay-tv .tc-ay3-karo-ust { flex-wrap: wrap; }
+html.tc-ay-tv .tc-ay3-karo-ust b { white-space: nowrap; }
+html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
 
 @media (max-width: 1023px) {
   .tc-ay3-pano { grid-template-columns: minmax(0, 1fr); }

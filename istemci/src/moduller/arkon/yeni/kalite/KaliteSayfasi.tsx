@@ -24,6 +24,12 @@ type Kip = 'samples' | 'spc' | 'onay' | 'alet';
 type Gorunum = 'list' | 'draw' | 'form';
 interface Odak { id: number; n: number }
 
+// Eski QTop kısayolları: Operatör ve Üretim Terminali Hazırlık.
+const KALITE_KISAYOLLARI = [
+  { sayfa: 'operator', simge: 'gauge', metin: 'Operatör' },
+  { sayfa: 'hazirlik', simge: 'layers', metin: 'Üretim Terminali Hazırlık', yalnizSimge: true },
+] as const;
+
 export function KaliteSayfasi() {
   const { depo, kisi, ayarlar, yetkiVar, saltOkunur } = useArkon();
   const soyle = useSoyle();
@@ -185,7 +191,7 @@ export function KaliteSayfasi() {
   const gorunenler = items.filter((b) => mf === 'all' || yontem(b) === mf).sort((x, y) => (mf === 'all' ? Number(yontem(x) === 'cmm') - Number(yontem(y) === 'cmm') : 0));
 
   return (
-    <SayfaCercevesi simge="target" baslik="Kalite · ölçüm istasyonu" ek={ek}>
+    <SayfaCercevesi simge="target" baslik="Kalite · ölçüm istasyonu" ek={ek} kisayollar={KALITE_KISAYOLLARI} saatAlt="Kalite laboratuvarı">
       {kip === 'spc' ? <SpcGorunumu paketler={pkgs} numuneler={reqs} soyle={soyle} />
         : kip === 'onay' ? <Onaylar paketler={pkgs} soyle={soyle} />
         : kip === 'alet' ? <OlcuAletleri soyle={soyle} />
