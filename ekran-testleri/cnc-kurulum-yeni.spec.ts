@@ -36,9 +36,12 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
 
   test('Hazırlık: adımlar sırayla açılır, rayda gruplar vardır, son adım denemedir', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/hazirlik');
-    await expect(page.getByText(/^HAZIRLIK · ADIM 1 \//)).toBeVisible();
+    // Hazırlık son açık adımı kayda yazar ve kayıt ortaktır: başka genişlikteki koşu adımı ilerletmiş olabilir. Önce raydan ilk adıma gidilir.
     // Kabuğun da Geri düğmesi var; adım düğmeleri Hazırlık'ın eylem çubuğunda aranır.
     const eylem = page.locator('.tc-ck-hz-eylem'), ray = page.locator('.tc-ck-hz-ray');
+    await expect(page.getByText(/^HAZIRLIK · ADIM \d+ \//)).toBeVisible();
+    await ray.getByRole('button', { name: /^Tezgâh/ }).click();
+    await expect(page.getByText(/^HAZIRLIK · ADIM 1 \//)).toBeVisible();
     await expect(eylem.getByRole('button', { name: 'Geri' })).toBeDisabled();
     await eylem.getByRole('button', { name: 'İleri' }).click();
     await expect(page.getByText(/^HAZIRLIK · ADIM 2 \//)).toBeVisible();
