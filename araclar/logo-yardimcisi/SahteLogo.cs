@@ -29,7 +29,7 @@ namespace LogoYardimcisi
             { "DEMAND_FICHES", K("NUMBER", "DATE", "TIME", "STATUS", "DO_CODE", "PROJECT_CODE", "LINE_CNT", "TRANSACTIONS", "FICHE_DATE", "MRP_HEAD_TYPE", "ORD_PEG_USE",
                 "REAL_SRC_INDEX") },
             { "MATERIAL_SLIPS", K("TYPE", "NUMBER", "DATE", "TIME", "GROUP", "CURRSEL_TOTALS", "PROJECT_CODE", "SHIP_DATE", "SHIP_TIME", "DOC_DATE", "DOC_TIME", "RC_RATE",
-                "TRANSACTIONS") },
+                "SOURCE_WH", "DEST_WH", "TRANSACTIONS") },
         };
 
         static readonly Dictionary<string, HashSet<string>> XmlSatir = new Dictionary<string, HashSet<string>>
@@ -40,7 +40,7 @@ namespace LogoYardimcisi
             { "DEMAND_FICHES", K("ITEM_CODE", "AMOUNT", "MEET_AMOUNT", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2", "MEET_TYPE", "PROCURE_DATE", "STATUS", "LINE_TYPE",
                 "LINE_NO", "USER_NAME", "PROJECT_CODE", "CARD_TYPE") },
             { "MATERIAL_SLIPS", K("ITEM_CODE", "QUANTITY", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2", "LINE_TYPE", "LINE_NUMBER", "DESCRIPTION", "PROJECT_CODE",
-                "EU_VAT_STATUS", "DEMPEGGED_AMNT", "EDT_CURR", "RC_XRATE") },
+                "EU_VAT_STATUS", "DEMPEGGED_AMNT", "EDT_CURR", "RC_XRATE", "SOURCE_WH", "DEST_WH") },
         };
 
         static readonly Dictionary<int, HashSet<string>> AlanBaslik = new Dictionary<int, HashSet<string>>
