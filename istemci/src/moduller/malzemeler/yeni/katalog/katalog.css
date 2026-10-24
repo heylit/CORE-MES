@@ -1,0 +1,98 @@
+/* Malzemeler katalog parçası (tc-mk-). Renk ve ölçü yalnız tasarım değişkeni; 360, 768 ve 1280'de tam işlevli. */
+.tc-mk { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-mk-duzen { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-mk-ana { display: grid; gap: var(--b-3); min-width: 0; align-content: start; }
+.tc-mk-yan { min-width: 0; }
+@media (min-width: 1024px) {
+  .tc-mk-duzen[data-suzgec="acik"] { grid-template-columns: minmax(0, var(--menu-genis)) minmax(0, 1fr); }
+  .tc-mk-yan { position: sticky; top: calc(var(--ust-cubuk) + var(--b-3)); align-self: start; max-height: calc(100vh - var(--ust-cubuk) - var(--b-5)); overflow-y: auto; }
+}
+
+.tc-mk-fasetler { display: grid; gap: var(--b-3); }
+.tc-mk-faset { display: grid; gap: var(--b-1); margin: 0; padding: 0; border: 0; min-width: 0; }
+.tc-mk-faset-bas { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); width: 100%; padding: 0; font-size: var(--yazi-s); font-weight: 700; }
+.tc-mk-faset-deger { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-mk-faset-deger[data-bos] { color: var(--faint); }
+.tc-mk-faset-sayi { flex: none; font-size: var(--yazi-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-mk-olcu { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-2); font-size: var(--yazi-s); }
+
+.tc-mk-aktif { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-mk-aktif-sayi { font-size: var(--yazi-s); color: var(--muted); }
+.tc-mk-cip { font-size: var(--yazi-s); }
+
+.tc-mk-secim {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2);
+}
+
+.tc-mk-malzeme { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
+.tc-mk-malzeme > .tc-simge { flex: none; color: var(--muted); }
+.tc-mk-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; }
+.tc-mk-kod { font-family: var(--font-mono); font-weight: 700; overflow-wrap: anywhere; }
+.tc-mk-ad { min-width: 0; overflow-wrap: anywhere; }
+.tc-mk-alt { display: block; font-size: var(--yazi-xs); color: var(--muted); }
+
+.tc-mk-bag {
+  padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer;
+  min-height: var(--dokunma); text-align: left;
+}
+.tc-mk-ipucu { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-mk-soluk { color: var(--muted); }
+.tc-mk-sayi { text-align: right; font-variant-numeric: tabular-nums; }
+.tc-mk-eylemler, .tc-mk-cipler, .tc-mk-arac-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-mk-pencere-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); width: 100%; }
+.tc-mk-sona { margin-left: auto; }
+
+.tc-mk-uyari {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3);
+  padding: var(--b-2) var(--b-3); border-left: var(--cizgi-kalin) solid var(--hold); background: var(--panel2);
+}
+.tc-mk-uyari[data-ton="hata"] { border-left-color: var(--stop); }
+
+.tc-mk-onay, .tc-mk-talep { display: grid; gap: var(--b-2); margin-bottom: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); }
+.tc-mk-onay-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-mk-onay-bilgi { flex: 1 1 auto; min-width: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-mk-neden { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
+.tc-mk-neden > .tc-alan { flex: 1 1 auto; min-width: 0; }
+
+.tc-mk-tablo-kap { overflow-x: auto; min-width: 0; }
+.tc-mk-tablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-mk-tablo th, .tc-mk-tablo td { padding: var(--b-2); text-align: left; vertical-align: top; border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-mk-tablo thead th { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-mk-tablo tr[data-fark] td { background: var(--panel2); font-weight: 700; }
+.tc-mk-bolum th { font-weight: 700; color: var(--muted); }
+.tc-mk-karsilastirma thead th .tc-mk-kod { display: block; }
+
+.tc-mk-acilir { margin: var(--b-3) 0; }
+.tc-mk-acilir > summary { min-height: var(--dokunma); cursor: pointer; font-weight: 700; }
+.tc-mk-liste { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-mk-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-mk-liste small { flex-basis: 100%; color: var(--muted); }
+.tc-mk-revler { display: grid; gap: var(--b-2); margin: 0; padding-left: var(--b-4); font-size: var(--yazi-s); }
+
+.tc-mk-etiketler { display: grid; gap: var(--b-3); margin: var(--b-3) 0; }
+.tc-mk-etiket { display: block; width: 100%; height: auto; border: var(--cizgi-ince) solid var(--edge2); background: var(--qr-zemin); }
+
+.tc-mk-saha-bas { display: flex; align-items: center; gap: var(--b-3); margin-bottom: var(--b-3); }
+.tc-mk-saha-ad { font-size: var(--yazi-m); }
+.tc-mk-dl { display: grid; gap: var(--b-1); margin: 0; }
+.tc-mk-dl > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-2); }
+.tc-mk-dl dt { color: var(--muted); }
+.tc-mk-dl dd { margin: 0; overflow-wrap: anywhere; }
+.tc-mk-tarihler { display: grid; gap: var(--b-1); margin: var(--b-3) 0 0; padding: 0; list-style: none; font-size: var(--yazi-s); }
+.tc-mk-tarihler [data-durum="gecti"] { color: var(--stop); }
+.tc-mk-tarihler [data-durum="yakin"] { color: var(--hold); }
+
+.tc-mk-birlestir { display: grid; gap: var(--b-2); margin: var(--b-3) 0; padding: 0; border: 0; }
+.tc-mk-birlestir-secenek { display: flex; gap: var(--b-2); align-items: flex-start; min-height: var(--dokunma); }
+.tc-mk-birlestir-secenek small { display: block; color: var(--muted); }
+
+.tc-mk-excel { display: grid; gap: var(--b-2); }
+.tc-mk-excel-secenek {
+  display: grid; gap: var(--b-1); padding: var(--b-3); text-align: left; color: inherit; font: inherit;
+  border: var(--cizgi-ince) solid var(--edge2); background: var(--panel2); cursor: pointer;
+}
+.tc-mk-excel-secenek:disabled { cursor: default; opacity: .5; }
+.tc-mk-excel-secenek span { font-size: var(--yazi-s); color: var(--muted); }
+
+.tc-mk-gizli-cerceve { position: absolute; width: 0; height: 0; border: 0; visibility: hidden; }
