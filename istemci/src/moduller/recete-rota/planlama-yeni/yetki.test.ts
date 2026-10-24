@@ -6,7 +6,12 @@ import { yetkiKur } from './yetki.ts';
 describe('yetkiKur ve gorunumAcik', () => {
   it('bayraklar ortak işlemlerden okunur; kayıt yazma ben cevabından', () => {
     const y = yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: true });
-    expect(y).toMatchObject({ planlamaOku: true, maliyetOku: false, planYaz: true, planCanliyaAl: false, kayitYazabilir: true });
+    expect(y).toMatchObject({ planlamaOku: true, maliyetOku: false, planYaz: true, planCanliyaAl: false, kayitYazabilir: true, calismaYazabilir: true });
+  });
+
+  it('çalışma yazma plan.yaz ve sunucunun kayıt iznini birlikte ister (223 a; izinli ve reddedilen)', () => {
+    expect(yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: false }).calismaYazabilir).toBe(false);
+    expect(yetkiKur([PLANLAMA_ISLEMI, 'plan.kilitle'], { yazabilir: true }).calismaYazabilir).toBe(false);
   });
 
   it('maliyet görünümü maliyet okuması ister (izinli ve reddedilen); öteki görünüm planlama okuması', () => {
