@@ -12,3 +12,6 @@ export const CNC3D = {
   htype(_t: Kalem): string { return ''; },
   M: { steel: new THREE.MeshStandardMaterial(), dark: new THREE.MeshStandardMaterial(), oxide: new THREE.MeshStandardMaterial() } as Record<'steel' | 'dark' | 'oxide', THREE.Material>,
 };
+
+// Parçaların bir kısmı adları tek tek ithal eder.
+export const { build, assembly, fit, dispose, isLatheTool, isMillTool, htype, M } = CNC3D;
