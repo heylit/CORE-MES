@@ -1,0 +1,43 @@
+/* Firma belgeleri (P2). Yalnız tasarım değişkenleri; önek tc-pt-belgeler-. */
+.tc-pt-belgeler { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-pt-belgeler-iki { display: flex; flex-direction: column; min-width: 0; }
+.tc-pt-belgeler-iki small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+.tc-pt-belgeler-iki small[data-gecti] { color: var(--stop); }
+.tc-pt-belgeler-eylem { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
+
+.tc-pt-belgeler-eksik { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pt-belgeler-eksik li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); align-items: center; min-height: var(--dokunma);
+}
+.tc-pt-belgeler-eksik a { color: var(--ink); overflow-wrap: anywhere; }
+.tc-pt-belgeler-eksik span { grid-column: 1; color: var(--muted); font-size: var(--yazi-s); }
+.tc-pt-belgeler-eksik .tc-rozet { grid-column: 2; grid-row: 1 / span 2; }
+@media (min-width: 768px) {
+  .tc-pt-belgeler-eksik li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .tc-pt-belgeler-eksik span { grid-column: auto; }
+  .tc-pt-belgeler-eksik .tc-rozet { grid-column: auto; grid-row: auto; }
+}
+
+.tc-pt-belgeler-satir { display: grid; gap: var(--b-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--acilir-enaz)), 1fr)); }
+.tc-pt-belgeler-yukle { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; margin: 0; padding: 0; border: 0; }
+.tc-pt-belgeler-yukle legend { margin-bottom: var(--b-2); padding: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-pt-belgeler-sec {
+  display: inline-flex; align-self: start; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px dashed var(--edge2); border-radius: var(--yari-2); color: var(--ink); cursor: pointer;
+}
+.tc-pt-belgeler-sec input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.tc-pt-belgeler-sec:focus-within { border-color: var(--done); }
+.tc-pt-belgeler-ipucu { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-pt-belgeler-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+
+.tc-pt-belgeler-gorseller { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0 0 var(--b-3); padding: 0; list-style: none; }
+.tc-pt-belgeler-gorseller li { display: flex; flex-direction: column; align-items: center; gap: var(--b-1); }
+.tc-pt-belgeler-kucuk {
+  display: grid; place-items: center; width: calc(var(--dokunma) * 2); height: calc(var(--dokunma) * 2); padding: 0; overflow: hidden;
+  border: 1px solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); color: var(--muted); font-size: var(--yazi-xs);
+}
+.tc-pt-belgeler-kucuk[aria-busy] { opacity: .5; }
+.tc-pt-belgeler-kucuk img { width: 100%; height: 100%; object-fit: cover; }
+button.tc-pt-belgeler-kucuk { cursor: zoom-in; }
+.tc-pt-belgeler-buyuk { display: grid; place-items: center; min-height: 0; }
+.tc-pt-belgeler-buyuk img { max-width: 100%; max-height: var(--ekran-boy-70); object-fit: contain; }
