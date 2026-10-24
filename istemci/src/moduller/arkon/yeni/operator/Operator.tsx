@@ -1,0 +1,1103 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Dugme, KodOkuyucu, OzetKatmani, Pencere, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
+} from '../../../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
+import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
+import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
+import {
+  baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni,
+  type DurumEsitleme,
+} from '../../../../../../arkon/web/src/data/biten-is.ts';
+import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
+import { eskiCizim, eskiCizimGorevi, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { hazirlikUyarisi } from '../../../../../../arkon/web/src/data/cnc-hazirlik.ts';
+import { durumKaydiGerekir } from '../../../../../../arkon/web/src/data/durum-kaydi.ts';
+import { IS_DEGISIMI, nedenAdi as nedenAdiYaz } from '../../../../../../arkon/web/src/data/durus-nedeni.ts';
+import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi, kartSeciminiAl, type EmirSecimiPenceresi } from '../../../../../../arkon/web/src/data/emir-secimi.ts';
+import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
+import {
+  ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
+} from '../../../../../../arkon/web/src/data/ilk-parca.ts';
+import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
+import { ilkAcilis } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
+import { elleNumuneOlculeri } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
+import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, seciliMakineler, type MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
+import { sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
+import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
+import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
+import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
+import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
+import { durusNedeni, planliNedenMi } from '../cekirdek/ayarlar.ts';
+import { GUN_ADLARI, basHarfler, iki, sayi } from '../cekirdek/bicim.ts';
+import { CAGRI_EKIPLERI, YETKI_ADLARI } from '../cekirdek/sabitler.ts';
+import { bip } from '../cekirdek/ses.ts';
+import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis.ts';
+import type { Perm } from '../cekirdek/tipler.ts';
+import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
+import { yerel } from '../cekirdek/yerel.ts';
+import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
+import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
+import { useArkon, useSimdi } from '../veri/baglam.ts';
+import type { Ileti } from '../veri/depo.ts';
+import {
+  IS_TURLERI, ISTASYON_PANELLERI, IstasyonSecici, SEVIYELER, TakimKarti, UyariPenceresi, isKurallari, istasyonAyari, isTuru,
+  sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
+} from '../hazirlik/index.tsx';
+import { Adimlar } from './Adimlar.tsx';
+import { Analiz } from './Analiz.tsx';
+import { useDarEkran, useMerkezUyarilari, useVardiyaKaydi } from './kancalar.ts';
+import {
+  DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
+  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, paketleriBirlestir, siradakiGorev, simgeSec,
+  sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, kaliteYuzdesi,
+  type EkranSekmesi,
+} from './kurallar.ts';
+import {
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
+  TopluGiris, type CevrimOlcer, type SayimTusu,
+} from './Parcalar.tsx';
+import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
+import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
+import { UzakMod } from './UzakMod.tsx';
+import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
+import './operator.css';
+
+// Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
+// Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
+
+type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu';
+type Gorunum = EkranSekmesi['id'];
+interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
+interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
+interface Devir { note: string; by: string; at: number }
+interface Ek { undo?: () => void; action?: { l: string; fn: () => void } }
+
+const BOS_TAKVIM: KontrolTakvimi = { due: [], next: null, who: {}, why: {} };
+const YAZAN: ReadonlySet<GorevEylemi> = new Set<GorevEylemi>(['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish', 'tool', 'sample', 'next', 'call']);
+
+export function Operator(_o: ArkonEkranOzellikleri) { return <IstasyonluEkran onizleme={null} />; }
+export function Onizleme({ kimlik }: ArkonEkranOzellikleri) { return <IstasyonluEkran onizleme={kimlik ?? ''} />; }
+
+// İstasyon değişince ekran baştan kurulur (eski ekran sayfayı yeniden yüklüyordu).
+function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
+  const [surum, surumYaz] = useState(0);
+  return <OperatorEkrani key={surum} onizleme={onizleme} yenidenKur={() => surumYaz((s) => s + 1)} />;
+}
+
+function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
+  const { depo, kisi, ayarlar, yetkiVar } = useArkon();
+  const { bildir } = useBildirim();
+  const dar = useDarEkran();
+  const pv = onizleme !== null;
+  const tesis = ayarlar.tesis;
+  const POLICY = ayarlar.kurallar;
+  const ME = kisi?.name ?? '';
+  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi)) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi);
+  const ist = istasyonBul(tesis, MACHINE);
+  const uretir = !pv && yetkiVar('prod.run');
+  const duzeltir = !pv && yetkiVar('prod.fix');
+  const istasyonTableti = () => !!yerel.oku<string>('station') && yetkiVar('prod.run');
+  const ozetVar = !pv && ozetimGorunur(kisi);
+  const nedenAdiOku = useCallback((k: string) => durusNedeni(ayarlar, k)?.l ?? null, [ayarlar]);
+  const planliMi = useCallback((k: string | null | undefined) => planliNedenMi(ayarlar, k), [ayarlar]);
+
+  const [mv, mvYaz] = useState<Gorunum>(() => (ozetVar ? 'ozet' : 'prod'));
+  const [isler, islerYaz] = useState<Is[]>([]);
+  const [ai, aiYaz] = useState(0);
+  const aiRef = useRef(0);
+  aiRef.current = ai;
+  const o: Is = isler[ai] || isler[0] || bosIs(ist);
+  const curMc = () => (o.pkg && o.pkg.mc) || (ist.mcs.length === 1 ? ist.mcs[0]!.id : null);
+  const [mcSel, mcSelYaz] = useState<string[]>([]);
+  const [since, sinceYaz] = useState(() => { const l = yerel.oku<{ at?: number }>(`lastState:${MACHINE}`); return l && l.at ? l.at : Date.now(); });
+  const [tab, tabYaz] = useState<Gorunum>('draw');
+  const [ov, ovYaz] = useState<Pencereler | null>(null);
+  const [segs, segsYaz] = useState<DurumParcasi[]>([]);
+  const [away, awayYaz] = useState(false);
+  const [call, callYaz] = useState<Cagri | null>(null);
+  const [callLog, callLogYaz] = useState<{ k: string; ms: number }[]>([]);
+  const [handover, handoverYaz] = useState<Devir | null>(null);
+  const [snooze, snoozeYaz] = useState<Record<string, number>>({});
+  const [warnShow, warnShowYaz] = useState<UyariGosterimi | null>(null);
+  const [scan, scanYaz] = useState<Okutma | null>(null);
+  const shiftRef = useRef({ good: 0, scrap: 0, mOk: 0, mNok: 0 });
+  const scrapLog = useRef<number[]>([]);
+  const lastAct = useRef(Date.now());
+  const simdi = useSimdi(1000);
+  const SL = useVardiyaKaydi(MACHINE, pv);
+  const ortam = useMemo(() => ({ planliMi, durusPencereleri: (f: number, t: number) => durusPencereleri(MACHINE, f, t, ayarlar.planliDuruslar, tesis) }), [planliMi, MACHINE, ayarlar.planliDuruslar, tesis]);
+  const ceyrek = Math.floor(simdi / 15000);
+  // eslint olmayan bağımlılık: hesap 15 saniyede bir tazelenir (eski ekran gibi).
+  const SC = useMemo(() => vardiyaHesabi(SL, Date.now(), ortam), [SL, ortam, ceyrek]);
+  const shiftNow = Math.min(480, 312 + (simdi - since) / 60000);
+  const vardiya = anlikVardiya(simdi, ayarlar.vardiyalar, ayarlar.tatiller);
+
+  /* bildirimler: tek bildirim düzeninde en son bildirimin "Geri al"ı geçerlidir (eskisi gibi yeni ileti eskisinin yerini alır) */
+  const sonBildirim = useRef(0);
+  const say = useCallback((m: string, _simge: SimgeAdi = 'check', ton: Ton = 'run', ek?: Ek) => {
+    const no = ++sonBildirim.current;
+    const tur: BildirimTonu = ek?.undo ? (ton === 'run' ? 'tamam' : 'bilgi') : ton === 'stop' ? 'hata' : ton === 'run' ? 'tamam' : 'bilgi';
+    if (ek?.undo) {
+      const geri = ek.undo;
+      bildir(tur, m, { eylem: { etiket: 'Geri al', yap: () => { if (no === sonBildirim.current) geri(); else bildir('bilgi', 'Bu işlem artık geri alınamaz; sonraki işlem kaydedildi.'); } } });
+    } else if (ek?.action) {
+      const a = ek.action;
+      bildir(tur, m, { eylem: { etiket: a.l, yap: a.fn } });
+    } else bildir(tur, m);
+  }, [bildir]);
+  const sayRef = useRef(say);
+  sayRef.current = say;
+  useEffect(() => {
+    const f = (e: Event) => sayRef.current((e as CustomEvent<{ msg?: string }>).detail?.msg || CAKISMA_ILETISI, 'alert', 'hold');
+    window.addEventListener(CAKISMA_OLAYI, f);
+    return () => window.removeEventListener(CAKISMA_OLAYI, f);
+  }, []);
+
+  // İlk açılış: bu tablet hangi istasyonda? Kayıtlı değilse ve kişinin istasyonu yoksa sorulur.
+  useEffect(() => {
+    if (pv || !istasyonListesi(tesis).length) return;
+    const k = ilkAcilis(yerel.oku<string>('station'), kisi?.st, MACHINE, yetkiVar('prod.run'));
+    if (k === 'kaydet') yerel.yaz('station', MACHINE);
+    else if (k === 'sor') ovYaz('station');
+  }, []); // eslint olmayan bağımlılık: yalnız ilk açılışta
+
+  /* 393 d: seçici açıkken emrin makine ayrımları sunucudan okunur; okunamazsa null ve seçici bugünkü gibidir (son söz başlatmada) */
+  const [ayrim, ayrimYaz] = useState<MakineAyrimlari | null>(null);
+  const ayrimEmri = tmiEmirId(o.pkg);
+  const seciciAcik = !pv && !o.empty && yetkiVar('prod.run') && ist.mcs.length >= 2 && o.state !== 'running';
+  useEffect(() => {
+    ayrimYaz(null);
+    if (!seciciAcik || ayrimEmri === null) return;
+    let bitti = false;
+    const oku = () => depo.Server.makineAyrimlari(ayrimEmri).then((c) => { if (!bitti) ayrimYaz(c || null); }, () => { if (!bitti) ayrimYaz(null); });
+    void oku();
+    const t = setInterval(() => { void oku(); }, AYRIM_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [ayrimEmri, seciciAcik, MACHINE, depo]);
+
+  /* paketler */
+  const pkgsRef = useRef<Record<string, Pkg>>({});
+  const live = useRef<{ o?: Is; call?: Cagri | null; sendSample?: (auto?: boolean) => Promise<void>; startCall?: (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => void; mcData?: (m: Ileti) => void }>({});
+  const loadPkgs = async (msg?: Ileti) => {
+    const pk = (await depo.DB.all('pkgs')) as Pkg[];
+    pkgsRef.current = Object.fromEntries(pk.map((p) => [p.id, p]));
+    const rs = Object.fromEntries(((await depo.DB.all('results')) as Result[]).map((r) => [r.id, r]));
+    const rq = pv ? [] : ((await depo.DB.all('requests').catch(() => [])) as SampleRequest[]);
+    // Kalitede bekleyen numune ve son ret yenilemede de görünür; ekranda canlı numune durumu varsa ona dokunulmaz.
+    const numuneli = (l: Is[]) => l.map((x) => {
+      if (!x.pkg || x.pendingReq || x.lastDecision) return x;
+      const d = sonNumuneDurumu(rq, x.pkg.id, x.pkg.plan);
+      return d ? ({ ...x, ...d } as Is) : x;
+    });
+    // Sayacı olmayan takımlar işin şimdiki sayısının ömre göre tabanıyla başlar (kayda değişiklik olarak yazılmaz).
+    const takimli = (l: Is[]) => l.map((x) => { if (!x.pkg || pv) return x; const t = eksikTakimTabanlari(x, isKurallari(x.pkg).prod.tools); return t ? { ...x, toolsAt: t } : x; });
+    islerYaz((prev) => {
+      const activeNo = (prev[aiRef.current] || { no: null }).no;
+      const nx = takimli(numuneli(paketleriBirlestir(prev, pk, rs, MACHINE, onizleme)));
+      const idx = pv ? 0 : nx.findIndex((x) => x.no === activeNo);
+      if (idx >= 0 && idx !== aiRef.current) setTimeout(() => aiYaz(idx), 0);
+      return nx;
+    });
+    if (msg && msg.type === 'pkg' && msg['machine'] === MACHINE && !operatoreAcik(pkgsRef.current[String(msg['id'])] as Parameters<typeof operatoreAcik>[0])) return;
+    if (msg && msg.type === 'pkg') {
+      bip('call');
+      if (msg['machine'] === MACHINE) say(`${Number(msg['version']) > 1 ? 'Paket güncellendi: ' : 'Yeni iş paketi: '}${String(msg['no'])} · Rev ${String(msg['rev'])}`, 'layers', 'hazard');
+      else say(`${String(msg['machine'])} için paket yayınlandı · bu makine değil`, 'layers', 'idle');
+    }
+    if (msg && msg.type === 'pin-resolved') say(`Hazırlık notunu yanıtladı: ${String(msg['reply'] || 'çözüldü')}`, 'check', 'run');
+  };
+  const loadRef = useRef(loadPkgs);
+  loadRef.current = loadPkgs;
+
+  useEffect(() => {
+    void (async () => {
+      await loadRef.current().catch(() => undefined);
+      if (!pv) {
+        const h = await depo.DB.get('kv', 'handover').catch(() => null) as Devir | null;
+        if (h && Date.now() - h.at < 12 * 3600e3) handoverYaz(h);
+      }
+    })();
+    if (pv) return;
+    return depo.Bus.on((m) => {
+      if (m.type === 'pkg' || m.type === 'pkg-removed' || m.type === 'pin-resolved') void loadRef.current(m);
+      if (m.type === 'pkg-order' && m['machine'] === MACHINE) void loadRef.current();
+      if (m.type === '$merged' && (m.store === 'results' || m.store === 'pkgs')) void loadRef.current();
+      if (m.type === 'mc' && m['st'] === MACHINE) live.current.mcData?.(m);
+      if (m.type === 'call-ack' && m['machine'] === MACHINE) {
+        bip('call');
+        callYaz((x) => (x && x.t0 === m['t0']
+          ? { ...x, stage: Math.max(x.stage, 1), who: String(m['who']), times: [...x.times, Date.now()], msgs: [...x.msgs, { from: 'them', text: `${String(m['who'])} çağrıyı aldı · geliyor`, at: Date.now() }] }
+          : x));
+      }
+      if (m.type === 'sample-result' && m['machine'] === MACHINE) void onSampleRef.current(m);
+      const ds = durumIletisi(m, MACHINE);
+      if (ds) onTmiDurumRef.current(ds);
+    });
+  }, []); // eslint olmayan bağımlılık: abonelik ekran ömrünce bir kez kurulur
+
+  // Makine devralındı: TMI'deki hâl gelir, ekran ona eşitlenir; eşitleme yeni durum kaydı yazmaz.
+  const onTmiDurum = (ds: DurumEsitleme) => {
+    const a = live.current.o;
+    if (a && a.no === ds.orderNo && a.state !== ds.state) {
+      autoRef.current.state = true;
+      if (a.state === 'running' && ds.state === 'paused') say('Makine başka işe devredildi · iş duraklatıldı', 'alert', 'hazard');
+    }
+    islerYaz((l) => durumEsitle(l, ds));
+  };
+  const onTmiDurumRef = useRef(onTmiDurum);
+  onTmiDurumRef.current = onTmiDurum;
+
+  const onSampleResult = async (m: Ileti) => {
+    const rq = await depo.DB.get('requests', String(m['reqId'])) as SampleRequest | null;
+    if (!rq) return;
+    const paket = Object.values(pkgsRef.current).find((p) => p.id === rq.pkgId);
+    const plan = paket?.plan || [];
+    const { kotuMetni, olcumler } = kararOzeti(rq, plan);
+    islerYaz((l) => l.map((x) => (x.pkg && x.pkg.id === rq.pkgId
+      ? { ...x, meas: { ...x.meas, ...olcumler }, pendingReq: null, pendingItems: null, lastDecision: { status: rq.status, bad: kotuMetni, note: rq.note ?? '', at: Date.now() } }
+      : x)));
+    const QR = isKurallari(paket).q;
+    const L = live.current;
+    if (rq.status === 'rejected') {
+      bip('nok');
+      if (QR.nok === 'stop') {
+        islerYaz((l) => l.map((x) => (x.pkg && x.pkg.id === rq.pkgId && (x.state === 'running' || x.state === 'setup') ? { ...x, state: 'stopped' } : x)));
+        sinceYaz(Date.now());
+        segsYaz((s) => { const t = s.length ? s[s.length - 1]!.t : 0; return [...s, { f: t, t: t + 0.5, s: 'stopped', n: 'D-05' }]; });
+        say(`Kalite RED · makine durduruldu · ${kotuMetni}`, 'stop', 'stop');
+      } else if (QR.nok === 'call') {
+        const k = CAGRI_EKIPLERI.find((c) => c.k === 'kalite');
+        if (k) L.startCall?.(k);
+        say(`Kalite RED · kalite çağrıldı · ${kotuMetni}`, 'x', 'stop');
+      } else say(`Kalite RED · ${kotuMetni}`, 'x', 'stop', { action: { l: 'Durdur', fn: () => ovYaz('reason') } });
+    } else {
+      bip('ok');
+      say(rq.status === 'deviation' ? 'Sapma izni ile onaylandı' : `Kalite onayladı · ${rq.items.length} ölçü uygun`, 'check', 'run');
+      const kenar = rq.items.map((id) => ({ b: plan.find((q) => q.id === id), r: rq.results[id] }))
+        .filter((x) => x.b && x.r && x.r.ok && sinirYakin(x.b, x.r.v, QR.band));
+      if (kenar.length) {
+        setTimeout(() => say(`Sınıra yakın: ${kenar.map((x) => `${x.b!.nom} = ${String(x.r!.v)} (%${sinirYakin(x.b, x.r!.v, QR.band)})`).join(', ')} · takımı kontrol et`, 'alert', 'hazard'), 3000);
+      }
+    }
+  };
+  const onSampleRef = useRef(onSampleResult);
+  onSampleRef.current = onSampleResult;
+
+  /* sonuç kaydı: işin tabletteki son durumu paket başına yazılır; ilk görülen hali (açılış, yenileme) yazılmaz */
+  // Bekleyen kayıt ekrandan çıkınca hemen gider: sonradan açılan önizleme sayfası onu reddetmesin, kayıt da kaybolmasın.
+  const bekleyenKayit = useRef(new Map<string, { t: ReturnType<typeof setTimeout>; yap: () => void }>());
+  const saveT = useRef((anahtar: string, yap: () => void, ms: number) => {
+    const b = bekleyenKayit.current;
+    const once = b.get(anahtar);
+    if (once) clearTimeout(once.t);
+    b.set(anahtar, { t: setTimeout(() => { b.delete(anahtar); yap(); }, ms), yap });
+  });
+  useEffect(() => () => {
+    const b = bekleyenKayit.current;
+    for (const x of b.values()) { clearTimeout(x.t); x.yap(); }
+    b.clear();
+  }, []);
+  const kayitIzi = useRef(new Map<string, string>());
+  const izOf = (x: Is) => JSON.stringify([x.state, x.good, x.scrap, x.acks || {}, x.toolsAt || {}, x.sr || {}, x.kart ?? null]);
+  const saveResult = (x: Is | undefined, ping?: string) => {
+    if (pv || !x || !x.pkg || !istasyonTableti()) return;
+    kayitIzi.current.set(x.pkg.id, izOf(x));
+    const pkg = x.pkg;
+    saveT.current(pkg.id, () => {
+      void depo.DB.put('results', sonucBelgesi(x)).then(() => depo.Bus.send({ type: ping || 'progress', id: pkg.id, no: x.no }));
+    }, ping ? 50 : 1500);
+  };
+  useEffect(() => {
+    if (!o.pkg) return;
+    const iz = izOf(o);
+    const onceki = kayitIzi.current.get(o.pkg.id);
+    if (onceki === undefined) { kayitIzi.current.set(o.pkg.id, iz); return; }
+    if (onceki !== iz) saveResult(o);
+  }, [o.good, o.scrap, o.state, o.acks, o.toolsAt, o.sr, o.kart, o.pkg]);
+
+  /* iş değiştirme: çalışan eski iş duraklatılır ve olayı yeni işin olaylarından önce gönderilir */
+  const isGec = (i: number) => {
+    const duraklat = gecisteDuraklatilacaklar(isler, i);
+    for (const j of duraklat) {
+      const x = isler[j]!;
+      const eski: Is = { ...x, state: 'paused' };
+      if (!pv && istasyonTableti()) {
+        void depo.Log.add('events', { machine: MACHINE, wc: ist.wc || null, mc: (x.pkg && x.pkg.mc) || curMc(), orderNo: x.no, pkgId: x.pkg ? x.pkg.id : null, state: 'paused', reason: IS_DEGISIMI, planned: null });
+      }
+      saveResult(eski, 'result');
+    }
+    if (duraklat.length) islerYaz((l) => l.map((x, j) => (duraklat.includes(j) ? { ...x, state: 'paused' } : x)));
+    aiYaz(i);
+  };
+
+  // Ctrl K'den gelen emir listede varsa seçilir; çalışan başka iş varsa seçim yapılmaz ve operatöre söylenir.
+  // Malzeme Teslim'in "İş emrini aç"ı kartla gelir: emrin bu istasyondaki bitmemiş işi o kartla açılır; işi yoksa sıradaki adım söylenir.
+  const emirIstegi = useRef<number | null>(null);
+  const kartIstegi = useRef<number | null>(null);
+  const emirSec = () => {
+    const id = emirIstegi.current;
+    if (id === null || pv) return;
+    const kart = kartIstegi.current;
+    if (kart !== null) {
+      const r = refakatIsi(id, isler, Object.values(pkgsRef.current));
+      if (r.tur !== 'ac' && !isler.some((x) => x.pkg)) return;
+      emirIstegi.current = null;
+      kartIstegi.current = null;
+      if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return; }
+      if (r.sira !== ai && o.state === 'running') { say(`Çalışan iş var · ${isler[r.sira]!.no} için önce bu işi duraklat`, 'alert', 'hazard'); return; }
+      aiYaz(r.sira);
+      mvYaz('prod');
+      islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
+      say(`İş emri açıldı: ${isler[r.sira]!.no} · refakat kartıyla`, 'check', 'run');
+      return;
+    }
+    const i = emirSirasi(isler, id);
+    if (i < 0) { if (isler.some((x) => x.pkg)) emirIstegi.current = null; return; }
+    emirIstegi.current = null;
+    if (i === ai) return;
+    if (o.state === 'running') { say(`Çalışan iş var · ${isler[i]!.no} için önce bu işi duraklat`, 'alert', 'hazard'); return; }
+    aiYaz(i);
+  };
+  const emirSecRef = useRef(emirSec);
+  emirSecRef.current = emirSec;
+  useEffect(() => {
+    const al = () => {
+      const w = window as unknown as EmirSecimiPenceresi;
+      const id = emirSeciminiAl(w);
+      const kart = kartSeciminiAl(w);
+      if (id !== null) { emirIstegi.current = id; kartIstegi.current = kart; emirSecRef.current(); }
+    };
+    al();
+    window.addEventListener(EMIR_SEC_OLAYI, al);
+    return () => window.removeEventListener(EMIR_SEC_OLAYI, al);
+  }, []);
+  useEffect(() => { emirSecRef.current(); }, [isler]);
+
+  /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
+  const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
+  const kartAnahtari = pv ? '' : kartEmirleri(isler.map((x) => ({ state: x.state, emirId: tmiEmirId(x.pkg) }))).join(',');
+  useEffect(() => {
+    if (!kartAnahtari) { kartlarYaz([]); return; }
+    let bitti = false;
+    const oku = () => depo.Server.refakatKartlari(MACHINE, kartAnahtari.split(',').map(Number)).then((l) => { if (!bitti) kartlarYaz(l); }, () => undefined);
+    void oku();
+    const t = setInterval(() => { void oku(); }, KART_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [kartAnahtari, MACHINE, depo]);
+  // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
+  const kartlaAc = (i: number, k: RefakatKarti) => {
+    if (i !== ai) { isGec(i); sinceYaz(Date.now()); }
+    islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
+    mvYaz('prod');
+    say(`İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
+  };
+
+  /* iş kuralları ve istasyon türü (hazırlıktan) */
+  const RL = useMemo(() => isKurallari(o.pkg), [o.pkg]);
+  const opT = isTuru(o.pkg);
+  const OT = IS_TURLERI[opT];
+  const Panel = ISTASYON_PANELLERI[opT];
+  useEffect(() => { tabYaz(Panel ? 'st' : 'draw'); if (dar) mvYaz((v) => (v === 'ozet' ? v : 'prod')); }, [o.no]);
+  const stUpd = (f: (x: Is) => Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === aiRef.current ? { ...x, ...f(x) } : x)));
+  const stApi: PanelArayuzu = {
+    is: o, paket: (o.pkg || {}) as Pkg, ayar: istasyonAyari(o.pkg), kayit: (o.sr || {}) as IstasyonKaydi,
+    yap: (etiket, simge, ton, f) => undoable(etiket, simge, ton, () => stUpd(f)), sessiz: (f) => stUpd(f),
+    soyle: (m, ton) => say(m, 'alert', ton), okut: (x) => scanYaz(x),
+  };
+
+  /* uyarılar */
+  const ackWarns = (list: readonly Uyari[]) => {
+    const at = Date.now();
+    islerYaz((l) => l.map((x, i) => {
+      if (i !== aiRef.current) return x;
+      const a = { ...x.acks };
+      list.forEach((w) => { a[w.id] = { at, by: ME, cnt: x.good, k: uyariAnahtari(w, x), v: x.pkg && x.pkg.version }; });
+      return { ...x, acks: a };
+    }));
+  };
+  const bes = Math.floor(simdi / 5000);
+  useEffect(() => {
+    if (pv || warnShow || ov) return;
+    const due = zamaniGelenUyarilar(RL.warns, o, Date.now(), since, vardiya.s);
+    if (!due.length) return;
+    const loud = due.filter((w) => w.ack || w.lvl === 'crit');
+    const quiet = due.filter((w) => !(w.ack || w.lvl === 'crit'));
+    if (quiet.length) { ackWarns(quiet); bip('due'); say(quiet[0]!.t, SEVIYELER[quiet[0]!.lvl].simge, SEVIYELER[quiet[0]!.lvl].ton); }
+    if (loud.length) { awayYaz(false); bip('call'); warnShowYaz({ list: loud }); }
+  }, [bes, o.good, o.state, o.toolEvt, !!warnShow, !!ov, o.no]);
+  /* takım ömrü uyarıları */
+  const toolSeen = useRef(new Set<string>());
+  useEffect(() => {
+    for (const u of takimUyarilari(o, RL.prod.tools)) {
+      if (toolSeen.current.has(u.anahtar)) continue;
+      toolSeen.current.add(u.anahtar);
+      say(u.metin, 'tool', 'hazard');
+    }
+  }, [o.good, RL]);
+  const changeTool = (t: { id: string; name: string }) => undoable(`${t.name} değiştirildi · sayaç sıfırlandı`, 'tool', 'run', () => patch({ toolsAt: { ...o.toolsAt, [t.id]: o.good }, toolEvt: Date.now() }));
+  /* uzun duruş */
+  const pauseSeen = useRef(0);
+  const on = Math.floor(simdi / 10000);
+  useEffect(() => {
+    if (pv || !RL.prod.maxPauseMin || !(o.state === 'paused' || o.state === 'stopped')) return;
+    if (Date.now() - since >= RL.prod.maxPauseMin * 60000 && pauseSeen.current !== since) {
+      pauseSeen.current = since;
+      bip('nok');
+      say(`${o.state === 'paused' ? 'Duraklatma ' : 'Duruş '}${RL.prod.maxPauseMin} dk’yı geçti`, 'clock', 'stop', { action: { l: 'Amiri çağır', fn: () => startCall(CAGRI_EKIPLERI.find((c) => c.k === 'amir')!) } });
+    }
+  }, [on, o.state]);
+
+  /* kontrol takvimi */
+  const D = useMemo(() => (opT === 'cnc' ? kontrolTakvimi(o, Date.now(), anlikVardiya(Date.now(), ayarlar.vardiyalar, ayarlar.tatiller).s) : BOS_TAKVIM), [o, bes, opT, ayarlar.vardiyalar, ayarlar.tatiller]);
+  const dueKey = D.due.map((b) => b.id).join(',');
+  const prevDue = useRef('');
+  useEffect(() => {
+    const once = new Set(prevDue.current.split(',').filter(Boolean));
+    prevDue.current = dueKey;
+    const taze = D.due.filter((b) => !once.has(String(b.id)));
+    const tazeQ = taze.filter((b) => D.who[b.id] !== 'op');
+    const tazeO = taze.filter((b) => D.who[b.id] === 'op');
+    if (otomatikNumuneOlculeri(tazeQ, D.why, o.lastDecision).length && o.pkg && RL.q.autoSend && !o.pendingReq && !pv) {
+      setTimeout(() => { void live.current.sendSample?.(true); }, 400);
+    } else if (taze.length && o.pkg && !(o.lastDecision && o.lastDecision.status === 'rejected' && !tazeO.length)) {
+      // Ret kartı ekrandayken kalite ölçüsü için ayrıca uyarı verilmez: RED iletisi ve kart operatöre düzeltip göndermesini zaten söyler.
+      const b = tazeQ[0] || tazeO[0]!;
+      awayYaz(false); tabYaz('draw'); mvYaz('prod');
+      bip('due');
+      say(tazeQ.length ? `Numune zamanı · ${b.nom} (${D.why[b.id] || ''}) · kaliteye gönder` : `Ölçüm sırası sende · ${b.nom} (${D.why[b.id] || ''})`,
+        tazeQ.length ? 'target' : 'ruler', b.crit ? 'stop' : tazeQ.length ? 'hazard' : 'run');
+    }
+  }, [dueKey]);
+  const nextOrder = isler.find((x, i) => i !== ai && x.state === 'queued');
+  const siraRef = useRef<string[]>([]);
+  const [ondeNo, ondeNoYaz] = useState<string | null>(null);
+  const siraAnahtari = isler.map((x) => `${x.no}:${x.state}`).join(',');
+  useEffect(() => {
+    if (pv) return;
+    const yeni = yeniOneAlinan(siraRef.current, isler);
+    siraRef.current = isler.map((x) => x.no);
+    ondeNoYaz((n) => yeni ?? (n && oneAlinanSuruyor(n, isler) ? n : null));
+  }, [siraAnahtari]);
+  useEffect(() => { if (ondeNo) say(`Sıradaki iş öne alındı: ${ondeNo} · geçince çalışan iş duraklatılır`, 'alert', 'hazard'); }, [ondeNo]);
+
+  // İlk parça kapısı (129, 131 b, denetim #12): Kalite Merkezi onaylayana dek ilk parçadan sonraki sağlam parça karar bekler; yeniden ilk
+  // parça açıkken ikinci sağlam sayılmaz. Yeniden ilk parçanın tabanı hazırlık kararının damgasıdır.
+  const yenidenAcik = !!o.pkg && POLICY.fpRestart !== false && ilkParcaKalemleri(o).length > 0 && yenidenIlkParcaAcik(o.pkg);
+  const ilkKarari = ilkParcaKarari(o.pkg);
+  const ilkAcik = !!o.pkg && !pv && ilkParcaKalemleri(o).length > 0 && ilkKarari !== 'onay';
+  const ilkSayilan = o.good - (o.baseGood ?? 0) - (ilkAcik ? 0 : yenidenIlkParcaTabani(o.pkg));
+  const ilk = {
+    acik: ilkAcik || (!pv && yenidenAcik), yeniden: !ilkAcik && !pv && yenidenAcik, sayilan: ilkSayilan,
+    kararBekleyen: kararBekleyenSayisi(ilkAcik, ilkSayilan, ilkAcik && ilkKarari === 'ret'),
+  };
+  // 19.1: paketin merkez çizimi eskiyse başlatma görevi uyarıya döner.
+  const mUyari = useMerkezUyarilari((o.pkg ? o.pkg.files : null) as MerkezDosyasi[] | null);
+  const cizimEski = eskiCizim((o.pkg && o.pkg.files) as MerkezDosyasi[] | undefined, mUyari);
+  const task0 = siradakiGorev(o, D, nextOrder, ilk, simdi);
+  const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi) : task0;
+  const eskiG = eskiCizimGorevi(ertelenmis, cizimEski);
+  const task: Gorev | null = eskiG && eskiG !== ertelenmis
+    ? { ...(eskiG as unknown as Gorev), tone: tonAdi((eskiG as { tone: string }).tone), icon: simgeSec((eskiG as { icon: string }).icon) }
+    : ertelenmis;
+
+  /* çevrim ölçümü: son parçadan bu yana geçen çalışma süresi (duraklamalar sayılmaz); çizimden önce eşitlenir */
+  const cycRef = useRef({ acc: 0, since: null as number | null, good: null as number | null, scrap: null as number | null, no: null as string | null, state: null as string | null, last: 0, n: 0 });
+  {
+    const c = cycRef.current;
+    const t = Date.now();
+    if (c.no !== o.no) Object.assign(c, { no: o.no, good: o.good, scrap: o.scrap, state: o.state, acc: 0, since: o.state === 'running' ? t : null, last: 0, n: c.n + 1 });
+    else {
+      if (c.state !== o.state) {
+        if (o.state === 'running') { if (!c.since) c.since = t; } else if (c.since) { c.acc += t - c.since; c.since = null; }
+        c.state = o.state;
+      }
+      if (o.good > (c.good ?? 0) || o.scrap > (c.scrap ?? 0)) {
+        const el = c.acc + (c.since ? t - c.since : 0);
+        if (el > 500) c.last = el;
+        Object.assign(c, { acc: 0, since: o.state === 'running' ? t : null, n: c.n + 1 });
+      }
+      c.good = o.good; c.scrap = o.scrap;
+    }
+  }
+  const cevrim = useMemo((): CevrimOlcer => ({
+    gecen: () => { const c = cycRef.current; return c.acc + (c.since ? Date.now() - c.since : 0); },
+    son: () => cycRef.current.last,
+  }), []);
+
+  /* üretim kayıtları: durum değişimi ve sayımlar (OEE, vardiya özeti); her kaynaktan gelen değişiklik yakalanır */
+  const autoCallT = useRef<ReturnType<typeof setTimeout>>();
+  const autoRef = useRef({ state: false, cnt: false });
+  const scrapWhy = useRef<string | null>(null);
+  const topluRef = useRef(false);
+  const lastNoteRef = useRef<string | null>(null);
+  const prevCnt = useRef<{ no: string; good: number; scrap: number } | null>(null);
+  const gorulenIs = useRef(new Set<string>());
+  useEffect(() => {
+    if (pv || o.empty || !istasyonTableti()) return;
+    const k = `lastState:${MACHINE}`;
+    const l = yerel.oku<{ no: string; state: string; at: number }>(k);
+    // Açılışta ve yenilemede ilk görülen işin durumu kayda gitmez: durum bu tablette değişmedi.
+    const ilkGorus = !gorulenIs.current.has(o.no);
+    gorulenIs.current.add(o.no);
+    if (l && l.no === o.no && l.state === o.state) return;
+    yerel.yaz(k, { no: o.no, state: o.state, at: Date.now() });
+    if (ilkGorus) { autoRef.current.state = false; lastNoteRef.current = null; return; }
+    const why = o.state === 'stopped' ? lastNoteRef.current : null;
+    if (!autoRef.current.state && durumKaydiGerekir(l, o)) {
+      void depo.Log.add('events', {
+        machine: MACHINE, wc: ist.wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), ist.mcs, o.state),
+        orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? planliMi(why) : null,
+      });
+    }
+    autoRef.current.state = false;
+    lastNoteRef.current = null;
+    schedAutoCall(why);
+  }, [o.state, o.no]);
+  // Nedeni bir ekibe bağlıysa (ör. mekanik arıza → bakım) belirlenen süre sonra kendiliğinden çağrılır.
+  const schedAutoCall = (why: string | null) => {
+    clearTimeout(autoCallT.current);
+    const r = why ? durusNedeni(ayarlar, why) : null;
+    if (r && r.team && POLICY.autoCall) {
+      const c0 = CAGRI_EKIPLERI.find((c) => c.k === r.team);
+      if (c0) {
+        autoCallT.current = setTimeout(() => {
+          const L = live.current;
+          if (L.o && L.o.state === 'stopped' && !L.call) L.startCall?.(c0, `Otomatik · ${r.l}`);
+        }, (r.after || 0) * 60e3 + 400);
+      }
+    }
+  };
+  // Zaten durmuş makineye (ör. makine verisiyle durdu) neden girilince.
+  const noteStop = (code: string) => {
+    void depo.Log.add('events', { machine: MACHINE, wc: ist.wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: 'stopped', reason: code, planned: planliMi(code) });
+    segsYaz((sg) => (sg.length ? sg.map((x, i) => (i === sg.length - 1 ? { ...x, n: code } : x)) : sg));
+    schedAutoCall(code);
+    say(`Duruş nedeni kaydedildi · ${nedenAdiOku(code) || code}`, 'stop', 'stop');
+  };
+  useEffect(() => () => clearTimeout(autoCallT.current), []);
+  useEffect(() => {
+    // Toplu girişin parça süresi yoktur: son çevrim süresi topluya yazılırsa birim süre ortalaması bozulur.
+    const toplu = topluRef.current;
+    topluRef.current = false;
+    if (pv || o.empty || !istasyonTableti()) return;
+    const p = prevCnt.current;
+    prevCnt.current = { no: o.no, good: o.good, scrap: o.scrap };
+    if (!p || p.no !== o.no) return;
+    const base = {
+      machine: MACHINE, wc: ist.wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, planMs: o.cycle > 0 ? Math.round(o.cycle * 1000) : null,
+      state: o.state, ...sayimKartAlani(o.kart),
+    };
+    const cyc = cycRef.current.last ? Math.round(cycRef.current.last) : null;
+    if (autoRef.current.cnt) { autoRef.current.cnt = false; return; } // makine verisinden gelen sayım sunucuda zaten kayıtlı
+    if (o.good !== p.good) void depo.Log.add('counts', { kind: 'good', delta: o.good - p.good, cycleMs: o.good > p.good && !toplu ? cyc : null, ...base });
+    if (o.scrap !== p.scrap) {
+      void depo.Log.add('counts', { kind: 'scrap', delta: o.scrap - p.scrap, cycleMs: o.scrap > p.scrap && !toplu ? cyc : null, reason: o.scrap > p.scrap ? scrapWhy.current : null, ...base });
+      scrapWhy.current = null;
+    }
+  }, [o.good, o.scrap, o.no]);
+  /* sunucu sayımı ya da başlatmayı reddetti: sayı ya da durum geri döner, ret metni gösterilir; geri alma yeni kayıt yazmaz */
+  useEffect(() => {
+    const f = (e: Event) => {
+      const detay = (e as CustomEvent<{ msg?: string }>).detail;
+      // TMI işin hâlini bildirdiyse ekran ona eşitlenir (tek kaynak TMI). Yoksa başlatma geri alınır.
+      const es = durumEsitleme(detay);
+      if (es) {
+        const a = live.current.o;
+        if (a && a.state !== es.state && geriAlinacakIs(a, { ...es, pkgId: es.pkgId ?? null, alan: 'good', fark: 0 })) autoRef.current.state = true;
+        islerYaz((l) => durumEsitle(l, es));
+        bip('nok'); sayRef.current(`TMI kabul etmedi · ${detay?.msg || ''}`, 'alert', 'stop');
+        return;
+      }
+      const b = baslatmaGeriAlma(detay);
+      if (b) {
+        // Başlatma yazılmadı: iş geri döner; geri dönüş yeni durum kaydı yazmaz (TMI'de değişen bir şey yok).
+        const a = live.current.o;
+        if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
+        islerYaz((l) => baslatmaGeriUygula(l, b));
+        bip('nok'); sayRef.current(`İş başlamadı · ${detay?.msg || 'TMI kabul etmedi'}`, 'alert', 'stop');
+        return;
+      }
+      const g = sayimGeriAlma(detay);
+      if (!g) return;
+      const a = live.current.o;
+      if (a && geriAlinacakIs(a, g) && Math.max(0, a[g.alan] + g.fark) !== a[g.alan]) autoRef.current.cnt = true;
+      islerYaz((l) => sayimGeriUygula(l, g));
+      bip('nok'); sayRef.current(`Sayım işlenmedi, sayı geri alındı · ${detay?.msg || ''}`, 'alert', 'stop');
+    };
+    window.addEventListener('arkon-rejected', f);
+    return () => window.removeEventListener('arkon-rejected', f);
+  }, []);
+  useEffect(() => {
+    const f = (e: Event) => sayRef.current(`${ILETI_GITMEDI} · ${(e as CustomEvent<{ msg?: string }>).detail?.msg || ''}`, 'alert', 'hold');
+    window.addEventListener('arkon-ileti-gitmedi', f);
+    return () => window.removeEventListener('arkon-ileti-gitmedi', f);
+  }, []);
+  const dakika = Math.floor(shiftNow);
+  useEffect(() => { segsYaz((s) => { const L = s[s.length - 1]; if (!L) return s; return s.map((x, i) => (i === s.length - 1 ? { ...x, t: Math.max(x.t, shiftNow) } : x)); }); }, [dakika]);
+  /* uzak mod: 45 sn dokunulmazsa */
+  useEffect(() => {
+    const f = () => { lastAct.current = Date.now(); };
+    window.addEventListener('pointerdown', f, true);
+    window.addEventListener('keydown', f, true);
+    return () => { window.removeEventListener('pointerdown', f, true); window.removeEventListener('keydown', f, true); };
+  }, []);
+  useEffect(() => { if (!pv && !away && !ov && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
+
+  const patch = (p: Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === ai ? { ...x, ...p } : x)));
+  const undoable = (label: string, icon: SimgeAdi, ton: Ton, f: () => void) => {
+    const s = { isler, since, segs };
+    f();
+    say(label, icon, ton, { undo: () => { islerYaz(s.isler); sinceYaz(s.since); segsYaz(s.segs); say('Geri alındı', 'rotate', 'idle'); } });
+  };
+  const go = (st: Is['state'], note?: string | null) => {
+    lastNoteRef.current = note || null;
+    patch({ state: st, ...(st === 'running' && !o.startedAt ? { startedAt: Date.now() } : null) });
+    sinceYaz(Date.now());
+    segsYaz((s) => { const t = s.length ? s[s.length - 1]!.t : 0; return [...s, { f: t, t: t + 0.5, s: st === 'done' || st === 'queued' ? 'paused' : st, n: note }]; });
+  };
+  const retZamani = useRef(0);
+  const ok = (k: Perm) => {
+    if (pv) return false;
+    if (yetkiVar(k)) return true;
+    if (Date.now() - retZamani.current > 1500) { retZamani.current = Date.now(); bip('nok'); say(`Yetkin yok: ${YETKI_ADLARI[k] || k}`, 'lock', 'stop'); }
+    return false;
+  };
+  const istasyonAc = () => { if (pv || yetkiVar('prod.station') || (kisi?.sts || []).length > 0 || ok('prod.station')) ovYaz('station'); };
+  const kapaliNedeni = sayimKapaliNedeni(o);
+  const kapali = kapaliNedeni !== null;
+  const iyiKapaliNedeni = sayimKapaliNedeni(o, 'good');
+  const iyiKapali = iyiKapaliNedeni !== null;
+  const iyiArtiNedeni = (n: number) => iyiKapaliNedeni ?? ilkParcaSayimReddi(ilk.yeniden, ilk.sayilan, n);
+  const iyiArtiKapali = iyiArtiNedeni(1) !== null;
+  const sayimOk = (k: Perm, neden: string | null = kapaliNedeni) => { if (neden !== null) { bip('nok'); say(neden, 'alert', 'idle'); return false; } return ok(k); };
+  const iyiSayimOk = (k: Perm) => sayimOk(k, iyiKapaliNedeni);
+  const topluKaydet = (g: { saglam: number; hurda: number; neden: string | null }) => {
+    if (!sayimOk('prod.run', g.saglam > 0 ? iyiArtiNedeni(g.saglam) ?? kapaliNedeni : kapaliNedeni)) return false;
+    doToplu(g);
+    return true;
+  };
+  const hazirlikta = useRef(false);
+  const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
+    if (URETIM_EYLEMLERI.includes(a) && !ok('prod.run')) return;
+    if (a === 'tool') { const tl = RL.prod.tools.find((x) => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
+    if (a === 'warns') { warnShowYaz({ list: RL.warns.filter((w) => w.t), title: 'Bu işin uyarıları' }); return; }
+    if (a === 'stop') { ovYaz('reason'); return; }
+    if (a === 'drawing') { tabYaz('draw'); return; }
+    if (a === 'st') { tabYaz('st'); mvYaz('st'); return; }
+    if (a === 'measure') { tabYaz('draw'); return; }
+    if (a === 'call') { ovYaz('call'); return; }
+    if (a === 'prepnext') { ovYaz('prepnext'); return; }
+    if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
+    if (a === 'sample') { ovYaz('numune'); return; } // hatırlatmadan Kaliteye numune penceresi (kart #1083)
+    if (a === 'finish') { sonBildirim.current++; go('done'); ovYaz('done'); return; } // açık "Geri al" bitmiş işi yeniden açmasın
+    if (a === 'next') {
+      const n = isler.findIndex((x, i) => i !== ai && x.state === 'queued');
+      ovYaz(null);
+      if (n >= 0) {
+        isGec(n); sinceYaz(Date.now());
+        islerYaz((l) => l.map((x, j) => (j === n ? { ...x, fresh: false } : x)));
+        say(`Yüklendi: ${isler[n]!.no} · hazırlık ${hazirlikSayisi(isler[n]!)}/4`, 'next', 'hazard');
+      } else say('Kuyrukta iş kalmadı', 'check');
+      return;
+    }
+    const m = EYLEM_DURUMU[a];
+    if (!m) return;
+    // Başlat ilk parça onayını beklemez (129, 130 a): ilk parça Başlat'tan sonra üretilip sayılır ve kaliteye gider.
+    if ((a === 'start' || a === 'resume' || a === 'restart') && ilk.acik) {
+      say(`Dikkat: ilk parçayı say ve kaliteye gönder · ${ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'karar gelene kadar sonraki sağlam parçalar karar bekler'}`, 'alert', 'hold');
+    }
+    if ((a === 'start' || a === 'setup') && !warned && !pv) {
+      const sw = baslangicUyarilari(RL.warns, o);
+      if (sw.length) { warnShowYaz({ list: sw, title: 'Başlamadan önce oku', then: () => act(a, t, true) }); return; }
+    }
+    // Üretim Terminali gibi: TMI emrinde başlatmadan önce girdiler istasyonda mı sorulur; eksikse istek açılır ve iş uyarıyla başlar
+    // (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü TMI'nin başlat denetimi söyler.
+    const tmiEmir = tmiEmirId(o.pkg);
+    if (a === 'start' && !hazir && !pv && tmiEmir !== null && depo.status().mode === 'server') {
+      if (hazirlikta.current) return;
+      hazirlikta.current = true;
+      const no = o.no;
+      const devam = (uyari: string | null) => { if (live.current.o && live.current.o.no === no) actRef.current(a, t, true, true, uyari); };
+      depo.Server.uretimHazirligi(tmiEmir, MACHINE)
+        .then((c) => { const uyari = baslatmaUyarisi(c); if (uyari) bip('nok'); devam(uyari); }, () => devam(null))
+        .finally(() => { hazirlikta.current = false; });
+      return;
+    }
+    const ileti = DURUM_ILETISI[a] ?? '';
+    undoable(ekUyari ? uyariliBaslatmaIletisi(ileti, ekUyari) : ileti, ekUyari ? 'alert' : DURUM_SIMGESI[a] || 'play', ekUyari ? 'hold' : m === 'running' ? 'run' : m === 'paused' ? 'hold' : 'hazard', () => go(m));
+  };
+  const actRef = useRef(act);
+  actRef.current = act;
+  const sendSample = async (auto?: boolean) => {
+    if (!o.pkg) { say('Bu iş için kontrol planı yok', 'alert', 'hold'); return; }
+    let items = D.due.filter((b) => D.who[b.id] !== 'op');
+    // Numune stoktan teslim edilir (115 a): ilk parça önce sağlam sayılmış olmalı, hazırlıkta yapılan parça stokta yoktur (129).
+    if (ilk.acik && (o.state !== 'running' || ilk.sayilan < 1) && items.some((b) => ilkParcaKapisi(o).some((f) => f.id === b.id))) {
+      if (auto !== true) say(o.state === 'running' ? ILK_PARCA_ONCE_SAY_ILETISI : 'İlk parça Başlat\'tan sonra üretilir · önce başlat', 'alert', 'hold');
+      return;
+    }
+    if (auto === true) items = otomatikNumuneOlculeri(items, D.why, o.lastDecision);
+    // Zamanı gelen ölçü yokken operatör yine de numune gönderebilir (şüphe, takım değişimi): planın bütün ölçüleri gider.
+    const elle = !items.length && auto !== true;
+    if (elle && o.pendingReq) { say('Önceki numune kalitede · sonuç bekleniyor', 'clock', 'idle'); return; }
+    if (elle) items = elleNumuneOlculeri(o.pkg.plan || []);
+    if (!items.length) { say('Kontrol planında ölçü yok', 'check'); return; }
+    if (pv) { say('Önizlemede gönderilmez', 'eye', 'idle'); return; }
+    const reason = elle ? 'Operatör isteği' : Array.from(new Set(items.map((b) => D.why[b.id] || b.freq || 'İlk parça'))).join(' + ');
+    const req: SampleRequest = {
+      id: `rq${Date.now()}`, pkgId: o.pkg.id, no: o.no, part: o.part, rev: o.pkg.rev, machine: MACHINE, by: ME, at: Date.now(), reason,
+      items: items.map((b) => b.id), crit: items.some((b) => b.crit), cnt: o.good, status: 'waiting', results: {},
+    };
+    await depo.DB.put('requests', req);
+    depo.Bus.send({ type: 'sample', reqId: req.id, no: o.no, machine: MACHINE, reason });
+    patch(yeniNumuneYamasi(req));
+    bip('call');
+    say(`${auto === true ? 'Otomatik numune isteği · ' : 'Numune isteği kalitede · onay bekleniyor · '}${items.length} ölçü · etiketle: ${o.no} #${sayi(o.good)}`, 'target', 'hold');
+  };
+  // Hurda yalnız nedenle yazılır (116 a).
+  const addScrap = () => { if (!sayimOk('prod.run')) return; ovYaz('scrap'); };
+  const doScrap = (why: string) => {
+    scrapWhy.current = why || null;
+    scrapLog.current = [...scrapLog.current, o.good].slice(-5);
+    shiftRef.current.scrap++;
+    const u = hurdaUyarisi(o, RL.prod, scrapLog.current);
+    undoable(`Hurda kaydedildi · toplam ${o.scrap + 1}`, 'trash', 'stop', () => patch({ scrap: o.scrap + 1 }));
+    if (u && u.tur === 'oran') {
+      setTimeout(() => { bip('nok'); say(`Hurda oranı %${u.oran.toFixed(1)} · limit %${RL.prod.scrapPct}`, 'alert', 'stop', { action: { l: 'Amiri çağır', fn: () => startCall(CAGRI_EKIPLERI.find((c) => c.k === 'amir')!) } }); }, 400);
+    } else if (u && u.tur === 'artis') {
+      setTimeout(() => say(`Hurda artıyor: son 20 parçada ${u.adet} hurda`, 'alert', 'stop', { action: { l: 'Kaliteyi çağır', fn: () => startCall(CAGRI_EKIPLERI.find((c) => c.k === 'kalite')!) } }), 400);
+    }
+  };
+  const doToplu = (g: { saglam: number; hurda: number; neden: string | null }) => {
+    shiftRef.current.good += g.saglam;
+    shiftRef.current.scrap += g.hurda;
+    scrapWhy.current = g.hurda > 0 ? g.neden : null;
+    topluRef.current = true;
+    undoable(`Toplu giriş · ${sayi(g.saglam)} sağlam${g.hurda ? ` · ${sayi(g.hurda)} hurda` : ''}`, 'check', 'run', () => patch({ good: o.good + g.saglam, scrap: o.scrap + g.hurda }));
+  };
+  /* duruş nedeni önerileri */
+  const reasonSuggest = () => {
+    const t = Date.now();
+    const dw = suankiDurus(MACHINE, t, ayarlar.planliDuruslar, tesis);
+    const molada = (anlikVardiya(t, ayarlar.vardiyalar, ayarlar.tatiller).breaks || []).some((b) => t >= b.s - 10 * 60e3 && t <= b.e);
+    const son = segs.slice().reverse().find((s) => s.s === 'stopped' && s.n);
+    return durusOnerileri({ o, D, takimlar: RL.prod.tools, planliDurus: dw ? dw.d : null, molada, sonDurusNedeni: son?.n ?? null, siradaki: nextOrder });
+  };
+
+  /* çağrı */
+  // 15.4: bu istasyonun açık çağrısı kayıttan geri gelir (ekranda yeni çağrı açılmışsa ona dokunulmaz).
+  useEffect(() => {
+    if (pv) return;
+    let canli = true;
+    depo.Log.query('calls', { machine: MACHINE, from: Date.now() - CAGRI_GERIYE_MS }).then((rows) => {
+      const a = canli ? acikCagri((rows || []) as CagriSatiri[], MACHINE, Date.now()) : null;
+      const ekip = a && CAGRI_EKIPLERI.find((c) => c.k === a.ekip);
+      if (a && ekip) callYaz((x) => x || (cagriyiKur(ekip, a) as unknown as Cagri));
+    }).catch(() => undefined);
+    return () => { canli = false; };
+  }, []);
+  const startCall = (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => {
+    bip('call');
+    const t0 = Date.now();
+    const sonSeg = segs[segs.length - 1];
+    const why = note || (o.state === 'stopped' && yerel.oku(`lastState:${MACHINE}`) && sonSeg?.n ? nedenAdiOku(sonSeg.n) : null) || null;
+    callYaz({ ...c, t0, stage: 0, who: null, note: why, times: [t0], msgs: [{ from: 'sys', text: `${c.l} ekibine iletildi${why ? ` · ${why}` : ''}`, at: t0 }] });
+    if (!pv) {
+      depo.Bus.send({ type: 'call', k: c.k, l: c.l, machine: MACHINE, wc: ist.wc || null, mc: curMc(), by: ME, t0, note: why, orderNo: o.no });
+      void depo.Log.add('calls', { machine: MACHINE, wc: ist.wc || null, mc: curMc(), callId: String(t0), team: c.k, phase: 'open', note: why });
+    }
+  };
+  // Hızlı yanıt operatörün iletisidir; karşı tarafın yanıtı yalnız çağrıyı alan ekrandan gelir.
+  const replyCall = (q: { t: string; close?: boolean }) => {
+    const at = Date.now();
+    callYaz((x) => x && ({ ...x, msgs: [...x.msgs, { from: 'me', text: q.t, at }] }));
+    if (q.close) setTimeout(() => endCall(), 2600);
+  };
+  const endCall = () => {
+    callYaz((x) => {
+      if (x) {
+        callLogYaz((l) => [...l, { k: x.k, ms: (x.times[2] || Date.now()) - x.t0 }]);
+        if (!pv) {
+          void depo.Log.add('calls', { machine: MACHINE, wc: ist.wc || null, callId: String(x.t0), team: x.k, phase: 'done' });
+          depo.Bus.send({ type: 'call-done', machine: MACHINE, t0: x.t0, k: x.k });
+        }
+      }
+      return null;
+    });
+    ovYaz((o2) => (o2 === 'calltrack' ? null : o2));
+    say('Çağrı kapatıldı', 'check', 'run');
+  };
+  live.current = {
+    sendSample, startCall, o, call,
+    // Makine veri toplayıcısından (sunucu) gelen sayım ve durum: sunucuda src 'auto' olarak zaten kaydedildi.
+    mcData: (m) => {
+      if (o.empty || o.state === 'done') return;
+      const delta = Number(m['delta']) || 0;
+      if (m['kind'] === 'count' && delta) {
+        autoRef.current.cnt = true;
+        if (m['ck'] === 'scrap') patch({ scrap: o.scrap + delta });
+        else if (delta < 0 || iyiArtiNedeni(delta) === null) { shiftRef.current.good += delta; patch({ good: o.good + delta }); }
+      }
+      const st = m['state'] as Is['state'] | undefined;
+      if (m['kind'] === 'state' && st && st !== o.state) {
+        autoRef.current.state = true;
+        go(st, null);
+        if (st === 'stopped') { ovYaz('reason'); say('Makine durdu · nedeni seç', 'stop', 'stop'); } else if (st === 'running') say('Makine çalışıyor (makine verisi)', 'play', 'run');
+      }
+    },
+  };
+  /* çağrı yükseltme: belirlenen sürede kimse üstlenmezse vardiya amirine */
+  useEffect(() => {
+    if (!call || pv || call.stage > 0 || call.esc || !(POLICY.callEsc > 0)) return;
+    const t = setTimeout(() => {
+      callYaz((x) => (x && x.t0 === call.t0 && x.stage === 0 ? { ...x, esc: true, msgs: [...x.msgs, { from: 'sys', text: `${POLICY.callEsc} dk yanıt yok · vardiya amirine yükseltildi`, at: Date.now() }] } : x));
+      depo.Bus.send({ type: 'call', esc: true, k: call.k, l: call.l, machine: MACHINE, wc: ist.wc || null, by: ME, t0: call.t0, note: call.note, orderNo: o.no });
+      void depo.Log.add('calls', { machine: MACHINE, wc: ist.wc || null, callId: String(call.t0), team: call.k, phase: 'esc' });
+      bip('call');
+      say(`${call.l} çağrısına ${POLICY.callEsc} dk yanıt yok · amire yükseltildi`, 'bell', 'stop');
+    }, Math.max(500, call.t0 + POLICY.callEsc * 60e3 - Date.now()));
+    return () => clearTimeout(t);
+  }, [call && call.t0, call && call.stage, call && call.esc]);
+
+  /* vardiya özeti */
+  const ustOzet = SL.ok && !SC.sh.tanimsiz ? vardiyaUretimi(SC.good, SC.expected) : null;
+  const shiftStats = () => vardiyaOzeti(vardiyaHesabi(SL, Date.now(), ortam), {
+    kisi: ME, istasyon: MACHINE, cevrim: o.cycle, olcumUygun: shiftRef.current.mOk, olcumRed: shiftRef.current.mNok,
+    cagriSureleri: callLog.map((x) => x.ms), cagriAcik: !!call, nedenAdi: (k) => nedenAdiYaz(k, nedenAdiOku),
+  });
+  const setReady = (k: string) => islerYaz((l) => l.map((x) => (nextOrder && x.no === nextOrder.no ? { ...x, ready: { ...(x.ready as Record<string, boolean> | undefined), [k]: !((x.ready as Record<string, boolean> | undefined) || {})[k] } } : x)));
+  const isSec = (i: number) => { isGec(i); sinceYaz(Date.now()); islerYaz((l) => l.map((x, j) => (j === i ? { ...x, fresh: false } : x))); };
+  const ertele = (g: Gorev) => { if (!g.key) return; snoozeYaz((s) => ({ ...s, [g.key!]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'idle'); };
+  const izinli = (a: GorevEylemi) => !YAZAN.has(a) || (uretir && (a !== 'call' || !pv));
+  const planliGec = uretir ? (code: string) => undoable(`Planlı duruş · ${nedenAdiOku(code) || ''}`, 'stop', 'done', () => go('stopped', code)) : null;
+  const pdSimdi = suankiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis);
+  const pdSonra = pdSimdi ? null : siradakiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis, 30 * 60e3);
+
+  /* ekran parçaları */
+  const uyarili = RL.warns.some((w) => w.t);
+  const panelSimgesi = OT.simge;
+  const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D);
+  const takimKarti = <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
+  const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
+  const resim = <div className="tc-ay1-resim"><Hazirlaniyor /></div>;
+  const panel = Panel ? <Panel key={o.no} api={stApi} kurallar={RL} /> : null;
+  const adimlar = <Adimlar key={o.no} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} />;
+  const notlar = (
+    <>
+      {hazirlikUyarisi(o.pkg) ? <div className="tc-ay1-not" role="status"><Simge ad="alert" boyut="k" /><span>{hazirlikUyarisi(o.pkg)}</span></div> : null}
+      {o.pkg && o.pkg.note ? <div className="tc-ay1-not"><Simge ad="alert" boyut="k" /><span>{o.pkg.note}</span></div> : null}
+    </>
+  );
+  const bantlar = (
+    <>
+      {!o.empty ? <PlanBandi simdiki={pdSimdi} siradaki={pdSonra} simdi={simdi} nedenAdi={nedenAdiOku} durduruldu={o.state === 'stopped'} gec={planliGec} /> : null}
+      {handover ? (
+        <div className="tc-ay1-bant" data-durum="ayar">
+          <Simge ad="alert" />
+          <div><span className="tc-ay1-ust-yazi">Önceki vardiyadan not{dar ? '' : ` · ${handover.by}`}</span><b>{handover.note}</b></div>
+          <button type="button" className="tc-ay1-kapat" onClick={() => handoverYaz(null)} aria-label="Kapat"><Simge ad="x" boyut="k" /></button>
+        </div>
+      ) : null}
+    </>
+  );
+  const makineSecici = (
+    <MakineSecici makineler={ist.mcs} secili={kilitsizSecim(seciliMakineler(mcSel, ist.mcs), ayrim)} atanan={(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)}
+      ayrim={ayrim} durum={pv || o.empty || !yetkiVar('prod.run') ? 'running' : o.state} degistir={mcSelYaz} />
+  );
+  const tuslar: SayimTusu[] = [];
+  if (duzeltir) tuslar.push({ etiket: 'İyi −1', simge: 'minus', ton: 'duz', aria: 'İyi parça eksi bir', kapali: iyiKapali || o.good <= 0, bas: () => { if (iyiSayimOk('prod.fix')) undoable(`İyi parça −1 · ${sayi(o.good - 1)}`, 'minus', 'idle', () => patch({ good: o.good - 1 })); } });
+  if (uretir) tuslar.push({ etiket: 'İyi +1', simge: 'plus', ton: 'iyi', kapali: iyiArtiKapali || o.good >= o.target, bas: () => { if (!sayimOk('prod.run', iyiArtiNedeni(1))) return; shiftRef.current.good++; undoable(`İyi parça +1 · ${sayi(o.good + 1)}`, 'plus', 'run', () => patch({ good: o.good + 1 })); } });
+  if (duzeltir) tuslar.push({ etiket: 'Hurda −1', simge: 'minus', ton: 'hurda', aria: 'Hurda eksi bir', kapali: kapali || o.scrap <= 0, bas: () => { if (sayimOk('prod.fix')) undoable(`Hurda −1 · toplam ${sayi(o.scrap - 1)}`, 'minus', 'idle', () => patch({ scrap: o.scrap - 1 })); } });
+  if (uretir) tuslar.push({ etiket: 'Hurda +1', simge: 'trash', ton: 'hurda', kapali, bas: addScrap });
+  const sayac = (
+    <div className="tc-ay1-sayac">
+      <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
+      <SayimTuslari tuslar={tuslar} />
+    </div>
+  );
+  const toplu = uretir ? <TopluGiris key={o.no} kalan={o.target - o.good} kapali={kapali} kaydet={topluKaydet} nedenler={ayarlar.hurdaNedenleri} /> : null;
+  const gorev = (mobil: boolean) => (
+    <GorevKarti gorev={task} izinli={izinli} ertele={ertele}
+      eylem={(a, g) => { if (mobil && (a === 'measure' || a === 'drawing')) mvYaz('draw'); act(a, g); }} />
+  );
+  const durumDugmeleri = (mobil: boolean) => (uretir ? (
+    <DurumDugmeleri durum={o.state} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
+      eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
+  ) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
+  const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradakiNo={nextOrder && nextOrder.no} ondeNo={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => { isSec(i); if (dar) mvYaz('prod'); }} />;
+  const uyariCipi = (dur: boolean) => (uyarili ? (
+    <button type="button" className="tc-ay1-uyari-cip" onClick={(e) => { if (dur) e.stopPropagation(); act('warns'); }} aria-label="Bu işin uyarıları" title="Bu işin uyarıları">
+      <Simge ad="bell" boyut="k" />{RL.warns.filter((w) => w.t).length}
+    </button>
+  ) : null);
+  const vardiyaMetni = vardiya.tanimsiz ? 'Vardiya tanımsız' : `Vardiya ${vardiya.name}`;
+
+  const pencereler = (
+    <>
+      {scan ? (
+        <Pencere acik kapat={() => scanYaz(null)} baslik={scan.baslik}>
+          <KodOkuyucu {...(scan.ipucu ? { ipucu: scan.ipucu } : {})} okundu={(c) => { const f = scan.okundu; scanYaz(null); bip('ok'); f(c); }} />
+        </Pencere>
+      ) : null}
+      {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
+      {warnShow ? <UyariPenceresi liste={warnShow.list} {...(warnShow.title ? { baslik: warnShow.title } : {})} okudum={() => { const w = warnShow; ackWarns(w.list); warnShowYaz(null); bip('ok'); if (w.then) setTimeout(w.then, 50); }} /> : null}
+      {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} kapat={() => ovYaz(null)} /> : null}
+      {ov === 'scrap' ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
+      {ov === 'reason' ? (
+        <DurusPenceresi istasyon={MACHINE} nedenler={ayarlar.durusNedenleri} oneriler={reasonSuggest()} otomatikCagri={POLICY.autoCall} kapat={() => ovYaz(null)}
+          kaydet={(r) => { ovYaz(null); if (o.state === 'stopped') noteStop(r.code); else undoable(`Duruş kaydedildi · ${r.l}`, 'stop', 'stop', () => go('stopped', r.code)); }} />
+      ) : null}
+      <TusTakimi acik={ov === 'num'} baslik="İyi parça sayısını düzelt" birim="adet" ilkDeger={o.good} enCok={o.target} enCokHane={6}
+        buyukDegisim={(v) => (Math.abs(v - o.good) > Math.max(20, o.good * 0.1) ? `Büyük değişiklik: ${sayi(o.good)} → ${sayi(v)} · doğruysa yeniden onayla` : null)}
+        kapat={() => ovYaz(null)}
+        onayla={(v) => { if (v > o.good && !sayimOk('prod.fix', iyiArtiNedeni(v - o.good))) return; ovYaz(null); undoable(`Sayaç güncellendi · ${sayi(v)}`, 'check', 'run', () => patch({ good: v })); }} />
+      {ov === 'call' ? <CagriPenceresi kapat={() => ovYaz(null)} cagir={(c) => { ovYaz(null); startCall(c); }} /> : null}
+      {ov === 'calltrack' && call ? <CagriTakibi cagri={call} kapat={() => ovYaz(null)} yanitla={replyCall} bitir={endCall} /> : null}
+      {ov === 'prepnext' && nextOrder ? <SonrakiHazirlik is={nextOrder} kapat={() => ovYaz(null)} degistir={setReady} /> : null}
+      {ov === 'shift' ? (
+        <VardiyaPenceresi ozet={shiftStats()} vardiyaEtiketi={vardiya.label} kapat={() => ovYaz(null)}
+          devret={(not) => { ovYaz(null); if (not && !pv) void depo.DB.put('kv', { note: not, by: `${ME} · ${vardiyaMetni}`, at: Date.now() }, 'handover'); say(`Vardiya devredildi${not ? ' · not sonraki vardiyaya iletildi' : ''}`, 'check', 'run'); }} />
+      ) : null}
+      {ov === 'ozetim' ? <Pencere acik kapat={() => ovYaz(null)} baslik="Özetim" tur="tam"><Ozetim /></Pencere> : null}
+      <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
+        satirlar={[{ etiket: 'İyi parça', deger: sayi(o.good) }, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }]}
+        {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
+      {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
+    </>
+  );
+
+  if (dar) {
+    const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length);
+    const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
+    return (
+      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)}>
+        <header className="tc-ay1-mobil-ust">
+          <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
+          <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
+          {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
+          <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
+        </header>
+        <div className="tc-ay1-gorunum">
+          {gor === 'ozet' ? <Ozetim /> : null}
+          {gor === 'prod' ? (
+            <div className="tc-ay1-uretim">
+              {bantlar}
+              <button type="button" className="tc-ay1-is-ozet" onClick={() => mvYaz('queue')}>
+                <span><span className="tc-ay1-ust-yazi">Aktif iş {o.urgent ? '· ACİL' : ''}</span><b>{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</b><small>{o.part} · {o.op}</small></span>
+                <Simge ad="next" boyut="k" />
+              </button>
+              {uyariCipi(false)}
+              <IsEtiketleri is={o} />
+              <EtkinKart is={o} kartlar={kartlar} />
+              {notlar}
+              {makineSecici}
+              {gorev(true)}
+              {sayac}
+              {toplu}
+              {durumDugmeleri(true)}
+            </div>
+          ) : null}
+          {gor === 'st' && panel ? <div className="tc-ay1-bolme">{panel}</div> : null}
+          {gor === 'draw' ? resim : null}
+          {gor === 'queue' ? kuyruk : null}
+          {gor === 'steps' ? adimlar : null}
+          {gor === 'ana' ? <div className="tc-ay1-bolme">{takimKarti}{analiz}</div> : null}
+        </div>
+        <nav className="tc-ay1-alt-gezinme" aria-label="Terminal görünümleri">
+          {MV.map((t) => (
+            <button key={t.id} type="button" aria-current={gor === t.id ? 'page' : undefined} onClick={() => mvYaz(t.id)}>
+              <span className="tc-ay1-alt-simge"><Simge ad={t.simge} />{t.n ? <em data-durum={t.id === 'draw' ? 'ayar' : undefined}>{t.n}</em> : null}</span>{t.l}
+            </button>
+          ))}
+        </nav>
+        {ov === 'menu' ? (
+          <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
+            <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
+            <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
+            <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
+            <MenuSatiri simge="ruler" baslik="Teknik resim · 3B" alt="Odak modu resim panelinde" tikla={() => { ovYaz(null); mvYaz('draw'); }} />
+          </Pencere>
+        ) : null}
+        {pencereler}
+      </div>
+    );
+  }
+
+  const gecerliSekme = sekmeler.some((s) => s.id === tab) ? tab : sekmeler[0]!.id;
+  const saat = new Date(simdi);
+  const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  return (
+    <div className="tc-ay1" data-durum={IS_DURUM_RENGI(o.state)}>
+      <header className="tc-ay1-ust">
+        <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir">
+          <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
+        </button>
+        <DurumLambasi durum={o.state} since={since} />
+        <span className="tc-ay1-bosluk" />
+        <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
+        {ozetVar ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('ozetim')} title="Özetim" aria-label="Özetim"><Simge ad="user" /></button> : null}
+        <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
+        {!pv ? <Dugme tur="ikincil" simge="bell" onClick={() => ovYaz('call')}>Çağrı</Dugme> : null}
+        <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
+        <button type="button" className="tc-ay1-kisi" onClick={() => ovYaz('shift')} title="Vardiya özeti ve devir">
+          <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
+          <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
+        </button>
+      </header>
+      <TerminalYerlesimi
+        durum={IS_DURUM_RENGI(o.state)}
+        oran="orta-genis"
+        sol={kuyruk}
+        orta={(
+          <div className="tc-ay1-orta">
+            {bantlar}
+            <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
+              <div>
+                <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
+                <h2 className="tc-ay1-is-baslik">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</h2>
+                <p>{o.part} · {o.op}</p>
+                <IsEtiketleri is={o} />
+                {notlar}
+              </div>
+              <div className="tc-ay1-olgular">
+                {uyariCipi(false)}
+                <div><span className="tc-ay1-ust-yazi">Çevrim</span><b>{o.cycle} sn</b></div>
+                <div><span className="tc-ay1-ust-yazi">Termin</span><b>{o.due}</b></div>
+              </div>
+            </section>
+            <EtkinKart is={o} kartlar={kartlar} />
+            <section className="tc-ay1-sahne" aria-label="Üretim">
+              {makineSecici}
+              {gorev(false)}
+              {sayac}
+              {toplu}
+              {durumDugmeleri(false)}
+            </section>
+          </div>
+        )}
+        sag={(
+          <div className="tc-ay1-sag">
+            <Sekmeler etiket="İş ayrıntısı" secili={gecerliSekme} sec={(a) => tabYaz(a)}
+              sekmeler={sekmeler.map((s) => ({ anahtar: s.id, baslik: s.n ? `${s.l} (${s.n})` : s.l, simge: s.simge }))} />
+            <div className="tc-ay1-bolme" role="tabpanel">
+              {gecerliSekme === 'st' ? panel : null}
+              {gecerliSekme === 'draw' ? resim : null}
+              {gecerliSekme === 'steps' ? adimlar : null}
+              {gecerliSekme === 'ana' ? <>{takimKarti}{analiz}</> : null}
+            </div>
+          </div>
+        )}
+      />
+      {pencereler}
+    </div>
+  );
+}
+
+const IS_DURUM_RENGI = (s: string) => ({ queued: 'sirada', setup: 'ayar', running: 'calisiyor', paused: 'durakli', stopped: 'durdu', done: 'bitti' } as const)[s as 'queued'] ?? 'sirada';
+
+function MenuSatiri({ simge, baslik, alt, tikla }: { simge: SimgeAdi; baslik: string; alt: string; tikla: () => void }): ReactNode {
+  return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;
+}
+

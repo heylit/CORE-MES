@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { ADRES, expect, test } from './ortak.ts';
 
 // Üretim Hazırlık TS ekranı (Soru 271 c). Ölçüt bugünkü çerçevedir: her sayfanın testi parçasıyla gelir ve eski ekranda bugün
@@ -23,17 +24,95 @@ test.describe('A0 iskelet', () => {
   });
 });
 
-// Parça yazarları kendi bölümlerini doldurur (yeni/PARCA-SOZLESMESI.md); bölüm boşken atlanır.
-for (const [parca, sayfalar] of [
-  ['A1 Operatör', 'Operatör, Önizleme'],
-  ['A2 Hazırlık', 'Üretim Terminali Hazırlık'],
-] as const) {
-  test.describe(parca, () => {
-    test(`${sayfalar}: bugünkü davranış`, () => {
-      test.fixme(true, 'parça teslim edilince dolar');
-    });
+test.describe('A2 Hazırlık', () => {
+  const tasma = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+  // Örnek veride iş paketi yoktur: boş liste ve yöneticinin "Yeni paket" yolu sınanır.
+  test('Hazırlık: liste açılır, açılışta yazma yok, süzgeç açıkken sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    await ac('/arkon/yeni/hazirlik');
+    const liste = page.getByRole('complementary', { name: 'İş paketleri' });
+    await expect(liste.getByRole('textbox', { name: 'İş paketlerinde ara' })).toBeVisible();
+    await expect(liste.getByRole('button', { name: 'Yeni paket' })).toBeVisible();
+    expect(await tasma(page)).toBeLessThanOrEqual(0);
+    await liste.getByRole('button', { name: 'Süzgeç ve gruplama' }).click();
+    await expect(liste.getByRole('group', { name: 'Süzgeç' })).toBeVisible();
+    expect(await tasma(page)).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler'))).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
   });
-}
+
+  // Ekran testleri yazmaz: paket tarayıcıda uydurulur (sentetik), sunucuya hiçbir yazma gitmez; her sekme açılıp taşma ölçülür.
+  test('Hazırlık: paket düzenleyicisinde her sekme açılır, yazma gitmez, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    const paket = {
+      id: 'ekran-deneme-1', no: 'IE-EKRAN-1', opType: 'cnc', st: {}, partNo: 'EK-1', part: 'Ekran deneme parçası', rev: 'A', op: 'Op 10', machine: '',
+      target: 10, cycle: 30, due: '', priority: 'normal', material: '', note: '', files: [], primary: null,
+      plan: [{ id: 1, nom: '20', tol: '0.1', min: 19.9, max: 20.1, tool: 'Kumpas', freq: 'İlk parça' }], steps: [{ id: 's1', t: 'Bağla', d: '', r: true }],
+      status: 'draft', version: 0, dirty: true, createdAt: 1, updatedAt: 2, by: 'Ekran',
+    };
+    await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
+    await page.route('**/api/arkon/belgeler/pkgs/*/yaz', (r) => r.fulfill({ json: { sonuc: 'yazildi', surum: 2 } }));
+    await ac('/arkon/yeni/hazirlik');
+    // Dar ekranda liste ile düzenleyici yer değiştirir: paket kartına basınca düzenleyici açılır.
+    await page.getByRole('complementary', { name: 'İş paketleri' }).getByRole('button', { name: /IE-EKRAN-1/, pressed: true }).click();
+    const duzen = page.getByRole('region', { name: 'İş paketi' });
+    await expect(duzen.getByRole('heading', { name: /IE-EKRAN-1/ })).toBeVisible();
+    const adimlar = duzen.getByRole('list', { name: 'Hazırlık adımları' });
+    for (const sekme of ['Bilgiler', 'Dokümanlar', 'Kontrol planı', 'Numune', 'Adımlar', 'Kurallar', 'Yayınla']) {
+      await adimlar.getByRole('button', { name: sekme }).click();
+      await expect(adimlar.getByRole('button', { name: sekme })).toHaveAttribute('aria-current', 'step');
+      expect(await tasma(page), sekme).toBeLessThanOrEqual(0);
+    }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler'))).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+test.describe('A1 Operatör', () => {
+  const tasma = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  const yazmalar = (y: string[]) => y.filter((x) => !x.startsWith('POST /api/arkon/iletiler'));
+
+  test('Operatör: terminal açılır, açılışta yazma yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    await ac('/arkon/yeni/operator');
+    await expect(page.getByRole('region', { name: 'Aktif iş emri' }).or(page.getByRole('navigation', { name: 'Terminal görünümleri' })).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'İstasyonu değiştir' }).or(page.getByTitle('İstasyonu değiştir')).first()).toBeVisible();
+    expect(await tasma(page)).toBeLessThanOrEqual(0);
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  // Ekran testleri yazmaz: paket tarayıcıda uydurulur (sentetik); önizleme hiçbir yazma göndermez, yazma düğmesi göstermez.
+  test('Önizleme: paket kimliğiyle açılır, yazma düğmesi yok, görünümler açılır, yazma gitmez, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    const paket = {
+      id: 'ekran-deneme-1', no: 'IE-EKRAN-1', opType: 'cnc', st: {}, partNo: 'EK-1', part: 'Ekran deneme parçası', rev: 'A', op: 'Op 10', machine: '',
+      target: 10, cycle: 30, due: '', priority: 'normal', material: '', note: '', files: [], primary: null,
+      plan: [{ id: 1, nom: '20', tol: '0.1', min: 19.9, max: 20.1, tool: 'Kumpas', freq: 'İlk parça' }], steps: [{ id: 's1', t: 'Bağla', d: '', r: true }],
+      status: 'published', version: 1, dirty: false, createdAt: 1, updatedAt: 2, publishedAt: 2, by: 'Ekran',
+    };
+    await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
+    await ac(`/arkon/yeni/onizle/${paket.id}`);
+    await expect(page.getByText('IE-EKRAN-1').first()).toBeVisible();
+    await expect(page.getByRole('group', { name: 'İş durumu' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Çağrı' })).toHaveCount(0);
+    expect(await tasma(page)).toBeLessThanOrEqual(0);
+    const alt = page.getByRole('navigation', { name: 'Terminal görünümleri' });
+    if (await alt.isVisible()) {
+      for (const b of await alt.getByRole('button').all()) {
+        await b.click();
+        await expect(b).toHaveAttribute('aria-current', 'page');
+        expect(await tasma(page), await b.innerText()).toBeLessThanOrEqual(0);
+      }
+    } else {
+      const sekmeler = page.getByRole('tablist', { name: 'İş ayrıntısı' });
+      for (const s of await sekmeler.getByRole('tab').all()) {
+        await s.click();
+        await expect(s).toHaveAttribute('aria-selected', 'true');
+        expect(await tasma(page), await s.innerText()).toBeLessThanOrEqual(0);
+      }
+    }
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
 
 // A3 ve A4: her sayfa üç genişlikte açılır, bölümü görünür, yatay taşmaz, açılışta belge yazmaz (eski ekran açılışta numuneyi "Ölçülüyor"
 // yapıyordu; yeni ekran seçilince yapar). Örnek veritabanının içeriğine bağlı değildir.
