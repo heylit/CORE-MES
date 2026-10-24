@@ -1,0 +1,13 @@
+/* Kalite Merkezi Terimler (K1): terim solda, açıklama sağda; dar ekranda alt alta. */
+.tc-km1-terimler { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-km1-terim-ara { max-width: var(--arama-genis); }
+.tc-km1-sozluk {
+  display: grid; margin: 0; overflow: hidden;
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km1-terim {
+  display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); padding: var(--b-3) var(--b-4); border-top: var(--cizgi-ince) solid var(--edge);
+}
+.tc-km1-terim:first-child { border-top: 0; }
+.tc-km1-terim dt { flex: 1 1 calc(var(--dokunma) * 3); font-weight: bold; }
+.tc-km1-terim dd { margin: 0; color: var(--muted); flex: 3 1 calc(var(--dokunma) * 6); min-width: 0; overflow-wrap: anywhere; }

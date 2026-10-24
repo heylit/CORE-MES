@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, silCevabi, silGovdesi, statulerCevabi, statuKartiGovdesi, statuKartlariCevabi, statuTanimiCevabi,
+  benCevabi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ben, durum, fasonTahminleri, kapasite, kayitlar, sil, statuKartiEkle, statuKartiSil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
+  ben, durum, fasonTahminleri, kapasite, kayitlar, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
@@ -96,22 +96,5 @@ export const uclar = [
     govde: statuTanimiSilGovdesi,
     cevap: statuTanimiCevabi,
     isle: ({ db, parametre, govde }) => statuTanimiSil(db, parametre.id, govde.beklenenSurum),
-  }),
-  // Statülü kart: açma ve kaldırma tabloya komutla gider.
-  uc({
-    yontem: 'POST',
-    yol: '/recete-rota/statu-kartlari/ac',
-    yetki: 'recete-rota.yaz',
-    govde: statuKartiGovdesi,
-    cevap: statuKartlariCevabi,
-    isle: ({ db, kullanici, govde }) => statuKartiEkle(db, kullanici, govde.malzemeId, govde.statu),
-  }),
-  uc({
-    yontem: 'POST',
-    yol: '/recete-rota/statu-kartlari/kaldir',
-    yetki: 'recete-rota.yaz',
-    govde: statuKartiGovdesi,
-    cevap: statuKartlariCevabi,
-    isle: ({ db, govde }) => statuKartiSil(db, govde.malzemeId, govde.statu),
   }),
 ];

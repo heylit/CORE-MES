@@ -18,12 +18,6 @@ const surum = (v: unknown, bosOlabilir: boolean): number | null => {
   return v;
 };
 
-const kartGovdesi = (g: Nesne): Nesne => {
-  const no = typeof g['malzemeId'] === 'string' && /^[1-9]\d{0,9}$/.test(g['malzemeId']) ? Number(g['malzemeId']) : g['malzemeId'];
-  if (typeof no !== 'number' || !Number.isInteger(no) || no <= 0) throw gecersiz('kart');
-  return { malzemeId: no, statu: kimlikYolu(g['statu']) };
-};
-
 export const STATU_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
   'statu-tanimi-kaydet': {
     hafif: true,
@@ -37,7 +31,4 @@ export const STATU_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
     hafif: true,
     hazirla: (g: Nesne) => ({ yol: `/recete-rota/statu-tanimlari/${kimlikYolu(g['id'])}/sil`, govde: { beklenenSurum: surum(g['beklenenSurum'], false) } }),
   },
-  // Statülü kart: kart, bağlı ekranda katalog numarasıdır (metin ya da sayı gelir).
-  'statu-karti-ac': { hafif: true, hazirla: (g: Nesne) => ({ yol: '/recete-rota/statu-kartlari/ac', govde: kartGovdesi(g) }) },
-  'statu-karti-kaldir': { hafif: true, hazirla: (g: Nesne) => ({ yol: '/recete-rota/statu-kartlari/kaldir', govde: kartGovdesi(g) }) },
 };
