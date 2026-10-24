@@ -3,6 +3,8 @@ import { Ayarlar } from './Ayarlar.tsx';
 import { Depo } from './Depo.tsx';
 import { Fis } from './Fis.tsx';
 import { Hareketler } from './Hareketler.tsx';
+import { MalzemeFisi } from './MalzemeFisi.tsx';
+import { MalzemeFisleri } from './MalzemeFisleri.tsx';
 import { EskiToplamaYolu, Hazirlik } from './Hazirlik.tsx';
 import { IsKutusu } from './IsKutusu.tsx';
 import { KonumAyrinti } from './KonumAyrinti.tsx';
@@ -34,6 +36,8 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/malzemeler', ekran: Malzemeler },
   { yol: '/stok/malzemeler/:id', ekran: MalzemeAyrinti },
   { yol: '/stok/hareketler', ekran: Hareketler },
+  { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },
+  { yol: '/stok/malzeme-fisleri/:id', ekran: MalzemeFisi },
   { yol: '/stok/konumlar', ekran: Konumlar },
   { yol: '/stok/konumlar/:id', ekran: KonumAyrinti },
   { yol: '/stok/raflar', ekran: Raflar },

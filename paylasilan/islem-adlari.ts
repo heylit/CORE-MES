@@ -139,6 +139,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'stok.geri-al': 'Stok hareketini geri alma',
   'stok.toplama': 'Toplama',
   'stok.istek': 'Malzeme isteme ve teslim',
+  'stok.malzeme-fisi-gonder': 'Malzeme fişini Logo\'ya gönderme',
   'stok.statu-degistir': 'Statü değiştirme',
   'terminal.uret': 'Terminalde üretim girme',
   'uretim-emirleri.yaz': 'Üretim emri açma ve düzenleme',

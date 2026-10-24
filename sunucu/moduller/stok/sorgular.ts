@@ -3,8 +3,8 @@ import type { Dilim, SiralamaIstegi } from '#cekirdek/liste.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { KaliteDurumu, KonumTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
-import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
+import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, KULLANILABILIR_KONUM_TURLERI, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
 
 // Sabit tür adları; kullanıcı girdisi değildir.
 const AYRILMIS_SQL = AYRILMIS_KONUM_TURLERI.map((t) => `'${t}'`).join(', ');
@@ -401,7 +401,13 @@ export interface HareketYeni {
   kisiId: number; aciklama: string | null; kaynakStatuId: number | null; hedefStatuId: number | null;
   kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null; isEmriId: number | null;
 }
-export const hareketYaz = async (db: Db, h: HareketYeni): Promise<number> => (await db.tek<{ id: number }>(
+// Her hareket tek yerden yazılır; fişi olan hareket aynı işlemde fişine bağlanır (kart #492).
+export const hareketYaz = async (db: Db, h: HareketYeni): Promise<number> => {
+  const id = await hareketSatiriYaz(db, h);
+  await malzemeFisineBagla(db, id, h);
+  return id;
+};
+const hareketSatiriYaz = async (db: Db, h: HareketYeni): Promise<number> => (await db.tek<{ id: number }>(
   `INSERT INTO stok_hareketi (tur, malzeme_id, parti_id, parti_secimi, kaynak_konum_id, hedef_konum_id, miktar, onayli_eksi, eksi_onay_kaynagi,
      giris_kaynagi, cikis_nedeni, uretim_emri_id, geri_alinan_id, kisi_id, aciklama, kaynak_statu_id, hedef_statu_id, kaynak_kalite_durumu, hedef_kalite_durumu, is_emri_id)
    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $8 THEN 'kisi' END, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
@@ -1520,3 +1526,110 @@ export const kartSatirlari = (db: Db, kartId: number): Promise<KartSatiriHam[]> 
       GROUP BY b.konum_id, k.kod, k.ad, k.tur, k.istasyon_id, b.malzeme_id, b.parti_id, p.lot_no, p.refakat_partisi_id, b.statu_id, b.kalite_durumu
       ORDER BY (p.refakat_partisi_id IS NULL) DESC, b.statu_id NULLS FIRST, k.kod`, [kartId]);
 
+
+// ---- Malzeme fişi (kart #492) ---------------------------------------------------------------------------------------------------------
+// Fiş satırı değişince sayaç ve zaman ilerler; Logo giden kutusu zamanla süzer, sayaçla aynı değişikliği iki kez saymaz.
+const FIS_DEGISTI = 'degisiklik = f.degisiklik + 1, degisiklik_zamani = now()';
+async function malzemeFisineBagla(db: Db, hareketId: number, h: HareketYeni): Promise<void> {
+  const bag = hareketinFisBagi(h);
+  if (bag === null) return;
+  if (bag.tur === 'geri_alma') {
+    await db.sorgu(
+      `WITH o AS (SELECT fis_id FROM stok_malzeme_fisi_hareketi WHERE hareket_id = $2),
+         u AS (UPDATE stok_malzeme_fisi f SET ${FIS_DEGISTI} FROM o WHERE f.id = o.fis_id RETURNING f.id)
+       INSERT INTO stok_malzeme_fisi_hareketi (hareket_id, fis_id) SELECT $1, id FROM u`, [hareketId, h.geriAlinanId]);
+    return;
+  }
+  if ('uretimEmriId' in bag) {
+    await db.sorgu(
+      `WITH u AS (INSERT INTO stok_malzeme_fisi AS f (tur, uretim_emri_id, degisiklik) VALUES ($1, $2, 1)
+         ON CONFLICT (uretim_emri_id, tur) WHERE uretim_emri_id IS NOT NULL DO UPDATE SET ${FIS_DEGISTI} RETURNING f.id)
+       INSERT INTO stok_malzeme_fisi_hareketi (hareket_id, fis_id) SELECT $3, id FROM u`, [bag.tur, bag.uretimEmriId, hareketId]);
+    return;
+  }
+  // Ambar fişi yalnız iki deponun Logo ambarı tanımlı ve farklıyken açılır; aynı ambarda taşıma Logo'yu ilgilendirmez.
+  const ambar = bag.tur === 'ambar_adayi';
+  await db.sorgu(
+    `WITH u AS (INSERT INTO stok_malzeme_fisi AS f (tur, islem_kimligi, degisiklik)
+         SELECT $1, pg_current_xact_id(), 1
+          WHERE NOT $3::boolean OR EXISTS (
+            SELECT 1 FROM stok_konum kk JOIN stok_depo kd ON kd.id = kk.depo_id, stok_konum hk JOIN stok_depo hd ON hd.id = hk.depo_id
+             WHERE kk.id = $4 AND hk.id = $5 AND kd.logo_ambar_no IS NOT NULL AND hd.logo_ambar_no IS NOT NULL AND kd.logo_ambar_no <> hd.logo_ambar_no)
+         ON CONFLICT (islem_kimligi, tur) WHERE islem_kimligi IS NOT NULL DO UPDATE SET ${FIS_DEGISTI} RETURNING f.id)
+     INSERT INTO stok_malzeme_fisi_hareketi (hareket_id, fis_id) SELECT $2, id FROM u`,
+    [ambar ? 'ambar' : bag.tur, hareketId, ambar, h.kaynakKonumId, h.hedefKonumId]);
+}
+
+// Emir açılınca üç fiş boş açılır (294 c); varsa dokunulmaz.
+export const emirFisleriniAc = (db: Db, emirId: number): Promise<unknown[]> => db.sorgu(
+  `INSERT INTO stok_malzeme_fisi (tur, uretim_emri_id) VALUES ('sarf', $1), ('uretim_girisi', $1), ('fire', $1)
+   ON CONFLICT (uretim_emri_id, tur) WHERE uretim_emri_id IS NOT NULL DO NOTHING RETURNING id`, [emirId]);
+// Hareketsiz değişiklik (mamul hurda sayımı üretimden girişin "Hurda" satırını değiştirir): fiş yoksa açılır.
+export const emirFisiDegisti = (db: Db, emirId: number, tur: 'sarf' | 'uretim_girisi' | 'fire'): Promise<unknown[]> => db.sorgu(
+  `INSERT INTO stok_malzeme_fisi AS f (tur, uretim_emri_id, degisiklik) VALUES ($1, $2, 1)
+   ON CONFLICT (uretim_emri_id, tur) WHERE uretim_emri_id IS NOT NULL DO UPDATE SET ${FIS_DEGISTI} RETURNING f.id`, [tur, emirId]);
+
+export interface MalzemeFisiHam {
+  id: number; tur: MalzemeFisiTuru; uretimEmriId: number | null; acilis: string; degisiklik: number; degisiklikZamani: string;
+  gonderimIstegi: string | null; surum: number;
+}
+const MALZEME_FISI_SECIMI = `SELECT f.id, f.tur, f.uretim_emri_id AS "uretimEmriId", ${zamanMetni('f.acilis')} AS acilis, f.degisiklik,
+  ${zamanMetni('f.degisiklik_zamani')} AS "degisiklikZamani", ${zamanMetni('f.gonderim_istegi')} AS "gonderimIstegi", f.surum FROM stok_malzeme_fisi f`;
+export const MALZEME_FISI_SIRALAMASI: SiralamaTanimi<'acilis'> = { sutunlar: { acilis: 'f.acilis' }, ikincil: 'f.id', varsayilan: { sutun: 'f.acilis', yon: 'azalan' } };
+export interface MalzemeFisiSuzgeci { tur?: MalzemeFisiTuru | undefined; uretimEmriId?: number | undefined; idler?: readonly number[] | undefined }
+function malzemeFisiKosulu(s: MalzemeFisiSuzgeci, ilk: number): { sql: string; degerler: unknown[] } {
+  const kosullar: string[] = [];
+  const degerler: unknown[] = [];
+  const ekle = (sql: (n: number) => string, deger: unknown) => { degerler.push(deger); kosullar.push(sql(ilk + degerler.length - 1)); };
+  if (s.tur !== undefined) ekle((n) => `f.tur = $${n}`, s.tur);
+  if (s.uretimEmriId !== undefined) ekle((n) => `f.uretim_emri_id = $${n}`, s.uretimEmriId);
+  if (s.idler !== undefined) ekle((n) => `f.id = ANY($${n}::int[])`, [...s.idler]);
+  return { sql: kosullar.length ? `WHERE ${kosullar.join(' AND ')}` : '', degerler };
+}
+export const malzemeFisiSay = async (db: Db, s: MalzemeFisiSuzgeci): Promise<number> => {
+  const k = malzemeFisiKosulu(s, 1);
+  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM stok_malzeme_fisi f ${k.sql}`, k.degerler))?.toplam ?? 0;
+};
+export const malzemeFisleri = (db: Db, s: MalzemeFisiSuzgeci, sira: SiralamaIstegi<'acilis'>, d: Dilim): Promise<MalzemeFisiHam[]> => {
+  const k = malzemeFisiKosulu(s, 3);
+  return db.sorgu(`${MALZEME_FISI_SECIMI} ${k.sql} ORDER BY ${siralamaSql(MALZEME_FISI_SIRALAMASI, sira)} LIMIT $1 OFFSET $2`, [d.sinir, d.atla, ...k.degerler]);
+};
+// Logo durumuyla süzmede aday kimlikler: süzgece uyan en yeni fişler (sınırlı).
+export const malzemeFisiKimlikleri = (db: Db, s: MalzemeFisiSuzgeci, sinir: number): Promise<MalzemeFisiHam[]> => {
+  const k = malzemeFisiKosulu(s, 2);
+  return db.sorgu(`${MALZEME_FISI_SECIMI} ${k.sql} ORDER BY f.acilis DESC, f.id DESC LIMIT $1`, [sinir, ...k.degerler]);
+};
+export const malzemeFisleriBul = (db: Db, idler: readonly number[]): Promise<MalzemeFisiHam[]> =>
+  db.sorgu(`${MALZEME_FISI_SECIMI} WHERE f.id = ANY($1::int[]) ORDER BY f.id`, [[...idler]]);
+export const emirlerinMalzemeFisleri = (db: Db, emirIdler: readonly number[]): Promise<MalzemeFisiHam[]> =>
+  db.sorgu(`${MALZEME_FISI_SECIMI} WHERE f.uretim_emri_id = ANY($1::int[]) ORDER BY f.id`, [[...emirIdler]]);
+// Değişiklik akışı: (zaman, kimlik) sırasıyla verilen noktadan sonra değişen fişler.
+export const degisenMalzemeFisleri = (db: Db, a: { zaman: string | null; id: number; sinir: number }): Promise<MalzemeFisiHam[]> =>
+  db.sorgu(`${MALZEME_FISI_SECIMI} WHERE $1::timestamptz IS NULL OR (f.degisiklik_zamani, f.id) > ($1::timestamptz, $2::int)
+    ORDER BY f.degisiklik_zamani, f.id LIMIT $3`, [a.zaman, a.id, a.sinir]);
+
+// Fişin net satırları: hareketler geri almalarıyla birlikte toplanır, sıfır satır düşer. Ambar fişinde satır depo çiftine göre ayrılır
+// (ambar numarası bugünkü depo tanımından okunur).
+export interface MalzemeFisiSatirHam { fisId: number; malzemeId: number; kaynakAmbarNo: number | null; hedefAmbarNo: number | null; miktar: string }
+export const malzemeFisiSatirlari = (db: Db, fisIdler: readonly number[]): Promise<MalzemeFisiSatirHam[]> => db.sorgu(
+  `SELECT l.fis_id AS "fisId", a.malzeme_id AS "malzemeId",
+     CASE WHEN f.tur = 'ambar' THEN kd.logo_ambar_no END AS "kaynakAmbarNo", CASE WHEN f.tur = 'ambar' THEN hd.logo_ambar_no END AS "hedefAmbarNo",
+     sum(CASE WHEN h.tur = 'geri_alma' THEN -h.miktar ELSE h.miktar END)::text AS miktar
+   FROM stok_malzeme_fisi_hareketi l
+   JOIN stok_malzeme_fisi f ON f.id = l.fis_id
+   JOIN stok_hareketi h ON h.id = l.hareket_id
+   JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
+   LEFT JOIN stok_konum kk ON kk.id = a.kaynak_konum_id LEFT JOIN stok_depo kd ON kd.id = kk.depo_id
+   LEFT JOIN stok_konum hk ON hk.id = a.hedef_konum_id LEFT JOIN stok_depo hd ON hd.id = hk.depo_id
+   WHERE l.fis_id = ANY($1::int[])
+   GROUP BY 1, 2, 3, 4
+   HAVING sum(CASE WHEN h.tur = 'geri_alma' THEN -h.miktar ELSE h.miktar END) <> 0
+   ORDER BY 1, 2, 3, 4`, [[...fisIdler]]);
+export const malzemeFisininHareketleri = (db: Db, fisId: number): Promise<HareketHam[]> =>
+  db.sorgu(`${HAREKET_SECIMI} ${HAREKET_BAGLARI} WHERE h.id IN (SELECT hareket_id FROM stok_malzeme_fisi_hareketi WHERE fis_id = $1) ORDER BY h.id`, [fisId]);
+// Elle gönderim ve yeniden gönderim isteği: zaman ve kişi sunucudan; değişiklik sayılır ki Logo giden kutusu fişi yeniden görsün.
+export const gonderimIstegiYaz = (db: Db, id: number, surum: number, kisiId: number): Promise<{ id: number } | null> => db.tek(
+  `UPDATE stok_malzeme_fisi f SET gonderim_istegi = now(), gonderim_isteyen_kisi_id = $3, ${FIS_DEGISTI}, surum = f.surum + 1
+   WHERE f.id = $1 AND f.surum = $2 RETURNING f.id`, [id, surum, kisiId]);
+export const malzemeFisiVarMi = async (db: Db, id: number): Promise<boolean> =>
+  (await db.tek('SELECT 1 AS var FROM stok_malzeme_fisi WHERE id = $1', [id])) !== null;

@@ -138,3 +138,11 @@ T: akış testi `teslim.test.ts` "STK-U3 hurda". Karar: kullanıcı, 16.10.2026 
 | Kural | Bağlı olduğu | Sürüm |
 |---|---|---|
 | STK-F1 fasona gönderimde istasyonda yeterli parça yoksa olan kadar taşınır, gönderim reddedilmez; gönderilen ile Yolda konumuna giren taşıma arasındaki fark "eksik gönderim" uyarısı olarak sayılır (tam gönderimde ve fason ilk adımsa sayılmaz) | S "STK-F1"; T `fason-iki-adim.test.ts` "noktasız firmaya gönderim...", "eksik gönderim uyarı sayısını artırır...", "fason ilk adımsa gönderim reddedilmez..." | Sürümsüz (hesap) |
+
+## Kart #492 Malzeme fişi
+
+| Kural | Bağlı olduğu | Sürüm |
+|---|---|---|
+| STK-MF1 emir açılınca sarf, üretimden giriş ve fire fişi açılır (emir ve tür başına tek); sarf ve fire ayrı fişe gider; geri alma geri aldığı hareketin fişine bağlanır ve değişiklik sayacını artırır; hurda sayımı giriş fişinin sayacını artırır | T `malzeme-fisi.test.ts` | Sürümsüz (sayaç) |
+| STK-MF2 sayım fişi komut başına tektir; ambar fişi yalnız Logo ambarı farklı depolar arasında açılır | T `malzeme-fisi.test.ts` | Sürümsüz |
+| STK-MF3 fiş no biçimi ve çözümü; Gönder yalnız elle türde bekleyen ya da hatalı fişte | S `kurallar.test.ts` "malzeme fişi kuralları"; T `malzeme-fisi.test.ts` gönder | Sürümlü (fiş `surum`) |

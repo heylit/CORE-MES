@@ -20,7 +20,9 @@ import {
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
+import { malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import * as s from './servis.ts';
+import * as mf from './malzeme-fisi.ts';
 
 // ST5 a: stoğu stok sayfası ya da bir stok işlemi olan okur (ADR 0007). Menü sayacı kabuğundur, oturumla açık kalır.
 // Yazma komutları POST'tur ve kendi işlemini ister; yinelenince iki kez yazacak olanlar tekrar korumalıdır (ağ hatasından
@@ -128,6 +130,11 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/refakat-partileri', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartileriCevabi, isle: ({ db, parametre }) => s.emrinRefakatPartileri(db, parametre.id) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/stoktan-dus', yetki: 'stok.cikis', govde: stoktanDusGovdesi, cevap: fisCevabi, isle: ({ db, kullanici, govde }) => s.stoktanDus(db, kullanici.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/fisler', yetki: OKUMA, sorgu: fislerSorgusu, cevap: fislerCevabi, isle: ({ db, sorgu }) => s.fisListesi(db, sorgu) }),
+  // Malzeme fişleri (kart #492): stok okuyan görür; Logo'ya elle gönderim ve yeniden gönderim ayrı işlemdir (295 a).
+  uc({ yontem: 'GET', yol: '/stok/malzeme-fisleri', yetki: OKUMA, sorgu: malzemeFisleriSorgusu, cevap: malzemeFisleriCevabi, isle: ({ db, sorgu }) => mf.malzemeFisiListesi(db, sorgu) }),
+  uc({ yontem: 'GET', yol: '/stok/malzeme-fisleri/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malzemeFisiAyrintiCevabi, isle: ({ db, parametre }) => s.malzemeFisiAyrintisiOku(db, parametre.id) }),
+  uc({ yontem: 'POST', yol: '/stok/malzeme-fisleri/:id/gonder', yetki: 'stok.malzeme-fisi-gonder', parametre: kimlikParametresi, govde: malzemeFisiGonderGovdesi, cevap: malzemeFisiOzeti,
+    isle: ({ db, kullanici, parametre, govde }) => mf.malzemeFisiGonder(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/fisler/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: fisAyrintiCevabi, isle: ({ db, parametre }) => s.fisAyrintisi(db, parametre.id) }),
 
   // Toplama: liste açılınca en eski girişten gözlere ayrılır ve rotaya dizilir; her adım toplanınca çıkış yazılır.

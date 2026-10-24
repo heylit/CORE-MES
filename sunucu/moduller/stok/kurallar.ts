@@ -1,6 +1,6 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
-import { ELLE_KONUM_TURLERI, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
 const MIKTAR = /^(-)?(\d+)(?:\.(\d{1,3}))?$/;
@@ -1005,3 +1005,50 @@ export function yoldaSureSonu(gonderim: string, dakika: number | null): string |
   return new Date(Date.parse(gonderim) + dakika * 60_000).toISOString();
 }
 
+
+// ---- Malzeme fişi (293 a, 294 c; kart #492) -------------------------------------------------------------------------------------------
+// Hareketin fişi: emirli sarf, fire ve üretim girişi emrin fişine; sayım farkı komutun sayım fişine; depolar arası taşıma (iki deponun Logo
+// ambarı tanımlı ve farklıysa, sorguda bakılır) komutun ambar fişine; geri alma geri aldığı hareketin fişine. Diğer hareketin fişi yok.
+export type HareketFisBagi =
+  | { tur: 'sarf' | 'uretim_girisi' | 'fire'; uretimEmriId: number }
+  | { tur: 'sayim_fazlasi' | 'sayim_eksigi' }
+  | { tur: 'ambar_adayi' }
+  | { tur: 'geri_alma' }
+  | null;
+export function hareketinFisBagi(h: { tur: string; cikisNedeni: string | null; girisKaynagi: string | null; uretimEmriId: number | null }): HareketFisBagi {
+  if (h.tur === 'geri_alma') return { tur: 'geri_alma' };
+  if (h.tur === 'sayim_fazla') return { tur: 'sayim_fazlasi' };
+  if (h.tur === 'sayim_eksik') return { tur: 'sayim_eksigi' };
+  if (h.tur === 'transfer') return { tur: 'ambar_adayi' };
+  if (h.uretimEmriId === null) return null;
+  if (h.tur === 'giris' && h.girisKaynagi === 'uretim') return { tur: 'uretim_girisi', uretimEmriId: h.uretimEmriId };
+  if (h.tur === 'cikis' && h.cikisNedeni === 'uretime_sarf') return { tur: 'sarf', uretimEmriId: h.uretimEmriId };
+  if (h.tur === 'cikis' && h.cikisNedeni === 'fire') return { tur: 'fire', uretimEmriId: h.uretimEmriId };
+  return null;
+}
+
+// Emir fişinin numarası emir numarasıdır (üç türde aynı; Logo türleri ayrı numaralar). Sayım ve ambar fişi önek ve kimlikle numaralanır
+// (VARSAYIM: Logo fiş numarası en çok 16 karakter, bu biçim sığar). Emir numarası okunamazsa emir kimliği yazılır, numara uydurulmaz.
+const FIS_ONEKLERI = { sayim_fazlasi: 'SF', sayim_eksigi: 'SE', ambar: 'AF' } as const;
+export function malzemeFisiNo(f: { id: number; tur: MalzemeFisiTuru; uretimEmriId: number | null }, emirNo: string | null): string {
+  if (f.tur === 'sarf' || f.tur === 'uretim_girisi' || f.tur === 'fire') return emirNo ?? `#${f.uretimEmriId ?? f.id}`;
+  return `${FIS_ONEKLERI[f.tur]}-${String(f.id).padStart(6, '0')}`;
+}
+// Fiş numarası aramada kimliğe çözülür; biçime uymayan metin null.
+export function fisNoKimligi(metin: string): { tur: 'sayim_fazlasi' | 'sayim_eksigi' | 'ambar'; id: number } | null {
+  const m = /^(SF|SE|AF)-0*(\d{1,9})$/i.exec(metin.trim());
+  if (!m) return null;
+  const onek = m[1]!.toUpperCase();
+  const tur = onek === 'SF' ? 'sayim_fazlasi' : onek === 'SE' ? 'sayim_eksigi' : 'ambar';
+  const id = Number(m[2]);
+  return id >= 1 && id <= 2147483647 ? { tur, id } : null;
+}
+
+// Gönder düğmesi (295 a): elle türde gönderim bekleyen ya da hatalı fiş; satırı yoksa yalnız Logo'da duran fiş (silinmesi için).
+// Logo modülü bağlı değilse ya da tür kapalıysa gönderilemez.
+export function malzemeFisiGonderilebilir(logo: { durum: LogoFisDurumu; gonderimSekli: FisGonderimSekli | null; kayitNo: string | null }, satirVar: boolean): boolean {
+  if (logo.gonderimSekli === null || logo.gonderimSekli === 'kapali' || logo.durum === 'bilinmiyor') return false;
+  if (!satirVar && logo.kayitNo === null) return false;
+  if (logo.durum === 'hata') return true;
+  return logo.gonderimSekli === 'elle' && logo.durum === 'bekliyor';
+}

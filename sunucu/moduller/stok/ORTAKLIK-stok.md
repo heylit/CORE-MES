@@ -36,6 +36,7 @@ Oturtmada yazıldı (teslimde yoktu). Kaynak: göçler `20261008142031`..`202610
 | Depo, raf, konum | sahibi stok | `stok_depo`, `stok_raf`, `stok_konum` | malzeme kartı metni `kayit.g.depoYeri`, `kayit.g.konum` (STK3 a); kalibrasyon `olcu_aleti.yer`; Arkon `logi` |
 | Belge no | mal kabul, fiş, toplama, malzeme isteği no (kalıp `ayarlar` Numara kuralları) | `stok_mal_kabul`, `stok_fis` | modül içi |
 | Logo | irsaliye satırı, ambar, fiş gönderimi | `stok_hareketi_logo`, `stok_mal_kabul_satiri.logo_*`, `stok_depo.logo_ambar_no` | yalnız alan; bağlantı kodu yok |
+| Malzeme fişi | emir, sayım ve ambar fişi (Logo'ya giden belge); satırı stok hareketinden | `stok_malzeme_fisi` (`uretim_emri_id`, `islem_kimligi`), `stok_malzeme_fisi_hareketi` | Logo `logo_malzeme_fisi_giden` gönderim durumunu tutar (kart #493); emir düz sayı (STK6 b) |
 | Para birimi, maliyet | tutulmaz | — | finans (OS5); stok değeri "—" |
 | Durum listeleri | hareket türü, çıkış nedeni, konum türü, raf türü, eşleşme ve gönderim durumu, toplama durumu | kısıt listeleri | modül içi |
 | Malzeme lojistiği | sepet, fiş, toplama | yukarıdaki tablolar | Arkon `arkon_belge` depo `logi` aynı işi metinle tutar (OS7: sahibi stok) |
@@ -46,3 +47,5 @@ Oturtmada yazıldı (teslimde yoktu). Kaynak: göçler `20261008142031`..`202610
 ## Başkasına verilen (`disari.ts`)
 
 `stokMiktarlari(db, malzemeIdler)`, `emrinPartileri(db, uretimEmriId)`, `konumAdlari(db, idler)`, `malzemeIstegiAc(db, kullanici, girdi)`, `malzemeIstekleri(db, kaynakKimlikleri)`.
+
+Kart #492: `malzemeFisiDegisiklikleri(db, imlec)`, `logoIcinMalzemeFisleri(db, idler)`, `emirlerinMalzemeFisleri(db, emirIdler)`, `malzemeFisiLogoCozucusu(cozucu)` (Logo durumunu stoğa kablolamadan verir).

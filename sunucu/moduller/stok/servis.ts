@@ -21,7 +21,7 @@ import type {
   KonumlarListesi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, MalzemeAyarKomutu,
   FasonIsleriCevabi, MalzemeAyrintiCevabi, RezervelerCevabi, RezerveEtKomutu, RezerveKaldirKomutu, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi, PartilerListesi, Raf,
   RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi,
-  FisAyrintiCevabi, FislerListesi, FisOzeti, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu, StoktanDusKomutu, TeslimKomutu,
+  FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu, StoktanDusKomutu, TeslimKomutu,
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
   LotEtiketi, LotEtiketleriCevabi, IstekAcGovdesi, IstekMalzemeleriCevabi, Teslim, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi,
@@ -66,6 +66,7 @@ import {
 } from './kurallar.ts';
 import type { IstekGecisi, MalzemeTuru } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
+import * as malzemeFisi from './malzeme-fisi.ts';
 import type { BakiyeHam, BelgeTablosu, HareketHam, HareketYeni, IstekHam, RefakatPartisiHam, TeslimHam } from './sorgular.ts';
 
 // Numara kayıtla aynı işlemde alınır: kayıt geri alınırsa sıra da geri alınır.
@@ -311,7 +312,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
     okut: null, depo: null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
-    malzemeler: null, hareketler: null, konumlar: null, ayarlar: null,
+    malzemeler: null, hareketler: null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
   };
 }
 
@@ -1690,6 +1691,8 @@ export async function fisListesi(db: Db, s: FislerListesi): Promise<SayfaliListe
   const kisiler = await kisiAdlari(db, [...new Set(l.satirlar.map((f) => f.kisiId))]);
   return { ...l, satirlar: l.satirlar.map(({ kisiId, ...f }) => ({ ...f, kisiAd: kisiler.get(kisiId) ?? null })) };
 }
+export const malzemeFisiAyrintisiOku = (db: Db, id: number): Promise<MalzemeFisiAyrintiCevabi> =>
+  malzemeFisi.malzemeFisiAyrintisi(db, id, (h) => hareketleriCevir(db, h));
 export async function fisAyrintisi(db: Db, id: number): Promise<FisAyrintiCevabi> {
   const f = await sorgular.fisBul(db, id);
   if (!f) throw bulunamadi('Fiş bulunamadı.');
@@ -3458,7 +3461,10 @@ const HURDA_ACIKLAMASI = 'Hurda sayımı';
 
 export async function hurdaSayimiYansit(db: Db, g: HurdaSayimiYansimasi): Promise<void> {
   const fark = binde(g.fark);
-  if (fark === 0n || g.isEmriId === null) return;
+  if (fark === 0n) return;
+  // Mamul hurdası üretimden giriş fişinin "Hurda" satırıdır; hareket yazılmasa da fiş değişir.
+  await sorgular.emirFisiDegisti(db, g.uretimEmriId, 'uretim_girisi');
+  if (g.isEmriId === null) return;
   const refakat = await sayimKarti(db, g.uretimEmriId, g.refakatPartisiId);
   const emir = await uretimEmriOzeti(db, g.uretimEmriId);
   if (!emir || emir.malzemeNo === null) return;
@@ -3786,6 +3792,8 @@ async function bekleyenlereDagit(db: Db, kisiId: number, malzemeIdler: readonly 
 }
 // Emir açıldı olayı (sunucu/kablolama.ts bağlar).
 export async function emirAcildiYansit(db: Db, olay: { uretimEmriId: number; kisiId: number; stoktanRezerve: boolean }): Promise<void> {
+  // Emrin sarf, üretimden giriş ve fire fişi emirle birlikte boş açılır (294 c).
+  await sorgular.emirFisleriniAc(db, olay.uretimEmriId);
   if (!olay.stoktanRezerve) return;
   await sorgular.emirRezerveIstegiYaz(db, olay.uretimEmriId, olay.kisiId);
   await emreRezerveEt(db, olay.kisiId, olay.uretimEmriId);

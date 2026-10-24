@@ -135,3 +135,8 @@ Güvenlik gevşemesi (kullanıcı onaylı, soru 96): okutarak almada iki imza (T
 
 İstemci (kart #95): yeni yazma ucu yok. Panel bölümleri yetkiyle süzülür, sunucu yine denetler: gözler ve depo sepeti stok okumasıyla (`sayfa.stok` ya da bir stok işlemi, `/stok/kod-coz` yalnız onlara sorulur; "okut-paneli" testi istek sahibinde sorulmadığını doğrular), Mal kabul `stok.giris`, sevk çıkışı `stok.cikis`, depo sepeti `stok.transfer`; sevk ve fason bölümleri kendi modüllerinin yetkisiyle görünür. `kod-coz` (panel) cevabındaki `malzeme.tur` ve `parti.uretimEmriId` yeni bilgi açmaz: lot etiketi emir numarasını zaten taşır, tür kartın genel bilgisidir. VARSAYIM.
 Kart #99 (soru 104 a): `POST /stok/mal-kabul` (`stok.giris`) satın alma satırında sipariş satırı zorunlu. İzinli: siparişli kabul testleri 200 (`stok.test.ts` sipariş teslimi). Reddeden: siparişsiz satın alma 400 (`stok.test.ts` yetki testi, `kurallar.test.ts` "soru 104 a"). Yetki değişmedi.
+
+| Uç (kart #492) | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|
+| `GET /stok/malzeme-fisleri`, `GET /stok/malzeme-fisleri/:id` (stok okuma) | yalnız okuma; fiş elle düzenlenmez, satır stok hareketinden | `malzeme-fisi.test.ts` liste ve ayrıntı 200 | olmayan fiş 404 |
+| `POST /stok/malzeme-fisleri/:id/gonder` (`stok.malzeme-fisi-gonder`) | sürüm; Logo durumu bilinmiyorsa 409; yalnız elle türde bekleyen ya da hatalı fişte (kapalı tür, satırsız fiş 409); zaman ve kişi sunucudan | sahte çözücüyle elle fiş 200 | kalite rolü 403, eski sürüm 409, Logo bağlı değil 409 |
