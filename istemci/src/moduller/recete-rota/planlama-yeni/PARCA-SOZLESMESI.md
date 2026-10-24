@@ -69,6 +69,12 @@ Sunucuya giden yazmalar (onay, canliya alma, kilit, siralama) bugun var olan pla
 istegi parcadan iskelete, oradan koordinatore gelir.
 
 ## Kurallar (her parca)
+- TASARIM KORUMA (2026-10-24 19:19, kullanici): ekranlarin tasarimi kullanicinindir. TS gecisinin amaci yalniz TypeScript'e gecis ve mantik, kurgu ve
+  bozukluk hatalarinin duzeltilmesidir. Prototip ya da eski ekranin gorunusu, duzeni, akisi, araclari ve metinleri birebir korunur. 360 genislige
+  sigdirma, ortak parcaya tasima, sadelestirme ya da "daha iyi" gerekcesiyle degisiklik yapilmaz; ortak parca yalniz gorunus birebir kaliyorsa
+  kullanilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli bir karar (orn. 357 b) gerektirdiginde yapilir; her fark gerekcesiyle ve
+  "hata turu" belirtilerek soru olur, varsayilan oneri "eski hali kalsin"dir. Bu dosyadaki 203 a, ortak bilesen ve 360/768/1280 maddeleriyle celisirse
+  TASARIM KORUMA gecerlidir (kurulum/proje-talimati.md KURALLAR 3).
 - 203 a: tasarim degiskenleri, ortak bilesenler (`Tablo`, `SayfaBasligi`, `FormPenceresi`, `Pencere`, `OnayPenceresi`, `Sekmeler`, `Rozet`,
   `SayiKarti`, `GrafikKarti`, `useBildirim`), ortak `Simge`, 360/768/1280. Sabit renk, olcu, satir ici stil yok.
 - 205 a: tarayicidaki hesaplar (yillik plan, ufuk kaba yuku, termin ve kar, maliyet, ek mesai ve fason onerisi, malzeme plani) saf TS islevi,
