@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  aralikDakika, basHarfler, eskiKalemler, etkinMakine, geceyiGecer, gunListesi, gunSaati, haftaSaati, kapasiteKaynagi, kategoriler, malzemeSuz,
+  aralikDakika, basHarfler, eskiKalemler, etkinMakine, geceyiGecer, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, kategoriler, malzemeSuz,
   minimumAltinda, ondalik, oranMetni, planEkleri, sayiGirdisi, sonrakiKod, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir,
 } from './kurallar.ts';
 
@@ -105,5 +105,12 @@ describe('R2 saf hesapları', () => {
     expect(e.aparatlar).toEqual([{ id: 'a1', ad: 'Mengene', adet: null }]);
     expect(gunListesi(e.fasoncular[0]!.cikisGunleri)).toBe('Pzt, Cum');
     expect(planEkleri(null)).toEqual({ fasoncular: [], aparatlar: [] });
+  });
+
+  it('vardiya çubuğu: gün içi tek parça, gece yarısını geçen iki parça, geçersiz boş', () => {
+    expect(gunParcalari('08:00', '16:00')).toEqual([[480, 960]]);
+    expect(gunParcalari('16:00', '00:00')).toEqual([[960, 1440]]);
+    expect(gunParcalari('22:00', '06:00')).toEqual([[1320, 1440], [0, 360]]);
+    expect(gunParcalari('25:00', '06:00')).toEqual([]);
   });
 });

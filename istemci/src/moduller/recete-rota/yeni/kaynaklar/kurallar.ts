@@ -171,3 +171,12 @@ export function geceyiGecer(baslangic: string, bitis: string): boolean {
   const b = saatDakika(bitis);
   return a !== null && b !== null && b <= a;
 }
+
+// Vardiya çubuğu (24 saatlik şerit) için dakika aralıkları: gece yarısını geçen aralık iki parçaya bölünür. Geçersiz saat boş liste verir.
+export function gunParcalari(baslangic: string, bitis: string): [number, number][] {
+  const a = saatDakika(baslangic);
+  const sure = aralikDakika(baslangic, bitis);
+  if (a === null || sure === null) return [];
+  const b = a + sure;
+  return b <= 1440 ? [[a, b]] : [[a, 1440], [0, b - 1440]];
+}
