@@ -1,0 +1,36 @@
+.tc-ms { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-ms-yardim { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-ms-grup { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ms-baslik { margin: 0; font-size: var(--yazi-l); font-weight: 700; }
+
+/* Prototipin şablon ızgarası (.tpls): sığdığı kadar sütun; dar ekranda tek sütun. */
+.tc-ms-liste {
+  display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 8)), 1fr));
+}
+
+/* Sol şerit ve simge türün ya da ailenin rengidir (data-tur / data-aile, malzemeler-yeni.css). */
+.tc-ms-kart {
+  --ms-renk: var(--aile-renk, var(--tur-renk, var(--muted)));
+  display: flex; min-width: 0; overflow: hidden;
+  border: 1px solid var(--edge2); border-left: var(--b-1) solid var(--ms-renk); border-radius: var(--yari-1); background: var(--panel);
+}
+.tc-ms-kart[data-tur] { --ms-renk: var(--tur-renk); }
+.tc-ms-kart:hover { border-color: var(--muted); border-left-color: var(--ms-renk); }
+
+.tc-ms-ana {
+  display: flex; flex: 1 1 auto; align-items: flex-start; gap: var(--b-3); min-width: 0; min-height: var(--dokunma);
+  padding: var(--b-3); border: 0; background: none; text-align: left; cursor: pointer;
+}
+.tc-ms-ana:focus-visible, .tc-ms-sil:focus-visible { outline: 2px solid var(--bp); outline-offset: -2px; }
+.tc-ms-simge { flex: none; color: var(--ms-renk); }
+.tc-ms-simge .tc-ksimge { width: var(--b-6); height: var(--b-6); }
+.tc-ms-metin { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-ms-metin b { font-weight: 600; overflow-wrap: anywhere; }
+.tc-ms-metin small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
+
+.tc-ms-sil {
+  display: grid; flex: none; place-items: center; min-width: var(--dokunma);
+  border: 0; border-left: 1px solid var(--edge2); background: none; color: var(--muted); cursor: pointer;
+}
+.tc-ms-sil:hover { color: var(--stop); }
