@@ -1,0 +1,80 @@
+/* Finans ana sayfası (F4): yalnız tasarım değişkenleri. Dar ekranda tek sütun, geniş ekranda yapılacaklar ve yan sütun. */
+.tc-fa { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fa-ust { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); }
+.tc-fa-selam { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-fa-sirket { margin: 0; font-size: var(--yazi-xl); overflow-wrap: anywhere; }
+.tc-fa-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-fa-soluk { color: var(--muted); font-size: var(--yazi-s); }
+.tc-fa-olumsuz { color: var(--stop); }
+.tc-fa-olumlu { color: var(--run); }
+.tc-fa-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+
+.tc-fa-uyari, .tc-fa-ipucu {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2);
+  padding: var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-fa-ipucu { border-color: var(--edge2); font-size: var(--yazi-s); }
+
+.tc-fa-ozet { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3); border-left: 3px solid var(--hazard); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-fa-ozet p { margin: 0; line-height: 1.5; }
+.tc-fa-ozet-baslik { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+
+.tc-fa-ilerleme { width: 100%; height: var(--b-2); accent-color: var(--run); }
+.tc-fa-tamlik { display: flex; flex-direction: column; margin: var(--b-2) 0 0; padding: 0; list-style: none; }
+.tc-fa-tamlik li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); min-height: var(--dokunma); padding: var(--b-1) 0; border-bottom: 1px solid var(--edge); }
+.tc-fa-tamlik li > span { display: flex; flex: 1 1 12rem; flex-direction: column; min-width: 0; }
+.tc-fa-tamlik li[data-tamam] b { color: var(--muted); }
+.tc-fa-tamlik small { color: var(--muted); }
+
+.tc-fa-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--b-3); }
+.tc-fa-sayi { position: relative; display: grid; }
+.tc-fa-sayi-dugme { position: absolute; inset: 0; border: 0; border-radius: var(--yari-3); background: transparent; cursor: pointer; }
+.tc-fa-sayi-dugme:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+.tc-fa-izgara { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); align-items: start; }
+.tc-fa-yan { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+@media (min-width: 1100px) {
+  .tc-fa-izgara { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+}
+
+.tc-fa-bos { margin: 0; color: var(--muted); }
+
+.tc-fa-grup { display: flex; flex-direction: column; margin-bottom: var(--b-3); }
+.tc-fa-grup-baslik, .tc-fa-grup > summary { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-1); font-size: var(--yazi-s); font-weight: 700; }
+.tc-fa-grup > summary { min-height: var(--dokunma); cursor: pointer; }
+
+.tc-fa-is {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "tarih ana tutar" "eylem eylem eylem";
+  align-items: center; column-gap: var(--b-3); row-gap: var(--b-1); padding: var(--b-2) 0; border-bottom: 1px solid var(--edge);
+}
+.tc-fa-is-tarih { grid-area: tarih; display: flex; flex-direction: column; align-items: center; min-width: var(--dokunma); line-height: 1.1; }
+.tc-fa-is-tarih b { font-size: var(--yazi-l); }
+.tc-fa-is-tarih span { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-fa-is[data-tur="tax"] .tc-fa-is-tarih b { color: var(--hold); }
+.tc-fa-is-ana { grid-area: ana; display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-fa-is-ana small { color: var(--muted); }
+.tc-fa-is-tutar { grid-area: tutar; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tc-fa-is-eylem { grid-area: eylem; display: flex; flex-wrap: wrap; gap: var(--b-2); }
+@media (min-width: 768px) {
+  .tc-fa-is { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "tarih ana tutar eylem"; }
+  .tc-fa-is-eylem { justify-content: flex-end; }
+}
+
+.tc-fa-hukum { margin: 0 0 var(--b-2); padding-left: var(--b-2); border-left: 3px solid var(--run); font-weight: 600; }
+.tc-fa-hukum[data-ton="uyari"] { border-color: var(--hold); }
+.tc-fa-hukum[data-ton="hata"] { border-color: var(--stop); }
+.tc-fa-grafik { position: relative; height: 12rem; min-width: 0; }
+.tc-fa-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-fa-isabet { padding: 0; border: 0; background: transparent; cursor: pointer; }
+
+.tc-fa-skor { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-4); }
+.tc-fa-skor p { flex: 1 1 12rem; margin: 0; }
+.tc-fa-kadran { display: flex; flex-direction: column; align-items: center; gap: var(--b-2); width: min(100%, 14rem); }
+.tc-fa-bulgular { display: flex; flex-direction: column; gap: var(--b-2); margin: var(--b-3) 0 0; padding: 0; list-style: none; }
+.tc-fa-bulgu {
+  display: flex; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dokunma); padding: var(--b-1) var(--b-2);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); text-align: left; cursor: pointer;
+}
+.tc-fa-bulgu:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+.tc-fa-form { display: flex; flex-direction: column; gap: var(--b-3); }

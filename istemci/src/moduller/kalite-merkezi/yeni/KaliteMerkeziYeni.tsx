@@ -8,6 +8,7 @@ import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { BOLUMLER, ESKI_YOL, GORUNUMLER, gorunumTanimi, gorunumYolu, type KmBolumu, type KmGecis, type KmGorunum } from './sekmeler.ts';
 import { ArsivGorunumuSaglayici } from './ArsivGorunumu.tsx';
+import { TerimIsaretleri } from './TerimIsaretleri.tsx';
 import { OnizlemeSaglayici } from './Onizleme.tsx';
 import { kmTercihi, tercihYaz, useKmVerisi, type KmVerisi } from './veri.ts';
 import { useKmYetkisi } from './yetki.ts';
@@ -116,6 +117,7 @@ function Icerik() {
           ? <Ekran key={tanim.anahtar} veri={veri} yetki={yetki} gecis={gecis} gecisTamam={gecisTamam} git={git} atolye={atolye} />
           : <DurumKutusu durum="bos" mesaj="Bu görünüm eski ekranda açılır." />}
       </div>
+      <TerimIsaretleri kapali={veri.ayarlar.terimKapali === true} />
     </div>
   );
 }
