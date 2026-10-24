@@ -1,0 +1,24 @@
+/* Ortak plan çizelgesi tuvali (tc-pyc-). Parça çubuğa kendi sınıfıyla `--renk` verir; verilmezse ana renk. */
+.tc-pyc-kap { overflow-x: auto; }
+.tc-pyc-ic { min-width: 100%; width: max-content; }
+.tc-pyc-satir { display: flex; align-items: stretch; border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-pyc-etiket {
+  position: sticky; left: 0; z-index: 1; display: flex; flex-direction: column; justify-content: center; flex: 0 0 calc(var(--b-6) * 5);
+  padding: 0 var(--b-2); background: var(--panel-solid); border-right: var(--cizgi-ince) solid var(--edge); overflow: hidden;
+}
+.tc-pyc-etiket span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyc-etiket small { color: var(--muted); }
+.tc-pyc-iz { display: block; flex: 0 0 auto; }
+.tc-pyc-iz text { font-family: var(--font-ana); }
+.tc-pyc-gun { font-size: var(--yazi-xs); font-weight: 700; fill: var(--ink); }
+.tc-pyc-cizgi { stroke: var(--edge); stroke-width: 1; }
+.tc-pyc-simdi { stroke: var(--stop); stroke-width: 2.5; }
+.tc-pyc-cubuk { --renk: var(--done); cursor: default; }
+.tc-pyc-cubuk[role="button"] { cursor: pointer; }
+.tc-pyc-cubuk:focus-visible { outline: none; }
+.tc-pyc-cubuk:focus-visible .tc-pyc-renk, .tc-pyc-cubuk.tc-secili .tc-pyc-renk { stroke: var(--ink); stroke-width: 2; }
+.tc-pyc-renk { fill: var(--renk); }
+.tc-pyc-yazi { font-size: var(--yazi-xs); font-weight: 700; fill: var(--parlak); }
+@media (max-width: 767px) {
+  .tc-pyc-etiket { flex-basis: calc(var(--b-6) * 3.5); }
+}
