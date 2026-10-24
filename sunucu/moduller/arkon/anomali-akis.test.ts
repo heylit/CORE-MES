@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import type { Db } from '#cekirdek/db.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { anomaliCevabi, anomaliIstatistikCevabi } from '#paylasilan/sozlesme/arkon.ts';
@@ -13,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { gunEkle } from './kurallar.ts';
 import { anomaliGunuKaydet, anomaliler } from './servis.ts';
 
@@ -50,6 +52,9 @@ describe('arkon üretim anomalisi (gerçek PostgreSQL)', () => {
     return String(cevap.headers['set-cookie']).split(';')[0] ?? '';
   }
 
+  // Başlatma ve sayımın HTTP ucu yok (238 H3); terminal bunları uretim-emirleri/disari.ts ile yapar.
+  const yoneticiyle = <T>(is: (db: Db, k: Kullanici) => Promise<T>): Promise<T> =>
+    vt().tx(async (db) => is(db, (await kullaniciYukle(db, yoneticiId))!));
   async function istek<T = unknown>(cerez: string | null, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
     const cevap = await app.inject({
       method: yontem, url: `/api${yol}`,
@@ -229,8 +234,8 @@ describe('arkon üretim anomalisi (gerçek PostgreSQL)', () => {
   test('AR-AN-2/3: o gün başlayan işin sağlam sayımı istasyonun ve makinenin üretilenidir; yeterliyse işaret yok, oran bulunur; tolerans ve kapalı kural', async () => {
     const o = await ortamKur(1);
     const ie = await isEmriKur(o.makineler[0]!, { birimSureDk: '2', bas: 8, bit: 12 });
-    assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${ie.emirId}/baslat`)).durum, 200);
-    assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${ie.emirId}/sayim`, { tur: 'saglam', adet: 45 })).durum, 200);
+    await yoneticiyle((db, k) => emirBaslat(db, k, ie.emirId));
+    await yoneticiyle((db, k) => emirSayim(db, k, ie.emirId, { tur: 'saglam', adet: 45 }));
     // 327 a: ilk parça onaylanana kadar sağlam sayım karar bekler.
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, ie.emirId, 'onay'));
     const eksik = await hesapla();
@@ -250,7 +255,7 @@ describe('arkon üretim anomalisi (gerçek PostgreSQL)', () => {
   test('istasyon ve makinenin üretileni günün net sayımıdır; başka gün başlamış işte dünkü sayım bugüne girmez, makine sayımı açık kullanımından bulunur', async () => {
     const o = await ortamKur(1);
     const ie = await isEmriKur(o.makineler[0]!, { birimSureDk: '2', bas: 8, bit: 12 });
-    assert.equal((await istek(yonetici, 'POST', `/uretim-emirleri/${ie.emirId}/baslat`)).durum, 200);
+    await yoneticiyle((db, k) => emirBaslat(db, k, ie.emirId));
     await sahip().sorgu("UPDATE uretim_emirleri_is_emri SET baslama = baslama - interval '2 days' WHERE id = $1", [ie.isEmriId]);
     await sahip().sorgu("UPDATE uretim_emirleri_makine_kullanimi SET baslama = baslama - interval '2 days' WHERE emir_id = $1", [ie.emirId]);
     await sayimYaz(ie.emirId, yoneticiId, o.istasyonId, 9, 40);

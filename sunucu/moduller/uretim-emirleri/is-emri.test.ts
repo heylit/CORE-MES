@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
+import { ZodError } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
@@ -10,19 +11,19 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  acikEmir, acikEmirler, aralikAdetleri, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
+  acikEmir, acikEmirler, aralikAdetleri, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
-import { refakatKartiSayimlari } from './disari.ts';
-import type { IsEmriGirdisi, SayimKirilimi } from './disari.ts';
+import { emirIptalDinle, refakatKartiSayimlari } from './disari.ts';
+import type { EmirIptalOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
@@ -148,7 +149,31 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     await assert.rejects(is, (h: unknown) => h instanceof UygulamaHatasi && h.message === ileti);
   };
   const yetkisiz = (h: unknown): boolean => h instanceof UygulamaHatasi && h.kod === 'YETKI_YOK';
-  const terminal = (yol: string, govde?: unknown) => istek<{ emir: Emir } & Hata>('operator', 'POST', `/uretim-emirleri${yol}`, govde, randomUUID());
+  // Başlatma, devam, durdurma, bitirme ve sayımın ekranı Arkon'dur ve disari.ts'ten girer (Arkon sayımı sözleşmeden geçirir);
+  // test bunları operatörün yetkisiyle kendi işleminde çağırır, hatayı uç cevabı gibi okur. Öbür terminal komutları uçtadır.
+  const terminal = async (yol: string, govde?: unknown, kisi = 'operator'): Promise<Cevap<{ emir: Emir } & Hata>> => {
+    const [, kimlik, komut] = /^\/(\d+)\/([a-z-]+)$/.exec(yol) ?? [];
+    if (komut === undefined || !['baslat', 'devam', 'durdur', 'bitir', 'sayim'].includes(komut)) {
+      return istek<{ emir: Emir } & Hata>(kisi, 'POST', `/uretim-emirleri${yol}`, govde, randomUUID());
+    }
+    const id = Number(kimlik);
+    const g = (govde ?? {}) as { makineIdleri?: number[]; durusNedeniId?: number; saglamAdet?: number };
+    try {
+      const sonuc = await o().vt.tx((db) => {
+        const k = kim(kisi);
+        if (komut === 'baslat') return emirBaslat(db, k, id, g.makineIdleri);
+        if (komut === 'devam') return emirDevam(db, k, id, g.makineIdleri);
+        if (komut === 'durdur') return emirDurdur(db, k, id, g.durusNedeniId ?? 0);
+        if (komut === 'bitir') return emirBitir(db, k, id, g.saglamAdet);
+        return emirSayim(db, k, id, sayimGovdesi.parse(govde));
+      });
+      return { durum: 200, govde: JSON.parse(JSON.stringify(sonuc)) as { emir: Emir } & Hata };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() as { emir: Emir } & Hata };
+      if (h instanceof ZodError) return { durum: 400, govde: { mesaj: h.issues[0]?.message ?? '' } as { emir: Emir } & Hata };
+      throw h;
+    }
+  };
 
   before(async () => {
     ortam = await testVeritabaniKur('uretim_is_emri');
@@ -530,7 +555,6 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual([asim.durum, asim.govde.mesaj], [409, ADIM_GIRDI_ASIMI], 'OP10 4 sağlam verdi');
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3 })).durum, 200);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 2 })).govde.mesaj, ADIM_GIRDI_ASIMI);
-    assert.equal((await terminal(`/${id}/sayim-ayarla`, { saglam: 5 })).govde.mesaj, ADIM_GIRDI_ASIMI);
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 5 })).govde.mesaj, ADIM_GIRDI_ASIMI);
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -1 })).durum, 200, 'düşürmek serbest');
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 4 })).durum, 200);
@@ -597,13 +621,39 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: iki } = await ac([adim(1, { tur: 'makine', id: makine }), adim(2, { tur: 'makine', id: makine })]);
     assert.equal((await terminal(`/${iki}/baslat`)).durum, 200);
     assert.equal((await terminal(`/${iki}/bitir`, {})).durum, 200);
-    assert.equal((await istek<Hata>('planlama_proje', 'POST', `/uretim-emirleri/${iki}/iptal`, { surum: (await ayrinti(iki)).surum })).govde.mesaj, ADIMLI_IPTAL_DURUMU, 'eski uç da reddeder');
     e = await ayrinti(iki);
     assert.equal((await iptal(iki, e.surum)).govde.mesaj, ADIMLI_IPTAL_DURUMU);
 
     const { uretimEmriId: uc } = await ac([adim(1, { tur: 'makine', id: makine })]);
     e = await ayrinti(uc);
     assert.equal((await iptal(uc, e.surum)).govde.emir.durum, 'iptal');
+  });
+
+  // 281 a: iş emirsiz emrin iptal yolu kalkınca (238 H3) iptal olayı yalnız bu yoldan çıkar; dinleyenler (bugün stok) onu buradan alır.
+  test('iptal olayı: iş emirli emrin iptali olayı bir kez, iptal edenle verir; reddedilen iptal (yetkisiz, başlamış, eski sürüm) olay vermez', async () => {
+    const gelen: EmirIptalOlayi[] = [];
+    const birak = emirIptalDinle(async (_db, olay) => { gelen.push(olay); });
+    try {
+      const ist = await istasyonKur();
+      const makine = await makineKur(ist);
+      const iptalEt = (kisi: string, id: number, surum: number) => istek<{ emir: AdimliEmirAyrintisi } & Hata>(kisi, 'POST', `/adimli-emirler/${id}/iptal`, { surum });
+      const olaylari = (id: number) => gelen.filter((g) => g.uretimEmriId === id);
+
+      const { uretimEmriId: planli } = await ac([adim(1, { tur: 'makine', id: makine })]);
+      const surum = (await ayrinti(planli)).surum;
+      assert.equal((await iptalEt('operator', planli, surum)).durum, 403, 'yetkisiz iptal');
+      assert.equal((await iptalEt('planlama_proje', planli, surum + 1)).durum, 409, 'eski sürüm');
+      assert.deepEqual(olaylari(planli), [], 'reddedilen iptal olay vermez');
+      assert.equal((await iptalEt('planlama_proje', planli, surum)).govde.emir.durum, 'iptal');
+      assert.deepEqual(olaylari(planli), [{ uretimEmriId: planli, kisiId: kim('planlama_proje').id }]);
+
+      const { uretimEmriId: baslamis } = await ac([adim(1, { tur: 'makine', id: makine })]);
+      assert.equal((await terminal(`/${baslamis}/baslat`)).durum, 200);
+      assert.equal((await iptalEt('planlama_proje', baslamis, (await ayrinti(baslamis)).surum)).govde.mesaj, ADIMLI_IPTAL_DURUMU);
+      assert.deepEqual(olaylari(baslamis), [], 'başlamış emir iptal edilmez, olay yok');
+    } finally {
+      birak();
+    }
   });
 
   test('plan: planlanacak iş emirleri fasonsuz ve bitmemiştir, öncelik ve tarih taşır, taslak istenirse gelir; kaynak ve plan bilgisi yazılır; işlemsiz kişi reddedilir', async () => {
@@ -1393,7 +1443,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(sonra.acik, once.acik + 1);
     assert.equal((await ozet('pano_op')).kuyrugum, 1);
 
-    const op = (yol: string, govde?: unknown) => istek<Hata>('pano_op', 'POST', `/uretim-emirleri/${id}${yol}`, govde, randomUUID());
+    const op = (yol: string, govde?: unknown) => terminal(`/${id}${yol}`, govde, 'pano_op');
     assert.equal((await op('/baslat')).durum, 200);
     assert.equal((await op('/sayim', { tur: 'saglam', adet: 5 })).durum, 200);
     await ilkParcaOnay(id);
@@ -1794,8 +1844,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: gecikmis } = await ac([adim(1, kisi)]);
     const { uretimEmriId: baslamis } = await ac([adim(1, { tur: 'makine', id: await makineKur(await istasyonKur()) }), adim(2, kisi)]);
     const { uretimEmriId: biten } = await ac([adim(1, kisi)]);
-    const basla = await istek<Hata>('ozet_op', 'POST', `/uretim-emirleri/${baslamis}/baslat`, undefined, randomUUID());
-    assert.equal(basla.durum, 200, JSON.stringify(basla.govde));
+    await o().vt.tx((db) => emirBaslat(db, kim('ozet_op'), baslamis));
     await o().sahip.sorgu("UPDATE uretim_emri SET teslim = current_date - 3 WHERE id = $1", [gecikmis]);
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = now(), bitis = now(), saglam_adet = 10 WHERE id = $1", [biten]);
 

@@ -113,8 +113,6 @@ const TAM_DENETLENMEYEN_UCLAR = [
   // Dosya saklama yüklemesi: içerik deftere girmez (kart #82, DS9 a).
   'POST /dosyalar/:ozet/parca govdesiz',
   'POST /dosyalar/eksikler govdesiz',
-  'POST /uretim-emirleri/:id/sayim govdesiz',
-  'POST /uretim-emirleri/:id/sayim-ayarla govdesiz',
   'POST /malzeme-katalogu-kartlari/:kimlik/kaydet govdesiz+secim',
   'POST /malzeme-katalogu-sablonlari/:kimlik/kaydet govdesiz',
   'POST /satin-alma-talepleri/ac govdesiz',

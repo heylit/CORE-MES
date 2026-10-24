@@ -1,7 +1,10 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { kullaniciYukle } from '../kisiler/disari.ts';
+import { emirBaslat, emirDevam } from '../uretim-emirleri/disari.ts';
 import { calisanAdimlar, canliOzeti } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
@@ -22,6 +25,21 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     ({ ortam, istasyonB, operatorId, yoneticiId } = durum());
     await ortam!.sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [operatorId, istasyonB]);
   });
+
+  // Başlatma ve devamın ekranı Arkon'dur ve uretim-emirleri/disari.ts'ten girer: test operatörün yetkisiyle çağırır, hatayı uç cevabı gibi okur.
+  const terminalKomutu = async (komut: 'baslat' | 'devam', emirId: number, makineIdleri: number[]) => {
+    try {
+      await vt().tx(async (db) => {
+        const k = await kullaniciYukle(db, operatorId);
+        if (k === null) throw new Error('operatör yok');
+        return komut === 'baslat' ? emirBaslat(db, k, emirId, makineIdleri) : emirDevam(db, k, emirId, makineIdleri);
+      });
+      return { statusCode: 200, body: '' };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { statusCode: h.durum, body: JSON.stringify(h.govde()) };
+      throw h;
+    }
+  };
 
   const canliyaAl = async (p: PlanCevabi) => tamam<PlanCevabi>(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
   const dakika = 60_000;
@@ -104,7 +122,7 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     await canliyaAl(await taslaktaOner());
     assert.deepEqual(yer(await planOku(), i1!).kaynak, { tur: 'makine', id: planlanan.id });
     const emirId = (await vt().tx((db) => db.tek<{ uretim_emri_id: number }>('SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1', [i1])))!.uretim_emri_id;
-    const r = await istek(c.operator, 'POST', `/uretim-emirleri/${emirId}/baslat`, { makineIdleri: [fiili.id] });
+    const r = await terminalKomutu('baslat', emirId, [fiili.id]);
     assert.equal(r.statusCode, 200, r.body);
     const kullanim = await vt().tx((db) => db.tek<{ makine_id: number | null }>(
       'SELECT makine_id FROM uretim_emirleri_makine_kullanimi WHERE is_emri_id = $1 AND bitis IS NULL', [i1]));
@@ -123,7 +141,7 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: planlanan.id } })]);
     await canliyaAl(await taslaktaOner());
     const emirId = (await vt().tx((db) => db.tek<{ uretim_emri_id: number }>('SELECT uretim_emri_id FROM uretim_emirleri_is_emri WHERE id = $1', [i1])))!.uretim_emri_id;
-    const r = await istek(c.operator, 'POST', `/uretim-emirleri/${emirId}/baslat`, { makineIdleri: [fiili.id] });
+    const r = await terminalKomutu('baslat', emirId, [fiili.id]);
     assert.equal(r.statusCode, 200, r.body);
     const ozet = await vt().tx((db) => canliOzeti(db));
     const kuyrugu = (makineId: number) => ozet.kuyruklar.find((q) => q.makineId === makineId)?.isler.length ?? 0;
@@ -143,7 +161,7 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
      VALUES ($1, $2, NULL, now() + make_interval(mins => $3), now() + make_interval(mins => $4), $5)
      ON CONFLICT (is_emri_id) DO UPDATE SET makine_id = EXCLUDED.makine_id, kisi_id = NULL, baslangic = EXCLUDED.baslangic, bitis = EXCLUDED.bitis`,
     [isEmriId, makineId, basDk, bitDk, yoneticiId]);
-  const baslat = async (isEmriId: number, makineIdleri: number[]) => istek(c.operator, 'POST', `/uretim-emirleri/${await emriOf(isEmriId)}/baslat`, { makineIdleri });
+  const baslat = async (isEmriId: number, makineIdleri: number[]) => terminalKomutu('baslat', await emriOf(isEmriId), makineIdleri);
   const acikKullanimVar = async (isEmriId: number) =>
     (await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_makine_kullanimi WHERE is_emri_id = $1 AND bitis IS NULL', [isEmriId])))!.n > 0;
 
@@ -190,8 +208,8 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
     assert.equal((await baslat(i1!, [planlanan, bos])).statusCode, 200);
     const emir = await emriOf(i1!);
     assert.equal((await istek(c.operator, 'POST', `/uretim-emirleri/${emir}/duraklat`)).statusCode, 200);
-    const devam = await istek(c.operator, 'POST', `/uretim-emirleri/${emir}/devam`, { makineIdleri: [ayrilmis] });
+    const devam = await terminalKomutu('devam', emir, [ayrilmis]);
     assert.equal(devam.statusCode, 409, devam.body);
-    assert.equal((await istek(c.operator, 'POST', `/uretim-emirleri/${emir}/devam`, { makineIdleri: [bos] })).statusCode, 200);
+    assert.equal((await terminalKomutu('devam', emir, [bos])).statusCode, 200);
   });
 });
