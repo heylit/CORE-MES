@@ -53,6 +53,12 @@ Baska parca yalniz bu adlari ithal eder (`../personel/index.tsx`, `../isealim/in
 - `test-ortak.tsx`: `ikAc(adres, { kullanici, veri })`, `ornekVeri()` (uydurma ornek, gercek veri yok), kullanicilar `IK_YONETICI`, `IK_OKUYAN`, `MUDUR`, `CALISAN`, `KAPISIZ`.
 
 ## Kurallar (her parca)
+- TASARIM KORUMA (2026-10-24 19:19, kullanici): ekranlarin tasarimi kullanicinindir. TS gecisinin amaci yalniz TypeScript'e gecis ve mantik, kurgu ve
+  bozukluk hatalarinin duzeltilmesidir. Prototip ya da eski ekranin gorunusu, duzeni, akisi, araclari ve metinleri birebir korunur. 360 genislige
+  sigdirma, ortak parcaya tasima, sadelestirme ya da "daha iyi" gerekcesiyle degisiklik yapilmaz; ortak parca yalniz gorunus birebir kaliyorsa
+  kullanilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli bir karar (orn. 357 b) gerektirdiginde yapilir; her fark gerekcesiyle ve
+  "hata turu" belirtilerek soru olur, varsayilan oneri "eski hali kalsin"dir. Bu dosyadaki 203 a, ortak bilesen ve 360/768/1280 maddeleriyle celisirse
+  TASARIM KORUMA gecerlidir (kurulum/proje-talimati.md KURALLAR 3).
 - 203 a: tasarim degiskenleri, ortak bilesenler (`Tablo` arac yuvasiyla, `SayfaBasligi`, `FormPenceresi`, `Pencere`, `OnayPenceresi`, `Sekmeler`,
   `Rozet`, `SayiKarti`, `GrafikKarti`, `useBildirim` eylemli), ortak `Simge`, 360/768/1280. Sabit renk, olcu, satir ici stil yok.
 - 205 a: tarayicidaki hesaplar saf TS islevi (parcanin `kurallar.ts` dosyasi, birim testli). Bordro kesinlesmesi sunucudadir.
