@@ -41,9 +41,21 @@ namespace LogoYardimcisi
         static readonly Regex SatisMusterisi = new Regex("^/api/SalesOffer/customer/([^/]+)$");
         static readonly Regex TeklifOku = new Regex("^/api/SalesOffer/([0-9]+)$");
         static readonly Regex TekliftenSiparis = new Regex("^/api/SalesOffer/([0-9]+)/toOrder$");
-        static readonly Regex MalzemeFisiYaz = new Regex("^/api/MaterialSlip/(AddConsumption|AddProductionEntry)$");
-        static readonly Regex MalzemeFisiBul = new Regex("^/api/MaterialSlip/(Consumption|ProductionEntry)/find/([^/]+)$");
-        static readonly Regex MalzemeFisiKayit = new Regex("^/api/MaterialSlip/(Consumption|ProductionEntry)/([^/]+)$");
+        const string FisTurAdlari = "Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage";
+        static readonly Regex MalzemeFisiYaz = new Regex("^/api/MaterialSlip/Add(" + FisTurAdlari + ")$");
+        static readonly Regex MalzemeFisiBul = new Regex("^/api/MaterialSlip/(" + FisTurAdlari + ")/find/([^/]+)$");
+        static readonly Regex MalzemeFisiKayit = new Regex("^/api/MaterialSlip/(" + FisTurAdlari + ")/([^/]+)$");
+        // Uç adı -> STFICHE TRCODE; gerçek Logo'da denenmedi (kurulum/logo-yardimcisi.md). 11, 25, 50, 51 için TMI'de gönderim ayarı kapalı gelir.
+        static readonly Dictionary<string, int> FisTrcode = new Dictionary<string, int>
+        {
+            { "Consumption", 12 }, { "ProductionEntry", 13 }, { "Scrap", 11 }, { "WarehouseTransfer", 25 }, { "CountSurplus", 50 }, { "CountShortage", 51 },
+        };
+        const int AmbarFisi = 25;
+
+        public static int FisTrcodeAl(string ucAdi)
+        {
+            return FisTrcode[ucAdi];
+        }
 
         // Oturum açılamadıysa istek Logo'ya gitmemiştir (503); çağrı sırasında koptuysa ya da beklenmeyen hata olduysa sonuç bilinmez (500).
         // Beklenmeyen hatanın iletisi (SQL sunucu adı taşıyabilir) cevaba girmez, yalnız günlüğe tür adıyla yazılır.
@@ -109,7 +121,7 @@ namespace LogoYardimcisi
                 if (yol == "/api/DemandFiche/peg") return KarsilamaEkle(Json.Nesne(govde));
                 if (yol == "/api/SalesOffer/AddRich") return TeklifEkle(Json.Nesne(govde));
                 if ((m = TekliftenSiparis.Match(yol)).Success) return SatisSiparisiAc(RefCoz(m), Json.Nesne(govde));
-                if ((m = MalzemeFisiYaz.Match(yol)).Success) return MalzemeFisiEkle(m.Groups[1].Value == "AddConsumption" ? 12 : 13, Json.Nesne(govde));
+                if ((m = MalzemeFisiYaz.Match(yol)).Success) return MalzemeFisiEkle(FisTuru(m), Json.Nesne(govde));
             }
             else if (yontem == "DELETE")
             {
@@ -137,7 +149,7 @@ namespace LogoYardimcisi
 
         static int FisTuru(Match m)
         {
-            return m.Groups[1].Value == "Consumption" ? 12 : 13;
+            return FisTrcode[m.Groups[1].Value];
         }
 
         static Cevap Bul(int kayit, string yokIletisi)
@@ -995,7 +1007,23 @@ namespace LogoYardimcisi
             return Cevap.Basari(b.Ref, "order", Kap(b.Ref, no, refler));
         }
 
-        /* ---------------- Malzeme fişi: sarf (12) ve üretimden giriş (13) (rehber §7) ---------------- */
+        /* ---------------- Malzeme fişi: sarf 12, üretimden giriş 13, fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51 (rehber §7) ---------------- */
+
+        // Ambar fişi başlıkta tek kaynak ve hedef ambar taşır; satırdaki ambar başlıkla aynı olmalı (TMI fişi böler değil reddeder). Alan adları
+        // SOURCE_WH ve DEST_WH gerçek Logo'da denenmedi. Öbür türlerde ambar alanı gelirse sessiz düşmesin diye reddedilir.
+        static int[] FisAmbarlari(Dictionary<string, object> d, int tur, string yer)
+        {
+            if (tur != AmbarFisi)
+            {
+                if (d.ContainsKey("SOURCE_WH") || d.ContainsKey("DEST_WH")) throw new GecersizIstek(yer + "SOURCE_WH ve DEST_WH yalnız ambar fişinde.");
+                return null;
+            }
+            var kaynak = Json.Tam(d, "SOURCE_WH", true).Value;
+            var hedef = Json.Tam(d, "DEST_WH", true).Value;
+            if (kaynak < 0 || hedef < 0) throw new GecersizIstek(yer + "ambar no eksi olamaz.");
+            if (kaynak == hedef) throw new GecersizIstek(yer + "kaynak ve hedef ambar aynı.");
+            return new[] { kaynak, hedef };
+        }
 
         Cevap MalzemeFisiEkle(int tur, Dictionary<string, object> g)
         {
@@ -1006,6 +1034,7 @@ namespace LogoYardimcisi
             var grup = Json.Tam(g, "GROUP", true).Value;
             var toplamlar = Json.Tam(g, "CURRSEL_TOTALS", true).Value;
             var proje = Json.Metin(g, "PROJECT_CODE", false);
+            var ambarlar = FisAmbarlari(g, tur, "");
             var satirlar = new List<SiparisSatiri>();
             var satirAlanlari = new List<AlanListesi>();
             var ham = Satirlar(g, "TRANSACTIONS");
@@ -1023,6 +1052,12 @@ namespace LogoYardimcisi
                 if (x.Aciklama != null) a.Ekle("DESCRIPTION", x.Aciklama);
                 var satirProje = Json.Metin(s, "PROJECT_CODE", false);
                 if (satirProje != null) a.Ekle("PROJECT_CODE", satirProje);
+                var satirAmbarlari = FisAmbarlari(s, tur, "Satır " + (i + 1) + ": ");
+                if (satirAmbarlari != null)
+                {
+                    if (satirAmbarlari[0] != ambarlar[0] || satirAmbarlari[1] != ambarlar[1]) throw new GecersizIstek("Satır " + (i + 1) + ": ambarlar başlıktakiyle aynı olmalı.");
+                    a.Ekle("SOURCE_WH", satirAmbarlari[0]).Ekle("DEST_WH", satirAmbarlari[1]);
+                }
                 a.Ekle("EU_VAT_STATUS", 4);
                 satirlar.Add(x);
                 satirAlanlari.Add(a);
@@ -1040,6 +1075,7 @@ namespace LogoYardimcisi
             if (saatMetni != null) x0.Alan("TIME", Bicim.LogoSaati(saatMetni, "TIME"));
             x0.Alan("GROUP", grup).Alan("CURRSEL_TOTALS", toplamlar);
             if (proje != null) x0.Alan("PROJECT_CODE", proje);
+            if (ambarlar != null) x0.Alan("SOURCE_WH", ambarlar[0]).Alan("DEST_WH", ambarlar[1]);
             x0.Ac("TRANSACTIONS");
             foreach (var a in satirAlanlari) x0.Ac("TRANSACTION").Alanlar(a).Kapat();
             x0.Kapat();

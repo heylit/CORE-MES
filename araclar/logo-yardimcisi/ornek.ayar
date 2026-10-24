@@ -22,3 +22,5 @@ sql_baglanti=Server=<sunucu>;Database=<veritabani>;User Id=<salt-okunur-kullanic
 # Istege bagli, yalniz --deneme icin: Logo'daki test satici ve test alici cari kodlari
 # deneme_satici=<test-satici-cari-kodu>
 # deneme_alici=<test-alici-cari-kodu>
+# Istege bagli, yalniz --deneme icin: ambar fisinin hedef ambar no'su (kaynak ambar_no); yoksa ambar fisi denenmez
+# deneme_hedef_ambar=<hedef-ambar-no>

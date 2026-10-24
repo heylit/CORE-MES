@@ -128,6 +128,9 @@ namespace LogoYardimcisi
             Esit(4190, a.Port, "port");
             Esit(0, a.AmbarNo, "ambar varsayılanı");
             Esit(1, a.FirmaNo, "firma");
+            Esit(null, a.DenemeHedefAmbar, "deneme hedef ambarı varsayılan yok");
+            Esit(2, Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x\ndeneme_hedef_ambar=2").DenemeHedefAmbar,
+                "deneme hedef ambarı");
             foreach (var bozuk in new[]
             {
                 "port=4190\nlogo_kullanici=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x",
@@ -512,6 +515,59 @@ namespace LogoYardimcisi
             Esit(404, C(s, "DELETE", "/api/MaterialSlip/Consumption/UE-2026-010", null).Durum, "ikinci silme yok sayılmaz, 404");
             Dogru(Basari(C(s, "POST", "/api/MaterialSlip/AddConsumption", Fis(12, "UE-2026-010"))), "aynı numarayla yeniden açılır");
             Esit(400, C(s, "DELETE", "/api/MaterialSlip/Consumption/" + new string('9', 17), null).Durum, "çok uzun numara");
+        }
+
+        static void T_fire_ve_sayim_fisleri_kendi_trcode_iyle_acilir_bulunur_silinir()
+        {
+            var s = Logo();
+            foreach (var t in new[] { new KeyValuePair<string, int>("Scrap", 11), new KeyValuePair<string, int>("CountSurplus", 50), new KeyValuePair<string, int>("CountShortage", 51) })
+            {
+                var c = C(s, "POST", "/api/MaterialSlip/Add" + t.Key, Fis(t.Value, "SF-000001"));
+                Dogru(Basari(c), t.Key + " " + Json.Yaz(c.Govde));
+                Icerir(s.SonXml, "<TYPE>" + t.Value + "</TYPE>");
+                Dogru(!s.SonXml.Contains("SOURCE_WH"), "ambar alanı yalnız ambar fişinde");
+                Dogru(Basari(C(s, "GET", "/api/MaterialSlip/" + t.Key + "/find/SF-000001", null)), t.Key + " bulunur");
+                Esit(400, C(s, "POST", "/api/MaterialSlip/Add" + t.Key, Fis(12, "SF-000002")).Durum, t.Key + " TYPE uçla uyuşmuyor");
+            }
+            Esit(404, C(s, "GET", "/api/MaterialSlip/Consumption/find/SF-000001", null).Durum, "türler ayrı numaralanır");
+            Dogru(Basari(C(s, "DELETE", "/api/MaterialSlip/CountShortage/SF-000001", null)), "sayım eksiği silinir");
+            Esit(404, C(s, "GET", "/api/MaterialSlip/CountShortage/find/SF-000001", null).Durum, "silinen bulunmaz");
+            Dogru(Basari(C(s, "GET", "/api/MaterialSlip/CountSurplus/find/SF-000001", null)), "öbür tür durur");
+            Esit(404, C(s, "POST", "/api/MaterialSlip/AddTransfer", Fis(25, "AF-000001")).Durum, "bilinmeyen tür ucu");
+            var g = Fis(11, "SF-000003");
+            g["SOURCE_WH"] = 1;
+            g["DEST_WH"] = 2;
+            Icerir(Hata(C(s, "POST", "/api/MaterialSlip/AddScrap", g)), "yalnız ambar fişinde");
+        }
+
+        static Dictionary<string, object> AmbarFisi(string no, int kaynak, int hedef)
+        {
+            var g = Fis(25, no);
+            g["SOURCE_WH"] = kaynak;
+            g["DEST_WH"] = hedef;
+            var satir = ((Dictionary<string, object>[])g["TRANSACTIONS"])[0];
+            satir["SOURCE_WH"] = kaynak;
+            satir["DEST_WH"] = hedef;
+            return g;
+        }
+
+        static void T_ambar_fisi_baslikta_ve_satirda_tek_ambar_cifti_tasir()
+        {
+            var s = Logo();
+            var c = C(s, "POST", "/api/MaterialSlip/AddWarehouseTransfer", AmbarFisi("AF-000001", 1, 2));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Icerir(s.SonXml, "<TYPE>25</TYPE>");
+            Icerir(s.SonXml, "<SOURCE_WH>1</SOURCE_WH>\n<DEST_WH>2</DEST_WH>\n<TRANSACTIONS>");
+            Icerir(s.SonXml, "<SOURCE_WH>1</SOURCE_WH>\n<DEST_WH>2</DEST_WH>\n<EU_VAT_STATUS>");
+            Dogru(Basari(C(s, "GET", "/api/MaterialSlip/WarehouseTransfer/find/AF-000001", null)), "bulunur");
+            Dogru(Basari(C(s, "DELETE", "/api/MaterialSlip/WarehouseTransfer/AF-000001", null)), "silinir");
+            Esit(400, C(s, "POST", "/api/MaterialSlip/AddWarehouseTransfer", Fis(25, "AF-000002")).Durum, "ambarsız ambar fişi");
+            Icerir(Hata(C(s, "POST", "/api/MaterialSlip/AddWarehouseTransfer", AmbarFisi("AF-000003", 1, 1))), "aynı");
+            Esit(400, C(s, "POST", "/api/MaterialSlip/AddWarehouseTransfer", AmbarFisi("AF-000004", -1, 2)).Durum, "eksi ambar");
+            var g = AmbarFisi("AF-000005", 1, 2);
+            ((Dictionary<string, object>[])g["TRANSACTIONS"])[0]["DEST_WH"] = 3;
+            Icerir(Hata(C(s, "POST", "/api/MaterialSlip/AddWarehouseTransfer", g)), "başlıktakiyle aynı");
+            Esit(404, C(s, "GET", "/api/MaterialSlip/WarehouseTransfer/find/AF-000005", null).Durum, "reddedilen fiş Logo'ya yazılmaz");
         }
 
         /* ---------------- Hata eşleme ---------------- */

@@ -22,11 +22,13 @@ namespace LogoYardimcisi
         // Yalnız --deneme: Logo'daki deneme satıcı ve alıcı cari kodları.
         public string DenemeSatici;
         public string DenemeAlici;
+        // Yalnız --deneme: ambar fişinin hedef ambarı (kaynak ambar_no); yoksa ambar fişi denenmez.
+        public int? DenemeHedefAmbar;
 
         static readonly string[] Adlar =
         {
             "port", "anahtar", "logo_kullanici", "logo_parola", "firma_no", "donem_no", "sql_baglanti", "ambar_no", "isyeri_no",
-            "deneme_satici", "deneme_alici",
+            "deneme_satici", "deneme_alici", "deneme_hedef_ambar",
         };
 
         public static Ayar DosyadanOku(string yol)
@@ -64,6 +66,7 @@ namespace LogoYardimcisi
             a.IsyeriNo = Tam(d, "isyeri_no", 0, 9999, 0);
             a.DenemeSatici = Metin(d, "deneme_satici", false);
             a.DenemeAlici = Metin(d, "deneme_alici", false);
+            if (Metin(d, "deneme_hedef_ambar", false) != null) a.DenemeHedefAmbar = Tam(d, "deneme_hedef_ambar", 0, 9999, null);
             return a;
         }
 

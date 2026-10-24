@@ -124,16 +124,38 @@ namespace LogoYardimcisi
                     Adim("Sipariş faturaları (boş)", "GET", "/api/PurchaseOrder/" + no + "/invoices", null);
                 }
 
-                foreach (var fis in new[] { new KeyValuePair<int, string>(13, "U"), new KeyValuePair<int, string>(12, "S") })
+                // Giriş önce açılır ki sarf, fire ve sayım eksiği test malzemesinde stok bulsun. Ambar fişi yalnız deneme_hedef_ambar verilmişse.
+                var fisler = new[]
                 {
+                    new KeyValuePair<string, string>("ProductionEntry", "U"), new KeyValuePair<string, string>("Consumption", "S"),
+                    new KeyValuePair<string, string>("Scrap", "F"), new KeyValuePair<string, string>("CountSurplus", "Y"),
+                    new KeyValuePair<string, string>("CountShortage", "E"), new KeyValuePair<string, string>("WarehouseTransfer", "A"),
+                };
+                foreach (var fis in fisler)
+                {
+                    var tur = Islemler.FisTrcodeAl(fis.Key);
+                    var ambar = tur == 25;
+                    if (ambar && ayar.DenemeHedefAmbar == null)
+                    {
+                        Console.WriteLine("ATLANDI ambar fişi: deneme_hedef_ambar ayarı yok.");
+                        continue;
+                    }
                     var fno = Onek + fis.Value + ek;
-                    var uc = fis.Key == 12 ? "AddConsumption" : "AddProductionEntry";
-                    var f = Adim((fis.Key == 12 ? "Sarf fişi" : "Üretimden giriş fişi") + " aç", "POST", "/api/MaterialSlip/" + uc,
-                        N("TYPE", fis.Key, "NUMBER", fno, "DATE", bugun, "TIME", DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture), "GROUP", 3, "CURRSEL_TOTALS", 1,
-                          "TRANSACTIONS", new[] { N("ITEM_CODE", TestMalzemesi, "QUANTITY", 1, "UNIT_CODE", Birim, "UNIT_CONV1", 1, "UNIT_CONV2", 1, "LINE_TYPE", 0,
-                              "LINE_NUMBER", 1, "DESCRIPTION", "TMI deneme") }));
-                    var tur = fis.Key;
-                    if (f != null) SilmeyiKaydet("malzeme fişi " + fno, Nesne.MalzemeFisi, Ref(f), () => oku.MalzemeFisi(fno, tur));
+                    var satir = N("ITEM_CODE", TestMalzemesi, "QUANTITY", 1, "UNIT_CODE", Birim, "UNIT_CONV1", 1, "UNIT_CONV2", 1, "LINE_TYPE", 0,
+                        "LINE_NUMBER", 1, "DESCRIPTION", "TMI deneme");
+                    var govde = N("TYPE", tur, "NUMBER", fno, "DATE", bugun, "TIME", DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture), "GROUP", 3,
+                        "CURRSEL_TOTALS", 1, "TRANSACTIONS", new[] { satir });
+                    if (ambar)
+                    {
+                        govde["SOURCE_WH"] = ayar.AmbarNo; govde["DEST_WH"] = ayar.DenemeHedefAmbar.Value;
+                        satir["SOURCE_WH"] = ayar.AmbarNo; satir["DEST_WH"] = ayar.DenemeHedefAmbar.Value;
+                    }
+                    var f = Adim("Malzeme fişi (TRCODE " + tur + ") aç", "POST", "/api/MaterialSlip/Add" + fis.Key, govde);
+                    if (f != null)
+                    {
+                        Adim("Malzeme fişi (TRCODE " + tur + ") numarayla bul", "GET", "/api/MaterialSlip/" + fis.Key + "/find/" + Uri.EscapeDataString(fno), null);
+                        SilmeyiKaydet("malzeme fişi " + fno, Nesne.MalzemeFisi, Ref(f), () => oku.MalzemeFisi(fno, tur));
+                    }
                 }
 
                 if (ayar.DenemeAlici == null) Console.WriteLine("ATLANDI satış teklifi ve siparişi: deneme_alici ayarı yok.");

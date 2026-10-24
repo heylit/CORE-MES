@@ -41,6 +41,7 @@ o Windows kullanıcısınca okunabilir olmalı; içinde Logo parolası ve SQL ba
 | `sql_baglanti` | Logo veritabanına salt okunur bağlantı. Yalnız `db_datareader` yetkili ayrı SQL kullanıcısı önerilir. |
 | `ambar_no`, `isyeri_no` | İsteğe bağlı, varsayılan 0. |
 | `deneme_satici`, `deneme_alici` | İsteğe bağlı, yalnız `--deneme` için test cari kodları. |
+| `deneme_hedef_ambar` | İsteğe bağlı, yalnız `--deneme` için ambar fişinin hedef ambar no'su (kaynak `ambar_no`); yoksa ambar fişi denenmez. |
 
 ## Çalıştırma
 
@@ -88,7 +89,8 @@ cikti\logo-yardimcisi.exe --ayar <ayar dosyası> --deneme
 
 Önce Logo'da `TMI-ERP-TEST-001` test malzemesi elle açılır (deneme açmaz, silmez) ve ayara `deneme_satici` (gerekirse `deneme_alici`) yazılır.
 Deneme bütün yazma akışlarını uçtan uca dener: malzeme var mı, satın alma siparişi aç, düzenle, satır kapat, onaylı talep fişi, karşılama yaz, oku,
-kaldır, sipariş iptal, sarf ve üretimden giriş fişi, satış teklifi ve tekliften satış siparişi. Fiş numaraları `TMI-ERP-` öneklidir; sonunda
+kaldır, sipariş iptal, malzeme fişleri (üretimden giriş, sarf, fire, sayım fazlası, sayım eksiği; `deneme_hedef_ambar` varsa ambar),
+satış teklifi ve tekliften satış siparişi. Fiş numaraları `TMI-ERP-` öneklidir; sonunda
 yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başladığı doğrulanan kayıtlar silinir. Gerçek kayıt silinmez. Her satır
 `TAMAM` ya da `HATA` yazar; son satır hata sayısıdır.
 
@@ -128,12 +130,19 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   kapalı gelir. Hizmet "var mı" ucu yardımcıda vardır (`GET /api/PurchaseService|SalesService/exists/{kod}`); sonucu bilinmeyen gönderim
   önce bununla okunur. Açmadan önce deneme firmasında bir kartla deneyin.
 
-## Malzeme fişi (sarf ve üretimden giriş)
+## Malzeme fişi
 
-- Açma `POST /api/MaterialSlip/AddConsumption` (sarf, TRCODE 12) ve `AddProductionEntry` (üretimden giriş, 13); numara emir numarasıdır, aynı numara ikinci kez açılmaz.
-- Numarayla bulma `GET /api/MaterialSlip/{Consumption|ProductionEntry}/find/{no}` (SQL, `STFICHE` FICHENO + TRCODE); yoksa 404.
-- Silme `DELETE /api/MaterialSlip/{Consumption|ProductionEntry}/{no}` (Logo Objects `Delete`), sonra fişin SQL'den gittiği doğrulanır; yoksa 404.
-  TMI miktar değişince fişi silip aynı numarayla yeniden açar (Logo'da satır silme yok), miktar sıfıra inince siler (233).
+- Açma `POST /api/MaterialSlip/Add{Tür}`; numarayla bulma `GET /api/MaterialSlip/{Tür}/find/{no}` (SQL, `STFICHE` FICHENO + TRCODE), yoksa 404;
+  silme `DELETE /api/MaterialSlip/{Tür}/{no}` (Logo Objects `Delete`), sonra fişin SQL'den gittiği doğrulanır, yoksa 404.
+- Türler ve TRCODE: `Consumption` sarf 12, `ProductionEntry` üretimden giriş 13, `Scrap` fire 11, `WarehouseTransfer` ambar fişi 25,
+  `CountSurplus` sayım fazlası 50, `CountShortage` sayım eksiği 51. Gövdedeki `TYPE` uçla aynı olmalı; aynı türde aynı numara ikinci kez açılmaz.
+- Numara TMI stok fişinin numarasıdır (emir fişinde emir no; ötekilerde `SF-`, `SE-`, `AF-`). TMI fiş değişince silip aynı numarayla yeniden açar
+  (Logo'da satır silme yok), boşalınca siler.
+- Ambar fişi başlıkta ve her satırda `SOURCE_WH` (kaynak) ve `DEST_WH` (hedef) Logo ambar no'su taşır; satırdaki çift başlıktakiyle aynı, kaynak ve
+  hedef farklı olmalı. Öbür türlerde bu iki alan reddedilir.
+- DOĞRULANMADI: TRCODE'lar (özellikle 11, 25, 50, 51) ve ambar fişinin `SOURCE_WH`/`DEST_WH` alan adları gerçek Logo'da denenmedi. TMI'de bu dört türün gönderim
+  ayarı kapalı gelir (Sistem Ayarları, "Logo: ... fişi gönderimi"). Açmadan önce deneme firmasında `--deneme` koşun: dört tür de denenir; ambar fişi
+  için ayar dosyasına `deneme_hedef_ambar` yazın (kaynak `ambar_no`). Logo'da açılan fişin türünü ve ambarlarını gözle denetleyin.
 
 ## Gerçek Logo'ya geçmeden önce
 
@@ -157,7 +166,8 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 3. Talep fişi satırlarında `INTERNAL_REFERENCE` okunabilir (satır eşleme ve karşılama için).
 4. Malzeme XML'indeki `FACTORY_PARAMS` bloğu rehberin ölçülmüş örneğinden alındı.
 5. Logo bilgisayarında .NET Framework 4.x kurulu; yardımcı yönetici olmadan kullanıcı süreci olarak çalışır.
-6. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
+6. Malzeme fişi TRCODE'ları (sarf 12, giriş 13, fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51) ve ambar fişinin `SOURCE_WH`/`DEST_WH` alanları.
+7. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
 
 TMI tarafındaki eski varsayımlar (cevap zarfı, 60 saniye, 5 dakika bekleme, kart türleri, sipariş alanları) yardımcının sözleşmesiyle aynıdır;
 yardımcı bunları `kopru.ts`'in beklediği biçimde döner (`Islemler.cs`).
