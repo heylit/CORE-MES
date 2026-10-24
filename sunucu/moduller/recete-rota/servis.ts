@@ -28,7 +28,7 @@ import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
+  adimCiktisiBul, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
@@ -66,7 +66,12 @@ export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: 
   if (!surumUyarMi(mevcut, g.beklenenSurum)) throw cakisma(CAKISMA_ILETISI);
   const anaKayit = g.anahtar === DURUM_ANAHTARI && g.bicim === 'json';
   const eskiDeger = anaKayit && mevcut !== null ? (await sorgular.kayitGetir(db, g.anahtar))?.deger : undefined;
-  const deger = anaKayit ? bagliDilimleriAyikla(planAlanlariniKoru(g.deger, mevcut === null ? null : eskiDeger)) : g.deger;
+  // Planlama çalışmasında bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
+  const planlama = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
+  const deger = anaKayit
+    ? bagliDilimleriAyikla(planAlanlariniKoru(g.deger, mevcut === null ? null : eskiDeger))
+    : planlama ? bitisAkisiEkle(g.deger, mevcut === null ? null : (await sorgular.kayitGetir(db, g.anahtar))?.deger, kullanici.ad, Date.now()) : g.deger;
+  if (planlama && deger !== g.deger && degerCokBuyukMu(deger)) throw cokBuyuk(BUYUK_ILETISI);
   const satir = { anahtar: g.anahtar, bicim: g.bicim, deger, kisiId: kullanici.id };
   const kayit = mevcut === null ? await sorgular.kayitEkle(db, satir) : await sorgular.kayitGuncelle(db, satir);
   // Eşzamanlı ilk yazmada öteki kazandı.
