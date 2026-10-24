@@ -498,6 +498,33 @@ export const degerlendirmeCevabi = z.object({
   maliyetGorunur: z.boolean(),
   sonuc: degerlendirmeSonucu,
 });
+// Yıllık plan çözümü (454/6 a): kaba kapasite modeli (LP metni) sayfada kurulur, HiGHS sunucuda çözer; tarayıcıda çözücü yoktur. Çözüm
+// 60 saniyeye kadar sürer ve uç transaction'ı o kadar bekleyemez: başlatma iş kimliğiyle hemen döner, sonuç kimlikle okunur.
+// Gövde sınırı sunucunun istek sınırının (1 MiB) altında kalır.
+export const YILLIK_LP_AZAMI = 900_000;
+export const YILLIK_SUTUN_AZAMI = 20_000;
+export const yillikCozGovdesi = z.object({
+  lp: z.string().min(1).max(YILLIK_LP_AZAMI),
+  // saniye; HiGHS'in zaman sınırı
+  sure: z.number().int().min(1).max(60),
+  // değeri ve gölge fiyatı istenen sütunlar
+  want: z.array(z.string().min(1).max(80)).max(YILLIK_SUTUN_AZAMI),
+});
+export const yillikCozBaslatCevabi = z.object({ is: z.string().uuid() });
+export const yillikCozParametresi = z.object({ is: z.string().uuid() });
+// HiGHS'in cevabı: model durumu (7 en iyi, 13 süre doldu, 8 çözüm yok, 14 adım sınırı), amaç (sonlu değilse null), istenen sütunların
+// değeri ve indirgenmiş maliyeti (çözücü vermezse null).
+export const yillikCozumSemasi = z.object({
+  s: z.number().int(),
+  ob: z.number().nullable(),
+  val: z.record(z.string(), z.number()).nullable(),
+  dual: z.record(z.string(), z.number().nullable()).nullable(),
+});
+export const yillikCozDurumuCevabi = z.discriminatedUnion('durum', [
+  z.object({ durum: z.literal('suruyor') }),
+  z.object({ durum: z.literal('bitti'), cozum: yillikCozumSemasi }),
+  z.object({ durum: z.literal('hata'), mesaj: z.string() }),
+]);
 export type FasonTahminCevabi = z.output<typeof fasonTahminCevabi>;
 export type Statu = z.output<typeof statuSemasi>;
 export type StatulerCevabi = z.output<typeof statulerCevabi>;
@@ -522,3 +549,6 @@ export type DurumEmirleri = z.output<typeof durumEmirlerSemasi>;
 export type DegerlendirmeIstegi = z.output<typeof degerlendirmeIstegi>;
 export type DegerlendirmeSonucu = z.output<typeof degerlendirmeSonucu>;
 export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
+export type YillikCozGovdesi = z.output<typeof yillikCozGovdesi>;
+export type YillikCozumu = z.output<typeof yillikCozumSemasi>;
+export type YillikCozDurumuCevabi = z.output<typeof yillikCozDurumuCevabi>;
