@@ -131,3 +131,30 @@ test.describe('M2 katalog', () => {
     expect(indirme.suggestedFilename()).toBe('malzeme-katalogu.csv');
   });
 });
+
+test.describe('M4 şablonlar ve kılavuz', () => {
+  test('Şablonlar: hazır şablonlar görünür, sayfa yatay taşmaz; karta basınca sihirbaz şablonla açılır', async ({ page, ac, ag }) => {
+    await ac('/malzemeler/yeni-ekran/sablonlar');
+    const hazir = page.getByRole('region', { name: 'Hazır şablonlar' });
+    await expect(hazir.getByRole('listitem').first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    const ilk = hazir.getByRole('listitem').first().getByRole('button').first();
+    const ad = (await ilk.locator('b').innerText()).trim();
+    await ilk.click();
+    // Sihirbaz şablonu uygulayınca sorguyu adresten siler (M1); şablonun uygulandığı bildirimden görülür.
+    await expect(page).toHaveURL(/\/malzemeler\/yeni-ekran\/kart/);
+    await expect(page.getByRole('heading', { name: 'Yeni malzeme kartı' })).toBeVisible();
+    await expect(page.getByText(`"${ad}" uygulandı`, { exact: false }).first()).toBeVisible();
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Kılavuz: bölümler ve tablolar çizilir, sayfa yatay taşmaz', async ({ page, ac, ag }) => {
+    await ac('/malzemeler/yeni-ekran/kilavuz');
+    await expect(page.getByRole('heading', { name: 'Kart nasıl açılır?' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Arama örnekleri' })).toBeAttached();
+    await expect(page.getByRole('table', { name: 'Roller ve yetkiler' })).toBeAttached();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
