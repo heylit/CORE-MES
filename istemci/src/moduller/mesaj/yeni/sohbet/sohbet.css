@@ -15,7 +15,8 @@
   .tc-ms-sohbet-kanalda .tc-ms-kanallar { display: flex; border-right: 1px solid var(--edge); }
   .tc-ms-sohbet .tc-ms-sohbet-ana,
   .tc-ms-sohbet:not(.tc-ms-sohbet-kanalda) .tc-ms-sohbet-ana { display: flex; }
-  .tc-ms-geri { display: none; }
+  /* Araç düğmesi kuralı dosyada sonra geldiği için seçici iki sınıflı. */
+  .tc-ms-arac.tc-ms-geri { display: none; }
 }
 
 /* Kanal listesi */
