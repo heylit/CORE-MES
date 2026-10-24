@@ -32,6 +32,15 @@ Bölüm sekmeleri, yetki kapısı ve görünüm izni kabuktadır (`PortalYeni.ts
 
 ## Kurallar
 
+0. TASARIM KORUMA (2026-10-24, kullanici; 20:22 duzeltilmis okuma teyitli; 203 a kalkti): HTML'den TS'ye gecen sayfalarda amac TypeScript'e gecis ve
+   mantik, kurgu, bozukluk hatalarinin duzeltilmesidir. Ortak tasarima oturur: renkler (tasarim degiskenleri, sabit renk yok), yazi tipi ve boyutlari,
+   dugme, kart, form ve bildirim gorunusu, genel dugme ikonlari (Malzemeler ikonlari dahil ortak sete gecebilir). Degismez: sayfanin duzeni, yerlesimi,
+   kullanimi, akisi, araclari ve yapisi; ozel tasarimlar ortak parcaya cevrilmez, kendi tasarimiyla tasinir (orn. planlama motoru ve sonsuz tahta,
+   planlama atolyesi, Recete-Rota akis semasi ve tablosu, Uretim Terminali). 360 genislige sigdirmak icin duzen degistirilmez; tasma yalniz duzen
+   bozulmadan giderilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli karar (orn. 357 b: motor isteyen dugme gorunur ama pasif)
+   gerektirdiginde yapilir; her fark gerekcesi ve hata turuyla soru olur, varsayilan oneri "eski hali kalsin". Bu dosyadaki ortak bilesen ve
+   360/768/1280 maddeleri bu metne gore okunur: ortak bilesen yalniz sayfanin duzenini, yerlesimini ve araclarini degistirmiyorsa kullanilir;
+   360/768/1280 olcumunde duzen degismez (kurulum/proje-talimati.md KURALLAR 3).
 1. Görünüm yalnız okuduğu koleksiyonları ister; yükleniyor, hata ve boş durumları `DurumKutusu` ile gösterir.
 2. Yazma: var olan kayıt `kaydet` ile okunduğu sürümle yazılır (409 -> ortak çatışma iletisi). Tam kayıt yazılır; kimlik ve sürüm
    gövdeye girmez. Onay kararı yalnız `onayKarari` ile; kişi ve zaman sunucudan gelir.

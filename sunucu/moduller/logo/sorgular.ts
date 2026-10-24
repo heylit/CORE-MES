@@ -271,8 +271,12 @@ export interface FisImleci { zaman: string; fisId: number; enBuyukFisId: number 
 export function fisImleci(db: Db): Promise<FisImleci | null> {
   return db.tek<FisImleci>(`SELECT ${zamanMetni('zaman')} AS zaman, fis_id AS "fisId", en_buyuk_fis_id AS "enBuyukFisId" FROM logo_malzeme_fisi_imleci`);
 }
+// İmleç yalnız ileri gider; karşılaştırma veritabanında mikrosaniyeyle (JS Date milisaniyeye kırpar, aynı milisaniyedeki fiş imleci durdururdu).
 export async function fisImleciYaz(db: Db, i: FisImleci): Promise<void> {
-  await db.sorgu('UPDATE logo_malzeme_fisi_imleci SET zaman = $1, fis_id = $2, en_buyuk_fis_id = GREATEST(en_buyuk_fis_id, $3)', [i.zaman, i.fisId, i.enBuyukFisId]);
+  await db.sorgu(`UPDATE logo_malzeme_fisi_imleci SET
+      zaman = CASE WHEN ($1::timestamptz, $2::int) > (zaman, fis_id) THEN $1::timestamptz ELSE zaman END,
+      fis_id = CASE WHEN ($1::timestamptz, $2::int) > (zaman, fis_id) THEN $2::int ELSE fis_id END,
+      en_buyuk_fis_id = GREATEST(en_buyuk_fis_id, $3)`, [i.zaman, i.fisId, i.enBuyukFisId]);
 }
 
 // Stok fişinin yeni sayacı: artış bekleyen değişikliğe eklenir. Aynı değişiklik ikinci kez okunursa (imlecin örtüşme penceresi) sayılmaz.
