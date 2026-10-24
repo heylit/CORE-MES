@@ -27,7 +27,6 @@ test.describe('A0 iskelet', () => {
 for (const [parca, sayfalar] of [
   ['A1 Operatör', 'Operatör, Önizleme'],
   ['A2 Hazırlık', 'Üretim Terminali Hazırlık'],
-  ['A5 Çizim', 'Çizim'],
 ] as const) {
   test.describe(parca, () => {
     test(`${sayfalar}: bugünkü davranış`, () => {
@@ -85,6 +84,89 @@ test.describe('A4 Kalite, bakım, raporlar · yetki', () => {
     await ac('/arkon/yeni/kalite');
     const kalite = page.getByRole('group', { name: 'Kalite görünümü' });
     for (const ad of ['Numuneler', 'SPC · rapor', 'Onaylar', 'Ölçü aletleri']) await expect(kalite.getByRole('button', { name: new RegExp(`^${ad}`) })).toBeVisible();
+  });
+});
+
+// A5: dosyalar sentetiktir (küp STL ve tek satırlık PDF, kod içinde üretilir); paket listesi bu testte ağdan verilir, sunucuya yazılmaz.
+const b64 = (s: string) => Buffer.from(s, 'latin1').toString('base64');
+function kupStl(a: number): string {
+  const v = [[0, 0, 0], [a, 0, 0], [a, a, 0], [0, a, 0], [0, 0, a], [a, 0, a], [a, a, a], [0, a, a]] as const;
+  const y = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+  return 'solid deneme\n' + y.map((u) => ' facet normal 0 0 0\n  outer loop\n' + u.map((i) => `   vertex ${v[i]!.join(' ')}\n`).join('') + '  endloop\n endfacet\n').join('') + 'endsolid deneme\n';
+}
+function tekSatirPdf(metin: string): string {
+  const akis = `BT /F1 18 Tf 120 400 Td (${metin}) Tj ET`;
+  const nesneler = [
+    '<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${String(akis.length)} >>\nstream\n${akis}\nendstream`,
+  ];
+  let govde = '%PDF-1.4\n';
+  const yer: number[] = [];
+  nesneler.forEach((n, i) => { yer.push(govde.length); govde += `${String(i + 1)} 0 obj\n${n}\nendobj\n`; });
+  const xref = govde.length;
+  govde += `xref\n0 ${String(nesneler.length + 1)}\n0000000000 65535 f \n` + yer.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  return govde + `trailer\n<< /Size ${String(nesneler.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xref)}\n%%EOF\n`;
+}
+const paket = (id: string, no: string, ad: string, kind: 'pdf' | 'model', icerik: string) => ({
+  kimlik: id, surum: 1, govde: { id, no, part: 'Deneme parca', files: [{ kind, name: ad, bytes: { $ta: 'u8', b: b64(icerik) } }], primary: ad, plan: [], updatedAt: 1 },
+});
+
+test.describe('A5 Çizim', () => {
+  test('Çizim stüdyosu: dosya, önizleme ve ayar panelleri açılır; açılışta yazma yok, dışarı istek yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    const disari: string[] = [];
+    page.on('request', (r) => { if (!r.url().startsWith(ADRES) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) disari.push(r.url()); });
+    await ac('/arkon/yeni/cizim');
+    const dosyalar = page.getByRole('complementary', { name: 'Dosyalar' });
+    await expect(dosyalar.getByText('PDF eklenmedi')).toBeVisible();
+    await expect(dosyalar.getByRole('button', { name: 'Kaydet' })).toBeDisabled();
+    const ayar = page.getByRole('complementary', { name: 'Okuma ayarları' });
+    const kip = page.getByRole('group', { name: 'Görünüm' });
+    // 1280'de eski ekrandaki gibi üç sütun yan yana (Soru 282); darda tek panel ve Dosya/Önizleme/Ayarlar düğmeleri.
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      await expect(kip).toBeHidden();
+      const kutular = await Promise.all([dosyalar, page.getByRole('region', { name: 'Çizim önizlemesi' }), ayar].map((k) => k.boundingBox()));
+      const [d, c, a] = kutular.map((k) => { if (!k) throw new Error('panel görünmüyor'); return k; });
+      expect(d!.x + d!.width).toBeLessThanOrEqual(c!.x);
+      expect(c!.x + c!.width).toBeLessThanOrEqual(a!.x);
+      expect(Math.abs(d!.y - a!.y)).toBeLessThan(2);
+    } else {
+      await expect(kip).toBeVisible();
+      await kip.getByRole('button', { name: 'Ayarlar' }).click();
+    }
+    await expect(ayar.getByRole('tab')).toHaveText(['PDF', '3B model', 'Tanı']);
+    await ayar.getByRole('tab', { name: '3B model' }).click();
+    await expect(ayar.getByRole('switch', { name: 'Gizli çizgiler' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler'))).toEqual([]);
+    expect(disari).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Teknik resim: STL modelden resim ve ölçü önerisi, 3B görünüm; PDF dosyasından ölçü önerisi; açmak yazmaz', async ({ page, ag, ac }) => {
+    test.setTimeout(90_000);
+    await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({
+      json: { belgeler: [paket('p-stl', 'IE-DENEME-STL', 'kup.stl', 'model', kupStl(40)), paket('p-pdf', 'IE-DENEME-PDF', 'deneme.pdf', 'pdf', tekSatirPdf('40 +/-0.1'))] },
+    }));
+    await ac('/arkon/yeni/cizim');
+    const dosyalar = page.getByRole('complementary', { name: 'Dosyalar' });
+    await dosyalar.getByRole('button', { name: /IE-DENEME-STL/ }).click();
+    const resim = page.getByRole('region', { name: 'Teknik resim' });
+    await expect(resim.getByRole('img', { name: 'Teknik resim kup' })).toBeVisible({ timeout: 30_000 });
+    await expect(resim.getByRole('dialog', { name: 'Ölçü önerileri' })).toBeVisible({ timeout: 30_000 });
+    await resim.getByRole('button', { name: '3B model' }).click();
+    await expect(resim.locator('.tc-ay5-3b-sahne canvas')).toBeVisible({ timeout: 30_000 });
+    await expect(resim.getByRole('alert')).toHaveCount(0);
+
+    const kip = page.getByRole('group', { name: 'Görünüm' });
+    if (await kip.isVisible()) await kip.getByRole('button', { name: 'Dosya' }).click();
+    await dosyalar.getByRole('button', { name: /IE-DENEME-PDF/ }).click();
+    await expect(resim.locator('img.tc-ay5-pdf')).toBeVisible({ timeout: 30_000 });
+    const oneriler = resim.getByRole('dialog', { name: 'Ölçü önerileri' });
+    await expect(oneriler.getByText(/ölçü bulundu/)).toBeVisible({ timeout: 30_000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler'))).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
   });
 });
 
