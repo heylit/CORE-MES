@@ -9,14 +9,28 @@ const KARTLAR: [string, SimgeAdi][] = [
   ['Plan', 'target'], ['Siparişler', 'list'], ['Kuyruklar', 'sort'], ['Senaryolar', 'layers'], ['Kısıt ve veri', 'gear'], ['Hesaplar', 'chart'],
   ['Ne neyi etkiliyor', 'scan'], ['Reçete ve Rota', 'tool'],
 ];
-const BOLUMLER: { ad: string; l: { ad: string; simge: SimgeAdi; not: string; tus?: string }[] }[] = [
-  { ad: 'Kartlar', l: KARTLAR.map(([ad, simge], i) => ({ ad, simge, not: HAZIRLANIYOR, tus: String(i + 1) })) },
-  { ad: 'Tahtada göster', l: [{ ad: 'Önceki planla fark', simge: 'eye', not: HAZIRLANIYOR }, { ad: 'Gecikme kaynağı', simge: 'chart', not: HAZIRLANIYOR }, { ad: 'Nasıl okunur', simge: 'help', not: HAZIRLANIYOR }] },
-  { ad: 'Düzen', l: [{ ad: 'Klavye kısayolları', simge: 'help', not: HAZIRLANIYOR }, { ad: 'Kartları bölgelere diz', simge: 'grid', not: HAZIRLANIYOR }] },
-  { ad: 'Sayfalar', l: [{ ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU }, { ad: 'Nasıl hesaplandı', simge: 'chart', not: YOK_NOTU }] },
-];
+interface Madde { ad: string; simge: SimgeAdi; not?: string; tus?: string; basili?: boolean; yap?: () => void; dugme?: boolean }
+// Haritanın katmanları menüden açılır: gecikme kaynağı, kılavuz ve klavye kısayolları (P1b). Önceki planla fark canlı planla gelir.
+export interface BaskaDurumu {
+  mercek: 'durum' | 'etki'; mercekSec: () => void; kilavuz: boolean; kilavuzAc: () => void; kisayolAc: () => void; planYaz: boolean;
+}
+function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
+  return [
+    { ad: 'Kartlar', l: KARTLAR.map(([ad, simge], i) => ({ ad, simge, not: HAZIRLANIYOR, tus: String(i + 1) })) },
+    { ad: 'Tahtada göster', l: [
+      { ad: 'Önceki planla fark', simge: 'eye', not: HAZIRLANIYOR },
+      { ad: 'Gecikme kaynağı', simge: 'chart', basili: b.mercek === 'etki', yap: b.mercekSec },
+      { ad: 'Nasıl okunur', simge: 'help', basili: b.kilavuz, yap: b.kilavuzAc },
+    ] },
+    { ad: 'Düzen', l: [
+      b.planYaz ? { ad: 'Klavye kısayolları', simge: 'help', tus: '?', yap: b.kisayolAc, dugme: true } : { ad: 'Klavye kısayolları', simge: 'help', tus: '?', not: 'Plan yazma yetkiniz yok.' },
+      { ad: 'Kartları bölgelere diz', simge: 'grid', not: HAZIRLANIYOR },
+    ] },
+    { ad: 'Sayfalar', l: [{ ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU }, { ad: 'Nasıl hesaplandı', simge: 'chart', not: YOK_NOTU }] },
+  ];
+}
 
-export function BaskaMenusu({ acik, ac }: { acik: boolean; ac: (v: boolean) => void }) {
+export function BaskaMenusu({ acik, ac, ...b }: { acik: boolean; ac: (v: boolean) => void } & BaskaDurumu) {
   const menu = useRef<HTMLDivElement>(null); const dugme = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!acik) return;
@@ -33,14 +47,18 @@ export function BaskaMenusu({ acik, ac }: { acik: boolean; ac: (v: boolean) => v
       </button>
       {acik && (
         <div ref={menu} className="tc-pym-sg-menu" role="menu" aria-label="Başka görünüm ve kartlar">
-          {BOLUMLER.map((b) => (
-            <div key={b.ad} role="group" aria-label={b.ad}>
-              <small>{b.ad}</small>
-              {b.l.map((x) => (
-                <button key={x.ad} type="button" role="menuitem" aria-disabled="true" title={`${x.ad}: ${x.not}`}>
+          {bolumler(b).map((g) => (
+            <div key={g.ad} role="group" aria-label={g.ad}>
+              <small>{g.ad}</small>
+              {g.l.map((x) => (x.yap ? (
+                <button key={x.ad} type="button" role={x.dugme ? 'menuitem' : 'menuitemcheckbox'} aria-checked={x.dugme ? undefined : x.basili ?? false} onClick={() => { ac(false); x.yap?.(); }}>
                   <Simge ad={x.simge} boyut="k" /><span>{x.ad}</span>{x.tus && <kbd>{x.tus}</kbd>}
                 </button>
-              ))}
+              ) : (
+                <button key={x.ad} type="button" role="menuitem" aria-disabled="true" title={`${x.ad}: ${x.not ?? ''}`}>
+                  <Simge ad={x.simge} boyut="k" /><span>{x.ad}</span>{x.tus && <kbd>{x.tus}</kbd>}
+                </button>
+              )))}
             </div>
           ))}
         </div>

@@ -47,3 +47,47 @@ test.describe('P1a Planlama motoru', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// P1b: Harita görünümü (tezgâh haritası, kılavuz, yakınlık, oynatıcı ve zaman imleci). Sürükleme kapalıdır (459/4 a); test yazma göndermez.
+test.describe('P1b Tezgâh haritası', () => {
+  test('Harita: tuval, yakınlık ve oynatıcı; kılavuz açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText('Planlama çalışması yok.')).first()).toBeVisible();
+    if (await page.getByText('Planlama çalışması yok.').isVisible()) { await tasmaz(page); return; }
+    await page.getByRole('button', { name: 'Harita', exact: true }).click();
+    if (await page.getByText(/Henüz plan yok/).first().isVisible()) { await tasmaz(page); return; }
+    const harita = page.getByRole('region', { name: 'Tezgâh haritası' });
+    await expect(harita).toBeVisible();
+    await expect(harita.locator('canvas')).toBeVisible();
+    await harita.getByRole('button', { name: 'Yakınlaş (+)' }).click();
+    await harita.getByRole('button', { name: 'Sığdır (F)' }).click();
+    const imlec = harita.getByRole('slider', { name: 'Zaman imleci' });
+    await expect(imlec).toBeVisible();
+    await harita.getByRole('button', { name: 'Oynat' }).click();
+    await expect(harita.getByRole('button', { name: 'Durdur' })).toBeVisible();
+    await harita.getByRole('button', { name: 'Durdur' }).click();
+    // İlk ziyarette kılavuz kendiliğinden açılır (eski zs-olcek-ortak); kapatılır, Başka menüsünden yeniden açılır.
+    const kilavuz = page.getByRole('complementary', { name: 'Kılavuz' });
+    await expect(kilavuz).toBeVisible({ timeout: 5000 });
+    await tasmaz(page);
+    await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
+    await expect(kilavuz).toHaveCount(0);
+    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
+    await expect(kilavuz).toBeVisible();
+    await kilavuz.getByRole('button', { name: 'Anladım' }).click();
+    await expect(kilavuz).toHaveCount(0);
+    // Özet'te de açılır, görünüm değişmez (eski atKilavuz).
+    await page.getByRole('button', { name: 'Özet', exact: true }).click();
+    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
+    await expect(kilavuz).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Plan nasıl gidiyor?' })).toBeVisible();
+    await tasmaz(page);
+    await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
+    await expect(kilavuz).toHaveCount(0);
+    await tasmaz(page);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
