@@ -3,19 +3,21 @@ import { CokSatir, Dugme, Rozet, useBildirim } from '../../../../ortak/arayuz/in
 import { AdimliForm, type FormVerisi, type KmAlan } from '../AdimliForm.tsx';
 import { Ekler } from '../Ekler.tsx';
 import { bugun, devDurumu } from '../kurallar.ts';
-import { INSP_TUR } from '../sabitler.ts';
+import { FAI_NEDEN, INSP_TUR } from '../sabitler.ts';
 import type { Muayene } from '../tipler.ts';
 import { siradakiNo, useKmKomutu, yeniKimlik, type KmVerisi } from '../veri.ts';
 import type { KmYetkisi } from '../yetki.ts';
 import { BelgeKontrolu } from './BelgeKontrolu.tsx';
 import {
-  aqlIleNumune, kayitEngeli, kayitGovdesi, muayeneEksikleri, muayeneTopla, olcumleriKoru, sonucTonu, type MuayeneDegeri,
+  aqlIleNumune, FAI_KAPSAM, kayitEngeli, kayitGovdesi, muayeneEksikleri, muayeneTopla, olcumleriKoru, sonucTonu, type MuayeneDegeri,
 } from './hesap.ts';
 import { KarakteristikTablosu } from './KarakteristikTablosu.tsx';
 import { MuayeneBelgesi } from './MuayeneBelgesi.tsx';
 
 // Form verisi uygulamanın serbest kayıt gövdesidir; muayene alanları buradan okunur.
 const muayene = (d: FormVerisi): MuayeneDegeri => d as MuayeneDegeri;
+
+const faiMi = (d: FormVerisi) => d.tur === 'FAI';
 
 function alanlar(veri: KmVerisi): KmAlan[] {
   return [
@@ -34,6 +36,9 @@ function alanlar(veri: KmVerisi): KmAlan[] {
       k: 'tedarikci', etiket: 'Tedarikçi', tur: 'secim', genis: 'tam',
       secenekler: [['', '— (iç üretim)'] as const, ...veri.sup.map((s) => [s._id, `${s.kod ?? ''} ${s.ad ?? ''}`.trim()] as const)],
     },
+    // Uygulama FAI bölümünü yalnız FAI türünde gösterir; tek tek kipte nedeni ve kapsamı ayrı sorar.
+    { k: 'faiNeden', etiket: 'FAI nedeni', tur: 'secim', genis: 'yarim', zorunlu: true, gorunur: faiMi, secenekler: [['', 'Seçin'] as const, ...FAI_NEDEN] },
+    { k: 'faiKapsam', etiket: 'Kapsam', tur: 'secim', genis: 'yarim', gorunur: faiMi, secenekler: FAI_KAPSAM, varsayilan: FAI_KAPSAM[0] },
   ];
 }
 
@@ -86,7 +91,7 @@ export function MuayeneFormu({ veri, yetki, kayit, on, kapat, retOldu }: {
           ),
         },
         {
-          baslik: 'Belge kontrolü', ipucu: "Giriş muayenesinde belge ve kaynak kontrolleri, FAI'de AS9102 Form 1-2-3.",
+          baslik: 'Belge kontrolü', alanlar: ['faiNeden', 'faiKapsam'], ipucu: "Giriş muayenesinde belge ve kaynak kontrolleri, FAI'de AS9102 Form 1-2-3.",
           icerik: (d, degistir) => <BelgeKontrolu d={muayene(d)} degistir={degistir} />,
         },
         {

@@ -55,7 +55,9 @@ test.describe('yönetici', () => {
       await expect(page.getByRole('heading', { name: 'Muayene ve FAI' })).toBeVisible();
       await page.getByRole('button', { name: 'Muayene kaydet' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('button', { name: 'Vazgeç' }).click();
+      // Dar ekranda Vazgeç gizlidir (bugünkü gibi); pencerenin kapatma düğmesi her genişlikte vardır.
+      await page.getByRole('dialog').getByRole('button', { name: 'Kapat' }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
     });
 
     test('lot kabul sihirbazı plan çıkarır', async ({ page, ac }) => {

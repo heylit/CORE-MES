@@ -6,6 +6,8 @@ import type { Karakteristik, KmAyarlari, Muayene } from '../tipler.ts';
 
 // `satirlar` formdaki düzenlenen tablo (boş satırlar dahil); kayda `chars` olarak, boş satırlar düşerek girer.
 // Uygulamanın muayene gövdesinde K0 tipinde adı geçmeyen alanlar da vardır (numune planı metni, not, ölçüme başlanan resim).
+export const FAI_KAPSAM = ['Tam FAI', 'Kısmi FAI (yalnız değişen karakteristikler)'] as const;
+
 export type MuayeneDegeri = Partial<Muayene> & { satirlar?: Karakteristik[]; aqlPlan?: string; not?: string; cizimId?: string };
 
 export const satirDolu = (c: Karakteristik) => !!(c.ad ?? '').trim();
@@ -22,7 +24,7 @@ export function muayeneTopla(d: MuayeneDegeri): MuayeneDegeri {
   // Uygulamada belge kontrolü alanları her türde formdadır; kayda boş da olsa yazılır.
   return {
     ...d, chars, sonuc, not: (d.not ?? '').trim(), aqlPlan: d.aqlPlan ?? '',
-    gchk: d.gchk ?? [], fchk: d.fchk ?? [], faiNeden: d.faiNeden ?? '', faiKapsam: d.faiKapsam || 'Tam FAI',
+    gchk: d.gchk ?? [], fchk: d.fchk ?? [], faiNeden: d.faiNeden ?? '', faiKapsam: d.faiKapsam || FAI_KAPSAM[0],
   };
 }
 
@@ -35,7 +37,6 @@ export function muayeneEksikleri(d: MuayeneDegeri): Eksik[] {
   if (!ch.length) e.push({ metin: 'En az bir karakteristik girin', adim: 2 });
   if (ch.some((c) => !c.sonuc)) e.push({ metin: 'Bazı karakteristiklerin ölçüm sonucu eksik', adim: 2 });
   if (ch.some((c) => !c.cihaz && c.tip !== 'Nitel')) e.push({ metin: 'Değişken ölçümlerde cihaz seçilmemiş', adim: 2 });
-  if (d.tur === 'FAI' && !d.faiNeden) e.push({ metin: 'FAI nedeni seçilmemiş', adim: 1, alan: 'faiNeden' });
   if (d.tur === 'Giriş' && (d.gchk ?? []).length < GIRIS_CHK.length) {
     e.push({ metin: `Belge kontrolünde ${GIRIS_CHK.length - (d.gchk ?? []).length} madde işaretsiz: sonuç "Beklemede" olur`, adim: 1 });
   }
