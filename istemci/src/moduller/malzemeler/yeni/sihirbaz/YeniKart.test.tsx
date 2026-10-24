@@ -188,6 +188,62 @@ describe('M1 yeni kart sihirbazı', () => {
     }
   });
 
+  test('reçete ve rota var olan üründen alınır: seçim karta yazılmaz, kayıttan sonra kopya isteği Rota\'ya gider (306 a, 307 b)', async () => {
+    const ymKarti = {
+      ...ornekKayit('mym3', 'YM-DNM-00003', 'Deneme yarı mamul', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},
+      g: { ad: 'Deneme mil', tip: 'Talaşlı işlenmiş parça' }, ops: [], onay: { durum: 'taslak' },
+    };
+    const rotalar = { rotalar: [
+      { urun: { id: 7, stokKodu: 'MM-DNM-00007', ad: 'Deneme ürün', tur: 'mamul', stokBirimi: null, onayDurumu: 'aktif' }, yururlukte: { id: 70, harf: 'A' }, acik: null, revizyonSayisi: 1 },
+      { urun: { id: 8, stokKodu: 'MM-DNM-00008', ad: 'Rotasız ürün', tur: 'mamul', stokBirimi: null, onayDurumu: 'aktif' }, yururlukte: null, acik: null, revizyonSayisi: 0 },
+    ] };
+    const istekler = sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mym3', kayit: ymKarti }),
+      'GET /malzeme-katalogu-kartlari/mym3/rota': () => json(200, { rotali: false }),
+      'GET /rota/urunler': () => json(200, rotalar),
+      'POST /malzeme-katalogu-kartlari/mym3/kaydet': () => json(200, { id: 'mym3', stok_kodu: 'YM-DNM-00003', surum: 2 }),
+      'POST /rota/urunler/100/kopya-iste': () => json(200, { durum: 'bekliyor', revizyon: null }),
+    });
+    ac('?kart=mym3');
+    fireEvent.click(await screen.findByRole('button', { name: /Operasyon/ }));
+    const secim = await screen.findByRole('combobox', { name: 'Reçete ve rotası alınacak ürün' });
+    expect(within(secim).queryByText(/Rotasız ürün/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reçete ve rotayı bu üründen al' }));
+    expect(await screen.findByText(/Reçete ve rota MM-DNM-00007 · Deneme ürün ürününden alınacak/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText(/Kart onaylanınca MM-DNM-00007 · Deneme ürün reçete ve rotası/)).toBeTruthy();
+    const kayit = istekler.find((i) => i.yol === '/malzeme-katalogu-kartlari/mym3/kaydet');
+    expect((kayit?.govde as { kayit: Record<string, unknown> }).kayit['_receteKaynagi']).toBeUndefined();
+    const kopya = istekler.find((i) => i.yol === '/rota/urunler/100/kopya-iste');
+    expect(kopya?.govde).toEqual({ kaynakUrunId: 7 });
+    expect(istekler.indexOf(kopya!)).toBeGreaterThan(istekler.indexOf(kayit!));
+  });
+
+  test('kopya isteği reddedilirse kart kayıtlı kalır ve sunucunun iletisi gösterilir; hammadde kartında seçim yok', async () => {
+    const ymKarti = {
+      ...ornekKayit('mym4', 'YM-DNM-00004', 'Deneme yarı mamul', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},
+      g: { ad: 'Deneme mil', tip: 'Talaşlı işlenmiş parça' }, ops: [], onay: { durum: 'taslak' }, _receteKaynagi: { no: 7, ad: 'Deneme ürün' },
+    };
+    sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mym4', kayit: ymKarti }),
+      'GET /malzeme-katalogu-kartlari/mym4/rota': () => json(200, { rotali: false }),
+      'POST /malzeme-katalogu-kartlari/mym4/kaydet': () => json(200, { id: 'mym4', stok_kodu: 'YM-DNM-00004', surum: 2 }),
+      'POST /rota/urunler/100/kopya-iste': () => json(409, { kod: 'CAKISMA', mesaj: 'Bu ürünün rotası var.' }),
+    });
+    ac('?kart=mym4');
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    expect(await screen.findByText(/Kart kaydedildi; reçete ve rota kopyası istenemedi: Bu ürünün rotası var\./)).toBeTruthy();
+    cleanup();
+    vi.unstubAllGlobals();
+    const istekler = sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.queryByRole('button', { name: /Operasyon/ })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Reçete ve rotası alınacak ürün' })).toBeNull();
+    expect(istekler.some((i) => i.yol === '/rota/urunler')).toBe(false);
+  });
+
   test('alış birimi ve katsayısı stok biriminin arkasında, kayıtlı değerle dolu gelir (323 b)', async () => {
     sunucuKur(YAZAN, {
       'GET /malzeme-katalogu-kartlari': kartlarYaniti({

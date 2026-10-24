@@ -54,6 +54,20 @@ test.describe('M1 yeni kart sihirbazı', () => {
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar).toEqual([]);
   });
+  // 306 a: seçim yalnız taslakta kalır; kayıt düğmesine basılmaz, yazma gitmez.
+  test('yarı mamulde reçete ve rota var olan üründen seçilir; uyarı çıkar, yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/malzemeler/yeni-ekran/kart?tur=yarimamul');
+    await page.getByRole('textbox', { name: 'Parça adı *' }).fill('Deneme mil');
+    await page.getByRole('radio', { name: 'Talaşlı işlenmiş parça' }).click();
+    await page.getByRole('navigation', { name: 'Adımlar' }).getByRole('button', { name: /Operasyon/ }).click();
+    const secim = page.getByRole('combobox', { name: 'Reçete ve rotası alınacak ürün' });
+    await expect(secim).toBeVisible();
+    await page.getByRole('button', { name: 'Reçete ve rotayı bu üründen al' }).click();
+    await expect(page.getByText(/ürününden alınacak\./)).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
 });
 
 test.describe('M3 malzeme ayarları', () => {
