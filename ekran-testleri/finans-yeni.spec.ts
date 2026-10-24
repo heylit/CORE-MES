@@ -40,3 +40,61 @@ test.describe('F0 iskelet', () => {
     });
   });
 });
+
+test.describe('F4 ana sayfa ve ayarlar', () => {
+  // Açılışta günlük skor kendiliğinden yazılabilir (F0); ekranın kendi işlemleri yazma göndermez.
+  const yazmalar = (y: readonly string[]) => y.filter((x) => x !== 'POST /api/finans/skorlar/kaydet');
+
+  test('ana sayfa: dört sayı, yapılacaklar, nakit ve finansal durum; yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni');
+    const ana = page.locator('.tc-fa');
+    for (const b of ['Kasada ve bankada', 'Alacağım', 'Borcum', 'Aylık ortalama kâr']) await expect(ana.getByText(b, { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(ana.getByText('Yapılacaklar', { exact: true })).toBeVisible();
+    await expect(ana.getByText('Nakit görünümü', { exact: true })).toBeVisible();
+    await expect(ana.getByText('Finansal durum', { exact: true })).toBeVisible();
+    await expect(ana.getByRole('group', { name: 'Hızlı kayıt' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('hızlı "Tahsilat" kayıt formunu açar; vazgeçince yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni');
+    await page.locator('.tc-fa').getByRole('group', { name: 'Hızlı kayıt' }).getByRole('button', { name: 'Tahsilat' }).click();
+    const form = page.getByRole('dialog', { name: 'Müşteriden para geldi' });
+    await expect(form).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await form.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(form).toBeHidden();
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('ayarlar: dokuz sekmenin her biri açılır, yatay taşma yok, yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/ayarlar');
+    const serit = page.getByRole('tablist', { name: 'Ayar bölümleri' });
+    await expect(serit).toBeVisible({ timeout: 15_000 });
+    const sekmeler = serit.getByRole('tab');
+    await expect(sekmeler).toHaveCount(9);
+    for (let i = 0; i < 9; i++) {
+      await sekmeler.nth(i).click();
+      await expect(sekmeler.nth(i)).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator('.tc-fa-ayar-govde > *').first()).toBeVisible();
+      expect((await tasmaOlc(page)).belge, await sekmeler.nth(i).innerText()).toBeLessThanOrEqual(0);
+    }
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('yeni hesap formu açılır ve kapanır; yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/ayarlar?sekme=hesaplar');
+    await page.getByRole('button', { name: 'Yeni hesap' }).click();
+    const form = page.getByRole('dialog', { name: 'Yeni hesap' });
+    await expect(form).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await form.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(form).toBeHidden();
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
