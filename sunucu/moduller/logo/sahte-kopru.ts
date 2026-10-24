@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { MALZEME_FISI_UCU } from './kurallar.ts';
 
 // Sahte Logo köprüsü: YALNIZ test ve yerel deneme içindir (kart #207, kullanıcı kararı 3). Üretim kodu bunu ithal etmez;
 // sunucu köprü adresini yalnız TMIV2_LOGO_KOPRU_ADRESI'nden alır. Yalnız 127.0.0.1'de dinler.
@@ -16,7 +17,11 @@ import type { AddressInfo } from 'node:net';
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
 // Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404). Malzeme fişi: POST
-// /api/MaterialSlip/AddConsumption ve AddProductionEntry, DELETE /api/MaterialSlip/{Consumption|ProductionEntry}/{no}. Hepsinin cevap biçimi VARSAYIM.
+// /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Hepsinin cevap biçimi VARSAYIM.
+
+const FIS_UCLARI = Object.values(MALZEME_FISI_UCU).join('|');
+const FIS_EKLE = new RegExp(`^/api/MaterialSlip/(Add(?:${FIS_UCLARI}))$`);
+const FIS_SIL = new RegExp(`^/api/MaterialSlip/(${FIS_UCLARI})/(.+)$`);
 
 export type SahteSenaryo =
   // Kart açılır, numarası döner.
@@ -217,8 +222,8 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         else json(cevap, 404, { success: false, logicalRef: 0, error: 'Order not found', validate: null });
         return;
       }
-      // Malzeme fişi: sarf (12) ve üretimden giriş (13); fişi numarayla arama ucu yok. Aynı numara tekrar gelirse yine açar (kalkanın Logo'ya güvenmediği görünsün).
-      const fis = /^\/api\/MaterialSlip\/(AddConsumption|AddProductionEntry)$/.exec(yol);
+      // Malzeme fişi (türler kurallar.ts MALZEME_FISI_UCU); fişi numarayla arama ucu yok. Aynı numara tekrar gelirse yine açar (kalkanın Logo'ya güvenmediği görünsün).
+      const fis = FIS_EKLE.exec(yol);
       if (istek.method === 'POST' && fis) {
         if (kopru.senaryo === 'dogrulama') { json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['ITEM_CODE gecersiz'] }); return; }
         if (kopru.senaryo === 'zaman-asimi') { bekleyenler.add(cevap); return; }
@@ -230,10 +235,10 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         return;
       }
       // 233: fişi numarasıyla silme; yoksa 404. Doğrulama senaryosunda Logo silmeyi reddeder.
-      const fisSil = /^\/api\/MaterialSlip\/(Consumption|ProductionEntry)\/(.+)$/.exec(yol);
+      const fisSil = FIS_SIL.exec(yol);
       if (istek.method === 'DELETE' && fisSil) {
         if (kopru.senaryo === 'dogrulama') { json(cevap, 200, { success: false, logicalRef: 0, error: 'Delete false', validate: null }); return; }
-        const uc = fisSil[1] === 'Consumption' ? 'AddConsumption' : 'AddProductionEntry';
+        const uc = `Add${fisSil[1] ?? ''}`;
         const no = decodeURIComponent(fisSil[2] ?? '');
         const i = kopru.malzemeFisleri.findIndex((f) => f.uc === uc && f.no === no);
         const silinen = i < 0 ? undefined : kopru.malzemeFisleri.splice(i, 1)[0];

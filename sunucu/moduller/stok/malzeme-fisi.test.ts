@@ -100,8 +100,9 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     malzemeFisleriCevabi.parse(c.govde);
     assert.deepEqual(c.govde.satirlar.map((f) => f.tur).sort(), ['fire', 'sarf', 'uretim_girisi']);
     assert.ok(c.govde.satirlar.every((f) => f.satirSayisi === 0 && f.emirNo !== null && f.no === f.emirNo));
-    // Logo modülü bağlı değil: durum bilinmiyor, gönderilemez.
-    assert.ok(c.govde.satirlar.every((f) => f.logo.durum === 'bilinmiyor' && !f.gonderilebilir));
+    // Logo modülü kablolamayla bağlı (kart #493): sarf ve giriş otomatik türde sıraya girecek, fire kapalı; hiçbiri elle gönderilemez.
+    assert.deepEqual(Object.fromEntries(c.govde.satirlar.map((f) => [f.tur, f.logo.durum])), { sarf: 'bekliyor', uretim_girisi: 'bekliyor', fire: 'gonderilmez' });
+    assert.ok(c.govde.satirlar.every((f) => !f.gonderilebilir));
   });
 
   test('emirli sarf ve fire ayrı fişe yazılır; geri alma satırı düşürür ve değişiklik sayılır', async () => {
@@ -197,7 +198,7 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     assert.deepEqual(l.satirlar.map((x) => x.miktar), ['2']);
   });
 
-  test('gönder: Logo bağlı değilken 409; elle türde bekleyen fiş gönderilir, istek ve sürüm yazılır; yetkisiz 403, eski sürüm 409', async () => {
+  test('gönder: otomatik türde 409; elle türde bekleyen fiş gönderilir, istek ve sürüm yazılır; yetkisiz 403, eski sürüm 409', async () => {
     const e = await emir();
     await o().vt.tx((db) => emirAcildiYansit(db, { uretimEmriId: e, kisiId: yoneticiId, stoktanRezerve: false }));
     const k = await kart();

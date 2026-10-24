@@ -1,4 +1,10 @@
-import type { AyarTanimi } from '../ayar-tanimi.ts';
+import type { AyarSecenegi, AyarTanimi } from '../ayar-tanimi.ts';
+
+const FIS_GONDERIM_SECENEKLERI: readonly AyarSecenegi[] = [
+  { deger: 'kapali', etiket: 'Kapalı' },
+  { deger: 'otomatik', etiket: 'Otomatik' },
+  { deger: 'elle', etiket: 'Elle' },
+];
 
 export const LOGO_AYARLARI = {
   'logo.baglanti': {
@@ -84,13 +90,45 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: fatura okuması',
     aciklama: 'Açıkken Logo\'ya gitmiş satın alma siparişlerinin faturaları sırayla okunur ve yalnız saklanır (turda en çok birkaç sipariş). "Logo bağlantısı" da açık olmalı.',
   },
-  // Sarf ve üretimden giriş fişi: kaynağı olan modül işlevleri gelene kadar akış bağlı değildir; ayar kapalı kalır.
+  // Malzeme fişlerinin ana anahtarı; tür başına gönderim şekli aşağıda (298 a).
   'logo.malzeme-fisi-gonderimi': {
     modul: 'logo',
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: malzeme fişi gönderimi',
-    aciklama: 'Açıkken sarf ve üretimden giriş fişleri Logo\'ya gider. Logo\'da fişi numarayla arama ucu yok; sonucu bilinmeyen gönderim tekrarlanmaz, Logo\'da kontrol istenir. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken Stok\'taki malzeme fişleri, türünün gönderim şekline göre Logo\'ya gider. Logo\'da fişi numarayla arama ucu yok; sonucu bilinmeyen gönderim tekrarlanmaz, Logo\'da kontrol istenir. "Logo bağlantısı" da açık olmalı.',
+  },
+  // 298 a (kullanıcı teyidi 24.10.2026): tür başına kapalı, otomatik ya da elle. Sarf ve üretimden giriş otomatik; yeni dört türün Logo
+  // tür kodu gerçek Logo'da doğrulanana kadar kapalı.
+  'logo.malzeme-fisi-sarf': {
+    modul: 'logo', tur: 'secim', varsayilan: 'otomatik', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: sarf fişi gönderimi',
+    aciklama: 'Otomatik: fiş değişince Logo\'ya gider. Elle: Stok\'taki Malzeme fişleri sayfasında "Gönder" ile gider. Kapalı: gitmez.',
+  },
+  'logo.malzeme-fisi-uretim-girisi': {
+    modul: 'logo', tur: 'secim', varsayilan: 'otomatik', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: üretimden giriş fişi gönderimi',
+    aciklama: 'Otomatik: fiş değişince Logo\'ya gider. Elle: Stok\'taki Malzeme fişleri sayfasında "Gönder" ile gider. Kapalı: gitmez.',
+  },
+  'logo.malzeme-fisi-fire': {
+    modul: 'logo', tur: 'secim', varsayilan: 'kapali', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: fire fişi gönderimi',
+    aciklama: 'Kapalıyken fire satırları emrin sarf fişiyle gider. Açarken dikkat: daha önce Logo\'ya gitmiş sarf fişleri fireyi içerir; o emirlerin sarf fişi değişince fire ondan çıkar.',
+  },
+  'logo.malzeme-fisi-sayim-fazlasi': {
+    modul: 'logo', tur: 'secim', varsayilan: 'kapali', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: sayım fazlası fişi gönderimi',
+    aciklama: 'Sayımda bulunan fazlanın fişi. Logo tür kodu gerçek Logo\'da doğrulanana kadar kapalı tutun.',
+  },
+  'logo.malzeme-fisi-sayim-eksigi': {
+    modul: 'logo', tur: 'secim', varsayilan: 'kapali', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: sayım eksiği fişi gönderimi',
+    aciklama: 'Sayımda çıkan eksiğin fişi. Logo tür kodu gerçek Logo\'da doğrulanana kadar kapalı tutun.',
+  },
+  'logo.malzeme-fisi-ambar': {
+    modul: 'logo', tur: 'secim', varsayilan: 'kapali', secenekler: FIS_GONDERIM_SECENEKLERI,
+    baslik: 'Logo: ambar transfer fişi gönderimi',
+    aciklama: 'Logo ambarı farklı depolar arası taşımanın fişi. Logo tür kodu ve ambar alanları gerçek Logo\'da doğrulanana kadar kapalı tutun.',
   },
   'logo.malzeme-guncelleme-gonderimi': {
     modul: 'logo',
