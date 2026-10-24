@@ -1,0 +1,25 @@
+/* Finans ayarları (F4): yalnız tasarım değişkenleri. */
+.tc-fa-ayar { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fa-ayar-govde { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-fa-ayar-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--b-3); align-items: start; }
+.tc-fa-ayar-tam { grid-column: 1 / -1; }
+.tc-fa-ayar-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--b-4); }
+.tc-fa-ayar-iki > section { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-fa-ayar-arac { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-top: var(--b-2); }
+.tc-fa-ayar-satir { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); margin-top: var(--b-3); }
+.tc-fa-ayar-satir > * { flex: 1 1 10rem; }
+.tc-fa-ayar-satir > button { flex: 0 0 auto; }
+.tc-fa-ayar-alt { margin: var(--b-4) 0 var(--b-2); font-size: var(--yazi-m); }
+.tc-fa-ayar-onizleme { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-fa-ayar-onizleme p { margin: 0; }
+.tc-fa-alt-satir { display: block; color: var(--muted); font-size: var(--yazi-s); }
+
+.tc-fa-dosya { position: relative; display: inline-flex; }
+.tc-fa-dosya input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tc-fa-dosya:focus-within > span { outline: 2px solid var(--hazard); outline-offset: 2px; }
+
+.tc-fa-duzenli { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tc-fa-duzenli-satir {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--b-2); align-items: end;
+  padding: var(--b-3) 0; border-bottom: 1px solid var(--edge);
+}
