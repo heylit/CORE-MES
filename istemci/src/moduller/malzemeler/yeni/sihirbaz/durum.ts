@@ -72,3 +72,13 @@ export function useSihirbazDurumu(ilk: () => { taslak: Taslak; adim: number }, k
 
   return useMemo(() => ({ taslak: durum.taslak, adim: durum.adim, degistir, yenisiniKur, adimaGec }), [durum, degistir, yenisiniKur, adimaGec]);
 }
+
+// Reçete ve rotası alınacak ürün (306 a): yalnız taslakta yaşar ve kayıttan önce silinir; kopya isteği kayıttan sonra Rota'ya gider.
+export interface ReceteKaynagi { no: number; ad: string }
+export const RECETE_KAYNAGI = '_receteKaynagi';
+export function receteKaynagi(d: Taslak): ReceteKaynagi | null {
+  const k = d[RECETE_KAYNAGI];
+  if (k === null || typeof k !== 'object') return null;
+  const { no, ad } = k as Partial<ReceteKaynagi>;
+  return typeof no === 'number' && typeof ad === 'string' ? { no, ad } : null;
+}

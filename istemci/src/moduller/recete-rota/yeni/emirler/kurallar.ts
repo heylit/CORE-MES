@@ -149,7 +149,9 @@ export function rotaFarki(d: Durum, o: Emir): RotaFarki | null {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Malzeme ihtiyacı: emirler plan sırasıyla (başlamış önce, sonra öncelik, teslim, açılış) ürün ağacından patlatılır; serbest stok emirlere
 // bu sırayla paylaştırılır (alt seviye üretilen parça da stoktan netleşir). Fire: adım ret yüzdesi önceki adımları büyütür, girdi firesi
-// girdiyi büyütür. Kayıt belgesindeki statülü yerel stok ve ara stok kullanılmaz (208 a: yerel yol yok).
+// girdiyi büyütür. Ara adım stoğu (stoktaki rota statüsü) da aynı sırayla paylaştırılır: adımın çıktısı olarak bekleyen miktar sonraki adımın
+// girdisini karşılar, o adım ve öncekiler o kadar az üretir (461 b; prototipin build kuralı). Yalnız ürünün kendi rota adımının statüsü
+// sayılır; kayıt belgesindeki yerel stok kullanılmaz (208 a).
 export interface IhtiyacSatiri { malzemeId: string; brut: number; stoktan: number; alinacak: number }
 export interface EmirIhtiyaci { hammadde: IhtiyacSatiri[]; yanUrun: { malzemeId: string; miktar: number }[]; eksikler: IhtiyacSatiri[]; uyarilar: string[] }
 
@@ -182,9 +184,32 @@ export function planSirasi(d: Durum): Emir[] {
 const kolIcinde = (kol: { n: number; m: number }, j: number): boolean => j >= kol.n && j <= kol.m - 2;
 const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 1 && m - n >= 2 && m <= adimSayisi;
 
-export function malzemeIhtiyaclari(d: Durum): Map<string, EmirIhtiyaci> {
+// Ara adım havuzu: anahtar `<ürün>|<adım kimliği>`. Statünün kaynak adımı `<ürün no>-o<OP>` biçimindedir; ürünü yazmayan eski biçim
+// hangi ürünün olduğu belli olmadığı için sayılmaz. Bir statünün stoğu hangi kartın kırılımında görünürse görünsün toplanır.
+export function araStokHavuzu(okuma: StokOkumasi | null): Map<string, number> {
+  const havuz = new Map<string, number>();
+  const statuler = okuma?.statuler;
+  const malzemeler = okuma?.malzemeler;
+  if (!statuler || !malzemeler) return havuz;
+  const anahtar = new Map<number, string>();
+  for (const s of statuler) {
+    const m = /^(\d+)-(o\d+)$/.exec(s.kaynakAdim);
+    if (m) anahtar.set(s.id, `${m[1] ?? ''}|${m[2] ?? ''}`);
+  }
+  for (const k of Object.values(malzemeler)) {
+    for (const r of k?.kirilim ?? []) {
+      const a = r.statuId === null ? undefined : anahtar.get(r.statuId);
+      const q = Number(r.miktar);
+      if (a !== undefined && Number.isFinite(q) && q > EPS) havuz.set(a, (havuz.get(a) ?? 0) + q);
+    }
+  }
+  return havuz;
+}
+
+export function malzemeIhtiyaclari(d: Durum, okuma: StokOkumasi | null = null): Map<string, EmirIhtiyaci> {
   const malzeme = new Map<string, Malzeme>((d.items ?? []).map((i) => [i.id, i]));
   const havuz = new Map<string, number>((d.items ?? []).map((i) => [i.id, Math.max(0, i.stock ?? 0)]));
+  const araHavuz = araStokHavuzu(okuma);
   const sira = planSirasi(d);
   const sonuc = new Map<string, EmirIhtiyaci>();
 
@@ -216,10 +241,21 @@ export function malzemeIhtiyaclari(d: Durum): Map<string, EmirIhtiyaci> {
       if (net <= EPS) return;
       const sirali = siraliAdimlar(ss);
       const fs = adimCarpanlari(sirali);
+      // Adımın yapacağı miktar; ara stok son adımdan geriye doğru düşülür. Kol hesabında (tut) ara stok kullanılmaz (prototipte de öyle).
+      const yapilacak = sirali.map((_, j) => net * (fs[j] ?? 1));
+      if (!tut && araHavuz.size) {
+        for (let k = sirali.length - 2; k >= 0; k--) {
+          const a = `${urunId}|${sirali[k]?.id ?? ''}`;
+          const kullan = Math.min(araHavuz.get(a) ?? 0, yapilacak[k + 1] ?? 0);
+          if (kullan > EPS) araHavuz.set(a, (araHavuz.get(a) ?? 0) - kullan);
+          const ret = Math.min(0.95, Math.max(0, (sirali[k]?.rejectPct ?? 0) / 100));
+          yapilacak[k] = Math.max(0, (yapilacak[k + 1] ?? 0) - Math.max(0, kullan)) / (1 - ret);
+        }
+      }
       sirali.forEach((s, j) => {
         const kf = tut ? tut(j) : 1;
         if (!(kf > EPS)) return;
-        const carpan = net * (fs[j] ?? 1) * kf;
+        const carpan = (yapilacak[j] ?? 0) * kf;
         for (const g of s.ins) {
           if (!malzeme.has(g.itemId)) continue;
           patlat(g.itemId, carpan * g.qty * (1 + (g.scrap || 0) / 100), [...yol, urunId], false, null, null);
@@ -374,6 +410,9 @@ export const bugun = (simdi: Date = new Date()): string => isoGun(simdi);
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Stok bölümü.
+// Stok okuması en çok 200 kart içindir (köprünün sınırı); Stok ve emir ayrıntısı aynı listeyi kullanır ki okuma tek kez yapılsın.
+export const AZAMI_STOK_KARTI = 200;
+export const stokKartiIdleri = (items: readonly Malzeme[]): number[] => items.slice(0, AZAMI_STOK_KARTI).map((i) => i.kayitNo);
 export interface StokSatiri { malzeme: Malzeme; serbest: number | null; minimumAlti: boolean }
 // Serbest stok: stok okunabildiyse statü kırılımının statüsüz satırı, okunamadıysa durumdaki stok. Minimum altı yalnız minimumu olanda.
 export function stokSatirlari(items: readonly Malzeme[], okuma: StokOkumasi | null): StokSatiri[] {

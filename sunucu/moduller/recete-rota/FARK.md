@@ -137,3 +137,27 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
   `kilitKoy`, `tMach`). Alt sınır, baş-kuyruk ve MIP gevşetmesi kilidin yerini sabit sayar.
 - Kilit saatinde arıza ya da bakım varsa iş kilitte başlar, arıza süresince durur; plan uyarılarında "Kilit" satırı çıkar.
 - Saati geçmiş (şimdiden önce) ve başlamamış kilit eskisi gibi yalnız tezgâhı bağlar.
+
+## Planlama değerlendirmesi (Soru 357 a; kart #547)
+- Yeni uç `GET /recete-rota/planlama-degerlendirmesi?surum=&istek=` (sözleşme `degerlendirmeSorgusu`, `degerlendirmeCevabi`): oturum ve
+  `recete-rota.planlama-oku` ister; salt okunur, kayıt yazmaz, zaman sunucudan. Girdi planlama çalışması ucunun birleştirdiğidir (288 a); `surum`
+  çalışma kaydınınkiyle uyuşmazsa 409. Türler: plan seçenekleri, teklif termin seçenekleri, termin uzatma önerisi, malzeme termin listesi,
+  malzeme öne çekme, partiyi böl, sipariş maliyet ve kâr.
+- Motor kancaları sayfanın parçalarından olduğu gibi `motor/kancalar.betik`e alındı (TL toplamı, fason kararı, WIP, termin, malzeme, hedef,
+  montaj, ayar, örtüşme); kart hesapları `motor/degerlendir.betik`te. Sayfa ve `planlama-modulu.html` değişmedi.
+- Arama sayfanınkidir (Soru 457 1-3 b): plan seçeneklerinde denge konumu başına LNS (sayfanın bütçesi `pdMs`), partiyi bölde 500 ms kısa
+  arama, ek mesai adaylarında 300 ms aramalı ölçüm; sayfanın arama kancaları (zz18 montaj araması, zz20 kayan pencere) yüklenir. Saat
+  sayfanın işçisindeki gibi sabit adımlıdır: aynı girdi aynı sonucu verir. Plan seçeneklerinin denge konumları ayrı iş parçacıklarında
+  koşar, sonuç tek iş parçacığındakiyle aynıdır.
+- Süre ve yük: değerlendirme kuyruğa girişten 25 s içinde bitmezse 503 (uç salt okunur transaction içinde bekler, boşta transaction sınırı
+  30 s); aynı kişinin önceki değerlendirmesi sürerken ikincisi 429; aynı anda tek değerlendirme koşar.
+- Eski sayfaya göre kalan farklar (Soru 457 4-7 a, onaylı): hesap kayıtlı çalışmayla (kaydedilmemiş değişiklik sürüm denetiminde 409);
+  bilinmeyen ek mesai ücreti 0 değil null; uydurma varsayılan yok (maliyet ve mesai sistemi, örnek talaş fiyatı); "şimdi" sunucudan.
+- Tutar, maliyet, kâr ve TL farkı yalnız `finans.maliyet-oku` taşıyana (180 a, 200 a); taşımayana bu alanlar null, sipariş kârı 403.
+
+## Bitiş tarihi akışı sunucuda (455/2 a)
+- Planlama çalışması (`:planlama`) kaydedilirken siparişin bitiş tarihi akışını (`sevkIz`, her yeni planda ayrı satır) sunucu yazar
+  (`kurallar.ts` `bitisAkisiEkle`, `servis.ts` `yaz`). Kural sayfanınkiyle aynı: plan güncel olmalı, havuz atlanır, 0,5 sa altı kayma eklenmez,
+  sipariş başına son 50 satır.
+- Sayfaya göre farklar: satırın zamanı ve kişisi sunucudandır (sayfa planın `kim` alanını öne alıyordu); gönderilen değer akışı taşımıyorsa
+  kayıttaki akış korunur. Eski sayfa kendi satırını yazmayı sürdürür; aynı bitiş ikinci kez eklenmez. Sözleşme ve göç değişmedi.

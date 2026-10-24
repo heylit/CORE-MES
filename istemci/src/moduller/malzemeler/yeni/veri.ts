@@ -3,10 +3,11 @@ import type {
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
   KatalogSurumluKayitCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { ApiHatasi, api, hataIletisi } from '../../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import {
   GENEL_VARSAYILAN, bosMalzemeAyari, kayitTamamla, type Firma, type GenelAyar, type KartKaydi, type KartOzeti, type KatalogKarti, type KatalogOrtami, type MalzemeAyari,
@@ -22,6 +23,7 @@ export const anahtar = {
   kartRotasi: (kimlik: string) => [...MALZEMELER_YENI, 'kart-rotasi', kimlik] as const,
   sablonlar: [...MALZEMELER_YENI, 'sablonlar'] as const,
   rotaSablonlari: [...MALZEMELER_YENI, 'rota-sablonlari'] as const,
+  rotaliUrunler: [...MALZEMELER_YENI, 'rotali-urunler'] as const,
 };
 
 // Kimlik yolun tek parçasıdır; ".." bir üst yola çıkardı.
@@ -169,6 +171,31 @@ export function useRotaSablonlari() {
       id: s.id, ad: s.ad, varsayilan: s.varsayilan,
       adimlar: [...s.adimlar].sort((a, b) => a.sira - b.sira).map((a) => ({ kod: a.operasyonTipi.kod, ad: a.ad || a.operasyonTipi.ad })),
     })),
+  });
+}
+
+// Reçete ve rotası kopyalanabilen ürünler (306 a): yürürlükte rotası olan, kullanımdaki mamul ve yarı mamul kartlar.
+export interface RotaliUrun { no: number; kod: string | null; ad: string }
+export function useRotaliUrunler(etkin: boolean) {
+  return useQuery({
+    queryKey: anahtar.rotaliUrunler,
+    enabled: etkin,
+    queryFn: async (): Promise<RotaliUrun[]> => (await api.get<RotaListesiCevabi>('/rota/urunler')).rotalar
+      .filter((r) => r.yururlukte !== null && r.urun.onayDurumu === 'aktif' && (r.urun.tur === 'mamul' || r.urun.tur === 'yarimamul'))
+      .map((r) => ({ no: r.urun.id, kod: r.urun.stokKodu, ad: r.urun.ad })),
+  });
+}
+
+// Kopya Rota modülünde açılır, karta yazılmaz (306 a, 307 b): kart kaydedilince istek bırakılır; kart kullanımdaysa taslak hemen,
+// değilse kart onaylanınca açılır. Kaydetme cevabında kartın sayı numarası yok; kart listesinin değişen kısmından okunur.
+export function useReceteRotaKopyasi() {
+  const oturum = useOturum();
+  return useMutation({
+    mutationFn: async ({ kimlik, kaynakUrunId }: { kimlik: string; kaynakUrunId: number }) => {
+      const kart = (await butunKartlar(oturum.data?.id ?? 0)).find((k) => k.kimlik === kimlik);
+      if (!kart) throw new Error('Kaydedilen kart listede bulunamadı; reçete ve rota kopyası istenemedi.');
+      return api.post<KopyaIstegiCevabi>(`/rota/urunler/${String(kart.no)}/kopya-iste`, { kaynakUrunId }, { istekKimligi: yeniIstekKimligi() });
+    },
   });
 }
 

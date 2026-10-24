@@ -1,11 +1,12 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
+  benCevabi, degerlendirmeCevabi, degerlendirmeSorgusu, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
+import { planlamaDegerlendirmesi } from './degerlendirme.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -48,6 +49,15 @@ export const uclar = [
     yetki: 'recete-rota.planlama-oku',
     cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlamaCalismasi(db, kullanici),
+  }),
+  // Planlama kartlarının sunucuda hesabı (Soru 357 a): yalnız okur; GET olduğu için salt okunur transaction'da koşar, kayıt yazamaz.
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/planlama-degerlendirmesi',
+    yetki: 'recete-rota.planlama-oku',
+    sorgu: degerlendirmeSorgusu,
+    cevap: degerlendirmeCevabi,
+    isle: ({ db, kullanici, sorgu }) => planlamaDegerlendirmesi(db, kullanici, sorgu),
   }),
   uc({
     yontem: 'GET',
