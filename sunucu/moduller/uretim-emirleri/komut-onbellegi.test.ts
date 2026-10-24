@@ -114,10 +114,12 @@ describe('uretim-emirleri komut önbelleği (gerçek PostgreSQL)', () => {
       const kimliksiz = (e: Emir) => ({ ...e, id: 0, emirNo: '', istasyon: { id: 0, ad: '' }, acilma: '', baslama: '' });
       assert.deepEqual(icCevaplar.map(kimliksiz), disCevaplar.map(kimliksiz));
       assert.equal(disarida[0], icerde[0], 'ilk komut aynı okumaları yapar');
-      assert.equal(new Set(disarida).size, 1, 'kapsam dışında her komut aynı sayıda sorgu atar');
+      assert.equal(disarida[0], disarida[1], 'kapsam dışında artı sayımlar aynı sayıda sorgu atar');
       // İstasyon, kişinin rol ve iş merkezi kısıtı, istasyon ve kişi ad listeleri: beş okuma bir kez.
       assert.equal(icerde[1], disarida[1]! - 5);
-      assert.equal(icerde[2], icerde[1]);
+      // Eksi sayım kişinin işe katılımını da okur (185 a, 238 H4); bu okuma emre özgüdür, önbelleğe girmez.
+      assert.equal(icerde[2]! - icerde[1]!, disarida[2]! - disarida[1]!);
+      assert.ok(disarida[2]! > disarida[1]!, 'eksi sayımda katılım okunur');
     });
     const satirlar = await vt().sorgu<{ emir_id: number; adet: number }>(
       'SELECT emir_id, adet FROM uretim_sayimi WHERE emir_id = ANY($1::int[]) ORDER BY id', [[a, b]],

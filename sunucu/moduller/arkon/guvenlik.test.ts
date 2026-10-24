@@ -74,6 +74,15 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     return { govde: { ...g, taban: satir.surum }, geriAl: async () => { await vt().sorgu("DELETE FROM arkon_belge WHERE depo = 'pkgs' AND kimlik = $1 AND surum = 1", [kimlik]); } };
   }
 
+  // İş emirsiz emrin açma ucu yok (238 H3): kurulum emri doğrudan yazar.
+  const emirYaz = async (g: { parcaNo: string; parcaAd: string; adet: number; istasyonId: number; projeId: number }) => {
+    const emir = (await ortam!.sahip.tek<{ id: number; emirNo: string }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, proje_id)
+       VALUES ($1, $2, $3, $4, (SELECT min(id) FROM kisi), $5) RETURNING id, emir_no AS "emirNo"`,
+      [g.parcaNo, g.parcaAd, g.adet, g.istasyonId, g.projeId]))!;
+    return { durum: 200, govde: { emir } };
+  };
+
   async function istek<T = unknown>(cerez: string, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
     const kurulan = yontem === 'POST' ? await yerelPaketKur(yol, govde) : null;
     const cevap = await istekDogrudan<T>(cerez, yontem, yol, kurulan?.govde ?? govde);
@@ -1904,7 +1913,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     });
 
     test('TMI\'deki açık emirden türeyen taslak paket yalnız iş merkezi kapsamındaki kişiye görünür; taslağı kapsam dışından ezemez', async () => {
-      const emir = await istek<{ emir: { id: number } }>(yonetici, 'POST', '/uretim-emirleri', { parcaNo: 'KAPSAM-B', parcaAd: 'B parçası', adet: 3, istasyonId: B.istasyonId, projeId });
+      const emir = await emirYaz({ parcaNo: 'KAPSAM-B', parcaAd: 'B parçası', adet: 3, istasyonId: B.istasyonId, projeId });
       assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
       const kimlik = `tmi-ue-${emir.govde.emir.id}`;
       const liste = async (cerez: string) =>
@@ -1930,7 +1939,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const eski = await istekDogrudan<BelgeYazCevabi>(yonetici, 'POST', '/arkon/belgeler/pkgs/a5-eski/yaz', { taban: 7, govde: { id: 'a5-eski', machine: A.istasyon, note: 'güncel' }, kaynak: 'g1' });
       assert.equal(eski.durum, 200, JSON.stringify(eski.govde));
       assert.equal(eski.govde.sonuc, 'yazildi');
-      const emir = await istek<{ emir: { id: number } }>(yonetici, 'POST', '/uretim-emirleri', { parcaNo: 'A5-P', parcaAd: 'A5 parçası', adet: 2, istasyonId: A.istasyonId, projeId });
+      const emir = await emirYaz({ parcaNo: 'A5-P', parcaAd: 'A5 parçası', adet: 2, istasyonId: A.istasyonId, projeId });
       assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
       const kimlik = `tmi-ue-${emir.govde.emir.id}`;
       const taslak = (await oku('admin', 'pkgs', kimlik)).govde.belge;
