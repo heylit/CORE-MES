@@ -1,0 +1,90 @@
+/* A4: Kalite, Bakım ve Raporlar (tc-ay4-). Ortak sayfa parçaları A3'ün tc-ay3- sınıflarındadır; renk yalnız tasarım değişkeninden. */
+
+/* Kalite: numune sırası, teknik resim, ölçüm (üç sütun; dar ekranda tek bölüm, üstte seçim) */
+.tc-ay4-kalite { display: grid; grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)) minmax(0, var(--sutun-dar)); gap: var(--b-4); align-items: start; }
+.tc-ay4-mobil { display: none; }
+.tc-ay4-sira, .tc-ay4-form { min-width: 0; }
+.tc-ay4-resim { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ay4-numune { justify-items: start; text-align: left; font: inherit; cursor: pointer; }
+.tc-ay4-numune[aria-pressed="true"] { border-color: var(--hazard-ink); box-shadow: var(--shadow); }
+.tc-ay4-olcum { --c: var(--edge); display: grid; gap: var(--b-2); padding: var(--b-2) 0; border-top: var(--cizgi-ince) solid var(--edge); cursor: pointer; }
+.tc-ay4-olcum[data-renk] { border-left: var(--cizgi-kalin) solid var(--c); padding-left: var(--b-2); }
+.tc-ay4-olcum[data-secili] { background: var(--panel2); }
+.tc-ay4-olcum [data-renk] { color: var(--c); }
+.tc-ay4-balon {
+  --c: var(--ink);
+  display: inline-grid; place-items: center; min-width: var(--dokunma); min-height: var(--dokunma); border: var(--cizgi-orta) solid var(--c);
+  border-radius: var(--yari-tam); color: var(--c); font-weight: 700;
+}
+.tc-ay4-tolerans { width: 100%; height: var(--b-3); }
+.tc-ay4-tolerans .tc-ay4-bant { fill: color-mix(in srgb, var(--run) 30%, transparent); }
+.tc-ay4-isaret { stroke: var(--ink); stroke-width: var(--cizgi-orta); }
+
+/* Tablo (alet, CMM, son ölçümler, güvenilirlik, istasyonlar) */
+.tc-ay4-tablo-kutu { overflow-x: auto; max-width: 100%; }
+.tc-ay4-tablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); color: var(--ink); }
+.tc-ay4-tablo th { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; text-align: left; white-space: nowrap; }
+.tc-ay4-tablo th, .tc-ay4-tablo td { padding: var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); vertical-align: top; }
+.tc-ay4-tablo tr[data-renk] td, .tc-ay4-tablo td[data-renk], .tc-ay4-tablo small[data-renk] { color: var(--c); }
+.tc-ay4-sayi { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* SPC */
+.tc-ay4-spc-duzen { display: grid; grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)); gap: var(--b-4); align-items: start; }
+.tc-ay4-olcu {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-2); align-items: center; padding: var(--b-2); border: var(--cizgi-ince) solid transparent;
+  border-radius: var(--yari-2); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.tc-ay4-olcu[aria-pressed="true"] { border-color: var(--edge); background: var(--panel2); }
+.tc-ay4-olcu em { color: var(--c, var(--muted)); font-style: normal; font-weight: 700; white-space: nowrap; }
+.tc-ay4-istatistik { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--dokunma-x24)), 1fr)); gap: var(--b-2); margin: 0; }
+.tc-ay4-istatistik > div { display: grid; gap: var(--b-1); padding: var(--b-2); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-ay4-istatistik dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay4-istatistik dd { margin: 0; font-weight: 700; color: var(--c, var(--ink)); }
+.tc-ay4-spc { width: 100%; height: auto; }
+.tc-ay4-spc .tc-ay4-bant { fill: color-mix(in srgb, var(--run) 10%, transparent); }
+.tc-ay4-spl { stroke-width: var(--cizgi-ince); }
+.tc-ay4-spl.tc-ay4-sinir { stroke: var(--stop); }
+.tc-ay4-spl.tc-ay4-ort { stroke: var(--run); }
+.tc-ay4-spl.tc-ay4-kontrol { stroke: var(--muted); stroke-dasharray: var(--kesik-orta); }
+.tc-ay4-spt, .tc-ay4-spy { fill: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay4-spt.tc-ay4-sinir { fill: var(--stop); }
+.tc-ay4-spp { fill: none; stroke: var(--grafik); stroke-width: var(--cizgi-orta); }
+.tc-ay4-spd { fill: var(--grafik); }
+.tc-ay4-spd.tc-ay4-red { fill: var(--stop); }
+
+/* Raporlar */
+.tc-ay4-rapor { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--kuyruk-genis)), 1fr)); gap: var(--b-4); }
+.tc-ay4-bolum[data-genis] { grid-column: 1 / -1; }
+.tc-ay4-cubuklar { display: grid; gap: var(--b-2); }
+.tc-ay4-cubuk { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: var(--b-2); align-items: center; font-size: var(--yazi-s); }
+.tc-ay4-cubuk-ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay4-cubuk progress { --c: var(--grafik); width: 100%; height: var(--b-3); accent-color: var(--c); }
+.tc-ay4-cubuk progress::-webkit-progress-bar { background: var(--panel2); border-radius: var(--yari-1); }
+.tc-ay4-cubuk progress::-webkit-progress-value { background: var(--c); border-radius: var(--yari-1); }
+.tc-ay4-cubuk progress::-moz-progress-bar { background: var(--c); }
+.tc-ay4-lejant { display: flex; flex-wrap: wrap; gap: var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ay4-lejant i { display: inline-block; width: var(--b-2); height: var(--b-2); margin-right: var(--b-1); border-radius: var(--yari-tam); background: var(--c); }
+.tc-ay4-gunluk { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--b-1); align-items: end; }
+.tc-ay4-gunluk-sutun { display: grid; justify-items: center; gap: var(--b-1); min-width: 0; }
+.tc-ay4-gunluk-cizim { width: min(100%, var(--dokunma)); height: var(--dokunma-x24); }
+.tc-ay4-gunluk-zemin { fill: var(--panel2); }
+.tc-ay4-gunluk-cubuk { fill: var(--grafik); }
+.tc-ay4-gunluk-hedef { stroke: var(--run); stroke-width: var(--cizgi-ince); stroke-dasharray: var(--kesik-orta); }
+.tc-ay4-gunluk-deger { font-size: var(--yazi-xs); color: var(--ink); }
+.tc-ay4-gunluk-gun { font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+@media (max-width: 1023px) {
+  .tc-ay4-kalite { grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)); }
+  .tc-ay4-resim { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@media (max-width: 767px) {
+  .tc-ay4-kalite, .tc-ay4-spc-duzen { grid-template-columns: minmax(0, 1fr); }
+  .tc-ay4-mobil { display: block; }
+  .tc-ay4-kalite > section { display: none; }
+  .tc-ay4-kalite[data-gorunum="list"] > .tc-ay4-sira,
+  .tc-ay4-kalite[data-gorunum="draw"] > .tc-ay4-resim,
+  .tc-ay4-kalite[data-gorunum="form"] > .tc-ay4-form { display: grid; }
+  .tc-ay4-cubuk { grid-template-columns: minmax(0, 1fr) auto; }
+  .tc-ay4-cubuk progress { grid-column: 1 / -1; grid-row: 2; }
+}
