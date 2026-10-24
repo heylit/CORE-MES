@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
-import { ornekBelgeler } from './ornek-veri.ts';
+import { ORNEK_ZAMAN, ornekBelgeler } from './ornek-veri.ts';
 import { KAPISIZ, OKUYAN, YAZAN, mesajAc, sunucuKur } from './test-ortak.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Örnek verinin zamanları ORNEK_ZAMAN'a göredir; saat sabitlenmezse toplantı ve görev zamanla geçmişe düşer.
+// Yalnız Date sahte: zamanlayıcılar gerçek kalır, findBy/waitFor beklemeleri bozulmaz.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(ORNEK_ZAMAN); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const sekme = (ad: RegExp) => screen.findByRole('tab', { name: ad });
 
