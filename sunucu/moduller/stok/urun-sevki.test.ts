@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -9,13 +10,14 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { bekleyenlerCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { partiIziCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { PartiIziCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { SevkIsDurumu, UrunSevkSatiri } from '../sevkiyat/disari.ts';
-import { kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { urunSevkiYansit } from './disari.ts';
 
@@ -93,7 +95,22 @@ describe('stok ürün sevki (gerçek PostgreSQL)', () => {
     bilesenler: [], sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tipId, kaynak, ayarSuresiDk: '10', birimSureDk: '1',
     terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   });
-  const terminal = (id: number, yol: string, govde?: unknown) => istek<{ mesaj?: string }>('operator', 'POST', `/uretim-emirleri/${id}/${yol}`, govde);
+  // Terminal komutlarının HTTP ucu yok (238 H3): terminal onları Arkon üzerinden uretim-emirleri/disari.ts ile yapar.
+  const terminal = async (id: number, yol: string, govde?: unknown): Promise<Cevap<{ mesaj?: string }>> => {
+    const k = kullanicilar.get('operator')!;
+    try {
+      await o().vt.tx((db) => {
+        if (yol === 'baslat') return emirBaslat(db, k, id);
+        if (yol === 'bitir') return emirBitir(db, k, id, (govde as { saglamAdet?: number } | undefined)?.saglamAdet);
+        if (yol === 'sayim') return emirSayim(db, k, id, sayimGovdesi.parse(govde));
+        throw new Error(`bilinmeyen komut ${yol}`);
+      });
+      return { durum: 200, govde: {} };
+    } catch (h) {
+      if (h instanceof UygulamaHatasi) return { durum: h.durum, govde: h.govde() };
+      throw h;
+    }
+  };
   // Tek adımlı emir biter; sağlam sayım emrin ürününü istasyona koyar.
   async function bitenEmir(saglam: number): Promise<number> {
     const m = await makineKur();
