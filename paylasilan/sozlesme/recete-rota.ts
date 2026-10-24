@@ -37,6 +37,14 @@ export const yazGovdesi = z.object({
 });
 export const yazCevabi = z.object({ kayit: kayitSemasi });
 
+// Planlama sayfasının açılış verisi (288 a): çalışma kaydı (`:planlama`) Reçete ve Rota kaydı ve kaynak okumasıyla sunucuda birleşmiş olarak
+// gelir; sayfa birleştirmez. Çalışma yoksa (hiç kaydedilmemiş ya da kayıt biçimi eski) null. Sürüm çalışma kaydınındır (yazmada beklenen
+// sürüm); kayıt yoksa null.
+export const planlamaCalismasiCevabi = z.object({
+  calisma: z.record(z.string(), z.unknown()).nullable(),
+  surum: z.number().int().nullable(),
+});
+
 export const silGovdesi = z.object({ anahtar, beklenenSurum: z.number().int() });
 export const silCevabi = z.object({ silindi: z.boolean() });
 
@@ -367,6 +375,7 @@ export type StatuTanimiCevabi = z.output<typeof statuTanimiCevabi>;
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
+export type PlanlamaCalismasiCevabi = z.output<typeof planlamaCalismasiCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;
 export type YazCevabi = z.output<typeof yazCevabi>;
 export type SilCevabi = z.output<typeof silCevabi>;

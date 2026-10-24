@@ -17,6 +17,7 @@ export const IZ_SINIRI = 400;
 export const CATISMA = 'Planlama çalışması başka bir kişi tarafından değiştirildi; son değişikliğiniz kaydedilmedi. Sayfayı yenileyin.';
 export const BUYUK = 'Planlama çalışması 1 MB sınırını aştı ve sunucuya yazılamadı.';
 export const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
+export const PLAN_YETKI = 'Plan yazma yetkiniz yok; son değişikliğiniz kaydedilmedi.';
 export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 
 // Geri almanın kopyaladığı alanlar (a-durum.betik degistir): veri, arıza, ek mesai, kilitler, tercihler, ağırlıklar, parametreler, kapalı kısıtlar.
@@ -150,7 +151,9 @@ export class CalismaYazici implements CalismaKomutu {
         if (this.#calisma === deger) this.#kirli = true;
         const durum = e instanceof ApiHatasi ? e.durum : null;
         if (durum === 409) { this.#durdu = true; this.#a.uyar(CATISMA); }
-        else if (durum === 401 || durum === 403) this.#a.uyar(OTURUM);
+        else if (durum === 401) this.#a.uyar(OTURUM);
+        // Sunucu bu kayda plan.yaz ister (287 a); yetki açılıştan sonra alınmış olabilir.
+        else if (durum === 403) this.#a.uyar(PLAN_YETKI);
         else if (durum === 413) this.#a.uyar(BUYUK);
         else this.#a.uyar(RET);
       },
