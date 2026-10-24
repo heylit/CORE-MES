@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
-import { BUYUK, CATISMA, CalismaYazici, IZ_SINIRI, OTURUM, RET, type YaziciAyari } from './kayit.ts';
+import { BUYUK, CATISMA, CalismaYazici, IZ_SINIRI, OTURUM, PLAN_YETKI, RET, type YaziciAyari } from './kayit.ts';
 import type { PlanlamaCalismasi } from './tipler.ts';
 import { ONEK, PLANLAMA_ANAHTARI } from './veri.ts';
 
@@ -106,12 +106,13 @@ describe('CalismaYazici', () => {
     expect(yazmalar).toHaveLength(1);
   });
 
-  it('yetkisiz yazma (403) oturum iletisi verir; başka hata yeniden denenir', async () => {
+  it('yetkisiz yazma (403) plan yetkisi, oturumsuz (401) oturum iletisi verir; başka hata yeniden denenir', async () => {
     let n = 0;
     const { y, yazmalar, uyarilar } = kur({}, async (g) => {
       n += 1;
       if (n === 1) throw new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
-      if (n === 2) throw new Error('ağ');
+      if (n === 2) throw new ApiHatasi(401, { kod: 'OTURUM_YOK', mesaj: 'yok' });
+      if (n === 3) throw new Error('ağ');
       return { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum: 9 } };
     });
     y.degistir('a', (t) => { t.pref.a = 1; });
@@ -120,8 +121,10 @@ describe('CalismaYazici', () => {
     await y.hepsiniYaz();
     y.degistir('c', (t) => { t.pref.c = 1; });
     await y.hepsiniYaz();
-    expect(uyarilar).toEqual([OTURUM, RET]);
-    expect(yazmalar).toHaveLength(3);
+    y.degistir('d', (t) => { t.pref.d = 1; });
+    await y.hepsiniYaz();
+    expect(uyarilar).toEqual([PLAN_YETKI, OTURUM, RET]);
+    expect(yazmalar).toHaveLength(4);
     expect(y.surum).toBe(9);
   });
 

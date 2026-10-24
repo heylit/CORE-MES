@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
+import { PLAN_YETKI } from './ReceteRotaCercevesi.tsx';
 import { YAZAR, ac, sunucuKur, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
 import { MALIYET_ISLEMI, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
 
@@ -43,6 +44,20 @@ describe('planlama çerçevesi', () => {
     expect(belge).toContain('[data-act=\\"iceri-ac\\"]');
     expect(belge).not.toContain('[data-act=\\"revApprove\\"]');
   }, 30000);
+
+  // 287 a, 292 (13): plan.yaz'sız kişinin planlama kaydı 403 alır; köprünün uyarısı oturumu değil plan yetkisini söyler.
+  it('plan.yaz taşımayana planlama çerçevesinin yetki uyarısı plan yetkisidir; taşıyana oturum uyarısıdır', async () => {
+    sunucuKur(YAZAR, [KAYIT]);
+    ac('/recete-rota/terminler');
+    const belge = (await screen.findByTitle('Planlama', {}, { timeout: 20000 })).getAttribute('srcdoc') ?? '';
+    expect(belge).toContain(`"oturumIletisi":${JSON.stringify(PLAN_YETKI)}`);
+    cleanup();
+    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'plan.yaz'] }, [KAYIT]);
+    ac('/recete-rota/terminler');
+    const izinli = (await screen.findByTitle('Planlama', {}, { timeout: 20000 })).getAttribute('srcdoc') ?? '';
+    expect(izinli).not.toContain(JSON.stringify(PLAN_YETKI));
+    expect(izinli).toContain('"oturumIletisi":"Oturumunuz kapandı');
+  }, 40000);
 
   // 353 a, 195 a: planlama sayfaları yalnız planlama işlemiyle açılır; Reçete ve Rota yazarı bölümleri görür, planlamayı görmez.
   it('planlama işlemi olmayan Reçete ve Rota yazarına planlama çerçevesi kurulmaz, kayıt okunmaz; Reçete ve Rota bölümü açılır', async () => {
