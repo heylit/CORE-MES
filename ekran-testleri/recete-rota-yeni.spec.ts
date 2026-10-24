@@ -83,3 +83,54 @@ test.describe('R3 Üretim emirleri ve Stok', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('R2 kaynaklar', () => {
+  // Açılış yazmaz: rota yazabilen yöneticide yalnız kart taslaklarının açılışı gider (iskeletin işi).
+  const yazmalar = (y: readonly string[]) => y.filter((x) => x !== 'POST /api/rota/karttan-taslaklar');
+
+  test('Süreler, Malzemeler ve Kaynaklar açılır; Kaynaklar alt sekmeleri gezilir; yatay taşma ve yazma yok', async ({ page, ag, ac }) => {
+    await ac('/recete-rota/yeni/sureler');
+    const sureler = page.getByRole('region', { name: 'Süreler' });
+    await expect(sureler.locator('[data-parca="R2"]')).toBeVisible({ timeout: 15_000 });
+    await expect(sureler.getByRole('searchbox', { name: 'Ürün ara' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+
+    const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
+    await sekmeler.getByRole('tab', { name: 'Malzemeler' }).click();
+    const malzemeler = page.getByRole('region', { name: 'Malzemeler' });
+    await expect(malzemeler.getByRole('searchbox', { name: 'Malzeme ara' })).toBeVisible({ timeout: 15_000 });
+    await expect(malzemeler.getByRole('group', { name: 'Tür' })).toBeVisible();
+    await expect(malzemeler.getByRole('region', { name: 'Statüler' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+
+    await sekmeler.getByRole('tab', { name: 'Kaynaklar' }).click();
+    const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
+    const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
+    await expect(alt.getByRole('tab')).toHaveCount(6, { timeout: 15_000 });
+    for (const ad of ['Genel bakış', 'Vardiyalar', 'İş merkezleri ve istasyonlar', /^Makineler/, /^Personel/, 'Fason ve aparat']) {
+      await alt.getByRole('tab', { name: ad }).click();
+      await expect(alt.getByRole('tab', { name: ad, selected: true })).toBeVisible();
+      await expect(kaynaklar.locator('.tc-rr2-govde')).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    }
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Kaynaklar: ekleme penceresi vazgeçilince istek gitmez; vardiya düzenleme Vardiya sayfasını açar', async ({ page, ag, ac }) => {
+    await ac('/recete-rota/yeni/res');
+    const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
+    const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
+    await alt.getByRole('tab', { name: 'İş merkezleri ve istasyonlar' }).click({ timeout: 15_000 });
+    await kaynaklar.getByRole('button', { name: 'İş merkezi', exact: true }).click();
+    const pencere = page.getByRole('dialog', { name: 'Yeni iş merkezi' });
+    await expect(pencere.getByLabel('Kod')).not.toHaveValue('');
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toBeHidden();
+    await alt.getByRole('tab', { name: 'Vardiyalar' }).click();
+    await kaynaklar.getByRole('button', { name: "Vardiya'da düzenle" }).click();
+    await expect(page).toHaveURL(/\/vardiya$/);
+    expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});

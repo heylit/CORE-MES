@@ -1,0 +1,55 @@
+/* R2 (Süreler, Malzemeler, Kaynaklar): yalnız tasarım değişkenleri; önek tc-rr2-. */
+.tc-rr2 { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-rr2-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr2-uyari { margin: 0; padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--hold); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.tc-rr2-soluk { color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr2-arac, .tc-rr2-cipler, .tc-rr2-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-rr2-arama { flex: 1 1 var(--damga-dar); min-width: 0; }
+.tc-rr2-cipler [aria-pressed="true"] { border-color: var(--hazard-ink); }
+
+.tc-rr2-grup { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-rr2-alt-grup { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding-left: var(--b-3); border-left: var(--cizgi) solid var(--edge); }
+.tc-rr2-grup-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-m); }
+.tc-rr2-grup-baslik > span:first-child { margin-right: auto; }
+
+/* Satır içi girdi: tablo hücresinde ve kart kipinde dar kalır. */
+.tc-rr2-girdi { min-width: 0; width: 100%; max-width: var(--damga); }
+.tc-rr2-sayi { max-width: var(--dokunma-x24); text-align: right; }
+.tc-rr2-olcum { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1); }
+.tc-rr2-renk { min-height: var(--dokunma); min-width: var(--dokunma); padding: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel); }
+
+/* Kaynaklar */
+.tc-rr2-govde { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-rr2-seviyeler, .tc-rr2-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--damga)), 1fr)); gap: var(--b-3); }
+.tc-rr2-seviye, .tc-rr2-kart-kutu {
+  display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-rr2-seviye p, .tc-rr2-kart-kutu p, .tc-rr2-kart-kutu h4 { margin: 0; }
+.tc-rr2-kart-kutu[data-pasif] { color: var(--muted); }
+.tc-rr2-liste { margin: 0; padding-left: var(--b-5); display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-rr2-agac-satir {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); padding: var(--b-2) 0; border-bottom: var(--cizgi-ince) solid var(--edge);
+}
+.tc-rr2-agac-satir > div:first-child { display: flex; flex-direction: column; min-width: 0; }
+
+.tc-rr2-kaydir { overflow-x: auto; min-width: 0; }
+.tc-rr2-matris { border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-rr2-matris th, .tc-rr2-matris td { padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); text-align: right; white-space: nowrap; }
+.tc-rr2-matris th[scope="row"], .tc-rr2-matris thead th:first-child { text-align: left; }
+.tc-rr2-matris small { color: var(--muted); }
+.tc-rr2-matris td[data-acik] { background: var(--panel2); font-weight: 600; }
+.tc-rr2-matris-ust th { text-align: left; color: var(--ink); background: var(--panel); }
+.tc-rr2-matris-toplam th, .tc-rr2-matris-toplam td, .tc-rr2-matris tfoot td, .tc-rr2-matris tfoot th { color: var(--muted); }
+
+.tc-rr2-baslik-satiri { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); }
+.tc-rr2-alan { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-rr2-alan > span:first-child { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-rr2-genis { flex: 1 1 var(--damga-dar); }
+.tc-rr2-kisi { display: flex; gap: var(--b-3); min-width: 0; }
+.tc-rr2-kisi-alanlar { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-rr2-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--dokunma); height: var(--dokunma);
+  border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font-weight: 700;
+}
+.tc-rr2-form { display: flex; flex-direction: column; gap: var(--b-3); }
