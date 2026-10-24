@@ -9,6 +9,7 @@ import { HAZIRLANIYOR } from '../ortak.tsx';
 import { GunCizelgesi } from './GunCizelgesi.tsx';
 import { tezgahSirasi } from './kurallar.ts';
 import { OlcekCizelgesi } from './OlcekCizelgesi.tsx';
+import { ZamanCizelgesi } from './ZamanCizelgesi.tsx';
 import './cizelge.css';
 
 // Çizelge (t-tekyer tbAracCubugu ve mercekler, zo-kontrol sgHtml "masa"): araç satırında görünüm çubuğu, sepet ve havuz, mercek (Tezgâhlar,
@@ -38,6 +39,8 @@ export function CizelgeGorunumu(o: Ozellikler) {
 
   const isSec = useCallback((id: string) => { sec({ adim: secim.adim === id ? null : id, siparis: null, tezgah: null }); }, [sec, secim.adim]);
   const tezSec = useCallback((m: string) => { sec({ tezgah: m, adim: null, siparis: null }); }, [sec]);
+  // Siparişler merceğinde işe basmak seçer, seçimi kaldırmaz (c-masa op).
+  const opSec = useCallback((id: string) => { sec({ adim: id, siparis: null, tezgah: null }); }, [sec]);
   // Gün başlığı o günü saatlik açar (ol-gun); gün düğmeleri saatlik günü değiştirir (gy-gun).
   const gunAc = useCallback((t: number) => { olcekSec('gun'); const n = Math.max(0, Math.round((t - Math.floor(o.now / 24) * 24) / 24)); if (n) kaydir(n); }, [olcekSec, kaydir, o.now]);
   const gunSec = useCallback((n: number) => { if (n !== g) kaydir(n - kayma); }, [g, kayma, kaydir]);
@@ -77,7 +80,8 @@ export function CizelgeGorunumu(o: Ozellikler) {
   );
 
   let govde: ReactNode;
-  if (mercek !== 'gun') govde = <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{MERCEKLER.find((m) => m[0] === mercek)?.[1]}: {HAZIRLANIYOR}</p></div>;
+  if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} />;
+  else if (mercek !== 'gun') govde = <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{MERCEKLER.find((m) => m[0] === mercek)?.[1]}: {HAZIRLANIYOR}</p></div>;
   else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={secim.adim} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
   else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} />;
 

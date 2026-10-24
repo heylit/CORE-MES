@@ -1,7 +1,7 @@
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
-import { acikSaat, AY_AD, saatYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, AY_AD, saatOku, saatYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
@@ -135,4 +135,73 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
     cit: citU && cit > a && cit < b ? x(cit) : null, citBant: citU && now < b && cit > a ? { x: x(Math.max(a, now)), w: w(Math.max(a, now), Math.min(b, cit)) } : null,
     erken, kilit: { donukBu: L.filter((v) => v === gNo).length, donukTum: L.filter((v) => typeof v === 'number').length, elle: L.filter((v) => typeof v !== 'number').length, cit: citU ? cit : null },
   };
+}
+
+// --- Siparişler merceği: bütün planın tezgâh zaman çizelgesi (c-masa gantt, zz5-olcek-her-yer ölçeği) ---
+// Ölçek saat başına piksel olarak eskidekiyle aynıdır; ekran konumu saat cinsinden alır, piksel çarpanı stildedir. Sayılar yalnız etiket kararları içindir.
+export const ZAMAN_PX: Record<DonemOlcegi, number> = { gun: 40, hafta: 10, ay: 2.5, yil: 0.6 };
+const UFUK_GUN = 63;
+export interface ZamanBasligi { x: number; w: number; ad: string; tatil: boolean; saatler: { x: number; ad: string }[] }
+export interface ZamanIsi { id: string; job: string; x: number; w: number; renk: string; ayar: number; gec: boolean; soluk: boolean; kilit: boolean; etiket: string | null; baslik: string }
+export interface ZamanSatiri { m: string; kod: string; ad: string; u: number | null; kapali: { x: number; w: number }[]; ariza: { x: number; w: number; baslik: string }[]; isler: ZamanIsi[] }
+export interface ZamanGrubu { g: string; n: number; u: number | null; satirlar: ZamanSatiri[] }
+export interface ZamanCizelgesi { px: number; saat: number; basliklar: ZamanBasligi[]; cizgiler: number[]; gruplar: ZamanGrubu[]; fason: ZamanSatiri[]; termin: number | null }
+
+export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, olcek: DonemOlcegi, secJob: string | null): ZamanCizelgesi {
+  const D = c.D; const px = ZAMAN_PX[olcek];
+  const ops = Object.values(p.ops);
+  const Cmax = Math.max(p.ozet.Cmax ?? 24, ...ops.map((r) => r.C).filter(Number.isFinite));
+  const gunN = Math.min(UFUK_GUN, Math.ceil(Cmax / 24) + 1); const son = gunN * 24;
+  const gec = new Set(Object.entries(p.J).filter(([, x]) => x.T == null || x.T > 0.01).map(([j]) => j));
+  const tatil = new Set((D.tatiller ?? []).map((s) => Math.floor((saatOku(D, s) ?? Number.NaN) / 24)));
+  const durus = c.down.flatMap((d) => (typeof d.m === 'string' && typeof d.from === 'number' && typeof d.to === 'number' ? [{ m: d.m, from: d.from, to: d.to }] : []));
+  const byM: Record<string, PlanIslemi[]> = {};
+  for (const r of ops) (byM[r.m] ??= []).push(r);
+  const kisa = (id: string) => id.slice(id.lastIndexOf('.') + 1);
+  const isler = (m: string): ZamanIsi[] => (byM[m] ?? []).filter((r) => Number.isFinite(r.C)).map((r) => {
+    const w = Math.max(3 / px, r.C - r.S); const kilit = !!kilitli(c, r.id);
+    return {
+      id: r.id, job: r.job, x: r.S, w: r.C - r.S, renk: renk(D, r.job), ayar: r.C > r.S ? Math.max(0, Math.min(1, ((r.Su ?? r.S) - r.S) / (r.C - r.S))) : 0,
+      gec: gec.has(r.job), soluk: !!secJob && r.job !== secJob, kilit, etiket: w * px > 56 ? `${r.job}·${kisa(r.id)}` : null,
+      baslik: `${r.id} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}${gec.has(r.job) ? ' · gecikiyor' : ''}${kilit ? ' · kilitli' : ''}`,
+    };
+  });
+  const satir = (m: string, ad: string, alt: boolean): ZamanSatiri => {
+    const u = p.util[m]; const M = cx.M[m];
+    const kapali: { x: number; w: number }[] = [];
+    if (alt && M) {
+      let t = 0;
+      for (const [a, b] of M.rw) { if (a > son) break; if (a > t) kapali.push({ x: t, w: Math.min(a, son) - t }); t = Math.max(t, b); }
+      if (t < son) kapali.push({ x: t, w: son - t });
+    }
+    const ariza = alt ? durus.filter((d) => d.m === m).map((d) => ({ x: d.from, w: d.to - d.from, baslik: `Arıza/bakım ${saatYaz(D, d.from)} → ${saatYaz(D, d.to)}` })) : [];
+    return { m, kod: m.startsWith('@') ? m.slice(1) : m, ad, u: u ? u.u : null, kapali, ariza, isler: isler(m) };
+  };
+  // Düz nesne: grup sırası eski sayfadaki gibi anahtar sırasıdır (sayı biçimli grup adları önce, küçükten büyüğe).
+  const tg: Record<string, { id: string; ad: string }[]> = {};
+  for (const m of D.tezgahlar) (tg[String(m.grup)] ??= []).push({ id: m.id, ad: m.ad ?? '' });
+  const gruplar = Object.keys(tg).map((g): ZamanGrubu => {
+    const l = tg[g] ?? []; let b = 0, o = 0, n = 0;
+    for (const m of l) { const u = p.util[m.id]; if (u) { b += u.busy; o += u.open; n++; } }
+    return { g, n: l.length, u: n ? (o ? b / o : 0) : null, satirlar: l.map((m) => satir(m.id, m.ad, true)) };
+  });
+  const fason = (D.fasoncular ?? []).filter((f) => ops.some((r) => r.m === `@${f.id}`) || Object.values(cx.byId).some((o) => o.c.includes(`@${f.id}`)))
+    .map((f) => satir(`@${f.id}`, f.ad ?? '', false));
+  let basliklar: ZamanBasligi[]; let cizgiler: number[];
+  if (px >= 1) {
+    basliklar = Array.from({ length: gunN }, (_, d) => ({
+      x: d * 24, w: 24, ad: `${px >= 4 ? gunAdi(D, d * 24) : gunAdi(D, d * 24).slice(0, 2)}${tatil.has(d) ? ' · tatil' : ''}`, tatil: tatil.has(d),
+      saatler: px >= 20 ? [6, 12, 18].map((h) => ({ x: h, ad: String(h).padStart(2, '0') })) : [],
+    }));
+    cizgiler = Array.from({ length: gunN }, (_, d) => d * 24);
+  } else {
+    // Yılda günlük başlık okunmaz: ay adları ve yalnız hafta başı çizgileri.
+    const ayBas: [number, number][] = []; let ay0: string | null = null;
+    for (let d = 0; d <= gunN; d++) { const ay = gunAdi(D, d * 24).slice(3, 5); if (ay !== ay0) { ayBas.push([d, Number(ay)]); ay0 = ay; } }
+    basliklar = ayBas.flatMap(([d, ay], i) => { const s = i + 1 < ayBas.length ? ayBas[i + 1]?.[0] ?? gunN : gunN; return s > d ? [{ x: d * 24, w: (s - d) * 24, ad: AY_AD[ay - 1] ?? '', tatil: false, saatler: [] }] : []; });
+    cizgiler = Array.from({ length: gunN }, (_, d) => d).filter((d) => gunAdi(D, d * 24).slice(6, 9).startsWith('Pzt')).map((d) => d * 24);
+  }
+  const s = secJob ? D.siparisler.find((z) => z.id === secJob) : undefined;
+  const termin = s ? saatOku(D, s.termin) : null;
+  return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin };
 }

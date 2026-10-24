@@ -187,6 +187,25 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('region', { name: 'Gün katmanı: 23.10 Cum' })).toBeTruthy();
   });
 
+  it('Siparişler merceği: tezgâh grupları katlanır, işe basmak seçer ve öteki siparişleri soldurur; kaynak yükü ve geri alma pasif', () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    const g = screen.getByRole('region', { name: 'Plan çizelgesi' });
+    expect((screen.getByRole('checkbox', { name: 'Kaynak yükü' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: /Planı geri al/ }).getAttribute('aria-disabled')).toBe('true');
+    const is = within(g).getByRole('button', { name: /^3\.10 · / });
+    fireEvent.click(is);
+    expect(is.hasAttribute('data-secili')).toBe(true);
+    expect(within(g).getByRole('button', { name: /^2\.30 · / }).hasAttribute('data-soluk')).toBe(true);
+    const grup = within(g).getByRole('button', { name: /^1 1 tezgâh/ });
+    fireEvent.click(grup);
+    expect(grup.getAttribute('aria-expanded')).toBe('false');
+    expect(within(g).queryByRole('button', { name: /^3\.10 · / })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Grupları katla ya da aç' }));
+    expect(within(g).getByRole('button', { name: /^3\.10 · / })).toBeTruthy();
+  });
+
   it('Çizelge araması tezgâhı ya da siparişi seçer, bulamazsa söyler; tam ekran Esc ile kapanır', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
