@@ -61,3 +61,13 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Nasıl uyumlanır: plan `vardiyasiz`ı okur (168 b plan yaması), sonra bağ `bag('plan motoru -> plan', ...)` kurulur ve plan testlerinin saat beklentileri güncellenir;
   takvim eki sunucuda okunur.
 - Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.
+
+## Bağlamada kapanacak: planlama değerlendirmesi (Soru 357 a)
+- Sunucunun `planCoz` ve teklif denemesi sayfanın motor kancaları olmadan koşar (DOĞRULANDI: `plan-motoru.ts` yalnız `engine`, `kisitlar`, `girdi`,
+  `durum` yükler); sonuçları sayfadan ve değerlendirme ucundan ayrılabilir. `kancalar.betik`i onlara da yüklemek davranış değiştirir, onay ister.
+- Çalışma kaydı (`:planlama`) sipariş geliri ve fiyatı taşır; `planlama-oku` taşıyan bu alanları çalışma ucundan okur. Değerlendirme ucunun
+  döndürdüğü opak plan ve sipariş kayıtları da çalışmaya geri yazıldığı için tutardan arındırılmaz.
+- Termin uzatma, bölme ve fiyat önerisinin uygulanması kaynak sahibinin alanını değiştirir (222 a ile çelişki); uygulama komutu bağlamada sahibinde.
+- Sayfanın kartları henüz bu uca bağlı değil; yeni Planlama ekranı (motor tarayıcıda yok) bağlanınca eski tarayıcı yolu kalkar.
+- Süre: 60 emir / 180 adımlık uydurma veride plan seçenekleri 10 s sürdü (ölçüldü). Çok daha büyük veride 25 s sınırı aşılıp 503 dönebilir;
+  o durumda #583'ün iki adımlı düzeni (POST başlatır, transaction dışı GET sonucu verir) bu uca da uygulanır.
