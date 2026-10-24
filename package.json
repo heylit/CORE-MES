@@ -29,7 +29,7 @@
     "yetki-matrisi": "node --import ./araclar/ortam-yukle-goc.ts araclar/yetki-matrisi-oku.ts",
     "geri-yukle": "node --import ./araclar/ortam-yukle-goc.ts araclar/yedek.ts geri-yukle",
     "ornek-veri": "node --import ./araclar/ortam-yukle.ts araclar/ornek-veri.ts",
-    "tip": "tsc -p sunucu && tsc -p istemci && tsc -p arkon/web && tsc -p arkon/web/tsconfig.core.json && tsc -p ekran-testleri",
+    "tip": "tsc -p sunucu && node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p istemci && tsc -p arkon/web && tsc -p arkon/web/tsconfig.core.json && tsc -p ekran-testleri",
     "sinir": "node araclar/sinir-denetimi.ts",
     "harita": "node araclar/harita.ts",
     "dizin": "node araclar/harita.ts",
