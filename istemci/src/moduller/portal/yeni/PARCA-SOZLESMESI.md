@@ -32,6 +32,12 @@ Bölüm sekmeleri, yetki kapısı ve görünüm izni kabuktadır (`PortalYeni.ts
 
 ## Kurallar
 
+0. TASARIM KORUMA (2026-10-24 19:19, kullanici): ekranlarin tasarimi kullanicinindir. TS gecisinin amaci yalniz TypeScript'e gecis ve mantik, kurgu ve
+   bozukluk hatalarinin duzeltilmesidir. Prototip ya da eski ekranin gorunusu, duzeni, akisi, araclari ve metinleri birebir korunur. 360 genislige
+   sigdirma, ortak parcaya tasima, sadelestirme ya da "daha iyi" gerekcesiyle degisiklik yapilmaz; ortak parca yalniz gorunus birebir kaliyorsa
+   kullanilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli bir karar (orn. 357 b) gerektirdiginde yapilir; her fark gerekcesiyle ve
+   "hata turu" belirtilerek soru olur, varsayilan oneri "eski hali kalsin"dir. Bu dosyadaki 6. madde (360, 768, 1280) ve ortak parca maddeleriyle
+   celisirse TASARIM KORUMA gecerlidir (kurulum/proje-talimati.md KURALLAR 3).
 1. Görünüm yalnız okuduğu koleksiyonları ister; yükleniyor, hata ve boş durumları `DurumKutusu` ile gösterir.
 2. Yazma: var olan kayıt `kaydet` ile okunduğu sürümle yazılır (409 -> ortak çatışma iletisi). Tam kayıt yazılır; kimlik ve sürüm
    gövdeye girmez. Onay kararı yalnız `onayKarari` ile; kişi ve zaman sunucudan gelir.
