@@ -42,13 +42,13 @@ describe('raporlar: saf hesaplar', () => {
     expect(T.aylar).toEqual(m.map((r) => r.ym));
     expect(T.toplamGelir.aylar).toEqual(m.map((r) => r.gelir));
     expect(T.toplamGider.aylar).toEqual(m.map((r) => r.gider));
-    // Prototipteki gibi: kategori listesinde olmayan gider (iade) satır olarak çıkmaz ama toplama girer (fark onaya soruldu).
     T.aylar.forEach((_, i) => {
       expect(sum(T.gelirler, (s) => s.aylar[i]!)).toBeCloseTo(T.toplamGelir.aylar[i]!, 6);
-      const listeDisi = m[i]!.byCat['Satış iadesi'] ?? 0;
-      expect(sum(T.giderler, (s) => s.aylar[i]!) + listeDisi).toBeCloseTo(T.toplamGider.aylar[i]!, 6);
+      expect(sum(T.giderler, (s) => s.aylar[i]!)).toBeCloseTo(T.toplamGider.aylar[i]!, 6);
     });
-    expect(T.giderler.some((s) => s.ad === 'Satış iadesi')).toBe(false);
+    const iade = T.giderler.find((s) => s.ad === 'Satış iadesi');
+    expect(iade?.toplam).toBeGreaterThan(0);
+    expect(T.giderler.indexOf(iade!)).toBeGreaterThan(T.giderler.findIndex((s) => s.ad === 'Mal / hammadde alımı'));
     expect(T.net.toplam).toBeCloseTo(T.toplamGelir.toplam - T.toplamGider.toplam, 6);
     const csv = gelirCsvSatirlari(motor, 6);
     expect(csv.basliklar).toEqual(['Ay', 'Gelir', 'Gider', 'Net kâr']);

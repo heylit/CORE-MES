@@ -94,8 +94,11 @@ export function gelirTablosu(motor: FinansMotoru, n: number): GelirTablosuVerisi
     const o = t.type === 'gelir' ? gcat : xcat;
     (o[t.cat] = o[t.cat] ?? new Array<number>(n).fill(0))[i]! += t.amount;
   }
-  const gelirler = CATS.gelir.filter((c) => gcat[c.k]).map((c) => satir(c.k, gcat[c.k]!));
-  const giderler = PNL_GIDER.filter((k) => xcat[k]).map((k) => satir(k, xcat[k]!));
+  // Listede olmayan kategori (iadeler) de kendi satırıyla çıkar; satırlar toplamla tutar (Soru 309 a).
+  const sirala = (o: Record<string, number[]>, liste: readonly string[]) =>
+    [...liste.filter((k) => o[k]), ...Object.keys(o).filter((k) => !liste.includes(k)).sort((a, b) => a.localeCompare(b, 'tr'))].map((k) => satir(k, o[k]!));
+  const gelirler = sirala(gcat, CATS.gelir.map((c) => c.k));
+  const giderler = sirala(xcat, PNL_GIDER);
   if (m.some((r) => r.amort)) giderler.push(satir(AMORT, m.map((r) => r.amort || 0)));
   const G = m.map((r) => r.gelir), X = m.map((r) => r.gider), N = m.map((r) => r.net);
   const byCat: Record<string, number> = {};
