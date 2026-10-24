@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
+  benCevabi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ben, durum, fasonTahminleri, kapasite, kayitlar, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
+  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
@@ -40,6 +40,14 @@ export const uclar = [
     yetki: OKUMA,
     cevap: kapasiteCevabi,
     isle: ({ db, kullanici }) => kapasite(db, kullanici),
+  }),
+  // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/planlama-calismasi',
+    yetki: 'recete-rota.planlama-oku',
+    cevap: planlamaCalismasiCevabi,
+    isle: ({ db, kullanici }) => planlamaCalismasi(db, kullanici),
   }),
   uc({
     yontem: 'GET',

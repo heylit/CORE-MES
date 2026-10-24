@@ -24,5 +24,6 @@ Dosyalar: `sunucu/moduller/recete-rota/kurallar.test.ts` (saf), `sunucu/moduller
 | RR-15 TMI teması kök öğeye geçer; yalnız "Bu cihazda kayıtlı" yazısı değişir | köprü | `KK-09` |
 | RR-16 Yetkisiz kişi uçlara gitmez | ekran + uç | `sayfayı görmeyen kişiye yetki iletisi gösterir, uçlara gitmez` |
 | RR-17 Cihaza özel anahtar (`:op`, `:side`, `:studio:intro`) ortak kayda gitmez; kabuğun tarayıcı deposunda önekle durur; listede olmayan anahtar ve 10 000 karakterden büyük değer reddedilir | köprü + `kopru.ts` | `KK-10`, `cihaz anahtarları kabuğun tarayıcı deposunda...` |
+| RR-19 Planlama sayfası çalışmayı sunucuda birleşmiş okur (288 a): `:planlama` kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması girdi.betik ile birleşir, takvim eki vardiya takvimindendir; sürüm çalışma kaydınındır; okuma yazmaz; kayıt yoksa ya da biçimi eskiyse çalışma null; uç `recete-rota.planlama-oku` ister | servis (`planlamaCalismasi`) + uç yetkisi | `PC-01`, `PC-02`, `PC-03`, `PC-04` (`planlama-calismasi.test.ts`) |
 
 Prototipin kendi iş kuralları (plan, malzeme ihtiyacı, revizyon onayı, stok hareketi) ekranda kalır (UYUM-BORCU.md); bunlar için sunucu testi yoktur.
