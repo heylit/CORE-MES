@@ -87,5 +87,16 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 8. Satış: teklifin bütün satırları siparişe dönünce teklif durumunu 4 yazmak (not 2.7: Logo kendisi değiştirmez), teklif ve satış siparişi
    düzenleme (`PUT /api/SalesOffer/{ref}`, `/order/{ref}`) ve silme yazılmadı; istenirse ayrı karar.
 
+28. [bağlama] Kart #493 malzeme fişi (293 a, 294 c, 295 a, 298 a; 27'deki olay bağlarının yerine geçer). Fişin sahibi stoktur; Logo stoğun değişiklik
+   akışını (`malzemeFisiDegisiklikleri`, `degisiklik_zamani` ve kimlik sırası) izler, her turda iki dakika geriden yeniden okur (aynı değişiklik sayaçla bir kez
+   sayılır). VARSAYIM: iki dakikadan uzun süren stok işlemi yok; daha uzun sürerse değişiklik bir sonraki değişikliğe kadar Logo'ya yansımaz. Geri alma: pencere sabiti.
+   Giden kutusu numarası stok fiş kimliğidir (göç 20261024173400 eski emir numaralarını çevirir); Logo'ya giden numara stoğun fiş numarasıdır (emir no, `SF-`, `SE-`, `AF-`).
+   Tür başına gönderim şekli `logo.malzeme-fisi-<tür>` (kapalı, otomatik, elle; sarf ve giriş otomatik, dördü kapalı). Elle türde fiş yalnız stoktaki istekle gider;
+   istek ("Gönder", "Yeniden gönder") niyeti ve geri çekilmeyi bırakır (sonucu bilinmeyen istekten sonra yeniden gönderim; ekran uyarır, 295 a).
+   VARSAYIM: fire kapalıyken fire satırları emrin sarf fişine eklenir (önceki gibi); fire ayarı değişince eski sarf fişleri ancak değişince yeniden eşitlenir,
+   o arada fire Logo'da iki kez ya da hiç görünebilir (ayar açıklaması söyler). VARSAYIM: imleç göç anındadır; geçiş öncesi açılıp sonra hiç değişmeyen fiş
+   "gönderilmez" görünür ve gitmez. DOĞRULANMADI: fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51 tür kodları ve ambar alanları (SOURCE_WH, DEST_WH; başlıkta
+   tek depo çifti, birden çok çift reddedilir); yardımcının uçları kart #494. Geri alma: göç sütun ve tablo ekler; numara çevirme geri alınırsa emir kimliğine döner.
+
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /logo/birim-setleri`, `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a); bu uçlar malzemelerin Logo ekranına bağlanacak.

@@ -1,9 +1,10 @@
 import type { Db } from '#cekirdek/db.ts';
-import type { FaturaKaydi, ListeKaydi, MalKabulSatiri } from './kurallar.ts';
+import { LOGO_FIS_TURLERI } from './kurallar.ts';
+import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
-export type FisTuru = 'sarf-fisi' | 'uretim-girisi';
+export type FisTuru = LogoFisTuru;
 export type BelgeTuru = 'malzeme' | 'hizmet' | 'malzeme-guncelleme' | 'siparis' | 'siparis-guncelleme' | 'siparis-kapatma' | 'siparis-iptal' | 'talep' | 'karsilama' | 'satis-teklifi' | 'satis-siparisi'
   | 'siparisler-teklifi' | 'siparisler-siparisi' | FisTuru;
 export type GidenSonucu = 'gonderildi' | 'zaten-vardi' | 'silindi' | 'reddedildi' | 'yetkisiz' | 'ulasilamadi' | 'belirsiz' | 'yazilamadi';
@@ -25,7 +26,7 @@ const ALANLAR = `belge_no AS "belgeNo", niyet_zamani AS "niyetZamani", deneme_sa
 
 // Malzeme fişleri logo_giden'in kısıtını genişletmeden (dolu tablo) kendi giden kutusundadır; sütunlar aynıdır. Tablo adı sabittir, dışarıdan gelmez.
 const tablo = (belgeTuru: BelgeTuru): 'logo_giden' | 'logo_malzeme_fisi_giden' =>
-  belgeTuru === 'sarf-fisi' || belgeTuru === 'uretim-girisi' ? 'logo_malzeme_fisi_giden' : 'logo_giden';
+  (LOGO_FIS_TURLERI as readonly string[]).includes(belgeTuru) ? 'logo_malzeme_fisi_giden' : 'logo_giden';
 
 export function gidenSatirlari(db: Db, belgeTuru: BelgeTuru, nolar: readonly number[]): Promise<GidenSatiri[]> {
   return db.sorgu<GidenSatiri>(`SELECT ${ALANLAR} FROM ${tablo(belgeTuru)} WHERE belge_turu = $1 AND belge_no = ANY($2::int[])`, [belgeTuru, nolar]);
@@ -265,71 +266,109 @@ export async function okumaOzeti(db: Db): Promise<OkumaOzeti> {
   return r;
 }
 
-// 233: emrin iki fişi hazırlıkta TMI'de boş açılır (Logo'ya gitmez); değişiklik sayımla gelir.
-export async function malzemeFisiAc(db: Db, emirId: number): Promise<void> {
+// Stoğun fiş değişiklik akışında kalınan yer (göçle tek satır açılır).
+export interface FisImleci { zaman: string; fisId: number; enBuyukFisId: number }
+export function fisImleci(db: Db): Promise<FisImleci | null> {
+  return db.tek<FisImleci>(`SELECT ${zamanMetni('zaman')} AS zaman, fis_id AS "fisId", en_buyuk_fis_id AS "enBuyukFisId" FROM logo_malzeme_fisi_imleci`);
+}
+export async function fisImleciYaz(db: Db, i: FisImleci): Promise<void> {
+  await db.sorgu('UPDATE logo_malzeme_fisi_imleci SET zaman = $1, fis_id = $2, en_buyuk_fis_id = GREATEST(en_buyuk_fis_id, $3)', [i.zaman, i.fisId, i.enBuyukFisId]);
+}
+
+// Stok fişinin yeni sayacı: artış bekleyen değişikliğe eklenir. Aynı değişiklik ikinci kez okunursa (imlecin örtüşme penceresi) sayılmaz.
+export async function fisDegisikligiYaz(db: Db, tur: FisTuru, id: number, degisiklik: number): Promise<void> {
   await db.sorgu(
-    `INSERT INTO logo_malzeme_fisi_giden (belge_turu, belge_no) VALUES ('sarf-fisi', $1), ('uretim-girisi', $1) ON CONFLICT (belge_turu, belge_no) DO NOTHING`,
-    [emirId],
+    `INSERT INTO logo_malzeme_fisi_giden AS g (belge_turu, belge_no, kaynak_degisiklik, bekleyen_degisiklik) VALUES ($1, $2, $3, $3)
+     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET
+       bekleyen_degisiklik = g.bekleyen_degisiklik + GREATEST(EXCLUDED.kaynak_degisiklik - g.kaynak_degisiklik, 0),
+       kaynak_degisiklik = GREATEST(g.kaynak_degisiklik, EXCLUDED.kaynak_degisiklik)`,
+    [tur, id, degisiklik],
   );
 }
 
-// Sayım ya da emir bitişi fişi değiştirir. `ac`: fişi yoksa açar (hazırlığı bu değişiklikten önce olmuş emir); yoksa yalnız açık fiş işaretlenir.
-export async function malzemeFisiDegisti(db: Db, emirId: number, ac: boolean): Promise<void> {
+// Fişi bir kez daha eşitlemeye işaretler (fire gönderimi kapalıyken fire değişince emrin sarf fişi).
+export async function fisIsaretle(db: Db, tur: FisTuru, id: number): Promise<void> {
   await db.sorgu(
-    ac
-      ? `INSERT INTO logo_malzeme_fisi_giden AS g (belge_turu, belge_no, bekleyen_degisiklik) VALUES ('sarf-fisi', $1, 1), ('uretim-girisi', $1, 1)
-         ON CONFLICT (belge_turu, belge_no) DO UPDATE SET bekleyen_degisiklik = g.bekleyen_degisiklik + 1`
-      : 'UPDATE logo_malzeme_fisi_giden SET bekleyen_degisiklik = bekleyen_degisiklik + 1 WHERE belge_no = $1',
-    [emirId],
+    `INSERT INTO logo_malzeme_fisi_giden AS g (belge_turu, belge_no, bekleyen_degisiklik) VALUES ($1, $2, 1)
+     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET bekleyen_degisiklik = g.bekleyen_degisiklik + 1`,
+    [tur, id],
   );
 }
 
-// Logo'yla eşitlenecek fişler; zamanı gelenler önce, sonra açılış sırası. Fiş tarihi ve saati fişin TMI'de açıldığı andır, İstanbul saatiyle.
-export interface KuyruktakiFis { tur: FisTuru; emirId: number; tarih: string; saat: string }
-export function malzemeFisiKuyrugu(db: Db, sinir: number): Promise<KuyruktakiFis[]> {
-  return db.sorgu<KuyruktakiFis>(
-    `SELECT belge_turu AS tur, belge_no AS "emirId", to_char(olusma AT TIME ZONE 'Europe/Istanbul', 'YYYY-MM-DD') AS tarih,
-            to_char(olusma AT TIME ZONE 'Europe/Istanbul', 'HH24:MI:SS') AS saat
+// Stokta yeni elle gönderim isteği ("Gönder", "Yeniden gönder"): fiş beklemeden ve önceki niyeti bırakarak sıraya girer. Niyetin
+// bırakılması, sonucu bilinmeyen eski isteğe rağmen yeniden göndermedir; ekran bunu kullanıcıya söyler (295 a).
+export async function fisIstegiYaz(db: Db, tur: FisTuru, id: number, istek: string): Promise<void> {
+  await db.sorgu(
+    `UPDATE logo_malzeme_fisi_giden SET son_istek = $3, istek_bekliyor = true, niyet_zamani = NULL, sonraki_deneme = NULL,
+            bekleyen_degisiklik = GREATEST(bekleyen_degisiklik, 1)
+      WHERE belge_turu = $1 AND belge_no = $2 AND (son_istek IS NULL OR son_istek < $3)`,
+    [tur, id, istek],
+  );
+}
+
+// Elle isteği sonuçlandı (gönderildi, eşitlendi ya da başarısız): elle türde fiş yeni istek gelene kadar beklemez.
+export async function fisIstegiKapat(db: Db, tur: FisTuru, id: number): Promise<void> {
+  await db.sorgu('UPDATE logo_malzeme_fisi_giden SET istek_bekliyor = false WHERE belge_turu = $1 AND belge_no = $2 AND istek_bekliyor', [tur, id]);
+}
+
+// Logo'yla eşitlenecek fişler: otomatik türde bekleyen her fiş, elle türde yalnız isteği olan. Zamanı gelenler önce, sonra eski fiş.
+export function malzemeFisiKuyrugu(db: Db, a: { otomatik: readonly FisTuru[]; elle: readonly FisTuru[]; sinir: number }): Promise<{ tur: FisTuru; id: number }[]> {
+  return db.sorgu<{ tur: FisTuru; id: number }>(
+    `SELECT belge_turu AS tur, belge_no AS id
        FROM logo_malzeme_fisi_giden
-      WHERE bekleyen_degisiklik > 0
-      ORDER BY sonraki_deneme NULLS FIRST, olusma, belge_no, belge_turu LIMIT $1`,
-    [sinir],
+      WHERE bekleyen_degisiklik > 0 AND (belge_turu = ANY($1::text[]) OR (belge_turu = ANY($2::text[]) AND istek_bekliyor))
+      ORDER BY sonraki_deneme NULLS FIRST, belge_no, belge_turu LIMIT $3`,
+    [[...a.otomatik], [...a.elle], a.sinir],
   );
+}
+
+// Stoğun sorduğu fişlerin giden kutusu satırları (durum ekranı).
+export async function fisGidenDurumlari(db: Db, fisler: readonly { tur: FisTuru; id: number }[]): Promise<Map<string, FisGidenDurumu>> {
+  if (fisler.length === 0) return new Map();
+  const satirlar = await db.sorgu<FisGidenDurumu & { tur: FisTuru; id: number }>(
+    `SELECT belge_turu AS tur, belge_no AS id, kaynak_degisiklik AS "kaynakDegisiklik", bekleyen_degisiklik AS bekleyen, istek_bekliyor AS "istekBekliyor",
+            logo_kayit_no AS "logoKayitNo", son_sonuc AS "sonSonuc", son_hata AS "sonHata", son_deneme AS "sonDeneme", sonraki_deneme AS "sonrakiDeneme",
+            deneme_sayisi AS "denemeSayisi", ardisik_hata AS "ardisikHata"
+       FROM logo_malzeme_fisi_giden g
+       JOIN unnest($1::text[], $2::int[]) AS q (tur, id) ON q.tur = g.belge_turu AND q.id = g.belge_no`,
+    [fisler.map((f) => f.tur), fisler.map((f) => f.id)],
+  );
+  return new Map(satirlar.map(({ tur, id, ...d }) => [`${tur}:${id}`, d]));
 }
 
 export interface EsitlemeDurumu { bekleyen: number; sonSatirOzeti: string | null }
-export function esitlemeDurumu(db: Db, tur: FisTuru, emirId: number): Promise<EsitlemeDurumu | null> {
+export function esitlemeDurumu(db: Db, tur: FisTuru, id: number): Promise<EsitlemeDurumu | null> {
   return db.tek<EsitlemeDurumu>(
     'SELECT bekleyen_degisiklik AS bekleyen, son_satir_ozeti AS "sonSatirOzeti" FROM logo_malzeme_fisi_giden WHERE belge_turu = $1 AND belge_no = $2',
-    [tur, emirId],
+    [tur, id],
   );
 }
 
-// Fiş Logo'dakiyle aynı: okunan değişiklikler düşer. Tur sürerken gelen sayım sayaçta kalır, sonraki turda yeniden bakılır.
-export async function esitlendi(db: Db, tur: FisTuru, emirId: number, okunan: number, ozet: string | null): Promise<void> {
+// Fiş Logo'dakiyle aynı: okunan değişiklikler düşer, elle istek kapanır. Tur sürerken gelen değişiklik sayaçta kalır, sonraki turda yeniden bakılır.
+export async function esitlendi(db: Db, tur: FisTuru, id: number, okunan: number, ozet: string | null): Promise<void> {
   await db.sorgu(
-    `UPDATE logo_malzeme_fisi_giden SET bekleyen_degisiklik = GREATEST(bekleyen_degisiklik - $3, 0), son_satir_ozeti = $4
+    `UPDATE logo_malzeme_fisi_giden SET bekleyen_degisiklik = GREATEST(bekleyen_degisiklik - $3, 0), son_satir_ozeti = $4, istek_bekliyor = false
       WHERE belge_turu = $1 AND belge_no = $2`,
-    [tur, emirId, okunan, ozet],
+    [tur, id, okunan, ozet],
   );
 }
 
 // Fiş Logo'da silindi: kayıt no ve satır özeti boşalır, değişiklik sayacı kalır (yeni satırlar sonraki turda aynı numarayla açılır).
-export async function silindiYaz(db: Db, tur: FisTuru, emirId: number, zaman: Date): Promise<void> {
+export async function silindiYaz(db: Db, tur: FisTuru, id: number, zaman: Date): Promise<void> {
   await db.sorgu(
     `UPDATE logo_malzeme_fisi_giden SET son_sonuc = 'silindi', son_hata = NULL, son_deneme = $3, sonraki_deneme = NULL, niyet_zamani = NULL,
             logo_kayit_no = NULL, son_satir_ozeti = NULL, deneme_sayisi = deneme_sayisi + 1, ardisik_hata = 0
       WHERE belge_turu = $1 AND belge_no = $2`,
-    [tur, emirId, zaman],
+    [tur, id, zaman],
   );
 }
 
 // Silme başarısız: fiş Logo'da durur, kayıt no kalır; geri çekilmeyle yeniden denenir.
-export async function silmeHatasiYaz(db: Db, tur: FisTuru, emirId: number, d: { zaman: Date; sonuc: GidenSonucu; hata: string; sonrakiDeneme: Date }): Promise<void> {
+export async function silmeHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zaman: Date; sonuc: GidenSonucu; hata: string; sonrakiDeneme: Date }): Promise<void> {
   await db.sorgu(
     `UPDATE logo_malzeme_fisi_giden SET son_sonuc = $3, son_hata = $4, son_deneme = $5, sonraki_deneme = $6, deneme_sayisi = deneme_sayisi + 1,
             ardisik_hata = ardisik_hata + 1
       WHERE belge_turu = $1 AND belge_no = $2`,
-    [tur, emirId, d.sonuc, d.hata, d.zaman, d.sonrakiDeneme],
+    [tur, id, d.sonuc, d.hata, d.zaman, d.sonrakiDeneme],
   );
 }
