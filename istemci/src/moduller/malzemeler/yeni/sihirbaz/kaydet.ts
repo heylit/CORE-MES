@@ -2,10 +2,10 @@ import { useState } from 'react';
 import * as K from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
 import type { KartKaydi } from '../tipler.ts';
-import { kayitHatasi, useKartKaydet } from '../veri.ts';
+import { kayitHatasi, useKartKaydet, useReceteRotaKopyasi } from '../veri.ts';
 import type { SihirbazAdimi } from './AdimCubugu.tsx';
 import type { Sihirbaz } from './baglam.ts';
-import { kopyala, type Taslak } from './durum.ts';
+import { kopyala, RECETE_KAYNAGI, receteKaynagi, type Taslak } from './durum.ts';
 import type { BenzerKart } from '../kurallar/index.ts';
 
 // Prototipteki yeni kimlik biçimi ('m' kart, 't' şablon): sunucu kendi kimliğini dönerse o geçerlidir.
@@ -29,6 +29,7 @@ export interface Kaydetme { calistir: () => Promise<void>; suruyor: boolean; ile
 // (kod, kategori, mükerrer gerekçesi ve sürüm uçta yeniden denetlenir).
 export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kaydetme {
   const kaydet = useKartKaydet();
+  const kopyaIste = useReceteRotaKopyasi();
   const [ilerleme, ilerlemeYaz] = useState<string | null>(null);
   const { taslak: D, b, kartlar, adimaGec, bildir, secimYaz, degistir, sonaKoy } = s;
   const son = adimlar.length - 1;
@@ -37,6 +38,18 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
   const gonder = async (kayit: KartKaydi) => {
     const c = await kaydet.mutateAsync({ kayit, ozet: K.kartOzeti(kayit, b) });
     return { id: c.id || String(kayit.id), kod: c.stok_kodu || kayit.com.kod };
+  };
+  // Kart kaydedildikten sonra gider: kopya isteği başarısızsa kart yine kayıtlıdır, kullanıcı Reçete ve Rota'da kopyalayabilir.
+  const receteRotaIste = async (kimlik: string, kaynak: { no: number; ad: string }) => {
+    try {
+      const c = await kopyaIste.mutateAsync({ kimlik, kaynakUrunId: kaynak.no });
+      degistir((d) => { delete d[RECETE_KAYNAGI]; });
+      bildir(c.durum === 'acildi'
+        ? `${kaynak.ad} reçete ve rotası Reçete ve Rota'da taslak olarak açıldı.`
+        : `Kart onaylanınca ${kaynak.ad} reçete ve rotası Reçete ve Rota'da taslak olarak açılacak.`, 'tamam');
+    } catch (e) {
+      bildir(`Kart kaydedildi; reçete ve rota kopyası istenemedi: ${kayitHatasi(e).ileti}`, 'hata');
+    }
   };
   const hata = (e: unknown) => {
     const h = kayitHatasi(e);
@@ -86,6 +99,8 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
     }
 
     let item: Taslak = kopyala(D);
+    const kaynak = receteKaynagi(D);
+    delete item[RECETE_KAYNAGI];
     item.id = D.id ?? yeniKimlik('m');
     item.com.kod = kod;
     item.com.ad = K.finalAd(D, b);
@@ -110,6 +125,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
         degistir((d) => { d.talepGonderildi = zaman; });
         secimYaz({ sonKayit: c.id });
         bildir(`Değişiklik talebi gönderildi (${String(t.talep?.farklar.length ?? 0)} alan). ${c.kod} onaylanana kadar mevcut hâliyle kullanımda.`, 'tamam');
+        if (kaynak) await receteRotaIste(c.id, kaynak);
       } catch (e) {
         hata(e);
       }
@@ -137,6 +153,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
       secimYaz({ sonKayit: c.id });
       if (D.fam && D.grade) sonaKoy(D.fam, K.clsKeyFor(D, b), D.grade);
       bildir(`${c.kod} kaydedildi${K.onayDurum(item, b) === 'onayda' ? '; onaya gönderildi' : ''}.`, 'tamam');
+      if (kaynak) await receteRotaIste(c.id, kaynak);
     } catch (e) {
       hata(e);
     }
@@ -168,6 +185,7 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
         continue;
       }
       let item: Taslak = kopyala(vd);
+      delete item[RECETE_KAYNAGI];
       delete item.vmode;
       delete item.vsel;
       item.id = yeniKimlik('m', String(i));
@@ -207,5 +225,5 @@ export function useKaydet(s: Sihirbaz, adimlar: readonly SihirbazAdimi[]): Kayde
     }
   };
 
-  return { calistir, suruyor: kaydet.isPending || ilerleme !== null, ilerleme };
+  return { calistir, suruyor: kaydet.isPending || kopyaIste.isPending || ilerleme !== null, ilerleme };
 }

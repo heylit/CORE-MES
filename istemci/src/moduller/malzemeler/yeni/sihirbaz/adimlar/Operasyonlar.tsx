@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Dugme, OnayPenceresi, Simge } from '../../../../../ortak/arayuz/index.ts';
 import * as K from '../../kurallar/index.ts';
 import * as S from '../../sabitler/index.ts';
-import { useKartRotasi, useRotaSablonlari } from '../../veri.ts';
+import { useKartRotasi, useRotaliUrunler, useRotaSablonlari } from '../../veri.ts';
 import { useSihirbaz } from '../baglam.ts';
+import { RECETE_KAYNAGI, receteKaynagi } from '../durum.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { BagDugmesi, Uyari } from '../parcalar.tsx';
 import type { OperasyonGrubu, OperasyonTanimi, RotaAdimi } from '../../kurallar/index.ts';
@@ -124,6 +125,7 @@ function RotaDuzenleyici() {
         </aside>
         <section className="tc-my-ops-rota" aria-label="Rota">
           <div className="tc-my-ops-ust"><b>Rota</b><small>{(d.ops ?? []).length ? `${String((d.ops ?? []).length)} operasyon` : 'henüz operasyon yok'}</small></div>
+          <UrundenAl />
           <RotaSablonu />
           {(d.ops ?? []).length ? (
             <>
@@ -228,6 +230,46 @@ function RotaSablonu() {
       <OnayPenceresi acik={soru} baslik="Rota değişsin mi?" onayMetni="Şablonla değiştir" tehlikeli onayla={doldur} vazgec={() => { soruYaz(false); }}>
         <p>Karttaki {(d.ops ?? []).length} operasyon silinir, yerine "{sablon?.ad}" şablonunun adımları yazılır.</p>
       </OnayPenceresi>
+    </div>
+  );
+}
+
+// Var olan ürünün reçete ve rotası (306 a, 307 b): kopya kartta değil Reçete ve Rota'da taslak olarak açılır; seçilince karttaki
+// operasyonlar rotaya aktarılmaz (Rota önce kaynaktan açar).
+function UrundenAl() {
+  const { taslak: d, yetki, kartlar, degistir, bildir } = useSihirbaz();
+  const uygun = yetki.yaz && (d.tur === 'mamul' || d.tur === 'yarimamul');
+  const urunler = useRotaliUrunler(uygun);
+  const [secili, seciliYaz] = useState('');
+  if (!uygun) return null;
+  const kaynak = receteKaynagi(d);
+  if (kaynak) {
+    return (
+      <Uyari>
+        <b>Reçete ve rota {kaynak.ad} ürününden alınacak.</b> Kart kaydedilince Reçete ve Rota'da taslak olarak açılır; kart onaydaysa onaylanınca açılır.
+        Karttaki operasyonlar rotaya aktarılmaz.{' '}
+        <Dugme onClick={() => { degistir((t) => { delete t[RECETE_KAYNAGI]; }); }}>Vazgeç</Dugme>
+      </Uyari>
+    );
+  }
+  if (urunler.isPending) return <div className="tc-my-ops-sablon"><span className="tc-my-kucuk">Rotalı ürünler yükleniyor…</span></div>;
+  const kendi = d.id ? kartlar.find((k) => k.kimlik === d.id)?.no : undefined;
+  const l = (urunler.data ?? []).filter((u) => u.no !== kendi);
+  if (!l.length) return <div className="tc-my-ops-sablon"><span className="tc-my-kucuk">{urunler.isError ? 'Rotalı ürünler okunamadı.' : 'Reçete ve rotası alınabilecek ürün yok.'}</span></div>;
+  const sec = l.find((u) => String(u.no) === secili) ?? l[0];
+  const ad = (u: typeof sec) => (u ? (u.kod ? `${u.kod} · ${u.ad}` : u.ad) : '');
+  return (
+    <div className="tc-my-ops-sablon">
+      <select aria-label="Reçete ve rotası alınacak ürün" value={sec ? String(sec.no) : ''} onChange={(e) => { seciliYaz(e.target.value); }}>
+        {l.map((u) => <option key={u.no} value={String(u.no)}>{ad(u)}</option>)}
+      </select>
+      <Dugme onClick={() => {
+        if (!sec) return;
+        degistir((t) => { t[RECETE_KAYNAGI] = { no: sec.no, ad: ad(sec) }; });
+        bildir(`${ad(sec)}: reçete ve rota kart kaydedilince Reçete ve Rota'da taslak olarak açılacak.`);
+      }}
+      >Reçete ve rotayı bu üründen al
+      </Dugme>
     </div>
   );
 }
