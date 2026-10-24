@@ -1388,3 +1388,80 @@ export const rezerveKaldirGovdesi = z.object({
 });
 export type RezerveKaldirGovdesi = z.input<typeof rezerveKaldirGovdesi>;
 export type RezerveKaldirKomutu = z.output<typeof rezerveKaldirGovdesi>;
+
+// ---- Malzeme fişi (293 a, 294 c, 295 a, 298 a; kart #492) ---------------------------------------------------------------------------
+// Fiş stoğundur ve stok hareketinden doğar; elle düzenlenmez. Emir fişleri (sarf, üretimden giriş, fire) emir açılınca boş açılır;
+// sayım ve depolar arası (Logo ambarı farklı) taşıma fişi komut başına tek fiştir. Logo durumu Logo modülündedir; stok onu çözücüyle okur.
+export const MALZEME_FISI_TURLERI = ['sarf', 'uretim_girisi', 'fire', 'sayim_fazlasi', 'sayim_eksigi', 'ambar'] as const;
+export type MalzemeFisiTuru = (typeof MALZEME_FISI_TURLERI)[number];
+export const EMIR_FISI_TURLERI = ['sarf', 'uretim_girisi', 'fire'] as const satisfies readonly MalzemeFisiTuru[];
+// Fiş türünün Logo'ya gidiş biçimi Logo ayarıdır; stok yalnız gösterir ve elle gönderim isteğini yazar.
+export const FIS_GONDERIM_SEKILLERI = ['kapali', 'otomatik', 'elle'] as const;
+export type FisGonderimSekli = (typeof FIS_GONDERIM_SEKILLERI)[number];
+// bekliyor: değişiklik Logo'ya gitmedi (bağlantı kapalı, sırada ya da elle gönderim bekliyor); gonderildi: Logo'daki fiş güncel;
+// hata: son deneme başarısız; gonderilmez: tür kapalı ya da fişte satır yok. bilinmiyor: Logo modülü bağlı değil.
+export const LOGO_FIS_DURUMLARI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez', 'bilinmiyor'] as const;
+export type LogoFisDurumu = (typeof LOGO_FIS_DURUMLARI)[number];
+
+export const logoFisBilgisi = z.object({
+  durum: z.enum(LOGO_FIS_DURUMLARI),
+  gonderimSekli: z.enum(FIS_GONDERIM_SEKILLERI).nullable(),
+  // Kısa neden: bekleme nedeni ya da son hata metni. Yoksa null.
+  neden: z.string().nullable(),
+  kayitNo: z.string().nullable(),
+  sonDeneme: zamanSemasi.nullable(),
+  sonrakiDeneme: zamanSemasi.nullable(),
+  denemeSayisi: z.number().int().min(0),
+  ardisikHata: z.number().int().min(0),
+});
+export type LogoFisBilgisi = z.output<typeof logoFisBilgisi>;
+
+export const malzemeFisiOzeti = z.object({
+  id: z.number().int(),
+  no: z.string(),
+  tur: z.enum(MALZEME_FISI_TURLERI),
+  acilis: zamanSemasi,
+  uretimEmriId: z.number().int().nullable(),
+  emirNo: z.string().nullable(),
+  satirSayisi: z.number().int().min(0),
+  // Elle gönderim ya da yeniden gönderim isteği; yoksa null.
+  gonderimIstegi: zamanSemasi.nullable(),
+  logo: logoFisBilgisi,
+  // Gönder düğmesi: elle türde ya da hatalı fişte, satırı varken. Yetkiyi istemci ayrıca denetler; sunucu her istekte yeniden bakar.
+  gonderilebilir: z.boolean(),
+  surum: surumSemasi,
+});
+export type MalzemeFisiOzeti = z.output<typeof malzemeFisiOzeti>;
+
+export const malzemeFisiSatiri = z.object({
+  // Hurda satırında kart üretim emrinindir; kimlik yine malzeme kartıdır.
+  malzemeId: z.number().int(),
+  stokKodu: z.string().nullable(),
+  malzemeAd: z.string().nullable(),
+  birim: z.string().nullable(),
+  miktar: ondalikMetinSemasi,
+  // "Hurda" (üretimden girişte mamul hurdası) ya da null.
+  aciklama: z.string().nullable(),
+  // Yalnız ambar fişinde: kaynak ve hedef deponun Logo ambar numarası.
+  kaynakAmbarNo: z.number().int().nullable(),
+  hedefAmbarNo: z.number().int().nullable(),
+});
+export type MalzemeFisiSatiri = z.output<typeof malzemeFisiSatiri>;
+
+export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez'] as const;
+export const malzemeFisleriSorgusu = z.object({
+  ...listeSorguAlanlari(['acilis']),
+  metin: z.string().trim().max(40).optional(),
+  tur: z.enum(MALZEME_FISI_TURLERI).optional(),
+  logoDurumu: z.enum(LOGO_FIS_SUZGECLERI).optional(),
+  uretimEmriId: kimlik.optional(),
+});
+export type MalzemeFisleriSorgusu = z.input<typeof malzemeFisleriSorgusu>;
+export type MalzemeFisleriListesi = z.output<typeof malzemeFisleriSorgusu>;
+export const malzemeFisleriCevabi = listeCevapSemasi(malzemeFisiOzeti);
+export type MalzemeFisleriCevabi = z.output<typeof malzemeFisleriCevabi>;
+export const malzemeFisiAyrintiCevabi = z.object({ fis: malzemeFisiOzeti, satirlar: z.array(malzemeFisiSatiri), hareketler: z.array(hareket) });
+export type MalzemeFisiAyrintiCevabi = z.output<typeof malzemeFisiAyrintiCevabi>;
+// Gönder ve Yeniden gönder aynı komuttur; sunucu fişin türüne ve Logo durumuna göre izin verir.
+export const malzemeFisiGonderGovdesi = z.object({ ...beklenenSurum });
+export type MalzemeFisiGonderGovdesi = z.input<typeof malzemeFisiGonderGovdesi>;

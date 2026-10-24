@@ -6,6 +6,7 @@ import { stokDurumu, type StokDurumu } from './kurallar.ts';
 import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
+import * as malzemeFisi from './malzeme-fisi.ts';
 
 // Malzeme başına stok: toplam, kullanılabilir (raf, kabul, depo zemini) ve üretim çıkış alanında bekleyen. Miktarlar numeric metin.
 // Stoğu olmayan malzeme haritada yoktur (sıfır uydurulmaz).
@@ -173,3 +174,10 @@ export async function refakatPartisi(db: Db, id: number): Promise<RefakatPartisi
     lotNo: refakat.lotNo, tedarikciPartiNo: refakat.tedarikciPartiNo, dokumNo: refakat.dokumNo, sertifikaNo: refakat.sertifikaNo,
   };
 }
+
+// Malzeme fişi (kart #492): Logo modülü değişen fişleri ve satırlarını buradan okur, durumunu çözücüyle verir (bağ `sunucu/kablolama.ts`).
+export type { FisDegisikligi, LogoDurumuSorusu, LogoIcinFis, MalzemeFisiLogoCozucusu } from './malzeme-fisi.ts';
+export const malzemeFisiDegisiklikleri = (db: Db, a: { zaman: string | null; id: number; sinir: number }) => malzemeFisi.malzemeFisiDegisiklikleri(db, a);
+export const logoIcinMalzemeFisleri = (db: Db, idler: readonly number[]) => malzemeFisi.logoIcinFisler(db, idler);
+export const emirlerinMalzemeFisleri = (db: Db, emirIdler: readonly number[]) => malzemeFisi.emirlerinFisKimlikleri(db, emirIdler);
+export const malzemeFisiLogoCozucusu = (cozucu: malzemeFisi.MalzemeFisiLogoCozucusu): void => malzemeFisi.malzemeFisiLogoCozucusuKaydet(cozucu);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
@@ -663,5 +664,43 @@ describe('stok kuralları: test bulguları 16.1, 21.4, 17.3 (saf)', () => {
     assert.deepEqual(stoksuzStatuler(st, 'YM-01', [{ statuId: null }, { statuId: 3 }]), [{ statuId: 1 }]);
     assert.deepEqual(stoksuzStatuler(st, 'YM-01', []), [{ statuId: 1 }, { statuId: 3 }]);
     assert.deepEqual(stoksuzStatuler(st, 'HM-1', []), []);
+  });
+});
+
+describe('malzeme fişi kuralları (kart #492)', () => {
+  const h = (tur: string, ek: { cikisNedeni?: string; girisKaynagi?: string; uretimEmriId?: number } = {}) =>
+    ({ tur, cikisNedeni: ek.cikisNedeni ?? null, girisKaynagi: ek.girisKaynagi ?? null, uretimEmriId: ek.uretimEmriId ?? null });
+  test('hareketin fişi: emirli sarf, fire, üretim girişi; sayım; taşıma ambar adayı; geri alma; emirsiz çıkış fişsiz', () => {
+    assert.deepEqual(hareketinFisBagi(h('cikis', { cikisNedeni: 'uretime_sarf', uretimEmriId: 3 })), { tur: 'sarf', uretimEmriId: 3 });
+    assert.deepEqual(hareketinFisBagi(h('cikis', { cikisNedeni: 'fire', uretimEmriId: 3 })), { tur: 'fire', uretimEmriId: 3 });
+    assert.deepEqual(hareketinFisBagi(h('giris', { girisKaynagi: 'uretim', uretimEmriId: 3 })), { tur: 'uretim_girisi', uretimEmriId: 3 });
+    assert.deepEqual(hareketinFisBagi(h('sayim_fazla')), { tur: 'sayim_fazlasi' });
+    assert.deepEqual(hareketinFisBagi(h('sayim_eksik')), { tur: 'sayim_eksigi' });
+    assert.deepEqual(hareketinFisBagi(h('transfer')), { tur: 'ambar_adayi' });
+    assert.deepEqual(hareketinFisBagi(h('geri_alma')), { tur: 'geri_alma' });
+    assert.equal(hareketinFisBagi(h('cikis', { cikisNedeni: 'fire' })), null);
+    assert.equal(hareketinFisBagi(h('cikis', { cikisNedeni: 'sevk', uretimEmriId: 3 })), null);
+    assert.equal(hareketinFisBagi(h('giris', { girisKaynagi: 'mal_kabul', uretimEmriId: 3 })), null);
+  });
+  test('fiş numarası: emir fişi emir no, yoksa emir kimliği; sayım ve ambar önekli; arama yalnız önekli numarayı çözer', () => {
+    assert.equal(malzemeFisiNo({ id: 9, tur: 'sarf', uretimEmriId: 4 }, 'UE-1'), 'UE-1');
+    assert.equal(malzemeFisiNo({ id: 9, tur: 'fire', uretimEmriId: 4 }, null), '#4');
+    assert.equal(malzemeFisiNo({ id: 12, tur: 'sayim_eksigi', uretimEmriId: null }, null), 'SE-000012');
+    assert.equal(malzemeFisiNo({ id: 12, tur: 'ambar', uretimEmriId: null }, null), 'AF-000012');
+    assert.deepEqual(fisNoKimligi('se-000012'), { tur: 'sayim_eksigi', id: 12 });
+    assert.deepEqual(fisNoKimligi(' AF-7 '), { tur: 'ambar', id: 7 });
+    assert.equal(fisNoKimligi('UE-1'), null);
+    assert.equal(fisNoKimligi('SF-0'), null);
+  });
+  test('gönderilebilir: elle bekleyen ya da hatalı; kapalı tür, bilinmeyen durum ve boş yeni fiş gönderilmez', () => {
+    const l = (durum: 'bekliyor' | 'gonderildi' | 'hata' | 'gonderilmez' | 'bilinmiyor', gonderimSekli: 'kapali' | 'otomatik' | 'elle' | null, kayitNo: string | null = null) => ({ durum, gonderimSekli, kayitNo });
+    assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'elle'), true), true);
+    assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'otomatik'), true), false);
+    assert.equal(malzemeFisiGonderilebilir(l('hata', 'otomatik'), true), true);
+    assert.equal(malzemeFisiGonderilebilir(l('gonderildi', 'elle'), true), false);
+    assert.equal(malzemeFisiGonderilebilir(l('hata', 'kapali'), true), false);
+    assert.equal(malzemeFisiGonderilebilir(l('bilinmiyor', null), true), false);
+    assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'elle'), false), false);
+    assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'elle', '55'), false), true);
   });
 });

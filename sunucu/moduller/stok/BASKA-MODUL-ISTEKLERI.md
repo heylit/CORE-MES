@@ -81,3 +81,5 @@ Mal kabulde depocu kartı müşteri parça no, teknik resim no, tedarikçi kodu 
 - `paylasilan/sozlesme/bildirim.ts`: iki yeni tür `stok.birakildi` (bilgi) ve `stok.teslim-suresi-doldu` (uyarı); `bildirim/kurallar.test.ts` beklenen liste buna göre güncellendi.
 - `kisiler/rol-dagilimi.test.ts`: stok taşıma yoklaması `GET /stok/sepet` yerine `POST /stok/sepet/teslim-et` (sepet herkese açıldı, Soru 133).
 - Kablolama: sayım uyarısı için `disari.ts uretimSayimiYansitUyarili` hazır; kablolamanın ona geçmesi Dal 11 tarafında.
+
+- Üretim Emirleri (kart #492): `disari.ts` emir no ile kimlik çözümü (`emirNoCoz(db, metin)`), malzeme fişi listesinde emir no ile arama için. Gelene kadar arama yalnız önekli fiş no ile.

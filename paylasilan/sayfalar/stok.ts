@@ -27,6 +27,7 @@ export const STOK_IKINCI_MENU = {
       maddeler: [
         { anahtar: 'malzemeler', baslik: 'Malzemeler', yol: '/stok/malzemeler', simge: 'layers', islem: 'sayfa.stok' },
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
+        { anahtar: 'malzeme-fisleri', baslik: 'Malzeme fişleri', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
       ],
     },
     {

@@ -1,8 +1,9 @@
 import type {
-  AmbalajTuru, CikisNedeni, ElleKonumTuru, HareketTuru, KonumTuru, LogoEslesmeDurumu, MalKabulTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
+  AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketTuru, KonumTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
   StokDurumuSuzgeci, TeslimDurumu,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 
 // Miktar metni (numeric) ekranda Türkçe ondalıkla ve fazla sıfırsız gösterilir; sayıya çevrilmez.
 export function miktarMetni(m: string | null | undefined): string {
@@ -88,3 +89,20 @@ export const HAREKET_TURLERI = anahtarlari(HAREKET_ETIKETI);
 export const CIKIS_NEDENLERI = anahtarlari(CIKIS_NEDENI);
 export const LOGO_ESLESME_DURUMLARI = anahtarlari(LOGO_ETIKETI);
 export const STOK_DURUMLARI = anahtarlari(STOK_SUZGECI);
+
+// Malzeme fişi (kart #492).
+export const MALZEME_FISI_ETIKETI: Record<MalzemeFisiTuru, string> = {
+  sarf: 'Sarf', uretim_girisi: 'Üretimden giriş', fire: 'Fire', sayim_fazlasi: 'Sayım fazlası', sayim_eksigi: 'Sayım eksiği', ambar: 'Ambar transferi',
+};
+export const MALZEME_FISI_SIMGESI: Record<MalzemeFisiTuru, SimgeAdi> = {
+  sarf: 'minus', uretim_girisi: 'plus', fire: 'fire', sayim_fazlasi: 'up', sayim_eksigi: 'down', ambar: 'truck',
+};
+export const LOGO_FIS_ETIKETI: Record<LogoFisDurumu, string> = {
+  bekliyor: 'Bekliyor', gonderildi: 'Gönderildi', hata: 'Hata', gonderilmez: 'Gönderilmez', bilinmiyor: 'Bilinmiyor',
+};
+export const LOGO_FIS_TONU: Record<LogoFisDurumu, RozetTonu> = {
+  bekliyor: 'uyari', gonderildi: 'tamam', hata: 'hata', gonderilmez: 'pasif', bilinmiyor: 'pasif',
+};
+export const FIS_GONDERIM_ETIKETI: Record<FisGonderimSekli, string> = { kapali: 'Gönderim kapalı', otomatik: 'Otomatik gönderim', elle: 'Elle gönderim' };
+export const MALZEME_FISI_TURLERI = anahtarlari(MALZEME_FISI_ETIKETI);
+export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez'] as const satisfies readonly LogoFisDurumu[];
