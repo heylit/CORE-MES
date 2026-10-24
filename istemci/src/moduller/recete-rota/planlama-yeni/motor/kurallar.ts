@@ -1,4 +1,5 @@
 import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../tipler.ts';
+import type { Metin } from './ozet/veri.ts';
 
 // P1'in saf hesapları. Plan saat eksenlidir: 0, D.meta.baslangic günü 00:00 duvar saatidir (engine.betik baseMs, parseT, fmtDT).
 // Motor burada koşmaz (357 b); kayıttaki çözülmüş plan okunur. Eski sayfanın tarayıcıda motorun derlemesinden (compile) aldığı takvim,
@@ -600,10 +601,14 @@ const KISIT_AD: Record<string, string> = {
   karantina: 'Kalite bekletme', yeniden: 'Yeniden işleme',
 };
 export const kisitAdi = (id: string): string => KISIT_AD[id] ?? id;
+export const KISIT_SAYISI = Object.keys(KISIT_AD).length;
 export type SorunTonu = 'hata' | 'uyari' | 'bilgi';
 // Eylem türü: `motor` plan motoru ister (357 b), `git` sayfa içi görünüme gider, `sec` siparişi seçer, öteki çalışmaya yazar.
 export type SorunEylemi = 'ekip' | 'kisit-hepsi' | 'git' | 'one-al' | 'sec-is' | 'suz-gec' | 'hs-mesai' | 'durus-kaldir' | 'olay-kaldir';
-export interface Sorun { ton: SorunTonu; simge: 'rotate' | 'alert' | 'flag' | 'box' | 'gauge' | 'wrench' | 'scan'; baslik: string; eylem: { ad: string; tur: SorunEylemi; v: string } }
+export interface SorunEylemiKaydi { ad: string; tur: SorunEylemi; v: string; birincil: boolean }
+// `eylem` ilk eylemdir (Yapılacaklar); `metin` ve `eylemler` karar panelinindir.
+export interface Sorun { ton: SorunTonu; simge: 'rotate' | 'alert' | 'flag' | 'box' | 'gauge' | 'wrench' | 'scan'; baslik: string; metin: Metin; eylem: SorunEylemiKaydi; eylemler: SorunEylemiKaydi[]; job: string | null }
+export const ONCELIK_AD: Record<number, string> = { 1: 'Yüksek', 2: 'Normal', 3: 'Düşük' };
 export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
   const D = c.D;
   if (ev.tip === 'malzeme') { const m = (D.malzemeler ?? []).find((x) => x.kod === ev.kod); return `${m?.ad ?? String(ev.kod)}: satın alma ${String(ev.gun)} gün gecikti`; }
@@ -613,21 +618,66 @@ export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
 }
 export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, guncel: boolean): Sorun[] {
   const D = c.D; const out: Sorun[] = [];
-  const ekle = (ton: SorunTonu, simge: Sorun['simge'], baslik: string, ad: string, tur: SorunEylemi, v = '') => out.push({ ton, simge, baslik, eylem: { ad, tur, v } });
-  if (!guncel) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', 'Planı iyileştir', 'ekip');
-  if (c.kapali.length) ekle('hata', 'alert', `${c.kapali.length} kısıt kapalı`, 'Hepsini aç', 'kisit-hepsi');
-  if (p.fail.length) ekle('hata', 'alert', `${p.fail.length} işlem planlanamadı`, 'Veri denetimi', 'git', 'denetim');
+  const ekle = (ton: SorunTonu, simge: Sorun['simge'], baslik: string, metin: Metin, eylemler: [string, SorunEylemi, string?, boolean?][], job: string | null = null) => {
+    const l = eylemler.map(([ad, tur, v = '', birincil = false]) => ({ ad, tur, v, birincil }));
+    if (l[0]) out.push({ ton, simge, baslik, metin, eylem: l[0], eylemler: l, job });
+  };
+  if (!guncel) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', ['Plan kurulduktan sonra veri, kısıt ya da olay değişti. Gösterilen saatler gerçeği yansıtmayabilir.'], [['Planı iyileştir', 'ekip', '', true]]);
+  if (c.kapali.length) ekle('hata', 'alert', `${c.kapali.length} kısıt kapalı`, [`${c.kapali.map(kisitAdi).join(', ')}. Motor bunları saymadan çözer; plan atölyede uygulanamayabilir.`], [['Hepsini aç', 'kisit-hepsi', '', true], ['Kısıtlar', 'git', 'kisitlar']]);
+  if (p.fail.length) ekle('hata', 'alert', `${p.fail.length} işlem planlanamadı`, [`${p.fail.slice(0, 3).join(', ')}${p.fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`], [['Veri denetimi', 'git', 'denetim']]);
+  const kay = gecikmeKaynaklari(c, p, cx);
   const gec = D.siparisler.map((s) => ({ s, j: p.J[s.id] })).filter((x): x is { s: Siparis; j: NonNullable<typeof x.j> } => !!x.j && (x.j.T == null || x.j.T > 0.05))
     .sort((a, b) => (b.j.T ?? 1e4) * isAgirligi(b.s) - (a.j.T ?? 1e4) * isAgirligi(a.s));
-  for (const { s, j } of gec.slice(0, 3)) ekle('hata', 'flag', `${s.id} ${j.T == null ? 'planlanamadı' : `${saatYazi(j.T)} gecikiyor`}`, 'Öne almayı dene', 'one-al', s.id);
-  if (gec.length > 3) ekle('uyari', 'flag', `${gec.length - 3} sipariş daha gecikiyor`, 'Gecikenleri göster', 'suz-gec');
-  const malJ = [...new Set(p.warn.filter((w) => w.t === 'malzeme').map((w) => w.j ?? ''))];
-  if (malJ.length) ekle('uyari', 'box', `${malJ.length} siparişin malzemesi eksik`, 'Ayrıntı', 'sec-is', malJ[0]);
-  const dol = grupDoluluk(c, p).filter((g) => g.u > 0.88);
-  if (dol.length || gecikmeKaynaklari(c, p, cx).liste.some((x) => x.k === 'tezgah')) ekle('uyari', 'gauge', 'Darboğaz', 'Ek mesai öner', 'hs-mesai');
-  c.down.forEach((d, i) => { if ((sayi(d.to) ?? 0) > 7) ekle('bilgi', 'wrench', `${String(d.m)} duruşta`, 'Duruşu kaldır', 'durus-kaldir', String(i)); });
-  c.olaylar.forEach((ev, i) => ekle('bilgi', 'alert', olayAdi(c, ev), 'Olayı kaldır', 'olay-kaldir', String(i)));
+  for (const { s, j } of gec.slice(0, 3)) {
+    const en = kay.is[s.id]; const urun = D.urunler.find((u) => u.id === s.urun)?.ad ?? (s.urun || '—');
+    const metin: Metin = [`${urun}, ${sayiYaz(Number(s.adet) || 0)} adet, ${ONCELIK_AD[Number(s.oncelik)] ?? ''} öncelik. Termin ${(s.termin ?? '—').slice(5)}, bitiş ${j.C != null ? saatYaz(D, j.C).slice(0, 15) : '—'}.`];
+    if (en) metin.push(' En çok ', { b: en.ad }, ` bekledi (${saatYazi(en.v)}).`);
+    ekle('hata', 'flag', `${s.id} ${j.T == null ? 'planlanamadı' : `${saatYazi(j.T)} gecikiyor`}`, metin, [['Öne almayı dene', 'one-al', s.id, true], ['Ayrıntı', 'sec-is', s.id]], s.id);
+  }
+  if (gec.length > 3) ekle('uyari', 'flag', `${gec.length - 3} sipariş daha gecikiyor`, ['Hepsini görmek için süzgeçte "Yalnız geciken siparişler"i açın.'], [['Gecikenleri göster', 'suz-gec']]);
+  const mal = p.warn.filter((w) => w.t === 'malzeme'); const malJ = [...new Set(mal.map((w) => w.j ?? ''))];
+  if (malJ.length) {
+    const diger = malJ.length > 1 ? ` Diğerleri: ${malJ.slice(1, 4).join(', ')}${malJ.length > 4 ? '…' : ''}.` : '';
+    ekle('uyari', 'box', `${malJ.length} siparişin malzemesi eksik`, [`${mal[0]?.txt ?? ''}${diger} İş planda başlar; malzeme gelmezse kayar.`], [['Ayrıntı', 'sec-is', malJ[0] ?? ''], ['Malzeme', 'git', 'malzeme']]);
+  }
+  const dol = grupDoluluk(c, p).filter((g) => g.u > 0.88); const darb = kay.liste.find((x) => x.k === 'tezgah');
+  if (dol.length || darb) {
+    const g = dol[0]; const metin: Metin = [];
+    if (g) metin.push({ b: g.ad }, ` grubu %${Math.round(g.u * 100)} dolu.`);
+    if (darb) metin.push(' Gecikmenin en büyük kaynağı ', { b: darb.ad }, ` kuyruğu: ${darb.n} siparişte ağırlıklı ${saatYazi(darb.v)}.`);
+    ekle('uyari', 'gauge', 'Darboğaz', metin, [['Ek mesai öner', 'hs-mesai', '', true], ['Matriste gör', 'git', 'matris']]);
+  }
+  const ops = Object.values(p.ops);
+  c.down.forEach((d, i) => {
+    const a = sayi(d.from), b = sayi(d.to); if ((b ?? 0) <= 7) return;
+    const n = a != null && b != null ? new Set(ops.filter((r) => r.m === d.m && r.S < b + 24 && r.C > a).map((r) => r.job)).size : 0;
+    ekle('bilgi', 'wrench', `${String(d.m)} duruşta`, [`${saatYaz(D, a)} → ${saatYaz(D, b)}. Planda hesaba katıldı; yakınındaki ${n} siparişin işleri başka saate ya da tezgâha kaydı.`], [['Duruşu kaldır', 'durus-kaldir', String(i)]]);
+  });
+  c.olaylar.forEach((ev, i) => ekle('bilgi', 'alert', olayAdi(c, ev), ['İşlenmiş olay. Planda hesaba katılıyor.'], [['Olayı kaldır', 'olay-kaldir', String(i)]]));
   const den = veriDenetimi(c, cx);
-  if (den.length) ekle('uyari', 'scan', `${den.length} veri bulgusu`, 'Veri denetimi', 'git', 'denetim');
+  if (den.length) ekle('uyari', 'scan', `${den.length} veri bulgusu`, ['Eksik ya da çelişkili veri planı yanıltabilir.'], [['Veri denetimi', 'git', 'denetim']]);
   return out;
+}
+
+// --- yardımcı (zz24-sade.betik sdGecikenler, t-tekyer.betik DENGE, h-cozuculer.betik EKIP_ADIM) ---
+// Planda olup geç biten siparişler, en çok gecikenden; planlanamayan en başta.
+export interface Geciken { s: Siparis; T: number | null; C: number | null }
+export function gecikenler(c: PlanlamaCalismasi, p: OkunanPlan): Geciken[] {
+  const l: Geciken[] = [];
+  for (const s of c.D.siparisler) { const j = p.J[s.id]; if (!s.havuz && j && (j.T == null || j.T > 0.01)) l.push({ s, T: j.T, C: j.C }); }
+  return l.sort((a, b) => (b.T ?? 1e9) - (a.T ?? 1e9));
+}
+export const DENGE = {
+  elle: { ad: 'Elle ağırlıklı', m: 'Dondurma bölgesi 3 gün: motor önümüzdeki 3 günün işlerine dokunmaz, yalnız ötesini dizer. Planı siz kurarsınız, motor boşlukları doldurur.' },
+  dengeli: { ad: 'Dengeli', m: 'Dondurma bölgesi 24 saat: önümüzdeki 24 saatin işleri yerinde kalır, motor ötesini iyileştirir.' },
+  otomatik: { ad: 'Otomatik', m: 'Dondurma bölgesi yok: motor sabitlediğiniz işler ve dondurulmuş günler dışında her şeyi yeniden dizer.' },
+} as const;
+export type Denge = keyof typeof DENGE;
+export const dengeAl = (c: PlanlamaCalismasi): Denge => (typeof c.w.denge === 'string' && c.w.denge in DENGE ? (c.w.denge as Denge) : 'dengeli');
+export const EKIP_ADIM: [string, string, string][] = [['motor', 'Motor', 'İlk planı kurar, iyileştirir'], ['mesai', 'HiGHS', 'Ek mesai önerir'], ['son', 'Motor', 'Son iyileştirme, kabul edilenleri birleştirir'], ['sinir', 'HiGHS', 'Alt sınırla denetler'], ['kontrol', 'Hakem', 'Çapraz kontrol']];
+// Elle yapılanların sayısı: tek tek sabitlenen işler, dondurulmuş günler (kilidin `gun`ü), gerçekleşen saat girilen işler.
+export function elleSayilari(c: PlanlamaCalismasi): { sabit: number; gun: number; gercek: number } {
+  const l = Object.values(c.locks).map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>).gun : undefined));
+  const g = c.gercek && typeof c.gercek === 'object' ? Object.keys(c.gercek).length : 0;
+  return { sabit: l.filter((x) => x == null).length, gun: new Set(l.filter((x) => x != null)).size, gercek: g };
 }

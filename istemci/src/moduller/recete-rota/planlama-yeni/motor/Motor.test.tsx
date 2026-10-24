@@ -196,6 +196,53 @@ describe('PlanlamaMotoru', () => {
     expect(within(g).getByRole('button', { name: /^3\.10 · / })).toBeTruthy();
   });
 
+  it('Çizelge panelleri: yardımcı, karar paneli, sepet ve havuz; seçim ayrıntıya geçer, motor düğmeleri pasif, denge ve sabitler degistir ile', () => {
+    const c = ornekCalisma(); c.locks = { 'x.1': { m: 'T', S: 1 } };
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    const arac = screen.getByRole('toolbar', { name: 'Plan araçları' });
+    fireEvent.click(within(arac).getByRole('button', { name: 'Yardımcı' }));
+    const yrd = screen.getByRole('complementary', { name: 'Plan yardımcısı' });
+    expect(within(yrd).getByText(/siparişten 1 tanesi geç bitiyor\./)).toBeTruthy();
+    expect(within(yrd).getByRole('button', { name: /Acil sipariş ekle/ }).getAttribute('title')).toContain(MOTOR_NOTU);
+    fireEvent.click(within(yrd).getByRole('button', { name: 'Otomatik' }));
+    expect(komut.degistir).toHaveBeenCalledWith('Denge: Otomatik', expect.any(Function), { planKoru: true });
+    expect(yazilan.at(-1)?.w.denge).toBe('otomatik');
+    expect(within(yrd).getByText('1 sabit · 0 gün dondu · sepette 0')).toBeTruthy();
+    fireEvent.click(within(yrd).getByRole('button', { name: 'Sabitleri kaldır' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Sabitleri kaldır' })).getByRole('button', { name: 'Onayla' }));
+    expect(yazilan.at(-1)?.locks).toEqual({});
+    fireEvent.click(within(yrd).getByRole('tab', { name: 'Ayrıntı' }));
+    const kp = screen.getByRole('region', { name: 'Karar paneli' });
+    expect(within(kp).getByText(/72,9 sa gecikiyor/)).toBeTruthy();
+    expect(within(kp).getByText('Fason · 5', { selector: 'b' })).toBeTruthy();
+    expect(within(kp).getByRole('button', { name: 'Öne almayı dene' }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(kp).getByRole('heading', { name: 'Gecikmenin kaynağı' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Yardımcı' }));
+    fireEvent.click(screen.getByRole('button', { name: /^2 siparişine bak/ }));
+    const ayr = screen.getByRole('complementary', { name: 'Ayrıntı' });
+    expect(within(ayr).getByRole('tab', { name: 'Ayrıntı' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(ayr).getByText(/Sipariş ayrıntısı/)).toBeTruthy();
+    fireEvent.click(within(arac).getByRole('button', { name: 'Havuz' }));
+    const hv = screen.getByRole('complementary', { name: 'Havuz' });
+    expect(within(hv).getByText(/Havuz boş/)).toBeTruthy();
+    expect(within(hv).getByRole('button', { name: 'Planı boşalt' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    fireEvent.click(within(hv).getByRole('tab', { name: 'Sepet' }));
+    expect(within(screen.getByRole('complementary', { name: 'Sepet' })).getByText('Başlangıç')).toBeTruthy();
+  });
+
+  it('plan yazma yetkisi yoksa sepet açılmaz, karar eylemleri yazmaz', () => {
+    ac({ yaz: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    const arac = screen.getByRole('toolbar', { name: 'Plan araçları' });
+    fireEvent.click(within(arac).getByRole('button', { name: 'Sepet' }));
+    expect(screen.getByText(/Bu rolde plan değiştirilemez/)).toBeTruthy();
+    fireEvent.click(within(arac).getByRole('button', { name: 'Ayrıntı' }));
+    const kp = screen.getByRole('region', { name: 'Karar paneli' });
+    expect(within(kp).queryByRole('heading', { name: 'Ne yapabilirsiniz' })).toBeNull();
+  });
+
   it('Çizelge araması tezgâhı ya da siparişi seçer, bulamazsa söyler; tam ekran Esc ile kapanır', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
