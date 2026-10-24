@@ -13,13 +13,15 @@ const n = (g: string | undefined): number => (g === undefined ? 0 : Number(g));
 
 // --- plan ---
 // İşlemin bekleme nedeni (motorun `why`'ı): t tür, o ikincil kod (rota: 2 son parti kuralı).
-export interface Neden { t: string; o?: number }
+export interface Neden { t: string; o?: number; r?: string }
 // Planın işlem kaydı. `m` tezgâh kimliği, fasonda `@fasoncu`. `Su` ayarın bittiği an, `lot1` ilk partinin bitişi.
 export interface PlanIslemi {
   id: string; job: string; m: string; S: number; C: number;
   su: number; run: number; fas: boolean; pin: boolean;
   Su: number | null; lot1: number | null;
   why: Neden | null;
+  // Bolluk: işin planı bozmadan kayabileceği saat; aynı aileden gelen kısa ayar; başlamış iş.
+  sl: number | null; famHit: boolean; act: boolean;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 export interface OkunanPlan {
@@ -41,10 +43,12 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
   for (const [id, r] of Object.entries(p.ops)) {
     const m = nesne(r) ? metin(r.m) : null, job = nesne(r) ? metin(r.job) : null;
     if (!nesne(r) || m === null || job === null) continue;
-    const why = nesne(r.why) && typeof r.why.t === 'string' ? { t: r.why.t, ...(sayi(r.why.o) !== null ? { o: r.why.o as number } : {}) } : null;
+    const why = nesne(r.why) && typeof r.why.t === 'string'
+      ? { t: r.why.t, ...(sayi(r.why.o) !== null ? { o: r.why.o as number } : {}), ...(typeof r.why.r === 'string' ? { r: r.why.r } : {}) } : null;
     ops[id] = {
       id, job, m, S: sayi(r.S) ?? Number.NaN, C: sayi(r.C) ?? Number.NaN,
       su: sayi(r.su) ?? 0, run: sayi(r.run) ?? 0, fas: !!r.fas, pin: !!r.pin, Su: sayi(r.Su), lot1: sayi(r.lot1), why,
+      sl: sayi(r.sl), famHit: !!r.famHit, act: !!r.act,
     };
   }
   const o = p.ozet;
@@ -680,4 +684,21 @@ export function elleSayilari(c: PlanlamaCalismasi): { sabit: number; gun: number
   const l = Object.values(c.locks).map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>).gun : undefined));
   const g = c.gercek && typeof c.gercek === 'object' ? Object.keys(c.gercek).length : 0;
   return { sabit: l.filter((x) => x == null).length, gun: new Set(l.filter((x) => x != null)).size, gercek: g };
+}
+
+// --- neden bu saatte (00-baslangic.betik NEDEN, c-masa.betik nedenMetni) ---
+const NEDEN: Record<string, string> = {
+  simdi: 'Plan başlangıcında hazırdı; ilk boş anda başladı.', serbest: 'Siparişin serbest bırakılma anını bekledi.',
+  malzeme: 'Malzemenin gelişini bekledi (malzeme kuralı: sert).', program: 'NC programının hazırlanmasını bekledi.', kilit: 'Kilitli saatine bağlı.',
+  ariza: 'Tezgâhın arıza ya da bakımının bitmesini bekledi.', ayarci: 'Boş ayarcı bekledi.', personel: 'Boş operatör bekledi.',
+  yetkin: 'Bu tezgâh grubunda yetkin boş operatör bekledi.', aparat: 'Aparatın boşalmasını bekledi.',
+  'fason-kap': 'Fasoncunun kapasitesi doluydu; sonraki çıkışa kaldı.', 'fason-cikis': 'Fasoncunun çıkış gününü bekledi.',
+};
+export function nedenMetni(r: PlanIslemi): string {
+  const w = r.why;
+  if (w?.t === 'rota') return w.o === 2 ? `Son parti kuralı: önceki adım ${w.r ?? ''} bitmeden son partiyi bitiremezdi.` : w.o === 1 ? `Önceki adım ${w.r ?? ''} ilk partisini bitirince örtüşmeli başladı.` : `Önceki adım ${w.r ?? ''} bitince başladı (taşıma payı dahil).`;
+  if (w?.t === 'tezgah') return `Tezgâhta önceki iş ${w.r ?? ''} bitince başladı.`;
+  if (w?.t === 'kilit') return 'Kilitli: planlamacının verdiği saatte, kendi tezgâhında sabit; öteki işler etrafına dizilir.';
+  if (w?.t === 'oneri') return 'Çözücü önerisindeki saatte başladı; motor kısıtları yeniden uyguladı.';
+  return (w && NEDEN[w.t]) ?? 'Bilinmiyor.';
 }
