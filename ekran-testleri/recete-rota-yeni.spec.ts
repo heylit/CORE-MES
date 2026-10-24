@@ -33,3 +33,33 @@ test.describe('R0 iskelet', () => {
     });
   });
 });
+
+test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
+  // Açılışta yazma yok: bölümleri gezmek rota modülüne ve operasyon kataloğuna istek yollamaz.
+  const yazma = (u: string, yontem: string) => yontem === 'POST' && /\/api\/(rota\/(urunler|revizyonlar)|operasyon-tipleri)/.test(u);
+  // Genişlikler (360, 768, 1280) yapılandırmanın projeleridir.
+  test('şema, düzenleme paneli, ürün listesi ve operasyonlar açılır; yatay taşma yok', async ({ page, ag, ac }) => {
+    const yazmalar: string[] = [];
+    page.on('request', (r) => { if (yazma(r.url(), r.method())) yazmalar.push(r.url()); });
+    await ac('/recete-rota/yeni/schema');
+    const sema = page.getByRole('region', { name: 'Ürün ve rotalar' });
+    await expect(sema.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    const kutu = sema.locator('.tc-rr1-opbox').first();
+    if (await kutu.count() > 0) {
+      await kutu.click();
+      await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    }
+    await sema.getByRole('button', { name: 'Ürün listesi' }).click();
+    await expect(sema.getByRole('table', { name: 'Ürünler ve rotaları' }).or(sema.getByText('Henüz ürün yok', { exact: false }))).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }).getByRole('tab', { name: 'Operasyonlar' }).click();
+    const ops = page.getByRole('region', { name: 'Operasyonlar' });
+    await expect(ops.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
+    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
