@@ -4,7 +4,7 @@ import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
 
 // TS geçişinde yeni ekranları denemek için ana menüde geçici satırlar (soru 308 d): yalnız yeni ekran kapısını geçen
 // (yönetici) görür. Ana menüde modül başına tek sayfa kuralının onaylı geçici istisnasıdır; bağlamada bu dosya ve
-// Kabuk'taki tek blok birlikte kalkar. Satır menü verisi değil, var olan `/yeni` rotasına bağlantıdır.
+// Kabuk'taki kullanımları birlikte kalkar. Satır menü verisi değil, var olan `/yeni` rotasına bağlantıdır.
 export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
@@ -24,6 +24,12 @@ const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: s
 ];
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
+
+// Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
+// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır.
+export function yeniEkranAdresiMi(adres: string): boolean {
+  return YENI_EKRAN_YOLLARI.some((yol) => adres === yol || adres.startsWith(`${yol}/`));
+}
 
 export interface YeniEkranBaglantisi { yol: string; baslik: string; simge: SimgeAdi }
 

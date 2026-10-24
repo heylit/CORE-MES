@@ -1,12 +1,14 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   benCevabi, degerlendirmeCevabi, degerlendirmeSorgusu, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
-  statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
+  statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi,
+  yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 import { planlamaDegerlendirmesi } from './degerlendirme.ts';
+import { yillikCozBaslat, yillikCozDurumu } from './yillik-cozucu.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -58,6 +60,25 @@ export const uclar = [
     sorgu: degerlendirmeSorgusu,
     cevap: degerlendirmeCevabi,
     isle: ({ db, kullanici, sorgu }) => planlamaDegerlendirmesi(db, kullanici, sorgu),
+  }),
+  // Yıllık planın çözümü (454/6 a): planlama sayfasını gören başlatır, kayıt yazılmaz. Çözüm uç transaction'ının dışında koşar; sonuç
+  // kimlikle, transaction açmadan okunur.
+  uc({
+    yontem: 'POST',
+    yol: '/recete-rota/yillik-plan/coz',
+    yetki: 'recete-rota.planlama-oku',
+    govde: yillikCozGovdesi,
+    cevap: yillikCozBaslatCevabi,
+    isle: ({ kullanici, govde }) => yillikCozBaslat(kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/yillik-plan/coz/:is',
+    yetki: 'recete-rota.planlama-oku',
+    txDisi: true,
+    parametre: yillikCozParametresi,
+    cevap: yillikCozDurumuCevabi,
+    isle: ({ kullanici, parametre }) => yillikCozDurumu(kullanici.id, parametre.is),
   }),
   uc({
     yontem: 'GET',
