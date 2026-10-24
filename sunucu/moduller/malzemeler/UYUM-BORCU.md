@@ -270,3 +270,6 @@ Açık:
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /malzeme-birimleri`. Birimin sahibi malzemeler (144 a).
+
+## Yeni ekran malzeme ayarları: Roller tablosu (M3, soru 284 madde 7, 24.10.2026) - bağlamada kapanacak
+- Yeni ekranın "Roller ve yetkiler" bölümü prototipin sabit `YETKI` tablosunu gösterir; ayarı yazma yetkisi ise sunucunun `ayarYazabilir` cevabındandır (213 a). Tablo gerçek yetkiyle ayrışabilir. Kullanıcı "şimdilik kabul" dedi; bağlamada tablo ortak yetki matrisinden doldurulur.

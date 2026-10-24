@@ -55,3 +55,23 @@ test.describe('M1 yeni kart sihirbazı', () => {
     expect(ag.yazmalar).toEqual([]);
   });
 });
+
+test.describe('M3 malzeme ayarları', () => {
+  // Genişlikler projeden gelir (360, 768, 1280).
+  test('bölümler gezilir, sayfa yatay taşmaz', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran/ayarlar');
+    const menu = page.getByRole('navigation', { name: 'Malzeme ayarları bölümleri' });
+    await expect(menu.getByRole('button', { name: 'Genel bakış' })).toHaveAttribute('aria-current', 'page');
+    for (const bolum of ['Aileler ve sınıflar', 'Kaliteler', 'Ad, açıklama ve zorunlu alanlar', 'Sertifikalar', 'Roller ve yetkiler', 'Genel']) {
+      await menu.getByRole('button', { name: bolum, exact: true }).click();
+      await expect(page.getByRole('heading', { name: bolum, exact: true, level: 3 })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test('bilinmeyen bölüm Genel bakış\'a düşer', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran/ayarlar?bolum=yok');
+    await expect(page.getByRole('navigation', { name: 'Malzeme ayarları bölümleri' }).getByRole('button', { name: 'Genel bakış' }))
+      .toHaveAttribute('aria-current', 'page');
+  });
+});
