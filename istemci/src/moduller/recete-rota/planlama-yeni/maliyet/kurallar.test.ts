@@ -1,0 +1,119 @@
+import { describe, expect, it } from 'vitest';
+import {
+  birimMaliyet, calisilir, fasonDurumu, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
+  mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, takvimKur, talasKredisi, kisaTl,
+} from './kurallar.ts';
+import { ornekCalisma } from './test-verisi.ts';
+
+describe('P3 saf hesaplar', () => {
+  it('sipariş maliyeti: malzeme, tezgâh saati ve fason; genel gider girilmemişse sıfır, kâr tutardan', () => {
+    const c = ornekCalisma();
+    const b = maliyetBaglami(c);
+    expect(b).not.toBeNull();
+    if (!b) return;
+    const s = c.D.siparisler[0];
+    if (!s) throw new Error('sipariş yok');
+    const m = siparisMaliyeti(b, s);
+    // Kg fiyat listesi yokken kaynağın birim maliyeti: 10 TL × 1,5 kg × 2 adet.
+    expect(m?.mal).toBe(30);
+    // Tampon açıkken acil pay (%5) çalışma süresinden düşer: 2 sa × 0,95 × 100 TL.
+    expect(m?.isl).toBeCloseTo(190);
+    expect(m?.fas).toBe(10);
+    expect(m?.gg).toBe(0);
+    expect(m?.top).toBeCloseTo(230);
+    expect(m?.kar).toBeCloseTo(770);
+    expect(m?.eksik).toEqual([]);
+    expect(planMaliyeti(b).mesTop).toBe(0);
+  });
+
+  it('fiyat eksikse kâr bilinmez (null), sıfır uydurulmaz', () => {
+    const c = ornekCalisma({ D: { tezgahlar: [{ id: 'T1', ad: 'Deneme torna', grup: 'TORNA', ucret: null, verim: 1 }] } });
+    const b = maliyetBaglami(c);
+    const s = c.D.siparisler[0];
+    if (!b || !s) throw new Error('bağlam yok');
+    const m = siparisMaliyeti(b, s);
+    expect(m?.eksik).toContain('T1 saat maliyeti');
+    expect(m?.kar).toBeNull();
+    expect(m?.net).toBeNull();
+  });
+
+  it('plan yoksa ya da başlangıç günü okunamazsa bağlam yoktur', () => {
+    expect(maliyetBaglami(null)).toBeNull();
+    expect(maliyetBaglami(ornekCalisma({ plan: null }))).toBeNull();
+    expect(maliyetBaglami(ornekCalisma({ D: { meta: {} } }))).toBeNull();
+  });
+
+  it('kg fiyat listesi varsa birim maliyet kalite ve formdan gelir; formu boş satır kalitenin bütün formlarına geçer; fire ihtiyacı büyütür', () => {
+    const c = ornekCalisma({ D: { kgFiyat: [{ id: 'KG-1', kalite: 'K1', form: '', fiyat: 20, fire: 10 }] } });
+    const m = malzemeler(c.D)[0];
+    if (!m) throw new Error('malzeme yok');
+    expect(birimMaliyet(c.D, m)).toBe(20);
+    const s = c.D.siparisler[0];
+    if (!s) throw new Error('sipariş yok');
+    expect(malzemeTutari(c.D, s)).toBeCloseTo(20 * 1.5 * 1.1 * 2);
+    const yok = ornekCalisma({ D: { kgFiyat: [{ id: 'KG-1', kalite: 'BASKA', form: '', fiyat: 20 }] } });
+    const m2 = malzemeler(yok.D)[0];
+    if (!m2) throw new Error('malzeme yok');
+    expect(birimMaliyet(yok.D, m2)).toBeNull();
+  });
+
+  it('talaş kredisi net ağırlık ve talaş fiyatıyla; fiyat yoksa null', () => {
+    const s = ornekCalisma().D.siparisler[0];
+    if (!s) throw new Error('sipariş yok');
+    expect(talasKredisi(ornekCalisma().D, s)).toBeNull();
+    const c = ornekCalisma({ D: { talasFiyat: [{ kalite: 'K1', fiyat: 4 }] } });
+    expect(talasKredisi(c.D, s)).toEqual({ kg: 1, tl: 4 });
+  });
+
+  it('genel gider: kalem eşit dağılır, amortisman tezgâha yazılır, oran 30 günün pratik kapasitesine bölünür', () => {
+    const c = ornekCalisma({ D: { maliyetSis: { kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }], tez: { T1: { bedel: 120000, omur: 10, hurda: 0 } } } } });
+    const G = genelGiderHesabi(c, takvimKur(c));
+    const t1 = G.tez.find((z) => z.tezgah.id === 'T1');
+    expect(t1?.amort).toBe(1000);
+    expect(t1?.pay).toBe(1500);
+    // 5 Ocak 07:00'den 30 gün: 22 iş günü × 8 saat × %85 verim.
+    expect(t1?.kap).toBeCloseTo(22 * 8 * 0.85);
+    expect(t1?.oran).toBeCloseTo(2500 / (22 * 8 * 0.85));
+    expect(G.aylik).toBe(4000);
+  });
+
+  it('ek mesai takvime girer; bedeli kişi ücreti yoksa bilinmez, girilince cumartesi çarpanıyla hesaplanır', () => {
+    const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }];
+    const c = ornekCalisma({ ekMesai: ek });
+    const T = takvimKur(c);
+    expect(calisilir(T.M.T1?.rw ?? [], 120, 144)).toBe(8);
+    const e = { m: 'T1', gun: 5, vardiya: 'V1' };
+    expect(mesaiBedeli(c, T, e)).toBeNull();
+    const u = ornekCalisma({ ekMesai: ek, D: { mesaiSis: { ucret: { P1: { brut: 22500 } } } } });
+    expect(mesaiBedeli(u, takvimKur(u), e)).toBeCloseTo(8 * ((22500 * 1.2875) / 225) * 1.5);
+    const A = mesaiAtamasi(u);
+    expect(A.liste[0]?.kisiler.map((k) => k.id)).toEqual(['P1']);
+    expect(A.liste[0]?.ihlal).toEqual([]);
+  });
+
+  it('fason dönüşü: termin yoksa ve iş bir hafta içinde çıkıyorsa hata; termin siparişi karşılıyorsa tamam', () => {
+    const c = ornekCalisma();
+    const L = fasonIsleri(c, isTanimlari(c, takvimKur(c)));
+    expect(L.map((x) => x.id)).toEqual(['S1.20']);
+    const x = L[0];
+    if (!x) throw new Error('fason işi yok');
+    expect(x.ger).toBe(112);
+    expect(fasonDurumu(x)).toEqual(['Termin yok, bir hafta içinde çıkıyor', 'hata']);
+    const t = ornekCalisma({ D: { fasonTermin: { 'S1.20': '2026-01-07 16:00' } } });
+    const y = fasonIsleri(t, isTanimlari(t, takvimKur(t)))[0];
+    if (!y) throw new Error('fason işi yok');
+    expect(y.T).toBe(64);
+    expect(fasonDurumu(y)).toEqual(['Karşılıyor', 'tamam']);
+  });
+
+  it('girdi denetimi ve yardımcılar', () => {
+    expect(sayiGirdisi('12,5')).toEqual({ tamam: true, deger: 12.5 });
+    expect(sayiGirdisi('')).toEqual({ tamam: true, deger: null });
+    expect(sayiGirdisi('x').tamam).toBe(false);
+    expect(sayiGirdisi('-1').tamam).toBe(false);
+    expect(sayiGirdisi('150', { max: 100 }).tamam).toBe(false);
+    expect(sonrakiKimlik([{ id: 'K3' }, { id: 'K1' }], 'K')).toBe('K4');
+    expect(kisaTl(25000)).toBe('25 bin');
+    expect(kisaTl(null)).toBe('');
+  });
+});
