@@ -28,7 +28,6 @@ for (const [parca, sayfalar] of [
   ['A1 Operatör', 'Operatör, Önizleme'],
   ['A2 Hazırlık', 'Üretim Terminali Hazırlık'],
   ['A5 Çizim', 'Çizim'],
-  ['A6 Ayarlar ve çağrı bandı', 'Ayarlar, çağrı bandı'],
 ] as const) {
   test.describe(parca, () => {
     test(`${sayfalar}: bugünkü davranış`, () => {
@@ -86,5 +85,25 @@ test.describe('A4 Kalite, bakım, raporlar · yetki', () => {
     await ac('/arkon/yeni/kalite');
     const kalite = page.getByRole('group', { name: 'Kalite görünümü' });
     for (const ad of ['Numuneler', 'SPC · rapor', 'Onaylar', 'Ölçü aletleri']) await expect(kalite.getByRole('button', { name: new RegExp(`^${ad}`) })).toBeVisible();
+  });
+});
+
+test.describe('A6 Ayarlar ve çağrı bandı', () => {
+  test('Ayarlar: yöneticide bölümler açılır, açılışta yazma yok, salt okunur listeler kilitli; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    await ac('/arkon/yeni/ayarlar');
+    const bolum = page.getByRole('region', { name: 'Ayarlar' });
+    const sekmeler = bolum.getByRole('tablist', { name: 'Ayarlar bölümleri' });
+    await expect(sekmeler.getByRole('tab')).toHaveText(['Genel', 'Tesis', 'Kişiler ve yetkiler', 'Üretim', 'Sistem']);
+    await expect(bolum.getByRole('heading', { name: 'Ekran modülleri' })).toBeVisible();
+    for (const [sekme, metin] of [
+      ['Tesis', /İstasyonlar sayfasından değiştirilir/], ['Kişiler ve yetkiler', /Roller sayfasından değiştirilir/],
+      ['Üretim', /Vardiya sayfasından değiştirilir/], ['Sistem', /Yedekleme TMI sunucusunda yapılır/],
+    ] as const) {
+      await sekmeler.getByRole('tab', { name: sekme }).click();
+      await expect(bolum.getByText(metin)).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/arkon/iletiler'))).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
   });
 });
