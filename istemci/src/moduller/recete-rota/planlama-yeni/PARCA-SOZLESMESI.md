@@ -19,11 +19,12 @@ sahiplenir (dosya kilidi koordinatorden). Parca yalniz kendi klasorune ve `ekran
 `test.describe('P<n> ...')` bloguna yazar. Kendi css dosyasi kendi klasorundedir. Iskelet dosyalarina (asagidaki liste) dokunulmaz; eksik islev
 iskelet sahibine istek olarak gelir. Parcalar birbirini ithal etmez; ortak gereken iskelete istekle girer.
 
-Iskelet dosyalari (tek sahip: iskelet): `PlanlamaYeni.tsx`, `gorunumler.ts`, `yollar.ts`, `veri.ts`, `durum.ts`, `tipler.ts`, `yetki.ts`,
+Iskelet dosyalari (tek sahip: iskelet): `PlanlamaYeni.tsx`, `gorunumler.ts`, `yollar.ts`, `veri.ts`, `kayit.ts`, `durum.ts`, `tipler.ts`, `yetki.ts`,
 `YerTutucu.tsx`, `test-ortak.tsx`, `planlama-yeni.css`, `cizelge/`, bu dosya ve iskeletin testleri.
 
 ## Iskeletin sabit imzalari (parcalar kullanir, degistirmez)
-- `gorunumler.ts`: `PlanlamaEkranOzellikleri { depo: PlanlamaDeposu; yetki: PlanlamaYetkisi; git(g: PlanlamaGorunumu): void; yenile(): void }`.
+- `gorunumler.ts`: `PlanlamaEkranOzellikleri { depo: PlanlamaDeposu; calisma: PlanlamaCalismasi | null; komut: CalismaKomutu | null; yetki: PlanlamaYetkisi;
+  git(g: PlanlamaGorunumu): void; yenile(): void }`. `calisma` guncel haldir (`depo.calisma` acilistaki); `komut` yazma izni ya da calisma kaydi yoksa null.
   `PlanlamaGorunumu` ikinci menu anahtarlaridir. `gorunumAcik(g, yetki)`: maliyet, giderler, denge `finans.maliyet-oku` ister (200 a, 195 a);
   ekran seritte gostermez, adresle acilirsa yetki iletisi cikar.
 - `veri.ts`: `PlanlamaDeposu { ben; calisma: PlanlamaCalismasi | null; calismaSurumu: number | null; receteRotaKaydi: unknown; durum: DurumCevabi | null;
@@ -35,22 +36,35 @@ Iskelet dosyalari (tek sahip: iskelet): `PlanlamaYeni.tsx`, `gorunumler.ts`, `yo
   `VARSAYILAN_AGIRLIK`, `VARSAYILAN_PARAMETRE` (sayfanin yeni calisma degerleri).
 - `tipler.ts`: `PlanlamaCalismasi` (`S`), `PlanVerisi` (`D`), `Siparis`, `Tezgah`, `Urun`, `RotaAdimi`, `Malzeme`, `Personel`, `Fasoncu`,
   `CozulmusPlan`, `CalismaSenaryosu`, `IzSatiri`. Bilinmeyen alan `ExtraAlanlar` ile tasinir; parca alan eklemek isterse iskelete istek yazar.
-- `yetki.ts`: `PlanlamaYetkisi { planlamaOku, maliyetOku, planYaz, planKilitle, planStudyo, planCanliyaAl, bedelAyari, kayitYazabilir }`.
-  Ekran yalniz gizler; denetim uctadir. Sayfanin ic rol modeli (veri.yaz, plan.kilitle ...) tasinmaz; esleme soru 223'e bagli.
+- `yetki.ts`: `PlanlamaYetkisi { planlamaOku, maliyetOku, planYaz, planKilitle, planStudyo, planCanliyaAl, bedelAyari, kayitYazabilir, calismaYazabilir }`.
+  Ekran yalniz gizler; denetim uctadir. `calismaYazabilir` = ortak `plan.yaz` ve `ben.yazabilir` (223 a). `planKilitle` sunucudaki is emri kilidi
+  uclarinindir; sayfa ici kilit (`calisma.locks`) `komut.degistir` ile ve `plan.yaz` ile yapilir.
+- `kayit.ts`: `CalismaKomutu { degistir(ne, fn(taslak) => boolean | void, { ayrinti?, planKoru? }): boolean; geriAl(): boolean; geriAlinabilir(): boolean }`.
+  `fn` calismanin kopyasini degistirir (false: vazgec). Her degisiklik eski sayfanin `degistir`'i gibi geri alma kopyasi alir (30), veri surumunu
+  artirir (plan bayatlar; `planKoru` gorunum tercihi icindir), ize yazar ve basari bildirimini Geri al dugmesiyle verir. Yazma 2 sn birlesik,
+  surum denetimli, yalniz `:planlama`; catismada (409) yazma durur ve kullanici yenilemeye cagrilir; 1 MB uzeri gonderilmez.
 - `cizelge/`: `Cizelge { etiket, olcek, satirlar, simdi?, secili?, sec?, gunEtiketi? }` (kaynak basina satir, saat eksenli cubuk; renk parcanin
   `sinif`'iyla `--renk`), `olcekKur(bas, bit, yakinlik)`, `konum`, `cubukAraligi`, `gunCizgileri`. Tahta, tezgah panosu ve atolye bunu kullanir.
 - `YerTutucu`: yalniz iskeletin; parca teslimde kendi index.tsx'inden kaldirir.
 - `test-ortak.tsx`: `sunucuKur(kullanici, kayitlar, { ret })`, `ac(adres)`, kullanicilar `YONETICI`, `MALIYETSIZ`, `PLANLAMASIZ`, `KAPISIZ` (uydurma).
 
-## Kararlar ve acik sorular (iskelet salt okur)
-- 221 c (kullanici 23.10 22:45, cmsg_019jymdq1CtoFcRqjZv7Ln6XCQ14KrCeDnUCGCLuq6Mmc3): karma. Senaryo, degisiklik ve onay plan modulunun
-  tablolarindadir (`/plan/senaryolar`, `PLAN_ONAY_KOMUTLARI`); ekran tercihleri ve agirliklar (`w`, `param`, `pref`, karar alanlari) `:planlama`
-  kaydinda kalir. Kayda yazma yolu (surum denetimli, `/recete-rota/kayitlar/yaz`) iskelete istekle girer; parca kendi yazma kodunu yazmaz.
-  Sayfanin kendi senaryolari (`calisma.senaryolar`, `canli`) yeni ekranda kullanilmaz; senaryo yalniz plan modulundendir.
-- 222: acik (kullanici aciklama istedi). Cevap gelene dek `receteRotaKaydi` yalniz okunur; hicbir parca Recete ve Rota kaydina yazmaz.
-- 223 a: cevap verildi, okuma teyidi bekleniyor. Teyit gelene dek ekran bayraklari ortak islemlerden okunur (yetki.ts); ic rol modeli tasinmaz.
-- 224 a (ayni mesaj): malzeme ihtiyaci (MRP) hesabinin sahibi recete-rota (Planlama). P4 hesabi saf TS olarak kendi `kurallar.ts`'inde yazar;
-  stok ve satin alma verisi sahiplerinin `disari.ts`/uclarindan okunur.
+## Kararlar
+Kullanici mesajlari: 221 c ve 224 a cmsg_019jymdq1CtoFcRqjZv7Ln6XCQ14KrCeDnUCGCLuq6Mmc3 (23.10 22:45); 222 a, 223 okuma teyidi ve 276 kabul
+cmsg_019jymdq1CtoFcRqjZv7Ln6XWUqxR4psGLrrobZ2Dzar9H (24.10 06:42; 06:39 cevabi bununla gecersiz).
+- 221 c: karma. Senaryo, degisiklik ve onay plan modulunun tablolarindadir (`/plan/senaryolar`, `PLAN_ONAY_KOMUTLARI`); ekran tercihleri,
+  agirliklar ve planlama karar alanlari (`w`, `param`, `pref`, `locks`, `kapali`, `ekMesai`, `down`, karar alanlari) `:planlama` kaydinda kalir.
+  Kayda yalniz `kayit.ts` `CalismaYazici` yazar (surum denetimli, `/recete-rota/kayitlar/yaz`); parca kendi yazma kodunu yazmaz, `komut.degistir` cagirir.
+  Sayfanin kendi senaryolari (`calisma.senaryolar`, `canli`) yeni ekranda kullanilmaz; belgede oldugu gibi kalir (eski ekran alima kadar okur).
+- 222 a: Planlama Recete ve Rota kaydina (anahtar `recete-rota-motoru-v1`) yazmaz; `receteRotaKaydi` salt okunurdur ve `CalismaYazici` yalniz
+  `:planlama` anahtarina yazar. Veri sahibinden girer (Recete ve Rota bolumleri, Malzemeler, Uretim emirleri, Istasyonlar, Vardiya). `calisma.D`'deki
+  kaynak kopyalarinin sahibinden gelen alanlari (ad, kod, adet, termin, rota adimlari, tezgah ve kisi tanimi) parca degistirmez; plan alt ayarlari
+  (oncelik, gelir, ceza, verim, karar alanlari) planlamanindir [VARSAYIM: eski sayfanin "motor ayarlari" ayrimi, girdi.betik sunucuKaydi].
+- 223 a: ic rol esleme. `veri.yaz` kalkar; `plan.yaz` -> ortak `plan.yaz`; sayfa ici `plan.kilitle` (calisma kilitleri, 61 eylem) `plan.yaz`'a katilir;
+  `plan.canliya-al` -> ortak `plan.canliya-al`; fiyat ve maliyet gorunumu -> `finans.maliyet-oku`. Sunucudaki `/plan/is-emirleri/:id/kilitle`
+  uclari ortak `plan.kilitle` ister (`yetki.planKilitle`); sayfa ici kilit ile ayni sey degildir.
+- 224 a: malzeme ihtiyaci (MRP) hesabinin sahibi recete-rota (Planlama). P4 hesabi saf TS olarak kendi `kurallar.ts`'inde yazar;
+  stok ve satin alma verisi sahiplerinin uclarindan okunur.
+- 276 kabul: iskelet DEVIR'indeki 7 fark kabul edildi.
 Sunucuya giden yazmalar (onay, canliya alma, kilit, siralama) bugun var olan plan uclariyla yapilir (`PLAN_ONAY_KOMUTLARI`, H2/H3); yeni uc
 istegi parcadan iskelete, oradan koordinatore gelir.
 

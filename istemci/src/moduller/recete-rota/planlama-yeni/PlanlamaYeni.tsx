@@ -1,10 +1,13 @@
-import { Suspense, useMemo } from 'react';
+import { Suspense, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { DurumKutusu, Sekmeler } from '../../../ortak/arayuz/index.ts';
+import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { DurumKutusu, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
+import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import { ACILIS, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, type PlanlamaGorunumu } from './gorunumler.ts';
+import { CalismaYazici } from './kayit.ts';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
 import './planlama-yeni.css';
@@ -14,6 +17,10 @@ import './planlama-yeni.css';
 export function PlanlamaYeni() {
   return <YeniEkranKapisi><PlanlamaEkrani /></YeniEkranKapisi>;
 }
+
+const bosAbone = (): (() => void) => () => {};
+// İz satırının sayfa adı yazma anındaki görünümdür (yazıcı bir kez kurulur, görünüm değişir).
+const sonGorunum: { deger: string | null } = { deger: null };
 
 function PlanlamaEkrani() {
   const oturum = useOturum();
@@ -26,6 +33,31 @@ function PlanlamaEkrani() {
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
     [durum, kullanici],
   );
+  const gorunum = gorunumOku(parca);
+  const { bildir } = useBildirim();
+  // Yazıcı açılıştaki çalışma ve sürümle kurulur; yazma yetkisi ya da çalışma kaydı yoksa ekran salt okunur (komut null).
+  const yazici = useMemo(() => {
+    if (durum.tur !== 'hazir' || yetki === null || !yetki.calismaYazabilir || durum.depo.calisma === null || !kullanici) return null;
+    return new CalismaYazici({
+      calisma: durum.depo.calisma, surum: durum.depo.calismaSurumu, kim: kullanici.ad,
+      sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
+      yaz: (g: YazGovdesi) => api.post<YazCevabi>('/recete-rota/kayitlar/yaz', g),
+      uyar: (ileti) => { bildir('hata', ileti); },
+      bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },
+    });
+    // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
+  }, [durum, yetki]);
+  sonGorunum.deger = gorunum;
+  const calisma = useSyncExternalStore(
+    yazici?.abone ?? bosAbone,
+    () => yazici?.calisma ?? (durum.tur === 'hazir' ? durum.depo.calisma : null),
+  );
+  useEffect(() => {
+    if (yazici === null) return undefined;
+    const cik = (): void => { void yazici.hepsiniYaz(); };
+    window.addEventListener('pagehide', cik);
+    return () => { window.removeEventListener('pagehide', cik); cik(); };
+  }, [yazici]);
 
   if (oturum.isPending) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
   if (!kullanici) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Oturum bulunamadı." /></div>;
@@ -33,7 +65,6 @@ function PlanlamaEkrani() {
   if (durum.tur === 'hata') return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj={durum.ileti} yenile={yenile} /></div>;
   if (durum.tur === 'yukleniyor' || yetki === null) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
 
-  const gorunum = gorunumOku(parca);
   if (gorunum === null) return <Navigate to={gorunumAdresi(ACILIS)} replace />;
   const kayitlar = GORUNUM_KAYITLARI.filter((k) => gorunumAcik(k.anahtar, yetki));
   const etkin = kayitlar.find((k) => k.anahtar === gorunum);
@@ -49,7 +80,7 @@ function PlanlamaEkrani() {
           ? <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Bu sayfayı görme yetkiniz yok." /></div>
           : (
             <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-              <etkin.bilesen depo={durum.depo} yetki={yetki} git={gec} yenile={yenile} />
+              <etkin.bilesen depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile} />
             </Suspense>
           )}
       </div>
