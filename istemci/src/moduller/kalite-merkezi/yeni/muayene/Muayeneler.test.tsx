@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MUAYENECI, MUHENDIS, OKUYAN, YONETICI, kayitYazmalari, kmAc, type TestKayitlari } from '../test-ortak.tsx';
 
 // jsdom tuval çizmez; grafik kurulmaz, ekranın geri kalanı sınanır.
@@ -55,7 +55,8 @@ describe('Muayeneler', () => {
     expect(await screen.findByText(/Gerekçe/)).toBeTruthy();
   });
 
-  it('yeni muayeneyi ölçümle kaydeder', async () => {
+  it('yeni muayeneyi ölçümle kaydeder (tüm alanlar kipi)', async () => {
+    localStorage.setItem('kym-me', JSON.stringify({ formMode: 'liste' }));
     const { yazmalar } = kmAc('muayeneler', YONETICI, KAYITLAR);
     fireEvent.click(await screen.findByRole('button', { name: /Muayene kaydet/ }));
     fireEvent.change(await screen.findByLabelText(/Parça no/), { target: { value: 'P-9' } });
@@ -71,5 +72,26 @@ describe('Muayeneler', () => {
     const govde = (kayitYazmalari(yazmalar, 'insp')[0]!.govde as { govde: Record<string, unknown> }).govde;
     expect(govde).toMatchObject({ parcaNo: 'P-9', tur: 'Giriş', chars: [{ ad: 'Boy', sonuc: 'OK' }] });
     expect(govde.satirlar).toBeUndefined();
+  });
+  it('tek tek sor kipinde FAI nedeni ve kapsamı ayrı sorulur, yalnız FAI türünde', async () => {
+    kmAc('muayeneler', YONETICI, KAYITLAR);
+    fireEvent.click(await screen.findByRole('button', { name: /Muayene kaydet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Özet' }));
+    expect(screen.queryByRole('button', { name: /FAI nedeni/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Muayene türü/ }));
+    fireEvent.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /FAI$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Özet' }));
+    expect(await screen.findByRole('button', { name: /FAI nedeni/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Kapsam/ })).toBeTruthy();
+  });
+  it('tüm alanlar kipinde FAI nedeni ve kapsamı yalnız FAI türünde görünür', async () => {
+    localStorage.setItem('kym-me', JSON.stringify({ formMode: 'liste' }));
+    kmAc('muayeneler', YONETICI, KAYITLAR);
+    fireEvent.click(await screen.findByRole('button', { name: /Muayene kaydet/ }));
+    fireEvent.change(await screen.findByLabelText(/Muayene türü/), { target: { value: 'Giriş' } });
+    expect(screen.queryByLabelText(/FAI nedeni/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Muayene türü/), { target: { value: 'FAI' } });
+    expect(await screen.findByLabelText(/FAI nedeni/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Kapsam/)).toBeTruthy();
   });
 });
