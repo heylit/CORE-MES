@@ -1,0 +1,18 @@
+.tc-km2-muayene { min-width: 0; }
+.tc-km2-eylemler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-km2-ret { color: var(--stop); }
+.tc-km2-soluk { color: var(--muted); }
+.tc-km2-isaretler { display: grid; gap: var(--b-2); margin: 0; padding: 0; border: 0; }
+.tc-km2-isaretler legend { margin-bottom: var(--b-2); font-weight: 700; }
+.tc-km2-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 6)), 1fr)); gap: var(--b-3); }
+.tc-km2-fai { display: grid; gap: var(--b-3); }
+.tc-km2-fai h4, .tc-km2-kar h4 { margin: 0; }
+.tc-km2-kar { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-km2-kar-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-km2-kar-toplu { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
+.tc-km2-kar-liste { display: grid; gap: var(--b-3); margin: 0; padding: 0; list-style: none; }
+.tc-km2-kar-satir {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 3)), 1fr)); align-items: end; gap: var(--b-2);
+  padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km2-kar-sonuc { display: flex; align-items: center; min-height: var(--dokunma); }
