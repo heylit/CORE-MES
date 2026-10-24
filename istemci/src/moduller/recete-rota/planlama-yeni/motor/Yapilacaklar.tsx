@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { olayAdi, saatYaz, type Sorun } from './kurallar.ts';
-import { HAZIRLANIYOR, MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
+import { eylemYapisi } from './eylem.ts';
+import type { Sorun } from './kurallar.ts';
 
 // Yapılacaklar (zo-kontrol.betik ypHtml): sağ altta sayılı düğme, basınca kararlar listesi; her kararın ilk eylemi. "Hazır olmayan emirler"
 // eski sayfada deneme verisiydi (208 a), gelmez.
@@ -70,36 +70,15 @@ export function Yapilacaklar(o: Ozellikler) {
   );
 }
 
-// Eylemin yapılışı: çalışmaya yazan üçü `degistir`le (plan.yaz), sipariş seçimi sayfada; motor isteyenler ve yeni ekranda karşılığı olmayan
-// sayfa pasif, nedeni ipucunda.
 function Karar({ x, c, komut, sipSec, ac }: Ozellikler & { x: Sorun }) {
-  const e = x.eylem; const i = Number(e.v);
-  const yaz = (ne: string, fn: (t: PlanlamaCalismasi) => void, ayrinti = '') => (komut ? () => { komut.degistir(ne, fn, { ayrinti }); } : null);
-  let yap: (() => void) | null = null; let not = '';
-  switch (e.tur) {
-    case 'kisit-hepsi': yap = yaz('Bütün kısıtlar açıldı', (t) => { t.kapali = []; }); not = 'Plan yazma yetkiniz yok.'; break;
-    case 'durus-kaldir': {
-      const d = c.down[i];
-      yap = d ? yaz('Duruş kaldırıldı', (t) => { t.down.splice(i, 1); }, `${String(d.m)} ${saatYaz(c.D, typeof d.from === 'number' ? d.from : null)}`) : null; not = 'Plan yazma yetkiniz yok.';
-      break;
-    }
-    case 'olay-kaldir': {
-      const ev = c.olaylar[i];
-      yap = ev ? yaz('Olay kaldırıldı', (t) => { t.olaylar.splice(i, 1); }, olayAdi(c, ev)) : null; not = 'Plan yazma yetkiniz yok.';
-      break;
-    }
-    case 'sec-is': yap = () => sipSec(e.v); break;
-    case 'git': not = YOK_NOTU; break;
-    case 'suz-gec': not = HAZIRLANIYOR; break;
-    default: not = MOTOR_NOTU;
-  }
+  const e = x.eylem; const { yap, not } = eylemYapisi(e, { c, komut, sipSec });
   return (
     <li data-ton={x.ton}>
       <Simge ad={x.simge} boyut="k" />
       <div>
         <b>{x.baslik}</b>
         <button type="button" className="tc-pym-link" aria-disabled={yap ? undefined : 'true'} title={yap ? undefined : `${e.ad}: ${not}`}
-          onClick={yap ? () => { ac(false); yap?.(); } : undefined}>{e.ad}</button>
+          onClick={yap ? () => { ac(false); yap(); } : undefined}>{e.ad}</button>
       </div>
     </li>
   );
