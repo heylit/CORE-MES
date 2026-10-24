@@ -1,11 +1,6 @@
-import type { EkranOzellikleri } from '../sekmeler.ts';
-import { Hazirlaniyor } from '../Hazirlaniyor.tsx';
+import './emirler.css';
 
-// R3 parçası: Üretim emirleri (liste, ayrıntı, emir komutları) ve Stok (statülü stok, statü tanımları). Bileşen adları değişmez.
-export function UretimEmirleri(_o: EkranOzellikleri) {
-  return <Hazirlaniyor baslik="Üretim emirleri" parca="R3" />;
-}
-
-export function Stok(_o: EkranOzellikleri) {
-  return <Hazirlaniyor baslik="Stok" parca="R3" />;
-}
+// R3 parçası: Üretim emirleri (liste, yeni emir, ayrıntı, bölme, rotasız adımlar, stoğa tamamlama) ve Stok (serbest ve statülü stok,
+// statü atlatma, sayım, süreçteki malzeme, hareketler). Bileşen adları değişmez; sekmeler.ts buradan ithal eder.
+export { UretimEmirleri } from './UretimEmirleri.tsx';
+export { Stok } from './Stok.tsx';
