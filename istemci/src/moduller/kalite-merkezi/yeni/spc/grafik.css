@@ -1,0 +1,5 @@
+.tc-km2-grafik { margin: 0; min-width: 0; }
+.tc-km2-g-alan { position: relative; width: 100%; min-width: 0; }
+.tc-km2-g-kisa { height: calc(var(--b-6) * 6); }
+.tc-km2-g-orta { height: calc(var(--b-6) * 8); }
+.tc-km2-g-uzun { height: calc(var(--b-6) * 9); }
