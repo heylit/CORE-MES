@@ -1,11 +1,5 @@
-import type { EkranOzellikleri } from '../sekmeler.ts';
-import { Hazirlaniyor } from '../Hazirlaniyor.tsx';
-
 // R1 parçası: Ürün ve rotalar (akış şeması, düzenleme paneli, revizyon çubuğu) ve Operasyonlar. Bileşen adları değişmez.
-export function UrunVeRotalar(_o: EkranOzellikleri) {
-  return <Hazirlaniyor baslik="Ürün ve rotalar" parca="R1" />;
-}
+import './rotalar.css';
 
-export function Operasyonlar(_o: EkranOzellikleri) {
-  return <Hazirlaniyor baslik="Operasyonlar" parca="R1" />;
-}
+export { UrunVeRotalar } from './UrunVeRotalar.tsx';
+export { Operasyonlar } from './Operasyonlar.tsx';
