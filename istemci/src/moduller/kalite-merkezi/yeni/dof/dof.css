@@ -1,0 +1,11 @@
+/* DÖF listesi: 8D adım kutucukları ve açıklama satırı. */
+.tc-km3-d8 { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-km3-d8 button {
+  min-width: var(--dokunma); min-height: var(--dokunma); padding: 0 var(--b-1);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: transparent; color: var(--ink);
+  font: inherit; font-size: var(--yazi-xs); font-weight: 700;
+}
+.tc-km3-d8 button[aria-pressed='true'] { background: var(--run); border-color: var(--run); color: var(--on-sig); }
+.tc-km3-d8 button:disabled { cursor: default; }
+.tc-km3-gecikme { color: var(--stop); font-weight: 600; }
+.tc-km3-d8-aciklama { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
