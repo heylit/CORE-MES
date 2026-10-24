@@ -4,7 +4,7 @@ import {
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
+  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
@@ -84,7 +84,7 @@ export const uclar = [
     yetki: 'recete-rota.yaz',
     govde: silGovdesi,
     cevap: silCevabi,
-    isle: ({ db, govde }) => sil(db, govde.anahtar, govde.beklenenSurum),
+    isle: ({ db, kullanici, govde }) => { planlamaYazmaDenetimi(kullanici, govde.anahtar); return sil(db, govde.anahtar, govde.beklenenSurum); },
   }),
   // Elle tanımlanan statü (geçiş planı adım 4): ekleme, değişiklik ve silme tabloya komutla gider.
   uc({

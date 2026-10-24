@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -41,6 +41,13 @@ import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-
 const ISLEM_YAZ = 'recete-rota.yaz';
 const CAKISMA_ILETISI = 'Reçete ve rota kayıtları siz açtıktan sonra başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 const BUYUK_ILETISI = 'Reçete ve rota kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
+const PLANLAMA_YETKI_ILETISI = 'Planlama çalışmasını değiştirme yetkiniz yok.';
+
+// Planlama çalışması (tercih, ağırlık, karar, sayfa içi kilit) yalnız planı yazabilene açıktır (287 a): yazma ve silme ucu recete-rota.yaz
+// ister, bu anahtar ayrıca plan.yaz ister. Planlama sayfasını okuyup plan yazmayan rol (müdür, 290 b) çalışmayı değiştiremez.
+export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): void {
+  if (anahtar === PLANLAMA_ANAHTARI && !islemVarMi(kullanici, 'plan.yaz')) throw yetkiYok(PLANLAMA_YETKI_ILETISI);
+}
 
 export function ben(kullanici: Kullanici): BenCevabi {
   return { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: kullanici.islemler.includes(ISLEM_YAZ) };
@@ -51,6 +58,7 @@ export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
+  planlamaYazmaDenetimi(kullanici, g.anahtar);
   if (!degerBicimeUyarMi(g.bicim, g.deger)) throw dogrulama('Metin biçimli değer dize olmalıdır.', 'deger');
   if (nulKarakteriVarMi(g.deger)) throw dogrulama('Değer boş karakter (U+0000) içeremez.', 'deger');
   if (degerCokBuyukMu(g.deger)) throw cokBuyuk(BUYUK_ILETISI);
