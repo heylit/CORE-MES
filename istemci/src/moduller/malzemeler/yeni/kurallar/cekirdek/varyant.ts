@@ -155,8 +155,8 @@ export function variantList(d: Taslak = D): Taslak[] {
     }
     return out.map(p => ({ ...d, dims: { ...d.dims, ...p } }));
 }
-export function variantKod__0(vd: Taslak, _ekstra?: unknown): string { return (D.kodManual && D.com.kod) ? D.com.kod + '-' + FORMS[vd.form!]!.dims.map(([k]) => vd.dims[k]).filter(isNum).join('x') : autoKod(vd); }
-export function variantAd(vd: Taslak): string { return (D.adManual && D.com.ad) ? D.com.ad + ' ' + dimsStr(vd, true) : autoAd(vd); }
+export function variantKod__0(vd: Taslak, _ekstra?: unknown): string { return (vd.kodManual && vd.com.kod) ? vd.com.kod + '-' + FORMS[vd.form!]!.dims.map(([k]) => vd.dims[k]).filter(isNum).join('x') : autoKod(vd); }
+export function variantAd(vd: Taslak): string { return (vd.adManual && vd.com.ad) ? vd.com.ad + ' ' + dimsStr(vd, true) : autoAd(vd); }
 export function variantSummary(d: Taslak = D): string {
     const vsel = d.vsel as VaryantSecimi | undefined;
     const parts: string[] = [];

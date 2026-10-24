@@ -33,8 +33,7 @@ export function MA_BOS(): MalzemeAyari { return ({ surum: 1, aileler: [], gizliA
 export function _alanBul(yol: string, k: string): Alan | null { const [t, x] = yol.split('.'); const l = t === 'ALAN' ? ALAN[String(x)] : t === 'SARF' ? (SARF_KAT[String(x)] || { alanlar: undefined }).alanlar : t === 'DB' ? (DB_KAT[String(x)] || { alanlar: undefined }).alanlar : null; return (l || []).find(a => a.k === k) || null; }
 export function listeHedef(id: string): ListeHedefi | null {
     const p = id.split('|');
-    // Eksik parça prototipteki gibi 'undefined' anahtarına düşer.
-    const p1 = String(p[1]), p2 = String(p[2]);
+    const p1 = p[1], p2 = p[2];
     if (id === 'sertifika')
         return { hedef: [SERTIFIKA], taban: TABAN.SERTIFIKA };
     if (id === 'belge') {
@@ -44,15 +43,21 @@ export function listeHedef(id: string): ListeHedefi | null {
     if (id === 'birim')
         return { hedef: [BIRIMLER], taban: TABAN.BIRIMLER };
     if (p[0] === 'birim') {
+        if (p1 === undefined)
+            return null;
         const bl = BIRIM_T[p1] = BIRIM_T[p1] || [];
         return { hedef: [bl], taban: TABAN.BIRIM_T[p1] || [] };
     }
     if (p[0] === 'tol') {
+        if (p1 === undefined || p2 === undefined)
+            return null;
         const tf = TOLP[p1] = TOLP[p1] || {};
         const tl = tf[p2] = tf[p2] || [];
         return { hedef: [tl], taban: ((TABAN.TOLP[p1] || {})[p2]) || [] };
     }
     if (p[0] === 'opt') {
+        if (p1 === undefined)
+            return null;
         const f = FAMS[p1];
         const o = f && f.opts.find(x => x.k === p[2]);
         if (!o)

@@ -14,7 +14,8 @@ export interface OnayBilgisi {
   onay?: Kisi | null;
   degisiklik?: boolean;
   sonOnay?: Kisi | null;
-  red?: Kisi & { neden?: string };
+  red?: (Kisi & { neden?: string }) | null;
+  pasif?: (Kisi & { neden?: string }) | null;
   [alan: string]: unknown;
 }
 

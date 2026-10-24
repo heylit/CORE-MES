@@ -65,7 +65,11 @@ export function onayYetkili(x: Taslak | null | undefined): boolean {
         return false;
     return true;
 }
+const ONAY_ISLEMLERI = ['onayla', 'reddet', 'gonder', 'pasif', 'aktif'];
+// Tanımsız işlem kartı değiştirmez; yoksa onay durumu boş kalır ve onay listesi çizilemez.
 export function onayUygula(x: Taslak, islem: string, neden?: string): Taslak {
+    if (!ONAY_ISLEMLERI.includes(islem))
+        return x;
     const it = clone(x);
     const eski = onayDurum(x);
     const k = _kim();
