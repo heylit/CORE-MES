@@ -1,0 +1,39 @@
+/* Kalite Merkezi Parçalar (K1): liste ve parça sayfası. */
+.tc-km1-parcalar, .tc-km1-parca { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-km1-soluk { color: var(--muted); }
+.tc-km1-kucuk { margin: 0; font-size: var(--yazi-s); }
+.tc-km1-kod { font-family: var(--font-mono); font-weight: bold; }
+.tc-km1-iki { display: grid; gap: var(--pay-ince); min-width: 0; }
+.tc-km1-iki small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km1-baglanti {
+  padding: 0; font: inherit; color: var(--done); text-align: start; cursor: pointer; background: none; border: 0;
+  text-decoration: underline; text-underline-offset: var(--kayma);
+}
+.tc-km1-geri { justify-self: start; }
+
+.tc-km1-parca-bas { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--b-3); }
+.tc-km1-parca-ad { min-width: 0; overflow-wrap: anywhere; }
+.tc-km1-parca-ad h2 { margin: 0; font-size: var(--yazi-xl); }
+.tc-km1-parca-ad p { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: var(--b-1) 0 0; }
+.tc-km1-parca-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-km1-not {
+  padding: var(--b-3) var(--b-4); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
+  border-inline-start: var(--b-1) solid var(--hold); border-radius: var(--yari-1);
+}
+.tc-km1-sekme-icerik, .tc-km1-sekme-ic { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-km1-sekme-ic > p { margin: 0; }
+.tc-km1-ara-baslik { margin: var(--b-2) 0 0; font-size: var(--yazi-m); }
+.tc-km1-ek-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+.tc-km1-kartlar { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--dokunma) * 7)), 1fr)); }
+.tc-km1-resim {
+  display: grid; gap: var(--b-2); padding: var(--b-3) var(--b-4); min-width: 0;
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-km1-resim h4, .tc-km1-resim p { margin: 0; overflow-wrap: anywhere; }
+.tc-km1-resim p { font-size: var(--yazi-s); }
+.tc-km1-resim-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-km1-resim-sayi { margin-inline-start: auto; font-weight: bold; }
+.tc-km1-resim-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+.tc-km1-satir-eylem { display: inline-flex; flex-wrap: wrap; gap: var(--pay-ince); }
