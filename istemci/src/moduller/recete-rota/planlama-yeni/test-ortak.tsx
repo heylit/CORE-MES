@@ -20,7 +20,10 @@ export const KAPISIZ: Kullanici = { id: 4, ad: 'Deneme Kapisiz', islemler: ['say
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
 // `ret` verilen yol 403 döner (izinsiz okuma). Dönen dizi yapılan istekler ("YÖNTEM /yol").
-export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitlar'] = [], secenek: { ret?: (yol: string) => boolean } = {}): string[] {
+// Yazma gövdeleri `secenek.govdeler`e eklenir; çalışma kaydına yazma kaydın sürümünü bir artırır.
+export function sunucuKur(
+  kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitlar'] = [], secenek: { ret?: (yol: string) => boolean; yazabilir?: boolean; govdeler?: unknown[] } = {},
+): string[] {
   const istekler: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     const yol = adres.replace(/^\/api/, '');
@@ -28,8 +31,13 @@ export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitl
     istekler.push(`${yontem} ${yol}`);
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (secenek.ret?.(yol)) return json(403, { kod: 'YETKI', mesaj: 'Bu işlem için yetkiniz yok.' });
+    if (yontem === 'POST' && yol === '/recete-rota/kayitlar/yaz') {
+      const g = JSON.parse(String(istek?.body)) as { anahtar: string; bicim: 'json'; deger: unknown; beklenenSurum: number | null };
+      secenek.govdeler?.push(g);
+      return json(200, { kayit: { anahtar: g.anahtar, bicim: g.bicim, deger: g.deger, surum: (g.beklenenSurum ?? 0) + 1 } });
+    }
     if (yontem !== 'GET') return json(405, { kod: 'YONTEM', mesaj: 'Beklenmeyen yazma.' });
-    if (yol === '/recete-rota/ben') return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: true } satisfies BenCevabi);
+    if (yol === '/recete-rota/ben') return json(200, { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: secenek.yazabilir ?? true } satisfies BenCevabi);
     if (yol === '/recete-rota/kayitlar') return json(200, { kayitlar } satisfies KayitlarCevabi);
     if (yol === '/plan/motor-uyarilari') return json(200, { uyarilar: [] });
     if (yol === '/plan/surum') return json(200, { planSurumu: 3, sonCanliyaAlma: null });
