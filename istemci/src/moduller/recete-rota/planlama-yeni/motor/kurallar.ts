@@ -170,7 +170,7 @@ export function acikSaat(W: Pencere[], a: number, b: number): number {
 const UFUK_GUN = 63;
 export interface DerlenenTezgah { id: string; grup: string; sw: Pencere[]; rw: Pencere[] }
 // `c` uygun tezgâhlar, fason `@fasoncu`; `aile` aile kısalması, `aparat` bağlama aparatı.
-export interface DerlenenAdim { id: string; pr: [string, string][]; c: string[]; aile: string; aparat: string | null }
+export interface DerlenenAdim { id: string; ad: string; pr: [string, string][]; c: string[]; aile: string; aparat: string | null }
 export interface DerlenenIs { id: string; due: number | null; rel: number | null; oncelik: number; adet: number; malzeme: { kod: string; miktar: number }[]; ops: DerlenenAdim[] }
 export interface Derleme {
   g: Girdi; now: number; tasima: number;
@@ -314,7 +314,7 @@ export function derle(g: Girdi): Derleme {
       const cs: string[] = o.fason ? [`@${o.fason}`] : (o.tezgahlar ?? []).filter((t) => M[t.id]).map((t) => t.id);
       if (o.fasonIzin && fasonTalas !== null && fasoncu.has(fasonTalas)) cs.push(`@${fasonTalas}`);
       const pr = (o.bag ?? []).filter((b) => b.length >= 2).map((b): [string, string] => [`${j.id}.${String(b[0])}`, String(b[1])]).filter(([q]) => !bitti(q));
-      const adim = { id, pr, c: cs, aile: metin(o.aile) ?? '', aparat: metin(o.aparat) };
+      const adim = { id, ad: metin(o.ad) ?? '', pr, c: cs, aile: metin(o.aile) ?? '', aparat: metin(o.aparat) };
       is.ops.push(adim); byId[id] = { ...adim, job: j.id };
     }
     jobs[j.id] = is;

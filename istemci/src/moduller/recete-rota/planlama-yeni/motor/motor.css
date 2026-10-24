@@ -3,16 +3,21 @@
    kendi genişliğinden (container) okunur: 1099 iki sütun, 599 tek sütun. */
 .tc-pym {
   container-type: inline-size; display: flex; flex-direction: column; min-height: 100%; min-width: 0;
-  /* Süre ayrışımının renkleri (KAT): eski --is-3..9 serisinin çekirdekte karşılığı gelene kadar var olan renklerin karışımı. */
+  /* Eski sayfanın on renkli serisi (--is-0..9) çekirdekte --grafik, --grafik-2..10'dur (464/1 a); değişken gelene kadar var olan renklerin karışımı.
+     Sipariş renkleri bu seriden, süre ayrışımının renkleri (KAT) eski eşlemesiyle. */
+  --tc-pym-is-0: var(--grafik); --tc-pym-is-1: var(--grafik-2);
+  --tc-pym-is-2: var(--grafik-3, color-mix(in oklab, var(--run) 85%, var(--grafik)));
+  --tc-pym-is-3: var(--grafik-4, color-mix(in oklab, var(--hazard) 55%, var(--hold)));
+  --tc-pym-is-4: var(--grafik-5, color-mix(in oklab, var(--grafik) 50%, var(--grafik-2)));
+  --tc-pym-is-5: var(--grafik-6, color-mix(in oklab, var(--hold) 80%, var(--stop)));
+  --tc-pym-is-6: var(--grafik-7, color-mix(in oklab, var(--run) 50%, var(--grafik)));
+  --tc-pym-is-7: var(--grafik-8, color-mix(in oklab, var(--hazard) 50%, var(--run)));
+  --tc-pym-is-8: var(--grafik-9, color-mix(in oklab, var(--grafik-2) 75%, var(--done)));
+  --tc-pym-is-9: var(--grafik-10, color-mix(in oklab, var(--idle) 60%, var(--grafik)));
   --tc-pym-k-isleme: var(--run); --tc-pym-k-ayar: var(--hazard); --tc-pym-k-kapali: var(--edge2); --tc-pym-k-tezgah: var(--stop);
   --tc-pym-k-baslangic: var(--done); --tc-pym-k-ariza: var(--grafik-2);
-  --tc-pym-k-fason: var(--grafik-3, color-mix(in oklab, var(--hazard) 55%, var(--hold)));
-  --tc-pym-k-personel: var(--grafik-4, color-mix(in oklab, var(--grafik) 50%, var(--grafik-2)));
-  --tc-pym-k-fasonBek: var(--grafik-5, color-mix(in oklab, var(--hold) 80%, var(--stop)));
-  --tc-pym-k-aparat: var(--grafik-6, color-mix(in oklab, var(--run) 50%, var(--grafik)));
-  --tc-pym-k-rota: var(--grafik-7, color-mix(in oklab, var(--hazard) 50%, var(--run)));
-  --tc-pym-k-ayarci: var(--grafik-8, color-mix(in oklab, var(--grafik-2) 75%, var(--done)));
-  --tc-pym-k-tasima: var(--grafik-9, color-mix(in oklab, var(--idle) 60%, var(--grafik)));
+  --tc-pym-k-fason: var(--tc-pym-is-3); --tc-pym-k-personel: var(--tc-pym-is-4); --tc-pym-k-fasonBek: var(--tc-pym-is-5); --tc-pym-k-aparat: var(--tc-pym-is-6);
+  --tc-pym-k-rota: var(--tc-pym-is-7); --tc-pym-k-ayarci: var(--tc-pym-is-8); --tc-pym-k-tasima: var(--tc-pym-is-9);
   --tc-pym-golge: 0 var(--pay-ince) var(--b-2) color-mix(in oklab, var(--ink) 8%, transparent);
   --tc-pym-golge-acilir: 0 calc(var(--b-2) + var(--pay-ince)) calc(var(--b-6) - var(--b-1)) color-mix(in oklab, var(--ink) 18%, transparent);
 }
