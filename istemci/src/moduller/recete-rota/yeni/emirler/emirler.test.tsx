@@ -120,6 +120,47 @@ describe('R3 Üretim emirleri: komutlar', () => {
   });
 });
 
+describe('R3 Üretim emirleri: eksik malzeme ve ara adım stoğu (461 b)', () => {
+  // Mamulün iki adımlı rotası; adım 10 hammaddeden 1 adet ister. Hammaddenin serbest stoğu yok, OP 10 çıktısı olarak 10 adet bekliyor.
+  const planda = () => {
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    const adim = (opNo: number, ins: { itemId: string; qty: number; scrap: number }[]) => ({
+      id: `o${String(opNo)}`, seq: opNo, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 30,
+      proc: null, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins, outs: [],
+    });
+    d.routes = { 11: { base: null, steps: [adim(10, [{ itemId: '12', qty: 1, scrap: 0 }]), adim(20, [])] } };
+    d.emirler!.orders[0] = { ...d.emirler!.orders[0]!, status: 'serbest' };
+    return d;
+  };
+  const statuler = () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' }] });
+  const stok = (id: number) => () => json(200, {
+    statuKirilimi: id === 12 ? [{ statuId: null, miktar: '0' }, { statuId: 7, miktar: '10' }] : [{ statuId: null, miktar: '4' }], bakiyeler: [],
+  });
+
+  it('stok okuyan: OP 10 çıktısı adım 10 ihtiyacını karşılar, eksik kalmaz (izinli)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: planda(), yazmalar: { 'GET /recete-rota/statuler': statuler, 'GET /stok/malzemeler/11': stok(11), 'GET /stok/malzemeler/12': stok(12) },
+    });
+    rrAc();
+    const b = await emirAc();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/malzemeler/12')).toBe(true));
+    await waitFor(() => expect(within(b).queryByText(/kalem eksik/)).toBeNull());
+    // Hesap stoğa yazmaz (açılışta rota taslağı eşitlemesi ayrı iştir).
+    expect(yazmalar(istekler).filter((i) => i.yol.startsWith('/stok/'))).toEqual([]);
+  });
+
+  it('stok okumayan: stoğa istek gitmez, yalnız serbest stokla hesaplanır ve eksik görünür (reddedilen)', async () => {
+    const istekler = sunucuKur(OKUYAN, { durum: planda() });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/1 kalem eksik: HM-0001/);
+    expect(istekler.some((i) => i.yol.startsWith('/stok/'))).toBe(false);
+  });
+});
+
 describe('R3 Stok', () => {
   const statuler = () => json(200, { statuler: [{ id: 7, malzemeNo: 'MM-0001', kaynakAdim: '10', ad: 'Torna çıktısı' }] });
   const malzeme = () => json(200, {

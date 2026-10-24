@@ -42,14 +42,18 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
 - `ortak/Hazirlaniyor.tsx`; `test-ortak.tsx`: `sunucuKur(deneme, { belgeler, kayitlar })`, `arkonAc(adres)`, denemeler `YONETICI`, `KAPISIZ`, `OPERATOR` (uydurma).
 
 ## Kurallar (her parca)
-- TASARIM KORUMA (2026-10-24 19:19, kullanici): ekranlarin tasarimi kullanicinindir. TS gecisinin amaci yalniz TypeScript'e gecis ve mantik, kurgu ve
-  bozukluk hatalarinin duzeltilmesidir. Prototip ya da eski ekranin gorunusu, duzeni, akisi, araclari ve metinleri birebir korunur. 360 genislige
-  sigdirma, ortak parcaya tasima, sadelestirme ya da "daha iyi" gerekcesiyle degisiklik yapilmaz; ortak parca yalniz gorunus birebir kaliyorsa
-  kullanilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli bir karar (orn. 357 b) gerektirdiginde yapilir; her fark gerekcesiyle ve
-  "hata turu" belirtilerek soru olur, varsayilan oneri "eski hali kalsin"dir. Bu dosyadaki 203 a, ortak bilesen ve 360/768/1280 maddeleriyle celisirse
-  TASARIM KORUMA gecerlidir (kurulum/proje-talimati.md KURALLAR 3).
-- Tasarim degiskenleri, ortak bilesenler (`Tablo`, `SayfaBasligi`, `FormPenceresi`, `Pencere`, `OnayPenceresi`, `Sekmeler`, `Rozet`, `SayiKarti`, `GrafikKarti`,
-  `DurumKutusu`, `useBildirim`), ortak `Simge`; 360/768/1280. Sabit renk, olcu, satir ici stil yok; renk tek basina anlam tasimaz.
+- TASARIM KORUMA (2026-10-24, kullanici; 20:22 duzeltilmis okuma teyitli; 203 a kalkti): HTML'den TS'ye gecen sayfalarda amac TypeScript'e gecis ve
+  mantik, kurgu, bozukluk hatalarinin duzeltilmesidir. Ortak tasarima oturur: renkler (tasarim degiskenleri, sabit renk yok), yazi tipi ve boyutlari,
+  dugme, kart, form ve bildirim gorunusu, genel dugme ikonlari (Malzemeler ikonlari dahil ortak sete gecebilir). Degismez: sayfanin duzeni, yerlesimi,
+  kullanimi, akisi, araclari ve yapisi; ozel tasarimlar ortak parcaya cevrilmez, kendi tasarimiyla tasinir (orn. planlama motoru ve sonsuz tahta,
+  planlama atolyesi, Recete-Rota akis semasi ve tablosu, Uretim Terminali). 360 genislige sigdirmak icin duzen degistirilmez; tasma yalniz duzen
+  bozulmadan giderilir. Fark yalniz mantik/kurgu/bozukluk hatasi, guvenlik ya da onayli karar (orn. 357 b: motor isteyen dugme gorunur ama pasif)
+  gerektirdiginde yapilir; her fark gerekcesi ve hata turuyla soru olur, varsayilan oneri "eski hali kalsin". Bu dosyadaki ortak bilesen ve 360/768/1280
+  maddeleri bu metne gore okunur: ortak bilesen yalniz sayfanin duzenini, yerlesimini ve araclarini degistirmiyorsa kullanilir; 360/768/1280 olcumunde
+  duzen degismez (kurulum/proje-talimati.md KURALLAR 3).
+- Tasarim degiskenleri, ortak `Simge` ve ortak dugme, kart, form, bildirim gorunusu gecerlidir; ortak bilesenler (`Tablo`, `SayfaBasligi`,
+  `FormPenceresi`, `Pencere`, `OnayPenceresi`, `Sekmeler`, `Rozet`, `SayiKarti`, `GrafikKarti`, `DurumKutusu`, `useBildirim`) yalniz sayfanin duzeni
+  birebir kaliyorsa kullanilir; 360/768/1280'de duzen degismez. Sabit renk, olcu, satir ici stil yok; renk tek basina anlam tasimaz.
 - Tarayicidaki hesap saf TS islevidir (parcanin `kurallar.ts` dosyasi, birim testli); eski islevle esitlik testi yazilir (ornegi `cekirdek/esitlik.test.ts`).
   Kopyala-yapistir ve `@ts-nocheck` yok; `htm` yok, TSX.
 - Kapali ozellikler (tanitim verisi, PLANT_DEMO, giris ve kilit ekrani, Arkon'un kendi tema ve yakinlastirmasi) yeni ekrana girmez (208 a benzeri).

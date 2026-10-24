@@ -516,18 +516,22 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     await vt().sorgu('DELETE FROM stok_malzeme_fisi');
     const ac = async (emir: number, tur: 'sarf' | 'uretim_girisi'): Promise<number> =>
       (await vt().tek<{ id: number }>('INSERT INTO stok_malzeme_fisi (tur, uretim_emri_id, degisiklik) VALUES ($1, $2, 1) RETURNING id', [tur, emir]))!.id;
+    // Zamanlar sabit: yeni fiş imleçle aynı milisaniyede, yarım milisaniye sonra (milisaniyeye kırpan karşılaştırma imleci durdururdu).
+    const IMLEC = '2026-01-01T10:00:00.123400Z', YENI = '2026-01-01T10:00:00.123900Z';
     const eski = await ac(9001, 'sarf');
-    await vt().sorgu('UPDATE logo_malzeme_fisi_imleci SET zaman = now(), fis_id = $1, en_buyuk_fis_id = $1', [eski]);
-    await vt().sorgu("UPDATE stok_malzeme_fisi SET degisiklik_zamani = now() - interval '1 hour' WHERE id = $1", [eski]);
+    await vt().sorgu('UPDATE logo_malzeme_fisi_imleci SET zaman = $2, fis_id = $1, en_buyuk_fis_id = $1', [eski, IMLEC]);
+    await vt().sorgu("UPDATE stok_malzeme_fisi SET degisiklik_zamani = $2::timestamptz - interval '1 hour' WHERE id = $1", [eski, IMLEC]);
     const yeni = await ac(9002, 'uretim_girisi');
+    await vt().sorgu('UPDATE stok_malzeme_fisi SET degisiklik_zamani = $2 WHERE id = $1', [yeni, YENI]);
     const kaynaklar: StokFisKaynaklari = { degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri };
     assert.equal(await vt().tx((db) => fisDegisiklikleriniAl(db, kaynaklar)), 1);
     assert.equal(await vt().tx((db) => fisDegisiklikleriniAl(db, kaynaklar)), 1, 'örtüşme penceresi yeniden okur');
     const satirlar = await vt().sorgu<{ k: string; bekleyen: number }>(
       "SELECT belge_turu || ':' || belge_no AS k, bekleyen_degisiklik AS bekleyen FROM logo_malzeme_fisi_giden ORDER BY 1");
     assert.deepEqual(satirlar, [{ k: `uretim-girisi:${yeni}`, bekleyen: 1 }], 'aynı değişiklik bir kez sayıldı; eski fiş girmedi');
-    const imlec = await vt().tek<{ fis: number; enb: number }>('SELECT fis_id AS fis, en_buyuk_fis_id AS enb FROM logo_malzeme_fisi_imleci');
-    assert.deepEqual(imlec, { fis: yeni, enb: yeni });
+    const imlec = await vt().tek<{ fis: number; enb: number; tam: boolean }>(
+      'SELECT fis_id AS fis, en_buyuk_fis_id AS enb, zaman = $1::timestamptz AS tam FROM logo_malzeme_fisi_imleci', [YENI]);
+    assert.deepEqual(imlec, { fis: yeni, enb: yeni, tam: true }, 'aynı milisaniyedeki fiş imleci ilerletir; örtüşme okuması geri götürmez');
     const d = await vt().tx((db) => malzemeFisiLogoDurumlari(db, [
       { id: eski, tur: 'sarf', uretimEmriId: 9001, degisiklik: 1, gonderimIstegi: null, satirVar: true },
     ]));

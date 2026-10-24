@@ -9,11 +9,10 @@ import type { EkranOzellikleri } from '../sekmeler.ts';
 import { anahtarlar, useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { useEmirKomutu } from './komut.ts';
 import {
-  miktarOku, statuAdi, statuHedefleri, statuluSatirlar, stokSatirlari, surectekiMalzeme, type StatuluSatir, type StokSatiri, type SurecSatiri,
+  miktarOku, statuAdi, statuHedefleri, statuluSatirlar, stokKartiIdleri, stokSatirlari, surectekiMalzeme, type StatuluSatir, type StokSatiri, type SurecSatiri,
 } from './kurallar.ts';
 
 const SAYFA_BOYU = 50;
-const AZAMI_STOK_KARTI = 200;
 const AZAMI_HAREKET = 40;
 type Hareket = NonNullable<RrDurumu['moves']>[number];
 
@@ -26,7 +25,7 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
   const [minimumAlti, setMinimumAlti] = useState(false);
   const [sayfa, setSayfa] = useState(1);
   const kalemler = useMemo(() => d.items ?? [], [d.items]);
-  const idler = useMemo(() => kalemler.slice(0, AZAMI_STOK_KARTI).map((i) => i.kayitNo), [kalemler]);
+  const idler = useMemo(() => stokKartiIdleri(kalemler), [kalemler]);
   const okuma = useStokOkumasi(idler, yetki.stokOku);
   const stok = okuma.data ?? null;
   const satirlar = stokSatirlari(kalemler, stok);
