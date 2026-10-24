@@ -5,7 +5,7 @@
   "type": "module",
   "description": "TMI CORE V2 - CNC atolyesi uretim planlama ve izlenebilirlik (kurum ici)",
   "engines": {
-    "node": ">=24"
+    "node": ">=24.22.1"
   },
   "imports": {
     "#paylasilan/*": "./paylasilan/*",

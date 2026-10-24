@@ -143,6 +143,7 @@ export async function surumVer(db: Db, kullanici: Kullanici, id: number, g: Tekl
     hedef, surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   const surum = await sorgular.surumEkle(db, id, { ...g, terminTarihi: plan === null ? g.terminTarihi : plan.termin }, g.fiyatlar, kullanici.id);
+  if (hedef === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
   if (plan !== null && g.planTaslagi !== null && g.gecerlilik !== null) {
     await satisTaslagiYaz(db, kullanici, id, surum.id, g.gecerlilik, g.planTaslagi, plan.hazirlik);
   } else {
@@ -183,6 +184,7 @@ export async function iskontoOnayla(db: Db, kullanici: Kullanici, id: number, g:
     hedef: onayHedefi({ ...bekleyen, iskonto: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   await sorgular.iskontoOnayiEkle(db, id, kullanici.id);
+  if (onayHedefi({ ...bekleyen, iskonto: false }) === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
   return teklifAyrintisi(db, id);
 }
 
@@ -197,6 +199,7 @@ export async function terminOnayla(db: Db, kullanici: Kullanici, id: number, g: 
     hedef: onayHedefi({ ...bekleyen, termin: false }), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: null,
   }));
   if ((await sorgular.terminOnayiYaz(db, id, kullanici.id)) === null) throw new Error('Termin onayı yazılamadı');
+  if (onayHedefi({ ...bekleyen, termin: false }) === 'verildi') await sorgular.logoTeklifSirasinaEkle(db, id, null);
   return teklifAyrintisi(db, id);
 }
 
@@ -257,6 +260,9 @@ export async function siparisDonustur(
   await surumluYaz(db, id, () => sorgular.teklifDurumYaz(db, id, {
     hedef: teklifHedefi('siparis'), surum: g.surum, kisiId: kullanici.id, not: null, kabulSurumu: null, siparisId: siparis.id,
   }));
+  // Logo siparişi kabul edilen sürümün teklifinden açılır; o sürüm sıraya girmemişse (H10'dan önce verilmiş) burada girer.
+  await sorgular.logoTeklifSirasinaEkle(db, id, kabul.surumNo);
+  await sorgular.logoSiparisSirasinaEkle(db, id, kabul.surumNo, siparis.id);
   // Sipariş plana kendi emriyle girer; satış taslağının yeri kalkar.
   await yerTutaniKaldir(db, id);
   return { teklif: await teklifAyrintisi(db, id), siparisId: siparis.id };

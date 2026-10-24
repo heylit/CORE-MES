@@ -97,7 +97,7 @@ export type TurSonucu =
   | { tur: NiyetliBelge; no: number; sonuc: GidenSonucu };
 
 // "Var mı" okuması olmayan, yalnız niyetle açılan belgeler.
-type NiyetliBelge = 'talep' | 'satis-teklifi' | 'satis-siparisi';
+type NiyetliBelge = 'talep' | 'siparisler-teklifi' | 'siparisler-siparisi';
 
 // Tur iki kısa transaction'dır, köprü cevabı ikisinin arasında, transaction dışında beklenir: Logo kaydı açtıktan sonra geri alınan
 // transaction izi kaybettirmesin (UYUM-BORCU 2). İlk transaction okur, niyet ya da red yazar; köprü adımı istekleri atar ve sonucu
@@ -399,7 +399,7 @@ export function satinAlmaTuru(vt: TxAcan, o: SatinAlmaTurOrtami): Promise<TurSon
 // Malzeme fişleri iki ayrı sayaçtır: sarf eksi tarafta, üretim girişi çok büyük artı tarafta (kimlikler bunun altındadır).
 const FIS_ANAHTAR_KAYMASI = 1_000_000_000;
 const bellekAnahtari = (belge: BelgeTuru, id: number): number =>
-  belge === 'sarf-fisi' ? -FIS_ANAHTAR_KAYMASI - id : belge === 'uretim-girisi' ? FIS_ANAHTAR_KAYMASI + id : belge === 'talep' || belge === 'satis-siparisi' ? -id : id;
+  belge === 'sarf-fisi' ? -FIS_ANAHTAR_KAYMASI - id : belge === 'uretim-girisi' ? FIS_ANAHTAR_KAYMASI + id : belge === 'talep' || belge === 'siparisler-siparisi' ? -id : id;
 
 async function kalkanEylemi(o: TurOrtami, belge: BelgeTuru, id: number, g: GidenSatiri | null) {
   const anahtar = bellekAnahtari(belge, id);
@@ -694,10 +694,10 @@ async function karsilamaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemcis
   return turla(adim, (sonuc) => ({ tur: 'karsilama', no: k.id, sonuc }));
 }
 
-/* ---------------- Satış: teklif ve tekliften sipariş (portal; kart #777) ---------------- */
+/* ---------------- Satış: teklif ve tekliften sipariş (Siparişler) ---------------- */
 
-// Sahibi portaldır: kuyrukları ve sonuçları onun disari.ts işlevleri verir (yön logo -> portal). İşlevler gelene kadar iş kaydedilmez
-// (UYUM-BORCU "bağlamada kapanacak"); test bu arayüzü sahte kaynakla verir. Teklifsiz portal siparişi portal tarafında önce teklif kuyruğuna girer.
+// Sahibi Siparişler'dir: kuyrukları ve sonuçları onun disari.ts işlevleri verir (yön logo -> siparisler). Kalkan anahtarı Siparişler sırasının
+// kimliğidir; Portal sırasının eski 'satis-*' izleriyle karışmasın diye belge türü ayrıdır. Tekliften gelmeyen sipariş Logo'ya gitmez (UYUM-BORCU).
 export interface LogoyaGidecekSatisTeklifi extends GonderilecekSatisTeklifi {
   firmaId: number | null;
 }
@@ -735,7 +735,7 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
   // Köprü adımı veritabanına dönmez: gövdeyi kuran ilk transaction aynı firmanın kodunu önbelleğe almıştır.
   const bilinenCariKodu = (firmaId: number | null): string | null => (firmaId === null ? null : cariler.get(firmaId) ?? null);
   const teklif = await niyetliAcmaTuru(db, o, {
-    belge: 'satis-teklifi', kuyruk: await o.kaynak.teklifGidecekler(db, KUYRUK_SINIRI),
+    belge: 'siparisler-teklifi', kuyruk: await o.kaynak.teklifGidecekler(db, KUYRUK_SINIRI),
     govde: async (t) => satisTeklifiGovdesi(t, { cariKodu: await cariKodu(t.firmaId), kdv, hizmetKdv }),
     // Logo teklifi CRM satış müşterisi kaydı ister (not 2.6, validate 4208); yoksa istek atılmaz.
     onKosul: async (t) => {
@@ -755,7 +755,7 @@ async function satisHazirla(db: Db, o: SatisTurOrtami): Promise<TurSonucu | Kopr
   });
   if (teklif !== null) return teklif;
   const siparis = await niyetliAcmaTuru(db, o, {
-    belge: 'satis-siparisi', kuyruk: await o.kaynak.siparisGidecekler(db, KUYRUK_SINIRI),
+    belge: 'siparisler-siparisi', kuyruk: await o.kaynak.siparisGidecekler(db, KUYRUK_SINIRI),
     govde: async (t) => satisSiparisiGovdesi(t),
     // Gövde kuralı teklif kaydının geçerli olduğunu denetledi.
     ekle: (t, govde) => kopru.satisSiparisiAc(Number(t.teklifKayitNo), govde),

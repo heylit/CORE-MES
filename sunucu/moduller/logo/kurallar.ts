@@ -517,7 +517,7 @@ export function malzemeGuncellemeGovdesi(k: { stokKodu: string; ad: string | nul
   return { govde: { code: kod, name: ad } };
 }
 
-/* ---------------- Satış teklifi ve tekliften satış siparişi (portal; kullanıcı sorusu 12.10.2026, kart #777) ---------------- */
+/* ---------------- Satış teklifi ve tekliften satış siparişi (Siparişler) ---------------- */
 
 // Satış teklifi gövdesi (not 2.6: POST /api/SalesOffer/AddRich; JSON adları notta yazılı). Satış teklifinde satır iskontosu ayrı alandır
 // (discountRate); satın alma siparişindeki DISCPER reddi bu uç için notta yok. status 1: "onay bekliyor" (VARSAYIM: müşteriye gönderilmiş teklif).
@@ -864,7 +864,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'talep-fisi', yon: 'tmi-logo', baslik: 'Talep fişi ve karşılama', kaynak: 'bagli', ayarlar: ['logo.satin-alma-gonderimi'],
     belgeTurleri: ['talep', 'karsilama'], aciklama: 'Onaylı talep DemandFiche olarak açılır; sipariş satırı talep satırına karşılama (peg) ile bağlanır.' },
   { anahtar: 'satis', yon: 'tmi-logo', baslik: 'Satış teklifi ve siparişi', kaynak: 'bagli', ayarlar: ['logo.satis-gonderimi'],
-    belgeTurleri: ['satis-teklifi', 'satis-siparisi'], aciklama: 'Portaldaki teklif SalesOffer olarak, kabul edilen sipariş tekliften açılır.' },
+    belgeTurleri: ['siparisler-teklifi', 'siparisler-siparisi'],
+    aciklama: 'Siparişler\'de müşteriye verilen her teklif sürümü SalesOffer olarak, onaylanan sipariş kabul edilen sürümün teklifinden açılır.' },
   { anahtar: 'malzeme-fisi', yon: 'tmi-logo', baslik: 'Sarf ve üretimden giriş fişi', kaynak: 'bagli', ayarlar: ['logo.malzeme-fisi-gonderimi'],
     belgeTurleri: ['sarf-fisi', 'uretim-girisi'],
     aciklama: 'Biten üretim emri, anahtar açıkken, MaterialSlip AddConsumption (12) ve AddProductionEntry (13) ile emir başına bir kez gider; satırlar stoktaki net sarf ve giriş ile emrin hurdasıdır.' },

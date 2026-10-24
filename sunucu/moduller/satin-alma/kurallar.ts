@@ -1,6 +1,7 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
 import { PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { HizliKalem, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
@@ -48,7 +49,7 @@ export const ILETILER = {
   acilisDurumu: 'Talep taslak, teklif istenen, değerlendirme ya da iptal durumuyla açılır.',
   onayDurumu: 'Onay ya da ret yalnız onaydaki ve kararı verilmiş talebe eklenir.',
   onaysizSiparis: 'Sipariş için kararın onaylanmış olması gerekir.',
-  askidakiTedarikci: (adlar: readonly string[]): string => `Askıdaki tedarikçiye sipariş verilmez: ${adlar.join(', ')}. Tedarikçiler bölümünde ya da Kalite Merkezi'nde durumunu değiştirin ya da başka teklife karar verin.`,
+  askidakiTedarikci: (adlar: readonly string[]): string => `Kalite Merkezi'nde onayı Aday ya da Askıda olan tedarikçiye sipariş verilmez: ${adlar.join(', ')}. Kalite Merkezi'nde durumunu değiştirin ya da başka teklife karar verin.`,
   onayliKararDegismez: 'Onaylanmış karar değişmez; değişmesi için önce reddedilmelidir.',
   kartsizSiparis: (adlar: readonly string[]): string => `Kart bekleyen kalemle sipariş verilmez; önce kalemi malzeme kartına bağlayın: ${adlar.join(', ')}. Malzemeler bölümünde kartı "Kataloğa ekle" ile ekleyin, sonra "Kataloğa bağla" ile kalemi seçin.`,
   siparisliKalem: (adlar: readonly string[]): string => `Siparişi verilmiş kalemin miktarı ve birimi kaydetle değişmez, kalem silinmez: ${adlar.join(', ')}. Siparişteki "Kalemi değiştir" ile gerekçe yazarak değiştirin (onay yetkisi gerekir).`,
@@ -367,14 +368,11 @@ export function yeniSiparisFirmalari(eski: SiparisKiyasi, yeni: SiparisKiyasi): 
   }))];
 }
 export const askidakiTedarikciReddi = (adlar: readonly string[]): string | null => (adlar.length === 0 ? null : ILETILER.askidakiTedarikci(adlar));
-// E-13: Kalite Merkezi'nin tedarikçi kaydında firma kimliği yoktur. İki tarafta da kod varsa kod belirler (aynı adlı başka firma
-// askıya girmez), yoksa ad; boşluk ve büyük-küçük harf sayılmaz.
-type FirmaAdi = { kod: string | null; ad: string };
-export function kaliteAskisindakiFirmalar(firmalar: readonly (FirmaAdi & { id: number })[], askidakiler: readonly FirmaAdi[]): number[] {
-  const yalin = (x: string | null) => (x ?? '').trim().toLocaleLowerCase('tr-TR');
-  const eslesir = (f: FirmaAdi, a: FirmaAdi) => (yalin(f.kod) !== '' && yalin(a.kod) !== '' ? yalin(f.kod) === yalin(a.kod) : yalin(a.ad) !== '' && yalin(f.ad) === yalin(a.ad));
-  return firmalar.filter((f) => askidakiler.some((a) => eslesir(f, a))).map((f) => f.id);
-}
+// 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir. Onayı "Aday" ya da "Askıda" olan tedarikçiye yeni sipariş verilmez;
+// Kalite Merkezi'nde kaydı olmayan firma reddedilmez.
+export const SIPARIS_REDDEDILEN_KALITE_DURUMLARI: readonly KmTedarikciDurumu[] = ['Aday', 'Askıda'];
+export const kaliteSiparisReddi = (durum: KmTedarikciDurumu | null | undefined): boolean =>
+  durum !== null && durum !== undefined && SIPARIS_REDDEDILEN_KALITE_DURUMLARI.includes(durum);
 // #375: kalem kartsızsa "kart bekliyor"dur; kart bağlanmadan talep siparişe dönmez (SA2 b: kopya tutulmaz, kartsız alım
 // stokta teslim alınamaz ve Logo'ya gidemez).
 export function kartsizSiparisReddi(eski: TalepDurumu, yeni: TalepDurumu, kalemler: readonly { ad: string; katalogId: string | null }[]): string | null {

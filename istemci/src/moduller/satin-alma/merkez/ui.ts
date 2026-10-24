@@ -1,9 +1,9 @@
 import type {
   Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus,
-  Settings, Supplier, SupplierStatus, Weights,
+  Settings, Supplier, Weights,
 } from "./tipler.ts";
 import { CURRENCIES as CURS } from "./tipler.ts";
-import { CRIT, DELIVERY, KART_SAYFASI, OPEN, COMMITTED, PRIO, QUALITY, STATUSES, SUP_STATUS, UNITS, stLabel } from "./constants.ts";
+import { CRIT, DELIVERY, KART_SAYFASI, OPEN, COMMITTED, PRIO, QUALITY, STATUSES, UNITS, stLabel } from "./constants.ts";
 import {
   FIRMA_KARTLARI, S, V, backend, canWrite, persist, persistUndoable, saveMaterial, saveRequest, saveRequestUndoable, saveSupplier, settings, undoLast, UNDO,
   type Page, type ViewState,
@@ -327,7 +327,7 @@ function supplierModal(s: Supplier | null | undefined): void {
   <div class="mb">
     <div class="grid g2">
       ${firmaAlani}
-      <label class="f"><span>Durum</span><select id="s-status">${Object.entries(SUP_STATUS).map(([k, l]) => `<option value="${k}" ${draftS.status === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="f"><span>Kalite onayı <small>— Kalite Merkezi'nde değişir</small></span><input type="text" id="s-kalite" value="${esc(draftS.kaliteDurumu ?? "Kalite Merkezi kaydı yok")}" disabled></label>
     </div>
     <div class="f"><span>Kategoriler <small>— teklif isteğinde öneri için</small></span><div class="chips" id="s-cats">${cats.map(c => `<button class="chip" data-act="tog-cat" aria-pressed="${draftS.categories.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>
     <div class="f"><span>Puanınız <small>— kalite, iletişim, sorun çözme</small></span><div class="rating" role="radiogroup" aria-label="Puan">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="s-rating" value="${n}" ${(parseNum(draftS.rating) || 3) === n ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
@@ -1011,7 +1011,7 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-supplier": () => {
     const g = (id: string) => $("#" + id).value.trim();
-    Object.assign(draftS, { status: $("#s-status").value as SupplierStatus, notes: g("s-notes"), rating: +((($("input[name=s-rating]:checked") as FormEl | null)?.value) || 3) });
+    Object.assign(draftS, { notes: g("s-notes"), rating: +((($("input[name=s-rating]:checked") as FormEl | null)?.value) || 3) });
     if (!firmaSecildi) { toast("Firmayı arayıp seçin ya da yeni firma açın."); $("#s-firma-ara")?.focus(); return; }
     saveSupplier(draftS); closeModal(); toast("Tedarikçi kaydedildi");
   },

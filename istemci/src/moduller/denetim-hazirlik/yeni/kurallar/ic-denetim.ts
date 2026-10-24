@@ -146,3 +146,17 @@ export function sahaAcikUygunsuzluklar(profil: Profil): { n: number; L: { run: S
 }
 
 export const SAHA_SABLONLARI = SAHA;
+
+// Saha turu başlatır (prototip sstart): denetçi KYS sorumlusu rolündeki kişi, açık iş "s:<kimlik>". Sekme geçişi ekran durumundadır
+// (ekran.ic.tab = 'saha'). Açılan turun kimliği döner; şablon yoksa null.
+export function sahaBaslat(profil: Profil, sablon: string): string | null {
+  const t0 = SAHA.find((s) => s.id === sablon);
+  if (!t0) return null;
+  const sr: SahaTuru = {
+    id: `s${yeniKimlik()}`, tpl: t0.id, date: bugunTarihi(), by: profil.kys.roles['kys']?.kisi ?? '', done: false,
+    items: t0.items.map(() => ({ r: '', n: '', fix: false })),
+  };
+  profil.ic.saha.unshift(sr);
+  profil.ic.cur = `s:${sr.id}`;
+  return sr.id;
+}

@@ -1487,14 +1487,14 @@ function statusCode(key){ if (!key) return ""; const f = stepOfKey(key); if (f) 
 function statusLabel(key){ if (!key) return ""; const f = stepOfKey(key); if (f) { const d = opdef(f.step.opId); return `OP ${statuNo(f.step)} ${d ? d.name : "adımı"}`; } if (String(key).startsWith("step:")) return "rotadan kalktı"; const x = statusOf(key); return x ? x.name : key; }
 function statusChip(key, small){ if (!key) return ""; const f = stepOfKey(key), x = f ? null : statusOf(key); const col = f ? (station(f.step.stationId) ? stColor(f.step.stationId) : "#4B5D7A") : x ? x.color : "#8a8f99";
   return `<span class="stc ${small?"sm":""}" style="--sc:${col}" title="${esc(statusLabel(key))}${f?" çıktısı":""}">${esc(statusCode(key))}</span>`; }
-/* Statülü kart: ana kartın stoğunun başka bir statüdeki hâli. Kodu ANA/STATÜ biçimindedir (ör. YM-203/OP 20, HM-110/KRN).
-   Rotanın ara adımlarının kartları otomatik vardır; diğerleri (karantina, kalite, ret…) elle açılır ya da bakiyesi olunca görünür. */
+/* Statülü kart: ana kartın stoğunun başka bir statüdeki hâli. Kodu ANA/STATÜ biçimindedir (ör. YM-203/OP 20).
+   Statü yalnız rota tanımından gelir (Soru 256 a): rotanın ara adımlarının kartları kendiliğinden vardır, elle kart açılmaz. Bakiyesi
+   olan statü de görünür (bağlı modda bakiye Stok Merkezi'nindir). */
 function statusCardsOf(itemId, opts={}){
   const out = [], seen = new Set();
   const add = (status, auto) => { if (!status || seen.has(status)) return; seen.add(status); out.push({itemId, status, auto}); };
   if (!opts.noAuto) for (const rid in st.routes) { if (!item(rid) || item(rid).type==="ham") continue;
     stepsOf(rid).slice(0,-1).filter(x=>!x.outItem).forEach(x=>{ if (tasinanMalzeme(rid, x)===itemId) add(stepStatusKey(x), true); }); }
-  for (const c of (st.statusCards||[])) if (c.itemId===itemId) add(c.status, false);
   for (const sid in (st.statusStock[itemId]||{})) add(sid, false);
   const m = bagliKirilim(itemId);
   if (m) for (const k of m.kirilim) if (k.statuId !== null && num(k.miktar) > 0) add(stokAnahtari(item(itemId), k.statuId), false);
@@ -2859,10 +2859,6 @@ function inspPick(s){
     <label class="check msec-st"><input type="checkbox" data-pick-statulu="1" ${ui.pickStatulu!==false?"checked":""}> Statülü kartlar</label>
     <p class="hint" style="font-size:.78rem;margin-top:8px">↳ ile başlayanlar statülü kartlardır: ana kartın stoğunun başka bir statüdeki hâli (ör. YM-203/OP 20 büküm çıktısı, HM-110/KRN karantinadaki sac).</p>
     <div class="picklist" id="pickList">${pickListeHTML(s)}</div>
-    <div class="isec"><h4>Statülü kart aç</h4><div class="ig">
-      ${fld("Ana kart", `<select id="scItem">${st.items.map(i=>`<option value="${i.id}" ${i.id===owner.id&&isOut?"selected":""}>${esc(i.code)} ${esc(i.name)}</option>`).join("")}</select>`, "wide")}
-      ${fld("Statü", `<select id="scSt">${(st.statuses||[]).map(x=>`<option value="${x.id}">${esc(x.code)} ${esc(x.name)}</option>`).join("")}</select>`, "wide")}
-    </div><button class="btn" style="margin-top:6px" data-act="createStatusCard" data-pick="1">Kartı aç ve ekle</button></div>
     <div class="isec"><h4>Listede yok mu?</h4>${MALZEME_GIT_NOT}${MALZEME_GIT}</div>`;
 }
 function inspNew(){
@@ -3037,13 +3033,12 @@ function rowItem(i){
     ${fld("Tür", sel(`i:${i.id}:type`,"item",i.id,"type",["ham","yari","mamul"].map(t=>`<option value="${t}" ${t===i.type?"selected":""}>${TYPE[t]}</option>`).join(""),{label:"Tür"}))}
     ${fld("Birim", inp(`i:${i.id}:unit`,"item",i.id,"unit",i.unit,{label:"Birim"}))}
     ${fld(produced(i.id)?"Malzeme maliyeti":"Birim maliyet (₺)", cost)}
-    <div class="acts">${i.type!=="ham"?`<button class="ib" data-act="openInSchema" data-id="${i.id}" aria-label="Akış şemasında aç" title="Akış şemasında aç">⇢</button>`:""}<button class="ib" data-act="scOpen" data-id="${i.id}" title="Statülü kart aç" aria-label="${esc(i.code)} için statülü kart aç">S+</button>${delBtn("item",i.id)}</div>
+    <div class="acts">${i.type!=="ham"?`<button class="ib" data-act="openInSchema" data-id="${i.id}" aria-label="Akış şemasında aç" title="Akış şemasında aç">⇢</button>`:""}${delBtn("item",i.id)}</div>
   </div>${statusCardRow(i)}`;
 }
 function statusCardRow(i){
-  const cs = statusCardsOf(i.id), have = new Set(cs.map(c=>c.status)), st0 = statusTotal(i.id);
-  const free = (st.statuses||[]).filter(x=>!have.has(x.id));
-  if (!cs.length && ui.scOpen!==i.id) return "";
+  const cs = statusCardsOf(i.id), st0 = statusTotal(i.id);
+  if (!cs.length) return "";
   const bagli = !!(i.bagli && stokBagli());
   if (bagli && STK.veri === null && !STK.yukleniyor && !STK.hata) setTimeout(stokYukle, 0);
   // Statü üçlüdür: bu malzeme, hangi mamülün rotasında, hangi OP. Başka ürünün rotasında taşınıyorsa ürün kodu her zaman yazılır.
@@ -3051,8 +3046,7 @@ function statusCardRow(i){
   const urunu = c => { const u = sahip(c) && sahip(c) !== i.id ? item(sahip(c)) : null; return u ? ` <small>(${esc(u.code)})</small>` : ""; };
   const adet = c => bagli && !bagliKirilim(i.id) ? `<span class="hint" title="${esc(STK.hata || "Stok okunuyor")}">–</span>` : `${fmt(cardStock(i.id,c.status),2)} ${esc(i.unit)}`;
   return `<div class="scrow"><span class="lbl">Statülü kartlar</span>
-    ${cs.map(c=>`<span class="sccard" title="${esc(cardName(i.id,c.status))}">${statusChip(c.status,true)} <b class="stx">${esc(cardTitle(i.id,c.status))}</b>${urunu(c)} ${adet(c)}${c.auto?` <small>rota adımı</small>`:""}${!c.auto && !(cardStock(i.id,c.status)>EPS) ? ` <button class="ib" style="min-width:20px;height:20px" data-act="delStatusCard" data-item="${i.id}" data-st="${esc(c.status)}" aria-label="Kartı kaldır">✕</button>`:""}</span>`).join("") || `<span class="hint" style="font-size:.78rem">yok</span>`}
-    ${free.length?`<select class="sk-add" data-s="scnew" data-id="${i.id}" data-f="status" aria-label="${esc(i.code)} için statülü kart aç"><option value="">+ Statülü kart</option>${free.map(x=>`<option value="${x.id}">${esc(x.code)} ${esc(x.name)}</option>`).join("")}</select>`:""}
+    ${cs.map(c=>`<span class="sccard" title="${esc(cardName(i.id,c.status))}">${statusChip(c.status,true)} <b class="stx">${esc(cardTitle(i.id,c.status))}</b>${urunu(c)} ${adet(c)}${c.auto?` <small>rota adımı</small>`:""}</span>`).join("")}
     ${st0>EPS?(() => { const n0 = cardStock(i.id, ""); return `<span class="hint" style="font-size:.78rem">Toplam stok: normal ${fmt(n0,2)} + statülü ${fmt(st0,2)} = ${fmt(n0+st0,2)} ${esc(i.unit)}</span>`; })():""}
   </div>`;
 }
@@ -4741,7 +4735,7 @@ function mergeDelta(base, cur, tgt){
 /* Plan açısından önemsiz (deneme hesabı) alanlar karşılaştırmaya girmez */
 function planJSON(x){ const c = Object.assign({}, x, {savedAt:0, routeRevs:0, orders:(x.orders||[]).map(o=>Object.assign({}, o, {tur:0}))}); c.settings = Object.assign({}, x.settings, {orderItem:0, orderQty:0, start:0, due:0, useStock:0}); return JSON.stringify(c); }
 /* Canlı planda yapılan bir değişikliği stüdyoya yönlendirir */
-const LIVE_OK = new Set(["bedelKaydet","emirYerGit","newOrderToggle","revSee","schMode","revFocus","cvFull","cvHelp","revUndo","addIn","addOut","scOpen","whatIf","tab","closeModal","newScenario","openScenario","exitStudio","publishScenario","dupScenario","delScenario","rebaseScenario","discardScenario","resTab","orderFilter","orderTur","emirGit","bolmeTur","bolmeAdim","bolmeTemizle","bolmeEkEkle","bolmeEkCikar","bolmePartiEkle","bolmePartiCikar","bolmeEsit","bolmeKapat","katilAc","bolGit","orderDetail","kview","planMatrix","qtyMode","zoom","selItem","selStep","selIn","selOut","closeInsp","toggleSub","addMode","pickType","outKind","comparePlans","openCard","kanbanOrder","openInSchema","setRoot","studioTab"]);
+const LIVE_OK = new Set(["bedelKaydet","emirYerGit","newOrderToggle","revSee","schMode","revFocus","cvFull","cvHelp","revUndo","addIn","addOut","whatIf","tab","closeModal","newScenario","openScenario","exitStudio","publishScenario","dupScenario","delScenario","rebaseScenario","discardScenario","resTab","orderFilter","orderTur","emirGit","bolmeTur","bolmeAdim","bolmeTemizle","bolmeEkEkle","bolmeEkCikar","bolmePartiEkle","bolmePartiCikar","bolmeEsit","bolmeKapat","katilAc","bolGit","orderDetail","kview","planMatrix","qtyMode","zoom","selItem","selStep","selIn","selOut","closeInsp","toggleSub","addMode","pickType","outKind","comparePlans","openCard","kanbanOrder","openInSchema","setRoot","studioTab"]);
 const guard = {depth:0, dirty:false};
 function guarded(name, fn){
   if (ui.studio && eskiSenaryo(scnMeta(ui.studio)) && !LIVE_OK.has(name)) { toast(ESKI_ILETI); render(); return; }
@@ -5053,22 +5047,14 @@ function statusDefsPanel(){
       <div class="acts">${delBtn("statusdef", x.id)}</div></div>`).join("")}</div>
     <div class="btnrow" style="margin-top:10px"><button class="btn" data-act="addStatus">+ Statü</button></div></div>`;
 }
+/* Kart bağsız modda statülü stok girişi yoktur (Soru 256 a): statülü stok Stok Merkezi'nindir ve yalnız malzeme kartına bağlı kalemde
+   okunur. Önceden yerelde kalan bakiye salt okunur görünür; Stok Merkezi onu görmez. */
 function statusStockPanel(){
   const rows = []; for (const id in st.statusStock) for (const sid in st.statusStock[id]) rows.push({id, sid, q:st.statusStock[id][sid]});
-  const smi = item(ui.smItem) ? ui.smItem : (st.items[0]||{}).id;
-  const opts = st.items.map(i=>`<option value="${i.id}" ${i.id===smi?"selected":""}>${esc(i.code)} ${esc(i.name)}</option>`).join("");
   return `<div class="panel"><h3>Statülü stok</h3>
-    <p class="hint" style="margin-bottom:10px">Statülü kartların bakiyesi: ana kartın stoğunun başka bir statüdeki hâli (karantinadaki sac, büküm sonrası bekleyen gövde, rete ayrılmış parça gibi). Ana kartın toplam stoğu = normal stok + statülü kartlar. Normal stoktan ayrı izlenir. Statü atlatmak için aşağıdaki formu kullan; her hareket stok geçmişine yazılır.</p>
-    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Malzeme</th><th>Statü</th><th class="n">Miktar</th><th>Birim</th></tr></thead><tbody>${rows.map(r=>{ const it = item(r.id); return it?`<tr><td><b class="stx">${esc(cardTitle(r.id, r.sid))}</b> <small>${esc(it.code)} ${esc(it.name)}</small></td><td>${statusChip(r.sid)} ${esc(statusLabel(r.sid))}</td><td class="n">${fmt(r.q,3)}</td><td>${esc(it.unit)}</td></tr>`:""; }).join("")}</tbody></table></div>`:`<p class="hint">Statülü stok yok.</p>`}
-    <h4 class="dh">Statü atlat</h4>
-    <div class="order sform">
-      ${fld("Malzeme", `<select id="smItem" data-s="ui" data-id="u" data-f="smItem">${opts}</select>`)}
-      ${fld("Nereden", `<select id="smFrom">${inputStatusOptions(smi, "")}</select>`)}
-      ${fld("Nereye", `<select id="smTo">${inputStatusOptions(smi, produced(smi)?"":"ONY")}</select>`)}
-      ${fld("Miktar", `<input id="smQty" class="num" inputmode="decimal" value="10" style="width:7rem">`)}
-      ${fld("Not", `<input id="smNote" placeholder="Giriş kalite raporu no…">`)}
-      <button class="btn primary" data-act="moveStatus">Statü atlat</button>
-    </div><p class="hint" style="font-size:.8rem;margin-top:6px">"Normal stok" statüsüz stoktur. Örnek: gelen sacı normal stoktan Karantina'ya, kontrolden sonra Karantina'dan Giriş onaylı'ya atlat.</p></div>`;
+    <p class="hint" style="margin-bottom:10px">Statülü stok Stok Merkezi'nde tutulur; burada girilmez. Görmek ve statü atlatmak için önce kalemi malzeme kartına bağla. Statüler rotanın ara adımlarından gelir.</p>
+    ${rows.length?`<p class="hint" style="margin-bottom:6px">Aşağıdaki miktarlar bu çalışma alanında yerel kalmıştır; Stok Merkezi'nde yoktur.</p><div class="tbl-wrap"><table><thead><tr><th>Malzeme</th><th>Statü</th><th class="n">Miktar</th><th>Birim</th></tr></thead><tbody>${rows.map(r=>{ const it = item(r.id); return it?`<tr><td><b class="stx">${esc(cardTitle(r.id, r.sid))}</b> <small>${esc(it.code)} ${esc(it.name)}</small></td><td>${statusChip(r.sid)} ${esc(statusLabel(r.sid))}</td><td class="n">${fmt(r.q,3)}</td><td>${esc(it.unit)}</td></tr>`:""; }).join("")}</tbody></table></div>`:""}
+  </div>`;
 }
 /* ================= Bağlı stok (kart #1169) =================
    Köprü varken ve kalemler malzeme kartına bağlıyken statülü stok stoktan okunur: kartın statü kırılımı ve bakiye satırları
@@ -5269,8 +5255,6 @@ function onChange(e){
   let o = null;
   if (s==="stepout") { const fS = findStep(id); if (!fS) return; const x = fS.step; x.outItem = ""; x.outStatus = "";
     if (v.startsWith("it:")) x.outItem = v.slice(3); else if (v.startsWith("st:")) x.outStatus = v.slice(3); save(); queueRender(); return; }
-  if (s==="scnew" && kartBagli()) { if (v && !st.statusCards.some(c=>c.itemId===id && c.status===v)) statuKomut("statu-karti-ac", {malzemeId:id, statu:v}); return; }
-  if (s==="scnew") { if (v && !st.statusCards.some(c=>c.itemId===id && c.status===v)) st.statusCards.push({id:uid("c"), itemId:id, status:v}); save(); render(); return; }
   if (s==="statusdef") o = statusOf(id); else
   if (s==="order") o = order(id); else if (s==="machine") o = machine(id); else if (s==="person") o = person(id); else
   if (s==="shift") o = shiftOf(id); else if (s==="brk") { const x = findBreak(id); o = x && x.br; } else
@@ -5437,15 +5421,6 @@ function act(a, d){
   if (a==="pickType") { ui.pickType = d.v; ui.pickSayfa = 1; const q = ($("#pickQ")||{}).value||""; renderSchema(true); const el = $("#pickQ"); if (el) { el.value = q; el.dispatchEvent(new Event("input",{bubbles:true})); } return; }
   if (a==="outKind") { ui.outKind = d.v; renderSchema(true); return; }
   if (a==="pickItem") { addPicked(d.msecId, d.msecSt||""); return; }
-  if (a==="scOpen") { ui.scOpen = ui.scOpen===d.id ? null : d.id; render(); return; }
-  if (a==="delStatusCard" && kartBagli()) { statuKomut("statu-karti-kaldir", {malzemeId:d.item, statu:d.st}); return; }
-  if (a==="createStatusCard" && kartBagli()) { const id = d.item || ($("#scItem")||{}).value, sid = d.st || ($("#scSt")||{}).value; if (!item(id) || !sid) return;
-    (async () => { if (!(await statuKomut("statu-karti-ac", {malzemeId:id, statu:sid}))) return;
-      if (d.pick) addPicked(id, sid); else toast(`<b>${esc(cardCode(id, sid))}</b> statülü kartı açıldı.`); })(); return; }
-  if (a==="delStatusCard") { st.statusCards = st.statusCards.filter(c=>!(c.itemId===d.item && c.status===d.st)); save(); render(); return; }
-  if (a==="createStatusCard") { const id = d.item || ($("#scItem")||{}).value, sid = d.st || ($("#scSt")||{}).value; if (!item(id) || !sid) return;
-    if (!st.statusCards.some(c=>c.itemId===id && c.status===sid)) st.statusCards.push({id:uid("c"), itemId:id, status:sid});
-    if (d.pick) { addPicked(id, sid); return; } save(); render(); toast(`<b>${esc(cardCode(id, sid))}</b> statülü kartı açıldı.`); return; }
   if (a==="removeIn") { const x = findIn(d.id); if (x) x.step.ins = x.step.ins.filter(i=>i.id!==d.id); ui.sel = x ? {kind:"step", id:x.step.id, itemId:x.itemId, nid:nidOfItemInTree(x.itemId), qty:st.settings.orderQty} : null; save(); renderSchema(true); return; }
   if (a==="removeOut") { const x = findOut(d.id); if (x) x.step.outs = x.step.outs.filter(i=>i.id!==d.id); ui.sel = x ? {kind:"step", id:x.step.id, itemId:x.itemId, nid:nidOfItemInTree(x.itemId), qty:st.settings.orderQty} : null; save(); renderSchema(true); return; }
   if (a==="resetStep") { const f = findStep(d.id), def = f && opdef(f.step.opId); if (def) { stepStation(f.step, def.stationId); f.step.setup = def.setup; sureKopyala(f.step, def); } save(); renderSchema(true); return; }
@@ -5645,11 +5620,6 @@ function act(a, d){
   if (a==="addStatus") { let n = (st.statuses||[]).length + 1, code = "S"+n; while ((st.statuses||[]).some(x=>x.id===code)) code = "S"+(++n);
     if (statuBagli()) { statuKomut("statu-tanimi-kaydet", {id:code, code, name:"Yeni statü", kind:"uretim", color:COLORS[n % COLORS.length], beklenenSurum:null}); return; }
     st.statuses.push({id:code, code, name:"Yeni statü", kind:"uretim", color:COLORS[n % COLORS.length]}); save(); render(); return; }
-  if (a==="moveStatus") { const id = $("#smItem").value, fr = $("#smFrom").value, to = $("#smTo").value, q = num($("#smQty").value), note0 = ($("#smNote").value||"").trim();
-    if (!item(id) || !(q>0)) { toast("Malzeme ve miktar gir."); return; } if (fr===to) { toast("Nereden ve nereye aynı olamaz."); return; }
-    const have = fr ? ((st.statusStock[id]||{})[fr]||0) : (item(id).stock||0); if (have < q - EPS) { toast(`${fr?statusLabel(fr):"Normal stokta"} yalnızca ${fmt(have,3)} var.`); return; }
-    const batch = uid("b"), txt = `Statü atlatma: ${fr?statusLabel(fr):"normal stok"} → ${to?statusLabel(to):"normal stok"}${note0?", "+note0:""}`;
-    bump(id, fr, -q); addMove(id, -q, txt, batch, fr); bump(id, to, q); addMove(id, q, txt, batch, to); save(); render(); toast(`${fmt(q,3)} ${esc(item(id).unit)} ${esc(item(id).code)} statü atladı.`); return; }
   if (a==="setDir") { st.settings.dir = d.v; save(); render(); return; }
   if (a==="comparePlans") { ui.cmp = comparePlans(); render(); return; }
   if (a==="applyPlan") { st.settings.rule = d.rule; st.settings.dir = d.dir; save(); ui.cmp = comparePlans(); render(); return; }
@@ -5840,8 +5810,6 @@ function baglaUygula(d, sessiz){
   if (d.emirler !== undefined) uyumlaEmirler(d.emirler);
   if (Array.isArray(d.statuses)) statuleriUygula(d.statuses);
   if (canliPlaniUygula()) rotaDegisti = true;
-  if (Array.isArray(d.statusCards)) { const kartlar = () => d.statusCards.map(c => ({id:`c:${c.itemId}:${c.status}`, itemId:c.itemId, status:c.status}));
-    st.statusCards = kartlar(); if (live && live !== st) live.statusCards = kartlar(); }
   invalidate();
   if (ROTA.tasindi) {
     const t = [...new Set(ROTA.tasindi)]; ROTA.tasindi = null;
@@ -5869,8 +5837,6 @@ function statuleriUygula(l){
   const kopya = () => l.map(x => ({id:x.id, code:x.code, name:x.name, kind:x.kind, color:x.color, surum:x.surum}));
   st.statuses = kopya(); if (live && live !== st) live.statuses = kopya();
 }
-/* Statülü kart da tablodan gelir; açma ve kaldırma komutla gider. */
-const kartBagli = () => !!(BAGLI.durum && Array.isArray(BAGLI.durum.statusCards));
 /* Hata olursa ekrandaki değer sunucudakine döner. */
 async function statuKomut(ad, govde){ const r = await baglaKomut(ad, govde); if (!r) await baglaYukle(); render(); return r; }
 function statuYereldenSil(id){
@@ -6428,7 +6394,7 @@ function tabItemsBagli(){
       ${fld("Kategori", `<span class="calc sol">${esc(i.kategoriAdi||"–")}</span>`)}
       ${fld("Stok", `<span class="calc ${az?"":"strong"}" title="Stok sahibinden okunur; bu ekranda değiştirilmez">${i.stokYok ? "–" : fmt(i.stock,2)}${az?` <span class="tag low">az</span>`:""}</span>`)}
       ${fld("Birim maliyet", maliyet)}
-      <div class="acts">${i.type==="yari"||i.type==="mamul"?`<button class="ib" data-act="openInSchema" data-id="${i.id}" aria-label="Akış şemasında aç" title="Akış şemasında aç">⇢</button>`:""}${["ham","yari","mamul"].includes(i.type)?`<button class="ib" data-act="scOpen" data-id="${i.id}" title="Statülü kart aç" aria-label="${esc(i.code)} için statülü kart aç">S+</button>`:""}</div>
+      <div class="acts">${i.type==="yari"||i.type==="mamul"?`<button class="ib" data-act="openInSchema" data-id="${i.id}" aria-label="Akış şemasında aç" title="Akış şemasında aç">⇢</button>`:""}</div>
     </div>${["ham","yari","mamul"].includes(i.type)?statusCardRow(i):""}`;
   };
   const turler = BTUR.filter(([t]) => !tur || t === tur);

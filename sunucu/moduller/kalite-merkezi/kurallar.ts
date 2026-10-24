@@ -1,6 +1,7 @@
 import { DOSYA_TURLERI } from '#paylasilan/sozlesme/dosya.ts';
 import { createHash } from 'node:crypto';
-import type { KaliteMerkeziKoleksiyonu, KmOnayReddiAlani } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KaliteMerkeziKoleksiyonu, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
@@ -25,6 +26,7 @@ export const ILETILER = {
   arsivYonetici: 'Kayıtları yalnız yönetici arşive alır.',
   silmeYonetici: 'Bu Kalite Merkezi kaydını yalnız yönetici siler.',
   kaynakOnay: 'Tedarikçi ve form şablonu kayıtlarını onay yetkisi olan değiştirir.',
+  tedarikciFirmasi: 'Tedarikçi kaydının firması Müşteri-Tedarikçi\'de aktif bir tedarikçi firma olmalı.',
   onayUcu: 'Onay ve kapanış alanları kayıt yazmayla değişmez; onay yetkisiyle kaydedilir.',
   onayDegeri: 'Onay ya da durum değeri geçersiz.',
   onayliForm: 'Onaylanmış form değiştirilemez ve silinemez; önce onayı geri alın.',
@@ -107,7 +109,7 @@ export const ONAY_ALANLARI: Readonly<Partial<Record<KaliteMerkeziKoleksiyonu, Re
     mrb: { degerler: null, serbest: (o, y) => MRB_KARARSIZ.includes(o) && MRB_KARARSIZ.includes(y) },
   },
   capa: { durum: { degerler: ['Açık', 'Kapalı'], serbest: kapanmamis('Kapalı') } },
-  sup: { onay: { degerler: ['Onaylı', 'Şartlı onaylı', 'Aday', TEDARIKCI_ASKIDA] } },
+  sup: { onay: { degerler: KM_TEDARIKCI_DURUMLARI } },
 };
 
 const ayni = (a: Deger, b: Deger): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -478,4 +480,45 @@ export function dofDurumu(kimlik: string, govde: Record<string, unknown>): DofDu
   const kapali = kapanmisKayitMi(DOF_KOLEKSIYONU, govde);
   const kapanis = metin(govde.kapanis);
   return { kimlik, no: metin(govde.no) || kimlik, durum: kapali ? 'Kapalı' : 'Açık', kapanis: kapali && kapanis !== '' ? kapanis : null };
+}
+
+// 236 a: tedarikçi kaydının `firmaId` alanı Müşteri-Tedarikçi firmasının kimliğidir. Yok ya da boşsa null (eski kayıt); öteki
+// her değer (metin, sıfır, kesir) geçersizdir.
+export const TEDARIKCI_FIRMA_ALANI = 'firmaId';
+export function tedarikciFirmaKimligi(govde: Record<string, unknown> | null): number | null | 'gecersiz' {
+  const d = govde?.[TEDARIKCI_FIRMA_ALANI];
+  if (d === undefined || d === null) return null;
+  return typeof d === 'number' && Number.isSafeInteger(d) && d > 0 ? d : 'gecersiz';
+}
+
+// Firma seçicisinde yalnız aktif tedarikçi firmalar (tür tedarikçi ya da ikisi) listelenir; adla sıralı.
+type SeciciFirmasi = { id: number; kod: string | null; ad: string; aktif: boolean; tur: string };
+export const tedarikciFirmasiMi = (f: Pick<SeciciFirmasi, 'aktif' | 'tur'>): boolean => f.aktif && (f.tur === 'tedarikci' || f.tur === 'ikisi');
+export function tedarikciFirmalari(firmalar: readonly SeciciFirmasi[]): { id: number; kod: string | null; ad: string }[] {
+  return firmalar.filter(tedarikciFirmasiMi).map(({ id, kod, ad }) => ({ id, kod, ad })).sort((a, b) => a.ad.localeCompare(b.ad, 'tr-TR') || a.id - b.id);
+}
+
+// 236 a: firma başına Kalite Merkezi onay durumu. Firma kimliği olan kayıt yalnız o firmaya bağlanır. Kimliği olmayan eski kayıt
+// bugünkü eşlemeyle bağlanır (iki tarafta kod varsa kod, yoksa ad; boşluk ve büyük-küçük harf sayılmaz); eşlemeyi bırakmak askıdaki
+// eski tedarikçiyi sessizce açardı. Firmaya birden çok kayıt bağlanırsa en kısıtlayıcı durum geçerlidir. Onayı geçersiz ya da boş
+// kayıt durum vermez; kaydı olmayan firma haritada yoktur.
+// Sözleşmedeki sıra en az kısıtlayıcıdan en çoğadır.
+const KISIT_SIRASI: readonly KmTedarikciDurumu[] = KM_TEDARIKCI_DURUMLARI;
+type TedarikciKaydi = { firmaId: number | null; kod: string | null; ad: string; onay: string | null };
+type FirmaAdi = { id: number; kod: string | null; ad: string };
+export function tedarikciOnayDurumlari(kayitlar: readonly TedarikciKaydi[], firmalar: readonly FirmaAdi[]): Map<number, KmTedarikciDurumu> {
+  const yalin = (x: string | null) => (x ?? '').trim().toLocaleLowerCase('tr-TR');
+  const eslesir = (f: FirmaAdi, k: TedarikciKaydi) => (yalin(f.kod) !== '' && yalin(k.kod) !== '' ? yalin(f.kod) === yalin(k.kod) : yalin(k.ad) !== '' && yalin(f.ad) === yalin(k.ad));
+  const sonuc = new Map<number, KmTedarikciDurumu>();
+  const koy = (id: number, d: KmTedarikciDurumu) => {
+    const o = sonuc.get(id);
+    if (o === undefined || KISIT_SIRASI.indexOf(d) > KISIT_SIRASI.indexOf(o)) sonuc.set(id, d);
+  };
+  for (const k of kayitlar) {
+    const d = KISIT_SIRASI.find((x) => x === k.onay);
+    if (d === undefined) continue;
+    const bagli = k.firmaId !== null ? firmalar.filter((f) => f.id === k.firmaId) : firmalar.filter((f) => eslesir(f, k));
+    for (const f of bagli) koy(f.id, d);
+  }
+  return sonuc;
 }

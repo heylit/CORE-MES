@@ -7,6 +7,8 @@ export interface StepIstegi {
   veri: ArrayBuffer;
   // Çizgisel sapma: modelin ortalama kutu boyuna oran (küçük değer ince üçgenleme, büyük dosya).
   ayrinti: number;
+  // Açısal sapma (radyan); verilmezse 0,5. CNC Kurulum ham hesabı prototipteki gibi 0,15 ister (eğri yüzey daha sık üçgenlenir).
+  aci?: number;
 }
 
 export interface StepAgi {
@@ -30,7 +32,7 @@ isci.onmessage = (o) => {
     try {
       const occt = await occtimportjs({ locateFile: () => o.data.wasm });
       const s = occt.ReadStepFile(new Uint8Array(o.data.veri), {
-        linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: o.data.ayrinti, angularDeflection: 0.5,
+        linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: o.data.ayrinti, angularDeflection: o.data.aci ?? 0.5,
       });
       if (!s.success || s.meshes.length === 0) {
         isci.postMessage({ hata: 'STEP dosyası okunamadı ya da içinde katı model yok.' });

@@ -10,7 +10,17 @@ export type { IkBicimi, MotorKancasi };
 export interface Donem { id: string; ad: string; baslangic: string; not?: string; params: Record<string, unknown> }
 export interface IzinBakiyesi {
   hak: number; devir: number; onceki: number; used: number; pending: number; kalan: number; next: Date | null; nextDays: number; years: number;
+  // Hizmet yılı başına hak ediş: k. yıl, yıl dönümü, gün, yaş notu (yaş sınırıyla yükseltildiyse).
+  rows: { k: number; ann: Date; d: number; note: string }[];
 }
+// Ayarlardaki prim ve teşvik satırları (motorun varsayılanları paylasilan/ik-motor/sabitler.ts).
+export interface Prim {
+  id: string; ad: string; tur: 'oran' | 'maas' | 'sabit'; deger: number; siklik: 'her' | 'ceyrek' | 'yarim' | 'yillik' | 'ozel';
+  aylar: string; atama: 'yok' | 'herkes' | 'beyaz' | 'mavi'; kidem: boolean;
+}
+export interface Tesvik { id: string; ad: string; tur: 'yok' | 'puan' | 'asgari'; deger: number }
+export type YanHak = 'yemek' | 'yol';
+export interface YanHakAyari { yontem: string | undefined; hesap: string | undefined; deger: number; kisisel: boolean }
 export interface BilinenYuz {
   fullName(e: Personel | null | undefined): string;
   payroll(personel: Personel, donem: string): (Record<string, unknown> & { paramAd?: string }) | null;
@@ -29,6 +39,21 @@ export interface BilinenYuz {
   isHoliday(gun: Date): boolean;
   // Bugünün parametre dönemindeki geçerli ayarlar (genel ayar + dönem).
   S(): Record<string, unknown>;
+  settingsList(k: 'primler'): Prim[];
+  settingsList(k: 'tesvikler'): Tesvik[];
+  tesvikById(id: string | undefined): Tesvik | null;
+  // Kişinin teşviki; yoksa ayardaki varsayılan teşvik.
+  tesvikOf(e: Personel | null | undefined): Tesvik | null;
+  primDefaultOn(p: Prim, e: Personel): boolean;
+  primDesc(p: Prim): string;
+  // Kişide açık primler; v kişiye özel değer (yoksa undefined, primin değeri geçer).
+  empPrims(e: Personel | null | undefined): { p: Prim; v: unknown }[];
+  primMonthlyKidem(e: Personel): number;
+  curBrut(e: Personel): number;
+  benefitCfg(e: Personel | null | undefined, tur: YanHak): YanHakAyari;
+  benefitMonthly(e: Personel): number;
+  docList(): string[];
+  missingDocs(e: Personel): string[];
 }
 
 export { MOTOR_ISLEVLERI };

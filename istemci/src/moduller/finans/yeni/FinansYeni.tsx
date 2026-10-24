@@ -8,7 +8,7 @@ import { useYetki } from '../../../ortak/veri/yetki.ts';
 import type { AkisDegerleri, OlayTuru } from './akislar.ts';
 import { KayitCekmecesi } from './KayitFormu.tsx';
 import { EKRANLAR, SEKMELER, sekmeBul, VERISIZ, type SekmeAnahtari } from './sekmeler.ts';
-import { useFinansVerisi, useFinansYetkisi } from './veri.ts';
+import { useFinansVerisi, useFinansYetkisi, useGunlukSkor } from './veri.ts';
 import './finans-yeni.css';
 
 interface Cekmece {
@@ -33,6 +33,7 @@ function FinansYeniIci() {
   const yetki = useFinansYetkisi();
   const veri = useFinansVerisi(yetki.oku);
   const [cekmece, setCekmece] = useState<Cekmece>({ acik: false, tur: null });
+  useGunlukSkor(veri.finans, yetki.yaz);
 
   const gorunen = SEKMELER.filter((s) => izin.var(s.islem as Islem));
   const sekme = sekmeBul(bolum);

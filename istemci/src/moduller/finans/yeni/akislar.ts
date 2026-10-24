@@ -312,13 +312,14 @@ export type CekDurumu = 'tahsilde' | 'tahsil' | 'ciro' | 'karsiliksiz' | 'odendi
 export const takiptekiCekler = (V: HazirVeri): SunucuCeki[] =>
   V.cekler.filter((c) => (c.yon === 'alinan' && ['portfoy', 'tahsilde'].includes(c.durum)) || (c.yon === 'verilen' && c.durum === 'bekliyor'))
     .sort((a, b) => (a.vade < b.vade ? -1 : 1));
-export function cekDugmeleri(c: SunucuCeki): { durum: CekDurumu; baslik: string; tehlike?: true }[] {
+// Karşılıksız kaydı faturaları yeniden açar; uç finans.yonet ister, yalnız yazan düğmeyi görmez.
+export function cekDugmeleri(c: SunucuCeki, yonet: boolean): { durum: CekDurumu; baslik: string; tehlike?: true }[] {
   if (c.yon === 'verilen') return [{ durum: 'odendi', baslik: 'Ödendi' }];
   return [
     ...(c.durum === 'portfoy' ? [{ durum: 'tahsilde' as const, baslik: 'Bankaya tahsile verdim' }] : []),
     { durum: 'tahsil', baslik: 'Tahsil edildi' },
     { durum: 'ciro', baslik: 'Ciro ettim' },
-    { durum: 'karsiliksiz', baslik: 'Karşılıksız çıktı', tehlike: true },
+    ...(yonet ? [{ durum: 'karsiliksiz' as const, baslik: 'Karşılıksız çıktı', tehlike: true as const }] : []),
   ];
 }
 // Tahsil ve ödendi hesap, ciro tedarikçi ister (ek alan); öteki ikisi doğrudan gider.
