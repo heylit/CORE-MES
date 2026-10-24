@@ -49,6 +49,9 @@ export const CIHAZ_ANAHTARLARI: readonly string[] = [`${ONEK}:op`, `${ONEK}:stud
   ...['-ui4', '-mz', '-tk', '-br', '-nb', '-tema'].map((ek) => PLANLAMA_ANAHTARI + ek)];
 const KAYIT_YAZISI = 'TMI\'de kayıtlı';
 const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
+// Planlama çalışmasının kaydı plan.yaz ister (287 a); çerçevenin kendi yetkisi TMI işlemlerine bağlı olmadığından plan.yaz'sız kişinin
+// kaydı 403 alır. Uyarı oturumu değil plan yetkisini söyler (292: 13).
+export const PLAN_YETKI = 'Plan yazma yetkiniz yok; planlama çalışmasındaki değişiklikleriniz kaydedilmedi. Oturumunuz kapandıysa sayfayı yenileyip yeniden giriş yapın.';
 const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 const KAYDEDILMEDI = 'Son değişiklikler kaydedilmedi';
 // Art arda değişiklikler tek yazmada birleşir: her yazma bütün belgeyi gönderir, aralık uzadıkça yazma seyrekleşir (kullanıcıya görünmez).
@@ -209,7 +212,7 @@ export function ReceteRotaCercevesi() {
       kayitYazisi: hazirlik.ben.yazabilir ? KAYIT_YAZISI : SEKME_YAZISI,
       kayitUyari: !hazirlik.ben.yazabilir,
       kisiAdi: hazirlik.ben.kisi.ad,
-      oturumIletisi: OTURUM,
+      oturumIletisi: planlama && !planYazabilir ? PLAN_YETKI : OTURUM,
       reddIletisi: RET,
       kaydedilmediYazisi: KAYDEDILMEDI,
       zamanAsimiMs: ZAMAN_ASIMI_MS,

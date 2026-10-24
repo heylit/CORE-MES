@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MotorUyarilariCevabi, PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { BenCevabi, DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, DurumCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
 import type { PlanlamaCalismasi } from './tipler.ts';
 
 // Açılış okumaları. Eski ekranın köprüsüyle aynı uçlar (kopru.ts: ben, kayitlar, durum-oku, plan-surum; motor uyarıları) doğrudan okunur;
-// köprü ve çerçeve yoktur. Yazma kayit.ts'tedir (yalnız `:planlama`; 222 a: Reçete ve Rota kaydı yalnız okunur).
+// köprü ve çerçeve yoktur. Çalışma sunucuda kaynakla birleşmiş gelir (288 a, /recete-rota/planlama-calismasi); ekran birleştirmez.
+// Yazma kayit.ts'tedir (yalnız `:planlama`; 222 a: Reçete ve Rota kaydı yalnız okunur).
 
 // Kayıt anahtarları eski ekranınkiyle aynı (ReceteRotaCercevesi.tsx ONEK, PLANLAMA_ANAHTARI; test denetler). Çerçeve dosyası burada ithal
 // edilmez: prototip yükleyicisini yeni ekrana taşırdı.
@@ -18,10 +19,11 @@ export type IstegeBagliDilim = 'durum' | 'planSurumu' | 'senaryolar' | 'motorUya
 
 export interface PlanlamaDeposu {
   ben: BenCevabi;
-  // Planlama çalışması (anahtar `recete-rota-motoru-v1:planlama`); kayıt yoksa ya da okunamıyorsa null.
+  // Planlama çalışması (anahtar `recete-rota-motoru-v1:planlama`), sunucuda Reçete ve Rota kaydı ve kaynakla birleşmiş; kayıt yoksa ya da
+  // okunamıyorsa null.
   calisma: PlanlamaCalismasi | null;
   calismaSurumu: number | null;
-  // Reçete ve Rota ana kaydı (anahtar `recete-rota-motoru-v1`): planlama verisi bundan kurulur (girdi.betik tmiCevir). Ekran yalnız okur.
+  // Reçete ve Rota ana kaydı (anahtar `recete-rota-motoru-v1`): çalışmanın verisi bundan kurulur (sunucuda, girdi.betik). Ekran yalnız okur.
   receteRotaKaydi: unknown;
   durum: DurumCevabi | null;
   planSurumu: PlanSurumCevabi | null;
@@ -36,24 +38,24 @@ async function dilim<T>(okuma: Promise<T>): Promise<T | null> {
   try { return await okuma; } catch { return null; }
 }
 
-// ben ve kayitlar zorunludur (eski ekran da bunlarsız açılmaz); öteki okumalar düşerse ekran o dilimsiz açılır.
+// ben, kayitlar ve çalışma zorunludur (eski ekran da bunlarsız açılmaz); öteki okumalar düşerse ekran o dilimsiz açılır.
 export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
-  const [ben, kayitlar, durum, planSurumu, senaryolar, uyari] = await Promise.all([
+  const [ben, kayitlar, calismaCevabi, durum, planSurumu, senaryolar, uyari] = await Promise.all([
     o.get<BenCevabi>('/recete-rota/ben'),
     o.get<KayitlarCevabi>('/recete-rota/kayitlar'),
+    o.get<PlanlamaCalismasiCevabi>('/recete-rota/planlama-calismasi'),
     dilim(o.get<DurumCevabi>('/recete-rota/durum')),
     dilim(o.get<PlanSurumCevabi>('/plan/surum')),
     dilim(o.get<SenaryolarCevabi>('/plan/senaryolar')),
     dilim(o.get<MotorUyarilariCevabi>('/plan/motor-uyarilari')),
   ]);
   const kayit = (anahtar: string) => kayitlar.kayitlar.find((k) => k.anahtar === anahtar && k.bicim === 'json') ?? null;
-  const calismaKaydi = kayit(PLANLAMA_ANAHTARI);
-  const calisma = calismaKaydi === null ? null : calismaOku(calismaKaydi.deger);
+  const calisma = calismaCevabi.calisma === null ? null : calismaOku(calismaCevabi.calisma);
   const dilimler = { durum, planSurumu, senaryolar, motorUyarilari: uyari };
   return {
     ben,
     calisma,
-    calismaSurumu: calisma === null ? null : calismaKaydi?.surum ?? null,
+    calismaSurumu: calisma === null ? null : calismaCevabi.surum,
     receteRotaKaydi: kayit(ONEK)?.deger ?? null,
     durum, planSurumu, senaryolar,
     motorUyarilari: uyari?.uyarilar ?? null,

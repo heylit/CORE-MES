@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -8,7 +8,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
-  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
+  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
   YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -26,14 +26,14 @@ import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururlukt
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
-import { calismaTakvimleri, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
+import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, ayarCevir, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
-import type { KaynakOkumasi } from './plan-girdisi.ts';
+import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
 // Akış: yetkiyi uç verir; burada biçim ve sürüm denetimi uygulanır.
@@ -41,6 +41,13 @@ import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-
 const ISLEM_YAZ = 'recete-rota.yaz';
 const CAKISMA_ILETISI = 'Reçete ve rota kayıtları siz açtıktan sonra başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 const BUYUK_ILETISI = 'Reçete ve rota kaydı 1 MB sınırını aşıyor ve kaydedilmedi; eski kayıtları silip yeniden deneyin.';
+const PLANLAMA_YETKI_ILETISI = 'Planlama çalışmasını değiştirme yetkiniz yok.';
+
+// Planlama çalışması (tercih, ağırlık, karar, sayfa içi kilit) yalnız planı yazabilene açıktır (287 a): yazma ve silme ucu recete-rota.yaz
+// ister, bu anahtar ayrıca plan.yaz ister. Planlama sayfasını okuyup plan yazmayan rol (müdür, 290 b) çalışmayı değiştiremez.
+export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): void {
+  if (anahtar === PLANLAMA_ANAHTARI && !islemVarMi(kullanici, 'plan.yaz')) throw yetkiYok(PLANLAMA_YETKI_ILETISI);
+}
 
 export function ben(kullanici: Kullanici): BenCevabi {
   return { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: kullanici.islemler.includes(ISLEM_YAZ) };
@@ -51,6 +58,7 @@ export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
+  planlamaYazmaDenetimi(kullanici, g.anahtar);
   if (!degerBicimeUyarMi(g.bicim, g.deger)) throw dogrulama('Metin biçimli değer dize olmalıdır.', 'deger');
   if (nulKarakteriVarMi(g.deger)) throw dogrulama('Değer boş karakter (U+0000) içeremez.', 'deger');
   if (degerCokBuyukMu(g.deger)) throw cokBuyuk(BUYUK_ILETISI);
@@ -378,6 +386,33 @@ export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null>
   if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
   const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
   return { calisma, kayit, kaynak: await kaynakOku(db, PLAN_MOTORU_OKUYUCUSU) };
+}
+
+// Planlama sayfasının açılışı (288 a). Eski çerçeve çalışmayı, Reçete ve Rota kaydını ve kaynak okumasını tarayıcıda girdi.betik ile
+// birleştirirdi; aynı betik burada aynı girdiyle koşar, sayfa birleşmiş çalışmayı okur. Kaynak okuması çağıranın yetkisiyledir (çerçevedeki
+// gibi: okuyamadığı dilim kayıttaki gibi kalır). Takvim eki çerçevenin okuduğu vardiya takviminden kurulur (o uç yalnız oturum ister).
+export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  const satir = await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI);
+  const calisma = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
+  const surum = satir?.surum ?? null;
+  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return { calisma: null, surum };
+  const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
+  const kaynak = await kaynakOku(db, kullanici);
+  const ek = { ...(kaynak.ek as Record<string, unknown>), takvim: await takvimEki(db) };
+  const g = planGirdisi({ calisma, kayit, kaynak: { durum: kaynak.durum, ek }, bugun: tesisGunu(simdi) }, simdi);
+  return { calisma: g === null ? null : g.S, surum };
+}
+
+// Çerçevenin biçimi (kaynak-komutlari.ts takvimEki): iş merkezi -> haftanın günü (0 pazar ... 6 cumartesi) -> vardiyalar; kişi -> vardiya.
+async function takvimEki(db: Db): Promise<{ hafta: Record<string, Record<number, string[]>>; kisiVardiyasi: Record<string, string> }> {
+  const hafta: Record<string, Record<number, string[]>> = {};
+  for (const m of await vardiyaMatrisi(db)) {
+    const merkez = (hafta[String(m.isMerkeziId)] ??= {});
+    (merkez[m.gun === 7 ? 0 : m.gun] ??= []).push(String(m.vardiyaId));
+  }
+  const kisiVardiyasi: Record<string, string> = {};
+  for (const k of await kisiVardiyalari(db)) kisiVardiyasi[String(k.kisiId)] = String(k.vardiyaId);
+  return { hafta, kisiVardiyasi };
 }
 
 export interface TeklifKalemiGirdisi { malzemeNo: number; adet: number }
