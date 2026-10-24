@@ -152,7 +152,10 @@ export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
           <Dugme simge="x" onClick={vazgec}>Vazgeç</Dugme>
           <span className="tc-sade-ara" />
           {adim > taban && <Dugme simge="up" onClick={() => { hataYaz([]); adimYaz(adim - 1); }}>Geri</Dugme>}
-          {adim < n ? <Dugme tur="birincil" simge="next" onClick={ileri}>İleri</Dugme> : <Dugme tur="birincil" simge="check" type="submit">Kaydet</Dugme>}
+          {/* Ayrı anahtar: aynı düğme öğesi tıklama içinde submit'e dönerse tarayıcı formu hemen gönderir (son adımda Kaydet'e basılmadan kayıt). */}
+          {adim < n
+            ? <Dugme key="ileri" tur="birincil" simge="next" onClick={ileri}>İleri</Dugme>
+            : <Dugme key="kaydet" tur="birincil" simge="check" type="submit">Kaydet</Dugme>}
         </div>
       </form>
     </section>

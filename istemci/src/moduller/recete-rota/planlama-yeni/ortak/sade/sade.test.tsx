@@ -106,6 +106,16 @@ describe('Sade kabuk', () => {
     expect(screen.getByRole('heading', { name: 'Ne girmek istiyorsunuz?' })).toBeTruthy();
   });
 
+  it('son İleri düğmesi Kaydet düğmesine dönüşmez, yeni öğe gelir (tarayıcıda tıklama içinde submit olup kaydetmesin)', () => {
+    render(<SadeSayfa tanim={sayfa([{ ...form(), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }) }])} />);
+    fireEvent.click(dugme('Gir'));
+    fireEvent.click(dugme('İleri'));
+    const ileri = dugme('İleri');
+    fireEvent.click(ileri);
+    expect(dugme('Kaydet')).not.toBe(ileri);
+    expect(ileri.isConnected).toBe(false);
+  });
+
   it('kayıtta ek kontrol iletisi kaydı durdurur', () => {
     const kaydet = vi.fn();
     const f: SihirbazTanimi = { ...form(kaydet), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }), kontrol: (_d, adim) => (adim === -1 ? 'Hiçbir şey değişmedi.' : null) };
