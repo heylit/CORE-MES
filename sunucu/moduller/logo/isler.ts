@@ -6,11 +6,10 @@ import {
   logoyaKapatmaGidecekSiparisler, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu, talepLogoSonucu,
 } from '../satin-alma/disari.ts';
 import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
-import { emirMalzemeFisleri } from '../stok/disari.ts';
-import { emirHurdalari, emirNolari } from '../uretim-emirleri/disari.ts';
+import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
 import { ortamKoprusu } from './baglanti.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
-import { BEKLEME_NEDENLERI, emirMalzemeFisiKaynagi, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeTuru, satinAlmaTuru, satisTuru, yeniSurecBellegi } from './servis.ts';
+import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
 import type { MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 
 // İş her zaman koşar; istek ancak "Logo bağlantısı" ayarı açık ve köprü değişkenleri varken çıkar (malzemeTuru).
@@ -53,7 +52,7 @@ export function satisIsi(kaynak: SatisKaynagi): IsTanimi {
   return kopruIsi('logo-satis-gonderimi', IS_ARALIGI_MS, (vt) => satisTuru(vt, { kopru: ortamKoprusu, bellek: satisBellegi, saat: () => new Date(), kaynak }));
 }
 
-// Malzeme fişi (sarf, üretimden giriş): kuyruk logonun, satırlar stok ve üretim emirlerinin disari.ts işlevlerinden (335).
+// Malzeme fişi: fişin sahibi stoktur (293 a); Logo değişiklik akışını izler, satırları stoğun disari.ts işlevlerinden okur.
 export function malzemeFisiIsi(kaynak: MalzemeFisiKaynagi): IsTanimi {
   const fisBellegi = yeniSurecBellegi();
   return kopruIsi('logo-malzeme-fisi-gonderimi', IS_ARALIGI_MS, (vt) => malzemeFisiTuru(vt, { kopru: ortamKoprusu, bellek: fisBellegi, saat: () => new Date(), kaynak }));
@@ -90,7 +89,7 @@ export const isler = [
     siparisGidecekler: logoyaGidecekSatisSiparisleri,
     siparisSonucu: satisSiparisiLogoSonucu,
   }),
-  malzemeFisiIsi(emirMalzemeFisiKaynagi({ emirNolari, emirMalzemeFisleri, emirHurdalari })),
+  malzemeFisiIsi(stokMalzemeFisiKaynagi({ degisiklikler: malzemeFisiDegisiklikleri, fisler: logoIcinMalzemeFisleri, emirFisleri: emirlerinMalzemeFisleri })),
   kopruIsi('logo-mal-kabul-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malKabulTuru(vt, okumaOrtami())),
   kopruIsi('logo-liste-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => listeOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-fatura-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => faturaTuru(vt, okumaOrtami())),

@@ -27,8 +27,7 @@
 - Okuma akışları (mal kabul, cari ve ambar, fatura) yalnız GET'tir ve okunanı yalnız saklar; her biri kendi anahtarıyla kapalı gelir. Cevap biçimleri doğrulanmadı:
   ayıklayıcılar esnektir, ayıklanamayan cevap imleci ilerletmez. Fatura numarayla aranır; numara `logo_giden`'de yok, `logo_siparis_no`'ya sipariş açılırken yazılır.
 - Malzeme fişinin giden kutusu ayrı tablodur (`logo_malzeme_fisi_giden`): dolu `logo_giden`'in kısıtı genişletilemezdi. Sorgu katmanı `tablo(belgeTuru)` ile seçer.
-- Artımlı fiş (233, okuma teyidi 23.10.2026; 264 1a, 2a; 269 1a, 2a): fiş hazırlıkta (uretim-emirleri `hazirlikTamamlandiDinle`) TMI'de boş açılır;
-  sağlam ve hurda sayımı `bekleyen_degisiklik` sayacını artırır. Logo işi satırları sahiplerinden okur, `son_satir_ozeti` ile karşılaştırır; farklıysa fişi
+- Artımlı fiş (233; kart #493 ile kaynak stok): fişin satırı değişince stoktaki sayaç artar, Logo işi akıştan okuyup `bekleyen_degisiklik`e ekler. Logo işi satırları sahiplerinden okur, `son_satir_ozeti` ile karşılaştırır; farklıysa fişi
   siler (Logo'da satır silinmez) ve sonraki turda aynı numarayla açar, boşsa siler. Sayaç işaret değil sayaçtır: istek sürerken gelen sayım kaybolmaz.
   VARSAYIM: Logo boş fişi kabul etmez (bu yüzden boş fiş TMI'dedir); fiş tarihi fişin TMI'de açıldığı andır; gerçek Logo'da silme denenmedi.
 - Tüm Logo işleri `isler.ts` `sirali` kuyruğundan geçer: ayrı zamanlayıcıda koşsalar da köprüye aynı anda iki istek gitmez (tek COM oturumu).
