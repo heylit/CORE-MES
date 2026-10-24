@@ -10,3 +10,7 @@
   - Bu kurulumda erişilebilir değil, gerekçesi:
     - SSR yok: `istemci/src/App.tsx` `BrowserRouter` kullanıyor ve depoda `renderToString` ya da `hydrateRoot` geçmiyor.
     - Yönlendirme hedefleri sabit önekle başlar: menü yolları, sayısal emir kimliği (`/uretim-emirleri/${id}`) ve `encodeURIComponent` ile `/arkon/` altına konan Arkon görünüm adı (`moduller/arkon/ArkonCercevesi.tsx`, `gezin(` satırı). Kullanıcı girdisi hedefin başına gelmez.
+
+## Bağlamada kapanacak
+
+- Bağlamada kalkar (kart #506, soru 308 d): ana menüdeki "Yeni ekranlar (deneme)" grubu. TS geçişindeki yeni ekranların (`<kök>/yeni`) satırları yalnız yeni ekran kapısını geçen yöneticide görünür; ana menüde modül başına tek sayfa kuralının onaylı geçici istisnasıdır. Kaldırmak için `rota/yeni-ekran-menusu.ts` ile testi silinir ve `arayuz/Kabuk.tsx`'teki `yeniEkranlar` satırı ile iki grup bloğu çıkarılır.

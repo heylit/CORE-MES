@@ -63,3 +63,23 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('R3 Üretim emirleri ve Stok', () => {
+  // Veri tabanı boş da olabilir: test bölgeye ve parçanın işaretine bakar, varsa ilk emri açar. GET dışı istek ag.hatalar'a düşer.
+  test('iki bölüm açılır, emir ayrıntısı açılır; yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/recete-rota/yeni');
+    const emirler = page.getByRole('region', { name: 'Üretim emirleri' });
+    await expect(emirler.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
+    const ilk = emirler.locator('.tc-rr3-emir').first();
+    if (await ilk.count()) {
+      await ilk.click();
+      await expect(ilk).toHaveAttribute('aria-expanded', 'true');
+    }
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }).getByRole('tab', { name: 'Stok' }).click();
+    const stok = page.getByRole('region', { name: 'Stok' });
+    await expect(stok.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+  });
+});

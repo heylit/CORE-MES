@@ -75,3 +75,59 @@ test.describe('M3 malzeme ayarları', () => {
       .toHaveAttribute('aria-current', 'page');
   });
 });
+
+// Katalog parçası: örnek verideki ORNEK kartlarıyla yalnız okuyan akışlar (yazma testleri birim testlerinde; koşular paralel).
+test.describe('M2 katalog', () => {
+  const tasmaz = async (page: Parameters<typeof tasmaOlc>[0]) => expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+
+  test('liste ve arama: örnek kart bulunur, sayfa yatay taşmaz', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    await expect(page.getByRole('heading', { name: 'Katalog' })).toBeVisible();
+    await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK Yuvarlak');
+    await expect(page.getByText('ORNEK Yuvarlak çubuk Ø50').first()).toBeVisible();
+    await tasmaz(page);
+  });
+
+  test('kart penceresi satırdan açılır, adres ?kart= taşır, pencere taşmaz ve kapanır', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK Yuvarlak');
+    await page.getByText('ORNEK Yuvarlak çubuk Ø50').first().click();
+    const pencere = page.getByRole('dialog');
+    await expect(pencere).toBeVisible();
+    await expect(page).toHaveURL(/[?&]kart=/);
+    await expect(pencere.getByRole('button', { name: 'Etiket', exact: true })).toBeVisible();
+    await tasmaz(page);
+    await pencere.getByRole('button', { name: 'Kapat' }).last().click();
+    await expect(pencere).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]kart=/);
+  });
+
+  test('süzgeç seçilince liste daralır ve aktif süzgeç çipi çıkar', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    const suzgecDugmesi = page.getByRole('button', { name: /^Süzgeçler/ });
+    if ((await suzgecDugmesi.getAttribute('aria-pressed')) !== 'true') await suzgecDugmesi.click();
+    const tur = page.getByRole('group', { name: /Tür/ });
+    await tur.getByRole('checkbox', { name: /Hizmet/ }).check();
+    await expect(page.getByRole('button', { name: /Hizmet.*kaldır/ })).toBeVisible();
+    await expect(page.getByText('ORNEK Yuvarlak çubuk Ø50')).toHaveCount(0);
+    await tasmaz(page);
+  });
+
+  test('iki kart seçilince karşılaştırma açılır', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK');
+    const kutular = page.getByRole('checkbox', { name: / seç$/ });
+    await kutular.nth(0).check();
+    await kutular.nth(1).check();
+    await page.getByRole('button', { name: /Karşılaştır/ }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await tasmaz(page);
+  });
+
+  test('diğer işlemlerden CSV indirilir', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    await page.getByRole('button', { name: /diğer işlemler/ }).click();
+    const [indirme] = await Promise.all([page.waitForEvent('download'), page.getByRole('menuitem', { name: 'CSV dışa aktar' }).click()]);
+    expect(indirme.suggestedFilename()).toBe('malzeme-katalogu.csv');
+  });
+});

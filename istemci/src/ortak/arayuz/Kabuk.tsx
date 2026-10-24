@@ -15,6 +15,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
+import { YENI_EKRAN_GRUBU, yeniEkranBaglantilari } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
@@ -156,6 +157,8 @@ export function Kabuk({
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);
+  // Geçici (308 d): yeni ekran satırları yalnız yöneticide, ayrı grupta; bağlamada kalkar.
+  const yeniEkranlar = useMemo(() => yeniEkranBaglantilari(menudekiler, islemler), [menudekiler, islemler]);
   const olayGruplari = useMemo(
     () => gorunenHizliIsler(hizliIsler, { sayfalar, menuler: ikinciMenuler, islemler }),
     [hizliIsler, sayfalar, ikinciMenuler, islemler],
@@ -290,6 +293,12 @@ export function Kabuk({
               {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
             </div>
           ))}
+          {yeniEkranlar.length > 0 && (
+            <div className="tc-kabuk-grup">
+              <p className="tc-kabuk-grup-ad">{YENI_EKRAN_GRUBU}</p>
+              {yeniEkranlar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+            </div>
+          )}
         </nav>
 
         <header className="tc-kabuk-ust">
@@ -416,6 +425,12 @@ export function Kabuk({
                 {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
               </div>
             ))}
+            {yeniEkranlar.length > 0 && (
+              <div className="tc-kabuk-grup">
+                <p className="tc-kabuk-grup-ad">{YENI_EKRAN_GRUBU}</p>
+                {yeniEkranlar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
+              </div>
+            )}
           </div>
         )}
       </div>
