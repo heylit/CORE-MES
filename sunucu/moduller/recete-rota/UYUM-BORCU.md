@@ -63,8 +63,7 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.
 
 ## Bağlamada kapanacak: planlama değerlendirmesi (Soru 357 a)
-- Sunucunun `planCoz` ve teklif denemesi sayfanın motor kancaları olmadan koşar (DOĞRULANDI: `plan-motoru.ts` yalnız `engine`, `kisitlar`, `girdi`,
-  `durum` yükler); sonuçları sayfadan ve değerlendirme ucundan ayrılabilir. `kancalar.betik`i onlara da yüklemek davranış değiştirir, onay ister.
+- KAPANDI (458 a, kart #591): sunucunun `planCoz`, `motorYukle` ve teklif denemesi de sayfanın motor kancalarıyla (`kancalar.betik`) koşar.
 - Çalışma kaydı (`:planlama`) sipariş geliri ve fiyatı taşır; `planlama-oku` taşıyan bu alanları çalışma ucundan okur. Değerlendirme ucunun
   döndürdüğü opak plan ve sipariş kayıtları da çalışmaya geri yazıldığı için tutardan arındırılmaz.
 - Termin uzatma, bölme ve fiyat önerisinin uygulanması kaynak sahibinin alanını değiştirir (222 a ile çelişki); uygulama komutu bağlamada sahibinde.
