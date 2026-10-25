@@ -46,6 +46,30 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yayin?.yayinImza).toBeTruthy();
   }, 40000);
 
+  it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma TMI\'ye gitmez', async () => {
+    const istekler = sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/yeni/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Operatör gözüyle/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Operatör gözüyle önizleme' }, { timeout: 10000 });
+    expect(within(pencere).getByText(/IST-1 ekranı · kayıt yapılmaz/)).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/hazirlik');
+    const once = yazmalar(istekler).length;
+    await new Promise((r) => { setTimeout(r, 300); });
+    expect(yazmalar(istekler).length).toBe(once);
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kapat/ }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Operatör gözüyle önizleme' })).toBeNull(); });
+  }, 40000);
+
+  it('sayfa başlığında kısayollar ve saat eski yerinde (Çizim, Operatör ekranı)', async () => {
+    sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/yeni/hazirlik');
+    await ekran();
+    expect(screen.getByRole('button', { name: /Çizim stüdyosu/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Operatör ekranı' }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/operator'); });
+  }, 40000);
+
   it('alan değişikliği yarım saniye sonra pakete yazılır; hazır uyarı kural olarak eklenir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/yeni/hazirlik');

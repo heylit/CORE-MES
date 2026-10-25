@@ -5,6 +5,23 @@
 .tc-rry-icerik { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-rry-bolum { min-width: 0; }
 .tc-rry-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+/* Plan şeridi (eski ekranın plan-serit'i): canlıda düz panel, bekleyen ve değişen planda uyarı tonu ve alt çizgi. */
+.tc-rry-plan {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; padding: var(--b-2) var(--b-3);
+  border-bottom: var(--cizgi-ince) solid var(--edge); background: var(--panel2); font-size: var(--yazi-s);
+}
+.tc-rry-plan small { color: var(--muted); }
+.tc-rry-plan-bosluk { flex: 1; }
+.tc-rry-plan-rozet {
+  display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--cizgi) var(--b-2); border: var(--cizgi-ince) solid currentColor; border-radius: var(--yari-1);
+  font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-02);
+}
+.tc-rry-plan[data-tur="canli"] .tc-rry-plan-rozet { color: var(--run); }
+.tc-rry-plan[data-tur="bekliyor"], .tc-rry-plan[data-tur="degisti"] {
+  border-bottom: var(--cizgi) solid var(--hold); background: color-mix(in srgb, var(--hold) 14%, var(--panel));
+}
+.tc-rry-plan[data-tur="bekliyor"] .tc-rry-plan-rozet, .tc-rry-plan[data-tur="degisti"] .tc-rry-plan-rozet { color: var(--hold); }
+.tc-rry-plan-uyari { color: var(--hold); }
 
 @media (max-width: 479px) {
   .tc-rry { padding: var(--b-3); }

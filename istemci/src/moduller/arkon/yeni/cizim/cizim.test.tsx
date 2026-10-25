@@ -36,6 +36,16 @@ describe('A5 Çizim', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 30000);
 
+  it('sayfa başlığında Hazırlık ve operatör kısayolu, saatin altında okuma türü (eski LabTop)', async () => {
+    sunucuKur(YONETICI, {});
+    arkonAc('/arkon/yeni/cizim');
+    await dosyalar();
+    expect(screen.getByText('PDF · 3B okuma')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Operatör ekranı' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Üretim Terminali Hazırlık' }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/hazirlik'); });
+  }, 30000);
+
   it('planlamacı stüdyoyu kullanır ama kayıtlı çizimi silemez', async () => {
     const istekler = sunucuKur(PLANLAMA, { belgeler: { draws: [CIZIM] } });
     arkonAc('/arkon/yeni/cizim');

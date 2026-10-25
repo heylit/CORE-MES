@@ -12,10 +12,33 @@ type Silinecek = { tur: 'aile'; anahtar: string; ad: string } | { tur: 'sinif'; 
 const sinifSayisi = (f: Aile) => Object.keys(f.classes).length;
 const kaliteSayisi = (f: Aile) => Object.values(f.classes).reduce((a, c) => a + c.grades.length, 0);
 
+// 465/2 b: prototipteki serbest renk seçici yerine tasarım değişkenleri. Kayda prototipteki gibi renk kodu yazılır (etiketin
+// renk şeridi basılı çıktıda kodla çizilir); seçim anındaki temanın değeridir.
+const AILE_RENKLERI = [
+  { ad: 'Mavi', degisken: 'done' }, { ad: 'Yeşil', degisken: 'run' }, { ad: 'Sarı', degisken: 'hazard-ink' }, { ad: 'Pembe', degisken: 'grafik-2' },
+  { ad: 'Gri', degisken: 'idle' }, { ad: 'Lacivert', degisken: 'grafik' }, { ad: 'Turuncu', degisken: 'hold' }, { ad: 'Kırmızı', degisken: 'stop' },
+] as const;
+const degiskenRengi = (degisken: string) => getComputedStyle(document.documentElement).getPropertyValue(`--${degisken}`).trim();
+
+function RenkSecici({ secili, sec }: { secili: string; sec: (degisken: string) => void }) {
+  return (
+    <div className="tc-ma-renkler" role="radiogroup" aria-label="Renk">
+      <span className="tc-ma-renkler-ad">Renk</span>
+      {AILE_RENKLERI.map((r) => (
+        <button
+          key={r.degisken} type="button" role="radio" aria-checked={secili === r.degisken} aria-label={r.ad} title={r.ad}
+          className="tc-ma-renk" data-renk={r.degisken} onClick={() => sec(r.degisken)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function YeniAile({ d }: { d: Duzen }) {
-  const [g, gYaz] = useState({ ad: '', kod: '', kaynak: 'diger', renk: '', forms: [] as string[] });
+  const [g, gYaz] = useState({ ad: '', kod: '', kaynak: 'diger', forms: [] as string[] });
+  const [renk, renkYaz] = useState<string>(AILE_RENKLERI[3].degisken);
   const ekle = () => {
-    const s = aileEkle(d.v, d.t, g);
+    const s = aileEkle(d.v, d.t, { ...g, renk: degiskenRengi(renk) });
     if (d.uygula(s) && s.tamam && s.anahtar) d.sec({ yeni: 'sinif', aile: s.anahtar, sinif: '' });
   };
   return (
@@ -28,6 +51,7 @@ function YeniAile({ d }: { d: Duzen }) {
           secenekler={Object.entries(d.taban.FAMS).map(([k, x]) => ({ deger: k, baslik: x.ad }))}
         />
       </div>
+      <RenkSecici secili={renk} sec={renkYaz} />
       <CokluSecim
         etiket="Formlar (seçmezsen kaynak ailenin formları)" secili={g.forms} degistir={(forms) => gYaz({ ...g, forms })}
         secenekler={Object.entries(FORMS).map(([k, x]) => ({ deger: k, baslik: x.ad }))}

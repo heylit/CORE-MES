@@ -1,5 +1,11 @@
 /* Yeni Kalite Merkezi ekranı: yalnız tasarım değişkenleri. Belge (pv) biçimi kâğıt düzenidir (203 a). */
 .tc-km { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); min-width: 0; }
+/* Kök çerçevelidir: kabuğun içerik alanı dolgusuzdur; eski sayfanın kenar boşluğunu ekran kendi verir (öbür yeni ekranlarla aynı ölçü).
+   Eski çerçevenin sarmalayıcısı da tc-km adını taşır; dolgu yalnız üst şeridi olan yeni ekrana verilir. */
+.tc-km:has(> .tc-km-ust) { padding: var(--b-5); }
+@media (max-width: 479px) {
+  .tc-km:has(> .tc-km-ust) { padding: var(--b-3); }
+}
 .tc-km-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); justify-content: space-between; }
 .tc-km-ust > .tc-sekmeler { flex: 1 1 auto; min-width: 0; }
 .tc-km-ust-eylem { display: flex; gap: var(--b-2); align-items: center; }

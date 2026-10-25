@@ -12,6 +12,11 @@ test.describe('R0 iskelet', () => {
     await ac('/recete-rota/yeni');
     const ekran = page.locator('.tc-rry');
     await expect(ekran.getByRole('heading', { name: 'Üretim emirleri', level: 2 })).toBeVisible();
+    // Eski ekranın plan şeridi her sekmenin üstündedir; "Onaya gönder" plan yazdığından görünür ama pasiftir (357 b).
+    const serit = ekran.getByRole('status', { name: 'Plan durumu' });
+    await expect(serit).toBeVisible();
+    const onaya = serit.getByRole('button', { name: 'Onaya gönder' });
+    if (await onaya.count()) await expect(onaya).toBeDisabled();
     const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
     await expect(sekmeler.getByRole('tab')).toHaveCount(BOLUMLER.length);
     for (const b of BOLUMLER) {

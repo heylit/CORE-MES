@@ -10,6 +10,9 @@ import { yeniKimlik } from './useRotaDuzeni.ts';
 
 export const YAKINLIK = [30, 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200] as const;
 type Yakinlik = (typeof YAKINLIK)[number];
+// Genişliğe sığdırmada rotanın kenar ve üst payı (ekran pikseli, eski sayfanın değerleri).
+const KENAR = 20;
+const UST_PAY = 16;
 // Vardiya düzeni okunamadığı için gün, günlük 8 saatle hesaplanır (bugünkü ekranın varsayılanı).
 
 const uc = (nid: string, adimId: string) => `${nid}|${adimId}`;
@@ -351,7 +354,8 @@ export function AkisSemasi({ r, kok, tamEkran, tamEkranDegistir, cop }: {
     setZ(yeni);
   }, [z, kok.id]);
 
-  // Sığdır: kök rota görünür alana ortalanır (genişlik kipinde üstten başlar).
+  // Sığdır: tüm kipte kök rota görünür alana ortalanır. Genişlik kipi eski sayfanın açılışıdır: yakınlık genişliğe göre seçilir
+  // ama okunurluk için %80'in altına inmez (dar ekranda daha da küçülür); rota sığarsa yatay ortalanır, sığmazsa soldan başlar; üstten başlar.
   const sigdir = useCallback((yalnizGenislik: boolean) => {
     const v = vp.current; const i = ic.current;
     const hedef = i?.querySelector('.tc-rr1-rcol-kok');
@@ -362,19 +366,22 @@ export function AkisSemasi({ r, kok, tamEkran, tamEkranDegistir, cop }: {
     if (w === 0) return;
     const vr = v.getBoundingClientRect();
     const en = Math.max(100, vr.width); const boy = Math.max(100, vr.height);
-    const oran = Math.min(en / w, yalnizGenislik ? Infinity : boy / hh, 1) * 95;
+    const oran = yalnizGenislik
+      ? Math.max(Math.min(80, (en / 700) * 100), Math.min(100, ((en - KENAR * 2) / w) * 100))
+      : Math.min(en / w, boy / hh, 1) * 95;
     const yeni = [...YAKINLIK].reverse().find((t) => t <= oran) ?? 30;
-    const nokta = { x: en / 2, y: yalnizGenislik ? 16 : boy / 2 };
-    const merkez = { cx: x + w / 2, cy: yalnizGenislik ? y : y + hh / 2 };
+    const sigar = w * (yeni / 100) <= en - KENAR * 2;
+    const nokta = { x: yalnizGenislik && !sigar ? KENAR : en / 2, y: yalnizGenislik ? UST_PAY : boy / 2 };
+    const merkez = { cx: yalnizGenislik && !sigar ? x : x + w / 2, cy: yalnizGenislik ? y : y + hh / 2 };
     if (yeni === z) { v.scrollLeft = merkez.cx * olcek - nokta.x; v.scrollTop = merkez.cy * olcek - nokta.y; return; }
     capa.current = { ...nokta, ...merkez };
     setZ(yeni);
   }, [z]);
 
-  // Açılışta ve kök değişince bütün sığdırılır; kullanıcı yakınlaştırınca ya da gezinince görünüm korunur.
+  // Açılışta ve kök değişince eski sayfadaki gibi genişliğe sığdırılır; kullanıcı yakınlaştırınca ya da gezinince görünüm korunur.
   useEffect(() => {
     if (cizim.en === 0 || dokundu.current === kok.id) return;
-    sigdir(false);
+    sigdir(true);
   }, [kok.id, cizim.en, cizim.boy, sigdir]);
   const elle = () => { dokundu.current = kok.id; };
 

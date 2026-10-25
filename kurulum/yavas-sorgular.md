@@ -16,7 +16,7 @@ Eklenti açık değilse uygulama aynı şekilde çalışır. Bu durumda araç ya
 
 PostgreSQL'i yeniden başlatmak ve ilk SQL adımı yönetici hakkı ister. Bu adımları PostgreSQL'i kuran kişi ya da bilgi işlem yapar.
 
-1. TMI sunucusunu kapatın: komut penceresinde Ctrl C.
+1. TMI sunucusunu kapatın: komut penceresinde Ctrl+C.
 2. PostgreSQL ayar dosyasını Not Defteri'yle açın:
    - Dosya: `C:\Program Files\PostgreSQL\<sürüm>\data\postgresql.conf`. `<sürüm>` kurulu sürümün numarasıdır, örneğin 16.
    - Dosyanın sonuna şu üç satırı ekleyin:

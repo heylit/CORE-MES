@@ -5,6 +5,7 @@ import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/sr
 import { AcKapa, Dugme, Girdi, Rozet, Secim, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../cekirdek/bicim.ts';
 import { yerel } from '../cekirdek/yerel.ts';
+import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { useArkon, useBelgeler, useCakismaUyarisi } from '../veri/baglam.ts';
 import { cihazAyari, cihazAyariYaz } from './bellek.ts';
 import {
@@ -29,6 +30,12 @@ const KATMAN_VARSAYILANI: Katman = { dim: true, table: true, border: true, notes
 const KIPLER: readonly [Kip, string][] = [['files', 'Dosya'], ['view', 'Önizleme'], ['set', 'Ayarlar']];
 const SEKMELER: readonly [Sekme, string][] = [['pdf', 'PDF'], ['3d', '3B model'], ['diag', 'Tanı']];
 const BALON_BOYU: readonly [number, string][] = [[0.8, 'S'], [1, 'M'], [1.25, 'L'], [1.5, 'XL']];
+// Eski LabTop'un sağ ucu: Hazırlık ve operatör ekranına kısayol, saatin altında okuma türü.
+const CIZIM_KISAYOLLARI = [
+  { sayfa: 'hazirlik', simge: 'layers', metin: 'Üretim Terminali Hazırlık' },
+  { sayfa: 'operator', simge: 'gauge', metin: 'Operatör ekranı', yalnizSimge: true },
+] as const;
+
 const AYIKLAMA = [
   ['table', 'Antet ve tablolar', 'Malzeme, revizyon, parça listesi'], ['border', 'Pafta kenarı', 'Kenardaki A–F / 1–8 kare harfleri'],
   ['notes', 'Notlar', '"NOTLAR" başlığı altındaki satırlar'], ['prose', 'Açıklama cümleleri', 'Uzun yazılar'],
@@ -277,6 +284,7 @@ export function CizimStudyosu() {
 
   return (
     <div className="tc-ay5">
+      <ArkonBandi simge="lab" baslik="Çizim stüdyosu" renk="lab" kisayollar={CIZIM_KISAYOLLARI} alt="PDF · 3B okuma" />
       <div className="tc-ay5-kipler"><Dilimler etiket="Görünüm" v={lv} sec={setLv} secenekler={KIPLER} /></div>
       <div className="tc-ay5-govde">
         <aside className={'tc-ay5-panel' + gizli('files')} aria-label="Dosyalar">

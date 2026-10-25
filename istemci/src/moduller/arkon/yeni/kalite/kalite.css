@@ -1,10 +1,15 @@
 /* A4: Kalite, Bakım ve Raporlar (tc-ay4-). Ortak sayfa parçaları A3'ün tc-ay3- sınıflarındadır; renk yalnız tasarım değişkeninden. */
 
-/* Kalite: numune sırası, teknik resim, ölçüm (üç sütun; dar ekranda tek bölüm, üstte seçim) */
-.tc-ay4-kalite { display: grid; grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)) minmax(0, var(--sutun-dar)); gap: var(--b-4); align-items: start; }
+/* Kalite: numune sırası, teknik resim, ölçüm (eski .qmain: dar sıra, geniş resim, ölçüm sütunu; ekran boyu kadar uzun; dar ekranda
+   tek bölüm, üstte seçim). Yükseklik ölçekli görünür alandan (--tc-ay-vh) sekme, şerit ve başlık payı düşülerek gelir. */
+.tc-ay4-kalite {
+  display: grid; grid-template-columns: minmax(0, var(--kuyruk-genis)) minmax(0, 1fr) minmax(0, var(--cekmece-genis)); gap: var(--b-4);
+  align-items: stretch; min-block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) * 4);
+}
+.tc-ay4-resim > .tc-ay3-kutu:only-child { place-content: center; justify-items: center; text-align: center; }
 .tc-ay4-mobil { display: none; }
-.tc-ay4-sira, .tc-ay4-form { min-width: 0; }
-.tc-ay4-resim { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ay4-sira, .tc-ay4-form { min-width: 0; align-content: start; }
+.tc-ay4-resim { display: grid; grid-auto-rows: minmax(0, 1fr); gap: var(--b-3); min-width: 0; }
 .tc-ay4-numune { justify-items: start; text-align: left; font: inherit; cursor: pointer; }
 .tc-ay4-numune[aria-pressed="true"] { border-color: var(--hazard-ink); box-shadow: var(--shadow); }
 .tc-ay4-olcum { --c: var(--edge); display: grid; gap: var(--b-2); padding: var(--b-2) 0; border-top: var(--cizgi-ince) solid var(--edge); cursor: pointer; }
@@ -74,7 +79,7 @@
 .tc-ay4-gunluk-gun { font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
 @media (max-width: 1023px) {
-  .tc-ay4-kalite { grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)); }
+  .tc-ay4-kalite { grid-template-columns: minmax(0, var(--sutun-dar)) minmax(0, var(--sutun-genis)); min-block-size: 0; }
   .tc-ay4-resim { grid-column: 1 / -1; grid-row: 2; }
 }
 
