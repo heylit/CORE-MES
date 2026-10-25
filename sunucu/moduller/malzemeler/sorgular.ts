@@ -215,8 +215,11 @@ const OZET_SECIMI = `k.no AS id, k.kimlik, k.stok_kodu AS kod, k.tur, ${KATALOG_
        ${KATALOG_KATEGORI} AS kategori, kt.ad AS "kategoriAdi", k.hizmet_yonu AS "hizmetYonu"
   FROM malzeme_katalog_karti k
   LEFT JOIN malzeme_kategorisi kt ON kt.tur = k.tur AND kt.kod = ${KATALOG_KATEGORI}`;
+// Eski / ERP kodu ve tedarikçi kodu da aranır: katalog ekranının kendi araması bu alanlara bakar, üst arama ve seçiciler aynı kartı bulmalı.
+const COM_METNI = (alan: string): string => `CASE WHEN jsonb_typeof(k.kayit -> 'com' -> '${alan}') = 'string' THEN k.kayit -> 'com' ->> '${alan}' END`;
 const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
-        AND ($1::text IS NULL OR k.stok_kodu ILIKE $1 OR ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} ILIKE $1 OR k.no = $2::int)
+        AND ($1::text IS NULL OR k.stok_kodu ILIKE $1 OR ${KATALOG_AD.replaceAll('kayit', 'k.kayit')} ILIKE $1 OR k.no = $2::int
+             OR ${COM_METNI('eskiKod')} ILIKE $1 OR ${COM_METNI('tkod')} ILIKE $1)
         AND (cardinality($3::text[]) = 0 OR k.tur = ANY($3::text[]))
         AND (NOT $4::boolean OR k.onay_durumu = 'aktif')
         AND ($5::text IS NULL OR k.hizmet_yonu = $5)`;
