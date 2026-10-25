@@ -16,6 +16,24 @@ export async function receteRotaDurumu(db: Db): Promise<Kayit | null> {
   return kayitGetir(db, DURUM_ANAHTARI);
 }
 
+// 525 2 b: haftalık ek mesai bütçesinin tek kaynağı planlama çalışmasıdır (Kısıtlar sayfası, param.mesaiHafta). Girilmemişse motorun
+// varsayılanı (motor/engine.betik W0.mesaiHafta, 8 saat); 0 sınırsızdır (525 3 a). Hafta, motordaki gibi çalışmanın başlangıç gününden
+// 7 günlük dilimdir. Çalışma yoksa ya da başlangıcı okunamazsa null: plan kendi varsayılanını kullanır.
+const MOTOR_MESAI_HAFTA = 8;
+export async function ekMesaiButcesi(db: Db): Promise<{ saat: number; haftaBasi: string } | null> {
+  const k = await kayitGetir(db, PLANLAMA_ANAHTARI);
+  if (k === null) return null;
+  let c: unknown = k.deger;
+  if (k.bicim === 'metin' && typeof c === 'string') { try { c = JSON.parse(c) as unknown; } catch { return null; } }
+  const x = c as { param?: { mesaiHafta?: unknown }; D?: { meta?: { baslangic?: unknown } } } | null;
+  const haftaBasi = x?.D?.meta?.baslangic;
+  if (typeof haftaBasi !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(haftaBasi)) return null;
+  const b = x?.param?.mesaiHafta;
+  // Motorla aynı okuma (girdi.betik stKur): yoksa varsayılan, sayı değilse 0.
+  const saat = b === undefined || b === null ? MOTOR_MESAI_HAFTA : Number(b);
+  return { saat: Number.isFinite(saat) && saat > 0 ? saat : 0, haftaBasi };
+}
+
 // Rotanın statülü adımlarından açılan statü tanımları (ad, renk, tür, malzeme no); statülü stok bunlara bağlanır (kart #1108).
 export async function receteRotaStatuleri(db: Db): Promise<Statu[]> {
   return statuListesi(db);

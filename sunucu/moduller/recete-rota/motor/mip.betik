@@ -147,7 +147,7 @@ function cerceveModel(st,cx,plan,opt={}){
   const nv={};
   for(const g of grp)for(let k=0;k<NB;k++){const key=g+'|'+k;const T=capT[key];if(!T)continue;
     const terms=T.map(v=>[v,1]);
-    if(ot[key]&&butH>0){const v='n'+(n++);nv[key]=v;gen.push(v);bnd.push(` 0 <= ${v} <= ${ot[key]}`);terms.push([v,-vh*Math.min(1,opG[g]>0?1/opG[g]:1)]);obj.push([v,(opt.mesaiAgirlik||.05)*vh]);cols[v]={g,k,n:1};}
+    if(ot[key]){const v='n'+(n++);nv[key]=v;gen.push(v);bnd.push(` 0 <= ${v} <= ${ot[key]}`);terms.push([v,-vh*Math.min(1,opG[g]>0?1/opG[g]:1)]);obj.push([v,(opt.mesaiAgirlik||.05)*vh]);cols[v]={g,k,n:1};}
     R.push('c'+R.length+': '+lin(terms)+' <= '+cap[key].toFixed(4));}
   for(let k=0;k<NB;k++){const terms=[];let rhs=tot[k];
     for(const g of grp){const T=capT[g+'|'+k];if(!T||!(opG[g]>0))continue;for(const v of T)terms.push([v,opG[g]]);rhs+=opG[g]*att[g+'|'+k];if(nv[g+'|'+k])terms.push([nv[g+'|'+k],-vh]);}
@@ -157,7 +157,8 @@ function cerceveModel(st,cx,plan,opt={}){
     for(let i=0;i<L0.length;i++){const h=L0[i].h;if(h<=Math.max(bk(k)[0],st.now)+1e-6)continue;const terms=L0.slice(i).map(x=>[Y[x.id][k],1]).filter(x=>x[0]);
       if(!terms.length)continue;const c=capOf(g,h,end).c;if(nv[key])terms.push([nv[key],-vh*Math.max(0,end-h)/L]);R.push('r'+R.length+': '+lin(terms)+' <= '+c.toFixed(4));}}
   const byW={};for(const key in nv){const k=+key.split('|')[1];(byW[wkOf(k)]=byW[wkOf(k)]||[]).push(nv[key]);}
-  for(const w in byW)R.push('b'+R.length+': '+lin(byW[w].map(v=>[v,vh]))+' <= '+Math.max(0,butH-(used[w]||0)).toFixed(4));
+  // 525 3 a: bütçe 0 sınırsızdır, haftalık satır yazılmaz
+  if(butH>0)for(const w in byW)R.push('b'+R.length+': '+lin(byW[w].map(v=>[v,vh]))+' <= '+Math.max(0,butH-(used[w]||0)).toFixed(4));
   const lp='Minimize\n obj: '+lin(obj)+'\nSubject To\n '+R.join('\n ')+'\nBounds\n'+bnd.join('\n')+'\n'+(gen.length?'General\n '+gen.join(' ')+'\n':'')+'End\n';
   return {lp,cols,nv,grp,NB,b0,L,O,bOf,cap,ot,vh,ad,nOps:Object.keys(Y).length,nVar:n,nRow:R.length};
 }

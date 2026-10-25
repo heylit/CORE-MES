@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { LogoFisBilgisi, MalzemeFisiOzeti, MalzemeFisiTuru, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ListeFisiTuru, LogoFisBilgisi, MalzemeFisiListeSatiri, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { LOGO_FIS_ETIKETI, LOGO_FIS_SUZGECLERI, LOGO_FIS_TONU, MALZEME_FISI_ETIKETI, MALZEME_FISI_SIMGESI, MALZEME_FISI_TURLERI, zamanMetni } from './gorunum.ts';
+import { LISTE_FISI_ETIKETI, LISTE_FISI_SIMGESI, LISTE_FISI_TURLERI, LOGO_FIS_ETIKETI, LOGO_FIS_SUZGECLERI, LOGO_FIS_TONU, zamanMetni } from './gorunum.ts';
 import { SayfaBasi, hataMetni } from './ortak.tsx';
 import './stok.css';
 
@@ -21,22 +21,26 @@ function gunBasligi(iso: string): string {
   return GUN.format(g);
 }
 
-export function FisTuruRozeti({ tur }: { tur: MalzemeFisiTuru }) {
-  return <Rozet ton="bilgi"><Simge ad={MALZEME_FISI_SIMGESI[tur]} boyut="k" /> {MALZEME_FISI_ETIKETI[tur]}</Rozet>;
+export function FisTuruRozeti({ tur }: { tur: ListeFisiTuru }) {
+  return <Rozet ton="bilgi"><Simge ad={LISTE_FISI_SIMGESI[tur]} boyut="k" /> {LISTE_FISI_ETIKETI[tur]}</Rozet>;
 }
 // Ekranda durum metni hep yazılır; neden ipucundadır (bekleme nedeni, hata metni ya da Logo kayıt no).
 export function LogoDurumRozeti({ logo }: { logo: LogoFisBilgisi }) {
   const ipucu = logo.durum === 'gonderildi' && logo.kayitNo !== null ? `Logo kayıt ${logo.kayitNo}` : (logo.neden ?? undefined);
   return <span title={ipucu}><Rozet ton={LOGO_FIS_TONU[logo.durum]}>{LOGO_FIS_ETIKETI[logo.durum]}</Rozet></span>;
 }
-export const kaynakMetni = (f: MalzemeFisiOzeti) => (f.uretimEmriId !== null
+type KaynakliFis = Pick<MalzemeFisiListeSatiri, 'tur' | 'uretimEmriId' | 'emirNo'> & { irsaliyeNo?: string | null };
+export const kaynakMetni = (f: KaynakliFis) => (f.uretimEmriId !== null
   ? <Link to={`/uretim-emirleri/${f.uretimEmriId}`}>Emir {f.emirNo ?? `#${f.uretimEmriId}`}</Link>
+  : f.tur === 'mal_kabul' ? (f.irsaliyeNo ? `İrsaliye ${f.irsaliyeNo}` : 'Mal kabul')
   : f.tur === 'ambar' ? 'Depolar arası taşıma' : 'Sayım');
+// Mal kabul belgesinin ayrıntısı Mal kabul ekranındadır; fiş ayrıntısı değil.
+const ayrintiYolu = (f: MalzemeFisiListeSatiri) => (f.tur === 'mal_kabul' ? `/stok/mal-kabul/${f.id}` : `/stok/malzeme-fisleri/${f.id}`);
 
-function csvIndir(satirlar: MalzemeFisiOzeti[]) {
+function csvIndir(satirlar: MalzemeFisiListeSatiri[]) {
   const alan = (v: string | number | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const basliklar = ['Açılış', 'Fiş no', 'Tür', 'Emir', 'Satır', 'Logo durumu', 'Logo kayıt', 'Son deneme', 'Neden'];
-  const govde = satirlar.map((f) => [f.acilis, f.no, MALZEME_FISI_ETIKETI[f.tur], f.emirNo, f.satirSayisi, LOGO_FIS_ETIKETI[f.logo.durum], f.logo.kayitNo, f.logo.sonDeneme, f.logo.neden].map(alan).join(';'));
+  const govde = satirlar.map((f) => [f.acilis, f.no, LISTE_FISI_ETIKETI[f.tur], f.emirNo, f.satirSayisi, LOGO_FIS_ETIKETI[f.logo.durum], f.logo.kayitNo, f.logo.sonDeneme, f.logo.neden].map(alan).join(';'));
   const blob = new Blob(['﻿' + [basliklar.map(alan).join(';'), ...govde].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `malzeme-fisleri-${tesisGunu(Date.now())}.csv`; a.click();
@@ -45,17 +49,17 @@ function csvIndir(satirlar: MalzemeFisiOzeti[]) {
 
 export function MalzemeFisleri() {
   const liste = useListeDurumu({
-    suzgecler: { tur: '' as '' | MalzemeFisiTuru, logoDurumu: '' as '' | (typeof LOGO_FIS_SUZGECLERI)[number], metin: '', uretimEmriId: '' as number | '' },
-    suzgecDegerleri: { tur: MALZEME_FISI_TURLERI, logoDurumu: LOGO_FIS_SUZGECLERI }, suzgecTurleri: { uretimEmriId: 'sayi' }, siralamaAlanlari: ['acilis'], adres: true,
+    suzgecler: { tur: '' as '' | ListeFisiTuru, logoDurumu: '' as '' | (typeof LOGO_FIS_SUZGECLERI)[number], metin: '', uretimEmriId: '' as number | '' },
+    suzgecDegerleri: { tur: LISTE_FISI_TURLERI, logoDurumu: LOGO_FIS_SUZGECLERI }, suzgecTurleri: { uretimEmriId: 'sayi' }, siralamaAlanlari: ['acilis'], adres: true,
   });
   const [arama, setArama] = useState(liste.suzgecler.metin);
   useEffect(() => { const t = setTimeout(() => { if (arama !== liste.suzgecler.metin) liste.suzgecDegistir({ metin: arama }); }, 300); return () => clearTimeout(t); }, [arama]);
   const l = useQuery({ queryKey: anahtarlar.liste('malzeme-fisleri', liste.sorgu), queryFn: () => api.get<MalzemeFisleriCevabi>(`/stok/malzeme-fisleri${sorguMetni(liste.sorgu)}`) });
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
-  const sekmeler = [{ anahtar: '' as const, baslik: 'Tümü' }, ...MALZEME_FISI_TURLERI.map((t) => ({ anahtar: t, baslik: MALZEME_FISI_ETIKETI[t] }))];
-  const sutunlar: Sutun<MalzemeFisiOzeti>[] = [
+  const sekmeler = [{ anahtar: '' as const, baslik: 'Tümü' }, ...LISTE_FISI_TURLERI.map((t) => ({ anahtar: t, baslik: LISTE_FISI_ETIKETI[t] }))];
+  const sutunlar: Sutun<MalzemeFisiListeSatiri>[] = [
     { anahtar: 'saat', baslik: 'Saat', kirilmaz: true, hucre: (f) => SAAT.format(new Date(f.acilis)) },
-    { anahtar: 'no', baslik: 'Fiş no', mono: true, hucre: (f) => <Link to={`/stok/malzeme-fisleri/${f.id}`}>{f.no}</Link> },
+    { anahtar: 'no', baslik: 'Fiş no', mono: true, hucre: (f) => <Link to={ayrintiYolu(f)}>{f.no}</Link> },
     { anahtar: 'tur', baslik: 'Tür', hucre: (f) => <FisTuruRozeti tur={f.tur} /> },
     { anahtar: 'kaynak', baslik: 'Kaynak', hucre: kaynakMetni },
     { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (f) => f.satirSayisi },
@@ -63,17 +67,17 @@ export function MalzemeFisleri() {
     { anahtar: 'logo', baslik: 'Logo', hucre: (f) => <LogoDurumRozeti logo={f.logo} /> },
     { anahtar: 'deneme', baslik: 'Son deneme', hucre: (f) => zamanMetni(f.logo.sonDeneme) },
   ];
-  const gruplar: { anahtar: string; baslik: string; satirlar: MalzemeFisiOzeti[] }[] = [];
+  const gruplar: { anahtar: string; baslik: string; satirlar: MalzemeFisiListeSatiri[] }[] = [];
   for (const f of l.data?.satirlar ?? []) {
     const k = gunAnahtari(f.acilis), son = gruplar[gruplar.length - 1];
     if (son && son.anahtar === k) son.satirlar.push(f); else gruplar.push({ anahtar: k, baslik: gunBasligi(f.acilis), satirlar: [f] });
   }
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Malzeme fişleri" alt="Üretim emri, sayım ve depolar arası taşıma fişleri. Fiş stok hareketinden oluşur; elle düzenlenmez."
+      <SayfaBasi baslik="Malzeme fişleri" alt="Üretim emri, sayım ve depolar arası taşıma fişleri ile mal kabul belgeleri. Fiş stok hareketinden oluşur; elle düzenlenmez."
         sag={<Dugme simge="download" disabled={!l.data?.satirlar.length} onClick={() => l.data && csvIndir(l.data.satirlar)}>CSV indir</Dugme>} />
       <div className="tc-stok-arac">
-        <Girdi etiket="Ara" placeholder="Fiş no (SF-, SE-, AF-)" value={arama} onChange={(e) => setArama(e.target.value)} />
+        <Girdi etiket="Ara" placeholder="Fiş no (SF-, SE-, AF-, MK-)" value={arama} onChange={(e) => setArama(e.target.value)} />
         <Secim etiket="Logo durumu" value={liste.suzgecler.logoDurumu} bosSecenek="Tümü"
           secenekler={LOGO_FIS_SUZGECLERI.map((d) => ({ deger: d, baslik: LOGO_FIS_ETIKETI[d] }))}
           onChange={(e) => liste.suzgecDegistir({ logoDurumu: e.target.value as '' | (typeof LOGO_FIS_SUZGECLERI)[number] })} />
@@ -84,7 +88,7 @@ export function MalzemeFisleri() {
       {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Bu süzgece uyan fiş yok." />}
       {gruplar.map((g) => (
         <Kart key={g.anahtar} baslik={g.baslik}>
-          <Tablo etiket="Malzeme fişleri" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => f.id} bosMesaj="Fiş yok." />
+          <Tablo etiket="Malzeme fişleri" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => `${f.tur === 'mal_kabul' ? 'mk' : 'fis'}-${f.id}`} bosMesaj="Fiş yok." />
         </Kart>
       ))}
       {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={liste.sayfaDegistir} satirSayisi={l.data.satirlar.length} />}

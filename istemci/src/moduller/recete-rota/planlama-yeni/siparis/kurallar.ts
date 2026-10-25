@@ -1,10 +1,11 @@
 import { kisaTl, maliyetBaglami, siparisMaliyeti, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
+import { DURUM_ADI, DURUM_TONU, tedarikciAdi, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
 // Kaynak bugünkü çerçevedir: zv-termin, zw-denge, zz25-sade-takvim, zz29-gorsel, zz30-isi, zr-agirlik ve motor/durum.betik, engine.betik
-// (zaman). Plan motorunu yeniden koşturan hesaplar (satın alma listesi, plan seçenekleri) burada yoktur (357 b). Sipariş maliyeti motor istemez;
-// Maliyetler (P3) hesabı kullanılır (486/1 a).
+// (zaman). Plan motorunu yeniden koşturan hesaplar (plan seçenekleri) burada yoktur (357 b). Satın alma listesi motor istemez; Malzeme satın
+// alma planının (P4) hesabı kullanılır (518 a). Sipariş maliyeti motor istemez; Maliyetler (P3) hesabı kullanılır (486/1 a).
 
 // ---- kayıtlı plan (c-masa.betik planKaydi) ----
 export interface PlanIsi { id: string; job: string; m: string; S: number; C: number; su?: number; run?: number; fas?: number; done?: number }
@@ -288,7 +289,49 @@ export function fasonTerminiYaz(t: PlanlamaCalismasi, id: string, tarih: string)
   }
 }
 
-export interface TerminKalemi { k: string; ad: string; alt: string; durum: string; ton: DurumTonu; bas: number; son: number; ger: number | null; tahmini: boolean; neden: string; bilgi: [string, string][]; x: FasonSatiri }
+// Terminler ısı haritasının kalemi (zz29-gorsel gvTmKalemler): malzeme (grup 'mal', satın alma satırı `m`) ya da fason (grup 'fas', `x`). Geliş
+// tarihi bilinmeyen malzemede `son` ve `bas` null'dır.
+interface KalemOrtak { k: string; ad: string; alt: string; durum: string; ton: DurumTonu; bas: number | null; son: number | null; ger: number | null; tahmini: boolean; neden: string; bilgi: [string, string][] }
+export type TerminKalemi = (KalemOrtak & { grup: 'fas'; x: FasonSatiri }) | (KalemOrtak & { grup: 'mal'; m: AlimPlaniSatiri });
+
+// Terminler ısı haritasının malzeme kalemleri (zz29-gorsel gvTmKalemler, malzeme kısmı). Satırlar Malzeme satın alma planının hesabındandır
+// (malzeme/kurallar.ts alimPlani, eski tmMalzeme). Sipariş verilmemiş satırın tahmini gelişi bugünden tedarik süresi x katsayıdır.
+export function malzemeKalemleri(D: PlanVerisi, L: readonly AlimPlaniSatiri[], now: number): TerminKalemi[] {
+  const A = terminAyari(D);
+  const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
+  const birim = (q: number, kod: string) => `${sayi(q, q < 10 ? 1 : 0)} ${mats.get(kod)?.birim ?? ''}`.trim();
+  return L.map((r) => {
+    const m = mats.get(r.kod);
+    const d = DURUM_ADI[r.durum]; const t = DURUM_TONU[r.durum]; const ton: DurumTonu = t === 'pasif' ? 'uyari' : t;
+    const termin = r.tm === 'termin';
+    const tg = m?.tedarikGun != null && Number.isFinite(+m.tedarikGun) ? +m.tedarikGun : null;
+    const tahminGelis = r.etkin ?? (tg !== null ? now + tg * katsayi(m, 'terminKat', A.katMal) * 24 : null);
+    const ted = r.tedarikci ? tedarikciAdi(D, r.tedarikci) : '';
+    let neden: string;
+    if (r.gerekli == null) neden = 'Bu alım plandaki bir işe gitmiyor; stoğa girer.';
+    else if (r.tm === 'siparis-yok' || r.tm === 'sure-yok') neden = `Plan bu malzemeyi ${gunYaz(D, r.gerekli)} günü istiyor ama sipariş verilmedi.${r.siparisGun != null ? ` Zamanında gelmesi için en geç ${gunYaz(D, r.siparisGun)} günü sipariş verilmeli.` : ''}${tahminGelis != null ? ` Bugün verilirse ${gunYaz(D, tahminGelis)} gelir.` : ''}`;
+    else if (r.tm === 'yok') neden = `Gerekmesine bir haftadan az kaldı ve tedarikçi tarih vermedi, sipariş yok sayıldı. Plan malzemeyi ${gunYaz(D, r.etkin)} varsayıyor; bağlı işler kayabilir.`;
+    else if (r.tm === 'tahmini') neden = `Tedarikçi tarih vermedi; plan tedarik süresinden ${gunYaz(D, r.etkin)} gelir varsayıyor. Plan ${gunYaz(D, r.gerekli)} günü istiyor.`;
+    else neden = alimNedeni(r);
+    return {
+      grup: 'mal', m: r, k: `m:${r.alimNo ?? `e-${r.isler.join(',')}`}:${r.kod}`, ad: r.kod, alt: `${m?.ad ?? ''} · ${birim(r.miktar, r.kod)}`, durum: d, ton,
+      bas: r.etkin != null || tahminGelis != null ? Math.max(now - 24, r.verildi ?? now) : null, son: tahminGelis, ger: r.gerekli, tahmini: !termin, neden,
+      bilgi: [['Gerekli', gunYaz(D, r.gerekli)], [termin ? 'Geliş (tedarikçi)' : 'Geliş (tahmini)', gunYaz(D, tahminGelis)], ['Sipariş gecikmeden en geç', gunYaz(D, r.enGec)],
+        ['Miktar', birim(r.miktar, r.kod)], ['Tedarikçi', ted || '—'], ['Bağlı siparişler', r.isler.join(', ') || '—']],
+    };
+  });
+}
+
+const gunSuresi = (h: number) => `${sayi(Math.abs(h) / 24, Math.abs(h) < 240 ? 1 : 0)} gün`;
+// Girilmiş terminli satırın açıklaması (zt-malzeme-plan mpDurum üçüncü değeri).
+function alimNedeni(r: AlimPlaniSatiri): string {
+  if (r.etkin == null) return 'Termin girin; plan buna göre denetlenir.';
+  if (r.gerekli == null) return 'Bu alım plandaki bir işe gitmiyor; stoğa girer.';
+  if (r.enGec != null && r.etkin > r.enGec + 1e-6) return `En geç gelişten ${gunSuresi(r.etkin - r.enGec)} sonra geliyor: bağlı sipariş termini kaçırır. Termini öne çekin ya da hızlandırın.`;
+  if (r.etkin > r.gerekli + 1e-6) return `Planın istediğinden ${gunSuresi(r.etkin - r.gerekli)} sonra geliyor. Plan işi malzeme gelmeden başlatıyor (malzeme yalnız uyarı); iş kayar, sipariş termini yine tutar.`;
+  if (r.etkin < r.gerekli - 10 * 24) return `Gerekenden ${gunSuresi(r.gerekli - r.etkin)} önce geliyor; ertelenebilir.`;
+  return `Gerekenden ${gunSuresi(r.gerekli - r.etkin)} önce geliyor.`;
+}
 
 // Terminler ısı haritasının fason kalemleri (zz29-gorsel gvTmKalemler, fason kısmı).
 export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[]): TerminKalemi[] {
@@ -298,7 +341,7 @@ export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[]): TerminKalemi[] 
       : d === 'Siparişi geciktirir' ? `Dönüş ${gunYaz(D, don)}; sipariş gecikmeden en geç ${gunYaz(D, x.enGec)} dönmeliydi. Fasoncuyla tarihi öne çekin.`
         : d === 'Plandan geç' ? `Dönüş ${gunYaz(D, don)}, sonraki adım ${gunYaz(D, x.ger)} başlıyor; iş kayar ama sipariş termini tutar.` : `Dönüş ${gunYaz(D, don)}, sonraki adım ${gunYaz(D, x.ger)} başlıyor.`;
     return {
-      k: `f:${x.id}`, ad: x.id, alt: `${x.f?.ad ?? x.r.m} · ${sayi(x.adet, 0)} adet`, durum: d, ton, bas: x.r.S, son: don, ger: x.ger, tahmini: x.T == null, neden,
+      grup: 'fas', k: `f:${x.id}`, ad: x.id, alt: `${x.f?.ad ?? x.r.m} · ${sayi(x.adet, 0)} adet`, durum: d, ton, bas: x.r.S, son: don, ger: x.ger, tahmini: x.T == null, neden,
       bilgi: [['Çıkış', gunYaz(D, x.r.S)], [x.T == null ? 'Dönüş (tahmini)' : 'Dönüş (fasoncu)', gunYaz(D, don)], ['Gerekli dönüş', gunYaz(D, x.ger)], ['Sipariş gecikmeden en geç', gunYaz(D, x.enGec)], ['Sipariş', x.r.job]],
       x,
     };
@@ -307,33 +350,29 @@ export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[]): TerminKalemi[] 
 
 const SIRA: Record<DurumTonu, number> = { hata: 0, uyari: 1, tamam: 2 };
 const TAHMIN = 'tarih girilmedi, olağan süreye göre';
-// kalem null: malzeme satırı; satın alma listesi plan motoruyla gelir, o zamana dek satır yerinde ve hücreleri kapalıdır (357 b).
-export interface TerminSatiri extends IsiSatiri { kalem: TerminKalemi | null; gun: number | null }
-export const MALZEME_SATIRI = 'malzeme';
+export interface TerminSatiri extends IsiSatiri { kalem: TerminKalemi; gun: number | null }
 export interface TerminIsisi { sutunlar: IsiSutunu[]; satirlar: TerminSatiri[]; ust: UstDurum }
 
-// Kalem × gün, neyi bekliyor (zz30-isi ISI.terminler.veri). Fason kalemleri plandan; malzeme kalemleri motorla gelir, yerinde kapalı satır.
+// Kalem × gün, neyi bekliyor (zz30-isi ISI.terminler.veri): malzeme ve fason kalemleri birlikte.
 export function terminIsisi(c: PlanlamaCalismasi, K: TerminKalemi[]): TerminIsisi {
   const D = c.D; const G = gunSutunlari(D, simdi(c), 21); const satirlar: TerminSatiri[] = [];
   for (const x of [...K].sort((a, b) => SIRA[a.ton] - SIRA[b.ton] || (a.ger ?? 1e12) - (b.ger ?? 1e12))) {
-    const h: Record<string, IsiHucresi> = {}; const tah = x.tahmini ? TAHMIN : undefined; const gec = x.ger != null && x.son > x.ger + 0.05;
-    const kd: Kademe = x.ton === 'hata' ? 4 : 2;
-    { const a = Math.max(gunNo(x.bas), G.g0), b = Math.min(gunNo(gec ? x.ger! : x.son) - (gec ? 0 : 1), G.g0 + G.n - 1); for (let g = a; g <= b; g++) hucreKoy(h, `g${g}`, { is: true, etiket: 'fasoncuda' }); }
-    if (gec) for (let g = Math.max(gunNo(x.ger!), G.g0); g <= Math.min(gunNo(x.son), G.g0 + G.n - 1); g++) hucreKoy(h, `g${g}`, { kd, tahmin: tah, etiket: 'bekleniyor' });
-    { const g = gunNo(x.son); const dis = !G.ic(g); const fark = gec ? Math.ceil((x.son - x.ger!) / 24) : 0;
-      hucreKoy(h, `g${G.kis(g)}`, { sm: 'truck', kd: gec ? kd : undefined, iyi: gec ? undefined : true, tahmin: tah, v: gec ? `+${fark}g` : dis ? '»' : '', etiket: `geliş ${gunYaz(D, x.son)}${gec ? `, gerekenden ${fark} gün geç` : ''}` }); }
+    const h: Record<string, IsiHucresi> = {}; const tah = x.tahmini ? TAHMIN : undefined; const gec = x.son != null && x.ger != null && x.son > x.ger + 0.05;
+    const kd: Kademe = x.ton === 'hata' ? 4 : 2; const mal = x.grup === 'mal'; const sm = mal ? 'box' : 'truck';
+    if (x.bas != null && x.son != null) { const a = Math.max(gunNo(x.bas), G.g0), b = Math.min(gunNo(gec ? x.ger! : x.son) - (gec ? 0 : 1), G.g0 + G.n - 1); for (let g = a; g <= b; g++) hucreKoy(h, `g${g}`, { is: true, etiket: mal ? 'yolda' : 'fasoncuda' }); }
+    if (gec) for (let g = Math.max(gunNo(x.ger!), G.g0); g <= Math.min(gunNo(x.son!), G.g0 + G.n - 1); g++) hucreKoy(h, `g${g}`, { kd, tahmin: tah, etiket: 'bekleniyor' });
+    if (x.son != null) {
+      const g = gunNo(x.son); const dis = !G.ic(g); const fark = gec ? Math.ceil((x.son - x.ger!) / 24) : 0;
+      hucreKoy(h, `g${G.kis(g)}`, { sm, kd: gec ? kd : undefined, iyi: gec ? undefined : true, tahmin: tah, v: gec ? `+${fark}g` : dis ? '»' : '', etiket: `geliş ${gunYaz(D, x.son)}${gec ? `, gerekenden ${fark} gün geç` : ''}` });
+    } else if (x.ger != null) hucreKoy(h, `g${G.kis(gunNo(x.ger))}`, { kd: 4, sm: 'alert', v: '!', etiket: 'geliş tarihi yok' });
     if (x.ger != null) hucreKoy(h, `g${G.kis(gunNo(x.ger))}`, { bayrak: true, etiket: `plan ${gunYaz(D, x.ger)} istiyor` });
-    satirlar.push({ k: x.k, ad: x.ad, alt: x.durum, simge: 'truck', ton: x.ton, gizli: x.ton === 'tamam', h, kalem: x, gun: gec ? (x.son - x.ger!) / 24 : 0 });
+    satirlar.push({ k: x.k, ad: x.ad, alt: x.durum, simge: sm, ton: x.ton, gizli: x.ton === 'tamam', h, kalem: x, gun: gec ? (x.son! - x.ger!) / 24 : x.son == null ? null : 0 });
   }
   // Eski sayım (486/3 a): yalnız hiç geliş tarihi olmayan kalem sayılır; tahmini dönüşü olan fason kalemi tarihli sayılır.
   const hata = satirlar.filter((r) => r.ton === 'hata'); const bek = satirlar.filter((r) => (r.gun ?? 0) > 0);
   const en = [...satirlar].filter((r) => r.ton !== 'tamam').sort((a, b) => Number(b.ton === 'hata') - Number(a.ton === 'hata') || (b.gun ?? 99) - (a.gun ?? 99))[0];
-  const metin = !en?.kalem ? `Bütün ${satirlar.length} fason kalemi gerektiği gün geliyor.`
-    : `En koyu satır ${en.ad}: plan ${gunYaz(D, en.kalem.ger)} istiyor, geliş ${gunYaz(D, en.kalem.son)} (${sayi(en.gun, 1)} gün bekleme). ${bek.length} kalem gerekenden geç geliyor, ${satirlar.filter((r) => r.kalem && !Number.isFinite(r.kalem.son)).length} kalemin geliş tarihi yok; ${hata.length} kalem işi kaydırıyor.`;
-  satirlar.push({
-    k: MALZEME_SATIRI, ad: 'Malzeme', alt: 'satın alma listesi', simge: 'box', ton: '', gizli: false, kalem: null, gun: null,
-    h: Object.fromEntries(G.l.map((c) => [c.k, { kapali: true, etiket: 'malzeme kalemleri plan motoruyla gelir' }])),
-  });
+  const metin = !en ? `Bütün ${satirlar.length} malzeme ve fason kalemi gerektiği gün geliyor.`
+    : `En koyu satır ${en.ad}: ${en.kalem.son == null ? `geliş tarihi yok, plan ${gunYaz(D, en.kalem.ger)} istiyor` : `plan ${gunYaz(D, en.kalem.ger)} istiyor, geliş ${gunYaz(D, en.kalem.son)} (${sayi(en.gun, 1)} gün bekleme)`}. ${bek.length} kalem gerekenden geç geliyor, ${satirlar.filter((r) => r.kalem.son == null).length} kalemin geliş tarihi yok; ${hata.length} kalem işi kaydırıyor.`;
   return { sutunlar: G.l, satirlar, ust: { ton: hata.length ? 'hata' : en ? 'uyari' : 'tamam', simge: hata.length ? 'alert' : en ? 'clock' : 'check', metin } };
 }
 

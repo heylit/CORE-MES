@@ -140,6 +140,35 @@ test.describe('M2 katalog', () => {
     await tasmaz(page);
   });
 
+  // Eski yoğunluk (kullanıcı, 25.10.2026): fareyle satır 64 px'i, süzgeç satırı 30 px'i geçmez; ad kalın, kod küçük ve soluk.
+  test('fareyle eski yoğunluk: satır <= 64 px, süzgeç satırı <= 30 px, ad kalın, kod soluk', async ({ page, ac }, bilgi) => {
+    test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
+    await ac('/malzemeler/yeni-ekran');
+    const satir = page.locator('.tc-mk-ana .tc-tablo tbody tr').first();
+    await expect(satir).toBeVisible();
+    const olcu = await page.evaluate(() => {
+      const tr = document.querySelector('.tc-mk-ana .tc-tablo tbody tr');
+      const isaret = document.querySelector('.tc-mk-yan .tc-isaret');
+      const ad = document.querySelector('.tc-mk-ad');
+      const kod = document.querySelector('.tc-mk-kod');
+      const rozet = document.querySelector('.tc-mk-malzeme .tc-rozet');
+      return {
+        satir: tr?.getBoundingClientRect().height ?? 0,
+        isaret: isaret?.getBoundingClientRect().height ?? 0,
+        adKalinlik: ad ? Number(getComputedStyle(ad).fontWeight) : 0,
+        kodBoyut: kod ? parseFloat(getComputedStyle(kod).fontSize) : 0,
+        rozetBuyukHarf: rozet ? getComputedStyle(rozet).textTransform : '',
+      };
+    });
+    expect(olcu.satir).toBeGreaterThan(0);
+    expect(olcu.satir).toBeLessThanOrEqual(64);
+    expect(olcu.isaret).toBeGreaterThan(0);
+    expect(olcu.isaret).toBeLessThanOrEqual(30);
+    expect(olcu.adKalinlik).toBeGreaterThanOrEqual(600);
+    expect(olcu.kodBoyut).toBeLessThanOrEqual(12);
+    expect(olcu.rozetBuyukHarf).toBe('none');
+  });
+
   test('kart penceresi satırdan açılır, adres ?kart= taşır, pencere taşmaz ve kapanır', async ({ page, ac }) => {
     await ac('/malzemeler/yeni-ekran');
     await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK Yuvarlak');

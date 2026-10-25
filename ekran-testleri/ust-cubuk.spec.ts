@@ -97,3 +97,30 @@ test('360 genişlikte uzun sayfada belge kaymaz, alt menü ekranın altında kal
     expect(olcu.altKenar, `${yol} alt menü ekranın altında değil`).toBe(olcu.yukseklik);
   }
 });
+
+// Üst çubukta yalnız sık kullanılanlar durur (516 a): geri/ileri, başlık, arama, Kayıt gir, Malzeme, Bildirim, kişi; tam ekran
+// yalnız çerçeveli sayfada. Seyrek kullanılanlar Hesap menüsündedir.
+test.describe('sade üst çubuk', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+  test('geniş ekranda çubukta yedi düğme kalır; seyrek kullanılanlar Hesap menüsündedir', async ({ page, ac }, bilgi) => {
+    test.skip(bilgi.project.name !== 'g1280', 'genişliği test kurar');
+    await page.setViewportSize({ width: 1440, height: 800 });
+    for (const [yol, sayi] of [['/stok', 6], ['/ik', 7]] as const) {
+      await ac(yol);
+      const ust = page.locator('.tc-kabuk-ust');
+      await expect(ust.getByRole('button', { name: 'Ne oldu? Kayıt gir' })).toHaveText('Kayıt gir');
+      const gorunen = await ust.locator('button:visible').evaluateAll((l) => l.map((d) => d.getAttribute('aria-label') ?? d.textContent));
+      expect(gorunen.length, `${yol}: ${gorunen.join(', ')}`).toBeLessThanOrEqual(sayi);
+      for (const ad of ['Yardım ve rehber', 'Ziyaretçilerim', 'Şikayet, istek ve öneri', 'Son yerler']) {
+        await expect(ust.getByRole('button', { name: ad, exact: true }), `${yol}: ${ad}`).toBeHidden();
+      }
+      expect(await ustCubukCakisanlar(page), `${yol} üst çubukta üst üste binen düğmeler`).toEqual([]);
+    }
+    await page.locator('.tc-kabuk-ust').getByRole('button', { name: 'Hesap', exact: true }).click();
+    for (const ad of ['Ziyaretçilerim', 'Şikayet, istek ve öneri', 'Sistem durumu', 'Yardım ve rehber']) {
+      await expect(page.getByRole('menuitem', { name: ad }), ad).toBeVisible();
+    }
+    await page.getByRole('menuitem', { name: 'Ziyaretçilerim' }).click();
+    await expect(page.getByRole('dialog', { name: 'Ziyaretçilerim' })).toBeVisible();
+  });
+});

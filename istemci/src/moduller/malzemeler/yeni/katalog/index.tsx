@@ -73,7 +73,7 @@ function sutunlar(b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string,
             <KatalogSimgesi yol={K.kartIkon(x, b)} />
             <div>
               <div className="tc-mk-rozetler">
-                <Rozet ton="bilgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>
+                <Rozet ton="bilgi" gorunum="cizgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>
                 {K.onayDurum(x, b) !== 'aktif' && <OnayRozeti x={x} b={b} />}
                 {K.talepVar(x, b) && <Rozet ton="uyari">Değişiklik talebi</Rozet>}
                 <span className="tc-mk-kod">{x.com.kod}</span>
@@ -96,7 +96,7 @@ function sutunlar(b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string,
       hucre: (k) => <>{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt">{k.kayit.com.ted ?? ''}</small></>,
     },
     {
-      anahtar: 'guncelleme', baslik: 'Güncelleme', kirilmaz: true,
+      anahtar: 'guncelleme', baslik: 'Güncelleme', hizala: 'sag', kirilmaz: true,
       hucre: (k) => {
         const x = k.kayit;
         return (

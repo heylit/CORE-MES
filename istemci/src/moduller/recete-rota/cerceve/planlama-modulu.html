@@ -4552,7 +4552,7 @@ function propose(st,base,ev,opts={}){
   for(const r of Object.values(B.ops)){if(r.fas||r.pin)continue;const x=ev0.J[r.job];if(!x||!(x.T>0)||!(r.sl<0))continue;
     const pw=isAgirligi(cx.jobs[r.job]);cnt[r.m]=(cnt[r.m]||0)+Math.min(x.T,r.C-r.S)*pw;(days[r.m]=days[r.m]||new Set()).add(Math.floor(Math.max(r.S,cand.now)/24));}
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
-  // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 ise eski sınırla yalnız gösterilir
+  // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 sınırsızdır (525 3 a)
   const vH=id=>{const v=cand.D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;};
   const butH=+st.w.mesaiHafta||0,wk={};for(const e of cand.ekMesai||[]){const k=Math.floor(e.gun/7);wk[k]=(wk[k]||0)+vH(e.vardiya);}
   const fits=(gun,vid)=>{if(butH<=0)return true;const k=Math.floor(gun/7);if((wk[k]||0)+vH(vid)>butH+1e-9)return false;wk[k]=(wk[k]||0)+vH(vid);return true;};
@@ -4565,10 +4565,8 @@ function propose(st,base,ev,opts={}){
     if(added.length){const p=fill(c2,base,{},Math.min(800,opts.budget||800),fasonM?[{fasonM}]:[]).plan;
     list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret==null||cand.D.ayarlar.mesaiUcret===''?'mesai ücreti girilmemiş':cand.D.ayarlar.mesaiUcret+' TL/sa'}); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
   list.forEach(x=>{x.st=x.st||cand;x.ev=evaluate(x.plan,x.st,base);});
-  // fazla mesai yalnız haftalık bütçe tanımlıysa önerilir; bütçe 0 ise gösterilir
-  const ok=x=>(+st.w.mesaiHafta>0)||x.id!=='mesai';
   // değişiklik bütçesi: her bütçe için o sınırın içinde kalan en iyi plan, parça parça yeniden kurmayla aranır
-  const pool=list.filter(ok),butce=[];
+  const pool=list.slice(),butce=[];
   if(!opts.noButce&&pool.length){const ms=opts.lnsMs!=null?opts.lnsMs:(+st.w.lnsMs||1000);
     const top=pool.reduce((a,b)=>cmpEv(b.ev,a.ev)>0?b:a);const S0=top.st;
     const Li=lns(S0,top.plan,base,{ms:ms*.2,seed:7});let prev={plan:Li.plan,e:Li.e,from:top};
@@ -4589,10 +4587,9 @@ function propose(st,base,ev,opts={}){
   for(let i=list.length-1;i>0;i--){const a=list[i];if(a.butce!=null)continue;const same=list.slice(0,i).find(b=>cmpEv(a.ev,b.ev)===0&&b.ev.chg===a.ev.chg);
     if(same){same.ayni=(same.ayni||[]).concat(a.ad);list.splice(i,1);}}
   const before=evaluate(base,st,null);
-  // fazla mesai politika izni yoksa önerilmez, yalnız gösterilir
-  let best=list.findIndex(ok);list.forEach((x,i)=>{if(ok(x)&&cmpEv(x.ev,list[best].ev)>0)best=i;});
+  let best=0;list.forEach((x,i)=>{if(cmpEv(x.ev,list[best].ev)>0)best=i;});
   // önerilenin ikinciye karşı hangi ölçütte öne geçtiği
-  let runner=null;list.forEach((x,i)=>{if(i!==best&&ok(x)&&(runner==null||cmpEv(x.ev,list[runner].ev)>0))runner=i;});
+  let runner=null;list.forEach((x,i)=>{if(i!==best&&(runner==null||cmpEv(x.ev,list[runner].ev)>0))runner=i;});
   const robust={by:runner==null?-1:lexWhy(list[best].ev,list[runner].ev),runner};
   return {label,cand,list,best,sel:best,before,hit:hitAll,robust,butce:butce.map(x=>list.indexOf(x)),ms:Date.now()-t0,info};
 }
@@ -5821,7 +5818,7 @@ function cerceveModel(st,cx,plan,opt={}){
   const nv={};
   for(const g of grp)for(let k=0;k<NB;k++){const key=g+'|'+k;const T=capT[key];if(!T)continue;
     const terms=T.map(v=>[v,1]);
-    if(ot[key]&&butH>0){const v='n'+(n++);nv[key]=v;gen.push(v);bnd.push(` 0 <= ${v} <= ${ot[key]}`);terms.push([v,-vh*Math.min(1,opG[g]>0?1/opG[g]:1)]);obj.push([v,(opt.mesaiAgirlik||.05)*vh]);cols[v]={g,k,n:1};}
+    if(ot[key]){const v='n'+(n++);nv[key]=v;gen.push(v);bnd.push(` 0 <= ${v} <= ${ot[key]}`);terms.push([v,-vh*Math.min(1,opG[g]>0?1/opG[g]:1)]);obj.push([v,(opt.mesaiAgirlik||.05)*vh]);cols[v]={g,k,n:1};}
     R.push('c'+R.length+': '+lin(terms)+' <= '+cap[key].toFixed(4));}
   for(let k=0;k<NB;k++){const terms=[];let rhs=tot[k];
     for(const g of grp){const T=capT[g+'|'+k];if(!T||!(opG[g]>0))continue;for(const v of T)terms.push([v,opG[g]]);rhs+=opG[g]*att[g+'|'+k];if(nv[g+'|'+k])terms.push([nv[g+'|'+k],-vh]);}
@@ -5831,7 +5828,8 @@ function cerceveModel(st,cx,plan,opt={}){
     for(let i=0;i<L0.length;i++){const h=L0[i].h;if(h<=Math.max(bk(k)[0],st.now)+1e-6)continue;const terms=L0.slice(i).map(x=>[Y[x.id][k],1]).filter(x=>x[0]);
       if(!terms.length)continue;const c=capOf(g,h,end).c;if(nv[key])terms.push([nv[key],-vh*Math.max(0,end-h)/L]);R.push('r'+R.length+': '+lin(terms)+' <= '+c.toFixed(4));}}
   const byW={};for(const key in nv){const k=+key.split('|')[1];(byW[wkOf(k)]=byW[wkOf(k)]||[]).push(nv[key]);}
-  for(const w in byW)R.push('b'+R.length+': '+lin(byW[w].map(v=>[v,vh]))+' <= '+Math.max(0,butH-(used[w]||0)).toFixed(4));
+  // 525 3 a: bütçe 0 sınırsızdır, haftalık satır yazılmaz
+  if(butH>0)for(const w in byW)R.push('b'+R.length+': '+lin(byW[w].map(v=>[v,vh]))+' <= '+Math.max(0,butH-(used[w]||0)).toFixed(4));
   const lp='Minimize\n obj: '+lin(obj)+'\nSubject To\n '+R.join('\n ')+'\nBounds\n'+bnd.join('\n')+'\n'+(gen.length?'General\n '+gen.join(' ')+'\n':'')+'End\n';
   return {lp,cols,nv,grp,NB,b0,L,O,bOf,cap,ot,vh,ad,nOps:Object.keys(Y).length,nVar:n,nRow:R.length};
 }
@@ -7375,7 +7373,7 @@ function sCozuculer() {
     </tbody></table></div>
     <p class="pm-kucuk">En iyi plan ${saat(h.best)} ile ${saat(p.ozet.wT)} arasındadır. Fark ya planın iyileşebileceğini ya da gevşetmenin (personel, fason kapasitesi) sınırı düşük tuttuğunu gösterir; ne kadarının hangisi olduğu bilinmiyor. Model ${sayi(h.nVar)} değişken, ${sayi(h.nRow)} kısıt.${h.s2 === 13 ? ' Süre doldu: süre uzarsa sınır yükselebilir.' : ''}</p>` : '<p class="pm-kucuk">Henüz hesaplanmadı ya da veri değişti.</p>'}`;
   const butce = MESAI_BUTCE(); const wk = haftaMesai(S.ekMesai);
-  const mesaiGovde = `<p class="pm-alt">HiGHS, tezgâh grubu ve vardiya dilimi başına yükü dağıtır; hangi gruba hangi vardiyada ek vardiya açmanın gecikmeyi en çok azalttığını bulur. Her aday sonra motorda gerçek plana çevrilip ölçülür. Haftalık bütçe ${butce} sa${Object.keys(wk).length ? `; kullanılan: ${Object.entries(wk).map(([k, v]) => `${+k + 1}. hafta ${v} sa`).join(', ')}` : ''}.</p>
+  const mesaiGovde = `<p class="pm-alt">HiGHS, tezgâh grubu ve vardiya dilimi başına yükü dağıtır; hangi gruba hangi vardiyada ek vardiya açmanın gecikmeyi en çok azalttığını bulur. Her aday sonra motorda gerçek plana çevrilip ölçülür. Haftalık bütçe ${butce > 0 ? `${butce} sa` : 'sınırsız'}${Object.keys(wk).length ? `; kullanılan: ${Object.entries(wk).map(([k, v]) => `${+k + 1}. hafta ${v} sa`).join(', ')}` : ''}.</p>
     ${mes ? (mes.liste.length ? `<div class="tc-tablo-kap"${kip()}><table class="tc-tablo"><thead><tr><th>Ek vardiya</th><th class="tc-sayi">Gecikme</th><th class="tc-sayi">Kazanç</th><th>Bütçe</th><th><span class="tc-gizli-etiket">İşlem</span></th></tr></thead><tbody>${mes.liste.map((a, i) => `<tr>${td('Ek vardiya', a.ek.map(e => `<span class="pm-nobr"><b class="mono">${esc(e.m)}</b> ${esc(fmtDT(S.D, e.gun * 24).slice(0, 9))} ${esc(e.vardiya)}</span>`).join('<br>'))}${td('Gecikme', `<span class="mono">${saat(a.wT)}</span>`, 'tc-sayi')}${td('Kazanç', a.dW > 0.05 ? `<span class="pm-fark-iyi mono">−${sayi(a.dW, 1)} sa</span>` : '<span class="pm-kucuk">yok</span>', 'tc-sayi')}${td('Bütçe', a.asar ? rozet('Aşar', 'uyari') : rozet('İçinde', 'tamam'))}${td('', dugme('', 'mesai-onizle', { kucuk: true, simge: 'eye', ad: 'Önizle', yetki: 'plan.yaz', veri: `data-v="${i}"` }))}</tr>`).join('')}</tbody></table></div><p class="pm-kucuk">HiGHS ${sayi(mes.ms)} ms, ${sayi(mes.nVar)} değişken. Kazanç motorun kısa çözümüyle ölçüldü; önizleme biraz daha uzun çözer.</p>` : '<p class="pm-kucuk">Gecikmeyi azaltan ek vardiya adayı bulunmadı.</p>') : ''}`;
   const cp = cpOneriHazir();
   const es = U.ekipSon || S.ekipSon || null;
@@ -7448,7 +7446,7 @@ async function ekipCoz() {
     basamak.push({ id: 'motor', ad: 'Motor', wT: E.wT });
     /* 3. HiGHS ek mesai */
     const butce = MESAI_BUTCE(); let em = clone(S.ekMesai); const alinan = [];
-    if (butce > 0 && ayar.mesai) {
+    if (ayar.mesai) {
       kur('mesai', 'calisiyor', 'Vardiya dilimli yük modeli çözülüyor…');
       const mod = cerceveModel({ ...st, w: { ...st.w, mesaiHafta: 1e4 } }, cx, P);
       const rr = await hsCoz(mod.lp.replace(/General\n[^\n]*\n/, ''), 10, Object.values(mod.nv));
@@ -7464,7 +7462,7 @@ async function ekipCoz() {
           const id = mesaiAnahtar(ap.ekMesai);
           if (haric.has(id)) { karar({ id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(ap.ekMesai), ek: ap.ekMesai, dW: null, durum: 'haric', neden: 'Planlamacı hariç tuttu.' }); continue; }
           const em2 = [...em, ...ap.ekMesai];
-          if (Object.values(haftaMesai(em2)).some(h => h > butce + 1e-9)) { if (!kararlar[id]) karar({ id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(ap.ekMesai), ek: ap.ekMesai, dW: null, durum: 'butce', neden: `Haftalık bütçeyi (${butce} sa) aşar.` }); continue; }
+          if (butce > 0 && Object.values(haftaMesai(em2)).some(h => h > butce + 1e-9)) { if (!kararlar[id]) karar({ id, tur: 'mesai', ad: 'Ek mesai: ' + mesaiAd(ap.ekMesai), ek: ap.ekMesai, dW: null, durum: 'butce', neden: `Haftalık bütçeyi (${butce} sa) aşar.` }); continue; }
           denenen++; kur('mesai', 'calisiyor', `Aday ${denenen} motorda ölçülüyor…`);
           const st2 = { ...st, ekMesai: clone(em2) }; const cx2 = compile(st2);
           /* aday plan, mevcut planın tezgâh ve saatleri en erken başlangıç alınarak kurulur: iyi sıra kod çözmede kaybolmasın */
@@ -7481,7 +7479,7 @@ async function ekipCoz() {
         izler.push({ t: (performance.now() - t0) / 1000, wT: E.wT, adim: 'mesai' });
       }
       kur('mesai', alinan.length ? 'alindi' : 'alinmadi', alinan.length ? `${alinan.length} ek vardiya alındı: ${alinan.map(a => mesaiAd(a.ek) + ` (−${sayi(a.dW, 1)} sa)`).join('; ')}.` : `${denenen} aday ölçüldü; bütçe içinde gecikmeyi azaltan yok.`, alinan.length ? E : null);
-    } else kur('mesai', 'yok', butce > 0 ? 'Bu çalışmada ek mesai kapalı.' : 'Haftalık mesai bütçesi 0.');
+    } else kur('mesai', 'yok', 'Bu çalışmada ek mesai kapalı.');
     basamak.push({ id: 'mesai', ad: 'Ek mesai', wT: E.wT });
     /* 4. motor son */
     const kalan = Math.max(sure * 0.25, sure - (performance.now() - t0));

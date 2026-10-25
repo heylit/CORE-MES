@@ -1034,12 +1034,12 @@ export function malzemeFisiNo(f: { id: number; tur: MalzemeFisiTuru; uretimEmriI
   if (f.tur === 'sarf' || f.tur === 'uretim_girisi' || f.tur === 'fire') return emirNo ?? `#${f.uretimEmriId ?? f.id}`;
   return `${FIS_ONEKLERI[f.tur]}-${String(f.id).padStart(6, '0')}`;
 }
-// Fiş numarası aramada kimliğe çözülür; biçime uymayan metin null.
-export function fisNoKimligi(metin: string): { tur: 'sayim_fazlasi' | 'sayim_eksigi' | 'ambar'; id: number } | null {
-  const m = /^(SF|SE|AF)-0*(\d{1,9})$/i.exec(metin.trim());
+// Fiş numarası aramada kimliğe çözülür; biçime uymayan metin null. MK- mal kabul belgesidir (listede görünür, 515 a).
+export function fisNoKimligi(metin: string): { tur: 'sayim_fazlasi' | 'sayim_eksigi' | 'ambar' | 'mal_kabul'; id: number } | null {
+  const m = /^(SF|SE|AF|MK)-0*(\d{1,9})$/i.exec(metin.trim());
   if (!m) return null;
   const onek = m[1]!.toUpperCase();
-  const tur = onek === 'SF' ? 'sayim_fazlasi' : onek === 'SE' ? 'sayim_eksigi' : 'ambar';
+  const tur = onek === 'SF' ? 'sayim_fazlasi' : onek === 'SE' ? 'sayim_eksigi' : onek === 'MK' ? 'mal_kabul' : 'ambar';
   const id = Number(m[2]);
   return id >= 1 && id <= 2147483647 ? { tur, id } : null;
 }
