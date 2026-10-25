@@ -32,9 +32,9 @@ export function simgeSec(ad: string | null | undefined, yedek: SimgeAdi = 'alert
   return (ad && SIMGE_KARSILIGI[ad]) || yedek;
 }
 
-// İstasyona atanmış iş yokken ekrandaki boş iş (istasyonlar.ts EMPTY_ORDER).
+// İstasyona atanmış iş yokken ekrandaki boş iş (istasyonlar.ts EMPTY_ORDER): hedefi yoktur, sayaç `sayacGosterimi` ile "—" gösterir.
 export const bosIs = (ist: Pick<IstasyonSatiri, 'l'>): Is =>
-  ({ no: '—', part: 'Bu istasyona atanmış iş yok', op: ist.l, state: 'queued', good: 0, scrap: 0, target: 1, cycle: 0, due: '—', baseGood: 0, meas: {}, pins: [], empty: true });
+  ({ no: '—', part: 'Bu istasyona atanmış iş yok', op: ist.l, state: 'queued', good: 0, scrap: 0, target: 0, cycle: 0, due: '—', baseGood: 0, meas: {}, pins: [], empty: true });
 
 const sonucAlanlari = (r: Result) => ({
   state: r.state || 'queued', good: r.good || 0, scrap: r.scrap || 0, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? 0,
@@ -172,7 +172,7 @@ export function siradakiGorev(o: GorevIsi | null | undefined, D: KontrolTakvimi,
   if (karar && karar.status === 'rejected' && !karar.ack) return { tone: 'stop', icon: 'x', t: `Kalite RED · ${karar.bad}`, d: `${karar.note ? `${karar.note} · ` : ''}Makineyi durdur, düzelt ve yeni numune gönder`, act: 'stop', btn: 'Durdur', act2: 'ack', btn2: 'Anladım', pulse: true, key: 'rej' };
   if (o.pendingReq) {
     const ek = ilk && ilk.acik
-      ? (ilk.yeniden ? ' · üretim uyarıyla sürer, karar gelene kadar sağlam sayılmaz' : ` · üretim sürer, sonraki sağlam parçalar karar bekler${kararBekleyenEki(ilk)}`)
+      ? (ilk.yeniden ? ' · üretim uyarıyla sürer, karar gelene kadar sağlam sayılmaz' : ` · üretim sürer, sağlam parçalar Kalite Merkezi kararını bekler${kararBekleyenEki(ilk)}`)
       : ' · üretim devam edebilir';
     return { tone: 'done', icon: 'target', t: `Numune kalitede · ${(o.pendingItems || []).length} ölçü`, d: `Bekleme ${sure((simdi - (o.pendingAt ?? simdi)) / 1000).slice(3)}${ek}`, act: null, quiet: true, key: 'pend' };
   }

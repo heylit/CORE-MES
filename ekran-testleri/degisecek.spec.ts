@@ -16,18 +16,6 @@ test.describe('Reçete ve Rota', () => {
 
 });
 
-test.describe('Üretim Terminali', () => {
-  test.use({ hesap: 'ornek.operator1' });
-  test('A0.3: istasyonda iş yokken "İşi Başlat" kapalıdır', ETIKET, async ({ page, ac }, bilgi) => {
-    test.skip(bilgi.project.name !== 'g1280', 'düğme geniş ekranda ilk görünümde');
-    test.fail();
-    await ac('/uretim-terminali');
-    const f = await cerceve(page);
-    await expect(f.getByText('Bu istasyonda iş yok').first()).toBeVisible();
-    await expect(f.getByRole('button', { name: 'İşi Başlat' })).toBeDisabled({ timeout: 2_000 });
-  });
-});
-
 test.describe('Plan', () => {
   test.use({ hesap: 'ornek.planlama' });
   for (const yol of ['/cizelge', '/matris']) {

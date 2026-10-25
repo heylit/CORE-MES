@@ -13,7 +13,7 @@ import {
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
 import { eskiCizim, eskiCizimGorevi, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
 import { hazirlikUyarisi } from '../../../../../../arkon/web/src/data/cnc-hazirlik.ts';
-import { durumKaydiGerekir } from '../../../../../../arkon/web/src/data/durum-kaydi.ts';
+import { durumBaslangici, durumKaydiGerekir } from '../../../../../../arkon/web/src/data/durum-kaydi.ts';
 import { IS_DEGISIMI, nedenAdi as nedenAdiYaz } from '../../../../../../arkon/web/src/data/durus-nedeni.ts';
 import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi, kartSeciminiAl, type EmirSecimiPenceresi } from '../../../../../../arkon/web/src/data/emir-secimi.ts';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
@@ -377,6 +377,18 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return () => window.removeEventListener(EMIR_SEC_OLAYI, al);
   }, []);
   useEffect(() => { emirSecRef.current(); }, [isler]);
+  // Etkin iş ya da durumu değişince süre işin sunucudaki son durum kaydından düzeltilir; yoksa yereldeki an kalır.
+  const pkgId = o.pkg ? o.pkg.id : null;
+  useEffect(() => {
+    if (pv || o.empty || !pkgId) return;
+    let bitti = false;
+    const durum = o.state;
+    depo.Log.query('events', { pkg: pkgId, limit: 200 }).then((k) => {
+      const at = durumBaslangici(k, durum);
+      if (!bitti && at !== null) sinceYaz(at);
+    }, () => undefined);
+    return () => { bitti = true; };
+  }, [o.no, o.state, pkgId, pv, depo]);
 
   /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
   const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
@@ -684,7 +696,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   const hazirlikta = useRef(false);
   const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
-    if (URETIM_EYLEMLERI.includes(a) && !ok('prod.run')) return;
+    if (URETIM_EYLEMLERI.includes(a) && (o.empty || !ok('prod.run'))) return;
     if (a === 'tool') { const tl = RL.prod.tools.find((x) => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { warnShowYaz({ list: RL.warns.filter((w) => w.t), title: 'Bu işin uyarıları' }); return; }
     if (a === 'stop') { ovYaz('reason'); return; }
@@ -710,7 +722,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (!m) return;
     // Başlat ilk parça onayını beklemez (129, 130 a): ilk parça Başlat'tan sonra üretilip sayılır ve kaliteye gider.
     if ((a === 'start' || a === 'resume' || a === 'restart') && ilk.acik) {
-      say(`Dikkat: ilk parçayı say ve kaliteye gönder · ${ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'karar gelene kadar sonraki sağlam parçalar karar bekler'}`, 'alert', 'hold');
+      say(`Dikkat: ilk parçayı say ve kaliteye gönder · ${ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'Kalite Merkezi kararı gelene kadar sağlam parçalar karar bekler'}`, 'alert', 'hold');
     }
     if ((a === 'start' || a === 'setup') && !warned && !pv) {
       const sw = baslangicUyarilari(RL.warns, o);
@@ -927,7 +939,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       eylem={(a, g) => { if (mobil && (a === 'measure' || a === 'drawing')) mvYaz('draw'); act(a, g); }} />
   );
   const durumDugmeleri = (mobil: boolean) => (uretir ? (
-    <DurumDugmeleri durum={o.state} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
+    <DurumDugmeleri durum={o.state} pasif={!!o.empty} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
   ) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
   const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradakiNo={nextOrder && nextOrder.no} ondeNo={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => { isSec(i); if (dar) mvYaz('prod'); }} />;

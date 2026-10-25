@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { Konfeti, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { DurumDugmeleri, Konfeti, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -39,5 +39,35 @@ describe('Konfeti', () => {
     expect(parcalar.length).toBe(70);
     expect(parcalar[0]?.style.getPropertyValue('--x')).toMatch(/%$/);
     expect(parcalar[0]?.style.getPropertyValue('--sure')).toMatch(/s$/);
+  });
+});
+
+// T2 ve T5 (526): kalan yalnız sağlamla düşer; işi olmayan istasyonda hedef ve kalan yoktur, durum düğmeleri kapalıdır.
+describe('Sayaç kadranı kalan ve boş istasyon', () => {
+  it('kalan hedef eksi sağlamdır; hurda kalanı düşürmez', () => {
+    const { container } = render(<SayacKadrani is={is({ empty: false, target: 40, good: 38, scrap: 2, cycle: 0 })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} />);
+    expect(container.querySelector('.tc-ay1-kadran-yuzde')?.textContent).toBe('%95 · 2 kaldı');
+  });
+  it('işi olmayan istasyonda hedef ve kalan "—" görünür', () => {
+    const { container } = render(<SayacKadrani is={bosIs({ l: 'Boş' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(0)} />);
+    expect(container.querySelector('.tc-ay1-kadran-hedef')?.textContent).toBe('/ — adet');
+    expect(container.querySelector('.tc-ay1-kadran-yuzde')?.textContent).toBe('—');
+    expect(container.textContent).not.toContain('kaldı');
+  });
+  it('pasifken durum düğmeleri kapalıdır ve eylem çağrılmaz', () => {
+    const eylemler: string[] = [];
+    const { container } = render(<DurumDugmeleri durum="idle" pasif eylem={(d) => eylemler.push(d.key)} erken={() => {}} />);
+    const dugmeler = [...container.querySelectorAll('button')];
+    expect(dugmeler.length).toBeGreaterThan(0);
+    dugmeler.forEach((b) => { expect(b.disabled).toBe(true); fireEvent.click(b); });
+    expect(eylemler).toEqual([]);
+  });
+  it('iş atanmışken durum düğmeleri açıktır ve eylemi çağırır', () => {
+    const eylemler: string[] = [];
+    const { container } = render(<DurumDugmeleri durum="idle" eylem={(d) => eylemler.push(d.key)} erken={() => {}} />);
+    const b = container.querySelector('button');
+    expect(b?.disabled).toBe(false);
+    fireEvent.click(b!);
+    expect(eylemler.length).toBe(1);
   });
 });

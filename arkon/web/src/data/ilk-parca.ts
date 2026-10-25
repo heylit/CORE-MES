@@ -4,7 +4,9 @@
 
 export const ILK_PARCA_ADEDI = 1;
 export const ILK_PARCA_BEKLIYOR_ILETISI = 'Yeniden ilk parça kalitede · karar gelene kadar sağlam sayılmaz';
-export const ILK_PARCA_KARAR_BEKLIYOR_ILETISI = 'İlk parça kalitede · sonraki sağlam parçalar karar bekler';
+export const ILK_PARCA_KARAR_BEKLIYOR_ILETISI = 'İlk parça kararı Kalite Merkezi\'nde bekleniyor · sağlam parçalar karar bekler';
+// Arkon numunesi karar değildir (229 a, 521 1 a): numuneyi onaylayan kaliteci kararın nerede verildiğini görür.
+export const KALITE_MERKEZI_KARARI_ILETISI = 'Numune onaylandı · ilk parça kararı Kalite Merkezi\'nde verilir, o zamana dek sağlam sayım karar bekler';
 export const ILK_PARCA_ONCE_SAY_ILETISI = 'Önce ilk parçayı sağlam say · sonra kaliteye gönder';
 
 // İlk parça kararı Kalite Merkezi'nindir (229 a, denetim #12): sunucu emrin son kararını paketin `tmi.ilkParca` alanına yazar. Arkon
@@ -28,11 +30,17 @@ export function yenidenIlkParcaAcik(p: { fpRe?: unknown; tmi?: unknown } | null 
 export const ilkParcaSayimReddi = (acik: boolean, sayilan: number, adet: number): string | null =>
   acik && adet > 0 && sayilan + adet > ILK_PARCA_ADEDI ? ILK_PARCA_BEKLIYOR_ILETISI : null;
 
-// Ekrandaki karar bekleyen sayısı sunucunun yazdığıyla aynı kuraldır. Kalite Merkezi ilk parçayı reddetmişse reddedilenler TMI'de redde geçmiştir
-// ve ekran ayrımı bilmez: sayı gösterilmez (null), yalnız uyarı kalır.
+// Ekrandaki karar bekleyen sayısı sunucunun yazdığıyla aynıdır: 327 a ile ilk parça dahil onaysız emrin bütün sağlamı karar bekler
+// (sunucu uretim-emirleri `ilkParcaOnaysiz`); ilk parçayı ayrı saymak tableti sunucudan bir eksik gösteriyordu (37 / 38). Kalite Merkezi
+// ilk parçayı reddetmişse reddedilenler TMI'de redde geçmiştir ve ekran ayrımı bilmez: sayı gösterilmez (null), yalnız uyarı kalır.
 export function kararBekleyenSayisi(acik: boolean, sayilan: number, retVar: boolean): number | null {
   if (!acik) return 0;
-  return retVar ? null : Math.max(0, sayilan - ILK_PARCA_ADEDI);
+  return retVar ? null : Math.max(0, sayilan);
+}
+
+// Onaylanan numune ilk parça ölçüsü taşıyor ve emrin Kalite Merkezi kararı henüz onay değilse kararın orada verilmesi gerekir.
+export function kaliteMerkeziKarariBekler(paket: { tmi?: unknown } | null | undefined, numuneOlculeri: readonly unknown[], ilkParcaOlculeri: readonly unknown[]): boolean {
+  return ilkParcaKarari(paket) !== 'onay' && numuneOlculeri.some((id) => ilkParcaOlculeri.includes(id));
 }
 
 export const kararBekleyenEki = (ilk: { kararBekleyen?: number | null }): string =>
