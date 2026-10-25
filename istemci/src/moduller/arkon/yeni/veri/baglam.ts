@@ -28,6 +28,10 @@ export interface ArkonBaglami {
 
 export const ArkonBaglamiKaynagi = createContext<ArkonBaglami | null>(null);
 
+// Sayfa alanı dar mı (eski useFit'in mobil kararı): kök, alanın kendi genişliğiyle ölçer. Pencere genişliği yetmez; TMI menüsü
+// açıkken 1024'lük tablette alan 900'den dardır. Kökün dışında (önizleme penceresi) değer yoktur, parça kendi kararını verir.
+export const ArkonDarAlanKaynagi = createContext<boolean | null>(null);
+
 export function useArkon(): ArkonBaglami {
   const b = useContext(ArkonBaglamiKaynagi);
   if (b === null) throw new Error('useArkon yalnız yeni Arkon ekranının içinde kullanılır.');

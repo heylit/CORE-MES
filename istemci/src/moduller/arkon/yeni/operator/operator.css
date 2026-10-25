@@ -414,6 +414,40 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 }
 .tc-ay1-alt-simge em[data-durum] { background: var(--sig); }
 
+/* Geniş düzen (eski .app ve .main): ekran yüksekliğine sığar; üst şerit ve altında üç sütun. Orta sütunda sahne kalan yüksekliği alır,
+   kadran onunla büyür ve dört sayım tuşu kadranın yanında iki sıra durur (eski .sayac). Taşan yan sütun kendi içinde kayar. */
+.tc-ay1 { position: relative; isolation: isolate; }
+/* Eski arka ışık (.aura): durum renginde, üretim sahnesinin arkasında. */
+.tc-ay1::before {
+  content: ''; position: absolute; inset: calc(var(--b-4) * -1); z-index: -1; pointer-events: none;
+  background: radial-gradient(38% 46% at 47% 58%, color-mix(in srgb, var(--sig, var(--idle)) var(--aura-strength), transparent), transparent 70%);
+}
+.tc-ay1-ust, .tc-ay1-aktif, .tc-ay1-sahne, .tc-ay1-is, .tc-ay1-is-ozet, .tc-ay1-mobil-ust { -webkit-backdrop-filter: var(--bulanik-kart); backdrop-filter: var(--bulanik-kart); }
+.tc-ay1-aktif, .tc-ay1-sahne { box-shadow: inset 0 var(--cizgi-ince) 0 var(--hi), var(--shadow); }
+.tc-ay1-genis { grid-template-rows: auto minmax(0, 1fr); block-size: calc(var(--tc-ay-vh, 100vh) - var(--b-4) * 2); }
+.tc-ay1-izgara { display: grid; grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr) minmax(0, 1.08fr); gap: var(--b-4); min-height: 0; }
+.tc-ay1-sutun { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.tc-ay1-genis .tc-ay1-orta { overflow-y: auto; }
+.tc-ay1-genis .tc-ay1-sahne { flex: 1 0 auto; justify-content: center; gap: var(--b-3); padding: var(--b-3) var(--b-4); }
+.tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac {
+  flex: 1 1 0; align-self: stretch; flex-direction: row; justify-content: center; gap: var(--b-4); min-block-size: var(--kadran-enaz); container-type: size;
+}
+.tc-ay1-genis .tc-ay1-kadran {
+  flex: none; inline-size: min(100cqh, 100cqw - var(--dokunma-x20) * 2 - var(--b-6) - var(--b-4), var(--kadran-encok)); max-inline-size: none; margin-block-end: 0;
+}
+.tc-ay1-genis .tc-ay1-kadran-yan { inset-block-start: auto; inset-block-end: 0; }
+.tc-ay1-genis .tc-ay1-kadran-sol { inset-inline-start: 0; inset-inline-end: auto; text-align: start; }
+.tc-ay1-genis .tc-ay1-kadran-sag { inset-inline-start: auto; inset-inline-end: 0; text-align: end; }
+.tc-ay1-genis .tc-ay1-kadran-etiket b { font-size: var(--yazi-l); }
+.tc-ay1-genis .tc-ay1-sayac .tc-ay1-tuslar { flex: none; grid-template-columns: repeat(2, calc(var(--dokunma-x20) + var(--b-2))); inline-size: auto; gap: var(--b-2); }
+.tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { flex-direction: column; gap: var(--b-1); min-block-size: var(--orb-2); padding: 0 var(--b-1); border-radius: var(--yari-3); font-size: var(--yazi-s); }
+.tc-ay1-genis .tc-ay1-sag .tc-ay1-bolme { flex: 1 1 auto; grid-template-rows: minmax(0, 1fr); }
+.tc-ay1-genis .tc-ay1-resim { min-block-size: 0; }
+.tc-ay1-genis .tc-ay1-aktif { flex-wrap: nowrap; }
+.tc-ay1-genis .tc-ay1-aktif > div:first-child { flex: 1 1 0; }
+.tc-ay1-genis .tc-ay1-gorev-metin { flex: 1 1 0; }
+.tc-ay1-istasyon b { white-space: nowrap; }
+
 @keyframes tc-ay1-zipla { 30% { transform: scale(1.06); } }
 @keyframes tc-ay1-nabiz { 50% { opacity: var(--saydam-28); } }
 @keyframes tc-ay1-nabiz-kenar { 50% { box-shadow: 0 0 0 var(--b-1) color-mix(in srgb, var(--sig) 35%, transparent); } }
