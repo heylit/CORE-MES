@@ -379,7 +379,32 @@ function tmiCevir(st, kaynak, D0, bugun) {
   const adet = tmiAdimAdetleri(k && k.durum, sk, D); if (adet) D.opAdet = adet;
   const kp = k && k.ek && k.ek.kapasite;
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
+  const sa = k && k.ek && k.ek.acikSiparisler;
+  if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
+  if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   return D;
+}
+/* 533 a: Satın Alma'nın tedarik termini malzemede durur (saTermin 'GGGG-AA-GG' ya da null; saSurum yazma ucunun sürümü). Okunamadıysa
+   (null) açık çalışmadaki değer kalır; satırı olmayan malzemede alan yoktur (termin bekleniyor). */
+function tmiTerminler(malzemeler, l, eski) {
+  const T = Array.isArray(l) ? new Map(l.map(x => [String(x.kod), x])) : null;
+  const E = new Map((eski || []).map(m => [m.kod, m]));
+  for (const m of malzemeler) {
+    delete m.saTermin; delete m.saSurum; delete m.saAciklama;
+    const x = T ? T.get(m.kod) : E.get(m.kod);
+    if (!x) continue;
+    const termin = T ? x.termin : x.saTermin, surum = T ? x.surum : x.saSurum, aciklama = T ? x.aciklama : x.saAciklama;
+    if (surum == null) continue;
+    Object.assign(m, { saTermin: termin || null, saSurum: surum }, aciklama ? { saAciklama: aciklama } : {});
+  }
+}
+/* 525 1 a: satın almanın açık siparişi (kalan miktar, beklenen teslim) motorda satın alma satırıdır. Sunucudan gelen satır işaretlidir ve
+   her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.betik tmUygula
+   termini olmayan satır gibi tahmin eder. Sunucu satırı hiç yoksa ve gelmediyse alan değişmez (null). */
+function tmiSatinalma(eski, l) {
+  const elle = (eski || []).filter(p => !p.sunucu);
+  if (!l.length && elle.length === (eski || []).length) return null;
+  return [...elle, ...l.map(x => ({ kod: String(x.kod), miktar: +x.miktar, gelis: x.tarih ? x.tarih + ' 08:00' : null, tedarikci: '', no: x.siparisNo, sunucu: true }))];
 }
 /* 13.4: kişinin onaylı izni (İK, Vardiya'nın kişi takvimiyle; /recete-rota/kapasite izinli günleri) motorda devamsızlıktır. Sunucudan
    gelen gün işaretlidir ve her okumada yeniden kurulur; planlamacının elle girdiği devamsızlık kalır. */
@@ -393,7 +418,7 @@ function tmiDevamsizlik(eski, kisiler) {
 
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrCevir grupMak), makine gelince adımlar yeniden kurulmalı. Malzeme ve
    sipariş kaynak okumasındaki sunucu kayıtlarındandır (sunucuKaydi). */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik', 'satinalma'];
 /* Kaynaklar açık çalışmaya (D0) yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Dönen: değişen alanlar. */
 function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   const D = tmiCevir(kayit && kayit.items ? kayit : TMI_BOS_KAYIT, kaynak, D0, bugun);

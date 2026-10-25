@@ -93,9 +93,9 @@ export function kovaAdi(taban: number, kirilim: Kirilim, k: number, uzun: boolea
 }
 
 // ---- Girdi ------------------------------------------------------------------------------------------------------
-// Terminin kaynağı (zv-termin `tm`): girilmiş termin; termin yokken tedarik süresinden tahmin; ihtiyacına eşik kadar gün kalmış ve termini
-// yok (sipariş yok sayılır); tedarik süresi yok; siparişi hiç verilmemiş eksik için tahmini satır.
-export type TerminTuru = 'termin' | 'tahmini' | 'yok' | 'sure-yok' | 'siparis-yok';
+// Terminin kaynağı (zv-termin `tm`): siparişte girilmiş termin; Satın Alma'nın malzeme termini (533 a); termini beklenen satır (554 a:
+// olması gereken tarihte gelmiş sayılır); siparişi hiç verilmemiş eksik satırı.
+export type TerminTuru = 'termin' | 'sa-termin' | 'termin-bekleniyor' | 'siparis-yok';
 
 // Açık satın alma satırı: kalan miktar, söz verilen geliş (saat), tedarikçi ve onun ortalama gecikmesi (saat); sipariş no, verildiği an
 // ve referans termin biliniyorsa. Motorun girdisinde `soz` planın gördüğü geliştir (tahmin dahil), `src` asıl satırın sırasıdır
@@ -103,6 +103,8 @@ export type TerminTuru = 'termin' | 'tahmini' | 'yok' | 'sure-yok' | 'siparis-yo
 export interface AcikAlim {
   kod: string; miktar: number; soz: number | null; tedarikci: string | null; gecikme: number;
   no?: string | null; verildi?: number | null; ref?: number | null; src?: number | null; tm?: TerminTuru;
+  // Termini beklenen satır (554 a): söz olması gereken tarihtir, iş beklemez.
+  tb?: boolean;
 }
 const asilSira = (a: AcikAlim, i: number): number | null => (a.src === undefined ? i : a.src);
 // Asıl satırın girilmiş termini (eski sayfa bunu çalışmanın kendi verisinden okur: tahmin orada yoktur).
@@ -155,7 +157,7 @@ export function tahsisEt(g: Pick<MrpGirdisi, 'siparisler' | 'urunler' | 'malzeme
   for (const m of g.malzemeler) arz.set(m.kod, [{ t: -1e9, kalan: sayiOku(m.stok), k: 'stok', i: null, alim: null }]);
   const alimlar = g.alimlar.map((a, i): AlimTahsisi => {
     const mu = sayiOku(mats.get(a.kod)?.muayeneGun) * 24;
-    const varis = a.soz === null ? 1e9 : Math.max(a.soz + a.gecikme, a.soz) + mu;
+    const varis = a.tb === true ? -1e9 : a.soz === null ? 1e9 : Math.max(a.soz + a.gecikme, a.soz) + mu;
     const x: AlimTahsisi = { i, varis, soz: a.soz, gecikme: a.gecikme, muayene: mu, isler: [] };
     const l = arz.get(a.kod) ?? [];
     l.push({ t: varis, kalan: a.miktar, k: 'sa', i, alim: x });
@@ -384,10 +386,10 @@ export interface AlimPlaniSatiri {
   // Söz verilen geliş (girilmiş termin; tahmini satırda tahmin) ve etkin geliş: söz + tedarikçinin ortalama gecikmesi.
   soz: number | null;
   etkin: number | null;
-  // En geç sipariş verme anı (en geç - tedarik süresi x katsayı); tedarik süresi yoksa null.
+  // En geç sipariş verme anı (en geç - tedarik süresi); tedarik süresi yoksa null.
   siparisGun: number | null;
-  // İhtiyacına termin eşiği kadar gün kalmış mı.
-  yakin: boolean;
+  // Termini beklenen satır (554 a).
+  tb: boolean;
   durum: AlimDurumu;
 }
 
@@ -419,27 +421,26 @@ export function alimDurumu(r: Pick<AlimPlaniSatiri, 'etkin' | 'gerekli' | 'enGec
   return 'karsiliyor';
 }
 
-// zv-termin tmDurum: verilmemiş siparişte en geç sipariş günü ve ihtiyacın yakınlığı; terminsizde tahmin; girilmiş terminde plan ve
-// referans termin.
-export function terminDurumu(r: Pick<AlimPlaniSatiri, 'tm' | 'siparisGun' | 'yakin' | 'etkin' | 'gerekli' | 'enGec' | 'ref' | 'soz'>, simdi: number): AlimDurumu {
-  if (r.tm === 'siparis-yok' || r.tm === 'sure-yok') return r.siparisGun !== null && r.siparisGun < simdi ? 'gec-kaldi' : r.yakin ? 'verilmedi' : 'verilmeli';
-  if (r.tm === 'yok') return 'yok-sayildi';
-  if (r.tm === 'tahmini') return 'bekleniyor';
+// zv-termin tmDurum: verilmemiş siparişte en geç sipariş günü; termini beklenen satır; girilmiş terminde plan ve referans termin.
+export function terminDurumu(r: Pick<AlimPlaniSatiri, 'tm' | 'siparisGun' | 'tb' | 'etkin' | 'gerekli' | 'enGec' | 'ref' | 'soz'>, simdi: number): AlimDurumu {
+  if (r.tm === 'siparis-yok' && r.siparisGun !== null && r.siparisGun < simdi) return 'gec-kaldi';
+  if (r.tb) return 'bekleniyor';
+  if (r.tm === 'siparis-yok') return 'verilmeli';
   const d = alimDurumu(r);
   if (DURUM_TONU[d] === 'tamam' && r.ref !== null && r.soz !== null && r.soz > r.ref + 1e-6) return 'referanstan-gec';
   return d;
 }
 
-export function alimPlani(g: MrpGirdisi, taban: number, tahsis: Tahsis = tahsisEt(g, taban), A: TerminAyari = TERMIN_AYARI): AlimPlaniSatiri[] {
+export function alimPlani(g: MrpGirdisi, taban: number, tahsis: Tahsis = tahsisEt(g, taban)): AlimPlaniSatiri[] {
   const mats = new Map(g.malzemeler.map((m) => [m.kod, m]));
   const ilk = isIlkleri(g, taban);
-  const out: Omit<AlimPlaniSatiri, 'siparisGun' | 'yakin' | 'durum'>[] = [];
+  const out: Omit<AlimPlaniSatiri, 'siparisGun' | 'durum'>[] = [];
   for (const x of tahsis.alimlar) {
     const a = g.alimlar[x.i];
     if (!a) continue;
     const js = x.isler.flatMap((u) => { const f = ilk.get(u.j); return f ? [{ j: u.j, ...f }] : []; });
     out.push({
-      tur: 'sa', alimNo: x.i, src: asilSira(a, x.i), tm: a.tm ?? 'termin', kod: a.kod, miktar: a.miktar, tedarikci: a.tedarikci,
+      tur: 'sa', alimNo: x.i, src: asilSira(a, x.i), tm: a.tm ?? 'termin', tb: a.tb === true, kod: a.kod, miktar: a.miktar, tedarikci: a.tedarikci,
       no: a.no ?? null, verildi: a.verildi ?? null, ref: a.ref ?? null, isler: js.map((u) => u.j),
       gerekli: js.length ? Math.min(...js.map((u) => u.s)) - x.muayene : null, enGec: js.length ? Math.min(...js.map((u) => u.l)) - x.muayene : null,
       soz: x.soz, etkin: x.soz === null ? null : x.soz + x.gecikme,
@@ -451,7 +452,7 @@ export function alimPlani(g: MrpGirdisi, taban: number, tahsis: Tahsis = tahsisE
       const f = ilk.get(j);
       const mu = sayiOku(mats.get(d.kod)?.muayeneGun) * 24;
       out.push({
-        tur: 'eksik', alimNo: null, src: null, tm: 'sure-yok', kod: d.kod, miktar: d.eksik, tedarikci: null, no: null, verildi: null, ref: null,
+        tur: 'eksik', alimNo: null, src: null, tm: 'siparis-yok', tb: true, kod: d.kod, miktar: d.eksik, tedarikci: null, no: null, verildi: null, ref: null,
         isler: [j], gerekli: f ? f.s - mu : null, enGec: f ? f.l - mu : null, soz: null, etkin: null,
       });
     }
@@ -459,11 +460,39 @@ export function alimPlani(g: MrpGirdisi, taban: number, tahsis: Tahsis = tahsisE
   return out.map((r): AlimPlaniSatiri => {
     const m = mats.get(r.kod);
     const tg = sonlu(m?.tedarikGun);
-    const kat = terminKatsayisi(m, 'terminKat', A.katMal);
-    const siparisGun = r.enGec !== null && tg !== null ? r.enGec - tg * kat * 24 : null;
-    const yakin = r.gerekli !== null && r.gerekli <= g.simdi + A.esik * 24;
-    return { ...r, siparisGun, yakin, durum: terminDurumu({ ...r, siparisGun, yakin }, g.simdi) };
+    const siparisGun = r.enGec !== null && tg !== null ? r.enGec - tg * 24 : null;
+    return { ...r, siparisGun, durum: terminDurumu({ ...r, siparisGun }, g.simdi) };
   });
+}
+
+// 533 a: tedarik termini satırı malzeme başınadır. Durum malzemenin satırlarının en kötüsü; olması gereken en erken gerekli geliş. Satın
+// Alma'nın kaydı (termin, sürüm, açıklama) planın girdisindeki malzemeden gelir (girdi.betik tmiTerminler); katalog numarası olmayan
+// malzemeye termin girilemez.
+export interface TedarikTerminiSatiri {
+  kod: string; ad: string; malzemeNo: number | null; termin: string | null; surum: number | null; aciklama: string;
+  gerekli: number | null; isler: string[]; durum: AlimDurumu;
+}
+const TON_SIRASI: Record<DurumTonu, number> = { hata: 3, uyari: 2, tamam: 1, pasif: 0 };
+export function tedarikTerminiSatirlari(D: PlanVerisi, l: readonly AlimPlaniSatiri[]): TedarikTerminiSatiri[] {
+  const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
+  const y = new Map<string, TedarikTerminiSatiri>();
+  for (const r of l) {
+    let x = y.get(r.kod);
+    if (!x) {
+      const m = mats.get(r.kod);
+      const surum = sonlu(m?.saSurum);
+      x = {
+        kod: r.kod, ad: typeof m?.ad === 'string' ? m.ad : '', malzemeNo: /^[1-9]\d*$/.test(r.kod) ? Number(r.kod) : null,
+        termin: typeof m?.saTermin === 'string' ? m.saTermin : null, surum, aciklama: typeof m?.saAciklama === 'string' ? m.saAciklama : '',
+        gerekli: null, isler: [], durum: r.durum,
+      };
+      y.set(r.kod, x);
+    }
+    if (r.gerekli !== null) x.gerekli = x.gerekli === null ? r.gerekli : Math.min(x.gerekli, r.gerekli);
+    for (const j of r.isler) if (!x.isler.includes(j)) x.isler.push(j);
+    if (TON_SIRASI[DURUM_TONU[r.durum]] > TON_SIRASI[DURUM_TONU[x.durum]]) x.durum = r.durum;
+  }
+  return [...y.values()].sort((a, b) => (a.gerekli ?? 1e9) - (b.gerekli ?? 1e9) || a.kod.localeCompare(b.kod));
 }
 
 // Verilecek siparişler en geç sipariş gününe, açık siparişler gerekli gelişe göre (zv-termin mpSatinalmaPlani).
@@ -487,14 +516,13 @@ export const DURUM_ADI: Record<AlimDurumu, string> = {
 };
 
 // Satın alma planının dört sayacı (zv-termin): verilecek sipariş ve günü geçenler; termini beklenen ve yok sayılanlar; geciktiren; karşılayan.
-export interface AlimSayaclari { verilmeli: number; gunuGecti: number; bekleniyor: number; yokSayildi: number; geciktirir: number; karsiliyor: number }
+export interface AlimSayaclari { verilmeli: number; gunuGecti: number; bekleniyor: number; geciktirir: number; karsiliyor: number }
 export function alimSayaclari(l: readonly AlimPlaniSatiri[], simdi: number): AlimSayaclari {
   const { yeni, acik } = alimTablolari(l);
   return {
     verilmeli: yeni.length,
     gunuGecti: yeni.filter((r) => r.siparisGun !== null && r.siparisGun < simdi).length,
-    bekleniyor: acik.filter((r) => r.tm === 'tahmini' || r.tm === 'yok').length,
-    yokSayildi: acik.filter((r) => r.tm === 'yok').length,
+    bekleniyor: l.filter((r) => r.tb).length,
     geciktirir: acik.filter((r) => r.durum === 'geciktirir').length,
     karsiliyor: acik.filter((r) => DURUM_TONU[r.durum] === 'tamam').length,
   };
@@ -599,22 +627,18 @@ export interface MotorGirdisiKaynagi {
   taban: number;
 }
 
-// Planın gördüğü girdi: havuz ve biten sipariş düşer (eksik tahmini de biten siparişi saymaz, 483/1), fire uygulanır, terminsiz satın
-// almaya ve eksik malzemeye tahmini geliş yazılır (ilk vardiyanın başından, 483/2). 483/1 ve 483/2 motorda da aynı tanımla değişir.
+// Planın gördüğü girdi: havuz ve biten sipariş düşer (eksik satırı da biten siparişi saymaz, 483/1), fire uygulanır. Tarihsiz satın almaya
+// ve eksik malzemeye Satın Alma'nın malzeme termini (533 a, günün 08:00'i), yoksa olması gereken tarih yazılır (554 a: termin beklenen satır,
+// iş beklemez). Olması gereken tarih kayıtlı plandaki ilk işin başlangıcından muayene kadar öncedir, plan yoksa ilk vardiyanın başı (483/2).
+// Motor aynı tanımla değişir (durum.betik tmUygula).
 export function motorGirdisi(k: MotorGirdisiKaynagi): MrpGirdisi {
-  const A = terminAyari(k.D);
   const mats = new Map(k.malzemeler.map((m) => [m.kod, m]));
   const ted = tedarikciGecikmeleri(k.D);
   const siparisler = k.D.siparisler.filter((s) => s.havuz !== true && !k.biten.siparis.has(s.id)).map((s): Siparis => {
     if (!s.malzeme) return s;
     return { ...s, malzeme: s.malzeme.map((r) => { const f = sayiOku(mats.get(r.kod)?.fire); return f > 0 ? { ...r, miktar: sayiOku(r.miktar) * (1 + f / 100) } : r; }) };
   });
-  const now = ilkVardiyaBasi(k.D, k.taban), sinir = now + A.esik * 24;
-  const sure = (kod: string, q: number): number | null => {
-    const m = mats.get(kod);
-    const tg = sonlu(m?.tedarikGun);
-    return m === undefined || tg === null ? null : (tg * terminKatsayisi(m, 'terminKat', A.katMal) + terminKatsayisi(m, 'terminEk', A.ekMal) * q / 100) * 24;
-  };
+  const bas = ilkVardiyaBasi(k.D, k.taban);
   // Malzemenin ihtiyaç günü kayıtlı plandan: onu kullanan ilk işin başlangıcı (durum.betik tmIhtiyac).
   const ilk = ilkBaslangiclar(k.islemler);
   const gerekGunu = new Map<string, number>();
@@ -623,14 +647,13 @@ export function motorGirdisi(k: MotorGirdisiKaynagi): MrpGirdisi {
     if (t === undefined) continue;
     for (const r of s.malzeme ?? []) gerekGunu.set(r.kod, Math.min(gerekGunu.get(r.kod) ?? Infinity, t));
   }
+  const saTermini = (kod: string): number | null => { const t = mats.get(kod)?.saTermin; return typeof t === 'string' ? saatOku(k.taban, `${t} 08:00`) : null; };
+  const gereken = (kod: string): number => { const h = gerekGunu.get(kod); return h === undefined ? bas : dakika(h - sayiOku(mats.get(kod)?.muayeneGun) * 24); };
   const alimlar = k.alimlar.map((a, i): AcikAlim => {
     const x: AcikAlim = { ...a, src: asilSira(a, i), tm: a.tm ?? 'termin' };
     if (x.soz !== null) return x;
-    const su = sure(a.kod, a.miktar);
-    if (su === null) return { ...x, tm: 'sure-yok' };
-    const h = gerekGunu.get(a.kod);
-    if (h !== undefined && h <= sinir) return { ...x, soz: dakika(now + su), tm: 'yok' };
-    return { ...x, soz: dakika(Math.max(now, (a.verildi ?? now) + su)), tm: 'tahmini' };
+    const sat = saTermini(a.kod);
+    return sat !== null ? { ...x, soz: sat, tm: 'sa-termin' } : { ...x, soz: gereken(a.kod), tm: 'termin-bekleniyor', tb: true };
   });
   const ihtiyac = new Map<string, number>();
   for (const s of siparisler) for (const r of s.malzeme ?? []) ihtiyac.set(r.kod, (ihtiyac.get(r.kod) ?? 0) + sayiOku(r.miktar) * sayiOku(s.adet));
@@ -638,10 +661,9 @@ export function motorGirdisi(k: MotorGirdisiKaynagi): MrpGirdisi {
     const m = mats.get(kod);
     const eks = q - (sayiOku(m?.stok) + k.alimlar.filter((a) => a.kod === kod).reduce((x, a) => x + a.miktar, 0));
     if (eks <= 1e-6) continue;
-    const su = sure(kod, eks);
-    if (su === null) continue;
     const t = typeof m?.tedarikci === 'string' && m.tedarikci !== '' ? m.tedarikci : null;
-    alimlar.push({ kod, miktar: eks, soz: dakika(now + su), tedarikci: t, gecikme: t === null ? 0 : ted(t), src: null, tm: 'siparis-yok' });
+    const sat = saTermini(kod);
+    alimlar.push({ kod, miktar: eks, soz: sat ?? gereken(kod), tedarikci: t, gecikme: t === null ? 0 : ted(t), src: null, tm: 'siparis-yok', ...(sat === null ? { tb: true } : {}) });
   }
   return {
     siparisler, urunler: k.D.urunler, malzemeler: k.malzemeler, alimlar, islemler: k.islemler, simdi: k.simdi, kokler: ilkIslemler(k.D, siparisler, k.biten.adim),
@@ -702,7 +724,7 @@ export function malzemeIsisi(l: readonly AlimPlaniSatiri[], taban: number, simdi
     const h: Record<string, IsiHucresi> = {};
     const d = DURUM_ADI[r.durum];
     const ton = DURUM_TONU[r.durum];
-    const tah = r.tm !== 'termin' ? (r.src === null ? 'sipariş verilmedi, tedarik süresine göre' : 'tedarikçi tarih vermedi') : undefined;
+    const tah = r.tb ? 'Satın Alma termini bekleniyor, olması gereken tarih' : undefined;
     const gel = r.etkin, plan = r.gerekli;
     const gec = gel !== null && plan !== null && gel > plan + 0.05;
     const kd = ton === 'hata' ? 4 : 2;

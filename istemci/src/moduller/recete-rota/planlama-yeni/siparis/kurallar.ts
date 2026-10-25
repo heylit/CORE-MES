@@ -212,13 +212,12 @@ export const TM0: TerminAyari = { katMal: 1, katFas: 1, ekMal: 0, ekFas: 0, esik
 export const terminAyari = (D: PlanVerisi): TerminAyari => ({ ...TM0, ...(nesne(D.terminAyar) ? (D.terminAyar as Partial<TerminAyari>) : {}) });
 export const katsayi = (x: ExtraAlanlar | undefined, k: string, genel: number): number => (x && x[k] != null && Number.isFinite(+(x[k] as number)) ? +(x[k] as number) : genel);
 
-// Ayar alanlarının sınırı (zv-termin sTerminler al): en az, en çok, adım.
-export const AYAR_SINIRI: Record<keyof TerminAyari, { ad: string; min: number; max: number; adim: number }> = {
-  katMal: { ad: 'Malzeme katsayısı ×', min: 0.1, max: 10, adim: 0.1 },
-  ekMal: { ad: 'Malzeme ek gün / 100 birim', min: 0, max: 100, adim: 0.1 },
+// Ayar alanlarının sınırı (zv-termin sTerminler al): en az, en çok, adım. 554 a: malzemede katsayı yoktur, ayar yalnız fasonundur.
+export type FasonTerminAyari = Pick<TerminAyari, 'katFas' | 'ekFas' | 'esik'>;
+export const AYAR_SINIRI: Record<keyof FasonTerminAyari, { ad: string; min: number; max: number; adim: number }> = {
   katFas: { ad: 'Fason katsayısı ×', min: 0.1, max: 10, adim: 0.1 },
   ekFas: { ad: 'Fason ek gün / 100 adet', min: 0, max: 100, adim: 0.1 },
-  esik: { ad: 'Termin zorunlu (gün önce)', min: 1, max: 60, adim: 1 },
+  esik: { ad: 'Fason termini zorunlu (gün önce)', min: 1, max: 60, adim: 1 },
 };
 // Malzeme ve fasoncu başına katsayının sınırı (tmKatKart): katsayı 0,1-10, ek gün 0-100; boş genel katsayıdır.
 export const KAT_SINIRI = { terminKat: { min: 0.1, max: 10 }, terminEk: { min: 0, max: 100 } } as const;
@@ -295,28 +294,25 @@ interface KalemOrtak { k: string; ad: string; alt: string; durum: string; ton: D
 export type TerminKalemi = (KalemOrtak & { grup: 'fas'; x: FasonSatiri }) | (KalemOrtak & { grup: 'mal'; m: AlimPlaniSatiri });
 
 // Terminler ısı haritasının malzeme kalemleri (zz29-gorsel gvTmKalemler, malzeme kısmı). Satırlar Malzeme satın alma planının hesabındandır
-// (malzeme/kurallar.ts alimPlani, eski tmMalzeme). Sipariş verilmemiş satırın tahmini gelişi bugünden tedarik süresi x katsayıdır.
+// (malzeme/kurallar.ts alimPlani, eski tmMalzeme). Termini beklenen satır (554 a) olması gereken tarihte gelmiş sayılır.
 export function malzemeKalemleri(D: PlanVerisi, L: readonly AlimPlaniSatiri[], now: number): TerminKalemi[] {
-  const A = terminAyari(D);
   const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
   const birim = (q: number, kod: string) => `${sayi(q, q < 10 ? 1 : 0)} ${mats.get(kod)?.birim ?? ''}`.trim();
   return L.map((r) => {
     const m = mats.get(r.kod);
     const d = DURUM_ADI[r.durum]; const t = DURUM_TONU[r.durum]; const ton: DurumTonu = t === 'pasif' ? 'uyari' : t;
-    const termin = r.tm === 'termin';
-    const tg = m?.tedarikGun != null && Number.isFinite(+m.tedarikGun) ? +m.tedarikGun : null;
-    const tahminGelis = r.etkin ?? (tg !== null ? now + tg * katsayi(m, 'terminKat', A.katMal) * 24 : null);
+    const termin = !r.tb;
+    const tahminGelis = r.etkin;
     const ted = r.tedarikci ? tedarikciAdi(D, r.tedarikci) : '';
     let neden: string;
     if (r.gerekli == null) neden = 'Bu alım plandaki bir işe gitmiyor; stoğa girer.';
-    else if (r.tm === 'siparis-yok' || r.tm === 'sure-yok') neden = `Plan bu malzemeyi ${gunYaz(D, r.gerekli)} günü istiyor ama sipariş verilmedi.${r.siparisGun != null ? ` Zamanında gelmesi için en geç ${gunYaz(D, r.siparisGun)} günü sipariş verilmeli.` : ''}${tahminGelis != null ? ` Bugün verilirse ${gunYaz(D, tahminGelis)} gelir.` : ''}`;
-    else if (r.tm === 'yok') neden = `Gerekmesine bir haftadan az kaldı ve tedarikçi tarih vermedi, sipariş yok sayıldı. Plan malzemeyi ${gunYaz(D, r.etkin)} varsayıyor; bağlı işler kayabilir.`;
-    else if (r.tm === 'tahmini') neden = `Tedarikçi tarih vermedi; plan tedarik süresinden ${gunYaz(D, r.etkin)} gelir varsayıyor. Plan ${gunYaz(D, r.gerekli)} günü istiyor.`;
+    else if (r.tm === 'siparis-yok') neden = `Plan bu malzemeyi ${gunYaz(D, r.gerekli)} günü istiyor ama sipariş verilmedi.${r.siparisGun != null ? ` Zamanında gelmesi için en geç ${gunYaz(D, r.siparisGun)} günü sipariş verilmeli.` : ''}${r.tb ? ' Satın Alma termini bekleniyor; plan malzemeyi olması gereken tarihte gelmiş sayıyor.' : ` Satın Alma termini ${gunYaz(D, r.etkin)}.`}`;
+    else if (r.tb) neden = `Satın Alma termini bekleniyor; plan malzemeyi olması gereken ${gunYaz(D, r.gerekli)} tarihinde gelmiş sayıyor, iş kaymaz.`;
     else neden = alimNedeni(r);
     return {
       grup: 'mal', m: r, k: `m:${r.alimNo ?? `e-${r.isler.join(',')}`}:${r.kod}`, ad: r.kod, alt: `${m?.ad ?? ''} · ${birim(r.miktar, r.kod)}`, durum: d, ton,
       bas: r.etkin != null || tahminGelis != null ? Math.max(now - 24, r.verildi ?? now) : null, son: tahminGelis, ger: r.gerekli, tahmini: !termin, neden,
-      bilgi: [['Gerekli', gunYaz(D, r.gerekli)], [termin ? 'Geliş (tedarikçi)' : 'Geliş (tahmini)', gunYaz(D, tahminGelis)], ['Sipariş gecikmeden en geç', gunYaz(D, r.enGec)],
+      bilgi: [['Gerekli', gunYaz(D, r.gerekli)], [termin ? 'Geliş (termin)' : 'Geliş (olması gereken)', gunYaz(D, tahminGelis)], ['Sipariş gecikmeden en geç', gunYaz(D, r.enGec)],
         ['Miktar', birim(r.miktar, r.kod)], ['Tedarikçi', ted || '—'], ['Bağlı siparişler', r.isler.join(', ') || '—']],
     };
   });
@@ -350,6 +346,8 @@ export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[]): TerminKalemi[] 
 
 const SIRA: Record<DurumTonu, number> = { hata: 0, uyari: 1, tamam: 2 };
 const TAHMIN = 'tarih girilmedi, olağan süreye göre';
+// 554 a: termini girilmemiş malzeme tahmin edilmez, olması gereken tarihte gelmiş sayılır.
+const TERMIN_BEKLENIYOR = 'Satın Alma termini bekleniyor, olması gereken tarih';
 export interface TerminSatiri extends IsiSatiri { kalem: TerminKalemi; gun: number | null }
 export interface TerminIsisi { sutunlar: IsiSutunu[]; satirlar: TerminSatiri[]; ust: UstDurum }
 
@@ -357,7 +355,7 @@ export interface TerminIsisi { sutunlar: IsiSutunu[]; satirlar: TerminSatiri[]; 
 export function terminIsisi(c: PlanlamaCalismasi, K: TerminKalemi[]): TerminIsisi {
   const D = c.D; const G = gunSutunlari(D, simdi(c), 21); const satirlar: TerminSatiri[] = [];
   for (const x of [...K].sort((a, b) => SIRA[a.ton] - SIRA[b.ton] || (a.ger ?? 1e12) - (b.ger ?? 1e12))) {
-    const h: Record<string, IsiHucresi> = {}; const tah = x.tahmini ? TAHMIN : undefined; const gec = x.son != null && x.ger != null && x.son > x.ger + 0.05;
+    const h: Record<string, IsiHucresi> = {}; const tah = x.tahmini ? (x.grup === 'mal' ? TERMIN_BEKLENIYOR : TAHMIN) : undefined; const gec = x.son != null && x.ger != null && x.son > x.ger + 0.05;
     const kd: Kademe = x.ton === 'hata' ? 4 : 2; const mal = x.grup === 'mal'; const sm = mal ? 'box' : 'truck';
     if (x.bas != null && x.son != null) { const a = Math.max(gunNo(x.bas), G.g0), b = Math.min(gunNo(gec ? x.ger! : x.son) - (gec ? 0 : 1), G.g0 + G.n - 1); for (let g = a; g <= b; g++) hucreKoy(h, `g${g}`, { is: true, etiket: mal ? 'yolda' : 'fasoncuda' }); }
     if (gec) for (let g = Math.max(gunNo(x.ger!), G.g0); g <= Math.min(gunNo(x.son!), G.g0 + G.n - 1); g++) hucreKoy(h, `g${g}`, { kd, tahmin: tah, etiket: 'bekleniyor' });

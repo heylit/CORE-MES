@@ -127,21 +127,24 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(g, 'E-2|10')!.bitis, '2026-10-19T22:30:00.000Z');
   });
 
-  test('525 4 a: katı malzeme kipinde malzemesi gelmeyen emrin işleri yerleşmez ama komutu durdurmaz; uyarı kipinde yerleşir', async () => {
+  test('525 4 a, 554 a: termini girilmemiş eksik malzeme olması gereken tarihte gelmiş sayılır, iş kaymaz; girilen geç termin katı kipte işi bekletir', async () => {
     const ham = { id: '60', code: 'HM-1', name: 'Ornek cubuk', type: 'ham', unit: 'kg', stock: 0 };
-    // Tedarik süresi boş: motor eksiğe tahmini geliş yazmaz (durum.betik tmEksikYaz), malzeme hiç gelmez.
-    const k = (mat: string) => ({
+    const k = (mat: string, termin: string | null) => ({
       ...KAYNAK, calisma: { ...KAYNAK.calisma, w: { ...KAYNAK.calisma.w, mat } },
       kayit: { ...KAYNAK.kayit, items: [{ ...ham, plan: { kod: '60', ad: 'Ornek cubuk', birim: 'kg', stok: 0, birimFiyat: 0, tedarikGun: null, muayeneGun: 0 } }] },
-      kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, items: [...KAYNAK.kaynak.durum.items, ham],
-        routes: { 50: { base: null, steps: [{ ...adim(10, 30), ins: [{ itemId: '60', qty: 1 }] }, adim(20, 15)] } } } },
+      kaynak: { ...KAYNAK.kaynak, ek: termin === null ? null : { tedarikTerminleri: [{ kod: '60', termin, surum: 1, aciklama: '' }] },
+        durum: { ...KAYNAK.kaynak.durum, items: [...KAYNAK.kaynak.durum.items, ham],
+          routes: { 50: { base: null, steps: [{ ...adim(10, 30), ins: [{ itemId: '60', qty: 1 }] }, adim(20, 15)] } } } },
     });
     const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|20'] }] });
-    const sert = await coz(k('sert'), i);
-    assert.deepEqual([sert.yerlesmeyen, sert.malzemeBekleyen.sort(), sert.yerlesimler], [[], ['E-1|10', 'E-1|20'], []]);
-    const uyari = await coz(k('uyari'), i);
-    assert.deepEqual([uyari.yerlesmeyen, uyari.malzemeBekleyen], [[], []]);
-    assert.ok(yer(uyari, 'E-1|10') && yer(uyari, 'E-1|20'));
+    const terminsiz = await coz(k('sert', null), i);
+    assert.deepEqual([terminsiz.yerlesmeyen, terminsiz.malzemeBekleyen], [[], []]);
+    assert.ok(yer(terminsiz, 'E-1|10') && yer(terminsiz, 'E-1|20'));
+    const gec = await coz(k('sert', '2026-10-23'), i);
+    assert.equal(yer(gec, 'E-1|10')!.baslangic, '2026-10-23T05:00:00.000Z', 'termin günü 08:00');
+    // Eski uyarı kipi karma kipe taşınır (1650 4 c): Satın Alma termini belli geliştir, karma kipte de bekletir.
+    const karma = await coz(k('uyari', '2026-10-23'), i);
+    assert.equal(yer(karma, 'E-1|10')!.baslangic, '2026-10-23T05:00:00.000Z');
   });
 
   test('512 1 a: taslağın ek vardiyası motorun kapasitesidir; verilmezse çalışmanınki, boş liste çalışmanınkini siler', async () => {
@@ -202,6 +205,8 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
     assert.deepEqual(d?.machines?.map((m) => m.id), [String(makineId)]);
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
+    // N8: takvim eki planlama sayfasındaki gibi kurulur (iş merkezinin haftalık vardiyası)
+    assert.deepEqual(Object.keys((k?.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
     assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [], malzemeBekleyen: [] });
   });

@@ -4,8 +4,9 @@ import { planGuncel } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from '../malzeme/kaynak.ts';
-import { alimPlani, bitenler, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs, tahsisEt, terminAyari as alimTerminAyari, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
-import type { Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
+import { alimPlani, bitenler, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs, tahsisEt, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
+import { TedarikTerminiKarti } from '../malzeme/TedarikTermini.tsx';
+import type { Fasoncu, PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { MalzemeBekleyenKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { fasonTanimi } from './formlar.ts';
@@ -13,13 +14,13 @@ import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Acili
 import { SayiGirdisi } from './SayiGirdisi.tsx';
 import {
   AYAR_SINIRI, KAT_SINIRI, fasonDurumu, fasonKalemleri, fasonSatirlari, malzemeKalemleri, fasonTerminiYaz, gunYaz, katsayi, kayitliPlan, sayi, sinirliSayi,
-  saatYaz, tarihGirdisi, tedarikliMalzemeler, terminAyari, terminIsisi, terminUyarisi, type FasonSatiri, type TerminAyari, type TerminSatiri,
+  saatYaz, tarihGirdisi, terminAyari, terminIsisi, terminUyarisi, type FasonSatiri, type FasonTerminAyari, type TerminSatiri,
 } from './kurallar.ts';
 
 // Terminler: kalem × gün (zz30-isi ISI.terminler), satırın altında sihirbazla dönüş tarihi (zz25-sade-takvim SADE.terminler fason, ortak sade
 // kabuğu), "Tüm satırlar"da varsayılan termin, katsayılar, termin bekleyen malzemeler ve fason dönüş terminleri (zv-termin sTerminler).
 // Malzeme kalemleri Malzeme satın alma planının (P4) hesabındandır, kaynağı da onunkidir: stok ve açık sipariş stoktan (518 a). Satın alma
-// termini ve siparişi satın almanındır; malzeme satırı yalnız okunur (222 a). İşi ileri atmak siparişin başlama tarihini yazar; o tarih
+// siparişi satın almanındır (222 a); malzeme başına tedarik termini burada da girilir, kayıt Satın Alma'nındır (533 a, 534 1 a). İşi ileri atmak siparişin başlama tarihini yazar; o tarih
 // Üretim emirlerindendir, düğme yerinde pasif (222 a, Soru 466/1 a).
 
 const ILERI_SAHIBI = 'İşin başlama tarihi Üretim emirlerinde değiştirilir.';
@@ -28,8 +29,7 @@ const tarih = (D: PlanVerisi, t: number | null | undefined) => (t == null || !Nu
 
 function AyarKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu | null; uyar: (ileti: string) => void }) {
   const A = terminAyari(D);
-  const orn = tedarikliMalzemeler(D)[0];
-  const yaz = (k: keyof TerminAyari, metin: string) => {
+  const yaz = (k: keyof FasonTerminAyari, metin: string) => {
     const s = AYAR_SINIRI[k]; const x = sinirliSayi(metin, s.min, s.max);
     if (x === null) { uyar('Geçerli bir sayı girin.'); return; }
     if (x === A[k] || !komut) return;
@@ -38,9 +38,9 @@ function AyarKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu | n
     }, { ayrinti: `${k}: ${A[k]} → ${x}` });
   };
   return (
-    <Kart baslik="Varsayılan termin" simge="gear">
+    <Kart baslik="Varsayılan fason dönüşü" simge="gear">
       <div className="tc-pys-alanlar">
-        {(Object.keys(AYAR_SINIRI) as (keyof TerminAyari)[]).map((k) => (
+        {(Object.keys(AYAR_SINIRI) as (keyof FasonTerminAyari)[]).map((k) => (
           <label key={k} className="tc-pys-alan">
             <span>{AYAR_SINIRI[k].ad}</span>
             {komut
@@ -50,18 +50,15 @@ function AyarKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu | n
         ))}
       </div>
       <p className="tc-pys-kucuk">
-        Katsayının iki işi var: termin gelene kadar planda boşluk kalmasın diye malzemenin ve fasonun ne zaman geleceğini varsayar, ve satın almaya referans
-        termin verir (tedarikçiden en geç bu tarih istenir). Referans siparişle birlikte saklanır; tedarikçinin verdiği termin referanstan geçse durum "plan
-        güncellenmeli" olur. Hesap: malzemede tedarik süresi × katsayı + miktarla orantılı ek gün, fasonda fasoncunun süresi × katsayı + adetle orantılı ek gün.
-        {orn && ` Örnek: ${orn.kod} tedarik ${sayi(orn.tedarikGun, 0)} gün × ${sayi(A.katMal, 2)}${A.ekMal ? ` + 100 birim başına ${sayi(A.ekMal, 1)} gün` : ''} = ${sayi((orn.tedarikGun ?? 0) * A.katMal, 1)} gün${A.ekMal ? ' + miktar payı' : ''}.`}
-        {' '}Girilen termin kesinleşen süredir ve katsayının yerine geçer. Plana girmesine {sayi(A.esik, 0)} gün kalmış ve termini olmayan malzeme siparişi yok
-        sayılır, fason için uyarı çıkar.
+        Dönüş termini girilmeyen fasonda plan dönüşü fasoncunun süresi × katsayı + adetle orantılı ek günle varsayar ve satın almaya referans termin verir;
+        girilen termin kesin süredir ve katsayının yerine geçer. Plana girmesine {sayi(A.esik, 0)} gün kalmış ve termini olmayan fason için uyarı çıkar.
+        Malzemede katsayı yoktur: termin Satın Alma'dan gelir, girilmemişse malzeme olması gereken tarihte gelmiş sayılır.
       </p>
     </Kart>
   );
 }
 
-type KatSatiri = { tur: 'mal'; x: Malzeme } | { tur: 'fas'; x: Fasoncu };
+type KatSatiri = { tur: 'fas'; x: Fasoncu };
 
 function KatsayiKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu | null; uyar: (ileti: string) => void }) {
   const A = terminAyari(D);
@@ -69,10 +66,9 @@ function KatsayiKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu 
     const s = KAT_SINIRI[k]; const x = metin.trim() === '' ? null : sinirliSayi(metin, s.min, s.max);
     if (metin.trim() !== '' && x === null) { uyar('Geçerli bir sayı girin.'); return; }
     if (!komut) return;
-    const kimlik = r.tur === 'mal' ? r.x.kod : r.x.id; const once = r.x[k];
-    komut.degistir(r.tur === 'mal' ? 'Malzeme termin katsayısı' : 'Fasoncu termin katsayısı', (t) => {
-      const l = (r.tur === 'mal' ? t.D.malzemeler : t.D.fasoncular) ?? [];
-      const o = (l as (Malzeme | Fasoncu)[]).find((y) => (r.tur === 'mal' ? (y as Malzeme).kod : (y as Fasoncu).id) === kimlik) as Record<string, unknown> | undefined;
+    const kimlik = r.x.id; const once = r.x[k];
+    komut.degistir('Fasoncu termin katsayısı', (t) => {
+      const o = (t.D.fasoncular ?? []).find((y) => y.id === kimlik) as Record<string, unknown> | undefined;
       if (!o) return false;
       if (x == null) delete o[k]; else o[k] = x;
       return true;
@@ -84,29 +80,19 @@ function KatsayiKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu 
       ? <SayiGirdisi deger={v} etiket={ad} min={KAT_SINIRI[k].min} max={KAT_SINIRI[k].max} adim={0.1} yer={sayi(genel, 2)} yaz={(m) => { yaz(r, k, m); }} />
       : <span className="mono">{v == null ? '—' : sayi(v, 2)}</span>;
   };
-  const mal: KatSatiri[] = tedarikliMalzemeler(D).map((x) => ({ tur: 'mal', x }));
   const fas: KatSatiri[] = (D.fasoncular ?? []).map((x) => ({ tur: 'fas', x }));
-  const malSut: Sutun<KatSatiri>[] = [
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (r) => r.tur === 'mal' && <><b className="mono">{r.x.kod}</b> <span className="tc-pys-kucuk">{r.x.ad ?? ''}</span></> },
-    { anahtar: 'tedarik', baslik: 'Tedarik', hizala: 'sag', hucre: (r) => r.tur === 'mal' && <span className="mono">{sayi(r.x.tedarikGun, 0)} gün</span> },
-    { anahtar: 'kat', baslik: 'Katsayı ×', hizala: 'sag', hucre: (r) => r.tur === 'mal' && gir(r, 'terminKat', A.katMal, `${r.x.kod} katsayı`) },
-    { anahtar: 'ek', baslik: 'Ek gün / 100 birim', hizala: 'sag', hucre: (r) => r.tur === 'mal' && gir(r, 'terminEk', A.ekMal, `${r.x.kod} ek gün`) },
-    { anahtar: 'sure', baslik: 'Varsayılan süre', hizala: 'sag', hucre: (r) => r.tur === 'mal' && (
-      <><b className="mono">{sayi((r.x.tedarikGun ?? 0) * katsayi(r.x, 'terminKat', A.katMal), 1)} gün</b><small className="tc-pys-not">{r.x.terminKat != null ? 'malzemenin kendi' : 'genel'}</small></>) },
-  ];
   const fasSut: Sutun<KatSatiri>[] = [
-    { anahtar: 'fasoncu', baslik: 'Fasoncu', hucre: (r) => r.tur === 'fas' && <><b>{r.x.ad ?? r.x.id}</b><small className="tc-pys-not mono">{r.x.id}</small></> },
-    { anahtar: 'sure', baslik: 'Süre', hizala: 'sag', hucre: (r) => r.tur === 'fas' && <span className="mono">{sayi(+(r.x.sureGun ?? 0) || 1, 1)} gün</span> },
-    { anahtar: 'kat', baslik: 'Katsayı ×', hizala: 'sag', hucre: (r) => r.tur === 'fas' && gir(r, 'terminKat', A.katFas, `${r.x.ad ?? r.x.id} katsayı`) },
-    { anahtar: 'ek', baslik: 'Ek gün / 100 adet', hizala: 'sag', hucre: (r) => r.tur === 'fas' && gir(r, 'terminEk', A.ekFas, `${r.x.ad ?? r.x.id} ek gün`) },
-    { anahtar: 'donus', baslik: 'Varsayılan dönüş', hizala: 'sag', hucre: (r) => r.tur === 'fas' && (
+    { anahtar: 'fasoncu', baslik: 'Fasoncu', hucre: (r) => <><b>{r.x.ad ?? r.x.id}</b><small className="tc-pys-not mono">{r.x.id}</small></> },
+    { anahtar: 'sure', baslik: 'Süre', hizala: 'sag', hucre: (r) => <span className="mono">{sayi(+(r.x.sureGun ?? 0) || 1, 1)} gün</span> },
+    { anahtar: 'kat', baslik: 'Katsayı ×', hizala: 'sag', hucre: (r) => gir(r, 'terminKat', A.katFas, `${r.x.ad ?? r.x.id} katsayı`) },
+    { anahtar: 'ek', baslik: 'Ek gün / 100 adet', hizala: 'sag', hucre: (r) => gir(r, 'terminEk', A.ekFas, `${r.x.ad ?? r.x.id} ek gün`) },
+    { anahtar: 'donus', baslik: 'Varsayılan dönüş', hizala: 'sag', hucre: (r) => (
       <><b className="mono">{sayi((+(r.x.sureGun ?? 0) || 1) * katsayi(r.x, 'terminKat', A.katFas), 1)} gün</b><small className="tc-pys-not">{r.x.terminKat != null ? 'firmanın kendi' : 'genel'}</small></>) },
   ];
   return (
-    <Kart baslik="Malzeme ve fasoncu başına katsayı" simge="list">
-      <p className="tc-pys-kucuk">Varsayılan termin malzemeye ve fason firmasına göre değişir. Boş bırakılan alan genel katsayıyı kullanır (gri yazılan değer).</p>
-      <Tablo etiket="Malzeme katsayıları" sutunlar={malSut} satirlar={mal} satirAnahtari={(r) => (r.tur === 'mal' ? r.x.kod : r.x.id)} bosMesaj="Tedarik süresi girilmiş malzeme yok." />
-      <Tablo etiket="Fasoncu katsayıları" sutunlar={fasSut} satirlar={fas} satirAnahtari={(r) => (r.tur === 'mal' ? r.x.kod : r.x.id)} bosMesaj="Fasoncu yok." />
+    <Kart baslik="Fasoncu başına katsayı" simge="list">
+      <p className="tc-pys-kucuk">Varsayılan dönüş fason firmasına göre değişir. Boş bırakılan alan genel katsayıyı kullanır (gri yazılan değer).</p>
+      <Tablo etiket="Fasoncu katsayıları" sutunlar={fasSut} satirlar={fas} satirAnahtari={(r) => r.x.id} bosMesaj="Fasoncu yok." />
     </Kart>
   );
 }
@@ -167,7 +153,7 @@ function useAlimPlani({ calisma, depo }: Pick<PlanlamaEkranOzellikleri, 'calisma
     const k = kaynakKur(D, taban, stok);
     const biten = bitenler(depo.durum?.emirler ?? depo.receteRotaKaydi, D);
     const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: calismaSimdisi(calisma), taban });
-    return alimPlani(g, taban, tahsisEt(g, taban), alimTerminAyari(D));
+    return alimPlani(g, taban, tahsisEt(g, taban));
   }, [calisma, stok, depo.durum, depo.receteRotaKaydi]);
 }
 
@@ -179,6 +165,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   const p = kayitliPlan(calisma);
   const L = calisma && p ? fasonSatirlari(calisma, p) : [];
   const degerlendir = gorunumDegerlendiricisi(depo);
+  const taban = calisma?.D.meta?.baslangic ? tabanMs(calisma.D.meta.baslangic) : null;
 
   const tum = calisma && (
     <TumSatirlar>
@@ -187,6 +174,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
       {p
         ? (
           <>
+            {alim && taban !== null && <TedarikTerminiKarti D={calisma.D} l={alim} taban={taban} yazar={yetki.planYaz} yenile={yenile} />}
             <MalzemeBekleyenKarti degerlendir={degerlendir} yenile={yenile} D={calisma.D} plandan={alim} />
             <FasonTerminKarti c={calisma} L={L} komut={komut} sadeceBos />
           </>

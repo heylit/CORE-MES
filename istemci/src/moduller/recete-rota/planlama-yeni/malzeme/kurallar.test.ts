@@ -159,13 +159,13 @@ describe('satın alma planı (satinalmaListe, zv-termin tmDurum)', () => {
     expect(alimDurumu({ etkin: 9, gerekli: 10, enGec: 12 })).toBe('karsiliyor');
   });
 
-  it('verilmemiş, terminsiz ve referanstan geç satırın durumu (tmDurum)', () => {
-    const r = { siparisGun: null, yakin: false, etkin: 9, gerekli: 10, enGec: 12, ref: null, soz: 9 };
-    expect(terminDurumu({ ...r, tm: 'siparis-yok', siparisGun: 1 }, 2)).toBe('gec-kaldi');
-    expect(terminDurumu({ ...r, tm: 'sure-yok', yakin: true }, 2)).toBe('verilmedi');
+  it('verilmemiş, termini beklenen ve referanstan geç satırın durumu (tmDurum, 554 a)', () => {
+    const r = { siparisGun: null, tb: false, etkin: 9, gerekli: 10, enGec: 12, ref: null, soz: 9 };
+    expect(terminDurumu({ ...r, tm: 'siparis-yok', tb: true, siparisGun: 1 }, 2)).toBe('gec-kaldi');
+    expect(terminDurumu({ ...r, tm: 'siparis-yok', tb: true }, 2)).toBe('bekleniyor');
     expect(terminDurumu({ ...r, tm: 'siparis-yok' }, 2)).toBe('verilmeli');
-    expect(terminDurumu({ ...r, tm: 'yok' }, 2)).toBe('yok-sayildi');
-    expect(terminDurumu({ ...r, tm: 'tahmini' }, 2)).toBe('bekleniyor');
+    expect(terminDurumu({ ...r, tm: 'termin-bekleniyor', tb: true }, 2)).toBe('bekleniyor');
+    expect(terminDurumu({ ...r, tm: 'sa-termin', etkin: 11 }, 2)).toBe('plandan-gec');
     expect(terminDurumu({ ...r, tm: 'termin', ref: 8 }, 2)).toBe('referanstan-gec');
     expect(terminDurumu({ ...r, tm: 'termin', ref: 9 }, 2)).toBe('karsiliyor');
   });
@@ -175,11 +175,11 @@ describe('satın alma planı (satinalmaListe, zv-termin tmDurum)', () => {
     const { yeni, acik } = alimTablolari(l);
     // E2 ilk işlem 2. gün; muayene 1 gün: gerekli 1. gün. Etkin = söz 4 + gecikme 1 = 5. gün. E2 bolluğu: termin 10. gün - bitiş 3. gün.
     expect(acik).toMatchObject([{ src: 0, tm: 'termin', gerekli: G, etkin: 5 * G, soz: 4 * G, enGec: 8 * G, durum: 'plandan-gec', isler: ['E2', 'E1'] }]);
-    // E1 ilk 6. gün - muayene 1 = 5. gün; bolluk 5 gün: en geç 10. gün, sipariş en geç 10 - 3 = 7. gün; ihtiyacı 7 gün içinde.
-    expect(yeni[0]).toMatchObject({ tur: 'eksik', kod: 'M1', miktar: 10, gerekli: 5 * G, enGec: 10 * G, siparisGun: 7 * G, yakin: true, durum: 'verilmedi' });
+    // E1 ilk 6. gün - muayene 1 = 5. gün; bolluk 5 gün: en geç 10. gün, sipariş en geç 10 - 3 = 7. gün (katsayı yok). Termini beklenir (554 a).
+    expect(yeni[0]).toMatchObject({ tur: 'eksik', kod: 'M1', miktar: 10, gerekli: 5 * G, enGec: 10 * G, siparisGun: 7 * G, tb: true, durum: 'bekleniyor' });
     // Planlı işi olmayan siparişin eksiği en sondadır; tarihi yoktur.
-    expect(yeni[1]).toMatchObject({ isler: ['E3'], miktar: 1, gerekli: null, siparisGun: null, durum: 'verilmeli' });
-    expect(alimSayaclari(l, G)).toEqual({ verilmeli: 2, gunuGecti: 0, bekleniyor: 0, yokSayildi: 0, geciktirir: 0, karsiliyor: 0 });
+    expect(yeni[1]).toMatchObject({ isler: ['E3'], miktar: 1, gerekli: null, siparisGun: null, durum: 'bekleniyor' });
+    expect(alimSayaclari(l, G)).toEqual({ verilmeli: 2, gunuGecti: 0, bekleniyor: 2, geciktirir: 0, karsiliyor: 0 });
     expect(alimSayaclari(l, 8 * G).gunuGecti).toBe(1);
   });
 
@@ -219,31 +219,33 @@ describe('motorun girdisi (stTamKur)', () => {
     expect(tahsisEt(g, taban).isler.get('F')?.[0]?.gerekli).toBeCloseTo(33);
   });
 
-  it('termini olmayan açık siparişe ve eksik malzemeye tahmini geliş verilir; eksik biten siparişi saymaz (483/1)', () => {
+  it('554 a: tarihsiz açık sipariş ve eksik malzeme olması gereken tarihte gelmiş sayılır, işi bekletmez; eksik biten siparişi saymaz (483/1)', () => {
     const g = motorGirdisi(kaynak());
-    // Takvim yok: tahmin 07:00'den; tedarik 10 gün. İhtiyaç (20. gün) eşiğin (7 gün) ötesinde: tahmini. Eksik: C'nin 10'u - açık 5.
+    // C'nin ilk işi 20. gün, muayene yok: olması gereken 20. gün. Tedarik süresi ve katsayı kullanılmaz. Eksik: C'nin 10'u - açık 5. M4'ü isteyen
+    // F planda yok: olması gereken bilinmez, ilk vardiya başı (takvim yok: 07:00); fire %10 ile 33.
     expect(g.alimlar).toMatchObject([
-      { kod: 'M5', miktar: 5, soz: 7 + 10 * G, tm: 'tahmini', src: 0 },
-      { kod: 'M5', miktar: 5, soz: 7 + 10 * G, tm: 'siparis-yok', src: null },
+      { kod: 'M5', miktar: 5, soz: 20 * G, tm: 'termin-bekleniyor', tb: true, src: 0 },
+      { kod: 'M5', miktar: 5, soz: 20 * G, tm: 'siparis-yok', tb: true, src: null },
+      { kod: 'M4', soz: 7, tm: 'siparis-yok', tb: true, src: null },
     ]);
-    const h = malzemePlani(g, taban);
-    // Tahmini satırdan alınan yeni alımdır; açık siparişin tarihi girilmiş termin yoksa ihtiyaç günüdür.
-    expect(h.satirlar.filter((s) => s.j === 'C').map((s) => [s.tur, s.q, s.alim])).toEqual([['acik', 5, 20 * G], ['yeni', 5, 20 * G - 10 * G]]);
+    expect(g.alimlar[2]?.miktar).toBeCloseTo(33);
+    // Termini beklenen satır işi bekletmez: C'nin malzemesi baştan hazırdır.
+    expect(tahsisEt(g, taban).alimlar.slice(0, 2).map((a) => a.varis)).toEqual([-1e9, -1e9]);
     const { yeni, acik } = alimTablolari(alimPlani(g, taban));
-    expect(acik).toMatchObject([{ tm: 'tahmini', durum: 'bekleniyor' }]);
-    // M4'ün tedarik süresi yok: tahmini satırı kurulamaz, eksik olarak kalır.
-    expect(yeni).toMatchObject([{ kod: 'M5', tm: 'siparis-yok', miktar: 5, durum: 'verilmeli' }, { kod: 'M4', tur: 'eksik', tm: 'sure-yok' }]);
+    expect(acik).toMatchObject([{ tm: 'termin-bekleniyor', durum: 'bekleniyor' }]);
+    expect(yeni).toMatchObject([{ kod: 'M5', tm: 'siparis-yok', miktar: 5, siparisGun: 10 * G, durum: 'bekleniyor' }, { kod: 'M4', tm: 'siparis-yok', durum: 'bekleniyor' }]);
   });
 
-  it('ihtiyacına eşik kadar gün kalmış terminsiz sipariş yok sayılır; sipariş tarihi biliniyorsa tahmin ondan sayılır', () => {
-    const yakin = motorGirdisi(kaynak({ islemler: [{ id: 'C.OP10', job: 'C', S: 2 * G, C: 3 * G, done: false }] }));
-    expect(yakin.alimlar[0]).toMatchObject({ soz: 7 + 10 * G, tm: 'yok' });
-    expect(alimTablolari(alimPlani(yakin, taban)).acik[0]?.durum).toBe('yok-sayildi');
-    const verildi = motorGirdisi(kaynak({ alimlar: [{ kod: 'M5', miktar: 5, soz: null, tedarikci: null, gecikme: 0, verildi: 4 * G }] }));
-    expect(verildi.alimlar[0]?.soz).toBe(14 * G);
+  it('533 a: Satın Alma termini tarihsiz siparişe ve eksiğe o günün 08:00 i olarak yazılır; geç termin işi bekletir', () => {
+    const T: PlanVerisi = { ...D, malzemeler: [{ kod: 'M5', stok: 0, tedarikGun: 10, saTermin: '2026-01-30' }, { kod: 'M4', stok: 0, fire: 10 }] };
+    const g = motorGirdisi(kaynak({ D: T, malzemeler: T.malzemeler ?? [] }));
+    expect(g.alimlar.slice(0, 2)).toMatchObject([{ soz: 25 * G + 8, tm: 'sa-termin' }, { soz: 25 * G + 8, tm: 'siparis-yok' }]);
+    expect(g.alimlar[0]?.tb).toBeUndefined();
+    expect(tahsisEt(g, taban).alimlar[0]?.varis).toBe(25 * G + 8);
+    expect(alimTablolari(alimPlani(g, taban)).acik[0]).toMatchObject({ tb: false, gerekli: 20 * G, enGec: 20 * G, durum: 'geciktirir' });
   });
 
-  it('tahmini geliş planın ilk çalışma gününün ilk vardiyasından sayılır; tatil ve vardiyasız gün atlanır (483/2)', () => {
+  it('plan yokken olması gereken tarih planın ilk çalışma gününün ilk vardiyasıdır; tatil ve vardiyasız gün atlanır (483/2)', () => {
     // Taban pazartesi; pazartesi tatil, salı yalnız V2 (14:00), çarşamba V1 (06:30) ve V2.
     const T: PlanVerisi = {
       ...D, vardiyalar: [{ id: 'V1', bas: '06:30', bit: '14:00' }, { id: 'V2', bas: '14:00', bit: '22:00' }],
@@ -252,7 +254,8 @@ describe('motorun girdisi (stTamKur)', () => {
     expect(ilkVardiyaBasi(T, taban)).toBe(G + 14);
     expect(ilkVardiyaBasi({ ...T, tatiller: [], calismaGunleri: { pzt: ['V2', 'V1'] } }, taban)).toBe(6.5);
     expect(ilkVardiyaBasi(D, taban)).toBe(7);
-    expect(motorGirdisi(kaynak({ D: T })).alimlar[0]?.soz).toBe(G + 14 + 10 * G);
+    // Malzemeyi isteyen iş planda yoksa olması gereken tarih ilk vardiyanın başıdır.
+    expect(motorGirdisi(kaynak({ D: T, islemler: [] })).alimlar[0]?.soz).toBe(G + 14);
   });
 
   it('malzeme rotanın ilk adımında gerekir; ilk adım başlamışsa gerekmez, bitmişse sonraki adımda gerekir (486/4)', () => {

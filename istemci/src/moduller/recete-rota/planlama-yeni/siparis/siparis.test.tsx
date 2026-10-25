@@ -201,7 +201,8 @@ describe('P2 Terminler', () => {
   }, 20000);
 
   it('malzeme kalemleri satın alma planından gelir (518 a): haritada satırı, kartta termin bekleyeni; ekran yazmaz (izinli)', async () => {
-    // S1'in malzemesi 20 kg, stok 5: 15 kg için sipariş verilmedi. Stok ucu cevap vermez; planın kendi kopyası kullanılır.
+    // S1'in malzemesi 20 kg, stok 5: 15 kg için sipariş verilmedi. Stok ucu cevap vermez; planın kendi kopyası kullanılır. Satın Alma termini
+    // yok: malzeme olması gereken tarihte gelmiş sayılır (554 a); plan yazan malzeme başına termini girebilir (533 a).
     const deger = structuredClone(CALISMA_DEGERI);
     Object.assign(deger.D.siparisler[0]!, { malzeme: [{ kod: '7', miktar: 2 }] });
     Object.assign(deger.D, { malzemeler: [{ kod: '7', ad: 'Deneme cubuk', birim: 'kg', stok: 5, tedarikGun: 3, muayeneGun: 0 }] });
@@ -210,17 +211,18 @@ describe('P2 Terminler', () => {
     await parca('terminler');
     await waitFor(() => { expect(screen.getAllByRole('button', { name: /^7, / }).length).toBeGreaterThan(0); }, BEKLE);
     expect(document.querySelectorAll('.tc-pys-h[data-kapali]').length).toBe(0);
-    expect(screen.getByText(/^En koyu satır 7: plan 19\.10 Pzt istiyor, geliş 22\.10 Per/)).toBeTruthy();
+    expect(screen.getByText(/^En koyu satır 7: plan 19\.10 Pzt istiyor, geliş 19\.10 Pzt \(0 gün bekleme\)/)).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: /^7, / })[0]!);
     const acilim = screen.getByRole('region', { name: '7 · Sipariş geç kaldı' });
     expect(within(acilim).queryByRole('form')).toBeNull();
     tumAc();
-    for (const ad of ['Varsayılan termin', 'Malzeme ve fasoncu başına katsayı', 'Malzeme: termin bekleyenler', 'Fason dönüş terminleri']) {
+    for (const ad of ['Varsayılan fason dönüşü', 'Fasoncu başına katsayı', 'Tedarik terminleri', 'Malzeme: termin bekleyenler', 'Fason dönüş terminleri']) {
       expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
     }
     const kart = screen.getByRole('table', { name: 'Malzeme: termin bekleyenler' });
     expect(within(kart).getByText('Sipariş geç kaldı')).toBeTruthy();
     expect((within(kart).getByLabelText('7 termin') as HTMLInputElement).disabled).toBe(true);
+    expect((within(screen.getByRole('table', { name: 'Tedarik terminleri' })).getByLabelText('7 tedarik termini') as HTMLInputElement).disabled).toBe(false);
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 

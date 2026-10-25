@@ -1011,3 +1011,43 @@ export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]
   S.plan.dataVer = null;
   return { deger: S as Record<string, unknown>, yazilan, kilitli, atlanan };
 }
+
+// 525 1 a: açık satın alma siparişinden kalan miktar ve beklenen teslim günü, plandaki malzeme koduyla. Miktar kalemin birimindedir: birimi
+// malzemenin biriminden farklı satır çevrilmeden toplanamaz, alınmaz; kalanı olmayan satır da alınmaz.
+export interface AcikSiparisGelisi { kod: string; miktar: number; tarih: string | null; siparisNo: string }
+export function acikSiparisSatirlari(
+  malzemeler: readonly { id: string; kayitNo: number; unit: string | null }[],
+  gelisler: ReadonlyMap<number, readonly { tarih: string | null; miktar: string; birim: string; siparisNo: string }[]>,
+): AcikSiparisGelisi[] {
+  return malzemeler.flatMap((m) => (gelisler.get(m.kayitNo) ?? [])
+    .filter((g) => g.birim === m.unit && Number(g.miktar) > 0)
+    .map((g) => ({ kod: m.id, miktar: Number(g.miktar), tarih: g.tarih, siparisNo: g.siparisNo })));
+}
+
+// 533 a: planın "olması gereken" tarihi Satın Alma'ya bildirilir: malzemeyi kullanan ilk işin kayıtlı plandaki başlangıcı eksi muayene süresi
+// (durum.betik tmIhtiyac), planın günü olarak. Havuzdaki sipariş ve bitmiş işlem sayılmaz. Plan ya da başlangıç günü yoksa liste boştur.
+export function gerekenTarihler(calisma: unknown): { kod: string; gerekenTarih: string }[] {
+  const nesne = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+  const dizi = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.map(nesne) : []);
+  const c = nesne(calisma), D = nesne(c['D']);
+  const bas = nesne(D['meta'])['baslangic'];
+  const taban = typeof bas === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(bas) ? Date.parse(`${bas}T00:00:00Z`) : Number.NaN;
+  if (!Number.isFinite(taban)) return [];
+  const ilk = new Map<string, number>();
+  for (const r of Object.values(nesne(nesne(c['plan'])['ops'])).map(nesne)) {
+    const S = r['S'], job = r['job'];
+    if (r['done'] || typeof S !== 'number' || !Number.isFinite(S) || typeof job !== 'string') continue;
+    ilk.set(job, Math.min(ilk.get(job) ?? Infinity, S));
+  }
+  const muayene = new Map(dizi(D['malzemeler']).map((m) => [String(m['kod']), Number(m['muayeneGun']) || 0]));
+  const gerek = new Map<string, number>();
+  for (const s of dizi(D['siparisler'])) {
+    const t = ilk.get(String(s['id']));
+    if (s['havuz'] === true || t === undefined) continue;
+    for (const r of dizi(s['malzeme'])) {
+      const kod = String(r['kod']);
+      gerek.set(kod, Math.min(gerek.get(kod) ?? Infinity, t - (muayene.get(kod) ?? 0) * 24));
+    }
+  }
+  return [...gerek].map(([kod, t]) => ({ kod, gerekenTarih: new Date(taban + Math.floor(t / 24) * 86_400_000).toISOString().slice(0, 10) }));
+}

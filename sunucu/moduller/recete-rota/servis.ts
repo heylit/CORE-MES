@@ -8,7 +8,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
-  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
+  BenCevabi, DurumCevabi, SatinAlmaEkiCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
   YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -21,19 +21,20 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { fasonSuresiTahminleri, malzemeGelisTarihleri, tedarikIhtiyaclariniYaz, tedarikTerminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  adimCiktisiBul, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
+  acikSiparisSatirlari, type AcikSiparisGelisi, adimCiktisiBul, gerekenTarihler, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
+import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
 // Akış: yetkiyi uç verir; burada biçim ve sürüm denetimi uygulanır.
@@ -76,6 +77,7 @@ export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: 
   const kayit = mevcut === null ? await sorgular.kayitEkle(db, satir) : await sorgular.kayitGuncelle(db, satir);
   // Eşzamanlı ilk yazmada öteki kazandı.
   if (kayit === null) throw cakisma(CAKISMA_ILETISI);
+  if (planlama) await gerekenTarihleriBildir(db, deger);
   // Ana durum kaydında statülü adımların statüleri aynı transaction'da eşitlenir (kart #1107).
   if (anaKayit) {
     await sorgular.statuEsitle(db, await yururluktekiRevizyonla(db, statuleriTuret(g.deger)));
@@ -179,6 +181,8 @@ const MALIYET_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
 const MALIYET_YAZMA: readonly Islem[] = ['finans.yonet'];
 const STOK_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const EMIR_OKUMA: readonly Islem[] = ADIMLI_OKUMA_ISLEMLERI;
+// Açık satın alma siparişinin gelişi (525 1 a): satın almayı okuyan ya da depoda mal kabul eden görür (stoktaki açık sipariş satırlarıyla aynı kapsam).
+const ACIK_SIPARIS_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz', 'stok.giris'];
 // Rota modülünün fason seçicisiyle aynı sınır (rota/servis.ts); süzgeç aramada uygulanır, yalnız aktif fason firmalar gelir.
 const FASON_ARAMA_SINIRI = 200;
 const yetkiliMi = (k: Kullanici, islemler: readonly Islem[]): boolean => islemler.some((i) => islemVarMi(k, i));
@@ -368,7 +372,44 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici) } };
+  const sa = await satinAlmaEkiKur(db, kullanici, d.items);
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), ...sa } };
+}
+
+// 525 1 a, 533 a: planın satın alma eki. Açık sipariş satın almayı okuyana; tedarik termini planlamada her malzeme satırında görünür
+// (yazma ucu satın almanın). Çerçeve bunu kaynak okumasıyla birlikte ayrı uçtan alır; sunucunun birleştirmesi kaynakOku'dan.
+export async function satinAlmaEki(db: Db, kullanici: Kullanici): Promise<SatinAlmaEkiCevabi> {
+  if (!yetkiliMi(kullanici, MALZEME_OKUMA)) return satinAlmaEkiKur(db, kullanici, null);
+  const { kartlar } = await aktifMalzemeler(db, { sayfaBoyu: MALZEME_SAYFA_BOYU, azamiSayfa: MALZEME_AZAMI_SAYFA });
+  return satinAlmaEkiKur(db, kullanici, kartlar.map((k) => malzemeCevir(k, undefined)));
+}
+async function satinAlmaEkiKur(db: Db, kullanici: Kullanici, malzemeler: DurumCevabi['items']): Promise<SatinAlmaEkiCevabi> {
+  if (malzemeler === null) return { acikSiparisler: null, tedarikTerminleri: null };
+  return {
+    acikSiparisler: yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, malzemeler) : null,
+    tedarikTerminleri: await malzemeTerminleri(db, malzemeler),
+  };
+}
+
+// 533 a: plan kaydedilince malzemenin olması gereken tarihi Satın Alma'ya aynı transaction'da gider (tam liste: planın artık istemediğinin tarihi
+// boşalır). Katalogda olmayan kod (silinmiş kart, sayfanın yerel malzemesi) bildirilmez: Satın Alma bilinmeyen malzemeyi reddeder.
+async function gerekenTarihleriBildir(db: Db, calisma: unknown): Promise<void> {
+  const l = gerekenTarihler(calisma).flatMap((x) => (/^\d+$/.test(x.kod) ? [{ malzemeNo: Number(x.kod), gerekenTarih: x.gerekenTarih }] : []));
+  const kartlar = await malzemeOzetleri(db, l.map((x) => x.malzemeNo));
+  await tedarikIhtiyaclariniYaz(db, l.filter((x) => kartlar.has(x.malzemeNo)));
+}
+
+// 533 a: ham malzemenin tedarik termini ve sürümü (girdi.betik plandaki malzemeye yazar). Satırı olmayan malzeme listede yoktur.
+async function malzemeTerminleri(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<{ kod: string; termin: string | null; surum: number; aciklama: string }[]> {
+  const ham = malzemeler.filter((m) => m.type === 'ham');
+  const t = await tedarikTerminleri(db, ham.map((m) => m.kayitNo));
+  return ham.flatMap((m) => { const x = t.get(m.kayitNo); return x ? [{ kod: m.id, termin: x.termin, surum: x.surum, aciklama: x.aciklama }] : []; });
+}
+
+// 525 1 a: ham malzemenin açık satın alma siparişleri (girdi.betik bunları plana satın alma satırı olarak yazar).
+async function acikSiparisGelisleri(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<AcikSiparisGelisi[]> {
+  const ham = malzemeler.filter((m) => m.type === 'ham');
+  return acikSiparisSatirlari(ham, await malzemeGelisTarihleri(db, ham.map((m) => m.kayitNo)));
 }
 
 // Çerçeve kaydı metin olarak da yazabilir (yerel depo değeri); metin biçimli değer JSON olarak okunur.
@@ -382,15 +423,13 @@ const kayitDegeri = (k: { bicim: string; deger?: unknown } | null): unknown => {
 // Okunan veri kimseye dönmez; çözücü yalnız saat verir. Yazma işlemi taşımaz.
 const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   id: 0, ad: 'plan motoru',
-  islemler: [...new Set([...MALZEME_OKUMA, ...ISTASYON_OKUMA, ...KISI_OKUMA, ...STOK_OKUMA, ...ROTA_OKUMA, ...EMIR_OKUMA, ...MALIYET_OKUMA])],
+  islemler: [...new Set([...MALZEME_OKUMA, ...ISTASYON_OKUMA, ...KISI_OKUMA, ...STOK_OKUMA, ...ROTA_OKUMA, ...EMIR_OKUMA, ...MALIYET_OKUMA, ...ACIK_SIPARIS_OKUMA])],
 };
 export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
 // Planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çalışma yoktur: null.
+// Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.
 export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null> {
-  const calisma = kayitDegeri(await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: unknown } | null;
-  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
-  const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
-  return { calisma, kayit, kaynak: await kaynakOku(db, PLAN_MOTORU_OKUYUCUSU) };
+  return (await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU)).girdi;
 }
 
 // Planlama sayfasının açılışı (288 a). Eski çerçeve çalışmayı, Reçete ve Rota kaydını ve kaynak okumasını tarayıcıda girdi.betik ile
@@ -401,6 +440,18 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   if (k.girdi === null) return { calisma: null, surum: k.surum };
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
   return { calisma: g === null ? null : g.S, surum: k.surum };
+}
+
+// 542 a, 546 a, 549 a: Satın Alma'nın malzeme ve fason planı sayfaları. Çalışma planlama sayfasıyla aynı girdiyle birleşir; kaynak sunucunun
+// iç okuyucusuyla okunur (çağıranın yetkisiyle okunsa satın almanın göremediği dilim düşer, hesap planlamadan ayrılırdı) ve giden çalışma
+// beyaz listeyle daraltılır (satin-alma-gorunumu.ts). Biten iş canlı emir durumundandır, okunamazsa Reçete ve Rota kaydındaki kopyası.
+export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  const k = await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU);
+  if (k.girdi === null) return { calisma: null, surum: k.surum };
+  const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
+  if (g === null) return { calisma: null, surum: k.surum };
+  const emirler = (k.girdi.kaynak.durum as { emirler?: unknown } | null)?.emirler ?? k.girdi.kayit;
+  return { calisma: satinAlmaCalismasi(g.S, emirler), surum: k.surum };
 }
 
 // Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki
