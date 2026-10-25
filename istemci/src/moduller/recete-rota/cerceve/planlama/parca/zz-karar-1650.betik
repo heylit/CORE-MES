@@ -15,8 +15,9 @@ function matKarmaUygula() {
   const c0 = compile;
   compile = function (st, ...a) {
     const cx = c0(st, ...a);
+    /* 533 a: Satın Alma termini belli gelişdir (1650 4 c, sert); termini beklenen satır (tb) motorda zaten bekletmez */
     if (st && st.w && st.w.matKarma && cx && cx.mat) for (const j in cx.mat.res) { const r = cx.mat.res[j];
-      const belli = r.det.every(d => !d.eksikQ && d.use.every(u => u.k !== 'sa' || !((st.D.satinalma || [])[u.i] || {}).tm));
+      const belli = r.det.every(d => !d.eksikQ && d.use.every(u => { const p = u.k === 'sa' ? (st.D.satinalma || [])[u.i] || {} : null; return !p || !p.tm || p.tm === 'sa-termin' || !!p.saTermin || !!p.tb; }));
       if (!belli && r.ready > st.now) { r.readyU = r.ready; r.ready = st.now; } }
     /* tezgâh seçimi TL ile: motorun puanı (1−α)·bitiş·1000 + α·maliyet + λ; α ve λ, bir saatin değeri siparişlerin ortanca gecikme bedeli (× denge katsayısı)
        ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */

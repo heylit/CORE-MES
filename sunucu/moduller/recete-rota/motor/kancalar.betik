@@ -90,12 +90,10 @@ function terminUygula() {
     const e = e0(plan, st, ref, fast); if (!st) return e;
     if (st.ggP > 0) { let h = 0; for (const id in plan.ops) { const r = plan.ops[id]; if (!r.fas) h += (+r.run || 0) + (+r.su || 0); } const g = h * st.ggP; e.gg = g; e.tl += g; e.lex[4] += g; }
     if (!fast && e.warn) {
-      /* uyarı yalnız terminsiz satırdan malzeme alan ve ondan önce başlayan işe: stoktan karşılanan iş etkilenmez */
+      /* 554 a: termini beklenen satırdan malzeme alan her işe uyarı; plan işi kaydırmaz */
       const cx = plan.cx || compile(st); const D = st.D;
-      for (const x of cx.mat.po) { const p = D.satinalma[x.i]; if (!p || !p.yakin) continue;
-        for (const j of new Set(x.jobs.map(u => u.j))) { let b = Infinity; for (const o of (cx.jobs[j] || { ops: [] }).ops) { const r = plan.ops[o.id]; if (r && !r.done && !o.pr.length) b = Math.min(b, r.S); }
-          if (!(b < x.t - 1e-9)) continue;
-          e.warn.push({ t: 'Termin yok', j, gelis: x.t, kod: p.kod, txt: `${j}: ${p.kod} ${p.tm === 'yok' ? 'siparişinin termini girilmedi, sipariş yok sayıldı' : 'için sipariş verilmedi'}; en erken geliş ${fmtDT(D, x.t)}, iş ${fmtDT(D, b)} başlıyor. İşi ileri atmak gerekebilir.` }); } }
+      for (const x of cx.mat.po) { const p = D.satinalma[x.i]; if (!p || !p.tb || x.soz == null) continue;
+        for (const j of new Set(x.jobs.map(u => u.j))) e.warn.push({ t: 'Termin bekleniyor', j, gelis: x.soz, kod: p.kod, txt: `${j}: ${p.kod} için Satın Alma termini bekleniyor; malzeme olması gereken ${fmtDT(D, x.soz)} tarihinde gelmiş sayıldı.` }); }
       for (const w of st.tmUyari || []) e.warn.push(w); }
     return e;
   };
@@ -113,8 +111,9 @@ function matKarmaUygula() {
   const c0 = compile;
   compile = function (st, ...a) {
     const cx = c0(st, ...a);
+    /* 533 a: Satın Alma termini belli gelişdir (1650 4 c, sert); termini beklenen satır (tb) motorda zaten bekletmez */
     if (st && st.w && st.w.matKarma && cx && cx.mat) for (const j in cx.mat.res) { const r = cx.mat.res[j];
-      const belli = r.det.every(d => !d.eksikQ && d.use.every(u => u.k !== 'sa' || !((st.D.satinalma || [])[u.i] || {}).tm));
+      const belli = r.det.every(d => !d.eksikQ && d.use.every(u => { const p = u.k === 'sa' ? (st.D.satinalma || [])[u.i] || {} : null; return !p || !p.tm || p.tm === 'sa-termin' || !!p.saTermin || !!p.tb; }));
       if (!belli && r.ready > st.now) { r.readyU = r.ready; r.ready = st.now; } }
     /* tezgâh seçimi TL ile: motorun puanı (1−α)·bitiş·1000 + α·maliyet + λ; α ve λ, bir saatin değeri siparişlerin ortanca gecikme bedeli (× denge katsayısı)
        ve tezgâh değiştirmenin bedeli ortanca ayar maliyeti olacak biçimde seçilir: puan ÷ α = saat değeri·bitiş + maliyet + değişim bedeli (TL) */

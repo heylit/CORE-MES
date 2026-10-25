@@ -269,8 +269,8 @@ function pdUzatma(gun) {
 
 /* ---------- malzeme ve fason terminleri (zv-termin tmMalzeme), öne çekme (zz7) ---------- */
 const TM_DURUM = { 'hızlandır': 'hizlandir', 'plan önce istiyor': 'plan-once-istiyor', 'ertelenebilir': 'ertelenebilir', 'uygun': 'uygun', 'bağlı iş yok': 'bagli-is-yok', 'sipariş yok': 'siparis-yok' };
-/* satın alma satırının termini: girilmiş, tahmini (katsayıyla), yok sayılan (ihtiyaca eşik kadar kalmış, termini yok), süresi bilinmeyen, sipariş verilmemiş */
-const TM_TERMIN = { termin: 'termin', tahmini: 'tahmini', yok: 'yok', 'sure-yok': 'sure-yok', 'siparis-yok': 'siparis-yok' };
+/* satın alma satırının termini: girilmiş (siparişte ya da Satın Alma'da), termini beklenen (554 a: olması gereken tarihte gelmiş sayılır), sipariş verilmemiş */
+const TM_TERMIN = { termin: 'termin', 'sa-termin': 'termin', 'termin-bekleniyor': 'termin-bekleniyor', 'siparis-yok': 'siparis-yok' };
 const sonlu = x => x == null || !isFinite(x) ? null : x;
 function tmMalzeme() {
   const p = S.plan; const cx = cxAl(); const D = cx.st.D; const now = cx.st.now;
@@ -278,7 +278,7 @@ function tmMalzeme() {
   let k = -1;
   return { satirlar: L.filter(r => r.tur === 'sa' || r.tur === 'eksik').map(r => { const sa = r.tur === 'sa'; if (sa) k++;
     const po = sa ? D.satinalma[k] || {} : null;
-    return { tur: sa ? 'siparis' : 'eksik', satinalmaSira: sa && po.src != null ? po.src : null, termin: sa ? TM_TERMIN[po.tm || 'termin'] || 'termin' : 'sure-yok', kod: r.kod, miktar: r.miktar, tedarikci: sa ? r.tedarikci || null : null, soz: sa ? sonlu(r.soz) : null,
+    return { tur: sa ? 'siparis' : 'eksik', satinalmaSira: sa && po.src != null ? po.src : null, termin: sa ? TM_TERMIN[po.tm || 'termin'] || 'termin' : 'siparis-yok', kod: r.kod, miktar: r.miktar, tedarikci: sa ? r.tedarikci || null : null, soz: sa ? sonlu(r.soz) : null,
       etkin: sa ? sonlu(r.etkin) : null, plan: sonlu(r.plan), enGec: sonlu(r.enGec), farkGun: sa ? sonlu(r.fark) : null, siparisEnGec: sa ? null : sonlu(r.siparisEnGec),
       durum: TM_DURUM[r.durum] || 'bagli-is-yok', isler: r.jobs.slice() }; }) };
 }

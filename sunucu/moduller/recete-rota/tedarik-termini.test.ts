@@ -53,6 +53,15 @@ describe('tedarik termini plana', () => {
     assert.equal(hazir(r.st), 5 * 24 + 8);
   });
 
+  test('554 a: termini girilmemiş malzeme katı kipte de işi bekletmez; eksik satırı termin beklenen olarak girer, tedarik süresi kullanılmaz', () => {
+    const D = { ...D0, satinalma: [{ kod: '60', miktar: 6, gelis: null, tedarikci: '', no: 'PO-2' }] };
+    const r = planGirdisi({ calisma: calisma(D), kayit: KAYIT, kaynak: kaynak([]) });
+    assert.ok(r);
+    const st = r.st as unknown as { now: number; D: { satinalma: { no?: string; miktar: number; tm?: string; tb?: number }[] } };
+    assert.deepEqual(st.D.satinalma.map((p) => [p.no ?? null, p.miktar, p.tm, p.tb]), [['PO-2', 6, 'termin-bekleniyor', 1], [null, 4, 'siparis-yok', 1]]);
+    assert.equal(hazir(r.st), st.now);
+  });
+
   test('termin teslim günü olmayan açık siparişe de uygulanır; teslim günü olan sipariş kendi günüyle kalır', () => {
     const D = { ...D0, satinalma: [{ kod: '60', miktar: 4, gelis: '2026-10-21 08:00', tedarikci: '', no: 'PO-1' }, { kod: '60', miktar: 6, gelis: null, tedarikci: '', no: 'PO-2' }] };
     const r = planGirdisi({ calisma: calisma(D), kayit: KAYIT, kaynak: { ...kaynak([{ kod: '60', termin: '2026-10-24', surum: 1, aciklama: '' }]), ek: { acikSiparisler: null, tedarikTerminleri: [{ kod: '60', termin: '2026-10-24', surum: 1, aciklama: '' }] } } });

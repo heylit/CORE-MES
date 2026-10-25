@@ -111,11 +111,12 @@ function compile(st){
 }
 function matAlloc(st,jobs){
   // etkin geliş = söz tarihi + tedarikçinin ortalama gecikmesi + giriş muayenesi (+ olay gecikmesi, risk sapması)
+  // 554 a: termini beklenen satır (tb) olması gereken tarihte gelmiş sayılır, işi bekletmez; söz tarihi yalnız gösterim içindir
   const D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m])),ted=Object.fromEntries((D.tedarikciler||[]).map(t=>[t.id,t]));
   const sup={},po=[];for(const m of D.malzemeler||[])sup[m.kod]=[{t:-1e9,q:+m.stok||0,kalan:+m.stok||0,k:'stok'}];
   (D.satinalma||[]).forEach((p,i)=>{const soz=parseT(D,p.gelis),td=ted[p.tedarikci],m=mats[p.kod];
     const gec=(td&&+td.ortGecikmeGun||0)*24+((st.tedSapma||{})[p.tedarikci]||0)+((st.saGecik||{})[p.kod]||0),mu=(m&&+m.muayeneGun||0)*24;
-    const x={t:soz==null?1e9:Math.max(soz+gec,soz)+mu,q:+p.miktar||0,kalan:+p.miktar||0,k:'sa',i,soz,gec,mu,jobs:[]};po.push(x);(sup[p.kod]=sup[p.kod]||[]).push(x);});
+    const x={t:p.tb?-1e9:soz==null?1e9:Math.max(soz+gec,soz)+mu,q:+p.miktar||0,kalan:+p.miktar||0,k:'sa',i,soz,gec,mu,tb:!!p.tb,jobs:[]};po.push(x);(sup[p.kod]=sup[p.kod]||[]).push(x);});
   for(const k in sup)sup[k].sort((a,b)=>a.t-b.t);
   const res={},summ={};
   const order=Object.values(jobs).sort((a,b)=>(a.oncelik-b.oncelik)||((a.due==null?1e9:a.due)-(b.due==null?1e9:b.due)));
@@ -123,7 +124,7 @@ function matAlloc(st,jobs){
     for(const r of j.malzeme||[]){const need=(+r.miktar||0)*j.adet,s=sup[r.kod]||[];let rem=need,t=-1e9;const use=[];
       for(const x of s){if(rem<=1e-9)break;if(x.kalan<=1e-9)continue;const q=Math.min(x.kalan,rem);x.kalan-=q;rem-=q;use.push({k:x.k,i:x.i,q});t=Math.max(t,x.t);if(x.k==='sa')x.jobs.push({j:j.id,q,kod:r.kod});}
       const eksikQ=rem>1e-9?rem:0;const tt=eksikQ?null:Math.max(t,st.now);
-      const kaynak=eksikQ?'eksik':tt<=st.now+1e-9?'stok':'satın alma';
+      const kaynak=eksikQ?'eksik':tt<=st.now+1e-9&&!use.some(u=>u.k==='sa'&&po[u.i].tb)?'stok':'satın alma';
       det.push({kod:r.kod,need,t:tt,kaynak,eksikQ,use,ad:mats[r.kod]?mats[r.kod].ad:r.kod,birim:mats[r.kod]?mats[r.kod].birim:''});
       ready=tt==null?Infinity:Math.max(ready,tt);
       const sa=(sup[r.kod]||[]).filter(x=>x.k==='sa').reduce((a,x)=>a+x.q,0);

@@ -64,6 +64,8 @@ if (TMI_ICINDE) {
       const k = kaynakUygula(); if (calisanUygula() || k) render();
     }, e => { console.error(e); bildir('Tezgâh, personel ve takvim sunucudan okunamadı; plan kapasitesiz kalabilir.', 'hata'); });
   };
+  /* 533 a: Satın Alma'ya yazan komuttan (tedarik termini) sonra kaynak yeniden okunur; terminler kaynak ekindedir */
+  TMI_KAYNAK.yenile = kaynakAl;
   /* 31 a: sayfanın "şimdi"si yeniden planlamada gerçek saate geçer (S.simdi, planla birlikte yazılır); açılışta ve çizimde değişmez, açılışta
      yazılmaz; st'ye stTamKur'da girer (motor/durum.betik, simdiUygula). Gerçek saat başlangıç günü 07:00'den önceyse 07:00 kalır. */
   const coz0 = coz;

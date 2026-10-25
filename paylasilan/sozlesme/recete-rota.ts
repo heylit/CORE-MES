@@ -504,7 +504,7 @@ const terminUzatma = z.object({
     netKarFarki: tl, gecikmeSaatFarki: saatDegeri, gecikenFarki: z.number().int(),
   })),
 });
-export const DEGERLENDIRME_TERMIN_DURUMLARI = ['termin', 'tahmini', 'yok', 'sure-yok', 'siparis-yok'] as const;
+export const DEGERLENDIRME_TERMIN_DURUMLARI = ['termin', 'termin-bekleniyor', 'siparis-yok'] as const;
 export const DEGERLENDIRME_MALZEME_DURUMLARI = ['hizlandir', 'plan-once-istiyor', 'ertelenebilir', 'uygun', 'bagli-is-yok', 'siparis-yok'] as const;
 const malzemeTerminleri = z.object({
   tur: z.literal('malzeme-terminleri'),
