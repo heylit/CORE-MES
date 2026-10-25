@@ -68,6 +68,7 @@
 .tc-ay3-iki { display: flex; justify-content: space-between; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay3-gec { color: var(--stop); font-weight: 700; }
 .tc-ay3-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+.tc-ay3-serit-alt { padding-block-start: var(--b-2); border-block-start: var(--cizgi-ince) solid var(--edge); }
 
 /* Planlı duruş: form ve haftalık şerit */
 .tc-ay3-form { display: grid; gap: var(--b-3); }

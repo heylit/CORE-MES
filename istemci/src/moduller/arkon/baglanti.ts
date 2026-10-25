@@ -270,6 +270,13 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   }
   if (ilk === 'plan-sira' && g.yontem === 'POST') return tamam(await istemci.post('/arkon/plan-sira/sirala', govdeyiOku(g.govde)));
   if (ilk === 'plan-sira' && g.yontem === 'GET') return tamam(await istemci.get('/arkon/plan-sira/surum'));
+  // Kart 527: Üretim Hazırlık kuyruk sırası; istasyon ve paket kimlikleri olduğu gibi geçer, doğrulamayı TMI ucu yapar.
+  if (ilk === 'kuyruk-sira' && g.yontem === 'POST' && ikinci === undefined) {
+    return tamam(await istemci.post('/arkon/kuyruk-sira/sirala', { ...(govdeyiOku(g.govde) as object), kaynak }));
+  }
+  if (ilk === 'kuyruk-sira' && g.yontem === 'POST' && ikinci === 'plana-don') {
+    return tamam(await istemci.post('/arkon/kuyruk-sira/plana-don', { ...(govdeyiOku(g.govde) as object), kaynak }));
+  }
   if (ilk === 'collector') return tamam({ machines: {}, note: 'Makine verisi TMI\'de toplanır.' });
   if (ilk === 'backups' && g.yontem === 'GET' && ikinci === undefined) return tamam([]);
   if (ilk === 'backups' || ilk === 'restore') return ret(403, 'Yedekleme TMI sunucusunda yapılır.');

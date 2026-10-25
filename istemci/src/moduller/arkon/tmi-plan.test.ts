@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi, planOnce, siraOnayi, siralamaIstegi, tmiPlani } from '../../../../arkon/web/src/data/tmi-plan.ts';
+import {
+  adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, kuyrukAdimHedefi, kuyrukIsiMi, kuyrukIstegi, kuyrukTasimaIstegi, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi,
+  planFarkOzeti, planOnce, planReferanslari, planaOneriIstekleri, siraOnayi, siralamaIstegi, tmiPlani,
+} from '../../../../arkon/web/src/data/tmi-plan.ts';
 
 // Kart #199 (A4): rotalı işin paketi operatöre yalnız yayında ve canlı planda iş emrinin kaynağına yerleşmişse düşer.
 const ie = (status: string, plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; zorunlu?: boolean; taslakta?: boolean; siraOnayi?: 'taslakta' | 'onayda' } | null) => ({ status, tmi: { isEmriId: 4, plan } });
@@ -118,5 +121,68 @@ describe('Arkon rotalı işin plan durumu', () => {
     expect(operatoreAcik(bekleyen)).toBe(true);
     expect(planEtiketi(bekleyen)).toBe(null);
     expect(planOnce(bekleyen, ie('published', { ...CANLI, sira: 1 }))).toBeGreaterThan(0);
+  });
+});
+
+// Kart 527 (519 1 c): kuyruk Üretim Hazırlık'ın sırasıdır, operatör onu izler; canlı plan kartta referans olarak görünür.
+describe('Arkon Hazırlık kuyruk sırası ve plan referansı', () => {
+  const m5 = { tur: 'makine' as const, id: 5 };
+  const tp = (id: number, plan: number | null, kuyruk: number | null = null, ek: object = {}) => ({ id: `tmi-ie-${id}`, status: 'published', machine: 'AI1',
+    tmi: { isEmriId: id, plan: { canli: plan !== null, sira: plan, eslesiyor: true, kaynak: plan === null ? null : m5 },
+      kuyruk: kuyruk === null ? null : { sira: kuyruk, kisi: 'Deneme', zaman: '2026-10-25T08:00:00Z' },
+      planSaati: plan === null ? null : { baslangic: '2026-10-25T07:30:00Z', bitis: '2026-10-25T09:40:00Z' }, ...ek } });
+
+  it('Hazırlık sırası olan iş önce (kendi sırasıyla), sırasız plan işi ardından plan sırasıyla, Arkon paketi en son', () => {
+    const arkon = { id: 'x', status: 'published', machine: 'AI1' };
+    const [a, b, c] = [tp(1, 1, 2), tp(2, 2, 1), tp(3, 3)];
+    expect([arkon, c, a, b].sort(planOnce)).toEqual([b, a, c, arkon]);
+  });
+
+  it('plan referansı: aynı yer, öne ya da geri alınmış, plana yeni girmiş ve plan dışı iş; fark özeti', () => {
+    const [a, b, c, d] = [tp(1, 1, 2), tp(2, 2, 1), tp(3, 3), tp(4, null, 3)];
+    const serit = [b, a, d, c];
+    const r = planReferanslari(serit);
+    expect(r.get(b)).toEqual({ tur: 'farkli', metin: 'Planda 2. · öne alındı', saat: { baslangic: '2026-10-25T07:30:00Z', bitis: '2026-10-25T09:40:00Z' } });
+    expect(r.get(a)?.metin).toBe('Planda 1. · geri alındı');
+    expect(r.get(c)).toMatchObject({ tur: 'yeni', metin: 'Yeni · planda 3.' });
+    expect(r.get(d)).toEqual({ tur: 'disi', metin: 'Plan dışı', saat: null });
+    expect(planFarkOzeti(r.values())).toEqual({ tur: 'farkli', metin: 'Planla 4 fark: 2 iş sırası farklı · 1 iş plan dışı · 1 iş plana yeni girdi' });
+    const ayni = planReferanslari([a, b, c].map((p) => ({ ...p, tmi: { ...p.tmi, kuyruk: null } })));
+    expect([...ayni.values()].map((x) => x.metin)).toEqual(['Planla aynı · 1.', 'Planla aynı · 2.', 'Planla aynı · 3.']);
+    expect(planFarkOzeti(ayni.values())).toEqual({ tur: 'ayni', metin: 'Kuyruk planla aynı sırada' });
+    expect(planFarkOzeti(planReferanslari([{ id: 'x', status: 'published' }]).values())).toBe(null);
+  });
+
+  it('kuyruk isteği yalnız açık TMI iş emri paketleriyle gider; bölünmüş bütün, biten iş ve Arkon paketi girmez; sıra değişmediyse null', () => {
+    const arkon = { id: 'x', status: 'published', machine: 'AI1' };
+    const [a, b] = [tp(1, 1), tp(2, 2)];
+    const bolunmus = tp(3, 3, null, { bolunmus: true });
+    const biten = tp(4, 4, null, { bitti: true });
+    const parca = { ...tp(5, null), id: 'tmi-ie-5-p2' };
+    expect([a, bolunmus, biten, parca, arkon].map(kuyrukIsiMi)).toEqual([true, false, false, true, false]);
+    expect(kuyrukIstegi('AI1', [a, b, arkon, biten], [b, arkon, a, biten])).toEqual({ istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2'], yeni: ['tmi-ie-2', 'tmi-ie-1'] });
+    expect(kuyrukIstegi('AI1', [a, b, arkon], [a, arkon, b])).toBe(null);
+    expect(kuyrukIstegi('AI1', [a, arkon], [arkon, a])).toBe(null);
+  });
+
+  it('taşıma ve yukarı/aşağı (eski ve yeni ekran, 544 a): iş komşunun önüne konur; Arkon paketi ve gizli biten iş komşu sayılmaz', () => {
+    const arkon = { id: 'x', status: 'published', machine: 'AI1' };
+    const [a, b, c] = [tp(1, 1), tp(2, 2), tp(3, 3)];
+    const serit = [a, arkon, b, c];
+    expect(kuyrukTasimaIstegi('AI1', serit, c, 'tmi-ie-1')).toEqual({ istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2', 'tmi-ie-3'], yeni: ['tmi-ie-3', 'tmi-ie-1', 'tmi-ie-2'] });
+    expect(kuyrukTasimaIstegi('AI1', serit, a, null)?.yeni).toEqual(['tmi-ie-2', 'tmi-ie-3', 'tmi-ie-1']);
+    expect(kuyrukTasimaIstegi('AI1', serit, a, 'tmi-ie-2')).toBe(null);
+    expect(kuyrukAdimHedefi(serit, b, -1)).toBe('tmi-ie-1');
+    expect(kuyrukAdimHedefi(serit, a, 1)).toBe('tmi-ie-3');
+    expect(kuyrukAdimHedefi(serit, b, 1)).toBe(undefined);
+    expect(kuyrukAdimHedefi(serit, a, -1)).toBe(null);
+    expect(kuyrukAdimHedefi(serit, c, 1)).toBe(null);
+  });
+
+  it('Plana öner: kuyruğun dizilişi kaynağın plan sıralama isteği olur; kuyruk planla aynıysa istek yok', () => {
+    const [a, b, c] = [tp(1, 1, 2), tp(2, 2, 1), tp(3, 3)];
+    expect(planaOneriIstekleri([b, a, c])).toEqual([{ kaynak: m5, onceki: [1, 2, 3], yeni: [2, 1, 3] }]);
+    expect(planaOneriIstekleri([a, b, c])).toEqual([]);
+    expect(planaOneriIstekleri([tp(4, null)])).toEqual([]);
   });
 });

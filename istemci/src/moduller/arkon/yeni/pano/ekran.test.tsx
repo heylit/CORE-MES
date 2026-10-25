@@ -59,6 +59,31 @@ describe('A3 sayfaları', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 30000);
 
+  it('Plan Kuyruğu (kart 527): Hazırlık kuyruğu sıralar, plan kartta referans görünür; sıra plana değil kuyruk ucuna gider', async () => {
+    const tp = (id: number, plan: number, kuyruk: number) => ({ kimlik: `tmi-ie-${id}`, surum: 1, govde: {
+      id: `tmi-ie-${id}`, no: `E-${id}0`, part: `Parça ${id}`, machine: 'S1', status: 'published', target: 4, cycle: 30, plan: [], steps: [], files: [], due: '',
+      tmi: { isEmriId: id, plan: { canli: true, sira: plan, eslesiyor: true, kaynak: { tur: 'makine', id: 5 } },
+        kuyruk: { sira: kuyruk, kisi: 'Deneme Hazirlik', zaman: '2026-10-25T08:00:00Z' }, planSaati: { baslangic: '2026-10-25T07:30:00Z', bitis: '2026-10-25T09:40:00Z' } },
+    } });
+    const SIRALAYAN: Deneme = { ...HAZIRLIK, kullanici: { ...HAZIRLIK.kullanici, islemler: [...HAZIRLIK.kullanici.islemler, 'arkon.kuyruk-sirala'] } };
+    const istekler = sunucuKur(SIRALAYAN, { belgeler: { ...belgeler, pkgs: [tp(1, 1, 2), tp(2, 2, 1)] } });
+    arkonAc('/arkon/yeni/planlama');
+    const b = await bolum('Plan Kuyruğu');
+    const s1 = await within(b).findByRole('region', { name: 'Şerit S1' }, { timeout: 10000 });
+    expect(await within(s1).findByText('Planda 2. · öne alındı')).toBeTruthy();
+    expect(within(s1).getByText('Planda 1. · geri alındı')).toBeTruthy();
+    expect(within(s1).getByText('Planla 2 fark: 2 iş sırası farklı')).toBeTruthy();
+    expect(within(s1).getByRole('button', { name: /Plan sırasına dön/ })).toBeTruthy();
+    expect(within(s1).queryByRole('button', { name: /Plana öner/ })).toBeNull();
+    expect(within(s1).queryByRole('combobox', { name: 'İstasyona taşı' })).toBeNull();
+    fireEvent.click(within(s1).getAllByRole('button', { name: 'Aşağı' })[0]!);
+    await vi.waitFor(() => { expect(istekler.some((i) => i.yol === '/arkon/kuyruk-sira/sirala')).toBe(true); });
+    expect(istekler.find((i) => i.yol === '/arkon/kuyruk-sira/sirala')?.govde)
+      .toMatchObject({ istasyon: 'S1', onceki: ['tmi-ie-2', 'tmi-ie-1'], yeni: ['tmi-ie-1', 'tmi-ie-2'] });
+    expect(istekler.some((i) => i.yol.startsWith('/arkon/plan-sira'))).toBe(false);
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 30000);
+
   it('Kuyruk salt okunurdur: yönetici de taşıyamaz', async () => {
     sunucuKur(YONETICI, { belgeler });
     arkonAc('/arkon/yeni/kuyruk');

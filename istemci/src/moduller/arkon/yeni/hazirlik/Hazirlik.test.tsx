@@ -36,6 +36,7 @@ function merkezKur(istekler: Istek[]) {
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
     if (yol === '/arkon/cizim-merkezi/belgeler') return jsonCevap({ belgeler: [MERKEZ_BELGESI] });
+    if (yol === '/arkon/cizim-merkezi/kontrol') return jsonCevap({ durumlar: [{ belgeId: 3, durum: 'yeni-revizyon', ozet: 'b'.repeat(64) }] });
     if (yol === MERKEZ_EKLE) {
       istekler.push({ yontem: 'POST', yol, govde: null });
       return jsonCevap({ ozet: MERKEZ_BELGESI.ozet, boyut: 3, kayit: { kind: 'pdf', name: 'deneme-b.pdf', merkez: 3, merkezOzet: MERKEZ_BELGESI.ozet } });
@@ -144,6 +145,19 @@ describe('A2 Hazırlık ekranı', () => {
       expect(paketYazimi(istekler).some((p) => p.primary === 'deneme-b.pdf' && p.files.some((x) => x.merkez === 3) && p.plan.length === 0)).toBe(true);
     }, { timeout: 10000 });
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: "Çizim Merkezi'nden ekle" })).toBeNull(); });
+  }, 40000);
+
+  it('merkezden gelen dosyada yeni revizyon rozeti çıkar; Güncelle dosyayı yeniden alır', async () => {
+    const MERKEZLI = { ...PAKET, files: [{ kind: 'pdf', name: 'deneme-a.pdf', size: 3, merkez: 3, merkezOzet: 'c'.repeat(64) }], primary: 'deneme-a.pdf' };
+    const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: MERKEZLI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    merkezKur(istekler);
+    arkonAc('/arkon/yeni/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+    expect(await within(d).findByText('Yeni revizyon var', undefined, { timeout: 10000 })).toBeTruthy();
+    fireEvent.click(within(d).getByRole('button', { name: /Güncelle/ }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(true); }, { timeout: 10000 });
+    await waitFor(() => { expect(paketYazimi(istekler).some((p) => p.primary === 'deneme-b.pdf' && p.files.length === 1)).toBe(true); }, { timeout: 10000 });
   }, 40000);
 
   it('düzenleme yetkisi olmayan kişi Çizim Merkezi\'nden dosya alamaz: kopyalama ve paket yazımı gitmez (reddedilen)', async () => {
