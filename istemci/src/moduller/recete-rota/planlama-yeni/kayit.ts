@@ -21,13 +21,19 @@ export const PLAN_YETKI = 'Plan yazma yetkiniz yok; son değişikliğiniz kayded
 export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 
 // Geri almanın kopyaladığı alanlar (a-durum.betik degistir): veri, arıza, ek mesai, kilitler, tercihler, ağırlıklar, parametreler, kapalı kısıtlar.
+// Değişikliğin dokunduğu öteki alanlar da (sayfa tercihleri: elle sıra, nabız referansı) kopyalanır; yoksa geri alma o değişikliği geri getirmez.
 const GERI_ALANLAR = ['D', 'down', 'ekMesai', 'locks', 'pref', 'w', 'param', 'kapali'] as const;
-type GeriKopyasi = Pick<PlanlamaCalismasi, (typeof GERI_ALANLAR)[number] | 'dataVer'>;
+const GERI_DISI = new Set<string>([...GERI_ALANLAR, 'dataVer', 'plan', 'iz']);
+type GeriKopyasi = Record<string, unknown> & { dataVer: number };
+interface GeriAdimi { ne: string; t: number; kopya: GeriKopyasi }
 
 export interface DegisiklikSecenegi {
   ayrinti?: string;
   // Değişiklik planın girdisini değiştirmiyor (görünüm tercihi gibi): güncel plan güncel kalır.
   planKoru?: boolean;
+  // Eski sayfanın doğrudan kaydı (dis.kaydet: gün başı, brifing günü): iz, bildirim, geri alma ve veri sürümü artışı yok. Sunucuya yazma,
+  // sürüm denetimi ve yetki aynıdır.
+  sessiz?: boolean;
 }
 
 // Görünümlerin kullandığı yüz. `degistir`in işlevi çalışmanın kopyasını değiştirir; false dönerse değişiklik olmaz.
@@ -35,6 +41,10 @@ export interface CalismaKomutu {
   degistir: (ne: string, fn: (taslak: PlanlamaCalismasi) => boolean | void, secenek?: DegisiklikSecenegi) => boolean;
   geriAl: () => boolean;
   geriAlinabilir: () => boolean;
+  // Bu oturumdaki geri alınabilir değişiklikler, en yenisi önce (eski panonun S.geri listesi).
+  geriAdimlari: () => { ne: string; t: number }[];
+  // En yeni n değişikliği birlikte geri alır (eski geriDon: seçilen karardan öncesine dön).
+  geriDon: (n: number) => boolean;
 }
 
 export interface YaziciAyari {
@@ -59,7 +69,7 @@ export class CalismaYazici implements CalismaKomutu {
   readonly #a: Required<YaziciAyari>;
   #calisma: PlanlamaCalismasi;
   #surum: number | null;
-  readonly #geri = new GeriAlYigini<GeriKopyasi>(VERI_GERI_ALMA);
+  readonly #geri = new GeriAlYigini<GeriAdimi>(VERI_GERI_ALMA);
   readonly #dinleyiciler = new Set<() => void>();
   #zamanlayici: ReturnType<typeof setTimeout> | null = null;
   #kirli = false;
@@ -89,8 +99,11 @@ export class CalismaYazici implements CalismaKomutu {
     const once = this.#calisma;
     const taslak = kopya(once);
     if (fn(taslak) === false) return false;
+    if (secenek.sessiz) { this.#koy(taslak); return true; }
     const gunceldi = once.plan !== null && once.plan.dataVer === once.dataVer;
-    this.#geri.koy(kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer'].map((k) => [k, once[k]])) as GeriKopyasi));
+    const o = once as Record<string, unknown>, y = taslak as Record<string, unknown>;
+    const ek = [...new Set([...Object.keys(o), ...Object.keys(y)])].filter((k) => !GERI_DISI.has(k) && JSON.stringify(o[k]) !== JSON.stringify(y[k]));
+    this.#geri.koy({ ne, t: this.#a.simdi(), kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((k) => [k, o[k]]))) as GeriKopyasi });
     taslak.dataVer = once.dataVer + 1;
     if (secenek.planKoru && gunceldi && taslak.plan !== null) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
     this.#izYaz(taslak, ne, secenek.ayrinti ?? '');
@@ -101,20 +114,31 @@ export class CalismaYazici implements CalismaKomutu {
     return true;
   };
 
-  geriAl = (): boolean => {
+  geriAl = (): boolean => this.#geriDon(1, 'Geri alındı');
+  geriDon = (n: number): boolean => this.#geriDon(n, n > 1 ? 'Seçilen karardan öncesine dönüldü' : 'Geri alındı');
+  geriAlinabilir = (): boolean => this.#geri.boy > 0;
+  geriAdimlari = (): { ne: string; t: number }[] => this.#geri.liste().map((g) => ({ ne: g.ne, t: g.t })).reverse();
+
+  #geriDon(n: number, ne: string): boolean {
     if (this.#durdu) { this.#a.uyar(CATISMA); return false; }
-    const x = this.#geri.al();
+    if (n < 1 || this.#geri.boy === 0) return false;
+    let taslak = kopya(this.#calisma) as PlanlamaCalismasi & Record<string, unknown>;
+    let x: GeriKopyasi | null = null;
+    // En yeniden eskiye: her kopya kendi değişikliğinden önceki hâli koyar, en eskisi son sözü söyler.
+    for (let i = 0; i < n; i++) {
+      const g = this.#geri.al(); if (g === null) break;
+      x = g.kopya;
+      taslak = { ...taslak, ...x };
+      for (const [k, v] of Object.entries(x)) if (v === undefined) delete taslak[k];
+    }
     if (x === null) return false;
-    const taslak = { ...kopya(this.#calisma), ...x };
     // Eski sayfadaki gibi: veri sürümü geri gitmez; plan geri alınan veriyle çözülmüşse yeniden güncel sayılır.
     taslak.dataVer = Math.max(this.#calisma.dataVer + 1, x.dataVer + 1);
     if (taslak.plan !== null && taslak.plan.dataVer === x.dataVer) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
-    this.#izYaz(taslak, 'Geri alındı', '');
+    this.#izYaz(taslak, ne, '');
     this.#koy(taslak);
     return true;
-  };
-
-  geriAlinabilir = (): boolean => this.#geri.boy > 0;
+  }
 
   // Bekleyen değişikliği hemen yazar (sayfadan çıkarken); yolda olan yazma da beklenir.
   async hepsiniYaz(): Promise<void> {

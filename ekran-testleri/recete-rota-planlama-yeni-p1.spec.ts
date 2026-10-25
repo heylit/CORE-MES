@@ -239,7 +239,8 @@ test.describe('P1d Yan panel', () => {
 });
 
 // P1e: Planlama atölyesi (eski stüdyonun Plan sekmesi, tezgâh panosu). Motor isteyen düğmeler pasif (357 b); Onay ve canlı ile Plan ve
-// gerçekleşen sonraki teslimdedir. Test yazma göndermez: brifing kapatılmaz, kilit ve donuk bölge seçilmez.
+// gerçekleşen sonraki teslimdedir. Eskisi gibi açılışta gün başı çalışmaya sessiz yazılır; test başka yazma göndermez (kilit, donuk bölge seçilmez).
+// Genişlikler aynı kayda paralel yazabildiği için o tek yazmanın sonucu (çatışma dahil) sınanmaz.
 test.describe('P1e Planlama atölyesi', () => {
   test('Atölye: kimlik ve sekmeler; pano, ray ve kartlar ya da boş durum; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/studio');
@@ -271,6 +272,6 @@ test.describe('P1e Planlama atölyesi', () => {
     await page.getByRole('tab', { name: /Onay ve canlı/ }).click();
     await expect(page.getByText('Hazırlanıyor.')).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);
   });
 });

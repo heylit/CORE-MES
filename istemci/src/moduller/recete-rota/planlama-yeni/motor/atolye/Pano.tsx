@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
+import { planGuncel } from '../../durum.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { MOTOR_NOTU } from '../ortak.tsx';
@@ -9,7 +10,7 @@ import { Brif, Bugun } from './Bugun.tsx';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  secKacis, gunAnahtari, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzSayisi, type AtolyeOlcegi, type SiparisBilgisi, type Suzgec,
+  canliFark, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzSayisi, type AtolyeOlcegi, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 
@@ -29,9 +30,9 @@ export interface Ortam {
   bugunAc: (x: boolean) => void; brifAc: () => void;
 }
 
-interface Ozellikler { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; sekSec: (s: AtolyeSekmesi) => void; onayda: number; canli: number | null }
+interface Ozellikler { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; sekSec: (s: AtolyeSekmesi) => void; onayda: number }
 
-export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
+export function Pano({ o, c, p, sekSec, onayda }: Ozellikler) {
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
@@ -45,9 +46,10 @@ export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
   const [rayAcik, setRayAcik] = useState(false);
   const [bugunAcik, setBugunAcik] = useState(false);
   const bugun = gunAnahtari(Date.now());
-  const [brifKapandi, setBrifKapandi] = useState(false);
-  const [brifIstek, setBrifIstek] = useState(false);
-  const brif = brifIstek || (!brifKapandi && c.tpBrif !== bugun && typeof window !== 'undefined' && window.innerWidth >= 768);
+  // Brifing günün ilk açılışında bir kez (eski gunBasla: geniş ekranda, açılışta gün yazılır); kapatmak yalnız gizler. Eskide gün bu tarayıcının
+  // kaydındaydı; ortak çalışmaya yazılsa ilk açan herkesin brifingini kapatırdı, bu yüzden tarayıcıda tutulur.
+  const [brif, setBrif] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768 && brifGunu() !== bugun);
+  useEffect(() => { if (brif) brifGunuYaz(bugun); }, [brif, bugun]);
   const [kart, setKart] = useState<{ k: AcikKart; a: Ankraj | null } | null>(null);
   const [parla, setParla] = useState<string | null>(null);
   const kap = useRef<HTMLDivElement | null>(null);
@@ -77,10 +79,13 @@ export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
     });
   }, [p, sec]);
   useEffect(() => { if (!parla) return undefined; const z = setTimeout(() => setParla(null), 1600); return () => clearTimeout(z); }, [parla]);
-  const brifKapat = useCallback(() => {
-    setBrifKapandi(true); setBrifIstek(false);
-    if (yaz && c.tpBrif !== bugun) komut.degistir('Sabah brifingi kapatıldı', (t) => { (t as Record<string, unknown>).tpBrif = bugun; }, { planKoru: true });
-  }, [yaz, komut, c.tpBrif, bugun]);
+  const brifKapat = useCallback(() => setBrif(false), []);
+  // Gün başı ve bugünün özeti çalışmaya sessiz yazılır (eski gunBasla, gunKaydet; iz, bildirim ve geri alma yok).
+  useEffect(() => {
+    if (!yaz) return;
+    const g = gunYeni(c, p, bugun);
+    if (g) komut.degistir('Gün özeti', (t) => { (t as Record<string, unknown>).tpGun = g; }, { sessiz: true });
+  }, [yaz, komut, c, p, bugun]);
 
   // Pano kabın kalan yüksekliğini alır (boyut): üstte başlık, altta telefonda alt menü.
   useLayoutEffect(() => {
@@ -123,17 +128,23 @@ export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
 
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
-    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrifIstek(true); setKart(null); },
+    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); },
   };
   const ozet = p.ozet;
+  const fark = useMemo(() => canliFark(c, p), [c, p]);
+  const farkli = fark.farkli || !planGuncel(c);
   const ns = suzSayisi(suz);
   const geriVar = yaz && !!komut?.geriAlinabilir();
   const ust = (
     <header className="tc-pym-tp-ust">
       <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-dar" aria-label="Siparişler" aria-expanded={rayAcik} onClick={() => setRayAcik((x) => !x)}><Simge ad="list" boyut="k" /></button>
-      <span className="tc-pym-tp-durum" title={canli ? 'Çalışma planı; canlı planla karşılaştırma Onay ve canlı sekmesindedir' : 'Henüz canlıya alınmış plan yok'}>
-        <Simge ad="edit" boyut="k" />Çalışma{!canli && <span data-ikincil=""> · canlı yok</span>}
-      </span>
+      {!fark.var ? (
+        <span className="tc-pym-tp-durum" title="Henüz canlıya alınmış plan yok"><Simge ad="edit" boyut="k" />Çalışma<span data-ikincil=""> · canlı yok</span></span>
+      ) : fark.say ? (
+        <span className="tc-pym-tp-durum" title="Canlı plandan farklı"><Simge ad="edit" boyut="k" />{`Taslak · ${fark.say}`}<span data-ikincil=""> değişiklik</span></span>
+      ) : (
+        <span className="tc-pym-tp-durum" data-ton="ayni" title="Çalışma planı canlı planla aynı"><Simge ad="check" boyut="k" />Canlı planla aynı</span>
+      )}
       {onayda > 0 && (
         <button type="button" className="tc-pym-tp-durum" data-ton="onayda" title="Onay sekmesini aç" onClick={() => sekSec('onay')}><Simge ad="clock" boyut="k" />{`${onayda} onayda`}</button>
       )}
@@ -163,9 +174,9 @@ export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
       <button type="button" className="tc-dugme" aria-disabled="true" aria-label="İyileştir" title={`Motor planı kısa sürede iyileştirir. ${MOTOR_NOTU}`}>
         <Simge ad="bolt" boyut="k" /><span data-ikincil="" data-metin="">İyileştir</span>
       </button>
-      {yaz && yetki.planStudyo && (
+      {farkli && yaz && yetki.planStudyo && (
         <button type="button" className="tc-dugme tc-dugme-birincil" aria-label="Onaya gönder" onClick={(e) => kartAc({ tur: 'gonder' }, ankraj(e))}>
-          <Simge ad="upload" boyut="k" /><span data-metin="">Onaya gönder</span>
+          <Simge ad="upload" boyut="k" /><span data-metin="">Onaya gönder</span>{fark.say > 0 && <span className="tc-pym-tp-tsay">{fark.say}</span>}
         </button>
       )}
       <button type="button" className="tc-dugme tc-pym-hayalet" aria-label="Diğer" onClick={(e) => kartAc({ tur: 'menu' }, ankraj(e))}><Simge ad="more" boyut="k" /></button>
@@ -185,6 +196,10 @@ export function Pano({ o, c, p, sekSec, onayda, canli }: Ozellikler) {
     </div>
   );
 }
+
+const BRIF_ANAHTARI = 'tmi:planlama:brif';
+function brifGunu(): string | null { try { return localStorage.getItem(BRIF_ANAHTARI); } catch { return null; } }
+function brifGunuYaz(g: string): void { try { localStorage.setItem(BRIF_ANAHTARI, g); } catch { /* depo kapalıysa brifing yeniden açılışta da görünür */ } }
 
 export const ankraj = (e: { clientX: number; clientY: number }): Ankraj => ({ x: e.clientX, y: e.clientY });
 // Ortamdan siparişin bilgisi (ray, kart ve brifing aynı hesabı kullanır).

@@ -78,5 +78,6 @@ export class GeriAlYigini<T> {
     if (this.#liste.length > this.#sinir) this.#liste.shift();
   }
   al(): T | null { return this.#liste.pop() ?? null; }
+  liste(): readonly T[] { return this.#liste; }
   bosalt(): void { this.#liste = []; }
 }
