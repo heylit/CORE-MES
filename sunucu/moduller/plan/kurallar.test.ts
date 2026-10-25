@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
+  araliklaraEkle, araliktanCikar, arkaArkaya, ayarVeGecikme, ekMesaiButcesi, haftaBasi, vardiyaSaati, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
   adetPayi, bedelCarpani, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
@@ -625,5 +625,15 @@ describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme'
     const sinirsiz = ekMesaiButcesi([{ gun: '2026-10-26', saat: 24 }, { gun: '2026-10-27', saat: 24 }], 0);
     assert.deepEqual([sinirsiz.asildi, sinirsiz.asanHaftalar, sinirsiz.haftalar], [false, [], [{ hafta: '2026-10-26', saat: 48 }]], 'sınır 0: sınır yok (eski motor)');
     assert.equal(ekMesaiButcesi([], 0).asildi, false);
+  });
+
+  test('PL-512K: ek vardiya penceresi takvime eklenir; çakışan ve bitişik aralık birleşir, sıra korunur', () => {
+    const takvim = [{ baslangic: 0, bitis: 240 }, { baslangic: 1440, bitis: 1680 }];
+    assert.deepEqual(araliklaraEkle(takvim, [{ baslangic: 240, bitis: 720 }]), [{ baslangic: 0, bitis: 720 }, { baslangic: 1440, bitis: 1680 }], 'bitişik');
+    assert.deepEqual(araliklaraEkle(takvim, [{ baslangic: 1600, bitis: 1900 }, { baslangic: 3000, bitis: 3100 }]),
+      [{ baslangic: 0, bitis: 240 }, { baslangic: 1440, bitis: 1900 }, { baslangic: 3000, bitis: 3100 }], 'çakışan ve ayrık');
+    assert.deepEqual(araliklaraEkle(takvim, [{ baslangic: 60, bitis: 120 }]), takvim, 'içte kalan değiştirmez');
+    assert.deepEqual(araliklaraEkle([], []), []);
+    assert.deepEqual(takvim, [{ baslangic: 0, bitis: 240 }, { baslangic: 1440, bitis: 1680 }], 'girdi değişmez');
   });
 });

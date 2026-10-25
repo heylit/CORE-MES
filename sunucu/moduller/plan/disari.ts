@@ -9,7 +9,7 @@ import { ayarOku, bedelAyariOku, bekleyenSiralar as bekleyenSiraSatirlari, senar
 import {
   malzemeMaliyetiCozucusuKaydet, musteriSinifiCozucusuKaydet, planMotoruCozucusuKaydet, tahminiMaliyetCozucusuKaydet, type MusteriSinifiCozucusu,
   type PlanMotoruCozucusu, type PlanMotoruIstegi, type MalzemeMaliyetiCozucusu, type TahminiMaliyetCozucusu,
-  ekMesaiTaslagaKopyala, kuyruklariYaz, taslakYerlesimleri,
+  kuyruklariYazIc, taslakYerlesimleri,
 } from './servis.ts';
 export { calisanAdimlar, canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
 export type { CalisanAdim } from './servis.ts';
@@ -55,7 +55,8 @@ export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promis
 // 503 a: Reçete ve Rota çalışma planını kişiye yeni taslak olarak yazar. Yol plan uçlarınınkidir: taslağı açmak stüdyo, kuyruk yazmak plan
 // yazma yetkisi ister (uçtaki gibi), gövde aynı şemalardan geçer, kuyruk yazmanın sürüm, kapsam ve dondurma denetimi kuyruklariYaz'dadır.
 // Kişi çağıranın oturumudur; denetim kaydını çağıranın uç katmanı yazar.
-// 507 2 a: çalışmanın ek vardiyaları da taslağa geçer; yazılamayan (sunucuda olmayan ya da kapsam dışı makine, kullanımda olmayan vardiya) atlanır.
+// 507 2 a, 512 1 a: çalışmanın ek vardiyaları kabul edilmiştir; kuyruklarla aynı işlemde, onlardan önce taslağa geçer ve kapasiteye girer.
+// Yazılamayan (sunucuda olmayan ya da kapsam dışı makine, kullanımda olmayan vardiya) atlanır.
 export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
   ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number }[];
 }): Promise<{ taslak: { id: number; surum: number }; yazilan: number; atlanan: number; ekMesai: { yazilan: number; atlanan: number } }> {
@@ -65,8 +66,7 @@ export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
   const govde = kuyrukYazGovdesi.omit({ taslak: true }).safeParse({ kuyruklar: g.kuyruklar, planSurumu: g.planSurumu });
   if (!govde.success) throw dogrulama(govde.error.issues[0]?.message ?? 'Geçersiz kuyruk.', 'kuyruklar');
   const id = await taslakAc(db, ad.data.ad, null, k.id);
-  const y = await kuyruklariYaz(db, k, { ...govde.data, taslak: { id, surum: (await senaryo(db, id))!.surum } });
-  const ekMesai = await ekMesaiTaslagaKopyala(db, k, y.taslak, g.ekMesai ?? []);
+  const { cevap: y, ekMesai } = await kuyruklariYazIc(db, k, { ...govde.data, taslak: { id, surum: (await senaryo(db, id))!.surum }, ekMesai: [...(g.ekMesai ?? [])] }, true);
   return { taslak: { id: y.taslak, surum: (await senaryo(db, y.taslak))!.surum }, yazilan: y.yazilan, atlanan: y.atlanan, ekMesai };
 }
 

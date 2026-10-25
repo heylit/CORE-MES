@@ -75,7 +75,8 @@ export const planEmri = z.object({
   yerlesen: z.number().int(),
 });
 // 507 2 a: taslağın (canlıda canlının) ek vardiyaları ve haftalık bütçesi. Hafta pazartesi başlar; sınır plan ayarındadır, boşsa haftada
-// 8 saat, 0 ise sınır yok (haftaSiniriSaat 0, hiçbir hafta aşmaz). saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). Ek vardiya planın kapasitesine girmez; ölçüm ve bütçe içindir.
+// 8 saat, 0 ise sınır yok (haftaSiniriSaat 0, hiçbir hafta aşmaz). saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). 512 1 a:
+// satırlar kabul edilmiş ek vardiyalardır, makinenin kapasitesine girer.
 export const planEkMesai = z.object({
   satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number() })),
   toplamSaat: z.number(),
@@ -267,11 +268,11 @@ export const hizliGovdesi = senaryoSurumGovdesi.extend({ tur: z.enum(HIZLI_DENEM
 export const onayaGonderGovdesi = senaryoSurumGovdesi.extend({ not: z.string().trim().max(500).nullish() });
 export const geriGonderGovdesi = senaryoSurumGovdesi.extend({ neden: z.string().trim().min(1, 'Geri gönderme nedenini yaz.').max(500) });
 export const onaydanCekGovdesi = senaryoSurumGovdesi;
-// 507 2 a: taslağın ek vardiyaları baştan yazılır (liste eskisinin yerine geçer). Aynı makine, gün ve vardiya bir kez.
-export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({
-  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK })).max(500, 'En çok 500 ek vardiya yazılır.')
-    .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.'),
-});
+// 507 2 a: taslağın ek vardiyaları baştan yazılır (liste eskisinin yerine geçer). Aynı makine, gün ve vardiya bir kez. 512 1 a: yazılan
+// ek vardiya kabul edilmiştir, kapasiteye girer.
+const ekMesaiSatirlari = z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK })).max(500, 'En çok 500 ek vardiya yazılır.')
+  .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.');
+export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({ satirlar: ekMesaiSatirlari });
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
@@ -300,6 +301,9 @@ export const kuyrukYazGovdesi = z.object({
   planSurumu: okunanPlanSurumu,
   // Verilirse kişinin açık taslağına (okunan sürümde) yazılır; verilmezse yeni taslak açılır (stüdyo aynı taslakta kalır).
   taslak: taslakGirdisi.optional(),
+  // 512 1 a: kabul edilen ek vardiyalar ("Uygula", "Plana işle") kuyruklarla aynı işlemde taslağa yazılır ve kapasiteye girer; liste
+  // taslağınkinin yerine geçer. Verilmezse taslağın ek vardiyası değişmez. Önerilen ek vardiya burada yoktur (motorun önizlemesidir).
+  ekMesai: ekMesaiSatirlari.optional(),
 });
 // ADR 0018 (son söz sunucuda): sunucu motoru önizlemeden 1 dakikadan çok ayrılan işler; anahtar `emirNo|opNo`. Önizleme yoksa null.
 export const motorFarki = z.array(z.object({

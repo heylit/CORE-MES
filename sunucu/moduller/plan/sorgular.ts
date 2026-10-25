@@ -304,8 +304,7 @@ export async function senaryoSifirla(db: Db, id: number, kisiId: number): Promis
   await ayariCanlidanAl(db, id);
   await bedelTaslaktanSil(db, id);
   await carpanTaslaktanSil(db, id, null);
-  await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [id]);
-  await ekMesaiKopyala(db, null, id);
+  await ekMesaiCanlidanAl(db, id);
   await db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $2, kaldirma = now() WHERE senaryo_id = $1 AND kaldirma IS NULL', [id, kisiId]);
   await tabanYenile(db, id);
 }
@@ -463,6 +462,11 @@ const EK_MESAI_SUTUN = 'makine_id, gun, vardiya_id, saat';
 export const ekMesaiKopyala = (db: Db, kaynak: Hedef, senaryoId: number) =>
   db.sorgu(`INSERT INTO plan_senaryo_ek_mesai (senaryo_id, ${EK_MESAI_SUTUN}) SELECT $2, ${EK_MESAI_SUTUN} FROM plan_senaryo_ek_mesai
              WHERE senaryo_id IS NOT DISTINCT FROM $1`, [kaynak, senaryoId]);
+// Taslağın ek vardiyaları canlınınkine döner.
+export async function ekMesaiCanlidanAl(db: Db, senaryoId: number): Promise<void> {
+  await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [senaryoId]);
+  await ekMesaiKopyala(db, null, senaryoId);
+}
 // Canlıya almada canlının ek vardiyaları taslağınkiyle değişir.
 export async function ekMesaiCanliyaYaz(db: Db, senaryoId: number): Promise<void> {
   await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id IS NULL');

@@ -69,4 +69,47 @@ describe('plan (gerçek PostgreSQL): ek mesai taslakta', () => {
     assert.equal((await planOku(yeni.taslak!.id)).ekMesai!.satirlar.length, 2, 'değişiklikleri at canlının ek vardiyasına döndürür');
     await assert.rejects(ortam!.sahip.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [y.taslak!.id]), /değişmez/, 'kapanmış taslağınki değişmez');
   });
+
+  test('PL-512: kabul edilen ek vardiya kuyruklarla tek işlemde yazılır ve makinenin kapasitesine girer; defter kaydı düşer, kaldırınca canlıya döner; yetkisiz ve eski sürüm reddedilir', async () => {
+    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'EM-IM', ad: 'Deneme ek mesai merkezi', aciklama: null });
+    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'EM-I', ad: 'Deneme ek mesai', isMerkeziId: merkez.id })).id;
+    const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'EM-M', ad: 'Deneme ek mesai makinesi', istasyonId: ist })).id;
+    const v = await tamam<{ vardiyalar: { id: number; ad: string }[] }>(c.yonetici, 'POST', '/vardiyalar', { ad: 'EM sabah', baslangic: '08:00', bitis: '12:00', molalar: [], aktif: true });
+    const vardiya = v.vardiyalar.find((x) => x.ad === 'EM sabah')!.id;
+    for (let gun = 1; gun <= 7; gun++) await tamam(c.yonetici, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkez.id, gun, vardiyaId: vardiya, acik: true });
+    const ogle = (await tamam<{ vardiyalar: { id: number; ad: string }[] }>(c.yonetici, 'POST', '/vardiyalar', { ad: 'EM ogle', baslangic: '12:00', bitis: '20:00', molalar: [], aktif: true }))
+      .vardiyalar.find((x) => x.ad === 'EM ogle')!.id;
+    const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: 60, birimSureDk: 30 })], 10);
+    const p = await taslaktaOner();
+    const y0 = p.yerlesimler.find((x) => x.isEmriId === i1)!;
+    const kuyruk = { kaynak: { tur: 'makine', id: makine }, baslangic: new Date(Date.now() + 3_600_000).toISOString(), isler: [{ emirNo: y0.emirNo, opNo: y0.opNo, dondurulmus: false }] };
+    const ekMesai = [0, 1, 2, 3, 4, 5, 6].map((n) => ({ makineId: makine, gun: tesisGunu(Date.now() + n * 86_400_000), vardiyaId: ogle }));
+    const govde = (t: PlanCevabi, ek?: unknown[]) => ({ taslak: { id: t.taslak!.id, surum: t.taslak!.surum }, kuyruklar: [kuyruk], ...(ek ? { ekMesai: ek } : {}) });
+    const yol = '/plan/kuyruklari-yaz';
+
+    // Ek vardiyasız: 6 saatlik iş günde 4 saatlik vardiyada iki güne yayılır.
+    assert.equal((await istek(c.planlama, 'POST', yol, govde(p))).statusCode, 200);
+    const once = await planOku(p.taslak!.id);
+    const bitisOnce = Date.parse(once.yerlesimler.find((x) => x.isEmriId === i1)!.bitis);
+
+    assert.equal((await istek(c.kalite, 'POST', yol, govde(once, ekMesai))).statusCode, 403, 'plan.yaz yok');
+    assert.equal((await istek(c.planlama, 'POST', yol, govde(p, ekMesai))).statusCode, 409, 'eski taslak sürümü');
+    assert.equal((await istek(c.planlama, 'POST', yol, govde(once, [{ makineId: makine, gun: ekMesai[0]!.gun, vardiyaId: 999_999 }]))).statusCode, 400, 'olmayan vardiya');
+    assert.equal((await planOku(p.taslak!.id)).ekMesai!.satirlar.filter((x) => x.makineId === makine).length, 0, 'reddedilen yazma ek vardiya bırakmaz');
+
+    const r = await istek(c.planlama, 'POST', yol, govde(once, ekMesai));
+    assert.equal(r.statusCode, 200, r.body);
+    const sonra = await planOku(p.taslak!.id);
+    assert.deepEqual(sonra.ekMesai!.satirlar.map((x) => [x.makineId, x.vardiyaId, x.saat]), ekMesai.map(() => [makine, ogle, 8]));
+    const bitisSonra = Date.parse(sonra.yerlesimler.find((x) => x.isEmriId === i1)!.bitis);
+    assert.ok(bitisSonra < bitisOnce, `ek vardiya kapasiteye girer: ${new Date(bitisSonra).toISOString()} < ${new Date(bitisOnce).toISOString()}`);
+
+    const s1 = (await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === p.taslak!.id)!;
+    const kayit = s1.degisiklikler.filter((d) => d.tur === 'ek_mesai');
+    assert.equal(kayit.length, 1, 'aynı liste yeniden yazılmaz, tek kayıt');
+    assert.match(kayit[0]!.ozet, /7 vardiya, 56 saat/);
+    const kaldir = await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${String(p.taslak!.id)}/degisiklikler/${String(kayit[0]!.id)}/kaldir`, { surum: s1.surum });
+    assert.ok(kaldir.senaryolar.some((x) => x.id === p.taslak!.id));
+    assert.deepEqual((await planOku(p.taslak!.id)).ekMesai!.satirlar, (await planOku()).ekMesai!.satirlar, 'kaydı kaldırmak canlının ek vardiyasına döndürür');
+  });
 });
