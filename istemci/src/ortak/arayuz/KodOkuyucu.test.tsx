@@ -58,4 +58,30 @@ describe('KodOkuyucu', () => {
       await vi.waitFor(() => expect(k.durdur).toHaveBeenCalledTimes(1));
     });
   });
+
+  describe('acilista odak', () => {
+    afterEach(() => { vi.unstubAllGlobals(); });
+    const isaretci = (ince: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches: ince && q === '(pointer: fine)' }));
+
+    it('secenek verilmezse dokunmatikte de kod alani acilista odak alir', () => {
+      isaretci(false);
+      render(<KodOkuyucu okundu={() => undefined} />);
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+
+    it('secenekle fareli cihazda kod alani acilista odak alir', () => {
+      isaretci(true);
+      render(<KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok />);
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+
+    it('secenekle dokunmatikte acilista odak almaz, kamera hata verince alir', async () => {
+      isaretci(false);
+      render(<KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok />);
+      expect(document.activeElement).not.toBe(screen.getByLabelText('Kod'));
+      fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));
+      await screen.findByRole('status');
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+  });
 });
