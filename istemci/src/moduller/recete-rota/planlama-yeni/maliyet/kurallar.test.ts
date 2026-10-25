@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   beklemeHesabi, birimMaliyet, calisilir, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
-  mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, takvimKur, talasKredisi, kisaTl,
+  mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
 
@@ -104,6 +104,18 @@ describe('P3 saf hesaplar', () => {
     if (!y) throw new Error('fason işi yok');
     expect(y.T).toBe(64);
     expect(fasonDurumu(y)).toEqual(['Karşılıyor', 'tamam']);
+  });
+
+  it('kayıtlı olaylar: süre sapması adımın süresini çarpar, sonraki olay ezer; fason gecikmesi dönüş tahminini uzatır', () => {
+    const c = ornekCalisma();
+    const T = takvimKur(c);
+    const once = isTanimlari(c, T).get('S1.10')?.secenekler[0]?.run ?? 0;
+    const tahmin0 = fasonIsleri(c, isTanimlari(c, T))[0]?.tahmini ?? 0;
+    c.olaylar.push({ tip: 'sure', urun: 'U1', k: '10', oran: 2 }, { tip: 'sureOp', id: 'S1.10', oran: 1.5 }, { tip: 'fason', f: 'F1', gun: 3 });
+    expect(sureSapmasi(c)).toEqual({ 'S1.10': 1.5 });
+    expect(isTanimlari(c, T).get('S1.10')?.secenekler[0]?.run).toBeCloseTo(once * 1.5);
+    const tahmin1 = fasonIsleri(c, isTanimlari(c, T))[0]?.tahmini ?? 0;
+    expect(tahmin1).toBeGreaterThan(tahmin0);
   });
 
   it('girdi denetimi ve yardımcılar', () => {
