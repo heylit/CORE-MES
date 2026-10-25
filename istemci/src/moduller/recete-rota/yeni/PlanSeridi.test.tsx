@@ -31,8 +31,18 @@ describe('plan şeridi', () => {
     expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
   });
 
-  it('fark varsa değişiklik sayısı ve görünür ama pasif Onaya gönder (357 b); yazma isteği gitmez', async () => {
-    const istekler = ac(durum({ 'UE-0001|10': yer(51, '08:00'), 'UE-0002|10': yer(51, '09:00') }));
+  it('canlı plan varken motor farkı: PLAN CANLI, altında motor önerisi satırı; onaya gönder yok (500 a)', () => {
+    ac(durum({ 'UE-0001|10': yer(51, '08:00'), 'UE-0002|10': yer(51, '09:00') }));
+    const s = screen.getByRole('status', { name: 'Plan durumu' });
+    expect(s.textContent).toContain('PLAN CANLI');
+    expect(screen.getByText('Motor önerisi canlıdan 1 iş farklı (1 iş canlı planda yok).')).toBeTruthy();
+    expect(screen.queryByText(/değişiklik bekliyor/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
+  });
+
+  it('hiç canlı plan yoksa değişiklik sayısı ve görünür ama pasif Onaya gönder (357 b); yazma isteği gitmez', async () => {
+    const bos = { ...durum({ 'UE-0001|10': yer(51, '08:00') }), planCanli: { ...CANLI, kuyruklar: [] } };
+    const istekler = ac(bos);
     expect(screen.getByText('1 değişiklik bekliyor')).toBeTruthy();
     const d = screen.getByRole('button', { name: 'Onaya gönder' }) as HTMLButtonElement;
     expect(d.disabled).toBe(true);
