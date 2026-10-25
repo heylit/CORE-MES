@@ -1,12 +1,13 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { ReceteRotaYeni } from './ReceteRotaYeni.tsx';
+import { SEKMELER } from './sekmeler.ts';
 
 // Yeni Reçete ve Rota ekranı testlerinin ortak kurulumu (R1-R3 de kullanır). Kullanıcılar ve kayıtlar uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
@@ -86,15 +87,18 @@ export function sunucuKur(kullanici: Kullanici, s: SunucuSecenegi = {}) {
   return istekler;
 }
 
-export function rrAc(adres = '/recete-rota/yeni') {
+export function rrAc(adres = '/recete-rota') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
+          {/* Bölümler arası geçiş kabuğun şeridindedir (553 1 a); testte yerine yalın bağlantılar. */}
+          <nav aria-label="Deneme şeridi">{SEKMELER.map((s) => <Link key={s.yol} to={s.yol}>{s.baslik}</Link>)}</nav>
           <Routes>
-            <Route path="/recete-rota/yeni" element={<ReceteRotaYeni />} />
-            <Route path="/recete-rota/yeni/:bolum" element={<ReceteRotaYeni />} />
+            {SEKMELER.map((s) => <Route key={s.yol} path={s.yol} element={<ReceteRotaYeni />} />)}
+            {/* Yönlendiricide bölümü olmayan adres yoktur; ekranın kendi reddi bununla sınanır. */}
+            <Route path="/recete-rota/bilinmeyen" element={<ReceteRotaYeni />} />
             <Route path="*" element={<p>Başka sayfa</p>} />
           </Routes>
         </MemoryRouter>

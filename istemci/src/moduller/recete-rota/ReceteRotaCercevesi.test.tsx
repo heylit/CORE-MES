@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { BildirimSaglayici, Kabuk } from '../../ortak/arayuz/index.ts';
 import { IKINCI_MENU_TANIMLARI, etkinMadde, menuMaddeleri } from '../../ortak/rota/ikinci-menu.ts';
-import { CIHAZ_ANAHTARLARI, ONEK, PLANLAMA_POLITIKASI, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
+import { CIHAZ_ANAHTARLARI, ESKI_MENULER, ONEK, PLANLAMA_POLITIKASI, sayfaKur, yerelDegerler } from './ReceteRotaCercevesi.tsx';
 import { CIHAZ_ONEKI, cihazDegerleriOku, kopruKur } from './kopru.ts';
 import { rotalar } from './rotalar.tsx';
 import { YAZAR, YETKISIZ, ac, bekle, prototipiCalistir, sayacIletileri, sunucuKur, yazilan, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -65,13 +65,17 @@ describe('ReceteRotaCercevesi', () => {
     await waitFor(() => { expect(istekler.some((i) => i.startsWith('GET /recete-rota/'))).toBe(false); });
   });
 
-  it('kök yol Üretim emirleri maddesidir ve adres değişmez', async () => {
+  it('kök yol Üretim emirleri maddesidir ve adres değişmez; çerçeve bölümü eski adreste açar (541)', async () => {
     sunucuKur(YAZAR);
     ac('/recete-rota');
     expect(await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 })).toBeTruthy();
-    expect(screen.getByTestId('konum').textContent).toBe('/recete-rota');
+    expect(screen.getByTestId('konum').textContent).toBe('/recete-rota/eski');
     const menu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota');
     expect(etkinMadde(menuMaddeleri(menu!), '/recete-rota')?.anahtar).toBe('orders');
+    const eski = ESKI_MENULER.find((m) => m.kok === '/recete-rota');
+    expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski')?.anahtar).toBe('orders');
+    expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski/stock')?.anahtar).toBe('stock');
+    expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/plan')?.anahtar).toBe('plan');
   }, 30000);
 
   it('prototipin betiği derlenir; açılan sayfada üst şerit, yan menü ve sekme şeridi yoktur, kayıt yazısı gizlidir', async () => {
@@ -228,7 +232,7 @@ describe('ReceteRotaCercevesi', () => {
     const kabuklu = () => {
       const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
       render(
-        <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/recete-rota']}>
+        <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/recete-rota/eski']}>
           <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={YAZAR.islemler}>
             <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
           </Kabuk>
@@ -324,7 +328,7 @@ describe('ReceteRotaCercevesi', () => {
       expect(ileti).toEqual({ kanal: 'recete-rota', yon: 'git', yol: '/malzemeler/yeni' });
       const pencere = document.querySelector<HTMLIFrameElement>('iframe[title="Reçete ve Rota"]')!.contentWindow as Window;
       act(() => { window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'recete-rota', yon: 'git', yol: '/kisiler' }, origin: 'null', source: pencere })); });
-      expect(screen.getByTestId('konum').textContent).toBe('/recete-rota');
+      expect(screen.getByTestId('konum').textContent).toBe('/recete-rota/eski');
       act(() => { window.dispatchEvent(new MessageEvent('message', { data: JSON.parse(JSON.stringify(ileti)) as unknown, origin: 'null', source: pencere })); });
       await waitFor(() => { expect(screen.getByTestId('konum').textContent).toBe('/malzemeler/yeni'); });
     }, 40000);
@@ -338,7 +342,7 @@ describe('ReceteRotaCercevesi', () => {
       const gonder = (yol: string) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'recete-rota', yon: 'git', yol }, origin: 'null', source: pencere })); }); };
       gonder('/uretim-emirleri/12/../../kisiler');
       gonder('/uretim-emirleri/abc');
-      expect(screen.getByTestId('konum').textContent).toBe('/recete-rota');
+      expect(screen.getByTestId('konum').textContent).toBe('/recete-rota/eski');
       gonder('/uretim-emirleri/12');
       await waitFor(() => { expect(screen.getByTestId('konum').textContent).toBe('/uretim-emirleri/12'); });
     }, 40000);
@@ -354,7 +358,7 @@ describe('ReceteRotaCercevesi', () => {
         const gonder = (y: string) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'recete-rota', yon: 'git', yol: y }, origin: 'null', source: pencere })); }); };
         gonder(`${yol}/9`);
         gonder(`${yol}/../kisiler`);
-        expect(screen.getByTestId('konum').textContent).toBe('/recete-rota');
+        expect(screen.getByTestId('konum').textContent).toBe('/recete-rota/eski');
         gonder(yol);
         await waitFor(() => { expect(screen.getByTestId('konum').textContent).toBe(yol); });
       }

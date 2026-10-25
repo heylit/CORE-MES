@@ -237,7 +237,7 @@ describe('R3 Stok', () => {
 
   it('stok okuma yetkisi olmayan statülü stoğu görmez; stoğa istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN);
-    rrAc('/recete-rota/yeni/stock');
+    rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
     await within(b).findByText(/Stok verisine erişiminiz yok/);
     expect(within(b).getByRole('table', { name: 'Stok' }).textContent).toContain('MM-0001');
@@ -249,7 +249,7 @@ describe('R3 Stok', () => {
     const istekler = sunucuKur(YONETICI, {
       yazmalar: { 'GET /recete-rota/statuler': statuler, 'GET /stok/malzemeler/11': malzeme, 'POST /stok/statu-degistir': () => json(200, {}) },
     });
-    rrAc('/recete-rota/yeni/stock');
+    rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
     await within(b).findByRole('table', { name: 'Statülü stok' });
     expect(within(b).getByRole('table', { name: 'Statülü stok' }).textContent).toContain('Torna çıktısı');
@@ -265,7 +265,7 @@ describe('R3 Stok', () => {
     const istekler = sunucuKur(kisi(['stok.sayim']), {
       yazmalar: { 'GET /recete-rota/statuler': statuler, 'GET /stok/malzemeler/11': malzeme, 'POST /stok/sayim': () => json(200, {}) },
     });
-    rrAc('/recete-rota/yeni/stock');
+    rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
     fireEvent.change(await within(b).findByLabelText('Sayılan miktar'), { target: { value: '3' } });
     expect(within(b).queryByRole('button', { name: 'Statü atlat' })).toBeNull();

@@ -21,7 +21,7 @@ describe('R1 Operasyonlar: izinli', () => {
         'POST /operasyon-tipleri/21/guncelle': () => json(200, { ...TIP, ad: 'Torna' }),
       },
     });
-    rrAc('/recete-rota/yeni/ops');
+    rrAc('/recete-rota/ops');
     const bolge = await bolumAc();
     expect(within(bolge).getByText('Talaşlı')).toBeTruthy();
     const ad = within(bolge).getByLabelText('Operasyon adı') as HTMLInputElement;
@@ -35,7 +35,7 @@ describe('R1 Operasyonlar: izinli', () => {
 
   it('yeni operasyon kodsuz eklenmez; kodla eklenir', async () => {
     const istekler = sunucuKur(YONETICI, { durum: rotaDurumu(), yazmalar: { 'POST /operasyon-tipleri': () => json(201, { id: 22 }) } });
-    rrAc('/recete-rota/yeni/ops');
+    rrAc('/recete-rota/ops');
     const bolge = await bolumAc();
     fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon' }));
     const form = within(bolge).getByRole('region', { name: 'Yeni operasyon' });
@@ -51,7 +51,7 @@ describe('R1 Operasyonlar: izinli', () => {
 
   it('revizyon tablosundaki "Akışta aç" ürünü şemada açar', async () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
-    rrAc('/recete-rota/yeni/ops');
+    rrAc('/recete-rota/ops');
     const bolge = await bolumAc();
     const tablo = within(bolge).getByRole('table', { name: 'Rota revizyonları' });
     fireEvent.click(within(tablo).getByRole('button', { name: 'Akışta aç' }));
@@ -63,7 +63,7 @@ describe('R1 Operasyonlar: izinli', () => {
 describe('R1 Operasyonlar: reddedilen', () => {
   it('istasyon yazma işlemi olmayan ekleme düğmesini görmez, alanlar kapalı', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });
-    rrAc('/recete-rota/yeni/ops');
+    rrAc('/recete-rota/ops');
     const bolge = await bolumAc();
     expect(within(bolge).queryByRole('button', { name: 'Operasyon' })).toBeNull();
     expect((within(bolge).getByLabelText('Operasyon adı') as HTMLInputElement).disabled).toBe(true);
@@ -72,7 +72,7 @@ describe('R1 Operasyonlar: reddedilen', () => {
 
   it('operasyon okuması kapalıysa bölüm boş kalır, sıfır uydurmaz', async () => {
     sunucuKur(YONETICI, { durum: { ...rotaDurumu(), opdefs: null } });
-    rrAc('/recete-rota/yeni/ops');
+    rrAc('/recete-rota/ops');
     await bolumAc();
     await screen.findByText(/okuma yetkiniz yok/);
   });

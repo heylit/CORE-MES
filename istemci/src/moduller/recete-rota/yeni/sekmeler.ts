@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
+import { eskiAdresi } from '../eski-adres.ts';
 import type { RrVerisi } from './veri.ts';
 import type { RrYetkisi } from './yetki.ts';
 import { Operasyonlar, UrunVeRotalar } from './rotalar/index.tsx';
@@ -8,9 +9,8 @@ import { Kaynaklar, Malzemeler, Sureler } from './kaynaklar/index.tsx';
 import { Stok, UretimEmirleri } from './emirler/index.tsx';
 
 // Yeni ekranın iç gezinmesi: ikinci menünün "Reçete ve Rota" grubunun yedi maddesi aynı sırayla sekme olur (menü verisinden okunur).
-// Planlama grubu bu ekranda yoktur (ayrı iş). İkinci menü alıma kadar eski çerçeveye gider. Parça yazarları (R1-R3) bu dosyaya
-// dokunmaz; yalnız kendi klasörlerindeki ekranı doldurur.
-export const YENI_KOK = '/recete-rota/yeni';
+// Planlama grubu bu ekranda yoktur (ayrı iş). Sekmenin adresi menü maddesinin adresidir (541, 527 1 a); eski çerçeve bir süre
+// `/recete-rota/eski` altında kalır (eski-adres.ts). Parça yazarları (R1-R3) bu dosyaya dokunmaz; yalnız kendi klasörlerindeki ekranı doldurur.
 
 export interface EkranOzellikleri {
   veri: RrVerisi;
@@ -45,11 +45,10 @@ export interface YeniSekme {
   yol: string;
   eskiYol: string;
 }
-export const yeniYol = (anahtar: SekmeAnahtari): string => (anahtar === 'orders' ? YENI_KOK : `${YENI_KOK}/${anahtar}`);
+// Kök adres ilk maddedir (Üretim emirleri).
 const maddeler: readonly Madde[] = menu.gruplar[0].maddeler;
 export const SEKMELER: readonly YeniSekme[] = maddeler.map((m) => ({
-  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, yol: yeniYol(m.anahtar), eskiYol: m.yol,
+  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, yol: m.yol, eskiYol: eskiAdresi(m.yol),
 }));
-// Kök adres ilk maddedir (Üretim emirleri); `orders` adres parçası olarak açılmaz (tek adres).
-export const sekmeBul = (bolum: string | undefined): YeniSekme | undefined =>
-  (bolum === undefined ? SEKMELER[0] : SEKMELER.find((s) => s.anahtar === bolum && s.anahtar !== 'orders'));
+// Sondaki `/` aynı adrestir (yönlendirici de öyle eşler).
+export const sekmeBul = (adres: string): YeniSekme | undefined => SEKMELER.find((s) => s.yol === adres.replace(/(.)\/+$/, '$1'));

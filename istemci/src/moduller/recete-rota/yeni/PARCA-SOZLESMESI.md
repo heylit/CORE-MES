@@ -1,8 +1,8 @@
 # TS Recete ve Rota: R1-R3 parca sozlesmesi (R0 iskelet uzerine)
 
-Kok: `istemci/src/moduller/recete-rota/yeni/`. Adres: `/recete-rota/yeni` (Uretim emirleri) ve `/recete-rota/yeni/<bolum>`; bolum
+Kok: `istemci/src/moduller/recete-rota/yeni/`. Adres: `/recete-rota` (Uretim emirleri) ve `/recete-rota/<bolum>` (541, eski cerceve `/recete-rota/eski/<bolum>`); bolum
 anahtarlari ikinci menunun "Recete ve Rota" grubundaki anahtarlardir (`paylasilan/sayfalar/recete-rota.ts`: stock, schema, ops, sureler,
-items, res). Alimda yalniz `yeni/` adres parcasi duser. Planlama grubu (plan, studio, ysiparis ...) bu ekranda yoktur; ayri istir.
+items, res). Bolumler arasi gecis kabugun ikinci menu seridindedir, ekran kendi sekmesini cizmez (553 1 a). Planlama grubu (plan, studio, ysiparis ...) bu ekranda yoktur; ayri istir.
 Envanter: `degerlendirme/ts-gecisi/envanter/recete-rota.md` (proje dosyalari). Cerceve dosyalari (`cerceve/`, `ReceteRotaCercevesi.tsx`,
 `cerceve-kopru.ts`) alima kadar degismez.
 

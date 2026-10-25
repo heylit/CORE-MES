@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { DurumKutusu, SayfaBasligi, Sekmeler } from '../../../ortak/arayuz/index.ts';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
+import { DurumKutusu, SayfaBasligi } from '../../../ortak/arayuz/index.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
@@ -18,11 +17,13 @@ import './recete-rota-yeni.css';
 export const MOTOR_OKUNAMADI = 'Plan motorunun yerleşimi okunamadı; emir tarihleri boş gösteriliyor.';
 export const PLAN_VERISI_EKSIK = 'İstasyon, makine ya da iş merkezi listesi bu rolde okunamıyor; bu verilere dayanan alanlar boş kalır.';
 
-// Yeni yol alıma kadar yalnız yöneticiye açıktır (ortak kapı); kullanıcılar bugünkü çerçevede çalışır.
+// Eski adresine geçti (541, 527 1 a): Reçete ve Rota'yı gören herkes açar; bölümü sekmenin işlemi, veriyi rol açar (useRrYetkisi).
+// Köprü oturumdaki işlemlerle kurulur: oturum gelmeden kurulmaz.
 export function ReceteRotaYeni() {
+  const yetki = useYetki();
   return (
     <div className="tc-rry">
-      <YeniEkranKapisi><VeriSaglayici /></YeniEkranKapisi>
+      {yetki.hazir ? <VeriSaglayici /> : <DurumKutusu durum="yukleniyor" />}
     </div>
   );
 }
@@ -37,7 +38,7 @@ function VeriSaglayici() {
   const [motorOkunamadi, setMotorOkunamadi] = useState(false);
   const [planVerisiEksik, setPlanVerisiEksik] = useState(false);
   const [secim, setSecim] = useState<Secim | null>(null);
-  // Kapı oturumu bekler: burada oturum hazırdır. Köprü bir kez kurulur (oturum yenilense de sürümler kaybolmasın).
+  // Burada oturum hazırdır. Köprü bir kez kurulur (oturum yenilense de sürümler kaybolmasın).
   const [baglam] = useState<RrBaglami>(() => {
     const islemler = oturum.data?.islemler;
     let taslaklar: Promise<void> | null = null;
@@ -65,14 +66,14 @@ function VeriSaglayici() {
 }
 
 function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; planVerisiEksik: boolean }) {
-  const { bolum } = useParams();
+  const { pathname } = useLocation();
   const yonlen = useNavigate();
   const izin = useYetki();
   const yetki = useRrYetkisi();
   const veri = useRrVerisi(yetki.oku);
   const [kimlik, setKimlik] = useState<string | null>(null);
 
-  const sekme = sekmeBul(bolum);
+  const sekme = sekmeBul(pathname);
   if (!sekme) return <DurumKutusu durum="bos" mesaj="Bu bölüm bulunamadı." />;
   if (!yetki.oku || !izin.var(sekme.islem as Islem)) return <DurumKutusu durum="bos" mesaj={`${sekme.baslik} için yetkiniz yok.`} />;
 
@@ -85,13 +86,7 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
 
   return (
     <>
-      {/* Eski ekranın sırası (497/1 a): modül sekmeleri en üstte, altında plan şeridi ve bölüm başlığı. */}
-      <Sekmeler<SekmeAnahtari>
-        etiket="Reçete ve Rota bölümleri"
-        sekmeler={SEKMELER.map((s) => ({ anahtar: s.anahtar, baslik: s.baslik, simge: s.simge }))}
-        secili={sekme.anahtar}
-        sec={(a) => { git(a); }}
-      />
+      {/* Bölümler kabuğun ikinci menü şeridindedir (553 1 a); eski ekranın sırası (497/1 a): şeridin altında plan şeridi ve bölüm başlığı. */}
       {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <SayfaBasligi baslik={sekme.baslik} simge={sekme.simge} />
       {motorOkunamadi && <p className="tc-rry-not" role="status">{MOTOR_OKUNAMADI}</p>}

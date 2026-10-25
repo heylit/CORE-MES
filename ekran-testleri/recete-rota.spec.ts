@@ -1,11 +1,12 @@
 import { cerceve, expect, test } from './ortak.ts';
 
 // Kaynak: kayit/recete-rota/akislar.md R0 (açılış ve plan şeridi), R1 adım 1 (ürün seçimi), durum ekranları.
-// Bilinen yanlış davranış (açılışta yazma) burada sınanmaz: degisecek.spec.ts.
+// Bilinen yanlış davranış (açılışta yazma) burada sınanmaz: degisecek.spec.ts. Reçete ve Rota bölümlerinin çerçevesi eski adrestedir
+// (541: menü adresi yeni ekranı açar, recete-rota-yeni.spec.ts); planlama sayfaları kendi adresinde çerçevededir.
 test.use({ hesap: 'ornek.yonetici' });
 
 test('Ürün ve rotalar: plan şeridi, ürün seçimi ve görünüm düğmeleri', async ({ page, ag, ac }) => {
-  await ac('/recete-rota/schema');
+  await ac('/recete-rota/eski/schema');
   const f = await cerceve(page);
   const serit = f.getByRole('status').filter({ hasText: /CANLIYA ALINMADI|ONAY BEKLİYOR|PLAN CANLI/ }).first();
   await expect(serit).toBeVisible();
@@ -29,19 +30,19 @@ test('Ürün ve rotalar: plan şeridi, ürün seçimi ve görünüm düğmeleri'
 });
 
 test('R1.1: ürün seçicide yalnız mamul ve yarımamul kartı vardır', async ({ page, ac }) => {
-  await ac('/recete-rota/schema');
+  await ac('/recete-rota/eski/schema');
   const f = await cerceve(page);
   const secenekler = await f.getByRole('combobox', { name: 'Şemadaki ürün' }).locator('option').allInnerTexts();
   expect(secenekler.length).toBeGreaterThan(1);
   expect(secenekler.filter((s) => /^(HZ|SF)-/.test(s))).toEqual([]);
 });
 
-test('ikinci menüden bölümler arasında geçilir', async ({ page, ag, ac }) => {
-  await ac('/recete-rota/schema');
+test('ikinci menüden bölümler arasında geçilir; Reçete ve Rota maddesi yeni ekranı açar', async ({ page, ag, ac }) => {
+  await ac('/recete-rota/eski/schema');
   await cerceve(page);
   const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   // Bağlantı adı bekleyen iş sayısını da taşır ("Plan 2"); bağlantı adresinden bulunur.
-  for (const [yol, baslik] of [['/recete-rota/plan', 'Planlama'], ['/recete-rota/studio', 'Planlama'], ['/recete-rota/schema', 'Reçete ve Rota']] as const) {
+  for (const [yol, baslik] of [['/recete-rota/plan', 'Planlama'], ['/recete-rota/studio', 'Planlama']] as const) {
     await menu.locator(`a[href="${yol}"]`).filter({ visible: true }).first().click();
     await expect(page).toHaveURL((u) => u.pathname === yol);
     // Plan ve atölye planlama çerçevesindedir (kanban yalnız eski adrestir, menüde yoktur): geçişte eski çerçeve bekleyen
@@ -53,6 +54,9 @@ test('ikinci menüden bölümler arasında geçilir', async ({ page, ag, ac }) =
     if (!f) throw new Error(`${baslik} çerçevesi yüklenmedi`);
     await expect(f.locator('main').first()).toBeVisible();
   }
+  await menu.locator('a[href="/recete-rota/schema"]').filter({ visible: true }).first().click();
+  await expect(page).toHaveURL((u) => u.pathname === '/recete-rota/schema');
+  await expect(page.getByRole('region', { name: 'Ürün ve rotalar' }).locator('[data-parca="R1"]')).toBeVisible({ timeout: 30_000 });
   expect(ag.hatalar).toEqual([]);
 });
 
@@ -73,7 +77,7 @@ test.describe('planlama işlemi olmayan', () => {
     await ac('/recete-rota/plan');
     await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
-    await ac('/recete-rota/schema');
+    await ac('/recete-rota/eski/schema');
     await cerceve(page);
     const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
     await expect(menu.locator('a[href="/recete-rota/schema"]').first()).toBeAttached();

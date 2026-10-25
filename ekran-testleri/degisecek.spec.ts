@@ -9,7 +9,7 @@ const ETIKET = { tag: '@degisecek' };
 test.describe('Reçete ve Rota', () => {
   test('R0: sayfayı açmak yalnız okur, yazma isteği göndermez', ETIKET, async ({ page, ag, ac }) => {
     test.fail();
-    await ac('/recete-rota/schema');
+    await ac('/recete-rota/eski/schema');
     await cerceve(page);
     expect(ag.yazmalar).toEqual([]);
   });

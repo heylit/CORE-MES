@@ -12,7 +12,6 @@ const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: s
   { kok: '/arkon', yol: '/arkon/yeni' },
   // Eski sistemde Üretim Terminali ve Kuyruk ana menüde ayrı satırdır (497/5 a); yeni ekranda da Arkon sekmesi değil, ayrı sayfadır.
   { kok: '/uretim-terminali', yol: '/arkon/yeni/operator' },
-  { kok: '/recete-rota', yol: '/recete-rota/yeni' },
   { kok: '/recete-rota', yol: '/recete-rota/planlama-yeni', baslik: 'Planlama' },
   { kok: '/malzemeler', yol: '/malzemeler/yeni-ekran' },
   { kok: '/kalite-merkezi', yol: '/kalite-merkezi/yeni' },
@@ -29,25 +28,43 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 
 // Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
 // kişi menüsündeki "Eski görünüm" ile açılır. Görünürlük sayfanın kendi işlemidir; `eski` sayfanın alt yolu olduğu için aynı işlemle açılır.
-export const TASINAN_EKRANLAR: readonly { yol: `/${string}`; eski: `/${string}` }[] = [
+// tam: yalnız bu adres (alt yolu değil); Reçete ve Rota'nın kök adresinin altında eski kalan Planlama sayfaları ve bölümlerin eski adresi vardır.
+// serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
+// (Reçete ve Rota'dan Planlama'ya) yol kalmaz.
+interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; tam?: true; serit?: true }
+export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/kuyruk', eski: '/kuyruk/eski' },
+  ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
+    yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
+  })),
 ];
 
 const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);
+const yeniMi = (adres: string, t: TasinanEkran): boolean => (t.tam ? adres === t.yol : altYolMu(adres, t.yol) && !altYolMu(adres, t.eski));
+const eskiMi = (adres: string, t: TasinanEkran): boolean => (t.tam ? adres === t.eski : altYolMu(adres, t.eski));
+// Sondaki `/` aynı adrestir (yönlendirici de öyle eşler).
+const temiz = (adres: string): string => adres.replace(/(.)\/+$/, '$1');
 
 // Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
 // yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır;
 // eski adresine geçen ekranın `eski` yolu eski ekrandır, şerit orada çizilir.
 export function yeniEkranAdresiMi(adres: string): boolean {
   return YENI_EKRAN_YOLLARI.some((yol) => altYolMu(adres, yol))
-    || TASINAN_EKRANLAR.some((t) => altYolMu(adres, t.yol) && !altYolMu(adres, t.eski));
+    || TASINAN_EKRANLAR.some((t) => !t.serit && yeniMi(temiz(adres), t));
+}
+
+// Şeritte seçili görünen madde: eski görünümde de bölümün maddesi seçili durur (`/recete-rota/eski/stock` -> Stok, kök madde değil).
+export function seritAdresi(adres: string): string {
+  const a = temiz(adres);
+  return TASINAN_EKRANLAR.find((t) => t.serit && eskiMi(a, t))?.yol ?? adres;
 }
 
 // Kişi menüsündeki geçiş: yeni ekrandayken eskisine, eski ekrandayken yenisine. Eskisi olmayan adreste null.
 export function gorunumGecisi(adres: string): { baslik: string; yol: string } | null {
+  const a = temiz(adres);
   for (const t of TASINAN_EKRANLAR) {
-    if (altYolMu(adres, t.eski)) return { baslik: 'Yeni görünüm', yol: t.yol };
-    if (altYolMu(adres, t.yol)) return { baslik: 'Eski görünüm', yol: t.eski };
+    if (eskiMi(a, t)) return { baslik: 'Yeni görünüm', yol: t.yol };
+    if (yeniMi(a, t)) return { baslik: 'Eski görünüm', yol: t.eski };
   }
   return null;
 }
