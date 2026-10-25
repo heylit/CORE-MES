@@ -232,7 +232,8 @@ describe('Kalite Merkezi köprüsü (uygulamanın yerel sunucu sözleşmesi -> T
     expect(await kopru.isle({ adres: 'api/ilk-parca/bekleyenler', yontem: 'GET', govde: null })).toEqual({ durum: 200, json: { emirler: [] } });
     expect(get).toHaveBeenLastCalledWith('/kalite-merkezi/ilk-parca/bekleyenler');
     expect(await kopru.isle({ adres: 'api/ilk-parca/7/karar', yontem: 'POST', govde: JSON.stringify({ karar: 'ret' }) })).toEqual({ durum: 200, json: { adet: 4 } });
-    expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/ilk-parca/7/karar', { karar: 'ret' });
+    // Karar tekrar korumalıdır: köprü istek kimliğiyle gönderir.
+    expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/ilk-parca/7/karar', { karar: 'ret' }, expect.objectContaining({ istekKimligi: expect.stringMatching(/^[0-9a-f-]{36}$/) }));
     post.mockClear();
     for (const adres of ['api/ilk-parca/0/karar', 'api/ilk-parca/abc/karar', 'api/ilk-parca/7..8/karar']) {
       expect((await kopru.isle({ adres, yontem: 'POST', govde: JSON.stringify({ karar: 'onay' }) })).durum).toBe(400);

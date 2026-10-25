@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KmIlkParcaBekleyenCevabi, KmIlkParcaCevabi, KmIlkParcaGovdesi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { Dugme, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 
 type Emir = KmIlkParcaBekleyenCevabi['emirler'][number];
 type Karar = KmIlkParcaGovdesi['karar'];
@@ -22,8 +23,11 @@ export function IlkParcaKarari() {
     refetchInterval: YOKLAMA_MS,
   });
   const karar = useMutation({
-    mutationFn: ({ emir, secim }: { emir: Emir; secim: Karar }) =>
-      api.post<KmIlkParcaCevabi>(`/kalite-merkezi/ilk-parca/${String(emir.uretimEmriId)}/karar`, { karar: secim } satisfies KmIlkParcaGovdesi),
+    // Karar tekrar korumalıdır: cevabı kaybolan gönderim aynı kimlikle yinelenir, deftere ikinci karar yazılmaz.
+    mutationFn: ({ emir, secim }: { emir: Emir; secim: Karar }) => tekrarKorumaliGonder((d) => api.post<KmIlkParcaCevabi>(
+      `/kalite-merkezi/ilk-parca/${String(emir.uretimEmriId)}/karar`, { karar: secim } satisfies KmIlkParcaGovdesi,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
     onSuccess: (cevap, { emir, secim }) => {
       reddedilecekYaz(null);
       bildir('tamam', `${secim === 'onay' ? 'İlk parça onaylandı' : 'İlk parça reddedildi'}: ${String(cevap.adet)} adet`);

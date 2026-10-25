@@ -203,6 +203,8 @@ export const uclar = [
     yontem: 'POST',
     yol: '/arkon/iletiler',
     yetki: ARKON_SAYFASI,
+    // Cevabı kaybolan iletinin yinelemesi (çağrı, numune isteği) ikinci kez yayımlanmasın; kimlik uygulamanın ileti kimliğidir.
+    tekrarKorumali: true,
     govde: iletiGovdesi,
     cevap: tamamCevabi,
     isle: async ({ db, kullanici, govde }) => {

@@ -40,6 +40,23 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect(cagrilar.map((c) => c.yol)).toEqual([`/arkon/malzemeler?ara=${encodeURIComponent('sıvı')}`, '/arkon/malzemeler']);
   });
 
+  it('ileti (551 a): tekrar korumalı uca gider; UUID ileti kimliği istek kimliği olur, UUID olmayan kimlikte yenisi üretilir', async () => {
+    const giden: { yol: string; govde: unknown; kimlik: string | undefined }[] = [];
+    const istemci = {
+      get: async () => { throw new Error('beklenmeyen okuma'); },
+      post: async (yol: string, govde?: unknown, secenek?: { istekKimligi?: string }) => { giden.push({ yol, govde, kimlik: secenek?.istekKimligi }); return { tamam: true }; },
+    } as unknown as Istemci;
+    const mid = '0f8fad5b-d9cb-469f-a165-70867728950e';
+    const ileti = { type: 'call', mid };
+    expect((await cevapla(istemci, istek('POST', '/bus', 'c=c1', JSON.stringify({ msg: ileti, c: 'c1' })))).govde).toEqual({ ok: true });
+    await cevapla(istemci, istek('POST', '/bus', 'c=c1', JSON.stringify({ msg: ileti, c: 'c1' })));
+    await cevapla(istemci, istek('POST', '/bus', 'c=c1', JSON.stringify({ msg: { type: 'call', mid: 'kisa-kimlik' }, c: 'c1' })));
+    expect(giden.map((g) => g.yol)).toEqual(['/arkon/iletiler', '/arkon/iletiler', '/arkon/iletiler']);
+    expect(giden[0]!.govde).toEqual({ ileti, kaynak: 'c1' });
+    expect([giden[0]!.kimlik, giden[1]!.kimlik]).toEqual([mid, mid]);
+    expect(giden[2]!.kimlik).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
   it('plan sırası: Arkon Planlama\'nın sıralaması TMI plan sıralama komutuna gider (A4)', async () => {
     const g = { kaynak: { tur: 'makine', id: 5 }, onceki: [1, 2], yeni: [2, 1], planSurumu: 7 };
     const { istemci, cagrilar } = istemciKur({ 'POST /arkon/plan-sira/sirala': { taslakId: 3, taslakAcildi: true } });

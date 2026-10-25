@@ -55,7 +55,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const cevap = await app.inject({
       method: yontem,
       url: `/api${yol}`,
-      headers: { ...(cerez ? { cookie: cerez } : {}), ...(yontem === 'POST' && yol === '/uretim-emirleri' ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
+      headers: { ...(cerez ? { cookie: cerez } : {}), ...(yontem === 'POST' && (yol === '/uretim-emirleri' || yol === '/arkon/iletiler') ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
       ...(govde === undefined ? {} : { payload: govde as object }),
     });
     return { durum: cevap.statusCode, govde: (cevap.body ? cevap.json() : undefined) as T };

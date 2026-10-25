@@ -55,7 +55,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
 
   async function istek<T = unknown>(cerez: string, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
     const cevap = await app.inject({
-      method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' && (yol === '/uretim-emirleri' || yol === '/adimli-emirler/rotasiz' || yol.startsWith('/plan/') || /^\/adimli-emirler\/\d+\/(bol|birlestir|adim-ekle)$/.test(yol)) ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
+      method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' && (yol === '/uretim-emirleri' || yol === '/adimli-emirler/rotasiz' || yol.startsWith('/plan/') || /^\/adimli-emirler\/\d+\/(bol|birlestir|adim-ekle)$/.test(yol) || /^\/kalite-merkezi\/ilk-parca\/\d+\/karar$/.test(yol)) ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
       ...(govde === undefined ? {} : { payload: govde as object }),
     });
     return { durum: cevap.statusCode, govde: (cevap.body ? cevap.json() : undefined) as T };

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirBaslat, emirNolari, emirSayim, kararSayaclari, uretimEmriAc } from '../uretim-emirleri/disari.ts';
@@ -74,7 +77,7 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     planlama = await kisi('planlama', 'planlama_proje');
     tipId = (await ortam.sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('KMF-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
     await ortam.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('KMF-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
-    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
+    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     urunNo = (await ortam.sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
        VALUES ('kmf-dnm-1', 'mamul', 'KMF-DNM-', 1, 'aktif', $1, $2, $2) RETURNING no`,
@@ -114,7 +117,9 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     const opr = await cerez('operator');
     const emir = await baslamisEmir();
     await kararBekleyen(emir, 2);
-    const karar = (c: string, govde: unknown) => app.inject({ method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${emir}/karar`, headers: { cookie: c }, payload: govde as object });
+    const karar = (c: string, govde: unknown, kimlik = randomUUID()) => app.inject({
+      method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${emir}/karar`, headers: { cookie: c, [ISTEK_KIMLIGI_BASLIGI]: kimlik }, payload: govde as object,
+    });
 
     assert.equal((await karar(opr, { karar: 'onay' })).statusCode, 403);
     assert.equal((await karar(kalite, { karar: 'belki' })).statusCode, 400);
@@ -123,6 +128,26 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     assert.equal(r.statusCode, 200, r.body);
     assert.deepEqual(r.json(), { adet: 2 });
     assert.deepEqual(await sayaclar(emir), { kararBekliyor: 0, red: 2 });
+  });
+
+  // 551 a: cevabı kaybolan kararın yinelemesi deftere ikinci karar yazmaz, ilk cevabı alır; kimliksiz karar reddedilir.
+  test('KM-K229 karar ucu tekrar korumalı: aynı istek kimliğiyle yinelenen karar tek satır yazar; kimliksiz istek 400', async () => {
+    const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'kaliteci', parola: 'dogru-parola-1' } });
+    assert.equal(giris.statusCode, 200, giris.body);
+    const kalite = String(giris.headers['set-cookie']).split(';')[0] ?? '';
+    const emir = await baslamisEmir();
+    await kararBekleyen(emir, 3);
+    const gonder = (kimlik?: string) => app.inject({
+      method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${emir}/karar`, payload: { karar: 'onay' },
+      headers: { cookie: kalite, ...(kimlik === undefined ? {} : { [ISTEK_KIMLIGI_BASLIGI]: kimlik }) },
+    });
+    assert.equal((await gonder()).statusCode, 400);
+    const kimlik = randomUUID();
+    const ilk = await gonder(kimlik);
+    const yineleme = await gonder(kimlik);
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    assert.deepEqual([yineleme.statusCode, yineleme.json()], [200, { adet: 3 }]);
+    assert.equal((await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_ilk_parca_karari WHERE uretim_emri_id = $1', [emir]))!.n, 1);
   });
 
   // Arkon'un kapısı KM'nin kararını okur (denetim #12): emir başına son karar; kararsız emir haritada yoktur.
@@ -169,7 +194,9 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
 
     assert.equal((await bekleyenler(opr)).statusCode, 403);
     assert.equal((await app.inject({ method: 'GET', url: '/api/kalite-merkezi/ilk-parca/bekleyenler' })).statusCode, 401);
-    const karar = await app.inject({ method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${bekleyen}/karar`, headers: { cookie: kalite }, payload: { karar: 'onay' } });
+    const karar = await app.inject({
+      method: 'POST', url: `/api/kalite-merkezi/ilk-parca/${bekleyen}/karar`, headers: { cookie: kalite, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() }, payload: { karar: 'onay' },
+    });
     assert.equal(karar.statusCode, 200, karar.body);
     const sonra = (await bekleyenler(kalite)).json() as { emirler: { uretimEmriId: number }[] };
     assert.ok(!sonra.emirler.some((e) => e.uretimEmriId === bekleyen), 'karar verilen emir listeden düştü');

@@ -223,3 +223,7 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 ## Satış formunda sevk seçimi (302 a, prototip değişikliği onaylı)
 - `GET /finans/satis-sevkleri?siparisId=` (finans.yaz): siparişin iptal edilmemiş teslimat işleri, iş başına bir satır (tarih, belge no, durum); Sevkiyat `siparisinSevkleri` kablolamadan okunur.
 - Satış formunda sipariş seçimin altında isteğe bağlı "Sevk" alanı: sipariş seçilmeden kapalı; seçilen sevk `sevkiyatIsiId` olarak gider, sunucu FNS-68 ile denetler.
+
+## Faiz ve düzenli ödeme eklemesi tekrar korumalı (551 a)
+- `POST /finans/faizler/ekle` ve `POST /finans/duzenli-odemeler/ekle` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen istek ikinci satır açmaz, ilk cevabı alır (FNS-40).
+- İstemci üç yoldan da kimlikle gönderir: Ayarlar komutları, Kur ve Faiz şeridi (sonucu bilinmeyen gönderimden sonra yeniden kaydet aynı kimliği kullanır), finans çerçeve köprüsü.

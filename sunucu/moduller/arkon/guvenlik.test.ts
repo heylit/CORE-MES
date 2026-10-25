@@ -92,7 +92,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
 
   async function istekDogrudan<T = unknown>(cerez: string, yontem: 'GET' | 'POST', yol: string, govde?: unknown): Promise<Cevap<T>> {
     const cevap = await app.inject({
-      method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' && (yol === '/uretim-emirleri' || yol === '/planli-duruslar') ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
+      method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' && (yol === '/uretim-emirleri' || yol === '/planli-duruslar' || yol === '/arkon/iletiler') ? { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } : {}) },
       ...(govde === undefined ? {} : { payload: govde as object }),
     });
     return { durum: cevap.statusCode, govde: (cevap.body ? cevap.json() : undefined) as T };
@@ -1735,6 +1735,18 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       assert.equal((await yolla(hiz.cerez)).durum, 429);
       assert.equal((await yolla(hiz.cerez)).durum, 429);
       assert.equal((await yolla(cerezler.lead)).durum, 200);
+    });
+
+    test('ileti (551 a): tekrar korumalı; aynı istek kimliğiyle yinelenen ileti ikinci satır açmaz, kimliksiz ileti 400', async () => {
+      const once = await iletiSayisi();
+      const kimlik = randomUUID();
+      const yolla = (baslik: Record<string, string>) => app.inject({
+        method: 'POST', url: '/api/arkon/iletiler', payload: { ileti: { type: 'call', mid: kimlik }, kaynak: 'g1' }, headers: { cookie: cerezler.operator, ...baslik },
+      });
+      assert.equal((await yolla({ [ISTEK_KIMLIGI_BASLIGI]: kimlik })).statusCode, 200);
+      assert.equal((await yolla({ [ISTEK_KIMLIGI_BASLIGI]: kimlik })).statusCode, 200);
+      assert.equal((await yolla({})).statusCode, 400);
+      assert.equal(await iletiSayisi(), once + 1);
     });
 
     test('ileti: Arkon\'un gerçek ileti gövdeleri geçer', async () => {

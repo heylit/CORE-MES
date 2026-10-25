@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KurFaizOzeti } from '#paylasilan/sozlesme/finans.ts';
 import { Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import './finans.css';
 
@@ -74,10 +75,22 @@ function Formlar({ bugun }: { bugun: string }) {
     onSuccess: async () => { setKur((k) => ({ ...k, deger: '' })); await sonra('Kur kaydedildi.'); },
     onError: (h) => bildir('hata', hataIletisi(h, 'Kur kaydedilemedi.')),
   });
+  // Sonucu bilinmeyen gönderimden sonra yeniden kaydet aynı kimlikle gider (faiz ikinci kez yazılmaz); kayıt ya da sunucunun reddi
+  // yeni girişe yeni kimlik açar.
+  const faizKimligi = useRef(yeniIstekKimligi());
   const faizYaz = useMutation({
-    mutationFn: () => api.post('/finans/faizler/ekle', { paraBirimi: faiz.paraBirimi, gecerlilikBaslangic: faiz.baslangic, aylikYuzde: Number(faiz.deger.replace(',', '.')) }),
-    onSuccess: async () => { setFaiz((f) => ({ ...f, deger: '' })); await sonra('Faiz kaydedildi.'); },
-    onError: (h) => bildir('hata', hataIletisi(h, 'Faiz kaydedilemedi.')),
+    mutationFn: () => {
+      const govde = { paraBirimi: faiz.paraBirimi, gecerlilikBaslangic: faiz.baslangic, aylikYuzde: Number(faiz.deger.replace(',', '.')) };
+      return tekrarKorumaliGonder(
+        (d) => api.post('/finans/faizler/ekle', govde, { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
+        { istekKimligi: faizKimligi.current },
+      );
+    },
+    onSuccess: async () => { faizKimligi.current = yeniIstekKimligi(); setFaiz((f) => ({ ...f, deger: '' })); await sonra('Faiz kaydedildi.'); },
+    onError: (h) => {
+      if (!yenidenDenenebilirMi(h)) faizKimligi.current = yeniIstekKimligi();
+      bildir('hata', hataIletisi(h, 'Faiz kaydedilemedi.'));
+    },
   });
   const gonder = (yaz: { mutate: () => void }) => (e: FormEvent) => { e.preventDefault(); yaz.mutate(); };
   return (

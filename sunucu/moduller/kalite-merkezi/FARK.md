@@ -78,3 +78,7 @@ Yok.
 - Üç ekran düzeltmesi (kullanıcı kararı 17.10.2026): ayarlar penceresi kapanınca adres alttaki görünüme döner (acilis.ts `SON_BETIK`);
   dar ekranda uygulamanın alt şeridi gizli (sayfa.ts `GOMULU_STIL`); PDF görüntüleyici pdf.js 6.3.289 (sayfa.ts `PDF_YERLERI`,
   kitapliklar.ts). Fotoğraf küçültme isteği uygulamanın var olan küçültmesiyle karşılandı, kod değişmedi (`fotograf.test.ts`).
+
+## İlk parça kararı tekrar korumalı (551 a)
+- `POST /kalite-merkezi/ilk-parca/:uretimEmriId/karar` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen karar deftere ikinci satır yazmaz, ilk cevabı alır.
+- Bugün ekranı ve uygulama köprüsü kararı kimlikle gönderir; sonucu bilinmeyen gönderim aynı kimlikle yinelenir.

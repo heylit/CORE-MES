@@ -628,6 +628,29 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
       "SELECT durum, kaynak, olusturma > now() - interval '1 minute' AS yeni, (SELECT count(*)::int FROM finans_belge WHERE aciklama IS NULL AND firma_id = $2) AS n FROM finans_belge WHERE id = $1", [a.json().belge.id, f]);
     assert.deepEqual(s, { durum: 'acik', kaynak: 'elle', yeni: true, n: 1 });
   });
+  test('FNS-40: aynı istek kimliğiyle yinelenen faiz ve düzenli ödeme eklemesi ikinci satır açmaz; kimliksiz ekleme reddedilir', async () => {
+    const gonder = (yol: string, govde: object, kimlik?: string) => app.inject({
+      method: 'POST', url: `/api${yol}`, payload: govde,
+      headers: { cookie: cerez.get('yonetim') ?? '', ...(kimlik === undefined ? {} : { [ISTEK_KIMLIGI_BASLIGI]: kimlik }) },
+    });
+    const faiz = { paraBirimi: 'CHF', gecerlilikBaslangic: '2026-07-01', aylikYuzde: 2 };
+    const faizKimligi = randomUUID();
+    assert.equal((await gonder('/finans/faizler/ekle', faiz, faizKimligi)).statusCode, 200);
+    assert.equal((await gonder('/finans/faizler/ekle', faiz, faizKimligi)).statusCode, 200);
+    assert.equal((await gonder('/finans/faizler/ekle', faiz)).statusCode, 400);
+    const faizSayisi = await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM finans_faiz WHERE para_birimi = 'CHF'");
+    assert.equal(faizSayisi?.n, 1);
+
+    const duzenli = { ad: 'Yinelenen Abonelik', kategori: 'personel', tutar: 40, ayinGunu: 3 };
+    const duzenliKimligi = randomUUID();
+    const a = await gonder('/finans/duzenli-odemeler/ekle', duzenli, duzenliKimligi);
+    const b = await gonder('/finans/duzenli-odemeler/ekle', duzenli, duzenliKimligi);
+    assert.equal(a.statusCode, 200);
+    assert.equal(b.json().duzenli.id, a.json().duzenli.id);
+    assert.equal((await gonder('/finans/duzenli-odemeler/ekle', duzenli)).statusCode, 400);
+    const duzenliSayisi = await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM finans_duzenli_odeme WHERE ad = 'Yinelenen Abonelik'");
+    assert.equal(duzenliSayisi?.n, 1);
+  });
   test('FNS-3, FNS-34, FNS-37: belge no en çok 16; açılış belgesinde geçmiş vade serbest, faturada değil; olmayan firma reddedilir', async () => {
     const f = await firma();
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(f, { belgeNo: 'A'.repeat(16) }))).durum, 200);
