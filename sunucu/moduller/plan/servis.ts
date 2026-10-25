@@ -26,7 +26,7 @@ import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, bantSinirlari, bedelCarpani, emirTutari, katkiPaylari, calisilanParcalar, elleCarpanSiniri, gecikmeBedeli, oncelikSiniflari, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, ayarVeGecikme, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -680,8 +680,19 @@ function gosterge(b: Baglam, yerler: readonly Yer[]) {
     return { ...y, uretimEmriId: b.isler.get(y.isEmriId)!.uretimEmriId, anahtar: kaynakAnahtari(y.kaynak), ad: k?.ad ?? '?', istasyon: k?.istasyon ?? null };
   }), [...emirler.values()], UFUK_DK, (id) => kaynakSayisi.get(id) ?? 1, { takvim: (a) => t(a), istasyon: (id) => istasyonKapasitesi.get(id) ?? 0 }, (l) => planinMaliyeti(b, l));
   const personel = personelVerisi(b, yerler);
+  // 507 1 a: ayar saati ve öncelik ağırlıklı gecikme, ağırlığın adet payı fiyat göstergesindekiyle aynı satırdan (adetPayi).
+  const ilkIs = new Map<number, Is>();
+  for (const i of b.isler.values()) if (planlanacak(i) && !ilkIs.has(i.uretimEmriId)) ilkIs.set(i.uretimEmriId, i);
+  const ek = ayarVeGecikme(isgal(yerler.filter((y) => b.isler.has(y.isEmriId))).map((y) => {
+    const i = b.isler.get(y.isEmriId)!;
+    return { ...y, uretimEmriId: i.uretimEmriId, ayarDk: i.durum === 'planli' || (i.islenenAdet ?? 0) === 0 ? i.ayarDk : 0 };
+  }), [...emirler.values()].map((e) => {
+    const i = ilkIs.get(e.id)!;
+    const satir = i.siparisSatiriId == null ? null : b.siparisSatirlari.get(i.siparisSatiriId) ?? null;
+    return { ...e, oncelik: i.oncelik, pay: adetPayi(satir, i.adet) };
+  }));
   // İlk sistem: personel kısıtı kapalıyken sınırlı gün sayılmaz (0); kişi verisi olan iş merkezi yoksa bilinmez (null).
-  return { ...g, personelGun: personel.length === 0 ? null : b.ayar.personelKisiti ? sinirliGunSayisi(personel) : 0 };
+  return { ...g, ...ek, personelGun: personel.length === 0 ? null : b.ayar.personelKisiti ? sinirliGunSayisi(personel) : 0 };
 }
 
 // Adet, süre gibi adımın işleyeceği adettir: önceki adımın hurdası düşülür, kolla paylaşılan adımda kol eklenir (H5).
