@@ -3,7 +3,7 @@ import { kayitAramaCevapSemasi, kayitAramaSorguSemasi } from '#paylasilan/ikinci
 import { KAYIT_ARAMA_EN_COK_SONUC, type KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 import { ADIMLI_OKUMA_ISLEMLERI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { istasyonKisiAtamalari } from '../../istasyonlar/disari.ts';
-import { kisininIstasyonu } from '../kurallar.ts';
+import { gorunenDurum, kisininIstasyonu } from '../kurallar.ts';
 import { emirAra, istasyondaEmirAra, type EmirAramaSatiri } from './sorgular.ts';
 
 const DURUM_ADI: Record<EmirDurumu, string> = { taslak: 'Taslak', planli: 'Planlı', basladi: 'Başladı', bitti: 'Bitti', iptal: 'İptal' };
@@ -12,7 +12,7 @@ const ISTASYON_ARAMASI = 'uretim-emirleri.ara-istasyon';
 const sonuc = (e: EmirAramaSatiri, yol: KayitAramaSonucu['yol']): KayitAramaSonucu => ({
   anahtar: String(e.id),
   baslik: e.emirNo,
-  aciklama: [[e.parcaNo, e.parcaAd].filter((p) => p !== null && p.trim() !== '').join(' '), DURUM_ADI[e.durum]].filter((p) => p !== '').join(' · '),
+  aciklama: [[e.parcaNo, e.parcaAd].filter((p) => p !== null && p.trim() !== '').join(' '), DURUM_ADI[gorunenDurum(e.durum, e.baslamis)]].filter((p) => p !== '').join(' · '),
   yol,
 });
 

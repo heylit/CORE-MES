@@ -538,7 +538,7 @@ export function taslakAc(db: Db, kullanici: Kullanici, urunId: number, kaynak: T
 
 // Kart onaylanınca ilk rota kendiliğinden taslak açılır (#688): Malzemeler Rota'yı çağıramaz (Rota onu ithal eder, döngü yasak),
 // bu yüzden Rota'nın işi kartları tarar. Rotası (herhangi bir revizyonu) olan kart atlanır: taslak bir kez açılır, silinse de
-// yeniden açılmaz. Taslağı açan, kartı onaylayan kişidir. Bir kartın reddi ötekileri durdurmaz; ret günlüğe yazılır.
+// yeniden açılmaz. Taslağı açan, kartı onaya gönderen (yoksa açan) kişidir (soru 520 2 b). Bir kartın reddi ötekileri durdurmaz; ret günlüğe yazılır.
 // Reçete ve Rota açılırken de koşar (POST /rota/karttan-taslaklar): kart yeni onaylandıysa tarama beklenmeden rota taslağı görünür.
 // Kopya isteği olan kart (#500) karttan önce, isteğin kaynağından açılır; açanı isteği bırakandır. İstek açılınca da açılamayınca da
 // silinir: açılamayan istek her taramada yeniden denenmez, kartın operasyonları varsa ilk taslak onlardan açılır.
