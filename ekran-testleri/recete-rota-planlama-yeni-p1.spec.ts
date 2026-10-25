@@ -141,6 +141,11 @@ test.describe('P1c Çizelge', () => {
       await expect(neden).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Siparişin adımları' })).toBeVisible();
       await tasmaz(page);
+      await page.keyboard.press('e');
+      await expect(page.getByRole('dialog', { name: 'Düzenle' })).toBeVisible();
+      await tasmaz(page);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog', { name: 'Düzenle' })).toHaveCount(0);
     }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
