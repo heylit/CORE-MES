@@ -3,6 +3,8 @@ import type { Metin } from './ozet/veri.ts';
 // Motor bağlanmadan çalışmayan düğmenin notu (357 b) ve yeni ekranda karşılığı olmayan iç görünümün notu (459/5 a).
 export const MOTOR_NOTU = 'Plan motoru bağlanınca açılır.';
 export const YOK_NOTU = 'Bu görünüm yeni ekranda yok.';
+// Verisi sahibi ekranından giren alanın notu (222 a, 223 a: veri.yaz kalkar).
+export const VERI_NOTU = 'Bu veri sahibi ekranında değişir.';
 // Sonraki teslimde gelen bölümün notu (harita, çizelge, keşfet ve kartlar).
 export const HAZIRLANIYOR = 'Hazırlanıyor.';
 

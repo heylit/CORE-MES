@@ -421,6 +421,24 @@ describe('PlanlamaMotoru', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('Yan panel Takvim: ek mesaiyi kaldırmak plan.yaz ile çalışmaya yazar; yetkisizde pasif', () => {
+    const c = ornekCalisma(); c.ekMesai = [{ m: '3', gun: 300, vardiya: '2' }, { m: '4', gun: 300, vardiya: '2' }] as typeof c.ekMesai;
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Hangi gün hangi tezgâh dolu?' })).getByRole('button', { name: '3' }));
+    const dk = screen.getByRole('complementary', { name: 'Yan panel' });
+    fireEvent.click(within(dk).getByRole('tab', { name: 'Takvim' }));
+    expect(within(dk).getAllByText('ek mesai')).toHaveLength(1);
+    fireEvent.click(within(dk).getByRole('button', { name: 'Ek mesaiyi kaldır' }));
+    expect(komut.degistir).toHaveBeenCalledWith('Ek mesai kaldırıldı', expect.any(Function), { ayrinti: '3 2' });
+    expect(yazilan.at(-1)?.ekMesai).toEqual([{ m: '4', gun: 300, vardiya: '2' }]);
+    cleanup(); ac({ c, komut: null, yaz: false });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Hangi gün hangi tezgâh dolu?' })).getByRole('button', { name: '3' }));
+    const dk2 = screen.getByRole('complementary', { name: 'Yan panel' });
+    fireEvent.click(within(dk2).getByRole('tab', { name: 'Takvim' }));
+    expect(within(dk2).getByRole('button', { name: 'Ek mesaiyi kaldır' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('Yan panel: seçim kartı Özet, Keşfet ve Harita\'da açılır; sipariş, iş ve tezgâh kartı; motor hamleleri pasif, sabitlemek degistir ile; gün planı Çizelge\'de', () => {
     const c = ornekCalisma(); const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
@@ -434,8 +452,13 @@ describe('PlanlamaMotoru', () => {
     expect(within(dk()).getByRole('button', { name: 'Öne al' }).getAttribute('aria-disabled')).toBe('true');
     expect(within(dk()).getByRole('button', { name: 'Normal' }).getAttribute('aria-pressed')).toBe('true');
     expect(within(dk()).getAllByRole('listitem').map((x) => x.textContent)).toContain('25 (fason)Pzt 16:00 → 16:00');
+    // Rota: adımlar rota sırasıyla, şu anki tezgâh çipi; başka tezgâha taşımak motorla gelir, Rotalar yeni ekranda yok.
     fireEvent.click(within(dk()).getByRole('tab', { name: 'Rota' }));
-    expect(dk().textContent).toContain('Hazırlanıyor');
+    const rota = within(dk()).getByRole('list', { name: '2 rotası' });
+    expect(rota.querySelectorAll('.tc-pym-mz-adim header button')).toHaveLength(3);
+    expect(rota.querySelector('li[data-bu]')?.textContent).toBe('34,4 sa + ayar 0,6 sa');
+    expect(within(dk()).getByRole('button', { name: 'Rotalar' }).getAttribute('title')).toBe(`Rotalar: ${YOK_NOTU}`);
+    expect((within(dk()).getByRole('combobox') as HTMLSelectElement).value).toBe('2');
     // Özet'te "Kartı aç" paneli odaklar ve Yön ver'e döner.
     fireEvent.click(screen.getByRole('button', { name: 'Kartı aç' }));
     expect(document.activeElement).toBe(dk());
@@ -461,6 +484,12 @@ describe('PlanlamaMotoru', () => {
     expect(dk().querySelectorAll('.tc-pym-at-gunler button')).toHaveLength(7);
     expect(within(dk()).getByRole('button', { name: 'Odakla' }).getAttribute('title')).toBe(`Odakla: ${YOK_NOTU}`);
     expect(within(dk()).getByRole('button', { name: 'Hepsini boşalt' }).getAttribute('title')).toBe(`Hepsini boşalt: ${MOTOR_NOTU}`);
+    // Takvim: vardiya verisi sahibinden girer, bakım denemesi motorla gelir; ek mesaiyi kaldırmak çalışmaya yazar.
+    fireEvent.click(within(dk()).getByRole('tab', { name: 'Takvim' }));
+    expect(dk().textContent).toContain('3 takvimi');
+    expect(within(dk()).getAllByRole('checkbox').every((x) => (x as HTMLInputElement).disabled)).toBe(true);
+    expect(within(dk()).getByRole('button', { name: 'Bakımı dene' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(dk()).getByRole('tab', { name: 'Yön ver' }));
     fireEvent.click(screen.getByRole('button', { name: 'Harita' }));
     expect(dk().textContent).toContain('TEZGÂH');
     fireEvent.click(within(dk()).getByRole('button', { name: 'Gün planı' }));

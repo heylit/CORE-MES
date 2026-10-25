@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aralik, haritaGruplari, sahneKur, yerlesim } from '../harita/kurallar.ts';
 import { derle, girdiKur, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { mesaiAdaylari, panelSecimi, tezgahYazi, yolculuk } from './kurallar.ts';
+import { mesaiAdaylari, panelSecimi, rotaAdimlari, tezgahYazi, yolculuk } from './kurallar.ts';
 
 function kur() {
   const c = ornekCalisma(); const p = planOku(c);
@@ -40,5 +40,15 @@ describe('Yan panel hesapları', () => {
     const l = mesaiAdaylari(c, cx, '3');
     expect(l.map((x) => x.gun)).toEqual([d0 + 1, d0 + 2, d0 + 3, d0 + 4]);
     expect(l[0]?.ad).toMatch(/^\d\d\.\d\d \S+ 2 16:00-00:00$/);
+  });
+
+  it('rota: adımlar rota sırasıyla, yapabilen tezgâhlar ve süreleri; şu anki tezgâh, kilit, fason', () => {
+    const { c, p, cx, now } = kur();
+    const l = rotaAdimlari(c, p, cx, '2', now);
+    expect(l.map((x) => [x.ad, x.zaman, x.kilitli])).toEqual([['Freze (CNC)', 'Cmt 18:37 → Pzt 13:15', false], ['Fason işlem', 'Pzt 16:00 → Sal 16:00', false], ['Boyutsal muayene', 'Sal 16:00 → Sal 17:55', false]]);
+    expect(l[0]?.cipler.find((x) => x.bu)).toEqual({ m: '3', ad: '3', bu: true, sure: '4,4 sa + ayar 0,6 sa' });
+    expect(l[1]?.cipler.find((x) => x.bu)).toMatchObject({ ad: '5 (fason)', sure: 'fason' });
+    expect(rotaAdimlari({ ...c, locks: { '2.20': { m: '3', S: 0 } } }, p, cx, '2', now)[0]?.kilitli).toBe(true);
+    expect(rotaAdimlari(c, p, cx, '2', (p.ops[l[1]?.id ?? '']?.S ?? now) + 1).map((x) => [x.bitti, x.simdi])).toEqual([[true, false], [false, true], [false, false]]);
   });
 });
