@@ -308,6 +308,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
       ...ARKON('planlama'),
       'arkon.yansima-oku',
       'arkon.yansima-yeniden',
+      // Üretim Hazırlık kuyruk sırası (kart 527, 522 2 a).
+      'arkon.kuyruk-sirala',
       'stok.toplama',
       'satin-alma.oku',
       TALEP, TALEP_SAYFASI,
@@ -345,7 +347,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     idari_isler: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'kisiler.oku', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU,
       // Kapı kaydını yazar, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).
       'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz', 'nizamiye.kart-yonet'],
-    cam: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', TALEP, TALEP_SAYFASI, ...ARKON('hazirlik'), ...SAYFA('uretim-emirleri', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'atolye'), ...SEVKIYAT_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU,
+    cam: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', TALEP, TALEP_SAYFASI, ...ARKON('hazirlik'), 'arkon.kuyruk-sirala', ...SAYFA('uretim-emirleri', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'atolye'), ...SEVKIYAT_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU,
       'sayfa.cizimler', 'cizimler.oku', 'cizimler.yaz', 'rota.talimat-yaz',
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
       'plan.oku',
@@ -539,7 +541,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2), ($1, $3)', [cam, await rolId('satin_alma'), await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
-      ['arkon.hazirlik', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
+      ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
         'sayfa.cizimler', 'cizimler.oku', 'cizimler.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', ...TESIS_TALEBI].sort(),
     );
   });
