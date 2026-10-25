@@ -343,3 +343,6 @@
   .tc-ay5-baslik { margin-inline-end: 0; }
   .tc-ay5-mesgul-kart { min-inline-size: 0; inline-size: 100%; }
 }
+
+/* Eski LabTop'un sağ ucu (kısayollar ve saat) sayfanın üstünde sağda. */
+.tc-ay5-serit-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
