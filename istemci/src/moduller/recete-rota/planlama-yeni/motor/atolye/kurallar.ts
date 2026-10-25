@@ -497,6 +497,12 @@ export function planFarki(a: PlanCevabi, b: PlanCevabi | null): PlanFarki {
 export function planGecikme(p: PlanCevabi): number {
   return p.emirler.reduce((t, e) => t + (gecikmeSaat(e.bitis, e.teslim) ?? 0), 0);
 }
+// Sunucunun öncelik ağırlıklı gecikmesi (507/1, eski wT); alan gelmeyen cevapta ağırlıksız toplam. Ayar saati (eski suH) gelmezse null.
+export const agirlikliGecikme = (p: PlanCevabi): { saat: number; agirlikli: boolean } => {
+  const v = p.gostergeler.agirlikliGecikmeSaat;
+  return typeof v === 'number' ? { saat: v, agirlikli: true } : { saat: planGecikme(p), agirlikli: false };
+};
+export const ayarSaat = (p: PlanCevabi | null): number | null => (typeof p?.gostergeler.ayarSaat === 'number' ? p.gostergeler.ayarSaat : null);
 export function sonBitis(p: PlanCevabi): string | null {
   let en: string | null = null;
   for (const e of p.emirler) if (e.bitis && (!en || e.bitis > en)) en = e.bitis;

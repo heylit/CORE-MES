@@ -5,7 +5,7 @@ import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslem
 import { ornekCalisma } from '../ornek.ts';
 import {
   akis, asilBekleme, bitisFarklari, canliFark, gunYeni, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
-  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, type SunucuSenaryosu,
+  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
@@ -184,5 +184,14 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     expect(planGecikme(canli)).toBe(0);
     expect(paPlanKontrol(f, true).map((k) => k[0])).toEqual(['red', 'red']);
     expect(paPlanKontrol(null, true)).toEqual([]);
+  });
+  it('ağırlıklı gecikme ve ayar sunucudan (507/1); alan yoksa ağırlıksız toplam ve null', () => {
+    const p = (g: Record<string, unknown>) => ({ gostergeler: g, emirler: [{ emirNo: 'E', teslim: '2026-10-21', bitis: '2026-10-22T23:59:59' }] }) as unknown as PlanCevabi;
+    expect(agirlikliGecikme(p({ agirlikliGecikmeSaat: 12.5 }))).toEqual({ saat: 12.5, agirlikli: true });
+    expect(agirlikliGecikme(p({})).agirlikli).toBe(false);
+    expect(agirlikliGecikme(p({})).saat).toBeCloseTo(24, 0);
+    expect(ayarSaat(p({ ayarSaat: 1.3 }))).toBe(1.3);
+    expect(ayarSaat(p({}))).toBeNull();
+    expect(ayarSaat(null)).toBeNull();
   });
 });

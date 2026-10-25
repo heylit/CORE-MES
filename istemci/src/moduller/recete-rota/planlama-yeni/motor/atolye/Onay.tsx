@@ -12,7 +12,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
-  canliFark, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
+  agirlikliGecikme, ayarSaat, canliFark, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
   paSecim, planFarki, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
@@ -159,7 +159,7 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
             <header><span><Simge ad="play" boyut="k" /> Canlı plan</span><Rozet ton="tamam">{`Sürüm ${canliSurum}`}</Rozet></header>
             <b className="tc-pym-pa-ad">{paGecmisler(l)[0]?.ad ?? `Sürüm ${canliSurum}`}</b>
             {o.depo.planSurumu?.sonCanliyaAlma && <span className="tc-pym-pa-kucuk">{`${o.depo.planSurumu.sonCanliyaAlma.kisi ?? ''} onayladı · ${zamanYaz(o.depo.planSurumu.sonCanliyaAlma.zaman)}`}</span>}
-            <Sayilar g={canli} gecikme={pc ? planGecikme(pc) : null} />
+            <Sayilar g={canli} gecikme={pc ? agirlikliGecikme(pc).saat : null} />
           </section>
         ) : (
           <section className="tc-pym-pa-kutu" data-ton="bos">
@@ -253,7 +253,9 @@ function Adaylar({ l, c, p, cf, canli, sec, secSec, kars, karsYaz }: {
           const g = s.gostergeler;
           const isaretli = kars.includes(s.id);
           return satir(s.id, s.ad, `${s.acan ?? ''} · ${zamanYaz(s.acilma)}${s.canliDegisti ? ' · canlı değişti' : ''}`, s.durum,
-            <><span className="mono">{g ? `${g.geciken} geç · ${yuzde(g.zamanindaYuzde)}` : '—'}</span>{g && canli && <Fark a={g.geciken} b={canli.geciken} k={0} />}</>,
+            <><span className="mono">{g ? `${g.geciken} geç · ${g.agirlikliGecikmeSaat != null ? `${sayi(g.agirlikliGecikmeSaat, 1)} sa` : yuzde(g.zamanindaYuzde)}` : '—'}</span>
+              {g && canli && (g.agirlikliGecikmeSaat != null && canli.agirlikliGecikmeSaat != null
+                ? <Fark a={g.agirlikliGecikmeSaat} b={canli.agirlikliGecikmeSaat} /> : <Fark a={g.geciken} b={canli.geciken} k={0} />)}</>,
             <label className="tc-pym-pa-kars" title="Karşılaştırmaya ekle">
               <input type="checkbox" checked={isaretli} aria-label={`${s.ad} karşılaştır`}
                 onChange={() => karsYaz(isaretli ? kars.filter((x) => x !== s.id) : [...kars, s.id].slice(-3))} />
@@ -324,6 +326,7 @@ function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eyle
   const yazP = o.yetki.planStudyo, yazC = o.yetki.planCanliyaAl;
   const kimYapar = !yazP && !yazC ? 'Bu rol planı yalnız görür.' : s.durum === 'onayda' && !yazC ? 'Müdür onayı bekleniyor.' : s.durum === 'acik' && !yazC && dg.length ? 'Onaya gönderdiğiniz plan müdür onaylayınca canlı olur.' : '';
   const tz = s.etki?.yukuDegisenIstasyonlar ?? [];
+  const ga = pa ? agirlikliGecikme(pa) : null; const gc = pc ? agirlikliGecikme(pc) : null;
   const tezler = f ? Object.entries(f.tez).sort((a, b) => b[1] - a[1]).slice(0, 8) : [];
   const enc = tezler[0]?.[1] ?? 1;
   // Bitişi değişen siparişler: iki planın emir bitişlerinden (termin farkıyla); plan okunamadıysa senaryonun etki özetinden.
@@ -341,8 +344,9 @@ function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eyle
         <ul className="tc-pym-pa-kiyas">
           <li><small>Yeri değişen iş</small><b className="mono">{r && f ? sayi(f.tasinan + f.yeni) : '—'}</b><span className="tc-pym-pa-kucuk">{!r ? 'canlı yok' : f ? `${f.tezgah} tezgâh, ${f.saat} saat, ${f.yeni} yeni` : `${s.degisiklikler.length} değişiklik`}</span></li>
           <li><small>Geciken sipariş</small><b className="mono">{r ? `${r.geciken} → ` : ''}{g ? g.geciken : '—'}</b></li>
-          <li><small>Gecikme</small><b className="mono">{pc && pa ? `${sayi(planGecikme(pc), 1)} → ` : ''}{pa ? `${sayi(planGecikme(pa), 1)} sa` : '—'}</b>{pc && pa && <Fark a={planGecikme(pa)} b={planGecikme(pc)} />}</li>
+          <li><small>{ga && !ga.agirlikli ? 'Gecikme' : 'Ağırlıklı gecikme'}</small><b className="mono">{gc && ga ? `${sayi(gc.saat, 1)} → ` : ''}{ga ? `${sayi(ga.saat, 1)} sa` : '—'}</b>{gc && ga && <Fark a={ga.saat} b={gc.saat} />}</li>
           <li><small>Plan TL</small><b className="mono">{g?.maliyetTl != null ? sayi(g.maliyetTl) : '—'}</b>{r && g && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl} b={r.maliyetTl} k={0} />}</li>
+          <li><small>Ayar</small><b className="mono">{ayarSaat(pa) == null ? '—' : `${sayi(ayarSaat(pa) ?? 0, 1)} sa`}</b>{pc && <Fark a={ayarSaat(pa)} b={ayarSaat(pc)} />}</li>
         </ul>
         <div className="tc-pym-pa-iki">
           <section className="tc-pym-pa-bolum">
@@ -460,8 +464,9 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle, planlar, farkAl }: {
           <thead><tr><th scope="col" />{sutun.map((s) => <th key={s.ad} scope="col" className="tc-pym-pa-num">{s.ad}<br /><Rozet ton={durumAdi(s.durum)[1]}>{durumAdi(s.durum)[0]}</Rozet></th>)}</tr></thead>
           <tbody>
             {satir('Geciken sipariş', (s) => s.g?.geciken, (x) => sayi(x))}
-            {satir('Gecikme (sa)', (s) => (s.p ? planGecikme(s.p) : null), (x) => sayi(x, 1))}
+            {satir(sutun.every((s) => !s.p || agirlikliGecikme(s.p).agirlikli) ? 'Ağırlıklı gecikme (sa)' : 'Gecikme (sa)', (s) => (s.p ? agirlikliGecikme(s.p).saat : null), (x) => sayi(x, 1))}
             {satir('Plan TL (bin)', (s) => (s.g?.maliyetTl != null ? s.g.maliyetTl / 1000 : null), (x) => sayi(x))}
+            {satir('Ayar (sa)', (s) => ayarSaat(s.p), (x) => sayi(x, 1))}
             {satir('Son bitiş', (s) => { const b = s.p ? sonBitis(s.p) : null; return b ? Date.parse(b) / 3_600_000 : null; }, (x) => zamanYaz(new Date(x * 3_600_000).toISOString()))}
             {satir('Canlıya göre yeri değişen iş', (s) => s.d, (x) => sayi(x))}
             {satir('Yerleşmeyen iş', (s) => yerlesmeyen(s.g), (x) => sayi(x))}
