@@ -1,7 +1,6 @@
 /* Menüler açılıp kapanmaz (kullanıcı kararı, kart #172). 1024 ve üstü: ana menü solda sabit ve yazılı; 768-1023: ana menü
-   yalnız simge şeridi, ad ipucunda. İkinci menü (data-ikinci) 1024 ve üstünde ana menünün yanında sütundur, altında başlığın
-   altında sekme şerididir: yatay tablette şerit sığmıyordu (soru 242). Çerçeveli sayfada her genişlikte şerittir: çerçevedeki
-   ön yüz kendi kırılımlarıyla çizilir, sütunun aldığı genişlik onu dar düzene düşürür (Arkon terminali 980 altında).
+   yalnız simge şeridi, ad ipucunda. İkinci menü (data-ikinci) her sayfada ve her genişlikte başlığın altında sekme şerididir
+   (soru 514 1a): ana menünün yanında ikinci bir sütun açılmaz, modülün menüsü eski ekranlardaki gibi üsttedir.
    Telefon (<768) ayrı düzendir: ana menü yerine alt çubuk. */
 /* Bağlantı şeridi kabuğun üstünde akıştadır; kabuk kalan yüksekliği alır. */
 .tc-kabuk-cati { display: flex; flex-direction: column; height: 100%; min-width: 0; }
@@ -14,13 +13,6 @@
 .tc-kabuk[data-ikinci] {
   grid-template-rows: var(--ust-cubuk) auto minmax(0, 1fr);
   grid-template-areas: "menu ust" "menu ikinci" "menu icerik";
-}
-@media (min-width: 1024px) {
-  .tc-kabuk[data-ikinci]:not([data-cerceveli]) {
-    grid-template-columns: var(--menu-sabit) var(--ikinci-sutun) minmax(0, 1fr);
-    grid-template-rows: var(--ust-cubuk) minmax(0, 1fr);
-    grid-template-areas: "menu ust ust" "menu ikinci icerik";
-  }
 }
 .tc-kabuk-menu {
   grid-area: menu; display: flex; flex-direction: column; gap: var(--b-3);
