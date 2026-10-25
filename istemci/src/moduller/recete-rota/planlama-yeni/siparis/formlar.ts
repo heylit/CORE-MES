@@ -1,7 +1,7 @@
 import type { CalismaKomutu } from '../kayit.ts';
 import type { SihirbazDegeri, SihirbazTanimi } from '../ortak/sade/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { CARPANLAR, elleCarpan, fasonTerminiYaz, fiyatDenetle, gunYaz, sayi, tarihGirdisi, tl, type FasonSatiri } from './kurallar.ts';
+import { CARPANLAR, elleCarpan, fasonTerminiYaz, fiyatDenetle, gunYaz, sayi, tarihGirdisi, tl, urunAdi, type FasonSatiri } from './kurallar.ts';
 
 // P2'nin "Veri gir" sihirbazları (zz24-sade SADE.ysiparis onem ve fiyat, zz25-sade-takvim SADE.terminler fason). Çizimi ortak sade kabuğu
 // yapar; açılımdan sipariş ya da iş dolu açılır. Yazma yalnız komut.degistir ile; termin ve öncelik sahibinindir, burada form yoktur (222 a).
@@ -14,7 +14,7 @@ export function onemTanimi(c: PlanlamaCalismasi, sinir: number, komut: CalismaKo
   return {
     id: 'onem', ad: 'Siparişi öne al ya da geri bırak', simge: 'up', ne: 'Önemini elle çarpanla değiştirir; gerekçe yazılır.',
     alanlar: () => [
-      { k: 'sip', ad: 'Sipariş', tur: 'secim', zorunlu: true, secenekler: c.D.siparisler.map((s) => [s.id, `${s.id} · ${s.ad ?? s.id} · şimdi ×${sayi(elleCarpan(s), 2)}`] as const) },
+      { k: 'sip', ad: 'Sipariş', tur: 'secim', zorunlu: true, secenekler: c.D.siparisler.map((s) => [s.id, `${s.id} · ${urunAdi(c.D, s.urun)} · şimdi ×${sayi(elleCarpan(s), 2)}`] as const) },
       { k: 'v', ad: 'Önemi', tur: 'secim', zorunlu: true, secenekler: carpan.map(([v, ad]) => [String(v), ad] as const), ipucu: '×2: bir saatlik gecikmesi iki kat pahalı sayılır, motor öne alır' },
       { k: 'g', ad: 'Gerekçe', tur: 'metin', zorunlu: true, ipucu: 'Örnek: müşteri hat duruşunda' },
     ],
@@ -50,7 +50,7 @@ export function fiyatTanimi(c: PlanlamaCalismasi, komut: CalismaKomutu): Sihirba
   return {
     id: 'fiyat', ad: 'Fiyat ve ödeme vadesi', simge: 'lira', ne: 'Siparişin tutarı ve kaç günde ödeneceği.',
     alanlar: () => [
-      { k: 'sip', ad: 'Sipariş', tur: 'secim', zorunlu: true, secenekler: c.D.siparisler.map((s) => [s.id, `${s.id} · ${s.ad ?? s.id} · ${s.gelir == null ? 'fiyatsız' : tl(s.gelir)}`] as const) },
+      { k: 'sip', ad: 'Sipariş', tur: 'secim', zorunlu: true, secenekler: c.D.siparisler.map((s) => [s.id, `${s.id} · ${urunAdi(c.D, s.urun)} · ${s.gelir == null ? 'fiyatsız' : tl(s.gelir)}`] as const) },
       { k: 'gelir', ad: 'Tutar (TL)', tur: 'sayi', min: 0, zorunlu: true },
       { k: 'vade', ad: 'Ödeme vadesi (gün)', tur: 'sayi', min: 0, max: 365, tam: true, ipucu: 'Boş: peşin' },
     ],

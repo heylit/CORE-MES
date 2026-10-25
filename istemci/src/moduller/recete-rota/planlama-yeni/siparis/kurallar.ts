@@ -1,4 +1,4 @@
-import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, Siparis } from '../tipler.ts';
+import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
 // Kaynak bugünkü çerçevedir: zv-termin, zw-denge, zz25-sade-takvim, zz29-gorsel, zz30-isi, zr-agirlik ve motor/durum.betik, engine.betik
@@ -400,9 +400,101 @@ export function partiAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
 }
 export const PARTI_EN_COK = 20;
 
-// En çok geciken k iş emri (zz11 btAdaylar kapsamı; seçenek sayısı motorla gelir).
+// Darboğaz adımı (zz4-oto-bolme darbogazAdimi): işin plandaki adımlarından, hazır olduğu andan başlamasına en uzun bekleyen. Hazır olma, adım
+// tezgâh, kişi, yetkinlik, ayarcı ya da aparat beklediyse önceki adımların (rota bağı) en geç bitişidir; değilse planlanan başlangıç.
+// Seçenek tezgâhlar adımın rotadaki öteki tezgâhlarıdır, iş süresi kısa olan önce (motor derlemesi gibi adet × çevrim / verim + ayar).
+const BEKLEME_NEDENI = new Set(['tezgah', 'personel', 'yetkin', 'ayarci', 'aparat']);
+export interface Darbogaz { k: string; m: string; alt: string[] }
+export function darbogaz(D: PlanVerisi, p: KayitliPlan, jid: string, simdiSaat: number): Darbogaz | null {
+  const s = D.siparisler.find((x) => x.id === jid); const u = s && D.urunler.find((x) => x.id === s.urun);
+  if (!s || !u) return null;
+  let en: { o: RotaAdimi; r: PlanIsi } | null = null; let enW = -1;
+  for (const o of u.rota ?? []) {
+    const r = p.ops[`${jid}.${o.k}`] as (PlanIsi & { act?: unknown; why?: { t?: string } | null }) | undefined;
+    if (!r || r.fas || r.done || r.act) continue;
+    let hazir = r.S;
+    if (r.why?.t && BEKLEME_NEDENI.has(r.why.t)) {
+      const once = (o.bag ?? []).map((b) => p.ops[`${jid}.${String(b[0])}`]?.C).filter(sonlu);
+      hazir = once.length ? Math.max(...once) : simdiSaat;
+    }
+    const w = r.S - hazir + (r.run ?? 0) * 0.01;
+    if (w > enW) { enW = w; en = { o, r }; }
+  }
+  if (!en) return null;
+  const verim = (m: string) => { const t = D.tezgahlar.find((x) => x.id === m); return t && sonlu(t.verim) && t.verim > 0 ? t.verim : 1; };
+  const m = en.r.m;
+  const alt = (en.o.fason ? [] : en.o.tezgahlar ?? [])
+    .filter((t) => t.id !== m && D.tezgahlar.some((x) => x.id === t.id))
+    .map((t) => ({ id: t.id, sure: (s.adet * (+(t.cevrim ?? 0) || 0)) / 60 / verim(t.id) + (+(t.ayar ?? 0) || 0) / 60 }))
+    .sort((a, b) => a.sure - b.sure).map((t) => t.id);
+  return { k: en.o.k, m, alt };
+}
+
+// En küçük parti ve kasa (zz14-qmin-kasa): bölünen adımda en küçük parti, adımın elle girilen en küçüğü ile "çalışma süresi ayarın en az iki
+// katı" kuralının büyüğü (adımın tezgâhlarının en büyüğü). Kasa adımın, yoksa ürünün, yoksa 1. Bölünen adım darboğaz, yoksa ilk adım.
+export interface PartiKurali { k: string | null; qmin: number; kasa: number }
+export function partiKurali(D: PlanVerisi, jid: string, dar: Darbogaz | null): PartiKurali {
+  const s = D.siparisler.find((x) => x.id === jid); const u = s && D.urunler.find((x) => x.id === s.urun);
+  const o = u?.rota?.find((x) => x.k === dar?.k) ?? u?.rota?.[0];
+  if (!o) return { k: null, qmin: 1, kasa: 1 };
+  let oran = 1;
+  if (!o.fason) for (const t of o.tezgahlar ?? []) { const c = +(t.cevrim ?? 0), a = +(t.ayar ?? 0); if (c > 0 && a > 0) oran = Math.max(oran, Math.ceil((2 * a) / c)); }
+  const kasa = Math.max(1, Math.round(+(o.kasa as number) || +(u?.kasa as number) || 1));
+  return { k: o.k, qmin: Math.max(+(o.minParti ?? 0) || 1, oran), kasa };
+}
+
+// Eşit partileri kasaya yuvarlar, son partiyi en küçüğe tamamlar (önceki partilerden sondan başa birer kasa); olmuyorsa null (pqYuvarla).
+export function kasayaBol(adetler: readonly number[], kasa: number, qmin: number): number[] | null {
+  const n = adetler.length; if (n < 2) return adetler.slice();
+  const top = adetler.reduce((a, x) => a + x, 0);
+  const on = adetler.slice(0, -1).map((x) => (kasa > 1 ? Math.max(kasa, Math.round(x / kasa) * kasa) : Math.max(1, Math.round(x))));
+  let son = top - on.reduce((a, x) => a + x, 0);
+  const alt = Math.max(qmin, kasa);
+  for (let tur = 0; son < qmin && tur < 1000; tur++) {
+    let oldu = false;
+    for (let i = on.length - 1; i >= 0 && son < qmin; i--) if (on[i]! - kasa >= alt) { on[i] = on[i]! - kasa; son += kasa; oldu = true; }
+    if (!oldu) break;
+  }
+  const l = [...on, son];
+  return l.every((x) => x >= qmin && x >= 1) && son >= 1 ? l : null;
+}
+
+// Kurala uymayan ilk parti (pqDenetle): en küçük partiden az ya da son parti dışında kasanın katı değil.
+export function partiKuraliDenetle(adetler: readonly number[], kasa: number, qmin: number): string | null {
+  for (let i = 0; i < adetler.length; i++) {
+    const x = adetler[i]!;
+    if (x < qmin) return `${String(i + 1)}. parti ${String(x)} adet; bu adımda en küçük parti ${String(qmin)}.`;
+    if (kasa > 1 && i < adetler.length - 1 && x % kasa) return `${String(i + 1)}. parti ${String(x)} adet; kasa ${String(kasa)} adedin katı olmalı (son parti hariç).`;
+  }
+  return null;
+}
+
+// Taramada iş emrinin seçenek sayısı (zz11 btAdaylar, zz14): bölünmez, 2-20 eşit parti aynı tezgâhlarda, seçenek tezgâh varsa darboğazda
+// dağıtılmış; kurala uymayan parti sayısı denenmez.
+export function taramaSecenekSayisi(adet: number, dar: Darbogaz | null, kural: PartiKurali): number {
+  let n = 1;
+  for (let k = 2; k <= Math.min(PARTI_EN_COK, adet); k++) {
+    const e = Array.from({ length: k }, (_, i) => Math.floor(adet / k) + (i >= k - (adet % k) ? 1 : 0));
+    if (kasayaBol(e, kural.kasa, kural.qmin)) n += dar && dar.alt.length ? 2 : 1;
+  }
+  return n;
+}
+
+// Taramanın kapsamı (zz11 btAdaylar): en çok geciken k iş emri; geciken mamullerin yarı mamul iş emirleri de girer (kendi gecikmeleri yoktur,
+// montajı bekletirler), toplam en çok 10.
+export const TARAMA_EN_COK_IS = 10;
 export function taramaKapsami(D: PlanVerisi, p: KayitliPlan, k: number): Siparis[] {
-  return partiAdaylari(D, p).filter((s) => (p.J[s.id]?.T ?? 0) > 0.05).slice(0, k);
+  const l = partiAdaylari(D, p); const kok = (id: string) => id.split('/')[0]!;
+  const ust = (s: Siparis): string | null => (typeof s.ust === 'string' && s.ust ? s.ust : null);
+  const sec = l.filter((s) => !ust(s) && (p.J[s.id]?.T ?? 0) > 0.05).slice(0, k);
+  const kokler = new Set(sec.map((s) => kok(s.id)));
+  const ustKok = (s: Siparis): string | null => {
+    let u = ust(s);
+    for (let i = 0; i < 6 && u; i++) { const x = D.siparisler.find((z) => kok(z.id) === u); if (!x || !ust(x)) return u; u = ust(x); }
+    return u;
+  };
+  for (const s of l) { const u = ust(s) ? ustKok(s) : null; if (u && kokler.has(u) && sec.length < TARAMA_EN_COK_IS) sec.push(s); }
+  return sec;
 }
 
 // ---- siparişler: maliyet ve kâr (zu-yan-sayfalar sSiparisKar; durum.betik YM0) ----

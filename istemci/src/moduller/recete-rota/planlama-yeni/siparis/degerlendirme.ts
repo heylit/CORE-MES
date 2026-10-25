@@ -118,5 +118,5 @@ export function esitPartiler(adet: number, n: number): number[] | null {
 export function partiAdetleriDenetle(adet: number, adetler: readonly number[]): string | null {
   if (adetler.some((x) => !Number.isInteger(x) || x < 1)) return 'Her parti en az 1 adet olmalı.';
   const top = adetler.reduce((a, x) => a + x, 0);
-  return top === adet ? null : `Partilerin toplamı ${String(top)}; sipariş ${String(adet)} adet.`;
+  return top === adet ? null : `Partilerin toplamı ${String(top)}, iş emri ${String(adet)} adet.`;
 }
