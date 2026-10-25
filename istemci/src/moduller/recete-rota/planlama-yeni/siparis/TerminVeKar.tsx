@@ -89,7 +89,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
     const A = dengeAcilimi(r, ck, V.sutunlar.find((x) => x.k === ck)?.ad ?? '');
     return (
       <FormluAcilim
-        key={`${r.k}|${ck}`} baslik={A.baslik} ton={A.ton} neden={A.neden} kapat={() => { secimYaz(null); }}
+        key={`${r.k}|${ck}`} baslik={A.baslik} simge="gauge" ton={A.ton} neden={A.neden} kapat={() => { secimYaz(null); }}
         formlar={[{ ad: `Termini ${String(A.gun)} gün uzat`, etki: 'Müşterinin kabul ettiği uzatma termine yazılır.', simge: 'flag', tanim: null, deg: { sip: r.ad, gun: String(A.gun) }, kapali: UZAT_SAHIBI }]}
         secenekler={[
           { ad: MOTORLA_OLC, etki: 'Her siparişe uzatmayı tek tek dener, diğerlerinin yeniden yerleşmesiyle ölçer.', simge: 'play', pasif: true },

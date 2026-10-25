@@ -327,12 +327,12 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile }: { c: PlanlamaCali
             </label>
           ))}
         </div>
-        {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <p className="tc-pys-kucuk">
           {s.id}: {s.adet} adet, termin {gunYaz(D, saatOku(D, s.termin))}{T > 0.05 ? `, şimdi ${sayi(T, 1)} sa gecikiyor` : ', zamanında'}.
           {dar && ` Darboğaz adımı ${dar.k} (${dar.m}).`} Partiler {s.id}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
         </p>
         <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {kural.k ?? ''} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
+        {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <div className="tc-pys-dugmeler">
           <Dugme tur="birincil" type="submit" simge="ruler" disabled={!degerlendir || Boolean(hata) || d.tur === 'bekliyor'}>Böl</Dugme>
         </div>

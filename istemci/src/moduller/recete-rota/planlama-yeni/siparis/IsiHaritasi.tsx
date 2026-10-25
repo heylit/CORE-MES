@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { IsiHucresi, IsiSatiri, IsiSutunu, UstDurum } from './kurallar.ts';
@@ -50,7 +50,7 @@ function Hucre({ satir, sutun, h, secili, sec }: { satir: IsiSatiri; sutun: IsiS
   const et = `${satir.ad}, ${sutun.ad}${sutun.alt ? ` ${sutun.alt}` : ''}: ${h.etiket ?? h.v ?? ''}${h.tahmin ? `, tahmini (${h.tahmin})` : ''}`;
   return (
     <button
-      type="button" className="tc-pys-h" onClick={sec} aria-pressed={secili} aria-label={et} title={et}
+      type="button" className="tc-pys-h" onClick={sec} aria-pressed={secili} aria-label={et} title={et} data-hucre={`${satir.k}|${sutun.k}`}
       data-kd={h.kd ?? undefined} data-tahmin={h.tahmin ? '' : undefined} data-iyi={h.iyi ? '' : undefined} data-is={h.is ? '' : undefined}
       data-bayrak={h.bayrak ? '' : undefined} data-bugun={sutun.bugun ? '' : undefined}
     >
@@ -79,9 +79,19 @@ export function IsiIzgarasi<S extends IsiSatiri>({ etiket, satirAd, genis, sutun
   const [tum, tumYaz] = useState(false);
   const gor = satirlar.filter((r) => tum || !r.gizli || r.k === secim?.satir);
   const giz = satirlar.length - gor.length;
+  // Açılım kapanınca (Esc, Kapat) odak boşa düşerse seçili hücreye döner (zz30-isi isKapat).
+  const kap = useRef<HTMLDivElement>(null);
+  const once = useRef<Secim | null>(null);
+  useEffect(() => {
+    const o = once.current; once.current = secim;
+    if (secim || !o) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && kap.current?.contains(a)) return;
+    [...(kap.current?.querySelectorAll<HTMLElement>('[data-hucre]') ?? [])].find((x) => x.dataset['hucre'] === `${o.satir}|${o.sutun}`)?.focus({ preventScroll: true });
+  }, [secim]);
   return (
     <>
-      <div className="tc-pys-kap" role="group" aria-label={etiket}>
+      <div className="tc-pys-kap" role="group" aria-label={etiket} ref={kap}>
         <div className="tc-pys-tablo" data-genis={genis}>
           <div className="tc-pys-sat tc-pys-bas">
             <span className="tc-pys-ad">{satirAd}</span>
@@ -121,14 +131,14 @@ export function IsiIzgarasi<S extends IsiSatiri>({ etiket, satirAd, genis, sutun
 export interface AcilimSecenegi { ad: string; etki: string; simge: SimgeAdi; yap?: () => void; pasif?: boolean }
 
 // Satırın altındaki açılım (zz30-isi isAcilim). Form ve seçenekler görünümden gelir; en çok iki seçenek gösterilir.
-export function Acilim({ baslik, ton, neden, bilgi, form, secenekler = [], kapat }: {
-  baslik: string; ton: string; neden: string; bilgi?: readonly [string, string][]; form?: ReactNode; secenekler?: readonly AcilimSecenegi[]; kapat: () => void;
+export function Acilim({ baslik, simge = 'target', ton, neden, bilgi, form, secenekler = [], kapat }: {
+  baslik: string; simge?: SimgeAdi; ton: string; neden: string; bilgi?: readonly [string, string][]; form?: ReactNode; secenekler?: readonly AcilimSecenegi[]; kapat: () => void;
 }) {
   return (
     <section className="tc-pys-ac" aria-label={baslik} data-ton={ton || undefined}>
       <div className="tc-pys-ac-ust">
-        <b><Simge ad="target" boyut="k" /><span>{baslik}</span></b>
-        <Dugme simge="x" aria-label="Kapat" onClick={kapat} />
+        <b><Simge ad={simge} boyut="k" /><span>{baslik}</span></b>
+        <button type="button" className="tc-pys-kapat" aria-label="Kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </div>
       <div className="tc-pys-ac-ic">
         <div className="tc-pys-ac-sol">

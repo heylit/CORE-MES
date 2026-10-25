@@ -56,13 +56,15 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
     // Siparişler açılımında ilk izinli form sihirbaz olarak sipariş dolu açılır; eski sayfadaki gibi başlık ve adım şeridi gizli, odak ilk alanda;
     // Esc açılımı kapatır.
     await ac('/recete-rota/planlama-yeni/ysiparis');
-    await page.locator('[data-parca="ysiparis"] button.tc-pys-h').first().click();
+    const hucre = page.locator('[data-parca="ysiparis"] button.tc-pys-h').first();
+    await hucre.click();
     const acilim = page.locator('.tc-pys-ac');
     await expect(acilim.locator('form')).toBeVisible();
     await expect(acilim.locator('.tc-sade-adimlar')).toBeHidden();
     await expect(acilim.locator('form select, form input').first()).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(acilim).toHaveCount(0);
+    await expect(hucre).toBeFocused();
   });
 });
 

@@ -61,7 +61,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
     ];
     return (
       <FormluAcilim
-        key={`${s.id}|${ck}`} baslik={A.baslik} ton={r.ton} neden={A.neden} bilgi={A.bilgi} formlar={formlar} kapat={() => { secimYaz(null); }}
+        key={`${s.id}|${ck}`} baslik={A.baslik} simge="flag" ton={r.ton} neden={A.neden} bilgi={A.bilgi} formlar={formlar} kapat={() => { secimYaz(null); }}
         planEski={c.plan !== null && !planGuncel(c)} iyilestirYetkisi={yetki.planYaz}
         secenekler={[{ ad: `${s.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }]}
       />

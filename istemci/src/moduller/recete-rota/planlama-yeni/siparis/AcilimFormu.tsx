@@ -11,8 +11,8 @@ export interface AcilimFormu {
   ad: string; etki: string; simge: SimgeAdi; tanim: SihirbazTanimi | null; deg: SihirbazDegeri; adim?: number; kapali?: string;
 }
 
-export function FormluAcilim({ baslik, ton, neden, bilgi, formlar, secenekler = [], planEski = false, iyilestirYetkisi = false, kapat }: {
-  baslik: string; ton: string; neden: string; bilgi?: readonly [string, string][]; formlar: readonly AcilimFormu[];
+export function FormluAcilim({ baslik, simge, ton, neden, bilgi, formlar, secenekler = [], planEski = false, iyilestirYetkisi = false, kapat }: {
+  baslik: string; simge?: SimgeAdi; ton: string; neden: string; bilgi?: readonly [string, string][]; formlar: readonly AcilimFormu[];
   secenekler?: readonly AcilimSecenegi[]; planEski?: boolean; iyilestirYetkisi?: boolean; kapat: () => void;
 }) {
   const izinli = formlar.map((f, i) => ({ f, i })).filter((x) => x.f.tanim !== null && !x.f.kapali);
@@ -69,5 +69,5 @@ export function FormluAcilim({ baslik, ton, neden, bilgi, formlar, secenekler = 
     }),
     ...secenekler,
   ];
-  return <div className="tc-pys-ac-kap" ref={kap}><Acilim baslik={baslik} ton={ton} neden={neden} bilgi={bilgi} form={govde} secenekler={yada} kapat={kapat} /></div>;
+  return <div className="tc-pys-ac-kap" ref={kap}><Acilim baslik={baslik} simge={simge} ton={ton} neden={neden} bilgi={bilgi} form={govde} secenekler={yada} kapat={kapat} /></div>;
 }

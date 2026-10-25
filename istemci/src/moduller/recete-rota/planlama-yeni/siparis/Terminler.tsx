@@ -192,7 +192,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
     const secenekler: AcilimSecenegi[] = [{ ad: `${x.r.job} çizelgede`, etki: 'Bu kalemi bekleyen siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }];
     return (
       <FormluAcilim
-        key={`${r.k}|${ck}`} baslik={`${r.ad} · ${k.durum}`} ton={r.ton} neden={k.neden} bilgi={k.bilgi.slice(0, 4)} formlar={formlar} secenekler={secenekler}
+        key={`${r.k}|${ck}`} baslik={`${r.ad} · ${k.durum}`} simge={r.simge} ton={r.ton} neden={k.neden} bilgi={k.bilgi.slice(0, 4)} formlar={formlar} secenekler={secenekler}
         planEski={c.plan !== null && !planGuncel(c)} iyilestirYetkisi={yetki.planYaz} kapat={() => { secimYaz(null); }}
       />
     );

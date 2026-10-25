@@ -57,15 +57,31 @@ describe('P2 Siparişler', () => {
     expect(istekler.filter((i) => i.includes('planlama-degerlendirmesi'))).toEqual([]);
   }, 20000);
 
-  it('açılımda odak formun ilk alanına gider, adım şeridi gizli sınıfla gelir; Esc açılımı kapatır', async () => {
+  it('açılımda odak formun ilk alanına gider, adım şeridi gizli sınıfla gelir; Esc açılımı kapatır, odak hücreye döner', async () => {
     sunucuKur(YONETICI, KAYIT);
     ac('/recete-rota/planlama-yeni/ysiparis');
     await parca('ysiparis');
-    s1Ac();
+    const hucre = screen.getAllByRole('button', { name: /^S1, / })[0]!;
+    fireEvent.click(hucre);
     const form = screen.getByRole('form', { name: ONEM });
     await waitFor(() => { expect(document.activeElement).toBe(within(form).getByLabelText(/^Önemi/)); });
+    expect(screen.getByRole('region', { name: /^S1 · / }).querySelector('.tc-pys-ac-ust svg')).not.toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.querySelector('.tc-pys-ac')).toBeNull();
+    await waitFor(() => { expect(document.activeElement).toBe(hucre); });
+  }, 20000);
+
+  it('Kapat düğmesiyle kapanınca da odak hücreye döner', async () => {
+    sunucuKur(YONETICI, KAYIT);
+    ac('/recete-rota/planlama-yeni/ysiparis');
+    await parca('ysiparis');
+    const hucre = screen.getAllByRole('button', { name: /^S1, / })[0]!;
+    fireEvent.click(hucre);
+    const kapat = dugme('Kapat');
+    kapat.focus();
+    fireEvent.click(kapat);
+    expect(document.querySelector('.tc-pys-ac')).toBeNull();
+    await waitFor(() => { expect(document.activeElement).toBe(hucre); });
   }, 20000);
 
   it('maliyet okumayan planlamacı önemi en çok ×2 seçer, gerekçesiz kaydedemez, fiyat formunu görmez', async () => {
