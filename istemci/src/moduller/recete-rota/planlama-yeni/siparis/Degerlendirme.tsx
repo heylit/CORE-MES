@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
@@ -58,6 +59,7 @@ export function useDegerlendirme<K extends DegerlendirmeTuru>(istek: Extract<Deg
 
 interface KartOzellikleri<K extends DegerlendirmeTuru> {
   baslik: string;
+  simge?: SimgeAdi;
   baslikEki?: ReactNode;
   aciklama: ReactNode;
   // Eski sayfadaki düğmenin adı ve yeri: kart başlığında ya da seçim satırında (pm-sira).
@@ -75,7 +77,7 @@ interface KartOzellikleri<K extends DegerlendirmeTuru> {
 }
 
 export function DegerlendirmeKarti<K extends DegerlendirmeTuru>({
-  baslik, baslikEki, aciklama, dugme, yeniden, yer, birincil, girdi, engel, istek, degerlendir, yenile, children,
+  baslik, simge, baslikEki, aciklama, dugme, yeniden, yer, birincil, girdi, engel, istek, degerlendir, yenile, children,
 }: KartOzellikleri<K>) {
   const [d, dYaz] = useState<Durum<K>>({ tur: 'bos' });
   const hesapla = () => {
@@ -93,7 +95,7 @@ export function DegerlendirmeKarti<K extends DegerlendirmeTuru>({
       disabled={kapali || Boolean(engel) || istek === null || d.tur === 'bekliyor'}>{ad}</Dugme>
   );
   return (
-    <Kart baslik={baslik} baslikEki={baslikEki} sag={yer === 'baslik' ? dg : undefined}>
+    <Kart baslik={baslik} simge={simge} baslikEki={baslikEki} sag={yer === 'baslik' ? dg : undefined}>
       {yer === 'sira' ? <div className="tc-pys-sira">{girdi}{dg}</div> : girdi}
       <p className="tc-pys-kucuk">{aciklama}</p>
       {engel && <p className="tc-pys-kucuk">{engel}</p>}
@@ -147,7 +149,7 @@ export function PlanSecenekleri({ cevap, komut, alabilir, kim, simdikiDenge }: {
 export function PlanSecenekleriKarti({ degerlendir, yenile, ...o }: { degerlendir: Degerlendirici | null; yenile: () => void; komut: CalismaKomutu | null; alabilir: boolean; kim: string; simdikiDenge: number }) {
   return (
     <DegerlendirmeKarti
-      baslik="Plan seçenekleri" dugme="Seçenekleri hesapla" yeniden="Yeniden hesapla" yer="baslik" birincil
+      baslik="Plan seçenekleri" simge="layers" dugme="Seçenekleri hesapla" yeniden="Yeniden hesapla" yer="baslik" birincil
       aciklama="Aynı veriyle termin önce, dengeli ve kâr önce üç plan kurulur; sonuçlar yan yana görünür. Müdür birini seçerse çubuk o konuma gelir ve plan çalışmaya alınır."
       istek={{ tur: 'plan-secenekleri' }} degerlendir={degerlendir} yenile={yenile}
     >
@@ -189,7 +191,7 @@ export function TeklifKarti({ siparisler, degerlendir, yenile }: { siparisler: P
   const tid = siparisler.some((s) => s.id === id) ? id : ilk;
   return (
     <DegerlendirmeKarti
-      baslik="Teklif: termin ve kâr" dugme="Termin seçeneklerini hesapla" yer="sira"
+      baslik="Teklif: termin ve kâr" simge="tag" dugme="Termin seçeneklerini hesapla" yer="sira"
       girdi={(
         <label className="tc-pys-ym-alan"><span>Sipariş</span>
           <select className="tc-alan-kutu tc-pys-secim" value={tid} aria-label="Teklif siparişi" onChange={(e) => { idYaz(e.target.value); }}>
@@ -238,7 +240,7 @@ export function TerminUzatmaKarti({ planVar, degerlendir, yenile }: { planVar: b
   const [gun, gunYaz] = useState<UzatmaGunu>(2);
   return (
     <DegerlendirmeKarti
-      baslik="Termin uzatma önerisi" dugme="Önerileri hesapla" yer="sira" engel={planVar ? null : 'Önce planı çözün.'}
+      baslik="Termin uzatma önerisi" simge="flag" dugme="Önerileri hesapla" yer="sira" engel={planVar ? null : 'Önce planı çözün.'}
       girdi={(
         <div className="tc-pys-seg" role="group" aria-label="Uzatma süresi">
           {UZATMA_GUNLERI.map((g) => <button key={g} type="button" aria-pressed={g === gun} onClick={() => { gunYaz(g); }}>{g} gün</button>)}
@@ -280,9 +282,9 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile }: { c: PlanlamaCali
   const [d, dYaz] = useState<Durum<'parti-bolme'>>({ tur: 'bos' });
   const baslik = 'Partiyi böl';
   const baslikEki = <span className="tc-pys-kucuk">iş emri seçin, parti sayısını verin</span>;
-  if (!c || !D || !p) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
+  if (!c || !D || !p) return <Kart baslik={baslik} simge="ruler" baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
   const s = l.find((x) => x.id === secilen) ?? l[0];
-  if (!s) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Bölünebilecek iş emri yok: plandaki iş emirleri başlamış ya da tek adet.</p></Kart>;
+  if (!s) return <Kart baslik={baslik} simge="ruler" baslikEki={baslikEki}><p className="tc-pys-kucuk">Bölünebilecek iş emri yok: plandaki iş emirleri başlamış ya da tek adet.</p></Kart>;
   // Darboğaz ve parti kuralı plandan ve rotadan hesaplanır (eski sayfa gibi, motor gerekmez).
   const dar = darbogaz(D, p, s.id, simdi(c));
   const kural = partiKurali(D, s.id, dar);
@@ -302,7 +304,7 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile }: { c: PlanlamaCali
     );
   };
   return (
-    <Kart baslik={baslik} baslikEki={baslikEki}>
+    <Kart baslik={baslik} simge="ruler" baslikEki={baslikEki}>
       <form className="tc-pys-eb" aria-label="Partiyi böl" noValidate onSubmit={(e) => { e.preventDefault(); olc(); }}>
         <Secim etiket="İş emri" value={s.id} onChange={(e) => { sec(e.target.value, n); }}
           secenekler={l.map((x) => { const t = p.J[x.id]?.T ?? 0; return { deger: x.id, baslik: `${x.id} · ${String(x.adet)} adet${t > 0.05 ? ` · ${sayi(t, 1)} sa gecikme` : ''}` }; })} />
@@ -352,13 +354,13 @@ export function PartiTaramasiKarti({ c, p }: { c: PlanlamaCalismasi | null; p: K
   const [k, kYaz] = useState(3);
   const baslik = 'Parti taraması';
   const baslikEki = <span className="tc-pys-kucuk">1-{PARTI_EN_COK} parti, iş emirleri arası birleşimler</span>;
-  if (!c || !p) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
+  if (!c || !p) return <Kart baslik={baslik} simge="grid" baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
   const D = c.D;
   const A = taramaKapsami(D, p, k).map((s) => { const dar = darbogaz(D, p, s.id, simdi(c)); return { s, n: taramaSecenekSayisi(s.adet, dar, partiKurali(D, s.id, dar)) }; });
   const top = A.reduce((a, x) => a * x.n, 1);
   return (
     // Tarama motoru yüzlerce kez koşturur; değerlendirme sözleşmesinde yok, uç açılınca da pasif kalır.
-    <Kart baslik={baslik} baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled>Tara</Dugme>}>
+    <Kart baslik={baslik} simge="grid" baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled>Tara</Dugme>}>
       <div className="tc-pys-eb-ust">
         <Secim etiket="En çok geciken kaç iş emri" value={String(k)} onChange={(e) => { kYaz(Number(e.target.value)); }}
           secenekler={Array.from({ length: TARAMA_EN_COK }, (_, i) => ({ deger: String(i + 1), baslik: String(i + 1) }))} />
@@ -399,7 +401,7 @@ export function MalzemeBekleyenKarti({ degerlendir, yenile }: { degerlendir: Deg
     { anahtar: 'islem', baslik: 'İşlem', csv: false, hucre: () => <Dugme simge="next" disabled title="Başlama tarihi Üretim emirlerinde değiştirilir">İleri at</Dugme> },
   ];
   return (
-    <Kart baslik="Malzeme: termin bekleyenler">
+    <Kart baslik="Malzeme: termin bekleyenler" simge="box">
       <Tablo etiket="Malzeme: termin bekleyenler" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(x) => `${x.tur}-${x.satinalmaSira ?? ''}-${x.kod}`}
         bosMesaj={d.tur === 'sonuc' ? 'Termini beklenen malzeme yok.' : 'Satın alma listesi plan motoruyla gelir.'} />
       <p className="tc-pys-kucuk">
