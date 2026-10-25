@@ -109,9 +109,10 @@ button.tc-pys-h:hover { border-color: var(--ink); }
 .tc-pys-dl dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
 /* Eski küçük hayalet Kapat düğmesi (dugme kucuk, hayalet). */
 .tc-pys-kapat {
-  display: inline-flex; flex: none; align-items: center; justify-content: center; min-width: calc(var(--dokunma) - var(--b-2)); min-height: calc(var(--dokunma) - var(--b-2));
-  border: 0; border-radius: var(--yari-2); background: transparent; color: var(--muted); cursor: pointer;
+  display: inline-flex; flex: none; align-items: center; justify-content: center; gap: var(--b-1); min-width: calc(var(--dokunma) - var(--b-2));
+  min-height: calc(var(--dokunma) - var(--b-2)); border: 0; border-radius: var(--yari-2); background: transparent; color: var(--muted); font: inherit; cursor: pointer;
 }
+.tc-pys-kapat:disabled { cursor: not-allowed; opacity: var(--saydam-45); }
 .tc-pys-kapat:hover { color: var(--ink); background: var(--panel2); }
 .tc-pys-kapat:focus-visible { outline: 2px solid var(--hazard); outline-offset: 1px; }
 .tc-pys-form { display: grid; gap: var(--b-2); min-width: 0; justify-items: start; white-space: normal; }
@@ -137,6 +138,10 @@ button.tc-pys-h:hover { border-color: var(--ink); }
 
 .tc-pys-kucuk { margin: var(--b-2) 0 0; font-size: var(--yazi-xs); color: var(--muted); }
 .tc-pys-not { display: block; font-size: var(--yazi-xs); color: var(--muted); }
+/* modul.stil .pm-ym-dok, .pm-ag-gec: maliyet ve bekleme dökümü, gecikme saati. */
+.tc-pys-dok { display: block; color: var(--muted); font-size: var(--yazi-s); line-height: 1.35; white-space: normal; }
+.tc-pys-dok > span { display: block; white-space: nowrap; }
+.tc-pys-gec { color: var(--stop); font-weight: 600; }
 .tc-pys-alanlar { display: grid; gap: var(--b-2); margin-bottom: var(--b-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.75rem), 1fr)); }
 .tc-pys-alan { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-s); }
 .tc-pys-alan > span { color: var(--muted); }

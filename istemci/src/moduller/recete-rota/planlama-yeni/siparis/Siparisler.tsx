@@ -5,13 +5,13 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim as HucreSecimi } from './IsiHaritasi.tsx';
-import { PartiBolmeKarti, PartiTaramasiKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
+import { OrtusmeKarti, PartiBolmeKarti, PartiTaramasiKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { fiyatTanimi, onemTanimi } from './formlar.ts';
 import { KarTablosu } from './KarTablosu.tsx';
 import { agirlikAyari, elleSinir, kayitliPlan, siparisAcilimi, siparisIsisi, type SiparisSatiri } from './kurallar.ts';
 
 // Siparişler (ysiparis): sipariş × hafta termin riski (zz30-isi ISI.ysiparis), satırın altında sihirbazla önem ve fiyat (zz24-sade SADE.ysiparis,
-// ortak sade kabuğu), "Tüm satırlar"da asıl sayfa (zz10 partiyi böl, zz11 parti taraması, zu-yan-sayfalar sSiparisKar). Motor isteyen araçlar
+// ortak sade kabuğu), "Tüm satırlar"da asıl sayfa (zz10 partiyi böl, zz11 parti taraması, zz16 örtüşme, zu-yan-sayfalar sSiparisKar). Motor isteyen araçlar
 // yerinde pasif (357 b). Termin ve öncelik Üretim emirlerinden gelir; "Termini değiştir" yerinde pasif (222 a, Soru 466/1 a).
 
 const TERMIN_SAHIBI = 'Termin Üretim emirlerinde değiştirilir.';
@@ -28,9 +28,10 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
         <>
           <PartiBolmeKarti c={calisma} p={p} degerlendir={degerlendir} yenile={yenile} />
           <PartiTaramasiKarti c={calisma} p={p} />
+          <OrtusmeKarti c={calisma} p={p} komut={komut} />
         </>
       )}
-      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} degerlendir={degerlendir} />
+      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} />
     </TumSatirlar>
   );
 

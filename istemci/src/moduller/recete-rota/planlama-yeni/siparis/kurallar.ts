@@ -1,8 +1,10 @@
+import { kisaTl, maliyetBaglami, siparisMaliyeti, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
 // Kaynak bugünkü çerçevedir: zv-termin, zw-denge, zz25-sade-takvim, zz29-gorsel, zz30-isi, zr-agirlik ve motor/durum.betik, engine.betik
-// (zaman). Plan motorunu yeniden koşturan hesaplar (satın alma listesi, sipariş maliyeti, plan seçenekleri) burada yoktur (357 b).
+// (zaman). Plan motorunu yeniden koşturan hesaplar (satın alma listesi, plan seçenekleri) burada yoktur (357 b). Sipariş maliyeti motor istemez;
+// Maliyetler (P3) hesabı kullanılır (486/1 a).
 
 // ---- kayıtlı plan (c-masa.betik planKaydi) ----
 export interface PlanIsi { id: string; job: string; m: string; S: number; C: number; su?: number; run?: number; fas?: number; done?: number }
@@ -323,10 +325,11 @@ export function terminIsisi(c: PlanlamaCalismasi, K: TerminKalemi[]): TerminIsis
     if (x.ger != null) hucreKoy(h, `g${G.kis(gunNo(x.ger))}`, { bayrak: true, etiket: `plan ${gunYaz(D, x.ger)} istiyor` });
     satirlar.push({ k: x.k, ad: x.ad, alt: x.durum, simge: 'truck', ton: x.ton, gizli: x.ton === 'tamam', h, kalem: x, gun: gec ? (x.son - x.ger!) / 24 : 0 });
   }
+  // Eski sayım (486/3 a): yalnız hiç geliş tarihi olmayan kalem sayılır; tahmini dönüşü olan fason kalemi tarihli sayılır.
   const hata = satirlar.filter((r) => r.ton === 'hata'); const bek = satirlar.filter((r) => (r.gun ?? 0) > 0);
   const en = [...satirlar].filter((r) => r.ton !== 'tamam').sort((a, b) => Number(b.ton === 'hata') - Number(a.ton === 'hata') || (b.gun ?? 99) - (a.gun ?? 99))[0];
   const metin = !en?.kalem ? `Bütün ${satirlar.length} fason kalemi gerektiği gün geliyor.`
-    : `En koyu satır ${en.ad}: plan ${gunYaz(D, en.kalem.ger)} istiyor, geliş ${gunYaz(D, en.kalem.son)} (${sayi(en.gun, 1)} gün bekleme). ${bek.length} kalem gerekenden geç geliyor, ${satirlar.filter((r) => r.kalem?.tahmini).length} kalemin dönüş tarihi yok; ${hata.length} kalem işi kaydırıyor.`;
+    : `En koyu satır ${en.ad}: plan ${gunYaz(D, en.kalem.ger)} istiyor, geliş ${gunYaz(D, en.kalem.son)} (${sayi(en.gun, 1)} gün bekleme). ${bek.length} kalem gerekenden geç geliyor, ${satirlar.filter((r) => r.kalem && !Number.isFinite(r.kalem.son)).length} kalemin geliş tarihi yok; ${hata.length} kalem işi kaydırıyor.`;
   satirlar.push({
     k: MALZEME_SATIRI, ad: 'Malzeme', alt: 'satın alma listesi', simge: 'box', ton: '', gizli: false, kalem: null, gun: null,
     h: Object.fromEntries(G.l.map((c) => [c.k, { kapali: true, etiket: 'malzeme kalemleri plan motoruyla gelir' }])),
@@ -359,13 +362,21 @@ export const UZATMALAR = [0, 1, 2, 3, 5] as const;
 export interface DengeSatiri extends IsiSatiri { s: Siparis; T: number | null; C: number | null }
 export interface DengeIsisi { sutunlar: IsiSutunu[]; satirlar: DengeSatiri[]; ust: UstDurum; yalnizGec: boolean }
 
-// Sipariş × termin uzatması, kalan gecikme (zz30-isi ISI.denge.veri). Kâr sütunu sipariş maliyetinden gelir; plan motoruyla açılır (357 b).
-// fg: maliyet okuyan; "Kâr" sütunu yalnız ona çizilir. Değeri motorun sipariş maliyetinden gelir; motor bağlanana dek hücre kapalıdır (357 b).
-export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, fg = false): DengeIsisi {
+// Siparişlerin plandan maliyeti (zz30-isi isSipMal: ymSipMaliyet); plan ya da takvim yoksa boş.
+export function siparisMaliyetleri(c: PlanlamaCalismasi): Map<string, SiparisMaliyeti> {
+  const b = maliyetBaglami(c); const m = new Map<string, SiparisMaliyeti>();
+  if (!b) return m;
+  for (const s of plandaki(c.D)) { const x = siparisMaliyeti(b, s); if (x) m.set(s.id, x); }
+  return m;
+}
+
+// Sipariş × termin uzatması, kalan gecikme (zz30-isi ISI.denge.veri). Kâr sütunu sipariş maliyetinin net kârıdır (486/1 a).
+// kar: maliyet okuyana sipariş maliyetleri (Kâr sütunu); null ise sütun yoktur.
+export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, kar: ReadonlyMap<string, SiparisMaliyeti> | null = null): DengeIsisi {
   let L = plandaki(D).filter((s) => p.J[s.id] && saatOku(D, s.termin) != null).map((s) => ({ s, T: p.J[s.id]!.T, C: p.J[s.id]!.C }));
   const gec = L.filter((z) => z.T != null && z.T > 0.05); const yalnizGec = gec.length > 0;
   L = (yalnizGec ? gec : L).sort((a, b) => (b.T ?? 1e9) - (a.T ?? 1e9) || (a.C ?? 0) - (b.C ?? 0)).slice(0, 12);
-  const sutunlar: IsiSutunu[] = [...UZATMALAR.map((d) => ({ k: `u${d}`, ad: d ? `+${d} gün` : 'Şimdi', alt: d ? 'uzatma' : 'plan' })), ...(fg ? [{ k: 'kar', ad: 'Kâr', alt: 'şimdi' }] : [])];
+  const sutunlar: IsiSutunu[] = [...UZATMALAR.map((d) => ({ k: `u${d}`, ad: d ? `+${d} gün` : 'Şimdi', alt: d ? 'uzatma' : 'plan' })), ...(kar ? [{ k: 'kar', ad: 'Kâr', alt: 'şimdi' }] : [])];
   const satirlar = L.map(({ s, T, C }): DengeSatiri => {
     const h: Record<string, IsiHucresi> = {};
     for (const d of UZATMALAR) {
@@ -373,7 +384,10 @@ export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, fg = false): DengeIsis
       const k = Math.max(0, T - d * 24);
       hucreKoy(h, `u${d}`, k > 0.05 ? { kd: kademe(k), v: kisaSure(k), etiket: `${saat(k)} geç kalır` } : { iyi: true, sm: 'check', etiket: 'zamanında' });
     }
-    if (fg) h.kar = { kapali: true, etiket: 'kâr plan motoruyla hesaplanır' };
+    if (kar) {
+      const m = kar.get(s.id); const v = m ? m.net ?? m.kar : null;
+      h.kar = v == null ? { sm: 'alert', v: '?', etiket: 'kâr hesaplanamıyor' } : { v: kisaTl(v), kd: v < 0 ? 4 : undefined, iyi: v >= 0 ? true : undefined, etiket: `net ${tl(v)}` };
+    }
     return { k: s.id, ad: s.id, alt: `termin ${gunYaz(D, saatOku(D, s.termin))} · ${urunAdi(D, s.urun)}`, simge: 'flag', ton: T == null || T >= 24 ? 'hata' : T > 0.05 ? 'uyari' : '', gizli: false, h, s, T, C };
   });
   const en = satirlar[0]; const kurt = en && en.T != null ? UZATMALAR.find((d) => en.T! - d * 24 <= 0.05) : undefined;
@@ -399,6 +413,28 @@ export function partiAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
     .sort((a, b) => (p.J[b.id]?.T ?? 0) - (p.J[a.id]?.T ?? 0) || a.id.localeCompare(b.id, 'tr'));
 }
 export const PARTI_EN_COK = 20;
+
+// ---- örtüşme (zz16-ortusme orAdaylar, ze-rota rtTur, engine isAgirligi) ----
+// Adımın önceki adıma bağ türü: ilk adım ve "bitince" bağı b, örtüşen o, bağsız x.
+export function bagTuru(r: readonly RotaAdimi[], i: number): string {
+  const o = r[i]; if (!o || i === 0) return 'b';
+  if (typeof o.gecis === 'string' && o.gecis) return o.gecis;
+  if (!(o.bag ?? []).length) return 'x';
+  return (o.bag ?? []).some((b) => b[1] === 'o') ? 'o' : 'b';
+}
+const ONCELIK_AGIRLIGI: Record<number, number> = { 1: 4, 2: 2, 3: 1 };
+const isAgirligi = (s: Siparis): number => { const p = Number(s.pay); return (ONCELIK_AGIRLIGI[Number(s.oncelik)] ?? 1) * (p > 0 && p < 1 ? p : 1); };
+export const ortusmesiAcik = (D: PlanVerisi): string[] => D.siparisler.filter((s) => s.ortus === true).map((s) => s.id);
+// Örtüşme denenecek iş emirleri: geciken, başlamamış, örtüşmesi açık olmayan ve rotasında "örtüşebilir" işaretli bitince bağı olan; ağırlıklı gecikmesi en
+// büyük altı tanesi.
+export function ortusmeAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
+  const A = nesne(D.ortusAcik) ? D.ortusAcik : {};
+  const isler = Object.values(p.ops);
+  const basladi = (j: string) => isler.some((r) => r.job === j && (Boolean(r.done) || Boolean((r as unknown as Record<string, unknown>).act)));
+  return D.siparisler.filter((s) => !s.havuz && s.ortus !== true && !A[s.id] && !A[s.id.split('/')[0] ?? ''] && !basladi(s.id) && (p.J[s.id]?.T ?? 0) > 0.05)
+    .filter((s) => { const r = D.urunler.find((u) => u.id === s.urun)?.rota ?? []; return r.some((o, i) => i > 0 && o.ortusebilir === true && bagTuru(r, i) === 'b'); })
+    .map((s) => ({ s, w: (p.J[s.id]?.T ?? 0) * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map((x) => x.s);
+}
 
 // Darboğaz adımı (zz4-oto-bolme darbogazAdimi): işin plandaki adımlarından, hazır olduğu andan başlamasına en uzun bekleyen. Hazır olma, adım
 // tezgâh, kişi, yetkinlik, ayarcı ya da aparat beklediyse önceki adımların (rota bağı) en geç bitişidir; değilse planlanan başlangıç.

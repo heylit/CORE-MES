@@ -8,7 +8,7 @@ import { FormluAcilim } from './AcilimFormu.tsx';
 import { PlanSecenekleriKarti, TeklifKarti, TerminUzatmaKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim } from './IsiHaritasi.tsx';
 import {
-  dengeAcilimi, dengeAdi, dengeEtkin, dengeIsisi, dengeKatYazi, kayitliPlan, planDengesi, type DengeSatiri,
+  dengeAcilimi, dengeAdi, dengeEtkin, dengeIsisi, dengeKatYazi, kayitliPlan, planDengesi, siparisMaliyetleri, type DengeSatiri,
 } from './kurallar.ts';
 
 // Termin ve kâr (denge): sipariş × termin uzatması (zz30-isi ISI.denge), "Tüm satırlar"da plan dengesi çubuğu ve motorla hesaplanan kartlar
@@ -84,7 +84,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
     );
   }
 
-  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku);
+  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku ? siparisMaliyetleri(calisma) : null);
   const acilim = (r: DengeSatiri, ck: string) => {
     const A = dengeAcilimi(r, ck, V.sutunlar.find((x) => x.k === ck)?.ad ?? '');
     return (
