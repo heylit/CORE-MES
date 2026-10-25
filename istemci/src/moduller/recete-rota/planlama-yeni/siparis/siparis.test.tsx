@@ -94,7 +94,8 @@ describe('P2 Siparişler', () => {
     expect(screen.getByText(/karar 180/)).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Partiyi böl' })).toBeNull();
     fireEvent.click(dugme(/S1 çizelgede/));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/recete-rota/planlama-yeni/plan'); });
+    // Yönlendirici adresi geçişle (startTransition) yazar; adres tembel yüklenen motor parçası gelince değişir, yük altında bir saniyeyi aşar.
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/recete-rota/planlama-yeni/plan'); }, BEKLE);
   }, 20000);
 
   it('sunucu kayıt yazmayı vermiyorsa (ben.yazabilir false) yönetici de form görmez', async () => {
