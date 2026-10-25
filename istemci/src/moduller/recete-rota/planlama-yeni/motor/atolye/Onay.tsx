@@ -11,10 +11,10 @@ import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } fro
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
-import { calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
-  agirlikliGecikme, ayarSaat, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
-  paSecim, planFarki, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
+  agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
+  paSecim, planFarki, sunucuEkMesai, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 // Onay ve canlı (zz22 sPlanAtolye): durum şeridi, akış, incelenecek planlar, seçili planın farkı, kontrolü ve kararı, karşılaştırma; yanda canlıdan
@@ -81,6 +81,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const [notlar, setNotlar] = useState<Record<string, string>>({});
   const [sor, setSor] = useState<SunucuSenaryosu | null>(null);
   const [calSor, setCalSor] = useState(false);
+  const [acSor, setAcSor] = useState<SunucuSenaryosu | null>(null);
   const [gidiyor, setGidiyor] = useState(false);
   const l = useMemo(() => sen?.senaryolar ?? [], [sen]);
   const canli = sen?.canli ?? null;
@@ -107,6 +108,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   }, [istenen, planlar]);
   const pc = planlar.canli ?? null;
   const farkAl = (id: number): PlanFarki | null => { const a = planlar[String(id)]; return a ? planFarki(a, pc) : null; };
+  // Senaryonun plan kontrolü: başlamış ve sabit iş, haftalık ek mesai bütçesi (sunucunun ek mesaisinden).
+  const planK = (id: number): KontrolMaddesi[] => [...paPlanKontrol(farkAl(id), !!pc), ...ekMesaiKontrol(sunucuEkMesai(planlar[String(id)] ?? null))];
 
   const gec = async (k: PlanOnayKomutu | 'vazgec', s: SunucuSenaryosu, ek: Record<string, unknown> = {}) => {
     const yol = k === 'vazgec' ? `/plan/senaryolar/${String(s.id)}/vazgec` : ONAY_YOLLARI[k].replace(':id', String(s.id));
@@ -160,13 +163,35 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
     } finally { setGidiyor(false); setCalSor(false); }
   };
 
+  // Çalışmaya aç (eski 'sen-ac'): taslağın planı çalışmaya yazılır, sayfa yeniden okunur; bildirimden yazmadan önceki sürüme dönülür (508 2 a).
+  const ac = async (s: SunucuSenaryosu) => {
+    if (!o.komut) return;
+    setGidiyor(true);
+    try {
+      const r = await calismayaAc({ komut: o.komut, taslakId: s.id, taslakSurumu: s.surum });
+      const geriAl = () => {
+        calismayiGeriAl(r.calismaSurumu).then(
+          () => { bildir('tamam', 'Çalışma açmadan önceki haline döndü.'); o.yenile(); },
+          (e: unknown) => { bildir('hata', gonderHataIletisi(e)); },
+        );
+      };
+      bildir('tamam', `"${s.ad}" çalışmaya yüklendi: ${acmaOzeti(r)}`, { eylem: { etiket: 'Geri al', yap: geriAl } });
+      planSekmesi();
+      o.yenile();
+    } catch (e) {
+      bildir('hata', gonderHataIletisi(e));
+    } finally { setGidiyor(false); setAcSor(null); }
+  };
+  // Eskisi gibi çalışma kaydedilmemiş bir değişiklik taşıyorsa (canlıdan farklı ya da fark bilinmiyor) önce sorulur.
+  const acIste = (s: SunucuSenaryosu) => { if (c?.plan && cf?.farkli !== false) setAcSor(s); else void ac(s); };
+
   const onayda = paOnayda(l);
   const ilk = onayda[0];
   const adim = paAdim(!!p, onayda.length, farkli, typeof sec === 'number');
   const sira = PA_ADIM.map((x) => x[0]);
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
-  const calK = c && p ? paCalismaKontrol(planGuncel(c), p.fail.length, farkli) : [];
-  const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, paPlanKontrol(farkAl(sor.id), !!pc)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
+  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
+  const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, planK(sor.id)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">
       <header className="tc-pym-pa-bas">
@@ -233,8 +258,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
               gonder={(h) => { if (h === 'canli') setCalSor(true); else void calGonder(h); }} />
           )}
           {secS && (
-            <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
-              gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); } }} />
+            <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} K={paKontrol(secS, canli, canliSurum, planK(secS.id))} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
+              gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); }, ac: async (s) => { acIste(s); } }} />
           )}
           <Karsilastir l={l} canli={canli} canliSurum={canliSurum} kars={kars} temizle={() => setKars([])} planlar={planlar} farkAl={farkAl} />
         </div>
@@ -249,6 +274,12 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         yukleniyor={gidiyor} vazgec={() => { setSor(null); setCalSor(false); }} onayla={() => { if (calSor) void calGonder('canli'); else if (sor) void eylem.canli(sor); }}
       >
         <p>{calSor ? (uyari.length ? `Çalışma planı: ${uyari.join('; ')}.` : 'Çalışma planı onaya gönderilip canlı plan olacak; tezgâh kuyrukları bu plana göre görünür.') : sor ? (uyari.length ? `${sor.ad}: ${uyari.join('; ')}.` : `"${sor.ad}" canlı plan olacak (sürüm ${(canliSurum ?? 0) + 1}); tezgâh kuyrukları bu plana göre görünür.`) : ''}</p>
+      </OnayPenceresi>
+      <OnayPenceresi
+        acik={acSor !== null} baslik="Çalışma değişsin mi?" onayMetni="Yükle"
+        yukleniyor={gidiyor} vazgec={() => setAcSor(null)} onayla={() => { if (acSor) void ac(acSor); }}
+      >
+        <p>{acSor ? `Çalışma planının yerine "${acSor.ad}" yüklenecek. Yazmadan sonra bildirimden geri alınabilir.` : ''}</p>
       </OnayPenceresi>
     </div>
   );
@@ -332,15 +363,19 @@ function CalismaSecili({ K, o, not, notYaz, gidiyor, gonder }: {
   );
 }
 
-interface SeciliEylemi { onaya: (s: SunucuSenaryosu) => Promise<void>; cek: (s: SunucuSenaryosu) => Promise<void>; geri: (s: SunucuSenaryosu) => Promise<void>; vazgec: (s: SunucuSenaryosu) => Promise<void>; canli: (s: SunucuSenaryosu) => Promise<void> }
-function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eylem }: {
-  s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; pa: PlanCevabi | null; pc: PlanCevabi | null; f: PlanFarki | null;
+interface SeciliEylemi { ac: (s: SunucuSenaryosu) => Promise<void>; onaya: (s: SunucuSenaryosu) => Promise<void>; cek: (s: SunucuSenaryosu) => Promise<void>; geri: (s: SunucuSenaryosu) => Promise<void>; vazgec: (s: SunucuSenaryosu) => Promise<void>; canli: (s: SunucuSenaryosu) => Promise<void> }
+function Secili({ s, canli, canliSurum, pa, pc, f, K, o, not, notYaz, gidiyor, eylem }: {
+  s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; pa: PlanCevabi | null; pc: PlanCevabi | null; f: PlanFarki | null; K: KontrolMaddesi[];
   o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi;
 }) {
-  const K = paKontrol(s, canli, canliSurum, paPlanKontrol(f, !!pc)); const red = paRedVar(K);
+  const red = paRedVar(K);
   const g = s.gostergeler; const r = canli;
   const [dad, dton] = PA_DURUM[s.durum];
   const y = s.yapabilir;
+  // Çalışmaya açmak çalışmaya yazar: eskisi gibi plan yazan görür; izin uçta (recete-rota.yaz ve plan.yaz).
+  const acabilir = o.yetki.planYaz && o.komut !== null;
+  const em = sunucuEkMesai(pa), emc = sunucuEkMesai(pc);
+  const emf = pa ? ekMesaiFarki(pa, pc) : [];
   const dg: ReactNode[] = [];
   const dugme = (ad: string, sm: SimgeAdi, f: () => void, birincil = false, hayalet = false, kapali = false) => (
     <button key={ad} type="button" className={`tc-dugme${birincil ? ' tc-dugme-birincil' : ''}${hayalet ? ' tc-pym-hayalet' : ''}`} disabled={gidiyor || kapali} onClick={f}><Simge ad={sm} boyut="k" />{ad}</button>
@@ -349,9 +384,11 @@ function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eyle
     if (y?.canliyaAl) dg.push(dugme('Onayla ve canlıya al', 'check', () => void eylem.canli(s), true, false, red));
     if (y?.geriGonder) dg.push(dugme('Geri gönder', 'back', () => void eylem.geri(s)));
     if (y?.onaydanCek) dg.push(dugme('Onaydan çek', 'edit', () => void eylem.cek(s), false, true));
+    if (acabilir) dg.push(dugme('Çalışmaya aç', 'edit', () => void eylem.ac(s), false, true));
   }
   if (s.durum === 'acik') {
     if (y?.onayaGonder) dg.push(dugme('Onaya gönder', 'flag', () => void eylem.onaya(s), true, false, red));
+    if (acabilir) dg.push(dugme('Çalışmaya aç', 'edit', () => void eylem.ac(s)));
     if (s.benim && o.yetki.planStudyo) dg.push(dugme('Vazgeç', 'x', () => void eylem.vazgec(s), false, true));
   }
   const yazP = o.yetki.planStudyo, yazC = o.yetki.planCanliyaAl;
@@ -378,14 +415,17 @@ function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eyle
           <li><small>{ga && !ga.agirlikli ? 'Gecikme' : 'Ağırlıklı gecikme'}</small><b className="mono">{gc && ga ? `${sayi(gc.saat, 1)} → ` : ''}{ga ? `${sayi(ga.saat, 1)} sa` : '—'}</b>{gc && ga && <Fark a={ga.saat} b={gc.saat} />}</li>
           <li><small>Plan TL</small><b className="mono">{g?.maliyetTl != null ? sayi(g.maliyetTl) : '—'}</b>{r && g && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl} b={r.maliyetTl} k={0} />}</li>
           <li><small>Ayar</small><b className="mono">{ayarSaat(pa) == null ? '—' : `${sayi(ayarSaat(pa) ?? 0, 1)} sa`}</b>{pc && <Fark a={ayarSaat(pa)} b={ayarSaat(pc)} />}</li>
+          <li><small>Ek mesai</small><b className="mono">{em ? `${sayi(em.saat, 1)} sa` : '—'}</b>{em && emc && <Fark a={em.saat} b={emc.saat} />}</li>
         </ul>
         <div className="tc-pym-pa-iki">
           <section className="tc-pym-pa-bolum">
             <h3><Simge ad="list" boyut="k" /> Veri ve karar farkı</h3>
-            {s.degisiklikler.length ? (
+            {s.degisiklikler.length + emf.length ? (
               <ul className="tc-pym-pa-degis">
                 {s.degisiklikler.slice(0, 12).map((d) => <li key={d.id}><Simge ad="edit" boyut="k" /><span>{d.ozet}</span></li>)}
                 {s.degisiklikler.length > 12 && <li className="tc-pym-pa-kucuk">{`ve ${s.degisiklikler.length - 12} değişiklik daha`}</li>}
+                {emf.slice(0, 12).map(([sm, t]) => <li key={t}><Simge ad={sm} boyut="k" /><span>{t}</span></li>)}
+                {emf.length > 12 && <li className="tc-pym-pa-kucuk">{`ve ${emf.length - 12} ek mesai değişikliği daha`}</li>}
               </ul>
             ) : <p className="tc-pym-pa-kucuk">{r ? 'Canlıya göre değişiklik yok.' : 'Karşılaştırılacak canlı plan yok.'}</p>}
           </section>
@@ -498,6 +538,7 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle, planlar, farkAl }: {
             {satir(sutun.every((s) => !s.p || agirlikliGecikme(s.p).agirlikli) ? 'Ağırlıklı gecikme (sa)' : 'Gecikme (sa)', (s) => (s.p ? agirlikliGecikme(s.p).saat : null), (x) => sayi(x, 1))}
             {satir('Plan TL (bin)', (s) => (s.g?.maliyetTl != null ? s.g.maliyetTl / 1000 : null), (x) => sayi(x))}
             {satir('Ayar (sa)', (s) => ayarSaat(s.p), (x) => sayi(x, 1))}
+            {satir('Ek mesai (sa)', (s) => s.p?.ekMesai?.toplamSaat, (x) => sayi(x, 1))}
             {satir('Son bitiş', (s) => { const b = s.p ? sonBitis(s.p) : null; return b ? Date.parse(b) / 3_600_000 : null; }, (x) => zamanYaz(new Date(x * 3_600_000).toISOString()))}
             {satir('Canlıya göre yeri değişen iş', (s) => s.d, (x) => sayi(x))}
             {satir('Yerleşmeyen iş', (s) => yerlesmeyen(s.g), (x) => sayi(x))}

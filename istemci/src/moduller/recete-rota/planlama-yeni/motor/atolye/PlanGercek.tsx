@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CanliyaAlmaGecmisiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TabanVeCanliCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
@@ -18,8 +19,11 @@ export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikler
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const [cevap, setCevap] = useState<{ r: TabanVeCanliCevabi } | { hata: string } | null>(null);
+  // Canlıya alma geçmişi yalnız "Plan değişikliği" kutusunundur; okunamazsa kutu sürüm farkıyla, adsız kalır.
+  const [gecmis, setGecmis] = useState<CanliyaAlmaGecmisiCevabi | null>(null);
   useEffect(() => {
     let gecerli = true;
+    api.get<CanliyaAlmaGecmisiCevabi>('/plan/canliya-alma-gecmisi').then((g) => { if (gecerli) setGecmis(g); }, () => undefined);
     api.get<TabanVeCanliCevabi>('/recete-rota/planlama-calismasi/taban-ve-canli').then(
       (r) => { if (gecerli) setCevap({ r }); },
       (h: unknown) => { if (gecerli) setCevap({ hata: hataIletisi(h, 'Taban ve canlı plan okunamadı.') }); },
@@ -40,7 +44,7 @@ export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikler
   return (
     <div className="tc-pym-tp-pg">
       {bas}
-      <Gostergeler c={c} p={p} K={K} L={L} />
+      <Gostergeler c={c} p={p} K={K} L={L} gecmis={gecmis} />
       <Serit c={c} p={p} K={K} now={simdiSaati(c)} />
       <NedenOzeti c={c} L={L} />
       <Tablo c={c} L={L} yalniz={yalniz} degis={() => setYalniz((x) => !x)} />
@@ -48,8 +52,8 @@ export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikler
   );
 }
 
-function Gostergeler({ c, p, K, L }: { c: PlanlamaCalismasi; p: OkunanPlan; K: PgKaynak; L: PgSatiri[] }) {
-  const g = pgGostergeleri(c, p, K, L); const esik = sapmaEsik(c);
+function Gostergeler({ c, p, K, L, gecmis }: { c: PlanlamaCalismasi; p: OkunanPlan; K: PgKaynak; L: PgSatiri[]; gecmis: CanliyaAlmaGecmisiCevabi | null }) {
+  const g = pgGostergeleri(c, p, K, L, gecmis); const esik = sapmaEsik(c);
   const kutu = (ad: string, deger: string, alt: string) => (
     <div className="tc-pym-tp-pg-kutu"><span>{ad}</span><b>{deger}</b><small>{alt}</small></div>
   );
@@ -58,7 +62,7 @@ function Gostergeler({ c, p, K, L }: { c: PlanlamaCalismasi; p: OkunanPlan; K: P
       {kutu('Plana uyum', g.biten ? `%${Math.round((100 * g.uyan) / g.biten)}` : '—', g.biten ? `${g.biten} biten adımın ${g.uyan}'i tabandan en çok ${saatYaz(esik)} geç` : 'henüz biten adım yok')}
       {kutu('Zamanında ve tam sevk', g.sevk ? `%${Math.round((100 * g.zaman) / g.sevk)}` : '—', g.sevk ? `${g.sevk} sevkin ${g.zaman}'i` : 'henüz biten sipariş yok')}
       {kutu('Ortalama kayma', pgSa(g.ort), 'bitiş, tabana göre')}
-      {kutu('Plan değişikliği', String(g.degisiklik), g.degisiklik ? 'taban sonrası canlıya alma' : 'taban sonrası canlıya alma yok')}
+      {kutu('Plan değişikliği', String(g.degisiklik), !g.degisiklik ? 'taban sonrası canlıya alma yok' : g.kimler.length ? g.kimler.map(([k, n]) => `${k} ${n}`).join(' · ') : 'taban sonrası canlıya alma')}
     </div>
   );
 }
