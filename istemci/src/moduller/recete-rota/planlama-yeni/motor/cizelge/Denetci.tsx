@@ -5,7 +5,7 @@ import {
   ayristir, KATEGORI_AD, nedenMetni, ONCELIK_AD, saatYaz, saatYazi, sayiYaz,
   type Ayrisim, type Derleme, type OkunanPlan, type SureKategorisi,
 } from '../kurallar.ts';
-import { degisken, MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
+import { degisken, MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from '../ortak.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
@@ -153,7 +153,15 @@ export function IsDenetci({ jid, ...o }: DenetciOzellikleri & { jid: string }) {
       <div className="tc-pym-panel-ust"><h2><span className="tc-pym-mono">{jid}</span></h2><Kapat yap={o.secimTemizle} /></div>
       <dl className="tc-pym-dl">
         <dt>Ürün</dt><dd>{D.urunler.find((u) => u.id === s.urun)?.ad ?? s.urun} · {s.adet} adet</dd>
-        <dt>Öncelik</dt><dd><Rozet ton={ONCELIK_TON[onc] ?? 'bilgi'}>{ONCELIK_AD[onc] ?? '—'}</Rozet></dd>
+        <dt>Öncelik</dt>
+        <dd>
+          {/* Eski seçim kutusu (veri.yaz); sipariş verisi sahibinden girer (223 a), kutu pasif. Soru 485 cevabına kadar eski görünüm. */}
+          {yaz ? (
+            <select className="tc-alan-kutu tc-pym-oto" aria-label="Öncelik" value={String(onc)} disabled title={`Öncelik: ${VERI_NOTU}`} onChange={() => undefined}>
+              {[1, 2, 3].map((k) => <option key={k} value={String(k)}>{ONCELIK_AD[k]}</option>)}
+            </select>
+          ) : <Rozet ton={ONCELIK_TON[onc] ?? 'bilgi'}>{ONCELIK_AD[onc] ?? '—'}</Rozet>}
+        </dd>
         <dt>Termin</dt><dd className="tc-pym-mono">{s.termin || '—'}</dd>
         <dt>Planlanan bitiş</dt><dd className="tc-pym-mono">{j?.C != null ? saatYaz(D, j.C) : '—'} {j?.T == null ? <Rozet ton="hata">Planlanmadı</Rozet> : <Durum T={j.T} />}</dd>
         <dt>Kapasitesiz en erken</dt>

@@ -28,7 +28,8 @@ export interface OkunanPlan {
   ops: Record<string, PlanIslemi>;
   fail: string[];
   ozet: PlanOzeti;
-  J: Record<string, { C: number | null; T: number | null }>;
+  // dueB: tamponlu termin (motor J.dueB); gecikmeyen ama onu aşan sipariş risk altındadır.
+  J: Record<string, { C: number | null; T: number | null; dueB?: number | null }>;
   util: Record<string, { u: number; n: number; busy: number; open: number }>;
   warn: { t: string; j: string | null; txt: string }[];
   dataVer: number;
@@ -53,7 +54,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
   }
   const o = p.ozet;
   const J: OkunanPlan['J'] = {};
-  if (nesne(p.J)) for (const [j, x] of Object.entries(p.J)) if (nesne(x)) J[j] = { C: sayi(x.C), T: sayi(x.T) };
+  if (nesne(p.J)) for (const [j, x] of Object.entries(p.J)) if (nesne(x)) J[j] = { C: sayi(x.C), T: sayi(x.T), dueB: sayi(x.dueB) };
   const util: OkunanPlan['util'] = {};
   if (nesne(p.util)) for (const [m, x] of Object.entries(p.util)) if (nesne(x) && sayi(x.u) !== null) util[m] = { u: x.u as number, n: sayi(x.n) ?? 0, busy: sayi(x.busy) ?? 0, open: sayi(x.open) ?? 0 };
   return {
@@ -223,6 +224,8 @@ export function plandanBitenler(c: PlanlamaCalismasi, p: OkunanPlan | null): Bit
 export interface Girdi {
   D: PlanVerisi & { ayarlar: Record<string, unknown>; aparatlar?: unknown[]; ayarMatrisi?: unknown[] }; now: number; kapali: Set<string>; bitti: Set<string>;
   down: { m: string; from: number; to: number }[]; ekMesai: { m: string; gun: number; vardiya: string }[]; saGecik: Record<string, number>;
+  // Adım süresinin çarpanı (kayıttaki "sure" ve "sureOp" olayları; engine.betik st.sapma).
+  sapma: Record<string, number>;
 }
 const GUN_KODLARI = [...GUN];
 const GEVSEK: Record<string, (g: Girdi) => void> = {
@@ -244,7 +247,7 @@ export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new 
   const D = structuredClone(c.D) as Girdi['D'];
   D.ayarlar = nesne(D.ayarlar) ? D.ayarlar : {};
   D.siparisler = D.siparisler.filter((s) => !s.havuz && !biten.siparis.has(s.id));
-  const g: Girdi = { D, now: simdiSaati(c), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {} };
+  const g: Girdi = { D, now: simdiSaati(c), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
   for (const d of c.down) { const m = metin(d.m), a = sayi(d.from), b = sayi(d.to); if (m !== null && a !== null && b !== null) g.down.push({ m, from: a, to: b }); }
   for (const e of c.ekMesai) { const m = metin(e.m), gun = sayi(e.gun), v = metin(e.vardiya); if (m !== null && gun !== null && v !== null) g.ekMesai.push({ m, gun, vardiya: v }); }
   for (const k of g.kapali) GEVSEK[k]?.(g);
@@ -261,6 +264,16 @@ export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new 
       D.siparisler.push({ id: `SP-${k}`, ad: `${u?.ad ?? ev.urun} (acil)`, urun: ev.urun, adet: Number(ev.adet), termin: metin(ev.termin), oncelik: Number(ev.oncelik) || 1, serbest: null });
     } else if (ev.tip === 'malzeme' && typeof ev.kod === 'string') {
       g.saGecik[ev.kod] = (g.saGecik[ev.kod] ?? 0) + Number(ev.gun) * 24;
+    } else if (ev.tip === 'sure' && typeof ev.urun === 'string') {
+      // Başlamış adımın süresi değişmez (applyEvent: plandaki S şimdiden önceyse atlanır).
+      const ops = planOku(c)?.ops ?? {};
+      for (const j of D.siparisler) {
+        if (j.urun !== ev.urun) continue;
+        const id = `${j.id}.${String(ev.k)}`; const S = ops[id]?.S;
+        if (!(S !== undefined && S < g.now)) g.sapma[id] = Number(ev.oran);
+      }
+    } else if (ev.tip === 'sureOp' && typeof ev.id === 'string') {
+      g.sapma[ev.id] = Number(ev.oran);
     } else if (ev.tip === 'fason') {
       D.fasoncular = (D.fasoncular ?? []).map((f) => (f.id === ev.f ? { ...f, sureGun: (Number(f.sureGun) || 1) + Number(ev.gun) } : f));
     } else if (ev.tip === 'mesai' && typeof ev.m === 'string' && typeof ev.vardiya === 'string' && sayi(ev.gun) !== null) {

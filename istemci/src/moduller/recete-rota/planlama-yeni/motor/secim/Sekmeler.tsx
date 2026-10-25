@@ -9,18 +9,19 @@ import type { Ozellikler } from './SecimPaneli.tsx';
 
 // Rota sekmesi (za-merkez mzRota): siparişin adımları rota sırasıyla, her adımda yapabilen tezgâhlar. Adımı başka tezgâha taşımak motorla
 // gelir (357 b); rota verisi Rotalar sayfasında değişir, o sayfa yeni ekranda yok.
-export function RotaSekmesi({ c, p, cx, t, j, planYaz: yaz, opSec, sipSec }: Ozellikler & { j: string }) {
+export function RotaSekmesi({ c, p, cx, j, planYaz: yaz, opSec, sipSec, rotaSec }: Ozellikler & { j: string }) {
   const D = c.D; const sp = D.siparisler.find((x) => x.id === j);
   const urunAd = (u: unknown) => D.urunler.find((x) => x.id === u)?.ad ?? String(u ?? '');
   const ayni = D.siparisler.filter((x) => !x.havuz && x.urun === sp?.urun && x.id !== j);
-  const adimlar = cx.jobs[j] ? rotaAdimlari(c, p, cx, j, t) : [];
+  // Adımın bitti ve şu an işareti planın şimdisine göredir (zaman imleci önizlemedir).
+  const adimlar = cx.jobs[j] ? rotaAdimlari(c, p, cx, j, cx.now) : [];
   const tasi = yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.';
   return (
     <>
       <div className="tc-pym-mz-arac">
         <label className="tc-pym-mz-sirala">
           <span>Sipariş</span>
-          <select className="tc-pym-mz-sec" value={cx.jobs[j] ? j : ''} onChange={(e) => { if (e.target.value) sipSec(e.target.value); }}>
+          <select className="tc-pym-mz-sec" value={cx.jobs[j] ? j : ''} onChange={(e) => { if (e.target.value) rotaSec(e.target.value); }}>
             {!cx.jobs[j] && <option value="">Seçin</option>}
             {D.siparisler.filter((x) => !x.havuz && p.J[x.id]).map((x) => <option key={x.id} value={x.id}>{x.id} · {urunAd(x.urun)}</option>)}
           </select>
