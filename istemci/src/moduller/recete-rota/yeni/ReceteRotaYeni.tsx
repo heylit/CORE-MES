@@ -9,6 +9,7 @@ import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { EmirProjeSecimi } from '../EmirProjeSecimi.tsx';
 import { kopruKur, type EmirSecimi } from '../kopru.ts';
+import { PlanSeridi } from './PlanSeridi.tsx';
 import { EKRANLAR, SEKMELER, sekmeBul, type SekmeAnahtari } from './sekmeler.ts';
 import { RrBaglamKaynagi, useRrVerisi, type RrBaglami } from './veri.ts';
 import { useRrYetkisi } from './yetki.ts';
@@ -83,6 +84,7 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
 
   return (
     <>
+      {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <SayfaBasligi baslik={sekme.baslik} simge={sekme.simge} />
       <Sekmeler<SekmeAnahtari>
         etiket="Reçete ve Rota bölümleri"
