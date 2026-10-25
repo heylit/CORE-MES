@@ -16,7 +16,7 @@ function duzenek(kayit: Nesne, calisma: Nesne, kaynak: { durum: Nesne; ek: Nesne
     const rrMi = s => typeof s === 'string' && s.startsWith('rr-');
     const sayi = (x, n) => Number(x).toFixed(n); const saat = x => sayi(x, 1) + ' sa'; const esc = x => String(x); const ic = a => '[' + a + ']';
     const dugme = (ad, act) => '<button data-act="' + act + '">' + ad + '</button>'; const yetkili = () => true;
-    function bildir() {} function iz() {} function kaydet() {} function render() {} function ozetTazele() {}
+    function bildir() {} function iz() {} function kaydet() {} function render() {} function ozetTazele() {} function paEylem() { return false; }
     const CALISMA = ${JSON.stringify(calisma)};
     function yukle() { return JSON.parse(JSON.stringify(CALISMA)); }
     function yeniCalisma() { throw new Error('çalışma kayıttan açılmalı'); }

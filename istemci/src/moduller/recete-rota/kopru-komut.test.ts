@@ -629,3 +629,13 @@ describe('motor özeti (481 a, 493)', () => {
     expect(o).toEqual({ emirler: [emir], parcaAdetleri: { 'UE-1|20~1': 3, 'UE-1|20~2': null } });
   });
 });
+
+// 524: planlama sayfası onay listesini plan modülünün senaryo okumasıyla eşitler; okuma yalnız okur, yazmaz.
+describe('plan senaryoları okuması', () => {
+  it('plan-senaryolar-oku GET /plan/senaryolar ister, cevabı olduğu gibi döner', async () => {
+    const cevap = { canli: null, canliSurum: 2, senaryolar: [{ id: 41, durum: 'onayda' }] };
+    const istekler = sunucuKur((yontem, yol) => (yontem === 'GET' && yol === '/plan/senaryolar' ? json(200, cevap) : json(404, {})));
+    expect(await kopruKur([])('plan-senaryolar-oku', {})).toEqual(cevap);
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/senaryolar']);
+  });
+});

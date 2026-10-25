@@ -39,9 +39,9 @@ beforeEach(() => {
   uyarilar = [];
   let surum = 10;
   cevaplar = () => ({ ok: true, veri: { kayit: { surum: ++surum } } });
-  vi.spyOn(window, 'alert').mockImplementation((ileti?: unknown) => { uyarilar.push(String(ileti)); });
   vi.spyOn(window, 'postMessage').mockImplementation((ileti: unknown) => {
     const m = ileti as Giden;
+    if (m.yon === 'uyari') { uyarilar.push((ileti as { metin: string }).metin); return; }
     if (m.yon !== 'istek') return;
     giden.push(m);
     const c = cevaplar(m.tip, m.veri);
@@ -99,14 +99,16 @@ describe('çerçeve köprüsü', () => {
     expect(yazilanlar().map((v) => v['beklenenSurum'])).toEqual([3, 20]);
   });
 
-  it('KK-04: çatışmada (409) bir kez uyarır ve yazmayı durdurur', async () => {
+  it('KK-04: çatışmada (409) bir kez uyarır ve yazmayı durdurur; uyarı alert() ile değil kabuğa iletiyle gider (çerçevede modal izni yok)', async () => {
     cevaplar = () => ({ ok: false, durum: 409, hata: 'değişti' });
+    const alarm = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
     cerceveKoprusu(window, AYAR);
     window.localStorage.setItem(ANAHTAR, '{"n":1}');
     await vi.advanceTimersByTimeAsync(1000);
     window.localStorage.setItem(ANAHTAR, '{"n":2}');
     await vi.advanceTimersByTimeAsync(10000);
     expect(uyarilar).toEqual(['Çatışma.']);
+    expect(alarm).not.toHaveBeenCalled();
     expect(yazilanlar()).toHaveLength(1);
   });
 

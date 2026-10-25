@@ -339,6 +339,8 @@ function psKarar(ref, h) {
   let oneri, gerekce;
   if (!tasinan && !gec && !erk) { oneri = 'notr'; gerekce = 'Uygulamanın bir etkisi olmaz.'; }
   else if (dW > 0.05 || dL > 0) { oneri = 'vazgec'; gerekce = `Ağırlıklı gecikme ${dW > 0.05 ? saat(dW) + ' artar' : 'aynı kalır'}${dL > 0 ? `, ${dL} iş daha gecikir` : ''}.`; }
+  /* kısıt ihlali artan değişiklik önerilmez: gecikme kazancı ihlalin bedelini göstermez */
+  else if (dI > 0) { oneri = 'vazgec'; gerekce = `${dI} kısıt ihlali eklenir${dW < -0.05 ? `; ağırlıklı gecikme ${saat(-dW)} azalsa da` : ''}.`; }
   else if (dW < -0.05) { oneri = 'uygula'; gerekce = `Ağırlıklı gecikme ${saat(-dW)} azalır${dL < 0 ? `, ${-dL} iş zamanına girer` : ''}${dK != null && dK < -0.5 ? `; kâr ${sayi(-dK, 0)} ₺ düşer` : ''}.`; }
   else if (dK != null && dK > 0.5) { oneri = 'uygula'; gerekce = `Gecikme aynı, kâr ${sayi(dK, 0)} ₺ artar.`; }
   else if (dI < 0) { oneri = 'uygula'; gerekce = `Gecikme aynı, ${-dI} kısıt ihlali kalkar.`; }

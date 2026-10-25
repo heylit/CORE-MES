@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -24,7 +24,9 @@ describe('planlama çerçevesi', () => {
     ac('/recete-rota/terminler');
     const cerceve = await screen.findByTitle('Planlama', {}, { timeout: 20000 });
     const belge = cerceve.getAttribute('srcdoc') ?? '';
-    expect(cerceve.getAttribute('sandbox')).toBe('allow-scripts');
+    // 524/1 a: formlar submit olayıyla çalışır; gönderim belgenin başındaki politikayla kapalıdır.
+    expect(cerceve.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
+    expect(belge.indexOf(`content="form-action 'none'"`)).toBeLessThan(belge.indexOf('<head>'));
     expect(belge).toContain("connect-src 'none'");
     expect(belge).toContain('worker-src blob:');
     expect(belge).toContain("frame-src 'none'");
@@ -58,6 +60,34 @@ describe('planlama çerçevesi', () => {
     expect(izinli).not.toContain(JSON.stringify(PLAN_YETKI));
     expect(izinli).toContain('"oturumIletisi":"Oturumunuz kapandı');
   }, 40000);
+
+  // 524: plan.yaz'sız kişinin planlama kaydı sunucuya gitmez (403 ve görünmeyen uyarı yerine "yalnız bu sekmede"); sayfaya yalnız plan işlemleri verilir.
+  it('plan.yaz taşımayanın planlama çerçevesi kaydı yazmaz; sayfaya yalnız plan işlemleri geçer', async () => {
+    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'plan.canliya-al', 'plan.kilitle'] }, [KAYIT]);
+    ac('/recete-rota/terminler');
+    const belge = (await screen.findByTitle('Planlama', {}, { timeout: 20000 })).getAttribute('srcdoc') ?? '';
+    expect(belge).toContain('"yazabilir":false');
+    expect(belge).toContain('"planIslemleri":["plan.canliya-al","plan.kilitle"]');
+    cleanup();
+    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'plan.yaz'] }, [KAYIT]);
+    ac('/recete-rota/terminler');
+    const izinli = (await screen.findByTitle('Planlama', {}, { timeout: 20000 })).getAttribute('srcdoc') ?? '';
+    expect(izinli).toContain('"yazabilir":true');
+    expect(izinli).toContain('"planIslemleri":["plan.yaz"]');
+  }, 40000);
+
+  // 524: çerçevede modal izni yok; köprünün uyarısını kabuk gösterir, yalnız kendi verdiği metni.
+  it('çerçevenin uyarısı kabuk bildirimi olur; kabuğun bilmediği metin gösterilmez', async () => {
+    sunucuKur(YAZAR, [KAYIT]);
+    ac('/recete-rota/terminler');
+    const cerceve = await screen.findByTitle('Planlama', {}, { timeout: 20000 }) as HTMLIFrameElement;
+    const pencere = cerceve.contentWindow as Window;
+    const gonder = (metin: string) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data: { kanal: 'recete-rota', yon: 'uyari', metin }, origin: 'null', source: pencere })); }); };
+    gonder('Sahte uyarı');
+    expect(screen.queryByText('Sahte uyarı')).toBeNull();
+    gonder(PLAN_YETKI);
+    expect(await screen.findByText(PLAN_YETKI)).toBeTruthy();
+  }, 30000);
 
   // 353 a, 195 a: planlama sayfaları yalnız planlama işlemiyle açılır; Reçete ve Rota yazarı bölümleri görür, planlamayı görmez.
   it('planlama işlemi olmayan Reçete ve Rota yazarına planlama çerçevesi kurulmaz, kayıt okunmaz; Reçete ve Rota bölümü açılır', async () => {
