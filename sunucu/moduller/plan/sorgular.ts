@@ -277,9 +277,8 @@ export const senaryoKapat = (db: Db, id: number, durum: 'canliya_alindi' | 'vazg
   db.sorgu('UPDATE plan_senaryosu SET durum = $2, kapanma = now(), kapatan_kisi_id = $3, surum = surum + 1 WHERE id = $1 AND durum = $4',
     [id, durum, kisiId, durum === 'canliya_alindi' ? 'onayda' : 'acik']);
 // 502 a: aynı tabandan açılmış öbür açık ve onaydaki taslaklar (biri canlıya alınınca bayatlarlar); kilitli okunur.
-// Kilidi başka işlemde olan taslak atlanır: o işlem kendi taslağını kilitleyip plan sürümünü bekler, beklemek kilitlenme olur.
 export const kardesTaslaklar = (db: Db, id: number, taban: number): Promise<{ id: number; durum: 'acik' | 'onayda' }[]> =>
-  db.sorgu(`SELECT id, durum FROM plan_senaryosu WHERE id <> $1 AND taban_plan_surumu = $2 AND durum IN ('acik', 'onayda') ORDER BY id FOR UPDATE SKIP LOCKED`, [id, taban]);
+  db.sorgu(`SELECT id, durum FROM plan_senaryosu WHERE id <> $1 AND taban_plan_surumu = $2 AND durum IN ('acik', 'onayda') ORDER BY id FOR UPDATE`, [id, taban]);
 export const senaryoDurumYaz = (db: Db, id: number, durumdan: 'acik' | 'onayda', duruma: 'acik' | 'onayda') =>
   db.sorgu('UPDATE plan_senaryosu SET durum = $3, surum = surum + 1 WHERE id = $1 AND durum = $2', [id, durumdan, duruma]);
 export const tabanYenile = (db: Db, id: number) =>
