@@ -10,9 +10,6 @@ export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
 const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
   { kok: '/arkon', yol: '/arkon/yeni' },
-  // Eski sistemde Üretim Terminali ve Kuyruk ana menüde ayrı satırdır (497/5 a); yeni ekranda da Arkon sekmesi değil, ayrı sayfadır.
-  { kok: '/uretim-terminali', yol: '/arkon/yeni/operator' },
-  { kok: '/kuyruk', yol: '/arkon/yeni/kuyruk' },
   { kok: '/recete-rota', yol: '/recete-rota/yeni' },
   { kok: '/recete-rota', yol: '/recete-rota/planlama-yeni', baslik: 'Planlama' },
   { kok: '/malzemeler', yol: '/malzemeler/yeni-ekran' },
