@@ -14,7 +14,8 @@ function sec(x: Nesne, alanlar: readonly string[]): Nesne {
 }
 
 const SIPARIS = ['id', 'urun', 'adet', 'termin'] as const;
-const MALZEME = ['kod', 'ad', 'birim', 'stok', 'tedarikGun', 'muayeneGun', 'fire', 'terminKat', 'terminEk', 'tedarikci'] as const;
+// 533 a: Satın Alma'nın kendi tedarik termini kaydı (termin, sürüm, açıklama) termin satırı için gider.
+const MALZEME = ['kod', 'ad', 'birim', 'stok', 'tedarikGun', 'muayeneGun', 'fire', 'terminKat', 'terminEk', 'tedarikci', 'saTermin', 'saSurum', 'saAciklama'] as const;
 const SATIN_ALMA = ['kod', 'miktar', 'gelis', 'tedarikci', 'no', 'verildi', 'ref', 'src', 'tm'] as const;
 const TEDARIKCI = ['id', 'ad', 'ortGecikmeGun'] as const;
 const FASONCU = ['id', 'ad', 'sureGun', 'kapasite', 'terminKat', 'terminEk'] as const;

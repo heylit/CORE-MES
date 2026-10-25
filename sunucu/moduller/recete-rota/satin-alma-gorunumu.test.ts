@@ -24,7 +24,7 @@ const tam = {
       { k: '10', ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 3, ayar: 20 }], bag: [] },
       { k: '20', ad: 'Kaplama', fason: 'F1', bag: [['10', 'FS']] },
     ] }],
-    malzemeler: [{ kod: 'M1', ad: 'Deneme cubuk', birim: 'kg', stok: 3, tedarikGun: 5, muayeneGun: 1, fire: 10, birimFiyat: 42, tedarikci: 'TD1' }],
+    malzemeler: [{ kod: 'M1', ad: 'Deneme cubuk', birim: 'kg', stok: 3, tedarikGun: 5, muayeneGun: 1, fire: 10, birimFiyat: 42, tedarikci: 'TD1', saTermin: '2026-11-02', saSurum: 2, saAciklama: 'Deneme not' }],
     satinalma: [{ kod: 'M1', miktar: 4, gelis: '2026-10-22 08:00', tedarikci: 'TD1', no: 'SA-0001', birimFiyat: 41, tutar: 164 }],
     tedarikciler: [{ id: 'TD1', ad: 'Deneme tedarikci', ortGecikmeGun: 1, iban: 'TR00' }],
     fasoncular: [{ id: 'F1', ad: 'Deneme fasoncu', sureGun: 3, kapasite: 2, fiyat: 8, saatFiyat: 90, tasima: 15 }],
@@ -52,7 +52,7 @@ test('SA-02: iki hesabın okuduğu alanlar olduğu gibi kalır', () => {
   const g = satinAlmaCalismasi(tam, kayit) as { D: Record<string, unknown>; plan: Record<string, unknown>; olaylar: unknown[]; emirDurumu: unknown; simdi: unknown };
   assert.deepEqual(g.D['siparisler'], [{ id: 'E-1', urun: 'U1', adet: 5, termin: '2026-10-30 16:00', malzeme: [{ kod: 'M1', miktar: 2 }] }]);
   assert.deepEqual(g.D['urunler'], [{ id: 'U1', rota: [{ k: '10', bag: [] }, { k: '20', bag: [['10', 'FS']] }] }]);
-  assert.deepEqual(g.D['malzemeler'], [{ kod: 'M1', ad: 'Deneme cubuk', birim: 'kg', stok: 3, tedarikGun: 5, muayeneGun: 1, fire: 10, tedarikci: 'TD1' }]);
+  assert.deepEqual(g.D['malzemeler'], [{ kod: 'M1', ad: 'Deneme cubuk', birim: 'kg', stok: 3, tedarikGun: 5, muayeneGun: 1, fire: 10, tedarikci: 'TD1', saTermin: '2026-11-02', saSurum: 2, saAciklama: 'Deneme not' }]);
   assert.deepEqual(g.D['satinalma'], [{ kod: 'M1', miktar: 4, gelis: '2026-10-22 08:00', tedarikci: 'TD1', no: 'SA-0001' }]);
   assert.deepEqual(g.D['fasoncular'], [{ id: 'F1', ad: 'Deneme fasoncu', sureGun: 3, kapasite: 2 }]);
   assert.deepEqual(g.D['vardiyalar'], [{ id: 'V1', bas: '08:00', bit: '16:00', molalar: [{ bas: '12:00', bit: '12:30' }] }]);

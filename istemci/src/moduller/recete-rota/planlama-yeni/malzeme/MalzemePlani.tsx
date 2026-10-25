@@ -7,16 +7,18 @@ import { kaynakKur, stokOku, type StokKaynagi } from './kaynak.ts';
 import {
   BAGSIZ, DURUM_ADI, DURUM_TONU, KAYNAKLAR, TEDARIKCISIZ, alimPlani, alimSayaclari, alimTablolari, bitenler, calismaSimdisi, dagilim,
   grafikKaynaklari, grafikSutunlari, gunYaz, kovaAdi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, sayiYaz, tabanMs, tahsisEt,
-  malzemeIsisi, tedarikciAdi, terminAyari, tlKisa, tlYaz,
-  type AlimPlaniSatiri, type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim, type TerminAyari,
+  malzemeIsisi, tedarikciAdi, tlKisa, tlYaz,
+  type AlimPlaniSatiri, type DagilimHucresi, type DagilimTuru, type GrafikTuru, type Kirilim,
 } from './kurallar.ts';
 import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
 import { OneCekme } from './OneCekme.tsx';
+import { TedarikTerminiKarti } from './TedarikTermini.tsx';
 import './malzeme.css';
 
 // Malzeme satın alma planı (P4, malzplan). Düzen, araçlar ve akış bugünkü eski sayfanındır (TASARIM KORUMA): başta satın alma planı
 // (zv-termin), sonra malzeme planı ve dağılım (zt-malzeme-plan), sonra öne çekme (zz7-malzeme-one); renk, yazı, düğme ve kart görünüşü
-// ortaktır. Ekran yalnız okur: satın alma termini ve yeni sipariş satın almanındır (222 a). Tutarı finans.maliyet-oku olan görür (223 a).
+// ortaktır. Yeni sipariş satın almanındır (222 a); malzeme başına tedarik termini burada da girilir, kayıt Satın Alma'nındır (533 a, 534 1 a).
+// Tutarı finans.maliyet-oku olan görür (223 a).
 
 // Eski ekranın ortak dönem düğmesi (zq-olcek OLCEK). Bütün görünümlerde ortak olması iskelet isteğidir; o gelene kadar görünüme özgü.
 const OLCEK: readonly [Kirilim, string, string][] = [['gun', 'Gün', 'Günlük'], ['hafta', 'Hafta', 'Haftalık'], ['ay', 'Ay', 'Aylık'], ['yil', 'Yıl', 'Yıllık']];
@@ -56,13 +58,13 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
   <span className="tc-pyz-baslik"><Simge ad={simge} boyut="k" />{ad}{ek && <span className="tc-pyz-kucuk">{ek}</span>}</span>
 );
 
-export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri) {
-  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} />;
+export function MalzemePlani({ depo, calisma, yetki, yenile }: PlanlamaEkranOzellikleri) {
+  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
-export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu }: {
-  calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null;
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile }: {
+  calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
 }) {
   const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
@@ -86,8 +88,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
     const biten = bitenler(emirler, D);
     const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: calismaSimdisi(calisma), taban });
     const t = tahsisEt(g, taban);
-    const A = terminAyari(D);
-    return { g, k, A, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t, A) };
+    return { g, k, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t) };
   }, [calisma, D, taban, stok, emirler]);
 
   // Çalışma kaydı hiç yokken de eski sayfa plansız halini çizer (başlık, boş harita, tüm satırlar); diğer görünümler de öyle.
@@ -104,7 +105,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   if (!hesap) return planYok;
 
   const fg = maliyetOku;
-  const { g, k, A, plan, alim } = hesap;
+  const { g, k, plan, alim } = hesap;
   const kov = kovala(plan.satirlar, taban, kirilim, g.simdi);
   const oz = ozet(plan);
   const mats = new Map(k.malzemeler.map((m) => [m.kod, m]));
@@ -137,7 +138,8 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const isi = malzemeIsisi(alim, taban, g.simdi, miktar, malzemeAdi, fg ? fiyat : undefined);
   const tum = (
     <div className="tc-pyz-kartlar">
-      <AlimPlani l={alim} fg={fg} dar={dar} taban={taban} simdi={g.simdi} A={A} fiyat={fiyat} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
+      <TedarikTerminiKarti D={D} l={alim} taban={taban} yazar={terminYazar} yenile={yenile} />
+      <AlimPlani l={alim} fg={fg} dar={dar} taban={taban} simdi={g.simdi} fiyat={fiyat} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
         malzemeTedarikcisi={(kod) => { const t = mats.get(kod)?.tedarikci; return typeof t === 'string' && t !== '' ? tedarikciAdi(D, t) : null; }}
         miktar={miktar} tedarikci={(t) => tedarikciAdi(D, t)} />
       <Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" ek="plandan; alım ve bütçe için" />}>
@@ -175,7 +177,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
             const r = x.r;
             const neden = r.src === null
               ? `${r.kod} için sipariş verilmedi; plan ${gunYaz(taban, r.gerekli)} günü ${miktar(Math.ceil(r.miktar), r.kod)} istiyor.${r.siparisGun !== null ? ` Zamanında gelmesi için en geç ${gunYaz(taban, r.siparisGun)} sipariş verilmeli.` : ''}`
-              : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tm !== 'termin' ? ' (tedarikçi tarih vermedi)' : ''}.`;
+              : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tb ? ' (Satın Alma termini bekleniyor, olması gereken tarihte gelmiş sayıldı)' : ''}.`;
             return (
               <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
                 bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.join(', ')]]}
@@ -306,7 +308,6 @@ interface AlimPlaniOzellikleri {
   dar: boolean;
   taban: number;
   simdi: number;
-  A: TerminAyari;
   fiyat: (kod: string, q: number) => number | null;
   malzemeAdi: (kod: string) => string;
   malzemeTedarikcisi: (kod: string) => string | null;
@@ -315,8 +316,8 @@ interface AlimPlaniOzellikleri {
 }
 
 // Bugünkü eski sayfanın satın alma planı (zv-termin mpSatinalmaPlani): dört sayaç, verilecek siparişler ve açık siparişler. Seçim, tedarikçi
-// seçimi, termin girişi ve "Sipariş ver" yoktur (222 a): satın almada girilir.
-function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTedarikcisi, miktar, tedarikci }: AlimPlaniOzellikleri) {
+// seçimi ve "Sipariş ver" yoktur (222 a): satın almada girilir. Tedarik termini üstteki karttadır (533 a).
+function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarikcisi, miktar, tedarikci }: AlimPlaniOzellikleri) {
   const { yeni, acik } = alimTablolari(l);
   const say = alimSayaclari(l, simdi);
   const tarih = (t: number | null): ReactNode => (t === null || !Number.isFinite(t) ? '—' : <span className="mono">{gunYaz(taban, t)}</span>);
@@ -325,7 +326,7 @@ function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTeda
   const satirTonu = (r: AlimPlaniSatiri): 'hata' | undefined => (DURUM_TONU[r.durum] === 'hata' ? 'hata' : undefined);
   const kpi: [SimgeAdi, string, string, string, string?][] = [
     ['lira', 'Sipariş verilmeli', String(say.verilmeli), `${say.gunuGecti} tanesinin günü geçti`, say.verilmeli ? 'uyari' : 'tamam'],
-    ['clock', 'Termin bekleniyor', String(say.bekleniyor), `${say.yokSayildi} tanesi bir hafta içinde gerekiyor`, say.yokSayildi ? 'hata' : undefined],
+    ['clock', 'Termin bekleniyor', String(say.bekleniyor), 'olması gereken tarihte gelmiş sayıldı', say.bekleniyor ? 'uyari' : undefined],
     ['alert', 'Siparişi geciktirir', String(say.geciktirir), 'termin en geç günden sonra', say.geciktirir ? 'hata' : 'tamam'],
     ['check', 'Karşılıyor', String(say.karsiliyor), 'termin planı tutuyor'],
   ];
@@ -343,7 +344,7 @@ function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTeda
         <table className="tc-tablo tc-pyz-sa" aria-label="Verilecek siparişler">
           <thead><tr>
             <th>Malzeme</th><th>Durum</th><th className="tc-pyz-num">Miktar</th>{fg && <th className="tc-pyz-num">Tutar</th>}
-            <th>En geç sipariş</th><th>Gerekli geliş</th><th>Referans termin</th><th>Tedarikçi</th><th>Siparişler</th>
+            <th>En geç sipariş</th><th>Gerekli geliş</th><th>Tedarik termini</th><th>Tedarikçi</th><th>Siparişler</th>
           </tr></thead>
           <tbody>
             {yeni.length === 0 && <tr><td colSpan={sutunY} className="tc-pyz-kucuk">Verilecek sipariş yok: ihtiyaç stoktan ve açık siparişlerden karşılanıyor.</td></tr>}
@@ -360,7 +361,7 @@ function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTeda
                     {r.siparisGun === null ? '—' : <>{tarih(r.siparisGun)}{r.siparisGun < simdi && <small className="tc-pyz-not">geçti</small>}</>}
                   </Td>
                   <Td b="Gerekli geliş">{tarih(r.gerekli)}</Td>
-                  <Td b="Referans termin">{r.etkin === null ? <span className="tc-pyz-kucuk">tedarik süresi yok</span> : tarih(r.etkin)}</Td>
+                  <Td b="Tedarik termini">{r.tb ? <span className="tc-pyz-kucuk">bekleniyor</span> : tarih(r.soz)}</Td>
                   <Td b="Tedarikçi">{t ?? '—'}</Td>
                   <Td b="Siparişler"><span className="mono">{r.isler.join(', ')}</span></Td>
                 </tr>
@@ -391,11 +392,11 @@ function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTeda
                 <Td b="Gerekli geliş">{tarih(r.gerekli)}</Td>
                 <Td b="En geç">{tarih(r.enGec)}</Td>
                 <Td b="Termin">
-                  {r.tm === 'termin' ? tarih(r.soz) : <span className="tc-pyz-kucuk">Satın alma girer</span>}
+                  {r.tb ? <span className="tc-pyz-kucuk">bekleniyor</span> : tarih(r.soz)}
                   {r.ref !== null && <small className="tc-pyz-not">{`referans ${gunYaz(taban, r.ref)}`}</small>}
                 </Td>
                 <Td b="Planda geliş">
-                  {tarih(r.etkin)}<small className="tc-pyz-not">{r.tm === 'termin' ? 'termin + tedarikçi gecikmesi' : 'referans terminden'}</small>
+                  {tarih(r.etkin)}<small className="tc-pyz-not">{r.tb ? 'olması gereken tarih' : r.tm === 'sa-termin' ? 'Satın Alma termini' : 'termin + tedarikçi gecikmesi'}</small>
                 </Td>
                 <Td b="Siparişler"><span className="mono">{r.isler.join(', ')}</span></Td>
               </tr>
@@ -404,9 +405,8 @@ function AlimPlani({ l, fg, dar, taban, simdi, A, fiyat, malzemeAdi, malzemeTeda
         </table>
       </div>
       <p className="tc-pyz-kucuk">
-        {`Sipariş termin olmadan verilebilir; termin gelene kadar geliş tedarik süresi × katsayısından (malzemenin kendi katsayısı, yoksa genel ${sayiYaz(A.katMal, 2)}) tahmin edilir. `}
-        {`İhtiyacına ${sayiYaz(A.esik, 0)} gün kalmış ve termini girilmemiş sipariş yok sayılır: plan gelişi bugünden tam tedarik süresi olarak alır ve uyarır. `}
-        En geç sipariş: siparişin terminini kaçırmadan verilebileceği son gün (tedarik süresi düşülmüş).
+        Termini girilmemiş malzeme olması gereken tarihte gelmiş sayılır, plan işi kaydırmaz; termin girilince plan o günü kullanır, geç kalırsa katı kipte iş
+        bekler. En geç sipariş: siparişin terminini kaçırmadan verilebileceği son gün (tedarik süresi düşülmüş).
       </p>
     </Kart>
   );

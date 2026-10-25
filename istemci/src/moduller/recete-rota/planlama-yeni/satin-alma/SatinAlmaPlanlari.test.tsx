@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { SatinAlmaFasonPlani, SatinAlmaMalzemePlani } from '../../disari.ts';
@@ -56,7 +57,12 @@ function sunucu(calisma: unknown, durum = 200): string[] {
   return istekler;
 }
 
-const ciz = (ekran: React.ReactNode) => render(<BildirimSaglayici><MemoryRouter>{ekran}</MemoryRouter></BildirimSaglayici>);
+// Oturum okunamaz (uç reddeder): termin yazma yetkisi görünmez.
+const ciz = (ekran: React.ReactNode) => render(
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <BildirimSaglayici><MemoryRouter>{ekran}</MemoryRouter></BildirimSaglayici>
+  </QueryClientProvider>,
+);
 const BEKLE = { timeout: 10000 };
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -82,7 +88,9 @@ describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
     expect(await screen.findByText(/planın kendi kopyası kullanılıyor/, {}, BEKLE)).toBeTruthy();
     const plan = screen.getByRole('table', { name: 'Verilecek siparişler' });
     expect(within(plan).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Tutar');
-    expect(within(plan).getByText('Sipariş verilmedi')).toBeTruthy();
+    expect(within(plan).getByText('Termin bekleniyor')).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'Tedarik terminleri' })).getByText('M-1')).toBeTruthy();
+    expect(screen.queryByLabelText('M-1 tedarik termini')).toBeNull();
     expect(screen.queryByText(/ TL$/)).toBeNull();
     expect((screen.getByRole('button', { name: 'Hesapla' }) as HTMLButtonElement).disabled).toBe(true);
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);

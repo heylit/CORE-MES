@@ -49,11 +49,12 @@ describe('Malzeme satın alma planı', () => {
     stokSun();
     ac('/recete-rota/planlama-yeni/malzplan');
     expect(await screen.findByText(/Stok ve açık satın alma siparişleri stoktan okundu\./, {}, { timeout: 10000 })).toBeTruthy();
-    // 20 kg gerekir: 6 stoktan, 4 açık siparişten, 10 yeni alım (10 TL/kg). Eksiğe tedarik süresinden tahmini satır kurulur; ihtiyacı
-    // 7 gün içinde olduğu için "Sipariş verilmedi".
+    // 20 kg gerekir: 6 stoktan, 4 açık siparişten, 10 yeni alım (10 TL/kg). Eksik satırının Satın Alma termini yok: olması gereken tarihte
+    // gelmiş sayılır, "Termin bekleniyor" (554 a). Plan yazan malzeme başına termini girebilir (533 a); girmeden yazma isteği gitmez.
     const plan = screen.getByRole('table', { name: 'Verilecek siparişler' });
     expect(within(plan).getAllByRole('columnheader').map((h) => h.textContent)).toContain('Tutar');
-    expect(within(plan).getByText('Sipariş verilmedi')).toBeTruthy();
+    expect(within(plan).getByText('Termin bekleniyor')).toBeTruthy();
+    expect(screen.getByLabelText('11 tedarik termini')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Açık siparişler' })).getByText('S-1')).toBeTruthy();
     expect(screen.getAllByText('100 TL').length).toBeGreaterThan(0);
     expect(screen.getByText('Plan motoru bağlanınca açılır.')).toBeTruthy();
@@ -91,13 +92,14 @@ describe('Malzeme satın alma planı', () => {
     stokSun();
     ac('/recete-rota/planlama-yeni/malzplan');
     const durum = await screen.findByText(/^En sıcak satır/, { selector: '.tc-isi-durum span' }, { timeout: 10000 });
-    // Açık sipariş (2099 termini) en geç gelişten sonra; eksik 10 kg'nin siparişi verilmedi. Açık alım: 4 kg x 10 TL (483/3).
-    expect(durum.textContent).toMatch(/^En sıcak satır 11: .*1 malzeme için sipariş verilmedi, 2 malzeme işi geciktirebilir; açık alım 40 TL\.$/);
+    // Açık sipariş (2099 termini) en geç gelişten sonra; eksik 10 kg'nin siparişi verilmedi, termini beklenir ve işi geciktirmez (554 a).
+    // Açık alım: 4 kg x 10 TL (483/3).
+    expect(durum.textContent).toMatch(/^En sıcak satır 11: .*1 malzeme için sipariş verilmedi, 1 malzeme işi geciktirebilir; açık alım 40 TL\.$/);
     const izgara = screen.getByRole('group', { name: 'Malzeme × gün, stok yetiyor mu' });
     const son = within(izgara).getAllByRole('button').find((b) => /en geç sipariş günü/.test(b.getAttribute('aria-label') ?? ''));
     expect(son?.textContent).toBe('son');
     fireEvent.click(son as HTMLElement);
-    const acilim = screen.getByRole('region', { name: '11 · Sipariş verilmedi' });
+    const acilim = screen.getByRole('region', { name: '11 · Termin bekleniyor' });
     expect(within(acilim).getByText(/11 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
     expect(within(acilim).getByText(/Bunu değiştirme yetkiniz yok\./)).toBeTruthy();
     expect((within(acilim).getByRole('button', { name: /E-1 çizelgede/ }) as HTMLButtonElement).disabled).toBe(true);

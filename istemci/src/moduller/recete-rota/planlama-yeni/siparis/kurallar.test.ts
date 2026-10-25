@@ -7,7 +7,7 @@ import {
   fasonKalemleri, malzemeKalemleri, ortusmeAdaylari, siparisIsisi, siparisMaliyetleri, terminIsisi, tl,
 } from './kurallar.ts';
 import { kaynakKur } from '../malzeme/kaynak.ts';
-import { alimPlani, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs, terminAyari as alimTerminAyari } from '../malzeme/kurallar.ts';
+import { alimPlani, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs } from '../malzeme/kurallar.ts';
 import { calismaKur } from './test-veri.ts';
 
 describe('P2 saf hesapları', () => {
@@ -96,9 +96,9 @@ describe('P2 saf hesapları', () => {
   });
 
   // Eski çerçeve (zz30-isi ISI.terminler, zz29-gorsel gvTmKalemler) malzeme kalemini satın alma listesinden çizer; 44ef834'teki yeni ekran yerine
-  // hücreleri kapalı tek "Malzeme" satırı koyuyordu (malzeme kalemi 0). Beklenen değerler eski formülle elde hesaplandı: S1 malzemesi 2 x 10 = 20 kg,
-  // stok 5, eksik 15; sipariş verilmemiş, tahmini geliş şimdi (7) + tedarik 3 gün x katsayı 1 = 79. saat; plan 8. saatte istiyor.
-  it('Terminler malzeme kalemini satın alma planından çizer: eski çerçevenin değerleri (518 a)', () => {
+  // hücreleri kapalı tek "Malzeme" satırı koyuyordu (malzeme kalemi 0). S1 malzemesi 2 x 10 = 20 kg, stok 5, eksik 15; sipariş verilmemiş ve
+  // Satın Alma termini yok: 554 a ile olması gereken tarihte (plan 8. saatte istiyor) gelmiş sayılır, bekleme yoktur. En geç sipariş günü geçti.
+  it('Terminler malzeme kalemini satın alma planından çizer; termini beklenen malzeme işi bekletmez (518 a, 554 a)', () => {
     const c = calismaKur((x) => {
       Object.assign(x.D.siparisler[0]!, { malzeme: [{ kod: '7', miktar: 2 }] });
       Object.assign(x.D, { malzemeler: [{ kod: '7', ad: 'Deneme cubuk', birim: 'kg', stok: 5, tedarikGun: 3, muayeneGun: 0 }] });
@@ -106,17 +106,18 @@ describe('P2 saf hesapları', () => {
     const taban = tabanMs(c.D.meta!.baslangic as string)!;
     const k = kaynakKur(c.D, taban, null);
     const g = motorGirdisi({ D: c.D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler: planIslemleri(c.plan), biten: { siparis: new Set(), adim: new Set() }, simdi: calismaSimdisi(c), taban });
-    const K = malzemeKalemleri(c.D, alimPlani(g, taban, undefined, alimTerminAyari(c.D)), calismaSimdisi(c));
-    expect(K.map((x) => [x.ad, x.durum, x.ger, x.son, x.tahmini, x.alt])).toEqual([['7', 'Sipariş geç kaldı', 8, 79, true, 'Deneme cubuk · 15 kg']]);
+    const K = malzemeKalemleri(c.D, alimPlani(g, taban), calismaSimdisi(c));
+    expect(K.map((x) => [x.ad, x.durum, x.ger, x.son, x.tahmini, x.alt])).toEqual([['7', 'Sipariş geç kaldı', 8, 8, true, 'Deneme cubuk · 15 kg']]);
     const V = terminIsisi(c, [...K, ...fasonKalemleri(c.D, fasonSatirlari(c, kayitliPlan(c)!))]);
     // Yeni: malzeme satırı gerçek kalemdir, kapalı yer tutucu yoktur.
     expect(V.satirlar.map((r) => [r.k, r.simge])).toEqual([['m:0:7', 'box'], ['f:S1.a2', 'truck']]);
     expect(V.satirlar.some((r) => Object.values(r.h).some((h) => h.kapali))).toBe(false);
-    expect(V.satirlar[0]!.h['g3']).toMatchObject({ sm: 'box', kd: 4, v: '+3g' });
-    expect(V.ust.metin).toBe('En koyu satır 7: plan 19.10 Pzt istiyor, geliş 22.10 Per (3 gün bekleme). 1 kalem gerekenden geç geliyor, 0 kalemin geliş tarihi yok; 2 kalem işi kaydırıyor.');
+    expect(V.satirlar[0]!.h['g0']).toMatchObject({ sm: 'box', iyi: true, bayrak: true, tahmin: 'Satın Alma termini bekleniyor, olması gereken tarih' });
+    expect(V.ust.metin).toBe('En koyu satır 7: plan 19.10 Pzt istiyor, geliş 19.10 Pzt (0 gün bekleme). 0 kalem gerekenden geç geliyor, 0 kalemin geliş tarihi yok; 2 kalem işi kaydırıyor.');
   });
 
-  it('tedarik süresi olmayan, siparişi verilmemiş malzemenin geliş tarihi yoktur (eski "!" hücresi)', () => {
+  // 554 a: tedarik süresi olmayan malzemenin de geliş tarihi vardır (olması gereken); eski "!" hücresi (geliş tarihi yok) malzemede çıkmaz.
+  it('tedarik süresi olmayan, siparişi verilmemiş malzeme olması gereken tarihte gelmiş sayılır (554 a)', () => {
     const c = calismaKur((x) => {
       Object.assign(x.D.siparisler[0]!, { malzeme: [{ kod: '7', miktar: 2 }] });
       Object.assign(x.D, { malzemeler: [{ kod: '7', birim: 'kg', stok: 0 }] });
@@ -125,8 +126,8 @@ describe('P2 saf hesapları', () => {
     const k = kaynakKur(c.D, taban, null);
     const g = motorGirdisi({ D: c.D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler: planIslemleri(c.plan), biten: { siparis: new Set(), adim: new Set() }, simdi: calismaSimdisi(c), taban });
     const V = terminIsisi(c, malzemeKalemleri(c.D, alimPlani(g, taban), calismaSimdisi(c)));
-    expect(V.satirlar[0]!.h['g0']).toMatchObject({ kd: 4, sm: 'alert', v: '!' });
-    expect(V.ust.metin).toMatch(/^En koyu satır 7: geliş tarihi yok, plan 19\.10 Pzt istiyor\. .* 1 kalemin geliş tarihi yok;/);
+    expect(V.satirlar[0]!.h['g0']).toMatchObject({ sm: 'box', iyi: true, bayrak: true });
+    expect(V.ust.metin).toMatch(/ 0 kalemin geliş tarihi yok; 0 kalem işi kaydırıyor\.$/);
   });
 
   it('elle çarpan sınırı: maliyet okuyan 3, plan yazan 2, ikisi de yoksa 0', () => {
