@@ -6,7 +6,7 @@ import {
 import { ornekCalisma } from './test-verisi.ts';
 
 describe('P3 saf hesaplar', () => {
-  it('sipariş maliyeti: malzeme, tezgâh saati ve fason; genel gider girilmemişse sıfır, kâr tutardan', () => {
+  it('sipariş maliyeti: malzeme, tezgâh saati ve fason; amortisman girilmemişse genel gider bilinmez (null), kâr tutardan', () => {
     const c = ornekCalisma();
     const b = maliyetBaglami(c);
     expect(b).not.toBeNull();
@@ -19,7 +19,7 @@ describe('P3 saf hesaplar', () => {
     // Tampon açıkken acil pay (%5) çalışma süresinden düşer: 2 sa × 0,95 × 100 TL.
     expect(m?.isl).toBeCloseTo(190);
     expect(m?.fas).toBe(10);
-    expect(m?.gg).toBe(0);
+    expect(m?.gg).toBeNull();
     expect(m?.top).toBeCloseTo(230);
     expect(m?.kar).toBeCloseTo(770);
     expect(m?.eksik).toEqual([]);
@@ -142,7 +142,7 @@ describe('P3 saf hesaplar', () => {
   });
 
   it('kalem kipinde genel gider saat ücreti olmayan tezgâhın adımına da yazılır; tek oranda yazılmaz (msGgOran, ymSipMaliyet)', () => {
-    const ms = { kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }] };
+    const ms = { kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }], tez: { T1: { bedel: 120000, omur: 10 }, T2: { bedel: 60000, omur: 10 } } };
     const ucretsiz = [{ id: 'T1', ad: 'Deneme torna', grup: 'TORNA', ucret: null, verim: 1 }, { id: 'T2', ad: 'Deneme freze', grup: 'FREZE', ucret: null, verim: 1 }];
     const kalem = ornekCalisma({ D: { tezgahlar: ucretsiz, maliyetSis: { ...ms, kip: 'kalem' } } });
     const bk = maliyetBaglami(kalem);
@@ -151,12 +151,25 @@ describe('P3 saf hesaplar', () => {
     const mk = siparisMaliyeti(bk, s);
     expect(mk?.isl).toBe(0);
     expect(mk?.eksik).toContain('T1 saat maliyeti');
-    expect(mk?.gg).toBeCloseTo(2 * genelGiderOrani(kalem.D, bk.G, 'T1'));
+    expect(mk?.gg).toBeCloseTo(2 * (genelGiderOrani(kalem.D, bk.G, 'T1') ?? Number.NaN));
     expect(mk?.gg ?? 0).toBeGreaterThan(0);
     const tek = ornekCalisma({ D: { tezgahlar: ucretsiz, maliyetSis: { ...ms, kip: 'tek' } } });
     const bt = maliyetBaglami(tek);
     if (!bt) throw new Error('bağlam yok');
     expect(siparisMaliyeti(bt, s)?.gg).toBe(0);
+  });
+
+  it('kalem kipinde amortismanı bilinmeyen tezgâhın oranı ve siparişin genel gideri bilinmez (null); toplam onu atlar', () => {
+    const ms = { kip: 'kalem', kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }] };
+    const c = ornekCalisma({ D: { maliyetSis: ms } });
+    const b = maliyetBaglami(c); const s = c.D.siparisler[0];
+    if (!b || !s) throw new Error('bağlam yok');
+    expect(b.G.tez.every((z) => z.oran === null)).toBe(true);
+    expect(b.G.ort).toBeNull();
+    expect(genelGiderOrani(c.D, b.G, 'T1')).toBeNull();
+    const m = siparisMaliyeti(b, s);
+    expect(m?.gg).toBeNull();
+    expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
   });
 
   it('tezgâhın oranı yoksa atölye ortalaması; ortalama yoksa ya da sıfırsa tek orana düşer', () => {
