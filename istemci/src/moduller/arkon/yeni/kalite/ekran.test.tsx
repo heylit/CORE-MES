@@ -42,6 +42,16 @@ describe('A4 sayfaları', () => {
     await vi.waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol.startsWith('/arkon/belgeler/requests/'))).toBe(true); });
   }, 30000);
 
+  it('Kalite: seçilen numunenin teknik resmi orta alanda açılır (yer tutucu yok)', async () => {
+    sunucuKur(KALITE, { belgeler });
+    arkonAc('/arkon/yeni/kalite');
+    const b = await bolum('Kalite');
+    const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
+    fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
+    expect(await within(b).findByRole('toolbar', { name: 'Teknik resim araçları' }, { timeout: 10000 })).toBeTruthy();
+    expect(within(b).queryByText('Bu bölüm hazırlanıyor')).toBeNull();
+  }, 30000);
+
   it('Kalite: ilk parça kararının Kalite Merkezi\'nde olduğu yazar; bağlantı yalnız o sayfayı görene, onay düğmesi yerinde (501 a)', async () => {
     sunucuKur(KALITE, { belgeler });
     arkonAc('/arkon/yeni/kalite');
