@@ -1,4 +1,4 @@
-import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliyaAlmaGecmisiCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
@@ -512,6 +512,54 @@ export function paPlanKontrol(f: PlanFarki | null, canliVar: boolean): KontrolMa
 }
 export const paRedVar = (K: KontrolMaddesi[]): boolean => K.some((k) => k[0] === 'red');
 
+// --- ek mesai (eski paEkSaat, haftaMesai, MESAI_BUTCE; 507 2 a) ---
+// Çalışmanınki sayfanın kaydından eskisi gibi hesaplanır: vardiya süresi (gece yarısını geçer, mola düşülmez), hafta planın başlangıcından
+// 7 günlük dilim, bütçe çalışmanın mesaiHafta'sı (yoksa 8). Senaryonunki sunucunun ekMesai'sinden. Eskide bütçe 0 "sınır yok" demekti; sunucu
+// 0'da her ek vardiyayı aşım sayar, ekran eski kuralı izler.
+export const MESAI_HAFTA = 8;
+export interface EkMesaiOzeti { saat: number; butce: number; asildi: boolean }
+const saatDakika = (x: unknown): number => { const [h, m] = String(x).split(':').map(Number); return (h || 0) + (m || 0) / 60; };
+export function vardiyaSaati(D: PlanVerisi, id: string): number {
+  const v = (D.vardiyalar ?? []).find((x) => String(x.id) === id);
+  if (!v) return 0;
+  const h = saatDakika(v.bit) - saatDakika(v.bas);
+  return h <= 0 ? h + 24 : h;
+}
+export function calismaEkMesai(c: PlanlamaCalismasi): EkMesaiOzeti {
+  const b = Number(c.param.mesaiHafta ?? MESAI_HAFTA); const butce = Number.isFinite(b) ? b : 0;
+  const hafta: Record<number, number> = {}; let saat = 0;
+  for (const e of c.ekMesai) {
+    const gun = Number(e.gun); if (!Number.isFinite(gun)) continue;
+    const h = vardiyaSaati(c.D, String(e.vardiya)); saat += h;
+    const k = Math.floor(gun / 7); hafta[k] = (hafta[k] ?? 0) + h;
+  }
+  return { saat, butce, asildi: butce > 0 && Object.values(hafta).some((h) => h > butce + 1e-9) };
+}
+export const sunucuEkMesai = (p: PlanCevabi | null): EkMesaiOzeti | null => {
+  const x = p?.ekMesai;
+  return x ? { saat: x.toplamSaat, butce: x.haftaSiniriSaat, asildi: x.haftaSiniriSaat > 0 && x.asildi } : null;
+};
+export const ekMesaiKontrol = (e: EkMesaiOzeti | null): KontrolMaddesi[] => (!e ? []
+  : [e.asildi ? ['red', `Haftalık ek mesai bütçesi (${e.butce} sa) aşılıyor`] : ['ok', 'Ek mesai bütçe içinde']]);
+const GUNLER = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+// "26.10 Pzt" (eski fmtDT(...).slice(0, 9)), sunucunun tarihinden.
+export function tarihGunYaz(t: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); if (!m) return t;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return `${m[3]}.${m[2]} ${GUNLER[(d.getUTCDay() + 6) % 7] ?? ''}`;
+}
+// Eski paVeriFark'ın ek mesai satırları: senaryoda eklenen ve canlıdan kaldırılan ek vardiyalar.
+export function ekMesaiFarki(a: PlanCevabi, b: PlanCevabi | null): ['clock' | 'minus', string][] {
+  const k = (x: { makineId: number; gun: string; vardiyaId: number }) => `${x.makineId}|${x.gun}|${x.vardiyaId}`;
+  const A = a.ekMesai?.satirlar ?? [], B = b?.ekMesai?.satirlar ?? [];
+  const sa = new Set(A.map(k)), sb = new Set(B.map(k));
+  const yaz = (p: PlanCevabi, x: { makineId: number; gun: string; vardiyaId: number }) => `${kaynakAdi(p, { tur: 'makine', id: x.makineId })}, ${tarihGunYaz(x.gun)}, vardiya ${x.vardiyaId}`;
+  return [
+    ...A.filter((x) => !sb.has(k(x))).map((x): ['clock', string] => ['clock', `Ek mesai: ${yaz(a, x)}`]),
+    ...(b ? B.filter((x) => !sa.has(k(x))).map((x): ['minus', string] => ['minus', `Kaldırılan ek mesai: ${yaz(b, x)}`]) : []),
+  ];
+}
+
 // Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
 export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean): KontrolMaddesi[] {
   const K: KontrolMaddesi[] = [
@@ -670,14 +718,17 @@ export function pgSatirlar(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, cx:
     return { j, ad: u?.ad ?? s?.urun ?? '', adet: s?.adet ?? null, tb, cb, gb, due, fark: gb.t != null ? gb.t - tb : null, plan: cb != null ? cb - tb : null, N: pgNedenler(c, p, K, cx, hazir, j) };
   }).sort((a, b) => Math.abs(b.fark ?? 0) - Math.abs(a.fark ?? 0));
 }
-export interface PgGostergeleri { biten: number; uyan: number; sevk: number; zaman: number; ort: number | null; degisiklik: number }
-export function pgGostergeleri(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, L: PgSatiri[]): PgGostergeleri {
+// Plan değişikliği: taban sonrası canlıya almalar ve kişi başına sayı sunucunun geçmişinden (510 a); geçmiş okunamazsa sayı sürüm farkından, adsız.
+export interface PgGostergeleri { biten: number; uyan: number; sevk: number; zaman: number; ort: number | null; degisiklik: number; kimler: [string, number][] }
+export function pgGostergeleri(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, L: PgSatiri[], gecmis: CanliyaAlmaGecmisiCevabi | null = null): PgGostergeleri {
   const g = gercekler(c); const T = K.taban; const esik = sapmaEsik(c);
   const biten = Object.keys(g).filter((id) => { const r = p.ops[id]; return g[id]?.C != null && r && T[r.job]?.ops[id]; });
   const uyan = biten.filter((id) => { const r = p.ops[id]; const t0 = r ? T[r.job]?.ops[id] : undefined; return t0 && (g[id]?.C ?? Infinity) - t0.C <= esik; });
   const sevk = L.filter((x) => !x.gb.tahmin && x.gb.t != null); const zam = sevk.filter((x) => x.due == null || (x.gb.t ?? Infinity) <= x.due);
   const kay = L.filter((x) => x.fark != null); const ort = kay.length ? kay.reduce((a, x) => a + (x.fark ?? 0), 0) / kay.length : null;
-  return { biten: biten.length, uyan: uyan.length, sevk: sevk.length, zaman: zam.length, ort, degisiklik: K.tabanSurum === null ? 0 : Math.max(0, K.planSurumu - K.tabanSurum) };
+  return { biten: biten.length, uyan: uyan.length, sevk: sevk.length, zaman: zam.length, ort,
+    ...(gecmis ? { degisiklik: gecmis.toplam, kimler: gecmis.kisiler.map((x): [string, number] => [x.kisi ?? '—', x.sayi]) }
+      : { degisiklik: K.tabanSurum === null ? 0 : Math.max(0, K.planSurumu - K.tabanSurum), kimler: [] }) };
 }
 // pgNedenOzet: tabandan sapan siparişlerde neden başına toplam saat ve sipariş sayısı.
 export function pgNedenOzeti(c: PlanlamaCalismasi, L: PgSatiri[]): { k: PgNedeni; ad: string; simge: string; s: number; n: number }[] {

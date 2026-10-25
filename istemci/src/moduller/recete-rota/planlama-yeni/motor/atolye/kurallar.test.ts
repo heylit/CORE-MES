@@ -4,7 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, canliFarkOzeti, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, type SunucuSenaryosu,
 } from './kurallar.ts';
 
@@ -217,9 +217,32 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     const s3 = L.find((x) => x.j === '3');
     expect(s3?.gb.basladi).toBe(true);
     expect(s3?.plan).toBeCloseTo(1, 1);
-    expect(pgGostergeleri(gc, p, K, L).degisiklik).toBe(2);
+    expect(pgGostergeleri(gc, p, K, L)).toMatchObject({ degisiklik: 2, kimler: [] });
+    const gecmis = { tabanZamani: '2026-10-20T08:00:00Z', toplam: 3, kisiler: [{ kisi: 'Ayşe', sayi: 2 }, { kisi: null, sayi: 1 }], son: [] };
+    expect(pgGostergeleri(gc, p, K, L, gecmis)).toMatchObject({ degisiklik: 3, kimler: [['Ayşe', 2], ['—', 1]] });
     expect(pgSerit(gc, p, K, 128).satirlar.length).toBeGreaterThan(0);
     expect(Array.isArray(pgNedenOzeti(gc, L))).toBe(true);
     expect(pgKaynakKur({ planSurumu: 0, isler: [] }, c, p)).toEqual({ taban: {}, canli: {}, planSurumu: 0, tabanSurum: null });
+  });
+
+  it('ek mesai: çalışmanınki eskisi gibi (vardiya süresi, 7 günlük hafta, bütçe 0 sınırsız); senaryonunki sunucudan; fark satırları', () => {
+    const { c } = kur();
+    const D = { ...c.D, vardiyalar: [{ id: 'V3', bas: '22:00', bit: '06:00' }, { id: 'V1', bas: '08:00', bit: '16:00' }] };
+    const cc = { ...c, D, param: { ...c.param, mesaiHafta: 8 }, ekMesai: [{ m: '1', gun: 1, vardiya: 'V3' }, { m: '2', gun: 2, vardiya: 'V1' }, { m: '1', gun: 8, vardiya: 'V1' }] } as PlanlamaCalismasi;
+    expect(calismaEkMesai(cc)).toEqual({ saat: 24, butce: 8, asildi: true });
+    expect(ekMesaiKontrol(calismaEkMesai(cc))).toEqual([['red', 'Haftalık ek mesai bütçesi (8 sa) aşılıyor']]);
+    expect(calismaEkMesai({ ...cc, param: { ...cc.param, mesaiHafta: 0 } } as PlanlamaCalismasi).asildi).toBe(false);
+    expect(calismaEkMesai({ ...cc, param: { ...cc.param, mesaiHafta: 16 } } as PlanlamaCalismasi).asildi).toBe(false);
+    const em = (satirlar: { makineId: number; gun: string; vardiyaId: number; saat: number }[], sinir = 8, asildi = false) => ({
+      satirlar, toplamSaat: satirlar.reduce((a, x) => a + x.saat, 0), haftaSiniriSaat: sinir, haftalar: [], asanHaftalar: [], asildi,
+    });
+    const plan = (e: ReturnType<typeof em>) => ({ kaynaklar: [{ tur: 'makine', id: 1, kod: 'M1', ad: 'M1' }], yerlesimler: [], emirler: [], gostergeler: {}, ekMesai: e }) as never;
+    const a = plan(em([{ makineId: 1, gun: '2026-10-26', vardiyaId: 3, saat: 8 }], 8, true));
+    const b = plan(em([{ makineId: 1, gun: '2026-10-27', vardiyaId: 3, saat: 8 }]));
+    expect(sunucuEkMesai(a)).toEqual({ saat: 8, butce: 8, asildi: true });
+    expect(sunucuEkMesai(plan(em([], 0, true)))?.asildi).toBe(false);
+    expect(sunucuEkMesai(null)).toBeNull();
+    expect(ekMesaiFarki(a, b)).toEqual([['clock', 'Ek mesai: M1, 26.10 Pzt, vardiya 3'], ['minus', 'Kaldırılan ek mesai: M1, 27.10 Sal, vardiya 3']]);
+    expect(tarihGunYaz('2026-11-01')).toBe('01.11 Paz');
   });
 });

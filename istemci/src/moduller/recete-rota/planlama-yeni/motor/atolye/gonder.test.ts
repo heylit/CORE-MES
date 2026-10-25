@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { calismayiGonder, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -83,5 +83,36 @@ describe('taslakAdi', () => {
     expect(taslakAdi('onay', '25.10 Cum ', 'Ayşe', 2)).toBe('Onay 25.10 Cum · Ayşe');
     expect(taslakAdi('canli', '25.10 Cum', 'Ayşe', 2)).toBe('Onay 25.10 Cum · Ayşe');
     expect(taslakAdi('deneme', '25.10 Cum', 'Ayşe', 2)).toBe('Deneme 3 · 25.10 Cum');
+  });
+});
+
+describe('Çalışmaya aç ve geri al (507 3 a, 508 2 a)', () => {
+  it('önce kaydeder, kayıtlı sürümle taslağı çalışmaya yazar; atlananlar özette', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8, yazilan: 4, kilitli: 1, atlanan: ['E-1|10'] } as never);
+    const k = komut(8);
+    const r = await calismayaAc({ komut: k, taslakId: 12, taslakSurumu: 3 });
+    expect(k.kaydet).toHaveBeenCalledOnce();
+    expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/recete-rota/planlama-calismasi/taslaktan-yaz', { taslakId: 12, taslakSurumu: 3, calismaSurumu: 8 }]);
+    expect(acmaOzeti(r)).toBe('4 iş çalışmaya yazıldı, 1 kilit; 1 iş çalışmada karşılığı olmadığı için yazılmadı (E-1|10). Plan yeniden çözülmeli.');
+  });
+
+  it('kaydedilemezse yazmaz; sunucu reddederse (eski sürüm) iletisi gösterilir', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValue(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Taslak bu arada değişti.' }));
+    await expect(calismayaAc({ komut: komut(null), taslakId: 12, taslakSurumu: 3 })).rejects.toThrow(/çalışma kaydedilemedi/);
+    expect(post).not.toHaveBeenCalled();
+    const h = await calismayaAc({ komut: komut(8), taslakId: 12, taslakSurumu: 3 }).catch((e: unknown) => e);
+    expect(gonderHataIletisi(h)).toBe('Plan çalışmaya açılamadı: Taslak bu arada değişti.');
+  });
+
+  it('geri al yazmanın sürümüyle gider; arada başka yazma olduysa ret iletisi', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValueOnce({ calismaSurumu: 10, donulenSurum: 8 } as never)
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Çalışma bu arada değişti.' }));
+    expect(await calismayiGeriAl(9)).toEqual({ calismaSurumu: 10, donulenSurum: 8 });
+    expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/recete-rota/planlama-calismasi/geri-al', { calismaSurumu: 9 }]);
+    expect(gonderHataIletisi(await calismayiGeriAl(9).catch((e: unknown) => e))).toBe('Geri alınamadı: Çalışma bu arada değişti.');
+  });
+
+  it('taslağa geçmeyen ek vardiya gönderme özetinde söylenir', () => {
+    expect(gonderOzeti({ yazilan: 2, atlanan: 0, yazilamaz: [], ekMesaiAtlanan: 1 })).toBe('2 iş taslağa yazıldı; 1 ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi.');
   });
 });

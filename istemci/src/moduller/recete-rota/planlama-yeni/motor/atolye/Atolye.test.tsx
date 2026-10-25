@@ -39,13 +39,14 @@ const DEPO = {
 function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
+  const yenile = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile: vi.fn(),
+    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile,
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
-  return { git };
+  return { git, yenile };
 }
 function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
   const [olcek, setOlcek] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
@@ -75,7 +76,10 @@ describe('PlanlamaAtolyesi', () => {
 
   it('Plan ve gerçekleşen: taban ve canlı sunucudan; okunana kadar hazırlanıyor, ret iletisi, canlı yoksa boş, varsa göstergeler; çalışmaya yazmaz', async () => {
     let cevap: Promise<unknown> = new Promise(() => undefined);
-    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? cevap : Promise.reject(new Error('yok')))) as never);
+    const gecmis = { tabanZamani: '2026-10-20T08:00:00Z', toplam: 3, kisiler: [{ kisi: 'Ayşe', sayi: 2 }, { kisi: 'Mehmet', sayi: 1 }], son: [] };
+    let gecmisCevap: Promise<unknown> = Promise.reject(new Error('yok'));
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? cevap
+      : yol === '/plan/canliya-alma-gecmisi' ? gecmisCevap : Promise.reject(new Error('yok')))) as never);
     const c = ornekCalisma();
     const { komut } = komutKur(c);
     const sekme = () => { ac({ c, komut }); fireEvent.click(screen.getByRole('tab', { name: 'Plan ve gerçekleşen' })); };
@@ -101,6 +105,13 @@ describe('PlanlamaAtolyesi', () => {
     await waitFor(() => expect(screen.getByText('Plana uyum')).toBeTruthy());
     expect(screen.getByRole('region', { name: 'Sipariş bazında' })).toBeTruthy();
     expect(within(screen.getByText('Plan değişikliği').parentElement as HTMLElement).getByText('1')).toBeTruthy();
+    expect(screen.getByText('taban sonrası canlıya alma')).toBeTruthy();
+    cleanup();
+    gecmisCevap = Promise.resolve(gecmis);
+    sekme();
+    await waitFor(() => expect(screen.getByText('Ayşe 2 · Mehmet 1')).toBeTruthy());
+    expect(within(screen.getByText('Plan değişikliği').parentElement as HTMLElement).getByText('3')).toBeTruthy();
+    expect(get).toHaveBeenCalledWith('/plan/canliya-alma-gecmisi');
     expect(vi.mocked(komut.degistir).mock.calls.map((x) => x[0])).not.toContain('Taban plan');
     get.mockRestore();
   });
@@ -228,6 +239,43 @@ describe('PlanlamaAtolyesi', () => {
     expect(post.mock.calls.map((x) => x[0])).toEqual(['/recete-rota/planlama-calismasi/taslak-yaz', '/plan/senaryolar/9/onaya-gonder', '/plan/senaryolar/9/canliya-al']);
     expect(get).toHaveBeenCalledWith('/plan/senaryolar');
     post.mockRestore();
+    get.mockRestore();
+  });
+
+  it('Onay sekmesi, senaryo: Çalışmaya aç önce sorar, taslağı çalışmaya yazar, sayfayı yeniden okur; bildirimden geri alınır', async () => {
+    const { yenile } = ac({ c: guncel() });
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Senaryo 2/ }));
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('/taslaktan-yaz')
+      ? { calismaSurumu: 9, oncekiSurum: 8, yazilan: 3, kilitli: 0, atlanan: [] }
+      : { calismaSurumu: 10, donulenSurum: 8 })) as never);
+    fireEvent.click(screen.getByRole('button', { name: 'Çalışmaya aç' }));
+    expect(post).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Yükle' }));
+    await waitFor(() => expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/recete-rota/planlama-calismasi/taslaktan-yaz', { taslakId: 2, taslakSurumu: 4, calismaSurumu: 8 }]));
+    await waitFor(() => expect(screen.getByText('"Senaryo 2" çalışmaya yüklendi: 3 iş çalışmaya yazıldı. Plan yeniden çözülmeli.')).toBeTruthy());
+    expect(yenile).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(screen.getByRole('region', { name: 'Bildirimler' })).getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => expect(post.mock.calls[1]?.slice(0, 2)).toEqual(['/recete-rota/planlama-calismasi/geri-al', { calismaSurumu: 9 }]));
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(2));
+    post.mockRestore();
+    get.mockRestore();
+  });
+
+  it('Onay sekmesi, senaryo: ek mesai kıyası, veri farkı ve bütçe kontrolü sunucunun ek mesaisinden; bütçe aşımı onaya göndermeyi kapatır', async () => {
+    const em = (gun: string, asildi: boolean) => ({ satirlar: [{ makineId: 1, gun, vardiyaId: 3, saat: 8 }], toplamSaat: 8, haftaSiniriSaat: 8, haftalar: [], asanHaftalar: [], asildi });
+    const plan = (e: unknown) => ({ kaynaklar: [{ tur: 'makine', id: 1, kod: 'M1', ad: 'M1' }], yerlesimler: [], emirler: [], gostergeler: GOSTERGE, ekMesai: e });
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan' ? Promise.resolve(plan(em('2026-10-27', false)))
+      : yol.startsWith('/plan?taslak=') ? Promise.resolve(plan({ ...em('2026-10-26', true), satirlar: [{ makineId: 1, gun: '2026-10-26', vardiyaId: 3, saat: 8 }, { makineId: 1, gun: '2026-10-27', vardiyaId: 3, saat: 8 }], toplamSaat: 16 }))
+        : Promise.reject(new Error('yok')))) as never);
+    ac({ c: guncel() });
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Senaryo 2/ }));
+    await waitFor(() => expect(screen.getByText('Ek mesai: M1, 26.10 Pzt, vardiya 3')).toBeTruthy());
+    expect(screen.getByText('16,0 sa')).toBeTruthy();
+    expect(screen.getByText('Haftalık ek mesai bütçesi (8 sa) aşılıyor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).hasAttribute('disabled')).toBe(true);
     get.mockRestore();
   });
 
