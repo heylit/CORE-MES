@@ -161,6 +161,27 @@ test.describe('A3 Pano ve kuyruk · yetki', () => {
   });
 });
 
+// Kuyruk eski adresine geçti (541, 527 1 a): operatör (yönetici kapısı yok) /kuyruk'ta yeni ekranı görür; eski çerçeve kişi menüsündeki
+// "Eski görünüm" ile /kuyruk/eski'de açılır, "Yeni görünüm" geri getirir.
+test.describe('541 Kuyruk eski adreste', () => {
+  test.use({ hesap: 'ornek.operator1' });
+  test('operatör /kuyruk\'ta yeni Kuyruk\'u görür; eski görünüme gidip döner', async ({ page, ag, ac }) => {
+    await ac('/kuyruk');
+    await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
+    await expect(page.locator('iframe')).toHaveCount(0);
+    await expect(page.locator('.tc-ikinci')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
+    await expect(page).toHaveURL(/\/kuyruk\/eski$/);
+    await expect(page.locator('iframe')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await page.getByRole('menuitem', { name: 'Yeni görünüm' }).click();
+    await expect(page).toHaveURL(/\/kuyruk$/);
+    await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
 test.describe('A4 Kalite, bakım, raporlar · yetki', () => {
   test('yönetici Bakım\'da arıza açabilir ve plan ekleyebilir; Kalite görünümleri yetkiye göre gelir', async ({ page, ac }) => {
     await ac('/arkon/yeni/bakim');
