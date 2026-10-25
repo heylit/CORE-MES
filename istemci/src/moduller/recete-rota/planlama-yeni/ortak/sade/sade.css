@@ -48,6 +48,7 @@
   border: var(--cizgi-ince) solid var(--edge); border-left: var(--b-1) solid var(--run); border-radius: var(--yari-2); background: var(--panel);
 }
 .tc-sade-son > .tc-sade-is-sm { color: var(--run); }
+.tc-sade-son-dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 
 .tc-sade-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
 .tc-sade-adimlar li { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }

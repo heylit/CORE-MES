@@ -26,6 +26,10 @@ export interface SadeTanimi {
   // Kişinin açabildiği formlar (yetki çağıranda süzülür).
   formlar: readonly SihirbazTanimi[];
   tum: () => ReactNode;
+  // Plan var ve bu sayfadaki veriden sonra kurulmamış (eski S.plan && !planGuncel()); sayfa verir, kabuk hesaplamaz.
+  planEski?: boolean;
+  // Planı iyileştirme yetkisi (eski plan.yaz).
+  iyilestirYetkisi?: boolean;
 }
 
 const OZET_EN_COK = 6;
@@ -60,13 +64,23 @@ function FormKarti({ f, ac }: { f: SihirbazTanimi; ac: () => void }) {
   );
 }
 
-// Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır.
-export function SonKart({ metin, kapat }: { metin: string; kapat: () => void }) {
+export const PLAN_ESKI_NOTU = 'Plan bu değişikliği henüz içermiyor. Planı iyileştir deyince yeni plan kurulur; Planlama stüdyosunda inceleyip onaya gönderirsiniz.';
+export const MOTOR_KAPALI_NOTU = 'Plan motoru bu ekrana bağlanınca açılır.';
+
+// Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır. Plan eskiyse eski not ve yetkiliye "Planı iyileştir":
+// motor isteyen düğme yerinde görünür ama pasiftir (357 b).
+export function SonKart({ metin, kapat, planEski = false, iyilestirYetkisi = false }: {
+  metin: string; kapat: () => void; planEski?: boolean; iyilestirYetkisi?: boolean;
+}) {
+  const dugme = planEski && iyilestirYetkisi;
   return (
     <div className="tc-sade-son" role="status">
       <span className="tc-sade-is-sm"><Simge ad="check" boyut="k" /></span>
-      <span className="tc-sade-is-m"><b>{metin}</b><small>Kaydedildi.</small></span>
-      <Dugme simge="x" onClick={kapat} aria-label="Kapat" />
+      <span className="tc-sade-is-m"><b>{metin}</b><small>{planEski ? PLAN_ESKI_NOTU : 'Kaydedildi.'}</small>{dugme && <small>{MOTOR_KAPALI_NOTU}</small>}</span>
+      <span className="tc-sade-son-dugmeler">
+        {dugme && <Dugme tur="birincil" simge="play" disabled title={MOTOR_KAPALI_NOTU}>Planı iyileştir</Dugme>}
+        <Dugme simge="x" onClick={kapat} aria-label="Kapat" />
+      </span>
     </div>
   );
 }
@@ -90,7 +104,7 @@ export function SadeSayfa({ tanim }: { tanim: SadeTanimi }) {
     ...(formlar.length ? [{ anahtar: 'gir' as const, baslik: 'Veri gir', simge: 'plus' as const }] : []),
     { anahtar: 'tum' as const, baslik: 'Tüm ayrıntılar', simge: 'list' as const },
   ];
-  const sonKart = son !== null && <SonKart metin={son} kapat={() => { sonYaz(null); }} />;
+  const sonKart = son !== null && <SonKart metin={son} kapat={() => { sonYaz(null); }} planEski={tanim.planEski} iyilestirYetkisi={tanim.iyilestirYetkisi} />;
   const formKartlari = <div className="tc-sade-formlar">{formlar.map((f) => <FormKarti key={f.id} f={f} ac={() => { formAc(f.id); }} />)}</div>;
 
   let govde: ReactNode;
