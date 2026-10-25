@@ -12,7 +12,6 @@ const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: s
   { kok: '/arkon', yol: '/arkon/yeni' },
   // Eski sistemde Üretim Terminali ve Kuyruk ana menüde ayrı satırdır (497/5 a); yeni ekranda da Arkon sekmesi değil, ayrı sayfadır.
   { kok: '/uretim-terminali', yol: '/arkon/yeni/operator' },
-  { kok: '/kuyruk', yol: '/arkon/yeni/kuyruk' },
   { kok: '/recete-rota', yol: '/recete-rota/yeni' },
   { kok: '/recete-rota', yol: '/recete-rota/planlama-yeni', baslik: 'Planlama' },
   { kok: '/malzemeler', yol: '/malzemeler/yeni-ekran' },
@@ -28,10 +27,29 @@ const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: s
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
 
+// Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
+// kişi menüsündeki "Eski görünüm" ile açılır. Görünürlük sayfanın kendi işlemidir; `eski` sayfanın alt yolu olduğu için aynı işlemle açılır.
+export const TASINAN_EKRANLAR: readonly { yol: `/${string}`; eski: `/${string}` }[] = [
+  { yol: '/kuyruk', eski: '/kuyruk/eski' },
+];
+
+const altYolMu = (adres: string, yol: string): boolean => adres === yol || adres.startsWith(`${yol}/`);
+
 // Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
-// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır.
+// yoksa iki şerit üst üste durur ve üsttekine tıklamak eski ekrana götürür. Alt yollar (`/ik/yeni/izinler`) da sayılır;
+// eski adresine geçen ekranın `eski` yolu eski ekrandır, şerit orada çizilir.
 export function yeniEkranAdresiMi(adres: string): boolean {
-  return YENI_EKRAN_YOLLARI.some((yol) => adres === yol || adres.startsWith(`${yol}/`));
+  return YENI_EKRAN_YOLLARI.some((yol) => altYolMu(adres, yol))
+    || TASINAN_EKRANLAR.some((t) => altYolMu(adres, t.yol) && !altYolMu(adres, t.eski));
+}
+
+// Kişi menüsündeki geçiş: yeni ekrandayken eskisine, eski ekrandayken yenisine. Eskisi olmayan adreste null.
+export function gorunumGecisi(adres: string): { baslik: string; yol: string } | null {
+  for (const t of TASINAN_EKRANLAR) {
+    if (altYolMu(adres, t.eski)) return { baslik: 'Yeni görünüm', yol: t.yol };
+    if (altYolMu(adres, t.yol)) return { baslik: 'Eski görünüm', yol: t.eski };
+  }
+  return null;
 }
 
 // Yeni ekran adresinin satırı ve bağlı olduğu ana menü sayfası. En uzun yol kazanır: `/arkon/yeni/operator` Üretim

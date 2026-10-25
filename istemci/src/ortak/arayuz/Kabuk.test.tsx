@@ -235,9 +235,10 @@ describe('Kabuk', () => {
     expect(secili('Üretim Hazırlık')).toBeNull();
     expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
     terminalKapat();
-    const { unmount: kuyrukKapat } = yeniCiz('/arkon/yeni/kuyruk');
+    // Eski adresine geçen yeni ekran (541) kendi ana menü satırını seçili tutar.
+    const { unmount: kuyrukKapat } = yeniCiz('/kuyruk');
     expect(baslik()).toBe('Kuyruk');
-    expect(secili('Kuyruk (yeni)')).toBe('page');
+    expect(secili('Kuyruk')).toBe('page');
     expect(secili('Üretim Hazırlık')).toBeNull();
     kuyrukKapat();
     // Sekmeli yeni ekranın alt yolu kendi satırını seçili tutar.

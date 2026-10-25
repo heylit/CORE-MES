@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { matchPath, MemoryRouter } from 'react-router-dom';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from '../arayuz/Kabuk.tsx';
 import { modulRotalari } from './kesif.ts';
 import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
-import { YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
+import { gorunumGecisi, TASINAN_EKRANLAR, YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
 
 function ciz(islemler: readonly string[], kapali: readonly string[] = []) {
   return render(
@@ -35,7 +35,9 @@ describe('yeni ekran menü satırları', () => {
     expect(within(menu).getByRole('link', { name: 'Planlama (yeni)' }).getAttribute('href')).toBe('/recete-rota/planlama-yeni');
     expect(within(menu).getByRole('link', { name: 'Finans ve Muhasebe (yeni)' }).getAttribute('href')).toBe('/finans/yeni');
     expect(within(menu).getByRole('link', { name: 'Üretim Terminali (yeni)' }).getAttribute('href')).toBe('/arkon/yeni/operator');
-    expect(within(menu).getByRole('link', { name: 'Kuyruk (yeni)' }).getAttribute('href')).toBe('/arkon/yeni/kuyruk');
+    // Kuyruk eski adresine geçti (541): deneme satırı yoktur, ana menüdeki Kuyruk yeni ekranı açar.
+    expect(within(menu).queryByRole('link', { name: 'Kuyruk (yeni)' })).toBeNull();
+    expect(within(menu).getByRole('link', { name: 'Kuyruk' }).getAttribute('href')).toBe('/kuyruk');
   });
 
   it('yönetici olmayan kişi, modül sayfalarının işlemleri olsa da satırları görmez', () => {
@@ -96,5 +98,48 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     const menu = serit('Reçete ve Rota');
     expect(menu).not.toBeNull();
     expect(within(menu as HTMLElement).getByRole('link', { name: /^Planlama motoru/ }).getAttribute('aria-current')).toBe('page');
+  });
+});
+
+describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
+  const adreste = (adres: string, islemler: readonly string[]) => render(
+    <MemoryRouter initialEntries={[adres]}>
+      <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={islemler}><p>icerik</p></Kabuk>
+    </MemoryRouter>,
+  );
+  const hesapMaddeleri = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
+    return screen.getAllByRole('menuitem').map((m) => m.textContent);
+  };
+  // Yönetici kapısı olmayan kişi: yalnız Kuyruk sayfasının işlemi.
+  const kuyrukcu = ['sayfa.kuyruk'];
+
+  it('yeni ve eski adres kayıtlı modül rotasıdır; eski adres sayfanın alt yoludur', () => {
+    for (const t of TASINAN_EKRANLAR) {
+      for (const yol of [t.yol, t.eski]) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
+      expect(t.eski.startsWith(`${t.yol}/`)).toBe(true);
+    }
+  });
+
+  it('yeni ekranda şerit çizilmez, eski adreste çizilir', () => {
+    expect(yeniEkranAdresiMi('/kuyruk')).toBe(true);
+    expect(yeniEkranAdresiMi('/kuyruk/eski')).toBe(false);
+    expect(yeniEkranAdresiMi('/kuyrukta')).toBe(false);
+  });
+
+  it('kişi menüsü yeni ekranda eskisini, eski ekranda yenisini açar; başka sayfada madde yoktur', () => {
+    expect(gorunumGecisi('/kuyruk')).toEqual({ baslik: 'Eski görünüm', yol: '/kuyruk/eski' });
+    expect(gorunumGecisi('/kuyruk/eski')).toEqual({ baslik: 'Yeni görünüm', yol: '/kuyruk' });
+    expect(gorunumGecisi('/ik')).toBeNull();
+    adreste('/kuyruk', kuyrukcu);
+    expect(hesapMaddeleri()).toContain('Eski görünüm');
+    cleanup();
+    adreste('/kuyruk/eski', kuyrukcu);
+    expect(hesapMaddeleri()).toContain('Yeni görünüm');
+    cleanup();
+    adreste('/ik', kuyrukcu);
+    const maddeler = hesapMaddeleri();
+    expect(maddeler).not.toContain('Eski görünüm');
+    expect(maddeler).not.toContain('Yeni görünüm');
   });
 });

@@ -31,7 +31,13 @@ export function ArkonYeni() {
   return <YeniEkranKapisi><ArkonYeniEkrani /></YeniEkranKapisi>;
 }
 
-function ArkonYeniEkrani() {
+// Eski adresine geçen ayrı sayfa (541, 527 1 a): yeni ekran kapısı yoktur; eski sayfa gibi TMI sayfa işlemi ve Arkon sayfa yetkisiyle açılır.
+export type TasinanSayfa = 'kuyruk';
+export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
+  return <ArkonYeniEkrani sabitSayfa={sayfa} />;
+}
+
+function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: TasinanSayfa }) {
   const oturum = useOturum();
   const islemler = useMemo(() => oturum.data?.islemler ?? [], [oturum.data]);
   const ben = useQuery({ queryKey: anahtarlar.ben, queryFn: () => api.get<ArkonBenCevabi>('/arkon/ben') });
@@ -39,7 +45,7 @@ function ArkonYeniEkrani() {
   const { bildir } = useBildirim();
   const cikis = useCikis();
   const { sayfa: adresSayfasi } = useParams();
-  const saltOkunur = adresSayfasi === 'onizle';
+  const saltOkunur = (sabitSayfa ?? adresSayfasi) === 'onizle';
   // "Operatör gözüyle" penceresi açıkken de yazma TMI'ye gitmez (eskide önizleme ayrı çerçevede, kendi salt okunur açılışındaydı).
   const [onizleme, onizlemeYaz] = useState<string | null>(null);
 
@@ -89,6 +95,7 @@ function ArkonYeniEkrani() {
   return (
     <AcikEkran
       depo={depo}
+      sabitSayfa={sabitSayfa}
       islemler={islemler}
       arkonRolu={kisi.rol}
       saltOkunur={saltOkunur}
@@ -102,6 +109,7 @@ function ArkonYeniEkrani() {
 
 interface AcikEkranOzellikleri {
   depo: ArkonDeposu;
+  sabitSayfa: TasinanSayfa | undefined;
   islemler: readonly string[];
   arkonRolu: ArkonRolu;
   saltOkunur: boolean;
@@ -111,8 +119,10 @@ interface AcikEkranOzellikleri {
   siradakiniKapat: () => void;
 }
 
-function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYaz, devralmalar, siradakiniKapat }: AcikEkranOzellikleri) {
-  const { sayfa: adres, kimlik } = useParams();
+function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYaz, devralmalar, siradakiniKapat }: AcikEkranOzellikleri) {
+  const parametreler = useParams();
+  const adres = sabitSayfa ?? parametreler.sayfa;
+  const kimlik = sabitSayfa === undefined ? parametreler.kimlik : undefined;
   const gezin = useNavigate();
   const { bildir } = useBildirim();
 
@@ -177,9 +187,11 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
   const sekmeler = maddeler.filter(gorunur).map((m) => (m.anahtar === 'kalite' && numune > 0 ? { ...m, baslik: `${m.baslik} (${numune})` } : m));
 
   // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; TMI'deki kendi menü satırının işlemi ve Arkon sayfa yetkisiyle açılır.
+  // Kuyruk salt okunurdur ve eskisi Arkon sayfa yetkisi istemiyordu (pano-planlama.ts KuyrukApp): Plan Kuyruğu yetkisi olmayan
+  // operatör de görür, TMI işlemi yeter.
   const ayriAcik = (s: ArkonSayfasi): boolean => {
     const t: SayfaTanimi = SAYFALAR[s];
-    return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && baglam.sayfaGorunur(s);
+    return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && (s === 'kuyruk' || baglam.sayfaGorunur(s));
   };
 
   if (adres === undefined) {
