@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
@@ -374,11 +374,50 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getAllByRole('button', { name: 'Plan masasında gör' }).length).toBe(3);
   });
 
-  it('Stüdyo atölyeye gider; Keşfet hazırlanıyor', () => {
+  it('Stüdyo atölyeye gider', () => {
     const { git } = ac();
     fireEvent.click(screen.getAllByRole('button', { name: 'Stüdyo' })[0]!);
     expect(git).toHaveBeenCalledWith('studio');
-    fireEvent.click(screen.getByRole('button', { name: 'Keşfet' }));
-    expect(screen.getByText(/Keşfet: Hazırlanıyor/)).toBeTruthy();
+  });
+
+  it('Keşfet: pay şeridi ve hatlar siparişi seçer; hazırlık verisi yok; planı anlat kendiliğinden ilerler, ok ve adım durdurur', () => {
+    vi.useFakeTimers();
+    try {
+      ac();
+      fireEvent.click(screen.getByRole('button', { name: 'Keşfet' }));
+      const ks = screen.getByRole('region', { name: 'Pay şeridi' });
+      expect(within(ks).getByRole('tab', { name: 'Pay şeridi' }).getAttribute('aria-selected')).toBe('true');
+      expect([...ks.querySelectorAll('.tc-pym-ks-sayi')].map((x) => x.textContent)).toEqual(['1geç', '11 günden az pay', '0rahat']);
+      const nokta = within(ks).getByRole('button', { name: '2: 3 gün geç' });
+      fireEvent.click(nokta);
+      expect(nokta.hasAttribute('data-secili')).toBe(true);
+      fireEvent.click(within(ks).getByRole('tab', { name: 'Sipariş hatları' }));
+      const hat = screen.getByRole('region', { name: 'Sipariş hatları' });
+      expect(within(hat).getByRole('button', { name: /^2: / }).hasAttribute('data-secili')).toBe(true);
+      fireEvent.keyDown(within(hat).getByRole('button', { name: /^3: / }), { key: 'Enter' });
+      expect(within(hat).getByRole('button', { name: /^3: / }).hasAttribute('data-secili')).toBe(true);
+      expect(within(hat).getByText('+73 sa geç')).toBeTruthy();
+      fireEvent.click(within(hat).getByRole('tab', { name: 'Hazırlık' }));
+      expect(screen.getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('tab', { name: 'Planı anlat' }));
+      const adimlar = () => within(screen.getByRole('tablist', { name: 'Adımlar' })).getAllByRole('tab');
+      expect(adimlar().map((x) => x.textContent)).toEqual(['Büyük resim', 'Ne bekletiyor', 'Süre nereye gidiyor', 'En yoğun gün', 'Doluluk', 'Ayarlar', 'Teslim', 'Hazırlık']);
+      expect(screen.getByText('1 / 8')).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(7000); });
+      expect(screen.getByText('2 / 8')).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Ne bekletiyor' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Durdur' })).toBeTruthy();
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+      expect(screen.getByText('3 / 8')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Oynat' })).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(14000); });
+      expect(screen.getByText('3 / 8')).toBeTruthy();
+      fireEvent.click(adimlar()[0]!);
+      fireEvent.click(screen.getByRole('button', { name: 'Önceki (sol ok)' }));
+      expect(screen.getByRole('heading', { name: 'Hazırlık' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Özet' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keşfet' }));
+      expect(screen.getByText('8 / 8')).toBeTruthy();
+    } finally { vi.useRealTimers(); }
   });
 });
