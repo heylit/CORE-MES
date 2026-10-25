@@ -360,10 +360,11 @@ export function kopruKur(
         return { ...d, planYerlesim: m?.yerlesim ?? null, ...(m && Object.keys(m.yerlesmeyen).length ? { planYerlesmeyen: m.yerlesmeyen } : {}) };
       });
   // Malzemeler'de yeni onaylanan kartın ilk rota taslağı ekran açılırken açılır (#688), dakikalık tarama beklenmez. Ekranın ilk
-  // okumasında bir kez, yalnız rota yazabilene denenir; açılamazsa durum yine okunur (tarama sonra açar).
+  // okumasında bir kez, yalnız rota yazabilene denenir; açılamazsa durum yine okunur (tarama sonra açar). Kullanıcının gönderdiği kayıt
+  // değildir: ulaşılamazsa kopukluk uyarısına "gönderilen kayıt" olarak girmez (Soru 487/3 a).
   let kartTaslaklari: Promise<unknown> | null = secenek.kartTaslakAcabilir === true ? null : Promise.resolve(null);
   const ilkDurumOku = (): Promise<DurumCevabi> =>
-    (kartTaslaklari ??= api.post<unknown>('/rota/karttan-taslaklar').catch(() => null)).then(durumOku);
+    (kartTaslaklari ??= api.post<unknown>('/rota/karttan-taslaklar', undefined, { arkaPlan: true }).catch(() => null)).then(durumOku);
 
   return async (tip, veri) => {
     const v = nesne(veri);

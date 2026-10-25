@@ -48,9 +48,10 @@ function VeriSaglayici() {
         planVerisi: setPlanVerisiEksik,
         emirSecimi: (secenekler) => new Promise<EmirSecimi | null>((coz) => { setSecim({ secenekler, coz }); }),
       }),
-      // Açılamazsa durum yine okunur; dakikalık tarama sonra açar (bugünkü ekranla aynı).
+      // Açılamazsa durum yine okunur; dakikalık tarama sonra açar (bugünkü ekranla aynı). Kullanıcının gönderdiği kayıt değildir:
+      // kopukluk uyarısına girmez (Soru 487/3 a).
       ilkOkuma: () => (taslaklar ??= yetki.var('rota.yaz')
-        ? api.post<unknown>('/rota/karttan-taslaklar').then(() => undefined, () => undefined)
+        ? api.post<unknown>('/rota/karttan-taslaklar', undefined, { arkaPlan: true }).then(() => undefined, () => undefined)
         : Promise.resolve()),
     };
   });
