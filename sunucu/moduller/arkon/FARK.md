@@ -850,3 +850,8 @@ Bu tur şunları varsaydı:
 2. Yan yana görünüm (tasarım B) yazılmadı; tasarım A yeterli sayıldı, istenirse ayrı iş.
 3. Kuyruk isteği istasyonun gizli tamamlananları dahil bütün açık TMI iş emri paketleriyle gider (sunucu da öyle sayar).
 4. Plan çipi her TMI işinde görünür (Hazırlık sırası yokken de "Planla aynı"); renk: aynı nötr, farklı bekleme, yeni ölçüm rengi.
+
+## İleti ucu tekrar korumalı (551 a)
+- `POST /arkon/iletiler` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen ileti ikinci satır açmaz, ilk cevabı alır.
+- Köprü (`istemci/src/moduller/arkon/baglanti.ts`) iletinin `mid` kimliği UUID ise onu istek kimliği yapar (uygulamanın aynı iletiyi yeniden göndermesi tek satır kalır); düz http'deki tablette `mid` UUID değildir, kimlik gönderim için üretilir. Sonucu bilinmeyen gönderim aynı kimlikle yinelenir.
+- Testlerde Kalite Merkezi ilk parça kararı istek kimliğiyle çağrılır (karar ucu da tekrar korumalı olur, 551 b).

@@ -10,7 +10,8 @@ import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { UretimHazirligiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { AdimCevabi, EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
-import { AgHatasi, ApiHatasi, OTURUM_BITTI, api } from '../../ortak/veri/api.ts';
+import { AgHatasi, ApiHatasi, OTURUM_BITTI, api, istekKimligiMi } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { MALZEME_TESLIM_AC, type MalzemeTeslimOdagi } from '../stok/disari.ts';
 import { hazirlikMetni } from './kurallar.ts';
 
@@ -210,8 +211,16 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   }
 
   if (ilk === 'bus' && g.yontem === 'POST') {
-    const govde = govdeyiOku(g.govde) as { msg?: unknown; c?: unknown } | undefined;
-    await istemci.post('/arkon/iletiler', { ileti: govde?.msg, kaynak: typeof govde?.c === 'string' ? govde.c : kaynak });
+    const govde = govdeyiOku(g.govde) as { msg?: { mid?: unknown } | null; c?: unknown } | undefined;
+    // İleti ucu tekrar korumalıdır. Uygulama iletiye kimlik (`mid`) verir; UUID ise istek kimliği odur ve uygulamanın aynı iletiyi
+    // yeniden göndermesi ikinci satır açmaz. Düz http'deki tablette `mid` UUID değildir; o zaman kimlik bu gönderim için üretilir.
+    const mid = govde?.msg?.mid;
+    const istekKimligi = istekKimligiMi(mid) ? mid : yeniIstekKimligi();
+    const yuk = { ileti: govde?.msg, kaynak: typeof govde?.c === 'string' ? govde.c : kaynak };
+    await tekrarKorumaliGonder(
+      (d) => istemci.post('/arkon/iletiler', yuk, { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
+      { istekKimligi },
+    );
     return tamam({ ok: true });
   }
   // 298: çağrı bandının alıcısı TMI bildirim yönlendirmesindedir; yalnız oturumdaki kişinin ekipleri döner.
