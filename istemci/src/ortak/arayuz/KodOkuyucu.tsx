@@ -7,7 +7,7 @@ import './kod-okuyucu.css';
 // Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin olduğu gibi `okundu`ya gider, ne olduğuna çağıran karar verir.
 // El okuyucu klavye gibi yazar ve Enter gönderir; kamerasız bilgisayarda da yalnız bu alan yeter.
 // `kendiliginden` kamerayı açılışta başlatır (okutmak için açılan ekranlar); varsayılan dokunmayla açılıştır.
-// Kod alanı açılışta odak alır. `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
+// Kod alanı açılışta odak alır; pencere içindeyse de (pencere ilk odağı `data-ilk-odak`a verir). `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
 }
@@ -34,7 +34,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
       </div>
       {kamera.hata && <p className="tc-kod-okuyucu-hata" role="status">{kamera.hata}</p>}
       <form ref={form} className="tc-kod-okuyucu-elle" onSubmit={(o) => { o.preventDefault(); if (elle.trim() !== '') { okundu(elle.trim()); setElle(''); } }}>
-        <Girdi etiket="Kod" placeholder="Kodu yaz ya da el okuyucuyla okut" value={elle} onChange={(o) => setElle(o.target.value)} autoFocus={acilistaOdak} {...(ipucu ? { ipucu } : {})} />
+        <Girdi etiket="Kod" placeholder="Kodu yaz ya da el okuyucuyla okut" value={elle} onChange={(o) => setElle(o.target.value)} autoFocus={acilistaOdak} {...(acilistaOdak ? { 'data-ilk-odak': '' } : {})} {...(ipucu ? { ipucu } : {})} />
         <Dugme tur="birincil" type="submit" yukleniyor={bekliyor}>Bul</Dugme>
       </form>
       <Dugme simge="upload" onClick={() => dosya.current?.click()}>Fotoğraftan oku</Dugme>
