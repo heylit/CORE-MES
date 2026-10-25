@@ -29,3 +29,11 @@
 | Taslak bedel ayarı | `plan_senaryo_bedel_ayari` (plan_ayari bedel sütunlarının kopyası) | plan |
 | Sipariş | `plan_senaryo_siparis_carpani.siparis_id` -> `siparisler_siparis` | siparisler |
 | Bekleyen Arkon sırası | okunur: `plan_senaryo_degisikligi` (tur sirala) | plan; Arkon `bekleyenSiralar` ile okur |
+
+## Ek mesai (507 2 a, 508 1 a)
+| Kavram | Planda | Sahibi / öteki yer |
+|---|---|---|
+| Ek vardiya (taslak ve canlı) | `plan_senaryo_ek_mesai` (senaryo_id boş: canlı; makine_id, gun, vardiya_id, saat) | plan; gerçek fazla mesai `vardiya_fazla_mesai` (vardiya), çalışmadaki `S.ekMesai` (recete-rota). Aşama 2'de sahiplik sorulur: plan ek vardiyası vardiya fazla mesaisine geçmez, kapasiteye girmez |
+| Haftalık ek mesai sınırı | `plan_ayari.ek_mesai_hafta_saat` (boş: 8) | plan; çalışmada `S.param.mesaiHafta` (recete-rota) |
+| Makine | `plan_senaryo_ek_mesai.makine_id` -> `makine` | istasyonlar |
+| Vardiya | `plan_senaryo_ek_mesai.vardiya_id` -> `vardiya` | vardiya |

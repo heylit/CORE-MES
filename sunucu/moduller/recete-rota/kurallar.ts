@@ -954,3 +954,52 @@ export function calismaKuyruklari(baslangic: string, isler: readonly CalismaIsi[
     };
   });
 }
+
+// 507 2 a: çalışmanın ek vardiyaları plan modülünün diliyle (makine ve vardiya kimliği sayı, gün takvim günü). Sayı olmayan kimlik
+// (sayfada elle girilmiş tezgâh ya da vardiya) yazılamaz; sayısı döner.
+export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun: number; vardiya: string }[]) {
+  const satirlar: { makineId: number; gun: string; vardiyaId: number }[] = [];
+  const anahtarlar = new Set<string>();
+  let yazilamaz = 0;
+  for (const e of l) {
+    if (!/^\d+$/.test(e.m) || !/^\d+$/.test(e.vardiya) || Number(e.m) === 0 || Number(e.vardiya) === 0) { yazilamaz++; continue; }
+    const x = { makineId: Number(e.m), gun: planGunu(baslangic, e.gun), vardiyaId: Number(e.vardiya) };
+    const a = `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}`;
+    if (!anahtarlar.has(a)) { anahtarlar.add(a); satirlar.push(x); }
+  }
+  return { satirlar, yazilamaz };
+}
+
+// 507 3 a (503'ün tersi): plan taslağının yerleri çalışmanın planına (S.plan.ops) ve kilitlerine (S.locks) yazılır; deger kayıttaki
+// çalışmadır, kopyası döner. Saatler kaydın kendi ekseninde (D.meta.baslangic). Yalnız çalışmada işlemi olan ve bitmemiş iş yazılır; işlemin
+// ayar başlangıcı (Su) ve ilk parti (lot1) aynı kayar. Taslakta kilitli iş çalışmada kilitlenir, kilitsizin kilidi kalkar. Plan "güncel
+// değil" işaretlenir (dataVer boş): sayfa yeniden çözer.
+export interface TaslakYeri { k: string; anahtar: string; makineId: number; baslangic: string; bitis: string; kilitli: boolean }
+export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]): { deger: Record<string, unknown>; yazilan: number; kilitli: number; atlanan: string[] } | null {
+  const S = JSON.parse(JSON.stringify(deger ?? null)) as {
+    D?: { meta?: { baslangic?: unknown } }; plan?: { ops?: Record<string, Record<string, unknown>>; dataVer?: unknown } | null; locks?: Record<string, unknown>;
+  } | null;
+  const eksen = S?.D?.meta?.baslangic;
+  if (S === null || typeof eksen !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(eksen) || !S.plan?.ops) return null;
+  const ops = S.plan.ops;
+  const locks: Record<string, unknown> = { ...(S.locks ?? {}) };
+  const atlanan: string[] = [];
+  let yazilan = 0;
+  let kilitli = 0;
+  for (const y of yerler) {
+    const r = ops[y.k];
+    if (!r || r.done) { atlanan.push(y.anahtar); continue; }
+    const S0 = planSaati(eksen, y.baslangic);
+    const C = planSaati(eksen, y.bitis);
+    const kay = typeof r.S === 'number' && Number.isFinite(r.S) ? S0 - r.S : 0;
+    const kaydir = (a: string, ust: number) => { if (typeof r[a] === 'number' && Number.isFinite(r[a])) r[a] = Math.min(ust, (r[a] as number) + kay); };
+    kaydir('Su', S0);
+    kaydir('lot1', C);
+    Object.assign(r, { m: String(y.makineId), S: S0, C });
+    yazilan++;
+    if (y.kilitli) { locks[y.k] = { m: String(y.makineId), S: S0 }; kilitli++; } else delete locks[y.k];
+  }
+  S.locks = locks;
+  S.plan.dataVer = null;
+  return { deger: S as Record<string, unknown>, yazilan, kilitli, atlanan };
+}
