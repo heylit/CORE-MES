@@ -160,3 +160,17 @@ describe('ortak plan motoru, kilitli iş (kilit a)', () => {
     assert.equal(p.ops['S2.10']!.m, 'T1');
   });
 });
+
+describe('ortak plan motoru, sayfanın motor kancaları (458 a)', () => {
+  // Aynı iş emrinin iki partisi aynı tezgâhta art arda: sayfanın ayar sıfırlama kancası (zz13) ikinci partide ayarı yeniden saymaz.
+  const partili = () => ({ ...veri([{ id: 'S1/1', adet: 2, termin: '2026-01-20' }, { id: 'S1/2', adet: 2, termin: '2026-01-20' }]),
+    personel: [{ id: 'P1', vardiya: 'V', gruplar: ['G'], ayar: true }],
+    urunler: [{ id: 'U', rota: [{ k: '10', ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 60, ayar: 120 }] }] }] });
+  test('motorYukle ve planCoz kancalarla kurar: ikinci partinin ayarı yok', async () => {
+    const m = motorYukle();
+    const st = durum(m, {}, 0, partili());
+    const bitis = (p: MotorPlani) => Math.max(p.ops['S1/1.10']?.C ?? 0, p.ops['S1/2.10']?.C ?? 0);
+    assert.equal(bitis(m.schedule(st, 'yeni', null)), 6);
+    assert.equal(bitis(await planCoz({ durum: st, kip: 'yeni', taban: null })), 6);
+  });
+});

@@ -1,13 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, cokIstek, dogrulama, eskiSurum, mesgul, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokIstek, dogrulama, eskiSurum, mesgul, UygulamaHatasi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
-import type { DegerlendirmeCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { HataKodu } from '#paylasilan/hata.ts';
+import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { planlamaGirdisi } from './servis.ts';
 
@@ -41,9 +43,8 @@ const i = workerData.girdi;
 parentPort.postMessage(m.degerlendir(i.calisma, i.kayit, i.kaynak, i.bugun, workerData.simdi, i.sira == null ? i.istek : { ...i.istek, sira: i.sira }));
 `;
 
-// Uç salt okunur transaction içinde bekler; kuyruk ve çözüm birlikte boşta transaction sınırının (TMIV2_PG_BOS_TX_SURE_MS, kurulumda 30 s)
-// altında kalır.
-export const DEGERLENDIRME_SURESI_MS = 25_000;
+// Hesap uç transaction'ının dışında koşar (463 a); süre kuyruğa girişten sayılır.
+export const DEGERLENDIRME_SURESI_MS = 60_000;
 export const MESGUL = 'Planlama değerlendirmesi şu an meşgul; biraz sonra yeniden deneyin.';
 
 // Aynı anda tek değerlendirme: kuyruk sırayla çalışır. Süre kuyruğa girişten sayılır; sırası gelene kalan süre yoksa çağrı koşmadan,
@@ -90,30 +91,63 @@ const HATALAR: Record<DegerlendirmeHatasi, () => Error> = {
   basladi: () => dogrulama('Başlamış ya da plana girmemiş iş emri bölünmez.', 'siparisId'),
 };
 
-// Kişi başına tek çağrı: önceki bitmeden gelen ikincisi kuyruğa girmez, reddedilir.
-const calisanlar = new Set<number>();
+// Okunmayan sonuç bu süreden sonra silinir; ekran sonucu saniyeler içinde okur.
+export const SONUC_OMRU_MS = 5 * 60_000;
+type Is =
+  | { kisi: number; durum: 'suruyor' }
+  | { kisi: number; durum: 'bitti'; cevap: DegerlendirmeCevabi; bitis: number }
+  | { kisi: number; durum: 'hata'; kod: HataKodu; mesaj: string; bitis: number };
+const isler = new Map<string, Is>();
+function temizle(simdi: number): void {
+  for (const [k, i] of isler) if (i.durum !== 'suruyor' && simdi - i.bitis > SONUC_OMRU_MS) isler.delete(k);
+}
 
-// Akış: oturum ve recete-rota.planlama-oku uçta; burada sürüm ve maliyet görüşü. Kayıt yazılmaz (uç GET, salt okunur transaction).
-export async function planlamaDegerlendirmesi(
-  db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(),
-): Promise<DegerlendirmeCevabi> {
+// Başlatma (463 a). Akış: oturum ve recete-rota.planlama-oku uçta; burada maliyet görüşü, kişi başına tek iş, girdi ve sürüm. Girdi uç
+// transaction'ında okunur; hesap iş parçacığında koşar, sonuç bellekte kısa süre tutulur. Kayıt yazılmaz.
+export async function degerlendirmeBaslat(
+  db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
+): Promise<{ is: string }> {
   const maliyetGorunur = islemVarMi(kullanici, MALIYET_ISLEMI);
   if (g.istek.tur === 'siparis-kari' && !maliyetGorunur) throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');
-  if (calisanlar.has(kullanici.id)) throw cokIstek('Önceki planlama değerlendirmeniz sürüyor; bitince yeniden deneyin.');
-  calisanlar.add(kullanici.id);
+  temizle(simdi);
+  if ([...isler.values()].some((i) => i.durum === 'suruyor' && i.kisi === kullanici.id)) throw cokIstek('Önceki planlama değerlendirmeniz sürüyor; bitince yeniden deneyin.');
+  // İş, girdi okunmadan yer tutar: aynı kişinin eşzamanlı ikinci başlatması okuma sürerken de reddedilir.
+  const is = randomUUID();
+  const kisi = kullanici.id;
+  isler.set(is, { kisi, durum: 'suruyor' });
   let k: Awaited<ReturnType<typeof planlamaGirdisi>>;
-  let r: DegerlendirmeDonusu;
   try {
     k = await planlamaGirdisi(db, kullanici);
     if (k.girdi === null || k.surum === null) throw cakisma(CALISMA_YOK);
     if (k.surum !== g.surum) throw eskiSurum();
-    r = await degerlendirmeYap({ ...k.girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi);
-  } finally { calisanlar.delete(kullanici.id); }
-  if (r === null) throw cakisma(CALISMA_YOK);
-  if ('hata' in r) throw HATALAR[r.hata]();
-  const sonuc = r.sonuc as DegerlendirmeSonucu;
-  return { calismaSurumu: k.surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: maliyetGorunur ? sonuc : maliyetsiz(sonuc) };
+  } catch (e) { isler.delete(is); throw e; }
+  const surum = k.surum;
+  yap({ ...k.girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
+    if (r === null) throw cakisma(CALISMA_YOK);
+    if ('hata' in r) throw HATALAR[r.hata]();
+    const sonuc = r.sonuc as DegerlendirmeSonucu;
+    const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: maliyetGorunur ? sonuc : maliyetsiz(sonuc) };
+    isler.set(is, { kisi, durum: 'bitti', cevap, bitis: Date.now() });
+  }).catch((e: unknown) => {
+    // Beklenmeyen hata (iş parçacığı çöktü) iç ayrıntı taşımaz.
+    const h = e instanceof UygulamaHatasi ? { kod: e.kod, mesaj: e.message } : { kod: 'SUNUCU' as const, mesaj: 'Planlama değerlendirmesi hesaplanamadı.' };
+    isler.set(is, { kisi, durum: 'hata', ...h, bitis: Date.now() });
+  });
+  return { is };
 }
+
+// Sonucu yalnız başlatan kişi okur; başkasının kimliği yokmuş gibi döner. Biten sonuç okununca silinir.
+export function degerlendirmeDurumu(kisi: number, is: string, simdi: number = Date.now()): DegerlendirmeDurumuCevabi {
+  temizle(simdi);
+  const i = isler.get(is);
+  if (i === undefined || i.kisi !== kisi) throw bulunamadi('Planlama değerlendirmesi bulunamadı; yeniden başlatın.');
+  if (i.durum === 'suruyor') return { durum: 'suruyor' };
+  isler.delete(is);
+  return i.durum === 'bitti' ? { durum: 'bitti', cevap: i.cevap } : { durum: 'hata', kod: i.kod, mesaj: i.mesaj };
+}
+
+// Testler için: bellekteki işleri boşaltır.
+export function degerlendirmeIsleriSifirla(): void { isler.clear(); }
 
 // 180 a, 200 a: tutar, maliyet, kâr ve TL farkı yalnız maliyeti görene. Saat, adet ve plan kaydı kalır (plan kaydı çalışmaya geri yazılır,
 // biçimi bozulmaz). Sipariş maliyeti ve kârı bu durumda hiç hesaplanmaz.

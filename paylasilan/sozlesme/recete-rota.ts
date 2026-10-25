@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HATA_KODLARI } from '../hata.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { PLAN_KURALLARI, planCanliOzeti } from './plan.ts';
 
@@ -377,14 +378,6 @@ export const DEGERLENDIRME_TURLERI = [
 ] as const;
 export const TERMIN_UZATMA_GUNLERI = [1, 2, 3, 5] as const;
 export const PARTI_SAYISI_EN_COK = 20;
-const degerlendirmeJsonu = <T extends z.ZodTypeAny>(sema: T) => z.string().max(2000).transform((metin, ctx) => {
-  try {
-    return JSON.parse(metin) as unknown;
-  } catch {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Geçersiz JSON.' });
-    return z.NEVER;
-  }
-}).pipe(sema);
 const planSiparisi = z.string().min(1).max(80);
 export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('plan-secenekleri') }).strict(),
@@ -399,10 +392,10 @@ export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
   }).strict(),
   z.object({ tur: z.literal('siparis-kari') }).strict(),
 ]);
-export const degerlendirmeSorgusu = z.object({
-  surum: z.coerce.number().int().positive(),
-  istek: degerlendirmeJsonu(degerlendirmeIstegi),
-});
+// İki adım (463 a): başlatma girdiyi okur ve hesabı başlatır, sonuç kimlikle transaction açmadan okunur; hesap uç transaction'ını beklemez.
+export const degerlendirmeGovdesi = z.object({ surum: z.number().int().positive(), istek: degerlendirmeIstegi }).strict();
+export const degerlendirmeBaslatCevabi = z.object({ is: z.string().uuid() });
+export const degerlendirmeParametresi = z.object({ is: z.string().uuid() });
 
 const tl = z.number().nullable();
 const saatDegeri = z.number();
@@ -498,6 +491,39 @@ export const degerlendirmeCevabi = z.object({
   maliyetGorunur: z.boolean(),
   sonuc: degerlendirmeSonucu,
 });
+// Hesap sırasında çıkan ret (plan yok, sipariş yok, adet, süre) uçtaki hatanın kodu ve iletisiyle döner.
+export const degerlendirmeDurumuCevabi = z.discriminatedUnion('durum', [
+  z.object({ durum: z.literal('suruyor') }),
+  z.object({ durum: z.literal('bitti'), cevap: degerlendirmeCevabi }),
+  z.object({ durum: z.literal('hata'), kod: z.enum(HATA_KODLARI), mesaj: z.string() }),
+]);
+// Yıllık plan çözümü (454/6 a): kaba kapasite modeli (LP metni) sayfada kurulur, HiGHS sunucuda çözer; tarayıcıda çözücü yoktur. Çözüm
+// 60 saniyeye kadar sürer ve uç transaction'ı o kadar bekleyemez: başlatma iş kimliğiyle hemen döner, sonuç kimlikle okunur.
+// Gövde sınırı sunucunun istek sınırının (1 MiB) altında kalır.
+export const YILLIK_LP_AZAMI = 900_000;
+export const YILLIK_SUTUN_AZAMI = 20_000;
+export const yillikCozGovdesi = z.object({
+  lp: z.string().min(1).max(YILLIK_LP_AZAMI),
+  // saniye; HiGHS'in zaman sınırı
+  sure: z.number().int().min(1).max(60),
+  // değeri ve gölge fiyatı istenen sütunlar
+  want: z.array(z.string().min(1).max(80)).max(YILLIK_SUTUN_AZAMI),
+});
+export const yillikCozBaslatCevabi = z.object({ is: z.string().uuid() });
+export const yillikCozParametresi = z.object({ is: z.string().uuid() });
+// HiGHS'in cevabı: model durumu (7 en iyi, 13 süre doldu, 8 çözüm yok, 14 adım sınırı), amaç (sonlu değilse null), istenen sütunların
+// değeri ve indirgenmiş maliyeti (çözücü vermezse null).
+export const yillikCozumSemasi = z.object({
+  s: z.number().int(),
+  ob: z.number().nullable(),
+  val: z.record(z.string(), z.number()).nullable(),
+  dual: z.record(z.string(), z.number().nullable()).nullable(),
+});
+export const yillikCozDurumuCevabi = z.discriminatedUnion('durum', [
+  z.object({ durum: z.literal('suruyor') }),
+  z.object({ durum: z.literal('bitti'), cozum: yillikCozumSemasi }),
+  z.object({ durum: z.literal('hata'), mesaj: z.string() }),
+]);
 export type FasonTahminCevabi = z.output<typeof fasonTahminCevabi>;
 export type Statu = z.output<typeof statuSemasi>;
 export type StatulerCevabi = z.output<typeof statulerCevabi>;
@@ -522,3 +548,8 @@ export type DurumEmirleri = z.output<typeof durumEmirlerSemasi>;
 export type DegerlendirmeIstegi = z.output<typeof degerlendirmeIstegi>;
 export type DegerlendirmeSonucu = z.output<typeof degerlendirmeSonucu>;
 export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
+export type DegerlendirmeGovdesi = z.output<typeof degerlendirmeGovdesi>;
+export type DegerlendirmeDurumuCevabi = z.output<typeof degerlendirmeDurumuCevabi>;
+export type YillikCozGovdesi = z.output<typeof yillikCozGovdesi>;
+export type YillikCozumu = z.output<typeof yillikCozumSemasi>;
+export type YillikCozDurumuCevabi = z.output<typeof yillikCozDurumuCevabi>;
