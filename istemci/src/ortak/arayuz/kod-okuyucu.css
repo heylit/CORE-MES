@@ -7,3 +7,8 @@
 .tc-kod-okuyucu-cerceve { position: absolute; inset: 18%; border: var(--b-1) solid var(--hazard); border-radius: var(--yari-2); pointer-events: none; opacity: .85; }
 .tc-kod-okuyucu-hata { margin: 0; color: var(--muted); }
 .tc-kod-okuyucu-elle { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; }
+/* Tek satır: etiket ekran okuyucuya kalır, düğmeler alanın boyundadır; ipucu satırın altında tam genişlikte. */
+.tc-kod-okuyucu-satir { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--b-2); align-items: start; }
+.tc-kod-okuyucu-satir .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-kod-okuyucu-satir .tc-dugme { inline-size: var(--alan-boy); block-size: var(--alan-boy); padding: 0; justify-content: center; }
+.tc-kod-okuyucu-sik .tc-kod-okuyucu-kamera[hidden] { display: none; }

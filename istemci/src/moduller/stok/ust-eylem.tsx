@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, SepettenCekGovdesi, SepettenKullanGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Sekmeler, Simge, type Secenek, type Sekme } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Sekmeler, Simge, useBildirim, type Secenek, type Sekme } from '../../ortak/arayuz/index.ts';
 import type { UstEylem } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -14,7 +14,7 @@ import { ELDEN_NOTU, okutulanHedef, type OkutulanHedef } from './okut-akisi.ts';
 import { Qr } from './Qr.tsx';
 import { MALZEME_TESLIM_AC, type MalzemeTeslimOdagi } from './disari.ts';
 import { birimliMiktar, istekDurumu, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
-import { IstasyonIstekleri } from './IstasyonIstekleri.tsx';
+import { AlinanSatir, IstasyonIstekleri } from './IstasyonIstekleri.tsx';
 import { OkutarakAl } from './OkutarakAl.tsx';
 import { OkutmaSonucu, type Okunan, type SonucEylemi } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
@@ -34,8 +34,9 @@ const KUTU = ['stok', 'teslim-kutusu'] as const;
 const yeniKimlik = yeniIstekKimligi;
 
 type SekmeAnahtari = PanelSekmesi;
-const SEKMELER: readonly Sekme<SekmeAnahtari>[] = [
-  { anahtar: 'al', baslik: 'Teslim al', simge: 'download' },
+// Teslim al sekmesi bekleyen gelen sayısını taşır (545 T2): panel açılınca nereye bakılacağı görünür.
+const sekmeler = (gelen: number): readonly Sekme<SekmeAnahtari>[] => [
+  { anahtar: 'al', baslik: gelen > 0 ? `Teslim al (${gelen > 99 ? '99+' : gelen})` : 'Teslim al', simge: 'download' },
   { anahtar: 'sepet', baslik: 'Sepet', simge: 'box' },
   { anahtar: 'et', baslik: 'Teslim et', simge: 'upload' },
   { anahtar: 'iste', baslik: 'Malzeme iste', simge: 'plus' },
@@ -110,7 +111,7 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
     <Pencere acik kapat={kapat} baslik="Malzeme · Teslim" tur="yan">
       <div className="tc-stok-form">
         <OkutAlani teslimEteGec={(hedef) => { setSekme('et'); setKisiHedefi((k) => ({ hedef, sira: (k?.sira ?? 0) + 1 })); }} okundu={okundu} sifir={sifir} sonuc={sonuc}>
-          <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Malzeme ve teslim" sekmeler={SEKMELER} secili={sekme} sec={(s) => { setSekme(s); setKisiHedefi(null); }} /></div>
+          <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Malzeme ve teslim" sekmeler={sekmeler(kutu.data?.gelenler.length ?? 0)} secili={sekme} sec={(s) => { setSekme(s); setKisiHedefi(null); }} /></div>
           {kutu.isPending ? <DurumKutusu durum="yukleniyor" />
             : kutu.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(kutu.error)} yenile={() => { void kutu.refetch(); }} />
             : sekme === 'al' ? <TeslimAl kutu={kutu.data} odak={odak} okunan={okunan} />
@@ -123,8 +124,10 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
   );
 }
 
+// 545 T4: çoğu teslim tam gelir; tek dokunuş gönderilen miktarı alır, "Eksik geldi" miktar alanını açar.
 function GelenTeslim({ t }: { t: Teslim }) {
   const [alinan, setAlinan] = useState(miktarMetni(t.miktar).replace(/\./g, ''));
+  const [eksikAcik, setEksikAcik] = useState(false);
   const [redAcik, setRedAcik] = useState(false);
   const [neden, setNeden] = useState('');
   const al = useStokKomutu((g: TeslimAlGovdesi) => api.post(`/stok/teslimler/${t.id}/teslim-al`, g), `${t.no} teslim alındı.`);
@@ -132,10 +135,18 @@ function GelenTeslim({ t }: { t: Teslim }) {
   return (
     <TeslimSatiri t={t}>
       <div className="tc-stok-dugmeler">
-        <Girdi etiket="Alınan miktar" inputMode="decimal" value={alinan} onChange={(o) => setAlinan(o.target.value)} />
-        <Dugme tur="birincil" simge="check" yukleniyor={al.komut.isPending} onClick={() => al.komut.mutate({ surum: t.surum, alinan: miktarGirdisi(alinan) })}>Teslim al</Dugme>
+        <Dugme tur="birincil" simge="check" yukleniyor={al.komut.isPending && !eksikAcik} disabled={al.komut.isPending}
+          onClick={() => al.komut.mutate({ surum: t.surum, alinan: t.miktar })}>Teslim al, {miktarMetni(t.miktar)}</Dugme>
+        <Dugme onClick={() => setEksikAcik((a) => !a)} aria-expanded={eksikAcik}>Eksik geldi</Dugme>
         <Dugme simge="x" onClick={() => setRedAcik((a) => !a)} aria-expanded={redAcik}>Reddet</Dugme>
       </div>
+      {eksikAcik && (
+        <div className="tc-stok-dugmeler">
+          <Girdi etiket="Alınan miktar" inputMode="decimal" value={alinan} onChange={(o) => setAlinan(o.target.value)} />
+          <Dugme tur="birincil" simge="check" yukleniyor={al.komut.isPending} disabled={alinan.trim() === ''}
+            onClick={() => al.komut.mutate({ surum: t.surum, alinan: miktarGirdisi(alinan) })}>Bu miktarı al</Dugme>
+        </div>
+      )}
       {redAcik && (
         <div className="tc-stok-dugmeler">
           <Girdi etiket="Red nedeni" maxLength={200} value={neden} onChange={(o) => setNeden(o.target.value)} />
@@ -171,24 +182,60 @@ function TeslimAl({ kutu, odak, okunan }: { kutu: TeslimKutusuCevabi; odak: Malz
   const istasyonSec = (deger: string) => { setIstasyon(deger); sonSecilen = kisiId === null || deger === '' ? null : { kisiId, istasyonId: Number(deger) }; };
   useEffect(() => { if (odak) setIstasyon(String(odak.istasyonId)); }, [odak]);
   const istasyonId = Number(istasyon);
+  const eldenAlinanlar = (kutu.okutarakAlinanlar ?? []).filter((t) => hedefTarafi(kutu, t));
+  // 545 T3: önce bekleyen iş (gelenler, itiraz edilebilecekler), sonra kişi kodu ve istasyonun işleri.
   return (
     <>
       {giris && okunan?.cevap.tur === 'malzeme' && <PanelMalKabul key={okunan.kod} kod={okunan.kod} />}
+      <div className="tc-stok-bolum-bas">
+        <h3 className="tc-stok-teslim-baslik">Bana gelenler</h3>
+        {kutu.gelenler.length > 1 && <HepsiniAl gelenler={kutu.gelenler} />}
+      </div>
+      {kutu.gelenler.length === 0 ? <DurumKutusu durum="bos" mesaj="Teslim almanızı bekleyen malzeme yok" />
+        : <ul className="tc-stok-isler tc-stok-teslim-liste">{kutu.gelenler.map((t) => <GelenTeslim key={t.id} t={t} />)}</ul>}
+      {eldenAlinanlar.length > 0 && (
+        <>
+          <div className="tc-stok-bolum-bas">
+            <h3 className="tc-stok-teslim-baslik">Elden alınanlar</h3>
+            <span className="tc-stok-not">Vardiya sonuna kadar itiraz</span>
+          </div>
+          <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Elden alınanlar">{eldenAlinanlar.map((t) => <AlinanSatir key={t.id} t={t} />)}</ul>
+        </>
+      )}
       <KisiKodum buradakiIstasyonId={kutu.buradakiIstasyonId} istasyonAdi={kutu.istasyonlar.find((i) => i.id === kutu.buradakiIstasyonId)?.ad ?? null} />
       {kutu.istasyonlar.length > 1 && (
         <Secim etiket="İstasyon" secenekler={kutu.istasyonlar.map((i) => ({ deger: String(i.id), baslik: `${i.ad} (${i.kod})` }))} value={istasyon}
           onChange={(o) => istasyonSec(o.target.value)} />
       )}
       {istasyonId > 0 && <IsMalzemeleri istasyonId={istasyonId} odak={odak?.istasyonId === istasyonId ? odak : null} />}
-      <h3 className="tc-stok-teslim-baslik">Bana gelenler</h3>
-      {kutu.gelenler.length === 0 ? <DurumKutusu durum="bos" mesaj="Teslim almanızı bekleyen malzeme yok" />
-        : <ul className="tc-stok-isler tc-stok-teslim-liste">{kutu.gelenler.map((t) => <GelenTeslim key={t.id} t={t} />)}</ul>}
       {istasyonId > 0 && <OncekiSepetler istasyonId={istasyonId} />}
-      <h3 className="tc-stok-teslim-baslik">Gönderdiklerim</h3>
-      {kutu.gonderdiklerim.length === 0 ? <p className="tc-stok-not">Son gönderiminiz yok.</p>
-        : <ul className="tc-stok-isler tc-stok-teslim-liste">{kutu.gonderdiklerim.map((t) => <GonderilenTeslim key={t.id} t={t} />)}</ul>}
     </>
   );
+}
+
+// 545 T5: elden ve bırakılarak gelen (hedefi kapsamımdaki istasyon) Teslim al'da itiraz edilir; okutarak alınana kaynak taraf Teslim et'te itiraz eder.
+const hedefTarafi = (kutu: TeslimKutusuCevabi, t: Teslim): boolean => t.hedef.istasyonId !== null && kutu.istasyonlar.some((i) => i.id === t.hedef.istasyonId);
+
+// 545 T4: bekleyen her teslim gönderilen miktarla, sırayla ve ayrı kayıt olarak alınır; biri reddedilirse ötekiler alınmış kalır ve söylenir.
+function HepsiniAl({ gelenler }: { gelenler: Teslim[] }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const al = useMutation({
+    mutationFn: async (liste: Teslim[]) => {
+      let alinan = 0;
+      const hatalar: string[] = [];
+      for (const t of liste) {
+        try { await api.post(`/stok/teslimler/${t.id}/teslim-al`, { surum: t.surum, alinan: t.miktar }); alinan++; } catch (h) { hatalar.push(`${t.no}: ${hataMetni(h)}`); }
+      }
+      return { alinan, hatalar };
+    },
+    onSuccess: ({ alinan, hatalar }) => {
+      if (hatalar.length === 0) bildir('tamam', `${alinan} teslim alındı.`);
+      else bildir('hata', `${alinan} teslim alındı; ${hatalar.length} alınamadı. ${hatalar.join(' · ')}`);
+    },
+    onSettled: () => istemci.invalidateQueries({ queryKey: KUTU }),
+  });
+  return <Dugme tur="ikincil" simge="check" yukleniyor={al.isPending} onClick={() => al.mutate(gelenler)}>Hepsini al</Dugme>;
 }
 
 // Kişiye teslim (299 b): teslim edecek kişi bu kodu okutur. Kod sunucuda imzalanır ve kısa sürelidir; ekran süresi dolmadan yenisini alır.
@@ -204,14 +251,39 @@ function KisiKodum({ buradakiIstasyonId, istasyonAdi }: { buradakiIstasyonId: nu
   if (buradakiIstasyonId === null) {
     return <p className="tc-stok-not">İstasyonda açık oturumunuz yok; kişi kodunuz yalnız istasyondayken çalışır. Teslim edecek kişi istasyon, raf ya da alan etiketini okutsun.</p>;
   }
+  const [buyuk, setBuyuk] = useState(false);
+  const yer = istasyonAdi ? `${istasyonAdi} istasyonuna` : 'istasyonunuza';
+  // 545 T6: küçük kart; kalan süre çubuğu ve tam ekran gösterim (uzaktan ya da telefonla okutmak için).
   return (
-    <div className="tc-stok-kisi-kodu">
+    <section className="tc-stok-kisi-kodu" aria-label="Elden teslim için kodum">
       {kod.isPending ? <DurumKutusu durum="yukleniyor" />
         : kod.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(kod.error)} yenile={() => { void kod.refetch(); }} />
-        : <Qr metin={kod.data.kod} boyut={160} />}
-      <p className="tc-stok-not">Teslim edecek kişi bu kodu okutsun; teslim {istasyonAdi ?? 'istasyonunuza'}{istasyonAdi ? ' istasyonuna' : ''} hemen geçer ve adınıza yazılır. Yanlışsa vardiya sonuna kadar Teslim et sekmesinden itiraz edin. Kod kendiliğinden yenilenir.</p>
-    </div>
+        : <Qr metin={kod.data.kod} boyut={112} />}
+      <div className="tc-stok-kisi-kodu-ic">
+        <strong>Elden teslim için kodum</strong>
+        <p className="tc-stok-not">Teslim eden bu kodu okutunca malzeme hemen {yer} geçer. Yanlışsa vardiya sonuna kadar buradan itiraz edin.</p>
+        {kod.data && <KalanSure son={kod.data.gecerlilikSonu} />}
+        {kod.data && <Dugme simge="expand" onClick={() => setBuyuk(true)}>Büyük göster</Dugme>}
+      </div>
+      {buyuk && kod.data && (
+        <Pencere acik kapat={() => setBuyuk(false)} baslik="Elden teslim için kodum">
+          <div className="tc-stok-kisi-kodu-buyuk"><Qr metin={kod.data.kod} boyut={320} /><p className="tc-stok-not">Teslim {yer} gider. Kod kendiliğinden yenilenir.</p></div>
+        </Pencere>
+      )}
+    </section>
   );
+}
+
+const KOD_SURESI_SN = 120;
+const kalanSaniye = (son: string): number => Math.max(0, Math.round((Date.parse(son) - Date.now()) / 1000));
+function KalanSure({ son }: { son: string }) {
+  const [kalan, setKalan] = useState(() => kalanSaniye(son));
+  useEffect(() => {
+    setKalan(kalanSaniye(son));
+    const z = window.setInterval(() => setKalan(kalanSaniye(son)), 1000);
+    return () => window.clearInterval(z);
+  }, [son]);
+  return <progress className="tc-stok-geri-sayim" max={KOD_SURESI_SN} value={Math.min(kalan, KOD_SURESI_SN)} aria-label={`Kod ${kalan} saniye daha geçerli`} />;
 }
 
 // İstasyondaki işlerin malzemeleri (kart #1289): bitmemiş her adımın girdisi, kalan iş için gereken, istasyondaki ve bulunduğu yer; adım
@@ -319,10 +391,13 @@ function OncekiSepetSatiri({ istasyonId, x }: { istasyonId: number; x: GelecekSe
 function TeslimEt(o: { kutu: TeslimKutusuCevabi; baslangic: OkutulanHedef | null; okunan: Okunan | null }) {
   return (
     <>
-      <IstasyonIstekleri istenenler={o.kutu.bendenIstenenler ?? []} alinanlar={o.kutu.okutarakAlinanlar ?? []} />
+      <IstasyonIstekleri istenenler={o.kutu.bendenIstenenler ?? []} alinanlar={(o.kutu.okutarakAlinanlar ?? []).filter((t) => !hedefTarafi(o.kutu, t))} />
       {o.okunan?.cevap.tur === 'malzeme' && <PanelSevk key={o.okunan.kod} okunan={o.okunan} />}
       <h3 className="tc-stok-teslim-baslik">Malzeme teslim et</h3>
       <MalzemeTeslimEt kutu={o.kutu} baslangic={o.baslangic} />
+      <h3 className="tc-stok-teslim-baslik">Gönderdiklerim</h3>
+      {o.kutu.gonderdiklerim.length === 0 ? <p className="tc-stok-not">Son gönderiminiz yok.</p>
+        : <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Gönderdiklerim">{o.kutu.gonderdiklerim.map((t) => <GonderilenTeslim key={t.id} t={t} />)}</ul>}
     </>
   );
 }
@@ -417,11 +492,19 @@ function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslan
             />
           )
       )}
+      {secili?.sonraki && (
+        <p className="tc-stok-bilgi" role="status">
+          <Simge ad="route" /> Rotada sonraki: {secili.sonraki.ad} (OP {secili.sonraki.opNo})
+          {hedef !== yerDegeri({ istasyonId: secili.sonraki.istasyonId }) && (
+            <Dugme onClick={() => hedefSec(yerDegeri({ istasyonId: secili.sonraki!.istasyonId }))}>Hedef yap</Dugme>
+          )}
+        </p>
+      )}
       <div className="tc-stok-iki">
         <Girdi etiket="Miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} required
           ipucu={secili ? `Burada ${miktarMetni(secili.miktar)} var; statü değişmez.` : undefined} />
         <Secim etiket="Nereye" bosSecenek="Hedef seçin" secenekler={hedefler} value={hedef} onChange={(o) => hedefSec(o.target.value)} required
-          ipucu={secili?.sonraki ? `Rotada sonraki: ${secili.sonraki.ad} (OP ${secili.sonraki.opNo})` : undefined} />
+        />
       </div>
       {alici && hedefGecerli && <p className="tc-stok-bilgi" role="status">{ELDEN_NOTU(alici.ad)}</p>}
       {alici && hedef !== '' && !hedefGecerli && (

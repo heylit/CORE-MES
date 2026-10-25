@@ -84,7 +84,7 @@ function IstenenSatir({ i }: { i: MalzemeIstegi }) {
   );
 }
 
-function AlinanSatir({ t }: { t: Teslim }) {
+export function AlinanSatir({ t }: { t: Teslim }) {
   const [acik, setAcik] = useState(false);
   const [neden, setNeden] = useState('');
   const itiraz = useStokKomutu((g: ItirazGovdesi) => api.post(`/stok/teslimler/${t.id}/itiraz`, g), `${t.no} için itiraz yazıldı.`, () => setAcik(false));
