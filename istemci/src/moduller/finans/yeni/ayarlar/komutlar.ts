@@ -21,7 +21,7 @@ export type DuzenliAlani = 'ad' | 'kategori' | 'tutar' | 'kdvOrani' | 'ayinGunu'
 
 // Prototipteki gibi yeni satır yer tutucu değerlerle açılır, kullanıcı tutarını satırda girer.
 export const duzenliEkleKomutu = (): Komut =>
-  komut('POST /finans/duzenli-odemeler/ekle', { ad: 'Yeni ödeme', kategori: 'personel', tutar: 1, ayinGunu: 1 }, 'Düzenli ödeme eklendi; tutarını girin.');
+  komut('POST /finans/duzenli-odemeler/ekle', { ad: 'Yeni ödeme', kategori: 'personel', tutar: 1, ayinGunu: 1 }, 'Düzenli ödeme eklendi; tutarını girin.', undefined, true);
 
 export function duzenliGuncelleKomutu(dz: DuzenliKayit, alan: DuzenliAlani, deger: string): Komut {
   const g = duzenliGovdesi(dz);
@@ -59,7 +59,7 @@ export function kurKomutu(V: HazirVeri, pbHam: string, tarih: string, kur: strin
   return komut('POST /finans/kurlar/ekle', { paraBirimi: pb, tarih, kur: sayi(kur) }, 'Kur kaydedildi.');
 }
 export const faizKomutu = (pb: string, baslangic: string, yuzde: string): Komut =>
-  komut('POST /finans/faizler/ekle', { paraBirimi: pb, gecerlilikBaslangic: baslangic, aylikYuzde: sayi(yuzde) }, 'Faiz kaydedildi.');
+  komut('POST /finans/faizler/ekle', { paraBirimi: pb, gecerlilikBaslangic: baslangic, aylikYuzde: sayi(yuzde) }, 'Faiz kaydedildi.', undefined, true);
 
 /* ---------- Sabit kıymetler ---------- */
 export interface KiymetDegerleri {

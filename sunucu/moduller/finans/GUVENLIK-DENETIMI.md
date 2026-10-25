@@ -58,7 +58,7 @@ Her uç `uc()` ile tanımlıdır, tek yetki ister; gövde, parametre ve sorgu zo
 | POST /finans/virmanlar/:id/iptal | finans.yonet | FNS-30 | para: FNS-30 | para: FNS-30 (para birimi, aynı hesap, 403) |
 | POST /finans/kurlar/ekle | finans.yonet | FNS-57 | para: FNS-57 | para: FNS-57 (409, 400, 403) |
 | GET /finans/faizler | finans.oku | sayfalı (en çok 200) | para: faiz | para: faiz (403) |
-| POST /finans/faizler/ekle | finans.yonet | 0-100, dört ondalık; tablo yalnız ekleme | para: faiz | para: faiz (400, 403, UPDATE ve DELETE reddi) |
+| POST /finans/faizler/ekle | finans.kur-yaz · tekrar korumalı | 0-100, dört ondalık; tablo yalnız ekleme; FNS-40 | para: faiz, FNS-40 (yinelenen ekleme) | para: faiz (400, 403, UPDATE ve DELETE reddi), FNS-40 (kimliksiz 400) |
 | GET /finans/sabit-kiymetler | finans.oku | sayfalı (en çok 200) | para: sabit kıymet | para: sabit kıymet (403) |
 | GET /finans/amortisman | finans.oku | son 24 ay, sabit | para: sabit kıymet | para: sabit kıymet |
 | POST /finans/sabit-kiymetler/ekle | finans.yonet | tekrar korumalı; ömür 1-600, kalıntı < bedel, devir çifti ve sınırı (kısıt) | para: sabit kıymet | para: sabit kıymet (400, 403) |
@@ -66,7 +66,7 @@ Her uç `uc()` ile tanımlıdır, tek yetki ister; gövde, parametre ve sorgu zo
 | POST /finans/kurlar/guncelle | finans.yonet | FNS-57 | para: FNS-57 | para: FNS-57 (409, 400, 403) |
 | POST /finans/kdv-oranlari/ekle | finans.yonet | FNS-1 | para: FNS-1 | şema (0-100) |
 | POST /finans/kdv-oranlari/kapat | finans.yonet | FNS-1 | para: FNS-1 | şema (0-100) |
-| POST /finans/duzenli-odemeler/ekle | finans.yonet | FNS-33 | para: FNS-33 | para: FNS-33 (firmasız faturalı 400) |
+| POST /finans/duzenli-odemeler/ekle | finans.yonet · tekrar korumalı | FNS-33, FNS-40 | para: FNS-33, FNS-40 (yinelenen ekleme) | para: FNS-33 (firmasız faturalı 400), FNS-40 (kimliksiz 400) |
 | POST /finans/duzenli-odemeler/:id/guncelle | finans.yonet | FNS-33 | para: FNS-33 | para: FNS-33 (firmasız faturalı 400) |
 | POST /finans/duzenli-odemeler/:id/odendi | finans.yaz · tekrar korumalı | FNS-33 | para: FNS-33, B-003 | para: FNS-33 (firmasız faturalı 400), B-003 (tek oranla oluşamayan toplam 400) |
 | POST /finans/butce/belirle | finans.yonet | FNS-35 | para: FNS-35 | para: FNS-35 (ay başı değil 400) |

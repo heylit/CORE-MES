@@ -10,7 +10,7 @@ import {
 // Ayarlar'ın her komutu sunucuda tanımlı bir yazma ucuna gider; değer, sunucudaki tekrar koruması işaretidir (finans uclar.ts).
 const SUNUCU = new Map<string, boolean>([
   ['POST /finans/ayar/guncelle', false],
-  ['POST /finans/duzenli-odemeler/ekle', false],
+  ['POST /finans/duzenli-odemeler/ekle', true],
   ['POST /finans/duzenli-odemeler/:id/guncelle', false],
   ['POST /finans/hesaplar/ekle', false],
   ['POST /finans/hesaplar/:id/guncelle', false],
@@ -19,7 +19,7 @@ const SUNUCU = new Map<string, boolean>([
   ['POST /finans/kdv-oranlari/ekle', false],
   ['POST /finans/kurlar/ekle', false],
   ['POST /finans/kurlar/guncelle', false],
-  ['POST /finans/faizler/ekle', false],
+  ['POST /finans/faizler/ekle', true],
   ['POST /finans/sabit-kiymetler/ekle', true],
   ['POST /finans/sabit-kiymetler/:id/pasif', false],
   ['POST /finans/toplu-ice-aktar', true],

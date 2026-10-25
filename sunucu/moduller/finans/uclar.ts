@@ -153,7 +153,7 @@ export const paraUclari = [
   // ---- tanımlar ve ayar ----
   uc({ yontem: 'POST', yol: '/finans/kurlar/ekle', yetki: 'finans.kur-yaz', govde: kurGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kurEkle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kurlar/guncelle', yetki: 'finans.kur-yaz', govde: kurGuncelleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde, denetimEki }) => servis.kurGuncelle(db, kullanici, govde, denetimEki) }),
-  uc({ yontem: 'POST', yol: '/finans/faizler/ekle', yetki: 'finans.kur-yaz', govde: faizEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.faizEkle(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/finans/faizler/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: faizEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.faizEkle(db, kullanici, govde) }),
   // 260 a: satış formundaki sipariş seçimi; fatura yazanın yetkisiyle (sipariş no ve durumu, tutar yok).
   uc({ yontem: 'GET', yol: '/finans/satis-siparisleri', yetki: 'finans.yaz', sorgu: satisSiparisleriSorgusu, cevap: satisSiparisleriCevabi,
     isle: ({ db, sorgu }) => servis.satisSiparisleri(db, sorgu.firmaId) }),
@@ -174,7 +174,7 @@ export const paraUclari = [
     isle: async ({ db, kullanici, parametre, govde }) => ({ maliyet: await servis.maliyetYaz(db, kullanici, parametre.tur, govde) }) }),
   uc({ yontem: 'POST', yol: '/finans/kdv-oranlari/ekle', yetki: 'finans.yonet', govde: kdvOraniEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kdvOraniEkle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kdv-oranlari/kapat', yetki: 'finans.yonet', govde: kdvOraniKapatGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kdvOraniKapat(db, kullanici, govde) }),
-  uc({ yontem: 'POST', yol: '/finans/duzenli-odemeler/ekle', yetki: 'finans.yonet', govde: duzenliOdemeGovdesi, cevap: zod.object({ duzenli: duzenliOdemeSemasi }),
+  uc({ yontem: 'POST', yol: '/finans/duzenli-odemeler/ekle', yetki: 'finans.yonet', tekrarKorumali: true, govde: duzenliOdemeGovdesi, cevap: zod.object({ duzenli: duzenliOdemeSemasi }),
     isle: async ({ db, kullanici, govde }) => ({ duzenli: await servis.duzenliEkle(db, kullanici, govde) as zod.output<typeof duzenliOdemeSemasi> }) }),
   uc({ yontem: 'POST', yol: '/finans/duzenli-odemeler/:id/guncelle', yetki: 'finans.yonet', parametre: kimlikParametresi, govde: duzenliOdemeGuncelleGovdesi, cevap: zod.object({ duzenli: duzenliOdemeSemasi }),
     isle: async ({ db, kullanici, parametre, govde, denetimEki }) => ({ duzenli: await servis.duzenliGuncelle(db, kullanici, parametre.id, govde, denetimEki) as zod.output<typeof duzenliOdemeSemasi> }) }),
