@@ -8,7 +8,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
-  BenCevabi, DurumCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
+  BenCevabi, DurumCevabi, SatinAlmaEkiCevabi, FasonTahminCevabi, KapasiteCevabi, KayitlarCevabi, PlanlamaCalismasiCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi,
   YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -372,10 +372,23 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
-  const acikSiparisler = d.items !== null && yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, d.items) : null;
-  // 533 a: malzemenin tedarik termini Satın Alma'dandır; planlamada her malzeme satırında görünür (yazma ucu satın almanın).
-  const terminler = d.items === null ? null : await malzemeTerminleri(db, d.items);
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), acikSiparisler, tedarikTerminleri: terminler } };
+  const sa = await satinAlmaEkiKur(db, kullanici, d.items);
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), ...sa } };
+}
+
+// 525 1 a, 533 a: planın satın alma eki. Açık sipariş satın almayı okuyana; tedarik termini planlamada her malzeme satırında görünür
+// (yazma ucu satın almanın). Çerçeve bunu kaynak okumasıyla birlikte ayrı uçtan alır; sunucunun birleştirmesi kaynakOku'dan.
+export async function satinAlmaEki(db: Db, kullanici: Kullanici): Promise<SatinAlmaEkiCevabi> {
+  if (!yetkiliMi(kullanici, MALZEME_OKUMA)) return satinAlmaEkiKur(db, kullanici, null);
+  const { kartlar } = await aktifMalzemeler(db, { sayfaBoyu: MALZEME_SAYFA_BOYU, azamiSayfa: MALZEME_AZAMI_SAYFA });
+  return satinAlmaEkiKur(db, kullanici, kartlar.map((k) => malzemeCevir(k, undefined)));
+}
+async function satinAlmaEkiKur(db: Db, kullanici: Kullanici, malzemeler: DurumCevabi['items']): Promise<SatinAlmaEkiCevabi> {
+  if (malzemeler === null) return { acikSiparisler: null, tedarikTerminleri: null };
+  return {
+    acikSiparisler: yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, malzemeler) : null,
+    tedarikTerminleri: await malzemeTerminleri(db, malzemeler),
+  };
 }
 
 // 533 a: plan kaydedilince malzemenin olması gereken tarihi Satın Alma'ya aynı transaction'da gider (tam liste: planın artık istemediğinin tarihi

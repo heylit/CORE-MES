@@ -9,7 +9,7 @@ import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
 import { highsYukle } from './highs.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
-import type { DurumCevabi, KapasiteCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -139,6 +139,8 @@ export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | 
   'maliyet-yaz': { hazirla: (girdi: Nesne, baglam: KomutBaglami) => maliyetIstegi(girdi, baglam) },
   ...KAYNAK_KOMUTLARI,
   ...PLAN_STOK_KOMUTLARI,
+  // 533 a: malzemenin tedarik termini Satın Alma'nın ucuna yazılır (yetki satin-alma.yaz ya da plan.yaz; sürüm tutmazsa 409).
+  'tedarik-termini-kaydet': { yol: '/satin-alma-tedarik-terminleri/kaydet', alanlar: ['malzemeNo', 'termin', 'aciklama', 'surum'], tekrarKorumali: true },
   // Plan stüdyosu: senaryo plan modülünün taslağıdır (`plan-senaryo-komutlari.ts`).
   ...planSenaryoKomutlari((yol) => api.get(yol)),
   // Rota (kart #1184): revizyon açma, kaydetme ve onay akışı rota modülünün uçlarına gider.
@@ -187,6 +189,9 @@ export interface KaynakEki {
   takvim: TakvimEki | null;
   // Plan kapasitesi (kart #1324): onaylı izin, planlı fazla mesai ve atama payı; okunamadıysa null (prototip vardiyayla hesaplar).
   kapasite: KapasiteCevabi | null;
+  // 525 1 a, 533 a: açık satın alma siparişinin gelişi ve malzemenin tedarik termini (girdi.betik plana yazar); okunamadıysa null.
+  acikSiparisler: SatinAlmaEkiCevabi['acikSiparisler'];
+  tedarikTerminleri: SatinAlmaEkiCevabi['tedarikTerminleri'];
 }
 
 // Sahibinin kendi okuma uçları (KAYNAK_OKUMALARI): sürüm ve tam kayıt buradan gelir. Biri okunamazsa (yetki yok) o koleksiyon null kalır;
@@ -210,6 +215,13 @@ async function anlikOku(islemler: IslemListesi): Promise<{ anlik: KaynakAnlik; t
 async function kapasiteOku(): Promise<KapasiteCevabi | null> {
   try { return await api.get<KapasiteCevabi>('/recete-rota/kapasite'); } catch { return null; }
 }
+const SATIN_ALMA_EKSIZ: SatinAlmaEkiCevabi = { acikSiparisler: null, tedarikTerminleri: null };
+async function satinAlmaEkiOku(): Promise<SatinAlmaEkiCevabi> {
+  try {
+    const c = await api.get<Partial<SatinAlmaEkiCevabi> | null>('/recete-rota/satin-alma-eki');
+    return { acikSiparisler: c?.acikSiparisler ?? null, tedarikTerminleri: c?.tedarikTerminleri ?? null };
+  } catch { return SATIN_ALMA_EKSIZ; }
+}
 
 const alanHaritasi = (k: KaynakKoleksiyonu | null, alan: string): Record<string, string | null> | null => {
   if (k === null) return null;
@@ -217,9 +229,11 @@ const alanHaritasi = (k: KaynakKoleksiyonu | null, alan: string): Record<string,
   for (const [id, kayit] of k) { const d = kayit[alan]; sonuc[String(id)] = typeof d === 'string' ? d : null; }
   return sonuc;
 };
-const ekOzeti = (anlik: KaynakAnlik, takvim: TakvimEki | null, kapasite: KapasiteCevabi | null): KaynakEki => ({
+const ekOzeti = (anlik: KaynakAnlik, takvim: TakvimEki | null, kapasite: KapasiteCevabi | null, sa: SatinAlmaEkiCevabi): KaynakEki => ({
   takvim,
   kapasite,
+  acikSiparisler: sa.acikSiparisler,
+  tedarikTerminleri: sa.tedarikTerminleri,
   makineNotu: alanHaritasi(anlik.makineDurumlari, 'aciklama'),
   kisiGorevi: alanHaritasi(anlik.kisiler, 'gorev'),
   istasyonTipi: alanHaritasi(anlik.istasyonlar, 'tip'),
@@ -443,9 +457,9 @@ export function kopruKur(
       // güvenli tarafta (409) reddedilir; tersi sırada ekranın görmediği değişikliğin üstüne yazılırdı.
       case 'kaynak-oku':
         return sirala(async () => {
-          const [okunan, kapasite] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku()]);
+          const [okunan, kapasite, sa] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku(), satinAlmaEkiOku()]);
           anlik = okunan.anlik;
-          return { durum: await durumOku(), ek: ekOzeti(anlik, okunan.takvim, kapasite) };
+          return { durum: await durumOku(), ek: ekOzeti(anlik, okunan.takvim, kapasite, sa) };
         });
       case 'komut': {
         const ad = metin(v['ad'], 'komut adı');
@@ -462,10 +476,10 @@ export function kopruKur(
           // Rota komutları sık koşar ve kaynak sürümlerine dokunmaz: yalnız bağlı durum yeniden okunur.
           if ('hafif' in tanim) return { sonuc, durum: await durumOku().catch(() => null), ek: null };
           // Komut uygulandı; durum okunamazsa komut başarısız sayılmaz (çerçeve `kaynakOku()` ile yeniden ister). Sürümler önce okunur.
-          const [okunan, kapasite] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku()]);
+          const [okunan, kapasite, sa] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku(), satinAlmaEkiOku()]);
           anlik = okunan.anlik;
           const durum = await durumOku().catch(() => null);
-          return { sonuc, durum, ek: ekOzeti(anlik, okunan.takvim, kapasite) };
+          return { sonuc, durum, ek: ekOzeti(anlik, okunan.takvim, kapasite, sa) };
         });
       }
       default:

@@ -28,6 +28,11 @@ const KAPASITE = {
   baslangic: '2030-01-01', isMerkezleri: [{ id: '1', fazlaMesai: [{ tarih: '2030-01-02', dakika: 120 }] }], istasyonlar: [],
   kisiler: [{ id: '8', izinli: ['2030-01-03'], fazlaMesai: [], paylar: [{ wcId: '1', pay: 0.5 }] }],
 };
+// 533 a: açık sipariş gelişleri ve tedarik terminleri sunucu birleştirmesiyle aynı ek olarak çerçeveye geçer.
+const SATIN_ALMA_EKI = {
+  acikSiparisler: [{ kod: '12', miktar: 5, tarih: '2030-01-04', siparisNo: 'SA-1' }],
+  tedarikTerminleri: [{ kod: '12', termin: '2030-01-06', surum: 2, aciklama: '' }],
+};
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const OKUMA_YOLLARI = ['/is-merkezleri', '/istasyonlar', '/makineler', '/kisiler', '/vardiya-takvimi', '/istasyon-plan-ayarlari', '/makine-durumlari'];
 
@@ -72,10 +77,10 @@ describe('köprü komutları', () => {
   it('KOM-01: izinli komut sahibi modülün var olan ucuna yalnız izinli alanlarla gider; başarıda sahibinin kayıtları ve durum yeniden okunup döner', async () => {
     const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { id: 4, kod: 'KES-1' }) : yol === '/recete-rota/durum' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
     const sonuc = await kopruKur()('komut', { ad: 'operasyon-tipi-ekle', govde: { kod: 'KES-1', ad: 'Testere', grup: 'KES', sinsi: 'gecmemeli' } });
-    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /operasyon-tipleri', ...OKUMA_YOLLARI.map((y) => `GET ${y}`), 'GET /recete-rota/kapasite', 'GET /recete-rota/durum', 'GET /plan/motor-yerlesimi']);
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /operasyon-tipleri', ...OKUMA_YOLLARI.map((y) => `GET ${y}`), 'GET /recete-rota/kapasite', 'GET /recete-rota/satin-alma-eki', 'GET /recete-rota/durum', 'GET /plan/motor-yerlesimi']);
     expect(istekler[0]?.govde).toEqual({ kod: 'KES-1', ad: 'Testere', grup: 'KES' });
     // Sahibinin okuma yetkisi yoksa ek alanlar null döner (sıfır uydurulmaz).
-    expect(sonuc).toEqual({ sonuc: { id: 4, kod: 'KES-1' }, durum: { ...DURUM, planYerlesim: null, planMotoru: null }, ek: { makineNotu: null, kisiGorevi: null, istasyonTipi: null, kapasiteKaynagi: null, takvim: null, kapasite: null } });
+    expect(sonuc).toEqual({ sonuc: { id: 4, kod: 'KES-1' }, durum: { ...DURUM, planYerlesim: null, planMotoru: null }, ek: { makineNotu: null, kisiGorevi: null, istasyonTipi: null, kapasiteKaynagi: null, takvim: null, kapasite: null, acikSiparisler: null, tedarikTerminleri: null } });
   });
 
   it('KOM-02: tabloda olmayan komut hiçbir istek atmadan reddedilir ve çerçeveye 400 ile döner; prototip anahtarları komut sayılmaz', async () => {
@@ -140,7 +145,7 @@ describe('köprü komutları', () => {
 
   it('KOM-04: komut uygulandıktan sonra durum okunamazsa komut başarılı sayılır, durum null döner; durum-oku durumu motorun ekran yerleşimiyle verir (220 a)', async () => {
     sunucuKur((yontem) => (yontem === 'POST' ? json(200, { id: 1 }) : json(500, { kod: 'SUNUCU', mesaj: 'Hata.' })));
-    expect(await kopruKur()('komut', { ad: 'operasyon-tipi-ekle', govde: {} })).toEqual({ sonuc: { id: 1 }, durum: null, ek: { makineNotu: null, kisiGorevi: null, istasyonTipi: null, kapasiteKaynagi: null, takvim: null, kapasite: null } });
+    expect(await kopruKur()('komut', { ad: 'operasyon-tipi-ekle', govde: {} })).toEqual({ sonuc: { id: 1 }, durum: null, ek: { makineNotu: null, kisiGorevi: null, istasyonTipi: null, kapasiteKaynagi: null, takvim: null, kapasite: null, acikSiparisler: null, tedarikTerminleri: null } });
     const yerlesim = { 'UE-1|10': [{ makineId: 3, baslangic: '2030-01-01T05:00:00.000Z' }], 'UE-1|20~2': [{ makineId: null, baslangic: '2030-01-01T07:00:00.000Z' }] };
     sunucuKur((_y, yol) => json(200, yol === '/plan/motor-yerlesimi' ? { ekranYerlesimi: yerlesim, yerlesimler: [], yerlesmeyen: [] } : DURUM));
     expect(await kopruKur()('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: yerlesim, planMotoru: { emirler: [], parcaAdetleri: {} } });
@@ -175,7 +180,7 @@ describe('köprü komutları', () => {
   });
 
   it('KOM-05: komut tablosu yalnız bilinen komutları ve sahibinin yollarını gösterir', () => {
-    expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['operasyon-tipi-ekle', 'operasyon-tipi-duzenle', 'statu-degistir', 'maliyet-yaz', ...Object.keys(KAYNAK_KOMUTLARI), ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
+    expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['operasyon-tipi-ekle', 'operasyon-tipi-duzenle', 'statu-degistir', 'maliyet-yaz', 'tedarik-termini-kaydet', ...Object.keys(KAYNAK_KOMUTLARI), ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
     expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-tanimi-kaydet', 'statu-tanimi-sil']);
     expect(STATU_KOMUTLARI['statu-tanimi-kaydet']!.hazirla({ id: 'S3', code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null, fazla: 1 }))
       .toEqual({ yol: '/recete-rota/statu-tanimlari/S3/kaydet', govde: { code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null } });
@@ -183,6 +188,7 @@ describe('köprü komutları', () => {
     expect(() => STATU_KOMUTLARI['statu-tanimi-sil']!.hazirla({ id: '../plan', beklenenSurum: 2 })).toThrow('Geçersiz statü kimliği.');
     expect((IZINLI_KOMUTLAR['operasyon-tipi-ekle'] as { yol: string }).yol).toBe('/operasyon-tipleri');
     expect(IZINLI_KOMUTLAR['statu-degistir']).toMatchObject({ yol: '/stok/statu-degistir', tekrarKorumali: true });
+    expect(IZINLI_KOMUTLAR['tedarik-termini-kaydet']).toMatchObject({ yol: '/satin-alma-tedarik-terminleri/kaydet', tekrarKorumali: true });
     expect(Object.keys(KAYNAK_KOMUTLARI).sort()).toEqual([
       'is-merkezi-ekle', 'is-merkezi-guncelle', 'is-merkezi-sil', 'istasyon-ekle', 'istasyon-guncelle', 'istasyon-sil',
       'kisi-duzenle', 'kisi-ekle', 'makine-ekle', 'makine-guncelle', 'makine-sil', 'yetkinlik-belirle',
@@ -274,13 +280,14 @@ describe('köprü komutları', () => {
       }
       if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, DURUM);
       if (yontem === 'GET' && yol === '/recete-rota/kapasite') return json(200, KAPASITE);
+      if (yontem === 'GET' && yol === '/recete-rota/satin-alma-eki') return json(200, SATIN_ALMA_EKI);
       return json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
     });
     const sonuc = await kopruKur()('kaynak-oku', {});
     // Plan kapasitesi eki (kart #1324) olduğu gibi çerçeveye geçer.
     expect(sonuc).toEqual({
       durum: { ...DURUM, planYerlesim: null, planMotoru: null },
-      ek: { makineNotu: { 3: 'Yağ' }, kisiGorevi: { 8: 'Usta', 9: null }, istasyonTipi: null, kapasiteKaynagi: null, takvim: { hafta: { 1: { 1: ['5', '6'], 0: ['5'] } }, kisiVardiyasi: { 8: '6' } }, kapasite: KAPASITE },
+      ek: { makineNotu: { 3: 'Yağ' }, kisiGorevi: { 8: 'Usta', 9: null }, istasyonTipi: null, kapasiteKaynagi: null, takvim: { hafta: { 1: { 1: ['5', '6'], 0: ['5'] } }, kisiVardiyasi: { 8: '6' } }, kapasite: KAPASITE, ...SATIN_ALMA_EKI },
     });
     sunucuKur(() => json(403, { kod: 'YETKI_YOK', mesaj: 'yok' }));
     expect(await kopruKur()('kaynak-oku', {}).then(() => null, sorun)).toEqual({ hata: 'yok', durum: 403 });

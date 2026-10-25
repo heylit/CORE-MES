@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeParametresi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
+  benCevabi, calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeParametresi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, satinAlmaEkiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, tabanVeCanliCevabi, taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yazCevabi, yazGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi,
   yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, satinAlmaPlanCalismasi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
+  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, satinAlmaEki, satinAlmaPlanCalismasi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
@@ -46,6 +46,14 @@ export const uclar = [
     yetki: OKUMA,
     cevap: kapasiteCevabi,
     isle: ({ db, kullanici }) => kapasite(db, kullanici),
+  }),
+  // 525 1 a, 533 a: planın satın alma eki (açık sipariş gelişi, tedarik termini); çerçevenin kaynak okuması ister.
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/satin-alma-eki',
+    yetki: OKUMA,
+    cevap: satinAlmaEkiCevabi,
+    isle: ({ db, kullanici }) => satinAlmaEki(db, kullanici),
   }),
   // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
   uc({

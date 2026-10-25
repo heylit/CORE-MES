@@ -390,6 +390,15 @@ export const durumCevabi = z.object({
 // Plan kapasitesi (kart #1324): Vardiya takviminden prototipin kendi vardiya hesabına eklediği farklar; bugünden KAPASITE_GUNU gün.
 // Fazla mesai dakikası vardiyayla örtüşmeyen planlı çalışmadır (yalnız sıfırdan büyük günler). İstasyon satırı yalnız istasyona özel
 // fazla mesaisi olan istasyonda gelir (iş merkezininkini de içerir). Kişide izinli onaylı izin günleri, paylar iş merkezi başına atama
+// 525 1 a, 533 a: planın satın alma eki (çerçevenin kaynak okuması ve sunucunun birleştirmesi aynı veriyi alır). `acikSiparisler`: ham
+// malzemenin açık satın alma siparişinden kalan miktar (malzemenin biriminde) ve beklenen teslim günü; satın almayı okuyamayana null.
+// `tedarikTerminleri`: malzemenin Satın Alma'daki tedarik termini ve yazma sürümü; satırı olmayan malzeme listede yoktur. `kod` plandaki
+// malzeme kodudur (kartın numarası). Malzemeleri okuyamayana ikisi de null.
+export const satinAlmaEkiCevabi = z.object({
+  acikSiparisler: z.array(z.object({ kod: kimlikMetni, miktar: z.number().positive(), tarih: tarihSemasi.nullable(), siparisNo: z.string() })).nullable(),
+  tedarikTerminleri: z.array(z.object({ kod: kimlikMetni, termin: tarihSemasi.nullable(), surum: z.number().int(), aciklama: z.string() })).nullable(),
+});
+
 // yüzdesi / 100. Okuma yetkisi olmayan dilim null.
 export const KAPASITE_GUNU = 180;
 const gunDakikasi = z.object({ tarih: tarihSemasi, dakika: z.number().int().positive() });
@@ -607,6 +616,7 @@ export type YazCevabi = z.output<typeof yazCevabi>;
 export type SilCevabi = z.output<typeof silCevabi>;
 export type DurumCevabi = z.output<typeof durumCevabi>;
 export type KapasiteCevabi = z.output<typeof kapasiteCevabi>;
+export type SatinAlmaEkiCevabi = z.output<typeof satinAlmaEkiCevabi>;
 export type DurumRotaAdimi = z.output<typeof durumRotaAdimiSemasi>;
 export type DurumRotaRevizyonu = z.output<typeof durumRotaRevizyonSemasi>;
 export type DurumMaliyeti = z.output<typeof durumMaliyetSemasi>;
