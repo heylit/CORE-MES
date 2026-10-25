@@ -43,6 +43,7 @@ test.describe('P6 Sevkiyat', () => {
     const acilim = kap.getByRole('region', { name: /^ORN-S2 · / });
     await expect(acilim.getByText('ORN-S2 termini 02.03 Pzt, plan 03.03 Sal sevke hazır diyor: 6 sa geç.')).toBeVisible();
     await expect(acilim.getByRole('button', { name: /ORN-S2 çizelgede/ })).toBeDisabled();
+    await expect(acilim.getByText('Bunu değiştirme yetkiniz yok.')).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await page.keyboard.press('Escape');
     await expect(acilim).toBeHidden();

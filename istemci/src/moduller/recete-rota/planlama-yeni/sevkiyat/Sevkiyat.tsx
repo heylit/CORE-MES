@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } 
 import { Kart, Rozet, SayiKarti, Simge } from '../../../../ortak/arayuz/index.ts';
 import '../../../../ortak/arayuz/tablo.css';
 import { planGuncel } from '../durum.ts';
-import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
+import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import {
   ACIK_GRUP, AKIS_SINIRI, AYNI_BITIS, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, gecMi, ilkPlanaGore, oncekineGore, planAdi, sayiYaz, sevkDurumu,
@@ -115,13 +115,13 @@ export function Sevkiyat({ calisma }: PlanlamaEkranOzellikleri) {
   );
 }
 
-// Satırın açılımı. Bugünkü sayfanın "Sevk edildi olarak işaretle" formu 455/1 a ile gelmez (sevk sevkiyat modülünden okunacak);
+// Satırın açılımı. "Sevk edildi olarak işaretle" formu sevkiyat modülünündür (455/1 a): yerinde eski sayfanın yetkisiz hali durur.
 // "çizelgede" seçeneği yerinde ve pasif: Planlama motoru görünümünde siparişi seçmek iskelet desteği ister.
 function SevkAcilimKarti({ r, taban, kapat }: { r: SevkIsiSatiri; taban: number; kapat: () => void }) {
   const a = sevkAcilimi(r, taban);
   return (
     <Acilim
-      baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat}
+      baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat} form={<IzinYok />}
       secenekler={[{ ad: `${r.x.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', pasif: true }]}
     />
   );

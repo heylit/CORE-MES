@@ -45,7 +45,7 @@ describe('P6 Sevkiyat', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('üstte ısı haritası: durum satırı, sipariş × gün ızgarası; hücre açılımı neden ve bilgiyle açılır, Esc kapatır; çizelge seçeneği pasif', async () => {
+  it('üstte ısı haritası: durum satırı, sipariş × gün ızgarası; hücre açılımı neden, bilgi ve kilit metniyle açılır, Esc kapatır; çizelge seçeneği pasif', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/recete-rota/planlama-yeni/sevkiyat');
     const izgara = await screen.findByRole('group', { name: 'Sipariş × gün, termine kalan süre' }, { timeout: 10000 });
@@ -58,6 +58,8 @@ describe('P6 Sevkiyat', () => {
     const acilim = screen.getByRole('region', { name: 'S2 · —' });
     expect(within(acilim).getByText('S2 termini 02.03 Pzt, plan 03.03 Sal sevke hazır diyor: 6 sa geç.')).toBeTruthy();
     expect((within(acilim).getByRole('button', { name: /S2 çizelgede/ }) as HTMLButtonElement).disabled).toBe(true);
+    // Sevk formu sevkiyat modülünündür: yerinde eski sayfanın kilit metni.
+    expect(within(acilim).getByText('Bunu değiştirme yetkiniz yok.')).toBeTruthy();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'S2 · —' })).toBeNull();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
