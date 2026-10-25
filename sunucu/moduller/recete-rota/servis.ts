@@ -34,6 +34,7 @@ import {
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
+import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
 // Akış: yetkiyi uç verir; burada biçim ve sürüm denetimi uygulanır.
@@ -401,6 +402,18 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   if (k.girdi === null) return { calisma: null, surum: k.surum };
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
   return { calisma: g === null ? null : g.S, surum: k.surum };
+}
+
+// 542 a, 546 a, 549 a: Satın Alma'nın malzeme ve fason planı sayfaları. Çalışma planlama sayfasıyla aynı girdiyle birleşir; kaynak sunucunun
+// iç okuyucusuyla okunur (çağıranın yetkisiyle okunsa satın almanın göremediği dilim düşer, hesap planlamadan ayrılırdı) ve giden çalışma
+// beyaz listeyle daraltılır (satin-alma-gorunumu.ts). Biten iş canlı emir durumundandır, okunamazsa Reçete ve Rota kaydındaki kopyası.
+export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now()): Promise<PlanlamaCalismasiCevabi> {
+  const k = await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU);
+  if (k.girdi === null) return { calisma: null, surum: k.surum };
+  const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
+  if (g === null) return { calisma: null, surum: k.surum };
+  const emirler = (k.girdi.kaynak.durum as { emirler?: unknown } | null)?.emirler ?? k.girdi.kayit;
+  return { calisma: satinAlmaCalismasi(g.S, emirler), surum: k.surum };
 }
 
 // Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki

@@ -5,7 +5,7 @@ import {
   yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
+  ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, satinAlmaPlanCalismasi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
@@ -54,6 +54,14 @@ export const uclar = [
     yetki: 'recete-rota.planlama-oku',
     cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlamaCalismasi(db, kullanici),
+  }),
+  // 542 a, 546 a, 549 a: Satın Alma menüsünün malzeme ve fason planı; daraltılmış çalışma (müşteri, fiyat, maliyet, tezgâh, personel yok).
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/planlama-calismasi/satin-alma',
+    yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'recete-rota.planlama-oku'] },
+    cevap: planlamaCalismasiCevabi,
+    isle: ({ db }) => satinAlmaPlanCalismasi(db),
   }),
   // 499 a, 506 a: çalışma planı ile canlı planın farkı (atölyenin "canlı planla aynı" rozeti); yalnız okur. Çalışmayı okuma yetkisi uçta,
   // canlı planı okuma yetkisi (GET /plan'ınki) işleyicide aranır: iki okumanın birleşimi yetkiyi genişletmez.
