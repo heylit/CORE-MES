@@ -4,7 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, canliFark, gunYeni, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, canliFarkOzeti, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, type SunucuSenaryosu,
 } from './kurallar.ts';
 
@@ -99,16 +99,14 @@ describe('atölye kuralları', () => {
     expect(gunKaydi(ornekCalisma())).toEqual({ basi: null, gecmis: [] });
   });
 
-  it('elle sıra listeyi sıralar; canlı senaryoyla fark eski farkSay gibi sayılır', () => {
+  it('elle sıra listeyi sıralar; canlı farkı sunucunun kıyasından özetlenir (tezgâh, sıra, yeni, eksik)', () => {
     const { c, p, cx, h } = kur();
     expect(siparisler({ ...c, tpSira: ['3', '2', 'yok'] } as PlanlamaCalismasi, p, cx, h).map((s) => s.id)).toEqual(['3', '2']);
-    expect(canliFark(c, p)).toEqual({ var: false, say: 0, farkli: true });
-    const ops = Object.fromEntries(Object.entries(p.ops).map(([k, r]) => [k, { m: r.m, S: r.S }]));
-    const ayni = { ...c, canli: 's1', senaryolar: [{ id: 's1', plan: { ops, zaman: 5 }, down: c.down }] } as PlanlamaCalismasi;
-    expect(canliFark(ayni, p).say).toBe(0);
-    const ilk = Object.keys(ops)[0] ?? '';
-    const kayik = { ...ayni, senaryolar: [{ id: 's1', plan: { ops: { ...ops, [ilk]: { m: 'baska', S: 0 } }, zaman: 5 }, down: [] }] } as PlanlamaCalismasi;
-    expect(canliFark(kayik, p).say).toBe(1 + c.down.length);
+    const r = { planSurumu: 4, ayni: false, guncel: true, tasinan: 3, tezgah: 1, sira: 2, yeni: 1, eksik: 1, isler: [], yazilamaz: ['x'] };
+    expect(canliFarkOzeti(r)).toEqual({ var: true, say: 5, farkli: true });
+    expect(canliFarkOzeti({ ...r, ayni: true, tasinan: 0, tezgah: 0, sira: 0, yeni: 0, eksik: 0 })).toEqual({ var: true, say: 0, farkli: false });
+    expect(canliFarkOzeti({ ...r, planSurumu: 0 })).toEqual({ var: false, say: 0, farkli: true });
+    expect(canliFarkOzeti(null)).toEqual({ var: false, say: 0, farkli: true });
   });
 
   it('malzeme ayrıntısı malzemeHazir ile aynı dağıtımı yapar', () => {
@@ -193,5 +191,35 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     expect(ayarSaat(p({ ayarSaat: 1.3 }))).toBe(1.3);
     expect(ayarSaat(p({}))).toBeNull();
     expect(ayarSaat(null)).toBeNull();
+  });
+
+  it('plan ve gerçekleşen: taban ve canlı sunucudan, sayfanın adımına k ile bağlanır; geç biten adım farkı ve nedeni verir', () => {
+    const { c, p, cx, h } = kur();
+    // Planın saat 0'ı başlangıç günü 00:00, tesis saatiyle (UTC+3).
+    const iso = (t: number) => new Date(Date.UTC(2026, 9, 19) - 3 * 3_600_000 + t * 3_600_000).toISOString();
+    const ops = Object.values(p.ops).filter((r) => !r.fas && Number.isFinite(r.S) && Number.isFinite(r.C));
+    const yer = (S: number, C: number) => ({ kaynak: { tur: 'makine' as const, id: 7 }, baslangic: iso(S), bitis: iso(C) });
+    const r = { planSurumu: 4, isler: [
+      ...ops.map((o, i) => ({ k: o.id, anahtar: `E|${i}`, isEmriId: i + 1, uretimEmriId: 1, taban: { ...yer(o.S, o.C), planSurumu: 2 }, canli: { ...yer(o.S, o.C + 1), parcalar: [] } })),
+      { k: null, anahtar: 'X|1', isEmriId: 99, uretimEmriId: 9, taban: { ...yer(0, 1), planSurumu: 1 }, canli: null },
+    ] };
+    const K = pgKaynakKur(r, c, p);
+    expect(Object.keys(K.taban).sort()).toEqual([...new Set(ops.map((o) => o.job))].sort());
+    const ilk = ops.find((o) => o.job === '3');
+    if (!ilk) throw new Error('adım yok');
+    const t0 = K.taban['3']?.ops[ilk.id];
+    expect(t0?.m).toBe('7');
+    expect(t0?.S).toBeCloseTo(ilk.S, 1);
+    expect(K.canli[ilk.id]?.C).toBeCloseTo(ilk.C + 1, 1);
+    expect(K.tabanSurum).toBe(2);
+    const gc = { ...c, gercek: { [ilk.id]: { m: ilk.m, S: ilk.S + 2, C: ilk.C + 5 } } } as PlanlamaCalismasi;
+    const L = pgSatirlar(gc, p, K, cx, h);
+    const s3 = L.find((x) => x.j === '3');
+    expect(s3?.gb.basladi).toBe(true);
+    expect(s3?.plan).toBeCloseTo(1, 1);
+    expect(pgGostergeleri(gc, p, K, L).degisiklik).toBe(2);
+    expect(pgSerit(gc, p, K, 128).satirlar.length).toBeGreaterThan(0);
+    expect(Array.isArray(pgNedenOzeti(gc, L))).toBe(true);
+    expect(pgKaynakKur({ planSurumu: 0, isler: [] }, c, p)).toEqual({ taban: {}, canli: {}, planSurumu: 0, tabanSurum: null });
   });
 });

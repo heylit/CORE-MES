@@ -1,9 +1,11 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Simge, type useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
+import { planGuncel } from '../../durum.ts';
 import { degisken, HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
+import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
   bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
@@ -156,7 +158,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
             <div className="tc-pym-tp-eylem">
-              <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" onClick={() => { ort.kartKapat(); ort.sekSec('onay'); }}><Simge ad="upload" boyut="k" />Gönder</button>
+              <GonderDugmesi ort={ort} bildir={bildir} />
               <button type="button" className="tc-dugme" onClick={ort.kartKapat}>Vazgeç</button>
             </div>
           </>
@@ -322,4 +324,26 @@ function gunOzeti(ort: Ortam): Govde {
       </>
     ),
   };
+}
+
+// Eski gonderOnay: kart doğrudan onaya gönderir (canlıya alma ayrı düğmedir, Onay sekmesinde). Eski veriyle çözülmüş plan gönderilmez, Onay
+// sekmesindeki kontrole gidilir. Ret ve yarıda kalma sunucunun iletisiyle gösterilir; kart açık kalır.
+function GonderDugmesi({ ort, bildir }: { ort: Ortam; bildir: Bildir }) {
+  const [gidiyor, setGidiyor] = useState(false);
+  const gonder = async () => {
+    if (!planGuncel(ort.c)) { ort.kartKapat(); ort.sekSec('onay'); bildir('hata', 'Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.'); return; }
+    setGidiyor(true);
+    try {
+      const g = await calismayiYolla({ o: ort.o, c: ort.c, sen: ort.sen, hedef: 'onay', not: null });
+      if (g.senaryolar) ort.senYaz(g.senaryolar);
+      ort.kartKapat(); ort.sekSec('onay');
+      bildir('tamam', gonderIletisi('onay', g));
+    } catch (e) {
+      setGidiyor(false);
+      bildir('hata', gonderHataIletisi(e));
+    }
+  };
+  return (
+    <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" disabled={gidiyor} onClick={() => void gonder()}><Simge ad="upload" boyut="k" />{gidiyor ? 'Gönderiliyor' : 'Gönder'}</button>
+  );
 }

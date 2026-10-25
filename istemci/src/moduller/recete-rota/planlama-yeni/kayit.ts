@@ -45,6 +45,9 @@ export interface CalismaKomutu {
   geriAdimlari: () => { ne: string; t: number }[];
   // En yeni n değişikliği birlikte geri alır (eski geriDon: seçilen karardan öncesine dön).
   geriDon: (n: number) => boolean;
+  // Bekleyen değişikliği hemen, her zamanki yazmayla (sürüm denetimli) gönderir ve kayıtlı sürümü verir; yazılamadıysa (çatışma, hata) null.
+  // Sunucu kayıtlı çalışmayı okuyan komuttan (taslak-yaz) önce çağrılır.
+  kaydet: () => Promise<number | null>;
 }
 
 export interface YaziciAyari {
@@ -155,6 +158,11 @@ export class CalismaYazici implements CalismaKomutu {
     if (this.#kirli) this.#yaz();
     while (this.#yolda !== null) await this.#yolda;
   }
+
+  kaydet = async (): Promise<number | null> => {
+    await this.hepsiniYaz();
+    return this.#durdu || this.#kirli ? null : this.#surum;
+  };
 
   #izYaz(taslak: PlanlamaCalismasi, ne: string, ayrinti: string): void {
     taslak.iz = [{ t: this.#a.simdi(), kim: this.#a.kim, rol: '', sayfa: this.#a.sayfa(), ne, ayrinti }, ...taslak.iz].slice(0, IZ_SINIRI);

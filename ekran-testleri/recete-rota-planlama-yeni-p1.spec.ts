@@ -275,7 +275,8 @@ test.describe('P1e Planlama atölyesi', () => {
     }
     await tasmaz(page);
     await page.getByRole('tab', { name: /Plan ve gerçekleşen/ }).click();
-    await expect(page.getByText('Hazırlanıyor.')).toBeVisible();
+    // Taban ve canlı sunucudan okunur (505 a): boş veritabanında canlı plan yoktur; sekme yazmaz.
+    await expect(page.locator('.tc-pym-tp-pg').getByText(/Henüz canlıya alınmış plan yok|Plana uyum/)).toBeVisible();
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);
   });

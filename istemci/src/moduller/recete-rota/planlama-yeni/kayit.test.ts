@@ -212,4 +212,33 @@ describe('CalismaYazici', () => {
     expect(uyarilar).toEqual([CATISMA]);
     expect(catismadaYenile).not.toHaveBeenCalled();
   });
+
+  it('kaydet bekleyen değişikliği beklemeden aynı sürüm denetimli yazmayla gönderir ve kayıtlı sürümü verir; değişiklik yoksa yazmaz', async () => {
+    const { y, yazmalar } = kur();
+    expect(await y.kaydet()).toBe(7);
+    expect(yazmalar).toHaveLength(0);
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBe(8);
+    expect(yazmalar).toHaveLength(1);
+    expect(yazmalar[0]).toMatchObject({ anahtar: PLANLAMA_ANAHTARI, beklenenSurum: 7 });
+    await vi.runAllTimersAsync();
+    expect(yazmalar).toHaveLength(1);
+  });
+
+  it('kaydet çatışmada (409) null verir, yazma durur ve çatışma her zamanki gibi bildirilir', async () => {
+    const { y, yazmalar, uyarilar } = kur({}, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBeNull();
+    expect(yazmalar[0]?.beklenenSurum).toBe(7);
+    expect(uyarilar).toEqual([CATISMA]);
+    expect(y.durdu).toBe(true);
+    expect(await y.kaydet()).toBeNull();
+  });
+
+  it('kaydet başka hatada null verir; değişiklik bekler', async () => {
+    const { y, uyarilar } = kur({}, async () => { throw new ApiHatasi(500, { kod: 'SUNUCU', mesaj: 'x' }); });
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBeNull();
+    expect(uyarilar).toEqual([RET]);
+  });
 });
