@@ -1,0 +1,141 @@
+/* Tezgâh haritası (eski cerceve/planlama/stil/modul.stil: pm-at, pm-at-alt, pm-at-serit, pm-at-kart, pm-hl, pm-sg-zum, pm-ipucu, pm-oz-yer).
+   Ölçüler eski sayfanınkidir, yalnız tasarım değişkenleriyle; kırılımlar görünümün genişliğinden (container). */
+.tc-pym-at-cv { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; outline: none; }
+.tc-pym-at-cv:focus-visible { box-shadow: inset 0 0 0 var(--pay-ince) var(--sig); }
+.tc-pym-oz-yer > .tc-pym-at-cv { position: absolute; inset: 0; }
+.tc-pym-oz-ipucu {
+  position: absolute; left: 50%; top: 50%; z-index: 2; transform: translate(-50%, -50%); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: color-mix(in oklab, var(--ink) 82%, transparent); color: var(--panel-solid); font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .2s;
+}
+.tc-pym-oz-yer[data-ipucu] .tc-pym-oz-ipucu { opacity: 1; }
+
+/* Harita görünümü bütün alanı kaplar; görünüm çubuğu, okuma düğmesi, kılavuz, yakınlık ve oynatıcı tuvalin üstündedir. */
+.tc-pym[data-gorunum="atolye"] { position: relative; height: 100%; }
+.tc-pym-at {
+  position: relative; flex: 1 1 auto; min-height: calc(var(--b-6) * 12); display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden; background: radial-gradient(120% 90% at 50% 40%, var(--panel2), var(--bg));
+}
+.tc-pym-at > .tc-pym-at-cv { grid-row: 1 / -1; grid-column: 1; }
+.tc-pym-at-ust { grid-row: 1; grid-column: 1; z-index: 5; padding: var(--b-2) var(--b-2) 0; pointer-events: none; min-width: 0; }
+.tc-pym-at-ust > * { pointer-events: auto; }
+.tc-pym-at-ust > .tc-pym-sg { margin: 0; }
+.tc-pym-hl {
+  position: absolute; top: calc(var(--dokunma) + 3 * var(--b-2) + var(--b-1)); right: var(--b-2); z-index: 9; max-width: min(calc(var(--b-6) * 17.5), calc(100% - 2 * var(--b-2)));
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); box-shadow: var(--shadow);
+}
+.tc-pym-hl > button {
+  display: inline-flex; align-items: center; gap: var(--nokta); min-height: calc(var(--dokunma) - var(--b-2)); padding: 0 var(--b-3); border: 0; background: none;
+  color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}
+.tc-pym-hl[data-acik] { max-height: calc(100% - var(--dokunma) - 8 * var(--b-2) - var(--b-6) * 2); overflow-y: auto; }
+.tc-pym-hl[data-acik] > button { width: 100%; border-bottom: var(--cizgi-ince) solid var(--edge); }
+
+.tc-pym-at-kart, .tc-pym-at-oynat, .tc-pym-at-serit {
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: color-mix(in oklab, var(--panel-solid) 88%, transparent); box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(var(--nokta)); backdrop-filter: blur(var(--nokta));
+}
+.tc-pym-at-kart {
+  grid-row: 2; grid-column: 1; z-index: 9; align-self: start; justify-self: end; display: flex; flex-direction: column; gap: var(--b-2);
+  width: min(calc(var(--b-6) * 10.625), calc(100% - 2 * var(--b-2))); max-height: calc(100% - var(--dokunma) - 3 * var(--b-2));
+  margin: calc(var(--dokunma) + 3 * var(--b-2)) var(--b-2) 0; padding: var(--b-2) var(--b-3); overflow: auto;
+}
+.tc-pym-at-kart header { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-pym-at-kart p { margin: 0; }
+.tc-pym-ara { flex: 1; }
+.tc-pym-kucuk-yazi { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+/* Adım listesi (pm-at-yol): seçim kartının yolculuğu ve sırası; kılavuzda numaralar dolu ve yazı üstten hizalı (pm-at-kilavuz). */
+.tc-pym-at-yol { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pym-at-yol li {
+  display: grid; grid-template-columns: calc(var(--b-4) + var(--b-1) + var(--pay-ince)) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2);
+  padding: var(--pay-ince) var(--b-1); border-radius: var(--yari-1); font-size: var(--yazi-s);
+}
+.tc-pym-at-yol li > b {
+  display: grid; place-items: center; width: calc(var(--b-4) + var(--b-1)); height: calc(var(--b-4) + var(--b-1)); border: var(--cizgi-ince) solid var(--edge2);
+  border-radius: var(--yari-tam); background: var(--panel2); font-size: var(--yazi-xs);
+}
+.tc-pym-at-yol li > .tc-pym-link { justify-self: start; }
+.tc-pym-at-yol li small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-at-yol li[data-bitti] { opacity: var(--saydam-55); }
+.tc-pym-at-yol li[data-simdi] { background: color-mix(in oklab, var(--sig) 14%, transparent); }
+.tc-pym-at-yol li[data-simdi] > b { border-color: var(--sig); background: var(--sig); color: var(--panel-solid); }
+.tc-pym-at-kilavuz li { grid-template-columns: calc(var(--b-4) + var(--b-1) + var(--pay-ince)) minmax(0, 1fr); align-items: start; }
+.tc-pym-at-kilavuz li > b { border-color: var(--done); background: var(--done); color: var(--panel-solid); }
+.tc-pym-at-kilavuz li span b { margin-right: var(--b-1); }
+
+.tc-pym-sg-zum {
+  grid-row: 2; grid-column: 1; z-index: 6; align-self: end; justify-self: end; display: flex; gap: var(--pay-ince); margin: var(--b-2); padding: var(--pay-ince);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); box-shadow: var(--shadow);
+}
+.tc-pym-sg-zum button {
+  display: inline-grid; place-items: center; min-width: calc(var(--dokunma) - var(--b-2)); min-height: calc(var(--dokunma) - var(--b-2)); border: 0; border-radius: var(--yari-1);
+  background: none; color: var(--ink); cursor: pointer;
+}
+.tc-pym-sg-zum button:hover { background: var(--panel2); }
+
+.tc-pym-at-alt { grid-row: 3; grid-column: 1; z-index: 5; display: flex; flex-wrap: nowrap; align-items: stretch; gap: var(--b-2); min-width: 0; padding: var(--b-2); pointer-events: none; }
+.tc-pym-at-alt > * { pointer-events: auto; }
+.tc-pym-at-oynat { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--b-2); padding: var(--b-1); max-width: 100%; }
+.tc-pym-at-oynat > * { flex: none; }
+.tc-pym-at-oynat .tc-pym-hayalet { color: var(--ink); }
+.tc-pym-at-saat { padding: 0 var(--b-2); font-size: var(--yazi-m); }
+.tc-pym-at-serit { position: relative; flex: 1 1 auto; min-width: 0; display: grid; gap: var(--pay-ince); padding: var(--b-1) var(--b-3) var(--b-2); }
+.tc-pym-at-gunler-s { position: relative; height: var(--b-4); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-at-gunler-s span { position: absolute; top: 0; left: var(--x); height: 100%; padding-left: var(--b-1); border-left: var(--cizgi-ince) solid var(--edge2); }
+.tc-pym-at-iz { position: relative; height: var(--b-5); margin-right: 2.5em; }
+.tc-pym-at-ote { position: absolute; top: var(--b-1); right: -2.5em; width: 2.2em; color: var(--muted); font-size: var(--yazi-xs); text-align: right; }
+.tc-pym-at-bit {
+  position: absolute; left: var(--x); top: calc(var(--ln, 0) * var(--b-2)); width: var(--b-2); height: calc(var(--b-2) - var(--cizgi-ince)); margin-left: calc(var(--b-1) * -1);
+  padding: 0; border: var(--cizgi-ince) solid var(--panel-solid); border-radius: var(--kayma); background: var(--run); cursor: pointer;
+}
+.tc-pym-at-bit[data-gec] { background: var(--stop); }
+.tc-pym-at-bit[data-secili] { z-index: 1; outline: var(--pay-ince) solid var(--sig); outline-offset: var(--cizgi-ince); }
+.tc-pym-at-bit::before { content: ""; position: absolute; inset: calc(var(--cizgi-ince) * -1) calc(var(--kayma) * -1); }
+.tc-pym-at-termin { position: absolute; top: 0; left: var(--x); width: 0; height: var(--b-5); border-left: var(--pay-ince) solid var(--sig); pointer-events: none; }
+.tc-pym-at-serit input[type="range"] { width: 100%; min-height: var(--b-5); margin: 0; accent-color: var(--sig); }
+/* Harita'da Yapılacaklar oynatıcının üstünde durur. */
+.tc-pym[data-gorunum="atolye"] > .tc-pym-yp-sira { position: absolute; right: 0; bottom: calc(var(--b-5) + var(--b-6) * 4 + var(--b-1)); margin: 0 var(--b-4) 0 0; }
+
+@container (max-width: 599px) {
+  .tc-pym-at-alt { padding: var(--b-1); gap: var(--b-1); }
+  .tc-pym-at-oynat { gap: var(--b-1); }
+  .tc-pym-at-oynat .tc-dugme > svg + * { position: absolute; width: var(--cizgi-ince); height: var(--cizgi-ince); overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tc-pym-at-saat { padding: 0 var(--b-1); font-size: var(--yazi-s); }
+  .tc-pym-at-serit { padding: var(--pay-ince) var(--b-2) var(--b-1); }
+  .tc-pym-at-gunler-s { height: calc(var(--b-4) - var(--pay-ince)); }
+  .tc-pym-at-alt { flex-direction: column; }
+  .tc-pym-hl { top: calc(var(--dokunma) + 2 * var(--b-1)); right: var(--b-1); }
+  .tc-pym-hl > button span { display: none; }
+  .tc-pym-hl[data-acik] > button span { display: inline; }
+  .tc-pym-at-kart { align-self: end; justify-self: stretch; width: auto; max-height: 46%; margin-top: 0; }
+  .tc-pym[data-gorunum="atolye"] > .tc-pym-yp-sira { bottom: calc(var(--b-6) * 6 + var(--b-1)); }
+}
+
+/* İpucu imlecin yanında (atIpucu). */
+.tc-pym-ipucu {
+  position: fixed; left: var(--x, 0); top: var(--y, 0); z-index: var(--z-bildirim); display: grid; gap: var(--pay-ince); max-width: min(calc(var(--b-6) * 10), calc(100vw - var(--b-4)));
+  padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); box-shadow: var(--shadow);
+  color: var(--ink); font-size: var(--yazi-xs); pointer-events: none;
+}
+.tc-pym-ipucu b { font-size: var(--yazi-s); }
+.tc-pym-ipucu [data-ton="hata"] { color: var(--stop); }
+.tc-pym-ipucu [data-ton="tamam"] { color: var(--run); }
+
+/* Klavye kısayolları (zp-klavye pm-kb-kl). */
+.tc-pym-kb-grup { display: grid; gap: var(--b-1); }
+.tc-pym-kb-grup > small { margin-top: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tc-pym-kb-grup dl { display: grid; gap: var(--pay-ince); margin: 0; }
+.tc-pym-kb-grup dl > div { display: grid; grid-template-columns: calc(var(--b-6) * 3) minmax(0, 1fr); gap: var(--b-2); align-items: center; font-size: var(--yazi-s); }
+.tc-pym-kb-grup dd { margin: 0; color: var(--muted); }
+.tc-pym-kb-grup kbd {
+  display: inline-block; min-width: var(--b-5); margin-right: var(--pay-ince); padding: 0 var(--b-1); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
+  background: var(--panel2); font-family: var(--font-mono); font-size: var(--yazi-xs); text-align: center;
+}
+
+/* Özet'te kılavuz sayfanın sağ üstünde asılı durur, Özet altından kayar (eski sayfada kart Özet katmanının üstündeydi); dar ekranda altta. */
+.tc-pym-oz-kilavuz { position: sticky; top: var(--b-2); z-index: 9; display: flex; justify-content: flex-end; height: 0; }
+.tc-pym-oz-kilavuz > .tc-pym-at-kart { position: absolute; top: 0; right: 0; margin: 0 var(--b-2); max-height: 70vh; }
+@container (max-width: 599px) {
+  .tc-pym-oz-kilavuz { order: 1; top: auto; bottom: 0; }
+  .tc-pym-oz-kilavuz > .tc-pym-at-kart { top: auto; bottom: var(--b-2); left: 0; width: auto; max-height: 55vh; }
+}
