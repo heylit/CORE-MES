@@ -222,18 +222,23 @@ function adimAdedi(D: PlanVerisi, id: string, siparis: number): number {
 // Motorun öğrendiği süre sapması istemcide yoktur; süre onsuz hesaplanır.
 export interface Aday { m: string; sure: number | null }
 export function adaylar(c: PlanlamaCalismasi, cx: Derleme, id: string): Aday[] {
+  return adaySureleri(c, cx, id).map((x) => ({ m: x.m, sure: x.run == null || x.su == null ? null : x.su + x.run }));
+}
+// Uygun tezgâhın ayarı ve işlemesi ayrı (za-merkez mzRota çipi); fason tezgâhın süresi yok.
+export interface AdaySuresi { m: string; su: number | null; run: number | null }
+export function adaySureleri(c: PlanlamaCalismasi, cx: Derleme, id: string): AdaySuresi[] {
   const o = cx.byId[id]; if (!o) return [];
   const D = cx.g.D; const j = D.siparisler.find((s) => s.id === o.job);
   const k = id.slice(o.job.length + 1); const adim = D.urunler.find((u) => u.id === j?.urun)?.rota?.find((x) => String(x.k) === k);
   const adet = adimAdedi(D, id, Number(j?.adet) || 0);
   const acilPay = Number(c.param.acilPay) || 0;
-  return o.c.map((m): Aday => {
-    if (m.startsWith('@')) return { m, sure: null };
+  return o.c.map((m): AdaySuresi => {
+    if (m.startsWith('@')) return { m, su: null, run: null };
     const t = adim?.tezgahlar?.find((x) => x.id === m); const M = D.tezgahlar.find((x) => x.id === m);
     const arizaGun = Number(M?.arizaGun) || 0;
     const pay = c.param.tampon ? Math.min(0.35, (arizaGun > 0 ? (Number(M?.onarimSaat) || 0) / (arizaGun * 24) : 0) + acilPay) : 0;
     const cyc = (Number(t?.cevrim) || 0) / 60 / (1 - pay); const verim = Number(M?.verim) || 1;
-    return { m, sure: (Number(t?.ayar) || 0) / 60 + (adet * cyc) / verim };
+    return { m, su: (Number(t?.ayar) || 0) / 60, run: (adet * cyc) / verim };
   });
 }
 // Tezgâhın planlı işleri başlangıç sırasıyla.

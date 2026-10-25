@@ -192,7 +192,7 @@ test.describe('P1d Keşfet', () => {
 
 // P1d-2: seçim yan paneli (sipariş, iş adımı ve tezgâh kartı). Motor hamleleri pasif; seçim ve sekme yazma göndermez.
 test.describe('P1d Yan panel', () => {
-  test('Yan panel: seçim kartı açılır, sekmeler, yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+  test('Yan panel: seçim kartı açılır, sekmeler (Rota, Takvim), yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
@@ -207,13 +207,21 @@ test.describe('P1d Yan panel', () => {
     await expect(dk.getByRole('button', { name: 'Öne al' })).toHaveAttribute('aria-disabled', 'true');
     await tasmaz(page);
     await dk.getByRole('tab', { name: 'Rota' }).click();
-    await expect(dk.getByText('Hazırlanıyor.')).toBeVisible();
+    await expect(dk.getByRole('list', { name: /rotası$/ })).toBeVisible();
+    await expect(dk.getByRole('button', { name: 'Rotalar' })).toHaveAttribute('aria-disabled', 'true');
+    await tasmaz(page);
     await dk.getByRole('tab', { name: 'Yön ver' }).click();
     await dk.locator('.tc-pym-at-yol .tc-pym-link').first().click();
     await expect(dk.getByText('İŞ ADIMI')).toBeVisible();
     await tasmaz(page);
     await dk.getByRole('button', { name: 'Kapat (Esc)' }).click();
     await expect(dk).toBeHidden();
+    await page.getByRole('button', { name: 'Özet', exact: true }).click();
+    await page.getByRole('region', { name: 'Hangi gün hangi tezgâh dolu?' }).locator('th.tc-pym-mono button').first().click();
+    await dk.getByRole('tab', { name: 'Takvim' }).click();
+    await expect(dk.getByText(/takvimi$/)).toBeVisible();
+    await expect(dk.getByRole('button', { name: 'Bakımı dene' })).toHaveAttribute('aria-disabled', 'true');
+    await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });

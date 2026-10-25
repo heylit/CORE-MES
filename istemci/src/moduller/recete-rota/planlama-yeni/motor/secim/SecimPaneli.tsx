@@ -12,14 +12,15 @@ import {
 } from '../harita/kurallar.ts';
 import { ayristir, KATEGORI_AD, ONCELIK_AD, saatYaz, saatYazi, type Derleme, type OkunanPlan, type SureKategorisi } from '../kurallar.ts';
 import { degisken, HAZIRLANIYOR, MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
-import { mesaiAdaylari, tezgahYazi, yolculuk, type PanelSecimi } from './kurallar.ts';
+import { isoYerel, mesaiAdaylari, tezgahYazi, yolculuk, type PanelSecimi } from './kurallar.ts';
+import { RotaSekmesi, TakvimSekmesi } from './Sekmeler.tsx';
 import './secim.css';
 
 // Yan panel (zl-yan dkHtml) ve seçim kartı (zc-tahta tkSecim, z-komuta kmSiparis, kmTezgah, kmIs): Özet, Harita ve Keşfet'te seçim olunca
 // görünümün sağında açılır, dar ekranda alttan. Motorun hamleleri (öne al, öncelik, hedefe yetiştir, boşalt, sıra, ek mesai, taşı, kaydır)
 // yerinde ve pasiftir (357 b); sabitlemek çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz).
 export type PanelSekmesi = 'yon' | 'rota' | 'takvim';
-interface Ozellikler {
+export interface Ozellikler {
   kok?: MutableRefObject<HTMLElement | null>;
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; s: Sahne; r: Aralik; olcek: DonemOlcegi; t: number;
   secim: PanelSecimi; sek: PanelSekmesi; sekSec: (x: PanelSekmesi) => void;
@@ -66,7 +67,8 @@ export function SecimPaneli(o: Ozellikler) {
   const kok = useGorunurBoy(o.kok);
   const sekmeler: [PanelSekmesi, string][] = secim.tur === 'siparis' ? [['yon', 'Yön ver'], ['rota', 'Rota']] : secim.tur === 'tezgah' ? [['yon', 'Yön ver'], ['takvim', 'Takvim']] : [];
   const k = sekmeler.some(([x]) => x === o.sek) ? o.sek : 'yon';
-  const govde = k !== 'yon' ? <p className="tc-pym-oz-hazir"><Simge ad={k === 'rota' ? 'route' : 'clock'} boyut="k" />{HAZIRLANIYOR}</p>
+  const govde = k === 'rota' ? <RotaSekmesi {...o} j={secim.id} />
+    : k === 'takvim' ? <TakvimSekmesi {...o} m={secim.id} />
     : secim.tur === 'is' ? <IsKarti {...o} id={secim.id} />
     : secim.tur === 'siparis' ? <SiparisKarti {...o} j={secim.id} />
     : <TezgahKarti {...o} m={secim.id} />;
@@ -163,12 +165,6 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani }: Ozel
     </>
   );
 }
-// datetime-local değeri: planın saatini takvim saatine çevirir (isoT).
-function isoYerel(D: PlanlamaCalismasi['D'], t: number): string {
-  const g = saatYaz(D, t); const yil = (D.meta?.baslangic ?? '').slice(0, 4);
-  return g === '—' || !yil ? '' : `${yil}-${g.slice(3, 5)}-${g.slice(0, 2)}T${g.slice(10, 15)}`;
-}
-
 function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani }: Ozellikler & { m: string }) {
   const D = c.D; const st = tezgahDurumu(s, durusOku(c), m, t); const d = s.dol[m] ?? [];
   const e = gecikmeEtkisi(D, p, cx).m[m]; const L = dilimBoyu(r);
