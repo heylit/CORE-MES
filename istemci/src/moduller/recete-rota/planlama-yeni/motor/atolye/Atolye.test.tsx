@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { api } from '../../../../../ortak/veri/api.ts';
+import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../../gorunumler.ts';
@@ -28,19 +28,20 @@ const senaryo = (id: number, durum: string, ek: Record<string, unknown> = {}) =>
   bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: false, canliyaAl: false }, ...ek,
 });
 const DEPO = {
+  ben: { kisi: { id: 1, ad: 'Ayşe' }, yazabilir: true },
   durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null },
   senaryolar: { canli: GOSTERGE, canliSurum: 3, senaryolar: [
     senaryo(1, 'onayda', { onay: { gonderen: 'Ayşe', gonderme: '2026-10-20T10:00:00Z', not: 'acil', geriGonderen: null, geriGonderme: null, geriNeden: null }, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true } }),
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
+function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile: vi.fn(),
-    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : [])], { yazabilir: yaz }),
+    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
   return { git };
@@ -55,10 +56,12 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 }
 const komutKur = (c: PlanlamaCalismasi) => {
   const yazilan: PlanlamaCalismasi[] = [];
-  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false, geriAdimlari: () => [], geriDon: vi.fn() } as unknown as CalismaKomutu;
+  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false, geriAdimlari: () => [], geriDon: vi.fn(), kaydet: vi.fn(async () => 8) } as unknown as CalismaKomutu;
   return { komut, yazilan };
 };
 const kart = () => screen.getByRole('dialog');
+// Güncel veriyle çözülmüş plan: eski veriyle çözülmüş plan onaya gönderilmez.
+const guncel = () => { const c = ornekCalisma(); if (c.plan) c.plan.dataVer = c.dataVer; return c; };
 
 describe('PlanlamaAtolyesi', () => {
   it('kimlik satırı, üç sekme ve onay sayısı; geri düğmesi motora döner', () => {
@@ -109,8 +112,8 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif, onaya gönder kartı Onay sekmesine götürür', () => {
-    ac();
+  it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif; onaya gönder kartı doğrudan gönderir ve Onay sekmesine götürür', async () => {
+    ac({ c: guncel() });
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
@@ -118,8 +121,88 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
     fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).getByText('1 → 1')).toBeTruthy();
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('/taslak-yaz')
+      ? { taslak: { id: 9, surum: 1 }, yazilan: 4, atlanan: 0, yazilamaz: [] }
+      : { ...DEPO.senaryolar, senaryolar: [...DEPO.senaryolar!.senaryolar, senaryo(9, 'onayda')] })) as never);
     fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true'));
+    expect(post.mock.calls.map((x) => x[0])).toEqual(['/recete-rota/planlama-calismasi/taslak-yaz', '/plan/senaryolar/9/onaya-gonder']);
+    expect(post.mock.calls[0]?.[1]).toMatchObject({ calismaSurumu: 8, planSurumu: 3 });
+    expect(String((post.mock.calls[0]?.[1] as { ad: string }).ad)).toMatch(/^Onay .+ · Ayşe$/);
+    expect(post.mock.calls.map((x) => x[0])).not.toContain('/plan/senaryolar/9/canliya-al');
+    expect(screen.getByText('Plan onaya gönderildi: 4 iş taslağa yazıldı. Canlıya onaylayan alır.')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).textContent).toBe('Onay ve canlı2');
+    post.mockRestore();
+  });
+
+  it('onaya gönder kartı: sunucu reddederse iletisi gösterilir, kart açık kalır, taslaktan vazgeçilir', async () => {
+    ac({ c: guncel() });
+    fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => (yol.endsWith('/onaya-gonder')
+      ? Promise.reject(new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }))
+      : Promise.resolve(yol.endsWith('/taslak-yaz') ? { taslak: { id: 9, surum: 1 }, yazilan: 4, atlanan: 0, yazilamaz: [] } : DEPO.senaryolar))) as never);
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
+    await waitFor(() => expect(screen.getByText('Plan onaya gönderilemedi: Bu işlem için yetkiniz yok.')).toBeTruthy());
+    expect(kart()).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Plan' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(post.mock.calls.map((x) => x[0])).toContain('/plan/senaryolar/9/vazgec'));
+    post.mockRestore();
+  });
+
+  it('canlı farkı sunucudan okunur: açılışta hemen, çalışma değişince kayıt beklemesinden sonra; okunana kadar iddia yok', async () => {
+    let cevap: unknown = { planSurumu: 3, ayni: false, guncel: true, tasinan: 2, tezgah: 1, sira: 1, yeni: 1, eksik: 0, isler: [], yazilamaz: [] };
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/canli-farki') ? Promise.resolve(cevap) : Promise.reject(new Error('yok')))) as never);
+    ac();
+    const ust = () => document.querySelector('.tc-pym-tp-ust') as HTMLElement;
+    await waitFor(() => expect(within(ust()).getByTitle('Canlı plandan farklı').textContent).toBe('Taslak · 3 değişiklik'));
+    expect(get).toHaveBeenCalledWith('/recete-rota/planlama-calismasi/canli-farki');
+    cevap = { ...(cevap as object), ayni: true, tasinan: 0, tezgah: 0, sira: 0, yeni: 0 };
+    cleanup();
+    ac();
+    await waitFor(() => expect(within(ust()).getByTitle('Çalışma planı canlı planla aynı')).toBeTruthy());
+    cevap = { ...(cevap as object), planSurumu: 0 };
+    cleanup();
+    ac();
+    await waitFor(() => expect(within(ust()).getByTitle('Henüz canlıya alınmış plan yok')).toBeTruthy());
+    get.mockRestore();
+  });
+
+  it('onaya gönder kartı: eski veriyle çözülmüş plan gönderilmez, Onay sekmesindeki kontrole gidilir', () => {
+    ac();
+    const post = vi.spyOn(api, 'post');
+    fireEvent.click(within(document.querySelector('.tc-pym-tp-ust') as HTMLElement).getByRole('button', { name: 'Onaya gönder' }));
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Gönder' }));
+    expect(post).not.toHaveBeenCalled();
     expect(screen.getByRole('tab', { name: /Onay ve canlı/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('Plan kontrolden geçmedi; Onay sekmesindeki kırmızı maddeleri giderin.')).toBeTruthy();
+    post.mockRestore();
+  });
+
+  it('Onay sekmesi, çalışma: notla onaya gönderir; Onayla ve canlıya al ayrı düğmedir, ret sunucunun iletisiyle gösterilir ve plan onayda kalır', async () => {
+    ac({ c: guncel(), mudur: true });
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    const post = vi.spyOn(api, 'post').mockImplementation(((yol: string) => {
+      if (yol.endsWith('/canliya-al')) return Promise.reject(new ApiHatasi(422, { kod: 'GECERSIZ', mesaj: 'Kendi gönderdiğiniz planı canlıya alamazsınız.' }));
+      return Promise.resolve(yol.endsWith('/taslak-yaz') ? { taslak: { id: 9, surum: 1 }, yazilan: 4, atlanan: 0, yazilamaz: [] }
+        : { ...DEPO.senaryolar, senaryolar: [...DEPO.senaryolar!.senaryolar, senaryo(9, 'onayda')] });
+    }) as never);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'M2 boşaldı' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Onaya gönder' }));
+    await waitFor(() => expect(post.mock.calls.map((x) => x[0])).toEqual(['/recete-rota/planlama-calismasi/taslak-yaz', '/plan/senaryolar/9/onaya-gonder']));
+    expect(post.mock.calls[1]?.[1]).toEqual({ surum: 1, not: 'M2 boşaldı' });
+    await waitFor(() => expect(document.querySelector('.tc-pym-pa-aday[aria-current="true"]')?.textContent).toContain('Senaryo 9'));
+    post.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Onayla ve canlıya al' }));
+    expect(post).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /canlıya al$/ }));
+    await waitFor(() => expect(screen.getByText('Plan canlıya alınamadı, onayda bekliyor: Kendi gönderdiğiniz planı canlıya alamazsınız.')).toBeTruthy());
+    expect(post.mock.calls.map((x) => x[0])).toEqual(['/recete-rota/planlama-calismasi/taslak-yaz', '/plan/senaryolar/9/onaya-gonder', '/plan/senaryolar/9/canliya-al']);
+    expect(get).toHaveBeenCalledWith('/plan/senaryolar');
+    post.mockRestore();
+    get.mockRestore();
   });
 
   it('yazma yetkisi yoksa Onaya gönder yok, donuk bölge pasif', () => {

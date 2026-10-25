@@ -11,14 +11,15 @@ import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } fro
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
+import { calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
-  agirlikliGecikme, ayarSaat, canliFark, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
-  paSecim, planFarki, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
+  agirlikliGecikme, ayarSaat, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
+  paSecim, planFarki, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 // Onay ve canlı (zz22 sPlanAtolye): durum şeridi, akış, incelenecek planlar, seçili planın farkı, kontrolü ve kararı, karşılaştırma; yanda canlıdan
 // sonra yapılanlar, geçmiş planlar ve planlama sayfaları. Senaryo ve onay plan modülündedir (221 c, PLAN_ONAY_KOMUTLARI): geçişler onun uçlarına
-// gider, kim yapabilir sunucunun `yapabilir` bayraklarındadır. Çalışmanın onaya gönderilmesi sonraki teslimdedir (soru 503).
+// gider, kim yapabilir sunucunun `yapabilir` bayraklarındadır. Çalışma plan modülüne taslak olarak yazılıp gönderilir (gonder.ts, 503 a).
 type Secim = number | 'calisma' | null;
 // Yollar sözleşmedekiyle tip denetiminde eşlenir (istemci sözleşmeyi yalnız tip olarak ithal eder).
 const ONAY_YOLLARI: { readonly [K in PlanOnayKomutu]: (typeof PLAN_ONAY_KOMUTLARI)[K]['yol'] } = {
@@ -66,23 +67,27 @@ export interface OnayOzellikleri {
   o: PlanlamaEkranOzellikleri;
   c: PlanlamaCalismasi | null;
   p: OkunanPlan | null;
+  // Canlı planla fark (sunucudan; okunmadıysa null).
+  cf: CanliFark | null;
   sen: SenaryolarCevabi | null;
   senYaz: (s: SenaryolarCevabi) => void;
   planSekmesi: () => void;
 }
 
-export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikleri) {
+export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }: OnayOzellikleri) {
   const { bildir } = useBildirim();
   const [secim, setSecim] = useState<Secim>(null);
   const [kars, setKars] = useState<number[]>([]);
   const [notlar, setNotlar] = useState<Record<string, string>>({});
   const [sor, setSor] = useState<SunucuSenaryosu | null>(null);
+  const [calSor, setCalSor] = useState(false);
   const [gidiyor, setGidiyor] = useState(false);
   const l = useMemo(() => sen?.senaryolar ?? [], [sen]);
   const canli = sen?.canli ?? null;
   const canliSurum = o.depo.planSurumu?.planSurumu ?? sen?.canliSurum ?? null;
-  const cf = c && p ? canliFark(c, p) : null;
-  const farkli = cf ? cf.farkli : false;
+  const cf = c && p ? cfSunucu : null;
+  // Fark okunmadıysa değişiklik var sayılır: "farkı yok" uyarısı ve "Canlıyla aynı" yalnız sunucunun cevabıyla gösterilir.
+  const farkli = cf ? cf.farkli : true;
   const sec = paSecim(l, secim, !!(c && p));
   const secS = typeof sec === 'number' ? l.find((s) => s.id === sec) ?? null : null;
   // Canlının ve incelenen senaryoların yerleşimi (GET /plan, GET /plan?taslak=): eski sayfanın plan karşılaştırması (paFark) bununla kurulur.
@@ -138,12 +143,30 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
     },
   };
 
+  // Çalışmanın gönderilmesi: başarıda sunucunun listesi gösterilir; ret ya da yarıda kalmada sunucunun iletisi gösterilir ve liste yeniden okunur
+  // (canlıya alma reddedilirse plan onayda kalır).
+  const calGonder = async (hedef: GonderHedefi) => {
+    if (!c) return;
+    setGidiyor(true);
+    try {
+      const g = await calismayiYolla({ o, c, sen, hedef, not: (notlar.calisma ?? '').trim() || null });
+      if (g.senaryolar) senYaz(g.senaryolar);
+      setNotlar((n) => ({ ...n, calisma: '' }));
+      bildir('tamam', gonderIletisi(hedef, g));
+      if (hedef === 'canli') { setSecim(null); o.yenile(); } else setSecim(g.taslak);
+    } catch (e) {
+      bildir('hata', gonderHataIletisi(e));
+      api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined);
+    } finally { setGidiyor(false); setCalSor(false); }
+  };
+
   const onayda = paOnayda(l);
   const ilk = onayda[0];
   const adim = paAdim(!!p, onayda.length, farkli, typeof sec === 'number');
   const sira = PA_ADIM.map((x) => x[0]);
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
-  const uyari = sor ? paKontrol(sor, canli, canliSurum, paPlanKontrol(farkAl(sor.id), !!pc)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
+  const calK = c && p ? paCalismaKontrol(planGuncel(c), p.fail.length, farkli) : [];
+  const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, paPlanKontrol(farkAl(sor.id), !!pc)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">
       <header className="tc-pym-pa-bas">
@@ -176,8 +199,8 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
           </section>
         ) : (
           <section className="tc-pym-pa-kutu" data-ton={farkli ? 'calisma' : undefined}>
-            <header><span><Simge ad="edit" boyut="k" /> Çalışma planı</span>{farkli ? <Rozet ton="uyari">Onaylanmamış değişiklik</Rozet> : <Rozet ton="tamam">Canlıyla aynı</Rozet>}</header>
-            <b className="tc-pym-pa-ad">{cf?.var ? `${sayi(cf.say)} işin yeri değişti` : 'İlk plan'}</b>
+            <header><span><Simge ad="edit" boyut="k" /> Çalışma planı</span>{!cf ? <Rozet ton="pasif">Okunuyor</Rozet> : farkli ? <Rozet ton="uyari">Onaylanmamış değişiklik</Rozet> : <Rozet ton="tamam">Canlıyla aynı</Rozet>}</header>
+            <b className="tc-pym-pa-ad">{!cf ? 'Canlıyla fark okunuyor' : cf.var ? `${sayi(cf.say)} işin yeri değişti` : 'İlk plan'}</b>
             <span className="tc-pym-pa-kucuk">{planImzasi(c)}</span>
             <dl className="tc-pym-pa-sayilar">
               <div><dt>Geciken · tüm plan</dt><dd className="mono">{`${p.ozet.late}/${p.ozet.n}`}</dd></div>
@@ -205,7 +228,10 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
           <Kart baslik="İncelenecek planlar" simge="list" baslikEki={<span className="tc-pym-pa-kucuk">Birini seçin; karşılaştırmak için kutuyu işaretleyin</span>}>
             <Adaylar l={l} c={c} p={p} cf={cf} canli={canli} sec={sec} secSec={setSecim} kars={kars} karsYaz={setKars} />
           </Kart>
-          {sec === 'calisma' && c && p && <CalismaSecili c={c} p={p} farkli={farkli} o={o} />}
+          {sec === 'calisma' && c && p && (
+            <CalismaSecili K={calK} o={o} not={notlar.calisma ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, calisma: v }))} gidiyor={gidiyor}
+              gonder={(h) => { if (h === 'canli') setCalSor(true); else void calGonder(h); }} />
+          )}
           {secS && (
             <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
               gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); } }} />
@@ -219,17 +245,17 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
         </div>
       </div>
       <OnayPenceresi
-        acik={sor !== null} baslik={uyari.length ? 'Uyarılarla canlıya alınsın mı?' : 'Canlıya alınsın mı?'} onayMetni={uyari.length ? 'Yine de canlıya al' : 'Onayla ve canlıya al'}
-        yukleniyor={gidiyor} vazgec={() => setSor(null)} onayla={() => { if (sor) void eylem.canli(sor); }}
+        acik={sor !== null || calSor} baslik={uyari.length ? 'Uyarılarla canlıya alınsın mı?' : 'Canlıya alınsın mı?'} onayMetni={uyari.length ? 'Yine de canlıya al' : 'Onayla ve canlıya al'}
+        yukleniyor={gidiyor} vazgec={() => { setSor(null); setCalSor(false); }} onayla={() => { if (calSor) void calGonder('canli'); else if (sor) void eylem.canli(sor); }}
       >
-        <p>{sor ? (uyari.length ? `${sor.ad}: ${uyari.join('; ')}.` : `"${sor.ad}" canlı plan olacak (sürüm ${(canliSurum ?? 0) + 1}); tezgâh kuyrukları bu plana göre görünür.`) : ''}</p>
+        <p>{calSor ? (uyari.length ? `Çalışma planı: ${uyari.join('; ')}.` : 'Çalışma planı onaya gönderilip canlı plan olacak; tezgâh kuyrukları bu plana göre görünür.') : sor ? (uyari.length ? `${sor.ad}: ${uyari.join('; ')}.` : `"${sor.ad}" canlı plan olacak (sürüm ${(canliSurum ?? 0) + 1}); tezgâh kuyrukları bu plana göre görünür.`) : ''}</p>
       </OnayPenceresi>
     </div>
   );
 }
 
 function Adaylar({ l, c, p, cf, canli, sec, secSec, kars, karsYaz }: {
-  l: SunucuSenaryosu[]; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: ReturnType<typeof canliFark> | null; canli: Gostergeler | null;
+  l: SunucuSenaryosu[]; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: CanliFark | null; canli: Gostergeler | null;
   sec: Secim; secSec: (s: Secim) => void; kars: number[]; karsYaz: (k: number[]) => void;
 }) {
   const a = paAdaylar(l);
@@ -247,7 +273,7 @@ function Adaylar({ l, c, p, cf, canli, sec, secSec, kars, karsYaz }: {
   return (
     <>
       <ul className="tc-pym-pa-adaylar">
-        {c && p && satir('calisma', 'Çalışma planı', cf?.farkli ? 'Canlıya alınmamış değişiklik var' : 'Canlı plan ve çalışma aynı', 'calisma',
+        {c && p && satir('calisma', 'Çalışma planı', !cf ? 'Canlıyla fark okunuyor' : cf.farkli ? 'Canlıya alınmamış değişiklik var' : 'Canlı plan ve çalışma aynı', 'calisma',
           <span className="mono">{`${p.ozet.late} geç · ${sayi(p.ozet.wT, 1)} sa`}</span>, <span className="tc-pym-pa-kars" />)}
         {a.map((s) => {
           const g = s.gostergeler;
@@ -276,24 +302,29 @@ function Kontrol({ K }: { K: KontrolMaddesi[] }) {
   );
 }
 
-// Çalışma (sayfanın kaydı) sunucu senaryosu değildir: farkı canlı planla aynı kaynaktan sayılır, gönderme sonraki teslimdedir.
-function CalismaSecili({ c, p, farkli, o }: { c: PlanlamaCalismasi; p: OkunanPlan; farkli: boolean; o: PlanlamaEkranOzellikleri }) {
-  const K: KontrolMaddesi[] = [
-    planGuncel(c) ? ['ok', 'Plan güncel veriyle çözülmüş'] : ['red', 'Veri plandan sonra değişti; önce planı yeniden çözün'],
-    p.fail.length ? ['uyari', `${p.fail.length} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
-  ];
-  if (!farkli) K.push(['uyari', 'Canlı plandan farkı yok']);
+// Çalışma (sayfanın kaydı) sunucu senaryosu değildir: gönderilince plan modülünde taslak olur. Düğmeler eski sayfadaki gibidir (plan.yaz: Onaya
+// gönder, Deneme olarak kaydet; plan.canliya-al: Onayla ve canlıya al); ekran yalnız gizler, ret sunucudan gelir ve iletisi gösterilir.
+function CalismaSecili({ K, o, not, notYaz, gidiyor, gonder }: {
+  K: KontrolMaddesi[]; o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; gonder: (h: GonderHedefi) => void;
+}) {
+  const red = paRedVar(K);
+  const yazP = o.yetki.planYaz && o.komut !== null, yazC = o.yetki.planCanliyaAl && o.komut !== null;
   return (
     <Kart baslik="Çalışma planı" simge="eye" sag={<Rozet ton="bilgi">Çalışma</Rozet>}>
       <div className="tc-pym-pa-secili">
         <section className="tc-pym-pa-bolum"><h3><Simge ad="target" boyut="k" /> Kontrol</h3><Kontrol K={K} /></section>
-        {o.yetki.planYaz && (
+        {(yazP || yazC) && (
           <section className="tc-pym-pa-karar">
             <h3><Simge ad="flag" boyut="k" /> Karar</h3>
+            <label className="tc-alan">
+              <span className="tc-alan-etiket">Not (karar geçmişine yazılır)</span>
+              <textarea className="tc-alan-kutu" rows={2} value={not} maxLength={500} onChange={(e) => notYaz(e.target.value)} placeholder="Ne değişti, neden" />
+            </label>
             <div className="tc-pym-pa-dugmeler">
-              <button type="button" className="tc-dugme tc-dugme-birincil" disabled title="Sonraki teslimde"><Simge ad="flag" boyut="k" />Onaya gönder</button>
+              {yazP && <button type="button" className={`tc-dugme${yazC ? '' : ' tc-dugme-birincil'}`} disabled={gidiyor || red} onClick={() => gonder('onay')}><Simge ad="flag" boyut="k" />Onaya gönder</button>}
+              {yazP && <button type="button" className="tc-dugme tc-pym-hayalet" disabled={gidiyor} onClick={() => gonder('deneme')}><Simge ad="book" boyut="k" />Deneme olarak kaydet</button>}
+              {yazC && <button type="button" className="tc-dugme tc-dugme-birincil" disabled={gidiyor || red} onClick={() => gonder('canli')}><Simge ad="check" boyut="k" />Onayla ve canlıya al</button>}
             </div>
-            <p className="tc-pym-pa-kucuk">Çalışma planının onaya gönderilmesi plan modülüne bağlanınca açılır.</p>
           </section>
         )}
       </div>

@@ -7,6 +7,8 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { BosCalisma, BosPlan } from '../BosPlan.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { HAZIRLANIYOR } from '../ortak.tsx';
+import { useCanliFarki } from './canli-farki.ts';
+import type { CanliFark } from './kurallar.ts';
 import { OnaySekmesi } from './Onay.tsx';
 import { Pano } from './Pano.tsx';
 import '../motor.css';
@@ -32,6 +34,7 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
   useEffect(() => { setSen(o.depo.senaryolar); }, [o.depo.senaryolar]);
   const onayda = sen?.senaryolar.filter((s) => s.durum === 'onayda').length ?? 0;
   const p = useMemo(() => planOku(c), [c]);
+  const cf = useCanliFarki(c, sen?.canliSurum ?? null);
   const ipucu = IPUCU[sek];
   return (
     <div className="tc-pym tc-pym-tp" data-sek={sek}>
@@ -53,18 +56,21 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}
-      {sek === 'plan' ? <PlanSekmesi o={o} c={c} p={p} sekSec={setSek} onayda={onayda} />
-        : sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
+      {sek === 'plan' ? <PlanSekmesi o={o} c={c} p={p} cf={cf} sekSec={setSek} onayda={onayda} sen={sen} senYaz={setSen} />
+        : sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
           : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
     </div>
   );
 }
 
-function PlanSekmesi({ o, c, p, sekSec, onayda }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number }) {
+function PlanSekmesi({ o, c, p, cf, sekSec, onayda, sen, senYaz }: {
+  o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: CanliFark | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number;
+  sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
+}) {
   if (!c) return <BosCalisma />;
   if (!p) {
     const emirler = o.depo.durum?.emirler ?? null;
     return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} />;
   }
-  return <Pano o={o} c={c} p={p} sekSec={sekSec} onayda={onayda} />;
+  return <Pano o={o} c={c} p={p} cf={cf} sekSec={sekSec} onayda={onayda} sen={sen} senYaz={senYaz} />;
 }

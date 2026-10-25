@@ -1,4 +1,5 @@
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { CanliFarkiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
@@ -346,20 +347,12 @@ export function bitisFarklari(once: Record<string, { C: number | null; T: number
   return L.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
 }
 
-// --- canlı planla fark (eski farkSay): canlı senaryonun planına göre tezgâhı ya da 15 dk'dan fazla saati değişen adım sayısı, artı arıza sayısı farkı ---
+// --- canlı planla fark (eski farkSay; 499 a, 506 a): sunucunun çalışma ile canlı plan kıyasından (tezgâh ve sıra; saat kıyaslanmaz). Canlı plan
+// yoksa (sürüm 0) var false; sayı yeri değişen, yeni ve canlıda olup çalışmada olmayan iş; çalışma ya da planı yoksa (null) canlı yok sayılır.
 export interface CanliFark { var: boolean; say: number; farkli: boolean }
-export function canliFark(c: PlanlamaCalismasi, p: OkunanPlan): CanliFark {
-  const s = c.senaryolar.find((x) => x.id === c.canli);
-  const cp = s && nesne(s.plan) ? s.plan : null;
-  if (!s || !cp || !nesne(cp.ops)) return { var: false, say: 0, farkli: true };
-  const cops = cp.ops;
-  let n = Math.abs(c.down.length - (Array.isArray(s.down) ? s.down.length : 0));
-  for (const [id, b] of Object.entries(p.ops)) {
-    const a = cops[id];
-    if (!nesne(a) || a.m !== b.m || typeof a.S !== 'number' || Math.abs(a.S - b.S) > 0.25) n++;
-  }
-  const z = nesne(c.plan) ? (c.plan as Record<string, unknown>).zaman : undefined;
-  return { var: true, say: n, farkli: cp.zaman !== z };
+export function canliFarkOzeti(r: CanliFarkiCevabi): CanliFark {
+  if (r === null || r.planSurumu <= 0) return { var: false, say: 0, farkli: true };
+  return { var: true, say: r.tasinan + r.yeni + r.eksik, farkli: !r.ayni };
 }
 
 // --- malzeme ayrıntısı (eski cx.mat.res det): malzemeHazir'ın aynı dağıtımı, malzeme başına hazır olma, eksik miktar ve kaynak (stok ya da satın alma) ---
@@ -517,6 +510,16 @@ export function paPlanKontrol(f: PlanFarki | null, canliVar: boolean): KontrolMa
   ];
 }
 export const paRedVar = (K: KontrolMaddesi[]): boolean => K.some((k) => k[0] === 'red');
+
+// Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
+export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean): KontrolMaddesi[] {
+  const K: KontrolMaddesi[] = [
+    guncel ? ['ok', 'Plan güncel veriyle çözülmüş'] : ['red', 'Veri plandan sonra değişti; önce planı yeniden çözün'],
+    yerlesmeyen ? ['uyari', `${yerlesmeyen} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
+  ];
+  if (!farkli) K.push(['uyari', 'Canlı plandan farkı yok']);
+  return K;
+}
 
 // Sunucu zamanı (ISO) ve saat farkı.
 export function zamanYaz(z: string | null | undefined): string {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { planGuncel } from '../../durum.ts';
@@ -10,7 +11,7 @@ import { Brif, Bugun } from './Bugun.tsx';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  canliFark, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzSayisi, type AtolyeOlcegi, type SiparisBilgisi, type Suzgec,
+  secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 
@@ -28,11 +29,17 @@ export interface Ortam {
   kartAc: (k: AcikKart, a?: Ankraj) => void; kartKapat: () => void;
   olcek: AtolyeOlcegi; olcekSec: (z: AtolyeOlcegi) => void; sekSec: (s: AtolyeSekmesi) => void;
   bugunAc: (x: boolean) => void; brifAc: () => void;
+  sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
-interface Ozellikler { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; sekSec: (s: AtolyeSekmesi) => void; onayda: number }
+interface Ozellikler {
+  o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; sekSec: (s: AtolyeSekmesi) => void; onayda: number;
+  // Canlı planla fark (sunucudan; okunmadıysa null).
+  cf: CanliFark | null;
+  sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
+}
 
-export function Pano({ o, c, p, sekSec, onayda }: Ozellikler) {
+export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
@@ -128,17 +135,18 @@ export function Pano({ o, c, p, sekSec, onayda }: Ozellikler) {
 
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
-    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); },
+    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, sen, senYaz,
   };
   const ozet = p.ozet;
-  const fark = useMemo(() => canliFark(c, p), [c, p]);
-  const farkli = fark.farkli || !planGuncel(c);
+  const farkli = !fark || fark.farkli || !planGuncel(c);
   const ns = suzSayisi(suz);
   const geriVar = yaz && !!komut?.geriAlinabilir();
   const ust = (
     <header className="tc-pym-tp-ust">
       <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-dar" aria-label="Siparişler" aria-expanded={rayAcik} onClick={() => setRayAcik((x) => !x)}><Simge ad="list" boyut="k" /></button>
-      {!fark.var ? (
+      {!fark ? (
+        <span className="tc-pym-tp-durum" title="Canlı planla fark okunuyor"><Simge ad="edit" boyut="k" />Çalışma</span>
+      ) : !fark.var ? (
         <span className="tc-pym-tp-durum" title="Henüz canlıya alınmış plan yok"><Simge ad="edit" boyut="k" />Çalışma<span data-ikincil=""> · canlı yok</span></span>
       ) : fark.say ? (
         <span className="tc-pym-tp-durum" title="Canlı plandan farklı"><Simge ad="edit" boyut="k" />{`Taslak · ${fark.say}`}<span data-ikincil=""> değişiklik</span></span>
@@ -176,7 +184,7 @@ export function Pano({ o, c, p, sekSec, onayda }: Ozellikler) {
       </button>
       {farkli && yaz && yetki.planStudyo && (
         <button type="button" className="tc-dugme tc-dugme-birincil" aria-label="Onaya gönder" onClick={(e) => kartAc({ tur: 'gonder' }, ankraj(e))}>
-          <Simge ad="upload" boyut="k" /><span data-metin="">Onaya gönder</span>{fark.say > 0 && <span className="tc-pym-tp-tsay">{fark.say}</span>}
+          <Simge ad="upload" boyut="k" /><span data-metin="">Onaya gönder</span>{fark && fark.say > 0 && <span className="tc-pym-tp-tsay">{fark.say}</span>}
         </button>
       )}
       <button type="button" className="tc-dugme tc-pym-hayalet" aria-label="Diğer" onClick={(e) => kartAc({ tur: 'menu' }, ankraj(e))}><Simge ad="more" boyut="k" /></button>
