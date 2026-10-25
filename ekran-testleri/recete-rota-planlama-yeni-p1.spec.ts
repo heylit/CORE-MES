@@ -42,7 +42,7 @@ test.describe('P1a Planlama motoru', () => {
     await page.getByRole('button', { name: 'Ay', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Ay', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Keşfet' }).click();
-    await expect(page.getByText(/Henüz plan yok|Keşfet: Hazırlanıyor/).first()).toBeVisible();
+    await expect(page.getByText(/Henüz plan yok/).or(page.getByRole('tablist', { name: 'Keşfet görünümleri' })).first()).toBeVisible();
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
@@ -155,6 +155,38 @@ test.describe('P1c Çizelge', () => {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Düzenle' })).toHaveCount(0);
     }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
+
+// P1d-1: Keşfet (pay şeridi, sipariş hatları, hazırlık, planı anlat). Seçim yazma göndermez.
+test.describe('P1d Keşfet', () => {
+  test('Keşfet: dört gösterim, sipariş seçimi, planı anlat adımları; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText('Planlama çalışması yok.')).first()).toBeVisible();
+    if (await page.getByText('Planlama çalışması yok.').isVisible()) { await tasmaz(page); return; }
+    await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
+    if (await page.getByText(/Henüz plan yok/).first().isVisible()) { await tasmaz(page); return; }
+    const sek = page.getByRole('tablist', { name: 'Keşfet görünümleri' });
+    await expect(sek).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Sipariş payları' }).or(page.getByText('Bu dönemde termini olan sipariş yok.')).first()).toBeVisible();
+    await tasmaz(page);
+    const nokta = page.locator('.tc-pym-ks-nokta').first();
+    if (await nokta.count()) { await nokta.click(); await expect(nokta).toHaveAttribute('data-secili', ''); }
+    await sek.getByRole('tab', { name: 'Sipariş hatları' }).click();
+    await expect(page.getByRole('img', { name: 'Sipariş hatları' })).toBeVisible();
+    await tasmaz(page);
+    await sek.getByRole('tab', { name: 'Hazırlık' }).click();
+    await expect(page.getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeVisible();
+    await sek.getByRole('tab', { name: 'Planı anlat' }).click();
+    const adimlar = page.getByRole('tablist', { name: 'Adımlar' });
+    await expect(adimlar).toBeVisible();
+    await adimlar.getByRole('tab').nth(1).click();
+    await expect(page.getByText(/^2 \/ \d+$/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Oynat' })).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByText(/^3 \/ \d+$/)).toBeVisible();
+    await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
