@@ -45,7 +45,10 @@ const AYRINTI: BelgeAyrintisi = {
       yukleyenAd: 'Deneme Teknik', yuklendi: '2026-09-01T08:00:00.000Z', yayinlayanAd: 'Deneme Şef', yayinlandi: '2026-09-02T08:00:00.000Z', onizlemeKareSayisi: 0,
     },
   ],
-  baglar: [{ hedefModul: 'malzemeler', hedefId: 41, ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z' }],
+  baglar: [
+    { hedefModul: 'malzemeler', hedefId: 41, hedefAdi: 'MM-DNM-00001 Deneme mil', ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z' },
+    { hedefModul: 'malzemeler', hedefId: 42, hedefAdi: null, ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z' },
+  ],
 };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -242,7 +245,10 @@ describe('cizimler ekranları', () => {
     ac('/cizimler/belge/7');
     expect(await screen.findByText('Görüntü 11')).toBeTruthy();
     expect(screen.getByText('Delik çapı')).toBeTruthy();
-    expect(screen.getByText('#41')).toBeTruthy();
+    // Bağlı kayıt okunur adıyla görünür; adı gelmeyen kayıtta kimlik kalır (ad uydurulmaz).
+    expect(screen.getByText('MM-DNM-00001 Deneme mil')).toBeTruthy();
+    expect(screen.queryByText('#41')).toBeNull();
+    expect(screen.getByText('#42')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yayınla' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Sil' })).toBeTruthy();
   });
