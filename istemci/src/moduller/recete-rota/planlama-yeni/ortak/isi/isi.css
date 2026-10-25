@@ -20,7 +20,7 @@
 .tc-isi-durum[data-ton="uyari"], .tc-isi-neden[data-ton="uyari"] { --c: var(--hold); }
 .tc-isi-durum[data-ton="tamam"], .tc-isi-neden[data-ton="tamam"] { --c: var(--run); }
 
-.tc-isi-ana { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-isi-ana { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-2); min-width: 0; }
 .tc-isi-bos {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-4);
   border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--yari-3); background: var(--panel); color: var(--muted);
@@ -83,6 +83,8 @@ button.tc-isi-h:hover { border-color: var(--ink); }
 .tc-isi-h[data-oneri], .tc-isi-l[data-oneri] { outline: 2px solid var(--hazard); outline-offset: -2px; }
 .tc-isi-h[aria-pressed="true"] { outline: 3px solid var(--hazard); outline-offset: 1px; z-index: 1; }
 .tc-isi-tum { display: flex; justify-content: flex-start; }
+/* Uzun etiket (gizli satır gerekçesi) dar ekranda kaba sığmak için kırılır; düğme yerinde kalır. */
+.tc-isi-tum > .tc-dugme { max-width: 100%; padding-block: var(--b-1); white-space: normal; text-align: left; }
 
 .tc-isi-ac {
   position: sticky; left: calc(var(--b-3) * -1); width: 100cqi; display: grid; gap: var(--b-3); margin: var(--b-1) 0 var(--b-3);
