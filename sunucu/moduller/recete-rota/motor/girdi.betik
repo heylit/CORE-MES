@@ -379,7 +379,17 @@ function tmiCevir(st, kaynak, D0, bugun) {
   const adet = tmiAdimAdetleri(k && k.durum, sk, D); if (adet) D.opAdet = adet;
   const kp = k && k.ek && k.ek.kapasite;
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
+  const sa = k && k.ek && k.ek.acikSiparisler;
+  if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
   return D;
+}
+/* 525 1 a: satın almanın açık siparişi (kalan miktar, beklenen teslim) motorda satın alma satırıdır. Sunucudan gelen satır işaretlidir ve
+   her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.betik tmUygula
+   termini olmayan satır gibi tahmin eder. Sunucu satırı hiç yoksa ve gelmediyse alan değişmez (null). */
+function tmiSatinalma(eski, l) {
+  const elle = (eski || []).filter(p => !p.sunucu);
+  if (!l.length && elle.length === (eski || []).length) return null;
+  return [...elle, ...l.map(x => ({ kod: String(x.kod), miktar: +x.miktar, gelis: x.tarih ? x.tarih + ' 08:00' : null, tedarikci: '', no: x.siparisNo, sunucu: true }))];
 }
 /* 13.4: kişinin onaylı izni (İK, Vardiya'nın kişi takvimiyle; /recete-rota/kapasite izinli günleri) motorda devamsızlıktır. Sunucudan
    gelen gün işaretlidir ve her okumada yeniden kurulur; planlamacının elle girdiği devamsızlık kalır. */
@@ -393,7 +403,7 @@ function tmiDevamsizlik(eski, kisiler) {
 
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrCevir grupMak), makine gelince adımlar yeniden kurulmalı. Malzeme ve
    sipariş kaynak okumasındaki sunucu kayıtlarındandır (sunucuKaydi). */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik', 'satinalma'];
 /* Kaynaklar açık çalışmaya (D0) yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Dönen: değişen alanlar. */
 function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   const D = tmiCevir(kayit && kayit.items ? kayit : TMI_BOS_KAYIT, kaynak, D0, bugun);

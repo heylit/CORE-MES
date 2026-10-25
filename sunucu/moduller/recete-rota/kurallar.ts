@@ -1011,3 +1011,15 @@ export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]
   S.plan.dataVer = null;
   return { deger: S as Record<string, unknown>, yazilan, kilitli, atlanan };
 }
+
+// 525 1 a: açık satın alma siparişinden kalan miktar ve beklenen teslim günü, plandaki malzeme koduyla. Miktar kalemin birimindedir: birimi
+// malzemenin biriminden farklı satır çevrilmeden toplanamaz, alınmaz; kalanı olmayan satır da alınmaz.
+export interface AcikSiparisGelisi { kod: string; miktar: number; tarih: string | null; siparisNo: string }
+export function acikSiparisSatirlari(
+  malzemeler: readonly { id: string; kayitNo: number; unit: string | null }[],
+  gelisler: ReadonlyMap<number, readonly { tarih: string | null; miktar: string; birim: string; siparisNo: string }[]>,
+): AcikSiparisGelisi[] {
+  return malzemeler.flatMap((m) => (gelisler.get(m.kayitNo) ?? [])
+    .filter((g) => g.birim === m.unit && Number(g.miktar) > 0)
+    .map((g) => ({ kod: m.id, miktar: Number(g.miktar), tarih: g.tarih, siparisNo: g.siparisNo })));
+}

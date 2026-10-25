@@ -21,14 +21,14 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { fasonSuresiTahminleri, malzemeGelisTarihleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  adimCiktisiBul, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
+  acikSiparisSatirlari, type AcikSiparisGelisi, adimCiktisiBul, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
@@ -180,6 +180,8 @@ const MALIYET_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
 const MALIYET_YAZMA: readonly Islem[] = ['finans.yonet'];
 const STOK_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const EMIR_OKUMA: readonly Islem[] = ADIMLI_OKUMA_ISLEMLERI;
+// Açık satın alma siparişinin gelişi (525 1 a): satın almayı okuyan ya da depoda mal kabul eden görür (stoktaki açık sipariş satırlarıyla aynı kapsam).
+const ACIK_SIPARIS_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz', 'stok.giris'];
 // Rota modülünün fason seçicisiyle aynı sınır (rota/servis.ts); süzgeç aramada uygulanır, yalnız aktif fason firmalar gelir.
 const FASON_ARAMA_SINIRI = 200;
 const yetkiliMi = (k: Kullanici, islemler: readonly Islem[]): boolean => islemler.some((i) => islemVarMi(k, i));
@@ -369,7 +371,14 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici) } };
+  const acikSiparisler = d.items !== null && yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, d.items) : null;
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), acikSiparisler } };
+}
+
+// 525 1 a: ham malzemenin açık satın alma siparişleri (girdi.betik bunları plana satın alma satırı olarak yazar).
+async function acikSiparisGelisleri(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<AcikSiparisGelisi[]> {
+  const ham = malzemeler.filter((m) => m.type === 'ham');
+  return acikSiparisSatirlari(ham, await malzemeGelisTarihleri(db, ham.map((m) => m.kayitNo)));
 }
 
 // Çerçeve kaydı metin olarak da yazabilir (yerel depo değeri); metin biçimli değer JSON olarak okunur.
@@ -383,7 +392,7 @@ const kayitDegeri = (k: { bicim: string; deger?: unknown } | null): unknown => {
 // Okunan veri kimseye dönmez; çözücü yalnız saat verir. Yazma işlemi taşımaz.
 const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
   id: 0, ad: 'plan motoru',
-  islemler: [...new Set([...MALZEME_OKUMA, ...ISTASYON_OKUMA, ...KISI_OKUMA, ...STOK_OKUMA, ...ROTA_OKUMA, ...EMIR_OKUMA, ...MALIYET_OKUMA])],
+  islemler: [...new Set([...MALZEME_OKUMA, ...ISTASYON_OKUMA, ...KISI_OKUMA, ...STOK_OKUMA, ...ROTA_OKUMA, ...EMIR_OKUMA, ...MALIYET_OKUMA, ...ACIK_SIPARIS_OKUMA])],
 };
 export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
 // Planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çalışma yoktur: null.
