@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { KodOkuyucu } from './KodOkuyucu.tsx';
 
@@ -20,5 +20,42 @@ describe('KodOkuyucu', () => {
     render(<KodOkuyucu okundu={() => undefined} />);
     fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));
     expect((await screen.findByRole('status')).textContent).toMatch(/kameraya erişemiyor/);
+  });
+
+  describe('kendiliginden', () => {
+    afterEach(() => { vi.restoreAllMocks(); Reflect.deleteProperty(navigator, 'mediaDevices'); });
+    function sahteKamera() {
+      const durdur = vi.fn();
+      let ver: (a: MediaStream) => void = () => undefined;
+      const getUserMedia = vi.fn(() => new Promise<MediaStream>((r) => { ver = r; }));
+      Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      return { getUserMedia, durdur, ver: () => ver({ getTracks: () => [{ stop: durdur }] } as unknown as MediaStream) };
+    }
+
+    it('verilmezse kamera dokunmadan acilmaz', () => {
+      const k = sahteKamera();
+      render(<KodOkuyucu okundu={() => undefined} />);
+      expect(k.getUserMedia).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Kamerayı aç' })).toBeTruthy();
+    });
+
+    it('verilirse kamera acilista baslar, kapatilinca akis durur', async () => {
+      const k = sahteKamera();
+      render(<KodOkuyucu okundu={() => undefined} kendiliginden />);
+      expect(k.getUserMedia).toHaveBeenCalledTimes(1);
+      k.ver();
+      fireEvent.click(await screen.findByRole('button', { name: 'Kamerayı kapat' }));
+      expect(k.durdur).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Kamerayı aç' })).toBeTruthy();
+    });
+
+    it('izin beklenirken ekran kapanirsa gec gelen akis acik kalmaz', async () => {
+      const k = sahteKamera();
+      const { unmount } = render(<KodOkuyucu okundu={() => undefined} kendiliginden />);
+      unmount();
+      k.ver();
+      await vi.waitFor(() => expect(k.durdur).toHaveBeenCalledTimes(1));
+    });
   });
 });
