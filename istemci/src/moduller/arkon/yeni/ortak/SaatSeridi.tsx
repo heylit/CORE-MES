@@ -1,5 +1,7 @@
-import { Dugme } from '../../../../ortak/arayuz/index.ts';
+import type { ReactNode } from 'react';
+import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
+import { useTema } from '../../../../ortak/veri/tema.ts';
 import { saat } from '../cekirdek/bicim.ts';
 import { anlikVardiya } from '../cekirdek/vardiya.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
@@ -22,5 +24,29 @@ export function SaatSeridi({ kisayollar = [], alt }: { kisayollar?: readonly Kis
       <BaglantiDurumu />
       <span className="tc-ay-saat"><b className="mono">{saat(simdi)}</b><small>{alt ?? anlikVardiya(simdi, ayarlar.vardiyalar, ayarlar.tatiller).label}</small></span>
     </>
+  );
+}
+
+// Sayfa rozetinin rengi (eski PageShell `color`): yalnız durum değişkenleri; lab eski Çizim stüdyosunun moru (mavi ile kırmızının karışımı).
+export type BantRengi = 'run' | 'stop' | 'done' | 'hazard' | 'ink' | 'lab';
+
+// Eski üst bant (PageShell, PrepTop, LabTop, SettingsApp header.top, soru 497/4 a): "ÜRETİM HAZIRLIK" markası, renkli sayfa rozeti,
+// sayfanın araçları, sağda kısayollar, bağlantı durumu, büyük saat ve tema düğmesi; altında rozet renginde ışık çizgisi.
+// Tema TMI'nin tek temasıdır; Arkon'un ayrı teması yoktur.
+// Eski Ayarlar bandında tema düğmesi yoktu (tema ayar kartındaydı): `temaDugmesi` false verilir.
+export function ArkonBandi({ simge, baslik, renk = 'hazard', ek, kisayollar, alt, temaDugmesi = true }: {
+  simge: SimgeAdi; baslik: string; renk?: BantRengi; ek?: ReactNode; kisayollar?: readonly Kisayol[]; alt?: string; temaDugmesi?: boolean;
+}) {
+  const { tema, degistir } = useTema();
+  return (
+    <header className="tc-ay-bant" data-renk={renk}>
+      <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
+      <span className="tc-ay-ayrac" aria-hidden="true" />
+      <h2 className="tc-ay-rozet"><Simge ad={simge} />{baslik}</h2>
+      {ek}
+      <span className="tc-ay-bosluk" />
+      <SaatSeridi {...(kisayollar ? { kisayollar } : {})} {...(alt ? { alt } : {})} />
+      {temaDugmesi && <Dugme simge={tema === 'dark' ? 'sun' : 'moon'} onClick={degistir} aria-label="Tema değiştir" title="Tema değiştir" />}
+    </header>
   );
 }

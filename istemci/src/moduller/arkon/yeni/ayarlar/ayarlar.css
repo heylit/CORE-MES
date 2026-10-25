@@ -51,6 +51,3 @@
 .tc-ay6-yukseltildi { border-color: var(--stop); }
 .tc-ay6-cagri-simge { display: inline-grid; place-items: center; color: var(--hold); }
 .tc-ay6-yukseltildi .tc-ay6-cagri-simge { color: var(--stop); }
-
-/* Eski Ayarlar üst çubuğunun sağ ucu: saat ve vardiya. */
-.tc-ay6-serit-ust { display: flex; justify-content: flex-end; }

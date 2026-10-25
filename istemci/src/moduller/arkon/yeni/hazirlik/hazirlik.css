@@ -295,7 +295,7 @@
 .tc-ay2-istasyon-grubu { display: grid; gap: var(--b-2); }
 
 /* hazırlık ekranı */
-.tc-ay2-serit-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
+.tc-ay2-esitlemeler { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-ay2-esitleme {
   display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge);
   border-radius: var(--yari-tam); background: var(--panel2); color: var(--muted); font: inherit; font-size: var(--yazi-s);

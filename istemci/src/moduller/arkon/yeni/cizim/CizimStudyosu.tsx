@@ -5,7 +5,7 @@ import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/sr
 import { AcKapa, Dugme, Girdi, Rozet, Secim, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../cekirdek/bicim.ts';
 import { yerel } from '../cekirdek/yerel.ts';
-import { SaatSeridi } from '../ortak/SaatSeridi.tsx';
+import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { useArkon, useBelgeler, useCakismaUyarisi } from '../veri/baglam.ts';
 import { cihazAyari, cihazAyariYaz } from './bellek.ts';
 import {
@@ -284,7 +284,7 @@ export function CizimStudyosu() {
 
   return (
     <div className="tc-ay5">
-      <div className="tc-ay5-serit-ust"><SaatSeridi kisayollar={CIZIM_KISAYOLLARI} alt="PDF · 3B okuma" /></div>
+      <ArkonBandi simge="lab" baslik="Çizim stüdyosu" renk="lab" kisayollar={CIZIM_KISAYOLLARI} alt="PDF · 3B okuma" />
       <div className="tc-ay5-kipler"><Dilimler etiket="Görünüm" v={lv} sec={setLv} secenekler={KIPLER} /></div>
       <div className="tc-ay5-govde">
         <aside className={'tc-ay5-panel' + gizli('files')} aria-label="Dosyalar">

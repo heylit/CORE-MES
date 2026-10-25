@@ -8,25 +8,20 @@ import type { Perm } from '../cekirdek/tipler.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { useArkon } from '../veri/baglam.ts';
 import type { ArkonDeposu } from '../veri/depo.ts';
-import { SaatSeridi, type Kisayol } from '../ortak/SaatSeridi.tsx';
+import { ArkonBandi, type BantRengi, type Kisayol } from '../ortak/SaatSeridi.tsx';
 import { aktifIsMerkezleri, csvDosyaAdi, csvMetni, type CsvHucresi, type Renk } from './kurallar.ts';
 import './pano.css';
 
 // A3 ve A4 sayfalarının ortak parçaları (pano-planlama.ts PageShell, Segs, WcFilter, useToast, putDoc, csvDownload; ortak-ayarlar.ts
 // audit, allowed). Renk tasarım değişkeninden seçilir (data-renk), durum her zaman metniyle yazılır.
 
-// Sayfa başlığı: simge, ad, sayfanın araçları, kısayollar, saat ve vardiya (Arkon'un kendi tema düğmesi yok: TMI teması geçerli).
-export function SayfaCercevesi({ simge, baslik, ek, kisayollar, saatAlt, children }: {
-  simge: SimgeAdi; baslik: string; ek?: ReactNode; kisayollar?: readonly Kisayol[]; saatAlt?: string; children: ReactNode;
+// Sayfa: eski PageShell'in üst bandı (marka, renkli rozet, araçlar, kısayollar, saat, tema) ve altında içerik.
+export function SayfaCercevesi({ simge, baslik, renk, ek, kisayollar, saatAlt, children }: {
+  simge: SimgeAdi; baslik: string; renk: BantRengi; ek?: ReactNode; kisayollar?: readonly Kisayol[]; saatAlt?: string; children: ReactNode;
 }) {
   return (
     <div className="tc-ay3-sayfa">
-      <header className="tc-ay3-baslik">
-        <h2 className="tc-ay3-ad"><Simge ad={simge} />{baslik}</h2>
-        {ek}
-        <span className="tc-ay3-bosluk" />
-        <SaatSeridi {...(kisayollar ? { kisayollar } : {})} {...(saatAlt ? { alt: saatAlt } : {})} />
-      </header>
+      <ArkonBandi simge={simge} baslik={baslik} renk={renk} ek={ek} {...(kisayollar ? { kisayollar } : {})} {...(saatAlt ? { alt: saatAlt } : {})} />
       {children}
     </div>
   );

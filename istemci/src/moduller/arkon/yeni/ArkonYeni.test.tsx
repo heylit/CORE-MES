@@ -31,21 +31,21 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(istekler.some((i) => i.yol.startsWith('/arkon/'))).toBe(false);
   }, 20000);
 
-  it('yöneticide kök adres Pano\'ya gider; sekmeler Operatör, ikinci menü sırası ve Kuyruk ile gelir', async () => {
+  it('yöneticide kök adres Pano\'ya gider; sekmeler ikinci menü sırasıyla, Operatör ve Kuyruk sekmede yok (497/5 a)', async () => {
     sunucuKur(YONETICI);
     arkonAc('/arkon/yeni');
     const pano = await bolum('Pano');
     expect(pano.getAttribute('data-sayfa')).toBe('pano');
     expect(adres()).toBe('/arkon/yeni/pano');
     expect(sekmeAdlari()).toEqual([
-      'Operatör', 'Pano', 'Plan Kuyruğu', 'Kuyruk', 'Üretim Terminali Hazırlık', 'Üretim Anomalisi', 'Kalite', 'Çizim',
+      'Pano', 'Plan Kuyruğu', 'Üretim Terminali Hazırlık', 'Üretim Anomalisi', 'Kalite', 'Çizim',
       'Bakım', 'Raporlar', 'TMI\'ye yazılamayanlar', 'Ayarlar',
     ]);
-    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve sayfa başlığında saatin yanındaki durum (soru 488 a)
-    // bunu kayıt riski olarak söyler; ayrı bant yoktur.
+    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve üst bantta saatin yanındaki durum (soru 488 a)
+    // bunu kayıt riski olarak söyler.
     const durum = await within(pano).findByRole('status', { name: /Cihaz deposu açılamadı/ }, { timeout: 10000 });
     expect(durum.textContent).toContain('Kayıt riski');
-    expect(durum.closest('.tc-ay3-baslik')).not.toBeNull();
+    expect(durum.closest('.tc-ay-bant')).not.toBeNull();
   }, 20000);
 
   it('sekmeden sayfa değişir; TMI ekranı olan sekme kendi adresine gider', async () => {
@@ -59,17 +59,24 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     await waitFor(() => { expect(adres()).toBe('/arkon/tmi-yansimalari'); });
   }, 20000);
 
-  it('operatör rolünde kök adres Operatör\'e gider, yalnız kendi sekmeleri görünür, Pano açılmaz', async () => {
+  it('operatör rolünde kök adres Üretim Terminali\'ne gider; ayrı sayfadır, sekme şeridi yok; Pano açılmaz', async () => {
     sunucuKur(OPERATOR);
     arkonAc('/arkon/yeni');
-    expect((await bolum('Operatör')).getAttribute('data-sayfa')).toBe('operator');
+    expect((await bolum('Üretim Terminali')).getAttribute('data-sayfa')).toBe('operator');
     expect(adres()).toBe('/arkon/yeni/operator');
-    expect(sekmeAdlari()).toEqual(['Operatör', 'Ayarlar']);
+    expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
     cleanup();
     sunucuKur(OPERATOR);
     arkonAc('/arkon/yeni/pano');
     expect(await screen.findByText('Bu sayfa bulunamadı ya da size açık değil.', {}, { timeout: 10000 })).toBeTruthy();
     expect(document.querySelector('[data-sayfa]')).toBeNull();
+  }, 20000);
+
+  it('Kuyruk ayrı sayfadır: sekme şeridi olmadan açılır', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/yeni/kuyruk');
+    expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');
+    expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
   }, 20000);
 
   it('bilinmeyen sayfa bölüm açmaz', async () => {
