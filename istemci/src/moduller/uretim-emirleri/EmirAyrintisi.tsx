@@ -11,14 +11,14 @@ import { StokTamamlama } from './StokTamamlama.tsx';
 import { UretimYerleri } from './UretimYerleri.tsx';
 import { Iplik } from './Iplik.tsx';
 import { iplikDuraklari } from './iplik.ts';
-import { ADIMLI_OKUMA_ISLEMLERI, OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { ADIMLI_OKUMA_ISLEMLERI, OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
 
 const KAYIT_SUTUNLARI: Sutun<UretimKaydi>[] = [
   { anahtar: 'olay', baslik: 'Olay', hucre: (k) => OLAY_ETIKETI[k.olay] },
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: kayitAdedi },
   { anahtar: 'neden', baslik: 'Neden', hucre: kayitNedeni },
-  { anahtar: 'kisi', baslik: 'Kişi', hucre: (k) => k.kisi.ad },
+  { anahtar: 'kisi', baslik: 'Kişi', hucre: kayitKisisi },
   { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (k) => zamanMetni(k.zaman) },
 ];
 

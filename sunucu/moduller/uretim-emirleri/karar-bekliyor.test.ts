@@ -115,6 +115,53 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.deepEqual(kararOlaylari.map((o) => [o.karar, o.adet, o.kisiId]), [['onay', '2', yoneticiId]]);
   });
 
+  test('504 a: defter kalite kararını kararı verenin adıyla ayrı gösterir; sayan kişi ve kişi başı sağlam operatörde kalır', async () => {
+    const id = await baslamisEmir();
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 2 }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 3 }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: -1 }));
+    const veren = await vt().sorgu<{ tur: string; kisi_id: number; karar_veren_kisi_id: number | null }>(
+      'SELECT tur, kisi_id, karar_veren_kisi_id FROM uretim_sayimi WHERE emir_id = $1 AND duzeltme ORDER BY id', [id],
+    );
+    assert.deepEqual(veren.map((v) => [v.tur, v.kisi_id, v.karar_veren_kisi_id]), [
+      ['karar_bekliyor', operator.id, yoneticiId], ['red', operator.id, yoneticiId],
+      ['karar_bekliyor', operator.id, yoneticiId], ['saglam', operator.id, yoneticiId],
+      ['saglam', operator.id, null],
+    ]);
+    const { kayitlar } = await vt().tx((db) => emirAyrintisi(db, id));
+    const defter = kayitlar.filter((k) => k.olay === 'kalite_onay' || k.olay === 'kalite_red' || k.olay === 'duzeltme');
+    assert.deepEqual(defter.map((k) => [k.olay, k.adet, k.kisi.id, k.kararVeren?.ad ?? null]), [
+      ['kalite_red', 2, operator.id, 'Deneme Yönetici'],
+      ['kalite_onay', 3, operator.id, 'Deneme Yönetici'],
+      ['duzeltme', -1, operator.id, null],
+    ]);
+    assert.equal(defter[2]?.kararVeren, undefined, 'operatör düzeltmesi kararı veren taşımaz');
+  });
+
+  test('504 a: karar veren tutulmadan önce yazılmış karar satırı defterde kalite kararıdır, kararı veren bilinmez; karar veren yalnız karar satırında yazılır', async () => {
+    const id = await baslamisEmir();
+    const s = await ortam!.sahip.tek<{ kisi_id: number; istasyon_id: number }>('SELECT kisi_id, istasyon_id FROM uretim_kaydi WHERE emir_id = $1', [id]);
+    const ekle = (tur: string, adet: number, duzeltme: boolean, zaman: string) => ortam!.sahip.sorgu(
+      'INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz)',
+      [id, s!.kisi_id, s!.istasyon_id, tur, adet, duzeltme, zaman],
+    );
+    // Eski onay: aynı anda karar bekleyenden düşen ve sağlama geçen eş satırlar. Ayrı andaki sağlam düzeltmesi operatöründür.
+    await ekle('karar_bekliyor', 2, false, '2026-01-01T08:00:00Z');
+    await ekle('karar_bekliyor', -2, true, '2026-01-01T09:00:00Z');
+    await ekle('saglam', 2, true, '2026-01-01T09:00:00Z');
+    await ekle('saglam', 1, true, '2026-01-01T10:00:00Z');
+    const { kayitlar } = await vt().tx((db) => emirAyrintisi(db, id));
+    const defter = kayitlar.filter((k) => k.olay !== 'baslat');
+    assert.deepEqual(defter.map((k) => [k.olay, k.adet, 'kararVeren' in k ? k.kararVeren : 'yok']), [['kalite_onay', 2, null], ['duzeltme', 1, 'yok']]);
+    const hata = await ortam!.sahip.sorgu(
+      `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, karar_veren_kisi_id) VALUES ($1, $2, $3, 'saglam', 1, false, $4)`,
+      [id, s!.kisi_id, s!.istasyon_id, yoneticiId],
+    ).then(() => null, (h: unknown) => h);
+    assert.match(String((hata as { constraint?: string } | null)?.constraint), /uretim_sayimi_karar_veren_duzeltmede/);
+  });
+
   test('327 a: onay beklerken adetli bitiş farkı karar bekleyene yazar; onay kapanışı verilen adede getirir, çift sayılmaz', async () => {
     const ayni = await baslamisEmir();
     await vt().tx((db) => emirSayim(db, operator, ayni, { tur: 'saglam', adet: 4 }));
@@ -191,7 +238,8 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.equal(onay.emir.saglamAdet, 2);
     assert.equal(onay.emir.canli?.saglam, 2);
     const { kayitlar } = await vt().tx((db) => emirAyrintisi(db, id));
-    assert.deepEqual(kayitlar.filter((k) => k.olay === 'duzeltme').map((k) => k.adet), [1], 'yalnız ilk parça onayı görünür; redde geçen satır sağlam düzeltmesi görünmez');
+    assert.deepEqual(kayitlar.filter((k) => k.olay === 'duzeltme').map((k) => k.adet), [], 'karar satırı sağlam düzeltmesi olarak görünmez');
+    assert.deepEqual(kayitlar.filter((k) => k.olay.startsWith('kalite_')).map((k) => [k.olay, k.adet]), [['kalite_onay', 1], ['kalite_red', 3]]);
   });
 
   test('karar bekleyen yoksa sonuçlandırma satır ve olay yazmaz; sayımı olmayan emrin sayacı sıfırdır', async () => {
