@@ -159,6 +159,40 @@ export function calismaBasiGeri(takvim: Takvim, bitis: number, sure: number): nu
 export const kesisimDk = (takvim: Takvim, a: number, z: number): number =>
   takvim === null ? z - a : takvim.reduce((t, x) => t + Math.max(0, Math.min(x.bitis, z) - Math.max(x.baslangic, a)), 0);
 
+// 481 a: teslime kalan bolluk eski Reçete ve Rota motorundaki gibi vardiya kapasitesi günüyle sayılır (recete-rota-motoru.html anKesri,
+// R.slack): an, o gün BAŞLAYAN vardiyaların net dakikasının dolan payıyla gün kesrine çevrilir. Önceki günün gece yarısını geçen vardiyası
+// bitmeden gelen an o güne düşer. gunler: gün numarasının (tesis günü) o gün başlayan çalışma aralıkları; null takvimsiz kaynaktır, kesir
+// duvar saatidir. Okunmamış gün (undefined) de duvar saatiyle sayılır. gunBasi: g gününün 00:00'ı, aynı dakika ekseninde.
+export function kapasiteKesri(gunler: ((g: number) => readonly Aralik[] | undefined) | null, g: number, gunBasi: number, t: number): number {
+  const saat = g + (t - gunBasi) / GUN_DK;
+  if (gunler === null) return saat;
+  const dun = gunler(g - 1) ?? [];
+  const dunKap = kesisimDk(dun, -Infinity, Infinity);
+  const dunDolan = kesisimDk(dun, -Infinity, t);
+  if (dunKap > 0 && dunDolan < dunKap && dun.some((a) => a.bitis > gunBasi && t < a.bitis)) return g - 1 + dunDolan / dunKap;
+  const bugun = gunler(g);
+  if (bugun === undefined) return saat;
+  const kap = kesisimDk(bugun, -Infinity, Infinity);
+  return g + (kap > 0 ? Math.min(1, kesisimDk(bugun, -Infinity, t) / kap) : 0);
+}
+
+// Bolluk = teslim günü sonu (gün + 1) - adımların en geç kesri (eski R.dueEnd - R.makespan); teslim ya da yerleşen adım yoksa null.
+export const kapasiteBollugu = (teslimGun: number | null, kesirler: readonly number[]): number | null =>
+  teslimGun === null || kesirler.length === 0 ? null : teslimGun + 1 - Math.max(...kesirler);
+
+// 493 1 a: bölünmüş işin canlıya yazılacak parça adetleri (eski Reçete ve Rota bolmeAdetleri): kayıtlı parçaların oranı adımın adedine
+// en büyük kalanla tam sayı olarak dağıtılır, toplamı adım adedidir. Adım adedi tam sayı değilse, parçadan azsa ya da bir parça bir tam
+// adetten az kalırsa bölme yazılamaz (null).
+export function bolmeAdetleri(oranlar: readonly number[], toplam: number): number[] | null {
+  if (oranlar.length < 2 || !Number.isInteger(toplam) || toplam < oranlar.length || oranlar.some((q) => !(q > 0))) return null;
+  const top = oranlar.reduce((a, b) => a + b, 0);
+  const ham = oranlar.map((q) => (q * toplam) / top);
+  const adet = ham.map(Math.floor);
+  let kalan = toplam - adet.reduce((a, b) => a + b, 0);
+  ham.map((h, i) => [h - adet[i]!, i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]).forEach(([, i]) => { if (kalan > 0) { adet[i]! += 1; kalan -= 1; } });
+  return adet.every((x) => x >= 1) ? adet : null;
+}
+
 // İşin çalışma takvimindeki parçaları: vardiya dışında kalan süre (gece, mola) yük sayılmaz. Takvimsiz kaynak sürekli çalışır.
 export const calisilanParcalar = (takvim: Takvim, is: Aralik): Aralik[] =>
   takvim === null ? [is] : takvim.flatMap((x) => {
