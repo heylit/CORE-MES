@@ -60,7 +60,7 @@ export function KarTablosu({ c, p, fg, komut }: { c: PlanlamaCalismasi | null; p
         <><b className="mono">{x.eksik.length ? '—' : tl(x.top)}</b>
           <small className="tc-pys-dok">
             <span>malzeme {tl(x.mal)}</span>{x.talas ? <span>talaş −{tl(x.talas)}</span> : null}<span>işleme {tl(x.isl)}</span><span>ayar {tl(x.ayar)}</span>
-            {x.gg ? <span>genel gider {tl(x.gg)}</span> : null}{x.mes ? <span>ek mesai {tl(x.mes)}</span> : null}{x.fas ? <span>fason {tl(x.fas)}</span> : null}
+            {x.gg === null ? <span>genel gider —</span> : x.gg ? <span>genel gider {tl(x.gg)}</span> : null}{x.mes ? <span>ek mesai {tl(x.mes)}</span> : null}{x.fas ? <span>fason {tl(x.fas)}</span> : null}
           </small>
           {x.eksik.length > 0 && <span className="tc-pys-uyari"><Simge ad="alert" boyut="k" />{x.eksik.join(', ')} yok</span>}</>
       );
