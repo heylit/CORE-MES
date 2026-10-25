@@ -22,6 +22,8 @@ export const SATIN_ALMA_IKINCI_MENU = {
         { anahtar: 'talepler', baslik: 'Talepler', yol: '/satin-alma/talepler', simge: 'list', islem: 'satin-alma.oku' },
         { anahtar: 'onaylar', baslik: 'Onaylar', yol: '/satin-alma/onaylar', simge: 'check', islem: 'satin-alma.onayla' },
         { anahtar: 'dis-operasyonlar', baslik: 'Dış operasyonlar', yol: '/satin-alma/dis-operasyonlar', simge: 'rotate', islem: 'satin-alma.oku' },
+        // 534 2 a: planın olması gereken tarihi ve satın almanın termini (533 a).
+        { anahtar: 'tedarik-terminleri', baslik: 'Tedarik terminleri', yol: '/satin-alma/tedarik-terminleri', simge: 'clock', islem: 'satin-alma.oku' },
       ],
     },
     {

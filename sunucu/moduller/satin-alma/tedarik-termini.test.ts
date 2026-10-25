@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { yoneticiOlustur } from '../kisiler/disari.ts';
+import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tedarikIhtiyaclariniYaz, tedarikTerminleri } from './disari.ts';
@@ -29,6 +29,22 @@ describe('satin-alma tedarik termini (533 a, gerçek PostgreSQL)', () => {
     assert.equal(r.statusCode, 200, r.body);
     return String(r.headers['set-cookie']).split(';')[0] ?? '';
   };
+  const kisiKur = async (kullaniciAdi: string, islemler: readonly string[]): Promise<string> => {
+    const sahip = ortam!.sahip;
+    const yoneticiRolu = (await sahip.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'"))!;
+    const gecici = (await sahip.tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $2) RETURNING id', [`gecici_${kullaniciAdi}`, kullaniciAdi]))!;
+    for (const islem of islemler) await sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [gecici.id, islem]);
+    await vt().tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: `Deneme ${kullaniciAdi}`, kullaniciAdi, parola: PAROLA });
+      await rolAta(db, yonetici.id, yeni, gecici.id);
+      await rolAl(db, yonetici.id, yeni, yoneticiRolu.id);
+    });
+    return giris(kullaniciAdi);
+  };
+  const istek = (cerez: string, yontem: 'GET' | 'POST', yol: string, govde?: object) => app.inject({
+    method: yontem, url: `/api${yol}`, headers: { cookie: cerez, ...(yontem === 'POST' ? { 'istek-kimligi': crypto.randomUUID() } : {}) },
+    ...(govde === undefined ? {} : { payload: govde }),
+  });
   const kartAc = async (kimlik: string, kod: string, cap: number): Promise<number> => {
     const r = await app.inject({
       method: 'POST', url: `/api/malzeme-katalogu-kartlari/${kimlik}/kaydet`, headers: { cookie: cerezYonetici, 'istek-kimligi': crypto.randomUUID() },
@@ -106,5 +122,43 @@ describe('satin-alma tedarik termini (533 a, gerçek PostgreSQL)', () => {
     assert.deepEqual([son.get(m2)?.termin, son.get(m2)?.gerekenTarih], ['2026-11-07', '2026-11-09']);
     await vt().tx((db) => tedarikIhtiyaclariniYaz(db, []));
     assert.equal((await vt().tx((db) => tedarikTerminleri(db, [m2]))).get(m2)?.gerekenTarih, null);
+  });
+
+  test('534 1 a: termin ucu satın almayı yazana ve planı yazana açık; satın almayı ya da planı yalnız okuyan ve ilgisiz kişi 403; liste okuyana açık', async () => {
+    const satinAlmaci = await kisiKur('termin_sa', ['satin-alma.yaz']);
+    const planlamaci = await kisiKur('termin_plan', ['plan.yaz', 'plan.oku']);
+    const okuyucu = await kisiKur('termin_oku', ['satin-alma.oku', 'plan.oku', 'recete-rota.planlama-oku']);
+    const ilgisiz = await kisiKur('termin_yok', ['stok.oku']);
+    const sonSurum = async (no: number) => (await vt().tx((db) => tedarikTerminleri(db, [no]))).get(no)?.surum ?? null;
+    const kaydet = (cerez: string, no: number, termin: string | null, surum: number | null) =>
+      istek(cerez, 'POST', '/satin-alma-tedarik-terminleri/kaydet', { malzemeNo: no, termin, surum });
+
+    const sa = await kaydet(satinAlmaci, m2, '2026-11-20', await sonSurum(m2));
+    assert.equal(sa.statusCode, 200, sa.body);
+    assert.equal((sa.json() as { termin: { termin: string } }).termin.termin, '2026-11-20');
+    const pl = await kaydet(planlamaci, m2, '2026-11-21', await sonSurum(m2));
+    assert.equal(pl.statusCode, 200, pl.body);
+    const kisi = await ortam!.sahip.tek<{ ad: string }>('SELECT k.ad FROM satin_alma_tedarik_termini t JOIN kisi k ON k.id = t.kisi_id WHERE t.malzeme_no = $1', [m2]);
+    assert.equal(kisi?.ad, 'Deneme termin_plan', 'kişi oturumdan, gövdeden değil');
+    for (const cerez of [okuyucu, ilgisiz]) {
+      const r = await kaydet(cerez, m2, '2026-12-01', await sonSurum(m2));
+      assert.equal(r.statusCode, 403, r.body);
+    }
+    assert.equal((await vt().tx((db) => tedarikTerminleri(db, [m2]))).get(m2)?.termin, '2026-11-21', 'reddedilen yazmadı');
+    const eski = await kaydet(satinAlmaci, m2, '2026-12-02', 1);
+    assert.equal(eski.statusCode, 409, eski.body);
+    const kisiGovdede = await istek(satinAlmaci, 'POST', '/satin-alma-tedarik-terminleri/kaydet', { malzemeNo: m2, termin: '2026-12-03', surum: await sonSurum(m2), kisiId: 1 });
+    assert.equal(kisiGovdede.statusCode, 200, kisiGovdede.body);
+    const yazan = await ortam!.sahip.tek<{ ad: string }>('SELECT k.ad FROM satin_alma_tedarik_termini t JOIN kisi k ON k.id = t.kisi_id WHERE t.malzeme_no = $1', [m2]);
+    assert.equal(yazan?.ad, 'Deneme termin_sa', 'gövdedeki kişi alanı yok sayılır');
+    const kotuTarih = await kaydet(satinAlmaci, m2, '2026-02-30', await sonSurum(m2));
+    assert.equal(kotuTarih.statusCode, 400, kotuTarih.body);
+
+    assert.equal((await istek(okuyucu, 'GET', '/satin-alma-tedarik-terminleri')).statusCode, 200);
+    assert.equal((await istek(satinAlmaci, 'GET', '/satin-alma-tedarik-terminleri')).statusCode, 200);
+    assert.equal((await istek(planlamaci, 'GET', '/satin-alma-tedarik-terminleri')).statusCode, 403, 'plan okuyan satın alma listesini görmez; termini plandan okur');
+    assert.equal((await istek(ilgisiz, 'GET', '/satin-alma-tedarik-terminleri')).statusCode, 403);
+    const oturumsuz = await app.inject({ method: 'POST', url: '/api/satin-alma-tedarik-terminleri/kaydet', headers: { 'istek-kimligi': crypto.randomUUID() }, payload: { malzemeNo: m2, termin: null, surum: 1 } });
+    assert.equal(oturumsuz.statusCode, 401);
   });
 });

@@ -27,10 +27,10 @@ describe('Satın Alma ikinci menüsü', () => {
   });
 
   it('rol setleri: satın almacı iş kutusunu, müdür onayları görür; finans yalnız okur; talep eden menüyü görmez', () => {
-    expect(gorunen(ROL_ISLEMLERI['satin_alma']!)).toEqual(['is-kutusu', 'talepler', 'dis-operasyonlar', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
-    expect(gorunen(ROL_ISLEMLERI['mudur']!)).toEqual(['talepler', 'onaylar', 'dis-operasyonlar', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
-    expect(gorunen(ROL_ISLEMLERI['planlama_proje']!)).toEqual(['talepler', 'dis-operasyonlar', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
-    expect(gorunen(ROL_ISLEMLERI['muhasebe_finans']!)).toEqual(['talepler', 'dis-operasyonlar', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
+    expect(gorunen(ROL_ISLEMLERI['satin_alma']!)).toEqual(['is-kutusu', 'talepler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
+    expect(gorunen(ROL_ISLEMLERI['mudur']!)).toEqual(['talepler', 'onaylar', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
+    expect(gorunen(ROL_ISLEMLERI['planlama_proje']!)).toEqual(['talepler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
+    expect(gorunen(ROL_ISLEMLERI['muhasebe_finans']!)).toEqual(['talepler', 'dis-operasyonlar', 'tedarik-terminleri', 'malzemeler', 'kg-fiyatlari', 'tedarikciler', 'raporlar']);
     expect(gorunen(ROL_ISLEMLERI['kalite']!)).toEqual([]);
   });
 });
