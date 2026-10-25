@@ -4,7 +4,7 @@ import {
   Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, SayiKarti, Secim, Tablo, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
 import type { StokBakiyesi } from '../../kopru.ts';
-import { miktar, sayi, zaman } from '../bicim.ts';
+import { miktar, sayi, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { anahtarlar, useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { useEmirKomutu } from './komut.ts';
@@ -12,9 +12,10 @@ import {
   miktarOku, statuAdi, statuHedefleri, statuluSatirlar, stokKartiIdleri, stokSatirlari, surectekiMalzeme, type StatuluSatir, type StokSatiri, type SurecSatiri,
 } from './kurallar.ts';
 
-const SAYFA_BOYU = 50;
 const AZAMI_HAREKET = 40;
 type Hareket = NonNullable<RrDurumu['moves']>[number];
+const paraBicimi = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' });
+const para = (v: number | null): string => (v === null ? YOK : paraBicimi.format(v));
 
 // Stok bölümü: serbest stok (durumdan), statülü stok ve bakiye satırları (stoktan, gösterilen kartlar için, en çok 200), statü atlatma ve
 // sayım düzeltmesi (stoğa yazılır), süreçteki malzeme ve son hareketler. Elle eldeki miktar, yerel statü atlatma ve hareket geri alma
@@ -23,7 +24,6 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
   const d = veri.durum;
   const [arama, setArama] = useState('');
   const [minimumAlti, setMinimumAlti] = useState(false);
-  const [sayfa, setSayfa] = useState(1);
   const kalemler = useMemo(() => d.items ?? [], [d.items]);
   const idler = useMemo(() => stokKartiIdleri(kalemler), [kalemler]);
   const okuma = useStokOkumasi(idler, yetki.stokOku);
@@ -38,7 +38,6 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
   const toplamDeger = d.maliyet ? satirlar.reduce((t, s) => t + (deger(s) ?? 0), 0) : null;
   const k = arama.trim().toLocaleLowerCase('tr-TR');
   const suzulen = satirlar.filter((s) => (!k || `${s.malzeme.code} ${s.malzeme.name}`.toLocaleLowerCase('tr-TR').includes(k)) && (!minimumAlti || s.minimumAlti));
-  const gosterilen = suzulen.slice((sayfa - 1) * SAYFA_BOYU, sayfa * SAYFA_BOYU);
 
   const sutunlar: Sutun<StokSatiri>[] = [
     { anahtar: 'kalem', baslik: 'Kalem', hucre: (s) => <><b className="mono">{s.malzeme.code}</b> <small>{s.malzeme.name}</small></> },
@@ -46,10 +45,11 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
     { anahtar: 'eldeki', baslik: 'Eldeki', hizala: 'sag', hucre: (s) => sayi(s.serbest) },
     { anahtar: 'minimum', baslik: 'Minimum', hizala: 'sag', hucre: (s) => sayi(s.malzeme.min) },
     { anahtar: 'birim', baslik: 'Birim', hucre: (s) => s.malzeme.unit },
-    ...(yetki.maliyetOku ? [{ anahtar: 'deger', baslik: 'Değer', hizala: 'sag' as const, hucre: (s: StokSatiri) => sayi(deger(s)) }] : []),
+    ...(yetki.maliyetOku ? [{ anahtar: 'deger', baslik: 'Değer', hizala: 'sag' as const, hucre: (s: StokSatiri) => para(deger(s)) }] : []),
     {
       anahtar: 'durum', baslik: 'Durum',
-      hucre: (s) => (s.minimumAlti ? <Rozet ton="uyari">Sipariş ver</Rozet> : s.malzeme.min !== null && s.malzeme.min > 0 ? <Rozet ton="tamam">Yeterli</Rozet> : null),
+      // Minimumu girilmemiş kalemde durum bilinmez: boş gösterilir (Soru 468/3, öneri a).
+      hucre: (s) => (s.minimumAlti ? <Rozet ton="uyari">Sipariş ver</Rozet> : s.malzeme.min !== null && s.malzeme.min > 0 ? <Rozet ton="tamam">Yeterli</Rozet> : YOK),
     },
   ];
 
@@ -57,7 +57,7 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
       <p className="tc-rr3-ipucu">Eldeki serbest stoktur; statülü miktar üretimdeki yarı parçadır ve aşağıda ayrıca görünür. Stok hareketleri Stok sayfasıyla ortaktır.</p>
       <div className="tc-rr3-kpi">
-        {yetki.maliyetOku && <SayiKarti baslik="Stok değeri" simge="lira" metin={toplamDeger === null ? 'Veri yok' : sayi(toplamDeger)} altMetin={`${String(kalemler.length)} kalem`} />}
+        {yetki.maliyetOku && <SayiKarti baslik="Stok değeri" simge="lira" metin={toplamDeger === null ? 'Veri yok' : para(toplamDeger)} altMetin={`${String(kalemler.length)} kalem`} />}
         <SayiKarti
           baslik="Minimumun altında" simge="alert" sayi={alti.length} ton="uyari"
           altMetin={alti.length ? `${alti.slice(0, 3).map((s) => s.malzeme.code).join(', ')}${alti.length > 3 ? '…' : ''}` : 'Hepsi yeterli'}
@@ -66,12 +66,11 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
       </div>
       {d.malzemeKesildi && <p className="tc-rr3-ipucu" role="status">Malzeme listesi üst sınırda kesildi; kalan kartlar okunmadı.</p>}
       <Tablo
-        etiket="Stok" sutunlar={sutunlar} satirlar={gosterilen} satirAnahtari={(s) => s.malzeme.id} bosMesaj={kalemler.length ? 'Bu aramada kalem yok.' : 'Malzeme yok.'}
+        etiket="Stok" sutunlar={sutunlar} satirlar={suzulen} satirAnahtari={(s) => s.malzeme.id} bosMesaj={kalemler.length ? 'Bu aramada kalem yok.' : 'Malzeme yok.'}
         arac={{
-          arama: { deger: arama, degistir: (v) => { setArama(v); setSayfa(1); }, etiket: 'Stokta ara', yerTutucu: 'Kod ya da ad ara…' },
-          sag: <IsaretKutusu etiket="Yalnız minimumun altındakiler" checked={minimumAlti} onChange={(o) => { setMinimumAlti(o.target.checked); setSayfa(1); }} />,
+          arama: { deger: arama, degistir: setArama, etiket: 'Stokta ara', yerTutucu: 'Kod ya da ad ara…' },
+          sag: <IsaretKutusu etiket="Yalnız minimumun altındakiler" checked={minimumAlti} onChange={(o) => { setMinimumAlti(o.target.checked); }} />,
         }}
-        sayfalama={{ sayfa, sayfaBoyu: SAYFA_BOYU, toplam: suzulen.length, degistir: setSayfa }}
       />
       <StatuluStok durum={d} yetki={yetki} idler={idler} okuma={okuma} />
       <SurectekiMalzeme durum={d} />

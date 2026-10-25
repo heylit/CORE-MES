@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI,
@@ -29,6 +29,8 @@ export const uclar = [
     isle: ({ db, kullanici, sorgu }) => servis.motorUyarilariOku(db, kullanici, sorgu.taslak) }),
   uc({ yontem: 'GET', yol: '/plan/canli-yerlesim', yetki: PLAN_OKUR, sorgu: canliYerlesimSorgusu, cevap: canliYerlesimCevabi,
     isle: ({ db, sorgu }) => servis.canliYerlesim(db, sorgu.isEmirleri) }),
+  // 510 a: canlıya alma geçmişi (eski "Plan değişikliği" kutusu); planı okuyan görür.
+  uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
@@ -108,10 +110,14 @@ export const uclar = [
     govde: onaydanCekGovdesi, cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.onaydanCek(db, kullanici, parametre.id, govde.surum) }),
   uc({ yontem: 'POST', yol: PLAN_ONAY_KOMUTLARI['geri-gonder'].yol, yetki: PLAN_ONAY_KOMUTLARI['geri-gonder'].islem, parametre: senaryoParametresi,
     govde: geriGonderGovdesi, cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.geriGonder(db, kullanici, parametre.id, govde) }),
-  uc({ yontem: 'POST', yol: PLAN_ONAY_KOMUTLARI['canliya-al'].yol, yetki: PLAN_ONAY_KOMUTLARI['canliya-al'].islem, tekrarKorumali: true, parametre: senaryoParametresi,
+  // Kardeş taslakları da kilitler (502 a): o taslağa aynı anda yazan komutla kilitlenirse baştan yeniden koşar.
+  uc({ yontem: 'POST', yol: PLAN_ONAY_KOMUTLARI['canliya-al'].yol, yetki: PLAN_ONAY_KOMUTLARI['canliya-al'].islem, tekrarKorumali: true, kilitlenmedeYinele: true, parametre: senaryoParametresi,
     govde: canliyaAlGovdesi, cevap: canliyaAlCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.canliyaAl(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/plan/musteri-secenekleri', yetki: 'plan.canliya-al', sorgu: musteriSecenekleriSorgusu, cevap: musteriSecenekleriCevabi,
     isle: ({ db, sorgu }) => servis.musteriSecenekleri(db, sorgu.ara) }),
+  // 507 2 a: taslağın ek vardiyaları baştan yazılır; okuma GET /plan cevabının ekMesai'sidir.
+  uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/ek-mesai', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi, govde: ekMesaiGovdesi,
+    cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.ekMesaiYaz(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/vazgec', yetki: 'plan.studyo', parametre: senaryoParametresi, govde: senaryoSurumGovdesi,
     cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.vazgec(db, kullanici, parametre.id, govde.surum) }),
 ];

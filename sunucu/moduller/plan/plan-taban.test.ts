@@ -91,7 +91,7 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
     assert.equal((await taban([ie!])).length, 1, 'emir silinse de taban kalır');
   });
 
-  test('33-4: eşzamanlı iki canlıya almada adımın tabanı tektir ve önce canlıya alınanındır', async () => {
+  test('33-4: eşzamanlı iki canlıya almada adımın tabanı tektir ve önce canlıya alınanındır; ikincinin taslağı kardeş olarak kapanır, 409 alır', async () => {
     const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
     const p1 = await taslaktaOner(c.planlama);
     const p2 = await taslaktaOner(c.planlama2);
@@ -99,12 +99,17 @@ describe('plan (gerçek PostgreSQL): taban plan', () => {
     const surumlar = [await gonder(p1.taslak!.id, p1.taslak!.surum), await gonder(p2.taslak!.id, p2.taslak!.surum, c.planlama2)];
     const cevaplar = await Promise.all([p1, p2].map((p, i) =>
       istek(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: surumlar[i], cakismalariKabul: true })));
-    assert.deepEqual(cevaplar.map((x) => x.statusCode), [200, 200]);
+    // 502 a: iki taslak aynı tabandan; kilit sırası plan sürümü önce olduğundan sonuç zamanlamaya bağlı değildir: biri canlıya alınır,
+    // öbürü onun kardeşi olarak kapanır ve anlamlı 409 alır.
+    assert.deepEqual(cevaplar.map((x) => x.statusCode).sort(), [200, 409]);
+    assert.match(cevaplar.find((x) => x.statusCode === 409)!.body, /başka bir taslak canlıya alındığı için kapandı/);
     const t = await taban([ie!]);
     assert.equal(t.length, 1);
-    const kapanis = await sahip().sorgu<{ id: number }>(
-      "SELECT id FROM plan_senaryosu WHERE id = ANY($1::int[]) AND durum = 'canliya_alindi' ORDER BY kapanma, id", [[p1.taslak!.id, p2.taslak!.id]]);
-    assert.equal(t[0]!.senaryoId, kapanis[0]!.id, 'taban ilk canlıya alınan senaryonun');
+    const durumlar = await sahip().sorgu<{ id: number; durum: string }>(
+      'SELECT id, durum FROM plan_senaryosu WHERE id = ANY($1::int[]) ORDER BY id', [[p1.taslak!.id, p2.taslak!.id]]);
+    const alinan = durumlar.find((x) => x.durum === 'canliya_alindi');
+    assert.deepEqual(durumlar.map((x) => x.durum).sort(), ['canliya_alindi', 'vazgecildi']);
+    assert.equal(t[0]!.senaryoId, alinan!.id, 'taban canlıya alınan senaryonun');
   });
 
   test('33-5: yetkisiz canlıya alma tabana yazmaz; vazgeçilen taslak tabana yazmaz', async () => {

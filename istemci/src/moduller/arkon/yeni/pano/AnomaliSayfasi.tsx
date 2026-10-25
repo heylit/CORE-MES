@@ -56,7 +56,7 @@ export function AnomaliSayfasi() {
       secenekler={(['bugun', 'gun', 'hafta', 'ay'] as Sekme[]).map((k) => ({ k, etiket: k === 'bugun' ? 'Bugün' : ANOMALI_DONEM_ETIKETI[k] }))} />
   );
   return s === 'bugun' ? <Bugun sekme={sekme} />
-    : <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi"><Donem sekme={sekme} donem={s} tarih={tarih} tarihYaz={tarihYaz} /></SayfaCercevesi>;
+    : <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi" renk="stop"><Donem sekme={sekme} donem={s} tarih={tarih} tarihYaz={tarihYaz} /></SayfaCercevesi>;
 }
 
 function Bugun({ sekme }: { sekme: ReactNode }) {
@@ -85,7 +85,7 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
   const ek = sayi !== null ? <Cip renk={sayi ? 'stop' : 'run'}>{sayi ? `${sayi} istasyon eksik` : 'Eksik yok'}</Cip> : null;
   const kapali = a ? kapaliKurallar(a.esikler) : [];
   return (
-    <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi" ek={ek}>
+    <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi" renk="stop" ek={ek}>
       <div className="tc-ay3-arac">
         {sekme}
         {a && (

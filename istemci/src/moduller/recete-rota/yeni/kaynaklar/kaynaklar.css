@@ -20,7 +20,17 @@
 
 /* Kaynaklar */
 .tc-rr2-govde { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
-.tc-rr2-seviyeler, .tc-rr2-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--damga)), 1fr)); gap: var(--b-3); }
+.tc-rr2-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--damga)), 1fr)); gap: var(--b-3); }
+/* Genel bakış: üç seviye kartı satırı doldurur; numara sarı dairede, başlıkla aynı satırda. */
+.tc-rr2-seviyeler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--damga-dar)), 1fr)); gap: var(--b-3); }
+.tc-rr2-seviye-bas { display: flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-m); }
+.tc-rr2-no {
+  display: inline-grid; flex: none; place-items: center; width: var(--b-5); height: var(--b-5); border-radius: var(--yari-tam);
+  background: var(--hazard); color: var(--ink); font-size: var(--yazi-xs); font-weight: 700;
+}
+.tc-rr2-seviye p { color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr2-seviye p b { color: var(--ink); }
+.tc-rr2-panel { padding: var(--b-4); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-rr2-seviye, .tc-rr2-kart-kutu {
   display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3);
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
@@ -53,3 +63,76 @@
   border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font-weight: 700;
 }
 .tc-rr2-form { display: flex; flex-direction: column; gap: var(--b-3); }
+
+/* Eski ekranın düzeni: iş merkezi rengi sırasından gelir (paneller, matris, avatar), bölümler çerçeveli panelde. */
+[data-renk="0"] { --rr2-renk: var(--grafik); }
+[data-renk="1"] { --rr2-renk: var(--done); }
+[data-renk="2"] { --rr2-renk: var(--hold); }
+[data-renk="3"] { --rr2-renk: var(--grafik-2); }
+[data-renk="4"] { --rr2-renk: var(--stop); }
+[data-renk="5"] { --rr2-renk: var(--run); }
+.tc-rr2-im { border-left: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-kutu { min-width: 0; overflow: hidden; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
+.tc-rr2-bag { padding: 0; border: 0; background: none; color: var(--grafik); font: inherit; font-weight: 600; cursor: pointer; }
+.tc-rr2-nokta { display: inline-block; width: var(--b-2); height: var(--b-2); margin-right: var(--b-1); border-radius: var(--yari-tam); background: var(--rr2-renk, var(--edge)); }
+
+/* Genel bakış: iş merkezi kartları yan yana, üstte renk çizgisi; istasyon solda renk çizgisiyle. */
+.tc-rr2-agac { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tus-pencere-genis)), 1fr)); gap: var(--b-3); }
+.tc-rr2-agac-im {
+  display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-top: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); border-radius: var(--yari-1); background: var(--panel);
+}
+.tc-rr2-agac-bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-3); margin-bottom: var(--b-2); }
+.tc-rr2-agac-bas > b { flex-basis: 100%; font-size: var(--yazi-m); }
+.tc-rr2-agac-bas > span { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-rr2-agac-ist { display: flex; flex-direction: column; gap: var(--cizgi); margin: var(--b-1) 0 0 var(--b-1); padding: var(--b-1) 0 var(--b-1) var(--b-3); border-left: calc(var(--cizgi) + var(--cizgi-ince)) solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-agac-ist small { font-size: var(--yazi-xs); }
+
+/* Vardiya matrisi: açık hücre iş merkezi renginde blok, kapalı hücre kesik çerçeve; hafta sonu başlığı kırmızı. */
+.tc-rr2-panel .tc-rr2-matris { width: 100%; }
+.tc-rr2-matris th[data-tatil] { color: var(--stop); }
+.tc-rr2-matris td { text-align: center; }
+.tc-rr2-matris td:last-child { text-align: right; }
+.tc-rr2-hucre {
+  display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: var(--b-6); min-height: var(--b-5);
+  border: var(--cizgi-ince) dashed var(--edge); border-radius: var(--yari-1); font-weight: 600;
+}
+.tc-rr2-hucre[data-acik] { border: 0; background: var(--rr2-renk, var(--grafik)); color: var(--panel); }
+.tc-rr2-matris td[data-eksik] { background: color-mix(in srgb, var(--stop) 18%, transparent); color: var(--stop); }
+.tc-rr2-sayac {
+  display: inline-grid; place-items: center; min-width: var(--b-5); height: var(--b-5); border-radius: var(--yari-tam); background: var(--ink); color: var(--panel); font-weight: 700;
+}
+
+/* Vardiya kartları iki sütun, üstte renk çizgisi; 24 saatlik çubuk ve cetvel. */
+.tc-rr2-vardiyalar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tus-pencere-genis)), 1fr)); gap: var(--b-3); }
+.tc-rr2-vardiya { border-top: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-cubuk svg { display: block; width: 100%; height: var(--b-5); }
+.tc-rr2-cubuk-zemin { fill: var(--panel2); }
+.tc-rr2-cubuk-iz { stroke: var(--edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.tc-rr2-cubuk-vardiya { fill: var(--rr2-renk, var(--grafik)); }
+.tc-rr2-cubuk-mola { fill: var(--hazard); stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.tc-rr2-cubuk-cetvel { display: flex; justify-content: space-between; color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Personel: kişi başına tek satır; avatar iş merkezi renginde. */
+.tc-rr2-kisiler { display: flex; flex-direction: column; min-width: 0; }
+.tc-rr2-kisi-satir { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3) 0; border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-rr2-kisi-satir[data-pasif] { color: var(--muted); }
+.tc-rr2-kisi-alanlar { flex: 1 1 auto; }
+.tc-rr2-avatar[data-renk] { background: var(--rr2-renk); color: var(--panel); }
+.tc-rr2-mgrup { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+
+/* Süreler: adım başına kart (eski ekranın düzeni); ürün, operasyon, kaynak ve plan tabanı satırı kaplar. */
+.tc-rr2-sureler { display: flex; flex-direction: column; min-width: 0; }
+.tc-rr2-sure {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--b-2) var(--b-3); min-width: 0; padding: var(--b-3) var(--b-4);
+  border: var(--cizgi-ince) solid var(--edge); border-bottom-width: 0; background: var(--panel);
+}
+.tc-rr2-sureler:last-of-type > .tc-rr2-sure:last-child { border-bottom-width: var(--cizgi-ince); }
+.tc-rr2-sure-alan { display: flex; flex-direction: column; gap: var(--cizgi); min-width: 0; }
+.tc-rr2-sure-alan > span { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-rr2-sure-alan > div { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.tc-rr2-sure-alan small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-rr2-sure-urun, .tc-rr2-sure-genis, .tc-rr2-sure-plan { grid-column: 1 / -1; }
+@media (max-width: 767px) {
+  .tc-rr2-sure { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -50,8 +50,11 @@ export function AdimCubugu({ adimlar, etkin, git }: { adimlar: readonly Sihirbaz
                 type="button" className={sinif} aria-current={i === etkin ? 'step' : undefined} disabled={!s.gidilir}
                 onClick={() => { git(i); }}
               >
-                <span className="tc-my-adim-no" aria-hidden="true">{tamam ? <Simge ad="check" /> : i + 1}</span>
+                <span className="tc-my-adim-no" aria-hidden="true">{i + 1}</span>
                 <span className="tc-my-adim-ad">{s.ad}</span>
+                {s.sorunlu
+                  ? <span className="tc-my-adim-isaret" aria-hidden="true"><Simge ad="alert" /></span>
+                  : tamam && <span className="tc-my-adim-isaret" aria-hidden="true"><Simge ad="check" /></span>}
                 {s.sorunlu && <span className="tc-my-gizli">(uyumsuz seçim var)</span>}
               </button>
             </li>

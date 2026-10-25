@@ -57,6 +57,10 @@ export const planGostergeleri = z.object({
   // 6c, planın TL toplamı (203 a): yerleşen emirlerin gecikme, ceza, finansman ve kâr riski. Yalnız siparisler.fiyat-oku (180) görür;
   // görmeyene null. Ekranlar okumaya başlayana dek isteğe bağlı.
   maliyetTl: z.number().nullable().optional(),
+  // 507 1 a (eski motorun suH ve wT'si, salt okuma): yerleşen işlerin ayar saati toplamı; emir başına teslim günü sonunu aşan saat x öncelik
+  // ağırlığı (1: 4, 2: 2, 3: 1, diğer 1) x sipariş satırındaki adet payı. Ekranlar okumaya başlayana dek isteğe bağlı.
+  ayarSaat: z.number().optional(),
+  agirlikliGecikmeSaat: z.number().optional(),
 });
 // Taslak (P6): planlamacının kendi senaryosu; bütün planlama işlemleri buna yazılır.
 export const taslakOzeti = z.object({
@@ -69,6 +73,16 @@ export const planEmri = z.object({
   // Emir önceliği (1 acil - 4 düşük); yalnız hızlı denemenin benzettiği emirde null olabilir.
   oncelik: z.number().int().nullable(), baslangic: zaman.nullable(), bitis: zaman.nullable(), tamponGun: z.number().nullable(), engelli: z.boolean(), isSayisi: z.number().int(),
   yerlesen: z.number().int(),
+});
+// 507 2 a: taslağın (canlıda canlının) ek vardiyaları ve haftalık bütçesi. Hafta pazartesi başlar; sınır plan ayarındadır, boşsa haftada
+// 8 saat, 0 ise sınır yok (haftaSiniriSaat 0, hiçbir hafta aşmaz). saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). Ek vardiya planın kapasitesine girmez; ölçüm ve bütçe içindir.
+export const planEkMesai = z.object({
+  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number() })),
+  toplamSaat: z.number(),
+  haftaSiniriSaat: z.number(),
+  haftalar: z.array(z.object({ hafta: tarih, saat: z.number() })),
+  asanHaftalar: z.array(z.object({ hafta: tarih, saat: z.number() })),
+  asildi: z.boolean(),
 });
 export const planCevabi = z.object({
   surum: z.number().int(),
@@ -100,6 +114,8 @@ export const planCevabi = z.object({
     isEmriId: KIMLIK, emirNo: z.string().nullable(), opNo: z.number().int().nullable(), neden: z.enum(['istasyon', 'fason', 'rotadan-kalkti']),
     eskiIstasyon: z.string().nullable(), yeniIstasyon: z.string().nullable(),
   })).optional(),
+  // Sunucu her okumada doldurur; ekranlar okumaya başlayana dek isteğe bağlı.
+  ekMesai: planEkMesai.optional(),
 });
 
 const tarihZaman = z.string().datetime({ offset: true, message: 'Başlangıç ISO tarih-saat olmalı.' });
@@ -140,12 +156,21 @@ export const motorYerlesimiCevabi = z.object({
   yerlesimler: z.array(z.object({
     isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), kaynak: kaynakGirdisi, kaynakAdi: z.string().nullable(),
     baslangic: zaman, bitis: zaman, sabit: z.boolean(),
-    parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman })).optional(),
+    // 493 1 a: adet parçanın canlıya yazılacak tam sayı adedidir (kayıtlı bölmenin oranı adım adedine dağıtılmış); bölme yazılamıyorsa null.
+    parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, adet: z.number().int().positive().nullable() })).optional(),
   })),
   yerlesmeyen: z.array(z.object({ isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
   // Ekranın planRun opts.yerlesim girişi (Reçete ve Rota, #1860): anahtar canlı kuyruktaki gibi `emirNo|opNo`, bölünmüş işte parça başına
   // `emirNo|opNo~parçaNo`; değer makine (kişi kaynağında null) ve ISO başlangıç.
   ekranYerlesimi: z.record(z.string(), z.array(z.object({ makineId: KIMLIK.nullable(), baslangic: zaman }))),
+  // 481 a: emir başına teslime kalan bolluk, vardiya kapasitesi günüyle (eski Reçete ve Rota motorunun R.slack'i): teslim günü sonu eksi
+  // adımların bitişinin o gün başlayan vardiyalardaki dolan payı. Ekranın tampon rozeti bunu gösterir. Teslimsiz ya da yerleşmemiş işi olan
+  // emirde bitis ve bollukGun null. 493 2 a: rotaEski, emir açıldıktan sonra ürünün yürürlükteki rotası değişti (emir açıldığı rotada kaldı);
+  // bolmeYazilamaz, bölmesi canlıya yazılamayan adımların OP numaraları (adım adedi tam sayı değil ya da parça bir tam adetten az kalıyor).
+  emirler: z.array(z.object({
+    uretimEmriId: KIMLIK, emirNo: z.string(), teslim: z.string().nullable(), bitis: zaman.nullable(), bollukGun: z.number().nullable(),
+    rotaEski: z.boolean(), bolmeYazilamaz: z.array(z.number().int()),
+  })),
   // 307 a: motorun kullanıcıya söylemesi gereken genel durumlar (ör. personel kısıtı açık ama personel tanımsız); yoksa boş dizi.
   uyarilar: z.array(z.string()),
 });
@@ -242,6 +267,11 @@ export const hizliGovdesi = senaryoSurumGovdesi.extend({ tur: z.enum(HIZLI_DENEM
 export const onayaGonderGovdesi = senaryoSurumGovdesi.extend({ not: z.string().trim().max(500).nullish() });
 export const geriGonderGovdesi = senaryoSurumGovdesi.extend({ neden: z.string().trim().min(1, 'Geri gönderme nedenini yaz.').max(500) });
 export const onaydanCekGovdesi = senaryoSurumGovdesi;
+// 507 2 a: taslağın ek vardiyaları baştan yazılır (liste eskisinin yerine geçer). Aynı makine, gün ve vardiya bir kez.
+export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({
+  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK })).max(500, 'En çok 500 ek vardiya yazılır.')
+    .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.'),
+});
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
@@ -310,6 +340,14 @@ export const planCanliOzeti = z.object({
 });
 // Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
 export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true });
+// 510 a: eski "Plan değişikliği" kutusu. Taban planın ilk yazılışından (ilk canlıya alma) sonraki canlıya almalar: toplam, kişi başına sayı
+// (kutunun alt satırı) ve en son 20'si (yeniden eskiye). Taban yoksa tabanZamani null, sayılar boş. Kişi adı okunamazsa null.
+export const canliyaAlmaGecmisiCevabi = z.object({
+  tabanZamani: zaman.nullable(),
+  toplam: z.number().int(),
+  kisiler: z.array(z.object({ kisi: z.string().nullable(), sayi: z.number().int() })),
+  son: z.array(z.object({ senaryoId: KIMLIK, ad: z.string(), kisi: z.string().nullable(), zaman })),
+});
 export const senaryoParametresi = z.object({ id: z.coerce.number().int().positive() });
 export const degisiklikParametresi = z.object({ id: z.coerce.number().int().positive(), degisiklikId: z.coerce.number().int().positive() });
 
@@ -361,6 +399,9 @@ export type MotorFarki = z.output<typeof motorFarki>;
 export type CanliyaAlCevabi = z.output<typeof canliyaAlCevabi>;
 export type PlanAyari = z.output<typeof planAyari>;
 export type PlanCevabi = z.output<typeof planCevabi>;
+export type PlanEkMesai = z.output<typeof planEkMesai>;
+export type CanliyaAlmaGecmisiCevabi = z.output<typeof canliyaAlmaGecmisiCevabi>;
+export type EkMesaiGovdesi = z.output<typeof ekMesaiGovdesi>;
 export type PlanYerlesimi = z.output<typeof planYerlesimi>;
 export type PlanParcasi = z.output<typeof planParcasi>;
 export type PlanKaynagi = z.output<typeof planKaynagi>;

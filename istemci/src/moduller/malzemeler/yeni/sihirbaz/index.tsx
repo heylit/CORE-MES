@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DurumKutusu, Dugme, useBildirim } from '../../../../ortak/arayuz/index.ts';
-import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import * as K from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
 import { useKuralBaglami, type KuralBaglami } from '../kurallar/index.ts';
@@ -53,7 +52,6 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   const [sonlar, sonlarYaz] = useSonKullanilanlar();
   const [secim, secimYazHam] = useState<EkranSecimi>(() => ({ ...SECIM_BOS, sablonAcik: arama.get('sablonYap') !== null }));
   const secimYaz = useCallback((s: Partial<EkranSecimi>) => { secimYazHam((e) => ({ ...e, ...s })); }, []);
-  const [foyAcik, foyAcikYaz] = useState(false);
 
   // Açılışı adres belirler; adres yoksa yarım taslak sürer. Uygulanan sorgu (kart dışında) adresten silinir: sayfa
   // yenilenince yarım taslaktan devam edilir, aynı kopya ikinci kez kurulmaz. Sihirbaz açıkken gelen yeni sorgu
@@ -167,35 +165,25 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   return (
     <SihirbazBaglami.Provider value={s}>
       <div className="tc-my">
-        <SayfaBasligi
-          baslik={d.id ? 'Kartı düzenle' : 'Yeni malzeme kartı'}
-          simge="plus"
-          alt={<span className="tc-my-orta" aria-live="polite">{ortaMetin}</span>}
-        />
         <div className={K.isGen(d, b) && SD?.ozel === 'ops' ? 'tc-my-duzen tc-my-genis' : 'tc-my-duzen'}>
           <AdimCubugu adimlar={adimlar} etkin={etkinAdim} git={adimaGit} />
           <section className="tc-my-govde" aria-labelledby="tc-my-adim-baslik">
             <header className="tc-my-adim-ust">
-              <h3 id="tc-my-adim-baslik">{SD?.ad}</h3>
+              <h2 id="tc-my-adim-baslik">{SD?.ad}</h2>
               {SD?.help && <p className="tc-my-yardim">{SD.help}</p>}
             </header>
             <KategoriUyarisi />
             <AdimGovdesi />
+            <nav className="tc-my-alt" aria-label="Sihirbaz">
+              <Dugme simge="back" onClick={() => { adimaGit(etkinAdim - 1); }} disabled={etkinAdim === 0}>Geri</Dugme>
+              <span className="tc-my-alt-orta" aria-live="polite">{ortaMetin}</span>
+              {etkinAdim === son
+                ? yetki.yaz && <Dugme tur="birincil" simge="check" onClick={ileri} yukleniyor={kaydet.suruyor}>{kaydet.suruyor ? kaydet.ilerleme ?? 'Kaydediliyor' : kaydetMetni}</Dugme>
+                : <Dugme tur="birincil" onClick={ileri}>İleri</Dugme>}
+            </nav>
           </section>
-          <aside className="tc-my-foy" aria-label="Föy önizlemesi" data-acik={foyAcik || undefined}>
-            <Dugme className="tc-my-foy-ac" simge="list" aria-expanded={foyAcik} onClick={() => { foyAcikYaz(!foyAcik); }}>
-              {foyAcik ? 'Föyü gizle' : 'Föyü göster'}
-            </Dugme>
-            <div className="tc-my-foy-ic"><FoyGorunumu d={d} kisa /></div>
-          </aside>
+          <aside className="tc-my-foy" aria-label="Canlı föy önizlemesi"><FoyGorunumu d={d} kisa /></aside>
         </div>
-        <nav className="tc-my-alt" aria-label="Sihirbaz">
-          <Dugme simge="back" onClick={() => { adimaGit(etkinAdim - 1); }} disabled={etkinAdim === 0}>Geri</Dugme>
-          <span className="tc-my-alt-orta">{ortaMetin}</span>
-          {etkinAdim === son
-            ? yetki.yaz && <Dugme tur="birincil" simge="check" onClick={ileri} yukleniyor={kaydet.suruyor}>{kaydet.suruyor ? kaydet.ilerleme ?? 'Kaydediliyor' : kaydetMetni}</Dugme>
-            : <Dugme tur="birincil" onClick={ileri}>İleri</Dugme>}
-        </nav>
       </div>
     </SihirbazBaglami.Provider>
   );
