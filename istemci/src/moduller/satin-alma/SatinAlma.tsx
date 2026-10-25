@@ -46,5 +46,6 @@ export const TedarikcilerSayfasi = () => <Merkez rol="buyer" sayfa="suppliers" y
 export const RaporlarSayfasi = () => <Merkez rol="buyer" sayfa="reports" yol="/satin-alma/raporlar" />;
 export { DisOperasyonlar as DisOperasyonlarSayfasi } from './dis-operasyon/DisOperasyonlar.tsx';
 export { KgFiyatlari as KgFiyatlariSayfasi } from './kg-fiyat/KgFiyatlari.tsx';
+export { TedarikTerminleri as TedarikTerminleriSayfasi } from './tedarik-termin/TedarikTerminleri.tsx';
 // Ayarlar yalnız Sistem Ayarları'nda açılır (ayar-ekranlari.tsx).
 export const AyarlarSayfasi = () => <Merkez rol="buyer" sayfa="settings" yol="/ayarlar" />;

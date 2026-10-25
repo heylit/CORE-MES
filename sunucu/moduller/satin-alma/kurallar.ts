@@ -25,6 +25,8 @@ export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
   tedarikciYok: 'Tedarikçi bulunamadı.',
+  terminMalzemesiYok: 'Malzeme kartı bulunamadı.',
+  terminVar: 'Bu malzemenin termini başka biri tarafından girildi; sayfayı yenileyin.',
   katalogYok: 'Katalog kalemi bulunamadı.',
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',

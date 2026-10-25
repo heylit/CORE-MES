@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
@@ -521,6 +521,8 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-kg-fiyatlari/gecmis': { sorgu: z.input<typeof kgFiyatiGecmisiSorgusu>; cevap: KgFiyatiGecmisiCevabi };
   'POST /satin-alma-kg-fiyatlari/ekle': { govde: KgFiyatiEkleGovdesi; cevap: KgFiyatlariCevabi };
   'GET /satin-alma-kg-fiyatlari/malzemeler': { sorgu: z.input<typeof malzemeKgFiyatlariSorgusu>; cevap: MalzemeKgFiyatlariCevabi };
+  'GET /satin-alma-tedarik-terminleri': { cevap: TedarikTerminleriCevabi };
+  'POST /satin-alma-tedarik-terminleri/kaydet': { govde: z.input<typeof tedarikTerminiKaydetGovdesi>; cevap: TedarikTerminiKaydetCevabi };
 }
 
 // Ana sayfa pano kartları (kart #489): yetkisi olmayan sayı null gelir, sıfır uydurulmaz.
@@ -661,3 +663,29 @@ export type KgFiyatiSatiri = z.output<typeof kgFiyatiSatiri>;
 export type KgFiyatlariCevabi = z.output<typeof kgFiyatlariCevabi>;
 export type KgFiyatiGecmisiCevabi = z.output<typeof kgFiyatiGecmisiCevabi>;
 export type KgFiyatiEkleGovdesi = z.input<typeof kgFiyatiEkleGovdesi>;
+
+// 533 a: malzemenin tedarik termini (malzeme başına tek satır, sahibi satın alma). termin boşsa malzeme termin bekler; gerekenTarih
+// planın hesapladığı "olması gereken" tarihtir. Planlama ekranı da aynı kaydetme ucuna yazar.
+export const tedarikTerminiSemasi = z.object({
+  malzemeNo: z.number().int().positive(),
+  termin: tarihSemasi.nullable(),
+  gerekenTarih: tarihSemasi.nullable(),
+  aciklama: z.string(),
+  surum: surumSemasi,
+  guncelleme: zamanSemasi,
+});
+export const tedarikTerminleriCevabi = z.object({
+  terminler: z.array(tedarikTerminiSemasi.extend({ malzemeKodu: z.string(), malzemeAdi: z.string(), kisiAdi: z.string().nullable() })),
+});
+// surum null: malzemenin ilk termini (satır varsa 409). termin null: termin kaldırılır, malzeme yeniden termin bekler.
+export const tedarikTerminiKaydetGovdesi = z.object({
+  malzemeNo: z.number().int().positive().max(2147483647),
+  termin: tarihSemasi.nullable(),
+  aciklama: z.string().trim().max(200).default(''),
+  surum: surumSemasi.nullable(),
+});
+export const tedarikTerminiKaydetCevabi = z.object({ termin: tedarikTerminiSemasi });
+export type TedarikTermini = z.output<typeof tedarikTerminiSemasi>;
+export type TedarikTerminleriCevabi = z.output<typeof tedarikTerminleriCevabi>;
+export type TedarikTerminiKaydetYazimi = z.output<typeof tedarikTerminiKaydetGovdesi>;
+export type TedarikTerminiKaydetCevabi = z.output<typeof tedarikTerminiKaydetCevabi>;

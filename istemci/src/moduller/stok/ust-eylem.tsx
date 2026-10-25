@@ -36,7 +36,7 @@ const yeniKimlik = yeniIstekKimligi;
 type SekmeAnahtari = PanelSekmesi;
 // Teslim al sekmesi bekleyen gelen sayısını taşır (545 T2): panel açılınca nereye bakılacağı görünür.
 const sekmeler = (gelen: number): readonly Sekme<SekmeAnahtari>[] => [
-  { anahtar: 'al', baslik: gelen > 0 ? `Teslim al (${gelen > 99 ? '99+' : gelen})` : 'Teslim al', simge: 'download' },
+  { anahtar: 'al', baslik: 'Teslim al', simge: 'download', sayi: gelen },
   { anahtar: 'sepet', baslik: 'Sepet', simge: 'box' },
   { anahtar: 'et', baslik: 'Teslim et', simge: 'upload' },
   { anahtar: 'iste', baslik: 'Malzeme iste', simge: 'plus' },
