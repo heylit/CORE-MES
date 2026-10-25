@@ -4,7 +4,7 @@ import type { MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { DurumCevabi, Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../ortak/veri/api.ts';
-import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type StokOkumasi } from '../kopru.ts';
+import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
 
 // Yeni Reçete ve Rota ekranının veri katmanı. Okuma ve yazma bugünkü köprünün TS tarafıdır (kopru.ts): aynı uçlar, aynı sürüm sırası,
 // aynı yetki sınırı. Çerçeve ve kayıt belgesi (`recete_rota_kayit`) yeni ekranda yazılmaz; belgedeki eski kalemler yalnız okunur (204 a).
@@ -12,7 +12,8 @@ import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type 
 
 export type EkranYerlesimi = MotorYerlesimiCevabi['ekranYerlesimi'];
 // planYerlesim: plan motorunun yerleşimi (215 a: emir tarihleri buradan). Okunamazsa null ve `motorOkunamadi` true; tarih boş gösterilir.
-export type RrDurumu = DurumCevabi & { planYerlesim: EkranYerlesimi | null };
+// planMotoru: motorun emir başına bolluğu, rota ve bölme durumu ve parça adetleri (481 a, 493); motor okunamazsa null.
+export type RrDurumu = DurumCevabi & { planYerlesim: EkranYerlesimi | null; planMotoru: PlanMotoru | null };
 export interface RrVerisi { durum: RrDurumu; ek: KaynakEki }
 
 export const RR_ANAHTARI = ['recete-rota', 'yeni'] as const;
