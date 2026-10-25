@@ -354,12 +354,12 @@ function sunucuKaydi(kayit, durum, D0, bugun) {
   }
   const e = d.emirler;
   if (e && Array.isArray(e.orders)) {
-    /* tarihsiz emir çerçevedeki gibi (uyumlaEmirler) bugünden başlar ve bugüne biter */
+    /* başlangıcı olmayan emir bugünden başlar; teslimi olmayanın termini yoktur (kural 5): bugüne bitmiş sayılıp "gecikiyor" görünmez */
     const sip0 = id => ((D0 && D0.siparisler) || []).find(s => String(s.id) === id) || null;
     const eskiEmir = new Map((k.orders || []).map(x => [String(x.id), x]));
     k.orders = e.orders.map(x => {
       const plan = sip0(x.id) || (eskiEmir.get(x.id) || {}).plan;
-      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || x.start || bugun, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, plan ? { plan } : {});
+      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || null, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, plan ? { plan } : {});
     });
   }
   return k;

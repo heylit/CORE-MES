@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { DurumKutusu, Simge, YalitilmisCerceve, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { YalitimIzni } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
@@ -35,6 +36,8 @@ const gidilebilirMi = (yol: string): boolean => GIDILEBILIR_YOLLAR.includes(yol)
 const OKUMA_ISLEMLERI = ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'];
 // GET /plan/bedel-ayari yetkisi (237 a); yetkiyi sunucu verir, burası yalnız paneli çizip çizmemeyi seçer.
 const BEDEL_OKUMA_ISLEMLERI = ['plan.yaz', 'plan.bedel-ayari', 'siparisler.fiyat-oku'];
+// Planlama sayfasının düğmelerini seçen işlemler (zz31-tmi.betik): sayfaya yalnız bunlar verilir.
+const PLAN_ISLEMLERI = ['plan.yaz', 'plan.kilitle', 'plan.canliya-al'];
 // Sözleşmedeki önekle aynı (paylasilan/sozlesme/recete-rota.ts ANAHTAR_ONEKI); istemci sözleşmeyi değer olarak ithal etmez.
 export const ONEK = 'recete-rota-motoru-v1';
 // Sunucunun JSON gövde sınırı 1 MiB'dir; zarf ve kaçış payı bırakılır.
@@ -54,6 +57,8 @@ const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişik
 export const PLAN_YETKI = 'Plan yazma yetkiniz yok; planlama çalışmasındaki değişiklikleriniz kaydedilmedi. Oturumunuz kapandıysa sayfayı yenileyip yeniden giriş yapın.';
 const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 const KAYDEDILMEDI = 'Son değişiklikler kaydedilmedi';
+// Köprünün kabuğa ilettiği uyarılar (çerçevede modal izni yok): kabuk yalnız kendi verdiği bu metinleri gösterir.
+const UYARILAR: readonly string[] = [CATISMA, BUYUK, OTURUM, PLAN_YETKI, RET];
 // Art arda değişiklikler tek yazmada birleşir: her yazma bütün belgeyi gönderir, aralık uzadıkça yazma seyrekleşir (kullanıcıya görünmez).
 const BEKLEME_MS = 2000;
 // Sunucu yanıt vermezse istek düşer: asılı tek istek komut ve kayıt zincirini kilitlemesin. Okuma sınırının (5 sn) çok üstünde.
@@ -79,6 +84,7 @@ export const PLANLAMA_VERI_ARACLARI: readonly string[] = ['[data-act="set-yukle"
 // Çerçeve değişirken (Reçete ve Rota <-> planlama) eski çerçevenin bekleyen yazması sunucuya varsın: yeni çerçeve kaydı sonra okur.
 const GECIS_MS = BEKLEME_MS + 1500;
 type Tur = 'recete-rota' | 'planlama';
+const PLANLAMA_IZINLERI: readonly YalitimIzni[] = ['allow-forms'];
 
 // Prototipin dış yazı tipi bağlantıları sayfadan çıkarılır (politika zaten kapatır; konsol hatası kalmasın), yerine gömülü
 // yazı tipi gelir. Köprü ve politika belgenin başına, prototip betiklerinden önce konur.
@@ -199,7 +205,8 @@ export function ReceteRotaCercevesi() {
     const planlama = tur === 'planlama';
     return sayfaKur(prototip.sayfa, cerceveBetigi({
       kanal: KANAL,
-      yazabilir: hazirlik.ben.yazabilir,
+      // Planlama çalışmasının kaydı ayrıca plan.yaz ister (287 a, 290 b): plan.yaz'sız kişinin değişikliği sekmede kalır, sunucuya 403'le gitmez.
+      yazabilir: hazirlik.ben.yazabilir && (!planlama || planYazabilir),
       onek: ONEK,
       degerler: hazirlik.degerler,
       cihazAnahtarlari: CIHAZ_ANAHTARLARI,
@@ -209,8 +216,8 @@ export function ReceteRotaCercevesi() {
       azamiBayt: AZAMI_BAYT,
       beklemeMs: BEKLEME_MS,
       tema: ilkTema === 'dark' ? 'dark' : 'light',
-      kayitYazisi: hazirlik.ben.yazabilir ? KAYIT_YAZISI : SEKME_YAZISI,
-      kayitUyari: !hazirlik.ben.yazabilir,
+      kayitYazisi: hazirlik.ben.yazabilir && (!planlama || planYazabilir) ? KAYIT_YAZISI : SEKME_YAZISI,
+      kayitUyari: !hazirlik.ben.yazabilir || (planlama && !planYazabilir),
       kisiAdi: hazirlik.ben.kisi.ad,
       oturumIletisi: planlama && !planYazabilir ? PLAN_YETKI : OTURUM,
       reddIletisi: RET,
@@ -223,8 +230,9 @@ export function ReceteRotaCercevesi() {
       ],
       bedelAyariOkunur,
       highsOkunur: planlama,
+      ...(planlama ? { planIslemleri: (islemler ?? []).filter((i) => PLAN_ISLEMLERI.includes(i)) } : {}),
     }), prototip.yaziStili, prototip.sonStil, planlama ? PLANLAMA_POLITIKASI : undefined);
-  }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, senaryoGonderebilir, bedelAyariOkunur]);
+  }, [prototip, hazirlik, tur, ilkTema, onaylayabilir, planYazabilir, senaryoGonderebilir, bedelAyariOkunur, islemler]);
   const kartTaslakAcabilir = kullanici?.islemler.includes('rota.yaz') ?? false;
   const bedelAyariYazabilir = kullanici?.islemler.includes('plan.bedel-ayari') ?? false;
   // Emir açılışında proje seçimi (224): köprü pencereyi sorar, cevabı bekler. Pencere başka bir istek gelince açık kalırsa önceki
@@ -265,6 +273,21 @@ export function ReceteRotaCercevesi() {
     // Çerçevede basılan Ctrl K: kabuğun arama kutusu pencerenin tuş olayını dinler; aynı tuş burada yeniden verilir.
     if (m?.kanal === KANAL && m.yon === 'kisayol' && m.tus === 'arama') {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }));
+      return;
+    }
+    if (m?.kanal === KANAL && m.yon === 'uyari') {
+      const metin = (m as { metin?: unknown }).metin;
+      if (typeof metin === 'string' && UYARILAR.includes(metin)) bildir('hata', metin);
+      return;
+    }
+    // Ortak kayıt açılışta bir kez okunur; çerçeve başkasının sonradan yazdığını görmek isteyince kayıt yeniden okunur ve sayfa yeniden kurulur.
+    // Çerçevenin yoldaki yazmaları önce varır (çerçeve göndermeden önce bekleyenleri yazar).
+    if (m?.kanal === KANAL && m.yon === 'yenile') {
+      const yenile = (): void => {
+        if (yoldakiYazma.current > 0) { window.setTimeout(yenile, 250); return; }
+        setHazirlik(null); setDeneme((d) => d + 1);
+      };
+      yenile();
       return;
     }
     if (m?.kanal === KANAL && m.yon === 'git') {
@@ -310,6 +333,9 @@ export function ReceteRotaCercevesi() {
           baslik={tur === 'planlama' ? 'Planlama' : 'Reçete ve Rota'}
           sinif="tc-recete-rota-cerceve"
           sayfa={sayfa}
+          // Planlama sayfasının formları (senaryo kaydet, Uygula, arıza, böl...) submit olayıyla çalışır (524/1 a); gönderim yine kapalıdır
+          // (form-action 'none'). Reçete ve Rota sayfasında form yoktur, izin verilmez.
+          izinler={tur === 'planlama' ? PLANLAMA_IZINLERI : undefined}
           iletiGeldi={iletiGeldi}
         />
       </div>

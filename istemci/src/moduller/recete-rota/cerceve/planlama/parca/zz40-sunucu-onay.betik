@@ -159,4 +159,58 @@ if (TMI_ICINDE) {
       vazgec0(id);
     });
   };
+
+  /* Onay listesi sunucudaki senaryo durumuyla eşitlenir: ortak kayıt açılışta bir kez okunur ve plan yazmayan kişi kayda yazamaz; onayın
+     durumu sunucudadır. Kayıtta onayda görünen planın taslağı sunucuda artık onayda değilse sayfada sunucunun durumu görünür (canlıya
+     alındı, geri gönderildi ya da onaydan çekildi, vazgeçildi). Sunucuda onayda olup kayıtta karşılığı olmayan plan varsa (sayfa o plan
+     gönderilmeden önce açıldı) yenilemesi söylenir. Eşitleme kayda yazmaz; yazabilen kişinin sonraki kaydıyla kayda geçer. */
+  const SE = { okunuyor: false, bildirilen: '', yer: '' };
+  function senaryoEsitle(liste) {
+    const sun = new Map(liste.map(x => [x.id, x]));
+    let degisti = false;
+    for (const s of S.senaryolar) {
+      if (!s.taslak || s.durum !== 'onay') continue;
+      const x = sun.get(s.taslak); if (!x || x.durum === 'onayda') continue;
+      degisti = true;
+      if (x.durum === 'canliya_alindi') {
+        for (const y of S.senaryolar) if (y.id !== s.id && y.durum === 'canli') y.durum = 'arsiv';
+        S.canliSurum++; S.canli = s.id; Object.assign(s, { durum: 'canli', surum: S.canliSurum, canliKim: null, canliZaman: null });
+        (S.paGecmis = S.paGecmis || []).unshift({ surum: S.canliSurum, id: s.id, ad: s.ad, yazar: s.yazar, kim: null, zaman: null, ozet: clone(s.ozet) });
+      } else if (x.durum === 'acik') {
+        s.durum = 'acik';
+        const o = x.onay;
+        if (o && o.geriGonderme) (s.kararlar = s.kararlar || []).push({ karar: 'geri', kim: o.geriGonderen || '', rol: '', zaman: Date.parse(o.geriGonderme), not: o.geriNeden || '' });
+      } else s.durum = 'vazgecildi';
+    }
+    const eksik = liste.filter(x => x.durum === 'onayda' && !S.senaryolar.some(s => s.taslak === x.id));
+    const imza = eksik.map(x => x.id).join(',');
+    if (eksik.length && imza !== SE.bildirilen) {
+      const ad = eksik.map(x => `${x.ad}${x.onay && x.onay.gonderen ? ` (gönderen ${x.onay.gonderen})` : ''}`).join(', ');
+      bildir(`Sunucuda onay bekleyen plan var: ${ad}. Bu sayfa plan gönderilmeden önce açıldı; görmek için yenileyin.`, 'uyari', { metin: 'Yenile', act: 'pa-yenile' });
+    }
+    SE.bildirilen = imza;
+    return degisti;
+  }
+  const senaryolariOku = () => {
+    if (!S || SE.okunuyor || typeof window.tmi.planSenaryolari !== 'function') return;
+    SE.okunuyor = true;
+    window.tmi.planSenaryolari().then(r => {
+      if (S && r && Array.isArray(r.senaryolar) && senaryoEsitle(r.senaryolar)) render();
+    }, h => console.error(h)).finally(() => { SE.okunuyor = false; });
+  };
+  /* açılışta, Onay sekmesine her girişte ve sayfaya dönüşte okunur */
+  const r0 = render;
+  render = function () {
+    const x = r0.apply(this, arguments);
+    const yer = S ? (U.sayfa === 'studyo' && U.psSek === 'onay' ? 'onay' : 'baska') : '';
+    if (yer && yer !== SE.yer && (SE.yer === '' || yer === 'onay')) senaryolariOku();
+    SE.yer = yer;
+    return x;
+  };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') senaryolariOku(); });
+  const paEylem0 = paEylem;
+  paEylem = function (act, v) {
+    if (act === 'pa-yenile') { if (typeof window.tmi.yenile === 'function') window.tmi.yenile(); return true; }
+    return paEylem0(act, v);
+  };
 }

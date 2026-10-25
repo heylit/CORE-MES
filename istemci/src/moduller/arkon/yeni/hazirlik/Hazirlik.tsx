@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Pencere, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { araOnayNedenleri, paketImzasi } from '../../../../../../arkon/web/src/data/ara-onay.ts';
-import { MERKEZDEN_EKLENIR } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
 import { herNParcaYap, olculeriSil } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type PaketGrubu } from '../../../../../../arkon/web/src/data/paket-grup.ts';
 import {
@@ -16,7 +16,7 @@ import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul, istasyonListesi, makineBul } from '../cekirdek/tesis.ts';
 import { yerel } from '../cekirdek/yerel.ts';
-import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
+import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/baglam.ts';
 import type { ArkonDeposu, Ileti } from '../veri/depo.ts';
@@ -33,6 +33,12 @@ import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
 import './hazirlik.css';
+
+// Çizim parçası (A5) ağırdır; yalnız Dokümanlar ve Kontrol planı sekmesi açılınca yüklenir.
+const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
+// Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
+const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
+const MerkezSecici = lazy(async () => ({ default: (await import('../cizim/index.tsx')).MerkezSecici }));
 
 // Üretim Terminali Hazırlık (hazirlik.ts PrepApp). Paket TMI'de emir açılınca oluşur; burada resim, kontrol planı, adım, kural ve
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
@@ -223,6 +229,17 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     yama({ files: d.files.map((f) => ({ ...f })), primary: d.primary, readCfg: d.cfg, plan, partNo: p.partNo || d.name });
     soyle('“' + d.name + '” pakete eklendi' + (d.bal && d.bal.length ? ' · ' + d.bal.length + ' kontrol noktası' : ''), 'run');
   };
+  // Çizim Merkezi (kart #800): seçilen yayındaki dosya pakete kopyalanır; aynı belge varsa yerine geçer.
+  const merkezdenAl = async (belgeId: number, guncelleme: boolean) => {
+    if (!p) return;
+    if (!duzenler) { yetkisiz(); return; }
+    try {
+      const f = await depo.Server.merkezdenAl(belgeId), r = merkezDosyasiniKoy(p, f);
+      yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
+      soyle(f.name + (guncelleme ? ' güncellendi' : ' Çizim Merkezi’nden eklendi'), 'run');
+      merkezSecYaz(false);
+    } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
+  };
   const studyodaAc = async () => {
     if (!studyoAcilir(sayfaGorunur)) { soyle(STUDYO_KAPALI, 'hold'); return; }
     await bekleyeniYaz(); if (p) yerel.yaz('labOpen', { pkg: p.id }); git('cizim');
@@ -353,6 +370,13 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Yayınla' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
+  const kontrol = useMemo((): TeknikResimKontrolu | null => (p && p.primary ? {
+    anahtar: p.id + ':' + p.primary + ':' + p.files.length, dosyalar: baytli(p.files), anaResim: p.primary,
+    hazirVeri: p.derived ?? null, ayar: p.readCfg, balonlar: p.plan as TeknikResimKontrolu['balonlar'],
+    balonlarYaz: (nb) => yama({ plan: nb.map((b) => ({ freq: 'İlk parça', crit: false, ...b }) as PlanItem) }),
+    olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: !duzenler,
+    notlar: (res?.pins || []) as unknown as ResimNotu[], notCoz: (id) => { void notuCoz(String(id)); },
+  } : null), [p?.id, p?.primary, p?.files.length, p?.plan, res, duzenler]);
   // Ara onay yalnız bir kez çalışmış işte sorulur: ilk çalışmada ilk parça kapısı zaten vardır.
   const calisti = !!(res && res.state && res.state !== 'queued');
   const araOnay = p && ayarlar.kurallar.fpRestart !== false && calisti ? araOnayNedenleri(p, istekler) : null;
@@ -559,7 +583,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                       </div>
                     </section>
                   ) : null}
-                  {merkezSec ? <Pencere acik kapat={() => merkezSecYaz(false)} baslik="Çizim Merkezi"><Hazirlaniyor /></Pencere> : null}
+                  {merkezSec ? <Suspense fallback={null}><MerkezSecici sec={(b) => merkezdenAl(b.id, false)} kapat={() => merkezSecYaz(false)} /></Suspense> : null}
                   {([['pdf', 'PDF', 'Teknik resim', "CAD'den çıkmış PDF · ölçüler otomatik okunur", pdfF], ['model', '3B', '3B model', 'STEP önerilir · IGES, STL de olur', mdlF]] as const).map(([k, kisa, ad, acik, f]) => (
                     <section key={k} className="tc-ay2-kart" aria-label={ad}>
                       <div className="tc-ay2-kb"><span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span><div><b>{ad}</b><small>{acik}</small></div></div>
@@ -596,7 +620,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               ) : null}
               {sekme === 'plan' ? (
                 <div className="tc-ay2-plan">
-                  {p.primary ? <div className="tc-ay2-plan-resim"><Hazirlaniyor /></div> : (
+                  {kontrol ? <div className="tc-ay2-plan-resim"><Suspense fallback={null}><TeknikResim kontrol={kontrol} /></Suspense></div> : (
                     <div className="tc-ay2-bos">
                       <Simge ad="upload" boyut="b" /><b>Önce bir teknik resim veya 3B model ekle</b>
                       <Dugme onClick={() => sekmeYaz('docs')}>Dokümanlar</Dugme>

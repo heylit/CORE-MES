@@ -9,7 +9,7 @@ import {
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
 import { istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
-import { halkaPaylari, kalanAdet } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
+import { sayacGosterimi } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { topluGirisHatasi, topluGirisSayilari } from '../../../../../../arkon/web/src/data/toplu-giris.ts';
 import { iki, sayi, sure } from '../cekirdek/bicim.ts';
@@ -283,20 +283,19 @@ export function Konfeti() {
 }
 
 export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer }) {
-  const { iyi, hurda } = halkaPaylari(is.good, is.scrap, is.target);
+  const { iyi, hurda, hedef, kalan } = sayacGosterimi(is);
   const yanan = Math.round(120 * iyi);
   const R = 180;
   const C = 2 * Math.PI * R;
   const [sira, siraYaz] = useState(0);
   const onceki = useRef(is.good);
   useEffect(() => { if (onceki.current !== is.good) { onceki.current = is.good; siraYaz((x) => x + 1); } }, [is.good]);
-  const kalan = kalanAdet(is.target, is.good, is.scrap);
   const ic = (
     <>
       <span className="tc-ay1-ust-yazi">{etiket}</span>
       <span key={sira} className={sira ? 'tc-ay1-kadran-sayi tc-ay1-zipla' : 'tc-ay1-kadran-sayi'}>{sayi(is.good)}</span>
-      <span className="tc-ay1-kadran-hedef">/ {sayi(is.target)} {birim}</span>
-      <span className="tc-ay1-kadran-yuzde">%{Math.floor((iyi + hurda) * 100)} · {sayi(kalan)} kaldı</span>
+      <span className="tc-ay1-kadran-hedef">/ {hedef === null ? '—' : sayi(hedef)} {birim}</span>
+      <span className="tc-ay1-kadran-yuzde">{kalan === null ? '—' : `%${Math.floor(iyi * 100)} · ${sayi(kalan)} kaldı`}</span>
     </>
   );
   return (
@@ -316,7 +315,7 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
         <CevrimEtiketleri is={is} cevrim={cevrim} sol />
       </div>
       <div className="tc-ay1-kadran-yan tc-ay1-kadran-sag">
-        <span className="tc-ay1-kadran-etiket">Kalan süre<b>{sure(kalan * is.cycle)}</b></span>
+        <span className="tc-ay1-kadran-etiket">Kalan süre<b>{kalan === null ? '—' : sure(kalan * is.cycle)}</b></span>
         <CevrimEtiketleri is={is} cevrim={cevrim} sol={false} />
       </div>
     </div>
@@ -383,11 +382,11 @@ export function TopluGiris({ kalan, kapali, kaydet, nedenler }: {
 }
 
 /* ── durum düğmeleri: geri alması zor olan (Durdur, Bitir) 1,2 sn basılı tutulur ── */
-export function DurumDugmeleri({ durum, eylem, erken }: { durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void }) {
+export function DurumDugmeleri({ durum, eylem, erken, pasif = false }: { durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean }) {
   return (
     <OrbGrubu etiket="İş durumu">
       {durumDugmeleri(durum).map((d) => (
-        <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} {...(d.tut ? { basiliTutMs: 1200 } : {})}
+        <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} disabled={pasif} {...(d.tut ? { basiliTutMs: 1200 } : {})}
           tetikle={() => eylem(d)} erkenBirakinca={() => erken(d.etiket)} />
       ))}
     </OrbGrubu>

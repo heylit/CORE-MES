@@ -12,7 +12,7 @@ import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
 // 287 a: planlama çalışmasının kaydı (`:planlama`) yalnız plan.yaz taşıyana yazılır ve silinir; öteki anahtarlar recete-rota.yaz ile kalır.
-// Müdür (290 b) planlamayı okur, recete-rota.yaz taşır, plan.yaz taşımaz: çalışmayı değiştiremez. Veriler uydurmadır.
+// Müdür rolü 524/3 b ile plan.yaz da taşır; planlamayı okuyup plan.yaz taşımayan rol çalışmayı değiştiremez. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
 
 describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)', () => {
@@ -98,16 +98,24 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
     assert.equal(await kayit(PLANLAMA_ANAHTARI), null);
   });
 
-  test('PY-04: müdür reddedilir (290 b): planlamayı okuyup recete-rota.yaz taşıyan ama plan.yaz taşımayan rol de, göçteki müdür rolü de', async () => {
+  test('PY-04: plan.yaz taşımayan müdür benzeri rol reddedilir: planlamayı okuyup recete-rota.yaz taşısa da', async () => {
     const surum = await calismaKur({ surum: 2, v: 1 });
-    for (const cerez of [mudurBenzeri, mudur]) {
-      assert.equal((await yaz(cerez, PLANLAMA_ANAHTARI, { surum: 2, v: 5 }, surum)).statusCode, 403);
-      assert.equal((await sil(cerez, PLANLAMA_ANAHTARI, surum)).statusCode, 403);
-    }
+    assert.equal((await yaz(mudurBenzeri, PLANLAMA_ANAHTARI, { surum: 2, v: 5 }, surum)).statusCode, 403);
+    assert.equal((await sil(mudurBenzeri, PLANLAMA_ANAHTARI, surum)).statusCode, 403);
     assert.deepEqual((await kayit(PLANLAMA_ANAHTARI))?.deger, { surum: 2, v: 1 });
-    // Göçteki müdür rolü recete-rota.yaz taşıdığı için ret yalnız bu denetimden gelir: ana kayda yazabilir.
-    const ana = await yaz(mudur, `${DURUM_ANAHTARI}:mudur-deneme`, { v: 1 }, null);
+    // recete-rota.yaz taşıdığı için ret yalnız bu denetimden gelir: ana kayda yazabilir.
+    const ana = await yaz(mudurBenzeri, `${DURUM_ANAHTARI}:mudur-deneme`, { v: 1 }, null);
     assert.equal(ana.statusCode, 200, ana.body);
+  });
+
+  test('PY-04b: göçteki müdür rolü plan.yaz taşır (524/3 b): çalışmayı yazar ve siler', async () => {
+    const surum = await calismaKur({ surum: 2, v: 1 });
+    const yazma = await yaz(mudur, PLANLAMA_ANAHTARI, { surum: 2, v: 6 }, surum);
+    assert.equal(yazma.statusCode, 200, yazma.body);
+    assert.deepEqual((await kayit(PLANLAMA_ANAHTARI))?.deger, { surum: 2, v: 6 });
+    const yeni = (yazma.json() as { kayit: { surum: number } }).kayit.surum;
+    assert.equal((await sil(mudur, PLANLAMA_ANAHTARI, yeni)).statusCode, 200);
+    assert.equal(await kayit(PLANLAMA_ANAHTARI), null);
   });
 
   test('PY-05: öteki anahtarlar plan.yaz istemez (ana kayıt, alt anahtar ve planlama önekli cihaz anahtarı)', async () => {

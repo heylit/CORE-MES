@@ -27,6 +27,29 @@ const paketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/p
 const ileti = (l: Istek[], tur: string) => l.some((i) => i.yol === '/arkon/iletiler' && (i.govde as { ileti?: { type?: string } } | null)?.ileti?.type === tur);
 const ekran = async () => screen.findByRole('region', { name: 'İş paketi' }, { timeout: 10000 });
 
+// Çizim Merkezi uçları (köprü cevirisi: arkon/cizim-merkezi.test.ts); belge ve dosya uydurmadır, bayt sentetiktir.
+const MERKEZ_BELGESI = { id: 3, ad: 'Deneme flans', tur: 'teknik-resim', harf: 'B', tip: 'pdf', dosyaAdi: 'deneme-b.pdf', ozet: 'a'.repeat(64) };
+const MERKEZ_EKLE = '/arkon/cizim-merkezi/belgeler/3/ekle';
+const jsonCevap = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } });
+function merkezKur(istekler: Istek[]) {
+  const asil = globalThis.fetch;
+  vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+    const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
+    if (yol === '/arkon/cizim-merkezi/belgeler') return jsonCevap({ belgeler: [MERKEZ_BELGESI] });
+    if (yol === MERKEZ_EKLE) {
+      istekler.push({ yontem: 'POST', yol, govde: null });
+      return jsonCevap({ ozet: MERKEZ_BELGESI.ozet, boyut: 3, kayit: { kind: 'pdf', name: 'deneme-b.pdf', merkez: 3, merkezOzet: MERKEZ_BELGESI.ozet } });
+    }
+    if (yol === `/arkon/dosyalar/${MERKEZ_BELGESI.ozet}`) return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    return asil(adres, ayar);
+  }));
+}
+const merkezAc = async (d: HTMLElement) => {
+  fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
+  fireEvent.click(await within(d).findByRole('button', { name: /Çizim Merkezi’nden ekle/ }, { timeout: 10000 }));
+  return screen.findByRole('dialog', { name: "Çizim Merkezi'nden ekle" }, { timeout: 10000 });
+};
+
 describe('A2 Hazırlık ekranı', () => {
   it('açılışta yazmaz; paket listede ve düzenleyicide görünür; yayın operatöre gönderir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
@@ -98,6 +121,39 @@ describe('A2 Hazırlık ekranı', () => {
     expect(within(d).queryByRole('button', { name: /geri çek/ })).toBeNull();
     expect(within(d).getByRole('button', { name: /Önizle/ })).toBeTruthy();
     await new Promise((r) => setTimeout(r, 700));
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('Kontrol planı sekmesinde teknik resim açılır (yer tutucu yok)', async () => {
+    sunucuKur(YONETICI, sunucu());
+    arkonAc('/arkon/yeni/hazirlik');
+    const d = await ekran();
+    fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
+    expect(await within(d).findByRole('toolbar', { name: 'Teknik resim araçları' }, { timeout: 10000 })).toBeTruthy();
+    expect(within(d).queryByText('Bu bölüm hazırlanıyor')).toBeNull();
+  }, 40000);
+
+  it('Çizim Merkezi seçicisi yayındaki belgeyi listeler; seçilen dosya pakete eklenir', async () => {
+    const istekler = sunucuKur(YONETICI, sunucu());
+    merkezKur(istekler);
+    arkonAc('/arkon/yeni/hazirlik');
+    const pencere = await merkezAc(await ekran());
+    fireEvent.click(await within(pencere).findByRole('button', { name: /Deneme flans/ }, { timeout: 10000 }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(true); }, { timeout: 10000 });
+    await waitFor(() => {
+      expect(paketYazimi(istekler).some((p) => p.primary === 'deneme-b.pdf' && p.files.some((x) => x.merkez === 3) && p.plan.length === 0)).toBe(true);
+    }, { timeout: 10000 });
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: "Çizim Merkezi'nden ekle" })).toBeNull(); });
+  }, 40000);
+
+  it('düzenleme yetkisi olmayan kişi Çizim Merkezi\'nden dosya alamaz: kopyalama ve paket yazımı gitmez (reddedilen)', async () => {
+    const istekler = sunucuKur(HAZIRLIKCI, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }]));
+    merkezKur(istekler);
+    arkonAc('/arkon/yeni/hazirlik');
+    const pencere = await merkezAc(await ekran());
+    fireEvent.click(await within(pencere).findByRole('button', { name: /Deneme flans/ }, { timeout: 10000 }));
+    await new Promise((r) => setTimeout(r, 700));
+    expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(false);
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 

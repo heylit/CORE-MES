@@ -6,7 +6,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import {
-  OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
+  ELDEN_NOTU, OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
 } from './okut-akisi.ts';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
@@ -100,7 +100,11 @@ function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: Okut
   const tasima = useStokKomutu((g: ReturnType<typeof tasimaGovdesi>) => korumaliPost<HareketCevabi>('/stok/tasima', g)
     .then((c) => { bitti(`${kaynak.malzemeAd} ${hedefAdi(hedef)} yerine taşındı.`); return c; }), 'Taşındı.');
   const teslim = useStokKomutu((g: ReturnType<typeof teslimGovdesi>) => korumaliPost<TeslimCevabi>('/stok/teslimler/gonder', g)
-    .then((c) => { bitti(c.teslim.durum === 'teslim' ? `${c.teslim.no}: ${hedefAdi(hedef)} yerine bırakıldı.` : `${c.teslim.no} yolda; ${hedefAdi(hedef)} teslim alınca kapanır.`); return c; }), 'Teslim kaydedildi.');
+    .then((c) => {
+      bitti(c.teslim.durum !== 'teslim' ? `${c.teslim.no} yolda; ${hedefAdi(hedef)} teslim alınca kapanır.`
+        : kisiHedefiMi(hedef) ? `${c.teslim.no}: ${hedefAdi(hedef)} kişisine elden teslim edildi.` : `${c.teslim.no}: ${hedefAdi(hedef)} yerine bırakıldı.`);
+      return c;
+    }), 'Teslim kaydedildi.');
   // Bırakınca teslim (Soru 133): ayrı kimlik; aynı onayda Teslim et ile karışmaz.
   const [birakKimligi] = useState(yeniIstekKimligi);
   const komut = yol === 'tasima' ? tasima.komut : teslim.komut;
@@ -112,8 +116,8 @@ function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: Okut
   return (
     <form className="tc-stok-form" onSubmit={(o) => { o.preventDefault(); gonder(); }}>
       <div className="tc-stok-is tc-stok-okut-kaynak"><div><span>Nereye</span><strong>{hedefMetni(hedef)}</strong></div></div>
-      {kisiHedefiMi(hedef) && <p className="tc-stok-bilgi" role="status">Alıcı: {hedef.alici.ad ?? 'okutulan kişi'}; istasyonundaki herkes de alabilir.</p>}
-      {yol === 'teslim' && <p className="tc-stok-not">Teslim et yolda açar, karşı taraf alır. Bıraktım teslimi hemen kapatır; karşı taraf vardiya sonuna kadar itiraz eder.</p>}
+      {kisiHedefiMi(hedef) && <p className="tc-stok-bilgi" role="status">{ELDEN_NOTU(hedef.alici.ad)}</p>}
+      {yol === 'teslim' && !kisiHedefiMi(hedef) && <p className="tc-stok-not">Teslim et yolda açar, karşı taraf alır. Bıraktım teslimi hemen kapatır; karşı taraf vardiya sonuna kadar itiraz eder.</p>}
       <div className="tc-stok-iki"><Girdi etiket="Miktar" inputMode="decimal" value={miktar} onChange={(o) => setMiktar(o.target.value)} required autoFocus /></div>
       {cevrimdisi && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Bağlantı yok; kayıt yalnız bağlantı varken yapılır.</p>}
       {komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(komut.error)}</p>}
@@ -121,7 +125,7 @@ function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: Okut
         <Dugme tur="birincil" type="submit" simge={yol === 'tasima' ? 'box' : 'upload'} yukleniyor={komut.isPending} disabled={cevrimdisi || miktar.trim() === ''}>
           {komut.isError ? 'Yeniden gönder' : yol === 'tasima' ? 'Yerleştir' : 'Teslim et'}
         </Dugme>
-        {yol === 'teslim' && (
+        {yol === 'teslim' && !kisiHedefiMi(hedef) && (
           <Dugme simge="check" disabled={cevrimdisi || miktar.trim() === '' || komut.isPending} onClick={() => teslim.komut.mutate(teslimGovdesi(kaynak, hedef, miktarGirdisi(miktar), birakKimligi, true))}>Bıraktım</Dugme>
         )}
         <Dugme simge="back" onClick={geri}>Başka yer okut</Dugme>

@@ -1,16 +1,16 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { numuneDugmeleri, numuneReddiEksigi, secinceOlcumeAlinir } from '../../../../../../arkon/web/src/data/numune.ts';
 import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../../../arkon/web/src/data/olcum-aleti.ts';
-import type { Meas, Pkg, PlanItem, Result, SampleRequest } from '../../../../../../arkon/shared/model.ts';
+import type { Meas, Pkg, PkgFile, PlanItem, Result, SampleRequest } from '../../../../../../arkon/shared/model.ts';
 import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul } from '../cekirdek/tesis.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
-import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
+import type { TeknikResimKontrolu } from '../cizim/index.tsx';
 import { Cip, SayfaCercevesi, Secmeli, onayBekliyor, useSoyle, useYetkiDenetimi } from '../pano/index.tsx';
 import {
   NUMUNE_DURUMLARI, acikNumuneMi, cmmOku, kaliteKurali, kenaraYakin, olcumDegerlendir, olcumKaydi, toleransta, yontem, type CmmSonucu,
@@ -21,6 +21,11 @@ import { SpcGorunumu } from './SpcGorunumu.tsx';
 
 // Kalite · ölçüm istasyonu (kalite.ts QualityApp): numune sırası, teknik resim, ölçüm girişi (elle, mastar, CMM dosyası), onay ve red kararı;
 // SPC, paket onayı ve ölçü aletleri sekmeleri. Ölçüm 'q.meas', karar 'q.decide' ister; yetkisiz rol düğmeyi görmez, sunucu da denetler.
+
+// Çizim parçası (A5) ağırdır; yalnız numune seçilince yüklenir.
+const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
+// Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
+const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
 
 type Kip = 'samples' | 'spc' | 'onay' | 'alet';
 type Gorunum = 'list' | 'draw' | 'form';
@@ -115,6 +120,18 @@ export function KaliteSayfasi() {
     if (items[0]) odakla(items[0].id, 300);
   }, [selId, secildi]);
 
+  // Resim yalnız gösterir (eski kalite.ts ctl): balon seçimi ölçüm satırına odaklanır; resimden gelen ölçüm değişikliği numuneye yazılır.
+  const kontrol = useMemo((): TeknikResimKontrolu | null => (r && p ? {
+    anahtar: 'q:' + r.id, dosyalar: baytli(p.files), anaResim: p.primary, hazirVeri: p.derived ?? null, ayar: p.readCfg,
+    balonlar: p.plan as TeknikResimKontrolu['balonlar'], balonlarYaz: () => undefined, saltOkunur: true, ozellikGizli: true,
+    olcumler: results as unknown as TeknikResimKontrolu['olcumler'], odak: focus, siradaki: r.items.filter((id) => !results[id]),
+    secildi: (id) => odakla(id, 30),
+    olcumlerYaz: (m) => {
+      if (!izinli('q.meas')) return;
+      const yeni = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { cnt: r.cnt, by: ad, ...x } as Meas]));
+      void depo.DB.put('requests', { ...r, results: yeni }).then(reload);
+    },
+  } : null), [r?.id, r?.results, p?.id, focus]);
   const kaydet = async (b: PlanItem, secim?: number | 'ok' | 'nok') => {
     if (!r || !p || !izinli('q.meas')) return;
     const alet = olcumAletiBul(aletler, b.tool);
@@ -233,7 +250,7 @@ export function KaliteSayfasi() {
               )}
             </section>
             <section className="tc-ay4-resim" aria-label="Teknik resim">
-              {r && p ? <Hazirlaniyor /> : (
+              {kontrol ? <Suspense fallback={null}><TeknikResim kontrol={kontrol} /></Suspense> : (
                 <div className="tc-ay3-kutu"><b><Simge ad="target" /> Numune seç</b><small className="tc-ay3-not">Operatör &quot;Numuneyi kaliteye gönder&quot; dediğinde istek soldaki listeye düşer.</small></div>
               )}
             </section>

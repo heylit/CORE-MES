@@ -3,7 +3,7 @@ import { ME, canSee, currentShift, initials, machineOf } from './ortak-ayarlar';
 import { CallChip, readyCount } from './operator-parcalar';
 import { Brand } from './baslat';
 import { kalanMetni, vardiyaKalanDk } from '../data/operator-ozeti';
-import { halkaPaylari, kalanAdet } from '../data/sayac-halkasi';
+import { sayacGosterimi } from '../data/sayac-halkasi';
 import { adimTuru } from '../data/adim-turu';
 import { parcaEtiketi } from '../data/parca';
 import { bitenleriAyir } from '../data/biten-is';
@@ -96,13 +96,12 @@ export function CycRing({ o, cyc }) {
   </${Fragment}>`;
 }
 export function Dial({ o, onEdit, label, unit, cyc }) {
-  const N = 120, { iyi: frac, hurda: sfrac } = halkaPaylari(o.good, o.scrap, o.target);
+  const N = 120, { iyi: frac, hurda: sfrac, hedef, kalan: remain } = sayacGosterimi(o);
   const lit = Math.round(N * frac);
   const ticks = useMemo(() => Array.from({ length: N }, (_, i) => { const a = (i / N) * Math.PI * 2 - Math.PI / 2, big = i % 10 === 0, r1 = big ? 196 : 202, r2 = 214; return { i, big, x1: 220 + r1 * Math.cos(a), y1: 220 + r1 * Math.sin(a), x2: 220 + r2 * Math.cos(a), y2: 220 + r2 * Math.sin(a) }; }), []);
   const R = 180, C = 2 * Math.PI * R;
   const [k, setK] = useState(0); const prev = useRef(o.good);
   useEffect(() => { if (prev.current !== o.good) { setK(x => x + 1); prev.current = o.good; } }, [o.good]);
-  const remain = kalanAdet(o.target, o.good, o.scrap);
   return html`<div className="dial">
     <svg viewBox="0 0 440 440" aria-hidden="true">
       ${ticks.map(t => html`<line key=${t.i} className=${'tk ' + (t.i < lit ? 'on ' : '') + (t.big ? 'big' : '')} x1=${t.x1} y1=${t.y1} x2=${t.x2} y2=${t.y2} />`)}
@@ -114,11 +113,11 @@ export function Dial({ o, onEdit, label, unit, cyc }) {
     <button className="core" onClick=${onEdit} title="Dokun: sayıyı düzelt" style=${{ border: 0 }}>
       <span className="over">${label || 'İyi parça'}</span>
       <span key=${k} className=${'num ' + (k ? 'bump' : '')}>${fmt(o.good)}</span>
-      <span className="of">/ ${fmt(o.target)} ${unit || 'adet'}</span>
-      <span className="pct">%${Math.floor((frac + sfrac) * 100)} · ${fmt(remain)} kaldı</span>
+      <span className="of">/ ${hedef === null ? '—' : fmt(hedef)} ${unit || 'adet'}</span>
+      <span className="pct">${remain === null ? '—' : '%' + Math.floor(frac * 100) + ' · ' + fmt(remain) + ' kaldı'}</span>
     </button>
     <div className="dlabel l">Hurda<b className="s">${o.scrap}</b></div>
-    <div className="dlabel r">Kalan süre<b>${dur(remain * o.cycle)}</b></div>
+    <div className="dlabel r">Kalan süre<b>${remain === null ? '—' : dur(remain * o.cycle)}</b></div>
   </div>`;
 }
 
@@ -142,8 +141,8 @@ export function Orb({ icon, label, c, main, hold, onGo, disabled }) {
     <span className="lbl">${label}</span>${hold ? html`<span className="hint">${p > 0 ? (((1 - p) * D) / 1000).toFixed(1) + ' sn' : 'Basılı tut'}</span>` : html`<span className="hint">${'\u00a0'}</span>`}
   </button>`;
 }
-export function Orbs({ state, act }) {
-  const O = (props) => html`<${Orb} ...${props} />`;
+export function Orbs({ state, act, disabled = false }) {
+  const O = (props) => html`<${Orb} ...${props} disabled=${disabled} />`;
   if (state === 'queued') return html`<div className="orbs">${O({ key: 'su', icon: 'wrench', label: 'Hazırlık', c: 'var(--hazard)', onGo: () => act('setup') })}${O({ key: 's', main: 1, icon: 'play', label: 'İşi Başlat', c: 'var(--run)', onGo: () => act('start') })}${O({ key: 'd', icon: 'ruler', label: 'Resim', c: 'var(--done)', onGo: () => act('drawing') })}</div>`;
   if (state === 'setup') return html`<div className="orbs">${O({ key: 's', main: 1, icon: 'play', label: 'Üretime Geç', c: 'var(--run)', onGo: () => act('start') })}</div>`;
   if (state === 'running') return html`<div className="orbs">${O({ key: 'x', hold: 1, icon: 'stop', label: 'Durdur', c: 'var(--stop)', onGo: () => act('stop') })}${O({ key: 'p', main: 1, icon: 'pause', label: 'Duraklat', c: 'var(--hold)', onGo: () => act('pause') })}${O({ key: 'f', hold: 1, icon: 'flag', label: 'Bitir', c: 'var(--done)', onGo: () => act('finish') })}</div>`;
