@@ -15,7 +15,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
-import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
+import { gorunumGecisi, YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
@@ -158,6 +158,7 @@ export function Kabuk({
   const [tamEkran, tamEkranYaz] = useState(false);
   const konum = useLocation();
   const gezin = useNavigate();
+  const gecis = gorunumGecisi(konum.pathname);
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);
@@ -367,6 +368,8 @@ export function Kabuk({
                   sec: () => { acmaIstekleriYaz((o) => ({ ...o, [anahtar]: (o[anahtar] ?? 0) + 1 })); },
                 })),
                 { anahtar: 'yardim', baslik: 'Yardım ve rehber', simge: 'help', sec: () => { yardimYaz(true); } },
+                // Eski adresine geçen yeni ekranın eski görünümü (541); yalnız o sayfadayken çıkar, sayfayı gören açar.
+                ...(gecis === null ? [] : [{ anahtar: 'gorunum', baslik: gecis.baslik, simge: 'rotate' as const, sec: () => { void gezin(gecis.yol); } }]),
                 { anahtar: 'tema', baslik: tema === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç', simge: tema === 'dark' ? 'sun' : 'moon', sec: degistir },
                 { anahtar: 'performans', baslik: performansEtiketi, simge: 'gauge', sec: performansDegistir },
                 { anahtar: 'parola', baslik: 'Parolamı değiştir', simge: 'edit', sec: () => { parolaYaz(true); } },

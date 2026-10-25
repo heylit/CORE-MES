@@ -79,6 +79,28 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
   }, 20000);
 
+  it('Kuyruk eski adresinde (/kuyruk) yeni ekranla, yönetici kapısı olmadan açılır (541)', async () => {
+    sunucuKur(KAPISIZ);
+    arkonAc('/kuyruk');
+    expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');
+    expect(screen.queryByText(YENI_EKRAN_ILETISI, { exact: false })).toBeNull();
+    expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
+    expect(adres()).toBe('/kuyruk');
+  }, 20000);
+
+  it('Kuyruk, Plan Kuyruğu yetkisi olmayan operatöre de açılır (eskisi gibi yalnız TMI işlemiyle)', async () => {
+    sunucuKur({ ...OPERATOR, kullanici: { ...OPERATOR.kullanici, islemler: [...OPERATOR.kullanici.islemler, 'sayfa.kuyruk'] } });
+    arkonAc('/kuyruk');
+    expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');
+  }, 20000);
+
+  it('Kuyruk işlemi olmayan kişide /kuyruk bölüm açmaz', async () => {
+    sunucuKur(OPERATOR);
+    arkonAc('/kuyruk');
+    expect(await screen.findByText('Bu sayfa bulunamadı ya da size açık değil.', {}, { timeout: 10000 })).toBeTruthy();
+    expect(document.querySelector('[data-sayfa]')).toBeNull();
+  }, 20000);
+
   it('bilinmeyen sayfa bölüm açmaz', async () => {
     sunucuKur(YONETICI);
     arkonAc('/arkon/yeni/olmayan');
