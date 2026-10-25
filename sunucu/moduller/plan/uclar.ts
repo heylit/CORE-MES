@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI,
@@ -29,6 +29,8 @@ export const uclar = [
     isle: ({ db, kullanici, sorgu }) => servis.motorUyarilariOku(db, kullanici, sorgu.taslak) }),
   uc({ yontem: 'GET', yol: '/plan/canli-yerlesim', yetki: PLAN_OKUR, sorgu: canliYerlesimSorgusu, cevap: canliYerlesimCevabi,
     isle: ({ db, sorgu }) => servis.canliYerlesim(db, sorgu.isEmirleri) }),
+  // 510 a: canlıya alma geçmişi (eski "Plan değişikliği" kutusu); planı okuyan görür.
+  uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
