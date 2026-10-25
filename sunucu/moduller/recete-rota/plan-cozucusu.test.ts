@@ -127,6 +127,23 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(yer(g, 'E-2|10')!.bitis, '2026-10-19T22:30:00.000Z');
   });
 
+  test('525 4 a: katı malzeme kipinde malzemesi gelmeyen emrin işleri yerleşmez ama komutu durdurmaz; uyarı kipinde yerleşir', async () => {
+    const ham = { id: '60', code: 'HM-1', name: 'Ornek cubuk', type: 'ham', unit: 'kg', stock: 0 };
+    // Tedarik süresi boş: motor eksiğe tahmini geliş yazmaz (durum.betik tmEksikYaz), malzeme hiç gelmez.
+    const k = (mat: string) => ({
+      ...KAYNAK, calisma: { ...KAYNAK.calisma, w: { ...KAYNAK.calisma.w, mat } },
+      kayit: { ...KAYNAK.kayit, items: [{ ...ham, plan: { kod: '60', ad: 'Ornek cubuk', birim: 'kg', stok: 0, birimFiyat: 0, tedarikGun: null, muayeneGun: 0 } }] },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, items: [...KAYNAK.kaynak.durum.items, ham],
+        routes: { 50: { base: null, steps: [{ ...adim(10, 30), ins: [{ itemId: '60', qty: 1 }] }, adim(20, 15)] } } } },
+    });
+    const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|20'] }] });
+    const sert = await coz(k('sert'), i);
+    assert.deepEqual([sert.yerlesmeyen, sert.malzemeBekleyen.sort(), sert.yerlesimler], [[], ['E-1|10', 'E-1|20'], []]);
+    const uyari = await coz(k('uyari'), i);
+    assert.deepEqual([uyari.yerlesmeyen, uyari.malzemeBekleyen], [[], []]);
+    assert.ok(yer(uyari, 'E-1|10') && yer(uyari, 'E-1|20'));
+  });
+
   test('512 1 a: taslağın ek vardiyası motorun kapasitesidir; verilmezse çalışmanınki, boş liste çalışmanınkini siler', async () => {
     const aksam = { id: '9', name: 'Aksam', start: '16:00', end: '23:59', breaks: [] };
     const k = (ekMesai: unknown[]) => ({
@@ -186,7 +203,7 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
-    assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [] });
+    assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [], malzemeBekleyen: [] });
   });
 
   test('planlama sayfasının çalışma kaydı yoksa komut reddedilir', async () => {
