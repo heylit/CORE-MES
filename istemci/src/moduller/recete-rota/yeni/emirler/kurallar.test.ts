@@ -3,7 +3,7 @@ import type { DurumCevabi, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-ro
 import type { StokOkumasi } from '../../kopru.ts';
 import {
   adimCarpanlari, adimDurumu, araStokHavuzu, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,
-  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
+  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -124,6 +124,12 @@ describe('adımlar, ilerleme ve plan', () => {
     // Biten adım listede olsa da emri planlanamaz yapmaz.
     const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|3': 'tamam' }, opProg: {} } });
     expect(planOzeti({ ...d, planYerlesmeyen: { 'UE-1|30': 'Makine yok.' } }, y, o)).toMatchObject({ tur: 'plan' });
+  });
+
+  it('emir şeridi: ardışık altı emir altı ayrı renk alır, komşular farklı', () => {
+    const renkler = [0, 1, 2, 3, 4, 5].map(seritNo);
+    expect(new Set(renkler).size).toBe(6);
+    expect(seritNo(6)).toBe(seritNo(0));
   });
 
   it('tampon (477 a): bolluk teslim günü sonuna kalan gün; tamponun üçte birinden azı kritik, üçte ikisinden azı azalmış', () => {
