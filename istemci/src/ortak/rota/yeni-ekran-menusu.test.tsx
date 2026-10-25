@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from '../arayuz/Kabuk.tsx';
 import { modulRotalari } from './kesif.ts';
 import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
-import { YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
+import { YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
 
 function ciz(islemler: readonly string[], kapali: readonly string[] = []) {
   return render(
@@ -50,5 +51,48 @@ describe('yeni ekran menü satırları', () => {
     expect(yollar).toContain('/arkon/yeni');
     ciz([YENI_EKRAN_ISLEMI], ['/arkon']);
     expect(within(anaMenu()).queryByRole('link', { name: 'Üretim Hazırlık (yeni)' })).toBeNull();
+  });
+});
+
+describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
+  const adreste = (adres: string) => render(
+    <MemoryRouter initialEntries={[adres]}>
+      <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={ISLEMLER}><p>icerik</p></Kabuk>
+    </MemoryRouter>,
+  );
+  const serit = (baslik: string) => screen.queryByRole('navigation', { name: `${baslik} menüsü` });
+
+  it('yeni ekran adresi ve alt yolları sayılır; benzer adlı ya da eski adres sayılmaz', () => {
+    for (const yol of YENI_EKRAN_YOLLARI) expect(yeniEkranAdresiMi(yol), yol).toBe(true);
+    expect(yeniEkranAdresiMi('/ik/yeni/izinler')).toBe(true);
+    expect(yeniEkranAdresiMi('/recete-rota/planlama-yeni/plan')).toBe(true);
+    expect(yeniEkranAdresiMi('/ik')).toBe(false);
+    expect(yeniEkranAdresiMi('/ik/yenilik')).toBe(false);
+    expect(yeniEkranAdresiMi('/recete-rota/plan')).toBe(false);
+    expect(yeniEkranAdresiMi('/malzemeler/yeni')).toBe(false);
+  });
+
+  it('yeni ekranda şerit çizilmez, çerçeveli düzen ve tam ekran kalır', () => {
+    const { container } = adreste('/ik/yeni/izinler');
+    expect(serit('İnsan Kaynakları')).toBeNull();
+    const kabuk = container.querySelector('.tc-kabuk');
+    expect(kabuk?.hasAttribute('data-cerceveli')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Tam ekran' })).toBeTruthy();
+  });
+
+  it('Planlama yeni ekranında başka maddeyi seçili gösteren şerit yoktur', () => {
+    adreste('/recete-rota/planlama-yeni/plan');
+    expect(serit('Reçete ve Rota')).toBeNull();
+    expect(document.querySelector('.tc-ikinci-madde-etkin')).toBeNull();
+  });
+
+  it('eski ekranda şerit durur', () => {
+    adreste('/ik');
+    expect(serit('İnsan Kaynakları')).not.toBeNull();
+    cleanup();
+    adreste('/recete-rota/plan');
+    const menu = serit('Reçete ve Rota');
+    expect(menu).not.toBeNull();
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Planlama motoru/ }).getAttribute('aria-current')).toBe('page');
   });
 });

@@ -63,14 +63,13 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.
 
 ## Bağlamada kapanacak: planlama değerlendirmesi (Soru 357 a)
-- Sunucunun `planCoz` ve teklif denemesi sayfanın motor kancaları olmadan koşar (DOĞRULANDI: `plan-motoru.ts` yalnız `engine`, `kisitlar`, `girdi`,
-  `durum` yükler); sonuçları sayfadan ve değerlendirme ucundan ayrılabilir. `kancalar.betik`i onlara da yüklemek davranış değiştirir, onay ister.
+- KAPANDI (458 a, kart #591): sunucunun `planCoz`, `motorYukle` ve teklif denemesi de sayfanın motor kancalarıyla (`kancalar.betik`) koşar.
 - Çalışma kaydı (`:planlama`) sipariş geliri ve fiyatı taşır; `planlama-oku` taşıyan bu alanları çalışma ucundan okur. Değerlendirme ucunun
   döndürdüğü opak plan ve sipariş kayıtları da çalışmaya geri yazıldığı için tutardan arındırılmaz.
 - Termin uzatma, bölme ve fiyat önerisinin uygulanması kaynak sahibinin alanını değiştirir (222 a ile çelişki); uygulama komutu bağlamada sahibinde.
 - Sayfanın kartları henüz bu uca bağlı değil; yeni Planlama ekranı (motor tarayıcıda yok) bağlanınca eski tarayıcı yolu kalkar.
-- Süre: 60 emir / 180 adımlık uydurma veride plan seçenekleri 10 s sürdü (ölçüldü). Çok daha büyük veride 25 s sınırı aşılıp 503 dönebilir;
-  o durumda #583'ün iki adımlı düzeni (POST başlatır, transaction dışı GET sonucu verir) bu uca da uygulanır.
+- KAPANDI (463 a, kart #614): değerlendirme iki adımlı; hesap uç transaction'ını beklemez, sınır 60 s. 60 emir / 180 adımlık uydurma veride plan
+  seçenekleri 10 s sürdü (ölçüldü); gerçek boyutta ölçülmedi.
 
 ## Bağlamada kapanacak: bitiş tarihi akışı (455/2 a)
 - Akış yalnız `yaz` ucundan kaydedilen planda düşer. Plan başka yoldan kaydedilirse (sunucu çözücüsü, P5) o yol da `bitisAkisiEkle`yi çağırmalı.

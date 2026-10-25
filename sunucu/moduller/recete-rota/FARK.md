@@ -161,3 +161,17 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
   sipariş başına son 50 satır.
 - Sayfaya göre farklar: satırın zamanı ve kişisi sunucudandır (sayfa planın `kim` alanını öne alıyordu); gönderilen değer akışı taşımıyorsa
   kayıttaki akış korunur. Eski sayfa kendi satırını yazmayı sürdürür; aynı bitiş ikinci kez eklenmez. Sözleşme ve göç değişmedi.
+## Sunucu çözücüsü ve teklif denemesi sayfanın motor kancalarıyla (Soru 458 a; kart #591)
+- `plan-motoru.ts` (`planCoz`, `motorYukle`) motoru `girdi`, `durum` ve `kancalar` ile yükler; çözümden önce girdinin ağırlıkları ve TL amacı
+  sayfanın işçisindeki gibi uygulanır (`stHazirla`, değerlendirme betiğinden `kancalar.betik`e taşındı). Teklif denemesi de kancaları yükler.
+- Davranış değişir: kancanın kapsadığı özelliği kullanan veride (TL amacı, fason kararı, malzeme ve fason termini, yıllık hedef, montaj,
+  partide ayar sıfırlama, ayar önde, örtüşme) sunucunun planı sayfanın planına yaklaşır. Mevcut testlerin beklentileri değişmedi.
+  Kipler aramasız kalır (`sabit`, `yeni`); arama kancaları yüklenir ama yalnız aramada çalışır.
+
+## Planlama değerlendirmesi iki adımlı (Soru 463 a; kart #614)
+- `GET /recete-rota/planlama-degerlendirmesi` kalktı. Yerine `POST /recete-rota/planlama-degerlendirmesi` (gövde `{ surum, istek }`, cevap `{ is }`)
+  ve `GET /recete-rota/planlama-degerlendirmesi/:is` (transaction açmaz; `suruyor` | `bitti` + cevap | `hata` + kod ve ileti) geldi; #583'ün düzeni.
+  Başlatma girdiyi uç transaction'ında okur, maliyet görüşünü, sürümü ve kişi başına tek işi denetler; hesap transaction'ı beklemez.
+- Süre sınırı 25 s'den 60 s'ye çıktı (kuyruğa girişten). Sonucu yalnız başlatan, bir kez okur; başkasına 404; okunmayan sonuç 5 dk sonra silinir.
+  Hesapta çıkan ret (plan yok, sipariş yok, adet, süre) durum cevabında uçtaki hata koduyla döner. Başlatma tam denetime girer (gövde en çok
+  birkaç yüz karakter).

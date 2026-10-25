@@ -5167,12 +5167,14 @@ function sunucuKaydi(kayit, durum, D0, bugun) {
    D0 açık çalışmanın verisidir: başlangıç ve motor ayarları (plan alt nesnesi) aynı kimlikte korunur. */
 function tmiCevir(st, kaynak, D0, bugun) {
   const k = kaynak && kaynak.durum ? kaynak : null;
-  const D = rrCevir(k ? tmiKaynakIle(sunucuKaydi(st, k.durum, D0, bugun || duvarSaati(Date.now()).slice(0, 10)), k, D0) : st);
+  /* rota ve emir no'su sunucunun kaydındandır: kayıttaki emirler bağlanmadan önceki yerel emirler olabilir, "emir no|OP" eşlenmez */
+  const sk = k ? sunucuKaydi(st, k.durum, D0, bugun || duvarSaati(Date.now()).slice(0, 10)) : st;
+  const D = rrCevir(k ? tmiKaynakIle(sk, k, D0) : st);
   if (!D.meta && D0 && D0.meta) D.meta = rrKopya(D0.meta);
   tmiTabanKur(D, bugun);
   const firmalar = k && k.durum.fasonFirms;
-  if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(st, firmalar, D, D0);
-  const adet = tmiAdimAdetleri(k && k.durum, st, D); if (adet) D.opAdet = adet;
+  if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(sk, firmalar, D, D0);
+  const adet = tmiAdimAdetleri(k && k.durum, sk, D); if (adet) D.opAdet = adet;
   const kp = k && k.ek && k.ek.kapasite;
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
   return D;
@@ -5334,16 +5336,22 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
   if (!calisma || !calisma.D) return null;
   const S = clone(calisma); tmiTabanKur(S.D, bugun);
   const k = kayit && kayit.items ? kayit : null;
-  if (k && S.rrSavedAt != null && (k.savedAt || 0) !== S.rrSavedAt) { const D = tmiCevir(k, null, S.D, bugun); if (!rrEsit(D, S.D)) S.D = D; }
+  /* veri değişince plan eskir (S.dataVer), çerçevedeki gibi (zz27 rrCek, zz31 kaynakUygula); başlamış adım planı eskitmez. Kayıt okunmuş
+     sayılır (rrSavedAt): sayfa çalışmayı yazınca aynı kayıt yeniden çevrilip planı her açılışta yeniden eskitmez. */
+  if (k && S.rrSavedAt != null && (k.savedAt || 0) !== S.rrSavedAt) {
+    const D = tmiCevir(k, null, S.D, bugun); S.rrSavedAt = k.savedAt || 0;
+    if (!rrEsit(D, S.D)) { S.D = D; S.dataVer = (+S.dataVer || 0) + 1; }
+  }
   karar1650Goc(S);
   const kn = kaynak && kaynak.durum ? kaynak : null;
   /* biten iş motorun girdisinden düşer, sayfanın stOf'u gibi (zz31): sunucunun iş emri durumu, okunamadıysa kayıttaki kopyası */
   const stBitenle = () => bitenUygula(stTamKur(S), tmiBitenler((kn && kn.durum.emirler) || k, S.D));
   if (kn) {
-    kaynakBirlestir(S.D, k, kn, bugun);
+    if (kaynakBirlestir(S.D, k, kn, bugun).length) S.dataVer = (+S.dataVer || 0) + 1;
     if (Array.isArray(kn.durum.calisanAdimlar)) {
       const cx = compile(stBitenle());
-      const y = tmiCalisanlar(kn.durum, k, S.D, cx.st.now); if (y) calisanBirlestir(S, y, cx);
+      /* çerçevede tmiCalisanlar sunucunun emirleriyle sarılıdır (zz40 sunucuyla); burada aynı kayıt doğrudan verilir */
+      const y = tmiCalisanlar(kn.durum, sunucuKaydi(k, kn.durum, S.D, bugun), S.D, cx.st.now); if (y) calisanBirlestir(S, y, cx);
     }
   }
   return { S, st: stBitenle() };

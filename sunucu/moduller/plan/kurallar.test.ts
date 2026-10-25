@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   araliktanCikar, arkaArkaya, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
-  adetPayi, bedelCarpani, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
+  adetPayi, bedelCarpani, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
 
@@ -512,6 +512,52 @@ describe('plan kuralları', () => {
     assert.ok(y[0]!.ihtiyac[0]! <= y[0]!.kapasite[0]!, `ihtiyaç ${y[0]!.ihtiyac[0]} kapasite ${y[0]!.kapasite[0]}`);
     assert.equal(sinirliGunSayisi(y), 0);
     assert.equal(sinirliGunSayisi(uc(1)), 1);
+  });
+});
+
+describe('tampon bolluğu vardiya kapasitesiyle (481 a)', () => {
+  // Gün 10 (00:00 = 14400): 08:00-12:00 ve 13:00-17:00 (480 dk). Gün 9: 22:00-06:00 gece vardiyası, 02:00-02:30 mola (450 dk).
+  const g0 = 10 * GUN;
+  const gunler = new Map<number, { baslangic: number; bitis: number }[]>([
+    [9, [{ baslangic: 9 * GUN + 1320, bitis: g0 + 120 }, { baslangic: g0 + 150, bitis: g0 + 360 }]],
+    [10, [{ baslangic: g0 + 480, bitis: g0 + 720 }, { baslangic: g0 + 780, bitis: g0 + 1020 }]],
+    [11, []],
+  ]);
+  const al = (g: number) => gunler.get(g);
+  test('an, o gün başlayan vardiyaların dolan payıyla gün kesridir; mola ve vardiya dışı saymaz', () => {
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 840), 10 + 300 / 480);
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 1020), 11, 'son vardiyanın sonu ertesi günün başıdır (eski advance)');
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 1300), 11);
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 420), 10, 'vardiya başlamadan');
+  });
+  test('önceki günün gece vardiyası bitmeden gelen an o güne düşer', () => {
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 240), 9 + 330 / 450);
+    assert.equal(kapasiteKesri(al, 10, g0, g0 + 360), 10, 'gece vardiyası bitti: bugünün başı');
+  });
+  test('takvimsiz kaynak ve okunmamış gün duvar saatiyle; vardiyasız gün kesirsiz', () => {
+    assert.equal(kapasiteKesri(null, 10, g0, g0 + 720), 10.5);
+    assert.equal(kapasiteKesri(al, 12, 12 * GUN, 12 * GUN + 360), 12.25);
+    assert.equal(kapasiteKesri(al, 11, 11 * GUN, 11 * GUN + 600), 11);
+  });
+  test('bolluk teslim günü sonu eksi en geç kesir; teslim ya da adım yoksa null', () => {
+    assert.equal(kapasiteBollugu(12, [10 + 300 / 480, 9.7]), 13 - 10.625);
+    assert.equal(kapasiteBollugu(9, [10.625]), -0.625);
+    assert.equal(kapasiteBollugu(null, [10]), null);
+    assert.equal(kapasiteBollugu(12, []), null);
+  });
+});
+
+describe('bölme adetleri (493 1 a)', () => {
+  test('oran adım adedine en büyük kalanla dağıtılır; toplamı adım adedi', () => {
+    assert.deepEqual(bolmeAdetleri([4, 6], 10), [4, 6]);
+    assert.deepEqual(bolmeAdetleri([4, 6], 9), [4, 5]);
+    assert.deepEqual(bolmeAdetleri([1, 1, 1], 10), [4, 3, 3]);
+  });
+  test('adım adedi tam sayı değilse, parçadan azsa ya da bir parça bir adetten az kalırsa yazılamaz', () => {
+    assert.equal(bolmeAdetleri([4, 6], 9.5), null);
+    assert.equal(bolmeAdetleri([1, 1, 1], 2), null);
+    assert.equal(bolmeAdetleri([1, 999], 10), null);
+    assert.equal(bolmeAdetleri([10], 10), null);
   });
 });
 
