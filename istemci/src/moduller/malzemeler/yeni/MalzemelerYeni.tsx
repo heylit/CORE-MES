@@ -33,7 +33,7 @@ function useGezinti(): Gezinti {
       ayarlar: (bolum) => gezin(bolum ? `${bolumYolu('ayarlar')}?${new URLSearchParams({ bolum }).toString()}` : bolumYolu('ayarlar')),
       sablonlar: () => gezin(bolumYolu('sablonlar')),
       kilavuz: () => gezin(bolumYolu('kilavuz')),
-      disari: (a) => gezin(a === 'logo' ? '/malzemeler/logo' : DIS_SAYFALAR[a]),
+      disari: (a) => gezin(DIS_SAYFALAR[a]),
       etiketMerkezi: (no) => {
         const yol = malzemeEtiketiYolu(no);
         if (yol) gezin(yol);
