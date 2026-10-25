@@ -6,7 +6,7 @@
 /* Prototipin şablon ızgarası (.tpls): sığdığı kadar sütun; dar ekranda tek sütun. */
 .tc-ms-liste {
   display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 8)), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 8 + var(--b-1))), 1fr));
 }
 
 /* Sol şerit ve simge türün ya da ailenin rengidir (data-tur / data-aile, malzemeler-yeni.css). */

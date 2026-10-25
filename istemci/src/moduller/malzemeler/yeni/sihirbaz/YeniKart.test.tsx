@@ -29,7 +29,7 @@ describe('M1 yeni kart sihirbazı', () => {
   test('yazan sihirbazı adresinden açar: başlık, adımlar, hızlı arama ve ilk adımda Kaydet yok (izinli)', async () => {
     sunucuKur(YAZAN);
     ac();
-    expect(await screen.findByRole('heading', { name: 'Yeni malzeme kartı' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Tür ve aile' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Adımlar' })).toBeTruthy();
     expect(screen.getByRole('searchbox', { name: 'Katalogda ara' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'İleri' })).toBeTruthy();
@@ -37,19 +37,30 @@ describe('M1 yeni kart sihirbazı', () => {
     expect((screen.getByRole('button', { name: /Geri/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  test('ilk adımda "Seçerek süz ve kart bul": seçim yokken yol gösterir, seçilince kart listelenir', async () => {
+    sunucuKur(YAZAN);
+    ac();
+    const suz = (await screen.findByText('Seçerek süz ve kart bul')).closest('details') as HTMLDetailsElement;
+    expect(suz.open).toBe(false);
+    fireEvent.click(within(suz).getByText('Seçerek süz ve kart bul'));
+    expect(within(suz).getByText(/Sol taraftan özellik seçerek/)).toBeTruthy();
+    fireEvent.click(within(suz).getAllByRole('checkbox')[0]!);
+    expect(await within(suz).findAllByRole('button', { name: 'Aç' })).not.toHaveLength(0);
+  });
+
   test('yalnız okuyan sihirbazı açamaz; kart isteği gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(OKUYAN);
     ac();
     expect(await screen.findByText('Bu bölümü görme yetkin yok.')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Yeni malzeme kartı' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Tür ve aile' })).toBeNull();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
   test('kayıtlı kart son adımdan açılır; kod alanı salt okunurdur ve "Otomatik" düğmesi yoktur (kart #234 madde 10)', async () => {
     sunucuKur(YAZAN);
     ac('?kart=mornek1');
-    expect(await screen.findByRole('heading', { name: 'Kartı düzenle' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Özet ve kayıt' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Özet ve kayıt' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Değişiklikleri kaydet' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Ticari bilgiler/ }));
     const kod = await screen.findByLabelText('Malzeme kodu') as HTMLInputElement;
     expect(kod.readOnly).toBe(true);
@@ -133,7 +144,6 @@ describe('M1 yeni kart sihirbazı', () => {
     sunucuKur(YAZAN);
     ac('?kopya=mornek1');
     expect(await screen.findByText('Kopya oluşturuldu. Ölçüleri değiştirip yeni kod olarak kaydedebilirsin.')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Yeni malzeme kartı' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Form ve ölçüler' })).toBeTruthy();
   });
 
@@ -143,7 +153,7 @@ describe('M1 yeni kart sihirbazı', () => {
         'GET /satin-alma-kg-fiyatlari/malzemeler': () => json(200, { malzemeler: [] }),
       });
       ac('?kart=mornek1');
-      await screen.findByRole('heading', { name: 'Kartı düzenle' });
+      await screen.findByRole('heading', { name: 'Özet ve kayıt' });
       if (sorulur) await waitFor(() => { expect(istekler.some((i) => i.yol.startsWith('/satin-alma-kg-fiyatlari'))).toBe(true); });
       else expect(istekler.some((i) => i.yol.startsWith('/satin-alma-kg-fiyatlari'))).toBe(false);
       cleanup();

@@ -22,7 +22,7 @@ describe('Malzeme ayarları: bölümler ve gezinme', () => {
     expect(adlar).toEqual([
       'Genel bakış', 'Aileler ve sınıflar', 'Kaliteler', 'Teknik özellikler', 'Durum ve işlem seçenekleri', 'Sınıf varsayılanları', 'Tolerans normları',
       'Ad, açıklama ve zorunlu alanlar', 'Yarı mamul alanları', 'Mamul alanları', 'Sarf kategorileri', 'Demirbaş kategorileri',
-      'Sertifikalar', 'Stok birimleri', 'Belge türleri', 'Roller ve yetkiler', 'Genel',
+      'Sertifikalar', 'Stok birimleri', 'Belge türleri', 'Roller ve yetkiler',
     ]);
     expect(within(menu).getByRole('button', { name: 'Genel bakış' }).getAttribute('aria-current')).toBe('page');
     expect(screen.queryByText(/Değişiklik kaydı/)).toBeNull();
@@ -43,7 +43,7 @@ describe('Malzeme ayarları: bölümler ve gezinme', () => {
     sunucuKur(YONETICI);
     yeniEkranAc(`${KOK}?bolum=sarf&don=kart`);
     fireEvent.click(await screen.findByRole('button', { name: 'Karta dön' }));
-    expect(await screen.findByRole('heading', { name: 'Yeni malzeme kartı' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Tür ve aile' })).toBeTruthy();
   });
 });
 
@@ -100,6 +100,20 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     expect((await screen.findByRole('switch', { name: 'Plastik: kullanımda, gizlemek için kapat' })).getAttribute('aria-checked')).toBe('true');
   });
 
+  test('yeni aile rengi tasarım değişkenleri arasından seçilir (465/2 b); aile kaydedilir', async () => {
+    const istekler = sunucuKur(YONETICI, { [yaz('malzeme')]: tamam });
+    yeniEkranAc(`${KOK}?bolum=aile`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni aile' }));
+    const renkler = screen.getByRole('radiogroup', { name: 'Renk' });
+    expect(within(renkler).getAllByRole('radio')).toHaveLength(8);
+    fireEvent.click(within(renkler).getByRole('radio', { name: 'Turuncu' }));
+    expect(within(renkler).getByRole('radio', { name: 'Turuncu' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.change(screen.getByLabelText('Aile adı'), { target: { value: 'Deneme ailesi' } });
+    fireEvent.change(screen.getByLabelText('Kod (3 harf)'), { target: { value: 'DNA' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aileyi ekle' }));
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(1));
+  });
+
   test('firma kodu biçimi denetlenir; geçerli kod genel ayara yazılır', async () => {
     const istekler = sunucuKur(YONETICI, { [yaz('genel')]: tamam });
     yeniEkranAc(`${KOK}?bolum=kural`);
@@ -137,10 +151,12 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     expect(kural(2)?.['cakisma']).toHaveLength(1);
   });
 
-  test('Genel bölümü sunucunun ayarlarını kilitli gösterir; mükerrer tarama yapılır', async () => {
+  test('üst baştaki Ayarlar penceresi sunucunun ayarlarını kilitli gösterir; mükerrer tarama yapılır', async () => {
     sunucuKur(YONETICI);
-    yeniEkranAc(`${KOK}?bolum=genel`);
-    const onay = await screen.findByLabelText('Yeni ve değişen kartlar onaydan sonra aktif olsun');
+    yeniEkranAc(KOK);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ayarlar' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Ayarlar' });
+    const onay = within(pencere).getByLabelText('Yeni ve değişen kartlar onaydan sonra aktif olsun');
     expect((onay as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('Firma kodu (firma kodlu türlerde kodun başı)') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Kataloğu tara' }));
