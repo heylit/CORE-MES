@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { Sihirbaz, type SihirbazDegeri, type SihirbazTanimi } from '../ortak/sade/index.ts';
@@ -22,6 +22,20 @@ export function FormluAcilim({ baslik, ton, neden, bilgi, formlar, secenekler = 
   const [son, sonYaz] = useState<string | null>(null);
   const ac = (i: number) => { acikYaz(i); fiYaz(i); sonYaz(null); };
   const f = acik === null ? undefined : formlar[acik];
+  const kap = useRef<HTMLDivElement>(null);
+  // Esc açılımı kapatır; açılınca ve form açılınca odak formun ilk alanına gider, form yoksa ilk düğmeye (zz30-isi keydown, isOdak).
+  useEffect(() => {
+    const tus = (e: KeyboardEvent) => { if (e.key !== 'Escape' || e.defaultPrevented) return; e.preventDefault(); kapat(); };
+    document.addEventListener('keydown', tus);
+    return () => { document.removeEventListener('keydown', tus); };
+  }, [kapat]);
+  useEffect(() => {
+    const ac = kap.current?.querySelector('.tc-pys-ac'); if (!ac) return;
+    ac.scrollIntoView?.({ block: 'nearest' });
+    const ilk = ac.querySelector<HTMLElement>('form input:not([type=hidden]), form select, form textarea, form button[type=submit]')
+      ?? (acik === null ? ac.querySelector<HTMLElement>('.tc-pys-form button:not([disabled])') : null);
+    ilk?.focus();
+  }, [acik]);
 
   let govde: ReactNode;
   if (f?.tanim) {
@@ -55,5 +69,5 @@ export function FormluAcilim({ baslik, ton, neden, bilgi, formlar, secenekler = 
     }),
     ...secenekler,
   ];
-  return <Acilim baslik={baslik} ton={ton} neden={neden} bilgi={bilgi} form={govde} secenekler={yada} kapat={kapat} />;
+  return <div className="tc-pys-ac-kap" ref={kap}><Acilim baslik={baslik} ton={ton} neden={neden} bilgi={bilgi} form={govde} secenekler={yada} kapat={kapat} /></div>;
 }

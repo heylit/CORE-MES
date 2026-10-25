@@ -54,6 +54,17 @@ describe('P2 Siparişler', () => {
     expect(istekler.filter((i) => i.includes('planlama-degerlendirmesi'))).toEqual([]);
   }, 20000);
 
+  it('açılımda odak formun ilk alanına gider, adım şeridi gizli sınıfla gelir; Esc açılımı kapatır', async () => {
+    sunucuKur(YONETICI, KAYIT);
+    ac('/recete-rota/planlama-yeni/ysiparis');
+    await parca('ysiparis');
+    s1Ac();
+    const form = screen.getByRole('form', { name: ONEM });
+    await waitFor(() => { expect(document.activeElement).toBe(within(form).getByLabelText(/^Önemi/)); });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('.tc-pys-ac')).toBeNull();
+  }, 20000);
+
   it('maliyet okumayan planlamacı önemi en çok ×2 seçer, gerekçesiz kaydedemez, fiyat formunu görmez', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(PLANLAMACI, KAYIT, { govdeler });
@@ -249,7 +260,7 @@ describe('Partiyi böl (uç açılınca)', () => {
   it('adetler eşit gelir, tek tek değişir; toplam tutmazsa hesap istenmez, tutunca elle adetler gider', async () => {
     const d = vi.fn(async () => ({ calismaSurumu: 9, dataVer: 3, baslangic: '2026-10-19', simdi: 7, maliyetGorunur: true, sonuc: { siparisId: 'S1', darbogaz: null, sonuc: null } })) as unknown as Degerlendirici;
     const c = calismaKur();
-    render(<BildirimSaglayici><PartiBolmeKarti D={c.D} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
     expect((screen.getByRole('combobox', { name: 'İş emri' }) as HTMLSelectElement).value).toBe('S1');
     const grup = screen.getByRole('group', { name: 'Parti adetleri' });
     const kutular = within(grup).getAllByRole('spinbutton') as HTMLInputElement[];
@@ -262,5 +273,24 @@ describe('Partiyi böl (uç açılınca)', () => {
     await waitFor(() => { expect(d).toHaveBeenCalledWith({ tur: 'parti-bolme', siparisId: 'S1', dagitim: 'ayni', adetler: [4, 6] }); });
     fireEvent.click(dugme('Eşit dağıt'));
     expect((within(grup).getAllByRole('spinbutton') as HTMLInputElement[]).map((k) => k.value)).toEqual(['5', '5']);
+  });
+
+  it('darboğaz plandan yazılır, tezgâh dağılımı seçilir; en küçük partinin altında Böl kilitli', () => {
+    const d = vi.fn() as unknown as Degerlendirici;
+    const c = calismaKur((x) => {
+      (x.D.urunler[0] as Record<string, unknown>).rota = [{ k: 'a1', minParti: 4, tezgahlar: [{ id: 'M1', cevrim: 6 }, { id: 'M2', cevrim: 3 }] }];
+      (x.D.tezgahlar as Record<string, unknown>[]).push({ id: 'M2', ad: 'Deneme 2' });
+      x.plan.ops = { 'S1.a1': { job: 'S1', m: 'M1', S: 8, C: 20 } } as typeof x.plan.ops;
+    });
+    render(<BildirimSaglayici><PartiBolmeKarti c={c} p={kayitliPlan(c)} degerlendir={d} yenile={vi.fn()} /></BildirimSaglayici>);
+    expect(screen.getByText(/Darboğaz adımı a1 \(M1\)/)).toBeTruthy();
+    expect(screen.getByText(/a1 adımında en küçük parti 4 adet/)).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Tezgâh' }), { target: { value: 'dag' } });
+    expect(screen.getByText('M2')).toBeTruthy();
+    const kutular = within(screen.getByRole('group', { name: 'Parti adetleri' })).getAllByRole('spinbutton');
+    fireEvent.change(kutular[0]!, { target: { value: '3' } });
+    fireEvent.change(kutular[1]!, { target: { value: '7' } });
+    expect(screen.getByRole('alert').textContent).toContain('1. parti 3 adet; bu adımda en küçük parti 4.');
+    expect(dugme('Böl').disabled).toBe(true);
   });
 });

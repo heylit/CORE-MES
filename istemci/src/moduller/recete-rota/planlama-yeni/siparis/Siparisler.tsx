@@ -26,8 +26,8 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
     <TumSatirlar>
       {yetki.planYaz && (
         <>
-          <PartiBolmeKarti D={calisma?.D ?? null} p={p} degerlendir={degerlendir} yenile={yenile} />
-          <PartiTaramasiKarti D={calisma?.D ?? null} p={p} />
+          <PartiBolmeKarti c={calisma} p={p} degerlendir={degerlendir} yenile={yenile} />
+          <PartiTaramasiKarti c={calisma} p={p} />
         </>
       )}
       <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} degerlendir={degerlendir} />
