@@ -487,6 +487,14 @@ const SATIR_GOCLERI: SatirGocu[] = [
     eklenen: ['planlama_proje:plan.yaz'],
   },
   {
+    ad: 'müdür rolüne plan.yaz',
+    dosyaSonu: '_kisiler_mudur_plan_yaz.sql',
+    onek: 'gocmpy',
+    elle: { kod: 'mudur', islem: 'plan.yaz' },
+    oncedenVar: ['mudur:plan.canliya-al', 'planlama_proje:plan.yaz'],
+    eklenen: ['mudur:plan.yaz'],
+  },
+  {
     ad: 'planlama rolüne satın alma sayfası',
     dosyaSonu: '_kisiler_planlama_satin_alma.sql',
     onek: 'gocpsa',
