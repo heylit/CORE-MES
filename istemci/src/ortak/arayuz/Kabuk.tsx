@@ -15,7 +15,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
-import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari } from '../rota/yeni-ekran-menusu.ts';
+import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
@@ -109,11 +109,15 @@ const ANA_SAYFA_BASLIGI = 'Ana sayfa';
 const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim', simge: 'user' };
 
 // Ana sayfa bağlantısı yalnız kendi yolunda seçili görünür: rolün panosu bir modül sayfasıysa alt yollarda modülün maddesi seçilidir.
+// Yeni ekran adresinde (`/arkon/yeni/operator`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
+// (`/arkon`) ya da başka yeni ekran satırı (`/arkon/yeni`) seçili görünmez.
 function Baglanti({ sayfa, kapat, tam = sayfa.yol === '/' }: { sayfa: BaglantiSayfasi; kapat?: () => void; tam?: boolean }) {
+  const yeni = yeniEkranEslesmesi(useLocation().pathname);
+  const yalnizKendiYolu = tam || (yeni !== null && sayfa.yol !== yeni.yol);
   return (
     <NavLink
       to={sayfa.yol}
-      end={tam}
+      end={yalnizKendiYolu}
       className={({ isActive }) => `tc-kabuk-bag${isActive ? ' tc-kabuk-bag-acik' : ''}`}
       aria-label={sayfa.baslik}
       title={sayfa.baslik}
@@ -217,7 +221,8 @@ export function Kabuk({
     ogesi.setAttribute('data-gecis', '');
   }, [konum.pathname]);
 
-  const sayfaYolu = rotaninSayfasi(konum.pathname);
+  // Yeni ekran kendi ana menü sayfasına bağlıdır; adres önekine bakılsa Üretim Terminali'nin yeni ekranı Üretim Hazırlık sayılırdı.
+  const sayfaYolu = yeniEkranEslesmesi(konum.pathname)?.kok ?? rotaninSayfasi(konum.pathname);
   // Başlık kişinin sayfalarından alınır: yetkisi olmayan sayfanın adresinde "bulunamadı" içeriğinin üstünde o sayfanın adı
   // yazmasın. Kapalı sayfa kişinindir; adı kalır, içerik "kapalı" der.
   const baslik = konum.pathname === '/' ? ANA_SAYFA_BASLIGI
