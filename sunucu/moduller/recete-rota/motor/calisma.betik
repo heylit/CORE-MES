@@ -1,0 +1,20 @@
+/* ---------- Çalışma planı, plan modülünün diliyle (499 a, 503 a, 505 a, 506 a) ----------
+   Planlama sayfasının çalışma planı (S.plan.ops) motorun işlem kimlikleriyle (sipariş.k) tutulur; plan modülü işi "emir no|OP no" ile bilir.
+   Çeviri sayfanınkidir (zz40 soKuyruklari): kayıt sunucunun emir, ürün ve rotasıyla tamamlanır (sunucuKaydi), kimlik tmiIslemler'den.
+   Girdi planlama çalışması ucunun birleştirdiğidir (girdiKur); hiçbir şey yazılmaz. Saatler planın ekseninde, başlangıç günü D.meta.baslangic.
+   Dönen: { baslangic, guncel, kimlik, ops } ya da çalışma yoksa null. kimlik: işlem kimliği -> anahtar (sunucuda karşılığı olanlar).
+   ops: çalışmada plan yoksa null; varsa her işlem { id, m, S, C, bitti } (m metin: tezgâh kimliği, fason '@...'). guncel: plan, çalışmanın
+   güncel verisiyle çözülmüş (sayfanın planGuncel'i). */
+function sunucuCalismaPlani(calisma, kayit, kaynak, bugun) {
+  const g = girdiKur(calisma, kayit, kaynak, bugun);
+  if (!g) return null;
+  const S = g.S, D = S.D;
+  const durum = kaynak && kaynak.durum ? kaynak.durum : null;
+  const k = durum ? sunucuKaydi(kayit, durum, D, bugun) : (kayit && kayit.items ? kayit : TMI_BOS_KAYIT);
+  const kimlik = {};
+  for (const [a, id] of Object.entries(tmiIslemler(k, D))) kimlik[id] = a;
+  const P = S.plan && S.plan.ops ? S.plan.ops : null;
+  const ops = P ? Object.entries(P).filter(([, r]) => r && isFinite(r.S) && isFinite(r.C))
+    .map(([id, r]) => ({ id, m: String(r.m == null ? '' : r.m), S: r.S, C: r.C, bitti: !!r.done })) : null;
+  return { baslangic: D.meta.baslangic, guncel: !!S.plan && S.plan.dataVer === S.dataVer, kimlik, ops };
+}

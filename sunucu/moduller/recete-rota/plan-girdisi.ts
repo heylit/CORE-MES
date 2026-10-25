@@ -67,6 +67,34 @@ export interface CozumGirdisi {
   sira: string[];
 }
 
+// Çalışma planının çevirisi (motor/calisma.betik) de çerçeveye gömülmez.
+let calismaKod: string | null = null;
+function calismaKodu(): string {
+  calismaKod ??= `${[...DOSYALAR, 'calisma'].map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ sunucuCalismaPlani });`;
+  return calismaKod;
+}
+export interface CalismaIslemi { id: string; m: string; S: number; C: number; bitti: boolean }
+export interface CalismaPlani {
+  // Planın saat ekseninin başlangıç günü ('GGGG-AA-GG').
+  baslangic: string;
+  guncel: boolean;
+  // Motorun işlem kimliği (sipariş.k) -> "emir no|OP no"; yalnız sunucuda karşılığı olanlar.
+  kimlik: Record<string, string>;
+  // Çalışmada plan yoksa null.
+  ops: CalismaIslemi[] | null;
+}
+
+// Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
+export function calismaPlani(istek: GirdiIstegi, simdi: number = Date.now()): CalismaPlani | null {
+  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
+  const { sunucuCalismaPlani } = vm.runInContext(calismaKodu(), baglam, { filename: 'calisma-plani.js' }) as {
+    sunucuCalismaPlani: (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null, bugun: string) => CalismaPlani | null;
+  };
+  const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
+  const sonuc = sunucuCalismaPlani(kopya(istek.calisma), kopya(istek.kayit), kopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
+  return sonuc === null ? null : structuredClone(sonuc);
+}
+
 // Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function cozumGirdisi(g: Omit<GirdiIstegi, 'bugun'> & { istek: CozumIstegi }): CozumGirdisi | null {
   const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
