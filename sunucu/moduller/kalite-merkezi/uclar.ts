@@ -108,6 +108,8 @@ export const uclar: Uc[] = [
     yol: '/kalite-merkezi/ilk-parca/:uretimEmriId/karar',
     // İlk parça kararı kalite onayıdır (denetim #12): operatörün sayımı karar vermez, onay yetkisi olan verir.
     yetki: 'kalite-merkezi.onayla',
+    // Her çağrı deftere karar satırı yazar: cevabı kaybolan kararın yinelemesi ikinci satır açmasın.
+    tekrarKorumali: true,
     parametre: kmIlkParcaParametresi,
     govde: kmIlkParcaGovdesi,
     cevap: kmIlkParcaCevabi,

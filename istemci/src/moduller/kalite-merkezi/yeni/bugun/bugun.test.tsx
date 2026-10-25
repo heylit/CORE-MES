@@ -154,6 +154,9 @@ describe('İlk parça kararı', () => {
     fireEvent.click(within(bolum).getByRole('button', { name: 'Onayla' }));
     await waitFor(() => { expect(s.yazmalar).toContainEqual({ yol: '/kalite-merkezi/ilk-parca/7/karar', govde: { karar: 'onay' } }); });
     expect(await screen.findByText('İlk parça onaylandı: 1 adet')).toBeTruthy();
+    // Karar tekrar korumalıdır: istek kimliğiyle gider.
+    const karar = s.fetch.mock.calls.find(([adres]) => String(adres).endsWith('/ilk-parca/7/karar'));
+    expect(new Headers((karar?.[1] as RequestInit | undefined)?.headers).get('istek-kimligi')).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('ret onay penceresinden sonra gönderilir; Vazgeç göndermez', async () => {

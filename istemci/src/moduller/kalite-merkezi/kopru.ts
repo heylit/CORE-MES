@@ -5,6 +5,7 @@ import type {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
 import type { api } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 
 // Uygulamanın yerel sunucu sözleşmesi (sunucu.py: ping, sync, doc, files, restore) TMI uçlarına çevrilir. Kural sunucudadır;
 // köprü yalnız taşır. Cevap uygulamanın beklediği biçimdedir: { version, changes } ve { col, id, data }.
@@ -191,7 +192,9 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => 
     if (ilk === 'ilk-parca' && ikinci !== undefined && ucuncu === 'karar' && p.length === 4 && g.yontem === 'POST') {
       if (!/^[1-9]\d{0,9}$/.test(ikinci)) return ret(400, 'Üretim emri kimliği geçersiz.');
       const govde = (typeof g.govde === 'string' ? JSON.parse(g.govde) : g.govde) as Partial<KmIlkParcaGovdesi> | null;
-      return tamam(await istemci.post<KmIlkParcaCevabi>(`/kalite-merkezi/ilk-parca/${ikinci}/karar`, { karar: govde?.karar }));
+      const cevap = await tekrarKorumaliGonder((d) => istemci.post<KmIlkParcaCevabi>(`/kalite-merkezi/ilk-parca/${ikinci}/karar`, { karar: govde?.karar },
+        { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }));
+      return tamam(cevap);
     }
     // Kaydın salt okunur geçmişi (326 a): değişiklik geçmişi penceresine eklenen "Önceki sürümler" bölümü.
     if (ilk === 'gecmis' && ikinci !== undefined && ucuncu !== undefined && p.length === 4 && g.yontem === 'GET') {
