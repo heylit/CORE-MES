@@ -11,7 +11,7 @@ import '../motor.css';
 import './atolye.css';
 
 // Planlama atölyesi (eski sayfanın tek stüdyosu, zz32-tek-studyo sTekStudyo): kimlik satırı, üç sekme ve ipucu; Plan sekmesi tezgâh panosudur
-// (zz36). Eski stüdyonun alt başlığı ve akış adımları eski çerçevenindir (208 a); ipucu Plan sekmesinde eskisi gibi gizli.
+// (zz36). Üstte eski sayfanın tek sekmeli başlığı; akış adımları eski çerçevenindir (208 a); ipucu Plan sekmesinde eskisi gibi gizli.
 // Onay ve canlı ile Plan ve gerçekleşen sonraki teslimdedir (P1f). Canlı sürüm sunucunun canlı planından okunur (221 c).
 export type AtolyeSekmesi = 'plan' | 'onay' | 'pg';
 const SEKMELER: [AtolyeSekmesi, SimgeAdi, string][] = [['plan', 'layers', 'Plan'], ['onay', 'check', 'Onay ve canlı'], ['pg', 'chart', 'Plan ve gerçekleşen']];
@@ -29,6 +29,7 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
   const ipucu = IPUCU[sek];
   return (
     <div className="tc-pym tc-pym-tp" data-sek={sek}>
+      <h2 className="tc-pym-tp-baslik"><span><Simge ad="layers" boyut="k" />Planlama stüdyosu</span></h2>
       <div className="tc-pym-tp-bas">
         <div className="tc-pym-tp-kimlik">
           <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label="Planlama motoruna dön" title="Planlama motoruna dön" onClick={() => o.git('plan')}>
@@ -46,17 +47,17 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}
-      {sek === 'plan' ? <PlanSekmesi o={o} c={c} sekSec={setSek} onayda={onayda} canli={canli} /> : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
+      {sek === 'plan' ? <PlanSekmesi o={o} c={c} sekSec={setSek} onayda={onayda} /> : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
     </div>
   );
 }
 
-function PlanSekmesi({ o, c, sekSec, onayda, canli }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number; canli: number | null }) {
+function PlanSekmesi({ o, c, sekSec, onayda }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number }) {
   const p = useMemo(() => planOku(c), [c]);
   if (!c) return <BosCalisma />;
   if (!p) {
     const emirler = o.depo.durum?.emirler ?? null;
     return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} />;
   }
-  return <Pano o={o} c={c} p={p} sekSec={sekSec} onayda={onayda} canli={canli} />;
+  return <Pano o={o} c={c} p={p} sekSec={sekSec} onayda={onayda} />;
 }

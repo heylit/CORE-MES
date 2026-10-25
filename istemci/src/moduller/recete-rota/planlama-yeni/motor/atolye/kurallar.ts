@@ -1,5 +1,5 @@
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
-import { acikSaat, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
 // Planlama atölyesinin saf hesapları (cerceve/planlama/parca/zz36-tezgah-panosu.betik). Motor burada koşmaz (357 b): kayıttaki çözülmüş plan
 // okunur; eski panonun motorla hesapladığı çözüm yolları, öne alma ve bölme burada yoktur.
@@ -53,9 +53,17 @@ export function sipBilgi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, hazir
   return { id: jid, ad, adet: j.adet, oncelik: j.oncelik, ops, bas, ur, C, due, T, pay, durum };
 }
 // En riskli üstte: gecikme büyükten, sonra pay küçükten.
+// Elle sıra (eski tpSira) varsa liste o sıradadır; sırada olmayan sipariş eskisi gibi başa gelir (indexOf -1).
 export function siparisler(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, hazir: Record<string, number>): SiparisBilgisi[] {
-  return Object.keys(cx.jobs).map((id) => sipBilgi(c, p, cx, hazir, id)).filter((x): x is SiparisBilgisi => x !== null)
-    .sort((a, b) => (b.T ?? 0) - (a.T ?? 0) || (a.pay ?? 1e9) - (b.pay ?? 1e9));
+  const L = Object.keys(cx.jobs).map((id) => sipBilgi(c, p, cx, hazir, id)).filter((x): x is SiparisBilgisi => x !== null);
+  const sira = elleSira(c);
+  if (sira.length) return L.sort((a, b) => sira.indexOf(a.id) - sira.indexOf(b.id));
+  return L.sort((a, b) => (b.T ?? 0) - (a.T ?? 0) || (a.pay ?? 1e9) - (b.pay ?? 1e9));
+}
+export function elleSira(c: PlanlamaCalismasi): string[] {
+  const s = c.tpSira; if (!Array.isArray(s)) return [];
+  const kayitli = new Set(c.D.siparisler.map((x) => x.id));
+  return s.filter((j): j is string => typeof j === 'string' && kayitli.has(j));
 }
 export const SIPARIS_GRUPLARI = [['gec', 'Geciken', 'alert'], ['risk', `Riskli · ${RISK_PAYI} sa’ten az pay`, 'clock'], ['iyi', 'Zamanında', 'check']] as const;
 // Malzeme tahmini üretim başlangıcından sonra.
@@ -311,4 +319,52 @@ export function bitisFarklari(once: Record<string, { C: number | null; T: number
     L.push({ j, d, gec: !a && b ? 'gecikmeye düşer' : a && !b ? 'zamanına girer' : '' });
   }
   return L.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+}
+
+// --- canlı planla fark (eski farkSay): canlı senaryonun planına göre tezgâhı ya da 15 dk'dan fazla saati değişen adım sayısı, artı arıza sayısı farkı ---
+export interface CanliFark { var: boolean; say: number; farkli: boolean }
+export function canliFark(c: PlanlamaCalismasi, p: OkunanPlan): CanliFark {
+  const s = c.senaryolar.find((x) => x.id === c.canli);
+  const cp = s && nesne(s.plan) ? s.plan : null;
+  if (!s || !cp || !nesne(cp.ops)) return { var: false, say: 0, farkli: true };
+  const cops = cp.ops;
+  let n = Math.abs(c.down.length - (Array.isArray(s.down) ? s.down.length : 0));
+  for (const [id, b] of Object.entries(p.ops)) {
+    const a = cops[id];
+    if (!nesne(a) || a.m !== b.m || typeof a.S !== 'number' || Math.abs(a.S - b.S) > 0.25) n++;
+  }
+  const z = nesne(c.plan) ? (c.plan as Record<string, unknown>).zaman : undefined;
+  return { var: true, say: n, farkli: cp.zaman !== z };
+}
+
+// --- malzeme ayrıntısı (eski cx.mat.res det): malzemeHazir'ın aynı dağıtımı, malzeme başına hazır olma, eksik miktar ve kaynak (stok ya da satın alma) ---
+export interface MalzemeKaynagi { stok: boolean; miktar: number; gelis: string | null; tedarikci: string | null }
+export interface MalzemeSatiri { kod: string; ihtiyac: number; t: number | null; eksik: number; kaynak: MalzemeKaynagi[] }
+export function malzemeDetay(cx: Derleme): Record<string, MalzemeSatiri[]> {
+  const D = cx.g.D;
+  const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
+  const ted = new Map((Array.isArray(D.tedarikciler) ? D.tedarikciler : []).filter(nesne).map((t) => [String(t.id), t]));
+  const sup: Record<string, { t: number; kalan: number; k: MalzemeKaynagi }[]> = {};
+  for (const m of D.malzemeler ?? []) sup[m.kod] = [{ t: -1e9, kalan: Number(m.stok) || 0, k: { stok: true, miktar: 0, gelis: null, tedarikci: null } }];
+  for (const p of Array.isArray(D.satinalma) ? D.satinalma : []) {
+    if (!nesne(p)) continue;
+    const kod = String(p.kod), soz = saatOku(D, p.gelis), td = ted.get(String(p.tedarikci));
+    const gec = (Number(td?.ortGecikmeGun) || 0) * 24 + (cx.g.saGecik[kod] ?? 0), mu = (Number(mats.get(kod)?.muayeneGun) || 0) * 24;
+    (sup[kod] ??= []).push({ t: soz === null ? 1e9 : Math.max(soz + gec, soz) + mu, kalan: Number(p.miktar) || 0,
+      k: { stok: false, miktar: 0, gelis: typeof p.gelis === 'string' ? p.gelis : null, tedarikci: td && typeof td.ad === 'string' ? td.ad : null } });
+  }
+  for (const l of Object.values(sup)) l.sort((a, b) => a.t - b.t);
+  const sira = Object.values(cx.jobs).sort((a, b) => (a.oncelik - b.oncelik) || ((a.due ?? 1e9) - (b.due ?? 1e9)));
+  const out: Record<string, MalzemeSatiri[]> = {};
+  for (const j of sira) {
+    out[j.id] = j.malzeme.map((r) => {
+      const ihtiyac = (Number(r.miktar) || 0) * j.adet; let kalan = ihtiyac, t = -1e9; const kaynak: MalzemeKaynagi[] = [];
+      for (const x of sup[r.kod] ?? []) {
+        if (kalan <= 1e-9) break; if (x.kalan <= 1e-9) continue;
+        const q = Math.min(x.kalan, kalan); x.kalan -= q; kalan -= q; t = Math.max(t, x.t); kaynak.push({ ...x.k, miktar: q });
+      }
+      return { kod: r.kod, ihtiyac, t: kalan > 1e-9 ? null : Math.max(t, cx.now), eksik: kalan > 1e-9 ? kalan : 0, kaynak };
+    });
+  }
+  return out;
 }

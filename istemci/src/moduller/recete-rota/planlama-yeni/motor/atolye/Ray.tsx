@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import { MOTOR_NOTU } from '../ortak.tsx';
 import {
-  akis, ga, malzemeGec, ONCELIK_KISA, parcaAyir, SIPARIS_GRUPLARI, sure, suzUyar, tz, zs, type SiparisBilgisi,
+  akis, elleSira, ga, malzemeDetay, malzemeGec, ONCELIK_KISA, parcaAyir, SIPARIS_GRUPLARI, sure, suzUyar, tz, zs, type SiparisBilgisi,
 } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
 // Sipariş rayı (cizRay): arama, sütunlar, durum ayraçlı liste; açılan siparişte ayrıntı, akış ve eylemler (cizSipAc, cizSipDetay).
-// Elle sıra sürüklemesi ve çözüm yolları motor ister (357 b).
+// Elle sıra kayıtlıysa liste o sıradadır ve bırakılabilir; sürükleyerek sıra değiştirmek ve çözüm yolları motor ister (357 b).
 export function Ray({ ort }: { ort: Ortam }) {
   const [ara, setAra] = useState('');
-  const { c, suz } = ort;
+  const { c, suz, o } = ort;
+  const elle = elleSira(c).length > 0;
+  const siraBirak = () => { if (ort.yaz) o.komut?.degistir('Sipariş sırası riske göre', (t) => { (t as Record<string, unknown>).tpSira = []; }, { planKoru: true }); };
   const q = ara.toLocaleLowerCase('tr-TR');
   const L = ort.liste.filter((s) => (!q || `${s.id} ${s.ad}`.toLocaleLowerCase('tr-TR').includes(q)) && (!suz || s.ops.some((r) => suzUyar(c.D, suz, r))));
   return (
@@ -18,11 +20,16 @@ export function Ray({ ort }: { ort: Ortam }) {
       <div className="tc-pym-tp-ray-bas">
         <Simge ad="search" boyut="k" />
         <input type="search" placeholder="Sipariş ara" value={ara} aria-label="Sipariş ara" onChange={(e) => setAra(e.target.value)} />
+        {elle && (
+          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-simge-d" aria-label="Elle sırayı bırak" title="Elle sırayı bırak, riske göre sırala" aria-disabled={!ort.yaz} onClick={siraBirak}>
+            <Simge ad="sort" boyut="k" />
+          </button>
+        )}
       </div>
-      <div className="tc-pym-tp-sutun"><span title="En riskli üstte">Sipariş</span><span>Başl.</span><span>Üretim</span><span>Bitiş</span><span>Termin</span></div>
+      <div className="tc-pym-tp-sutun"><span title={elle ? 'Elle sıra' : 'En riskli üstte'}>Sipariş</span><span>Başl.</span><span>Üretim</span><span>Bitiş</span><span>Termin</span></div>
       <div className="tc-pym-tp-liste">
         {!L.length && <p className="tc-pym-tp-not tc-pym-bos"><Simge ad="search" boyut="k" />{` ${suz ? 'Süzgece' : 'Aramaya'} uyan sipariş yok.`}</p>}
-        {q ? L.map((s) => <Satir key={s.id} ort={ort} s={s} />) : SIPARIS_GRUPLARI.map(([d, ad, ik]) => {
+        {q || elle ? L.map((s) => <Satir key={s.id} ort={ort} s={s} />) : SIPARIS_GRUPLARI.map(([d, ad, ik]) => {
           const G = L.filter((x) => x.durum === d); if (!G.length) return null;
           return (
             <div key={d} role="group" aria-label={ad}>
@@ -41,7 +48,7 @@ function Satir({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
   const [no, parca] = parcaAyir(s.id);
   const mg = malzemeGec(s);
   return (
-    <div className="tc-pym-tp-sip" data-durum={s.durum === 'iyi' ? undefined : s.durum} data-acik={ac ? '' : undefined}>
+    <div className="tc-pym-tp-sip" data-durum={s.durum === 'iyi' ? undefined : s.durum} data-acik={ac ? '' : undefined} title={ort.yaz ? `Sürükleyerek sırasını değiştir: ${MOTOR_NOTU}` : undefined}>
       <button type="button" className="tc-pym-tp-sip-tus" aria-expanded={ac} onClick={() => ort.sipSec(s.id)}>
         <div className="tc-pym-tp-sip-ad">
           <b><Simge ad={ac ? 'down' : 'chev-right'} boyut="k" />{no}{parca && <i>{parca}</i>}</b>
@@ -111,12 +118,12 @@ function SipAc({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
 
 // Ayrıntı (cizSipDetay): adet, öncelik, uyarılar, malzeme, kısıtlar; fiyat ve kâr yalnız maliyet okuyana (223 a). Kâr kayıtlı planda yoktur.
 function Detay({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
-  const { c, p, cx, hazir, o } = ort; const D = c.D;
+  const { c, p, cx, o } = ort; const D = c.D;
   const j = cx.jobs[s.id]; const sp = D.siparisler.find((x) => x.id === s.id);
   const maliyet = o.yetki.maliyetOku;
   const tl = (v: number) => `${Math.round(v).toLocaleString('tr-TR')} TL`;
   const uy = p.warn.filter((w) => w.j === s.id);
-  const mr = hazir[s.id];
+  const md = useMemo(() => malzemeDetay(cx)[s.id] ?? [], [cx, s.id]);
   const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
   const kis: string[] = [];
   if (j?.rel != null) kis.push(`serbest bırakma ${tz(D, j.rel)}`);
@@ -138,12 +145,17 @@ function Detay({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
       <div className="tc-pym-tp-detay-ic">
         {uy.map((w, i) => <p key={i} className="tc-pym-tp-not" data-uyari=""><Simge ad="alert" boyut="k" />{` ${w.txt}`}</p>)}
         <h5>Malzeme</h5>
-        {j?.malzeme.length ? j.malzeme.map((m) => {
-          const t = mats.get(m.kod); const eksik = mr == null || !Number.isFinite(mr);
+        {md.length ? md.map((d) => {
+          const t = mats.get(d.kod); const birim = t?.birim ?? '';
+          const kay = d.kaynak.map((u) => (u.stok ? `${Math.round(u.miktar)} ${birim} stoktan`
+            : `${Math.round(u.miktar)} ${birim} satın alma, ${u.gelis ? `${u.gelis.slice(8, 10)}.${u.gelis.slice(5, 7)} ${u.gelis.slice(11)}` : '?'}${u.tedarikci ? ` · ${u.tedarikci}` : ''}`)).join('; ');
           return (
-            <div key={m.kod} className="tc-pym-tp-satir2">
-              <span>{`${t?.ad ?? m.kod} · ${Math.round((Number(m.miktar) || 0) * s.adet)} ${t?.birim ?? ''}`.trim()}</span>
-              <b className={eksik ? 'tc-pym-tp-kotu' : undefined}>{eksik ? 'eksik' : `hazır ${tz(D, mr)}`}</b>
+            <div key={d.kod}>
+              <div className="tc-pym-tp-satir2">
+                <span>{`${t?.ad ?? d.kod} · ${Math.round(d.ihtiyac)} ${birim}`.trim()}</span>
+                {d.eksik > 0 ? <b className="tc-pym-tp-rozet" data-durum="gec">{`eksik ${Math.round(d.eksik)}`}</b> : <b>{`hazır ${tz(D, d.t)}`}</b>}
+              </div>
+              {kay && <p className="tc-pym-tp-not">{kay}</p>}
             </div>
           );
         }) : <p className="tc-pym-tp-not">Malzeme tanımı yok.</p>}
