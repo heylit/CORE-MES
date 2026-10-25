@@ -1601,6 +1601,17 @@ export const malzemeFisiKimlikleri = (db: Db, s: MalzemeFisiSuzgeci, sinir: numb
 };
 export const malzemeFisleriBul = (db: Db, idler: readonly number[]): Promise<MalzemeFisiHam[]> =>
   db.sorgu(`${MALZEME_FISI_SECIMI} WHERE f.id = ANY($1::int[]) ORDER BY f.id`, [[...idler]]);
+// Malzeme fişleri listesi (515 a): fiş ve mal kabul belgesi açılış zamanıyla tek sırada sayfalanır; ayrıntı kimlikle ayrıca okunur.
+export interface ListeFisiAnahtari { kaynak: 'fis' | 'mal_kabul'; id: number }
+const LISTE_FISI_BIRLESIMI = `(SELECT 'fis'::text AS kaynak, f.id, f.acilis FROM stok_malzeme_fisi f
+  UNION ALL SELECT 'mal_kabul'::text, m.id, m.zaman FROM stok_mal_kabul m) b WHERE $1::text IS NULL OR b.kaynak = $1`;
+export const LISTE_FISI_SIRALAMASI: SiralamaTanimi<'acilis'> = { sutunlar: { acilis: 'b.acilis' }, ikincil: 'b.id', varsayilan: { sutun: 'b.acilis', yon: 'azalan' } };
+export const listeFisiSay = async (db: Db, kaynak: ListeFisiAnahtari['kaynak'] | null): Promise<number> =>
+  (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM ${LISTE_FISI_BIRLESIMI}`, [kaynak]))?.toplam ?? 0;
+export const listeFisleri = (db: Db, kaynak: ListeFisiAnahtari['kaynak'] | null, sira: SiralamaIstegi<'acilis'>, d: Dilim): Promise<ListeFisiAnahtari[]> =>
+  db.sorgu(`SELECT b.kaynak, b.id FROM ${LISTE_FISI_BIRLESIMI} ORDER BY ${siralamaSql(LISTE_FISI_SIRALAMASI, sira)}, b.kaynak LIMIT $2 OFFSET $3`, [kaynak, d.sinir, d.atla]);
+export const malKabullerBul = (db: Db, idler: readonly number[]): Promise<MalKabulHam[]> =>
+  db.sorgu(`${MAL_KABUL_SECIMI} FROM stok_mal_kabul m WHERE m.id = ANY($1::int[]) ORDER BY m.id`, [[...idler]]);
 export const emirlerinMalzemeFisleri = (db: Db, emirIdler: readonly number[]): Promise<MalzemeFisiHam[]> =>
   db.sorgu(`${MALZEME_FISI_SECIMI} WHERE f.uretim_emri_id = ANY($1::int[]) ORDER BY f.id`, [[...emirIdler]]);
 // Değişiklik akışı: (zaman, kimlik) sırasıyla verilen noktadan sonra değişen fişler.

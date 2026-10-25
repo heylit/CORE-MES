@@ -1,5 +1,5 @@
 import type {
-  AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketTuru, KonumTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
+  AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketTuru, KonumTuru, ListeFisiTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
   StokDurumuSuzgeci, TeslimDurumu,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
@@ -104,5 +104,8 @@ export const LOGO_FIS_TONU: Record<LogoFisDurumu, RozetTonu> = {
   bekliyor: 'uyari', gonderildi: 'tamam', hata: 'hata', gonderilmez: 'pasif', bilinmiyor: 'pasif',
 };
 export const FIS_GONDERIM_ETIKETI: Record<FisGonderimSekli, string> = { kapali: 'Gönderim kapalı', otomatik: 'Otomatik gönderim', elle: 'Elle gönderim' };
-export const MALZEME_FISI_TURLERI = anahtarlari(MALZEME_FISI_ETIKETI);
+// Listede fiş türlerine mal kabul eklenir (515 a); simgesi menüdeki Mal kabul simgesidir.
+export const LISTE_FISI_ETIKETI: Record<ListeFisiTuru, string> = { ...MALZEME_FISI_ETIKETI, mal_kabul: 'Mal kabul' };
+export const LISTE_FISI_SIMGESI: Record<ListeFisiTuru, SimgeAdi> = { ...MALZEME_FISI_SIMGESI, mal_kabul: 'truck' };
+export const LISTE_FISI_TURLERI = anahtarlari(LISTE_FISI_ETIKETI);
 export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez'] as const satisfies readonly LogoFisDurumu[];
