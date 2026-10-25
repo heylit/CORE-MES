@@ -351,21 +351,18 @@ export const TARAMA_EN_COK = 6;
 const TAM_TARAMA_DK = 10;
 const KOORDINAT_TUR = 5;
 
-// Örtüşme (zz16-ortusme orKart): örtüşmesi açık iş emirleri ve Kapat, denenecek adaylar. Deneme motoru iş emri başına yeniden koşturur; yerinde
-// pasif (486/2 a). Kapat yalnız siparişin örtüşme işaretini kaldırır, motor istemez. Plan yokken kart çizilmez (eski gibi).
-export function OrtusmeKarti({ c, p, komut }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; komut: CalismaKomutu | null }) {
+// Örtüşme (zz16-ortusme orKart): örtüşmesi açık iş emirleri ve Kapat, denenecek adaylar. Deneme motoru iş emri başına yeniden koşturur; Kapat
+// çalışmaya yazar. İkisi de motor bağlanana dek yerinde pasif (486/2 a). Plan yokken kart çizilmez (eski gibi).
+export function OrtusmeKarti({ c, p }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null }) {
   if (!c || !p) return null;
   const acik = ortusmesiAcik(c.D); const l = ortusmeAdaylari(c.D, p);
-  const kapat = (j: string) => {
-    komut?.degistir('Örtüşme kapatıldı', (t) => { const x = t.D.siparisler.find((y) => y.id === j); if (!x) return false; delete (x as Record<string, unknown>).ortus; return true; }, { ayrinti: j });
-  };
   return (
     <Kart baslik="Örtüşme" simge="layers" baslikEki={<span className="tc-pys-kucuk">"örtüşebilir" bağlarda, ek ayar yok</span>}
       sag={<Dugme simge="rotate" disabled>Örtüşmeyi dene</Dugme>}>
       {acik.length > 0 && (
         <p className="tc-pys-kucuk">Örtüşmesi açık: {acik.map((j) => (
           <span key={j}><b className="mono">{j}</b> <button type="button" className="tc-pys-kapat" aria-label={`${j} örtüşmesini kapat`}
-            disabled={!komut} onClick={() => { kapat(j); }}><Simge ad="x" boyut="k" />Kapat</button> </span>
+            disabled><Simge ad="x" boyut="k" />Kapat</button> </span>
         ))}</p>
       )}
       <p className="tc-pys-kucuk">{l.length ? <>Denenecek: {l.map((s, i) => <span key={s.id}>{i ? ', ' : ''}<b className="mono">{s.id}</b></span>)}.</> : 'Örtüşebilir bağı olan geciken iş emri yok.'}</p>
