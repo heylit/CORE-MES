@@ -13,12 +13,13 @@ function sec(x: Nesne, alanlar: readonly string[]): Nesne {
   return y;
 }
 
-const SIPARIS = ['id', 'urun', 'adet', 'termin', 'havuz'] as const;
+const SIPARIS = ['id', 'urun', 'adet', 'termin'] as const;
 const MALZEME = ['kod', 'ad', 'birim', 'stok', 'tedarikGun', 'muayeneGun', 'fire', 'terminKat', 'terminEk', 'tedarikci'] as const;
 const SATIN_ALMA = ['kod', 'miktar', 'gelis', 'tedarikci', 'no', 'verildi', 'ref', 'src', 'tm'] as const;
 const TEDARIKCI = ['id', 'ad', 'ortGecikmeGun'] as const;
 const FASONCU = ['id', 'ad', 'sureGun', 'kapasite', 'terminKat', 'terminEk'] as const;
-const ADIM = ['k', 'ad', 'fason', 'fasonIzin', 'bag'] as const;
+// Adım kodu işlemi adıma, bağ öncülüne bağlar: malzemenin gerektiği ilk adım ve fason dönüşünün gerektiği sonraki adım bunlardan bulunur.
+const ADIM = ['k', 'bag'] as const;
 const ISLEM = ['id', 'job', 'S', 'C', 'done'] as const;
 
 function urun(u: Nesne): Nesne {
@@ -37,7 +38,7 @@ function plan(p: unknown): Nesne | null {
   const ops: Nesne = {};
   if (nesneMi(p['ops'])) for (const [id, r] of Object.entries(p['ops'])) if (nesneMi(r)) ops[id] = islem(r);
   const J: Nesne = {};
-  if (nesneMi(p['J'])) for (const [id, j] of Object.entries(p['J'])) if (nesneMi(j)) J[id] = sec(j, ['C', 'T']);
+  if (nesneMi(p['J'])) for (const [id, j] of Object.entries(p['J'])) if (nesneMi(j)) J[id] = sec(j, ['C']);
   return { dataVer: p['dataVer'], ops, J };
 }
 
@@ -46,7 +47,8 @@ function veri(D: Nesne): Nesne {
   const terminAyar = nesneMi(D['terminAyar']) ? D['terminAyar'] : undefined;
   return {
     meta: { baslangic: meta['baslangic'] },
-    siparisler: nesneler(D['siparisler']).map((s) => ({
+    // Havuzdaki (plana alınmamış) sipariş iki hesapta da sayılmaz; bayrağı gitmesin diye burada düşer.
+    siparisler: nesneler(D['siparisler']).filter((s) => s['havuz'] !== true).map((s) => ({
       ...sec(s, SIPARIS),
       malzeme: nesneler(s['malzeme']).map((r) => sec(r, ['kod', 'miktar'])),
     })),
@@ -68,13 +70,15 @@ function veri(D: Nesne): Nesne {
   };
 }
 
-// Biten iş ve adım (malzeme/kurallar.ts bitenler) Reçete ve Rota kaydının emir durumundan: yalnız kimlik ve durum.
+// Biten iş ve adım (malzeme/kurallar.ts bitenler): bitmiş işin malzemesi ihtiyaç sayılmaz. Reçete ve Rota kaydının emir durumundan yalnız
+// bitmiş (tamam ya da iptal) iş ve tamam adım gider; açık işin durumu gitmez.
 function emirDurumu(kayit: unknown): Nesne {
   const k = nesneMi(kayit) ? kayit : {};
   const durum = nesneMi(k['opStatus']) ? k['opStatus'] : {};
   const opStatus: Nesne = {};
-  for (const [a, d] of Object.entries(durum)) if (typeof d === 'string') opStatus[a] = d;
-  return { orders: nesneler(k['orders']).map((o) => sec(o, ['id', 'status'])), opStatus };
+  for (const [a, d] of Object.entries(durum)) if (d === 'tamam') opStatus[a] = d;
+  const orders = nesneler(k['orders']).filter((o) => o['status'] === 'tamam' || o['status'] === 'iptal').map((o) => sec(o, ['id', 'status']));
+  return { orders, opStatus };
 }
 
 // Fason gecikme olayı fasoncunun süresini uzatır (maliyet/kurallar.ts fasonIsleri); başka olay gitmez.

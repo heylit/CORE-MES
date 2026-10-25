@@ -14,14 +14,14 @@ const fasonCalismasi = {
   surum: 2, dataVer: 1, plan: {
     dataVer: 1,
     ops: { 'S1.10': { id: 'S1.10', job: 'S1', S: 8, C: 10 }, 'S1.20': { id: 'S1.20', job: 'S1', S: 10, C: 58, fas: 1, m: '@F1' } },
-    J: { S1: { C: 58, T: 0 } },
+    J: { S1: { C: 58 } },
   },
   olaylar: [], emirDurumu: { orders: [], opStatus: {} },
   D: {
     meta: { baslangic: '2026-01-05' },
     vardiyalar: [{ id: 'V1', bas: '08:00', bit: '16:00', molalar: [] }],
     calismaGunleri: { pzt: ['V1'], sal: ['V1'], car: ['V1'], per: ['V1'], cum: ['V1'], cmt: [], paz: [] }, tatiller: [],
-    urunler: [{ id: 'U1', rota: [{ k: '10', ad: 'Tornalama' }, { k: '20', ad: 'Kaplama', fason: 'F1', bag: [['10']] }] }],
+    urunler: [{ id: 'U1', rota: [{ k: '10' }, { k: '20', bag: [['10']] }] }],
     siparisler: [{ id: 'S1', urun: 'U1', adet: 2, termin: '2026-01-09 16:00', malzeme: [{ kod: 'M1', miktar: 1.5 }] }],
     malzemeler: [{ kod: 'M1', ad: 'Deneme çubuk', birim: 'kg', stok: 100 }],
     satinalma: [], tedarikciler: [], fasoncular: [{ id: 'F1', ad: 'Deneme kaplama', sureGun: 2, kapasite: 1 }],

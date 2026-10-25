@@ -19,7 +19,7 @@ const tam = {
   },
   D: {
     meta: { ad: 'Deneme calisma', baslangic: '2026-10-19' },
-    siparisler: [{ id: 'E-1', ad: 'Deneme musteri siparisi', musteri: 'Deneme Musteri', urun: 'U1', adet: 5, termin: '2026-10-30 16:00', gelir: 5000, cezaGun: 100, oncelik: 3, malzeme: [{ kod: 'M1', miktar: 2, fiyat: 9 }] }],
+    siparisler: [{ id: 'E-0', urun: 'U1', adet: 1, termin: null, havuz: true }, { id: 'E-1', ad: 'Deneme musteri siparisi', musteri: 'Deneme Musteri', urun: 'U1', adet: 5, termin: '2026-10-30 16:00', gelir: 5000, cezaGun: 100, oncelik: 3, malzeme: [{ kod: 'M1', miktar: 2, fiyat: 9 }] }],
     urunler: [{ id: 'U1', ad: 'Deneme urun adi', rota: [
       { k: '10', ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 3, ayar: 20 }], bag: [] },
       { k: '20', ad: 'Kaplama', fason: 'F1', bag: [['10', 'FS']] },
@@ -36,14 +36,14 @@ const tam = {
     ayarlar: { operatorUcret: 300, mesaiUcret: 400 }, planTL: { wip: {} },
   },
 };
-const kayit = { orders: [{ id: 'E-1', status: 'acik', musteri: 'Deneme Musteri', fiyat: 1 }], opStatus: { 'E-1|root|1': 'tamam' }, items: [{ id: 'U1' }] };
+const kayit = { orders: [{ id: 'E-1', status: 'acik', musteri: 'Deneme Musteri', fiyat: 1 }, { id: 'E-9', status: 'tamam' }], opStatus: { 'E-1|root|1': 'tamam', 'E-1|root|2': 'basladi' }, items: [{ id: 'U1' }] };
 
-test('SA-01: yalnız beyaz listedeki alanlar gider; müşteri, fiyat, tutar, maliyet, tezgâh ve personel gitmez', () => {
+test('SA-01: yalnız beyaz listedeki alanlar gider; müşteri, fiyat, tutar, maliyet, tezgâh, personel, havuz ve açık işin durumu gitmez', () => {
   const g = satinAlmaCalismasi(tam, kayit);
   const metin = JSON.stringify(g);
   for (const yasak of ['Deneme Musteri', 'Deneme musteri siparisi', 'Deneme urun adi', 'Deneme tezgah', 'Deneme kisi', 'Deneme calisma', 'Deneme senaryo',
     'birimFiyat', 'fiyat', 'tutar', 'gelir', 'cezaGun', 'oncelik', '"kar"', '"mc"', 'ucret', 'saatFiyat', 'tasima', 'iban', 'cost', 'ayarlar', 'planTL',
-    'tezgahlar":[{', 'cevrim', '"T1"', 'mesaiHafta', 'locks', 'ekMesai', '"down"', '"iz"', 'bedel', 'kisiler', 'items']) {
+    'tezgahlar":[{', 'cevrim', 'havuz', 'Torna', 'Kaplama', 'fasonIzin', '"fason":', '"T":', 'acik', 'basladi', '"T1"', 'mesaiHafta', 'locks', 'ekMesai', '"down"', '"iz"', 'bedel', 'kisiler', 'items']) {
     assert.ok(!metin.includes(yasak), `${yasak} gitmemeli`);
   }
 });
@@ -51,7 +51,7 @@ test('SA-01: yalnız beyaz listedeki alanlar gider; müşteri, fiyat, tutar, mal
 test('SA-02: iki hesabın okuduğu alanlar olduğu gibi kalır', () => {
   const g = satinAlmaCalismasi(tam, kayit) as { D: Record<string, unknown>; plan: Record<string, unknown>; olaylar: unknown[]; emirDurumu: unknown; simdi: unknown };
   assert.deepEqual(g.D['siparisler'], [{ id: 'E-1', urun: 'U1', adet: 5, termin: '2026-10-30 16:00', malzeme: [{ kod: 'M1', miktar: 2 }] }]);
-  assert.deepEqual(g.D['urunler'], [{ id: 'U1', rota: [{ k: '10', ad: 'Torna', bag: [] }, { k: '20', ad: 'Kaplama', fason: 'F1', bag: [['10', 'FS']] }] }]);
+  assert.deepEqual(g.D['urunler'], [{ id: 'U1', rota: [{ k: '10', bag: [] }, { k: '20', bag: [['10', 'FS']] }] }]);
   assert.deepEqual(g.D['malzemeler'], [{ kod: 'M1', ad: 'Deneme cubuk', birim: 'kg', stok: 3, tedarikGun: 5, muayeneGun: 1, fire: 10, tedarikci: 'TD1' }]);
   assert.deepEqual(g.D['satinalma'], [{ kod: 'M1', miktar: 4, gelis: '2026-10-22 08:00', tedarikci: 'TD1', no: 'SA-0001' }]);
   assert.deepEqual(g.D['fasoncular'], [{ id: 'F1', ad: 'Deneme fasoncu', sureGun: 3, kapasite: 2 }]);
@@ -61,10 +61,10 @@ test('SA-02: iki hesabın okuduğu alanlar olduğu gibi kalır', () => {
   assert.deepEqual(g.plan, {
     dataVer: 4,
     ops: { 'E-1.10': { id: 'E-1.10', job: 'E-1', S: 8, C: 10, done: 0 }, 'E-1.20': { id: 'E-1.20', job: 'E-1', S: 10, C: 40, done: 0, fas: 1, m: '@F1' } },
-    J: { 'E-1': { C: 40, T: 0 } },
+    J: { 'E-1': { C: 40 } },
   });
   assert.deepEqual(g.olaylar, [{ tip: 'fason', f: 'F1', gun: 2 }]);
-  assert.deepEqual(g.emirDurumu, { orders: [{ id: 'E-1', status: 'acik' }], opStatus: { 'E-1|root|1': 'tamam' } });
+  assert.deepEqual(g.emirDurumu, { orders: [{ id: 'E-9', status: 'tamam' }], opStatus: { 'E-1|root|1': 'tamam' } });
   assert.equal(g.simdi, 30);
 });
 
