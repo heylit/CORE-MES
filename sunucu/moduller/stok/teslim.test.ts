@@ -1347,7 +1347,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(await bakiye(h, kabul), '4.000');
   });
 
-  test('STK-T8 kişiye teslim (299 b): imzalı kısa süreli kişi kodu kişinin istasyonuna çözülür; teslimi yalnız o kişi görür ve alır', async () => {
+  test('STK-T8 kişiye teslim (299 b, 537 a): imzalı kısa süreli kişi kodu kişinin istasyonuna çözülür; elden teslim hemen kapanır, alıcı taraf itiraz eder', async () => {
     await kisiEkle('alici', 'operator');
     await kisiEkle('alici_yani', 'operator');
     await kisiEkle('alici_yersiz', 'operator');
@@ -1388,16 +1388,21 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const t = teslimCevabi.parse(g.govde).teslim;
     assert.equal(t.aliciAd, 'Deneme alici');
     assert.equal(t.hedef.istasyonId, a.id);
-    // Soru 133: kişiye teslim istasyona teslimdir; aynı istasyondaki başka kişi de görür ve sayılır. Alıcı alır, stok istasyona geçer.
-    assert.ok((await kutu('alici_yani')).gelenler.some((x) => x.id === t.id));
-    const sayac = async (kim: string) => (await istek<{ gelen: number }>(kim, 'GET', '/stok/teslim-kutusu/sayac')).govde.gelen;
-    assert.equal(await sayac('alici_yani'), 1);
-    assert.equal(await sayac('alici'), 1);
-    const gelen = (await kutu('alici')).gelenler.find((x) => x.id === t.id);
-    assert.equal(gelen?.aliciAd, 'Deneme alici');
-    const al = await istek<TeslimCevabi>('alici', 'POST', `/stok/teslimler/${t.id}/teslim-al`, { surum: t.surum, alinan: '4' });
-    assert.equal(al.durum, 200, JSON.stringify(al.govde));
+    // 537 a: alıcının gösterdiği kod onaydır; teslim gönderimle kapanır, stok istasyona geçer, ikinci "Teslim al" yoktur.
+    assert.deepEqual([t.durum, t.okutarak, t.aciklama], ['teslim', true, 'Elden teslim, alıcı kodu okutuldu']);
+    assert.ok(t.itirazSonu && Date.parse(t.itirazSonu) > Date.now(), 'itiraz süresi açık');
     assert.equal(await bakiye(h, (await istasyonKonumu(a.id))!), '4.000');
+    assert.equal((await istek<Hata>('alici', 'POST', `/stok/teslimler/${t.id}/teslim-al`, { surum: t.surum, alinan: '4' })).durum, 409, 'kapanmış teslim yeniden alınmaz');
+    const sayac = async (kim: string) => (await istek<{ gelen: number }>(kim, 'GET', '/stok/teslim-kutusu/sayac')).govde.gelen;
+    assert.equal(await sayac('alici'), 0);
+    // Alıcı taraf (kişi ve istasyondakiler) itiraz edilebilecekleri görür; gönderen göremez ve itiraz edemez.
+    assert.ok((await kutu('alici')).okutarakAlinanlar?.some((x) => x.id === t.id));
+    assert.ok((await kutu('alici_yani')).okutarakAlinanlar?.some((x) => x.id === t.id));
+    assert.ok(!(await kutu('depo')).okutarakAlinanlar?.some((x) => x.id === t.id));
+    assert.equal((await istek('depo', 'POST', `/stok/teslimler/${t.id}/itiraz`, { surum: t.surum, neden: 'x' })).durum, 403);
+    const it = await istek<TeslimCevabi>('alici', 'POST', `/stok/teslimler/${t.id}/itiraz`, { surum: t.surum, neden: 'Eksik geldi' });
+    assert.equal(it.durum, 200, JSON.stringify(it.govde));
+    assert.equal(teslimCevabi.parse(it.govde).teslim.itiraz?.neden, 'Eksik geldi');
     // Kodsuz teslim eskisi gibi istasyondaki herkese gelir.
     const k2 = teslimCevabi.parse((await gonder('depo', { malzemeId: h, miktar: '1', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } })).govde).teslim;
     assert.equal(k2.aliciAd, null);

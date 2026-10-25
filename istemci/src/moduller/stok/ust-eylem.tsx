@@ -10,7 +10,7 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { teslimAlIstasyonu } from './teslim-yeri.ts';
 import { OkutAlani } from './OkutPaneli.tsx';
-import { okutulanHedef, type OkutulanHedef } from './okut-akisi.ts';
+import { ELDEN_NOTU, okutulanHedef, type OkutulanHedef } from './okut-akisi.ts';
 import { Qr } from './Qr.tsx';
 import { MALZEME_TESLIM_AC, type MalzemeTeslimOdagi } from './disari.ts';
 import { birimliMiktar, istekDurumu, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
@@ -174,7 +174,7 @@ function TeslimAl({ kutu, odak, okunan }: { kutu: TeslimKutusuCevabi; odak: Malz
   return (
     <>
       {giris && okunan?.cevap.tur === 'malzeme' && <PanelMalKabul key={okunan.kod} kod={okunan.kod} />}
-      <KisiKodum />
+      <KisiKodum buradakiIstasyonId={kutu.buradakiIstasyonId} istasyonAdi={kutu.istasyonlar.find((i) => i.id === kutu.buradakiIstasyonId)?.ad ?? null} />
       {kutu.istasyonlar.length > 1 && (
         <Secim etiket="İstasyon" secenekler={kutu.istasyonlar.map((i) => ({ deger: String(i.id), baslik: `${i.ad} (${i.kod})` }))} value={istasyon}
           onChange={(o) => istasyonSec(o.target.value)} />
@@ -192,19 +192,24 @@ function TeslimAl({ kutu, odak, okunan }: { kutu: TeslimKutusuCevabi; odak: Malz
 }
 
 // Kişiye teslim (299 b): teslim edecek kişi bu kodu okutur. Kod sunucuda imzalanır ve kısa sürelidir; ekran süresi dolmadan yenisini alır.
-function KisiKodum() {
+// Kod kişinin bulunduğu istasyona çözülür; istasyonda değilken okutulsa reddedilir, bu yüzden QR yerine yol gösterilir (537 a).
+function KisiKodum({ buradakiIstasyonId, istasyonAdi }: { buradakiIstasyonId: number | null; istasyonAdi: string | null }) {
   const kod = useQuery({
     queryKey: [...KUTU, 'kisi-kodu'],
     queryFn: () => api.get<KisiKoduCevabi>('/stok/teslim-kutusu/kisi-kodu'),
     refetchInterval: 30_000,
     gcTime: 0,
+    enabled: buradakiIstasyonId !== null,
   });
+  if (buradakiIstasyonId === null) {
+    return <p className="tc-stok-not">İstasyonda açık oturumunuz yok; kişi kodunuz yalnız istasyondayken çalışır. Teslim edecek kişi istasyon, raf ya da alan etiketini okutsun.</p>;
+  }
   return (
     <div className="tc-stok-kisi-kodu">
       {kod.isPending ? <DurumKutusu durum="yukleniyor" />
         : kod.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(kod.error)} yenile={() => { void kod.refetch(); }} />
         : <Qr metin={kod.data.kod} boyut={160} />}
-      <p className="tc-stok-not">Teslim edecek kişi bu kodu okutsun; teslim size yazılır. Kod kendiliğinden yenilenir.</p>
+      <p className="tc-stok-not">Teslim edecek kişi bu kodu okutsun; teslim {istasyonAdi ?? 'istasyonunuza'}{istasyonAdi ? ' istasyonuna' : ''} hemen geçer ve adınıza yazılır. Yanlışsa vardiya sonuna kadar Teslim et sekmesinden itiraz edin. Kod kendiliğinden yenilenir.</p>
     </div>
   );
 }
@@ -351,7 +356,7 @@ function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslan
   });
   const araAlanaMi = kutu.araAlanlar.some((a) => yerDegeri({ konumId: a.id }) === hedef);
   const gonder = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g),
-    araAlanaMi ? 'Ara alana bırakıldı; stok oraya taşındı.' : 'Teslim gönderildi; alan taraf onaylayınca stok taşınır.', () => {
+    araAlanaMi ? 'Ara alana bırakıldı; stok oraya taşındı.' : alici ? `${alici.ad ?? 'Alıcıya'} elden teslim edildi; stok istasyonuna geçti.` : 'Teslim gönderildi; alan taraf onaylayınca stok taşınır.', () => {
     setSatir(''); setMiktar(''); setNot(''); setKimlik(yeniKimlik()); setAlici(null);
     setGonderilen((g) => ({ yer: `${kaynak}>${hedef}`, sira: (g?.sira ?? 0) + 1 }));
   });
@@ -418,7 +423,7 @@ function MalzemeTeslimEt({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; baslan
         <Secim etiket="Nereye" bosSecenek="Hedef seçin" secenekler={hedefler} value={hedef} onChange={(o) => hedefSec(o.target.value)} required
           ipucu={secili?.sonraki ? `Rotada sonraki: ${secili.sonraki.ad} (OP ${secili.sonraki.opNo})` : undefined} />
       </div>
-      {alici && hedefGecerli && <p className="tc-stok-bilgi" role="status">Alıcı: {alici.ad ?? 'okutulan kişi'}; istasyonundaki herkes de alabilir.</p>}
+      {alici && hedefGecerli && <p className="tc-stok-bilgi" role="status">{ELDEN_NOTU(alici.ad)}</p>}
       {alici && hedef !== '' && !hedefGecerli && (
         <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{alici.ad ?? 'Okutulan kişi'} buradan teslim edilebilecek bir istasyonda değil; listeden bir hedef seçin.</p>
       )}
