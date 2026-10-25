@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
-import { derle, girdiKur, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi } from './kurallar.ts';
+import { derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
@@ -86,5 +86,11 @@ describe('planlama motoru hesapları', () => {
     const { c } = kur();
     expect(saatYaz(c.D, 8)).toBe('19.10 Pzt 08:00');
     expect(saatYaz(c.D, null)).toBe('—');
+  });
+  it('olay adı süre sapmasını açıkça yazar: ürün, adım, çarpan, sipariş sayısı (494 b)', () => {
+    const c = ornekCalisma(); const u = c.D.siparisler.find((x) => x.id === '2')?.urun;
+    const ad = c.D.urunler.find((x) => x.id === u)?.ad ?? String(u); const n = c.D.siparisler.filter((x) => !x.havuz && x.urun === u).length;
+    expect(olayAdi(c, { tip: 'sure', urun: u, k: '20', oran: 1.5 })).toBe(`${ad}, adım 20: süre ×1,5 (${String(n)} sipariş)`);
+    expect(olayAdi(c, { tip: 'sureOp', id: '2.20', oran: 0.8 })).toBe('2.20: süre ×0,8');
   });
 });

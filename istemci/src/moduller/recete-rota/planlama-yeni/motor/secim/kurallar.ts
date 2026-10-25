@@ -1,6 +1,6 @@
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { adaySureleri } from '../cizelge/kurallar.ts';
-import { saatYaz, saatYazi, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { saatYaz, saatYazi, sayiYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import type { Sahne } from '../harita/kurallar.ts';
 
 // Yan panelin seçimi (zl-yan dkSecimVar, zc-tahta tkSecim): iş adımı, sipariş ya da tezgâh; sahnede yeri olmayan seçim panel açmaz.
@@ -54,18 +54,21 @@ export function mesaiAdaylari(c: PlanlamaCalismasi, cx: Derleme, m: string): Mes
 }
 
 // Siparişin rotası (za-merkez mzRota): adımlar rota sırasıyla; her adımın yapabilen tezgâhları ve süreleri, şu anki tezgâh işaretli.
-export interface RotaCipi { m: string; ad: string; bu: boolean; sure: string }
+export interface RotaCipi { m: string; ad: string; bu: boolean; sure: string; carpan: string | null }
 export interface RotaAdimi { id: string; ad: string; bitti: boolean; simdi: boolean; zaman: string; kilitli: boolean; cipler: RotaCipi[] }
 export function rotaAdimlari(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, j: string, t: number): RotaAdimi[] {
   return (cx.jobs[j]?.ops ?? []).map((o) => {
     const r = p.ops[o.id]; const bitti = !!r && r.C <= t; const simdi = !!r && r.S <= t && r.C > t;
     const sure = new Map(adaySureleri(c, cx, o.id).map((x) => [x.m, x]));
+    // Süre sapması çipte görünür (Soru 494 b); işleme süresi bu oranla çarpılmıştır.
+    const x0 = cx.g.sapma[o.id]; const carpan = x0 != null && Math.abs(x0 - 1) > 1e-3 ? `×${sayiYaz(x0, 2)}` : null;
     return {
       id: o.id, ad: o.ad || o.id.slice(j.length + 1), bitti, simdi, kilitli: !!c.locks[o.id],
       zaman: r ? `${saatYaz(c.D, r.S).slice(6)} → ${saatYaz(c.D, r.C).slice(6)}` : 'planlanmadı',
       cipler: o.c.map((m) => {
         const x = sure.get(m);
-        return { m, ad: tezgahYazi(m), bu: r?.m === m, sure: m.startsWith('@') || !x || x.run == null ? 'fason' : `${saatYazi(x.run)}${x.su ? ` + ayar ${saatYazi(x.su)}` : ''}` };
+        return { m, ad: tezgahYazi(m), bu: r?.m === m, sure: m.startsWith('@') || !x || x.run == null ? 'fason' : `${saatYazi(x.run)}${x.su ? ` + ayar ${saatYazi(x.su)}` : ''}`,
+          carpan: m.startsWith('@') ? null : carpan };
       }),
     };
   });

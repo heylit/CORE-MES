@@ -124,6 +124,8 @@
 }
 .tc-pym-mz-adim li[data-bu] { border-color: var(--ink); background: var(--ink); color: var(--panel-solid); }
 .tc-pym-mz-adim li[data-bu] small { color: inherit; opacity: .8; }
+.tc-pym-mz-carpan { color: var(--hold); font-weight: 600; }
+.tc-pym-mz-adim li[data-bu] .tc-pym-mz-carpan { color: inherit; }
 .tc-pym-mz-adim li button {
   min-height: calc(var(--b-5) - var(--pay-ince)); padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left;
   text-decoration: underline; text-underline-offset: var(--pay-ince); cursor: pointer;
