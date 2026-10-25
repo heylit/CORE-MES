@@ -22,6 +22,15 @@ function olcu(el: HTMLElement, { kap, icerik, kaydirma }: { kap: number; icerik:
 }
 const kenarlar = (el: HTMLElement) => ({ sol: el.hasAttribute('data-sol'), sag: el.hasAttribute('data-sag') });
 
+describe('Sekmeler sayı rozeti', () => {
+  it('sayısı sıfırdan büyük sekmede rozet çizilir, ad sayıyı taşır; sayısız ve sıfırda rozet yok', () => {
+    render(<Sekmeler etiket="Sayılı" sekmeler={[{ anahtar: 'a', baslik: 'Gelen', sayi: 3 }, { anahtar: 'b', baslik: 'Boş', sayi: 0 }, { anahtar: 'c', baslik: 'Düz' }]} secili="a" sec={() => undefined} />);
+    expect(screen.getByRole('tab', { name: 'Gelen (3)' }).querySelector('.tc-sekme-sayi')?.textContent).toBe('3');
+    expect(screen.getByRole('tab', { name: 'Boş' }).querySelector('.tc-sekme-sayi')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Düz' }).querySelector('.tc-sekme-sayi')).toBeNull();
+  });
+});
+
 describe('Sekmeler kaydırma işareti', () => {
   it('taşmayan şeritte işaret yok; gizli sekme olan kenar işaretlenir', () => {
     const serit = ciz();

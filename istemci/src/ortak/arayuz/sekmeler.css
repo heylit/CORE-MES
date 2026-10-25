@@ -24,3 +24,7 @@
   background: linear-gradient(to left, var(--bg) 45%, transparent);
 }
 .tc-sekmeler[data-sol] .tc-sekmeler-ok-sol, .tc-sekmeler[data-sag] .tc-sekmeler-ok-sag { visibility: visible; }
+.tc-sekme-sayi {
+  min-width: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-tam); background: var(--stop); color: var(--parlak);
+  font-size: var(--yazi-xs); line-height: var(--b-5); text-align: center;
+}

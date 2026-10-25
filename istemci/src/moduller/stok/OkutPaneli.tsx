@@ -41,7 +41,7 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
     <>
       <div className="tc-stok-okut-ust">
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
-        {durum.adim !== 'onay' && <KodOkuyucu okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
+        {durum.adim !== 'onay' && <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {sonucKarti}

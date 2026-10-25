@@ -8,6 +8,8 @@ export interface Sekme<A extends string> {
   anahtar: A;
   baslik: string;
   simge?: SimgeAdi;
+  // Bekleyen iş sayısı: sıfırdan büyükse rozet çizilir; ekran okuyucu adı "(n)" olarak duyar.
+  sayi?: number;
 }
 
 interface Ozellikler<A extends string> {
@@ -55,6 +57,12 @@ export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Oz
         >
           {s.simge && <Simge ad={s.simge} boyut="k" />}
           {s.baslik}
+          {s.sayi !== undefined && s.sayi > 0 && (
+            <>
+              <span className="tc-sekme-sayi" aria-hidden="true">{s.sayi > 99 ? '99+' : s.sayi}</span>
+              <span className="tc-gizli-etiket"> ({s.sayi})</span>
+            </>
+          )}
         </button>
       ))}
       <span className="tc-sekmeler-ok tc-sekmeler-ok-sag" aria-hidden="true" {...okOlaylari(1)}><Simge ad="chev-right" boyut="k" /></span>
