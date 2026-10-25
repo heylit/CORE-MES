@@ -291,7 +291,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
 }
 
 // urunler şemanın rota listesidir; ilki kök üründür.
-export function AkisTablosu({ r, urunler, miktar }: { r: RotaEkrani; urunler: readonly string[]; miktar: number }) {
+export function AkisTablosu({ r, urunler, miktar, cop }: { r: RotaEkrani; urunler: readonly string[]; miktar: number; cop: ReactNode }) {
   const dz = r.duzen;
   const kok = urunler[0];
   if (kok === undefined) return null;
@@ -299,6 +299,7 @@ export function AkisTablosu({ r, urunler, miktar }: { r: RotaEkrani; urunler: re
   const sira = rotaSirasi(agac, (id) => dz.h.malzeme.get(id), (id) => dz.adimlar(id).length > 0 || dz.revler(id).some((x) => x.status === 'taslak' || x.status === 'onay'));
   return (
     <div className="tc-rr1-rtab-wrap">
+      {cop}
       {sira.map((s, i) => {
         const sonraki = i < sira.length - 1;
         return [

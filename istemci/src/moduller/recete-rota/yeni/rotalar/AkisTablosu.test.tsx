@@ -34,6 +34,7 @@ describe('R1 akış tablosu: izinli', () => {
     expect(within(tablo).getByText('HM-0012')).toBeTruthy();
     expect(within(tablo).getByText('ürün, stoğa girer')).toBeTruthy();
     expect(within(tablo).getByRole('button', { name: 'OP 10 Tornalama' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Adımı silmek için buraya sürükle' })).toBeTruthy();
     expect(rotaYazmalari(istekler)).toEqual([]);
 
     const hazirlik = within(tablo).getByLabelText('Hazırlık dk');
@@ -54,6 +55,7 @@ describe('R1 akış tablosu: reddedilen', () => {
     expect((within(tablo).getByLabelText('Operasyon') as HTMLSelectElement).disabled).toBe(true);
     expect(within(tablo).queryByRole('button', { name: /Giren$/ })).toBeNull();
     expect(within(tablo).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Adımı silmek için buraya sürükle' })).toBeNull();
     expect(rotaYazmalari(istekler)).toEqual([]);
   });
 });
