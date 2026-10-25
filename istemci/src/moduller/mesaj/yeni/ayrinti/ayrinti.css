@@ -1,0 +1,31 @@
+.tc-mi-sayfa { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-mi-sayfa-ust { display: flex; align-items: flex-start; gap: var(--b-3); }
+.tc-mi-sayfa-baslik { margin: 0; font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.tc-mi-sayfa-baslik-girdi {
+  width: 100%; padding: var(--b-1); border: 1px solid transparent; border-radius: var(--yari-1); background: none; color: var(--ink);
+  font: inherit; font-size: var(--yazi-l); font-weight: 700; resize: none;
+}
+.tc-mi-sayfa-baslik-girdi:hover:not(:disabled), .tc-mi-sayfa-baslik-girdi:focus { border-color: var(--edge2); }
+.tc-mi-sayfa-alt { font-size: var(--yazi-s); color: var(--muted); }
+.tc-mi-ozellikler { display: grid; gap: var(--b-2); margin: 0; }
+.tc-mi-ozellik { display: grid; grid-template-columns: calc(var(--b-6) * 4) minmax(0, 1fr); align-items: center; gap: var(--b-3); }
+.tc-mi-ozellik dt { display: flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-mi-ozellik dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.tc-mi-ozellik .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-mi-sayfa-bolum { display: grid; gap: var(--b-2); }
+.tc-mi-sayfa-bolum-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-mi-sayfa-bolum-ust h3 { margin: 0; font-size: var(--yazi-s); }
+.tc-mi-bolum-eylem { display: inline-flex; gap: var(--b-3); font-weight: 400; }
+.tc-mi-bolum-eylem .tc-mi-baglanti { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-mi-kaynak {
+  display: inline-flex; justify-self: start; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); background: none; color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-mi-notlar { display: grid; gap: var(--b-3); }
+.tc-mi-not-satiri { display: flex; align-items: flex-start; gap: var(--b-2); }
+.tc-mi-not-yaz { display: flex; flex: 1 1 auto; align-items: flex-end; gap: var(--b-2); min-width: 0; }
+.tc-mi-not-yaz textarea { flex: 1 1 auto; min-width: 0; resize: vertical; }
+
+@media (max-width: 767px) {
+  .tc-mi-ozellik { grid-template-columns: minmax(0, 1fr); gap: var(--b-1); }
+}

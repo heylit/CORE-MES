@@ -1,0 +1,53 @@
+/* M3 Bugün: yalnız tasarım değişkenleri. Şerit kendi içinde yatay kayar; sayfa kaymaz. */
+.tc-mb-bugun { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
+.tc-mb-selam {
+  display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-4);
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3);
+}
+.tc-mb-selam-baslik { font-size: var(--yazi-xl); font-weight: 800; overflow-wrap: anywhere; }
+.tc-mb-selam-ozet { color: var(--muted); }
+.tc-mb-serit { overflow-x: auto; overscroll-behavior-x: contain; min-width: 0; margin-top: var(--b-2); }
+.tc-mb-serit-cizim { display: block; }
+.tc-mb-saat line { stroke: var(--edge); stroke-width: var(--cizgi-ince); }
+.tc-mb-saat text { fill: var(--faint); font-size: var(--yazi-xs); font-family: var(--font-mono); }
+.tc-mb-saat-uc line { stroke: var(--edge2); }
+.tc-mb-blok { cursor: pointer; }
+.tc-mb-blok rect { fill: color-mix(in srgb, var(--done) 18%, transparent); stroke: var(--done); stroke-width: var(--cizgi-ince); }
+.tc-mb-blok text { fill: var(--ink); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-mb-blok-gecti { opacity: var(--saydam-55); }
+.tc-mb-blok:focus-visible rect, .tc-mb-igne-oge:focus-visible circle { stroke: var(--hazard); stroke-width: var(--cizgi-kalin); }
+.tc-mb-igne-oge { cursor: pointer; }
+.tc-mb-igne-oge circle { --c: var(--run); fill: color-mix(in srgb, var(--c) 18%, var(--panel-solid)); stroke: var(--c); stroke-width: var(--cizgi-ince); }
+.tc-mb-igne-oge path { fill: none; stroke: var(--ink); stroke-width: var(--cizgi); stroke-linecap: round; stroke-linejoin: round; }
+.tc-mb-igne-siparis circle { --c: var(--hold); }
+.tc-mb-igne-zamanli circle { --c: var(--grafik-2); }
+.tc-mb-simdi line { stroke: var(--stop); stroke-width: var(--cizgi); }
+.tc-mb-simdi text { fill: var(--stop); font-size: var(--yazi-xs); font-weight: 800; font-family: var(--font-mono); }
+.tc-mb-serit-bos { fill: var(--muted); font-size: var(--yazi-s); text-anchor: middle; }
+.tc-mb-siradaki {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-3);
+  padding: var(--b-3) var(--b-4); border-radius: var(--yari-2);
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge);
+}
+.tc-mb-siradaki-yakin { border-color: var(--hold); }
+.tc-mb-siradaki-govde { display: grid; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-mb-siradaki-ne { color: var(--hold); font-size: var(--yazi-xs); font-weight: 800; text-transform: uppercase; letter-spacing: var(--harf-aralik-06); }
+.tc-mb-siradaki-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; }
+.tc-mb-bolum { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-mb-siparisler { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(var(--acilir-enaz), 1fr)); }
+.tc-mb-bahis {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--b-3);
+  width: 100%; min-height: var(--dokunma); padding: var(--b-3); text-align: left; cursor: pointer;
+  background: var(--panel2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+}
+.tc-mb-bahis:hover { border-color: var(--edge2); }
+.tc-mb-bahis-isaret {
+  display: inline-grid; place-items: center; width: var(--dokunma); height: var(--dokunma); border-radius: var(--yari-1);
+  color: var(--stop); background: color-mix(in srgb, var(--stop) 14%, transparent); font-weight: 800;
+}
+.tc-mb-bahis-govde { display: grid; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-mb-bahis-govde span { color: var(--muted); font-size: var(--yazi-s); }
+@media (max-width: 767px) {
+  .tc-mb-siradaki { grid-template-columns: auto minmax(0, 1fr); }
+  .tc-mb-siradaki-eylem { grid-column: 1 / -1; justify-content: flex-start; }
+}
