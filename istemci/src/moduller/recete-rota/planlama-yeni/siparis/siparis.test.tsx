@@ -114,6 +114,9 @@ describe('P2 Siparişler', () => {
     await parca('ysiparis');
     tumAc();
     expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(3);
+    for (const ad of ['Partiyi böl', 'Parti taraması', 'Siparişler: maliyet ve kâr']) {
+      expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
+    }
     expect(dugme('Böl').disabled).toBe(true);
     expect(dugme('Tara').disabled).toBe(true);
     expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
@@ -149,7 +152,9 @@ describe('P2 Terminler', () => {
     expect(screen.getAllByText('Malzeme').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('.tc-pys-h[data-kapali]').length).toBeGreaterThan(0);
     tumAc();
-    expect(screen.getByRole('heading', { name: 'Malzeme: termin bekleyenler' })).toBeTruthy();
+    for (const ad of ['Varsayılan termin', 'Malzeme ve fasoncu başına katsayı', 'Malzeme: termin bekleyenler', 'Fason dönüş terminleri']) {
+      expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
+    }
     expect(screen.getByText('Satın alma listesi plan motoruyla gelir.')).toBeTruthy();
   }, 20000);
 

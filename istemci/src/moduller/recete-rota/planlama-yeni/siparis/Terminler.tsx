@@ -35,7 +35,7 @@ function AyarKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu | n
     }, { ayrinti: `${k}: ${A[k]} → ${x}` });
   };
   return (
-    <Kart baslik="Varsayılan termin">
+    <Kart baslik="Varsayılan termin" simge="gear">
       <div className="tc-pys-alanlar">
         {(Object.keys(AYAR_SINIRI) as (keyof TerminAyari)[]).map((k) => (
           <label key={k} className="tc-pys-alan">
@@ -100,7 +100,7 @@ function KatsayiKarti({ D, komut, uyar }: { D: PlanVerisi; komut: CalismaKomutu 
       <><b className="mono">{sayi((+(r.x.sureGun ?? 0) || 1) * katsayi(r.x, 'terminKat', A.katFas), 1)} gün</b><small className="tc-pys-not">{r.x.terminKat != null ? 'firmanın kendi' : 'genel'}</small></>) },
   ];
   return (
-    <Kart baslik="Malzeme ve fasoncu başına katsayı">
+    <Kart baslik="Malzeme ve fasoncu başına katsayı" simge="list">
       <p className="tc-pys-kucuk">Varsayılan termin malzemeye ve fason firmasına göre değişir. Boş bırakılan alan genel katsayıyı kullanır (gri yazılan değer).</p>
       <Tablo etiket="Malzeme katsayıları" sutunlar={malSut} satirlar={mal} satirAnahtari={(r) => (r.tur === 'mal' ? r.x.kod : r.x.id)} bosMesaj="Tedarik süresi girilmiş malzeme yok." />
       <Tablo etiket="Fasoncu katsayıları" sutunlar={fasSut} satirlar={fas} satirAnahtari={(r) => (r.tur === 'mal' ? r.x.kod : r.x.id)} bosMesaj="Fasoncu yok." />
@@ -135,7 +135,7 @@ export function FasonTerminKarti({ c, L, komut, sadeceBos }: { c: PlanlamaCalism
     { anahtar: 'planda', baslik: 'Planda dönüş', kirilmaz: true, hucre: (x) => <>{tarih(D, x.r.C)}<small className="tc-pys-not">{x.T == null ? 'referans terminden' : 'terminden'}</small></> },
   ];
   return (
-    <Kart baslik="Fason dönüş terminleri">
+    <Kart baslik="Fason dönüş terminleri" simge="truck">
       <Tablo etiket="Fason dönüş terminleri" sutunlar={sut} satirlar={l} satirAnahtari={(x) => x.id} bosMesaj={sadeceBos ? 'Termini beklenen fason yok.' : 'Planda fason yok.'} />
       <p className="tc-pys-kucuk">
         Gerekli dönüş: işin sonraki adımının planlanan başlangıcı (son adımsa sipariş termini). En geç: siparişin terminini kaçırmadan dönebileceği son gün.
@@ -165,7 +165,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
             <FasonTerminKarti c={calisma} L={L} komut={komut} sadeceBos />
           </>
         )
-        : <Kart baslik="Terminler"><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>}
+        : <Kart baslik="Terminler" simge="flag"><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>}
     </TumSatirlar>
   );
 

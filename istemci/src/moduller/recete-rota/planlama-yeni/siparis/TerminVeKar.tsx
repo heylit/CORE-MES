@@ -32,7 +32,7 @@ function DengeCubugu({ c, komut, yazabilir }: { c: PlanlamaCalismasi; komut: Cal
     komut.degistir('Plan dengesi değişti', (t) => { (t.D as Record<string, unknown>).planDenge = d; }, { ayrinti: `${dengeAdi(d0)} ${dengeKatYazi(d0)} → ${dengeAdi(d)} ${dengeKatYazi(d)}` });
   };
   return (
-    <Kart baslik="Plan dengesi">
+    <Kart baslik="Plan dengesi" simge="gauge">
       <div className="tc-pys-cubuk">
         <div className="tc-pys-cubuk-uc"><span><Simge ad="clock" boyut="k" />Termin önce</span><span>Kâr önce<Simge ad="lira" boyut="k" /></span></div>
         <input

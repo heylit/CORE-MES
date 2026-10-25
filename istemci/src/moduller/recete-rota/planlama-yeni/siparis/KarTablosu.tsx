@@ -35,8 +35,8 @@ export function KarTablosu({ c, p, fg, komut, degerlendir }: {
 }) {
   const d = useDegerlendirme<'siparis-kari'>(fg && c && p ? { tur: 'siparis-kari' } : null, degerlendir);
   const { bildir } = useBildirim();
-  if (!fg) return <Kart baslik={BASLIK}><p className="tc-pys-kucuk"><Simge ad="lock" boyut="k" /> Fiyat, maliyet ve kâr bilgisini müdür ve yönetici görür ve girer (karar 180, öneri a).</p></Kart>;
-  if (!c || !p) return <Kart baslik={BASLIK}><p className="tc-pys-kucuk">Maliyet plandan çıkar (tezgâh, ayar, fason). Önce plan kurulmalı.</p></Kart>;
+  if (!fg) return <Kart baslik={BASLIK} simge="lock"><p className="tc-pys-kucuk"><Simge ad="lock" boyut="k" /> Fiyat, maliyet ve kâr bilgisini müdür ve yönetici görür ve girer (karar 180, öneri a).</p></Kart>;
+  if (!c || !p) return <Kart baslik={BASLIK} simge="list"><p className="tc-pys-kucuk">Maliyet plandan çıkar (tezgâh, ayar, fason). Önce plan kurulmalı.</p></Kart>;
   const D = c.D;
   const M = d.tur === 'sonuc' ? d.cevap.sonuc : null;
   const satirlar: Satir[] = D.siparisler.filter((s) => !s.havuz).map((s) => ({ s, m: M?.satirlar.find((x) => x.siparisId === s.id) ?? null, planda: Boolean(p.J[s.id]) }));
@@ -122,7 +122,7 @@ export function KarTablosu({ c, p, fg, komut, degerlendir }: {
   ];
 
   return (
-    <Kart baslik={BASLIK} baslikEki={<span className="tc-pys-kucuk">plandan</span>}>
+    <Kart baslik={BASLIK} simge="list" baslikEki={<span className="tc-pys-kucuk">plandan</span>}>
       <Gostergeler l={[
         { simge: 'lira', ad: 'Toplam tutar', deger: tl(tutar), not: `${String(satirlar.filter((r) => r.s.gelir != null).length)} fiyatlı sipariş` },
         { simge: 'layers', ad: 'Toplam maliyet', deger: tl(maliyet), not: 'malzeme, işleme, ayar, genel gider, fason, ek mesai' },
