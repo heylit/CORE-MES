@@ -110,6 +110,14 @@ test.describe('P1c Çizelge', () => {
     await tasmaz(page);
     await arac.getByRole('button', { name: 'Gün', exact: true }).click();
     await expect(page.getByRole('region', { name: /^Gün katmanı: / })).toBeVisible();
+    // İş bloğu ipucu (492/4 a): o gün iş varsa odakla açılır, neden ve durum yazar.
+    const blok = page.locator('.tc-pym-gy-blok').first();
+    if (await blok.count()) {
+      await blok.focus();
+      await expect(page.getByRole('tooltip')).toContainText('Neden burada:');
+      await blok.blur();
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+    }
     await tasmaz(page);
     await arac.getByRole('button', { name: 'Ay', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Çizelge, ay' })).toBeVisible();

@@ -83,6 +83,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
     oz: { suH: w.suH, suN: ops.filter((o) => o.su > 0 && o.S >= r.a && o.S < r.b).length, famN: null, Cmax: p.ozet.Cmax },
   };
 }
+export const ACIK_TEZGAH_YOK = 'Bu dönemde açık tezgâh yok.';
 const AY = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 function acik(W: [number, number][], a: number, b: number) { let s = 0; for (const [x, y] of W) s += Math.max(0, Math.min(b, y) - Math.max(a, x)); return s; }
 
@@ -197,7 +198,8 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
   const gt = gunOrtalamasi(v).map((x) => x ?? -1); const dmax = gt.indexOf(Math.max(...gt));
   if (v.yuk.length) {
     const o = (gt[dmax] ?? 0) * 100;
-    l.push({ simge: 'grid', ton: 'bilgi', m: ['En yoğun gün ', { b: v.gunAd[dmax] ?? '' }, ` (${saatYaz(D, sutunAni(v, dmax)).slice(0, 5)}): tezgâhların ortalama `, { b: `%${Math.round(o)}` }, `${sayiEki(o, 'i')} dolu.`] });
+    // Dönemde açık tezgâh saati yoksa en büyük değer -1 çıkar; yüzde yerine durum yazılır (Soru 489/1 c).
+    l.push({ simge: 'grid', ton: 'bilgi', m: dmax < 0 || (gt[dmax] ?? -1) < 0 ? [ACIK_TEZGAH_YOK] : ['En yoğun gün ', { b: v.gunAd[dmax] ?? '' }, ` (${saatYaz(D, sutunAni(v, dmax)).slice(0, 5)}): tezgâhların ortalama `, { b: `%${Math.round(o)}` }, `${sayiEki(o, 'i')} dolu.`] });
   }
   const gu: Record<string, number[]> = {}; for (const [m, x] of v.u) (gu[tezGrup(m)] ??= []).push(x);
   const gl = Object.entries(gu).map(([g, a]): [string, number] => [g, a.reduce((x, y) => x + y, 0) / a.length]).sort((a, b) => a[1] - b[1]);
@@ -230,7 +232,8 @@ export function cevap(c: PlanlamaCalismasi, v: OzetVerisi, id: BolgeKimligi, yor
     }
     case 'yuk': {
       const gt = gunOrtalamasi(v).map((x) => x ?? -1); const d = gt.indexOf(Math.max(...gt)); const enT = [...v.u].sort((a, b) => b[1] - a[1])[0];
-      return ['En yoğun gün ', { b: `${v.gunAd[d] ?? ''} ${saatYaz(D, sutunAni(v, d)).slice(0, 5)}` }, ` (ortalama %${Math.round((gt[d] ?? 0) * 100)}). Plan boyunca en dolu tezgâh `, { b: enT ? enT[0] : '—' }, `${enT ? ` (%${Math.round(enT[1] * 100)})` : ''}.`];
+      const ilk: Metin = d < 0 || (gt[d] ?? -1) < 0 ? [`${ACIK_TEZGAH_YOK} `] : ['En yoğun gün ', { b: `${v.gunAd[d] ?? ''} ${saatYaz(D, sutunAni(v, d)).slice(0, 5)}` }, ` (ortalama %${Math.round((gt[d] ?? 0) * 100)}). `];
+      return [...ilk, 'Plan boyunca en dolu tezgâh ', { b: enT ? enT[0] : '—' }, `${enT ? ` (%${Math.round(enT[1] * 100)})` : ''}.`];
     }
     case 'sure': return yor.find((x) => x.simge === 'clock')?.m ?? [];
     case 'yaris': {

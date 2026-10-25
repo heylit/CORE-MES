@@ -518,3 +518,7 @@ button.tc-pym-m-ad:hover b { text-decoration: underline; }
   color: var(--ink); font-size: var(--yazi-xs); white-space: pre-line; pointer-events: none; transform: translate(-50%, calc(-100% - var(--b-2)));
 }
 .tc-pym-ipucu[data-alt] { transform: translate(-50%, var(--b-2)); }
+.tc-pym-ip-is { display: grid; gap: var(--b-1); white-space: normal; }
+.tc-pym-ip-is [data-ton='hata'] { color: var(--stop); }
+.tc-pym-ip-is [data-ton='uyari'] { color: var(--hazard); }
+.tc-pym-ip-is [data-ton='tamam'] { color: var(--run); }
