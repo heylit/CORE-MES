@@ -98,7 +98,10 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.deepEqual(s.secenekler.map((x) => x.denge), [0, 25, 50, 100]);
     assert.equal(s.secenekler[0]?.carpan, 100);
     assert.ok(Math.abs((s.secenekler[3]?.carpan ?? 0) - 0.1) < 1e-9);
-    for (const x of s.secenekler) { assert.equal(x.isSayisi, 2); assert.equal(x.plan['dataVer'], 1); assert.ok(x.plan['ops'] && x.plan['J']); }
+    // Seçeneğin planı birleşmiş çalışmanın veri sürümündedir (planlama çalışması ucunun verdiği; kayıt ve kaynak veriyi değiştirince artar).
+    const dataVer = planGirdisi({ calisma: planli(), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' })?.S['dataVer'];
+    assert.equal(typeof dataVer, 'number');
+    for (const x of s.secenekler) { assert.equal(x.isSayisi, 2); assert.equal(x.plan['dataVer'], dataVer); assert.ok(x.plan['ops'] && x.plan['J']); }
   });
 
   test('PD-04: termin seçenekleri en erkenden başlar, sıralıdır; girilen termin ayrı satırdır', async () => {
