@@ -118,8 +118,9 @@
   .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
   .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
 }
-/* Çerçeveli modül: içerik alanını çerçeve doldurur, kaydırmayı o yapar. */
-.tc-kabuk-icerik[data-cerceveli] { padding: 0; overflow: hidden; }
+/* Çerçeveli modül: içerik alanını çerçeve doldurur, kaydırmayı o yapar. Taşma gizlenmez: aynı kökte açılan doğal (TS) ekranın
+   kendi kaydırması yoksa içerik alanı kaydırır; tam yükseklikteki çerçeve taşmadığından ikinci kaydırma çubuğu çıkmaz. */
+.tc-kabuk-icerik[data-cerceveli] { padding: 0; overflow: auto; }
 
 /* 1280'in altında sayfa başlığına yer kalmıyordu (ad "Fi..." diye kesiliyordu): Yardım ve Hesap menüsü maddesi olan modül
    düğmeleri de Hesap menüsünden açılır. Sarmalayıcı kutu çizmez; penceresi gövdeye açıldığından gizliyken de görünür. */
