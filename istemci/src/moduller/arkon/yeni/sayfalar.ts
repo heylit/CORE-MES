@@ -6,6 +6,7 @@ import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 // Yeni Arkon ekranının sayfaları. Anahtar adres parçasıdır (/arkon/yeni/<anahtar>) ve eski Arkon'un adres işaretiyle aynıdır
 // (operatör ekranınınki boştu, burada `operator`). Başlık, simge ve TMI işlemi ikinci menüden (paylasilan/sayfalar/arkon.ts) okunur;
 // menüde olmayan sayfalar (Operatör, Kuyruk, Önizleme) kendi tanımını taşır. Her sayfanın ekranı bir parçanın klasöründedir.
+// Operatör (Üretim Terminali) ve Kuyruk eskisi gibi ayrı sayfadır (soru 497/5 a): Arkon sekmelerinde yoktur, sekme şeridi çizilmez.
 
 export const KOK = '/arkon/yeni';
 
@@ -37,14 +38,16 @@ export interface SayfaTanimi {
   baslik?: string;
   simge?: SimgeAdi;
   islem?: string;
+  // TMI'de kendi ana menü satırı olan ayrı sayfa: sekme şeridi yoktur, görünürlük TMI işlemi ve Arkon sayfa yetkisiyle.
+  ayri?: true;
 }
 
 export const SAYFALAR = {
-  operator: { ekran: parca(operator, 'Operator'), baslik: 'Operatör', simge: 'gauge', islem: 'sayfa.uretim-terminali' },
+  operator: { ekran: parca(operator, 'Operator'), baslik: 'Üretim Terminali', simge: 'gauge', islem: 'sayfa.uretim-terminali', ayri: true },
   onizle: { ekran: parca(operator, 'Onizleme'), ust: 'hazirlik' },
   pano: { ekran: parca(pano, 'Pano') },
   planlama: { ekran: parca(pano, 'PlanKuyrugu') },
-  kuyruk: { ekran: parca(pano, 'Kuyruk'), baslik: 'Kuyruk', simge: 'layers', islem: 'sayfa.kuyruk' },
+  kuyruk: { ekran: parca(pano, 'Kuyruk'), baslik: 'Kuyruk', simge: 'layers', islem: 'sayfa.kuyruk', ayri: true },
   hazirlik: { ekran: parca(hazirlik, 'Hazirlik') },
   anomali: { ekran: parca(pano, 'Anomali') },
   kalite: { ekran: parca(kalite, 'Kalite') },
@@ -60,18 +63,11 @@ export const SAYFA_DISI: Readonly<Record<string, string>> = { 'tmi-yansimalari':
 
 export interface SekmeMaddesi { anahtar: string; baslik: string; simge: SimgeAdi; islem: string; veya?: readonly string[] }
 
-// Sekme sırası: önce Operatör, sonra ikinci menünün sırası, Kuyruk Plan Kuyruğu'nun yanında.
+// Sekmeler ikinci menünün sırasıyladır.
 export function sekmeMaddeleri(): SekmeMaddesi[] {
   const menu = IKINCI_MENULER.find((m) => m.kok === '/arkon');
-  const maddeler: SekmeMaddesi[] = (menu?.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler) ?? [])
+  return (menu?.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler) ?? [])
     .map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, ...(m.veya ? { veya: m.veya } : {}) }));
-  const ek = (a: 'operator' | 'kuyruk'): SekmeMaddesi => {
-    const t = SAYFALAR[a];
-    return { anahtar: a, baslik: t.baslik, simge: t.simge, islem: t.islem };
-  };
-  const sira = maddeler.findIndex((m) => m.anahtar === 'planlama');
-  maddeler.splice(sira < 0 ? maddeler.length : sira + 1, 0, ek('kuyruk'));
-  return [ek('operator'), ...maddeler];
 }
 
 export const sayfaAdresi = (sayfa: string, kimlik?: string | null): string =>

@@ -42,6 +42,27 @@ describe('A4 sayfaları', () => {
     await vi.waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol.startsWith('/arkon/belgeler/requests/'))).toBe(true); });
   }, 30000);
 
+  it('Kalite: ilk parça kararının Kalite Merkezi\'nde olduğu yazar; bağlantı yalnız o sayfayı görene, onay düğmesi yerinde (501 a)', async () => {
+    sunucuKur(KALITE, { belgeler });
+    arkonAc('/arkon/yeni/kalite');
+    let b = await bolum('Kalite');
+    let sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
+    fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
+    const not = await within(b).findByRole('note', {}, { timeout: 10000 });
+    expect(not.textContent).toContain('İlk parça kararı Kalite Merkezi\'nde');
+    expect(within(not).queryByRole('link')).toBeNull();
+    expect(within(b).getByRole('button', { name: /^Onayla$/ })).toBeTruthy();
+    cleanup();
+
+    sunucuKur({ ...KALITE, kullanici: { ...KALITE.kullanici, islemler: [...KALITE.kullanici.islemler, 'sayfa.kalite-merkezi'] } }, { belgeler });
+    arkonAc('/arkon/yeni/kalite');
+    b = await bolum('Kalite');
+    sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
+    fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
+    const baglanti = await within(await within(b).findByRole('note', {}, { timeout: 10000 })).findByRole('link', { name: 'Kalite Merkezi\'ni aç' }, { timeout: 10000 });
+    expect(baglanti.getAttribute('href')).toBe('/kalite-merkezi');
+  }, 30000);
+
   it('Kalite: ölçme yetkisi olmayan amir ölçüm girişini ve karar düğmelerini görmez, seçince yazmaz', async () => {
     const istekler = sunucuKur(AMIR, { belgeler });
     arkonAc('/arkon/yeni/kalite');

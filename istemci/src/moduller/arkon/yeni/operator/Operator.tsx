@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Dugme, KodOkuyucu, OzetKatmani, Pencere, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
+  Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
+import { useTema } from '../../../../ortak/veri/tema.ts';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
@@ -37,6 +38,7 @@ import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis
 import type { Perm } from '../cekirdek/tipler.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
+import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
 import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
@@ -55,7 +57,7 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
@@ -87,7 +89,8 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 }
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
-  const { depo, kisi, ayarlar, yetkiVar } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, git, sayfaGorunur } = useArkon();
+  const { tema, degistir: temaDegistir } = useTema();
   const { bildir } = useBildirim();
   const dar = useDarEkran();
   const pv = onizleme !== null;
@@ -524,6 +527,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const cevrim = useMemo((): CevrimOlcer => ({
     gecen: () => { const c = cycRef.current; return c.acc + (c.since ? Date.now() - c.since : 0); },
     son: () => cycRef.current.last,
+    sayac: () => cycRef.current.n,
   }), []);
 
   /* üretim kayıtları: durum değişimi ve sayımlar (OEE, vardiya özeti); her kaynaktan gelen değişiklik yakalanır */
@@ -938,7 +942,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <>
       {scan ? (
         <Pencere acik kapat={() => scanYaz(null)} baslik={scan.baslik}>
-          <KodOkuyucu {...(scan.ipucu ? { ipucu: scan.ipucu } : {})} okundu={(c) => { const f = scan.okundu; scanYaz(null); bip('ok'); f(c); }} />
+          <KodOkuyucu kendiliginden dokunmatikteOdakYok {...(scan.ipucu ? { ipucu: scan.ipucu } : {})} okundu={(c) => { const f = scan.okundu; scanYaz(null); bip('ok'); f(c); }} />
         </Pencere>
       ) : null}
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
@@ -961,6 +965,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           devret={(not) => { ovYaz(null); if (not && !pv) void depo.DB.put('kv', { note: not, by: `${ME} · ${vardiyaMetni}`, at: Date.now() }, 'handover'); say(`Vardiya devredildi${not ? ' · not sonraki vardiyaya iletildi' : ''}`, 'check', 'run'); }} />
       ) : null}
       {ov === 'ozetim' ? <Pencere acik kapat={() => ovYaz(null)} baslik="Özetim" tur="tam"><Ozetim /></Pencere> : null}
+      {ov === 'done' ? <Konfeti /> : null}
       <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
         satirlar={[{ etiket: 'İyi parça', deger: sayi(o.good) }, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }]}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
@@ -976,6 +981,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <header className="tc-ay1-mobil-ust">
           <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
+          {/* Darda saat yok; kopukluk ve kayıt riski operatörden saklanmasın diye durum üst çubukta kalır. */}
+          <BaglantiDurumu />
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
           <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
         </header>
@@ -1031,16 +1038,23 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   return (
     <div className="tc-ay1" data-durum={IS_DURUM_RENGI(o.state)}>
       <header className="tc-ay1-ust">
+        <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
+        <span className="tc-ay-ayrac" aria-hidden="true" />
         <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
         </button>
         <DurumLambasi durum={o.state} since={since} />
+        {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}
         <span className="tc-ay1-bosluk" />
         <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
+        {!pv && sayfaGorunur('hazirlik') ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => git('hazirlik')} title="Üretim Terminali Hazırlık" aria-label="Üretim Terminali Hazırlık"><Simge ad="layers" /></button> : null}
+        {!pv && sayfaGorunur('kalite') ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => git('kalite')} title="Kalite ölçüm istasyonu" aria-label="Kalite ölçüm istasyonu"><Simge ad="target" /></button> : null}
         {ozetVar ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('ozetim')} title="Özetim" aria-label="Özetim"><Simge ad="user" /></button> : null}
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
         {!pv ? <Dugme tur="ikincil" simge="bell" onClick={() => ovYaz('call')}>Çağrı</Dugme> : null}
+        <BaglantiDurumu />
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
+        <button type="button" className="tc-ay1-simge-dugme" onClick={temaDegistir} title="Tema değiştir" aria-label="Tema değiştir"><Simge ad={tema === 'dark' ? 'sun' : 'moon'} /></button>
         <button type="button" className="tc-ay1-kisi" onClick={() => ovYaz('shift')} title="Vardiya özeti ve devir">
           <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
           <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>

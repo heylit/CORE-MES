@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
+import { LogoGonderimi } from '../LogoGonderimi.tsx';
 import { MalzemeAyarlari } from './ayarlar/index.tsx';
 import { Katalog } from './katalog/index.tsx';
 import { Kilavuz } from './kilavuz/index.tsx';
@@ -13,7 +14,7 @@ import type { MalzemeYetkisi } from './yetki.ts';
 export const YENI_KOK = '/malzemeler/yeni-ekran';
 
 export interface YeniKartSecenegi { kart?: string; kopya?: string; sablon?: string; sablonYap?: string; tur?: KatalogTuru }
-export type DisSayfa = 'operasyon-tipleri' | 'rota-sablonlari' | 'urun-rotalari' | 'logo';
+export type DisSayfa = 'operasyon-tipleri' | 'rota-sablonlari' | 'urun-rotalari';
 
 export interface Gezinti {
   katalog: (kimlik?: string) => void;
@@ -31,7 +32,7 @@ export interface EkranOzellikleri {
   git: Gezinti;
 }
 
-export type Bolum = 'katalog' | 'kart' | 'sablonlar' | 'ayarlar' | 'kilavuz';
+export type Bolum = 'katalog' | 'kart' | 'sablonlar' | 'ayarlar' | 'logo' | 'kilavuz';
 
 export interface BolumTanimi {
   anahtar: Bolum;
@@ -44,11 +45,13 @@ export interface BolumTanimi {
 }
 
 // Sıra ve adlar ikinci menüyle aynıdır (paylasilan/sayfalar/malzemeler.ts); yeni kartı yalnız yazabilen görür.
+// Logo gönderimi prototipte yoktur, kabuğun kendi sayfasıdır (kart #232); sekmede aynı sayfa değişmeden açılır (497/6 a).
 export const BOLUMLER: readonly BolumTanimi[] = [
   { anahtar: 'kart', baslik: 'Yeni kart', simge: 'plus', yol: 'kart', ekran: YeniKart, gorur: (y) => y.yaz },
   { anahtar: 'katalog', baslik: 'Katalog', simge: 'list', yol: '', ekran: Katalog, gorur: (y) => y.oku },
   { anahtar: 'sablonlar', baslik: 'Şablonlar', simge: 'grid', yol: 'sablonlar', ekran: Sablonlar, gorur: (y) => y.oku },
   { anahtar: 'ayarlar', baslik: 'Malzeme ayarları', simge: 'gear', yol: 'ayarlar', ekran: MalzemeAyarlari, gorur: (y) => y.oku },
+  { anahtar: 'logo', baslik: 'Logo gönderimi', simge: 'upload', yol: 'logo', ekran: LogoGonderimi, gorur: (y) => y.oku },
   { anahtar: 'kilavuz', baslik: 'Kılavuz', simge: 'eye', yol: 'kilavuz', ekran: Kilavuz, gorur: (y) => y.oku },
 ];
 
