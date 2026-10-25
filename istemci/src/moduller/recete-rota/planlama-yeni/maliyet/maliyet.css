@@ -51,6 +51,7 @@
 }
 .tc-pyk-ad > .tc-simge { flex: none; color: var(--c, var(--muted)); }
 .tc-pyk-ad[data-ton="hata"] { --c: var(--stop); }
+.tc-pyk-ad[data-ton="hata"] b { color: var(--c); }
 .tc-pyk-ad[data-ton="uyari"] { --c: var(--hold); }
 .tc-pyk-ad[data-ton="tamam"] { --c: var(--run); }
 .tc-pyk-ad > span { display: grid; min-width: 0; }
