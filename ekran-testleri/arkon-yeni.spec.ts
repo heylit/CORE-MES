@@ -209,6 +209,9 @@ test.describe('A5 Çizim', () => {
       expect(d!.x + d!.width).toBeLessThanOrEqual(c!.x);
       expect(c!.x + c!.width).toBeLessThanOrEqual(a!.x);
       expect(Math.abs(d!.y - a!.y)).toBeLessThan(2);
+      // Eski labmain gibi ekranın kalanını doldurur (denetim E11: yarım yükseklikte kalıyordu).
+      const boy = page.viewportSize()?.height ?? 0;
+      expect(a!.y + a!.height, 'ayar paneli ekran boyunca').toBeGreaterThan(boy * 0.9);
     } else {
       await expect(kip).toBeVisible();
       await kip.getByRole('button', { name: 'Ayarlar' }).click();
@@ -256,6 +259,12 @@ test.describe('A6 Ayarlar ve çağrı bandı', () => {
     const sekmeler = bolum.getByRole('tablist', { name: 'Ayarlar bölümleri' });
     await expect(sekmeler.getByRole('tab')).toHaveText(['Genel', 'Tesis', 'Kişiler ve yetkiler', 'Üretim', 'Sistem']);
     await expect(bolum.getByRole('heading', { name: 'Ekran modülleri' })).toBeVisible();
+    // Eski setmain gibi 1280'de Genel'in üç kartı tek satırda (denetim E12).
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      const ustler = await Promise.all(['Örnek Yönetici', 'Ekran modülleri', 'PDF ve 3B okuma']
+        .map(async (b) => (await bolum.getByRole('heading', { name: b, exact: true }).first().boundingBox())?.y ?? -1));
+      expect(new Set(ustler.map((y) => Math.round(y))).size, ustler.join(',')).toBe(1);
+    }
     for (const [sekme, metin] of [
       ['Tesis', /İstasyonlar sayfasından değiştirilir/], ['Kişiler ve yetkiler', /Roller sayfasından değiştirilir/],
       ['Üretim', /Vardiya sayfasından değiştirilir/], ['Sistem', /Yedekleme TMI sunucusunda yapılır/],
