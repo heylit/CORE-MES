@@ -42,11 +42,13 @@ const komutKur = (c: PlanlamaCalismasi) => {
 };
 
 describe('PlanlamaMotoru', () => {
-  it('çalışma yoksa söyler: üç adım ve pasif Planı kur, sayı yok (489/2 c)', () => {
+  it('çalışma yoksa söyler: üç adım, pasif Planı kur ve Veri ve kısıtlar, sayı yok; plan çubuğu üstte (489/2 c, 497/10 a)', async () => {
     ac({ c: null });
-    expect(screen.getByText('Planlama çalışması yok.')).toBeTruthy();
-    expect(screen.getAllByRole('listitem').map((x) => x.querySelector('span > b')?.textContent)).toEqual(['Planı kur', 'Sorunlara bak', 'Karar ver']);
-    expect(screen.getByRole('button', { name: 'Planı kur' }).getAttribute('aria-disabled')).toBe('true');
+    expect(await screen.findByRole('toolbar', { name: 'Plan çubuğu' })).toBeTruthy();
+    const kart = screen.getByText('Planlama çalışması yok.').parentElement as HTMLElement;
+    expect(within(kart).getAllByRole('listitem').map((x) => x.querySelector('span > b')?.textContent)).toEqual(['Planı kur', 'Sorunlara bak', 'Karar ver']);
+    expect(within(kart).getByRole('button', { name: 'Planı kur' }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(kart).getByRole('button', { name: 'Veri ve kısıtlar' }).getAttribute('aria-disabled')).toBe('true');
     expect(screen.queryByText(/tezgâh,/)).toBeNull();
   });
 

@@ -22,6 +22,10 @@ iskelet sahibine istek olarak gelir. Parcalar birbirini ithal etmez; ortak gerek
 Iskelet dosyalari (tek sahip: iskelet): `PlanlamaYeni.tsx`, `gorunumler.ts`, `yollar.ts`, `veri.ts`, `kayit.ts`, `durum.ts`, `tipler.ts`, `yetki.ts`,
 `YerTutucu.tsx`, `test-ortak.tsx`, `planlama-yeni.css`, `cizelge/`, bu dosya ve iskeletin testleri.
 
+Plan cubugu (Soru 497/10 a): her planlama sayfasinin ustunde eski ekranin plan cubugu (pm-sb: Plan, Studyo, Veri, Gecmis; plan nabzi; durum;
+Olay ekle ve Plani kur/iyilestir, ikisi 357 b geregi pasif) vardir. Cubuk P1'indir (`motor/ust/PlanSeridi.tsx`, `PlanSeridi`); iskelet onu
+`gorunumler.ts` uzerinden motor disindaki her gorunumun ustune koyar, motor kendi cubugunu cizer. Parca kendi sayfasinda cubuk cizmez.
+
 ## Iskeletin sabit imzalari (parcalar kullanir, degistirmez)
 - `gorunumler.ts`: `PlanlamaEkranOzellikleri { depo: PlanlamaDeposu; calisma: PlanlamaCalismasi | null; komut: CalismaKomutu | null; yetki: PlanlamaYetkisi;
   git(g: PlanlamaGorunumu): void; yenile(): void }`. `calisma` guncel haldir (`depo.calisma` acilistaki); `komut` yazma izni ya da calisma kaydi yoksa null.

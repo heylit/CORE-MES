@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { MALIYET_ANAHTARLARI, ONERILEN_IKINCI_MENU } from '../planlama-menusu.ts';
 import { KAPISIZ, MALIYETSIZ, PLANLAMASIZ, YONETICI, ac, sunucuKur } from './test-ortak.tsx';
@@ -28,6 +28,16 @@ describe('PlanlamaYeni', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Sevkiyat' }, { timeout: 10000 }));
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/recete-rota/planlama-yeni/sevkiyat'); });
     expect(kap()?.getAttribute('data-gorunum')).toBe('sevkiyat');
+  }, 20000);
+
+  it('plan çubuğu motor dışındaki her sayfanın üstündedir; Plan düğmesi motora götürür, motorda tek çubuk vardır (497/10 a)', async () => {
+    sunucuKur(YONETICI);
+    ac('/recete-rota/planlama-yeni/ysiparis');
+    const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
+    expect(cubuk.querySelector('[aria-current]')).toBeNull();
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Plan' }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/recete-rota/planlama-yeni/plan'); });
+    await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
   }, 20000);
 
   it('bilinmeyen görünüm adresi kök görünüme döner', async () => {
