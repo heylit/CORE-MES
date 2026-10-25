@@ -40,7 +40,7 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
           ['clock', 'Pratik kapasite', `${sayi(G.kap, 0)} sa`, `30 gün, verim %${sayi(M.verim, 0)}`],
           ['lira', 'Ortalama oran', G.ort === null ? '—' : tlSaat(G.ort), M.kip === 'kalem' ? 'maliyette kullanılıyor' : `kullanılan: tek oran ${tlSaat(gg)}`],
           ['gauge', 'Plan doluluğu', G.kap ? `%${sayi(Math.min(100, (G.mesgul / G.kap) * 100), 0)}` : '—', `${sayi(G.mesgul, 0)} sa planlı`],
-          ['alert', 'Atıl kapasite gideri', tl(G.atil), 'ürüne yüklenmez, dönem gideri', G.atil > G.aylik * 0.3 ? 'uyari' : ''],
+          ['alert', 'Atıl kapasite gideri', tl(G.atil), 'ürüne yüklenmez, dönem gideri', G.atil !== null && G.atil > G.aylik * 0.3 ? 'uyari' : ''],
         ]} />
         <Not>Her kalem aylık tutardır ve seçilen anahtarla tezgâhlara dağılır; amortisman tezgâhın kendisine yazılır. Tezgâhın oranı = (pay + amortisman) / pratik kapasite saati. Normal kapasiteyle dağıtıldığı için boş kalan saatin gideri ürüne yüklenmez, atıl kapasite olarak ayrı görünür. Genel gider plan amacına girmez (5 b); ürün maliyetinde, teklifte ve proje maliyetinde kullanılır.</Not>
       </AsilKart>
@@ -240,11 +240,14 @@ function TezgahGiderKarti({ c, G, kapali, y }: { c: PlanlamaCalismasi; G: GenelG
 }
 
 function GrupKarti({ G }: { G: GenelGiderHesabi }) {
-  const gr = new Map<string, { aylik: number; kap: number; mesgul: number; atil: number; n: number }>();
+  // Grupta amortismanı bilinmeyen tezgâh varsa grubun oranı bilinmez; atıl gider bilinenlerin toplamı, hiçbiri bilinmiyorsa boş.
+  const gr = new Map<string, { aylik: number; kap: number; mesgul: number; atil: number | null; bilinmez: boolean; n: number }>();
   for (const z of G.tez) {
     const k = z.tezgah.grup ?? '';
-    const g = gr.get(k) ?? { aylik: 0, kap: 0, mesgul: 0, atil: 0, n: 0 };
-    g.aylik += z.aylik; g.kap += z.kap; g.mesgul += z.mesgul; g.atil += z.atil; g.n++;
+    const g = gr.get(k) ?? { aylik: 0, kap: 0, mesgul: 0, atil: null, bilinmez: false, n: 0 };
+    g.aylik += z.aylik; g.kap += z.kap; g.mesgul += z.mesgul; g.n++;
+    if (z.atil !== null) g.atil = (g.atil ?? 0) + z.atil;
+    if (z.kap > 0 && z.amort === null) g.bilinmez = true;
     gr.set(k, g);
   }
   return (
@@ -258,7 +261,7 @@ function GrupKarti({ G }: { G: GenelGiderHesabi }) {
                 <td><b>{g}</b> <span className="tc-pyk-soluk">{x.n} tezgâh</span></td>
                 <td className="tc-pyk-num">{tl(x.aylik)}</td>
                 <td className="tc-pyk-num">{sayi(x.kap, 0)} sa</td>
-                <td className="tc-pyk-num"><b>{x.kap ? tlSaat(x.aylik / x.kap) : '—'}</b></td>
+                <td className="tc-pyk-num"><b>{x.kap && !x.bilinmez ? tlSaat(x.aylik / x.kap) : '—'}</b></td>
                 <td className="tc-pyk-num">{x.kap ? `%${sayi(Math.min(100, (x.mesgul / x.kap) * 100), 0)}` : '—'}</td>
                 <td className="tc-pyk-num">{tl(x.atil)}</td>
               </tr>
