@@ -51,3 +51,9 @@ Merkez çizimi durumu (Soru 197 a, W7): `GET /arkon/cizim-merkezi/kontrol` salt 
 paketi okuyabilmeli (`kurallar.ts merkezDurumunuOkuyabilirMi`: bütün Arkon rolleri). Öncesinde yalnız paket yazanlar (yönetici, planlama, hazırlık,
 kalite). Merkez listesi ve dosya alma paket yazanlarda kalır. İzinli: merkez-kontrol-okuma.test.ts (operatör ve amir 200); reddedilen: aynı test
 (Arkon rolü olmayan 403; operatör ve amir merkez listesinde 403).
+
+Kuyruk sırası (kart 527, 522): `POST /arkon/kuyruk-sira/sirala` ve `POST /arkon/kuyruk-sira/plana-don`, yetki `arkon.kuyruk-sirala` (CAM ve planlama; Arkon
+rolü değildir), serviste Arkon rolü ve istasyonun iş merkezi kapsamı. Kişi ve zaman sunucudan; sürüm denetimi ekranın gördüğü sıradır (eski ekran 409).
+Plan yazılmaz. İzinli: yansima.test.ts "kuyruk sırası: Hazırlık istasyon kuyruğunu sıralar..." (işlemi olan hazırlıkçı 200). Ret: aynı test (Arkon operatörü 403,
+işlemi olmayan planlamacı 403, kapsam dışı istasyon 403, yinelenen ve TMI dışı paket 400, eski ekran 409, kilitli iş 409, bilinmeyen istasyon 404);
+arkon.test.ts "her uç" (oturumsuz 401, rolsüz 403), "uç tanımı" (yetki ayrı işlem).

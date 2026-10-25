@@ -450,6 +450,22 @@ export type RefakatKartlariCevabi = z.infer<typeof refakatKartlariCevabi>;
 export const planSiraSurumuCevabi = z.object({ planSurumu: z.number().int().nonnegative() });
 export const planSiralaCevabi = z.object({ taslakId: z.number().int(), taslakAcildi: z.boolean() });
 
+// Üretim Hazırlık kuyruk sırası (kart 527, 519 1 c): bir istasyonun TMI iş emri paketleri (kimlikleriyle). `onceki` ekranın gördüğü sıradır;
+// arada başka biri sıraladıysa ya da kuyruğa iş girip çıktıysa 409. Plan değişmez; plana göndermek ayrı komuttur (`/arkon/plan-sira/sirala`).
+const paketKimlikleri = z.array(z.string().min(1).max(80)).min(1).max(200);
+export const kuyrukSiralaGovdesi = z.object({
+  istasyon: z.string().min(1).max(40),
+  onceki: paketKimlikleri,
+  yeni: paketKimlikleri,
+  kaynak,
+}).strict();
+export const kuyrukSiralaCevabi = z.object({ surum: z.number().int() });
+export const kuyrukPlanaDonGovdesi = z.object({ istasyon: z.string().min(1).max(40), kaynak }).strict();
+export const kuyrukPlanaDonCevabi = z.object({ silinen: z.number().int().nonnegative() });
+export type KuyrukSiralaGovdesi = z.output<typeof kuyrukSiralaGovdesi>;
+export type KuyrukSiralaCevabi = z.output<typeof kuyrukSiralaCevabi>;
+export type KuyrukPlanaDonCevabi = z.output<typeof kuyrukPlanaDonCevabi>;
+
 // Çizim Merkezi'nden dosya alma (kart #800): Arkon yalnız yayındaki belgeyi, yalnız okuyabildiği türde (PDF, 3B model) alır.
 // Alınan dosya Arkon'un kendi dosya deposuna kopyalanır (özetle tekil); paketin dosya kaydını ekran kurar.
 export const MERKEZ_DOSYA_TIPLERI = ['pdf', 'model'] as const;

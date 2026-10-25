@@ -14,4 +14,6 @@ export const ARKON_ISLEMLERI = [
   'arkon.yansima-yeniden',
   // Arkon rolü değildir: üretim anomalisinin kişi kırılımını (bugün ve gün, hafta, ay) okur (kart #1306; yalnız yönetici, rol satırı yok).
   'arkon.anomali-kisi',
+  // Arkon rolü değildir: Üretim Hazırlık kuyruğunun istasyon sırasını yazar (kart 527; CAM ve planlama, rol satırı çekirdekte).
+  'arkon.kuyruk-sirala',
 ] as const;
