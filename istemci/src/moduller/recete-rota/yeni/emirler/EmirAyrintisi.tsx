@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Dugme, Girdi, OnayPenceresi, Rozet, SayiKarti, Secim, Simge, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import type { RrDurumu } from '../veri.ts';
+import { useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import {
-  acikMi, adimDurumu, adimPlani, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, yeniOpNo,
-  yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
+  acikMi, adimDurumu, adimPlani, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
+  yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
 } from './kurallar.ts';
 import { DURUM_TONU, planMetni, turAdi } from './gorunum.ts';
 
@@ -336,7 +336,10 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
   durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; tamamla: () => void;
 }) {
   const yonlen = useNavigate();
-  const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d), [d]);
+  // Ara adım stoğu stoktan okunur (Stok bölümüyle aynı okuma); okunamazsa yalnız serbest stokla hesaplanır.
+  const stokIdleri = useMemo(() => stokKartiIdleri(d.items ?? []), [d.items]);
+  const stok = useStokOkumasi(stokIdleri, yetki.stokOku).data ?? null;
+  const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d, stok), [d, stok]);
   if (!plandaMi(o)) {
     const metin = o.status === 'taslak' ? 'Taslak emirler plana girmez. Plana alınca yerleşir.'
       : o.status === 'tamam' ? 'Bu emir tamamlandı.' : 'Bu emir iptal edildi.';

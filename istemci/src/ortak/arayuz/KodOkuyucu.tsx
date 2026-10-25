@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useKamera } from '../veri/kamera.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
@@ -6,9 +6,12 @@ import './kod-okuyucu.css';
 
 // Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin olduğu gibi `okundu`ya gider, ne olduğuna çağıran karar verir.
 // El okuyucu klavye gibi yazar ve Enter gönderir; kamerasız bilgisayarda da yalnız bu alan yeter.
-export function KodOkuyucu({ okundu, bekliyor = false, ipucu }: { okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string }) {
+// `kendiliginden` kamerayı açılışta başlatır (okutmak için açılan ekranlar); varsayılan dokunmayla açılıştır.
+export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false }: { okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean }) {
   const [elle, setElle] = useState('');
   const kamera = useKamera(okundu);
+  const { ac } = kamera;
+  useEffect(() => { if (kendiliginden) void ac(); }, [kendiliginden, ac]);
   const dosya = useRef<HTMLInputElement | null>(null);
   return (
     <div className="tc-kod-okuyucu">

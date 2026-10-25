@@ -39,8 +39,6 @@ function planKaydi(p, st, ref) {
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
   return { ops, fail: p.fail || [], ozet: { wT: ef.wT, onT: ef.onT, late: ef.late, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300) };
 }
-/* sayfanın işçisi her girdide ağırlıkları ve TL amacını girdiden alır (zu TL_ISCI, zw PD_ISCI) */
-function stHazirla(st) { if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); } return st; }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 function dgPlanKur(st, ms = 0) {
   stHazirla(st); const cx = compile(st); let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx); let E = evaluate(cur, st, null, true);

@@ -40,14 +40,20 @@ export function useKamera(okundu: (kod: string) => void) {
     son.current = { kod, zaman: simdi };
     okundu(kod);
   }, [okundu]);
-  const kapat = useCallback(() => { akis.current?.getTracks().forEach((t) => t.stop()); akis.current = null; setAcik(false); }, []);
+  // İzin beklenirken kapatılır ya da bileşen kalkarsa (açılışta kendiliğinden açmada sık) geç gelen akış açık kalmasın diye her açma bir nesil alır.
+  const nesil = useRef(0);
+  const kapat = useCallback(() => { nesil.current += 1; akis.current?.getTracks().forEach((t) => t.stop()); akis.current = null; setAcik(false); }, []);
   const ac = useCallback(async () => {
+    const benim = ++nesil.current;
     setHata(null);
     if (!navigator.mediaDevices?.getUserMedia) { setHata('Bu tarayıcı kameraya erişemiyor; el okuyucuyu ya da fotoğraftan okumayı kullanın.'); return; }
     try {
-      akis.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const yeni = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      if (benim !== nesil.current) { yeni.getTracks().forEach((t) => t.stop()); return; }
+      akis.current?.getTracks().forEach((t) => t.stop());
+      akis.current = yeni;
       setAcik(true);
-    } catch { setHata('Kamera açılamadı: izin verilmedi ya da kamera yok.'); }
+    } catch { if (benim === nesil.current) setHata('Kamera açılamadı: izin verilmedi ya da kamera yok.'); }
   }, []);
   useEffect(() => {
     if (!acik || !video.current || !akis.current) return;
