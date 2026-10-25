@@ -629,6 +629,12 @@ export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
   if (ev.tip === 'malzeme') { const m = (D.malzemeler ?? []).find((x) => x.kod === ev.kod); return `${m?.ad ?? String(ev.kod)}: satın alma ${String(ev.gun)} gün gecikti`; }
   if (ev.tip === 'eksik') return `${saatYaz(D, Number(ev.gun) * 24).slice(0, 9)} ${String(ev.vardiya)}: ${String(ev.n)} ${ev.grup === 'ayar' ? 'ayarcı' : `${String(ev.grup)} personeli`} eksik`;
   if (ev.tip === 'fason') return `${String(ev.f)} teslim süresi +${String(ev.gun)} gün`;
+  // Süre sapması açıkça yazılır (Soru 494 b): ürün ve adım ya da tek adım, çarpan, etkilenen sipariş sayısı.
+  if (ev.tip === 'sure') {
+    const u = D.urunler.find((x) => x.id === ev.urun); const n = D.siparisler.filter((j) => !j.havuz && j.urun === ev.urun).length;
+    return `${u?.ad ?? String(ev.urun)}, adım ${String(ev.k)}: süre ×${sayiYaz(Number(ev.oran), 2)} (${String(n)} sipariş)`;
+  }
+  if (ev.tip === 'sureOp') return `${String(ev.id)}: süre ×${sayiYaz(Number(ev.oran), 2)}`;
   return String(ev.tip);
 }
 export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, guncel: boolean): Sorun[] {

@@ -46,8 +46,12 @@ describe('Yan panel hesapları', () => {
     const { c, p, cx, now } = kur();
     const l = rotaAdimlari(c, p, cx, '2', now);
     expect(l.map((x) => [x.ad, x.zaman, x.kilitli])).toEqual([['Freze (CNC)', 'Cmt 18:37 → Pzt 13:15', false], ['Fason işlem', 'Pzt 16:00 → Sal 16:00', false], ['Boyutsal muayene', 'Sal 16:00 → Sal 17:55', false]]);
-    expect(l[0]?.cipler.find((x) => x.bu)).toEqual({ m: '3', ad: '3', bu: true, sure: '4,4 sa + ayar 0,6 sa' });
+    expect(l[0]?.cipler.find((x) => x.bu)).toEqual({ m: '3', ad: '3', bu: true, sure: '4,4 sa + ayar 0,6 sa', carpan: null });
     expect(l[1]?.cipler.find((x) => x.bu)).toMatchObject({ ad: '5 (fason)', sure: 'fason' });
+    // Süre sapması çipte çarpanla görünür (494 b); fason çipte yok.
+    const c2 = { ...c, olaylar: [{ tip: 'sure', urun: c.D.siparisler.find((x) => x.id === '2')?.urun, k: '20', oran: 1.5 }] };
+    const l2 = rotaAdimlari(c2, p, derle(girdiKur(c2, plandanBitenler(c2, p))), '2', now);
+    expect(l2[0]?.cipler.find((x) => x.bu)).toMatchObject({ carpan: '×1,5' }); expect(l2[1]?.cipler.every((x) => x.carpan === null)).toBe(true);
     expect(rotaAdimlari({ ...c, locks: { '2.20': { m: '3', S: 0 } } }, p, cx, '2', now)[0]?.kilitli).toBe(true);
     expect(rotaAdimlari(c, p, cx, '2', (p.ops[l[1]?.id ?? '']?.S ?? now) + 1).map((x) => [x.bitti, x.simdi])).toEqual([[true, false], [false, true], [false, false]]);
   });
