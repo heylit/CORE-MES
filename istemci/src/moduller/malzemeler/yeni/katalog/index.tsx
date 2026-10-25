@@ -54,7 +54,7 @@ function agirlikAlti(x: KartKaydi, b: KuralBaglami): string {
 function sutunlar(b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void): Sutun<KatalogKarti>[] {
   return [
     {
-      anahtar: 'sec', baslik: 'Seç', csv: false,
+      anahtar: 'sec', baslik: '', csv: false,
       hucre: (k) => (
         <span onClick={(o) => o.stopPropagation()}>
           <label className="tc-isaret">
