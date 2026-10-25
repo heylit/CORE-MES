@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 import type { BirimSistemi, KartKaydi } from './tipler.ts';
 
 // K4 a (VARSAYIM, geri alma ucuz): yalnız üç kişisel kolaylık tarayıcıda kalır; ortak veri sunucudadır. Depo kapalıysa
@@ -30,7 +30,20 @@ function useKalici<T>(anahtar: string, dogrula: (v: unknown) => v is T, ilk: T):
 }
 
 const birimMi = (v: unknown): v is BirimSistemi => v === 'met' || v === 'imp';
-export const useBirimSistemi = () => useKalici<BirimSistemi>(ANAHTAR.birim, birimMi, 'met');
+
+// Birim düğmeleri üst başta, birimi kullanan ekranlar altta: hepsi aynı değeri görür (prototipte tek `UNITS`).
+let birimDegeri: BirimSistemi | null = null;
+const birimDinleyenler = new Set<() => void>();
+const birimAnlik = (): BirimSistemi => (birimDegeri ??= oku(ANAHTAR.birim, birimMi) ?? 'met');
+const birimDinle = (f: () => void) => { birimDinleyenler.add(f); return () => { birimDinleyenler.delete(f); }; };
+function birimYaz(v: BirimSistemi): void {
+  birimDegeri = v;
+  yaz(ANAHTAR.birim, v);
+  for (const f of birimDinleyenler) f();
+}
+export function useBirimSistemi(): [BirimSistemi, (v: BirimSistemi) => void] {
+  return [useSyncExternalStore(birimDinle, birimAnlik, birimAnlik), birimYaz];
+}
 
 export interface SonKullanilan { fam: string; cls: string; grade: string; t: number }
 const sonListesiMi = (v: unknown): v is SonKullanilan[] => Array.isArray(v) && v.every((x) => typeof x === 'object' && x !== null && 'grade' in x);
