@@ -149,7 +149,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           ) : gorunum === 'cizelge' ? (
             // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
             <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
-              planYaz={yetki.planYaz} planKilitle={yetki.planYaz} studyo={studyo} ust={cubukKur(true)} />
+              planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
+              sor={sor} guncel={guncel} komut={komut} />
           ) : gorunum !== 'atolye' ? (
             <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{GORUNUM_AD[gorunum]}: {HAZIRLANIYOR}</p></div>
           ) : null}
