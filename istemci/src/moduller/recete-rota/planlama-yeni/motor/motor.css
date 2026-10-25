@@ -2,7 +2,7 @@
    Ölçüler ve renkler eski sayfanınkidir, yalnız tasarım değişkenleriyle; kırılımlar eski çerçevenin genişliğiyle aynı olsun diye görünümün
    kendi genişliğinden (container) okunur: 1099 iki sütun, 599 tek sütun. */
 .tc-pym {
-  container-type: inline-size; display: flex; flex-direction: column; min-height: 100%; min-width: 0;
+  container: tc-pym / inline-size; display: flex; flex-direction: column; min-height: 100%; min-width: 0;
   /* Eski sayfanın on renkli serisi (--is-0..9) çekirdekte --grafik, --grafik-2..10'dur (464/1 a); değişken gelene kadar var olan renklerin karışımı.
      Sipariş renkleri bu seriden, süre ayrışımının renkleri (KAT) eski eşlemesiyle. */
   --tc-pym-is-0: var(--grafik); --tc-pym-is-1: var(--grafik-2);

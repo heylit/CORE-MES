@@ -93,7 +93,7 @@ test.describe('P1b Tezgâh haritası', () => {
 });
 
 test.describe('P1c Çizelge', () => {
-  test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, tam ekran; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+  test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText('Planlama çalışması yok.')).first()).toBeVisible();
     if (await page.getByText('Planlama çalışması yok.').isVisible()) { await tasmaz(page); return; }
@@ -110,7 +110,9 @@ test.describe('P1c Çizelge', () => {
     await arac.getByRole('button', { name: 'Ay', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Çizelge, ay' })).toBeVisible();
     await arac.getByRole('tab', { name: 'Siparişler' }).click();
-    await expect(page.getByText(/Siparişler: Hazırlanıyor/)).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Plan çizelgesi' })).toBeVisible();
+    await page.getByRole('button', { name: 'Şimdiye git' }).click();
+    await tasmaz(page);
     await arac.getByRole('tab', { name: 'Tezgâhlar' }).click();
     const cizelge = page.getByRole('region', { name: 'Çizelge', exact: true });
     await arac.getByRole('button', { name: 'Tam ekran', exact: true }).click();

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { gunCizelgesi, olcekCizelgesi, tezgahSirasi } from './kurallar.ts';
+import { gunCizelgesi, olcekCizelgesi, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -39,5 +39,26 @@ describe('çizelge hesapları', () => {
     expect(g.satirlar.map((s) => s.etiket)).toEqual(['1', '2', '3', '4', '5', '5']);
     expect(g.gunler[5]?.ad).toBe('24.10 Cmt');
     expect(g.kilit).toMatchObject({ donukBu: 0, donukTum: 0, elle: 0 });
+  });
+
+  it('Siparişler merceği: gruplar, fason, işlerin saat konumu, ayar payı ve yıl başlıkları eski çizelgeyle aynı', () => {
+    const { c, p, cx } = kur();
+    const z = zamanCizelgesi(c, p, cx, 'hafta', '3');
+    expect(z.px).toBe(10);
+    expect(z.saat).toBe(240);
+    expect(z.basliklar.map((b) => b.ad)).toEqual(['19.10 Pzt', '20.10 Sal', '21.10 Çar', '22.10 Per', '23.10 Cum', '24.10 Cmt', '25.10 Paz', '26.10 Pzt', '27.10 Sal', '28.10 Çar']);
+    expect(z.gruplar.map((g) => [g.g, g.n, g.satirlar.map((s) => s.m)])).toEqual([['1', 1, ['1']], ['2', 1, ['2']], ['3', 1, ['3']], ['4', 1, ['4']], ['5', 1, ['5']]]);
+    expect(z.fason.map((s) => [s.m, s.kod])).toEqual([['@5', '5']]);
+    const is = Object.fromEntries([...z.gruplar.flatMap((g) => g.satirlar), ...z.fason].flatMap((s) => s.isler).map((i) => [i.id, i]));
+    // Eski sayfada 3.10 left 1280px, width 19.956px, --a 20.879%; 2.30 fasonda left 1840px, width 240px.
+    expect([is['3.10']?.x, Number(((is['3.10']?.w ?? 0) * 10).toFixed(3)), Number(((is['3.10']?.ayar ?? 0) * 100).toFixed(3))]).toEqual([128, 19.956, 20.879]);
+    expect([is['2.30']?.x, is['2.30']?.w, is['2.30']?.gec, is['2.30']?.soluk]).toEqual([184, 24, true, true]);
+    expect(is['3.10']?.soluk).toBe(false);
+    // Eski kapalı şerit: 0-8, 12-12,5, 20-20,5 saatleri (left 0/80px, 120/5px, 200/5px).
+    expect(z.gruplar[0]?.satirlar[0]?.kapali.slice(0, 3)).toEqual([{ x: 0, w: 8 }, { x: 12, w: 0.5 }, { x: 20, w: 0.5 }]);
+    const y = zamanCizelgesi(c, p, cx, 'yil', null);
+    expect(y.basliklar.map((b) => b.ad)).toEqual(['Eki']);
+    expect(y.cizgiler).toEqual([0, 168]);
+    expect(y.termin).toBeNull();
   });
 });
