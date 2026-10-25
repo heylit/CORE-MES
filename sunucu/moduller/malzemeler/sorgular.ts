@@ -302,7 +302,7 @@ export function katalogKartKaydiNoIle(db: Db, no: number): Promise<{ kayit: Reco
 
 export function operasyonluAktifKartKayitlari(db: Db): Promise<{ no: number; kisiId: number; kayit: Record<string, unknown> }[]> {
   return db.sorgu<{ no: number; kisiId: number; kayit: Record<string, unknown> }>(
-    `SELECT no, COALESCE(onaylayan_kisi_id, guncelleyen_kisi_id) AS "kisiId", kayit FROM malzeme_katalog_karti
+    `SELECT no, COALESCE(gonderen_kisi_id, acan_kisi_id) AS "kisiId", kayit FROM malzeme_katalog_karti
       WHERE onay_durumu = 'aktif' AND tur IN ('mamul', 'yarimamul')
         AND jsonb_typeof(kayit->'ops') = 'array' AND jsonb_array_length(kayit->'ops') > 0
       ORDER BY no`,

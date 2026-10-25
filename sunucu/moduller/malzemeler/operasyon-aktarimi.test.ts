@@ -68,7 +68,7 @@ describe('malzemeOperasyonlari (kart #688, gerçek PostgreSQL)', () => {
     assert.equal(await malzemeOperasyonlari(vt, 999_999), null);
   });
 
-  test('operasyonluAktifKartlar: yalnız aktif, mamul ya da yarı mamul ve kodlu operasyonlu kart; kişi onaylayan, yoksa güncelleyen', async () => {
+  test('operasyonluAktifKartlar: yalnız aktif, mamul ya da yarı mamul ve kodlu operasyonlu kart; kişi onaya gönderen, yoksa açan (520 2 b)', async () => {
     const vt = ortam!.vt;
     const kaydet = async (kimlik: string, tur: 'yarimamul' | 'mamul' | 'hammadde', ops: unknown[]): Promise<number> => {
       const c = await app.inject({
@@ -88,12 +88,14 @@ describe('malzemeOperasyonlari (kart #688, gerçek PostgreSQL)', () => {
     const hm = await kaydet('ak4', 'hammadde', op);
     const kodsuz = await kaydet('ak5', 'mamul', [{ no: 10, kod: ' ', ad: 'Boş' }]);
     const bos = await kaydet('ak6', 'mamul', []);
-    const kisi = (await vt.tek<{ id: number }>('SELECT guncelleyen_kisi_id AS id FROM malzeme_katalog_karti WHERE no = $1', [ym]))!.id;
-    const ikinci = (await vt.tek<{ id: number }>(
-      `INSERT INTO kisi (ad) VALUES ('Deneme onaylayan') RETURNING id`))!.id;
+    const acan = (await vt.tek<{ id: number }>('SELECT acan_kisi_id AS id FROM malzeme_katalog_karti WHERE no = $1', [ym]))!.id;
+    const [gonderen, onaylayan] = await Promise.all(['Deneme gönderen', 'Deneme onaylayan'].map(async (ad) =>
+      (await vt.tek<{ id: number }>('INSERT INTO kisi (ad) VALUES ($1) RETURNING id', [ad]))!.id));
     await vt.sorgu(`UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE no = ANY($1::int[])`, [[ym, mm, hm, kodsuz, bos]]);
-    await vt.sorgu('UPDATE malzeme_katalog_karti SET onaylayan_kisi_id = $2 WHERE no = $1', [mm, ikinci]);
+    // Rota yetkisi olmayan onaylayıcı (kalite) taslağı açan görünmez: onaya gönderen esas, gönderen yoksa açan.
+    await vt.sorgu('UPDATE malzeme_katalog_karti SET gonderen_kisi_id = $2, onaylayan_kisi_id = $3 WHERE no = $1', [mm, gonderen, onaylayan]);
+    await vt.sorgu('UPDATE malzeme_katalog_karti SET onaylayan_kisi_id = $2 WHERE no = $1', [ym, onaylayan]);
     assert.deepEqual((await operasyonluAktifKartlar(vt)).filter((k) => [ym, mm, taslak, hm, kodsuz, bos].includes(k.no)).sort((a, b) => a.no - b.no),
-      [{ no: ym, kisiId: kisi }, { no: mm, kisiId: ikinci }]);
+      [{ no: ym, kisiId: acan }, { no: mm, kisiId: gonderen }]);
   });
 });
