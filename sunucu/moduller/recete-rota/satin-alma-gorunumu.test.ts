@@ -56,6 +56,9 @@ test('SA-02: iki hesabın okuduğu alanlar olduğu gibi kalır', () => {
   assert.deepEqual(g.D['satinalma'], [{ kod: 'M1', miktar: 4, gelis: '2026-10-22 08:00', tedarikci: 'TD1', no: 'SA-0001' }]);
   assert.deepEqual(g.D['fasoncular'], [{ id: 'F1', ad: 'Deneme fasoncu', sureGun: 3, kapasite: 2 }]);
   assert.deepEqual(g.D['vardiyalar'], [{ id: 'V1', bas: '08:00', bit: '16:00', molalar: [{ bas: '12:00', bit: '12:30' }] }]);
+  // 549 a: rota adım kodu ve bağ, bitmiş iş ve adım, fasoncu adı (fiyatsız), fabrika vardiya takvimi (kişi ve tezgâh bağsız).
+  assert.deepEqual(g.D['calismaGunleri'], { pzt: ['V1'] });
+  assert.deepEqual(g.D['tatiller'], ['2026-10-29']);
   assert.deepEqual(g.D['fasonTermin'], { 'E-1.20': '2026-10-24 08:00' });
   assert.deepEqual(g.D['meta'], { baslangic: '2026-10-19' });
   assert.deepEqual(g.plan, {
