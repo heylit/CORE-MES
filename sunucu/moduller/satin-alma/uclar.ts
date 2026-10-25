@@ -3,6 +3,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, sirketAdiCevabi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi,
   satinAlmaOzetiCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
+  tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { z } from 'zod';
@@ -12,6 +13,8 @@ const katalogParametresi = z.object({ id: z.string().uuid() });
 
 // 215 a: maliyet okuyan (müdür, muhasebe/finans) kg fiyatını görür, değiştiremez.
 const KG_FIYATI_OKUR = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
+// 534 1 a: tedarik terminini satın almayı yazan ve planı yazan girer (Planlama ekranındaki giriş de bu uca gelir); yeni işlem yok.
+const TERMIN_YAZAR = ['satin-alma.yaz', 'plan.yaz'] as const;
 
 // Tekrar korumalı (#188): talep açma, katalog kaydı ve teslim alma. Cevabı yitirilen komut aynı kimlikle yeniden gönderilince
 // ilk cevap döner; kimliksiz gönderim 400 alır.
@@ -187,5 +190,14 @@ export const uclar = [
     yontem: 'GET', yol: '/satin-alma-kg-fiyatlari/malzemeler', yetki: { biri: KG_FIYATI_OKUR }, sorgu: malzemeKgFiyatlariSorgusu,
     cevap: malzemeKgFiyatlariCevabi,
     isle: async ({ db, sorgu }) => ({ malzemeler: [...(await servis.malzemeKgFiyatlari(db, sorgu.nolar))].map(([malzemeNo, f]) => ({ malzemeNo, ...f })) }),
+  }),
+  // 533 a: malzeme başına tedarik termini; liste planın gereken tarihini ve girilen termini gösterir.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-tedarik-terminleri', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: tedarikTerminleriCevabi,
+    isle: ({ db }) => servis.tedarikTerminleriListesi(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-tedarik-terminleri/kaydet', yetki: { biri: TERMIN_YAZAR }, govde: tedarikTerminiKaydetGovdesi, cevap: tedarikTerminiKaydetCevabi,
+    isle: ({ db, kullanici, govde }) => servis.tedarikTerminiKaydet(db, kullanici, govde),
   }),
 ];
