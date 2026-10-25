@@ -11,6 +11,7 @@ import {
 import { MaliyetSayfasi } from './asil/MaliyetSayfasi.tsx';
 import { hucreKoy, IsiSayfasi, kdOran, yazici, type Acilim, type FormCagrisi, type FormTanimi, type Hucre, type IsiBos, type IsiSatiri, type IsiVerisi } from './ortak.tsx';
 
+const GG_BILINMEZ = 'Genel gider bilinmiyor: çalıştığı tezgâhlardan birinin amortismanı (bedel, ömür) girilmemiş';
 const SUTUN = [['mal', 'Malzeme'], ['isl', 'Tezgâh'], ['ayar', 'Ayar'], ['gg', 'Genel gider'], ['fas', 'Fason'], ['mes', 'Ek mesai'], ['gec', 'Gecikme'], ['kar', 'Kâr']] as const;
 type Kalem = (typeof SUTUN)[number][0];
 interface Satir { s: Siparis; m: SiparisMaliyeti }
@@ -36,6 +37,8 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
       if (v === null) {
         const eks = k === 'mal' ? m.eksik.includes('malzeme kg fiyatı') : false;
         if (eks) hucreKoy(h, k, { sm: 'alert', v: '?', etiket: `${ad} fiyatı eksik` });
+        // Amortismanı bilinmeyen tezgâhta çalışan siparişin genel gideri bilinmez; sıfır yazılmaz.
+        else if (k === 'gg') hucreKoy(h, k, { v: YOK, etiket: GG_BILINMEZ });
         continue;
       }
       const pay = top ? (v / top) * 100 : null;
@@ -117,7 +120,8 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
       sec.push({ ad: 'Termin ve kâr', etki: 'Termin uzatmasının gecikmeyi ve kârı nasıl değiştirdiğini gösterir.', simge: 'gauge', yap: () => { o.git('denge'); } });
     } else {
       const v = ck === 'isl' ? m.isl : ck === 'ayar' ? m.ayar : m.gg;
-      neden = `${s.id} ${kucukHarf(sutunAdi(ck))} ${tl(v)}. En çok ${tez ?? YOK} tezgâhında çalışıyor; tutar o tezgâhın saat ücretinden gelir.`;
+      neden = ck === 'gg' && v === null ? `${s.id} ${kucukHarf(GG_BILINMEZ)}.`
+        : `${s.id} ${kucukHarf(sutunAdi(ck))} ${tl(v)}. En çok ${tez ?? YOK} tezgâhında çalışıyor; tutar o tezgâhın saat ücretinden gelir.`;
       if (tez) ekle(F?.tez, { ad: `${tez} saat ücreti`, deg: { tez }, etki: 'Bu tezgâhta çalışan bütün siparişlerin maliyeti değişir.' });
       if (ck === 'gg') sec.push({ ad: 'Genel gider', etki: 'Kira, enerji ve amortismanın tezgâhlara nasıl dağıldığını gösterir.', simge: 'layers', yap: () => { o.git('giderler'); } });
     }
