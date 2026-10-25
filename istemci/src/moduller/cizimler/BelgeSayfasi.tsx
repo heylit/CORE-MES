@@ -16,6 +16,9 @@ import './cizimler.css';
 // pdf.js, three ve STEP okuyucusu yalnız belge açılınca iner.
 const Goruntuleyici = lazy(() => import('./goruntu/Goruntuleyici.tsx'));
 
+// Bağlı kayıt okunur adıyla görünür; adı gelmeyen kayıtta (sahibi ad vermiyor ya da kayıt silinmiş) kimlik yazılır.
+const bagHedefi = (b: Pick<Bag, 'hedefAdi' | 'hedefId'>): string => b.hedefAdi ?? `#${String(b.hedefId)}`;
+
 type Acik = 'duzenle' | 'revizyon' | 'bag' | 'istasyon' | 'arsiv' | { sil: Revizyon } | { yayinla: Revizyon } | { bagKaldir: Bag } | null;
 
 const DOSYA_MIME: Record<Revizyon['dosyaTuru'], string> = {
@@ -41,7 +44,7 @@ function Onay({ belge, acik, kapat, yayinlandi }: OnayOzellikleri) {
       ? [`/cizimler/${belge.id}/revizyonlar/${acik.sil.id}/sil`, `Revizyon ${acik.sil.harf} silinsin mi?`, 'Taslak revizyon ve dosya bağı silinir. Bu işlem geri alınamaz.', 'Sil', surum, true]
       : 'yayinla' in acik
         ? [`/cizimler/${belge.id}/revizyonlar/${acik.yayinla.id}/yayinla`, `Revizyon ${acik.yayinla.harf} yayınlansın mı?`, 'Yayındaki revizyon eskiye düşer; bu belgeyi gösteren ekranlar yeni revizyonu gösterir.', 'Yayınla', surum, false]
-        : [`/cizimler/${belge.id}/bag-kaldir`, 'Bağı kaldır', `${BAG_ADI[acik.bagKaldir.hedefModul]} #${acik.bagKaldir.hedefId} ile bağ kaldırılır.`, 'Kaldır',
+        : [`/cizimler/${belge.id}/bag-kaldir`, 'Bağı kaldır', `${BAG_ADI[acik.bagKaldir.hedefModul]} ${bagHedefi(acik.bagKaldir)} ile bağ kaldırılır.`, 'Kaldır',
           { hedefModul: acik.bagKaldir.hedefModul, hedefId: acik.bagKaldir.hedefId, ...surum }, true];
   const komut = useKomut(yol, (cevap) => {
     kapat();
@@ -186,7 +189,7 @@ export function BelgeSayfasi() {
                 <ul className="tc-cz-baglar">
                   {belge.baglar.map((b) => (
                     <li key={`${b.hedefModul}-${b.hedefId}`}>
-                      <span><Simge ad="tag" />{BAG_ADI[b.hedefModul]} <b className="mono">#{b.hedefId}</b></span>
+                      <span><Simge ad="tag" />{BAG_ADI[b.hedefModul]} <b className="mono">{bagHedefi(b)}</b></span>
                       <span className="tc-cz-ipucu">{b.ekleyenAd ?? 'bilinmiyor'} · <span className="mono">{zamanMetni(b.eklendi)}</span></span>
                       {yazar && <Dugme simge="x" aria-label="Bağı kaldır" onClick={() => { acikYaz({ bagKaldir: b }); }} />}
                     </li>
