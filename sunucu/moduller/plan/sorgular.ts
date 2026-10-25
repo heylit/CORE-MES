@@ -100,6 +100,7 @@ export const bekleyenSiralar = async (db: Db, isEmriIdleri: readonly number[]): 
     `SELECT DISTINCT i.id AS "isEmriId", s.id AS "senaryoId", s.durum
        FROM plan_senaryo_degisikligi d JOIN plan_senaryosu s ON s.id = d.senaryo_id CROSS JOIN LATERAL unnest(d.is_emri_idleri) AS i (id)
       WHERE d.tur = 'sirala' AND d.kaldirma IS NULL AND s.durum IN ('acik', 'onayda') AND i.id = ANY($1::int[])
+        AND s.taban_plan_surumu = (SELECT surum FROM plan_durumu)
       ORDER BY 1, 2`, [[...isEmriIdleri]]));
 
 // Taslağa yazma: iş emri başına tek yerleşim (eskisi parçalarıyla silinir); parçası verilen iş bölünmüş yazılır.
