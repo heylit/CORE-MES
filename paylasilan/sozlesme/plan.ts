@@ -144,12 +144,21 @@ export const motorYerlesimiCevabi = z.object({
   yerlesimler: z.array(z.object({
     isEmriId: KIMLIK, uretimEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), kaynak: kaynakGirdisi, kaynakAdi: z.string().nullable(),
     baslangic: zaman, bitis: zaman, sabit: z.boolean(),
-    parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman })).optional(),
+    // 493 1 a: adet parçanın canlıya yazılacak tam sayı adedidir (kayıtlı bölmenin oranı adım adedine dağıtılmış); bölme yazılamıyorsa null.
+    parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, adet: z.number().int().positive().nullable() })).optional(),
   })),
   yerlesmeyen: z.array(z.object({ isEmriId: KIMLIK, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
   // Ekranın planRun opts.yerlesim girişi (Reçete ve Rota, #1860): anahtar canlı kuyruktaki gibi `emirNo|opNo`, bölünmüş işte parça başına
   // `emirNo|opNo~parçaNo`; değer makine (kişi kaynağında null) ve ISO başlangıç.
   ekranYerlesimi: z.record(z.string(), z.array(z.object({ makineId: KIMLIK.nullable(), baslangic: zaman }))),
+  // 481 a: emir başına teslime kalan bolluk, vardiya kapasitesi günüyle (eski Reçete ve Rota motorunun R.slack'i): teslim günü sonu eksi
+  // adımların bitişinin o gün başlayan vardiyalardaki dolan payı. Ekranın tampon rozeti bunu gösterir. Teslimsiz ya da yerleşmemiş işi olan
+  // emirde bitis ve bollukGun null. 493 2 a: rotaEski, emir açıldıktan sonra ürünün yürürlükteki rotası değişti (emir açıldığı rotada kaldı);
+  // bolmeYazilamaz, bölmesi canlıya yazılamayan adımların OP numaraları (adım adedi tam sayı değil ya da parça bir tam adetten az kalıyor).
+  emirler: z.array(z.object({
+    uretimEmriId: KIMLIK, emirNo: z.string(), teslim: z.string().nullable(), bitis: zaman.nullable(), bollukGun: z.number().nullable(),
+    rotaEski: z.boolean(), bolmeYazilamaz: z.array(z.number().int()),
+  })),
   // 307 a: motorun kullanıcıya söylemesi gereken genel durumlar (ör. personel kısıtı açık ama personel tanımsız); yoksa boş dizi.
   uyarilar: z.array(z.string()),
 });

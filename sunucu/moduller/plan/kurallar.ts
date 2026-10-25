@@ -159,6 +159,40 @@ export function calismaBasiGeri(takvim: Takvim, bitis: number, sure: number): nu
 export const kesisimDk = (takvim: Takvim, a: number, z: number): number =>
   takvim === null ? z - a : takvim.reduce((t, x) => t + Math.max(0, Math.min(x.bitis, z) - Math.max(x.baslangic, a)), 0);
 
+// 481 a: teslime kalan bolluk eski Reçete ve Rota motorundaki gibi vardiya kapasitesi günüyle sayılır (recete-rota-motoru.html anKesri,
+// R.slack): an, o gün BAŞLAYAN vardiyaların net dakikasının dolan payıyla gün kesrine çevrilir. Önceki günün gece yarısını geçen vardiyası
+// bitmeden gelen an o güne düşer. gunler: gün numarasının (tesis günü) o gün başlayan çalışma aralıkları; null takvimsiz kaynaktır, kesir
+// duvar saatidir. Okunmamış gün (undefined) de duvar saatiyle sayılır. gunBasi: g gününün 00:00'ı, aynı dakika ekseninde.
+export function kapasiteKesri(gunler: ((g: number) => readonly Aralik[] | undefined) | null, g: number, gunBasi: number, t: number): number {
+  const saat = g + (t - gunBasi) / GUN_DK;
+  if (gunler === null) return saat;
+  const dun = gunler(g - 1) ?? [];
+  const dunKap = kesisimDk(dun, -Infinity, Infinity);
+  const dunDolan = kesisimDk(dun, -Infinity, t);
+  if (dunKap > 0 && dunDolan < dunKap && dun.some((a) => a.bitis > gunBasi && t < a.bitis)) return g - 1 + dunDolan / dunKap;
+  const bugun = gunler(g);
+  if (bugun === undefined) return saat;
+  const kap = kesisimDk(bugun, -Infinity, Infinity);
+  return g + (kap > 0 ? Math.min(1, kesisimDk(bugun, -Infinity, t) / kap) : 0);
+}
+
+// Bolluk = teslim günü sonu (gün + 1) - adımların en geç kesri (eski R.dueEnd - R.makespan); teslim ya da yerleşen adım yoksa null.
+export const kapasiteBollugu = (teslimGun: number | null, kesirler: readonly number[]): number | null =>
+  teslimGun === null || kesirler.length === 0 ? null : teslimGun + 1 - Math.max(...kesirler);
+
+// 493 1 a: bölünmüş işin canlıya yazılacak parça adetleri (eski Reçete ve Rota bolmeAdetleri): kayıtlı parçaların oranı adımın adedine
+// en büyük kalanla tam sayı olarak dağıtılır, toplamı adım adedidir. Adım adedi tam sayı değilse, parçadan azsa ya da bir parça bir tam
+// adetten az kalırsa bölme yazılamaz (null).
+export function bolmeAdetleri(oranlar: readonly number[], toplam: number): number[] | null {
+  if (oranlar.length < 2 || !Number.isInteger(toplam) || toplam < oranlar.length || oranlar.some((q) => !(q > 0))) return null;
+  const top = oranlar.reduce((a, b) => a + b, 0);
+  const ham = oranlar.map((q) => (q * toplam) / top);
+  const adet = ham.map(Math.floor);
+  let kalan = toplam - adet.reduce((a, b) => a + b, 0);
+  ham.map((h, i) => [h - adet[i]!, i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]).forEach(([, i]) => { if (kalan > 0) { adet[i]! += 1; kalan -= 1; } });
+  return adet.every((x) => x >= 1) ? adet : null;
+}
+
 // İşin çalışma takvimindeki parçaları: vardiya dışında kalan süre (gece, mola) yük sayılmaz. Takvimsiz kaynak sürekli çalışır.
 export const calisilanParcalar = (takvim: Takvim, is: Aralik): Aralik[] =>
   takvim === null ? [is] : takvim.flatMap((x) => {
@@ -788,6 +822,27 @@ export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: n
     personelGun: null as number | null,
     maliyetTl: maliyet(emirSonu),
   };
+}
+
+// 507 1 a: eski Reçete ve Rota motorunun özetindeki iki gösterge (evaluate suH ve wT), salt okuma. Ayar saati: yerleşen işlerin (bölünmüş
+// işte her parçanın) ayar süresi toplamı; başlamış ve sayımı olan işin ayarı yapılmıştır, sayılmaz. Öncelik ağırlıklı gecikme: emrin bütün
+// işleri yerleşmişse son bitişin teslim günü sonunu aştığı saat x öncelik ağırlığı x sipariş satırındaki adet payı. Ağırlık eski motorun
+// PW'si (1: 4, 2: 2, 3: 1); tanımsız öncelik (4 dahil) 1. Yerleşmemiş işi olan ya da teslimsiz emir gecikmeye girmez. Saatler bir ondalık.
+export const ONCELIK_AGIRLIGI: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1 };
+export function ayarVeGecikme(
+  y: readonly (Aralik & { isEmriId: number; uretimEmriId: number; ayarDk: number | null })[],
+  emirler: readonly { id: number; teslimDk: number | null; isSayisi: number; oncelik: number | null; pay: number }[],
+): { ayarSaat: number; agirlikliGecikmeSaat: number } {
+  const ayarDk = y.reduce((t, x) => t + (x.ayarDk ?? 0), 0);
+  let gecikme = 0;
+  for (const e of emirler) {
+    const l = y.filter((x) => x.uretimEmriId === e.id);
+    if (e.teslimDk === null || e.isSayisi === 0 || new Set(l.map((x) => x.isEmriId)).size !== e.isSayisi) continue;
+    const bit = Math.max(...l.map((x) => x.bitis));
+    gecikme += (Math.max(0, bit - e.teslimDk) / 60) * (ONCELIK_AGIRLIGI[e.oncelik ?? 0] ?? 1) * e.pay;
+  }
+  const bir = (x: number) => Math.round(x * 10) / 10;
+  return { ayarSaat: bir(ayarDk / 60), agirlikliGecikmeSaat: bir(gecikme) };
 }
 
 // PL-09: iş merkezinin günlük kişi-dakika ihtiyacı (istasyon yükü x operatör ihtiyacı; 1 kişi 3 makineye bakıyorsa 0,33) ve kapasitesi

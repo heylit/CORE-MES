@@ -44,7 +44,7 @@ export function RaporlarSayfasi() {
   const R = useMemo(() => (D ? raporHesapla(D, { wc, st, shf }, ayarlar) : null), [D, wc, st, shf, ayarlar]);
   const istasyonlar = istasyonListesi(ayarlar.tesis, true).filter((s) => !wc || s.wc === wc);
   return (
-    <SayfaCercevesi simge="chart" baslik="Raporlar" ek={(
+    <SayfaCercevesi simge="chart" baslik="Raporlar" renk="done" ek={(
       <Secmeli etiket="Rapor aralığı" deger={rk} degistir={rkYaz} secenekler={ARALIKLAR.map(([k, l]) => ({ k, etiket: l }))} />
     )}>
       <div className="tc-ay3-arac">

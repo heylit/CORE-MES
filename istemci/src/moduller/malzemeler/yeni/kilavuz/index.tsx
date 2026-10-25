@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { SayfaBasligi, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { KatalogSimgesi } from '../ortak/KatalogSimgesi.tsx';
 import { OPT_ICON, ROLLER, TURLER, TUR_ICON, YETKI, YETKI_AD } from '../sabitler/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
@@ -19,7 +19,6 @@ export function Kilavuz(o: EkranOzellikleri) {
 
   return (
     <div className="tc-ml">
-      <SayfaBasligi baslik="Kılavuz" simge="eye" />
 
       <section className="tc-ml-giris">
         <h3>Kart nasıl açılır?</h3>

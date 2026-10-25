@@ -55,6 +55,20 @@ describe('M2 Katalog: liste ve arama', () => {
     expect(screen.getAllByText('2 kart').length).toBeGreaterThan(0);
   });
 
+  test('eski düzen: katlanır süzgeç kutusu, üst baştaki birim düğmesi listeyi çevirir; liste 50 satırlık sayfalarla (465/3)', async () => {
+    kur(YONETICI, kartlar(...Array.from({ length: 55 }, (_, i) => satir(`m${String(i)}`, i + 1, ornekKayit(`m${String(i)}`, `HM-T-${String(i)}`, `Çubuk ${String(i)}`)))));
+    yeniEkranAc(KOK);
+    expect(await screen.findAllByText(/^HM-T-\d+$/)).toHaveLength(50);
+    const kutu = screen.getByText('Süzgeçler').closest('details') as HTMLDetailsElement;
+    expect(kutu.open).toBe(true);
+    expect(screen.getByRole('heading', { level: 1, name: 'Malzemeler ve Hizmetler' })).toBeTruthy();
+    const imp = screen.getByRole('button', { name: 'in, lb' });
+    fireEvent.click(imp);
+    expect(imp.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getAllByText(/ lb$/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'mm, kg' }));
+  });
+
   test('arama kod, ad ve tedarikçide arar; eşleşme yoksa ileti çıkar', async () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
@@ -69,13 +83,13 @@ describe('M2 Katalog: liste ve arama', () => {
   test('yazan "Yeni kart" görür ve sihirbaza gider; okuyan görmez (reddedilen)', async () => {
     kur(YAZAN);
     yeniEkranAc(KOK);
-    fireEvent.click(await screen.findByRole('button', { name: 'Yeni kart' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yeni kart' }));
     expect(await screen.findByRole('tab', { name: 'Yeni kart', selected: true })).toBeTruthy();
     cleanup();
     kur(OKUYAN);
     yeniEkranAc(KOK);
     await screen.findByText('HM-MET-C45-0001');
-    expect(screen.queryByRole('button', { name: 'Yeni kart' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Yeni kart' })).toBeNull();
   });
 
   test('boş katalog "Katalog boş." der; yazana yeni malzeme düğmesi', async () => {
@@ -89,14 +103,12 @@ describe('M2 Katalog: liste ve arama', () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
     await screen.findByText('HM-MET-C45-0001');
-    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'CSV dışa aktar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'CSV dışa aktar' }));
     const csv = await metni(indirilen[0]!);
     expect(csv.split('\r\n')[0]).toMatch(/^﻿?Tür;Kod;Ad;Aile;Sınıf;Kalite;Standart/);
     expect(csv).toContain('HM-MET-C45-0001');
     expect(csv).not.toMatch(/Fiyat;|Para birimi/);
-    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'JSON dışa aktar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'JSON dışa aktar' }));
     // Hammadde `kod`, öteki türler `stok_kodu` taşır (prototipin JSON biçimi).
     const j = JSON.parse(await metni(indirilen[1]!)) as { kod?: string; stok_kodu?: string; onay_durumu: string }[];
     expect(j.map((x) => x.kod ?? x.stok_kodu).sort()).toEqual(['HM-MET-C45-0001', 'SF-GEN-00001']);
@@ -108,8 +120,7 @@ describe('M2 Katalog: liste ve arama', () => {
     kur(YONETICI, kartlar(satir('m9', 1, eksik)));
     yeniEkranAc(KOK);
     await screen.findByText('HM-EKSIK-1');
-    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'CSV dışa aktar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'CSV dışa aktar' }));
     expect(await metni(indirilen[0]!)).toContain('HM-EKSIK-1');
     expect(await kartiAc('HM-EKSIK-1')).toBeTruthy();
   });
@@ -315,8 +326,7 @@ describe('M2 Katalog: etiket, saha ve seçim', () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
     await screen.findByText('HM-MET-C45-0001');
-    fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'QR okut' }));
+    fireEvent.click(screen.getByRole('button', { name: 'QR okut' }));
     const qr = within(await screen.findByRole('dialog', { name: 'QR okut' }));
     fireEvent.change(qr.getByLabelText('Kod'), { target: { value: 'YOK-000' } });
     fireEvent.click(qr.getByRole('button', { name: 'Bul' }));

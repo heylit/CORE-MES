@@ -24,7 +24,7 @@ export function BakimSayfasi() {
   const acik = liste.filter(arizaMi).filter((m) => m.status !== 'done').length;
   const vade = yaklasanBakimSayisi(liste, simdi);
   return (
-    <SayfaCercevesi simge="wrench" baslik="Bakım" ek={(
+    <SayfaCercevesi simge="wrench" baslik="Bakım" renk="stop" ek={(
       <Secmeli etiket="Bakım bölümü" deger={sekme} degistir={sekmeYaz}
         secenekler={[{ k: 'ariza', etiket: 'Arızalar', sayi: acik || null }, { k: 'plan', etiket: 'Periyodik bakım', sayi: vade || null }, { k: 'mc', etiket: 'Makine güvenilirliği' }]} />
     )}>

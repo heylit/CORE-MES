@@ -291,10 +291,11 @@ function tmiBitenler(emirler, D) {
   }
   return y;
 }
-/* Planın girdisinden biten işi düşürür (st yerinde değişir); biten yoksa st olduğu gibi kalır. */
+/* Planın girdisinden biten işi düşürür (st yerinde değişir); biten yoksa st olduğu gibi kalır. Biten siparişin malzemesi tahmini eksik
+   satırından da düşer (tmEksikYaz). */
 function bitenUygula(st, b) {
   if (!b || !st || !st.D) return st;
-  if (Object.keys(b.siparis).length) st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]);
+  if (Object.keys(b.siparis).length) { st.D.siparisler = (st.D.siparisler || []).filter(s => !b.siparis[s.id]); tmEksikYaz(st); }
   if (Object.keys(b.adim).length) st.bitti = Object.assign({}, st.bitti || {}, b.adim);
   return st;
 }

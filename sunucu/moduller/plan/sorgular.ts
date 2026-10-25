@@ -100,6 +100,7 @@ export const bekleyenSiralar = async (db: Db, isEmriIdleri: readonly number[]): 
     `SELECT DISTINCT i.id AS "isEmriId", s.id AS "senaryoId", s.durum
        FROM plan_senaryo_degisikligi d JOIN plan_senaryosu s ON s.id = d.senaryo_id CROSS JOIN LATERAL unnest(d.is_emri_idleri) AS i (id)
       WHERE d.tur = 'sirala' AND d.kaldirma IS NULL AND s.durum IN ('acik', 'onayda') AND i.id = ANY($1::int[])
+        AND s.taban_plan_surumu = (SELECT surum FROM plan_durumu)
       ORDER BY 1, 2`, [[...isEmriIdleri]]));
 
 // Taslağa yazma: iş emri başına tek yerleşim (eskisi parçalarıyla silinir); parçası verilen iş bölünmüş yazılır.
@@ -275,6 +276,9 @@ export const senaryoSurumArtir = (db: Db, id: number) => db.sorgu('UPDATE plan_s
 export const senaryoKapat = (db: Db, id: number, durum: 'canliya_alindi' | 'vazgecildi', kisiId: number) =>
   db.sorgu('UPDATE plan_senaryosu SET durum = $2, kapanma = now(), kapatan_kisi_id = $3, surum = surum + 1 WHERE id = $1 AND durum = $4',
     [id, durum, kisiId, durum === 'canliya_alindi' ? 'onayda' : 'acik']);
+// 502 a: aynı tabandan açılmış öbür açık ve onaydaki taslaklar (biri canlıya alınınca bayatlarlar); kilitli okunur.
+export const kardesTaslaklar = (db: Db, id: number, taban: number): Promise<{ id: number; durum: 'acik' | 'onayda' }[]> =>
+  db.sorgu(`SELECT id, durum FROM plan_senaryosu WHERE id <> $1 AND taban_plan_surumu = $2 AND durum IN ('acik', 'onayda') ORDER BY id FOR UPDATE`, [id, taban]);
 export const senaryoDurumYaz = (db: Db, id: number, durumdan: 'acik' | 'onayda', duruma: 'acik' | 'onayda') =>
   db.sorgu('UPDATE plan_senaryosu SET durum = $3, surum = surum + 1 WHERE id = $1 AND durum = $2', [id, durumdan, duruma]);
 export const tabanYenile = (db: Db, id: number) =>
