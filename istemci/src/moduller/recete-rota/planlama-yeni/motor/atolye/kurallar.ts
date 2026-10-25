@@ -307,6 +307,30 @@ export function gunKaydi(c: PlanlamaCalismasi): GunKaydi {
   }
   return { basi, gecmis: gecmis.sort((a, b) => b.gun.localeCompare(a.gun)) };
 }
+// Eski gunBasla ve gunKaydet: gün başı yoksa ya da başka günse şimdiki plan gün başı olur; bugünün satırı (sabah, son, kararlar, onaylar) güncellenir;
+// en çok 90 gün tutulur. Değişmediyse null (gereksiz yazma yok).
+export const IZ_KARAR = /^(Plan elle değişti|Deneme ana plana alındı)$/;
+export const IZ_ONAY = /onay|canlı/i;
+export function gunYeni(c: PlanlamaCalismasi, p: OkunanPlan, k: string): Record<string, unknown> | null {
+  const g = nesne(c.tpGun) ? c.tpGun : {};
+  const gecmis: Record<string, unknown> = nesne(g.gecmis) ? { ...g.gecmis } : {};
+  const J: Record<string, { C: number | null; T: number | null }> = {};
+  for (const [j, x] of Object.entries(p.J)) J[j] = { C: x.C, T: x.T };
+  const eski = nesne(g.basi) && g.basi.gun === k ? g.basi : null;
+  const basi = eski ?? { gun: k, e: { wT: p.ozet.wT, late: p.ozet.late, J }, surum: c.canliSurum };
+  const sabah = gunDurumu(nesne(basi) ? basi.e : null) ?? { late: p.ozet.late, wT: p.ozet.wT };
+  const bugun = c.iz.filter((x) => gunAnahtari(x.t) === k);
+  gecmis[k] = {
+    sabah: { late: sabah.late, wT: sabah.wT }, son: { late: p.ozet.late, wT: p.ozet.wT }, surum: c.canliSurum,
+    kararlar: bugun.filter((x) => IZ_KARAR.test(x.ne)).map((x) => ({ t: x.t, ad: x.ayrinti })),
+    onaylar: bugun.filter((x) => IZ_ONAY.test(x.ne)).map((x) => ({ t: x.t, ad: x.ne + (x.ayrinti ? ` · ${x.ayrinti}` : '') })),
+  };
+  const ks = Object.keys(gecmis).sort(); while (ks.length > 90) { const d = ks.shift(); if (d) delete gecmis[d]; }
+  const yeni = { gecmis, basi };
+  return sirali(yeni) === sirali(c.tpGun) ? null : yeni;
+}
+// Anahtar sırasından bağımsız karşılaştırma: sunucu belgeyi anahtarları yeniden sıralayarak döndürebilir.
+const sirali = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => (nesne(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
 export function gunAnahtari(t: number): string { const d = new Date(t); return `${d.getFullYear()}-${iki(d.getMonth() + 1)}-${iki(d.getDate())}`; }
 // İki planın sipariş bitişi farkı (etki): çeyrek saatten büyük fark, mutlak büyüklüğe göre.
 export interface BitisFarki { j: string; d: number; gec: '' | 'gecikmeye düşer' | 'zamanına girer' }
