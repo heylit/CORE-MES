@@ -6,10 +6,10 @@ import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
-import { DURUM_TONU, planMetni, turAdi } from './gorunum.ts';
+import { DURUM_TONU, planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, uretilirMi,
+  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
@@ -91,7 +91,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
         : (
           <ul className="tc-rr3-liste" aria-label="Üretim emirleri">
             <li className="tc-rr3-bas" aria-hidden="true">
-              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan</span><span>İlerleme</span><span>Durum</span>
+              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan bitiş</span><span>İlerleme</span><span>Durum</span>
             </li>
             {satirlar.map((s) => (
               <EmirSatiri
@@ -108,7 +108,6 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
 }
 
 // Sol şerit emrin plan sırasından renk alır (plandaki emirler ayırt edilsin); plan dışı emirde şerit çizgi rengidir.
-const SERIT_SAYISI = 6;
 
 function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   durum: RrDurumu; emir: Emir; derinlik: number; acik: boolean; sira: number | null; ac: () => void; children: React.ReactNode;
@@ -117,7 +116,8 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   const il = ilerleme(d, o);
   const ozet = planOzeti(d, d.planYerlesim, o);
   const plan = planMetni(ozet);
-  const gecikiyor = ozet.tur === 'plan' && ozet.gecikiyor;
+  const tampon = tamponRozeti(ozet);
+  const gecikiyor = ozet.tur === 'planlanamiyor' || (ozet.tur === 'plan' && ozet.gecikiyor);
   const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
   const rev = o.rev === null ? null : d.routeRevs?.find((r) => r.id === o.rev) ?? null;
   const revEski = rev !== null && rev.status !== 'yururlukte';
@@ -125,7 +125,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   return (
     <li
       className="tc-rr3-satir-kap" data-acik={acik ? '' : undefined} data-gec={gecikiyor ? '' : undefined}
-      data-serit={sira === null ? undefined : String((sira * 3 + 1) % SERIT_SAYISI)} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
+      data-serit={sira === null ? undefined : String(seritNo(sira))} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
     >
       <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
         <span className="tc-rr3-no">
@@ -147,8 +147,9 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
         </span>
         <span className="tc-rr3-sag" data-baslik="Miktar"><b>{sayi(o.qty)}</b> <small>{urun?.unit ?? ''}</small></span>
         <span data-baslik="Teslim">{tarih(o.due)}</span>
-        <span data-baslik="Plan">
+        <span data-baslik="Plan bitiş">
           {plan.ton ? <Rozet ton={plan.ton}>{plan.metin}</Rozet> : plan.metin}
+          {tampon && <span title={tampon.ipucu}><Rozet ton={tampon.ton}>{tampon.metin}</Rozet></span>}
           {plan.alt && <small>{plan.alt}</small>}
         </span>
         <span className="tc-rr3-ilerleme" data-baslik="İlerleme">
