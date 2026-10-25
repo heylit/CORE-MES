@@ -46,6 +46,66 @@ export const planlamaCalismasiCevabi = z.object({
   surum: z.number().int().nullable(),
 });
 
+// 499 a, 506 a: çalışma planı ile canlı plan farkı (atölyenin "canlı planla aynı" rozeti). k: motorun işlem kimliği (sipariş.k), anahtar plan
+// modülünün `emirNo|opNo`'su. Saat kıyaslanmaz (canlıya almada saati plan modülü kurar); kıyas tezgâh ve tezgâhtaki sıradır. yeni: canlıda
+// yeri yok; tezgah: canlıda başka tezgâhta; sira: aynı tezgâhta sırası değişen (en az iş); eksik: canlıda olup çalışmada yazılacak olmayan
+// iş; tasinan = tezgah + sira. Biten ve fason iş sayılmaz. ayni: hiç fark yok. guncel: plan çalışmanın güncel verisiyle çözülmüş (ayni'ya
+// karışmaz). yazilamaz: çalışmada olup plan modülünde karşılığı olmayan iş (kişi kaynağı, planlanacak iş emri değil); kıyasa girmez.
+// Çalışma ya da çalışmada plan yoksa cevap null.
+export const CALISMA_FARKI_TURLERI = ['yeni', 'tezgah', 'sira', 'eksik'] as const;
+export const canliFarkiCevabi = z.object({
+  planSurumu: z.number().int(), ayni: z.boolean(), guncel: z.boolean(),
+  tasinan: z.number().int(), tezgah: z.number().int(), sira: z.number().int(), yeni: z.number().int(), eksik: z.number().int(),
+  isler: z.array(z.object({ k: z.string().nullable(), anahtar: z.string(), tur: z.enum(CALISMA_FARKI_TURLERI) })),
+  yazilamaz: z.array(z.string()),
+}).nullable();
+
+// 505 a, 506 a: taban plan (adımın ilk canlıya alınan yeri, 33 a) ve son canlı plan, sayfanın anahtarlarıyla ("Plan ve gerçekleşen" sekmesi).
+// k: çalışmada karşılığı yoksa (çalışma yok, emir sayfada değil) null. Bölünmüş canlı işte parcalar dolu, ana satır zarftır. İş, tabanı
+// ya da canlı yeri olan iş emirleridir (biten dahil); ikisi de yoksa listede yoktur.
+const planKaynagi = z.object({ tur: z.enum(['makine', 'kisi']), id: z.number().int().positive() });
+const planYeri = z.object({ kaynak: planKaynagi, baslangic: zamanSemasi, bitis: zamanSemasi });
+export const tabanVeCanliCevabi = z.object({
+  planSurumu: z.number().int(),
+  isler: z.array(z.object({
+    k: z.string().nullable(), anahtar: z.string(), isEmriId: z.number().int().positive(), uretimEmriId: z.number().int().positive(),
+    taban: planYeri.extend({ planSurumu: z.number().int() }).nullable(),
+    canli: planYeri.extend({ parcalar: z.array(planYeri.extend({ no: z.number().int().positive(), adet: z.number().int().positive() })) }).nullable(),
+  })),
+});
+
+// 503 a: çalışma planı kişiye yeni plan taslağı olarak yazılır (atölyenin "Onaya gönder" ve "Çalışmayı canlıya al"ı). calismaSurumu
+// okunan çalışma kaydının sürümüdür: arada başkası yazdıysa reddedilir; sunucu yalnız kayıtlı çalışmayı yazar. planSurumu verilirse plan
+// arada canlıya alındıysa reddedilir. Onaya gönderme ve canlıya alma plan modülünün uçlarıyla kalır.
+export const calismaTaslagiGovdesi = z.object({
+  ad: z.string().trim().min(1, 'Taslak adı gerekli.').max(80),
+  calismaSurumu: z.number().int(),
+  planSurumu: z.number().int().nonnegative().optional(),
+});
+// yazilan, atlanan plan modülünün kuyruk yazmasınındır (atlanan: başlamış, kilitli ya da dondurulmuş iş); yazilamaz canliFarkiCevabi'ndaki gibi.
+export const calismaTaslagiCevabi = z.object({
+  taslak: z.object({ id: z.number().int().positive(), surum: z.number().int() }),
+  yazilan: z.number().int(), atlanan: z.number().int(), yazilamaz: z.array(z.string()),
+  // 507 2 a: çalışmanın ek vardiyaları taslağa geçer; atlanan: sunucuda karşılığı olmayan (elle girilmiş, kapsam dışı ya da kullanımda
+  // olmayan) makine ya da vardiya. Eski istemciler okumadığı için isteğe bağlı; sunucu her cevapta doldurur.
+  ekMesai: z.object({ yazilan: z.number().int(), atlanan: z.number().int() }).optional(),
+});
+
+// 507 3 a (503'ün tersi): plan taslağının yerleşimleri ve kilitleri çalışmaya yazılır (eski "Çalışmaya aç"ın planı). Yalnız çalışmada
+// işlemi olan, bitmemiş, makinedeki iş yazılır; plan "güncel değil" olur, sayfa yeniden çözer. Veri, arıza, tercih ve ağırlıklar yazılmaz.
+// taslakSurumu ve calismaSurumu okunan sürümlerdir: arada yazıldıysa reddedilir.
+export const taslaktanCalismayaGovdesi = z.object({
+  taslakId: z.number().int().positive(), taslakSurumu: z.number().int().positive(), calismaSurumu: z.number().int(),
+});
+// atlanan: taslakta yerleşik ama çalışmaya yazılamayan iş (anahtar "emir no|OP no"; çalışmada işlemi yok, bitmiş ya da kişide).
+// oncekiSurum: geri almanın döneceği sürüm.
+export const taslaktanCalismayaCevabi = z.object({
+  calismaSurumu: z.number().int(), oncekiSurum: z.number().int(), yazilan: z.number().int(), kilitli: z.number().int(), atlanan: z.array(z.string()),
+});
+// 508 2 a: çalışma kaydı geçmişteki bir önceki sürümüne döner. calismaSurumu okunan sürümdür: arada başka yazma olduysa reddedilir (409).
+export const calismaGeriAlGovdesi = z.object({ calismaSurumu: z.number().int() });
+export const calismaGeriAlCevabi = z.object({ calismaSurumu: z.number().int(), donulenSurum: z.number().int() });
+
 export const silGovdesi = z.object({ anahtar, beklenenSurum: z.number().int() });
 export const silCevabi = z.object({ silindi: z.boolean() });
 
@@ -535,6 +595,13 @@ export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
 export type PlanlamaCalismasiCevabi = z.output<typeof planlamaCalismasiCevabi>;
+export type CanliFarkiCevabi = z.output<typeof canliFarkiCevabi>;
+export type TabanVeCanliCevabi = z.output<typeof tabanVeCanliCevabi>;
+export type CalismaTaslagiGovdesi = z.output<typeof calismaTaslagiGovdesi>;
+export type CalismaTaslagiCevabi = z.output<typeof calismaTaslagiCevabi>;
+export type TaslaktanCalismayaGovdesi = z.output<typeof taslaktanCalismayaGovdesi>;
+export type TaslaktanCalismayaCevabi = z.output<typeof taslaktanCalismayaCevabi>;
+export type CalismaGeriAlCevabi = z.output<typeof calismaGeriAlCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;
 export type YazCevabi = z.output<typeof yazCevabi>;
 export type SilCevabi = z.output<typeof silCevabi>;

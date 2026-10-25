@@ -99,6 +99,17 @@ describe('son hareketler iki kaynaktan (ATL-40, kart #1122)', () => {
     expect(sonHareketler([emirOlayi('a', '2026-10-13T09:00:00Z')], [arkonOlayi(3, 'calls', '2026-10-13T09:30:00Z', null)], 1).map((x) => x.anahtar)).toEqual(['arkon:3']);
   });
 
+  it('504 a: kalite kararı defterle aynı adla ve kararı verenle görünür; kararı veren bilinmiyorsa kişi "—"; düzeltme sayanındır', () => {
+    const s = sonHareketler([
+      { ...emirOlayi('a', '2026-10-13T09:00:00Z'), olay: 'kalite_red', kararVeren: { id: 9, ad: 'Deneme Kaliteci' } },
+      { ...emirOlayi('b', '2026-10-13T09:10:00Z'), olay: 'kalite_onay', kararVeren: null },
+      { ...emirOlayi('c', '2026-10-13T09:20:00Z'), olay: 'duzeltme' },
+    ], [], 10);
+    expect(s.map((x) => [x.metin, x.ayrinti[1]])).toEqual([
+      ['Düzeltme', kisi.ad], ['Kalite kararı (onay)', '—'], ['Kalite kararı (red)', 'Deneme Kaliteci'],
+    ]);
+  });
+
   it('ret: Arkon sayımı ve emre bağlı durum olayı alınmaz (üretim emirlerinde zaten var)', () => {
     const s = sonHareketler([], [arkonOlayi(5, 'counts', '2026-10-13T09:00:00Z', 'UE-1'), arkonOlayi(4, 'events', '2026-10-13T09:00:00Z', 'UE-1')], 10);
     expect(s).toEqual([]);

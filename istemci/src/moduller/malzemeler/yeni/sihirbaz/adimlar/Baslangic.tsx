@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dugme } from '../../../../../ortak/arayuz/index.ts';
 import { fmt } from '../../bicim.ts';
 import * as K from '../../kurallar/index.ts';
@@ -10,6 +10,8 @@ import { aileler, formlar, girdiler } from '../turler.ts';
 import type { Aile, HizliAramaSonucu, Kalite, Tur } from '../../kurallar/index.ts';
 import { useSihirbaz } from '../baglam.ts';
 import { kopyala, type Taslak } from '../durum.ts';
+import { AktifSuzgecler, Suzgecler } from '../../katalog/Suzgecler.tsx';
+import { suzulmus, type FiltreSecimi } from '../../katalog/liste.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
 import { OnayRozeti } from '../OnayRozeti.tsx';
 import { BagDugmesi, Cip, CipGrubu, Tamam, Yardim } from '../parcalar.tsx';
@@ -48,7 +50,7 @@ export function Baslangic() {
           <button key={k} type="button" className="tc-my-kart" data-aile={k} aria-pressed={d.fam === k} onClick={() => { aileSec(k); }}>
             <span className="tc-my-kart-ikon"><KatalogSimgesi yol={S.FAM_ICON[k]} /></span>
             <span className="tc-my-kart-ad">{f.ad}</span>
-            <span className="tc-my-kart-acik">{f.desc}</span>
+            <span className="tc-my-kart-aciklama">{f.desc}</span>
           </button>
         ))}
       </div>
@@ -79,7 +81,7 @@ export function TurKartlari() {
         <button key={k} type="button" className="tc-my-kart" data-tur={k} aria-pressed={cur === k} onClick={() => { sec(k); }}>
           <span className="tc-my-kart-ikon"><KatalogSimgesi yol={S.TUR_ICON[k]} /></span>
           <span className="tc-my-kart-ad">{t.ad}</span>
-          <span className="tc-my-kart-acik">{t.desc}</span>
+          <span className="tc-my-kart-aciklama">{t.desc}</span>
         </button>
       ))}
     </div>
@@ -189,7 +191,42 @@ export function HizliArama() {
           <FavoriBolumu />
         )}
       </div>
+      <SecerekSuz />
     </section>
+  );
+}
+
+const SUZ_SINIRI = 25;
+
+// Prototipte `hzFiltreHTML`: katalog süzgeçleriyle kart bulma; ilk 25 kart listelenir, seçim yokken yalnız yol gösterilir.
+function SecerekSuz() {
+  const { b, kartlar } = useSihirbaz();
+  const [sec, secYaz] = useState<FiltreSecimi>({});
+  const kayitlar = useMemo(() => kartlar.map((k) => k.kayit), [kartlar]);
+  const aktif = K.filtreEtiketleri(sec, b).length > 0;
+  const sonuc = useMemo(() => suzulmus(kartlar, '', sec, b), [kartlar, sec, b]);
+  const etkinSayi = aktif ? sonuc.length : kayitlar.filter((x) => K.onayDurum(x, b) !== 'pasif').length;
+  return (
+    <details className="tc-my-hzf" open={aktif || undefined}>
+      <summary>Seçerek süz ve kart bul</summary>
+      {kartlar.length === 0 ? <p className="tc-my-kucuk">Katalog henüz boş.</p> : (
+        <>
+          <AktifSuzgecler sec={sec} adet={etkinSayi} degistir={secYaz} b={b} />
+          <div className="tc-my-hzf-g">
+            <Suzgecler liste={kayitlar} sec={sec} degistir={secYaz} b={b} />
+            <div>
+              {!aktif ? <p className="tc-my-kucuk">Sol taraftan özellik seçerek katalogdaki kartları daralt; bulduğun kartı açıp kullanabilirsin.</p>
+                : sonuc.length ? (
+                  <>
+                    <ul className="tc-my-hz-liste">{sonuc.slice(0, SUZ_SINIRI).map((k) => <KartSatiri key={k.kimlik} x={k.kayit} />)}</ul>
+                    {sonuc.length > SUZ_SINIRI && <p className="tc-my-kucuk">İlk 25 kart; süzgeci daralt ya da katalogda gör.</p>}
+                  </>
+                ) : <Tamam>Bu süzgeçle katalogda kart yok.</Tamam>}
+            </div>
+          </div>
+        </>
+      )}
+    </details>
   );
 }
 

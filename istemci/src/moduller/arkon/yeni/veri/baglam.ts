@@ -20,6 +20,8 @@ export interface ArkonBaglami {
   git(sayfa: string, kimlik?: string): void;
   // TMI'nin öteki sayfaları; yalnız bu listedeki hedef açılır (baglanti.ts TMI_HEDEFLERI).
   tmiyeGit(hedef: TmiHedefi): void;
+  // "Operatör gözüyle": paketin operatör ekranı bulunduğu sayfanın üstünde açılan pencerede, salt okunur (eski PreviewOv).
+  onizle(paketId: string): void;
   // Önizlemede ("Operatör gözüyle") yazma yoktur; taşıyıcı da yazmayı TMI'ye iletmez.
   saltOkunur: boolean;
 }

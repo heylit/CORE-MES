@@ -824,6 +824,49 @@ export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: n
   };
 }
 
+// 507 1 a: eski Reçete ve Rota motorunun özetindeki iki gösterge (evaluate suH ve wT), salt okuma. Ayar saati: yerleşen işlerin (bölünmüş
+// işte her parçanın) ayar süresi toplamı; başlamış ve sayımı olan işin ayarı yapılmıştır, sayılmaz. Öncelik ağırlıklı gecikme: emrin bütün
+// işleri yerleşmişse son bitişin teslim günü sonunu aştığı saat x öncelik ağırlığı x sipariş satırındaki adet payı. Ağırlık eski motorun
+// PW'si (1: 4, 2: 2, 3: 1); tanımsız öncelik (4 dahil) 1. Yerleşmemiş işi olan ya da teslimsiz emir gecikmeye girmez. Saatler bir ondalık.
+export const ONCELIK_AGIRLIGI: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1 };
+export function ayarVeGecikme(
+  y: readonly (Aralik & { isEmriId: number; uretimEmriId: number; ayarDk: number | null })[],
+  emirler: readonly { id: number; teslimDk: number | null; isSayisi: number; oncelik: number | null; pay: number }[],
+): { ayarSaat: number; agirlikliGecikmeSaat: number } {
+  const ayarDk = y.reduce((t, x) => t + (x.ayarDk ?? 0), 0);
+  let gecikme = 0;
+  for (const e of emirler) {
+    const l = y.filter((x) => x.uretimEmriId === e.id);
+    if (e.teslimDk === null || e.isSayisi === 0 || new Set(l.map((x) => x.isEmriId)).size !== e.isSayisi) continue;
+    const bit = Math.max(...l.map((x) => x.bitis));
+    gecikme += (Math.max(0, bit - e.teslimDk) / 60) * (ONCELIK_AGIRLIGI[e.oncelik ?? 0] ?? 1) * e.pay;
+  }
+  const bir = (x: number) => Math.round(x * 10) / 10;
+  return { ayarSaat: bir(ayarDk / 60), agirlikliGecikmeSaat: bir(gecikme) };
+}
+
+// 507 2 a: ek vardiyaların haftalık bütçesi (eski motorun mesaiHafta'sı, kontroldeki "haftalık ek mesai bütçesi aşılıyor"). Hafta
+// pazartesi başlar (gün takvim günüdür, saat dilimi yok); sınırı aşan hafta asanHaftalar'dadır. Sınır 0 sınır yok demektir (eski motorun fits'i: butH <= 0 her
+// vardiyayı sığdırır); boş sınırı çağıran 8 saate çevirir.
+export const EK_MESAI_HAFTA_SAAT = 8;
+export function vardiyaSaati(baslangic: string, bitis: string): number {
+  const dk = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+  const fark = dk(bitis) - dk(baslangic);
+  return (fark <= 0 ? fark + 1440 : fark) / 60;
+}
+export function haftaBasi(gun: string): string {
+  const t = Date.UTC(Number(gun.slice(0, 4)), Number(gun.slice(5, 7)) - 1, Number(gun.slice(8, 10)));
+  return new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+}
+export function ekMesaiButcesi(satirlar: readonly { gun: string; saat: number }[], sinirSaat: number) {
+  const hafta = new Map<string, number>();
+  for (const x of satirlar) hafta.set(haftaBasi(x.gun), (hafta.get(haftaBasi(x.gun)) ?? 0) + x.saat);
+  const bir = (x: number) => Math.round(x * 10) / 10;
+  const haftalar = [...hafta].sort(([a], [b]) => a.localeCompare(b)).map(([h, saat]) => ({ hafta: h, saat: bir(saat) }));
+  const asanHaftalar = sinirSaat > 0 ? haftalar.filter((h) => h.saat > sinirSaat) : [];
+  return { toplamSaat: bir(satirlar.reduce((t, x) => t + x.saat, 0)), haftaSiniriSaat: sinirSaat, haftalar, asanHaftalar, asildi: asanHaftalar.length > 0 };
+}
+
 // PL-09: iş merkezinin günlük kişi-dakika ihtiyacı (istasyon yükü x operatör ihtiyacı; 1 kişi 3 makineye bakıyorsa 0,33) ve kapasitesi
 // (kişilerin o günkü çalışma dakikası x o merkezdeki payı). İhtiyacın kapasiteyi aştığı gün personelin sınırladığı gündür; aynı gün birden
 // çok iş merkezinde aşılsa da bir gün sayılır.

@@ -14,7 +14,7 @@ export const ADIMLI_OKUMA_ISLEMLERI: typeof SUNUCUDAKI_LISTE = ['sayfa.uretim-em
 
 export const OLAY_ETIKETI: Record<KayitOlayi, string> = {
   ayar: 'Hazırlık başladı', baslat: 'Başlatıldı', bitir: 'Bitirildi', duraklat: 'Duraklatıldı', durdur: 'Durduruldu', devam: 'Devam edildi',
-  hurda: 'Hurda', duzeltme: 'Düzeltme',
+  hurda: 'Hurda', duzeltme: 'Düzeltme', kalite_onay: 'Kalite kararı (onay)', kalite_red: 'Kalite kararı (red)',
 };
 
 // Zaman sunucudan ISO metni gelir; yoksa null kalır (tabloda "yok" yazılır).
@@ -52,6 +52,10 @@ export function kayitAdedi(k: Pick<UretimKaydi, 'olay' | 'saglamAdet' | 'adet'>)
   if (k.adet === null || k.adet === undefined) return null;
   return k.adet > 0 ? `+${k.adet}` : String(k.adet);
 }
+
+// Kalite kararında kişi kararı verendir; kararı veren tutulmadan önceki satırda bilinmez.
+export const kayitKisisi = (k: Pick<UretimKaydi, 'olay' | 'kisi' | 'kararVeren'>): string =>
+  k.olay === 'kalite_onay' || k.olay === 'kalite_red' ? (k.kararVeren?.ad ?? '—') : k.kisi.ad;
 
 export const kayitNedeni = (k: Pick<UretimKaydi, 'durusNedeni' | 'hurdaNedeni'>): string | null =>
   k.durusNedeni?.ad ?? k.hurdaNedeni?.ad ?? null;

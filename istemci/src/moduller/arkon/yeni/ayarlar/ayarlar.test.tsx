@@ -27,6 +27,7 @@ describe('A6 Ayarlar', () => {
     arkonAc('/arkon/yeni/ayarlar');
     const b = await bolum();
     expect(await altSekmeler(b)).toEqual(['Genel', 'Tesis', 'Kişiler ve yetkiler', 'Üretim', 'Sistem']);
+    expect(b.querySelector('.tc-ay-bant .tc-ay-saat')?.textContent, 'saat ve vardiya eski yerinde').toMatch(/^\d\d:\d\d\S/);
     expect(within(b).getByRole('heading', { name: 'Ekran modülleri' })).toBeTruthy();
     expect(within(b).getByRole('button', { name: /Çizim stüdyosunu aç/ })).toBeTruthy();
 

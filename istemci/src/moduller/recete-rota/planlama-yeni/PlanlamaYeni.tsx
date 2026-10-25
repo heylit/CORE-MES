@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { DurumKutusu, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
@@ -6,7 +6,10 @@ import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
-import { ACILIS, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, type PlanlamaGorunumu } from './gorunumler.ts';
+import {
+  ACILIS, ACILIS_OLCEGI, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi,
+  type DonemOlcegi, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi,
+} from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
@@ -28,7 +31,7 @@ function PlanlamaEkrani() {
   const git = useNavigate();
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false;
-  const { durum, yenile } = usePlanlamaDeposu(girebilir);
+  const { durum, yenile, tazele } = usePlanlamaDeposu(girebilir);
   const yetki = useMemo(
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
     [durum, kullanici],
@@ -43,6 +46,7 @@ function PlanlamaEkrani() {
       sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
       yaz: (g: YazGovdesi) => api.post<YazCevabi>('/recete-rota/kayitlar/yaz', g),
       uyar: (ileti) => { bildir('hata', ileti); },
+      catismadaYenile: tazele,
       bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },
     });
     // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
@@ -58,6 +62,12 @@ function PlanlamaEkrani() {
     window.addEventListener('pagehide', cik);
     return () => { window.removeEventListener('pagehide', cik); cik(); };
   }, [yazici]);
+  // Ölçek ve seçim görünümler arasında taşınır (görünüm değişince bu bileşen kalır, adres parçası değişir).
+  const [olcek, olcekKur] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
+  const [secim, secimKur] = useState<PlanlamaSecimi>(BOS_SECIM);
+  const olcekSec = useCallback((o: DonemOlcegi): void => { olcekKur({ olcek: o, kayma: 0 }); }, []);
+  const kaydir = useCallback((n: number): void => { olcekKur((x) => ({ ...x, kayma: n === 0 ? 0 : x.kayma + n })); }, []);
+  const sec = useCallback((s: Partial<PlanlamaSecimi>): void => { secimKur((x) => ({ ...x, ...s })); }, []);
 
   if (oturum.isPending) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
   if (!kullanici) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Oturum bulunamadı." /></div>;
@@ -79,9 +89,22 @@ function PlanlamaEkrani() {
         {etkin === undefined
           ? <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Bu sayfayı görme yetkiniz yok." /></div>
           : (
-            <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-              <etkin.bilesen depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile} />
-            </Suspense>
+            <>
+              {gorunum !== 'plan' && (
+                <Suspense fallback={null}>
+                  <PlanSeridi
+                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} gorunum={gorunum}
+                  />
+                </Suspense>
+              )}
+              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                <etkin.bilesen
+                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec}
+                />
+              </Suspense>
+            </>
           )}
       </div>
     </div>
