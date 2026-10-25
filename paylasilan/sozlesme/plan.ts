@@ -57,6 +57,10 @@ export const planGostergeleri = z.object({
   // 6c, planın TL toplamı (203 a): yerleşen emirlerin gecikme, ceza, finansman ve kâr riski. Yalnız siparisler.fiyat-oku (180) görür;
   // görmeyene null. Ekranlar okumaya başlayana dek isteğe bağlı.
   maliyetTl: z.number().nullable().optional(),
+  // 507 1 a (eski motorun suH ve wT'si, salt okuma): yerleşen işlerin ayar saati toplamı; emir başına teslim günü sonunu aşan saat x öncelik
+  // ağırlığı (1: 4, 2: 2, 3: 1, diğer 1) x sipariş satırındaki adet payı. Ekranlar okumaya başlayana dek isteğe bağlı.
+  ayarSaat: z.number().optional(),
+  agirlikliGecikmeSaat: z.number().optional(),
 });
 // Taslak (P6): planlamacının kendi senaryosu; bütün planlama işlemleri buna yazılır.
 export const taslakOzeti = z.object({
