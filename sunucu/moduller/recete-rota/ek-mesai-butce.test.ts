@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 import vm from 'node:vm';
+import { testVeritabaniKur, type TestVeritabani } from '#cekirdek/test-vt.ts';
+import { yoneticiOlustur } from '../kisiler/disari.ts';
+import { ekMesaiButcesi, PLANLAMA_ANAHTARI } from './disari.ts';
 import { motorKodu } from './plan-motoru.ts';
 
 // 525 3 a: haftalık ek mesai bütçesi 0 her yerde sınırsızdır; HiGHS çerçevesi ve motorun olay önerisi 0'da ek mesaiyi kapatmaz.
@@ -55,5 +58,37 @@ describe('ek mesai bütçesi 0 sınırsız (525 3 a)', () => {
       assert.ok(i >= 0, `bütçe ${String(b)}: fazla mesai seçeneği listede`);
       assert.equal(o.list[o.best]?.id, 'mesai', `bütçe ${String(b)}: gecikmeyi en çok azaltan fazla mesai önerilir`);
     }
+  });
+});
+
+describe('ek mesai bütçesinin kaynağı planlama çalışması (525 2 b, gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
+  let kisi = 0;
+  before(async () => {
+    ortam = await testVeritabaniKur('recete_rota_ek_mesai_butce');
+    kisi = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: 'dogru-parola-1' }));
+  });
+  after(async () => { await ortam?.kaldir(); });
+  const yaz = (bicim: 'json' | 'metin', deger: unknown) => ortam!.sahip.sorgu(
+    `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, $2, $3::jsonb, nextval('recete_rota_surum'), $4)
+     ON CONFLICT (anahtar) DO UPDATE SET bicim = EXCLUDED.bicim, deger = EXCLUDED.deger`, [PLANLAMA_ANAHTARI, bicim, JSON.stringify(deger), kisi]);
+  const oku = () => vt().tx((db) => ekMesaiButcesi(db));
+  const calisma = (param: Record<string, unknown>) => ({ surum: 2, param, D: { meta: { baslangic: '2026-01-07' } } });
+
+  test('çalışma yoksa null; bütçe girilmemişse 8; girilen değer; 0 ve sayı olmayan sınırsız (0); metin biçimli kayıt okunur', async () => {
+    assert.equal(await oku(), null);
+    await yaz('json', calisma({}));
+    assert.deepEqual(await oku(), { saat: 8, haftaBasi: '2026-01-07' });
+    await yaz('json', calisma({ mesaiHafta: 16 }));
+    assert.deepEqual(await oku(), { saat: 16, haftaBasi: '2026-01-07' });
+    await yaz('json', calisma({ mesaiHafta: 0 }));
+    assert.deepEqual(await oku(), { saat: 0, haftaBasi: '2026-01-07' });
+    await yaz('json', calisma({ mesaiHafta: 'x' }));
+    assert.deepEqual(await oku(), { saat: 0, haftaBasi: '2026-01-07' });
+    await yaz('metin', JSON.stringify(calisma({ mesaiHafta: 12 })));
+    assert.deepEqual(await oku(), { saat: 12, haftaBasi: '2026-01-07' });
+    await yaz('json', { surum: 2, param: { mesaiHafta: 4 }, D: {} });
+    assert.equal(await oku(), null, 'başlangıç günü yoksa hafta kurulamaz');
   });
 });
