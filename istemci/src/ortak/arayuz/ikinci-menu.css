@@ -1,7 +1,6 @@
-/* İkinci menü: modülün kendi sayfaları; 1024'ün altında başlığın altında yatay sekme şerididir, 1024 ve üstünde ana
-   menünün yanında sütundur (soru 242); çerçeveli sayfada her genişlikte şerittir (gerekçe kabuk.css'te). Gruplar ince
-   ayraçla ayrılır; şeritte sığmayan madde yana kayar, sütunda uzun ad ikinci satıra iner. Kap ızgaradaki yerdir; kaydırma
-   işaretleri kabın kenarına oturur. */
+/* İkinci menü: modülün kendi sayfaları; her genişlikte başlığın altında yatay sekme şerididir (soru 514 1a, gerekçe
+   kabuk.css'te). Gruplar ince ayraçla ayrılır; sığmayan madde yana kayar. Kap ızgaradaki yerdir; kaydırma işaretleri kabın
+   kenarına oturur. */
 .tc-ikinci-kap { grid-area: ikinci; position: relative; display: grid; grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; }
 .tc-ikinci {
   display: flex; flex-direction: row; align-items: center; gap: var(--b-2); min-width: 0;
@@ -37,16 +36,3 @@
 .tc-ikinci-ok-sol { left: 0; padding-left: var(--b-1); background: linear-gradient(to right, var(--bg2) 45%, transparent); }
 .tc-ikinci-ok-sag { right: 0; justify-content: flex-end; padding-right: var(--b-1); background: linear-gradient(to left, var(--bg2) 45%, transparent); }
 .tc-ikinci-kap[data-sol] .tc-ikinci-ok-sol, .tc-ikinci-kap[data-sag] .tc-ikinci-ok-sag { display: flex; }
-@media (min-width: 1024px) {
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci {
-    flex-direction: column; align-items: stretch; gap: var(--b-2);
-    overflow-x: hidden; overflow-y: auto; padding: var(--b-3) var(--b-2);
-    border-bottom: 0; border-right: 1px solid var(--edge);
-  }
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-grup { flex-direction: column; }
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-grup + .tc-ikinci-grup { padding-left: 0; border-left: 0; padding-top: var(--b-2); border-top: 1px solid var(--edge2); }
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-madde-ad { flex: 1 1 auto; min-width: 0; white-space: normal; }
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-madde-etkin::before { left: 0; right: auto; top: var(--b-2); bottom: var(--b-2); width: var(--ikinci-vurgu); height: auto; }
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-kap[data-sol] .tc-ikinci-ok-sol,
-  .tc-kabuk:not([data-cerceveli]) .tc-ikinci-kap[data-sag] .tc-ikinci-ok-sag { display: none; }
-}
