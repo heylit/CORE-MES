@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
-import { derle, girdiKur, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
+import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { gunCizelgesi, olcekCizelgesi, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, gunCizelgesi, kapasitesizEnErken, olcekCizelgesi, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -60,5 +60,22 @@ describe('çizelge hesapları', () => {
     expect(y.basliklar.map((b) => b.ad)).toEqual(['Eki']);
     expect(y.cizgiler).toEqual([0, 168]);
     expect(y.termin).toBeNull();
+  });
+  it('ayrıntı: uygun tezgâh süresi, tezgâh kuyruğu ve neden eski panelle aynı', () => {
+    const { c, p, cx } = kur();
+    expect(adaylar(c, cx, '3.10').map((a) => [a.m, Number(a.sure?.toFixed(4))])).toEqual([['1', 1.9956]]);
+    expect(adaylar(c, cx, '2.30')).toEqual([{ m: '@5', sure: null }]);
+    expect(tezgahKuyrugu(p, '1').map((r) => r.id)).toEqual(['3.10']);
+    const r = p.ops['3.10']; if (!r) throw new Error('iş yok');
+    expect(nedenMetni(r)).toBe('Siparişin serbest bırakılma anını bekledi.');
+    expect(nedenMetni({ ...r, why: { t: 'rota', o: 1, r: '2.10' } })).toBe('Önceki adım 2.10 ilk partisini bitirince örtüşmeli başladı.');
+    expect(nedenMetni({ ...r, why: null })).toBe('Bilinmiyor.');
+  });
+
+  it('kapasitesiz en erken: kayıttaki lbC; yoksa ya da sonlu değilse null', () => {
+    const c = ornekCalisma();
+    expect(kapasitesizEnErken(c, '2')).toBeNull();
+    c.plan = { ...c.plan, dataVer: c.plan?.dataVer ?? 0, lbC: { 2: 201.5, 3: null, 4: 'x' } };
+    expect([kapasitesizEnErken(c, '2'), kapasitesizEnErken(c, '3'), kapasitesizEnErken(c, '4'), kapasitesizEnErken(c, '5')]).toEqual([201.5, null, null, null]);
   });
 });

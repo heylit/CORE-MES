@@ -207,7 +207,7 @@ describe('PlanlamaMotoru', () => {
   });
 
   it('Çizelge panelleri: yardımcı, karar paneli, sepet ve havuz; seçim ayrıntıya geçer, motor düğmeleri pasif, denge ve sabitler degistir ile', () => {
-    const c = ornekCalisma(); c.locks = { 'x.1': { m: 'T', S: 1 } };
+    const c = ornekCalisma(); c.locks = { 'x.1': { m: 'T', S: 1 } }; c.plan = { ...c.plan, dataVer: c.plan?.dataVer ?? 0, lbC: { 2: 201.92105263157893, 3: null } };
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
@@ -233,13 +233,51 @@ describe('PlanlamaMotoru', () => {
     fireEvent.click(screen.getByRole('button', { name: /^2 siparişine bak/ }));
     const ayr = screen.getByRole('complementary', { name: 'Ayrıntı' });
     expect(within(ayr).getByRole('tab', { name: 'Ayrıntı' }).getAttribute('aria-selected')).toBe('true');
-    expect(within(ayr).getByText(/Sipariş ayrıntısı/)).toBeTruthy();
+    const sp = within(ayr).getByRole('region', { name: 'Sipariş 2' });
+    expect(within(sp).getByText('Planlanan bitiş')).toBeTruthy();
+    expect(within(sp).getByText(/72,9 sa gecikme/)).toBeTruthy();
+    expect(within(sp).getByText('Kapasitesiz en erken').nextElementSibling?.textContent).toMatch(/^\d\d\.\d\d \S+ \d\d:\d\d \(plan 8 sa sonra\)$/);
+    expect(within(sp).getByRole('button', { name: 'Düzenle' }).getAttribute('title')).toContain(YOK_NOTU);
+    expect(within(sp).getByRole('heading', { name: 'Süre nereye gitti' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Siparişler' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(within(arac).getByRole('button', { name: 'Havuz' }));
     const hv = screen.getByRole('complementary', { name: 'Havuz' });
     expect(within(hv).getByText(/Havuz boş/)).toBeTruthy();
     expect(within(hv).getByRole('button', { name: 'Planı boşalt' }).getAttribute('title')).toContain(MOTOR_NOTU);
     fireEvent.click(within(hv).getByRole('tab', { name: 'Sepet' }));
     expect(within(screen.getByRole('complementary', { name: 'Sepet' })).getByText('Başlangıç')).toBeTruthy();
+  });
+
+  it('Ayrıntı: işin dökümü, neden, kilit degistir ile; kuyruk ve adımlar işi seçer; tezgâh paneli; motor düğmeleri pasif', () => {
+    const c = ornekCalisma();
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Ayrıntı' }));
+    const op = screen.getByRole('region', { name: '3 adım 10' });
+    expect(within(op).getByText('Siparişin serbest bırakılma anını bekledi.', { exact: false })).toBeTruthy();
+    expect(within(op).getByText('5,4 sa kayabilir')).toBeTruthy();
+    expect(within(op).getByText('Planda')).toBeTruthy();
+    expect(within(op).getByRole('button', { name: 'Bir öne' }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(op).getByRole('button', { name: 'Siparişi öne al' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    fireEvent.click(within(op).getByRole('button', { name: 'Kilitle' }));
+    expect(komut.degistir).toHaveBeenCalledWith('İş kilitlendi', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    expect(Object.keys(yazilan.at(-1)?.locks ?? {})).toEqual(['3.10']);
+    fireEvent.click(within(op).getByRole('button', { name: /^20\s*Freze/ }));
+    expect(screen.getByRole('region', { name: '3 adım 20' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('region', { name: '3 adım 20' })).getByRole('button', { name: 'Kapat' }));
+    expect(screen.getByRole('region', { name: 'Karar paneli' })).toBeTruthy();
+    const ara = screen.getByRole('combobox', { name: 'Sipariş ya da tezgâh bul' });
+    fireEvent.change(ara, { target: { value: '1' } });
+    fireEvent.keyDown(ara, { key: 'Enter' });
+    const tz = screen.getByRole('region', { name: 'Tezgâh 1' });
+    expect(within(tz).getByText('1 iş')).toBeTruthy();
+    expect(within(tz).getByRole('button', { name: 'Stüdyoda aç' }).getAttribute('title')).toContain(YOK_NOTU);
+    expect(within(tz).getByRole('button', { name: 'Tezgâhı boşalt' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    fireEvent.click(within(tz).getByRole('button', { name: 'Kapat' }));
+    expect(screen.getByRole('region', { name: 'Karar paneli' })).toBeTruthy();
   });
 
   it('plan yazma yetkisi yoksa sepet açılmaz, karar eylemleri yazmaz', () => {
