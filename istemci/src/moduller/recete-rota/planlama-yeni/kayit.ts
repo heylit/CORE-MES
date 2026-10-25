@@ -50,6 +50,9 @@ export interface CalismaKomutu {
 export interface YaziciAyari {
   calisma: PlanlamaCalismasi;
   surum: number | null;
+  // Yalnız sessiz değişiklik taşıyan yazma sürüm çatışmasına düşerse çağrılır: sayfa güncel kaydı kullanıcıya hata göstermeden yeniden okur
+  // (eskide bu kayıt tarayıcıdaydı, çatışma olmazdı). Verilmezse yazma durur; kullanıcı çatışmayı ancak kendi değişikliğinde görür.
+  catismadaYenile?: () => void;
   // Değişiklik izine yazılan kişi (oturumdaki kişinin adı) ve sayfa adı.
   kim: string;
   sayfa: () => string;
@@ -73,13 +76,17 @@ export class CalismaYazici implements CalismaKomutu {
   readonly #dinleyiciler = new Set<() => void>();
   #zamanlayici: ReturnType<typeof setTimeout> | null = null;
   #kirli = false;
+  // Son yazmadan beri yalnız sessiz değişiklik var mı (açılıştaki gün başı gibi).
+  #yalnizSessiz = true;
   #yolda: Promise<void> | null = null;
   #sirada = false;
   #durdu = false;
+  readonly #yenileVar: boolean;
   #buyukUyarildi = false;
 
   constructor(ayar: YaziciAyari) {
-    this.#a = { beklemeMs: BEKLEME_MS, azamiBayt: AZAMI_BAYT, simdi: () => Date.now(), bildir: () => {}, ...ayar };
+    this.#a = { beklemeMs: BEKLEME_MS, azamiBayt: AZAMI_BAYT, simdi: () => Date.now(), bildir: () => {}, catismadaYenile: () => {}, ...ayar };
+    this.#yenileVar = ayar.catismadaYenile !== undefined;
     this.#calisma = ayar.calisma;
     this.#surum = ayar.surum;
   }
@@ -95,11 +102,12 @@ export class CalismaYazici implements CalismaKomutu {
   };
 
   degistir = (ne: string, fn: (taslak: PlanlamaCalismasi) => boolean | void, secenek: DegisiklikSecenegi = {}): boolean => {
-    if (this.#durdu) { this.#a.uyar(CATISMA); return false; }
+    if (this.#durdu) { if (!secenek.sessiz) this.#a.uyar(CATISMA); return false; }
     const once = this.#calisma;
     const taslak = kopya(once);
     if (fn(taslak) === false) return false;
     if (secenek.sessiz) { this.#koy(taslak); return true; }
+    this.#yalnizSessiz = false;
     const gunceldi = once.plan !== null && once.plan.dataVer === once.dataVer;
     const o = once as Record<string, unknown>, y = taslak as Record<string, unknown>;
     const ek = [...new Set([...Object.keys(o), ...Object.keys(y)])].filter((k) => !GERI_DISI.has(k) && JSON.stringify(o[k]) !== JSON.stringify(y[k]));
@@ -132,6 +140,7 @@ export class CalismaYazici implements CalismaKomutu {
       for (const [k, v] of Object.entries(x)) if (v === undefined) delete taslak[k];
     }
     if (x === null) return false;
+    this.#yalnizSessiz = false;
     // Eski sayfadaki gibi: veri sürümü geri gitmez; plan geri alınan veriyle çözülmüşse yeniden güncel sayılır.
     taslak.dataVer = Math.max(this.#calisma.dataVer + 1, x.dataVer + 1);
     if (taslak.plan !== null && taslak.plan.dataVer === x.dataVer) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
@@ -169,11 +178,20 @@ export class CalismaYazici implements CalismaKomutu {
     }
     this.#buyukUyarildi = false;
     this.#kirli = false;
+    const sessiz = this.#yalnizSessiz;
+    this.#yalnizSessiz = true;
     this.#yolda = this.#a.yaz({ anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, beklenenSurum: this.#surum }).then(
       (cevap) => { this.#surum = cevap.kayit.surum; },
       (e: unknown) => {
-        if (this.#calisma === deger) this.#kirli = true;
         const durum = e instanceof ApiHatasi ? e.durum : null;
+        // Yalnız sessiz değişiklik çatıştıysa ve ardından da yalnız sessiz değişiklik geldiyse hata gösterilmez: bunlar bırakılır, sayfa yeniden okur.
+        if (durum === 409 && sessiz && this.#yalnizSessiz) {
+          this.#durdu = true;
+          if (this.#yenileVar) this.#a.catismadaYenile();
+          return;
+        }
+        if (this.#calisma === deger) this.#kirli = true;
+        if (!sessiz) this.#yalnizSessiz = false;
         if (durum === 409) { this.#durdu = true; this.#a.uyar(CATISMA); }
         else if (durum === 401) this.#a.uyar(OTURUM);
         // Sunucu bu kayda plan.yaz ister (287 a); yetki açılıştan sonra alınmış olabilir.
