@@ -1,0 +1,85 @@
+/* Müşteri teklifleri (P1). Yalnız tasarım değişkenleri; önek tc-pt-teklif-. */
+.tc-pt-teklif { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-pt-teklif-don { align-self: start; }
+.tc-pt-teklif-baslik-alt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pt-teklif-no { font-family: var(--font-mono); font-size: var(--yazi-s); color: var(--muted); }
+
+.tc-pt-teklif-hucre { display: flex; flex-direction: column; min-width: 0; }
+.tc-pt-teklif-hucre small { color: var(--muted); font-size: var(--yazi-xs); }
+
+.tc-pt-teklif-bant {
+  display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding: var(--b-3) var(--b-4);
+  border: 1px solid var(--edge); border-left: var(--ikinci-vurgu) solid var(--idle); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-pt-teklif-bant[data-ton="iyi"] { border-left-color: var(--run); }
+.tc-pt-teklif-bant[data-ton="uyari"] { border-left-color: var(--hold); }
+.tc-pt-teklif-bant[data-ton="hata"] { border-left-color: var(--stop); }
+.tc-pt-teklif-bant > div { overflow-wrap: anywhere; }
+.tc-pt-teklif-eylemler { display: flex; flex-wrap: wrap; gap: var(--b-2); margin-top: var(--b-2); }
+/* Uzun eylem adı 360 genişlikte bant içinde kesilmesin. */
+.tc-pt-teklif-eylemler > .tc-dugme { max-inline-size: 100%; white-space: normal; text-align: start; }
+.tc-pt-teklif-adimlar { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: var(--b-2) 0; padding: 0; list-style: none; }
+.tc-pt-teklif-adimlar li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-pt-teklif-adimlar small { color: var(--muted); font-size: var(--yazi-xs); }
+
+.tc-pt-teklif-kaydir { min-width: 0; overflow-x: auto; }
+.tc-pt-teklif-tablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-pt-teklif-tablo th { padding: var(--b-2); border-bottom: 1px solid var(--edge2); color: var(--muted); font-weight: 600; text-align: left; }
+.tc-pt-teklif-tablo td { padding: var(--b-2); border-bottom: 1px solid var(--edge); vertical-align: top; }
+.tc-pt-teklif-tablo td small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-teklif-tablo .tc-pt-teklif-sag { text-align: right; }
+.tc-pt-teklif-kirilmaz { white-space: nowrap; }
+.tc-pt-teklif-ad { font-weight: 600; }
+.tc-pt-teklif-fiyat { min-width: var(--b-6); text-align: right; }
+
+.tc-pt-teklif-not { margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); overflow-wrap: anywhere; }
+
+.tc-pt-teklif-sayfa {
+  display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; padding: var(--b-4);
+  border: 1px solid var(--edge2); border-radius: var(--yari-3); background: var(--panel);
+}
+.tc-pt-teklif-sayfa-bas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-3); }
+.tc-pt-teklif-sayfa-bas div { display: flex; flex-direction: column; }
+.tc-pt-teklif-sayfa-bas small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-teklif-toplam { display: grid; grid-template-columns: 1fr auto; gap: var(--b-1) var(--b-4); margin: 0; justify-self: end; font-size: var(--yazi-s); }
+.tc-pt-teklif-toplam dt { color: var(--muted); }
+.tc-pt-teklif-toplam dd { margin: 0; text-align: right; font-family: var(--font-mono); }
+.tc-pt-teklif-toplam .tc-pt-teklif-genel { font-size: var(--yazi-m); font-weight: 700; color: var(--ink); }
+.tc-pt-teklif-kosullar { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); font-size: var(--yazi-s); }
+.tc-pt-teklif-kosullar span { color: var(--muted); }
+.tc-pt-teklif-fark { margin: 0; font-size: var(--yazi-s); color: var(--run); }
+.tc-pt-teklif-fark[data-yon="yukari"] { color: var(--hold); }
+
+.tc-pt-teklif-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-pt-teklif-form h3 { margin: var(--b-2) 0 0; font-size: var(--yazi-m); }
+.tc-pt-teklif-satir { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--acilir-enaz)), 1fr)); }
+.tc-pt-teklif-kalemler { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-pt-teklif-kalem { display: grid; gap: var(--b-2); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 768px) { .tc-pt-teklif-kalem { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr); } }
+.tc-pt-teklif-yukle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-pt-teklif-yukle input[type="file"] { inline-size: 1px; block-size: 1px; opacity: 0; position: absolute; }
+.tc-pt-teklif-hata { margin: 0; color: var(--stop); }
+.tc-pt-teklif-ipucu { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-teklif-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-pt-teklif-canli { display: flex; flex-direction: column; font-size: var(--yazi-s); }
+.tc-pt-teklif-canli b { font-family: var(--font-mono); font-size: var(--yazi-m); }
+
+.tc-pt-teklif-ekler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pt-teklif-ek {
+  display: inline-flex; align-items: center; justify-content: center; inline-size: var(--dokunma); block-size: var(--dokunma); overflow: hidden;
+  border: 1px solid var(--edge); border-radius: var(--yari-1); color: var(--ink); font-size: var(--yazi-xs); text-decoration: none;
+}
+.tc-pt-teklif-ek img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+
+.tc-pt-teklif-surumler, .tc-pt-teklif-gecmis, .tc-pt-teklif-mesajlar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pt-teklif-surumler li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-s); }
+.tc-pt-teklif-surumler li[data-guncel] { font-weight: 600; }
+.tc-pt-teklif-gecmis li { display: flex; flex-direction: column; font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-pt-teklif-gecmis small, .tc-pt-teklif-mesajlar small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pt-teklif-mesajlar li {
+  display: flex; flex-direction: column; align-self: start; max-inline-size: 90%; padding: var(--b-2) var(--b-3);
+  border-radius: var(--yari-2); background: var(--panel2); overflow-wrap: anywhere;
+}
+.tc-pt-teklif-mesajlar li[data-ben] { align-self: end; border: 1px solid var(--edge2); }
+.tc-pt-teklif-mesaj-form { display: flex; gap: var(--b-2); }
+.tc-pt-teklif-mesaj-form input { flex: 1; min-width: 0; }
