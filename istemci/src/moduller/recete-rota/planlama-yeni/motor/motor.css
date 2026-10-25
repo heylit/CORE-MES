@@ -417,6 +417,44 @@
 .tc-pym-yp li > div { display: flex; flex-direction: column; gap: var(--pay-ince); min-width: 0; }
 .tc-pym-yp li .tc-pym-link { align-self: flex-start; }
 
+/* Düzenle ve Değişiklikler (zp-klavye pm-kb) */
+.tc-pym-yp-fab kbd, .tc-pym-kb kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: calc(var(--b-5) - var(--pay-ince)); height: calc(var(--b-5) - var(--pay-ince));
+  padding: 0 calc(var(--b-1) + var(--cizgi-ince)); border: var(--cizgi-ince) solid var(--edge2); border-bottom-width: var(--cizgi); border-radius: var(--yari-1);
+  background: var(--panel2); color: var(--ink); font: 700 var(--yazi-xs) / 1 var(--font-mono);
+}
+.tc-pym-kb-bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-2); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-pym-kb-bas small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-kb-tur { padding: var(--cizgi-ince) var(--nokta); border-radius: var(--yari-tam); background: var(--sig); color: var(--panel-solid); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.tc-pym-kb-l { display: flex; flex-direction: column; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pym-yp .tc-pym-kb-l li { display: block; padding: 0; border: 0; background: none; }
+.tc-pym-kb-k {
+  display: grid; grid-template-columns: calc(var(--b-5) + var(--pay-ince)) calc(var(--b-4) + var(--b-1)) minmax(0, 1fr); align-items: center; gap: var(--b-2);
+  width: 100%; min-height: calc(var(--b-6) + var(--b-2)); padding: var(--b-1) var(--b-2); border: 0; border-radius: var(--yari-1); background: none; color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.tc-pym-kb-k:hover, .tc-pym-kb-k:focus-visible { background: var(--panel2); }
+.tc-pym-kb-k[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+.tc-pym-kb-k > span { display: flex; flex-direction: column; min-width: 0; }
+.tc-pym-kb-k small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-kb-ip { margin: var(--b-1) 0 0; color: var(--muted); font-size: var(--yazi-xs); line-height: 2; }
+.tc-pym-kb-ip kbd { margin: 0 var(--cizgi-ince); }
+.tc-pym-kb-hedef { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-pym-kb-hedef button {
+  display: inline-flex; flex-direction: column; align-items: flex-start; min-height: calc(var(--b-6) + var(--b-2)); padding: var(--pay-ince) var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-pym-kb-hedef button small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-kb-hedef button[aria-pressed="true"] { border-color: var(--sig); box-shadow: inset 0 0 0 var(--cizgi-ince) var(--sig); }
+.tc-pym-taslak {
+  display: grid; gap: var(--b-2); margin-bottom: var(--b-3); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: color-mix(in oklab, var(--hazard) 8%, var(--panel-solid));
+}
+.tc-pym-taslak header { display: flex; align-items: center; gap: var(--b-1); }
+.tc-pym-taslak header .tc-pym-mono { margin-left: auto; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-taslak-ozet { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); }
+.tc-pym-taslak p { margin: 0; }
+
 @media (prefers-reduced-motion: reduce) { .tc-pym-br-pano { animation: none; } }
 
 /* ---------- eski çerçevenin genişlik kırılımları ---------- */
@@ -434,7 +472,7 @@
   .tc-pym-ol-ortak .tc-pym-ol-kay { display: none; }
 }
 @container (max-width: 700px) {
-  .tc-pym-yp-fab span { display: none; }
+  .tc-pym-yp-fab span, .tc-pym-yp-fab kbd { display: none; }
   .tc-pym-yp-fab { padding: 0 var(--b-2); }
 }
 @container (max-width: 599px) {

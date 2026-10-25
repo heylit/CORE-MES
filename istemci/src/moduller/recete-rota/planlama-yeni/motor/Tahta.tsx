@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DurumKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
@@ -15,6 +15,7 @@ import { ozetVerisi, type BolgeKimligi } from './ozet/veri.ts';
 import { Cubuk } from './ust/Cubuk.tsx';
 import { Gorunum, type TahtaGorunumu } from './ust/Gorunum.tsx';
 import { nabizDurumu, sabitReferans } from './ust/nabiz.ts';
+import type { KbPanel } from './Duzenle.tsx';
 import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
 
@@ -35,7 +36,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [nbAcik, setNbAcik] = useState(false);
   const [menuAcik, setMenuAcik] = useState(false);
   const [ypAcik, setYpAcik] = useState(false);
-  const [kisayol, setKisayol] = useState(false);
+  const [pan, setPan] = useState<KbPanel | null>(null);
   const [nasil, setNasil] = useState<BolgeKimligi | null>(null);
   const [acikGrup, setAcikGrup] = useState<string | null>(null);
   const [mercek, setMercek] = useState<'durum' | 'etki'>('durum');
@@ -62,8 +63,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const studyo = useCallback(() => o.git('studio'), [o]);
   const nabizAc = useCallback((x: boolean) => setNbAcik(x), []);
   const menuAc = useCallback((x: boolean) => setMenuAcik(x), []);
-  const ypAc = useCallback((x: boolean) => { setYpAcik(x); if (x) setKisayol(false); }, []);
-  const kisayolAc = useCallback((x: boolean) => { setKisayol(x); if (x) setYpAcik(false); }, []);
+  const ypAc = useCallback((x: boolean) => { setYpAcik(x); if (x) setPan(null); }, []);
+  // Düzenle, Değişiklikler ve kısayol listesi (zp-klavye kbPanAc): aynı tuş açıp kapatır; açılan Yapılacaklar'ı kapatır.
+  const panAc = useCallback((x: KbPanel | null) => { setPan(x); if (x) setYpAcik(false); }, []);
+  const panDegis = useCallback((x: KbPanel) => { setPan((y) => (y === x ? null : x)); setYpAcik(false); }, []);
   // Seçim: sipariş ya da tezgâh; aynısına yeniden dokunmak bırakır.
   const sipSec = useCallback((j: string, birak = true) => { sec({ siparis: birak && secJob === j ? null : j, adim: null, tezgah: null }); }, [sec, secJob]);
   const tezSec = useCallback((m: string, birak = true) => { sec({ tezgah: birak && secim.tezgah === m ? null : m, siparis: null, adim: null }); }, [sec, secim.tezgah]);
@@ -84,11 +87,12 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     if (!ornek) return undefined;
     const z = requestAnimationFrame(() => harita.current?.kilavuzKamera(ornek)); return () => cancelAnimationFrame(z);
   }, [ornek, gorunum]);
-  const gorunumSec = useCallback((g: TahtaGorunumu) => { setMenuAcik(false); if (g !== 'atolye' && g !== 'genel') setKilavuz(false); setGorunum(g); }, []);
+  const gorunumSec = useCallback((g: TahtaGorunumu) => { setMenuAcik(false); setPan(null); if (g !== 'atolye' && g !== 'genel') setKilavuz(false); setGorunum(g); }, []);
 
   // Klavye (zd-tam, zp-klavye, zs-olcek-ortak): yazı alanında ve açık pencerede çalışmaz.
-  const tuslar = useRef({ gorunumSec, kisayolAc, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p });
-  tuslar.current = { gorunumSec, kisayolAc, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p };
+  const { bildir } = useBildirim();
+  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir });
+  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -103,7 +107,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       if (k === '-') { dur(); harita.current?.yakinlas(0.8); return; }
       if (!x.planYaz) return;
       if (h === 'y') { dur(); x.ypAc(!x.ypAcik); return; }
-      if (k === '?') { dur(); x.kisayolAc(true); return; }
+      if (k === '?') { dur(); x.panDegis('kl'); return; }
+      if (h === 'e') { dur(); x.panDegis('dz'); return; }
+      if (h === 'd') { dur(); x.panDegis('sp'); return; }
+      if ((k === '[' || k === ']') && x.secim.adim) { dur(); x.bildir('bilgi', `Kuyrukta sıra: ${MOTOR_NOTU}`); return; }
       const g = ({ g: 'genel', h: 'atolye', k: 'kesif', c: 'cizelge', ç: 'cizelge' } as Record<string, TahtaGorunumu>)[h];
       if (g) { dur(); x.gorunumSec(g); }
     };
@@ -123,7 +130,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
       donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
-      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => kisayolAc(true), planYaz: yetki.planYaz }} />
+      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz }} />
   );
   const cubuk = cubukKur(false);
 
@@ -157,7 +164,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         </>
       )}
       {p && yetki.planYaz && (
-        <Yapilacaklar c={c} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} kisayol={kisayol} kisayolAc={kisayolAc} />
+        <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} />
       )}
     </div>
   );
