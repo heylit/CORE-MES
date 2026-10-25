@@ -50,7 +50,8 @@ describe('A1 Üretim Terminali', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
-  it('okutma penceresi kamerayı kendiliğinden açar (eski davranış, 283.5)', async () => {
+  it('okutma penceresi kamerayı kendiliğinden açar (283.5); dokunmatikte kod alanı odak almaz (492/1 a)', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
     const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => {}));
     Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
     try {
@@ -62,6 +63,8 @@ describe('A1 Üretim Terminali', () => {
       fireEvent.click(await screen.findByRole('button', { name: /QR/ }, { timeout: 10000 }));
       expect(await screen.findByRole('dialog', { name: 'Ürün kodunu okut' })).toBeTruthy();
       await waitFor(() => { expect(getUserMedia).toHaveBeenCalled(); });
+      // Pencere açılınca odağı ilk odaklanabilir öğeye (kamera düğmesi) verir; kod alanı dokunmatikte odak almaz, ekran klavyesi açılmaz.
+      expect(document.activeElement).not.toBe(within(screen.getByRole('dialog', { name: 'Ürün kodunu okut' })).getByRole('textbox', { name: 'Kod' }));
     } finally {
       Reflect.deleteProperty(navigator, 'mediaDevices');
     }
