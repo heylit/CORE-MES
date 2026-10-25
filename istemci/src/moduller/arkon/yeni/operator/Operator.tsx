@@ -530,6 +530,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     for (const r of numunePlani(o.pkg)) if ((r.who || ['q']).every((w) => w === 'op')) for (const b of numuneOlculeri(o.pkg, r)) ids.add(b.id);
     return Array.from(ids);
   }, [o.pkg, dueKey]);
+  // Eski ekranda olduğu gibi tek bildirim: görüntüleyicinin ölçüm iletisi "Geri al" ile birlikte verilir.
+  const olcumGeri = useRef<(() => void) | null>(null);
   const olcumYaz = (m: Record<number, Meas>) => {
     const pkg = o.pkg;
     if (!pkg) return;
@@ -551,7 +553,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       saveResult({ ...o, meas }, 'result');
     };
     yaz(nm);
-    say('Ölçüm kaydedildi', 'ruler', 'run', { undo: () => { yaz(once); say('Ölçüm geri alındı', 'rotate', 'idle'); } });
+    olcumGeri.current = () => { yaz(once); say('Ölçüm geri alındı', 'rotate', 'idle'); };
+  };
+  const olcumBildir = (mesaj: string, uygun: boolean) => {
+    const geri = olcumGeri.current;
+    olcumGeri.current = null;
+    say(mesaj, 'ruler', uygun ? 'run' : 'stop', geri ? { undo: geri } : undefined);
   };
   const notBirak = (n: { x: number; y: number; text: string }) => {
     const pin = { id: 'p' + Date.now(), by: ME + ' · ' + MACHINE, at: Date.now(), status: 'open' as const, ...n };
@@ -567,7 +574,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     aletZorunlu: !pv, aletSecimi: (tool) => <Suspense fallback={null}><AletSecici aletler={aletler} tool={tool} /></Suspense>,
     operatorOlcer: opIds, odakKipi: odakKipiYaz, olcumler: (o.meas || {}) as unknown as TeknikResimKontrolu['olcumler'],
     retGerekcesi: retGerekcesiMetni(o.lastDecision), odak, siradaki: D.due.map((b) => b.id), notlar: (o.pins || []) as unknown as ResimNotu[],
-    olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), notBirak: pv ? undefined : notBirak,
+    olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), olcumBildir, notBirak: pv ? undefined : notBirak,
   } : {
     anahtar: 'bos:' + o.no, dosyalar: [], anaResim: null, balonlar: [], balonlarYaz: () => undefined, olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: true,
   }), [o.pkg?.id, o.pkg?.version, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);

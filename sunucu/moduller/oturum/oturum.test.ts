@@ -281,6 +281,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'siparisler.oku', 'siparisler.yaz', 'siparisler.onayla',
       // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
       'cnc-kurulum.takim-degistir',
+      // Planlama çalışmasını da değiştirir (kullanıcı kararı 524/3 b, 25.10.2026).
+      'plan.yaz',
     ],
     kalite: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, ...MALZEME_ONAYI, 'kalibrasyon.yaz', TALEP, TALEP_SAYFASI, ...ARKON('kalite'), ...SAYFA('uretim-emirleri', 'terminal', 'stok', 'malzemeler', 'rota', 'emirler', 'kalibrasyon', 'atolye'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.kalite', ...DENETIM_HAZIRLIK_YAZ, ...CNC_OKU, ...RECETE_ROTA_OKU,
       // Kalite Merkezi'ni görür, yazmaz (kullanıcı kararı 15.10.2026).

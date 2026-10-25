@@ -59,6 +59,8 @@ export interface TeknikResimKontrolu {
   olcumYok?: boolean; // noMeasure
   operatorOlcer?: readonly number[]; // opIds
   ozellikGizli?: boolean; // hideSpec
+  // Ölçüm bildirimini kullanan verir (operatör ekranı kendi bildirimine "Geri al" ekler); verilmezse görüntüleyici bildirir.
+  olcumBildir?: (mesaj: string, uygun: boolean) => void;
   siradaki?: readonly number[]; // due
   secildi?: (id: number) => void; // onSelect
   notlar?: readonly ResimNotu[]; // pins
@@ -475,7 +477,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     setSuggest(null); bip(k.ok ? 'ok' : 'nok');
     const nm = { ...meas, [b.id]: { v: k.v, ok: k.ok, at: Date.now(), ...(alet ? olcumAletDamgasi(alet) : {}) } };
     setMeas(nm); setVal('');
-    say((k.ok ? 'Uygun · ' : 'Tolerans dışı! ') + b.nom + ' = ' + k.v, k.ok ? 'run' : 'stop');
+    const mesaj = (k.ok ? 'Uygun · ' : 'Tolerans dışı! ') + b.nom + ' = ' + k.v;
+    if (ctl.olcumBildir) ctl.olcumBildir(mesaj, k.ok); else say(mesaj, k.ok ? 'run' : 'stop');
     const nx = bal.find((x) => !nm[x.id]); if (nx && k.ok) setTimeout(() => setSel(nx.id), 500);
   };
   const applyEdit = () => {
