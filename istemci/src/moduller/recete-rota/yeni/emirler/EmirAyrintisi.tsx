@@ -394,6 +394,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
   ];
   const ipuclari = [
     ...(plan.tur === 'plan' && plan.gecikiyor ? [`Plan bitişi teslimden sonra (${tarih(plan.bitis)}, teslim ${tarih(o.due)}).`] : []),
+    ...(plan.tur === 'planlanamiyor' ? plan.adimlar.map((a) => `OP ${String(a.opNo)} planlanamadı: ${a.neden}`) : []),
     ...(plan.tur === 'yerlesmedi' ? ['Emrin açık adımları plan motorunun yerleşiminde yok: rota, istasyon ya da vardiya eksik olabilir.'] : []),
     ...(R && R.eksikler.length ? [`${String(R.eksikler.length)} kalem malzeme stokta yetersiz.`] : []),
     ...(R?.uyarilar ?? []),
@@ -402,7 +403,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
   return (
     <section className="tc-rr3-plan" aria-label={`${o.no} planı`}>
       <div className="tc-rr3-kpi">
-        <SayiKarti baslik="Plan bitiş" simge="gantt" metin={planMetni(plan).metin} altMetin={`Teslim ${tarih(o.due)}${tampon ? ` · ${tampon.metin}` : ''}`} ton={plan.tur === 'plan' && plan.gecikiyor ? 'hata' : 'bilgi'} />
+        <SayiKarti baslik="Plan bitiş" simge="gantt" metin={planMetni(plan).metin} altMetin={`Teslim ${tarih(o.due)}${tampon ? ` · ${tampon.metin}` : ''}`} ton={plan.tur === 'planlanamiyor' || (plan.tur === 'plan' && plan.gecikiyor) ? 'hata' : 'bilgi'} />
         <SayiKarti baslik="Plan sırası" simge="list" metin={sira >= 0 ? `${String(sira + 1)}. emir` : YOK} altMetin="Öncelik ve teslim tarihine göre" />
         <SayiKarti baslik="Eksik malzeme" simge="box" sayi={R ? R.eksikler.length : null} ton="uyari" altMetin="kalem" />
       </div>

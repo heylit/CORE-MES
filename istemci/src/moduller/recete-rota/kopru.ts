@@ -339,20 +339,25 @@ export function kopruKur(
     uyariImzasi = imza;
     secenek.motorUyarilari?.(uyarilar);
   };
-  const motorYerlesimiOku = (): Promise<EkranYerlesimi | null> =>
+  // Motorun yerleştiremediği adımlar (anahtar `emirNo|opNo`, değer motorun nedeni): eski ekrandaki "Planlanamıyor" bundan çıkar.
+  const motorYerlesimiOku = (): Promise<{ yerlesim: EkranYerlesimi | null; yerlesmeyen: Record<string, string> } | null> =>
     api.get<MotorYerlesimiCevabi>('/plan/motor-yerlesimi').then(
-      (c) => { motorDurumu(false); motorUyarilari(c.uyarilar); return bitisliYerlesim(c); },
+      (c) => {
+        motorDurumu(false); motorUyarilari(c.uyarilar);
+        return { yerlesim: bitisliYerlesim(c), yerlesmeyen: Object.fromEntries((c.yerlesmeyen ?? []).map((y) => [`${y.emirNo}|${String(y.opNo)}`, y.neden])) };
+      },
       () => { motorDurumu(true); return null; },
     );
   // Okunamazsa uyarı listesine dokunulmaz (yerleşimdeki gibi).
   const yalnizUyariOku = (): Promise<null> =>
     api.get<MotorUyarilariCevabi>('/plan/motor-uyarilari').then((c) => { motorUyarilari(c.uyarilar); return null; }, () => null);
-  const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null }> =>
+  // planYerlesmeyen yalnız motor bir adımı yerleştiremediyse vardır; yoksa alan da yoktur.
+  const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null; planYerlesmeyen?: Record<string, string> }> =>
     Promise.all([api.get<DurumCevabi>('/recete-rota/durum'), secenek.yerlesimCizilmez?.() === true ? yalnizUyariOku() : motorYerlesimiOku()])
-      .then(([d, planYerlesim]) => {
+      .then(([d, m]) => {
         maliyetAnlik = d.maliyet;
         secenek.planVerisi?.(d.stations === null || d.machines === null || d.wcs === null);
-        return { ...d, planYerlesim };
+        return { ...d, planYerlesim: m?.yerlesim ?? null, ...(m && Object.keys(m.yerlesmeyen).length ? { planYerlesmeyen: m.yerlesmeyen } : {}) };
       });
   // Malzemeler'de yeni onaylanan kartın ilk rota taslağı ekran açılırken açılır (#688), dakikalık tarama beklenmez. Ekranın ilk
   // okumasında bir kez, yalnız rota yazabilene denenir; açılamazsa durum yine okunur (tarama sonra açar).

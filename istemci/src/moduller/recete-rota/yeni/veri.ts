@@ -13,7 +13,8 @@ import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type 
 // Girdi başına motorun bitişi (468/2 a) köprüde eklenir; motor cevabında yoksa alan da yoktur.
 export type EkranYerlesimi = Record<string, Array<MotorYerlesimiCevabi['ekranYerlesimi'][string][number] & { bitis?: string }>>;
 // planYerlesim: plan motorunun yerleşimi (215 a: emir tarihleri buradan). Okunamazsa null ve `motorOkunamadi` true; tarih boş gösterilir.
-export type RrDurumu = DurumCevabi & { planYerlesim: EkranYerlesimi | null };
+// planYerlesmeyen: motorun yerleştiremediği adımlar (`emirNo|opNo` -> neden); hepsi yerleştiyse alan yoktur.
+export type RrDurumu = DurumCevabi & { planYerlesim: EkranYerlesimi | null; planYerlesmeyen?: Record<string, string> };
 export interface RrVerisi { durum: RrDurumu; ek: KaynakEki }
 
 export const RR_ANAHTARI = ['recete-rota', 'yeni'] as const;

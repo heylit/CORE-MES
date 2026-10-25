@@ -20,10 +20,13 @@ export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null;
     case 'tamam': return { metin: 'Tamamlandı', ton: null, alt: null };
     case 'plan-disi': return { metin: 'Plan dışı', ton: null, alt: null };
     case 'motor-yok': return { metin: '—', ton: null, alt: null };
+    case 'planlanamiyor': return {
+      metin: 'Planlanamıyor', ton: 'hata', alt: p.adimlar.length === 1 ? p.adimlar[0]?.neden ?? null : `${String(p.adimlar.length)} adım planlanamadı`,
+    };
     case 'yerlesmedi': return { metin: 'Yerleşmedi', ton: 'hata', alt: `${String(p.acikAdim)} açık adım planda yok` };
     case 'plan': return {
       metin: tarih(p.bitis), ton: p.bitis === null ? null : p.gecikiyor ? 'hata' : 'tamam',
-      alt: p.yerlesmeyen ? `${String(p.yerlesmeyen)} adım planda yok` : null,
+      alt: null,
     };
   }
 }

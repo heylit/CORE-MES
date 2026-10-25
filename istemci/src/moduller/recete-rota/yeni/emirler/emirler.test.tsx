@@ -99,6 +99,26 @@ describe('R3 Üretim emirleri: plan bitiş', () => {
   });
 });
 
+describe('R3 Üretim emirleri: planlanamayan emir', () => {
+  it('motor açık bir adımı yerleştiremediyse "Planlanamıyor", nedeni ve gecikme şeridi; tarih ve tampon rozeti yok', async () => {
+    const d = ornekDurum();
+    d.routes = { '11': { base: null, steps: [{
+      id: 's1', seq: 1, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    }] } } as unknown as typeof d.routes;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((o) => ({ ...o, status: 'serbest' as const })) };
+    sunucuKur(OKUYAN, { durum: d, motorYerlesimi: { ekranYerlesimi: {}, yerlesimler: [], yerlesmeyen: [{ isEmriId: 1, emirNo: 'UE-0001', opNo: 10, neden: 'Uygun makine yok.' }] } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
+    await waitFor(() => { expect(within(satir).getByText('Planlanamıyor')).toBeTruthy(); });
+    expect(within(satir).getByText('Uygun makine yok.')).toBeTruthy();
+    expect(within(satir).queryByText(/Tampon|Gecikiyor/)).toBeNull();
+    expect(satir.hasAttribute('data-gec')).toBe(true);
+  });
+});
+
 describe('R3 Üretim emirleri: komutlar', () => {
   it('yönetici taslağı plana alır: emrin ekrandaki sürümüyle gider (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/plana-al': () => json(200, {}) } });

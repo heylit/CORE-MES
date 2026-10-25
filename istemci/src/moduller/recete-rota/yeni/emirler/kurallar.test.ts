@@ -95,7 +95,8 @@ describe('adımlar, ilerleme ve plan', () => {
       'UE-1|20~2': [{ makineId: 52, baslangic: '2026-11-09T08:00:00.000Z', bitis: '2026-11-09T12:00:00.000Z' }],
     };
     const p = planOzeti(d, y, o);
-    expect(p).toMatchObject({ tur: 'plan', ilk: '2026-11-03T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z', gecikiyor: true, yerlesmeyen: 1, tampon: 'gec' });
+    expect(p).toMatchObject({ tur: 'plan', ilk: '2026-11-03T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z', gecikiyor: true, tampon: 'gec' });
+    expect(p).not.toHaveProperty('yerlesmeyen');
     expect(adimPlani(y, 'UE-1', 20)).toEqual({ baslangic: '2026-11-09T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z', makineIdler: ['51', '52'] });
     expect(planOzeti(d, { 'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-10T12:00:00.000Z' }] }, o)).toMatchObject({ gecikiyor: false });
   });
@@ -112,6 +113,17 @@ describe('adımlar, ilerleme ve plan', () => {
     const teslimsiz = emir('2', { due: null });
     expect(planOzeti(durum([teslimsiz]), { 'UE-2|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2027-01-01T08:00:00.000Z' }] }, teslimsiz))
       .toMatchObject({ bitis: '2027-01-01T08:00:00.000Z', gecikiyor: false, bolluk: null, tampon: null });
+  });
+
+  it('motorun yerleştiremediği açık adım varsa emir planlanamaz (eski "Planlanamıyor"); listede olmayan eksik adım (çalışan, fason) sayılmaz', () => {
+    const o = emir('1');
+    const y = { 'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-04T10:00:00.000Z' }] };
+    expect(planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|30': 'Makine yok.', 'UE-9|10': 'Başka emir.' } }, y, o))
+      .toEqual({ tur: 'planlanamiyor', adimlar: [{ opNo: 30, neden: 'Makine yok.' }] });
+    expect(planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-9|10': 'Başka emir.' } }, y, o)).toMatchObject({ tur: 'plan', bitis: '2026-11-04T10:00:00.000Z', gecikiyor: false });
+    // Biten adım listede olsa da emri planlanamaz yapmaz.
+    const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|3': 'tamam' }, opProg: {} } });
+    expect(planOzeti({ ...d, planYerlesmeyen: { 'UE-1|30': 'Makine yok.' } }, y, o)).toMatchObject({ tur: 'plan' });
   });
 
   it('tampon (477 a): bolluk teslim günü sonuna kalan gün; tamponun üçte birinden azı kritik, üçte ikisinden azı azalmış', () => {

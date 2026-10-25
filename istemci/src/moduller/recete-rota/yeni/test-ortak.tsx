@@ -56,7 +56,7 @@ export interface SunucuSecenegi {
   // Plan motorunun yerleşimi okunamaz (yetki ya da hata).
   motorYok?: boolean;
   // Plan motoru cevabının yerleşim alanları (verilmezse boş).
-  motorYerlesimi?: { ekranYerlesimi: Record<string, unknown[]>; yerlesimler: unknown[] };
+  motorYerlesimi?: { ekranYerlesimi: Record<string, unknown[]>; yerlesimler: unknown[]; yerlesmeyen?: unknown[] };
   yazmalar?: Record<string, (govde: unknown) => Response>;
 }
 

@@ -124,12 +124,16 @@ export function tamponDurumu(bolluk: number, tamponGun: number): TamponDurumu {
 const teslimGunuSonu = (due: string): number => { const t = new Date(`${due}T00:00:00`); t.setDate(t.getDate() + 1); return t.getTime(); };
 
 // Emrin plan özeti: ilk açık adımın başlangıcı ve açık adımların en geç bitişi (eski ekrandaki "Plan bitiş"). Yerleşen bir adımın bitişi
-// yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz; yerleşmeyen adım ayrıca sayılır. Bolluk ve tampon yalnız bitiş ve teslim
-// biliniyorsa vardır (teslimsiz emre tarih uydurulmaz, 468/1 a).
+// yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz. Motorun yerleştiremediği açık adım varsa emir eski ekrandaki gibi
+// planlanamaz ve geç sayılır; yerleşimde de listede de olmayan açık adımı (çalışan, fason) motor hesaba katmıştır. Bolluk ve tampon
+// yalnız bitiş ve teslim biliniyorsa vardır (teslimsiz emre tarih uydurulmaz, 468/1 a).
 export type PlanOzeti =
   | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number }
-  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; yerlesmeyen: number; bolluk: number | null; tampon: TamponDurumu | null };
-export function planOzeti(d: Durum & Pick<DurumCevabi, 'settings'>, yerlesim: EkranYerlesimi | null, o: Emir): PlanOzeti {
+  | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[] }
+  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null };
+export function planOzeti(
+  d: Durum & Pick<DurumCevabi, 'settings'> & { planYerlesmeyen?: Record<string, string> }, yerlesim: EkranYerlesimi | null, o: Emir,
+): PlanOzeti {
   if (o.status === 'tamam') return { tur: 'tamam' };
   if (!plandaMi(o)) return { tur: 'plan-disi' };
   if (yerlesim === null) return { tur: 'motor-yok' };
@@ -137,6 +141,8 @@ export function planOzeti(d: Durum & Pick<DurumCevabi, 'settings'>, yerlesim: Ek
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
   const acik = adimlar.filter((a) => a.sira >= ilk && a.sira <= son && (a.durum ?? adimDurumu(o, a.sira, opStatus)) !== 'tamam');
+  const yerlesmeyen = acik.flatMap((a) => { const neden = d.planYerlesmeyen?.[`${o.no}|${String(a.opNo)}`]; return neden === undefined ? [] : [{ opNo: a.opNo, neden }]; });
+  if (yerlesmeyen.length > 0) return { tur: 'planlanamiyor', adimlar: yerlesmeyen };
   const planlar = acik.map((a) => adimPlani(yerlesim, o.no, a.opNo)).filter((p): p is AdimPlani => p !== null);
   if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length };
   const bitisler = planlar.map((p) => p.bitis);
@@ -145,7 +151,7 @@ export function planOzeti(d: Durum & Pick<DurumCevabi, 'settings'>, yerlesim: Ek
   const bolluk = o.due !== null && bitis !== null ? (teslimGunuSonu(o.due) - Date.parse(bitis)) / GUN_MS : null;
   const tampon = bolluk === null ? null : tamponDurumu(bolluk, d.settings.buffer);
   return {
-    tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', yerlesmeyen: acik.length - planlar.length, bolluk, tampon,
+    tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', bolluk, tampon,
   };
 }
 

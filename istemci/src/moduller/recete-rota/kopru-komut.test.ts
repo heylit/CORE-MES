@@ -166,6 +166,14 @@ describe('köprü komutları', () => {
     } });
   });
 
+  it('KOM-04c: motorun yerleştiremediği adımlar durumda `emirNo|opNo` -> neden olarak gelir; hepsi yerleştiyse alan yoktur', async () => {
+    const yerlesmeyen = [{ isEmriId: 5, emirNo: 'UE-1', opNo: 30, neden: 'Makine yok.' }];
+    sunucuKur((_y, yol) => json(200, yol === '/plan/motor-yerlesimi' ? { ekranYerlesimi: {}, yerlesimler: [], yerlesmeyen, uyarilar: [] } : DURUM));
+    expect(await kopruKur()('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: {}, planYerlesmeyen: { 'UE-1|30': 'Makine yok.' } });
+    sunucuKur((_y, yol) => json(200, yol === '/plan/motor-yerlesimi' ? { ekranYerlesimi: {}, yerlesimler: [], yerlesmeyen: [], uyarilar: [] } : DURUM));
+    expect(await kopruKur()('durum-oku', {})).not.toHaveProperty('planYerlesmeyen');
+  });
+
   it('KOM-05: komut tablosu yalnız bilinen komutları ve sahibinin yollarını gösterir', () => {
     expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['operasyon-tipi-ekle', 'operasyon-tipi-duzenle', 'statu-degistir', 'maliyet-yaz', ...Object.keys(KAYNAK_KOMUTLARI), ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
     expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-tanimi-kaydet', 'statu-tanimi-sil']);

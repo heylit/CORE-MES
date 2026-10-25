@@ -118,7 +118,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   const ozet = planOzeti(d, d.planYerlesim, o);
   const plan = planMetni(ozet);
   const tampon = tamponRozeti(ozet);
-  const gecikiyor = ozet.tur === 'plan' && ozet.gecikiyor;
+  const gecikiyor = ozet.tur === 'planlanamiyor' || (ozet.tur === 'plan' && ozet.gecikiyor);
   const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
   const rev = o.rev === null ? null : d.routeRevs?.find((r) => r.id === o.rev) ?? null;
   const revEski = rev !== null && rev.status !== 'yururlukte';
