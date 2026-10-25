@@ -23,6 +23,20 @@ describe('KodOkuyucu', () => {
     expect((await screen.findByRole('status')).textContent).toMatch(/kameraya erişemiyor/);
   });
 
+  it('sik: tek satirda kamera, kod, bul ve fotograf; kamera kapaliyken goruntu alani yer kaplamaz, ipucu alanin aciklamasidir', () => {
+    const okundu = vi.fn();
+    const { container } = render(<KodOkuyucu sik okundu={okundu} ipucu="Malzeme ya da yer okut" />);
+    expect(container.querySelector('.tc-kod-okuyucu-kamera')?.hasAttribute('hidden')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Kamerayı aç' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fotoğraftan oku' })).toBeTruthy();
+    const alan = screen.getByLabelText('Kod');
+    expect(alan.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('Malzeme ya da yer okut')).toBeTruthy();
+    fireEvent.change(alan, { target: { value: ' MLZ:901 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bul' }));
+    expect(okundu).toHaveBeenCalledWith('MLZ:901');
+  });
+
   describe('kendiliginden', () => {
     afterEach(() => { vi.restoreAllMocks(); Reflect.deleteProperty(navigator, 'mediaDevices'); });
     function sahteKamera() {
