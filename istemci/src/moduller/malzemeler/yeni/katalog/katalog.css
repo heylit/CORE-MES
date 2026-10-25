@@ -1,11 +1,27 @@
 /* Malzemeler katalog parçası (tc-mk-). Renk ve ölçü yalnız tasarım değişkeni; 360, 768 ve 1280'de tam işlevli. */
 .tc-mk { display: grid; gap: var(--b-3); min-width: 0; }
-.tc-mk-duzen { display: grid; gap: var(--b-4); min-width: 0; }
+/* Prototipin düzeni: üstte arama ve aktarma düğmeleri; altta solda katlanır süzgeç kutusu, sağda liste. 980 altında kutu listenin üstüne iner. */
+.tc-mk-araclar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-mk-ara { flex: 0 1 var(--menu-genis); min-width: 0; }
+.tc-mk-ara-bosluk { flex: 1; }
+.tc-mk-duzen { display: grid; gap: var(--b-5); min-width: 0; grid-template-columns: minmax(0, var(--menu-genis)) minmax(0, 1fr); align-items: start; }
 .tc-mk-ana { display: grid; gap: var(--b-3); min-width: 0; align-content: start; }
-.tc-mk-yan { min-width: 0; }
-@media (min-width: 1024px) {
-  .tc-mk-duzen[data-suzgec="acik"] { grid-template-columns: minmax(0, var(--menu-genis)) minmax(0, 1fr); }
-  .tc-mk-yan { position: sticky; top: calc(var(--ust-cubuk) + var(--b-3)); align-self: start; max-height: calc(100vh - var(--ust-cubuk) - var(--b-5)); overflow-y: auto; }
+.tc-mk-yan {
+  min-width: 0; position: sticky; top: calc(var(--ust-cubuk) + var(--b-3)); max-height: calc(100vh - var(--ust-cubuk) - var(--b-5)); overflow-y: auto;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid);
+}
+.tc-mk-yan > summary { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3); font-weight: 700; cursor: pointer; list-style: none; }
+.tc-mk-yan > summary::-webkit-details-marker { display: none; }
+.tc-mk-yan > summary::before { content: "▸"; transition: transform var(--hareket-sure); }
+.tc-mk-yan[open] > summary::before { transform: rotate(90deg); }
+.tc-mk-yan > aside { padding: 0 var(--b-3) var(--b-3); }
+@media (max-width: 980px) {
+  .tc-mk-duzen { grid-template-columns: minmax(0, 1fr); }
+  .tc-mk-yan { position: static; max-height: none; }
+}
+@media (max-width: 720px) {
+  .tc-mk-ara { flex-basis: 100%; }
+  .tc-mk-ara-bosluk { display: none; }
 }
 
 .tc-mk-fasetler { display: grid; gap: var(--b-3); }
