@@ -166,6 +166,23 @@ describe('P2 kâr tablosu (486/1 a)', () => {
   }, 20000);
 });
 
+describe('P2 örtüşme kartı (486/2 a)', () => {
+  it('örtüşmesi açık iş emri listelenir; Kapat ve Örtüşmeyi dene pasif, yazma gitmez', async () => {
+    const deger = structuredClone(CALISMA_DEGERI);
+    Object.assign(deger.D.siparisler[1]!, { ortus: true });
+    const govdeler: unknown[] = [];
+    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }], { govdeler });
+    ac('/recete-rota/planlama-yeni/ysiparis');
+    await parca('ysiparis');
+    tumAc();
+    const kapat = dugme('S2 örtüşmesini kapat');
+    expect(kapat.disabled).toBe(true);
+    fireEvent.click(kapat);
+    expect(dugme('Örtüşmeyi dene').disabled).toBe(true);
+    expect(govdeler).toEqual([]);
+  }, 20000);
+});
+
 describe('P2 Terminler', () => {
   it('yönetici fason dönüş tarihini sihirbazla girer; 16:00 ve planın dönüşü referans olarak yazılır', async () => {
     const govdeler: unknown[] = [];
