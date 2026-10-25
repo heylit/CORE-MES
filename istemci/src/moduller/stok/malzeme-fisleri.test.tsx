@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import type { LogoFisBilgisi, MalzemeFisiAyrintiCevabi, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { LogoFisBilgisi, MalzemeFisiAyrintiCevabi, MalzemeFisiListeSatiri, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
@@ -13,7 +13,8 @@ const FIS: MalzemeFisiOzeti = {
   id: 7, no: 'UE-2026-0012', tur: 'sarf', acilis: '2026-10-24T09:15:00+03:00', uretimEmriId: 12, emirNo: 'UE-2026-0012', satirSayisi: 2, gonderimIstegi: null,
   logo: logo(), gonderilebilir: false, surum: 3,
 };
-const liste = (satirlar: MalzemeFisiOzeti[]) => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 }) satisfies MalzemeFisleriCevabi;
+const liste = (satirlar: (MalzemeFisiOzeti | MalzemeFisiListeSatiri)[]) =>
+  ({ satirlar: satirlar.map((f) => ({ irsaliyeNo: null, ...f })), toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 }) satisfies MalzemeFisleriCevabi;
 const ayrinti = (fis: MalzemeFisiOzeti): MalzemeFisiAyrintiCevabi => ({
   fis,
   satirlar: [
@@ -37,6 +38,21 @@ describe('Malzeme fişleri', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('tur=fire'))).toBe(true));
     fireEvent.change(screen.getByRole('combobox', { name: /Logo durumu/ }), { target: { value: 'hata' } });
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('logoDurumu=hata'))).toBe(true));
+  });
+
+  // 515 a: mal kabul belgesi listede ayrı türdür; ayrıntısı Mal kabul ekranında, Logo'ya gitmez.
+  it('mal kabul satırı: no Mal kabul ayrıntısına gider, kaynak irsaliye no; Mal kabul sekmesi sorguya gider', async () => {
+    const MK: MalzemeFisiListeSatiri = {
+      ...FIS, id: 31, no: 'MK-000031', tur: 'mal_kabul', uretimEmriId: null, emirNo: null, satirSayisi: 1, irsaliyeNo: 'IRS-DNM-1', surum: 1,
+      logo: logo({ durum: 'gonderilmez', gonderimSekli: null, neden: "Mal kabul Logo'ya fiş olarak gitmez." }),
+    };
+    const istekler = sunucuKur(OKUYUCU, { 'GET /stok/malzeme-fisleri': () => json(200, liste([MK, { ...FIS, id: 31 }])) });
+    ac('/stok/malzeme-fisleri');
+    expect((await screen.findByRole('link', { name: 'MK-000031' })).getAttribute('href')).toBe('/stok/mal-kabul/31');
+    expect(screen.getByRole('link', { name: 'UE-2026-0012' }).getAttribute('href')).toBe('/stok/malzeme-fisleri/31');
+    expect(screen.getByText('İrsaliye IRS-DNM-1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Mal kabul' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol.includes('tur=mal_kabul'))).toBe(true));
   });
 
   it('boş listede uydurmaz, söyler', async () => {
