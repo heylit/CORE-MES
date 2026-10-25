@@ -200,17 +200,38 @@ describe('P2 Terminler', () => {
     expect(govdeler[0]).toMatchObject({ deger: { D: { fasonTermin: { 'S1.a2': '2026-10-22 16:00' }, fasonRef: { 'S1.a2': '2026-10-21 20:00' } } } });
   }, 20000);
 
-  it('malzeme satırı haritada yerinde, hücreleri pasif; termin bekleyenler kartı eski başlıklarıyla', async () => {
-    sunucuKur(YONETICI, KAYIT);
+  it('malzeme kalemleri satın alma planından gelir (518 a): haritada satırı, kartta termin bekleyeni; ekran yazmaz (izinli)', async () => {
+    // S1'in malzemesi 20 kg, stok 5: 15 kg için sipariş verilmedi. Stok ucu cevap vermez; planın kendi kopyası kullanılır.
+    const deger = structuredClone(CALISMA_DEGERI);
+    Object.assign(deger.D.siparisler[0]!, { malzeme: [{ kod: '7', miktar: 2 }] });
+    Object.assign(deger.D, { malzemeler: [{ kod: '7', ad: 'Deneme cubuk', birim: 'kg', stok: 5, tedarikGun: 3, muayeneGun: 0 }] });
+    const istekler = sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }], { ret: (y) => y.startsWith('/stok/') });
     ac('/recete-rota/planlama-yeni/terminler');
     await parca('terminler');
-    expect(screen.getAllByText('Malzeme').length).toBeGreaterThan(0);
-    expect(document.querySelectorAll('.tc-pys-h[data-kapali]').length).toBeGreaterThan(0);
+    await waitFor(() => { expect(screen.getAllByRole('button', { name: /^7, / }).length).toBeGreaterThan(0); }, BEKLE);
+    expect(document.querySelectorAll('.tc-pys-h[data-kapali]').length).toBe(0);
+    expect(screen.getByText(/^En koyu satır 7: plan 19\.10 Pzt istiyor, geliş 22\.10 Per/)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: /^7, / })[0]!);
+    const acilim = screen.getByRole('region', { name: '7 · Sipariş geç kaldı' });
+    expect(within(acilim).queryByRole('form')).toBeNull();
     tumAc();
     for (const ad of ['Varsayılan termin', 'Malzeme ve fasoncu başına katsayı', 'Malzeme: termin bekleyenler', 'Fason dönüş terminleri']) {
       expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
     }
-    expect(screen.getByText('Satın alma listesi plan motoruyla gelir.')).toBeTruthy();
+    const kart = screen.getByRole('table', { name: 'Malzeme: termin bekleyenler' });
+    expect(within(kart).getByText('Sipariş geç kaldı')).toBeTruthy();
+    expect((within(kart).getByLabelText('7 termin') as HTMLInputElement).disabled).toBe(true);
+    expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+  }, 20000);
+
+  it('malzemesi stoktan karşılanan planda malzeme satırı ve termin bekleyen yoktur (eski çerçeve gibi)', async () => {
+    sunucuKur(YONETICI, KAYIT);
+    ac('/recete-rota/planlama-yeni/terminler');
+    await parca('terminler');
+    tumAc();
+    await waitFor(() => { expect(screen.getByText('Termini beklenen malzeme yok.')).toBeTruthy(); }, BEKLE);
+    expect(screen.queryByText('Satın alma listesi plan motoruyla gelir.')).toBeNull();
+    expect(document.querySelectorAll('.tc-pys-h[data-kapali]').length).toBe(0);
   }, 20000);
 
   it('plan yazmayan kişi fason tarihi giremez (reddedilen)', async () => {

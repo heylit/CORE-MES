@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dugme, Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
+import { kaynakKur, stokOku, type StokKaynagi } from '../malzeme/kaynak.ts';
+import { alimPlani, bitenler, calismaSimdisi, motorGirdisi, planIslemleri, tabanMs, tahsisEt, terminAyari as alimTerminAyari, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { MalzemeBekleyenKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
@@ -10,14 +12,15 @@ import { fasonTanimi } from './formlar.ts';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type AcilimSecenegi, type Secim } from './IsiHaritasi.tsx';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
 import {
-  AYAR_SINIRI, KAT_SINIRI, fasonDurumu, fasonKalemleri, fasonSatirlari, fasonTerminiYaz, gunYaz, katsayi, kayitliPlan, sayi, sinirliSayi,
+  AYAR_SINIRI, KAT_SINIRI, fasonDurumu, fasonKalemleri, fasonSatirlari, malzemeKalemleri, fasonTerminiYaz, gunYaz, katsayi, kayitliPlan, sayi, sinirliSayi,
   saatYaz, tarihGirdisi, tedarikliMalzemeler, terminAyari, terminIsisi, terminUyarisi, type FasonSatiri, type TerminAyari, type TerminSatiri,
 } from './kurallar.ts';
 
 // Terminler: kalem × gün (zz30-isi ISI.terminler), satırın altında sihirbazla dönüş tarihi (zz25-sade-takvim SADE.terminler fason, ortak sade
 // kabuğu), "Tüm satırlar"da varsayılan termin, katsayılar, termin bekleyen malzemeler ve fason dönüş terminleri (zv-termin sTerminler).
-// Malzeme kalemleri motorun satın alma listesinden gelir; satırı ve kartı yerinde pasif (357 b). İşi ileri atmak siparişin başlama tarihini
-// yazar; o tarih Üretim emirlerindendir, düğme yerinde pasif (222 a, Soru 466/1 a).
+// Malzeme kalemleri Malzeme satın alma planının (P4) hesabındandır, kaynağı da onunkidir: stok ve açık sipariş stoktan (518 a). Satın alma
+// termini ve siparişi satın almanındır; malzeme satırı yalnız okunur (222 a). İşi ileri atmak siparişin başlama tarihini yazar; o tarih
+// Üretim emirlerindendir, düğme yerinde pasif (222 a, Soru 466/1 a).
 
 const ILERI_SAHIBI = 'İşin başlama tarihi Üretim emirlerinde değiştirilir.';
 
@@ -146,8 +149,31 @@ export function FasonTerminKarti({ c, L, komut, sadeceBos }: { c: PlanlamaCalism
   );
 }
 
+// Malzeme satın alma planının satırları (MalzemePlani.tsx ile aynı girdi); stok okunurken undefined, plan yoksa null.
+function useAlimPlani({ calisma, depo }: Pick<PlanlamaEkranOzellikleri, 'calisma' | 'depo'>): AlimPlaniSatiri[] | null | undefined {
+  const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
+  useEffect(() => {
+    let bitti = false;
+    void stokOku().then((s) => { if (!bitti) stokYaz(s); });
+    return () => { bitti = true; };
+  }, []);
+  return useMemo(() => {
+    const D = calisma?.D;
+    const taban = D?.meta?.baslangic ? tabanMs(D.meta.baslangic) : null;
+    if (!calisma || !D || taban === null) return null;
+    if (stok === undefined) return undefined;
+    const islemler = planIslemleri(calisma.plan);
+    if (calisma.plan === null || islemler.length === 0) return null;
+    const k = kaynakKur(D, taban, stok);
+    const biten = bitenler(depo.durum?.emirler ?? depo.receteRotaKaydi, D);
+    const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: calismaSimdisi(calisma), taban });
+    return alimPlani(g, taban, tahsisEt(g, taban), alimTerminAyari(D));
+  }, [calisma, stok, depo.durum, depo.receteRotaKaydi]);
+}
+
 export function Terminler({ calisma, komut, yetki, git, depo, yenile }: PlanlamaEkranOzellikleri) {
   const [secim, secimYaz] = useState<Secim | null>(null);
+  const alim = useAlimPlani({ calisma, depo });
   const { bildir } = useBildirim();
   const uyar = (ileti: string) => { bildir('hata', ileti); };
   const p = kayitliPlan(calisma);
@@ -161,7 +187,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
       {p
         ? (
           <>
-            <MalzemeBekleyenKarti degerlendir={degerlendir} yenile={yenile} />
+            <MalzemeBekleyenKarti degerlendir={degerlendir} yenile={yenile} D={calisma.D} plandan={alim} />
             <FasonTerminKarti c={calisma} L={L} komut={komut} sadeceBos />
           </>
         )
@@ -182,14 +208,20 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   }
 
   const c = calisma;
-  const V = terminIsisi(c, fasonKalemleri(c.D, L));
+  const V = terminIsisi(c, [...malzemeKalemleri(c.D, alim ?? [], calismaSimdisi(c)), ...fasonKalemleri(c.D, L)]);
   const u = terminUyarisi(p);
   const fason = komut ? fasonTanimi(c, L, komut) : null;
   const acilim = (r: TerminSatiri, ck: string) => {
-    const k = r.kalem; if (!k) return null;
-    const x = k.x;
-    const formlar: AcilimFormu[] = [{ ad: x.T == null ? 'Dönüş tarihini gir' : 'Dönüş tarihini değiştir', etki: 'Girilen gün kesin süre sayılır; plan onu kullanır.', simge: 'flag', tanim: fason, deg: { is: x.id }, adim: 1 }];
-    const secenekler: AcilimSecenegi[] = [{ ad: `${x.r.job} çizelgede`, etki: 'Bu kalemi bekleyen siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }];
+    const k = r.kalem;
+    const cizelge = (j: string): AcilimSecenegi => ({ ad: `${j} çizelgede`, etki: 'Bu kalemi bekleyen siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } });
+    const formlar: AcilimFormu[] = k.grup === 'fas'
+      ? [{ ad: k.x.T == null ? 'Dönüş tarihini gir' : 'Dönüş tarihini değiştir', etki: 'Girilen gün kesin süre sayılır; plan onu kullanır.', simge: 'flag', tanim: fason, deg: { is: k.x.id }, adim: 1 }]
+      : [];
+    const j1 = k.grup === 'fas' ? k.x.r.job : k.m.isler[0];
+    const secenekler: AcilimSecenegi[] = [
+      ...(j1 ? [cizelge(j1)] : []),
+      ...(k.grup === 'mal' ? [{ ad: 'Satın alma planı', etki: 'Bütün malzemelerin sipariş günlerini ve miktarlarını gösterir.', simge: 'box' as const, yap: () => { git('malzplan'); } }] : []),
+    ];
     return (
       <FormluAcilim
         key={`${r.k}|${ck}`} baslik={`${r.ad} · ${k.durum}`} simge={r.simge} ton={r.ton} neden={k.neden} bilgi={k.bilgi.slice(0, 4)} formlar={formlar} secenekler={secenekler}
