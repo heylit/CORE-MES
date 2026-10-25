@@ -43,10 +43,23 @@ describe('plan şeridi: motor yerleşimi ile canlı plan farkı (eski sayım, 49
 
 describe('plan şeridi: durum', () => {
   const c = canli([{ makineId: 1, isler: [is('A|10')] }]);
-  it('fark yoksa plan canlı; fark varsa canlıya alınmadı ve değişiklik sayısı', () => {
-    expect(seritDurumu(c, { 'A|10': yer(1, '08:00') }, surum(3))).toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0 });
-    expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'B|10': yer(1, '09:00') }, null))
-      .toMatchObject({ tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 1, parca: '1 iş canlı planda yok' });
+  it('fark yoksa plan canlı, eski metinle', () => {
+    expect(seritDurumu(c, { 'A|10': yer(1, '08:00') }, surum(3)))
+      .toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 0, metin: 'Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.' });
+  });
+  it('canlı plan varken motor farkı canlıya alınmadı demez: plan canlı, motor farkı ayrı sayı (500 a)', () => {
+    expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'B|10': yer(1, '09:00') }, null)).toMatchObject({
+      tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 1, parca: '1 iş canlı planda yok',
+      metin: 'Terminal ve Arkon Hazırlık canlı planın sırasını kullanıyor.',
+    });
+    const kilitli = canli([], { sonCanliyaAlma: { zaman: '2026-10-24T09:30:00.000Z', kisi: 'Deneme 1' } });
+    expect(seritDurumu(kilitli, { 'A|10': yer(1, '08:00') }, null)).toMatchObject({ tur: 'canli', motorFarki: 1 });
+  });
+  it('hiç canlı plan yoksa canlıya alınmadı ve motor önerisinin iş sayısı', () => {
+    const bos = canli([]);
+    expect(seritDurumu(bos, { 'A|10': yer(1, '08:00') }, null))
+      .toMatchObject({ tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 1, motorFarki: 0, parca: '1 iş canlı planda yok' });
+    expect(seritDurumu(bos, {}, null)).toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0 });
   });
   it('motorun rota ve bölme durumları uyarıdır, sayılmaz (493/2 a)', () => {
     const motor = { parcaAdetleri: {}, emirler: [
@@ -69,7 +82,8 @@ describe('plan şeridi: durum', () => {
     expect(d).toMatchObject({ tur: 'degisti', rozet: 'PLAN DEĞİŞTİ' });
     expect(d.metin).toMatch(/^Plan başkası tarafından canlıya alındı \(Deneme 2, 25\.10\.2026 \d\d:15\)\. Ekranı yenileyin/);
     expect(seritDurumu(c, {}, surum(4)).metin).toMatch(/^Plan başkası tarafından canlıya alındı\. /);
-    expect(seritDurumu(c, null, surum(3))).toMatchObject({ tur: 'bekliyor', degisiklik: 0 });
+    expect(seritDurumu(c, null, surum(3))).toMatchObject({ tur: 'canli', degisiklik: 0, uyarilar: ['Plan motorunun yerleşimi okunamadı; motor önerisiyle fark gösterilemiyor.'] });
+    expect(seritDurumu(canli([]), null, surum(3))).toMatchObject({ tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 0 });
   });
   it('son canlıya alma metni', () => {
     expect(sonCanliyaAlmaMetni(c)).toBe('Plan henüz hiç canlıya alınmadı');

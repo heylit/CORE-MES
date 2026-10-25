@@ -22,6 +22,8 @@
 }
 .tc-rry-plan[data-tur="bekliyor"] .tc-rry-plan-rozet, .tc-rry-plan[data-tur="degisti"] .tc-rry-plan-rozet { color: var(--hold); }
 .tc-rry-plan-uyari { color: var(--hold); }
+/* Plan canlıyken motorun farkı rozetin altında ayrı satırdır (500 a). */
+.tc-rry-plan-motor { flex-basis: 100%; color: var(--muted); }
 
 @media (max-width: 479px) {
   .tc-rry { padding: var(--b-3); }

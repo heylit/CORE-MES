@@ -68,6 +68,10 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     await parcaCizildi(bolge, 'R3');
     const sekmeler = within(screen.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' })).getAllByRole('tab').map((s) => s.textContent);
     expect(sekmeler).toEqual(SEKMELER.map((s) => s.baslik));
+    // Eski ekranın sırası (497/1 a): sekmeler bölüm başlığının üstündedir (plan şeridiyle sıra ekran testinde).
+    const sekme = screen.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
+    const baslik = screen.getByRole('heading', { name: 'Üretim emirleri', level: 2 });
+    expect(sekme.compareDocumentPosition(baslik) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Okuma yalnız GET'tir; rota.yaz olmayan için kart taslağı açılmaz, kayıt belgesine yazılmaz.
     expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
   });

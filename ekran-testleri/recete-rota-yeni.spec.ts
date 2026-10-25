@@ -17,7 +17,13 @@ test.describe('R0 iskelet', () => {
     await expect(serit).toBeVisible();
     const onaya = serit.getByRole('button', { name: 'Onaya gönder' });
     if (await onaya.count()) await expect(onaya).toBeDisabled();
+    // Plan canlıyken "değişiklik bekliyor" denmez; motor farkı ayrı satırdır (500 a).
+    if (await serit.getByText('PLAN CANLI').count()) await expect(serit.getByText(/değişiklik bekliyor/)).toHaveCount(0);
     const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
+    // Eski ekranın sırası (497/1 a): sekmeler en üstte, altında şerit, sonra bölüm başlığı.
+    const ust = async (l: typeof serit) => (await l.boundingBox())?.y ?? Number.NaN;
+    expect(await ust(sekmeler)).toBeLessThan(await ust(serit));
+    expect(await ust(serit)).toBeLessThan(await ust(ekran.getByRole('heading', { name: 'Üretim emirleri', level: 2 })));
     await expect(sekmeler.getByRole('tab')).toHaveCount(BOLUMLER.length);
     for (const b of BOLUMLER) {
       await sekmeler.getByRole('tab', { name: b.sekme }).click();
@@ -75,6 +81,17 @@ test.describe('R3 Üretim emirleri ve Stok', () => {
     await ac('/recete-rota/yeni');
     const emirler = page.getByRole('region', { name: 'Üretim emirleri' });
     await expect(emirler.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
+    // Eski süzgeç çubuğu (497/2 a): geniş ekranda her grup tek satırlık bölümlü çubuk; emir no hiçbir genişlikte kırılmaz.
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      for (const ad of ['Tür', 'Durum']) {
+        const ustler = await emirler.getByRole('group', { name: ad }).locator('button').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().top)));
+        expect(new Set(ustler).size).toBeLessThanOrEqual(1);
+      }
+    }
+    const satirSayilari = await emirler.locator('.tc-rr3-emirno').evaluateAll((l) => l.map((b) => {
+      const r = document.createRange(); r.selectNodeContents(b); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+    }));
+    expect(satirSayilari.filter((n) => n > 1)).toEqual([]);
     const ilk = emirler.locator('.tc-rr3-emir').first();
     if (await ilk.count()) {
       await ilk.click();

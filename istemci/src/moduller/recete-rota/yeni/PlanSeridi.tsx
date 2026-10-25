@@ -30,7 +30,8 @@ export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerl
     <div className="tc-rry-plan" data-tur={s.tur} role="status" aria-label="Plan durumu">
       <span className="tc-rry-plan-rozet"><Simge ad="gantt" boyut="k" />{s.rozet}</span>
       {s.degisiklik > 0 && <b>{s.degisiklik} değişiklik bekliyor</b>}
-      <span>{s.parca ? `${s.parca}. ${s.metin}` : s.metin}</span>
+      <span>{s.parca && s.tur === 'bekliyor' ? `${s.parca}. ${s.metin}` : s.metin}</span>
+      {s.motorFarki > 0 && <span className="tc-rry-plan-motor">{`Motor önerisi canlıdan ${String(s.motorFarki)} iş farklı (${s.parca}).`}</span>}
       {s.uyarilar.map((u) => <span key={u} className="tc-rry-plan-uyari">{u}</span>)}
       {(canli.yersizBolmeler ?? []).length > 0 && (
         <span className="tc-rry-plan-uyari">
