@@ -1,14 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { ILK_PARCA_BEKLIYOR_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kararBekleyenEki, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani } from '../../../../arkon/web/src/data/ilk-parca.ts';
+import { ILK_PARCA_BEKLIYOR_ILETISI, ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_KARARI_ILETISI, ilkParcaKarari, kaliteMerkeziKarariBekler, ilkParcaSayimReddi, kararBekleyenEki, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani } from '../../../../arkon/web/src/data/ilk-parca.ts';
 
 describe('ilk parça kapısı (129, 131 b)', () => {
-  it('ilk parça kararı beklenirken ilk sağlamdan sonrası karar bekler; ret varsa sayı gösterilmez', () => {
+  it('327 a, 521 1 a: ilk parça kararı beklenirken ilk parça dahil bütün sağlam karar bekler (sunucuyla aynı sayı); ret varsa sayı gösterilmez', () => {
     expect(kararBekleyenSayisi(true, 0, false)).toBe(0);
-    expect(kararBekleyenSayisi(true, 4, false)).toBe(3);
+    expect(kararBekleyenSayisi(true, 4, false)).toBe(4);
+    expect(kararBekleyenSayisi(true, 38, false)).toBe(38);
     expect(kararBekleyenSayisi(true, 4, true)).toBeNull();
     expect(kararBekleyenSayisi(false, 9, false)).toBe(0);
     expect(kararBekleyenEki({ kararBekleyen: 3 })).toBe(' · karar bekleyen 3');
     expect(kararBekleyenEki({ kararBekleyen: null })).toBe('');
+  });
+
+  it('521 1 a: karar Kalite Merkezi\'nde; ilk parça ölçüsü taşıyan numune onaylanınca kaliteci yönlendirilir, onaylı emirde ve ilk parçasız numunede yönlendirilmez', () => {
+    expect(ILK_PARCA_KARAR_BEKLIYOR_ILETISI).toMatch(/Kalite Merkezi/);
+    expect(KALITE_MERKEZI_KARARI_ILETISI).toMatch(/Kalite Merkezi/);
+    expect(kaliteMerkeziKarariBekler({}, [1, 2], [2])).toBe(true);
+    expect(kaliteMerkeziKarariBekler({ tmi: { ilkParca: { karar: 'ret', zaman: 'z' } } }, [2], [2])).toBe(true);
+    expect(kaliteMerkeziKarariBekler({ tmi: { ilkParca: { karar: 'onay', zaman: 'z' } } }, [2], [2])).toBe(false);
+    expect(kaliteMerkeziKarariBekler({}, [1, 3], [2])).toBe(false);
+    expect(kaliteMerkeziKarariBekler(undefined, [1], [])).toBe(false);
   });
 
   it('yeniden ilk parça kapısı açıkken yalnız ilk sağlam sayılır; düzeltme serbest; kapı kapalıyken sınır yok', () => {

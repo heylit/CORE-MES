@@ -6,7 +6,8 @@ import { Fragment, I, dur, fmt, html, pad, pl, useCallback, useEffect, useMemo, 
 import { ME, MEU, ROLE_L, allowed, can, initials, machineOf } from './ortak-ayarlar';
 import { fold } from './pdf-okuma';
 import { BlueprintM, methOf } from './teknik-resim';
-import { beep } from './operator-parcalar';
+import { beep, ilkParcaKalemleri } from './operator-parcalar';
+import { KALITE_MERKEZI_KARARI_ILETISI, kaliteMerkeziKarariBekler } from '../data/ilk-parca';
 import { Sw, nearEdge, rulesOf } from './kurallar';
 import { Bus, DB, apPending, seedIfEmpty } from './hazirlik';
 import { SpcView } from './giris-ayarlar-spc';
@@ -150,7 +151,8 @@ export function QualityApp() {
     res.meas = Object.assign({}, res.meas, n.results); res.at = Date.now(); await DB.put('results', res);
     Bus.send({ type: 'sample-result', reqId: r.id, id: r.pkgId, no: r.no, status, machine: r.machine });
     Bus.send({ type: 'result', id: r.pkgId, no: r.no });
-    say(status === 'rejected' ? 'Red kararı makineye iletildi' : 'Onay makineye iletildi', status === 'rejected' ? 'x' : 'check', RQ[status].c);
+    if (status !== 'rejected' && kaliteMerkeziKarariBekler(p, r.items || [], ilkParcaKalemleri({ pkg: p }).map(b => b.id))) say(KALITE_MERKEZI_KARARI_ILETISI, 'alert', 'var(--hold)');
+    else say(status === 'rejected' ? 'Red kararı makineye iletildi' : 'Onay makineye iletildi', status === 'rejected' ? 'x' : 'check', RQ[status].c);
     const rs = await reload(); const nx = rs.find(x => x.status === 'waiting'); setSelId(nx ? nx.id : null);
   };
   const open = reqs.filter(x => x.status === 'waiting' || x.status === 'measuring'), done = reqs.filter(x => !(x.status === 'waiting' || x.status === 'measuring')).reverse();
