@@ -49,6 +49,7 @@
 .tc-isi-ad[data-ton="hata"] { --c: var(--stop); }
 .tc-isi-ad[data-ton="uyari"] { --c: var(--hold); }
 .tc-isi-ad[data-ton="tamam"] { --c: var(--run); }
+.tc-isi-ad[data-ton="pasif"] { --c: var(--muted); }
 .tc-isi-ad > span { display: grid; min-width: 0; }
 .tc-isi-ad b, .tc-isi-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-isi-ad b { font-size: var(--yazi-s); font-family: var(--font-mono); }
