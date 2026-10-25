@@ -514,8 +514,7 @@ export const paRedVar = (K: KontrolMaddesi[]): boolean => K.some((k) => k[0] ===
 
 // --- ek mesai (eski paEkSaat, haftaMesai, MESAI_BUTCE; 507 2 a) ---
 // Çalışmanınki sayfanın kaydından eskisi gibi hesaplanır: vardiya süresi (gece yarısını geçer, mola düşülmez), hafta planın başlangıcından
-// 7 günlük dilim, bütçe çalışmanın mesaiHafta'sı (yoksa 8). Senaryonunki sunucunun ekMesai'sinden. Eskide bütçe 0 "sınır yok" demekti; sunucu
-// 0'da her ek vardiyayı aşım sayar, ekran eski kuralı izler.
+// 7 günlük dilim, bütçe çalışmanın mesaiHafta'sı (yoksa 8). Senaryonunki sunucunun ekMesai'sinden. Bütçe 0 her yerde sınırsızdır (525 3 a).
 export const MESAI_HAFTA = 8;
 export interface EkMesaiOzeti { saat: number; butce: number; asildi: boolean }
 const saatDakika = (x: unknown): number => { const [h, m] = String(x).split(':').map(Number); return (h || 0) + (m || 0) / 60; };

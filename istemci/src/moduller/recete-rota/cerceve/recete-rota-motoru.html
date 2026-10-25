@@ -1504,6 +1504,9 @@ function statusCardsOf(itemId, opts={}){
 function statusName(key){ const f = stepOfKey(key); if (f) { const d = opdef(f.step.opId); return d ? d.name : "Adım"; } const x = statusOf(key); return x ? x.name : key; }
 const cardTitle = (itemId, status) => { const it = item(itemId); if (!status) return it ? it.code : "?"; return `${it?TS[it.type]:""} ${statusCode(status)} ${statusName(status)}`.trim(); };
 const cardCode = (itemId, status) => { const it = item(itemId); return (it ? it.code : "?") + (status ? "/" + statusCode(status) : ""); };
+/* Soru 520 (1 a): rota adımının ara statülü kartı taşıdığı malzemenin kodunu korur ama adetle sayılır (miktarı emrin adedidir); tanımlı
+   statülerde (karantina vb.) ve normal stokta birim malzemenin birimidir. */
+const cardUnit = (itemId, status) => String(status || "").startsWith("step:") ? "adet" : ((item(itemId) || {}).unit || "");
 const cardName = (itemId, status) => { const it = item(itemId); return (it ? it.name : "") + (status ? ", " + statusLabel(status) : ""); };
 /* Bağlı modda statülü stok yerel statusStock'ta değil, stoktadır (STK.veri kırılımı); kart adetleri oradan okunur. */
 const bagliKirilim = itemId => { const it = item(itemId); return it && it.bagli && stokBagli() ? stokMalzemesi(it) : null; };
@@ -2317,7 +2320,7 @@ function routeTables(root){
         <td>${inp(`rt:${s0.id}:ch`,"step",s0.id,"chg",s0.chg,{num:1,label:"Değişim dakika"})}</td>
         <td class="n calc">${oranMetni(degisimOrani(s0.proc,s0.chg))}</td>
         <td>${j===0?`<span class="hint">ilk adım</span>`:`<div class="rt-dep">${sel0(`rt:${s0.id}:dep`,"step",s0.id,"dep",[["bagimli","Bağımlı"],["ortulu","Örtülü"],["bagimsiz","Bağımsız"]].map(([k,l])=>`<option value="${k}" ${dep===k?"selected":""}>${l}</option>`).join(""),"Önceki adımla ilişki",true)}${dep==="ortulu"?inp(`rt:${s0.id}:dq`,"step",s0.id,"depQty",s0.depQty||1,{num:1,label:"Kaç adet çıkınca"}):""}</div>`}</td>
-        <td><div class="rt-ins">${s0.ins.map(x=>{ const ii = item(x.itemId); return ii?`<button class="rt-chip ${x.status?"st":""}" data-act="selIn" data-id="${x.id}" data-item="${ii.id}" data-owner="${id}" data-qty="${q}">${esc(x.status?cardTitle(ii.id,x.status):ii.code)} <b>${fmt(x.qty,3)}</b> ${esc(ii.unit)}</button>`:""; }).join("")}<button class="rt-add" data-act="addIn" data-step="${s0.id}" data-item="${id}" title="Giren ekle">+</button></div></td>
+        <td><div class="rt-ins">${s0.ins.map(x=>{ const ii = item(x.itemId); return ii?`<button class="rt-chip ${x.status?"st":""}" data-act="selIn" data-id="${x.id}" data-item="${ii.id}" data-owner="${id}" data-qty="${q}">${esc(x.status?cardTitle(ii.id,x.status):ii.code)} <b>${fmt(x.qty,3)}</b> ${esc(cardUnit(ii.id, x.status))}</button>`:""; }).join("")}<button class="rt-add" data-act="addIn" data-step="${s0.id}" data-item="${id}" title="Giren ekle">+</button></div></td>
         <td><span class="${fc.status?"stx":""}">${esc(cardTitle(fc.itemId, fc.status))}</span>${s0.outs.length?`<br><small class="hint">+ ${s0.outs.length} yan ürün</small>`:""}</td>
         <td class="n">${t?`${fmt(t.min/60,1)} sa`:"–"}</td>
         <td class="rt-acts"><button class="ib" data-act="mvStep" data-id="${s0.id}" data-dir="-1" ${j===0?"disabled":""} aria-label="Yukarı taşı">↑</button><button class="ib" data-act="mvStep" data-id="${s0.id}" data-dir="1" ${last?"disabled":""} aria-label="Aşağı taşı">↓</button><button class="ib" data-act="addStep" data-item="${id}" data-after="${s0.id}" data-qty="${q}" title="Bu adımdan sonra adım ekle" aria-label="Araya adım ekle">＋</button>${delBtn("step", s0.id)}</td>
@@ -2351,7 +2354,7 @@ function routeFlowTables(root){
       const left = tuketilenAdimlar(ss, j).map(p => flowCard(p, id)).map(prevC => card(`flowin ${prevC.status?"st":""}`, {cls:prevC.status?"stslot t-"+it.type:"t-"+(item(prevC.itemId)||{}).type, t:TS[(item(prevC.itemId)||it).type]}, cardTitle(prevC.itemId, prevC.status), "önceki adımdan, tüketilir", `<span class="fc-q">${fmt(q,2)}</span>`)).join("")
         + s0.ins.map(x=>{ const ii = item(x.itemId); if (!ii) return ""; const qq = f*(x.qty||0)*(1+(x.scrap||0)/100), prodHere = produced(x.itemId) && order.includes(x.itemId);
           return `<div class="fcard in ${x.status?"st":""} ${ui.sel&&ui.sel.kind==="in"&&ui.sel.id===x.id?"sel":""}"><button class="fc-sel" data-act="selIn" data-id="${x.id}" data-item="${ii.id}" data-owner="${id}" data-qty="${qq}"><span class="slot sm t-${ii.type} ${x.status?"stslot":""}">${TS[ii.type]}</span><span class="fc-t"><b>${esc(x.status?cardTitle(ii.id,x.status):ii.code)}</b><small>${esc(x.status?ii.code+" "+ii.name:ii.name)}${prodHere?" ↑ yukarıdaki akıştan":""}</small></span></button>
-            <label class="fc-in"><input class="num" inputmode="decimal" data-k="ft:${x.id}:q" data-s="in" data-id="${x.id}" data-f="qty" value="${nv(x.qty)}" aria-label="${esc(ii.code)} miktarı (${fmt(r.base||1,2)} ${esc(it.unit)} başına)"><small>${esc(ii.unit)}/${fmt(r.base||1,0)}</small></label>
+            <label class="fc-in"><input class="num" inputmode="decimal" data-k="ft:${x.id}:q" data-s="in" data-id="${x.id}" data-f="qty" value="${nv(x.qty)}" aria-label="${esc(ii.code)} miktarı (${fmt(r.base||1,2)} ${esc(it.unit)} başına)"><small>${esc(cardUnit(ii.id, x.status))}/${fmt(r.base||1,0)}</small></label>
             <span class="fc-q" title="Bu siparişte toplam">${fmt(qq,2)}</span><button class="ib" data-act="removeIn" data-id="${x.id}" aria-label="Kaldır">✕</button></div>`; }).join("")
         + `<button class="add" data-act="addIn" data-step="${s0.id}" data-item="${id}">+ Giren</button>`;
       const mid = `<div class="fstep ${sel?"sel":""}" style="--c:${sta?stColor(sta.id):"var(--bad)"}" data-dstep="${s0.id}" data-ditem="${id}">
@@ -2537,7 +2540,7 @@ function chipHTML(c){
   return `<span class="chipw"><button class="chip-it t-${it.type} k-${c.kind} ${isSt?"stcard":""} ${selected?"sel":""}" data-act="${act}" data-id="${esc(c.id||it.id)}" data-item="${it.id}" data-owner="${c.owner||""}" data-step="${c.stepId||""}" data-nid="${esc(c.nid||"")}" data-qty="${c.qty}" ${c.feed?`data-feed="${esc(c.feed)}"`:""} ${c.from?`data-from="${esc(c.from)}"`:""}>
     <span class="slot">${isSt?`<em>${TS[it.type]}</em><i class="stmark">S</i>`:TS[it.type]}${low&&!isSt?`<i class="lowdot" title="Minimum stoğun altında"></i>`:""}</span>
     <span class="ci"><b>${esc(isSt ? cardTitle(it.id, c.reqStatus) : it.code)}</b><small>${esc(isSt ? `${it.code} ${it.name}` : (it.name||"Adsız"))}</small>${badge}</span>
-    <span class="cq">${fmt(c.qty,3)}<small>${esc(it.unit)}</small></span>
+    <span class="cq">${fmt(c.qty,3)}<small>${esc(cardUnit(it.id, c.reqStatus))}</small></span>
   </button>${c.expandable?`<button class="exp" data-act="toggleSub" data-nid="${esc(c.nid)}" aria-label="${esc(it.code)} alt akışını göster">▸ akış</button>`:""}</span>`;
 }
 function runStrip(){
@@ -3314,7 +3317,7 @@ function rawTable(r){
   const ids = Object.keys(r.raw); if (!ids.length) return `<p class="hint">Satın alınacak malzeme yok.</p>`;
   let tot = 0;
   const rows = ids.map(id=>{ const e = r.raw[id], it = item(e.itemId||id), c = e.net*(it.cost||0); tot += c;
-    return `<tr><td>${esc(it.code)} ${e.status?statusChip(e.status,true):""}</td><td>${esc(it.name)}</td><td class="n">${fmt(e.gross,3)}</td>${r.useStock?`<td class="n">${fmt(e.stock,3)}</td>`:""}<td class="n ${e.net>EPS&&r.useStock?"short":""}">${fmt(e.net,3)}</td><td>${esc(it.unit)}</td><td class="n">${money(c)}</td></tr>`; }).join("");
+    return `<tr><td>${esc(it.code)} ${e.status?statusChip(e.status,true):""}</td><td>${esc(it.name)}</td><td class="n">${fmt(e.gross,3)}</td>${r.useStock?`<td class="n">${fmt(e.stock,3)}</td>`:""}<td class="n ${e.net>EPS&&r.useStock?"short":""}">${fmt(e.net,3)}</td><td>${esc(cardUnit(it.id, e.status))}</td><td class="n">${money(c)}</td></tr>`; }).join("");
   return `<div class="tbl-wrap"><table><thead><tr><th>Kod</th><th>Malzeme</th><th class="n">Brüt</th>${r.useStock?`<th class="n">Stoktan</th>`:""}<th class="n">Alınacak</th><th>Birim</th><th class="n">Tutar</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="${r.useStock?6:5}">Satın alma toplamı</td><td class="n">${money(tot)}</td></tr></tfoot></table></div>`;
 }
 function bypTable(r){
@@ -3682,7 +3685,7 @@ function orderDetail(o, R, P){
     <div class="cols2" style="margin-top:12px"><div><h4 class="dh">Malzeme ihtiyacı</h4>${rawTable(R)}</div><div><h4 class="dh">Yan ürün ve hurda</h4>${bypTable(R)}</div></div>
     <h4 class="dh">Stok ve tamamlama</h4>
     ${R.shortages.length
-      ? `<p class="hint">${R.shortages.length} kalem eksik: ${R.shortages.map(k=>{ const e = R.raw[k], it = item(e.itemId); return `${esc(it.code)}${e.status?" ("+esc(statusLabel(e.status))+")":""} ${fmt(e.net,3)} ${esc(it.unit)}`; }).join(", ")}. Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.</p>
+      ? `<p class="hint">${R.shortages.length} kalem eksik: ${R.shortages.map(k=>{ const e = R.raw[k], it = item(e.itemId); return `${esc(it.code)}${e.status?" ("+esc(statusLabel(e.status))+")":""} ${fmt(e.net,3)} ${esc(cardUnit(it.id, e.status))}`; }).join(", ")}. Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.</p>
          <div class="btnrow" style="margin-top:8px"><button class="btn primary" data-act="receiveOrder" data-id="${o.id}">Eksikleri teslim al</button></div>`
       : o.kol ? `<p class="hint">Bu kol ana emre bağlıdır; ana emir tamamlanınca birlikte tamamlanır ve girenleri stoktan düşer.</p>`
       : `<p class="hint">Tüm girenler stokta. Tamamladığında girenler stoktan düşülür, yan ürün ve hurdalar ile ${fmt(o.qty,0)} ${esc(item(o.itemId).unit)} ${esc(item(o.itemId).code)} stoğa girer.${R.doneCount<R.totalOps?` ${R.totalOps-R.doneCount} adım henüz bitmedi.`:""}</p>
@@ -4547,7 +4550,7 @@ function opBody(){
   const now = running[0] || null;
   const detail = c => { const e = c.e, op = e.op, it = item(e.itemId), d = opdef(op.s.opId), o = c.R.order, q = op.qty, done = Math.min(q, (st.opProg||{})[e.opKey]||0), rem = Math.max(0, q-done);
     const ins = op.s.ins.map(x=>{ const ii = item(x.itemId); if (!ii) return ""; const r0 = st.routes[e.itemId] || {base:1}; const need = q/(r0.base>0?r0.base:1)*(x.qty||0)*(1+(x.scrap||0)/100);
-      return `<li><b class="${x.status?"stx":""}">${esc(x.status?cardTitle(ii.id,x.status):ii.code)}</b> ${esc(ii.name)} <span class="op-need">${fmt(need,2)} ${esc(ii.unit)}</span></li>`; }).join("");
+      return `<li><b class="${x.status?"stx":""}">${esc(x.status?cardTitle(ii.id,x.status):ii.code)}</b> ${esc(ii.name)} <span class="op-need">${fmt(need,2)} ${esc(cardUnit(ii.id, x.status))}</span></li>`; }).join("");
     return {e, op, it, d, o, q, done, rem, ins}; };
   const nowHTML = now ? (()=>{ const x = detail(now), pct = x.q>0 ? x.done/x.q : 0, pr = person((st.assign[x.e.key]||{}).personId);
     return `<div class="op-now run">
@@ -5149,7 +5152,7 @@ function wipPanel(){
   const P = curPlan(), rows = wipRows(P);
   return `<div class="panel"><h3>Süreçteki malzeme (statü bazında)</h3>
     <p class="hint" style="margin-bottom:10px">Stok değildir: atölyede bir adımı geçmiş, sonraki adımı bekleyen miktarlardır. Kanban'da adet bildirdikçe ya da adım bitirdikçe güncellenir.</p>
-    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Malzeme</th><th>Statü</th><th class="n">Miktar</th><th>Emirler</th></tr></thead><tbody>${rows.map(r=>{ const it = item(r.itemId); return `<tr><td><b class="${r.sk?"stx":""}">${esc(cardTitle(r.itemId, r.sk))}</b> <small>${esc(it.code)} ${esc(it.name)}</small></td><td>${r.sk?statusChip(r.sk)+" "+esc(statusLabel(r.sk))+" çıktısı":"gerçek kart (yarı mamul)"}</td><td class="n">${fmt(r.qty,2)} ${esc(it.unit)}</td><td>${Object.keys(r.orders).map(no=>`${esc(no)}: ${fmt(r.orders[no],1)}`).join(", ")}</td></tr>`; }).join("")}</tbody></table></div>`:`<p class="hint">Şu an süreçte bekleyen malzeme yok. Kanban'da bir adımı bitirdiğinde ya da üretilen adet girdiğinde burada görünür.</p>`}
+    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Malzeme</th><th>Statü</th><th class="n">Miktar</th><th>Emirler</th></tr></thead><tbody>${rows.map(r=>{ const it = item(r.itemId); return `<tr><td><b class="${r.sk?"stx":""}">${esc(cardTitle(r.itemId, r.sk))}</b> <small>${esc(it.code)} ${esc(it.name)}</small></td><td>${r.sk?statusChip(r.sk)+" "+esc(statusLabel(r.sk))+" çıktısı":"gerçek kart (yarı mamul)"}</td><td class="n">${fmt(r.qty,2)} ${esc(cardUnit(r.itemId, r.sk))}</td><td>${Object.keys(r.orders).map(no=>`${esc(no)}: ${fmt(r.orders[no],1)}`).join(", ")}</td></tr>`; }).join("")}</tbody></table></div>`:`<p class="hint">Şu an süreçte bekleyen malzeme yok. Kanban'da bir adımı bitirdiğinde ya da üretilen adet girdiğinde burada görünür.</p>`}
   </div>`;
 }
 function addMove(itemId, qty, note, batch, status){ st.moves.push({id:uid("m"), t:Date.now(), itemId, qty, note, batch:batch||null, status:status||""}); if (st.moves.length > 400) st.moves = st.moves.slice(-400); }
@@ -5329,9 +5332,20 @@ function nidOfItemInTree(itemId){
   (function walk(n){ if (found) return; if (n.id===itemId) { found = n.nid; return; } n.steps.forEach(s=>s.ins.forEach(i=>walk(i.node))); })(tree);
   return found || "root";
 }
+/* Rota modülü aynı malzemeyi bir adımda iki kez bileşen olarak kabul etmez (statüsü farklı olsa da tek malzemedir); ekran eklemeden önce
+   engeller, yoksa taslak düzeltilene kadar her kaydetme aynı ret ile düşer. Var olan giren seçilir, miktarı oradan artırılır. */
+function girenVarsaGoster(f, itemId, haricId){
+  const x = (f.step.ins || []).find(y => y.itemId === itemId && y.id !== haricId);
+  if (!x) return false;
+  ui.sel = {kind:"in", id:x.id, itemId:f.itemId, nid:nidOfItemInTree(f.itemId)+">"+x.id, qty:0};
+  renderSchema(true);
+  toast(`<b>${esc(item(itemId) ? item(itemId).code : "?")}</b> bu adımda zaten giren; aynı malzeme bir adıma iki kez eklenmez. Miktarını var olan satırdan değiştir.`);
+  return true;
+}
 function addPicked(itemId, status=""){
   const s = ui.sel; const f = findStep(s.stepId); if (!f) return;
   if ((s.replaceId || s.kind==="addIn") && !girdiOlur(item(itemId))) { toast("Ticari mal ve hizmet reçetede girdi olmaz."); return; }
+  if ((s.replaceId || s.kind==="addIn") && girenVarsaGoster(f, itemId, s.replaceId)) return;
   if (s.replaceId) { const x = findIn(s.replaceId); if (x) { x.inp.itemId = itemId; x.inp.status = status; } ui.sel = {kind:"in", id:s.replaceId, itemId:f.itemId, nid:"", qty:0}; save(); renderSchema(true); return; }
   if (s.kind==="addIn") {
     const x = {id:uid("n"), itemId, qty:1, scrap:0, status}; f.step.ins.push(x);
@@ -5408,6 +5422,7 @@ function act(a, d){
     if (!c) { toast("Önce malzemenin kodunu ya da adını yaz."); return; }
     if (d.kind==="in" && !c.create && !girdiOlur(item(c.itemId))) { toast("Ticari mal ve hizmet reçetede girdi olmaz."); return; }
     if (c.create) { toast(`"${esc(c.create)}" listede yok. Malzemeyi Malzemeler ve Hizmetler'de açın; kart onaylanınca burada seçilir.`); return; }
+    if (d.kind==="in" && girenVarsaGoster(f, c.itemId)) return;
     if (d.kind==="in") f.step.ins.push({id:uid("n"), itemId:c.itemId, qty:q, scrap:0, status:c.status});
     else f.step.outs.push({id:uid("u"), itemId:c.itemId, qty:q, kind:"yan", status:c.status, self:c.itemId===f.itemId});
     ui.sel = {kind:"step", id:f.step.id, itemId:f.itemId, nid:(ui.sel&&ui.sel.nid)||nidOfItemInTree(f.itemId), qty:(ui.sel&&ui.sel.qty)||st.settings.orderQty||1};

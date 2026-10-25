@@ -1395,6 +1395,10 @@ export type RezerveKaldirKomutu = z.output<typeof rezerveKaldirGovdesi>;
 export const MALZEME_FISI_TURLERI = ['sarf', 'uretim_girisi', 'fire', 'sayim_fazlasi', 'sayim_eksigi', 'ambar'] as const;
 export type MalzemeFisiTuru = (typeof MALZEME_FISI_TURLERI)[number];
 export const EMIR_FISI_TURLERI = ['sarf', 'uretim_girisi', 'fire'] as const satisfies readonly MalzemeFisiTuru[];
+// Malzeme fişleri listesinde mal kabul belgesi de görünür (515 a); Logo'ya gitmez, irsaliye Logo'da kesilip mal kabulle eşlenir (K7).
+// Liste türü bu yüzden fiş türünden ayrıdır: Logo'ya giden fiş türleri (MalzemeFisiTuru) değişmez.
+export const LISTE_FISI_TURLERI = [...MALZEME_FISI_TURLERI, 'mal_kabul'] as const;
+export type ListeFisiTuru = (typeof LISTE_FISI_TURLERI)[number];
 // Fiş türünün Logo'ya gidiş biçimi Logo ayarıdır; stok yalnız gösterir ve elle gönderim isteğini yazar.
 export const FIS_GONDERIM_SEKILLERI = ['kapali', 'otomatik', 'elle'] as const;
 export type FisGonderimSekli = (typeof FIS_GONDERIM_SEKILLERI)[number];
@@ -1432,6 +1436,13 @@ export const malzemeFisiOzeti = z.object({
   surum: surumSemasi,
 });
 export type MalzemeFisiOzeti = z.output<typeof malzemeFisiOzeti>;
+// Liste satırı: mal kabul satırında kimlik mal kabul belgesinindir (ayrıntısı /stok/mal-kabul/:id), Logo durumu "gonderilmez".
+export const malzemeFisiListeSatiri = malzemeFisiOzeti.extend({
+  tur: z.enum(LISTE_FISI_TURLERI),
+  // Yalnız mal kabulde; yoksa null.
+  irsaliyeNo: z.string().nullable(),
+});
+export type MalzemeFisiListeSatiri = z.output<typeof malzemeFisiListeSatiri>;
 
 export const malzemeFisiSatiri = z.object({
   // Hurda satırında kart üretim emrinindir; kimlik yine malzeme kartıdır.
@@ -1452,13 +1463,13 @@ export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilm
 export const malzemeFisleriSorgusu = z.object({
   ...listeSorguAlanlari(['acilis']),
   metin: z.string().trim().max(40).optional(),
-  tur: z.enum(MALZEME_FISI_TURLERI).optional(),
+  tur: z.enum(LISTE_FISI_TURLERI).optional(),
   logoDurumu: z.enum(LOGO_FIS_SUZGECLERI).optional(),
   uretimEmriId: kimlik.optional(),
 });
 export type MalzemeFisleriSorgusu = z.input<typeof malzemeFisleriSorgusu>;
 export type MalzemeFisleriListesi = z.output<typeof malzemeFisleriSorgusu>;
-export const malzemeFisleriCevabi = listeCevapSemasi(malzemeFisiOzeti);
+export const malzemeFisleriCevabi = listeCevapSemasi(malzemeFisiListeSatiri);
 export type MalzemeFisleriCevabi = z.output<typeof malzemeFisleriCevabi>;
 export const malzemeFisiAyrintiCevabi = z.object({ fis: malzemeFisiOzeti, satirlar: z.array(malzemeFisiSatiri), hareketler: z.array(hareket) });
 export type MalzemeFisiAyrintiCevabi = z.output<typeof malzemeFisiAyrintiCevabi>;

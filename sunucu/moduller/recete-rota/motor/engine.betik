@@ -548,7 +548,7 @@ function propose(st,base,ev,opts={}){
   for(const r of Object.values(B.ops)){if(r.fas||r.pin)continue;const x=ev0.J[r.job];if(!x||!(x.T>0)||!(r.sl<0))continue;
     const pw=isAgirligi(cx.jobs[r.job]);cnt[r.m]=(cnt[r.m]||0)+Math.min(x.T,r.C-r.S)*pw;(days[r.m]=days[r.m]||new Set()).add(Math.floor(Math.max(r.S,cand.now)/24));}
   const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
-  // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 ise eski sınırla yalnız gösterilir
+  // haftalık bütçe: kabul edilmiş ek vardiyalar dahil, haftada en çok mesaiHafta saat; bütçe 0 sınırsızdır (525 3 a)
   const vH=id=>{const v=cand.D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;};
   const butH=+st.w.mesaiHafta||0,wk={};for(const e of cand.ekMesai||[]){const k=Math.floor(e.gun/7);wk[k]=(wk[k]||0)+vH(e.vardiya);}
   const fits=(gun,vid)=>{if(butH<=0)return true;const k=Math.floor(gun/7);if((wk[k]||0)+vH(vid)>butH+1e-9)return false;wk[k]=(wk[k]||0)+vH(vid);return true;};
@@ -561,10 +561,8 @@ function propose(st,base,ev,opts={}){
     if(added.length){const p=fill(c2,base,{},Math.min(800,opts.budget||800),fasonM?[{fasonM}]:[]).plan;
     list.push({id:'mesai',ad:'Fazla mesai ve boşluk doldur',ac:`${added.join(', ')} ek vardiya (${cand.D.ayarlar.mesaiUcret==null||cand.D.ayarlar.mesaiUcret===''?'mesai ücreti girilmemiş':cand.D.ayarlar.mesaiUcret+' TL/sa'}); sonra boşluk doldurulur.`,plan:p,st:c2,mesai:added});}}
   list.forEach(x=>{x.st=x.st||cand;x.ev=evaluate(x.plan,x.st,base);});
-  // fazla mesai yalnız haftalık bütçe tanımlıysa önerilir; bütçe 0 ise gösterilir
-  const ok=x=>(+st.w.mesaiHafta>0)||x.id!=='mesai';
   // değişiklik bütçesi: her bütçe için o sınırın içinde kalan en iyi plan, parça parça yeniden kurmayla aranır
-  const pool=list.filter(ok),butce=[];
+  const pool=list.slice(),butce=[];
   if(!opts.noButce&&pool.length){const ms=opts.lnsMs!=null?opts.lnsMs:(+st.w.lnsMs||1000);
     const top=pool.reduce((a,b)=>cmpEv(b.ev,a.ev)>0?b:a);const S0=top.st;
     const Li=lns(S0,top.plan,base,{ms:ms*.2,seed:7});let prev={plan:Li.plan,e:Li.e,from:top};
@@ -585,10 +583,9 @@ function propose(st,base,ev,opts={}){
   for(let i=list.length-1;i>0;i--){const a=list[i];if(a.butce!=null)continue;const same=list.slice(0,i).find(b=>cmpEv(a.ev,b.ev)===0&&b.ev.chg===a.ev.chg);
     if(same){same.ayni=(same.ayni||[]).concat(a.ad);list.splice(i,1);}}
   const before=evaluate(base,st,null);
-  // fazla mesai politika izni yoksa önerilmez, yalnız gösterilir
-  let best=list.findIndex(ok);list.forEach((x,i)=>{if(ok(x)&&cmpEv(x.ev,list[best].ev)>0)best=i;});
+  let best=0;list.forEach((x,i)=>{if(cmpEv(x.ev,list[best].ev)>0)best=i;});
   // önerilenin ikinciye karşı hangi ölçütte öne geçtiği
-  let runner=null;list.forEach((x,i)=>{if(i!==best&&ok(x)&&(runner==null||cmpEv(x.ev,list[runner].ev)>0))runner=i;});
+  let runner=null;list.forEach((x,i)=>{if(i!==best&&(runner==null||cmpEv(x.ev,list[runner].ev)>0))runner=i;});
   const robust={by:runner==null?-1:lexWhy(list[best].ev,list[runner].ev),runner};
   return {label,cand,list,best,sel:best,before,hit:hitAll,robust,butce:butce.map(x=>list.indexOf(x)),ms:Date.now()-t0,info};
 }

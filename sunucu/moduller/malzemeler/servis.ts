@@ -126,7 +126,8 @@ export async function katalogKartiRotasi(db: Db, kimlik: string): Promise<Katalo
   return { rotali: await rotasiVarMi(db, no) };
 }
 
-// Rota'nın taslak açma işi için: kodlu operasyonu olan aktif mamul ve yarı mamul kartlar. kisiId, onaylayan; yoksa son güncelleyen.
+// Rota'nın taslak açma işi için: kodlu operasyonu olan aktif mamul ve yarı mamul kartlar. kisiId, kartı onaya gönderen; onaysız
+// aktif olan kartta açan (soru 520 2 b: taslağı açan rota yetkisi olmayan onaylayıcı görünmesin).
 export async function operasyonluAktifKartlar(db: Db): Promise<{ no: number; kisiId: number }[]> {
   return (await s.operasyonluAktifKartKayitlari(db))
     .filter((k) => kartOperasyonlari(k.kayit).length > 0)

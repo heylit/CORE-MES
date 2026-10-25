@@ -18,6 +18,7 @@ import type {
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { AZAMI_DOSYA, DOSYA_PARCASI } from '#paylasilan/sozlesme/arkon.ts';
+import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
 import { ilkParcaKararlari } from '../kalite-merkezi/disari.ts';
@@ -49,6 +50,7 @@ import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
   adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
+  KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
@@ -244,6 +246,8 @@ async function isEmriTaslaklari(
   if (isEmirleri.length === 0) return sonuc;
   const zorunlu = await sistemAyariOku(db, 'arkon.yalniz-canli-plan');
   const { yerlesimler } = await canliSira(db, rotali.map((i) => i.id));
+  const saatler = planSaatleri(yerlesimler);
+  const kuyruk = new Map((await sorgular.kuyrukSiralari(db)).map((k) => [k.parcaNo === 0 ? isEmriPaketKimligi(k.isEmriId) : parcaPaketKimligi(k.isEmriId, k.parcaNo), k]));
   const parcaPlanlari = new Map<string, TmiPlanDurumu>();
   const planlar = planDurumlari(yerlesimler, new Map(rotali.map((i) => [i.id, i.kaynak])), zorunlu, parcaPlanlari);
   siraOnayiniYaz(planlar, siraOnaylari(await bekleyenSiralar(db, [...planlar.keys()])));
@@ -298,7 +302,11 @@ async function isEmriTaslaklari(
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, ilkParca: ilkParcalar.get(g.isEmri.uretimEmriId) ?? null });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const govde = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
-    sonuc.set(String(govde['id']), govde);
+    const kimlik = String(govde['id']);
+    // Hazırlık sırası işin bugünkü istasyonundaysa geçerlidir: plan işi başka istasyona aldıysa iş orada sırasız (plan sırasıyla) durur.
+    const sira = kuyruk.get(kimlik);
+    const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;
+    sonuc.set(kimlik, kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }));
   }
   return sonuc;
 }
@@ -1190,6 +1198,56 @@ export async function planSirasiYaz(
   if (tasinacak === 'planSiraSabit') throw cakisma(ILETILER.planSiraSabit);
   if (tasinacak === 'planSiraDegismedi') throw dogrulama(ILETILER.planSiraDegismedi, 'yeni');
   return kuyruguSirala(db, kullanici, { kaynak: g.kaynak, isEmriIdleri: tasinacak, planSurumu });
+}
+
+// Üretim Hazırlık kuyruk sırası (kart 527, 519 1 c, 522): istasyonun TMI iş emri paketleri Hazırlık'ın sırasıyla dizilir, operatör onu izler;
+// canlı plan değişmez. Uç `arkon.kuyruk-sirala` ister; Arkon rolü ve istasyonun iş merkezi kapsamı burada denetlenir. Kilitli ya da dondurulmuş
+// iş (plan) yerinde kalır, başlamış iş taşınır (A4 ile aynı kural).
+export async function kuyrukSirasiYaz(db: Db, kullanici: Kullanici, g: KuyrukSiralaGovdesi): Promise<{ surum: number }> {
+  const istasyon = await kuyrukIstasyonu(db, kullanici, g.istasyon);
+  if ([...g.onceki, ...g.yeni].some((k) => paketIsEmri(k) === null)) throw dogrulama(KUYRUK_ILETILERI.pakete, 'yeni');
+  await sorgular.kuyrukKilitle(db, istasyon.id);
+  const mevcut = [...(await tmiTaslaklari(db, await sorgular.belgeler(db, 'pkgs'))).isEmri.values()].filter((p) => {
+    const tmi = p['tmi'] as { bolunmus?: boolean } | undefined;
+    return p['machine'] === istasyon.kod && tmi?.bolunmus !== true;
+  }).map((p) => ({ kimlik: String(p['id']), sira: (p['tmi'] as { kuyruk?: { sira: number } } | undefined)?.kuyruk?.sira ?? null }));
+  const ret = kuyrukSirasiReddi(g.onceki, g.yeni, mevcut);
+  if (ret === 'gecersiz') throw dogrulama(KUYRUK_ILETILERI.gecersiz, 'yeni');
+  if (ret === 'eski') throw cakisma(KUYRUK_ILETILERI.eski);
+  const { yerlesimler } = await canliSira(db, [...new Set(g.onceki.map((k) => paketIsEmri(k)!))]);
+  const sabitIsler = new Set(yerlesimler.filter((y) => y.kilitli || y.dondurulmus).map((y) => y.isEmriId));
+  const tasinacak = planSirasiTasinacaklar(g.onceki, g.yeni, new Set(g.onceki.filter((k) => sabitIsler.has(paketIsEmri(k)!))));
+  if (tasinacak === 'planSiraSabit') throw cakisma(KUYRUK_ILETILERI.sabit);
+  if (tasinacak === 'planSiraDegismedi') throw dogrulama(KUYRUK_ILETILERI.degismedi, 'yeni');
+  const surum = Date.now();
+  await sorgular.kuyrukSirasiYaz(db, istasyon.id, g.yeni.map((k) => {
+    const p = paketParcasi(k)!;
+    return { isEmriId: p.isEmriId, parcaNo: p.no ?? 0 };
+  }), surum, kullanici.id);
+  for (const kimlik of g.yeni) await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: 'pkgs', id: kimlik });
+  await gunlugeYaz(db, kullanici, g.kaynak, [{ area: 'plan', action: 'kuyruk sırası', target: istasyon.kod, detail: `${g.yeni.length} iş` }]);
+  return { surum };
+}
+
+// "Plan sırasına dön": istasyonun Hazırlık sırası kalkar, işler yeniden canlı plan sırasıyla dizilir.
+export async function kuyrukPlanaDon(db: Db, kullanici: Kullanici, g: { istasyon: string; kaynak: string }): Promise<{ silinen: number }> {
+  const istasyon = await kuyrukIstasyonu(db, kullanici, g.istasyon);
+  await sorgular.kuyrukKilitle(db, istasyon.id);
+  const silinen = await sorgular.kuyrukSirasiSil(db, istasyon.id);
+  if (silinen.length === 0) throw cakisma(KUYRUK_ILETILERI.bos);
+  for (const s of silinen) {
+    await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: 'pkgs', id: s.parcaNo === 0 ? isEmriPaketKimligi(s.isEmriId) : parcaPaketKimligi(s.isEmriId, s.parcaNo) });
+  }
+  await gunlugeYaz(db, kullanici, g.kaynak, [{ area: 'plan', action: 'kuyruk plan sırasına döndü', target: istasyon.kod, detail: `${silinen.length} iş` }]);
+  return { silinen: silinen.length };
+}
+
+async function kuyrukIstasyonu(db: Db, kullanici: Kullanici, kod: string): Promise<Istasyon> {
+  await rolGerekli(db, kullanici);
+  const istasyon = (await istasyonlar(db, { pasiflerDahil: false })).find((i) => i.kod === kod);
+  if (istasyon === undefined) throw bulunamadi('İstasyon bulunamadı.');
+  if (!kapsamdaMi(await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri), istasyon.isMerkeziId)) throw kapsamDisi();
+  return istasyon;
 }
 
 // Bekleyen iş emrini başlatan olayların plan durumu; başlatma yoksa plan okunmaz. Okunamayan iş emri burada değil yansımada eşlenmez.

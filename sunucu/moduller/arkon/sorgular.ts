@@ -579,3 +579,43 @@ export async function anomaliSatirlariYenile(db: Db, tarih: string, satirlar: re
 export async function anomaliGunuKesinlestir(db: Db, tarih: string): Promise<void> {
   await db.sorgu("UPDATE arkon_anomali_gunu SET durum = 'kesin', kapanis = now() WHERE tarih = $1::date AND durum = 'acik'", [tarih]);
 }
+
+// Üretim Hazırlık kuyruk sırası (kart 527). Tablo küçüktür (açık işler kadar): paket okuması bütün satırları tek sorguda alır.
+export interface KuyrukSirasiSatiri {
+  isEmriId: number; parcaNo: number; istasyonId: number; sira: number; kisi: string; zaman: string;
+}
+export function kuyrukSiralari(db: Db): Promise<KuyrukSirasiSatiri[]> {
+  return db.sorgu<KuyrukSirasiSatiri>(
+    `SELECT s.is_emri_id AS "isEmriId", s.parca_no AS "parcaNo", s.istasyon_id AS "istasyonId", s.sira, k.ad AS kisi, ${zamanMetni('s.zaman')} AS zaman
+       FROM arkon_kuyruk_sirasi s JOIN kisi k ON k.id = s.kisi_id`,
+  );
+}
+
+// Aynı istasyonun iki sıralaması sırayla yürür: ikincisi birincinin yazdığı sırayı görür ve eski ekranı reddeder.
+export async function kuyrukKilitle(db: Db, istasyonId: number): Promise<void> {
+  await db.sorgu("SELECT pg_advisory_xact_lock(hashtext('arkon_kuyruk_sirasi'), $1)", [istasyonId]);
+}
+
+// İstasyonun sırası baştan yazılır: listedeki işler 1'den numaralanır (başka istasyondaki eski satırları da buraya taşınır), listede olmayan
+// satırları silinir.
+export async function kuyrukSirasiYaz(
+  db: Db, istasyonId: number, satirlar: readonly { isEmriId: number; parcaNo: number }[], surum: number, kisiId: number,
+): Promise<void> {
+  await db.sorgu(
+    `DELETE FROM arkon_kuyruk_sirasi s
+      WHERE s.istasyon_id = $1
+        AND NOT EXISTS (SELECT 1 FROM unnest($2::int[], $3::int[]) AS y(is_emri_id, parca_no) WHERE y.is_emri_id = s.is_emri_id AND y.parca_no = s.parca_no)`,
+    [istasyonId, satirlar.map((s) => s.isEmriId), satirlar.map((s) => s.parcaNo)],
+  );
+  await db.sorgu(
+    `INSERT INTO arkon_kuyruk_sirasi (is_emri_id, parca_no, istasyon_id, sira, surum, kisi_id)
+     SELECT y.is_emri_id, y.parca_no, $1, y.sira::int, $4, $5 FROM unnest($2::int[], $3::int[]) WITH ORDINALITY AS y(is_emri_id, parca_no, sira)
+     ON CONFLICT (is_emri_id, parca_no) DO UPDATE
+        SET istasyon_id = EXCLUDED.istasyon_id, sira = EXCLUDED.sira, surum = EXCLUDED.surum, kisi_id = EXCLUDED.kisi_id, zaman = now()`,
+    [istasyonId, satirlar.map((s) => s.isEmriId), satirlar.map((s) => s.parcaNo), surum, kisiId],
+  );
+}
+
+export function kuyrukSirasiSil(db: Db, istasyonId: number): Promise<{ isEmriId: number; parcaNo: number }[]> {
+  return db.sorgu('DELETE FROM arkon_kuyruk_sirasi WHERE istasyon_id = $1 RETURNING is_emri_id AS "isEmriId", parca_no AS "parcaNo"', [istasyonId]);
+}

@@ -94,21 +94,26 @@ describe('Geri ve İleri', () => {
     expect(ileri().hasAttribute('disabled')).toBe(true);
   });
 
-  it('son yerler en yakını başta listelenir ve seçilen yere doğrudan gidilir', () => {
+  it('son yerler aramanın boş halinde en yakını başta listelenir ve seçilen yere doğrudan gidilir (516 a)', () => {
     ciz();
     anaMenudenAc('Reçete ve Rota');
     anaMenudenAc('Stok Merkezi');
-    fireEvent.click(ust().getByRole('button', { name: 'Son yerler' }));
-    const yerler = screen.getAllByRole('menuitem');
-    expect(yerler.map((y) => y.textContent)).toEqual(['Reçete ve Rota', 'Ana sayfa']);
+    expect(ust().queryByRole('button', { name: 'Son yerler' })).toBeNull();
+    fireEvent.focus(kutu());
+    const yerler = screen.getAllByRole('option').filter((o) => o.getAttribute('aria-label')?.endsWith('Son yerler'));
+    expect(yerler.map((y) => y.getAttribute('aria-label'))).toEqual(['Reçete ve Rota Son yerler', 'Ana sayfa Son yerler']);
     fireEvent.click(yerler[1]!);
     expect(adres()).toBe('/');
     expect(ileri().getAttribute('aria-label')).toBe('İleri: Reçete ve Rota');
   });
 
-  it('reddedilen: geri gidilecek yer yokken son yerler düğmesi çizilmez', () => {
+  it('reddedilen: geri gidilecek yer yokken boş aramada son yer listelenmez; yazınca son yerler çekilir', () => {
     ciz();
-    expect(ust().queryByRole('button', { name: 'Son yerler' })).toBeNull();
+    fireEvent.focus(kutu());
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    anaMenudenAc('Reçete ve Rota');
+    yaz('rota');
+    expect(screen.queryAllByRole('option').some((o) => o.getAttribute('aria-label')?.endsWith('Son yerler'))).toBe(false);
   });
 });
 

@@ -242,8 +242,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 
 /* Malzeme · Teslim: üst çubuk düğmesi ve paneli (kart #1208) */
 .tc-stok-teslim-dugme { position: relative; }
-/* Geniş ekranda ad yazılınca sayaç rozeti adın son harfini örtmesin. */
-@media (min-width: 1280px) { .tc-kabuk-tema.tc-stok-teslim-dugme:has(> .tc-kabuk-dugme-ad):has(> .tc-stok-teslim-sayac) { padding-inline-end: var(--b-5); } }
 .tc-stok-teslim-sayac {
   position: absolute; inset-block-start: calc(var(--b-1) * -1); inset-inline-end: calc(var(--b-1) * -1);
   min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2);

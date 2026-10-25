@@ -343,6 +343,33 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(c.statusCode, 403, c.body);
   });
 
+  // Test raporu: bağ listesi "Malzeme kartı #54" gibi iç numara gösteriyordu; bağ satırı sahibinden okunan adı taşır.
+  test('bağ satırı kaydın okunur adını taşır: malzemede stok kodu ve ad, makinede istasyon adı; olmayan kayıtta ad uydurulmaz', async () => {
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('CZ-ADI-', 0) ON CONFLICT (onek) DO NOTHING");
+    sayac += 1;
+    const kart = await vt().tek<{ no: number; kod: string }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'mamul', 'CZ-ADI-', $2, 'aktif', $3, $4, $4) RETURNING no, stok_kodu AS kod`,
+      [`cz-adi-${sayac}`, sayac, JSON.stringify({ id: `cz-adi-${sayac}`, com: { ad: 'Deneme bağlı mil' } }), yonetici.id],
+    );
+    const im = await vt().tek<{ id: number }>('INSERT INTO is_merkezi (kod, ad) VALUES ($1, $2) RETURNING id', [`CZIM${(sayac += 1)}`, 'Deneme Merkezi']);
+    const ist = await vt().tek<{ id: number }>(
+      'INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ($1, $2, $3, true) RETURNING id', [`CZIS${sayac}`, 'Deneme Adlı Tezgah', im?.id],
+    );
+    let b = await belgeAc(yonetici, '3b-model', glb(), 'Adlı bağ modeli');
+    for (const [hedefModul, hedefId] of [['malzemeler', kart!.no], ['malzemeler', 2_000_000_001], ['istasyonlar', ist!.id]] as const) {
+      const c = await gonder(yonetici, `/cizimler/${b.id}/bag-ekle`, { hedefModul, hedefId, surum: b.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      b = c.json<BelgeAyrintisi>();
+    }
+    const ayrinti = (await oku(yonetici, `/cizimler/${b.id}`)).json<BelgeAyrintisi>();
+    assert.deepEqual(ayrinti.baglar.map((g) => [g.hedefModul, g.hedefId, g.hedefAdi]).sort((x, y) => Number(x[1]) - Number(y[1])), [
+      ['istasyonlar', ist!.id, 'Deneme Adlı Tezgah'],
+      ['malzemeler', kart!.no, `${kart!.kod} Deneme bağlı mil`],
+      ['malzemeler', 2_000_000_001, null],
+    ].sort((x, y) => Number(x[1]) - Number(y[1])));
+  });
+
   test('CZ-14 merkezden 3B model istasyona bağlanır ve istasyonun öbür 3B modelinin yerini alır; başka tür ve olmayan istasyon reddedilir', async () => {
     const im = await vt().tek<{ id: number }>('INSERT INTO is_merkezi (kod, ad) VALUES ($1, $2) RETURNING id', [`CZIM${(sayac += 1)}`, 'Deneme Merkezi']);
     const ist = await vt().tek<{ id: number }>(

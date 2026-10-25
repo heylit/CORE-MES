@@ -1474,7 +1474,10 @@ const finalKod = (d = D) => (d.kodManual && d.com.kod) ? d.com.kod : (kayitliKod
 const kodSunucudan = () => !!Host.on;
 const finalAd = (d = D) => (d.adManual && d.com.ad) ? d.com.ad : autoAd(d);
 const finalStd = (d = D) => d.com.std || autoStd(d);
-let finalBirim = (d = D) => d.com.birim || DEFBIRIM[d.form] || 'adet';
+// Soru 520 (3 b): metal ailesinde kendi varsayılanı olmayan formlar (çubuk, levha, boru, profil, blok, disk) ağırlıkla tutulur; varsayılan kg.
+// Tel ve rulo kendi birimini, öteki aileler adeti korur.
+const metalKgFormu = d => d.fam === 'metal' && !!FORMS[d.form] && !DEFBIRIM[d.form];
+let finalBirim = (d = D) => d.com.birim || DEFBIRIM[d.form] || (metalKgFormu(d) ? 'kg' : 'adet');
 // Birimi boş kayıtlı kart açılınca birim varsayılanla doldurulmaz, kullanıcıdan istenir (kullanıcı kararı "Ekranda", malzeme denetimi 3/5):
 // sunucu birimsiz kartı onaya ve aktife almaz.
 function birimIstenir(d = D) { if (!d || !d.id || String((d.com && d.com.birim) || '').trim())

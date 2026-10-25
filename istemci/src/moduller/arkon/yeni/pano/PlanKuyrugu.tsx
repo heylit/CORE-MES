@@ -199,13 +199,13 @@ function IsEmirleri({ salt }: { salt: boolean }) {
       <section key={id} className="tc-ay3-kutu tc-ay3-serit" aria-label={`Şerit ${baslik}`} data-uzerinde={(surukle && uzerinde === `serit:${id}`) || undefined}
         onDragOver={(o) => { if (surukle) { o.preventDefault(); if (uzerinde !== `serit:${id}` && !sirali.some((p) => p.id === uzerinde)) uzerindeYaz(`serit:${id}`); } }}
         onDrop={(o) => { if (istasyonlu) birak(o, id); else { o.preventDefault(); uzerindeYaz(null); } }}>
-        <div>
-          <b className="mono">{baslik}</b> <small className="tc-ay3-not">{alt}</small>
+        <div className="tc-ay3-serit-bas">
+          <b className="mono">{baslik}</b><small className="tc-ay3-not" title={alt}>{alt}</small>
           <div className="tc-ay3-not">{sirali.length} iş · {dakikaMetni(toplam)}{son ? ` · biter ${gunAySaat(son)}` : ''}</div>
           {istasyonlu && suankiDurus(id, simdi, ayarlar.planliDuruslar, ayarlar.tesis) && <Cip renk="done">Planlı duruşta</Cip>}
         </div>
         {sirali.map((p, i) => kart(p, id, sc[i]))}
-        {!sirali.length && <small className="tc-ay3-not">{duzenle ? 'İş emri sürükle' : 'İş yok'}</small>}
+        {!sirali.length && <small className="tc-ay3-not tc-ay3-serit-bos">{duzenle ? 'İş emri sürükle' : 'İş yok'}</small>}
       </section>
     );
   };
@@ -213,7 +213,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   const sahipsiz = isler.filter((p) => !bilinen.has(p.machine));
   return (
     <div className="tc-ay3-sayfa">
-      <div className="tc-ay3-arac">
+      <div className="tc-ay3-arac tc-ay3-kuyruk-arac">
         <IsMerkeziSuzgeci deger={wc} degistir={wcYaz} />
         <IsaretKutusu etiket="Tamamlananları göster" checked={bitenler} onChange={(o) => bitenlerYaz(o.target.checked)} />
         <span className="tc-ay3-bosluk" />

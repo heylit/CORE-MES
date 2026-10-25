@@ -386,7 +386,7 @@ export function planSirasiReddi(onceki: readonly number[], yeni: readonly number
 
 // Kilitli, dondurulmuş ve bitmiş iş ekranın sırasındaki yerinde kalır, plana yalnız taşınabilen işler gider. Başlamış iş taşınabilir:
 // önüne alınan iş operatöre bildirilir, operatör ona geçince çalışan iş duraklatılır.
-export function planSirasiTasinacaklar(onceki: readonly number[], yeni: readonly number[], sabit: ReadonlySet<number>): number[] | 'planSiraSabit' | 'planSiraDegismedi' {
+export function planSirasiTasinacaklar<T>(onceki: readonly T[], yeni: readonly T[], sabit: ReadonlySet<T>): T[] | 'planSiraSabit' | 'planSiraDegismedi' {
   if (onceki.some((x, i) => sabit.has(x) && yeni[i] !== x)) return 'planSiraSabit';
   const tasinacak = yeni.filter((x) => !sabit.has(x));
   const eski = onceki.filter((x) => !sabit.has(x));
@@ -2500,4 +2500,52 @@ export function mesaiSaniyesi(g: { araliklar: readonly NetAralik[] | null; gunle
 export function emekVerimi(standartSn: number | null, mesaiSn: number | null): number | null {
   if (standartSn === null || mesaiSn === null || !(mesaiSn > 0)) return null;
   return standartSn / mesaiSn;
+}
+
+// Üretim Hazırlık kuyruk sırası (kart 527, 519 1 c): istasyon kuyruğunun sırası Arkon'undur, canlı plan referanstır. Plan sırası değişmez;
+// "Plana öner" A4 komutudur (`planSirasiReddi`).
+export const KUYRUK_ILETILERI = {
+  gecersiz: 'Yeni sıra, ekrandaki işlerin dizilişi olmalı.',
+  eski: 'Kuyruk değişti: ekranı yenileyip yeniden sıralayın.',
+  pakete: 'Yalnız TMI iş emri işleri sıralanır.',
+  sabit: 'Kilitli ya da dondurulmuş iş yerinden oynatılamaz.',
+  degismedi: 'Sıra değişmedi.',
+  bos: 'Bu kuyrukta Hazırlık sırası yok.',
+} as const;
+
+export interface KuyrukIsi { kimlik: string; sira: number | null }
+
+// Ekranın gördüğü kuyruk (`onceki`) bugünkü kuyrukla aynı işlerden oluşmalı ve Hazırlık sırası olan işler aynı dizilişte görünmeli: arada
+// sıralayan kişi ya da kuyruğa giren, çıkan iş eski ekranı reddettirir. Sırasız işlerin dizilişi plandandır; onu ekranın kendisi gösterir.
+export function kuyrukSirasiReddi(onceki: readonly string[], yeni: readonly string[], mevcut: readonly KuyrukIsi[]): 'gecersiz' | 'eski' | null {
+  const a = [...onceki].sort(), b = [...yeni].sort();
+  if (a.length !== b.length || new Set(a).size !== a.length || a.some((x, i) => x !== b[i])) return 'gecersiz';
+  const m = mevcut.map((x) => x.kimlik).sort();
+  if (m.length !== a.length || m.some((x, i) => x !== a[i])) return 'eski';
+  const sira = new Map(mevcut.flatMap((x) => (x.sira === null ? [] : [[x.kimlik, x.sira] as const])));
+  const gorunen = onceki.filter((k) => sira.has(k));
+  const kayitli = [...sira.keys()].sort((x, y) => sira.get(x)! - sira.get(y)!);
+  return gorunen.every((k, i) => k === kayitli[i]) ? null : 'eski';
+}
+
+export interface PlanSaati { baslangic: string; bitis: string }
+// Canlı planın saatleri paket kimliğiyle: bölünmemiş iş kendi yerleşimi, bölünmüş işin bütün paketi zarf, parça kendi yeri.
+export function planSaatleri(
+  yerlesimler: readonly { isEmriId: number; baslangic: Date; bitis: Date; parcalar?: readonly { no: number; baslangic: Date; bitis: Date }[] | undefined }[],
+): Map<string, PlanSaati> {
+  const sonuc = new Map<string, PlanSaati>();
+  for (const y of yerlesimler) {
+    sonuc.set(isEmriPaketKimligi(y.isEmriId), { baslangic: y.baslangic.toISOString(), bitis: y.bitis.toISOString() });
+    for (const p of y.parcalar ?? []) sonuc.set(parcaPaketKimligi(y.isEmriId, p.no), { baslangic: p.baslangic.toISOString(), bitis: p.bitis.toISOString() });
+  }
+  return sonuc;
+}
+
+// İş emri paketinin `tmi` alanına kuyruk sırası ve plan saati eklenir (TMI alanıdır, istemciden alınmaz). Yoksa alan yazılmaz.
+export function kuyrukAlanlariniEkle(
+  govde: Record<string, unknown>, ek: { kuyruk: { sira: number; kisi: string; zaman: string } | null; planSaati: PlanSaati | null },
+): Record<string, unknown> {
+  if (ek.kuyruk === null && ek.planSaati === null) return govde;
+  const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
+  return { ...govde, tmi: { ...tmi, ...(ek.kuyruk ? { kuyruk: ek.kuyruk } : {}), ...(ek.planSaati ? { planSaati: ek.planSaati } : {}) } };
 }
