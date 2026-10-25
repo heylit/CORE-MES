@@ -307,11 +307,24 @@ export function takvimKur(c: PlanlamaCalismasi, ek: EkMesai[] = ekMesailer(c)): 
 }
 
 // ---------- adımlar: rotadan (engine.betik compile işlemler) ----------
+// Kayıtlı süre sapması olayları (engine.betik applyEvent sure / sureOp): adımın çevrimi oranla çarpılır, sonraki olay öncekini ezer.
+// Olaylar plan kurulmadan uygulandığı için (girdi.betik stKur) "sure" ürünün bütün siparişlerine gider.
+export function sureSapmasi(c: PlanlamaCalismasi): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const ev of c.olaylar) {
+    const oran = sayiOku(ev.oran);
+    if (oran === null) continue;
+    if (ev.tip === 'sure') { for (const j of c.D.siparisler) if (j.urun === metin(ev.urun)) out[`${j.id}.${metin(ev.k)}`] = oran; }
+    else if (ev.tip === 'sureOp') out[metin(ev.id)] = oran;
+  }
+  return out;
+}
 export interface IsTanimi { id: string; job: string; ad: string; adet: number; fason: string | null; fasonIzin: boolean; secenekler: { m: string; run: number }[]; onculler: string[] }
 export function isTanimlari(c: PlanlamaCalismasi, T: Takvim): Map<string, IsTanimi> {
   const D = c.D;
   const out = new Map<string, IsTanimi>();
   const opAdet = nesneMi(D.opAdet) ? D.opAdet : {};
+  const sapma = sureSapmasi(c);
   for (const j of aktifSiparisler(D)) {
     const u = D.urunler.find((x) => x.id === j.urun);
     for (const o of u?.rota ?? []) {
@@ -322,7 +335,7 @@ export function isTanimlari(c: PlanlamaCalismasi, T: Takvim): Map<string, IsTani
         for (const t of o.tezgahlar ?? []) {
           const mm = T.M[t.id];
           if (!mm) continue;
-          const cyc = ((t.cevrim ?? 0) / 60) / (1 - mm.pay);
+          const cyc = (((t.cevrim ?? 0) / 60) * (sapma[id] ?? 1)) / (1 - mm.pay);
           sec.push({ m: t.id, run: (ad * cyc) / mm.verim });
         }
       }
@@ -848,6 +861,12 @@ export function fasonIsleri(c: PlanlamaCalismasi, I: Map<string, IsTanimi>): Fas
   const k = nesneMi(D.fasonTermin) ? D.fasonTermin : {};
   const ref = nesneMi(D.fasonRef) ? D.fasonRef : {};
   const ops = planIsleri(c);
+  // Fason gecikme olayı fasoncunun süresini uzatır (applyEvent fason); dönüş tahmini motorun gördüğü süreyle yapılır (cx.FS).
+  const FS = fasoncular(D).map((f) => ({ ...f }));
+  for (const ev of c.olaylar) {
+    const f = ev.tip === 'fason' ? FS.find((x) => x.id === metin(ev.f)) : undefined;
+    if (f) f.sureGun = (f.sureGun || 1) + (sayiOku(ev.gun) ?? 0);
+  }
   const out: FasonIsi[] = [];
   for (const r of ops) {
     if (!r.fas || r.done) continue;
@@ -860,7 +879,7 @@ export function fasonIsleri(c: PlanlamaCalismasi, I: Map<string, IsTanimi>): Fas
     if (ger === null) ger = due;
     const C = planSonucu(c, r.job)?.C ?? null;
     const bol = due !== null && C !== null ? Math.max(0, due - C) : 0;
-    const f = fasoncular(D).find((x) => `@${x.id}` === r.m) ?? null;
+    const f = FS.find((x) => `@${x.id}` === r.m) ?? null;
     out.push({
       id: r.id, r, tanim: o, f, ger, enGec: ger === null ? null : ger + bol, T: saatOku(D, k[r.id]), tahmini: r.S + fasonSuresi(f, o?.adet ?? j.adet, A),
       yakin: r.S <= now + A.esik * 24, ref: saatOku(D, ref[r.id]),
