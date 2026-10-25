@@ -1,20 +1,21 @@
 import type { PlanCanliOzeti, PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PlanMotoru } from '../kopru.ts';
 import type { EkranYerlesimi } from './veri.ts';
 
 // Plan şeridi (eski ekranın planSeridi): plan motorunun yerleşimi canlı planla karşılaştırılır (Soru 491/1 a). Eski ekran kendi
 // tarayıcı planını karşılaştırıyordu; yeni ekranda o plan yok, karşılaştırılan motorun yerleşimidir. Sayım eskininkidir (Soru 492/2 a):
-// canlıda olmayan iş; canlıda başka makinede, başka sırada ya da dondurması farklı duran iş. Canlıda kilitli iş sayılmaz (yazma onu
-// taşımaz); canlıda yerleşemeyen bölünmüş iş "canlıda yok" sayılmaz, ayrı uyarıyla söylenir. Emirde karşılığı olmayan adım ve makine
-// kuyruğuna girmeyen adım yazılamaz: sayılmaz, uyarı olur.
+// canlıda olmayan iş; canlıda başka makinede, başka sırada, dondurması ya da parça adedi farklı duran iş (adet motordan, 493/1 a). Canlıda
+// kilitli iş sayılmaz (yazma onu taşımaz); canlıda yerleşemeyen bölünmüş iş "canlıda yok" sayılmaz, ayrı uyarıyla söylenir. Emirde karşılığı
+// olmayan adım, makine kuyruğuna girmeyen adım ve bölmesi yazılamayan iş (motorun adedi yok) yazılamaz: sayılmaz, uyarı olur.
 export interface PlanFarki { yok: number; farkli: number; emirdeYok: string[]; makinesiz: string[] }
 
 const adimAdi = (anahtar: string) => (anahtar.split('~')[0] ?? anahtar).replace('|', ' OP ');
 
-export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi): PlanFarki {
-  const canliIsler = new Map<string, { makine: number; sira: number; sabit: boolean; dondurulmus: boolean }>();
+export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi, adetler: PlanMotoru['parcaAdetleri'] = {}): PlanFarki {
+  const canliIsler = new Map<string, { makine: number; sira: number; sabit: boolean; dondurulmus: boolean; adet: number }>();
   for (const k of canli.kuyruklar) {
     k.isler.forEach((x, sira) => {
-      canliIsler.set(x.parca ? `${x.anahtar}~${String(x.parca.no)}` : x.anahtar, { makine: k.makineId, sira, sabit: x.sabit, dondurulmus: x.dondurulmus });
+      canliIsler.set(x.parca ? `${x.anahtar}~${String(x.parca.no)}` : x.anahtar, { makine: k.makineId, sira, sabit: x.sabit, dondurulmus: x.dondurulmus, adet: x.parca?.adet ?? 0 });
     });
   }
   const yersiz = new Set((canli.yersizBolmeler ?? []).map((y) => y.anahtar));
@@ -27,6 +28,7 @@ export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi): Plan
   for (const [anahtar, yerler] of Object.entries(yerlesim)) {
     const taban = anahtar.split('~')[0] ?? anahtar;
     if (!planlanacak.has(taban)) { emirdeYok.add(adimAdi(anahtar)); continue; }
+    if (adetler[anahtar] === null) continue;
     for (const y of yerler) {
       if (y.makineId === null) { makinesiz.add(adimAdi(anahtar)); continue; }
       const k = kuyruklar.get(y.makineId) ?? [];
@@ -45,7 +47,9 @@ export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi): Plan
       if (!c) { if (!yersiz.has(x.anahtar.split('~')[0] ?? x.anahtar)) yok++; continue; }
       if (c.sabit) continue;
       // Yeni ekran işi dondurmaz: canlıda dondurulmuş duran iş farklıdır (eski ekranda tarayıcıdaki dondurmayla karşılaştırılırdı).
-      if (c.makine !== makine || c.dondurulmus) { farkli++; continue; }
+      // Motor parça adedini vermediyse (eski sürüm cevabı) adet karşılaştırılmaz.
+      const adet = x.anahtar.includes('~') ? adetler[x.anahtar] : 0;
+      if (c.makine !== makine || c.dondurulmus || (adet !== undefined && adet !== c.adet)) { farkli++; continue; }
       ayni.push(c.sira);
     }
     const sirali = [...ayni].sort((a, b) => a - b);
@@ -60,10 +64,11 @@ export type SeritTuru = 'canli' | 'bekliyor' | 'degisti';
 export interface SeritDurumu { tur: SeritTuru; rozet: string; degisiklik: number; parca: string; metin: string; uyarilar: string[] }
 
 // Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti", kimin ne zaman canlıya aldığıyla (Soru 491/2 a, 492/2 a);
-// fark yoksa "plan canlı"; varsa "canlıya alınmadı" ve değişiklik sayısı. Rotası yürürlükteki rotadan eski açık emir de değişiklik sayılır
-// (eskide "N emrin rotası değişti"). Motor yerleşimi okunamazsa fark bilinmez: şerit bunu söyler, "canlı" demez.
+// fark yoksa "plan canlı"; varsa "canlıya alınmadı" ve değişiklik sayısı. Motor yerleşimi okunamazsa fark bilinmez: şerit bunu söyler,
+// "canlı" demez. Rotası değişen emir (motorun rotaEski'si) değişiklik sayılmaz, "açıldığı rotada kaldı" der (493/2 a): bu ekran emri yeni
+// rotaya taşımaz. Bölmesi yazılamayan iş (motorun bolmeYazilamaz'ı) uyarıdır.
 export function seritDurumu(
-  canli: PlanCanliOzeti, yerlesim: EkranYerlesimi | null, guncel: PlanSurumCevabi | null, rotasiDegisen = 0,
+  canli: PlanCanliOzeti, yerlesim: EkranYerlesimi | null, guncel: PlanSurumCevabi | null, motor: PlanMotoru | null = null,
 ): SeritDurumu {
   if (guncel !== null && guncel.planSurumu !== canli.planSurumu) {
     const s = guncel.sonCanliyaAlma;
@@ -76,19 +81,24 @@ export function seritDurumu(
   if (yerlesim === null) {
     return { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 0, parca: '', uyarilar: [], metin: 'Plan motorunun yerleşimi okunamadı; canlı planla farkı gösterilemiyor.' };
   }
-  const f = planFarki(canli, yerlesim);
+  const f = planFarki(canli, yerlesim, motor?.parcaAdetleri);
+  const rotadaKalan = (motor?.emirler ?? []).filter((e) => e.rotaEski).length;
+  const bolmeYazilamaz = (motor?.emirler ?? []).flatMap((e) => e.bolmeYazilamaz.map((op) => `${e.emirNo} OP ${String(op)}`));
   const uyarilar = [
+    rotadaKalan ? `${String(rotadaKalan)} emir açıldığı rotada kaldı (yürürlükte yeni rota var).` : '',
     f.emirdeYok.length ? `${String(f.emirdeYok.length)} adım emirde yok, canlıya alınmaz (${ilkUc(f.emirdeYok)}): emir, adım eklenmeden önceki rotadan açıldı.` : '',
     f.makinesiz.length
       ? `${String(f.makinesiz.length)} adım makinesi olmayan istasyonda, canlıya alınmaz (${ilkUc(f.makinesiz)}): istasyona makine tanımlayın ya da rotada adımın makinesini seçin.`
       : '',
+    bolmeYazilamaz.length
+      ? `${String(bolmeYazilamaz.length)} bölünmüş iş canlıya alınmaz (${ilkUc(bolmeYazilamaz)}): adımın adedi plandan okunamadı ya da bir parça bir tam adetten az kaldı; iş kartında parçaları birleştirip yeniden bölün.`
+      : '',
   ].filter(Boolean);
-  const n = f.yok + f.farkli + rotasiDegisen;
+  const n = f.yok + f.farkli;
   if (n === 0) return { tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, parca: '', uyarilar, metin: 'Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.' };
   const parca = [
     f.yok ? `${String(f.yok)} iş canlı planda yok` : '',
     f.farkli ? `${String(f.farkli)} iş canlıda başka sırada ya da makinede` : '',
-    rotasiDegisen ? `${String(rotasiDegisen)} emrin rotası değişti` : '',
   ].filter(Boolean).join(', ');
   return { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: n, parca, uyarilar, metin: 'Onaylanıp canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.' };
 }

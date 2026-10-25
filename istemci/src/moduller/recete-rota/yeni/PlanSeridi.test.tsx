@@ -9,7 +9,7 @@ import type { EkranYerlesimi, RrDurumu } from './veri.ts';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const CANLI: PlanCanliOzeti = { planSurumu: 3, sonCanliyaAlma: null, planlanacak: ['UE-0001|10', 'UE-0002|10'], kuyruklar: [{ makineId: 51, isler: [{ anahtar: 'UE-0001|10', dondurulmus: false, sabit: false }] }] };
-const durum = (yerlesim: EkranYerlesimi | null): RrDurumu => ({ ...ornekDurum(), planCanli: CANLI, planYerlesim: yerlesim });
+const durum = (yerlesim: EkranYerlesimi | null): RrDurumu => ({ ...ornekDurum(), planCanli: CANLI, planYerlesim: yerlesim, planMotoru: null });
 const ac = (d: RrDurumu, surum = 3) => {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
@@ -51,7 +51,7 @@ describe('plan şeridi', () => {
   });
 
   it('canlı plan özeti yoksa şerit çizilmez ve sürüm sorulmaz', () => {
-    const istekler = ac({ ...ornekDurum(), planYerlesim: {} });
+    const istekler = ac({ ...ornekDurum(), planYerlesim: {}, planMotoru: null });
     expect(screen.queryByRole('status', { name: 'Plan durumu' })).toBeNull();
     expect(istekler).toHaveLength(0);
   });
