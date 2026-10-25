@@ -153,4 +153,41 @@ describe('CalismaYazici', () => {
     expect(yazmalar).toHaveLength(2);
     expect(yazmalar[1]?.beklenenSurum).toBe(8);
   });
+
+  it('sayfa tercihi değişikliği (GERI_ALANLAR dışı alan) geri alınınca eski hâline döner; önceden yoksa silinir', () => {
+    const { y } = kur();
+    y.degistir('Elle sıra', (t) => { (t as Record<string, unknown>).tpSira = ['2', '1']; }, { planKoru: true });
+    y.degistir('Sıra riske göre', (t) => { (t as Record<string, unknown>).tpSira = []; }, { planKoru: true });
+    expect(y.geriAl()).toBe(true);
+    expect((y.calisma as Record<string, unknown>).tpSira).toEqual(['2', '1']);
+    expect(y.geriAl()).toBe(true);
+    expect('tpSira' in y.calisma).toBe(false);
+  });
+
+  it('sessiz değişiklik ize, bildirime ve geri yığınına girmez, veri sürümünü artırmaz; sunucuya sürüm denetimiyle yazılır', async () => {
+    const bildir = vi.fn();
+    const { y, yazmalar } = kur({ bildir });
+    y.degistir('Gün başı', (t) => { (t as Record<string, unknown>).tpGun = { basi: { gun: '2026-10-25' } }; }, { sessiz: true });
+    expect(y.calisma.iz).toHaveLength(0);
+    expect(y.calisma.dataVer).toBe(3);
+    expect(y.geriAlinabilir()).toBe(false);
+    expect(bildir).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(yazmalar).toHaveLength(1);
+    expect(yazmalar[0]?.beklenenSurum).toBe(7);
+    expect((yazmalar[0]?.deger as Record<string, unknown>).tpGun).toEqual({ basi: { gun: '2026-10-25' } });
+  });
+
+  it('geri adımları en yenisi önce listelenir; geriDon seçilen karardan öncesine tek adımda döner', () => {
+    const { y } = kur();
+    y.degistir('Bir', (t) => { t.w.sure = 1; });
+    y.degistir('İki', (t) => { t.w.sure = 2; });
+    y.degistir('Üç', (t) => { t.w.sure = 3; });
+    expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['Üç', 'İki', 'Bir']);
+    expect(y.geriDon(2)).toBe(true);
+    expect(y.calisma.w.sure).toBe(1);
+    expect(y.calisma.iz[0]?.ne).toBe('Seçilen karardan öncesine dönüldü');
+    expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['Bir']);
+    expect(y.geriDon(0)).toBe(false);
+  });
 });
