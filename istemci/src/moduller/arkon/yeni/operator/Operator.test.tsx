@@ -29,6 +29,8 @@ describe('A1 Üretim Terminali', () => {
     arkonAc('/arkon/yeni/operator');
     const d = await ekran();
     expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
+    // Bağlantı durumu üst çubukta saatin yanında (soru 488 a); testte cihaz deposu yok, kayıt riski yazar.
+    expect(screen.getByRole('status', { name: /Cihaz deposu açılamadı/ }).closest('.tc-ay1-ust')).not.toBeNull();
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
     fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
@@ -46,6 +48,26 @@ describe('A1 Üretim Terminali', () => {
     expect(screen.queryByRole('group', { name: 'Toplu giriş' })).toBeNull();
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('okutma penceresi kamerayı kendiliğinden açar (283.5); dokunmatikte kod alanı odak almaz (492/1 a)', async () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} }));
+    const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => {}));
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+    try {
+      // Ayrı kimlik: önceki testlerin yerel kopyasındaki CNC paketi yerine geçmesin.
+      const depo = { ...PAKET, id: 'pk-deneme-depo', no: 'IE-DENEME-2', opType: 'depo', st: { items: [{ id: 'k1', code: 'DN-K1', name: 'Deneme kalem', qty: 2, loc: 'R-1', unit: 'adet' }] } };
+      sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: depo.id, surum: 1, govde: depo }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+      arkonAc('/arkon/yeni/operator');
+      await ekran();
+      fireEvent.click(await screen.findByRole('button', { name: /QR/ }, { timeout: 10000 }));
+      expect(await screen.findByRole('dialog', { name: 'Ürün kodunu okut' })).toBeTruthy();
+      await waitFor(() => { expect(getUserMedia).toHaveBeenCalled(); });
+      // Pencere açılınca odağı ilk odaklanabilir öğeye (kamera düğmesi) verir; kod alanı dokunmatikte odak almaz, ekran klavyesi açılmaz.
+      expect(document.activeElement).not.toBe(within(screen.getByRole('dialog', { name: 'Ürün kodunu okut' })).getByRole('textbox', { name: 'Kod' }));
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
   }, 40000);
 
   it('önizleme paketi kimliğiyle açar, yazma düğmesi göstermez ve yazmaz', async () => {

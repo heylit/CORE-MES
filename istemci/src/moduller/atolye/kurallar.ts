@@ -495,6 +495,8 @@ export const OLAY_GORUNUMU: Record<SonOlayTuru, { metin: string; durum: MakineDu
   saglam: { metin: 'Sayım', durum: 'sirada' },
   hurda: { metin: 'Hurda', durum: 'durdu' },
   duzeltme: { metin: 'Düzeltme', durum: 'sirada' },
+  kalite_onay: { metin: 'Kalite kararı (onay)', durum: 'sirada' },
+  kalite_red: { metin: 'Kalite kararı (red)', durum: 'sirada' },
 };
 
 // Son hareketler listesinin satırı: üretim emirleri ve Arkon olayları tek zaman çizgisinde.
@@ -525,12 +527,14 @@ export function sonHareketler(
 ): HareketSatiri[] {
   const satirlar: HareketSatiri[] = emirOlaylari.map((o) => {
     const g = OLAY_GORUNUMU[o.olay];
+    // Kalite kararında kişi kararı verendir; kararı veren tutulmadan önceki satırda bilinmez.
+    const kisi = o.olay === 'kalite_onay' || o.olay === 'kalite_red' ? (o.kararVeren?.ad ?? '—') : o.kisi.ad;
     return {
       anahtar: `emir:${o.id}`,
       zaman: o.zaman,
       baslik: `${o.emir.emirNo} · ${o.emir.parcaNo}`,
       adet: o.adet === null ? (o.isEmri ? `Op ${o.isEmri.opNo} · ${o.isEmri.ad}` : o.emir.parcaNo) : `${o.adet > 0 ? '+' : ''}${sayiMetni(o.adet)} adet`,
-      ayrinti: [o.makine ? o.makine.ad : o.istasyon.ad, o.kisi.ad, o.durusNedeni?.ad].filter((m): m is string => Boolean(m)),
+      ayrinti: [o.makine ? o.makine.ad : o.istasyon.ad, kisi, o.durusNedeni?.ad].filter((m): m is string => Boolean(m)),
       durum: g.durum,
       metin: g.metin,
       yer: { makine: o.makine, istasyon: o.istasyon },

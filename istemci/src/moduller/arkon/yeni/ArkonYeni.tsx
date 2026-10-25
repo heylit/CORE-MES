@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { ArkonBenCevabi, ArkonRolu, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
-import { DurumKutusu, Rozet, Sekmeler, useBildirim, type RozetTonu } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Pencere, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
@@ -15,7 +15,9 @@ import { TMI_HEDEFLERI, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
 import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar.ts';
+import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
 import type { Perm } from './cekirdek/tipler.ts';
+import { yerel } from './cekirdek/yerel.ts';
 import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
 import { ArkonBaglamiKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
 import { depoyuBaslat, type ArkonDeposu, type ArkonDurumu } from './veri/depo.ts';
@@ -38,6 +40,8 @@ function ArkonYeniEkrani() {
   const cikis = useCikis();
   const { sayfa: adresSayfasi } = useParams();
   const saltOkunur = adresSayfasi === 'onizle';
+  // "Operatör gözüyle" penceresi açıkken de yazma TMI'ye gitmez (eskide önizleme ayrı çerçevede, kendi salt okunur açılışındaydı).
+  const [onizleme, onizlemeYaz] = useState<string | null>(null);
 
   // Taşıyıcının çağırdıkları her açılışta yeniden kurulmasın diye son değerler ref'te tutulur.
   const bildirRef = useRef(bildir);
@@ -45,7 +49,7 @@ function ArkonYeniEkrani() {
   const cikisRef = useRef(cikis.mutate);
   cikisRef.current = cikis.mutate;
   const saltOkunurRef = useRef(saltOkunur);
-  saltOkunurRef.current = saltOkunur;
+  saltOkunurRef.current = saltOkunur || onizleme !== null;
   const temaRef = useRef(tema);
   temaRef.current = tema;
   const benRef = useRef({ cevap: ben.data, zaman: ben.dataUpdatedAt });
@@ -88,6 +92,8 @@ function ArkonYeniEkrani() {
       islemler={islemler}
       arkonRolu={kisi.rol}
       saltOkunur={saltOkunur}
+      onizleme={onizleme}
+      onizlemeYaz={onizlemeYaz}
       devralmalar={devralmalar}
       siradakiniKapat={() => devralmalarYaz((l) => l.slice(1))}
     />
@@ -99,11 +105,13 @@ interface AcikEkranOzellikleri {
   islemler: readonly string[];
   arkonRolu: ArkonRolu;
   saltOkunur: boolean;
+  onizleme: string | null;
+  onizlemeYaz: (paketId: string | null) => void;
   devralmalar: readonly MakineDoluRedi[];
   siradakiniKapat: () => void;
 }
 
-function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradakiniKapat }: AcikEkranOzellikleri) {
+function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYaz, devralmalar, siradakiniKapat }: AcikEkranOzellikleri) {
   const { sayfa: adres, kimlik } = useParams();
   const gezin = useNavigate();
   const { bildir } = useBildirim();
@@ -153,18 +161,30 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradak
       sayfaGorunur: (s: string) => sayfaGorunur(s, kisi, ayarlar.yetkiler),
       git: (s: string, k?: string) => { void gezin(sayfaAdresi(s, k)); },
       tmiyeGit: (h: TmiHedefi) => { const yol = TMI_HEDEFLERI[h]; if (yol !== undefined) void gezin(yol); },
+      onizle: (paketId: string) => onizlemeYaz(paketId),
     };
-  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin]);
+  }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz]);
+  const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
+  useOlcek(kok);
+  const numune = useNumuneSayisi(depo);
 
   if (baglam === null) return <DurumKutusu durum="yukleniyor" />;
 
   // Madde hem TMI menüsünde (işlemle) hem Arkon'un sayfa yetkisinde görünür olmalı; TMI ekranı olan madde yalnız TMI işlemine bakar.
   const gorunur = (m: SekmeMaddesi): boolean =>
     maddeGorunurMu(m, islemler) && (Object.hasOwn(SAYFA_DISI, m.anahtar) || baglam.sayfaGorunur(m.anahtar));
-  const sekmeler = maddeler.filter(gorunur);
+  // Kalite sekmesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet); sayı parantezle yazılır (283.25).
+  const sekmeler = maddeler.filter(gorunur).map((m) => (m.anahtar === 'kalite' && numune > 0 ? { ...m, baslik: `${m.baslik} (${numune})` } : m));
+
+  // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; TMI'deki kendi menü satırının işlemi ve Arkon sayfa yetkisiyle açılır.
+  const ayriAcik = (s: ArkonSayfasi): boolean => {
+    const t: SayfaTanimi = SAYFALAR[s];
+    return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && baglam.sayfaGorunur(s);
+  };
 
   if (adres === undefined) {
     const giris = arkonGirisSayfasi(arkonRolu, islemler);
+    if (sayfaMi(giris) && ayriAcik(giris)) return <Navigate replace to={sayfaAdresi(giris)} />;
     const hedef = sekmeler.find((m) => m.anahtar === giris) ?? sekmeler.find((m) => !Object.hasOwn(SAYFA_DISI, m.anahtar));
     if (hedef === undefined) return <DurumKutusu durum="bos" mesaj="Üretim Hazırlık'ta size açık sayfa yok." />;
     return <Navigate replace to={sayfaAdresi(hedef.anahtar)} />;
@@ -173,8 +193,11 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradak
   const sayfa: ArkonSayfasi | null = sayfaMi(adres) ? adres : null;
   const tanim: SayfaTanimi | null = sayfa === null ? null : SAYFALAR[sayfa];
   const secili: string | null = sayfa === null ? null : (tanim?.ust ?? sayfa);
-  const acik = sayfa !== null && secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa);
-  const madde = maddeler.find((m) => m.anahtar === secili);
+  const ayri = sayfa !== null && tanim?.ayri === true;
+  const acik = sayfa !== null && (ayri
+    ? ayriAcik(sayfa)
+    : secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa));
+  const etiket = ayri ? tanim?.baslik : maddeler.find((m) => m.anahtar === secili)?.baslik;
 
   const sec = (anahtar: string) => {
     const disari = SAYFA_DISI[anahtar];
@@ -184,18 +207,14 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradak
   const Ekran = tanim?.ekran;
   return (
     <ArkonBaglamiKaynagi.Provider value={baglam}>
-      <div className="tc-ay">
-        {sekmeler.length > 0 && (
+      <div className="tc-ay" ref={kokYaz}>
+        {!ayri && sekmeler.length > 0 && (
           <Sekmeler etiket="Üretim Hazırlık" sekmeler={sekmeler} secili={secili ?? ''} sec={sec} />
         )}
-        <div className="tc-ay-serit">
-          <BaglantiDurumu durum={durum} />
-          {saltOkunur && <span role="status">Önizleme: kayıt yapılmaz.</span>}
-        </div>
         {!acik || Ekran === undefined || sayfa === null
           ? <DurumKutusu durum="bos" mesaj="Bu sayfa bulunamadı ya da size açık değil." />
           : (
-            <section className="tc-ay-icerik" aria-label={madde?.baslik ?? 'Önizleme'} data-sayfa={sayfa}>
+            <section className="tc-ay-icerik" aria-label={etiket ?? 'Önizleme'} data-sayfa={sayfa}>
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <Ekran sayfa={sayfa} kimlik={kimlik ?? null} />
               </Suspense>
@@ -203,6 +222,7 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradak
           )}
         {acik && !saltOkunur && sayfa !== null && <CagriBandi sayfa={sayfa} />}
       </div>
+      {onizleme !== null && <OnizlemePenceresi paketId={onizleme} baglam={baglam} kapat={() => onizlemeYaz(null)} />}
       <MakineDevralPenceresi
         red={siradaki}
         yukleniyor={devral.isPending}
@@ -216,16 +236,91 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, devralmalar, siradak
   );
 }
 
-// Bağlantı ve gönderim kuyruğu (eski şeritteki RailStatus): renk tek başına anlam taşımaz, durum metniyle yazılır.
-export function baglantiOzeti(d: Pick<ArkonDurumu, 'memory' | 'mode' | 'online' | 'pending' | 'base'>): { ton: RozetTonu; metin: string; aciklama: string } {
-  if (d.memory) return { ton: 'hata', metin: 'Kayıt riski', aciklama: 'Cihaz deposu açılamadı · gönderilmemiş kayıtlar sekme kapanınca kaybolur' };
-  if (d.mode !== 'server') return { ton: 'pasif', metin: 'Yerel', aciklama: 'Yerel mod · veriler bu cihazda' };
-  if (!d.online) return { ton: 'hata', metin: 'Kopuk', aciklama: `Sunucuya ulaşılamıyor · ${d.pending || 0} kayıt bekliyor (bağlantı gelince gönderilir)` };
-  if (d.pending) return { ton: 'uyari', metin: `${d.pending} gönderiliyor`, aciklama: `${d.pending} kayıt gönderiliyor` };
-  return { ton: 'tamam', metin: 'Bağlı', aciklama: 'Sunucuya bağlı' };
+// Ekran ölçeği (eski useFit): sayfa 1600x900 tasarım alanına göre ölçeklenir. Ölçek ve ölçekli görünür yükseklik kökte değişken
+// olarak durur (arkon-yeni.css zoom; tam yükseklikli düzenler --tc-ay-vh kullanır). Kabuk alanı değişince yeniden hesaplanır.
+function useOlcek(kok: HTMLDivElement | null): void {
+  useEffect(() => {
+    const alan = kok?.parentElement;
+    if (!kok || !alan) return undefined;
+    const uygula = () => {
+      const yukseklik = Math.max(0, window.innerHeight - Math.max(0, alan.getBoundingClientRect().top));
+      const { mobil, z } = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
+      kok.style.setProperty('--tc-ay-olcek', String(z));
+      kok.style.setProperty('--tc-ay-vh', `${Math.round(yukseklik / z)}px`);
+      kok.toggleAttribute('data-mobil', mobil);
+    };
+    uygula();
+    const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
+    izleyici?.observe(alan);
+    window.addEventListener('resize', uygula);
+    window.addEventListener('orientationchange', uygula);
+    return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); window.removeEventListener('orientationchange', uygula); };
+  }, [kok]);
 }
 
-function BaglantiDurumu({ durum }: { durum: ArkonDurumu }) {
-  const o = baglantiOzeti(durum);
-  return <span className="tc-ay-baglanti" title={o.aciklama} role="status" aria-label={o.aciklama}><Rozet ton={o.ton}>{o.metin}</Rozet></span>;
+// Kalitede bekleyen ya da ölçülen numune sayısı (baslat.ts nWait): numune ve sonuç iletisinde ve 20 sn'de bir yeniden sayılır.
+function useNumuneSayisi(depo: ArkonDeposu): number {
+  const [n, nYaz] = useState(0);
+  useEffect(() => {
+    let iptal = false;
+    let bekleyen: ReturnType<typeof setTimeout> | null = null;
+    const say = async () => {
+      try {
+        const rs = await depo.DB.all('requests') as { status?: string }[];
+        if (!iptal) nYaz(rs.filter((r) => r.status === 'waiting' || r.status === 'measuring').length);
+      } catch { /* okunamazsa son sayı kalır */ }
+    };
+    void say();
+    const birak = depo.Bus.on((m) => { if (/sample|result/.test(m.type)) { if (bekleyen) clearTimeout(bekleyen); bekleyen = setTimeout(() => { void say(); }, 300); } });
+    const t = setInterval(() => { void say(); }, 20000);
+    return () => { iptal = true; birak(); clearInterval(t); if (bekleyen) clearTimeout(bekleyen); };
+  }, [depo]);
+  return n;
 }
+
+// "Operatör gözüyle" önizleme (operator-parcalar.ts PreviewOv): operatör ekranı 1600x900 cihaz alanında, pencereye sığacak
+// ölçekte çizilir. Pencerenin içi salt okunurdur; istasyon cihazda hatırlanan önizleme istasyonudur (pvStation).
+function OnizlemePenceresi({ paketId, baglam, kapat }: { paketId: string; baglam: ArkonBaglami; kapat: () => void }) {
+  const [sahne, sahneYaz] = useState<HTMLDivElement | null>(null);
+  const [cihaz, cihazYaz] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!sahne || !cihaz) return undefined;
+    const uygula = () => {
+      const k = Math.max(0.1, Math.min((sahne.clientWidth - 40) / TASARIM_GENISLIGI, (sahne.clientHeight - 40) / TASARIM_YUKSEKLIGI));
+      cihaz.style.setProperty('--tc-ay-onizleme-olcek', String(k));
+      cihaz.style.setProperty('--tc-ay-onizleme-en', `${TASARIM_GENISLIGI}px`);
+      cihaz.style.setProperty('--tc-ay-onizleme-boy', `${TASARIM_YUKSEKLIGI}px`);
+      cihaz.style.setProperty('--tc-ay-vh', `${TASARIM_YUKSEKLIGI}px`);
+    };
+    uygula();
+    const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
+    izleyici?.observe(sahne);
+    window.addEventListener('resize', uygula);
+    return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); };
+  }, [sahne, cihaz]);
+  const salt = useMemo((): ArkonBaglami => ({ ...baglam, saltOkunur: true }), [baglam]);
+  const Ekran = SAYFALAR.onizle.ekran;
+  const istasyon = yerel.oku<string>('pvStation') ?? '';
+  const ust = (
+    <header className="tc-ay-onizleme-ust">
+      <span className="tc-ay-onizleme-baslik">Operatör gözüyle önizleme{istasyon ? ` · ${istasyon} ekranı` : ''} · kayıt yapılmaz</span>
+      <Dugme simge="x" onClick={kapat}>Kapat</Dugme>
+    </header>
+  );
+  return (
+    <Pencere acik kapat={kapat} baslik="Operatör gözüyle önizleme" tur="tam" ust={ust}>
+      <div ref={sahneYaz} className="tc-ay-onizleme-sahne">
+        <div ref={cihazYaz} className="tc-ay-onizleme-cihaz">
+          <div className="tc-ay-onizleme-ekran">
+            <ArkonBaglamiKaynagi.Provider value={salt}>
+              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                <Ekran sayfa="onizle" kimlik={paketId} />
+              </Suspense>
+            </ArkonBaglamiKaynagi.Provider>
+          </div>
+        </div>
+      </div>
+    </Pencere>
+  );
+}
+

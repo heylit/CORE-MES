@@ -8,7 +8,7 @@ import { Cip, gunlugeYaz, onayBekliyor, type Soyle } from '../pano/index.tsx';
 // Kalite › Onaylar (bakim-raporlar.ts ApprovalView): hazırlıkta "Kaliteye onaya gönder" denilen paketler. Onaylanan paket yayınlanabilir;
 // onaydan sonra değişirse yeniden onay ister. Karar 'pkg.approve' ister; geri gönderme gerekçesizdir olamaz.
 export function Onaylar({ paketler, soyle }: { paketler: Record<string, Pkg>; soyle: Soyle }) {
-  const { depo, kisi, ayarlar, yetkiVar, saltOkunur, git } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, saltOkunur, onizle } = useArkon();
   const [not, notYaz] = useState<Record<string, string>>({});
   const karar = yetkiVar('pkg.approve') && !saltOkunur;
   const simdi = Date.now();
@@ -43,7 +43,7 @@ export function Onaylar({ paketler, soyle }: { paketler: Record<string, Pkg>; so
           </small>
           <div className="tc-ay3-dugmeler">
             <input className="tc-ay3-girdi" value={not[p.id] || ''} onChange={(o) => notYaz({ ...not, [p.id]: o.target.value })} placeholder="Not (geri gönderirken zorunlu)" aria-label={`${p.no} not`} />
-            <Dugme simge="eye" onClick={() => git('onizle', p.id)}>Operatör gözüyle</Dugme>
+            <Dugme simge="eye" onClick={() => onizle(p.id)}>Operatör gözüyle</Dugme>
             {karar && <Dugme tur="tehlike" simge="x" onClick={() => { void karariVer(p, false); }}>Geri gönder</Dugme>}
             {karar && <Dugme tur="birincil" simge="check" onClick={() => { void karariVer(p, true); }}>Onayla</Dugme>}
           </div>

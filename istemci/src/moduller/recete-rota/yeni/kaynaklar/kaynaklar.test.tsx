@@ -29,7 +29,8 @@ const SURELER: SurelerCevabi = {
   revizyon: { id: 7, harf: 'A', durum: 'yururlukte', malzemeId: 11 },
   makineId: null,
   adimlar: [{
-    adimId: 41, opNo: 10, sira: 1, ad: 'Tornalama', operasyonTipi: { id: 21, kod: 'TOR', ad: 'Tornalama' }, kaynak: null,
+    adimId: 41, opNo: 10, sira: 1, ad: 'Tornalama', operasyonTipi: { id: 21, kod: 'TOR', ad: 'Tornalama' },
+    kaynak: { tur: 'makine', id: 5, kod: 'M-1', ad: 'Torna makinesi', aktif: true, istasyon: { id: 3, kod: 'IST-1', ad: 'Torna istasyonu', aktif: true } },
     teorik: { hazirlikDk: '30', islemDk: '5', degisimDk: '1', degisimOraniYuzde: '20' },
     sonKayit: { hazirlik: null, islem: 9, degisim: null },
     olcum: {
@@ -55,7 +56,11 @@ describe('R2 Süreler', () => {
     rrAc('/recete-rota/yeni/sureler');
     const bolge = await bolumAc('Süreler');
     const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık dakika, MM-0001 OP 10' });
-    expect(within(bolge).getByText('Rev A')).toBeTruthy();
+    const kart = within(bolge).getByRole('article', { name: 'MM-0001 OP 10 süreleri' });
+    expect(within(kart).getByText('Revizyon').nextElementSibling?.textContent).toBe('A');
+    // Eski düzen: kaynak istasyon koduyla, altında istasyon adı ve makine kodu; operasyon yalnız adıyla.
+    expect(within(kart).getByText('Kaynak').nextElementSibling?.textContent).toBe('IST-1Torna istasyonu · M-1');
+    expect(within(kart).getByText('Operasyon').nextElementSibling?.textContent).toBe('Tornalama');
     yaz(hazirlik, '3,5');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure', govde: { tur: 'hazirlik', sureDk: 3.5, makineId: null, okunanId: null } });
@@ -185,6 +190,8 @@ describe('R2 Kaynaklar', () => {
     });
     rrAc('/recete-rota/yeni/res');
     const bolge = await bolumAc('Kaynaklar');
+    // Genel bakış: plan teorik süreyi kullanır (Soru 490/1 a; eski cümle 468/4 a ile geçersizdi).
+    expect(within(bolge).getByText(/kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır/)).toBeTruthy();
     altSekme(bolge, /İş merkezleri/);
     yaz(await within(bolge).findByRole('textbox', { name: 'TZ1 istasyon adı' }), 'Torna A');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));

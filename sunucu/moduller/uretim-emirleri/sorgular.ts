@@ -43,6 +43,8 @@ export interface KayitSatiri {
   adet: number | null;
   durusNedeniId: number | null;
   hurdaNedeniId: number | null;
+  // Yalnız kalite kararında dolu olabilir; sütundan önceki karar satırında bilinmez (null).
+  kararVerenId: number | null;
   zaman: string;
 }
 
@@ -208,13 +210,15 @@ export function kararBekleyenGruplari(db: Db, emirId: number): Promise<KararGrub
 }
 
 // Kararın iki satırı aynı iş emrine ve sayan kişiye yazılır (terminal ya da kararı veren değil): üretim sayanın kalır (348 a).
+// Sayım kişisi operatörde kalır (348 a); kararı veren ayrı sütunda, defter onu gösterir (504 a).
 export function kararSatirlariEkle(
-  db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', an: string,
+  db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', an: string, kararVerenId: number,
 ): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id)
-     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8), ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8)`,
-    [emirId, g.kisiId, g.istasyonId, g.isEmriId, an, g.adet, tur, g.refakatPartisiId],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id, karar_veren_kisi_id)
+     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8, $9),
+            ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8, $9)`,
+    [emirId, g.kisiId, g.istasyonId, g.isEmriId, an, g.adet, tur, g.refakatPartisiId, kararVerenId],
   );
 }
 
@@ -370,21 +374,29 @@ export function isEmriSayimlari(db: Db, isEmriId: number): Promise<SureSayimSati
 
 // Üç defter tek listede: kimlik tablo kimliğinin üç katı artı kaynak payıdır (0 kayıt, 1 olay, 2 sayım),
 // bu yüzden çakışmaz. Aynı anı taşıyan satırlarda başlatma önce, bitirme sonra gelir.
+// Kalite kararı sağlama ya da redde geçen satırdır; kişi sayandır, kararı veren ayrı gelir. Karar veren sütunundan önce
+// yazılmış karar satırı, aynı anda aynı adedi karar bekleyenden düşen eşinden tanınır; kararı veren bilinmez.
+const KARAR_SATIRI = `(s.tur = 'red' OR (s.tur = 'saglam' AND s.duzeltme AND (s.karar_veren_kisi_id IS NOT NULL OR EXISTS (
+  SELECT 1 FROM uretim_sayimi k WHERE k.emir_id = s.emir_id AND k.zaman = s.zaman AND k.tur = 'karar_bekliyor'
+     AND k.duzeltme AND k.adet = -s.adet AND k.is_emri_id IS NOT DISTINCT FROM s.is_emri_id))))`;
+
 export function kayitlariGetir(db: Db, emirId: number): Promise<KayitSatiri[]> {
   return db.sorgu<KayitSatiri>(
     `SELECT b.id, b."emirId", b."kisiId", b."istasyonId", b.olay, b."saglamAdet", b.adet, b."durusNedeniId", b."hurdaNedeniId",
-            ${ISO('b.an')} AS zaman FROM (
+            b."kararVerenId", ${ISO('b.an')} AS zaman FROM (
        SELECT k.id::bigint * 3 AS id, k.emir_id AS "emirId", k.kisi_id AS "kisiId", k.istasyon_id AS "istasyonId", k.olay,
               k.saglam_adet AS "saglamAdet", NULL::int AS adet, NULL::int AS "durusNedeniId", NULL::int AS "hurdaNedeniId",
-              k.zaman AS an, CASE k.olay WHEN 'baslat' THEN 0 ELSE 2 END AS sira
+              NULL::int AS "kararVerenId", k.zaman AS an, CASE k.olay WHEN 'baslat' THEN 0 ELSE 2 END AS sira
          FROM uretim_kaydi k WHERE k.emir_id = $1
        UNION ALL
-       SELECT o.id::bigint * 3 + 1, o.emir_id, o.kisi_id, o.istasyon_id, o.olay, NULL, NULL, o.durus_nedeni_id, NULL, o.zaman, 1
+       SELECT o.id::bigint * 3 + 1, o.emir_id, o.kisi_id, o.istasyon_id, o.olay, NULL, NULL, o.durus_nedeni_id, NULL, NULL, o.zaman, 1
          FROM uretim_olayi o WHERE o.emir_id = $1
        UNION ALL
-       SELECT s.id::bigint * 3 + 2, s.emir_id, s.kisi_id, s.istasyon_id, CASE s.tur WHEN 'hurda' THEN 'hurda' ELSE 'duzeltme' END,
-              NULL, s.adet, NULL, s.hurda_nedeni_id, s.zaman, 1
-         FROM uretim_sayimi s WHERE s.emir_id = $1 AND (s.tur = 'hurda' OR (s.tur = 'saglam' AND s.duzeltme))
+       SELECT s.id::bigint * 3 + 2, s.emir_id, s.kisi_id, s.istasyon_id,
+              CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN s.karar THEN 'kalite_onay' ELSE 'duzeltme' END,
+              NULL, s.adet, NULL, s.hurda_nedeni_id, s.karar_veren_kisi_id, s.zaman, 1
+         FROM (SELECT s.*, ${KARAR_SATIRI} AS karar
+                 FROM uretim_sayimi s WHERE s.emir_id = $1 AND (s.tur IN ('hurda', 'red') OR (s.tur = 'saglam' AND s.duzeltme))) s
      ) b ORDER BY b.an, b.sira, b.id`,
     [emirId],
   );
@@ -1535,6 +1547,8 @@ export interface SonOlaySatiri {
   kisiId: number;
   adet: number | null;
   durusNedeniId: number | null;
+  // Yalnız kalite kararında dolu olabilir; sütundan önceki karar satırında bilinmez (null).
+  kararVerenId: number | null;
   zaman: string;
 }
 
@@ -1544,18 +1558,22 @@ export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Pro
   return db.sorgu<SonOlaySatiri>(
     `SELECT b.id, b.olay, e.id AS "emirId", e.emir_no AS "emirNo", e.parca_no AS "parcaNo",
             i.id AS "isEmriId", i.op_no AS "opNo", i.ad AS "isEmriAd", i.makine_id AS "makineId",
-            b.istasyon_id AS "istasyonId", b.kisi_id AS "kisiId", b.adet, b.durus_nedeni_id AS "durusNedeniId", ${ISO('b.an')} AS zaman
+            b.istasyon_id AS "istasyonId", b.kisi_id AS "kisiId", b.adet, b.durus_nedeni_id AS "durusNedeniId",
+            b.karar_veren_kisi_id AS "kararVerenId", ${ISO('b.an')} AS zaman
        FROM (
          SELECT 'k' || k.id AS id, k.emir_id, k.is_emri_id, k.istasyon_id, k.kisi_id, k.olay, k.saglam_adet AS adet,
-                NULL::int AS durus_nedeni_id, k.zaman AS an, CASE k.olay WHEN 'baslat' THEN 0 ELSE 2 END AS sira, k.id AS satir
+                NULL::int AS durus_nedeni_id, NULL::int AS karar_veren_kisi_id, k.zaman AS an, CASE k.olay WHEN 'baslat' THEN 0 ELSE 2 END AS sira,
+                k.id AS satir
            FROM uretim_kaydi k WHERE $1::timestamptz IS NULL OR k.zaman > $1::timestamptz
          UNION ALL
-         SELECT 'o' || o.id, o.emir_id, o.is_emri_id, o.istasyon_id, o.kisi_id, o.olay, NULL, o.durus_nedeni_id, o.zaman, 1, o.id
+         SELECT 'o' || o.id, o.emir_id, o.is_emri_id, o.istasyon_id, o.kisi_id, o.olay, NULL, o.durus_nedeni_id, NULL, o.zaman, 1, o.id
            FROM uretim_olayi o WHERE $1::timestamptz IS NULL OR o.zaman > $1::timestamptz
          UNION ALL
          SELECT 's' || s.id, s.emir_id, s.is_emri_id, s.istasyon_id, s.kisi_id,
-                CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.duzeltme THEN 'duzeltme' ELSE 'saglam' END, s.adet, NULL, s.zaman, 1, s.id
-           FROM uretim_sayimi s WHERE s.tur IN ('saglam', 'hurda') AND ($1::timestamptz IS NULL OR s.zaman > $1::timestamptz)
+                CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN ${KARAR_SATIRI} THEN 'kalite_onay'
+                     WHEN s.duzeltme THEN 'duzeltme' ELSE 'saglam' END,
+                s.adet, NULL, s.karar_veren_kisi_id, s.zaman, 1, s.id
+           FROM uretim_sayimi s WHERE s.tur IN ('saglam', 'hurda', 'red') AND ($1::timestamptz IS NULL OR s.zaman > $1::timestamptz)
        ) b
        JOIN uretim_emri e ON e.id = b.emir_id
        LEFT JOIN uretim_emirleri_is_emri i ON i.id = b.is_emri_id

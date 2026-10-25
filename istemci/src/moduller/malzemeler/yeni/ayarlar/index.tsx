@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, SayfaBasligi } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Pencere } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { useAyarDuzeni, type Duzen } from './duzen.ts';
 import { AYAR_MENUSU, gecerliBolum, type AyarBolumu } from './menu.ts';
@@ -31,7 +31,6 @@ const BOLUMLER: Record<AyarBolumu, (d: Duzen) => ReactNode> = {
   birim: (d) => <StokBirimleri d={d} />,
   belge: (d) => <BelgeTurleri d={d} />,
   roller: (d) => <Roller d={d} />,
-  genel: (d) => <GenelAyarlar d={d} />,
 };
 
 export function MalzemeAyarlari(o: EkranOzellikleri) {
@@ -46,7 +45,6 @@ export function MalzemeAyarlari(o: EkranOzellikleri) {
 
   return (
     <div className="tc-ma">
-      <SayfaBasligi baslik="Malzeme ayarları" simge="gear" />
       {kartaDon && (
         <p className="tc-ma-uyari tc-ma-karta-don">
           Açtığın kart bekliyor; girdiğin bilgiler duruyor. <Dugme simge="back" onClick={() => o.git.yeniKart()}>Karta dön</Dugme>
@@ -67,5 +65,16 @@ export function MalzemeAyarlari(o: EkranOzellikleri) {
         <div className="tc-ma-ic">{BOLUMLER[bolum](d)}</div>
       </div>
     </div>
+  );
+}
+
+// Prototipin üst başındaki "Ayarlar" penceresi: onay akışı, kod, QR, açıklama ve mükerrer tarama; malzeme ayarlarının bölümü değildir.
+// Taramadaki karta gidince pencere kapanır (prototipte kartın föyü bu pencerenin yerine açılır).
+export function GenelAyarPenceresi({ kapat, ...o }: EkranOzellikleri & { kapat: () => void }) {
+  const d = useAyarDuzeni({ ...o, git: { ...o.git, katalog: (k) => { kapat(); o.git.katalog(k); } } });
+  return (
+    <Pencere acik kapat={kapat} baslik="Ayarlar" alt={<Dugme onClick={kapat}>Kapat</Dugme>}>
+      <div className="tc-ma"><GenelAyarlar d={d} /></div>
+    </Pencere>
   );
 }

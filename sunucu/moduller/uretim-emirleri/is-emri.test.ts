@@ -1787,7 +1787,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
 
     const tumu = await olaylar(baslangic === undefined ? '' : `?sonra=${encodeURIComponent(baslangic)}`);
     const bu = tumu.filter((x) => x.emir.id === id);
-    assert.deepEqual(bu.map((x) => x.olay), ['durdur', 'duzeltme', 'baslat'], 'yeniden eskiye; ilk parça onayla sağlama geçer');
+    assert.deepEqual(bu.map((x) => x.olay), ['durdur', 'kalite_onay', 'baslat'], 'yeniden eskiye; ilk parça onayı kalite kararıdır (504 a)');
     assert.deepEqual(bu[0]?.durusNedeni, { id: neden, ad: 'Harita duruşu' });
     assert.equal(bu[1]?.adet, 2);
     for (const x of bu) {
