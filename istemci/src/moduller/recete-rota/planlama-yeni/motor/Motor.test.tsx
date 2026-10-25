@@ -269,6 +269,36 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('region', { name: 'Karar paneli' })).toBeTruthy();
   });
 
+  it('Düzenle: E seçilene göre menüyü açar, sayı komutu çalıştırır, sabitlemek degistir ile; motor komutları pasif; D değişiklikler, Esc kapatır', () => {
+    const c = ornekCalisma();
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    expect(screen.queryByRole('button', { name: /^Düzenle\s*E$/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.keyDown(window, { key: 'e' });
+    const dz = screen.getByRole('dialog', { name: 'Düzenle' });
+    expect(within(dz).getByText('İş adımı')).toBeTruthy();
+    expect(within(dz).getByRole('button', { name: /3 siparişini öne al/ }).getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(within(dz).getByRole('button', { name: /sırasını düzenle/ }).getAttribute('title')).toContain(YOK_NOTU);
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByText(`İşi kaydırmak: ${MOTOR_NOTU}`)).toBeTruthy();
+    fireEvent.keyDown(document, { key: '6' });
+    expect(komut.degistir).toHaveBeenCalledWith('İş sabitlendi', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    expect(yazilan.at(-1)?.locks['3.10']).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Düzenle' })).toBeNull();
+    fireEvent.keyDown(window, { key: 'd' });
+    expect(screen.getByRole('dialog', { name: 'Değişiklikler' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Değişiklikler' })).toBeNull();
+    const ara = screen.getByRole('combobox', { name: 'Sipariş ya da tezgâh bul' });
+    fireEvent.change(ara, { target: { value: '1' } });
+    fireEvent.keyDown(ara, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /^Düzenle\s*E$/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Düzenle' })).getByRole('button', { name: /1 bugün boşalt/ }).getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('plan yazma yetkisi yoksa sepet açılmaz, karar eylemleri yazmaz', () => {
     ac({ yaz: false });
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
