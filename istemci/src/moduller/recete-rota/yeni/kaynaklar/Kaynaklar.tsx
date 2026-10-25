@@ -159,7 +159,7 @@ function GenelBakis({ b }: { b: Bag }) {
           <li>Her makine için, önceki işi bittikten sonra ilk boş anı bulur. Bu an, makinenin bağlı olduğu <b>iş merkezinin vardiya saatleri</b> içinde olmalıdır; molalar ve tatiller düşülür.</li>
           <li>Personel kısıtı açıksa o gün iş merkezinde vardiyada olan personelin kişi-saati de yetmelidir.</li>
           <li>İşi en erken bitirecek makineyi seçer. Partiyi kendiliğinden makinelere bölmez; bölme yalnız elle yapılır.</li>
-          <li>Süre = hazırlık + (işlem + değişim) × miktar ÷ istasyonun verimi. Maliyet = makine saati × istasyonun saatlik maliyeti.</li>
+          <li>Süre = hazırlık + (işlem + değişim) × miktar ÷ istasyonun verimi; Süreler bölümünde kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır. Maliyet = makine saati × istasyonun saatlik maliyeti.</li>
         </ol>
       </section>
       <h3 className="tc-rr2-grup-baslik"><span>Şu anki kaynakların</span></h3>

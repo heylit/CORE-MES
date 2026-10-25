@@ -1,7 +1,7 @@
 import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
 import type { EkranYerlesimi } from './veri.ts';
 
-// Plan şeridi (eski ekranın planSeridi): plan motorunun yerleşimi canlı planla karşılaştırılır (Soru 491/1, öneri a). Eski ekran kendi
+// Plan şeridi (eski ekranın planSeridi): plan motorunun yerleşimi canlı planla karşılaştırılır (Soru 491/1 a). Eski ekran kendi
 // tarayıcı planını karşılaştırıyordu; yeni ekranda o plan yok, karşılaştırılan motorun yerleşimidir. Fark: canlıda olmayan iş, canlıda başka
 // makinede ya da başka sırada duran iş. Canlıda kilitli ya da dondurulmuş iş sayılmaz (yazma onu taşımaz); canlıda yerleşemeyen bölünmüş
 // iş "canlıda yok" sayılmaz, ayrı uyarıyla söylenir.
@@ -48,7 +48,7 @@ export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi): Plan
 export type SeritTuru = 'canli' | 'bekliyor' | 'degisti';
 export interface SeritDurumu { tur: SeritTuru; rozet: string; degisiklik: number; parca: string; metin: string }
 
-// Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti" (Soru 491/2, öneri a); fark yoksa "plan canlı"; varsa
+// Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti" (Soru 491/2 a); fark yoksa "plan canlı"; varsa
 // "canlıya alınmadı" ve değişiklik sayısı. Motor yerleşimi okunamazsa fark bilinmez: şerit yalnız son canlıya almayı söyler.
 export function seritDurumu(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi | null, guncelSurum: number | null): SeritDurumu {
   if (guncelSurum !== null && guncelSurum !== canli.planSurumu) {
