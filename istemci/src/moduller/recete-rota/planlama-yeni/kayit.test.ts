@@ -190,4 +190,26 @@ describe('CalismaYazici', () => {
     expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['Bir']);
     expect(y.geriDon(0)).toBe(false);
   });
+
+  it('yalnız sessiz değişiklik çatışırsa hata gösterilmez, sayfa yeniden okur; ardından gelen sessiz değişiklik de sessizce bırakılır', async () => {
+    const catismadaYenile = vi.fn();
+    const { y, uyarilar } = kur({ catismadaYenile }, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('Gün başı', (t) => { t.pref.g = 1; }, { sessiz: true });
+    await y.hepsiniYaz();
+    expect(uyarilar).toEqual([]);
+    expect(catismadaYenile).toHaveBeenCalledTimes(1);
+    expect(y.durdu).toBe(true);
+    expect(y.degistir('Gün başı', (t) => { t.pref.g = 2; }, { sessiz: true })).toBe(false);
+    expect(uyarilar).toEqual([]);
+  });
+
+  it('sessiz değişiklikle birlikte kullanıcı değişikliği çatışırsa çatışma bildirilir', async () => {
+    const catismadaYenile = vi.fn();
+    const { y, uyarilar } = kur({ catismadaYenile }, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('Gün başı', (t) => { t.pref.g = 1; }, { sessiz: true });
+    y.degistir('Ağırlık', (t) => { t.w.sure = 1; });
+    await y.hepsiniYaz();
+    expect(uyarilar).toEqual([CATISMA]);
+    expect(catismadaYenile).not.toHaveBeenCalled();
+  });
 });

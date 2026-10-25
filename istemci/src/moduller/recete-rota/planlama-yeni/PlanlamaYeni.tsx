@@ -31,7 +31,7 @@ function PlanlamaEkrani() {
   const git = useNavigate();
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false;
-  const { durum, yenile } = usePlanlamaDeposu(girebilir);
+  const { durum, yenile, tazele } = usePlanlamaDeposu(girebilir);
   const yetki = useMemo(
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
     [durum, kullanici],
@@ -46,6 +46,7 @@ function PlanlamaEkrani() {
       sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
       yaz: (g: YazGovdesi) => api.post<YazCevabi>('/recete-rota/kayitlar/yaz', g),
       uyar: (ileti) => { bildir('hata', ileti); },
+      catismadaYenile: tazele,
       bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },
     });
     // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
