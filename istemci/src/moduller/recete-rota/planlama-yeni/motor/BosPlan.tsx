@@ -28,3 +28,19 @@ export function BosPlan({ c, cx }: { c: PlanlamaCalismasi; cx: Derleme }) {
     </div>
   );
 }
+
+// Çalışma kaydı yokken (Soru 489/2 c): sade mesaj, kartın üç adımı ve pasif "Planı kur"; sayılar çalışmayla gelir, çalışmayı ekran kurmaz (289/8).
+export function BosCalisma() {
+  return (
+    <div className="tc-pym-bos tc-pym-bos-genis">
+      <Simge ad="gantt" boyut="b" />
+      <strong>Planlama çalışması yok.</strong>
+      <ol className="tc-pym-adimlar">
+        {ADIMLAR.map(([b, m], i) => <li key={b}><b className="tc-pym-adim-no tc-pym-mono">{i + 1}</b><span><b>{b}</b><br /><small>{m}</small></span></li>)}
+      </ol>
+      <div className="tc-pym-bos-dugmeler">
+        <button type="button" className="tc-dugme tc-dugme-birincil" aria-disabled="true" title={`Planı kur: ${MOTOR_NOTU}`}><Simge ad="play" boyut="k" />Planı kur</button>
+      </div>
+    </div>
+  );
+}

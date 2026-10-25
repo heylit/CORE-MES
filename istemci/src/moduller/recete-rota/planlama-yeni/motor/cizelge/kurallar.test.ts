@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, adaySureleri, gunCizelgesi, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunAcilimlari, gunCizelgesi, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -121,7 +121,7 @@ describe('çizelge hesapları', () => {
     expect(matris(c, p, cx, v, 'tezgah', 'gun', 14).sutunlar).toHaveLength(14);
   });
 
-  it('süre olayı adımın işleme süresini çarpar (sureOp; sure başlamış adımı atlar), ayar değişmez', () => {
+  it('süre olayı adımın işleme süresini çarpar (sureOp; sure başlamış adım dahil), ayar değişmez', () => {
     const { c, p } = kur();
     const taban = derle(girdiKur(c, plandanBitenler(c, p)));
     const t0 = adaySureleri(c, taban, '3.10')[0];
@@ -129,9 +129,9 @@ describe('çizelge hesapları', () => {
     c.olaylar = [{ tip: 'sureOp', id: '3.10', oran: 2 }, { tip: 'sure', urun, k: '20', oran: 3 }];
     const cx = derle(girdiKur(c, plandanBitenler(c, p)));
     expect([cx.g.sapma['3.10'], cx.g.sapma['2.20']]).toEqual([2, 3]);
-    // Planda şimdiden önce başlamış adımın süresi değişmez.
+    // Başlamış adıma da uygulanır (485/5 a).
     const S = p.ops['2.20']?.S ?? 0;
-    expect(derle(girdiKur({ ...c, simdi: S + 1 }, plandanBitenler(c, p))).g.sapma['2.20']).toBeUndefined();
+    expect(derle(girdiKur({ ...c, simdi: S + 1 }, plandanBitenler(c, p))).g.sapma['2.20']).toBe(3);
     const t1 = adaySureleri(c, cx, '3.10')[0];
     expect([t1?.su, Number(((t1?.run ?? 0) / (t0?.run ?? 1)).toFixed(6))]).toEqual([t0?.su, 2]);
   });
@@ -147,5 +147,20 @@ describe('çizelge hesapları', () => {
     const { c, p, cx } = kur();
     const z = zamanCizelgesi(c, p, cx, 'hafta', '2');
     expect(z.terminYazi).toBe(c.D.siparisler.find((s) => s.id === '2')?.termin);
+  });
+  it('iş bloğu ipucu: iş, tezgâh ve saat, neden burada ve siparişin durumu (492/4 a)', () => {
+    const { c, p, cx } = kur();
+    expect(isIpucu(c, p, cx, '3.20')).toEqual({ baslik: '3 · Freze (CNC)', satir: '4 · 24.10 Cmt 09:59 → 24.10 Cmt 11:38',
+      neden: 'Önceki adım 3.10 bitince başladı (taşıma payı dahil).', kilit: null, durum: { ton: 'tamam', metin: 'Sipariş termine yetişiyor' } });
+    expect(isIpucu(c, p, cx, '2.30')?.satir).toBe('5 (fason) · 26.10 Pzt 16:00 → 27.10 Sal 16:00');
+    expect(isIpucu(c, p, cx, '2.20')?.durum).toEqual({ ton: 'hata', metin: 'Sipariş 3 gün geç' });
+    expect(isIpucu(c, p, cx, 'yok')).toBeNull();
+  });
+
+  it('gün açılımları: başlamamış adımda erken ya da geç bitme, başlamışta pasif Gerçekleşen (492/3 a)', () => {
+    const { c, p, cx } = kur(); const r = p.ops['2.20']; if (!r) throw new Error('2.20 yok');
+    expect(gunAcilimlari(c, cx, r).map((x) => x[1])).toEqual(['Erken ya da geç biterse', 'Hedefe yetiştir']);
+    const c2 = { ...c, simdi: r.S + 1 }; const cx2 = derle(girdiKur(c2, plandanBitenler(c2, p)));
+    expect(gunAcilimlari(c2, cx2, r)).toEqual([['clock', 'Gerçekleşen', false], ['target', 'Hedefe yetiştir', false]]);
   });
 });

@@ -16,7 +16,7 @@ export interface KesifDurumu { gor: KesifGorunumu; adim: number; oyna: boolean }
 export const KESIF_ILK: KesifDurumu = { gor: 'pay', adim: 0, oyna: true };
 
 interface Ozellikler {
-  c: PlanlamaCalismasi; v: OzetVerisi; vYorum: OzetVerisi; secJob: string | null; tezGrup: (m: string) => string;
+  c: PlanlamaCalismasi; v: OzetVerisi; secJob: string | null; tezGrup: (m: string) => string;
   durum: KesifDurumu; durumDegis: (d: KesifDurumu) => void;
   sipSec: (j: string) => void; tezSec: (m: string) => void; gunSec: (d: number) => void; acikGrup: string | null; grupAc: (g: string) => void;
 }
@@ -46,7 +46,7 @@ export function Kesif(o: Ozellikler) {
   const [govde, w] = useGenislik();
   // Planı anlat'ın gösterimi her adımda yeniden kurulur; son ölçü korunur, nokta yeniden yerleşmez.
   const wgSon = useRef(0);
-  const adimlar = useMemo(() => anlatAdimlari(o.c, o.v, o.tezGrup, o.vYorum), [o.c, o.v, o.tezGrup, o.vYorum]);
+  const adimlar = useMemo(() => anlatAdimlari(o.c, o.v, o.tezGrup), [o.c, o.v, o.tezGrup]);
   const n = adimlar.length;
   const adim = Math.max(0, Math.min(n - 1, durum.adim));
 

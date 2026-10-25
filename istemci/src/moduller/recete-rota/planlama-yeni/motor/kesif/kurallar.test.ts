@@ -12,7 +12,7 @@ function kur() {
   if (!p) throw new Error('plan yok');
   const cx = derle(girdiKur(c, plandanBitenler(c, p)));
   const tg = (m: string) => c.D.tezgahlar.find((t) => t.id === m)?.grup ?? 'diger';
-  return { c, p, cx, v: ozetVerisi(c, p, cx, 'hafta', 0), tg };
+  return { c, v: ozetVerisi(c, p, cx, 'hafta', 0), tg };
 }
 
 describe('Keşfet hesapları', () => {
@@ -51,14 +51,5 @@ describe('Keşfet hesapları', () => {
     expect(html(l[0]?.m ?? [])).toBe("Planda <b>2</b> sipariş var. <b>1</b>'i zamanında, <b>1</b>'i geç. Son iş <b>27.10 Sal 17:55</b> bitiyor.");
     expect(html(l[1]?.m ?? [])).toBe('Geç siparişleri en çok <b>Fason · 5</b> bekletiyor: toplam <b>2,8 sa</b>. Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.');
     expect(html(l[7]?.m ?? [])).toBe(HAZIRLIK_YOK);
-  });
-
-  it('planı anlat: gözlemler son Özet çiziminin döneminden, büyük resim seçili dönemden (eski BR.yor)', () => {
-    const { c, p, cx, v, tg } = kur();
-    const gun = ozetVerisi(c, p, cx, 'gun', 0);
-    const l = anlatAdimlari(c, gun, tg, v);
-    expect(l.map((a) => a.baslik)).toEqual(anlatAdimlari(c, v, tg).map((a) => a.baslik));
-    expect(l.slice(1).map((a) => html(a.m))).toEqual(anlatAdimlari(c, v, tg).slice(1).map((a) => html(a.m)));
-    expect(html(l[0]?.m ?? [])).toBe(html(anlatAdimlari(c, gun, tg)[0]?.m ?? []));
   });
 });

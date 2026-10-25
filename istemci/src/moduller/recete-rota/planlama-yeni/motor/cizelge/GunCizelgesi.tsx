@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { saatYazi, saatYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { saatYazi, saatYaz, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { HAZIRLANIYOR, MOTOR_NOTU, degisken, yuzde } from '../ortak.tsx';
 import { siparisRengi } from '../harita/kurallar.ts';
-import { gunCizelgesi, tezgahAdi } from './kurallar.ts';
+import { useIpucu } from './Ipucu.tsx';
+import { gunAcilimlari, gunCizelgesi, isIpucu, tezgahAdi } from './kurallar.ts';
 
 // Saatlik gün (s-gun sGunYuzey ve gyYan, w-v20 kilit şeridi): tezgâh satırları ve saatler; kapalı saat, arıza, şimdi ve dondurma bölgesi.
 // İş seçilince yapabilen tezgâhlar yanar, sağda işin ayrıntısı açılır. Taşıma, saat kapatma, çoklu kaydırma ve formlar motorla gelir (357 b).
@@ -23,6 +24,18 @@ export function GunCizelgesi(o: Ozellikler) {
   const v = useMemo(() => gunCizelgesi(c, p, cx, g, o.secili, o.secJob), [c, p, cx, g, o.secili, o.secJob]);
   const sec = o.secili ? p.ops[o.secili] ?? null : null; const secO = sec ? cx.byId[sec.id] : undefined;
   const gunAd = saatYaz(D, v.a).slice(0, 9); const oz = p.ozet; const dondu = v.gunler[g]?.dondu ?? false;
+  const ip = useIpucu();
+  // İş bloğu ipucu (v-yardim isIpucu): iş, tezgâh ve saat, neden burada, sabitlik ve siparişin durumu.
+  const icerik = (id: string) => {
+    const x = isIpucu(c, p, cx, id); if (!x) return null;
+    return (
+      <span className="tc-pym-ip-is">
+        <b>{x.baslik}</b><span className="tc-pym-mono">{x.satir}</span>
+        <span><b>Neden burada:</b> {x.neden}</span>{x.kilit && <span>{x.kilit}</span>}
+        <span data-ton={x.durum.ton}>{x.durum.metin}</span>
+      </span>
+    );
+  };
   const pasif = (simge: SimgeAdi, ad: string, not = MOTOR_NOTU) => (
     <button type="button" className="tc-dugme tc-pym-kucuk" aria-disabled="true" aria-pressed="false" title={`${ad}: ${not}`}><Simge ad={simge} boyut="k" /><span>{ad}</span></button>
   );
@@ -78,6 +91,8 @@ export function GunCizelgesi(o: Ozellikler) {
                   {s.erken?.cizgi != null && <i className="tc-pym-gy-cizgi-im" ref={degisken({ '--x': yuzde(s.erken.cizgi) })}><span>{s.erken.ad}</span></i>}
                   {s.bloklar.map((b) => (
                     <button key={b.id} type="button" className="tc-pym-gy-blok" title={b.baslik} onClick={() => o.isSec(b.id)}
+                      onPointerEnter={(e) => { if (e.pointerType === 'mouse') ip.ac(e.currentTarget, icerik(b.id), 250); }} onPointerLeave={ip.kapat}
+                      onFocus={(e) => ip.ac(e.currentTarget, icerik(b.id))} onBlur={ip.kapat}
                       data-sol={b.sol ? '' : undefined} data-sag={b.sag ? '' : undefined} data-secili={b.secili ? '' : undefined}
                       data-soluk={b.soluk ? '' : undefined} data-gec={b.gec ? '' : undefined} data-risk={!b.gec && b.risk ? '' : undefined}
                       data-dondu={b.dondu ? '' : undefined} data-kilit={b.sabit ? (b.dondu ? 'gun' : 'elle') : undefined}
@@ -104,7 +119,7 @@ export function GunCizelgesi(o: Ozellikler) {
                     {pasif('list', 'Siparişin yolu', HAZIRLANIYOR)}
                     <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Seçimi bırak" aria-label="Seçimi bırak" onClick={() => o.isSec(sec.id)}><Simge ad="x" boyut="k" /></button>
                   </div>
-                  {acilimlar(c, cx, sec).map(([sm, ad, acik]) => (
+                  {gunAcilimlari(c, cx, sec).map(([sm, ad, acik]) => (
                     <details key={ad} className="tc-pym-gy-ac" open={acik || undefined}><summary><Simge ad={sm} boyut="k" /> {ad}</summary><p className="tc-pym-kucuk-yazi">{MOTOR_NOTU}</p></details>
                   ))}
                 </>
@@ -116,19 +131,7 @@ export function GunCizelgesi(o: Ozellikler) {
           <p className="tc-pym-kucuk-yazi tc-pym-gy-lejant"><i className="tc-pym-gy-l-kapali" />kapalı <i className="tc-pym-gy-l-ariza" />arıza <i className="tc-pym-gy-l-gec" />geciken <Simge ad="lock" boyut="k" />sabit</p>
         </aside>
       </div>
+      {ip.kutu}
     </section>
   );
-}
-
-// Seçili işin açılımları (s-gun gyYan, t-tekyer gercekFormu, hedefFormu): parti bölme birden çok adetli, bitmemiş ve başlamamış işte; erken ya da geç
-// bitme fason olmayan ve tezgâhı aday olan işte, süre olayı varsa çarpanıyla açık; hedefe yetiştirme siparişi olan işte.
-function acilimlar(c: PlanlamaCalismasi, cx: Derleme, r: PlanIslemi): [SimgeAdi, string, boolean][] {
-  const s = c.D.siparisler.find((x) => x.id === r.job); const l: [SimgeAdi, string, boolean][] = [];
-  if (s && Number(s.adet) > 1 && !r.act && r.C > cx.now) l.push(['ruler', 'Partiyi böl', false]);
-  if (!r.fas && cx.byId[r.id]?.c.includes(r.m)) {
-    const sap = c.olaylar.filter((e) => e.tip === 'sureOp' && e.id === r.id).pop(); const oran = sap ? Number(sap.oran) : 1;
-    l.push(['clock', `Erken ya da geç biterse${sap && Math.abs(oran - 1) > 1e-3 ? ` (×${oran.toLocaleString('tr-TR', { maximumFractionDigits: 2 })})` : ''}`, !!sap]);
-  }
-  if (s) l.push(['target', 'Hedefe yetiştir', false]);
-  return l;
 }

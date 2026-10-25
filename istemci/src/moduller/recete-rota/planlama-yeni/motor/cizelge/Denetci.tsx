@@ -155,7 +155,7 @@ export function IsDenetci({ jid, ...o }: DenetciOzellikleri & { jid: string }) {
         <dt>Ürün</dt><dd>{D.urunler.find((u) => u.id === s.urun)?.ad ?? s.urun} · {s.adet} adet</dd>
         <dt>Öncelik</dt>
         <dd>
-          {/* Eski seçim kutusu (veri.yaz); sipariş verisi sahibinden girer (223 a), kutu pasif. Soru 485 cevabına kadar eski görünüm. */}
+          {/* Eski seçim kutusu geri geldi (485/6 a); yazma veri sahibindedir (222 a, 223 a), kutu pasif. */}
           {yaz ? (
             <select className="tc-alan-kutu tc-pym-oto" aria-label="Öncelik" value={String(onc)} disabled title={`Öncelik: ${VERI_NOTU}`} onChange={() => undefined}>
               {[1, 2, 3].map((k) => <option key={k} value={String(k)}>{ONCELIK_AD[k]}</option>)}
