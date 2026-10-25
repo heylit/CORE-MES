@@ -48,6 +48,23 @@ describe('A1 Üretim Terminali', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
+  it('okutma penceresi kamerayı kendiliğinden açar (eski davranış, 283.5)', async () => {
+    const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => {}));
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+    try {
+      // Ayrı kimlik: önceki testlerin yerel kopyasındaki CNC paketi yerine geçmesin.
+      const depo = { ...PAKET, id: 'pk-deneme-depo', no: 'IE-DENEME-2', opType: 'depo', st: { items: [{ id: 'k1', code: 'DN-K1', name: 'Deneme kalem', qty: 2, loc: 'R-1', unit: 'adet' }] } };
+      sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: depo.id, surum: 1, govde: depo }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+      arkonAc('/arkon/yeni/operator');
+      await ekran();
+      fireEvent.click(await screen.findByRole('button', { name: /QR/ }, { timeout: 10000 }));
+      expect(await screen.findByRole('dialog', { name: 'Ürün kodunu okut' })).toBeTruthy();
+      await waitFor(() => { expect(getUserMedia).toHaveBeenCalled(); });
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
+  }, 40000);
+
   it('önizleme paketi kimliğiyle açar, yazma düğmesi göstermez ve yazmaz', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc(`/arkon/yeni/onizle/${PAKET.id}`);
