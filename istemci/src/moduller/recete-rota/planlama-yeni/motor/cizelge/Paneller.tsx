@@ -100,7 +100,7 @@ interface SagOzellikleri {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null;
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; secim: PlanlamaSecimi; secJob: string | null;
   sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
-  opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void;
+  opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;

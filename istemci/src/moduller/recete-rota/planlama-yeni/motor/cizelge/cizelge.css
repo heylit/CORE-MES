@@ -427,3 +427,79 @@ button.tc-pym-g-grup { letter-spacing: .1em; cursor: pointer; }
 .tc-pym-ay-lejant li { display: grid; grid-template-columns: var(--b-3) minmax(0, 1fr) auto var(--dokunma); align-items: center; gap: var(--b-2); }
 .tc-pym-ay-lejant i { display: inline-block; width: var(--b-3); height: var(--b-3); border-radius: var(--kayma); }
 .tc-pym-ay-lejant span:last-child { text-align: right; }
+
+/* Matris merceği (pm-m-kap, pm-matris, pm-m-*; ısı data-isi). Sütun ve satır başlığı kayarken yerinde kalır. */
+.tc-pym-m-kap { max-height: 70vh; overflow: auto; }
+.tc-pym-matris { border-collapse: separate; border-spacing: 0; }
+.tc-pym-matris thead th { position: sticky; top: 0; z-index: 2; background: var(--panel-solid); }
+.tc-pym-matris tbody th, .tc-pym-matris tfoot th, .tc-pym-matris thead th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel-solid); text-align: left; }
+.tc-pym-matris thead th:first-child { z-index: 3; }
+.tc-pym-matris th[data-kapali], .tc-pym-matris td[data-kapali] { color: var(--faint); }
+.tc-pym-matris .tc-pym-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.tc-pym-matris tbody th:not([colspan]), .tc-pym-matris tfoot th { text-transform: none; letter-spacing: 0; font-size: var(--yazi-s); color: var(--ink); }
+.tc-pym-matris tr[data-uyari] th b { color: var(--stop); }
+.tc-pym-m-gun { display: block; font-weight: 700; }
+.tc-pym-m-ad {
+  display: grid; gap: var(--pay-ince); min-width: calc(var(--b-6) * 4.375); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+span.tc-pym-m-ad { cursor: default; }
+button.tc-pym-m-ad:hover b { text-decoration: underline; }
+.tc-pym-m-ad b { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pym-m-grup th { padding-top: var(--b-3); font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.tc-pym-m-h { min-width: calc(var(--b-6) * 2); text-align: right; font-variant-numeric: tabular-nums; border-left: var(--pay-ince) solid var(--panel-solid); }
+.tc-pym-m-h b { display: block; font-size: var(--yazi-s); }
+.tc-pym-m-h:focus-visible { outline: var(--kayma) solid var(--hazard); outline-offset: calc(var(--kayma) * -1); }
+.tc-pym-m-top th, .tc-pym-m-top td { border-top: var(--pay-ince) solid var(--edge2); }
+.tc-pym-m-lejant { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pym-m-lejant i { width: calc(var(--b-4) + var(--pay-ince)); height: var(--b-3); border-radius: var(--yari-1); border: var(--cizgi-ince) solid var(--edge); }
+:is(.tc-pym-m-h, .tc-pym-m-lejant i)[data-isi="1"] { background: color-mix(in oklab, var(--grafik) 14%, transparent); }
+:is(.tc-pym-m-h, .tc-pym-m-lejant i)[data-isi="2"] { background: color-mix(in oklab, var(--grafik) 30%, transparent); }
+:is(.tc-pym-m-h, .tc-pym-m-lejant i)[data-isi="3"] { background: color-mix(in oklab, var(--grafik) 48%, transparent); }
+:is(.tc-pym-m-h, .tc-pym-m-lejant i)[data-isi="4"] { background: color-mix(in oklab, var(--stop) 42%, transparent); }
+
+/* Kuyruk merceği (pm-kanban, pm-k-*): tezgâh sütunları yatay kayar; dar ekranda sütun ekran genişliğindedir. */
+.tc-pym-kanban {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(calc(var(--b-6) * 8.125), calc(var(--b-6) * 9.375)); gap: var(--b-3); overflow-x: auto;
+  padding-bottom: var(--b-2); scroll-snap-type: x proximity;
+}
+.tc-pym-k-sutun {
+  display: flex; flex-direction: column; min-width: 0; max-height: 72vh; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2);
+  scroll-snap-align: start;
+}
+.tc-pym-k-sutun[data-odak] { border-color: var(--hazard); box-shadow: 0 0 0 var(--pay-ince) var(--hazard); }
+.tc-pym-k-bas { display: grid; gap: var(--b-1); padding: var(--b-2) var(--b-3); border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-pym-k-olcu { display: flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pym-k-dolu { flex: 1; height: var(--nokta); border-radius: var(--yari-tam); background: var(--edge); overflow: hidden; }
+.tc-pym-k-dolu i { display: block; width: var(--w); height: 100%; background: var(--grafik); }
+.tc-pym-k-dolu[data-isi="4"] i { background: var(--stop); }
+.tc-pym-k-liste { list-style: none; margin: 0; padding: var(--b-2); display: grid; gap: var(--b-2); overflow-y: auto; min-height: calc(var(--b-6) * 2.5); align-content: start; }
+.tc-pym-k-kart {
+  display: grid; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-left: var(--b-1) solid var(--c); border-radius: var(--yari-1);
+  background: var(--panel-solid);
+}
+.tc-pym-k-kart[data-durum="calisiyor"] { background: color-mix(in oklab, var(--run) 10%, var(--panel-solid)); }
+.tc-pym-k-ust { display: flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
+.tc-pym-k-ust > .tc-pym-ara { flex: 1 1 auto; }
+.tc-pym-k-no {
+  min-width: calc(var(--b-5) - var(--pay-ince)); height: calc(var(--b-5) - var(--pay-ince)); display: inline-grid; place-items: center; border-radius: var(--yari-tam);
+  background: var(--panel2); font-size: var(--yazi-xs); font-weight: 700;
+}
+.tc-pym-k-durum { display: inline-flex; align-items: center; gap: var(--pay-ince); font-size: var(--yazi-xs); font-weight: 700; color: var(--muted); }
+.tc-pym-k-durum[data-durum="calisiyor"] { color: var(--run); }
+.tc-pym-k-durum[data-durum="ayar"] { color: var(--hazard); }
+.tc-pym-k-ikon { color: var(--muted); display: inline-flex; }
+.tc-pym-k-ad { font-weight: 700; font-size: var(--yazi-s); }
+.tc-pym-k-bilgi { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pym-k-bilgi > span { display: inline-flex; align-items: center; gap: var(--kayma); }
+.tc-pym-k-gec { color: var(--stop); font-weight: 700; }
+.tc-pym-k-arac { display: flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
+.tc-pym-k-arac > .tc-pym-ara { flex: 1 1 auto; }
+.tc-pym-k-tasi { width: auto; min-height: var(--b-6); font-size: var(--yazi-xs); }
+.tc-pym-k-bos, .tc-pym-k-fazla, .tc-pym-k-sonra { padding: var(--b-2) var(--b-3); }
+@container tc-pym (max-width: 767px) {
+  .tc-pym-kanban { grid-auto-columns: 86vw; }
+  .tc-pym-k-sutun { max-height: none; }
+  .tc-pym-m-ad { min-width: 0; max-width: calc(var(--b-6) * 3.5); }
+  .tc-pym-m-ad .tc-pym-kucuk-yazi { white-space: normal; }
+  .tc-pym-m-h { min-width: calc(var(--b-6) * 1.625); }
+}

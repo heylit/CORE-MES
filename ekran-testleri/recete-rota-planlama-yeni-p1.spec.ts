@@ -113,6 +113,14 @@ test.describe('P1c Çizelge', () => {
     await expect(page.getByRole('region', { name: 'Plan çizelgesi' })).toBeVisible();
     await page.getByRole('button', { name: 'Şimdiye git' }).click();
     await tasmaz(page);
+    await arac.getByRole('tab', { name: 'Kuyruk' }).click();
+    await expect(page.getByRole('region', { name: 'Tezgâh kuyrukları' })).toBeVisible();
+    await tasmaz(page);
+    await arac.getByRole('tab', { name: 'Matris' }).click();
+    await expect(page.getByRole('tablist', { name: 'Matris' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Personel' }).click();
+    await expect(page.getByRole('columnheader', { name: 'Personel' })).toBeVisible();
+    await tasmaz(page);
     await arac.getByRole('tab', { name: 'Tezgâhlar' }).click();
     const cizelge = page.getByRole('region', { name: 'Çizelge', exact: true });
     await arac.getByRole('button', { name: 'Tam ekran', exact: true }).click();
