@@ -29,7 +29,7 @@ export function PlanKuyruguSayfasi() {
       secenekler={[{ k: 'orders', etiket: 'İş emirleri' }, { k: 'downs', etiket: 'Planlı duruşlar', sayi: duruslar || null }]} />
   );
   return (
-    <SayfaCercevesi simge="list" baslik="Plan Kuyruğu" ek={ek}>
+    <SayfaCercevesi simge="list" baslik="Plan Kuyruğu" renk="hazard" ek={ek}>
       {sekme === 'orders' ? <IsEmirleri salt={false} /> : <PlanliDuruslar />}
     </SayfaCercevesi>
   );
@@ -37,7 +37,7 @@ export function PlanKuyruguSayfasi() {
 
 export function KuyrukSayfasi() {
   return (
-    <SayfaCercevesi simge="list" baslik="Plan Kuyruğu" ek={<Cip renk="idle">Salt okunur</Cip>}>
+    <SayfaCercevesi simge="list" baslik="Plan Kuyruğu" renk="hazard" ek={<Cip renk="idle">Salt okunur</Cip>}>
       <IsEmirleri salt />
     </SayfaCercevesi>
   );

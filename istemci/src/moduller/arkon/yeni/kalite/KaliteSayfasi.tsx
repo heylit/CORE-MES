@@ -191,7 +191,7 @@ export function KaliteSayfasi() {
   const gorunenler = items.filter((b) => mf === 'all' || yontem(b) === mf).sort((x, y) => (mf === 'all' ? Number(yontem(x) === 'cmm') - Number(yontem(y) === 'cmm') : 0));
 
   return (
-    <SayfaCercevesi simge="target" baslik="Kalite · ölçüm istasyonu" ek={ek} kisayollar={KALITE_KISAYOLLARI} saatAlt="Kalite laboratuvarı">
+    <SayfaCercevesi simge="target" baslik="Kalite · ölçüm istasyonu" renk="done" ek={ek} kisayollar={KALITE_KISAYOLLARI} saatAlt="Kalite laboratuvarı">
       {kip === 'spc' ? <SpcGorunumu paketler={pkgs} numuneler={reqs} soyle={soyle} />
         : kip === 'onay' ? <Onaylar paketler={pkgs} soyle={soyle} />
         : kip === 'alet' ? <OlcuAletleri soyle={soyle} />

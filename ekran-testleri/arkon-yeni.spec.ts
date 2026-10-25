@@ -12,7 +12,12 @@ test.describe('A0 iskelet', () => {
     await ac('/arkon/yeni');
     await expect(page).toHaveURL(/\/arkon\/yeni\/pano$/);
     const serit = page.getByRole('tablist', { name: 'Üretim Hazırlık' });
-    await expect(serit.getByRole('tab').first()).toHaveText('Operatör');
+    // Üretim Terminali ve Kuyruk eskisi gibi ayrı sayfa (497/5 a): sekmelerde yok. Her sayfada eski üst bant (497/4 a).
+    await expect(serit.getByRole('tab').first()).toHaveText('Pano');
+    await expect(serit.getByRole('tab', { name: 'Operatör' })).toHaveCount(0);
+    await expect(serit.getByRole('tab', { name: 'Kuyruk', exact: true })).toHaveCount(0);
+    await expect(page.locator('.tc-ay-bant').getByRole('heading', { name: 'Fabrika panosu' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tema değiştir' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Pano' })).toBeVisible();
     await serit.getByRole('tab', { name: 'Kalite' }).click();
     await expect(page).toHaveURL(/\/arkon\/yeni\/kalite$/);

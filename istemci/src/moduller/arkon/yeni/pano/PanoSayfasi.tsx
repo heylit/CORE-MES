@@ -64,7 +64,7 @@ export function PanoSayfasi() {
   const o = d ? panoOzeti(d, simdi, ayarlar, wc) : null;
   const ek = <Dugme simge="expand" onClick={() => { void tvDegistir(); }}>{tv ? 'TV modundan çık' : 'TV modu'}</Dugme>;
   return (
-    <SayfaCercevesi simge="grid" baslik="Fabrika panosu" ek={ek}>
+    <SayfaCercevesi simge="grid" baslik="Fabrika panosu" renk="run" ek={ek}>
       <div className="tc-ay3-arac"><IsMerkeziSuzgeci deger={wc} degistir={wcYaz} /></div>
       <div className="tc-ay3-ozet">
         {d?.sh.tanimsiz

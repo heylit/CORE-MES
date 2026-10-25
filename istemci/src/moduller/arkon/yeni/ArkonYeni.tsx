@@ -176,8 +176,15 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
   // Kalite sekmesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet); sayı parantezle yazılır (283.25).
   const sekmeler = maddeler.filter(gorunur).map((m) => (m.anahtar === 'kalite' && numune > 0 ? { ...m, baslik: `${m.baslik} (${numune})` } : m));
 
+  // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; TMI'deki kendi menü satırının işlemi ve Arkon sayfa yetkisiyle açılır.
+  const ayriAcik = (s: ArkonSayfasi): boolean => {
+    const t: SayfaTanimi = SAYFALAR[s];
+    return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && baglam.sayfaGorunur(s);
+  };
+
   if (adres === undefined) {
     const giris = arkonGirisSayfasi(arkonRolu, islemler);
+    if (sayfaMi(giris) && ayriAcik(giris)) return <Navigate replace to={sayfaAdresi(giris)} />;
     const hedef = sekmeler.find((m) => m.anahtar === giris) ?? sekmeler.find((m) => !Object.hasOwn(SAYFA_DISI, m.anahtar));
     if (hedef === undefined) return <DurumKutusu durum="bos" mesaj="Üretim Hazırlık'ta size açık sayfa yok." />;
     return <Navigate replace to={sayfaAdresi(hedef.anahtar)} />;
@@ -186,8 +193,11 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
   const sayfa: ArkonSayfasi | null = sayfaMi(adres) ? adres : null;
   const tanim: SayfaTanimi | null = sayfa === null ? null : SAYFALAR[sayfa];
   const secili: string | null = sayfa === null ? null : (tanim?.ust ?? sayfa);
-  const acik = sayfa !== null && secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa);
-  const madde = maddeler.find((m) => m.anahtar === secili);
+  const ayri = sayfa !== null && tanim?.ayri === true;
+  const acik = sayfa !== null && (ayri
+    ? ayriAcik(sayfa)
+    : secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa));
+  const etiket = ayri ? tanim?.baslik : maddeler.find((m) => m.anahtar === secili)?.baslik;
 
   const sec = (anahtar: string) => {
     const disari = SAYFA_DISI[anahtar];
@@ -198,13 +208,13 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
   return (
     <ArkonBaglamiKaynagi.Provider value={baglam}>
       <div className="tc-ay" ref={kokYaz}>
-        {sekmeler.length > 0 && (
+        {!ayri && sekmeler.length > 0 && (
           <Sekmeler etiket="Üretim Hazırlık" sekmeler={sekmeler} secili={secili ?? ''} sec={sec} />
         )}
         {!acik || Ekran === undefined || sayfa === null
           ? <DurumKutusu durum="bos" mesaj="Bu sayfa bulunamadı ya da size açık değil." />
           : (
-            <section className="tc-ay-icerik" aria-label={madde?.baslik ?? 'Önizleme'} data-sayfa={sayfa}>
+            <section className="tc-ay-icerik" aria-label={etiket ?? 'Önizleme'} data-sayfa={sayfa}>
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <Ekran sayfa={sayfa} kimlik={kimlik ?? null} />
               </Suspense>

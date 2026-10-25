@@ -1,7 +1,5 @@
 /* A3 ve A4 ortak sayfa parçaları ile Pano, Plan Kuyruğu, planlı duruş ve anomali sayfaları (tc-ay3-). Renk yalnız tasarım değişkeninden. */
 .tc-ay3-sayfa { display: grid; gap: var(--b-4); min-width: 0; }
-.tc-ay3-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); min-width: 0; }
-.tc-ay3-ad { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-l); font-weight: 700; color: var(--ink); }
 .tc-ay3-bosluk { flex: 1 1 auto; }
 
 [data-renk="run"] { --c: var(--run); }
