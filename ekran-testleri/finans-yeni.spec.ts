@@ -98,3 +98,100 @@ test.describe('F4 ana sayfa ve ayarlar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+test.describe('F3 raporlar', () => {
+  test('beş rapor açılır: başlık, içerik, yatay taşma yok, hata ve yazma yok', async ({ page, ag, ac }) => {
+    const ekran = page.locator('.tc-fy');
+    for (const [yol, baslik, icerik] of [
+      ['durum', 'Durum ve öneriler', page.getByRole('region', { name: 'Öneriler', exact: true })],
+      ['gelir-tablosu', 'Gelir tablosu', page.getByRole('table', { name: 'Gelir tablosu' })],
+      ['karar-araclari', 'Karar araçları', page.getByLabel('Aylık sabit gider')],
+      ['ay-sonu', 'Ay sonu kapanışı', page.getByRole('checkbox').first()],
+      ['tahminler', 'Tahminler ve doğruluk', page.getByRole('heading', { name: 'Teknik ayrıntılar' })],
+    ] as const) {
+      await ac(`/finans/yeni/${yol}`);
+      await expect(ekran.getByRole('heading', { name: baslik, level: 2 })).toBeVisible();
+      await expect(icerik).toBeVisible({ timeout: 15_000 });
+      expect((await tasmaOlc(page)).belge, yol).toBeLessThanOrEqual(0);
+    }
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('ana akış: süzgeç, dönem, hesap makinesi ve "Nasıl hesaplandı?" yazmadan çalışır', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/gelir-tablosu');
+    const tablo = page.getByRole('table', { name: 'Gelir tablosu' });
+    await expect(tablo.getByRole('columnheader')).toHaveCount(8, { timeout: 15_000 });
+    await page.getByRole('button', { name: '12 ay' }).click();
+    await expect(tablo.getByRole('columnheader')).toHaveCount(14);
+
+    await ac('/finans/yeni/karar-araclari');
+    const sabit = page.getByLabel('Aylık sabit gider');
+    await sabit.fill('840000');
+    await expect(page.getByText('2.000 adet')).toBeVisible();
+
+    await ac('/finans/yeni/durum');
+    const oneriler = page.getByRole('region', { name: 'Öneriler', exact: true });
+    await expect(oneriler).toBeVisible({ timeout: 15_000 });
+    await oneriler.getByRole('button', { name: /^Tümü/ }).click();
+    const nasil = oneriler.getByRole('button', { name: 'Nasıl hesaplandı?' }).first();
+    if (await nasil.count()) {
+      await nasil.click();
+      await expect(page.getByRole('heading', { name: 'Teknik ayrıntılar' })).toBeVisible({ timeout: 15_000 });
+      await expect(page).toHaveURL(/\/finans\/yeni\/tahminler#m-/);
+    }
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/finans/skorlar/kaydet')).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+// F1: Kayıtlar ve Firmalar. Veriden bağımsız: ekran açılır, süzgeç ve liste gelir, yatay taşma yok, yazma gitmez.
+// Genişlikler (360, 768, 1280) yapılandırmadaki projelerdendir.
+test.describe('F1 kayıtlar ve firmalar', () => {
+  test("Kayıtlar: süzgeç, arama ve Excel'e aktar; taşma yok", async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/kayitlar');
+    const ekran = page.locator('.tc-fy');
+    const suzgec = ekran.getByRole('group', { name: 'Kayıt süzgeci' });
+    await expect(suzgec).toBeVisible({ timeout: 15_000 });
+    await expect(ekran.getByLabel('Kayıtlarda ara')).toBeVisible();
+    await expect(ekran.getByRole('button', { name: "Excel'e aktar" })).toBeVisible();
+    await suzgec.getByRole('button', { name: /^Geciken/ }).click();
+    await expect(suzgec.getByRole('button', { name: /^Geciken/ })).toHaveAttribute('aria-pressed', 'true');
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Firmalar: liste, süzgeç ve firma kartı; taşma yok', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/firmalar');
+    const ekran = page.locator('.tc-fy');
+    const tur = ekran.getByRole('group', { name: 'Firma türü' });
+    await expect(tur).toBeVisible({ timeout: 15_000 });
+    await tur.getByRole('button', { name: 'Tümü' }).click();
+    await expect(ekran.getByRole('button', { name: /Yeni firma/ })).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    const satir = ekran.getByRole('table', { name: 'Firmalar' }).getByRole('row').nth(1);
+    if (await satir.isVisible()) {
+      await satir.click();
+      await expect(ekran.getByRole('heading', { name: 'Kimlik' })).toBeVisible();
+      expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await ekran.getByRole('button', { name: 'Firmalar', exact: true }).click();
+      await expect(tur).toBeVisible();
+    }
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test('Firmalar: yeni firma formu açılır, Vazgeç ile kapanır, yazma gitmez', async ({ page, ag, ac }) => {
+    await ac('/finans/yeni/firmalar');
+    await page.locator('.tc-fy').getByRole('button', { name: /Yeni firma/ }).click();
+    const form = page.getByRole('dialog', { name: 'Yeni firma' });
+    await expect(form.getByLabel('Vergi no')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    await form.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(form).toBeHidden();
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
