@@ -1,21 +1,25 @@
 import type { Page } from '@playwright/test';
-import { ADRES, expect, test } from './ortak.ts';
+import { HESAPLAR } from './hesaplar.ts';
+import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Üretim Hazırlık TS ekranı (Soru 271 c). Ölçüt bugünkü çerçevedir: her sayfanın testi parçasıyla gelir ve eski ekranda bugün
 // çalışan davranışı yeni yolda sınar. İskelet yalnız kabuğu sınar; bölümlerin içine bakmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
 test.describe('A0 iskelet', () => {
-  test('kök adres Pano\'yu açar; sekmeden sayfa değişir; çerçeve yok, başka kökene istek yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+  test('kök adres Pano\'yu açar; kabuğun şeridinden sayfa değişir; çerçeve yok, başka kökene istek yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
     const disari: string[] = [];
     page.on('request', (r) => { if (!r.url().startsWith(ADRES) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) disari.push(r.url()); });
-    await ac('/arkon/yeni');
-    await expect(page).toHaveURL(/\/arkon\/yeni\/pano$/);
-    const serit = page.getByRole('tablist', { name: 'Üretim Hazırlık' });
-    // Üretim Terminali ve Kuyruk eskisi gibi ayrı sayfa (497/5 a): sekmelerde yok. Her sayfada eski üst bant (497/4 a).
-    await expect(serit.getByRole('tab').first()).toHaveText('Pano');
-    await expect(serit.getByRole('tab', { name: 'Operatör' })).toHaveCount(0);
-    await expect(serit.getByRole('tab', { name: 'Kuyruk', exact: true })).toHaveCount(0);
+    await ac('/arkon');
+    await expect(page).toHaveURL(/\/arkon\/pano$/);
+    // Sayfalar kabuğun ikinci menü şeridindedir, ekran kendi sekmesini çizmez (553 1 a). Üretim Terminali ve Kuyruk eskisi gibi ayrı
+    // sayfa (497/5 a): şeritte yok. Her sayfada eski üst bant (497/4 a).
+    const serit = page.getByRole('navigation', { name: 'Üretim Hazırlık menüsü' });
+    await expect(page.getByRole('tablist', { name: 'Üretim Hazırlık' })).toHaveCount(0);
+    await expect(serit.getByRole('link').first()).toHaveText(/^Pano/);
+    await expect(serit.getByRole('link', { name: /^Pano/ })).toHaveAttribute('aria-current', 'page');
+    await expect(serit.getByRole('link', { name: 'Operatör' })).toHaveCount(0);
+    await expect(serit.getByRole('link', { name: 'Kuyruk', exact: true })).toHaveCount(0);
     await expect(page.locator('.tc-ay-bant').getByRole('heading', { name: 'Fabrika panosu' })).toBeVisible();
     // Dar ekranda tema bandın "Diğer" menüsündedir.
     const diger = page.locator('.tc-ay-bant').getByRole('button', { name: 'Diğer' });
@@ -23,8 +27,8 @@ test.describe('A0 iskelet', () => {
     await expect(page.getByRole('button', { name: 'Tema değiştir' })).toBeVisible();
     if (await diger.isVisible()) await diger.click();
     await expect(page.getByRole('region', { name: 'Pano' })).toBeVisible();
-    await serit.getByRole('tab', { name: 'Kalite' }).click();
-    await expect(page).toHaveURL(/\/arkon\/yeni\/kalite$/);
+    await serit.getByRole('link', { name: /^Kalite/ }).click();
+    await expect(page).toHaveURL(/\/arkon\/kalite$/);
     await expect(page.getByRole('region', { name: 'Kalite' })).toBeVisible();
     await expect(page.locator('iframe')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -38,7 +42,7 @@ test.describe('A2 Hazırlık', () => {
 
   // Örnek veride iş paketi yoktur: boş liste ve yöneticinin "Yeni paket" yolu sınanır.
   test('Hazırlık: liste açılır, açılışta yazma yok, süzgeç açıkken sayfa yatay taşmaz', async ({ page, ag, ac }) => {
-    await ac('/arkon/yeni/hazirlik');
+    await ac('/arkon/hazirlik');
     const liste = page.getByRole('complementary', { name: 'İş paketleri' });
     await expect(liste.getByRole('textbox', { name: 'İş paketlerinde ara' })).toBeVisible();
     await expect(liste.getByRole('button', { name: 'Yeni paket' })).toBeVisible();
@@ -60,7 +64,7 @@ test.describe('A2 Hazırlık', () => {
     };
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
     await page.route('**/api/arkon/belgeler/pkgs/*/yaz', (r) => r.fulfill({ json: { sonuc: 'yazildi', surum: 2 } }));
-    await ac('/arkon/yeni/hazirlik');
+    await ac('/arkon/hazirlik');
     // Dar ekranda liste ile düzenleyici yer değiştirir: paket kartına basınca düzenleyici açılır.
     await page.getByRole('complementary', { name: 'İş paketleri' }).getByRole('button', { name: /IE-EKRAN-1/, pressed: true }).click();
     const duzen = page.getByRole('region', { name: 'İş paketi' });
@@ -81,7 +85,7 @@ test.describe('A1 Operatör', () => {
   const yazmalar = (y: string[]) => y.filter((x) => !x.startsWith('POST /api/arkon/iletiler'));
 
   test('Operatör: terminal açılır, açılışta yazma yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
-    await ac('/arkon/yeni/operator');
+    await ac('/uretim-terminali');
     await expect(page.getByRole('region', { name: 'Aktif iş emri' }).or(page.getByRole('navigation', { name: 'Terminal görünümleri' })).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'İstasyonu değiştir' }).or(page.getByTitle('İstasyonu değiştir')).first()).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
@@ -98,7 +102,7 @@ test.describe('A1 Operatör', () => {
       status: 'published', version: 1, dirty: false, createdAt: 1, updatedAt: 2, publishedAt: 2, by: 'Ekran',
     };
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
-    await ac(`/arkon/yeni/onizle/${paket.id}`);
+    await ac(`/arkon/onizle/${paket.id}`);
     await expect(page.getByText('IE-EKRAN-1').first()).toBeVisible();
     await expect(page.getByRole('group', { name: 'İş durumu' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Çağrı' })).toHaveCount(0);
@@ -137,7 +141,7 @@ for (const [parca, sayfalar] of [
       for (const genislik of GENISLIKLER) {
         test(`${ad} ${String(genislik)} genişlikte açılır, taşmaz, açılışta yazmaz`, async ({ page, ag, ac }) => {
           await page.setViewportSize({ width: genislik, height: 900 });
-          await ac(`/arkon/yeni/${anahtar}`);
+          await ac(`/arkon/${anahtar}`);
           const bolum = page.getByRole('region', { name: ad });
           await expect(bolum).toBeVisible();
           await expect(bolum.getByRole('heading').first()).toBeVisible();
@@ -152,11 +156,11 @@ for (const [parca, sayfalar] of [
 
 test.describe('A3 Pano ve kuyruk · yetki', () => {
   test('yönetici Plan Kuyruğu\'nda planlı duruş ekleyebilir; Kuyruk salt okunurdur', async ({ page, ac }) => {
-    await ac('/arkon/yeni/planlama');
+    await ac('/arkon/planlama');
     const bolum = page.getByRole('region', { name: 'Plan Kuyruğu' });
     await bolum.getByRole('button', { name: /Planlı duruşlar/ }).click();
     await expect(bolum.getByRole('button', { name: 'Planlı duruş ekle' })).toBeVisible();
-    await ac('/arkon/yeni/kuyruk');
+    await ac('/kuyruk');
     await expect(page.getByRole('region', { name: 'Kuyruk' }).getByRole('button', { name: /^(Yukarı|Aşağı)$/ })).toHaveCount(0);
   });
 });
@@ -169,7 +173,8 @@ test.describe('541 Kuyruk eski adreste', () => {
     await ac('/kuyruk');
     await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
     await expect(page.locator('iframe')).toHaveCount(0);
-    await expect(page.locator('.tc-ikinci')).toHaveCount(0);
+    // Eski sayfadaki tek maddelik şerit durur (553 1 a).
+    await expect(page.getByRole('navigation', { name: 'Kuyruk menüsü' })).toBeVisible();
     await page.getByRole('button', { name: 'Hesap' }).click();
     await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
     await expect(page).toHaveURL(/\/kuyruk\/eski$/);
@@ -184,13 +189,13 @@ test.describe('541 Kuyruk eski adreste', () => {
 
 test.describe('A4 Kalite, bakım, raporlar · yetki', () => {
   test('yönetici Bakım\'da arıza açabilir ve plan ekleyebilir; Kalite görünümleri yetkiye göre gelir', async ({ page, ac }) => {
-    await ac('/arkon/yeni/bakim');
+    await ac('/arkon/bakim');
     const bakim = page.getByRole('region', { name: 'Bakım' });
     await bakim.getByRole('button', { name: 'Arızalar' }).click();
     await expect(bakim.getByRole('button', { name: 'Arıza kaydı aç' })).toBeVisible();
     await bakim.getByRole('button', { name: /Periyodik bakım/ }).click();
     await expect(bakim.getByRole('button', { name: 'Bakım planı ekle' })).toBeVisible();
-    await ac('/arkon/yeni/kalite');
+    await ac('/arkon/kalite');
     const kalite = page.getByRole('group', { name: 'Kalite görünümü' });
     for (const ad of ['Numuneler', 'SPC · rapor', 'Onaylar', 'Ölçü aletleri']) await expect(kalite.getByRole('button', { name: new RegExp(`^${ad}`) })).toBeVisible();
   });
@@ -225,7 +230,7 @@ test.describe('A5 Çizim', () => {
   test('Çizim stüdyosu: dosya, önizleme ve ayar panelleri açılır; açılışta yazma yok, dışarı istek yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
     const disari: string[] = [];
     page.on('request', (r) => { if (!r.url().startsWith(ADRES) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) disari.push(r.url()); });
-    await ac('/arkon/yeni/cizim');
+    await ac('/arkon/cizim');
     const dosyalar = page.getByRole('complementary', { name: 'Dosyalar' });
     await expect(dosyalar.getByText('PDF eklenmedi')).toBeVisible();
     await expect(dosyalar.getByRole('button', { name: 'Kaydet' })).toBeDisabled();
@@ -260,7 +265,7 @@ test.describe('A5 Çizim', () => {
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({
       json: { belgeler: [paket('p-stl', 'IE-DENEME-STL', 'kup.stl', 'model', kupStl(40)), paket('p-pdf', 'IE-DENEME-PDF', 'deneme.pdf', 'pdf', tekSatirPdf('40 +/-0.1'))] },
     }));
-    await ac('/arkon/yeni/cizim');
+    await ac('/arkon/cizim');
     const dosyalar = page.getByRole('complementary', { name: 'Dosyalar' });
     await dosyalar.getByRole('button', { name: /IE-DENEME-STL/ }).click();
     const resim = page.getByRole('region', { name: 'Teknik resim' });
@@ -284,7 +289,7 @@ test.describe('A5 Çizim', () => {
 
 test.describe('A6 Ayarlar ve çağrı bandı', () => {
   test('Ayarlar: yöneticide bölümler açılır, açılışta yazma yok, salt okunur listeler kilitli; sayfa yatay taşmaz', async ({ page, ag, ac }) => {
-    await ac('/arkon/yeni/ayarlar');
+    await ac('/arkon/ayarlar');
     const bolum = page.getByRole('region', { name: 'Ayarlar' });
     const sekmeler = bolum.getByRole('tablist', { name: 'Ayarlar bölümleri' });
     await expect(sekmeler.getByRole('tab')).toHaveText(['Genel', 'Tesis', 'Kişiler ve yetkiler', 'Üretim', 'Sistem']);
@@ -307,3 +312,103 @@ test.describe('A6 Ayarlar ve çağrı bandı', () => {
     expect(ag.hatalar).toEqual([]);
   });
 });
+
+// Üretim Hazırlık ve Üretim Terminali eski adresine geçti (541, 553 2): menü ve eski adres yeni ekranı açar, eski çerçeve kişi menüsündeki
+// "Eski görünüm" ile `/eski` altında açılır, "Yeni görünüm" geri getirir.
+test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => {
+  const gecis = async (page: Page, ad: 'Eski görünüm' | 'Yeni görünüm') => {
+    await page.getByRole('button', { name: 'Hesap' }).click();
+    await page.getByRole('menuitem', { name: ad }).click();
+  };
+
+  test('Hazırlık: /arkon/kalite yeni ekrandır; eski görünümde aynı sayfa çerçevede açılır, şeritte Kalite seçilidir', async ({ page, ag, ac }) => {
+    await ac('/arkon/kalite');
+    await expect(page.getByRole('region', { name: 'Kalite' })).toBeVisible();
+    await expect(page.locator('iframe')).toHaveCount(0);
+    await gecis(page, 'Eski görünüm');
+    await expect(page).toHaveURL(/\/arkon\/eski\/kalite$/);
+    await expect(page.locator('iframe')).toHaveCount(1);
+    const serit = page.getByRole('navigation', { name: 'Üretim Hazırlık menüsü' });
+    await expect(serit.locator('[aria-current="page"]')).toHaveText(/^Kalite/);
+    await gecis(page, 'Yeni görünüm');
+    await expect(page).toHaveURL(/\/arkon\/kalite$/);
+    await expect(page.getByRole('region', { name: 'Kalite' })).toBeVisible();
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  test.describe('operatör', () => {
+    test.use({ hesap: 'ornek.operator1' });
+    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur; eski görünüme gidip döner', async ({ page, ag, ac }) => {
+      await ac('/uretim-terminali');
+      await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
+      await expect(page.locator('iframe')).toHaveCount(0);
+      await expect(page.getByRole('navigation', { name: 'Üretim Terminali menüsü' })).toBeVisible();
+      await gecis(page, 'Eski görünüm');
+      await expect(page).toHaveURL(/\/uretim-terminali\/eski$/);
+      await expect(page.locator('iframe')).toHaveCount(1);
+      await gecis(page, 'Yeni görünüm');
+      await expect(page).toHaveURL(/\/uretim-terminali$/);
+      await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
+      expect(ag.hatalar).toEqual([]);
+    });
+  });
+});
+
+// Her rolde görünürlük eşitliği (553 2): bir sayfayı eski görünümde gören yeni ekranda da görür, görmeyen görmez. Eskide görmek, şeritte
+// maddenin olması (TMI işlemi) ve çerçevenin sayfada kalmasıdır (Arkon rolü; göremediği sayfadan ilk sayfasına geçer). Yenide görmek,
+// adresin değişmeden o sayfanın bölümünü açmasıdır. Üretim Terminali ve Kuyruk ayrı sayfadır: menü satırı yerine kendi adresi denenir.
+// Ölçü tek genişlikte alınır: görünürlük genişliğe bağlı değildir.
+const HAZIRLIK_SAYFALARI = ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'bakim', 'raporlar', 'cizim', 'ayarlar'] as const;
+const AYRI_SAYFALAR = [['operator', '/uretim-terminali', ''], ['kuyruk', '/kuyruk', 'kuyruk']] as const;
+
+// Eski çerçevenin açtığı sayfa: çerçeve göremediği sayfada hiçbir şey çizmeden ilk sayfasına geçer; ilk çizimde adres işareti son hâlidir.
+// Kabuğun kapalı sayfa yanıtları: sayfa işlemi yok (Yetkiniz yok) ya da ekran sayfayı tanımıyor ya da açmıyor.
+const kapali = (page: Page) => page.getByRole('heading', { name: 'Yetkiniz yok' }).or(page.getByText('Bu sayfa bulunamadı ya da size açık değil.'));
+
+async function eskiAcilan(page: Page): Promise<string | null> {
+  const iframe = page.locator('main iframe');
+  await expect(iframe.or(kapali(page)).first()).toBeAttached({ timeout: 15_000 });
+  if (await iframe.count() === 0) return null;
+  const f = await cerceve(page);
+  await expect(f.locator('#root > *').first()).toBeAttached({ timeout: 15_000 });
+  return f.evaluate(() => decodeURIComponent(location.hash.replace(/^#/, '')));
+}
+
+async function yeniAcilan(page: Page, adres: string): Promise<string | null> {
+  const bolum = page.locator('main [data-sayfa]');
+  await expect(bolum.or(kapali(page)).first()).toBeAttached({ timeout: 15_000 });
+  if (await bolum.count() === 0 || new URL(page.url()).pathname !== adres) return null;
+  return bolum.first().getAttribute('data-sayfa');
+}
+
+for (const hesap of HESAPLAR) {
+  test.describe(`553 2 görünürlük eşitliği · ${hesap}`, () => {
+    test.use({ hesap });
+    test('eski ve yeni görünümde aynı sayfalar açılır', async ({ page, ac }, bilgi) => {
+      test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
+      test.setTimeout(240_000);
+      const eski: string[] = [];
+      const yeni: string[] = [];
+      await ac('/arkon/eski/pano');
+      const serit = page.getByRole('navigation', { name: 'Üretim Hazırlık menüsü' });
+      const seritte = new Set<string>();
+      if (await serit.count() > 0) {
+        for (const h of await serit.getByRole('link').evaluateAll((l) => l.map((a) => a.getAttribute('href') ?? ''))) seritte.add(h);
+      }
+      for (const s of HAZIRLIK_SAYFALARI) {
+        await ac(`/arkon/eski/${s}`);
+        if (seritte.has(`/arkon/${s}`) && await eskiAcilan(page) === s) eski.push(s);
+        await ac(`/arkon/${s}`);
+        if (await yeniAcilan(page, `/arkon/${s}`) === s) yeni.push(s);
+      }
+      for (const [s, yol, isaret] of AYRI_SAYFALAR) {
+        await ac(`${yol}/eski`);
+        if (await eskiAcilan(page) === isaret) eski.push(s);
+        await ac(yol);
+        if (await yeniAcilan(page, yol) === s) yeni.push(s);
+      }
+      bilgi.annotations.push({ type: 'eskide görülen', description: eski.join(', ') });
+      expect(yeni, `${hesap}: eskide görülen sayfalar`).toEqual(eski);
+    });
+  });
+}

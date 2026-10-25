@@ -109,8 +109,8 @@ const ANA_SAYFA_BASLIGI = 'Ana sayfa';
 const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim', simge: 'user' };
 
 // Ana sayfa bağlantısı yalnız kendi yolunda seçili görünür: rolün panosu bir modül sayfasıysa alt yollarda modülün maddesi seçilidir.
-// Yeni ekran adresinde (`/arkon/yeni/operator`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
-// (`/arkon`) ya da başka yeni ekran satırı (`/arkon/yeni`) seçili görünmez.
+// Yeni ekran adresinde (`/recete-rota/planlama-yeni`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
+// (`/recete-rota`) seçili görünmez.
 function Baglanti({ sayfa, kapat, tam = sayfa.yol === '/' }: { sayfa: BaglantiSayfasi; kapat?: () => void; tam?: boolean }) {
   const yeni = yeniEkranEslesmesi(useLocation().pathname);
   const yalnizKendiYolu = tam || (yeni !== null && sayfa.yol !== yeni.yol);

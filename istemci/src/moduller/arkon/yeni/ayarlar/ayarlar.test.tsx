@@ -24,7 +24,7 @@ describe('A6 Ayarlar', () => {
         ],
       },
     });
-    arkonAc('/arkon/yeni/ayarlar');
+    arkonAc('/arkon/ayarlar');
     const b = await bolum();
     expect(await altSekmeler(b)).toEqual(['Genel', 'Tesis', 'Kişiler ve yetkiler', 'Üretim', 'Sistem']);
     expect(b.querySelector('.tc-ay-bant .tc-ay-saat')?.textContent, 'saat ve vardiya eski yerinde').toMatch(/^\d\d:\d\d\S/);
@@ -50,7 +50,7 @@ describe('A6 Ayarlar', () => {
   it('çalışma kuralı kaydedilince kv/policy yazılır ve öteki ekranlara duyurulur', async () => {
     const istekler = sunucuKur(YONETICI);
     window.localStorage.setItem('arkon:setTab', JSON.stringify('uretim'));
-    arkonAc('/arkon/yeni/ayarlar');
+    arkonAc('/arkon/ayarlar');
     const b = await bolum();
     await altSekmeler(b);
     const anahtar = await within(b).findByRole('switch', { name: 'Paket yayınında kalite onayı' });
@@ -67,7 +67,7 @@ describe('A6 Ayarlar', () => {
   it('operatör yalnız Genel\'i görür; kural, yetki ve günlük kartı yoktur (reddedilen)', async () => {
     window.localStorage.setItem('arkon:setTab', JSON.stringify('uretim'));
     const istekler = sunucuKur(OPERATOR);
-    arkonAc('/arkon/yeni/ayarlar');
+    arkonAc('/arkon/ayarlar');
     const b = await bolum();
     expect(await altSekmeler(b)).toEqual(['Genel']);
     expect(within(b).queryByRole('heading', { name: 'Çalışma kuralları' })).toBeNull();
@@ -80,7 +80,7 @@ describe('A6 Ayarlar', () => {
 describe('A6 Çağrı bandı', () => {
   it('ekibine gelen çağrıyı gösterir; Üstlen üstlenme iletisini ve kaydını gönderir', async () => {
     const istekler = sunucuKur(YONETICI);
-    arkonAc('/arkon/yeni/ayarlar');
+    arkonAc('/arkon/ayarlar');
     await altSekmeler(await bolum());
     const depo = await depoModulu();
     act(() => { depo.Bus.yerel({ type: 'call', t0: 1_700_000_000_000, k: 'kalite', l: 'Kalite', machine: 'IST-9', by: 'Deneme Op' }); });
@@ -96,7 +96,7 @@ describe('A6 Çağrı bandı', () => {
 
   it('üstlenme yetkisi olmayan operatöre çağrı görünmez', async () => {
     sunucuKur(OPERATOR);
-    arkonAc('/arkon/yeni/ayarlar');
+    arkonAc('/arkon/ayarlar');
     await altSekmeler(await bolum());
     const depo = await depoModulu();
     act(() => { depo.Bus.yerel({ type: 'call', t0: 1_700_000_000_001, k: 'kalite', l: 'Kalite', machine: 'IST-9', by: 'Deneme Op' }); });

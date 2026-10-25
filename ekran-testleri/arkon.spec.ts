@@ -27,7 +27,7 @@ test.describe('yönetici', () => {
           basliklar.push({ zorlayici: b['content-security-policy'], rapor: b['content-security-policy-report-only'] });
         }
       });
-      await ac(`/arkon/${s}`);
+      await ac(`/arkon/eski/${s}`);
       const f = await cerceve(page);
       await expect(f.locator('body')).toContainText(/\S/);
       expect(await ihlaller(f), s).toEqual([]);
@@ -45,7 +45,7 @@ test.describe('yönetici', () => {
   test('gömülü Arkon başka kökene istek göndermez; Bağlantı kartı görünmez', async ({ page, ag, ac }) => {
     const disari: string[] = [];
     page.on('request', (r) => { if (!r.url().startsWith(ADRES) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) disari.push(r.url()); });
-    await ac('/arkon/ayarlar');
+    await ac('/arkon/eski/ayarlar');
     const f = await cerceve(page);
     await expect(f.getByRole('button', { name: 'Genel', exact: true })).toBeVisible();
     await expect(f.getByText('Hesap', { exact: true }).or(f.getByText('HESAP', { exact: true })).first()).toBeVisible();
@@ -72,7 +72,7 @@ test.describe('yönetici', () => {
       else await expect(bolge).toContainText(istasyonlar.some((i) => i.kod === 'ORN-TORNA-1') ? 'ORN-TORNA-1' : istasyonlar[0]?.kod ?? '');
     };
     const ilk = bugunCevabi();
-    await ac('/arkon/anomali');
+    await ac('/arkon/eski/anomali');
     const f = await cerceve(page);
     await expect(f.getByText('İstasyon', { exact: true }).first()).toBeVisible();
     await bugunPanosu(f, await ilk);
@@ -101,7 +101,7 @@ test.describe('planlama', () => {
     const liste = (Array.isArray(govde) ? govde : (govde as { kayitlar?: unknown[]; nedenler?: unknown[] }).kayitlar ?? (govde as { nedenler?: unknown[] }).nedenler ?? []) as { kod: string; ad: string }[];
     expect(liste.length).toBeGreaterThan(0);
 
-    await ac('/arkon/ayarlar');
+    await ac('/arkon/eski/ayarlar');
     const f = await cerceve(page);
     await f.getByRole('button', { name: 'Üretim', exact: true }).click();
     await expect(f.getByText('Duruş nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();

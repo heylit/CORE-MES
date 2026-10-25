@@ -22,7 +22,6 @@ afterEach(cleanup);
 
 describe('yeni ekran menü satırları', () => {
   it('her satırın adresi kayıtlı bir modül rotasıdır', () => {
-    // Ayrı sayfa satırı (`/arkon/yeni/operator`) parametreli rotayla eşleşir.
     for (const yol of YENI_EKRAN_YOLLARI) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
   });
 
@@ -34,11 +33,11 @@ describe('yeni ekran menü satırları', () => {
     for (const yol of YENI_EKRAN_YOLLARI) expect(adresler, yol).toContain(yol);
     expect(within(menu).getByRole('link', { name: 'Planlama (yeni)' }).getAttribute('href')).toBe('/recete-rota/planlama-yeni');
     expect(within(menu).getByRole('link', { name: 'Finans ve Muhasebe (yeni)' }).getAttribute('href')).toBe('/finans/yeni');
-    expect(within(menu).getByRole('link', { name: 'Üretim Terminali (yeni)' }).getAttribute('href')).toBe('/arkon/yeni/operator');
-    // Kuyruk eski adresine geçti (541): deneme satırı yoktur, ana menüdeki Kuyruk yeni ekranı açar.
-    expect(within(menu).queryByRole('link', { name: 'Kuyruk (yeni)' })).toBeNull();
+    // Eski adresine geçenlerin (541) deneme satırı yoktur, ana menüdeki satır yeni ekranı açar.
+    for (const ad of ['Kuyruk (yeni)', 'Reçete ve Rota (yeni)', 'Üretim Terminali (yeni)', 'Üretim Hazırlık (yeni)']) {
+      expect(within(menu).queryByRole('link', { name: ad }), ad).toBeNull();
+    }
     expect(within(menu).getByRole('link', { name: 'Kuyruk' }).getAttribute('href')).toBe('/kuyruk');
-    expect(within(menu).queryByRole('link', { name: 'Reçete ve Rota (yeni)' })).toBeNull();
   });
 
   it('yönetici olmayan kişi, modül sayfalarının işlemleri olsa da satırları görmez', () => {
@@ -53,9 +52,9 @@ describe('yeni ekran menü satırları', () => {
     const finanssiz = SAYFALAR.filter((s) => s.yol !== '/finans');
     const yollar = yeniEkranBaglantilari(finanssiz, [YENI_EKRAN_ISLEMI]).map((b) => b.yol);
     expect(yollar).not.toContain('/finans/yeni');
-    expect(yollar).toContain('/arkon/yeni');
-    ciz([YENI_EKRAN_ISLEMI], ['/arkon']);
-    expect(within(anaMenu()).queryByRole('link', { name: 'Üretim Hazırlık (yeni)' })).toBeNull();
+    expect(yollar).toContain('/ik/yeni');
+    ciz([YENI_EKRAN_ISLEMI], ['/ik']);
+    expect(within(anaMenu()).queryByRole('link', { name: 'İnsan Kaynakları (yeni)' })).toBeNull();
   });
 });
 
@@ -122,10 +121,21 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     }
   });
 
-  it('yeni ekranda şerit çizilmez, eski adreste çizilir', () => {
-    expect(yeniEkranAdresiMi('/kuyruk')).toBe(true);
-    expect(yeniEkranAdresiMi('/kuyruk/eski')).toBe(false);
-    expect(yeniEkranAdresiMi('/kuyrukta')).toBe(false);
+  it('kabuğun şeridi yeni ekranda da eski adreste de durur (553 1 a; eski sayfa tek maddelik şeridi de çizer)', () => {
+    for (const yol of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon', '/arkon/pano', '/arkon/eski/pano']) {
+      expect(yeniEkranAdresiMi(yol), yol).toBe(false);
+    }
+  });
+
+  it('Arkon: alt yol eski adreste aynı alt yoldur; TMI ekranı olan madde taşınmadı', () => {
+    expect(gorunumGecisi('/arkon/kalite')).toEqual({ baslik: 'Eski görünüm', yol: '/arkon/eski/kalite' });
+    expect(gorunumGecisi('/arkon/eski/kalite')).toEqual({ baslik: 'Yeni görünüm', yol: '/arkon/kalite' });
+    expect(gorunumGecisi('/arkon')).toEqual({ baslik: 'Eski görünüm', yol: '/arkon/eski' });
+    expect(gorunumGecisi('/uretim-terminali')).toEqual({ baslik: 'Eski görünüm', yol: '/uretim-terminali/eski' });
+    expect(gorunumGecisi('/uretim-terminali/eski')).toEqual({ baslik: 'Yeni görünüm', yol: '/uretim-terminali' });
+    expect(gorunumGecisi('/arkon/tmi-yansimalari')).toBeNull();
+    expect(gorunumGecisi('/arkonx')).toBeNull();
+    expect(seritAdresi('/arkon/eski/kalite')).toBe('/arkon/kalite');
   });
 
   it('kişi menüsü yeni ekranda eskisini, eski ekranda yenisini açar; başka sayfada madde yoktur', () => {

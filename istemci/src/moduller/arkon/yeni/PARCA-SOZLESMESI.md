@@ -1,8 +1,10 @@
 # TS Arkon (Uretim Terminali ve Uretim Hazirlik): A1-A6 parca sozlesmesi (A0 iskelet uzerine)
 
-Kok: `istemci/src/moduller/arkon/yeni/`. Adres: `/arkon/yeni/<sayfa>[/<kimlik>]`; kok adres role gore girer (yonetim rolleri Pano,
-operator Operator; `arkonGirisSayfasi`). Alima kadar yalniz yoneticide acilir (`YeniEkranKapisi`); eski cerceve yerinde kalir.
-Uretim Terminali (`operator`) ve Kuyruk (`kuyruk`) eskisi gibi ayri sayfadir (soru 497/5 a; `SAYFALAR[..].ayri`): sekmelerde yok, sekme seridi cizilmez.
+Kok: `istemci/src/moduller/arkon/yeni/`. Adres: `/arkon/<sayfa>[/<kimlik>]` (541, 527 1 a); kok adres role gore girer (yonetim rolleri Pano,
+operator Uretim Terminali; `arkonGirisSayfasi`). Sayfayi goren herkes acar; eski cerceve kisi menusundeki "Eski gorunum" ile `/arkon/eski/<sayfa>` altindadir.
+Sayfalar arasi gecis kabugun ikinci menu seridindedir; ekran kendi sekme seridini cizmez (553 1 a).
+Uretim Terminali (`operator`, `/uretim-terminali`, eskisi `/uretim-terminali/eski`) ve Kuyruk (`kuyruk`, `/kuyruk`, eskisi `/kuyruk/eski`) eskisi gibi
+ayri sayfadir (soru 497/5 a; `SAYFALAR[..].ayri`). Goremedigi sayfada kisi giris sayfasina gecer (eski firstPage).
 Sayfa anahtarlari eski Arkon'un adres isaretleridir (`#pano` -> `pano`; operator ekraninin bos isareti -> `operator`; `#onizle:<istasyon>` -> `onizle/<istasyon>`).
 Olcut bugun cercevede calisan davranistir; her fark "fark" satiri olarak DEVIR'e yazilir ve kullanici onayina gider.
 

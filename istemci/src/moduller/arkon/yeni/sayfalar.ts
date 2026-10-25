@@ -3,12 +3,13 @@ import type { IkinciMenuMaddesi } from '#paylasilan/sayfa-tanimi.ts';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 
-// Yeni Arkon ekranının sayfaları. Anahtar adres parçasıdır (/arkon/yeni/<anahtar>) ve eski Arkon'un adres işaretiyle aynıdır
+// Yeni Arkon ekranının sayfaları. Anahtar adres parçasıdır (/arkon/<anahtar>) ve eski Arkon'un adres işaretiyle aynıdır
 // (operatör ekranınınki boştu, burada `operator`). Başlık, simge ve TMI işlemi ikinci menüden (paylasilan/sayfalar/arkon.ts) okunur;
 // menüde olmayan sayfalar (Operatör, Kuyruk, Önizleme) kendi tanımını taşır. Her sayfanın ekranı bir parçanın klasöründedir.
 // Operatör (Üretim Terminali) ve Kuyruk eskisi gibi ayrı sayfadır (soru 497/5 a): Arkon sekmelerinde yoktur, sekme şeridi çizilmez.
 
-export const KOK = '/arkon/yeni';
+// Eski adresine geçti (541, 527 1 a); eski çerçeve bir süre /arkon/eski altındadır.
+export const KOK = '/arkon';
 
 export type ArkonSayfasi =
   | 'operator' | 'onizle' | 'pano' | 'planlama' | 'kuyruk' | 'hazirlik' | 'anomali' | 'kalite' | 'cizim' | 'bakim' | 'raporlar' | 'ayarlar';
@@ -70,5 +71,7 @@ export function sekmeMaddeleri(): SekmeMaddesi[] {
     .map((m) => ({ anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, ...(m.veya ? { veya: m.veya } : {}) }));
 }
 
+// Ayrı sayfanın adresi TMI'deki kendi menü satırıdır (Üretim Terminali, Kuyruk).
+const AYRI_ADRES: Readonly<Partial<Record<string, string>>> = { operator: '/uretim-terminali', kuyruk: '/kuyruk' };
 export const sayfaAdresi = (sayfa: string, kimlik?: string | null): string =>
-  `${KOK}/${encodeURIComponent(sayfa)}${kimlik ? `/${encodeURIComponent(kimlik)}` : ''}`;
+  (!kimlik && AYRI_ADRES[sayfa]) || `${KOK}/${encodeURIComponent(sayfa)}${kimlik ? `/${encodeURIComponent(kimlik)}` : ''}`;

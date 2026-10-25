@@ -24,7 +24,7 @@ test.describe('fare', () => {
     test.use({ hesap: 'ornek.operator1' });
     test('masaüstünde de terminal düğmeleri dokunma ölçüsünde kalır', async ({ page, ag, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
-      await ac('/uretim-terminali');
+      await ac('/uretim-terminali/eski');
       const f = await cerceve(page);
       const dugme = f.getByRole('button', { name: 'İyi +1' });
       await expect(dugme).toBeVisible();

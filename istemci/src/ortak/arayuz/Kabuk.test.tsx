@@ -229,29 +229,29 @@ describe('Kabuk', () => {
     );
     const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
     const secili = (ad: string) => within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('link', { name: ad }).getAttribute('aria-current');
-    const { unmount: terminalKapat } = yeniCiz('/arkon/yeni/operator');
-    expect(baslik()).toBe('Üretim Terminali');
-    expect(secili('Üretim Terminali (yeni)')).toBe('page');
-    expect(secili('Üretim Hazırlık')).toBeNull();
-    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
-    terminalKapat();
+    const { unmount: planlamaKapat } = yeniCiz('/recete-rota/planlama-yeni/plan');
+    expect(baslik()).toBe('Reçete ve Rota');
+    expect(secili('Planlama (yeni)')).toBe('page');
+    expect(secili('Reçete ve Rota')).toBeNull();
+    planlamaKapat();
     // Eski adresine geçen yeni ekran (541) kendi ana menü satırını seçili tutar.
     const { unmount: kuyrukKapat } = yeniCiz('/kuyruk');
     expect(baslik()).toBe('Kuyruk');
     expect(secili('Kuyruk')).toBe('page');
     expect(secili('Üretim Hazırlık')).toBeNull();
     kuyrukKapat();
-    // Sekmeli yeni ekranın alt yolu kendi satırını seçili tutar.
-    const { unmount: hazirlikKapat } = yeniCiz('/arkon/yeni/hazirlik');
-    expect(baslik()).toBe('Üretim Hazırlık');
-    expect(secili('Üretim Hazırlık (yeni)')).toBe('page');
+    const { unmount: terminalKapat } = yeniCiz('/uretim-terminali');
+    expect(baslik()).toBe('Üretim Terminali');
+    expect(secili('Üretim Terminali')).toBe('page');
     expect(secili('Üretim Hazırlık')).toBeNull();
-    hazirlikKapat();
-    // Yeni ekran olmayan alt yolda önek kuralı sürer.
-    yeniCiz('/arkon/pano');
-    expect(baslik()).toBe('Üretim Hazırlık');
-    expect(secili('Üretim Hazırlık')).toBe('page');
-    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
+    terminalKapat();
+    // Alt yolda önek kuralı sürer: yeni ve eski görünüm aynı satırdadır.
+    for (const yol of ['/arkon/pano', '/arkon/eski/pano']) {
+      const { unmount } = yeniCiz(yol);
+      expect(baslik()).toBe('Üretim Hazırlık');
+      expect(secili('Üretim Hazırlık')).toBe('page');
+      unmount();
+    }
   });
 
   it('yetkisi olmayan sayfanin adresinde baslik o sayfanin adini vermez', () => {

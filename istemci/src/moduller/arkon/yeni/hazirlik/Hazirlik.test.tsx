@@ -54,7 +54,7 @@ const merkezAc = async (d: HTMLElement) => {
 describe('A2 Hazırlık ekranı', () => {
   it('açılışta yazmaz; paket listede ve düzenleyicide görünür; yayın operatöre gönderir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     expect(within(d).getByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
     expect(within(screen.getByRole('complementary', { name: 'İş paketleri' })).getByRole('button', { name: /IE-DENEME-1/, pressed: true })).toBeTruthy();
@@ -72,12 +72,12 @@ describe('A2 Hazırlık ekranı', () => {
 
   it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma TMI\'ye gitmez', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Operatör gözüyle/ }));
     const pencere = await screen.findByRole('dialog', { name: 'Operatör gözüyle önizleme' }, { timeout: 10000 });
     expect(within(pencere).getByText(/IST-1 ekranı · kayıt yapılmaz/)).toBeTruthy();
-    expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/hazirlik');
+    expect(screen.getByTestId('adres').textContent).toBe('/arkon/hazirlik');
     const once = yazmalar(istekler).length;
     await new Promise((r) => { setTimeout(r, 300); });
     expect(yazmalar(istekler).length).toBe(once);
@@ -87,16 +87,16 @@ describe('A2 Hazırlık ekranı', () => {
 
   it('sayfa başlığında kısayollar ve saat eski yerinde (Çizim, Operatör ekranı)', async () => {
     sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     await ekran();
     expect(screen.getByRole('button', { name: /Çizim stüdyosu/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Operatör ekranı' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/operator'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/uretim-terminali'); });
   }, 40000);
 
   it('alan değişikliği yarım saniye sonra pakete yazılır; hazır uyarı kural olarak eklenir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.change(within(d).getByPlaceholderText('S355J2'), { target: { value: 'Deneme çelik' } });
     await waitFor(() => { expect(paketYazimi(istekler).some((p) => p.material === 'Deneme çelik' && p.dirty)).toBe(true); }, { timeout: 10000 });
@@ -109,7 +109,7 @@ describe('A2 Hazırlık ekranı', () => {
 
   it('düzenleme ve yayın yetkisi olmayan kişi yalnız görür: yazma düğmeleri yok, alanlar kilitli, yazma gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(HAZIRLIKCI, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }]));
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     expect(await within(d).findByText(/düzenleme yetkin yok/)).toBeTruthy();
     expect(within(d).getByPlaceholderText('S355J2').matches(':disabled')).toBe(true);
@@ -127,7 +127,7 @@ describe('A2 Hazırlık ekranı', () => {
 
   it('Kontrol planı sekmesinde teknik resim açılır (yer tutucu yok)', async () => {
     sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Kontrol planı/ }));
     expect(await within(d).findByRole('toolbar', { name: 'Teknik resim araçları' }, { timeout: 10000 })).toBeTruthy();
@@ -137,7 +137,7 @@ describe('A2 Hazırlık ekranı', () => {
   it('Çizim Merkezi seçicisi yayındaki belgeyi listeler; seçilen dosya pakete eklenir', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     merkezKur(istekler);
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const pencere = await merkezAc(await ekran());
     fireEvent.click(await within(pencere).findByRole('button', { name: /Deneme flans/ }, { timeout: 10000 }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(true); }, { timeout: 10000 });
@@ -151,7 +151,7 @@ describe('A2 Hazırlık ekranı', () => {
     const MERKEZLI = { ...PAKET, files: [{ kind: 'pdf', name: 'deneme-a.pdf', size: 3, merkez: 3, merkezOzet: 'c'.repeat(64) }], primary: 'deneme-a.pdf' };
     const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: MERKEZLI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     merkezKur(istekler);
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
     expect(await within(d).findByText('Yeni revizyon var', undefined, { timeout: 10000 })).toBeTruthy();
@@ -163,7 +163,7 @@ describe('A2 Hazırlık ekranı', () => {
   it('düzenleme yetkisi olmayan kişi Çizim Merkezi\'nden dosya alamaz: kopyalama ve paket yazımı gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(HAZIRLIKCI, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { prep: ['page.op', 'page.prep'] } } }]));
     merkezKur(istekler);
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const pencere = await merkezAc(await ekran());
     fireEvent.click(await within(pencere).findByRole('button', { name: /Deneme flans/ }, { timeout: 10000 }));
     await new Promise((r) => setTimeout(r, 700));
@@ -173,7 +173,7 @@ describe('A2 Hazırlık ekranı', () => {
 
   it('silme iki basış ister; silinen paket duyurulur', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
-    arkonAc('/arkon/yeni/hazirlik');
+    arkonAc('/arkon/hazirlik');
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
     fireEvent.click(await within(d).findByRole('button', { name: 'Paketi sil' }));

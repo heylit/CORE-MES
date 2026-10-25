@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/yeni', '/arkon/yeni/operator', '/kuyruk', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
+  '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -43,5 +43,21 @@ test('Reçete ve Rota yeni ekranında kabuğun şeridi durur, tek şerit vardır
     await expect(menu, yol).toBeVisible();
     await expect(menu.locator('[aria-current="page"]'), yol).toHaveText(new RegExp(`^${madde}`));
     await expect(page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }), yol).toHaveCount(0);
+  }
+});
+
+// Üretim Hazırlık, Üretim Terminali ve Kuyruk da öyle (553 1 a, 2): eski görünümde de seçili madde aynıdır.
+test('Üretim Hazırlık, Üretim Terminali ve Kuyruk yeni ekranında kabuğun şeridi durur', async ({ page, ac }) => {
+  const durumlar = [
+    ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
+    ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
+    ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
+  ] as const;
+  for (const [yol, menuAdi, madde] of durumlar) {
+    await ac(yol);
+    const menu = page.getByRole('navigation', { name: `${menuAdi} menüsü` });
+    await expect(menu, yol).toBeVisible();
+    await expect(menu.locator('[aria-current="page"]'), yol).toHaveText(new RegExp(`^${madde}`));
+    await expect(page.getByRole('tablist', { name: 'Üretim Hazırlık' }), yol).toHaveCount(0);
   }
 });

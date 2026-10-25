@@ -27,7 +27,7 @@ const ekran = async () => screen.findByRole('region', { name: 'Aktif iş emri' }
 describe('A1 Üretim Terminali', () => {
   it('açılışta yazmaz; istasyonun yayınlı işi açılır; başlatma durum kaydı yazar', async () => {
     const istekler = sunucuKur(ISTASYONLU, sunucu());
-    arkonAc('/arkon/yeni/operator');
+    arkonAc('/uretim-terminali');
     const d = await ekran();
     expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
     // Bağlantı durumu üst çubukta saatin yanında (soru 488 a); testte cihaz deposu yok, kayıt riski yazar.
@@ -41,7 +41,7 @@ describe('A1 Üretim Terminali', () => {
 
   it('üretim yetkisi olmayan kişi yalnız görür: sayım ve durum düğmeleri yok, yazma gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op'] } } }]));
-    arkonAc('/arkon/yeni/operator');
+    arkonAc('/uretim-terminali');
     await ekran();
     expect(await screen.findByText('Bu rol üretim kaydı yapamaz')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Başlat/ })).toBeNull();
@@ -59,7 +59,7 @@ describe('A1 Üretim Terminali', () => {
       // Ayrı kimlik: önceki testlerin yerel kopyasındaki CNC paketi yerine geçmesin.
       const depo = { ...PAKET, id: 'pk-deneme-depo', no: 'IE-DENEME-2', opType: 'depo', st: { items: [{ id: 'k1', code: 'DN-K1', name: 'Deneme kalem', qty: 2, loc: 'R-1', unit: 'adet' }] } };
       sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: depo.id, surum: 1, govde: depo }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
-      arkonAc('/arkon/yeni/operator');
+      arkonAc('/uretim-terminali');
       await ekran();
       fireEvent.click(await screen.findByRole('button', { name: /QR/ }, { timeout: 10000 }));
       expect(await screen.findByRole('dialog', { name: 'Ürün kodunu okut' })).toBeTruthy();
@@ -73,7 +73,7 @@ describe('A1 Üretim Terminali', () => {
 
   it('teknik resim sekmesi resmi açar (yer tutucu yok); paketsiz dosyada "Doküman yok"', async () => {
     sunucuKur(ISTASYONLU, sunucu());
-    arkonAc('/arkon/yeni/operator');
+    arkonAc('/uretim-terminali');
     await ekran();
     expect(await screen.findByRole('toolbar', { name: 'Teknik resim araçları' }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getAllByText('Doküman yok').length).toBeGreaterThan(0);
@@ -82,7 +82,7 @@ describe('A1 Üretim Terminali', () => {
 
   it('önizleme paketi kimliğiyle açar, yazma düğmesi göstermez ve yazmaz', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
-    arkonAc(`/arkon/yeni/onizle/${PAKET.id}`);
+    arkonAc(`/arkon/onizle/${PAKET.id}`);
     const d = await ekran();
     expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Başlat/ })).toBeNull();

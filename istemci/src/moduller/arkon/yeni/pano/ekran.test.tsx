@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { arkonAc, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
@@ -27,7 +27,7 @@ const belgeler = {
 describe('A3 sayfaları', () => {
   it('Pano açılır, istasyonları çizer ve açılışta kayıt yazmaz', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/pano');
+    arkonAc('/arkon/pano');
     const b = await bolum('Pano');
     expect(await within(b).findByText('Torna', { exact: false }, { timeout: 10000 })).toBeTruthy();
     await bekle();
@@ -36,7 +36,7 @@ describe('A3 sayfaları', () => {
 
   it('Plan Kuyruğu: yönetici sıra değiştirir ve planlı duruş ekler; hazırlık rolü yalnız görür', async () => {
     let istekler = sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/planlama');
+    arkonAc('/arkon/planlama');
     let b = await bolum('Plan Kuyruğu');
     expect(await within(b).findByText('E-1', { exact: false }, { timeout: 10000 })).toBeTruthy();
     expect(within(b).getAllByRole('button', { name: /aşağı|yukarı|Taşı/i }).length).toBeGreaterThan(0);
@@ -49,7 +49,7 @@ describe('A3 sayfaları', () => {
     window.localStorage.clear();
 
     istekler = sunucuKur(HAZIRLIK, { belgeler });
-    arkonAc('/arkon/yeni/planlama');
+    arkonAc('/arkon/planlama');
     b = await bolum('Plan Kuyruğu');
     expect(await within(b).findByText('E-1', { exact: false }, { timeout: 10000 })).toBeTruthy();
     expect(within(b).queryAllByRole('button', { name: /aşağı|yukarı|Taşı/i })).toEqual([]);
@@ -67,7 +67,7 @@ describe('A3 sayfaları', () => {
     } });
     const SIRALAYAN: Deneme = { ...HAZIRLIK, kullanici: { ...HAZIRLIK.kullanici, islemler: [...HAZIRLIK.kullanici.islemler, 'arkon.kuyruk-sirala'] } };
     const istekler = sunucuKur(SIRALAYAN, { belgeler: { ...belgeler, pkgs: [tp(1, 1, 2), tp(2, 2, 1)] } });
-    arkonAc('/arkon/yeni/planlama');
+    arkonAc('/arkon/planlama');
     const b = await bolum('Plan Kuyruğu');
     const s1 = await within(b).findByRole('region', { name: 'Şerit S1' }, { timeout: 10000 });
     expect(await within(s1).findByText('Planda 2. · öne alındı')).toBeTruthy();
@@ -86,7 +86,7 @@ describe('A3 sayfaları', () => {
 
   it('Kuyruk salt okunurdur: yönetici de taşıyamaz', async () => {
     sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/kuyruk');
+    arkonAc('/kuyruk');
     const b = await bolum('Kuyruk');
     expect(await within(b).findByText('E-2', { exact: false }, { timeout: 10000 })).toBeTruthy();
     expect(within(b).queryAllByRole('button', { name: /aşağı|yukarı|Taşı/i })).toEqual([]);
@@ -94,7 +94,7 @@ describe('A3 sayfaları', () => {
 
   it('Kuyruk şeridi: istasyon kodu kendi satırında, boş istasyonda "İş yok" kutusu; dolu şeritte kutu yok', async () => {
     sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/kuyruk');
+    arkonAc('/kuyruk');
     const b = await bolum('Kuyruk');
     const bos = await within(b).findByRole('region', { name: 'Şerit S2' }, { timeout: 10000 });
     expect(bos.querySelector('.tc-ay3-serit-bas > b')?.textContent).toBe('S2');
@@ -105,7 +105,7 @@ describe('A3 sayfaları', () => {
 
   it('bant "Diğer" düğmesi araç menüsünü açar, Escape ile kapanır', async () => {
     sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/kuyruk');
+    arkonAc('/kuyruk');
     const b = await bolum('Kuyruk');
     const diger = await within(b).findByRole('button', { name: 'Diğer' }, { timeout: 10000 });
     const bant = diger.closest('.tc-ay-bant')!;
@@ -119,15 +119,16 @@ describe('A3 sayfaları', () => {
     expect(diger.getAttribute('aria-expanded')).toBe('false');
   }, 20000);
 
-  it('Üretim Anomalisi açılır, kayıt yazmaz; amir rolünde sayfa açılmaz', async () => {
+  it('Üretim Anomalisi açılır, kayıt yazmaz; amir rolünde sayfa açılmaz, ilk açık sayfasına geçer (eski firstPage)', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/anomali');
+    arkonAc('/arkon/anomali');
     await bolum('Üretim Anomalisi');
     await bekle();
     expect(yazmalar(istekler)).toEqual([]);
     cleanup();
     sunucuKur(AMIR, { belgeler });
-    arkonAc('/arkon/yeni/anomali');
-    expect(await screen.findByText('Bu sayfa bulunamadı ya da size açık değil.', {}, { timeout: 10000 })).toBeTruthy();
+    arkonAc('/arkon/anomali');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).not.toBe('/arkon/anomali'); }, { timeout: 10000 });
+    expect(screen.queryByRole('region', { name: 'Üretim Anomalisi' })).toBeNull();
   }, 30000);
 });

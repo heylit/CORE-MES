@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { arkonAc, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
@@ -31,7 +31,7 @@ const belgeler = {
 describe('A4 sayfaları', () => {
   it('Kalite: açılışta ilk numune görünür ama yazılmaz; kalite seçince "Ölçülüyor" yazar ve ölçüm girer', async () => {
     const istekler = sunucuKur(KALITE, { belgeler });
-    arkonAc('/arkon/yeni/kalite');
+    arkonAc('/arkon/kalite');
     const b = await bolum('Kalite');
     const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     const numune = await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 });
@@ -44,7 +44,7 @@ describe('A4 sayfaları', () => {
 
   it('Kalite: seçilen numunenin teknik resmi orta alanda açılır (yer tutucu yok)', async () => {
     sunucuKur(KALITE, { belgeler });
-    arkonAc('/arkon/yeni/kalite');
+    arkonAc('/arkon/kalite');
     const b = await bolum('Kalite');
     const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
@@ -54,7 +54,7 @@ describe('A4 sayfaları', () => {
 
   it('Kalite: ilk parça kararının Kalite Merkezi\'nde olduğu yazar; bağlantı yalnız o sayfayı görene, onay düğmesi yerinde (501 a)', async () => {
     sunucuKur(KALITE, { belgeler });
-    arkonAc('/arkon/yeni/kalite');
+    arkonAc('/arkon/kalite');
     let b = await bolum('Kalite');
     let sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
@@ -65,7 +65,7 @@ describe('A4 sayfaları', () => {
     cleanup();
 
     sunucuKur({ ...KALITE, kullanici: { ...KALITE.kullanici, islemler: [...KALITE.kullanici.islemler, 'sayfa.kalite-merkezi'] } }, { belgeler });
-    arkonAc('/arkon/yeni/kalite');
+    arkonAc('/arkon/kalite');
     b = await bolum('Kalite');
     sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
@@ -75,7 +75,7 @@ describe('A4 sayfaları', () => {
 
   it('Kalite: ölçme yetkisi olmayan amir ölçüm girişini ve karar düğmelerini görmez, seçince yazmaz', async () => {
     const istekler = sunucuKur(AMIR, { belgeler });
-    arkonAc('/arkon/yeni/kalite');
+    arkonAc('/arkon/kalite');
     const b = await bolum('Kalite');
     const sira = await within(b).findByRole('region', { name: 'Numune sırası' }, { timeout: 10000 });
     fireEvent.click(await within(sira).findByRole('button', { name: /E-1/ }, { timeout: 10000 }));
@@ -87,7 +87,7 @@ describe('A4 sayfaları', () => {
 
   it('Bakım: bakımcı arıza açar ve plan ekler; amir arıza açar ama plan ekleyemez; açılış yazmaz', async () => {
     let istekler = sunucuKur(BAKIM, { belgeler });
-    arkonAc('/arkon/yeni/bakim');
+    arkonAc('/arkon/bakim');
     let b = await bolum('Bakım');
     expect(await within(b).findByText('Kaçak', { exact: false }, { timeout: 10000 })).toBeTruthy();
     expect(within(b).getByRole('button', { name: /Arıza kaydı aç/ })).toBeTruthy();
@@ -101,7 +101,7 @@ describe('A4 sayfaları', () => {
     window.localStorage.clear();
 
     istekler = sunucuKur(AMIR, { belgeler });
-    arkonAc('/arkon/yeni/bakim');
+    arkonAc('/arkon/bakim');
     b = await bolum('Bakım');
     expect(await within(b).findByRole('button', { name: /Arıza kaydı aç/ }, { timeout: 10000 })).toBeTruthy();
     fireEvent.click(within(b).getByRole('button', { name: /Periyodik bakım/ }));
@@ -111,15 +111,16 @@ describe('A4 sayfaları', () => {
     expect(within(b).getByRole('button', { name: /Yapıldı/ })).toBeTruthy();
   }, 30000);
 
-  it('Bakım: kalite rolüne açık değildir', async () => {
+  it('Bakım: kalite rolüne açık değildir, ilk açık sayfasına geçer (eski firstPage)', async () => {
     sunucuKur(KALITE, { belgeler });
-    arkonAc('/arkon/yeni/bakim');
-    expect(await screen.findByText('Bu sayfa bulunamadı ya da size açık değil.', {}, { timeout: 10000 })).toBeTruthy();
+    arkonAc('/arkon/bakim');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).not.toBe('/arkon/bakim'); }, { timeout: 10000 });
+    expect(screen.queryByRole('region', { name: 'Bakım' })).toBeNull();
   }, 20000);
 
   it('Raporlar: bölümler çizilir, açılış yazmaz', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler });
-    arkonAc('/arkon/yeni/raporlar');
+    arkonAc('/arkon/raporlar');
     const b = await bolum('Raporlar');
     expect(await within(b).findByRole('region', { name: 'OEE · günlük' }, { timeout: 10000 })).toBeTruthy();
     expect(within(b).getByRole('region', { name: 'Duruş nedenleri · Pareto' })).toBeTruthy();

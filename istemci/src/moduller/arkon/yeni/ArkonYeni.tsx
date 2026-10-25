@@ -1,17 +1,17 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { ArkonBenCevabi, ArkonRolu, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
-import { Dugme, DurumKutusu, Pencere, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
+import { Dugme, DurumKutusu, Pencere, useBildirim } from '../../../ortak/arayuz/index.ts';
+import { useCerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
 import { useTema } from '../../../ortak/veri/tema.ts';
 import { anahtarlar } from '../anahtarlar.ts';
 import { arkonGirisSayfasi } from '../ArkonCercevesi.tsx';
-import { TMI_HEDEFLERI, type MakineDoluRedi } from '../baglanti.ts';
+import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
 import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar.ts';
@@ -22,17 +22,18 @@ import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
 import { ArkonBaglamiKaynagi, ArkonDarAlanKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
 import { depoyuBaslat, type ArkonDeposu, type ArkonDurumu } from './veri/depo.ts';
 import { tasiyiciYap } from './veri/tasiyici.ts';
-import { SAYFALAR, SAYFA_DISI, sayfaAdresi, sayfaMi, sekmeMaddeleri, type ArkonSayfasi, type SayfaTanimi, type SekmeMaddesi } from './sayfalar.ts';
+import { KOK, SAYFALAR, SAYFA_DISI, sayfaAdresi, sayfaMi, sekmeMaddeleri, type ArkonSayfasi, type SayfaTanimi, type SekmeMaddesi } from './sayfalar.ts';
 import './arkon-yeni.css';
 
-// TS geçişinin Arkon ekranı (Soru 271 c): Üretim Terminali ve Üretim Hazırlık kabuğun içinde, çerçevesiz. Alıma kadar eski çerçevenin
-// yanında /arkon/yeni adresindedir ve yalnız yöneticide açılır; gezinme ikinci menünün maddeleriyle sekmelerdedir.
+// TS geçişinin Arkon ekranı (Soru 271 c): Üretim Terminali ve Üretim Hazırlık kabuğun içinde, çerçevesiz. Eski adresine geçti (541, 527 1 a):
+// sayfayı gören herkes açar, eski çerçeve bir süre /arkon/eski altındadır. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi
+// sekmesini çizmez (553 1 a).
 export function ArkonYeni() {
-  return <YeniEkranKapisi><ArkonYeniEkrani /></YeniEkranKapisi>;
+  return <ArkonYeniEkrani />;
 }
 
-// Eski adresine geçen ayrı sayfa (541, 527 1 a): yeni ekran kapısı yoktur; eski sayfa gibi TMI sayfa işlemi ve Arkon sayfa yetkisiyle açılır.
-export type TasinanSayfa = 'kuyruk';
+// Ayrı sayfa (Üretim Terminali, Kuyruk): eski sayfa gibi TMI sayfa işlemi ve Arkon sayfa yetkisiyle açılır.
+export type TasinanSayfa = 'kuyruk' | 'operator';
 export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
   return <ArkonYeniEkrani sabitSayfa={sayfa} />;
 }
@@ -125,6 +126,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   const kimlik = sabitSayfa === undefined ? parametreler.kimlik : undefined;
   const gezin = useNavigate();
   const { bildir } = useBildirim();
+  const [arama, aramaYaz] = useSearchParams();
 
   const [durum, durumYaz] = useState<ArkonDurumu>(() => depo.status());
   useEffect(() => depo.onStatus(durumYaz), [depo]);
@@ -177,14 +179,24 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
   const darAlan = useOlcek(kok);
   const numune = useNumuneSayisi(depo);
+  // Kalite maddesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet, 283.25); sayı kabuğun şeridinde çizilir.
+  const sayacYaz = useCerceveSayacYazici(KOK);
+  useEffect(() => { sayacYaz({ kalite: numune > 0 ? numune : null }); }, [sayacYaz, numune]);
+  // Ctrl K'nin ve Malzeme Teslim'in "İş emrini aç"ı Üretim Terminali'ne `?emir=&kart=` ile gelir (çerçevedeki gibi): istek operatör
+  // ekranının okuduğu pencereye bırakılır ve adresten silinir, yenilemede yeniden seçmez.
+  const secilecekEmir = adres === 'operator' ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
+  useEffect(() => {
+    if (secilecekEmir === null) return;
+    emirSeciminiGonder(window, secilecekEmir, emirParametresiOku(arama.get(KART_PARAMETRESI)));
+    aramaYaz((a) => { const y = new URLSearchParams(a); y.delete(EMIR_PARAMETRESI); y.delete(KART_PARAMETRESI); return y; }, { replace: true });
+  }, [secilecekEmir, arama, aramaYaz]);
 
   if (baglam === null) return <DurumKutusu durum="yukleniyor" />;
 
   // Madde hem TMI menüsünde (işlemle) hem Arkon'un sayfa yetkisinde görünür olmalı; TMI ekranı olan madde yalnız TMI işlemine bakar.
   const gorunur = (m: SekmeMaddesi): boolean =>
     maddeGorunurMu(m, islemler) && (Object.hasOwn(SAYFA_DISI, m.anahtar) || baglam.sayfaGorunur(m.anahtar));
-  // Kalite sekmesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet); sayı parantezle yazılır (283.25).
-  const sekmeler = maddeler.filter(gorunur).map((m) => (m.anahtar === 'kalite' && numune > 0 ? { ...m, baslik: `${m.baslik} (${numune})` } : m));
+  const sekmeler = maddeler.filter(gorunur);
 
   // Ayrı sayfa (Üretim Terminali, Kuyruk) sekmede değil; TMI'deki kendi menü satırının işlemi ve Arkon sayfa yetkisiyle açılır.
   // Kuyruk salt okunurdur ve eskisi Arkon sayfa yetkisi istemiyordu (pano-planlama.ts KuyrukApp): Plan Kuyruğu yetkisi olmayan
@@ -194,12 +206,18 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     return t.ayri === true && t.islem !== undefined && islemler.includes(t.islem) && (s === 'kuyruk' || baglam.sayfaGorunur(s));
   };
 
-  if (adres === undefined) {
+  // Rolün giriş sayfası: yalın adres ve göremediği sayfa buraya gider (eskisi göremediği sayfadan ilk açık sayfaya geçerdi: baslat.ts firstPage).
+  const girisHedefi = (): string | null => {
     const giris = arkonGirisSayfasi(arkonRolu, islemler);
-    if (sayfaMi(giris) && ayriAcik(giris)) return <Navigate replace to={sayfaAdresi(giris)} />;
+    if (sayfaMi(giris) && ayriAcik(giris)) return sayfaAdresi(giris);
     const hedef = sekmeler.find((m) => m.anahtar === giris) ?? sekmeler.find((m) => !Object.hasOwn(SAYFA_DISI, m.anahtar));
-    if (hedef === undefined) return <DurumKutusu durum="bos" mesaj="Üretim Hazırlık'ta size açık sayfa yok." />;
-    return <Navigate replace to={sayfaAdresi(hedef.anahtar)} />;
+    return hedef === undefined ? null : sayfaAdresi(hedef.anahtar);
+  };
+
+  if (adres === undefined) {
+    const hedef = girisHedefi();
+    if (hedef === null) return <DurumKutusu durum="bos" mesaj="Üretim Hazırlık'ta size açık sayfa yok." />;
+    return <Navigate replace to={hedef} />;
   }
 
   const sayfa: ArkonSayfasi | null = sayfaMi(adres) ? adres : null;
@@ -210,20 +228,16 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     ? ayriAcik(sayfa)
     : secili !== null && sekmeler.some((m) => m.anahtar === secili) && baglam.sayfaGorunur(sayfa));
   const etiket = ayri ? tanim?.baslik : maddeler.find((m) => m.anahtar === secili)?.baslik;
-
-  const sec = (anahtar: string) => {
-    const disari = SAYFA_DISI[anahtar];
-    void gezin(disari ?? sayfaAdresi(anahtar));
-  };
+  if (!acik && !ayri && sayfa !== null) {
+    const hedef = girisHedefi();
+    if (hedef !== null && hedef !== sayfaAdresi(sayfa)) return <Navigate replace to={hedef} />;
+  }
 
   const Ekran = tanim?.ekran;
   return (
     <ArkonBaglamiKaynagi.Provider value={baglam}>
       <ArkonDarAlanKaynagi.Provider value={darAlan}>
       <div className="tc-ay" ref={kokYaz}>
-        {!ayri && sekmeler.length > 0 && (
-          <Sekmeler etiket="Üretim Hazırlık" sekmeler={sekmeler} secili={secili ?? ''} sec={sec} />
-        )}
         {!acik || Ekran === undefined || sayfa === null
           ? <DurumKutusu durum="bos" mesaj="Bu sayfa bulunamadı ya da size açık değil." />
           : (
