@@ -40,12 +40,17 @@
 }
 .tc-rr3-satir-kap { --serit: var(--edge); min-width: 0; border-bottom: 1px solid var(--edge); border-left: 5px solid var(--serit); }
 .tc-rr3-satir-kap:last-child { border-bottom: 0; }
-.tc-rr3-satir-kap[data-serit="0"] { --serit: var(--grafik); }
-.tc-rr3-satir-kap[data-serit="1"] { --serit: var(--done); }
-.tc-rr3-satir-kap[data-serit="2"] { --serit: var(--hold); }
-.tc-rr3-satir-kap[data-serit="3"] { --serit: var(--grafik-2); }
-.tc-rr3-satir-kap[data-serit="4"] { --serit: var(--stop); }
-.tc-rr3-satir-kap[data-serit="5"] { --serit: var(--run); }
+/* Eski ekranın 10 renklik serisi (464/1 a, --grafik-1..10); değişkenler ortak tasarıma girene kadar plan ekranıyla aynı karşılıklar. */
+.tc-rr3-satir-kap[data-serit="0"] { --serit: var(--grafik-1, var(--grafik)); }
+.tc-rr3-satir-kap[data-serit="1"] { --serit: var(--grafik-2); }
+.tc-rr3-satir-kap[data-serit="2"] { --serit: var(--grafik-3, color-mix(in oklab, var(--run) 85%, var(--grafik))); }
+.tc-rr3-satir-kap[data-serit="3"] { --serit: var(--grafik-4, color-mix(in oklab, var(--hazard) 55%, var(--hold))); }
+.tc-rr3-satir-kap[data-serit="4"] { --serit: var(--grafik-5, color-mix(in oklab, var(--grafik) 50%, var(--grafik-2))); }
+.tc-rr3-satir-kap[data-serit="5"] { --serit: var(--grafik-6, color-mix(in oklab, var(--hold) 80%, var(--stop))); }
+.tc-rr3-satir-kap[data-serit="6"] { --serit: var(--grafik-7, color-mix(in oklab, var(--run) 50%, var(--grafik))); }
+.tc-rr3-satir-kap[data-serit="7"] { --serit: var(--grafik-8, color-mix(in oklab, var(--hazard) 50%, var(--run))); }
+.tc-rr3-satir-kap[data-serit="8"] { --serit: var(--grafik-9, color-mix(in oklab, var(--grafik-2) 75%, var(--done))); }
+.tc-rr3-satir-kap[data-serit="9"] { --serit: var(--grafik-10, color-mix(in oklab, var(--idle) 60%, var(--grafik))); }
 .tc-rr3-satir-kap[data-gec] > .tc-rr3-emir { box-shadow: inset 3px 0 0 var(--stop); }
 .tc-rr3-satir-kap[data-acik] > .tc-rr3-emir { background: var(--panel2); }
 .tc-rr3-satir-kap[data-derinlik="1"] > .tc-rr3-emir { padding-left: calc(var(--b-4) + var(--b-5)); }
