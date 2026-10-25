@@ -16,7 +16,7 @@ export function Raporlar(_o: ArkonEkranOzellikleri) { return <RaporlarSayfasi />
 // Öteki parçaların kullandığı bileşenler (PARCA-SOZLESMESI.md): A1 ve A5 ölçü aleti, numune penceresi ve SPC'yi kullanır.
 export { AletSecimi, NumunePenceresi, OlcuAletleri, olcumAletiBul, useOlcumAletleri, type NumuneIstegi } from './OlcuAletleri.tsx';
 export { SpcGorunumu, SpcGrafigi } from './SpcGorunumu.tsx';
-export { acikNumuneMi, bekleyenNumuneSayisi } from './kurallar.ts';
+export { acikNumuneMi, bekleyenNumuneSayisi, olcumKaydi } from './kurallar.ts';
 
 // Sekme rozeti (eski NavRail nWait): kalitede bekleyen ya da ölçülen numune sayısı; numune ve sonuç iletisinde ve 20 saniyede bir
 // yeniden okunur. A0 sekmesi bunu çağırır.

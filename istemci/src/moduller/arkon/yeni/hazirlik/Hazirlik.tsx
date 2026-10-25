@@ -39,6 +39,16 @@ const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.t
 // Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
 const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
 const MerkezSecici = lazy(async () => ({ default: (await import('../cizim/index.tsx')).MerkezSecici }));
+// Dosya satırındaki merkez rozeti: kendi dosyasının merkezdeki durumunu sorar ("Yeni revizyon var" ve Güncelle, eski hazirlik.ts gibi).
+const MerkezDurumu = lazy(async () => {
+  const { MerkezRozeti, useMerkezUyarilari } = await import('../cizim/index.tsx');
+  return {
+    default: function MerkezDurumu({ f, mesgul, guncelle }: { f: PkgFile; mesgul: boolean; guncelle: (f: PkgFile) => void }) {
+      const uyari = useMerkezUyarilari([f]);
+      return <MerkezRozeti f={f} uyari={uyari} mesgul={mesgul} guncelle={(g) => guncelle(g as PkgFile)} />;
+    },
+  };
+});
 
 // Üretim Terminali Hazırlık (hazirlik.ts PrepApp). Paket TMI'de emir açılınca oluşur; burada resim, kontrol planı, adım, kural ve
 // istasyon ayarı hazırlanır ve operatöre yayınlanır. Değişiklik yarım saniye sonra cihaza ve sunucuya yazılır (eskisi gibi).
@@ -120,6 +130,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const [olcuSec, olcuSecYaz] = useState<number[]>([]);
   const [nSor, nSorYaz] = useState<number | null>(null);
   const [merkezSec, merkezSecYaz] = useState(false);
+  const [merkezMesgul, merkezMesgulYaz] = useState(false);
   const [yayinda, yayindaYaz] = useState(false);
   const dosyaRef = useRef<HTMLInputElement | null>(null);
   const kayitZamani = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -233,12 +244,14 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const merkezdenAl = async (belgeId: number, guncelleme: boolean) => {
     if (!p) return;
     if (!duzenler) { yetkisiz(); return; }
+    merkezMesgulYaz(true);
     try {
       const f = await depo.Server.merkezdenAl(belgeId), r = merkezDosyasiniKoy(p, f);
       yama({ files: r.files, primary: r.primary, plan: r.planSifirla ? [] : p.plan, partNo: p.partNo || f.name.replace(/\.[^.]+$/, '') });
       soyle(f.name + (guncelleme ? ' güncellendi' : ' Çizim Merkezi’nden eklendi'), 'run');
       merkezSecYaz(false);
     } catch (e) { soyle('Çizim Merkezi’nden alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'stop'); }
+    merkezMesgulYaz(false);
   };
   const studyodaAc = async () => {
     if (!studyoAcilir(sayfaGorunur)) { soyle(STUDYO_KAPALI, 'hold'); return; }
@@ -590,6 +603,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                       {f ? (
                         <div className="tc-ay2-dosya">
                           <Simge ad="check" /><b>{f.name}</b><span>{(dosyaBoyu(f) / 1024).toFixed(0)} KB</span>
+                          {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
                           <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
                         </div>
                       ) : <p className="tc-ay2-soluk">{MERKEZDEN_EKLENIR}</p>}
