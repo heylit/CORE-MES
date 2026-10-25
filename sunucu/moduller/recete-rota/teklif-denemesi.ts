@@ -7,9 +7,9 @@ import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { COZUM_SURESI_MS } from './plan-motoru.ts';
 
 // Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.betik), kalemler motorun acil sipariş olayıyla eklenir
-// (motor/teklif.betik). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
+// (motor/teklif.betik). Sayfanın motor kancaları (motor/kancalar.betik) yüklenir (458 a). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
-const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum', 'teklif'] as const;
+const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum', 'kancalar', 'teklif'] as const;
 
 let kod: string | null = null;
 function denemeKodu(): string {
@@ -70,11 +70,12 @@ const ISCI = `
 const { parentPort, workerData } = require('node:worker_threads');
 const vm = require('node:vm');
 const b = vm.createContext({ GIRDI_SAAT_DILIMI: workerData.dilim });
-const m = vm.runInContext(workerData.kod + '\\n;({ girdiKur, teklifDene, teklifTabani });', b, { filename: 'teklif-denemesi.js' });
+b.self = b;
+const m = vm.runInContext(workerData.kod + '\\n;({ girdiKur, teklifDene, teklifTabani, stHazirla });', b, { filename: 'teklif-denemesi.js' });
 const i = workerData.istek;
 const g = m.girdiKur(i.calisma, i.kayit, i.kaynak, i.bugun);
 if (!g) parentPort.postMessage(null);
-else parentPort.postMessage({ baslangic: g.S.D.meta.baslangic, ...m.teklifDene(g.st, m.teklifTabani(g.S), i) });
+else parentPort.postMessage({ baslangic: g.S.D.meta.baslangic, ...m.teklifDene(m.stHazirla(g.st), m.teklifTabani(g.S), i) });
 `;
 
 // Aynı anda tek deneme: kuyruk sırayla çalışır. Süre aşılırsa iş parçacığı durdurulur ve çağrı reddedilir. Çalışma yoksa null.
