@@ -31,18 +31,34 @@ describe('plan şeridi: motor yerleşimi ile canlı plan farkı (eski sayım, 49
       .toEqual({ yok: 0, farkli: 0, emirdeYok: ['Z OP 20'], makinesiz: ['K OP 10'] });
   });
 
-  it('bölünmüş iş parça anahtarıyla eşleşir', () => {
+  it('bölünmüş iş parça anahtarıyla eşleşir; motorun parça adedi canlıdan farklıysa farklıdır, adedi yoksa (yazılamaz) sayılmaz', () => {
     const c = canli([{ makineId: 1, isler: [is('A|10', { parca: { no: 1, adet: 3 } })] }, { makineId: 2, isler: [is('A|10', { parca: { no: 2, adet: 2 } })] }]);
-    expect(planFarki(c, { 'A|10~1': yer(1, '08:00'), 'A|10~2': yer(2, '08:00') })).toMatchObject({ yok: 0, farkli: 0 });
+    const y = { 'A|10~1': yer(1, '08:00'), 'A|10~2': yer(2, '08:00') };
+    expect(planFarki(c, y)).toMatchObject({ yok: 0, farkli: 0 });
+    expect(planFarki(c, y, { 'A|10~1': 3, 'A|10~2': 2 })).toMatchObject({ yok: 0, farkli: 0 });
+    expect(planFarki(c, y, { 'A|10~1': 4, 'A|10~2': 1 })).toMatchObject({ yok: 0, farkli: 2 });
+    expect(planFarki(c, { ...y, 'A|10~3': yer(1, '09:00') }, { 'A|10~1': 3, 'A|10~2': 2, 'A|10~3': null })).toMatchObject({ yok: 0, farkli: 0 });
   });
 });
 
 describe('plan şeridi: durum', () => {
   const c = canli([{ makineId: 1, isler: [is('A|10')] }]);
-  it('fark yoksa plan canlı; fark ya da rotası değişen emir varsa canlıya alınmadı ve değişiklik sayısı', () => {
+  it('fark yoksa plan canlı; fark varsa canlıya alınmadı ve değişiklik sayısı', () => {
     expect(seritDurumu(c, { 'A|10': yer(1, '08:00') }, surum(3))).toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0 });
-    expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'B|10': yer(1, '09:00') }, null, 2))
-      .toMatchObject({ tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 3, parca: '1 iş canlı planda yok, 2 emrin rotası değişti' });
+    expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'B|10': yer(1, '09:00') }, null))
+      .toMatchObject({ tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 1, parca: '1 iş canlı planda yok' });
+  });
+  it('motorun rota ve bölme durumları uyarıdır, sayılmaz (493/2 a)', () => {
+    const motor = { parcaAdetleri: {}, emirler: [
+      { uretimEmriId: 1, emirNo: 'A', teslim: null, bitis: null, bollukGun: null, rotaEski: true, bolmeYazilamaz: [10] },
+      { uretimEmriId: 2, emirNo: 'B', teslim: null, bitis: null, bollukGun: null, rotaEski: false, bolmeYazilamaz: [] },
+    ] };
+    const d = seritDurumu(c, { 'A|10': yer(1, '08:00') }, null, motor);
+    expect(d).toMatchObject({ tur: 'canli', degisiklik: 0 });
+    expect(d.uyarilar).toEqual([
+      '1 emir açıldığı rotada kaldı (yürürlükte yeni rota var).',
+      '1 bölünmüş iş canlıya alınmaz (A OP 10): adımın adedi plandan okunamadı ya da bir parça bir tam adetten az kaldı; iş kartında parçaları birleştirip yeniden bölün.',
+    ]);
   });
   it('uyarılar canlı durumda da yazılır', () => {
     expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'K|10': yer(null, '08:00') }, null).uyarilar)
