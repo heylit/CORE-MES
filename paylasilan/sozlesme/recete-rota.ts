@@ -86,7 +86,25 @@ export const calismaTaslagiGovdesi = z.object({
 export const calismaTaslagiCevabi = z.object({
   taslak: z.object({ id: z.number().int().positive(), surum: z.number().int() }),
   yazilan: z.number().int(), atlanan: z.number().int(), yazilamaz: z.array(z.string()),
+  // 507 2 a: çalışmanın ek vardiyaları taslağa geçer; atlanan: sunucuda karşılığı olmayan (elle girilmiş, kapsam dışı ya da kullanımda
+  // olmayan) makine ya da vardiya. Eski istemciler okumadığı için isteğe bağlı; sunucu her cevapta doldurur.
+  ekMesai: z.object({ yazilan: z.number().int(), atlanan: z.number().int() }).optional(),
 });
+
+// 507 3 a (503'ün tersi): plan taslağının yerleşimleri ve kilitleri çalışmaya yazılır (eski "Çalışmaya aç"ın planı). Yalnız çalışmada
+// işlemi olan, bitmemiş, makinedeki iş yazılır; plan "güncel değil" olur, sayfa yeniden çözer. Veri, arıza, tercih ve ağırlıklar yazılmaz.
+// taslakSurumu ve calismaSurumu okunan sürümlerdir: arada yazıldıysa reddedilir.
+export const taslaktanCalismayaGovdesi = z.object({
+  taslakId: z.number().int().positive(), taslakSurumu: z.number().int().positive(), calismaSurumu: z.number().int(),
+});
+// atlanan: taslakta yerleşik ama çalışmaya yazılamayan iş (anahtar "emir no|OP no"; çalışmada işlemi yok, bitmiş ya da kişide).
+// oncekiSurum: geri almanın döneceği sürüm.
+export const taslaktanCalismayaCevabi = z.object({
+  calismaSurumu: z.number().int(), oncekiSurum: z.number().int(), yazilan: z.number().int(), kilitli: z.number().int(), atlanan: z.array(z.string()),
+});
+// 508 2 a: çalışma kaydı geçmişteki bir önceki sürümüne döner. calismaSurumu okunan sürümdür: arada başka yazma olduysa reddedilir (409).
+export const calismaGeriAlGovdesi = z.object({ calismaSurumu: z.number().int() });
+export const calismaGeriAlCevabi = z.object({ calismaSurumu: z.number().int(), donulenSurum: z.number().int() });
 
 export const silGovdesi = z.object({ anahtar, beklenenSurum: z.number().int() });
 export const silCevabi = z.object({ silindi: z.boolean() });
@@ -581,6 +599,9 @@ export type CanliFarkiCevabi = z.output<typeof canliFarkiCevabi>;
 export type TabanVeCanliCevabi = z.output<typeof tabanVeCanliCevabi>;
 export type CalismaTaslagiGovdesi = z.output<typeof calismaTaslagiGovdesi>;
 export type CalismaTaslagiCevabi = z.output<typeof calismaTaslagiCevabi>;
+export type TaslaktanCalismayaGovdesi = z.output<typeof taslaktanCalismayaGovdesi>;
+export type TaslaktanCalismayaCevabi = z.output<typeof taslaktanCalismayaCevabi>;
+export type CalismaGeriAlCevabi = z.output<typeof calismaGeriAlCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;
 export type YazCevabi = z.output<typeof yazCevabi>;
 export type SilCevabi = z.output<typeof silCevabi>;
