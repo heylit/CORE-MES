@@ -3,8 +3,8 @@ import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  ayarCevir, calismaFarki, calismaIsleri, calismaKuyruklari, degerBicimeUyarMi, planAni, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
-  rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
+  ayarCevir, calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, degerBicimeUyarMi, planAni, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
+  rotasizAdimlariCevir, surumUyarMi, taslaktanCalismaya, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 
 describe('recete-rota kuralları (saf)', () => {
@@ -202,5 +202,35 @@ describe('recete-rota kuralları: çalışma planı ve canlı plan', () => {
     assert.deepEqual(q[0]!.isler[1], {
       emirNo: 'E-1', opNo: 20, dondurulmus: false, elle: true, elleKaynak: true, onizleme: { baslangic: planAni(b, 12), bitis: planAni(b, 13) },
     });
+  });
+
+  test('RR-507-2: ek vardiya sayı kimlikli tezgâh ve vardiyayla, gün takvim günü; elle girilmiş kimlik yazılamaz, tekrar bir kez', () => {
+    const r = calismaEkMesaisi('2026-10-30', [
+      { m: '5', gun: 2, vardiya: '3' }, { m: '5', gun: 2, vardiya: '3' }, { m: 'T1', gun: 0, vardiya: '3' }, { m: '5', gun: 0, vardiya: 'V3' },
+    ]);
+    assert.deepEqual(r, { satirlar: [{ makineId: 5, gun: '2026-11-01', vardiyaId: 3 }], yazilamaz: 2 });
+  });
+
+  test('RR-507-3: taslağın yeri çalışmanın ekseninde yazılır, ayar başlangıcı ve ilk parti aynı kayar; kilit taslağınki; biten ve olmayan işlem atlanır', () => {
+    const b = '2026-10-19';
+    const deger = {
+      D: { meta: { baslangic: b } }, locks: { y: { m: '5', S: 1 }, z: { m: '5', S: 2 } },
+      plan: { dataVer: 3, ops: { x: { S: 10, C: 12, m: '5', Su: 9, lot1: 11, pin: 1 }, y: { S: 20, C: 21, m: '5' }, z: { S: 1, C: 2, m: '5', done: 1 } } },
+    };
+    const r = taslaktanCalismaya(deger, [
+      { k: 'x', anahtar: 'E|10', makineId: 6, baslangic: planAni(b, 14), bitis: planAni(b, 16), kilitli: true },
+      { k: 'y', anahtar: 'E|20', makineId: 5, baslangic: planAni(b, 30), bitis: planAni(b, 31), kilitli: false },
+      { k: 'z', anahtar: 'E|30', makineId: 5, baslangic: planAni(b, 3), bitis: planAni(b, 4), kilitli: true },
+      { k: 'q', anahtar: 'E|40', makineId: 5, baslangic: planAni(b, 3), bitis: planAni(b, 4), kilitli: false },
+    ])!;
+    assert.deepEqual([r.yazilan, r.kilitli, r.atlanan], [2, 1, ['E|30', 'E|40']]);
+    const d = r.deger as typeof deger & { plan: { ops: Record<string, Record<string, unknown>> } };
+    assert.deepEqual(d.plan.ops.x, { S: 14, C: 16, m: '6', Su: 13, lot1: 15, pin: 1 });
+    assert.deepEqual(d.plan.ops.y, { S: 30, C: 31, m: '5' });
+    assert.deepEqual(d.locks, { x: { m: '6', S: 14 }, z: { m: '5', S: 2 } }, 'kilitsiz y açılır, biten z dokunulmaz');
+    assert.equal(d.plan.dataVer, null);
+    assert.equal(deger.plan.ops.x.S, 10, 'girdi değişmez');
+    assert.equal(taslaktanCalismaya({ D: { meta: { baslangic: b } }, plan: null }, []), null, 'planı olmayan çalışma');
+    assert.equal(taslaktanCalismaya({ D: {}, plan: { ops: {} } }, []), null, 'başlangıcı olmayan çalışma');
   });
 });

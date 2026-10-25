@@ -82,6 +82,8 @@ export interface CalismaPlani {
   kimlik: Record<string, string>;
   // Çalışmada plan yoksa null.
   ops: CalismaIslemi[] | null;
+  // Ek vardiyalar (507 2 a): m tezgâh kimliği, gun planın ekseninde gün, vardiya kimliği; ikisi de metin.
+  ekMesai: { m: string; gun: number; vardiya: string }[];
 }
 
 // Girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.

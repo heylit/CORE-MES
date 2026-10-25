@@ -235,7 +235,7 @@ const CANLIYI_KOPYALA = `INSERT INTO plan_senaryo_yerlesimi (${SY_SUTUN})
   SELECT $1, is_emri_id, makine_id, kisi_id, baslangic, bitis, kilitli, dondurulmus, elle_sira, elle_istasyon_id, elle_kaynak FROM plan_yerlesimi`;
 const CANLI_PARCALARI_KOPYALA = `INSERT INTO plan_senaryo_yerlesim_parcasi (senaryo_id, ${PARCA_SUTUN}) SELECT $1, ${PARCA_SUTUN} FROM plan_yerlesim_parcasi`;
 
-// Yeni taslak canlının tam kopyasıdır: yerleşimler ve ayar; taban, açıldığı andaki canlı plan sürümüdür.
+// Yeni taslak canlının tam kopyasıdır: yerleşimler, ayar ve ek vardiyalar; taban, açıldığı andaki canlı plan sürümüdür.
 export async function senaryoAc(db: Db, ad: string, aciklama: string | null, kisiId: number): Promise<number> {
   const id = (await db.tek<{ id: number }>(
     'INSERT INTO plan_senaryosu (ad, aciklama, taban_plan_surumu, acan_kisi_id) SELECT $1, $2, surum, $3 FROM plan_durumu RETURNING id',
@@ -244,10 +244,11 @@ export async function senaryoAc(db: Db, ad: string, aciklama: string | null, kis
   await db.sorgu(CANLIYI_KOPYALA, [id]);
   await db.sorgu(CANLI_PARCALARI_KOPYALA, [id]);
   await db.sorgu(`INSERT INTO plan_senaryo_ayari (senaryo_id, ${AYAR_SUTUN}) SELECT $1, ${AYAR_SUTUN} FROM plan_ayari`, [id]);
+  await ekMesaiKopyala(db, null, id);
   return id;
 }
 
-// Çoğalt: kaynağın yerleşimleri, ayarı ve defteri yeni taslağa kopyalanır; taban kaynağınkidir.
+// Çoğalt: kaynağın yerleşimleri, ayarı, defteri ve ek vardiyaları yeni taslağa kopyalanır; taban kaynağınkidir.
 export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId: number): Promise<number> {
   const id = (await db.tek<{ id: number }>(
     `INSERT INTO plan_senaryosu (ad, aciklama, taban_plan_surumu, acan_kisi_id)
@@ -266,6 +267,7 @@ export async function senaryoCogalt(db: Db, kaynakId: number, ad: string, kisiId
   await db.sorgu(`INSERT INTO plan_senaryo_bedel_ayari (senaryo_id, ${BEDEL_SUTUN}) SELECT $2, ${BEDEL_SUTUN} FROM plan_senaryo_bedel_ayari WHERE senaryo_id = $1`, [kaynakId, id]);
   await db.sorgu(`INSERT INTO plan_senaryo_siparis_carpani (senaryo_id, ${CARPAN_SUTUN}) SELECT $2, ${CARPAN_SUTUN} FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1`,
     [kaynakId, id]);
+  await ekMesaiKopyala(db, kaynakId, id);
   return id;
 }
 
@@ -293,6 +295,8 @@ export async function senaryoSifirla(db: Db, id: number, kisiId: number): Promis
   await ayariCanlidanAl(db, id);
   await bedelTaslaktanSil(db, id);
   await carpanTaslaktanSil(db, id, null);
+  await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [id]);
+  await ekMesaiKopyala(db, null, id);
   await db.sorgu('UPDATE plan_senaryo_degisikligi SET kaldiran_kisi_id = $2, kaldirma = now() WHERE senaryo_id = $1 AND kaldirma IS NULL', [id, kisiId]);
   await tabanYenile(db, id);
 }
@@ -425,3 +429,39 @@ export async function taslakCarpanlari(db: Db, senaryoId: number): Promise<Map<n
 export const carpanlariCanliyaYaz = (db: Db, senaryoId: number) =>
   db.sorgu(`INSERT INTO plan_siparis_carpani (siparis_id, carpan, gerekce, kisi_id)
             SELECT siparis_id, carpan, gerekce, kisi_id FROM plan_senaryo_siparis_carpani WHERE senaryo_id = $1 ORDER BY siparis_id`, [senaryoId]);
+
+/* ---------------- ek mesai (507 2 a, 508 1 a) ---------------- */
+
+// Hedefin (boş: canlı) ek vardiyaları; saat yazıldığı andaki vardiya süresidir.
+export interface EkMesaiSatiri { makineId: number; gun: string; vardiyaId: number; saat: number }
+export async function ekMesailer(db: Db, hedef: Hedef): Promise<EkMesaiSatiri[]> {
+  const r = await db.sorgu<Omit<EkMesaiSatiri, 'saat'> & { saat: string }>(
+    `SELECT makine_id AS "makineId", to_char(gun, 'YYYY-MM-DD') AS gun, vardiya_id AS "vardiyaId", saat FROM plan_senaryo_ek_mesai
+      WHERE senaryo_id IS NOT DISTINCT FROM $1 ORDER BY gun, makine_id, vardiya_id`, [hedef]);
+  return r.map((x) => ({ ...x, saat: Number(x.saat) }));
+}
+// Taslağın ek vardiyaları baştan yazılır (yeni liste eskisinin yerine geçer).
+export async function ekMesaiYaz(db: Db, senaryoId: number, satirlar: readonly EkMesaiSatiri[]): Promise<void> {
+  await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id = $1', [senaryoId]);
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO plan_senaryo_ek_mesai (senaryo_id, makine_id, gun, vardiya_id, saat)
+     SELECT $1, * FROM unnest($2::int[], $3::date[], $4::int[], $5::numeric[])`,
+    [senaryoId, satirlar.map((x) => x.makineId), satirlar.map((x) => x.gun), satirlar.map((x) => x.vardiyaId), satirlar.map((x) => x.saat)]);
+}
+const EK_MESAI_SUTUN = 'makine_id, gun, vardiya_id, saat';
+// Yeni taslak canlının, çoğaltılan kaynağının ek vardiyalarıyla açılır (kaynak boş: canlı).
+export const ekMesaiKopyala = (db: Db, kaynak: Hedef, senaryoId: number) =>
+  db.sorgu(`INSERT INTO plan_senaryo_ek_mesai (senaryo_id, ${EK_MESAI_SUTUN}) SELECT $2, ${EK_MESAI_SUTUN} FROM plan_senaryo_ek_mesai
+             WHERE senaryo_id IS NOT DISTINCT FROM $1`, [kaynak, senaryoId]);
+// Canlıya almada canlının ek vardiyaları taslağınkiyle değişir.
+export async function ekMesaiCanliyaYaz(db: Db, senaryoId: number): Promise<void> {
+  await db.sorgu('DELETE FROM plan_senaryo_ek_mesai WHERE senaryo_id IS NULL');
+  await db.sorgu(`INSERT INTO plan_senaryo_ek_mesai (senaryo_id, ${EK_MESAI_SUTUN}) SELECT NULL, ${EK_MESAI_SUTUN} FROM plan_senaryo_ek_mesai
+                   WHERE senaryo_id = $1`, [senaryoId]);
+}
+// Haftalık ek mesai sınırı (saat); boşsa null (çağıran eski motorun varsayılanını kullanır).
+export const ekMesaiSiniri = async (db: Db): Promise<number | null> => {
+  const r = await db.tek<{ s: string | null }>('SELECT ek_mesai_hafta_saat AS s FROM plan_ayari');
+  return r?.s == null ? null : Number(r.s);
+};

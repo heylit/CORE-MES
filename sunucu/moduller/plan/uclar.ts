@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI,
@@ -113,6 +113,9 @@ export const uclar = [
     govde: canliyaAlGovdesi, cevap: canliyaAlCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.canliyaAl(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/plan/musteri-secenekleri', yetki: 'plan.canliya-al', sorgu: musteriSecenekleriSorgusu, cevap: musteriSecenekleriCevabi,
     isle: ({ db, sorgu }) => servis.musteriSecenekleri(db, sorgu.ara) }),
+  // 507 2 a: taslağın ek vardiyaları baştan yazılır; okuma GET /plan cevabının ekMesai'sidir.
+  uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/ek-mesai', yetki: 'plan.yaz', tekrarKorumali: true, parametre: senaryoParametresi, govde: ekMesaiGovdesi,
+    cevap: planCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.ekMesaiYaz(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/plan/senaryolar/:id/vazgec', yetki: 'plan.studyo', parametre: senaryoParametresi, govde: senaryoSurumGovdesi,
     cevap: senaryolarCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.vazgec(db, kullanici, parametre.id, govde.surum) }),
 ];
