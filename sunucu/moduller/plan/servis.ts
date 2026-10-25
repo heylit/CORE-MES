@@ -1882,6 +1882,13 @@ export async function hizliDene(db: Db, k: Kullanici, id: number, g: { tur: Hizl
 // Canlıya alma (P4, P6, ST-02..ST-04): iki adımlı ve yetkili. Taslağın yerleşimleri ve ayarı canlıya yazılır; başlamış ve bitmiş işler
 // canlıdaki hâliyle kalır; yerleşimin makine ya da kişisi iş emrine yazılır (P3). Sahibi bağlanmamış denemeler varsa alınmaz.
 export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: number; cakismalariKabul: boolean; acilMusteriler?: readonly { degisiklikId: number; firmaId: number }[] }): Promise<CanliyaAlCevabi> {
+  // Kilit sırası: önce plan sürümü, sonra taslak (502 a). Eşzamanlı ikinci canlıya alma birincinin bitmesini bekler; birinci onun taslağını
+  // kardeş olarak kapattıysa ikinci anlamlı 409 alır. Ters sıra kilitlenme ya da zamanlamaya bağlı sonuç verirdi.
+  await s.planSurumu(db, true);
+  const once = await s.senaryo(db, id, true);
+  if (once?.durum === 'vazgecildi' && once.tabanPlanSurumu !== await s.planSurumu(db)) {
+    throw cakisma('Bu taslak, aynı canlı plandan açılmış başka bir taslak canlıya alındığı için kapandı; canlı planla yeni taslak açın.');
+  }
   const { x, dortGozsuz } = await onayGecisi(db, k, id, g.surum, 'canliya-al');
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
@@ -1984,7 +1991,20 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }), k.id);
   await s.onayKaydiEkle(db, id, 'canliya_al', k.id, null, dortGozsuz);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
+  await kardesleriKapat(db, k, id, x.tabanPlanSurumu);
   return { ...(await senaryolar(db, k)), ...(motorFarki === undefined ? {} : { motorFarki }) };
+}
+
+// 502 a: aynı tabandan açılmış öbür açık ve onaydaki taslaklar canlıya alanın adına kapanır; ekranın kapatma yoluyla aynı kayıtlar:
+// onaydaki önce onaydan çekilir (onay kaydı), sonra vazgeçilir. Kalsalardı Arkon'da sıraları onay bekler görünürdü.
+async function kardesleriKapat(db: Db, k: Kullanici, id: number, taban: number): Promise<void> {
+  for (const t of await s.kardesTaslaklar(db, id, taban)) {
+    if (t.durum === 'onayda') {
+      await s.senaryoDurumYaz(db, t.id, 'onayda', 'acik');
+      await s.onayKaydiEkle(db, t.id, 'onaydan_cek', k.id, null);
+    }
+    await s.senaryoKapat(db, t.id, 'vazgecildi', k.id);
+  }
 }
 
 interface AcilVeri { malzemeNo: number; adet: number; teslim: string; revizyonId: number; siparisId?: number; uretimEmriId?: number }
