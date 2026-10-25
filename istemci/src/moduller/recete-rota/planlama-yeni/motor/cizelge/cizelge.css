@@ -174,10 +174,12 @@
 .tc-pym-gy-blok[data-sol] { border-left-style: dashed; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .tc-pym-gy-blok[data-sag] { border-right-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .tc-pym-gy-blok[data-gec] { box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--stop); }
+.tc-pym-gy-blok[data-risk] { box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--hazard); }
 .tc-pym-gy-blok[data-soluk] { opacity: .55; }
 .tc-pym-gy-blok[data-dondu] { outline: var(--pay-ince) solid var(--grafik); outline-offset: calc(var(--pay-ince) * -1); }
 .tc-pym-gy-blok[data-secili] { z-index: 2; border-color: var(--hazard); box-shadow: 0 0 0 var(--pay-ince) var(--hazard); opacity: 1; }
 .tc-pym-gy[data-istisna] .tc-pym-gy-blok { --c: var(--muted) !important; }
+.tc-pym-gy[data-istisna] .tc-pym-gy-blok[data-risk] { --c: var(--hazard) !important; }
 .tc-pym-gy[data-istisna] .tc-pym-gy-blok[data-gec] { --c: var(--stop) !important; }
 .tc-pym-gy[data-istisna] .tc-pym-gy-blok[data-secili] { --c: var(--sig) !important; }
 .tc-pym-gy[data-kilit] .tc-pym-gy-blok:not([data-kilit]) { opacity: .35; }
@@ -503,3 +505,16 @@ button.tc-pym-m-ad:hover b { text-decoration: underline; }
   .tc-pym-m-ad .tc-pym-kucuk-yazi { white-space: normal; }
   .tc-pym-m-h { min-width: calc(var(--b-6) * 1.625); }
 }
+
+/* Ayrıntıdaki kendi genişliğindeki seçim kutusu (pm-oto). */
+.tc-pym-denetci .tc-pym-oto { width: auto; }
+
+/* Matris hücre ipucu (pm-ipucu): hücrenin üstünde, yer yoksa altında; ekran kenarını aşmaz. */
+.tc-pym-ipucu {
+  --tc-pym-ip-w: min(calc(var(--b-6) * 10), calc(100vw - var(--b-4)));
+  position: fixed; z-index: var(--z-bildirim); top: var(--y); left: clamp(calc(var(--tc-pym-ip-w) / 2 + var(--b-2)), var(--x), calc(100vw - var(--tc-pym-ip-w) / 2 - var(--b-2)));
+  max-width: var(--tc-pym-ip-w);
+  padding: var(--b-1) var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); box-shadow: var(--shadow);
+  color: var(--ink); font-size: var(--yazi-xs); white-space: pre-line; pointer-events: none; transform: translate(-50%, calc(-100% - var(--b-2)));
+}
+.tc-pym-ipucu[data-alt] { transform: translate(-50%, var(--b-2)); }

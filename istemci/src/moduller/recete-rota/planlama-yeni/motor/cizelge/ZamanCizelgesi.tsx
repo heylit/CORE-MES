@@ -33,7 +33,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
         {s.ariza.map((k) => <i key={`a${k.x}`} className="tc-pym-g-ariza" title={k.baslik} ref={degisken({ '--x': k.x, '--w': k.w })} />)}
         {v.cizgiler.map((x) => <i key={`c${x}`} className="tc-pym-g-gunc" ref={degisken({ '--x': x })} />)}
         <i className="tc-pym-g-simdi" ref={degisken({ '--x': now })} />
-        {v.termin != null && <i className="tc-pym-g-termin" ref={degisken({ '--x': v.termin })} />}
+        {v.termin != null && <i className="tc-pym-g-termin" title={`Termin ${v.terminYazi ?? ''}`} ref={degisken({ '--x': v.termin })} />}
         {s.isler.map((i) => (
           <button key={i.id} type="button" className="tc-pym-g-is" data-job={i.job} data-gec={i.gec ? '' : undefined} data-soluk={i.soluk ? '' : undefined}
             data-secili={o.secili === i.id ? '' : undefined} title={i.baslik} aria-label={i.baslik}

@@ -17,7 +17,8 @@ interface Ozellikler {
   pan: KbPanel | null; panAc: (v: KbPanel | null) => void; studyo: () => void;
 }
 const KISAYOLLAR: [string, [string, string][]][] = [
-  ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi']]],
+  ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi'],
+    ['V', 'Ölçek: gün, hafta, ay, yıl (çizelge, matris, odak, özet, sevkiyat, malzeme planı)']]],
   ['Bul ve seç', [['/', 'Sipariş, tezgâh ya da komut ara'], ['Ctrl K', 'Komut arama'], ['Esc', 'Menüyü, sonra seçimi kapat']]],
   ['Düzenle', [['E', 'Seçilene göre Düzenle menüsü'], ['1 - 9', 'Menüdeki komut'], ['← →', 'İşi 1 saat kaydır (Shift: çeyrek)'], ['↑ ↓', 'Yapabilen bir önceki ya da sonraki tezgâh'], ['[ ]', 'Kuyrukta bir öne, bir arkaya'], ['Backspace', 'Menüde geri']]],
   ['Değişiklikler', [['D', 'Değişiklik listesi'], ['Ctrl Z', 'Geri al'], ['Ctrl Shift Z', 'Yinele'], ['Ctrl Enter', 'Onayla, listeyi temizle']]],

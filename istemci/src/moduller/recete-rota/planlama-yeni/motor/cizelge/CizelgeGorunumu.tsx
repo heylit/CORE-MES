@@ -62,8 +62,11 @@ export function CizelgeGorunumu(o: Ozellikler) {
   const g = Math.max(0, kayma);
   const secJob = secim.adim && p.ops[secim.adim] ? p.ops[secim.adim]?.job ?? null : secim.siparis;
 
-  const isSec = useCallback((id: string) => { sec({ adim: secim.adim === id ? null : id, siparis: null, tezgah: null }); }, [sec, secim.adim]);
-  const tezSec = useCallback((m: string) => { sec({ tezgah: m, adim: null, siparis: null }); sagAc('ayrinti'); }, [sec, sagAc]);
+  // Gün katmanında tezgâh adına basmak tezgâh ayrıntısını açar, seçili iş blokta seçili kalır (eski gySec ayrı tutulur, gy-tez).
+  const [gyKalan, setGyKalan] = useState<string | null>(null);
+  const isSec = useCallback((id: string) => { setGyKalan(null); sec({ adim: secim.adim === id ? null : id, siparis: null, tezgah: null }); }, [sec, secim.adim]);
+  const tezSec = useCallback((m: string) => { setGyKalan(olcek === 'gun' ? secim.adim ?? gyKalan : null); sec({ tezgah: m, adim: null, siparis: null }); sagAc('ayrinti'); }, [sec, sagAc, olcek, secim.adim, gyKalan]);
+  const gySecili = secim.adim ?? (secim.tezgah ? gyKalan : null);
   // Siparişler merceğinde işe basmak seçer, seçimi kaldırmaz (c-masa op).
   const opSec = useCallback((id: string) => { sec({ adim: id, siparis: null, tezgah: null }); }, [sec]);
   // Gün başlığı o günü saatlik açar (ol-gun); gün düğmeleri saatlik günü değiştirir (gy-gun).
@@ -114,7 +117,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
   if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} />;
   else if (mercek === 'kuyruk') govde = <KuyrukCizelgesi c={c} p={p} cx={cx} planYaz={o.planYaz} gun={kGun} gunSec={setKGun} odak={kTez} masadaGor={masadaGor} />;
   else if (mercek === 'matris') govde = <MatrisCizelgesi c={c} p={p} cx={cx} olcek={olcek} gor={mGor} gorSec={setMGor} gun={mGun} gunSec={setMGun} kuyrukAc={kuyrukAc} sipSec={sipSec} />;
-  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={secim.adim} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
+  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
   else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} />;
 
   return (

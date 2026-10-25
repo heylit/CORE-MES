@@ -9,7 +9,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { PlanlamaMotoru } from './index.tsx';
-import { MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
+import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
 import { ornekCalisma } from './ornek.ts';
 
 afterEach(cleanup);
@@ -105,6 +105,7 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }).getAttribute('aria-checked')).toBe('true');
     fireEvent.click(screen.getByRole('menuitem', { name: /Klavye kısayolları/ }));
     expect(screen.getByRole('dialog', { name: 'Klavye kısayolları' }).textContent).toContain('Seçilene göre Düzenle menüsü');
+    expect(screen.getByRole('dialog', { name: 'Klavye kısayolları' }).textContent).toContain('Ölçek: gün, hafta, ay, yıl (çizelge, matris, odak, özet, sevkiyat, malzeme planı)');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Klavye kısayolları' })).toBeNull();
   });
@@ -238,6 +239,8 @@ describe('PlanlamaMotoru', () => {
     expect(within(sp).getByText(/72,9 sa gecikme/)).toBeTruthy();
     expect(within(sp).getByText('Kapasitesiz en erken').nextElementSibling?.textContent).toMatch(/^\d\d\.\d\d \S+ \d\d:\d\d \(plan 8 sa sonra\)$/);
     expect(within(sp).getByRole('button', { name: 'Düzenle' }).getAttribute('title')).toContain(YOK_NOTU);
+    const onc = within(sp).getByRole('combobox', { name: 'Öncelik' }) as HTMLSelectElement;
+    expect([onc.disabled, onc.title]).toEqual([true, `Öncelik: ${VERI_NOTU}`]);
     expect(within(sp).getByRole('heading', { name: 'Süre nereye gitti' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Siparişler' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(within(arac).getByRole('button', { name: 'Havuz' }));
@@ -459,6 +462,11 @@ describe('PlanlamaMotoru', () => {
     expect(rota.querySelector('li[data-bu]')?.textContent).toBe('34,4 sa + ayar 0,6 sa');
     expect(within(dk()).getByRole('button', { name: 'Rotalar' }).getAttribute('title')).toBe(`Rotalar: ${YOK_NOTU}`);
     expect((within(dk()).getByRole('combobox') as HTMLSelectElement).value).toBe('2');
+    // Seçim kutusundan başka sipariş: sekme Rota'da kalır (mz-rota-j).
+    fireEvent.change(within(dk()).getByRole('combobox'), { target: { value: '3' } });
+    expect(within(dk()).getByRole('tab', { name: 'Rota' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(dk()).getByRole('list', { name: '3 rotası' })).toBeTruthy();
+    fireEvent.change(within(dk()).getByRole('combobox'), { target: { value: '2' } });
     // Özet'te "Kartı aç" paneli odaklar ve Yön ver'e döner.
     fireEvent.click(screen.getByRole('button', { name: 'Kartı aç' }));
     expect(document.activeElement).toBe(dk());
@@ -494,6 +502,7 @@ describe('PlanlamaMotoru', () => {
     expect(dk().textContent).toContain('TEZGÂH');
     fireEvent.click(within(dk()).getByRole('button', { name: 'Gün planı' }));
     expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Gün' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Hafta' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Gün' }).getAttribute('aria-pressed')).toBe('false');
   });
 });

@@ -86,8 +86,10 @@ export function erkenBaslama(p: OkunanPlan, cx: Derleme, id: string): ErkenBasla
 export interface GunAraligi { x: number; w: number }
 export interface GunBlogu {
   id: string; job: string; ad: string; x: number; w: number; renk: string; baslik: string;
-  sol: boolean; sag: boolean; secili: boolean; soluk: boolean; gec: boolean; sabit: boolean; dondu: boolean;
+  sol: boolean; sag: boolean; secili: boolean; soluk: boolean; gec: boolean; risk: boolean; sabit: boolean; dondu: boolean;
 }
+// Gecikmiyor ama tamponlu termini aşmış sipariş risk altındadır (s-gun gyRisk).
+export const riskte = (J: OkunanPlan['J'][string] | undefined): boolean => !!J && J.dueB != null && J.C != null && J.C > J.dueB + 0.05 && !((J.T ?? 0) > 0.05);
 export interface GunSatiri {
   m: string; etiket: string; ad: string; oran: number | null; isi: number; uygun: boolean | null;
   kapali: GunAraligi[]; ariza: GunAraligi[]; bloklar: GunBlogu[]; erken: (GunAraligi & { ad: string; t: number; cizgi: number | null }) | null;
@@ -123,7 +125,7 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
       return {
         id: r.id, job: r.job, ad: o?.ad ?? '', x: x(s), w: w(s, e), renk: renk(D, r.job),
         baslik: `${r.id} · ${o?.ad ?? ''} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}${kl ? (kl.gun != null ? ' · dondurulmuş gün' : ' · sabit') : ''}`,
-        sol: r.S < a, sag: r.C > b, secili: sec?.id === r.id, soluk: !!sJ && r.job !== sJ, gec: (p.J[r.job]?.T ?? 0) > 0.05, sabit: !!kl, dondu: kl?.gun != null,
+        sol: r.S < a, sag: r.C > b, secili: sec?.id === r.id, soluk: !!sJ && r.job !== sJ, gec: (p.J[r.job]?.T ?? 0) > 0.05, risk: riskte(p.J[r.job]), sabit: !!kl, dondu: kl?.gun != null,
       };
     });
     const acik = M ? M.rw.reduce((s, [u, v]) => s + Math.max(0, Math.min(v, b) - Math.max(u, a)), 0) : 24;
@@ -150,7 +152,7 @@ export interface ZamanBasligi { x: number; w: number; ad: string; tatil: boolean
 export interface ZamanIsi { id: string; job: string; x: number; w: number; renk: string; ayar: number; gec: boolean; soluk: boolean; kilit: boolean; etiket: string | null; baslik: string }
 export interface ZamanSatiri { m: string; kod: string; ad: string; u: number | null; kapali: { x: number; w: number }[]; ariza: { x: number; w: number; baslik: string }[]; isler: ZamanIsi[] }
 export interface ZamanGrubu { g: string; n: number; u: number | null; satirlar: ZamanSatiri[] }
-export interface ZamanCizelgesi { px: number; saat: number; basliklar: ZamanBasligi[]; cizgiler: number[]; gruplar: ZamanGrubu[]; fason: ZamanSatiri[]; termin: number | null }
+export interface ZamanCizelgesi { px: number; saat: number; basliklar: ZamanBasligi[]; cizgiler: number[]; gruplar: ZamanGrubu[]; fason: ZamanSatiri[]; termin: number | null; terminYazi: string | null }
 
 export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, olcek: DonemOlcegi, secJob: string | null): ZamanCizelgesi {
   const D = c.D; const px = ZAMAN_PX[olcek];
@@ -208,7 +210,7 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
   }
   const s = secJob ? D.siparisler.find((z) => z.id === secJob) : undefined;
   const termin = s ? saatOku(D, s.termin) : null;
-  return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin };
+  return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin, terminYazi: s?.termin ?? null };
 }
 
 // Adımın adedi: adım başına girilen adet (opAdet) yoksa siparişin adedi.
@@ -218,8 +220,7 @@ function adimAdedi(D: PlanVerisi, id: string, siparis: number): number {
 }
 
 // --- ayrıntı (c-masa opDenetci, o-tahta tbTezPaneli) ---
-// Uygun tezgâhlar ve süreleri, motorun derlemesiyle aynı hesap (engine.betik: arıza payı, verim, adımın adedi); fasonda süre yoktur.
-// Motorun öğrendiği süre sapması istemcide yoktur; süre onsuz hesaplanır.
+// Uygun tezgâhlar ve süreleri, motorun derlemesiyle aynı hesap (engine.betik: arıza payı, verim, adımın adedi, süre olayının çarpanı); fasonda süre yoktur.
 export interface Aday { m: string; sure: number | null }
 export function adaylar(c: PlanlamaCalismasi, cx: Derleme, id: string): Aday[] {
   return adaySureleri(c, cx, id).map((x) => ({ m: x.m, sure: x.run == null || x.su == null ? null : x.su + x.run }));
@@ -231,13 +232,13 @@ export function adaySureleri(c: PlanlamaCalismasi, cx: Derleme, id: string): Ada
   const D = cx.g.D; const j = D.siparisler.find((s) => s.id === o.job);
   const k = id.slice(o.job.length + 1); const adim = D.urunler.find((u) => u.id === j?.urun)?.rota?.find((x) => String(x.k) === k);
   const adet = adimAdedi(D, id, Number(j?.adet) || 0);
-  const acilPay = Number(c.param.acilPay) || 0;
+  const acilPay = Number(c.param.acilPay) || 0; const x = cx.g.sapma[id] || 1;
   return o.c.map((m): AdaySuresi => {
     if (m.startsWith('@')) return { m, su: null, run: null };
     const t = adim?.tezgahlar?.find((x) => x.id === m); const M = D.tezgahlar.find((x) => x.id === m);
     const arizaGun = Number(M?.arizaGun) || 0;
     const pay = c.param.tampon ? Math.min(0.35, (arizaGun > 0 ? (Number(M?.onarimSaat) || 0) / (arizaGun * 24) : 0) + acilPay) : 0;
-    const cyc = (Number(t?.cevrim) || 0) / 60 / (1 - pay); const verim = Number(M?.verim) || 1;
+    const cyc = ((Number(t?.cevrim) || 0) / 60) * x / (1 - pay); const verim = Number(M?.verim) || 1;
     return { m, su: (Number(t?.ayar) || 0) / 60, run: (adet * cyc) / verim };
   });
 }

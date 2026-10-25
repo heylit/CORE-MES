@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, gunCizelgesi, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunCizelgesi, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -119,5 +119,33 @@ describe('çizelge hesapları', () => {
     expect(matrisSutunlari(c.D, cx, 'ay', v.d0, 7).map((s) => s.tarih)).toEqual(['Eki', 'Kas', 'Ara']);
     expect(matrisSutunlari(c.D, cx, 'yil', v.d0, 7).map((s) => [s.tarih, s.a, s.b])).toEqual([['2026', 0, 63]]);
     expect(matris(c, p, cx, v, 'tezgah', 'gun', 14).sutunlar).toHaveLength(14);
+  });
+
+  it('süre olayı adımın işleme süresini çarpar (sureOp; sure başlamış adımı atlar), ayar değişmez', () => {
+    const { c, p } = kur();
+    const taban = derle(girdiKur(c, plandanBitenler(c, p)));
+    const t0 = adaySureleri(c, taban, '3.10')[0];
+    const urun = c.D.siparisler.find((s) => s.id === '2')?.urun;
+    c.olaylar = [{ tip: 'sureOp', id: '3.10', oran: 2 }, { tip: 'sure', urun, k: '20', oran: 3 }];
+    const cx = derle(girdiKur(c, plandanBitenler(c, p)));
+    expect([cx.g.sapma['3.10'], cx.g.sapma['2.20']]).toEqual([2, 3]);
+    // Planda şimdiden önce başlamış adımın süresi değişmez.
+    const S = p.ops['2.20']?.S ?? 0;
+    expect(derle(girdiKur({ ...c, simdi: S + 1 }, plandanBitenler(c, p))).g.sapma['2.20']).toBeUndefined();
+    const t1 = adaySureleri(c, cx, '3.10')[0];
+    expect([t1?.su, Number(((t1?.run ?? 0) / (t0?.run ?? 1)).toFixed(6))]).toEqual([t0?.su, 2]);
+  });
+
+  it('risk: gecikmeyen ama tamponlu termini aşan sipariş', () => {
+    expect(riskte({ C: 10, T: 0, dueB: 9 })).toBe(true);
+    expect(riskte({ C: 10, T: 1, dueB: 9 })).toBe(false);
+    expect(riskte({ C: 8, T: 0, dueB: 9 })).toBe(false);
+    expect(riskte({ C: 10, T: 0, dueB: null })).toBe(false);
+  });
+
+  it('zaman çizelgesinde termin çizgisinin ipucu kayıttaki termin', () => {
+    const { c, p, cx } = kur();
+    const z = zamanCizelgesi(c, p, cx, 'hafta', '2');
+    expect(z.terminYazi).toBe(c.D.siparisler.find((s) => s.id === '2')?.termin);
   });
 });
