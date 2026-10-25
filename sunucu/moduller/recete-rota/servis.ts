@@ -21,14 +21,14 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { fasonSuresiTahminleri, malzemeGelisTarihleri, tedarikTerminleri } from '../satin-alma/disari.ts';
+import { fasonSuresiTahminleri, malzemeGelisTarihleri, tedarikIhtiyaclariniYaz, tedarikTerminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaMatrisi, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  acikSiparisSatirlari, type AcikSiparisGelisi, adimCiktisiBul, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
+  acikSiparisSatirlari, type AcikSiparisGelisi, adimCiktisiBul, gerekenTarihler, adimKimligi, ayarCevir, bitisAkisiEkle, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, calisanAdimlariCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru, bagliDilimleriAyikla,
   planAni, planGunu, planSaati, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
@@ -77,6 +77,7 @@ export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: 
   const kayit = mevcut === null ? await sorgular.kayitEkle(db, satir) : await sorgular.kayitGuncelle(db, satir);
   // Eşzamanlı ilk yazmada öteki kazandı.
   if (kayit === null) throw cakisma(CAKISMA_ILETISI);
+  if (planlama) await gerekenTarihleriBildir(db, deger);
   // Ana durum kaydında statülü adımların statüleri aynı transaction'da eşitlenir (kart #1107).
   if (anaKayit) {
     await sorgular.statuEsitle(db, await yururluktekiRevizyonla(db, statuleriTuret(g.deger)));
@@ -375,6 +376,14 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
   // 533 a: malzemenin tedarik termini Satın Alma'dandır; planlamada her malzeme satırında görünür (yazma ucu satın almanın).
   const terminler = d.items === null ? null : await malzemeTerminleri(db, d.items);
   return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), acikSiparisler, tedarikTerminleri: terminler } };
+}
+
+// 533 a: plan kaydedilince malzemenin olması gereken tarihi Satın Alma'ya aynı transaction'da gider (tam liste: planın artık istemediğinin tarihi
+// boşalır). Katalogda olmayan kod (silinmiş kart, sayfanın yerel malzemesi) bildirilmez: Satın Alma bilinmeyen malzemeyi reddeder.
+async function gerekenTarihleriBildir(db: Db, calisma: unknown): Promise<void> {
+  const l = gerekenTarihler(calisma).flatMap((x) => (/^\d+$/.test(x.kod) ? [{ malzemeNo: Number(x.kod), gerekenTarih: x.gerekenTarih }] : []));
+  const kartlar = await malzemeOzetleri(db, l.map((x) => x.malzemeNo));
+  await tedarikIhtiyaclariniYaz(db, l.filter((x) => kartlar.has(x.malzemeNo)));
 }
 
 // 533 a: ham malzemenin tedarik termini ve sürümü (girdi.betik plandaki malzemeye yazar). Satırı olmayan malzeme listede yoktur.
