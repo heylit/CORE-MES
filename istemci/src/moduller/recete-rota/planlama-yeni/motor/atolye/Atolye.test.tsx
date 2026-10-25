@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../../planlama-menusu.ts';
@@ -13,6 +13,10 @@ import { HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
 import { ornekCalisma } from '../ornek.ts';
 
 afterEach(cleanup);
+// Brifing günü tarayıcıda; testler öntanımlı olarak bugün görülmüş sayar.
+const BRIF = 'tmi:planlama:brif';
+const bugunAnahtari = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+beforeEach(() => { localStorage.setItem(BRIF, bugunAnahtari()); });
 
 const DEPO = {
   durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null },
@@ -21,7 +25,7 @@ const DEPO = {
 function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
-  const c = o.c === undefined ? { ...ornekCalisma(), tpBrif: 'hep' } as PlanlamaCalismasi : o.c;
+  const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile: vi.fn(),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : [])], { yazabilir: yaz }),
@@ -39,7 +43,7 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 }
 const komutKur = (c: PlanlamaCalismasi) => {
   const yazilan: PlanlamaCalismasi[] = [];
-  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false } as unknown as CalismaKomutu;
+  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false, geriAdimlari: () => [], geriDon: vi.fn() } as unknown as CalismaKomutu;
   return { komut, yazilan };
 };
 const kart = () => screen.getByRole('dialog');
@@ -105,7 +109,7 @@ describe('PlanlamaAtolyesi', () => {
   });
 
   it('çubuğa dokununca iş kartı; kilit çalışmaya yazılır', () => {
-    const c = { ...ornekCalisma(), tpBrif: 'hep' } as PlanlamaCalismasi;
+    const c = ornekCalisma();
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
     const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
@@ -116,7 +120,7 @@ describe('PlanlamaAtolyesi', () => {
   });
 
   it('donuk bölge ağırlığa yazılır; Diğer menüsü ölçek ve sekmeler', () => {
-    const c = { ...ornekCalisma(), tpBrif: 'hep' } as PlanlamaCalismasi;
+    const c = ornekCalisma();
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
     fireEvent.click(screen.getByRole('button', { name: 'Diğer' }));
@@ -127,15 +131,21 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(kart()).getByRole('button', { name: 'Atölye ekranı' }).getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('sabah brifingi günün ilk açılışında; kapatınca çalışmaya yazılır', () => {
+  it('sabah brifingi günün ilk açılışında (gün tarayıcıda); gün başı açılışta çalışmaya sessiz yazılır', () => {
+    localStorage.removeItem(BRIF);
     const c = ornekCalisma();
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
     const b = screen.getByRole('region', { name: 'Sabah brifingi' });
     expect(within(b).getByText('1 geciken, 1 riskli sipariş')).toBeTruthy();
+    expect(localStorage.getItem(BRIF)).toBe(bugunAnahtari());
     fireEvent.click(within(b).getByRole('button', { name: 'Kapat' }));
     expect(screen.queryByRole('region', { name: 'Sabah brifingi' })).toBeNull();
-    expect(typeof yazilan.at(-1)?.tpBrif).toBe('string');
+    expect(yazilan.every((t) => !('tpBrif' in t) || t.tpBrif === c.tpBrif)).toBe(true);
+    const gun = yazilan.at(-1)?.tpGun as { basi: { gun: string; e: { late: number } } } | undefined;
+    expect(gun?.basi.gun).toBe(bugunAnahtari());
+    expect(gun?.basi.e.late).toBe(1);
+    expect(vi.mocked(komut.degistir).mock.calls.at(-1)?.[2]).toEqual({ sessiz: true });
   });
 
   it('Bugün şeridi açılır; Gün özeti kartı', () => {

@@ -3,7 +3,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, canliFark, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, canliFark, gunYeni, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs,
 } from './kurallar.ts';
 
@@ -118,5 +118,16 @@ describe('atölye kuralları', () => {
       expect(t).toBe(h[j]);
       for (const x of L) expect(x.kaynak.reduce((a, u) => a + u.miktar, 0) + x.eksik).toBeCloseTo(x.ihtiyac, 6);
     }
+  });
+
+  it('gün başı bir kez yazılır; anahtar sırası değişse de yeniden yazılmaz', () => {
+    const { c, p } = kur();
+    const g = gunYeni(c, p, '2026-10-25');
+    expect(g).not.toBeNull();
+    const ters = (v: unknown): unknown => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, ters(x)])) : v);
+    expect(gunYeni({ ...c, tpGun: ters(g) } as PlanlamaCalismasi, p, '2026-10-25')).toBeNull();
+    const ertesi = gunYeni({ ...c, tpGun: g } as PlanlamaCalismasi, p, '2026-10-26') as { gecmis: Record<string, unknown>; basi: { gun: string } };
+    expect(Object.keys(ertesi.gecmis).sort()).toEqual(['2026-10-25', '2026-10-26']);
+    expect(ertesi.basi.gun).toBe('2026-10-26');
   });
 });

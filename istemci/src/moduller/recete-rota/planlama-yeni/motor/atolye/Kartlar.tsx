@@ -5,7 +5,7 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { degisken, HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, duruslar, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -133,7 +133,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       return {
         ad: 'Geri al', simge: 'back', ic: (
           <>
-            <Kararlar ort={ort} n={10} />
+            <Kararlar ort={ort} n={10} bos="Bu panoda geri alınacak karar yok." />
             <div className="tc-pym-tp-eylem">
               <button type="button" className="tc-dugme" aria-disabled="true" title={`Yinele: ${MOTOR_NOTU}`}><Simge ad="next" boyut="k" />Yinele</button>
               <button type="button" className="tc-dugme" aria-disabled="true" title={`Taslağı sıfırla: ${MOTOR_NOTU}`}><Simge ad="rotate" boyut="k" />Taslağı sıfırla</button>
@@ -274,8 +274,6 @@ function Donuk({ ort }: { ort: Ortam }) {
   );
 }
 
-const IZ_KARAR = /^(Plan elle değişti|Deneme ana plana alındı)$/;
-const IZ_ONAY = /onay|canlı/i;
 // Gün özeti (KART.gun): gün başı ile şimdi, bugünkü kararlar ve onay hareketleri, bitişi değişen siparişler, arızalar, geçmiş günler.
 function gunOzeti(ort: Ortam): Govde {
   const { c, p, o } = ort; const D = c.D;

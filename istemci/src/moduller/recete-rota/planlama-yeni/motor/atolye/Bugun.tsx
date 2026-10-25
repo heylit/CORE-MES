@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import type { IzSatiri } from '../../tipler.ts';
 import { MOTOR_NOTU } from '../ortak.tsx';
 import { akis, asilBekleme, DARBOGAZ, duruslar, gs, malzemeGec, sure, tz, yukOranlari, zs } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
 // Bugün (cizBugun): katlanır alt şerit; geciken ve riskli siparişler, asıl beklemesi ve son kararlar. Eski panonun her sipariş için arka planda
-// aradığı çözüm yolları motor ister (357 b). Kararlar çalışmanın değişiklik izindendir; yalnız son değişiklik geri alınır.
+// aradığı çözüm yolları motor ister (357 b). Kararlar bu oturumun geri alma listesidir.
 export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
   const { c, liste } = ort;
   const L = liste.filter((x) => x.durum !== 'iyi'); const gec = L.filter((x) => x.durum === 'gec').length;
@@ -38,7 +37,7 @@ export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
           </div>
           <div>
             <h4>Son kararlar</h4>
-            <Kararlar ort={ort} n={8} />
+            <Kararlar ort={ort} n={8} bos="Bu oturumda karar yok." />
           </div>
         </div>
       )}
@@ -47,19 +46,17 @@ export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
 }
 
 const saatTr = (t: number) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-// Değişiklik izinin son satırları; en üstteki bu oturumda yapıldıysa "Öncesine dön" onu geri alır.
-export function Kararlar({ ort, n }: { ort: Ortam; n: number }) {
-  const { c, o } = ort; const komut = o.komut;
-  const L: IzSatiri[] = c.iz.slice(0, n);
-  if (!L.length) return <p className="tc-pym-tp-not">Bu çalışmada karar yok.</p>;
-  const geri = ort.yaz && !!komut?.geriAlinabilir();
+// Bu oturumda geri alınabilir kararlar (eski S.geri), en yenisi önce; "Öncesine dön" o karar dahil sonrakileri birlikte geri alır.
+export function Kararlar({ ort, n, bos }: { ort: Ortam; n: number; bos: string }) {
+  const komut = ort.o.komut;
+  const L = komut?.geriAdimlari().slice(0, n) ?? [];
+  if (!L.length) return <p className="tc-pym-tp-not">{bos}</p>;
   return (
     <>
       {L.map((g, i) => (
         <div key={`${g.t}-${i}`} className="tc-pym-tp-kar">
-          <span>{g.ne}<small>{`${saatTr(g.t)}${g.ayrinti ? ` · ${g.ayrinti}` : ''}`}</small></span>
-          <button type="button" className="tc-dugme" aria-disabled={!(i === 0 && geri)} title={i === 0 && geri ? 'Bu kararı geri al' : 'Yalnız bu oturumdaki son değişiklik geri alınır.'}
-            onClick={() => { if (i === 0 && geri) komut?.geriAl(); }}>
+          <span>{g.ne}<small>{saatTr(g.t)}</small></span>
+          <button type="button" className="tc-dugme" aria-disabled={!ort.yaz} title="Bu karardan öncesine dön" onClick={() => { if (ort.yaz) komut?.geriDon(i + 1); }}>
             <Simge ad="back" boyut="k" />Öncesine dön
           </button>
         </div>
