@@ -193,7 +193,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
     return (
       <FormluAcilim
         key={`${r.k}|${ck}`} baslik={`${r.ad} · ${k.durum}`} ton={r.ton} neden={k.neden} bilgi={k.bilgi.slice(0, 4)} formlar={formlar} secenekler={secenekler}
-        sonNot={planGuncel(c) ? 'Kaydedildi.' : 'İş plana bu dönüş tarihiyle yeni çözümde girer.'} kapat={() => { secimYaz(null); }}
+        planEski={c.plan !== null && !planGuncel(c)} iyilestirYetkisi={yetki.planYaz} kapat={() => { secimYaz(null); }}
       />
     );
   };
@@ -204,7 +204,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
       <GorunumBasligi simge="flag" baslik="Malzeme ve fason terminleri" alt="Kalem × gün, neyi bekliyor" ust={V.ust} eylem={ileri ?? undefined} />
       <section className="tc-pys-ana" aria-label="Isı haritası">
         <Lejant
-          ogeler={[{ tur: 'kd', kd: 2, ad: 'Bekleme' }, { tur: 'kd', kd: 4, ad: 'İşi kaydıran bekleme' }, { tur: 'is', ad: 'Yolda / fasoncuda' }, { tur: 'iyi', ad: 'Zamanında geliş' }, { tur: 'tahmin', ad: 'Tahmini tarih' }, { tur: 'bayrak', ad: 'Plan istiyor' }]}
+          ogeler={[{ tur: 'kd', kd: 2, ad: 'Bekleme' }, { tur: 'kd', kd: 4, ad: 'İşi kaydıran bekleme' }, { tur: 'iyi', ad: 'Zamanında geliş' }, { tur: 'is', ad: 'Yolda / fasoncuda' }, { tur: 'tahmin', ad: 'Tahmini tarih' }, { tur: 'bayrak', ad: 'Plan istiyor' }]}
           simgeler={[['box', 'Malzeme'], ['truck', 'Fason']]}
         />
         <IsiIzgarasi etiket="Kalem × gün, neyi bekliyor" satirAd="Kalem" genis="gun" sutunlar={V.sutunlar} satirlar={V.satirlar} secim={secim} sec={secimYaz} gizliAd="zamanında gelenler" acilim={acilim} />

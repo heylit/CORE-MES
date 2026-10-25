@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Dugme, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import type { CalismaKomutu } from '../kayit.ts';
-import type { PlanVerisi } from '../tipler.ts';
+import type { PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import {
   DEGERLENDIRME_ACIK, MALZEME_DURUM_AD, TERMIN_SECENEK_AD, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl,
   type DegerlendirmeCevabi, type DegerlendirmeIstegi, type DegerlendirmeTuru, type Degerlendirici, type MalzemeTerminiSatiri,
@@ -10,7 +10,8 @@ import {
 } from './degerlendirme.ts';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
-  PARTI_EN_COK, dengeAdi, dengeKatYazi, gunYaz, partiAdaylari, saat, saatOku, sayi, taramaKapsami, tl, type KayitliPlan,
+  PARTI_EN_COK, darbogaz, dengeAdi, dengeKatYazi, gunYaz, kasayaBol, partiAdaylari, partiKurali, partiKuraliDenetle, saat, saatOku, sayi, simdi,
+  taramaKapsami, taramaSecenekSayisi, tl, type KayitliPlan,
 } from './kurallar.ts';
 
 // Plan motorunu isteyen kartlar (zw-denge sDenge, zz10 ebFormHtml, zz11 btKart, zv-termin sTerminler). Kart eski düzeniyle yerinde durur;
@@ -268,7 +269,8 @@ export function PartiBolme({ cevap }: { cevap: DegerlendirmeCevabi<'parti-bolme'
   );
 }
 
-export function PartiBolmeKarti({ D, p, degerlendir, yenile }: { D: PlanVerisi | null; p: KayitliPlan | null; degerlendir: Degerlendirici | null; yenile: () => void }) {
+export function PartiBolmeKarti({ c, p, degerlendir, yenile }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; degerlendir: Degerlendirici | null; yenile: () => void }) {
+  const D = c?.D ?? null;
   const l = D && p ? partiAdaylari(D, p) : [];
   const [secilen, secilenYaz] = useState<string | null>(null);
   const [n, nYaz] = useState(2);
@@ -276,15 +278,20 @@ export function PartiBolmeKarti({ D, p, degerlendir, yenile }: { D: PlanVerisi |
   // Elle değiştirilen adetler metin olarak tutulur (boş alan yazılırken geçerli olsun); iş emri ya da parti sayısı değişince eşit dağılıma döner.
   const [elle, elleYaz] = useState<string[] | null>(null);
   const [d, dYaz] = useState<Durum<'parti-bolme'>>({ tur: 'bos' });
+  const baslik = 'Partiyi böl';
   const baslikEki = <span className="tc-pys-kucuk">iş emri seçin, parti sayısını verin</span>;
-  if (!D || !p) return <Kart baslik="Partiyi böl" baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
+  if (!c || !D || !p) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
   const s = l.find((x) => x.id === secilen) ?? l[0];
-  if (!s) return <Kart baslik="Partiyi böl" baslikEki={baslikEki}><p className="tc-pys-kucuk">Bölünebilecek iş emri yok: plandaki iş emirleri başlamış ya da tek adet.</p></Kart>;
+  if (!s) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Bölünebilecek iş emri yok: plandaki iş emirleri başlamış ya da tek adet.</p></Kart>;
+  // Darboğaz ve parti kuralı plandan ve rotadan hesaplanır (eski sayfa gibi, motor gerekmez).
+  const dar = darbogaz(D, p, s.id, simdi(c));
+  const kural = partiKurali(D, s.id, dar);
+  const tez = dar ? [dar.m, ...dar.alt] : [];
   const nGercek = Math.min(n, s.adet);
-  const metin = elle ?? esitPartiler(s.adet, nGercek)?.map(String) ?? [];
+  const esit = esitPartiler(s.adet, nGercek);
+  const metin = elle ?? (esit ? kasayaBol(esit, kural.kasa, kural.qmin) ?? esit : []).map(String);
   const adetler = metin.map((x) => (x.trim() === '' ? NaN : Number(x)));
-  const hata = partiAdetleriDenetle(s.adet, adetler);
-  const darbogaz = d.tur === 'sonuc' ? d.cevap.sonuc.darbogaz : null;
+  const hata = partiAdetleriDenetle(s.adet, adetler) ?? partiKuraliDenetle(adetler, kural.kasa, kural.qmin);
   const T = p.J[s.id]?.T ?? 0;
   const sec = (id: string, yeniN: number) => { secilenYaz(id); nYaz(yeniN); elleYaz(null); dYaz({ tur: 'bos' }); };
   const olc = () => {
@@ -295,24 +302,24 @@ export function PartiBolmeKarti({ D, p, degerlendir, yenile }: { D: PlanVerisi |
     );
   };
   return (
-    <Kart baslik="Partiyi böl" baslikEki={baslikEki}>
+    <Kart baslik={baslik} baslikEki={baslikEki}>
       <form className="tc-pys-eb" aria-label="Partiyi böl" noValidate onSubmit={(e) => { e.preventDefault(); olc(); }}>
         <Secim etiket="İş emri" value={s.id} onChange={(e) => { sec(e.target.value, n); }}
           secenekler={l.map((x) => { const t = p.J[x.id]?.T ?? 0; return { deger: x.id, baslik: `${x.id} · ${String(x.adet)} adet${t > 0.05 ? ` · ${sayi(t, 1)} sa gecikme` : ''}` }; })} />
         <div className="tc-pys-eb-ust">
           <Secim etiket="Parti sayısı" value={String(nGercek)} onChange={(e) => { sec(s.id, Number(e.target.value)); }}
             secenekler={Array.from({ length: Math.min(PARTI_EN_COK, s.adet) - 1 }, (_, i) => ({ deger: String(i + 2), baslik: String(i + 2) }))} />
-          {darbogaz && darbogaz.alternatifler.length > 0 && (
+          {dar && dar.alt.length > 0 && (
             <Secim etiket="Tezgâh" value={dagitim} onChange={(e) => { dagitimYaz(e.target.value === 'dag' ? 'dag' : 'ayni'); }}
               secenekler={[{ deger: 'ayni', baslik: 'Bütün partiler aynı tezgâhlarda, sırayla' },
-                { deger: 'dag', baslik: `${darbogaz.adim} adımında partiler ${[darbogaz.makineId, ...darbogaz.alternatifler].join(', ')} arasında dağılır` }]} />
+                { deger: 'dag', baslik: `${dar.k} adımında partiler ${tez.join(', ')} arasında dağılır` }]} />
           )}
           <Dugme simge="grid" onClick={() => { elleYaz(null); }}>Eşit dağıt</Dugme>
         </div>
         <div className="tc-pys-partiler" role="group" aria-label="Parti adetleri">
           {metin.map((x, i) => (
             <label key={i} className="tc-pys-parti">
-              <span>{i + 1}. parti</span>
+              <span>{i + 1}. parti{dagitim === 'dag' && dar && dar.alt.length > 0 && <> <small className="tc-pys-kucuk">{tez[i % tez.length]}</small></>}</span>
               <input className="tc-alan-kutu" type="number" min={1} max={s.adet - 1} step={1} value={x} aria-label={`${String(i + 1)}. parti adedi`}
                 onChange={(e) => { const y = [...metin]; y[i] = e.target.value; elleYaz(y); }} />
             </label>
@@ -321,12 +328,13 @@ export function PartiBolmeKarti({ D, p, degerlendir, yenile }: { D: PlanVerisi |
         {hata && <p className="tc-pys-uyari" role="alert"><Simge ad="alert" boyut="k" /> {hata}</p>}
         <p className="tc-pys-kucuk">
           {s.id}: {s.adet} adet, termin {gunYaz(D, saatOku(D, s.termin))}{T > 0.05 ? `, şimdi ${sayi(T, 1)} sa gecikiyor` : ', zamanında'}.
-          {darbogaz && ` Darboğaz adımı ${darbogaz.adim} (${darbogaz.makineId}).`} Partiler {s.id}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
+          {dar && ` Darboğaz adımı ${dar.k} (${dar.m}).`} Partiler {s.id}/1, /2 … adıyla ayrı iş emri olur; termin, öncelik ve malzeme oranı aynı kalır.
         </p>
+        <p className="tc-pys-kucuk"><Simge ad="ruler" boyut="k" /> {kural.k ?? ''} adımında en küçük parti {kural.qmin} adet{kural.kasa > 1 ? `, kasa ${String(kural.kasa)} adet` : ''}.</p>
         <div className="tc-pys-dugmeler">
           <Dugme tur="birincil" type="submit" simge="ruler" disabled={!degerlendir || Boolean(hata) || d.tur === 'bekliyor'}>Böl</Dugme>
         </div>
-        {/* 451.2: bölme Üretim emirlerinde yapılır; burada yalnız etkisi ölçülür (motor bağlanınca). */}
+        {/* 451/2: bölme Üretim emirlerinde yapılır; burada yalnız etkisi ölçülür (motor bağlanınca). */}
         <MotorNotu ne="İş emri Üretim emirlerinde bölünür; burada bölmenin gecikmeye etkisi ölçülür." />
         <DurumSatiri d={d} yenile={yenile} />
         {d.tur === 'sonuc' && <PartiBolme cevap={d.cevap} />}
@@ -335,22 +343,35 @@ export function PartiBolmeKarti({ D, p, degerlendir, yenile }: { D: PlanVerisi |
   );
 }
 
+// Seçimde en çok 6 iş emri, iş emri başına 1-20 parti (zz11 btKart, BT_MAKS_N).
 export const TARAMA_EN_COK = 6;
+const TAM_TARAMA_DK = 10;
+const KOORDINAT_TUR = 5;
 
-export function PartiTaramasiKarti({ D, p }: { D: PlanVerisi | null; p: KayitliPlan | null }) {
+export function PartiTaramasiKarti({ c, p }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null }) {
   const [k, kYaz] = useState(3);
-  const baslikEki = <span className="tc-pys-kucuk">1-{TARAMA_EN_COK} parti, iş emirleri arası birleşimler</span>;
-  if (!D || !p) return <Kart baslik="Parti taraması" baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
-  const A = taramaKapsami(D, p, k);
+  const baslik = 'Parti taraması';
+  const baslikEki = <span className="tc-pys-kucuk">1-{PARTI_EN_COK} parti, iş emirleri arası birleşimler</span>;
+  if (!c || !p) return <Kart baslik={baslik} baslikEki={baslikEki}><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>;
+  const D = c.D;
+  const A = taramaKapsami(D, p, k).map((s) => { const dar = darbogaz(D, p, s.id, simdi(c)); return { s, n: taramaSecenekSayisi(s.adet, dar, partiKurali(D, s.id, dar)) }; });
+  const top = A.reduce((a, x) => a * x.n, 1);
   return (
     // Tarama motoru yüzlerce kez koşturur; değerlendirme sözleşmesinde yok, uç açılınca da pasif kalır.
-    <Kart baslik="Parti taraması" baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled>Tara</Dugme>}>
+    <Kart baslik={baslik} baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled>Tara</Dugme>}>
       <div className="tc-pys-eb-ust">
         <Secim etiket="En çok geciken kaç iş emri" value={String(k)} onChange={(e) => { kYaz(Number(e.target.value)); }}
           secenekler={Array.from({ length: TARAMA_EN_COK }, (_, i) => ({ deger: String(i + 1), baslik: String(i + 1) }))} />
       </div>
       <p className="tc-pys-kucuk">
-        {A.length ? A.map((s, i) => <span key={s.id}>{i ? ' · ' : ''}<b className="mono">{s.id}</b> {s.adet} adet</span>) : 'Geciken iş emri yok.'}
+        {A.length ? (
+          <>
+            {A.map(({ s, n }, i) => <span key={s.id}>{i ? ' · ' : ''}<b className="mono">{s.id}</b>{typeof s.ust === 'string' && s.ust ? ' yarı mamul' : ''} {s.adet} adet, {n} seçenek</span>)}
+            {'. '}
+            {A.length < 2 ? 'Tek iş emri: bütün seçenekler denenir.'
+              : `Çapraz ${sayi(top, 0)} birleşim. Önce her iş emri tek başına denenir; ölçülen hızla hepsi ${String(TAM_TARAMA_DK)} dakikaya sığıyorsa bütün birleşimler denenir, sığmıyorsa koordinat taraması yapılır: her iş emrinin bütün seçenekleri ötekiler en iyide sabitken denenir, değişiklik kalmayana kadar (en çok ${String(KOORDINAT_TUR)} tur).`}
+          </>
+        ) : 'Geciken ve bölünebilen iş emri yok.'}
       </p>
       <MotorNotu />
     </Kart>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
 import { degerlendirmeAdresi, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
 import {
+  darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
   dengeIsisi, dengeKatsayisi, elleSinir, fasonDurumu, fasonSatirlari, fasonTerminiYaz, fiyatDenetle, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
   siparisIsisi,
 } from './kurallar.ts';
@@ -75,6 +76,47 @@ describe('P2 saf hesapları', () => {
     expect(typeof fiyatDenetle('100', '400')).toBe('string');
     expect(fiyatDenetle('100', '')).toEqual({ gelir: 100, vade: null });
     expect(fiyatDenetle('100', '30')).toEqual({ gelir: 100, vade: 30 });
+  });
+});
+
+describe('Parti bölme kuralları (zz4, zz14, zz11)', () => {
+  // S1'in a3 adımı tezgâh bekledi: hazır olduğu an a2'nin bitişi (68), başlangıç 70; a1 beklemedi. Değerler uydurmadır.
+  const kur = () => calismaKur((x) => {
+    const u = x.D.urunler[0]! as Record<string, unknown>;
+    u.rota = [
+      { k: 'a1', tezgahlar: [{ id: 'M1', ayar: 30, cevrim: 6 }] },
+      { k: 'a2', fason: 'F1', bag: [['a1', 'FS']] },
+      { k: 'a3', bag: [['a2', 'FS']], minParti: 3, kasa: 2, tezgahlar: [{ id: 'M1', ayar: 60, cevrim: 10 }, { id: 'M2', ayar: 10, cevrim: 4 }, { id: 'M3', ayar: 0, cevrim: 2 }] },
+    ];
+    (x.D.tezgahlar as Record<string, unknown>[]).push({ id: 'M2', ad: 'Deneme 2' }, { id: 'M3', ad: 'Deneme 3', verim: 0.5 });
+    (x.plan.ops['S1.a3'] as Record<string, unknown>).why = { t: 'tezgah' };
+  });
+
+  it('darboğaz plandan: en uzun bekleyen adım; seçenek tezgâhlar kısa süre önce (verimle), tanımsız tezgâh yok', () => {
+    const c = kur(); const p = kayitliPlan(c)!;
+    expect(darbogaz(c.D, p, 'S1', 7)).toEqual({ k: 'a3', m: 'M1', alt: ['M3', 'M2'] });
+    expect(darbogaz(c.D, p, 'YOK', 7)).toBeNull();
+  });
+
+  it('en küçük parti: elle girilen ile ayarın iki katı kuralının büyüğü; kasa adımdan', () => {
+    const c = kur(); const p = kayitliPlan(c)!;
+    expect(partiKurali(c.D, 'S1', darbogaz(c.D, p, 'S1', 7))).toEqual({ k: 'a3', qmin: 12, kasa: 2 });
+    expect(partiKurali(c.D, 'S1', null)).toEqual({ k: 'a1', qmin: 10, kasa: 1 });
+  });
+
+  it('kasaya yuvarlama son partiyi en küçüğe tamamlar, olmazsa null; denetim ilk kurala uymayan partiyi söyler', () => {
+    expect(kasayaBol([5, 5, 5], 4, 3)).toEqual([4, 4, 7]);
+    expect(kasayaBol([5, 5], 1, 6)).toBeNull();
+    expect(partiKuraliDenetle([4, 6], 1, 5)).toBe('1. parti 4 adet; bu adımda en küçük parti 5.');
+    expect(partiKuraliDenetle([3, 7], 2, 1)).toBe('1. parti 3 adet; kasa 2 adedin katı olmalı (son parti hariç).');
+    expect(partiKuraliDenetle([4, 6], 2, 3)).toBeNull();
+  });
+
+  it('tarama seçenekleri: bölünmez + kurala uyan parti sayıları, seçenek tezgâh varsa iki kat; kapsam yalnız gecikenler', () => {
+    expect(taramaSecenekSayisi(10, null, { k: 'a1', qmin: 1, kasa: 1 })).toBe(10);
+    expect(taramaSecenekSayisi(10, { k: 'a3', m: 'M1', alt: ['M2'] }, { k: 'a3', qmin: 3, kasa: 1 })).toBe(5);
+    const c = calismaKur(); const p = kayitliPlan(c)!;
+    expect(taramaKapsami(c.D, p, 3).map((s) => s.id)).toEqual(['S1']);
   });
 });
 

@@ -26,8 +26,8 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
     <TumSatirlar>
       {yetki.planYaz && (
         <>
-          <PartiBolmeKarti D={calisma?.D ?? null} p={p} degerlendir={degerlendir} yenile={yenile} />
-          <PartiTaramasiKarti D={calisma?.D ?? null} p={p} />
+          <PartiBolmeKarti c={calisma} p={p} degerlendir={degerlendir} yenile={yenile} />
+          <PartiTaramasiKarti c={calisma} p={p} />
         </>
       )}
       <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} degerlendir={degerlendir} />
@@ -62,7 +62,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
     return (
       <FormluAcilim
         key={`${s.id}|${ck}`} baslik={A.baslik} ton={r.ton} neden={A.neden} bilgi={A.bilgi} formlar={formlar} kapat={() => { secimYaz(null); }}
-        sonNot={planGuncel(c) ? 'Kaydedildi.' : 'Plan bu değişikliği henüz içermiyor; Planlama motorunda plan yeniden kurulunca girer.'}
+        planEski={c.plan !== null && !planGuncel(c)} iyilestirYetkisi={yetki.planYaz}
         secenekler={[{ ad: `${s.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }]}
       />
     );
