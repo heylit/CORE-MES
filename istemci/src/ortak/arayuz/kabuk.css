@@ -67,8 +67,14 @@
 }
 .tc-kabuk-hesap > .tc-menu-dugme:hover { border-color: var(--hazard); }
 .tc-kabuk-kisi-avatar {
-  display: grid; place-items: center; flex: none; inline-size: var(--b-6); block-size: var(--b-6);
+  position: relative; display: grid; place-items: center; flex: none; inline-size: var(--b-6); block-size: var(--b-6);
   border-radius: var(--yari-tam); background: var(--hazard); color: var(--on-hazard); font-size: var(--yazi-xs); font-weight: 800;
+}
+/* Hesap menüsündeki eylemin dikkat isteyen durumu (sistem uyarısı): yuvarlağın köşesinde nokta; sayı menüdeki penceresindedir. */
+.tc-kabuk-kisi-isaret {
+  position: absolute; inset-block-start: calc(-1 * var(--pay-ince)); inset-inline-end: calc(-1 * var(--pay-ince));
+  inline-size: var(--b-3); block-size: var(--b-3); border-radius: var(--yari-tam);
+  background: var(--stop); box-shadow: 0 0 0 2px var(--panel2);
 }
 .tc-kabuk-kisi-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Geniş olmayan ekranda sayfa başlığına yer kalsın: ad gizlenir, baş harfli düğme kalır (adı title ve aria-label taşır).
@@ -114,21 +120,25 @@
    kendi kaydırması yoksa içerik alanı kaydırır; tam yükseklikteki çerçeve taşmadığından ikinci kaydırma çubuğu çıkmaz. */
 .tc-kabuk-icerik[data-cerceveli] { padding: 0; overflow: auto; }
 
-/* 1280'in altında sayfa başlığına yer kalmıyordu (ad "Fi..." diye kesiliyordu): Yardım ve Hesap menüsü maddesi olan modül
-   düğmeleri de Hesap menüsünden açılır. Sarmalayıcı kutu çizmez; penceresi gövdeye açıldığından gizliyken de görünür. */
+/* 1280'in altında sayfa başlığına yer kalmıyordu (ad "Fi..." diye kesiliyordu): Hesap menüsü maddesi olan modül düğmeleri
+   orada Hesap menüsünden açılır; 'hesap' yerindeki düğme her genişlikte yalnız oradadır (516 a). Sarmalayıcı kutu çizmez;
+   penceresi gövdeye açıldığından gizliyken de görünür. */
 .tc-kabuk-hesapta { display: contents; }
+.tc-kabuk-yalniz-hesapta { display: none; }
 @media (min-width: 768px) and (max-width: 1279px) {
-  .tc-kabuk-ayri, .tc-kabuk-hesapta { display: none; }
+  .tc-kabuk-hesapta { display: none; }
 }
-/* Geniş ekranda sık kullanılan düğmenin adı simgesinin yanında yazılır; dar ekranda ad ipucu ve erişilebilir ad olarak kalır. */
+/* Çubuğun tek birincil işi Kayıt gir'dir: dolgulu durur, geniş ekranda adı yazılır (516 a). Öteki düğmeler yalnız simgedir;
+   adları ipucu ve erişilebilir ad olarak kalır. */
+.tc-kabuk-ust .tc-is-paneli-dugme { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); }
 .tc-kabuk-dugme-ad { display: none; }
 @media (min-width: 1440px) {
-  .tc-kabuk-tema:has(> .tc-kabuk-dugme-ad) { display: inline-flex; gap: var(--b-2); width: auto; padding-inline: var(--b-2) var(--b-3); font-weight: 600; }
-  .tc-kabuk-dugme-ad { display: inline; white-space: nowrap; }
+  .tc-is-paneli-dugme:has(> .tc-kabuk-dugme-ad) { display: inline-flex; gap: var(--b-2); width: auto; padding-inline: var(--b-2) var(--b-3); font-weight: 600; }
+  .tc-is-paneli-dugme > .tc-kabuk-dugme-ad { display: inline; white-space: nowrap; }
 }
-/* Tablette ileri ve son yerler de kalkar (Geri kalır). */
+/* Tablette ileri de kalkar (Geri kalır). */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .tc-kabuk-ileri, .tc-kabuk-yerler { display: none; }
+  .tc-kabuk-ileri { display: none; }
 }
 /* 1280'in altında zil ve modül düğmeleriyle çubuk dolar: uzun başlık kesilmez, telefondaki gibi iki satıra iner. */
 @media (min-width: 768px) and (max-width: 1279px) {
@@ -163,8 +173,8 @@
     font-size: var(--yazi-l); line-height: 1.2;
     white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
   }
-  /* Telefonda yalnız Geri kalır: ileri ve son yerler başlığın yerini almasın; telefonun geri hareketi aynı sıradadır. */
-  .tc-kabuk-ayri, .tc-kabuk-ileri, .tc-kabuk-yerler { display: none; }
+  /* Telefonda yalnız Geri kalır: ileri başlığın yerini almasın; telefonun geri hareketi aynı sıradadır. */
+  .tc-kabuk-ileri { display: none; }
   .tc-kabuk-icerik { padding: var(--b-4); }
   .tc-kabuk-icerik[data-cerceveli] { padding: 0; }
   .tc-kabuk-alt {

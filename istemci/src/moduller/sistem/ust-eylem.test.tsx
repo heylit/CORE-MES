@@ -12,7 +12,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['saglik.ayrinti-oku'] };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function ac(uyarilar: Uyari[]) {
+function ac(uyarilar: Uyari[], parca: 'dugme' | 'isaret' = 'dugme') {
   const ayrinti = {
     veritabaniGecikmeMs: 3, sonGoc: null, commit: null, calismaSuresiSn: 60, ortam: 'test', isler: [], uyarilar,
   } satisfies Ayrinti;
@@ -26,7 +26,9 @@ function ac(uyarilar: Uyari[]) {
   const [eylem] = gorunenUstEylemler(ustEylemler, YONETICI.islemler);
   if (!eylem) throw new Error('Sistem durumu düğmesi görünmüyor');
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><eylem.dugme /></QueryClientProvider>);
+  const Isaret = eylem.isaret;
+  if (parca === 'isaret' && !Isaret) throw new Error('Sistem durumunun işareti yok');
+  render(<QueryClientProvider client={istemci}>{parca === 'isaret' && Isaret ? <Isaret /> : <eylem.dugme />}</QueryClientProvider>);
 }
 
 describe('üst çubukta sistem durumu', () => {
@@ -46,6 +48,19 @@ describe('üst çubukta sistem durumu', () => {
     const pencere = await screen.findByRole('dialog', { name: 'Sistem durumu' });
     expect(await within(pencere).findByText('Son yedek 30 saat önce alındı.')).toBeTruthy();
     expect(within(pencere).getByText('Yedek diskinde 2,0 GB boş yer kaldı.')).toBeTruthy();
+  });
+
+  it('çubukta yer tutmaz, Hesap menüsündedir; uyarı varsa kişi düğmesinin işareti çizilir', async () => {
+    expect(ustEylemler[0]?.yer).toBe('hesap');
+    ac([{ tur: 'yedek', ileti: 'Son yedek 30 saat önce alındı.' }], 'isaret');
+    expect(await screen.findByRole('img', { name: 'Sistem durumu, 1 uyarı' })).toBeTruthy();
+  });
+
+  it('reddedilen: uyarı yokken işaret çizilmez', async () => {
+    ac([], 'isaret');
+    await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([a]) => a === '/api/saglik/ayrinti')).toBe(true));
+    await new Promise((r) => { setTimeout(r, 0); });
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   it('uyarı yokken sayı göstermez', async () => {
