@@ -3,7 +3,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, canliFark, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs,
 } from './kurallar.ts';
 
@@ -96,5 +96,27 @@ describe('atölye kuralları', () => {
     expect(g.gecmis.map((x) => x.gun)).toEqual(['2026-10-24']);
     expect(bitisFarklari({ 2: { C: 100, T: 0 } }, { 2: { C: 110, T: 5 }, 3: { C: 1, T: 0 } })).toEqual([{ j: '2', d: 10, gec: 'gecikmeye düşer' }]);
     expect(gunKaydi(ornekCalisma())).toEqual({ basi: null, gecmis: [] });
+  });
+
+  it('elle sıra listeyi sıralar; canlı senaryoyla fark eski farkSay gibi sayılır', () => {
+    const { c, p, cx, h } = kur();
+    expect(siparisler({ ...c, tpSira: ['3', '2', 'yok'] } as PlanlamaCalismasi, p, cx, h).map((s) => s.id)).toEqual(['3', '2']);
+    expect(canliFark(c, p)).toEqual({ var: false, say: 0, farkli: true });
+    const ops = Object.fromEntries(Object.entries(p.ops).map(([k, r]) => [k, { m: r.m, S: r.S }]));
+    const ayni = { ...c, canli: 's1', senaryolar: [{ id: 's1', plan: { ops, zaman: 5 }, down: c.down }] } as PlanlamaCalismasi;
+    expect(canliFark(ayni, p).say).toBe(0);
+    const ilk = Object.keys(ops)[0] ?? '';
+    const kayik = { ...ayni, senaryolar: [{ id: 's1', plan: { ops: { ...ops, [ilk]: { m: 'baska', S: 0 } }, zaman: 5 }, down: [] }] } as PlanlamaCalismasi;
+    expect(canliFark(kayik, p).say).toBe(1 + c.down.length);
+  });
+
+  it('malzeme ayrıntısı malzemeHazir ile aynı dağıtımı yapar', () => {
+    const { cx, h } = kur();
+    const md = malzemeDetay(cx);
+    for (const [j, L] of Object.entries(md)) {
+      const t = L.some((x) => x.t === null) ? Infinity : Math.max(cx.now, ...L.map((x) => x.t ?? 0));
+      expect(t).toBe(h[j]);
+      for (const x of L) expect(x.kaynak.reduce((a, u) => a + u.miktar, 0) + x.eksik).toBeCloseTo(x.ihtiyac, 6);
+    }
   });
 });
