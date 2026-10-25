@@ -94,7 +94,7 @@ test.describe('P1b Tezgâh haritası', () => {
 });
 
 test.describe('P1c Çizelge', () => {
-  test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+  test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran, yan paneller; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
@@ -119,6 +119,17 @@ test.describe('P1c Çizelge', () => {
     await expect(cizelge).toHaveAttribute('data-tam', '');
     await page.keyboard.press('Escape');
     await expect(cizelge).not.toHaveAttribute('data-tam', '');
+    await tasmaz(page);
+    await arac.getByRole('button', { name: 'Yardımcı', exact: true }).click();
+    const yan = page.getByRole('complementary', { name: 'Plan yardımcısı' });
+    await expect(yan.getByText('Teknik ayrıntılar (uzman)')).toBeVisible();
+    await tasmaz(page);
+    await yan.getByRole('tab', { name: 'Ayrıntı' }).click();
+    await expect(page.getByRole('region', { name: 'Karar paneli' })).toBeVisible();
+    await arac.getByRole('button', { name: 'Sepet', exact: true }).click();
+    await expect(page.getByRole('complementary', { name: 'Sepet' })).toBeVisible();
+    await page.getByRole('complementary', { name: 'Sepet' }).getByRole('tab', { name: 'Havuz' }).click();
+    await expect(page.getByRole('complementary', { name: 'Havuz' })).toBeVisible();
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
