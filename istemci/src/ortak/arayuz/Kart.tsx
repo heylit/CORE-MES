@@ -21,7 +21,7 @@ export function Kart({ baslik, simge, baslikEki, sag, children }: Ozellikler) {
           {(baslik || baslikEki) && (
             <div className="tc-kart-bas">
               {baslik && (simge
-                ? <h2 className="tc-kart-baslik tc-kart-baslik-simgeli"><Simge ad={simge} />{baslik}</h2>
+                ? <h2 className="tc-kart-baslik tc-kart-baslik-simgeli"><Simge ad={simge} boyut="k" />{baslik}</h2>
                 : <h2 className="tc-kart-baslik">{baslik}</h2>)}
               {baslikEki && <div className="tc-kart-ek">{baslikEki}</div>}
             </div>
