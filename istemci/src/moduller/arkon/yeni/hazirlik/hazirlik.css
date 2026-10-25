@@ -245,11 +245,14 @@
 .tc-ay2-kalite-kaydet { display: flex; justify-content: flex-end; }
 
 /* istasyon düzenleyici */
-.tc-ay2-tur-secici { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--sutun-genis)), 1fr)); gap: var(--b-2); }
+/* İş türü seçimi eski .typepick düzeninde: 3x2 ızgara, simge solda iki satır boyunca (dar ekranda 2 sütun). */
+.tc-ay2-tur-secici { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); }
 .tc-ay2-tur-secici button {
-  display: grid; justify-items: start; gap: var(--b-1); padding: var(--b-3); min-block-size: var(--dokunma-ana); border: var(--cizgi-ince) solid var(--edge);
-  border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); align-items: center; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
 }
+.tc-ay2-tur-secici button > svg { grid-row: span 2; color: var(--muted); }
+.tc-ay2-tur-secici button[aria-pressed="true"] > svg { color: var(--hazard-ink); }
 .tc-ay2-tur-secici button small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay2-tur-secici button[aria-pressed="true"] { border-color: var(--sig); box-shadow: inset 0 0 0 var(--cizgi-ince) var(--sig); }
 .tc-ay2-tur-secici button:disabled { cursor: not-allowed; opacity: var(--saydam-70); }
@@ -292,7 +295,7 @@
 .tc-ay2-istasyon-grubu { display: grid; gap: var(--b-2); }
 
 /* hazırlık ekranı */
-.tc-ay2-serit-ust { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
+.tc-ay2-serit-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }
 .tc-ay2-esitleme {
   display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge);
   border-radius: var(--yari-tam); background: var(--panel2); color: var(--muted); font: inherit; font-size: var(--yazi-s);
@@ -302,10 +305,10 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-esitleme[data-acik] { color: var(--ink); }
 .tc-ay2-esitleme[data-acik] i { background: var(--run); }
 .tc-ay2-govde { display: grid; grid-template-columns: minmax(var(--kuyruk-genis), 1fr) minmax(0, 3fr); gap: var(--b-4); align-items: start; min-width: 0; }
-.tc-ay2-liste { display: grid; gap: var(--b-2); min-width: 0; position: sticky; inset-block-start: var(--b-3); max-block-size: calc(100vh - var(--ust-cubuk) - var(--b-6)); overflow: auto; }
+.tc-ay2-liste { display: grid; gap: var(--b-2); min-width: 0; position: sticky; inset-block-start: var(--b-3); max-block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) - var(--b-6)); overflow: auto; }
 .tc-ay2-arama { display: flex; gap: var(--b-2); align-items: center; }
 .tc-ay2-arama-kutu { display: flex; align-items: center; gap: var(--b-2); flex: 1; min-width: 0; padding-inline-start: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); }
-.tc-ay2 .tc-ay2-arama-kutu input { flex: 1; border: 0; background: none; padding-inline: 0; }
+.tc-ay2 .tc-ay2-arama-kutu input { flex: 1; min-width: 0; inline-size: 100%; border: 0; background: none; padding-inline: 0; }
 .tc-ay2-arama-kutu .tc-ay2-arac { border: 0; background: none; }
 .tc-ay2-suzgec { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-ay2-suzgec-alanlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
@@ -414,6 +417,8 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-sonuc-satir em { font-style: normal; font-family: var(--font-mono); font-weight: 800; }
 .tc-ay2-sonuc-satir em[data-durum="tamam"] { color: var(--run); }
 .tc-ay2-sonuc-satir em[data-durum="red"] { color: var(--stop); }
+
+.tc-ay[data-mobil] .tc-ay2-tur-secici { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* tablet ve telefon: liste ile düzenleyici yer değiştirir (eski ekranın mobil düzeni) */
 @media (max-width: 1023px) {

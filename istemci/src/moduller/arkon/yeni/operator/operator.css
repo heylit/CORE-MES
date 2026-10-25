@@ -137,7 +137,7 @@
 /* sayaç kadranı */
 .tc-ay1-sayac { display: flex; flex-direction: column; align-items: center; gap: var(--b-4); inline-size: 100%; min-width: 0; }
 .tc-ay1-kadran {
-  --kadran-sinir: clamp(var(--kadran-enaz), calc(100vh - var(--kadran-dusey-pay)), var(--kadran-encok));
+  --kadran-sinir: clamp(var(--kadran-enaz), calc(var(--tc-ay-vh, 100vh) - var(--kadran-dusey-pay)), var(--kadran-encok));
   position: relative; inline-size: 100%; max-inline-size: var(--kadran-sinir); aspect-ratio: 1; margin-block-end: var(--dokunma-x14); container-type: size;
 }
 .tc-ay1-kadran svg { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; overflow: visible; }
@@ -428,7 +428,47 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-saat small, .tc-ay1-kisi small { display: none; }
   .tc-ay1-is-baslik { font-size: var(--yazi-xl); }
 }
+/* Dönen çevrim ışığı (eski .dial .sweep, .cyca, .cycd): bir tur = planlı çevrim süresi; yalnız iş çalışırken döner. */
+.tc-ay1-tarama {
+  position: absolute; inset: 9%; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity var(--hareket-panel);
+  background: conic-gradient(from 0deg, transparent 0 290deg, color-mix(in srgb, var(--sig) 45%, transparent) 360deg);
+  mask-image: radial-gradient(circle, transparent 62%, var(--ink) 63%, var(--ink) 98%, transparent 99%);
+  animation: tc-ay1-don var(--tc-ay1-cevrim-sure) linear var(--tc-ay1-cevrim-baslangic) 1 forwards paused;
+}
+.tc-ay1-cevrim { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; overflow: visible; pointer-events: none; }
+.tc-ay1-cevrim-yol { stroke: var(--edge); }
+.tc-ay1-cevrim-yay {
+  stroke: color-mix(in srgb, var(--sig) 75%, transparent); stroke-dashoffset: var(--tc-ay1-cevrim-cevre);
+  animation: tc-ay1-cevrim-dol var(--tc-ay1-cevrim-sure) steps(var(--tc-ay1-cevrim-adim), end) var(--tc-ay1-cevrim-baslangic) 1 forwards paused;
+}
+.tc-ay1-cevrim-nokta {
+  transform-box: view-box; transform-origin: 50% 50%;
+  animation: tc-ay1-don var(--tc-ay1-cevrim-sure) steps(var(--tc-ay1-cevrim-adim), end) var(--tc-ay1-cevrim-baslangic) 1 forwards paused;
+}
+.tc-ay1-cevrim-nokta circle { fill: var(--sig); filter: drop-shadow(0 0 var(--nokta) var(--sig)); }
+.tc-ay1-kadran[data-calisiyor] .tc-ay1-tarama { opacity: 1; }
+.tc-ay1-kadran[data-calisiyor] .tc-ay1-tarama, .tc-ay1-kadran[data-calisiyor] .tc-ay1-cevrim-yay, .tc-ay1-kadran[data-calisiyor] .tc-ay1-cevrim-nokta { animation-play-state: running; }
+.tc-ay1-kadran[data-calisiyor] .tc-ay1-tarama[data-gec] { opacity: 0; }
+.tc-ay1-cevrim-yay[data-gec] { stroke: var(--hazard); animation: none; stroke-dashoffset: 0; }
+.tc-ay1-cevrim-nokta[data-gec] circle { fill: var(--hazard); filter: drop-shadow(0 0 var(--b-2) var(--hazard)); }
+@keyframes tc-ay1-don { to { transform: rotate(360deg); } }
+@keyframes tc-ay1-cevrim-dol { to { stroke-dashoffset: 0; } }
+
+/* İş bitince konfeti (eski .confetti): özet katmanının üstünde, tıklamayı geçirir. */
+.tc-ay1-konfeti { position: fixed; inset: 0; z-index: calc(var(--z-ozet) + 1); overflow: hidden; pointer-events: none; }
+.tc-ay1-konfeti i {
+  position: absolute; top: calc(var(--b-5) * -1); left: var(--x); inline-size: var(--b-2); block-size: var(--b-4); border-radius: var(--pay-ince);
+  background: var(--c, var(--run)); transform: rotate(var(--aci)); animation: tc-ay1-dus var(--sure) linear var(--gecikme) forwards;
+}
+.tc-ay1-konfeti i[data-renk="hazard"] { --c: var(--hazard); }
+.tc-ay1-konfeti i[data-renk="run"] { --c: var(--run); }
+.tc-ay1-konfeti i[data-renk="done"] { --c: var(--done); }
+.tc-ay1-konfeti i[data-renk="hold"] { --c: var(--hold); }
+@keyframes tc-ay1-dus { to { transform: translateY(110vh) rotate(720deg); } }
+
 @media (prefers-reduced-motion: reduce) {
+  .tc-ay1-tarama, .tc-ay1-konfeti { display: none; }
+  .tc-ay1-cevrim-yay, .tc-ay1-cevrim-nokta { animation: none; }
   .tc-ay1-zipla, .tc-ay1-gorev-nabiz, .tc-ay1-cagri-cip > i { animation: none; }
   .tc-ay1-cizgi, .tc-ay1-kadran-yay, .tc-ay1-halka-yay, .tc-ay1-oee-yay, .tc-ay1-is { transition: none; }
 }

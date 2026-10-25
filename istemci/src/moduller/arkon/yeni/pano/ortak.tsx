@@ -1,31 +1,31 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
-import { saat } from '../cekirdek/bicim.ts';
 import { YETKI_ADLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonListesi } from '../cekirdek/tesis.ts';
 import type { Perm } from '../cekirdek/tipler.ts';
 import { yerel } from '../cekirdek/yerel.ts';
-import { useArkon, useSimdi } from '../veri/baglam.ts';
+import { useArkon } from '../veri/baglam.ts';
 import type { ArkonDeposu } from '../veri/depo.ts';
-import { aktifIsMerkezleri, anlikVardiyasi, csvDosyaAdi, csvMetni, type CsvHucresi, type Renk } from './kurallar.ts';
+import { SaatSeridi, type Kisayol } from '../ortak/SaatSeridi.tsx';
+import { aktifIsMerkezleri, csvDosyaAdi, csvMetni, type CsvHucresi, type Renk } from './kurallar.ts';
 import './pano.css';
 
 // A3 ve A4 sayfalarının ortak parçaları (pano-planlama.ts PageShell, Segs, WcFilter, useToast, putDoc, csvDownload; ortak-ayarlar.ts
 // audit, allowed). Renk tasarım değişkeninden seçilir (data-renk), durum her zaman metniyle yazılır.
 
-// Sayfa başlığı: simge, ad, sayfanın araçları, saat ve vardiya (Arkon'un kendi tema düğmesi yok: TMI teması geçerli).
-export function SayfaCercevesi({ simge, baslik, ek, children }: { simge: SimgeAdi; baslik: string; ek?: ReactNode; children: ReactNode }) {
-  const { ayarlar } = useArkon();
-  const simdi = useSimdi(30000);
+// Sayfa başlığı: simge, ad, sayfanın araçları, kısayollar, saat ve vardiya (Arkon'un kendi tema düğmesi yok: TMI teması geçerli).
+export function SayfaCercevesi({ simge, baslik, ek, kisayollar, saatAlt, children }: {
+  simge: SimgeAdi; baslik: string; ek?: ReactNode; kisayollar?: readonly Kisayol[]; saatAlt?: string; children: ReactNode;
+}) {
   return (
     <div className="tc-ay3-sayfa">
       <header className="tc-ay3-baslik">
         <h2 className="tc-ay3-ad"><Simge ad={simge} />{baslik}</h2>
         {ek}
         <span className="tc-ay3-bosluk" />
-        <span className="tc-ay3-saat"><b className="mono">{saat(simdi)}</b><small>{anlikVardiyasi(ayarlar, simdi).label}</small></span>
+        <SaatSeridi {...(kisayollar ? { kisayollar } : {})} {...(saatAlt ? { alt: saatAlt } : {})} />
       </header>
       {children}
     </div>
