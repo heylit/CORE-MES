@@ -50,7 +50,7 @@ export function RotaSekmesi({ c, p, cx, j, planYaz: yaz, opSec, sipSec, rotaSec 
                       {x.bu || a.bitti || a.simdi || !yaz
                         ? <span className="tc-pym-mono">{x.ad}</span>
                         : <button type="button" className="tc-pym-mono" aria-disabled="true" title={`Bu adımı ${x.ad} tezgâhına taşı: ${tasi}`}>{x.ad}</button>}
-                      <small className="tc-pym-mono">{x.sure}</small>
+                      <small className="tc-pym-mono">{x.sure}{x.carpan && <> <b className="tc-pym-mz-carpan" title={`Süre sapması: işleme süresi ${x.carpan} çarpıldı`}>{x.carpan}</b></>}</small>
                     </li>
                   ))}
                 </ul>
