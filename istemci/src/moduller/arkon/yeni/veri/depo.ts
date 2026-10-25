@@ -60,6 +60,7 @@ export interface ArkonDeposu {
     uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }>;
   };
   Plan: { sirala(g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }): Promise<unknown>; surum(): Promise<{ planSurumu: number }> };
+  Kuyruk: { sirala(g: { istasyon: string; onceki: string[]; yeni: string[] }): Promise<{ surum: number }>; planaDon(istasyon: string): Promise<{ silinen: number }> };
   Cache: { get(k: string): Promise<unknown>; put(k: string, v: unknown): Promise<void>; clear(): Promise<void> };
   Pkg: { toFile(p: unknown): string; fromFile(metin: string): unknown; fileName(p: { no?: string; rev?: string }): string };
   init(): Promise<ArkonDurumu>;
