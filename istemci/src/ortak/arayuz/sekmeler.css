@@ -9,3 +9,18 @@
   color: var(--muted); font-weight: 700; white-space: nowrap; cursor: pointer;
 }
 .tc-sekme[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--hazard); }
+/* Kaydırma işareti: yapışkan, akışta yer tutmaz (eksi kenar payı genişliği ve aralığı geri alır); yalnız gizli sekme olan kenarda görünür. */
+.tc-sekmeler-ok {
+  position: sticky; z-index: 1; flex: none; display: flex; align-items: center; align-self: stretch;
+  width: var(--dokunma); visibility: hidden; color: var(--muted); cursor: pointer;
+}
+.tc-sekmeler-ok:hover { color: var(--ink); }
+.tc-sekmeler-ok-sol {
+  left: 0; margin-right: calc(-1 * (var(--dokunma) + var(--b-1))); padding-left: var(--b-1);
+  background: linear-gradient(to right, var(--bg) 45%, transparent);
+}
+.tc-sekmeler-ok-sag {
+  right: 0; margin-left: calc(-1 * (var(--dokunma) + var(--b-1))); justify-content: flex-end; padding-right: var(--b-1);
+  background: linear-gradient(to left, var(--bg) 45%, transparent);
+}
+.tc-sekmeler[data-sol] .tc-sekmeler-ok-sol, .tc-sekmeler[data-sag] .tc-sekmeler-ok-sag { visibility: visible; }

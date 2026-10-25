@@ -226,3 +226,21 @@ Kod değişmedi; yalnız test ve borç.
 Şema, göç, uç ve işlem değişmedi. Modül klasörlerine dokunulmadı.
 - `AnaSayfaKarti.bolum` yeni değer `yonetim` ("Şirket özeti"), bölümlerin en üstünde. Modül yöneticiye işletme özetini bu bölümde,
   `islem: 'ayarlar.yaz'` ile verir. Kartı olmayan bölüm çizilmez; bugün hiçbir modül vermediği için ekran değişmez.
+
+## Ek: dal ortak-yogun-olcu (kullanıcı kararı 25.10.2026: fareyle yoğun ölçü, dokunmatikte 44 px)
+
+Şema, göç, uç, işlem ve paket değişmedi. Modül klasörlerine dokunulmadı.
+- Yeni değişkenler (`tokens.css`): `--dugme-boy`, `--dugme-yazi`, `--alan-boy`, `--isaret-boy`, `--isaret-kutu`, `--tablo-hucre`. Varsayılan dokunma
+  ölçüsü (44 px, 16 px yazı, 24 px kutu, 12 px hücre); `@media (pointer: fine)` altında 32 / 14 / 36 / 28 / 16 / 8 px. `--dokunma` değişmedi.
+- Masaüstünde de parmakla kullanılan ekran köküne `data-dokunmatik` yazar; altındaki her şey dokunma ölçüsüne döner.
+- `dugme.css`, `alan.css`, `tablo.css` bu değişkenleri okur. Ana düğme (`tc-dugme-ana`) ve sekmeler 44/56 px kalır.
+- Tablo başlığı düz yazı (büyük harf ve harf aralığı kalktı, 600). `Rozet` yeni `gorunum="cizgi"`: çerçeveli, küçük harf, noktasız; varsayılan değişmedi.
+- Ölçüm (Chromium 1280, `/malzemeler/yeni-ekran`): Excel düğmesi 44 -> 32, süzgeç satırı 44 -> 28 px; `data-dokunmatik` ile 44; dokunmatik bağlamda 44.
+- Testler: `Rozet.test.tsx` (yeni), `ekran-testleri/ortak-yogun-olcu.spec.ts` (fare, `data-dokunmatik`, dokunmatik, Üretim Terminali >= 44).
+
+## Ek: dal ortak-yogun-olcu, O6 (Planlama önerisi; sekme şeridi taşınca ok)
+
+- `Sekmeler` taşınca ikinci menüdeki gibi davranır: gizli sekme olan kenarda solma ve ok; fare okta beklerse şerit kayar, tık bir sayfa atlatır,
+  dikey tekerlek yana çevrilir. Davranış yeni `serit-kaydirma.ts` kancasındadır; `IkinciMenu` kendi kopyasını taşır (514 girince aynı kancaya geçebilir).
+- Ok şeridin içinde yapışkandır ve akışta yer tutmaz: modüllerin `> .tc-sekmeler` seçicileri (Kalite Merkezi, Arkon, Mesaj) bozulmaz.
+- Testler: `Sekmeler.test.tsx` (4 yeni: kenar, gizlilik, tık, tekerlek).
