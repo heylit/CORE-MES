@@ -295,7 +295,12 @@ describe('App modul rotalari', () => {
     await ac(YALNIZ_VERI, '/');
     const menu = () => within(screen.getByRole('navigation', { name: 'Ana menü' }));
     const adresler = () => menu().getAllByRole('link').map((b) => b.getAttribute('href'));
-    expect(adresler()).toEqual(['/', '/profil', '/kuyruk']);
+    // Veri işlemleri yeni ekran kapısını da (kisiler.rol-yonet) taşır; "Kuyruk (yeni)" satırı yine sayfa.kuyruk ile gelir.
+    expect(adresler()).toEqual(['/', '/profil', '/kuyruk', '/arkon/yeni/kuyruk']);
+    cleanup();
+
+    await ac({ ...YALNIZ_VERI, islemler: [...VERI_ISLEMLERI] }, '/');
+    expect(adresler()).toEqual(['/', '/profil']);
     cleanup();
 
     await ac({ ...YALNIZ_VERI, islemler: ['sayfa.personel'] }, '/');
