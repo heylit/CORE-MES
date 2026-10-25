@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { api } from '../../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../../gorunumler.ts';
@@ -18,9 +20,19 @@ const BRIF = 'tmi:planlama:brif';
 const bugunAnahtari = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 beforeEach(() => { localStorage.setItem(BRIF, bugunAnahtari()); });
 
+const GOSTERGE = { emirSayisi: 5, isEmriSayisi: 9, yerlesen: 9, geciken: 1, zamanindaYuzde: 80, ortAtolyeGun: 2, darbogaz: null, enDoluKaynak: null, personelGun: null, maliyetTl: null };
+const senaryo = (id: number, durum: string, ek: Record<string, unknown> = {}) => ({
+  id, ad: `Senaryo ${id}`, aciklama: null, durum, acan: 'Ayşe', benim: true, acilma: '2026-10-20T08:00:00Z', surum: 4, tabanPlanSurumu: 3, canliDegisti: false,
+  gostergeler: { ...GOSTERGE, geciken: 2 }, degisiklikler: [{ id: 7, tur: 'sira', ozet: 'M1 sırası değişti', yazma: '2026-10-20T09:00:00Z' }],
+  etki: { tarihiDegisenEmirler: [{ emirNo: 'E-1', canli: '2026-10-21T08:00:00Z', senaryo: '2026-10-21T11:00:00Z' }], yukuDegisenIstasyonlar: [], yeniUyarilar: [] },
+  bekleyenler: [], onay: null, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: false, canliyaAl: false }, ...ek,
+});
 const DEPO = {
   durum: null, planSurumu: { planSurumu: 3, sonCanliyaAlma: null },
-  senaryolar: { canli: { geciken: 1 }, canliSurum: 3, senaryolar: [{ id: 1, durum: 'onayda' }, { id: 2, durum: 'acik' }] },
+  senaryolar: { canli: GOSTERGE, canliSurum: 3, senaryolar: [
+    senaryo(1, 'onayda', { onay: { gonderen: 'Ayşe', gonderme: '2026-10-20T10:00:00Z', not: 'acil', geriGonderen: null, geriGonderme: null, geriNeden: null }, yapabilir: { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true } }),
+    senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
+  ] },
 } as unknown as PlanlamaDeposu;
 function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
   const yaz = o.yaz ?? true;
@@ -30,7 +42,7 @@ function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKom
     depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile: vi.fn(),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : [])], { yazabilir: yaz }),
   };
-  render(<BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici>);
+  render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
   return { git };
 }
 function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
@@ -57,13 +69,30 @@ describe('PlanlamaAtolyesi', () => {
     expect(git).toHaveBeenCalledWith('plan');
   });
 
-  it('Onay ve canlı ile Plan ve gerçekleşen sonraki teslimde: ipucu ve hazırlanıyor', () => {
+  it('Plan ve gerçekleşen sonraki teslimde: ipucu ve hazırlanıyor', () => {
+    ac();
+    fireEvent.click(screen.getByRole('tab', { name: 'Plan ve gerçekleşen' }));
+    expect(screen.getByText(/Taban plan, son canlı plan/)).toBeTruthy();
+    expect(screen.getByText(HAZIRLANIYOR)).toBeTruthy();
+  });
+
+  it('Onay ve canlı: sunucu senaryoları, onaydaki seçili; geri gönderme neden ister, cevap listeyi yeniler', async () => {
     ac();
     fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     expect(screen.getByText(/Çalışma planını canlıyla karşılaştırın/)).toBeTruthy();
-    expect(screen.getByText(HAZIRLANIYOR)).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Plan ve gerçekleşen' }));
-    expect(screen.getByText(/Taban plan, son canlı plan/)).toBeTruthy();
+    expect(document.querySelectorAll('.tc-pym-pa-aday')).toHaveLength(3);
+    expect(document.querySelector('.tc-pym-pa-aday[aria-current="true"]')?.textContent).toContain('Senaryo 1');
+    expect(screen.getByText('M1 sırası değişti')).toBeTruthy();
+    expect(screen.getByText('+3,0 sa')).toBeTruthy();
+    expect(screen.getByText('Geciken sipariş canlıya göre 1 artıyor')).toBeTruthy();
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ ...DEPO.senaryolar, senaryolar: [DEPO.senaryolar!.senaryolar[1]] });
+    fireEvent.click(screen.getByRole('button', { name: 'Geri gönder' }));
+    expect(post).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'M2 dolu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Geri gönder' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/senaryolar/1/geri-gonder', { surum: 4, neden: 'M2 dolu' }));
+    await waitFor(() => expect(document.querySelectorAll('.tc-pym-pa-aday')).toHaveLength(2));
+    post.mockRestore();
   });
 
   it('üst çubuk: geciken ve gecikme, ölçek, motor isteyenler pasif, onaya gönder kartı Onay sekmesine götürür', () => {

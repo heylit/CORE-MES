@@ -270,6 +270,11 @@ test.describe('P1e Planlama atölyesi', () => {
     await expect(page.getByText('Çözülecekler')).toBeVisible();
     await tasmaz(page);
     await page.getByRole('tab', { name: /Onay ve canlı/ }).click();
+    for (const ad of ['İncelenecek planlar', 'Karşılaştırma', 'Canlıdan sonra yapılanlar', 'Geçmiş planlar', 'Planlama sayfaları']) {
+      await expect(page.getByRole('heading', { name: ad })).toBeVisible();
+    }
+    await tasmaz(page);
+    await page.getByRole('tab', { name: /Plan ve gerçekleşen/ }).click();
     await expect(page.getByText('Hazırlanıyor.')).toBeVisible();
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);

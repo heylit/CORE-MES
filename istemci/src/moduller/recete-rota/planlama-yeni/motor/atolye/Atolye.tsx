@@ -1,18 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { BosCalisma, BosPlan } from '../BosPlan.tsx';
-import { bitenler, derle, girdiKur, planOku, plandanBitenler } from '../kurallar.ts';
+import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { HAZIRLANIYOR } from '../ortak.tsx';
+import { OnaySekmesi } from './Onay.tsx';
 import { Pano } from './Pano.tsx';
 import '../motor.css';
 import './atolye.css';
 
 // Planlama atölyesi (eski sayfanın tek stüdyosu, zz32-tek-studyo sTekStudyo): kimlik satırı, üç sekme ve ipucu; Plan sekmesi tezgâh panosudur
 // (zz36). Üstte eski sayfanın tek sekmeli başlığı; akış adımları eski çerçevenindir (208 a); ipucu Plan sekmesinde eskisi gibi gizli.
-// Onay ve canlı ile Plan ve gerçekleşen sonraki teslimdedir (P1f). Canlı sürüm sunucunun canlı planından okunur (221 c).
+// Onay ve canlı plan modülünün senaryolarındandır; geçişin cevabı listeyi yeniler. Plan ve gerçekleşen sonraki teslimdedir. Canlı sürüm
+// sunucunun canlı planından okunur (221 c).
 export type AtolyeSekmesi = 'plan' | 'onay' | 'pg';
 const SEKMELER: [AtolyeSekmesi, SimgeAdi, string][] = [['plan', 'layers', 'Plan'], ['onay', 'check', 'Onay ve canlı'], ['pg', 'chart', 'Plan ve gerçekleşen']];
 const IPUCU: Record<AtolyeSekmesi, string | null> = {
@@ -25,7 +28,10 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
   const [sek, setSek] = useState<AtolyeSekmesi>('plan');
   const c = o.calisma;
   const canli = o.depo.planSurumu?.planSurumu ?? null;
-  const onayda = o.depo.senaryolar?.senaryolar.filter((s) => s.durum === 'onayda').length ?? 0;
+  const [sen, setSen] = useState<SenaryolarCevabi | null>(o.depo.senaryolar);
+  useEffect(() => { setSen(o.depo.senaryolar); }, [o.depo.senaryolar]);
+  const onayda = sen?.senaryolar.filter((s) => s.durum === 'onayda').length ?? 0;
+  const p = useMemo(() => planOku(c), [c]);
   const ipucu = IPUCU[sek];
   return (
     <div className="tc-pym tc-pym-tp" data-sek={sek}>
@@ -47,13 +53,14 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}
-      {sek === 'plan' ? <PlanSekmesi o={o} c={c} sekSec={setSek} onayda={onayda} /> : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
+      {sek === 'plan' ? <PlanSekmesi o={o} c={c} p={p} sekSec={setSek} onayda={onayda} />
+        : sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
+          : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
     </div>
   );
 }
 
-function PlanSekmesi({ o, c, sekSec, onayda }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number }) {
-  const p = useMemo(() => planOku(c), [c]);
+function PlanSekmesi({ o, c, p, sekSec, onayda }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number }) {
   if (!c) return <BosCalisma />;
   if (!p) {
     const emirler = o.depo.durum?.emirler ?? null;

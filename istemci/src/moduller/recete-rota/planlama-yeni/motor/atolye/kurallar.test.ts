@@ -4,7 +4,7 @@ import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslem
 import { ornekCalisma } from '../ornek.ts';
 import {
   akis, asilBekleme, bitisFarklari, canliFark, gunYeni, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
-  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs,
+  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paRedVar, paSecim, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
@@ -129,5 +129,42 @@ describe('atölye kuralları', () => {
     const ertesi = gunYeni({ ...c, tpGun: g } as PlanlamaCalismasi, p, '2026-10-26') as { gecmis: Record<string, unknown>; basi: { gun: string } };
     expect(Object.keys(ertesi.gecmis).sort()).toEqual(['2026-10-25', '2026-10-26']);
     expect(ertesi.basi.gun).toBe('2026-10-26');
+  });
+});
+
+describe('Onay ve canlı (sunucu senaryoları)', () => {
+  const g = { emirSayisi: 5, isEmriSayisi: 9, yerlesen: 8, geciken: 2, zamanindaYuzde: 80, ortAtolyeGun: 2, darbogaz: null, enDoluKaynak: null, personelGun: null, maliyetTl: null };
+  const s = (id: number, durum: SunucuSenaryosu['durum'], ek: Partial<SunucuSenaryosu> = {}): SunucuSenaryosu => ({
+    id, ad: `S${id}`, aciklama: null, durum, acan: null, benim: true, acilma: '2026-10-20T08:00:00Z', surum: 1, tabanPlanSurumu: 2, canliDegisti: false,
+    gostergeler: g, degisiklikler: [], etki: null, bekleyenler: [], ...ek,
+  });
+  it('akış adımı ve seçim: onay bekleyen önce, yoksa çalışma', () => {
+    expect(paAdim(false, 0, false, false)).toBe('hazirla');
+    expect(paAdim(true, 1, false, false)).toBe('canli');
+    expect(paAdim(true, 0, true, true)).toBe('incele');
+    expect(paAdim(true, 0, true, false)).toBe('onaya');
+    expect(paAdim(true, 0, false, false)).toBe('bitti');
+    const l = [s(1, 'acik'), s(2, 'onayda'), s(3, 'canliya_alindi')];
+    expect(paSecim(l, null, true)).toBe(2);
+    expect(paSecim(l, 3, true)).toBe(2);
+    expect(paSecim([s(1, 'acik')], null, true)).toBe('calisma');
+    expect(paSecim([s(1, 'acik')], 1, false)).toBe(1);
+  });
+  it('kontrol sunucu senaryosunun bildikleriyle', () => {
+    const K = paKontrol(s(1, 'acik', { canliDegisti: true, bekleyenler: ['Müşteri önceliği'] }), { ...g, geciken: 1 }, 4);
+    expect(K.map((k) => k[1])).toEqual([
+      'Canlı plan bu plan hazırlandıktan sonra değişti (sürüm 2 → 4); aradaki canlı değişiklikleri bu planda yok',
+      '1 iş yerleşmedi', 'Geciken sipariş canlıya göre 1 artıyor', 'Canlıya alınamaz, bekliyor: Müşteri önceliği', 'Canlı plandan farkı yok',
+    ]);
+    expect(paRedVar(K)).toBe(false);
+  });
+  it('fark ve planlar arası emir farkı', () => {
+    expect(farkKur(3, 1)).toEqual({ metin: '+2,0', iyi: false });
+    expect(farkKur(1, 1.01)).toBeNull();
+    const e = (emirNo: string, canli: string, senaryo: string | null) => ({ emirNo, canli, senaryo });
+    const etki = (l: ReturnType<typeof e>[]) => ({ tarihiDegisenEmirler: l, yukuDegisenIstasyonlar: [], yeniUyarilar: [] });
+    const r = paEmirFarki([s(1, 'acik', { etki: etki([e('A', '2026-10-21T08:00:00Z', '2026-10-21T10:00:00Z')]) }), s(2, 'acik', { etki: etki([e('B', '2026-10-21T08:00:00Z', null)]) })]);
+    expect(r.map((x) => x.emirNo)).toEqual(['B', 'A']);
+    expect(r[1]?.senaryo).toEqual(['2026-10-21T10:00:00Z', '2026-10-21T08:00:00Z']);
   });
 });
