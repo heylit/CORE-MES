@@ -98,6 +98,10 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     assert.notDeepEqual(c.calisma, JSON.parse(JSON.stringify(eksiz?.S)));
     // Kayıttaki çalışma ile birleşmiş çalışma ayrıdır: Reçete ve Rota kaydı değiştiği için veri ondan yeniden kurulmuştur.
     assert.notDeepEqual(c.calisma?.['D'], calisma(2).D);
+    // Kayıt çevirisi ve kaynak okuması veriyi değiştirdi: her biri planı eskitir (dataVer 1 -> 3, çerçevenin rrCek ve kaynakUygula'sı
+    // gibi); kayıt okunmuş sayılır.
+    assert.equal(c.calisma?.['dataVer'], calisma(2).dataVer + 2);
+    assert.equal(c.calisma?.['rrSavedAt'], kayit.savedAt);
   });
 
   test('PC-02: okuma kaydı değiştirmez', async () => {
