@@ -72,19 +72,22 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
           acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setAcik(id); }}
         />
       )}
-      <div className="tc-rr3-secici" role="group" aria-label="Tür">
-        {['tum', ...turler].map((t) => (
-          <Dugme key={t} aria-pressed={turSuzgeci === t} onClick={() => { setTurSuzgeci(t); }}>
-            {t === 'tum' ? 'Tüm türler' : turAdi(t)} <small>{emirler.filter((o) => t === 'tum' || o.tur === t).length}</small>
-          </Dugme>
-        ))}
-      </div>
-      <div className="tc-rr3-secici" role="group" aria-label="Durum">
-        {DURUM_SUZGECLERI.map((s) => (
-          <Dugme key={s.deger} aria-pressed={durumSuzgeci === s.deger} onClick={() => { setDurumSuzgeci(s.deger); }}>
-            {s.baslik} <small>{emirler.filter((o) => turUyar(o) && durumUyar(o, s.deger)).length}</small>
-          </Dugme>
-        ))}
+      {/* Eski ekranın tek satırlık bölümlü süzgeç çubuğu (497/2 a). */}
+      <div className="tc-rr3-suzgec">
+        <span className="tc-rr3-seg" role="group" aria-label="Tür">
+          {['tum', ...turler].map((t) => (
+            <button key={t} type="button" aria-pressed={turSuzgeci === t} onClick={() => { setTurSuzgeci(t); }}>
+              {t === 'tum' ? 'Tüm türler' : turAdi(t)} <small>{emirler.filter((o) => t === 'tum' || o.tur === t).length}</small>
+            </button>
+          ))}
+        </span>
+        <span className="tc-rr3-seg" role="group" aria-label="Durum">
+          {DURUM_SUZGECLERI.map((s) => (
+            <button key={s.deger} type="button" aria-pressed={durumSuzgeci === s.deger} onClick={() => { setDurumSuzgeci(s.deger); }}>
+              {s.baslik} <small>{emirler.filter((o) => turUyar(o) && durumUyar(o, s.deger)).length}</small>
+            </button>
+          ))}
+        </span>
       </div>
       {satirlar.length === 0
         ? <DurumKutusu durum="bos" mesaj="Bu süzgeçte emir yok." />
@@ -130,7 +133,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
       <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
         <span className="tc-rr3-no">
           <Rozet ton={o.priority === 1 ? 'hata' : o.priority === 2 ? 'uyari' : 'pasif'}>{ONCELIK_ADI[o.priority] ?? ''}</Rozet>
-          <b className="mono">{o.no}</b>
+          <b className="mono tc-rr3-emirno">{o.no}</b>
           <span className="tc-rr3-etiketler">
             <span className="tc-rr3-tur">{turAdi(o.tur)}</span>
             {ana && <small>{o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · {ana.no}</small>}

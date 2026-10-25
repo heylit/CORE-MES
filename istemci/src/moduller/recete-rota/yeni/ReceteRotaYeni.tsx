@@ -85,14 +85,15 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
 
   return (
     <>
-      {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
-      <SayfaBasligi baslik={sekme.baslik} simge={sekme.simge} />
+      {/* Eski ekranın sırası (497/1 a): modül sekmeleri en üstte, altında plan şeridi ve bölüm başlığı. */}
       <Sekmeler<SekmeAnahtari>
         etiket="Reçete ve Rota bölümleri"
         sekmeler={SEKMELER.map((s) => ({ anahtar: s.anahtar, baslik: s.baslik, simge: s.simge }))}
         secili={sekme.anahtar}
         sec={(a) => { git(a); }}
       />
+      {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
+      <SayfaBasligi baslik={sekme.baslik} simge={sekme.simge} />
       {motorOkunamadi && <p className="tc-rry-not" role="status">{MOTOR_OKUNAMADI}</p>}
       {planVerisiEksik && <p className="tc-rry-not" role="status">{PLAN_VERISI_EKSIK}</p>}
       <section className="tc-rry-icerik" aria-label={sekme.baslik} data-bolum={sekme.anahtar}>

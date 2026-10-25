@@ -60,12 +60,18 @@ export function planFarki(canli: PlanCanliOzeti, yerlesim: EkranYerlesimi, adetl
 
 const ilkUc = (l: readonly string[]) => `${l.slice(0, 3).join(', ')}${l.length > 3 ? '…' : ''}`;
 
-export type SeritTuru = 'canli' | 'bekliyor' | 'degisti';
-export interface SeritDurumu { tur: SeritTuru; rozet: string; degisiklik: number; parca: string; metin: string; uyarilar: string[] }
+// Eski metin; motor önerisi canlıdan farklıyken "bu ekrandaki sıra" yanlış olur, o durumda canlı planın sırası denir.
+const ESKI_CANLI_METNI = 'Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.';
+const CANLI_METNI = 'Terminal ve Arkon Hazırlık canlı planın sırasını kullanıyor.';
 
-// Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti", kimin ne zaman canlıya aldığıyla (Soru 491/2 a, 492/2 a);
-// fark yoksa "plan canlı"; varsa "canlıya alınmadı" ve değişiklik sayısı. Motor yerleşimi okunamazsa fark bilinmez: şerit bunu söyler,
-// "canlı" demez. Rotası değişen emir (motorun rotaEski'si) değişiklik sayılmaz, "açıldığı rotada kaldı" der (493/2 a): bu ekran emri yeni
+export type SeritTuru = 'canli' | 'bekliyor' | 'degisti';
+// motorFarki: plan canlıyken motor önerisinin canlıdan farklı iş sayısı (500 a); değişiklik sayısı değildir, yalnız bilgi.
+export interface SeritDurumu { tur: SeritTuru; rozet: string; degisiklik: number; motorFarki: number; parca: string; metin: string; uyarilar: string[] }
+
+// Şeridin durumu: canlı plan sürümü açılıştakinden farklıysa "plan değişti", kimin ne zaman canlıya aldığıyla (Soru 491/2 a, 492/2 a).
+// Canlı plan varsa "plan canlı"dır (500 a): bu ekran plan yazmaz, motorun önerisi canlıdan farklıysa bu ayrıca "Motor önerisi canlıdan
+// N iş farklı" diye söylenir, "canlıya alınmadı" denmez. Hiç canlı plan yoksa "canlıya alınmadı" ve motor önerisinin iş sayısı; motor
+// yerleşimi okunamazsa fark bilinmez, şerit bunu söyler. Rotası değişen emir (motorun rotaEski'si) değişiklik sayılmaz, "açıldığı rotada kaldı" der (493/2 a): bu ekran emri yeni
 // rotaya taşımaz. Bölmesi yazılamayan iş (motorun bolmeYazilamaz'ı) uyarıdır.
 export function seritDurumu(
   canli: PlanCanliOzeti, yerlesim: EkranYerlesimi | null, guncel: PlanSurumCevabi | null, motor: PlanMotoru | null = null,
@@ -74,12 +80,16 @@ export function seritDurumu(
     const s = guncel.sonCanliyaAlma;
     const kim = [s?.kisi ?? '', s ? planZamani(s.zaman) : ''].filter(Boolean).join(', ');
     return {
-      tur: 'degisti', rozet: 'PLAN DEĞİŞTİ', degisiklik: 0, parca: '', uyarilar: [],
+      tur: 'degisti', rozet: 'PLAN DEĞİŞTİ', degisiklik: 0, motorFarki: 0, parca: '', uyarilar: [],
       metin: `Plan başkası tarafından canlıya alındı${kim ? ` (${kim})` : ''}. Ekranı yenileyin; yenilemeden onaya gönderme reddedilir.`,
     };
   }
+  // Canlı plan: en az bir kez canlıya alınmış ya da kuyruğunda iş olan plan.
+  const canliVar = canli.sonCanliyaAlma !== null || canli.kuyruklar.some((k) => k.isler.length > 0);
   if (yerlesim === null) {
-    return { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 0, parca: '', uyarilar: [], metin: 'Plan motorunun yerleşimi okunamadı; canlı planla farkı gösterilemiyor.' };
+    return canliVar
+      ? { tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 0, parca: '', uyarilar: ['Plan motorunun yerleşimi okunamadı; motor önerisiyle fark gösterilemiyor.'], metin: CANLI_METNI }
+      : { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: 0, motorFarki: 0, parca: '', uyarilar: [], metin: 'Plan motorunun yerleşimi okunamadı; canlı planla farkı gösterilemiyor.' };
   }
   const f = planFarki(canli, yerlesim, motor?.parcaAdetleri);
   const rotadaKalan = (motor?.emirler ?? []).filter((e) => e.rotaEski).length;
@@ -95,12 +105,12 @@ export function seritDurumu(
       : '',
   ].filter(Boolean);
   const n = f.yok + f.farkli;
-  if (n === 0) return { tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, parca: '', uyarilar, metin: 'Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.' };
   const parca = [
     f.yok ? `${String(f.yok)} iş canlı planda yok` : '',
     f.farkli ? `${String(f.farkli)} iş canlıda başka sırada ya da makinede` : '',
   ].filter(Boolean).join(', ');
-  return { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: n, parca, uyarilar, metin: 'Onaylanıp canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.' };
+  if (canliVar || n === 0) return { tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: n, parca, uyarilar, metin: n === 0 ? ESKI_CANLI_METNI : CANLI_METNI };
+  return { tur: 'bekliyor', rozet: 'CANLIYA ALINMADI', degisiklik: n, motorFarki: 0, parca, uyarilar, metin: 'Onaylanıp canlıya alınana kadar terminal ve Arkon Hazırlık eski planı kullanır.' };
 }
 
 function planZamani(z: string): string {
