@@ -44,8 +44,36 @@
   font-size: var(--yazi-s); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase;
 }
 .tc-ay-bosluk { flex: 1 1 auto; }
+.tc-ay-bant-araclar, .tc-ay-bant-ek { display: contents; }
+.tc-ay-bant-kisayol { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-ay-bosluk, .tc-ay-diger { order: 1; }
+.tc-ay-bant-kisayol, .tc-ay-bant > .tc-ay-baglanti, .tc-ay-bant > .tc-ay-saat { order: 2; }
+.tc-ay-bant-tema { order: 3; }
+.tc-ay-diger { display: none; }
 @media (max-width: 767px) {
   .tc-ay-marka b, .tc-ay-marka small, .tc-ay-ayrac { display: none; }
+  .tc-ay-bant { gap: var(--b-2); }
+  .tc-ay-bant-ek { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); order: 4; flex: 1 1 100%; min-width: 0; }
+  .tc-ay-bant > .tc-ay-bosluk { display: none; }
+  .tc-ay-rozet { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .tc-ay-rozet .tc-simge { display: none; }
+  .tc-ay-bant > .tc-ay-saat small { display: none; }
+  /* Bağlantı adı kapının aria-label'ında kalır; dar bantta yalnız durum noktası görünür. */
+  .tc-ay-bant > .tc-ay-baglanti .tc-rozet { font-size: 0; gap: 0; padding: var(--b-2); }
+  .tc-ay-bant > * { flex: none; }
+  .tc-ay-bant > .tc-ay-rozet { flex: 1 1 0; max-inline-size: max-content; margin-inline-end: auto; }
+  .tc-ay-bant > .tc-ay-bant-ek { flex: 1 1 100%; }
+  .tc-ay-diger { display: inline-flex; order: 3; }
+  .tc-ay-bant-araclar { display: none; }
+  .tc-ay-bant[data-acik] .tc-ay-bant-araclar {
+    display: grid; justify-items: stretch; gap: var(--b-2); position: absolute; z-index: 5; inset-block-start: 100%; inset-inline-end: 0;
+    min-inline-size: var(--kuyruk-genis); max-inline-size: 100%; padding: var(--b-3); margin-block-start: var(--b-2);
+    border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); box-shadow: var(--shadow);
+  }
+  .tc-ay-bant-araclar > *, .tc-ay-bant-kisayol { display: grid; gap: var(--b-2); }
+  /* Yalnız simgeli düğme menüde adıyla okunur. */
+  .tc-ay-bant-araclar button { min-width: 0; max-inline-size: 100%; }
+  .tc-ay-bant-araclar button[aria-label]::after { content: attr(aria-label); min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 }
 
 /* TV modu (eski html.tv): Arkon'un gezinmesi (eski ray, bağlantı durumu dahil) ve çağrı bandı gizlenir, pano tam ekranda kalır. */

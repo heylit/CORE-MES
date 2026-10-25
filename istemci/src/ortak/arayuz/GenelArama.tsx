@@ -6,6 +6,7 @@ import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import { ara, aramaDizini, sadelestir } from '../rota/arama-dizini.ts';
 import { komutAra, type Komut } from '../rota/komutlar.ts';
 import type { SayfaKomutu } from '../rota/sayfa-komutlari.ts';
+import { yerAdi } from '../rota/gezinme-gecmisi.ts';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { useKayitAramasi, type KayitKaynagi } from '../veri/kayit-aramasi.ts';
@@ -24,11 +25,13 @@ interface Ozellikler {
   sayfaKomutlari?: readonly SayfaKomutu[];
   // Paletin sorgusu değişince (kapalıyken null): değer alan komutu öneren sayfa bunu dinler.
   sorguDegisti?: (sorgu: string | null) => void;
+  // Geri yöndeki son yerler (en yakını başta, adım sayısıyla); boş sorguda listelenir, seçilince o adıma dönülür.
+  sonYerler?: readonly { yol: string; adim: number }[];
 }
 
 interface Satir {
   anahtar: string;
-  tur: 'sayfa' | 'madde' | 'kayit' | 'komut' | 'sayfa-komutu';
+  tur: 'sayfa' | 'madde' | 'kayit' | 'komut' | 'sayfa-komutu' | 'son-yer';
   baslik: string;
   ust: string | null;
   ad: string;
@@ -41,14 +44,16 @@ interface Satir {
 }
 
 const SAYFASIZ: readonly Sayfa[] = [];
+const YERSIZ: readonly { yol: string; adim: number }[] = [];
 const KOMUTSUZ: readonly Komut[] = [];
 const SAYFA_KOMUTSUZ: readonly SayfaKomutu[] = [];
 // Boş sorguda açık sayfanın komutlarından en çok bu kadarı görünür; yazınca süzülür.
 const BOS_SORGUDA_SAYFA_KOMUTU = 12;
 const SAYFA_KOMUTU_GRUBU = 'Bu sayfa';
 const KOMUT_GRUBU = 'Komut';
+const SON_YER_GRUBU = 'Son yerler';
 
-const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt', komut: 'Komut', 'sayfa-komutu': 'Bu sayfanın komutu' };
+const TUR_ADI: Record<Satir['tur'], string> = { sayfa: 'Sayfa', madde: 'Menü maddesi', kayit: 'Kayıt', komut: 'Komut', 'sayfa-komutu': 'Bu sayfanın komutu', 'son-yer': 'Son yer' };
 
 // Eşleşen parçalar arama dizininin kuralıyla bulunur (Türkçe harf ve büyük-küçük farkı yok): "okut" "Okut"u, "cek" "Çek"i işaretler.
 // Harf harf sadeleştirilir ki işaretin yeri özgün metindeki yerle aynı kalsın.
@@ -108,7 +113,7 @@ function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: S
   });
 }
 
-// Üst çubuktaki arama ve komut paleti (Ctrl K). Sıra: açık sayfanın komutları ("Bu sayfa"; boş sorguda da görünür), sayfa
+// Üst çubuktaki arama ve komut paleti (Ctrl K). Sıra: açık sayfanın komutları ("Bu sayfa"; boş sorguda da görünür), boş sorguda son yerler, sayfa
 // ve menü maddeleri, modüllerin genel komutları (sunucuya gitmeden), altında arama ucu olan modüllerin kayıtları. Komut
 // yazma yapmaz: genel komut modülün ekranını açar, sayfa komutu sayfanın kendi işlevini çağırır; yetki yine uçtadır. Çerçeveli modülün içindeki tuşlar modülündür: tuş çerçevenin belgesine gider, buraya ulaşmaz.
 // Açılınca kutu ortada komut paleti olur, arkası perdelenir; geniş ekranda sağda seçili sonucun önizlemesi durur. Kutu DOM'da
@@ -116,6 +121,7 @@ function kayitKaynaklari(sayfalar: readonly Sayfa[]): (KayitKaynagi & { simge: S
 // Telefonda yalnız simge düğmesi görünür; dokununca palet ekranın üstünde açılır.
 export function GenelArama({
   sayfalar, menuler, islemler, aramaSayfalari = SAYFASIZ, komutlar = KOMUTSUZ, sayfaKomutlari = SAYFA_KOMUTSUZ, sorguDegisti,
+  sonYerler = YERSIZ,
 }: Ozellikler) {
   const gezin = useNavigate();
   const [sorgu, sorguYaz] = useState('');
@@ -137,11 +143,20 @@ export function GenelArama({
   }, [sayfaKomutlari, sorgu]);
   useEffect(() => { sorguDegisti?.(acik ? sorgu : null); }, [sorguDegisti, acik, sorgu]);
   const komutSonuclari = useMemo(() => komutAra(komutlar, sorgu), [komutlar, sorgu]);
+  // Yazınca yerini sayfa sonuçları alır: aynı sayfa iki kez listelenmez.
+  const sonYerSonuclari = sorgu.trim() === '' ? sonYerler : YERSIZ;
   const sonuclar = useMemo<Satir[]>(() => [
     ...sayfaKomutSonuclari.map((k, sira): Satir => ({
       anahtar: `bu-sayfa#${sira}#${k.anahtar}`, tur: 'sayfa-komutu', baslik: k.baslik, ust: null, ad: k.baslik,
       grup: SAYFA_KOMUTU_GRUBU, aciklama: k.aciklama, yol: null, simge: k.simge, calistir: k.calistir,
     })),
+    ...sonYerSonuclari.map((y): Satir => {
+      const ad = yerAdi(y.yol, menuler);
+      return {
+        anahtar: `son-yer#${y.adim}`, tur: 'son-yer', baslik: ad, ust: null, ad, grup: SON_YER_GRUBU, aciklama: null, yol: y.yol,
+        simge: 'clock', calistir: () => { void gezin(y.adim); },
+      };
+    }),
     ...sayfaSonuclari.map((s): Satir => ({
       anahtar: s.anahtar, tur: s.ust === null ? 'sayfa' : 'madde', baslik: s.baslik, ust: s.ust,
       ad: s.ust === null ? s.baslik : `${s.ust} › ${s.baslik}`, grup: s.grup, aciklama: null, yol: s.yol, simge: s.simge,
@@ -154,12 +169,12 @@ export function GenelArama({
       anahtar: k.anahtar, tur: 'kayit', baslik: k.baslik, ust: null, ad: k.baslik, grup: k.kaynak, aciklama: k.aciklama, yol: k.yol,
       simge: kaynaklar.find((y) => y.ad === k.kaynak)?.simge ?? 'search',
     })),
-  ], [sayfaKomutSonuclari, sayfaSonuclari, komutSonuclari, kayitlar.sonuclar, kaynaklar]);
+  ], [sayfaKomutSonuclari, sonYerSonuclari, menuler, gezin, sayfaSonuclari, komutSonuclari, kayitlar.sonuclar, kaynaklar]);
   const komutVar = komutlar.length > 0 || sayfaKomutlari.length > 0;
   const etiket = komutVar
     ? (kaynaklar.length > 0 ? 'Sayfa, kayıt ya da komut ara' : 'Sayfa ya da komut ara')
     : (kaynaklar.length > 0 ? 'Sayfa ya da kayıt ara' : 'Sayfa ya da menü ara');
-  const listeAcik = acik && (sorgu.trim() !== '' || sayfaKomutSonuclari.length > 0);
+  const listeAcik = acik && (sorgu.trim() !== '' || sayfaKomutSonuclari.length > 0 || sonYerSonuclari.length > 0);
 
   // Modülün kendi Ctrl K'sı (stokta ve satın almada kendi araması) önce gelir. Kabuk tuşu en önce (yakalama evresinde)
   // görür ve tarayıcının kendi Ctrl K'sını hemen durdurur; modülün dinleyicisi tuşu işlerse (preventDefault çağırırsa)

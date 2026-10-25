@@ -3,6 +3,7 @@ import { Dugme, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../../..
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import type { CalismaKomutu } from '../kayit.ts';
+import { DURUM_ADI, DURUM_TONU, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import {
   DEGERLENDIRME_ACIK, MALZEME_DURUM_AD, TERMIN_SECENEK_AD, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl,
@@ -12,7 +13,7 @@ import {
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
   PARTI_EN_COK, darbogaz, dengeAdi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, saat,
-  saatOku, sayi, simdi,
+  katsayi, saatOku, sayi, simdi, terminAyari,
   taramaKapsami, taramaSecenekSayisi, tl, type KayitliPlan,
 } from './kurallar.ts';
 
@@ -407,8 +408,42 @@ const MALZEME_TON: Record<MalzemeTerminiSatiri['durum'], 'hata' | 'uyari' | 'tam
   hizlandir: 'hata', 'plan-once-istiyor': 'uyari', ertelenebilir: 'bilgi', uygun: 'tamam', 'bagli-is-yok': 'pasif', 'siparis-yok': 'uyari',
 };
 
-export function MalzemeBekleyenKarti({ degerlendir, yenile }: { degerlendir: Degerlendirici | null; yenile: () => void }) {
+const BEKLEYEN_NOTU = 'Siparişi verilmemiş satıra termin girmek siparişi o terminle verir. İleri at: işin serbest bırakılma zamanını tahmini gelişe '
+  + '(muayene dahil) taşır; plan yeniden çözülünce iş o tarihten önce başlamaz.';
+
+// Değerlendirme ucu kapalıyken kart Malzeme satın alma planının satırlarından dolar (zv-termin sTerminler: termini girilmemiş satırlar, gerekli
+// gelişe göre). Termin ve sipariş satın almanındır: alan ve düğme yerinde pasif (222 a).
+function PlandanBekleyenler({ D, satirlar }: { D: PlanVerisi; satirlar: readonly AlimPlaniSatiri[] }) {
+  const A = terminAyari(D);
+  const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
+  const bek = satirlar.filter((x) => x.tm !== 'termin').sort((a, b) => (a.gerekli ?? 1e9) - (b.gerekli ?? 1e9));
+  const tarih = (t: number | null) => (t == null ? '—' : <span className="mono">{gunYaz(D, t)}</span>);
+  const sutunlar: Sutun<AlimPlaniSatiri>[] = [
+    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x) => <><b className="mono">{x.kod}</b> <span className="tc-pys-kucuk">{mats.get(x.kod)?.ad ?? ''}</span></>, csv: (x) => x.kod },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <Rozet ton={DURUM_TONU[x.durum]}>{DURUM_ADI[x.durum]}</Rozet>, csv: (x) => DURUM_ADI[x.durum] },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', mono: true, hucre: (x) => `${sayi(x.miktar, x.miktar < 10 ? 1 : 0)} ${mats.get(x.kod)?.birim ?? ''}`.trim() },
+    { anahtar: 'gerekli', baslik: 'Gerekli geliş', kirilmaz: true, hucre: (x) => tarih(x.gerekli) },
+    { anahtar: 'referans', baslik: 'Referans termin', kirilmaz: true, hucre: (x) => {
+      const m = mats.get(x.kod); const tg = m?.tedarikGun;
+      return <>{tarih(x.etkin)}<small className="tc-pys-not">{tg == null ? 'tedarik süresi yok' : `${sayi(+tg, 0)} gün × ${sayi(katsayi(m, 'terminKat', A.katMal), 2)}`}</small></>;
+    } },
+    { anahtar: 'termin', baslik: 'Termin', hucre: (x) => <input className="tc-alan-kutu tc-pys-tarih" type="date" disabled aria-label={`${x.kod} termin`} /> },
+    { anahtar: 'siparisler', baslik: 'Siparişler', mono: true, hucre: (x) => x.isler.join(', ') },
+    { anahtar: 'islem', baslik: 'İşlem', csv: false, hucre: () => <Dugme simge="next" disabled title="Başlama tarihi Üretim emirlerinde değiştirilir">İleri at</Dugme> },
+  ];
+  return (
+    <Kart baslik="Malzeme: termin bekleyenler" simge="box">
+      <Tablo etiket="Malzeme: termin bekleyenler" sutunlar={sutunlar} satirlar={bek} satirAnahtari={(x) => `${x.tur}-${x.alimNo ?? x.isler.join(',')}-${x.kod}`} bosMesaj="Termini beklenen malzeme yok." />
+      <p className="tc-pys-kucuk">{BEKLEYEN_NOTU}</p>
+    </Kart>
+  );
+}
+
+export function MalzemeBekleyenKarti({ degerlendir, yenile, D, plandan }: {
+  degerlendir: Degerlendirici | null; yenile: () => void; D: PlanVerisi; plandan: readonly AlimPlaniSatiri[] | null | undefined;
+}) {
   const d = useDegerlendirme<'malzeme-terminleri'>({ tur: 'malzeme-terminleri' }, degerlendir);
+  if (!degerlendir && plandan) return <PlandanBekleyenler D={D} satirlar={plandan} />;
   const satirlar = d.tur === 'sonuc' ? d.cevap.sonuc.satirlar.filter((x) => x.soz == null) : [];
   const sutunlar: Sutun<MalzemeTerminiSatiri>[] = [
     { anahtar: 'malzeme', baslik: 'Malzeme', mono: true, hucre: (x) => x.kod },
@@ -425,10 +460,7 @@ export function MalzemeBekleyenKarti({ degerlendir, yenile }: { degerlendir: Deg
     <Kart baslik="Malzeme: termin bekleyenler" simge="box">
       <Tablo etiket="Malzeme: termin bekleyenler" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(x) => `${x.tur}-${x.satinalmaSira ?? ''}-${x.kod}`}
         bosMesaj={d.tur === 'sonuc' ? 'Termini beklenen malzeme yok.' : 'Satın alma listesi plan motoruyla gelir.'} />
-      <p className="tc-pys-kucuk">
-        Siparişi verilmemiş satıra termin girmek siparişi o terminle verir. İleri at: işin serbest bırakılma zamanını tahmini gelişe (muayene dahil) taşır; plan
-        yeniden çözülünce iş o tarihten önce başlamaz.
-      </p>
+      <p className="tc-pys-kucuk">{BEKLEYEN_NOTU}</p>
       {!degerlendir && <MotorNotu />}
       <DurumSatiri d={d} yenile={yenile} />
     </Kart>

@@ -377,7 +377,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
 
   return (
     <div className="tc-ay2" data-duzen={duzenAcik ? '' : undefined}>
-      <ArkonBandi simge="layers" baslik="Üretim Terminali Hazırlık" kisayollar={HAZIRLIK_KISAYOLLARI} alt="Kalite & proses" ek={(
+      <ArkonBandi simge="layers" baslik="Üretim Terminali Hazırlık" kisayollar={HAZIRLIK_KISAYOLLARI} alt="Kalite & proses" ekMenude ek={(
         <span className="tc-ay2-esitlemeler">
         <span className="tc-ay2-esitleme" data-acik="" title="Aynı bilgisayardaki operatör ekranlarına anında iletim"><i aria-hidden="true" />Bu bilgisayar</span>
         <button type="button" className="tc-ay2-esitleme" data-acik={klasorAdi ? '' : undefined} title="Ağ klasörü ile paylaşım" onClick={() => { void klasorSec(); }}>

@@ -90,6 +90,25 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* Yoğun ölçü (kullanıcı kararı 25.10.2026): fareyle kullanılan ekranda denetimler eski yoğunluğuna iner; dokunmatikte 44 px kalır.
+   --dokunma bilerek değişmez: dokunma için konmuş kalıplar (x14 ... x24, ana düğme, menü) ona bağlıdır. */
+:root {
+  --dokunma-yogun: 32px; --alan-yogun: 36px; --isaret-yogun: 28px;
+  --dugme-boy: var(--dokunma); --dugme-yazi: var(--yazi-m); --alan-boy: var(--dokunma);
+  --isaret-boy: var(--dokunma); --isaret-kutu: var(--b-5); --tablo-hucre: var(--b-3);
+}
+@media (pointer: fine) {
+  :root {
+    --dugme-boy: var(--dokunma-yogun); --dugme-yazi: var(--yazi-s); --alan-boy: var(--alan-yogun);
+    --isaret-boy: var(--isaret-yogun); --isaret-kutu: var(--b-4); --tablo-hucre: var(--b-2);
+  }
+}
+/* Masaüstünde de parmakla kullanılan ekran (Üretim Terminali gibi) kendi köküne `data-dokunmatik` yazar. */
+[data-dokunmatik] {
+  --dugme-boy: var(--dokunma); --dugme-yazi: var(--yazi-m); --alan-boy: var(--dokunma);
+  --isaret-boy: var(--dokunma); --isaret-kutu: var(--b-5); --tablo-hucre: var(--b-3);
+}
+
 /* Terminal parcalari: durum adlari, buyuk kose, cam bulanikligi, kiosk olculeri */
 [data-durum="sirada"]    { --sig: var(--idle); --sig-yazi: var(--idle); }
 [data-durum="ayar"]      { --sig: var(--hazard); --sig-yazi: var(--hazard-ink); }

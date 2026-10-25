@@ -44,8 +44,8 @@ function ac() {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Ziyaretçilerim', () => {
-  it('üst çubukta her oturuma açık; Nizamiye işlemi istemez', () => {
-    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['ziyaretcilerim', 'oturum']]);
+  it('her oturuma açık, Hesap menüsünde durur (516 a); Nizamiye işlemi istemez', () => {
+    expect(ustEylemler.map((e) => [e.anahtar, e.islem, e.yer, e.hesapMaddesi?.baslik])).toEqual([['ziyaretcilerim', 'oturum', 'hesap', 'Ziyaretçilerim']]);
   });
 
   it('yalnız gelmemiş ziyaretçi iptal edilir; içerideki kartıyla görünür', async () => {

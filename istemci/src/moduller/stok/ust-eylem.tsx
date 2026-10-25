@@ -83,7 +83,6 @@ function TeslimDugmesi() {
     <>
       <button type="button" className="tc-kabuk-tema tc-stok-teslim-dugme" onClick={() => setAcik(true)} aria-haspopup="dialog" aria-label={etiket} title={etiket}>
         <Simge ad="scan" />
-        <span className="tc-kabuk-dugme-ad" aria-hidden="true">Malzeme</span>
         {gelen > 0 && <span className="tc-stok-teslim-sayac" aria-hidden="true">{gelen > 99 ? '99+' : gelen}</span>}
       </button>
       {acik && <TeslimPaneli key={istek ? `${istek.sekme}-${istek.depoSepeti ?? false}` : 'olagan'} odak={odak} istek={istek} kapat={() => { setAcik(false); setOdak(null); setIstek(null); }} />}

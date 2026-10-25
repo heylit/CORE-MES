@@ -10,7 +10,7 @@
   min-width: 0; position: sticky; top: calc(var(--ust-cubuk) + var(--b-3)); max-height: calc(100vh - var(--ust-cubuk) - var(--b-5)); overflow-y: auto;
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid);
 }
-.tc-mk-yan > summary { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3); font-weight: 700; cursor: pointer; list-style: none; }
+.tc-mk-yan > summary { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dugme-boy); padding: var(--b-1) var(--b-3); font-weight: 800; font-stretch: 85%; cursor: pointer; list-style: none; }
 .tc-mk-yan > summary::-webkit-details-marker { display: none; }
 .tc-mk-yan > summary::before { content: "▸"; transition: transform var(--hareket-sure); }
 .tc-mk-yan[open] > summary::before { transform: rotate(90deg); }
@@ -25,15 +25,17 @@
 }
 
 .tc-mk-fasetler { display: grid; gap: var(--b-3); }
-.tc-mk-faset { display: grid; gap: var(--b-1); margin: 0; padding: 0; border: 0; min-width: 0; }
+/* Eski düzen: bölümler ince çizgiyle ayrılır, değer satırları sık (fareyle 28 px). */
+.tc-mk-faset { display: grid; gap: 0; margin: 0; padding: var(--b-2) 0 0; border: 0; border-top: var(--cizgi-ince) solid var(--edge); min-width: 0; }
+.tc-mk-faset:first-child { border-top: 0; padding-top: 0; }
 .tc-mk-faset-bas { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); width: 100%; padding: 0; font-size: var(--yazi-s); font-weight: 700; }
-.tc-mk-faset-deger { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; }
+.tc-mk-faset-deger { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-width: 0; font-size: var(--yazi-s); }
 .tc-mk-faset-deger[data-bos] { color: var(--faint); }
 .tc-mk-faset-sayi { flex: none; font-size: var(--yazi-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .tc-mk-olcu { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-2); font-size: var(--yazi-s); }
 
 .tc-mk-aktif { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
-.tc-mk-aktif-sayi { font-size: var(--yazi-s); color: var(--muted); }
+.tc-mk-aktif-sayi { font-size: var(--yazi-s); font-weight: 800; font-stretch: 85%; }
 .tc-mk-cip { font-size: var(--yazi-s); }
 
 .tc-mk-secim {
@@ -60,17 +62,22 @@
 .tc-mk-malzeme { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
 .tc-mk-malzeme > .tc-simge { flex: none; color: var(--muted); }
 .tc-mk-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; }
-.tc-mk-kod { font-family: var(--font-mono); font-weight: 700; overflow-wrap: anywhere; }
-.tc-mk-ad { min-width: 0; overflow-wrap: anywhere; }
+/* Eski hiyerarşi: ad kalın ve önde, kod küçük ve soluk; tür etiketi tür renginde çerçeveli. */
+.tc-mk-kod { font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
+.tc-mk-ad { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.tc-mk-malzeme .tc-rozet-cizgi { --c: var(--tur-renk); }
 .tc-mk-alt { display: block; font-size: var(--yazi-xs); color: var(--muted); }
 
 .tc-mk-bag {
   padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer;
-  min-height: var(--dokunma); text-align: left;
+  min-height: var(--isaret-boy); text-align: left;
 }
+.tc-mk-faset .tc-mk-bag { font-size: var(--yazi-s); font-weight: 700; color: var(--hazard-ink); }
 .tc-mk-ipucu { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
 .tc-mk-soluk { color: var(--muted); }
 .tc-mk-sayi { text-align: right; font-variant-numeric: tabular-nums; }
+/* Stok birimi sütunu eskide ortalıdır. */
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo :is(th, td):nth-child(4) { text-align: center; }
 .tc-mk-eylemler, .tc-mk-cipler, .tc-mk-arac-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-mk-pencere-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); width: 100%; }
 .tc-mk-sona { margin-left: auto; }

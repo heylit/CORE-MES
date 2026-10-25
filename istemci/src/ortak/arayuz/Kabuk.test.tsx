@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
+import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
   return render(
@@ -62,6 +63,34 @@ describe('Kabuk', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Durum paneli' }));
     expect(screen.getByRole('button', { name: 'Durum 1' })).toBeTruthy();
+  });
+
+  it('hesap yerindeki ust eylem cubukta yer tutmaz, yalniz Hesap menusundedir; isareti kisi dugmesinde cizilir (516 a)', () => {
+    const eylem = {
+      anahtar: 'ziyaret', sira: 1, islem: 'oturum' as const, yer: 'hesap' as const, hesapMaddesi: { baslik: 'Ziyaretçilerim', simge: 'users' as const },
+      dugme: ({ acmaIstegi = 0 }: { acmaIstegi?: number }) => <button type="button">{`Ziyaret ${String(acmaIstegi)}`}</button>,
+      isaret: () => <span role="img" aria-label="Uyarı var" />,
+    };
+    const { container } = render(
+      <MemoryRouter>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={[]} ustEylemler={[eylem]}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    // Sarmalayıcı her genişlikte gizlidir (kabuk.css); düğmenin penceresi gövdeye açılır.
+    expect(container.querySelector('.tc-kabuk-ust .tc-kabuk-yalniz-hesapta')?.textContent).toBe('Ziyaret 0');
+    expect(container.querySelector('.tc-kabuk-ust .tc-kabuk-hesapta')).toBeNull();
+    expect(container.querySelector('.tc-kabuk-kisi-avatar [role="img"]')?.getAttribute('aria-label')).toBe('Uyarı var');
+    fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent).slice(0, 4)).toEqual(['Profilim', 'Ziyaretçilerim', 'Yardım ve rehber', 'Koyu temaya geç']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ziyaretçilerim' }));
+    expect(screen.getByRole('button', { name: 'Ziyaret 1' })).toBeTruthy();
+  });
+
+  it('Yardim ust cubukta ayri dugme degildir; F1 ve Hesap menusu acar (516 a)', () => {
+    ciz();
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Yardım ve rehber' })).toBeNull();
+    fireEvent.keyDown(document, { key: 'F1' });
+    expect(screen.getByRole('dialog', { name: 'Yardım ve rehber' })).toBeTruthy();
   });
 
   it('"Ne oldu?" paneli kisiye acik olaylari gosterir, secilen olayin ekranina goturur; olaysiz kiside dugme yoktur', () => {
@@ -190,6 +219,38 @@ describe('Kabuk', () => {
     benzerKapat();
     ciz(SAYFALAR, undefined, '/bilinmeyen/alt');
     expect(baslik()).toBe('TMI CORE');
+  });
+
+  it('yeni ekranin basligi ve menu secimi bagli oldugu sayfadandir, adres onekinden degil', () => {
+    const yeniCiz = (yol: string) => render(
+      <MemoryRouter initialEntries={[yol]}>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme" cikis={() => {}} islemler={[YENI_EKRAN_ISLEMI]}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
+    const secili = (ad: string) => within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('link', { name: ad }).getAttribute('aria-current');
+    const { unmount: terminalKapat } = yeniCiz('/arkon/yeni/operator');
+    expect(baslik()).toBe('Üretim Terminali');
+    expect(secili('Üretim Terminali (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
+    terminalKapat();
+    const { unmount: kuyrukKapat } = yeniCiz('/arkon/yeni/kuyruk');
+    expect(baslik()).toBe('Kuyruk');
+    expect(secili('Kuyruk (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    kuyrukKapat();
+    // Sekmeli yeni ekranın alt yolu kendi satırını seçili tutar.
+    const { unmount: hazirlikKapat } = yeniCiz('/arkon/yeni/hazirlik');
+    expect(baslik()).toBe('Üretim Hazırlık');
+    expect(secili('Üretim Hazırlık (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    hazirlikKapat();
+    // Yeni ekran olmayan alt yolda önek kuralı sürer.
+    yeniCiz('/arkon/pano');
+    expect(baslik()).toBe('Üretim Hazırlık');
+    expect(secili('Üretim Hazırlık')).toBe('page');
+    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
   });
 
   it('yetkisi olmayan sayfanin adresinde baslik o sayfanin adini vermez', () => {

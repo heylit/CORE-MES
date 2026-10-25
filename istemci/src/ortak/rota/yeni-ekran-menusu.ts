@@ -34,6 +34,16 @@ export function yeniEkranAdresiMi(adres: string): boolean {
   return YENI_EKRAN_YOLLARI.some((yol) => adres === yol || adres.startsWith(`${yol}/`));
 }
 
+// Yeni ekran adresinin satırı ve bağlı olduğu ana menü sayfası. En uzun yol kazanır: `/arkon/yeni/operator` Üretim
+// Terminali'dir, önekteki `/arkon` (Üretim Hazırlık) değil. Kabuk başlığı ve menü seçimi bununla bulunur.
+export function yeniEkranEslesmesi(adres: string): { yol: string; kok: string } | null {
+  let bulunan: { yol: string; kok: string } | null = null;
+  for (const e of YENI_EKRANLAR) {
+    if ((adres === e.yol || adres.startsWith(`${e.yol}/`)) && (bulunan === null || e.yol.length > bulunan.yol.length)) bulunan = { yol: e.yol, kok: e.kok };
+  }
+  return bulunan;
+}
+
 export interface YeniEkranBaglantisi { yol: string; baslik: string; simge: SimgeAdi }
 
 // sayfalar: kişinin menüdeki sayfaları (kapalılar düşmüş). Kapı işlemi yoksa liste boştur.
