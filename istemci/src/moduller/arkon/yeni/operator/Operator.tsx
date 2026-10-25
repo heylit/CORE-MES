@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TusTakimi, useBildirim, type BildirimTonu,
 } from '../../../../ortak/arayuz/index.ts';
@@ -24,7 +24,7 @@ import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../..
 import { ilkAcilis } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
 import { elleNumuneOlculeri } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, seciliMakineler, type MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
-import { sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
+import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
 import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
 import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
@@ -39,13 +39,13 @@ import type { Perm } from '../cekirdek/tipler.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
-import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
+import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import type { Ileti } from '../veri/depo.ts';
 import {
   IS_TURLERI, ISTASYON_PANELLERI, IstasyonSecici, SEVIYELER, TakimKarti, UyariPenceresi, isKurallari, istasyonAyari, isTuru,
-  sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
+  numuneOlculeri, numunePlani, sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
 } from '../hazirlik/index.tsx';
 import { Adimlar } from './Adimlar.tsx';
 import { Analiz } from './Analiz.tsx';
@@ -63,8 +63,18 @@ import {
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { UzakMod } from './UzakMod.tsx';
-import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
+import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
+
+// Teknik resim (A5) ve ölçü aleti seçimi (A4) ağırdır; resim sekmesi açılınca yüklenir.
+const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
+const AletSecici = lazy(async () => {
+  const { AletSecimi } = await import('../kalite/index.tsx');
+  return { default: function AletSecici({ aletler, tool }: { aletler: Parameters<typeof AletSecimi>[0]['aletler']; tool: string | undefined }) { return <AletSecimi aletler={aletler} tool={tool} />; } };
+});
+// Baytı gelmemiş dosya kaydı resimde açılamaz; görüntüleyici onu atlar.
+const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikResimKontrolu['dosyalar'] =>
+  l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
 
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
@@ -116,6 +126,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const [mcSel, mcSelYaz] = useState<string[]>([]);
   const [since, sinceYaz] = useState(() => { const l = yerel.oku<{ at?: number }>(`lastState:${MACHINE}`); return l && l.at ? l.at : Date.now(); });
   const [tab, tabYaz] = useState<Gorunum>('draw');
+  const [odak, odakYaz] = useState<{ id: number; n: number } | null>(null);
+  const [odakKipi, odakKipiYaz] = useState(false);
   const [ov, ovYaz] = useState<Pencereler | null>(null);
   const [segs, segsYaz] = useState<DurumParcasi[]>([]);
   const [away, awayYaz] = useState(false);
@@ -479,7 +491,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     } else if (taze.length && o.pkg && !(o.lastDecision && o.lastDecision.status === 'rejected' && !tazeO.length)) {
       // Ret kartı ekrandayken kalite ölçüsü için ayrıca uyarı verilmez: RED iletisi ve kart operatöre düzeltip göndermesini zaten söyler.
       const b = tazeQ[0] || tazeO[0]!;
-      awayYaz(false); tabYaz('draw'); mvYaz('prod');
+      awayYaz(false); tabYaz('draw'); mvYaz('prod'); odakYaz({ id: b.id, n: Date.now() });
       bip('due');
       say(tazeQ.length ? `Numune zamanı · ${b.nom} (${D.why[b.id] || ''}) · kaliteye gönder` : `Ölçüm sırası sende · ${b.nom} (${D.why[b.id] || ''})`,
         tazeQ.length ? 'target' : 'ruler', b.crit ? 'stop' : tazeQ.length ? 'hazard' : 'run');
@@ -510,6 +522,55 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // 19.1: paketin merkez çizimi eskiyse başlatma görevi uyarıya döner.
   const mUyari = useMerkezUyarilari((o.pkg ? o.pkg.files : null) as MerkezDosyasi[] | null);
   const cizimEski = eskiCizim((o.pkg && o.pkg.files) as MerkezDosyasi[] | undefined, mUyari);
+
+  /* teknik resim (operator.ts ctl): salt okunur; operatör yalnız kendisine düşen ölçüyü girer, ölçü aleti zorunlu (önizlemede değil) */
+  const opIds = useMemo(() => {
+    if (!o.pkg) return [];
+    const ids = new Set(D.due.filter((b) => D.who[b.id] === 'op').map((b) => b.id));
+    for (const r of numunePlani(o.pkg)) if ((r.who || ['q']).every((w) => w === 'op')) for (const b of numuneOlculeri(o.pkg, r)) ids.add(b.id);
+    return Array.from(ids);
+  }, [o.pkg, dueKey]);
+  const olcumYaz = (m: Record<number, Meas>) => {
+    const pkg = o.pkg;
+    if (!pkg) return;
+    const nm: Record<string, Meas> = { ...m };
+    for (const k of Object.keys(nm)) {
+      const x = nm[k];
+      if (!x || x.cnt != null) continue;
+      nm[k] = { ...x, cnt: o.good, who: 'op', by: ME };
+      shiftRef.current[x.ok ? 'mOk' : 'mNok']++;
+      const b = pkg.plan.find((p) => String(p.id) === k);
+      if (!pv && b) {
+        const kayit = { v: x.v, ok: x.ok, cnt: o.good }, wc = ist.wc || null;
+        void import('../kalite/index.tsx').then(({ olcumKaydi }) => depo.Log.add('meas', olcumKaydi(pkg, b, kayit, wc, { src: 'op', orderNo: o.no, machine: MACHINE })));
+      }
+    }
+    const once = o.meas || {};
+    const yaz = (meas: Record<string, Meas>) => {
+      islerYaz((l) => l.map((x, i) => (i === aiRef.current ? { ...x, meas } : x)));
+      saveResult({ ...o, meas }, 'result');
+    };
+    yaz(nm);
+    say('Ölçüm kaydedildi', 'ruler', 'run', { undo: () => { yaz(once); say('Ölçüm geri alındı', 'rotate', 'idle'); } });
+  };
+  const notBirak = (n: { x: number; y: number; text: string }) => {
+    const pin = { id: 'p' + Date.now(), by: ME + ' · ' + MACHINE, at: Date.now(), status: 'open' as const, ...n };
+    const pins = [...(o.pins || []), pin];
+    islerYaz((l) => l.map((x, i) => (i === aiRef.current ? { ...x, pins } : x)));
+    saveResult({ ...o, pins }, 'feedback');
+    say('Not hazırlığa gönderildi', 'flag', 'hazard');
+  };
+  const aletler = ayarlar.olcuAletleri;
+  const resimKontrolu = useMemo((): TeknikResimKontrolu => (o.pkg ? {
+    anahtar: o.pkg.id + ':' + o.pkg.version, dosyalar: baytli(o.pkg.files), anaResim: o.pkg.primary, hazirVeri: o.pkg.derived ?? null, ayar: o.pkg.readCfg,
+    balonlar: o.pkg.plan as TeknikResimKontrolu['balonlar'], balonlarYaz: () => undefined, saltOkunur: true, eskiCizim: cizimEski, olcumYok: true,
+    aletZorunlu: !pv, aletSecimi: (tool) => <Suspense fallback={null}><AletSecici aletler={aletler} tool={tool} /></Suspense>,
+    operatorOlcer: opIds, odakKipi: odakKipiYaz, olcumler: (o.meas || {}) as unknown as TeknikResimKontrolu['olcumler'],
+    retGerekcesi: retGerekcesiMetni(o.lastDecision), odak, siradaki: D.due.map((b) => b.id), notlar: (o.pins || []) as unknown as ResimNotu[],
+    olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), notBirak: pv ? undefined : notBirak,
+  } : {
+    anahtar: 'bos:' + o.no, dosyalar: [], anaResim: null, balonlar: [], balonlarYaz: () => undefined, olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: true,
+  }), [o.pkg?.id, o.pkg?.version, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);
   const task0 = siradakiGorev(o, D, nextOrder, ilk, simdi);
   const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi) : task0;
   const eskiG = eskiCizimGorevi(ertelenmis, cizimEski);
@@ -659,7 +720,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     window.addEventListener('keydown', f, true);
     return () => { window.removeEventListener('pointerdown', f, true); window.removeEventListener('keydown', f, true); };
   }, []);
-  useEffect(() => { if (!pv && !away && !ov && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
+  useEffect(() => { if (!pv && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
 
   const patch = (p: Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === ai ? { ...x, ...p } : x)));
   const undoable = (label: string, icon: SimgeAdi, ton: Ton, f: () => void) => {
@@ -702,7 +763,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'stop') { ovYaz('reason'); return; }
     if (a === 'drawing') { tabYaz('draw'); return; }
     if (a === 'st') { tabYaz('st'); mvYaz('st'); return; }
-    if (a === 'measure') { tabYaz('draw'); return; }
+    if (a === 'measure') { tabYaz('draw'); if (t && t.id !== undefined) odakYaz({ id: t.id, n: Date.now() }); return; }
     if (a === 'call') { ovYaz('call'); return; }
     if (a === 'prepnext') { ovYaz('prepnext'); return; }
     if (a === 'ack') { patch({ lastDecision: { ...o.lastDecision!, ack: true } }); return; }
@@ -897,7 +958,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D);
   const takimKarti = <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
-  const resim = <div className="tc-ay1-resim"><Hazirlaniyor /></div>;
+  const resim = <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={resimKontrolu} /></Suspense></div>;
   const panel = Panel ? <Panel key={o.no} api={stApi} kurallar={RL} /> : null;
   const adimlar = <Adimlar key={o.no} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} />;
   const notlar = (
@@ -959,7 +1020,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       ) : null}
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
       {warnShow ? <UyariPenceresi liste={warnShow.list} {...(warnShow.title ? { baslik: warnShow.title } : {})} okudum={() => { const w = warnShow; ackWarns(w.list); warnShowYaz(null); bip('ok'); if (w.then) setTimeout(w.then, 50); }} /> : null}
-      {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} kapat={() => ovYaz(null)} /> : null}
+      {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} numune={{ hazir: !!o.pkg, bekliyor: !!o.pendingReq, gonder: () => { void sendSample(); } }} kapat={() => ovYaz(null)} /> : null}
       {ov === 'scrap' ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
       {ov === 'reason' ? (
         <DurusPenceresi istasyon={MACHINE} nedenler={ayarlar.durusNedenleri} oneriler={reasonSuggest()} otomatikCagri={POLICY.autoCall} kapat={() => ovYaz(null)}
