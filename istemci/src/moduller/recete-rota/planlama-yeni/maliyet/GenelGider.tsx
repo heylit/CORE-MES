@@ -46,7 +46,7 @@ export function giderIsisi(c: PlanlamaCalismasi, v: GenelGiderHesabi): IsiVerisi
   });
   const eksA = amortismanEksik(D);
   const enB = en as { ad: string; g: string; x: number } | null;
-  const metin = `${enB ? `En sıcak hücre ${enB.ad}, ${enB.g || YOK}: ayda ${tl(enB.x)}. ` : ''}Aylık genel gider ${tl(v.aylik)}, bunun ${tl(v.atil)} tutarı boş tezgâh saatlerine düşüyor${eksA.length ? `; ${String(eksA.length)} tezgâhın amortisman bilgisi eksik` : ''}.`;
+  const metin = `${enB ? `En sıcak hücre ${enB.ad}, ${enB.g || YOK}: ayda ${tl(enB.x)}. ` : ''}Aylık genel gider ${tl(v.aylik)}, ${v.atil === null ? 'boş tezgâh saatlerine düşen tutar bilinmiyor' : `bunun ${tl(v.atil)} tutarı boş tezgâh saatlerine düşüyor`}${eksA.length ? `; ${String(eksA.length)} tezgâhın amortisman bilgisi eksik` : ''}.`;
   return {
     genis: 'kalem', baslik: 'Gider kalemi × tezgâh grubu, aylık pay', satirAd: 'Gider kalemi', sutunlar, satirlar,
     ust: { ton: eksA.length ? 'uyari' : '', simge: 'layers', metin },

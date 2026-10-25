@@ -89,6 +89,23 @@ describe('P3 saf hesaplar', () => {
     expect(B.amort).toBeNull();
   });
 
+  it('amortismanı bilinmeyen tezgâhın emilen ve atıl tutarı bilinmez (null); toplam onları atlar, hiçbiri bilinmiyorsa null', () => {
+    const c = ornekCalisma({ D: { maliyetSis: { tez: { T1: { bedel: 120000, omur: 10, hurda: 0 } } } } });
+    const G = genelGiderHesabi(c, takvimKur(c));
+    const t1 = G.tez.find((z) => z.tezgah.id === 'T1');
+    expect(t1?.absorbe).not.toBeNull();
+    expect(t1?.atil).not.toBeNull();
+    const digerleri = G.tez.filter((z) => z.tezgah.id !== 'T1' && z.kap > 0);
+    expect(digerleri.length).toBeGreaterThan(0);
+    expect(digerleri.every((z) => z.oran === null && z.absorbe === null && z.atil === null)).toBe(true);
+    expect(G.absorbe).toBeCloseTo(t1?.absorbe ?? Number.NaN);
+    expect(G.atil).toBeCloseTo(t1?.atil ?? Number.NaN);
+    const bos = ornekCalisma();
+    const B = genelGiderHesabi(bos, takvimKur(bos));
+    expect(B.absorbe).toBeNull();
+    expect(B.atil).toBeNull();
+  });
+
   it('ek mesai takvime girer; bedeli kişi ücreti yoksa bilinmez, girilince cumartesi çarpanıyla hesaplanır', () => {
     const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }];
     const c = ornekCalisma({ ekMesai: ek });
