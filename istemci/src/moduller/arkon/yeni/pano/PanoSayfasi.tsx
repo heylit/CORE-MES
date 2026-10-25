@@ -46,6 +46,12 @@ export function PanoSayfasi() {
     return () => { birak1(); birak2(); s.birak(); clearInterval(t); };
   }, [depo, yukle]);
 
+  // TV modunda Arkon'un gezinmesi ve çağrı bandı gizlenir, yazılar büyür (eski html.tv).
+  useEffect(() => {
+    document.documentElement.classList.toggle('tc-ay-tv', tv);
+    return () => document.documentElement.classList.remove('tc-ay-tv');
+  }, [tv]);
+
   const tvDegistir = async () => {
     const ac = !tv;
     tvYaz(ac);
@@ -147,7 +153,7 @@ function Karo({ k, simdi }: { k: PanoKarosu; simdi: number }) {
   const plansiz = k.state === 'stopped' && look.etiket !== 'Planlı duruş';
   return (
     <div className="tc-ay3-kutu tc-ay3-karo" data-durum={look.durum} data-plansiz={plansiz || undefined} aria-label={`${s.id} ${look.etiket}`}>
-      <div className="tc-ay3-karo-ust"><b className="mono">{s.id}</b><span className="tc-ay3-karo-durum">{look.etiket}{k.since ? ` · ${dakikaMetni(simdi - k.since)}` : ''}</span></div>
+      <div className="tc-ay3-karo-ust"><b className="mono">{s.id}</b><span className="tc-ay3-karo-durum"><i aria-hidden="true" />{look.etiket}{k.since ? ` · ${dakikaMetni(simdi - k.since)}` : ''}</span></div>
       <small className="tc-ay3-not">{s.name}{s.mcs.length === 1 ? ` · ${s.mcs[0]?.name ?? ''}` : ''}</small>
       {k.state === 'stopped' && k.last?.reason
         ? <div>{durusNedeni(ayarlar, k.last.reason)?.l ?? k.last.reason}</div>

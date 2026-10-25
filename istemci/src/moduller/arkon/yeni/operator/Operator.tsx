@@ -55,7 +55,7 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
@@ -524,6 +524,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const cevrim = useMemo((): CevrimOlcer => ({
     gecen: () => { const c = cycRef.current; return c.acc + (c.since ? Date.now() - c.since : 0); },
     son: () => cycRef.current.last,
+    sayac: () => cycRef.current.n,
   }), []);
 
   /* üretim kayıtları: durum değişimi ve sayımlar (OEE, vardiya özeti); her kaynaktan gelen değişiklik yakalanır */
@@ -938,7 +939,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <>
       {scan ? (
         <Pencere acik kapat={() => scanYaz(null)} baslik={scan.baslik}>
-          <KodOkuyucu {...(scan.ipucu ? { ipucu: scan.ipucu } : {})} okundu={(c) => { const f = scan.okundu; scanYaz(null); bip('ok'); f(c); }} />
+          <KodOkuyucu kendiliginden {...(scan.ipucu ? { ipucu: scan.ipucu } : {})} okundu={(c) => { const f = scan.okundu; scanYaz(null); bip('ok'); f(c); }} />
         </Pencere>
       ) : null}
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
@@ -961,6 +962,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           devret={(not) => { ovYaz(null); if (not && !pv) void depo.DB.put('kv', { note: not, by: `${ME} · ${vardiyaMetni}`, at: Date.now() }, 'handover'); say(`Vardiya devredildi${not ? ' · not sonraki vardiyaya iletildi' : ''}`, 'check', 'run'); }} />
       ) : null}
       {ov === 'ozetim' ? <Pencere acik kapat={() => ovYaz(null)} baslik="Özetim" tur="tam"><Ozetim /></Pencere> : null}
+      {ov === 'done' ? <Konfeti /> : null}
       <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
         satirlar={[{ etiket: 'İyi parça', deger: sayi(o.good) }, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }]}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
