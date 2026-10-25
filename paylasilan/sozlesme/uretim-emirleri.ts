@@ -10,7 +10,7 @@ export const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] 
 // Defterde görünen olaylar. Sağlam +1 dokunuşları tek tek listelenmez; sağlam sayacı elle değişince (eksiltme,
 // tuş takımıyla ayarlama, bitişte farklı adet) `duzeltme` yazılır.
 export const KAYIT_OLAYLARI = ['ayar', 'baslat', 'bitir', 'duraklat', 'durdur', 'devam', 'hurda', 'duzeltme'] as const;
-// Ayrıntıdaki defter terminal olaylarına ek olarak ilk parça kalite kararını ayrı gösterir (504 a); son olaylar listesine girmez.
+// Defter terminal olaylarına ek olarak ilk parça kalite kararını ayrı gösterir (504 a).
 export const DEFTER_OLAYLARI = [...KAYIT_OLAYLARI, 'kalite_onay', 'kalite_red'] as const;
 export const CALISMA_DURUMLARI = ['calisiyor', 'durakli', 'durdu'] as const;
 // karar_bekliyor: ilk parça kararı beklenirken sayılan parça; red: reddedilen kararın zincirinde kalan parça. İkisi de sağlama katılmaz.
@@ -236,7 +236,7 @@ export const durusDagilimiCevabi = z.object({
 
 // Son terminal olayları, bütün emirlerde, yeniden eskiye. `sonra` verilirse yalnız o andan sonrakiler (yoklama için).
 // Defterdeki olaylara ek olarak sağlam sayım dokunuşu `saglam` olarak gelir; `adet` sayımda dolu (eksiltmede eksi).
-export const SON_OLAY_TURLERI = [...KAYIT_OLAYLARI, 'saglam'] as const;
+export const SON_OLAY_TURLERI = [...DEFTER_OLAYLARI, 'saglam'] as const;
 export const AZAMI_SON_OLAY = 200;
 export const sonOlaylarSorgusu = z.object({
   sonra: zamanSemasi.optional(),
@@ -253,6 +253,8 @@ export const sonOlaylarCevabi = z.object({
     kisi: adliKayit,
     adet: z.number().int().nullable(),
     durusNedeni: adliKayit.nullable(),
+    // Yalnız kalite kararında: kararı veren (kisi parçayı sayandır); bilinmiyorsa null.
+    kararVeren: adliKayit.nullable().optional(),
     zaman,
   })),
 });
