@@ -44,7 +44,7 @@ const BUYUK_ILETISI = 'Reçete ve rota kaydı 1 MB sınırını aşıyor ve kayd
 const PLANLAMA_YETKI_ILETISI = 'Planlama çalışmasını değiştirme yetkiniz yok.';
 
 // Planlama çalışması (tercih, ağırlık, karar, sayfa içi kilit) yalnız planı yazabilene açıktır (287 a): yazma ve silme ucu recete-rota.yaz
-// ister, bu anahtar ayrıca plan.yaz ister. Planlama sayfasını okuyup plan yazmayan rol (müdür, 290 b) çalışmayı değiştiremez.
+// ister, bu anahtar ayrıca plan.yaz ister. Planlama sayfasını okuyup plan.yaz taşımayan rol çalışmayı değiştiremez.
 export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): void {
   if (anahtar === PLANLAMA_ANAHTARI && !islemVarMi(kullanici, 'plan.yaz')) throw yetkiYok(PLANLAMA_YETKI_ILETISI);
 }
