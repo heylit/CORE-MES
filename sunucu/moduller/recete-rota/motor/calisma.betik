@@ -4,7 +4,8 @@
    Girdi planlama çalışması ucunun birleştirdiğidir (girdiKur); hiçbir şey yazılmaz. Saatler planın ekseninde, başlangıç günü D.meta.baslangic.
    Dönen: { baslangic, guncel, kimlik, ops } ya da çalışma yoksa null. kimlik: işlem kimliği -> anahtar (sunucuda karşılığı olanlar).
    ops: çalışmada plan yoksa null; varsa her işlem { id, m, S, C, bitti } (m metin: tezgâh kimliği, fason '@...'). guncel: plan, çalışmanın
-   güncel verisiyle çözülmüş (sayfanın planGuncel'i). */
+   güncel verisiyle çözülmüş (sayfanın planGuncel'i). ekMesai (507 2 a): çalışmanın ek vardiyaları { m, gun, vardiya } (gün planın ekseninde,
+   başlangıç gününden; vardiya kimliği metin). */
 function sunucuCalismaPlani(calisma, kayit, kaynak, bugun) {
   const g = girdiKur(calisma, kayit, kaynak, bugun);
   if (!g) return null;
@@ -16,5 +17,6 @@ function sunucuCalismaPlani(calisma, kayit, kaynak, bugun) {
   const P = S.plan && S.plan.ops ? S.plan.ops : null;
   const ops = P ? Object.entries(P).filter(([, r]) => r && isFinite(r.S) && isFinite(r.C))
     .map(([id, r]) => ({ id, m: String(r.m == null ? '' : r.m), S: r.S, C: r.C, bitti: !!r.done })) : null;
-  return { baslangic: D.meta.baslangic, guncel: !!S.plan && S.plan.dataVer === S.dataVer, kimlik, ops };
+  const ekMesai = (S.ekMesai || []).filter(e => e && Number.isInteger(e.gun)).map(e => ({ m: String(e.m == null ? '' : e.m), gun: e.gun, vardiya: String(e.vardiya == null ? '' : e.vardiya) }));
+  return { baslangic: D.meta.baslangic, guncel: !!S.plan && S.plan.dataVer === S.dataVer, kimlik, ops, ekMesai };
 }

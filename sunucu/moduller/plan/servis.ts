@@ -2,8 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  CanliYerlesimCevabi, CanliyaAlCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
-  GeriGonderGovdesi, OnayaGonderGovdesi, PlanOnayKomutu,
+  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  EkMesaiGovdesi, GeriGonderGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
@@ -21,12 +21,12 @@ import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import { FASON_VARSAYILAN_GUN, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
-import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri } from '../vardiya/disari.ts';
+import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, bantSinirlari, bedelCarpani, emirTutari, katkiPaylari, calisilanParcalar, elleCarpanSiniri, gecikmeBedeli, oncelikSiniflari, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, ayarVeGecikme, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -782,7 +782,14 @@ async function planOku(db: Db, k: Kullanici | null, b: Baglam, taslakAcildi = fa
     kaynaklar: [...b.kaynaklar.values()].filter((x) => x.aktif && izinliMi(b, x)).map(({ isMerkeziId, ...x }) => { void isMerkeziId; return x; }),
     yerlesimler: c.yerlesimler, yerlesmemis: c.yerlesmemis, emirler: c.emirler, istasyonYuku: c.istasyonYuku, personelYuku: c.personelYuku,
     gostergeler: gosterge(b, c.yerler), uyarilar: [...c.uyarilar, ...dusen.map(elleSiraMetni)], elleSiraDusenler: dusen,
+    ekMesai: await ekMesaiOku(db, b.hedef),
   };
+}
+
+// 507 2 a: hedefin ek vardiyaları ve haftalık bütçesi; sınır plan ayarında boşsa eski motorun varsayılanı.
+async function ekMesaiOku(db: Db, hedef: Hedef): Promise<PlanEkMesai> {
+  const satirlar = await s.ekMesailer(db, hedef);
+  return { satirlar, ...ekMesaiButcesi(satirlar, (await s.ekMesaiSiniri(db)) ?? EK_MESAI_HAFTA_SAAT) };
 }
 
 // Elle sıra (kullanıcı kararı 16.10.2026): verildiği andaki rota istasyonunda kalan adımda korunur (yalnız makine değişebilir); istasyon
@@ -841,6 +848,18 @@ export async function plan(db: Db, k: Kullanici, taslak?: number): Promise<PlanC
 // A4: başka ekranın (Arkon Planlama) iş sırası canlı plandan gelir. Yerleşmemiş iş emri listede yoktur; sırayı çağıran kurar.
 export async function canliSira(db: Db, isEmriIdleri: readonly number[]): Promise<{ planSurumu: number; yerlesimler: YerlesimSatiri[] }> {
   return { planSurumu: await s.planSurumu(db), yerlesimler: isEmriIdleri.length ? await s.canliYerlesimleri(db, isEmriIdleri) : [] };
+}
+
+// 507 3 a: taslağın yerleşimleri, Reçete ve Rota çalışmaya yazar. Bölünmüş işte zarf (ilk parçanın kaynağı, ilk başlangıç, son bitiş).
+// Yetki denetlemez; çağıran (disari) korur.
+export async function taslakYerlesimleri(db: Db, id: number) {
+  const x = await s.senaryo(db, id);
+  if (!x) throw bulunamadi('Taslak bulunamadı.');
+  const y = await s.yerlesimler(db, id);
+  return {
+    id: x.id, surum: x.surum, durum: x.durum,
+    yerlesimler: y.map((r) => ({ isEmriId: r.isEmriId, kaynak: r.kaynak, baslangic: r.baslangic.toISOString(), bitis: r.bitis.toISOString(), kilitli: r.kilitli })),
+  };
 }
 
 // Canlı planda olmayan ama açık bir taslakta yerleşmiş iş emirleri (taslak canlıya alınınca canlıya geçer).
@@ -938,6 +957,20 @@ export async function canliSurum(db: Db): Promise<PlanSurumCevabi> {
   return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null };
 }
 
+// 510 a: "Plan değişikliği" kutusu; kişi başına sayı çoktan aza, eşitte ada göre.
+export async function canliyaAlmaGecmisi(db: Db): Promise<CanliyaAlmaGecmisiCevabi> {
+  const { tabanZamani, satirlar } = await s.canliyaAlmalar(db);
+  const adlar = await kisiAdlari(db, [...new Set(satirlar.map((x) => x.kisiId))]);
+  const sayi = new Map<number, number>();
+  for (const x of satirlar) sayi.set(x.kisiId, (sayi.get(x.kisiId) ?? 0) + 1);
+  const kisiler = [...sayi].map(([id, n]) => ({ kisi: adlar.get(id) ?? null, sayi: n }))
+    .sort((a, b) => b.sayi - a.sayi || (a.kisi ?? '').localeCompare(b.kisi ?? '', 'tr'));
+  return {
+    tabanZamani, toplam: satirlar.length, kisiler,
+    son: satirlar.slice(0, 20).map((x) => ({ senaryoId: x.senaryoId, ad: x.ad, kisi: adlar.get(x.kisiId) ?? null, zaman: x.zaman })),
+  };
+}
+
 /* ---------------- yazma: hepsi taslağa (P6) ---------------- */
 
 // Ekran okuduğu canlı plan sürümünü gönderdiyse plan arada canlıya alınmamış olmalı; kilit, aynı anda canlıya almayı yazma bitene kadar bekletir.
@@ -975,6 +1008,37 @@ async function taslagaYaz(
   await s.senaryoSurumArtir(db, id);
   const sonra = baglamDegisir ? await baglamKur(db, k, id) : { ...b, defter: await s.degisiklikler(db, [id]), yersiz: await s.yersizBolmeler(db, id) };
   return planOku(db, k, sonra, acildi);
+}
+
+// 507 2 a: ek vardiya kullanımdaki vardiyadır, makine kişinin kapsamındadır; saat vardiyanın süresidir (molalar düşülmez).
+async function ekMesaiSatirlari(db: Db, b: Baglam, l: readonly { makineId: number; gun: string; vardiyaId: number }[]) {
+  const vardiyalar = new Map((await vardiyaTanimlari(db)).map((v) => [v.id, v]));
+  const gecerli: s.EkMesaiSatiri[] = [];
+  const hatali: string[] = [];
+  for (const x of l) {
+    const v = vardiyalar.get(x.vardiyaId);
+    const m = await kaynakBilgisi(db, b, { tur: 'makine', id: x.makineId });
+    if (!v || !v.aktif) hatali.push(`${x.gun}: vardiya ${String(x.vardiyaId)} kullanımda değil`);
+    else if (!m || !m.aktif || !izinliMi(b, m)) hatali.push(`${x.gun}: makine ${String(x.makineId)} yok ya da kapsam dışı`);
+    else gecerli.push({ ...x, saat: vardiyaSaati(v.baslangic, v.bitis) });
+  }
+  return { gecerli, hatali };
+}
+// Defter kaydı düşmez (değişiklik türleri dolu defterde kısıttır); "değişiklikleri at" canlının ek vardiyalarına döndürür.
+export async function ekMesaiYaz(db: Db, k: Kullanici, id: number, g: EkMesaiGovdesi): Promise<PlanCevabi> {
+  await acikTaslak(db, k, id, g.surum);
+  const { gecerli, hatali } = await ekMesaiSatirlari(db, await baglamKur(db, k, id), g.satirlar);
+  if (hatali.length > 0) throw dogrulama(`Ek vardiya yazılamadı: ${hatali.slice(0, 5).join('; ')}.`, 'satirlar');
+  await s.ekMesaiYaz(db, id, gecerli);
+  await s.senaryoSurumArtir(db, id);
+  return planOku(db, k, await baglamKur(db, k, id));
+}
+// 503 a ile: çalışmanın ek vardiyaları yeni taslağa; yazılamayan satır atlanır (çalışma sunucuda olmayan makine ya da vardiya taşıyabilir).
+export async function ekMesaiTaslagaKopyala(db: Db, k: Kullanici, id: number, l: readonly { makineId: number; gun: string; vardiyaId: number }[]) {
+  const { gecerli, hatali } = await ekMesaiSatirlari(db, await baglamKur(db, k, id), l);
+  await s.ekMesaiYaz(db, id, gecerli);
+  if (gecerli.length > 0) await s.senaryoSurumArtir(db, id);
+  return { yazilan: gecerli.length, atlanan: hatali.length };
 }
 
 // Kaynak denetimi (P5 ret): var ve kullanımda, kullanıcının kapsamında.
@@ -1994,6 +2058,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }
   await s.ayariCanliyaYaz(db, id, k.id);
   await s.carpanlariCanliyaYaz(db, id);
+  await s.ekMesaiCanliyaYaz(db, id);
   await s.planSurumuArtir(db);
   // 33 a: taban, yeni canlı sürümle yazılır; tabanı olan adım atlanır.
   await s.tabanYaz(db, id, idler.flatMap((i) => {

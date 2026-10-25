@@ -74,6 +74,16 @@ export const planEmri = z.object({
   oncelik: z.number().int().nullable(), baslangic: zaman.nullable(), bitis: zaman.nullable(), tamponGun: z.number().nullable(), engelli: z.boolean(), isSayisi: z.number().int(),
   yerlesen: z.number().int(),
 });
+// 507 2 a: taslağın (canlıda canlının) ek vardiyaları ve haftalık bütçesi. Hafta pazartesi başlar; sınır plan ayarındadır, boşsa haftada
+// 8 saat. saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). Ek vardiya planın kapasitesine girmez; ölçüm ve bütçe içindir.
+export const planEkMesai = z.object({
+  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number() })),
+  toplamSaat: z.number(),
+  haftaSiniriSaat: z.number(),
+  haftalar: z.array(z.object({ hafta: tarih, saat: z.number() })),
+  asanHaftalar: z.array(z.object({ hafta: tarih, saat: z.number() })),
+  asildi: z.boolean(),
+});
 export const planCevabi = z.object({
   surum: z.number().int(),
   simdi: zaman,
@@ -104,6 +114,8 @@ export const planCevabi = z.object({
     isEmriId: KIMLIK, emirNo: z.string().nullable(), opNo: z.number().int().nullable(), neden: z.enum(['istasyon', 'fason', 'rotadan-kalkti']),
     eskiIstasyon: z.string().nullable(), yeniIstasyon: z.string().nullable(),
   })).optional(),
+  // Sunucu her okumada doldurur; ekranlar okumaya başlayana dek isteğe bağlı.
+  ekMesai: planEkMesai.optional(),
 });
 
 const tarihZaman = z.string().datetime({ offset: true, message: 'Başlangıç ISO tarih-saat olmalı.' });
@@ -255,6 +267,11 @@ export const hizliGovdesi = senaryoSurumGovdesi.extend({ tur: z.enum(HIZLI_DENEM
 export const onayaGonderGovdesi = senaryoSurumGovdesi.extend({ not: z.string().trim().max(500).nullish() });
 export const geriGonderGovdesi = senaryoSurumGovdesi.extend({ neden: z.string().trim().min(1, 'Geri gönderme nedenini yaz.').max(500) });
 export const onaydanCekGovdesi = senaryoSurumGovdesi;
+// 507 2 a: taslağın ek vardiyaları baştan yazılır (liste eskisinin yerine geçer). Aynı makine, gün ve vardiya bir kez.
+export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({
+  satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK })).max(500, 'En çok 500 ek vardiya yazılır.')
+    .refine((l) => new Set(l.map((x) => `${x.makineId}|${x.gun}|${x.vardiyaId}`)).size === l.length, 'Aynı makine, gün ve vardiya bir kez yazılır.'),
+});
 // Taslakta acil sipariş denemesi varsa her biri için müşteri seçilir; canlıya alınca taslak sipariş açılır (286 b, 287 b).
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().default(false),
@@ -323,6 +340,14 @@ export const planCanliOzeti = z.object({
 });
 // Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
 export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true });
+// 510 a: eski "Plan değişikliği" kutusu. Taban planın ilk yazılışından (ilk canlıya alma) sonraki canlıya almalar: toplam, kişi başına sayı
+// (kutunun alt satırı) ve en son 20'si (yeniden eskiye). Taban yoksa tabanZamani null, sayılar boş. Kişi adı okunamazsa null.
+export const canliyaAlmaGecmisiCevabi = z.object({
+  tabanZamani: zaman.nullable(),
+  toplam: z.number().int(),
+  kisiler: z.array(z.object({ kisi: z.string().nullable(), sayi: z.number().int() })),
+  son: z.array(z.object({ senaryoId: KIMLIK, ad: z.string(), kisi: z.string().nullable(), zaman })),
+});
 export const senaryoParametresi = z.object({ id: z.coerce.number().int().positive() });
 export const degisiklikParametresi = z.object({ id: z.coerce.number().int().positive(), degisiklikId: z.coerce.number().int().positive() });
 
@@ -374,6 +399,9 @@ export type MotorFarki = z.output<typeof motorFarki>;
 export type CanliyaAlCevabi = z.output<typeof canliyaAlCevabi>;
 export type PlanAyari = z.output<typeof planAyari>;
 export type PlanCevabi = z.output<typeof planCevabi>;
+export type PlanEkMesai = z.output<typeof planEkMesai>;
+export type CanliyaAlmaGecmisiCevabi = z.output<typeof canliyaAlmaGecmisiCevabi>;
+export type EkMesaiGovdesi = z.output<typeof ekMesaiGovdesi>;
 export type PlanYerlesimi = z.output<typeof planYerlesimi>;
 export type PlanParcasi = z.output<typeof planParcasi>;
 export type PlanKaynagi = z.output<typeof planKaynagi>;

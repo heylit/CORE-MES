@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { BedelAyari, CanliYerlesimCevabi, KuyrukYazCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { CalismaTaslagiCevabi, CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import type { AdimGirdisi, KomutCevabi, RevizyonAyrintisi, SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -579,6 +579,94 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     await kisiEkle('calismaokur', calismaRol!.id);
     const farkRed = await istek(await girisCerezi('calismaokur'), 'GET', '/recete-rota/planlama-calismasi/canli-farki');
     assert.equal(farkRed.statusCode, 403, farkRed.body);
+  });
+  test('CA-11: çalışmanın ek vardiyası taslağa geçer; taslağın yeri ve kilidi çalışmaya yazılır (yetki, iki sürüm); geri al önceki sürüme döner, arada yazma varsa 409', async () => {
+    const e = await emirAc([yeniAdim(), yeniAdim()]);
+    const [i1, i2] = e.isEmriIdleri as [number, number];
+    const [a1, a2] = await anahtarlar([i1, i2]);
+    const bugun = tesisGunu(Date.now());
+    const saat = (an: number) => (an - tesisGunBasi(bugun)) / 3_600_000;
+    const vardiya = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Deneme ek', '16:00', '20:00') RETURNING id"))!.id;
+    const kayitSurumu = async () => (await vt().tx((db) => db.tek<{ surum: number }>('SELECT surum FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI])))?.surum ?? null;
+    const kayitDegeri = async () => (await vt().tx((db) => db.tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI])))!.deger;
+    const calismaYaz = async (ops: Record<string, Record<string, unknown>> | null) => {
+      const calisma = {
+        surum: 2, rrSavedAt: null, dataVer: 1, down: [], locks: {}, gercek: {}, kapali: [], olaylar: [],
+        ekMesai: [{ m: String(makineA), gun: 1, vardiya: String(vardiya) }, { m: 'X1', gun: 1, vardiya: 'V3' }],
+        plan: ops === null ? null : { ops, dataVer: 1, zaman: Date.now() },
+        w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+        D: { meta: { ad: 'Deneme', baslangic: bugun }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [],
+          personel: [], siparisler: [], ayarlar: {} },
+      };
+      return (await tamam<{ kayit: { surum: number } }>(c.yonetici, 'POST', '/recete-rota/kayitlar/yaz',
+        { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: calisma, beklenenSurum: await kayitSurumu() })).kayit.surum;
+    };
+    await calismaYaz(null);
+    const planlamaci = (await kimlikCozucu(vt())({ headers: { cookie: c.planlama } } as never))!;
+    const kimlik = await vt().tx(async (db) => calismaPlani({ ...(await planlamaGirdisi(db, planlamaci)).girdi!, bugun })!.kimlik);
+    const k = (a: string) => Object.entries(kimlik).find(([, x]) => x === a)![0];
+    const [k1, k2] = [k(a1!), k(a2!)];
+    const bas = saat(Date.now() + 2 * 3_600_000);
+    const ops = { [k1]: { S: bas, C: bas + 1, m: String(makineA), Su: bas - 0.5, lot1: bas + 0.5 }, [k2]: { S: bas + 1, C: bas + 2, m: String(makineA) } };
+    let surum = await calismaYaz(ops);
+
+    // 507 2 a: çalışmanın ek vardiyası taslağa; sunucuda karşılığı olmayan tezgâh ve vardiya atlanır.
+    const y = await tamam<CalismaTaslagiCevabi>(c.planlama, 'POST', '/recete-rota/planlama-calismasi/taslak-yaz', { ad: 'Deneme ek mesai', calismaSurumu: surum });
+    assert.deepEqual(y.ekMesai, { yazilan: 1, atlanan: 1 });
+    const p = await tamam<PlanCevabi>(c.planlama, 'GET', `/plan?taslak=${String(y.taslak.id)}`);
+    assert.deepEqual(p.ekMesai!.satirlar, [{ makineId: makineA, gun: tesisGunu(tesisGunBasi(bugun) + 36 * 3_600_000), vardiyaId: vardiya, saat: 4 }]);
+
+    // Taslakta i2 ileri taşınır, i1 kilitlenir.
+    const ileri = new Date(Date.now() + 30 * 3_600_000).toISOString();
+    const t1 = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${String(i2)}/tasi`, { taslak: { id: p.taslak!.id, surum: p.taslak!.surum }, kaynak: { tur: 'makine', id: makineA }, baslangic: ileri });
+    const t2 = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${String(i1)}/kilitle`, { taslak: { id: t1.taslak!.id, surum: t1.taslak!.surum } });
+    const yer = (id: number) => t2.yerlesimler.find((x) => x.isEmriId === id)!;
+    const govde = (taslakSurumu: number, calismaSurumu: number) => ({ taslakId: t2.taslak!.id, taslakSurumu, calismaSurumu });
+    const yol = '/recete-rota/planlama-calismasi/taslaktan-yaz';
+
+    // Yetki: recete-rota.yaz yoksa 403, yalnız recete-rota.yaz da yetmez (plan.yaz); eski taslak ve eski çalışma sürümü 409; reddedilen
+    // yazma kaydı değiştirmez.
+    const cerezler: Record<string, string> = {};
+    for (const ad of ['ekyalnizplan', 'ekyalnizrr']) {
+      const r = await vt().tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [`test_${ad}`]);
+      await vt().sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [r!.id, ad === 'ekyalnizplan' ? 'plan.yaz' : 'recete-rota.yaz']);
+      await kisiEkle(ad, r!.id);
+      cerezler[ad] = await girisCerezi(ad);
+      const red = await istek(cerezler[ad], 'POST', yol, govde(t2.taslak!.surum, surum));
+      assert.equal(red.statusCode, 403, `${ad}: ${red.body}`);
+    }
+    assert.equal((await istek(c.planlama, 'POST', yol, govde(t2.taslak!.surum - 1, surum))).statusCode, 409, 'eski taslak');
+    assert.equal((await istek(c.planlama, 'POST', yol, govde(t2.taslak!.surum, surum - 1))).statusCode, 409, 'eski çalışma');
+    assert.equal(await kayitSurumu(), surum);
+
+    const w = await tamam<TaslaktanCalismayaCevabi>(c.planlama, 'POST', yol, govde(t2.taslak!.surum, surum));
+    assert.deepEqual([w.oncekiSurum, w.yazilan, w.kilitli], [surum, 2, 1]);
+    assert.ok(!w.atlanan.includes(a1!) && !w.atlanan.includes(a2!));
+    const d = await kayitDegeri() as { plan: { ops: Record<string, { S: number; C: number; m: string; Su?: number }>; dataVer: unknown }; locks: Record<string, unknown> };
+    const eksende = (an: string) => saat(Date.parse(an));
+    for (const [kk, id] of [[k1, i1], [k2, i2]] as const) {
+      assert.equal(d.plan.ops[kk]!.m, String(makineA));
+      assert.ok(Math.abs(d.plan.ops[kk]!.S - eksende(yer(id).baslangic)) < 1 / 60, `${kk} başlangıcı taslaktan`);
+      assert.ok(Math.abs(d.plan.ops[kk]!.C - eksende(yer(id).bitis)) < 1 / 60, `${kk} bitişi taslaktan`);
+    }
+    assert.ok(Math.abs(d.plan.ops[k1]!.Su! - (d.plan.ops[k1]!.S - 0.5)) < 1e-9, 'ayar başlangıcı aynı kayar');
+    assert.deepEqual(d.locks, { [k1]: { m: String(makineA), S: d.plan.ops[k1]!.S } }, 'yalnız kilitli iş kilitlenir');
+    assert.equal(d.plan.dataVer, null, 'plan güncel değil; sayfa yeniden çözer');
+    const denetim = await ortam!.sahip.sorgu<{ ek: unknown }>("SELECT govde -> '_ek' AS ek FROM denetim_kaydi WHERE yol = $1 ORDER BY id", [yol]);
+    assert.equal(denetim.length, 1, 'yalnız başarılı yazma denetime girer');
+
+    // Geri al: önceki sürüm geri gelir; eski sürümle 409; yetkisiz 403; geri alma da yazmadır (ikinci geri alma ileri döner).
+    const geri = '/recete-rota/planlama-calismasi/geri-al';
+    assert.equal((await istek(c.planlama, 'POST', geri, { calismaSurumu: surum })).statusCode, 409, 'arada yazma oldu');
+    for (const ad of ['ekyalnizplan', 'ekyalnizrr']) assert.equal((await istek(cerezler[ad]!, 'POST', geri, { calismaSurumu: w.calismaSurumu })).statusCode, 403, ad);
+    const g = await tamam<CalismaGeriAlCevabi>(c.planlama, 'POST', geri, { calismaSurumu: w.calismaSurumu });
+    assert.equal(g.donulenSurum, surum);
+    const eskiDeger = await kayitDegeri() as { plan: { ops: Record<string, { S: number }>; dataVer: unknown }; locks: Record<string, unknown> };
+    assert.deepEqual([eskiDeger.plan.ops[k1]!.S, eskiDeger.plan.dataVer, eskiDeger.locks], [bas, 1, {}]);
+    surum = g.calismaSurumu;
+    const ileriDon = await tamam<CalismaGeriAlCevabi>(c.planlama, 'POST', geri, { calismaSurumu: surum });
+    assert.equal(ileriDon.donulenSurum, w.calismaSurumu);
+    assert.equal((await kayitDegeri() as { plan: { dataVer: unknown } }).plan.dataVer, null);
   });
 });
 
