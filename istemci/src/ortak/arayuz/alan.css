@@ -2,7 +2,7 @@
 .tc-alan-etiket { font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
 .tc-alan-zorunlu { color: var(--stop); }
 .tc-alan-kutu {
-  width: 100%; min-height: var(--dokunma); padding: 0 var(--b-3);
+  width: 100%; min-height: var(--alan-boy); padding: 0 var(--b-3);
   border: 1px solid var(--edge2); border-radius: var(--yari-2);
   background: var(--panel2); color: var(--ink);
 }
@@ -13,8 +13,8 @@
 .tc-alan-hatali .tc-alan-kutu { border-color: var(--stop); }
 .tc-alan-hatali .tc-alan-alt { color: var(--stop); font-weight: 700; }
 
-.tc-isaret { display: inline-flex; align-items: center; gap: var(--b-3); min-height: var(--dokunma); cursor: pointer; }
-.tc-isaret input { width: var(--b-5); height: var(--b-5); flex: none; accent-color: var(--hazard); }
+.tc-isaret { display: inline-flex; align-items: center; gap: var(--b-3); min-height: var(--isaret-boy); cursor: pointer; }
+.tc-isaret input { width: var(--isaret-kutu); height: var(--isaret-kutu); flex: none; accent-color: var(--hazard); }
 .tc-isaret:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 
 /* Form düzeni: geniş ekranda iki sütun, telefonda tek sütun. */
