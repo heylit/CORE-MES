@@ -190,6 +190,8 @@ describe('R2 Kaynaklar', () => {
     });
     rrAc('/recete-rota/yeni/res');
     const bolge = await bolumAc('Kaynaklar');
+    // Genel bakış: plan teorik süreyi kullanır (Soru 490/1 a; eski cümle 468/4 a ile geçersizdi).
+    expect(within(bolge).getByText(/kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır/)).toBeTruthy();
     altSekme(bolge, /İş merkezleri/);
     yaz(await within(bolge).findByRole('textbox', { name: 'TZ1 istasyon adı' }), 'Torna A');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
