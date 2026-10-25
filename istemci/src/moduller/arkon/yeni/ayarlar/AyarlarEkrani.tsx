@@ -12,6 +12,7 @@ import { ROL_ADLARI, ROLLER, YETKILER } from '../cekirdek/sabitler.ts';
 import { aktif, isMerkeziBul } from '../cekirdek/tesis.ts';
 import type { Policy, Role, Station } from '../cekirdek/tipler.ts';
 import { hafifKip, ozellikler, yerel } from '../cekirdek/yerel.ts';
+import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { useArkon } from '../veri/baglam.ts';
 import {
   AYAR_SEKMELERI, GUNLUK_ALANLARI, GUNLUK_GOSTERIM, GUNLUK_GUNLERI, ayarGorunurlugu, gunlukSuz, ilkAyarSekmesi, kisiSirasi,
@@ -57,6 +58,7 @@ export function AyarlarEkrani() {
 
   return (
     <div className="tc-ay6">
+      <ArkonBandi simge="gear" baslik="Ayarlar" renk="ink" temaDugmesi={false} />
       <Sekmeler
         etiket="Ayarlar bölümleri"
         sekmeler={AYAR_SEKMELERI.filter((s) => gorunur.sekmeler.includes(s.anahtar))}

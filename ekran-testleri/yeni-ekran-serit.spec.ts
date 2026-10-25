@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/yeni', '/recete-rota/yeni', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
+  '/arkon/yeni', '/arkon/yeni/operator', '/arkon/yeni/kuyruk', '/recete-rota/yeni', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 

@@ -1,6 +1,7 @@
 /* A6: Ayarlar ve çağrı bandı. */
 .tc-ay6 { display: grid; gap: var(--b-4); min-width: 0; }
-.tc-ay6-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pencere-genis)), 1fr)); gap: var(--b-4); align-items: start; min-width: 0; }
+/* Eski setmain: en dar 380 px kart, raylı tasarım genişliğinde en çok üç sütun; yüzde 30 alt sınırı dördüncü boş sütunu önler. */
+.tc-ay6-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(var(--bildirim-genis), 30%)), 1fr)); gap: var(--b-4); align-items: start; min-width: 0; }
 .tc-ay6-kart { min-width: 0; }
 .tc-ay6-genis { grid-column: 1 / -1; }
 .tc-ay6-ust { font-size: var(--yazi-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--harf-aralik-06); }
