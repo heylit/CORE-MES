@@ -1,13 +1,13 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, degerlendirmeCevabi, degerlendirmeSorgusu, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
+  benCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeParametresi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
   statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi,
   yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
-import { planlamaDegerlendirmesi } from './degerlendirme.ts';
+import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { yillikCozBaslat, yillikCozDurumu } from './yillik-cozucu.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
@@ -52,14 +52,24 @@ export const uclar = [
     cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlamaCalismasi(db, kullanici),
   }),
-  // Planlama kartlarının sunucuda hesabı (Soru 357 a): yalnız okur; GET olduğu için salt okunur transaction'da koşar, kayıt yazamaz.
+  // Planlama kartlarının sunucuda hesabı (Soru 357 a, 463 a): başlatma girdiyi okur, kayıt yazmaz; hesap uç transaction'ının dışında koşar,
+  // sonuç kimlikle transaction açmadan okunur.
   uc({
-    yontem: 'GET',
+    yontem: 'POST',
     yol: '/recete-rota/planlama-degerlendirmesi',
     yetki: 'recete-rota.planlama-oku',
-    sorgu: degerlendirmeSorgusu,
-    cevap: degerlendirmeCevabi,
-    isle: ({ db, kullanici, sorgu }) => planlamaDegerlendirmesi(db, kullanici, sorgu),
+    govde: degerlendirmeGovdesi,
+    cevap: degerlendirmeBaslatCevabi,
+    isle: ({ db, kullanici, govde }) => degerlendirmeBaslat(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/planlama-degerlendirmesi/:is',
+    yetki: 'recete-rota.planlama-oku',
+    txDisi: true,
+    parametre: degerlendirmeParametresi,
+    cevap: degerlendirmeDurumuCevabi,
+    isle: ({ kullanici, parametre }) => degerlendirmeDurumu(kullanici.id, parametre.is),
   }),
   // Yıllık planın çözümü (454/6 a): planlama sayfasını gören başlatır, kayıt yazılmaz. Çözüm uç transaction'ının dışında koşar; sonuç
   // kimlikle, transaction açmadan okunur.
