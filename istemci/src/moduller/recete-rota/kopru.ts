@@ -39,6 +39,19 @@ function bitisliYerlesim(c: MotorYerlesimiCevabi): EkranYerlesimi | null {
     return [k, b === undefined ? l : l.map((x) => ({ ...x, bitis: b }))];
   }));
 }
+// Motor cevabının ekranların ekran yerleşimi dışında okuduğu kısmı (481 a, 493): emir başına bolluk, rota ve bölme durumu; bölünmüş işte
+// parçanın canlıya yazılacak adedi, anahtar `emirNo|opNo~parçaNo` (yazılamazsa null).
+export interface PlanMotoru { emirler: MotorYerlesimiCevabi['emirler']; parcaAdetleri: Record<string, number | null> }
+export function planMotoruOzeti(c: MotorYerlesimiCevabi): PlanMotoru {
+  const parcaAdetleri: Record<string, number | null> = {};
+  // 481/493 öncesi sunucu emirler ve parça adedi vermez: alanlar boş kalır, şerit adet karşılaştırmaz.
+  const yerlesimler: unknown = c.yerlesimler;
+  const emirler: unknown = c.emirler;
+  for (const y of Array.isArray(yerlesimler) ? c.yerlesimler : []) {
+    for (const p of y.parcalar ?? []) if (p.adet !== undefined) parcaAdetleri[`${y.emirNo}|${String(y.opNo)}~${String(p.no)}`] = p.adet;
+  }
+  return { emirler: Array.isArray(emirler) ? c.emirler : [], parcaAdetleri };
+}
 type Nesne = Record<string, unknown>;
 const tamSayi = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0 && (v as number) < 1e10;
 function fasonTahminSorgusu(v: unknown): string {
@@ -340,11 +353,14 @@ export function kopruKur(
     secenek.motorUyarilari?.(uyarilar);
   };
   // Motorun yerleştiremediği adımlar (anahtar `emirNo|opNo`, değer motorun nedeni): eski ekrandaki "Planlanamıyor" bundan çıkar.
-  const motorYerlesimiOku = (): Promise<{ yerlesim: EkranYerlesimi | null; yerlesmeyen: Record<string, string> } | null> =>
+  const motorYerlesimiOku = (): Promise<{ yerlesim: EkranYerlesimi | null; yerlesmeyen: Record<string, string>; motor: PlanMotoru } | null> =>
     api.get<MotorYerlesimiCevabi>('/plan/motor-yerlesimi').then(
       (c) => {
         motorDurumu(false); motorUyarilari(c.uyarilar);
-        return { yerlesim: bitisliYerlesim(c), yerlesmeyen: Object.fromEntries((c.yerlesmeyen ?? []).map((y) => [`${y.emirNo}|${String(y.opNo)}`, y.neden])) };
+        return {
+          yerlesim: bitisliYerlesim(c), yerlesmeyen: Object.fromEntries((c.yerlesmeyen ?? []).map((y) => [`${y.emirNo}|${String(y.opNo)}`, y.neden])),
+          motor: planMotoruOzeti(c),
+        };
       },
       () => { motorDurumu(true); return null; },
     );
@@ -352,12 +368,15 @@ export function kopruKur(
   const yalnizUyariOku = (): Promise<null> =>
     api.get<MotorUyarilariCevabi>('/plan/motor-uyarilari').then((c) => { motorUyarilari(c.uyarilar); return null; }, () => null);
   // planYerlesmeyen yalnız motor bir adımı yerleştiremediyse vardır; yoksa alan da yoktur.
-  const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null; planYerlesmeyen?: Record<string, string> }> =>
+  const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null; planYerlesmeyen?: Record<string, string>; planMotoru: PlanMotoru | null }> =>
     Promise.all([api.get<DurumCevabi>('/recete-rota/durum'), secenek.yerlesimCizilmez?.() === true ? yalnizUyariOku() : motorYerlesimiOku()])
       .then(([d, m]) => {
         maliyetAnlik = d.maliyet;
         secenek.planVerisi?.(d.stations === null || d.machines === null || d.wcs === null);
-        return { ...d, planYerlesim: m?.yerlesim ?? null, ...(m && Object.keys(m.yerlesmeyen).length ? { planYerlesmeyen: m.yerlesmeyen } : {}) };
+        return {
+          ...d, planYerlesim: m?.yerlesim ?? null, ...(m && Object.keys(m.yerlesmeyen).length ? { planYerlesmeyen: m.yerlesmeyen } : {}),
+          planMotoru: m?.motor ?? null,
+        };
       });
   // Malzemeler'de yeni onaylanan kartın ilk rota taslağı ekran açılırken açılır (#688), dakikalık tarama beklenmez. Ekranın ilk
   // okumasında bir kez, yalnız rota yazabilene denenir; açılamazsa durum yine okunur (tarama sonra açar). Kullanıcının gönderdiği kayıt

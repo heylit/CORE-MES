@@ -41,7 +41,7 @@ describe('rota köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /rota/urunler/12/taslak-ac', 'GET /recete-rota/durum', 'GET /plan/motor-yerlesimi']);
     expect(istekler[0]?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 7 } });
     expect(istekler[0]?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
-    expect(sonuc).toEqual({ sonuc: { id: 101, durum: 'taslak', surum: 2 }, durum: { ...DURUM, planYerlesim: null }, ek: null });
+    expect(sonuc).toEqual({ sonuc: { id: 101, durum: 'taslak', surum: 2 }, durum: { ...DURUM, planYerlesim: null, planMotoru: null }, ek: null });
     await kopruKur()('komut', { ad: 'rota-taslak-ac', govde: { urunId: 12, kaynak: { tur: 'bos' } } });
     expect(istekler.find((i) => i.yol === '/rota/urunler/12/taslak-ac' && i !== istekler[0])?.govde).toEqual({ kaynak: { tur: 'bos' } });
   });
