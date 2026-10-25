@@ -10,6 +10,7 @@ import type { PlanliDurusGirdisi, PlanliDurusKapsami, PlanliDurusTekrari } from 
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import { svgHatasi } from './svg.ts';
 
+// Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
   rolYok: 'Üretim Hazırlık için rolünüz yok.',
   ozetRolYok: 'Özetim yalnız Arkon operatörü ve amiri içindir.',
@@ -20,8 +21,8 @@ export const ILETILER = {
   yetkiTmide: 'Yetkiler TMI\'de yönetilir (Roller).',
   gunlukOkuma: 'Değişiklik günlüğünü yalnız Üretim Hazırlık yöneticisi okur.',
   yalnizYonetici: 'Bu ayarı yalnız Üretim Hazırlık yöneticisi değiştirir.',
-  rolYetmez: 'Üretim Hazırlık rolünüz bu belgeyi yazamaz ya da silemez.',
-  okumaRolu: 'Üretim Hazırlık rolünüz bu depoyu okuyamaz.',
+  rolYetmez: 'Rolünüz bu belgeyi yazamaz ya da silemez.',
+  okumaRolu: 'Rolünüz bu depoyu okuyamaz.',
   ilkParca: 'İlk parça kalitede: kalite kararına kadar ikinci sağlam parça sayılmaz.',
   aletZorunlu: 'Ölçü aleti seçilmeden ölçüm kaydedilmez.',
   aletGecersiz: 'Seçilen ölçü aletinin kalibrasyonu geçerli değil ya da alet kullanım dışı: bu aletle ölçüm kaydedilmez.',
@@ -32,11 +33,11 @@ export const ILETILER = {
   parcaUyusmuyor: 'Parça sayısı önceki parçalarla uyuşmuyor.',
   sunucuIletisi: 'Bu ileti türünü yalnız sunucu üretir.',
   iletiTuruYok: 'Bu ileti türü tanınmıyor.',
-  iletiRolu: 'Üretim Hazırlık rolünüz bu ileti türünü gönderemez.',
+  iletiRolu: 'Rolünüz bu ileti türünü gönderemez.',
   iletiBuyuk: 'İleti çok büyük.',
   iletiHizi: 'Dakikada gönderilebilecek ileti sayısı aşıldı.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
-  kayitRolYetmez: 'Üretim Hazırlık rolünüz bu kayıt türünü ya da kaynağı yazamaz.',
+  kayitRolYetmez: 'Rolünüz bu kayıt türünü ya da kaynağı yazamaz.',
   olcumKaynagi: 'Ölçüm kaynağı tanınmıyor.',
   isEmriYok: 'Bu paketin TMI iş emri açık değil.',
   yerelPaket: 'Yeni paket TMI\'de emir açılınca oluşur (Rota > Üretim emirleri); emir dışı paket açılmaz.',
@@ -59,7 +60,7 @@ export const ILETILER = {
   gunlukSunucu: 'Değişiklik günlüğünü yalnız sunucu yazar.',
   hazirliktaSayim: 'Hazırlıkta sayım yapılmaz · önce ilk parça onayı',
   makineKaynagi: 'Makine kaynaklı (src: auto) kaydı yalnız makine bağlantısı yazar.',
-  alanYetkisi: 'Üretim Hazırlık rolünüz bu belgedeki bu değişikliği yapamaz.',
+  alanYetkisi: 'Rolünüz bu belgedeki bu değişikliği yapamaz.',
   emirIptal: 'Bu iş emri TMI\'de iptal edildi; iş için kayıt yazılmaz.',
   bitmisIs: 'Bu iş bitti: sayı ve durum değişmez.',
   tmiIstasyonu: 'Bu paketin istasyonu TMI planından değişir.',
@@ -270,6 +271,8 @@ export interface IsEmriPaketGirdisi {
   hazirlik?: HazirlikEksigi | null | undefined;
   // Emrin Kalite Merkezi'ndeki son ilk parça kararı (denetim #12): tablet ilk parça kapısını buradan okur, sunucu kapısıyla aynı kaynak.
   ilkParca?: { karar: 'onay' | 'ret'; zaman: string } | null | undefined;
+  // Adımın rotadaki girenleri (521 3 a): kayıtsız taslağın Malzeme alanına yazılır (`girenMetni`); kayıtlı paket ve dolu şablon değişmez.
+  girenler?: readonly AdimGireni[] | undefined;
   // Bölünmüş işin parçası: paket kimliği, hedef adet ve `tmi.parca` parçadandır; istasyon ve makine parçanın kaynağıdır.
   parca?: { no: number; adet: number; toplam: number } | null | undefined;
   // Bölünmüş işin bütün paketi: operatöre düşmez, parçaları düşer (kayıtlı paketin hazırlığı parçalara şablon olur).
@@ -289,6 +292,14 @@ const dakika = (d: string | null): number | null => (d === null || !Number.isFin
 export const talimatAdimlari = (metin: string | null) => (metin ?? '').split(/\r?\n/).map((t) => t.trim()).filter((t) => t !== '')
   .map((t, i) => ({ id: `tmi-${i + 1}`, t, d: '', r: false }));
 
+export interface AdimGireni { kod: string; ad: string | null; miktar: string; birim: string | null }
+// Miktar emrin brüt ihtiyacıdır (uretim-emirleri `emirMalzemeIhtiyaci`, dört haneli ondalık metin); sondaki sıfırlar atılır, ondalık ayırıcı virgüldür.
+export function girenMetni(girenler: readonly AdimGireni[]): string {
+  return girenler.map((g) => {
+    const miktar = g.miktar.includes('.') ? g.miktar.replace(/0+$/, '').replace(/\.$/, '').replace('.', ',') : g.miktar;
+    return [g.kod, g.ad, `${miktar}${g.birim === null ? '' : ` ${g.birim}`}`].filter((p) => p !== null && p !== '').join(' · ');
+  }).join('; ');
+}
 export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unknown> {
   const { isEmri: ie, emir, istasyon, sablon } = g;
   const acilma = Date.parse(emir.acilma);
@@ -302,6 +313,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     machine: istasyon?.kod ?? '', mc: g.makineKodu ?? '', target: g.parca?.adet ?? ie.adimAdedi ?? ie.adet, cycle: birim === null ? null : Math.round(birim * 600) / 10, setup: ayar,
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
+    ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
     tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },

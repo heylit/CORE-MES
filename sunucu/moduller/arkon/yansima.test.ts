@@ -2794,4 +2794,55 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(belge?.govde['status'], 'waiting');
     assert.equal('numuneTeslim' in (belge?.govde ?? {}), false);
   });
+
+  // Uçtan uca test raporu 2026-10-25 K1 ve T1 (kart 526, 521 1 a): terminal yolundan sayılan sağlam, ilk parça kararı Kalite Merkezi'nden gelene dek
+  // karar bekler; Arkon numune onayı karar değildir. Bitirilen adımın sağlamı ve sonraki adımın hedefi kararla dolar. Rol reddinde modül adı geçmez (G1).
+  test('K1, T1, 521 1 a, G1: terminal sayımı ilk parça kararına dek bekler; Arkon numunesi karar değil; Kalite Merkezi onayı bitmiş adıma ve sonraki adımın hedefine yazar; operatör karar veremez, paket yazamaz', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1, ie2] = await isEmriIdleri(r.emirId);
+    const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
+    const yayin = await paketYaz(ieKimligi(ie1!), null, { ...taslak, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] });
+    assert.equal(yayin.durum, 200, JSON.stringify(yayin.govde));
+    const durum = async () => {
+      const k = (await kararSayaclari(vt(), [r.emirId])).get(r.emirId);
+      const adimlar = await ortam!.sahip.sorgu<{ durum: string; saglam: number | null }>(
+        'SELECT durum, saglam_adet AS saglam FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [r.emirId]);
+      return { kararBekliyor: k?.kararBekliyor ?? 0, adimlar, sonrakiHedef: (await paketler()).get(ieKimligi(ie2!))?.govde['target'] };
+    };
+    const yaz = async (tur: string, satir: Record<string, unknown>) => {
+      const c = await ekle(operator, tur, { ...satir, machine: r.ilk });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      assert.equal((await yansima(String(satir['cid'])))?.sonuc, 'yazildi', JSON.stringify(await yansima(String(satir['cid']))));
+    };
+    await yaz('events', ieOlay(ie1!, 'running'));
+    await yaz('counts', ieSayim(ie1!, 'good', 1));
+    await yaz('counts', ieSayim(ie1!, 'good', 17));
+    await yaz('counts', ieSayim(ie1!, 'scrap', 2, { reason: hurdaKodu }));
+    // 327 a: ilk parça dahil bütün sağlam karar bekler; tabletteki sayı da bu (arkon/web/src/data/ilk-parca.ts kararBekleyenSayisi).
+    assert.equal((await durum()).kararBekliyor, 18);
+    const tur = await vt().tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'");
+    const alet = await istek<{ id: number }>(yonetici, 'POST', '/olcu-aletleri', { no: `K1-${r.emirId}`, turId: tur?.id, ilkKalibrasyon: { sonuc: 'uygun' } });
+    assert.equal(alet.durum, 200, JSON.stringify(alet.govde));
+    const numune = await istek(yonetici, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, {
+      taban: 0, govde: { id: `rq-k1-${r.emirId}`, pkgId: ieKimligi(ie1!), items: [1], status: 'approved', decidedAt: Date.now(), note: 'not', results: { 1: { ok: true, v: 1, gid: `${ALET_ONEKI}${alet.govde.id}` } } }, kaynak: 'y1',
+    });
+    assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
+    assert.equal((await durum()).kararBekliyor, 18, 'Arkon numune onayı ilk parça kararı değildir');
+    await yaz('events', ieOlay(ie1!, 'done'));
+    assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'tamam', saglam: 0 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 0 },
+      'raporun gördüğü hâl: karar gelmeden bitirilen adımın sağlamı 0, sonraki adımın hedefi 0');
+    // Reddedilen: operatör ilk parça kararı veremez; paket yazma reddinde modül adı rol adı gibi geçmez.
+    const ret = await istek(operator, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
+    assert.equal(ret.durum, 403, JSON.stringify(ret.govde));
+    assert.equal((await durum()).kararBekliyor, 18);
+    const paketReddi = await paketYaz(ieKimligi(ie1!), null, { ...taslak, note: 'operatör' }, operator);
+    assert.equal(paketReddi.durum, 403, JSON.stringify(paketReddi.govde));
+    assert.match(JSON.stringify(paketReddi.govde), /Rolünüz bu belgeyi yazamaz ya da silemez/);
+    assert.doesNotMatch(JSON.stringify(paketReddi.govde), /Üretim Hazırlık/);
+    // İzinli: Kalite Merkezi onayı karar bekleyeni bitmiş adımın sağlamına ve sonraki adımın hedefine taşır.
+    const onay = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
+    assert.equal(onay.durum, 200, JSON.stringify(onay.govde));
+    assert.equal(onay.govde.adet, 18);
+    assert.deepEqual(await durum(), { kararBekliyor: 0, adimlar: [{ durum: 'tamam', saglam: 18 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 18 });
+  });
 });

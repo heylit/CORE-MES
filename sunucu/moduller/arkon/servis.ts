@@ -26,7 +26,7 @@ import {
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
 } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
-import { malzemeAra } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
 import { adimEtkinSureleriToplu, gecerliTalimat, girdisiEksikRevizyonlar, revizyonGetir } from '../rota/disari.ts';
@@ -40,7 +40,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari,
+  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -59,7 +59,7 @@ import {
   donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
   emekVerimi, mesaiSaniyesi,
 } from './kurallar.ts';
-import type { AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
+import type { AdimGireni, AnomaliDonemi, YoklamaDenetimi, DonemSatiri, IsEmriPaketGirdisi, DonemToplami, NetAralik, OzetGunu, TmiPlanDurumu } from './kurallar.ts';
 import type { ArkonDurumu, BelgeEylemi, DurusKimlikleri, DurusKodlari, GunlukSatiri, KatilimDurumu, KatilimYolu, KayitSutunlari, Konum, KonumKimlikleri, NumuneTeslimGirdisi, StokIstegiGirdisi, TmiAyari, YansimaKarari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -293,12 +293,30 @@ async function isEmriTaslaklari(
   }
   const hazirliklar = await isEmriHazirlikDurumlari(db, girdiler.flatMap((g) => (g.istasyon?.tip === 'talasli' ? [g.isEmri.id] : [])));
   const ilkParcalar = await ilkParcaKararlari(db, girdiler.map((g) => g.isEmri.uretimEmriId));
+  const girenler = await adimGirenleri(db, girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id))));
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
-    const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, ilkParca: ilkParcalar.get(g.isEmri.uretimEmriId) ?? null });
+    const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, ilkParca: ilkParcalar.get(g.isEmri.uretimEmriId) ?? null, girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const govde = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     sonuc.set(String(govde['id']), govde);
+  }
+  return sonuc;
+}
+
+// 521 3 a: kayıtsız taslakların adım girenleri emir ve adım (op no) başına; malzeme adı ve birimi kartından. Kayıtlı paket için okunmaz.
+async function adimGirenleri(db: Db, girdiler: readonly IsEmriPaketGirdisi[]): Promise<Map<string, AdimGireni[]>> {
+  const sonuc = new Map<string, AdimGireni[]>();
+  const emirIdleri = [...new Set(girdiler.map((g) => g.isEmri.uretimEmriId))];
+  if (emirIdleri.length === 0) return sonuc;
+  const ihtiyaclar = await emirlerinMalzemeIhtiyaci(db, emirIdleri);
+  const kartlar = await malzemeOzetleri(db, [...ihtiyaclar.values()].flatMap((l) => (l ?? []).map((m) => m.malzemeNo)));
+  for (const [emirId, liste] of ihtiyaclar) {
+    for (const m of liste ?? []) {
+      const kart = kartlar.get(m.malzemeNo);
+      const anahtar = `${emirId}:${m.opNo}`;
+      sonuc.set(anahtar, [...(sonuc.get(anahtar) ?? []), { kod: kart?.kod ?? String(m.malzemeNo), ad: kart?.ad ?? null, miktar: m.brut, birim: kart?.birim ?? null }]);
+    }
   }
   return sonuc;
 }

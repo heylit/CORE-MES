@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durumKaydiGerekir } from '../../../../arkon/web/src/data/durum-kaydi.ts';
+import { durumBaslangici, durumKaydiGerekir } from '../../../../arkon/web/src/data/durum-kaydi.ts';
 
 // Y3 (ikinci tarayıcı turu): her sayfa açılışı etkin işin eski durumunu yeniden gönderiyor, TMI'ye yazılamayanlar listesine ret bırakıyordu.
 describe('Arkon durum kaydı', () => {
@@ -12,5 +12,14 @@ describe('Arkon durum kaydı', () => {
     expect(durumKaydiGerekir({ no: 'E2', state: 'paused' }, { no: 'E2', state: 'paused' })).toBe(false);
     expect(durumKaydiGerekir(null, { no: 'E1', state: 'stopped' })).toBe(false);
     expect(durumKaydiGerekir(undefined, { no: 'E1', state: 'paused' })).toBe(false);
+  });
+
+  it('T3: süre işin son durum kaydının anından; son kayıt başka durumdaysa (gitmemiş) ya da kayıt yoksa bilinmez', () => {
+    const kayitlar = [{ state: 'running', at: 1000 }, { state: 'paused', at: 2000 }, { state: 'running', at: 3000 }];
+    expect(durumBaslangici(kayitlar, 'running')).toBe(3000);
+    expect(durumBaslangici([...kayitlar].reverse(), 'running')).toBe(3000);
+    expect(durumBaslangici(kayitlar, 'paused')).toBeNull();
+    expect(durumBaslangici([], 'running')).toBeNull();
+    expect(durumBaslangici([{ state: 'running', at: 'dun' }], 'running')).toBeNull();
   });
 });

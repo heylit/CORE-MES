@@ -384,7 +384,8 @@ export function stValidate(p): { k: string; ok: any; l: string; d: string; soft?
   if (t === 'kalite') return [{ k: 'st', ok: c.n > 0 && c.lot >= c.n, l: 'Numune planı', d: 'Lot ' + c.lot + ' · numune ' + c.n + ' · Ac ' + c.ac }];
   return [];
 }
-export const EMPTY_ORDER = (m?): Order => ({ no: '—', part: 'Bu istasyona atanmış iş yok', op: machineOf(m).l, state: 'queued', good: 0, scrap: 0, target: 1, cycle: 0, due: '—', baseGood: 0, meas: {}, pins: [], empty: true });
+// Boş işin hedefi yoktur: sayaç `sayacGosterimi` ile "—" gösterir, düğmeler kapalıdır.
+export const EMPTY_ORDER = (m?): Order => ({ no: '—', part: 'Bu istasyona atanmış iş yok', op: machineOf(m).l, state: 'queued', good: 0, scrap: 0, target: 0, cycle: 0, due: '—', baseGood: 0, meas: {}, pins: [], empty: true });
 /** örnek istasyon paketleri (kalite, depo, markalama, boya, montaj) */
 export async function seedStations() {
   if (await DB.get('kv', 'seedV11')) return;

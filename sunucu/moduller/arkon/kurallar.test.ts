@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -330,6 +330,17 @@ test('CNC hazırlık eksiği yalnız talaşlı istasyonda; kurulum kaydı yoksa 
   assert.equal('hazirlik' in (isEmrindenTaslakPaket(girdi({ hazirlik: null }))['tmi'] as Record<string, unknown>), false);
   assert.deepEqual((isEmrindenTaslakPaket(girdi({ ilkParca: { karar: 'ret', zaman: 't' } }))['tmi'] as Record<string, unknown>)['ilkParca'], { karar: 'ret', zaman: 't' });
   assert.equal('ilkParca' in (isEmrindenTaslakPaket(girdi({ ilkParca: null }))['tmi'] as Record<string, unknown>), false);
+});
+
+// 521 3 a (H1): kayıtsız taslağın Malzeme alanı adımın rota girenleridir; dolu şablon ve giren yoksa boş kalır.
+test('521 3 a: taslak pakete rota girenleri yazılır (kod, ad, miktar); şablonun dolu malzemesi korunur, giren yoksa alan boş', () => {
+  const g = [{ kod: 'HM-YAP-00001', ad: 'Deneme çubuk', miktar: '40.5000', birim: 'kg' }, { kod: 'HM-2', ad: null, miktar: '3.0000', birim: null }];
+  assert.equal(girenMetni(g), 'HM-YAP-00001 · Deneme çubuk · 40,5 kg; HM-2 · 3');
+  assert.equal(isEmrindenTaslakPaket(girdi({ girenler: g }))['material'], 'HM-YAP-00001 · Deneme çubuk · 40,5 kg; HM-2 · 3');
+  assert.equal(isEmrindenTaslakPaket(girdi({ girenler: g, sablon: { material: 'Elle yazılan' } }))['material'], 'Elle yazılan');
+  assert.equal(isEmrindenTaslakPaket(girdi({ girenler: g, sablon: { material: '  ' } }))['material'], 'HM-YAP-00001 · Deneme çubuk · 40,5 kg; HM-2 · 3');
+  assert.equal(isEmrindenTaslakPaket(girdi({ girenler: [] }))['material'], '');
+  assert.equal(isEmrindenTaslakPaket(girdi())['material'], '');
 });
 
 // #1444: önceki biten adımın hurdası sonraki adımın adedinden düşer (OP10 40 -> 39 sağlam -> OP20 39); operatör kartının hedefi de o adettir.
