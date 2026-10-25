@@ -562,6 +562,18 @@ describe('tarayıcıdaki eski kopyaların silinmesi (borç #281, kullanıcı ona
   });
 });
 
+// Soru 520 (3 b): hammadde sihirbazında metal ailesinin ağırlıkla tutulan formlarında varsayılan stok birimi kg; seçilen birim korunur.
+describe('hammadde varsayılan stok birimi (520 3 b)', () => {
+  it('metal çubuk, levha ve boruda kg; metal telde m; metal dışı ailede ve formsuz kartta adet; seçilen birim değişmez', async () => {
+    const w = await prototipiKostur();
+    const r = await hesapla<Record<string, string>>(w, `
+      const k = (fam, form, birim = '') => finalBirim({ tur: 'hammadde', fam, form, com: { birim }, g: {}, opts: {} });
+      return { cubuk: k('metal', 'cubuk'), levha: k('metal', 'levha'), boru: k('metal', 'boru'), tel: k('metal', 'tel'), rulo: k('metal', 'rulo'),
+        plastik: k('plastik', 'cubuk'), formsuz: k('metal', null), secilen: k('metal', 'cubuk', 'adet') };`);
+    expect(r).toEqual({ cubuk: 'kg', levha: 'kg', boru: 'kg', tel: 'm', rulo: 'rulo', plastik: 'adet', formsuz: 'adet', secilen: 'adet' });
+  });
+});
+
 describe('onay öncesi denetimler (malzeme denetimi 3/5 ve 4/5)', () => {
   it('birimi boş kayıtlı kart açılınca birim varsayılanla doldurulmaz, istenir; yeni kartta ve birimli kartta istenmez', async () => {
     const w = await prototipiKostur();
