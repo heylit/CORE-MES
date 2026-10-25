@@ -69,6 +69,27 @@ describe('üretim emirleri genel arama ucu (kart #1221, gerçek PostgreSQL)', ()
     assert.deepEqual((await ara(ilk!.emirNo.toLowerCase())).map((s) => s.anahtar)[0], String(ilk!.id));
   });
 
+  // Test raporu K2: adımlı emirde satır adımlar arasında 'planli' kalır; arama emir listesiyle aynı görünen durumu yazar.
+  test('adımlı emirde bir iş emri başladıysa durum "Başladı", hiçbiri başlamadıysa "Planlı" görünür', async () => {
+    const sahip = ortam!.sahip;
+    const acan = await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'ue-yonetici'");
+    const ist = await sahip.tek<{ id: number }>("SELECT id FROM istasyon WHERE kod = 'UEIS'");
+    const tip = await sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('UET', 'Deneme tipi', 'TAL') RETURNING id");
+    const ekle = async (parcaNo: string, isDurumu: string) => {
+      const e = await sahip.tek<{ id: number }>("INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id) VALUES ($1, 'Durum Mili', 5, $2, $3) RETURNING id", [parcaNo, ist!.id, acan!.id]);
+      await sahip.sorgu(`INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id, durum, baslama)
+        VALUES ($1, 1, 10, $2, 'OP 10', $3, $4::text, CASE WHEN $4::text = 'calisiyor' THEN now() END)`, [e!.id, tip!.id, ist!.id, isDurumu]);
+      return e!.id;
+    };
+    const baslamis = await ekle('P-DUR-1', 'calisiyor');
+    const bekleyen = await ekle('P-DUR-2', 'bekliyor');
+    const sonuclar = await ara('p-dur');
+    assert.deepEqual(sonuclar.map((s) => [s.anahtar, s.aciklama]), [
+      [String(bekleyen), 'P-DUR-2 Durum Mili · Planlı'],
+      [String(baslamis), 'P-DUR-1 Durum Mili · Başladı'],
+    ]);
+  });
+
   test('reddedilen: emir listesini okuyamayan 403, oturumsuz 401, kısa sorgu 400; eşleşmeyen sorgu boş döner', async () => {
     assert.equal((await istek(yetkisiz, 'GET', '/uretim-emirleri/ara?q=arama')).durum, 403);
     assert.equal((await istek(null, 'GET', '/uretim-emirleri/ara?q=arama')).durum, 401);
