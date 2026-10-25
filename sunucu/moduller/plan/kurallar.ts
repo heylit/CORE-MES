@@ -849,6 +849,16 @@ export function ayarVeGecikme(
 // pazartesi başlar (gün takvim günüdür, saat dilimi yok); sınırı aşan hafta asanHaftalar'dadır. Sınır 0 sınır yok demektir (eski motorun fits'i: butH <= 0 her
 // vardiyayı sığdırır); boş sınırı çağıran 8 saate çevirir.
 export const EK_MESAI_HAFTA_SAAT = 8;
+// 512 1 a: kabul edilmiş ek vardiyanın penceresi makinenin çalışma aralıklarına katılır; çakışan ve bitişik aralıklar birleşir, sıralı döner.
+export function araliklaraEkle(l: readonly Aralik[], ek: readonly Aralik[]): Aralik[] {
+  const y: Aralik[] = [];
+  for (const a of [...l, ...ek].sort((x, z) => x.baslangic - z.baslangic)) {
+    const son = y[y.length - 1];
+    if (son && a.baslangic <= son.bitis) son.bitis = Math.max(son.bitis, a.bitis);
+    else y.push({ baslangic: a.baslangic, bitis: a.bitis });
+  }
+  return y;
+}
 export function vardiyaSaati(baslangic: string, bitis: string): number {
   const dk = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
   const fark = dk(bitis) - dk(baslangic);

@@ -26,7 +26,7 @@ import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, bantSinirlari, bedelCarpani, emirTutari, katkiPaylari, calisilanParcalar, elleCarpanSiniri, gecikmeBedeli, oncelikSiniflari, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, karsilastir as kurallariKarsilastir, motorUyarilari, onayGecisiReddi, onayGecisleri, oner as motor, personelYuku, planMaliyeti, sinirliGunSayisi, tlIyilestir, tlKosuSiniri, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelKisiti, PersonelMerkezi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, Kaynak, Kural, MotorIsi, MusteriSinifi, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -165,6 +165,25 @@ async function vardiyaOku(db: Db, simdi: number, kaynaklar: Map<string, KaynakBi
   return { takvimler, takvimsizKapali, merkezler, operator };
 }
 
+// 512 1 a: kabul edilmiş ek vardiya makinenin takvimine eklenir (gün başı + vardiya başlangıcı, vardiya süresince). Takvimi tanımsız
+// (sürekli çalışan) makineye eklenmez; kişi takvimi değişmez.
+async function ekMesaiTakvimde<T extends { takvimler: Map<string, Aralik[] | null> }>(db: Db, hedef: Hedef, simdi: number, v: T): Promise<T> {
+  const satirlar = await s.ekMesailer(db, hedef);
+  if (satirlar.length === 0) return v;
+  const vardiyalar = new Map((await vardiyaTanimlari(db)).map((x) => [x.id, x]));
+  const ek = new Map<string, Aralik[]>();
+  for (const x of satirlar) {
+    const vr = vardiyalar.get(x.vardiyaId);
+    if (!vr) continue;
+    const bas = (tesisGunBasi(x.gun) - simdi) / DK + Number(vr.baslangic.slice(0, 2)) * 60 + Number(vr.baslangic.slice(3, 5));
+    const a = `makine:${String(x.makineId)}`;
+    ek.set(a, [...(ek.get(a) ?? []), { baslangic: bas, bitis: bas + x.saat * 60 }]);
+  }
+  const takvimler = new Map(v.takvimler);
+  for (const [a, l] of ek) { const t = takvimler.get(a); if (t) takvimler.set(a, araliklaraEkle(t, l)); }
+  return { ...v, takvimler };
+}
+
 // Kişi kart #1324 kararıyla atama yüzdesi kadar sayılır: iki iş merkezine %50 atanan kişi ikisinde yarımdır. Paylar vardiya modülünün tek
 // tanımından gelir (istasyon, makine ve ekip ataması); pasif kişi ve pasif istasyon sayılmaz.
 async function merkezPersoneli(db: Db, kaynaklar: Map<string, KaynakBilgisi>): Promise<Map<number, Map<number, number>>> {
@@ -292,6 +311,8 @@ export function tahminiMaliyetCozucusuKaydet(cozucu: TahminiMaliyetCozucusu | nu
 export interface PlanMotoruIstegi {
   kip: 'sabit' | 'yeni'; simdi: Date; kuyruklar: { makineId: number; anahtarlar: string[] }[];
   sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[]; calisanlar: CalisanAdim[]; taslakId: number | null;
+  // 512 1 a: taslağın kabul edilmiş ek vardiyaları (gün takvim günü); verilirse motorun kapasitesi bunlardır, çalışmanınki değil.
+  ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
 }
 // vardiyasiz (168 b): vardiyası tanımsız tezgâhtaki kuyruk işleri; hata değildir, yerleşmemiş kalır.
 export type PlanMotoruCozucusu = (db: Db, istek: PlanMotoruIstegi) =>
@@ -354,7 +375,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
   }
   const b: Baglam = {
     simdi, gun0, hedef, ayar, isler, rotaEksik, kaynaklar, defter, kapaliGunler: [], siparisSatirlari, carpanlar, siniflar, bedelAyari: await s.bedelAyariOku(db, hedef), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,
-    ...await vardiyaOku(db, simdi, kaynaklar),
+    ...await ekMesaiTakvimde(db, hedef, simdi, await vardiyaOku(db, simdi, kaynaklar)),
     izinli: kullanici ? await kisininIzinliIsMerkezleri(db, kullanici.id) : [],
     fiyatGorur: kullanici !== null && islemVarMi(kullanici, 'siparisler.fiyat-oku'), katkilar: new Map(), gercek: gerceklesenler(simdi, acik), fiili: fiiliKaynaklar(acik),
   };
@@ -457,6 +478,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number, kuyruklar: read
   });
   const sonuc = await planMotoru(db, {
     kip: 'sabit', simdi: new Date(b.simdi), sabitler, calisanlar, taslakId,
+    ekMesai: (await s.ekMesailer(db, taslakId)).map(({ makineId, gun, vardiyaId }) => ({ makineId, gun, vardiyaId })),
     kuyruklar: kuyruklar.filter((q) => q.isler.length > 0).map((q) => ({ makineId: q.makineId, anahtarlar: q.isler.map((i) => anahtarOf(i.isId)!) })),
   });
   if (sonuc.yerlesmeyen.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştiremedi: ${sonuc.yerlesmeyen.map(anahtarMetni).join(', ')}. Plan yazılmadı.`);
@@ -1024,21 +1046,25 @@ async function ekMesaiSatirlari(db: Db, b: Baglam, l: readonly { makineId: numbe
   }
   return { gecerli, hatali };
 }
-// Defter kaydı düşmez (değişiklik türleri dolu defterde kısıttır); "değişiklikleri at" canlının ek vardiyalarına döndürür.
+// 512 2 a: defter kaydı düşer; kaydı kaldırmak ve "değişiklikleri at" canlının ek vardiyalarına döndürür.
+// Liste değişmediyse (aynı satırlar) yazılmaz, defter kaydı düşmez.
+async function ekMesaiTaslagaYaz(db: Db, k: Kullanici, id: number, l: readonly s.EkMesaiSatiri[]): Promise<void> {
+  const anahtar = (x: s.EkMesaiSatiri) => `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}|${String(x.saat)}`;
+  const once = new Set((await s.ekMesailer(db, id)).map(anahtar));
+  if (once.size === l.length && l.every((x) => once.has(anahtar(x)))) return;
+  await s.ekMesaiYaz(db, id, l);
+  await s.degisiklikEkle(db, id, ekMesaiKaydi(l), k.id);
+}
+const ekMesaiKaydi = (l: readonly s.EkMesaiSatiri[]) => ({
+  tur: 'ek_mesai', ozet: `Ek mesai: ${String(l.length)} vardiya, ${String(Math.round(l.reduce((t, x) => t + x.saat, 0) * 10) / 10)} saat`, isEmriIdleri: [],
+});
 export async function ekMesaiYaz(db: Db, k: Kullanici, id: number, g: EkMesaiGovdesi): Promise<PlanCevabi> {
   await acikTaslak(db, k, id, g.surum);
   const { gecerli, hatali } = await ekMesaiSatirlari(db, await baglamKur(db, k, id), g.satirlar);
   if (hatali.length > 0) throw dogrulama(`Ek vardiya yazılamadı: ${hatali.slice(0, 5).join('; ')}.`, 'satirlar');
-  await s.ekMesaiYaz(db, id, gecerli);
+  await ekMesaiTaslagaYaz(db, k, id, gecerli);
   await s.senaryoSurumArtir(db, id);
   return planOku(db, k, await baglamKur(db, k, id));
-}
-// 503 a ile: çalışmanın ek vardiyaları yeni taslağa; yazılamayan satır atlanır (çalışma sunucuda olmayan makine ya da vardiya taşıyabilir).
-export async function ekMesaiTaslagaKopyala(db: Db, k: Kullanici, id: number, l: readonly { makineId: number; gun: string; vardiyaId: number }[]) {
-  const { gecerli, hatali } = await ekMesaiSatirlari(db, await baglamKur(db, k, id), l);
-  await s.ekMesaiYaz(db, id, gecerli);
-  if (gecerli.length > 0) await s.senaryoSurumArtir(db, id);
-  return { yazilan: gecerli.length, atlanan: hatali.length };
 }
 
 // Kaynak denetimi (P5 ret): var ve kullanımda, kullanıcının kapsamında.
@@ -1246,6 +1272,12 @@ export function planSirasinaDon(db: Db, k: Kullanici, g: { taslak: TaslakGirdisi
 // elle makine istemcinin, gerisi ve saat plan modülünündür (276 a: yazımdan sonra motor önerir). Önce yazım: her kuyruk `baslangic`ten sonraki ilk çalışma anından, kaynağın verimi ve takvimiyle, kuyruktaki sabit (kilitli ya
 // da dondurulmuş) işlerin etrafından arka arkaya dizilir. Başlamış iş ve sabit iş yerinde kalır (atlanır); plan modülünün durumu geçerlidir.
 export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): Promise<KuyrukYazCevabi> {
+  return (await kuyruklariYazIc(db, k, g, false)).cevap;
+}
+// 512 1 a: kabul edilen ek vardiya kuyruklardan önce yazılır, kuyruklar onun kapasitesiyle dizilir. Uçta yazılamayan satır reddedilir;
+// çalışmadan gelen (503 a, gevsek) atlanır: çalışma sunucuda olmayan makine ya da vardiya taşıyabilir.
+export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi, gevsek: boolean): Promise<{ cevap: KuyrukYazCevabi; ekMesai: { yazilan: number; atlanan: number } }> {
+  const ekMesai = { yazilan: 0, atlanan: 0 };
   if (g.kuyruklar.some((q) => q.isler.some((i) => i.dondurulmus)) && !islemVarMi(k, 'plan.kilitle')) throw yetkiYok('Dondurmak plan kilitleme yetkisi ister.');
   if (new Set(g.kuyruklar.map((q) => kaynakAnahtari(q.kaynak))).size !== g.kuyruklar.length) throw dogrulama('Bir kaynak yalnız bir kez yazılır.', 'kuyruklar');
   await planSurumuDenetle(db, g.planSurumu);
@@ -1254,7 +1286,15 @@ export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): 
   let atlanan = 0;
   let motorFarki: MotorFarki | undefined;
   if (g.kuyruklar.length > 0) {
-    const p = await taslagaYaz(db, k, taslak, async (b, id) => {
+    const p = await taslagaYaz(db, k, taslak, async (b0, id) => {
+      let b = b0;
+      if (g.ekMesai !== undefined) {
+        const { gecerli, hatali } = await ekMesaiSatirlari(db, b0, g.ekMesai);
+        if (hatali.length > 0 && !gevsek) throw dogrulama(`Ek vardiya yazılamadı: ${hatali.slice(0, 5).join('; ')}.`, 'ekMesai');
+        await ekMesaiTaslagaYaz(db, k, id, gecerli);
+        Object.assign(ekMesai, { yazilan: gecerli.length, atlanan: hatali.length });
+        b = await baglamKur(db, k, id);
+      }
       const hepsi = await s.yerlesimler(db, id);
       const yerler = hepsi.map((y) => yerOf(b, y));
       const bul = new Map<string, Is[]>();
@@ -1407,7 +1447,7 @@ export async function kuyruklariYaz(db: Db, k: Kullanici, g: KuyrukYazGovdesi): 
     taslak = { id: p.taslak!.id, surum: p.taslak!.surum };
   }
   if (taslak === null) throw dogrulama('Yazılacak kuyruk yok.', 'kuyruklar');
-  return { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }) };
+  return { cevap: { taslak: taslak.id, canli: false, yazilan, atlanan, ...(motorFarki === undefined ? {} : { motorFarki }) }, ekMesai };
 }
 
 // Parti kolu (B7): kolun bölünme adımı üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler. Kol birleşme adımını taşımaz.
@@ -1885,6 +1925,7 @@ export async function degisiklikKaldir(db: Db, k: Kullanici, id: number, degisik
   if (d.tur === 'ayar') await s.ayariCanlidanAl(db, id);
   // Bedel ve çarpan değişikliği kalkınca taslak canlınınkine döner (ayar gibi: türün bütün değişiklikleri birlikte).
   if (d.tur === 'bedel_ayari') await s.bedelTaslaktanSil(db, id);
+  if (d.tur === 'ek_mesai') await s.ekMesaiCanlidanAl(db, id);
   if (d.tur === 'siparis_carpani') await s.carpanTaslaktanSil(db, id, Number((d.veri as { siparisId: number }).siparisId));
   if (d.tur === 'acil_emir') {
     const sanal = (await s.yerlesimler(db, id)).filter((y) => y.isEmriId < 0 && Math.floor(-y.isEmriId / 1000) === d.id).map((y) => y.isEmriId);
