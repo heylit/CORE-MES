@@ -11,3 +11,9 @@
 .tc-rozet-uyari { --c: var(--hold); }
 .tc-rozet-hata { --c: var(--stop); }
 .tc-rozet-pasif { --c: var(--idle); }
+/* Çizgi görünüm: katalog satırındaki tür gibi yan yana çok etiketli yerde; dolu rozet durumu gösterir. */
+.tc-rozet-cizgi {
+  gap: var(--b-1); padding: 0 var(--b-2); border: 1px solid var(--c);
+  font-weight: 600; letter-spacing: normal; text-transform: none; background: none;
+}
+.tc-rozet-cizgi i { display: none; }

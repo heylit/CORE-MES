@@ -1,6 +1,6 @@
 .tc-dugme {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--b-2);
-  min-height: var(--dokunma); padding: 0 var(--b-4);
+  min-height: var(--dugme-boy); padding: 0 var(--b-4); font-size: var(--dugme-yazi);
   border-radius: var(--yari-2); border: 1px solid var(--edge2);
   background: var(--panel2); color: var(--ink);
   font-weight: 700; cursor: pointer; white-space: nowrap;
