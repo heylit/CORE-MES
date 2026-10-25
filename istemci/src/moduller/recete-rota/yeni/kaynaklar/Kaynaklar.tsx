@@ -7,7 +7,7 @@ import type { EkranOzellikleri } from '../sekmeler.ts';
 import { useEskiKayit, type RrDurumu, type RrVerisi } from '../veri.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import {
-  aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi, sonrakiKod,
+  aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi, sonrakiKod,
   geceyiGecer, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir, type Hafta,
 } from './kurallar.ts';
 import { SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
@@ -27,6 +27,7 @@ const ALT_SEKMELER: readonly AltSekme[] = ['overview', 'shifts', 'wcs', 'machine
 const MAKINE_DURUMU: Record<Makine['status'], { ad: string; ton: RozetTonu }> = {
   aktif: { ad: 'Aktif', ton: 'tamam' }, bakim: { ad: 'Bakımda', ton: 'uyari' }, ariza: { ad: 'Arızalı', ton: 'hata' },
 };
+const RENK_SAYISI = 6;
 export const ISTASYON_MALIYET_NOTU = 'Doğrudan gider: enerji, bakım, sarf (amortisman ve kira genel giderde)';
 export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine, personel, vardiya ve tatiller İstasyonlar, Kişiler ve Vardiya sayfalarıyla ortaktır: '
   + 'burada yapılan değişiklik orada da görünür.';
@@ -53,6 +54,8 @@ interface Bag {
   shifts: readonly Vardiya[];
   hafta: (wcId: string) => Hafta | undefined;
   takvimVar: boolean;
+  // İş merkezinin renk sırası (eski ekranda iş merkezi rengi sıradan gelir); bilinmeyen iş merkezi çizgi rengidir.
+  renk: (wcId: string | null) => string | undefined;
   kapasite: (x: Istasyon) => 'makine' | 'insan';
   altSekme: (s: AltSekme) => void;
   ekle: (e: Ekleme) => void;
@@ -84,6 +87,10 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
       return sonuc;
     },
     takvimVar: ek.takvim !== null,
+    renk: (wcId) => {
+      const i = (durum.wcs ?? []).findIndex((w) => w.id === wcId);
+      return i < 0 ? undefined : String(i % RENK_SAYISI);
+    },
     kapasite: (x) => kapasiteKaynagi(ek.istasyonTipi?.[x.id] ?? null, ek.kapasiteKaynagi?.[x.id] ?? null),
     altSekme: sec, ekle: eklemeYaz, sil: silmeYaz,
   };
@@ -141,60 +148,60 @@ function GenelBakis({ b }: { b: Bag }) {
   return (
     <>
       <div className="tc-rr2-seviyeler">
-        <div className="tc-rr2-seviye"><b>1. İş merkezi</b><p>Bölüm ya da hat: kesimhane, boyahane gibi. Ne zaman çalışılacağını belirler: haftalık vardiya düzeni, tatiller ve o bölümde çalışan personel burada.</p></div>
-        <div className="tc-rr2-seviye"><b>2. İstasyon</b><p>Operasyonun yapıldığı yer: fiber lazer, abkant pres gibi. Rota adımında seçilen budur. Saatlik maliyet, verim ve bir makinenin başında kaç operatör gerektiği istasyonda tutulur. Operasyon kataloğundaki her operasyonun varsayılan istasyonu vardır.</p></div>
-        <div className="tc-rr2-seviye"><b>3. Makine</b><p>İstasyondaki tek tek ekipman. Plan makine makine yapılır: her makine aynı anda tek iş yapar, farklı makinelerde aynı anda farklı işler çalışabilir. Bakımdaki ya da arızalı makine iş almaz. Makine tanımlanmamışsa istasyonun "paralel adet" kadar makinesi varsayılır.</p></div>
+        <div className="tc-rr2-seviye"><span className="tc-rr2-seviye-bas"><span className="tc-rr2-no" aria-hidden="true">1</span><b>İş merkezi</b></span><p>Bölüm ya da hat: kesimhane, boyahane gibi. <b>Ne zaman çalışılacağını</b> belirler: haftalık vardiya düzeni, tatiller ve o bölümde çalışan personel burada.</p></div>
+        <div className="tc-rr2-seviye"><span className="tc-rr2-seviye-bas"><span className="tc-rr2-no" aria-hidden="true">2</span><b>İstasyon</b></span><p>Operasyonun yapıldığı yer: fiber lazer, abkant pres gibi. <b>Rota adımında seçilen budur.</b> Saatlik maliyet, verim ve bir makinenin başında kaç operatör gerektiği istasyonda tutulur. Operasyon kataloğundaki her operasyonun varsayılan istasyonu vardır.</p></div>
+        <div className="tc-rr2-seviye"><span className="tc-rr2-seviye-bas"><span className="tc-rr2-no" aria-hidden="true">3</span><b>Makine</b></span><p>İstasyondaki tek tek ekipman. <b>Plan makine makine yapılır:</b> her makine aynı anda tek iş yapar, farklı makinelerde aynı anda farklı işler çalışabilir. Bakımdaki ya da arızalı makine iş almaz. Makine tanımlanmamışsa istasyonun "paralel adet" kadar makinesi varsayılır.</p></div>
       </div>
-      <section className="tc-rr2-grup" aria-label="Planlayıcı bir operasyonu nasıl yerleştirir">
+      <section className="tc-rr2-grup tc-rr2-panel" aria-label="Planlayıcı bir operasyonu nasıl yerleştirir">
         <h3 className="tc-rr2-grup-baslik"><span>Planlayıcı bir operasyonu nasıl yerleştirir</span></h3>
         <ol className="tc-rr2-liste">
-          <li>Rota adımında seçilen istasyonun (ve varsa alternatif istasyonların) aktif makinelerine bakar.</li>
-          <li>Her makine için, önceki işi bittikten sonra ilk boş anı bulur. Bu an, makinenin bağlı olduğu iş merkezinin vardiya saatleri içinde olmalıdır; molalar ve tatiller düşülür.</li>
+          <li>Rota adımında seçilen istasyonun (ve varsa alternatif istasyonların) <b>aktif makinelerine</b> bakar.</li>
+          <li>Her makine için, önceki işi bittikten sonra ilk boş anı bulur. Bu an, makinenin bağlı olduğu <b>iş merkezinin vardiya saatleri</b> içinde olmalıdır; molalar ve tatiller düşülür.</li>
           <li>Personel kısıtı açıksa o gün iş merkezinde vardiyada olan personelin kişi-saati de yetmelidir.</li>
           <li>İşi en erken bitirecek makineyi seçer. Partiyi kendiliğinden makinelere bölmez; bölme yalnız elle yapılır.</li>
-          <li>Süre = hazırlık + (işlem + değişim) × miktar ÷ istasyonun verimi. Maliyet = makine saati × istasyonun saatlik maliyeti.</li>
+          <li>Süre = hazırlık + (işlem + değişim) × miktar ÷ istasyonun verimi; Süreler bölümünde kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır. Maliyet = makine saati × istasyonun saatlik maliyeti.</li>
         </ol>
       </section>
       <h3 className="tc-rr2-grup-baslik"><span>Şu anki kaynakların</span></h3>
       {b.wcs.length === 0 && <DurumKutusu durum="bos" mesaj="İş merkezi yok." />}
-      {b.wcs.map((w) => {
-        const sts = b.stations.filter((x) => x.wcId === w.id);
-        const kisi = b.people.filter((p) => p.wcId === w.id && p.active).length;
-        const hafta = b.hafta(w.id);
-        return (
-          <section key={w.id} className="tc-rr2-grup" aria-label={`${w.code} ${w.name}`}>
-            <h4 className="tc-rr2-grup-baslik">
-              <span>{w.code} {w.name}</span>
-              <Rozet ton="pasif">{b.takvimVar ? `${sayi(Math.round(haftaSaati(hafta, b.shifts)))} sa/hafta vardiya` : 'vardiya bağlı değil'}</Rozet>
-              <Rozet ton="pasif">{`${String(kisi)} personel`}</Rozet>
-              <Dugme simge="clock" onClick={() => b.altSekme('shifts')}>Vardiyalar</Dugme>
-            </h4>
-            {sts.length === 0 && <p className="tc-rr2-not">İstasyon yok.</p>}
-            {sts.map((x) => {
-              const ms = b.machines.filter((m) => m.stationId === x.id);
-              const ops = operasyonlar(x.id);
-              return (
-                <div key={x.id} className="tc-rr2-agac-satir">
-                  <div>
+      <div className="tc-rr2-agac">
+        {b.wcs.map((w) => {
+          const sts = b.stations.filter((x) => x.wcId === w.id);
+          const kisi = b.people.filter((p) => p.wcId === w.id && p.active).length;
+          const hafta = b.hafta(w.id);
+          return (
+            <section key={w.id} className="tc-rr2-agac-im" data-renk={b.renk(w.id)} aria-label={`${w.code} ${w.name}`}>
+              <div className="tc-rr2-agac-bas">
+                <b>{w.code} {w.name}</b>
+                <span>{b.takvimVar ? `${sayi(Math.round(haftaSaati(hafta, b.shifts)))} sa/hafta vardiya` : 'vardiya bağlı değil'}</span>
+                <span>{`${String(kisi)} personel`}</span>
+                <button type="button" className="tc-rr2-bag" onClick={() => b.altSekme('shifts')}>vardiyalar</button>
+              </div>
+              {sts.length === 0 && <p className="tc-rr2-not">İstasyon yok.</p>}
+              {sts.map((x) => {
+                const ms = b.machines.filter((m) => m.stationId === x.id);
+                const ops = operasyonlar(x.id);
+                return (
+                  <div key={x.id} className="tc-rr2-agac-ist">
                     <b>{x.code} {x.name}</b>
-                    <small>{` verim %${sayi(x.eff)}, ${sayi(x.opPer ?? 1)} operatör/makine`}</small>
+                    <small>{`verim %${sayi(x.eff)}, ${sayi(x.opPer ?? 1)} operatör/makine`}</small>
                     <small className="tc-rr2-soluk">{ops.length > 0 ? ops.join(', ') : 'operasyon yok'}</small>
+                    <div className="tc-rr2-satir">
+                      {ms.length > 0
+                        ? ms.map((m) => (
+                          <span key={m.id} title={`${MAKINE_DURUMU[m.status].ad}${b.ek.makineNotu?.[m.id] ? `: ${b.ek.makineNotu[m.id] ?? ''}` : ''}`}>
+                            <Rozet ton={MAKINE_DURUMU[m.status].ton}>{m.code}</Rozet>
+                          </span>
+                        ))
+                        : <span title="Makine tanımlı değil; paralel adetten varsayıldı"><Rozet ton="pasif">{`${String(Math.max(1, x.count))} sanal makine`}</Rozet></span>}
+                    </div>
                   </div>
-                  <div className="tc-rr2-satir">
-                    {ms.length > 0
-                      ? ms.map((m) => (
-                        <span key={m.id} title={`${MAKINE_DURUMU[m.status].ad}${b.ek.makineNotu?.[m.id] ? `: ${b.ek.makineNotu[m.id] ?? ''}` : ''}`}>
-                          <Rozet ton={MAKINE_DURUMU[m.status].ton}>{m.code}</Rozet>
-                        </span>
-                      ))
-                      : <span title="Makine tanımlı değil; paralel adetten varsayıldı"><Rozet ton="pasif">{`${String(Math.max(1, x.count))} sanal makine`}</Rozet></span>}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        );
-      })}
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
     </>
   );
 }
@@ -218,21 +225,27 @@ function VardiyaMatrisi({ b }: { b: Bag }) {
     <div className="tc-rr2-kaydir">
       <table className="tc-rr2-matris" aria-label="Haftalık vardiya matrisi">
         <thead>
-          <tr><th scope="col">İş merkezi / vardiya</th>{GUNLER.map(([g, ad]) => <th key={g} scope="col" abbr={GUN_ADI[g]}>{ad}</th>)}<th scope="col">Hafta</th></tr>
+          <tr>
+            <th scope="col">İş merkezi / vardiya</th>
+            {GUNLER.map(([g, ad]) => <th key={g} scope="col" abbr={GUN_ADI[g]} data-tatil={g === 0 || g === 6 || undefined}>{ad}</th>)}
+            <th scope="col">Hafta</th>
+          </tr>
         </thead>
         <tbody>
           {b.wcs.map((w) => {
             const hafta = b.hafta(w.id);
             return [
-              <tr key={`${w.id}-b`} className="tc-rr2-matris-ust"><th colSpan={9} scope="rowgroup">{w.code} {w.name}</th></tr>,
+              <tr key={`${w.id}-b`} className="tc-rr2-matris-ust" data-renk={b.renk(w.id)}>
+                <th colSpan={9} scope="rowgroup"><span className="tc-rr2-nokta" aria-hidden="true" /><b>{w.code}</b> {w.name}</th>
+              </tr>,
               ...b.shifts.map((v) => (
-                <tr key={`${w.id}-${v.id}`}>
+                <tr key={`${w.id}-${v.id}`} data-renk={b.renk(w.id)}>
                   <th scope="row">{v.name} <small>{v.start}–{v.end}, net {saat(v.netDakika / 60)} sa</small></th>
                   {GUNLER.map(([g]) => {
                     const acik = (hafta?.[g] ?? []).includes(v.id);
                     return (
-                      <td key={g} data-acik={acik || undefined} aria-label={`${w.code} ${GUN_ADI[g]} ${v.name}: ${acik ? 'açık' : 'kapalı'}`}>
-                        {acik ? saat(v.netDakika / 60) : ''}
+                      <td key={g} aria-label={`${w.code} ${GUN_ADI[g]} ${v.name}: ${acik ? 'açık' : 'kapalı'}`}>
+                        <span className="tc-rr2-hucre" data-acik={acik || undefined}>{acik ? saat(v.netDakika / 60) : ''}</span>
                       </td>
                     );
                   })}
@@ -265,7 +278,7 @@ function Vardiyalar({ b }: { b: Bag }) {
   const tatiller = [...b.durum.cal.holidays].sort();
   return (
     <>
-      <section className="tc-rr2-grup" aria-label="Haftalık vardiya matrisi">
+      <section className="tc-rr2-grup tc-rr2-panel" aria-label="Haftalık vardiya matrisi">
         <h3 className="tc-rr2-grup-baslik"><span>Haftalık vardiya matrisi</span><SahibindeDuzenle sahip="vardiya" /></h3>
         <VardiyaMatrisi b={b} />
         <p className="tc-rr2-not">
@@ -273,20 +286,21 @@ function Vardiyalar({ b }: { b: Bag }) {
           Vardiya sayfasında değişir.
         </p>
       </section>
-      <section className="tc-rr2-grup" aria-label="Vardiya saatleri ve molalar">
+      <section className="tc-rr2-grup tc-rr2-panel" aria-label="Vardiya saatleri ve molalar">
         <h3 className="tc-rr2-grup-baslik"><span>Vardiya saatleri ve molalar</span></h3>
         <p className="tc-rr2-not">Kapasite molalar düşülmüş net süreyle hesaplanır. Bitiş başlangıçtan önceyse vardiya gece yarısını geçer ve başladığı güne sayılır.</p>
         {b.shifts.length === 0 && <DurumKutusu durum="bos" mesaj="Vardiya yok." />}
-        <div className="tc-rr2-kartlar">
-          {b.shifts.map((v) => {
+        <div className="tc-rr2-vardiyalar">
+          {b.shifts.map((v, sira) => {
             const brut = aralikDakika(v.start, v.end);
             const mola = v.breaks.reduce((t, m) => t + (aralikDakika(m.start, m.end) ?? 0), 0);
             return (
-              <article key={v.id} className="tc-rr2-kart-kutu" aria-label={v.name}>
+              <article key={v.id} className="tc-rr2-kart-kutu tc-rr2-vardiya" data-renk={String((sira + 5) % RENK_SAYISI)} aria-label={v.name}>
                 <h4>{v.name} <small>{v.start}–{v.end}</small></h4>
                 <p><b>{sayi(Math.round((v.netDakika / 60) * 100) / 100)} sa net</b>{' '}
                   <small>{brut === null ? '' : `${sayi(Math.round((brut / 60) * 100) / 100)} sa brüt, `}{sayi(mola)} dk mola{geceyiGecer(v.start, v.end) ? ', gece yarısını geçer' : ''}</small>
                 </p>
+                <VardiyaCubugu v={v} mola={mola} />
                 {v.breaks.length === 0
                   ? <p className="tc-rr2-soluk">Bu vardiyada mola yok.</p>
                   : <ul className="tc-rr2-liste">{v.breaks.map((m) => <li key={`${m.start}-${m.end}`}>Mola {m.start}–{m.end} <small>{sayi(aralikDakika(m.start, m.end))} dk</small></li>)}</ul>}
@@ -295,7 +309,7 @@ function Vardiyalar({ b }: { b: Bag }) {
           })}
         </div>
       </section>
-      <section className="tc-rr2-grup" aria-label="Tatiller ve kapalı günler">
+      <section className="tc-rr2-grup tc-rr2-panel" aria-label="Tatiller ve kapalı günler">
         <h3 className="tc-rr2-grup-baslik"><span>Tatiller ve kapalı günler ({tatiller.length})</span></h3>
         {tatiller.length === 0
           ? <p className="tc-rr2-soluk">Tatil eklenmedi.</p>
@@ -303,6 +317,24 @@ function Vardiyalar({ b }: { b: Bag }) {
         <p className="tc-rr2-not">Ramazan ve Kurban Bayramı tarihleri her yıl değiştiği için onlar Vardiya sayfasında tarih seçilerek eklenir.</p>
       </section>
     </>
+  );
+}
+
+// 24 saatlik şerit: vardiya renkli, molalar taralı; yalnız gösterir (vardiya Vardiya sayfasında değişir).
+const SAAT_IZLERI = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+function VardiyaCubugu({ v, mola }: { v: Vardiya; mola: number }) {
+  return (
+    <div className="tc-rr2-cubuk">
+      <svg viewBox="0 0 1440 24" preserveAspectRatio="none" role="img" aria-label={`${v.name}: ${v.start}–${v.end}, ${String(mola)} dakika mola`}>
+        <rect className="tc-rr2-cubuk-zemin" x={0} y={0} width={1440} height={24} />
+        {SAAT_IZLERI.map((h) => <line key={h} className="tc-rr2-cubuk-iz" x1={h * 60} x2={h * 60} y1={0} y2={24} />)}
+        {gunParcalari(v.start, v.end).map(([a, z]) => <rect key={`v${String(a)}`} className="tc-rr2-cubuk-vardiya" x={a} y={4} width={z - a} height={16} />)}
+        {v.breaks.flatMap((m) => gunParcalari(m.start, m.end)).map(([a, z]) => (
+          <rect key={`m${String(a)}`} className="tc-rr2-cubuk-mola" x={a} y={2} width={Math.max(4, z - a)} height={20} />
+        ))}
+      </svg>
+      <div className="tc-rr2-cubuk-cetvel" aria-hidden="true">{SAAT_IZLERI.map((h) => <span key={h}>{String(h % 24).padStart(2, '0')}</span>)}</div>
+    </div>
   );
 }
 
@@ -330,7 +362,7 @@ function IsMerkezleri({ b }: { b: Bag }) {
       <div className="tc-rr2-arac"><SahibindeDuzenle sahip="istasyon" metin="Verim ve operatörü İstasyonlar'da düzenle" /></div>
       {b.wcs.length === 0 && <DurumKutusu durum="bos" mesaj="İş merkezi yok. Kesimhane, kaynakhane, montaj gibi bölümlerini ekle." />}
       {b.wcs.map((w) => (
-        <section key={w.id} className="tc-rr2-grup" aria-label={`${w.code} ${w.name}`}>
+        <section key={w.id} className="tc-rr2-grup tc-rr2-panel tc-rr2-im" data-renk={b.renk(w.id)} aria-label={`${w.code} ${w.name}`}>
           <div className="tc-rr2-baslik-satiri">
             <span className="tc-rr2-alan"><span>Kod</span>
               {yaz ? <SatirGirdisi deger={w.code} etiket="İş merkezi kodu" kaydet={(v) => kaydet('is-merkezi-guncelle', { id: w.id }, 'kod', v, 'Kod')} /> : <b>{w.code}</b>}
@@ -343,7 +375,7 @@ function IsMerkezleri({ b }: { b: Bag }) {
             </span>
             {yaz && <Dugme simge="trash" aria-label={`${w.code} iş merkezini sil`} onClick={() => b.sil({ tur: 'wc', id: w.id, ad: `${w.code} ${w.name}` })} />}
           </div>
-          <IstasyonTablosu b={b} wc={w} />
+          <div className="tc-rr2-kutu"><IstasyonTablosu b={b} wc={w} /></div>
           {yaz && <div className="tc-rr2-arac"><Dugme simge="plus" onClick={() => b.ekle({ tur: 'station', wcId: w.id })}>İstasyon</Dugme></div>}
         </section>
       ))}
@@ -467,12 +499,12 @@ function Makineler({ b }: { b: Bag }) {
         const sts = b.stations.filter((x) => x.wcId === w.id);
         if (sts.length === 0) return null;
         return (
-          <section key={w.id} className="tc-rr2-grup" aria-label={`${w.code} ${w.name} makineleri`}>
+          <section key={w.id} className="tc-rr2-grup tc-rr2-panel tc-rr2-im" data-renk={b.renk(w.id)} aria-label={`${w.code} ${w.name} makineleri`}>
             <h3 className="tc-rr2-grup-baslik"><span>{w.code} {w.name}</span></h3>
             {sts.map((x) => {
               const ms = b.machines.filter((m) => m.stationId === x.id);
               return (
-                <div key={x.id} className="tc-rr2-alt-grup">
+                <div key={x.id} className="tc-rr2-mgrup">
                   <h4 className="tc-rr2-grup-baslik">
                     <span>{x.code} {x.name}</span>
                     <small className="tc-rr2-soluk">
@@ -480,7 +512,7 @@ function Makineler({ b }: { b: Bag }) {
                     </small>
                     {yaz && <Dugme simge="plus" onClick={() => b.ekle({ tur: 'machine', istasyon: x })}>Makine</Dugme>}
                   </h4>
-                  {ms.length > 0 && <Tablo<Makine> etiket={`${x.code} makineleri`} sutunlar={sutunlar} satirlar={ms} satirAnahtari={(m) => m.id} />}
+                  {ms.length > 0 && <div className="tc-rr2-kutu"><Tablo<Makine> etiket={`${x.code} makineleri`} sutunlar={sutunlar} satirlar={ms} satirAnahtari={(m) => m.id} /></div>}
                 </div>
               );
             })}
@@ -505,7 +537,7 @@ function Personel({ b }: { b: Bag }) {
         Personel bir iş merkezine ve vardiyaya bağlıdır; yetkin olduğu istasyonları işaretle. Plan, istasyonların çalıştığı saatleri operatör ihtiyacıyla çarpar ve o gün
         vardiyada olan personelin net saatiyle karşılaştırır. Saatlik ücret girersen işçilik maliyeti emir maliyetine eklenir.
       </p>
-      <section className="tc-rr2-grup" aria-label="Vardiya başına personel">
+      <section className="tc-rr2-grup tc-rr2-panel" aria-label="Vardiya başına personel">
         <h3 className="tc-rr2-grup-baslik"><span>Vardiya başına personel</span><SahibindeDuzenle sahip="personel" /></h3>
         {b.takvimVar
           ? (
@@ -515,12 +547,19 @@ function Personel({ b }: { b: Bag }) {
                 <tbody>
                   {b.wcs.map((w) => {
                     const kisiler = b.people.filter((p) => p.wcId === w.id && p.active);
+                    const hafta = b.hafta(w.id);
                     return (
-                      <tr key={w.id}>
-                        <th scope="row">{w.code} {w.name}</th>
+                      <tr key={w.id} data-renk={b.renk(w.id)}>
+                        <th scope="row"><span className="tc-rr2-nokta" aria-hidden="true" /> {w.code} {w.name}</th>
                         {b.shifts.map((v) => {
                           const n = kisiler.filter((p) => vardiyasi(p) === v.id);
-                          return <td key={v.id} title={n.map((p) => p.name).join(', ')}>{n.length > 0 ? String(n.length) : YOK}</td>;
+                          // Vardiya bu iş merkezinde çalışıyor ama kimse atanmamışsa sıfır gerçek bir sayıdır ve eksik olarak işaretlenir.
+                          const kullanilir = GUNLER.some(([g]) => (hafta?.[g] ?? []).includes(v.id));
+                          return (
+                            <td key={v.id} title={n.map((p) => p.name).join(', ')} data-eksik={(kullanilir && n.length === 0) || undefined}>
+                              {n.length > 0 ? <span className="tc-rr2-sayac">{n.length}</span> : kullanilir ? '0' : YOK}
+                            </td>
+                          );
                         })}
                         <td><b>{kisiler.length}</b></td>
                       </tr>
@@ -539,10 +578,10 @@ function Personel({ b }: { b: Bag }) {
       </section>
       {b.yetki.kisiYaz && <div className="tc-rr2-arac"><Dugme simge="user-plus" tur="birincil" onClick={() => b.ekle({ tur: 'person' })}>Personel</Dugme></div>}
       {gruplar.map(({ w, liste }) => (
-        <section key={w?.id ?? 'yok'} className="tc-rr2-grup" aria-label={w ? `${w.code} ${w.name} personeli` : 'İş merkezi atanmamış personel'}>
+        <section key={w?.id ?? 'yok'} className="tc-rr2-grup tc-rr2-panel tc-rr2-im" data-renk={b.renk(w?.id ?? null)} aria-label={w ? `${w.code} ${w.name} personeli` : 'İş merkezi atanmamış personel'}>
           <h3 className="tc-rr2-grup-baslik"><span>{w ? `${w.code} ${w.name}` : 'İş merkezi atanmamış'}</span><Rozet ton="pasif">{`${String(liste.length)} kişi`}</Rozet></h3>
           {liste.length === 0 && <p className="tc-rr2-soluk">Bu iş merkezinde personel yok.</p>}
-          <div className="tc-rr2-kartlar">{liste.map((k) => <KisiKarti key={k.id} k={k} w={w} b={b} />)}</div>
+          <div className="tc-rr2-kisiler">{liste.map((k) => <KisiKarti key={k.id} k={k} w={w} b={b} />)}</div>
         </section>
       ))}
     </>
@@ -562,9 +601,9 @@ function KisiKarti({ k, w, b }: { k: Kisi; w: IsMerkezi | null; b: Bag }) {
   const vardiya = vardiyaId ? b.shifts.find((v) => v.id === vardiyaId) : undefined;
   const yetkinlik = (istasyonIdleri: number[]) => { void calistir('yetkinlik-belirle', { kisiId: k.id, istasyonIdleri }); };
   return (
-    <article className="tc-rr2-kart-kutu" data-pasif={!k.active || undefined} aria-label={k.name}>
+    <article className="tc-rr2-kisi-satir" data-pasif={!k.active || undefined} aria-label={k.name}>
       <div className="tc-rr2-kisi">
-        <span className="tc-rr2-avatar" aria-hidden="true">{basHarfler(k.name)}</span>
+        <span className="tc-rr2-avatar" data-renk={b.renk(w?.id ?? null)} aria-hidden="true">{basHarfler(k.name)}</span>
         <div className="tc-rr2-kisi-alanlar">
           <span className="tc-rr2-alan"><span>Sicil</span>
             {yaz ? <SatirGirdisi deger={k.code ?? ''} etiket={`${k.name} sicil`} kaydet={async (v) => (await calistir('kisi-duzenle', { id: k.id, sicilNo: v.trim() || null })) === null} /> : <b>{k.code ?? YOK}</b>}

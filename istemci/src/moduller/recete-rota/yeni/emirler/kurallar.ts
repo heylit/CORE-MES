@@ -452,17 +452,22 @@ export function surectekiMalzeme(d: Pick<DurumCevabi, 'emirler' | 'routes' | 'ro
   const satir = new Map<string, SurecSatiri & { emirMiktari: Map<string, number> }>();
   for (const o of e.orders.filter((x) => x.status === 'serbest' || x.status === 'uretimde')) {
     const rota = o.rotasiz ? null : (d.routeRevs?.find((r) => r.id === o.rev)?.data ?? d.routes?.[o.itemId]) ?? null;
-    const adimlar = o.rotasiz ? [...(o.adimlar ?? [])].sort((a, b) => a.seq - b.seq).map((a) => a.opNo) : [...(rota?.steps ?? [])].sort((a, b) => a.seq - b.seq).map((a) => a.opNo);
+    const adimlar: { opNo: number; bagimsiz: boolean }[] = o.rotasiz
+      ? [...(o.adimlar ?? [])].sort((a, b) => a.seq - b.seq).map((a) => ({ opNo: a.opNo, bagimsiz: false }))
+      : [...(rota?.steps ?? [])].sort((a, b) => a.seq - b.seq).map((a) => ({ opNo: a.opNo, bagimsiz: a.dep === 'bagimsiz' }));
     const ilk = o.kol ? o.kol.n + 1 : 1;
     const son = o.kol ? o.kol.m - 1 : adimlar.length;
     const anahtar = (j: number) => `${o.id}|root|${String(o.kol ? j - o.kol.n : j)}`;
     for (let j = ilk; j < son; j++) {
-      const opNo = adimlar[j - 1];
-      const sonrakiOp = adimlar[j];
+      const opNo = adimlar[j - 1]?.opNo;
+      const sonrakiOp = adimlar[j]?.opNo;
       if (opNo === undefined || sonrakiOp === undefined) continue;
+      // Çıktıyı tüketen sonraki adım bağımsız olmayan ilk adımdır (bağımsız adım önceki adımın parçasını beklemez; eski ekranın kuralı).
+      let t = j + 1;
+      while (t <= son && adimlar[t - 1]?.bagimsiz) t++;
       const biten = e.opStatus[anahtar(j)] === 'tamam';
       const uretilen = biten ? d.adimAdetleri?.[`${o.no}|${String(sonrakiOp)}`] ?? o.qty : e.opProg[anahtar(j)] ?? 0;
-      const tuketilen = e.opStatus[anahtar(j + 1)] === 'tamam' ? uretilen : e.opProg[anahtar(j + 1)] ?? 0;
+      const tuketilen = t > son ? 0 : e.opStatus[anahtar(t)] === 'tamam' ? uretilen : e.opProg[anahtar(t)] ?? 0;
       const kalan = uretilen - tuketilen;
       if (!(kalan > 1e-6)) continue;
       const k = `${o.itemId}|${String(opNo)}`;

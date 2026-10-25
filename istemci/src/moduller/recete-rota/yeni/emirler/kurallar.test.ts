@@ -274,4 +274,14 @@ describe('tarih ve stok', () => {
     expect(s.map((x) => [x.urun, x.opNo, x.miktar])).toEqual([['1', 10, 5], ['1', 20, 4]]);
     expect(s[0]!.emirler).toBe('UE-1: 5');
   });
+
+  it('süreçteki malzeme: bağımsız adım önceki çıktıyı tüketmez, sonraki bağımlı adım tüketir', () => {
+    const o = emir('1', { qty: 10, rev: null });
+    const d = durum([o], {
+      routes: { 1: { base: null, steps: [adim(10), adim(20, { dep: 'bagimsiz' }), adim(30), adim(40)] } },
+      emirler: { orders: [o], opStatus: { '1|root|1': 'tamam' }, opProg: { '1|root|2': 7, '1|root|3': 3 } },
+      adimAdetleri: { 'UE-1|20': 10 },
+    });
+    expect(surectekiMalzeme(d).filter((x) => x.opNo === 10).map((x) => x.miktar)).toEqual([7]);
+  });
 });

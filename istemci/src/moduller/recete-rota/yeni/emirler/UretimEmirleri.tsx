@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
-import { miktar, tarih } from '../bicim.ts';
+import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
@@ -9,10 +9,11 @@ import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { DURUM_TONU, planMetni, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, uretilirMi,
+  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
+const TUR_KISA: Readonly<Record<string, string>> = { ham: 'HM', yari: 'YM', mamul: 'MM' };
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
@@ -37,14 +38,19 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   }
 
   const turUyar = (o: Emir) => turSuzgeci === 'tum' || o.tur === turSuzgeci;
-  const turler = [...new Set(emirler.map((o) => o.tur))];
+  const turler = Object.keys(EMIR_TURU_ADLARI);
+  const sira = new Map(planSirasi(d).map((o, i) => [o.id, i]));
   const satirlar = emirAgaci(emirler, (o) => turUyar(o) && durumUyar(o, durumSuzgeci));
 
   return (
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
       <p className="tc-rr3-ipucu">
+        Serbest ve üretimdeki emirler birlikte planlanır: önce öncelik, sonra teslim tarihi sırasıyla istasyonlara yerleştirilir ve stok emirler
+        arasında bu sırayla paylaştırılır. Taslak emirler plana girmez.
+      </p>
+      <p className="tc-rr3-ipucu">
         Emirler Üretim Emirleri sayfasıyla ortaktır; terminalde başlatılan, sayılan ve biten iş burada ilerleme olarak görünür. Emir yürürlükteki
-        rotadan açılır. Serbest ve üretimdeki emirleri plan motoru öncelik ve teslim sırasıyla yerleştirir; taslak emir plana girmez.
+        rotadan açılır.
       </p>
       {komut.uyari && (
         <div className="tc-rr3-uyari-kutu" role="alert">
@@ -85,11 +91,11 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
         : (
           <ul className="tc-rr3-liste" aria-label="Üretim emirleri">
             <li className="tc-rr3-bas" aria-hidden="true">
-              <span>Öncelik / No</span><span>Ürün</span><span>Miktar</span><span>Teslim</span><span>Plan</span><span>İlerleme</span><span>Durum</span>
+              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan</span><span>İlerleme</span><span>Durum</span>
             </li>
             {satirlar.map((s) => (
               <EmirSatiri
-                key={s.emir.id} durum={d} emir={s.emir} derinlik={s.derinlik} acik={acik === s.emir.id}
+                key={s.emir.id} durum={d} emir={s.emir} derinlik={s.derinlik} acik={acik === s.emir.id} sira={sira.get(s.emir.id) ?? null}
                 ac={() => { setAcik(acik === s.emir.id ? null : s.emir.id); }}
               >
                 <EmirAyrintisi durum={d} emir={s.emir} yetki={yetki} git={git} komut={komut} emirAc={setAcik} />
@@ -101,31 +107,45 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   );
 }
 
-function EmirSatiri({ durum: d, emir: o, derinlik, acik, ac, children }: {
-  durum: RrDurumu; emir: Emir; derinlik: number; acik: boolean; ac: () => void; children: React.ReactNode;
+// Sol şerit emrin plan sırasından renk alır (plandaki emirler ayırt edilsin); plan dışı emirde şerit çizgi rengidir.
+const SERIT_SAYISI = 6;
+
+function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
+  durum: RrDurumu; emir: Emir; derinlik: number; acik: boolean; sira: number | null; ac: () => void; children: React.ReactNode;
 }) {
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const il = ilerleme(d, o);
-  const plan = planMetni(planOzeti(d, d.planYerlesim, o));
+  const ozet = planOzeti(d, d.planYerlesim, o);
+  const plan = planMetni(ozet);
+  const gecikiyor = ozet.tur === 'plan' && ozet.gecikiyor;
   const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
   const rev = o.rev === null ? null : d.routeRevs?.find((r) => r.id === o.rev) ?? null;
+  const revEski = rev !== null && rev.status !== 'yururlukte';
   const yuzde = il.toplam ? Math.round((il.biten / il.toplam) * 100) : o.status === 'tamam' ? 100 : 0;
   return (
-    <li className="tc-rr3-satir-kap" data-acik={acik ? '' : undefined} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}>
+    <li
+      className="tc-rr3-satir-kap" data-acik={acik ? '' : undefined} data-gec={gecikiyor ? '' : undefined}
+      data-serit={sira === null ? undefined : String((sira * 3 + 1) % SERIT_SAYISI)} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
+    >
       <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
         <span className="tc-rr3-no">
           <Rozet ton={o.priority === 1 ? 'hata' : o.priority === 2 ? 'uyari' : 'pasif'}>{ONCELIK_ADI[o.priority] ?? ''}</Rozet>
           <b className="mono">{o.no}</b>
-          <small>{turAdi(o.tur)}</small>
-          {ana && <small>{o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · {ana.no}</small>}
-          {rev && <small>Rev {rev.no}</small>}
+          <span className="tc-rr3-etiketler">
+            <span className="tc-rr3-tur">{turAdi(o.tur)}</span>
+            {ana && <small>{o.kol ? `Kol ${String(o.kol.n)}→${String(o.kol.m)}` : 'Alt emir'} · {ana.no}</small>}
+            {rev && <Rozet ton={revEski ? 'uyari' : 'tamam'}>Rev {rev.no} {revEski ? 'eski rota' : 'sabit'}</Rozet>}
+          </span>
         </span>
         <span className="tc-rr3-urun">
           {derinlik > 0 && <Simge ad={o.kol ? 'route' : 'layers'} boyut="k" />}
-          {urun ? <><b>{urun.code}</b> <small>{urun.name}</small></> : <small>Ürün okunamadı</small>}
-          {o.note && <small className="tc-rr3-not">{o.note}</small>}
+          {urun && derinlik === 0 && <span className="tc-rr3-slot" data-tur={urun.type}>{TUR_KISA[urun.type] ?? ''}</span>}
+          <span className="tc-rr3-urun-ad">
+            {urun ? <><b>{urun.code}</b> <small>{urun.name}</small></> : <small>Ürün okunamadı</small>}
+            {o.note && <small className="tc-rr3-not">{o.note}</small>}
+          </span>
         </span>
-        <span className="tc-rr3-sag" data-baslik="Miktar">{miktar(o.qty, urun?.unit)}</span>
+        <span className="tc-rr3-sag" data-baslik="Miktar"><b>{sayi(o.qty)}</b> <small>{urun?.unit ?? ''}</small></span>
         <span data-baslik="Teslim">{tarih(o.due)}</span>
         <span data-baslik="Plan">
           {plan.ton ? <Rozet ton={plan.ton}>{plan.metin}</Rozet> : plan.metin}
