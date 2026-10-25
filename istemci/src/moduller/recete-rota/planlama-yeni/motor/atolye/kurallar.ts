@@ -1,3 +1,4 @@
+import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
@@ -391,4 +392,93 @@ export function malzemeDetay(cx: Derleme): Record<string, MalzemeSatiri[]> {
     });
   }
   return out;
+}
+
+// --- Onay ve canlı (zz22 pa*): plan modülünün senaryolarından (221 c). Eski sayfanın planları karşılaştırması (paFark, paKontrol) canlı ve
+// senaryo planının işlerini isterdi; sunucu senaryosu yerine göstergeleri, değişiklik listesini ve canlıya göre etkisini verir ---
+export type SunucuSenaryosu = SenaryolarCevabi['senaryolar'][number];
+export type Gostergeler = SenaryolarCevabi['canli'];
+export const PA_ADIM = [['hazirla', 'Hazırla', 'edit'], ['incele', 'İncele', 'eye'], ['onaya', 'Onaya gönder', 'flag'], ['canli', 'Onayla, canlıya al', 'check']] as const;
+export type PaAdimi = (typeof PA_ADIM)[number][0] | 'bitti';
+export const PA_NOT: Record<(typeof PA_ADIM)[number][0], string> = {
+  hazirla: 'Planı kurun ya da değiştirin.', incele: 'Farkı ve kontrolleri inceleyin.', onaya: 'Planlamacı onaya gönderir.', canli: 'Müdür onaylar; canlı ancak o zaman değişir.',
+};
+export const PA_DURUM: Record<SunucuSenaryosu['durum'] | 'calisma', [string, 'bilgi' | 'tamam' | 'uyari' | 'pasif']> = {
+  calisma: ['Çalışma', 'bilgi'], onayda: ['Onay bekliyor', 'uyari'], acik: ['Deneme', 'bilgi'], canliya_alindi: ['Önceki canlı', 'pasif'], vazgecildi: ['Vazgeçildi', 'pasif'],
+};
+
+// Akışın şimdiki adımı (paAkis): plan yoksa hazırla, onay bekleyen varsa canlıya al, çalışma canlıdan farklıysa incele ya da onaya gönder.
+export function paAdim(plan: boolean, onayda: number, farkli: boolean, seciliSenaryo: boolean): PaAdimi {
+  if (!plan) return 'hazirla';
+  if (onayda) return 'canli';
+  if (farkli) return seciliSenaryo ? 'incele' : 'onaya';
+  return 'bitti';
+}
+
+// İncelenecek planlar (paAdaylar): açık ve onaydaki senaryolar, yeniden eskiye; canlıya alınanlar Geçmiş planlardadır.
+export const paAdaylar = (l: SunucuSenaryosu[]): SunucuSenaryosu[] => l.filter((s) => s.durum === 'acik' || s.durum === 'onayda');
+export const paGecmisler = (l: SunucuSenaryosu[]): SunucuSenaryosu[] => l.filter((s) => s.durum === 'canliya_alindi');
+export const paOnayda = (l: SunucuSenaryosu[]): SunucuSenaryosu[] => l.filter((s) => s.durum === 'onayda');
+// Seçili plan (sPlanAtolye secId): seçilen aday yoksa en son onaya gönderilen, o da yoksa çalışma.
+export function paSecim(l: SunucuSenaryosu[], sec: number | 'calisma' | null, calismaVar: boolean): number | 'calisma' | null {
+  const a = paAdaylar(l);
+  if (sec === 'calisma' && calismaVar) return 'calisma';
+  if (typeof sec === 'number' && a.some((s) => s.id === sec)) return sec;
+  const o = paOnayda(l);
+  return o[0] ? o[0].id : calismaVar ? 'calisma' : null;
+}
+
+export const yerlesmeyen = (g: Gostergeler | null): number | null => (g ? Math.max(0, g.isEmriSayisi - g.yerlesen) : null);
+
+// Kontrol (paKontrol): sunucu senaryosunun bildikleriyle. ok yeşil, uyari sarı; kırmızı maddeleri (başlamış ya da sabit iş oynadı, ek mesai
+// bütçesi) sunucu canlıya almada kendisi denetler.
+export type KontrolMaddesi = ['ok' | 'uyari' | 'red', string];
+export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSurum: number | null): KontrolMaddesi[] {
+  const K: KontrolMaddesi[] = [];
+  if (s.canliDegisti) K.push(['uyari', `Canlı plan bu plan hazırlandıktan sonra değişti (sürüm ${s.tabanPlanSurumu} → ${canliSurum ?? '—'}); aradaki canlı değişiklikleri bu planda yok`]);
+  const g = s.gostergeler;
+  if (!g) K.push(['uyari', 'Plan göstergeleri hesaplanmadı']);
+  else {
+    const y = yerlesmeyen(g) ?? 0;
+    K.push(y ? ['uyari', `${y} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti']);
+    if (canli) {
+      const d = g.geciken - canli.geciken;
+      K.push(d > 0 ? ['uyari', `Geciken sipariş canlıya göre ${d} artıyor`] : ['ok', d < 0 ? `Geciken sipariş canlıya göre ${-d} azalıyor` : 'Geciken sipariş artmıyor']);
+    } else K.push(['ok', 'İlk yayın: henüz canlı plan yok']);
+  }
+  for (const u of s.etki?.yeniUyarilar ?? []) K.push(['uyari', u]);
+  for (const b of s.bekleyenler) K.push(['uyari', `Canlıya alınamaz, bekliyor: ${b}`]);
+  if (!s.degisiklikler.length) K.push(['uyari', 'Canlı plandan farkı yok']);
+  return K;
+}
+export const paRedVar = (K: KontrolMaddesi[]): boolean => K.some((k) => k[0] === 'red');
+
+// Sunucu zamanı (ISO) ve saat farkı.
+export function zamanYaz(z: string | null | undefined): string {
+  if (!z) return '—';
+  const d = new Date(z);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+export function saatFarki(a: string | null, b: string | null): number | null {
+  if (!a || !b) return null;
+  const x = Date.parse(a), y = Date.parse(b);
+  return Number.isNaN(x) || Number.isNaN(y) ? null : (y - x) / 3_600_000;
+}
+// İki değerin farkı (fark): küçük fark yazılmaz; iyi ya da kötü yönü küçükİyi'ye göre.
+export function farkKur(a: number | null | undefined, b: number | null | undefined, basamak = 1, kucukIyi = true): { metin: string; iyi: boolean } | null {
+  if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a - b) < (basamak ? 0.05 : 0.5)) return null;
+  return { metin: `${a > b ? '+' : '−'}${Math.abs(a - b).toLocaleString('tr-TR', { maximumFractionDigits: basamak, minimumFractionDigits: basamak })}`, iyi: (a < b) === kucukIyi };
+}
+
+// Bitişi planlar arasında değişen emirler (paKarsilastir): canlıdaki bitiş ve her senaryodaki bitiş (etkide yoksa canlıdakiyle aynıdır); en çok
+// değişen 15. Bitişi olmayan (yerleşmeyen) emir en başa gelir.
+export function paEmirFarki(l: SunucuSenaryosu[]): { emirNo: string; canli: string | null; senaryo: (string | null)[] }[] {
+  const canli = new Map<string, string | null>();
+  for (const s of l) for (const e of s.etki?.tarihiDegisenEmirler ?? []) canli.set(e.emirNo, e.canli);
+  return [...canli.entries()].map(([emirNo, c]) => {
+    const senaryo = l.map((s) => { const e = s.etki?.tarihiDegisenEmirler.find((x) => x.emirNo === emirNo); return e ? e.senaryo : c; });
+    const t = [c, ...senaryo].map((v) => (v ? Date.parse(v) : Number.NaN));
+    const g = t.filter((v) => !Number.isNaN(v));
+    return { emirNo, canli: c, senaryo, yay: g.length < t.length ? 1e9 : (Math.max(...g) - Math.min(...g)) / 3_600_000 };
+  }).filter((x) => x.yay > 0.5).sort((a, b) => b.yay - a.yay).slice(0, 15).map(({ emirNo, canli: c, senaryo }) => ({ emirNo, canli: c, senaryo }));
 }
