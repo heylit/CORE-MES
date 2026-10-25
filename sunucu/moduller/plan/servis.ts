@@ -1984,20 +1984,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   }), k.id);
   await s.onayKaydiEkle(db, id, 'canliya_al', k.id, null, dortGozsuz);
   await s.senaryoKapat(db, id, 'canliya_alindi', k.id);
-  await kardesleriKapat(db, k, id, x.tabanPlanSurumu);
   return { ...(await senaryolar(db, k)), ...(motorFarki === undefined ? {} : { motorFarki }) };
-}
-
-// 502 a: aynı tabandan açılmış öbür açık ve onaydaki taslaklar canlıya alanın adına kapanır; ekranın kapatma yoluyla aynı kayıtlar:
-// onaydaki önce onaydan çekilir (onay kaydı), sonra vazgeçilir. Kalsalardı Arkon'da sıraları onay bekler görünürdü.
-async function kardesleriKapat(db: Db, k: Kullanici, id: number, taban: number): Promise<void> {
-  for (const t of await s.kardesTaslaklar(db, id, taban)) {
-    if (t.durum === 'onayda') {
-      await s.senaryoDurumYaz(db, t.id, 'onayda', 'acik');
-      await s.onayKaydiEkle(db, t.id, 'onaydan_cek', k.id, null);
-    }
-    await s.senaryoKapat(db, t.id, 'vazgecildi', k.id);
-  }
 }
 
 interface AcilVeri { malzemeNo: number; adet: number; teslim: string; revizyonId: number; siparisId?: number; uretimEmriId?: number }

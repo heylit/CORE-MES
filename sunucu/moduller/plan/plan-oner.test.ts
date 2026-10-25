@@ -319,9 +319,7 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     s = l.senaryolar.find((x) => x.id === s.id)!;
     assert.equal(s.degisiklikler.length, 0);
     // Canlı değişir (başka taslak canlıya alınır): onaysız canlıya alma reddedilir, yetkisiz rol reddedilir.
-    // Aynı tabandan açılmış taslak 502 a ile kapanır; burada 502'den önce eski tabandan açılıp açık kalmış taslak benzetilir.
     const baska = await taslaktaOner();
-    await ortam!.sahip.tx((db) => db.sorgu('UPDATE plan_senaryosu SET taban_plan_surumu = taban_plan_surumu - 1 WHERE id = $1', [s.id]));
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${baska.taslak!.id}/canliya-al`, { surum: await gonder(baska.taslak!.id, baska.taslak!.surum), cakismalariKabul: true });
     l = await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar');
     s = l.senaryolar.find((x) => x.id === s.id)!;
