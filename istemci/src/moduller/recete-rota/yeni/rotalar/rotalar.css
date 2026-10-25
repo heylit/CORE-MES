@@ -268,8 +268,10 @@
 .tc-rr1-lg-out { background: var(--run); }
 .tc-rr1-copkutu {
   position: absolute; left: var(--b-3); top: var(--b-3); z-index: 2; display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma);
-  padding: 0 var(--b-3); font-size: var(--yazi-xs); color: var(--muted); background: var(--panel-solid); border: 1px dashed var(--edge); border-radius: var(--yari-1);
+  padding: 0 var(--b-3); font-size: var(--yazi-xs); color: var(--muted); background: var(--panel-solid); border: var(--cizgi) dashed var(--edge); border-radius: var(--yari-1);
 }
+.tc-rr1-cop-ustunde { border-color: var(--stop); color: var(--stop); background: color-mix(in srgb, var(--stop) 10%, var(--panel-solid)); }
+.tc-rr1-rtab-wrap > .tc-rr1-copkutu { position: static; width: max-content; }
 .tc-rr1-emptycv { display: flex; flex-direction: column; gap: var(--b-2); align-items: flex-start; padding: var(--b-5); background: var(--panel); border: 1px dashed var(--edge); border-radius: var(--yari-1); }
 .tc-rr1-emptycv h3 { margin: 0; }
 
@@ -303,6 +305,12 @@
 .tc-rr1-fsop span { font-size: var(--yazi-xs); font-weight: 700; }
 .tc-rr1-fst { flex: 1; text-align: right; font-size: var(--yazi-xs); }
 .tc-rr1-fsacts { display: flex; gap: var(--kayma); }
+/* Eski sayfadaki gibi küçük ve başlık renginde: adım başlığı tek satır kalır. */
+.tc-rr1-fsacts .tc-rr1-ib {
+  min-width: var(--b-5); min-height: var(--b-5); color: var(--on-sig); background: color-mix(in srgb, var(--on-sig) 12%, transparent);
+  border-color: color-mix(in srgb, var(--on-sig) 40%, transparent);
+}
+.tc-rr1-fsacts .tc-rr1-ib:disabled { opacity: .4; }
 .tc-rr1-fsbody { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-2); }
 .tc-rr1-fsbody .tc-rr1-secim { width: 100%; min-width: 0; }
 .tc-rr1-fsbody > .tc-rr1-alan > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

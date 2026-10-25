@@ -33,6 +33,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const [adimPaneli, setAdimPaneli] = useState(() => tercihOku('adim-paneli', '') === '1');
   const [kapali, setKapali] = useState<ReadonlySet<string>>(new Set());
   const [tamEkran, setTamEkran] = useState(false);
+  const [copUstunde, setCopUstunde] = useState(false);
 
   const miktar = kip === 'baz' ? 1 : siparis;
   const gunSaati = useMemo(() => {
@@ -93,9 +94,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     bildir('bilgi', `OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} silindi.`, { eylem: { etiket: 'Geri al', yap: () => { duzen.geriAl(s.urunId, 'geri'); } } });
   };
   const cop = kokId && duzen.duzenlenebilir(kokId) ? (
-    <div className="tc-rr1-copkutu" onDragOver={(e) => { e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); copeBirak(e.dataTransfer.getData(SURUKLE_TURU)); }}
-      title="Silmek için adımı buraya bırak">
-      <Simge ad="trash" boyut="k" /> Silmek için bırak
+    <div className={`tc-rr1-copkutu${copUstunde ? ' tc-rr1-cop-ustunde' : ''}`} role="region" aria-label="Adımı silmek için buraya sürükle"
+      onDragOver={(e) => { e.preventDefault(); setCopUstunde(true); }} onDragLeave={() => { setCopUstunde(false); }}
+      onDrop={(e) => { e.preventDefault(); setCopUstunde(false); copeBirak(e.dataTransfer.getData(SURUKLE_TURU)); }}>
+      <Simge ad="trash" boyut="k" /> Silmek için adımı buraya sürükle
     </div>
   ) : null;
 
@@ -139,7 +141,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} />}
             {dugum ? (
               gorunum === 'tablo'
-                ? <AkisTablosu r={r} urunler={agac} miktar={miktar} />
+                ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
                 : <AkisSemasi r={r} kok={dugum} tamEkran={tamEkran} tamEkranDegistir={() => { setTamEkran(!tamEkran); }} cop={cop} />
             ) : (
               <div className="tc-rr1-emptycv">
