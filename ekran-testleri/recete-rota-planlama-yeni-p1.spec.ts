@@ -237,3 +237,47 @@ test.describe('P1d Yan panel', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// P1e: Planlama atölyesi (eski stüdyonun Plan sekmesi, tezgâh panosu). Motor isteyen düğmeler pasif (357 b); Onay ve canlı ile Plan ve
+// gerçekleşen sonraki teslimdedir. Eskisi gibi açılışta gün başı çalışmaya sessiz yazılır; test başka yazma göndermez (kilit, donuk bölge seçilmez).
+// Genişlikler aynı kayda paralel yazabildiği için o tek yazmanın sonucu (çatışma dahil) sınanmaz.
+test.describe('P1e Planlama atölyesi', () => {
+  test('Atölye: kimlik ve sekmeler; pano, ray ve kartlar ya da boş durum; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/studio');
+    await expect(page.getByRole('tablist', { name: 'Stüdyo sekmeleri' })).toBeVisible();
+    await expect(page.getByText(/^Canlı sürüm /)).toBeVisible();
+    await expect(page.locator('.tc-pym-tp-ust').or(page.getByText(BOS)).first()).toBeVisible();
+    if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
+    const ust = page.locator('.tc-pym-tp-ust');
+    await expect(ust.getByRole('button', { name: 'Diğer' })).toBeVisible();
+    await expect(ust.getByRole('button', { name: 'İyileştir' })).toHaveAttribute('aria-disabled', 'true');
+    await tasmaz(page);
+    // Sabah brifingi panonun üstünde kalabilir; kapatmak yazma gönderir, çubuk olayla seçilir.
+    const cubuk = page.locator('.tc-pym-tp-cubuk').first();
+    if (await cubuk.count()) {
+      await cubuk.dispatchEvent('click');
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.getByRole('dialog').getByText('Neden bu saatte')).toBeVisible();
+      await tasmaz(page);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
+    await ust.getByRole('button', { name: 'Diğer' }).click();
+    await expect(page.getByRole('dialog', { name: 'Diğer' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'Diğer' }).getByRole('button', { name: 'Hafta' }).click();
+    await page.keyboard.press('Escape');
+    await page.locator('.tc-pym-tp-bugun-bas').click();
+    await expect(page.getByText('Çözülecekler')).toBeVisible();
+    await tasmaz(page);
+    await page.getByRole('tab', { name: /Onay ve canlı/ }).click();
+    for (const ad of ['İncelenecek planlar', 'Karşılaştırma', 'Canlıdan sonra yapılanlar', 'Geçmiş planlar', 'Planlama sayfaları']) {
+      await expect(page.getByRole('heading', { name: ad })).toBeVisible();
+    }
+    await tasmaz(page);
+    await page.getByRole('tab', { name: /Plan ve gerçekleşen/ }).click();
+    // Taban ve canlı sunucudan okunur (505 a): boş veritabanında canlı plan yoktur; sekme yazmaz.
+    await expect(page.locator('.tc-pym-tp-pg').getByText(/Henüz canlıya alınmış plan yok|Plana uyum/)).toBeVisible();
+    await tasmaz(page);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);
+  });
+});
