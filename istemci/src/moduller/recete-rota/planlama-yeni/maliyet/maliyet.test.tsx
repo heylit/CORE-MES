@@ -36,6 +36,16 @@ describe('P3 Maliyetler', () => {
     expect(g.deger.D.tezgahlar).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'T1', ucret: 120 })]));
   }, 30000);
 
+  it('amortismanı girilmemiş tezgâhta genel gider hücresi "—", açılım nedenini yazar; sıfır yazılmaz', async () => {
+    sunucuKur(YONETICI, kayit());
+    ac('/recete-rota/planlama-yeni/maliyet');
+    await screen.findByRole('group', { name: 'Sipariş × maliyet kalemi, toplam içindeki payı' }, BEKLE);
+    const h = screen.getByRole('button', { name: /^S1, Genel gider: Genel gider bilinmiyor/ });
+    expect(h.textContent).toBe('—');
+    fireEvent.click(h);
+    expect(within(screen.getByRole('region', { name: 'S1 · Genel gider' })).getByText(/S1 genel gider bilinmiyor/)).toBeTruthy();
+  }, 30000);
+
   it('hücre seçilince odak formun ilk alanına gider; kayıttan sonra plan eski notu, pasif "Planı iyileştir" ve "Yeniden düzenle"; Esc açılımı kapatır, odak hücreye döner', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(YONETICI, kayit(), { govdeler });
