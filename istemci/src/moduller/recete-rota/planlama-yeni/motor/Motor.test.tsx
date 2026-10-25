@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
-import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -20,6 +20,7 @@ function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKom
   const oz: PlanlamaEkranOzellikleri = {
     depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile: vi.fn(),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
+    olcek: ACILIS_OLCEGI, olcekSec: vi.fn(), kaydir: vi.fn(), secim: BOS_SECIM, sec: vi.fn(),
   };
   render(<PlanlamaMotoru {...oz} />);
   return { git };
