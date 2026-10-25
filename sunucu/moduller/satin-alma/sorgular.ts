@@ -880,3 +880,43 @@ export async function kgFiyatlariEkle(db: Db, kisiId: number, satirlar: readonly
       satirlar.map((s) => s.gecerlilik), satirlar.map((s) => s.aciklama), satirlar.map((s) => s.talasKgFiyati), kisiId],
   );
 }
+
+// ---- 533 a: tedarik termini (malzeme başına tek satır). Planın gereken tarihi sürümü artırmaz: plan her kayıtta tam listeyi
+// yazar, sürüm artsaydı açık termin girişleri 409'a düşerdi. Sürüm ve güncelleme yalnız termin girişini izler.
+export interface TedarikTerminiOkuma {
+  malzemeNo: number; termin: string | null; gerekenTarih: string | null; aciklama: string; surum: number; kisiId: number | null; guncelleme: string;
+}
+const TERMIN_SECIMI = `malzeme_no AS "malzemeNo", termin, gereken_tarih AS "gerekenTarih", aciklama, surum, kisi_id AS "kisiId",
+  ${ISO('guncelleme')} AS guncelleme`;
+// nolar null: termini ya da gereken tarihi dolu bütün satırlar (ekran listesi).
+export function tedarikTerminleriOku(db: Db, nolar: readonly number[] | null): Promise<TedarikTerminiOkuma[]> {
+  return nolar === null
+    ? db.sorgu<TedarikTerminiOkuma>(`SELECT ${TERMIN_SECIMI} FROM satin_alma_tedarik_termini
+        WHERE termin IS NOT NULL OR gereken_tarih IS NOT NULL ORDER BY gereken_tarih NULLS LAST, termin NULLS LAST, malzeme_no`)
+    : db.sorgu<TedarikTerminiOkuma>(`SELECT ${TERMIN_SECIMI} FROM satin_alma_tedarik_termini WHERE malzeme_no = ANY($1::int[]) ORDER BY malzeme_no`, [[...nolar]]);
+}
+export interface TedarikTerminiYazimi { malzemeNo: number; termin: string | null; aciklama: string }
+export function tedarikTerminiEkle(db: Db, y: TedarikTerminiYazimi, kisiId: number): Promise<TedarikTerminiOkuma | null> {
+  return db.tek<TedarikTerminiOkuma>(
+    `INSERT INTO satin_alma_tedarik_termini (malzeme_no, termin, aciklama, kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (malzeme_no) DO NOTHING RETURNING ${TERMIN_SECIMI}`, [y.malzemeNo, y.termin, y.aciklama, kisiId]);
+}
+export function tedarikTerminiGuncelle(db: Db, y: TedarikTerminiYazimi, surum: number, kisiId: number): Promise<TedarikTerminiOkuma | null> {
+  return db.tek<TedarikTerminiOkuma>(
+    `UPDATE satin_alma_tedarik_termini SET termin = $2, aciklama = $3, kisi_id = $4, surum = surum + 1, guncelleme = now()
+      WHERE malzeme_no = $1 AND surum = $5 RETURNING ${TERMIN_SECIMI}`, [y.malzemeNo, y.termin, y.aciklama, kisiId, surum]);
+}
+export async function tedarikTerminiVarMi(db: Db, malzemeNo: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM satin_alma_tedarik_termini WHERE malzeme_no = $1', [malzemeNo])) !== null;
+}
+// Listede olmayanın gereken tarihi boşalır (plan artık istemiyor); aynı tarih yeniden yazılmaz.
+export async function gerekenTarihleriYaz(db: Db, ihtiyaclar: readonly { malzemeNo: number; gerekenTarih: string }[]): Promise<void> {
+  const nolar = ihtiyaclar.map((i) => i.malzemeNo);
+  await db.sorgu(`UPDATE satin_alma_tedarik_termini SET gereken_tarih = NULL WHERE gereken_tarih IS NOT NULL AND malzeme_no <> ALL($1::int[])`, [nolar]);
+  if (ihtiyaclar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO satin_alma_tedarik_termini AS t (malzeme_no, gereken_tarih)
+     SELECT * FROM unnest($1::int[], $2::date[])
+     ON CONFLICT (malzeme_no) DO UPDATE SET gereken_tarih = EXCLUDED.gereken_tarih WHERE t.gereken_tarih IS DISTINCT FROM EXCLUDED.gereken_tarih`,
+    [nolar, ihtiyaclar.map((i) => i.gerekenTarih)]);
+}

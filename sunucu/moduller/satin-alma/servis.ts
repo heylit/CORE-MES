@@ -7,7 +7,7 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  AcikEmirlerCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  AcikEmirlerCevabi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -1058,4 +1058,49 @@ export async function kgFiyatiGecmisi(db: Db, kaliteKodu: string, form: string |
 export async function kgFiyatlariEkle(db: Db, k: Kullanici, satirlar: readonly s.KgFiyatiYazimi[]): Promise<KgFiyatlariCevabi> {
   await s.kgFiyatlariEkle(db, k.id, satirlar);
   return kgFiyatlari(db, k.islemler);
+}
+
+// 533 a: tedarik termini satın almanındır; satın alma ekranı ve planlama ekranı aynı komutla yazar (yetki uçta). Kişi ve zaman
+// sunucudan. Geçmiş tarih kabul edilir: geç kalan termin planda işi bekletir, girişi reddetmek gecikmeyi saklardı.
+const terminCikisi = ({ kisiId: _, ...t }: s.TedarikTerminiOkuma): TedarikTermini => t;
+export async function tedarikTerminiKaydet(db: Db, k: Kullanici, g: TedarikTerminiKaydetYazimi): Promise<{ termin: TedarikTermini }> {
+  const yazim = { malzemeNo: g.malzemeNo, termin: g.termin, aciklama: g.aciklama };
+  if (g.surum === null) {
+    if (!(await malzemeOzetleri(db, [g.malzemeNo])).has(g.malzemeNo)) throw dogrulama(ILETILER.terminMalzemesiYok, 'malzemeNo');
+    const yeni = await s.tedarikTerminiEkle(db, yazim, k.id);
+    if (yeni === null) throw cakisma(ILETILER.terminVar);
+    return { termin: terminCikisi(yeni) };
+  }
+  const surum = g.surum;
+  const satir = await surumluGuncelle({
+    guncelle: () => s.tedarikTerminiGuncelle(db, yazim, surum, k.id), varMi: () => s.tedarikTerminiVarMi(db, g.malzemeNo), bulunamadiIletisi: ILETILER.terminMalzemesiYok,
+  });
+  return { termin: terminCikisi(satir) };
+}
+export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminleriCevabi> {
+  const satirlar = await s.tedarikTerminleriOku(db, null);
+  const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeNo));
+  const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.kisiId === null ? [] : [t.kisiId])));
+  return {
+    terminler: satirlar.map((t) => {
+      const m = malzemeler.get(t.malzemeNo);
+      return { ...terminCikisi(t), malzemeKodu: m?.kod ?? '', malzemeAdi: m?.ad ?? '', kisiAdi: t.kisiId === null ? null : adlar.get(t.kisiId) ?? null };
+    }),
+  };
+}
+// Plan okuması: satırı olmayan malzeme haritada yoktur (termin bekliyor, ilk giriş sürümsüz yazılır).
+export async function tedarikTerminleri(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, TedarikTermini>> {
+  const tekil = [...new Set(malzemeNolar)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await s.tedarikTerminleriOku(db, tekil)).map((t) => [t.malzemeNo, terminCikisi(t)]));
+}
+// Plan "olması gereken" tarihi tam liste olarak bildirir; listede olmayanın gereken tarihi boşalır, termin kalır. Bilinmeyen
+// malzeme ya da aynı malzemenin iki kez gelmesi çağıranın hatasıdır, yazılmaz.
+export async function tedarikIhtiyaclariniYaz(db: Db, ihtiyaclar: readonly { malzemeNo: number; gerekenTarih: string }[]): Promise<void> {
+  const nolar = ihtiyaclar.map((i) => i.malzemeNo);
+  if (new Set(nolar).size !== nolar.length) throw gecersiz('Aynı malzeme ihtiyaç listesinde iki kez var.');
+  const kartlar = await malzemeOzetleri(db, nolar);
+  const yok = nolar.filter((n) => !kartlar.has(n));
+  if (yok.length > 0) throw gecersiz(`${ILETILER.terminMalzemesiYok} (${yok.join(', ')})`);
+  await s.gerekenTarihleriYaz(db, ihtiyaclar);
 }
