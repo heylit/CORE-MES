@@ -82,18 +82,18 @@ export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri)
     return { g, k, A, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t, A) };
   }, [calisma, D, taban, stok, depo.durum, depo.receteRotaKaydi]);
 
-  if (!calisma || !D) return <div className="tc-pyz"><DurumKutusu durum="bos" mesaj="Planlama çalışması yok." /></div>;
+  // Çalışma kaydı hiç yokken de eski sayfa plansız halini çizer (başlık, boş harita, tüm satırlar); diğer görünümler de öyle.
+  const planYok = (
+    <div className="tc-pyz">
+      <IsiSayfasi simge="box" baslik={SAYFA_ADI} tum={<Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" />}><p className="tc-pyz-kucuk">Önce plan kurulmalı.</p></Kart>}>
+        <BosHarita metin="Plan kurulunca malzemenin ne zaman gerektiği ve ne zaman sipariş verilmesi gerektiği burada görünür." />
+      </IsiSayfasi>
+    </div>
+  );
+  if (!calisma || !D || planIslemleri(calisma.plan).length === 0) return planYok;
   if (taban === null) return <div className="tc-pyz"><DurumKutusu durum="hata" mesaj="Planın başlangıç günü okunamadı." /></div>;
   if (stok === undefined) return <div className="tc-pyz"><DurumKutusu durum="yukleniyor" /></div>;
-  if (!hesap) {
-    return (
-      <div className="tc-pyz">
-        <IsiSayfasi simge="box" baslik={SAYFA_ADI} tum={<Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" />}><p className="tc-pyz-kucuk">Önce plan kurulmalı.</p></Kart>}>
-          <BosHarita metin="Plan kurulunca malzemenin ne zaman gerektiği ve ne zaman sipariş verilmesi gerektiği burada görünür." />
-        </IsiSayfasi>
-      </div>
-    );
-  }
+  if (!hesap) return planYok;
 
   const fg = yetki.maliyetOku;
   const { g, k, A, plan, alim } = hesap;

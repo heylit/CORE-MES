@@ -111,6 +111,14 @@ describe('Malzeme satın alma planı', () => {
     expect(await screen.findByText('Önce plan kurulmalı.', {}, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByText(/Plan kurulunca malzemenin ne zaman gerektiği/)).toBeTruthy();
   }, 20000);
+
+  it('çalışma kaydı hiç yoksa da plansız sayfa çizilir, boş ekran açılmaz', async () => {
+    sunucuKur(YONETICI, []);
+    ac('/recete-rota/planlama-yeni/malzplan');
+    expect(await screen.findByText('Önce plan kurulmalı.', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByText(/Plan kurulunca malzemenin ne zaman gerektiği/)).toBeTruthy();
+    expect(screen.queryByText('Planlama çalışması yok.')).toBeNull();
+  }, 20000);
 });
 
 describe('Malzeme öne çekme', () => {
