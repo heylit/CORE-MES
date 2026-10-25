@@ -10,21 +10,45 @@ import { HAZIRLANIYOR, MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
 interface Ozellikler {
   c: PlanlamaCalismasi; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
   komut: CalismaKomutu | null; sipSec: (j: string) => void;
+  // Klavye kısayolları listesi aynı köşede açılır; aynı anda tek pencere (zp-klavye).
+  kisayol: boolean; kisayolAc: (v: boolean) => void;
 }
+const KISAYOLLAR: [string, [string, string][]][] = [
+  ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi']]],
+  ['Bul ve seç', [['/', 'Sipariş, tezgâh ya da komut ara'], ['Ctrl K', 'Komut arama'], ['Esc', 'Menüyü, sonra seçimi kapat']]],
+  ['Düzenle', [['E', 'Seçilene göre Düzenle menüsü'], ['1 - 9', 'Menüdeki komut'], ['← →', 'İşi 1 saat kaydır (Shift: çeyrek)'], ['↑ ↓', 'Yapabilen bir önceki ya da sonraki tezgâh'], ['[ ]', 'Kuyrukta bir öne, bir arkaya'], ['Backspace', 'Menüde geri']]],
+  ['Değişiklikler', [['D', 'Değişiklik listesi'], ['Ctrl Z', 'Geri al'], ['Ctrl Shift Z', 'Yinele'], ['Ctrl Enter', 'Onayla, listeyi temizle']]],
+  ['Diğer', [['Y', 'Yapılacaklar'], ['?', 'Bu liste']]],
+];
 
 export function Yapilacaklar(o: Ozellikler) {
   const kap = useRef<HTMLDivElement>(null);
-  const { acik, ac } = o;
+  const { acik, ac, kisayol, kisayolAc } = o;
   useEffect(() => {
-    if (!acik) return undefined;
-    const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') ac(false); };
-    const dokun = (e: PointerEvent) => { if (!kap.current?.contains(e.target as Node | null)) ac(false); };
-    document.addEventListener('keydown', tus); document.addEventListener('pointerdown', dokun, true);
-    return () => { document.removeEventListener('keydown', tus); document.removeEventListener('pointerdown', dokun, true); };
-  }, [acik, ac]);
+    if (!acik && !kisayol) return undefined;
+    const kapat = () => { ac(false); kisayolAc(false); };
+    const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); kapat(); } };
+    const dokun = (e: PointerEvent) => { if (!kap.current?.contains(e.target as Node | null)) kapat(); };
+    document.addEventListener('keydown', tus, true); document.addEventListener('pointerdown', dokun, true);
+    return () => { document.removeEventListener('keydown', tus, true); document.removeEventListener('pointerdown', dokun, true); };
+  }, [acik, ac, kisayol, kisayolAc]);
   const n = o.l.filter((x) => x.ton === 'hata').length;
   return (
     <div className="tc-pym-yp-sira" ref={kap}>
+      {kisayol && !acik && (
+        <section className="tc-pym-yp tc-pym-kb" role="dialog" aria-label="Klavye kısayolları">
+          <header>
+            <b><Simge ad="help" boyut="k" />Klavye kısayolları</b>
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Kapat (Esc)" aria-label="Kapat (Esc)" onClick={() => kisayolAc(false)}><Simge ad="x" boyut="k" /></button>
+          </header>
+          {KISAYOLLAR.map(([g, l]) => (
+            <div key={g} className="tc-pym-kb-grup">
+              <small>{g}</small>
+              <dl>{l.map(([t, a]) => <div key={t}><dt>{t.split(' ').map((x) => <kbd key={x}>{x}</kbd>)}</dt><dd>{a}</dd></div>)}</dl>
+            </div>
+          ))}
+        </section>
+      )}
       {acik && (
         <section className="tc-pym-yp" role="dialog" aria-label="Yapılacaklar">
           <header>
