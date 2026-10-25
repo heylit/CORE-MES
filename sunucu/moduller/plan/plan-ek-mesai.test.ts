@@ -47,6 +47,11 @@ describe('plan (gerçek PostgreSQL): ek mesai taslakta', () => {
     assert.deepEqual((await planOku(p.taslak!.id)).ekMesai, y.ekMesai, 'okuma aynı');
     assert.equal((await yaz(p, satirlar)).statusCode, 409, 'eski sürüm');
 
+    await ortam!.sahip.sorgu('UPDATE plan_ayari SET ek_mesai_hafta_saat = 1');
+    assert.equal((await planOku(p.taslak!.id)).ekMesai!.asildi, true, 'sınır 1 saat aşılır');
+    await ortam!.sahip.sorgu('UPDATE plan_ayari SET ek_mesai_hafta_saat = 0');
+    const sinirsiz = (await planOku(p.taslak!.id)).ekMesai!;
+    assert.deepEqual([sinirsiz.haftaSiniriSaat, sinirsiz.asildi, sinirsiz.asanHaftalar], [0, false, []], 'sınır 0: sınır yok (eski motor)');
     await ortam!.sahip.sorgu('UPDATE plan_ayari SET ek_mesai_hafta_saat = 20');
     assert.equal((await planOku(p.taslak!.id)).ekMesai!.asildi, false, 'sınır plan ayarından');
     assert.equal((await planOku()).ekMesai!.satirlar.length, 0, 'canlı değişmedi');

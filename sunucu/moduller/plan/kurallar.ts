@@ -846,7 +846,8 @@ export function ayarVeGecikme(
 }
 
 // 507 2 a: ek vardiyaların haftalık bütçesi (eski motorun mesaiHafta'sı, kontroldeki "haftalık ek mesai bütçesi aşılıyor"). Hafta
-// pazartesi başlar (gün takvim günüdür, saat dilimi yok); sınırı aşan hafta asanHaftalar'dadır. Sınır 0 ise her ek vardiya aşımdır.
+// pazartesi başlar (gün takvim günüdür, saat dilimi yok); sınırı aşan hafta asanHaftalar'dadır. Sınır 0 sınır yok demektir (eski motorun fits'i: butH <= 0 her
+// vardiyayı sığdırır); boş sınırı çağıran 8 saate çevirir.
 export const EK_MESAI_HAFTA_SAAT = 8;
 export function vardiyaSaati(baslangic: string, bitis: string): number {
   const dk = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
@@ -862,7 +863,7 @@ export function ekMesaiButcesi(satirlar: readonly { gun: string; saat: number }[
   for (const x of satirlar) hafta.set(haftaBasi(x.gun), (hafta.get(haftaBasi(x.gun)) ?? 0) + x.saat);
   const bir = (x: number) => Math.round(x * 10) / 10;
   const haftalar = [...hafta].sort(([a], [b]) => a.localeCompare(b)).map(([h, saat]) => ({ hafta: h, saat: bir(saat) }));
-  const asanHaftalar = haftalar.filter((h) => h.saat > sinirSaat);
+  const asanHaftalar = sinirSaat > 0 ? haftalar.filter((h) => h.saat > sinirSaat) : [];
   return { toplamSaat: bir(satirlar.reduce((t, x) => t + x.saat, 0)), haftaSiniriSaat: sinirSaat, haftalar, asanHaftalar, asildi: asanHaftalar.length > 0 };
 }
 

@@ -614,7 +614,7 @@ describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme'
     assert.deepEqual(ayarVeGecikme([], []), { ayarSaat: 0, agirlikliGecikmeSaat: 0 });
   });
 
-  test('PL-507-2K: vardiya süresi gece yarısını geçer; hafta pazartesi başlar; bütçe hafta başına, sınırı aşan hafta döner', () => {
+  test('PL-507-2K: vardiya süresi gece yarısını geçer; hafta pazartesi başlar; bütçe hafta başına, sınırı aşan hafta döner; 0 sınırsız', () => {
     assert.deepEqual([vardiyaSaati('22:00', '06:00'), vardiyaSaati('06:00', '08:30'), vardiyaSaati('08:00', '08:00')], [8, 2.5, 24]);
     assert.deepEqual([haftaBasi('2026-10-25'), haftaBasi('2026-10-26'), haftaBasi('2026-11-01')], ['2026-10-19', '2026-10-26', '2026-10-26']);
     const b = ekMesaiButcesi([{ gun: '2026-10-26', saat: 8 }, { gun: '2026-10-28', saat: 2.5 }, { gun: '2026-11-02', saat: 8 }], 8);
@@ -622,7 +622,8 @@ describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme'
       toplamSaat: 18.5, haftaSiniriSaat: 8, haftalar: [{ hafta: '2026-10-26', saat: 10.5 }, { hafta: '2026-11-02', saat: 8 }],
       asanHaftalar: [{ hafta: '2026-10-26', saat: 10.5 }], asildi: true,
     });
-    assert.equal(ekMesaiButcesi([{ gun: '2026-10-26', saat: 1 }], 0).asildi, true, 'sınır 0: her ek vardiya aşım');
+    const sinirsiz = ekMesaiButcesi([{ gun: '2026-10-26', saat: 24 }, { gun: '2026-10-27', saat: 24 }], 0);
+    assert.deepEqual([sinirsiz.asildi, sinirsiz.asanHaftalar, sinirsiz.haftalar], [false, [], [{ hafta: '2026-10-26', saat: 48 }]], 'sınır 0: sınır yok (eski motor)');
     assert.equal(ekMesaiButcesi([], 0).asildi, false);
   });
 });

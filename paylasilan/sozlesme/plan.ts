@@ -75,7 +75,7 @@ export const planEmri = z.object({
   yerlesen: z.number().int(),
 });
 // 507 2 a: taslağın (canlıda canlının) ek vardiyaları ve haftalık bütçesi. Hafta pazartesi başlar; sınır plan ayarındadır, boşsa haftada
-// 8 saat. saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). Ek vardiya planın kapasitesine girmez; ölçüm ve bütçe içindir.
+// 8 saat, 0 ise sınır yok (haftaSiniriSaat 0, hiçbir hafta aşmaz). saat, satır yazıldığı andaki vardiya süresidir (molalar düşülmez). Ek vardiya planın kapasitesine girmez; ölçüm ve bütçe içindir.
 export const planEkMesai = z.object({
   satirlar: z.array(z.object({ makineId: KIMLIK, gun: tarih, vardiyaId: KIMLIK, saat: z.number() })),
   toplamSaat: z.number(),
