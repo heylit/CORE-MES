@@ -15,11 +15,12 @@
 /* Üst baş (prototipte `header.top`): solda büyük başlık ve açıklama, sağda araç düğmeleri; dar ekranda araçlar alta, sola yaslı. */
 .tc-myeni-ust { display: flex; flex-wrap: wrap; gap: var(--b-3) var(--b-6); align-items: flex-end; justify-content: space-between; min-width: 0; }
 .tc-myeni-ust > div { min-width: 0; max-width: 100%; }
-.tc-myeni-ust h1 { margin: 0; font-size: var(--yazi-2xl); line-height: 1; font-weight: 700; overflow-wrap: anywhere; }
+/* Eski büyük dar başlık: ortak Archivo'nun dar kesimi (yerel dosya genişlik eksenini taşır), yeni yazı tipi yok. */
+.tc-myeni-ust h1 { margin: 0; font-size: var(--yazi-3xl); line-height: 1; font-weight: 800; font-stretch: 75%; overflow-wrap: anywhere; }
 .tc-myeni-ust-aciklama { margin: var(--b-2) 0 0; color: var(--muted); max-width: 52ch; }
 .tc-myeni-araclar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-1); }
 .tc-myeni-araclar button {
-  min-block-size: var(--dokunma); padding: 0 var(--b-3); font: inherit; font-size: var(--yazi-xs); color: var(--muted);
+  min-block-size: var(--isaret-boy); padding: 0 var(--b-3); font: inherit; font-size: var(--yazi-xs); color: var(--muted);
   background: transparent; border: thin solid var(--edge); border-radius: var(--yari-tam); cursor: pointer;
 }
 .tc-myeni-araclar button:hover { color: var(--ink); border-color: var(--ink); }
@@ -27,6 +28,7 @@
 .tc-myeni-not { margin: var(--b-1) 0 0; font-size: var(--yazi-xs); color: var(--muted); text-align: right; }
 
 @media (width < 720px) {
+  .tc-myeni-ust h1 { font-size: var(--yazi-2xl); }
   .tc-myeni-ust > div:last-child { width: 100%; }
   .tc-myeni-araclar { justify-content: flex-start; }
   .tc-myeni-not { text-align: left; }
