@@ -155,6 +155,11 @@ export function planOzeti(
   };
 }
 
+// Emir şeridinin renk numarası (0..9, ortak grafik renkleri) plan sırasından, eski ekranın sırasıyla: on rengin hepsi döner ve komşu
+// emirler farklı renk alır (çarpan 10 ile aralarında asal).
+export const SERIT_SAYISI = 10;
+export const seritNo = (sira: number): number => (sira * 3 + 1) % SERIT_SAYISI;
+
 // Emrin rotası yürürlüktekinden eskiyse: rotaya eklenen ve rotadan çıkan adımlar (OP numarasıyla).
 export interface RotaFarki { eskiNo: string; yeniNo: string; eklenen: { opNo: number; ad: string }[]; cikan: number[] }
 export function rotaFarki(d: Durum, o: Emir): RotaFarki | null {
