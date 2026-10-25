@@ -825,6 +825,9 @@ export async function sonOlaylar(db: Db, sonra: string | null, sayi: number): Pr
       kisi: adli(adlar.kisi, r.kisiId, 'Kişi'),
       adet: r.adet,
       durusNedeni: r.durusNedeniId === null ? null : adli(nedenler, r.durusNedeniId, 'Duruş nedeni'),
+      ...(r.olay === 'kalite_onay' || r.olay === 'kalite_red'
+        ? { kararVeren: r.kararVerenId === null ? null : adli(adlar.kisi, r.kararVerenId, 'Kişi') }
+        : {}),
       zaman: r.zaman,
     })),
   };

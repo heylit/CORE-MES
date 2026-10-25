@@ -10,7 +10,7 @@ import {
 } from './disari.ts';
 import type { KaliteKarariOlayi, SaglamSayimOlayi } from './disari.ts';
 import { SAGLAM_EKSIYE_INER } from './kurallar.ts';
-import { emirAc, emirAyrintisi } from './servis.ts';
+import { emirAc, emirAyrintisi, sonOlaylar } from './servis.ts';
 
 // İlk parça kararı beklenirken sayılan parça (131 b, 136 a): sağlama katılmaz, kalite kararıyla sağlama döner ya da redde kalır.
 describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
@@ -138,6 +138,22 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
       ['duzeltme', -1, operator.id, null],
     ]);
     assert.equal(defter[2]?.kararVeren, undefined, 'operatör düzeltmesi kararı veren taşımaz');
+  });
+
+  test('504 a: son olaylar akışı kalite kararını defterle aynı olayla ve kararı verenle gösterir; operatör düzeltmesi düzeltme kalır', async () => {
+    const id = await baslamisEmir();
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 2 }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 3 }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: -1 }));
+    const { olaylar } = await vt().tx((db) => sonOlaylar(db, null, 200));
+    const akis = olaylar.filter((o) => o.emir.id === id && o.olay !== 'baslat').reverse();
+    assert.deepEqual(akis.map((o) => [o.olay, o.adet, o.kisi.id, 'kararVeren' in o ? (o.kararVeren?.ad ?? null) : 'yok']), [
+      ['kalite_red', 2, operator.id, 'Deneme Yönetici'],
+      ['kalite_onay', 3, operator.id, 'Deneme Yönetici'],
+      ['duzeltme', -1, operator.id, 'yok'],
+    ], 'karar bekleyen sayım akışa girmez; red ve onay kalite kararıdır');
   });
 
   test('504 a: karar veren tutulmadan önce yazılmış karar satırı defterde kalite kararıdır, kararı veren bilinmez; karar veren yalnız karar satırında yazılır', async () => {
