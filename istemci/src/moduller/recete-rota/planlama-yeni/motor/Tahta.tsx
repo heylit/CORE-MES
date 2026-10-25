@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DurumKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
@@ -10,7 +10,8 @@ import { KilavuzKarti } from './harita/Kilavuz.tsx';
 import { aralik, durusOku, haritaGruplari, ornekTezgah, pencereSonu, sahneKur, yerlesim, zamanSinirla } from './harita/kurallar.ts';
 import { BosPlan } from './BosPlan.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
-import { HAZIRLANIYOR, MOTOR_NOTU } from './ortak.tsx';
+import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
+import { MOTOR_NOTU } from './ortak.tsx';
 import { Ozet, type OzetDurumu } from './ozet/Ozet.tsx';
 import { ozetVerisi, type BolgeKimligi } from './ozet/veri.ts';
 import { Cubuk } from './ust/Cubuk.tsx';
@@ -22,7 +23,6 @@ import './motor.css';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
-const GORUNUM_AD: Record<Exclude<TahtaGorunumu, 'genel' | 'atolye'>, string> = { cizelge: 'Çizelge', kesif: 'Keşfet' };
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma;
@@ -43,6 +43,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [mercek, setMercek] = useState<'durum' | 'etki'>('durum');
   const [kilavuz, setKilavuz] = useState(false);
   const [ornek, setOrnek] = useState<string | null>(null);
+  const [ks, setKs] = useState<KesifDurumu>(KESIF_ILK);
   const harita = useRef<HaritaKomutu | null>(null);
 
   const emirler = o.depo.durum?.emirler ?? null;
@@ -159,8 +160,9 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
               planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
               sor={sor} guncel={guncel} komut={komut} />
-          ) : gorunum !== 'atolye' ? (
-            <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{GORUNUM_AD[gorunum]}: {HAZIRLANIYOR}</p></div>
+          ) : gorunum === 'kesif' ? (
+            <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
+              sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />
           ) : null}
         </>
       )}
