@@ -86,6 +86,27 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
   }, 20000);
 });
 
+describe('Yeni Arkon ekranı (eski düzen)', () => {
+  it('Kalite sekmesi bekleyen ve ölçülen numune sayısını taşır', async () => {
+    const numune = (id: string, status: string) => ({ kimlik: id, surum: 1, govde: { id, status, at: 1, items: [] } });
+    sunucuKur(YONETICI, { belgeler: { requests: [numune('n1', 'waiting'), numune('n2', 'measuring'), numune('n3', 'approved')] } });
+    arkonAc('/arkon/yeni/pano');
+    await bolum('Pano');
+    expect(await screen.findByRole('tab', { name: 'Kalite (2)' }, { timeout: 10000 })).toBeTruthy();
+  }, 20000);
+
+  it('kök ölçek değişkenini taşır; dar ekranda ölçek 1 ve mobil işareti', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/yeni/pano');
+    await bolum('Pano');
+    const kok = document.querySelector<HTMLElement>('.tc-ay');
+    await waitFor(() => { expect(kok?.style.getPropertyValue('--tc-ay-olcek')).not.toBe(''); });
+    // jsdom'da alan genişliği 0'dır: eski useFit gibi dar ekran sayılır.
+    expect(kok?.style.getPropertyValue('--tc-ay-olcek')).toBe('1');
+    expect(kok?.hasAttribute('data-mobil')).toBe(true);
+  }, 20000);
+});
+
 describe('Bağlantı özeti', () => {
   const temel = { memory: false, mode: 'server' as const, online: true, pending: 0, base: 'x' };
   it('durum metinle söylenir, renk tek başına değildir', () => {

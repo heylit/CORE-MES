@@ -31,7 +31,7 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
 ## A0'in sabit imzalari (parcalar kullanir, degistirmez)
 - `veri/baglam.ts`: `useArkon(): ArkonBaglami { depo, kisi, ayarlar, ayarlariYenile, yetkiVar(k), sayfaGorunur(s), git(sayfa, kimlik?), tmiyeGit(hedef), saltOkunur }`;
   `useArkonDurumu()`, `useIleti(f)` (anlik iletiler), `useBelgeler<T>(depoAdi, ekDinle?) -> { liste, yenile, hazir }`, `belgeYaz(depo, depoAdi, belge, ileti?)`,
-  `belgeSil(depo, depoAdi, kimlik)`, `useSimdi(ms?)`. Eski modul degiskenleri (PLANT, SHIFTS, POLICY, REASONS, SCRAPS, GAUGES) `ayarlar` icindedir.
+  `belgeSil(depo, depoAdi, kimlik)`, `useSimdi(ms?)`; `onizle(paketId)` "Operator gozuyle" penceresini acar (salt okunur). Eski modul degiskenleri (PLANT, SHIFTS, POLICY, REASONS, SCRAPS, GAUGES) `ayarlar` icindedir.
 - `veri/depo.ts`: `ArkonDeposu` (eski AKStore'un ekranda kullanilan yuzu, tipli: DB, Bus, Log, Auth, Server, Plan, Cache, Pkg, status, onStatus).
   Veri katmani eski `arkon/web/src/data/store.ts`'tir (kopya yok); yeni ekranda istekler `veri/tasiyici.ts` ile kopru cevirisinden TMI uclarina gider.
   Onizlemede (`saltOkunur`) yazma TMI'ye iletilmez; parca ayrica yazma dugmesini gizler.
@@ -39,7 +39,7 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
   cagri ekipleri), `yetki.ts`, `tesis.ts`, `vardiya.ts`, `oee.ts` (`oeeHesapla`), `ayarlar.ts`, `bicim.ts` (`YOK` "—"; veri yoksa sifir yazilmaz), `ses.ts` (`bip`),
   `yerel.ts` (cihaz ayarlari, `ozellikler`, `hafifKip`). Hepsi eski ortak-ayarlar.ts/temel.ts/yukleyici.ts mantiginin tipli tasimasidir; `cekirdek/esitlik.test.ts` eskisiyle esitligi sinar.
 - `arkon/web/src/data/*` saf modulleri (anomali, numune, kuyruk, parca, refakat-karti, ...) kopyalanmaz, dogrudan ithal edilir.
-- `ortak/Hazirlaniyor.tsx`; `test-ortak.tsx`: `sunucuKur(deneme, { belgeler, kayitlar })`, `arkonAc(adres)`, denemeler `YONETICI`, `KAPISIZ`, `OPERATOR` (uydurma).
+- `ortak/Hazirlaniyor.tsx`; `ortak/SaatSeridi.tsx` (sayfa basliginin sagindaki kisayollar, saat ve vardiya); `test-ortak.tsx`: `sunucuKur(deneme, { belgeler, kayitlar })`, `arkonAc(adres)`, denemeler `YONETICI`, `KAPISIZ`, `OPERATOR` (uydurma).
 
 ## Kurallar (her parca)
 - TASARIM KORUMA (2026-10-24, kullanici; 20:22 duzeltilmis okuma teyitli; 203 a kalkti): HTML'den TS'ye gecen sayfalarda amac TypeScript'e gecis ve
@@ -56,7 +56,8 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
   birebir kaliyorsa kullanilir; 360/768/1280'de duzen degismez. Sabit renk, olcu, satir ici stil yok; renk tek basina anlam tasimaz.
 - Tarayicidaki hesap saf TS islevidir (parcanin `kurallar.ts` dosyasi, birim testli); eski islevle esitlik testi yazilir (ornegi `cekirdek/esitlik.test.ts`).
   Kopyala-yapistir ve `@ts-nocheck` yok; `htm` yok, TSX.
-- Kapali ozellikler (tanitim verisi, PLANT_DEMO, giris ve kilit ekrani, Arkon'un kendi tema ve yakinlastirmasi) yeni ekrana girmez (208 a benzeri).
+- Kapali ozellikler (tanitim verisi, PLANT_DEMO, giris ve kilit ekrani, Arkon'un kendi temasi) yeni ekrana girmez (208 a benzeri). Ekran olcegi
+  (eski useFit) TASARIM KORUMA geregi geri geldi: kok `cekirdek/olcek.ts` ile 1600x900 tasarim alanina gore yakinlasir (A0.1, O8).
 - Uc, sema, tablo eklenmez; gerekiyorsa A0 uzerinden koordinatore istek.
 
 Kabul (parca basina): eski sayfadaki her alan ve islem DEVIR'de isaretli liste; yazma dugmeleri yetkiye gore gizli, izinli ve reddedilen test;

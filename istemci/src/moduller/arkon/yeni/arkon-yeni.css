@@ -1,11 +1,32 @@
 /* Arkon'un yeni ekranı (TS geçişi): sekmeler, bağlantı şeridi ve sayfa alanı. Parçalar kendi klasöründeki önekli css'i kullanır. */
-.tc-ay { display: grid; gap: var(--b-4); padding: var(--b-4); min-width: 0; }
+/* Ölçek (eski useFit): kök 1600x900 tasarım alanına göre yakınlaşır; değeri ArkonYeni.tsx useOlcek yazar. */
+.tc-ay { display: grid; gap: var(--b-4); padding: var(--b-4); min-width: 0; zoom: var(--tc-ay-olcek, 1); }
 .tc-ay-serit {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
   padding: var(--b-2) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
 }
 .tc-ay-baglanti { display: inline-flex; align-items: center; }
 .tc-ay-icerik { display: grid; gap: var(--b-4); min-width: 0; }
+/* Sayfa başlığının sağındaki saat ve vardiya (eski .clock) */
+.tc-ay-saat { display: grid; justify-items: end; line-height: 1.1; color: var(--ink); }
+.tc-ay-saat small { color: var(--muted); font-size: var(--yazi-xs); }
+
+/* TV modu (eski html.tv): Arkon'un gezinmesi ve çağrı bandı gizlenir, pano tam ekranda kalır. */
+html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-serit, html.tc-ay-tv .tc-ay6-bant { display: none; }
+
+/* "Operatör gözüyle" önizleme penceresi: 1600x900 cihaz alanı pencereye sığacak ölçekte. */
+.tc-ay-onizleme-ust {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); padding: var(--b-3) var(--b-5);
+  border-bottom: 1px solid var(--edge);
+}
+.tc-ay-onizleme-baslik { color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay-onizleme-sahne { display: grid; place-items: center; height: 100%; min-height: 0; overflow: hidden; }
+.tc-ay-onizleme-cihaz { padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-5); background: var(--panel2); box-shadow: var(--shadow); overflow: hidden; }
+.tc-ay-onizleme-ekran {
+  width: var(--tc-ay-onizleme-en); height: var(--tc-ay-onizleme-boy); overflow: auto; border-radius: var(--yari-3); background: var(--bg);
+  zoom: var(--tc-ay-onizleme-olcek, 0.5);
+}
+
 @media (max-width: 767px) {
   .tc-ay { padding: var(--b-3); }
 }

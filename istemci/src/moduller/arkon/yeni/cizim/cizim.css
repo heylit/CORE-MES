@@ -329,7 +329,8 @@
 @container tc-ay5 (min-width: 1000px) {
   .tc-ay5-kipler { display: none; }
   /* Eskisi gibi sütunlar ekran boyunda kalır, uzun içerik kendi içinde kayar. */
-  .tc-ay5-govde { grid-template-columns: var(--menu-genis) minmax(0, 1fr) var(--bildirim-genis); align-items: stretch; block-size: var(--ekran-boy-70); }
+  /* Yükseklik ölçekli görünür alandan (--tc-ay-vh) sekme, şerit ve kısayol payı düşülerek gelir; eski labmain ekranın kalanını doldururdu. */
+  .tc-ay5-govde { grid-template-columns: var(--menu-genis) minmax(0, 1fr) var(--bildirim-genis); align-items: stretch; block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) * 4); }
   .tc-ay5-govde > .tc-ay5-panel { overflow-y: auto; }
   .tc-ay5-cizim { min-block-size: 0; }
 }
@@ -343,3 +344,6 @@
   .tc-ay5-baslik { margin-inline-end: 0; }
   .tc-ay5-mesgul-kart { min-inline-size: 0; inline-size: 100%; }
 }
+
+/* Eski LabTop'un sağ ucu (kısayollar ve saat) sayfanın üstünde sağda. */
+.tc-ay5-serit-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2); }

@@ -1,5 +1,4 @@
-import type { Frame, Page } from '@playwright/test';
-import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import type { Frame, Page, Response } from '@playwright/test';
 import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Arkon'un UYUM-BORCU.md'de "tarayıcıda görülünce kapanır" diye bekleyen davranışları; yalnız okuyan akışlar (örnek veri değişmez).
@@ -61,24 +60,22 @@ test.describe('yönetici', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  // "Bugün" panosu yalnız bugünün sayımını gösterir; örnek verinin sayımları yüklendiği anın günündedir. Yükleme gece yarısından önce,
-  // koşu sonra olursa (CI'da 23:59 / 00:02) pano doğru olarak boştur: beklenen, örnek emrin açılış günü bugün mü diye seçilir.
-  // Örnek veri tek transaction'da yazılır: emirlerin açılışı ile sayımlar aynı andadır.
   test('Üretim Anomalisi panosu ve dönem görünümü açılır', async ({ page, ag, ac }) => {
-    const liste = await page.request.get(`${ADRES}/api/uretim-emirleri`);
-    expect(liste.ok()).toBe(true);
-    // Ekran testleri yazmaz: listedeki emirlerin hepsi örnek veridir.
-    const acilislar = ((await liste.json()) as { emirler: { acilma: string }[] }).emirler.map((e) => Date.parse(e.acilma));
-    expect(acilislar.length, 'örnek emir').toBeGreaterThan(0);
-    const ornekBugun = tesisGunu(Math.min(...acilislar)) === tesisGunu(Date.now());
+    // "Bugün" sunucunun tesis gününe göre hesaplanır; beklenti sayfanın aldığı cevabın kendisinden çıkar. Testin kendi saatiyle
+    // karşılaştırmak tesis gece yarısında (örnek veri bir gün önce yüklenmişken) kırılıyordu.
+    const bugunCevabi = () => page.waitForResponse((c) => c.request().method() === 'GET' && new URL(c.url()).pathname.endsWith('/arkon/anomaliler'));
+    const bugunPanosu = async (f: Frame, cevap: Response): Promise<void> => {
+      expect(cevap.ok()).toBe(true);
+      const { istasyonlar } = (await cevap.json()) as { istasyonlar: { kod: string }[] };
+      const bolge = f.getByRole('region', { name: 'İstasyon' });
+      if (istasyonlar.length === 0) await expect(bolge).toContainText('Canlı planda yerleşmiş iş yok');
+      else await expect(bolge).toContainText(istasyonlar.some((i) => i.kod === 'ORN-TORNA-1') ? 'ORN-TORNA-1' : istasyonlar[0]?.kod ?? '');
+    };
+    const ilk = bugunCevabi();
     await ac('/arkon/anomali');
     const f = await cerceve(page);
-    const bugunPanosu = async (): Promise<void> => {
-      if (ornekBugun) await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
-      else await expect(f.getByRole('region', { name: 'İstasyon' })).toContainText('Canlı planda yerleşmiş iş yok');
-    };
     await expect(f.getByText('İstasyon', { exact: true }).first()).toBeVisible();
-    await bugunPanosu();
+    await bugunPanosu(f, await ilk);
     for (const d of ['Gün', 'Hafta', 'Ay']) {
       await f.getByRole('button', { name: d, exact: true }).click();
       await expect(f.getByRole('button', { name: d, exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -86,8 +83,9 @@ test.describe('yönetici', () => {
       await expect(f.getByText('Kayıtlı gün')).toBeVisible();
       await expect(f.locator('input[type="date"]')).toBeVisible();
     }
+    const yeniden = bugunCevabi();
     await f.getByRole('button', { name: 'Bugün', exact: true }).click();
-    await bugunPanosu();
+    await bugunPanosu(f, await yeniden);
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'pano okumakla yazmaz').toEqual([]);
   });
