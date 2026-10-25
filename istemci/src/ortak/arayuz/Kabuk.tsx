@@ -15,7 +15,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
-import { gorunumGecisi, YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
+import { gorunumGecisi, seritAdresi, YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
@@ -382,7 +382,7 @@ export function Kabuk({
         {/* Yeni ekran menünün maddelerini kendi sekmesi olarak çizer; şerit yalnız çizilmez, menü açık kalır: çerçeveli düzen,
             tam ekran ve sayaçlar kökün menüsünden gelmeye devam eder. */}
         {ikinci && !yeniEkranAdresiMi(konum.pathname) && (
-          <IkinciMenu menu={ikinci} adres={konum.pathname} sayaclar={sayaclar} />
+          <IkinciMenu menu={ikinci} adres={seritAdresi(konum.pathname)} sayaclar={sayaclar} />
         )}
 
         <span className="tc-kabuk-tarama" aria-hidden="true" />

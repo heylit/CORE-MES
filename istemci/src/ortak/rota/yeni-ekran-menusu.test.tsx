@@ -6,7 +6,7 @@ import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from '../arayuz/Kabuk.tsx';
 import { modulRotalari } from './kesif.ts';
 import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
-import { gorunumGecisi, TASINAN_EKRANLAR, YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
+import { gorunumGecisi, seritAdresi, TASINAN_EKRANLAR, YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
 
 function ciz(islemler: readonly string[], kapali: readonly string[] = []) {
   return render(
@@ -38,6 +38,7 @@ describe('yeni ekran menü satırları', () => {
     // Kuyruk eski adresine geçti (541): deneme satırı yoktur, ana menüdeki Kuyruk yeni ekranı açar.
     expect(within(menu).queryByRole('link', { name: 'Kuyruk (yeni)' })).toBeNull();
     expect(within(menu).getByRole('link', { name: 'Kuyruk' }).getAttribute('href')).toBe('/kuyruk');
+    expect(within(menu).queryByRole('link', { name: 'Reçete ve Rota (yeni)' })).toBeNull();
   });
 
   it('yönetici olmayan kişi, modül sayfalarının işlemleri olsa da satırları görmez', () => {
@@ -117,7 +118,7 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
   it('yeni ve eski adres kayıtlı modül rotasıdır; eski adres sayfanın alt yoludur', () => {
     for (const t of TASINAN_EKRANLAR) {
       for (const yol of [t.yol, t.eski]) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
-      expect(t.eski.startsWith(`${t.yol}/`)).toBe(true);
+      expect(t.eski.startsWith(`${t.yol}/`) || t.eski.startsWith('/recete-rota/eski')).toBe(true);
     }
   });
 
@@ -141,5 +142,36 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     const maddeler = hesapMaddeleri();
     expect(maddeler).not.toContain('Eski görünüm');
     expect(maddeler).not.toContain('Yeni görünüm');
+  });
+});
+
+describe('Reçete ve Rota eski adresinde yeni ekran (541b, 553 1 a)', () => {
+  const adreste = (adres: string) => render(
+    <MemoryRouter initialEntries={[adres]}>
+      <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={ISLEMLER}><p>icerik</p></Kabuk>
+    </MemoryRouter>,
+  );
+  const serit = () => screen.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+  const secili = () => within(serit()).getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent);
+
+  it('yalnız yedi bölüm adresi taşınmıştır; Planlama ve alt yollar eski adreste kalır', () => {
+    expect(gorunumGecisi('/recete-rota')).toEqual({ baslik: 'Eski görünüm', yol: '/recete-rota/eski' });
+    expect(gorunumGecisi('/recete-rota/stock/')).toEqual({ baslik: 'Eski görünüm', yol: '/recete-rota/eski/stock' });
+    expect(gorunumGecisi('/recete-rota/eski/res')).toEqual({ baslik: 'Yeni görünüm', yol: '/recete-rota/res' });
+    expect(gorunumGecisi('/recete-rota/plan')).toBeNull();
+    expect(gorunumGecisi('/recete-rota/planlama-yeni')).toBeNull();
+    expect(gorunumGecisi('/recete-rota/stockx')).toBeNull();
+  });
+
+  it('kabuk şeridi yeni ekranda durur; eski görünümde bölümün maddesi seçili görünür', () => {
+    expect(yeniEkranAdresiMi('/recete-rota')).toBe(false);
+    expect(seritAdresi('/recete-rota/eski/stock')).toBe('/recete-rota/stock');
+    expect(seritAdresi('/recete-rota/plan')).toBe('/recete-rota/plan');
+    adreste('/recete-rota/schema');
+    expect(secili()).toEqual(['Ürün ve rotalar']);
+    expect(within(serit()).getByRole('link', { name: /^Planlama motoru/ }).getAttribute('href')).toBe('/recete-rota/plan');
+    cleanup();
+    adreste('/recete-rota/eski/stock');
+    expect(secili()).toEqual(['Stok']);
   });
 });

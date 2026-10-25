@@ -28,7 +28,7 @@ describe('R1 akış tablosu: izinli', () => {
         'POST /rota/revizyonlar/72/kaydet': (g) => { kaydet = g; return json(200, { id: 72, durum: 'taslak', surum: 2 }); },
       },
     });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const tablo = await tabloAc();
     for (const baslik of ['Girenler', 'Rota adımları', 'Çıkanlar']) expect(within(tablo).getByText(baslik)).toBeTruthy();
     expect(within(tablo).getByText('HM-0012')).toBeTruthy();
@@ -49,7 +49,7 @@ describe('R1 akış tablosu: izinli', () => {
 describe('R1 akış tablosu: reddedilen', () => {
   it('yalnız okuyan kişide alanlar kapalıdır, ekleme ve silme düğmesi yoktur, yazma gitmez', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const tablo = await tabloAc();
     expect((within(tablo).getByLabelText('Hazırlık dk') as HTMLInputElement).disabled).toBe(true);
     expect((within(tablo).getByLabelText('Operasyon') as HTMLSelectElement).disabled).toBe(true);

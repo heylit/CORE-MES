@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/yeni', '/arkon/yeni/operator', '/kuyruk', '/recete-rota/yeni', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
+  '/arkon/yeni', '/arkon/yeni/operator', '/kuyruk', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -33,4 +33,15 @@ test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) =>
   const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
   await expect(menu).toBeVisible();
   await expect(menu.locator('[aria-current="page"]')).toContainText('Planlama motoru');
+});
+
+// Reçete ve Rota'nın yeni ekranı kendi sekmesini çizmez, kabuğun şeridi durur (553 1 a): Planlama sayfalarına yol kalır.
+test('Reçete ve Rota yeni ekranında kabuğun şeridi durur, tek şerit vardır', async ({ page, ac }) => {
+  for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota/res', 'Kaynaklar'], ['/recete-rota/eski/res', 'Kaynaklar']] as const) {
+    await ac(yol);
+    const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+    await expect(menu, yol).toBeVisible();
+    await expect(menu.locator('[aria-current="page"]'), yol).toHaveText(new RegExp(`^${madde}`));
+    await expect(page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }), yol).toHaveCount(0);
+  }
 });

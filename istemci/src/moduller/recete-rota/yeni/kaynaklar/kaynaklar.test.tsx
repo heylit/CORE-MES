@@ -53,7 +53,7 @@ const sureSunucusu = (k: Kullanici) => sunucuKur(k, {
 describe('R2 Süreler', () => {
   it('izinli: rota.yaz olan elle ölçüm yazar ve bekleyen ölçümü kabul eder; okunan son satır gider, süreler yeniden okunur', async () => {
     const istekler = sureSunucusu(YONETICI);
-    rrAc('/recete-rota/yeni/sureler');
+    rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
     const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık dakika, MM-0001 OP 10' });
     const kart = within(bolge).getByRole('article', { name: 'MM-0001 OP 10 süreleri' });
@@ -73,7 +73,7 @@ describe('R2 Süreler', () => {
 
   it('reddedilen: geçersiz sayı istek atmaz; rota.yaz olmayan girdi ve kabul düğmesi görmez, ölçüm metin olarak görünür', async () => {
     const istekler = sureSunucusu(YONETICI);
-    rrAc('/recete-rota/yeni/sureler');
+    rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
     yaz(await within(bolge).findByRole('textbox', { name: 'Gerçekleşen değişim dakika, MM-0001 OP 10' }), '-2');
     await screen.findByText('Sıfır ya da sıfırdan büyük bir sayı girin.');
@@ -81,7 +81,7 @@ describe('R2 Süreler', () => {
     cleanup();
 
     const okuyan = sureSunucusu(OKUYAN);
-    rrAc('/recete-rota/yeni/sureler');
+    rrAc('/recete-rota/sureler');
     const b2 = await bolumAc('Süreler');
     await within(b2).findByText('4,5');
     expect(within(b2).queryAllByRole('textbox')).toEqual([]);
@@ -93,7 +93,7 @@ describe('R2 Süreler', () => {
     const d = ornekDurum();
     d.routes = null;
     const istekler = sunucuKur(OKUYAN, { durum: d });
-    rrAc('/recete-rota/yeni/sureler');
+    rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
     expect(within(bolge).getByText(/rota okuma yetkiniz yok/)).toBeTruthy();
     expect(istekler.some((i) => i.yol.includes('/sureler'))).toBe(false);
@@ -114,7 +114,7 @@ const BELGE = [{ anahtar: 'recete-rota-motoru-v1', bicim: 'json' as const, deger
 describe('R2 Malzemeler', () => {
   it('kartlar türüne göre gruplanır; eski kalemler belgeden yalnız okunur, belgeye yazılmaz', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: statuluDurum(), kayitlar: BELGE });
-    rrAc('/recete-rota/yeni/items');
+    rrAc('/recete-rota/items');
     const bolge = await bolumAc('Malzemeler');
     expect(within(within(bolge).getByRole('region', { name: 'Mamul' })).getByText('MM-0001')).toBeTruthy();
     const eski = await within(bolge).findByRole('region', { name: 'Kartı olmayan eski kayıtlar' });
@@ -132,7 +132,7 @@ describe('R2 Malzemeler', () => {
         'POST /finans/maliyetler/malzeme/yaz': () => json(200, {}),
       },
     });
-    rrAc('/recete-rota/yeni/items');
+    rrAc('/recete-rota/items');
     const bolge = await bolumAc('Malzemeler');
     yaz(await within(bolge).findByRole('textbox', { name: 'Statü adı' }), 'Karantinada');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
@@ -146,7 +146,7 @@ describe('R2 Malzemeler', () => {
 
   it('reddedilen: yazma işlemi olmayan statü ve maliyet girdisi görmez; kart okuma yetkisi yoksa bölüm boştur', async () => {
     sunucuKur(OKUYAN, { durum: statuluDurum() });
-    rrAc('/recete-rota/yeni/items');
+    rrAc('/recete-rota/items');
     const bolge = await bolumAc('Malzemeler');
     expect(within(bolge).getByText('Karantina')).toBeTruthy();
     expect(within(bolge).queryAllByRole('textbox')).toEqual([]);
@@ -156,7 +156,7 @@ describe('R2 Malzemeler', () => {
     const d = ornekDurum();
     d.items = null;
     sunucuKur(YONETICI, { durum: d });
-    rrAc('/recete-rota/yeni/items');
+    rrAc('/recete-rota/items');
     const b2 = await bolumAc('Malzemeler');
     expect(within(b2).getByText(/okuma yetkiniz yok/)).toBeTruthy();
   });
@@ -188,7 +188,7 @@ describe('R2 Kaynaklar', () => {
         'POST /is-merkezleri/41/sil': () => json(200, {}),
       },
     });
-    rrAc('/recete-rota/yeni/res');
+    rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');
     // Genel bakış: plan teorik süreyi kullanır (Soru 490/1 a; eski cümle 468/4 a ile geçersizdi).
     expect(within(bolge).getByText(/kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır/)).toBeTruthy();
@@ -215,7 +215,7 @@ describe('R2 Kaynaklar', () => {
 
   it('reddedilen: istasyonlar.yaz olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
     const istekler = sunucuKur({ ...OKUYAN, islemler: [KAPI, 'sayfa.recete-rota', 'recete-rota.oku'] } as Kullanici, { durum: kaynakDurumu(), yazmalar: SAHIP_OKUMALARI });
-    rrAc('/recete-rota/yeni/res');
+    rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');
     altSekme(bolge, /İş merkezleri/);
     await within(bolge).findByText('TZ1');
@@ -227,7 +227,7 @@ describe('R2 Kaynaklar', () => {
 
   it('vardiya matrisi takvimden yalnız okunur; takvim yoksa uyarı; düğme Vardiya sayfasını açar; alt sekme cihazda kalır', async () => {
     sunucuKur(YONETICI, { durum: kaynakDurumu(), yazmalar: SAHIP_OKUMALARI });
-    rrAc('/recete-rota/yeni/res');
+    rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');
     altSekme(bolge, /Vardiyalar/);
     const matris = await within(bolge).findByRole('table', { name: 'Haftalık vardiya matrisi' });
@@ -240,7 +240,7 @@ describe('R2 Kaynaklar', () => {
     cleanup();
 
     sunucuKur(YONETICI, { durum: kaynakDurumu() });
-    rrAc('/recete-rota/yeni/res');
+    rrAc('/recete-rota/res');
     const b2 = await bolumAc('Kaynaklar');
     expect(within(b2).getByRole('tab', { name: 'Vardiyalar', selected: true })).toBeTruthy();
     await within(b2).findByText(/Vardiya takvimi okunamadı/);
@@ -250,7 +250,7 @@ describe('R2 Kaynaklar', () => {
     const d = kaynakDurumu();
     d.stations = null;
     sunucuKur(YONETICI, { durum: d });
-    rrAc('/recete-rota/yeni/res');
+    rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');
     expect(within(bolge).getByText(/İstasyonlar verisine erişimin yok/)).toBeTruthy();
   });

@@ -6,7 +6,9 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { eskiAdresi } from './eski-adres.ts';
 import { rotalar } from './rotalar.tsx';
+import { SEKMELER } from './yeni/sekmeler.ts';
 
 // Kişi adları uydurmadır.
 export const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'plan.oku', 'recete-rota.planlama-oku'] };
@@ -32,10 +34,18 @@ export function sunucuKur(kullanici: Kullanici, kayitlar: KayitlarCevabi['kayitl
 
 const Konum = () => <output data-testid="konum">{useLocation().pathname}</output>;
 
+// Bu yardımcı eski çerçevenin testlerinindir: Reçete ve Rota maddesinin adresi yeni ekrana geçtiği için (541) çerçeve o bölümün eski
+// adresinde açılır. Planlama adresleri olduğu gibi kalır.
+const cerceveAdresi = (adres: string): string => {
+  const [yol = '', ara] = adres.split('?');
+  if (!SEKMELER.some((s) => s.yol === yol)) return adres;
+  return ara === undefined ? eskiAdresi(yol) : `${eskiAdresi(yol)}?${ara}`;
+};
+
 export function ac(adres: string) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
-    <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}>
+    <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[cerceveAdresi(adres)]}>
       <Konum />
       <Routes>
         {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}

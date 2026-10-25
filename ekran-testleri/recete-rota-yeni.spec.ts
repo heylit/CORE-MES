@@ -1,15 +1,20 @@
+import type { Page } from '@playwright/test';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Yeni Reçete ve Rota ekranı (TS geçişi). Alıma kadar yalnız yöneticiye açıktır; parça yazarları (R1-R3) kendi describe bloğunu ekler.
+// Yeni Reçete ve Rota ekranı (TS geçişi). Menü maddesinin adresinde açılır (541); bölümler kabuğun ikinci menü şeridindedir, ekran kendi
+// sekmesini çizmez (553 1 a). Parça yazarları (R1-R3) kendi describe bloğunu ekler.
 // Bölümler parçalarca doldurulur: iskelet testi yer tutucu metnine değil, bölgeye ve parçanın işaretine bakar.
 const BOLUMLER = [
   { sekme: 'Üretim emirleri', parca: 'R3' }, { sekme: 'Stok', parca: 'R3' }, { sekme: 'Ürün ve rotalar', parca: 'R1' },
   { sekme: 'Operasyonlar', parca: 'R1' }, { sekme: 'Süreler', parca: 'R2' }, { sekme: 'Malzemeler', parca: 'R2' }, { sekme: 'Kaynaklar', parca: 'R2' },
 ] as const;
 
+// Şerit maddesinin adı sayı rozeti taşıyabilir (Üretim emirleri 2): ad baştan eşlenir.
+const seritte = (page: Page, ad: string) => page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' }).getByRole('link', { name: new RegExp(`^${ad}`) });
+
 test.describe('R0 iskelet', () => {
-  test('yönetici açar: başlık, yedi sekme ve her bölüm; yatay taşma yok', async ({ page, ag, ac }) => {
-    await ac('/recete-rota/yeni');
+  test('yönetici açar: başlık, şeritteki yedi bölüm ve her bölüm; yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/recete-rota');
     const ekran = page.locator('.tc-rry');
     await expect(ekran.getByRole('heading', { name: 'Üretim emirleri', level: 2 })).toBeVisible();
     // Eski ekranın plan şeridi her sekmenin üstündedir; "Onaya gönder" plan yazdığından görünür ama pasiftir (357 b).
@@ -19,14 +24,18 @@ test.describe('R0 iskelet', () => {
     if (await onaya.count()) await expect(onaya).toBeDisabled();
     // Plan canlıyken "değişiklik bekliyor" denmez; motor farkı ayrı satırdır (500 a).
     if (await serit.getByText('PLAN CANLI').count()) await expect(serit.getByText(/değişiklik bekliyor/)).toHaveCount(0);
-    const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
-    // Eski ekranın sırası (497/1 a): sekmeler en üstte, altında şerit, sonra bölüm başlığı.
+    const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
+    await expect(page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' })).toHaveCount(0);
+    // Eski ekranın sırası (497/1 a): kabuğun şeridi en üstte, altında plan şeridi, sonra bölüm başlığı.
     const ust = async (l: typeof serit) => (await l.boundingBox())?.y ?? Number.NaN;
-    expect(await ust(sekmeler)).toBeLessThan(await ust(serit));
+    expect(await ust(menu)).toBeLessThan(await ust(serit));
     expect(await ust(serit)).toBeLessThan(await ust(ekran.getByRole('heading', { name: 'Üretim emirleri', level: 2 })));
-    await expect(sekmeler.getByRole('tab')).toHaveCount(BOLUMLER.length);
+    await expect(seritte(page, 'Üretim emirleri')).toHaveAttribute('aria-current', 'page');
+    // Planlama sayfaları aynı şeritten açılır (553'ün nedeni).
+    await expect(seritte(page, 'Planlama motoru')).toHaveAttribute('href', '/recete-rota/plan');
     for (const b of BOLUMLER) {
-      await sekmeler.getByRole('tab', { name: b.sekme }).click();
+      await seritte(page, b.sekme).click();
+      await expect(seritte(page, b.sekme)).toHaveAttribute('aria-current', 'page');
       const bolge = page.getByRole('region', { name: b.sekme });
       await expect(bolge.locator(`[data-parca="${b.parca}"]`)).toBeVisible({ timeout: 15_000 });
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
@@ -34,12 +43,23 @@ test.describe('R0 iskelet', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  test.describe('kapı', () => {
-    // Planlama rolü sayfayı görür ama kapı işlemi yoktur: kabuk değil yeni ekranın kapısı durdurur.
+  test.describe('eski adres (541)', () => {
+    // Planlama rolü sayfayı görür, yeni ekran kapısı yoktur: eski adres ona da yeni ekranı açar; eski görünüm kişi menüsündedir.
     test.use({ hesap: 'ornek.planlama' });
-    test('yönetici olmayana yeni ekran açılmaz', async ({ page, ag, ac }) => {
-      await ac('/recete-rota/yeni');
-      await expect(page.getByText('Bu ekran hazırlanıyor')).toBeVisible();
+    test("Reçete ve Rota'yı gören açar; Eski görünüm çerçeveyi aynı bölümde açar, Yeni görünüm geri getirir", async ({ page, ag, ac }) => {
+      const bolum = page.locator('.tc-rry-icerik[data-bolum="stock"]');
+      await ac('/recete-rota/stock');
+      await expect(bolum.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText('Bu ekran hazırlanıyor')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Hesap' }).click();
+      await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
+      await expect(page).toHaveURL(/\/recete-rota\/eski\/stock$/);
+      await expect(page.locator('main iframe[title="Reçete ve Rota"]')).toBeVisible({ timeout: 20_000 });
+      await expect(seritte(page, 'Stok')).toHaveAttribute('aria-current', 'page');
+      await page.getByRole('button', { name: 'Hesap' }).click();
+      await page.getByRole('menuitem', { name: 'Yeni görünüm' }).click();
+      await expect(page).toHaveURL(/\/recete-rota\/stock$/);
+      await expect(bolum).toBeVisible();
       expect(ag.hatalar).toEqual([]);
     });
   });
@@ -52,7 +72,7 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
   test('şema, düzenleme paneli, ürün listesi ve operasyonlar açılır; yatay taşma yok', async ({ page, ag, ac }) => {
     const yazmalar: string[] = [];
     page.on('request', (r) => { if (yazma(r.url(), r.method())) yazmalar.push(r.url()); });
-    await ac('/recete-rota/yeni/schema');
+    await ac('/recete-rota/schema');
     const sema = page.getByRole('region', { name: 'Ürün ve rotalar' });
     await expect(sema.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
@@ -65,7 +85,7 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
     await sema.getByRole('button', { name: 'Ürün listesi' }).click();
     await expect(sema.getByRole('table', { name: 'Ürünler ve rotaları' }).or(sema.getByText('Henüz ürün yok', { exact: false }))).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-    await page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }).getByRole('tab', { name: 'Operasyonlar' }).click();
+    await seritte(page, 'Operasyonlar').click();
     const ops = page.getByRole('region', { name: 'Operasyonlar' });
     await expect(ops.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
     await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toBeVisible();
@@ -78,7 +98,7 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
 test.describe('R3 Üretim emirleri ve Stok', () => {
   // Veri tabanı boş da olabilir: test bölgeye ve parçanın işaretine bakar, varsa ilk emri açar. GET dışı istek ag.hatalar'a düşer.
   test('iki bölüm açılır, emir ayrıntısı açılır; yatay taşma yok', async ({ page, ag, ac }) => {
-    await ac('/recete-rota/yeni');
+    await ac('/recete-rota');
     const emirler = page.getByRole('region', { name: 'Üretim emirleri' });
     await expect(emirler.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
     // Eski süzgeç çubuğu (497/2 a): geniş ekranda her grup tek satırlık bölümlü çubuk; emir no hiçbir genişlikte kırılmaz.
@@ -98,7 +118,7 @@ test.describe('R3 Üretim emirleri ve Stok', () => {
       await expect(ilk).toHaveAttribute('aria-expanded', 'true');
     }
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
-    await page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' }).getByRole('tab', { name: 'Stok' }).click();
+    await seritte(page, 'Stok').click();
     const stok = page.getByRole('region', { name: 'Stok' });
     await expect(stok.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
@@ -111,21 +131,20 @@ test.describe('R2 kaynaklar', () => {
   const yazmalar = (y: readonly string[]) => y.filter((x) => x !== 'POST /api/rota/karttan-taslaklar');
 
   test('Süreler, Malzemeler ve Kaynaklar açılır; Kaynaklar alt sekmeleri gezilir; yatay taşma ve yazma yok', async ({ page, ag, ac }) => {
-    await ac('/recete-rota/yeni/sureler');
+    await ac('/recete-rota/sureler');
     const sureler = page.getByRole('region', { name: 'Süreler' });
     await expect(sureler.locator('[data-parca="R2"]')).toBeVisible({ timeout: 15_000 });
     await expect(sureler.getByRole('searchbox', { name: 'Ürün ara' })).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-    const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
-    await sekmeler.getByRole('tab', { name: 'Malzemeler' }).click();
+    await seritte(page, 'Malzemeler').click();
     const malzemeler = page.getByRole('region', { name: 'Malzemeler' });
     await expect(malzemeler.getByRole('searchbox', { name: 'Malzeme ara' })).toBeVisible({ timeout: 15_000 });
     await expect(malzemeler.getByRole('group', { name: 'Tür' })).toBeVisible();
     await expect(malzemeler.getByRole('region', { name: 'Statüler' })).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-    await sekmeler.getByRole('tab', { name: 'Kaynaklar' }).click();
+    await seritte(page, 'Kaynaklar').click();
     const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
     const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
     await expect(alt.getByRole('tab')).toHaveCount(6, { timeout: 15_000 });
@@ -140,7 +159,7 @@ test.describe('R2 kaynaklar', () => {
   });
 
   test('Kaynaklar: ekleme penceresi vazgeçilince istek gitmez; vardiya düzenleme Vardiya sayfasını açar', async ({ page, ag, ac }) => {
-    await ac('/recete-rota/yeni/res');
+    await ac('/recete-rota/res');
     const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
     const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
     await alt.getByRole('tab', { name: 'İş merkezleri ve istasyonlar' }).click({ timeout: 15_000 });

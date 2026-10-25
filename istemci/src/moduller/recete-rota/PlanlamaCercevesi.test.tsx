@@ -120,7 +120,7 @@ describe('planlama çerçevesi', () => {
     const istekler = sunucuKur(YAZAR, [KAYIT]);
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/recete-rota']}>
+      <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/recete-rota/eski']}>
         <Git yol="/recete-rota/terminler" />
         <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
       </MemoryRouter></BildirimSaglayici></QueryClientProvider>,

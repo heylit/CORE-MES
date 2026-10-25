@@ -29,7 +29,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
         'POST /rota/revizyonlar/72/kaydet': (g) => { kaydet = g; return json(200, { id: 72, durum: 'taslak', surum: 2 }); },
       },
     });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     const kutu = await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).getByText('HM-0012')).toBeTruthy();
@@ -54,7 +54,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
       durum: tam,
       yazmalar: { 'POST /rota/revizyonlar/72/onaya-gonder': () => json(200, { id: 72, durum: 'onay', surum: 5 }) },
     });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'Onaya gönder…' }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder' }));
@@ -66,7 +66,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
   it('giren eksik taslak onaya gönderilmez, eksik söylenir', async () => {
     const eksik = rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [adimOrnegi({ ins: [] })])]);
     const istekler = sunucuKur(YONETICI, { durum: eksik });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'Onaya gönder…' }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder' }));
@@ -82,7 +82,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
         'POST /rota/revizyonlar/72/kaydet': () => json(409, { kod: 'CAKISMA', mesaj: 'Kayıt başka yerde değişti.', ayrinti: { neden: 'eski-surum' } }),
       },
     });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
     const islem = within(bolge).getByLabelText('İşlem (dk / 1 adet)');
@@ -93,7 +93,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
 
   it('ürün listesinden seçilen ürün şemada açılır', async () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(within(bolge).getByRole('button', { name: 'Ürün listesi' }));
     const tablo = await within(bolge).findByRole('table', { name: 'Ürünler ve rotaları' });
@@ -105,7 +105,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
 describe('R1 Ürün ve rotalar: reddedilen', () => {
   it('rota yazma işlemi olmayan düzenleme düğmelerini görmez, alanlar kapalı, istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
     expect(within(bolge).queryByRole('button', { name: 'Yeni rota' })).toBeNull();
@@ -120,7 +120,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'rota.onayla') }, {
       durum: rotaDurumu([revizyonOrnegi('72', 'B', 'onay', 2)]),
     });
-    rrAc('/recete-rota/yeni/schema');
+    rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).queryByRole('button', { name: 'Onayla…' })).toBeNull();

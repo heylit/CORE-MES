@@ -7,6 +7,8 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
 import { useYalitilmisGorunum } from '../../ortak/rota/cerceve-gorunumu.ts';
+import { IKINCI_MENU_TANIMLARI, type IkinciMenu } from '../../ortak/rota/ikinci-menu.ts';
+import { eskiAdresi } from './eski-adres.ts';
 import { cerceveBetigi } from './cerceve-kopru.ts';
 import type { CerceveAyari } from './cerceve-kopru.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -27,6 +29,11 @@ const POLITIKA = "default-src 'none'; script-src 'unsafe-inline'; style-src 'uns
 // Planlama çerçevesi ayrıca 'wasm-unsafe-eval' ister: HiGHS WebAssembly'dir (361 b); ikili kabuktan gelir, ağ yine kapalıdır.
 export const PLANLAMA_POLITIKASI = POLITIKA.replace("script-src 'unsafe-inline'", "script-src 'unsafe-inline' 'wasm-unsafe-eval'");
 export const KOK = '/recete-rota';
+// Reçete ve Rota maddeleri yeni ekrandadır (541): çerçeve o görünümleri eski adreste açar, çerçeve içindeki görünüm değişimi de adresi
+// oraya çeker. Planlama maddeleri kendi adresinde kalır.
+export const ESKI_MENULER: readonly IkinciMenu[] = IKINCI_MENU_TANIMLARI.map((m) => (m.kok !== KOK ? m : {
+  ...m, gruplar: m.gruplar.map((g) => ({ ...g, maddeler: g.maddeler.map((d) => (planlamaYoluMu(d.yol) ? d : { ...d, yol: eskiAdresi(d.yol) })) })),
+}));
 const KANAL = 'recete-rota';
 // Çerçevenin gidebileceği sayfalar: malzeme yalnız Malzemeler ve Hizmetler'de açılır; istasyonun plan ayarı ve makine durumu İstasyonlar'da,
 // vardiya, tatil ve kişi vardiyası Vardiya'da düzenlenir.
@@ -136,7 +143,7 @@ export function ReceteRotaCercevesi() {
   const [hazirlik, setHazirlik] = useState<Hazirlik | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
-  const gorunumIletisi = useYalitilmisGorunum(KOK);
+  const gorunumIletisi = useYalitilmisGorunum(KOK, ESKI_MENULER);
   const git = useNavigate();
   // Okuma yetkisi olmayan rolde prototip planı boş listelerle çizer ve sahte değer gösterir (plan akışı H4): kabuk o sekmelerde
   // çerçeveyi gizler (köprü sürer) ve nedenini söyler.
