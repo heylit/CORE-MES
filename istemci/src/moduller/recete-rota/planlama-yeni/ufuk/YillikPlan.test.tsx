@@ -41,12 +41,15 @@ describe('Yıllık plan', () => {
     expect(cozumler.map((c) => c.sure)).toEqual([30, 60, 30]);
     expect(cozumler[1]?.lp).toContain('Subject To');
     expect(document.querySelector('.tc-isi-ust h2')?.textContent).toContain('Tezgâh grubu × dönem, kapasite kullanımı');
-    expect(document.querySelector('.tc-isi-durum')?.textContent).toBe('En sıcak blok torna, 05.10–Eyl 27: en çok %0 dolu. Bütün yük karşılanıyor.Yeniden çöz');
+    expect(document.querySelector('.tc-isi-durum')?.textContent).toBe('En sıcak blok Torna, 05.10–Eyl 27: en çok %0 dolu. Bütün yük karşılanıyor.Yeniden çöz');
     expect(screen.getAllByRole('button', { name: 'Yeniden çöz' })).toHaveLength(2);
-    expect(within(izgara).getAllByRole('button')[0]?.getAttribute('aria-label')).toMatch(/^torna, .+: %\d+ dolu \(/);
+    expect(within(izgara).getAllByRole('button')[0]?.getAttribute('aria-label')).toMatch(/^Torna, .+: %\d+ dolu \(/);
     expect(screen.getByText('Tüm satırlar')).toBeTruthy();
     expect(screen.getByText('Plan bedeli')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Darboğaz ve gölge fiyat' })).toBeTruthy();
+    // Genel gider girilmemiş: yatırım denenmez ve nedeni bu yazılır (kapasite açığının yokluğu değil).
+    expect(screen.getByText('Genel gider (tezgâh bedeli) girilmediği için yatırım denenmedi.')).toBeTruthy();
+    expect(screen.queryByText(/kapasite açığı yok/)).toBeNull();
     expect(screen.getByLabelText('Geç teslim bedeli, değerin %/gün')).toBeTruthy();
   }, 20000);
 
@@ -58,8 +61,8 @@ describe('Yıllık plan', () => {
     fireEvent.click(within(await screen.findByRole('region', { name: 'Isı haritası' }, BEKLE)).getByRole('button', { name: 'Yıllık planı çöz' }));
     const izgara = await screen.findByRole('group', { name: 'Tezgâh grubu × dönem, kapasite kullanımı' });
     fireEvent.click(within(izgara).getAllByRole('button')[0] as HTMLElement);
-    const ac2 = screen.getByRole('region', { name: /^torna · / });
-    expect(within(ac2).getByText(/^torna .+: %\d+ dolu .*Kapasite yetiyor\.$/)).toBeTruthy();
+    const ac2 = screen.getByRole('region', { name: /^Torna · / });
+    expect(within(ac2).getByText(/^Torna .+: %\d+ dolu .*Kapasite yetiyor\.$/)).toBeTruthy();
     expect(within(ac2).getByRole('button', { name: /Yıllık planı yeniden çöz/ })).toBeTruthy();
     expect(within(ac2).queryByRole('button', { name: 'Geri' })).toBeNull();
     const mesai = within(ac2).getByLabelText(/Ek mesai sınırı \(kapasitenin %\)/);
@@ -89,10 +92,10 @@ describe('Yıllık plan', () => {
     const hucre = within(izgara).getAllByRole('button')[0] as HTMLElement;
     fireEvent.click(hucre);
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('region', { name: /^torna · / })).toBeNull();
+    expect(screen.queryByRole('region', { name: /^Torna · / })).toBeNull();
     fireEvent.click(within(izgara).getAllByRole('button')[0] as HTMLElement);
-    fireEvent.click(within(screen.getByRole('region', { name: /^torna · / })).getByRole('button', { name: 'Vazgeç' }));
-    expect(screen.queryByRole('region', { name: /^torna · / })).toBeNull();
+    fireEvent.click(within(screen.getByRole('region', { name: /^Torna · / })).getByRole('button', { name: 'Vazgeç' }));
+    expect(screen.queryByRole('region', { name: /^Torna · / })).toBeNull();
     expect(govdeler).toHaveLength(0);
   }, 20000);
 
