@@ -200,6 +200,16 @@ test.describe('M4 şablonlar ve kılavuz', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
+  test('Logo gönderimi sekmesi: kabuğun Logo sayfası yeni ekranda açılır, yazma yok, sayfa yatay taşmaz (497/6 a)', async ({ page, ac, ag }) => {
+    await ac('/malzemeler/yeni-ekran');
+    await page.getByRole('tab', { name: 'Logo gönderimi' }).click();
+    await expect(page).toHaveURL(/\/malzemeler\/yeni-ekran\/logo$/);
+    await expect(page.getByRole('tab', { name: 'Logo gönderimi' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('table', { name: 'Logo gönderim durumu' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    expect(ag.yazmalar).toEqual([]);
+  });
+
   test('Kılavuz: bölümler ve tablolar çizilir, sayfa yatay taşmaz', async ({ page, ac, ag }) => {
     await ac('/malzemeler/yeni-ekran/kilavuz');
     await expect(page.getByRole('heading', { name: 'Kart nasıl açılır?' })).toBeVisible();
