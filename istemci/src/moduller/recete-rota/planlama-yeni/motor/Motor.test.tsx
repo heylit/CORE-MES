@@ -334,6 +334,46 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('region', { name: 'Çizelge' }).hasAttribute('data-tam')).toBe(false);
   });
 
+  it('Kuyruk ve Matris: tezgâh sütunları ve kartlar, oklar ve tezgâh seçimi pasif; matris görünüm ve gün sayısı; tezgâh adı kuyruğunu, kart işi Siparişler\'de açar', () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Matris' }));
+    expect(screen.getByText('Kırılım:')).toBeTruthy();
+    const tablo = screen.getByRole('table');
+    expect(within(tablo).getAllByRole('columnheader').map((x) => x.textContent)).toEqual(['Tezgâh', '19.10', '26.10', '02.11', '09.11', '16.11', '23.11', '30.11', '07.12', '14.12', 'Toplam']);
+    expect(screen.getByText(/o dönemde üretilen parça adedi/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Personel' }));
+    expect(within(screen.getByRole('table')).getByText('Kişi atanamadı')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Sipariş' }));
+    expect(within(screen.getByRole('table')).getByText('ORNEK Flanş · 50 adet · 72,9 sa gecikme').closest('tr')?.hasAttribute('data-uyari')).toBe(true);
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: /^Gün$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: '14 gün' }));
+    expect(within(screen.getByRole('table')).getAllByRole('columnheader')).toHaveLength(16);
+    fireEvent.click(screen.getByRole('tab', { name: 'Tezgâh' }));
+    fireEvent.click(within(screen.getByRole('table')).getByRole('button', { name: /^4\s*Örnek Dik İşlem 2/ }));
+    const k = screen.getByRole('region', { name: 'Tezgâh kuyrukları' });
+    expect(within(k).getAllByRole('region').map((x) => x.getAttribute('aria-label'))).toEqual(['5 kuyruğu', '3 kuyruğu', '4 kuyruğu', '1 kuyruğu', '2 kuyruğu']);
+    expect(within(k).getByRole('region', { name: '4 kuyruğu' }).hasAttribute('data-odak')).toBe(true);
+    expect(within(k).getByText('Aralık dışında 1 iş daha')).toBeTruthy();
+    expect(within(k).getByText('Cmt 09:59 → 11:38')).toBeTruthy();
+    const ok = within(k).getAllByRole('button', { name: 'Sırada öne al' })[0]!;
+    expect([ok.getAttribute('aria-disabled'), ok.getAttribute('title')]).toEqual(['true', `Sırada öne al: ${MOTOR_NOTU}`]);
+    fireEvent.click(screen.getByRole('tab', { name: 'Bugün' }));
+    expect(within(k).getAllByText('Bu aralıkta iş yok.')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('tab', { name: '1 hafta' }));
+    fireEvent.click(within(within(k).getByRole('region', { name: '1 kuyruğu' })).getByRole('button', { name: 'Plan masasında gör' }));
+    expect(screen.getByRole('tab', { name: 'Siparişler' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(screen.getByRole('region', { name: 'Plan çizelgesi' })).getByRole('button', { name: /^3\.10 · / }).hasAttribute('data-secili')).toBe(true);
+  });
+
+  it('plan yazma yetkisi yoksa kuyrukta oklar ve tezgâh seçimi yok', () => {
+    ac({ yaz: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Kuyruk' }));
+    expect(screen.queryByRole('button', { name: 'Sırada öne al' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Plan masasında gör' }).length).toBe(3);
+  });
+
   it('Stüdyo atölyeye gider; Keşfet hazırlanıyor', () => {
     const { git } = ac();
     fireEvent.click(screen.getAllByRole('button', { name: 'Stüdyo' })[0]!);
