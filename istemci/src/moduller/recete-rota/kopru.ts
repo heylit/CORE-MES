@@ -24,7 +24,21 @@ export type KopruIsleyici = (tip: string, veri: unknown) => Promise<unknown>;
 // reddettiği gövde alanı (ör. adimlar.2.islemSuresiDk); çerçeve sorunlu adımı ekrandaki numarasıyla söyler.
 export interface KopruHatasi { hata: string; durum: number; eskiSurum?: true; alan?: string }
 
-type EkranYerlesimi = MotorYerlesimiCevabi['ekranYerlesimi'];
+// Ekran yerleşimine motorun adım (bölünmüş işte parça) bitişi eklenir (468/2 a); bitiş `yerlesimler`dedir, `ekranYerlesimi` yalnız başlangıç taşır.
+type EkranYerlesimi = Record<string, Array<MotorYerlesimiCevabi['ekranYerlesimi'][string][number] & { bitis?: string }>>;
+function bitisliYerlesim(c: MotorYerlesimiCevabi): EkranYerlesimi | null {
+  if (!c.ekranYerlesimi) return null;
+  const bitis = new Map<string, string>();
+  for (const y of c.yerlesimler ?? []) {
+    const anahtar = `${y.emirNo}|${String(y.opNo)}`;
+    if (y.parcalar?.length) for (const p of y.parcalar) bitis.set(`${anahtar}~${String(p.no)}`, p.bitis);
+    else bitis.set(anahtar, y.bitis);
+  }
+  return Object.fromEntries(Object.entries(c.ekranYerlesimi).map(([k, l]) => {
+    const b = bitis.get(k);
+    return [k, b === undefined ? l : l.map((x) => ({ ...x, bitis: b }))];
+  }));
+}
 type Nesne = Record<string, unknown>;
 const tamSayi = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0 && (v as number) < 1e10;
 function fasonTahminSorgusu(v: unknown): string {
@@ -327,7 +341,7 @@ export function kopruKur(
   };
   const motorYerlesimiOku = (): Promise<EkranYerlesimi | null> =>
     api.get<MotorYerlesimiCevabi>('/plan/motor-yerlesimi').then(
-      (c) => { motorDurumu(false); motorUyarilari(c.uyarilar); return c.ekranYerlesimi ?? null; },
+      (c) => { motorDurumu(false); motorUyarilari(c.uyarilar); return bitisliYerlesim(c); },
       () => { motorDurumu(true); return null; },
     );
   // Okunamazsa uyarı listesine dokunulmaz (yerleşimdeki gibi).

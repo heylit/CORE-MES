@@ -55,6 +55,8 @@ export interface SunucuSecenegi {
   kayitlar?: KayitlarCevabi['kayitlar'];
   // Plan motorunun yerleşimi okunamaz (yetki ya da hata).
   motorYok?: boolean;
+  // Plan motoru cevabının yerleşim alanları (verilmezse boş).
+  motorYerlesimi?: { ekranYerlesimi: Record<string, unknown[]>; yerlesimler: unknown[] };
   yazmalar?: Record<string, (govde: unknown) => Response>;
 }
 
@@ -75,7 +77,7 @@ export function sunucuKur(kullanici: Kullanici, s: SunucuSecenegi = {}) {
       if (yol === '/plan/motor-yerlesimi') {
         return s.motorYok ? json(403, { kod: 'YETKISIZ', mesaj: 'Yetkiniz yok.' })
           : json(200, { hesaplanma: '2026-10-23T08:00:00.000Z', ayar: { kural: 'oncelik', yon: 'ileri', tamponGun: 0 }, yerlesimler: [], yerlesmeyen: [],
-            ekranYerlesimi: {}, uyarilar: [] });
+            ekranYerlesimi: {}, uyarilar: [], ...s.motorYerlesimi });
       }
     }
     const isle = s.yazmalar?.[`${yontem} ${yol}`];

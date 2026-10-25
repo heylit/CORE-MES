@@ -146,6 +146,26 @@ describe('köprü komutları', () => {
     expect(await kopruKur()('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: yerlesim });
   });
 
+  it('KOM-04b: durum-oku ekran yerleşimine motorun adım ve parça bitişini ekler; yerleşimde bitişi olmayan girdi olduğu gibi kalır (468/2 a)', async () => {
+    const ekran = {
+      'UE-1|10': [{ makineId: 3, baslangic: '2030-01-01T05:00:00.000Z' }],
+      'UE-1|20~2': [{ makineId: 4, baslangic: '2030-01-01T07:00:00.000Z' }],
+      'UE-1|30': [{ makineId: null, baslangic: '2030-01-02T05:00:00.000Z' }],
+    };
+    const kaynak = { tur: 'makine', id: 3 };
+    const yerlesimler = [
+      { isEmriId: 1, uretimEmriId: 9, emirNo: 'UE-1', opNo: 10, kaynak, kaynakAdi: null, baslangic: '2030-01-01T05:00:00.000Z', bitis: '2030-01-01T06:30:00.000Z', sabit: true },
+      { isEmriId: 2, uretimEmriId: 9, emirNo: 'UE-1', opNo: 20, kaynak, kaynakAdi: null, baslangic: '2030-01-01T07:00:00.000Z', bitis: '2030-01-01T09:00:00.000Z', sabit: false,
+        parcalar: [{ no: 2, kaynak: { tur: 'makine', id: 4 }, baslangic: '2030-01-01T07:00:00.000Z', bitis: '2030-01-01T08:15:00.000Z' }] },
+    ];
+    sunucuKur((_y, yol) => json(200, yol === '/plan/motor-yerlesimi' ? { ekranYerlesimi: ekran, yerlesimler, yerlesmeyen: [], uyarilar: [] } : DURUM));
+    expect(await kopruKur()('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: {
+      'UE-1|10': [{ makineId: 3, baslangic: '2030-01-01T05:00:00.000Z', bitis: '2030-01-01T06:30:00.000Z' }],
+      'UE-1|20~2': [{ makineId: 4, baslangic: '2030-01-01T07:00:00.000Z', bitis: '2030-01-01T08:15:00.000Z' }],
+      'UE-1|30': [{ makineId: null, baslangic: '2030-01-02T05:00:00.000Z' }],
+    } });
+  });
+
   it('KOM-05: komut tablosu yalnız bilinen komutları ve sahibinin yollarını gösterir', () => {
     expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['operasyon-tipi-ekle', 'operasyon-tipi-duzenle', 'statu-degistir', 'maliyet-yaz', ...Object.keys(KAYNAK_KOMUTLARI), ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
     expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-tanimi-kaydet', 'statu-tanimi-sil']);
