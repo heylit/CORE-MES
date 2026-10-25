@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -126,11 +127,17 @@ describe('Şikayet, istek ve öneri düğmesi', () => {
     expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['geri-bildirim']);
   });
 
-  it('kısa adı geniş ekranda simgenin yanında yazılır; erişilebilir adı tam kalır', () => {
+  it('çubukta yer tutmaz, Hesap menüsünden açılır (516 a)', async () => {
+    expect(ustEylemler[0]).toMatchObject({ yer: 'hesap', hesapMaddesi: { baslik: 'Şikayet, istek ve öneri', simge: 'edit' } });
     const Dugme = ustEylemler[0]!.dugme;
-    ac('/yok', <Dugme />);
-    const dugme = screen.getByRole('button', { name: 'Şikayet, istek ve öneri' });
-    expect(dugme.querySelector('.tc-kabuk-dugme-ad')?.textContent).toBe('Öneri');
+    function HesapMenusu() {
+      const [istek, istekYaz] = useState(0);
+      return <><button type="button" onClick={() => { istekYaz((n) => n + 1); }}>Menüden aç</button><Dugme acmaIstegi={istek} /></>;
+    }
+    ac('/yok', <HesapMenusu />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Menüden aç' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 
   it('konu, tür ve metin seçilmeden gönderilmez; gönderim istek kimliğiyle gider', async () => {

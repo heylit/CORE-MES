@@ -65,6 +65,34 @@ describe('Kabuk', () => {
     expect(screen.getByRole('button', { name: 'Durum 1' })).toBeTruthy();
   });
 
+  it('hesap yerindeki ust eylem cubukta yer tutmaz, yalniz Hesap menusundedir; isareti kisi dugmesinde cizilir (516 a)', () => {
+    const eylem = {
+      anahtar: 'ziyaret', sira: 1, islem: 'oturum' as const, yer: 'hesap' as const, hesapMaddesi: { baslik: 'Ziyaretçilerim', simge: 'users' as const },
+      dugme: ({ acmaIstegi = 0 }: { acmaIstegi?: number }) => <button type="button">{`Ziyaret ${String(acmaIstegi)}`}</button>,
+      isaret: () => <span role="img" aria-label="Uyarı var" />,
+    };
+    const { container } = render(
+      <MemoryRouter>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={[]} ustEylemler={[eylem]}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    // Sarmalayıcı her genişlikte gizlidir (kabuk.css); düğmenin penceresi gövdeye açılır.
+    expect(container.querySelector('.tc-kabuk-ust .tc-kabuk-yalniz-hesapta')?.textContent).toBe('Ziyaret 0');
+    expect(container.querySelector('.tc-kabuk-ust .tc-kabuk-hesapta')).toBeNull();
+    expect(container.querySelector('.tc-kabuk-kisi-avatar [role="img"]')?.getAttribute('aria-label')).toBe('Uyarı var');
+    fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent).slice(0, 4)).toEqual(['Profilim', 'Ziyaretçilerim', 'Yardım ve rehber', 'Koyu temaya geç']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ziyaretçilerim' }));
+    expect(screen.getByRole('button', { name: 'Ziyaret 1' })).toBeTruthy();
+  });
+
+  it('Yardim ust cubukta ayri dugme degildir; F1 ve Hesap menusu acar (516 a)', () => {
+    ciz();
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Yardım ve rehber' })).toBeNull();
+    fireEvent.keyDown(document, { key: 'F1' });
+    expect(screen.getByRole('dialog', { name: 'Yardım ve rehber' })).toBeTruthy();
+  });
+
   it('"Ne oldu?" paneli kisiye acik olaylari gosterir, secilen olayin ekranina goturur; olaysiz kiside dugme yoktur', () => {
     const olay = {
       anahtar: 'mal-kabul', sira: 1, baslik: 'Malzeme geldi', aciklama: 'Mal kabul', simge: 'truck' as const, yol: '/stok/mal-kabul', islem: 'stok.giris' as const,

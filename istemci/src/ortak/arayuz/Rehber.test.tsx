@@ -18,10 +18,16 @@ function ciz(yol = '/stok', kisiId?: number) {
 
 beforeEach(() => { localStorage.clear(); });
 
+// Yardım çubukta düğme değil (516 a): F1 ile ya da Hesap menüsünden açılır.
+function yardimiAc() {
+  fireEvent.click(screen.getByRole('button', { name: /^Hesap/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Yardım ve rehber' }));
+}
+
 describe('Yardim ve tanitim', () => {
   it('Yardim acildigi sayfanin tarifini ustte gosterir; yalniz kisinin sayfalarini listeler', () => {
     ciz('/stok');
-    fireEvent.click(screen.getByRole('button', { name: 'Yardım ve rehber' }));
+    yardimiAc();
     const pencere = within(screen.getByRole('dialog', { name: 'Yardım ve rehber' }));
     expect(pencere.getByRole('heading', { name: 'Bu sayfa: Stok Merkezi' })).toBeTruthy();
     expect(pencere.getByText('İK İşlemlerim')).toBeTruthy();
@@ -68,7 +74,7 @@ describe('Yardim ve tanitim', () => {
 
   it('kitapcik butun sayfalari acik ve yazdirilabilir gosterir', () => {
     ciz('/stok');
-    fireEvent.click(screen.getByRole('button', { name: 'Yardım ve rehber' }));
+    yardimiAc();
     fireEvent.click(screen.getByRole('button', { name: 'Kitapçık' }));
     const kitap = within(screen.getByRole('dialog', { name: 'Kullanım kitapçığı' }));
     expect(kitap.getByRole('heading', { name: 'Stok Merkezi' })).toBeTruthy();

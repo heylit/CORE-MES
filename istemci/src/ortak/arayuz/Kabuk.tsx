@@ -5,7 +5,7 @@ import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import type { CerceveSayaclari } from '../rota/cerceve-iletisi.ts';
 import { CerceveSayacBaglami, type CerceveSayacYazici } from '../rota/cerceve-sayaclari.ts';
 import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, type IkinciMenu as IkinciMenuTanimi } from '../rota/ikinci-menu.ts';
-import { gecmisiSil } from '../rota/gezinme-gecmisi.ts';
+import { gecmisiSil, sonYerler, useGezinmeGecmisi } from '../rota/gezinme-gecmisi.ts';
 import { gorunenHizliIsler, type HizliIs } from '../rota/hizli-isler.ts';
 import { gorunenKomutlar, type Komut } from '../rota/komutlar.ts';
 import { rehberMaddeleri, sayfaRehberleri, type SayfaRehberi } from '../rota/rehber.ts';
@@ -188,6 +188,8 @@ export function Kabuk({
   const [paletSorgusu] = useState(paletSorgusuKur);
   const tumKutu = useKatman<HTMLDivElement>(tumuAcik, () => tumuYaz(false));
   const [yardimAcik, yardimYaz] = useState(false);
+  // Geri ve İleri düğmeleri ile aramanın son yerleri aynı sayımı okur: tek kez tutulur.
+  const gecmis = useGezinmeGecmisi();
   const [acmaIstekleri, acmaIstekleriYaz] = useState<Readonly<Record<string, number>>>({});
   const [tanitimAcik, tanitimYaz] = useState(false);
   const [davet, davetYaz] = useState(() => kisiId !== undefined && !tanitimGorulduMu(kisiId));
@@ -268,6 +270,7 @@ export function Kabuk({
   }, [tamEkranAcik]);
 
   const gorunenler = gorunenUstEylemler(ustEylemler, islemler);
+  const sonYerListesi = sonYerler(gecmis);
   const hesapMaddeleri = gorunenler.flatMap((e) => (e.hesapMaddesi === undefined ? [] : [{ anahtar: e.anahtar, hesapMaddesi: e.hesapMaddesi }]));
   return (
     <div className="tc-kabuk-cati">
@@ -308,7 +311,7 @@ export function Kabuk({
 
         <header className="tc-kabuk-ust">
           {gorunenler.filter((e) => e.yer === 'sol').map((e) => <e.dugme key={e.anahtar} />)}
-          <GeziDugmeleri menuler={ikinciMenuler} />
+          <GeziDugmeleri menuler={ikinciMenuler} gecmis={gecmis} />
           <h1 className="tc-kabuk-baslik">{baslik}</h1>
           <GenelArama
             sayfalar={sayfalar}
@@ -318,21 +321,16 @@ export function Kabuk({
             komutlar={gorunenKomutListesi}
             sayfaKomutlari={kapaliAdres ? SAYFA_KOMUTSUZ : sayfaKomutlari}
             sorguDegisti={paletSorgusu.yaz}
+            sonYerler={sonYerListesi}
           />
           <IsPaneli gruplar={olayGruplari} />
           {gorunenler.filter((e) => e.yer !== 'sol').map((e) => (e.hesapMaddesi === undefined
             ? <e.dugme key={e.anahtar} />
-            : <span key={e.anahtar} className="tc-kabuk-hesapta"><e.dugme acmaIstegi={acmaIstekleri[e.anahtar] ?? 0} /></span>))}
-          <button
-            type="button"
-            className="tc-kabuk-tema tc-kabuk-ayri"
-            onClick={() => yardimYaz(true)}
-            aria-haspopup="dialog"
-            aria-label="Yardım ve rehber"
-            title="Yardım ve rehber (F1)"
-          >
-            <Simge ad="help" />
-          </button>
+            : (
+              <span key={e.anahtar} className={e.yer === 'hesap' ? 'tc-kabuk-yalniz-hesapta' : 'tc-kabuk-hesapta'}>
+                <e.dugme acmaIstegi={acmaIstekleri[e.anahtar] ?? 0} />
+              </span>
+            )))}
           {cerceveli && (
             <button
               type="button"
@@ -345,8 +343,9 @@ export function Kabuk({
               <Simge ad={tamEkranAcik ? 'x' : 'expand'} />
             </button>
           )}
-          {/* Seyrek kullanılanlar (profil, tema, hareket, parola, çıkış) her genişlikte adın olduğu tek düğmenin menüsündedir:
-              üst çubukta yalnız sık kullanılanlar kalır. Yardım masaüstünde ayrıca görünür; menüdeki kopya dar ekran içindir. */}
+          {/* Seyrek kullanılanlar (profil, kişinin kendi işleri, yardım, tema, hareket, parola, çıkış) her genişlikte adın olduğu
+              tek düğmenin menüsündedir: üst çubukta yalnız sık kullanılanlar kalır (516 a). Yardım F1 ile de açılır. Menüdeki
+              eylemin dikkat isteyen durumu kişinin yuvarlağında işaretle görünür. */}
           <span className="tc-kabuk-hesap">
             <Menu
               etiket="Hesap"
@@ -354,17 +353,20 @@ export function Kabuk({
               simge={null}
               metin={(
                 <>
-                  <span className="tc-kabuk-kisi-avatar" aria-hidden="true">{basHarfler(kullaniciAdi)}</span>
+                  <span className="tc-kabuk-kisi-avatar">
+                    <span aria-hidden="true">{basHarfler(kullaniciAdi)}</span>
+                    {gorunenler.map((e) => (e.isaret === undefined ? null : <e.isaret key={e.anahtar} />))}
+                  </span>
                   <span className="tc-kabuk-kisi-ad">{kullaniciAdi}</span>
                 </>
               )}
               ogeler={[
                 { anahtar: 'profil', baslik: 'Profilim', simge: 'user', sec: () => { void gezin(PROFIL_YOLU); } },
-                { anahtar: 'yardim', baslik: 'Yardım ve rehber', simge: 'help', sec: () => { yardimYaz(true); } },
                 ...hesapMaddeleri.map(({ anahtar, hesapMaddesi }) => ({
                   anahtar: `eylem-${anahtar}`, baslik: hesapMaddesi.baslik, simge: hesapMaddesi.simge,
                   sec: () => { acmaIstekleriYaz((o) => ({ ...o, [anahtar]: (o[anahtar] ?? 0) + 1 })); },
                 })),
+                { anahtar: 'yardim', baslik: 'Yardım ve rehber', simge: 'help', sec: () => { yardimYaz(true); } },
                 { anahtar: 'tema', baslik: tema === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç', simge: tema === 'dark' ? 'sun' : 'moon', sec: degistir },
                 { anahtar: 'performans', baslik: performansEtiketi, simge: 'gauge', sec: performansDegistir },
                 { anahtar: 'parola', baslik: 'Parolamı değiştir', simge: 'edit', sec: () => { parolaYaz(true); } },
