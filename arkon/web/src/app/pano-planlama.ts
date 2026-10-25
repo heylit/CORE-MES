@@ -1,7 +1,7 @@
 import { AKStore } from '../data/store';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../data/cakisma';
 import { kayitIlgili, seyrelt } from '../data/log-tepki';
-import { istasyonPaketleri, istasyonPlanOzeti, adimIstegi, planOnce, siralamaIstegi, siralamayiGonder, tmiPlani } from '../data/tmi-plan';
+import { istasyonPaketleri, istasyonPlanOzeti, adimIstegi, kuyrukAdimHedefi, kuyrukIsiMi, kuyrukTasimaIstegi, planOnce, siralamaIstegi, siralamayiGonder, tmiPlani } from '../data/tmi-plan';
 import { CALLS, Fragment, I, REASONS, ST, fmt, html, isPlannedReason, pad, reasonOf, useCallback, useEffect, useNow, useState } from './temel';
 import { LS, download } from './yukleyici';
 import { DOWNS, ME, PLANT, act_, allowed, audit, can, currentShift, downNext, downNow, downWindows, expandDown, machineOf, oeeCalc, setDOWNS, shiftWindows, stationList, wcOf } from './ortak-ayarlar';
@@ -212,6 +212,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
   const moveTo = async (p, st, beforeId?) => {
     if (!allowed('plan.edit', say)) return;
     if (tmiIsi(p) && p.machine !== st) { say('İstasyon TMI planından değişir', 'x', 'var(--stop)'); return; }
+    if (kuyrukIsiMi(p)) { await kuyrugaSirala(p, st, beforeId); return; }
     if (tmiPlani(p)) { await planaSirala(p, st, beforeId); return; }
     const mt = machineOf(st).t, pt = opOf(p);
     if (known.has(st) && mt !== pt && !confirm(p.no + ' bir ' + OPTYPES[pt].l + ' paketi; ' + st + ' istasyonu ' + (OPTYPES[mt] || OPTYPES.cnc).l + ' tipinde. Yine de taşınsın mı?')) return;
@@ -224,7 +225,16 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
     audit('plan', moved ? 'istasyon değişti' : 'sıra değişti', p.no, moved ? p.machine + ' → ' + st : st + ' · ' + (idx + 1) + '. sıra');
     say(moved ? p.no + ' → ' + st : p.no + ' sırası güncellendi', 'check', 'var(--run)'); reload();
   };
-  // Rotalı TMI işinin sırası planındır (A4, 147 a): plan taslağına yazılır; ekran ve operatör taslak onaylanıp canlıya alınınca değişir,
+  // Açık TMI iş emrinin sırası Üretim Hazırlık'ındır (kart 527, 519 1 c, 544 a): kuyruğa yazılır, plan değişmez (plan yalnız yeni ekrandaki
+  // "Plana öner" ile). Kuyruk işlemini (`arkon.kuyruk-sirala`) sunucu denetler; istek istasyonun gizli tamamlananları dahil bütün işleriyle gider.
+  const kuyrugaSirala = async (p, st, beforeId) => {
+    const istek = kuyrukTasimaIstegi(st, sortL(pk.filter(x => x.machine === st)), p, beforeId);
+    if (!istek) { say('Kuyruk sırası değişmedi', 'check', 'var(--idle)'); return; }
+    try { await AKStore.Kuyruk.sirala(istek); audit('plan', 'kuyruk sırası', p.no, st); say(p.no + ' kuyruk sırası güncellendi', 'check', 'var(--run)'); }
+    catch (e) { say((e && e.message) || 'Kuyruk sırası yazılamadı', 'x', 'var(--stop)'); }
+    reload();
+  };
+  // Rotalı TMI işinin (kuyruk dışı) sırası planındır (A4, 147 a): plan taslağına yazılır; ekran ve operatör taslak onaylanıp canlıya alınınca değişir,
   // o zamana dek kart "Sıra taslakta" ya da "Sıra onay bekliyor" der.
   const planaSirala = async (p, st, beforeId) => {
     if (!tmiPlani(p).canli) { say('Plana yerleşmemiş iş sıralanamaz', 'x', 'var(--stop)'); return; }
@@ -239,6 +249,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
     say(r.ileti, 'x', 'var(--stop)'); if (r.yenile) await yenile();
   };
   const step = (p, st, dir) => { const L = sortL(items.filter(x => x.machine === st));
+    if (kuyrukIsiMi(p)) { const h = kuyrukAdimHedefi(L, p, dir); if (h !== null) moveTo(p, st, h); return; }
     if (tmiPlani(p)) { if (!allowed('plan.edit', say)) return; if (!tmiPlani(p).canli) { say('Plana yerleşmemiş iş sıralanamaz', 'x', 'var(--stop)'); return; } planaGonder(p, st, adimIstegi(L, p, dir)); return; }
     const i = L.findIndex(x => x.id === p.id), j = i + dir; if (j < 0 || j >= L.length) return; moveTo(p, st, dir < 0 ? L[j].id : (L[j + 1] || {}).id); };
   const card = (p, st, sc) => {

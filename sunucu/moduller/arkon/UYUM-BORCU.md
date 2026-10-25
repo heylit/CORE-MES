@@ -293,3 +293,14 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   "SIRADA" ve "İşi Başlat" açık gösterir. Terminalin makine durumunu önceden göstermesi ayrı iştir. BİLMİYORUM: başlatma reddinin arıza durumunu
   bu dalda tarayıcıda denemedim.
 - 12.9 kalanı: 768 genişlikte TMI bildirimi terminalin ana düğmesini örtüyor (ortak bildirim katmanı, CEKIRDEK-ISTEKLERI).
+
+## Eski Plan Kuyruğu ekranı ve Hazırlık sırası (kart 527, kapandı: 544 a)
+- Eski Arkon ekranında (`arkon/web/src/app/pano-planlama.ts`) açık TMI iş emrinin sürüklemesi ve yukarı-aşağı düğmeleri artık yeni ekrandaki gibi
+  kuyruk sırasına yazar, planı değiştirmez (`kuyrukTasimaIstegi`, `kuyrukAdimHedefi`). Düğmeler eski ekranda bugünkü gibi `plan.edit` ile açılır;
+  kuyruk işlemi (`arkon.kuyruk-sirala`) sunucuda denetlenir, işlemi olmayan kişi ret iletisini görür. Plan çipi ve "Plana öner" yalnız yeni ekrandadır.
+
+## Eski Plan Kuyruğu ekranında düğme yetkisi (kart 527, 544 a; eski ekran geçiş sonunda kalkınca kapanır)
+- Eski ekranda (`arkon/web/src/app/pano-planlama.ts`) sıralama düğmeleri ve sürükleme Arkon `plan.edit` yetkisiyle açılır, kuyruk yazımı ise TMI
+  `arkon.kuyruk-sirala` işlemini ister. İki yönlü fark: `arkon.kuyruk-sirala` taşıyıp `plan.edit` taşımayan kişi (ör. `cam`) eski ekranda düğmeyi
+  görmez (yeni ekranda görür); `plan.edit` taşıyıp `arkon.kuyruk-sirala` taşımayan kişi (ör. `mudur`, plan yazma yetkisiyle) düğmeyi açık görür,
+  sürükler ve sunucu 403 ile reddeder (ekranda ret iletisi). Ayrı iş açılmadı; eski ekran kalkınca kapanır.

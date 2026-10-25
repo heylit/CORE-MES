@@ -54,6 +54,17 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect(cagrilar).toEqual([{ yontem: 'GET', yol: '/arkon/plan-sira/surum' }]);
   });
 
+  it('kuyruk sırası (kart 527): Hazırlık sıralaması ve plan sırasına dönüş TMI kuyruk uçlarına cihaz kaynağıyla gider; plan ucu çağrılmaz', async () => {
+    const g = { istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2'], yeni: ['tmi-ie-2', 'tmi-ie-1'] };
+    const { istemci, cagrilar } = istemciKur({ 'POST /arkon/kuyruk-sira/sirala': { surum: 9 }, 'POST /arkon/kuyruk-sira/plana-don': { silinen: 2 } });
+    expect((await cevapla(istemci, istek('POST', '/kuyruk-sira', 'c=c1', JSON.stringify(g)))).govde).toEqual({ surum: 9 });
+    expect((await cevapla(istemci, istek('POST', '/kuyruk-sira/plana-don', 'c=c1', JSON.stringify({ istasyon: 'AI1' })))).govde).toEqual({ silinen: 2 });
+    expect(cagrilar).toEqual([
+      { yontem: 'POST', yol: '/arkon/kuyruk-sira/sirala', govde: { ...g, kaynak: 'c1' } },
+      { yontem: 'POST', yol: '/arkon/kuyruk-sira/plana-don', govde: { istasyon: 'AI1', kaynak: 'c1' } },
+    ]);
+  });
+
   it('makine ayrımları (393 d): yalnız emir kimliği TMI ucuna geçer, cevap olduğu gibi döner', async () => {
     const ayrim = { planMakinesi: 'M1', ayrimlar: [{ mc: 'M2', emirNo: 'E-1', opNo: 10, baslangic: '2026-10-21T10:30:00+03:00' }] };
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/makine-ayrimlari?emirId=12': ayrim });
@@ -307,7 +318,7 @@ describe('TMI içinde Arkon yalnız TMI\'ye bağlanır (TD)', () => {
 describe('önizleme TMI\'yi yalnız okur', () => {
   const YAZMALAR: [string, string][] = [
     ['PUT', '/doc/pkgs/tmi-ie-1'], ['DELETE', '/doc/pkgs/tmi-ie-1'], ['POST', '/log/counts'], ['POST', '/log/events'], ['POST', '/log/meas'],
-    ['POST', '/bus'], ['PUT', '/blob/b1'], ['POST', '/plan-sira'], ['POST', '/login'],
+    ['POST', '/bus'], ['PUT', '/blob/b1'], ['POST', '/plan-sira'], ['POST', '/kuyruk-sira'], ['POST', '/kuyruk-sira/plana-don'], ['POST', '/login'],
   ];
   const pencereKur = (hash: string, istemci: Istemci) => {
     const pencere = {
