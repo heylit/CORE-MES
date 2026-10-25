@@ -2748,6 +2748,8 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi)
   if (g.aliciKodu != null && alici === null) throw dogrulama('Kişi kodu tanınmadı.', 'aliciKodu');
   if (alici?.kisiId === k.id) throw dogrulama('Kendinize teslim edemezsiniz; karşıdakinin kodunu okutun.', 'aliciKodu');
   if (alici && !('istasyonId' in g.hedef && Number(g.hedef.istasyonId) === alici.istasyon.id)) throw dogrulama(`${alici.ad ?? 'Kişi'} şu an ${alici.istasyon.ad} istasyonunda; teslim oraya gider.`, 'hedef');
+  // Elden teslim (537 a): alıcının gösterdiği kod onay sayılır; teslim Bıraktım gibi hemen kapanır, alıcı taraf vardiya sonuna kadar itiraz eder.
+  const birak = g.birak === true || alici !== null;
   const statuId = g.statuId === null ? null : Number(g.statuId);
   const kalite = g.kaliteDurumu ?? 'serbest';
   // Refakat kartıyla teslim (kart #123): lot ve emir karttan gelir; gövdedeki farklıysa yanlış kart okutulmuştur.
@@ -2786,18 +2788,19 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi)
     if (uretimEmriId !== null && kalite === 'serbest') await rezerveyiAsmasin(db, malzemeId, statuId, uretimEmriId, binde(g.miktar));
     return teslimYaz(db, {
       no: await belgeNo(db, 'stok.teslim-no', 'stok_teslim'), kaynakKimligi, malzemeId, miktar: g.miktar, partiId, statuId, kaliteDurumu: kalite, kaynakKonumId: kaynak, hedefKonumId: hedef,
-      uretimEmriId, istekId, aciklama: g.birak === true ? (aciklama === null ? 'Bırakıldı, alan onayı yok' : `Bırakıldı · ${aciklama}`).slice(0, 200) : aciklama,
-      gonderenKisiId: k.id, aliciKisiId: alici?.kisiId ?? null, itirazSonu: g.birak === true ? await birakmaItirazSuresi(db, hedef, kaynak) : null,
+      uretimEmriId, istekId, aciklama: birak ? (aciklama === null ? birakmaNotu(alici !== null) : `${birakmaNotu(alici !== null)} · ${aciklama}`).slice(0, 200) : aciklama,
+      gonderenKisiId: k.id, aliciKisiId: alici?.kisiId ?? null, itirazSonu: birak ? await birakmaItirazSuresi(db, hedef, kaynak) : null,
     });
   });
   if (id === null) return teslimOku(db, (await sorgular.teslimKaynaktan(db, kaynakKimligi))!.id);
-  if (g.birak === true) {
+  if (birak) {
     const t = (await sorgular.teslimBul(db, id, true))!;
     await teslimiKapat(db, k.id, t, bindenMetin(binde(t.miktar)), t.surum, 'miktar');
     const hedefIstasyonId = (await sorgular.teslimUclari(db, [hedef]))[0]?.istasyonId ?? null;
     if (hedefIstasyonId !== null) {
+      const fiil = alici === null ? 'bırakıldı' : 'elden teslim edildi';
       await bildirimGonder(db, {
-        tur: 'stok.birakildi', baslik: `${t.no}: malzeme bırakıldı`, metin: `${t.miktar} bırakıldı (${t.no}). Yanlışsa vardiya sonuna kadar itiraz edin: Malzeme · Teslim > Teslim et.`,
+        tur: 'stok.birakildi', baslik: `${t.no}: malzeme ${fiil}`, metin: `${t.miktar} ${fiil} (${t.no}). Yanlışsa vardiya sonuna kadar itiraz edin: Malzeme · Teslim > Teslim et.`,
         kisiler: (await istasyondakiKisiler(db, hedefIstasyonId)).map((x) => x.kisiId), haric: k.id, kaynakKimlik: t.no,
       });
     }
@@ -2810,6 +2813,7 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi)
   }
   return teslimOku(db, id);
 }
+const birakmaNotu = (elden: boolean): string => (elden ? 'Elden teslim, alıcı kodu okutuldu' : 'Bırakıldı, alan onayı yok');
 async function teslimAlaniDenetle(db: Db, k: Kullanici, t: TeslimHam): Promise<void> {
   const hedef = (await sorgular.teslimUclari(db, [t.hedefKonumId]))[0];
   let alan: Parameters<typeof teslimAlmaEngeli>[1];

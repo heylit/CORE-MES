@@ -18,6 +18,8 @@ export interface OkutKaynagi {
 // Nereye adımında okutulan kişi kodu (372 a): teslim kişinin bulunduğu istasyona, yalnız o kişiye gider; sunucu kodu yeniden doğrular.
 export interface KisiHedefi { alici: { kod: string; ad: string | null }; istasyon: { id: number; kod: string; ad: string } }
 export type OkutHedefi = OkutYeri | KisiHedefi;
+// Kişi kodu okutulmuş teslim gönderilince kapanır (537 a); alıcı taraf vardiya sonuna kadar itiraz eder.
+export const ELDEN_NOTU = (ad: string | null): string => `Alıcı: ${ad ?? 'okutulan kişi'}. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.`;
 export const kisiHedefiMi = (h: OkutHedefi): h is KisiHedefi => 'alici' in h;
 export type OkutDurumu =
   | { adim: 'ne'; ileti: string | null }
