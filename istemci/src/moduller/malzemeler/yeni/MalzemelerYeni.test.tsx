@@ -13,11 +13,11 @@ describe('MalzemelerYeni', () => {
     expect(screen.queryByRole('tablist')).toBeNull();
   });
 
-  test('yönetici kökte Katalog bölümünü ve beş sekmeyi görür (izinli)', async () => {
+  test('yönetici kökte Katalog bölümünü ve altı sekmeyi görür (izinli)', async () => {
     sunucuKur(YONETICI);
     yeniEkranAc('/malzemeler/yeni-ekran');
     const sekmeler = await screen.findAllByRole('tab');
-    expect(sekmeler.map((s) => s.textContent)).toEqual(['Yeni kart', 'Katalog', 'Şablonlar', 'Malzeme ayarları', 'Kılavuz']);
+    expect(sekmeler.map((s) => s.textContent)).toEqual(['Yeni kart', 'Katalog', 'Şablonlar', 'Malzeme ayarları', 'Logo gönderimi', 'Kılavuz']);
     expect(screen.getByRole('tab', { name: 'Katalog' }).getAttribute('aria-selected')).toBe('true');
   });
 

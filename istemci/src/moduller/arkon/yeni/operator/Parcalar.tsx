@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Dugme, Orb, OrbGrubu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
 import { bitenleriAyir } from '../../../../../../arkon/web/src/data/biten-is.ts';
@@ -193,7 +194,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradakiNo, ondeNo, kartlar, kart
 }
 
 /* ── sayaç: iyi ve hurda payı, kalan adet işlenen parçaya göre (hurda da ham parçayı tüketir) ── */
-export interface CevrimOlcer { gecen(): number; son(): number }
+export interface CevrimOlcer { gecen(): number; son(): number; sayac(): number }
 const CIZGILER = Array.from({ length: 120 }, (_, i) => {
   const a = (i / 120) * Math.PI * 2 - Math.PI / 2;
   const buyuk = i % 10 === 0;
@@ -224,6 +225,63 @@ function CevrimEtiketleri({ is, cevrim, sol }: { is: Is; cevrim: CevrimOlcer; so
   );
 }
 
+// Dönen çevrim ışığı (bilesenler.ts CycAnim, CycRing): bir tur bir parçanın planlı çevrim süresidir; parça sayılınca baştan,
+// duraklayınca durur, süre aşılınca gecikme rengine döner. Süre ve başlangıç CSS değişkeniyle verilir (animasyon kaymasın diye
+// başlangıç yalnız ilk çizimde okunur).
+function CevrimIsigi({ is, gecen, gec }: { is: Is; gecen: number; gec: boolean }) {
+  const [baslangic] = useState(() => -(gecen / 1000));
+  const R = 158;
+  const C = 2 * Math.PI * R;
+  const ayarla = (el: HTMLElement | SVGElement | null) => {
+    el?.style.setProperty('--tc-ay1-cevrim-sure', `${is.cycle}s`);
+    el?.style.setProperty('--tc-ay1-cevrim-baslangic', `${baslangic}s`);
+    el?.style.setProperty('--tc-ay1-cevrim-adim', String(Math.max(1, Math.round(is.cycle * 2))));
+    el?.style.setProperty('--tc-ay1-cevrim-cevre', String(C));
+  };
+  return (
+    <>
+      <div ref={ayarla} className="tc-ay1-tarama" data-gec={gec || undefined} aria-hidden="true" />
+      <svg className="tc-ay1-cevrim" viewBox="0 0 440 440" aria-hidden="true">
+        <circle className="tc-ay1-cevrim-yol" cx="220" cy="220" r={R} fill="none" strokeWidth="3" />
+        <circle ref={ayarla} className="tc-ay1-cevrim-yay" data-gec={gec || undefined} cx="220" cy="220" r={R} fill="none" strokeWidth="3" strokeDasharray={C} transform="rotate(-90 220 220)" />
+        <g ref={ayarla} className="tc-ay1-cevrim-nokta" data-gec={gec || undefined}><circle cx="220" cy="62" r="7" /></g>
+      </svg>
+    </>
+  );
+}
+function CevrimHalkasi({ is, cevrim }: { is: Is; cevrim: CevrimOlcer }) {
+  useSimdi(500);
+  if (!(is.cycle > 0)) return null;
+  const e = cevrim.gecen();
+  const gec = is.state === 'running' && e > is.cycle * 1000 * 1.08;
+  return <CevrimIsigi key={`${is.no}:${cevrim.sayac()}`} is={is} gecen={e} gec={gec} />;
+}
+
+// İş bitince düşen konfeti (operator-parcalar.ts DoneOv); yeri, süresi ve dönüşü her parça için bir kez seçilir.
+const KONFETI_RENKLERI = ['hazard', 'run', 'done', 'hold'] as const;
+export function Konfeti() {
+  const parcalar = useMemo(() => Array.from({ length: 70 }, (_, i) => ({
+    sol: Math.random() * 100, gecikme: Math.random() * 0.8, sure: 2.2 + Math.random() * 1.8, aci: Math.random() * 360, renk: KONFETI_RENKLERI[i % 4],
+  })), []);
+  return createPortal(
+    <div className="tc-ay1-konfeti" aria-hidden="true">
+      {parcalar.map((b, i) => (
+        <i
+          key={i}
+          data-renk={b.renk}
+          ref={(el) => {
+            el?.style.setProperty('--x', `${b.sol}%`);
+            el?.style.setProperty('--gecikme', `${b.gecikme}s`);
+            el?.style.setProperty('--sure', `${b.sure}s`);
+            el?.style.setProperty('--aci', `${b.aci}deg`);
+          }}
+        />
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; etiket: string; birim: string; duzelt: (() => void) | null; cevrim: CevrimOlcer }) {
   const { iyi, hurda } = halkaPaylari(is.good, is.scrap, is.target);
   const yanan = Math.round(120 * iyi);
@@ -242,13 +300,14 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
     </>
   );
   return (
-    <div className="tc-ay1-kadran">
+    <div className="tc-ay1-kadran" data-calisiyor={is.state === 'running' || undefined}>
       <svg viewBox="0 0 440 440" aria-hidden="true">
         {CIZGILER.map((t) => <line key={t.i} className={`tc-ay1-cizgi${t.i < yanan ? ' tc-ay1-cizgi-yanik' : ''}${t.buyuk ? ' tc-ay1-cizgi-buyuk' : ''}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} />)}
         <circle className="tc-ay1-kadran-yol" cx="220" cy="220" r={R} fill="none" strokeWidth="12" />
         <circle className="tc-ay1-kadran-yay" cx="220" cy="220" r={R} fill="none" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${C * iyi} ${C}`} transform="rotate(-90 220 220)" />
         {is.scrap ? <circle className="tc-ay1-kadran-hurda" cx="220" cy="220" r={R} fill="none" strokeWidth="12" strokeDasharray={`0 ${C * iyi + 6} ${Math.max(4, C * hurda)} ${C}`} transform="rotate(-90 220 220)" /> : null}
       </svg>
+      <CevrimHalkasi is={is} cevrim={cevrim} />
       {duzelt
         ? <button type="button" className="tc-ay1-kadran-cekirdek" onClick={duzelt} title="Dokun: sayıyı düzelt" aria-label={`${etiket} ${sayi(is.good)}, sayıyı düzelt`}>{ic}</button>
         : <div className="tc-ay1-kadran-cekirdek">{ic}</div>}

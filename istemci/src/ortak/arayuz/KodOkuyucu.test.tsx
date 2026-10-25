@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { KodOkuyucu } from './KodOkuyucu.tsx';
+import { Pencere } from './Pencere.tsx';
 
 describe('KodOkuyucu', () => {
   it('el okuyucunun yazdigini Enter ile bosluksuz bildirir, bos girdiyi bildirmez', () => {
@@ -56,6 +57,41 @@ describe('KodOkuyucu', () => {
       unmount();
       k.ver();
       await vi.waitFor(() => expect(k.durdur).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  describe('acilista odak', () => {
+    afterEach(() => { vi.unstubAllGlobals(); });
+    const isaretci = (ince: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches: ince && q === '(pointer: fine)' }));
+
+    it('secenek verilmezse dokunmatikte de kod alani acilista odak alir', () => {
+      isaretci(false);
+      render(<KodOkuyucu okundu={() => undefined} />);
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+
+    it('pencere icinde de kod alani acilista odak alir; secenekle dokunmatikte almaz', () => {
+      isaretci(false);
+      const { unmount } = render(<Pencere acik kapat={() => undefined} baslik="Okut"><KodOkuyucu okundu={() => undefined} /></Pencere>);
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+      unmount();
+      render(<Pencere acik kapat={() => undefined} baslik="Okut"><KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok /></Pencere>);
+      expect(document.activeElement).not.toBe(screen.getByLabelText('Kod'));
+    });
+
+    it('secenekle fareli cihazda kod alani acilista odak alir', () => {
+      isaretci(true);
+      render(<KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok />);
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+
+    it('secenekle dokunmatikte acilista odak almaz, kamera hata verince alir', async () => {
+      isaretci(false);
+      render(<KodOkuyucu okundu={() => undefined} dokunmatikteOdakYok />);
+      expect(document.activeElement).not.toBe(screen.getByLabelText('Kod'));
+      fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));
+      await screen.findByRole('status');
+      expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
     });
   });
 });

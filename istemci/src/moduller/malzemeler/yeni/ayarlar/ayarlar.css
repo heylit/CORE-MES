@@ -15,7 +15,8 @@
 .tc-ma-menu button:hover { border-color: var(--edge); }
 .tc-ma-menu button[aria-current="page"] { border-color: var(--hazard); background: color-mix(in srgb, var(--hazard) 12%, var(--panel2)); font-weight: 600; }
 
-@media (min-width: 1280px) {
+/* Prototipte bölüm menüsü 860 pikselin üstünde solda, altında üstte şerit (`.ma-wrap`). */
+@media (min-width: 861px) {
   .tc-ma-duzen { grid-template-columns: var(--menu-genis) minmax(0, 1fr); align-items: start; }
   .tc-ma-menu { position: sticky; top: var(--b-4); flex-direction: column; overflow: visible; padding: 0; }
   .tc-ma-menu-grup { display: grid; }
@@ -57,8 +58,7 @@
 .tc-ma-jetonlar { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-size: var(--yazi-s); color: var(--muted); }
 .tc-ma-jetonlar code, .tc-ma-yardim code { font-family: var(--font-mono); color: var(--ink); }
 
-.tc-ma-kartlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3); }
-@media (min-width: 768px) { .tc-ma-kartlar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tc-ma-kartlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr)); gap: var(--b-3); }
 .tc-ma-kart {
   display: grid; gap: var(--b-1); min-height: var(--dokunma-ana); padding: var(--b-4); text-align: left;
   border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer;
@@ -116,3 +116,20 @@
 .tc-ma-liste-deger { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
 .tc-ma-rolum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* Aile rengi seçimi (465/2 b): yalnız tasarım değişkenleri. */
+.tc-ma-renkler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-ma-renkler-ad { font-size: var(--yazi-s); color: var(--muted); margin-right: var(--b-1); }
+.tc-ma-renk {
+  inline-size: var(--dokunma); block-size: var(--dokunma); padding: 0; border: var(--cizgi) solid var(--edge); border-radius: var(--yari-tam);
+  background: var(--renk-ornek); cursor: pointer;
+}
+.tc-ma-renk[aria-checked="true"] { outline: var(--cizgi-kalin) solid var(--ink); outline-offset: var(--cizgi); }
+.tc-ma-renk[data-renk="done"] { --renk-ornek: var(--done); }
+.tc-ma-renk[data-renk="run"] { --renk-ornek: var(--run); }
+.tc-ma-renk[data-renk="hazard-ink"] { --renk-ornek: var(--hazard-ink); }
+.tc-ma-renk[data-renk="grafik-2"] { --renk-ornek: var(--grafik-2); }
+.tc-ma-renk[data-renk="idle"] { --renk-ornek: var(--idle); }
+.tc-ma-renk[data-renk="grafik"] { --renk-ornek: var(--grafik); }
+.tc-ma-renk[data-renk="hold"] { --renk-ornek: var(--hold); }
+.tc-ma-renk[data-renk="stop"] { --renk-ornek: var(--stop); }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { matchPath, MemoryRouter } from 'react-router-dom';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from '../arayuz/Kabuk.tsx';
@@ -22,8 +22,8 @@ afterEach(cleanup);
 
 describe('yeni ekran menü satırları', () => {
   it('her satırın adresi kayıtlı bir modül rotasıdır', () => {
-    const rotaYollari = new Set(modulRotalari.map((r) => r.yol));
-    for (const yol of YENI_EKRAN_YOLLARI) expect(rotaYollari.has(yol), yol).toBe(true);
+    // Ayrı sayfa satırı (`/arkon/yeni/operator`) parametreli rotayla eşleşir.
+    for (const yol of YENI_EKRAN_YOLLARI) expect(modulRotalari.some((r) => matchPath(r.yol, yol) !== null), yol).toBe(true);
   });
 
   it('yönetici her yeni ekran için ayrı satır görür', () => {
@@ -34,6 +34,8 @@ describe('yeni ekran menü satırları', () => {
     for (const yol of YENI_EKRAN_YOLLARI) expect(adresler, yol).toContain(yol);
     expect(within(menu).getByRole('link', { name: 'Planlama (yeni)' }).getAttribute('href')).toBe('/recete-rota/planlama-yeni');
     expect(within(menu).getByRole('link', { name: 'Finans ve Muhasebe (yeni)' }).getAttribute('href')).toBe('/finans/yeni');
+    expect(within(menu).getByRole('link', { name: 'Üretim Terminali (yeni)' }).getAttribute('href')).toBe('/arkon/yeni/operator');
+    expect(within(menu).getByRole('link', { name: 'Kuyruk (yeni)' }).getAttribute('href')).toBe('/arkon/yeni/kuyruk');
   });
 
   it('yönetici olmayan kişi, modül sayfalarının işlemleri olsa da satırları görmez', () => {

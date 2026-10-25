@@ -9,6 +9,7 @@ import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { EmirProjeSecimi } from '../EmirProjeSecimi.tsx';
 import { kopruKur, type EmirSecimi } from '../kopru.ts';
+import { PlanSeridi } from './PlanSeridi.tsx';
 import { EKRANLAR, SEKMELER, sekmeBul, type SekmeAnahtari } from './sekmeler.ts';
 import { RrBaglamKaynagi, useRrVerisi, type RrBaglami } from './veri.ts';
 import { useRrYetkisi } from './yetki.ts';
@@ -47,9 +48,10 @@ function VeriSaglayici() {
         planVerisi: setPlanVerisiEksik,
         emirSecimi: (secenekler) => new Promise<EmirSecimi | null>((coz) => { setSecim({ secenekler, coz }); }),
       }),
-      // Açılamazsa durum yine okunur; dakikalık tarama sonra açar (bugünkü ekranla aynı).
+      // Açılamazsa durum yine okunur; dakikalık tarama sonra açar (bugünkü ekranla aynı). Kullanıcının gönderdiği kayıt değildir:
+      // kopukluk uyarısına girmez (Soru 487/3 a).
       ilkOkuma: () => (taslaklar ??= yetki.var('rota.yaz')
-        ? api.post<unknown>('/rota/karttan-taslaklar').then(() => undefined, () => undefined)
+        ? api.post<unknown>('/rota/karttan-taslaklar', undefined, { arkaPlan: true }).then(() => undefined, () => undefined)
         : Promise.resolve()),
     };
   });
@@ -83,6 +85,7 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
 
   return (
     <>
+      {veri.data && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <SayfaBasligi baslik={sekme.baslik} simge={sekme.simge} />
       <Sekmeler<SekmeAnahtari>
         etiket="Reçete ve Rota bölümleri"

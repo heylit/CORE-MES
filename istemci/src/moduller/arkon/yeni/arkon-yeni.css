@@ -1,11 +1,69 @@
-/* Arkon'un yeni ekranı (TS geçişi): sekmeler, bağlantı şeridi ve sayfa alanı. Parçalar kendi klasöründeki önekli css'i kullanır. */
-.tc-ay { display: grid; gap: var(--b-4); padding: var(--b-4); min-width: 0; }
-.tc-ay-serit {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
-  padding: var(--b-2) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+/* Arkon'un yeni ekranı (TS geçişi): sekmeler ve sayfa alanı; bağlantı durumu sayfa başlığında saatin yanında. Parçalar kendi klasöründeki önekli css'i kullanır. */
+/* Ölçek (eski useFit): kök 1600x900 tasarım alanına göre yakınlaşır; değeri ArkonYeni.tsx useOlcek yazar. */
+.tc-ay {
+  display: grid; gap: var(--b-4); align-content: start; padding: var(--b-4); min-width: 0; zoom: var(--tc-ay-olcek, 1);
+  /* Eski kareli zemin (.gridbg): ince ızgara; kök görünür alan boyunca uzar ki zemin içerik bitince kesilmesin. */
+  min-block-size: var(--tc-ay-vh, 100vh); box-sizing: border-box;
+  background-image: linear-gradient(var(--grid) var(--cizgi-ince), transparent var(--cizgi-ince)), linear-gradient(90deg, var(--grid) var(--cizgi-ince), transparent var(--cizgi-ince));
+  background-size: var(--ust-cubuk) var(--ust-cubuk);
 }
 .tc-ay-baglanti { display: inline-flex; align-items: center; }
 .tc-ay-icerik { display: grid; gap: var(--b-4); min-width: 0; }
+/* Sayfa başlığının sağındaki saat ve vardiya (eski .clock): büyük, eşit genişlikli rakamlar. */
+.tc-ay-saat { display: grid; justify-items: end; line-height: 1.1; color: var(--ink); }
+.tc-ay-saat b { font-size: var(--yazi-xl); font-variant-numeric: tabular-nums; }
+.tc-ay-saat small { color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Eski üst bant (.top): marka, sayfa rozeti (.sbig), araçlar, sağda saat ve tema; altta rozet renginde ışık çizgisi. */
+.tc-ay-bant {
+  --c: var(--hazard-ink);
+  position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); min-width: 0;
+  padding-block-end: var(--b-3); border-block-end: var(--cizgi-ince) solid var(--edge);
+}
+.tc-ay-bant::after {
+  content: ''; position: absolute; inset-inline: 0; inset-block-end: calc(var(--cizgi-ince) * -1); block-size: var(--cizgi-orta);
+  background: linear-gradient(90deg, transparent, var(--c) 20%, var(--c) 80%, transparent);
+}
+.tc-ay-bant[data-renk="run"] { --c: var(--run); }
+.tc-ay-bant[data-renk="stop"] { --c: var(--stop); }
+.tc-ay-bant[data-renk="done"] { --c: var(--done); }
+.tc-ay-bant[data-renk="ink"] { --c: var(--ink); }
+.tc-ay-bant[data-renk="lab"] { --c: color-mix(in srgb, var(--done), var(--stop)); }
+.tc-ay-marka { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--ink); }
+.tc-ay-marka b { font-size: var(--yazi-m); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay-marka small { align-self: flex-end; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay-isaret {
+  inline-size: var(--b-5); block-size: var(--b-5); border-radius: var(--yari-2);
+  background: repeating-linear-gradient(-45deg, var(--hazard) 0 var(--b-1), var(--on-hazard) var(--b-1) var(--b-2));
+}
+.tc-ay-ayrac { inline-size: var(--cizgi-ince); block-size: var(--b-6); background: var(--edge); }
+.tc-ay-rozet {
+  display: inline-flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-1) var(--b-3);
+  border: var(--cizgi-ince) solid color-mix(in srgb, var(--c) 40%, transparent); border-radius: var(--yari-tam);
+  background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
+  font-size: var(--yazi-s); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase;
+}
+.tc-ay-bosluk { flex: 1 1 auto; }
+@media (max-width: 767px) {
+  .tc-ay-marka b, .tc-ay-marka small, .tc-ay-ayrac { display: none; }
+}
+
+/* TV modu (eski html.tv): Arkon'un gezinmesi (eski ray, bağlantı durumu dahil) ve çağrı bandı gizlenir, pano tam ekranda kalır. */
+html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-baglanti, html.tc-ay-tv .tc-ay6-bant { display: none; }
+
+/* "Operatör gözüyle" önizleme penceresi: 1600x900 cihaz alanı pencereye sığacak ölçekte. */
+.tc-ay-onizleme-ust {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); padding: var(--b-3) var(--b-5);
+  border-bottom: 1px solid var(--edge);
+}
+.tc-ay-onizleme-baslik { color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay-onizleme-sahne { display: grid; place-items: center; height: 100%; min-height: 0; overflow: hidden; }
+.tc-ay-onizleme-cihaz { padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-5); background: var(--panel2); box-shadow: var(--shadow); overflow: hidden; }
+.tc-ay-onizleme-ekran {
+  width: var(--tc-ay-onizleme-en); height: var(--tc-ay-onizleme-boy); overflow: auto; border-radius: var(--yari-3); background: var(--bg);
+  zoom: var(--tc-ay-onizleme-olcek, 0.5);
+}
+
 @media (max-width: 767px) {
   .tc-ay { padding: var(--b-3); }
 }

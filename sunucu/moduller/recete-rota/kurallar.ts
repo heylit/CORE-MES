@@ -867,3 +867,139 @@ export function bitisAkisiEkle(yeni: unknown, eski: unknown, kim: string, an: nu
   }
   return degisti ? { ...c, sevkIz: akis } : yeni;
 }
+
+// 499 a, 503 a (sayfanın zz40 soKuyruklari'yla aynı süzgeç): çalışma planının plan modülüne yazılabilecek işleri. Biten iş yazılmaz;
+// fason ('@...') sayfada kalır; kişi ya da sunucuda karşılığı olmayan (planlanacak iş emri değil) iş yazılamaz. dokunulmaz: çalışmada biten
+// ya da fason olan anahtarlar (canlıdaki yerleri bu yazmayla değişmez).
+export interface CalismaIsi { k: string; anahtar: string; makineId: number; S: number; C: number }
+export function calismaIsleri(
+  ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
+): { yazilacak: CalismaIsi[]; yazilamaz: string[]; dokunulmaz: Set<string> } {
+  const yazilacak: CalismaIsi[] = [];
+  const yazilamaz = new Set<string>();
+  const dokunulmaz = new Set<string>();
+  for (const r of ops) {
+    const anahtar = kimlik[r.id];
+    if (r.bitti || r.m.startsWith('@')) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
+    if (!/^\d+$/.test(r.m) || anahtar === undefined || !planlanacak.has(anahtar)) { yazilamaz.add(anahtar ?? r.id); continue; }
+    yazilacak.push({ k: r.id, anahtar, makineId: Number(r.m), S: r.S, C: r.C });
+  }
+  return { yazilacak, yazilamaz: [...yazilamaz], dokunulmaz };
+}
+
+export type FarkTuru = 'yeni' | 'tezgah' | 'sira' | 'eksik';
+// 499 a: çalışma planı ile canlı plan. Saat kıyaslanmaz: canlıya almada saatleri plan modülü kurar (ADR 0018, son söz sunucuda), çalışmanın
+// canlıya taşıdığı tezgâh ve tezgâhtaki sıradır. canli: anahtar -> canlıdaki parçalar (bölünmemiş işte tek; kişi kaynağında makineId null).
+// yeni: canlıda yeri yok; tezgah: canlıdaki hiçbir parçası o tezgâhta değil; sira: aynı tezgâhtaki ortak işlerin sırasında yeri değişen
+// (en uzun ortak sıranın dışında kalan, en az iş); eksik: canlıda var, çalışmada yazılacak değil (dokunulmaz hariç).
+export function calismaFarki(
+  isler: readonly CalismaIsi[], dokunulmaz: ReadonlySet<string>,
+  canli: ReadonlyMap<string, readonly { makineId: number | null; baslangic: string }[]>, kimligi: (anahtar: string) => string | null,
+): { tezgah: number; sira: number; yeni: number; eksik: number; isler: { k: string | null; anahtar: string; tur: FarkTuru }[] } {
+  const y = { tezgah: 0, sira: 0, yeni: 0, eksik: 0, isler: [] as { k: string | null; anahtar: string; tur: FarkTuru }[] };
+  const ekle = (k: string | null, anahtar: string, tur: FarkTuru) => { y[tur]++; y.isler.push({ k, anahtar, tur }); };
+  const calismada = new Set<string>();
+  const tezgahta = new Map<number, { i: CalismaIsi; canliAn: number }[]>();
+  for (const i of isler) {
+    calismada.add(i.anahtar);
+    const parcalar = canli.get(i.anahtar);
+    if (parcalar === undefined || parcalar.length === 0) { ekle(i.k, i.anahtar, 'yeni'); continue; }
+    const ayni = parcalar.filter((p) => p.makineId === i.makineId);
+    if (ayni.length === 0) { ekle(i.k, i.anahtar, 'tezgah'); continue; }
+    tezgahta.set(i.makineId, [...(tezgahta.get(i.makineId) ?? []), { i, canliAn: Math.min(...ayni.map((p) => Date.parse(p.baslangic))) }]);
+  }
+  for (const l of tezgahta.values()) {
+    const calismaSirasi = [...l].sort((p, q) => p.i.S - q.i.S || p.i.k.localeCompare(q.i.k));
+    const canliSirasi = new Map([...l].sort((p, q) => p.canliAn - q.canliAn || p.i.k.localeCompare(q.i.k)).map((x, n) => [x.i.k, n]));
+    const yerinde = enUzunArtan(calismaSirasi.map((x) => canliSirasi.get(x.i.k)!));
+    calismaSirasi.forEach((x, n) => { if (!yerinde.has(n)) ekle(x.i.k, x.i.anahtar, 'sira'); });
+  }
+  for (const anahtar of canli.keys()) if (!calismada.has(anahtar) && !dokunulmaz.has(anahtar)) ekle(kimligi(anahtar), anahtar, 'eksik');
+  return y;
+}
+
+// En uzun artan alt dizinin konumları (O(n log n)); eşitlikte ilk bulunan.
+function enUzunArtan(a: readonly number[]): Set<number> {
+  const uclar: number[] = [];
+  const onceki = new Array<number>(a.length).fill(-1);
+  for (let n = 0; n < a.length; n++) {
+    let alt = 0;
+    let ust = uclar.length;
+    while (alt < ust) { const o = (alt + ust) >> 1; if (a[uclar[o]!]! < a[n]!) alt = o + 1; else ust = o; }
+    if (alt > 0) onceki[n] = uclar[alt - 1]!;
+    uclar[alt] = n;
+  }
+  const y = new Set<number>();
+  for (let n = uclar.length > 0 ? uclar[uclar.length - 1]! : -1; n >= 0; n = onceki[n]!) y.add(n);
+  return y;
+}
+
+// 503 a: yazılacak işler plan modülünün kuyruk diliyle (sayfanın soKuyruklari): tezgâh başına çalışmadaki başlangıç sırasıyla, kuyruğun
+// başlangıcı şimdiden önce olamaz; yer ve sıra planlamacının kararıdır (elle, elleKaynak), saat önizlemedir.
+export function calismaKuyruklari(baslangic: string, isler: readonly CalismaIsi[], simdi: number) {
+  const gruplar = new Map<number, CalismaIsi[]>();
+  for (const i of isler) gruplar.set(i.makineId, [...(gruplar.get(i.makineId) ?? []), i]);
+  return [...gruplar].map(([makineId, l]) => {
+    const sirali = [...l].sort((p, q) => p.S - q.S);
+    return {
+      kaynak: { tur: 'makine' as const, id: makineId },
+      baslangic: new Date(Math.max(simdi, Date.parse(planAni(baslangic, sirali[0]!.S)))).toISOString(),
+      isler: sirali.map((i) => {
+        const b = i.anahtar.lastIndexOf('|');
+        return {
+          emirNo: i.anahtar.slice(0, b), opNo: Number(i.anahtar.slice(b + 1)), dondurulmus: false, elle: true, elleKaynak: true,
+          onizleme: { baslangic: planAni(baslangic, i.S), bitis: planAni(baslangic, i.C) },
+        };
+      }),
+    };
+  });
+}
+
+// 507 2 a: çalışmanın ek vardiyaları plan modülünün diliyle (makine ve vardiya kimliği sayı, gün takvim günü). Sayı olmayan kimlik
+// (sayfada elle girilmiş tezgâh ya da vardiya) yazılamaz; sayısı döner.
+export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun: number; vardiya: string }[]) {
+  const satirlar: { makineId: number; gun: string; vardiyaId: number }[] = [];
+  const anahtarlar = new Set<string>();
+  let yazilamaz = 0;
+  for (const e of l) {
+    if (!/^\d+$/.test(e.m) || !/^\d+$/.test(e.vardiya) || Number(e.m) === 0 || Number(e.vardiya) === 0) { yazilamaz++; continue; }
+    const x = { makineId: Number(e.m), gun: planGunu(baslangic, e.gun), vardiyaId: Number(e.vardiya) };
+    const a = `${String(x.makineId)}|${x.gun}|${String(x.vardiyaId)}`;
+    if (!anahtarlar.has(a)) { anahtarlar.add(a); satirlar.push(x); }
+  }
+  return { satirlar, yazilamaz };
+}
+
+// 507 3 a (503'ün tersi): plan taslağının yerleri çalışmanın planına (S.plan.ops) ve kilitlerine (S.locks) yazılır; deger kayıttaki
+// çalışmadır, kopyası döner. Saatler kaydın kendi ekseninde (D.meta.baslangic). Yalnız çalışmada işlemi olan ve bitmemiş iş yazılır; işlemin
+// ayar başlangıcı (Su) ve ilk parti (lot1) aynı kayar. Taslakta kilitli iş çalışmada kilitlenir, kilitsizin kilidi kalkar. Plan "güncel
+// değil" işaretlenir (dataVer boş): sayfa yeniden çözer.
+export interface TaslakYeri { k: string; anahtar: string; makineId: number; baslangic: string; bitis: string; kilitli: boolean }
+export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]): { deger: Record<string, unknown>; yazilan: number; kilitli: number; atlanan: string[] } | null {
+  const S = JSON.parse(JSON.stringify(deger ?? null)) as {
+    D?: { meta?: { baslangic?: unknown } }; plan?: { ops?: Record<string, Record<string, unknown>>; dataVer?: unknown } | null; locks?: Record<string, unknown>;
+  } | null;
+  const eksen = S?.D?.meta?.baslangic;
+  if (S === null || typeof eksen !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(eksen) || !S.plan?.ops) return null;
+  const ops = S.plan.ops;
+  const locks: Record<string, unknown> = { ...(S.locks ?? {}) };
+  const atlanan: string[] = [];
+  let yazilan = 0;
+  let kilitli = 0;
+  for (const y of yerler) {
+    const r = ops[y.k];
+    if (!r || r.done) { atlanan.push(y.anahtar); continue; }
+    const S0 = planSaati(eksen, y.baslangic);
+    const C = planSaati(eksen, y.bitis);
+    const kay = typeof r.S === 'number' && Number.isFinite(r.S) ? S0 - r.S : 0;
+    const kaydir = (a: string, ust: number) => { if (typeof r[a] === 'number' && Number.isFinite(r[a])) r[a] = Math.min(ust, (r[a] as number) + kay); };
+    kaydir('Su', S0);
+    kaydir('lot1', C);
+    Object.assign(r, { m: String(y.makineId), S: S0, C });
+    yazilan++;
+    if (y.kilitli) { locks[y.k] = { m: String(y.makineId), S: S0 }; kilitli++; } else delete locks[y.k];
+  }
+  S.locks = locks;
+  S.plan.dataVer = null;
+  return { deger: S as Record<string, unknown>, yazilan, kilitli, atlanan };
+}

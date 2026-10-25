@@ -22,6 +22,7 @@ import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/b
 import type { ArkonDeposu, Ileti } from '../veri/depo.ts';
 import { Bolmeli, Cip } from './denetimler.tsx';
 import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
+import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
 import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
@@ -72,8 +73,14 @@ function Alan({ etiket, genis, children }: { etiket: string; genis?: 2 | 3; chil
   return <label className="tc-ay2-form-alan" data-genis={genis}><span className="tc-ay2-ust-yazi">{etiket}</span>{children}</label>;
 }
 
+// Eski PrepTop kısayolları: Çizim stüdyosu ve operatör ekranı.
+const HAZIRLIK_KISAYOLLARI = [
+  { sayfa: 'cizim', simge: 'lab', metin: 'Çizim stüdyosu · PDF ve 3B okuma ayarları', yalnizSimge: true },
+  { sayfa: 'operator', simge: 'gauge', metin: 'Operatör ekranı' },
+] as const;
+
 export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
-  const { depo, ayarlar, yetkiVar, sayfaGorunur, git, tmiyeGit } = useArkon();
+  const { depo, ayarlar, yetkiVar, sayfaGorunur, git, tmiyeGit, onizle: onizlemeAc } = useArkon();
   const durum = useArkonDurumu();
   const { bildir } = useBildirim();
   const tesis = ayarlar.tesis;
@@ -187,7 +194,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     if (kayitZamani.current && seciliRef.current) { clearTimeout(kayitZamani.current); kayitZamani.current = null; await depo.DB.put('pkgs', seciliRef.current); }
   };
   const sec = async (x: Pkg) => { await bekleyeniYaz(); seciliYaz(x); sekmeYaz('info'); duzenAcikYaz(true); void yenile(); };
-  const onizle = async () => { if (p) { await bekleyeniYaz(); yerel.yaz('pvStation', p.machine); git('onizle', p.id); } };
+  const onizle = async () => { if (p) { await bekleyeniYaz(); yerel.yaz('pvStation', p.machine); onizlemeAc(p.id); } };
 
   // Silinen ölçü numune kurallarından da düşer (data/kontrol-plani.ts); geri al, silmeden önceki planı ve numune planını yazar.
   const olcuSil = (ids: number[]) => {
@@ -370,12 +377,14 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
 
   return (
     <div className="tc-ay2" data-duzen={duzenAcik ? '' : undefined}>
-      <div className="tc-ay2-serit-ust">
+      <ArkonBandi simge="layers" baslik="Üretim Terminali Hazırlık" kisayollar={HAZIRLIK_KISAYOLLARI} alt="Kalite & proses" ek={(
+        <span className="tc-ay2-esitlemeler">
         <span className="tc-ay2-esitleme" data-acik="" title="Aynı bilgisayardaki operatör ekranlarına anında iletim"><i aria-hidden="true" />Bu bilgisayar</span>
         <button type="button" className="tc-ay2-esitleme" data-acik={klasorAdi ? '' : undefined} title="Ağ klasörü ile paylaşım" onClick={() => { void klasorSec(); }}>
           <i aria-hidden="true" />{klasorAdi ? 'Klasör: ' + klasorAdi : Folder && Folder.supported ? 'Klasör bağla' : 'Klasör (desteklenmiyor)'}
         </button>
-      </div>
+        </span>
+      )} />
       <div className="tc-ay2-govde">
         <aside className="tc-ay2-liste" aria-label="İş paketleri">
           <div className="tc-ay2-kb"><b>İş paketleri</b><span className="tc-ay2-ust-yazi tc-ay2-sag">{paketler.length} paket</span></div>

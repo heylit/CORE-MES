@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
-import { baglantiOzeti } from './ArkonYeni.tsx';
+import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
 import { SAYFALAR, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 
@@ -31,18 +31,21 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(istekler.some((i) => i.yol.startsWith('/arkon/'))).toBe(false);
   }, 20000);
 
-  it('yöneticide kök adres Pano\'ya gider; sekmeler Operatör, ikinci menü sırası ve Kuyruk ile gelir', async () => {
+  it('yöneticide kök adres Pano\'ya gider; sekmeler ikinci menü sırasıyla, Operatör ve Kuyruk sekmede yok (497/5 a)', async () => {
     sunucuKur(YONETICI);
     arkonAc('/arkon/yeni');
     const pano = await bolum('Pano');
     expect(pano.getAttribute('data-sayfa')).toBe('pano');
     expect(adres()).toBe('/arkon/yeni/pano');
     expect(sekmeAdlari()).toEqual([
-      'Operatör', 'Pano', 'Plan Kuyruğu', 'Kuyruk', 'Üretim Terminali Hazırlık', 'Üretim Anomalisi', 'Kalite', 'Çizim',
+      'Pano', 'Plan Kuyruğu', 'Üretim Terminali Hazırlık', 'Üretim Anomalisi', 'Kalite', 'Çizim',
       'Bakım', 'Raporlar', 'TMI\'ye yazılamayanlar', 'Ayarlar',
     ]);
-    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve şerit bunu kayıt riski olarak söyler.
-    expect(screen.getByRole('status', { name: /Cihaz deposu açılamadı/ }).textContent).toContain('Kayıt riski');
+    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve üst bantta saatin yanındaki durum (soru 488 a)
+    // bunu kayıt riski olarak söyler.
+    const durum = await within(pano).findByRole('status', { name: /Cihaz deposu açılamadı/ }, { timeout: 10000 });
+    expect(durum.textContent).toContain('Kayıt riski');
+    expect(durum.closest('.tc-ay-bant')).not.toBeNull();
   }, 20000);
 
   it('sekmeden sayfa değişir; TMI ekranı olan sekme kendi adresine gider', async () => {
@@ -56,17 +59,24 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     await waitFor(() => { expect(adres()).toBe('/arkon/tmi-yansimalari'); });
   }, 20000);
 
-  it('operatör rolünde kök adres Operatör\'e gider, yalnız kendi sekmeleri görünür, Pano açılmaz', async () => {
+  it('operatör rolünde kök adres Üretim Terminali\'ne gider; ayrı sayfadır, sekme şeridi yok; Pano açılmaz', async () => {
     sunucuKur(OPERATOR);
     arkonAc('/arkon/yeni');
-    expect((await bolum('Operatör')).getAttribute('data-sayfa')).toBe('operator');
+    expect((await bolum('Üretim Terminali')).getAttribute('data-sayfa')).toBe('operator');
     expect(adres()).toBe('/arkon/yeni/operator');
-    expect(sekmeAdlari()).toEqual(['Operatör', 'Ayarlar']);
+    expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
     cleanup();
     sunucuKur(OPERATOR);
     arkonAc('/arkon/yeni/pano');
     expect(await screen.findByText('Bu sayfa bulunamadı ya da size açık değil.', {}, { timeout: 10000 })).toBeTruthy();
     expect(document.querySelector('[data-sayfa]')).toBeNull();
+  }, 20000);
+
+  it('Kuyruk ayrı sayfadır: sekme şeridi olmadan açılır', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/yeni/kuyruk');
+    expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');
+    expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
   }, 20000);
 
   it('bilinmeyen sayfa bölüm açmaz', async () => {
@@ -82,7 +92,28 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     const b = await bolum('Üretim Terminali Hazırlık');
     expect(b.getAttribute('data-sayfa')).toBe('onizle');
     expect(screen.getByRole('tab', { selected: true }).textContent).toContain('Üretim Terminali Hazırlık');
-    expect(screen.getByText('Önizleme: kayıt yapılmaz.')).toBeTruthy();
+    expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
+  }, 20000);
+});
+
+describe('Yeni Arkon ekranı (eski düzen)', () => {
+  it('Kalite sekmesi bekleyen ve ölçülen numune sayısını taşır', async () => {
+    const numune = (id: string, status: string) => ({ kimlik: id, surum: 1, govde: { id, status, at: 1, items: [] } });
+    sunucuKur(YONETICI, { belgeler: { requests: [numune('n1', 'waiting'), numune('n2', 'measuring'), numune('n3', 'approved')] } });
+    arkonAc('/arkon/yeni/pano');
+    await bolum('Pano');
+    expect(await screen.findByRole('tab', { name: 'Kalite (2)' }, { timeout: 10000 })).toBeTruthy();
+  }, 20000);
+
+  it('kök ölçek değişkenini taşır; dar ekranda ölçek 1 ve mobil işareti', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/yeni/pano');
+    await bolum('Pano');
+    const kok = document.querySelector<HTMLElement>('.tc-ay');
+    await waitFor(() => { expect(kok?.style.getPropertyValue('--tc-ay-olcek')).not.toBe(''); });
+    // jsdom'da alan genişliği 0'dır: eski useFit gibi dar ekran sayılır.
+    expect(kok?.style.getPropertyValue('--tc-ay-olcek')).toBe('1');
+    expect(kok?.hasAttribute('data-mobil')).toBe(true);
   }, 20000);
 });
 

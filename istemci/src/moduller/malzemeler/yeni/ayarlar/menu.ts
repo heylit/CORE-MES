@@ -1,4 +1,4 @@
-// Prototipin MA_MENU sırası. "Değişiklik kaydı" yok (210.3); prototipin "Ayarlar" penceresi "Genel" bölümü olarak Yönetim'de.
+// Prototipin MA_MENU sırası. "Değişiklik kaydı" yok (210.3); prototipin "Ayarlar" penceresi üst baştaki düğmeden açılır, burada bölüm değildir.
 export const AYAR_MENUSU = [
   { baslik: '', bolumler: [{ anahtar: 'ozet', ad: 'Genel bakış' }] },
   {
@@ -20,7 +20,7 @@ export const AYAR_MENUSU = [
     baslik: 'Genel listeler',
     bolumler: [{ anahtar: 'sertifika', ad: 'Sertifikalar' }, { anahtar: 'birim', ad: 'Stok birimleri' }, { anahtar: 'belge', ad: 'Belge türleri' }],
   },
-  { baslik: 'Yönetim', bolumler: [{ anahtar: 'roller', ad: 'Roller ve yetkiler' }, { anahtar: 'genel', ad: 'Genel' }] },
+  { baslik: 'Yönetim', bolumler: [{ anahtar: 'roller', ad: 'Roller ve yetkiler' }] },
 ] as const;
 
 export type AyarBolumu = (typeof AYAR_MENUSU)[number]['bolumler'][number]['anahtar'];
