@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { taslakEkMesaisi } from './kurallar.ts';
 import type { MotorDurumu, MotorPlani } from './plan-motoru.ts';
 
 // Planın girdisi (st) planlama çerçevesindeki kodla kurulur: motor/girdi.betik çerçeveye de gömülür (planlama-derle.ts), aynı kayıt,
@@ -15,7 +16,7 @@ function girdiKodu(): string {
   kod ??= `${DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ girdiKur });`;
   return kod;
 }
-// Sunucu çözücüsünün çevirisi (motor/emirler.betik) çerçeveye gömülmez; aynı dosyalarla aynı bağlamda yüklenir.
+// Sunucu çözücüsünün çevirisi (motor/emirler.betik) aynı dosyalarla aynı bağlamda yüklenir; çerçeveye de gömülür (planlamaMotoru).
 let cozumKod: string | null = null;
 function cozumKodu(): string {
   cozumKod ??= `${[...DOSYALAR, 'emirler'].map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ sunucuCozumGirdisi });`;
@@ -51,6 +52,8 @@ export interface CozumIstegi {
   kuyruklar: { makineId: number; anahtarlar: string[] }[];
   sabitler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[];
   calisanlar: { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }[];
+  // 512 1 a: plan taslağının kabul edilmiş ek vardiyaları (gün takvim günü); verilirse çalışmanın ek vardiyalarının yerine geçer.
+  ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
 }
 export interface CozumGirdisi {
   st: MotorDurumu;
@@ -104,6 +107,6 @@ export function cozumGirdisi(g: Omit<GirdiIstegi, 'bugun'> & { istek: CozumIsteg
     sunucuCozumGirdisi: (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null, istek: CozumIstegi, bugun: string) => CozumGirdisi | null;
   };
   const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
-  const sonuc = sunucuCozumGirdisi(kopya(g.calisma), kopya(g.kayit), kopya(g.kaynak), kopya(g.istek), tesisGunu(Date.parse(g.istek.simdi)));
+  const sonuc = sunucuCozumGirdisi(kopya(g.istek.ekMesai ? taslakEkMesaisi(g.calisma, g.istek.ekMesai) : g.calisma), kopya(g.kayit), kopya(g.kaynak), kopya(g.istek), tesisGunu(Date.parse(g.istek.simdi)));
   return sonuc === null ? null : structuredClone(sonuc);
 }

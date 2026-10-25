@@ -815,6 +815,14 @@ export function planSaati(baslangic: string, an: number | string): number {
 export function planGunu(baslangic: string, gun: number): string {
   return new Date(gunMs(baslangic) + gun * GUN_MS).toISOString().slice(0, 10);
 }
+// 512 1 a: sunucu motoruna plan taslağının kabul edilmiş ek vardiyası verilir; çalışmanınkinin yerine geçer. Gün çalışmanın ekseninde
+// (D.meta.baslangic); motor ekseni kaydırırken ek vardiyayı da kaydırır. Ekseni olmayan çalışma değişmez.
+export function taslakEkMesaisi(calisma: unknown, ekMesai: readonly { makineId: number; gun: string; vardiyaId: number }[]): unknown {
+  const c = calisma as { D?: { meta?: { baslangic?: unknown } } } | null;
+  const baslangic = c?.D?.meta?.baslangic;
+  if (typeof baslangic !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(baslangic)) return calisma;
+  return { ...c, ekMesai: ekMesai.map((e) => ({ m: String(e.makineId), gun: (gunMs(e.gun) - gunMs(baslangic)) / GUN_MS, vardiya: String(e.vardiyaId) })) };
+}
 export function planAni(baslangic: string, saat: number): string {
   const dk = Math.round(saat * 60); const gun = Math.floor(dk / 1440);
   return new Date(tesisGunBasi(planGunu(baslangic, gun)) + (dk - gun * 1440) * 60_000).toISOString();
