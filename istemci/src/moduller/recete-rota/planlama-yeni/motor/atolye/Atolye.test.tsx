@@ -81,6 +81,7 @@ describe('PlanlamaAtolyesi', () => {
       kaynaklar: [{ tur: 'makine', id: 1, kod: 'M1', ad: 'M1' }, { tur: 'makine', id: 2, kod: 'M2', ad: 'M2' }],
       yerlesimler: [{ isEmriId: 9, kaynak: { tur: 'makine', id: kaynak }, baslangic: '2026-10-21T06:00:00Z', bitis, kilitli: false, dondurulmus: false, durum: 'planli' }],
       emirler: [{ emirNo: 'E-1', teslim: '2026-10-30', bitis }],
+      gostergeler: { ...GOSTERGE, ayarSaat: kaynak === 1 ? 2 : 3.5, agirlikliGecikmeSaat: kaynak === 1 ? 4 : 6 },
     });
     const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve(yol === '/plan' ? plan(1, '2026-10-21T08:00:00Z') : plan(2, '2026-10-21T11:00:00Z')) as never);
     ac();
@@ -89,6 +90,9 @@ describe('PlanlamaAtolyesi', () => {
     await waitFor(() => expect(screen.getByText('1 tezgâh, 0 saat, 0 yeni')).toBeTruthy());
     expect(get).toHaveBeenCalledWith('/plan?taslak=1');
     expect(screen.getByText('Başlamış işler yerinde')).toBeTruthy();
+    expect(screen.getByText('Ağırlıklı gecikme')).toBeTruthy();
+    expect(screen.getByText('4,0 → 6,0 sa')).toBeTruthy();
+    expect(screen.getByText('3,5 sa')).toBeTruthy();
     expect(document.querySelectorAll('.tc-pym-pa-aday')).toHaveLength(3);
     expect(document.querySelector('.tc-pym-pa-aday[aria-current="true"]')?.textContent).toContain('Senaryo 1');
     expect(screen.getByText('M1 sırası değişti')).toBeTruthy();
