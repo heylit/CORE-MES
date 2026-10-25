@@ -824,6 +824,27 @@ export function gostergeler(y: readonly GostergeIsi[], emirler: readonly { id: n
   };
 }
 
+// 507 1 a: eski Reçete ve Rota motorunun özetindeki iki gösterge (evaluate suH ve wT), salt okuma. Ayar saati: yerleşen işlerin (bölünmüş
+// işte her parçanın) ayar süresi toplamı; başlamış ve sayımı olan işin ayarı yapılmıştır, sayılmaz. Öncelik ağırlıklı gecikme: emrin bütün
+// işleri yerleşmişse son bitişin teslim günü sonunu aştığı saat x öncelik ağırlığı x sipariş satırındaki adet payı. Ağırlık eski motorun
+// PW'si (1: 4, 2: 2, 3: 1); tanımsız öncelik (4 dahil) 1. Yerleşmemiş işi olan ya da teslimsiz emir gecikmeye girmez. Saatler bir ondalık.
+export const ONCELIK_AGIRLIGI: Readonly<Record<number, number>> = { 1: 4, 2: 2, 3: 1 };
+export function ayarVeGecikme(
+  y: readonly (Aralik & { isEmriId: number; uretimEmriId: number; ayarDk: number | null })[],
+  emirler: readonly { id: number; teslimDk: number | null; isSayisi: number; oncelik: number | null; pay: number }[],
+): { ayarSaat: number; agirlikliGecikmeSaat: number } {
+  const ayarDk = y.reduce((t, x) => t + (x.ayarDk ?? 0), 0);
+  let gecikme = 0;
+  for (const e of emirler) {
+    const l = y.filter((x) => x.uretimEmriId === e.id);
+    if (e.teslimDk === null || e.isSayisi === 0 || new Set(l.map((x) => x.isEmriId)).size !== e.isSayisi) continue;
+    const bit = Math.max(...l.map((x) => x.bitis));
+    gecikme += (Math.max(0, bit - e.teslimDk) / 60) * (ONCELIK_AGIRLIGI[e.oncelik ?? 0] ?? 1) * e.pay;
+  }
+  const bir = (x: number) => Math.round(x * 10) / 10;
+  return { ayarSaat: bir(ayarDk / 60), agirlikliGecikmeSaat: bir(gecikme) };
+}
+
 // PL-09: iş merkezinin günlük kişi-dakika ihtiyacı (istasyon yükü x operatör ihtiyacı; 1 kişi 3 makineye bakıyorsa 0,33) ve kapasitesi
 // (kişilerin o günkü çalışma dakikası x o merkezdeki payı). İhtiyacın kapasiteyi aştığı gün personelin sınırladığı gündür; aynı gün birden
 // çok iş merkezinde aşılsa da bir gün sayılır.
