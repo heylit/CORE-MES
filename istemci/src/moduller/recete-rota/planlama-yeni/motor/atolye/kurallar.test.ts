@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
   akis, asilBekleme, bitisFarklari, canliFark, gunYeni, malzemeDetay, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
-  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paRedVar, paSecim, type SunucuSenaryosu,
+  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
@@ -166,5 +167,22 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
     const r = paEmirFarki([s(1, 'acik', { etki: etki([e('A', '2026-10-21T08:00:00Z', '2026-10-21T10:00:00Z')]) }), s(2, 'acik', { etki: etki([e('B', '2026-10-21T08:00:00Z', null)]) })]);
     expect(r.map((x) => x.emirNo)).toEqual(['B', 'A']);
     expect(r[1]?.senaryo).toEqual(['2026-10-21T10:00:00Z', '2026-10-21T08:00:00Z']);
+  });
+  it('plan farkı: tezgâh, saat, yeni; başlamış ve sabit iş oynadıysa kırmızı; gecikme termin günü sonuna göre', () => {
+    const y = (isEmriId: number, kaynak: number, baslangic: string, ek: Record<string, unknown> = {}) => ({ isEmriId, kaynak: { tur: 'makine', id: kaynak }, baslangic, bitis: baslangic, kilitli: false, dondurulmus: false, durum: 'planli', ...ek });
+    const plan = (yerlesimler: unknown[], emirler: unknown[]) => ({ kaynaklar: [{ tur: 'makine', id: 1, kod: 'M1', ad: 'M1' }, { tur: 'makine', id: 2, kod: 'M2', ad: 'M2' }], yerlesimler, emirler }) as unknown as PlanCevabi;
+    const canli = plan([y(1, 1, '2026-10-21T08:00:00Z', { durum: 'basladi' }), y(2, 1, '2026-10-21T10:00:00Z', { kilitli: true }), y(3, 2, '2026-10-21T12:00:00Z')],
+      [{ emirNo: 'E-1', teslim: '2026-10-21', bitis: '2026-10-21T12:00:00Z' }]);
+    const sen = plan([y(1, 2, '2026-10-21T08:00:00Z'), y(2, 1, '2026-10-21T11:00:00Z'), y(3, 2, '2026-10-21T12:05:00Z'), y(4, 2, '2026-10-22T08:00:00Z')],
+      [{ emirNo: 'E-1', teslim: '2026-10-21', bitis: '2026-10-23T12:00:00Z' }]);
+    const f = planFarki(sen, canli);
+    expect([f.tasinan, f.tezgah, f.saat, f.yeni, f.baslamis, f.sabit]).toEqual([2, 1, 1, 1, 1, 1]);
+    expect(f.tez).toEqual({ M2: 2, M1: 1 });
+    expect(f.sip[0]?.emirNo).toBe('E-1');
+    expect(f.sip[0]?.T0).toBe(0);
+    expect((f.sip[0]?.T1 ?? 0) > 30).toBe(true);
+    expect(planGecikme(canli)).toBe(0);
+    expect(paPlanKontrol(f, true).map((k) => k[0])).toEqual(['red', 'red']);
+    expect(paPlanKontrol(null, true)).toEqual([]);
   });
 });

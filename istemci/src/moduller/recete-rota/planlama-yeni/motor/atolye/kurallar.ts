@@ -1,4 +1,4 @@
-import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
@@ -433,7 +433,7 @@ export const yerlesmeyen = (g: Gostergeler | null): number | null => (g ? Math.m
 // Kontrol (paKontrol): sunucu senaryosunun bildikleriyle. ok yeşil, uyari sarı; kırmızı maddeleri (başlamış ya da sabit iş oynadı, ek mesai
 // bütçesi) sunucu canlıya almada kendisi denetler.
 export type KontrolMaddesi = ['ok' | 'uyari' | 'red', string];
-export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSurum: number | null): KontrolMaddesi[] {
+export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSurum: number | null, planK: KontrolMaddesi[] = []): KontrolMaddesi[] {
   const K: KontrolMaddesi[] = [];
   if (s.canliDegisti) K.push(['uyari', `Canlı plan bu plan hazırlandıktan sonra değişti (sürüm ${s.tabanPlanSurumu} → ${canliSurum ?? '—'}); aradaki canlı değişiklikleri bu planda yok`]);
   const g = s.gostergeler;
@@ -441,6 +441,7 @@ export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSu
   else {
     const y = yerlesmeyen(g) ?? 0;
     K.push(y ? ['uyari', `${y} iş yerleşmedi`] : ['ok', 'Bütün işler yerleşti']);
+    K.push(...planK);
     if (canli) {
       const d = g.geciken - canli.geciken;
       K.push(d > 0 ? ['uyari', `Geciken sipariş canlıya göre ${d} artıyor`] : ['ok', d < 0 ? `Geciken sipariş canlıya göre ${-d} azalıyor` : 'Geciken sipariş artmıyor']);
@@ -450,6 +451,64 @@ export function paKontrol(s: SunucuSenaryosu, canli: Gostergeler | null, canliSu
   for (const b of s.bekleyenler) K.push(['uyari', `Canlıya alınamaz, bekliyor: ${b}`]);
   if (!s.degisiklikler.length) K.push(['uyari', 'Canlı plandan farkı yok']);
   return K;
+}
+
+// Plan farkı (paFark): senaryonun ve canlının yerleşimleri (GET /plan?taslak=, GET /plan) iş emri kimliğiyle karşılaştırılır. Kaynağı değişen
+// "tezgâh", saati çeyrek saatten çok kayan "saat", canlıda yerleşmemiş olan "yeni"dir. Bitişi değişen emirler en çok değişenden.
+export interface EmirFarki { emirNo: string; once: string | null; sonra: string | null; d: number; teslim: string | null; T0: number | null; T1: number | null }
+export interface PlanFarki { tasinan: number; tezgah: number; saat: number; yeni: number; tez: Record<string, number>; sip: EmirFarki[]; baslamis: number; sabit: number }
+const SAAT = 3_600_000;
+const ms = (z: string | null | undefined): number | null => { if (!z) return null; const t = Date.parse(z); return Number.isNaN(t) ? null : t; };
+// Termin günün sonudur [VARSAYIM: eski sayfada due saat ekseninde; sunucu teslimi tarih verir].
+export function gecikmeSaat(bitis: string | null, teslim: string | null): number | null {
+  const b = ms(bitis), t = ms(teslim ? `${teslim}T23:59:59` : null);
+  return b === null || t === null ? null : Math.max(0, (b - t) / SAAT);
+}
+export const kaynakAdi = (p: PlanCevabi, k: { tur: string; id: number }): string => {
+  const x = p.kaynaklar.find((y) => y.tur === k.tur && y.id === k.id);
+  return x ? x.kod ?? x.ad : `${k.tur === 'kisi' ? 'Kişi' : 'Makine'} ${k.id}`;
+};
+export function planFarki(a: PlanCevabi, b: PlanCevabi | null): PlanFarki {
+  const f: PlanFarki = { tasinan: 0, tezgah: 0, saat: 0, yeni: 0, tez: {}, sip: [], baslamis: 0, sabit: 0 };
+  const bo = new Map((b?.yerlesimler ?? []).map((y) => [y.isEmriId, y]));
+  for (const r of a.yerlesimler) {
+    const e = bo.get(r.isEmriId); const m = kaynakAdi(a, r.kaynak);
+    if (!e) { f.yeni++; f.tez[m] = (f.tez[m] ?? 0) + 1; continue; }
+    const yerDegisti = e.kaynak.tur !== r.kaynak.tur || e.kaynak.id !== r.kaynak.id;
+    const kayma = Math.abs((ms(e.baslangic) ?? 0) - (ms(r.baslangic) ?? 0)) / SAAT > 0.25;
+    if (yerDegisti) f.tezgah++; else if (kayma) f.saat++; else continue;
+    f.tasinan++; f.tez[m] = (f.tez[m] ?? 0) + 1;
+    if (e.durum === 'basladi' || e.durum === 'bitti') f.baslamis++;
+    if (e.kilitli || e.dondurulmus) f.sabit++;
+  }
+  const ea = new Map(a.emirler.map((x) => [x.emirNo, x])); const eb = new Map((b?.emirler ?? []).map((x) => [x.emirNo, x]));
+  for (const j of new Set([...ea.keys(), ...eb.keys()])) {
+    const x = ea.get(j), y = eb.get(j); const ca = ms(x?.bitis), cb = ms(y?.bitis);
+    if (ca === null && cb === null) continue;
+    if (ca !== null && cb !== null && Math.abs(ca - cb) / SAAT < 0.25) continue;
+    const teslim = x?.teslim ?? y?.teslim ?? null;
+    f.sip.push({ emirNo: j, once: y?.bitis ?? null, sonra: x?.bitis ?? null, d: ((ca ?? 1e13) - (cb ?? 1e13)) / SAAT, teslim,
+      T0: y ? gecikmeSaat(y.bitis, teslim) : null, T1: x ? gecikmeSaat(x.bitis, teslim) : null });
+  }
+  f.sip.sort((p, q) => Math.abs(q.d) - Math.abs(p.d));
+  return f;
+}
+// Planın gecikmesi (saat, emir başına toplam) ve son bitişi; ağırlıksız [eski ozet.wT öncelik ağırlıklıydı].
+export function planGecikme(p: PlanCevabi): number {
+  return p.emirler.reduce((t, e) => t + (gecikmeSaat(e.bitis, e.teslim) ?? 0), 0);
+}
+export function sonBitis(p: PlanCevabi): string | null {
+  let en: string | null = null;
+  for (const e of p.emirler) if (e.bitis && (!en || e.bitis > en)) en = e.bitis;
+  return en;
+}
+// Kontrolün plana bakan kırmızı maddeleri (paKontrol): canlıda başlamış ya da sabit (kilitli, dondurulmuş) iş senaryoda yerinden oynadıysa.
+export function paPlanKontrol(f: PlanFarki | null, canliVar: boolean): KontrolMaddesi[] {
+  if (!f || !canliVar) return [];
+  return [
+    f.baslamis ? ['red', `${f.baslamis} başlamış iş yerinden oynadı`] : ['ok', 'Başlamış işler yerinde'],
+    f.sabit ? ['red', `${f.sabit} sabit iş yerinden oynadı`] : ['ok', 'Sabit işler yerinde'],
+  ];
 }
 export const paRedVar = (K: KontrolMaddesi[]): boolean => K.some((k) => k[0] === 'red');
 
