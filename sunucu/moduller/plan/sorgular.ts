@@ -228,6 +228,15 @@ export const acikTaslagi = (db: Db, kisiId: number): Promise<SenaryoSatiri | nul
 export const sonCanliyaAlma = (db: Db): Promise<{ zaman: string; kisiId: number } | null> =>
   db.tek(`SELECT to_json(kapanma) #>> '{}' AS zaman, kapatan_kisi_id AS "kisiId" FROM plan_senaryosu
            WHERE durum = 'canliya_alindi' ORDER BY kapanma DESC, id DESC LIMIT 1`);
+// 510 a: taban planın ilk yazılışından sonraki canlıya almalar (ilk canlıya alma tabanı yazar, sayılmaz), yeniden eskiye.
+export async function canliyaAlmalar(db: Db): Promise<{ tabanZamani: string | null; satirlar: { senaryoId: number; ad: string; kisiId: number; zaman: string }[] }> {
+  const t = (await db.tek<{ z: string | null }>("SELECT to_json(min(zaman)) #>> '{}' AS z FROM plan_taban"))!.z;
+  if (t === null) return { tabanZamani: null, satirlar: [] };
+  const satirlar = await db.sorgu<{ senaryoId: number; ad: string; kisiId: number; zaman: string }>(
+    `SELECT id AS "senaryoId", ad, kapatan_kisi_id AS "kisiId", to_json(kapanma) #>> '{}' AS zaman FROM plan_senaryosu
+      WHERE durum = 'canliya_alindi' AND kapanma > (SELECT min(zaman) FROM plan_taban) ORDER BY kapanma DESC, id DESC`);
+  return { tabanZamani: t, satirlar };
+}
 export const acikSenaryoSayisi = async (db: Db): Promise<number> =>
   (await db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_senaryosu WHERE durum IN ('acik', 'onayda')"))!.n;
 

@@ -68,19 +68,21 @@ export type AcilisDurumu =
   | { tur: 'hata'; ileti: string }
   | { tur: 'hazir'; depo: PlanlamaDeposu };
 
-export function usePlanlamaDeposu(etkin: boolean): { durum: AcilisDurumu; yenile: () => void } {
+// tazele: ekran açıkken kaydı yükleniyor durumuna geçmeden yeniden okur (sessiz yazmanın çatışması); okunamazsa ekran olduğu gibi kalır.
+export function usePlanlamaDeposu(etkin: boolean): { durum: AcilisDurumu; yenile: () => void; tazele: () => void } {
   const [durum, setDurum] = useState<AcilisDurumu>({ tur: 'yukleniyor' });
-  const [deneme, setDeneme] = useState(0);
+  const [deneme, setDeneme] = useState<{ n: number; sessiz: boolean }>({ n: 0, sessiz: false });
   useEffect(() => {
     if (!etkin) return undefined;
     let bitti = false;
-    setDurum({ tur: 'yukleniyor' });
+    if (!deneme.sessiz) setDurum({ tur: 'yukleniyor' });
     acilisOku().then(
       (depo) => { if (!bitti) setDurum({ tur: 'hazir', depo }); },
-      (e: unknown) => { if (!bitti) setDurum({ tur: 'hata', ileti: hataIletisi(e, 'Planlama açılamadı.') }); },
+      (e: unknown) => { if (!bitti && !deneme.sessiz) setDurum({ tur: 'hata', ileti: hataIletisi(e, 'Planlama açılamadı.') }); },
     );
     return () => { bitti = true; };
   }, [etkin, deneme]);
-  const yenile = useCallback(() => { setDeneme((d) => d + 1); }, []);
-  return { durum, yenile };
+  const yenile = useCallback(() => { setDeneme((d) => ({ n: d.n + 1, sessiz: false })); }, []);
+  const tazele = useCallback(() => { setDeneme((d) => ({ n: d.n + 1, sessiz: true })); }, []);
+  return { durum, yenile, tazele };
 }

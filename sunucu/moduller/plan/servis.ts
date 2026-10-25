@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  CanliYerlesimCevabi, CanliyaAlCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
+  CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, KarsilastirmaCevabi, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisBandiCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
 import { KURAL_ADI, PLAN_KURALLARI, PLAN_ONAY_KOMUTLARI } from '#paylasilan/sozlesme/plan.ts';
@@ -955,6 +955,20 @@ export async function canliSurum(db: Db): Promise<PlanSurumCevabi> {
   const son = await s.sonCanliyaAlma(db);
   const ad = son ? (await kisiAdlari(db, [son.kisiId])).get(son.kisiId) ?? null : null;
   return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null };
+}
+
+// 510 a: "Plan değişikliği" kutusu; kişi başına sayı çoktan aza, eşitte ada göre.
+export async function canliyaAlmaGecmisi(db: Db): Promise<CanliyaAlmaGecmisiCevabi> {
+  const { tabanZamani, satirlar } = await s.canliyaAlmalar(db);
+  const adlar = await kisiAdlari(db, [...new Set(satirlar.map((x) => x.kisiId))]);
+  const sayi = new Map<number, number>();
+  for (const x of satirlar) sayi.set(x.kisiId, (sayi.get(x.kisiId) ?? 0) + 1);
+  const kisiler = [...sayi].map(([id, n]) => ({ kisi: adlar.get(id) ?? null, sayi: n }))
+    .sort((a, b) => b.sayi - a.sayi || (a.kisi ?? '').localeCompare(b.kisi ?? '', 'tr'));
+  return {
+    tabanZamani, toplam: satirlar.length, kisiler,
+    son: satirlar.slice(0, 20).map((x) => ({ senaryoId: x.senaryoId, ad: x.ad, kisi: adlar.get(x.kisiId) ?? null, zaman: x.zaman })),
+  };
 }
 
 /* ---------------- yazma: hepsi taslağa (P6) ---------------- */

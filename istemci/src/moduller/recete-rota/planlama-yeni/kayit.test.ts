@@ -153,4 +153,92 @@ describe('CalismaYazici', () => {
     expect(yazmalar).toHaveLength(2);
     expect(yazmalar[1]?.beklenenSurum).toBe(8);
   });
+
+  it('sayfa tercihi değişikliği (GERI_ALANLAR dışı alan) geri alınınca eski hâline döner; önceden yoksa silinir', () => {
+    const { y } = kur();
+    y.degistir('Elle sıra', (t) => { (t as Record<string, unknown>).tpSira = ['2', '1']; }, { planKoru: true });
+    y.degistir('Sıra riske göre', (t) => { (t as Record<string, unknown>).tpSira = []; }, { planKoru: true });
+    expect(y.geriAl()).toBe(true);
+    expect((y.calisma as Record<string, unknown>).tpSira).toEqual(['2', '1']);
+    expect(y.geriAl()).toBe(true);
+    expect('tpSira' in y.calisma).toBe(false);
+  });
+
+  it('sessiz değişiklik ize, bildirime ve geri yığınına girmez, veri sürümünü artırmaz; sunucuya sürüm denetimiyle yazılır', async () => {
+    const bildir = vi.fn();
+    const { y, yazmalar } = kur({ bildir });
+    y.degistir('Gün başı', (t) => { (t as Record<string, unknown>).tpGun = { basi: { gun: '2026-10-25' } }; }, { sessiz: true });
+    expect(y.calisma.iz).toHaveLength(0);
+    expect(y.calisma.dataVer).toBe(3);
+    expect(y.geriAlinabilir()).toBe(false);
+    expect(bildir).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(yazmalar).toHaveLength(1);
+    expect(yazmalar[0]?.beklenenSurum).toBe(7);
+    expect((yazmalar[0]?.deger as Record<string, unknown>).tpGun).toEqual({ basi: { gun: '2026-10-25' } });
+  });
+
+  it('geri adımları en yenisi önce listelenir; geriDon seçilen karardan öncesine tek adımda döner', () => {
+    const { y } = kur();
+    y.degistir('Bir', (t) => { t.w.sure = 1; });
+    y.degistir('İki', (t) => { t.w.sure = 2; });
+    y.degistir('Üç', (t) => { t.w.sure = 3; });
+    expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['Üç', 'İki', 'Bir']);
+    expect(y.geriDon(2)).toBe(true);
+    expect(y.calisma.w.sure).toBe(1);
+    expect(y.calisma.iz[0]?.ne).toBe('Seçilen karardan öncesine dönüldü');
+    expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['Bir']);
+    expect(y.geriDon(0)).toBe(false);
+  });
+
+  it('yalnız sessiz değişiklik çatışırsa hata gösterilmez, sayfa yeniden okur; ardından gelen sessiz değişiklik de sessizce bırakılır', async () => {
+    const catismadaYenile = vi.fn();
+    const { y, uyarilar } = kur({ catismadaYenile }, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('Gün başı', (t) => { t.pref.g = 1; }, { sessiz: true });
+    await y.hepsiniYaz();
+    expect(uyarilar).toEqual([]);
+    expect(catismadaYenile).toHaveBeenCalledTimes(1);
+    expect(y.durdu).toBe(true);
+    expect(y.degistir('Gün başı', (t) => { t.pref.g = 2; }, { sessiz: true })).toBe(false);
+    expect(uyarilar).toEqual([]);
+  });
+
+  it('sessiz değişiklikle birlikte kullanıcı değişikliği çatışırsa çatışma bildirilir', async () => {
+    const catismadaYenile = vi.fn();
+    const { y, uyarilar } = kur({ catismadaYenile }, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('Gün başı', (t) => { t.pref.g = 1; }, { sessiz: true });
+    y.degistir('Ağırlık', (t) => { t.w.sure = 1; });
+    await y.hepsiniYaz();
+    expect(uyarilar).toEqual([CATISMA]);
+    expect(catismadaYenile).not.toHaveBeenCalled();
+  });
+
+  it('kaydet bekleyen değişikliği beklemeden aynı sürüm denetimli yazmayla gönderir ve kayıtlı sürümü verir; değişiklik yoksa yazmaz', async () => {
+    const { y, yazmalar } = kur();
+    expect(await y.kaydet()).toBe(7);
+    expect(yazmalar).toHaveLength(0);
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBe(8);
+    expect(yazmalar).toHaveLength(1);
+    expect(yazmalar[0]).toMatchObject({ anahtar: PLANLAMA_ANAHTARI, beklenenSurum: 7 });
+    await vi.runAllTimersAsync();
+    expect(yazmalar).toHaveLength(1);
+  });
+
+  it('kaydet çatışmada (409) null verir, yazma durur ve çatışma her zamanki gibi bildirilir', async () => {
+    const { y, yazmalar, uyarilar } = kur({}, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBeNull();
+    expect(yazmalar[0]?.beklenenSurum).toBe(7);
+    expect(uyarilar).toEqual([CATISMA]);
+    expect(y.durdu).toBe(true);
+    expect(await y.kaydet()).toBeNull();
+  });
+
+  it('kaydet başka hatada null verir; değişiklik bekler', async () => {
+    const { y, uyarilar } = kur({}, async () => { throw new ApiHatasi(500, { kod: 'SUNUCU', mesaj: 'x' }); });
+    y.degistir('a', (t) => { t.pref.a = 1; });
+    expect(await y.kaydet()).toBeNull();
+    expect(uyarilar).toEqual([RET]);
+  });
 });

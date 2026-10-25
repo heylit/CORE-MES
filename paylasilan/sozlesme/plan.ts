@@ -340,6 +340,14 @@ export const planCanliOzeti = z.object({
 });
 // Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
 export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true });
+// 510 a: eski "Plan değişikliği" kutusu. Taban planın ilk yazılışından (ilk canlıya alma) sonraki canlıya almalar: toplam, kişi başına sayı
+// (kutunun alt satırı) ve en son 20'si (yeniden eskiye). Taban yoksa tabanZamani null, sayılar boş. Kişi adı okunamazsa null.
+export const canliyaAlmaGecmisiCevabi = z.object({
+  tabanZamani: zaman.nullable(),
+  toplam: z.number().int(),
+  kisiler: z.array(z.object({ kisi: z.string().nullable(), sayi: z.number().int() })),
+  son: z.array(z.object({ senaryoId: KIMLIK, ad: z.string(), kisi: z.string().nullable(), zaman })),
+});
 export const senaryoParametresi = z.object({ id: z.coerce.number().int().positive() });
 export const degisiklikParametresi = z.object({ id: z.coerce.number().int().positive(), degisiklikId: z.coerce.number().int().positive() });
 
@@ -392,6 +400,7 @@ export type CanliyaAlCevabi = z.output<typeof canliyaAlCevabi>;
 export type PlanAyari = z.output<typeof planAyari>;
 export type PlanCevabi = z.output<typeof planCevabi>;
 export type PlanEkMesai = z.output<typeof planEkMesai>;
+export type CanliyaAlmaGecmisiCevabi = z.output<typeof canliyaAlmaGecmisiCevabi>;
 export type EkMesaiGovdesi = z.output<typeof ekMesaiGovdesi>;
 export type PlanYerlesimi = z.output<typeof planYerlesimi>;
 export type PlanParcasi = z.output<typeof planParcasi>;
