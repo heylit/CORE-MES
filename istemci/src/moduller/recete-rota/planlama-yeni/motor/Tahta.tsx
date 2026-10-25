@@ -13,6 +13,8 @@ import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunl
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
 import { MOTOR_NOTU } from './ortak.tsx';
 import { Ozet, type OzetDurumu } from './ozet/Ozet.tsx';
+import { panelSecimi } from './secim/kurallar.ts';
+import { SecimPaneli, type PanelSekmesi } from './secim/SecimPaneli.tsx';
 import { ozetVerisi, type BolgeKimligi } from './ozet/veri.ts';
 import { Cubuk } from './ust/Cubuk.tsx';
 import { Gorunum, type TahtaGorunumu } from './ust/Gorunum.tsx';
@@ -44,7 +46,9 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [kilavuz, setKilavuz] = useState(false);
   const [ornek, setOrnek] = useState<string | null>(null);
   const [ks, setKs] = useState<KesifDurumu>(KESIF_ILK);
+  const [sekD, setSekD] = useState<{ k: string | null; x: PanelSekmesi }>({ k: null, x: 'yon' });
   const harita = useRef<HaritaKomutu | null>(null);
+  const dk = useRef<HTMLElement | null>(null);
 
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
@@ -61,6 +65,13 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const zaman = zamanSinirla(secim.zaman, now, pencereSonu(now, r));
   // Seçili adımın siparişi seçili sipariş sayılır (atSecJob).
   const secJob = secim.adim && p?.ops[secim.adim] ? p.ops[secim.adim]?.job ?? null : secim.siparis;
+  // Yan panel (zl-yan): Özet, Harita ve Keşfet'te seçim olunca açılır; tezgâh yerleri haritanınkiyle aynı sahneden.
+  const sahne = useMemo(() => (p ? sahneKur(c.D, p, cx, yerlesim(haritaGruplari(c.D, p, cx), 1000, 600), r, now) : null), [c, p, cx, r, now]);
+  const ps = p && sahne && gorunum !== 'cizelge' ? panelSecimi(p, sahne, secim, zaman) : null;
+  // Sekme seçimle birlikte tutulur; yeni seçim "Yön ver"le açılır (tkSek seçimde sıfırlanır).
+  const psAnahtar = ps ? `${ps.tur}:${ps.id}` : null;
+  const sek = sekD.k === psAnahtar ? sekD.x : 'yon';
+  const sekSec = (x: PanelSekmesi) => setSekD({ k: psAnahtar, x });
 
   const studyo = useCallback(() => o.git('studio'), [o]);
   const nabizAc = useCallback((x: boolean) => setNbAcik(x), []);
@@ -80,6 +91,18 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   // Çift tık tezgâhın gün planını açar (Çizelge).
   const ciftTik = useCallback((m: string) => { sec({ tezgah: m, siparis: null, adim: null }); setGorunum('cizelge'); }, [sec]);
   const komutKur = useCallback((k: HaritaKomutu | null) => { harita.current = k; }, []);
+  const secimBirak = useCallback(() => sec({ siparis: null, adim: null, tezgah: null }), [sec]);
+  const opSec = useCallback((id: string) => sec({ adim: id, siparis: null, tezgah: null }), [sec]);
+  const zamanSec = useCallback((t: number) => sec({ zaman: t }), [sec]);
+  // Gün planı (at-gun): seçilen adımın ya da tezgâhın o günü Çizelge'nin gün ölçeğinde açılır.
+  const gunPlani = useCallback((t: number, x: { adim?: string; tezgah?: string }) => {
+    sec({ siparis: null, adim: x.adim ?? null, tezgah: x.tezgah ?? null });
+    o.olcekSec('gun'); const n = Math.floor(t / 24) - Math.floor(now / 24); if (n > 0) o.kaydir(n);
+    setGorunum('cizelge');
+  }, [sec, o, now]);
+  const hazirlikAc = useCallback(() => { setKs((x) => ({ ...x, gor: 'hazir' })); setMenuAcik(false); setPan(null); setKilavuz(false); setGorunum('kesif'); }, []);
+  // Özet'te "Kartı aç": panel görünür alana gelir ve odağı alır.
+  const kartAc = useCallback(() => { setSekD({ k: null, x: 'yon' }); dk.current?.scrollIntoView?.({ block: 'nearest' }); dk.current?.focus(); }, []);
   // Örnek tezgâh açılışta bir kez seçilir; kamera ona uçar, görünüm değişince (Büyüt) yeniden.
   useEffect(() => {
     if (!kilavuz || !p) { setOrnek(null); return; }
@@ -140,32 +163,42 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     <div className="tc-pym" data-gorunum={gorunum}>
       <Cubuk plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} />
-      {gorunum === 'atolye' && p ? (
-        <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
-          kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} />
-      ) : (
-        <>
-          {p && v && gorunum !== 'cizelge' && cubuk}
-          {!p || !v ? (
-            <BosPlan c={c} cx={cx} />
-          ) : gorunum === 'genel' ? (
+      <div className="tc-pym-govde">
+        <div className="tc-pym-govde-ana">
+          {gorunum === 'atolye' && p ? (
+            <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
+              kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} />
+          ) : (
             <>
-              {kilavuz && <div className="tc-pym-oz-kilavuz"><KilavuzKarti ornek={ornek} kapat={() => kilavuzAc(false)} /></div>}
-              <Ozet c={c} p={p} cx={cx} v={v} d={d} r={r} olcek={donem} now={now} secim={secim} sec={sec} mercek={mercek} komut={komutKur} kilavuz={kilavuz ? ornek : null}
-                kilavuzKapat={() => kilavuzAc(false)}
-              tezGrup={tezGrup} nasilAc={nasilAc} grupAc={grupAc} sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} buyut={() => gorunumSec('atolye')} ciftTik={ciftTik} />
+              {p && v && gorunum !== 'cizelge' && cubuk}
+              {!p || !v ? (
+                <BosPlan c={c} cx={cx} />
+              ) : gorunum === 'genel' ? (
+                <>
+                  {kilavuz && <div className="tc-pym-oz-kilavuz"><KilavuzKarti ornek={ornek} kapat={() => kilavuzAc(false)} /></div>}
+                  <Ozet c={c} p={p} cx={cx} v={v} d={d} r={r} olcek={donem} now={now} secim={secim} sec={sec} mercek={mercek} komut={komutKur} kilavuz={kilavuz ? ornek : null}
+                    kilavuzKapat={() => kilavuzAc(false)}
+                    tezGrup={tezGrup} nasilAc={nasilAc} grupAc={grupAc} sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} buyut={() => gorunumSec('atolye')} ciftTik={ciftTik}
+                    kartAc={ps ? kartAc : null} />
+                </>
+              ) : gorunum === 'cizelge' ? (
+                // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
+                <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
+                  planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
+                  sor={sor} guncel={guncel} komut={komut} />
+              ) : gorunum === 'kesif' ? (
+                <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
+                  sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />
+              ) : null}
             </>
-          ) : gorunum === 'cizelge' ? (
-            // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
-            <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
-              planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
-              sor={sor} guncel={guncel} komut={komut} />
-          ) : gorunum === 'kesif' ? (
-            <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
-              sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />
-          ) : null}
-        </>
-      )}
+          )}
+        </div>
+        {ps && p && sahne && (
+          <SecimPaneli kok={dk} c={c} p={p} cx={cx} s={sahne} r={r} olcek={donem} t={zaman} secim={ps} sek={sek} sekSec={sekSec}
+            komut={komut} planYaz={yetki.planYaz} planKilitle={yetki.planYaz} kapat={secimBirak} opSec={opSec} sipSec={(j) => sipSec(j, false)}
+            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} />
+        )}
+      </div>
       {p && yetki.planYaz && (
         <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} />
       )}

@@ -398,7 +398,7 @@ describe('PlanlamaMotoru', () => {
       expect(within(hat).getByRole('button', { name: /^3: / }).hasAttribute('data-secili')).toBe(true);
       expect(within(hat).getByText('+73 sa geç')).toBeTruthy();
       fireEvent.click(within(hat).getByRole('tab', { name: 'Hazırlık' }));
-      expect(screen.getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeTruthy();
+      expect(within(screen.getByRole('region', { name: 'Hazırlık' })).getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeTruthy();
       fireEvent.click(screen.getByRole('tab', { name: 'Planı anlat' }));
       const adimlar = () => within(screen.getByRole('tablist', { name: 'Adımlar' })).getAllByRole('tab');
       expect(adimlar().map((x) => x.textContent)).toEqual(['Büyük resim', 'Ne bekletiyor', 'Süre nereye gidiyor', 'En yoğun gün', 'Doluluk', 'Ayarlar', 'Teslim', 'Hazırlık']);
@@ -419,5 +419,52 @@ describe('PlanlamaMotoru', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Keşfet' }));
       expect(screen.getByText('8 / 8')).toBeTruthy();
     } finally { vi.useRealTimers(); }
+  });
+
+  it('Yan panel: seçim kartı Özet, Keşfet ve Harita\'da açılır; sipariş, iş ve tezgâh kartı; motor hamleleri pasif, sabitlemek degistir ile; gün planı Çizelge\'de', () => {
+    const c = ornekCalisma(); const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Siparişler zamanında bitiyor mu?' })).getByRole('button', { name: '2' }));
+    const dk = () => screen.getByRole('complementary', { name: 'Yan panel' });
+    expect(within(dk()).getAllByRole('tab').map((x) => x.textContent)).toEqual(['Yön ver', 'Rota']);
+    expect(dk().textContent).toContain('SİPARİŞ');
+    expect(dk().textContent).toContain('Bitiş 27.10 Sal 17:55 · termin 24.10 Cmt 17:00 · 3 gün geç');
+    expect(dk().textContent).toContain('Emir hazırlık verisi bu ekrana bağlı değil.');
+    expect(within(dk()).getByRole('button', { name: 'Öne al' }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(dk()).getByRole('button', { name: 'Normal' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(dk()).getAllByRole('listitem').map((x) => x.textContent)).toContain('25 (fason)Pzt 16:00 → 16:00');
+    fireEvent.click(within(dk()).getByRole('tab', { name: 'Rota' }));
+    expect(dk().textContent).toContain('Hazırlanıyor');
+    // Özet'te "Kartı aç" paneli odaklar ve Yön ver'e döner.
+    fireEvent.click(screen.getByRole('button', { name: 'Kartı aç' }));
+    expect(document.activeElement).toBe(dk());
+    expect(within(dk()).getByRole('tab', { name: 'Yön ver' }).getAttribute('aria-selected')).toBe('true');
+    // Yolculuktaki tezgâh işi açar; iş kartında sabitlemek çalışmaya yazar.
+    fireEvent.click(within(dk()).getByRole('button', { name: '3' }));
+    expect(dk().textContent).toContain('İŞ ADIMI');
+    expect(within(dk()).queryAllByRole('tab')).toHaveLength(0);
+    expect(within(dk()).getByRole('button', { name: '+2 sa' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(dk()).getByRole('button', { name: 'Burada sabitle' }));
+    expect(komut.degistir).toHaveBeenCalledWith('İş sabitlendi', expect.any(Function), { ayrinti: '2.20', planKoru: true });
+    expect(yazilan.at(-1)?.locks['2.20']).toMatchObject({ m: '3' });
+    // Keşfet'te seçim korunur; Kapat bırakır.
+    fireEvent.click(screen.getByRole('button', { name: 'Keşfet' }));
+    expect(dk().textContent).toContain('İŞ ADIMI');
+    fireEvent.click(within(dk()).getByRole('button', { name: 'Kapat (Esc)' }));
+    expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
+    // Tezgâh kartı: yedi gün, Odakla yeni ekranda yok, motor hamleleri pasif; gün planı Çizelge'nin gün ölçeğine gider.
+    fireEvent.click(screen.getByRole('button', { name: 'Özet' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Hangi gün hangi tezgâh dolu?' })).getByRole('button', { name: '3' }));
+    expect(within(dk()).getAllByRole('tab').map((x) => x.textContent)).toEqual(['Yön ver', 'Takvim']);
+    expect(dk().textContent).toContain('TEZGÂH');
+    expect(dk().querySelectorAll('.tc-pym-at-gunler button')).toHaveLength(7);
+    expect(within(dk()).getByRole('button', { name: 'Odakla' }).getAttribute('title')).toBe(`Odakla: ${YOK_NOTU}`);
+    expect(within(dk()).getByRole('button', { name: 'Hepsini boşalt' }).getAttribute('title')).toBe(`Hepsini boşalt: ${MOTOR_NOTU}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Harita' }));
+    expect(dk().textContent).toContain('TEZGÂH');
+    fireEvent.click(within(dk()).getByRole('button', { name: 'Gün planı' }));
+    expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Gün' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

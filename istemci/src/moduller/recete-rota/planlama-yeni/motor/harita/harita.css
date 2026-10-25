@@ -44,16 +44,24 @@
 .tc-pym-ara { flex: 1; }
 .tc-pym-kucuk-yazi { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pym-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+/* Adım listesi (pm-at-yol): seçim kartının yolculuğu ve sırası; kılavuzda numaralar dolu ve yazı üstten hizalı (pm-at-kilavuz). */
 .tc-pym-at-yol { display: grid; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
 .tc-pym-at-yol li {
-  display: grid; grid-template-columns: calc(var(--b-5) - var(--pay-ince)) minmax(0, 1fr); align-items: start; gap: var(--b-2); padding: var(--pay-ince) var(--b-1);
-  border-radius: var(--yari-1); font-size: var(--yazi-s);
+  display: grid; grid-template-columns: calc(var(--b-4) + var(--b-1) + var(--pay-ince)) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2);
+  padding: var(--pay-ince) var(--b-1); border-radius: var(--yari-1); font-size: var(--yazi-s);
 }
 .tc-pym-at-yol li > b {
-  display: grid; place-items: center; width: calc(var(--b-5) - var(--b-1)); height: calc(var(--b-5) - var(--b-1)); border: var(--cizgi-ince) solid var(--done); border-radius: 50%;
-  background: var(--done); color: var(--panel-solid); font-size: var(--yazi-xs);
+  display: grid; place-items: center; width: calc(var(--b-4) + var(--b-1)); height: calc(var(--b-4) + var(--b-1)); border: var(--cizgi-ince) solid var(--edge2);
+  border-radius: var(--yari-tam); background: var(--panel2); font-size: var(--yazi-xs);
 }
-.tc-pym-at-yol li span b { margin-right: var(--b-1); }
+.tc-pym-at-yol li > .tc-pym-link { justify-self: start; }
+.tc-pym-at-yol li small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-at-yol li[data-bitti] { opacity: var(--saydam-55); }
+.tc-pym-at-yol li[data-simdi] { background: color-mix(in oklab, var(--sig) 14%, transparent); }
+.tc-pym-at-yol li[data-simdi] > b { border-color: var(--sig); background: var(--sig); color: var(--panel-solid); }
+.tc-pym-at-kilavuz li { grid-template-columns: calc(var(--b-4) + var(--b-1) + var(--pay-ince)) minmax(0, 1fr); align-items: start; }
+.tc-pym-at-kilavuz li > b { border-color: var(--done); background: var(--done); color: var(--panel-solid); }
+.tc-pym-at-kilavuz li span b { margin-right: var(--b-1); }
 
 .tc-pym-sg-zum {
   grid-row: 2; grid-column: 1; z-index: 6; align-self: end; justify-self: end; display: flex; gap: var(--pay-ince); margin: var(--b-2); padding: var(--pay-ince);

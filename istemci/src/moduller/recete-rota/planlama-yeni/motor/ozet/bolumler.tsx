@@ -91,8 +91,9 @@ export function Canli({ c, v, t }: { c: PlanlamaCalismasi; v: OzetVerisi; t: num
 }
 
 const pay = (x: number, mx: number) => yuzde(x / mx);
-export function Bekleme({ c, v, sec, acikGrup, grupAc, sipSec }: {
+export function Bekleme({ c, v, sec, acikGrup, grupAc, sipSec, kartAc }: {
   c: PlanlamaCalismasi; v: OzetVerisi; sec: OzetSecimi | null; acikGrup: string | null; grupAc: (g: string) => void; sipSec: (j: string) => void;
+  kartAc: (() => void) | null;
 }) {
   const l = beklemeler(v); const mx = Math.max(1, ...l.map((x) => x.isl + x.ayar + x.bek));
   return (
@@ -121,13 +122,13 @@ export function Bekleme({ c, v, sec, acikGrup, grupAc, sipSec }: {
           );
         })}
       </div>
-      <Yolculuk c={c} v={v} sec={sec} />
+      <Yolculuk c={c} v={v} sec={sec} kartAc={kartAc} />
     </>
   );
 }
 
-// Seçilen siparişin yolculuğu: adım adım işleme ve aradaki beklemeler, termin çizgisi.
-function Yolculuk({ c, v, sec }: { c: PlanlamaCalismasi; v: OzetVerisi; sec: OzetSecimi | null }) {
+// Seçilen siparişin yolculuğu: adım adım işleme ve aradaki beklemeler, termin çizgisi. "Kartı aç" yan paneldeki seçim kartına götürür.
+function Yolculuk({ c, v, sec, kartAc }: { c: PlanlamaCalismasi; v: OzetVerisi; sec: OzetSecimi | null; kartAc: (() => void) | null }) {
   const s = sec?.s;
   if (!s) return <p className="tc-pym-br-ipucu"><Simge ad="target" boyut="k" />Bir siparişe dokunun: atölyedeki yolculuğu burada adım adım açılır.</p>;
   const due = s.due ?? s.C; const t0 = Math.min(v.now, s.S), t1 = Math.max(s.C, due); const x = (t: number) => (t - t0) / Math.max(1, t1 - t0);
@@ -144,7 +145,7 @@ function Yolculuk({ c, v, sec }: { c: PlanlamaCalismasi; v: OzetVerisi; sec: Oze
   return (
     <div className="tc-pym-br-yc">
       <p>
-        <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" aria-disabled="true" title={`Kartı aç: ${HAZIRLANIYOR}`}><Simge ad="expand" boyut="k" />Kartı aç</button>
+        <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" aria-disabled={kartAc ? undefined : 'true'} title={kartAc ? undefined : 'Kartı aç: siparişin tezgâhı haritada yok.'} onClick={kartAc ?? undefined}><Simge ad="expand" boyut="k" />Kartı aç</button>
         <b className="tc-pym-mono">{s.id}</b> {s.urun} · {s.adim.length} adım · işleme {saKisa(isl)}, bekleme <b>{saKisa(bek)}</b> · {s.gec ? <b data-ton="hata">{saKisa(s.T)} geç</b> : 'zamanında'}
       </p>
       <div className="tc-pym-br-yc-yol">
