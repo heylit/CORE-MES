@@ -111,12 +111,25 @@ export function adimPlani(yerlesim: EkranYerlesimi | null, emirNo: string, opNo:
   return { baslangic, bitis, makineIdler };
 }
 
+// Emrin tampon durumu (477 a, eski ekranın hesabı): bolluk teslim günü sonuna kalan takvim günüdür (kesirli); plan ayarının tampon günüyle
+// kıyaslanır. Tampon 0 ise geç olmayan emir yeterli sayılır.
+export type TamponDurumu = 'gec' | 'kirmizi' | 'sari' | 'yesil';
+const GUN_MS = 86_400_000;
+const PAY = 1e-9;
+export function tamponDurumu(bolluk: number, tamponGun: number): TamponDurumu {
+  if (bolluk < -PAY) return 'gec';
+  if (tamponGun <= PAY) return 'yesil';
+  return bolluk < tamponGun / 3 ? 'kirmizi' : bolluk < (2 * tamponGun) / 3 ? 'sari' : 'yesil';
+}
+const teslimGunuSonu = (due: string): number => { const t = new Date(`${due}T00:00:00`); t.setDate(t.getDate() + 1); return t.getTime(); };
+
 // Emrin plan özeti: ilk açık adımın başlangıcı ve açık adımların en geç bitişi (eski ekrandaki "Plan bitiş"). Yerleşen bir adımın bitişi
-// yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz; yerleşmeyen adım ayrıca sayılır.
+// yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz; yerleşmeyen adım ayrıca sayılır. Bolluk ve tampon yalnız bitiş ve teslim
+// biliniyorsa vardır (teslimsiz emre tarih uydurulmaz, 468/1 a).
 export type PlanOzeti =
   | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number }
-  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; yerlesmeyen: number };
-export function planOzeti(d: Durum, yerlesim: EkranYerlesimi | null, o: Emir): PlanOzeti {
+  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; yerlesmeyen: number; bolluk: number | null; tampon: TamponDurumu | null };
+export function planOzeti(d: Durum & Pick<DurumCevabi, 'settings'>, yerlesim: EkranYerlesimi | null, o: Emir): PlanOzeti {
   if (o.status === 'tamam') return { tur: 'tamam' };
   if (!plandaMi(o)) return { tur: 'plan-disi' };
   if (yerlesim === null) return { tur: 'motor-yok' };
@@ -128,9 +141,12 @@ export function planOzeti(d: Durum, yerlesim: EkranYerlesimi | null, o: Emir): P
   if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length };
   const bitisler = planlar.map((p) => p.bitis);
   const bitis = bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string;
-  // Teslim günü sonuna kadar biten emir geç sayılmaz; gün yerel saatle okunur (teslim yerel tarihtir).
-  const gecikiyor = o.due !== null && bitis !== null && isoGun(new Date(bitis)) > o.due;
-  return { tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor, yerlesmeyen: acik.length - planlar.length };
+  // Teslim günü sonuna (yerel saat; teslim yerel tarihtir) kadar biten emir geç sayılmaz.
+  const bolluk = o.due !== null && bitis !== null ? (teslimGunuSonu(o.due) - Date.parse(bitis)) / GUN_MS : null;
+  const tampon = bolluk === null ? null : tamponDurumu(bolluk, d.settings.buffer);
+  return {
+    tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', yerlesmeyen: acik.length - planlar.length, bolluk, tampon,
+  };
 }
 
 // Emrin rotası yürürlüktekinden eskiyse: rotaya eklenen ve rotadan çıkan adımlar (OP numarasıyla).

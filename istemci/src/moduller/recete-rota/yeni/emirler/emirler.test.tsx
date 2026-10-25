@@ -77,24 +77,25 @@ describe('R3 Üretim emirleri: plan bitiş', () => {
     const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
     expect(within(b).getByText('Plan bitiş')).toBeTruthy();
     await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
-    expect(within(satir).getByText('Gecikiyor')).toBeTruthy();
+    expect(within(satir).getByText(/^Gecikiyor, -/)).toBeTruthy();
     expect(satir.hasAttribute('data-gec')).toBe(true);
   });
 
-  it('teslimden önce biten emir gecikmez; teslimsiz emirde gecikme yok', async () => {
+  it('teslimden önce biten emir gecikmez, tampon rozeti görünür; teslimsiz emirde gecikme ve tampon rozeti yok', async () => {
     sunucuKur(OKUYAN, { durum: planli('2026-11-05'), motorYerlesimi: motor });
     rrAc();
     const b = await bolum('Üretim emirleri');
     const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
     await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
-    expect(within(satir).queryByText('Gecikiyor')).toBeNull();
+    expect(within(satir).queryByText(/Gecikiyor/)).toBeNull();
+    expect(within(satir).getByText(/^Tampon (yeterli|azaldı|kritik), \+/)).toBeTruthy();
     cleanup();
     sunucuKur(OKUYAN, { durum: planli(null), motorYerlesimi: motor });
     rrAc();
     const b2 = await bolum('Üretim emirleri');
     const satir2 = (await within(b2).findByRole('button', { name: /UE-0001/ })).closest('li')!;
     await waitFor(() => { expect(within(satir2).getByText('03.11.2026')).toBeTruthy(); });
-    expect(within(satir2).queryByText('Gecikiyor')).toBeNull();
+    expect(within(satir2).queryByText(/Gecikiyor|Tampon/)).toBeNull();
   });
 });
 
