@@ -556,12 +556,15 @@ const yerOf = (b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Yer & { ki
 // (parça başına gerçekleşen yok); planlamacının ileriye sıraladığı çalışan iş (A4) saklı yerinde kalır.
 function gerceklesenAralik(b: Pick<Baglam, 'simdi'> | Baglam, y: YerlesimSatiri): Aralik | null {
   if (!('gercek' in b) || y.parcalar?.length || dk(b, y.baslangic) > ILERI_SIRA_DK) return null;
-  const g = b.gercek.get(y.isEmriId);
+  return calisanAraligi(b, y.isEmriId, kaynakOf(b, y), dk(b, y.baslangic));
+}
+// Çalışan işin şimdiye uzanan yeri: başladığı an (yoksa yedek başlangıç), bitişi son sayımdan kalan verimli süre kadar sonra, kaynağın takvimiyle.
+function calisanAraligi(b: Baglam, isEmriId: number, kaynak: Kaynak, yedekBaslangic: number): Aralik | null {
+  const g = b.gercek.get(isEmriId);
   if (g === undefined) return null;
   const cikis = g.cikis ?? 0;
-  const kaynak = kaynakOf(b, y);
   const kalan = verimliSure(g.kalanDk, g.ayarDk, verimi(b)(kaynak));
-  return { baslangic: Math.min(g.baslangic ?? dk(b, y.baslangic), 0), bitis: calismaBitisi(takvim(b)(kaynak), cikis, kalan) ?? cikis + kalan };
+  return { baslangic: Math.min(g.baslangic ?? yedekBaslangic, 0), bitis: calismaBitisi(takvim(b)(kaynak), cikis, kalan) ?? cikis + kalan };
 }
 // Motor çalışan işi şimdiye koyar; bundan ileride başlayan çalışan iş elle arkaya sıralanmıştır.
 const ILERI_SIRA_DK = 1;
@@ -1411,6 +1414,15 @@ function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[]) {
       const sp = satirlar.get(y.isEmriId)?.parcalar ?? [];
       if (sp.length) parcalar.set(y.isEmriId, uzlasikParcalar(is, sp).map((p) => ({ no: p.no, sureDk: parcaSuresi(is, p.adet), kaynak: p.elleKaynak && tutulur(p.kaynak) ? p.kaynak : null })));
     }
+  }
+  // 482 a: plan satırı olmayan çalışan iş de sabittir (terminalin makinesinde, gerçekleşen süresiyle): motor onu görmezse ardılı (fason
+  // beklemesi dahil) şimdiden başlar ve makine boş sayılır.
+  for (const [id, g] of b.gercek) {
+    const is = b.isler.get(id);
+    const kaynak = b.fiili.get(id) ?? is?.kaynak ?? null;
+    if (!is || satirlar.has(id) || kaynak === null || !izinliMi(b, b.kaynaklar.get(kaynakAnahtari(kaynak)) ?? null)) continue;
+    const a = calisanAraligi(b, id, kaynak, g.baslangic ?? 0);
+    if (a) sabitler.push({ isEmriId: id, kaynak, ...a, uretimEmriId: is.uretimEmriId, sira: is.sira });
   }
   const sabitIdler = new Set(sabitler.map((x) => x.isEmriId));
   const uygun = (kk: Kaynak) => { const v = b.kaynaklar.get(kaynakAnahtari(kk)); return !!v && v.aktif && izinliMi(b, v); };
