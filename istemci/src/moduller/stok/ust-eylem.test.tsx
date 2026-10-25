@@ -268,12 +268,20 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     expect((screen.getByRole('combobox', { name: /^Nereye/ }) as HTMLSelectElement).value).toBe('');
   });
 
-  it('teslim al: kisinin imzali kodu QR olarak gorunur; kisiye gelen teslim aliciyla yazilir', async () => {
-    ciz({}, { ...KUTU, gelenler: [{ ...GELEN, aliciAd: 'Deneme Operatör' }] });
+  it('teslim al: istasyondaki kisinin imzali kodu QR olarak gorunur; kisiye gelen teslim aliciyla yazilir', async () => {
+    ciz({}, { ...KUTU, istasyonlar: [{ id: 2, kod: 'F2', ad: 'Freze 2' }], buradakiIstasyonId: 2, gelenler: [{ ...GELEN, aliciAd: 'Deneme Operatör' }] });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
     expect(await screen.findByRole('img', { name: `QR: ${KISI_KODU}` })).toBeTruthy();
-    expect(screen.getByText(/Teslim edecek kişi bu kodu okutsun/)).toBeTruthy();
+    expect(screen.getByText(/Teslim edecek kişi bu kodu okutsun; teslim Freze 2 istasyonuna hemen geçer/)).toBeTruthy();
     expect(screen.getByText('Alıcı: Deneme Operatör')).toBeTruthy();
+  });
+
+  it('teslim al (537 a): istasyonda olmayan kisiye QR yerine etiket okutma yolu gosterilir, kod istenmez', async () => {
+    const istekler = ciz({}, KUTU);
+    fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
+    expect(await screen.findByText(/İstasyonda açık oturumunuz yok/)).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /^QR:/ })).toBeNull();
+    expect(istekler.some((i) => i.yol.startsWith('/stok/teslim-kutusu/kisi-kodu'))).toBe(false);
   });
 
   it('teslim et: kisinin kodu okutulunca hedef kisinin istasyonu olur, gonderim kodu tasir; hedef degisince kisi duser', async () => {
@@ -291,7 +299,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     fireEvent.change(within(pencere).getByLabelText(/Kod/), { target: { value: KISI_KODU } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Bul' }));
     await waitFor(() => expect((screen.getByRole('combobox', { name: /^Nereye/ }) as HTMLSelectElement).value).toBe('i:1'));
-    expect(screen.getByText('Alıcı: Deneme Alıcı; istasyonundaki herkes de alabilir.')).toBeTruthy();
+    expect(screen.getByText('Alıcı: Deneme Alıcı. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Teslim et' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ hedef: { istasyonId: 1 }, aliciKodu: KISI_KODU }));
     fireEvent.change(screen.getByRole('combobox', { name: /^Nereye/ }), { target: { value: 'k:5' } });
