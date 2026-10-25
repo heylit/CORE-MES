@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
+import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
   return render(
@@ -190,6 +191,38 @@ describe('Kabuk', () => {
     benzerKapat();
     ciz(SAYFALAR, undefined, '/bilinmeyen/alt');
     expect(baslik()).toBe('TMI CORE');
+  });
+
+  it('yeni ekranin basligi ve menu secimi bagli oldugu sayfadandir, adres onekinden degil', () => {
+    const yeniCiz = (yol: string) => render(
+      <MemoryRouter initialEntries={[yol]}>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme" cikis={() => {}} islemler={[YENI_EKRAN_ISLEMI]}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
+    const secili = (ad: string) => within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('link', { name: ad }).getAttribute('aria-current');
+    const { unmount: terminalKapat } = yeniCiz('/arkon/yeni/operator');
+    expect(baslik()).toBe('Üretim Terminali');
+    expect(secili('Üretim Terminali (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
+    terminalKapat();
+    const { unmount: kuyrukKapat } = yeniCiz('/arkon/yeni/kuyruk');
+    expect(baslik()).toBe('Kuyruk');
+    expect(secili('Kuyruk (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    kuyrukKapat();
+    // Sekmeli yeni ekranın alt yolu kendi satırını seçili tutar.
+    const { unmount: hazirlikKapat } = yeniCiz('/arkon/yeni/hazirlik');
+    expect(baslik()).toBe('Üretim Hazırlık');
+    expect(secili('Üretim Hazırlık (yeni)')).toBe('page');
+    expect(secili('Üretim Hazırlık')).toBeNull();
+    hazirlikKapat();
+    // Yeni ekran olmayan alt yolda önek kuralı sürer.
+    yeniCiz('/arkon/pano');
+    expect(baslik()).toBe('Üretim Hazırlık');
+    expect(secili('Üretim Hazırlık')).toBe('page');
+    expect(secili('Üretim Hazırlık (yeni)')).toBeNull();
   });
 
   it('yetkisi olmayan sayfanin adresinde baslik o sayfanin adini vermez', () => {
