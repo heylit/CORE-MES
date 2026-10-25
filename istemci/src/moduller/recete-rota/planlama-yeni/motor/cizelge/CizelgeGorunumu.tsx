@@ -6,9 +6,10 @@ import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
 import type { Derleme, OkunanPlan, Sorun } from '../kurallar.ts';
-import { HAZIRLANIYOR } from '../ortak.tsx';
 import { GunCizelgesi } from './GunCizelgesi.tsx';
-import { tezgahSirasi } from './kurallar.ts';
+import { tezgahSirasi, type MatrisGorunumu } from './kurallar.ts';
+import { KuyrukCizelgesi } from './KuyrukCizelgesi.tsx';
+import { MatrisCizelgesi } from './MatrisCizelgesi.tsx';
 import { OlcekCizelgesi } from './OlcekCizelgesi.tsx';
 import { SagPanel, SolPanel, type SagPanelAdi, type SolPanelAdi } from './Paneller.tsx';
 import { ZamanCizelgesi } from './ZamanCizelgesi.tsx';
@@ -97,12 +98,22 @@ export function CizelgeGorunumu(o: Ozellikler) {
     const ilk = (cx.jobs[j]?.ops ?? []).map((x) => p.ops[x.id]).find((r) => r && Number.isFinite(r.C));
     sec(ilk ? { adim: ilk.id, siparis: null, tezgah: null } : { siparis: j, adim: null, tezgah: null });
   }, [sec, p, cx]);
+  // Kuyruk ve Matris seçimleri mercekler arasında korunur (U.kGun, U.mGor, U.mGun); matristen açılan tezgâh kuyrukta işaretlenir (U.kTez).
+  const [kGun, setKGun] = useState(7);
+  const [mGor, setMGor] = useState<MatrisGorunumu>('tezgah');
+  const [mGun, setMGun] = useState(7);
+  const [kTez, setKTez] = useState<string | null>(null);
+  const mercekSec = useCallback((x: CizelgeMercegi) => { setMercek(x); setKTez(null); }, []);
+  const kuyrukAc = useCallback((m: string) => { setMercek('kuyruk'); setKTez(m); }, []);
+  // "Plan masasında gör" (sec-op-masa, masayaGit): işi Siparişler merceğinde seçer.
+  const masadaGor = useCallback((id: string) => { sec({ adim: id, siparis: null, tezgah: null }); mercekSec('zaman'); }, [sec, mercekSec]);
   const secimTemizle = useCallback(() => { sec({ adim: null, siparis: null }); }, [sec]);
   const tezKapat = useCallback(() => { sec({ tezgah: null }); }, [sec]);
 
   let govde: ReactNode;
   if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} />;
-  else if (mercek !== 'gun') govde = <div className="tc-pym-bos"><p className="tc-pym-oz-hazir"><Simge ad="layers" boyut="o" />{MERCEKLER.find((m) => m[0] === mercek)?.[1]}: {HAZIRLANIYOR}</p></div>;
+  else if (mercek === 'kuyruk') govde = <KuyrukCizelgesi c={c} p={p} cx={cx} planYaz={o.planYaz} gun={kGun} gunSec={setKGun} odak={kTez} masadaGor={masadaGor} />;
+  else if (mercek === 'matris') govde = <MatrisCizelgesi c={c} p={p} cx={cx} olcek={olcek} gor={mGor} gorSec={setMGor} gun={mGun} gunSec={setMGun} kuyrukAc={kuyrukAc} sipSec={sipSec} />;
   else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={secim.adim} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
   else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} />;
 
@@ -114,7 +125,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
         {pd('havuz', 'box', sol === 'havuz', () => solDugme('havuz'), nHav)}
         <div className="tc-pym-seg tc-pym-mercek" role="tablist" aria-label="Görünüm">
           {MERCEKLER.map(([id, ad, sm]) => (
-            <button key={id} type="button" role="tab" aria-selected={mercek === id} title={ad} onClick={() => setMercek(id)}><Simge ad={sm} boyut="k" /><span>{ad}</span></button>
+            <button key={id} type="button" role="tab" aria-selected={mercek === id} title={ad} onClick={() => mercekSec(id)}><Simge ad={sm} boyut="k" /><span>{ad}</span></button>
           ))}
         </div>
         <label className="tc-pym-tb-ara">
@@ -138,8 +149,8 @@ export function CizelgeGorunumu(o: Ozellikler) {
         <div className="tc-pym-tb" data-mercek={mercek}>{govde}</div>
         {sag && (
           <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null}
-            planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={setMercek}
-            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} />
+            planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={mercekSec}
+            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} />
         )}
       </div>
     </section>
