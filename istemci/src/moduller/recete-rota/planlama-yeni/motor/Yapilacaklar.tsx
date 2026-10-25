@@ -1,17 +1,20 @@
-import { useEffect, useRef } from 'react';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { useEffect, useRef, useState } from 'react';
+import { Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import type { PlanlamaSecimi } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
+import { Degisiklikler, DuzenleMenusu, kbBaglam, kbHedefler, kbKomutlari, type KbHedef, type KbPanel } from './Duzenle.tsx';
 import { eylemYapisi } from './eylem.ts';
-import type { Sorun } from './kurallar.ts';
+import type { Derleme, OkunanPlan, Sorun } from './kurallar.ts';
+import { MOTOR_NOTU } from './ortak.tsx';
 
 // Yapılacaklar (zo-kontrol.betik ypHtml): sağ altta sayılı düğme, basınca kararlar listesi; her kararın ilk eylemi. "Hazır olmayan emirler"
-// eski sayfada deneme verisiydi (208 a), gelmez.
+// eski sayfada deneme verisiydi (208 a), gelmez. Yanında Düzenle düğmesi; Düzenle, Değişiklikler ve klavye kısayolları aynı köşede açılır,
+// aynı anda tek pencere (zp-klavye). Değişiklikler düğmesi sepette satır varken çıkar; satırlar motorla gelir.
 interface Ozellikler {
-  c: PlanlamaCalismasi; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
-  komut: CalismaKomutu | null; sipSec: (j: string) => void;
-  // Klavye kısayolları listesi aynı köşede açılır; aynı anda tek pencere (zp-klavye).
-  kisayol: boolean; kisayolAc: (v: boolean) => void;
+  c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
+  komut: CalismaKomutu | null; sipSec: (j: string) => void; secim: PlanlamaSecimi;
+  pan: KbPanel | null; panAc: (v: KbPanel | null) => void; studyo: () => void;
 }
 const KISAYOLLAR: [string, [string, string][]][] = [
   ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi']]],
@@ -23,23 +26,51 @@ const KISAYOLLAR: [string, [string, string][]][] = [
 
 export function Yapilacaklar(o: Ozellikler) {
   const kap = useRef<HTMLDivElement>(null);
-  const { acik, ac, kisayol, kisayolAc } = o;
+  const { bildir } = useBildirim();
+  const { acik, ac, pan, panAc } = o;
+  // Menü açılınca alt liste ve hedef baştan başlar (kbPanAc).
+  const [alt, setAlt] = useState(false);
+  const [hedef, setHedef] = useState<KbHedef['k'] | null>(null);
+  const [sonPan, setSonPan] = useState(pan);
+  if (pan !== sonPan) { setSonPan(pan); setAlt(false); setHedef(null); }
+  const hl = kbHedefler(o.p, o.cx, o.secim); const b = kbBaglam(hl, hedef);
+  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true) }, b, alt);
+  // Komut çalışınca menü kapanır; alt listeye geçen komut menüyü açık tutar (kbKos).
+  const kos = (i: number) => { const k = kl[i]; if (!k?.yap) return; k.yap(); if (!k.alt) panAc(null); };
+  const tusDurumu = useRef({ pan, alt, hl, b, kos });
+  tusDurumu.current = { pan, alt, hl, b, kos };
   useEffect(() => {
-    if (!acik && !kisayol) return undefined;
-    const kapat = () => { ac(false); kisayolAc(false); };
-    const tus = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); kapat(); } };
+    if (!acik && !pan) return undefined;
+    const kapat = () => { ac(false); panAc(null); };
+    const tus = (e: KeyboardEvent) => {
+      const x = tusDurumu.current; const k = e.key;
+      const dur = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+      if (k === 'Escape') { dur(); if (x.alt) setAlt(false); else kapat(); return; }
+      if (x.pan !== 'dz' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null; if (t?.closest?.('input, textarea, select, [contenteditable]')) return;
+      if (/^[1-9]$/.test(k)) { dur(); x.kos(Number(k) - 1); return; }
+      if (k === 'Tab' && x.hl.length > 1 && x.b) {
+        dur(); const i = x.hl.findIndex((h) => h.k === x.b?.k); setHedef(x.hl[(i + (e.shiftKey ? x.hl.length - 1 : 1)) % x.hl.length]?.k ?? null); setAlt(false); return;
+      }
+      if (k === 'Backspace' && x.alt) { dur(); setAlt(false); return; }
+      if (x.b && x.b.k !== 'tez' && k.startsWith('Arrow')) { dur(); bildir('bilgi', `İşi kaydırmak: ${MOTOR_NOTU}`); }
+    };
     const dokun = (e: PointerEvent) => { if (!kap.current?.contains(e.target as Node | null)) kapat(); };
     document.addEventListener('keydown', tus, true); document.addEventListener('pointerdown', dokun, true);
     return () => { document.removeEventListener('keydown', tus, true); document.removeEventListener('pointerdown', dokun, true); };
-  }, [acik, ac, kisayol, kisayolAc]);
+  }, [acik, ac, pan, panAc, bildir]);
   const n = o.l.filter((x) => x.ton === 'hata').length;
   return (
     <div className="tc-pym-yp-sira" ref={kap}>
-      {kisayol && !acik && (
+      {pan === 'dz' && !acik && (
+        <DuzenleMenusu c={o.c} hl={hl} b={b} l={kl} alt={alt} yaz kos={kos} geri={() => setAlt(false)} hedefSec={(k) => { setHedef(k); setAlt(false); }} kapat={() => panAc(null)} />
+      )}
+      {pan === 'sp' && !acik && <Degisiklikler p={o.p} studyo={o.studyo} kapat={() => panAc(null)} />}
+      {pan === 'kl' && !acik && (
         <section className="tc-pym-yp tc-pym-kb" role="dialog" aria-label="Klavye kısayolları">
           <header>
             <b><Simge ad="help" boyut="k" />Klavye kısayolları</b>
-            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Kapat (Esc)" aria-label="Kapat (Esc)" onClick={() => kisayolAc(false)}><Simge ad="x" boyut="k" /></button>
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Kapat (Esc)" aria-label="Kapat (Esc)" onClick={() => panAc(null)}><Simge ad="x" boyut="k" /></button>
           </header>
           {KISAYOLLAR.map(([g, l]) => (
             <div key={g} className="tc-pym-kb-grup">
@@ -62,6 +93,11 @@ export function Yapilacaklar(o: Ozellikler) {
             </>
           ) : <p>Karar bekleyen konu yok.</p>}
         </section>
+      )}
+      {b && (
+        <button type="button" className="tc-pym-yp-fab" aria-expanded={pan === 'dz'} title="Seçileni düzenle (E)" onClick={() => panAc(pan === 'dz' ? null : 'dz')}>
+          <Simge ad="wrench" boyut="k" /><span>Düzenle</span><kbd>E</kbd>
+        </button>
       )}
       <button type="button" className="tc-pym-yp-fab" aria-label={`Yapılacaklar: ${n}`} aria-expanded={acik} data-ton={n ? 'hata' : undefined} title="Yapılacaklar: kararlar ve hazır olmayan emirler" onClick={() => ac(!acik)}>
         <Simge ad="check" boyut="k" /><span>Yapılacaklar</span><b className="tc-pym-mono">{n}</b>
