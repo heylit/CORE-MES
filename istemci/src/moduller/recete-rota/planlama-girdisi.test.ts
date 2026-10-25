@@ -27,6 +27,8 @@ function duzenek(kayit: Nesne, calisma: Nesne, kaynak: { durum: Nesne; ek: Nesne
     ${planlamaParcasi('zz27-rr-veri')}
     ${planlamaParcasi('zz34-adet-sayim')}
     ${planlamaParcasi('zz31-tmi')}
+    let paOnayaGonder = null, paYayinla = null, paGeri = null, paVazgec = null;
+    ${planlamaParcasi('zz40-sunucu-onay')}
     const KAYNAK = ${JSON.stringify(kaynak)};
     return {
       ac: () => { S = yukle(); render(); karar1650Goc(S); },
@@ -90,7 +92,7 @@ describe('plan girdisi: çerçeve ve sunucu aynı kodla kurar', () => {
     const c = d.cerceve(); const s = d.sunucu();
     expect(s).not.toBeNull();
     expect(s?.st).toEqual(c.st);
-    for (const alan of ['D', 'gercek', 'plan', 'simdi', 'locks']) expect(s?.S[alan]).toEqual(c.S[alan]);
+    for (const alan of ['D', 'gercek', 'plan', 'simdi', 'locks', 'dataVer']) expect(s?.S[alan]).toEqual(c.S[alan]);
     // sınama boş geçmesin: kaynak, adım adedi, başlamış adım ve "şimdi" st ye girmiş olmalı
     const st = c.st as { now: number; D: Nesne & { tezgahlar: Nesne[]; opAdet: Nesne; fasoncular: Nesne[]; siparisler: unknown[]; tatiller: unknown[] }; gercek: Nesne; locks: Nesne };
     expect(st.now).toBe(30.25);
@@ -101,6 +103,37 @@ describe('plan girdisi: çerçeve ve sunucu aynı kodla kurar', () => {
     expect(st.D.tatiller).toEqual([]);
     expect(st.gercek['O1.10']).toMatchObject({ m: '100', kalan: 1.5, sunucu: 1, planC: 30 });
     expect(st.locks).toEqual({ 'O2.10': { m: '100', S: 60 } });
+  });
+
+  it('kaynak ya da kayıt veriyi değiştirince plan iki yolda da eskir (dataVer); değiştirmezse aynı kalır', async () => {
+    const C = { ...CALISMA, plan: { ...CALISMA.plan, dataVer: 3 } };
+    const d = duzenek(KAYIT, C, KAYNAK);
+    d.ac();
+    await bekle();
+    const c = d.cerceve(); const s = d.sunucu();
+    expect(c.S['dataVer']).toBe(5);
+    expect(s?.S['dataVer']).toBe(5);
+    // Birleşmiş çalışma aynı kayıt ve kaynakla yeniden açılınca veri değişmez: sürüm artmaz.
+    // Kayıt okunmuş sayılır (rrSavedAt): birleşmiş çalışma aynı kayıt ve kaynakla yeniden açılınca sürüm artmaz.
+    // (Çerçeve açılmadan: çerçeve açılışta kaydı yeniden yazar.)
+    const ilk = duzenek(KAYIT, C, KAYNAK).sunucu();
+    expect(ilk?.S['rrSavedAt']).toBe(9);
+    expect(duzenek(KAYIT, ilk?.S ?? {}, KAYNAK).sunucu()?.S['dataVer']).toBe(5);
+  });
+
+  it('kayıttaki emir no su sunucununkinden farklıysa başlamış adım ve adım adedi sunucunun emriyle eşlenir', async () => {
+    // Kayıtta bağlanmadan önceki yerel emirler kalır (no '1', '2'); kaynak okumasındaki emirler sunucunundur (E-1, E-2).
+    const kayit = { ...KAYIT, orders: KAYIT.orders.map((o, i) => ({ ...o, no: String(i + 1) })) };
+    const kaynak = { ...KAYNAK, durum: { ...KAYNAK.durum, emirler: { orders: KAYIT.orders, opStatus: {} } } };
+    const C = { ...CALISMA, gercek: { 'O1.10': { m: '100', S: 20, sunucu: 1 } } };
+    const d = duzenek(kayit, C, kaynak);
+    d.ac();
+    await bekle();
+    const c = d.cerceve(); const s = d.sunucu();
+    expect(s?.st).toEqual(c.st);
+    for (const alan of ['D', 'gercek', 'plan', 'dataVer']) expect(s?.S[alan]).toEqual(c.S[alan]);
+    expect(Object.keys((s?.S['gercek'] ?? {}) as Nesne)).toEqual(['O1.10']);
+    expect((s?.st['D'] as Nesne)['opAdet']).toEqual({ 'O1.20': 8 });
   });
 
   it('çalışma yoksa girdi kurulmaz (varsayılan çalışma sayfanın kendisindedir)', () => {

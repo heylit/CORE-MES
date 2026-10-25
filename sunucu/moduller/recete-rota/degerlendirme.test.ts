@@ -5,13 +5,16 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import {
-  degerlendirmeCevabi, degerlendirmeSonucu, degerlendirmeSorgusu, type DegerlendirmeIstegi, type DegerlendirmeSonucu,
+  degerlendirmeCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeSonucu, type DegerlendirmeDurumuCevabi, type DegerlendirmeIstegi, type DegerlendirmeSonucu,
 } from '#paylasilan/sozlesme/recete-rota.ts';
+import { HATA_DURUMU } from '#paylasilan/hata.ts';
+import { ISLEMLER } from '#paylasilan/islemler.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { degerlendirmeYap, maliyetsiz, MESGUL, type DegerlendirmeZarfi } from './degerlendirme.ts';
+import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
 import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
@@ -95,7 +98,10 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.deepEqual(s.secenekler.map((x) => x.denge), [0, 25, 50, 100]);
     assert.equal(s.secenekler[0]?.carpan, 100);
     assert.ok(Math.abs((s.secenekler[3]?.carpan ?? 0) - 0.1) < 1e-9);
-    for (const x of s.secenekler) { assert.equal(x.isSayisi, 2); assert.equal(x.plan['dataVer'], 1); assert.ok(x.plan['ops'] && x.plan['J']); }
+    // Seçeneğin planı birleşmiş çalışmanın veri sürümündedir (planlama çalışması ucunun verdiği; kayıt ve kaynak veriyi değiştirince artar).
+    const dataVer = planGirdisi({ calisma: planli(), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' })?.S['dataVer'];
+    assert.equal(typeof dataVer, 'number');
+    for (const x of s.secenekler) { assert.equal(x.isSayisi, 2); assert.equal(x.plan['dataVer'], dataVer); assert.ok(x.plan['ops'] && x.plan['J']); }
   });
 
   test('PD-04: termin seçenekleri en erkenden başlar, sıralıdır; girilen termin ayrı satırdır', async () => {
@@ -152,14 +158,14 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.throws(() => maliyetsiz(k), /maliyeti görene/);
   });
 
-  test('PD-09: sorgu: tur dışı alan, bilinmeyen tur, 20 üstü parti ve geçersiz JSON reddedilir', () => {
-    const q = (istek: unknown) => degerlendirmeSorgusu.safeParse({ surum: '3', istek: typeof istek === 'string' ? istek : JSON.stringify(istek) }).success;
+  test('PD-09: gövde: tur dışı alan, bilinmeyen tur, 20 üstü parti ve gövde dışı alan reddedilir', () => {
+    const q = (istek: unknown) => degerlendirmeGovdesi.safeParse({ surum: 3, istek }).success;
     assert.equal(q({ tur: 'termin-uzatma', gun: 2 }), true);
     assert.equal(q({ tur: 'termin-uzatma', gun: 4 }), false);
     assert.equal(q({ tur: 'plan-secenekleri', calisma: {} }), false);
     assert.equal(q({ tur: 'yaz' }), false);
     assert.equal(q({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: Array.from({ length: 21 }, () => 1) }), false);
-    assert.equal(q('{'), false);
+    assert.equal(degerlendirmeGovdesi.safeParse({ surum: 3, istek: { tur: 'plan-secenekleri' }, calisma: {} }).success, false);
   });
 });
 
@@ -233,9 +239,26 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     });
     return girisCerezi(kullaniciAdi);
   }
-  const iste = (cerez: string | null, surum: number, istek: DegerlendirmeIstegi) => app.inject({
-    method: 'GET', url: `${URL}?surum=${String(surum)}&istek=${encodeURIComponent(JSON.stringify(istek))}`, headers: cerez === null ? {} : { cookie: cerez },
-  });
+  const baslat = (cerez: string | null, govde: unknown) => app.inject({ method: 'POST', url: URL, headers: cerez === null ? {} : { cookie: cerez }, payload: govde as object });
+  const durumOku = (cerez: string, is: string) => app.inject({ method: 'GET', url: `${URL}/${is}`, headers: { cookie: cerez } });
+  async function sonucuBekle(cerez: string, is: string): Promise<DegerlendirmeDurumuCevabi> {
+    for (;;) {
+      const r = await durumOku(cerez, is);
+      assert.equal(r.statusCode, 200, r.body);
+      const d = degerlendirmeDurumuCevabi.parse(r.json());
+      if (d.durum !== 'suruyor') return d;
+      await new Promise((coz) => setTimeout(coz, 10));
+    }
+  }
+  // İki adım tek cevap gibi: başlatma reddedilirse onun cevabı; hesap reddedilirse hatanın koduna denk HTTP durumu.
+  async function iste(cerez: string | null, surum: number, istek: DegerlendirmeIstegi): Promise<{ statusCode: number; body: string; json: () => unknown }> {
+    const b = await baslat(cerez, { surum, istek });
+    if (b.statusCode !== 200 || cerez === null) return b;
+    const d = await sonucuBekle(cerez, (b.json() as { is: string }).is);
+    if (d.durum === 'bitti') return { statusCode: 200, body: JSON.stringify(d.cevap), json: () => d.cevap };
+    if (d.durum !== 'hata') return assert.fail(d.durum);
+    return { statusCode: HATA_DURUMU[d.kod], body: JSON.stringify(d), json: () => d };
+  }
   async function calismaYaz(deger: unknown): Promise<number> {
     return vt().tx(async (db) => {
       await db.sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
@@ -286,7 +309,7 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.equal((await iste(tam, plansiz, { tur: 'malzeme-terminleri' })).statusCode, 409);
     await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
     assert.equal((await iste(tam, 1, { tur: 'plan-secenekleri' })).statusCode, 409);
-    assert.equal((await app.inject({ method: 'GET', url: `${URL}?surum=1&istek=${encodeURIComponent('{"tur":"yaz"}')}`, headers: { cookie: tam } })).statusCode, 400);
+    assert.equal((await baslat(tam, { surum: 1, istek: { tur: 'yaz' } })).statusCode, 400);
   });
 
   // Sunucuda emirler kaynaktan birleşir (288 a): örnek emirler veritabanında olmadığı için bölme burada sınanmaz, PD-02 kopyayı sınar.
@@ -306,5 +329,28 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.ok(kodlar.includes(200) && kodlar.includes(429), kodlar.join(','));
     assert.ok(istekler.filter((x) => x.statusCode === 429).every((x) => x.body.includes('sürüyor')));
     assert.equal((await iste(planlamaci, surum, { tur: 'plan-secenekleri' })).statusCode, 200);
+  });
+  test('PD-17: sonucu yalnız başlatan, bir kez okur; başkasına 404; okuma transaction açmaz; hesaptaki ret kod ve iletiyle döner; okunmayan sonuç 5 dk sonra silinir', async () => {
+    const surum = await calismaYaz(planli());
+    const b = await baslat(tam, { surum, istek: { tur: 'termin-uzatma', gun: 2 } });
+    assert.equal(b.statusCode, 200, b.body);
+    const is = (b.json() as { is: string }).is;
+    assert.equal((await durumOku(planlamaci, is)).statusCode, 404);
+    assert.equal((await sonucuBekle(tam, is)).durum, 'bitti');
+    assert.equal((await durumOku(tam, is)).statusCode, 404);
+    const plansiz = await calismaYaz(calismaKur());
+    const h = await baslat(tam, { surum: plansiz, istek: { tur: 'malzeme-terminleri' } });
+    assert.deepEqual(await sonucuBekle(tam, (h.json() as { is: string }).is), { durum: 'hata', kod: 'CAKISMA', mesaj: 'Önce plan kurulmalı.' });
+    // Ömür: hesabı hemen biten (çalışma yok sayan) iki iş; biri ömür dolmuş sayılarak okunur, öteki hemen.
+    const surum2 = await calismaYaz(planli());
+    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yonetici', islemler: [...ISLEMLER] };
+    const hemen = () => Promise.resolve(null);
+    const bas = () => vt().tx((db) => degerlendirmeBaslat(db, yonetici, { surum: surum2, istek: { tur: 'plan-secenekleri' } }, Date.now(), hemen));
+    const eski = (await bas()).is;
+    await new Promise((coz) => setImmediate(coz));
+    assert.throws(() => degerlendirmeDurumu(yoneticiId, eski, Date.now() + SONUC_OMRU_MS + 1000), /bulunamadı/);
+    const yeni = (await bas()).is;
+    await new Promise((coz) => setImmediate(coz));
+    assert.equal(degerlendirmeDurumu(yoneticiId, yeni).durum, 'hata');
   });
 });

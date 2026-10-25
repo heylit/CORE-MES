@@ -23,6 +23,17 @@ describe('Kart basligi', () => {
     expect(ust.getByRole('button', { name: 'İptal et' })).toBeTruthy();
   });
 
+  it('simge verilmezse baslikta ikon yoktur; verilirse kucuk ikon cizilir, basligin adi degismez', () => {
+    const { unmount } = render(<Kart baslik="Liste">içerik</Kart>);
+    expect(screen.getByRole('heading', { level: 2, name: 'Liste' }).querySelector('svg')).toBeNull();
+    unmount();
+    render(<Kart baslik="Liste" simge="scan">içerik</Kart>);
+    const baslik = screen.getByRole('heading', { level: 2, name: 'Liste' });
+    expect(baslik.textContent).toBe('Liste');
+    expect(baslik.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(baslik.querySelector('svg')?.classList.contains('tc-simge-k')).toBe(true);
+  });
+
   it('basliksiz kartta da ek cizilir; hicbiri yoksa ust bolum olmaz', () => {
     const { container, rerender } = render(<Kart baslikEki={<Rozet>Taslak</Rozet>}>içerik</Kart>);
     expect(within(container.querySelector('header') as HTMLElement).getByText('Taslak')).toBeTruthy();
