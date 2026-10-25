@@ -14,7 +14,7 @@ import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kuralla
 // Tezgâh stüdyosu yeni ekranda yok (459/5 a). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
 export interface DenetciOzellikleri {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; komut: CalismaKomutu | null; planYaz: boolean; planKilitle: boolean;
-  opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; mercekSec: (m: CizelgeMercegi) => void;
+  opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; mercekSec: (m: CizelgeMercegi) => void; kuyrukAc: (m: string) => void;
 }
 
 const kisaId = (id: string) => id.slice(id.lastIndexOf('.') + 1);
@@ -190,7 +190,7 @@ export function TezgahDenetci({ m, ...o }: DenetciOzellikleri & { m: string }) {
       <div className="tc-pym-dugmeler"><Dg ad="Stüdyoda aç" simge="wrench" birincil not={YOK_NOTU} /></div>
       {yaz && !fason && (
         <>
-          <div className="tc-pym-dugmeler"><Dg ad="Arıza ya da bakım ekle" simge="wrench" /><Dg ad="Kuyrukta aç" simge="sort" yap={() => o.mercekSec('kuyruk')} /></div>
+          <div className="tc-pym-dugmeler"><Dg ad="Arıza ya da bakım ekle" simge="wrench" /><Dg ad="Kuyrukta aç" simge="sort" yap={() => o.kuyrukAc(m)} /></div>
           <div className="tc-pym-dugmeler"><Dg ad="Tezgâhı boşalt" simge="trash" /><Dg ad="Bugünü boşalt" simge="sun" /></div>
           <p className="tc-pym-kucuk-yazi">Boşaltmak işleri yapabilen en hızlı başka tezgâha taşır ve orada sabitler; başka tezgâhı olmayan iş yerinde kalır.</p>
         </>

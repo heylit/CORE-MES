@@ -97,7 +97,7 @@ function gunKodu(D: PlanVerisi, d: number): (typeof GUN)[number] {
   const b = tabanMs(D) ?? 0;
   return GUN[(new Date(b + d * 86_400_000).getUTCDay() + 6) % 7] ?? 'pzt';
 }
-const hm = (s: unknown): number => { const [h, m] = String(s).split(':').map(Number); return (h ?? 0) + (m || 0) / 60; };
+export const hm = (s: unknown): number => { const [h, m] = String(s).split(':').map(Number); return (h ?? 0) + (m || 0) / 60; };
 
 // Sayı yazımı (sayi): Türkçe ondalık, verilen basamakla.
 export function sayiYaz(x: number, basamak = 0): string {
@@ -172,13 +172,16 @@ export function acikSaat(W: Pencere[], a: number, b: number): number {
 }
 
 // --- derleme (engine.betik compile'ın ekranın okuduğu kısmı) ---
-const UFUK_GUN = 63;
-export interface DerlenenTezgah { id: string; grup: string; sw: Pencere[]; rw: Pencere[] }
+export const UFUK_GUN = 63;
+// `op` operatör oranı: bir kişinin bu tezgâha ayırdığı pay (0,5: bir kişi iki tezgâh).
+export interface DerlenenTezgah { id: string; grup: string; op: number; sw: Pencere[]; rw: Pencere[] }
 // `c` uygun tezgâhlar, fason `@fasoncu`; `aile` aile kısalması, `aparat` bağlama aparatı.
 export interface DerlenenAdim { id: string; ad: string; pr: [string, string][]; c: string[]; aile: string; aparat: string | null }
 export interface DerlenenIs { id: string; due: number | null; rel: number | null; oncelik: number; adet: number; malzeme: { kod: string; miktar: number }[]; ops: DerlenenAdim[] }
 export interface Derleme {
   g: Girdi; now: number; tasima: number;
+  // Gün başına açık vardiyalar (tatil boş).
+  gunler: string[][];
   M: Record<string, DerlenenTezgah>;
   jobs: Record<string, DerlenenIs>;
   byId: Record<string, DerlenenAdim & { job: string }>;
@@ -301,7 +304,7 @@ export function derle(g: Girdi): Derleme {
     let rw = sw;
     if (m.isiksiz) { const t: Pencere[] = []; for (let d = 0; d < UFUK_GUN; d++) if (gunler[d]?.length) t.push([d * 24, d * 24 + 24]); rw = birlestir(t.concat(sw)); }
     const dn = down.filter((x) => x.m === m.id).map((x): Pencere => [x.from, x.to]);
-    M[m.id] = { id: m.id, grup: m.grup ?? '', sw: cikar(sw, dn), rw: cikar(rw, dn) };
+    M[m.id] = { id: m.id, grup: m.grup ?? '', op: m.opOran == null ? 1 : Number(m.opOran), sw: cikar(sw, dn), rw: cikar(rw, dn) };
   }
   const urun = Object.fromEntries(D.urunler.map((u) => [u.id, u]));
   const A = D.ayarlar;
@@ -324,7 +327,7 @@ export function derle(g: Girdi): Derleme {
     }
     jobs[j.id] = is;
   }
-  return { g, now, tasima: sayi(A.tasimaSaat) ?? 0, M, jobs, byId };
+  return { g, now, tasima: sayi(A.tasimaSaat) ?? 0, gunler, M, jobs, byId };
 }
 
 // --- süre ayrıştırması (c-masa.betik ayristir): siparişin bitişini belirleyen zincir ---

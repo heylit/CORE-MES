@@ -1,7 +1,7 @@
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
-import { acikSaat, AY_AD, saatOku, saatYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, AY_AD, hm, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
@@ -146,7 +146,6 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
 // --- Siparişler merceği: bütün planın tezgâh zaman çizelgesi (c-masa gantt, zz5-olcek-her-yer ölçeği) ---
 // Ölçek saat başına piksel olarak eskidekiyle aynıdır; ekran konumu saat cinsinden alır, piksel çarpanı stildedir. Sayılar yalnız etiket kararları içindir.
 export const ZAMAN_PX: Record<DonemOlcegi, number> = { gun: 40, hafta: 10, ay: 2.5, yil: 0.6 };
-const UFUK_GUN = 63;
 export interface ZamanBasligi { x: number; w: number; ad: string; tatil: boolean; saatler: { x: number; ad: string }[] }
 export interface ZamanIsi { id: string; job: string; x: number; w: number; renk: string; ayar: number; gec: boolean; soluk: boolean; kilit: boolean; etiket: string | null; baslik: string }
 export interface ZamanSatiri { m: string; kod: string; ad: string; u: number | null; kapali: { x: number; w: number }[]; ariza: { x: number; w: number; baslik: string }[]; isler: ZamanIsi[] }
@@ -212,6 +211,12 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
   return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin };
 }
 
+// Adımın adedi: adım başına girilen adet (opAdet) yoksa siparişin adedi.
+function adimAdedi(D: PlanVerisi, id: string, siparis: number): number {
+  const x = D.opAdet && typeof D.opAdet === 'object' ? (D.opAdet as Record<string, unknown>)[id] : undefined;
+  return x != null && Number.isFinite(Number(x)) ? Number(x) : siparis;
+}
+
 // --- ayrıntı (c-masa opDenetci, o-tahta tbTezPaneli) ---
 // Uygun tezgâhlar ve süreleri, motorun derlemesiyle aynı hesap (engine.betik: arıza payı, verim, adımın adedi); fasonda süre yoktur.
 // Motorun öğrendiği süre sapması istemcide yoktur; süre onsuz hesaplanır.
@@ -220,8 +225,7 @@ export function adaylar(c: PlanlamaCalismasi, cx: Derleme, id: string): Aday[] {
   const o = cx.byId[id]; if (!o) return [];
   const D = cx.g.D; const j = D.siparisler.find((s) => s.id === o.job);
   const k = id.slice(o.job.length + 1); const adim = D.urunler.find((u) => u.id === j?.urun)?.rota?.find((x) => String(x.k) === k);
-  const opAdet = D.opAdet && typeof D.opAdet === 'object' ? (D.opAdet as Record<string, unknown>)[id] : undefined;
-  const adet = opAdet != null && Number.isFinite(Number(opAdet)) ? Number(opAdet) : Number(j?.adet) || 0;
+  const adet = adimAdedi(D, id, Number(j?.adet) || 0);
   const acilPay = Number(c.param.acilPay) || 0;
   return o.c.map((m): Aday => {
     if (m.startsWith('@')) return { m, sure: null };
@@ -234,3 +238,188 @@ export function adaylar(c: PlanlamaCalismasi, cx: Derleme, id: string): Aday[] {
 }
 // Tezgâhın planlı işleri başlangıç sırasıyla.
 export const tezgahKuyrugu = (p: OkunanPlan, m: string): PlanIslemi[] => yerlesen(p).filter((r) => r.m === m).sort((a, b) => a.S - b.S);
+
+// --- Kuyruk merceği (k-gorunum sKanban): her tezgâh bir sütun, kartlar plandaki sırasıyla ---
+export const KUYRUK_ARALIKLARI = [[1, 'Bugün'], [3, '3 gün'], [7, '1 hafta'], [14, '2 hafta']] as const;
+export type KuyrukDurumu = 'bitti' | 'ayar' | 'calisiyor' | 'sirada';
+export const KUYRUK_DURUM: Record<KuyrukDurumu, [string, 'check' | 'wrench' | 'play' | 'clock']> = {
+  bitti: ['Bitti', 'check'], ayar: ['Ayarda', 'wrench'], calisiyor: ['Çalışıyor', 'play'], sirada: ['Sırada', 'clock'],
+};
+export interface KuyrukKarti {
+  id: string; job: string; k: string; ad: string; adet: number; durum: KuyrukDurumu; zaman: string; gec: number | null; kilit: boolean; renk: string; alt: string[];
+}
+export interface KuyrukSutunu { m: string; ad: string; n: number; dolu: number; isi: number; kartlar: KuyrukKarti[]; fazla: number; sonra: number }
+const KUYRUK_KART = 40;
+// Bitiş başlangıçla aynı gündeyse yalnız saati yazılır ("Cmt 09:59 → 10:38"). Eski sayfa saatin yalnız dakikasını yazıyordu (":38", SORU-P1c3 1).
+export function kuyrukZamani(D: PlanVerisi, S: number, C: number): string {
+  const ayni = C - S < 24 && Math.floor(C / 24) === Math.floor(S / 24);
+  return `${saatYaz(D, S).slice(6)} → ${saatYaz(D, C).slice(ayni ? 10 : 6)}`;
+}
+export function kuyruk(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, gun: number): KuyrukSutunu[] {
+  const D = c.D; const now = cx.now; const ufuk = now + gun * 24;
+  return D.tezgahlar.map((m): KuyrukSutunu => {
+    const M = cx.M[m.id];
+    const tum = yerlesen(p).filter((r) => r.m === m.id && r.C > now).sort((a, b) => a.S - b.S);
+    const l = tum.filter((r) => r.S < ufuk);
+    const cap = (M ? acikSaat(M.rw, now, ufuk) : 0) || 1;
+    const dolu = l.reduce((s, r) => s + (M ? acikSaat(M.rw, Math.max(r.S, now), Math.min(r.C, ufuk)) : 0), 0) / cap;
+    const kartlar = l.slice(0, KUYRUK_KART).map((r): KuyrukKarti => {
+      const o = cx.byId[r.id]; const Su = r.Su ?? r.S; const T = p.J[r.job]?.T ?? null;
+      const durum: KuyrukDurumu = r.C <= now ? 'bitti' : r.S <= now && now < Su ? 'ayar' : Su <= now && now < r.C ? 'calisiyor' : 'sirada';
+      return {
+        id: r.id, job: r.job, k: r.id.slice(r.job.length + 1), ad: o?.ad || r.id, adet: adimAdedi(D, r.id, cx.jobs[r.job]?.adet ?? 0), durum,
+        zaman: kuyrukZamani(D, r.S, r.C), gec: T != null && T > 0.05 ? T : null, kilit: !!c.locks[r.id], renk: renk(D, r.job),
+        alt: (o?.c ?? []).filter((x) => !x.startsWith('@') && x !== r.m),
+      };
+    });
+    return { m: m.id, ad: m.ad ?? '', n: l.length, dolu, isi: isiSeviyesi(dolu), kartlar, fazla: Math.max(0, l.length - KUYRUK_KART), sonra: tum.length - l.length };
+  });
+}
+
+// --- Matris merceği (k-gorunum gunlukDagilim, sMatris; zz5-olcek-her-yer mtKovalar; zt-malzeme-plan mpKova) ---
+// Günlük dağılım: işlemin üretim süresi tezgâhın çalışma pencerelerine göre günlere bölünür, adet bu oranla paylaşılır.
+export interface MatrisIsi { id: string; job: string; adet: number; m?: string }
+export interface DagilimHucresi { adet: number; mesgul: number; isler: MatrisIsi[] }
+export type DagilimSatirlari = Record<string, Record<number, DagilimHucresi>>;
+export interface GunlukDagilim { d0: number; tez: DagilimSatirlari; kisi: DagilimSatirlari; sip: DagilimSatirlari }
+// Atanamayan işin kişi satırı.
+export const KISI_BOS = '_bos';
+
+export function gunlukDagilim(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): GunlukDagilim {
+  const D = c.D; const d0 = Math.floor(cx.now / 24);
+  const tez: DagilimSatirlari = {}, kisi: DagilimSatirlari = {}, sip: DagilimSatirlari = {};
+  const hucre = (o: DagilimSatirlari, k: string, d: number): DagilimHucresi => ((o[k] ??= {})[d] ??= { adet: 0, mesgul: 0, isler: [] });
+  const onculer = new Set<string>(); for (const o of Object.values(cx.byId)) for (const [q] of o.pr) onculer.add(q);
+  const parca: { r: PlanIslemi; adet: number; d: number }[] = [];
+  for (const r of Object.values(p.ops)) {
+    const M = cx.M[r.m];
+    if (r.fas || !Number.isFinite(r.C) || !cx.byId[r.id] || !M) continue;
+    const Su = r.Su ?? r.S; const adet = adimAdedi(D, r.id, cx.jobs[r.job]?.adet ?? 0);
+    const top = acikSaat(M.rw, Su, r.C) || 1;
+    for (let d = Math.max(d0, Math.floor(r.S / 24)); d <= Math.floor((r.C - 1e-6) / 24); d++) {
+      const a = d * 24, b = a + 24;
+      const uret = acikSaat(M.rw, Math.max(Su, a), Math.min(r.C, b));
+      const ayar = acikSaat(M.sw, Math.max(r.S, a), Math.min(Su, b));
+      if (uret + ayar <= 1e-6) continue;
+      const x = (adet * uret) / top;
+      const h = hucre(tez, r.m, d); h.adet += x; h.mesgul += uret + ayar; h.isler.push({ id: r.id, job: r.job, adet: x });
+      parca.push({ r, adet, d });
+      if (!onculer.has(r.id) && x > 1e-6) { const s = hucre(sip, r.job, d); s.adet += x; s.isler.push({ id: r.id, job: r.job, adet: x }); }
+    }
+  }
+  // Motor kişi seçmez, grup başına kişi sayar. Kişi satırları bu yüzden bir atama önerisidir: her vardiyada tezgâh, o vardiyada çalışan ve
+  // tezgâhın grubunda yetkin, en az yüklü kişiye verilir.
+  const vs = new Map((D.vardiyalar ?? []).map((v) => [String(v.id), v]));
+  const pen = (d: number, sid: string): [number, number] | null => {
+    const v = vs.get(sid); if (!v) return null;
+    const a = d * 24 + hm(v.bas); let b = d * 24 + hm(v.bit); if (b <= a) b += 24; return [a, b];
+  };
+  const yuk = new Map<string, number>(); const bakar = new Map<string, string[]>();
+  for (const { r, adet, d } of parca) {
+    const M = cx.M[r.m]; if (!M) continue;
+    const Su = r.Su ?? r.S; const top = acikSaat(M.rw, Su, r.C) || 1;
+    for (const sid of cx.gunler[d] ?? []) {
+      const w = pen(d, sid); if (!w) continue;
+      const uret = acikSaat(M.rw, Math.max(Su, w[0]), Math.min(r.C, w[1])); if (uret <= 1e-6) continue;
+      const x = (adet * uret) / top; const an = `${d}|${sid}`;
+      const y = (k: string) => yuk.get(`${k}|${an}`) ?? 0;
+      const aday = (D.personel ?? []).filter((k) => k.vardiya === sid && (k.gruplar ?? []).includes(M.grup));
+      const yer = aday.filter((k) => y(k.id) + M.op <= 1.0001 || (bakar.get(`${k.id}|${an}`) ?? []).includes(r.m)).sort((a, b) => y(a.id) - y(b.id))[0];
+      const kid = yer ? yer.id : KISI_BOS;
+      const ml = bakar.get(`${kid}|${an}`) ?? [];
+      if (!ml.includes(r.m)) { bakar.set(`${kid}|${an}`, [...ml, r.m]); yuk.set(`${kid}|${an}`, y(kid) + M.op); }
+      const h = hucre(kisi, kid, d); h.adet += x; h.mesgul += uret; h.isler.push({ id: r.id, job: r.job, adet: x, m: r.m });
+    }
+  }
+  return { d0, tez, kisi, sip };
+}
+
+// Sütunlar dönemin kırılımıdır: günde 7 ya da 14 gün, haftada hafta, ayda ay, yılda yıl; [a, b) gün aralığı.
+export const MATRIS_KIRILIM: Record<DonemOlcegi, string> = { gun: 'Günlük', hafta: 'Haftalık', ay: 'Aylık', yil: 'Yıllık' };
+export interface MatrisSutunu { a: number; b: number; gun: string; tarih: string; kapali: boolean }
+export function matrisSutunlari(D: PlanVerisi, cx: Derleme, olcek: DonemOlcegi, d0: number, mGun: number): MatrisSutunu[] {
+  const acik = (a: number, b: number) => { for (let d = a; d < b; d++) if (cx.gunler[d]?.length) return true; return false; };
+  if (olcek === 'gun') {
+    return Array.from({ length: mGun }, (_, i) => { const d = d0 + i; const t = saatYaz(D, d * 24); return { a: d, b: d + 1, gun: t.slice(6, 9), tarih: t.slice(0, 5), kapali: !acik(d, d + 1) }; });
+  }
+  const taban = tabanMs(D) ?? 0;
+  const tarih = (t: number) => new Date(taban + t * 3_600_000);
+  const saat = (x: Date) => (x.getTime() - taban) / 3_600_000;
+  const kova = (t: number) => {
+    const x = tarih(t); const y = x.getUTCFullYear(), m = x.getUTCMonth(), g = x.getUTCDate();
+    if (olcek === 'yil') return saat(new Date(Date.UTC(y, 0, 1)));
+    if (olcek === 'ay') return saat(new Date(Date.UTC(y, m, 1)));
+    return saat(new Date(Date.UTC(y, m, g - ((x.getUTCDay() + 6) % 7))));
+  };
+  const sonraki = (k: number) => {
+    const x = tarih(k); const y = x.getUTCFullYear(), m = x.getUTCMonth(), g = x.getUTCDate();
+    return saat(olcek === 'yil' ? new Date(Date.UTC(y + 1, 0, 1)) : olcek === 'ay' ? new Date(Date.UTC(y, m + 1, 1)) : new Date(Date.UTC(y, m, g + 7)));
+  };
+  const ad = (k: number) => (olcek === 'yil' ? String(tarih(k).getUTCFullYear()) : olcek === 'ay' ? AY_AD[tarih(k).getUTCMonth()] ?? '' : saatYaz(D, k).slice(0, 5));
+  const gunSon = d0 + UFUK_GUN; const l: MatrisSutunu[] = [];
+  for (let k = kova(d0 * 24 + 1); k < gunSon * 24 && l.length < 60; k = sonraki(k)) {
+    const a = Math.max(d0, Math.floor(k / 24)), b = Math.min(gunSon, Math.ceil(sonraki(k) / 24));
+    if (b > a) l.push({ a, b, gun: '', tarih: ad(k), kapali: !acik(a, b) });
+  }
+  return l;
+}
+
+export type MatrisGorunumu = 'tezgah' | 'kisi' | 'siparis';
+export interface MatrisHucre { adet: string; oran: number | null; isi: number; ipucu: string }
+export interface MatrisSatiri { id: string; ad: string; alt: string; uyari: boolean; hucreler: (MatrisHucre | null)[]; toplam: string }
+export interface MatrisGrubu { ad: string | null; satirlar: MatrisSatiri[] }
+export interface Matris { sutunlar: MatrisSutunu[]; gruplar: MatrisGrubu[]; toplamlar: string[]; toplam: string; bos: MatrisSatiri | null }
+
+const adetYaz = (x: number) => (x < 0.5 ? (x > 1e-6 ? '<1' : '') : sayiYaz(Math.round(x), 0));
+const toplamYaz = (x: number) => (x ? sayiYaz(Math.round(x), 0) : '—');
+function ipucu(h: DagilimHucresi): string {
+  const l = [...h.isler].sort((a, b) => b.adet - a.adet).slice(0, 8).map((x) => `${x.id} · ${x.adet < 1 ? '<1' : Math.round(x.adet)} adet${x.m ? ` · ${x.m}` : ''}`);
+  return l.join('\n') + (h.isler.length > 8 ? `\n+${h.isler.length - 8} iş` : '');
+}
+
+export function matris(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, v: GunlukDagilim, gor: MatrisGorunumu, olcek: DonemOlcegi, mGun: number): Matris {
+  const D = c.D; const sutunlar = matrisSutunlari(D, cx, olcek, v.d0, mGun);
+  const toplamG = sutunlar.map(() => 0);
+  const acikGun = (k: MatrisSutunu) => { let n = 0; for (let d = k.a; d < k.b; d++) if (cx.gunler[d]?.length) n++; return n; };
+  const satir = (sat: Record<number, DagilimHucresi> | undefined, kapasite: (k: MatrisSutunu) => number, s: Omit<MatrisSatiri, 'hucreler' | 'toplam'>, hep = false): MatrisSatiri => {
+    let top = 0;
+    const hucreler = sutunlar.map((k, i): MatrisHucre | null => {
+      let h: DagilimHucresi | null = null;
+      for (let d = k.a; d < k.b; d++) { const x = sat?.[d]; if (!x) continue; h ??= { adet: 0, mesgul: 0, isler: [] }; h.adet += x.adet; h.mesgul += x.mesgul; h.isler.push(...x.isler); }
+      if (!h) return null;
+      const cap = kapasite(k); const oran = cap ? h.mesgul / cap : null; top += h.adet; toplamG[i] = (toplamG[i] ?? 0) + h.adet;
+      return { adet: adetYaz(h.adet), oran, isi: isiSeviyesi(oran), ipucu: ipucu(h) };
+    });
+    return { ...s, hucreler, toplam: hep ? sayiYaz(Math.round(top), 0) : toplamYaz(top) };
+  };
+  const gruplar: MatrisGrubu[] = []; let bos: MatrisSatiri | null = null;
+  if (gor === 'tezgah') {
+    // Düz nesne: grup sırası eski sayfadaki gibi anahtar sırasıdır.
+    const tg: Record<string, typeof D.tezgahlar> = {};
+    for (const m of D.tezgahlar) (tg[String(m.grup)] ??= []).push(m);
+    for (const [ad, l] of Object.entries(tg)) {
+      gruplar.push({ ad, satirlar: l.map((m) => { const M = cx.M[m.id]; return satir(v.tez[m.id], (k) => (M ? acikSaat(M.rw, k.a * 24, k.b * 24) : 0), { id: m.id, ad: m.id, alt: m.ad ?? '', uyari: false }); }) });
+    }
+  } else if (gor === 'kisi') {
+    const vs = new Map((D.vardiyalar ?? []).map((x) => [String(x.id), x]));
+    const l = D.personel ?? []; const sira = [...l.filter((k) => v.kisi[k.id]), ...l.filter((k) => !v.kisi[k.id])];
+    gruplar.push({
+      ad: null,
+      satirlar: sira.map((k) => {
+        const x = k.vardiya != null ? vs.get(k.vardiya) : undefined; const fark = x ? hm(x.bit) - hm(x.bas) : 8; const sure = fark <= 0 ? fark + 24 : fark;
+        // Kapasite: kırılımdaki açık gün sayısı kadar vardiya (eski sayfa haftada, ayda da tek vardiya sayıyordu, SORU-P1c3 2).
+        return satir(v.kisi[k.id], (s) => acikGun(s) * sure, { id: k.id, ad: k.ad ?? k.id, alt: `${k.vardiya ?? ''} · ${(k.gruplar ?? []).join(', ')}`, uyari: false });
+      }),
+    });
+    if (v.kisi[KISI_BOS]) bos = satir(v.kisi[KISI_BOS], () => 0, { id: KISI_BOS, ad: 'Kişi atanamadı', alt: 'vardiyada yetkin kişi yok ya da dolu', uyari: true }, true);
+  } else {
+    gruplar.push({
+      ad: null,
+      satirlar: D.siparisler.map((s) => {
+        const T = p.J[s.id]?.T ?? null; const gec = T != null && T > 0.05; const urun = D.urunler.find((u) => u.id === s.urun)?.ad ?? s.urun;
+        return satir(v.sip[s.id], () => 0, { id: s.id, ad: s.id, alt: `${urun} · ${sayiYaz(Number(s.adet) || 0, 0)} adet${gec ? ` · ${saatYazi(T)} gecikme` : ''}`, uyari: gec });
+      }),
+    });
+  }
+  return { sutunlar, gruplar, bos, toplamlar: toplamG.map((x) => (x ? sayiYaz(Math.round(x), 0) : '')), toplam: sayiYaz(Math.round(toplamG.reduce((a, b) => a + b, 0)), 0) };
+}

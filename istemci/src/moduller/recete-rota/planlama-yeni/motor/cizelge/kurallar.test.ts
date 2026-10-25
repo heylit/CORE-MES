@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, gunCizelgesi, kapasitesizEnErken, olcekCizelgesi, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, gunCizelgesi, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -77,5 +77,47 @@ describe('çizelge hesapları', () => {
     expect(kapasitesizEnErken(c, '2')).toBeNull();
     c.plan = { ...c.plan, dataVer: c.plan?.dataVer ?? 0, lbC: { 2: 201.5, 3: null, 4: 'x' } };
     expect([kapasitesizEnErken(c, '2'), kapasitesizEnErken(c, '3'), kapasitesizEnErken(c, '4'), kapasitesizEnErken(c, '5')]).toEqual([201.5, null, null, null]);
+  });
+
+  // Beklenenler eski sayfanın aynı veriyle çizdiği Kuyruk ve Matris'tir (sKanban, sMatris; hafta kırılımı zz5-olcek-her-yer). Bilinçli iki fark
+  // SORU-P1c3'tedir: aynı gün bitişte saat (eski ":38") ve kişi kapasitesi kırılımın açık günleri kadar (eski haftada %36, %52).
+  it('Kuyruk: sütun sırası, iş sayısı, doluluk, kartlar ve aralık dışı eski kanbanla aynı', () => {
+    const { c, p, cx } = kur();
+    const k = kuyruk(c, p, cx, 7);
+    expect(k.map((s) => [s.m, s.n, Math.round(s.dolu * 100), s.sonra])).toEqual([['5', 0, 0, 1], ['3', 1, 0, 0], ['4', 1, 2, 0], ['1', 1, 2, 0], ['2', 0, 0, 0]]);
+    expect(k.flatMap((s) => s.kartlar.map((x) => [x.id, x.k, x.ad, x.adet, x.durum, x.zaman, x.gec != null]))).toEqual([
+      ['2.20', '20', 'Freze (CNC)', 50, 'sirada', 'Cmt 18:37 → Pzt 13:15', true],
+      ['3.20', '20', 'Freze (CNC)', 30, 'sirada', 'Cmt 09:59 → 11:38', false],
+      ['3.10', '10', 'Torna (CNC)', 30, 'sirada', 'Cmt 08:00 → 09:59', false],
+    ]);
+    expect(kuyruk(c, p, cx, 1).map((s) => s.n)).toEqual([0, 0, 0, 0, 0]);
+    expect(kuyrukZamani(c.D, 10, 34)).toBe('Pzt 10:00 → Sal 10:00');
+  });
+
+  it('Matris: gün ve hafta kırılımında tezgâh, kişi ve sipariş hücreleri eski matrisle aynı', () => {
+    const { c, p, cx } = kur();
+    const v = gunlukDagilim(c, p, cx);
+    const yaz = (m: ReturnType<typeof matris>) => [
+      m.gruplar.flatMap((g) => g.satirlar.filter((s) => s.toplam !== '—').map((s) => [g.ad, s.ad, s.hucreler.map((h) => (h ? `${h.adet}${h.oran == null ? '' : `%${Math.round(h.oran * 100)}`}` : '')).join('|'), s.toplam])),
+      m.toplamlar.join('|'), m.toplam,
+    ];
+    const gt = matris(c, p, cx, v, 'tezgah', 'gun', 7);
+    expect(gt.sutunlar.map((s) => `${s.gun} ${s.tarih}${s.kapali ? '*' : ''}`)).toEqual(['Pzt 19.10', 'Sal 20.10', 'Çar 21.10', 'Per 22.10', 'Cum 23.10', 'Cmt 24.10', 'Paz 25.10*']);
+    expect(gt.gruplar.map((g) => g.ad)).toEqual(['1', '2', '3', '4', '5']);
+    expect(yaz(gt)).toEqual([[['1', '1', '|||||30%27|', '30'], ['4', '4', '|||||30%22|', '30']], '|||||60|', '60']);
+    const gk = matris(c, p, cx, v, 'kisi', 'gun', 7);
+    expect(yaz(gk)).toEqual([[[null, 'Örnek Operatör Bir', '|||||60%36|', '60']], '|||||60|', '60']);
+    expect(gk.gruplar[0]?.satirlar.map((s) => s.ad).slice(0, 3)).toEqual(['Örnek Operatör Bir', 'Örnek Ayarcı Bir', 'Örnek Ayarcı İki']);
+    expect([gk.bos?.ad, gk.bos?.toplam, gk.bos?.uyari]).toEqual(['Kişi atanamadı', '0', true]);
+    const ht = matris(c, p, cx, v, 'tezgah', 'hafta', 7);
+    expect(ht.sutunlar.map((s) => s.tarih)).toEqual(['19.10', '26.10', '02.11', '09.11', '16.11', '23.11', '30.11', '07.12', '14.12']);
+    expect(yaz(ht)).toEqual([[['1', '1', '30%2||||||||', '30'], ['3', '3', '|50%6|||||||', '50'], ['4', '4', '30%2||||||||', '30'], ['5', '5', '|50%2|||||||', '50']], '60|100|||||||', '160']);
+    expect(yaz(matris(c, p, cx, v, 'kisi', 'hafta', 7))[0]).toEqual([[null, 'Örnek Operatör Bir', '60%6|50%9|||||||', '110']]);
+    const hs = matris(c, p, cx, v, 'siparis', 'hafta', 7);
+    expect(yaz(hs)).toEqual([[[null, '3', '30||||||||', '30'], [null, '2', '|50|||||||', '50']], '30|50|||||||', '80']);
+    expect(hs.gruplar[0]?.satirlar.map((s) => [s.alt, s.uyari])).toEqual([['ORNEK Burç · 30 adet', false], ['ORNEK Flanş · 50 adet · 72,9 sa gecikme', true], ['ORNEK Mil · 20 adet', false]]);
+    expect(matrisSutunlari(c.D, cx, 'ay', v.d0, 7).map((s) => s.tarih)).toEqual(['Eki', 'Kas', 'Ara']);
+    expect(matrisSutunlari(c.D, cx, 'yil', v.d0, 7).map((s) => [s.tarih, s.a, s.b])).toEqual([['2026', 0, 63]]);
+    expect(matris(c, p, cx, v, 'tezgah', 'gun', 14).sutunlar).toHaveLength(14);
   });
 });
