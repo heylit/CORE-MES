@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  araliktanCikar, arkaArkaya, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
+  araliktanCikar, arkaArkaya, ayarVeGecikme, bosluk, calisilanParcalar, calismaBasiGeri, calismaBitisi, dondurulacaklar, emirSirasi, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, karsilastir, kesisimDk, oner,
   adetPayi, bedelCarpani, bolmeAdetleri, kapasiteBollugu, kapasiteKesri, onayGecisiReddi, onayGecisleri, elleCarpanSiniri, tlIyilestir, tlKosuSiniri, emirTutari, verimliSure, gecikmeBedeli, gecikmeMaliyeti, katkiPaylari, bantSinirlari, motorUyarilari, PERSONEL_TANIMSIZ, oncelikSiniflari, planMaliyeti, personelYuku, sinirliGunSayisi, TABAN_BEDEL_SAAT, takvimliBosluk, VARSAYILAN_MOTOR, uyarilar, yukYuzdesi,
 } from './kurallar.ts';
 import type { MaliyetSatiri, MotorIsi, PersonelMerkezi } from './kurallar.ts';
@@ -594,5 +594,23 @@ describe('öncelik bandı sınırları (306 a)', () => {
     for (const durum of ['canliya_alindi', 'vazgecildi'] as const) {
       assert.deepEqual(onayGecisleri({ ...b, durum }), { onayaGonder: false, onaydanCek: false, geriGonder: false, canliyaAl: false });
     }
+  });
+});
+
+describe('plan kuralları: 507 1 a ayar saati ve öncelik ağırlıklı gecikme', () => {
+  test('PL-507-K: ayar parça başına toplanır; gecikme yalnız bütün işleri yerleşmiş, teslimli emirde; ağırlık 4/2/1, diğer 1, adet payıyla', () => {
+    const y = [
+      { isEmriId: 1, uretimEmriId: 1, ayarDk: 30, baslangic: 0, bitis: 600 }, { isEmriId: 1, uretimEmriId: 1, ayarDk: 30, baslangic: 0, bitis: 700 },
+      { isEmriId: 2, uretimEmriId: 2, ayarDk: null, baslangic: 0, bitis: 400 }, { isEmriId: 3, uretimEmriId: 3, ayarDk: 15, baslangic: 0, bitis: 900 },
+      { isEmriId: 4, uretimEmriId: 4, ayarDk: 0, baslangic: 0, bitis: 900 },
+    ];
+    const e = [
+      { id: 1, teslimDk: 100, isSayisi: 1, oncelik: 1, pay: 0.5 }, { id: 2, teslimDk: 460, isSayisi: 1, oncelik: 2, pay: 1 },
+      { id: 3, teslimDk: 300, isSayisi: 2, oncelik: 1, pay: 1 }, { id: 4, teslimDk: 300, isSayisi: 1, oncelik: 4, pay: 1 },
+      { id: 5, teslimDk: null, isSayisi: 1, oncelik: 1, pay: 1 },
+    ];
+    // emir 1: 600 dk geç x 4 x 0,5 = 20 sa; emir 2 zamanında; emir 3 eksik yerleşmiş; emir 4: 600 dk x 1 = 10 sa.
+    assert.deepEqual(ayarVeGecikme(y, e), { ayarSaat: 1.3, agirlikliGecikmeSaat: 30 });
+    assert.deepEqual(ayarVeGecikme([], []), { ayarSaat: 0, agirlikliGecikmeSaat: 0 });
   });
 });
