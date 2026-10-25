@@ -1,9 +1,9 @@
 .tc-tablo-kap { overflow-x: auto; min-width: 0; scroll-margin-top: calc(var(--ust-cubuk) + var(--b-3)); }
 .tc-tablo-kap[aria-busy="true"] { opacity: .6; }
 .tc-tablo { width: 100%; border-collapse: collapse; }
-.tc-tablo th, .tc-tablo td { padding: var(--b-3); text-align: left; vertical-align: middle; }
+.tc-tablo th, .tc-tablo td { padding: var(--tablo-hucre) var(--b-3); text-align: left; vertical-align: middle; }
 .tc-tablo th {
-  font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  font-size: var(--yazi-xs); font-weight: 600;
   color: var(--muted); border-bottom: 1px solid var(--edge2); white-space: nowrap;
 }
 /* Sözcük ortasından bölünme sütunun en dar genişliğini düşürmez: sığma ölçüsü okunur genişliğe göre çıkar. */
@@ -17,7 +17,7 @@
 .tc-tablo th[aria-sort] { padding-top: 0; padding-bottom: 0; }
 .tc-tablo th[aria-sort="ascending"], .tc-tablo th[aria-sort="descending"] { color: var(--ink); }
 .tc-tablo-sirala {
-  display: inline-flex; align-items: center; gap: var(--b-1); min-width: var(--dokunma); min-height: var(--dokunma); padding: 0;
+  display: inline-flex; align-items: center; gap: var(--b-1); min-width: var(--dugme-boy); min-height: var(--dugme-boy); padding: 0;
   border: 0; background: none; cursor: pointer;
   font-weight: inherit; letter-spacing: inherit; text-transform: inherit;
 }

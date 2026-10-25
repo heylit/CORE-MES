@@ -51,6 +51,8 @@ export function Cubuk(o: Ozellikler) {
               <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
             </button>
           )}
+          {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
+          {o.planYaz && <small className="tc-pym-sb-not">Motor kapalı</small>}
           {o.planYaz && (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
               title={`${o.plan ? 'Planı iyileştir' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Planı iyileştir' : 'Planı kur'}>

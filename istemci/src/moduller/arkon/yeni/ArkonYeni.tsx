@@ -19,7 +19,7 @@ import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/
 import type { Perm } from './cekirdek/tipler.ts';
 import { yerel } from './cekirdek/yerel.ts';
 import { sayfaGorunur, yetkiVar } from './cekirdek/yetki.ts';
-import { ArkonBaglamiKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
+import { ArkonBaglamiKaynagi, ArkonDarAlanKaynagi, useCakismaUyarisi, type ArkonBaglami, type TmiHedefi } from './veri/baglam.ts';
 import { depoyuBaslat, type ArkonDeposu, type ArkonDurumu } from './veri/depo.ts';
 import { tasiyiciYap } from './veri/tasiyici.ts';
 import { SAYFALAR, SAYFA_DISI, sayfaAdresi, sayfaMi, sekmeMaddeleri, type ArkonSayfasi, type SayfaTanimi, type SekmeMaddesi } from './sayfalar.ts';
@@ -165,7 +165,7 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
     };
   }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz]);
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
-  useOlcek(kok);
+  const darAlan = useOlcek(kok);
   const numune = useNumuneSayisi(depo);
 
   if (baglam === null) return <DurumKutusu durum="yukleniyor" />;
@@ -207,6 +207,7 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
   const Ekran = tanim?.ekran;
   return (
     <ArkonBaglamiKaynagi.Provider value={baglam}>
+      <ArkonDarAlanKaynagi.Provider value={darAlan}>
       <div className="tc-ay" ref={kokYaz}>
         {!ayri && sekmeler.length > 0 && (
           <Sekmeler etiket="Üretim Hazırlık" sekmeler={sekmeler} secili={secili ?? ''} sec={sec} />
@@ -222,6 +223,7 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
           )}
         {acik && !saltOkunur && sayfa !== null && <CagriBandi sayfa={sayfa} />}
       </div>
+      </ArkonDarAlanKaynagi.Provider>
       {onizleme !== null && <OnizlemePenceresi paketId={onizleme} baglam={baglam} kapat={() => onizlemeYaz(null)} />}
       <MakineDevralPenceresi
         red={siradaki}
@@ -238,7 +240,8 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
 
 // Ekran ölçeği (eski useFit): sayfa 1600x900 tasarım alanına göre ölçeklenir. Ölçek ve ölçekli görünür yükseklik kökte değişken
 // olarak durur (arkon-yeni.css zoom; tam yükseklikli düzenler --tc-ay-vh kullanır). Kabuk alanı değişince yeniden hesaplanır.
-function useOlcek(kok: HTMLDivElement | null): void {
+function useOlcek(kok: HTMLDivElement | null): boolean | null {
+  const [mobilMi, mobilYaz] = useState<boolean | null>(null);
   useEffect(() => {
     const alan = kok?.parentElement;
     if (!kok || !alan) return undefined;
@@ -248,6 +251,8 @@ function useOlcek(kok: HTMLDivElement | null): void {
       kok.style.setProperty('--tc-ay-olcek', String(z));
       kok.style.setProperty('--tc-ay-vh', `${Math.round(yukseklik / z)}px`);
       kok.toggleAttribute('data-mobil', mobil);
+      // Yerleşimi olmayan alan (genişlik 0) ölçü sayılmaz; terminal pencere genişliğine düşer.
+      mobilYaz(alan.clientWidth > 0 ? mobil : null);
     };
     uygula();
     const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
@@ -256,6 +261,7 @@ function useOlcek(kok: HTMLDivElement | null): void {
     window.addEventListener('orientationchange', uygula);
     return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); window.removeEventListener('orientationchange', uygula); };
   }, [kok]);
+  return mobilMi;
 }
 
 // Kalitede bekleyen ya da ölçülen numune sayısı (baslat.ts nWait): numune ve sonuç iletisinde ve 20 sn'de bir yeniden sayılır.
