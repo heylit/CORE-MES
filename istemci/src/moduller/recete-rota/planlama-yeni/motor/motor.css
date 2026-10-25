@@ -80,6 +80,7 @@
 .tc-pym-sb-nb-k[data-ton="iyi"] small { color: var(--run); }
 .tc-pym-sb-nb-k[data-ton="kotu"] small { color: var(--stop); }
 .tc-pym-sb-sag { display: inline-flex; align-items: center; gap: var(--b-2); margin-left: auto; }
+.tc-pym-sb-not { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
 
 .tc-pym-sk-nb {
   position: absolute; z-index: calc(var(--z-katman) + 5); top: calc(100% - var(--b-1)); left: var(--b-2); right: var(--b-2);
@@ -496,6 +497,7 @@
   .tc-pym-sb-ekran button > span, .tc-pym-sb-iyi > span { display: none; }
   .tc-pym-sb-sag { gap: var(--b-1); }
   .tc-pym-sb-sag [data-olay] { display: none; }
+  .tc-pym-sb-not { display: none; }
   .tc-pym-sb-nb-k span { font-size: var(--yazi-xs); }
   .tc-pym-sg { margin: var(--b-1) var(--b-1) var(--b-1); }
   .tc-pym-sg-sec { flex: 0 1 auto; flex-wrap: wrap; min-width: 0; }
