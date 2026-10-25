@@ -5,7 +5,8 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 
 // 0: işaret yok; 1-4: az, orta, çok, en koyu (termini kaydırır, kapasite aşılıyor).
 export type IsiKademe = 0 | 1 | 2 | 3 | 4;
-export type IsiTonu = 'hata' | 'uyari' | 'tamam' | '';
+// pasif: bakılacak bir şey yok ama karşılandı da değil ("Bağlı iş yok", "Termin yok"); simge gri.
+export type IsiTonu = 'hata' | 'uyari' | 'tamam' | 'pasif' | '';
 export interface IsiHucresi {
   kd?: IsiKademe | null; sm?: SimgeAdi; v?: string;
   iyi?: boolean; is?: boolean; bayrak?: boolean; oneri?: boolean; kapali?: boolean;
@@ -41,5 +42,11 @@ export function hucreKoy(h: Record<string, IsiHucresi>, k: string, o: IsiHucresi
 
 // Boş hücre: hiçbir işaret yoksa düğme değil, kesik çizgili yer tutucudur.
 export const hucreBos = (h: IsiHucresi | undefined): boolean => !h || (h.kd == null && !h.v && !h.sm && !h.is && !h.iyi && !h.bayrak && !h.oneri);
+
+// Tezgâh grubu kimliğinden satır adı (zz30-isi IS_GRUP, zn-kesif BR_GRUP_AD); bilinmeyen kimlik olduğu gibi yazılır.
+const GRUP_ADI: Record<string, string> = {
+  testere: 'Testere', torna: 'Torna', freze: 'Freze', '5eksen': '5 eksen', taslama: 'Taşlama', tesviye: 'Tesviye', yikama: 'Yıkama', olcum: 'Ölçüm', fason: 'Fason', montaj: 'Montaj',
+};
+export const grupAdi = (g: string): string => GRUP_ADI[g] ?? g;
 
 export const KADEME_ADI: Record<number, string> = { 1: 'Az', 2: 'Orta', 3: 'Çok', 4: 'Termini kaydırır' };
