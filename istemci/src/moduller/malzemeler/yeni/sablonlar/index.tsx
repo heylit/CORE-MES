@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DurumKutusu, OnayPenceresi, SayfaBasligi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { KatalogSimgesi } from '../ortak/KatalogSimgesi.tsx';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { Sablon } from '../tipler.ts';
@@ -13,7 +13,6 @@ export function Sablonlar(o: EkranOzellikleri) {
   const sorgu = useSablonlar();
   return (
     <div className="tc-ms">
-      <SayfaBasligi baslik="Şablonlar" simge="grid" />
       <p className="tc-ms-yardim">
         Bir şablon seçince kalite, standart, durum, işlem ve sertifika seçimleri dolu olarak yeni malzeme akışı başlar. Kendi şablonunu yeni malzemenin son
         adımında "Şablon olarak kaydet" ile oluşturabilirsin.

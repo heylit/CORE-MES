@@ -1,4 +1,4 @@
-// Genel listeler (sertifika, stok birimi, belge türü), roller ve genel ayarlar (prototipin üst şeritteki "Ayarlar" penceresi).
+// Genel listeler (sertifika, stok birimi, belge türü), roller ve genel ayarlar (prototipin üst baştaki "Ayarlar" penceresinin içi).
 import { useState } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Rozet, Tablo, type Sutun } from '../../../../../ortak/arayuz/index.ts';
 import type { Duzen } from '../duzen.ts';
@@ -106,7 +106,6 @@ export function GenelAyarlar({ d }: { d: Duzen }) {
   const kilit = true;
   return (
     <>
-      <BolumBasligi baslik="Genel" />
       <Kutu baslik="Onay akışı">
         <IsaretKutusu etiket="Yeni ve değişen kartlar onaydan sonra aktif olsun" checked={g.onayAkisi !== false} disabled={kilit} readOnly />
         <IsaretKutusu etiket="Dört göz kuralı: kartı gönderen kişi kendi kartını onaylayamasın" checked={d.o.ortam.dortGoz} disabled={kilit} readOnly />
