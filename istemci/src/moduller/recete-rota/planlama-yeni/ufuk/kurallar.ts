@@ -152,6 +152,9 @@ export function yatirimTL(D: PlanVerisi, grup: string): number | null {
   return am + (s === null || m === null ? 0 : s * (n(m.aylikSaat) || 225) * opOrani(tz) * 2);
 }
 
+// Yatırım bedeli bilinmediği için yatırım denenmeyen gruplar (yillik-durum yatAday yalnız bedeli bilinen grubu aday yapar).
+export const bedelsizGruplar = (D: PlanVerisi, gruplar: readonly string[]): string[] => gruplar.filter((g) => yatirimTL(D, g) === null);
+
 // ---------- takvim: motorun açık pencereleri (engine.betik compile, rw) ----------
 type Pencere = [number, number];
 function birlestir(W: Pencere[]): Pencere[] {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  DEGER_VARSAYILAN_TL, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, pencereSaati, planUretimi, saatOku, simdiOku,
+  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, pencereSaati, planUretimi, saatOku, simdiOku,
   talepHizi, tezgahPencereleri, ufukMalzemesi, ufukTakvimi, ufukVerisi, urunAileleri, yatirimTL, yillikAyarOku, yillikAyarYaz, yillikDonemler,
   yillikHedefKur, yillikModel, yillikOzet, yillikSonuc, yillikTalep, yillikVeri, zamanKur, type CozumCevabi, type Zaman,
 } from './kurallar.ts';
@@ -184,6 +184,8 @@ describe('yıllık plan', () => {
     expect(grupSaatTL(m.D, 'torna')).toBe(240);
     expect(mesaiSaatTL(m.D, 'torna')).toBe(240 * 1.5 + 10);
     expect(yatirimTL(m.D, 'torna')).toBe(10000 + 240 * 200 * 2);
+    expect(bedelsizGruplar(c.D, ['torna', 'freze'])).toEqual(['torna', 'freze']);
+    expect(bedelsizGruplar(m.D, ['torna', 'freze', 'yok'])).toEqual(['yok']);
   });
 
   it('HiGHS ile: kapasite yetiyorsa açık yok; yetmiyorsa önce ek mesai, sonra acil kapasite ve gölge fiyat', async () => {

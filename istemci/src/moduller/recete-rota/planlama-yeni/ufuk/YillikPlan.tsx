@@ -2,13 +2,13 @@ import { useState, type ReactNode } from 'react';
 import { DurumKutusu, Dugme, Kart, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import {
-  Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, hucreKoy, oranKademesi,
+  Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, grupAdi, hucreKoy, oranKademesi,
   type IsiHucresi, type IsiSatiri, type IsiSecimi, type IsiSutunu, type IsiUstDurumu,
 } from '../ortak/isi/index.ts';
 import { Sihirbaz, SonKart, type SihirbazAlani, type SihirbazDegeri, type SihirbazTanimi } from '../ortak/sade/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  HDAYS, HS_DURUM, TALEP_GECMIS_ENAZ, YL_ACIL, darbogazlar, kullanilabilirlik, planUretimi, yillikAyarOku, yillikAyarYaz, yillikAylar,
+  HDAYS, HS_DURUM, TALEP_GECMIS_ENAZ, YL_ACIL, bedelsizGruplar, darbogazlar, kullanilabilirlik, planUretimi, yillikAyarOku, yillikAyarYaz, yillikAylar,
   yillikHedefKur, yillikOzet, yillikVeri, zamanKur, type Darbogaz, type YillikAyar, type Zaman,
 } from './kurallar.ts';
 import { GostergeSeridi, Not, SayiGirdisi, SecimDugmeleri, sayi, tl, type Gosterge } from './parcalar.tsx';
@@ -106,7 +106,7 @@ function isiVerisi(b: Bitti): { sutunlar: IsiSutunu[]; satirlar: YillikSatiri[];
         etiket: `%${Math.round(pct)} dolu (${saat(x.yuk)} / ${saat(x.kap)})${x.o > 0.5 ? `, ${saat(x.o)} ek mesai` : ''}${x.e > 0.5 ? `, ${saat(x.e)} karşılanamıyor` : ''}`,
       });
     });
-    return { k: g, ad: g, alt: v.sinir[g] === 'kisi' ? 'kişi sınırlı' : 'tezgâh sınırlı', simge: 'layers' as const, ton: mx >= 100 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, h, mx };
+    return { k: g, ad: grupAdi(g), alt: v.sinir[g] === 'kisi' ? 'kişi sınırlı' : 'tezgâh sınırlı', simge: 'layers' as const, ton: mx >= 100 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, h, mx };
   }).sort((p, q) => q.mx - p.mx);
   const en = satirlar[0];
   const esik = en ? Math.min(4, oranKademesi(en.mx, ESIK) ?? 0) : 0;
@@ -315,6 +315,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
   const D = calisma.D;
   const A = yillikAyarOku(D);
   const o = yillikOzet(v, s);
+  const bedelsiz = bedelsizGruplar(D, v.gruplar);
   const kpi: Gosterge[] = [
     { simge: 'box', ad: 'Yıllık talep', deger: `${sayi(o.topD, 0)} adet`, alt: `${v.aileler.length} aile, ${P.length} dönem` },
     { simge: 'check', ad: 'Zamanında karşılanan', deger: o.zamaninda === null ? '—' : `%${sayi(o.zamaninda * 100, 1)}`, alt: 'dönem talebinin kendi döneminde üretilen payı', ton: o.zamaninda !== null && o.zamaninda < 0.95 ? 'uyari' : 'tamam' },
@@ -386,7 +387,12 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
               </ul>
               {fg && <p>Yatırımla yıllık plan bedeli <b>{tl(s.tl0 === null || s.tl === null ? null : s.tl0 - s.tl)}</b> düşüyor (yatırımsız {tl(s.tl0)}, yatırımlı {tl(s.tl)}; aylık bedel dahil).</p>}
             </>
-          ) : <p><Simge ad="check" boyut="k" /> Hiçbir grupta yatırım bedelini karşılayacak kadar kapasite açığı yok.</p>}
+          ) : bedelsiz.length < v.gruplar.length
+            ? <p><Simge ad="check" boyut="k" /> Hiçbir grupta yatırım bedelini karşılayacak kadar kapasite açığı yok.</p>
+            : <p><Simge ad="alert" boyut="k" /> Genel gider (tezgâh bedeli) girilmediği için yatırım denenmedi.</p>}
+          {bedelsiz.length > 0 && bedelsiz.length < v.gruplar.length && (
+            <p><Simge ad="alert" boyut="k" /> {bedelsiz.join(', ')} grubunda tezgâh bedeli bilinmediği için yatırım denenmedi.</p>
+          )}
           <p className="tc-pyu-not">
             Aylık bedel: Genel gider sayfasındaki tezgâh bedeli, ömrü ve hurdasından amortisman + iki vardiya operatör maliyeti (grubun kişi saat maliyeti × aylık saat ×
             operatör oranı × 2). Genel gider ayarı yoksa bedel bilinmez ve o grupta yatırım denenmez. Kapasite grubun ortalama tezgâhı kadar. En erken {A.teslimAy}. aydan.
