@@ -6,18 +6,18 @@ import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { BosCalisma, BosPlan } from '../BosPlan.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
-import { HAZIRLANIYOR } from '../ortak.tsx';
 import { useCanliFarki } from './canli-farki.ts';
 import type { CanliFark } from './kurallar.ts';
 import { OnaySekmesi } from './Onay.tsx';
 import { Pano } from './Pano.tsx';
+import { PlanGercek } from './PlanGercek.tsx';
 import '../motor.css';
 import './atolye.css';
 
 // Planlama atölyesi (eski sayfanın tek stüdyosu, zz32-tek-studyo sTekStudyo): kimlik satırı, üç sekme ve ipucu; Plan sekmesi tezgâh panosudur
 // (zz36). Üstte eski sayfanın tek sekmeli başlığı; akış adımları eski çerçevenindir (208 a); ipucu Plan sekmesinde eskisi gibi gizli.
-// Onay ve canlı plan modülünün senaryolarındandır; geçişin cevabı listeyi yeniler. Plan ve gerçekleşen sonraki teslimdedir. Canlı sürüm
-// sunucunun canlı planından okunur (221 c).
+// Onay ve canlı plan modülünün senaryolarındandır; geçişin cevabı listeyi yeniler. Plan ve gerçekleşen taban ve canlı planı sunucudan okur
+// (505 a). Canlı sürüm sunucunun canlı planından okunur (221 c).
 export type AtolyeSekmesi = 'plan' | 'onay' | 'pg';
 const SEKMELER: [AtolyeSekmesi, SimgeAdi, string][] = [['plan', 'layers', 'Plan'], ['onay', 'check', 'Onay ve canlı'], ['pg', 'chart', 'Plan ve gerçekleşen']];
 const IPUCU: Record<AtolyeSekmesi, string | null> = {
@@ -56,15 +56,14 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}
-      {sek === 'plan' ? <PlanSekmesi o={o} c={c} p={p} cf={cf} sekSec={setSek} onayda={onayda} sen={sen} senYaz={setSen} />
-        : sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
-          : <p className="tc-pym-tp-hazir"><Simge ad="clock" boyut="k" />{HAZIRLANIYOR}</p>}
+      {sek === 'onay' ? <OnaySekmesi o={o} c={c} p={p} cf={cf} sen={sen} senYaz={setSen} planSekmesi={() => setSek('plan')} />
+        : <PlanSekmesi o={o} c={c} p={p} cf={cf} sek={sek} sekSec={setSek} onayda={onayda} sen={sen} senYaz={setSen} />}
     </div>
   );
 }
 
-function PlanSekmesi({ o, c, p, cf, sekSec, onayda, sen, senYaz }: {
-  o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: CanliFark | null; sekSec: (s: AtolyeSekmesi) => void; onayda: number;
+function PlanSekmesi({ o, c, p, cf, sek, sekSec, onayda, sen, senYaz }: {
+  o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: CanliFark | null; sek: AtolyeSekmesi; sekSec: (s: AtolyeSekmesi) => void; onayda: number;
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }) {
   if (!c) return <BosCalisma />;
@@ -72,5 +71,6 @@ function PlanSekmesi({ o, c, p, cf, sekSec, onayda, sen, senYaz }: {
     const emirler = o.depo.durum?.emirler ?? null;
     return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} />;
   }
+  if (sek === 'pg') return <PlanGercek o={o} c={c} p={p} canliSurum={sen?.canliSurum ?? null} />;
   return <Pano o={o} c={c} p={p} cf={cf} sekSec={sekSec} onayda={onayda} sen={sen} senYaz={senYaz} />;
 }

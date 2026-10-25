@@ -12,6 +12,7 @@ import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
 import { PlanlamaAtolyesi } from '../index.tsx';
 import { HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
+import { planOku } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 
 afterEach(cleanup);
@@ -72,11 +73,36 @@ describe('PlanlamaAtolyesi', () => {
     expect(git).toHaveBeenCalledWith('plan');
   });
 
-  it('Plan ve gerçekleşen sonraki teslimde: ipucu ve hazırlanıyor', () => {
-    ac();
-    fireEvent.click(screen.getByRole('tab', { name: 'Plan ve gerçekleşen' }));
+  it('Plan ve gerçekleşen: taban ve canlı sunucudan; okunana kadar hazırlanıyor, ret iletisi, canlı yoksa boş, varsa göstergeler; çalışmaya yazmaz', async () => {
+    let cevap: Promise<unknown> = new Promise(() => undefined);
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? cevap : Promise.reject(new Error('yok')))) as never);
+    const c = ornekCalisma();
+    const { komut } = komutKur(c);
+    const sekme = () => { ac({ c, komut }); fireEvent.click(screen.getByRole('tab', { name: 'Plan ve gerçekleşen' })); };
+    sekme();
     expect(screen.getByText(/Taban plan, son canlı plan/)).toBeTruthy();
     expect(screen.getByText(HAZIRLANIYOR)).toBeTruthy();
+    expect(get).toHaveBeenCalledWith('/recete-rota/planlama-calismasi/taban-ve-canli');
+    cleanup();
+    cevap = Promise.reject(new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Plan okuma yetkisi gerekir.' }));
+    sekme();
+    await waitFor(() => expect(screen.getByText('Plan okuma yetkisi gerekir.')).toBeTruthy());
+    cleanup();
+    cevap = Promise.resolve({ planSurumu: 0, isler: [] });
+    sekme();
+    await waitFor(() => expect(screen.getByText(/Henüz canlıya alınmış plan yok/)).toBeTruthy());
+    cleanup();
+    const op = Object.values(planOku(c)?.ops ?? {}).find((r) => !r.fas && Number.isFinite(r.C));
+    if (!op) throw new Error('adım yok');
+    const iso = (t: number) => new Date(Date.UTC(2026, 9, 19) - 3 * 3_600_000 + t * 3_600_000).toISOString();
+    const yer = { kaynak: { tur: 'makine', id: 7 }, baslangic: iso(op.S), bitis: iso(op.C) };
+    cevap = Promise.resolve({ planSurumu: 3, isler: [{ k: op.id, anahtar: 'E|10', isEmriId: 1, uretimEmriId: 1, taban: { ...yer, planSurumu: 2 }, canli: { ...yer, parcalar: [] } }] });
+    sekme();
+    await waitFor(() => expect(screen.getByText('Plana uyum')).toBeTruthy());
+    expect(screen.getByRole('region', { name: 'Sipariş bazında' })).toBeTruthy();
+    expect(within(screen.getByText('Plan değişikliği').parentElement as HTMLElement).getByText('1')).toBeTruthy();
+    expect(vi.mocked(komut.degistir).mock.calls.map((x) => x[0])).not.toContain('Taban plan');
+    get.mockRestore();
   });
 
   it('Onay ve canlı: sunucu senaryoları, onaydaki seçili; geri gönderme neden ister, cevap listeyi yeniler', async () => {

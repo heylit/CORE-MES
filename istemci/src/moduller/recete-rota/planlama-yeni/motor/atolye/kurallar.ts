@@ -1,5 +1,6 @@
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { CanliFarkiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, saatOku, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
@@ -549,4 +550,153 @@ export function paEmirFarki(l: SunucuSenaryosu[]): { emirNo: string; canli: stri
     const g = t.filter((v) => !Number.isNaN(v));
     return { emirNo, canli: c, senaryo, yay: g.length < t.length ? 1e9 : (Math.max(...g) - Math.min(...g)) / 3_600_000 };
   }).filter((x) => x.yay > 0.5).sort((a, b) => b.yay - a.yay).slice(0, 15).map(({ emirNo, canli: c, senaryo }) => ({ emirNo, canli: c, senaryo }));
+}
+
+// --- Plan ve gerçekleşen (zz35-plan-gercek.betik): taban plan, son canlı plan ve atölyede olan ---
+// Taban plan siparişin ilk canlıya alınan planıdır; hiç değişmez (karar 394). Nedenler yalnız kayıtlardan çıkar (karar 395).
+export const PG_ASIM = 0.1;
+export const PG_NEDEN = [['fason', 'Fason gecikmesi', 'truck'], ['ayar', 'Uzun ayar', 'wrench'], ['malzeme', 'Malzeme gecikmesi', 'box'],
+  ['yavas', 'Yavaş üretim', 'clock'], ['gec', 'Geç başlama', 'play'], ['ariza', 'Arıza', 'alert']] as const;
+export type PgNedeni = (typeof PG_NEDEN)[number][0];
+export interface PgAdim { m: string; S: number; C: number; job: string }
+export interface TabanIs { surum: number | null; ops: Record<string, { m: string; S: number; C: number }>; C: number }
+interface Gercek { m: string | null; S: number; C: number | null; t: number | null; n: number | null }
+// fmtDT: "26.10 Pzt 14:00"; tarihGun ilk dokuz harfi.
+export const tt = (D: PlanVerisi, t: number | null | undefined): string => (gecerli(t) ? `${ga(D, t)} ${gs(D, t).split(' ')[0] ?? ''} ${zs(D, t)}` : '—');
+export const tarihGun = (D: PlanVerisi, t: number): string => tt(D, t).slice(0, 9);
+export const pgSa = (x: number | null): string => (x == null ? '—' : `${x > 0.05 ? '+' : x < -0.05 ? '−' : ''}${Math.abs(x).toFixed(1).replace('.', ',')} sa`);
+export const saatYaz = (x: number | null): string => (x == null || !Number.isFinite(x) ? '—' : `${x.toFixed(1).replace('.', ',')} sa`);
+export const sapmaEsik = (c: PlanlamaCalismasi): number => (c.param.sapmaEsik != null && Number.isFinite(Number(c.param.sapmaEsik)) ? Number(c.param.sapmaEsik) : 0.5);
+const sayiMi = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+// Taban ve son canlı plan sunucudan (505 a, GET taban-ve-canli), sayfanın adım kimliğiyle (k): taban adımın ilk canlıya alınan yeridir (33 a),
+// sayfa yazmaz. Sunucu zamanı tesis saatiyle planın saat eksenine çevrilir; tezgâh makine kimliğidir (sayfanın tezgâh kimliği gibi).
+// Çalışmada karşılığı olmayan iş (k null) sayfada gösterilmez. planSurumu her canlıya almada bir artar; taban sonrası değişiklik sayısı farktır.
+export interface PgKaynak { taban: Record<string, TabanIs>; canli: Record<string, PgAdim>; planSurumu: number; tabanSurum: number | null }
+export function pgKaynakKur(r: TabanVeCanliCevabi, c: PlanlamaCalismasi, p: OkunanPlan): PgKaynak {
+  const saat = (iso: string) => saatOku(c.D, tesisSaati(Date.parse(iso)));
+  const kaynak = (k: { tur: string; id: number }) => (k.tur === 'makine' ? String(k.id) : `${k.tur}:${k.id}`);
+  const taban: Record<string, TabanIs> = {}; const canli: Record<string, PgAdim> = {}; let tabanSurum: number | null = null;
+  for (const x of r.isler) {
+    if (x.k === null) continue;
+    const job = p.ops[x.k]?.job ?? (x.k.includes('.') ? x.k.slice(0, x.k.lastIndexOf('.')) : x.k);
+    if (x.taban) {
+      const S = saat(x.taban.baslangic), C = saat(x.taban.bitis);
+      if (S !== null && C !== null) {
+        const t = (taban[job] ??= { surum: x.taban.planSurumu, ops: {}, C });
+        t.ops[x.k] = { m: kaynak(x.taban.kaynak), S, C };
+        t.C = Math.max(t.C, C); t.surum = Math.min(t.surum ?? x.taban.planSurumu, x.taban.planSurumu);
+        tabanSurum = Math.min(tabanSurum ?? x.taban.planSurumu, x.taban.planSurumu);
+      }
+    }
+    if (x.canli) {
+      const S = saat(x.canli.baslangic), C = saat(x.canli.bitis);
+      if (S !== null && C !== null) canli[x.k] = { m: kaynak(x.canli.kaynak), S, C, job };
+    }
+  }
+  return { taban, canli, planSurumu: r.planSurumu, tabanSurum };
+}
+
+function gercekler(c: PlanlamaCalismasi): Record<string, Gercek> {
+  const g = c.gercek; const y: Record<string, Gercek> = {};
+  if (!nesne(g)) return y;
+  for (const [id, x] of Object.entries(g)) if (nesne(x) && sayiMi(x.S)) {
+    y[id] = { m: typeof x.m === 'string' ? x.m : null, S: x.S, C: sayiMi(x.C) ? x.C : null, t: sayiMi(x.t) ? x.t : null, n: sayiMi(x.n) ? x.n : null };
+  }
+  return y;
+}
+export function pgBitis(ops: Record<string, { C: number; job?: string }> | null, j: string): number | null {
+  if (!ops) return null; let c: number | null = null;
+  for (const r of Object.values(ops)) if (r.job === j && Number.isFinite(r.C)) c = c == null ? r.C : Math.max(c, r.C);
+  return c;
+}
+export interface GercekBitis { t: number | null; tahmin: boolean; basladi: boolean }
+export function pgGercekBitis(c: PlanlamaCalismasi, p: OkunanPlan, j: string): GercekBitis | null {
+  const ops = Object.values(p.ops).filter((r) => r.job === j); if (!ops.length) return null;
+  const g = gercekler(c); const bitti = ops.every((r) => g[r.id]?.C != null);
+  // Sayım planı oynatmaz; sürmekte olan adım sonrakinin başlangıcını aşıyorsa aşan kısım bitişe eklenir.
+  const sira = ops.slice().sort((a, b) => a.id.localeCompare(b.id, 'tr', { numeric: true })); let tas = 0;
+  sira.forEach((r, i) => { const n = sira[i + 1]; if (g[r.id] && g[r.id]?.C == null && n && Number.isFinite(r.C) && Number.isFinite(n.S)) tas = Math.max(tas, r.C - n.S); });
+  const pb = pgBitis(p.ops, j);
+  return { t: bitti ? Math.max(...ops.map((r) => g[r.id]?.C ?? -Infinity)) : pb == null ? null : pb + Math.max(0, tas), tahmin: !bitti, basladi: ops.some((r) => g[r.id]) };
+}
+// Adımın tezgâhtaki standart ayarı ve birim süresi (saat; engine.betik derleme: cevrim/60 · sapma / (1 − pay) / verim).
+function standart(c: PlanlamaCalismasi, cx: Derleme, id: string, m: string): { su: number; cyc: number } | null {
+  const o = cx.byId[id]; const j = cx.jobs[o?.job ?? '']; if (!o || !j) return null;
+  const sp = c.D.siparisler.find((x) => x.id === j.id); const u = c.D.urunler.find((x) => x.id === sp?.urun);
+  const k = id.slice(j.id.length + 1); const a = u?.rota?.find((x) => String(x.k) === k);
+  const tz2 = a?.tezgahlar ?? []; const t = tz2.find((x) => x.id === m) ?? tz2[0]; if (!t) return null;
+  const mm = c.D.tezgahlar.find((x) => x.id === t.id) as { verim?: unknown; arizaGun?: unknown; onarimSaat?: unknown } | undefined;
+  const verim = Number(mm?.verim) || 1; const x = cx.g.sapma[id] ?? 1;
+  const ag = Number(mm?.arizaGun) || 0;
+  const pay = c.param.tampon ? Math.min(0.35, (ag > 0 ? (Number(mm?.onarimSaat) || 0) / (ag * 24) : 0) + (Number(c.param.acilPay) || 0)) : 0;
+  return { su: (Number(t.ayar) || 0) / 60, cyc: ((Number(t.cevrim) || 0) / 60) * x / (1 - pay) / verim };
+}
+// pgNedenler: siparişin canlı plana göre kayma nedenleri, saat.
+export function pgNedenler(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, cx: Derleme, hazir: Record<string, number>, j: string): Record<PgNedeni, number> {
+  const N: Record<PgNedeni, number> = { ayar: 0, yavas: 0, ariza: 0, malzeme: 0, fason: 0, gec: 0 };
+  const g = gercekler(c); const cp = K.canli; const dn = c.down as unknown as { m?: unknown; from?: unknown; to?: unknown }[];
+  for (const r of Object.values(p.ops).filter((x) => x.job === j)) {
+    const a = g[r.id]; const q = cp[r.id];
+    if (r.fas || r.m.startsWith('@')) { if (q && r.C - q.C > 0.01) N.fason += r.C - q.C; continue; }
+    if (!a) continue;
+    const m = a.m ?? r.m; const M = cx.M[m]; const k = standart(c, cx, r.id, m); if (!M || !k) continue;
+    const Su = r.Su ?? a.S;
+    const ayar = acikSaat(M.sw, a.S, Su); if (k.su > 0 && ayar > k.su * (1 + PG_ASIM)) N.ayar += ayar - k.su;
+    let ar = 0;
+    for (const d of dn) if (d.m === m && sayiMi(d.from) && sayiMi(d.to)) { const b0 = Math.max(d.from, a.S), b1 = Math.min(d.to, r.C); if (b1 > b0) ar += b1 - b0; }
+    N.ariza += ar;
+    const bit = a.C ?? a.t; const adet = a.C != null ? cx.jobs[j]?.adet ?? 0 : a.n ?? 0;
+    if (bit != null && adet > 0 && k.cyc > 0) {
+      const tk = acikSaat(M.rw, a.S, bit); const is = tk > 1e-6 ? acikSaat(M.rw, Su, bit) : Math.max(0, bit - a.S - k.su - ar); const std = adet * k.cyc;
+      if (is > std * (1 + PG_ASIM)) N.yavas += is - std;
+    }
+  }
+  const T = K.taban[j]; const mr = hazir[j];
+  if (mr != null && Number.isFinite(mr) && T) { const ilk = Math.min(...Object.values(T.ops).map((x) => x.S)); if (mr > ilk) N.malzeme = mr - ilk; }
+  const gb = pgGercekBitis(c, p, j); const cb = pgBitis(K.canli, j);
+  const sapma = gb?.t != null && cb != null ? gb.t - cb : 0;
+  const ac = N.ayar + N.yavas + N.ariza + N.malzeme + N.fason;
+  if (sapma > 0.01 && gb?.basladi) N.gec = Math.max(0, sapma - ac);
+  return N;
+}
+export interface PgSatiri { j: string; ad: string; adet: number | null; tb: number; cb: number | null; gb: GercekBitis; due: number | null; fark: number | null; plan: number | null; N: Record<PgNedeni, number> }
+export function pgSatirlar(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, cx: Derleme, hazir: Record<string, number>): PgSatiri[] {
+  const T = K.taban; const cp = K.canli;
+  return Object.keys(T).map((j) => {
+    const s = c.D.siparisler.find((x) => x.id === j); const u = c.D.urunler.find((x) => x.id === s?.urun);
+    const gb = pgGercekBitis(c, p, j) ?? { t: null, tahmin: true, basladi: false };
+    const tb = T[j]?.C ?? 0; const cb = pgBitis(cp, j); const due = cx.jobs[j]?.due ?? null;
+    return { j, ad: u?.ad ?? s?.urun ?? '', adet: s?.adet ?? null, tb, cb, gb, due, fark: gb.t != null ? gb.t - tb : null, plan: cb != null ? cb - tb : null, N: pgNedenler(c, p, K, cx, hazir, j) };
+  }).sort((a, b) => Math.abs(b.fark ?? 0) - Math.abs(a.fark ?? 0));
+}
+export interface PgGostergeleri { biten: number; uyan: number; sevk: number; zaman: number; ort: number | null; degisiklik: number }
+export function pgGostergeleri(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, L: PgSatiri[]): PgGostergeleri {
+  const g = gercekler(c); const T = K.taban; const esik = sapmaEsik(c);
+  const biten = Object.keys(g).filter((id) => { const r = p.ops[id]; return g[id]?.C != null && r && T[r.job]?.ops[id]; });
+  const uyan = biten.filter((id) => { const r = p.ops[id]; const t0 = r ? T[r.job]?.ops[id] : undefined; return t0 && (g[id]?.C ?? Infinity) - t0.C <= esik; });
+  const sevk = L.filter((x) => !x.gb.tahmin && x.gb.t != null); const zam = sevk.filter((x) => x.due == null || (x.gb.t ?? Infinity) <= x.due);
+  const kay = L.filter((x) => x.fark != null); const ort = kay.length ? kay.reduce((a, x) => a + (x.fark ?? 0), 0) / kay.length : null;
+  return { biten: biten.length, uyan: uyan.length, sevk: sevk.length, zaman: zam.length, ort, degisiklik: K.tabanSurum === null ? 0 : Math.max(0, K.planSurumu - K.tabanSurum) };
+}
+// pgNedenOzet: tabandan sapan siparişlerde neden başına toplam saat ve sipariş sayısı.
+export function pgNedenOzeti(c: PlanlamaCalismasi, L: PgSatiri[]): { k: PgNedeni; ad: string; simge: string; s: number; n: number }[] {
+  const esik = sapmaEsik(c); const t: Partial<Record<PgNedeni, { s: number; n: number }>> = {};
+  for (const x of L.filter((y) => y.fark != null && y.fark > esik)) for (const [k] of PG_NEDEN) if (x.N[k] > 0.05) { const z = (t[k] ??= { s: 0, n: 0 }); z.s += x.N[k]; z.n++; }
+  return PG_NEDEN.flatMap(([k, ad, simge]) => { const z = t[k]; return z ? [{ k, ad, simge, s: z.s, n: z.n }] : []; });
+}
+// pgSerit: en çok işi olan üç tezgâhta beş günlük taban, canlı ve gerçekleşen çizgileri.
+export interface PgSeritIsi { id: string; t0: { m: string; S: number; C: number }; q: PgAdim | null; g: { S: number; C: number; k: 'zaman' | 'gec' | 'calisiyor' } | null; fk: number | null }
+export function pgSerit(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, now: number): { a: number; b: number; satirlar: { m: string; isler: PgSeritIsi[] }[] } {
+  const a = Math.floor(now / 24) * 24, b = a + 5 * 24; const cp = K.canli; const g = gercekler(c); const esik = sapmaEsik(c);
+  const tb: Record<string, { m: string; S: number; C: number }> = {}; for (const x of Object.values(K.taban)) Object.assign(tb, x.ops);
+  const say: Record<string, number> = {};
+  for (const [id, x] of Object.entries(tb)) if (x.C > a && x.S < b && !x.m.startsWith('@')) say[x.m] = (say[x.m] ?? 0) + 1 + (g[id] ? 5 : 0);
+  const mler = Object.entries(say).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
+  return { a, b, satirlar: mler.map((m) => ({ m, isler: Object.keys(tb).filter((id) => tb[id]?.m === m && (tb[id]?.C ?? 0) > a && (tb[id]?.S ?? 0) < b).map((id) => {
+    const t0 = tb[id] as { m: string; S: number; C: number }; const r = p.ops[id]; const x = g[id];
+    const fk = r && Number.isFinite(r.C) ? r.C - t0.C : null;
+    const k = x ? (x.C != null ? (fk != null && fk > esik ? 'gec' : 'zaman') : 'calisiyor') : null;
+    return { id, t0, q: cp[id] ?? null, g: x && r && k ? { S: x.S, C: x.C ?? r.C, k } : null, fk };
+  }) })) };
 }
