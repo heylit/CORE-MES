@@ -159,6 +159,8 @@ describe('P2 kâr tablosu (486/1 a)', () => {
     tumAc();
     const tablo = screen.getByRole('table', { name: 'Siparişler: maliyet ve kâr' });
     expect(within(tablo).getAllByText(/^işleme \d/).length).toBeGreaterThan(0);
+    // Tezgâh amortismanı girilmediği için genel gider bilinmez; sıfır yazılmaz.
+    expect(within(tablo).getAllByText('genel gider —').length).toBeGreaterThan(0);
     const uygula = screen.getAllByRole('button', { name: 'Uygula' }) as HTMLButtonElement[];
     expect(uygula.length).toBeGreaterThan(0);
     expect(uygula.every((b) => b.disabled)).toBe(true);
