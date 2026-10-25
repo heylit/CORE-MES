@@ -77,6 +77,18 @@ describe('P3 saf hesaplar', () => {
     expect(G.aylik).toBe(4000);
   });
 
+  it('bedel ya da ömür girilmemiş tezgâhın amortismanı bilinmez (null); toplam onu atlar, hiçbiri bilinmiyorsa null', () => {
+    const c = ornekCalisma({ D: { maliyetSis: { tez: { T1: { bedel: 120000, omur: 10, hurda: 0 } } } } });
+    const G = genelGiderHesabi(c, takvimKur(c));
+    expect(G.tez.find((z) => z.tezgah.id === 'T1')?.amort).toBe(1000);
+    expect(G.tez.filter((z) => z.tezgah.id !== 'T1').every((z) => z.amort === null)).toBe(true);
+    expect(G.amort).toBe(1000);
+    const bos = ornekCalisma();
+    const B = genelGiderHesabi(bos, takvimKur(bos));
+    expect(B.tez.every((z) => z.amort === null)).toBe(true);
+    expect(B.amort).toBeNull();
+  });
+
   it('ek mesai takvime girer; bedeli kişi ücreti yoksa bilinmez, girilince cumartesi çarpanıyla hesaplanır', () => {
     const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }];
     const c = ornekCalisma({ ekMesai: ek });

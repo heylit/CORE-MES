@@ -431,11 +431,11 @@ export function grupSaati(D: PlanVerisi, grup: string, m: MesaiSistemi): number 
 }
 
 export interface TezgahGiderSatiri {
-  tezgah: Tezgah; x: TezgahGideri; acik: number; kap: number; amort: number; op: number;
+  tezgah: Tezgah; x: TezgahGideri; acik: number; kap: number; amort: number | null; op: number;
   dog: { enerji: number; sarf: number; bakim: number; operator: number | null }; dogTop: number;
   pay: number; kalem: Record<string, number>; mesgul: number; aylik: number; oran: number | null; absorbe: number; atil: number;
 }
-export interface GenelGiderHesabi { tez: TezgahGiderSatiri[]; aylik: number; amort: number; kap: number; mesgul: number; absorbe: number; atil: number; kalemTop: number; ort: number | null }
+export interface GenelGiderHesabi { tez: TezgahGiderSatiri[]; aylik: number; amort: number | null; kap: number; mesgul: number; absorbe: number; atil: number; kalemTop: number; ort: number | null }
 const bosGider: TezgahGideri = { bedel: null, omur: null, hurda: null, kw: null, yuk: null, alan: null, sarf: null, bakim: null };
 // Tezgâhın genel gider oranı = (dağılan pay + amortisman) / önümüzdeki 30 günün pratik kapasitesi (msHesap).
 export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHesabi {
@@ -448,7 +448,8 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
     const acik = calisilir(W, now, son);
     const x = M.tez[t.id] ?? bosGider;
     const kap = (acik * (M.verim || 85)) / 100;
-    const amort = x.bedel !== null && x.bedel > 0 && x.omur !== null && x.omur > 0 ? (x.bedel * (1 - (x.hurda ?? 0) / 100)) / (x.omur * 12) : 0;
+    // Bedel ya da ömür girilmemişse amortisman bilinmez (null); sıfır uydurulmaz, toplamlar onu atlar.
+    const amort = x.bedel !== null && x.bedel > 0 && x.omur !== null && x.omur > 0 ? (x.bedel * (1 - (x.hurda ?? 0) / 100)) / (x.omur * 12) : null;
     const op = t.opOran === undefined || t.opOran === null ? 1 : t.opOran;
     const opSaat = grupSaati(D, t.grup ?? '', ms);
     const dog = { enerji: (x.kw ?? 0) * (x.yuk ?? 0) * (M.kwh ?? 0), sarf: x.sarf ?? 0, bakim: x.bakim ?? 0, operator: opSaat === null ? null : opSaat * op };
@@ -465,7 +466,7 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
     for (const z of l) { const p = (tutar * taban(k, z)) / t; z.pay += p; z.kalem[k.id] = p; }
   }
   for (const z of tez) {
-    z.aylik = z.pay + z.amort;
+    z.aylik = z.pay + (z.amort ?? 0);
     z.oran = z.kap > 0 ? z.aylik / z.kap : null;
     z.absorbe = z.oran === null ? 0 : Math.min(z.mesgul, z.kap) * z.oran;
     z.atil = z.oran === null ? 0 : Math.max(0, z.kap - z.mesgul) * z.oran;
@@ -473,8 +474,9 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
   const t = (f: (z: TezgahGiderSatiri) => number): number => top(tez.map(f));
   const kap = t((z) => z.kap);
   const aylik = t((z) => z.aylik);
+  const amortlar = tez.map((z) => z.amort).filter((x): x is number => x !== null);
   return {
-    tez, aylik, amort: t((z) => z.amort), kap, mesgul: t((z) => z.mesgul), absorbe: t((z) => z.absorbe), atil: t((z) => z.atil),
+    tez, aylik, amort: amortlar.length ? top(amortlar) : null, kap, mesgul: t((z) => z.mesgul), absorbe: t((z) => z.absorbe), atil: t((z) => z.atil),
     kalemTop: top(M.kalemler.map((k) => kalemTutari(k, M, ms))), ort: kap > 0 ? aylik / kap : null,
   };
 }
