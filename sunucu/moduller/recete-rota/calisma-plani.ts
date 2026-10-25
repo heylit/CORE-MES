@@ -1,13 +1,17 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
-import type { CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type {
+  CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi,
+} from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { canliSira, calismaTaslagiYaz, tabanPlani, type YerlesimSatiri } from '../plan/disari.ts';
+import { canliSira, calismaTaslagiYaz, tabanPlani, taslakYerlesimleriOku, type YerlesimSatiri } from '../plan/disari.ts';
 import { emirDilimi, isEmriPlanBilgileri, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
-import { calismaFarki, calismaIsleri, calismaKuyruklari } from './kurallar.ts';
+import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
-import { planlamaGirdisi } from './servis.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
+import { planlamaGirdisi, planlamaYazmaDenetimi, yaz } from './servis.ts';
+import * as sorgular from './sorgular.ts';
 
 // Çalışma planı plan modülünün diliyle (499 a, 503 a, 505 a, 506 a). Çeviri sayfanınkidir (motor/calisma.betik); kaynak okuması çağıranın
 // yetkisiyledir (planlama çalışması ucundaki gibi). Okumalar yazmaz.
@@ -88,8 +92,47 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
   const anahtarlar = new Set((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => `${i.emirNo}|${i.opNo}`));
   const { yazilacak, yazilamaz } = calismaIsleri(plan.ops, plan.kimlik, anahtarlar);
   if (yazilacak.length === 0) throw cakisma('Plana yazılacak iş yok: sunucuda iş emri ve makinesi olan, bitmemiş iş gerekir.');
+  const ek = calismaEkMesaisi(plan.baslangic, plan.ekMesai);
   const y = await calismaTaslagiYaz(db, kullanici, {
     ad: g.ad, kuyruklar: calismaKuyruklari(plan.baslangic, yazilacak, simdi), ...(g.planSurumu === undefined ? {} : { planSurumu: g.planSurumu }),
+    ekMesai: ek.satirlar,
   });
-  return { taslak: y.taslak, yazilan: y.yazilan, atlanan: y.atlanan, yazilamaz };
+  return { taslak: y.taslak, yazilan: y.yazilan, atlanan: y.atlanan, yazilamaz, ekMesai: { yazilan: y.ekMesai.yazilan, atlanan: y.ekMesai.atlanan + ek.yazilamaz } };
+}
+
+// 507 3 a: plan taslağının yerleşimleri ve kilitleri kayıtlı çalışmaya yazılır (503'ün tersi). Yazma kaydın kendi yazma yolundan geçer
+// (sürüm, boyut, plan.yaz denetimi, geçmiş); taslağı okumak plan okuma yetkisi ister. Sürümler okunanla aynı olmalı.
+export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: TaslaktanCalismayaGovdesi, simdi: number = Date.now()): Promise<TaslaktanCalismayaCevabi> {
+  planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  const t = await taslakYerlesimleriOku(db, kullanici, g.taslakId, g.taslakSurumu);
+  const kayit = await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI);
+  if (kayit === null || kayit.surum !== g.calismaSurumu) throw eskiSurum();
+  const { plan } = await calismaOku(db, kullanici, simdi);
+  const anahtarlar = new Map((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
+  const ters = tersKimlik(plan);
+  const yerler: TaslakYeri[] = [];
+  const atlanan: string[] = [];
+  for (const y of t.yerlesimler) {
+    const anahtar = anahtarlar.get(y.isEmriId);
+    if (anahtar === undefined) continue;
+    const k = ters.get(anahtar);
+    if (k === undefined || y.kaynak.tur !== 'makine') { atlanan.push(anahtar); continue; }
+    yerler.push({ k, anahtar, makineId: y.kaynak.id, baslangic: y.baslangic, bitis: y.bitis, kilitli: y.kilitli });
+  }
+  const r = kuralTaslaktanCalismaya(kayit.deger, yerler);
+  if (r === null) throw cakisma('Çalışmada plan ya da başlangıç günü yok; önce planı kurup kaydedin.');
+  const yazilan = await yaz(db, kullanici, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: r.deger, beklenenSurum: g.calismaSurumu });
+  return { calismaSurumu: yazilan.kayit.surum, oncekiSurum: kayit.surum, yazilan: r.yazilan, kilitli: r.kilitli, atlanan: [...atlanan, ...r.atlanan] };
+}
+
+// 508 2 a: çalışma kaydı geçmişteki bir önceki sürümüne döner (geçmiş 242 a, son 50 sürüm). Okunan sürümden sonra başka yazma olduysa
+// eski sürüm (409). Dönüş de bir yazmadır: geri alınan sürüm geçmişe düşer, ikinci geri alma onu getirir.
+export async function calismaGeriAl(db: Db, kullanici: Kullanici, calismaSurumu: number): Promise<CalismaGeriAlCevabi> {
+  planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  const mevcut = await sorgular.surumKilitle(db, PLANLAMA_ANAHTARI);
+  if (mevcut !== calismaSurumu) throw eskiSurum();
+  const onceki = await sorgular.sonGecmis(db, PLANLAMA_ANAHTARI);
+  if (onceki === null) throw cakisma('Geri alınacak önceki sürüm yok.');
+  const k = await sorgular.kayitGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: onceki.deger, kisiId: kullanici.id });
+  return { calismaSurumu: k!.surum, donulenSurum: onceki.surum };
 }

@@ -1,13 +1,13 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeParametresi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
-  statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, tabanVeCanliCevabi, yazCevabi, yazGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi,
+  benCevabi, calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi, degerlendirmeParametresi, durumCevabi, fasonTahminCevabi, fasonTahminSorgusu, kapasiteCevabi, kayitlarCevabi, planlamaCalismasiCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi,
+  statuTanimiKaydetGovdesi, statuTanimiParametresi, statuTanimiSilGovdesi, tabanVeCanliCevabi, taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yazCevabi, yazGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi,
   yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
   ben, durum, fasonTahminleri, kapasite, kayitlar, planlamaCalismasi, planlamaYazmaDenetimi, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz,
 } from './servis.ts';
-import { calismaTaslagi, canliFarki, tabanVeCanli } from './calisma-plani.ts';
+import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { yillikCozBaslat, yillikCozDurumu } from './yillik-cozucu.ts';
 
@@ -85,6 +85,35 @@ export const uclar = [
     isle: async ({ db, kullanici, govde, denetimEki }) => {
       const r = await calismaTaslagi(db, kullanici, govde);
       denetimEki([{ taslak: r.taslak.id, yazilan: r.yazilan, atlanan: r.atlanan, yazilamaz: r.yazilamaz.length }]);
+      return r;
+    },
+  }),
+  // 507 3 a: plan taslağının yerleşimleri ve kilitleri kayıtlı çalışmaya yazılır; çalışma kaydını yazmak gibi recete-rota.yaz ve plan.yaz
+  // ister, taslağı okumak plan okuma yetkisi (plan.yaz onu kapsar).
+  uc({
+    yontem: 'POST',
+    yol: '/recete-rota/planlama-calismasi/taslaktan-yaz',
+    yetki: 'recete-rota.yaz',
+    tekrarKorumali: true,
+    govde: taslaktanCalismayaGovdesi,
+    cevap: taslaktanCalismayaCevabi,
+    isle: async ({ db, kullanici, govde, denetimEki }) => {
+      const r = await taslaktanCalismaya(db, kullanici, govde);
+      denetimEki([{ taslak: govde.taslakId, calismaSurumu: r.calismaSurumu, oncekiSurum: r.oncekiSurum, yazilan: r.yazilan, kilitli: r.kilitli, atlanan: r.atlanan.length }]);
+      return r;
+    },
+  }),
+  // 508 2 a: çalışma kaydı bir önceki sürümüne döner (geçmişten); arada başka yazma olduysa 409.
+  uc({
+    yontem: 'POST',
+    yol: '/recete-rota/planlama-calismasi/geri-al',
+    yetki: 'recete-rota.yaz',
+    tekrarKorumali: true,
+    govde: calismaGeriAlGovdesi,
+    cevap: calismaGeriAlCevabi,
+    isle: async ({ db, kullanici, govde, denetimEki }) => {
+      const r = await calismaGeriAl(db, kullanici, govde.calismaSurumu);
+      denetimEki([{ calismaSurumu: r.calismaSurumu, donulenSurum: r.donulenSurum }]);
       return r;
     },
   }),

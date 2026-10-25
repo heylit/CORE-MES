@@ -73,6 +73,11 @@ export async function statuKimligi(db: Db, kaynakAdim: string, rotaRevizyonuId: 
   return (await db.tek<{ id: number }>('SELECT id FROM recete_rota_statu WHERE kaynak_adim = $1 AND rota_revizyonu_id IS NOT DISTINCT FROM $2::int', [kaynakAdim, rotaRevizyonuId]))?.id ?? null;
 }
 
+// 508 2 a: kaydın geçmişteki son (bir önceki) sürümü; geçmiş yoksa null.
+export async function sonGecmis(db: Db, anahtar: string): Promise<{ surum: number; bicim: string; deger: unknown } | null> {
+  return db.tek(`SELECT surum, bicim, deger FROM recete_rota_kayit_gecmisi WHERE anahtar = $1 ORDER BY id DESC LIMIT 1`, [anahtar]);
+}
+
 export async function kayitSil(db: Db, anahtar: string): Promise<boolean> {
   return (await db.sorgu<{ anahtar: string }>('DELETE FROM recete_rota_kayit WHERE anahtar = $1 RETURNING anahtar', [anahtar])).length > 0;
 }
