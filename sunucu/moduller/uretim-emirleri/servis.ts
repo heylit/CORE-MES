@@ -185,9 +185,12 @@ async function kayitlariCevir(db: Db, satirlar: readonly KayitSatiri[]): Promise
   const hurda = satirlar.some((k) => k.hurdaNedeniId !== null)
     ? new Map((await hurdaNedenleriniListele(db, { yalnizAktif: false })).map((n) => [n.id, n.ad]))
     : new Map<number, string>();
-  return satirlar.map(({ kisiId, istasyonId, durusNedeniId, hurdaNedeniId, ...kalan }) => ({
+  return satirlar.map(({ kisiId, istasyonId, durusNedeniId, hurdaNedeniId, kararVerenId, ...kalan }) => ({
     ...kalan,
     kisi: adli(adlar.kisi, kisiId, 'Kişi'),
+    ...(kalan.olay === 'kalite_onay' || kalan.olay === 'kalite_red'
+      ? { kararVeren: kararVerenId === null ? null : adli(adlar.kisi, kararVerenId, 'Kişi') }
+      : {}),
     istasyon: adli(adlar.istasyon, istasyonId, 'İstasyon'),
     durusNedeni: durusNedeniId === null ? null : adli(durus, durusNedeniId, 'Duruş nedeni'),
     hurdaNedeni: hurdaNedeniId === null ? null : adli(hurda, hurdaNedeniId, 'Hurda nedeni'),
@@ -604,7 +607,7 @@ export async function kararliSayimiSonuclandir(
   // İş emri ve refakat partisi başına toplanır: stok kararı partinin kendi bakiyesine uygular.
   const adetler = new Map<string, { isEmriId: number | null; refakatPartisiId: number | null; adet: number }>();
   for (const g of gruplar) {
-    await sorgular.kararSatirlariEkle(db, id, g, karar === 'onay' ? 'saglam' : 'red', an);
+    await sorgular.kararSatirlariEkle(db, id, g, karar === 'onay' ? 'saglam' : 'red', an, kisiId);
     const anahtar = `${String(g.isEmriId)}/${String(g.refakatPartisiId)}`;
     const o = adetler.get(anahtar) ?? { isEmriId: g.isEmriId, refakatPartisiId: g.refakatPartisiId, adet: 0 };
     adetler.set(anahtar, { ...o, adet: o.adet + g.adet });
@@ -822,6 +825,9 @@ export async function sonOlaylar(db: Db, sonra: string | null, sayi: number): Pr
       kisi: adli(adlar.kisi, r.kisiId, 'Kişi'),
       adet: r.adet,
       durusNedeni: r.durusNedeniId === null ? null : adli(nedenler, r.durusNedeniId, 'Duruş nedeni'),
+      ...(r.olay === 'kalite_onay' || r.olay === 'kalite_red'
+        ? { kararVeren: r.kararVerenId === null ? null : adli(adlar.kisi, r.kararVerenId, 'Kişi') }
+        : {}),
       zaman: r.zaman,
     })),
   };

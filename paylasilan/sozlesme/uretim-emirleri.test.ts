@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
-  bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi,
+  bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi, sonOlaylarCevabi,
 } from './uretim-emirleri.ts';
 
 const GOVDE = { parcaNo: 'P-1', parcaAd: 'Deneme Parça', adet: 5, istasyonId: 3, projeId: 7 };
@@ -166,6 +166,16 @@ test('kayıt: olay defterin yedi olayından biridir; hurda ve duruş nedenini, d
   assert.deepEqual(kayitSemasi.parse({ ...KAYIT, olay: 'bitir', saglamAdet: 4 }), { ...KAYIT, olay: 'bitir', saglamAdet: 4 });
   for (const olay of ['duraklat', 'durdur', 'devam', 'hurda', 'duzeltme']) assert.equal(gecer(kayitSemasi, { ...KAYIT, olay }), true, olay);
   for (const olay of ['iptal', 'saglam', 'sayim']) assert.equal(gecer(kayitSemasi, { ...KAYIT, olay }), false, olay);
+  const karar = { ...KAYIT, olay: 'kalite_red', adet: 2, kararVeren: { id: 3, ad: 'Deneme Kaliteci' } };
+  assert.deepEqual(kayitSemasi.parse(karar), karar);
+  assert.equal(kayitSemasi.parse({ ...KAYIT, olay: 'kalite_onay', kararVeren: null }).kararVeren, null, 'eski karar satırında kararı veren bilinmez');
+  assert.equal(gecer(kayitSemasi, { ...KAYIT, olay: 'kalite_onay', kararVeren: { id: 3 } }), false);
+  const sonOlay = {
+    id: 's1', olay: 'kalite_onay', emir: { id: 1, emirNo: 'UE-1', parcaNo: 'P-1' }, isEmri: null, makine: null,
+    istasyon: { id: 3, ad: 'Torna 1' }, kisi: { id: 2, ad: 'Deneme Kişi' }, adet: 3, durusNedeni: null,
+    kararVeren: { id: 4, ad: 'Deneme Kaliteci' }, zaman: KAYIT.zaman,
+  };
+  assert.deepEqual(sonOlaylarCevabi.parse({ olaylar: [sonOlay] }).olaylar, [sonOlay], 'son olaylar akışı kalite kararını defterle aynı olayla taşır');
   const hurda = { ...KAYIT, olay: 'hurda', adet: 2, hurdaNedeni: { id: 4, ad: 'Deneme hurda' }, durusNedeni: null };
   assert.deepEqual(kayitSemasi.parse(hurda), hurda);
   const durdur = { ...KAYIT, olay: 'durdur', adet: null, hurdaNedeni: null, durusNedeni: { id: 6, ad: 'Deneme neden' } };

@@ -1033,7 +1033,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal(eksi.govde.mesaj, 'Sağlam adet sıfırın altına inemez.');
     assert.equal((await canliAl(emir.id))?.saglam, 10);
     const ayrinti = await ayrintiAl(emir.id);
-    assert.deepEqual(ayrinti.kayitlar.map((k) => [k.olay, k.adet]), [['baslat', null], ['duzeltme', 1], ['duzeltme', -2]], 'ilk parça onayı düzeltme olarak görünür');
+    assert.deepEqual(ayrinti.kayitlar.map((k) => [k.olay, k.adet]), [['baslat', null], ['kalite_onay', 1], ['duzeltme', -2]], 'ilk parça onayı kalite kararı olarak görünür (504 a)');
     assert.equal((await sayimYap(emir.id, 0)).durum, 400);
     assert.equal((await komut(emir.id, 'sayim', 'operator', { tur: 'saglam', adet: 1.5 })).durum, 400);
   });
@@ -1280,7 +1280,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     await ilkParcaOnay(sayili.id);
     const s1 = await bitir0(sayili.id);
     assert.equal(s1.govde.emir.saglamAdet, 6);
-    assert.deepEqual((await ayrintiAl(sayili.id)).kayitlar.map((k) => [k.olay, k.saglamAdet]), [['baslat', null], ['duzeltme', null], ['bitir', 6]]);
+    assert.deepEqual((await ayrintiAl(sayili.id)).kayitlar.map((k) => [k.olay, k.saglamAdet]), [['baslat', null], ['kalite_onay', null], ['bitir', 6]]);
 
     const farkli = (await baslatilmis()).emir;
     await sayimYap(farkli.id, 6);
@@ -1289,13 +1289,13 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal(s2.govde.emir.saglamAdet, 4);
     assert.equal(s2.govde.emir.canli?.saglam, 4);
     assert.deepEqual((await ayrintiAl(farkli.id)).kayitlar.map((k) => [k.olay, k.adet, k.saglamAdet]), [
-      ['baslat', null, null], ['duzeltme', 6, null], ['duzeltme', -2, null], ['bitir', null, 4],
+      ['baslat', null, null], ['kalite_onay', 6, null], ['duzeltme', -2, null], ['bitir', null, 4],
     ]);
     const ayni = (await baslatilmis()).emir;
     await sayimYap(ayni.id, 3);
     await ilkParcaOnay(ayni.id);
     await bitir(ayni.id, 3);
-    assert.deepEqual((await ayrintiAl(ayni.id)).kayitlar.filter((k) => k.olay === 'duzeltme').map((k) => k.adet), [3], 'fark yoksa bitirme satırı yok; yalnız onay');
+    assert.deepEqual((await ayrintiAl(ayni.id)).kayitlar.filter((k) => k.olay === 'duzeltme' || k.olay === 'kalite_onay').map((k) => [k.olay, k.adet]), [['kalite_onay', 3]], 'fark yoksa bitirme satırı yok; yalnız onay');
   });
   const bitir0 = (id: number) => komut(id, 'bitir', 'operator', {});
 
@@ -1314,7 +1314,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     await bitir(emir.id, 9);
     const kayitlar = (await ayrintiAl(emir.id)).kayitlar;
     assert.deepEqual(kayitlar.map((k) => k.olay), [
-      'baslat', 'duzeltme', 'hurda', 'duraklat', 'devam', 'duzeltme', 'durdur', 'devam', 'duzeltme', 'duzeltme', 'bitir',
+      'baslat', 'kalite_onay', 'hurda', 'duraklat', 'devam', 'duzeltme', 'durdur', 'devam', 'duzeltme', 'duzeltme', 'bitir',
     ]);
     const idler = kayitlar.map((k) => k.id);
     assert.equal(new Set(idler).size, idler.length);
@@ -1582,7 +1582,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal(bitis.govde.emir.saglamAdet, 3);
     const kayitlar = (await ayrintiAl(emir.id)).kayitlar;
     assert.ok(kayitlar.every((k) => k.emirId === emir.id && k.kisi.ad === 'Deneme operator'), 'onay satırı da sayanındır (348 a)');
-    assert.deepEqual(kayitlar.filter((k) => k.olay === 'duzeltme').map((k) => k.adet), [3], 'yalnız ilk parça onayı');
+    assert.deepEqual(kayitlar.filter((k) => k.olay === 'duzeltme' || k.olay === 'kalite_onay').map((k) => [k.olay, k.adet]), [['kalite_onay', 3]], 'yalnız ilk parça onayı');
   });
 
   test('hurda: duraklıyken kabul edilir, durmuşken reddedilir', async () => {
