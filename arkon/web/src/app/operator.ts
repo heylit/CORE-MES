@@ -2,7 +2,7 @@ import type { Order, Pkg, Result } from '@shared/model';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../data/cakisma';
 import { AKStore } from '../data/store';
 import { anahtarliErteleyici } from '../data/ertele';
-import { durumKaydiGerekir } from '../data/durum-kaydi';
+import { durumBaslangici, durumKaydiGerekir } from '../data/durum-kaydi';
 import { IS_DEGISIMI, nedenAdi } from '../data/durus-nedeni';
 import { istasyonPaketleri, operatoreAcik, planOnce } from '../data/tmi-plan';
 import { tmiEmirId } from '../data/tmi-adim';
@@ -328,6 +328,14 @@ export function App({ preview }) {
     autoRef.current.state = false; lastNoteRef.current = null;
     schedAutoCall(why);
   }, [o.state, o.no]);
+  // Etkin iş ya da durumu değişince süre işin sunucudaki son durum kaydından düzeltilir (durum-kaydi.ts durumBaslangici).
+  useEffect(() => {
+    if (preview || o.empty || !o.pkg) return;
+    let bitti = false;
+    const st = o.state;
+    AKStore.Log.query('events', { pkg: o.pkg.id, limit: 200 }).then(k => { const at = durumBaslangici(k || [], st); if (!bitti && at !== null) setSince(at); }, () => {});
+    return () => { bitti = true; };
+  }, [o.no, o.state]);
   /* nedeni bir ekibe bağlıysa (ör. mekanik arıza → bakım) belirlenen süre sonra kendiliğinden çağır */
   const schedAutoCall = why => {
     clearTimeout(autoCallT.current);
@@ -401,7 +409,7 @@ export function App({ preview }) {
   const topluKaydet = g => { if (!sayimOk('prod.run', g.saglam > 0 ? iyiArtiNedeni(g.saglam) ?? kapaliNedeni : kapaliNedeni)) return false; doToplu(g); };
   const hazirlikta = useRef(false);
   const act = (a, t?, warned?, hazir?) => {
-    if (['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'].includes(a) && !ok('prod.run')) return;
+    if (['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'].includes(a) && (o.empty || !ok('prod.run'))) return;
     if (a === 'tool') { const tl = RL.prod.tools.find(x => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { setWarnShow({ list: RL.warns.filter(w => w.t), title: 'Bu işin uyarıları' }); return; }
     if (a === 'stop') return setOv('reason');
@@ -416,7 +424,7 @@ export function App({ preview }) {
     if (a === 'next') { const n = orders.findIndex((x, i) => i !== ai && x.state === 'queued'); setOv(null); if (n >= 0) { isGec(n); setSince(Date.now()); setOrders(l => l.map((x, j) => j === n ? Object.assign({}, x, { fresh: false }) : x)); say('Yüklendi: ' + orders[n].no + ' · hazırlık ' + readyCount(orders[n]) + '/4', 'next', 'var(--hazard)'); } else say('Kuyrukta iş kalmadı', 'check'); return; }
     const m = { start: 'running', resume: 'running', restart: 'running', pause: 'paused', setup: 'setup' }[a];
     // Başlat ilk parça onayını beklemez (129, 130 a): ilk parça Başlat'tan sonra üretilip sayılır ve kaliteye gider.
-    if ((a === 'start' || a === 'resume' || a === 'restart') && ilk.acik) say('Dikkat: ilk parçayı say ve kaliteye gönder · ' + (ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'karar gelene kadar sonraki sağlam parçalar karar bekler'), 'alert', 'var(--hold)');
+    if ((a === 'start' || a === 'resume' || a === 'restart') && ilk.acik) say('Dikkat: ilk parçayı say ve kaliteye gönder · ' + (ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'Kalite Merkezi kararı gelene kadar sağlam parçalar karar bekler'), 'alert', 'var(--hold)');
     if ((a === 'start' || a === 'setup') && !warned && !preview) { const sw = RL.warns.filter(w => w.t && w.t.trim() && w.when === 'start' && !((o.acks || {})[w.id] && (o.acks || {})[w.id].v === (o.pkg && o.pkg.version))); if (sw.length) { setWarnShow({ list: sw, title: 'Başlamadan önce oku', then: () => act(a, t, true) }); return; } }
     // Üretim Terminali gibi: TMI emrinde başlatmadan önce girdiler istasyonda mı sorulur; eksikse istek açılır, Malzeme · Teslim paneli açılır
     // ve iş uyarıyla başlar (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü TMI'nin başlat denetimi söyler.
@@ -605,7 +613,7 @@ export function App({ preview }) {
           </div>
           <${TopluPanel} key=${o.no} kalan=${o.target - o.good} disabled=${kapali} onSave=${topluKaydet} />
           </div>
-          <${Orbs} state=${o.state} act=${a => { if (a === 'drawing') { setMv('draw'); return; } act(a); }} />
+          <${Orbs} state=${o.state} disabled=${o.empty} act=${a => { if (a === 'drawing') { setMv('draw'); return; } act(a); }} />
         </div>
         ${mv === 'st' && Panel ? html`<div className="mpane mscroll"><${Panel} key=${o.no} api=${stApi} RL=${RL} /></div>` : null}
         <div className="mpane" style=${{ display: mv === 'draw' ? 'flex' : 'none' }}><${BlueprintM} say=${say} theme=${theme} ctl=${ctl} yuklemeYok=${true} /></div>
@@ -652,7 +660,7 @@ export function App({ preview }) {
               </div>
             </div>
             <${TopluPanel} key=${o.no} kalan=${o.target - o.good} disabled=${kapali} onSave=${topluKaydet} />
-            <${Orbs} state=${o.state} act=${act} />
+            <${Orbs} state=${o.state} disabled=${o.empty} act=${act} />
           </div>
         </section>
         <section className="col">

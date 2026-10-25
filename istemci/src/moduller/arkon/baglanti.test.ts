@@ -226,8 +226,8 @@ it('ikinci menü sayıları: taslak paket ve ölçüm bekleyen numune sayılır'
 
 describe('sessiz kayıp: reddedilen yazma TMI bildirimiyle söylenir', () => {
   it('reddiBildirimi: yazma reddi neden ve hedefle döner; okuma, çakışma, oturum, yok ve günlük satırı söylenmez', () => {
-    const r = (durum: number, error = 'Üretim Hazırlık rolünüz bu belgeyi yazamaz ya da silemez.') => ({ durum, govde: { error } });
-    expect(reddiBildirimi('PUT', '/doc/pkgs/p1', r(403))).toBe('Belge kaydedilmedi (pkgs): Üretim Hazırlık rolünüz bu belgeyi yazamaz ya da silemez.');
+    const r = (durum: number, error = 'Rolünüz bu belgeyi yazamaz ya da silemez.') => ({ durum, govde: { error } });
+    expect(reddiBildirimi('PUT', '/doc/pkgs/p1', r(403))).toBe('Belge kaydedilmedi (pkgs): Rolünüz bu belgeyi yazamaz ya da silemez.');
     expect(reddiBildirimi('DELETE', '/doc/maint/m1', r(403))).toMatch(/^Belge kaydedilmedi \(maint\)/);
     expect(reddiBildirimi('POST', '/log/counts', r(400, 'Kayıt geçersiz.'))).toBe('Kayıt kaydedilmedi (counts): Kayıt geçersiz.');
     expect(reddiBildirimi('POST', '/bus', r(429, 'Dakikada gönderilebilecek ileti sayısı aşıldı.'))).toMatch(/^İleti kaydedilmedi/);
