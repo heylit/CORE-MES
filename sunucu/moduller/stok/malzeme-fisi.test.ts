@@ -7,7 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { malzemeFisiAyrintiCevabi, malzemeFisiOzeti, malzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
-import type { LogoFisBilgisi, MalzemeFisiAyrintiCevabi, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { LogoFisBilgisi, MalKabulCevabi, MalzemeFisiAyrintiCevabi, MalzemeFisiListeSatiri, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -65,7 +65,7 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     return malzemeFisiAyrintiCevabi.parse(c.govde);
   };
-  const emirFisi = async (e: number, tur: string): Promise<MalzemeFisiOzeti> => {
+  const emirFisi = async (e: number, tur: string): Promise<MalzemeFisiListeSatiri> => {
     const c = await fisler(`uretimEmriId=${e}&tur=${tur}`);
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     assert.equal(c.govde.satirlar.length, 1);
@@ -236,5 +236,63 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     assert.equal(yok.durum, 200);
     assert.ok((yok.govde as MalzemeFisleriCevabi).satirlar.some((f) => f.id === s.id));
     assert.equal((await yon('GET', '/stok/malzeme-fisleri/2147483000')).durum, 404);
+  });
+
+  // 515 a: mal kabul belgesi listede ayrı türdür; Logo'ya giden fiş açılmaz, yetki listeninkidir.
+  test('mal kabul listede görünür: türle süzülür, MK- ile aranır, Logo ve emir süzgecinde çıkmaz, fiş açmaz', async () => {
+    malzemeFisiLogoCozucusu(async () => new Map());
+    const fisSayisi = async () => (await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_malzeme_fisi'))!.n;
+    const once = await fisSayisi();
+    const k = await kart();
+    const c = await yon<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'diger', irsaliyeNo: 'IRS-DNM-1', satirlar: [{ malzemeId: k, miktar: '4' }] });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const mk = c.govde.belge;
+    assert.equal(await fisSayisi(), once, 'mal kabul Logo fişi açmaz');
+
+    const tur = await fisler('tur=mal_kabul');
+    assert.equal(tur.durum, 200, JSON.stringify(tur.govde));
+    malzemeFisleriCevabi.parse(tur.govde);
+    assert.ok(tur.govde.satirlar.every((f) => f.tur === 'mal_kabul'));
+    const satir = tur.govde.satirlar.find((f) => f.id === mk.id)!;
+    assert.equal(satir.no, mk.no);
+    assert.equal(satir.irsaliyeNo, 'IRS-DNM-1');
+    assert.equal(satir.satirSayisi, 1);
+    assert.equal(satir.logo.durum, 'gonderilmez');
+    assert.equal(satir.gonderilebilir, false);
+    assert.equal(satir.uretimEmriId, null);
+
+    const tumu = await fisler('sayfaBoyu=200');
+    const toplam = (await o().vt.tek<{ n: number }>('SELECT (SELECT count(*) FROM stok_malzeme_fisi) + (SELECT count(*) FROM stok_mal_kabul) AS n'))!.n;
+    assert.equal(tumu.govde.toplam, Number(toplam));
+    assert.ok(tumu.govde.satirlar.some((f) => f.tur === 'mal_kabul' && f.id === mk.id));
+    assert.ok(tumu.govde.satirlar.some((f) => f.tur !== 'mal_kabul'), 'tümünde fişler de var');
+    const zamanlar = tumu.govde.satirlar.map((f) => Date.parse(f.acilis));
+    assert.deepEqual(zamanlar, [...zamanlar].sort((a, b) => b - a), 'açılışa göre en yeni önce');
+
+    assert.deepEqual((await fisler(`metin=${encodeURIComponent(mk.no.toLowerCase())}`)).govde.satirlar.map((f) => [f.tur, f.id]), [['mal_kabul', mk.id]]);
+    assert.deepEqual((await fisler(`tur=sayim_eksigi&metin=${mk.no}`)).govde.satirlar, []);
+    assert.ok(!(await fisler('logoDurumu=gonderilmez')).govde.satirlar.some((f) => f.tur === 'mal_kabul'));
+    assert.deepEqual((await fisler('tur=mal_kabul&logoDurumu=gonderilmez')).govde.satirlar, []);
+    const e = await emir();
+    await o().vt.tx((db) => emirAcildiYansit(db, { uretimEmriId: e, kisiId: yoneticiId, stoktanRezerve: false }));
+    assert.ok((await fisler(`uretimEmriId=${e}`)).govde.satirlar.every((f) => f.tur !== 'mal_kabul'));
+    assert.deepEqual((await fisler(`tur=mal_kabul&uretimEmriId=${e}`)).govde.satirlar, []);
+  });
+
+  test('mal kabul listesi: stok okuyan görür; stok yetkisi olmayan 403, oturumsuz 401', async () => {
+    // Stok sayfası ve işlemi olmayan rol.
+    const bos = await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('mf_stoksuz', 'Stoksuz') RETURNING id");
+    const yr = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
+    await o().vt.tx(async (db) => {
+      const k = await yoneticiOlustur(db, { ad: 'Deneme yetkisiz', kullaniciAdi: 'yetkisiz', parola: PAROLA });
+      await rolAta(db, yoneticiId, k, bos!.id);
+      await rolAl(db, yoneticiId, k, yr!.id);
+    });
+    await giris('yetkisiz');
+    const izinli = await istek<MalzemeFisleriCevabi>('kalite', 'GET', '/stok/malzeme-fisleri?tur=mal_kabul');
+    assert.equal(izinli.durum, 200, JSON.stringify(izinli.govde));
+    assert.ok(izinli.govde.satirlar.length > 0);
+    assert.equal((await istek('yetkisiz', 'GET', '/stok/malzeme-fisleri?tur=mal_kabul')).durum, 403);
+    assert.equal((await istek('oturumsuz', 'GET', '/stok/malzeme-fisleri?tur=mal_kabul')).durum, 401);
   });
 });

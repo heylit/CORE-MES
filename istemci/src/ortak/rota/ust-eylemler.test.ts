@@ -25,6 +25,14 @@ describe('ustEylemleriTopla', () => {
     expect(yanlis({ hesapMaddesi: { baslik: 'Durum', simge: 'boyle-simge-yok' } })).toThrow(/Hesap menüsü maddesi/);
     expect(() => ustEylemleriTopla({ '../../moduller/a/ust-eylem.tsx': {} })).toThrow(/moduller\/a\/ust-eylem\.tsx/);
   });
+
+  it('hesap yerindeki eylem menu maddesi ister; isaret verilirse bilesen olmali', () => {
+    expect(yanlis({ yer: 'hesap' })).toThrow(/Hesap menüsündeki üst eylemin maddesi yok: e/);
+    const hesapta = ustEylemleriTopla(dosya(eylem('e', { yer: 'hesap', hesapMaddesi: { baslik: 'Durum', simge: 'cpu' }, isaret: Dugme })))[0];
+    expect(hesapta?.yer).toBe('hesap');
+    expect(hesapta?.isaret).toBe(Dugme);
+    expect(yanlis({ isaret: 'nokta' })).toThrow(/işareti bileşen değil/);
+  });
 });
 
 describe('gorunenUstEylemler', () => {

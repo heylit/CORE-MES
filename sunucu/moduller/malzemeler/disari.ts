@@ -20,7 +20,8 @@ export type { LogoyaGuncellemeGidecekMalzeme } from './servis.ts';
 export type { LogoGuncellemeSonucu } from './kurallar.ts';
 // Kart #688: kartın Operasyonlar adımı, rota taslağı açmak için ({ no, kod, ad }, no sırasıyla); kart yoksa null.
 export { malzemeOperasyonlari } from './servis.ts';
-// Kart #688: Rota'nın kendiliğinden taslak işi için kodlu operasyonu olan aktif mamul ve yarı mamul kartlar ({ no, kisiId }).
+// Kart #688: Rota'nın kendiliğinden taslak işi için kodlu operasyonu olan aktif mamul ve yarı mamul kartlar ({ no, kisiId }; kişi
+// kartı onaya gönderen, yoksa açan: soru 520 2 b).
 export { operasyonluAktifKartlar } from './servis.ts';
 export type { KartOperasyonu } from './kurallar.ts';
 // Üretim emirleri numara kuralı (kart #802): kurumun firma kodu ya da null.

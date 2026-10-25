@@ -13,10 +13,10 @@ function calisma(plan: boolean) {
     surum: 2, dataVer: 1, down: [], ekMesai: [], locks: {}, pref: {}, kapali: [], olaylar: [], senaryolar: [], canli: null, iz: [],
     D: {
       meta: { baslangic: bugun },
-      siparisler: [{ id: 'E-1', urun: 'U1', adet: 10, termin: null, malzeme: [{ kod: 'M-1', miktar: 2 }] }],
+      siparisler: [{ id: 'E-1', urun: 'U1', adet: 10, termin: null, malzeme: [{ kod: '11', miktar: 2 }] }],
       urunler: [{ id: 'U1' }], tezgahlar: [],
-      malzemeler: [{ kod: 'M-1', ad: 'Deneme cubuk', birim: 'kg', stok: 5, birimFiyat: 10, tedarikGun: 2, muayeneGun: 0 }],
-      satinalma: [{ kod: 'M-1', miktar: 3, gelis: '2099-01-01 08:00', tedarikci: 'T1' }],
+      malzemeler: [{ kod: '11', ad: 'Deneme cubuk', birim: 'kg', stok: 5, birimFiyat: 10, tedarikGun: 2, muayeneGun: 0 }],
+      satinalma: [{ kod: '11', miktar: 3, gelis: '2099-01-01 08:00', tedarikci: 'T1' }],
       tedarikciler: [{ id: 'T1', ad: 'Deneme Tedarik' }],
     },
     plan: plan ? { dataVer: 1, ops: { 'E-1.10': { job: 'E-1', S: 5 * G, C: 6 * G, done: 0 } } } : null,
@@ -26,7 +26,7 @@ function calisma(plan: boolean) {
 const kayit = (plan = true) => [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: calisma(plan), surum: 4 }];
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-// Stok uçları: kart M-1 (malzeme 11), serbest 6; açık sipariş satırı 4 kg.
+// Stok uçları: malzeme 11 (stok kodu M-1; planda kodu malzeme numarasıdır), serbest 6; açık sipariş satırı 4 kg.
 function stokSun(): void {
   const once = globalThis.fetch;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
@@ -92,13 +92,13 @@ describe('Malzeme satın alma planı', () => {
     ac('/recete-rota/planlama-yeni/malzplan');
     const durum = await screen.findByText(/^En sıcak satır/, { selector: '.tc-isi-durum span' }, { timeout: 10000 });
     // Açık sipariş (2099 termini) en geç gelişten sonra; eksik 10 kg'nin siparişi verilmedi. Açık alım: 4 kg x 10 TL (483/3).
-    expect(durum.textContent).toMatch(/^En sıcak satır M-1: .*1 malzeme için sipariş verilmedi, 2 malzeme işi geciktirebilir; açık alım 40 TL\.$/);
+    expect(durum.textContent).toMatch(/^En sıcak satır 11: .*1 malzeme için sipariş verilmedi, 2 malzeme işi geciktirebilir; açık alım 40 TL\.$/);
     const izgara = screen.getByRole('group', { name: 'Malzeme × gün, stok yetiyor mu' });
     const son = within(izgara).getAllByRole('button').find((b) => /en geç sipariş günü/.test(b.getAttribute('aria-label') ?? ''));
     expect(son?.textContent).toBe('son');
     fireEvent.click(son as HTMLElement);
-    const acilim = screen.getByRole('region', { name: 'M-1 · Sipariş verilmedi' });
-    expect(within(acilim).getByText(/M-1 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
+    const acilim = screen.getByRole('region', { name: '11 · Sipariş verilmedi' });
+    expect(within(acilim).getByText(/11 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
     expect(within(acilim).getByText(/Bunu değiştirme yetkiniz yok\./)).toBeTruthy();
     expect((within(acilim).getByRole('button', { name: /E-1 çizelgede/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Tüm satırlar')).toBeTruthy();
@@ -130,7 +130,7 @@ describe('Malzeme öne çekme', () => {
         calismaSurumu: 4, dataVer: 1, baslangic: '2026-01-05', simdi: 10, maliyetGorunur: true,
         sonuc: {
           gunler: [1, 3, 5], taban: { tl: 1000, gecikmeSaat: 5, geciken: 1, yerlesmeyen: 0 },
-          satirlar: [{ satinalmaSira: 0, kod: 'M-1', tedarikci: 'Deneme Tedarik', soz: 48, isler: ['E-1'], kazanc: [
+          satirlar: [{ satinalmaSira: 0, kod: '11', tedarikci: 'Deneme Tedarik', soz: 48, isler: ['E-1'], kazanc: [
             { gun: 1, tl: 100, saat: 0, geciken: 0, kurtulan: [] }, { gun: 3, tl: 900, saat: 4, geciken: 1, kurtulan: ['E-1'] }, { gun: 5, tl: 900, saat: 4, geciken: 1, kurtulan: ['E-1'] },
           ] }],
         },

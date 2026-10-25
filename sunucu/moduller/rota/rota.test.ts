@@ -300,18 +300,19 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await taslakAc(bos, { tur: 'kart' })).statusCode, 422);
   });
 
-  test('#688: onaylanan kartın ilk taslağı iş taramasıyla kendiliğinden açılır; açanı onaylayandır; rotası olan kart yeniden açılmaz', async () => {
+  test('#688: onaylanan kartın ilk taslağı iş taramasıyla kendiliğinden açılır; açanı kartı onaya gönderendir (520 2 b); rotası olan kart yeniden açılmaz', async () => {
     const urun = await kartAc('mamul', 'aktif', [{ no: 10, kod: 'TRN', ad: 'Torna' }]);
     const taslakta = await kartAc('mamul', 'taslak', [{ no: 10, kod: 'TRN', ad: 'Torna' }]);
     const operasyonsuz = await mamulAc();
-    const revizyonlar = (id: number) => vt().tx((db) => db.sorgu<{ id: number; durum: string; acan: number; onaylayan: number }>(
-      `SELECT r.id, r.durum, r.acan_kisi_id AS acan, k.onaylayan_kisi_id AS onaylayan
+    const revizyonlar = (id: number) => vt().tx((db) => db.sorgu<{ id: number; durum: string; acan: number; gonderen: number; onaylayan: number }>(
+      `SELECT r.id, r.durum, r.acan_kisi_id AS acan, COALESCE(k.gonderen_kisi_id, k.acan_kisi_id) AS gonderen, k.onaylayan_kisi_id AS onaylayan
          FROM rota_revizyonu r JOIN malzeme_katalog_karti k ON k.no = r.malzeme_id WHERE r.malzeme_id = $1`, [id]));
     assert.equal(await isiBirKezCalistir(vt(), isler[0]!), 'tamam');
     const [ilk, ...fazla] = await revizyonlar(urun);
     assert.equal(fazla.length, 0);
     assert.equal(ilk?.durum, 'taslak');
-    assert.equal(ilk?.acan, ilk?.onaylayan);
+    assert.equal(ilk?.acan, ilk?.gonderen);
+    assert.notEqual(ilk?.acan, ilk?.onaylayan);
     assert.deepEqual((await ayrinti(ilk!.id)).adimlar.map((x) => [x.opNo, x.ad, x.operasyonTipi.id]), [[10, 'Torna', tip('TRN')]]);
     assert.equal((await revizyonlar(taslakta)).length, 0);
     assert.equal((await revizyonlar(operasyonsuz)).length, 0);

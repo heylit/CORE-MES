@@ -102,6 +102,8 @@ export const revizyonSemasi = z.object({
 export const bagSemasi = z.object({
   hedefModul: z.enum(BAG_MODULLERI),
   hedefId: z.number().int(),
+  // Kaydın okunur adı (malzemede stok kodu ve adı, makinede istasyon adı); sahibi adı vermeyen ya da silinmiş kayıtta null, ekran kimliği yazar.
+  hedefAdi: z.string().nullable(),
   ekleyenAd: z.string().nullable(),
   eklendi: zamanSemasi,
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanVerisi } from '../tipler.ts';
-import { kaynakKur, type StokKaynagi } from './kaynak.ts';
+import { kaynakKur, stokOku, type Okuyucu, type StokKaynagi } from './kaynak.ts';
 import {
   alimDurumu, alimPlani, alimSayaclari, alimTablolari, belgedekiAlimlar, bitenler, calismaSimdisi, ilkVardiyaBasi, dagilim, grafikSutunlari, kovaAdi,
   kovaBasi, kovala, malzemePlani, motorGirdisi, ozet, planIslemleri, saatOku, sayiYaz, sonrakiKova, tabanMs, tahsisEt, terminDurumu, tlKisa,
@@ -285,9 +285,10 @@ describe('girdi', () => {
     expect(planIslemleri(null)).toEqual([]);
   });
 
+  // Plan belgesinde malzeme kodu katalog malzeme numarasıdır ("11"); stok kodu ("HM-11") değildir.
   const D: PlanVerisi = {
-    siparisler: [], tezgahlar: [], urunler: [], malzemeler: [{ kod: 'M1', stok: 3 }, { kod: 'M2', stok: 4 }],
-    satinalma: [{ kod: 'M1', miktar: 5, gelis: '2026-01-07 08:00', tedarikci: 'T1' }],
+    siparisler: [], tezgahlar: [], urunler: [], malzemeler: [{ kod: '11', stok: 3 }, { kod: '13', stok: 4 }],
+    satinalma: [{ kod: '11', miktar: 5, gelis: '2026-01-07 08:00', tedarikci: 'T1' }],
     tedarikciler: [{ id: 'T1', ad: 'Deneme Tedarik', ortGecikmeGun: 2 }],
   };
 
@@ -301,7 +302,7 @@ describe('girdi', () => {
 
   it('stok okunursa bakiye ve açık sipariş sahibinden gelir; kartsız ve bağlanamayan sayılır', () => {
     const stok: StokKaynagi = {
-      bakiye: new Map([['M1', 7]]), kodlar: new Map([[11, 'M1'], [12, 'X9']]),
+      bakiye: new Map([['11', 7], ['12', 1]]),
       satirlar: [
         { id: 1, siparisNo: 'S1', talepNo: 'T1', tedarikciAdi: 'Deneme Tedarik', malzemeId: 11, malzemeTur: null, kalemAdi: 'a', miktar: '10', kalanMiktar: '6', birim: 'kg', beklenenTeslim: '2026-01-08' },
         { id: 2, siparisNo: 'S2', talepNo: 'T2', tedarikciAdi: 'Baska', malzemeId: 12, malzemeTur: null, kalemAdi: 'b', miktar: '1', kalanMiktar: '1', birim: 'ad', beklenenTeslim: null },
@@ -310,9 +311,51 @@ describe('girdi', () => {
     };
     const k = kaynakKur(D, taban, stok);
     expect(k.nereden).toBe('sahip');
-    expect(k.malzemeler.map((m) => [m.kod, m.stok])).toEqual([['M1', 7], ['M2', 0]]);
-    expect(k.kartsiz).toEqual(['M2']);
-    expect(k.alimlar).toEqual([{ kod: 'M1', miktar: 6, soz: 3 * G, tedarikci: 'Deneme Tedarik', gecikme: 2 * G, no: 'S1', verildi: null, ref: null }]);
+    expect(k.malzemeler.map((m) => [m.kod, m.stok])).toEqual([['11', 7], ['13', 0]]);
+    expect(k.kartsiz).toEqual(['13']);
+    expect(k.alimlar).toEqual([{ kod: '11', miktar: 6, soz: 3 * G, tedarikci: 'Deneme Tedarik', gecikme: 2 * G, no: 'S1', verildi: null, ref: null }]);
     expect(k.baglanamayan).toBe(1);
+  });
+
+  // Stok ucunun satırı: malzeme numarası, stok kodu ve serbest miktar.
+  const stokSatiri = (malzemeId: number, stokKodu: string | null, serbest: string) => ({
+    malzemeId, ad: null, stokKodu, tur: null, birim: 'kg', toplam: serbest, serbest, statude: '0', rezerve: '0', kritikSeviye: null, durum: 'yeterli', konumSayisi: 0, konumlar: [],
+  });
+  const okuyucu = (satirlar: ReturnType<typeof stokSatiri>[], acik: unknown[] = []): Okuyucu => ({
+    get: async <T,>(yol: string): Promise<T> => (yol.startsWith('/stok/malzemeler?') ? { satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 200 } : { satirlar: acik }) as T,
+  });
+
+  it('bakiye malzeme numarasıyla eşlenir; stok kodu olmayan kartın bakiyesi de sayılır', async () => {
+    const s = await stokOku(okuyucu([stokSatiri(11, 'HM-11', '5'), stokSatiri(11, 'HM-11', '2'), stokSatiri(13, null, '4')]));
+    expect(s && [...s.bakiye]).toEqual([['11', 7], ['13', 4]]);
+  });
+
+  // Ekran denetiminde (main 44ef834, örnek veri) eski çerçeve stoğu 800 ve 280 kg görüp "0 malzeme için sipariş verilmedi" dedi; yeni
+  // ekran stok kodunu aradığı için stoğu 0 saydı ve 30 kg ile 50 kg yeni alım çıkardı. Eski değer belgenin kopyasıyla (eski çerçevenin
+  // gördüğü stok) hesaplanır; stoktan okunan sonuç ona eşit olmalıdır.
+  it('stoktan okunan plan eski çerçevenin sonucuyla aynıdır: stok yeterliyse yeni alım yoktur (eski 0, düzeltmeden önce 2)', async () => {
+    const belge: PlanVerisi = {
+      siparisler: [
+        { id: '2', urun: 'U1', adet: 1, termin: null, malzeme: [{ kod: '5', miktar: 50 }] },
+        { id: '3', urun: 'U1', adet: 1, termin: null, malzeme: [{ kod: '4', miktar: 30 }] },
+      ],
+      tezgahlar: [], urunler: [{ id: 'U1' }],
+      malzemeler: [{ kod: '4', birim: 'kg', stok: 800, tedarikGun: 0, muayeneGun: 0 }, { kod: '5', birim: 'kg', stok: 280, tedarikGun: 0, muayeneGun: 0 }],
+    };
+    const plan = (k: ReturnType<typeof kaynakKur>) => malzemePlani({
+      siparisler: belge.siparisler, urunler: belge.urunler ?? [], malzemeler: k.malzemeler, alimlar: k.alimlar,
+      islemler: [{ job: '2', S: 2 * G, C: 3 * G, done: false }, { job: '3', S: 2 * G, C: 3 * G, done: false }], simdi: G,
+    }, taban);
+    const yeniAlim = (k: ReturnType<typeof kaynakKur>) => plan(k).satirlar.filter((x) => x.tur === 'yeni').map((x) => [x.kod, x.q]);
+    const eski = kaynakKur(belge, taban, null);
+    const stok = await stokOku(okuyucu([stokSatiri(4, 'HM-ORN-00001', '800'), stokSatiri(5, 'HM-ORN-00002', '280')]));
+    const yeni = kaynakKur(belge, taban, stok);
+    expect(yeniAlim(eski)).toEqual([]);
+    expect(yeni.kartsiz).toEqual([]);
+    expect(yeni.malzemeler.map((m) => [m.kod, m.stok])).toEqual(eski.malzemeler.map((m) => [m.kod, m.stok]));
+    expect(yeniAlim(yeni)).toEqual(yeniAlim(eski));
+    // Düzeltmeden önceki eşleme (stok koduyla) bu iki malzemeyi kartsız sayıp yeni alım çıkarıyordu.
+    const stokKoduyla: StokKaynagi = { bakiye: new Map([['HM-ORN-00001', 800], ['HM-ORN-00002', 280]]), satirlar: [] };
+    expect(yeniAlim(kaynakKur(belge, taban, stokKoduyla))).toEqual([['5', 50], ['4', 30]]);
   });
 });

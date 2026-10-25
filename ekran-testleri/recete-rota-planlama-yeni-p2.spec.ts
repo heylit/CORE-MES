@@ -48,9 +48,10 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
       await kap.locator('button.tc-pys-h').first().click();
       await expect(kap.locator('.tc-pys-ac')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      // Tüm satırlar: kâr tablosu, parti formu ve motor kartları yerinde (pasif); dar ekranda da taşmaz.
+      // Tüm satırlar: kâr tablosu, parti formu ve motor kartları yerinde (pasif); dar ekranda da taşmaz. Terminler'de termin bekleyen malzeme
+      // kartı Malzeme satın alma planından dolar (518 a); plan okunana kadar motor notunu gösterir.
       await kap.locator('summary', { hasText: 'Tüm satırlar' }).click();
-      await expect(kap.locator('[data-kapali="motor"]').first()).toBeVisible();
+      await expect(kap.locator('[data-kapali="motor"]').or(kap.getByRole('heading', { name: 'Malzeme: termin bekleyenler' })).first()).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     }
     // Siparişler açılımında ilk izinli form sihirbaz olarak sipariş dolu açılır; eski sayfadaki gibi başlık ve adım şeridi gizli, odak ilk alanda;

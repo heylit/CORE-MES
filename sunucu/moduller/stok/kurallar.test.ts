@@ -689,6 +689,7 @@ describe('malzeme fişi kuralları (kart #492)', () => {
     assert.equal(malzemeFisiNo({ id: 12, tur: 'ambar', uretimEmriId: null }, null), 'AF-000012');
     assert.deepEqual(fisNoKimligi('se-000012'), { tur: 'sayim_eksigi', id: 12 });
     assert.deepEqual(fisNoKimligi(' AF-7 '), { tur: 'ambar', id: 7 });
+    assert.deepEqual(fisNoKimligi('mk-000031'), { tur: 'mal_kabul', id: 31 });
     assert.equal(fisNoKimligi('UE-1'), null);
     assert.equal(fisNoKimligi('SF-0'), null);
   });

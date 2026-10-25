@@ -32,10 +32,10 @@ describe('malzemeler genel arama ucu (kart #1221, gerçek PostgreSQL)', () => {
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
     return String(c.headers['set-cookie']).split(';')[0] ?? '';
   };
-  async function kartAc(o: { tur: string; kod: string; ad: string; durum?: string }): Promise<number> {
+  async function kartAc(o: { tur: string; kod: string; ad: string; durum?: string; com?: Record<string, unknown> }): Promise<number> {
     const kimlik = `ar${++sayac}`;
     const c = await istek(yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
-      kayit: { id: kimlik, tur: o.tur, fam: 'metal', com: { kod: o.kod, ad: o.ad, birim: 'adet' }, onay: { durum: o.durum ?? 'aktif' } },
+      kayit: { id: kimlik, tur: o.tur, fam: 'metal', com: { kod: o.kod, ad: o.ad, birim: 'adet', ...o.com }, onay: { durum: o.durum ?? 'aktif' } },
       ozet: { benzersiz_anahtar: `${o.tur}|arama|${kimlik}`, mukerrer_gerekcesi: null },
       surum: null,
     });
@@ -74,6 +74,19 @@ describe('malzemeler genel arama ucu (kart #1221, gerçek PostgreSQL)', () => {
     assert.equal(sonuclar.find((s) => s.anahtar === String(taslak))?.aciklama, 'Hammadde · taslak');
     for (let i = 0; i < 5; i += 1) await kartAc({ tur: 'sarf', kod: 'SF-ARM-00001', ad: `Arama Sarf ${i}` });
     assert.equal(((await istek(yonetici, 'GET', '/malzemeler/ara?q=arama')).govde as KayitAramaCevabi).sonuclar.length, 5);
+  });
+
+  // Test raporu bölüm 3: katalog araması "ERP kodu" diyor, üst arama eski/ERP koduyla bulmuyordu.
+  test('eski / ERP kodu ya da tedarikçi koduyla aranan kart bulunur; eşleşmeyen kod boş döner', async () => {
+    const erp = await kartAc({ tur: 'hammadde', kod: 'HM-ERP-00001', ad: 'Erp Çubuğu', com: { eskiKod: 'ESK-4711', tkod: 'TED-K-93' } });
+    const ara = async (q: string) => {
+      const c = await istek(yonetici, 'GET', `/malzemeler/ara?q=${encodeURIComponent(q)}`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return (c.govde as KayitAramaCevabi).sonuclar.map((s) => s.anahtar);
+    };
+    assert.deepEqual(await ara('esk-4711'), [String(erp)]);
+    assert.deepEqual(await ara('TED-K-93'), [String(erp)]);
+    assert.deepEqual(await ara('ESK-9999'), []);
   });
 
   test('reddedilen: sayfası olmayan 403, oturumsuz 401; tek harf ya da altmıştan uzun sorgu 400', async () => {

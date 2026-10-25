@@ -13,9 +13,9 @@ import type {
 import { BELGE_TURLERI, ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/cizimler.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
-import { istasyonGetir } from '../istasyonlar/disari.ts';
+import { istasyonAdlari, istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeAra } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi,
   silmeReddi, yayinReddi,
@@ -214,6 +214,19 @@ export async function bagKaldir(db: Db, id: number, g: { hedefModul: BagModulu; 
   return belgeAyrintisi(db, id);
 }
 
+// Bağın okunur adı, sahibinin disari.ts'inden toplu okunur (test raporu: "Malzeme kartı #54"). Adı veren yalnız malzemeler ve
+// istasyonlar; öteki modüllerde ve silinmiş kayıtta null.
+async function bagHedefAdlari(db: Db, baglar: readonly { hedefModul: BagModulu; hedefId: number }[]): Promise<(g: { hedefModul: BagModulu; hedefId: number }) => string | null> {
+  const idler = (m: BagModulu) => baglar.filter((g) => g.hedefModul === m).map((g) => g.hedefId);
+  const [malzemeler, istasyonlar] = [await malzemeOzetleri(db, idler('malzemeler')), await istasyonAdlari(db, idler('istasyonlar'))];
+  return (g) => {
+    if (g.hedefModul === 'istasyonlar') return istasyonlar.get(g.hedefId) ?? null;
+    if (g.hedefModul !== 'malzemeler') return null;
+    const m = malzemeler.get(g.hedefId);
+    return m === undefined ? null : m.ad === null ? m.kod : `${m.kod} ${m.ad}`;
+  };
+}
+
 export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi> {
   const b = await sorgular.belge(db, id);
   if (b === null) throw bulunamadi('Belge bulunamadı.');
@@ -222,6 +235,7 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
     await sorgular.onizlemeSayilari(db, id),
   ];
   const dosya = new Map(dosyalar.map((d) => [d.ozet, d]));
+  const hedefAdi = await bagHedefAdlari(db, baglar);
   const adlar = await kisiAdlari(db, [
     b.olusturanId, ...revizyonlar.flatMap((r) => [r.yukleyenId, ...(r.yayinlayanId === null ? [] : [r.yayinlayanId])]), ...baglar.map((g) => g.ekleyenId),
   ]);
@@ -239,7 +253,7 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
         onizlemeKareSayisi: kareler.get(r.id) ?? 0,
       };
     }),
-    baglar: baglar.map((g) => ({ hedefModul: g.hedefModul, hedefId: g.hedefId, ekleyenAd: adlar.get(g.ekleyenId) ?? null, eklendi: g.eklendi })),
+    baglar: baglar.map((g) => ({ hedefModul: g.hedefModul, hedefId: g.hedefId, hedefAdi: hedefAdi(g), ekleyenAd: adlar.get(g.ekleyenId) ?? null, eklendi: g.eklendi })),
   };
 }
 

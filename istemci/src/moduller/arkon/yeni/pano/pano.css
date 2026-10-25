@@ -100,10 +100,22 @@ html.tc-ay-tv .tc-ay3-karo-ust { flex-wrap: wrap; }
 html.tc-ay-tv .tc-ay3-karo-ust b { white-space: nowrap; }
 html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
 
+/* Plan kuyruğu (eski QueueView): şerit başında istasyon kodu kendi satırında, ad ve grup altta tek satır; boş şeritte kesik çizgili kutu;
+   iş merkezi süzgeci ayrı çipler. */
+.tc-ay3-serit-bas { display: grid; gap: var(--pay-ince); min-width: 0; }
+.tc-ay3-serit-bas > b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-ay3-serit-bas > small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-ay3-serit-bos { display: grid; place-items: center; min-block-size: var(--dokunma-ana); border: var(--cizgi-ince) dashed var(--edge); border-radius: var(--yari-2); }
+.tc-ay3-kuyruk-arac .tc-ay3-secmeli { gap: var(--b-2); padding: 0; border: 0; background: none; }
+.tc-ay3-kuyruk-arac .tc-ay3-secmeli button { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel); white-space: nowrap; }
+.tc-ay3-kuyruk-arac .tc-ay3-secmeli button[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: transparent; box-shadow: none; }
+
 @media (max-width: 1023px) {
   .tc-ay3-pano { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
   .tc-ay3-serit { flex-basis: 85%; }
+  .tc-ay3-kuyruk-arac .tc-ay3-secmeli { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .tc-ay3-kuyruk-arac .tc-ay3-secmeli button { flex: none; }
   .tc-ay3-hafta-satir { grid-template-columns: minmax(0, 1fr); }
 }

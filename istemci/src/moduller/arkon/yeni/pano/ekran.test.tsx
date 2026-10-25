@@ -67,6 +67,33 @@ describe('A3 sayfaları', () => {
     expect(within(b).queryAllByRole('button', { name: /aşağı|yukarı|Taşı/i })).toEqual([]);
   }, 20000);
 
+  it('Kuyruk şeridi: istasyon kodu kendi satırında, boş istasyonda "İş yok" kutusu; dolu şeritte kutu yok', async () => {
+    sunucuKur(YONETICI, { belgeler });
+    arkonAc('/arkon/yeni/kuyruk');
+    const b = await bolum('Kuyruk');
+    const bos = await within(b).findByRole('region', { name: 'Şerit S2' }, { timeout: 10000 });
+    expect(bos.querySelector('.tc-ay3-serit-bas > b')?.textContent).toBe('S2');
+    expect(within(bos).getByText('İş yok').classList.contains('tc-ay3-serit-bos')).toBe(true);
+    const dolu = within(b).getByRole('region', { name: 'Şerit S1' });
+    expect(dolu.querySelector('.tc-ay3-serit-bos')).toBeNull();
+  }, 20000);
+
+  it('bant "Diğer" düğmesi araç menüsünü açar, Escape ile kapanır', async () => {
+    sunucuKur(YONETICI, { belgeler });
+    arkonAc('/arkon/yeni/kuyruk');
+    const b = await bolum('Kuyruk');
+    const diger = await within(b).findByRole('button', { name: 'Diğer' }, { timeout: 10000 });
+    const bant = diger.closest('.tc-ay-bant')!;
+    expect(diger.getAttribute('aria-expanded')).toBe('false');
+    expect(bant.hasAttribute('data-acik')).toBe(false);
+    fireEvent.click(diger);
+    expect(diger.getAttribute('aria-expanded')).toBe('true');
+    expect(bant.hasAttribute('data-acik')).toBe(true);
+    expect(document.getElementById(diger.getAttribute('aria-controls')!)?.querySelector('[aria-label="Tema değiştir"]')).not.toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(diger.getAttribute('aria-expanded')).toBe('false');
+  }, 20000);
+
   it('Üretim Anomalisi açılır, kayıt yazmaz; amir rolünde sayfa açılmaz', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler });
     arkonAc('/arkon/yeni/anomali');
