@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent } from 'react';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { Simge } from './Simge.tsx';
+import { useSeritKaydirma } from './serit-kaydirma.ts';
 import './sekmeler.css';
 
 export interface Sekme<A extends string> {
@@ -18,6 +19,7 @@ interface Ozellikler<A extends string> {
 
 export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Ozellikler<A>) {
   const kutu = useRef<HTMLDivElement>(null);
+  const { kenar, okOlaylari } = useSeritKaydirma(kutu);
 
   const tus = (o: KeyboardEvent) => {
     const sira = sekmeler.findIndex((s) => s.anahtar === secili);
@@ -35,7 +37,11 @@ export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Oz
   };
 
   return (
-    <div ref={kutu} className="tc-sekmeler" role="tablist" aria-label={etiket} onKeyDown={tus}>
+    <div ref={kutu} className="tc-sekmeler" role="tablist" aria-label={etiket} onKeyDown={tus}
+      data-sol={kenar.sol ? '' : undefined} data-sag={kenar.sag ? '' : undefined}>
+      {/* Taşan şeritte kenar işareti (ikinci menüdeki gibi). Şeridin içinde yapışkan durur ki modüllerin `> .tc-sekmeler`
+          seçicileri bozulmasın; ekran okuyucuya gizlidir, klavye sekmeler arasında okla gezer. */}
+      <span className="tc-sekmeler-ok tc-sekmeler-ok-sol" aria-hidden="true" {...okOlaylari(-1)}><Simge ad="chev-left" boyut="k" /></span>
       {sekmeler.map((s) => (
         <button
           key={s.anahtar}
@@ -51,6 +57,7 @@ export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Oz
           {s.baslik}
         </button>
       ))}
+      <span className="tc-sekmeler-ok tc-sekmeler-ok-sag" aria-hidden="true" {...okOlaylari(1)}><Simge ad="chev-right" boyut="k" /></span>
     </div>
   );
 }
