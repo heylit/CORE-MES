@@ -166,6 +166,10 @@ test('kayıt: olay defterin yedi olayından biridir; hurda ve duruş nedenini, d
   assert.deepEqual(kayitSemasi.parse({ ...KAYIT, olay: 'bitir', saglamAdet: 4 }), { ...KAYIT, olay: 'bitir', saglamAdet: 4 });
   for (const olay of ['duraklat', 'durdur', 'devam', 'hurda', 'duzeltme']) assert.equal(gecer(kayitSemasi, { ...KAYIT, olay }), true, olay);
   for (const olay of ['iptal', 'saglam', 'sayim']) assert.equal(gecer(kayitSemasi, { ...KAYIT, olay }), false, olay);
+  const karar = { ...KAYIT, olay: 'kalite_red', adet: 2, kararVeren: { id: 3, ad: 'Deneme Kaliteci' } };
+  assert.deepEqual(kayitSemasi.parse(karar), karar);
+  assert.equal(kayitSemasi.parse({ ...KAYIT, olay: 'kalite_onay', kararVeren: null }).kararVeren, null, 'eski karar satırında kararı veren bilinmez');
+  assert.equal(gecer(kayitSemasi, { ...KAYIT, olay: 'kalite_onay', kararVeren: { id: 3 } }), false);
   const hurda = { ...KAYIT, olay: 'hurda', adet: 2, hurdaNedeni: { id: 4, ad: 'Deneme hurda' }, durusNedeni: null };
   assert.deepEqual(kayitSemasi.parse(hurda), hurda);
   const durdur = { ...KAYIT, olay: 'durdur', adet: null, hurdaNedeni: null, durusNedeni: { id: 6, ad: 'Deneme neden' } };

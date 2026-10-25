@@ -10,6 +10,8 @@ export const EMIR_DURUMLARI = ['taslak', 'planli', 'basladi', 'bitti', 'iptal'] 
 // Defterde görünen olaylar. Sağlam +1 dokunuşları tek tek listelenmez; sağlam sayacı elle değişince (eksiltme,
 // tuş takımıyla ayarlama, bitişte farklı adet) `duzeltme` yazılır.
 export const KAYIT_OLAYLARI = ['ayar', 'baslat', 'bitir', 'duraklat', 'durdur', 'devam', 'hurda', 'duzeltme'] as const;
+// Ayrıntıdaki defter terminal olaylarına ek olarak ilk parça kalite kararını ayrı gösterir (504 a); son olaylar listesine girmez.
+export const DEFTER_OLAYLARI = [...KAYIT_OLAYLARI, 'kalite_onay', 'kalite_red'] as const;
 export const CALISMA_DURUMLARI = ['calisiyor', 'durakli', 'durdu'] as const;
 // karar_bekliyor: ilk parça kararı beklenirken sayılan parça; red: reddedilen kararın zincirinde kalan parça. İkisi de sağlama katılmaz.
 export const SAYIM_TURLERI = ['saglam', 'hurda', 'karar_bekliyor', 'red'] as const;
@@ -29,7 +31,7 @@ const zaman = z.string();
 const metin = (azami: number, bosIleti: string) => z.string().trim().min(1, bosIleti).max(azami);
 
 export const emirDurumu = z.enum(EMIR_DURUMLARI);
-export const kayitOlayi = z.enum(KAYIT_OLAYLARI);
+export const kayitOlayi = z.enum(DEFTER_OLAYLARI);
 export const calismaDurumu = z.enum(CALISMA_DURUMLARI);
 
 export const emirParametresi = z.object({ id: yolKimligi });
@@ -174,10 +176,12 @@ export const kayitSemasi = z.object({
   olay: kayitOlayi,
   // Yalnız bitişte dolu: emrin kapanış sağlam adedi.
   saglamAdet: z.number().int().nonnegative().nullable(),
-  // Hurdada eklenen adet (artı), düzeltmede sağlam sayacındaki değişim (artı ya da eksi); öbür olaylarda null.
+  // Hurdada eklenen adet (artı), düzeltmede sağlam sayacındaki değişim (artı ya da eksi), kalite kararında karara giren adet; öbür olaylarda null.
   adet: z.number().int().nullable().optional(),
   durusNedeni: adliKayit.nullable().optional(),
   hurdaNedeni: adliKayit.nullable().optional(),
+  // Yalnız kalite kararında: kararı veren (kisi parçayı sayandır). Karar veren tutulmadan önce yazılmış satırda null (bilinmez).
+  kararVeren: adliKayit.nullable().optional(),
   zaman,
 });
 
