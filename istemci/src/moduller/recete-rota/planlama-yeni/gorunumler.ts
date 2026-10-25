@@ -15,8 +15,29 @@ export type PlanlamaGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'];
 // Kök adres Planlama motoru'dur (ikinci menünün ilk planlama maddesi).
 export const ACILIS: PlanlamaGorunumu = 'plan';
 
+// Dönem ölçeği eski ekranda bütün görünümlerin ortak düğmesiydi (zs-olcek-ortak: varsayılan Hafta, ölçek değişince kayma sıfırlanır).
+export const DONEM_OLCEKLERI = [['gun', 'Gün'], ['hafta', 'Hafta'], ['ay', 'Ay'], ['yil', 'Yıl']] as const;
+export type DonemOlcegi = (typeof DONEM_OLCEKLERI)[number][0];
+export interface PlanlamaOlcegi {
+  olcek: DonemOlcegi;
+  // Bugünden kaç dönem ileri (eksi: geri).
+  kayma: number;
+}
+export const ACILIS_OLCEGI: PlanlamaOlcegi = { olcek: 'hafta', kayma: 0 };
+
+// Görünümler arası taşınan seçim (eski ekranın secJob, gySec, rsTez, rsT'si). `zaman` plan saatidir (calisma.D ekseni); null şu andır.
+export interface PlanlamaSecimi {
+  siparis: string | null;
+  adim: string | null;
+  tezgah: string | null;
+  zaman: number | null;
+}
+export const BOS_SECIM: PlanlamaSecimi = { siparis: null, adim: null, tezgah: null, zaman: null };
+
 // Her görünüme verilen ortak özellikler. `git` başka görünüme geçer; `yenile` açılış okumalarını yeniden yapar. `calisma` çalışmanın güncel
 // halidir (değişiklikten sonra yenisi gelir; `depo.calisma` açılıştakidir). `komut` yazma yetkisi yoksa ya da çalışma kaydı yoksa null'dır.
+// `olcek` ve `secim` görünüm değişince korunur, sayfa yenilenince açılış haline döner (eski ekranda da kaydedilmezdi); çalışmaya yazılmaz.
+// `olcekSec` ölçeği değiştirir ve kaymayı sıfırlar; `kaydir(0)` bugüne döner, başka sayı kaymaya eklenir. `sec` verilen alanları değiştirir.
 export interface PlanlamaEkranOzellikleri {
   depo: PlanlamaDeposu;
   calisma: PlanlamaCalismasi | null;
@@ -24,6 +45,11 @@ export interface PlanlamaEkranOzellikleri {
   yetki: PlanlamaYetkisi;
   git: (g: PlanlamaGorunumu) => void;
   yenile: () => void;
+  olcek: PlanlamaOlcegi;
+  olcekSec: (o: DonemOlcegi) => void;
+  kaydir: (n: number) => void;
+  secim: PlanlamaSecimi;
+  sec: (s: Partial<PlanlamaSecimi>) => void;
 }
 
 export interface GorunumKaydi {
