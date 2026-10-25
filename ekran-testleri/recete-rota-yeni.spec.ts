@@ -17,6 +17,8 @@ test.describe('R0 iskelet', () => {
     await expect(serit).toBeVisible();
     const onaya = serit.getByRole('button', { name: 'Onaya gönder' });
     if (await onaya.count()) await expect(onaya).toBeDisabled();
+    // Plan canlıyken "değişiklik bekliyor" denmez; motor farkı ayrı satırdır (500 a).
+    if (await serit.getByText('PLAN CANLI').count()) await expect(serit.getByText(/değişiklik bekliyor/)).toHaveCount(0);
     const sekmeler = page.getByRole('tablist', { name: 'Reçete ve Rota bölümleri' });
     // Eski ekranın sırası (497/1 a): sekmeler en üstte, altında şerit, sonra bölüm başlığı.
     const ust = async (l: typeof serit) => (await l.boundingBox())?.y ?? Number.NaN;
