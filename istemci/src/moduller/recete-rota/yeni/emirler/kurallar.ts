@@ -96,22 +96,26 @@ export function ilerleme(d: Durum, o: Emir): Ilerleme {
 }
 
 // Plan motorunun yerleşimi (215 a): anahtar `emirNo|opNo`, bölünmüş işte `emirNo|opNo~parça`. Adımın plan başlangıcı parçaların en
-// erkenidir. Yerleşim okunamadıysa (null) tarih yoktur; yerleşimde olmayan adım plana yerleşmemiştir.
-export interface AdimPlani { baslangic: string; makineIdler: string[] }
+// erkeni, bitişi en geçidir (468/2 a); bir parçanın bitişi yoksa adımın bitişi bilinmez (null). Yerleşim okunamadıysa (null) tarih
+// yoktur; yerleşimde olmayan adım plana yerleşmemiştir.
+export interface AdimPlani { baslangic: string; bitis: string | null; makineIdler: string[] }
 export function adimPlani(yerlesim: EkranYerlesimi | null, emirNo: string, opNo: number): AdimPlani | null {
   if (yerlesim === null) return null;
   const onek = `${emirNo}|${String(opNo)}`;
   const parcalar = Object.entries(yerlesim).filter(([k]) => k === onek || k.startsWith(`${onek}~`)).flatMap(([, l]) => l);
   if (parcalar.length === 0) return null;
   const baslangic = parcalar.map((p) => p.baslangic).sort()[0] as string;
+  const bitisler = parcalar.map((p) => p.bitis ?? null);
+  const bitis = bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string;
   const makineIdler = [...new Set(parcalar.map((p) => p.makineId).filter((m): m is number => m !== null).map(String))];
-  return { baslangic, makineIdler };
+  return { baslangic, bitis, makineIdler };
 }
 
-// Emrin plan özeti: ilk ve son açık adımın plan başlangıcı. Bitiş saati yerleşimde yoktur; "son" son açık adımın başladığı andır.
+// Emrin plan özeti: ilk açık adımın başlangıcı ve açık adımların en geç bitişi (eski ekrandaki "Plan bitiş"). Yerleşen bir adımın bitişi
+// yoksa emrin bitişi bilinmez (null) ve gecikme hesaplanmaz; yerleşmeyen adım ayrıca sayılır.
 export type PlanOzeti =
   | { tur: 'tamam' } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number }
-  | { tur: 'plan'; ilk: string; son: string; gecikiyor: boolean; yerlesmeyen: number };
+  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; yerlesmeyen: number };
 export function planOzeti(d: Durum, yerlesim: EkranYerlesimi | null, o: Emir): PlanOzeti {
   if (o.status === 'tamam') return { tur: 'tamam' };
   if (!plandaMi(o)) return { tur: 'plan-disi' };
@@ -122,11 +126,11 @@ export function planOzeti(d: Durum, yerlesim: EkranYerlesimi | null, o: Emir): P
   const acik = adimlar.filter((a) => a.sira >= ilk && a.sira <= son && (a.durum ?? adimDurumu(o, a.sira, opStatus)) !== 'tamam');
   const planlar = acik.map((a) => adimPlani(yerlesim, o.no, a.opNo)).filter((p): p is AdimPlani => p !== null);
   if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length };
-  const sirali = planlar.map((p) => p.baslangic).sort();
-  const sonTarih = sirali.at(-1) as string;
-  // Teslim günü sonuna kadar başlayan son adım geç sayılmaz; bitişi bilinmediği için yalnız başlangıç teslimden sonraysa gecikir.
-  const gecikiyor = o.due !== null && sonTarih.slice(0, 10) > o.due;
-  return { tur: 'plan', ilk: sirali[0] as string, son: sonTarih, gecikiyor, yerlesmeyen: acik.length - planlar.length };
+  const bitisler = planlar.map((p) => p.bitis);
+  const bitis = bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string;
+  // Teslim günü sonuna kadar biten emir geç sayılmaz; gün yerel saatle okunur (teslim yerel tarihtir).
+  const gecikiyor = o.due !== null && bitis !== null && isoGun(new Date(bitis)) > o.due;
+  return { tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor, yerlesmeyen: acik.length - planlar.length };
 }
 
 // Emrin rotası yürürlüktekinden eskiyse: rotaya eklenen ve rotadan çıkan adımlar (OP numarasıyla).

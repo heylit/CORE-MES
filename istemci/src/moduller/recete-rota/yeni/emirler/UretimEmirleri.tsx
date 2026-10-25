@@ -91,7 +91,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
         : (
           <ul className="tc-rr3-liste" aria-label="Üretim emirleri">
             <li className="tc-rr3-bas" aria-hidden="true">
-              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan</span><span>İlerleme</span><span>Durum</span>
+              <span>Öncelik / No</span><span>Ürün</span><span className="tc-rr3-sag">Miktar</span><span>Teslim</span><span>Plan bitiş</span><span>İlerleme</span><span>Durum</span>
             </li>
             {satirlar.map((s) => (
               <EmirSatiri
@@ -147,7 +147,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
         </span>
         <span className="tc-rr3-sag" data-baslik="Miktar"><b>{sayi(o.qty)}</b> <small>{urun?.unit ?? ''}</small></span>
         <span data-baslik="Teslim">{tarih(o.due)}</span>
-        <span data-baslik="Plan">
+        <span data-baslik="Plan bitiş">
           {plan.ton ? <Rozet ton={plan.ton}>{plan.metin}</Rozet> : plan.metin}
           {plan.alt && <small>{plan.alt}</small>}
         </span>

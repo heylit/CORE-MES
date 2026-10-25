@@ -83,21 +83,35 @@ describe('adımlar, ilerleme ve plan', () => {
     expect(yeniOpNo([])).toBe(10);
   });
 
-  it('plan özeti motorun yerleşiminden: okunamazsa tarih yok, yerleşmeyen ayrı, geç başlayan son adım gecikir', () => {
+  it('plan özeti motorun yerleşiminden: okunamazsa tarih yok, yerleşmeyen ayrı, bitiş açık adımların en geçi, teslimden sonra biten gecikir', () => {
     const o = emir('1');
     const d = durum([o]);
     expect(planOzeti(d, null, o)).toEqual({ tur: 'motor-yok' });
     expect(planOzeti(d, {}, o)).toEqual({ tur: 'yerlesmedi', acikAdim: 3 });
     expect(planOzeti(d, {}, emir('1', { status: 'taslak' }))).toEqual({ tur: 'plan-disi' });
     const y = {
-      'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z' }],
-      'UE-1|20~1': [{ makineId: 51, baslangic: '2026-11-11T08:00:00.000Z' }],
-      'UE-1|20~2': [{ makineId: 52, baslangic: '2026-11-09T08:00:00.000Z' }],
+      'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-04T10:00:00.000Z' }],
+      'UE-1|20~1': [{ makineId: 51, baslangic: '2026-11-11T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z' }],
+      'UE-1|20~2': [{ makineId: 52, baslangic: '2026-11-09T08:00:00.000Z', bitis: '2026-11-09T12:00:00.000Z' }],
     };
     const p = planOzeti(d, y, o);
-    expect(p).toMatchObject({ tur: 'plan', ilk: '2026-11-03T08:00:00.000Z', son: '2026-11-09T08:00:00.000Z', gecikiyor: false, yerlesmeyen: 1 });
-    expect(adimPlani(y, 'UE-1', 20)).toEqual({ baslangic: '2026-11-09T08:00:00.000Z', makineIdler: ['51', '52'] });
-    expect(planOzeti(d, { 'UE-1|30': [{ makineId: null, baslangic: '2026-11-12T08:00:00.000Z' }] }, o)).toMatchObject({ gecikiyor: true });
+    expect(p).toEqual({ tur: 'plan', ilk: '2026-11-03T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z', gecikiyor: true, yerlesmeyen: 1 });
+    expect(adimPlani(y, 'UE-1', 20)).toEqual({ baslangic: '2026-11-09T08:00:00.000Z', bitis: '2026-11-11T12:00:00.000Z', makineIdler: ['51', '52'] });
+    expect(planOzeti(d, { 'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-10T12:00:00.000Z' }] }, o)).toMatchObject({ gecikiyor: false });
+  });
+
+  it('plan özeti: bitişi bilinmeyen adım varsa emrin bitişi yok ve gecikme hesaplanmaz; teslimsiz emir gecikmez', () => {
+    const o = emir('1');
+    const d = durum([o]);
+    const y = {
+      'UE-1|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2026-11-20T10:00:00.000Z' }],
+      'UE-1|30': [{ makineId: null, baslangic: '2026-11-12T08:00:00.000Z' }],
+    };
+    expect(planOzeti(d, y, o)).toMatchObject({ tur: 'plan', bitis: null, gecikiyor: false });
+    expect(adimPlani(y, 'UE-1', 30)).toEqual({ baslangic: '2026-11-12T08:00:00.000Z', bitis: null, makineIdler: [] });
+    const teslimsiz = emir('2', { due: null });
+    expect(planOzeti(durum([teslimsiz]), { 'UE-2|10': [{ makineId: 51, baslangic: '2026-11-03T08:00:00.000Z', bitis: '2027-01-01T08:00:00.000Z' }] }, teslimsiz))
+      .toMatchObject({ bitis: '2027-01-01T08:00:00.000Z', gecikiyor: false });
   });
 
   it('rota farkı: emrin revizyonu yürürlüktekinden eskiyse eklenen ve çıkan OP', () => {

@@ -57,7 +57,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc }: 
             <dd>{rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'} (Rev ${rev.no})` : yururlukte ? `Yürürlükteki (Rev ${yururlukte.no})` : YOK}</dd>
           </div>
         )}
-        <div><dt>Plan</dt><dd>{pm.metin}{pm.alt ? ` (${pm.alt})` : ''}</dd></div>
+        <div><dt>Plan bitiş</dt><dd>{pm.metin}{pm.alt ? ` (${pm.alt})` : ''}</dd></div>
         <div><dt>İlerleme</dt><dd>{il.toplam ? `${String(il.biten)}/${String(il.toplam)} adım` : YOK}</dd></div>
       </dl>
       {o.note && <p className="tc-rr3-ipucu">{o.note}</p>}
@@ -391,7 +391,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(e.miktar, birim(e.malzemeId)) },
   ];
   const ipuclari = [
-    ...(plan.tur === 'plan' && plan.gecikiyor ? [`Son açık adım teslimden sonra başlıyor (${tarih(plan.son)}, teslim ${tarih(o.due)}).`] : []),
+    ...(plan.tur === 'plan' && plan.gecikiyor ? [`Plan bitişi teslimden sonra (${tarih(plan.bitis)}, teslim ${tarih(o.due)}).`] : []),
     ...(plan.tur === 'yerlesmedi' ? ['Emrin açık adımları plan motorunun yerleşiminde yok: rota, istasyon ya da vardiya eksik olabilir.'] : []),
     ...(R && R.eksikler.length ? [`${String(R.eksikler.length)} kalem malzeme stokta yetersiz.`] : []),
     ...(R?.uyarilar ?? []),
@@ -400,7 +400,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, tamamla }: {
   return (
     <section className="tc-rr3-plan" aria-label={`${o.no} planı`}>
       <div className="tc-rr3-kpi">
-        <SayiKarti baslik="Plan (son adım)" simge="gantt" metin={planMetni(plan).metin} altMetin={`Teslim ${tarih(o.due)}`} ton={plan.tur === 'plan' && plan.gecikiyor ? 'hata' : 'bilgi'} />
+        <SayiKarti baslik="Plan bitiş" simge="gantt" metin={planMetni(plan).metin} altMetin={`Teslim ${tarih(o.due)}`} ton={plan.tur === 'plan' && plan.gecikiyor ? 'hata' : 'bilgi'} />
         <SayiKarti baslik="Plan sırası" simge="list" metin={sira >= 0 ? `${String(sira + 1)}. emir` : YOK} altMetin="Öncelik ve teslim tarihine göre" />
         <SayiKarti baslik="Eksik malzeme" simge="box" sayi={R ? R.eksikler.length : null} ton="uyari" altMetin="kalem" />
       </div>

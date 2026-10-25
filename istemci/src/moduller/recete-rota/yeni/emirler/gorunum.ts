@@ -13,8 +13,8 @@ export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null;
     case 'motor-yok': return { metin: '—', ton: null, alt: null };
     case 'yerlesmedi': return { metin: 'Yerleşmedi', ton: 'hata', alt: `${String(p.acikAdim)} açık adım planda yok` };
     case 'plan': return {
-      metin: tarih(p.son), ton: p.gecikiyor ? 'hata' : 'tamam',
-      alt: p.gecikiyor ? 'son adım teslimden sonra' : p.yerlesmeyen ? `${String(p.yerlesmeyen)} adım planda yok` : 'son adım başlangıcı',
+      metin: tarih(p.bitis), ton: p.bitis === null ? null : p.gecikiyor ? 'hata' : 'tamam',
+      alt: p.gecikiyor ? 'Gecikiyor' : p.yerlesmeyen ? `${String(p.yerlesmeyen)} adım planda yok` : null,
     };
   }
 }

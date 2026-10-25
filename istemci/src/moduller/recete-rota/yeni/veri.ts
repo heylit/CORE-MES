@@ -10,7 +10,8 @@ import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type 
 // aynı yetki sınırı. Çerçeve ve kayıt belgesi (`recete_rota_kayit`) yeni ekranda yazılmaz; belgedeki eski kalemler yalnız okunur (204 a).
 // Köprü örneği ekran başına tektir (sürümler onun içinde tutulur); ReceteRotaYeni.tsx kurar, parçalar bu kancalarla kullanır.
 
-export type EkranYerlesimi = MotorYerlesimiCevabi['ekranYerlesimi'];
+// Girdi başına motorun bitişi (468/2 a) köprüde eklenir; motor cevabında yoksa alan da yoktur.
+export type EkranYerlesimi = Record<string, Array<MotorYerlesimiCevabi['ekranYerlesimi'][string][number] & { bitis?: string }>>;
 // planYerlesim: plan motorunun yerleşimi (215 a: emir tarihleri buradan). Okunamazsa null ve `motorOkunamadi` true; tarih boş gösterilir.
 export type RrDurumu = DurumCevabi & { planYerlesim: EkranYerlesimi | null };
 export interface RrVerisi { durum: RrDurumu; ek: KaynakEki }

@@ -53,6 +53,51 @@ describe('R3 Üretim emirleri: okuma', () => {
   });
 });
 
+describe('R3 Üretim emirleri: plan bitiş', () => {
+  const planli = (due: string | null) => {
+    const d = ornekDurum();
+    d.routes = { '11': { base: null, steps: [{
+      id: 's1', seq: 1, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    }] } } as unknown as typeof d.routes;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((o) => ({ ...o, status: 'serbest' as const, due })) };
+    return d;
+  };
+  const motor = {
+    ekranYerlesimi: { 'UE-0001|10': [{ makineId: 51, baslangic: '2026-11-02T06:00:00.000Z' }] },
+    yerlesimler: [{ isEmriId: 1, uretimEmriId: 61, emirNo: 'UE-0001', opNo: 10, kaynak: { tur: 'makine', id: 51 }, kaynakAdi: null,
+      baslangic: '2026-11-02T06:00:00.000Z', bitis: '2026-11-03T09:00:00.000Z', sabit: false }],
+  };
+
+  it('sütun "Plan bitiş": motorun adım bitişini gösterir, teslimden sonra biten emir gecikir', async () => {
+    sunucuKur(OKUYAN, { durum: planli('2026-11-02'), motorYerlesimi: motor });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
+    expect(within(b).getByText('Plan bitiş')).toBeTruthy();
+    await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
+    expect(within(satir).getByText('Gecikiyor')).toBeTruthy();
+    expect(satir.hasAttribute('data-gec')).toBe(true);
+  });
+
+  it('teslimden önce biten emir gecikmez; teslimsiz emirde gecikme yok', async () => {
+    sunucuKur(OKUYAN, { durum: planli('2026-11-05'), motorYerlesimi: motor });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    const satir = (await within(b).findByRole('button', { name: /UE-0001/ })).closest('li')!;
+    await waitFor(() => { expect(within(satir).getByText('03.11.2026')).toBeTruthy(); });
+    expect(within(satir).queryByText('Gecikiyor')).toBeNull();
+    cleanup();
+    sunucuKur(OKUYAN, { durum: planli(null), motorYerlesimi: motor });
+    rrAc();
+    const b2 = await bolum('Üretim emirleri');
+    const satir2 = (await within(b2).findByRole('button', { name: /UE-0001/ })).closest('li')!;
+    await waitFor(() => { expect(within(satir2).getByText('03.11.2026')).toBeTruthy(); });
+    expect(within(satir2).queryByText('Gecikiyor')).toBeNull();
+  });
+});
+
 describe('R3 Üretim emirleri: komutlar', () => {
   it('yönetici taslağı plana alır: emrin ekrandaki sürümüyle gider (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/plana-al': () => json(200, {}) } });
