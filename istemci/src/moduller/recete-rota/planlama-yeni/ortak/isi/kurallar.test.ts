@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hucreBos, hucreKoy, kisaSure, oranKademesi, saatKademesi, type IsiHucresi } from './kurallar.ts';
+import { grupAdi, hucreBos, hucreKoy, kisaSure, oranKademesi, saatKademesi, type IsiHucresi } from './kurallar.ts';
 
 describe('ısı haritası yardımcıları (zz30-isi)', () => {
   it('saat ve oran kademesi eski eşiklerle; veri yoksa null', () => {
@@ -23,5 +23,9 @@ describe('ısı haritası yardımcıları (zz30-isi)', () => {
     expect(hucreBos({ kapali: true, etiket: 'tatil' })).toBe(true);
     expect(hucreBos({ kd: 0 })).toBe(false);
     expect(hucreBos({ oneri: true })).toBe(false);
+  });
+
+  it('grup adı eski adlandırmayla; bilinmeyen kimlik olduğu gibi', () => {
+    expect(['torna', '5eksen', 'montaj', 'olcum', 'G7'].map(grupAdi)).toEqual(['Torna', '5 eksen', 'Montaj', 'Ölçüm', 'G7']);
   });
 });
