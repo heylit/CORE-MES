@@ -71,7 +71,7 @@
 [data-renk="3"] { --rr2-renk: var(--grafik-2); }
 [data-renk="4"] { --rr2-renk: var(--stop); }
 [data-renk="5"] { --rr2-renk: var(--run); }
-.tc-rr2-im { border-left: 6px solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-im { border-left: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); }
 .tc-rr2-kutu { min-width: 0; overflow: hidden; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); }
 .tc-rr2-bag { padding: 0; border: 0; background: none; color: var(--grafik); font: inherit; font-weight: 600; cursor: pointer; }
 .tc-rr2-nokta { display: inline-block; width: var(--b-2); height: var(--b-2); margin-right: var(--b-1); border-radius: var(--yari-tam); background: var(--rr2-renk, var(--edge)); }
@@ -80,12 +80,12 @@
 .tc-rr2-agac { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tus-pencere-genis)), 1fr)); gap: var(--b-3); }
 .tc-rr2-agac-im {
   display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; padding: var(--b-3);
-  border: var(--cizgi-ince) solid var(--edge); border-top: 6px solid var(--rr2-renk, var(--edge)); border-radius: var(--yari-1); background: var(--panel);
+  border: var(--cizgi-ince) solid var(--edge); border-top: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); border-radius: var(--yari-1); background: var(--panel);
 }
 .tc-rr2-agac-bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-3); margin-bottom: var(--b-2); }
 .tc-rr2-agac-bas > b { flex-basis: 100%; font-size: var(--yazi-m); }
 .tc-rr2-agac-bas > span { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-rr2-agac-ist { display: flex; flex-direction: column; gap: 2px; margin: var(--b-1) 0 0 var(--b-1); padding: var(--b-1) 0 var(--b-1) var(--b-3); border-left: 3px solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-agac-ist { display: flex; flex-direction: column; gap: var(--cizgi); margin: var(--b-1) 0 0 var(--b-1); padding: var(--b-1) 0 var(--b-1) var(--b-3); border-left: calc(var(--cizgi) + var(--cizgi-ince)) solid var(--rr2-renk, var(--edge)); }
 .tc-rr2-agac-ist small { font-size: var(--yazi-xs); }
 
 /* Vardiya matrisi: açık hücre iş merkezi renginde blok, kapalı hücre kesik çerçeve; hafta sonu başlığı kırmızı. */
@@ -105,7 +105,7 @@
 
 /* Vardiya kartları iki sütun, üstte renk çizgisi; 24 saatlik çubuk ve cetvel. */
 .tc-rr2-vardiyalar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tus-pencere-genis)), 1fr)); gap: var(--b-3); }
-.tc-rr2-vardiya { border-top: 6px solid var(--rr2-renk, var(--edge)); }
+.tc-rr2-vardiya { border-top: calc(var(--b-1) + var(--cizgi)) solid var(--rr2-renk, var(--edge)); }
 .tc-rr2-cubuk svg { display: block; width: 100%; height: var(--b-5); }
 .tc-rr2-cubuk-zemin { fill: var(--panel2); }
 .tc-rr2-cubuk-iz { stroke: var(--edge); stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -128,7 +128,7 @@
   border: var(--cizgi-ince) solid var(--edge); border-bottom-width: 0; background: var(--panel);
 }
 .tc-rr2-sureler:last-of-type > .tc-rr2-sure:last-child { border-bottom-width: var(--cizgi-ince); }
-.tc-rr2-sure-alan { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tc-rr2-sure-alan { display: flex; flex-direction: column; gap: var(--cizgi); min-width: 0; }
 .tc-rr2-sure-alan > span { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
 .tc-rr2-sure-alan > div { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .tc-rr2-sure-alan small { color: var(--muted); font-size: var(--yazi-xs); }

@@ -79,6 +79,9 @@ export interface YazmaSecenegi extends IstekSecenegi {
   // Tekrar korumalı komutun kimliği (UUID): aynı kimlikle yinelenen isteğe sunucu ilk cevabı döner. Verilmezse
   // başlık gitmez; yeniden denemede yeni kimlik üretilmez, ilk isteğinki yollanır.
   istekKimligi?: string;
+  // Kullanıcının göndermediği, ekranın kendiliğinden attığı yazma (açılışta denenen hazırlık gibi): ulaşılamazsa ya da süresi dolarsa
+  // "sonucu bilinmeyen kayıt" sayılmaz; kullanıcı yeniden girecek bir şey göndermedi. Bağlantı durumu yine güncellenir.
+  arkaPlan?: boolean;
 }
 
 // Okuma yinelenebilir, kimlik taşımaz: yazma seçeneği değişkenle de okumaya verilemez.
@@ -88,7 +91,7 @@ export type OkumaSecenegi = IstekSecenegi & { istekKimligi?: never };
 const AZAMI_ZAMAN_ASIMI_MS = 2_147_483_647;
 
 const yazmaBilgisi = (yontem: string, secenek: YazmaSecenegi): { istekKimligi?: string } | null =>
-  yontem === 'GET' ? null : { ...(secenek.istekKimligi === undefined ? {} : { istekKimligi: secenek.istekKimligi }) };
+  yontem === 'GET' || secenek.arkaPlan === true ? null : { ...(secenek.istekKimligi === undefined ? {} : { istekKimligi: secenek.istekKimligi }) };
 
 async function istek<T>(yontem: string, yol: string, govde?: unknown, secenek: YazmaSecenegi = {}): Promise<T> {
   const baslik: Record<string, string> = { Accept: 'application/json' };
