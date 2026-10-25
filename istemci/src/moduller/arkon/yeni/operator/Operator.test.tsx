@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { NumunePenceresi } from './Pencereler.tsx';
 import { arkonAc, OPERATOR, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
 // Üretim Terminali: açılışta yazma yok; üretim yetkisi olan başlatır; yetkisi olmayan yalnız görür; önizleme hiç yazmaz.
@@ -70,6 +71,15 @@ describe('A1 Üretim Terminali', () => {
     }
   }, 40000);
 
+  it('teknik resim sekmesi resmi açar (yer tutucu yok); paketsiz dosyada "Doküman yok"', async () => {
+    sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/arkon/yeni/operator');
+    await ekran();
+    expect(await screen.findByRole('toolbar', { name: 'Teknik resim araçları' }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getAllByText('Doküman yok').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Bu bölüm hazırlanıyor')).toBeNull();
+  }, 40000);
+
   it('önizleme paketi kimliğiyle açar, yazma düğmesi göstermez ve yazmaz', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc(`/arkon/yeni/onizle/${PAKET.id}`);
@@ -81,4 +91,23 @@ describe('A1 Üretim Terminali', () => {
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
+});
+
+describe('A1 Kaliteye numune penceresi (A4 NumunePenceresi)', () => {
+  it('kontrol planı varsa gönderir ve kapanır; plan yoksa ya da önceki numune bekliyorsa düğme kapalı', async () => {
+    const gonder = vi.fn(), kapat = vi.fn();
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: false, gonder }} kapat={kapat} />);
+    const pencere = await screen.findByRole('dialog', { name: 'Kaliteye numune · IST-1' }, { timeout: 10000 });
+    fireEvent.click(within(pencere).getByRole('button', { name: /Numune gönder/ }));
+    expect(gonder).toHaveBeenCalledTimes(1);
+    expect(kapat).toHaveBeenCalled();
+    cleanup();
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: false, bekliyor: false, gonder }} kapat={kapat} />);
+    expect((await screen.findByRole('button', { name: /Numune gönder/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText(/kontrol planı yok/)).toBeTruthy();
+    cleanup();
+    render(<NumunePenceresi istasyon="IST-1" numune={{ hazir: true, bekliyor: true, gonder }} kapat={kapat} />);
+    expect((await screen.findByRole('button', { name: /Numune gönder/ }, { timeout: 10000 })).hasAttribute('disabled')).toBe(true);
+    expect(gonder).toHaveBeenCalledTimes(1);
+  });
 });

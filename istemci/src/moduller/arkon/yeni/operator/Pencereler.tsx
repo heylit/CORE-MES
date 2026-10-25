@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { CokSatir, Dugme, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
 import { onerileriSuz } from '../../../../../../arkon/web/src/app/neden-kaynagi.ts';
 import { hurdaNedeniYokIletisi } from '../../../../../../arkon/web/src/data/hurda-nedeni.ts';
@@ -7,9 +7,9 @@ import type { DurusNedeni } from '../cekirdek/ayarlar.ts';
 import { CAGRI_EKIPLERI } from '../cekirdek/sabitler.ts';
 import type { ScrapReason } from '../cekirdek/tipler.ts';
 import { yerel } from '../cekirdek/yerel.ts';
-import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
 import { useSimdi } from '../veri/baglam.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
+import type { NumuneIstegi } from '../kalite/index.tsx';
 import { CAGRI_ASAMALARI, HAZIRLIK_MADDELERI, HIZLI_YANITLAR, cagriTonu, hazirlikSayisi, simgeSec, tonDurumu, type VardiyaOzeti } from './kurallar.ts';
 import { MiniHalka } from './Parcalar.tsx';
 import type { Cagri, Is } from './tipler.ts';
@@ -187,12 +187,8 @@ export function VardiyaPenceresi({ ozet, vardiyaEtiketi, kapat, devret }: {
   );
 }
 
-/* ── kaliteye numune (A4 NumunePenceresi gelene kadar yer tutucu) ── */
-export function NumunePenceresi({ istasyon, kapat }: { istasyon: string; kapat: () => void }) {
-  return (
-    <Pencere acik kapat={kapat} baslik="Kaliteye numune">
-      <p className="tc-ay1-soluk">{istasyon}</p>
-      <Hazirlaniyor />
-    </Pencere>
-  );
+/* ── kaliteye numune (A4 NumunePenceresi; operator.ts NumuneOv) ── */
+const KaliteNumunesi = lazy(async () => ({ default: (await import('../kalite/index.tsx')).NumunePenceresi }));
+export function NumunePenceresi({ istasyon, numune, kapat }: { istasyon: string; numune: NumuneIstegi; kapat: () => void }) {
+  return <Suspense fallback={null}><KaliteNumunesi st={istasyon} numune={numune} kapat={kapat} /></Suspense>;
 }
