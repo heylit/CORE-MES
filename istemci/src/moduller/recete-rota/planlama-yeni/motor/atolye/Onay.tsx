@@ -1,6 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { PLAN_ONAY_KOMUTLARI, PlanOnayKomutu, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PLAN_ONAY_KOMUTLARI, PlanCevabi, PlanOnayKomutu, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Kart, OnayPenceresi, Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
@@ -12,8 +12,8 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
-  canliFark, farkKur, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paEmirFarki, paGecmisler, paKontrol, paOnayda, paRedVar, paSecim,
-  saatFarki, yerlesmeyen, zamanYaz, type Gostergeler, type KontrolMaddesi, type SunucuSenaryosu,
+  canliFark, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
+  paSecim, planFarki, planGecikme, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 // Onay ve canlı (zz22 sPlanAtolye): durum şeridi, akış, incelenecek planlar, seçili planın farkı, kontrolü ve kararı, karşılaştırma; yanda canlıdan
@@ -36,13 +36,13 @@ function Fark({ a, b, k = 1, kucukIyi = true }: { a: number | null | undefined; 
   const f = farkKur(a, b, k, kucukIyi);
   return f ? <span className={f.iyi ? 'tc-pym-pa-iyi' : 'tc-pym-pa-kotu'}>{f.metin}</span> : null;
 }
-function Sayilar({ g, kiyas: r }: { g: Gostergeler | null; kiyas?: Gostergeler | null }) {
+function Sayilar({ g, gecikme, kiyas: r }: { g: Gostergeler | null; gecikme: number | null; kiyas?: Gostergeler | null }) {
   const s = (ad: string, v: string, f?: ReactNode) => <div><dt>{ad}</dt><dd className="mono">{v}{f && <> {f}</>}</dd></div>;
   if (!g) return null;
   return (
     <dl className="tc-pym-pa-sayilar">
       {s('Geciken · tüm plan', `${g.geciken}/${g.emirSayisi}`, r && <Fark a={g.geciken} b={r.geciken} k={0} />)}
-      {s('Zamanında', yuzde(g.zamanindaYuzde), r && <Fark a={g.zamanindaYuzde} b={r.zamanindaYuzde} k={0} kucukIyi={false} />)}
+      {s('Gecikme', gecikme == null ? '—' : `${sayi(gecikme, 1)} sa`)}
       {s('Plan TL', tl(g.maliyetTl), r && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl / 1000} b={r.maliyetTl / 1000} k={0} />)}
     </dl>
   );
@@ -54,6 +54,12 @@ function planImzasi(c: PlanlamaCalismasi | null): string {
   const kim = typeof pl?.kim === 'string' ? pl.kim : '';
   const z = typeof pl?.zaman === 'number' ? zamanYaz(new Date(pl.zaman).toISOString()) : '';
   return [kim, z].filter(Boolean).join(' · ');
+}
+
+// Çalışma planının TL toplamı (kayıttaki plan.ozet.tl, eski planKaydi); yoksa null.
+function planTl(c: PlanlamaCalismasi | null): number | null {
+  const oz = (c?.plan as { ozet?: { tl?: unknown } } | null | undefined)?.ozet;
+  return typeof oz?.tl === 'number' && Number.isFinite(oz.tl) ? oz.tl : null;
 }
 
 export interface OnayOzellikleri {
@@ -79,6 +85,23 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
   const farkli = cf ? cf.farkli : false;
   const sec = paSecim(l, secim, !!(c && p));
   const secS = typeof sec === 'number' ? l.find((s) => s.id === sec) ?? null : null;
+  // Canlının ve incelenen senaryoların yerleşimi (GET /plan, GET /plan?taslak=): eski sayfanın plan karşılaştırması (paFark) bununla kurulur.
+  // Okunamayan plan null kalır; ekran o zaman senaryonun etki özetini gösterir.
+  const [planlar, setPlanlar] = useState<Record<string, PlanCevabi | null>>({});
+  const istenen = useMemo(() => [...new Set(['canli', ...(secS ? [String(secS.id)] : []), ...kars.map(String)])], [secS, kars]);
+  const acik = useRef(true);
+  useEffect(() => () => { acik.current = false; }, []);
+  useEffect(() => {
+    const yeni = istenen.filter((k) => !(k in planlar));
+    if (!yeni.length) return;
+    setPlanlar((x) => ({ ...x, ...Object.fromEntries(yeni.map((k) => [k, null])) }));
+    for (const k of yeni) {
+      api.get<PlanCevabi>(k === 'canli' ? '/plan' : `/plan?taslak=${k}`)
+        .then((v) => { if (acik.current) setPlanlar((x) => ({ ...x, [k]: v })); }, () => undefined);
+    }
+  }, [istenen, planlar]);
+  const pc = planlar.canli ?? null;
+  const farkAl = (id: number): PlanFarki | null => { const a = planlar[String(id)]; return a ? planFarki(a, pc) : null; };
 
   const gec = async (k: PlanOnayKomutu | 'vazgec', s: SunucuSenaryosu, ek: Record<string, unknown> = {}) => {
     const yol = k === 'vazgec' ? `/plan/senaryolar/${String(s.id)}/vazgec` : ONAY_YOLLARI[k].replace(':id', String(s.id));
@@ -120,7 +143,7 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
   const adim = paAdim(!!p, onayda.length, farkli, typeof sec === 'number');
   const sira = PA_ADIM.map((x) => x[0]);
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
-  const uyari = sor ? paKontrol(sor, canli, canliSurum).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
+  const uyari = sor ? paKontrol(sor, canli, canliSurum, paPlanKontrol(farkAl(sor.id), !!pc)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">
       <header className="tc-pym-pa-bas">
@@ -136,7 +159,7 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
             <header><span><Simge ad="play" boyut="k" /> Canlı plan</span><Rozet ton="tamam">{`Sürüm ${canliSurum}`}</Rozet></header>
             <b className="tc-pym-pa-ad">{paGecmisler(l)[0]?.ad ?? `Sürüm ${canliSurum}`}</b>
             {o.depo.planSurumu?.sonCanliyaAlma && <span className="tc-pym-pa-kucuk">{`${o.depo.planSurumu.sonCanliyaAlma.kisi ?? ''} onayladı · ${zamanYaz(o.depo.planSurumu.sonCanliyaAlma.zaman)}`}</span>}
-            <Sayilar g={canli} />
+            <Sayilar g={canli} gecikme={pc ? planGecikme(pc) : null} />
           </section>
         ) : (
           <section className="tc-pym-pa-kutu" data-ton="bos">
@@ -159,7 +182,7 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
             <dl className="tc-pym-pa-sayilar">
               <div><dt>Geciken · tüm plan</dt><dd className="mono">{`${p.ozet.late}/${p.ozet.n}`}</dd></div>
               <div><dt>Gecikme</dt><dd className="mono">{`${sayi(p.ozet.wT, 1)} sa`}</dd></div>
-              <div><dt>Plan TL</dt><dd className="mono">—</dd></div>
+              <div><dt>Plan TL</dt><dd className="mono">{tl(o.yetki.maliyetOku ? planTl(c) : null)}</dd></div>
             </dl>
           </section>
         )}
@@ -184,14 +207,14 @@ export function OnaySekmesi({ o, c, p, sen, senYaz, planSekmesi }: OnayOzellikle
           </Kart>
           {sec === 'calisma' && c && p && <CalismaSecili c={c} p={p} farkli={farkli} o={o} />}
           {secS && (
-            <Secili s={secS} canli={canli} canliSurum={canliSurum} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
+            <Secili s={secS} canli={canli} canliSurum={canliSurum} pa={planlar[String(secS.id)] ?? null} pc={pc} f={farkAl(secS.id)} o={o} not={notlar[String(secS.id)] ?? ''} notYaz={(v) => setNotlar((n) => ({ ...n, [String(secS.id)]: v }))}
               gidiyor={gidiyor} eylem={{ ...eylem, canli: async (s) => { setSor(s); } }} />
           )}
-          <Karsilastir l={l} canli={canli} canliSurum={canliSurum} kars={kars} temizle={() => setKars([])} />
+          <Karsilastir l={l} canli={canli} canliSurum={canliSurum} kars={kars} temizle={() => setKars([])} planlar={planlar} farkAl={farkAl} />
         </div>
         <div className="tc-pym-pa-yan">
           <Yapilanlar c={c} t0={o.depo.planSurumu?.sonCanliyaAlma?.zaman ?? null} canliVar={!!canliSurum} />
-          <Gecmis l={l} canliSurum={canliSurum} />
+          <Gecmis l={l} canliSurum={canliSurum} kars={kars} karsYaz={setKars} />
           <Yonlendir o={o} c={c} />
         </div>
       </div>
@@ -225,7 +248,7 @@ function Adaylar({ l, c, p, cf, canli, sec, secSec, kars, karsYaz }: {
     <>
       <ul className="tc-pym-pa-adaylar">
         {c && p && satir('calisma', 'Çalışma planı', cf?.farkli ? 'Canlıya alınmamış değişiklik var' : 'Canlı plan ve çalışma aynı', 'calisma',
-          <span className="mono">{`${p.ozet.late} geç`}</span>, <span className="tc-pym-pa-kars" />)}
+          <span className="mono">{`${p.ozet.late} geç · ${sayi(p.ozet.wT, 1)} sa`}</span>, <span className="tc-pym-pa-kars" />)}
         {a.map((s) => {
           const g = s.gostergeler;
           const isaretli = kars.includes(s.id);
@@ -277,10 +300,11 @@ function CalismaSecili({ c, p, farkli, o }: { c: PlanlamaCalismasi; p: OkunanPla
 }
 
 interface SeciliEylemi { onaya: (s: SunucuSenaryosu) => Promise<void>; cek: (s: SunucuSenaryosu) => Promise<void>; geri: (s: SunucuSenaryosu) => Promise<void>; vazgec: (s: SunucuSenaryosu) => Promise<void>; canli: (s: SunucuSenaryosu) => Promise<void> }
-function Secili({ s, canli, canliSurum, o, not, notYaz, gidiyor, eylem }: {
-  s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi;
+function Secili({ s, canli, canliSurum, pa, pc, f, o, not, notYaz, gidiyor, eylem }: {
+  s: SunucuSenaryosu; canli: Gostergeler | null; canliSurum: number | null; pa: PlanCevabi | null; pc: PlanCevabi | null; f: PlanFarki | null;
+  o: PlanlamaEkranOzellikleri; not: string; notYaz: (v: string) => void; gidiyor: boolean; eylem: SeciliEylemi;
 }) {
-  const K = paKontrol(s, canli, canliSurum); const red = paRedVar(K);
+  const K = paKontrol(s, canli, canliSurum, paPlanKontrol(f, !!pc)); const red = paRedVar(K);
   const g = s.gostergeler; const r = canli;
   const [dad, dton] = PA_DURUM[s.durum];
   const y = s.yapabilir;
@@ -300,7 +324,12 @@ function Secili({ s, canli, canliSurum, o, not, notYaz, gidiyor, eylem }: {
   const yazP = o.yetki.planStudyo, yazC = o.yetki.planCanliyaAl;
   const kimYapar = !yazP && !yazC ? 'Bu rol planı yalnız görür.' : s.durum === 'onayda' && !yazC ? 'Müdür onayı bekleniyor.' : s.durum === 'acik' && !yazC && dg.length ? 'Onaya gönderdiğiniz plan müdür onaylayınca canlı olur.' : '';
   const tz = s.etki?.yukuDegisenIstasyonlar ?? [];
-  const sip = s.etki?.tarihiDegisenEmirler ?? [];
+  const tezler = f ? Object.entries(f.tez).sort((a, b) => b[1] - a[1]).slice(0, 8) : [];
+  const enc = tezler[0]?.[1] ?? 1;
+  // Bitişi değişen siparişler: iki planın emir bitişlerinden (termin farkıyla); plan okunamadıysa senaryonun etki özetinden.
+  const sip: { emirNo: string; once: string | null; sonra: string | null; d: number | null; T0: number | null; T1: number | null }[] = f && r
+    ? f.sip.map((x) => ({ ...x, d: x.once && x.sonra ? x.d : null }))
+    : (s.etki?.tarihiDegisenEmirler ?? []).map((x) => ({ emirNo: x.emirNo, once: x.canli, sonra: x.senaryo, d: saatFarki(x.canli, x.senaryo), T0: null, T1: null }));
   const kg = [
     ...(s.onay?.gonderen ? [{ kim: s.onay.gonderen, ne: 'onaya gönderdi', z: s.onay.gonderme, not: s.onay.not }] : []),
     ...(s.onay?.geriGonderen ? [{ kim: s.onay.geriGonderen, ne: 'geri gönderdi', z: s.onay.geriGonderme ?? '', not: s.onay.geriNeden }] : []),
@@ -310,12 +339,10 @@ function Secili({ s, canli, canliSurum, o, not, notYaz, gidiyor, eylem }: {
       <div className="tc-pym-pa-secili">
         <p className="tc-pym-pa-kucuk">{`${s.acan ?? ''} · ${zamanYaz(s.acilma)} · canlı sürüm ${s.tabanPlanSurumu} üstünde hazırlandı. Karşılaştırma canlı plana göredir.`}</p>
         <ul className="tc-pym-pa-kiyas">
-          <li><small>Değişiklik</small><b className="mono">{sayi(s.degisiklikler.length)}</b><span className="tc-pym-pa-kucuk">{r ? `${tz.length} istasyonun yükü, ${sip.length} emrin bitişi değişti` : 'canlı yok'}</span></li>
+          <li><small>Yeri değişen iş</small><b className="mono">{r && f ? sayi(f.tasinan + f.yeni) : '—'}</b><span className="tc-pym-pa-kucuk">{!r ? 'canlı yok' : f ? `${f.tezgah} tezgâh, ${f.saat} saat, ${f.yeni} yeni` : `${s.degisiklikler.length} değişiklik`}</span></li>
           <li><small>Geciken sipariş</small><b className="mono">{r ? `${r.geciken} → ` : ''}{g ? g.geciken : '—'}</b></li>
-          <li><small>Zamanında</small><b className="mono">{r ? `${yuzde(r.zamanindaYuzde)} → ` : ''}{yuzde(g?.zamanindaYuzde)}</b>{r && g && <Fark a={g.zamanindaYuzde} b={r.zamanindaYuzde} k={0} kucukIyi={false} />}</li>
+          <li><small>Gecikme</small><b className="mono">{pc && pa ? `${sayi(planGecikme(pc), 1)} → ` : ''}{pa ? `${sayi(planGecikme(pa), 1)} sa` : '—'}</b>{pc && pa && <Fark a={planGecikme(pa)} b={planGecikme(pc)} />}</li>
           <li><small>Plan TL</small><b className="mono">{g?.maliyetTl != null ? sayi(g.maliyetTl) : '—'}</b>{r && g && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl} b={r.maliyetTl} k={0} />}</li>
-          <li><small>Atölyede ortalama</small><b className="mono">{gun(g?.ortAtolyeGun)}</b>{r && g && <Fark a={g.ortAtolyeGun} b={r.ortAtolyeGun} />}</li>
-          <li><small>Darboğaz</small><b className="mono">{g?.darbogaz ? `${g.darbogaz.ad} ${yuzde(g.darbogaz.dolulukYuzde)}` : '—'}</b></li>
         </ul>
         <div className="tc-pym-pa-iki">
           <section className="tc-pym-pa-bolum">
@@ -328,39 +355,43 @@ function Secili({ s, canli, canliSurum, o, not, notYaz, gidiyor, eylem }: {
             ) : <p className="tc-pym-pa-kucuk">{r ? 'Canlıya göre değişiklik yok.' : 'Karşılaştırılacak canlı plan yok.'}</p>}
           </section>
           <section className="tc-pym-pa-bolum">
-            <h3><Simge ad="cpu" boyut="k" /> İstasyon başına yük</h3>
-            {tz.length ? (
+            <h3><Simge ad="cpu" boyut="k" /> Tezgâh başına değişen iş</h3>
+            {f && r ? (tezler.length ? (
+              <ul className="tc-pym-pa-tez">
+                {tezler.map(([m, n]) => (
+                  <li key={m}><b className="mono">{m}</b><span className="tc-pym-pa-cubuk"><i ref={degisken({ '--p': Math.round((100 * n) / enc) })} /></span><span className="mono">{n}</span></li>
+                ))}
+              </ul>
+            ) : <p className="tc-pym-pa-kucuk">Tezgâh değişikliği yok.</p>) : tz.length ? (
               <ul className="tc-pym-pa-tez">
                 {tz.slice(0, 8).map((x) => (
                   <li key={x.ad}><b className="mono">{x.ad}</b><span className="tc-pym-pa-cubuk"><i ref={degisken({ '--p': Math.max(0, Math.min(100, Math.round(x.senaryoYuzde ?? 0))) })} /></span><span className="mono">{`${yuzde(x.canliYuzde)} → ${yuzde(x.senaryoYuzde)}`}</span></li>
                 ))}
               </ul>
-            ) : <p className="tc-pym-pa-kucuk">İstasyon yükü değişmedi.</p>}
+            ) : <p className="tc-pym-pa-kucuk">Tezgâh değişikliği yok.</p>}
           </section>
         </div>
         <section className="tc-pym-pa-bolum">
-          <h3><Simge ad="clock" boyut="k" /> Bitişi değişen emirler</h3>
+          <h3><Simge ad="clock" boyut="k" /> Bitişi değişen siparişler</h3>
           {sip.length ? (
             <div className="tc-pym-pa-kap">
               <table className="tc-tablo tc-pym-pa-tablo">
-                <thead><tr><th scope="col">Emir</th><th scope="col" className="tc-pym-pa-num">Canlıda bitiş</th><th scope="col" className="tc-pym-pa-num">Bu planda</th><th scope="col" className="tc-pym-pa-num">Fark</th></tr></thead>
+                <thead><tr><th scope="col">Sipariş</th><th scope="col" className="tc-pym-pa-num">Canlıda bitiş</th><th scope="col" className="tc-pym-pa-num">Bu planda</th><th scope="col" className="tc-pym-pa-num">Fark</th><th scope="col">Termin</th></tr></thead>
                 <tbody>
-                  {sip.slice(0, 10).map((x) => {
-                    const d = saatFarki(x.canli, x.senaryo);
-                    return (
-                      <tr key={x.emirNo}>
-                        <td data-baslik="Emir" className="mono">{x.emirNo}</td>
-                        <td data-baslik="Canlıda bitiş" className="tc-pym-pa-num mono">{x.canli ? zamanYaz(x.canli) : 'yok'}</td>
-                        <td data-baslik="Bu planda" className="tc-pym-pa-num mono">{x.senaryo ? zamanYaz(x.senaryo) : 'yok'}</td>
-                        <td data-baslik="Fark" className="tc-pym-pa-num">{d == null ? '—' : <span className={`${d < 0 ? 'tc-pym-pa-iyi' : 'tc-pym-pa-kotu'} mono`}>{`${d > 0 ? '+' : '−'}${sayi(Math.abs(d), 1)} sa`}</span>}</td>
-                      </tr>
-                    );
-                  })}
+                  {sip.slice(0, 10).map((x) => (
+                    <tr key={x.emirNo}>
+                      <td data-baslik="Sipariş" className="mono">{x.emirNo}</td>
+                      <td data-baslik="Canlıda bitiş" className="tc-pym-pa-num mono">{x.once ? zamanYaz(x.once) : 'yok'}</td>
+                      <td data-baslik="Bu planda" className="tc-pym-pa-num mono">{x.sonra ? zamanYaz(x.sonra) : 'yok'}</td>
+                      <td data-baslik="Fark" className="tc-pym-pa-num">{x.d == null ? '—' : <span className={`${x.d < 0 ? 'tc-pym-pa-iyi' : 'tc-pym-pa-kotu'} mono`}>{`${x.d > 0 ? '+' : '−'}${sayi(Math.abs(x.d), 1)} sa`}</span>}</td>
+                      <td data-baslik="Termin">{(x.T1 ?? 0) > 0.05 ? <span className="tc-pym-pa-kotu">{`${sayi(x.T1 ?? 0, 1)} sa geç`}</span> : (x.T0 ?? 0) > 0.05 ? <span className="tc-pym-pa-iyi">zamanına girdi</span> : x.T1 == null ? '—' : <span className="tc-pym-pa-kucuk">zamanında</span>}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          ) : <p className="tc-pym-pa-kucuk">{r ? 'Bitişi değişen emir yok.' : ''}</p>}
-          {sip.length > 10 && <p className="tc-pym-pa-kucuk">{`Bitişi değişen ${sip.length} emrin ilk 10'u.`}</p>}
+          ) : <p className="tc-pym-pa-kucuk">{r ? 'Bitişi değişen sipariş yok.' : ''}</p>}
+          {sip.length > 10 && <p className="tc-pym-pa-kucuk">{`Bitişi değişen ${sip.length} siparişin en çok değişen 10'u.`}</p>}
         </section>
         <section className="tc-pym-pa-bolum"><h3><Simge ad="target" boyut="k" /> Kontrol</h3><Kontrol K={K} /></section>
         {(dg.length > 0 || kimYapar) && (
@@ -390,11 +421,15 @@ function Secili({ s, canli, canliSurum, o, not, notYaz, gidiyor, eylem }: {
   );
 }
 
-function Karsilastir({ l, canli, canliSurum, kars, temizle }: { l: SunucuSenaryosu[]; canli: Gostergeler | null; canliSurum: number | null; kars: number[]; temizle: () => void }) {
+function Karsilastir({ l, canli, canliSurum, kars, temizle, planlar, farkAl }: {
+  l: SunucuSenaryosu[]; canli: Gostergeler | null; canliSurum: number | null; kars: number[]; temizle: () => void;
+  planlar: Record<string, PlanCevabi | null>; farkAl: (id: number) => PlanFarki | null;
+}) {
   const secili = kars.map((id) => l.find((s) => s.id === id)).filter((s): s is SunucuSenaryosu => !!s);
-  const sutun: { ad: string; durum: keyof typeof PA_DURUM | 'canli'; g: Gostergeler | null; d: number | null }[] = [
-    ...(canli ? [{ ad: `Canlı · sürüm ${canliSurum ?? '—'}`, durum: 'canli' as const, g: canli, d: 0 }] : []),
-    ...secili.map((s) => ({ ad: s.ad, durum: s.durum, g: s.gostergeler, d: s.degisiklikler.length })),
+  const tasinan = (id: number) => { const f = farkAl(id); return f ? f.tasinan + f.yeni : null; };
+  const sutun: { ad: string; durum: keyof typeof PA_DURUM | 'canli'; g: Gostergeler | null; p: PlanCevabi | null; d: number | null }[] = [
+    ...(canli ? [{ ad: `Canlı · sürüm ${canliSurum ?? '—'}`, durum: 'canli' as const, g: canli, p: planlar.canli ?? null, d: 0 }] : []),
+    ...secili.map((s) => ({ ad: s.ad, durum: s.durum, g: s.gostergeler, p: planlar[String(s.id)] ?? null, d: canli ? tasinan(s.id) : null })),
   ].slice(0, 4);
   const yardim = <p className="tc-pym-pa-kucuk">Listeden en çok üç plan işaretleyin; canlı plan her zaman ilk sütundur.</p>;
   const sag = kars.length ? <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={temizle}><Simge ad="x" boyut="k" />Temizle</button> : undefined;
@@ -417,7 +452,7 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle }: { l: SunucuSenaryo
     );
   };
   const durumAdi = (d: (typeof sutun)[number]['durum']) => (d === 'canli' ? ['Canlı', 'tamam'] as const : PA_DURUM[d]);
-  const emir = paEmirFarki(secili);
+  const emir = emirFarki(secili, planlar);
   return (
     <Kart baslik="Karşılaştırma" simge="chart" sag={sag}>
       <div className="tc-pym-pa-kap">
@@ -425,24 +460,23 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle }: { l: SunucuSenaryo
           <thead><tr><th scope="col" />{sutun.map((s) => <th key={s.ad} scope="col" className="tc-pym-pa-num">{s.ad}<br /><Rozet ton={durumAdi(s.durum)[1]}>{durumAdi(s.durum)[0]}</Rozet></th>)}</tr></thead>
           <tbody>
             {satir('Geciken sipariş', (s) => s.g?.geciken, (x) => sayi(x))}
-            {satir('Zamanında (%)', (s) => s.g?.zamanindaYuzde, (x) => sayi(x), false)}
+            {satir('Gecikme (sa)', (s) => (s.p ? planGecikme(s.p) : null), (x) => sayi(x, 1))}
             {satir('Plan TL (bin)', (s) => (s.g?.maliyetTl != null ? s.g.maliyetTl / 1000 : null), (x) => sayi(x))}
-            {satir('Atölyede ortalama (g)', (s) => s.g?.ortAtolyeGun, (x) => sayi(x, 1))}
-            {satir('Darboğaz doluluğu (%)', (s) => s.g?.darbogaz?.dolulukYuzde, (x) => sayi(x))}
-            {satir('Canlıya göre değişiklik', (s) => s.d, (x) => sayi(x))}
+            {satir('Son bitiş', (s) => { const b = s.p ? sonBitis(s.p) : null; return b ? Date.parse(b) / 3_600_000 : null; }, (x) => zamanYaz(new Date(x * 3_600_000).toISOString()))}
+            {satir('Canlıya göre yeri değişen iş', (s) => s.d, (x) => sayi(x))}
             {satir('Yerleşmeyen iş', (s) => yerlesmeyen(s.g), (x) => sayi(x))}
           </tbody>
         </table>
       </div>
       {emir.length > 0 && (
         <>
-          <h3 className="tc-pym-pa-alt"><Simge ad="clock" boyut="k" /> Bitişi planlar arasında değişen emirler</h3>
+          <h3 className="tc-pym-pa-alt"><Simge ad="clock" boyut="k" /> Bitişi planlar arasında değişen siparişler</h3>
           <div className="tc-pym-pa-kap">
             <table className="tc-tablo tc-pym-pa-tablo">
-              <thead><tr><th scope="col">Emir</th><th scope="col" className="tc-pym-pa-num">Canlı</th>{secili.map((s) => <th key={s.id} scope="col" className="tc-pym-pa-num">{s.ad}</th>)}</tr></thead>
+              <thead><tr><th scope="col">Sipariş</th><th scope="col" className="tc-pym-pa-num">Canlı</th>{secili.map((s) => <th key={s.id} scope="col" className="tc-pym-pa-num">{s.ad}</th>)}</tr></thead>
               <tbody>
                 {emir.map((x) => (
-                  <tr key={x.emirNo}><th scope="row" className="mono">{x.emirNo}</th><td className="tc-pym-pa-num mono">{zamanYaz(x.canli)}</td>{x.senaryo.map((v, i) => <td key={i} className="tc-pym-pa-num mono">{zamanYaz(v)}</td>)}</tr>
+                  <tr key={x.emirNo}><th scope="row" className="mono">{x.emirNo}</th><td className="tc-pym-pa-num mono">{zamanYaz(x.canli)}</td>{x.senaryo.map((v, i) => <td key={i} className="tc-pym-pa-num mono">{zamanYaz(v)}{(x.gec[i] ?? 0) > 0.05 && <><br /><span className="tc-pym-pa-kotu">{`${sayi(x.gec[i] ?? 0, 1)} sa geç`}</span></>}</td>)}</tr>
                 ))}
               </tbody>
             </table>
@@ -452,6 +486,22 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle }: { l: SunucuSenaryo
       <p className="tc-pym-pa-kucuk">Altı çizili değer o satırdaki en iyisidir; renkli fark ilk sütuna göredir.</p>
     </Kart>
   );
+}
+
+// Bitişi planlar arasında değişen siparişler: planlar okunduysa emir bitişlerinden (termin gecikmesiyle), yoksa senaryoların etki özetinden.
+function emirFarki(secili: SunucuSenaryosu[], planlar: Record<string, PlanCevabi | null>) {
+  const pc = planlar.canli; const ps = secili.map((s) => planlar[String(s.id)] ?? null);
+  if (!pc || ps.some((p) => !p)) return paEmirFarki(secili).map((x) => ({ ...x, gec: x.senaryo.map((): number | null => null) }));
+  const tam = ps as PlanCevabi[];
+  const bul = (p: PlanCevabi, j: string) => p.emirler.find((e) => e.emirNo === j) ?? null;
+  const tum = new Set([...pc.emirler.map((e) => e.emirNo), ...tam.flatMap((p) => p.emirler.map((e) => e.emirNo))]);
+  return [...tum].map((j) => {
+    const c = bul(pc, j); const v = tam.map((p) => bul(p, j));
+    const t = [c, ...v].map((e) => (e?.bitis ? Date.parse(e.bitis) : Number.NaN));
+    const g = t.filter((x) => !Number.isNaN(x));
+    return { emirNo: j, canli: c?.bitis ?? null, senaryo: v.map((e) => e?.bitis ?? null), gec: v.map((e) => (e ? gecikmeSaat(e.bitis, e.teslim) : null)),
+      yay: g.length < t.length ? 1e9 : (Math.max(...g) - Math.min(...g)) / 3_600_000 };
+  }).filter((x) => x.yay > 0.5).sort((a, b) => b.yay - a.yay).slice(0, 15);
 }
 
 function Yapilanlar({ c, t0, canliVar }: { c: PlanlamaCalismasi | null; t0: string | null; canliVar: boolean }) {
@@ -470,7 +520,7 @@ function Yapilanlar({ c, t0, canliVar }: { c: PlanlamaCalismasi | null; t0: stri
   );
 }
 
-function Gecmis({ l, canliSurum }: { l: SunucuSenaryosu[]; canliSurum: number | null }) {
+function Gecmis({ l, canliSurum, kars, karsYaz }: { l: SunucuSenaryosu[]; canliSurum: number | null; kars: number[]; karsYaz: (k: number[]) => void }) {
   const g = paGecmisler(l);
   return (
     <Kart baslik="Geçmiş planlar" simge="rotate" baslikEki={<span className="tc-pym-pa-kucuk">{g.length}</span>}>
@@ -481,6 +531,14 @@ function Gecmis({ l, canliSurum }: { l: SunucuSenaryosu[]; canliSurum: number | 
               <li key={x.id}>
                 <span>{i === 0 && canliSurum ? <><b>{`Sürüm ${canliSurum}`}</b>{' · '}</> : null}{`${x.ad} `}{i === 0 ? <Rozet ton="tamam">Canlı</Rozet> : <Rozet ton="bilgi">Önceki canlı</Rozet>}</span>
                 <small>{`${x.acan ?? ''} · ${zamanYaz(x.onay?.gonderme ?? x.acilma)}${x.gostergeler ? ` · ${x.gostergeler.geciken} geç` : ''}`}</small>
+                {i > 0 && (
+                  <span className="tc-pym-pa-dugmeler">
+                    <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" aria-pressed={kars.includes(x.id)}
+                      onClick={() => karsYaz(kars.includes(x.id) ? kars.filter((y) => y !== x.id) : [...kars, x.id].slice(-3))}>
+                      <Simge ad="layers" boyut="k" />Karşılaştır
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
