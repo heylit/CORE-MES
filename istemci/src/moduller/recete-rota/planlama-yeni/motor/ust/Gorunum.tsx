@@ -13,23 +13,27 @@ const GORUNUMLER: [TahtaGorunumu, string, SimgeAdi, string][] = [
   ['kesif', 'Keşfet', 'eye', 'Keşfet: pay şeridi, sipariş hatları, hazırlık ve planı anlatan adımlar'],
 ];
 
+const STUDYO_IPUCU = 'Planlama stüdyosu: bütün kaynaklar tek zaman ekseninde, etki şeridi, günlük ve karşılaştırma';
+
 interface Ozellikler {
   gorunum: TahtaGorunumu; sec: (g: TahtaGorunumu) => void; studyo: () => void;
   donem: Donem; donemSec: (d: Donem) => void; kaydir: (n: number) => void; donemYazi: string;
   menuAcik: boolean; menuAc: (v: boolean) => void; baska: BaskaDurumu;
+  // Çizelgenin araç satırındaki görünüm çubuğunda (sgHtml "masa") Başka menüsü yoktur, dönem grubunun sonunda Stüdyo yinelenir.
+  masa?: boolean;
 }
 
 export function Gorunum(o: Ozellikler) {
   const ad = donemAdi(o.donem);
   return (
-    <div className="tc-pym-sg" role="toolbar" aria-label="Görünüm">
+    <div className="tc-pym-sg" data-masa={o.masa ? '' : undefined} role="toolbar" aria-label="Görünüm">
       <div className="tc-pym-sg-sec">
         {GORUNUMLER.map(([id, baslik, simge, ipucu]) => (
           <button key={id} type="button" aria-pressed={o.gorunum === id} title={ipucu} onClick={() => o.sec(id)}>
             <Simge ad={simge} boyut="k" /><span>{baslik}</span>
           </button>
         ))}
-        <button type="button" aria-pressed="false" title="Planlama stüdyosu: bütün kaynaklar tek zaman ekseninde, etki şeridi, günlük ve karşılaştırma" onClick={o.studyo}>
+        <button type="button" aria-pressed="false" title={STUDYO_IPUCU} onClick={o.studyo}>
           <Simge ad="layers" boyut="k" /><span>Stüdyo</span>
         </button>
       </div>
@@ -37,8 +41,9 @@ export function Gorunum(o: Ozellikler) {
         <button type="button" className="tc-pym-ol-kay" title={`Önceki ${ad}`} aria-label={`Önceki ${ad}`} onClick={() => o.kaydir(-1)}><Simge ad="chev-left" boyut="k" /></button>
         {DONEMLER.map(([k, n]) => <button key={k} type="button" aria-pressed={o.donem === k} onClick={() => o.donemSec(k)}>{n}</button>)}
         <button type="button" className="tc-pym-ol-kay" title={`Sonraki ${ad}`} aria-label={`Sonraki ${ad}`} onClick={() => o.kaydir(1)}><Simge ad="chev-right" boyut="k" /></button>
+        {o.masa && <button type="button" aria-pressed="false" title={STUDYO_IPUCU} onClick={o.studyo}><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>}
       </div>
-      <span className="tc-pym-sg-baska-kap"><BaskaMenusu acik={o.menuAcik} ac={o.menuAc} {...o.baska} /></span>
+      {!o.masa && <span className="tc-pym-sg-baska-kap"><BaskaMenusu acik={o.menuAcik} ac={o.menuAc} {...o.baska} /></span>}
     </div>
   );
 }
