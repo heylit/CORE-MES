@@ -9,6 +9,8 @@ import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from
 interface Ozellikler {
   plan: boolean; guncel: boolean; planYaz: boolean;
   nabiz: NabizDurumu | null; nabizAcik: boolean; nabizAc: (ac: boolean) => void;
+  // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi motora gider.
+  etkin: 'plan' | 'studyo' | null; planaGit: (() => void) | null;
   studyo: () => void; ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
 }
@@ -21,8 +23,8 @@ export function Cubuk(o: Ozellikler) {
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
         <nav className="tc-pym-sb-ekran" aria-label="Ekranlar">
-          <button type="button" aria-current="page"><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
-          <button type="button" onClick={o.studyo} title="Planlama stüdyosu"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
+          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.etkin === 'plan' ? undefined : o.planaGit ?? undefined} title={o.etkin === 'plan' ? undefined : 'Plan'}><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
+          <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Planlama stüdyosu"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
           <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>
           <button type="button" aria-disabled="true" title={`Geçmiş: ${YOK_NOTU}`}><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>
         </nav>
