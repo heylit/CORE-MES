@@ -9,7 +9,7 @@ import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { DURUM_TONU, planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi,
+  bugun, DURUM_ADI, DURUM_SUZGECLERI, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, uretilirMi,
   type DurumSuzgeci, type Emir, type PlanOzeti,
 } from './kurallar.ts';
 
@@ -108,6 +108,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
 }
 
 // Sol şerit emrin plan sırasından renk alır (plandaki emirler ayırt edilsin); plan dışı emirde şerit çizgi rengidir.
+const SERIT_SAYISI = 6;
 
 function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   durum: RrDurumu; emir: Emir; derinlik: number; acik: boolean; sira: number | null; ac: () => void; children: React.ReactNode;
@@ -125,7 +126,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, acik, sira, ac, children }: {
   return (
     <li
       className="tc-rr3-satir-kap" data-acik={acik ? '' : undefined} data-gec={gecikiyor ? '' : undefined}
-      data-serit={sira === null ? undefined : String(seritNo(sira))} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
+      data-serit={sira === null ? undefined : String((sira * 3 + 1) % SERIT_SAYISI)} data-derinlik={derinlik > 0 ? String(Math.min(derinlik, 3)) : undefined}
     >
       <button type="button" className="tc-rr3-emir" aria-expanded={acik} onClick={ac}>
         <span className="tc-rr3-no">
