@@ -17,7 +17,11 @@ test.describe('A0 iskelet', () => {
     await expect(serit.getByRole('tab', { name: 'Operatör' })).toHaveCount(0);
     await expect(serit.getByRole('tab', { name: 'Kuyruk', exact: true })).toHaveCount(0);
     await expect(page.locator('.tc-ay-bant').getByRole('heading', { name: 'Fabrika panosu' })).toBeVisible();
+    // Dar ekranda tema bandın "Diğer" menüsündedir.
+    const diger = page.locator('.tc-ay-bant').getByRole('button', { name: 'Diğer' });
+    if (await diger.isVisible()) await diger.click();
     await expect(page.getByRole('button', { name: 'Tema değiştir' })).toBeVisible();
+    if (await diger.isVisible()) await diger.click();
     await expect(page.getByRole('region', { name: 'Pano' })).toBeVisible();
     await serit.getByRole('tab', { name: 'Kalite' }).click();
     await expect(page).toHaveURL(/\/arkon\/yeni\/kalite$/);

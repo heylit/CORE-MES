@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react';
 import { merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
 import { kayitIlgili, seyrelt } from '../../../../../../arkon/web/src/data/log-tepki.ts';
 import type { DurumOlayi, SayimKaydi } from '../cekirdek/oee.ts';
 import { anlikVardiya, type AnlikVardiya } from '../cekirdek/vardiya.ts';
-import { useArkon } from '../veri/baglam.ts';
+import { ArkonDarAlanKaynagi, useArkon } from '../veri/baglam.ts';
 
 // Operatör ekranının veri kancaları (operator-parcalar.ts useShiftLog, cizim-merkezi.ts useMerkezUyarilari, baslat.ts useFit).
 
@@ -56,16 +56,19 @@ export function useMerkezUyarilari(dosyalar: readonly MerkezDosyasi[] | null | u
   return uyari;
 }
 
-// Dar ekran (eski ekranın mobil düzeni): 900 pikselden dar ya da 1200'den dar ve dik tutulan ekran. Alt gezinme çubuklu görünüm açılır.
+// Dar ekran (eski ekranın mobil düzeni): 900 pikselden dar ya da 1200'den dar ve dik tutulan alan. Alt gezinme çubuklu görünüm açılır.
+// Kök sayfa alanını ölçer (eskide iframe kendi genişliğini görürdü); kökün dışında, ölçüm yokken pencereye bakılır.
 const darMi = (): boolean => { const W = window.innerWidth; const H = window.innerHeight; return W < 900 || (W < 1200 && H > W * 1.05); };
 export function useDarEkran(): boolean {
+  const alan = useContext(ArkonDarAlanKaynagi);
   const [dar, darYaz] = useState(darMi);
   useEffect(() => {
+    if (alan !== null) return undefined;
     const f = () => darYaz(darMi());
     window.addEventListener('resize', f);
     return () => window.removeEventListener('resize', f);
-  }, []);
-  return dar;
+  }, [alan]);
+  return alan ?? dar;
 }
 
 // Öğenin piksel genişliği: çizim yazısı ekran genişledikçe büyümesin diye çizim alanı ölçüye göre kurulur.
