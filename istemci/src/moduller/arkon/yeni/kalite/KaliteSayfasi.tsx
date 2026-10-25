@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { numuneDugmeleri, numuneReddiEksigi, secinceOlcumeAlinir } from '../../../../../../arkon/web/src/data/numune.ts';
 import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../../../arkon/web/src/data/olcum-aleti.ts';
 import type { Meas, Pkg, PlanItem, Result, SampleRequest } from '../../../../../../arkon/shared/model.ts';
 import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
+import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul } from '../cekirdek/tesis.ts';
@@ -29,6 +31,16 @@ const KALITE_KISAYOLLARI = [
   { sayfa: 'operator', simge: 'gauge', metin: 'Operatör' },
   { sayfa: 'hazirlik', simge: 'layers', metin: 'Üretim Terminali Hazırlık', yalnizSimge: true },
 ] as const;
+
+// İlk parça kapısını Kalite Merkezi'nin kararı açar (229 a); buradaki onay ölçüm kaydıdır. Not bunu söyler, karar yeri oraya bağlanır (501 a).
+function IlkParcaNotu() {
+  const kaliteMerkezi = useYetki().var('sayfa.kalite-merkezi');
+  return (
+    <p className="tc-ay3-not" role="note">
+      <Simge ad="check" /> İlk parça kararı Kalite Merkezi'nde{kaliteMerkezi && <> · <Link to="/kalite-merkezi">Kalite Merkezi'ni aç</Link></>}
+    </p>
+  );
+}
 
 export function KaliteSayfasi() {
   const { depo, kisi, ayarlar, yetkiVar, saltOkunur } = useArkon();
@@ -322,6 +334,7 @@ export function KaliteSayfasi() {
                       );
                     })}
                   </div>
+                  <IlkParcaNotu />
                   {olcumAcik ? (dugme.karar && (
                     <div className="tc-ay3-kutu" aria-label="Karar">
                       <input className="tc-ay3-girdi" placeholder="Not · Red için gerekçe zorunlu · örn. takım değişimi önerilir" value={note} onChange={(o) => noteYaz(o.target.value)} aria-label="Not" />
