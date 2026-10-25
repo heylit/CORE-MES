@@ -23,7 +23,24 @@ test.describe('P1 bugun ve program', () => {
 });
 
 test.describe('P2 KYS', () => {
-  // P2 yazar.
+  test('dokuz alt sekme ve şema türleri açılır, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
+    await ac('/denetim-hazirlik/yeni/kys');
+    const kys = page.getByRole('tablist', { name: 'KYS bölümleri' });
+    await expect(kys).toBeVisible();
+    for (const ad of ['Kurulum yol haritası', 'Yapı taşları', 'Süreçler', 'Doküman üretici', 'Dosyalama', 'Görev tanımları', 'Rutin görevler', 'Şemalar ve grafikler', 'Genel bakış']) {
+      await kys.getByRole('tab', { name: ad }).click();
+      await expect(page.getByRole('heading', { level: 2, name: ad })).toBeVisible();
+      expect((await tasmaOlc(page)).belge, `${ad}: yatay taşma`).toBeLessThanOrEqual(0);
+    }
+    await kys.getByRole('tab', { name: 'Şemalar ve grafikler' }).click();
+    const tur = page.getByRole('tablist', { name: 'Şema türü' });
+    for (const ad of ['Akış şemaları', 'Süreç etkileşimi', 'Kaplumbağa', 'Organizasyon', 'Dosya ağacı', 'Pano']) {
+      await tur.getByRole('tab', { name: ad }).click();
+      await expect(tur.getByRole('tab', { name: ad, selected: true })).toBeVisible();
+      expect((await tasmaOlc(page)).belge, `${ad}: yatay taşma`).toBeLessThanOrEqual(0);
+    }
+    expect(ag.hatalar).toEqual([]);
+  });
 });
 
 test.describe('P3 ic denetim, takvim, performans, kalibrasyon, ayarlar', () => {
