@@ -1,18 +1,14 @@
-/* Arkon'un yeni ekranı (TS geçişi): sekmeler, bağlantı şeridi ve sayfa alanı. Parçalar kendi klasöründeki önekli css'i kullanır. */
+/* Arkon'un yeni ekranı (TS geçişi): sekmeler ve sayfa alanı; bağlantı durumu sayfa başlığında saatin yanında. Parçalar kendi klasöründeki önekli css'i kullanır. */
 /* Ölçek (eski useFit): kök 1600x900 tasarım alanına göre yakınlaşır; değeri ArkonYeni.tsx useOlcek yazar. */
 .tc-ay { display: grid; gap: var(--b-4); padding: var(--b-4); min-width: 0; zoom: var(--tc-ay-olcek, 1); }
-.tc-ay-serit {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3);
-  padding: var(--b-2) var(--b-4); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
-}
 .tc-ay-baglanti { display: inline-flex; align-items: center; }
 .tc-ay-icerik { display: grid; gap: var(--b-4); min-width: 0; }
 /* Sayfa başlığının sağındaki saat ve vardiya (eski .clock) */
 .tc-ay-saat { display: grid; justify-items: end; line-height: 1.1; color: var(--ink); }
 .tc-ay-saat small { color: var(--muted); font-size: var(--yazi-xs); }
 
-/* TV modu (eski html.tv): Arkon'un gezinmesi ve çağrı bandı gizlenir, pano tam ekranda kalır. */
-html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-serit, html.tc-ay-tv .tc-ay6-bant { display: none; }
+/* TV modu (eski html.tv): Arkon'un gezinmesi (eski ray, bağlantı durumu dahil) ve çağrı bandı gizlenir, pano tam ekranda kalır. */
+html.tc-ay-tv .tc-ay > .tc-sekmeler, html.tc-ay-tv .tc-ay-baglanti, html.tc-ay-tv .tc-ay6-bant { display: none; }
 
 /* "Operatör gözüyle" önizleme penceresi: 1600x900 cihaz alanı pencereye sığacak ölçekte. */
 .tc-ay-onizleme-ust {

@@ -3,9 +3,10 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { saat } from '../cekirdek/bicim.ts';
 import { anlikVardiya } from '../cekirdek/vardiya.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
+import { BaglantiDurumu } from './BaglantiDurumu.tsx';
 
 // Eski sayfa üst çubuklarının sağ ucu (PrepTop, QTop, LabTop, PageShell): öteki Arkon sayfalarına kısayollar ve saat. Saatin altında
-// sayfanın yazısı ya da (verilmezse) anlık vardiya yazar. Kısayol, kişinin göremediği sayfa için çizilmez.
+// sayfanın yazısı ya da (verilmezse) anlık vardiya yazar; saatin solunda bağlantı durumu. Kısayol, kişinin göremediği sayfa için çizilmez.
 export interface Kisayol { sayfa: string; simge: SimgeAdi; metin: string; yalnizSimge?: boolean }
 
 export function SaatSeridi({ kisayollar = [], alt }: { kisayollar?: readonly Kisayol[]; alt?: string }) {
@@ -18,6 +19,7 @@ export function SaatSeridi({ kisayollar = [], alt }: { kisayollar?: readonly Kis
           {k.yalnizSimge ? null : k.metin}
         </Dugme>
       ))}
+      <BaglantiDurumu />
       <span className="tc-ay-saat"><b className="mono">{saat(simdi)}</b><small>{alt ?? anlikVardiya(simdi, ayarlar.vardiyalar, ayarlar.tatiller).label}</small></span>
     </>
   );

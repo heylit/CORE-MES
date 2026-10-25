@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Dugme, KodOkuyucu, OzetKatmani, Pencere, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
+  Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
@@ -37,6 +37,7 @@ import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis
 import type { Perm } from '../cekirdek/tipler.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
+import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
 import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
@@ -978,6 +979,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <header className="tc-ay1-mobil-ust">
           <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
+          {/* Darda saat yok; kopukluk ve kayıt riski operatörden saklanmasın diye durum üst çubukta kalır. */}
+          <BaglantiDurumu />
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
           <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
         </header>
@@ -1037,11 +1040,13 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
         </button>
         <DurumLambasi durum={o.state} since={since} />
+        {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}
         <span className="tc-ay1-bosluk" />
         <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
         {ozetVar ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('ozetim')} title="Özetim" aria-label="Özetim"><Simge ad="user" /></button> : null}
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
         {!pv ? <Dugme tur="ikincil" simge="bell" onClick={() => ovYaz('call')}>Çağrı</Dugme> : null}
+        <BaglantiDurumu />
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
         <button type="button" className="tc-ay1-kisi" onClick={() => ovYaz('shift')} title="Vardiya özeti ve devir">
           <span className="tc-ay1-avatar">{basHarfler(ME)}</span>

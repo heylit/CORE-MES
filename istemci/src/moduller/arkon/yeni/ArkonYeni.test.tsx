@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
-import { baglantiOzeti } from './ArkonYeni.tsx';
+import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
 import { SAYFALAR, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 
@@ -41,8 +41,11 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
       'Operatör', 'Pano', 'Plan Kuyruğu', 'Kuyruk', 'Üretim Terminali Hazırlık', 'Üretim Anomalisi', 'Kalite', 'Çizim',
       'Bakım', 'Raporlar', 'TMI\'ye yazılamayanlar', 'Ayarlar',
     ]);
-    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve şerit bunu kayıt riski olarak söyler.
-    expect(screen.getByRole('status', { name: /Cihaz deposu açılamadı/ }).textContent).toContain('Kayıt riski');
+    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve sayfa başlığında saatin yanındaki durum (soru 488 a)
+    // bunu kayıt riski olarak söyler; ayrı bant yoktur.
+    const durum = await within(pano).findByRole('status', { name: /Cihaz deposu açılamadı/ }, { timeout: 10000 });
+    expect(durum.textContent).toContain('Kayıt riski');
+    expect(durum.closest('.tc-ay3-baslik')).not.toBeNull();
   }, 20000);
 
   it('sekmeden sayfa değişir; TMI ekranı olan sekme kendi adresine gider', async () => {
@@ -82,7 +85,7 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     const b = await bolum('Üretim Terminali Hazırlık');
     expect(b.getAttribute('data-sayfa')).toBe('onizle');
     expect(screen.getByRole('tab', { selected: true }).textContent).toContain('Üretim Terminali Hazırlık');
-    expect(screen.getByText('Önizleme: kayıt yapılmaz.')).toBeTruthy();
+    expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
   }, 20000);
 });
 
