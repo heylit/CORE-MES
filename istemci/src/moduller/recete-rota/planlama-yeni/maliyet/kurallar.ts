@@ -433,9 +433,9 @@ export function grupSaati(D: PlanVerisi, grup: string, m: MesaiSistemi): number 
 export interface TezgahGiderSatiri {
   tezgah: Tezgah; x: TezgahGideri; acik: number; kap: number; amort: number | null; op: number;
   dog: { enerji: number; sarf: number; bakim: number; operator: number | null }; dogTop: number;
-  pay: number; kalem: Record<string, number>; mesgul: number; aylik: number; oran: number | null; absorbe: number; atil: number;
+  pay: number; kalem: Record<string, number>; mesgul: number; aylik: number; oran: number | null; absorbe: number | null; atil: number | null;
 }
-export interface GenelGiderHesabi { tez: TezgahGiderSatiri[]; aylik: number; amort: number | null; kap: number; mesgul: number; absorbe: number; atil: number; kalemTop: number; ort: number | null }
+export interface GenelGiderHesabi { tez: TezgahGiderSatiri[]; aylik: number; amort: number | null; kap: number; mesgul: number; absorbe: number | null; atil: number | null; kalemTop: number; ort: number | null }
 const bosGider: TezgahGideri = { bedel: null, omur: null, hurda: null, kw: null, yuk: null, alan: null, sarf: null, bakim: null };
 // Tezgâhın genel gider oranı = (dağılan pay + amortisman) / önümüzdeki 30 günün pratik kapasitesi (msHesap).
 export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHesabi {
@@ -467,17 +467,20 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
   }
   for (const z of tez) {
     z.aylik = z.pay + (z.amort ?? 0);
-    // Amortismanı bilinmeyen tezgâhın oranı da bilinmez; sipariş maliyeti onun genel giderini boş bırakır.
-    z.oran = z.kap > 0 && z.amort !== null ? z.aylik / z.kap : null;
-    z.absorbe = z.oran === null ? 0 : Math.min(z.mesgul, z.kap) * z.oran;
-    z.atil = z.oran === null ? 0 : Math.max(0, z.kap - z.mesgul) * z.oran;
+    // Amortismanı bilinmeyen tezgâhın oranı, emilen ve atıl gideri de bilinmez (null); sipariş maliyeti onun genel giderini boş bırakır.
+    // Kapasitesi olmayan tezgâhta emilen ve atıl gider gerçekten sıfırdır.
+    const bilinmez = z.kap > 0 && z.amort === null;
+    z.oran = z.kap > 0 && !bilinmez ? z.aylik / z.kap : null;
+    z.absorbe = bilinmez ? null : z.oran === null ? 0 : Math.min(z.mesgul, z.kap) * z.oran;
+    z.atil = bilinmez ? null : z.oran === null ? 0 : Math.max(0, z.kap - z.mesgul) * z.oran;
   }
   const t = (f: (z: TezgahGiderSatiri) => number): number => top(tez.map(f));
   const kap = t((z) => z.kap);
   const aylik = t((z) => z.aylik);
-  const amortlar = tez.map((z) => z.amort).filter((x): x is number => x !== null);
+  // Bilinmeyenleri atlayan toplam; hiçbiri bilinmiyorsa null.
+  const bilinen = (f: (z: TezgahGiderSatiri) => number | null): number | null => { const l = tez.map(f).filter((x): x is number => x !== null); return l.length ? top(l) : null; };
   return {
-    tez, aylik, amort: amortlar.length ? top(amortlar) : null, kap, mesgul: t((z) => z.mesgul), absorbe: t((z) => z.absorbe), atil: t((z) => z.atil),
+    tez, aylik, amort: bilinen((z) => z.amort), kap, mesgul: t((z) => z.mesgul), absorbe: bilinen((z) => z.absorbe), atil: bilinen((z) => z.atil),
     kalemTop: top(M.kalemler.map((k) => kalemTutari(k, M, ms))), ort: kap > 0 && tez.every((z) => z.amort !== null) ? aylik / kap : null,
   };
 }
