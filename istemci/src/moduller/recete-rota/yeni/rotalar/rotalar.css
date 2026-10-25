@@ -145,7 +145,8 @@
 .tc-rr1-tile:hover { border-color: var(--ink); border-left-color: var(--renk); }
 
 /* Tuval */
-.tc-rr1-canvas-kap { position: relative; min-width: 0; min-height: var(--ekran-boy-60); }
+/* Kabın boyu sabit olmalı: yoksa tuval içerik kadar uzar, kaydırma ve sığdırma dikeyde çalışmaz, görünüm düğmeleri ekran dışında kalır. */
+.tc-rr1-canvas-kap { position: relative; min-width: 0; height: var(--ekran-boy-70); min-height: var(--ekran-boy-60); }
 .tc-rr1-canvas {
   position: relative; height: 100%; min-height: var(--ekran-boy-60); overflow: hidden; cursor: grab; isolation: isolate;
   border: 1px solid var(--edge); border-radius: var(--yari-1); background-color: var(--panel2); overscroll-behavior: contain; touch-action: none;
