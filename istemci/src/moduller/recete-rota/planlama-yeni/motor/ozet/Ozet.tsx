@@ -22,7 +22,7 @@ interface Ozellikler {
   komut: (k: HaritaKomutu | null) => void; ciftTik: (m: string) => void;
   kilavuz: string | null; kilavuzKapat: () => void;
   nasilAc: (id: BolgeKimligi) => void; grupAc: (g: string) => void; sipSec: (j: string, birak?: boolean) => void; tezSec: (m: string, birak?: boolean) => void;
-  gunSec: (d: number) => void; buyut: () => void;
+  gunSec: (d: number) => void; buyut: () => void; kartAc: (() => void) | null;
 }
 
 export function Ozet(o: Ozellikler) {
@@ -44,7 +44,7 @@ export function Ozet(o: Ozellikler) {
   return (
     <div className="tc-pym-oz" data-vurgu={sec ? '' : undefined} ref={degisken({ '--f': konum(v, t).toFixed(4) })}>
       <Pano {...pano('ozet')} ek={<Canli c={c} v={v} t={t} />}><Gostergeler l={kpi} /></Pano>
-      <Pano {...pano('bekle')}><Bekleme c={c} v={v} sec={sec} acikGrup={d.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} /></Pano>
+      <Pano {...pano('bekle')}><Bekleme c={c} v={v} sec={sec} acikGrup={d.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} kartAc={o.kartAc} /></Pano>
       <Pano {...pano('yorum')}><Yorumlar l={yor} eylem={eylem} /></Pano>
       <Pano {...pano('yuk')}><Yuk c={c} v={v} sec={sec} gun={gun} gunSec={o.gunSec} tezSec={o.tezSec} tezGrup={o.tezGrup} /></Pano>
       <Pano {...pano('yaris')}><Yaris c={c} v={v} sec={sec} sipSec={o.sipSec} /></Pano>

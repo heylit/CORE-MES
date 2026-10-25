@@ -203,7 +203,7 @@ function Anlat(o: Ozellikler & { wgSon: { current: number }; adimlar: AnlatAdimi
         </div>
         <div ref={gorsel} className="tc-pym-ks-gorsel">
           {a.gorsel === 'pay' ? <PaySeridi {...o} w={wg} kucuk />
-            : a.gorsel === 'bekle' ? <Bekleme c={o.c} v={v} sec={null} acikGrup={o.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} />
+            : a.gorsel === 'bekle' ? <Bekleme c={o.c} v={v} sec={null} acikGrup={o.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} kartAc={null} />
             : a.gorsel === 'sure' ? <Sure v={v} sipSec={o.sipSec} />
             : a.gorsel === 'yuk' ? <Yuk c={o.c} v={v} sec={null} gun={-1} gunSec={o.gunSec} tezSec={o.tezSec} tezGrup={o.tezGrup} />
             : null}

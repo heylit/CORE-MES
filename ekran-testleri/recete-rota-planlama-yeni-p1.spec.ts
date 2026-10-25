@@ -176,7 +176,7 @@ test.describe('P1d Keşfet', () => {
     await expect(page.getByRole('img', { name: 'Sipariş hatları' })).toBeVisible();
     await tasmaz(page);
     await sek.getByRole('tab', { name: 'Hazırlık' }).click();
-    await expect(page.getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Hazırlık' }).getByText('Emir hazırlık verisi bu ekrana bağlı değil.')).toBeVisible();
     await sek.getByRole('tab', { name: 'Planı anlat' }).click();
     const adimlar = page.getByRole('tablist', { name: 'Adımlar' });
     await expect(adimlar).toBeVisible();
@@ -186,6 +186,34 @@ test.describe('P1d Keşfet', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.getByText(/^3 \/ \d+$/)).toBeVisible();
     await tasmaz(page);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
+
+// P1d-2: seçim yan paneli (sipariş, iş adımı ve tezgâh kartı). Motor hamleleri pasif; seçim ve sekme yazma göndermez.
+test.describe('P1d Yan panel', () => {
+  test('Yan panel: seçim kartı açılır, sekmeler, yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
+    if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
+    await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
+    const nokta = page.locator('.tc-pym-ks-nokta').first();
+    if (!(await nokta.count())) { await tasmaz(page); return; }
+    await nokta.click();
+    const dk = page.getByRole('complementary', { name: 'Yan panel' });
+    await expect(dk).toBeVisible();
+    await expect(dk.getByRole('tab', { name: 'Yön ver' })).toHaveAttribute('aria-selected', 'true');
+    await expect(dk.getByText('SİPARİŞ')).toBeVisible();
+    await expect(dk.getByRole('button', { name: 'Öne al' })).toHaveAttribute('aria-disabled', 'true');
+    await tasmaz(page);
+    await dk.getByRole('tab', { name: 'Rota' }).click();
+    await expect(dk.getByText('Hazırlanıyor.')).toBeVisible();
+    await dk.getByRole('tab', { name: 'Yön ver' }).click();
+    await dk.locator('.tc-pym-at-yol .tc-pym-link').first().click();
+    await expect(dk.getByText('İŞ ADIMI')).toBeVisible();
+    await tasmaz(page);
+    await dk.getByRole('button', { name: 'Kapat (Esc)' }).click();
+    await expect(dk).toBeHidden();
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
