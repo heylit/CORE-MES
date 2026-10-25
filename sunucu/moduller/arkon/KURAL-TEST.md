@@ -182,3 +182,8 @@ A3 kırmızı (DOĞRULANDI, yerelde): her düzeltme tek tek geri alınınca ilgi
 | 15.4: açık çağrı kayıttan geri gelir | istemci acik-cagri.test.ts "açık çağrı döner" | aynı dosya: kapanan, başka makinenin, ekibi bilinmeyen ve 12 saatten eski çağrı gelmez |
 | 19.1: eski merkez çiziminde başlatma görevi uyarı olur, rozet değişir | istemci cizim-merkezi.test.ts "Terminalde eski çizim" | aynı test: güncel çizimde ve başlatmayan görevde değişmez |
 | Soru 197 a: merkez çizimi durumunu paketi okuyan her Arkon rolü sorar | merkez-kontrol-okuma.test.ts "operatör ve amir kontrolü okur" | aynı test: Arkon rolü olmayan 403; operatör ve amir merkez listesinde 403 |
+
+| 527: kuyruk sırası Hazırlık'ındır; plan değişmez, taslak açılmaz | yansima.test.ts "kuyruk sırası: Hazırlık istasyon kuyruğunu sıralar..." | aynı test: işlemsiz 403, kapsam dışı 403, geçersiz 400, eski ekran 409, kilitli iş 409. Mutasyon: eski ekran denetimi kaldırılınca kırmızı (yerelde) |
+| 527: Hazırlık sırası işin bugünkü istasyonunda geçerlidir | yansima.test.ts "kuyruk sırası: plan işi başka istasyona alınca..." | aynı test: başka istasyona alınan işte `tmi.kuyruk` yok |
+| 527: plan sırasına dön istasyonun Hazırlık sırasını siler | yansima.test.ts "kuyruk sırası: Hazırlık..." (silinen 2) | aynı test: işlemsiz 403; sıra yokken 409 |
+| 527: plan saati paket kimliğiyle, parça kendi yeri | kurallar.test.ts "plan saatleri paket kimliğiyle..." | aynı test: ek yoksa gövde aynı nesne |

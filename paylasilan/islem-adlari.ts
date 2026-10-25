@@ -13,6 +13,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'arkon.yansima-oku': 'TMI aktarımını görme',
   'arkon.yansima-yeniden': 'TMI aktarımını yeniden deneme',
   'arkon.anomali-kisi': 'Üretim anomalisinde kişi kırılımını görme',
+  'arkon.kuyruk-sirala': 'Üretim kuyruğunun sırasını değiştirme',
   'atolye.yaz': 'Fabrika haritasını düzenleme',
   'cizimler.oku': 'Çizim ve dosyaları görme',
   'cizimler.yaz': 'Çizim belgesi ve taslak revizyon',

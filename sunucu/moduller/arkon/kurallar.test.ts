@@ -9,6 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
+import { kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -909,3 +910,34 @@ test('298: yalnız açılan çağrı bildirilir; yer makine, yoksa istasyon; tan
   assert.equal(cagriBildirimi({ ...ac, callId: '' }), null);
   assert.equal(cagriBildirimi({ ...ac, callId: 17 }), null);
 });
+
+// Kart 527: Üretim Hazırlık kuyruk sırası.
+test('kuyruk sırası reddi: yeni sıra aynı işlerin dizilişi olmalı; ekran bugünkü kuyruğu ve Hazırlık sırasını görmeli', () => {
+  const mevcut = [{ kimlik: 'a', sira: null }, { kimlik: 'b', sira: null }, { kimlik: 'c', sira: null }];
+  assert.equal(kuyrukSirasiReddi(['a', 'b', 'c'], ['c', 'a', 'b'], mevcut), null);
+  assert.equal(kuyrukSirasiReddi(['a', 'b', 'c'], ['c', 'a', 'a'], mevcut), 'gecersiz');
+  assert.equal(kuyrukSirasiReddi(['a', 'b', 'c'], ['c', 'a'], mevcut), 'gecersiz');
+  assert.equal(kuyrukSirasiReddi(['a', 'b'], ['b', 'a'], mevcut), 'eski', 'kuyrukta ekranın görmediği iş var');
+  assert.equal(kuyrukSirasiReddi(['a', 'b', 'c', 'd'], ['d', 'a', 'b', 'c'], mevcut), 'eski', 'kuyruktan çıkmış iş');
+  const sirali = [{ kimlik: 'a', sira: 2 }, { kimlik: 'b', sira: 1 }, { kimlik: 'c', sira: null }];
+  assert.equal(kuyrukSirasiReddi(['b', 'a', 'c'], ['a', 'b', 'c'], sirali), null);
+  assert.equal(kuyrukSirasiReddi(['b', 'c', 'a'], ['a', 'b', 'c'], sirali), null, 'sırasız işin yeri plandandır, denetlenmez');
+  assert.equal(kuyrukSirasiReddi(['a', 'b', 'c'], ['c', 'b', 'a'], sirali), 'eski', 'başkasının sıralamasından önceki ekran');
+});
+
+test('plan saatleri paket kimliğiyle; kuyruk ve plan saati tmi alanına eklenir, yoksa gövde aynı kalır', () => {
+  const t = (dk: number) => new Date(Date.UTC(2026, 9, 25, 8, dk));
+  const saat = planSaatleri([
+    { isEmriId: 5, baslangic: t(0), bitis: t(30) },
+    { isEmriId: 6, baslangic: t(30), bitis: t(90), parcalar: [{ no: 1, baslangic: t(30), bitis: t(60) }, { no: 2, baslangic: t(60), bitis: t(90) }] },
+  ]);
+  assert.deepEqual(saat.get('tmi-ie-5'), { baslangic: '2026-10-25T08:00:00.000Z', bitis: '2026-10-25T08:30:00.000Z' });
+  assert.deepEqual(saat.get('tmi-ie-6-p2'), { baslangic: '2026-10-25T09:00:00.000Z', bitis: '2026-10-25T09:30:00.000Z' });
+  assert.equal(saat.get('tmi-ie-6')?.bitis, '2026-10-25T09:30:00.000Z', 'bölünmüş işin bütünü zarftır');
+  const govde = { id: 'tmi-ie-5', tmi: { isEmriId: 5 } };
+  assert.equal(kuyrukAlanlariniEkle(govde, { kuyruk: null, planSaati: null }), govde);
+  assert.deepEqual(kuyrukAlanlariniEkle(govde, { kuyruk: { sira: 1, kisi: 'K', zaman: 'z' }, planSaati: saat.get('tmi-ie-5')! }), {
+    id: 'tmi-ie-5', tmi: { isEmriId: 5, kuyruk: { sira: 1, kisi: 'K', zaman: 'z' }, planSaati: saat.get('tmi-ie-5') },
+  });
+});
+

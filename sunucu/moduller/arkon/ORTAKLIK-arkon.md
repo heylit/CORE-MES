@@ -8,6 +8,7 @@ Kaynak: göçler `sunucu/gocler/*arkon*`, `arkon/shared/model.ts`, `sunucu/modul
 - `arkon_kayit` (yalnız eklenir): `tur` (events, counts, meas, calls, audit), `cid`, `zaman`, `makine`, `is_merkezi`, `emir_no`, `paket_id`, `madde_id`, `govde`, `kisi_id`.
 - `arkon_dosya` (`ozet`, `icerik`, `boyut`, `yukleyen_id`), `arkon_dosya_parcasi` (geçici), `arkon_ileti` (geçici).
 - `arkon_tmi_yansima`: `kayit_id`, `emir_id` (yabancı anahtarsız), `kisi_id`, `sonuc` (bekliyor, yazildi, reddedildi, eslenemedi, hatali), `neden`, `deneme`, `son_hata`, `son_deneme`, `zaman`.
+- `arkon_kuyruk_sirasi` (kart 527): `is_emri_id` (yabancı anahtarsız), `parca_no`, `istasyon_id`, `sira`, `surum`, `kisi_id`, `zaman`. İş sırası kavramı: canlı plan sırası plan modülünün, istasyon kuyruğu sırası Arkon'un.
 
 ## Kavramlar
 | Kavram | Arkon ne tutuyor | Yer | Bağ |

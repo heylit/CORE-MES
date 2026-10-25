@@ -4,6 +4,7 @@ import {
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
+  kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
   merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import * as servis from './servis.ts';
@@ -273,5 +274,22 @@ export const uclar = [
     govde: planSiralaGovdesi,
     cevap: planSiralaCevabi,
     isle: ({ db, kullanici, govde }) => servis.planSirasiYaz(db, kullanici, govde),
+  }),
+  // Üretim Hazırlık kuyruk sırası (kart 527, 522 2 a): Arkon rolü değil, ayrı işlem ister; plan değişmez.
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/kuyruk-sira/sirala',
+    yetki: 'arkon.kuyruk-sirala',
+    govde: kuyrukSiralaGovdesi,
+    cevap: kuyrukSiralaCevabi,
+    isle: ({ db, kullanici, govde }) => servis.kuyrukSirasiYaz(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/kuyruk-sira/plana-don',
+    yetki: 'arkon.kuyruk-sirala',
+    govde: kuyrukPlanaDonGovdesi,
+    cevap: kuyrukPlanaDonCevabi,
+    isle: ({ db, kullanici, govde }) => servis.kuyrukPlanaDon(db, kullanici, govde),
   }),
 ];

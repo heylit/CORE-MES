@@ -1896,7 +1896,9 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(p1['malzemeNo'], r.kart);
     assert.equal(p1['status'], 'draft');
     // İstasyon talaşlı ve emrin CNC kurulumunda onayı yok: hazırlık uyarısı (kilit değil).
-    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok' });
+    const planSaati = (p1['tmi'] as { planSaati?: unknown }).planSaati;
+    assert.ok(planSaati, 'canlı plandaki işin plan saati');
+    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok', planSaati });
     assert.deepEqual(tmiPlani(p3), { canli: true, sira: 2, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, 'aynı makinede ikinci iş');
     const tek = await paketOku(ieKimligi(ie2!));
     assert.deepEqual(tek?.govde, p2);
@@ -2163,6 +2165,75 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const ret = await sirala([ie1!, ie3!, ie2!], [ie3!, ie1!, ie2!]);
     assert.equal(ret.durum, 409, JSON.stringify(ret.govde));
     assert.match(JSON.stringify(ret.govde), /Kilitli ya da dondurulmuş iş yerinden oynatılamaz/);
+  });
+
+  // Kart 527 (519 1 c, 522): Üretim Hazırlık kuyruğu kendi sırasını yazar, plan değişmez; paket plan saatini ve Hazırlık sırasını taşır.
+  test('kuyruk sırası: Hazırlık istasyon kuyruğunu sıralar, plan ve taslak değişmez; eski ekran, geçersiz sıra, yetkisiz, kapsam dışı ve kilitli iş reddedilir; plan sırasına döner', async () => {
+    const r = await rotaliEmirKur({ ucuncuIlkte: true });
+    const [ie1, , ie3] = await isEmriIdleri(r.emirId);
+    const [k1, k3] = [ieKimligi(ie1!), ieKimligi(ie3!)];
+    const tmiAlani = (p: Paket | undefined, ad: string): unknown => (p?.['tmi'] as Record<string, unknown> | undefined)?.[ad];
+    const sirala = (cerez: string, onceki: string[], yeni: string[], istasyon = r.ilk) =>
+      istek<{ surum: number }>(cerez, 'POST', '/arkon/kuyruk-sira/sirala', { istasyon, onceki, yeni, kaynak: 'y1' });
+    const hazirlikci = await kisiKur(`kq${(sayac += 1)}`, ['arkon.hazirlik', 'sayfa.arkon', 'arkon.kuyruk-sirala']);
+    const planlamaci = await kisiKur(`kq${(sayac += 1)}`, ['arkon.planlama', 'sayfa.arkon', 'plan.yaz']);
+    const ilk = await paketler();
+    assert.equal(tmiAlani(ilk.get(k1)?.govde, 'kuyruk'), undefined, 'sıralanmamış kuyrukta Hazırlık sırası yok');
+    const saat = tmiAlani(ilk.get(k1)?.govde, 'planSaati') as { baslangic: string; bitis: string };
+    assert.ok(Date.parse(saat.bitis) > Date.parse(saat.baslangic), JSON.stringify(saat));
+    const senaryolar = async () => (await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_senaryosu'))!.n;
+    const taslakOnce = await senaryolar();
+
+    assert.equal((await sirala(operator, [k1, k3], [k3, k1])).durum, 403, 'Arkon operatörü');
+    assert.equal((await sirala(planlamaci, [k1, k3], [k3, k1])).durum, 403, 'kuyruk işlemi olmayan planlamacı');
+    assert.equal((await sirala(hazirlikci, [k1, k3], [k3, k3])).durum, 400, 'yinelenen iş');
+    assert.equal((await sirala(hazirlikci, [k1, 'oz-p1'], ['oz-p1', k1])).durum, 400, 'TMI iş emri paketi değil');
+    assert.equal((await sirala(hazirlikci, [k1], [k1])).durum, 409, 'ekran kuyruğun bir kısmını görüyor');
+    assert.equal((await sirala(hazirlikci, [k1, k3], [k1, k3])).durum, 400, 'sıra değişmedi');
+    assert.equal((await sirala(hazirlikci, [k1, k3], [k3, k1], 'YOK-ISTASYON')).durum, 404);
+
+    const c = await sirala(hazirlikci, [k1, k3], [k3, k1]);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const sonra = await paketler();
+    assert.deepEqual([k3, k1].map((k) => (tmiAlani(sonra.get(k)?.govde, 'kuyruk') as { sira: number }).sira), [1, 2]);
+    assert.match((tmiAlani(sonra.get(k3)?.govde, 'kuyruk') as { kisi: string }).kisi, /^Deneme kq/, 'kişi sunucudan');
+    assert.deepEqual([k1, k3].map((k) => (tmiPlani(sonra.get(k)?.govde) as { sira: number }).sira), [1, 2], 'canlı plan sırası değişmedi');
+    assert.equal(await senaryolar(), taslakOnce, 'plan taslağı açılmadı');
+    assert.equal((await sirala(hazirlikci, [k1, k3], [k3, k1])).durum, 409, 'ekran başkasının sıralamasından önceki sırayı görüyor');
+
+    const yasakAdi = `kq${(sayac += 1)}`;
+    await kisiKur(yasakAdi, ['arkon.hazirlik', 'sayfa.arkon', 'arkon.kuyruk-sirala']);
+    await ortam!.sahip.sorgu("INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) SELECT id, $2 FROM kisi WHERE kullanici_adi = $1", [yasakAdi, r.ikinciMerkez]);
+    assert.equal((await sirala(await girisCerezi(yasakAdi), [k3, k1], [k1, k3])).durum, 403, 'kapsam dışındaki istasyon');
+
+    await ortam!.sahip.sorgu('UPDATE plan_yerlesimi SET kilitli = true WHERE is_emri_id = $1', [ie1]);
+    const kilitli = await sirala(hazirlikci, [k3, k1], [k1, k3]);
+    assert.equal(kilitli.durum, 409, JSON.stringify(kilitli.govde));
+    assert.match(JSON.stringify(kilitli.govde), /yerinden oynatılamaz/);
+    await ortam!.sahip.sorgu('UPDATE plan_yerlesimi SET kilitli = false WHERE is_emri_id = $1', [ie1]);
+
+    const don = (cerez: string) => istek<{ silinen: number }>(cerez, 'POST', '/arkon/kuyruk-sira/plana-don', { istasyon: r.ilk, kaynak: 'y1' });
+    assert.equal((await don(planlamaci)).durum, 403);
+    const d = await don(hazirlikci);
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    assert.equal(d.govde.silinen, 2);
+    assert.equal(tmiAlani((await paketler()).get(k3)?.govde, 'kuyruk'), undefined, 'kuyruk yeniden plan sırasında');
+    assert.equal((await don(hazirlikci)).durum, 409, 'Hazırlık sırası yok');
+  });
+
+  // Plan işi başka istasyona alınca Hazırlık sırası o işte geçersizdir: iş yeni istasyonunda sırasız durur.
+  test('kuyruk sırası: plan işi başka istasyona alınca eski istasyondaki sıra işe uygulanmaz', async () => {
+    const r = await rotaliEmirKur({ ucuncuIlkte: true });
+    const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
+    const hazirlikci = await kisiKur(`kq${(sayac += 1)}`, ['arkon.hazirlik', 'sayfa.arkon', 'arkon.kuyruk-sirala']);
+    const c = await istek(hazirlikci, 'POST', '/arkon/kuyruk-sira/sirala', { istasyon: r.ilk, onceki: [ieKimligi(ie1!), ieKimligi(ie3!)], yeni: [ieKimligi(ie3!), ieKimligi(ie1!)], kaynak: 'y1' });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const ikinciMakine = (await makinesi(ie2!)).id;
+    await ortam!.sahip.sorgu('UPDATE uretim_emirleri_is_emri SET makine_id = $2 WHERE id = $1', [ie3, ikinciMakine]);
+    await canliyaYerlestir(ie3!, { makine: ikinciMakine }, 200);
+    const p = (await paketler()).get(ieKimligi(ie3!))?.govde;
+    assert.equal(p?.['machine'], r.ikinci);
+    assert.equal((p?.['tmi'] as Record<string, unknown>)['kuyruk'], undefined);
   });
 
   // Demo 2.16 (kart #544): emrin bir adımı çalışırken aynı emrin bekleyen adımı Arkon'dan sıralanır (çalışan adım kart #199 3b testinde).

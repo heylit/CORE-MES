@@ -807,3 +807,26 @@ Kontrol ucu kapısı (19.1): Soru 197 a, "Soru 197: a, yetki onayli" (2026-10-23
   uyarıya ve Çağrı'ya döner (`data/cizim-merkezi.ts eskiCizim, eskiCizimGorevi`, `teknik-resim.ts`, `operator.ts`). Başlatmayı sunucu zaten reddediyordu (denetim #34).
 - 19.1 kapısı (ayrı commit): `GET /arkon/cizim-merkezi/kontrol` paketi okuyabilen bütün Arkon rollerine açıldı (`kurallar.ts merkezDurumunuOkuyabilirMi`);
   operatör ve amir 403 aldığı için terminal rozeti hiç değişmiyordu. Soru 197 b seçilseydi yalnız bu commit geri alınırdı.
+
+## Kart 527: Üretim Hazırlık kuyruk sırası, plan referans (sunucu)
+
+Kullanıcı kararları: 519 "1 c, 2 a, 3 a, 4 evet" ve "519 okuma doğru"; 522 "1 a, 2 a" ve "522 okuma doğru" (2026-10-25). 519 1 c, A4 "b" kararını değiştirir:
+TMI işinin istasyon kuyruğu sırası artık Üretim Hazırlık'ındır, operatör onu izler, canlı plan referans kalır; "Plana öner" bugünkü A4 komutudur.
+- Tablo `arkon_kuyruk_sirasi` (göç `20261025193000_arkon_kuyruk_sirasi.sql`, boş tablo): iş emri, parça no (0 bütün), istasyon, sıra, sürüm, kişi, zaman.
+  Paket kimliği kayıtsız iş emri paketinde her okumada yeniden kurulduğu için sıra pakette (`seq`) tutulmaz (519 2 a durduruldu, 522 1 a).
+- İşlem `arkon.kuyruk-sirala` (Arkon rolü değil; göç `20261025193500_kisiler_arkon_kuyruk_sirala.sql`: `cam`, `planlama_proje`; yönetici bütün işlemleri taşır).
+- Uçlar: `POST /arkon/kuyruk-sira/sirala` (istasyon kodu, ekranın gördüğü ve yeni paket kimlikleri) ve `POST /arkon/kuyruk-sira/plana-don` (istasyonun
+  Hazırlık sırası silinir). Serviste Arkon rolü ve istasyonun iş merkezi kapsamı; yeni sıra aynı işlerden değilse ya da TMI iş emri paketi değilse 400,
+  ekran bugünkü kuyruğun bütün işlerini ya da Hazırlık sırasını görmüyorsa 409, plan kilitli ya da dondurulmuş işi yerinden oynatırsa 409
+  (`planSirasiTasinacaklar`, A4 ile aynı kural), bilinmeyen istasyon 404. İstasyon başına danışma kilidiyle sırayla yazılır.
+- Paket: `tmi.kuyruk { sira, kisi, zaman }` (Hazırlık sırası; satırın istasyonu işin bugünkü istasyonu değilse yazılmaz) ve `tmi.planSaati { baslangic, bitis }`
+  (canlı plandan; parçada parçanın yeri). İkisi de TMI alanıdır, istemciden alınmaz. `tmi.plan` değişmedi.
+- Testler: yansima.test.ts "kuyruk sırası: ..." (iki test), arkon.test.ts "uç tanımı", "her uç", kurallar.test.ts iki birim testi.
+
+Bu tur şunları varsaydı:
+1. Ekranın gördüğü sıra denetimi işlerin kümesine ve Hazırlık sırası olan işlerin dizilişine bakar; sırasız işlerin dizilişi plandandır, denetlenmez.
+2. Sıralanmamış istasyonda kuyruk canlı plan sırasıdır; Hazırlık sırası olan işler önce, plana yeni giren ya da sırasız iş ardından plan sırasıyla gelir (istemci).
+3. Plan kilidi ve dondurma Hazırlık sırasında da işi yerinde tutar (A4 kuralı); başlamış iş taşınır.
+4. Kapanan iş emrinin satırı silinmez, istasyon yeniden sıralanınca ya da plana dönünce silinir; okumada yalnız açık işler görünür.
+5. Plan saati ve Hazırlık sırası paket sürümüne girer: canlıya alma ya da sıralama, o istasyonda açık düzenlemede çakışmayı artırabilir (ölçülmedi).
+6. İstemci (Plan Kuyruğu, operatör sırası, plan çipi) 521 düzen yaması main'e girince ayrı yamayla gelir; bu yama yalnız sunucudur.
