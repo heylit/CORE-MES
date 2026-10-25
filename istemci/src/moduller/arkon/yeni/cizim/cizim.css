@@ -329,8 +329,8 @@
 @container tc-ay5 (min-width: 1000px) {
   .tc-ay5-kipler { display: none; }
   /* Eskisi gibi sütunlar ekran boyunda kalır, uzun içerik kendi içinde kayar. */
-  /* Yükseklik ölçekli görünür alandan (--tc-ay-vh) sekme, şerit ve kısayol payı düşülerek gelir; eski labmain ekranın kalanını doldururdu. */
-  .tc-ay5-govde { grid-template-columns: var(--menu-genis) minmax(0, 1fr) var(--bildirim-genis); align-items: stretch; block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) * 4); }
+  /* Yükseklik ölçekli görünür alandan (--tc-ay-vh, kabuğun şeridinin altı) bant ve kısayol payı düşülerek gelir; eski labmain ekranın kalanını doldururdu. */
+  .tc-ay5-govde { grid-template-columns: var(--menu-genis) minmax(0, 1fr) var(--bildirim-genis); align-items: stretch; block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) * 3); }
   .tc-ay5-govde > .tc-ay5-panel { overflow-y: auto; }
   .tc-ay5-cizim { min-block-size: 0; }
 }

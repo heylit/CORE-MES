@@ -17,7 +17,7 @@ const dosyalar = async () => screen.findByRole('complementary', { name: 'Dosyala
 describe('A5 Çizim', () => {
   it('yönetici: boş çalışma, ayar sekmeleri, kayıtlı çizim ve paket listesi; açılışta yazma yok', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler: { draws: [CIZIM], pkgs: [PAKET] } });
-    arkonAc('/arkon/yeni/cizim');
+    arkonAc('/arkon/cizim');
     const d = await dosyalar();
     expect(await within(d).findByText('Deneme cizim')).toBeTruthy();
     expect(within(d).getByText('IE-DENEME-1')).toBeTruthy();
@@ -38,17 +38,17 @@ describe('A5 Çizim', () => {
 
   it('sayfa başlığında Hazırlık ve operatör kısayolu, saatin altında okuma türü (eski LabTop)', async () => {
     sunucuKur(YONETICI, {});
-    arkonAc('/arkon/yeni/cizim');
+    arkonAc('/arkon/cizim');
     await dosyalar();
     expect(screen.getByText('PDF · 3B okuma')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Operatör ekranı' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Üretim Terminali Hazırlık' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/yeni/hazirlik'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/hazirlik'); });
   }, 30000);
 
   it('planlamacı stüdyoyu kullanır ama kayıtlı çizimi silemez', async () => {
     const istekler = sunucuKur(PLANLAMA, { belgeler: { draws: [CIZIM] } });
-    arkonAc('/arkon/yeni/cizim');
+    arkonAc('/arkon/cizim');
     const d = await dosyalar();
     expect(await within(d).findByText('Deneme cizim')).toBeTruthy();
     expect(within(d).queryByRole('button', { name: /^Sil/ })).toBeNull();
@@ -57,7 +57,7 @@ describe('A5 Çizim', () => {
 
   it('yönetici kayıtlı çizimi siler: silme isteği sunucuya gider', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler: { draws: [CIZIM] } });
-    arkonAc('/arkon/yeni/cizim');
+    arkonAc('/arkon/cizim');
     const d = await dosyalar();
     fireEvent.click(await within(d).findByRole('button', { name: 'Sil: Deneme cizim' }));
     await waitFor(() => { expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/arkon/belgeler/draws/dr-deneme/sil')).toBe(true); }, { timeout: 10000 });
@@ -66,7 +66,7 @@ describe('A5 Çizim', () => {
   it('paket açılır, kaydedilir ve pakete aktarılır: draws ve pkgs yazılır', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const istekler = sunucuKur(YONETICI, { belgeler: { pkgs: [PAKET] } });
-    arkonAc('/arkon/yeni/cizim');
+    arkonAc('/arkon/cizim');
     const d = await dosyalar();
     fireEvent.click(await within(d).findByText('IE-DENEME-1'));
     expect(await within(d).findByText('deneme.pdf')).toBeTruthy();

@@ -1,14 +1,16 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { ArkonKisi, ArkonRolu } from '#paylasilan/sozlesme/arkon.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
+import { CerceveSayacBaglami, type CerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
 import { YENI_EKRAN_ISLEMI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { rotalar } from '../rotalar.tsx';
+import { SAYFA_DISI, sayfaAdresi, sekmeMaddeleri } from './sayfalar.ts';
 
 // Yeni Arkon ekranının ekran testleri için ortak kurulum (A0 ve parçalar kullanır). TMI uçları sahte fetch'le cevaplanır;
 // belgeler `belgeler` ile, kayıtlar `kayitlar` ile verilir. Kişi adları uydurmadır.
@@ -69,15 +71,20 @@ export function sunucuKur(d: Deneme, s: SahteSunucu = {}): Istek[] {
 // Testin okuduğu adres: ekranın gezdiği yer.
 function Adres() { return <output data-testid="adres">{useLocation().pathname}</output>; }
 
-export function arkonAc(adres: string) {
+// Sayfalar arası geçiş kabuğun ikinci menü şeridindedir (553 1 a); testte yerine yalın bağlantılar. sayacYaz: kabuğun şeritteki
+// sayılar için verdiği yazıcı.
+export function arkonAc(adres: string, { sayacYaz = null }: { sayacYaz?: CerceveSayacYazici | null } = {}) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
-    <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}>
+    <QueryClientProvider client={istemci}><BildirimSaglayici><CerceveSayacBaglami.Provider value={sayacYaz}><MemoryRouter initialEntries={[adres]}>
+      <nav aria-label="Deneme şeridi">
+        {sekmeMaddeleri().map((m) => <Link key={m.anahtar} to={SAYFA_DISI[m.anahtar] ?? sayfaAdresi(m.anahtar)}>{m.baslik}</Link>)}
+      </nav>
       <Routes>
         {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
         <Route path="*" element={<p>Başka sayfa</p>} />
       </Routes>
       <Adres />
-    </MemoryRouter></BildirimSaglayici></QueryClientProvider>,
+    </MemoryRouter></CerceveSayacBaglami.Provider></BildirimSaglayici></QueryClientProvider>,
   );
 }

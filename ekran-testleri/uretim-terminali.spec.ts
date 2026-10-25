@@ -7,7 +7,7 @@ test.describe('operatör', () => {
   test.use({ hesap: 'ornek.operator1' });
 
   test('kendi istasyonunda açılır; iş yokken sayaç kapalı; Özetim açılır', async ({ page, ag, ac }, bilgi) => {
-    await ac('/uretim-terminali');
+    await ac('/uretim-terminali/eski');
     const f = await cerceve(page);
     // Makine ataması istasyon yetkisi sayılır (#1433): operatör 1 ORN-TORNA-1 ile açılır.
     await expect(f.getByRole('banner')).toContainText('ORN-TORNA-1');
@@ -26,7 +26,7 @@ test.describe('operatör', () => {
   // A0.3, T5 (uçtan uca test raporu 2026-10-25): iş yokken hedef uydurulmaz ve iş düğmeleri kapalıdır.
   test('A0.3: istasyonda iş yokken "İşi Başlat" kapalı, sayaç hedef ve kalan göstermez', async ({ page, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g1280', 'düğme geniş ekranda ilk görünümde');
-    await ac('/uretim-terminali');
+    await ac('/uretim-terminali/eski');
     const f = await cerceve(page);
     await expect(f.getByText('Bu istasyonda iş yok').first()).toBeVisible();
     await expect(f.getByRole('button', { name: 'İşi Başlat' })).toBeDisabled();
@@ -39,7 +39,7 @@ test.describe('yönetici', () => {
   test.use({ hesap: 'ornek.yonetici' });
 
   test('cihazda istasyon yokken seçici kendiliğinden açılır ve bütün istasyonları listeler', async ({ page, ag, ac }) => {
-    await ac('/uretim-terminali');
+    await ac('/uretim-terminali/eski');
     const f = await cerceve(page);
     const secici = f.locator('.ov').filter({ hasText: 'Hangi istasyonda?' });
     await expect(secici).toBeVisible();

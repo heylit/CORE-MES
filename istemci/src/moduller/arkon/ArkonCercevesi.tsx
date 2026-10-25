@@ -66,12 +66,15 @@ const hashSayfasi = (hash: string): string => decodeURIComponent(hash.replace(/^
 // Arkon sayfasının TMI adresi. Üretim Terminali'nde adres hep terminalde kalır: /arkon'a geçmek çerçeveyi yeniden kurup
 // operatörün yarım işini kaybettirirdi ve Arkon MES sayfası olmayan rolde "sayfa bulunamadı" verirdi.
 export const ARKON_KOKU = '/arkon';
+// Yeni ekran Arkon'un adreslerine geçti (541, 527 1 a): çok sayfalı çerçeve bir süre bu kökün altındadır (/arkon/eski/<sayfa>).
+export const ESKI_ARKON_KOKU = '/arkon/eski';
+const cokSayfali = (kok: string | null): boolean => kok === ARKON_KOKU || kok === ESKI_ARKON_KOKU;
 // Arkon'un operatör ekranının adres işareti boştur; TMI adresinde `operator` adıyla durur, böylece /arkon girişi rolüne göre
 // başka sayfayı açabilir.
 export const OPERATOR_SAYFASI = 'operator';
 const arkonSayfasi = (tmi: string): string => (tmi === OPERATOR_SAYFASI ? '' : tmi);
 export const tmiAdresi = (kok: string, sayfa: string): string =>
-  kok !== ARKON_KOKU ? kok : `${ARKON_KOKU}/${encodeURIComponent(sayfa === '' ? OPERATOR_SAYFASI : sayfa)}`;
+  !cokSayfali(kok) ? kok : `${kok}/${encodeURIComponent(sayfa === '' ? OPERATOR_SAYFASI : sayfa)}`;
 
 // Açılan ekran kişinin Arkon rolündendir (sunucu rolü kişinin TMI rolünden çözer; ek Arkon işlemi değiştirmez): operatör
 // operatör ekranından, Pano'yu görebilen öteki roller Pano'dan girer.
@@ -83,6 +86,7 @@ export function arkonGirisSayfasi(rol: ArkonRolu, islemler: readonly string[]): 
 
 // Arkon rolü operatör olan kişi Arkon MES'ten Üretim Terminali'ne girer: operatör ekranı orada tam ekran ve yarım iş korunarak açılır.
 export const URETIM_TERMINALI_YOLU = '/uretim-terminali';
+export const URETIM_TERMINALI_ESKI_YOLU = '/uretim-terminali/eski';
 export const operatorTerminaleGirer = (rol: ArkonRolu, islemler: readonly string[]): boolean =>
   rol === 'operator' && islemler.includes('sayfa.uretim-terminali');
 
@@ -98,7 +102,7 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
   // Oturum çıkışsız kapanırsa (süre doldu) açık çerçeve de temizler.
   useEffect(() => { if (oturum.data === null) yerelVeriyiSil(); }, [oturum.data]);
   // Rol giriş sayfası yalnız Arkon MES'in kendisindedir; Üretim Terminali hep operatör ekranını açar.
-  const girisSayfasi = kok === ARKON_KOKU && adresSayfasi === '';
+  const girisSayfasi = cokSayfali(kok) && adresSayfasi === '';
   const gezin = useNavigate();
   const cikis = useCikis();
   const ben = useQuery({ queryKey: anahtarlar.ben, queryFn: () => api.get<ArkonBenCevabi>('/arkon/ben') });
@@ -176,7 +180,7 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
   // Ctrl K'den gelen emir yalnız Üretim Terminali'nde seçilir. İstek Arkon yüklenmiş pencereye bırakılır (boş çerçeve yüklenince
   // değişir) ve bırakılınca adresten silinir: yenilemede yeniden seçmez.
   const [arama, aramaYaz] = useSearchParams();
-  const secilecekEmir = kok === URETIM_TERMINALI_YOLU ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
+  const secilecekEmir = kok === URETIM_TERMINALI_YOLU || kok === URETIM_TERMINALI_ESKI_YOLU ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
   const secilecekKart = secilecekEmir === null ? null : emirParametresiOku(arama.get(KART_PARAMETRESI));
   const yuklu = useRef(false);
   // Adresten silme bir sonraki çizimde görünür; arada gelen ikinci yükleme ya da etki aynı isteği yeniden göndermesin.
@@ -219,7 +223,8 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
     if (hashSayfasi(pencere.location.hash) !== sayfa) pencere.location.hash = encodeURIComponent(sayfa);
   }, [sayfa]);
 
-  if (terminale) return <Navigate replace to={URETIM_TERMINALI_YOLU} />;
+  // Eski görünümden eski terminale: kişi eski görünümde kalır.
+  if (terminale) return <Navigate replace to={kok === ESKI_ARKON_KOKU ? URETIM_TERMINALI_ESKI_YOLU : URETIM_TERMINALI_YOLU} />;
   const devralPenceresi = (
     <MakineDevralPenceresi
       red={siradaki}
