@@ -29,7 +29,8 @@ export function BosPlan({ c, cx }: { c: PlanlamaCalismasi; cx: Derleme }) {
   );
 }
 
-// Çalışma kaydı yokken (Soru 489/2 c): sade mesaj, kartın üç adımı ve pasif "Planı kur"; sayılar çalışmayla gelir, çalışmayı ekran kurmaz (289/8).
+// Çalışma kaydı yokken (Soru 489/2 c): sade mesaj, kartın üç adımı, pasif "Planı kur" ve "Veri ve kısıtlar" (497/10 a); sayılar çalışmayla gelir,
+// çalışmayı ekran kurmaz (289/8).
 export function BosCalisma() {
   return (
     <div className="tc-pym-bos tc-pym-bos-genis">
@@ -40,6 +41,7 @@ export function BosCalisma() {
       </ol>
       <div className="tc-pym-bos-dugmeler">
         <button type="button" className="tc-dugme tc-dugme-birincil" aria-disabled="true" title={`Planı kur: ${MOTOR_NOTU}`}><Simge ad="play" boyut="k" />Planı kur</button>
+        <button type="button" className="tc-dugme" aria-disabled="true" title={`Veri ve kısıtlar: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" />Veri ve kısıtlar</button>
       </div>
     </div>
   );

@@ -63,6 +63,9 @@ export interface GorunumKaydi {
 const parca = <M extends Record<string, unknown>>(yukle: () => Promise<M>, ad: keyof M & string) =>
   lazy(async () => ({ default: (await yukle())[ad] as ComponentType<PlanlamaEkranOzellikleri> }));
 
+// Her sayfanın üstündeki plan çubuğu (Soru 497/10 a) P1'indir; motor sayfası kendi çubuğunu çizer, iskelet ötekilerin üstüne koyar.
+export const PlanSeridi = lazy(async () => ({ default: (await import('./motor/ust/PlanSeridi.tsx')).PlanSeridi }));
+
 const BILESENLER: Record<PlanlamaGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> = {
   plan: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaMotoru') },
   studio: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaAtolyesi') },

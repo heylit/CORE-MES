@@ -7,7 +7,7 @@ import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
-  ACILIS, ACILIS_OLCEGI, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku,
+  ACILIS, ACILIS_OLCEGI, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi,
   type DonemOlcegi, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
@@ -88,12 +88,22 @@ function PlanlamaEkrani() {
         {etkin === undefined
           ? <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Bu sayfayı görme yetkiniz yok." /></div>
           : (
-            <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-              <etkin.bilesen
-                depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
-                olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec}
-              />
-            </Suspense>
+            <>
+              {gorunum !== 'plan' && (
+                <Suspense fallback={null}>
+                  <PlanSeridi
+                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} gorunum={gorunum}
+                  />
+                </Suspense>
+              )}
+              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                <etkin.bilesen
+                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec}
+                />
+              </Suspense>
+            </>
           )}
       </div>
     </div>

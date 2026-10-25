@@ -18,7 +18,8 @@ import { SecimPaneli, type PanelSekmesi } from './secim/SecimPaneli.tsx';
 import { ozetVerisi, type BolgeKimligi } from './ozet/veri.ts';
 import { Cubuk } from './ust/Cubuk.tsx';
 import { Gorunum, type TahtaGorunumu } from './ust/Gorunum.tsx';
-import { nabizDurumu, sabitReferans } from './ust/nabiz.ts';
+import { nabizDurumu } from './ust/nabiz.ts';
+import { nabizYazmalari, PlanSeridi } from './ust/PlanSeridi.tsx';
 import type { KbPanel } from './Duzenle.tsx';
 import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
@@ -28,7 +29,8 @@ import './motor.css';
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma;
-  if (!c) return <div className="tc-pym"><BosCalisma /></div>;
+  // Çalışma yokken de plan çubuğu üstte durur (497/10 a; eski sayfa her durumda çizerdi).
+  if (!c) return <><PlanSeridi {...o} gorunum="plan" /><div className="tc-pym"><BosCalisma /></div></>;
   return <Tahta {...o} c={c} />;
 }
 
@@ -143,14 +145,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     return () => window.removeEventListener('keydown', tus);
   }, []);
 
-  const yazabilir = komut !== null && yetki.planYaz;
-  const refSec = yazabilir ? (x: 'onceki' | 'sabit') => { komut.degistir('Nabız referansı değişti', (t) => { (t as Record<string, unknown>).nbRef = x; }, { planKoru: true }); } : null;
-  const sabitle = yazabilir && p && nabiz ? () => {
-    const x = sabitReferans(p, nabiz.cur, new Date());
-    komut.degistir(`Şu anki plan referans alındı (${x.ad})`, (t) => { const y = t as Record<string, unknown>; y.nbSabit = x; y.nbRef = 'sabit'; }, { ayrinti: 'Değişiklikler buna göre ölçülür.', planKoru: true });
-  } : null;
-  const sabit = (c as Record<string, unknown>).nbSabit;
-  const sabitAd = sabit && typeof sabit === 'object' && typeof (sabit as Record<string, unknown>).ad === 'string' ? (sabit as Record<string, string>).ad ?? null : null;
+  const { refSec, sabitle, sabitAd } = nabizYazmalari(c, komut, yetki, p, nabiz);
   const d: OzetDurumu = { nasil, acikGrup, secJob, secTez: secim.tezgah, zaman };
   const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
@@ -161,7 +156,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   return (
     <div className="tc-pym" data-gorunum={gorunum}>
-      <Cubuk plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
+      <Cubuk etkin="plan" planaGit={null} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">

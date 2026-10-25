@@ -53,6 +53,8 @@
 
 /* ---------- plan çubuğu (pm-sb) ve plan nabzı (pm-nb) ---------- */
 .tc-pym-sb-kap { position: relative; }
+/* Öteki planlama sayfalarının üstünde (497/10 a): yalnız çubuk, sayfanın boyunu almaz. */
+.tc-pym[data-serit] { min-height: 0; }
 .tc-pym-sb {
   display: flex; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; margin: var(--b-2); padding: var(--b-1) var(--b-2);
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid);
