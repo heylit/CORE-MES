@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import { AgHatasi, api, ApiHatasi, hataIletisi, IstekKesildi, istekKimligiMi, OTURUM_BITTI, ULASILAMADI_ILETISI } from './api.ts';
+import { baglantiDurumu, baglantiSifirla } from './baglanti.ts';
 
 function cevapVer(durum: number, govde: unknown) {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(govde), { status: durum })));
@@ -233,6 +234,24 @@ describe('api: zaman asimi ve iptal', () => {
     const koptu = await api.get('/x', { zamanAsimiMs: 1000 }).catch((e: unknown) => e);
     expect(koptu).toBeInstanceOf(AgHatasi);
     expect(koptu).not.toBeInstanceOf(IstekKesildi);
+  });
+
+  it('arka plan yazmasi ulasilamayinca ya da suresi dolunca belirsiz kayit sayilmaz; baglanti yine kopuk olur; secenegsiz yazma sayilir', async () => {
+    baglantiSifirla();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    await expect(api.post('/x', undefined, { arkaPlan: true })).rejects.toBeInstanceOf(AgHatasi);
+    expect(baglantiDurumu()).toMatchObject({ kopuk: true, bilinmeyenYazma: 0 });
+    await expect(api.post('/x')).rejects.toBeInstanceOf(AgHatasi);
+    expect(baglantiDurumu().bilinmeyenYazma).toBe(1);
+    baglantiSifirla();
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_: string, i?: RequestInit) => new Promise((_c, red) => { i?.signal?.addEventListener('abort', () => { red(new DOMException('kesildi', 'AbortError')); }); })));
+    const bekleyen = api.post('/x', undefined, { arkaPlan: true, zamanAsimiMs: 50 }).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(await bekleyen).toBeInstanceOf(IstekKesildi);
+    expect(baglantiDurumu().bilinmeyenYazma).toBe(0);
+    vi.useRealTimers();
+    baglantiSifirla();
   });
 
   it('cagiranin hatasi ag hatasi sayilmaz ve istek gitmez: metne cevrilemeyen govde, basliga yazilamayan kimlik', async () => {

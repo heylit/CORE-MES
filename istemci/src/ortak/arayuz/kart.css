@@ -5,6 +5,8 @@
 }
 .tc-kart-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); margin-bottom: var(--b-4); }
 .tc-kart-baslik { font-size: var(--yazi-l); font-weight: 700; }
+.tc-kart-baslik-simgeli { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-kart-baslik-simgeli .tc-simge { flex: none; color: var(--muted); }
 /* Sarmalayıcılar yerleşime girmez: ek içerik verilmeyen kartın başlığı ve sağ içeriği eskisi gibi doğrudan dizilir. */
 .tc-kart-bas, .tc-kart-sag { display: contents; }
 
