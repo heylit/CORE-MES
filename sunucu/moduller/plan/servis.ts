@@ -1882,6 +1882,13 @@ export async function hizliDene(db: Db, k: Kullanici, id: number, g: { tur: Hizl
 // Canlıya alma (P4, P6, ST-02..ST-04): iki adımlı ve yetkili. Taslağın yerleşimleri ve ayarı canlıya yazılır; başlamış ve bitmiş işler
 // canlıdaki hâliyle kalır; yerleşimin makine ya da kişisi iş emrine yazılır (P3). Sahibi bağlanmamış denemeler varsa alınmaz.
 export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: number; cakismalariKabul: boolean; acilMusteriler?: readonly { degisiklikId: number; firmaId: number }[] }): Promise<CanliyaAlCevabi> {
+  // Kilit sırası: önce plan sürümü, sonra taslak (502 a). Eşzamanlı ikinci canlıya alma birincinin bitmesini bekler; birinci onun taslağını
+  // kardeş olarak kapattıysa ikinci anlamlı 409 alır. Ters sıra kilitlenme ya da zamanlamaya bağlı sonuç verirdi.
+  await s.planSurumu(db, true);
+  const once = await s.senaryo(db, id, true);
+  if (once?.durum === 'vazgecildi' && once.tabanPlanSurumu !== await s.planSurumu(db)) {
+    throw cakisma('Bu taslak, aynı canlı plandan açılmış başka bir taslak canlıya alındığı için kapandı; canlı planla yeni taslak açın.');
+  }
   const { x, dortGozsuz } = await onayGecisi(db, k, id, g.surum, 'canliya-al');
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
