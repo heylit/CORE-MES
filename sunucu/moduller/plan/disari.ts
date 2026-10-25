@@ -44,6 +44,7 @@ export const tabanPlani = (db: Db, g: { uretimEmriIdleri?: readonly number[]; is
 export type { TabanSatiri };
 
 // 147 a: Arkon'un kuyruk sırası taslağa düşer ve onayla canlıya geçer. İş emrini içeren, kaldırılmamış sıralama değişikliği olan açık ya da
-// onaydaki taslaklar; Arkon operatöre "sıra onay bekliyor" gösterir. Boş girdi boş döner.
+// onaydaki taslaklar; Arkon operatöre "sıra onay bekliyor" gösterir. Yalnız tabanı güncel canlı sürüm olan taslak sayılır: başka bir taslak
+// canlıya alınınca aynı tabandan açılmış olanlar bayatlar, onların sırası canlıdaki sıranın üstüne beklemez. Boş girdi boş döner.
 export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; senaryoId: number; durum: 'acik' | 'onayda' }[]> =>
   bekleyenSiraSatirlari(db, isEmriIdleri);
