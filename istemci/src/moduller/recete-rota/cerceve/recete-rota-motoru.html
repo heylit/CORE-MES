@@ -5329,9 +5329,20 @@ function nidOfItemInTree(itemId){
   (function walk(n){ if (found) return; if (n.id===itemId) { found = n.nid; return; } n.steps.forEach(s=>s.ins.forEach(i=>walk(i.node))); })(tree);
   return found || "root";
 }
+/* Rota modülü aynı malzemeyi bir adımda iki kez bileşen olarak kabul etmez (statüsü farklı olsa da tek malzemedir); ekran eklemeden önce
+   engeller, yoksa taslak düzeltilene kadar her kaydetme aynı ret ile düşer. Var olan giren seçilir, miktarı oradan artırılır. */
+function girenVarsaGoster(f, itemId, haricId){
+  const x = (f.step.ins || []).find(y => y.itemId === itemId && y.id !== haricId);
+  if (!x) return false;
+  ui.sel = {kind:"in", id:x.id, itemId:f.itemId, nid:nidOfItemInTree(f.itemId)+">"+x.id, qty:0};
+  renderSchema(true);
+  toast(`<b>${esc(item(itemId) ? item(itemId).code : "?")}</b> bu adımda zaten giren; aynı malzeme bir adıma iki kez eklenmez. Miktarını var olan satırdan değiştir.`);
+  return true;
+}
 function addPicked(itemId, status=""){
   const s = ui.sel; const f = findStep(s.stepId); if (!f) return;
   if ((s.replaceId || s.kind==="addIn") && !girdiOlur(item(itemId))) { toast("Ticari mal ve hizmet reçetede girdi olmaz."); return; }
+  if ((s.replaceId || s.kind==="addIn") && girenVarsaGoster(f, itemId, s.replaceId)) return;
   if (s.replaceId) { const x = findIn(s.replaceId); if (x) { x.inp.itemId = itemId; x.inp.status = status; } ui.sel = {kind:"in", id:s.replaceId, itemId:f.itemId, nid:"", qty:0}; save(); renderSchema(true); return; }
   if (s.kind==="addIn") {
     const x = {id:uid("n"), itemId, qty:1, scrap:0, status}; f.step.ins.push(x);
@@ -5408,6 +5419,7 @@ function act(a, d){
     if (!c) { toast("Önce malzemenin kodunu ya da adını yaz."); return; }
     if (d.kind==="in" && !c.create && !girdiOlur(item(c.itemId))) { toast("Ticari mal ve hizmet reçetede girdi olmaz."); return; }
     if (c.create) { toast(`"${esc(c.create)}" listede yok. Malzemeyi Malzemeler ve Hizmetler'de açın; kart onaylanınca burada seçilir.`); return; }
+    if (d.kind==="in" && girenVarsaGoster(f, c.itemId)) return;
     if (d.kind==="in") f.step.ins.push({id:uid("n"), itemId:c.itemId, qty:q, scrap:0, status:c.status});
     else f.step.outs.push({id:uid("u"), itemId:c.itemId, qty:q, kind:"yan", status:c.status, self:c.itemId===f.itemId});
     ui.sel = {kind:"step", id:f.step.id, itemId:f.itemId, nid:(ui.sel&&ui.sel.nid)||nidOfItemInTree(f.itemId), qty:(ui.sel&&ui.sel.qty)||st.settings.orderQty||1};
