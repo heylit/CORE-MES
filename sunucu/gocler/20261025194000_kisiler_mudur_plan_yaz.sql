@@ -9,9 +9,10 @@ BEGIN
 END $$;
 
 -- Bilinmeyen rol kodu boş kimlik üretir ve NOT NULL'a takılır: yanlış yazılan satır sessizce düşmez.
--- Satır elle girilmişse birincil anahtara takılır ve göç durur: üstüne yazılmaz.
+-- Yetkiler ekranından önceden verilmiş satır atlanır (göç orada durmaz).
 INSERT INTO rol_islemi (rol_id, islem)
 SELECT (SELECT id FROM rol WHERE kod = m.kod), m.islem
   FROM (VALUES
     ('mudur', 'plan.yaz')
-  ) AS m (kod, islem);
+  ) AS m (kod, islem)
+ON CONFLICT (rol_id, islem) DO NOTHING;
