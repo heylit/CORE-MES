@@ -42,9 +42,12 @@ const komutKur = (c: PlanlamaCalismasi) => {
 };
 
 describe('PlanlamaMotoru', () => {
-  it('çalışma yoksa söyler', () => {
+  it('çalışma yoksa söyler: üç adım ve pasif Planı kur, sayı yok (489/2 c)', () => {
     ac({ c: null });
     expect(screen.getByText('Planlama çalışması yok.')).toBeTruthy();
+    expect(screen.getAllByRole('listitem').map((x) => x.querySelector('span > b')?.textContent)).toEqual(['Planı kur', 'Sorunlara bak', 'Karar ver']);
+    expect(screen.getByRole('button', { name: 'Planı kur' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByText(/tezgâh,/)).toBeNull();
   });
 
   it('çalışma var, plan yoksa eski kart: kaydın sayıları, üç adım; Planı kur ve Veri ve kısıtlar pasif; görünüm çubuğu yok', () => {
@@ -502,7 +505,6 @@ describe('PlanlamaMotoru', () => {
     expect(dk().textContent).toContain('TEZGÂH');
     fireEvent.click(within(dk()).getByRole('button', { name: 'Gün planı' }));
     expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Hafta' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Gün' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Gün' }).getAttribute('aria-pressed')).toBe('true');
   });
 });

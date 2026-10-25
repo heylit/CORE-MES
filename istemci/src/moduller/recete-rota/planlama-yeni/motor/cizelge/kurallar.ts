@@ -1,7 +1,8 @@
+import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
-import { acikSaat, AY_AD, hm, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, AY_AD, hm, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, UFUK_GUN, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
@@ -87,6 +88,19 @@ export interface GunAraligi { x: number; w: number }
 export interface GunBlogu {
   id: string; job: string; ad: string; x: number; w: number; renk: string; baslik: string;
   sol: boolean; sag: boolean; secili: boolean; soluk: boolean; gec: boolean; risk: boolean; sabit: boolean; dondu: boolean;
+}
+// Gün katmanında iş bloğunun ipucu (v-yardim isIpucu): iş, tezgâh ve saat, neden burada, sabitlik, siparişin durumu.
+export interface IsIpucu { baslik: string; satir: string; neden: string; kilit: string | null; durum: { ton: 'hata' | 'uyari' | 'tamam'; metin: string } }
+const gecMetin = (h: number | null): string => (h == null || !Number.isFinite(h) ? 'belirsiz süre' : h >= 24 ? `${sayiYaz(h / 24, 1)} gün` : `${sayiYaz(Math.max(h, 0.1), 1)} saat`);
+export function isIpucu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, id: string): IsIpucu | null {
+  const r = p.ops[id]; if (!r) return null;
+  const D = c.D; const J = p.J[r.job]; const kl = kilitli(c, id);
+  const durum: IsIpucu['durum'] = (J?.T ?? 0) > 0.05 ? { ton: 'hata', metin: `Sipariş ${gecMetin(J?.T ?? null)} geç` }
+    : riskte(J) ? { ton: 'uyari', metin: 'Termine yetişiyor ama tampon aşıldı' } : { ton: 'tamam', metin: 'Sipariş termine yetişiyor' };
+  return {
+    baslik: `${r.job} · ${cx.byId[id]?.ad || id}`, satir: `${r.m.startsWith('@') ? `${r.m.slice(1)} (fason)` : r.m} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`, neden: nedenMetni(r),
+    kilit: kl ? (kl.gun != null ? 'Gün donduruldu.' : 'Elle sabitlendi.') : null, durum,
+  };
 }
 // Gecikmiyor ama tamponlu termini aşmış sipariş risk altındadır (s-gun gyRisk).
 export const riskte = (J: OkunanPlan['J'][string] | undefined): boolean => !!J && J.dueB != null && J.C != null && J.C > J.dueB + 0.05 && !((J.T ?? 0) > 0.05);
@@ -428,4 +442,21 @@ export function matris(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, v: Gunl
     });
   }
   return { sutunlar, gruplar, bos, toplamlar: toplamG.map((x) => (x ? sayiYaz(Math.round(x), 0) : '')), toplam: sayiYaz(Math.round(toplamG.reduce((a, b) => a + b, 0)), 0) };
+}
+
+// Seçili işin açılımları (s-gun gyYan, t-tekyer gercekFormu, hedefFormu): parti bölme birden çok adetli, bitmemiş ve başlamamış işte; fason olmayan ve
+// tezgâhı aday olan işte başlamışsa gerçekleşen, değilse erken ya da geç bitme (süre olayı varsa çarpanıyla açık); hedefe yetiştirme siparişi olan işte.
+const nesneMi = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object';
+export function gunAcilimlari(c: PlanlamaCalismasi, cx: Derleme, r: PlanIslemi): [SimgeAdi, string, boolean][] {
+  const s = c.D.siparisler.find((x) => x.id === r.job); const l: [SimgeAdi, string, boolean][] = [];
+  if (s && Number(s.adet) > 1 && !r.act && r.C > cx.now) l.push(['ruler', 'Partiyi böl', false]);
+  if (!r.fas && cx.byId[r.id]?.c.includes(r.m)) {
+    // Başlamış ya da gerçekleşeni girilmiş adımda "Gerçekleşen" (t-tekyer gercekFormu; içerik yazar, pasif: 492/3 a).
+    const g = nesneMi(c.gercek) ? c.gercek[r.id] : undefined;
+    if (r.S <= cx.now + 1e-6 || g) { l.push(['clock', `Gerçekleşen${g ? ' (girildi)' : ''}`, !!g]); if (s) l.push(['target', 'Hedefe yetiştir', false]); return l; }
+    const sap = c.olaylar.filter((e) => e.tip === 'sureOp' && e.id === r.id).pop(); const oran = sap ? Number(sap.oran) : 1;
+    l.push(['clock', `Erken ya da geç biterse${sap && Math.abs(oran - 1) > 1e-3 ? ` (×${oran.toLocaleString('tr-TR', { maximumFractionDigits: 2 })})` : ''}`, !!sap]);
+  }
+  if (s) l.push(['target', 'Hedefe yetiştir', false]);
+  return l;
 }

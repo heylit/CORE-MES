@@ -265,13 +265,8 @@ export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new 
     } else if (ev.tip === 'malzeme' && typeof ev.kod === 'string') {
       g.saGecik[ev.kod] = (g.saGecik[ev.kod] ?? 0) + Number(ev.gun) * 24;
     } else if (ev.tip === 'sure' && typeof ev.urun === 'string') {
-      // Başlamış adımın süresi değişmez (applyEvent: plandaki S şimdiden önceyse atlanır).
-      const ops = planOku(c)?.ops ?? {};
-      for (const j of D.siparisler) {
-        if (j.urun !== ev.urun) continue;
-        const id = `${j.id}.${String(ev.k)}`; const S = ops[id]?.S;
-        if (!(S !== undefined && S < g.now)) g.sapma[id] = Number(ev.oran);
-      }
+      // Başlamış adım dahil ürünün bu adımının her siparişi (Soru 485/5 a; eski stKur ve Maliyet ile aynı süre).
+      for (const j of D.siparisler) if (j.urun === ev.urun) g.sapma[`${j.id}.${String(ev.k)}`] = Number(ev.oran);
     } else if (ev.tip === 'sureOp' && typeof ev.id === 'string') {
       g.sapma[ev.id] = Number(ev.oran);
     } else if (ev.tip === 'fason') {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
 import { derle, girdiKur, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
-import { beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
+import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla ekrana yazdığı değerlerdir; kalın yazı <b> ile.
@@ -70,6 +70,16 @@ describe('planlama motoru hesapları', () => {
     const yil = ozetVerisi(c, p, cx, 'yil', 0);
     expect([yil.kova, yil.gun]).toEqual([7, 52]);
     expect(ozetVerisi(c, p, cx, 'hafta', 1).sip.map((s) => s.id)).toEqual(['2']);
+  });
+
+  it('açık tezgâh saati olmayan dönemde yüzde yerine durum yazılır (489/1 c)', () => {
+    const { c, p, cx } = kur();
+    const tg = (m: string) => c.D.tezgahlar.find((t) => t.id === m)?.grup ?? 'diger';
+    const kapali = [0, 1, 2, 3, 4, 5, 6].map((k) => ozetVerisi(c, p, cx, 'gun', k)).find((v) => v.yuk.every((y) => y.g.every((x) => x == null)));
+    if (!kapali) throw new Error('kapalı gün yok');
+    const yor = yorumlar(c, kapali, tg);
+    expect(yor.find((y) => y.simge === 'grid')?.m).toEqual([ACIK_TEZGAH_YOK]);
+    expect(html(cevap(c, kapali, 'yuk', yor))).toMatch(/^Bu dönemde açık tezgâh yok\. Plan boyunca en dolu tezgâh /);
   });
 
   it('saat biçimi eski sayfanınki', () => {
