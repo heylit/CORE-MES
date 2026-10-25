@@ -60,7 +60,8 @@ function FormKarti({ f, ac }: { f: SihirbazTanimi; ac: () => void }) {
   );
 }
 
-function SonKart({ metin, kapat }: { metin: string; kapat: () => void }) {
+// Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır.
+export function SonKart({ metin, kapat }: { metin: string; kapat: () => void }) {
   return (
     <div className="tc-sade-son" role="status">
       <span className="tc-sade-is-sm"><Simge ad="check" boyut="k" /></span>

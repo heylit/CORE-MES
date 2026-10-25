@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Secim, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 
@@ -70,6 +70,13 @@ export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
   const [d, dYaz] = useState<SihirbazDegeri>(ilk.d);
   const taban = acilis?.geriSiniri ? ilk.adim : 0;
   const [hata, hataYaz] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const ilkCizim = useRef(true);
+  // Adım değişince odak yeni adımın ilk alanına (son adımda Kaydet'e) gider (eski sdAdim); ilk açılışta odağı açan yer verir.
+  useEffect(() => {
+    if (ilkCizim.current) { ilkCizim.current = false; return; }
+    formRef.current?.querySelector<HTMLElement>('fieldset input:not([type=hidden]), fieldset select, button[type=submit]')?.focus({ preventScroll: true });
+  }, [adim]);
   const { adimlar } = tanim;
   const alanlar = tanim.alanlar(d);
   const n = adimlar.length;
@@ -131,7 +138,7 @@ export function Sihirbaz({ tanim, acilis, vazgec, bitti }: {
           </li>
         ))}
       </ol>
-      <form onSubmit={gonder} noValidate aria-label={tanim.ad}>
+      <form ref={formRef} onSubmit={gonder} noValidate aria-label={tanim.ad}>
         {adimlar.map((g, i) => i === adim && (
           <fieldset key={g.ad} className="tc-sade-adim">
             <legend className="tc-gizli-etiket">{g.ad}</legend>

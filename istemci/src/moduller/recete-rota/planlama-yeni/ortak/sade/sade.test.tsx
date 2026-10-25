@@ -116,6 +116,17 @@ describe('Sade kabuk', () => {
     expect(ileri.isConnected).toBe(false);
   });
 
+  it('adım değişince odak yeni adımın ilk alanına, son adımda Kaydet düğmesine gider', () => {
+    render(<SadeSayfa tanim={sayfa([{ ...form(), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }) }])} />);
+    fireEvent.click(dugme('Gir'));
+    fireEvent.click(dugme('İleri'));
+    expect(document.activeElement).toBe(screen.getByLabelText(/Oran/));
+    fireEvent.click(dugme('İleri'));
+    expect(document.activeElement).toBe(dugme('Kaydet'));
+    fireEvent.click(dugme('Geri'));
+    expect(document.activeElement).toBe(screen.getByLabelText(/Oran/));
+  });
+
   it('kayıtta ek kontrol iletisi kaydı durdurur', () => {
     const kaydet = vi.fn();
     const f: SihirbazTanimi = { ...form(kaydet), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }), kontrol: (_d, adim) => (adim === -1 ? 'Hiçbir şey değişmedi.' : null) };
