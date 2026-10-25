@@ -39,7 +39,7 @@ Baska parca yalniz sahibinin `index.tsx` dosyasindan ithal eder. Imzayi sahibi i
   cagri ekipleri), `yetki.ts`, `tesis.ts`, `vardiya.ts`, `oee.ts` (`oeeHesapla`), `ayarlar.ts`, `bicim.ts` (`YOK` "—"; veri yoksa sifir yazilmaz), `ses.ts` (`bip`),
   `yerel.ts` (cihaz ayarlari, `ozellikler`, `hafifKip`). Hepsi eski ortak-ayarlar.ts/temel.ts/yukleyici.ts mantiginin tipli tasimasidir; `cekirdek/esitlik.test.ts` eskisiyle esitligi sinar.
 - `arkon/web/src/data/*` saf modulleri (anomali, numune, kuyruk, parca, refakat-karti, ...) kopyalanmaz, dogrudan ithal edilir.
-- `ortak/Hazirlaniyor.tsx`; `ortak/SaatSeridi.tsx` (sayfa basliginin sagindaki kisayollar, saat ve vardiya); `test-ortak.tsx`: `sunucuKur(deneme, { belgeler, kayitlar })`, `arkonAc(adres)`, denemeler `YONETICI`, `KAPISIZ`, `OPERATOR` (uydurma).
+- `ortak/Hazirlaniyor.tsx`; `ortak/SaatSeridi.tsx` (sayfa basliginin sagindaki kisayollar, baglanti durumu, saat ve vardiya); `ortak/BaglantiDurumu.tsx` (baglantiOzeti, durum isareti); `test-ortak.tsx`: `sunucuKur(deneme, { belgeler, kayitlar })`, `arkonAc(adres)`, denemeler `YONETICI`, `KAPISIZ`, `OPERATOR` (uydurma).
 
 ## Kurallar (her parca)
 - TASARIM KORUMA (2026-10-24, kullanici; 20:22 duzeltilmis okuma teyitli; 203 a kalkti): HTML'den TS'ye gecen sayfalarda amac TypeScript'e gecis ve

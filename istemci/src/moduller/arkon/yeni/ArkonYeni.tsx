@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { ArkonBenCevabi, ArkonRolu, MakineDevralGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
-import { Dugme, DurumKutusu, Pencere, Rozet, Sekmeler, useBildirim, type RozetTonu } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Pencere, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
@@ -201,10 +201,6 @@ function AcikEkran({ depo, islemler, arkonRolu, saltOkunur, onizleme, onizlemeYa
         {sekmeler.length > 0 && (
           <Sekmeler etiket="Üretim Hazırlık" sekmeler={sekmeler} secili={secili ?? ''} sec={sec} />
         )}
-        <div className="tc-ay-serit">
-          <BaglantiDurumu durum={durum} />
-          {saltOkunur && <span role="status">Önizleme: kayıt yapılmaz.</span>}
-        </div>
         {!acik || Ekran === undefined || sayfa === null
           ? <DurumKutusu durum="bos" mesaj="Bu sayfa bulunamadı ya da size açık değil." />
           : (
@@ -318,16 +314,3 @@ function OnizlemePenceresi({ paketId, baglam, kapat }: { paketId: string; baglam
   );
 }
 
-// Bağlantı ve gönderim kuyruğu (eski şeritteki RailStatus): renk tek başına anlam taşımaz, durum metniyle yazılır.
-export function baglantiOzeti(d: Pick<ArkonDurumu, 'memory' | 'mode' | 'online' | 'pending' | 'base'>): { ton: RozetTonu; metin: string; aciklama: string } {
-  if (d.memory) return { ton: 'hata', metin: 'Kayıt riski', aciklama: 'Cihaz deposu açılamadı · gönderilmemiş kayıtlar sekme kapanınca kaybolur' };
-  if (d.mode !== 'server') return { ton: 'pasif', metin: 'Yerel', aciklama: 'Yerel mod · veriler bu cihazda' };
-  if (!d.online) return { ton: 'hata', metin: 'Kopuk', aciklama: `Sunucuya ulaşılamıyor · ${d.pending || 0} kayıt bekliyor (bağlantı gelince gönderilir)` };
-  if (d.pending) return { ton: 'uyari', metin: `${d.pending} gönderiliyor`, aciklama: `${d.pending} kayıt gönderiliyor` };
-  return { ton: 'tamam', metin: 'Bağlı', aciklama: 'Sunucuya bağlı' };
-}
-
-function BaglantiDurumu({ durum }: { durum: ArkonDurumu }) {
-  const o = baglantiOzeti(durum);
-  return <span className="tc-ay-baglanti" title={o.aciklama} role="status" aria-label={o.aciklama}><Rozet ton={o.ton}>{o.metin}</Rozet></span>;
-}
