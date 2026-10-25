@@ -293,3 +293,10 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   "SIRADA" ve "İşi Başlat" açık gösterir. Terminalin makine durumunu önceden göstermesi ayrı iştir. BİLMİYORUM: başlatma reddinin arıza durumunu
   bu dalda tarayıcıda denemedim.
 - 12.9 kalanı: 768 genişlikte TMI bildirimi terminalin ana düğmesini örtüyor (ortak bildirim katmanı, CEKIRDEK-ISTEKLERI).
+
+## Eski Plan Kuyruğu ekranı ve Hazırlık sırası (kart 527, bağlamada kapanacak)
+- Eski Arkon ekranı (`arkon/web/src/app/pano-planlama.ts`) kuyruğu `planOnce` ile, yani Hazırlık sırasıyla gösterir; ama TMI işinin sürüklemesi
+  bugün de plan taslağına yazar (A4 komutu). Bu, 519 1 c kararına (kuyruk sırası Hazırlık'ın, plan referans) terstir: eski ekranda sürükleyen kişi
+  kuyruğu değil planı değiştirir, ekrandaki sıra da değişmez. Yeni ekran (`yeni/pano/PlanKuyrugu.tsx`) doğru yoldadır. Eski ekrana dokunulmadı
+  (kullanımda); ya eski ekranın sürüklemesi kuyruk ucuna çevrilir ya da eski ekran kalkar.
+

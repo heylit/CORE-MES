@@ -830,3 +830,23 @@ Bu tur şunları varsaydı:
 4. Kapanan iş emrinin satırı silinmez, istasyon yeniden sıralanınca ya da plana dönünce silinir; okumada yalnız açık işler görünür.
 5. Plan saati ve Hazırlık sırası paket sürümüne girer: canlıya alma ya da sıralama, o istasyonda açık düzenlemede çakışmayı artırabilir (ölçülmedi).
 6. İstemci (Plan Kuyruğu, operatör sırası, plan çipi) 521 düzen yaması main'e girince ayrı yamayla gelir; bu yama yalnız sunucudur.
+
+## Kart 527: Üretim Hazırlık kuyruk sırası, plan referans (istemci)
+
+Yeni Plan Kuyruğu (`/arkon/yeni/planlama`, `istemci/src/moduller/arkon/yeni/pano/PlanKuyrugu.tsx`), tasarım A (kart içinde plan çipi).
+- Açık TMI iş emri paketinin sürüklemesi ve yukarı-aşağı düğmeleri `POST /kuyruk-sira` (TMI'de `/arkon/kuyruk-sira/sirala`) ile kuyruğa yazılır, plan
+  taslağına gitmez. Düğmeler `arkon.kuyruk-sirala` işlemiyle açılır (TMI oturumu); istasyona taşıma ve Arkon paketinin sırası bugünkü gibi `plan.edit`.
+- Kartta plan çipi: "Planla aynı · n.", "Planda n. · öne alındı / geri alındı", "Yeni · planda n."; altında plandaki saat. Plan dışı iş bugünkü
+  plan etiketiyle görünür. Şerit başında fark özeti ("Planla N fark: ..." ya da "Kuyruk planla aynı sırada").
+- Şerit altında "Plan sırasına dön" (Hazırlık sırası varsa, onaylı) ve "Plana öner" (`plan.edit`; kuyruk plandan farklıysa kaynak başına A4 plan sıralama
+  isteği, taslağa yazılır).
+- Sıra (`tmi-plan.ts planOnce`): Hazırlık sırası olan iş önce, sırasız plan işi ardından plan sırasıyla. Operatör kuyruğu ve Kuyruk (salt okunur)
+  aynı sıralamayı kullanır.
+- Testler: `tmi-plan.test.ts` "Arkon Hazırlık kuyruk sırası ve plan referansı" (dört test), `baglanti.test.ts` "kuyruk sırası (kart 527)" ve önizleme
+  yazma listesi, `yeni/pano/ekran.test.tsx` "Plan Kuyruğu (kart 527)".
+
+Bu tur şunları varsaydı:
+1. "Gördüm" bandı yazılmadı: sıra değişmeden yazma sunucuda "sıra değişmedi" (400) alır; plana yeni giren iş kartında "Yeni" çipi ve özetle görünür.
+2. Yan yana görünüm (tasarım B) yazılmadı; tasarım A yeterli sayıldı, istenirse ayrı iş.
+3. Kuyruk isteği istasyonun gizli tamamlananları dahil bütün açık TMI iş emri paketleriyle gider (sunucu da öyle sayar).
+4. Plan çipi her TMI işinde görünür (Hazırlık sırası yokken de "Planla aynı"); renk: aynı nötr, farklı bekleme, yeni ölçüm rengi.

@@ -551,8 +551,13 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     sirala: (g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }) => api('POST', '/plan-sira', g),
     surum: (): Promise<{ planSurumu: number }> => api('GET', '/plan-sira'),
   };
+  // Üretim Hazırlık kuyruk sırası (kart 527): istasyonun sırası Arkon'da tutulur, plan değişmez; yalnız TMI'ye bağlıyken.
+  const Kuyruk = {
+    sirala: (g: { istasyon: string; onceki: string[]; yeni: string[] }): Promise<{ surum: number }> => api('POST', '/kuyruk-sira', g),
+    planaDon: (istasyon: string): Promise<{ silinen: number }> => api('POST', '/kuyruk-sira/plana-don', { istasyon }),
+  };
   // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, TMI'de çıkıp başka
   // kişiyle girilince kuyruk öğeleri önceki kişinin adına yazılmasın (çerçeve her açılışta yeniden yüklendiği için bunu kendiliğinden yapar).
   function tasiyiciKur(t: Tasiyici | null): void { tasiyici = t; session = LS.get('session'); emit(); }
-  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, init, status, tasiyiciKur, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
+  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
 (window as any).AKStore = AKStore;
