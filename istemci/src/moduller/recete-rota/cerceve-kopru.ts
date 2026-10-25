@@ -49,6 +49,8 @@ export interface CerceveAyari {
   bedelAyariOkunur?: boolean;
   // HiGHS çözücüsünü kabuktan isteyebilir mi (yalnız planlama çerçevesi, 361 b): `tmi.highs()` -> { betik, wasm }.
   highsOkunur?: boolean;
+  // Oturumdaki kişinin plan işlemleri (yalnız planlama çerçevesi): sayfa düğmelerini kişinin yapabileceğine göre çizer. Sunucu yine denetler.
+  planIslemleri?: readonly string[];
   // Emir türleri ve adları Üretim Emirleri sözleşmesinden (emir-turleri.ts); prototip kendi listesini tutmaz. Verilmezse
   // `cerceveBetigi` sözleşmedekini koyar.
   emirTurleri?: Readonly<Record<string, string>>;
@@ -222,6 +224,11 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       stokOku: (malzemeIdler: number[]): Promise<unknown> => istek('stok-oku', { malzemeIdler }),
       // Canlı plan sürümü ve son canlıya alma (eşzamanlı planlama uyarısı).
       planSurumu: (): Promise<unknown> => istek('plan-surum', {}),
+      // Plan senaryolarının sunucudaki durumu (GET /plan/senaryolar).
+      planSenaryolari: (): Promise<unknown> => istek('plan-senaryolar-oku', {}),
+      // Ortak kayıt açılışta bir kez okunur: başkasının sonradan yazdığını görmek için kabuk çerçeveyi kayıtla yeniden kurar.
+      yenile: (): void => { hepsiniYaz(); ust.postMessage({ kanal: ayar.kanal, yon: 'yenile' }, '*'); },
+      ...(ayar.planIslemleri === undefined ? {} : { planIslemleri: Object.freeze([...ayar.planIslemleri]) }),
       // Plan öncelik ayarları: { ayar, yazabilir }; yazma `plan-bedel-ayari` komutuyla.
       ...(ayar.bedelAyariOkunur === false ? {} : { bedelAyari: (): Promise<unknown> => istek('bedel-ayari-oku', {}) }),
       ...(ayar.highsOkunur === true ? { highs: (): Promise<unknown> => istek('highs-oku', {}) } : {}),
@@ -260,6 +267,8 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
   const yolda = new Set<string>();
   const sirada = new Set<string>();
   let durdu = false;
+  // Uyarıyı kabuk gösterir: çerçeveye modal izni verilmez (alert() sessizce düşer). Kabuk yalnız kendi bildiği metinleri gösterir.
+  const uyar = (metin: string): void => { ust.postMessage({ kanal: ayar.kanal, yon: 'uyari', metin }, '*'); };
   let buyukUyarildi = false;
   let reddUyarildi = false;
   const has = (anahtar: string): boolean => Object.prototype.hasOwnProperty.call(degerler, anahtar);
@@ -280,7 +289,7 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       try { govde = { bicim: 'json', deger: JSON.parse(metin) as unknown }; } catch { govde = { bicim: 'metin', deger: metin }; }
       const veri = { anahtar, ...govde, beklenenSurum: beklenen };
       if (new w.TextEncoder().encode(JSON.stringify(veri)).length > ayar.azamiBayt) {
-        if (!buyukUyarildi) { buyukUyarildi = true; w.alert(ayar.buyukIletisi); }
+        if (!buyukUyarildi) { buyukUyarildi = true; uyar(ayar.buyukIletisi); }
         return;
       }
       is = istek<{ kayit: { surum: number } }>('kayit-yaz', veri, (c) => { surumler.set(anahtar, c.kayit.surum); })
@@ -292,14 +301,14 @@ export function cerceveKoprusu(w: Window & typeof globalThis, ayar: CerceveAyari
       if (h.durum === 409) {
         // Ortak kayıtta başkasının yazdığının üstüne yazılmaz: yazma durur, kullanıcı sayfayı yeniler.
         durdu = true;
-        w.alert(ayar.catismaIletisi);
+        uyar(ayar.catismaIletisi);
       } else if (h.durum === 403 || h.durum === 401) {
         // Oturum düştü ya da yetki kalktı: sonraki yazmalar da reddedilir; kullanıcı yeniden girene kadar değişiklik kaydedilmez.
         durdu = true;
-        w.alert(ayar.oturumIletisi);
+        uyar(ayar.oturumIletisi);
       } else if (h.durum >= 400 && h.durum < 500) {
         // Sunucunun reddettiği kayıt (geçersiz değer) yinelenmez; sonraki değişiklik yeniden dener.
-        if (!reddUyarildi) { reddUyarildi = true; w.alert(ayar.reddIletisi); }
+        if (!reddUyarildi) { reddUyarildi = true; uyar(ayar.reddIletisi); }
       } else {
         // Bağlantı ya da sunucu hatası ya da zaman aşımı: kayıt kaybolmasın, biraz sonra yeniden denenir.
         w.setTimeout(() => { yazmayiPlanla(anahtar); }, 5000);

@@ -418,6 +418,9 @@ export function kopruKur(
       // Canlı plan sürümü (hafif): ekran kısa aralıkla sorar, başkası canlıya aldıysa uyarır.
       case 'plan-surum':
         return api.get<unknown>('/plan/surum');
+      // Plan senaryolarının sunucudaki durumu (onayda, canlı, geri gönderildi): planlama sayfası onay listesini bununla eşitler.
+      case 'plan-senaryolar-oku':
+        return api.get<unknown>('/plan/senaryolar');
       // Plan öncelik ayarları (taban bedel, oranlar, eşikler): plan sayfasını gören herkes okur.
       case 'bedel-ayari-oku':
         return { ayar: await api.get<BedelAyari>('/plan/bedel-ayari'), yazabilir: secenek.bedelAyariYazabilir === true };

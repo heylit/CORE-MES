@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, kuyrukIsiMi, kuyrukIstegi, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi,
+  adimIstegi, gonderimUyarisi, istasyonsuzMu, istasyonPaketleri, kuyrukAdimHedefi, kuyrukIsiMi, kuyrukIstegi, kuyrukTasimaIstegi, siralamayiGonder, istasyonPlanOzeti, operatoreAcik, planEtiketi,
   planFarkOzeti, planOnce, planReferanslari, planaOneriIstekleri, siraOnayi, siralamaIstegi, tmiPlani,
 } from '../../../../arkon/web/src/data/tmi-plan.ts';
 
@@ -163,6 +163,20 @@ describe('Arkon Hazırlık kuyruk sırası ve plan referansı', () => {
     expect(kuyrukIstegi('AI1', [a, b, arkon, biten], [b, arkon, a, biten])).toEqual({ istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2'], yeni: ['tmi-ie-2', 'tmi-ie-1'] });
     expect(kuyrukIstegi('AI1', [a, b, arkon], [a, arkon, b])).toBe(null);
     expect(kuyrukIstegi('AI1', [a, arkon], [arkon, a])).toBe(null);
+  });
+
+  it('taşıma ve yukarı/aşağı (eski ve yeni ekran, 544 a): iş komşunun önüne konur; Arkon paketi ve gizli biten iş komşu sayılmaz', () => {
+    const arkon = { id: 'x', status: 'published', machine: 'AI1' };
+    const [a, b, c] = [tp(1, 1), tp(2, 2), tp(3, 3)];
+    const serit = [a, arkon, b, c];
+    expect(kuyrukTasimaIstegi('AI1', serit, c, 'tmi-ie-1')).toEqual({ istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2', 'tmi-ie-3'], yeni: ['tmi-ie-3', 'tmi-ie-1', 'tmi-ie-2'] });
+    expect(kuyrukTasimaIstegi('AI1', serit, a, null)?.yeni).toEqual(['tmi-ie-2', 'tmi-ie-3', 'tmi-ie-1']);
+    expect(kuyrukTasimaIstegi('AI1', serit, a, 'tmi-ie-2')).toBe(null);
+    expect(kuyrukAdimHedefi(serit, b, -1)).toBe('tmi-ie-1');
+    expect(kuyrukAdimHedefi(serit, a, 1)).toBe('tmi-ie-3');
+    expect(kuyrukAdimHedefi(serit, b, 1)).toBe(undefined);
+    expect(kuyrukAdimHedefi(serit, a, -1)).toBe(null);
+    expect(kuyrukAdimHedefi(serit, c, 1)).toBe(null);
   });
 
   it('Plana öner: kuyruğun dizilişi kaynağın plan sıralama isteği olur; kuyruk planla aynıysa istek yok', () => {

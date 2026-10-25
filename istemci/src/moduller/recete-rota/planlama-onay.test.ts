@@ -10,6 +10,7 @@ interface Duzenek {
   S: () => { senaryolar: Senaryo[]; canli: string | null; canliSurum: number };
   cagrilar: Cagri[]; bildirimler: string[]; notlar: Record<string, string>;
   eylem: (ad: 'onaya' | 'canli' | 'geri' | 'vazgec', id: string) => void;
+  ciz: (sayfa?: string, sek?: string) => void; paEylem: (act: string) => boolean; yenilendi: () => number;
   cevir: (kayit: unknown) => { siparisler: { id: string }[] };
 }
 
@@ -27,10 +28,10 @@ const DURUM = {
 const PLAN = { ops: { '7.a': { job: '7', m: '12', S: 8, C: 10 }, '7.b': { job: '7', m: '@f1', S: 12, C: 14 }, 'X.z': { job: 'X', m: '13', S: 1, C: 2 } }, ozet: { late: 0, wT: 0 } };
 
 type Cevap = (govde: Record<string, unknown>) => unknown;
-function duzenek(cevaplar: Record<string, Cevap> = {}, yetki = true): Duzenek {
+function duzenek(cevaplar: Record<string, Cevap> = {}, yetki = true, senaryolar?: () => unknown): Duzenek {
   const govde = `
     let S = { D: ${JSON.stringify(D)}, senaryolar: [], canli: null, canliSurum: 3, plan: ${JSON.stringify(PLAN)} };
-    const U = { paNot: {} }; const bildirimler = [];
+    const U = { paNot: {}, sayfa: 'bugun', psSek: null }; const bildirimler = [];
     const TMI_ICINDE = true; const TMI_KAYNAK = { durum: ${JSON.stringify(DURUM)}, ek: null };
     const esc = x => String(x); const yetkili = () => ${String(yetki)}; const kim = () => ({ ad: 'Planlamacı' });
     const cxAl = () => ({ st: { now: 7 } });
@@ -48,13 +49,19 @@ function duzenek(cevaplar: Record<string, Cevap> = {}, yetki = true): Duzenek {
     const paNot = id => (U.paNot[id] || '').trim();
     function paOnayaGonder() { throw new Error('taklit'); } function paYayinla() { throw new Error('taklit'); } function paGeri() { throw new Error('taklit'); }
     function paVazgec(id) { const s = paAl(id); if (s) s.durum = 'vazgecildi'; }
+    function paEylem() { return false; }
     ${planlamaParcasi('zz40-sunucu-onay')}
     const eylemler = { onaya: id => paOnayaGonder(id), canli: id => paYayinla(id), geri: id => paGeri(id), vazgec: id => paVazgec(id) };
     return { S: () => S, bildirimler, notlar: U.paNot, eylem: (ad, id) => eylemler[ad](id),
+      ciz: (sayfa, sek) => { if (sayfa) U.sayfa = sayfa; if (sek !== undefined) U.psSek = sek; render(); }, paEylem: act => paEylem(act, ''),
+      yenilendi: () => window.yenilenen,
       cevir: kayit => tmiCevir(kayit, TMI_KAYNAK, S.D, '2026-10-23') };`;
   const cagrilar: Cagri[] = [];
-  const window = {
+  const window: { yenilenen: number; tmi: Record<string, unknown> } = {
+    yenilenen: 0,
     tmi: {
+      ...(senaryolar ? { planSenaryolari: (): Promise<unknown> => { cagrilar.push({ ad: 'senaryolar-oku', govde: {} }); return Promise.resolve(senaryolar()); } } : {}),
+      yenile: (): void => { window.yenilenen += 1; },
       komut: (ad: string, g: Record<string, unknown>): Promise<unknown> => {
         cagrilar.push({ ad, govde: g });
         try { return Promise.resolve(cevaplar[ad]?.(g) ?? { sonuc: {} }); } catch (h) { return Promise.reject(h); }
@@ -154,5 +161,74 @@ describe('stüdyonun onay akışı plan modülünde (H2)', () => {
     const D2 = d.cevir(KAYIT) as { siparisler: { id: string; gelir?: number; oncelik?: number }[] };
     expect(D2.siparisler.map((x) => x.id)).toEqual(['7']);
     expect(D2.siparisler[0]).toMatchObject({ gelir: 900, oncelik: 1 });
+  });
+
+  // 524: ortak kayıt açılışta bir kez okunur ve plan yazmayan kayda yazamaz; onay durumu sunucudan eşitlenir (P5).
+  const sun = (durum: string, ek: Record<string, unknown> = {}) => ({ id: 41, ad: 'Onay 1', durum, onay: null, ...ek });
+  const onayda = (): Senaryo => ({ id: 'o1', ad: 'Onay 1', durum: 'onay', taslak: 41, kararlar: [], plan: PLAN, ozet: PLAN.ozet, D });
+
+  it('kayıtta onayda görünen plan sunucuda canlıya alındıysa sayfada canlı görünür; kayda yazılmaz', async () => {
+    const d = duzenek({}, true, () => ({ canliSurum: 9, senaryolar: [sun('canliya_alindi')] }));
+    d.S().senaryolar.push({ ...onayda(), id: 'eski', durum: 'canli' }, onayda());
+    d.S().canli = 'eski';
+    d.ciz();
+    await bekle();
+    expect(d.cagrilar.map((c) => c.ad)).toEqual(['senaryolar-oku']);
+    expect([d.S().canli, d.S().canliSurum, d.S().senaryolar.map((x) => x.durum)]).toEqual(['o1', 4, ['arsiv', 'canli']]);
+  });
+
+  it('sunucuda geri gönderilen plan açığa döner, geri gönderenin adı ve nedeni karar geçmişine girer', async () => {
+    const d = duzenek({}, true, () => ({ canliSurum: 9, senaryolar: [sun('acik', { onay: { gonderen: 'A', gonderme: '2026-10-25T10:00:00Z', not: null, geriGonderen: 'Ornek Mudur', geriGonderme: '2026-10-25T11:00:00Z', geriNeden: 'Teslim kayiyor' } })] }));
+    d.S().senaryolar.push(onayda());
+    d.ciz();
+    await bekle();
+    expect(d.S().senaryolar[0]!.durum).toBe('acik');
+    expect(d.S().senaryolar[0]!.kararlar).toEqual([expect.objectContaining({ karar: 'geri', kim: 'Ornek Mudur', not: 'Teslim kayiyor' })]);
+  });
+
+  it('sunucuda onayda olup kayıtta olmayan plan için bir kez yenile denir; Yenile kabuğa kaydı yeniden okutur; Onay sekmesine girişte yeniden okunur', async () => {
+    const d = duzenek({}, true, () => ({ canliSurum: 3, senaryolar: [{ ...sun('onayda'), id: 42, ad: 'Onay 25.10', onay: { gonderen: 'Ornek Planlamaci' } }] }));
+    d.ciz();
+    await bekle();
+    expect(d.bildirimler).toEqual(['uyari: Sunucuda onay bekleyen plan var: Onay 25.10 (gönderen Ornek Planlamaci). Bu sayfa plan gönderilmeden önce açıldı; görmek için yenileyin.']);
+    d.ciz();
+    await bekle();
+    expect(d.cagrilar).toHaveLength(1);
+    d.ciz('studyo', 'onay');
+    await bekle();
+    expect(d.cagrilar).toHaveLength(2);
+    expect(d.bildirimler).toHaveLength(1);
+    expect(d.paEylem('pa-yenile')).toBe(true);
+    expect(d.yenilendi()).toBe(1);
+  });
+
+  it('sunucu okunamazsa ya da sunucuda da onaydaysa kayıttaki onay durumu değişmez', async () => {
+    const d = duzenek({}, true, () => ({ canliSurum: 3, senaryolar: [sun('onayda')] }));
+    d.S().senaryolar.push(onayda());
+    d.ciz();
+    await bekle();
+    expect([d.S().senaryolar[0]!.durum, d.bildirimler]).toEqual(['onay', []]);
+  });
+});
+
+// 524 (P9): stüdyo önizlemesinin önerisi (zz31-studyo psKarar). İşlev parçadan alınır; ölçüm (psOlc) ve yardımcılar taklittir.
+describe('stüdyo önizlemesinin önerisi', () => {
+  const parca = planlamaParcasi('zz31-studyo');
+  const bas = parca.indexOf('function psKarar(');
+  const govde = parca.slice(bas, parca.indexOf('\nfunction ', bas + 1));
+  const karar = (once: { wT: number; late: number; ih: number }, sonra: { wT: number; late: number; ih: number }) => new Function(`
+    const OLC = new Map(); const psOlc = p => OLC.get(p); const psYapamadi = () => null;
+    const saat = x => x.toFixed(1) + ' sa'; const sayi = x => String(x);
+    ${govde}
+    const ref = { J: { A: { C: 10, T: 0 } }, ops: { a: { id: 'a', m: 'T1', S: 2 } } };
+    const plan = { J: { A: { C: 8, T: 0 } }, ops: { a: { id: 'a', m: 'T2', S: 1 } } };
+    OLC.set(ref, ${JSON.stringify({ ...once, kar: null })}); OLC.set(plan, ${JSON.stringify({ ...sonra, kar: null })});
+    return psKarar(ref, { plan });`)() as { oneri: string; gerekce: string };
+
+  it('kısıt ihlali artarken gecikme azalsa da önerisi Vazgeç; ihlal artmıyorsa gecikme azalınca Uygula', () => {
+    const r = karar({ wT: 20, late: 2, ih: 8 }, { wT: 10, late: 2, ih: 9 });
+    expect(r.oneri).toBe('vazgec');
+    expect(r.gerekce).toBe('1 kısıt ihlali eklenir; ağırlıklı gecikme 10.0 sa azalsa da.');
+    expect(karar({ wT: 20, late: 2, ih: 8 }, { wT: 10, late: 2, ih: 8 }).oneri).toBe('uygula');
   });
 });

@@ -201,6 +201,21 @@ export function kuyrukIstegi(istasyon: string, once: readonly PlanliPaket[], son
   return onceki.length > 1 && onceki.length === yeni.length && onceki.some((x, i) => x !== yeni[i]) ? { istasyon, onceki, yeni } : null;
 }
 
+// Taşıma: iş `onceki` kimlikli işin önüne (yoksa sona) konur; `serit` istasyonun bütün paketleridir (gizli tamamlananlar dahil).
+export function kuyrukTasimaIstegi(istasyon: string, serit: readonly PlanliPaket[], tasinan: PlanliPaket, onceki?: string | null): KuyrukIstegi | null {
+  const yeni = serit.filter((x) => x !== tasinan);
+  const i = onceki ? yeni.findIndex((x) => x.id === onceki) : -1;
+  yeni.splice(i < 0 ? yeni.length : i, 0, tasinan);
+  return kuyrukIstegi(istasyon, serit, yeni);
+}
+// Yukarı/aşağı: ekranda görünen kuyruk işleri içinde komşuyla yer değiştirir; dönen kimliğin önüne konur (undefined: sona), null: kıpırdamaz.
+export function kuyrukAdimHedefi(gorunen: readonly PlanliPaket[], tasinan: PlanliPaket, yon: -1 | 1): string | undefined | null {
+  const K = gorunen.filter(kuyrukIsiMi);
+  const i = K.indexOf(tasinan), j = i + yon;
+  if (i < 0 || j < 0 || j >= K.length) return null;
+  return yon < 0 ? K[j]!.id : K[j + 1]?.id;
+}
+
 // "Plana öner": kuyruğun dizilişi kaynak başına plan sıralama isteğine çevrilir (A4 komutu; taslağa gider, müdür canlıya alınca geçer).
 // Kuyrukla planın aynı olduğu kaynak için istek yoktur.
 export function planaOneriIstekleri(serit: readonly PlanliPaket[]): SiralamaIstegi[] {

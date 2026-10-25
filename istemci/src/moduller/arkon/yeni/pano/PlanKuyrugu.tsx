@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import {
-  PLAN_ETIKETI, SIRA_ONAYI, adimIstegi, kuyrukIsiMi, kuyrukIstegi, kuyrukSirasi, planEtiketi, planFarkOzeti, planReferanslari, planaOneriIstekleri,
+  PLAN_ETIKETI, SIRA_ONAYI, adimIstegi, kuyrukAdimHedefi, kuyrukIsiMi, kuyrukSirasi, kuyrukTasimaIstegi, planEtiketi, planFarkOzeti, planReferanslari, planaOneriIstekleri,
   siraOnayi, siralamaIstegi, siralamayiGonder, tmiPlani, type KuyrukIstegi, type PlanReferansTuru, type PlanReferansi, type SiralamaIstegi,
 } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import type { Pkg, Result } from '../../../../../../arkon/shared/model.ts';
@@ -131,11 +131,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   };
   const kuyrukTasi = async (p: Pkg, st: string, onceki?: string | null) => {
     if (!kuyrukDuzenle) { soyle('Yetkin yok: Üretim kuyruğunun sırasını değiştirme', 'hata'); return; }
-    const once = istasyonPaketleri(st);
-    const yeni = once.filter((x) => x.id !== p.id);
-    const i = onceki ? yeni.findIndex((x) => x.id === onceki) : -1;
-    yeni.splice(i < 0 ? yeni.length : i, 0, p);
-    await kuyrukGonder(p, st, kuyrukIstegi(st, once, yeni));
+    await kuyrukGonder(p, st, kuyrukTasimaIstegi(st, istasyonPaketleri(st), p, onceki));
   };
   const planaDon = (st: string) => onayYaz({
     baslik: 'Plan sırasına dön', onayMetni: 'Plan sırasına dön',
@@ -181,10 +177,8 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   const adim = (p: Pkg, st: string, yon: -1 | 1) => {
     const L = seritSirala(isler.filter((x) => x.machine === st));
     if (kuyrukIsiMi(p)) {
-      const K = L.filter(kuyrukIsiMi);
-      const i = K.indexOf(p), j = i + yon;
-      if (i < 0 || j < 0 || j >= K.length) return;
-      void kuyrukTasi(p, st, yon < 0 ? K[j]!.id : K[j + 1]?.id);
+      const h = kuyrukAdimHedefi(L, p, yon);
+      if (h !== null) void kuyrukTasi(p, st, h);
       return;
     }
     if (tmiPlani(p)) {

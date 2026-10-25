@@ -294,9 +294,7 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   bu dalda tarayıcıda denemedim.
 - 12.9 kalanı: 768 genişlikte TMI bildirimi terminalin ana düğmesini örtüyor (ortak bildirim katmanı, CEKIRDEK-ISTEKLERI).
 
-## Eski Plan Kuyruğu ekranı ve Hazırlık sırası (kart 527, bağlamada kapanacak)
-- Eski Arkon ekranı (`arkon/web/src/app/pano-planlama.ts`) kuyruğu `planOnce` ile, yani Hazırlık sırasıyla gösterir; ama TMI işinin sürüklemesi
-  bugün de plan taslağına yazar (A4 komutu). Bu, 519 1 c kararına (kuyruk sırası Hazırlık'ın, plan referans) terstir: eski ekranda sürükleyen kişi
-  kuyruğu değil planı değiştirir, ekrandaki sıra da değişmez. Yeni ekran (`yeni/pano/PlanKuyrugu.tsx`) doğru yoldadır. Eski ekrana dokunulmadı
-  (kullanımda); ya eski ekranın sürüklemesi kuyruk ucuna çevrilir ya da eski ekran kalkar.
-
+## Eski Plan Kuyruğu ekranı ve Hazırlık sırası (kart 527, kapandı: 544 a)
+- Eski Arkon ekranında (`arkon/web/src/app/pano-planlama.ts`) açık TMI iş emrinin sürüklemesi ve yukarı-aşağı düğmeleri artık yeni ekrandaki gibi
+  kuyruk sırasına yazar, planı değiştirmez (`kuyrukTasimaIstegi`, `kuyrukAdimHedefi`). Düğmeler eski ekranda bugünkü gibi `plan.edit` ile açılır;
+  kuyruk işlemi (`arkon.kuyruk-sirala`) sunucuda denetlenir, işlemi olmayan kişi ret iletisini görür. Plan çipi ve "Plana öner" yalnız yeni ekrandadır.

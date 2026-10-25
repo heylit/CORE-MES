@@ -52,6 +52,18 @@ describe('plan girdisi (sunucu)', () => {
     assert.equal(JSON.stringify(g), once);
   });
 
+  // 524/5 a, kural 5: teslimi boş emir bugüne bitmiş sayılmaz (ekranda bugünün tarihi ve "gecikiyor" görünüyordu).
+  test('sunucu emrinin teslimi yoksa termini de yoktur; başlangıcı yoksa bugünden başlar; teslimi olanın termini günün 17:00ıdır', () => {
+    const emirler = { orders: [
+      { id: 'O1', no: 'E-1', itemId: '50', qty: 10, start: null, due: null, priority: 2, status: 'uretimde' },
+      { id: 'O2', no: 'E-2', itemId: '50', qty: 5, start: '2026-10-19', due: '2026-10-30', priority: 2, status: 'serbest' },
+    ], opStatus: {}, opProg: {} };
+    const r = planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak: { durum: { ...KAYNAK.durum, emirler }, ek: null }, bugun: '2026-10-21' });
+    const sip = (r?.st as { D: { siparisler: Array<{ id: string; termin: string | null; serbest: string | null }> } }).D.siparisler;
+    assert.equal(sip.find((x) => x.id === 'O1')?.termin, null);
+    assert.equal(sip.find((x) => x.id === 'O2')?.termin, '2026-10-30 17:00');
+  });
+
   test('çalışma yoksa null', () => {
     assert.equal(planGirdisi({ calisma: null, kayit: KAYIT, kaynak: null }), null);
   });
