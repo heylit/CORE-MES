@@ -130,20 +130,39 @@ describe('P2 Siparişler', () => {
     ac('/recete-rota/planlama-yeni/ysiparis');
     await parca('ysiparis');
     tumAc();
-    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(3);
-    for (const ad of ['Partiyi böl', 'Parti taraması', 'Siparişler: maliyet ve kâr']) {
+    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(4);
+    expect(dugme('Örtüşmeyi dene').disabled).toBe(true);
+    expect(screen.getByText('Örtüşebilir bağı olan geciken iş emri yok.')).toBeTruthy();
+    for (const ad of ['Partiyi böl', 'Parti taraması', 'Örtüşme', 'Siparişler: maliyet ve kâr']) {
       expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
     }
     expect(dugme('Böl').disabled).toBe(true);
     expect(dugme('Tara').disabled).toBe(true);
     expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
-    expect(screen.getAllByRole('button', { name: 'Uygula' }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.queryAllByRole('button', { name: 'Uygula' }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     const tutar = screen.getByLabelText('S2 tutar');
     fireEvent.change(tutar, { target: { value: '800' } });
     fireEvent.blur(tutar);
     await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
     expect((govdeler[0] as { deger: typeof CALISMA_DEGERI }).deger.D.siparisler[1]).toMatchObject({ id: 'S2', gelir: 800 });
     expect(istekler.filter((i) => i.includes('planlama-degerlendirmesi'))).toEqual([]);
+  }, 20000);
+});
+
+describe('P2 kâr tablosu (486/1 a)', () => {
+  it('maliyet Maliyetler hesabıyla dolu; önerilen fiyatı yazan düğmeler pasif', async () => {
+    const deger = structuredClone(CALISMA_DEGERI);
+    Object.assign(deger.D.tezgahlar[0]!, { ucret: 10 }); Object.assign(deger.D.fasoncular[0]!, { fiyat: 1 }); deger.plan.ops['S1.a2'].m = '@F1';
+    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }]);
+    ac('/recete-rota/planlama-yeni/ysiparis');
+    await parca('ysiparis');
+    tumAc();
+    const tablo = screen.getByRole('table', { name: 'Siparişler: maliyet ve kâr' });
+    expect(within(tablo).getAllByText(/^işleme \d/).length).toBeGreaterThan(0);
+    const uygula = screen.getAllByRole('button', { name: 'Uygula' }) as HTMLButtonElement[];
+    expect(uygula.length).toBeGreaterThan(0);
+    expect(uygula.every((b) => b.disabled)).toBe(true);
+    expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
   }, 20000);
 });
 

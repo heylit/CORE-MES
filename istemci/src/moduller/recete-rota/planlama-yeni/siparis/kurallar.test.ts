@@ -4,7 +4,7 @@ import { degerlendirmeAdresi, degerlendirmeHatasi, esitPartiler, partiAdetleriDe
 import {
   darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
   dengeIsisi, dengeKatsayisi, elleSinir, fasonDurumu, fasonSatirlari, fasonTerminiYaz, fiyatDenetle, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
-  siparisIsisi,
+  fasonKalemleri, ortusmeAdaylari, siparisIsisi, siparisMaliyetleri, terminIsisi, tl,
 } from './kurallar.ts';
 import { calismaKur } from './test-veri.ts';
 
@@ -63,6 +63,34 @@ describe('P2 saf hesapları', () => {
     expect(V.satirlar.map((r) => r.k)).toEqual(['S1']);
     expect(V.satirlar[0]!.h.u0).toMatchObject({ kd: 2 });
     expect(V.satirlar[0]!.h.u1).toMatchObject({ iyi: true });
+  });
+
+  it('Kâr sütunu Maliyetler hesabının net kârıdır; maliyeti eksik siparişte "?" (486/1 a)', () => {
+    const eksik = calismaKur();
+    expect(dengeIsisi(eksik.D, kayitliPlan(eksik)!, siparisMaliyetleri(eksik)).satirlar[0]!.h.kar).toMatchObject({ sm: 'alert', v: '?' });
+    // Maliyet hesabı fason adımını "@<fasoncu>" tezgâhıyla tanır (motor kaydı gibi).
+    const c = calismaKur((x) => { Object.assign(x.D.tezgahlar[0]!, { ucret: 10 }); Object.assign(x.D.fasoncular[0]!, { fiyat: 1 }); x.plan.ops['S1.a2'].m = '@F1'; });
+    const M = siparisMaliyetleri(c); const m = M.get('S1')!;
+    expect(m.eksik).toEqual([]);
+    const v = m.net ?? m.kar!;
+    expect(dengeIsisi(c.D, kayitliPlan(c)!, M).satirlar[0]!.h.kar).toMatchObject({ etiket: `net ${tl(v)}`, ...(v < 0 ? { kd: 4 } : { iyi: true }) });
+    expect(dengeIsisi(c.D, kayitliPlan(c)!).sutunlar.some((x) => x.k === 'kar')).toBe(false);
+  });
+
+  it('örtüşme adayı: geciken, başlamamış, rotasında örtüşebilir bitince bağı olan; açık olan aday değildir', () => {
+    const ortus = (x: { D: { urunler: { rota: Record<string, unknown>[] }[] } }) => { Object.assign(x.D.urunler[0]!.rota[2]!, { ortusebilir: true }); };
+    expect(ortusmeAdaylari(calismaKur().D, kayitliPlan(calismaKur())!)).toEqual([]);
+    const c = calismaKur(ortus);
+    expect(ortusmeAdaylari(c.D, kayitliPlan(c)!).map((s) => s.id)).toEqual(['S1']);
+    const a = calismaKur((x) => { ortus(x); Object.assign(x.D.siparisler[0]!, { ortus: true }); });
+    expect(ortusmeAdaylari(a.D, kayitliPlan(a)!)).toEqual([]);
+    const b = calismaKur((x) => { ortus(x); Object.assign(x.D, { ortusAcik: { S1: true } }); });
+    expect(ortusmeAdaylari(b.D, kayitliPlan(b)!)).toEqual([]);
+  });
+
+  it('Terminler özeti eski sayımla: tahmini dönüşü olan fason kalemi tarihsiz sayılmaz (486/3 a)', () => {
+    const c = calismaKur();
+    expect(terminIsisi(c, fasonKalemleri(c.D, fasonSatirlari(c, kayitliPlan(c)!))).ust.metin).toMatch(/ 0 kalemin geliş tarihi yok;/);
   });
 
   it('elle çarpan sınırı: maliyet okuyan 3, plan yazan 2, ikisi de yoksa 0', () => {
