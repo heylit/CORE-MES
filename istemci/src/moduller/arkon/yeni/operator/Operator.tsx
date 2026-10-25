@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TerminalYerlesimi, TusTakimi, useBildirim, type BildirimTonu,
+  Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TusTakimi, useBildirim, type BildirimTonu,
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { useTema } from '../../../../ortak/veri/tema.ts';
@@ -977,7 +977,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
     return (
-      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)}>
+      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
         <header className="tc-ay1-mobil-ust">
           <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
@@ -1036,7 +1036,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const saat = new Date(simdi);
   const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   return (
-    <div className="tc-ay1" data-durum={IS_DURUM_RENGI(o.state)}>
+    <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
       <header className="tc-ay1-ust">
         <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
         <span className="tc-ay-ayrac" aria-hidden="true" />
@@ -1060,50 +1060,45 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
         </button>
       </header>
-      <TerminalYerlesimi
-        durum={IS_DURUM_RENGI(o.state)}
-        oran="orta-genis"
-        sol={kuyruk}
-        orta={(
-          <div className="tc-ay1-orta">
-            {bantlar}
-            <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
-              <div>
-                <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
-                <h2 className="tc-ay1-is-baslik">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</h2>
-                <p>{o.part} · {o.op}</p>
-                <IsEtiketleri is={o} />
-                {notlar}
-              </div>
-              <div className="tc-ay1-olgular">
-                {uyariCipi(false)}
-                <div><span className="tc-ay1-ust-yazi">Çevrim</span><b>{o.cycle} sn</b></div>
-                <div><span className="tc-ay1-ust-yazi">Termin</span><b>{o.due}</b></div>
-              </div>
-            </section>
-            <EtkinKart is={o} kartlar={kartlar} />
-            <section className="tc-ay1-sahne" aria-label="Üretim">
-              {makineSecici}
-              {gorev(false)}
-              {sayac}
-              {toplu}
-              {durumDugmeleri(false)}
-            </section>
-          </div>
-        )}
-        sag={(
-          <div className="tc-ay1-sag">
-            <Sekmeler etiket="İş ayrıntısı" secili={gecerliSekme} sec={(a) => tabYaz(a)}
-              sekmeler={sekmeler.map((s) => ({ anahtar: s.id, baslik: s.n ? `${s.l} (${s.n})` : s.l, simge: s.simge }))} />
-            <div className="tc-ay1-bolme" role="tabpanel">
-              {gecerliSekme === 'st' ? panel : null}
-              {gecerliSekme === 'draw' ? resim : null}
-              {gecerliSekme === 'steps' ? adimlar : null}
-              {gecerliSekme === 'ana' ? <>{takimKarti}{analiz}</> : null}
+      {/* Eski üç sütun (.main): kuyruk, üretim, ayrıntı; sütunlar ekran yüksekliğine sığar, taşan sütun kendi içinde kayar. */}
+      <div className="tc-ay1-izgara">
+        <div className="tc-ay1-sutun">{kuyruk}</div>
+        <div className="tc-ay1-orta tc-ay1-sutun">
+          {bantlar}
+          <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
+            <div>
+              <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
+              <h2 className="tc-ay1-is-baslik">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</h2>
+              <p>{o.part} · {o.op}</p>
+              <IsEtiketleri is={o} />
+              {notlar}
             </div>
+            <div className="tc-ay1-olgular">
+              {uyariCipi(false)}
+              <div><span className="tc-ay1-ust-yazi">Çevrim</span><b>{o.cycle} sn</b></div>
+              <div><span className="tc-ay1-ust-yazi">Termin</span><b>{o.due}</b></div>
+            </div>
+          </section>
+          <EtkinKart is={o} kartlar={kartlar} />
+          <section className="tc-ay1-sahne" aria-label="Üretim">
+            {makineSecici}
+            {gorev(false)}
+            {sayac}
+            {toplu}
+            {durumDugmeleri(false)}
+          </section>
+        </div>
+        <div className="tc-ay1-sag tc-ay1-sutun">
+          <Sekmeler etiket="İş ayrıntısı" secili={gecerliSekme} sec={(a) => tabYaz(a)}
+            sekmeler={sekmeler.map((s) => ({ anahtar: s.id, baslik: s.n ? `${s.l} (${s.n})` : s.l, simge: s.simge }))} />
+          <div className="tc-ay1-bolme" role="tabpanel">
+            {gecerliSekme === 'st' ? panel : null}
+            {gecerliSekme === 'draw' ? resim : null}
+            {gecerliSekme === 'steps' ? adimlar : null}
+            {gecerliSekme === 'ana' ? <>{takimKarti}{analiz}</> : null}
           </div>
-        )}
-      />
+        </div>
+      </div>
       {pencereler}
     </div>
   );
