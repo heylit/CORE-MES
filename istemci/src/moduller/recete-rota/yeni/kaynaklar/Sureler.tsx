@@ -13,6 +13,15 @@ import { SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 // yazar; ikisi de rota.yaz ister. Plan tabanı yalnız gösterilir (Soru 468/4, öneri a): plan teorik süreyi kullanır.
 // Düzen eski ekranınkidir: her adım bir kart, alanlar etiketli ızgarada; ürün ve revizyon kartın içinde yazılır.
 type SureAdimi = SurelerCevabi['adimlar'][number];
+
+// Eski ekrandaki gibi kaynak istasyonuyla yazılır: istasyon kodu, altında istasyon adı ve makine kodu; istasyonu olmayan kaynak kendi kodu ve adıyla.
+function kaynakMetni(k: SureAdimi['kaynak']): React.ReactNode {
+  if (k === null) return YOK;
+  const ist = k.istasyon;
+  if (ist === null || (k.tur === 'istasyon' && ist.id === k.id)) return <><b>{k.kod ?? k.ad}</b>{k.kod !== null && <small>{k.ad}</small>}</>;
+  const alt = k.tur === 'makine' && k.kod !== null ? `${ist.ad} · ${k.kod}` : `${ist.ad} · ${k.ad}`;
+  return <><b>{ist.kod}</b><small>{alt}</small></>;
+}
 const TURLER = [['hazirlik', 'Hazırlık'], ['islem', 'İşlem'], ['degisim', 'Değişim']] as const;
 type Tur = (typeof TURLER)[number][0];
 const KAYNAK_ADI = { elle: 'Elle', terminal: 'Terminal' } as const;
@@ -127,8 +136,8 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
           {alan('Ürün', <><b>{kod}</b><small>{ad}</small></>, 'tc-rr2-sure-urun')}
           {alan('Revizyon', <b>{revNo ?? YOK}</b>)}
           {alan('Op no', <b>{String(a.opNo)}</b>)}
-          {alan('Operasyon', <>{a.operasyonTipi.kod} <small>{a.operasyonTipi.ad}</small></>, 'tc-rr2-sure-genis')}
-          {alan('Kaynak', a.fason ? 'Fason' : a.kaynak ? <><b>{a.kaynak.kod}</b><small>{a.kaynak.ad}</small></> : YOK, 'tc-rr2-sure-genis')}
+          {alan('Operasyon', <small>{a.operasyonTipi.ad}</small>, 'tc-rr2-sure-genis')}
+          {alan('Kaynak', a.fason ? 'Fason' : kaynakMetni(a.kaynak), 'tc-rr2-sure-genis')}
           {TURLER.map(([t, e]) => <Fragment key={`t-${t}`}>{alan(`Teorik ${e.toLocaleLowerCase('tr-TR')} dk`, <b>{sayi(ondalik(a.teorik[`${t}Dk`]))}</b>)}</Fragment>)}
           {alan('Değişim %', <b>{oranMetni(ondalik(a.teorik.degisimOraniYuzde))}</b>)}
           {TURLER.map(([t, e]) => <Fragment key={`g-${t}`}>{alan(`Gerçekleşen ${e.toLocaleLowerCase('tr-TR')} dk`, gerceklesen(a, t, e))}</Fragment>)}
