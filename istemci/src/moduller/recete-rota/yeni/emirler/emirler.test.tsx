@@ -48,7 +48,8 @@ describe('R3 Üretim emirleri: okuma', () => {
     sunucuKur(OKUYAN);
     rrAc();
     const b = await emirAc();
-    expect(within(b).getByText(/Taslak emirler plana girmez/)).toBeTruthy();
+    const satir = within(b).getByRole('button', { name: /UE-0001/ }).closest('li')!;
+    expect(within(satir).getByText(/Taslak emirler plana girmez/)).toBeTruthy();
   });
 });
 

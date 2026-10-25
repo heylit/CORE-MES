@@ -55,7 +55,8 @@ describe('R2 Süreler', () => {
     rrAc('/recete-rota/yeni/sureler');
     const bolge = await bolumAc('Süreler');
     const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık dakika, MM-0001 OP 10' });
-    expect(within(bolge).getByText('Rev A')).toBeTruthy();
+    const kart = within(bolge).getByRole('article', { name: 'MM-0001 OP 10 süreleri' });
+    expect(within(kart).getByText('Revizyon').nextElementSibling?.textContent).toBe('A');
     yaz(hazirlik, '3,5');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure', govde: { tur: 'hazirlik', sureDk: 3.5, makineId: null, okunanId: null } });

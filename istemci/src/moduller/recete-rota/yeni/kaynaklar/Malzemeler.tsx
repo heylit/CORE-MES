@@ -127,10 +127,10 @@ function KartTablosu({ baslik, kartlar, durum, yetki, semadaAc }: {
       },
     },
     {
-      anahtar: 'eylem', baslik: 'Eylem', csv: false,
+      anahtar: 'eylem', baslik: '', csv: false,
       hucre: (m) => (m.type === 'yari' || m.type === 'mamul'
-        ? <Dugme simge="route" onClick={() => semadaAc(m.id)} aria-label={`${m.code} akış şemasında aç`}>Şemada aç</Dugme>
-        : null),
+        ? <Dugme simge="chev-right" onClick={() => semadaAc(m.id)} aria-label={`${m.code} akış şemasında aç`} title="Şemada aç" />
+        : <span />),
     },
   ];
   return <Tablo<Malzeme> etiket={`${baslik} kartları`} sutunlar={sutunlar} satirlar={kartlar} satirAnahtari={(m) => m.id} bosMesaj="Bu süzgeçle kart yok." />;
