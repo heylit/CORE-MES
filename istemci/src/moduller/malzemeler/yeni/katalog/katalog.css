@@ -41,6 +41,22 @@
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2);
 }
 
+/* Prototipte her katalog satırı ayrık karttır, sol kenarında tür rengi şerit; seçim kutusu kartın dışında, başlıksız sütunda. Ortak tablonun satır niteliği olmadığından şerit malzeme hücresinin ::before'u ile çizilir. */
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo { border-collapse: separate; border-spacing: 0 calc(var(--b-1) + var(--cizgi)); }
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody td { border-top: var(--cizgi-ince) solid var(--edge); border-bottom: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid); }
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody td:first-child { border: 0; background: none; padding-inline: 0 var(--b-2); }
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody td:nth-child(2) {
+  position: relative; padding-left: calc(var(--b-3) + var(--b-1) + var(--cizgi)); border-left: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1) 0 0 var(--yari-1);
+}
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody td:last-child { border-right: var(--cizgi-ince) solid var(--edge); border-radius: 0 var(--yari-1) var(--yari-1) 0; }
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody tr.tc-tablo-secilir:hover { background: none; }
+.tc-mk-ana .tc-tablo-kap:not([data-kip="kart"]) .tc-tablo tbody tr.tc-tablo-secilir:hover td:not(:first-child) { border-color: var(--edge2); }
+.tc-mk-ana .tc-tablo-kap[data-kip="kart"] .tc-tablo tr { position: relative; padding-left: calc(var(--b-4) + var(--b-1) + var(--cizgi)); overflow: hidden; }
+.tc-mk-ana .tc-tablo tbody .tc-mk-malzeme::before {
+  content: ""; position: absolute; inset-block: calc(-1 * var(--cizgi-ince)); left: calc(-1 * var(--cizgi-ince)); width: calc(var(--b-1) + var(--cizgi));
+  background: var(--tur-renk); border-radius: var(--yari-1) 0 0 var(--yari-1);
+}
+.tc-mk-ana .tc-tablo-kap[data-kip="kart"] .tc-tablo tbody .tc-mk-malzeme::before { inset-block: 0; left: 0; border-radius: 0; }
 .tc-mk-malzeme { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
 .tc-mk-malzeme > .tc-simge { flex: none; color: var(--muted); }
 .tc-mk-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; }

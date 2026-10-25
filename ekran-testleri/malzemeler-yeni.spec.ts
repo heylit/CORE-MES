@@ -89,6 +89,18 @@ test.describe('M3 malzeme ayarları', () => {
     expect(ag.yazmalar).toEqual([]);
   });
 
+  test('Genel bakış özet kartları otomatik ızgarada: 1280\'de 4 + 2 (prototip)', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran/ayarlar');
+    const kartlar = page.locator('.tc-ma-kartlar');
+    await expect(kartlar).toBeVisible();
+    const satirlar = await kartlar.evaluate((el) => {
+      const ustler = [...el.children].map((c) => Math.round(c.getBoundingClientRect().top));
+      return [...new Set(ustler)].map((u) => ustler.filter((x) => x === u).length);
+    });
+    if ((page.viewportSize()?.width ?? 0) >= 1280) expect(satirlar).toEqual([4, 2]);
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+  });
+
   test('bilinmeyen bölüm Genel bakış\'a düşer', async ({ page, ac }) => {
     await ac('/malzemeler/yeni-ekran/ayarlar?bolum=yok');
     await expect(page.getByRole('navigation', { name: 'Malzeme ayarları bölümleri' }).getByRole('button', { name: 'Genel bakış' }))
@@ -106,6 +118,25 @@ test.describe('M2 katalog', () => {
     await expect(page.getByRole('button', { name: 'Excel: şablon, dışa ve içe aktar' })).toBeVisible();
     await page.getByRole('searchbox', { name: 'Katalogda ara' }).fill('ORNEK Yuvarlak');
     await expect(page.getByText('ORNEK Yuvarlak çubuk Ø50').first()).toBeVisible();
+    await tasmaz(page);
+  });
+
+  test('satırlar ayrık kart, sol kenarda tür rengi şerit; seçim sütununun başlığı yok (prototip)', async ({ page, ac }) => {
+    await ac('/malzemeler/yeni-ekran');
+    const tablo = page.locator('.tc-mk-ana .tc-tablo');
+    await expect(tablo.locator('tbody tr').first()).toBeVisible();
+    const olcu = await tablo.evaluate((el) => {
+      const malzeme = el.querySelector('tbody .tc-mk-malzeme');
+      const serit = malzeme ? getComputedStyle(malzeme, '::before') : null;
+      return {
+        secBaslik: el.querySelector('thead th')?.textContent?.trim() ?? null,
+        seritGenislik: serit ? parseFloat(serit.width) : 0,
+        seritRenk: serit?.backgroundColor ?? '',
+      };
+    });
+    expect(olcu.secBaslik).toBe('');
+    expect(olcu.seritGenislik).toBeGreaterThan(0);
+    expect(olcu.seritRenk).not.toBe('rgba(0, 0, 0, 0)');
     await tasmaz(page);
   });
 
