@@ -405,3 +405,25 @@ button.tc-pym-g-grup { letter-spacing: .1em; cursor: pointer; }
 .tc-pym-hizli-d:hover { border-color: var(--edge2); }
 .tc-pym-hizli-d span { display: grid; gap: var(--pay-ince); }
 .tc-pym-hizli-d small { color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Ayrıntı panelleri (c-masa opDenetci, isDenetci; o-tahta tbTezPaneli) */
+.tc-pym-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-2) var(--b-4); margin: 0; font-size: var(--yazi-s); }
+.tc-pym-dl dt { color: var(--muted); font-weight: 700; }
+.tc-pym-dl dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.tc-pym-neden { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-3); border-radius: var(--yari-2); background: color-mix(in srgb, var(--done) 10%, transparent); color: var(--ink); font-size: var(--yazi-s); }
+.tc-pym-neden > .tc-simge { flex: 0 0 auto; color: var(--done); }
+.tc-pym-hamleler { margin-top: var(--b-1); }
+.tc-pym-zincir { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pym-zincir button {
+  display: grid; grid-template-columns: calc(var(--b-6) + var(--b-1)) minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dokunma);
+  padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer;
+}
+.tc-pym-zincir button[aria-current="true"] { border-color: var(--hazard); }
+.tc-pym-denetci .tc-tablo td.tc-pym-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.tc-pym-denetci .tc-tablo tr[data-secili] td { background: color-mix(in srgb, var(--hazard) 10%, transparent); }
+.tc-pym-ay-yol { display: flex; min-width: 0; height: calc(var(--b-3) + var(--pay-ince)); overflow: hidden; border-radius: var(--yari-1); background: var(--panel2); box-shadow: inset 0 0 0 var(--cizgi-ince) var(--edge); }
+.tc-pym-ay-yol i { display: block; width: var(--w); min-width: var(--cizgi-ince); height: 100%; }
+.tc-pym-ay-lejant { display: grid; gap: var(--pay-ince); margin: var(--b-2) 0 0; padding: 0; font-size: var(--yazi-xs); list-style: none; }
+.tc-pym-ay-lejant li { display: grid; grid-template-columns: var(--b-3) minmax(0, 1fr) auto var(--dokunma); align-items: center; gap: var(--b-2); }
+.tc-pym-ay-lejant i { display: inline-block; width: var(--b-3); height: var(--b-3); border-radius: var(--kayma); }
+.tc-pym-ay-lejant span:last-child { text-align: right; }
