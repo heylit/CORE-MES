@@ -23,7 +23,8 @@
   background: var(--panel2); color: var(--ink); font: inherit; min-width: 0;
 }
 .tc-ay2 textarea, .tc-ay2-kurallar textarea { resize: vertical; inline-size: 100%; }
-.tc-ay2 input:disabled, .tc-ay2 select:disabled, .tc-ay2 textarea:disabled { opacity: var(--saydam-70); cursor: not-allowed; }
+/* Kilitli (TMI'den gelen) alan değişebilenden ayrı okunur: kesik çerçeve, zeminsiz. */
+.tc-ay2 input:disabled:not([type="checkbox"]):not([type="range"]):not([type="color"]), .tc-ay2 select:disabled, .tc-ay2 textarea:disabled { border-style: dashed; background: transparent; color: var(--muted); cursor: not-allowed; }
 
 /* küçük denetimler */
 .tc-ay2-anahtar { display: flex; align-items: flex-start; gap: var(--b-3); min-width: 0; }
@@ -50,7 +51,8 @@
   display: inline-grid; place-items: center; position: relative; flex: none; inline-size: var(--dokunma); block-size: var(--dokunma);
   border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); cursor: pointer;
 }
-.tc-ay2-arac[aria-pressed="true"], .tc-ay2-arac[data-birincil] { background: var(--sig); color: var(--on-sig); border-color: transparent; }
+.tc-ay2-arac[aria-pressed="true"] { background: var(--sig); color: var(--on-sig); border-color: transparent; }
+.tc-ay2-arac[data-birincil] { background: var(--hazard); color: var(--on-hazard); border-color: transparent; }
 .tc-ay2-arac:disabled { opacity: var(--saydam-50); cursor: not-allowed; }
 .tc-ay2-onay {
   min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
@@ -304,11 +306,12 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-esitleme i { inline-size: var(--b-2); block-size: var(--b-2); border-radius: var(--yari-tam); background: var(--idle); }
 .tc-ay2-esitleme[data-acik] { color: var(--ink); }
 .tc-ay2-esitleme[data-acik] i { background: var(--run); }
-.tc-ay2-govde { display: grid; grid-template-columns: minmax(var(--kuyruk-genis), 1fr) minmax(0, 3fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-ay2-govde { display: grid; grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr); gap: var(--b-4); align-items: start; min-width: 0; }
 .tc-ay2-liste { display: grid; gap: var(--b-2); min-width: 0; position: sticky; inset-block-start: var(--b-3); max-block-size: calc(var(--tc-ay-vh, 100vh) - var(--ust-cubuk) - var(--b-6)); overflow: auto; }
 .tc-ay2-arama { display: flex; gap: var(--b-2); align-items: center; }
 .tc-ay2-arama-kutu { display: flex; align-items: center; gap: var(--b-2); flex: 1; min-width: 0; padding-inline-start: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); }
-.tc-ay2 .tc-ay2-arama-kutu input { flex: 1; min-width: 0; inline-size: 100%; border: 0; background: none; padding-inline: 0; }
+/* Genel alan seçicisi :not() ile daha güçlü; kutunun içindeki giriş ikinci çerçeve almasın. */
+.tc-ay2 .tc-ay2-arama-kutu input:not([type="checkbox"]):not([type="range"]):not([type="color"]) { flex: 1; min-width: 0; inline-size: 100%; border: 0; border-radius: 0; background: none; padding-inline: 0; }
 .tc-ay2-arama-kutu .tc-ay2-arac { border: 0; background: none; }
 .tc-ay2-suzgec { display: grid; gap: var(--b-2); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
 .tc-ay2-suzgec-alanlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
@@ -317,7 +320,8 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-paketler { display: grid; gap: var(--b-2); }
 .tc-ay2-paket-grubu { display: grid; gap: var(--b-2); }
 .tc-ay2-grup-bas { display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-1); border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; min-width: 0; }
-.tc-ay2-grup-bas small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tc-ay2-grup-bas b { flex: none; white-space: nowrap; }
+.tc-ay2-grup-bas small { flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .tc-ay2-grup-bas .tc-ay2-rozet-sayi { margin-inline-start: auto; }
 .tc-ay2-paket {
   display: grid; gap: var(--b-1); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
@@ -339,7 +343,8 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-emir-sayilar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-4); }
 .tc-ay2-emir-sayilar > div { display: grid; gap: var(--b-1); }
 .tc-ay2-emir-sayilar b { font-size: var(--yazi-xl); }
-.tc-ay2-adimlar { display: flex; gap: var(--b-1); list-style: none; margin: 0; padding: 0; overflow-x: auto; min-width: 0; }
+.tc-ay2-adimlar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(max-content, 1fr); gap: var(--b-1); list-style: none; margin: 0; padding: 0; overflow-x: auto; min-width: 0; }
+.tc-ay2-adimlar button { inline-size: 100%; justify-content: center; }
 .tc-ay2-adimlar button {
   display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge);
   border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font: inherit; white-space: nowrap; cursor: pointer;
