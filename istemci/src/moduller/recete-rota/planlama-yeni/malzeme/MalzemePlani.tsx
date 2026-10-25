@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DurumKutusu, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import type { PlanlamaCalismasi } from '../tipler.ts';
 import { kaynakKur, stokOku, type StokKaynagi } from './kaynak.ts';
 import {
   BAGSIZ, DURUM_ADI, DURUM_TONU, KAYNAKLAR, TEDARIKCISIZ, alimPlani, alimSayaclari, alimTablolari, bitenler, calismaSimdisi, dagilim,
@@ -56,6 +57,13 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
 );
 
 export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri) {
+  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} />;
+}
+
+// Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu }: {
+  calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null;
+}) {
   const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
   const [gor, gorYaz] = useState<GrafikTuru>('butce');
@@ -75,12 +83,12 @@ export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri)
     const islemler = planIslemleri(calisma.plan);
     if (calisma.plan === null || islemler.length === 0) return null;
     const k = kaynakKur(D, taban, stok);
-    const biten = bitenler(depo.durum?.emirler ?? depo.receteRotaKaydi, D);
+    const biten = bitenler(emirler, D);
     const g = motorGirdisi({ D, malzemeler: k.malzemeler, alimlar: k.alimlar, islemler, biten, simdi: calismaSimdisi(calisma), taban });
     const t = tahsisEt(g, taban);
     const A = terminAyari(D);
     return { g, k, A, plan: malzemePlani(g, taban, t), alim: alimPlani(g, taban, t, A) };
-  }, [calisma, D, taban, stok, depo.durum, depo.receteRotaKaydi]);
+  }, [calisma, D, taban, stok, emirler]);
 
   // Çalışma kaydı hiç yokken de eski sayfa plansız halini çizer (başlık, boş harita, tüm satırlar); diğer görünümler de öyle.
   const planYok = (
@@ -95,7 +103,7 @@ export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri)
   if (stok === undefined) return <div className="tc-pyz"><DurumKutusu durum="yukleniyor" /></div>;
   if (!hesap) return planYok;
 
-  const fg = yetki.maliyetOku;
+  const fg = maliyetOku;
   const { g, k, A, plan, alim } = hesap;
   const kov = kovala(plan.satirlar, taban, kirilim, g.simdi);
   const oz = ozet(plan);
@@ -155,7 +163,7 @@ export function MalzemePlani({ depo, calisma, yetki }: PlanlamaEkranOzellikleri)
           ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
           tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} />
       </Kart>
-      <OneCekme surum={depo.calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
+      <OneCekme surum={calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
     </div>
   );
   return (
