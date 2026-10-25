@@ -130,6 +130,9 @@ const tmTarihYaz = (D, t) => new Date(baseMs(D) + t * 3600000).toISOString().sli
 /* kullanıcı 13:17: varsayılan termin malzemeye ve fason firmasına göre değişir; malzeme ya da fasoncu kendi katsayısını taşırsa genel katsayının yerine o kullanılır */
 const tmKat = (x, k, genel) => x && x[k] != null && isFinite(+x[k]) ? +x[k] : genel;
 function tmSureMal(D, kod, q, A) { const m = (D.malzemeler || []).find(x => x.kod === kod); if (!m || m.tedarikGun == null) return null; return (+m.tedarikGun * tmKat(m, 'terminKat', A.katMal) + tmKat(m, 'terminEk', A.ekMal) * q / 100) * 24; }
+/* 533 a: Satın Alma'dan girilen tedarik termini kesinleşen gelişti (günün 08:00'i): katsayılı tahminin yerine geçer, geç kalırsa katı kipte
+   iş bekler. Termini olmayan malzeme bugünkü tahminle kalır. */
+const tmSaTermin = (D, kod) => { const m = (D.malzemeler || []).find(x => x.kod === kod); return m && typeof m.saTermin === 'string' ? m.saTermin + ' 08:00' : null; };
 /* malzemenin ihtiyaç günü son plandan: onu kullanan ilk işin başlangıcı; plan yoksa bilinmez */
 function tmIhtiyac(D, p) {
   const out = {}, ilk = {}; if (!p || !p.ops) return { kod: out, is: ilk };
@@ -154,6 +157,7 @@ function tmUygula(st, S) {
   const yaz = t => tmTarihYaz(S.D, t);
   D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
   for (const p of D.satinalma) { if (parseT(D, p.gelis) != null) continue;
+    const sat = tmSaTermin(D, p.kod); if (sat) { p.gelis = sat; p.tm = 'sa-termin'; continue; }
     const sure = tmSureMal(D, p.kod, +p.miktar || 0, A); if (sure == null) { p.tm = 'sure-yok'; continue; }
     const h = ih.kod[p.kod]; const t0 = parseT(D, p.verildi) ?? bas;
     if (h != null && h <= sinir) { const g = bas + sure; p.gelis = yaz(g); p.tm = 'yok'; p.yakin = 1; }
@@ -172,9 +176,10 @@ function tmEksikYaz(st) {
   D.satinalma = (D.satinalma || []).filter(p => p.tm !== 'siparis-yok');
   const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz) continue; for (const r of s.malzeme || []) ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; }
   for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
-    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue; const sure = tmSureMal(D, kod, eks, E.A); if (sure == null) continue;
-    const g = E.bas + sure; D.satinalma.push({ kod, miktar: eks, gelis: tmTarihYaz(D, g), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok' });
-    if (E.ih[kod] != null && E.ih[kod] <= E.sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
+    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue;
+    const sat = tmSaTermin(D, kod); const sure = sat ? null : tmSureMal(D, kod, eks, E.A); if (!sat && sure == null) continue;
+    D.satinalma.push({ kod, miktar: eks, gelis: sat || tmTarihYaz(D, E.bas + sure), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok', ...(sat ? { saTermin: 1 } : {}) });
+    if (!sat && E.ih[kod] != null && E.ih[kod] <= E.sinir) D.satinalma[D.satinalma.length - 1].yakin = 1; }
   return st;
 }
 

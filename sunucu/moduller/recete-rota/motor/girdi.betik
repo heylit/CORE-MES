@@ -381,7 +381,22 @@ function tmiCevir(st, kaynak, D0, bugun) {
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
   const sa = k && k.ek && k.ek.acikSiparisler;
   if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
+  if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   return D;
+}
+/* 533 a: Satın Alma'nın tedarik termini malzemede durur (saTermin 'GGGG-AA-GG' ya da null; saSurum yazma ucunun sürümü). Okunamadıysa
+   (null) açık çalışmadaki değer kalır; satırı olmayan malzemede alan yoktur (termin bekleniyor). */
+function tmiTerminler(malzemeler, l, eski) {
+  const T = Array.isArray(l) ? new Map(l.map(x => [String(x.kod), x])) : null;
+  const E = new Map((eski || []).map(m => [m.kod, m]));
+  for (const m of malzemeler) {
+    delete m.saTermin; delete m.saSurum; delete m.saAciklama;
+    const x = T ? T.get(m.kod) : E.get(m.kod);
+    if (!x) continue;
+    const termin = T ? x.termin : x.saTermin, surum = T ? x.surum : x.saSurum, aciklama = T ? x.aciklama : x.saAciklama;
+    if (surum == null) continue;
+    Object.assign(m, { saTermin: termin || null, saSurum: surum }, aciklama ? { saAciklama: aciklama } : {});
+  }
 }
 /* 525 1 a: satın almanın açık siparişi (kalan miktar, beklenen teslim) motorda satın alma satırıdır. Sunucudan gelen satır işaretlidir ve
    her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.betik tmUygula

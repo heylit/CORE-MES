@@ -21,7 +21,7 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { fasonSuresiTahminleri, malzemeGelisTarihleri } from '../satin-alma/disari.ts';
+import { fasonSuresiTahminleri, malzemeGelisTarihleri, tedarikTerminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { calisanAdimlar, canliOzeti, planAyariOku } from '../plan/disari.ts';
@@ -372,7 +372,16 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const acikSiparisler = d.items !== null && yetkiliMi(kullanici, ACIK_SIPARIS_OKUMA) ? await acikSiparisGelisleri(db, d.items) : null;
-  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), acikSiparisler } };
+  // 533 a: malzemenin tedarik termini Satın Alma'dandır; planlamada her malzeme satırında görünür (yazma ucu satın almanın).
+  const terminler = d.items === null ? null : await malzemeTerminleri(db, d.items);
+  return { durum: d, ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), acikSiparisler, tedarikTerminleri: terminler } };
+}
+
+// 533 a: ham malzemenin tedarik termini ve sürümü (girdi.betik plandaki malzemeye yazar). Satırı olmayan malzeme listede yoktur.
+async function malzemeTerminleri(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<{ kod: string; termin: string | null; surum: number; aciklama: string }[]> {
+  const ham = malzemeler.filter((m) => m.type === 'ham');
+  const t = await tedarikTerminleri(db, ham.map((m) => m.kayitNo));
+  return ham.flatMap((m) => { const x = t.get(m.kayitNo); return x ? [{ kod: m.id, termin: x.termin, surum: x.surum, aciklama: x.aciklama }] : []; });
 }
 
 // 525 1 a: ham malzemenin açık satın alma siparişleri (girdi.betik bunları plana satın alma satırı olarak yazar).
