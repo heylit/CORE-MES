@@ -202,6 +202,8 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
     assert.deepEqual(d?.machines?.map((m) => m.id), [String(makineId)]);
     assert.notEqual(d?.emirler, null, 'emir dilimi okunur');
     assert.notEqual(d?.routes, null, 'rota dilimi okunur');
+    // N8: takvim eki planlama sayfasındaki gibi kurulur (iş merkezinin haftalık vardiyası)
+    assert.deepEqual(Object.keys((k?.kaynak.ek as { takvim: object | null } | undefined)?.takvim ?? {}).sort(), ['hafta', 'kisiVardiyasi']);
     const r = await vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-404|10'] }] })));
     assert.deepEqual(r, { yerlesimler: [], yerlesmeyen: ['E-404|10'], vardiyasiz: [], malzemeBekleyen: [] });
   });

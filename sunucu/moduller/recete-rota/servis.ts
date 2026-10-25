@@ -405,11 +405,9 @@ const PLAN_MOTORU_OKUYUCUSU: Kullanici = {
 };
 export interface PlanCozumKaynagi { calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi }
 // Planlama sayfası hiç kaydetmemişse (ya da kaydın sürümü eskiyse) çalışma yoktur: null.
+// Girdi planlama sayfasınınkiyle aynı yoldan kurulur (takvim eki dahil): iş merkezinin haftalık vardiyası olmadan sunucu başka takvimle çözerdi.
 export async function planCozumKaynagi(db: Db): Promise<PlanCozumKaynagi | null> {
-  const calisma = kayitDegeri(await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI)) as { surum?: unknown; D?: unknown } | null;
-  if (calisma === null || calisma.surum !== PLANLAMA_SURUMU || !calisma.D) return null;
-  const kayit = kayitDegeri(await sorgular.kayitGetir(db, DURUM_ANAHTARI));
-  return { calisma, kayit, kaynak: await kaynakOku(db, PLAN_MOTORU_OKUYUCUSU) };
+  return (await planlamaGirdisi(db, PLAN_MOTORU_OKUYUCUSU)).girdi;
 }
 
 // Planlama sayfasının açılışı (288 a). Eski çerçeve çalışmayı, Reçete ve Rota kaydını ve kaynak okumasını tarayıcıda girdi.betik ile
