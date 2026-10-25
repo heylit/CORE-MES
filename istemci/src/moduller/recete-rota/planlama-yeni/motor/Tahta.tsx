@@ -57,6 +57,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const tezGrup = useMemo(() => { const m = new Map(c.D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger'])); return (id: string) => (id.startsWith('@') ? 'fason' : m.get(id) ?? 'diger'); }, [c]);
   const guncel = planGuncel(c);
   const v = useMemo(() => (p ? ozetVerisi(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
+  // Planı anlat'ın gözlem cümleleri son Özet çiziminin döneminden gelir (eski BR.yor önbelleği; Soru 485 cevabına kadar eski hali).
+  const [ozD, setOzD] = useState({ donem, kayma });
+  if (gorunum === 'genel' && (ozD.donem !== donem || ozD.kayma !== kayma)) setOzD({ donem, kayma });
+  const vYorum = useMemo(() => (p ? ozetVerisi(c, p, cx, ozD.donem, ozD.kayma) : null), [c, p, cx, ozD]);
   const nabiz = useMemo(() => (p ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
   const sor = useMemo(() => (p ? sorunlar(c, p, cx, guncel) : []), [c, p, cx, guncel]);
   const now = simdiSaati(c);
@@ -94,12 +98,11 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const secimBirak = useCallback(() => sec({ siparis: null, adim: null, tezgah: null }), [sec]);
   const opSec = useCallback((id: string) => sec({ adim: id, siparis: null, tezgah: null }), [sec]);
   const zamanSec = useCallback((t: number) => sec({ zaman: t }), [sec]);
-  // Gün planı (at-gun): seçilen adımın ya da tezgâhın o günü Çizelge'nin gün ölçeğinde açılır.
-  const gunPlani = useCallback((t: number, x: { adim?: string; tezgah?: string }) => {
+  // Gün planı (at-gun): seçilen adım ya da tezgâh Çizelge'de açılır, dönem değişmez (eski ekran haftalık açar; Soru 485 cevabına kadar eski hali).
+  const gunPlani = useCallback((_t: number, x: { adim?: string; tezgah?: string }) => {
     sec({ siparis: null, adim: x.adim ?? null, tezgah: x.tezgah ?? null });
-    o.olcekSec('gun'); const n = Math.floor(t / 24) - Math.floor(now / 24); if (n > 0) o.kaydir(n);
     setGorunum('cizelge');
-  }, [sec, o, now]);
+  }, [sec]);
   const hazirlikAc = useCallback(() => { setKs((x) => ({ ...x, gor: 'hazir' })); setMenuAcik(false); setPan(null); setKilavuz(false); setGorunum('kesif'); }, []);
   // Özet'te "Kartı aç": panel görünür alana gelir ve odağı alır.
   const kartAc = useCallback(() => { setSekD({ k: null, x: 'yon' }); dk.current?.scrollIntoView?.({ block: 'nearest' }); dk.current?.focus(); }, []);
@@ -187,7 +190,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                   planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
                   sor={sor} guncel={guncel} komut={komut} />
               ) : gorunum === 'kesif' ? (
-                <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
+                <Kesif c={c} v={v} vYorum={vYorum ?? v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
                   sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />
               ) : null}
             </>
@@ -196,6 +199,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         {ps && p && sahne && (
           <SecimPaneli kok={dk} c={c} p={p} cx={cx} s={sahne} r={r} olcek={donem} t={zaman} secim={ps} sek={sek} sekSec={sekSec}
             komut={komut} planYaz={yetki.planYaz} planKilitle={yetki.planYaz} kapat={secimBirak} opSec={opSec} sipSec={(j) => sipSec(j, false)}
+            rotaSec={(j) => { sipSec(j, false); setSekD({ k: `siparis:${j}`, x: 'rota' }); }}
             zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} />
         )}
       </div>

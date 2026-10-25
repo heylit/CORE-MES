@@ -62,10 +62,11 @@ describe('planlama motoru hesapları', () => {
     ]);
   });
 
-  it('dönem değişince Özet o dönemi gösterir; yılda sütun haftadır', () => {
+  it('dönem değişince Özet o dönemi gösterir; günde üçer saatlik sekiz sütun, yılda sütun haftadır', () => {
     const { c, p, cx } = kur();
     const gun = ozetVerisi(c, p, cx, 'gun', 0);
-    expect([gun.T0, gun.H1, gun.gunAd]).toEqual([0, 24, ['Pzt']]);
+    expect([gun.T0, gun.H1, gun.gun, gun.kova * 24, gun.gunAd]).toEqual([0, 24, 8, 3, ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00']]);
+    expect(gun.yuk.every((y) => y.g.length === 8)).toBe(true);
     const yil = ozetVerisi(c, p, cx, 'yil', 0);
     expect([yil.kova, yil.gun]).toEqual([7, 52]);
     expect(ozetVerisi(c, p, cx, 'hafta', 1).sip.map((s) => s.id)).toEqual(['2']);

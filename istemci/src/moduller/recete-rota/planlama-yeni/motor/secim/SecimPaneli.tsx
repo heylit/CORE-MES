@@ -26,6 +26,8 @@ export interface Ozellikler {
   secim: PanelSecimi; sek: PanelSekmesi; sekSec: (x: PanelSekmesi) => void;
   komut: CalismaKomutu | null; planYaz: boolean; planKilitle: boolean;
   kapat: () => void; opSec: (id: string) => void; sipSec: (j: string) => void; zamanSec: (t: number) => void;
+  // Rota sekmesindeki seçim kutusu siparişi değiştirir, sekme Rota'da kalır (mz-rota-j).
+  rotaSec: (j: string) => void;
   gunPlani: (t: number, sec: { adim?: string; tezgah?: string }) => void; hazirlikAc: () => void;
 }
 

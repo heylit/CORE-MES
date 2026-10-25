@@ -57,9 +57,9 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
       seg: a && a !== 'eksik' ? a.seg : null, kaynak: a && a !== 'eksik' ? a.kaynak : [],
     };
   });
-  // Dönem: Özet seçili dönemi gösterir; yılda gün yerine hafta sütunu.
+  // Dönem: Özet seçili dönemi gösterir; yılda gün yerine hafta sütunu, günde üçer saatlik sekiz sütun (zz5-olcek-her-yer brVeri).
   const r = donemAraligi(now, donem, kayma);
-  const kova = donem === 'yil' ? 7 : 1; const gun = Math.max(1, Math.round((r.b - r.a) / 24 / kova));
+  const kova = donem === 'yil' ? 7 : donem === 'gun' ? 3 / 24 : 1; const gun = donem === 'gun' ? 8 : Math.max(1, Math.round((r.b - r.a) / 24 / kova));
   const acikS = (m: string, x: number, z: number) => { const W = cx.M[m]?.rw; return z <= x ? 0 : W ? acik(W, x, z) : z - x; };
   const yuk = D.tezgahlar.filter((t) => ops.some((o) => o.m === t.id)).map((t) => ({
     m: t.id, grup: t.grup ?? '',
@@ -70,6 +70,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
     }),
   }));
   const gunAd = Array.from({ length: gun }, (_, d) => {
+    if (donem === 'gun') return `${String((d * 3) % 24).padStart(2, '0')}:00`;
     const g = saatYaz(D, r.a + d * kova * 24 + 1);
     return kova === 1 ? g.slice(6, 9) : Number(g.slice(0, 2)) <= 7 ? AY[Number(g.slice(3, 5)) - 1] ?? '' : '';
   });

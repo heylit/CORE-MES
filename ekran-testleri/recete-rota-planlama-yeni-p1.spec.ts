@@ -68,9 +68,13 @@ test.describe('P1b Tezgâh haritası', () => {
     await harita.getByRole('button', { name: 'Oynat' }).click();
     await expect(harita.getByRole('button', { name: 'Durdur' })).toBeVisible();
     await harita.getByRole('button', { name: 'Durdur' }).click();
-    // İlk ziyarette kılavuz kendiliğinden açılır (eski zs-olcek-ortak); kapatılır, Başka menüsünden yeniden açılır.
+    // Kılavuz kendiliğinden açılmaz (eski sayfa da açmıyor); Başka menüsünden açılır, kapatılır.
     const kilavuz = page.getByRole('complementary', { name: 'Kılavuz' });
-    await expect(kilavuz).toBeVisible({ timeout: 5000 });
+    await page.waitForTimeout(2000);
+    await expect(kilavuz).toHaveCount(0);
+    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
+    await expect(kilavuz).toBeVisible();
     await tasmaz(page);
     await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);

@@ -104,14 +104,15 @@ const ADIM_AD: Partial<Record<Yorum['simge'], string>> = {
 };
 const ADIM_GORSEL: Partial<Record<Yorum['simge'], AnlatGorseli>> = { target: 'bekle', clock: 'sure', grid: 'yuk', gauge: 'yuk' };
 export const HAZIRLIK_YOK = 'Emir hazırlık verisi bu ekrana bağlı değil.';
-export function anlatAdimlari(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: string) => string): AnlatAdimi[] {
+// Gözlem cümleleri vYorum'dan (son Özet çiziminin dönemi, eski BR.yor); büyük resim ve gösterim seçili dönemden.
+export function anlatAdimlari(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: string) => string, vYorum: OzetVerisi = v): AnlatAdimi[] {
   const n = v.sip.length, gec = v.sip.filter((s) => s.gec).length;
   const son = n ? Math.max(...v.sip.map((s) => s.C)) : null;
   const l: AnlatAdimi[] = [{
     simge: 'flag', ton: gec ? 'hata' : 'tamam', baslik: 'Büyük resim', gorsel: 'pay',
     m: ['Planda ', { b: String(n) }, ' sipariş var. ', { b: String(n - gec) }, `${sayiEki(n - gec, 'i')} zamanında, `, { b: String(gec) }, `${sayiEki(gec, 'i')} geç. Son iş `, { b: saatYaz(c.D, son) }, ' bitiyor.'],
   }];
-  for (const y of yorumlar(c, v, tezGrup).slice(1)) l.push({ simge: y.simge, ton: y.ton, baslik: ADIM_AD[y.simge] ?? 'Gözlem', m: y.m, gorsel: ADIM_GORSEL[y.simge] ?? null });
+  for (const y of yorumlar(c, vYorum, tezGrup).slice(1)) l.push({ simge: y.simge, ton: y.ton, baslik: ADIM_AD[y.simge] ?? 'Gözlem', m: y.m, gorsel: ADIM_GORSEL[y.simge] ?? null });
   // Hazırlık maddeleri için veri kaynağı yok; eski sayfa durumları sipariş kimliğinden uyduruyordu.
   l.push({ simge: 'check', ton: 'bilgi', baslik: 'Hazırlık', m: [HAZIRLIK_YOK], gorsel: null });
   return l;

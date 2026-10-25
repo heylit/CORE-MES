@@ -1,9 +1,10 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment, useMemo, useState, type SyntheticEvent } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
+import { degisken } from '../ortak.tsx';
 import { gunlukDagilim, KISI_BOS, matris, MATRIS_KIRILIM, type MatrisGorunumu, type MatrisSatiri } from './kurallar.ts';
 
 // Matris merceği (k-gorunum sMatris; zz5-olcek-her-yer kırılımı): tezgâh, kişi ya da sipariş başına dönem dönem adet ve doluluk. Sütun dönemin
@@ -28,6 +29,14 @@ export function MatrisCizelgesi(o: Ozellikler) {
   const v = useMemo(() => gunlukDagilim(c, p, cx), [c, p, cx]);
   const m = useMemo(() => matris(c, p, cx, v, gor, olcek, gun), [c, p, cx, v, gor, olcek, gun]);
   const n = m.sutunlar.length;
+  // Hücre ipucu (b-kabuk ipucuGoster): fare ya da odakla hücrenin üstünde tek kutu; yer yoksa altında.
+  const [ip, setIp] = useState<{ t: string; x: number; y: number; alt: boolean } | null>(null);
+  const ipucu = (e: SyntheticEvent) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-ipucu]');
+    if (!el?.dataset.ipucu) { setIp(null); return; }
+    const r = el.getBoundingClientRect(); const alt = r.top < 96;
+    setIp({ t: el.dataset.ipucu, x: r.left + r.width / 2, y: alt ? r.bottom : r.top, alt });
+  };
 
   const ad = (s: MatrisSatiri) => {
     const ic = <><b className={gor === 'kisi' ? undefined : 'tc-pym-mono'}>{s.id === KISI_BOS && <Simge ad="alert" boyut="k" />}{s.ad}</b><span className="tc-pym-kucuk-yazi">{s.alt}</span></>;
@@ -42,7 +51,7 @@ export function MatrisCizelgesi(o: Ozellikler) {
         const k = m.sutunlar[i];
         if (!h) return <td key={k?.a ?? i} className="tc-pym-m-h" data-isi={0} data-kapali={k?.kapali ? '' : undefined} />;
         return (
-          <td key={k?.a ?? i} className="tc-pym-m-h" data-isi={h.isi} title={h.ipucu} tabIndex={0}>
+          <td key={k?.a ?? i} className="tc-pym-m-h" data-isi={h.isi} data-ipucu={h.ipucu} tabIndex={0}>
             <b>{h.adet}</b>{h.oran != null && <span className="tc-pym-kucuk-yazi">%{Math.round(h.oran * 100)}</span>}
           </td>
         );
@@ -68,7 +77,7 @@ export function MatrisCizelgesi(o: Ozellikler) {
         </div>
       </div>
       <p className="tc-pym-alt">{olcek === 'gun' ? NOT[gor] : donemli(NOT[gor])}</p>
-      <div className="tc-tablo-kap tc-pym-m-kap">
+      <div className="tc-tablo-kap tc-pym-m-kap" onMouseOver={ipucu} onFocus={ipucu} onMouseLeave={() => setIp(null)} onBlur={() => setIp(null)}>
         <table className="tc-tablo tc-pym-matris">
           <thead>
             <tr>
@@ -97,6 +106,7 @@ export function MatrisCizelgesi(o: Ozellikler) {
           </tfoot>
         </table>
       </div>
+      {ip && <div className="tc-pym-ipucu" role="tooltip" data-alt={ip.alt ? '' : undefined} ref={degisken({ '--x': `${ip.x}px`, '--y': `${ip.y}px` })}>{ip.t}</div>}
     </div>
   );
 }

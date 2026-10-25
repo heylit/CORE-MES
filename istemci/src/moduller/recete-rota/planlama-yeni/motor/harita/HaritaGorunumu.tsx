@@ -13,7 +13,6 @@ import { HaritaOkuma } from './Okuma.tsx';
 
 // Harita görünümü (y-atolye sAtolye, zm-ozet ozHarita, zo-kontrol, zj-gorunum sgHtml): bütün alanı kaplayan harita; üstünde görünüm çubuğu ve
 // "Haritayı okuma", sağda kılavuz kartı, sağ altta yakınlık, altta oynatıcı ve zaman şeridi.
-export const KILAVUZ_ANAHTARI = 'tc-pym-harita-kilavuz';
 const HIZLAR = [1, 4, 24];
 const hizAdi = (h: number) => (h === 24 ? '1 gün' : `${h} sa`);
 
@@ -40,14 +39,7 @@ export function HaritaGorunumu(o: Ozellikler) {
   const sj = o.secim.adim && p.ops[o.secim.adim] ? p.ops[o.secim.adim]?.job ?? null : o.secim.siparis;
 
   const komutKur = useCallback((k: HaritaKomutu | null) => { harita.current = k; o.komut?.(k); }, [o]);
-  // İlk açılışta kılavuz bir kez kendiliğinden açılır (eski sayfa da bir kez gösterirdi).
-  useEffect(() => {
-    let ilk = false; try { ilk = !localStorage.getItem(KILAVUZ_ANAHTARI); } catch { ilk = false; }
-    if (!ilk) return undefined;
-    const z = setTimeout(() => { if (!o.secim.siparis && !o.secim.tezgah && !o.secim.adim) o.kilavuzAc(true); }, 1500);
-    return () => clearTimeout(z);
-  }, []);
-  useEffect(() => { if (o.kilavuz) try { localStorage.setItem(KILAVUZ_ANAHTARI, '1'); } catch { /* yalnız bu tarayıcının kolaylığı */ } }, [o.kilavuz]);
+  // Kılavuz kendiliğinden açılmaz: eski sayfa taze tarayıcıda da Özet'te ve Harita'da açmadı (denetim 2, A8); Başka menüsünden açılır.
   // Alttaki oynatıcının boyu yerleşimden düşülür.
   useEffect(() => {
     const el = altEl.current; if (!el || typeof ResizeObserver !== 'function') return undefined;
