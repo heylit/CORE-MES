@@ -7,18 +7,20 @@ import './kod-okuyucu.css';
 // Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin olduğu gibi `okundu`ya gider, ne olduğuna çağıran karar verir.
 // El okuyucu klavye gibi yazar ve Enter gönderir; kamerasız bilgisayarda da yalnız bu alan yeter.
 // `kendiliginden` kamerayı açılışta başlatır (okutmak için açılan ekranlar); varsayılan dokunmayla açılıştır.
-// Kod alanı yalnız fareli cihazda açılışta, ya da kamera hata verince odak alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
+// Kod alanı açılışta odak alır. `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
 }
-export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false }: { okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean }) {
+export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false }: {
+  okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean; dokunmatikteOdakYok?: boolean;
+}) {
   const [elle, setElle] = useState('');
   const kamera = useKamera(okundu);
   const { ac } = kamera;
   useEffect(() => { if (kendiliginden) void ac(); }, [kendiliginden, ac]);
-  const [acilistaOdak] = useState(inceIsaretci);
+  const [acilistaOdak] = useState(() => !dokunmatikteOdakYok || inceIsaretci());
   const form = useRef<HTMLFormElement | null>(null);
-  useEffect(() => { if (kamera.hata) form.current?.querySelector('input')?.focus(); }, [kamera.hata]);
+  useEffect(() => { if (dokunmatikteOdakYok && kamera.hata) form.current?.querySelector('input')?.focus(); }, [dokunmatikteOdakYok, kamera.hata]);
   const dosya = useRef<HTMLInputElement | null>(null);
   return (
     <div className="tc-kod-okuyucu">
