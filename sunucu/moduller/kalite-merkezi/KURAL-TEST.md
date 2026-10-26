@@ -60,3 +60,14 @@
 | KM-K564c: plan `settings/genel` varsayılan AQL ayarından, ayar yoksa uygulamanın varsayılanı (II, kritik %100, majör 1.0, minör 2.5), Hazırlık'ın verdiği ayar varsa o | "KM-K564c ..." (`aql.test.ts`) |
 | KM-K564d (564 6 a): istasyonun lot kararı `disari.ts` `lotKarariYaz` ile lot kabul kaydı olur (uygulamanın lot biçimi, `LOT-YYYY-NNNN`, muayeneci yazan kişi, kararı sunucu hesaplar, kayıt kilitli); aynı kaynak anahtarı ikinci kayıt açmaz | "KM-K564d ..." (`aql.test.ts`) |
 | KM-K564e: sıkılıkta durdurulmuş parçada plan yoktur ve lot kararı 409 | "KM-K564e ..." (`aql.test.ts`) |
+| KM-S: stüdyo göçü yalnız boş yeni tablo açar; dolu Kalite Merkezi tablosu değişmez (595 3 c) | "KM-S01 boş veritabanında ...", "KM-S02 dolu veritabanında ..." (`studyo-goc.test.ts`) |
+| KM-S: parça okuma resim, balon ve numune planını verir; okuma `kalite-merkezi.oku`, oturumsuz 401 | "KM-S10 parça okuma: ..." |
+| KM-S: resim dosyası belge merkezinin yayındaki revizyonundan akar; revizyon değişince alınan revizyon 409 (içerik kopyalanmaz) | "KM-S11 resim dosyası ..." |
+| KM-S: resim alma: aynı revizyon ikinci satır açmaz; kartsız parça, taslak belge ve PDF/STEP/STL/IGES dışı tür 400 | "KM-S12 resim alma: ..." |
+| KM-S: numune isteği `kalite-merkezi.yaz`, tekrar korumalı; balon emrin parçasının etkin resminden, yinelenmez | "KM-S13 numune isteği: ..." |
+| KM-S: ölçüm yalnız eklenir, uygunluk sunucuda balon sınırından (ondalık, sınır dahil); sınırlı balon değer, sınırsız balon geçer/geçmez ister; kararlı numuneye ölçüm yok | "KM-S14 ölçüm ve karar: ...", "KM-S20 ondalık karşılaştırma ..." |
+| KM-S: numune kararı `kalite-merkezi.onayla` (600 a), tek karar (ikinci 409); red ölçü ve gerekçe, onay ve sapma bütün balonların son ölçüsünü ister; onay uygunsuzla, sapma uygunsuzsuz verilmez | "KM-S14 ...", "KM-S21 numune kararı: ..." |
+| KM-S: numune, karar ve ölçüm veritabanında da değişmez; NaN ve sonsuz sınır yazılamaz | "KM-S15 numune, karar ve ölçüm yalnız eklenir ..." |
+| KM-S: resim alma ve kaldırma `kalite-merkezi.onayla` (603 a), tekrar korumalı; kaldırma sürümle (eski 409), balon ve ölçüm silinmez; yeniden alınan resim balonlarıyla döner | "KM-S16 resim alma ve kaldırma ..." |
+| KM-S: kontrol planı `kalite-merkezi.onayla`, resim başına bütün ve resmin sürümüyle; numara tekilliği yalnız etkin balonlarda, transaction sonunda; yinelenen numara, başka resmin balonu, ters ya da eksik sınır 400; kararsız numunedeki balon kaldırılmaz | "KM-S17 kontrol planı ...", "KM-S22 kontrol planı ve numune planı kuralları" |
+| KM-S: numune planı `kalite-merkezi.onayla`, parça ve operasyon başına sürümle (yeni sürümsüz); kural kimliği tekil, kuraldaki balon numarası parçanın etkin resimlerinde | "KM-S18 numune planı ...", "KM-S22 ..." |

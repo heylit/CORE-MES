@@ -25,3 +25,8 @@ export type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 export { lotKarariYaz, muayenePlaniOner } from './servis.ts';
 export type { MuayenePlaniSonucu } from './servis.ts';
 export type { AqlSinifi, LotBulunani, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
+// Stüdyo (595 1 b, 597 a, 600 a): teknik resim, balon, numune planı, numune ve ölçümün sahibi Kalite Merkezi'dir. Arkon kalite
+// istasyonu ve Hazırlık parçanın resim ve planını buradan okur; numuneyi, ölçümü (kaynak: operatör, kalite, CMM) ve numune kararını
+// buraya yazar. Yetkiyi ve emrin kapsamını çağıranın ucu denetler; yazan kişi kayıtta tutulur.
+export { acikNumuneler, emirNumuneleri, emirOlcumleri, numuneIste, numuneKarari, numuneOku, olcumYaz, resimDosyasi, studyoParcasi } from './studyo.ts';
+export type { KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
