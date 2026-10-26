@@ -34,7 +34,7 @@
 
 /* Balonlar: elle mavi daire, CMM altıgen; ölçülünce durum rengi. */
 .tc-ay5-balon { --r: var(--done); cursor: pointer; animation: tc-ay5-cik var(--hareket-sure) var(--gecikme, 0s) both; }
-.tc-ay5-balon.tc-ay5-cmm { --r: var(--grafik-2); }
+.tc-ay5-balon.tc-ay5-cmm { --r: var(--cmm); }
 .tc-ay5-balon.tc-ay5-sirada { --r: var(--hazard); }
 .tc-ay5-balon.tc-ay5-uygun { --r: var(--run); }
 .tc-ay5-balon.tc-ay5-sinirda { --r: var(--hazard); }
@@ -52,7 +52,7 @@
 @keyframes tc-ay5-cik { from { opacity: 0; transform: scale(.2); } }
 
 .tc-ay5-kilavuz { --r: var(--done); }
-.tc-ay5-kilavuz.tc-ay5-cmm { --r: var(--grafik-2); }
+.tc-ay5-kilavuz.tc-ay5-cmm { --r: var(--cmm); }
 .tc-ay5-kilavuz.tc-ay5-uygun { --r: var(--run); }
 .tc-ay5-kilavuz.tc-ay5-red { --r: var(--stop); }
 .tc-ay5-kilavuz line { stroke: var(--r); stroke-linecap: round; stroke-width: calc(1.6px * var(--bs, 1)); opacity: .85; }
@@ -164,7 +164,7 @@
   display: inline-grid; place-items: center; flex: none; inline-size: var(--b-5); block-size: var(--b-5);
   border-radius: var(--yari-tam); border: var(--cizgi-orta) solid var(--done); color: var(--done); font-weight: 800; font-size: var(--yazi-xs);
 }
-.tc-ay5-no.tc-ay5-cmm { border-color: var(--grafik-2); color: var(--grafik-2); border-radius: var(--yari-1); }
+.tc-ay5-no.tc-ay5-cmm { border-color: var(--cmm); color: var(--cmm); border-radius: var(--yari-1); }
 .tc-ay5-no.tc-ay5-uygun { border-color: var(--run); color: var(--run); }
 .tc-ay5-no.tc-ay5-red { border-color: var(--stop); color: var(--stop); }
 .tc-ay5-no.tc-ay5-uyari { background: var(--hazard); border-color: var(--hazard); color: var(--on-hazard); }
@@ -205,7 +205,7 @@
 }
 .tc-ay5-bilgi { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
 .tc-ay5-bilgi b { color: var(--ink); }
-.tc-ay5-yontem-cmm { color: var(--grafik-2) !important; } .tc-ay5-yontem-man { color: var(--done) !important; }
+.tc-ay5-yontem-cmm { color: var(--cmm) !important; } .tc-ay5-yontem-man { color: var(--done) !important; }
 .tc-ay5-karar { display: flex; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); font-weight: 700; }
 .tc-ay5-karar.tc-ay5-uygun { background: color-mix(in srgb, var(--run) 14%, transparent); }
 .tc-ay5-karar.tc-ay5-red { background: color-mix(in srgb, var(--stop) 14%, transparent); }

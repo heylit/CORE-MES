@@ -10,6 +10,8 @@
   --ink: #f2f4f7; --muted: #929cab; --faint: #5d6675;
   --hazard: #ffd23f; --on-hazard: #161100; --hazard-ink: #ffd23f;
   --run: #3cf0a8; --hold: #ffa94d; --stop: #ff5c7a; --done: #7fb2ff; --idle: #9aa4b2;
+  /* CMM ile ölçülen kontrol noktası (Arkon --cmm, 611 a). */
+  --cmm: #d08bff;
   /* Grafik serisi: durum renklerinden ayrı; panele karşı 3:1 ve renk körlüğü denetiminden geçer. */
   --grafik: #4a90dc;
   /* İkinci seri (iki serili çubuk): birinciyle renk körlüğü denetiminden geçer, durum renklerinden ayrıdır. */
@@ -28,6 +30,7 @@
   --ink: #14171c; --muted: #545c68; --faint: #8a919c;
   --hazard: #f7c600; --on-hazard: #161100; --hazard-ink: #7a5a00;
   --run: #0b8a55; --hold: #b55600; --stop: #c81e40; --done: #1f5fd0; --idle: #5a6372;
+  --cmm: #8a2bd6;
   --grafik: #2a6fb8;
   --grafik-2: #c4407a;
   --on-sig: #ffffff;
