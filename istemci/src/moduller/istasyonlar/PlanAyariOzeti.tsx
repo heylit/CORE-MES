@@ -4,6 +4,7 @@ import { DurumKutusu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { degisimMetni } from './etiketler.ts';
+import { operatorMetni } from './tesis.ts';
 
 // Plan ayarı İş merkezleri ve istasyonlar satırında yazılır; pencerede yalnız okunur. Satırı olmayan istasyonu plan verim %100, operatör 1 sayar.
 export function PlanAyariOzeti({ istasyonId }: { istasyonId: number }) {
@@ -18,7 +19,7 @@ export function PlanAyariOzeti({ istasyonId }: { istasyonId: number }) {
         <dt>Verim</dt>
         <dd>{ayar ? `%${Number(ayar.verimYuzde).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}` : '%100 (varsayılan)'}</dd>
         <dt>Operatör ihtiyacı</dt>
-        <dd>{ayar ? Number(ayar.operatorIhtiyaci).toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : '1 (varsayılan)'}</dd>
+        <dd>{ayar ? operatorMetni(Number(ayar.operatorIhtiyaci)) : '1 operatör/makine (varsayılan)'}</dd>
         {ayar && (<><dt>Son değişiklik</dt><dd>{degisimMetni(ayar.degistiren.ad, ayar.degisme)}</dd></>)}
       </dl>
       <p className="tc-ist-ipucu">İş merkezleri ve istasyonlar satırında değiştirilir.</p>
