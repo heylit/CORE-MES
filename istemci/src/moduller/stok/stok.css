@@ -139,6 +139,9 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-geri-sayim::-moz-progress-bar { background: var(--run); }
 .tc-stok-bolum-bas { display: flex; justify-content: space-between; align-items: center; gap: var(--b-2); flex-wrap: wrap; }
 .tc-stok-bolum-bas .tc-stok-not { margin: var(--b-3) 0 0; }
+/* 618: terminalin malzeme çipinden açılan işin bölümü; panelin geri kalanından çerçeveyle ayrılır. */
+.tc-stok-bu-is { display: grid; gap: var(--b-2); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-stok-bu-is .tc-stok-teslim-baslik { margin: 0; }
 .tc-stok-qr-zemin { fill: var(--panel-solid); }
 .tc-stok-qr-kare { fill: var(--ink); }
 @media (max-width: 767px) { .tc-stok-sepet { grid-template-columns: 1fr; } }

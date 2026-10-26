@@ -1,8 +1,8 @@
 /* Planlama motoru (tc-pym-): eski sayfanın tahtası (cerceve/planlama/parca zk-kabuk, zj-gorunum, zf-resim, zm-ozet, zo-kontrol, zh-nabiz).
    Ölçüler ve renkler eski sayfanınkidir, yalnız tasarım değişkenleriyle; kırılımlar eski çerçevenin genişliğiyle aynı olsun diye görünümün
    kendi genişliğinden (container) okunur: 1099 iki sütun, 599 tek sütun. */
-.tc-pym {
-  container: tc-pym / inline-size; display: flex; flex-direction: column; min-height: 100%; min-width: 0;
+/* Tahtanın dışındaki iç sayfalar (akış ağı) da aynı seriyi tc-pym-renk ile alır. */
+.tc-pym, .tc-pym-renk {
   /* Eski sayfanın on renkli serisi (--is-0..9) çekirdekte --grafik, --grafik-2..10'dur (464/1 a); değişken gelene kadar var olan renklerin karışımı.
      Sipariş renkleri bu seriden, süre ayrışımının renkleri (KAT) eski eşlemesiyle. */
   --tc-pym-is-0: var(--grafik); --tc-pym-is-1: var(--grafik-2);
@@ -14,6 +14,9 @@
   --tc-pym-is-7: var(--grafik-8, color-mix(in oklab, var(--hazard) 50%, var(--run)));
   --tc-pym-is-8: var(--grafik-9, color-mix(in oklab, var(--grafik-2) 75%, var(--done)));
   --tc-pym-is-9: var(--grafik-10, color-mix(in oklab, var(--idle) 60%, var(--grafik)));
+}
+.tc-pym {
+  container: tc-pym / inline-size; display: flex; flex-direction: column; min-height: 100%; min-width: 0;
   --tc-pym-k-isleme: var(--run); --tc-pym-k-ayar: var(--hazard); --tc-pym-k-kapali: var(--edge2); --tc-pym-k-tezgah: var(--stop);
   --tc-pym-k-baslangic: var(--done); --tc-pym-k-ariza: var(--grafik-2);
   --tc-pym-k-fason: var(--tc-pym-is-3); --tc-pym-k-personel: var(--tc-pym-is-4); --tc-pym-k-fasonBek: var(--tc-pym-is-5); --tc-pym-k-aparat: var(--tc-pym-is-6);

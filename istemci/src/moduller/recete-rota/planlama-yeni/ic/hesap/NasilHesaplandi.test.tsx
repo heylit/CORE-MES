@@ -129,10 +129,11 @@ describe('Nasıl hesaplandı ekranı', () => {
     expect(screen.getByRole('img', { name: /Kim ne kattı/ })).toBeTruthy();
   });
 
-  it('Akış ağı sekmesi; çalışma yoksa boş ekran', () => {
+  it('Akış ağı sekmesi; çalışma yoksa boş ekran', async () => {
     ac(ekipli());
     fireEvent.click(screen.getByRole('tab', { name: /Akış ağı/ }));
-    expect(screen.getByText(/Akış ağı: /)).toBeTruthy();
+    expect(await screen.findByRole('tablist', { name: 'Ağ görünümü' })).toBeTruthy();
+    expect(screen.queryByText('Ekip adımları')).toBeNull();
     cleanup();
     ac(null);
     expect(screen.getByText('Planlama çalışması yok')).toBeTruthy();

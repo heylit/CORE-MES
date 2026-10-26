@@ -1,0 +1,122 @@
+/* Odak tahtası (tc-pyo-): bugünkü sayfanın düzeni (cerceve/planlama/stil/modul.stil pm-od-). Konum ve genişlik CSS değişkeniyle (--x, --w,
+   --ayar); ölçü ve renk yalnız tasarım değişkeniyle. Sürükleme ve önizleme (hayalet, hedef) motorla gelir. */
+.tc-pyo {
+  --tc-pyo-bas: calc(var(--dokunma) * 3);
+  --tc-pyo-sutun: calc(var(--dokunma) * 4.75);
+  display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; min-height: 0; margin: 0 var(--b-2) var(--b-2); padding: var(--b-2) var(--b-3) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid);
+}
+.tc-pyo-k { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyo-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-pyo-iz { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; font-size: var(--yazi-m); }
+.tc-pyo-iz > button {
+  display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); padding: 0 var(--b-2); border: 0; border-radius: var(--yari-1);
+  background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer;
+}
+.tc-pyo-iz > button:hover { background: var(--panel2); color: var(--ink); }
+.tc-pyo-iz > span { color: var(--muted); }
+.tc-pyo-iz > b { padding: 0 var(--b-1); }
+.tc-pyo-kardes select { min-height: var(--dokunma); max-width: calc(var(--dokunma) * 4.5); }
+.tc-pyo-zaman { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); margin-left: auto; }
+.tc-pyo-zaman .tc-pym-seg button { padding: 0 var(--b-2); }
+
+.tc-pyo-etki {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); margin: 0; padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s);
+}
+.tc-pyo-ipucu { color: var(--muted); }
+
+.tc-pyo-govde { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr) minmax(calc(var(--dokunma) * 6), calc(var(--dokunma) * 8)); align-items: start; min-height: 0; }
+.tc-pyo-ana { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-pyo-gantt { overflow-x: auto; overscroll-behavior-x: contain; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--bg); }
+.tc-pyo-ic { display: grid; min-width: calc(var(--tc-pyo-bas) + var(--tc-pyo-gun, 1) * var(--tc-pyo-sutun)); }
+.tc-pyo[data-sev="tez"] .tc-pyo-ic { min-width: calc(var(--tc-pyo-bas) + var(--tc-pyo-sutun) * 2.3); }
+.tc-pyo-eksen {
+  position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: var(--tc-pyo-bas) minmax(0, 1fr);
+  border-bottom: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid);
+}
+.tc-pyo-eksen-bas { position: sticky; left: 0; z-index: 3; border-right: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid); }
+.tc-pyo-eksen > div { position: relative; height: calc(var(--dokunma) * 0.6); }
+.tc-pyo-eksen[data-iki] > div { height: calc(var(--dokunma) * 0.95); }
+.tc-pyo-eksen > div > span {
+  position: absolute; top: var(--b-1); left: var(--x); padding-left: var(--b-1); border-left: var(--cizgi-ince) solid var(--edge);
+  color: var(--muted); font-family: var(--font-mono); font-size: var(--yazi-xs); white-space: nowrap;
+}
+.tc-pyo-eksen > div > span[data-tur="gun"] { color: var(--ink); font-weight: 700; border-left-color: var(--edge2); }
+.tc-pyo-eksen[data-iki] > div > span[data-tur="saat"] { top: calc(var(--dokunma) * 0.5); }
+
+.tc-pyo-satir { display: grid; grid-template-columns: var(--tc-pyo-bas) minmax(0, 1fr); border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-pyo-satir:last-child { border-bottom: 0; }
+.tc-pyo-satir[data-secili] { background: color-mix(in oklab, var(--done) 7%, transparent); }
+.tc-pyo-tez {
+  position: sticky; left: 0; z-index: 3; display: grid; align-content: center; gap: var(--cizgi-ince); min-width: 0; min-height: calc(var(--dokunma) + var(--b-2));
+  padding: var(--b-1) var(--b-2); border: 0; border-right: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid); color: var(--ink); font: inherit; text-align: left;
+}
+button.tc-pyo-tez { cursor: pointer; }
+button.tc-pyo-tez:hover { background: var(--panel2); }
+.tc-pyo-tez small { overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); text-overflow: ellipsis; white-space: nowrap; }
+.tc-pyo-serit { position: relative; min-height: calc(var(--dokunma) * 1.25); }
+.tc-pyo-kapali {
+  position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--idle) 22%, transparent) 0 var(--b-1), transparent var(--b-1) calc(var(--b-2) + var(--cizgi-ince)));
+}
+.tc-pyo-kapali[data-ariza] {
+  pointer-events: auto;
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--stop) 26%, transparent) 0 var(--b-1), transparent var(--b-1) calc(var(--b-2) + var(--cizgi-ince)));
+}
+.tc-pyo-gunc { position: absolute; top: 0; bottom: 0; left: var(--x); width: 0; border-left: var(--cizgi-ince) solid var(--edge2); pointer-events: none; }
+.tc-pyo-simdi { position: absolute; top: 0; bottom: 0; left: var(--x); z-index: 1; width: 0; border-left: var(--cizgi) solid var(--done); pointer-events: none; }
+.tc-pyo-is {
+  --t: var(--run);
+  position: absolute; top: var(--b-2); bottom: var(--b-2); left: var(--x); width: var(--w); z-index: 1; min-width: var(--b-1); padding: 0 var(--b-1);
+  display: flex; align-items: center; overflow: hidden; border: var(--cizgi-ince) solid color-mix(in oklab, var(--t) 75%, var(--ink)); border-radius: var(--yari-1);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--hold) 55%, var(--panel-solid)) 0 var(--ayar), color-mix(in oklab, var(--t) 30%, var(--panel-solid)) var(--ayar));
+  color: var(--ink); font: inherit; font-size: var(--yazi-xs); cursor: pointer;
+}
+.tc-pyo-is > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.tc-pyo-is[data-gec] { --t: var(--stop); }
+.tc-pyo-is[data-durum="bitti"] { opacity: var(--saydam-50); }
+.tc-pyo-is[data-durum="simdi"] { box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--done); }
+.tc-pyo-is[data-sabit]::after { content: ""; position: absolute; top: var(--cizgi-kalin); right: var(--cizgi-kalin); width: var(--b-1); height: var(--b-1); border-radius: var(--yari-tam); background: var(--ink); }
+.tc-pyo-is[data-soluk] { opacity: var(--saydam-55); }
+.tc-pyo-is[data-ilgili], .tc-pyo-is[aria-pressed="true"] { z-index: 2; box-shadow: 0 0 0 var(--cizgi) var(--done); }
+.tc-pyo-is[aria-pressed="true"] { box-shadow: 0 0 0 var(--cizgi-kalin) var(--done), 0 var(--b-1) var(--b-3) color-mix(in oklab, var(--ink) 20%, transparent); }
+.tc-pyo-is:focus-visible { outline: var(--cizgi) solid var(--done); outline-offset: var(--cizgi); }
+
+.tc-pyo-lejant { display: flex; flex-wrap: wrap; gap: var(--cizgi) var(--b-3); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyo-lejant li { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-pyo-lejant i { width: var(--b-3); height: calc(var(--b-2) + var(--cizgi)); border-radius: var(--cizgi); }
+.tc-pyo-lejant i[data-r="zam"] { border: var(--cizgi-ince) solid var(--run); background: color-mix(in oklab, var(--run) 30%, var(--panel-solid)); }
+.tc-pyo-lejant i[data-r="gec"] { border: var(--cizgi-ince) solid var(--stop); background: color-mix(in oklab, var(--stop) 30%, var(--panel-solid)); }
+.tc-pyo-lejant i[data-r="ayar"] { background: color-mix(in oklab, var(--hold) 55%, var(--panel-solid)); }
+.tc-pyo-lejant i[data-r="kapali"] { border: var(--cizgi-ince) solid var(--edge); background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--idle) 40%, transparent) 0 var(--cizgi), transparent var(--cizgi) calc(var(--b-1) + var(--cizgi))); }
+.tc-pyo-lejant i[data-r="simdi"] { width: var(--cizgi); height: var(--b-3); border-radius: 0; background: var(--done); }
+
+.tc-pyo-yan { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-pyo-blok { display: grid; gap: var(--b-2); min-width: 0; padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-pyo-blok h4 { display: flex; align-items: center; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); }
+.tc-pyo-blok p { margin: 0; font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-pyo-secili { box-shadow: inset var(--b-1) 0 0 var(--done); }
+.tc-pyo-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-pyo-liste, .tc-pyo-kuyruk { display: grid; gap: var(--cizgi); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); }
+.tc-pyo-liste li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); padding: var(--cizgi) var(--b-1); border-radius: var(--yari-1); }
+.tc-pyo-kuyruk li { display: grid; grid-template-columns: calc(var(--yazi-s) * 1.6) auto minmax(0, 1fr) auto; align-items: center; gap: var(--b-2); padding: 0 var(--b-1); border-radius: var(--yari-1); }
+.tc-pyo-liste li[data-gec], .tc-pyo-kuyruk li[data-gec] { box-shadow: inset var(--kayma) 0 0 var(--stop); }
+.tc-pyo-liste li[data-secili], .tc-pyo-kuyruk li[data-secili] { background: color-mix(in oklab, var(--done) 12%, transparent); }
+.tc-pyo-liste [data-ton="hata"] { color: var(--stop); }
+.tc-pyo-kuyruk small { color: var(--muted); }
+.tc-pyo-kuyruk-d { display: inline-flex; }
+.tc-pyo-takvim .tc-pym-mz-blok { padding: 0; border: 0; background: none; }
+.tc-pyo-takvim .tc-alan { flex: 1 1 calc(var(--dokunma) * 4); min-width: 0; }
+.tc-pyo-takvim .tc-alan-kutu { box-sizing: border-box; width: 100%; min-width: 0; }
+
+@media (max-width: 1099px) { .tc-pyo-govde { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767px) {
+  .tc-pyo { --tc-pyo-bas: calc(var(--dokunma) * 2); --tc-pyo-sutun: calc(var(--dokunma) * 5.5); margin: 0 var(--b-1) var(--b-1); padding: var(--b-2); }
+  .tc-pyo[data-sev="tez"] .tc-pyo-ic { min-width: calc(var(--tc-pyo-bas) + var(--tc-pyo-sutun) * 1.75); }
+  .tc-pyo-bas { gap: var(--b-1); }
+  .tc-pyo-iz { flex: 1 1 auto; font-size: var(--yazi-s); }
+  .tc-pyo-iz > button { padding: 0 var(--b-1); }
+  .tc-pyo-kardes select { max-width: calc(var(--dokunma) * 3.2); }
+  .tc-pyo-zaman { flex: 1 1 100%; justify-content: space-between; margin-left: 0; }
+}

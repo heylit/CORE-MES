@@ -16,17 +16,6 @@ test.describe('Reçete ve Rota', () => {
 
 });
 
-test.describe('Plan', () => {
-  test.use({ hesap: 'ornek.planlama' });
-  for (const yol of ['/cizelge', '/matris']) {
-    test(`P2.2: ${yol} "Rota > Plan" bağlantısı menüdeki plan ekranına gider`, ETIKET, async ({ page, ac }) => {
-      test.fail();
-      await ac(yol);
-      await expect(page.getByRole('link', { name: 'Rota > Plan' })).toHaveAttribute('href', '/recete-rota/plan', { timeout: 2_000 });
-    });
-  }
-});
-
 test.describe('Rota', () => {
   test('A4: menüde gizli eski /rota sayfaları kapanır ya da Reçete ve Rota\'ya yönlenir', ETIKET, async ({ page, ac }) => {
     test.fail();

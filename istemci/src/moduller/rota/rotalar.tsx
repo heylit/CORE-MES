@@ -4,7 +4,6 @@ import { TUM_BOLUMLER } from './bolumler.ts';
 import { KaynaklarEkrani } from './KaynaklarEkrani.tsx';
 import { MalzemelerEkrani } from './MalzemelerEkrani.tsx';
 import { MerkezBolumu } from './BolumYeri.tsx';
-import { PlanCizelgesiEkrani, PlanMatrisiEkrani } from './PlanSaltEkrani.tsx';
 import { StokEkrani } from './StokEkrani.tsx';
 
 // Operatör Üretim Terminali'ni kullanır; eski yer imi boş sayfa yerine Rota ana sayfasına düşer (terminal yetkisi herkeste yok).
@@ -14,8 +13,12 @@ const OperatorYonlendirme = () => <Navigate to="/rota" replace />;
 // (ürün ve rotalar, rota revizyonları, rota şablonları) açılmaz, adresleri Reçete ve Rota'nın "Ürün ve rotalar" görünümüne gider.
 const ROTA_TANIM_BOLUMLERI = new Set(['rotalar', 'operasyonlar', 'sablonlar']);
 const ReceteRotayaYonlendirme = () => <Navigate to="/recete-rota/schema" replace />;
-// Plan ekranı tektir (240 a): eski plan, stüdyo ve kanban ikinci bir sıra veriyordu; adresleri Reçete ve Rota'daki karşılığına gider.
-const ESKI_PLAN_ADRESLERI: readonly [string, string][] = [['/rota/plan', '/recete-rota/plan'], ['/rota/plan-studyosu', '/recete-rota/studio'], ['/rota/kanban', '/recete-rota/kanban']];
+// Plan ekranı tektir (240 a, 627 a): eski plan, stüdyo, kanban, çizelge ve matris ikinci bir sıra ya da ikinci bir plan görünümü veriyordu;
+// adresleri Reçete ve Rota'daki karşılığına gider. Çizelge ve matrisin sayfa tanımı işlemleri (sayfa.cizelge, sayfa.matris) rollerde durduğu için kalır.
+const ESKI_PLAN_ADRESLERI: readonly [string, string][] = [
+  ['/rota/plan', '/recete-rota/plan'], ['/rota/plan-studyosu', '/recete-rota/studio'], ['/rota/kanban', '/recete-rota/kanban'],
+  ['/cizelge', '/recete-rota/plan'], ['/matris', '/recete-rota/plan'],
+];
 function EmirlerYonlendirme() {
   const { search } = useLocation();
   return <Navigate to={`/uretim-emirleri${search}`} replace />;
@@ -30,9 +33,6 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/rota/emirler', ekran: EmirlerYonlendirme },
   { yol: '/emirler', ekran: EmirlerYonlendirme },
   { yol: '/rota/:urunId', ekran: ReceteRotayaYonlendirme },
-  // Menüdeki plan sayfaları (sayfa.cizelge, sayfa.matris): canlı planın salt okunur görünümü.
-  { yol: '/cizelge', ekran: PlanCizelgesiEkrani },
-  { yol: '/matris', ekran: PlanMatrisiEkrani },
   ...ESKI_PLAN_ADRESLERI.map(([yol, hedef]) => ({ yol, ekran: () => <Navigate to={hedef} replace /> })),
   ...TUM_BOLUMLER.filter((b) => b.yol !== '/rota').map((b) => ({
     yol: b.yol, ekran: ROTA_TANIM_BOLUMLERI.has(b.anahtar) ? ReceteRotayaYonlendirme : HAZIR[b.anahtar] ?? MerkezBolumu,
