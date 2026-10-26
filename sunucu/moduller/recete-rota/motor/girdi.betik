@@ -9,7 +9,11 @@ const RR_GUN_SIRA = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
 /* D'nin bu dizileri çerçeve kayıtlarına dağılır; kalan üst düzey alanlar st.plan'da durur */
 const RR_DAGILAN = ['urunler', 'malzemeler', 'tezgahlar', 'personel', 'siparisler'];
 const rrKopya = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
-const rrEsit = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/* Nesne anahtarlarının sırası değer farkı sayılmaz: çalışma PostgreSQL'de jsonb durur ve jsonb anahtarları kendi sırasına dizer. Sıraya bakan
+   karşılaştırma yazılıp okunan veriyi her okumada değişmiş sayar; veri sürümü boşuna artar, plan bayatlar. Dizilerin sırası anlamlıdır. */
+const rrDuzle = x => Array.isArray(x) ? x.map(rrDuzle)
+  : x !== null && typeof x === 'object' ? Object.keys(x).sort().reduce((o, k) => { o[k] = rrDuzle(x[k]); return o; }, {}) : x;
+const rrEsit = (a, b) => JSON.stringify(rrDuzle(a)) === JSON.stringify(rrDuzle(b));
 const rrTarih = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)) ? s.slice(0, 10) : '';
 const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) ? s.slice(11, 16) : '';
 const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
