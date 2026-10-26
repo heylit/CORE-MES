@@ -199,3 +199,8 @@ Derlenmiş planlama sayfası (`cerceve/planlama-modulu.html`) yamada yok: birle�
    Makine durumu istasyonlar modülünün verdiğidir; istasyonlar modülü değişmedi.
 Testler: `plan-cozucusu.test.ts`'e iki test eklendi (650 a, 651 a). İkisi de değişiklik olmadan kırılıyor (DOĞRULANDI).
 Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/moduller/recete-rota/planlama-derle.ts` ile yeniden kurulur. `planlama-derle.test.ts` o zamana kadar kırık kalır.
+
+## Kapalı gün motorun tatilidir (677 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 677)
+- Kaynak okumasının takvimi (`durum.cal.holidays`, `kurallar.ts` `tatilTarihleri`) artık kapalı günleri de verir. Önceki davranış: yalnız `tatil`
+  türü alınıyordu; Vardiya 142 b'den beri yalnız kapalı gün yazabildiği ve plan stüdyosunun kapattığı gün de kapalı olduğu için bu günler motorda çalışılıyordu.
+- Sayfanın ve sunucu çözümünün planı değişir: kapalı günde tezgâh çalışmaz (Motor A'daki gibi). RR-D7 ve RR-13 testlerinin beklentisi değişti.

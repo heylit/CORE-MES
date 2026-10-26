@@ -327,9 +327,9 @@ export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
   return { orders, opStatus, opProg, opYer };
 }
 
-// Yalnız tatil günleri; "kapalı" gün resmî tatil değildir.
+// 677 a: motorun tatili hem resmî tatil hem kapalı gündür (Vardiya yalnız kapalı gün yazar; plan stüdyosunun kapattığı gün de kapalıdır).
 export function tatilTarihleri(gunler: readonly { tarih: string; tur: 'tatil' | 'kapali' }[]): string[] {
-  return gunler.filter((g) => g.tur === 'tatil').map((g) => g.tarih);
+  return gunler.map((g) => g.tarih);
 }
 
 // ----- Statü türetme (kart #1107): rotanın statülü adımı malzemesi için kendiliğinden statü açar. -----

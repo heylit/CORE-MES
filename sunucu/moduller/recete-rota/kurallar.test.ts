@@ -107,10 +107,10 @@ describe('recete-rota durum çevirisi (saf)', () => {
     assert.equal(makineCevir({ ...m, istasyonId: null }, undefined).stationId, null);
   });
 
-  test('RR-D7: vardiya molalarıyla çevrilir; takvimden yalnız tatil günleri alınır', () => {
+  test('RR-D7, 677 a: vardiya molalarıyla çevrilir; takvimden tatil ve kapalı günler alınır', () => {
     const v = { id: 1, ad: '1. vardiya', baslangic: '08:00', bitis: '16:00', aktif: true, surum: 1, molalar: [{ baslangic: '12:00', bitis: '12:30' }], netDakika: 450 };
     assert.deepEqual(vardiyaCevir(v), { id: '1', name: '1. vardiya', start: '08:00', end: '16:00', breaks: [{ start: '12:00', end: '12:30' }], netDakika: 450 });
-    assert.deepEqual(tatilTarihleri([{ tarih: '2026-05-01', tur: 'tatil' }, { tarih: '2026-05-02', tur: 'kapali' }]), ['2026-05-01']);
+    assert.deepEqual(tatilTarihleri([{ tarih: '2026-05-01', tur: 'tatil' }, { tarih: '2026-05-02', tur: 'kapali' }]), ['2026-05-01', '2026-05-02']);
     assert.deepEqual(tatilTarihleri([]), []);
   });
   test('RR-K20: plan ayarı prototipin settings adlarına çevrilir (kural, yön, tampon, dondurma, personel kısıtı, taslak emirler)', () => {
