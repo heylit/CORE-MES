@@ -81,6 +81,9 @@ export const ortakCihazParametresi = z.object({ id: z.coerce.number().int().posi
 export const ortakCihazKapatCevabi = z.object({ tamam: z.literal(true) });
 export type CihazDurumu = z.output<typeof cihazDurumuCevabi>;
 export type OrtakCihaz = z.output<typeof ortakCihazSemasi>;
+export type OrtakCihazlarCevabi = z.output<typeof ortakCihazlarCevabi>;
+export type OrtakCihazKaydetCevabi = z.output<typeof ortakCihazKaydetCevabi>;
+export type OrtakCihazKapatCevabi = z.output<typeof ortakCihazKapatCevabi>;
 
 export type GirisGovdesi = z.input<typeof girisGovdesi>;
 export type PinBelirleGovdesi = z.input<typeof pinBelirleGovdesi>;
