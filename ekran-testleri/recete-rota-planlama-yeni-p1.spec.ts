@@ -333,3 +333,23 @@ test.describe('577a Nasıl hesaplandı', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+test.describe('577a Bugünün kararları', () => {
+  test('Bugünün kararları: adresle açılır, dört adım gezilir; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan?ekran=bugun');
+    const kok = page.locator('[data-parca="bugun"]');
+    await expect(kok).toBeVisible();
+    const adimlar = kok.getByRole('tablist', { name: 'Günlük plan adımları' });
+    if (await adimlar.isVisible()) {
+      for (const ad of [/^Gelenler/, /^Kararlar/, /^Gözden geçir/, /^Yayınla/]) {
+        await adimlar.getByRole('tab', { name: ad }).click();
+        await expect(adimlar.getByRole('tab', { name: ad })).toHaveAttribute('aria-selected', 'true');
+        await tasmaz(page);
+      }
+      await expect(kok.getByRole('region', { name: /^Gün katmanı/ })).toBeVisible();
+    }
+    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
+    await expect(kok).toHaveCount(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});

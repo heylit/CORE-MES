@@ -1985,13 +1985,19 @@ export function numuneTesliminiKoru(govde: unknown, onceki: unknown): unknown {
   return { ...gerisi, ...(kayitli === undefined ? {} : { numuneTeslim: kayitli }), ...(istasyon === undefined ? {} : { kaliteIstasyonu: istasyon }) };
 }
 
-// 564 1 b: numunenin gideceği kalite istasyonu, emrin bu adımdan sonraki ilk kalite tipli adımının istasyonudur; yoksa null (eski kutu yolu).
+// 564 1 b: numunenin gideceği kalite istasyonu, emrin bu adımdan sonraki ilk kalite tipli adımının istasyonudur; yoksa null.
 export interface RotaAdimi { id: number; sira: number; istasyonKodu: string | null; istasyonTipi: string | null }
 export function kaliteIstasyonuSec(adimlar: readonly RotaAdimi[], isEmriId: number): string | null {
   const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
   const i = sirali.findIndex((a) => a.id === isEmriId);
   if (i < 0) return null;
   return sirali.slice(i + 1).find((a) => a.istasyonTipi === 'kalite' && a.istasyonKodu !== null)?.istasyonKodu ?? null;
+}
+// 608 b: rotada sonraki kalite adımı yoksa numune atölyedeki tek aktif kalite istasyonuna gider; hiç yoksa ya da birden çoksa null (kutu yolu).
+// Kaynak istasyon sayılmaz: numune kendi istasyonuna gönderilemez.
+export function tekKaliteIstasyonu(aktifler: readonly { kod: string; tip: string }[], kaynakKodu: string): string | null {
+  const kaliteler = aktifler.filter((i) => i.tip === 'kalite' && i.kod !== kaynakKodu);
+  return kaliteler.length === 1 ? kaliteler[0]!.kod : null;
 }
 
 // 564 6 a, 600 a: kalite istasyonu terminalinde lotun Kabul ya da Red'i. Sonuç belgesinin (`results`) `lotKarari` alanıdır; karar Kalite

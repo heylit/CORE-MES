@@ -29,7 +29,7 @@ function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
       { ad: 'Kartları bölgelere diz', simge: 'grid', not: HAZIRLANIYOR },
     ] },
     { ad: 'Sayfalar', l: [
-      { ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU },
+      b.sayfaAc ? { ad: 'Bugünün kararları', simge: 'check', yap: () => b.sayfaAc?.('bugun'), dugme: true } : { ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU },
       b.sayfaAc ? { ad: 'Nasıl hesaplandı', simge: 'chart', yap: () => b.sayfaAc?.('hesap'), dugme: true } : { ad: 'Nasıl hesaplandı', simge: 'chart', not: YOK_NOTU },
     ] },
   ];

@@ -9,7 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
-import { ilkParcaNumuneKarari, kaliteIstasyonuSec, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -213,6 +213,15 @@ test('564 1 b: numune emrin bu adımdan sonraki ilk kalite istasyonuna gider; ö
   assert.equal(kaliteIstasyonuSec(rota, 4), null, 'son adım');
   assert.equal(kaliteIstasyonuSec(rota, 9), null, 'rotada olmayan adım');
   assert.equal(kaliteIstasyonuSec([a(1, 1, 'TOR', 'uretim'), a(2, 2, null, 'kalite')], 1), null, 'istasyonsuz kalite adımı');
+});
+
+test('608 b: rotada kalite adımı yoksa numune tek aktif kalite istasyonuna gider; hiç yoksa ya da birden çoksa kutu yolu (null)', () => {
+  const i = (kod: string, tip: string) => ({ kod, tip });
+  assert.equal(tekKaliteIstasyonu([i('TOR', 'talasli'), i('KAL', 'kalite')], 'TOR'), 'KAL');
+  assert.equal(tekKaliteIstasyonu([i('TOR', 'talasli'), i('MON', 'montaj')], 'TOR'), null, 'kalite istasyonu yok');
+  assert.equal(tekKaliteIstasyonu([i('TOR', 'talasli'), i('KAL1', 'kalite'), i('KAL2', 'kalite')], 'TOR'), null, 'birden çok kalite istasyonu');
+  assert.equal(tekKaliteIstasyonu([i('KAL', 'kalite')], 'KAL'), null, 'kendi istasyonuna gönderilmez');
+  assert.equal(tekKaliteIstasyonu([i('KAL1', 'kalite'), i('KAL2', 'kalite')], 'KAL1'), 'KAL2', 'kaynak sayılmaz');
 });
 
 test('564 6 a, 600 a: kalite istasyonu lot kararı; Red ölçü ve gerekçe ister, sayısız sınıf null, verilen karar değişmez', () => {
