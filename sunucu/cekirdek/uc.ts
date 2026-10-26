@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { Readable, pipeline } from 'node:stream';
 import { promisify } from 'node:util';
-import { gzip } from 'node:zlib';
+import { constants as zlibSabitleri, createGzip, gzip } from 'node:zlib';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { semayaGoreGizle } from '#paylasilan/gizli.ts';
@@ -301,6 +301,14 @@ function gzipKabul(baslik: string | undefined): boolean {
   });
 }
 
+// Metin ya da sıkıştırılmamış ikili biçimde gelen dosyalar (STEP, IGES, STL, glTF, DXF, türü bilinmeyen ağ verisi) ağda küçülür. PDF ve
+// resimler zaten içten sıkıştırılmıştır; onları yeniden sıkıştırmak işlemci harcar, kazandırmaz.
+const SIKISAN_DOSYALAR: ReadonlySet<string> = new Set([
+  'model/step', 'model/iges', 'model/stl', 'model/gltf+json', 'image/vnd.dxf', 'application/octet-stream',
+]);
+// En hızlı düzey: 200 MB'lık dosya da tek indirmede saniyeler içinde sıkışır; kazancın çoğu ilk düzeyde gelir.
+const DOSYA_SIKISTIRMA_DUZEYI = zlibSabitleri.Z_BEST_SPEED;
+
 function etiketTutar(baslik: string | undefined, etiket: string): boolean {
   if (baslik === undefined) return false;
   return baslik.split(',').some((e) => {
@@ -594,15 +602,20 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
               govde: undefined, yetki: yetkiMetni(tanim.yetki), ...(modul === undefined ? {} : { modul }), ek,
             }));
           }
-          return yanit.code(200)
+          void yanit.code(200)
             .header('content-type', dosya.tur)
-            .header('content-length', String(dosya.boyut))
             .header('content-disposition', dosyaAdiBasligi(dosya.ad))
             .header('x-content-type-options', 'nosniff')
             // Dosya tarayıcıda doğrudan açılsa da betik ya da alt kaynak çalıştıramaz.
             .header('content-security-policy', "default-src 'none'; sandbox")
-            .header('cache-control', 'private, no-store')
-            .send(Readable.from(ikiliAkis(dosya, dogrudan, anahtar)));
+            .header('cache-control', 'private, no-store');
+          const akis = Readable.from(ikiliAkis(dosya, dogrudan, anahtar));
+          const sikisir = SIKISAN_DOSYALAR.has(dosya.tur) && dosya.boyut >= SIKISTIRMA_ESIGI;
+          if (sikisir) void yanit.header('vary', 'accept-encoding');
+          if (!sikisir || !gzipKabul(istek.headers['accept-encoding'])) return yanit.header('content-length', String(dosya.boyut)).send(akis);
+          // Sıkışmış boy önceden bilinmez: Content-Length yazılmaz. Kaynak akış koparsa (eksik ya da fazla içerik) pipeline sıkıştırıcıyı da
+          // bozar ve bağlantı kesilir; istemci yarım dosyayı tam sanmaz.
+          return yanit.header('content-encoding', 'gzip').send(pipeline(akis, createGzip({ level: DOSYA_SIKISTIRMA_DUZEYI }), () => undefined));
         }
         if (sonuc === undefined) return yanit.code(durumKodu ?? 204).send();
         // 204 ve 304 gövde taşımaz; gövde sessizce düşmesin diye tanım hatası sayılır.
