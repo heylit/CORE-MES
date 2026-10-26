@@ -679,16 +679,33 @@ describe('toplu işlem, çoklu ekle ve süzgeç (#1296)', () => {
     expect(kodDizisi(' ', 2)).toBeNull();
   });
 
-  it('istasyon süzgeci makinesiz ve sorumlusuz olanları ayırır', async () => {
+  it('istasyon tablosu iş merkezini yinelemez; operatör hücresi kısa yazar; aç ve kapat tek düğmedir (670)', async () => {
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />);
+    const satir = await screen.findByRole('row', { name: 'T-01' });
+    const tablo = satir.closest('[role="table"]') as HTMLElement;
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('İş merkezi');
+    const operator = within(satir).getByLabelText('T-01 operatör ihtiyacı');
+    expect(operator.textContent).toBe('1 / 2 tezgâh');
+    expect(operator.getAttribute('title')).toBe('1 operatör 2 tezgâha bakar');
+    expect(screen.queryByRole('button', { name: 'Hepsini aç' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hepsini kapat' }));
+    expect(screen.queryByRole('row', { name: 'T-01' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hepsini aç' }));
+    expect(screen.getByRole('row', { name: 'T-01' })).toBeTruthy();
+  });
+
+  it('istasyon süzgeci sorumlusuz olanları ayırır; sayısı sıfır olan süzgeç görünmez (670)', async () => {
     sunucuKur(OKUYUCU);
     goster(<Istasyonlar />);
     await screen.findByRole('row', { name: 'T-01' });
     const suzgecler = screen.getByRole('group', { name: 'Süzgeçler' });
-    fireEvent.click(within(suzgecler).getByRole('button', { name: /Makinesi yok/ }));
-    expect(screen.queryByRole('row', { name: 'T-01' })).toBeNull();
-    fireEvent.click(within(suzgecler).getByRole('button', { name: /Makinesi yok/ }));
-    fireEvent.click(within(suzgecler).getByRole('button', { name: /Sorumlusu yok/ }));
+    // Örnekte her aktif istasyonun aktif makinesi ve kapasite kaynağı var: o iki süzgeç sıfırdır, gösterilmez.
+    expect(within(suzgecler).queryByRole('button', { name: /Makinesi yok/ })).toBeNull();
+    expect(within(suzgecler).queryByRole('button', { name: /Kapasite seçilmemiş/ })).toBeNull();
+    fireEvent.click(within(suzgecler).getByRole('button', { name: /Sorumlusu yok 1/ }));
     expect(screen.getByRole('row', { name: 'T-01' })).toBeTruthy();
+    expect(within(suzgecler).getByRole('button', { name: /Sorumlusu yok/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('seçilen istasyonlar tek komutla iş merkezine taşınır ve pasife alınır; okuyucuda seçim yoktur', async () => {
