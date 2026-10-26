@@ -372,8 +372,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.ok(akis);
     assert.deepEqual([akis.emir.id, akis.emir.emirNo, akis.emir.malzemeNo, akis.emir.adet, akis.emir.durum, akis.emir.teslim], [id, e.emirNo, urunNo, 10, 'bitti', null]);
     assert.ok(akis.emir.acilma <= akis.emir.baslama! && akis.emir.baslama! <= akis.emir.bitis!);
-    assert.deepEqual(akis.isEmirleri.map((i) => [i.id, i.opNo, i.sira, i.fasonFirmaId, i.terminGun, i.durum, i.birimSureDk, i.ayarSuresiDk]), [
-      [ie1, 10, 1, null, null, 'tamam', '1.5000', '10.00'], [ie2, 20, 2, firmaId, 5, 'tamam', null, null], [ie3, 30, 3, null, null, 'tamam', '1.5000', '10.00'],
+    assert.deepEqual(akis.isEmirleri.map((i) => [i.id, i.opNo, i.sira, i.fasonFirmaId, i.terminGun, i.durum, i.birimSureDk, i.ayarSuresiDk, i.bagimlilik, i.devirAdedi]), [
+      [ie1, 10, 1, null, null, 'tamam', '1.5000', '10.00', 'bekleyen', null], [ie2, 20, 2, firmaId, 5, 'tamam', null, null, 'bekleyen', null],
+      [ie3, 30, 3, null, null, 'tamam', '1.5000', '10.00', 'bekleyen', null],
     ]);
     assert.ok(akis.isEmirleri.every((i) => i.baslama !== null && i.bitis !== null));
     assert.deepEqual(akis.olaylar.filter((x) => x.olay === 'baslat' || x.olay === 'bitir').map((x) => [x.isEmriId, x.olay]),
@@ -1031,6 +1032,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     // Kol başka istasyonda çalışır: bir istasyonda aynı anda tek iş başlar.
     const mk2 = { tur: 'makine' as const, id: await makineKur(await istasyonKur()) };
     const { uretimEmriId: id } = await ac([adim(1, mk), adim(2, mk), adim(3, mk, { bagimlilik: 'akisli', devirAdedi: 1 })], { adet: 6 });
+    assert.deepEqual((await emirAkisKaydi(o().vt, id))?.isEmirleri.map((i) => [i.opNo, i.bagimlilik, i.devirAdedi]),
+      [[10, 'bekleyen', null], [20, 'bekleyen', null], [30, 'akisli', 1]], 'akış bağımlılığı ve devir adedini okur');
     const yaz = (yol: string, govde: unknown, kisi = 'planlama_proje', ik: string | null = randomUUID()) =>
       istek<{ emir: AdimliEmirAyrintisi } & Hata>(kisi, 'POST', `/adimli-emirler/${yol}`, govde, ik ?? undefined);
     const ek = (oncekiOpNo: number | null, opNo: number, tur = 'tamir') => ({
