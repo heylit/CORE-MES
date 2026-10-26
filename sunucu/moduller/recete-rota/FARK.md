@@ -219,3 +219,9 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
   `emirler.betik` onu `st.ekOncul`'a çevirir, `engine.betik` `compile` işlemin öncüllerine ekler. Motorda karşılığı olmayan (biten, istekte geçmeyen) bağ yok sayılır.
 - Sayfa `st.ekOncul` vermez; sayfanın planı değişmez. Derlenmiş sayfa engine.betik'i taşır: `planlama-derle.ts` ile yeniden kurulur.
 - Test: `plan-cozucusu.test.ts` 690 b; değişiklik olmadan kırılıyor (DOĞRULANDI). Plan B7 de bağsız kırılıyordu (DOĞRULANDI).
+## Ek adım emrin kendi adımıdır (686 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 686)
+- Rotada olmayan ek adım (rework, tamir, ek) motora `PlanMotoruIstegi` `ekAdimlar` ile gelir: anahtar, ad, emrin içindeki öncül ve ardıl, ayar ve
+  parça başı dakika, adet. `emirler.betik` `ekAdimlariEkle` emre özel ürün kopyası kurar (`<ürün>#<emir>`): adım öncülünden sonra girer, ardılı onu
+  bekler, makinesi kuyruğundaki tezgâhtır. Kuyrukta olmayan ek adım eklenmez. Önceki davranış: motor ek adımı tanımıyordu (yerleşmeyen; plan 689 a ile uyarıyla boş bırakıyordu).
+- Kaynak okuması ve sayfa değişmedi; alanı yalnız plan modülü verir. `plan-cozucusu.ts` alanı geçirir.
+- Test: `plan-cozucusu.test.ts` 686 a; değişiklik olmadan kırılıyor (DOĞRULANDI).
