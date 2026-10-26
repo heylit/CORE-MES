@@ -77,6 +77,15 @@
 }
 .tc-ay1-aktif > div:first-child { display: grid; gap: var(--b-1); min-width: 0; flex: 1 1 auto; }
 .tc-ay1-aktif p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+/* 664, 673 a: işin başlığı etiketli alanlar, okuma sırası Proje, Üretim emri, Op, Parça no, Parça adı, Rev. Emir no uzundur: ilk
+   satırda Proje'nin yanında kalan genişliği, telefonda tek başına bir satırı alır. */
+.tc-ay1-is-alanlari { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-ay1-is-alan { display: grid; gap: var(--pay-ince); align-content: start; min-width: 0; }
+.tc-ay1-is-alan-emir { grid-column: span 3; }
+.tc-ay1-is-alanlari .tc-ay1-is-alan > b { font-family: var(--font-ana); font-size: var(--yazi-m); overflow-wrap: anywhere; }
+.tc-ay1-is-alanlari .tc-ay1-is-alan.tc-ay1-mono > b, .tc-ay1-is-alanlari .tc-ay1-is-alan > b.tc-ay1-mono { font-family: var(--font-mono); }
+.tc-ay1-is-alanlari .tc-ay1-is-alan-emir > b { font-size: var(--yazi-l); }
+.tc-ay1-is-alanlari .tc-ay1-is-baslik { font-size: var(--yazi-xl); }
 .tc-ay1-is-baslik { margin: 0; font-family: var(--font-mono); font-size: var(--yazi-2xl); line-height: 1.1; overflow-wrap: anywhere; }
 .tc-ay1-olgular { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-4); }
 .tc-ay1-olgular > div { display: grid; gap: var(--pay-ince); }
@@ -118,6 +127,20 @@
 .tc-ay1-numune-serit-metin b { font-size: var(--yazi-s); white-space: nowrap; }
 .tc-ay1-numune-serit-metin small { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
 .tc-ay1-numune-serit-metin .tc-ay1-numune-serit-durum { color: var(--sig-yazi); font-weight: 600; }
+/* 664: aralıklı kuralda numuneye yaklaşma çizgisi; kart satırın tamamını alır, çizgi metnin altında uzar. */
+.tc-ay1-numune-serit-parca[data-cizgili] { flex: 1 0 60%; flex-wrap: wrap; }
+.tc-ay1-numune-cizgi { display: grid; gap: var(--pay-ince); flex: 1 1 100%; min-width: 0; }
+.tc-ay1-numune-cizgi svg { display: block; inline-size: 100%; block-size: var(--b-4); overflow: visible; }
+.tc-ay1-numune-cizgi line { stroke-linecap: round; }
+.tc-ay1-numune-cizgi-yol { stroke: var(--edge2); stroke-width: var(--b-1); }
+.tc-ay1-numune-cizgi-dolu { stroke: var(--run); stroke-width: var(--b-1); }
+.tc-ay1-numune-cizgi-uc { stroke: var(--muted); stroke-width: var(--cizgi); }
+.tc-ay1-numune-cizgi-isaret { stroke: var(--ink); stroke-width: var(--b-1); }
+.tc-ay1-numune-cizgi small { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; overflow-wrap: anywhere; }
+.tc-ay1-numune-cizgi[data-yakin] .tc-ay1-numune-cizgi-dolu { stroke: var(--hazard); }
+.tc-ay1-numune-cizgi[data-yakin] small { color: var(--ink); }
+.tc-ay1-numune-cizgi[data-dolu] .tc-ay1-numune-cizgi-dolu { stroke: var(--stop); }
+.tc-ay1-numune-cizgi[data-dolu] small { color: var(--stop); }
 .tc-ay1-etkin-kart {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); min-width: 0;
   border: var(--cizgi-ince) solid var(--sig, var(--edge)); border-radius: var(--yari-2); background: var(--panel);
@@ -180,6 +203,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-kadran-sayi { font-weight: 800; font-size: var(--yazi-3xl); font-size: 20cqh; line-height: .9; font-variant-numeric: tabular-nums; }
 .tc-ay1-kadran-hedef { font-size: var(--yazi-s); color: var(--muted); margin-block-start: var(--b-2); }
 .tc-ay1-kadran-yuzde { margin-block-start: var(--b-2); font-size: var(--yazi-xs); font-weight: 700; color: var(--sig-yazi); }
+/* Küçük halkada (dar ekran, alçak pencere) çekirdeğin yazısı daireden taşıp çizgilere biniyordu (664): çekirdek, çevrim ışığının
+   içine kadar büyür ve satır araları daralır. */
+@container (max-width: 320px) {
+  .tc-ay1-kadran-cekirdek { inset: 17%; }
+  .tc-ay1-kadran-hedef, .tc-ay1-kadran-yuzde { margin-block-start: var(--b-1); }
+}
 .tc-ay1-zipla { animation: tc-ay1-zipla var(--hareket-panel) ease-out; }
 .tc-ay1-kadran-yan { position: absolute; inset-block-start: 100%; display: grid; gap: var(--b-1); }
 .tc-ay1-kadran-sol { inset-inline-start: 0; text-align: start; }
@@ -286,6 +315,21 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 /* sağ sütun */
 .tc-ay1-bolme { display: grid; gap: var(--b-3); min-width: 0; }
 .tc-ay1-resim { display: grid; min-block-size: var(--ekran-boy-40); }
+/* Terminalde resmin başlık kartı ve araç çubuğu resmin üstüne binmez, yanında durur: telefonda üst üste dizildiklerinde resmin üst yarısını
+   örtüyordu; alttaki ölçek ve ölçüm yazısı da resmin köşesindeki yazıya biniyordu (664). Kart ve çubuk aynı, yalnız yer açılır. */
+.tc-ay1-resim .tc-ay5-resim { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto; }
+.tc-ay1-resim .tc-ay5-ust { display: contents; }
+.tc-ay1-resim .tc-ay5-baslik { grid-area: 1 / 1; align-self: start; margin: var(--b-3) var(--b-3) 0; }
+.tc-ay1-resim .tc-ay5-araclar { grid-area: 1 / 2 / 4; align-self: start; margin: var(--b-3) var(--b-3) var(--b-3) 0; }
+.tc-ay1-resim :is(.tc-ay5-sahne, .tc-ay5-3b) { position: relative; inset: auto; grid-area: 2 / 1; }
+.tc-ay1-resim .tc-ay5-durum { position: relative; inset: auto; grid-area: 3 / 1; justify-self: start; margin: 0 var(--b-3) var(--b-3); }
+@media (max-width: 767px) {
+  .tc-ay1-resim .tc-ay5-resim { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .tc-ay1-resim .tc-ay5-baslik { grid-area: 1 / 1; margin: var(--b-2) var(--b-2) 0; }
+  .tc-ay1-resim .tc-ay5-araclar { grid-area: 2 / 1; margin: var(--b-2) var(--b-2) 0; }
+  .tc-ay1-resim :is(.tc-ay5-sahne, .tc-ay5-3b) { grid-area: 3 / 1; }
+  .tc-ay1-resim .tc-ay5-durum { grid-area: 4 / 1; margin: 0 var(--b-2) var(--b-2); }
+}
 .tc-ay1-adimlar { display: grid; gap: var(--b-2); min-width: 0; }
 
 /* analiz */
@@ -492,10 +536,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-sahne > .tc-ay1-sayac {
   flex: 1 1 0; align-self: stretch; flex-direction: row; justify-content: center; gap: var(--b-4); min-block-size: var(--kadran-enaz); container-type: size;
 }
+/* Hurda ve gecikme halkanın altındaki şeritte durur: küçük halkada köşeye konunca çekirdeğin yazısını örtüyordu (664). */
 .tc-ay1-genis .tc-ay1-kadran {
-  flex: none; inline-size: min(100cqh, 100cqw - var(--dokunma-x20) * 2 - var(--b-6) - var(--b-4), var(--kadran-encok)); max-inline-size: none; margin-block-end: 0;
+  flex: none; inline-size: min(100cqh - var(--dokunma-x14), 100cqw - var(--dokunma-x20) * 2 - var(--b-6) - var(--b-4), var(--kadran-encok));
+  max-inline-size: none; margin-block-end: var(--dokunma-x14);
 }
-.tc-ay1-genis .tc-ay1-kadran-yan { inset-block-start: auto; inset-block-end: 0; }
+.tc-ay1-genis .tc-ay1-kadran-yan { inset-block-start: 100%; inset-block-end: auto; }
 .tc-ay1-genis .tc-ay1-kadran-sol { inset-inline-start: 0; inset-inline-end: auto; text-align: start; }
 .tc-ay1-genis .tc-ay1-kadran-sag { inset-inline-start: auto; inset-inline-end: 0; text-align: end; }
 .tc-ay1-genis .tc-ay1-kadran-etiket b { font-size: var(--yazi-l); }
@@ -523,6 +569,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-is-baslik { font-size: var(--yazi-xl); }
   .tc-ay1-uzak-orta { display: flex; flex-direction: column; align-items: center; }
   .tc-ay1-uzak-hedef { align-self: center; }
+  .tc-ay1-is-alanlari { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-ay1-is-alan-emir { grid-column: 1 / -1; }
 }
 /* Dönen çevrim ışığı (eski .dial .sweep, .cyca, .cycd): bir tur = planlı çevrim süresi; yalnız iş çalışırken döner. */
 .tc-ay1-tarama {

@@ -7,7 +7,7 @@ import { saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import {
   ayrimAciklamasi, ayrimEtiketi, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, type MakineAyrimlari, type SecilebilirMakine,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
-import { numuneSeridi, type SeritDurumu, type SeritGirdisi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
+import { numuneSeridi, type SeritDurumu, type SeritGirdisi, type SeritIlerlemesi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
 import { istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import { sayacGosterimi } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
@@ -41,6 +41,32 @@ function IsEtiketleri({ is }: { is: Is }) {
 }
 export { IsEtiketleri };
 
+/* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
+export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean }) {
+  const pkg = is.pkg;
+  // İşsiz istasyonda alan yok: "atanmış iş yok" ve istasyon satırı eskisi gibi düz yazılır.
+  if (is.empty) return baslik ? <><h2 className="tc-ay1-is-baslik">{is.no}</h2><p>{is.part} · {is.op}</p></> : <><b>{is.no}</b><small>{is.part} · {is.op}</small></>;
+  const alan = (etiket: string, deger: string | null | undefined, sinif?: string) => (
+    <span className={sinif ? `tc-ay1-is-alan ${sinif}` : 'tc-ay1-is-alan'}>
+      <span className="tc-ay1-ust-yazi">{etiket}</span>
+      <b>{deger || '—'}</b>
+    </span>
+  );
+  return (
+    <span className="tc-ay1-is-alanlari">
+      {alan('Proje', pkg?.proje)}
+      <span className="tc-ay1-is-alan tc-ay1-is-alan-emir">
+        <span className="tc-ay1-ust-yazi">Üretim emri</span>
+        {baslik ? <h2 className="tc-ay1-is-baslik">{is.no}</h2> : <b className="tc-ay1-mono">{is.no}</b>}
+      </span>
+      {alan('Op', is.op)}
+      {alan('Parça no', pkg?.partNo, 'tc-ay1-mono')}
+      {alan('Parça adı', is.part)}
+      {alan('Rev', pkg?.rev)}
+    </span>
+  );
+}
+
 /* ── "Şimdi" kartı ── */
 export function GorevKarti({ gorev, eylem, ertele, izinli }: {
   gorev: Gorev | null; eylem: (a: GorevEylemi, g: Gorev) => void; ertele: (g: Gorev) => void; izinli: (a: GorevEylemi) => boolean;
@@ -72,16 +98,38 @@ export function NumuneSeridi({ girdi }: { girdi: SeritGirdisi }) {
   return (
     <ul className="tc-ay1-numune-serit" aria-label="Numune planı">
       {parcalar.map((p) => (
-        <li key={p.id} className="tc-ay1-numune-serit-parca" data-durum={SERIT_GORUNUMU[p.durum].durum}>
+        <li key={p.id} className="tc-ay1-numune-serit-parca" data-durum={SERIT_GORUNUMU[p.durum].durum} data-cizgili={p.ilerleme ? '' : undefined}>
           <Simge ad={SERIT_GORUNUMU[p.durum].simge} boyut="k" />
           <span className="tc-ay1-numune-serit-metin">
             <b>{p.etiket}</b>
             <small>{p.olcen} · {p.gecen}/{p.toplam} ölçü</small>
-            <small className="tc-ay1-numune-serit-durum">{p.metin}</small>
+            {p.ilerleme && (p.durum === 'siradaki' || p.durum === 'bekliyor') ? null : <small className="tc-ay1-numune-serit-durum">{p.metin}</small>}
           </span>
+          {p.ilerleme ? <NumuneCizgisi i={p.ilerleme} durum={p.durum} /> : null}
         </li>
       ))}
     </ul>
+  );
+}
+
+// Numuneye yaklaşma (664): sol uç önceki numune, sağ uç sıradaki; işaret şimdiki parçadır. Son onda birde ve zamanı gelince renk değişir.
+// Çizgiler ölçeksiz kalınlıktadır: çizgi genişliğe uzar, kalınlığı değişmez.
+function NumuneCizgisi({ i, durum }: { i: SeritIlerlemesi; durum: SeritDurumu }) {
+  const x = Math.round(i.oran * 1000) / 10;
+  const dolu = durum === 'zamani' || durum === 'kalitede';
+  const metin = dolu
+    ? (durum === 'kalitede' ? 'Numune kalitede' : 'Numune zamanı')
+    : i.hedef !== null ? `Sıradaki numune ${i.hedef}. parça · ${i.kalan} parça kaldı` : `Sıradaki numune ${i.kalan} dk sonra`;
+  return (
+    <span className="tc-ay1-numune-cizgi" data-yakin={!dolu && i.oran >= 0.9 ? '' : undefined} data-dolu={dolu ? '' : undefined}>
+      <svg viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={metin}>
+        <line className="tc-ay1-numune-cizgi-yol" x1="0" y1="5" x2="100" y2="5" vectorEffect="non-scaling-stroke" />
+        <line className="tc-ay1-numune-cizgi-dolu" x1="0" y1="5" x2={x} y2="5" vectorEffect="non-scaling-stroke" />
+        <line className="tc-ay1-numune-cizgi-uc" x1="100" y1="0" x2="100" y2="10" vectorEffect="non-scaling-stroke" />
+        <line className="tc-ay1-numune-cizgi-isaret" x1={x} y1="1" x2={x} y2="9" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <small aria-hidden="true">{metin}</small>
+    </span>
   );
 }
 
@@ -229,25 +277,18 @@ const CIZGILER = Array.from({ length: 120 }, (_, i) => {
   return { i, buyuk, x1: 220 + r1 * Math.cos(a), y1: 220 + r1 * Math.sin(a), x2: 220 + 214 * Math.cos(a), y2: 220 + 214 * Math.sin(a) };
 });
 
-// Bir tur = bir parçanın planlı çevrim süresi; süre aşılırsa gecikme yazar (iyi parça ya da hurda eklenince baştan sayar).
-function CevrimEtiketleri({ is, cevrim, sol }: { is: Is; cevrim: CevrimOlcer; sol: boolean }) {
+// Bir tur = bir parçanın planlı çevrim süresi (iyi parça ya da hurda eklenince baştan sayar). 664: çevrim, son çevrim ve kalan süre
+// yazılmaz; yalnız süre aşılınca gecikme uyarısı çıkar.
+function GecikmeEtiketi({ is, cevrim }: { is: Is; cevrim: CevrimOlcer }) {
   useSimdi(500);
   if (!(is.cycle > 0)) return null;
   const e = cevrim.gecen();
   const T = is.cycle * 1000;
-  const calisiyor = is.state === 'running';
-  const gec = calisiyor && e > T * 1.08;
-  const son = cevrim.son();
-  if (sol) {
-    return (
-      <span className="tc-ay1-kadran-etiket" data-durum={son > T * 1.08 ? 'durakli' : undefined} title="Son parçanın gerçek süresi (iyi ya da hurda)">
-        Son çevrim<b>{son ? `${Math.round(son / 1000)} sn` : '—'}</b>
-      </span>
-    );
-  }
+  const gec = is.state === 'running' && e > T * 1.08;
+  if (!gec) return null;
   return (
-    <span className="tc-ay1-kadran-etiket" data-durum={gec ? 'durakli' : calisiyor ? undefined : 'sirada'} title="Planlı çevrim süresi · iyi parça ya da hurda eklenince baştan başlar">
-      {gec ? 'Gecikme' : 'Çevrim'}<b>{gec ? `+${Math.round((e - T) / 1000)} sn` : `${Math.floor(e / 1000)} / ${is.cycle} sn`}</b>
+    <span className="tc-ay1-kadran-etiket" data-durum="durakli" title="Planlı çevrim süresi aşıldı · iyi parça ya da hurda eklenince baştan başlar">
+      Gecikme<b>{`+${Math.round((e - T) / 1000)} sn`}</b>
     </span>
   );
 }
@@ -339,11 +380,9 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
         : <div className="tc-ay1-kadran-cekirdek">{ic}</div>}
       <div className="tc-ay1-kadran-yan tc-ay1-kadran-sol">
         <span className="tc-ay1-kadran-etiket" data-durum="durdu">Hurda<b>{is.scrap}</b></span>
-        <CevrimEtiketleri is={is} cevrim={cevrim} sol />
       </div>
       <div className="tc-ay1-kadran-yan tc-ay1-kadran-sag">
-        <span className="tc-ay1-kadran-etiket">Kalan süre<b>{kalan === null ? '—' : sure(kalan * is.cycle)}</b></span>
-        <CevrimEtiketleri is={is} cevrim={cevrim} sol={false} />
+        <GecikmeEtiketi is={is} cevrim={cevrim} />
       </div>
     </div>
   );

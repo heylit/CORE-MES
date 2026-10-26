@@ -52,12 +52,12 @@ import { Analiz } from './Analiz.tsx';
 import { useDarEkran, useMerkezUyarilari, useVardiyaKaydi } from './kancalar.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, paketleriBirlestir, siradakiGorev, simgeSec,
+  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, kaliteYuzdesi,
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
@@ -1021,7 +1021,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <NumuneSeridi girdi={{
       kurallar: numunePlani(o.pkg).map((r) => ({
         id: r.id, etiket: numuneEtiketi(r), olcen: (r.who && r.who.length ? r.who : ['q' as const]).map((w) => OLCENLER[w].l).join('→'),
-        ilk: r.when === 'first', olculer: numuneOlculeri(o.pkg!, r).map((b) => b.id),
+        ilk: r.when === 'first', olculer: numuneOlculeri(o.pkg!, r).map((b) => b.id), aralik: numuneAraligi(r, o, simdi),
       })),
       meas: o.meas || {}, bekleyen: o.pendingReq ? o.pendingItems || [] : [], zamani: D.due.map((b) => b.id),
       siradaki: D.next ? { olcu: D.next.b.id, v: D.next.v, u: D.next.u } : null, ilkKarar: ilkKarari,
@@ -1096,7 +1096,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             <div className="tc-ay1-uretim">
               {bantlar}
               <button type="button" className="tc-ay1-is-ozet" onClick={() => mvYaz('queue')}>
-                <span><span className="tc-ay1-ust-yazi">Aktif iş {o.urgent ? '· ACİL' : ''}</span><b>{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</b><small>{o.part} · {o.op}</small></span>
+                <span><span className="tc-ay1-ust-yazi">Aktif iş {o.urgent ? '· ACİL' : ''}</span><IsAlanlari is={o} /></span>
                 <Simge ad="next" boyut="k" />
               </button>
               {uyariCipi(false)}
@@ -1174,16 +1174,13 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
             <div>
               <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
-              <h2 className="tc-ay1-is-baslik">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</h2>
-              <p>{o.part} · {o.op}</p>
+              <IsAlanlari is={o} baslik />
               <IsEtiketleri is={o} />
               {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               {notlar}
             </div>
             <div className="tc-ay1-olgular">
               {uyariCipi(false)}
-              <div><span className="tc-ay1-ust-yazi">Çevrim</span><b>{o.cycle} sn</b></div>
-              <div><span className="tc-ay1-ust-yazi">Termin</span><b>{o.due}</b></div>
             </div>
           </section>
           <EtkinKart is={o} kartlar={kartlar} />
