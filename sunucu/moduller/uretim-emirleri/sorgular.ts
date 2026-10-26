@@ -1728,6 +1728,8 @@ export interface AkisEmirSatiri {
 export interface AkisIsEmriSatiri {
   id: number; opNo: number; sira: number; istasyonId: number | null; fasonFirmaId: number | null; terminGun: number | null;
   durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslama: string | null; bitis: string | null; birimSureDk: string | null; ayarSuresiDk: string | null;
+  // Akış, adım önündeki beklemeyi bağımlılığa göre ölçer: akışlıda girdi devir adedi kadar sağlam çıkınca hazırdır.
+  bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz'; devirAdedi: number | null;
 }
 export interface AkisOlaySatiri {
   isEmriId: number | null; zaman: string; olay: 'baslat' | 'bitir' | 'duraklat' | 'durdur' | 'devam' | 'ayar';
@@ -1749,7 +1751,7 @@ export function akisIsEmirleriGetir(db: Db, emirId: number): Promise<AkisIsEmriS
   return db.sorgu<AkisIsEmriSatiri>(
     `SELECT i.id, i.op_no AS "opNo", i.sira, i.istasyon_id AS "istasyonId", i.fason_firma_id AS "fasonFirmaId", i.termin_gun AS "terminGun",
             i.durum, ${NULLU_ISO('i.baslama')} AS baslama, ${NULLU_ISO('i.bitis')} AS bitis,
-            i.birim_sure_dk::text AS "birimSureDk", i.ayar_suresi_dk::text AS "ayarSuresiDk"
+            i.birim_sure_dk::text AS "birimSureDk", i.ayar_suresi_dk::text AS "ayarSuresiDk", i.bagimlilik, i.devir_adedi AS "devirAdedi"
        FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = $1 ORDER BY i.sira`,
     [emirId],
   );
