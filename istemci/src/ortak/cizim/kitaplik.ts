@@ -53,14 +53,14 @@ const kalici = <T>(f: () => Promise<T>) => {
   return (): Promise<T> => (p ??= f().catch((h: unknown) => { p = null; throw h; }));
 };
 
-/* ── pdf.js 6: ayrıştırma ana iş parçacığında kalır (eskisi gibi). Çalışan modülü globalThis.pdfjsWorker'ı kurar, pdf.js onu sahte çalışan
-   olarak kullanır; ayrı çalışan ve içerik ilkesinde yeni satır gerekmez. JPEG 2000 ve JBIG2 çözücülerinin wasm'sız sürümü kullanılır. ── */
+/* ── pdf.js 6: ayrıştırma ayrı çalışanda koşar (731): büyük teknik resim açılırken tabletin ekranı donmaz. Çalışan dosyası kendi cevabının
+   dar içerik ilkesiyle gelir (arkon/sun.ts). Çalışan kurulamazsa pdf.js aynı dosyayı ana iş parçacığında sahte çalışan olarak yükler
+   (eski davranış). JPEG 2000 ve JBIG2 çözücülerinin wasm'sız sürümü kullanılır. ── */
 export type PdfKitapligi = typeof PdfJs;
 export const pdfjs = kalici(async () => {
-  const [lib] = await Promise.all([
-    import(/* @vite-ignore */ vendorAdresi('pdfjs')) as Promise<PdfKitapligi>,
-    import(/* @vite-ignore */ vendorAdresi('pdfworker')) as Promise<unknown>,
-  ]);
+  const lib = await (import(/* @vite-ignore */ vendorAdresi('pdfjs')) as Promise<PdfKitapligi>);
+  if (typeof Worker === 'undefined') await (import(/* @vite-ignore */ vendorAdresi('pdfworker')) as Promise<unknown>);
+  else lib.GlobalWorkerOptions.workerSrc = vendorAdresi('pdfworker');
   return lib;
 });
 export const pdfWasmAdresi = (): string => vendorAdresi('pdfwasm');
