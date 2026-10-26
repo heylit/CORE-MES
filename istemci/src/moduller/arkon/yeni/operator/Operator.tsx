@@ -18,7 +18,7 @@ import { IS_DEGISIMI, nedenAdi as nedenAdiYaz } from '../../../../../../arkon/we
 import { EMIR_SEC_OLAYI, emirSeciminiAl, emirSirasi, kartSeciminiAl, type EmirSecimiPenceresi } from '../../../../../../arkon/web/src/data/emir-secimi.ts';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import {
-  ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
+  ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kaliteMerkeziNumuneYamasi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
 } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
 import { ilkAcilis } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
@@ -206,11 +206,16 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       const d = sonNumuneDurumu(rq, x.pkg.id, x.pkg.plan);
       return d ? ({ ...x, ...d } as Is) : x;
     });
+    // Kalite Merkezi'nin ilk parça kararı kalitede bekleyen ilk parça numunesini terminalde kapatır (Arkon numune kaydı açık kalsa da).
+    const kmKararli = (l: Is[]) => l.map((x) => {
+      const y = x.pkg ? kaliteMerkeziNumuneYamasi(x, x.pkg, ilkParcaKalemleri(x).map((b) => b.id)) : null;
+      return y ? ({ ...x, ...y } as Is) : x;
+    });
     // Sayacı olmayan takımlar işin şimdiki sayısının ömre göre tabanıyla başlar (kayda değişiklik olarak yazılmaz).
     const takimli = (l: Is[]) => l.map((x) => { if (!x.pkg || pv) return x; const t = eksikTakimTabanlari(x, isKurallari(x.pkg).prod.tools); return t ? { ...x, toolsAt: t } : x; });
     islerYaz((prev) => {
       const activeNo = (prev[aiRef.current] || { no: null }).no;
-      const nx = takimli(numuneli(paketleriBirlestir(prev, pk, rs, MACHINE, onizleme)));
+      const nx = takimli(kmKararli(numuneli(paketleriBirlestir(prev, pk, rs, MACHINE, onizleme))));
       const idx = pv ? 0 : nx.findIndex((x) => x.no === activeNo);
       if (idx >= 0 && idx !== aiRef.current) setTimeout(() => aiYaz(idx), 0);
       return nx;

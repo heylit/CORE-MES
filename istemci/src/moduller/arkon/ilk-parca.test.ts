@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ILK_PARCA_BEKLIYOR_ILETISI, ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_KARARI_ILETISI, ilkParcaKarari, kaliteMerkeziKarariBekler, ilkParcaSayimReddi, kararBekleyenEki, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani } from '../../../../arkon/web/src/data/ilk-parca.ts';
+import { ILK_PARCA_BEKLIYOR_ILETISI, ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_KARARI_ILETISI, KALITE_MERKEZI_RETTI_ILETISI, ilkParcaKarari, kaliteMerkeziNumuneYamasi, kaliteMerkeziKarariBekler, ilkParcaSayimReddi, kararBekleyenEki, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani } from '../../../../arkon/web/src/data/ilk-parca.ts';
 
 describe('ilk parça kapısı (129, 131 b)', () => {
   it('327 a, 521 1 a: ilk parça kararı beklenirken ilk parça dahil bütün sağlam karar bekler (sunucuyla aynı sayı); ret varsa sayı gösterilmez', () => {
@@ -20,6 +20,30 @@ describe('ilk parça kapısı (129, 131 b)', () => {
     expect(kaliteMerkeziKarariBekler({ tmi: { ilkParca: { karar: 'onay', zaman: 'z' } } }, [2], [2])).toBe(false);
     expect(kaliteMerkeziKarariBekler({}, [1, 3], [2])).toBe(false);
     expect(kaliteMerkeziKarariBekler(undefined, [1], [])).toBe(false);
+  });
+
+  it('557, 521 1 a: Kalite Merkezi kararı kalitede bekleyen ilk parça numunesini terminalde kapatır; ret, daha yeni karar yoksa uyarıdır (559 2)', () => {
+    const zaman = '2026-10-25T10:00:00Z';
+    const once = Date.parse(zaman) - 60e3;
+    const paket = (karar: string) => ({ tmi: { ilkParca: { karar, zaman } } });
+    const bekleyen = { pendingReq: 'r1', pendingItems: [1, 2], pendingAt: once };
+    expect(kaliteMerkeziNumuneYamasi(bekleyen, paket('onay'), [1, 2])).toEqual({ pendingReq: null, pendingItems: null });
+    expect(kaliteMerkeziNumuneYamasi(bekleyen, paket('ret'), [1, 2])).toEqual({
+      pendingReq: null, pendingItems: null, lastDecision: { status: 'rejected', bad: 'İlk parça', note: KALITE_MERKEZI_RETTI_ILETISI, at: Date.parse(zaman), km: true },
+    });
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, lastDecision: { at: Date.parse(zaman) + 1 } }, paket('ret'), [1, 2])).toEqual({ pendingReq: null, pendingItems: null });
+  });
+
+  it('557: karardan sonra gönderilen, ilk parça dışı ölçü taşıyan ya da kararsız emrin numunesi açık kalır', () => {
+    const zaman = '2026-10-25T10:00:00Z';
+    const onay = { tmi: { ilkParca: { karar: 'onay', zaman } } };
+    const bekleyen = { pendingReq: 'r1', pendingItems: [1], pendingAt: Date.parse(zaman) - 60e3 };
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, pendingAt: Date.parse(zaman) + 60e3 }, onay, [1])).toBeNull();
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, pendingItems: [1, 3] }, onay, [1])).toBeNull();
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, pendingItems: [] }, onay, [1])).toBeNull();
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, pendingAt: null }, onay, [1])).toBeNull();
+    expect(kaliteMerkeziNumuneYamasi({ ...bekleyen, pendingReq: null }, onay, [1])).toBeNull();
+    for (const p of [{}, { tmi: {} }, { tmi: { ilkParca: { karar: 'onay', zaman: 'gecersiz' } } }, null, undefined]) expect(kaliteMerkeziNumuneYamasi(bekleyen, p, [1])).toBeNull();
   });
 
   it('yeniden ilk parça kapısı açıkken yalnız ilk sağlam sayılır; düzeltme serbest; kapı kapalıyken sınır yok', () => {

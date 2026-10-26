@@ -1,5 +1,5 @@
 import { tmiBitti } from '../../../../../../arkon/web/src/data/biten-is.ts';
-import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, kararBekleyenEki } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
+import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_RET_UYARISI, ilkParcaKarari, kararBekleyenEki, yenidenIlkParcaAcik } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 import { kalanAdet } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
 import { TEKRAR_OLCUM } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { anlikPencereler } from '../../../../../../arkon/web/src/data/vardiya-gunu.ts';
@@ -99,10 +99,12 @@ export function kontrolTakvimi(o: TakvimIsi | null | undefined, simdi: number, v
   const dusun = (kalan: SiradakiKontrol) => { if (!next || dakikasi(kalan) < dakikasi(next)) next = kalan; };
   // Reddedilen ölçü düzeltilip yeniden ölçülene kadar sırada kalır.
   for (const b of pkg.plan) { const m = meas[b.id]; if (m && m.ok === false && !m.dev && aktifIs) ekle(b, m.who === 'op' ? 'op' : 'q', TEKRAR_OLCUM); }
+  // 521 1 a: ilk parça kararı Kalite Merkezi'nindir; emir onaylıysa ilk parça ölçüsü terminalde ölçülmemiş olsa da yeniden istenmez.
+  const ilkOnayli = ilkParcaKarari(pkg) === 'onay' && !yenidenIlkParcaAcik(pkg);
   for (const r of numunePlani(pkg)) {
     const olculer = numuneOlculeri(pkg, r);
     const L = numuneEtiketi(r);
-    if (r.when === 'first') { if (aktifIs) olculer.forEach((b) => { if (!gecti(meas[b.id])) ekle(b, siradakiOlcen(r, 0), L); }); continue; }
+    if (r.when === 'first') { if (aktifIs && !ilkOnayli) olculer.forEach((b) => { if (!gecti(meas[b.id])) ekle(b, siradakiOlcen(r, 0), L); }); continue; }
     if (r.when === 'every') {
       const N = Math.max(1, r.n || 50);
       const taban = o.baseGood ?? 0;
@@ -169,6 +171,7 @@ export function siradakiGorev(o: GorevIsi | null | undefined, D: KontrolTakvimi,
   const ilkKapi = ilkParcaKapisi(o);
   const asinan = RL.prod.tools.find((t) => o.good - ((o.toolsAt || {})[t.id] || 0) >= t.life);
   const karar = o.lastDecision;
+  if (karar && karar.status === 'rejected' && karar.km && !karar.ack) return { tone: 'hazard', icon: 'alert', t: karar.note ?? '', d: KALITE_MERKEZI_RET_UYARISI, act: 'ack', btn: 'Anladım', key: 'kmret' };
   if (karar && karar.status === 'rejected' && !karar.ack) return { tone: 'stop', icon: 'x', t: `Kalite RED · ${karar.bad}`, d: `${karar.note ? `${karar.note} · ` : ''}Makineyi durdur, düzelt ve yeni numune gönder`, act: 'stop', btn: 'Durdur', act2: 'ack', btn2: 'Anladım', pulse: true, key: 'rej' };
   if (o.pendingReq) {
     const ek = ilk && ilk.acik

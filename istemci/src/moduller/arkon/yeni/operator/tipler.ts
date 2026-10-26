@@ -9,7 +9,8 @@ export type { Meas, Order, Pkg, PlanItem, Result, SampleRequest, Olcen, Ton };
 export type IsDurumu = Order['state'];
 
 // Kalite kararı: numune sonucu gelince işe yazılır; ret kartı "Anladım" denene dek görünür.
-export interface KaliteKarari { status: string; bad?: string; note?: string; at: number; ack?: boolean }
+// km: karar Kalite Merkezi'nin ilk parça reddidir; terminal durdurmaz, uyarır (559 2).
+export interface KaliteKarari { status: string; bad?: string; note?: string; at: number; ack?: boolean; km?: boolean }
 
 // Ekrandaki iş: paket ve sonuçla birleşmiş iş emri.
 export interface Is extends Order {

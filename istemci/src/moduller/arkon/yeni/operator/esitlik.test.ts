@@ -3,6 +3,7 @@ import { sayi, sure } from '../cekirdek/bicim.ts';
 import type { Plant } from '../cekirdek/tipler.ts';
 import { CAGRI_ASAMALARI, HAZIRLIK_MADDELERI, hazirlikSayisi, ilkParcaKalemleri, ilkParcaKapisi, kontrolTakvimi, siradakiGorev, simgeSec, tonAdi } from './kurallar.ts';
 import type { IlkParcaDurumu, Is, Pkg } from './tipler.ts';
+import { KALITE_MERKEZI_RET_UYARISI } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 
 // Taşınan hesaplar eski ekranınkiyle aynı sonucu vermeli. Eski modül (operator-parcalar.ts) gerçek haliyle yüklenir; yalnız arayüz,
 // çizim ve veri katmanı bağımlılıkları sahtedir. Eski renk değişkeni ton adına, eski simge adı ortak simgeye çevrilip karşılaştırılır.
@@ -77,11 +78,15 @@ const ISLER: Is[] = [
   is({ state: 'running', good: 10, pendingReq: 'r1', pendingItems: [1, 2], pendingAt: SIMDI - 95e3 }),
   is({ state: 'running', good: 40, pkg: TAKIMLI, toolsAt: { t1: 5 } }),
   is({ state: 'running', good: 10, lastDecision: { status: 'rejected', bad: 'Ø60', note: 'Deneme', at: 1 } }),
+  is({ state: 'running', good: 10, lastDecision: { status: 'rejected', bad: 'İlk parça', note: 'Deneme', at: 1, km: true } }),
   is({ state: 'running', good: 100, pkg: paket({ plan: [] }) }),
   is({ state: 'running', pkg: paket({ opType: 'kalite', st: { n: 2, ac: 0 }, plan: [] }), sr: { insp: [{ ok: true }, { ok: false }] } }),
   is({ state: 'running', pkg: paket({ opType: 'depo', st: { items: [{ id: 'a' }] }, plan: [] }), good: 1 }),
   is({ state: 'running', pkg: paket({ opType: 'boya', st: { cureMin: 10 }, plan: [] }), sr: { rack: { stage: 'oven', t0: SIMDI - 11 * 60e3, n: 6 } } }),
   { ...is(), empty: true } as Is,
+  is({ state: 'running', good: 3, pkg: paket({ tmi: { emirId: 1, isEmriId: 1, opNo: 10, ilkParca: { karar: 'onay', zaman: '2026-10-24T08:00:00Z' } } } as Partial<Pkg>) }),
+  is({ state: 'running', good: 3, pkg: paket({ tmi: { emirId: 1, isEmriId: 1, opNo: 10, ilkParca: { karar: 'ret', zaman: '2026-10-24T08:00:00Z' } } } as Partial<Pkg>) }),
+  is({ state: 'running', good: 3, pkg: paket({ tmi: { emirId: 1, isEmriId: 1, opNo: 10, ilkParca: { karar: 'onay', zaman: '2026-10-24T08:00:00Z' } }, fpRe: { on: true, at: Date.parse('2026-10-24T09:00:00Z') } } as unknown as Partial<Pkg>) }),
 ];
 const ILKLER: (IlkParcaDurumu | undefined)[] = [undefined, { acik: true, sayilan: 0 }, { acik: true, sayilan: 1 }, { acik: true, sayilan: 3, kararBekleyen: 2 }, { acik: true, yeniden: true, sayilan: 3 }];
 const SIRADAKI = is({ no: 'IE-2', part: 'Deneme ikinci', state: 'queued', ready: { mat: true, prog: true } });
@@ -106,6 +111,18 @@ describe('A1 kurallar eski hesaplarla aynı', () => {
       }
       expect(dolu).toBeGreaterThanOrEqual(5);
     } finally { vi.useRealTimers(); }
+  });
+
+  it('557, 521 1 a, 559 2: Kalite Merkezi reddi durdurmaz, uyarır; onaylı emirde ilk parça ölçüsü terminalde ölçülmemiş olsa da istenmez; ret ve yeniden ilk parçada istenir', () => {
+    const ilkIsteniyor = (o: Is) => kontrolTakvimi(o, SIMDI, VARDIYA_BASI).due.some((b) => b.id === 1);
+    const [onay, ret, yeniden] = ISLER.slice(-3) as [Is, Is, Is];
+    const kmRet = siradakiGorev(is({ state: 'running', good: 10, lastDecision: { status: 'rejected', bad: 'İlk parça', note: 'Deneme', at: 1, km: true } }), kontrolTakvimi(null, SIMDI, VARDIYA_BASI), null, undefined, SIMDI);
+    expect(kmRet).toMatchObject({ tone: 'hazard', t: 'Deneme', d: KALITE_MERKEZI_RET_UYARISI, act: 'ack', key: 'kmret' });
+    expect(kmRet?.act2).toBeUndefined();
+    expect(ilkIsteniyor(is({ state: 'running', good: 3 }))).toBe(true);
+    expect(ilkIsteniyor(onay)).toBe(false);
+    expect(ilkIsteniyor(ret)).toBe(true);
+    expect(ilkIsteniyor(yeniden)).toBe(true);
   });
 
   it('"Şimdi" kartı her iş durumunda eskisiyle aynı görevi verir', () => {

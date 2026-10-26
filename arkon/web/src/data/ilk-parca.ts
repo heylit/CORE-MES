@@ -43,6 +43,34 @@ export function kaliteMerkeziKarariBekler(paket: { tmi?: unknown } | null | unde
   return ilkParcaKarari(paket) !== 'onay' && numuneOlculeri.some((id) => ilkParcaOlculeri.includes(id));
 }
 
+// Kalite Merkezi kararı Arkon numunesini kapatmaz (numune kaydı Arkon'undur); terminal kalitede bekleyen numuneyi kararla kapatır. Numunenin
+// bütün ölçüleri ilk parça ölçüsü ve karar numuneden sonra verilmişse numune kararla kapanmıştır; başka ölçü taşıyan numune Arkon kalitesini
+// bekler. Onay yalnız numuneyi kapatır; ret, işte daha yeni bir karar yoksa uyarı olarak görünür (559 2: makineyi durdurmaz).
+export const KALITE_MERKEZI_RETTI_ILETISI = 'Kalite Merkezi ilk parçayı reddetti';
+
+interface BekleyenNumuneli {
+  pendingReq?: string | null; pendingItems?: readonly number[] | null; pendingAt?: number | null;
+  lastDecision?: { at?: number } | null;
+}
+
+export function kaliteMerkeziNumuneYamasi(
+  is: BekleyenNumuneli, paket: { tmi?: unknown } | null | undefined, ilkParcaOlculeri: readonly number[],
+): { pendingReq: null; pendingItems: null; lastDecision?: { status: 'rejected'; bad: string; note: string; at: number; km: true } } | null {
+  if (!is.pendingReq) return null;
+  const karar = ilkParcaKarari(paket);
+  if (karar === null) return null;
+  const zaman = Date.parse(String((paket!.tmi as { ilkParca: { zaman?: unknown } }).ilkParca.zaman));
+  const olculer = is.pendingItems ?? [];
+  if (!Number.isFinite(zaman) || zaman <= (is.pendingAt ?? Infinity)) return null;
+  if (olculer.length === 0 || !olculer.every((id) => ilkParcaOlculeri.includes(id))) return null;
+  const kapat = { pendingReq: null, pendingItems: null } as const;
+  if (karar === 'onay' || (is.lastDecision?.at ?? -Infinity) >= zaman) return kapat;
+  return { ...kapat, lastDecision: { status: 'rejected', bad: 'İlk parça', note: KALITE_MERKEZI_RETTI_ILETISI, at: zaman, km: true } };
+}
+
+// Kalite Merkezi reddi üretimi durdurmaz (559 2): operatör uyarılır, düzeltip yeni ilk parça numunesi gönderir.
+export const KALITE_MERKEZI_RET_UYARISI = 'Üretim sürer · düzelt ve yeni ilk parça numunesi gönder';
+
 export const kararBekleyenEki = (ilk: { kararBekleyen?: number | null }): string =>
   typeof ilk.kararBekleyen === 'number' && ilk.kararBekleyen > 0 ? ' · karar bekleyen ' + ilk.kararBekleyen : '';
 

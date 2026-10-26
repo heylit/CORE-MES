@@ -8,7 +8,7 @@ import { Step3D, processModel } from './model-3b';
 import { CALLS, Fragment, I, REASONS, SCRAPS, ST, STEPS0, alpha, dur, fmt, html, isPlannedReason, pad, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
 import { MiniRing } from './bilesenler';
 import { onerileriSuz } from './neden-kaynagi';
-import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, kararBekleyenEki } from '../data/ilk-parca';
+import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_RET_UYARISI, ilkParcaKarari, kararBekleyenEki, yenidenIlkParcaAcik } from '../data/ilk-parca';
 import { FEAT, LS } from './yukleyici';
 import { POLICY, currentShift, downNext, downNow, downWindows, oeeCalc } from './ortak-ayarlar';
 import { rulesOf } from './kurallar';
@@ -277,9 +277,11 @@ export function dueControls(o, now): { due: any[]; next: any; who?: Record<strin
   const consider = left => { if (left && (!next || (left.u === 'parça' ? left.v * (o.cycle || 30) / 60 : left.v) < (next.u === 'parça' ? next.v * (o.cycle || 30) / 60 : next.v))) next = left; };
   // reddedilen ölçü: düzeltilip yeniden ölçülene kadar sırada kalır
   for (const b of o.pkg.plan) { const m = meas[b.id]; if (m && m.ok === false && !m.dev && active) add(b, m.who === 'op' ? 'op' : 'q', TEKRAR_OLCUM); }
+  // 521 1 a: ilk parça kararı Kalite Merkezi'nindir; emir onaylıysa ilk parça ölçüsü terminalde ölçülmemiş olsa da yeniden istenmez
+  const ilkOnayli = ilkParcaKarari(o.pkg) === 'onay' && !yenidenIlkParcaAcik(o.pkg);
   for (const r of sampOf(o.pkg)) {
     const its = sampItems(o.pkg, r), L = sampLabel(r);
-    if (r.when === 'first') { if (active) its.forEach(b => { const m = meas[b.id]; if (!(m && (m.ok || m.dev))) add(b, whoAt(r, 0), L); }); continue; }
+    if (r.when === 'first') { if (active && !ilkOnayli) its.forEach(b => { const m = meas[b.id]; if (!(m && (m.ok || m.dev))) add(b, whoAt(r, 0), L); }); continue; }
     if (r.when === 'every') {
       const N = Math.max(1, r.n || 50), base = o.baseGood ?? 0, c = o.good - base, k = Math.floor(c / N);
       const open = k >= 1 ? its.filter(b => { const m = meas[b.id]; return !(m && (m.cnt ?? -1) >= base + k * N); }) : [];
@@ -315,6 +317,7 @@ export function nextTask(o, D, nextOrder, ilk?: { acik: boolean; yeniden?: boole
   const first = firstGate(o);
   const worn = RLo.prod.tools.find(t => o.good - ((o.toolsAt || {})[t.id] || 0) >= t.life);
   const dec = o.lastDecision;
+  if (dec && dec.status === 'rejected' && dec.km && !dec.ack) return { tone: 'var(--hazard)', icon: 'alert', t: dec.note, d: KALITE_MERKEZI_RET_UYARISI, act: 'ack', btn: 'Anladım', key: 'kmret' };
   if (dec && dec.status === 'rejected' && !dec.ack) return { tone: 'var(--stop)', icon: 'x', t: 'Kalite RED · ' + dec.bad, d: (dec.note ? dec.note + ' · ' : '') + 'Makineyi durdur, düzelt ve yeni numune gönder', act: 'stop', btn: 'Durdur', act2: 'ack', btn2: 'Anladım', pulse: true, key: 'rej' };
   if (o.pendingReq) return { tone: 'var(--done)', icon: 'target', t: 'Numune kalitede · ' + (o.pendingItems || []).length + ' ölçü', d: 'Bekleme ' + dur((Date.now() - o.pendingAt) / 1000).slice(3) + (ilk && ilk.acik ? (ilk.yeniden ? ' · üretim uyarıyla sürer, karar gelene kadar sağlam sayılmaz' : ' · üretim sürer, sağlam parçalar Kalite Merkezi kararını bekler' + kararBekleyenEki(ilk)) : ' · üretim devam edebilir'), act: null, quiet: true, key: 'pend' };
   // İlk parça Başlat'tan sonra üretilir, önce sağlam sayılır sonra kaliteye gider: numune stoktan teslim edilir.

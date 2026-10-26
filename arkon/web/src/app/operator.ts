@@ -15,7 +15,7 @@ import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../da
 import { ilkAcilis } from '../data/istasyon-sec';
 import { ILETI_GITMEDI } from '../data/gonderim-hatasi';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/numune';
-import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
+import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, kaliteMerkeziNumuneYamasi, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
 import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
@@ -116,7 +116,9 @@ export function App({ preview }) {
     rqRef.current = rq;
     // kalitede bekleyen numune ve son ret yenilemede de görünür; ekranda canlı numune durumu varsa ona dokunulmaz
     const numuneli = l => l.map(x => { if (!x.pkg || x.pendingReq || x.lastDecision) return x; const d = sonNumuneDurumu(rq, x.pkg.id, x.pkg.plan); return d ? Object.assign({}, x, d) : x; });
-    setOrders(prev => { const activeNo = (prev[aiRef.current] || {}).no; const nx = numuneli(mergePkgs(prev, pk, rs)); const idx = preview ? 0 : nx.findIndex(x => x.no === activeNo); if (idx >= 0 && idx !== aiRef.current) setTimeout(() => setAi(idx), 0); return nx; });
+    // Kalite Merkezi'nin ilk parça kararı kalitede bekleyen ilk parça numunesini terminalde kapatır (Arkon numune kaydı açık kalsa da)
+    const kmKarari = l => l.map(x => { const y = x.pkg ? kaliteMerkeziNumuneYamasi(x, x.pkg, ilkParcaKalemleri(x).map(b => b.id)) : null; return y ? Object.assign({}, x, y) : x; });
+    setOrders(prev => { const activeNo = (prev[aiRef.current] || {}).no; const nx = kmKarari(numuneli(mergePkgs(prev, pk, rs))); const idx = preview ? 0 : nx.findIndex(x => x.no === activeNo); if (idx >= 0 && idx !== aiRef.current) setTimeout(() => setAi(idx), 0); return nx; });
     if (msg && msg.type === 'pkg' && msg.machine === MACHINE && !operatoreAcik(pkgsRef.current[msg.id])) return;
     if (msg && msg.type === 'pkg') { beep('call'); if (msg.machine === MACHINE) say((msg.version > 1 ? 'Paket güncellendi: ' : 'Yeni iş paketi: ') + msg.no + ' · Rev ' + msg.rev, 'layers', 'var(--hazard)'); else say(msg.machine + ' için paket yayınlandı · bu makine değil', 'layers', 'var(--idle)'); }
     if (msg && msg.type === 'pin-resolved') say('Hazırlık notunu yanıtladı: ' + (msg.reply || 'çözüldü'), 'check', 'var(--run)');
