@@ -16,7 +16,8 @@ describe('plan (gerçek PostgreSQL): ayar saati ve öncelik ağırlıklı gecikm
     const p = await taslaktaOner();
     assert.equal(p.gostergeler.ayarSaat, 1.3, '30 + 45 dakika');
     const e = p.emirler.find((x) => x.teslim === dun)!;
-    const gecikme = (Date.parse(e.bitis!) - tesisGunBasi(tesisGunu(Date.parse(`${dun}T12:00:00Z`) + 86_400_000))) / 3_600_000;
+    // Teslim sınırı sunucudaki gunSonu ile aynı: ertesi gün başından 1 sn önce. 1 sn fark ağırlıkla çarpılıp bir ondalığa yuvarlanınca sonucu kaydırır.
+    const gecikme = (Date.parse(e.bitis!) - (tesisGunBasi(tesisGunu(Date.parse(`${dun}T12:00:00Z`) + 86_400_000)) - 1000)) / 3_600_000;
     assert.ok(gecikme > 0);
     assert.equal(p.gostergeler.agirlikliGecikmeSaat, Math.round(gecikme * (ONCELIK_AGIRLIGI[e.oncelik ?? 0] ?? 1) * 10) / 10);
     const okunan = await tamam<typeof p>(c.planlama, 'GET', `/plan?taslak=${String(p.taslak!.id)}`);
