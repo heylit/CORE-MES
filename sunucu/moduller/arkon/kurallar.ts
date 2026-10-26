@@ -37,6 +37,10 @@ export const ILETILER = {
   iletiRolu: 'Rolünüz bu ileti türünü gönderemez.',
   iletiBuyuk: 'İleti çok büyük.',
   iletiHizi: 'Dakikada gönderilebilecek ileti sayısı aşıldı.',
+  lotKarariGecersiz: 'Lot kararı eksik: Kabul için bulunan kusurlu sayıları, Red için en az bir kusurlu sayısı ve gerekçe gerekir.',
+  lotKarariVar: 'Bu lotun kararı verildi; değiştirmek Kalite Merkezi\'ndedir.',
+  lotKarariTutmadi: 'Bulunan kusurlu sayıları AQL planına göre başka karar veriyor; sayıları ya da kararı düzeltin.',
+  lotPaketi: 'Lot kararı yalnız kalite istasyonundaki TMI iş emri paketinde verilir.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
   kayitRolYetmez: 'Rolünüz bu kayıt türünü ya da kaynağı yazamaz.',
   olcumKaynagi: 'Ölçüm kaynağı tanınmıyor.',
@@ -1972,11 +1976,58 @@ export function numuneTeslimGirdisi(kimlik: string, govde: unknown, onceki: unkn
 }
 
 // Teslim bağını yalnız sunucu yazar: istemcinin gönderdiği `numuneTeslim` yok sayılır, kayıtlı bağ sonraki yazımlarda (kalite kararı) korunur.
+// 564 1 b: numunenin gönderildiği kalite istasyonu (`kaliteIstasyonu`, kod) da yalnız sunucudandır; kalite istasyonu terminali bununla listeler.
 export function numuneTesliminiKoru(govde: unknown, onceki: unknown): unknown {
   if (!kayitMi(govde)) return govde;
-  const { numuneTeslim: _istemcinin, ...gerisi } = govde;
+  const { numuneTeslim: _istemcinin, kaliteIstasyonu: _istemcininIstasyonu, ...gerisi } = govde;
   const kayitli = alanOku(onceki, 'numuneTeslim');
-  return kayitli === undefined ? gerisi : { ...gerisi, numuneTeslim: kayitli };
+  const istasyon = alanOku(onceki, 'kaliteIstasyonu');
+  return { ...gerisi, ...(kayitli === undefined ? {} : { numuneTeslim: kayitli }), ...(istasyon === undefined ? {} : { kaliteIstasyonu: istasyon }) };
+}
+
+// 564 1 b: numunenin gideceği kalite istasyonu, emrin bu adımdan sonraki ilk kalite tipli adımının istasyonudur; yoksa null (eski kutu yolu).
+export interface RotaAdimi { id: number; sira: number; istasyonKodu: string | null; istasyonTipi: string | null }
+export function kaliteIstasyonuSec(adimlar: readonly RotaAdimi[], isEmriId: number): string | null {
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  const i = sirali.findIndex((a) => a.id === isEmriId);
+  if (i < 0) return null;
+  return sirali.slice(i + 1).find((a) => a.istasyonTipi === 'kalite' && a.istasyonKodu !== null)?.istasyonKodu ?? null;
+}
+
+// 564 6 a, 600 a: kalite istasyonu terminalinde lotun Kabul ya da Red'i. Sonuç belgesinin (`results`) `lotKarari` alanıdır; karar Kalite
+// Merkezi'nin lot kaydına yazılır (kayıt no ve karar `lotKarari.kayit` olarak sunucudan damgalanır), Arkon kendi kararını tutmaz. Red
+// ölçü (bulunan kusurlu) ve gerekçe ister; karar verildikten sonra değişmez. Sayı verilmeyen sınıf null'dır, sıfır sayılmaz.
+export type LotSinifi = 'Kritik' | 'Majör' | 'Minör';
+// Kayıtlı karar istemciden ezilmez; paketten lot bilgisi (TMI alanları) okunur; karar sunucudan damgalanır.
+export const lotKarariKoru = (govde: unknown, onceki: unknown): unknown =>
+  (kayitMi(govde) && kayitMi(alanOku(onceki, 'lotKarari')) ? { ...govde, lotKarari: alanOku(onceki, 'lotKarari') } : govde);
+export function lotPaketi(paket: unknown): { N: number; parcaNo: string; parcaAdi: string | null; istasyonKodu: string } | null {
+  const N = alanOku(paket, 'target'), parcaNo = alanOku(paket, 'partNo'), parcaAdi = alanOku(paket, 'part'), istasyon = alanOku(paket, 'machine');
+  if (typeof N !== 'number' || typeof parcaNo !== 'string' || typeof istasyon !== 'string') return null;
+  return { N, parcaNo, parcaAdi: typeof parcaAdi === 'string' ? parcaAdi : null, istasyonKodu: istasyon };
+}
+export const lotKarariDamgala = (govde: unknown, by: string, kayit: { no: string; karar: 'Kabul' | 'Ret'; redde?: string }): unknown =>
+  ({ ...(govde as object), lotKarari: { ...(alanOku(govde, 'lotKarari') as object), by, kayit } });
+export interface LotKarariGirdisi { istenen: 'Kabul' | 'Ret'; bulunan: Record<LotSinifi, number | null>; not: string | null; anahtar: string }
+export function lotKarariGirdisi(govde: unknown, onceki: unknown): LotKarariGirdisi | 'lotKarariGecersiz' | 'lotKarariVar' | null {
+  const lk = alanOku(govde, 'lotKarari');
+  const eski = alanOku(onceki, 'lotKarari');
+  if (kayitMi(eski) && kayitMi(alanOku(eski, 'kayit'))) {
+    return lk === undefined || kanonik(disindaKalanlar(lk, ['kayit'])) === kanonik(disindaKalanlar(eski, ['kayit'])) ? null : 'lotKarariVar';
+  }
+  if (lk === undefined || lk === null) return null;
+  if (!kayitMi(lk)) return 'lotKarariGecersiz';
+  const karar = lk['karar'];
+  const b = lk['bulunan'];
+  const sayi = (v: unknown): number | null | 'hata' => (v === null || v === undefined ? null : Number.isSafeInteger(v) && (v as number) >= 0 ? v as number : 'hata');
+  const bulunan = { Kritik: sayi(alanOku(b, 'Kritik')), Majör: sayi(alanOku(b, 'Majör')), Minör: sayi(alanOku(b, 'Minör')) };
+  const not = typeof lk['not'] === 'string' && lk['not'].trim() !== '' ? lk['not'].trim().slice(0, 500) : null;
+  const at = lk['at'];
+  if ((karar !== 'kabul' && karar !== 'ret') || !kayitMi(b) || typeof at !== 'number' || Object.values(bulunan).some((x) => x === 'hata')) return 'lotKarariGecersiz';
+  const sayilar = bulunan as Record<LotSinifi, number | null>;
+  if (Object.values(sayilar).every((x) => x === null)) return 'lotKarariGecersiz';
+  if (karar === 'ret' && (not === null || !Object.values(sayilar).some((x) => x !== null && x > 0))) return 'lotKarariGecersiz';
+  return { istenen: karar === 'kabul' ? 'Kabul' : 'Ret', bulunan: sayilar, not, anahtar: String(at) };
 }
 
 // Stok durumu Arkon'un istek durumlarına: teslim edilen istek Arkon'da tamamdır (operatörün "Aldım"ı stokta yoktur).

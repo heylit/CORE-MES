@@ -308,3 +308,10 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 ## Kalite reddi makineyi durdurmaz (564 7 a)
 - Eski ekranlar (`arkon/web/src/app/kurallar.ts`, `operator.ts`) "Makineyi durdur" seçeneğini ve durdurmayı taşır; yeni ekran kayıtlı eski
   `stop` kuralını uyarı sayar. Eski ekran kalkınca kapanır.
+
+## Kalite istasyonu terminali (564 1 b, 6 a, 600 a) - bağlamada kapanacak
+- Lot Kabul'ü kalite adımının sağlam sayısını yazmaz; kalite istasyonundaki parça sayımı sağ sekmedeki kalite panelinden (parça başına) sürer.
+  Lot kararı ile adım sayımının bağı bağlamada kararlaştırılır.
+- Terminal numuneyi `kaliteIstasyonu` ile listeler; stoktaki teslimin "Teslim al" yapılıp yapılmadığı istemcide bilinmez (Arkon istek kaydı
+  stok teslim durumunu taşımaz). Teslim alınmamış numune de listede görünür.
+- Lot büyüklüğü paketin hedefidir (adım adedi); parça bölünmüş pakette parçanın adedidir. Lot kararı Arkon'da düzeltilmez; düzeltme Kalite Merkezi'ndedir.

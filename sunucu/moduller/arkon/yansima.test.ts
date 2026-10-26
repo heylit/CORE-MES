@@ -2925,4 +2925,60 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
     assert.equal(ikinci.govde.adet, 0, 'karar Arkon onayıyla verildi, bekleyen kalmadı');
   });
+
+  // 564 1 b, 6 a, 600 a: numune emrin sonraki kalite istasyonuna gider (istek o istasyonla işaretlenir); kalite istasyonu terminalindeki lot
+  // Kabul/Red'i Kalite Merkezi'nin lot kaydıdır. Karar AQL planı ve bulunan sayılardan çıkar; tutmayan istek yazılmaz, kayıt da kalmaz.
+  test('564 1 b, 6 a, 600 a: numune kalite istasyonuna işaretlenir; lot kararı Kalite Merkezi lot kaydıdır, rol, eksik, tutmayan ve verilmiş karar reddedilir', async () => {
+    const r = await rotaliEmirKur();
+    await ortam!.sahip.sorgu("UPDATE istasyon SET tip = 'kalite' WHERE id = $1", [r.ikinciId]);
+    const [ie1, ie2] = await isEmriIdleri(r.emirId);
+    const numune = await istek(operator, 'POST', `/arkon/belgeler/requests/nk-${r.emirId}/yaz`, {
+      taban: 0, govde: { id: `nk-${r.emirId}`, pkgId: ieKimligi(ie1!), machine: r.ilk, status: 'waiting', items: [1], results: {}, kaliteIstasyonu: 'SAHTE' }, kaynak: 'nk',
+    });
+    assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
+    const istekBelgesi = await vt().tek<{ govde: Record<string, unknown> }>("SELECT govde FROM arkon_belge WHERE depo = 'requests' AND kimlik = $1", [`nk-${r.emirId}`]);
+    assert.equal(istekBelgesi?.govde['kaliteIstasyonu'], r.ikinci);
+
+    const kimlik = ieKimligi(ie2!);
+    const taslak = (await paketler()).get(kimlik)!.govde;
+    const yayin = await paketYaz(kimlik, null, { ...taslak, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] });
+    assert.equal(yayin.durum, 200, JSON.stringify(yayin.govde));
+    const lotlar = async () => (await ortam!.sahip.sorgu<{ govde: Record<string, unknown> }>("SELECT govde FROM kalite_merkezi_belge WHERE koleksiyon = 'lot'"))
+      .filter((l) => l.govde['uretimEmriId'] === r.emirId || String(l.govde['kaynakAnahtari'] ?? '').startsWith(kimlik));
+    let surum = 0;
+    const sonucYaz = async (lotKarari: Record<string, unknown>, cerez = yonetici) => {
+      const c = await istek<{ surum: number }>(cerez, 'POST', `/arkon/belgeler/results/${kimlik}/yaz`, { taban: surum, govde: { id: kimlik, meas: {}, pins: [], lotKarari }, kaynak: 'lk' });
+      if (c.durum === 200) surum = c.govde.surum;
+      return c;
+    };
+    const kabul = { karar: 'kabul', bulunan: { Kritik: 0, Majör: 0, Minör: 0 }, at: 1 };
+    assert.equal((await sonucYaz(kabul, operator)).durum, 403, 'operatör lot kararı veremez');
+    assert.equal((await sonucYaz({ ...kabul, karar: 'ret', bulunan: { Majör: 2 } })).durum, 400, 'Red gerekçe ister');
+    const tutmayan = await sonucYaz({ ...kabul, bulunan: { Kritik: 0, Majör: 3, Minör: 0 } });
+    assert.equal(tutmayan.durum, 400, JSON.stringify(tutmayan.govde));
+    assert.match(JSON.stringify(tutmayan.govde), /AQL planına göre başka karar/);
+    assert.equal((await lotlar()).length, 0, 'tutmayan istekte Kalite Merkezi kaydı da kalmaz');
+    const verildi = await sonucYaz(kabul);
+    assert.equal(verildi.durum, 200, JSON.stringify(verildi.govde));
+    const sonuc = await vt().tek<{ govde: { lotKarari: { kayit: { no: string; karar: string } } } }>("SELECT govde FROM arkon_belge WHERE depo = 'results' AND kimlik = $1", [kimlik]);
+    assert.equal(sonuc?.govde.lotKarari.kayit.karar, 'Kabul');
+    const kayitlar = await lotlar();
+    assert.equal(kayitlar.length, 1);
+    assert.deepEqual([kayitlar[0]!.govde['no'], kayitlar[0]!.govde['karar']], [sonuc?.govde.lotKarari.kayit.no, 'Kabul']);
+    const degistir = await sonucYaz({ ...kabul, karar: 'ret', bulunan: { Majör: 2 }, not: 'çapak', at: 2 });
+    assert.equal(degistir.durum, 403, 'verilmiş karar Arkon\'da değişmez');
+    assert.equal((await sonucYaz(sonuc!.govde.lotKarari as unknown as Record<string, unknown>)).durum, 200, 'aynı kararın yeniden yazılması');
+    assert.equal((await lotlar()).length, 1);
+    // Red: kusurlu sayısı ve gerekçeyle Kalite Merkezi Ret kaydı; stokta izlenmeyen parçada redde geçen yoktur ("0"), uydurulmaz.
+    const r2 = await rotaliEmirKur({ kart: r.kart });
+    await ortam!.sahip.sorgu("UPDATE istasyon SET tip = 'kalite' WHERE id = $1", [r2.ikinciId]);
+    const k2 = ieKimligi((await isEmriIdleri(r2.emirId))[1]!);
+    assert.equal((await paketYaz(k2, null, { ...(await paketler()).get(k2)!.govde, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1 }] })).durum, 200);
+    const red = await istek(yonetici, 'POST', `/arkon/belgeler/results/${k2}/yaz`, {
+      taban: 0, govde: { id: k2, meas: {}, pins: [], lotKarari: { karar: 'ret', bulunan: { Kritik: 0, Majör: 3, Minör: null }, not: 'çapak', at: 3 } }, kaynak: 'lk',
+    });
+    assert.equal(red.durum, 200, JSON.stringify(red.govde));
+    const redSonucu = await vt().tek<{ govde: { lotKarari: { kayit: Record<string, unknown> } } }>("SELECT govde FROM arkon_belge WHERE depo = 'results' AND kimlik = $1", [k2]);
+    assert.deepEqual([redSonucu?.govde.lotKarari.kayit['karar'], redSonucu?.govde.lotKarari.kayit['redde']], ['Ret', '0']);
+  });
 });

@@ -207,6 +207,18 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-toplu-alan[data-tur="hurda"] input { border-color: color-mix(in srgb, var(--stop) 60%, var(--edge)); }
 .tc-ay1-toplu-alan input:disabled { opacity: var(--saydam-70); }
 
+/* 600 a: kalite istasyonu orta sütunu (gelen numuneler, lot kararı) */
+.tc-ay1-kalite { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ay1-kalite .tc-ay1-kart { flex-wrap: wrap; border-style: solid; }
+.tc-ay1-kalite .tc-ay1-kart[data-durum="ayar"] { border-color: var(--hazard); }
+.tc-ay1-kalite .tc-ay1-kart[data-durum="durdu"] { border-color: var(--stop); }
+.tc-ay1-kalite .tc-ay1-kart[data-durum="calisiyor"] { border-color: var(--run); }
+.tc-ay1-kalite-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-ay1-kalite-not {
+  inline-size: 100%; min-block-size: var(--dokunma); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel); color: var(--ink); font: inherit; resize: vertical;
+}
+
 /* neden karoları (hurda, duruş, çağrı) */
 .tc-ay1-nedenler { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--dokunma-x24)), 1fr)); gap: var(--b-2); }
 .tc-ay1-nedenler-kucuk { grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--dokunma-x20)), 1fr)); }
