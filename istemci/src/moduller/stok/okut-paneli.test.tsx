@@ -338,7 +338,8 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     const panel = await screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
     expect(await screen.findByText('Sayfa')).toBeTruthy();
     expect(within(panel).getByRole('tab', { name: 'Sepet' }).getAttribute('aria-selected')).toBe('true');
-    expect(within(panel).getByRole('button', { name: 'Sepetim' }).getAttribute('aria-pressed')).toBe('true');
+    // Sepet sekmesi "Sayfa" yazısından sonra yüklenebilir (CI'da bir kez düştü); düğme beklenir.
+    expect((await within(panel).findByRole('button', { name: 'Sepetim' })).getAttribute('aria-pressed')).toBe('true');
     const satir = within(await within(panel).findByRole('list', { name: 'Sepetim' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/A-01-02 · TP-1/)).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Hepsini taşı' })).toHaveProperty('disabled', true);

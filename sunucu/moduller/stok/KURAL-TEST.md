@@ -131,7 +131,17 @@ T: akış testi `teslim.test.ts` "STK-U3 hurda". Karar: kullanıcı, 16.10.2026 
 
 | Kural | Bağlı olduğu | Sürüm |
 |---|---|---|
-| STK-U3 terminalde hurdaya ayrılan parçanın taşınan HM'si (adet x reçete miktarı) istasyondaki emrin stoğundan fire çıkışıyla düşer (önceki adım statüsü, serbest, adım statüsü sırasıyla); yetmeyen düşülmez; hurda geri alma o fire çıkışını geri alır; hurdasız sayım değişmez | T "STK-U3 hurda" (ilk adım, son adım, geri alma, sıfır fark, yetersiz stok) | İ |
+| STK-U3 terminalde hurdaya ayrılan parçanın taşınan HM'si (adet x reçete miktarı) istasyondaki emrin stoğundan fire çıkışıyla düşer (önceki adım statüsü, serbest, adım statüsü sırasıyla); yetmeyen istasyonda eksiye fire yazılır (iş 558); hurda geri alma o fire çıkışını geri alır; hurdasız sayım değişmez | T "STK-U3 hurda" (ilk adım, son adım, geri alma, sıfır fark, yetersiz stok) | İ |
+
+## İş 558, soru 562: sayım girdiyi yalnız istasyondan düşer
+
+Karar: kullanıcı, 26.10.2026 (558 okuma teyitli; 562 1 b, 562 2 b). K2 (kart #1413) aynen kalır; K3'ün depodan düşümü, kart #154'ün başka istasyondan düşümü ve fasondan dönüp kabulde bekleyenin düşümü (#1407) kalktı.
+
+| Kural | Bağlı olduğu | Sürüm |
+|---|---|---|
+| STK-U4 sayım önceki adımın parçasını (statülü taşınan: son ve çıktılı adımda sarf, ara adımda çevirme) yalnız bu istasyondan düşer (fasondan dönüp kabulde bekleyen de teslim edilmeden alınmaz); yetmeyen rotadaki miktarla istasyonda lotsuz onaylı eksi düşülür, sayım cevabında uyarı verilir; parça sonradan teslim edilince statü toplamı düzelir; sayım düşüşü eksi sarfı geri alır | T "iş 558: son adım önceki adımın parçasını yalnız kendi istasyonundan düşer..."; T "terminal üretim girişi..." (başlatma uyarısı); T `fason-iki-adim.test.ts` "girdili emir: statülü HM firmaya gider..." | İ |
+| STK-U5 statüsüz hammadde girdisi depodan düşülmez; istasyonda yetmeyen istisna kartıyla lotsuz eksi düşülür; kartın lotu başka istasyondaysa da alınmaz | T "562 2 b: istasyonda yetmeyen statüsüz girdi...", "karar 110 b, Soru 129...", "denetim #1...", "iş 558 (kart #154 yerine)..." | İ |
+| STK-U6 başlatma ve sayım uyarısı önceki adımın parçası bu istasyonda yokken (başka yerde duruyor, statülüde emre ayrılmış) "bu istasyona teslim edilmedi" der; önceki adım parça çıkarmadıysa söylemez | T "iş 558: son adım...", "terminal üretim girişi...", "kart #1289 girdi uyarısı..." | Sürümsüz (okuma) |
 
 ## Borç #440 Fason gönderimi eksik giderse uyarı
 
