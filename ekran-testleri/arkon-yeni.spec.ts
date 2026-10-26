@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { HESAPLAR } from './hesaplar.ts';
+import { HESAPLAR, type Hesap } from './hesaplar.ts';
 import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Üretim Hazırlık TS ekranı (Soru 271 c). Ölçüt bugünkü çerçevedir: her sayfanın testi parçasıyla gelir ve eski ekranda bugün
@@ -172,16 +172,12 @@ test.describe('A3 Pano ve kuyruk · yetki', () => {
   });
 });
 
-// Kuyruk eski adresine geçti (541, 527 1 a): operatör (yönetici kapısı yok) /kuyruk'ta yeni ekranı görür; eski çerçeve kişi menüsündeki
-// "Eski görünüm" ile /kuyruk/eski'de açılır, "Yeni görünüm" geri getirir.
+// Kuyruk eski adresine geçti (541, 527 1 a): /kuyruk yeni ekrandır. Eski görünüm yalnız yöneticidedir (681 a): yönetici kişi menüsündeki
+// "Eski görünüm" ile /kuyruk/eski'ye gider, "Yeni görünüm" geri getirir; operatörde geçiş yoktur, eski adres kapalıdır.
 test.describe('541 Kuyruk eski adreste', () => {
-  test.use({ hesap: 'ornek.operator1' });
-  test('operatör /kuyruk\'ta yeni Kuyruk\'u görür; eski görünüme gidip döner', async ({ page, ag, ac }) => {
+  test('yönetici eski görünüme gidip döner', async ({ page, ag, ac }) => {
     await ac('/kuyruk');
     await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
-    await expect(page.locator('iframe')).toHaveCount(0);
-    // Eski sayfadaki tek maddelik şerit durur (553 1 a); telefonda çizilmez, sayfa kendi başlığını taşır (618c).
-    await tekSerit(page, 'Kuyruk');
     await page.getByRole('button', { name: 'Hesap' }).click();
     await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
     await expect(page).toHaveURL(/\/kuyruk\/eski$/);
@@ -191,6 +187,24 @@ test.describe('541 Kuyruk eski adreste', () => {
     await expect(page).toHaveURL(/\/kuyruk$/);
     await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
     expect(ag.hatalar).toEqual([]);
+  });
+
+  test.describe('operatör', () => {
+    test.use({ hesap: 'ornek.operator1' });
+    test('operatör /kuyruk\'ta yeni Kuyruk\'u görür; eski görünüm geçişi yoktur, eski adres kapalıdır', async ({ page, ag, ac }) => {
+      await ac('/kuyruk');
+      await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
+      await expect(page.locator('iframe')).toHaveCount(0);
+      // Eski sayfadaki tek maddelik şerit durur (553 1 a); telefonda çizilmez, sayfa kendi başlığını taşır (618c).
+      await tekSerit(page, 'Kuyruk');
+      await page.getByRole('button', { name: 'Hesap' }).click();
+      await expect(page.getByRole('menuitem').first()).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: /görünüm$/ })).toHaveCount(0);
+      expect(ag.hatalar).toEqual([]);
+      await ac('/kuyruk/eski');
+      await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+      await expect(page.locator('iframe')).toHaveCount(0);
+    });
   });
 });
 
@@ -345,17 +359,15 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
 
   test.describe('operatör', () => {
     test.use({ hesap: 'ornek.operator1' });
-    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur; eski görünüme gidip döner', async ({ page, ag, ac }) => {
+    // Operatör yalnız yeni terminali görür (681 a): geçiş yoktur, eski adres kapalıdır.
+    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur; eski görünüm geçişi yoktur', async ({ page, ag, ac }) => {
       await ac('/uretim-terminali');
       await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
       await expect(page.locator('iframe')).toHaveCount(0);
       await tekSerit(page, 'Üretim Terminali');
-      await gecis(page, 'Eski görünüm');
-      await expect(page).toHaveURL(/\/uretim-terminali\/eski$/);
-      await expect(page.locator('iframe')).toHaveCount(1);
-      await gecis(page, 'Yeni görünüm');
-      await expect(page).toHaveURL(/\/uretim-terminali$/);
-      await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
+      await page.getByRole('button', { name: 'Hesap' }).click();
+      await expect(page.getByRole('menuitem').first()).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: /görünüm$/ })).toHaveCount(0);
       expect(ag.hatalar).toEqual([]);
     });
   });
@@ -388,14 +400,45 @@ async function yeniAcilan(page: Page, adres: string): Promise<string | null> {
   return bolum.first().getAttribute('data-sayfa');
 }
 
+// Eski görünüm yalnız yöneticidedir (681 a): eşitlik yöneticide ölçülür. Başka hesapta eski adresler kapalıdır ve yeni ekranda açılan
+// sayfalar 681 öncesi eşitlik ölçümünün listesidir (o gün eskide görülenle aynıydı); liste değişirse görünürlük değişmiştir.
+const YENIDE_ACILAN: Readonly<Record<Exclude<Hesap, 'ornek.yonetici'>, readonly string[]>> = {
+  'ornek.mudur': ['pano', 'planlama', 'kalite', 'bakim', 'raporlar', 'ayarlar', 'operator', 'kuyruk'],
+  'ornek.planlama': ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'raporlar', 'cizim', 'ayarlar', 'kuyruk'],
+  'ornek.operator1': ['operator', 'kuyruk'],
+  'ornek.operator2': ['operator', 'kuyruk'],
+  'ornek.kalite': ['pano', 'kalite', 'raporlar', 'ayarlar'],
+  'ornek.depo': [],
+  'ornek.satis': [],
+  'ornek.satinalma': [],
+  'ornek.muhasebe': [],
+};
+
 for (const hesap of HESAPLAR) {
   test.describe(`553 2 görünürlük eşitliği · ${hesap}`, () => {
     test.use({ hesap });
     test('eski ve yeni görünümde aynı sayfalar açılır', async ({ page, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
       test.setTimeout(240_000);
-      const eski: string[] = [];
       const yeni: string[] = [];
+      if (hesap !== 'ornek.yonetici') {
+        for (const s of HAZIRLIK_SAYFALARI) {
+          await ac(`/arkon/${s}`);
+          if (await yeniAcilan(page, `/arkon/${s}`) === s) yeni.push(s);
+        }
+        for (const [s, yol] of AYRI_SAYFALAR) {
+          await ac(yol);
+          if (await yeniAcilan(page, yol) === s) yeni.push(s);
+        }
+        for (const yol of ['/arkon/eski/pano', '/kuyruk/eski', '/uretim-terminali/eski']) {
+          await ac(yol);
+          await expect(page.getByRole('heading', { name: 'Yetkiniz yok' }), yol).toBeVisible();
+          await expect(page.locator('main iframe'), yol).toHaveCount(0);
+        }
+        expect(yeni, `${hesap}: yeni ekranda açılan sayfalar`).toEqual(YENIDE_ACILAN[hesap]);
+        return;
+      }
+      const eski: string[] = [];
       await ac('/arkon/eski/pano');
       const serit = page.getByRole('navigation', { name: 'Üretim Hazırlık menüsü' });
       const seritte = new Set<string>();

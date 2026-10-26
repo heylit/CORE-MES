@@ -101,17 +101,21 @@ test.describe('planlama', () => {
     const liste = (Array.isArray(govde) ? govde : (govde as { kayitlar?: unknown[]; nedenler?: unknown[] }).kayitlar ?? (govde as { nedenler?: unknown[] }).nedenler ?? []) as { kod: string; ad: string }[];
     expect(liste.length).toBeGreaterThan(0);
 
+    // Eski görünüm yalnız yöneticidedir (681 a): planlamacı Ayarlar'ı yeni ekranda görür, eski adres ona kapalıdır.
     await ac('/arkon/eski/ayarlar');
-    const f = await cerceve(page);
-    await f.getByRole('button', { name: 'Üretim', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await ac('/arkon/ayarlar');
+    const f = page.locator('main .tc-ay6');
+    await f.getByRole('tab', { name: 'Üretim', exact: true }).click();
     await expect(f.getByText('Duruş nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
     await expect(f.getByText('Hurda nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
-    const satirlar = await f.locator('.shr:has(b.shn.mono)').evaluateAll((ss) => ss.map((s) => [s.querySelector('b')?.textContent?.trim(), s.querySelector('span')?.textContent?.trim()]));
+    const satirlar = await f.locator('.tc-ay6-neden').evaluateAll((ss) => ss.map((s) => [s.querySelector('b')?.textContent?.trim(), s.querySelector('span')?.textContent?.trim()]));
     for (const n of liste) expect(satirlar, n.kod).toContainEqual([n.kod, n.ad]);
     await expect(f.getByRole('button', { name: 'Varsayılanlar' })).toHaveCount(0);
-    await expect(f.locator('.shr input')).toHaveCount(0);
+    await expect(f.locator('.tc-ay6-neden input')).toHaveCount(0);
 
-    await f.getByRole('button', { name: 'Tesis', exact: true }).click();
+    await f.getByRole('tab', { name: 'Tesis', exact: true }).click();
     await expect(f.getByText('Tesis TMI\'de İstasyonlar sayfasından değiştirilir.')).toBeVisible();
     await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
     await expect(f.getByRole('button', { name: 'Kaydet' })).toHaveCount(0);

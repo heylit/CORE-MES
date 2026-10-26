@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { HESAPLAR } from './hesaplar.ts';
+import { HESAPLAR, type Hesap } from './hesaplar.ts';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kalite Merkezi'nin TS ekranı (199 b). Eski adresine geçti (582, 527 1 a): menü adresleri yeni ekranı açar, eski çerçeve bir süre
@@ -161,14 +161,40 @@ async function acilir(page: Page, isaret: ReturnType<Page['locator']>, adres: st
   return await isaret.count() > 0 && new URL(page.url()).pathname === adres;
 }
 
+// Eski görünüm yalnız yöneticidedir (681 a): eşitlik yöneticide ölçülür. Başka hesapta eski adres kapalıdır ve yeni ekranda açılan
+// görünümler 681 öncesi eşitlik ölçümünün listesidir (o gün eskide görülenle aynıydı); liste değişirse görünürlük değişmiştir.
+const YENIDE_ACILAN: Readonly<Record<Exclude<Hesap, 'ornek.yonetici'>, readonly string[]>> = {
+  'ornek.mudur': GORUNUMLER,
+  'ornek.planlama': [],
+  'ornek.operator1': [],
+  'ornek.operator2': [],
+  'ornek.kalite': GORUNUMLER,
+  'ornek.depo': [],
+  'ornek.satis': [],
+  'ornek.satinalma': [],
+  'ornek.muhasebe': [],
+};
+
 for (const hesap of HESAPLAR) {
   test.describe(`582 görünürlük eşitliği · ${hesap}`, () => {
     test.use({ hesap });
     test('eski ve yeni görünümde aynı görünümler açılır', async ({ page, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
       test.setTimeout(240_000);
-      const eski: string[] = [];
       const yeni: string[] = [];
+      if (hesap !== 'ornek.yonetici') {
+        for (const g of GORUNUMLER) {
+          const y = adresi(g, '/kalite-merkezi');
+          await ac(y);
+          if (await acilir(page, page.locator('.tc-km-govde'), y)) yeni.push(g);
+        }
+        await ac('/kalite-merkezi/eski');
+        await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+        await expect(page.locator('main iframe')).toHaveCount(0);
+        expect(yeni, `${hesap}: yeni ekranda açılan görünümler`).toEqual(YENIDE_ACILAN[hesap]);
+        return;
+      }
+      const eski: string[] = [];
       for (const g of GORUNUMLER) {
         const e = adresi(g, '/kalite-merkezi/eski');
         await ac(e);

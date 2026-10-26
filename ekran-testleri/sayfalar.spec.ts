@@ -55,7 +55,8 @@ const SAYFALAR: Sayfa[] = [
   // Üretim Terminali yeni ekrandadır (541); eski çerçeve /uretim-terminali/eski altında.
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
-  { modul: 'uretim-terminali', yol: '/uretim-terminali/eski', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', cerceve: true },
+  // Eski çerçeve yalnız yöneticidedir (681 a); operatörün reddi uretim-terminali.spec.ts'te.
+  { modul: 'uretim-terminali', yol: '/uretim-terminali/eski', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', cerceve: true },
   { modul: 'stok', yol: '/stok', hesap: 'ornek.depo', baslik: 'Stok Merkezi' },
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),

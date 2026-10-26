@@ -77,8 +77,11 @@ test.describe('planlama işlemi olmayan', () => {
     await ac('/recete-rota/plan');
     await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
+    // Eski görünüm yalnız yöneticidedir (681 a): şerit yeni ekranda denenir, eski adres kapalıdır.
     await ac('/recete-rota/eski/schema');
-    await cerceve(page);
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await ac('/recete-rota/schema');
     const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
     await expect(menu.locator('a[href="/recete-rota/schema"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/recete-rota/plan"]')).toHaveCount(0);

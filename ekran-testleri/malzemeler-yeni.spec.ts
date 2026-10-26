@@ -283,6 +283,11 @@ for (const hesap of HESAPLAR) {
       test.skip(bilgi.project.name !== 'g1280', 'görünürlük genişliğe bağlı değil');
       test.setTimeout(120_000);
       await ac('/malzemeler/eski');
+      // Eski çerçeve yalnız yöneticidedir (681 a): başkası eski adreste yetki iletisini görür; şerit kabuğundur, ölçü ondan alınır.
+      if (hesap !== 'ornek.yonetici') {
+        await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+        await expect(page.locator('main iframe')).toHaveCount(0);
+      }
       const eskiSerit = new Set(await seritMaddeleri(page));
       const eski = BOLUMLER.filter(([yol]) => eskiSerit.has(yol)).map(([, ad]) => ad);
       const yeni: string[] = [];

@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { cerceve, expect, test } from './ortak.ts';
+import { expect, test } from './ortak.ts';
 
 // Yoğun ölçü (kullanıcı kararı 25.10.2026): fareyle denetimler yoğun (düğme 32, işaret satırı 28), dokunmatikte ve `data-dokunmatik`
 // kökte 44 px kalır. Üretim Terminali parmakla kullanılır; masaüstünde de dokunma ölçüsünde kalmalıdır.
@@ -24,9 +24,9 @@ test.describe('fare', () => {
     test.use({ hesap: 'ornek.operator1' });
     test('masaüstünde de terminal düğmeleri dokunma ölçüsünde kalır', async ({ page, ag, ac }, bilgi) => {
       test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
-      await ac('/uretim-terminali/eski');
-      const f = await cerceve(page);
-      const dugme = f.getByRole('button', { name: 'İyi +1' });
+      // Operatör yalnız yeni terminali görür (681 a).
+      await ac('/uretim-terminali');
+      const dugme = page.getByRole('region', { name: 'Üretim Terminali' }).getByRole('button', { name: 'İyi +1' });
       await expect(dugme).toBeVisible();
       expect(await boy(dugme)).toBeGreaterThanOrEqual(44);
       expect(ag.hatalar).toEqual([]);
