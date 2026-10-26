@@ -29,10 +29,11 @@ import './motor.css';
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
 
-// Veri ve kısıtlar (577b) motor sayfasının ekranıdır (eski b-kabuk EKRANLAR veri); Nasıl hesaplandı (577a) Plan ekranının sayfasıdır (zk-kabuk
-// Başka menüsü Sayfalar). Plan çubuğu üstte; bölüm adresin sorgusunda.
+// Veri ve kısıtlar (577b) motor sayfasının ekranıdır (eski b-kabuk EKRANLAR veri); Nasıl hesaplandı ve Bugünün kararları (577a) Plan ekranının
+// sayfalarıdır (zk-kabuk Başka menüsü Sayfalar). Plan çubuğu üstte; bölüm adresin sorgusunda.
 const VeriVeKisitlar = lazy(async () => ({ default: (await import('../ic/veri/index.tsx')).VeriVeKisitlar }));
 const NasilHesaplandi = lazy(async () => ({ default: (await import('../ic/hesap/index.tsx')).NasilHesaplandi }));
+const BugununKararlari = lazy(async () => ({ default: (await import('../ic/bugun/index.tsx')).BugununKararlari }));
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
@@ -40,12 +41,13 @@ export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugu
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma; const veriAc = veriAcici(o);
   const ekran = o.alt?.ekran ?? 'tahta';
-  if (ekran === 'veri' || ekran === 'hesap') {
+  if (ekran === 'veri' || ekran === 'hesap' || ekran === 'bugun') {
     return (
       <>
         <PlanSeridi {...o} gorunum="plan" />
         <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-          {ekran === 'veri' ? <VeriVeKisitlar {...o} bolum={bolumOku(o.alt?.bolum) ?? undefined} bolumSec={(b) => veriAc?.(b)} /> : <NasilHesaplandi {...o} />}
+          {ekran === 'veri' ? <VeriVeKisitlar {...o} bolum={bolumOku(o.alt?.bolum) ?? undefined} bolumSec={(b) => veriAc?.(b)} />
+            : ekran === 'hesap' ? <NasilHesaplandi {...o} /> : <BugununKararlari {...o} />}
         </Suspense>
       </>
     );

@@ -51,7 +51,7 @@ import {
   adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
-  plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
+  plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
@@ -796,6 +796,7 @@ async function stoktaIstekAc(db: Db, kullanici: Kullanici, kimlik: string, g: St
 // Teslim açılmazsa (stok atladı, istasyon bilinmiyor ya da paket iş emrine bağlı değil) numune isteği yine yazılır: numune stok yüzünden durmaz.
 // Stok iş emrini ister; üretim emri paketinde (tmi-ue) iş emri bilinmediği için teslim açılmaz.
 // 564 1 b: emrin sonraki kalite adımı varsa numune o istasyona yolda gider (kalite "Teslim al" ile alır) ve istek o istasyonla işaretlenir.
+// 608 b: kalite adımı yoksa tek aktif kalite istasyonuna; o da yoksa ya da birden çoksa stok "Kalite numune" kutusuna.
 async function numuneyiTeslimEt(db: Db, kullanici: Kullanici, g: NumuneTeslimGirdisi): Promise<{ teslim: { id: number; no: string } | null; kaliteIstasyonu: string | null }> {
   const yok = { teslim: null, kaliteIstasyonu: null };
   if (g.isEmriId === null) return yok;
@@ -803,7 +804,7 @@ async function numuneyiTeslimEt(db: Db, kullanici: Kullanici, g: NumuneTeslimGir
   const istasyon = hepsi.find((i) => i.kod === g.istasyonKodu);
   const uretimEmriId = (await isEmriOzeti(db, g.isEmriId))?.uretimEmriId ?? null;
   if (istasyon === undefined || uretimEmriId === null) return yok;
-  const kaliteKodu = await emrinKaliteIstasyonu(db, uretimEmriId, g.isEmriId, hepsi);
+  const kaliteKodu = (await emrinKaliteIstasyonu(db, uretimEmriId, g.isEmriId, hepsi)) ?? tekKaliteIstasyonu(hepsi, istasyon.kod);
   const hedef = kaliteKodu === null ? undefined : hepsi.find((i) => i.kod === kaliteKodu);
   const sonuc = await numuneTeslimi(db, {
     uretimEmriId, isEmriId: g.isEmriId, istasyonId: istasyon.id, kisiId: kullanici.id, adet: g.miktar, kaynakKimligi: g.kaynakKimligi,
