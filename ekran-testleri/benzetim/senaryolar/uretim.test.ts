@@ -7,6 +7,7 @@ import uretim, { gunEkle, kod, kartGovdesi, rotaAdimi, siparisGovdesi, yetkinlik
 import { gunleriKos } from '../gun-dongusu.ts';
 import { KosuKaydi } from '../kayit.ts';
 import { DOSYA, adimSatiriOku } from '../sozlesme.ts';
+import { ESKI_SURUM_ILETISI, ESKI_SURUM_NEDENI } from '#paylasilan/hata.ts';
 import { rastgeleUret } from '../tohum.ts';
 import type { Cevap, RolIstemcisi } from '../senaryo.ts';
 import type { AdimSatiri } from '../sozlesme.ts';
@@ -46,8 +47,12 @@ function sahteSunucu(boz: (c: Cagri) => Cevap | undefined = () => undefined): { 
     if (/^GET \/api\/adimli-emirler\/\d+$/.test(y)) return { emir: { durum: 'bitti', isEmirleri: [{ id: 12, sira: 2 }, { id: 11, sira: 1 }] } };
     if (/^GET \/api\/stok\/malzemeler\//.test(y)) return { satir: { toplam: '0' }, bakiyeler: [{ konumId: 3, miktar: '5' }] };
     if (y === 'GET /api/stok/partiler') return { satirlar: [...emirler].map(([e, a]) => ({ id: 4, uretimEmriId: e, eldeki: String(a) })) };
-    if (y === 'POST /api/plan/oner') return { taslak: { id: 1, surum: 1 }, yerlesimler: [...emirler.keys()].flatMap((e) => [{ uretimEmriId: e }, { uretimEmriId: e }]) };
-    if (y === 'GET /api/plan') return { taslak: { surum: 1 } };
+    if (y === 'POST /api/vardiyalar') return { vardiyalar: [{ id: 3, ad: 'baska' }, { id: yeni(), ad: g?.['ad'] }] };
+    if (y === 'GET /api/plan' && !c.yol.includes('taslak=')) {
+      return { surum: 1, yerlesmemis: [...emirler.keys()].flatMap((e) => [10, 20].map((opNo) => ({ uretimEmriId: e, emirNo: `E${String(e)}`, opNo, kaynak: { tur: 'makine', id: opNo } }))) };
+    }
+    if (y === 'POST /api/plan/kuyruklari-yaz') return { taslak: 1, canli: false, yazilan: 2, atlanan: 0 };
+    if (y === 'GET /api/plan') return { taslak: { surum: 1 }, yerlesimler: [...emirler.keys()].flatMap((e) => [{ uretimEmriId: e }, { uretimEmriId: e }]) };
     if (/^POST \/api\/arkon\/kayitlar\//.test(y)) return { eklenen: 1, reddedilen: [] };
     if (y === 'GET /api/sevkiyat/bekleyenler') return { bekleyenler: [...emirler.keys()].map((e) => ({ id: 2, uretimEmriId: e })) };
     if (y === 'POST /api/sevkiyat/noktalar/ekle') return { nokta: { id: 1 } };
@@ -124,6 +129,15 @@ describe('üretim senaryosu: akış', () => {
     assert.deepEqual(rolu(/^POST \/api\/arkon\//), ['ornek.operator1']);
     assert.deepEqual(rolu(/ilk-parca/), ['ornek.kalite']);
     assert.deepEqual(rolu(/^POST \/api\/(stok|sevkiyat)\//), ['ornek.depo']);
+    // Sunucu motoru için koşu başına bir vardiya, iş merkezinin yedi günü ve bir planlama çalışması kaydı.
+    assert.equal(sayac(s.cagrilar, /^POST \/api\/vardiyalar$/), 1);
+    assert.equal(sayac(s.cagrilar, /^POST \/api\/vardiya-matrisi\/degistir$/), 7);
+    assert.equal(sayac(s.cagrilar, /^POST \/api\/recete-rota\/kayitlar\/yaz$/), 1);
+    assert.deepEqual(rolu(/^POST \/api\/vardiya/), ['ornek.mudur']);
+    assert.deepEqual(rolu(/^POST \/api\/(plan|recete-rota)\//), ['ornek.planlama']);
+    assert.equal(sayac(s.cagrilar, /\/plan\/oner/), 0);
+    const kuyruk = s.cagrilar.find((c) => c.yol === '/api/plan/kuyruklari-yaz')?.govde as { kuyruklar: { kaynak: { id: number }; isler: { opNo: number }[] }[] };
+    assert.deepEqual(kuyruk.kuyruklar.map((q) => [q.kaynak.id, q.isler.map((i) => i.opNo)]), [[10, [10]], [20, [20]]]);
   });
 
   it('uydurma ad ve kodlar BNZ- önekli, örnek veriye (ORN-) dokunulmaz', async () => {
@@ -172,5 +186,16 @@ describe('üretim senaryosu: akış', () => {
     const b = (await kos('u7', s500)).filter((x) => x.adim === 'planı canlıya al');
     assert.deepEqual([...new Set(b.map((x) => x.sonuc))], ['dustu']);
     assert.equal(sayac(s500.cagrilar, /arkon/), 0);
+  });
+
+  it('kuyruk yazımında eski sürüm (409) düşmüş sayılmaz; motorun reddi (409) düşer; ikisinde de canlıya alınmaz', async () => {
+    const eski = sahteSunucu((c) => (c.yol === '/api/plan/kuyruklari-yaz' ? { durum: 409, govde: { kod: 'CAKISMA', mesaj: ESKI_SURUM_ILETISI, ayrinti: { neden: ESKI_SURUM_NEDENI } } } : undefined));
+    const a = (await kos('u8', eski)).filter((x) => x.adim === 'emrin işlerini kuyruğa yaz');
+    assert.deepEqual([...new Set(a.map((x) => x.sonuc))], ['gecti']);
+    assert.equal(sayac(eski.cagrilar, /canliya-al/), 0);
+    const ret = sahteSunucu((c) => (c.yol === '/api/plan/kuyruklari-yaz' ? { durum: 409, govde: { kod: 'CAKISMA', mesaj: 'Sunucu motoru şu işleri yerleştiremedi' } } : undefined));
+    const b = (await kos('u9', ret)).filter((x) => x.adim === 'emrin işlerini kuyruğa yaz');
+    assert.deepEqual([...new Set(b.map((x) => x.sonuc))], ['dustu']);
+    assert.equal(sayac(ret.cagrilar, /canliya-al|arkon/), 0);
   });
 });

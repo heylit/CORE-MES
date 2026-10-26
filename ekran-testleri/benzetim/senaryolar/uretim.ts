@@ -1,5 +1,6 @@
 import { senaryo } from '../senaryo.ts';
 import type { SenaryoBaglami } from '../senaryo.ts';
+import { ESKI_SURUM_NEDENI } from '#paylasilan/hata.ts';
 import type { Hesap } from '../../hesaplar.ts';
 
 // S1 üretim akışı (akış A): sipariş -> malzeme ve rota -> emir ve iş emirleri -> plan -> Arkon sayımı -> ilk parça -> stok girişi -> sevk.
@@ -111,6 +112,15 @@ async function tezgahlariKur(b: SenaryoBaglami, kopyaSayisi: number): Promise<Ro
     }
     ciftler.push(cift);
   }
+  // ADR 0018: plan sunucu motoruyla dizilir; motor vardiyası tanımsız tezgâha yer vermez. Müdür koşunun iş merkezine her gün bir vardiya açar.
+  const vardiyaAdi = kod(b, 'vardiya');
+  const vardiya = await b.bekle(MUDUR, 'vardiya aç', 'POST', '/api/vardiyalar', 200, { ad: vardiyaAdi, baslangic: '08:00', bitis: '18:00', molalar: [], aktif: true });
+  if (vardiya === null) return null;
+  const vardiyaId = sayi(liste(vardiya, 'vardiyalar').find((v) => alan(v, 'ad') === vardiyaAdi), 'id');
+  for (let gun = 1; gun <= 7; gun += 1) {
+    if (await b.bekle(MUDUR, 'iş merkezinin haftasını kur', 'POST', '/api/vardiya-matrisi/degistir', 200, { isMerkeziId: sayi(im, 'id'), gun, vardiyaId, acik: true }) === null) return null;
+  }
+  if (!(await planlamaKaydi(b))) return null;
   const oturum = await b.bekle(OPERATOR, 'operatör oturumu', 'GET', '/api/oturum', 200);
   const yetkinlik = await b.bekle(MUDUR, 'yetkinlikleri oku', 'GET', '/api/kisi-yetkinlikleri', 200);
   if (oturum === null || yetkinlik === null) return null;
@@ -128,6 +138,27 @@ async function tezgahCifti(b: SenaryoBaglami, kopyaSayisi: number): Promise<Rota
   }
   const ciftler = await kurulum;
   return ciftler?.[(b.kopya - 1) % ciftler.length] ?? null;
+}
+
+// Sunucu motoru planlama sayfasının çalışma kaydı olmadan plan kurmaz (ADR 0018). Kayıt yoksa planlamacı boş çalışmayı bir kez kaydeder;
+// varsa (örnek veri, önceki koşu ya da sayfa) üstüne yazılmaz: 409 doğru davranıştır.
+export const PLANLAMA_KAYDI = 'recete-rota-motoru-v1:planlama';
+export function bosPlanlamaCalismasi(bugun: string): Kayit {
+  return {
+    surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+    w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+    D: { meta: { ad: 'Benzetim', baslangic: bugun }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
+  };
+}
+async function planlamaKaydi(b: SenaryoBaglami): Promise<boolean> {
+  const yol = '/api/recete-rota/kayitlar/yaz';
+  return b.adim(PLANLAMA, 'planlama çalışmasını kaydet', async () => {
+    const c = await b.rol(PLANLAMA).istek('POST', yol, { anahtar: PLANLAMA_KAYDI, bicim: 'json', beklenenSurum: null, deger: bosPlanlamaCalismasi(new Date().toISOString().slice(0, 10)) });
+    const ortak = { yontem: 'POST', yol, beklenen: '200 ya da 409', gelen: String(c.durum) };
+    if (c.durum === 200) return ortak;
+    if (c.durum === 409) return { ...ortak, ileti: 'Çalışma kaydı zaten var; üstüne yazılmadı.' };
+    return { ...ortak, sonuc: 'dustu', ileti: JSON.stringify(c.govde) };
+  });
 }
 
 // Arkon kayıt ucu reddi 200 ile döner; reddedilen satır varsa adım düşer.
@@ -163,18 +194,37 @@ async function kartAc(b: SenaryoBaglami, tur: KartTuru): Promise<number | null> 
   return no;
 }
 
-// Plan ortaktır: aynı gün öteki kopyalar da öneri ve canlıya alma yapar. Bayat sürümle canlıya alma 409 alır; bu doğru davranıştır,
-// kayda geçer ama düşmüş sayılmaz. Asıl eşzamanlı yazma sınaması S4'tedir.
+// Planlama sayfasının "Planı kur"u (ADR 0018): emrin yerleşmemiş işleri rotadaki makinelerin kuyruğuna yazılır, saati sunucu motoru verir.
+// Plan ortaktır: aynı gün öteki kopyalar da kuyruk yazar ve canlıya alır. Bayat sürümle yazım ya da canlıya alma 409 alır; bu doğru
+// davranıştır, kayda geçer ama düşmüş sayılmaz. Asıl eşzamanlı yazma sınaması S4'tedir.
 async function plandaYerlestir(b: SenaryoBaglami, emirId: number): Promise<boolean> {
-  const oneri = await b.bekle(PLANLAMA, 'plan önerisi', 'POST', '/api/plan/oner', 200, { taslak: null });
-  if (oneri === null) return false;
-  const yerlesen = liste(oneri, 'yerlesimler').filter((y) => alan(y, 'uretimEmriId') === emirId).length;
-  if (!(await b.adim(PLANLAMA, 'emrin iki işi öneride', () => Promise.resolve(
-    { beklenen: '2', gelen: String(yerlesen), ...(yerlesen === 2 ? {} : { sonuc: 'dustu' as const }) })))) return false;
-  const taslakId = sayi(oneri, 'taslak', 'id');
+  const canli = await b.bekle(PLANLAMA, 'planı oku', 'GET', '/api/plan', 200);
+  if (canli === null) return false;
+  const kuyruk = new Map<number, Kayit[]>();
+  for (const y of liste(canli, 'yerlesmemis')) {
+    if (alan(y, 'uretimEmriId') !== emirId || alan(y, 'kaynak', 'tur') !== 'makine') continue;
+    const m = sayi(y, 'kaynak', 'id');
+    kuyruk.set(m, [...(kuyruk.get(m) ?? []), { emirNo: alan(y, 'emirNo'), opNo: alan(y, 'opNo'), dondurulmus: false }]);
+  }
+  const baslangic = new Date(Date.now() + 3_600_000).toISOString();
+  const kuyrukYolu = '/api/plan/kuyruklari-yaz';
+  let taslakId: number | null = null;
+  const yazildi = await b.adim(PLANLAMA, 'emrin işlerini kuyruğa yaz', async () => {
+    const c = await b.rol(PLANLAMA).istek('POST', kuyrukYolu, {
+      kuyruklar: [...kuyruk].map(([id, isler]) => ({ kaynak: { tur: 'makine', id }, baslangic, isler })), planSurumu: alan(canli, 'surum'),
+    });
+    const ortak = { yontem: 'POST', yol: kuyrukYolu, beklenen: '200 ya da eski sürüm 409', gelen: String(c.durum) };
+    if (c.durum === 200) { taslakId = sayi(c.govde, 'taslak'); return ortak; }
+    if (c.durum === 409 && alan(c.govde, 'ayrinti', 'neden') === ESKI_SURUM_NEDENI) return { ...ortak, ileti: 'Aynı anda başka kopya planı değiştirdi (sürüm denetimi).' };
+    return { ...ortak, sonuc: 'dustu', ileti: JSON.stringify(c.govde) };
+  });
+  if (!yazildi || taslakId === null) return false;
   const plan = await b.bekle(PLANLAMA, 'plan taslağını oku', 'GET', `/api/plan?taslak=${String(taslakId)}`, 200);
   if (plan === null) return false;
-  const surum = alan(plan, 'taslak', 'surum') ?? alan(oneri, 'taslak', 'surum');
+  const yerlesen = liste(plan, 'yerlesimler').filter((y) => alan(y, 'uretimEmriId') === emirId).length;
+  if (!(await b.adim(PLANLAMA, 'emrin iki işi planda', () => Promise.resolve(
+    { beklenen: '2', gelen: String(yerlesen), ...(yerlesen === 2 ? {} : { sonuc: 'dustu' as const }) })))) return false;
+  const surum = alan(plan, 'taslak', 'surum');
   const yol = `/api/plan/senaryolar/${String(taslakId)}/canliya-al`;
   return b.adim(PLANLAMA, 'planı canlıya al', async () => {
     const c = await b.rol(PLANLAMA).istek('POST', yol, { surum, cakismalariKabul: true });
