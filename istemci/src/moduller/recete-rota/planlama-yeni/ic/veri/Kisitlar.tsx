@@ -15,7 +15,7 @@ import { KucukDugme, Serit, VeriKarti, sayiYazi, type Sutun, VeriTablosu } from 
 const saat = (h: number) => `${sayiYazi(h, 1)} sa`;
 const zamanYaz = (ms: number | null) => (ms === null ? '' : new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 
-function ParametreGirdisi({ p, c, yaz }: { p: Parametre; c: PlanlamaCalismasi; yaz: ((p: Parametre, girdi: string) => void) | null }) {
+export function ParametreGirdisi({ p, c, yaz }: { p: Parametre; c: PlanlamaCalismasi; yaz: ((p: Parametre, girdi: string) => void) | null }) {
   const v = parametreDegeri(c, p.yer, p.k);
   const ortak = { disabled: !yaz, 'aria-label': p.etiket, className: 'tc-alan-kutu' };
   const girdi = p.tur === 'sec'

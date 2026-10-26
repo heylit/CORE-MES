@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Simge, type useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { planGuncel } from '../../durum.ts';
-import { degisken, HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
+import { degisken, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
@@ -177,7 +177,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             <div className="tc-pym-tp-cipler">
               <button type="button" className="tc-pym-tp-cip" onClick={() => ort.kartAc({ tur: 'gun' })}><Simge ad="book" boyut="k" />Gün özeti</button>
               <button type="button" className="tc-pym-tp-cip" onClick={ort.brifAc}><Simge ad="sun" boyut="k" />Sabah brifingi</button>
-              <button type="button" className="tc-pym-tp-cip" aria-disabled="true" title={`Atölye ekranı: ${HAZIRLANIYOR}`}><Simge ad="laptop" boyut="k" />Atölye ekranı</button>
+              <button type="button" className="tc-pym-tp-cip" onClick={ort.atolyeAc}><Simge ad="laptop" boyut="k" />Atölye ekranı</button>
             </div>
             <Etiket>Stüdyo</Etiket>
             <div className="tc-pym-tp-cipler">
@@ -319,7 +319,7 @@ function gunOzeti(ort: Ortam): Govde {
         {!g.gecmis.some((x) => x.gun !== bu) && <Not>Henüz geçmiş gün yok. Her günün özeti çalışma kaydında saklanır, ertesi gün burada görünür.</Not>}
         <div className="tc-pym-tp-eylem">
           <button type="button" className="tc-dugme" onClick={ort.brifAc}><Simge ad="sun" boyut="k" />Sabah brifingi</button>
-          <button type="button" className="tc-dugme" aria-disabled="true" title={`Atölye ekranı: ${HAZIRLANIYOR}`}><Simge ad="laptop" boyut="k" />Atölye ekranı</button>
+          <button type="button" className="tc-dugme" onClick={ort.atolyeAc}><Simge ad="laptop" boyut="k" />Atölye ekranı</button>
         </div>
       </>
     ),

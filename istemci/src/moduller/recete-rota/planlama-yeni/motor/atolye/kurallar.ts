@@ -750,3 +750,25 @@ export function pgSerit(c: PlanlamaCalismasi, p: OkunanPlan, K: PgKaynak, now: n
     return { id, t0, q: cp[id] ?? null, g: x && r && k ? { S: x.S, C: x.C ?? r.C, k } : null, fk };
   }) })) };
 }
+
+// --- atölye ekranı (zz36 cizAtolye): canlı planla her tezgâhın şu anki ve sıradaki işi, arızası; geciken siparişler ---
+export type AtolyeDurumu = 'calisiyor' | 'ariza' | 'bos';
+export interface AtolyeIsi { id: string; job: string; ad: string; S: number; C: number; oran: number }
+export interface AtolyeKarti { m: string; ad: string; durum: AtolyeDurumu; su: AtolyeIsi | null; sonra: AtolyeIsi | null }
+export const ATOLYE_GEC_SINIRI = 12;
+// Gecikme canlı planın son adım bitişinin terminden farkıdır; termini olmayan sipariş geç sayılmaz.
+export function atolyeEkrani(c: PlanlamaCalismasi, cx: Derleme, canli: Record<string, PgAdim>, now: number): { kartlar: AtolyeKarti[]; gec: { j: string; T: number }[] } {
+  const L = Object.entries(canli).filter(([, r]) => Number.isFinite(r.S) && Number.isFinite(r.C));
+  const is = (id: string, r: PgAdim): AtolyeIsi => ({ id, job: r.job, ad: cx.byId[id]?.ad ?? '', S: r.S, C: r.C, oran: Math.max(0, Math.min(1, (now - r.S) / Math.max(1e-6, r.C - r.S))) });
+  const dn = duruslar(c);
+  const kartlar = c.D.tezgahlar.map((t): AtolyeKarti => {
+    const l = L.filter(([, r]) => r.m === t.id).sort((a, b) => a[1].S - b[1].S);
+    const su = l.find(([, r]) => r.S <= now + 1e-6 && r.C > now); const sonra = l.find(([, r]) => r.S > now + 1e-6);
+    const ar = dn.some((d) => d.m === t.id && d.from <= now && d.to > now);
+    return { m: t.id, ad: t.ad ?? '', durum: ar ? 'ariza' : su ? 'calisiyor' : 'bos', su: su ? is(...su) : null, sonra: sonra ? is(...sonra) : null };
+  });
+  const son: Record<string, number> = {};
+  for (const [, r] of L) son[r.job] = Math.max(son[r.job] ?? -Infinity, r.C);
+  const gec = Object.entries(son).flatMap(([j, C]) => { const due = cx.jobs[j]?.due; return due != null && C - due > 0.01 ? [{ j, T: C - due }] : []; }).sort((a, b) => b.T - a.T);
+  return { kartlar, gec };
+}

@@ -7,10 +7,11 @@ import { Degisiklikler, DuzenleMenusu, kbBaglam, kbHedefler, kbKomutlari, type K
 import { eylemYapisi } from './eylem.ts';
 import type { Derleme, OkunanPlan, Sorun } from './kurallar.ts';
 import { MOTOR_NOTU } from './ortak.tsx';
+import { TezgahSirasiPaneli } from '../ic/sira/index.tsx';
 
 // Yapılacaklar (zo-kontrol.betik ypHtml): sağ altta sayılı düğme, basınca kararlar listesi; her kararın ilk eylemi. "Hazır olmayan emirler"
 // eski sayfada deneme verisiydi (208 a), gelmez. Yanında Düzenle düğmesi; Düzenle, Değişiklikler ve klavye kısayolları aynı köşede açılır,
-// aynı anda tek pencere (zp-klavye). Değişiklikler düğmesi sepette satır varken çıkar; satırlar motorla gelir.
+// aynı anda tek pencere (zp-klavye). Değişiklikler düğmesi sepette satır varken çıkar; satırlar motorla gelir. Tezgâh sırası aracı da (w-v20) bu köşededir.
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
   komut: CalismaKomutu | null; sipSec: (j: string) => void; secim: PlanlamaSecimi;
@@ -33,11 +34,12 @@ export function Yapilacaklar(o: Ozellikler) {
   const [alt, setAlt] = useState(false);
   const [hedef, setHedef] = useState<KbHedef['k'] | null>(null);
   const [sonPan, setSonPan] = useState(pan);
+  const [siraM, setSiraM] = useState<string | null>(null);
   if (pan !== sonPan) { setSonPan(pan); setAlt(false); setHedef(null); }
   const hl = kbHedefler(o.p, o.cx, o.secim); const b = kbBaglam(hl, hedef);
-  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true) }, b, alt);
+  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true), siraAc: (m) => { setSiraM(m); panAc('sr'); } }, b, alt);
   // Komut çalışınca menü kapanır; alt listeye geçen komut menüyü açık tutar (kbKos).
-  const kos = (i: number) => { const k = kl[i]; if (!k?.yap) return; k.yap(); if (!k.alt) panAc(null); };
+  const kos = (i: number) => { const k = kl[i]; if (!k?.yap) return; k.yap(); if (!k.alt && !k.pencere) panAc(null); };
   const tusDurumu = useRef({ pan, alt, hl, b, kos });
   tusDurumu.current = { pan, alt, hl, b, kos };
   useEffect(() => {
@@ -67,6 +69,7 @@ export function Yapilacaklar(o: Ozellikler) {
         <DuzenleMenusu c={o.c} hl={hl} b={b} l={kl} alt={alt} yaz kos={kos} geri={() => setAlt(false)} hedefSec={(k) => { setHedef(k); setAlt(false); }} kapat={() => panAc(null)} />
       )}
       {pan === 'sp' && !acik && <Degisiklikler p={o.p} studyo={o.studyo} kapat={() => panAc(null)} />}
+      {pan === 'sr' && !acik && <TezgahSirasiPaneli c={o.c} p={o.p} cx={o.cx} m={siraM} yaz={o.komut !== null} kapat={() => panAc(null)} />}
       {pan === 'kl' && !acik && (
         <section className="tc-pym-yp tc-pym-kb" role="dialog" aria-label="Klavye kısayolları">
           <header>

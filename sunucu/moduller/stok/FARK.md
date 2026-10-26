@@ -7,6 +7,13 @@ Kullanıcı kararları 2026-10-26: 615-2 a, 632 a (yarı otomatik, tek kontroll�
 - Onay istenmez: emirsiz teslim, üretim lotu, bitti ya da iptal emir.
 - Sözleşme: üç gövdeye `kartOnayi?: boolean`; `kartOnayiAyrintisi` (cevap ayrıntısı).
 - İstemci: `useStokKomutu` yetersiz stok onayıyla aynı yoldan kart onayını açar (`KartOnayi.tsx`): emir, malzeme, lot, miktar, kart; düğme "Refakat kartı aç ve gönder", "<kart> kartına ekle ve gönder" ya da "Lot bekleyen istisna kartı aç ve gönder". Vazgeç gönderimi bırakır.
+# FARK: stok, tek kart okutma, sunucu (kart #655; soru 614 1a, 3a)
+
+Kullanıcı kararı 2026-10-26: 614 1a (tek kart), 3a (eski kart uyarısı); okuma teyitli. Göç yok.
+- `GET /stok/teslim-kutusu/kod-coz`: refakat kartı cevabına `anaEylem` (`teslim-al`, `isi-ac`, `teslim-et`; kural `refakatAnaEylemi`). İşi aç koşulu başka modüle sorulmaz: kartın malzemesi okutanın kapsamındaki istasyonda; iş başka istasyondaysa terminal söyler.
+- Stok okuması olana malzeme ve yer cevabı `stok` alanında `/stok/kod-coz` çözümünü taşır; panelin ikinci isteği istemci adımında kalkar. `/stok/kod-coz` ucu değişmedi.
+- Malzeme ve lot cevabında serbest miktar artık okutulan bakiyelerden ve tek yoldaki ayrılanlar sorgusundan (`konumlardakiYoldaAyrilanlar`) çıkar; önceden her yer için konumun bütün bakiyeleri ve yoldakileri ayrı okunuyordu. Sonuç aynı.
+- Eklenen alanlar isteğe bağlıdır; istemci değişmeden derlenir. Raf etiketi, eski kart ve tek kart ekranı istemci yamasında.
 
 # FARK: stok, siparişsiz satın alma kabulü reddi (kart #99; soru 104 a)
 

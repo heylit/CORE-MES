@@ -64,6 +64,7 @@ import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenc
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
+import { MalzemeCipi } from './MalzemeCipi.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
@@ -1100,6 +1101,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               </button>
               {uyariCipi(false)}
               <IsEtiketleri is={o} />
+              {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               <EtkinKart is={o} kartlar={kartlar} />
               {notlar}
               {makineSecici}
@@ -1127,6 +1129,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         {ov === 'menu' ? (
           <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
             <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
+            <MenuSatiri simge="cpu" baslik="İstasyonu değiştir" alt={`Şu an ${MACHINE} · başka tezgahın işleri`} tikla={() => { ovYaz(null); istasyonAc(); }} />
             <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
             <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
             <MenuSatiri simge="ruler" baslik="Teknik resim · 3B" alt="Odak modu resim panelinde" tikla={() => { ovYaz(null); mvYaz('draw'); }} />
@@ -1143,8 +1146,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   return (
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
       <header className="tc-ay1-ust">
-        <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
-        <span className="tc-ay-ayrac" aria-hidden="true" />
         <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
         </button>
@@ -1176,6 +1177,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               <h2 className="tc-ay1-is-baslik">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}</h2>
               <p>{o.part} · {o.op}</p>
               <IsEtiketleri is={o} />
+              {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               {notlar}
             </div>
             <div className="tc-ay1-olgular">

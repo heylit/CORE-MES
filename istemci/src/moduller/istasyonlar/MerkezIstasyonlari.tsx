@@ -11,7 +11,7 @@ import { Hucre, MetinHucresi, SatirHatasi, SayiHucresi, SecimHucresi } from './H
 import { IsMerkeziFormu } from './IsMerkeziFormu.tsx';
 import { IstasyonFormu } from './IstasyonFormu.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
-import { istasyonGovdesi, merkezGovdesi, merkezRengi, operatorMetni, operatorSecenekleri, saatMetni, yeniKod, yuzdeMetni } from './tesis.ts';
+import { istasyonGovdesi, merkezGovdesi, merkezRengi, operatorMetni, operatorSecenekleri, saatMetni, tezgahSayisi, yeniKod, yuzdeMetni } from './tesis.ts';
 import { useTopluYaz, type TesisVerisi, type TesisYaz } from './tesisVerisi.ts';
 import { SecimKutusu, TopluCubuk } from './TopluCubuk.tsx';
 
@@ -42,6 +42,13 @@ export function DuzenleDugmesi({ kod, acik, degistir }: { kod: string; acik: boo
     </Dugme>
   );
 }
+
+// Sütun başlığı "Operatör / makine" olduğu için hücre yalnız değeri yazar; uzun anlatım hücrenin ipucundadır.
+const operatorKisa = (oran: number): string => {
+  if (oran === 0) return 'Gerekmez';
+  const n = tezgahSayisi(oran);
+  return n === null || n === 1 ? oran.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : `1 / ${n} tezgâh`;
+};
 
 const degistir = <T,>(kume: ReadonlySet<T>, deger: T, var_: boolean): Set<T> => {
   const yeni = new Set(kume);
@@ -94,6 +101,11 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
   const toplu = (yol: string, govde: Record<string, unknown>) =>
     t.gonder({ yol, govde: { ...govde, kayitlar: seciliKayitlar.map((i) => ({ id: i.id, surum: i.surum })) }, tamam: () => seciliYaz(new Set()) });
 
+  const hepsiKapali = v.merkezler.length > 0 && v.merkezler.every((m) => kapaliMerkezler.has(m.id));
+  const suzgecSayisi = (kod: SuzgecKodu) => v.istasyonlar.filter((i) => i.aktif && (kod === 'sorumlusuz' ? i.sorumluKisiId === null
+    : kod === 'kapasitesiz' ? i.kapasiteKaynagi === null : !(makineleri.get(i.id) ?? []).some((x) => x.aktif))).length;
+  // Sayısı sıfır olan süzgeç gösterilmez; seçiliyken sıfıra düşen, kaldırılabilsin diye görünür kalır.
+  const gorunenSuzgecler = SUZGECLER.filter((x) => suzgec.has(x.kod) || suzgecSayisi(x.kod) > 0);
   const gorunenler = merkezler.flatMap((m) => satirlari(m).map((i) => ({ m, i })));
   const csv = () => csvIndir('istasyonlar', ['İş merkezi', 'Kod', 'Ad', 'Tip', 'Kapasite', 'Sorumlu', 'Verim %', 'Operatör / makine', 'Aktif makine', 'Durum'],
     gorunenler.map(({ m, i }) => {
@@ -120,8 +132,9 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
           {duzenle ? (
             <>
               <Hucre baslik="Kod"><MetinHucresi surum={s.surum} etiket={`${s.kod} kodu`} deger={s.kod} mono enCok={24} disabled={kapali} kaydet={(kod) => istasyonYaz(s, { kod })} /></Hucre>
-              <Hucre baslik="İstasyon adı"><MetinHucresi surum={s.surum} etiket={`${s.kod} adı`} deger={s.ad} enCok={120} disabled={kapali} kaydet={(ad) => istasyonYaz(s, { ad })} /></Hucre>
-              <Hucre baslik="İş merkezi">
+              {/* İş merkezi sütunu yok (satır zaten merkezin panelinde); taşıma düzenlemede adın altındadır. */}
+              <Hucre baslik="İstasyon adı ve iş merkezi">
+                <MetinHucresi surum={s.surum} etiket={`${s.kod} adı`} deger={s.ad} enCok={120} disabled={kapali} kaydet={(ad) => istasyonYaz(s, { ad })} />
                 <SecimHucresi etiket={`${s.kod} iş merkezi`} deger={String(s.isMerkeziId)} disabled={kapali}
                   secenekler={merkezSecenekleri.some((x) => x.deger === String(m.id)) ? merkezSecenekleri : [{ deger: String(m.id), baslik: `${m.kod} ${m.ad} (pasif)` }, ...merkezSecenekleri]}
                   kaydet={(d) => istasyonYaz(s, { isMerkeziId: Number(d) })} />
@@ -153,12 +166,11 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
             <>
               <Hucre baslik="Kod"><span className="tc-ist-mono">{s.kod}</span></Hucre>
               <Hucre baslik="İstasyon adı"><span>{s.ad}{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</span></Hucre>
-              <Hucre baslik="İş merkezi"><span className="tc-ist-mono">{m.kod}</span></Hucre>
               <Hucre baslik="Sorumlu"><span className={s.sorumluAd ? '' : 'tc-ist-ipucu'}>{s.sorumluAd ?? 'Yok'}</span></Hucre>
               <Hucre baslik="Kapasite">{s.kapasiteKaynagi ? <span>{KAPASITE_KAYNAGI_ADLARI[s.kapasiteKaynagi]}</span> : <span className="tc-ist-hata">Seçilmemiş</span>}</Hucre>
               <Hucre baslik="Verim %">{v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} verim`}>{yuzdeMetni(String(verim))}</span>}</Hucre>
               <Hucre baslik="Operatör / makine">
-                {v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} operatör ihtiyacı`}>{operatorMetni(operator)}</span>}
+                {v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} operatör ihtiyacı`} title={operatorMetni(operator)}>{operatorKisa(operator)}</span>}
               </Hucre>
             </>
           )}
@@ -185,8 +197,9 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
         <Girdi etiket="Ara" type="search" placeholder="Kod, ad ya da sorumlu" value={ara} onChange={(o) => araYaz(o.target.value)} />
         <IsaretKutusu etiket="Pasifleri göster" checked={pasifler} onChange={(o) => pasiflerYaz(o.target.checked)} />
         <div className="tc-ist-arac-sag">
-          <Dugme simge="minus" onClick={() => kapaliMerkezlerYaz(new Set(v.merkezler.map((m) => m.id)))}>Hepsini kapat</Dugme>
-          <Dugme simge="plus" onClick={() => kapaliMerkezlerYaz(new Set())}>Hepsini aç</Dugme>
+          <Dugme simge={hepsiKapali ? 'down' : 'up'} onClick={() => kapaliMerkezlerYaz(hepsiKapali ? new Set() : new Set(v.merkezler.map((m) => m.id)))}>
+            {hepsiKapali ? 'Hepsini aç' : 'Hepsini kapat'}
+          </Dugme>
           <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
           {yazabilir && (
             <Dugme tur="birincil" simge="plus" disabled={y.mesgul}
@@ -196,14 +209,15 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
           )}
         </div>
       </div>
-      <div className="tc-ist-cipler" role="group" aria-label="Süzgeçler">
-        {SUZGECLER.map((s) => (
-          <button key={s.kod} type="button" className="tc-ist-secmeli" aria-pressed={suzgec.has(s.kod)} onClick={() => suzgecYaz((k) => degistir(k, s.kod, !k.has(s.kod)))}>
-            {s.baslik} <span className="tc-ist-calc">{v.istasyonlar.filter((i) => i.aktif && (s.kod === 'sorumlusuz' ? i.sorumluKisiId === null
-              : s.kod === 'kapasitesiz' ? i.kapasiteKaynagi === null : !(makineleri.get(i.id) ?? []).some((x) => x.aktif))).length}</span>
-          </button>
-        ))}
-      </div>
+      {gorunenSuzgecler.length > 0 && (
+        <div className="tc-ist-cipler" role="group" aria-label="Süzgeçler">
+          {gorunenSuzgecler.map((s) => (
+            <button key={s.kod} type="button" className="tc-ist-secmeli" aria-pressed={suzgec.has(s.kod)} onClick={() => suzgecYaz((k) => degistir(k, s.kod, !k.has(s.kod)))}>
+              {s.baslik} <span className="tc-ist-calc">{suzgecSayisi(s.kod)}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <SatirHatasi ileti={y.hatalar['yeni-im']} />
       <TopluCubuk sayi={seciliKayitlar.length} temizle={() => { seciliYaz(new Set()); t.temizle(); }} ret={t.ret?.ileti ?? null}>
         <AranabilirSecim etiket="Seçilenleri iş merkezine taşı" tur="merkez" deger="" yerTutucu="İş merkezine taşı" secenekler={merkezSecenekleri} disabled={t.mesgul}
@@ -211,11 +225,14 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
         <Dugme disabled={t.mesgul} onClick={() => toplu('/istasyonlar/toplu-aktiflik', { aktif: false })}>Pasife al</Dugme>
         <Dugme disabled={t.mesgul} onClick={() => toplu('/istasyonlar/toplu-aktiflik', { aktif: true })}>Aktif yap</Dugme>
       </TopluCubuk>
-      <p className="tc-ist-ipucu">
-        {yazabilir ? '"Düzenle" satırın hücrelerini açar; değer alandan çıkınca kaydedilir, Escape vazgeçer. ' : ''}
-        İş merkezi bir bölüm ya da hattır, vardiya düzeni onda tutulur. İstasyon operasyonun yapıldığı yerdir; rota adımında seçilen odur.
-        Operatör ihtiyacı bir makine çalışırken başında duran kişi sayısıdır (yarım için 0,5).
-      </p>
+      <details className="tc-ist-nasil">
+        <summary><Simge ad="help" boyut="k" /> Nasıl çalışır</summary>
+        <p className="tc-ist-ipucu">
+          {yazabilir ? '"Düzenle" satırın hücrelerini açar; değer alandan çıkınca kaydedilir, Escape vazgeçer. ' : ''}
+          İş merkezi bir bölüm ya da hattır, vardiya düzeni onda tutulur. İstasyon operasyonun yapıldığı yerdir; rota adımında seçilen odur.
+          Operatör ihtiyacı bir makine çalışırken başında duran kişi sayısıdır (yarım için 0,5).
+        </p>
+      </details>
       {merkezler.length === 0 && (
         <DurumKutusu durum="bos" mesaj={v.merkezler.length === 0 ? 'İş merkezi yok. Bölüm ya da hatlarınızı ekleyin.' : 'Aramaya uyan kayıt yok.'} />
       )}
@@ -246,8 +263,9 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
               )}
               <Hucre baslik="Haftalık vardiya">
                 <span className="tc-ist-calc">
-                  {hafta === undefined ? (v.takvim === null ? 'Alınamadı' : '…') : `${saatMetni(hafta)} sa`} <Link to="/istasyonlar/vardiyalar">düzenle</Link>
+                  {hafta === undefined ? (v.takvim === null ? 'Alınamadı' : '…') : `${saatMetni(hafta)} sa/hafta`}
                 </span>
+                <Link to="/istasyonlar/vardiyalar" className="tc-ist-bag"><Simge ad="clock" boyut="k" /> Vardiyalar</Link>
               </Hucre>
               <div className="tc-ist-islemler">
                 {duzenle && <AktifDugmesi aktif={m.aktif} etiket={m.kod} disabled={kapali} degistir={() => merkezYaz(m, { aktif: !m.aktif })} />}
@@ -265,7 +283,7 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
                         degistir={(d) => seciliYaz((k) => { const y2 = new Set(k); for (const s of satirlar) { if (d) y2.add(s.id); else y2.delete(s.id); } return y2; })} />
                     )}
                   </span>
-                  <span role="columnheader">Kod</span><span role="columnheader">İstasyon adı</span><span role="columnheader">İş merkezi</span>
+                  <span role="columnheader">Kod</span><span role="columnheader">İstasyon adı</span>
                   <span role="columnheader">Sorumlu</span><span role="columnheader">Kapasite</span><span role="columnheader">Verim %</span>
                   <span role="columnheader">Operatör / makine</span><span role="columnheader">Makineler</span><span role="columnheader">İşlem</span>
                 </div>

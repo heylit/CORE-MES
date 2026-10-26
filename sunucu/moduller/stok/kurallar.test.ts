@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -558,6 +558,14 @@ describe('DEP-64 katalog etiketi', () => {
     assert.equal(siparisBagiEngeli('diger', null), null);
     assert.equal(siparisBagiEngeli('iade', null), null);
     assert.match(siparisBagiEngeli('diger', 5) ?? '', /yalnız satın alma/);
+  });
+  test('614 1a tek kart: refakat kartında gelen teslim önce alınır, malzeme kapsamdaki istasyondaysa iş açılır, yoksa teslim edilir', () => {
+    const kapsam = new Set([7]);
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 1, kartAcik: true, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam }), 'teslim-al');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 7], kapsamdakiIstasyonlar: kapsam }), 'isi-ac');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [null, 8], kapsamdakiIstasyonlar: kapsam }), 'teslim-et', 'başka istasyondaki malzeme');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: false, satirIstasyonlari: [7], kapsamdakiIstasyonlar: kapsam }), 'teslim-et', 'iptal kart iş açmaz');
+    assert.equal(refakatAnaEylemi({ gelenSayisi: 0, kartAcik: true, satirIstasyonlari: [], kapsamdakiIstasyonlar: kapsam }), 'teslim-et');
   });
   test('kart #123 refakat partisi: etiket emir no ve sıradır; üretim lotu kart açmaz; teslimli ya da iptal kart iptal edilmez; kartla çelişen teslim reddedilir', () => {
     assert.equal(refakatEtiketi('UE-000120', 120, 2), 'UE-000120-P2');
