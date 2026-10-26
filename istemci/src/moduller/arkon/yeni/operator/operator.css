@@ -365,19 +365,26 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 
 /* uzak mod */
 .tc-ay1-uzak {
-  position: fixed; inset: 0; z-index: var(--z-katman); display: flex; flex-direction: column; justify-content: center; gap: var(--b-5); padding: var(--b-5);
-  background: var(--bg); color: var(--ink); cursor: pointer; overflow-y: auto;
+  position: fixed; inset: 0; z-index: var(--z-katman); display: flex; flex-direction: column; justify-content: safe center; gap: var(--b-5); padding: var(--b-5);
+  background: radial-gradient(70% 70% at 50% 55%, color-mix(in srgb, var(--sig, var(--muted)) 22%, var(--bg)), var(--bg)); color: var(--ink); cursor: pointer; overflow-y: auto;
 }
 .tc-ay1-uzak:focus { outline: none; }
-.tc-ay1-uzak-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-ay1-uzak-ust { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-3); }
+.tc-ay1-uzak-ust > :first-child { justify-self: start; }
+.tc-ay1-uzak-istasyon { justify-self: end; min-inline-size: 0; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-uzak-saat { font-size: var(--yazi-xl); }
-.tc-ay1-uzak-govde { display: grid; justify-items: center; gap: var(--b-2); text-align: center; }
-.tc-ay1-uzak-parca { font-size: var(--yazi-xl); font-weight: 700; overflow-wrap: anywhere; }
-.tc-ay1-uzak-malzeme { color: var(--muted); }
-.tc-ay1-uzak-3b { position: relative; overflow: hidden; width: min(34vh, 60vw); aspect-ratio: 1; pointer-events: none; }
-.tc-ay1-uzak-sayi { display: flex; align-items: baseline; gap: var(--b-3); color: var(--sig-yazi); }
-.tc-ay1-uzak-sayi span { font-size: var(--yazi-3xl); font-size: min(30vw, 30vh); font-weight: 800; line-height: .9; font-variant-numeric: tabular-nums; }
-.tc-ay1-uzak-sayi small { font-size: var(--yazi-2xl); color: var(--muted); }
+.tc-ay1-uzak-govde { display: grid; justify-items: center; gap: var(--b-4); text-align: center; }
+.tc-ay1-uzak-basliklar { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--b-3) var(--b-5); margin: 0; }
+.tc-ay1-uzak-basliklar > div { display: grid; gap: var(--b-1); min-inline-size: 0; }
+.tc-ay1-uzak-basliklar dd { margin: 0; font-size: var(--yazi-xl); font-weight: 700; overflow-wrap: anywhere; }
+.tc-ay1-uzak-orta { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-4); inline-size: 100%; }
+.tc-ay1-uzak-orta > .tc-ay1-uzak-3b { grid-column: 1; justify-self: end; }
+.tc-ay1-uzak-3b { position: relative; overflow: hidden; width: min(34vh, 60vw, 100%); aspect-ratio: 1; pointer-events: none; }
+.tc-ay1-uzak-sayi {
+  grid-column: 2; color: var(--sig-yazi); font-size: var(--yazi-3xl); font-size: min(30vw, 30vh); font-weight: 800; line-height: .9; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 calc(var(--b-6) * 2) color-mix(in srgb, var(--sig, var(--muted)) 45%, transparent);
+}
+.tc-ay1-uzak-hedef { grid-column: 3; justify-self: start; align-self: end; font-size: var(--yazi-2xl); color: var(--muted); }
 .tc-ay1-uzak-alt { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--damga-dar)), 1fr)); gap: var(--b-3); }
 .tc-ay1-uzak-alt > div { display: grid; gap: var(--b-1); padding: var(--b-3); border-radius: var(--yari-3); background: var(--panel); }
 .tc-ay1-uzak-alt b { font-size: var(--yazi-2xl); font-variant-numeric: tabular-nums; }
@@ -514,6 +521,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-ust { gap: var(--b-2); }
   .tc-ay1-saat small, .tc-ay1-kisi small { display: none; }
   .tc-ay1-is-baslik { font-size: var(--yazi-xl); }
+  .tc-ay1-uzak-orta { display: flex; flex-direction: column; align-items: center; }
+  .tc-ay1-uzak-hedef { align-self: center; }
 }
 /* Dönen çevrim ışığı (eski .dial .sweep, .cyca, .cycd): bir tur = planlı çevrim süresi; yalnız iş çalışırken döner. */
 .tc-ay1-tarama {
