@@ -31,11 +31,15 @@ export const OKUT_BASI: OkutDurumu = { adim: 'ne', ileti: null };
 
 // Kişiye teslim (299 b) kişinin bulunduğu istasyona ve o kişiye yazılır. Kişi kaynak olmaz; ilk okutmada panel Teslim et'i açar (panelOkutuldu).
 const KISI_ILETISI = 'Kişinin kodu kaynak olmaz; önce malzemeyi okut, kişiyi nereye adımında okut.';
+// 614 3a: emir kimliğini taşıyan eski kart teslimde geçmez; malzeme depodan verilen refakat kartıyla gider.
+export const ESKI_KART_ILETISI = 'Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.';
 const yerAdi = (y: OkutYeri): string => (y.ad ? `${y.ad} (${y.kod})` : y.kod);
 
 function kaynaklar(c: OkutCozCevabi): OkutKaynagi[] | string {
   if (c.tur === 'bilinmiyor') return `Kod tanınmadı: ${c.kod}`;
   if (c.tur === 'kisi') return KISI_ILETISI;
+  if (c.tur === 'eski-kart') return ESKI_KART_ILETISI;
+  if (c.tur === 'raf') return `Raf ${c.raf.kod}: malzemenin bulunduğu gözün etiketini okut.`;
   if (c.tur === 'malzeme') {
     const ad = c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;
     if (c.yerler.length === 0) {
