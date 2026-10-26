@@ -1006,7 +1006,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const sayac = (
     <div className="tc-ay1-sayac">
       <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
-      <SayimTuslari tuslar={tuslar} />
+      {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
+      <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus') : tuslar} />
     </div>
   );
   const toplu = uretir ? <TopluGiris key={o.no} kalan={o.target - o.good} kapali={kapali} kaydet={topluKaydet} nedenler={ayarlar.hurdaNedenleri} /> : null;
