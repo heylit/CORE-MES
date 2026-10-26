@@ -77,6 +77,13 @@ export const kmResimEkleGovdesi = z.object({
   revizyon: z.string().trim().min(1).max(20).nullish(),
 });
 export const kmResimCevabi = z.object({ resim: kmResim });
+// Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (cizimler/disari.ts yayindakiBelgeler); arama belge adında.
+export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
+export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
+export const kmMerkezBelgesi = z.object({
+  id: z.number().int().positive(), ad: z.string(), harf: z.string(), tur: z.enum(KM_RESIM_TURLERI), bicim: z.enum(KM_MERKEZ_BICIMLERI), ozet: z.string(),
+});
+export const kmMerkezBelgeleriCevabi = z.object({ belgeler: z.array(kmMerkezBelgesi) });
 // Resim parçadan kaldırılır (pasif); balonları ve ölçümleri silinmez. Sürüm, başkasının aynı anda yaptığı değişikliği ezmemek içindir.
 export const kmSurumGovdesi = z.object({ surum: z.number().int().positive().max(2147483647) });
 
@@ -171,6 +178,8 @@ export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;
+export type KmMerkezBelgesi = z.output<typeof kmMerkezBelgesi>;
+export type KmMerkezBelgeleriCevabi = z.output<typeof kmMerkezBelgeleriCevabi>;
 export type KmBalonGirdisi = z.output<typeof kmBalonGirdisi>;
 export type KmBalonlarGovdesi = z.input<typeof kmBalonlarGovdesi>;
 export type KmNumunePlaniGovdesi = z.input<typeof kmNumunePlaniGovdesi>;
