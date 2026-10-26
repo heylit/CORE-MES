@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { KodCozCevabi, OkutCozCevabi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { VARSAYILAN_TAZELIK_MS } from '../../ortak/veri/sorgu-istemcisi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, MALZEME_TURU, miktarMetni, zamanMetni } from './gorunum.ts';
 import { hataMetni, useIslem, useStokKomutu, useStokOkur } from './ortak.tsx';
@@ -18,10 +19,13 @@ export interface Okunan { kod: string; cevap: OkutCozCevabi }
 export type SonucEylemi = 'kabul' | 'sevk' | 'okutarak-al';
 
 // Tam stok çözümü (eski Okut sayfasının sorgusu); Mal kabul ve Sevk bölümleri aynı önbelleği okur.
+export const stokKodCozAnahtari = (kod: string) => [...anahtarlar.hepsi, 'kod-coz', kod] as const;
 export function useStokKodCoz(kod: string | null) {
   const okur = useStokOkur();
   return useQuery({
-    queryKey: [...anahtarlar.hepsi, 'kod-coz', kod ?? ''],
+    queryKey: stokKodCozAnahtari(kod ?? ''),
+    // Okuyucunun yazdığı çözüm bölüm açılınca yeniden istenmez.
+    staleTime: VARSAYILAN_TAZELIK_MS,
     queryFn: () => api.get<KodCozCevabi>(`/stok/kod-coz?kod=${encodeURIComponent(kod ?? '')}`),
     enabled: okur && kod !== null,
   });
@@ -111,12 +115,14 @@ function KartlaGelenler({ gelenler }: { gelenler: Teslim[] }) {
 
 export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void }) {
   const c = okunan.cevap;
-  const stok = useStokKodCoz(okunan.kod);
+  // Tam stok çözümü okutma cevabıyla gelir (tek istek); okuyucu onu Mal kabul ve Sevk bölümlerinin önbelleğine de yazar.
+  const stokCevabi = c.tur === 'malzeme' || c.tur === 'yer' ? c.stok : undefined;
   const giris = useIslem('stok.giris'), depocu = useIslem('stok.transfer');
   const cikis = useIslem('stok.cikis'), sevkOkur = useIslem('sevkiyat.oku'), fasoncu = useIslem('uretim-emirleri.fason');
   const sevkeder = cikis || sevkOkur || fasoncu;
   const [kartAc, setKartAc] = useState(false);
   const [izAcik, setIzAcik] = useState(false);
+  const [baskaAcik, setBaskaAcik] = useState(false);
   const okur = useStokOkur();
   if (c.tur !== 'malzeme' && c.tur !== 'yer') return null;
   const malzeme = c.tur === 'malzeme' ? c : null;
@@ -125,7 +131,9 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
   // Kapsam dışı istasyonun etiketi: oradan okutarak alınır (soru 96 b).
   const uzakIstasyon = c.tur === 'yer' && c.yer.tur === 'istasyon' && c.satirlar === null;
   const baslik = malzeme ? malzeme.malzeme.ad ?? malzeme.malzeme.kod ?? `Malzeme #${malzeme.malzeme.id}` : c.tur === 'yer' ? c.yer.ad ?? c.yer.kod : '';
-  const stokCevabi = stok.data;
+  // Tek kart (614 1a): refakat kartında ana eylem tek düğmedir; öteki işler ve kartın satırları "Başka işlem" altında kalır.
+  const anaEylem = refakat ? malzeme?.anaEylem ?? null : null;
+  const tekKart = anaEylem !== null;
   return (
     <section className="tc-stok-is tc-stok-okut-sonuc" aria-label="Okutma sonucu">
       <div className="tc-stok-form">
@@ -136,9 +144,10 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           <Dugme simge="x" aria-label="Okutma sonucunu kapat" onClick={kapat} />
         </div>
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
-        {refakat && malzeme?.kartSatirlari && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
-        {stok.isError && <DurumKutusu durum="hata" mesaj={hataMetni(stok.error)} />}
+        {refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
+        {refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Nereye: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
+        {refakat && malzeme?.kartSatirlari && (!tekKart || baskaAcik) && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">
             {malzeme.yerler.map((y) => <li key={`${y.konumId}-${y.partiId ?? 0}-${y.statuId ?? 0}`}><span>{y.ad ?? y.kod}</span><strong>{miktarMetni(y.miktar)}</strong></li>)}
@@ -149,8 +158,9 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
             {digerleri.map((d) => <li key={d.istasyonId}><span>{d.ad} ({d.kod})</span><strong>{miktarMetni(d.miktar)}</strong></li>)}
           </ul>
         )}
-        <div className="tc-stok-eylem">
-          {refakat && <IsEmriniAc r={refakat} />}
+        {tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>Başka işlem</Dugme></div>}
+        {(!tekKart || baskaAcik) && <div className="tc-stok-eylem">
+          {refakat && anaEylem !== 'isi-ac' && <IsEmriniAc r={refakat} />}
           {malzeme && giris && <Dugme tur="birincil" simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}
           {(digerleri.length > 0 || uzakIstasyon) && <Dugme simge="scan" onClick={() => sec('okutarak-al')}>Okutarak al</Dugme>}
@@ -158,7 +168,7 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           {depocu && malzeme?.parti && malzeme.parti.uretimEmriId == null && !refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartına geç</Dugme>}
           {depocu && refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartı</Dugme>}
           {okur && malzeme?.parti && <Dugme tur="ikincil" simge="truck" onClick={() => setIzAcik(true)}>Lot izi</Dugme>}
-        </div>
+        </div>}
         {izAcik && malzeme?.parti && <PartiIziPenceresi partiId={malzeme.parti.id} lotNo={malzeme.parti.etiket} kapat={() => setIzAcik(false)} />}
         {kartAc && malzeme && (refakat
           ? <RefakatKartPenceresi id={refakat.id} kapat={() => setKartAc(false)} />

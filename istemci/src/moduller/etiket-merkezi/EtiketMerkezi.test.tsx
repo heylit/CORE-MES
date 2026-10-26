@@ -310,13 +310,13 @@ describe('EtiketMerkezi', () => {
     await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=lot&id=11'));
   });
 
-  it('refakat adresi yalnız refakat kartı şablonunu ve notunu gösterir', async () => {
+  it('refakat kartı adresi yalnız refakat kartı şablonunu ve notunu gösterir', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
-    ac(<HazirSablonlar />, '/etiket-merkezi?tur=refakat&id=12');
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=refakat-partisi&id=12');
     expect(await screen.findByText('Refakat kartları')).toBeTruthy();
-    expect(await screen.findByText(/refakat kartı bilgisi basılır/)).toBeTruthy();
+    expect(await screen.findByText(/depodan verilen lot basılır/)).toBeTruthy();
     expect(screen.queryByText('Lot 100x50')).toBeNull();
-    await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=refakat&id=12'));
+    await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=refakat-partisi&id=12'));
   });
 
   it('mal kabul adresi lot şablonlarını açar, kabulün lotlarını çip olarak gösterir ve tek lot çıkarılamaz', async () => {

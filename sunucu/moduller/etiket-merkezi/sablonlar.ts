@@ -4,7 +4,7 @@ import type { AlanDegerleri } from './kurallar.ts';
 
 // Hazır şablonlar kodda durur: kullanıcı şablonu gelince bunlar kopyalanıp değiştirilecek. Ölçüler mm.
 // Alan "=" ile başlarsa sabit metindir. Konum kodu 20 karaktere kadar kesilmeden sığar (stok_konum_kod_bicimi, EM-13). Raf etiketi Fabrika Haritası rafından (#116). Bugünkü baskılarla aynı içerik: konum ve malzeme (stok/Etiketler.tsx),
-// lot (stok/LotEtiketi.tsx), refakat kartı (uretim-emirleri/refakat.ts).
+// lot (stok/LotEtiketi.tsx), refakat kartı (stok/RefakatKarti.tsx).
 
 export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
   konum: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'Konum kodu' }, { anahtar: 'ad', ad: 'Konum adı' }, { anahtar: 'yer', ad: 'Salon ve kutu türü' }],

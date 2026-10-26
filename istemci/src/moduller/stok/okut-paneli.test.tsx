@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { BakiyeSatiri, IstasyonSepetiCevabi, MalzemeIstegi, OkutCozCevabi, Teslim, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { BakiyeSatiri, IstasyonSepetiCevabi, KodCozCevabi, MalzemeIstegi, OkutCozCevabi, Teslim, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { DEPOCU, json, type Istek } from './test-ortak.tsx';
 import { OkutYonlendir } from './OkutYonlendir.tsx';
@@ -21,6 +21,8 @@ const BAKIYE = {
 } satisfies BakiyeSatiri;
 const OZET = { id: 901, tur: 'sarf', kod: 'SR-001', ad: 'Eldiven', onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } as const;
 const MLZ = { tur: 'malzeme', ozet: OZET, toplam: '3', bakiyeler: [BAKIYE] } as const;
+// Okutma cevabının taşıdığı tam stok çözümü (tek istek); örnek, ekranın okuduğu alanlarla sınırlı.
+const stokCozumu = (c: typeof MLZ | typeof LOT): KodCozCevabi => c as unknown as KodCozCevabi;
 const LOT = { tur: 'lot', parti: { id: 4, lotNo: 'LT-000123', etiket: 'LT-000123' }, ozet: { ...OZET, tur: 'hammadde', ad: 'Deneme sac' }, toplam: '3', bakiyeler: [BAKIYE] } as const;
 const KNM = { tur: 'konum', konum: { id: 7, kod: 'A-02-01', tur: 'raf_gozu', ad: null, depoId: 1, depoKod: 'ANA', rafId: 1, bolmeNo: 2, katNo: 1, sonSayim: null, aktif: true, satirSayisi: 0, haritaGozId: null, haritaAlanId: null, surum: 1 }, bakiyeler: [] };
 const PANEL_MLZ = (tur: 'sarf' | 'mamul' | 'hammadde', ek: Partial<Extract<OkutCozCevabi, { tur: 'malzeme' }>> = {}): OkutCozCevabi => ({
@@ -88,10 +90,9 @@ const panelKodu = (kodlar: Record<string, OkutCozCevabi>): Isleyici => (u) => {
 };
 
 describe('Okutma sonucu', () => {
-  it('stok okuyan gözleri görür; depo sepetine ekler ve son eklemeyi geri alır (soru 93 a, 95 a)', async () => {
+  it('stok okuyan gözleri tek istekle görür (655); depo sepetine ekler ve son eklemeyi geri alır (soru 93 a, 95 a)', async () => {
     const istekler = ciz(DEPO, {
-      'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'MLZ:901': PANEL_MLZ('sarf') }),
-      'GET /stok/kod-coz': () => json(200, MLZ),
+      'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'MLZ:901': PANEL_MLZ('sarf', { stok: stokCozumu(MLZ) }) }),
       'POST /stok/sepet/satir-ekle': () => json(200, { satirlar: [{ id: 5, malzemeId: 901, malzemeAd: 'Eldiven', malzemeKod: 'SR-001', kaynakKonumId: 3, kaynakKonumKod: 'A-01-02', partiId: 4, partiEtiketi: 'TP-1', miktar: '8', mevcut: '3', eklenme: '2026-10-07T10:00:00+03:00' }] }),
       'POST /stok/sepet/satirlar/5/degistir': () => json(200, { satirlar: [] }),
     });
@@ -99,6 +100,7 @@ describe('Okutma sonucu', () => {
     await okut(panel, 'MLZ:901');
     const sonuc = await within(panel).findByRole('region', { name: 'Okutma sonucu' });
     expect(await within(sonuc).findByRole('table', { name: 'Malzemenin gözleri' })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/kod-coz')).map((i) => i.yol)).toEqual([]);
     fireEvent.click(within(sonuc).getByRole('button', { name: 'Depo sepetine ekle' }));
     const pencere = await screen.findByRole('dialog', { name: /Sepete ekle: Eldiven/ });
     fireEvent.click(within(pencere).getByLabelText(/A-01-02/));
@@ -111,8 +113,7 @@ describe('Okutma sonucu', () => {
 
   it('okutulan lotta en eski giriş seçeneği yoktur; lotun gözü seçili gelir', async () => {
     const istekler = ciz(DEPO, {
-      'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'LOT:LT-000123': PANEL_MLZ('hammadde', { parti: { id: 4, etiket: 'LT-000123', uretimEmriId: null } }) }),
-      'GET /stok/kod-coz': () => json(200, LOT),
+      'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'LOT:LT-000123': PANEL_MLZ('hammadde', { parti: { id: 4, etiket: 'LT-000123', uretimEmriId: null }, stok: stokCozumu(LOT) }) }),
       'POST /stok/sepet/satir-ekle': () => json(200, { satirlar: [] }),
     });
     const panel = await panelAc();
@@ -122,6 +123,39 @@ describe('Okutma sonucu', () => {
     expect(within(pencere).queryByText('Otomatik')).toBeNull();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Sepete ekle' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')?.govde).toMatchObject({ malzemeId: 901, kaynakKonumId: 3, partiId: 4 }));
+  });
+
+  it('614 1a tek kart: refakat kartında ana eylem tek düğmedir, akış başlamaz; öteki işler Başka işlem altındadır', async () => {
+    const refakat = {
+      id: 12, qr: 'RP:12', etiket: 'UE-000001-P1', uretimEmriId: 1, emirNo: 'UE-000001', sira: 1, malzemeId: 901, malzemeKod: 'SR-001', malzemeAd: 'Eldiven', birim: 'adet',
+      partiId: 4, lotNo: 'LT-000123', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '5', durum: 'acik' as const, surum: 1, kayitZamani: '2026-10-22T10:00:00+03:00', lotaBaglanmaZamani: null,
+      ust: null, birlestigi: null, birlesmeZamani: null,
+    };
+    ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({ 'RP:12': PANEL_MLZ('hammadde', { parti: { id: 4, etiket: 'UE-000001-P1', uretimEmriId: null }, refakat, gelenler: [], kartSatirlari: [], anaEylem: 'isi-ac' }) }) });
+    const panel = await panelAc();
+    await okut(panel, 'RP:12');
+    const sonuc = await within(panel).findByRole('region', { name: 'Okutma sonucu' });
+    expect(within(sonuc).getAllByRole('button', { name: 'İş emrini aç' })).toHaveLength(1);
+    expect(within(sonuc).queryByRole('button', { name: 'Mal kabul' })).toBeNull();
+    expect(within(panel).queryByRole('list', { name: 'Adımlar' })).toBeNull();
+    fireEvent.click(within(sonuc).getByRole('button', { name: 'Başka işlem' }));
+    expect(within(sonuc).getByRole('button', { name: 'Mal kabul' })).toBeTruthy();
+    expect(within(sonuc).getAllByRole('button', { name: 'İş emrini aç' })).toHaveLength(1);
+  });
+
+  it('raf etiketi gözleri düğme olarak verir, seçilen göz kendi etiketiyle çözülür; eski refakat kartı uyarı verir', async () => {
+    const goz = (konumId: number, kod: string) => ({ konumId, kod, ad: null, tur: 'raf_gozu' as const, istasyonId: null });
+    const istekler = ciz(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': panelKodu({
+      'RAF:A1': { tur: 'raf', raf: { id: 1, kod: 'A1' }, gozler: [goz(3, 'A1-01-01'), goz(4, 'A1-02-01')] },
+      'UE:7': { tur: 'eski-kart', kod: 'UE:7', uretimEmriId: 7 },
+    }) });
+    const panel = await panelAc();
+    await okut(panel, 'RAF:A1');
+    expect(await within(panel).findByText('Raf A1: gözü seç ya da gözün etiketini okut.')).toBeTruthy();
+    fireEvent.click(within(within(panel).getByRole('list', { name: 'Raf A1 gözleri' })).getByRole('button', { name: 'A1-02-01' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent('LOC:A1-02-01')}`)).toBe(true));
+    await okut(panel, 'UE:7');
+    expect(await within(panel).findByText('Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.')).toBeTruthy();
   });
 
   it('tanınmayan kodu söyler, sonuç kartı açmaz', async () => {
@@ -150,7 +184,7 @@ describe('Okutma sonucu', () => {
     expect(within(within(sonuc).getByRole('list', { name: 'Başka istasyonlarda' })).getByText('Torna 1 (T1)')).toBeTruthy();
     expect(within(sonuc).queryByRole('button', { name: 'Mal kabul' })).toBeNull();
     expect(within(sonuc).queryByRole('button', { name: 'Depo sepetine ekle' })).toBeNull();
-    expect(istekler.some((i) => i.yol.startsWith('/stok/kod-coz'))).toBe(false);
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/kod-coz')).map((i) => i.yol)).toEqual([]);
     fireEvent.click(within(sonuc).getByRole('button', { name: 'Okutarak al' }));
     expect(within(panel).getByRole('tab', { name: 'Malzeme iste' }).getAttribute('aria-selected')).toBe('true');
     const okutulanlar = within(panel).getByRole('list', { name: 'Okutulanlar' });

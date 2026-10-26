@@ -2405,6 +2405,15 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
       const anaEylem = refakatAnaEylemi({ gelenSayisi: gelenler.length, kartAcik: refakat.durum === 'acik', satirIstasyonlari: kartSatirlari.map((x) => x.istasyonId), kapsamdakiIstasyonlar: istasyonlar });
       bulunan = { ...m, ...(lotId === null ? { parti: null, digerIstasyonlar: [] } : {}), refakat, gelenler: await teslimleriAdlandir(db, gelenler), kartSatirlari, anaEylem };
     }
+  } else if (t.tur === 'raf') {
+    const raf = await sorgular.rafKoduyla(db, t.deger);
+    if (raf) {
+      const gozler = await sorgular.rafinGozleri(db, raf.id);
+      const yerler = await yerOku(gozler.map((g) => g.konumId));
+      return { tur: 'raf', raf, gozler: gozler.flatMap((g) => yerler.get(g.konumId) ?? []) };
+    }
+  } else if (t.tur === 'uretim-emri' && t.bicim === 'kimlik') {
+    return { tur: 'eski-kart', kod: ham.trim(), uretimEmriId: Number(t.deger) };
   }
   const stokluCevap = async (c: OkutCozCevabi): Promise<OkutCozCevabi> =>
     ((c.tur === 'malzeme' || c.tur === 'yer') && stokOkurMu(k) ? { ...c, stok: await kodCoz(db, ham) } : c);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OkutCozCevabi, OkutYeri } from '#paylasilan/sozlesme/stok.ts';
-import { OKUT_BASI, okutulanHedef, okutuldu, okutYolu, panelOkutuldu, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
+import { ESKI_KART_ILETISI, OKUT_BASI, okutulanHedef, okutuldu, okutYolu, panelOkutuldu, teslimGovdesi, type OkutKaynagi } from './okut-akisi.ts';
 
 const yer = (konumId: number, tur: OkutYeri['tur'], istasyonId: number | null = null): OkutYeri => ({ konumId, kod: `K${konumId}`, ad: null, tur, istasyonId });
 const malzeme = (yerler: OkutYeri[]): OkutCozCevabi => ({
@@ -21,6 +21,8 @@ describe('QR okut akışı', () => {
   it('alınamayan yer ilk okutmada kaynak olmaz; bilinmeyen kod söylenir', () => {
     expect(okutuldu(OKUT_BASI, { tur: 'yer', yer: yer(5, 'kabul'), satirlar: null })).toEqual({ adim: 'ne', ileti: 'K5 yerinden alamazsın; önce malzemeyi okut.' });
     expect(okutuldu(OKUT_BASI, { tur: 'bilinmiyor', kod: 'ZZZ' })).toEqual({ adim: 'ne', ileti: 'Kod tanınmadı: ZZZ' });
+    expect(okutuldu(OKUT_BASI, { tur: 'eski-kart', kod: 'UE:12', uretimEmriId: 12 })).toEqual({ adim: 'ne', ileti: ESKI_KART_ILETISI });
+    expect(okutuldu(OKUT_BASI, { tur: 'raf', raf: { id: 1, kod: 'A1' }, gozler: [] })).toEqual({ adim: 'ne', ileti: 'Raf A1: gözü seç ya da gözün etiketini okut.' });
   });
 
   it('"nereye"de yalnız yer kabul edilir; aynı yer reddedilir', () => {
@@ -90,5 +92,10 @@ describe('QR okut akışı', () => {
     expect(teslimGovdesi(kaynak(yer(5, 'kabul')), yer(9, 'istasyon', 3), '2', 'k-1')).not.toHaveProperty('refakatPartisiId');
     const gelen = { ...kartli, yerler: [], gelenler: [{} as never] };
     expect(okutuldu(OKUT_BASI, gelen)).toEqual({ adim: 'ne', ileti: 'UE-000001-P1: sana gelen teslim var; aşağıdan teslim al.' });
+    // 614 1a: ana eylem teslim al ya da işi aç ise akış başlamaz, iş sonuç kartından yapılır; teslim et ise nereye beklenir.
+    expect(panelOkutuldu(OKUT_BASI, { ...kartli, anaEylem: 'isi-ac' })).toEqual({ tur: 'akis', durum: OKUT_BASI });
+    expect(panelOkutuldu(OKUT_BASI, { ...kartli, anaEylem: 'teslim-al' })).toEqual({ tur: 'akis', durum: OKUT_BASI });
+    expect(panelOkutuldu(OKUT_BASI, { ...kartli, anaEylem: 'teslim-et' })).toMatchObject({ tur: 'akis', durum: { adim: 'nereye' } });
+    expect(okutuldu(d, { tur: 'raf', raf: { id: 1, kod: 'A1' }, gozler: [] })).toMatchObject({ adim: 'nereye', ileti: 'Raf A1: gözü seç ya da gözün etiketini okut.' });
   });
 });

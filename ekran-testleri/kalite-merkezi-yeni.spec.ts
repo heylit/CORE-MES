@@ -32,11 +32,14 @@ test.describe('yönetici', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  test('şeritteki Resim ve modeller stüdyoyu çerçevede açar (217 b)', async ({ page, ac }) => {
+  test('şeritteki Resim ve modeller yeni stüdyoyu açar (597 a), hata vermez, taşmaz', async ({ page, ag, ac }) => {
     await ac('/kalite-merkezi');
     await page.getByRole('navigation', { name: 'Kalite Merkezi menüsü' }).getByRole('link', { name: 'Resim ve modeller' }).click();
     await expect(page).toHaveURL(/\/kalite-merkezi\/resimler$/);
-    await expect(page.locator('main iframe')).toHaveCount(1);
+    await expect(page.locator('main iframe')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Teknik resim' })).toBeVisible();
+    expect(ag.hatalar, 'konsol ve API hataları').toEqual([]);
+    expect((await tasmaOlc(page)).belge, 'sayfa yatay taşması').toBe(0);
   });
 
   test.describe('K1 Bugün, Parçalar, Teknik kütüphane, Terimler', () => {
@@ -67,7 +70,7 @@ test.describe('yönetici', () => {
       await expect(page.getByRole('heading', { name: 'Geometrik toleranslar (ASME Y14.5 / ISO 1101)' })).toBeVisible();
     });
 
-    test('Bugün ölçüm kısayolu eski çerçevedeki stüdyoya gider, yazma isteği atmaz', async ({ page, ag, ac }) => {
+    test('Bugün ölçüm kısayolu Resim ve modeller stüdyosuna gider, yazma isteği atmaz', async ({ page, ag, ac }) => {
       await ac('/kalite-merkezi');
       ag.sifirla();
       await page.getByRole('button', { name: /^Ölçüm yap/ }).click();

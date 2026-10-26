@@ -403,6 +403,24 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal((await istek('sevkiyat', 'GET', '/stok/teslim-kutusu/kod-coz?kod=KABUL')).durum, 403, 'stok.istek olmayan okutamaz');
     assert.equal((await istek('oturumsuz', 'GET', '/stok/teslim-kutusu/kod-coz?kod=KABUL')).durum, 401);
   });
+  test('614 1a, 3a: raf etiketi rafın açık gözlerini verir; eski refakat kartı (UE:<emir>) teslimde geçmez, emir numarası tanınmaz', async () => {
+    const coz = async (kod: string) => {
+      const c = await istek<OkutCozCevabi & Hata>('depo', 'GET', `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return okutCozCevabi.parse(c.govde);
+    };
+    const kod = `R${String(sira % 100).padStart(2, '0')}`.slice(0, 3);
+    const depoId = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_depo ORDER BY id LIMIT 1"))!.id;
+    const rafId = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO stok_raf (depo_id, kod, tur, numaralama, bolme_sayisi, kat_sayisi, bolme_genislik_m, derinlik_m, kat_araligi_m)
+       VALUES ($1, $2, 'palet', 'sirali', 2, 1, 2.7, 1.1, 1.5) RETURNING id`, [depoId, kod]))!.id;
+    await o().sahip.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, raf_id, bolme_no, kat_no) VALUES ($1, $2 || '-01-01', 'raf_gozu', $3, 1, 1), ($1, $2 || '-02-01', 'raf_gozu', $3, 2, 1)`, [depoId, kod, rafId]);
+    const r = await coz(` raf:${kod.toLowerCase()} `);
+    assert.deepEqual(r.tur === 'raf' ? [r.raf.id, r.gozler.map((g) => g.kod).sort(), r.gozler.every((g) => g.tur === 'raf_gozu')] : r, [rafId, [`${kod}-01-01`, `${kod}-02-01`], true]);
+    assert.deepEqual(await coz('RAF:ZZZ'), { tur: 'bilinmiyor', kod: 'RAF:ZZZ' }, 'olmayan raf');
+    assert.deepEqual(await coz('UE:4512'), { tur: 'eski-kart', kod: 'UE:4512', uretimEmriId: 4512 });
+    assert.deepEqual(await coz('UE-004512'), { tur: 'bilinmiyor', kod: 'UE-004512' }, 'elle yazılan emir numarası kart değildir');
+  });
   test('DEP-64 katalog etiketi: MK:<stok kodu> kartın kendisini çözer (küçük harf ve boşlukla da); bilinmeyen stok kodu ve boş MK tanınmaz', async () => {
     const h = await kart('hammadde');
     await malKabul(h, '4');

@@ -1212,6 +1212,10 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     // Stok okuması olana tam çözüm aynı cevapla gelir (tek istek); okuması olmayanda yoktur.
     stok: kodCozCevabi.optional(),
   }),
+  // Raf etiketi (RAF:<kod>): raf stok yeri değildir; okutan rafın açık gözlerinden birini seçer.
+  z.object({ tur: z.literal('raf'), raf: z.object({ id: z.number().int(), kod: z.string() }), gozler: z.array(okutYeri) }),
+  // Eski refakat kartı (UE:<emir>, 614 3a): teslimde geçmez; depodan refakat kartı istenir.
+  z.object({ tur: z.literal('eski-kart'), kod: z.string(), uretimEmriId: z.number().int() }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.
   z.object({
     tur: z.literal('kisi'), kod: z.string(), kisi: z.object({ id: z.number().int(), ad: z.string().nullable() }),
