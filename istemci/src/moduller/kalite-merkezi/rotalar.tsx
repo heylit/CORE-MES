@@ -5,7 +5,7 @@ import { KaliteMerkeziYeni } from './yeni/KaliteMerkeziYeni.tsx';
 
 // Yeni ekran Kalite Merkezi'nin adreslerindedir (582, 527 1 a): kök ve ikinci menünün her maddesi (paylasilan/sayfalar/kalite-merkezi.ts)
 // yeni ekrana gider, görünümü adres seçer. Eski çerçeve bir süre /kalite-merkezi/eski altında kalır, kişi menüsündeki "Eski görünüm" açar.
-// Resim ve modeller ile Analiz (217 b: ölçüm, balonlama, resim yükleme) yalnız çerçevededir; sabit yolları :gorunum'dan önce eşlenir.
+// Analiz (ekranı null görünüm) yalnız çerçevededir; sabit yolu :gorunum'dan önce eşlenir. Resim ve modeller yeni stüdyodadır (597 a).
 const EskiKaliteMerkezi = () => <KaliteMerkeziCercevesi eski />;
 const Studyo = () => <KaliteMerkeziCercevesi />;
 
