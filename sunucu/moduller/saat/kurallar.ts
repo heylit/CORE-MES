@@ -299,17 +299,34 @@ export interface KaynakYerlesim {
   baslangic: Date;
 }
 
-// İstasyonun makinelerine canlı planda yerleşmiş, çalışmayan ve bitmemiş işlerden en erken başlayanı. Kişiye yerleşmiş iş istasyona
-// bağlanmaz (kişinin istasyonu plan satırında yoktur).
+// İstasyonun makinelerine canlı planda yerleşmiş, çalışmayan ve bitmemiş işlerden terminalin sırasında ilk olanı (3a): Üretim Hazırlık
+// sırası olan iş önce, sıra numarasıyla; sırasız iş canlı planda makinesindeki yeriyle (makineler iç içe: önce yer, sonra makine), Arkon'un
+// `planOnce`'u gibi. `hazirlik` iş emri -> istasyondaki en küçük Hazırlık sırası. Kişiye yerleşmiş iş istasyona bağlanmaz (kişinin istasyonu
+// plan satırında yoktur).
 export function siradakiIs(
   isler: readonly KaynakPlanIsi[], yerlesimler: readonly KaynakYerlesim[], makineIdleri: ReadonlySet<number>,
+  hazirlik: ReadonlyMap<number, number> = new Map(),
 ): { is: KaynakPlanIsi; yerlesim: KaynakYerlesim } | null {
   const bekleyen = new Map(isler.filter((i) => i.adimDurumu !== 'calisiyor' && i.adimDurumu !== 'tamam').map((i) => [i.id, i]));
-  let en: { is: KaynakPlanIsi; yerlesim: KaynakYerlesim } | null = null;
+  const yer = new Map<KaynakYerlesim, number>();
+  const sayac = new Map<number, number>();
+  for (const y of [...yerlesimler].sort((a, b) => a.baslangic.getTime() - b.baslangic.getTime() || a.isEmriId - b.isEmriId)) {
+    if (y.makineId === null) continue;
+    const n = (sayac.get(y.makineId) ?? 0) + 1;
+    sayac.set(y.makineId, n);
+    yer.set(y, n);
+  }
+  const anahtar = (y: KaynakYerlesim): [number, number, number] => {
+    const h = hazirlik.get(y.isEmriId);
+    return h === undefined ? [1, yer.get(y)!, y.makineId!] : [0, h, 0];
+  };
+  const fark = (a: readonly number[], b: readonly number[]): number => a[0]! - b[0]! || a[1]! - b[1]! || a[2]! - b[2]!;
+  let en: { is: KaynakPlanIsi; yerlesim: KaynakYerlesim; anahtar: [number, number, number] } | null = null;
   for (const y of yerlesimler) {
     const is = bekleyen.get(y.isEmriId);
     if (is === undefined || y.makineId === null || !makineIdleri.has(y.makineId)) continue;
-    if (en === null || y.baslangic.getTime() < en.yerlesim.baslangic.getTime()) en = { is, yerlesim: y };
+    const k = anahtar(y);
+    if (en === null || fark(k, en.anahtar) < 0) en = { is, yerlesim: y, anahtar: k };
   }
-  return en;
+  return en && { is: en.is, yerlesim: en.yerlesim };
 }
