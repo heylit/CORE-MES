@@ -39,7 +39,8 @@ export const adimOlcusuSemasi = z.object({
   opNo: z.number().int(),
   istasyon: z.string().nullable(),
   fason: z.boolean(),
-  // Girdisi hazır olduktan sonra adımın başlamasını bekleme (önceki adımın ilk sağlam sayımından bu adımın ilk olayına).
+  // Girdisi hazır olduktan sonra adımın başlamasını bekleme; girdi bağımlılığa göre hazırdır (bekleyende önceki adımın bitişi,
+  // akışlıda devir adedi kadar sağlam, bağımsızda bekleme yok). Bitirilip yeniden açılan adımın bitir-başlat arası da eklenir.
   beklemeDk: dakika.nullable(),
   hazirlikDk: dakika.nullable(),
   islemeDk: dakika.nullable(),

@@ -17,6 +17,9 @@ export interface AkisAdimi {
   bitis: string | null;
   birimSureDk: number | null;
   ayarSuresiDk: number | null;
+  bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
+  // Akışlı adımın girdisi önceki adımdan bu kadar sağlam çıkınca hazırdır; başka bağımlılıkta null.
+  devirAdedi: number | null;
 }
 
 export interface AkisHareketi {
@@ -58,8 +61,11 @@ interface Aralik { tur: BolumTuru; bas: number; bit: number; acik: boolean }
 
 // AKS-1: adımın olayları sırayla bir durum makinesi işler. "ayar" hazırlığı, "baslat"/"devam" işlemeyi, "duraklat" duraklamayı,
 // "durdur" duruşu başlatır; "bitir" kapatır. Kapanmamış son durum "şimdi"ye kadar sürer (açık). Olay yoksa iş emrinin başlama
-// ve bitişi işleme sayılır.
-export function adimAraliklari(adim: AkisAdimi, olaylar: readonly { zaman: string; olay: UretimOlayi }[], simdi: number): Aralik[] {
+// ve bitişi işleme sayılır. AKS-3: bitirilip yeniden açılan adımda bitir ile sonraki olay arası beklemedir; yeniden açılıp
+// başlamamış adımın beklemesi emir sürüyorsa "şimdi"ye kadar açıktır.
+export function adimAraliklari(
+  adim: AkisAdimi, olaylar: readonly { zaman: string; olay: UretimOlayi }[], simdi: number, surer = true,
+): Aralik[] {
   const sirali = [...olaylar].sort((a, b) => an(a.zaman) - an(b.zaman));
   if (sirali.length === 0) {
     if (adim.baslama === null) return [];
@@ -69,6 +75,7 @@ export function adimAraliklari(adim: AkisAdimi, olaylar: readonly { zaman: strin
   const sonuc: Aralik[] = [];
   let durum: BolumTuru | null = null;
   let bas = 0;
+  let sonBitir: number | null = null;
   const kapat = (t: number) => {
     if (durum !== null && t > bas) sonuc.push({ tur: durum, bas, bit: t, acik: false });
   };
@@ -77,8 +84,14 @@ export function adimAraliklari(adim: AkisAdimi, olaylar: readonly { zaman: strin
     const yeni: BolumTuru | null = o.olay === 'ayar' ? 'hazirlik' : o.olay === 'baslat' || o.olay === 'devam' ? 'isleme'
       : o.olay === 'duraklat' ? 'duraklama' : o.olay === 'durdur' ? 'durus' : null;
     kapat(t);
+    if (durum === null && sonBitir !== null && yeni !== null && t > sonBitir) sonuc.push({ tur: 'bekleme', bas: sonBitir, bit: t, acik: false });
+    if (yeni !== null) sonBitir = null;
+    if (o.olay === 'bitir') sonBitir = t;
     durum = yeni;
     bas = t;
+  }
+  if (durum === null && sonBitir !== null && adim.bitis === null && surer && simdi > sonBitir) {
+    sonuc.push({ tur: 'bekleme', bas: sonBitir, bit: simdi, acik: true });
   }
   if (durum !== null) {
     const bit = adim.bitis !== null && an(adim.bitis) > bas ? an(adim.bitis) : simdi;
@@ -226,24 +239,48 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
       const f = fasonAraligi(g.fason.filter((h) => h.isEmriId === a.id), simdi);
       araliklar.set(a.id, f === null ? [] : [f]);
     } else {
-      araliklar.set(a.id, adimAraliklari(a, g.olaylar.filter((o) => o.isEmriId === a.id), simdi));
+      araliklar.set(a.id, adimAraliklari(a, g.olaylar.filter((o) => o.isEmriId === a.id), simdi, surer));
     }
   }
-  const ilkOlay = (id: number): number | null => enKucuk((araliklar.get(id) ?? []).map((x) => x.bas));
+  const ilkOlay = (id: number): number | null => enKucuk((araliklar.get(id) ?? []).filter((x) => x.tur !== 'bekleme').map((x) => x.bas));
   const uretimBasladi = enKucuk([...adimlar.map((a) => ilkOlay(a.id)), g.emir.baslama === null ? null : an(g.emir.baslama)]);
   const son = adimlar.at(-1);
   const uretimBitti = son?.bitis === null || son === undefined ? null : an(son.bitis);
   const saglamlar = (id: number) => g.sayimlar.filter((s) => s.isEmriId === id && s.tur === 'saglam');
 
-  // AKS-3: adımın önündeki bekleme, girdisinin hazır olduğu andan adımın ilk olayına kadardır. Girdi hazır: önceki adımın ilk sağlam
-  // sayımı (fason adımda ilk dönüş). İlk adımın önündeki bekleme hammadde şeridindedir. Başlamamış adımın girdisi hazırsa bekleme sürer.
+  // Önceki adımın ilk bitişi: parça o an devredilir; adım sonradan yeniden açılsa da değişmez. Fasonda bitiş yoksa bütün adedin
+  // döndüğü an.
+  const ilkBitis = (o: AkisAdimi): number | null => {
+    const bitir = enKucuk(g.olaylar.filter((x) => x.isEmriId === o.id && x.olay === 'bitir').map((x) => an(x.zaman)));
+    if (bitir !== null) return bitir;
+    if (o.bitis !== null) return an(o.bitis);
+    const f = o.fason ? araliklar.get(o.id)?.[0] : undefined;
+    return f !== undefined && !f.acik ? f.bit : null;
+  };
+  // Önceki adımdan toplam `adet` sağlam (fasonda dönen) çıktığı an; düzeltme satırları toplamdan düşer.
+  const adedeUlasti = (o: AkisAdimi, adet: number): number | null => {
+    const kayitlar = o.fason
+      ? g.fason.filter((h) => h.isEmriId === o.id && h.yon === 'donus')
+      : saglamlar(o.id);
+    let toplamAdet = 0;
+    for (const k of [...kayitlar].sort((x, y) => an(x.zaman) - an(y.zaman))) {
+      toplamAdet += k.adet;
+      if (toplamAdet >= adet) return an(k.zaman);
+    }
+    return null;
+  };
+
+  // AKS-3: adımın önündeki bekleme, girdisinin hazır olduğu andan adımın ilk olayına kadardır. Girdi hazır, adımın bağımlılığına
+  // göre: bekleyende önceki adımın ilk bitişi; akışlıda önceki adımdan devir adedi kadar sağlam (fasonda dönen) çıktığı an, adede
+  // ulaşmadan biterse ilk bitişi; bağımsızda bekleme yoktur. Devir adedi yoksa 1 sayılır. İlk adımın önündeki bekleme hammadde
+  // şeridindedir. Başlamamış adımın girdisi hazırsa bekleme sürer.
   const beklemeler = new Map<number, Aralik | null>();
   adimlar.forEach((a, i) => {
     const onceki = adimlar[i - 1];
-    if (onceki === undefined) { beklemeler.set(a.id, null); return; }
-    const hazir = onceki.fason
-      ? enKucuk(g.fason.filter((h) => h.isEmriId === onceki.id && h.yon === 'donus').map((h) => an(h.zaman)))
-      : enKucuk(saglamlar(onceki.id).filter((s) => s.adet > 0).map((s) => an(s.zaman)));
+    if (onceki === undefined || a.bagimlilik === 'bagimsiz') { beklemeler.set(a.id, null); return; }
+    const hazir = a.bagimlilik === 'akisli'
+      ? adedeUlasti(onceki, a.devirAdedi !== null && a.devirAdedi > 0 ? a.devirAdedi : 1) ?? ilkBitis(onceki)
+      : ilkBitis(onceki);
     if (hazir === null) { beklemeler.set(a.id, null); return; }
     const basla = ilkOlay(a.id);
     if (basla === null) {
@@ -288,12 +325,13 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
     const isleme = toplam(ar, 'isleme');
     const saglam = saglamlar(a.id).reduce((t, s) => t + s.adet, 0);
     const b = beklemeler.get(a.id);
+    const yenidenAcilma = toplam(ar, 'bekleme');
     return {
       isEmriId: a.id,
       opNo: a.opNo,
       istasyon: a.istasyon,
       fason: a.fason,
-      beklemeDk: b ? dk(b.bit - b.bas) : null,
+      beklemeDk: b || yenidenAcilma > 0 ? dk((b ? b.bit - b.bas : 0) + yenidenAcilma) : null,
       hazirlikDk: basladi && !a.fason ? dk(toplam(ar, 'hazirlik')) : null,
       islemeDk: basladi && !a.fason ? dk(isleme) : null,
       duraklamaDk: basladi && !a.fason ? dk(toplam(ar, 'duraklama')) : null,

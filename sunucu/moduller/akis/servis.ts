@@ -36,6 +36,7 @@ export async function emirAkisiOku(db: Db, id: number): Promise<EmirAkisiCevabi>
     adimlar: kayit.isEmirleri.map((i) => ({
       id: i.id, opNo: i.opNo, sira: i.sira, istasyon: i.istasyonId === null ? null : istasyonlar.get(i.istasyonId) ?? null,
       fason: i.fasonFirmaId !== null, terminGun: i.terminGun, baslama: i.baslama, bitis: i.bitis, birimSureDk: sayi(i.birimSureDk), ayarSuresiDk: sayi(i.ayarSuresiDk),
+      bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
     })),
     olaylar: kayit.olaylar,
     sayimlar: kayit.sayimlar,
