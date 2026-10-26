@@ -7,7 +7,7 @@ import {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 import {
-  kmBalonlarGovdesi, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
+  kmBalonlarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
   kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoParcaCevabi,
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
@@ -249,6 +249,15 @@ export const uclar: Uc[] = [
     parametre: kmStudyoEmirParametresi,
     cevap: kmOlcumlerCevabi,
     isle: async ({ db, parametre }) => ({ olcumler: await studyo.emirOlcumleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/merkez-belgeleri',
+    // Seçici resim almanın parçasıdır: alma ile aynı yetki (603 a).
+    yetki: 'kalite-merkezi.onayla',
+    sorgu: kmMerkezBelgeSorgusu,
+    cevap: kmMerkezBelgeleriCevabi,
+    isle: async ({ db, sorgu }) => ({ belgeler: await studyo.merkezBelgeleri(db, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara) }),
   }),
   uc({
     yontem: 'POST',

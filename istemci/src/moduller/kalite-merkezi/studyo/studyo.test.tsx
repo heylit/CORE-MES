@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
-import type { KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { kmAc, MUAYENECI, OKUYAN, type SunucuSecenegi } from '../yeni/test-ortak.tsx';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { KmMerkezBelgesi, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import { kmAc, MUAYENECI, MUHENDIS, OKUYAN, type SunucuSecenegi } from '../yeni/test-ortak.tsx';
 
 // Uydurma deneme verisi: bir malzeme kartı, iki iş emri, bir resim ve bir model.
 const KART = { malzemeNo: 7, kod: 'DNM-07', ad: 'Deneme gövde', aktif: true };
@@ -59,5 +59,49 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     const { fetch } = kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);
     await screen.findByRole('button', { name: /Deneme resim/ });
     expect(fetch.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method && (i as RequestInit).method !== 'GET')).toBe(false);
+  });
+
+  // Resim alma seçicisi ve resim alma/kaldırma cevapları ortak deneme sunucusunun üstüne konur (ötekiler ona gider).
+  const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64) };
+  function merkezliAc(k = MUHENDIS) {
+    const acilan = kmAc('resimler?parca=7', k, {}, SECENEK);
+    const asil = acilan.fetch.getMockImplementation()!;
+    const cevap = (govde: unknown) => Promise.resolve(new Response(JSON.stringify(govde), { status: 200 }));
+    acilan.fetch.mockImplementation((adres: string, istek?: RequestInit) => {
+      if (adres.startsWith('/api/kalite-merkezi/studyo/merkez-belgeleri')) { void asil(adres, istek); return cevap({ belgeler: [BELGE] }); }
+      if (adres === '/api/kalite-merkezi/studyo/resimler/al') { void asil(adres, istek); return cevap({ resim: resim({ id: 9, ad: 'Merkez flanş', merkezBelgeId: 41 }) }); }
+      if (adres === '/api/kalite-merkezi/studyo/resimler/1/kaldir') { void asil(adres, istek); return cevap({ resim: resim({ aktif: false, surum: 2 }) }); }
+      return asil(adres, istek);
+    });
+    return acilan;
+  }
+
+  it('onaylayan belge merkezinden resim alır: seçici yayındakileri listeler, seçilen belge yayındaki harfle alınır ve listeye girer', async () => {
+    const { yazmalar } = merkezliAc();
+    fireEvent.click(await screen.findByRole('button', { name: 'Belge merkezinden al' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Belge merkezinden resim al' });
+    fireEvent.click(await within(pencere).findByRole('button', { name: /^Merkez flanş/ }));
+    await waitFor(() => { expect(yazmalar.some((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')).toBe(true); });
+    expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: 'C' });
+    const sol = screen.getByRole('complementary', { name: 'Parça ve resimler' });
+    expect(await within(sol).findByRole('button', { name: 'Merkez flanş resmini kaldır' })).toBeTruthy();
+  });
+
+  it('onaylayan resmi onayla kaldırır; sürüm gider, resim listeden düşer', async () => {
+    const { yazmalar } = merkezliAc();
+    fireEvent.click(await screen.findByRole('button', { name: 'Deneme resim resmini kaldır' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Resmi parçadan kaldır' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaldır' }));
+    await waitFor(() => { expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/1/kaldir')?.govde).toEqual({ surum: 1 }); });
+    const sol = screen.getByRole('complementary', { name: 'Parça ve resimler' });
+    await waitFor(() => { expect(within(sol).queryByRole('button', { name: /^Deneme resim/ })).toBeNull(); });
+  });
+
+  it('onayı olmayan resim alamaz ve kaldıramaz', async () => {
+    merkezliAc(MUAYENECI);
+    await screen.findByRole('button', { name: /Deneme resim/ });
+    expect(screen.queryByRole('button', { name: 'Belge merkezinden al' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /resmini kaldır/ })).toBeNull();
+    vi.unstubAllGlobals();
   });
 });
