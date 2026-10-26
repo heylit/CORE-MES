@@ -1,5 +1,5 @@
 import type {
-  AdimOlcusu, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, Olcu, Serit, StatuKalisi,
+  AdimOlcusu, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
 
 // Akış Süresi hesabı (kart #1338). Saf: veritabanı ve saat yok; "şimdi" girdidir. Kurallar AKS-<n> numarasıyla KURAL-TEST.md'dedir.
@@ -387,4 +387,47 @@ export function sevkAni(k: SevkKaydi | null): { hazir: string | null; sevk: stri
   if (k === null) return null;
   const sevk = k.isDurumu === 'tamamlandi' && !k.isIptalEdildi ? k.isDurumZamani : k.kaldirildi;
   return { hazir: k.hazirZamani, sevk };
+}
+
+export interface KartAniGirdisi {
+  acilis: string;
+  hammadde: readonly HammaddePartisi[];
+  teslimler: readonly { durum: 'yolda' | 'teslim' | 'red' | 'iptal'; gonderim: string; kapanis: string | null; miktar: string; alinan: string | null; kaynak: string; hedef: string }[];
+  adimlar: readonly { id: number; opNo: number; istasyon: string | null; fason: boolean }[];
+  olaylar: readonly { isEmriId: number | null; zaman: string; olay: UretimOlayi }[];
+  sayimlar: readonly { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number }[];
+  fason: readonly { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number }[];
+  sevk: { hazir: string | null; sevk: string | null } | null;
+}
+
+// AKS-8 (kart #708): kartın anları zamana göre tek dizidir; aynı anda olanlar akış sırasıyla (kabul, açılış, teslim, adım, sevk)
+// dizilir. Teslim gönderimi ve kapanışı ayrı andır; iptal teslimin kapanışı an değildir. Sayım kaydındaki adetle yazılır (düzeltme
+// kendi işaretini taşır). Adımı bilinmeyen olay ve sayım yine an olur (adımsız).
+export function kartAnlari(g: KartAniGirdisi): KartAni[] {
+  const adim = new Map(g.adimlar.map((a) => [a.id, a]));
+  const adimli = (isEmriId: number | null) => {
+    const a = isEmriId === null ? undefined : adim.get(isEmriId);
+    return { isEmriId: a === undefined ? null : a.id, opNo: a?.opNo ?? null, yer: a === undefined ? null : a.fason ? 'Fason' : a.istasyon };
+  };
+  const bos = { isEmriId: null, opNo: null };
+  const anlar: (KartAni & { sira: number })[] = [];
+  for (const h of g.hammadde) if (h.malKabul !== null) anlar.push({ zaman: h.malKabul, tur: 'mal_kabul', ...bos, yer: h.lotNo, miktar: null, sira: 0 });
+  anlar.push({ zaman: g.acilis, tur: 'kart_acildi', ...bos, yer: null, miktar: null, sira: 1 });
+  for (const t of g.teslimler) {
+    const yer = `${t.kaynak} → ${t.hedef}`;
+    anlar.push({ zaman: t.gonderim, tur: 'teslim_gonderildi', ...bos, yer, miktar: t.miktar, sira: 2 });
+    if (t.kapanis !== null && t.durum === 'teslim') anlar.push({ zaman: t.kapanis, tur: 'teslim_alindi', ...bos, yer, miktar: t.alinan, sira: 2 });
+    if (t.kapanis !== null && t.durum === 'red') anlar.push({ zaman: t.kapanis, tur: 'teslim_reddedildi', ...bos, yer, miktar: t.miktar, sira: 2 });
+  }
+  for (const o of g.olaylar) anlar.push({ zaman: o.zaman, tur: o.olay, ...adimli(o.isEmriId), miktar: null, sira: 3 });
+  for (const s of g.sayimlar) {
+    anlar.push({ zaman: s.zaman, tur: s.tur, ...adimli(s.isEmriId), miktar: String(s.adet), sira: 3 });
+  }
+  for (const f of g.fason) anlar.push({ zaman: f.zaman, tur: f.yon === 'gidis' ? 'fason_gidis' : 'fason_donus', ...adimli(f.isEmriId), miktar: String(f.adet), sira: 3 });
+  if (g.sevk?.hazir != null) anlar.push({ zaman: g.sevk.hazir, tur: 'sevke_hazir', ...bos, yer: null, miktar: null, sira: 4 });
+  if (g.sevk?.sevk != null) anlar.push({ zaman: g.sevk.sevk, tur: 'sevk', ...bos, yer: null, miktar: null, sira: 4 });
+  return anlar
+    .map((x, i) => ({ x, i }))
+    .sort((a, b) => an(a.x.zaman) - an(b.x.zaman) || a.x.sira - b.x.sira || a.i - b.i)
+    .map(({ x: { sira: _sira, ...k } }) => k);
 }
