@@ -17,7 +17,7 @@ import type { AcilDeneme, AcilMusteri, EmirSecimi } from './kopru.ts';
 import { EmirProjeSecimi } from './EmirProjeSecimi.tsx';
 import { AcilMusteriSecimi } from './AcilMusteriSecimi.tsx';
 import { gomuluYaziStili } from './yazi-tipleri.ts';
-import { MALIYET_ISLEMI, PLANLAMA_ISLEMI, maliyetYoluMu, planlamaYoluMu } from './planlama-menusu.ts';
+import { MALIYET_ISLEMI, PLANLAMA_ESKI_KOK, PLANLAMA_ISLEMI, maliyetYoluMu, planlamaEskiAdresi, planlamaYoluMu } from './planlama-menusu.ts';
 import './recete-rota.css';
 
 // Reçete ve Rota Motoru prototipi olduğu gibi yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); veri
@@ -29,11 +29,14 @@ const POLITIKA = "default-src 'none'; script-src 'unsafe-inline'; style-src 'uns
 // Planlama çerçevesi ayrıca 'wasm-unsafe-eval' ister: HiGHS WebAssembly'dir (361 b); ikili kabuktan gelir, ağ yine kapalıdır.
 export const PLANLAMA_POLITIKASI = POLITIKA.replace("script-src 'unsafe-inline'", "script-src 'unsafe-inline' 'wasm-unsafe-eval'");
 export const KOK = '/recete-rota';
-// Reçete ve Rota maddeleri yeni ekrandadır (541): çerçeve o görünümleri eski adreste açar, çerçeve içindeki görünüm değişimi de adresi
-// oraya çeker. Planlama maddeleri kendi adresinde kalır.
-export const ESKI_MENULER: readonly IkinciMenu[] = IKINCI_MENU_TANIMLARI.map((m) => (m.kok !== KOK ? m : {
-  ...m, gruplar: m.gruplar.map((g) => ({ ...g, maddeler: g.maddeler.map((d) => (planlamaYoluMu(d.yol) ? d : { ...d, yol: eskiAdresi(d.yol) })) })),
-}));
+// Reçete ve Rota maddeleri yeni ekrandadır (541), Planlama'nınkiler plan modülünün yeni ekranında (658 b, 659 a): çerçeve iki menünün
+// görünümlerini eski adreste açar, çerçeve içindeki görünüm değişimi de adresi oraya çeker.
+export const PLANLAMA_KOKU = '/plan';
+const ESKI_ADRES: Record<string, (yol: string) => `/${string}`> = { [KOK]: eskiAdresi, [PLANLAMA_KOKU]: planlamaEskiAdresi };
+export const ESKI_MENULER: readonly IkinciMenu[] = IKINCI_MENU_TANIMLARI.map((m) => {
+  const cevir = ESKI_ADRES[m.kok];
+  return cevir === undefined ? m : { ...m, gruplar: m.gruplar.map((g) => ({ ...g, maddeler: g.maddeler.map((d) => ({ ...d, yol: cevir(d.yol) })) })) };
+});
 const KANAL = 'recete-rota';
 // Çerçevenin gidebileceği sayfalar: malzeme yalnız Malzemeler ve Hizmetler'de açılır; istasyonun plan ayarı ve makine durumu İstasyonlar'da,
 // vardiya, tatil ve kişi vardiyası Vardiya'da düzenlenir.
@@ -73,7 +76,7 @@ const ZAMAN_ASIMI_MS = 30_000;
 const SEKME_YAZISI = 'Yalnız bu sekmede (yazma yetkiniz yok)';
 export const PLAN_VERISI_YOK = 'Plan için istasyon, makine ve iş merkezi verileri bu rolde okunamıyor; plan eksik veriyle çizilmez.';
 // Planı istasyon, makine ve iş merkezinden çizen sekmeler (ikinci menü yolları). Ürün ve rota sekmeleri bu verisiz de doğrudur.
-const PLAN_SEKMELERI = /^\/recete-rota\/(?:plan|kanban|studio)(?:\/|$)/;
+const PLAN_SEKMELERI = new RegExp(`^${PLANLAMA_ESKI_KOK}(?:/(?:plan|kanban|studio))?(?:/|$)`);
 export const MOTOR_OKUNAMADI = 'Plan motorunun yerleşimi okunamadı; plan ekranı kendi hesabıyla çiziliyor ve sıra sunucunun planından farklı olabilir. Canlıya almadan önce sayfayı yenileyin.';
 // Rota modülünün `rota.onayla` işlemine giden düğmeler (onayla, düzeltmeye geri gönder, yürürlüğe al; sunucu/moduller/rota/uclar.ts).
 // İşlemi olmayan kişiye gösterilmez: planlamacı "Onayla…" görüp 403 almasın (Akış A provası O1).
@@ -143,7 +146,7 @@ export function ReceteRotaCercevesi() {
   const [hazirlik, setHazirlik] = useState<Hazirlik | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [deneme, setDeneme] = useState(0);
-  const gorunumIletisi = useYalitilmisGorunum(KOK, ESKI_MENULER);
+  const gorunumIletisi = useYalitilmisGorunum(tur === 'planlama' ? PLANLAMA_KOKU : KOK, ESKI_MENULER);
   const git = useNavigate();
   // Okuma yetkisi olmayan rolde prototip planı boş listelerle çizer ve sahte değer gösterir (plan akışı H4): kabuk o sekmelerde
   // çerçeveyi gizler (köprü sürer) ve nedenini söyler.
@@ -192,11 +195,14 @@ export function ReceteRotaCercevesi() {
     let bitti = false;
     void (async () => {
       try {
-        const [ben, kayitlar] = await Promise.all([
+        // Planlama çalışması ve tercihleri plan modülünün kaydındadır (658 b); planlama çerçevesinin yerel deposu ikisini birlikte görür,
+        // Reçete ve Rota çerçevesi planlama kaydını okumaz.
+        const [ben, kayitlar, planlama] = await Promise.all([
           api.get<BenCevabi>('/recete-rota/ben'),
           api.get<KayitlarCevabi>('/recete-rota/kayitlar'),
+          tur === 'planlama' ? api.get<KayitlarCevabi>('/plan/planlama-kayitlari') : Promise.resolve<KayitlarCevabi>({ kayitlar: [] }),
         ]);
-        if (!bitti) setHazirlik({ tur, ben, degerler: yerelDegerler(kayitlar) });
+        if (!bitti) setHazirlik({ tur, ben, degerler: yerelDegerler({ kayitlar: [...kayitlar.kayitlar, ...planlama.kayitlar] }) });
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'Reçete ve Rota açılamadı.'));
       }

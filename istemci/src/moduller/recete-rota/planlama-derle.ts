@@ -33,7 +33,7 @@ export const PARCA_SIRASI: readonly (string | null)[] = [
 
 const MODUL = dirname(fileURLToPath(import.meta.url));
 const KAYNAK = join(MODUL, 'cerceve', 'planlama');
-export const MOTOR = resolve(MODUL, '..', '..', '..', '..', 'sunucu', 'moduller', 'recete-rota', 'motor');
+export const MOTOR = resolve(MODUL, '..', '..', '..', '..', 'sunucu', 'moduller', 'plan', 'motor');
 export const CIKTI = join(MODUL, 'cerceve', 'planlama-modulu.html');
 
 const oku = (yol: string): string => readFileSync(yol, 'utf8');

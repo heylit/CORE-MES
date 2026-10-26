@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
-import { PLAN_YETKI } from './ReceteRotaCercevesi.tsx';
+import { PLAN_YETKI, ReceteRotaCercevesi } from './ReceteRotaCercevesi.tsx';
 import { YAZAR, ac, sunucuKur, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
-import { MALIYET_ISLEMI, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
+import { MALIYET_ISLEMI, PLANLAMA_ESKI_KOK, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); yazmaDinleyiciKapat(); });
 
@@ -116,25 +116,28 @@ describe('planlama çerçevesi', () => {
     expect(await screen.findByTitle('Planlama', {}, { timeout: 20000 })).toBeTruthy();
   }, 40000);
 
-  it('Reçete ve Rota bölümünden planlama sayfasına geçişte eski çerçeve bekler, sonra kayıt yeniden okunup planlama açılır', async () => {
+  // 658 b, 659 a: planlama çerçevesi plan modülünün adresindedir (/plan/eski); Reçete ve Rota çerçevesinden geçiş başka sayfaya geçiştir,
+  // planlama çerçevesi kendi kaydını (Reçete ve Rota ile planlama kaydı) yeniden okuyarak açılır.
+  it('Reçete ve Rota bölümünden eski planlama sayfasına geçişte planlama çerçevesi kayıtları yeniden okuyarak açılır', async () => {
     const istekler = sunucuKur(YAZAR, [KAYIT]);
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/recete-rota/eski']}>
-        <Git yol="/recete-rota/terminler" />
-        <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+        <Git yol="/plan/eski/terminler" />
+        <Routes>
+          {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
+          <Route path={`${PLANLAMA_ESKI_KOK}/:gorunum`} element={<ReceteRotaCercevesi />} />
+        </Routes>
       </MemoryRouter></BildirimSaglayici></QueryClientProvider>,
     );
-    const rr = await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 });
+    await screen.findByTitle('Reçete ve Rota', {}, { timeout: 20000 });
     const okuma = () => istekler.filter((i) => i === 'GET /recete-rota/kayitlar').length;
     expect(okuma()).toBe(1);
+    expect(istekler).not.toContain('GET /plan/planlama-kayitlari');
     fireEvent.click(screen.getByRole('button', { name: 'git' }));
-    // Geçişte eski çerçeve aynı öğedir ve gizlidir (yeniden kurulmaz); kayıt henüz yeniden okunmaz.
-    await waitFor(() => { expect(rr.closest('[hidden]')).not.toBeNull(); });
-    expect(screen.getByTitle('Reçete ve Rota')).toBe(rr);
-    expect(okuma()).toBe(1);
     await screen.findByTitle('Planlama', {}, { timeout: 20000 });
     expect(screen.queryByTitle('Reçete ve Rota')).toBeNull();
     expect(okuma()).toBe(2);
+    expect(istekler).toContain('GET /plan/planlama-kayitlari');
   }, 40000);
 });

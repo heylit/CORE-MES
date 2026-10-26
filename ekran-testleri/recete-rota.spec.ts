@@ -1,8 +1,9 @@
-import { cerceve, expect, test } from './ortak.ts';
+import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Kaynak: kayit/recete-rota/akislar.md R0 (açılış ve plan şeridi), R1 adım 1 (ürün seçimi), durum ekranları.
 // Bilinen yanlış davranış (açılışta yazma) burada sınanmaz: degisecek.spec.ts. Reçete ve Rota bölümlerinin çerçevesi eski adrestedir
-// (541: menü adresi yeni ekranı açar, recete-rota-yeni.spec.ts); planlama sayfaları kendi adresinde çerçevededir.
+// (541: menü adresi yeni ekranı açar, recete-rota-yeni.spec.ts). Planlama plan modülünün sayfasıdır (658 b); eski planlama çerçevesi
+// /plan/eski altında yalnız yöneticidedir (659 a).
 test.use({ hesap: 'ornek.yonetici' });
 
 test('Ürün ve rotalar: plan şeridi, ürün seçimi ve görünüm düğmeleri', async ({ page, ag, ac }) => {
@@ -41,32 +42,63 @@ test('ikinci menüden bölümler arasında geçilir; Reçete ve Rota maddesi yen
   await ac('/recete-rota/eski/schema');
   await cerceve(page);
   const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
-  // Bağlantı adı bekleyen iş sayısını da taşır ("Plan 2"); bağlantı adresinden bulunur.
-  for (const [yol, baslik] of [['/recete-rota/plan', 'Planlama'], ['/recete-rota/studio', 'Planlama']] as const) {
-    await menu.locator(`a[href="${yol}"]`).filter({ visible: true }).first().click();
-    await expect(page).toHaveURL((u) => u.pathname === yol);
-    // Plan ve atölye planlama çerçevesindedir (kanban yalnız eski adrestir, menüde yoktur): geçişte eski çerçeve bekleyen
-    // yazması bitene kadar gizli durur, sonra yenisi kurulur. Adres değiştikten hemen sonra eski çerçeve bir an daha görünür
-    // olabilir; ilk görünen çerçeve alınırsa gizlenen eski çerçeve yakalanır. Bu yüzden istenen türün çerçevesi başlığıyla beklenir.
-    const ogesi = page.locator(`main iframe[title="${baslik}"]`);
-    await expect(ogesi).toBeVisible({ timeout: 30_000 });
-    const f = await (await ogesi.elementHandle())?.contentFrame();
-    if (!f) throw new Error(`${baslik} çerçevesi yüklenmedi`);
-    await expect(f.locator('main').first()).toBeVisible();
-  }
+  // Planlama ayrı sayfadır (658 b): Reçete ve Rota menüsünde planlama maddesi yoktur.
+  await expect(menu.locator('a[href="/recete-rota/plan"]')).toHaveCount(0);
   await menu.locator('a[href="/recete-rota/schema"]').filter({ visible: true }).first().click();
   await expect(page).toHaveURL((u) => u.pathname === '/recete-rota/schema');
   await expect(page.getByRole('region', { name: 'Ürün ve rotalar' }).locator('[data-parca="R1"]')).toBeVisible({ timeout: 30_000 });
   expect(ag.hatalar).toEqual([]);
 });
 
-test('planlama sayfasını açmak ortak kayda yazmaz (aynı anda açan ikinci kişi çakışma uyarısı almaz)', async ({ page, ag, ac }) => {
-  await ac('/recete-rota/plan');
+// Çerçeve açılışta Reçete ve Rota kaydı çalışmanınkinden yeniyse (savedAt, çalışmada rrSavedAt) onu çalışmaya alır ve iki kaydı yazar; bu
+// eşitlemedir, sınanan değildir. Aynı veritabanında koşan öteki testler (öteki genişlikler dahil) iki kaydı her an değiştirebilir, bu yüzden
+// çerçeveye okunan kayıtların eşitlenmiş hâli verilir: çalışmanın rrSavedAt'i Reçete ve Rota kaydının savedAt'idir.
+const RR_ANAHTARI = 'recete-rota-motoru-v1';
+const PLANLAMA_KAYDI = `${RR_ANAHTARI}:planlama`;
+type Kayit = { anahtar: string; deger: unknown };
+type Kayitlar = { kayitlar: Kayit[] };
+const kayitDegeri = (k: Kayitlar, anahtar: string): Record<string, unknown> | null =>
+  (k.kayitlar.find((x) => x.anahtar === anahtar)?.deger ?? null) as Record<string, unknown> | null;
+
+test('eski planlama çerçevesini açmak ortak kayda yazmaz (aynı anda açan ikinci kişi çakışma uyarısı almaz)', async ({ page, ag, ac }) => {
+  const oku = async (yol: string): Promise<Kayitlar> => (await page.request.get(`${ADRES}/api/${yol}`)).json() as Promise<Kayitlar>;
+  // Çalışma yoksa Planlama sayfası kurar (657 a); kurmak kayıt varsa dokunmaz, öteki testlerle yarışmaz.
+  let plan = await oku('plan/planlama-kayitlari');
+  if (kayitDegeri(plan, PLANLAMA_KAYDI) === null) {
+    await ac('/plan');
+    await expect.poll(async () => { plan = await oku('plan/planlama-kayitlari'); return kayitDegeri(plan, PLANLAMA_KAYDI) !== null; }).toBe(true);
+  }
+  const rr = await oku('recete-rota/kayitlar');
+  const savedAt = kayitDegeri(rr, RR_ANAHTARI)?.['savedAt'];
+  expect(typeof savedAt).toBe('number');
+  const eslenmis: Kayitlar = { ...plan, kayitlar: plan.kayitlar.map((k): Kayit => (k.anahtar === PLANLAMA_KAYDI
+    ? { ...k, deger: { ...(k.deger as Record<string, unknown>), rrSavedAt: savedAt } } : k)) };
+  await page.route('**/api/recete-rota/kayitlar', (r) => (r.request().method() === 'GET' ? r.fulfill({ json: rr }) : r.fallback()));
+  await page.route('**/api/plan/planlama-kayitlari', (r) => (r.request().method() === 'GET' ? r.fulfill({ json: eslenmis }) : r.fallback()));
+  // Çerçeve kayıtları kabuğa mesajla yazdırır; yazma isteği kabuğa vardığı anda sayılır, ağ zamanlamasından bağımsızdır.
+  await page.addInitScript(() => {
+    const w = window as unknown as { yazmaIstekleri: string[] };
+    w.yazmaIstekleri = [];
+    window.addEventListener('message', (o: MessageEvent) => {
+      const m = o.data as { yon?: unknown; tip?: unknown; veri?: { anahtar?: unknown } } | null;
+      if (m?.yon === 'istek' && (m.tip === 'kayit-yaz' || m.tip === 'kayit-sil')) w.yazmaIstekleri.push(`${String(m.tip)} ${String(m.veri?.anahtar)}`);
+    }, true);
+  });
+  ag.sifirla();
+  await ac('/plan/eski');
   const f = await cerceve(page);
   await expect(f.locator('main').first()).toBeVisible();
-  // Çerçeve kaydı 2 sn bekletip yazar; yokluk ancak bekleyerek görülür.
-  await page.waitForTimeout(4_000);
-  expect(ag.yazmalar.filter((y) => y.includes('/recete-rota/kayitlar/'))).toEqual([]);
+  // Çerçeve kaydı 2 sn bekletip yazar, kapanırken (pagehide) bekleyeni hemen gönderir. Kapanış çerçevede tetiklenir; ardından gönderilen
+  // işaret kabuğa varınca (aynı kaynağın mesajları sırayla gelir) çerçevenin bütün yazma istekleri sayılmıştır. Sayfa kapanırken kabuk
+  // mesajı işleyemez, bu yüzden başka adrese gidilerek sınanmaz.
+  await page.evaluate(() => {
+    const w = window as unknown as { isaret: Promise<string[]>; yazmaIstekleri: string[] };
+    w.isaret = new Promise((coz) => {
+      window.addEventListener('message', (o: MessageEvent) => { if ((o.data as { isaret?: unknown } | null)?.isaret === true) coz(w.yazmaIstekleri); });
+    });
+  });
+  await f.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide')); window.parent.postMessage({ isaret: true }, '*'); });
+  expect(await page.evaluate(() => (window as unknown as { isaret: Promise<string[]> }).isaret)).toEqual([]);
   expect(ag.hatalar).toEqual([]);
 });
 
@@ -74,9 +106,9 @@ test.describe('planlama işlemi olmayan', () => {
   test.use({ hesap: 'ornek.kalite' });
 
   test('planlama sayfası açılmaz, menüde görünmez (353 a, 195 a)', async ({ page, ac }) => {
-    await ac('/recete-rota/plan');
-    await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
+    await ac('/plan/eski');
     await expect(page.locator('main iframe')).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).locator('a[href="/plan"]')).toHaveCount(0);
     // Eski görünüm yalnız yöneticidedir (681 a): şerit yeni ekranda denenir, eski adres kapalıdır.
     await ac('/recete-rota/eski/schema');
     await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
@@ -92,14 +124,16 @@ test.describe('planlama işlemi olmayan', () => {
 test.describe('planlama rolü', () => {
   test.use({ hesap: 'ornek.planlama' });
 
-  test('planlama sayfası açılır; maliyet sayfası açılmaz, menüde görünmez', async ({ page, ac }) => {
-    await ac('/recete-rota/maliyet');
+  test('planlama sayfası açılır; maliyet sayfası açılmaz, menüde görünmez; eski çerçeve yalnız yöneticide (659 a)', async ({ page, ac }) => {
+    await ac('/plan/maliyet');
     await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
+    await ac('/plan');
+    await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
+    const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
+    await expect(menu.locator('a[href="/plan"]').first()).toBeAttached();
+    await expect(menu.locator('a[href="/plan/maliyet"]')).toHaveCount(0);
+    await ac('/plan/eski');
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
-    await ac('/recete-rota/plan');
-    await cerceve(page);
-    const menu = page.getByRole('navigation', { name: 'Reçete ve Rota menüsü' });
-    await expect(menu.locator('a[href="/recete-rota/plan"]').first()).toBeAttached();
-    await expect(menu.locator('a[href="/recete-rota/maliyet"]')).toHaveCount(0);
   });
 });

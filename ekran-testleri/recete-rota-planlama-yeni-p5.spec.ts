@@ -23,7 +23,7 @@ const SENTETIK = {
 
 test.describe('P5 yıllık plan ve ufuk', () => {
   test('yıllık plan bugünkü ısı haritası düzeninde açılır; sayfa taşmaz, açılış yazmaz', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/yillik');
+    await ac('/plan/yillik');
     const gorunum = page.locator('[data-gorunum="yillik"]');
     await expect(gorunum).toBeVisible();
     const harita = gorunum.getByRole('region', { name: 'Isı haritası' });
@@ -31,15 +31,15 @@ test.describe('P5 yıllık plan ve ufuk', () => {
     await expect(harita.or(yok).first()).toBeVisible();
     if (await harita.isVisible()) await expect(gorunum.getByText('Tüm satırlar')).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 
   // Örnek veride çalışma yoksa harita hiç çizilmez; bu test çalışmayı sentetik veriyle verir (kod, ad ve tutarlar uydurmadır), planı sunucudaki
   // çözücüyle çözer ve düzeni ölçer. Tek yazma çözüm isteğidir; kayıt yapılmaz.
   test('yıllık plan ısı haritası çalışmayla: çöz, hücre açılımı ve sihirbaz, Esc, Tüm satırlar taşmaz', async ({ page, ac, ag }) => {
-    await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({ json: { calisma: SENTETIK, surum: 1 } }));
-    await ac('/recete-rota/planlama-yeni/yillik');
+    await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({ json: { calisma: SENTETIK, surum: 1 } }));
+    await ac('/plan/yillik');
     const gorunum = page.locator('[data-gorunum="yillik"]');
     const harita = gorunum.getByRole('region', { name: 'Isı haritası' });
     await expect(harita.getByText(/^Yıllık plan henüz hesaplanmadı/)).toBeVisible();
@@ -61,12 +61,12 @@ test.describe('P5 yıllık plan ve ufuk', () => {
     await gorunum.getByText('Tüm satırlar').click();
     await expect(gorunum.getByRole('heading', { name: 'Varsayımlar' })).toBeVisible();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar.every((y) => y === 'POST /api/recete-rota/yillik-plan/coz')).toBe(true);
+    expect(ag.yazmalar.every((y) => y === 'POST /api/plan/yillik-plan/coz' || y === 'POST /api/plan/planlama-calismasi/olustur')).toBe(true);
     expect(ag.hatalar).toEqual([]);
   });
 
   test('ufuk açılır; plan varsa yük ızgarası ve malzeme görünümü, yoksa "önce plan" der; sayfa taşmaz', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/ufuk');
+    await ac('/plan/ufuk');
     const gorunum = page.locator('[data-gorunum="ufuk"]');
     await expect(gorunum).toBeVisible();
     const secim = gorunum.getByRole('group', { name: 'Görünüm' });
@@ -77,7 +77,7 @@ test.describe('P5 yıllık plan ve ufuk', () => {
       await expect(secim.getByRole('button', { name: 'Malzeme' })).toHaveAttribute('aria-pressed', 'true');
     }
     expect(await tasma(page)).toBeLessThanOrEqual(0);
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });

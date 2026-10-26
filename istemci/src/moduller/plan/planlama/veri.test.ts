@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import type { Kayit } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import { ONEK, PLANLAMA_ANAHTARI, acilisOku, type Okuyucu } from './veri.ts';
+
+// Veri uydurmadır.
+const BOS: PlanlamaCalismasiCevabi = { calisma: null, surum: null };
+function okuyucu(kayitlar: Kayit[], ret: readonly string[] = [], calisma: PlanlamaCalismasiCevabi = BOS): Okuyucu & { yollar: string[] } {
+  const yollar: string[] = [];
+  const cevap: Record<string, unknown> = {
+    '/recete-rota/ben': { kisi: { id: 1, ad: 'Deneme' }, yazabilir: false },
+    '/recete-rota/kayitlar': { kayitlar },
+    '/plan/planlama-calismasi': calisma,
+    '/plan/planlama-kaynagi': { items: null },
+    '/plan/surum': { planSurumu: 4, sonCanliyaAlma: null },
+    '/plan/senaryolar': { canliSurum: 4, senaryolar: [] },
+    '/plan/motor-uyarilari': { uyarilar: ['uyari'] },
+  };
+  return {
+    yollar,
+    get: async <T,>(yol: string): Promise<T> => {
+      yollar.push(yol);
+      if (ret.includes(yol)) throw new Error(`ret ${yol}`);
+      return cevap[yol] as T;
+    },
+  };
+}
+
+describe('acilisOku', () => {
+  it('anahtarlar sunucunun kabul ettiği planlama anahtarıdır', () => {
+    // Sözleşmenin ANAHTAR_ONEKI ve PLANLAMA_ANAHTARI_BICIMI'ne uyar (sunucuda PY-06 sınar; istemci sözleşmeyi değer olarak ithal etmez).
+    expect(ONEK).toBe('recete-rota-motoru-v1');
+    expect(PLANLAMA_ANAHTARI).toBe('recete-rota-motoru-v1:planlama');
+  });
+
+  it('çalışma sunucunun birleştirdiği uçtan, Reçete ve Rota kaydı kendi anahtarından okunur; dilimler dolu gelir', async () => {
+    const o = okuyucu([
+      // Kayıtlardaki çalışma birleşmemiş halidir; ekran onu kullanmaz.
+      { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: { surum: 2, D: { siparisler: [], tezgahlar: [], urunler: [] } }, surum: 9 },
+      { anahtar: ONEK, bicim: 'json', deger: { items: [] }, surum: 3 },
+      { anahtar: `${PLANLAMA_ANAHTARI}-ui4`, bicim: 'json', deger: { sayfa: 'x' }, surum: 1 },
+    ], [], { calisma: { surum: 2, D: { siparisler: [{ id: 'S1' }], tezgahlar: [], urunler: [] } }, surum: 9 });
+    const d = await acilisOku(o);
+    expect(d.calisma?.surum).toBe(2);
+    expect(d.calisma?.D.siparisler.map((x) => x.id)).toEqual(['S1']);
+    expect(d.calismaSurumu).toBe(9);
+    expect(o.yollar).toContain('/plan/planlama-calismasi');
+    expect(d.receteRotaKaydi).toEqual({ items: [] });
+    expect(d.motorUyarilari).toEqual(['uyari']);
+    expect(d.planSurumu?.planSurumu).toBe(4);
+    expect(d.okunamayan).toEqual([]);
+  });
+
+  it('kayıt yoksa çalışma ve sürüm null; okunamayan dilim null ve adıyla listede', async () => {
+    const d = await acilisOku(okuyucu([], ['/plan/planlama-kaynagi', '/plan/motor-uyarilari']));
+    expect(d.calisma).toBeNull();
+    expect(d.calismaSurumu).toBeNull();
+    expect(d.receteRotaKaydi).toBeNull();
+    expect(d.durum).toBeNull();
+    expect(d.motorUyarilari).toBeNull();
+    expect(d.okunamayan).toEqual(['durum', 'motorUyarilari']);
+  });
+
+  it('zorunlu okuma düşerse açılış düşer', async () => {
+    await expect(acilisOku(okuyucu([], ['/recete-rota/ben']))).rejects.toThrow();
+    await expect(acilisOku(okuyucu([], ['/plan/planlama-calismasi']))).rejects.toThrow();
+  });
+
+  it('sunucunun verdiği çalışma biçime uymazsa çalışma ve sürüm null', async () => {
+    const d = await acilisOku(okuyucu([], [], { calisma: { surum: 1 }, surum: 4 }));
+    expect(d.calisma).toBeNull();
+    expect(d.calismaSurumu).toBeNull();
+  });
+});

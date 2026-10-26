@@ -151,7 +151,7 @@ export function bosPlanlamaCalismasi(bugun: string): Kayit {
   };
 }
 async function planlamaKaydi(b: SenaryoBaglami): Promise<boolean> {
-  const yol = '/api/recete-rota/kayitlar/yaz';
+  const yol = '/api/plan/planlama-kayitlari/yaz';
   return b.adim(PLANLAMA, 'planlama çalışmasını kaydet', async () => {
     const c = await b.rol(PLANLAMA).istek('POST', yol, { anahtar: PLANLAMA_KAYDI, bicim: 'json', beklenenSurum: null, deger: bosPlanlamaCalismasi(new Date().toISOString().slice(0, 10)) });
     const ortak = { yontem: 'POST', yol, beklenen: '200 ya da 409', gelen: String(c.durum) };

@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { DurumCevabi, Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
@@ -63,7 +64,7 @@ const cagir = async <T,>(kopru: KopruIsleyici, tip: string, veri: unknown = {}):
   try { return await kopru(tip, veri) as T; } catch (h) { throw new RrHatasi(h); }
 };
 
-// Bütün bölümlerin okuması tek uçtan (GET /recete-rota/durum) ve sahiplerin kaynak okumalarından gelir; sürümler köprüde kalır.
+// Bütün bölümlerin okuması tek uçtan (GET /plan/planlama-kaynagi; Reçete ve Rota dilimleri ve planın alanları, 658 b) ve sahiplerin kaynak okumalarından gelir; sürümler köprüde kalır.
 export function useRrVerisi(etkin = true) {
   const { kopru, ilkOkuma } = useRrBaglami();
   return useQuery({

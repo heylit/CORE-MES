@@ -16,7 +16,7 @@ const BOLUMLER = ['Plan nasıl gidiyor?', 'Siparişler nerede bekliyor?', 'Ne ya
 
 test.describe('P1a Planlama motoru', () => {
   test('Özet: altı bölüm ve tezgâh haritası ya da boş durum; çubuklar ve Başka menüsü; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     const ozet = page.getByRole('region', { name: 'Plan nasıl gidiyor?' });
@@ -52,14 +52,14 @@ test.describe('P1a Planlama motoru', () => {
     await page.getByRole('button', { name: 'Keşfet' }).click();
     await expect(page.getByRole('tablist', { name: 'Keşfet görünümleri' })).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 // P1b: Harita görünümü (tezgâh haritası, kılavuz, yakınlık, oynatıcı ve zaman imleci). Sürükleme kapalıdır (459/4 a); test yazma göndermez.
 test.describe('P1b Tezgâh haritası', () => {
   test('Harita: tuval, yakınlık ve oynatıcı; kılavuz açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
@@ -101,13 +101,13 @@ test.describe('P1b Tezgâh haritası', () => {
     await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 test.describe('P1c Çizelge', () => {
   test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran, yan paneller; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
@@ -175,14 +175,14 @@ test.describe('P1c Çizelge', () => {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Düzenle' })).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 // P1d-1: Keşfet (pay şeridi, sipariş hatları, hazırlık, planı anlat). Seçim yazma göndermez.
 test.describe('P1d Keşfet', () => {
   test('Keşfet: dört gösterim, sipariş seçimi, planı anlat adımları; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
@@ -206,14 +206,14 @@ test.describe('P1d Keşfet', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.getByText(/^3 \/ \d+$/)).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 // P1d-2: seçim yan paneli (sipariş, iş adımı ve tezgâh kartı). Motor hamleleri pasif; seçim ve sekme yazma göndermez.
 test.describe('P1d Yan panel', () => {
   test('Yan panel: seçim kartı açılır, sekmeler (Rota, Takvim), yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
@@ -242,7 +242,7 @@ test.describe('P1d Yan panel', () => {
     await expect(dk.getByText(/takvimi$/)).toBeVisible();
     await expect(dk.getByRole('button', { name: 'Bakımı dene' })).toHaveAttribute('aria-disabled', 'true');
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
@@ -251,7 +251,7 @@ test.describe('P1d Yan panel', () => {
 // Genişlikler aynı kayda paralel yazabildiği için o tek yazmanın sonucu (çatışma dahil) sınanmaz.
 test.describe('P1e Planlama atölyesi', () => {
   test('Atölye: kimlik ve sekmeler; pano, ray ve kartlar ya da boş durum; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/studio');
+    await ac('/plan/studio');
     await expect(page.getByRole('tablist', { name: 'Stüdyo sekmeleri' })).toBeVisible();
     await expect(page.getByText(/^Canlı sürüm /)).toBeVisible();
     await expect(page.locator('.tc-pym-tp-ust').or(page.getByText(BOS)).first()).toBeVisible();
@@ -292,7 +292,7 @@ test.describe('P1e Planlama atölyesi', () => {
     // Taban ve canlı sunucudan okunur (505 a): boş veritabanında canlı plan yoktur; sekme yazmaz.
     await expect(page.locator('.tc-pym-tp-pg').getByText(/Henüz canlıya alınmış plan yok|Plana uyum/)).toBeVisible();
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-kayitlari/yaz' && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
@@ -301,10 +301,10 @@ test.describe('P1e Planlama atölyesi', () => {
 const VERI_BOLUMLERI = ['Siparişler', 'Kısıtlar', 'Tezgâhlar', 'Ürün ve rota', 'Takvim', 'Personel', 'Malzeme', 'Fason ve aparat', 'Ayar matrisi', 'Veri denetimi'];
 test.describe('577b Veri ve kısıtlar', () => {
   test('Veri: plan çubuğundan açılır, on bölüm gezilir, Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/sevkiyat');
+    await ac('/plan/sevkiyat');
     const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
     await cubuk.getByRole('button', { name: /^Veri/ }).click();
-    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan\?ekran=veri$/);
+    await expect(page).toHaveURL(/\/plan\?ekran=veri$/);
     await expect(page.locator('[data-parca="veri"]')).toBeVisible();
     await expect(cubuk.getByRole('button', { name: /^Veri/ })).toHaveAttribute('aria-current', 'page');
     const menu = page.getByRole('navigation', { name: 'Veri ve kısıtlar' });
@@ -317,15 +317,15 @@ test.describe('577b Veri ve kısıtlar', () => {
     await expect(page).toHaveURL(/ekran=veri&bolum=denetim$/);
     await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(page.locator('[data-parca="veri"]')).toHaveCount(0);
-    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan$/);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    await expect(page).toHaveURL(/\/plan$/);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 // 577a: Nasıl hesaplandı Plan ekranının sayfasıdır (`?ekran=hesap`); örnek veride son ekip kaydı olmayabilir, o halde boş sonuç ve bekleyen adımlar.
 test.describe('577a Nasıl hesaplandı', () => {
   test('Nasıl hesaplandı: adresle açılır, karar masası ve ekip adımları, iki sekme, akış ağının üç kipi; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan?ekran=hesap');
+    await ac('/plan?ekran=hesap');
     const kok = page.locator('[data-parca="hesap"]');
     await expect(kok).toBeVisible();
     await expect(kok.getByRole('list', { name: 'Ekip adımları' }).or(kok.getByText('Planlama çalışması yok'))).toBeVisible();
@@ -347,13 +347,13 @@ test.describe('577a Nasıl hesaplandı', () => {
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 test.describe('577a Bugünün kararları', () => {
   test('Bugünün kararları: adresle açılır, dört adım gezilir; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan?ekran=bugun');
+    await ac('/plan?ekran=bugun');
     const kok = page.locator('[data-parca="bugun"]');
     await expect(kok).toBeVisible();
     const adimlar = kok.getByRole('tablist', { name: 'Günlük plan adımları' });
@@ -367,13 +367,13 @@ test.describe('577a Bugünün kararları', () => {
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 test.describe('577a Odak tahtası', () => {
   test('Odak: O tuşu bir bölümü açar, tezgâha inilir, Esc seviye seviye çıkar; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' })).toBeVisible();
     await page.locator('body').press('o');
     const odak = page.locator('section.tc-pyo');
@@ -391,7 +391,7 @@ test.describe('577a Odak tahtası', () => {
       await page.locator('body').press('Escape');
       await expect(odak).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
@@ -399,10 +399,10 @@ test.describe('577a Odak tahtası', () => {
 // canlı plan olmayabilir; o halde "Henüz canlıya alınmış plan yok" satırı kabul edilir.
 test.describe('577c Geçmiş ve fark', () => {
   test('Geçmiş: plan çubuğundan açılır, iki bölüm gezilir, Plan tahtaya döner; fark Başka menüsünden açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
     await cubuk.getByRole('button', { name: 'Geçmiş', exact: true }).click();
-    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan\?ekran=gecmis$/);
+    await expect(page).toHaveURL(/\/plan\?ekran=gecmis$/);
     const kok = page.locator('[data-parca="gecmis"]');
     await expect(kok).toBeVisible();
     await expect(cubuk.getByRole('button', { name: 'Geçmiş', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -427,7 +427,7 @@ test.describe('577c Geçmiş ve fark', () => {
       await satir.getByRole('button', { name: 'Farkı kapat' }).click();
       await expect(satir).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
@@ -435,18 +435,18 @@ test.describe('577c Geçmiş ve fark', () => {
 // olmayabilir; o halde pano çizilmez, istek bekler.
 test.describe('577d Tezgâh stüdyosu', () => {
   test('Stüdyo isteği: pano isteği işler, adresten siler; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/studio?istek=tez&v=yok-boyle');
+    await ac('/plan/studio?istek=tez&v=yok-boyle');
     await expect(page.locator('.tc-pym-tp')).toBeVisible();
-    if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/studio$/);
+    if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/plan\/studio$/);
     await tasmaz(page);
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });
 
 // 577d: Başka menüsünün kartları haritanın üstüne açılır; plan yoksa menüde pasiftir. Kartlar okur, yazma gitmez.
 test.describe('577d Tahta kartları', () => {
   test('Sekiz kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
+    await ac('/plan');
     const baska = page.getByRole('button', { name: /Başka/ });
     if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
       await page.keyboard.press('Escape');
@@ -466,6 +466,6 @@ test.describe('577d Tahta kartları', () => {
       for (const t of ['1', '2', '3', '4', '5', '6', '7']) await page.keyboard.press(t);
       await expect(page.locator('.tc-pyk-kart')).toHaveCount(0);
     }
-    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 });

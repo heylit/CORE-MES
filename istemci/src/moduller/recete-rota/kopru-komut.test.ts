@@ -5,7 +5,7 @@ import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
 import { KAYNAK_KOMUTLARI } from './kaynak-komutlari.ts';
 import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, kopruKur, planMotoruOzeti } from './kopru.ts';
 import { ROTA_KOMUTLARI } from './rota-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
@@ -60,7 +60,7 @@ function istasyonSahibi() {
     kayit,
     cevap: (yontem: string, yol: string, govde: unknown): Response => {
       if (yontem === 'GET' && yol === '/istasyonlar') return json(200, { istasyonlar: [{ ...kayit }] });
-      if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, durum);
+      if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, durum);
       if (yontem === 'POST' && yol === '/istasyonlar/7/guncelle') {
         const g = govde as { surum: number; ad: string };
         if (g.surum !== kayit.surum) return json(409, { kod: 'CAKISMA', mesaj: ESKI_SURUM_ILETISI, ayrinti: { neden: 'eski-surum' } });
@@ -75,9 +75,9 @@ function istasyonSahibi() {
 
 describe('köprü komutları', () => {
   it('KOM-01: izinli komut sahibi modülün var olan ucuna yalnız izinli alanlarla gider; başarıda sahibinin kayıtları ve durum yeniden okunup döner', async () => {
-    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { id: 4, kod: 'KES-1' }) : yol === '/recete-rota/durum' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
+    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { id: 4, kod: 'KES-1' }) : yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
     const sonuc = await kopruKur()('komut', { ad: 'operasyon-tipi-ekle', govde: { kod: 'KES-1', ad: 'Testere', grup: 'KES', sinsi: 'gecmemeli' } });
-    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /operasyon-tipleri', ...OKUMA_YOLLARI.map((y) => `GET ${y}`), 'GET /recete-rota/kapasite', 'GET /recete-rota/satin-alma-eki', 'GET /recete-rota/durum', 'GET /plan/motor-yerlesimi']);
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /operasyon-tipleri', ...OKUMA_YOLLARI.map((y) => `GET ${y}`), 'GET /plan/planlama-kapasitesi', 'GET /plan/satin-alma-eki', 'GET /plan/planlama-kaynagi', 'GET /plan/motor-yerlesimi']);
     expect(istekler[0]?.govde).toEqual({ kod: 'KES-1', ad: 'Testere', grup: 'KES' });
     // Sahibinin okuma yetkisi yoksa ek alanlar null döner (sıfır uydurulmaz).
     expect(sonuc).toEqual({ sonuc: { id: 4, kod: 'KES-1' }, durum: { ...DURUM, planYerlesim: null, planMotoru: null }, ek: { makineNotu: null, kisiGorevi: null, istasyonTipi: null, kapasiteKaynagi: null, takvim: null, kapasite: null, acikSiparisler: null, tedarikTerminleri: null } });
@@ -278,9 +278,9 @@ describe('köprü komutları', () => {
       if (yontem === 'GET' && yol === '/vardiya-takvimi') {
         return json(200, { vardiyalar: [], matris: [{ isMerkeziId: 1, gun: 1, vardiyaId: 5 }, { isMerkeziId: 1, gun: 7, vardiyaId: 5 }, { isMerkeziId: 1, gun: 1, vardiyaId: 6 }], kisiVardiyalari: [{ kisiId: 8, vardiyaId: 6 }], gunler: [], isMerkezleri: [], bugun: '2030-01-01' });
       }
-      if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, DURUM);
-      if (yontem === 'GET' && yol === '/recete-rota/kapasite') return json(200, KAPASITE);
-      if (yontem === 'GET' && yol === '/recete-rota/satin-alma-eki') return json(200, SATIN_ALMA_EKI);
+      if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, DURUM);
+      if (yontem === 'GET' && yol === '/plan/planlama-kapasitesi') return json(200, KAPASITE);
+      if (yontem === 'GET' && yol === '/plan/satin-alma-eki') return json(200, SATIN_ALMA_EKI);
       return json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
     });
     const sonuc = await kopruKur()('kaynak-oku', {});
@@ -307,7 +307,7 @@ describe('köprü komutları', () => {
     expect(yazma?.yol).toBe('/operasyon-tipleri/4/guncelle');
     expect(yazma?.govde).toEqual({ ad: 'Testere', grup: 'KES', aktif: false, kisaltma: 'TST', varsayilanAyarDk: '5', varsayilanBirimDk: '2.5', varsayilanIstasyonId: 31, surum: 7 });
     // Aynı gövde sahibin şemasıyla sunucu testinde sınanır (sunucu/moduller/recete-rota/kopru-sozlesmesi.test.ts).
-    expect(istekler.slice(-2).map((i) => i.yol)).toEqual(['/recete-rota/durum', '/plan/motor-yerlesimi']);
+    expect(istekler.slice(-2).map((i) => i.yol)).toEqual(['/plan/planlama-kaynagi', '/plan/motor-yerlesimi']);
   });
 
   it('RR2-2: listede olmayan ya da geçersiz kimlikli operasyon tipi yazmadan reddedilir', async () => {
@@ -330,7 +330,7 @@ describe('köprü komutları', () => {
     let surum = 4;
     const istekler = sunucuKur((yontem, yol) => {
       if (yontem === 'GET' && yol.startsWith('/plan?taslak=')) return json(200, { taslak: { id: 9, surum } });
-      if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, DURUM);
+      if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, DURUM);
       if (yontem === 'POST') { if (yol !== '/plan/senaryolar') surum += 1; return json(200, { taslak: 9, canli: false }); }
       return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
     });
@@ -369,7 +369,7 @@ describe('köprü komutları', () => {
   });
 
   it('KOM-20: plan ve stok komutları sahibinin var olan ucuna yalnız izinli alanlarla, istek kimliğiyle gider; yol parametresi doğrulanır', async () => {
-    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { ok: true }) : yol === '/recete-rota/durum' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
+    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { ok: true }) : yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
     const isle = kopruKur();
     const ayar = { kural: 'fifo', yon: 'ileri', tamponGun: 2, dondurmaGun: 2, personelKisiti: false, taslakEmirler: false };
     const kuyruklar = [{ kaynak: { tur: 'makine', id: 4 }, baslangic: '2026-10-14T05:00:00.000Z', isler: [{ emirNo: 'E-1', opNo: 10, dondurulmus: false }] }];
@@ -409,7 +409,7 @@ describe('köprü komutları', () => {
     expect(await isle('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: null, planMotoru: { emirler: [], parcaAdetleri: {} } });
     await isle('durum-oku', {});
     expect(istekler.map((i) => [i.yontem, i.yol])).toEqual([
-      ['POST', '/rota/karttan-taslaklar'], ['GET', '/recete-rota/durum'], ['GET', '/plan/motor-yerlesimi'], ['GET', '/recete-rota/durum'], ['GET', '/plan/motor-yerlesimi'],
+      ['POST', '/rota/karttan-taslaklar'], ['GET', '/plan/planlama-kaynagi'], ['GET', '/plan/motor-yerlesimi'], ['GET', '/plan/planlama-kaynagi'], ['GET', '/plan/motor-yerlesimi'],
     ]);
   });
 
@@ -417,7 +417,7 @@ describe('köprü komutları', () => {
     const istekler = sunucuKur(() => json(200, DURUM));
     const isle = kopruKur();
     expect(await isle('durum-oku', {})).toEqual({ ...DURUM, planYerlesim: null, planMotoru: { emirler: [], parcaAdetleri: {} } });
-    expect(istekler.map((i) => [i.yontem, i.yol])).toEqual([['GET', '/recete-rota/durum'], ['GET', '/plan/motor-yerlesimi']]);
+    expect(istekler.map((i) => [i.yontem, i.yol])).toEqual([['GET', '/plan/planlama-kaynagi'], ['GET', '/plan/motor-yerlesimi']]);
   });
 });
 
@@ -428,7 +428,7 @@ describe('köprü: birim maliyet yazma (kart #1187)', () => {
   };
   const sunucu = (durum: DurumCevabi) => sunucuKur((yontem, yol) => {
     if (yontem === 'POST') return json(200, { maliyet: { anahtar: 12 } });
-    return yol === '/recete-rota/durum' ? json(200, durum) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
+    return yol === '/plan/planlama-kaynagi' ? json(200, durum) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
   });
 
   it('MAL-01: yazma /finans/maliyetler/:tur/yaz ucuna yalnız TRY ve köprünün son okuduğu sürümle gider; satırı olmayan kalemde sürüm null (ilk giriş)', async () => {
@@ -466,20 +466,20 @@ describe('köprü: birim maliyet yazma (kart #1187)', () => {
   });
 
   it('MAL-03: sunucu yetkiyi reddederse (finans.yonet yok) hata iletisiyle taşınır ve durum yeniden okunmaz', async () => {
-    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) : json(200, yol === '/recete-rota/durum' ? MALIYETLI : {})));
+    const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) : json(200, yol === '/plan/planlama-kaynagi' ? MALIYETLI : {})));
     const isle = kopruKur();
     await isle('durum-oku', {});
     const hata = await isle('komut', { ad: 'maliyet-yaz', govde: { tur: 'malzeme', anahtar: 12, birimMaliyet: 1 } }).then(() => null, sorun);
     expect(hata).toEqual({ hata: 'Bu işlem için yetkiniz yok.', durum: 403 });
     expect(yazmalar(istekler)).toHaveLength(1);
-    expect(istekler.filter((i) => i.yol === '/recete-rota/durum')).toHaveLength(1);
+    expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(1);
   });
 
   it('MAL-04: başarıdan sonra sürüm yenilenir; ikinci yazma yeni sürümle gider', async () => {
     let surum = 3;
     const istekler = sunucuKur((yontem, yol) => {
       if (yontem === 'POST' && yol !== '/rota/karttan-taslaklar') { surum += 1; return json(200, { maliyet: { anahtar: 12, surum } }); }
-      return yol === '/recete-rota/durum'
+      return yol === '/plan/planlama-kaynagi'
         ? json(200, { ...MALIYETLI, maliyet: { ...MALIYETLI.maliyet!, malzeme: { '12': { birimMaliyet: '4.5000', paraBirimi: 'TRY', surum } } } })
         : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' });
     });
@@ -575,7 +575,7 @@ describe('köprü: plan motoru okunamadı uyarısı (denetim 22)', () => {
   it('MO-1: motor yerleşimi okunamayınca bir kez haber verir, yeniden okununca kalkar; ekran yerleşimsiz açılır', async () => {
     let motor = 503;
     sunucuKur((_y, yol) => {
-      if (yol === '/recete-rota/durum') return json(200, DURUM);
+      if (yol === '/plan/planlama-kaynagi') return json(200, DURUM);
       if (yol === '/plan/motor-yerlesimi') return motor === 200 ? json(200, { ekranYerlesimi: {} }) : json(motor, { kod: 'SUNUCU', mesaj: 'Hata.' });
       return json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' });
     });
@@ -593,7 +593,7 @@ describe('köprü: plan motoru okunamadı uyarısı (denetim 22)', () => {
   });
 
   it('MO-2: okunan motor yerleşimi haber vermez', async () => {
-    sunucuKur((_y, yol) => (yol === '/recete-rota/durum' ? json(200, DURUM) : json(200, { ekranYerlesimi: null })));
+    sunucuKur((_y, yol) => (yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : json(200, { ekranYerlesimi: null })));
     const durumlar: boolean[] = [];
     await kopruKur([], { motorDurumu: (o) => { durumlar.push(o); } })('durum-oku', {});
     expect(durumlar).toEqual([]);
@@ -602,7 +602,7 @@ describe('köprü: plan motoru okunamadı uyarısı (denetim 22)', () => {
   it('MO-3: yerleşimi çizmeyen çerçeve motoru istemez; uyarıyı motorsuz uçtan okur, okunamayınca listeye ve motor durumuna dokunmaz', async () => {
     let uyari = 200;
     const istekler = sunucuKur((_y, yol) => {
-      if (yol === '/recete-rota/durum') return json(200, DURUM);
+      if (yol === '/plan/planlama-kaynagi') return json(200, DURUM);
       if (yol === '/plan/motor-uyarilari') return uyari === 200 ? json(200, { uyarilar: ['Kısıt uygulanmadı.'] }) : json(uyari, { kod: 'SUNUCU', mesaj: 'Hata.' });
       return json(404, { kod: 'BULUNAMADI', mesaj: 'Yok.' });
     });
@@ -612,7 +612,7 @@ describe('köprü: plan motoru okunamadı uyarısı (denetim 22)', () => {
     expect(await isle('durum-oku', {})).toMatchObject({ planYerlesim: null });
     uyari = 503;
     expect(await isle('durum-oku', {})).toMatchObject({ planYerlesim: null });
-    expect(istekler.map((i) => `${i.yontem} ${i.yol}`).filter((x) => x.includes('/plan/'))).toEqual(['GET /plan/motor-uyarilari', 'GET /plan/motor-uyarilari']);
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`).filter((x) => x.includes('/plan/') && !x.endsWith('/plan/planlama-kaynagi'))).toEqual(['GET /plan/motor-uyarilari', 'GET /plan/motor-uyarilari']);
     expect(listeler).toEqual([['Kısıt uygulanmadı.']]);
     expect(durumlar).toEqual([]);
   });

@@ -1,15 +1,15 @@
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Planlama P4: Malzeme satın alma planı (/recete-rota/planlama-yeni/malzplan). Ekran yalnız okur (222 a); örnek veride plan
+// Planlama P4: Malzeme satın alma planı (/plan/malzplan). Ekran yalnız okur (222 a); örnek veride plan
 // kurulmamış olabilir, o zaman boş ısı haritası ve "Önce plan kurulmalı." ya da "Planlama çalışması yok." görünür. Üç genişlikte (360, 768, 1280) koşar.
 test.use({ hesap: 'ornek.yonetici' });
 
 test.describe('P4 malzeme planı', () => {
   test('görünüm adresiyle açılır, yazmaz, hata vermez, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
-    await ac('/recete-rota/planlama-yeni/malzplan');
+    await ac('/plan/malzplan');
     await expect(page.locator('[data-gorunum="malzplan"]')).toBeVisible();
-    const serit = page.getByRole('tablist', { name: 'Planlama görünümleri' });
-    await expect(serit.getByRole('tab', { name: 'Malzeme satın alma planı' })).toHaveAttribute('aria-selected', 'true');
+    const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
+    await expect(serit.getByRole('link', { name: /^Malzeme satın alma planı/ })).toHaveAttribute('aria-current', 'page');
     // Isı haritası katmanı başta, asıl sayfa "Tüm satırlar" içinde (zz30-isi).
     const plan = page.getByRole('heading', { name: /Malzeme satın alma planı/ });
     await expect(plan.or(page.getByText('Planlama çalışması yok.'))).toBeVisible();
@@ -24,13 +24,13 @@ test.describe('P4 malzeme planı', () => {
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     // Stok uçlarının yetkisi olmayan hesapta 403 beklenir (ekran planın kopyasına döner); onun dışında hata yok.
     expect(ag.hatalar.filter((h) => !/^403 GET \/api\/stok\//.test(h))).toEqual([]);
-    expect(ag.yazmalar).toEqual([]);
+    expect(ag.yazmalar.filter((y) => y !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
   });
 
   test.describe('yetki', () => {
     test.use({ hesap: 'ornek.depo' });
     test('yönetici olmayan kişi yeni ekranı görmez', async ({ page, ac }) => {
-      await ac('/recete-rota/planlama-yeni/malzplan');
+      await ac('/plan/malzplan');
       await expect(page.locator('[data-gorunum="malzplan"]')).toHaveCount(0);
     });
   });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -24,7 +24,7 @@ function sunucuKur(cevap: (yontem: string, yol: string) => Response): Istek[] {
   }));
   return istekler;
 }
-const tamam = (yontem: string, yol: string): Response => (yontem === 'POST' ? json(200, { id: 101, durum: 'taslak', surum: 2 }) : yol === '/recete-rota/durum' ? json(200, DURUM) : json(404, { kod: 'BULUNAMADI', mesaj: 'yok' }));
+const tamam = (yontem: string, yol: string): Response => (yontem === 'POST' ? json(200, { id: 101, durum: 'taslak', surum: 2 }) : yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : json(404, { kod: 'BULUNAMADI', mesaj: 'yok' }));
 const sorun = (e: unknown) => kopruHatasi(e);
 
 const ADIM = {
@@ -38,7 +38,7 @@ describe('rota köprü komutları', () => {
   it('ROK-1: taslak açma istek kimliğiyle rota ucuna gider; başarıda yalnız bağlı durum yeniden okunur', async () => {
     const istekler = sunucuKur(tamam);
     const sonuc = await kopruKur()('komut', { ad: 'rota-taslak-ac', govde: { urunId: 12, kaynak: { tur: 'revizyon', revizyonId: 7, sinsi: 1 } } });
-    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /rota/urunler/12/taslak-ac', 'GET /recete-rota/durum', 'GET /plan/motor-yerlesimi']);
+    expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['POST /rota/urunler/12/taslak-ac', 'GET /plan/planlama-kaynagi', 'GET /plan/motor-yerlesimi']);
     expect(istekler[0]?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 7 } });
     expect(istekler[0]?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
     expect(sonuc).toEqual({ sonuc: { id: 101, durum: 'taslak', surum: 2 }, durum: { ...DURUM, planYerlesim: null, planMotoru: null }, ek: null });

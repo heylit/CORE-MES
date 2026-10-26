@@ -177,7 +177,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
   // Onaylı matris (kart 69). Bayraklı rol kayıtlı bütün işlemleri alır.
   const SAYFA = (...adlar: string[]): string[] => adlar.map((ad) => `sayfa.${ad}`);
   // Üretim Emirleri sayfası Rota'yı gören her rolde (kullanıcı kararı 12.10.2026, kart #651).
-  const MUDUR_SAYFALARI = SAYFA('uretim-emirleri', 'terminal', 'kuyruk', 'cizelge', 'matris', 'vardiya', 'mesai', 'stok', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'personel', 'arkon', 'kalibrasyon', 'denetim', 'finans', 'satin-alma', 'sevkiyat', 'atolye', 'taleplerim', 'portal', 'ik-islemlerim', 'projeler', 'denetim-hazirlik', 'cnc-kurulum', 'mesaj', 'recete-rota', 'musteri-tedarikci', 'akis', 'oee', 'etiket-merkezi',
+  const MUDUR_SAYFALARI = SAYFA('uretim-emirleri', 'terminal', 'kuyruk', 'cizelge', 'matris', 'vardiya', 'mesai', 'stok', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'personel', 'arkon', 'kalibrasyon', 'denetim', 'finans', 'satin-alma', 'sevkiyat', 'atolye', 'taleplerim', 'portal', 'ik-islemlerim', 'projeler', 'denetim-hazirlik', 'cnc-kurulum', 'mesaj', 'recete-rota', 'plan', 'musteri-tedarikci', 'akis', 'oee', 'etiket-merkezi',
     // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
     'kalite-merkezi', 'durus-nedenleri', 'cizimler', 'smartes', 'siparisler',
     // Kullanıcı kararları 174 a ve 182 a.
@@ -401,8 +401,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.vardiya_sorumlusu?.push('saat.oku');
   MATRIS.bakim?.push('saat.oku');
   // Ortak yetki matrisi (195 a, 23.10.2026; 353 a ve 65 a ile çelişme onaylı). Sayım düzeltmesi müdüre verilmez (185 a).
-  MATRIS.mudur?.push('recete-rota.planlama-oku');
-  MATRIS.planlama_proje?.push('recete-rota.planlama-oku');
+  MATRIS.mudur?.push('plan.planlama-oku');
+  MATRIS.planlama_proje?.push('plan.planlama-oku', 'sayfa.plan');
   MATRIS.kalite?.push('musteri-tedarikci.oku');
   // Sipariş listesindeki firma seçicisi (201 a, 23.10.2026).
   MATRIS.sevkiyat?.push('musteri-tedarikci.oku');

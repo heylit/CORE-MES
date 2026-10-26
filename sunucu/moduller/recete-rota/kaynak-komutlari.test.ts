@@ -12,7 +12,7 @@ import {
   BOS_ANLIK, KAYNAK_KOMUTLARI, KAYNAK_OKUMALARI, koleksiyonKur, komutIstegi, takvimEki,
 } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import type { KaynakAnlik, KaynakKoleksiyonu } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import {

@@ -31,8 +31,8 @@ test.describe('R0 iskelet', () => {
     expect(await ust(menu)).toBeLessThan(await ust(serit));
     expect(await ust(serit)).toBeLessThan(await ust(ekran.getByRole('heading', { name: 'Üretim emirleri', level: 2 })));
     await expect(seritte(page, 'Üretim emirleri')).toHaveAttribute('aria-current', 'page');
-    // Planlama sayfaları aynı şeritten açılır (553'ün nedeni).
-    await expect(seritte(page, 'Planlama motoru')).toHaveAttribute('href', '/recete-rota/plan');
+    // Planlama ayrı sayfadır (658 b): şeritte planlama maddesi yoktur.
+    await expect(seritte(page, 'Planlama motoru')).toHaveCount(0);
     for (const b of BOLUMLER) {
       await seritte(page, b.sekme).click();
       await expect(seritte(page, b.sekme)).toHaveAttribute('aria-current', 'page');

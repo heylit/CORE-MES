@@ -1,6 +1,8 @@
 # ADR 0018 — Plan motoru tek kaynak, son söz sunucuda
 
 Durum: kabul (kullanıcı kararı 21.10.2026: "ADR 0018 a onaylı, yaz"; seçenek a: motor `sunucu/moduller/recete-rota/motor/` altında).
+Motorun yeri ADR 0020 ile değişti (26.10.2026): motor ve planlama kodu `sunucu/moduller/plan/motor/` altında, plan modülünündür; öteki
+maddeler aynen sürer.
 Dayandığı kararlar: 354 (asıl plan motoru sunucuda; denemeler ve stüdyodaki asıl plan öncesi değişiklikler tarayıcıda), 391 a (başlamış adımın
 kalanını sunucu adetten hesaplar, motor kullanır), 396 a, 397 a, 338 a (tek plan motoru Reçete ve Rota'da, plan sunucusu plan modülünde),
 364 c (motor JS kalır). Canlıya alma (356 b) bu belgenin kapsamında değildir.

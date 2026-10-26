@@ -22,9 +22,9 @@ interface Sayfa {
 const RECETE_ROTA = /^\/recete-rota(\/[a-z]+)?$/;
 const RECETE_ROTA_ESKI = /^\/recete-rota\/eski(\/[a-z]+)?$/;
 const RECETE_ROTA_BOLUMLERI = ['schema', 'plan', 'kanban', 'items', 'ops', 'res', 'stock', 'studio', 'sureler'] as const;
-// Bu bölümler planlama çerçevesinde açılır ve planlama işlemini ister; Aşama 1'de yalnız yöneticide (353 a). Planlamacının
-// reddi recete-rota.spec.ts'te sınanır.
+// Planlama plan modülünün sayfasıdır (658 b): bu eski adresler Planlama'ya yönlenir. Planlamacının reddi recete-rota.spec.ts'te sınanır.
 const PLANLAMA_BOLUMLERI: readonly string[] = ['plan', 'kanban', 'studio'];
+const PLANLAMA = /^\/plan(\/[a-z]+)?$/;
 // Yeni ekranın başlığı bölümün adıdır (kabuğun başlığı dar ekranda görünmez).
 const YENI_BOLUM_BASLIGI: Readonly<Record<string, string>> = {
   schema: 'Ürün ve rotalar', items: 'Malzemeler', ops: 'Operasyonlar', res: 'Kaynaklar', stock: 'Stok', sureler: 'Süreler',
@@ -49,8 +49,9 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'recete-rota', yol: '/recete-rota', varis: RECETE_ROTA, hesap: 'ornek.yonetici', baslik: 'Üretim emirleri' },
   { modul: 'recete-rota', yol: '/recete-rota/eski', varis: RECETE_ROTA_ESKI, hesap: 'ornek.yonetici', baslik: 'Reçete ve Rota', cerceve: true },
   ...RECETE_ROTA_BOLUMLERI.map((b): Sayfa => ({
-    modul: 'recete-rota', yol: `/recete-rota/${b}`, varis: RECETE_ROTA, hesap: PLANLAMA_BOLUMLERI.includes(b) ? 'ornek.yonetici' : 'ornek.planlama',
-    ...(PLANLAMA_BOLUMLERI.includes(b) ? { baslik: 'Reçete ve Rota', cerceve: true } : { baslik: YENI_BOLUM_BASLIGI[b] ?? b }),
+    modul: 'recete-rota', yol: `/recete-rota/${b}`, ...(PLANLAMA_BOLUMLERI.includes(b)
+      ? { varis: PLANLAMA, hesap: 'ornek.yonetici', baslik: 'Planlama' }
+      : { varis: RECETE_ROTA, hesap: 'ornek.planlama', baslik: YENI_BOLUM_BASLIGI[b] ?? b }),
   })),
   // Üretim Terminali yeni ekrandadır (541); eski çerçeve /uretim-terminali/eski altında.
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },

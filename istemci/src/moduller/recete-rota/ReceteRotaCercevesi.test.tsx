@@ -75,7 +75,10 @@ describe('ReceteRotaCercevesi', () => {
     const eski = ESKI_MENULER.find((m) => m.kok === '/recete-rota');
     expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski')?.anahtar).toBe('orders');
     expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/eski/stock')?.anahtar).toBe('stock');
-    expect(etkinMadde(menuMaddeleri(eski!), '/recete-rota/plan')?.anahtar).toBe('plan');
+    // Planlama menüsünün maddeleri eski çerçevede /plan/eski altındadır (659 a).
+    const planlama = ESKI_MENULER.find((m) => m.kok === '/plan');
+    expect(etkinMadde(menuMaddeleri(planlama!), '/plan/eski')?.anahtar).toBe('plan');
+    expect(etkinMadde(menuMaddeleri(planlama!), '/plan/eski/terminler')?.anahtar).toBe('terminler');
   }, 30000);
 
   it('prototipin betiği derlenir; açılan sayfada üst şerit, yan menü ve sekme şeridi yoktur, kayıt yazısı gizlidir', async () => {
@@ -273,7 +276,8 @@ describe('ReceteRotaCercevesi', () => {
       expect(rozet('Ürün ve rotalar')).toBe('1');
       expect(rozet('Operasyonlar')).toBe('1');
       expect(rozet('Malzemeler')).toBe('3');
-      expect(rozet('Planlama motoru')).toBe('1');
+      // Planlama motoru maddesi Planlama menüsündedir (658 b): Reçete ve Rota şeridinde rozeti yoktur.
+      expect(within(menu()).queryByRole('link', { name: /^Planlama motoru/ })).toBeNull();
     }, 40000);
 
     it('plan hesaplanmadıysa geç sayısı yoktur (null); hesaplanmışsa başka sekmede de korunur', async () => {

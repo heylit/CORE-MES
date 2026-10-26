@@ -38,6 +38,7 @@ import { STOK_IKINCI_MENU, STOK_SAYFALARI } from './sayfalar/stok.ts';
 import { TERMINAL_SAYFALARI } from './sayfalar/terminal.ts';
 import { URETIM_EMIRLERI_SAYFALARI } from './sayfalar/uretim-emirleri.ts';
 import { VARDIYA_IKINCI_MENU, VARDIYA_SAYFALARI } from './sayfalar/vardiya.ts';
+import { PLAN_IKINCI_MENU, PLAN_SAYFALARI } from './sayfalar/plan.ts';
 import { PORTAL_IKINCI_MENU, PORTAL_SAYFALARI } from './sayfalar/portal.ts';
 
 // Sayfa listesi tek kaynaktır: menü buradan beslenir. Her sayfa menüde görünme işlemini kendi bildirir;
@@ -52,6 +53,7 @@ export const SAYFALAR = sayfalariSirala([
   ...CIZIMLER_SAYFALARI,
   ...CNC_KURULUM_SAYFALARI,
   ...RECETE_ROTA_SAYFALARI,
+  ...PLAN_SAYFALARI,
   ...DENETIM_SAYFALARI,
   ...DENETIM_HAZIRLIK_SAYFALARI,
   ...DURUS_NEDENLERI_SAYFALARI,
@@ -118,6 +120,7 @@ export const IKINCI_MENULER = [
   MESAJ_IKINCI_MENU,
   CNC_KURULUM_IKINCI_MENU,
   RECETE_ROTA_IKINCI_MENU,
+  PLAN_IKINCI_MENU,
   MUSTERI_TEDARIKCI_IKINCI_MENU,
   AKIS_IKINCI_MENU,
   OEE_IKINCI_MENU,

@@ -3,7 +3,8 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, DurumCevabi, DurumRotaAdimi, DurumRotaRevizyonu, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, DurumRotaAdimi, DurumRotaRevizyonu, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { YAZAR, ac, prototipiCalistir, yazilan, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -96,7 +97,7 @@ function sunucuKur(s: Sunucu): void {
     if (yol === '/oturum') return json(200, { kullanici: kisi } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: kisi.id, ad: kisi.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [{ anahtar: ONEK, bicim: 'json', deger: s.belge ?? BELGE, surum: 1 }] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, durumKur(s));
+    if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, durumKur(s));
     if (yontem !== 'POST' || !yol.startsWith('/rota/')) return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
     const g = JSON.parse(String(secenek?.body)) as Record<string, unknown>;
     s.yazmalar.push({ yol, govde: g });
