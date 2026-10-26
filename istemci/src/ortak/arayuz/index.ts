@@ -28,7 +28,7 @@ export { Menu, type MenuOgesi } from './Menu.tsx';
 export { OnayPenceresi } from './OnayPenceresi.tsx';
 export { Sekmeler, type Sekme } from './Sekmeler.tsx';
 export {
-  BildirimSaglayici, useBildirim, type BildirimEylemi, type BildirimSecenegi, type BildirimTonu,
+  BildirimSaglayici, BildirimSayfaIzleyici, useBildirim, type BildirimEylemi, type BildirimSecenegi, type BildirimTonu,
 } from './Bildirim.tsx';
 export { FormPenceresi } from './FormPenceresi.tsx';
 export type { MakineDurumu } from './durum.ts';
