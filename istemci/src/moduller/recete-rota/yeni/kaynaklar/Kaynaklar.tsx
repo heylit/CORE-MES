@@ -28,6 +28,11 @@ const MAKINE_DURUMU: Record<Makine['status'], { ad: string; ton: RozetTonu }> = 
   aktif: { ad: 'Aktif', ton: 'tamam' }, bakim: { ad: 'Bakımda', ton: 'uyari' }, ariza: { ad: 'Arızalı', ton: 'hata' },
 };
 const RENK_SAYISI = 6;
+// 561 1 b: istasyonun operatör ihtiyacı 1/N (aşağı yuvarlanmış) ise "1 operatör N tezgâha bakar" okunur (567 ortak anlaşma).
+const operatorMetni = (oran: number): string => {
+  const n = oran > 0 && oran < 1 ? Math.round(1 / oran) : 0;
+  return n >= 2 && n <= 10 && Math.floor(100 / n) / 100 === oran ? `1 operatör ${String(n)} tezgâha bakar` : `${sayi(oran)} operatör/makine`;
+};
 export const ISTASYON_MALIYET_NOTU = 'Doğrudan gider: enerji, bakım, sarf (amortisman ve kira genel giderde)';
 export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine, personel, vardiya ve tatiller İstasyonlar, Kişiler ve Vardiya sayfalarıyla ortaktır: '
   + 'burada yapılan değişiklik orada da görünür.';
@@ -184,7 +189,7 @@ function GenelBakis({ b }: { b: Bag }) {
                 return (
                   <div key={x.id} className="tc-rr2-agac-ist">
                     <b>{x.code} {x.name}</b>
-                    <small>{`verim %${sayi(x.eff)}, ${sayi(x.opPer ?? 1)} operatör/makine`}</small>
+                    <small>{`verim %${sayi(x.eff)}, ${operatorMetni(x.opPer ?? 1)}`}</small>
                     <small className="tc-rr2-soluk">{ops.length > 0 ? ops.join(', ') : 'operasyon yok'}</small>
                     <div className="tc-rr2-satir">
                       {ms.length > 0
@@ -409,7 +414,7 @@ function IstasyonTablosu({ b, wc }: { b: Bag; wc: IsMerkezi }) {
           : `${String(x.count)} aktif makine`;
       },
     },
-    { anahtar: 'operator', baslik: 'Operatör / makine', hizala: 'sag', hucre: (x) => sayi(x.opPer ?? 1) },
+    { anahtar: 'operator', baslik: 'Operatör / makine', hizala: 'sag', hucre: (x) => operatorMetni(x.opPer ?? 1) },
     {
       anahtar: 'kapasite', baslik: 'Kapasite',
       hucre: (x) => {
