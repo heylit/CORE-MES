@@ -167,6 +167,47 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(await bitis(calismada, { ekMesai: [] }), ertesi, 'taslakta ek vardiya yoksa çalışmanınki kullanılmaz');
   });
 
+  test('650 a: tezgâh kendi iş merkezinin haftasıyla çalışır; haftasında vardiya olmayan merkezin tezgâhı vardiyasız', async () => {
+    // Merkez 1 (T1, T2) hafta içi 08:00-16:00; merkez 2 (T3) her gün 13:00-17:00; merkez 3 (T4) vardiyasız. Atölyenin tek takvimi birleşimdir.
+    const ogle = { id: '5', name: 'Ogle', start: '13:00', end: '17:00', breaks: [] };
+    const hafta = (ids: string[], gunler: number[]) => Object.fromEntries(gunler.map((g) => [g, ids]));
+    const d = KAYNAK.kaynak.durum;
+    const k = {
+      ...KAYNAK,
+      calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, vardiyalar: [...KAYNAK.calisma.D.vardiyalar, { id: '5', bas: '13:00', bit: '17:00' }] } },
+      kaynak: {
+        durum: {
+          ...d,
+          wcs: [...d.wcs, { id: '2', code: 'IM2', name: 'Ogle merkezi', aktif: true }, { id: '3', code: 'IM3', name: 'Bos merkez', aktif: true }],
+          stations: [...d.stations, { id: '20', code: 'TOR2', name: 'Torna 2', wcId: '2', eff: 100, opPer: 1, count: 1, aktif: true },
+            { id: '30', code: 'TOR3', name: 'Torna 3', wcId: '3', eff: 100, opPer: 1, count: 1, aktif: true }],
+          machines: [...d.machines, { id: '200', code: 'T3', name: 'Torna 3', stationId: '20', status: 'aktif', aktif: true },
+            { id: '300', code: 'T4', name: 'Torna 4', stationId: '30', status: 'aktif', aktif: true }],
+          cal: { shifts: [...d.cal.shifts, ogle], holidays: [] },
+        },
+        ek: { takvim: { hafta: { 1: hafta([V], [1, 2, 3, 4, 5]), 2: hafta(['5'], [0, 1, 2, 3, 4, 5, 6]) }, kisiVardiyasi: {} } },
+      },
+    };
+    const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }, { makineId: 200, anahtarlar: ['E-2|10'] }, { makineId: 300, anahtarlar: ['E-2|20'] }] }));
+    assert.deepEqual([yer(r, 'E-1|10')!.baslangic, yer(r, 'E-1|10')!.bitis], ['2026-10-19T05:00:00.000Z', '2026-10-19T06:00:00.000Z'], 'merkez 1: 08:00');
+    assert.deepEqual([yer(r, 'E-2|10')!.baslangic, yer(r, 'E-2|10')!.bitis], ['2026-10-19T10:00:00.000Z', '2026-10-19T11:00:00.000Z'], 'merkez 2: 13:00');
+    assert.deepEqual(r.vardiyasiz, ['E-2|20'], 'merkez 3: vardiyasız');
+  });
+
+  test('651 a: arızadaki tezgâh vardiya sonuna kadar kapalıdır; silinen oto satırı geri gelmez, makine çalışınca satır kapanır', async () => {
+    const d = KAYNAK.kaynak.durum;
+    const durumlu = (status: string, calisma: object = {}) => ({ ...KAYNAK, calisma: { ...KAYNAK.calisma, ...calisma },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...d, machines: d.machines.map((m) => m.id === '100' ? { ...m, status } : m) } } });
+    const i = istek({ simdi: new Date('2026-10-19T07:00:00Z'), kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] });
+    const bas = async (k: Parameters<typeof coz>[0]) => yer(await coz(k, i), 'E-1|10')!.baslangic;
+    assert.equal(await bas(durumlu('ariza')), '2026-10-20T05:00:00.000Z', 'arıza: 10:00-16:00 kapalı, ertesi gün 08:00');
+    assert.equal(await bas(durumlu('bakim')), '2026-10-20T05:00:00.000Z', 'bakım da aynı');
+    assert.equal(await bas(durumlu('ariza', { arizaOto: { 100: 'ariza' } })), '2026-10-19T07:00:00.000Z', 'planlamacının sildiği satır geri gelmez');
+    const acik = { arizaOto: { 100: 'ariza' }, down: [{ m: '100', from: 10, to: 16, neden: 'arıza', oto: 1 }] };
+    assert.equal(await bas(durumlu('aktif', acik)), '2026-10-19T07:00:00.000Z', 'makine çalışır: oto satır şimdide kapanır');
+    assert.equal(await bas(durumlu('aktif', { down: [{ m: '100', from: 10, to: 16, neden: 'arıza' }] })), '2026-10-20T05:00:00.000Z', 'elle girilen satır kalır');
+  });
+
   test('168 b: vardiyası tanımsız tezgâhın işi vardiyasiz\'dadır, ötekiler dizilir', async () => {
     const k = { ...KAYNAK, calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, calismaGunleri: {} } } };
     const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
