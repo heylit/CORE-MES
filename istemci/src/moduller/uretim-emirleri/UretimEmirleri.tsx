@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { KucukResim } from '#paylasilan/sozlesme/cizimler.ts';
 import type { BitenEmirlerCevabi, EmirDurumu, IzlemeEmri, IzlemeListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { KucukResimKutusu, useKucukResimler } from '../cizimler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI, durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
@@ -20,10 +22,16 @@ const durumSecenekleri = (g: Gorunum) => [
 ];
 const GORUNUMLER = [{ anahtar: 'acik', baslik: 'Açık emirler', simge: 'list' }, { anahtar: 'bitenler', baslik: 'Bitenler', simge: 'check' }] as const;
 
-const SUTUNLAR: Sutun<IzlemeEmri>[] = [
+// Parça adının yanında malzeme kartının küçük resmi (kart #688); resim çizim merkezinden tek istekte gelir.
+const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[] => [
   { anahtar: 'emirNo', baslik: 'Emir no', hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="tc-emir-kod">{e.emirNo}</Link> },
   { anahtar: 'parcaNo', baslik: 'Parça no', hucre: (e) => e.parcaNo },
-  { anahtar: 'parcaAd', baslik: 'Parça adı', hucre: (e) => e.parcaAd },
+  { anahtar: 'parcaAd', baslik: 'Parça adı', hucre: (e) => (e.malzemeNo == null ? e.parcaAd : (
+    <span className="tc-emir-parca">
+      <KucukResimKutusu resim={resimler.get(e.malzemeNo)} ad={e.parcaAd} />
+      {e.parcaAd}
+    </span>
+  )) },
   { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (e) => e.adet },
   { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (e) => e.istasyon?.ad ?? 'Atanmamış' },
   { anahtar: 'durum', baslik: 'Durum', hucre: (e) => { const d = durumGosterimi(e); return <Rozet ton={d.ton}>{d.etiket}</Rozet>; } },
@@ -70,6 +78,9 @@ export function UretimEmirleri() {
   });
   const emirler = (liste.data?.emirler ?? []).filter((e) => ara === '' || `${e.emirNo} ${e.parcaNo} ${e.parcaAd}`.toLocaleLowerCase('tr-TR').includes(ara));
   const sorgu = gorunum === 'acik' ? liste : bitenler;
+  const gorunen = gorunum === 'acik' ? emirler : bitenler.data?.satirlar ?? [];
+  const resimler = useKucukResimler('malzemeler', gorunen.flatMap((e) => (e.malzemeNo == null ? [] : [e.malzemeNo])));
+  const SUTUNLAR = sutunlar(resimler);
 
   return (
     <Kart

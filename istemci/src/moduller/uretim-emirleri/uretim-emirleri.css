@@ -36,3 +36,4 @@
 .tc-iplik-uc { fill: var(--ink); filter: drop-shadow(0 0 var(--b-2) var(--hazard)); }
 :root[data-hareket='sade'] .tc-iplik * { transition: none; }
 @media (prefers-reduced-motion: reduce) { .tc-iplik * { transition: none; } }
+.tc-emir-parca { display: inline-flex; align-items: center; gap: var(--b-2); }
