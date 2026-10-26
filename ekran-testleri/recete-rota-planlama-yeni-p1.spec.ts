@@ -304,7 +304,7 @@ test.describe('577b Veri ve kısıtlar', () => {
     await ac('/plan/sevkiyat');
     const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
     await cubuk.getByRole('button', { name: /^Veri/ }).click();
-    await expect(page).toHaveURL(/\/plan\/plan\?ekran=veri$/);
+    await expect(page).toHaveURL(/\/plan\?ekran=veri$/);
     await expect(page.locator('[data-parca="veri"]')).toBeVisible();
     await expect(cubuk.getByRole('button', { name: /^Veri/ })).toHaveAttribute('aria-current', 'page');
     const menu = page.getByRole('navigation', { name: 'Veri ve kısıtlar' });

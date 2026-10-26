@@ -1,4 +1,4 @@
-import { cerceve, expect, test } from './ortak.ts';
+import { ADRES, cerceve, expect, test } from './ortak.ts';
 
 // Kaynak: kayit/recete-rota/akislar.md R0 (açılış ve plan şeridi), R1 adım 1 (ürün seçimi), durum ekranları.
 // Bilinen yanlış davranış (açılışta yazma) burada sınanmaz: degisecek.spec.ts. Reçete ve Rota bölümlerinin çerçevesi eski adrestedir
@@ -50,13 +50,55 @@ test('ikinci menüden bölümler arasında geçilir; Reçete ve Rota maddesi yen
   expect(ag.hatalar).toEqual([]);
 });
 
+// Çerçeve açılışta Reçete ve Rota kaydı çalışmanınkinden yeniyse (savedAt, çalışmada rrSavedAt) onu çalışmaya alır ve iki kaydı yazar; bu
+// eşitlemedir, sınanan değildir. Aynı veritabanında koşan öteki testler (öteki genişlikler dahil) iki kaydı her an değiştirebilir, bu yüzden
+// çerçeveye okunan kayıtların eşitlenmiş hâli verilir: çalışmanın rrSavedAt'i Reçete ve Rota kaydının savedAt'idir.
+const RR_ANAHTARI = 'recete-rota-motoru-v1';
+const PLANLAMA_KAYDI = `${RR_ANAHTARI}:planlama`;
+type Kayit = { anahtar: string; deger: unknown };
+type Kayitlar = { kayitlar: Kayit[] };
+const kayitDegeri = (k: Kayitlar, anahtar: string): Record<string, unknown> | null =>
+  (k.kayitlar.find((x) => x.anahtar === anahtar)?.deger ?? null) as Record<string, unknown> | null;
+
 test('eski planlama çerçevesini açmak ortak kayda yazmaz (aynı anda açan ikinci kişi çakışma uyarısı almaz)', async ({ page, ag, ac }) => {
+  const oku = async (yol: string): Promise<Kayitlar> => (await page.request.get(`${ADRES}/api/${yol}`)).json() as Promise<Kayitlar>;
+  // Çalışma yoksa Planlama sayfası kurar (657 a); kurmak kayıt varsa dokunmaz, öteki testlerle yarışmaz.
+  let plan = await oku('plan/planlama-kayitlari');
+  if (kayitDegeri(plan, PLANLAMA_KAYDI) === null) {
+    await ac('/plan');
+    await expect.poll(async () => { plan = await oku('plan/planlama-kayitlari'); return kayitDegeri(plan, PLANLAMA_KAYDI) !== null; }).toBe(true);
+  }
+  const rr = await oku('recete-rota/kayitlar');
+  const savedAt = kayitDegeri(rr, RR_ANAHTARI)?.['savedAt'];
+  expect(typeof savedAt).toBe('number');
+  const eslenmis: Kayitlar = { ...plan, kayitlar: plan.kayitlar.map((k): Kayit => (k.anahtar === PLANLAMA_KAYDI
+    ? { ...k, deger: { ...(k.deger as Record<string, unknown>), rrSavedAt: savedAt } } : k)) };
+  await page.route('**/api/recete-rota/kayitlar', (r) => (r.request().method() === 'GET' ? r.fulfill({ json: rr }) : r.fallback()));
+  await page.route('**/api/plan/planlama-kayitlari', (r) => (r.request().method() === 'GET' ? r.fulfill({ json: eslenmis }) : r.fallback()));
+  // Çerçeve kayıtları kabuğa mesajla yazdırır; yazma isteği kabuğa vardığı anda sayılır, ağ zamanlamasından bağımsızdır.
+  await page.addInitScript(() => {
+    const w = window as unknown as { yazmaIstekleri: string[] };
+    w.yazmaIstekleri = [];
+    window.addEventListener('message', (o: MessageEvent) => {
+      const m = o.data as { yon?: unknown; tip?: unknown; veri?: { anahtar?: unknown } } | null;
+      if (m?.yon === 'istek' && (m.tip === 'kayit-yaz' || m.tip === 'kayit-sil')) w.yazmaIstekleri.push(`${String(m.tip)} ${String(m.veri?.anahtar)}`);
+    }, true);
+  });
+  ag.sifirla();
   await ac('/plan/eski');
   const f = await cerceve(page);
   await expect(f.locator('main').first()).toBeVisible();
-  // Çerçeve kaydı 2 sn bekletip yazar; yokluk ancak bekleyerek görülür.
-  await page.waitForTimeout(4_000);
-  expect(ag.yazmalar.filter((y) => y.includes('/recete-rota/kayitlar/') || y.includes('/plan/planlama-kayitlari/'))).toEqual([]);
+  // Çerçeve kaydı 2 sn bekletip yazar, kapanırken (pagehide) bekleyeni hemen gönderir. Kapanış çerçevede tetiklenir; ardından gönderilen
+  // işaret kabuğa varınca (aynı kaynağın mesajları sırayla gelir) çerçevenin bütün yazma istekleri sayılmıştır. Sayfa kapanırken kabuk
+  // mesajı işleyemez, bu yüzden başka adrese gidilerek sınanmaz.
+  await page.evaluate(() => {
+    const w = window as unknown as { isaret: Promise<string[]>; yazmaIstekleri: string[] };
+    w.isaret = new Promise((coz) => {
+      window.addEventListener('message', (o: MessageEvent) => { if ((o.data as { isaret?: unknown } | null)?.isaret === true) coz(w.yazmaIstekleri); });
+    });
+  });
+  await f.evaluate(() => { window.dispatchEvent(new PageTransitionEvent('pagehide')); window.parent.postMessage({ isaret: true }, '*'); });
+  expect(await page.evaluate(() => (window as unknown as { isaret: Promise<string[]> }).isaret)).toEqual([]);
   expect(ag.hatalar).toEqual([]);
 });
 
@@ -84,14 +126,14 @@ test.describe('planlama rolü', () => {
 
   test('planlama sayfası açılır; maliyet sayfası açılmaz, menüde görünmez; eski çerçeve yalnız yöneticide (659 a)', async ({ page, ac }) => {
     await ac('/plan/maliyet');
-    await expect(page.getByText('Bu sayfayı görme yetkiniz yok.')).toBeVisible();
+    await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await ac('/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
     await expect(menu.locator('a[href="/plan"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/plan/maliyet"]')).toHaveCount(0);
     await ac('/plan/eski');
-    await expect(page.getByText('Bu ekran hazırlanıyor')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
   });
 });
