@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 
 export const CEREZ_ADI = 'tmiv2_oturum';
+// Ortak cihaz belirteci (kart #739): oturumdan ayrı çerezdir, çıkışta silinmez; cihaz iptal edilene dek kalır. Tarayıcılar çerez
+// ömrünü 400 günle sınırlar; bir yıl yeter, cihaz her bağlantıda tazelenir.
+export const CIHAZ_CEREZI = 'tmiv2_cihaz';
+export const CIHAZ_CEREZ_SN = 365 * 24 * 60 * 60;
 
 export const BOSTA_SN = 12 * 60 * 60;
 export const AZAMI_SN = 30 * 24 * 60 * 60;

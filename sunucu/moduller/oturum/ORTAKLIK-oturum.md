@@ -9,6 +9,7 @@ Sütunlar `npm run harita -- --modul oturum` çıktısından (DOĞRULANDI, `9b65
 | `oturum` | id, anahtar_ozeti, kisi_id -> kisi, acildi, son_gorulme, kapandi?, ip?, tarayici? | oturum |
 | `giris_denemesi` | id, kullanici_adi, sonuc, ip?, zaman | oturum |
 | `oturum_hesap_kilidi` | id, kullanici_adi, kilitlendi, bitis, acildi?, acan_kisi_id? -> kisi | oturum |
+| `oturum_ortak_cihaz` | id, belirtec_ozeti, ad, kaydeden_kisi_id -> kisi, kaydedildi, kapandi?, kapatan_kisi_id? -> kisi | oturum (kart #739) |
 
 ## Kavramlar
 

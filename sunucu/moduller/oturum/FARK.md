@@ -44,3 +44,16 @@ Yok (UYUM-BORCU m.5).
 
 Yalnız belge eklendi: `UYUM-BORCU.md`, `ORTAKLIK-oturum.md`, `GUVENLIK-DENETIMI.md`. Kod, şema, uç ve ekran değişmedi.
 Değişen onaylı karar yok; K1 a (`giris_denemesi` tablo öneki istisnası) borca yazıldı.
+
+# FARK: oturum, ortak cihaz (kart #739, karar 738 a)
+
+- Yeni tablo `oturum_ortak_cihaz` (göç 20261026203500); dolu tabloya dokunulmadı. Belirteç saklanmaz, yalnız özeti.
+- Yeni işlem `oturum.ortak-cihaz`, yalnız yöneticide (bayraklı rol bütün işlemleri aldığı için rol göçü yok); yetki matrisi belgesi ve testi güncellendi.
+- Uçlar: `GET /oturum/cihaz` (oturumdaki her kişi; ortak mı), `GET/POST /oturum/ortak-cihazlar`, `POST /oturum/ortak-cihazlar/:id/kapat`.
+- Cihaz çerezi `tmiv2_cihaz` (HttpOnly, SameSite=Strict, canlıda Secure, bir yıl, her soruda tazelenir) oturum çerezinden ayrıdır; çıkışta silinmez.
+
+Bu tur şunları varsaydı:
+1. Kayıt ortak yapılacak cihazın kendisinden yapılır (yönetici o cihazda oturum açar); uzaktan kayıt kodu yok.
+2. Cihaz belirtecinin sunucuda süresi yok; iptal edilene dek geçerlidir. Tarayıcı çerezi bir yıl, her kullanımda tazelenir.
+3. Son görülme tutulmaz: okuma ucu veritabanına yazmaz.
+4. Açık cihaz adları büyük-küçük harf ayrımsız tekildir; iptal edilen adla yeni cihaz kaydedilebilir.
