@@ -884,3 +884,18 @@ Bu tur şunları varsaydı:
 3. Kayıtsız eski dosyanın açılış zamanı 0 sayılır (önce silinir); boyu bir kez dosyadan okunur.
 4. Çevrimdışıyken cihazda olmayan dosya açılamaz; görüntüleyici o dosyayı atlar (önceki davranış: bütün liste beklerdi).
 5. Hazırlık yayınında 3B hazır veri baştan yazılır (eskisi gibi); önceki hazır veri korunmaz.
+
+## Cihaz kipi: ortak ve kişisel cihaz (kart #739 D3; karar 738 a)
+- Yeni ekran açılışta `GET /oturum/cihaz` sorar (`yeni/veri/depo.ts cihazKipiniBul`) ve veri katmanına kipini verir (`store.ts kipKur`, init'ten önce).
+  Sunucuya ulaşılamazsa son bilinen kip (`arkon:cihazKipi`), o da yoksa kişisel.
+- Kişisel cihaz (kayıtsız ya da kaydı iptal edilmiş): açılışta önceki veri silinir (dosyalar dahil), veri katmanı bellekte çalışır, dosya ve
+  ekran önbelleği cihaza yazılmaz, arka plan indirmesi yapılmaz. Gönderilmemiş kayıt varsa o oturum cihaz deposunu açık tutar (kayıt gitsin).
+  Çıkışta bellek de temizlenir (kuyruk kalır).
+- Ortak cihaz: çıkışta çizim dosyaları (`blobs`, `blobzaman`) ve ekran önbelleği (`cache`) kalır; kişiye ait veri karar 102 a ile silinir.
+- Bağlantı rozeti: kişisel cihazın bellek kipi bağlıyken "Kayıt riski" sayılmaz; kopukken bekleyen kaydın sekme kapanırsa kaybolacağını yazar.
+- Testler: `cikis-temizligi.test.ts` (dört yeni), `yeni/veri/depo.test.ts` (iki yeni), `ArkonYeni.test.tsx` rozet; iki ekran testi kişisel rozete göre güncellendi.
+
+Bu tur şunları varsaydı:
+1. Sunucuya ulaşılamayan açılışta son bilinen kip geçerlidir: ortak terminal ağ kesintisinde dosyalarını silmez; iptal edilen ortak cihaz sunucuya ilk ulaştığında siler.
+2. Açık sekmede kişisel cihaz sonradan ortak yapılırsa sayfa yenilenene kadar bellekte kalır (güvenli yön).
+3. Ekran önbelleği (`cache`: PDF görüntüsü, 3B ağı) dosyadan türediği için kişiye ait sayılmadı ve ortak cihazda kalır.

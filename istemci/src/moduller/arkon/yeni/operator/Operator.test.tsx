@@ -30,8 +30,8 @@ describe('A1 Üretim Terminali', () => {
     arkonAc('/uretim-terminali');
     const d = await ekran();
     expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
-    // Bağlantı durumu üst çubukta saatin yanında (soru 488 a); testte cihaz deposu yok, kayıt riski yazar.
-    expect(screen.getByRole('status', { name: /Cihaz deposu açılamadı/ }).closest('.tc-ay1-ust')).not.toBeNull();
+    // Bağlantı durumu üst çubukta saatin yanında (soru 488 a); testte cihaz kişiseldir (ortak kaydı yok), bağlı yazar.
+    expect(screen.getByRole('status', { name: /Sunucuya bağlı/ }).closest('.tc-ay1-ust')).not.toBeNull();
     await new Promise((r) => setTimeout(r, 700));
     expect(yazmalar(istekler)).toEqual([]);
     fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));

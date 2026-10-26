@@ -1,4 +1,6 @@
 import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
+import type { CihazDurumu } from '#paylasilan/sozlesme/oturum.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { tohumla } from '../../baglanti.ts';
 import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from '../../../../../../arkon/web/src/data/anomali.ts';
 import type { CagriEkiplerim } from '../../../../../../arkon/web/src/data/cagri-ekiplerim.ts';
@@ -16,8 +18,9 @@ import type { Tasiyici } from './tasiyici.ts';
 // ek kuralları (noUncheckedIndexedAccess) eski dosyaya uygulanmaz. Yüz ile dosyanın eşliğini depo.test.ts gerçek modülle sınar.
 
 export interface ArkonDurumu {
-  mode: 'server' | 'local'; base: string | null; online: boolean; pending: number; baskasi: number; user: User | null; err: string; memory: boolean;
+  mode: 'server' | 'local'; base: string | null; online: boolean; pending: number; baskasi: number; user: User | null; err: string; memory: boolean; kip: CihazKipi | null;
 }
+export type CihazKipi = 'ortak' | 'kisisel';
 export type Ileti = BusMsg & Record<string, unknown>;
 export interface KayitSorgusu {
   machine?: string | null; wc?: string | null; from?: number | null; to?: number | null; order?: string | null; pkg?: string | null;
@@ -70,6 +73,8 @@ export interface ArkonDeposu {
   sha256(u: Uint8Array): Promise<string>;
   // Tembel kip (kart #731): paket belgesindeki dosya `{ $blob, t, n }` işaretiyle gelir; açılacak paket `coz` ile baytlanır.
   tembelKur(): void;
+  // Cihaz kipi (karar 738 a, kart #739): kişisel cihaz veriyi yalnız bellekte tutar; init'ten önce çağrılır.
+  kipKur(k: CihazKipi): Promise<void>;
   coz<T>(x: T): Promise<T>;
   // Arka planda cihaza indirilecek belgeler: öncelikliler (açık iş, kuyruk) önce iner ve temizlikte silinmez.
   dosyalariIndir(oncelikli: readonly unknown[], diger?: readonly unknown[]): void;
@@ -90,15 +95,40 @@ export interface BaslatmaGirdisi {
   tasiyici: Pick<Tasiyici, 'fetch' | 'EventSource'>;
   depo?: Pick<Storage, 'setItem' | 'getItem'>;
   koken?: string;
+  cihaz?: () => Promise<CihazDurumu>;
+}
+
+const KIP_ANAHTARI = 'arkon:cihazKipi';
+
+// Sunucu cihazı ortak diye tanımıyorsa kişiseldir. Sunucuya ulaşılamazsa son bilinen kip kullanılır: ortak terminal ağ kesintisinde
+// sakladığı çizimleri silmesin. Hiç bilinmiyorsa kişisel sayılır.
+export async function cihazKipiniBul(
+  sor: () => Promise<CihazDurumu>, depo: Pick<Storage, 'setItem' | 'getItem'> | null,
+): Promise<CihazKipi> {
+  try {
+    const kip: CihazKipi = (await sor()).ortak ? 'ortak' : 'kisisel';
+    try { depo?.setItem(KIP_ANAHTARI, JSON.stringify(kip)); } catch { /* depolama kapalı */ }
+    return kip;
+  } catch {
+    try { return JSON.parse(depo?.getItem(KIP_ANAHTARI) ?? 'null') === 'ortak' ? 'ortak' : 'kisisel'; } catch { return 'kisisel'; }
+  }
 }
 
 // Çerçevedeki açılışın aynısı: oturum ve sunucu adresi cihaza yazılır (tohumla), sonra veri katmanı TMI'ye bağlanır. Oturum
 // store.ts yüklenirken de okunduğu için tohum yüklemeden önce yazılır. Kişi değişince yeniden çağrılır (taşıyıcı oturumu tazeler).
+// Kişisel cihazda kipKur önceki veriyi (oturum dahil) sildiği için tohum ondan sonra yeniden yazılır.
 export async function depoyuBaslat(g: BaslatmaGirdisi): Promise<ArkonDeposu> {
-  try {
-    tohumla(g.depo ?? window.localStorage, { kokAdres: g.koken ?? window.location.origin, kisi: g.kisi, tema: g.tema });
-  } catch { /* depolama kapalı: veri katmanı bellekte çalışır, oturum sunucudan okunur */ }
+  const yerel = (() => { try { return g.depo ?? window.localStorage; } catch { return null; } })();
+  const tohum = () => {
+    try {
+      if (yerel !== null) tohumla(yerel, { kokAdres: g.koken ?? window.location.origin, kisi: g.kisi, tema: g.tema });
+    } catch { /* depolama kapalı: veri katmanı bellekte çalışır, oturum sunucudan okunur */ }
+  };
+  tohum();
+  const kip = await cihazKipiniBul(g.cihaz ?? (() => api.get<CihazDurumu>('/oturum/cihaz')), yerel);
   const depo = await depoModulu();
+  await depo.kipKur(kip);
+  tohum();
   depo.tembelKur();
   depo.tasiyiciKur(g.tasiyici);
   await depo.init();

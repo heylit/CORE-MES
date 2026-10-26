@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
 import type { Istemci } from '../../baglanti.ts';
-import { depoModulu, depoyuBaslat, type ArkonDeposu } from './depo.ts';
+import { cihazKipiniBul, depoModulu, depoyuBaslat, type ArkonDeposu } from './depo.ts';
 import { tasiyiciYap } from './tasiyici.ts';
 
 // Gerçek Arkon veri katmanı (store.ts) taşıyıcıyla, pencerenin fetch'i olmadan. Cihaz deposu testte yoktur (bellek kipi).
@@ -39,7 +39,7 @@ async function baslat(k: ArkonKisi, istemci: Istemci): Promise<ArkonDeposu> {
 describe('Yeni ekranın veri katmanı', () => {
   it('store.ts yüklenir ve ekranın kullandığı yüzü verir', async () => {
     const d = await depoModulu();
-    for (const ad of ['init', 'status', 'onStatus', 'tasiyiciKur', 'sha256', 'tembelKur', 'coz', 'dosyalariIndir'] as const) expect(typeof d[ad]).toBe('function');
+    for (const ad of ['init', 'status', 'onStatus', 'tasiyiciKur', 'sha256', 'tembelKur', 'kipKur', 'coz', 'dosyalariIndir'] as const) expect(typeof d[ad]).toBe('function');
     for (const ad of ['all', 'get', 'put', 'del'] as const) expect(typeof d.DB[ad]).toBe('function');
     for (const ad of ['send', 'yerel', 'on'] as const) expect(typeof d.Bus[ad]).toBe('function');
     for (const ad of ['add', 'query', 'on'] as const) expect(typeof d.Log[ad]).toBe('function');
@@ -73,5 +73,37 @@ describe('Yeni ekranın veri katmanı', () => {
     simdiki = kisi('k2', 'operator');
     const d = await baslat(simdiki, istemci);
     expect(d.Auth.current()).toMatchObject({ id: 'k2', role: 'operator' });
+  });
+});
+
+describe('Cihaz kipi (karar 738 a)', () => {
+  const sahteDepo = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); } };
+  };
+  const ortak = async () => ({ ortak: true, id: 1, ad: 'Terminal' });
+  const kisisel = async () => ({ ortak: false, id: null, ad: null });
+  const kopuk = async (): Promise<never> => { throw new Error('ağ yok'); };
+
+  it('sunucunun dediği kip kullanılır ve hatırlanır; sunucuya ulaşılamazsa son bilinen, o da yoksa kişisel', async () => {
+    const depo = sahteDepo();
+    expect(await cihazKipiniBul(kopuk, depo)).toBe('kisisel');
+    expect(await cihazKipiniBul(ortak, depo)).toBe('ortak');
+    expect(await cihazKipiniBul(kopuk, depo)).toBe('ortak');
+    expect(await cihazKipiniBul(kisisel, depo)).toBe('kisisel');
+    expect(await cihazKipiniBul(kopuk, depo)).toBe('kisisel');
+    expect(await cihazKipiniBul(ortak, null)).toBe('ortak');
+  });
+
+  it('açılış cihaz durumunu sorar ve veri katmanına kipini verir; kişisel cihaz bellekte çalışır', async () => {
+    const { istemci } = istemciKur(() => kisi('k1'));
+    const tasiyici = tasiyiciYap({ koken: KOKEN, istemci });
+    kapatilacak.push(tasiyici.kapat);
+    const sor = vi.fn(kisisel);
+    const d = await depoyuBaslat({ kisi: kisi('k1'), tema: 'light', tasiyici, cihaz: sor });
+    expect(sor).toHaveBeenCalledTimes(1);
+    expect(d.status()).toMatchObject({ kip: 'kisisel', memory: true, mode: 'server' });
+    // Kişisel cihazda önceki veri silinse de oturum yeniden yazılır: kişi girişli kalır.
+    expect(d.Auth.current()?.id).toBe('k1');
   });
 });

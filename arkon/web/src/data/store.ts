@@ -16,7 +16,7 @@ import { baskasininKayitSayisi } from './bekleyen-kayit';
 import { kuyrukGonderilir } from './kuyruk';
 import { gecikmeliRet, logRetleri } from './biten-is';
 import { oturumKisisi } from './oturum-kisisi';
-import { yerelVeriyiTemizle } from './yerel-temizlik';
+import { ORTAK_CIHAZDA_KALAN_DEPOLAR, anahtarKalir, bekleyenKuyrukVar, yerelVeriyiTemizle, type KuyrukOgesi } from './yerel-temizlik';
 import { anilanOzetler, silinecekDosyalar } from './dosya-temizligi';
 import type { DepodakiDosya } from './dosya-temizligi';
 /* Belgeler bu katmanda biçimden bağımsız taşınır (IndexedDB ↔ sunucu); alan tipleri @shared/model'dedir.
@@ -24,6 +24,7 @@ import type { DepodakiDosya } from './dosya-temizligi';
 type Doc = any;
 type Key = IDBValidKey;
 type Bytes = Uint8Array;
+export type CihazKipi = 'ortak' | 'kisisel';
 /** gelen anlık ileti: bilinen alanlar + sayfaya özgü alanlar */
 export type BusIn = BusMsg & Record<string, any>;
 export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string }
@@ -35,7 +36,7 @@ export interface UserSave { id: string; name: string; role: Role; wcs?: string[]
 /** sunucu / bağlantı hatası: offline = sunucuya ulaşılamadı (kuyruğa alınır), status = HTTP kodu, body = sunucunun yanıtı */
 export interface TmiAdim { id: number; sira: number; ad: string; aciklama: string | null; tamam: boolean }
 export class ApiError extends Error { offline?: boolean; status?: number; body?: any }
-export interface Status { mode: 'server' | 'local'; base: string | null; online: boolean; pending: number; baskasi: number; user: User | null; err: string; memory: boolean }
+export interface Status { mode: 'server' | 'local'; base: string | null; online: boolean; pending: number; baskasi: number; user: User | null; err: string; memory: boolean; kip: CihazKipi | null }
 /* Arkon — veri katmanı
    Yerel mod: her şey cihazdaki IndexedDB'de (tek dosya HTML / APK, sunucusuz).
    Sunucu modu: Arkon MES sunucusu (Node + PostgreSQL) ortak veridir; cihazdaki IndexedDB aynası ve gönderim kuyruğu
@@ -115,7 +116,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   let session: Session | null = LS.get('session'); // { token, user: { id, name, role }, srv }
   const statusSubs = new Set<(s: Status) => void>();
   const emit = () => statusSubs.forEach(f => { try { f(status()); } catch (e: any) {} });
-  const status = (): Status => ({ mode: SRV.on ? 'server' : 'local', base: SRV.base, online: SRV.online, pending: SRV.pending, baskasi: baskasininKayitSayisi(kuyrukSahipleri, oturumSahibi()), user: session && session.user || null, err: SRV.lastErr, memory: useMem });
+  const status = (): Status => ({ mode: SRV.on ? 'server' : 'local', base: SRV.base, online: SRV.online, pending: SRV.pending, baskasi: baskasininKayitSayisi(kuyrukSahipleri, oturumSahibi()), user: session && session.user || null, err: SRV.lastErr, memory: useMem, kip: cihazKipi });
   const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('zaman aşımı')), ms))]);
   async function api(method: string, p: string, body?: unknown, opt: ApiOpts = {}): Promise<any> {
     if (!SRV.on) throw new Error('Sunucu modu kapalı');
@@ -134,7 +135,28 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   // Çıkışta cihazdaki veri silinir, gönderilmemiş kayıt kuyruğu kalır. Sunucusuz yerel kipte kaydın tek kopyası cihazdadır: silinmez.
   async function cikisTemizligi(): Promise<void> {
     if (!SRV.on) return;
-    try { await yerelVeriyiTemizle(localStorage, typeof indexedDB === 'undefined' ? undefined : indexedDB); } catch (e: any) { console.warn('yerel veri temizlenemedi', e); }
+    if (useMem) bellegiTemizle();
+    try { await yerelVeriyiTemizle(localStorage, typeof indexedDB === 'undefined' ? undefined : indexedDB, cihazKipi === 'ortak' ? ORTAK_CIHAZDA_KALAN_DEPOLAR : undefined); } catch (e: any) { console.warn('yerel veri temizlenemedi', e); }
+  }
+  // Bellek kipinde de çıkan kişinin verisi aynı sekmede sonraki kişiye kalmaz; gönderilmemiş kuyruk ve belgesi kalır.
+  function bellegiTemizle(): void {
+    const kuyruk = Array.from(mem.outbox.values()) as KuyrukOgesi[];
+    for (const s of Object.keys(mem)) if (s !== 'outbox') for (const k of Array.from(mem[s].keys())) if (!anahtarKalir(s, k, kuyruk)) mem[s].delete(k);
+  }
+  /* Cihaz kipi (karar 738 a, kart #739). Sunucuda ortak diye kayıtlı cihaz çizimleri cihazda tutar ve çıkışta da tutar. Kayıtsız ya da
+     kaydı iptal edilmiş cihaz kişiseldir: açılışta önceki veri silinir, veri yalnız bellekte durur, dosya cihaza yazılmaz ve arka planda
+     indirilmez. Gönderilmemiş kayıt bulunan kişisel cihaz o oturumda cihaz deposunu açık tutar ki kayıt gönderilsin (çıkışta yine silinir).
+     init'ten önce çağrılır; çağrılmazsa (eski çerçeve) bugünkü davranış sürer. */
+  let cihazKipi: CihazKipi | null = null;
+  const kalici = (): boolean => cihazKipi !== 'kisisel';
+  async function kipKur(k: CihazKipi): Promise<void> {
+    cihazKipi = k;
+    if (k === 'ortak') return;
+    const idb = typeof indexedDB === 'undefined' ? undefined : indexedDB;
+    try { await yerelVeriyiTemizle(localStorage, idb); } catch (e: any) { console.warn('yerel veri temizlenemedi', e); }
+    let bekleyen = false;
+    try { bekleyen = !!idb && await bekleyenKuyrukVar(idb); } catch (e: any) { bekleyen = false; }
+    if (!bekleyen) useMem = true;
   }
   function setSession(s: Session | null): void { session = s; LS.set('session', s); emit(); if (SRV.on) openBus(); }
 
@@ -145,11 +167,11 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     const bellekte = blobMem.al(h);
     if (bellekte) return bellekte;
     let u = await L.get('blobs', h).catch(() => null);
-    if (!u) { u = await api('GET', '/blob/' + h, undefined, { raw: true, timeout: 120000 }); await L.put('blobs', u, h).catch(() => {}); }
+    if (!u) { u = await api('GET', '/blob/' + h, undefined, { raw: true, timeout: 120000 }); if (kalici()) await L.put('blobs', u, h).catch(() => {}); }
     known.add(h); memPutBlob(h, u); zamanla(h, u.length); return u;
   }
   // Dosyanın son açılışı ve boyu: temizlik en uzun süredir açılmayanı bunla bulur (dosyanın kendisi okunmadan).
-  const zamanla = (h: string, n: number): void => { L.put('blobzaman', { at: Date.now(), n }, h).catch(() => {}); };
+  const zamanla = (h: string, n: number): void => { if (kalici()) L.put('blobzaman', { at: Date.now(), n }, h).catch(() => {}); };
   async function toWire(x: any, up: [string, Bytes][]): Promise<any> {
     if (ArrayBuffer.isView(x)) {
       const u = asBytes(x), k = taKind(x);
@@ -182,7 +204,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   async function uploadBlobs(up: [string, Bytes][]): Promise<void> {
     const need = up.filter(([h]) => !known.has(h)); if (!need.length) return;
     const miss = new Set(await api('POST', '/blob/missing', need.map(x => x[0])));
-    for (const [h, u] of need) { if (miss.has(h)) await api('PUT', '/blob/' + h, u, { timeout: 300000 }); known.add(h); await L.put('blobs', u, h).catch(() => {}); }
+    for (const [h, u] of need) { if (miss.has(h)) await api('PUT', '/blob/' + h, u, { timeout: 300000 }); known.add(h); if (kalici()) await L.put('blobs', u, h).catch(() => {}); }
   }
 
   /* gönderim kuyruğu: bağlantı yokken yapılan yazmalar sırayla saklanır */
@@ -558,7 +580,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   const CMAX = 60;
   const Cache = {
     async get(k: string): Promise<any> { try { const r = await L.get('cache', k); if (!r) return null; r.at = Date.now(); L.put('cache', r, k).catch(() => {}); return r.v; } catch (e: any) { return null; } },
-    async put(k: string, v: unknown): Promise<void> { try { await L.put('cache', { v, at: Date.now() }, k); Cache.prune(); } catch (e: any) { console.warn('önbellek yazılamadı', e); } },
+    async put(k: string, v: unknown): Promise<void> { if (!kalici()) return; try { await L.put('cache', { v, at: Date.now() }, k); Cache.prune(); } catch (e: any) { console.warn('önbellek yazılamadı', e); } },
     async prune() { try { if (useMem) return; const d = await open(); if (!d) return; const keys = await tx('cache', 'readonly', s => s.getAllKeys()); if (keys.length <= CMAX) return; const all: [Key, number][] = await Promise.all(keys.map(async (k: Key): Promise<[Key, number]> => [k, ((await L.get('cache', k)) || {}).at || 0])); all.sort((a, b) => a[1] - b[1]); for (const [k] of all.slice(0, all.length - CMAX)) await L.del('cache', k); } catch (e: any) {} },
     async clear() { try { await L.clear('cache'); } catch (e: any) {} },
     async stats() { try { const keys = await tx('cache', 'readonly', s => s.getAllKeys()); return { n: keys.length }; } catch (e: any) { return { n: 0 }; } }
@@ -578,6 +600,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
      her çağrı sırayı yeniler. Ayrı uç indirme günlüğüne yazılmaz (karar 730 a): kişi dosyayı açınca normal uçtan okunur. */
   let indirmeSirasi: string[] = [], korunan = new Set<string>(), indiriyor = false;
   function dosyalariIndir(oncelikli: readonly unknown[], diger: readonly unknown[] = []): void {
+    if (!kalici()) return;
     const once = new Set<string>(); for (const b of oncelikli) anilanOzetler(b, once);
     const hepsi = new Set(once); for (const b of diger) anilanOzetler(b, hepsi);
     korunan = once; indirmeSirasi = [...hepsi];
@@ -632,5 +655,5 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, TMI'de çıkıp başka
   // kişiyle girilince kuyruk öğeleri önceki kişinin adına yazılmasın (çerçeve her açılışta yeniden yüklendiği için bunu kendiliğinden yapar).
   function tasiyiciKur(t: Tasiyici | null): void { tasiyici = t; session = LS.get('session'); emit(); }
-  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, tembelKur, coz, dosyalariIndir, dosyaDeposunuTemizle, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
+  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, tembelKur, kipKur, coz, dosyalariIndir, dosyaDeposunuTemizle, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
 (window as any).AKStore = AKStore;

@@ -320,3 +320,7 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 ## Terminale dosya iletimi (kart #731 A) - bağlamada kapanacak
 - Tembel kip yalnız yeni ekranda; eski çerçeve paketleri dosyalarıyla okumaya devam eder. Eski ekran kalkınca kapanır.
 - Arkon dosyaları ortak `dosya` deposuna taşınınca (kart #732) `blob` yolları ve temizlikteki anılma taraması yeniden bağlanır.
+
+## Cihaz kipi (kart #739 D3) - bağlamada kapanacak
+- Eski çerçeve (`ArkonCercevesi`) kipi sormaz: bugünkü davranış sürer (cihaz deposu her cihazda açık, çıkışta karar 102 a). Eski ekran kalkınca kapanır.
+- Kişisel cihazda sekme kapanırsa ya da sayfa yenilenirse gönderilmemiş kayıt kaybolur (karar 738 a'nın bilinen bedeli; rozet kopukken yazar).
