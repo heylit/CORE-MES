@@ -59,6 +59,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
   fasonlariAdimaCevir(k, st.D);
+  ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
   /* 690 b: emirler arası öncül (parti kolu, Motor A'nın B7 kuralı); motor öncülü yalnız rotadan, emrin içinde kurar */
   st.ekOncul = (istek.baglar || []).map(x => [opOf[x.anahtar], opOf[x.oncul]]).filter(([a, p]) => a && p && a !== p);
@@ -127,6 +128,34 @@ function fasonlariAdimaCevir(k, D) {
 }
 /* 671 a (Motor A, H3): planlamacı işi rota dışı makineye elle koyabilir. O makine adımın adayları arasına rotadaki ilk tezgâhın
    süreleriyle girer (verim tezgâhındır); yalnız bu çözümde. */
+/* 686 a: rotada olmayan ek adım (rework, tamir, ek) emrin kendi adımıdır; motor onu rotadan tanımaz. Plan modülü adımı, süresini (ayar ve
+   parça başı dakika), adedini ve emrin içindeki öncül ve ardılını verir. Emre özel ürün kopyası kurulur: adım öncülünden sonra girer, ardılı
+   onu bekler, makinesi kuyruğundaki tezgâhtır. Kuyrukta olmayan ek adım eklenmez (yerleşmeyen kalır). Ekler emirdeki sırayla gelir: önceki ek
+   adım sonrakinin öncülü olabilir. */
+function ekAdimlariEkle(k, D, istek, opOf) {
+  const ekler = istek.ekAdimlar || []; if (!ekler.length) return;
+  const makine = {}; for (const q of istek.kuyruklar) for (const a of q.anahtarlar) makine[a] = String(q.makineId);
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  const emirId = new Map(((k && k.orders) || []).map(o => [o.no, String(o.id)]));
+  const kOf = a => { const id = a && opOf[a]; return id ? id.slice(id.lastIndexOf('.') + 1) : null; };
+  for (const e of ekler) {
+    const n = e.anahtar.lastIndexOf('|'), sid = emirId.get(e.anahtar.slice(0, n)), s = sid && sip.get(sid), m = makine[e.anahtar];
+    if (opOf[e.anahtar] || !s || !m || !urun.get(s.urun)) continue;
+    let u = urun.get(s.urun);
+    if (!u.emreOzel) {
+      u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
+      D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+    }
+    const yeni = 'e' + e.anahtar.slice(n + 1), on = kOf(e.oncul), ar = kOf(e.ardil);
+    const i = ar == null ? -1 : u.rota.findIndex(r => String(r.k) === ar);
+    u.rota.splice(i < 0 ? u.rota.length : i, 0, { k: yeni, ad: e.ad || yeni, bag: on == null ? [] : [[on, 'b']], aile: '', tezgahlar: [{ id: m, ayar: +e.ayarDk || 0, cevrim: +e.birimDk || 0 }] });
+    if (i >= 0) u.rota[i + 1] = Object.assign({}, u.rota[i + 1], { bag: [...(u.rota[i + 1].bag || []).filter(([q]) => String(q) !== on), [yeni, 'b']] });
+    const id = sid + '.' + yeni;
+    opOf[e.anahtar] = id;
+    if (isFinite(+e.adet) && +e.adet > 0) D.opAdet = Object.assign({}, D.opAdet, { [id]: +e.adet });
+  }
+}
 function kuyrukMakineleriniEkle(k, D, istek, opOf) {
   const emir = new Map(((k && k.orders) || []).map(o => [String(o.id), o]));
   const urun = new Map((D.urunler || []).map(u => [u.id, u]));
