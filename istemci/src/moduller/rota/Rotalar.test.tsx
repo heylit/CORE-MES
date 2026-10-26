@@ -185,7 +185,7 @@ describe('Kaynaklar ve Rota revizyonları bölümleri', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'İş merkezleri ve istasyonlar' }));
     const verim = await screen.findByRole('link', { name: "T-01 verim 90, İstasyonlar'da düzenlenir" });
     expect(verim.getAttribute('href')).toBe('/istasyonlar/is-merkezleri');
-    expect(screen.getByRole('link', { name: "T-01 operatör 1, İstasyonlar'da düzenlenir" }).getAttribute('href')).toBe('/istasyonlar/is-merkezleri');
+    expect(screen.getByRole('link', { name: "T-01 operatör: 1 operatör/makine, İstasyonlar'da düzenlenir" }).getAttribute('href')).toBe('/istasyonlar/is-merkezleri');
     expect(screen.queryByLabelText('T-01 verim')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Personel' }));
     const grup = await screen.findByRole('group', { name: 'Deneme usta yetkinliği' });

@@ -91,3 +91,11 @@ export function dalla<T>(liste: readonly T[], id: (e: T) => number, ust: (e: T) 
   for (const e of liste.filter((x) => ustu(x) === null)) ekle(e, 0);
   return sonuc;
 }
+
+// 561 1 b: operatör ihtiyacı çalışan bir makinenin istediği operatördür; 1/N (aşağı yuvarlanmış) "1 operatör N tezgâha bakar" okunur.
+// Çeviri İstasyonlar'ın girişiyle aynıdır (567 ortak anlaşma); burada yalnız gösterilir.
+export const operatorMetni = (oran: number): string => {
+  if (oran === 0) return 'Operatör gerekmez';
+  const n = oran > 0 && oran < 1 ? Math.round(1 / oran) : 0;
+  return n >= 2 && n <= 10 && Math.floor(100 / n) / 100 === oran ? `1 operatör ${n} tezgâha bakar` : `${oran.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} operatör/makine`;
+};
