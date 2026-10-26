@@ -7,7 +7,8 @@ import { gorunenKartlar } from '../../ortak/rota/ana-sayfa.ts';
 import { anaSayfaKartlari } from './ana-sayfa.tsx';
 
 const olcu = (o: Partial<OeeOlcusu> = {}): OeeOlcusu => ({
-  planliDk: 480, takvimDk: 2880, calismaDk: 420, standartDk: 384, saglam: 98, hurda: 2, suresizSaglam: 0,
+  planliDk: 480, takvimDk: 2880, calismaDk: 420, standartDk: 384, saglam: 98, hurda: 2, red: 0, suresizSaglam: 0,
+  vardiyaDisi: { calismaDk: 0, standartDk: 0, saglam: 0, hurda: 0, red: 0 },
   kullanilabilirlik: 0.875, veriEksik: false, performans: 0.9, kalite: 0.98, oee: 0.8, teep: 0.13, kisiPayi: 1,
   makineMaliyeti: null, iscilikMaliyeti: null, birimMaliyet: null, ...o,
 });

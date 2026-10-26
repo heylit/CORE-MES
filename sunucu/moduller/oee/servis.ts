@@ -5,10 +5,10 @@ import type { OeeCevabi, OeeSorgusu } from '#paylasilan/sozlesme/oee.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { aktifMakineler, isMerkezleri, istasyonlar, kisininIzinliIsMerkezleri, makineKisiAtamalari } from '../istasyonlar/disari.ts';
-import { aralikAdetleri, kirilimStandartSureleri, makineSureleri } from '../uretim-emirleri/disari.ts';
+import { makineKullanimAraliklari, makineSayimAnlari } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import {
-  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla,
+  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla, vardiyaIleAyir,
 } from './kurallar.ts';
 import type { Aralik, HamOlcu, Iscilik } from './kurallar.ts';
 
@@ -56,14 +56,17 @@ export async function oee(db: Db, kullanici: Kullanici, sorgu: OeeSorgusu, simdi
     ...makineIdleri.map((id) => ({ tur: 'makine' as const, id })),
     ...kisiIdleri.map((id) => ({ tur: 'kisi' as const, id })),
   ], takvimAraligi);
-  const pencereDk = (anahtar: string): number | null => {
+  const planAraliklari = (anahtar: string): Aralik[] | null => {
     const t = takvimler.get(anahtar) ?? null;
-    return t === null ? null : penceredekiDakika(t.araliklar.map(aralikMs), bas, bit);
+    return t === null ? null : t.araliklar.map(aralikMs);
+  };
+  const pencereDk = (anahtar: string): number | null => {
+    const plan = planAraliklari(anahtar);
+    return plan === null ? null : penceredekiDakika(plan, bas, bit);
   };
 
-  const calisma = await makineSureleri(db, makineIdleri, basIso, bitIso);
-  const adetler = await aralikAdetleri(db, 'makine', makineIdleri, basIso, bitIso);
-  const standart = await kirilimStandartSureleri(db, 'makine', makineIdleri, basIso, bitIso);
+  const kullanimlar = await makineKullanimAraliklari(db, makineIdleri, basIso, bitIso);
+  const sayimlar = await makineSayimAnlari(db, makineIdleri, basIso, bitIso);
   const istasyonMaliyeti = await saatMaliyetleri(db, 'istasyon');
   const kisiMaliyeti = await saatMaliyetleri(db, 'kisi');
   const kisiMesaisi = new Map(kisiIdleri.map((k) => [k, pencereDk(`kisi:${k}`)]));
@@ -74,14 +77,16 @@ export async function oee(db: Db, kullanici: Kullanici, sorgu: OeeSorgusu, simdi
     const kisiler: Iscilik[] = (paylar.get(m.id) ?? []).map((p) => ({
       pay: p.pay, mesaiDk: kisiMesaisi.get(p.kisiId) ?? null, saatMaliyeti: kisiMaliyeti.get(p.kisiId) ?? null,
     }));
+    const { ici, disi } = vardiyaIleAyir(
+      planAraliklari(`makine:${m.id}`),
+      (kullanimlar.get(m.id) ?? []).map(aralikMs),
+      (sayimlar.get(m.id) ?? []).map(({ zaman, ...a }) => ({ an: Date.parse(zaman), ...a })),
+    );
     return [m.id, {
       planliDk,
       takvimDk,
-      calismaDk: (calisma.get(m.id) ?? 0) / 60,
-      standartDk: (standart.get(m.id)?.standartSaniye ?? 0) / 60,
-      saglam: adetler.get(m.id)?.saglam ?? 0,
-      hurda: adetler.get(m.id)?.hurda ?? 0,
-      suresizSaglam: standart.get(m.id)?.suresizSaglam ?? 0,
+      ...ici,
+      vardiyaDisi: disi,
       kisiPayi: kisiPayiToplami(kisiler),
       makineMaliyeti: makineMaliyeti(planliDk, istasyonMaliyeti.get(m.istasyonId) ?? null),
       iscilikMaliyeti: iscilikMaliyeti(kisiler),
