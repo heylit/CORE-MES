@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Dugme, Orb, OrbGrubu, Simge } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Orb, OrbGrubu, Simge, type MakineDurumu } from '../../../../ortak/arayuz/index.ts';
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
 import { bitenleriAyir } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import {
   ayrimAciklamasi, ayrimEtiketi, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, type MakineAyrimlari, type SecilebilirMakine,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
+import { numuneSeridi, type SeritDurumu, type SeritGirdisi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import { parcaEtiketi } from '../../../../../../arkon/web/src/data/parca.ts';
 import { istasyondakiKartlar, kartDoldu, sinirMetni, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import { sayacGosterimi } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
@@ -15,6 +16,7 @@ import { topluGirisHatasi, topluGirisSayilari } from '../../../../../../arkon/we
 import { iki, sayi, sure } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI, type IsDurumu } from '../cekirdek/sabitler.ts';
 import type { ScrapReason } from '../cekirdek/tipler.ts';
+import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { DurusGerceklesmesi } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { useSimdi } from '../veri/baglam.ts';
@@ -55,6 +57,31 @@ export function GorevKarti({ gorev, eylem, ertele, izinli }: {
         <button type="button" className="tc-ay1-gorev-ertele" onClick={() => ertele(gorev)} aria-label="Sonra hatırlat" title="10 dk sonra hatırlat"><Simge ad="x" /></button>
       ) : null}
     </div>
+  );
+}
+
+/* ── numune planı şeridi (566): "Şimdi" kartının altında, Hazırlık'ın numune planı kural kural ve ilerlemesi ── */
+const SERIT_GORUNUMU: Readonly<Record<SeritDurumu, { durum: MakineDurumu; simge: SimgeAdi }>> = {
+  kalitede: { durum: 'bitti', simge: 'target' }, zamani: { durum: 'ayar', simge: 'alert' }, red: { durum: 'durdu', simge: 'x' },
+  tamam: { durum: 'calisiyor', simge: 'check' }, siradaki: { durum: 'sirada', simge: 'clock' }, bekliyor: { durum: 'sirada', simge: 'clock' },
+};
+
+export function NumuneSeridi({ girdi }: { girdi: SeritGirdisi }) {
+  const parcalar = numuneSeridi(girdi);
+  if (!parcalar.length) return null;
+  return (
+    <ul className="tc-ay1-numune-serit" aria-label="Numune planı">
+      {parcalar.map((p) => (
+        <li key={p.id} className="tc-ay1-numune-serit-parca" data-durum={SERIT_GORUNUMU[p.durum].durum}>
+          <Simge ad={SERIT_GORUNUMU[p.durum].simge} boyut="k" />
+          <span className="tc-ay1-numune-serit-metin">
+            <b>{p.etiket}</b>
+            <small>{p.olcen} · {p.gecen}/{p.toplam} ölçü</small>
+            <small className="tc-ay1-numune-serit-durum">{p.metin}</small>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

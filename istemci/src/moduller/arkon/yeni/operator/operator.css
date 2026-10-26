@@ -95,6 +95,20 @@
 }
 .tc-ay1-bant > div { display: grid; gap: var(--pay-ince); flex: 1 1 auto; min-width: 0; }
 .tc-ay1-bant b { overflow-wrap: anywhere; }
+/* 566: numune planı şeridi; dar ekranda düzen değişmez, şerit yatay kayar */
+.tc-ay1-numune-serit {
+  display: flex; gap: var(--b-2); margin: 0; padding: 0; list-style: none; min-width: 0;
+  overflow-x: auto; scroll-snap-type: x proximity;
+}
+.tc-ay1-numune-serit-parca {
+  display: flex; align-items: flex-start; gap: var(--b-2); flex: 1 0 auto; min-width: 0; padding: var(--b-2) var(--b-3); scroll-snap-align: start;
+  border: var(--cizgi-ince) solid var(--sig); border-block-start-width: var(--b-1); border-radius: var(--yari-2); background: color-mix(in srgb, var(--sig) 8%, var(--panel));
+}
+.tc-ay1-numune-serit-parca > svg { color: var(--sig-yazi); flex: none; }
+.tc-ay1-numune-serit-metin { display: grid; gap: var(--pay-ince); min-width: 0; }
+.tc-ay1-numune-serit-metin b { font-size: var(--yazi-s); white-space: nowrap; }
+.tc-ay1-numune-serit-metin small { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
+.tc-ay1-numune-serit-metin .tc-ay1-numune-serit-durum { color: var(--sig-yazi); font-weight: 600; }
 .tc-ay1-etkin-kart {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); min-width: 0;
   border: var(--cizgi-ince) solid var(--sig, var(--edge)); border-radius: var(--yari-2); background: var(--panel);

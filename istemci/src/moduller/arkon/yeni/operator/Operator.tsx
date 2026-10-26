@@ -45,7 +45,7 @@ import { useArkon, useSimdi } from '../veri/baglam.ts';
 import type { Ileti } from '../veri/depo.ts';
 import {
   IS_TURLERI, ISTASYON_PANELLERI, IstasyonSecici, SEVIYELER, TakimKarti, UyariPenceresi, isKurallari, istasyonAyari, isTuru,
-  numuneOlculeri, numunePlani, sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
+  OLCENLER, numuneEtiketi, numuneOlculeri, numunePlani, sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
 } from '../hazirlik/index.tsx';
 import { Adimlar } from './Adimlar.tsx';
 import { Analiz } from './Analiz.tsx';
@@ -57,7 +57,7 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
@@ -1011,6 +1011,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <GorevKarti gorev={task} izinli={izinli} ertele={ertele}
       eylem={(a, g) => { if (mobil && (a === 'measure' || a === 'drawing')) mvYaz('draw'); act(a, g); }} />
   );
+  // 566: numune planı paketten (Hazırlık), ilerleme terminalin ölçümleri, kontrol takvimi ve kalitedeki numuneden.
+  const serit = o.pkg ? (
+    <NumuneSeridi girdi={{
+      kurallar: numunePlani(o.pkg).map((r) => ({
+        id: r.id, etiket: numuneEtiketi(r), olcen: (r.who && r.who.length ? r.who : ['q' as const]).map((w) => OLCENLER[w].l).join('→'),
+        ilk: r.when === 'first', olculer: numuneOlculeri(o.pkg!, r).map((b) => b.id),
+      })),
+      meas: o.meas || {}, bekleyen: o.pendingReq ? o.pendingItems || [] : [], zamani: D.due.map((b) => b.id),
+      siradaki: D.next ? { olcu: D.next.b.id, v: D.next.v, u: D.next.u } : null, ilkKarar: ilkKarari,
+    }} />
+  ) : null;
   const durumDugmeleri = (mobil: boolean) => (uretir ? (
     <DurumDugmeleri durum={o.state} pasif={!!o.empty} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
@@ -1086,6 +1097,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               {notlar}
               {makineSecici}
               {gorev(true)}
+              {serit}
               {sayac}
               {toplu}
               {durumDugmeleri(true)}
@@ -1168,6 +1180,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <section className="tc-ay1-sahne" aria-label="Üretim">
             {makineSecici}
             {gorev(false)}
+            {serit}
             {sayac}
             {toplu}
             {durumDugmeleri(false)}
