@@ -61,6 +61,7 @@ import {
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
+import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
@@ -964,7 +965,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const uyarili = RL.warns.some((w) => w.t);
   const panelSimgesi = OT.simge;
   const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D);
-  const takimKarti = <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
+  // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
+  const kaliteIstasyonu = ist.t === 'kalite';
+  const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
   const resim = <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={resimKontrolu} /></Suspense></div>;
   const panel = Panel ? <Panel key={o.no} api={stApi} kurallar={RL} /> : null;
@@ -1003,6 +1006,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </div>
   );
   const toplu = uretir ? <TopluGiris key={o.no} kalan={o.target - o.good} kapali={kapali} kaydet={topluKaydet} nedenler={ayarlar.hurdaNedenleri} /> : null;
+  const kaliteGorunumu = kaliteIstasyonu && !pv ? (
+    <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olc={() => git('kalite')} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
+  ) : null;
   const gorev = (mobil: boolean) => (
     <GorevKarti gorev={task} izinli={izinli} ertele={ertele}
       eylem={(a, g) => { if (mobil && (a === 'measure' || a === 'drawing')) mvYaz('draw'); act(a, g); }} />
@@ -1093,9 +1099,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               {notlar}
               {makineSecici}
               {gorev(true)}
-              {serit}
-              {sayac}
-              {toplu}
+              {kaliteGorunumu ?? <>{serit}{sayac}{toplu}</>}
               {durumDugmeleri(true)}
             </div>
           ) : null}
@@ -1176,9 +1180,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <section className="tc-ay1-sahne" aria-label="Üretim">
             {makineSecici}
             {gorev(false)}
-            {serit}
-            {sayac}
-            {toplu}
+            {kaliteGorunumu ?? <>{serit}{sayac}{toplu}</>}
             {durumDugmeleri(false)}
           </section>
         </div>

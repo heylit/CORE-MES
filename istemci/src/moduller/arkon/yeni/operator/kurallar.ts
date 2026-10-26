@@ -14,7 +14,7 @@ import type { IstasyonSatiri } from '../cekirdek/tesis.ts';
 import { isKurallari, istasyonAyari, isTuru, numuneEtiketi, numuneOlculeri, numunePlani, siradakiOlcen } from '../hazirlik/index.tsx';
 import type { Uyari } from '../hazirlik/tipler.ts';
 import type {
-  Gorev, GorevEylemi, IlkParcaDurumu, Is, KontrolTakvimi, Meas, Olcen, Pkg, PlanItem, Result, SiradakiKontrol, Ton,
+  Gorev, GorevEylemi, IlkParcaDurumu, Is, KaliteNumunesi, KontrolTakvimi, LotKarari, LotSinifi, Meas, Olcen, Pkg, PlanItem, Result, SiradakiKontrol, Ton,
 } from './tipler.ts';
 
 // Operatör ekranının saf hesapları (operator.ts, operator-parcalar.ts, bilesenler.ts). Eski ekranda bileşenin içindeydi ya da modül
@@ -412,3 +412,29 @@ export function vardiyaOzeti(c: VardiyaHesabi, g: VardiyaOzetGirdisi): VardiyaOz
 export const kalanSure = (adet: number, cevrimSn: number): string => sure(Math.max(0, adet) * cevrimSn);
 
 export type { GorevEylemi };
+
+// 564 1 b, 600 a: kalite istasyonu terminali yalnız kendisine gönderilen açık numuneleri listeler (eskiden yeniye).
+export const kaliteIstasyonuNumuneleri = (liste: readonly KaliteNumunesi[], istasyon: string): KaliteNumunesi[] =>
+  liste.filter((r) => r.kaliteIstasyonu === istasyon && (r.status === 'waiting' || r.status === 'measuring')).sort((a, b) => a.at - b.at);
+
+// 564 6 a, 600 a: lot kararının eksiği (sunucu da aynısını denetler). Boş sınıf sayılmamıştır (null), sıfır yazılmaz.
+export const LOT_SINIFLARI: readonly LotSinifi[] = ['Kritik', 'Majör', 'Minör'];
+export function lotSayisi(metin: string): number | null | 'hata' {
+  const t = metin.trim();
+  if (t === '') return null;
+  return /^\d{1,6}$/.test(t) ? Number(t) : 'hata';
+}
+export function lotKarariEksigi(karar: LotKarari['karar'], bulunan: Record<LotSinifi, number | null | 'hata'>, not: string): string | null {
+  const sayilar = LOT_SINIFLARI.map((s) => bulunan[s]);
+  if (sayilar.includes('hata')) return 'Kusurlu sayısı tam sayı olmalı.';
+  if (sayilar.every((x) => x === null)) return 'Muayenede bulunan kusurlu sayılarını girin (yoksa 0).';
+  if (karar === 'ret' && !sayilar.some((x) => typeof x === 'number' && x > 0)) return 'Red için en az bir kusurlu sayısı girin.';
+  if (karar === 'ret' && not.trim() === '') return 'Red için gerekçe yazın.';
+  return null;
+}
+export function lotKarariOku(sonuc: unknown): LotKarari | null {
+  const lk = sonuc && typeof sonuc === 'object' ? (sonuc as { lotKarari?: unknown }).lotKarari : undefined;
+  if (!lk || typeof lk !== 'object') return null;
+  const k = lk as Partial<LotKarari>;
+  return (k.karar === 'kabul' || k.karar === 'ret') && k.bulunan && typeof k.at === 'number' ? k as LotKarari : null;
+}

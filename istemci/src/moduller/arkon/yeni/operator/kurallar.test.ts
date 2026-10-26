@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  cagriTonu, durumDugmeleri, durusOnerileri, hurdaUyarisi, kalanSure, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  cagriTonu, durumDugmeleri, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -57,5 +57,31 @@ describe('A1 operatör kuralları', () => {
   it('kalan süre negatif adette sıfırdır', () => {
     expect(kalanSure(-3, 30)).toBe('00:00:00');
     expect(kalanSure(10, 30)).toBe('00:05:00');
+  });
+});
+
+describe('600 a: kalite istasyonu', () => {
+  const numune = (id: string, ek: Record<string, unknown>) => ({ id, pkgId: 'p', no: 'IE-1', part: 'P', rev: 'A', machine: 'TOR', by: 'x', at: 1, reason: '', items: [1], crit: false, cnt: 1, status: 'waiting', results: {}, ...ek }) as never;
+  it('yalnız bu istasyona gelen açık numuneler, eskiden yeniye', () => {
+    const l = [numune('b', { kaliteIstasyonu: 'KAL', at: 5 }), numune('a', { kaliteIstasyonu: 'KAL', at: 2, status: 'measuring' }), numune('c', { kaliteIstasyonu: 'KAL2' }),
+      numune('d', { kaliteIstasyonu: 'KAL', status: 'approved' }), numune('e', {})];
+    expect(kaliteIstasyonuNumuneleri(l, 'KAL').map((r) => r.id)).toEqual(['a', 'b']);
+  });
+  it('lot kararının eksiği: boş sınıf sayılmamıştır, Red kusur ve gerekçe ister', () => {
+    const b = (k: number | null | 'hata', m: number | null | 'hata' = null) => ({ Kritik: k, Majör: m, Minör: null });
+    expect([lotSayisi(''), lotSayisi(' 3 '), lotSayisi('-1'), lotSayisi('1.5')]).toEqual([null, 3, 'hata', 'hata']);
+    expect(lotKarariEksigi('kabul', b(null), '')).toMatch(/kusurlu sayılarını/);
+    expect(lotKarariEksigi('kabul', b(0, 0), '')).toBeNull();
+    expect(lotKarariEksigi('kabul', b('hata'), '')).toMatch(/tam sayı/);
+    expect(lotKarariEksigi('ret', b(0, 0), 'çapak')).toMatch(/en az bir kusurlu/);
+    expect(lotKarariEksigi('ret', b(0, 2), ' ')).toMatch(/gerekçe/);
+    expect(lotKarariEksigi('ret', b(0, 2), 'çapak')).toBeNull();
+  });
+  it('sonuç belgesindeki lot kararı', () => {
+    const lk = { karar: 'kabul', bulunan: { Kritik: 0, Majör: 0, Minör: null }, at: 1 };
+    expect(lotKarariOku({ lotKarari: lk })).toEqual(lk);
+    expect(lotKarariOku({ lotKarari: { ...lk, karar: 'x' } })).toBeNull();
+    expect(lotKarariOku({})).toBeNull();
+    expect(lotKarariOku(null)).toBeNull();
   });
 });

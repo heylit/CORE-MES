@@ -52,3 +52,13 @@ export interface Cagri {
 export interface DurumParcasi { f: number; t: number; s: string; n?: string | null | undefined }
 
 export type { SampleRequest as NumuneIstegi };
+
+// 564 1 b, 600 a: kalite istasyonuna gelen numune; `kaliteIstasyonu` (istasyon kodu) yalnız sunucudan gelir.
+export type KaliteNumunesi = SampleRequest & { kaliteIstasyonu?: string };
+
+// 564 6 a, 600 a: kalite istasyonunun lot kararı sonuç belgesinin `lotKarari` alanıdır; `kayit` Kalite Merkezi'nin lot kaydıdır (sunucu yazar).
+export type LotSinifi = 'Kritik' | 'Majör' | 'Minör';
+export interface LotKarari {
+  karar: 'kabul' | 'ret'; bulunan: Record<LotSinifi, number | null>; not?: string | null; at: number; by?: string;
+  kayit?: { no: string; karar: 'Kabul' | 'Ret'; redde?: string };
+}
