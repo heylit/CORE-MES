@@ -55,3 +55,8 @@
 | Geri yükleme parçalanır, başlangıç sürümü taşınır, yalnız sonuncusu "son" | "geri yükleme: dosyalar yüklenip bağlanır, kayıtlar gövde sınırının altında parçalanır, başlangıç sürümü taşınır, yalnız son parça silme işaretlidir" |
 | Çerçeve dışarı istek atamaz; betik sırası | "içerik politikası betiklerden önce gelir; dış adrese bağlantı, form gönderimi ve taban değişimi kapalı", "ön betik ve ayar uygulamadan önce, görünüm betiği uygulamadan sonra; sunucu kipi TMI ayarına bağlı" |
 | Görünüm sözleşmesi (tmi-gorunum) | "hazır bildirir; kabuğun istediği görünüme geçer ve isteğin yankısını bildirmez" |
+| KM-K564a (564 2 a, 4 a): AQL lot planı Kalite Merkezi sunucusundadır; tablo, ok kuralı ve sıkılık geçişi ekranın `yeni/aql.ts` dosyasıyla aynı planı verir; numune örneklemeli sınıfların en büyüğüdür, %100 sınıf numuneyi büyütmez; karar yalnız sayısı verilen sınıflarda, sayılmayan sınıf null | "KM-K564a ..." (`aql.test.ts`, üç test) |
+| KM-K564b: lot kararı isteği kaynak, parça no, parti büyüklüğü (en az 2), seviye/AQL ve bulunan sayıları (en az biri, 0..N) denetlenir; geçersiz 400 | "KM-K564b ..." (`aql.test.ts`), "KM-K564e ..." |
+| KM-K564c: plan `settings/genel` varsayılan AQL ayarından, ayar yoksa uygulamanın varsayılanı (II, kritik %100, majör 1.0, minör 2.5), Hazırlık'ın verdiği ayar varsa o | "KM-K564c ..." (`aql.test.ts`) |
+| KM-K564d (564 6 a): istasyonun lot kararı `disari.ts` `lotKarariYaz` ile lot kabul kaydı olur (uygulamanın lot biçimi, `LOT-YYYY-NNNN`, muayeneci yazan kişi, kararı sunucu hesaplar, kayıt kilitli); aynı kaynak anahtarı ikinci kayıt açmaz | "KM-K564d ..." (`aql.test.ts`) |
+| KM-K564e: sıkılıkta durdurulmuş parçada plan yoktur ve lot kararı 409 | "KM-K564e ..." (`aql.test.ts`) |

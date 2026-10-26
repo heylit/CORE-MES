@@ -25,6 +25,8 @@ import {
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
+import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
+import type { AqlSiddeti, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const dosyaTutamak = dosyaTutamagi(KM_MODULU);
@@ -428,4 +430,44 @@ export async function dofDurumlari(db: Db, kaynak: DofKaynagi, anahtarlar: reado
     const anahtar = kimlikler.get(s.kimlik);
     return anahtar === undefined ? [] : [[anahtar, dofDurumu(s.kimlik, s.govde)] as const];
   }));
+}
+
+// 564 2 a, 4 a: kalite istasyonunun lot planı. Ayar verilmezse (Hazırlık değiştirmediyse) uygulamanın varsayılan AQL ayarı; sıkılık
+// aynı parçanın iç üretim lotlarından. Durdurulmuş sıkılıkta plan yoktur. Yetki denetlemez.
+export type MuayenePlaniSonucu = { plan: MuayenePlani } | { durduruldu: true } | { gecersiz: true };
+export async function muayenePlaniOner(db: Db, g: { parcaNo: string; N: number; ayar: MuayeneAqlAyari | null }): Promise<MuayenePlaniSonucu> {
+  const ayar = g.ayar ?? varsayilanAqlAyari(await sorgular.kayitGovdesi(db, 'settings', 'genel'));
+  const lotlar = (await sorgular.koleksiyonKayitlari(db, LOT_KOLEKSIYONU)).map((l) => l.govde);
+  const siddet = lotSikiligi(lotlar, lotAnahtari(g.parcaNo, ''));
+  if (siddet === AQL_DURDURULDU) return { durduruldu: true };
+  const plan = muayenePlani(g.N, ayar, siddet as AqlSiddeti);
+  return plan === null ? { gecersiz: true } : { plan };
+}
+
+// 564 6 a: istasyonun lot kararı lot kabul kaydı olur. Plan sunucuda yeniden hesaplanır, karar planla bulunandan çıkar (istemcinin
+// kararı sayılmaz). Aynı kaynak anahtarı ikinci kaydı açmaz, var olan döner. Kayıt genel yazmanın kurallarından geçer; muayeneci
+// yazan kişidir. Stoktaki parçanın serbest ya da red olması stoğun işidir (çağıran aynı işlemde yapar). Yetkiyi çağıranın ucu denetler.
+export async function lotKarariYaz(
+  db: Db, kullanici: Kullanici, istek: LotKarariIstegi,
+): Promise<{ kimlik: string; no: string; karar: 'Kabul' | 'Ret'; plan: MuayenePlani; yeni: boolean }> {
+  const ret = lotIstegiReddi(istek);
+  if (ret !== null) throw dogrulama(ILETILER[ret]);
+  const kimlik = lotKimligi(istek.kaynak, istek.kaynakAnahtari);
+  await sorgular.yazmaKilidi(db);
+  const sonuc = await muayenePlaniOner(db, { parcaNo: istek.parcaNo, N: istek.N, ayar: istek.ayar });
+  if ('durduruldu' in sonuc) throw cakisma(ILETILER.lotDurduruldu);
+  if ('gecersiz' in sonuc) throw dogrulama(ILETILER.lotBuyuklugu);
+  const onceki = await sorgular.kayitGovdesi(db, LOT_KOLEKSIYONU, kimlik);
+  if (onceki !== null) {
+    const karar = onceki['karar'] === 'Ret' ? 'Ret' : 'Kabul';
+    return { kimlik, no: typeof onceki['no'] === 'string' ? onceki['no'] : kimlik, karar, plan: sonuc.plan, yeni: false };
+  }
+  const karar = lotKarari(sonuc.plan, istek.bulunan)!;
+  const gun = tesisGunu(Date.now());
+  const lotlar = (await sorgular.koleksiyonKayitlari(db, LOT_KOLEKSIYONU)).map((l) => l.govde);
+  const no = siradakiLotNo(lotlar, Number(gun.slice(0, 4)));
+  const emirNo = (await emirNolari(db, [istek.uretimEmriId])).get(istek.uretimEmriId) ?? null;
+  const govde = lotGovdesi(istek, { no, gun, emirNo, muayeneci: kullanici.ad, plan: sonuc.plan, karar });
+  await kayitYaz(db, kullanici, LOT_KOLEKSIYONU, kimlik, govde, null, false);
+  return { kimlik, no, karar, plan: sonuc.plan, yeni: true };
 }

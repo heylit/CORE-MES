@@ -19,3 +19,9 @@ export type { KalibrasyonHazirligi } from './kurallar.ts';
 // açmaz, var olanı döner) ve kaynak anahtarı başına durumunu buradan okur. Yetkiyi çağıranın ucu denetler; açan kişi kayıtta yazan olur.
 export { dofAc, dofDurumlari } from './servis.ts';
 export type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
+// AQL lot planı ve lot kararı (564 2 a, 4 a, 6 a): Arkon kalite istasyonu numune sayısını ve kabul sayısını buradan alır, lot kararını
+// buraya lot kabul kaydı olarak yazar. Plan uygulamanın varsayılan AQL ayarından (ya da Hazırlık'ın değiştirdiği ayardan) ve parti
+// büyüklüğünden; karar sunucuda hesaplanır. Stok yansıması çağıranındır. Yetkiyi çağıranın ucu denetler.
+export { lotKarariYaz, muayenePlaniOner } from './servis.ts';
+export type { MuayenePlaniSonucu } from './servis.ts';
+export type { AqlSinifi, LotBulunani, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
