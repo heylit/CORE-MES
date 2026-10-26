@@ -178,7 +178,8 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     };
   }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz]);
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
-  // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur.
+  // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur. Dar düzeni de
+  // pencere genişliğine bakar (705 b): 1024 tablette menü açıkken alan 900'ün altına düşse de geniş düzen kalır.
   const darAlan = useOlcek(kok, adres !== 'operator');
   const numune = useNumuneSayisi(depo);
   // Kalite maddesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet, 283.25); sayı kabuğun şeridinde çizilir.
@@ -278,13 +279,13 @@ function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null 
     const uygula = () => {
       const yukseklik = Math.max(0, window.innerHeight - Math.max(0, alan.getBoundingClientRect().top));
       const olcek = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
-      const { mobil } = olcek;
+      const mobil = olcekli ? olcek.mobil : olcekHesapla(window.innerWidth, window.innerHeight).mobil;
       const z = olcekli ? olcek.z : 1;
       kok.style.setProperty('--tc-ay-olcek', String(z));
       kok.style.setProperty('--tc-ay-vh', `${Math.round(yukseklik / z)}px`);
       kok.toggleAttribute('data-mobil', mobil);
-      // Yerleşimi olmayan alan (genişlik 0) ölçü sayılmaz; terminal pencere genişliğine düşer.
-      mobilYaz(alan.clientWidth > 0 ? mobil : null);
+      // Ölçülemeyen alan (genişlik 0) ve terminal null verir; dar düzen kararı pencere genişliğine düşer (useDarEkran).
+      mobilYaz(olcekli && alan.clientWidth > 0 ? mobil : null);
     };
     uygula();
     const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
