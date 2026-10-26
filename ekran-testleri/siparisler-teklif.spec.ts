@@ -3,7 +3,8 @@ import type { Page } from '@playwright/test';
 import { ADRES, expect, tasmaOlc, test } from './ortak.ts';
 
 // Teklif termin ve fiyat ekranı (44): 360, 768 ve 1280 genişlikte yatay taşma yok, termin, kâr ve sürüm düğmesi görünür.
-// Örnek ortamda planlama motoru kayıtlı değildir: plan yolu deneme cevabı yönlendirilerek, elle yol gerçek sunucuyla çizilir.
+// İki yol da deneme cevabı yönlendirilerek çizilir: Planlama sayfası açılınca boş çalışmayı kurduğundan (657 a) motorun bağlı olup olmadığı
+// aynı veritabanında koşan öteki testlere bağlıdır. "cozucu-yok" cevabını sunucu birim testleri sınar (siparisler/teklif-deneme.test.ts).
 test.use({ hesap: 'ornek.yonetici' });
 
 const DENEME = {
@@ -81,6 +82,20 @@ test('Teklif termin ve fiyat: plan denemesiyle termin, maliyet, kâr ve fiyat ta
 
 test('Teklif termin ve fiyat: motor bağlı değilken elle fiyat ve termin taşmadan çizilir', async ({ page, ag, ac }) => {
   const t = await teklifAc(page);
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/termin-denemesi**`, (r) => r.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      durum: 'cozucu-yok', planSurumu: null, gecerlilik: null, istenenTermin: null, planTermini: null, termin: null, terminGun: null, yetisir: null,
+      onayGerekli: false, satinalmaGerekli: false, maliyetToplami: null, genelGiderSaatBasi: null, kayanlar: [], plan: null,
+      kalemler: [{
+        satirId: t.satirId, sira: 1, tanim: t.tanim, malzemeNo: 1, adet: '40', plansiz: false, yerlesti: false, bitis: null, planTermini: null,
+        malzemeGelisi: null, satinalma: [], birimMaliyet: null, toplamMaliyet: null, dokum: null, eksikVeri: [],
+      }],
+    }),
+  }));
+  await page.route(`**/api/siparisler/teklifler/${String(t.id)}/adet-denemesi**`, (r) => r.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ durum: 'cozucu-yok', satirlar: [] }),
+  }));
   await ac(`/siparisler/teklifler/${String(t.id)}`);
   const form = page.getByRole('form', { name: 'Sürüm formu' });
   await expect(form.getByText('Termin denemesi kullanılamıyor')).toBeVisible();

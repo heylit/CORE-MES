@@ -51,12 +51,27 @@ test('ikinci menüden bölümler arasında geçilir; Reçete ve Rota maddesi yen
 });
 
 test('eski planlama çerçevesini açmak ortak kayda yazmaz (aynı anda açan ikinci kişi çakışma uyarısı almaz)', async ({ page, ag, ac }) => {
+  // Planlama sayfası açılınca çalışma kurulur (657 a); öteki testler Reçete ve Rota verisini değiştirdiyse ilk açılış onu çalışmaya alıp
+  // yazar. Veri aynıyken açan kişi yazmaz: ilk açılıştan sonraki açılış sınanır.
+  test.setTimeout(90_000);
+  await ac('/plan/eski');
+  await expect((await cerceve(page)).locator('main').first()).toBeVisible();
+  // İlk açılışın yazması bekletilir (kayıt 2 sn sonra gider, yavaş makinede daha geç); 4 sn yeni yazma gelmeyince durulmuş sayılır.
+  // Durulmadan adres değişirse bekleyen yazma sayfa kapanırken gider ve ikinci açılışın yazması sanılır.
+  let once = -1;
+  await expect.poll(async () => {
+    const n = ag.yazmalar.length;
+    const duruldu = n === once;
+    once = n;
+    if (!duruldu) await page.waitForTimeout(4_000);
+    return duruldu;
+  }, { timeout: 40_000, intervals: [0] }).toBe(true);
   await ac('/plan/eski');
   const f = await cerceve(page);
   await expect(f.locator('main').first()).toBeVisible();
   // Çerçeve kaydı 2 sn bekletip yazar; yokluk ancak bekleyerek görülür.
   await page.waitForTimeout(4_000);
-  expect(ag.yazmalar.filter((y) => y.includes('/recete-rota/kayitlar/') || y.includes('/plan/planlama-kayitlari/'))).toEqual([]);
+  expect(ag.yazmalar.slice(once).filter((y) => y.includes('/recete-rota/kayitlar/') || y.includes('/plan/planlama-kayitlari/'))).toEqual([]);
   expect(ag.hatalar).toEqual([]);
 });
 
@@ -84,14 +99,14 @@ test.describe('planlama rolü', () => {
 
   test('planlama sayfası açılır; maliyet sayfası açılmaz, menüde görünmez; eski çerçeve yalnız yöneticide (659 a)', async ({ page, ac }) => {
     await ac('/plan/maliyet');
-    await expect(page.getByText('Bu sayfayı görme yetkiniz yok.')).toBeVisible();
+    await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await ac('/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
     await expect(menu.locator('a[href="/plan"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/plan/maliyet"]')).toHaveCount(0);
     await ac('/plan/eski');
-    await expect(page.getByText('Bu ekran hazırlanıyor')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
     await expect(page.locator('main iframe')).toHaveCount(0);
   });
 });
