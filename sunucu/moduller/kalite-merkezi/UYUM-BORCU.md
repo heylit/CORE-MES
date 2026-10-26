@@ -55,6 +55,10 @@
   aynı sıradan alır; ikisi aynı anda yazarsa aynı numara çıkabilir (DÖF'teki gibi Sistem Ayarları kalıbı paylasilan ayar kaydı ister,
   ayrı iş). VARSAYIM: Arkon tek numune sayısı kullandığı için `n` örneklemeli sınıfların en büyüğüdür; %100 sınıf (varsayılan kritik) yalnız
   kendi özelliklerinde bütün partiye bakar. Stoğun serbest/red olması stoğun ve Arkon'un işidir (K2, K3).
+- Ekran geçişi (582, 583 c, 584 a; 26.10.2026): menü adresleri TS ekranı açar, eski çerçeve `/kalite-merkezi/eski` altındadır ve
+  Resim ve modeller ile Analiz çerçevede kalır (217 b). Eski çerçeve stüdyo TS'ye geçince (591) kalkar. Ekran kendi bölüm sekmesini
+  çizmez (553 1 a); görünüm sayaçları (`yeni/*/index.tsx` `...Sayaci`) eski sayfadaki gibi gösterilmez (584 a), tanımları stüdyo işinde
+  ya da eski çerçeve kalkarken birlikte gözden geçirilir.
 
 ## Sunucu kuralları
 - Kayıt içeriği sunucuda büyük ölçüde yorumlanmaz (Arkon kalıbı): zorunlu alan, NCR/DÖF kuralları uygulamadadır. Sunucu yetkiyi, koleksiyon ve

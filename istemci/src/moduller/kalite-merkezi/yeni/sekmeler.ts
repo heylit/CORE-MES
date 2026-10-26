@@ -85,10 +85,11 @@ export const GORUNUMLER: readonly KmGorunumTanimi[] = [
   { anahtar: 'ayarlar', baslik: 'Ayarlar ve yedek', bolum: 'rapor', ekran: Ayarlar, sayac: AyarlarSayaci },
 ];
 
-export const KOK_YOL = '/kalite-merkezi/yeni';
-export const ESKI_YOL = '/kalite-merkezi';
-// 217 b: ölçüm, balonlama, resim yükleme ve yarım ölçüme devam eski çerçevedeki stüdyoda kalır; cihaz kaydı Kalibrasyondadır.
-export const STUDYO_YOLU = `${ESKI_YOL}/resimler`;
-export const KALIBRASYON_YOLU = '/kalibrasyon';
+export const KOK_YOL = '/kalite-merkezi';
+// 217 b: ölçüm, balonlama, resim yükleme ve yarım ölçüme devam çerçevedeki stüdyoda kalır (ekranı null görünümler); aynı adreste
+// çerçeve açılır (rotalar.tsx). Cihaz kaydı Kalibrasyondadır.
 export const gorunumYolu = (g: KmGorunum): string => (g === 'bugun' ? KOK_YOL : `${KOK_YOL}/${g}`);
+export const STUDYO_YOLLARI: readonly string[] = GORUNUMLER.filter((g) => g.ekran === null).map((g) => gorunumYolu(g.anahtar));
+export const STUDYO_YOLU = gorunumYolu('resimler');
+export const KALIBRASYON_YOLU = '/kalibrasyon';
 export const gorunumTanimi = (g: string | undefined): KmGorunumTanimi | undefined => GORUNUMLER.find((x) => x.anahtar === (g ?? 'bugun'));

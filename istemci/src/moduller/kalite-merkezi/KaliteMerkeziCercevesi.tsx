@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { KmKimlikCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { DurumKutusu, YalitilmisCerceve, useBildirim } from '../../ortak/arayuz/index.ts';
 import { useYalitilmisGorunum } from '../../ortak/rota/cerceve-gorunumu.ts';
+import { IKINCI_MENU_TANIMLARI, type IkinciMenu } from '../../ortak/rota/ikinci-menu.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { VERI_KANALI } from './acilis.ts';
@@ -14,6 +15,18 @@ import { sayfaKur } from './sayfa.ts';
 import './kalite-merkezi.css';
 
 export const KOK = '/kalite-merkezi';
+// Yeni ekran Kalite Merkezi'nin adreslerine geçti (582, 527 1 a): çerçeve bir süre bu kökün altındadır (/kalite-merkezi/eski/<görünüm>).
+export const ESKI_KOK = '/kalite-merkezi/eski';
+
+// Eski görünümde ikinci menünün maddeleri eski köke çevrilir: çerçevenin içindeki geçiş adresi yeni ekrana döndürmez,
+// adresteki görünüm de çerçeveye aynı adla gider.
+export function eskiMenuler(menuler: readonly IkinciMenu[] = IKINCI_MENU_TANIMLARI): readonly IkinciMenu[] {
+  return menuler.map((m) => (m.kok !== KOK ? m : {
+    ...m,
+    gruplar: m.gruplar.map((g) => ({ ...g, maddeler: g.maddeler.map((d) => ({ ...d, yol: `${ESKI_KOK}${d.yol.slice(KOK.length)}` })) })),
+  }));
+}
+const ESKI_MENULER = eskiMenuler();
 
 // Dosya ikili cevaptır: aynı kökene oturum çereziyle düz istek (api.get JSON okur).
 async function dosyaOku(yol: string): Promise<Blob | null> {
@@ -32,14 +45,15 @@ export const kisayolIstegiMi = (m: Istek | null): boolean => m !== null && m.kan
 
 // Kalite Merkezi değiştirilmeden yalıtılmış çerçevede açılır (TMI oturumuna, sayfasına ve deposuna erişemez); menü kabuktadır
 // (ikinci menü). Uygulamanın yerel sunucuya attığı istekler köprüyle TMI uçlarına gider.
-export function KaliteMerkeziCercevesi() {
+// eski: çerçeve eski görünümdür (ESKI_KOK); değilse yalnız yeni ekranın eski çerçevede bıraktığı stüdyo sayfalarını açar (217 b).
+export function KaliteMerkeziCercevesi({ eski = false }: { eski?: boolean }) {
   const oturum = useOturum();
   const { bildir } = useBildirim();
   const [paket, setPaket] = useState<{ paket: string; kitapliklar: Kitapliklar } | null>(null);
   const [kimlik, setKimlik] = useState<KmKimlikCevabi | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const okur = oturum.data?.islemler.includes('kalite-merkezi.oku') === true;
-  const gorunumIletisi = useYalitilmisGorunum(KOK);
+  const gorunumIletisi = useYalitilmisGorunum(KOK, eski ? ESKI_MENULER : IKINCI_MENU_TANIMLARI);
   const gezin = useNavigate();
 
   useEffect(() => {

@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/recete-rota/planlama-yeni', '/kalite-merkezi/yeni', '/finans/yeni',
+  '/recete-rota/planlama-yeni', '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -47,12 +47,13 @@ for (const [yol, madde] of [['/recete-rota', 'Üretim emirleri'], ['/recete-rota
   });
 }
 
-// Üretim Hazırlık, Üretim Terminali, Kuyruk ve Malzemeler de öyle (553 1 a, 2; 572): eski görünümde de seçili madde aynıdır.
+// Üretim Hazırlık, Üretim Terminali, Kuyruk, Malzemeler ve Kalite Merkezi de öyle (553 1 a, 2; 572, 582): eski görünümde de seçili madde aynıdır.
 const SERITLI = [
   ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
   ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
   ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/eski/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
+  ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'], ['/kalite-merkezi/eski/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;
 for (const [yol, menuAdi, madde] of SERITLI) {
   test(`${yol}: yeni ekranda kabuğun şeridi durur`, async ({ page, ac }) => {
