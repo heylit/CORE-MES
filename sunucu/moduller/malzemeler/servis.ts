@@ -63,6 +63,14 @@ export async function malzemeMaliyetBilgileri(db: Db, nolar: number[]): Promise<
   }]));
 }
 
+// Kart #688: çizim merkezinin resim eşleşmesi. Değer kırpılır, boş metin null; olmayan kart haritada yok. Yetki denetlemez.
+export interface MalzemeResimAnahtari { resimNo: string | null; revizyon: string | null }
+export async function malzemeResimAnahtarlari(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeResimAnahtari>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogResimSatirlari(db, benzersiz)).map((r) => [r.no, { resimNo: r.resimNo, revizyon: r.revizyon }]));
+}
+
 // 323 b: tedarikçinin biriminde girilen miktar stok birimine `miktar * katsayi` ile çevrilir. Olmayan ya da dönüşümsüz kart haritada yok.
 export interface MalzemeBirimDonusumu { stokBirimi: string | null; alisBirimi: string; katsayi: string }
 export async function malzemeBirimDonusumleri(db: Db, nolar: number[]): Promise<Map<number, MalzemeBirimDonusumu>> {
