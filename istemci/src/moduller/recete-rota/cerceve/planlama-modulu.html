@@ -4072,6 +4072,15 @@ function compile(st){
     }
   }
   for(const e of ek){const w=inst(e.gun,e.vardiya);if(!w)continue;const g=M[e.m]&&M[e.m].grup;addW(capTot,w,1);if(g)addW(capG[g],w,1);addW(capAyar,w,1);}
+  /* 563 c: en az bir kişinin listesinde geçen tezgâh "kayıtlı"dır; çalışırken oranı her dilimde listesinde o tezgâh olan, o dilimde çalışan
+     kişilere dağıtılır (kisiDagit). Ek mesai o tezgâha sanal bir kişi ekler. Kaydı olmayan tezgâh grup ve toplam kapasiteyle hesaplanır. */
+  const PK=[];
+  for(const p of D.personel){const ms=(p.makineler||[]).filter(id=>M[id]);if(!ms.length)continue;const av=new Float32Array(NS);
+    for(let d=0;d<HDAYS;d++){if(!days[d].vard.includes(p.vardiya)||devam.has(p.id+'@'+d))continue;const w=inst(d,p.vardiya);if(w)addW(av,w,1);}
+    PK.push({id:p.id,mk:new Set(ms),enCok:+p.enCok>0?+p.enCok:Infinity,av});}
+  if(PK.length)for(const e of ek){if(!M[e.m])continue;const w=inst(e.gun,e.vardiya);if(!w)continue;const av=new Float32Array(NS);addW(av,w,1);PK.push({id:'~ek',mk:new Set([e.m]),enCok:Infinity,av,ek:1});}
+  for(const id in M){if(!PK.some(p=>p.mk.has(id)&&!p.ek))continue;
+    M[id].kisiler=PK.map((p,i)=>p.mk.has(id)?i:-1).filter(i=>i>=0);const kav=new Uint8Array(NS);for(const i of M[id].kisiler)for(let k=0;k<NS;k++)if(PK[i].av[k]>0)kav[k]=1;M[id].kav=kav;}
   for(const c of st.eksik||[]){const w=inst(c.gun,c.vardiya);if(!w)continue;
     if(c.grup==='ayar')addW(capAyar,w,-c.n);else{addW(capTot,w,-c.n);if(capG[c.grup])addW(capG[c.grup],w,-c.n);}}
   const genW=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard){const w=inst(d,sid);if(w)genW.push(w);}
@@ -4111,7 +4120,7 @@ function compile(st){
   const mat=matAlloc(st,jobs);
   // program
   const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
-  return {st,D,A,M,days,gen,capTot,capAyar,capG,FS,AP,ops,byId,jobs,succ,mat,progRel};
+  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,ops,byId,jobs,succ,mat,progRel};
 }
 function matAlloc(st,jobs){
   // etkin geliş = söz tarihi + tedarikçinin ortalama gecikmesi + giriş muayenesi (+ olay gecikmesi, risk sapması)
@@ -4152,7 +4161,7 @@ function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries
     const tg=m.tedarikGun==null?null:+m.tedarikGun;out.push({tur:'eksik',kod:d.kod,miktar:d.eksikQ,plan:isFinite(f.s)?f.s-mu:null,enGec:lt,siparisEnGec:lt!=null&&tg!=null?lt-tg*24:null,durum:'sipariş yok',jobs:[jid]});}
   return out;}
 /* ---- kaynak kullanımı ---- */
-function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
+function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{},pl:(cx.PK||[]).map(()=>new Float32Array(NS)),pn:(cx.PK||[]).map(()=>new Uint8Array(NS)),pa:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
 /* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
    Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
 function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
@@ -4166,11 +4175,20 @@ function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.no
 function kilitKoy(cx,ctx,r){ctx.P[r.id]=r;(ctx.kilit[r.m]=ctx.kilit[r.m]||[]).push([r.S,r.C,r.id]);addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat);}
 function k0(t){return Math.max(0,Math.floor(t/SL+1e-9));}
 function k1(t){return Math.min(NS,Math.ceil(t/SL-1e-9));}
+/* Kayıtlı tezgâhın oranı dilimde açgözlü dağıtılır: en az yüklü kişi önce; kişinin oran toplamı 1'i, tezgâh sayısı enCok'u geçmez.
+   Sığmazsa null. Aynı kullanımda aynı sonucu verir: checkUse ile addUse aynı dağıtımı bulur. */
+function kisiDagit(cx,u,M,k){let kalan=M.opOran;const sec=[];
+  const ad=M.kisiler.filter(i=>{const p=cx.PK[i];return p.av[k]>0&&u.pl[i][k]<1-1e-6&&u.pn[i][k]<p.enCok;}).sort((a,b)=>u.pl[a][k]-u.pl[b][k]||a-b);
+  for(const i of ad){const al=Math.min(kalan,1-u.pl[i][k]);sec.push([i,al]);kalan-=al;if(kalan<=1e-6)return sec;}
+  return null;}
 function checkUse(cx,u,M,r,apId){
   // dönüş: -1 uygun; yoksa sorunlu slot ve tür
   if(r.su>0){for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
   const d=M.opOran;
-  if(d>0){const G=u.g[M.grup],cG=cx.capG[M.grup];
+  if(d>0&&M.kisiler){
+    for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;
+      if(!kisiDagit(cx,u,M,k))return {k,t:'yetkin',kalici:!M.kav[k],kisi:1};}}
+  else if(d>0){const G=u.g[M.grup],cG=cx.capG[M.grup];
     for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;
       if(u.tot[k]+d>cx.capTot[k]+1e-6)return {k,t:'personel',kalici:cx.capTot[k]<d};
       if(G&&G[k]+d>cG[k]+1e-6)return {k,t:'yetkin',kalici:cG[k]<d};}}
@@ -4179,7 +4197,10 @@ function checkUse(cx,u,M,r,apId){
 }
 function addUse(cx,u,M,r,apId,sign=1){
   if(r.su>0)for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k])u.ayar[k]+=sign;
-  const d=M.opOran;if(d>0){const G=u.g[M.grup];for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;u.tot[k]+=d*sign;if(G)G[k]+=d*sign;}}
+  const d=M.opOran;if(d>0){const G=u.g[M.grup];const pa=M.kisiler&&sign>0?(u.pa[r.id]=[]):null;
+    for(let k=k0(r.Su);k<k1(r.C);k++){if(!M.rmask[k])continue;if(M.isiksiz&&!M.smask[k])continue;u.tot[k]+=d*sign;if(G)G[k]+=d*sign;
+      if(pa){const sec=kisiDagit(cx,u,M,k);if(sec)for(const [i,al] of sec){u.pl[i][k]+=al;u.pn[i][k]++;pa.push(k,i,al);}}}
+    if(M.kisiler&&sign<0&&u.pa[r.id]){const a=u.pa[r.id];for(let j=0;j<a.length;j+=3){u.pl[a[j+1]][a[j]]-=a[j+2];u.pn[a[j+1]][a[j]]--;}delete u.pa[r.id];}}
   if(apId&&u.ap[apId])for(let k=k0(r.S);k<k1(r.C);k++)u.ap[apId][k]+=sign;
 }
 
@@ -4233,7 +4254,8 @@ function tMach(o,c,cx,ctx,b,fast){
     const r={S:s,Su,C,su};
     const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat);
     if(bad){let k=bad.k+1;
-      if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
+      if(bad.kalici&&bad.kisi){while(k<NS&&!M.kav[k])k++;}
+      else if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
     const lot1=adv(M.rw,Su,Math.min(run,c.tbRun));
     const cost=M.ucret==null?null:(run*(1-M.pay)*M.ucret+su*(M.ucret+(+cx.A.ayarciUcret||0)));
@@ -4759,8 +4781,8 @@ const KISITLAR=[
   not:'Alt sınır ve çerçeve en kısa ayarı alır. CP-SAT geçişi tezgâh sırasıyla hesaplar; geçişin uzattığı süreyi takvimsiz ekler.'},
  {id:'fai',ad:'İlk parça onayı',veri:'rota[].fai, ayarlar.faiSaat',motor:'tam',sinir:'tam',cerceve:'tam',cpsat:'tam',not:''},
  {id:'ayarci',ad:'Ayarcı sayısı',veri:'personel[].ayar, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',not:'CP-SAT ayarcıyı en kısa ayar süresince sayar.'},
- {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
-  not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz.'},
+ {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar/makineler/enCok, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
+  not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz. Kişiye makine ataması (makineler, enCok) yalnız sezgisel motordadır; CP-SAT grup düzeyinde kalır.'},
  {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'tam',not:''},
  {id:'fason',ad:'Fason çıkış günü, süre, kapasite',veri:'fasoncular',motor:'tam',sinir:'yaklasik',cerceve:'tam',cpsat:'tam',not:'Alt sınır fason kapasitesini saymaz.'},
  {id:'program',ad:'CNC programı hazır olmadan başlamaz',veri:'rota[].program, ayarlar.programSaat',motor:'tam',sinir:'tam',cerceve:'yok',cpsat:'tam',not:''},
@@ -4781,7 +4803,10 @@ function veriDenetimi(st,cx){
   const ayarci=new Set(D.personel.filter(p=>p.ayar).map(p=>p.vardiya));
   for(const m of D.tezgahlar){const vs=m.vardiyalar&&m.vardiyalar.length?m.vardiyalar:[...new Set(Object.values(D.calismaGunleri).flat())];
     const op=m.opOran==null?1:+m.opOran;
-    for(const v of vs){if(op>0&&!(kim[m.grup]||new Set()).has(v))bul('personel',`${m.id} ${v} vardiyasında açık ama ${m.grup} yetkinliğinde personel yok; bu vardiyadaki işler yerleşemez.`);
+    const kayitli=D.personel.filter(p=>(p.makineler||[]).includes(m.id));
+    if(op>0&&kayitli.length&&kayitli.length<Math.ceil(op-1e-9))bul('personel',`${m.id} ${op} operatör ister ama listesinde ${kayitli.length} kişi var; işleri yerleşemez.`);
+    for(const v of vs){if(op>0&&kayitli.length&&!kayitli.some(p=>p.vardiya===v))bul('personel',`${m.id} ${v} vardiyasında açık ama listesinde bu vardiyada kişi yok; bu vardiyadaki işler yerleşemez.`);
+      else if(op>0&&!kayitli.length&&!(kim[m.grup]||new Set()).has(v))bul('personel',`${m.id} ${v} vardiyasında açık ama ${m.grup} yetkinliğinde personel yok; bu vardiyadaki işler yerleşemez.`);
       if(!ayarci.has(v))bul('ayarci',`${m.id} ${v} vardiyasında ayarcı yok; ayar bu vardiyada yapılamaz.`);}}
   for(const o of cx.ops){if(!o.c.length)bul('tezgah',`${o.id}: uygun tezgâh ya da fasoncu yok.`);
     if(o.aparat&&!cx.AP[o.aparat])bul('aparat',`${o.id}: ${o.aparat} aparatı tanımlı değil.`);}
@@ -4921,6 +4946,9 @@ function rrCevir(st) {
     if (!a || a.ad !== p.name) y.ad = p.name;
     if (!a || a.vardiya !== p.shiftId) y.vardiya = p.shiftId;
     if (!a || !rrEsit(a.gruplar || [], p.skills || [])) y.gruplar = (p.skills || []).slice();
+    /* 563 c, 563 2 a: baktığı makineler ve aynı anda en çok tezgâh istasyonlardan gelir; sayfada değiştirilmez */
+    if (!a || !rrEsit(a.makineler || [], p.machines || [])) y.makineler = (p.machines || []).slice();
+    if (!a || (a.enCok ?? null) !== (p.maxMachines ?? null)) y.enCok = p.maxMachines ?? null;
     if (!a) y.ayar = p.role === 'Ayarcı';
     return rrKur(a, y);
   });
@@ -5029,7 +5057,8 @@ function tmiKaynakIle(st, kaynak, D) {
   if (Array.isArray(d.people)) {
     o.people = d.people.filter(k => k.active !== false).map(k => {
       const y = { id: k.id, name: k.name, code: k.code || '', role: (ek.kisiGorevi && ek.kisiGorevi[k.id]) || '', wcId: k.wcId || '', stationId: k.stationId || '',
-        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true };
+        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true,
+        machines: (k.machines || []).slice(), maxMachines: k.maxMachines ?? null };
       const a = eski('personel', k.id); if (a) y.plan = a;
       return y;
     });
@@ -5271,7 +5300,7 @@ const GEVSEK = {
   tampon: st => { st.w.tampon = false; },
   /* oran yalnız kapasiteden düşer; operatör ücreti (durum.betik ymUygula) asıl oranla sayılır */
   personel: st => { for (const m of st.D.tezgahlar) { m.opMaliyet = m.opOran == null ? 1 : +m.opOran; m.opOran = 0; } },
-  yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) p.gruplar = g.slice(); },
+  yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) { p.gruplar = g.slice(); delete p.makineler; delete p.enCok; } },
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
   aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; },

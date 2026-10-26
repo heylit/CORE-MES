@@ -174,3 +174,52 @@ describe('ortak plan motoru, sayfanın motor kancaları (458 a)', () => {
     assert.equal(bitis(await planCoz({ durum: st, kip: 'yeni', taban: null })), 6);
   });
 });
+
+describe('ortak plan motoru, kişi ataması (563 c, 563 2 a)', () => {
+  // İki tezgâh, her birinde 4 saatlik tek iş; ikisi de 0. saatte başlayabilir. Veriler uydurmadır.
+  const iki = (personel: unknown[], opOran: [number, number] = [1, 1]) => ({
+    ...veri([{ id: 'S1', adet: 4, termin: '2026-01-20' }]),
+    tezgahlar: [{ id: 'T1', grup: 'G', opOran: opOran[0] }, { id: 'T2', grup: 'G', opOran: opOran[1] }],
+    personel,
+    urunler: [
+      { id: 'U', rota: [{ k: 10, ad: 'Torna', tezgahlar: [{ id: 'T1', cevrim: 60, ayar: 0 }] }] },
+      { id: 'U2', rota: [{ k: 10, ad: 'Freze', tezgahlar: [{ id: 'T2', cevrim: 60, ayar: 0 }] }] },
+    ],
+    siparisler: [{ id: 'S1', urun: 'U', adet: 4, termin: '2026-01-20' }, { id: 'S2', urun: 'U2', adet: 4, termin: '2026-01-20' }],
+  });
+  const plan = (D: unknown) => { const m = motorYukle(); return m.schedule(durum(m, {}, 0, D), 'yeni', null); };
+  const paralel = (p: MotorPlani) => p.ops['S1.10']!.S < p.ops['S2.10']!.C && p.ops['S2.10']!.S < p.ops['S1.10']!.C;
+  const kisi = (ek: Record<string, unknown> = {}) => ({ id: 'P1', vardiya: 'V', gruplar: ['G'], ...ek });
+
+  test('kayıtlı iki tezgâh tek kişiye düşer: oran toplamı 1i geçmez, yarım oranlı iki tezgâh birlikte çalışır', () => {
+    assert.equal(paralel(plan(iki([kisi({ makineler: ['T1', 'T2'] })]))), false);
+    assert.equal(paralel(plan(iki([kisi({ makineler: ['T1', 'T2'] })], [0.5, 0.5]))), true);
+  });
+
+  test('aynı anda en çok tezgâh sınırı oran yetse de ikinci tezgâhı bekletir', () => {
+    assert.equal(paralel(plan(iki([kisi({ makineler: ['T1', 'T2'], enCok: 1 })], [0.5, 0.5]))), false);
+    assert.equal(paralel(plan(iki([kisi({ makineler: ['T1', 'T2'], enCok: 2 })], [0.5, 0.5]))), true);
+  });
+
+  test('kayıtlı tezgâha yalnız listesinde o tezgâh olan kişi bakar; grupta başka kişi olması yetmez', () => {
+    const p = plan(iki([kisi({ makineler: ['T1'] }), { id: 'P2', vardiya: 'V', gruplar: ['G'], makineler: ['T2'] }]));
+    assert.equal(paralel(p), true);
+    // P2 grupta ama listesi yok: iki kayıtlı tezgâhı yalnız P1 çalıştırır.
+    assert.equal(paralel(plan(iki([kisi({ makineler: ['T1', 'T2'] }), { id: 'P2', vardiya: 'V', gruplar: ['G'] }]))), false);
+    // T2 kayıtsızdır, grup kapasitesiyle hesaplanır: P1 T1'de, P2 T2'de.
+    assert.equal(paralel(plan(iki([kisi(), { id: 'P2', vardiya: 'V', gruplar: ['G'], makineler: ['T1'] }]))), true);
+  });
+
+  test('iki operatör isteyen kayıtlı tezgâh iki kişiye bölünür; tek kişiyle yerleşmez', () => {
+    const tek = iki([kisi({ makineler: ['T1'] })], [2, 0]);
+    assert.equal(plan(tek).ops['S1.10'], undefined);
+    const cift = iki([kisi({ makineler: ['T1'] }), { id: 'P2', vardiya: 'V', gruplar: ['G'], makineler: ['T1'] }], [2, 0]);
+    assert.ok(plan(cift).ops['S1.10']);
+  });
+
+  test('listesi olmayan veride plan bugünkü gibidir', () => {
+    const ozet = (p: MotorPlani) => Object.fromEntries(Object.entries(p.ops).map(([k, r]) => [k, [r.m, r.S, r.C]]));
+    const D = iki([kisi(), { id: 'P2', vardiya: 'V', gruplar: ['G'] }]);
+    assert.deepEqual(ozet(plan(D)), ozet(plan({ ...D, personel: D.personel.map((p) => ({ ...(p as object), makineler: [] })) })));
+  });
+});
