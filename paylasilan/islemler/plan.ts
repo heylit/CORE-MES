@@ -2,4 +2,5 @@
 // senaryoyu canlıya almak plan.canliya-al (öneri dağılımı CEKIRDEK-ISTEKLERI'nde).
 // Öncelik ayarları (taban bedel, oranlar, eşikler) bütün siparişlerin sırasını değiştirir; plan.bedel-ayari ister, planlama
 // değiştiremez (soru 210). Siparişe elle verilen çarpan bu işlemi istemez.
-export const PLAN_ISLEMLERI = ['plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari'] as const;
+// Planlama sayfalarını (motor, atölye, planlama görünümleri) görmek plan.planlama-oku; yönetici, müdür ve planlamadadır (195 a, 663 a).
+export const PLAN_ISLEMLERI = ['plan.planlama-oku', 'plan.oku', 'plan.yaz', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al', 'plan.bedel-ayari'] as const;
