@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { gunzipSync } from 'node:zlib';
 import { test } from 'node:test';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -39,11 +40,11 @@ function kur(uclar: readonly Uc[], kimlik: Kimlik = okuyan, denetle?: Denetle): 
 const PARCALAR = [Buffer.from('%PDF-1.7\n'), Buffer.from('gövde'), Buffer.from('%%EOF')];
 const BOYUT = PARCALAR.reduce((t, p) => t + p.length, 0);
 
-const indir = (yol: string, ad: string, parcalar: readonly Buffer[] = PARCALAR, boyut = BOYUT): Uc =>
+const indir = (yol: string, ad: string, parcalar: readonly Buffer[] = PARCALAR, boyut = BOYUT, tur = 'application/pdf'): Uc =>
   uc({
     yontem: 'GET', yol, yetki: 'kisiler.oku', cevap: ikiliCevap,
     isle: () => ({
-      tur: 'application/pdf', ad, boyut,
+      tur, ad, boyut,
       // Şemada olmayan alan cevaba çıkmaz.
       gizli: 'sızmamalı',
       akis: async function* (db: Db) {
@@ -199,4 +200,57 @@ test('385 a kapsamı: ekranın kendiliğinden yüklediği dosya (atölye 3B mode
   assert.deepEqual(kayitlar, []);
   assert.throws(() => uc({ yontem: 'GET', yol: '/x', yetki: 'kisiler.oku', kendiligindenYuklenir: true, cevap: z.object({}), isle: () => ({}) }),
     /yalnız dosya ucunda/);
+});
+
+// Sıkışabilir dosya: metin STEP benzeri, eşiğin üstünde; iki parça halinde akar.
+const STEP = Buffer.from('#1=CARTESIAN_POINT(\'\',(0.,0.,0.));\n'.repeat(4000));
+const STEP_PARCALARI = [STEP.subarray(0, 70_000), STEP.subarray(70_000)];
+
+test('ikili cevap sıkıştırma: STEP gibi sıkışan tür, gzip kabul eden istemciye sıkışmış gider; açılınca aynı içerik, boyut başlığı yok', async () => {
+  const { app } = kur([indir('/step', 'a.step', STEP_PARCALARI, STEP.length, 'model/step')]);
+  const cevap = await app.inject({ method: 'GET', url: '/api/step', headers: { 'accept-encoding': 'gzip, deflate' } });
+  assert.equal(cevap.statusCode, 200, cevap.body);
+  assert.equal(cevap.headers['content-encoding'], 'gzip');
+  assert.equal(cevap.headers['vary'], 'accept-encoding');
+  assert.equal(cevap.headers['content-length'], undefined);
+  assert.equal(cevap.headers['content-type'], 'model/step');
+  assert.equal(cevap.headers['cache-control'], 'private, no-store');
+  assert.ok(cevap.rawPayload.length < STEP.length / 4, `sıkışmadı: ${cevap.rawPayload.length}`);
+  assert.deepEqual(gunzipSync(cevap.rawPayload), STEP);
+});
+
+test('ikili cevap sıkıştırma: gzip istemeyen, q=0 diyen, PDF ve eşik altı dosya sıkışmadan ve boyut başlığıyla gider', async () => {
+  const kucuk = [Buffer.from('ISO-10303-21;')];
+  const pdf = [Buffer.concat([Buffer.from('%PDF-1.7\n'), STEP])];
+  const { app } = kur([
+    indir('/step', 'a.step', STEP_PARCALARI, STEP.length, 'model/step'),
+    indir('/kucuk', 'b.step', kucuk, kucuk[0]!.length, 'model/step'),
+    indir('/pdf', 'c.pdf', pdf, pdf[0]!.length),
+  ]);
+  const durumlar: [string, string | undefined, Buffer][] = [
+    ['/step', undefined, STEP], ['/step', 'gzip;q=0', STEP], ['/kucuk', 'gzip', kucuk[0]!], ['/pdf', 'gzip', pdf[0]!],
+  ];
+  for (const [yol, kabul, beklenen] of durumlar) {
+    const cevap = await app.inject({ method: 'GET', url: `/api${yol}`, headers: kabul === undefined ? {} : { 'accept-encoding': kabul } });
+    assert.equal(cevap.statusCode, 200, `${yol} ${kabul}`);
+    assert.equal(cevap.headers['content-encoding'], undefined, `${yol} ${kabul}`);
+    assert.equal(cevap.headers['content-length'], String(beklenen.length), `${yol} ${kabul}`);
+    assert.deepEqual(cevap.rawPayload, beklenen, `${yol} ${kabul}`);
+  }
+  // Sıkışabilir dosyanın sıkışmamış cevabı da önbelleklere kodlamaya göre değiştiğini söyler; PDF söylemez.
+  assert.equal((await app.inject({ method: 'GET', url: '/api/step' })).headers['vary'], 'accept-encoding');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/pdf', headers: { 'accept-encoding': 'gzip' } })).headers['vary'], undefined);
+});
+
+test('ikili cevap sıkıştırma: bildirilen boyutu tutmayan akış sıkışmış cevapta da tamamlanmış görünmez', async () => {
+  const { app } = kur([
+    indir('/kisa', 'a.step', STEP_PARCALARI, STEP.length + 10, 'model/step'),
+    indir('/uzun', 'b.step', STEP_PARCALARI, STEP.length - 1, 'model/step'),
+  ]);
+  for (const yol of ['/kisa', '/uzun']) {
+    // Sıkıştırıcı ilk baytı vermeden akış koparsa başlık henüz gitmemiştir: cevap 500 olur. Sonra koparsa bağlantı kesilir.
+    const cevap = await app.inject({ method: 'GET', url: `/api${yol}`, headers: { 'accept-encoding': 'gzip' } }).then((c) => c.statusCode, (h: unknown) => h);
+    if (typeof cevap === 'number') assert.equal(cevap, 500, yol);
+    else assert.match(String(cevap), /destroyed/, yol);
+  }
 });

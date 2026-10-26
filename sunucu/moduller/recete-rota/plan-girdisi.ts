@@ -56,7 +56,10 @@ export interface CozumIstegi {
   ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
   // 690 b: emirler arası öncül (parti kolu); anahtar, oncul bitmeden başlamaz.
   baglar?: { anahtar: string; oncul: string }[];
+  // 686 a: rotada olmayan ek adım (emrin kendi adımı); öncül ve ardıl emrin içindeki komşu adımların anahtarı, süreler dakika.
+  ekAdimlar?: EkAdim[];
 }
+export interface EkAdim { anahtar: string; ad: string; oncul: string | null; ardil: string | null; ayarDk: number; birimDk: number; adet: number }
 export interface CozumGirdisi {
   st: MotorDurumu;
   taban: MotorPlani;

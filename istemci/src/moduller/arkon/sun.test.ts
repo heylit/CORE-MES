@@ -6,7 +6,7 @@ import { join, sep } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  CALISAN_ILKESI, CALISAN_YOLU, ILKE_BASLIGI, KALICI_ONBELLEK, SORARAK_ONBELLEK, arkonuSun, derlemeEskiMi, icerikIlkesi,
+  CALISAN_ILKESI, CALISAN_YOLU, ILKE_BASLIGI, PDF_CALISAN_ILKESI, PDF_CALISAN_YOLU, KALICI_ONBELLEK, SORARAK_ONBELLEK, arkonuSun, derlemeEskiMi, icerikIlkesi,
 } from '../../../../arkon/sun.ts';
 
 const KOPRU = 'try { for (var w = window; w.parent && w.parent !== w;) { w = w.parent; if (w.__tmiArkonBagla) { w.__tmiArkonBagla(window); break; } } } catch (e) {}';
@@ -40,6 +40,9 @@ describe('Arkon sayfası içerik güvenliği ilkesi (zorlayıcı kip, CSP a)', (
     await mkdir(join(kok, 'vendor', 'occt'));
     await writeFile(join(kok, 'vendor', 'occt', 'occt-import-js.js'), 'var b = 1;');
     await writeFile(join(kok, CALISAN_YOLU), 'var c = 1;');
+    await mkdir(join(kok, 'vendor', 'pdfjs'));
+    await writeFile(join(kok, PDF_CALISAN_YOLU), 'var d = 1;');
+    await writeFile(join(kok, 'vendor', 'pdfjs', 'pdf.min.js'), 'var e = 1;');
     const eklenti = arkonuSun(kok) as unknown as { configureServer(s: unknown): void };
     eklenti.configureServer({ middlewares: { use: (_yol: string, i: Isleyici) => { isleyici = i; } } });
   });
@@ -95,6 +98,13 @@ describe('Arkon sayfası içerik güvenliği ilkesi (zorlayıcı kip, CSP a)', (
     expect(sayfa.basliklar['content-security-policy']).toBeDefined();
     expect(sayfa.basliklar['content-security-policy']).not.toContain("'unsafe-eval'");
     expect(sayfa.basliklar['content-security-policy']).not.toBe(CALISAN_ILKESI);
+  });
+
+  it('PDF okuyucu çalışanı en dar ilkeyi taşır (ağ yok, eval yok); pdf.js kitaplığının kendisi ilke almaz', async () => {
+    expect(PDF_CALISAN_ILKESI).toBe("default-src 'none'; script-src 'self'");
+    expect((await iste(`/${PDF_CALISAN_YOLU}`)).basliklar['content-security-policy']).toBe(PDF_CALISAN_ILKESI);
+    expect((await iste(`/${PDF_CALISAN_YOLU}?v=3`)).basliklar['content-security-policy']).toBe(PDF_CALISAN_ILKESI);
+    expect((await iste('/vendor/pdfjs/pdf.min.js')).basliklar['content-security-policy']).toBeUndefined();
   });
 });
 

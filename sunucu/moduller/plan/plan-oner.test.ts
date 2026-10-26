@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { tesisGunBasi } from '#paylasilan/zaman.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
@@ -127,51 +128,55 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
   });
 
   test('denetim #23: çalışan iş gerçek başlangıcından şimdi + kalan adedin süresine uzanır (ayar düşülür)', async () => {
-    const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-M23', ad: 'Deneme 23', istasyonId: istasyonB });
-    const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m.id } })]);
-    const p = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
-    await vt().tx(async (db) => {
-      await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now() - interval '2 hours' WHERE id = $1", [i1]);
-      await db.sorgu(
-        `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
-         SELECT uretim_emri_id, id, $2, $3, 'saglam', t.adet, now() FROM uretim_emirleri_is_emri, (VALUES (4), (2)) AS t(adet) WHERE id = $1`,
-        [i1, operatorId, istasyonB]);
+    await gunduzde(async () => {
+      const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-M23', ad: 'Deneme 23', istasyonId: istasyonB });
+      const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m.id } })]);
+      const p = await taslaktaOner();
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+      await vt().tx(async (db) => {
+        await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2 WHERE id = $1", [i1, new Date(Date.now() - 2 * 3600_000)]);
+        await db.sorgu(
+          `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
+           SELECT uretim_emri_id, id, $2, $3, 'saglam', t.adet, $4 FROM uretim_emirleri_is_emri, (VALUES (4), (2)) AS t(adet) WHERE id = $1`,
+          [i1, operatorId, istasyonB, new Date()]);
+      });
+      const simdi = Date.now();
+      const y = yer(await planOku(), i1!);
+      assert.equal(y.durum, 'basladi');
+      const dakika = (t: string) => (Date.parse(t) - simdi) / 60_000;
+      assert.ok(Math.abs(dakika(y.baslangic) + 120) < 2, `başlangıç gerçek: ${y.baslangic}`);
+      // Kalan 10 - 6 = 4 adet x 2 dk; ayar (30 dk) düşülür.
+      assert.ok(Math.abs(dakika(y.bitis) - 8) < 2, `bitiş şimdi + kalan: ${y.bitis}`);
+      await isEmriDurumu(i1!, 'bekliyor');
     });
-    const simdi = Date.now();
-    const y = yer(await planOku(), i1!);
-    assert.equal(y.durum, 'basladi');
-    const dakika = (t: string) => (Date.parse(t) - simdi) / 60_000;
-    assert.ok(Math.abs(dakika(y.baslangic) + 120) < 2, `başlangıç gerçek: ${y.baslangic}`);
-    // Kalan 10 - 6 = 4 adet x 2 dk; ayar (30 dk) düşülür.
-    assert.ok(Math.abs(dakika(y.bitis) - 8) < 2, `bitiş şimdi + kalan: ${y.bitis}`);
-    await isEmriDurumu(i1!, 'bekliyor');
   });
 
   test('denetim #23: tahmini bitişi geçmişte kalan çalışan işten sonra o makinedeki iş geçmişe yerleşmez', async () => {
-    const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-M23G', ad: 'Deneme 23 geç', istasyonId: istasyonB });
-    const kaynak = { tur: 'makine' as const, id: m.id };
-    const [i1] = await isEmirleriAc([yeniAdim({ kaynak })]);
-    const [j1] = await isEmirleriAc([yeniAdim({ kaynak })]);
-    let p = await taslaktaOner();
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
-    const calisan = Date.parse(yer(p, i1!).baslangic) <= Date.parse(yer(p, j1!).baslangic) ? i1! : j1!;
-    const sonraki = calisan === i1 ? j1! : i1!;
-    // Son sayım 4 saat önce: kalan 9 x 2 dk o andan sayılınca tahmini bitiş geçmişte kalır.
-    await vt().tx(async (db) => {
-      await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now() - interval '5 hours' WHERE id = $1", [calisan]);
-      await db.sorgu(
-        `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
-         SELECT uretim_emri_id, id, $2, $3, 'saglam', 1, now() - interval '4 hours' FROM uretim_emirleri_is_emri WHERE id = $1`,
-        [calisan, operatorId, istasyonB]);
+    await gunduzde(async () => {
+      const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-M23G', ad: 'Deneme 23 geç', istasyonId: istasyonB });
+      const kaynak = { tur: 'makine' as const, id: m.id };
+      const [i1] = await isEmirleriAc([yeniAdim({ kaynak })]);
+      const [j1] = await isEmirleriAc([yeniAdim({ kaynak })]);
+      let p = await taslaktaOner();
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
+      const calisan = Date.parse(yer(p, i1!).baslangic) <= Date.parse(yer(p, j1!).baslangic) ? i1! : j1!;
+      const sonraki = calisan === i1 ? j1! : i1!;
+      // Son sayım 4 saat önce: kalan 9 x 2 dk o andan sayılınca tahmini bitiş geçmişte kalır.
+      await vt().tx(async (db) => {
+        await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2 WHERE id = $1", [calisan, new Date(Date.now() - 5 * 3600_000)]);
+        await db.sorgu(
+          `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
+           SELECT uretim_emri_id, id, $2, $3, 'saglam', 1, $4 FROM uretim_emirleri_is_emri WHERE id = $1`,
+          [calisan, operatorId, istasyonB, new Date(Date.now() - 4 * 3600_000)]);
+      });
+      const simdi = Date.now();
+      p = await taslaktaOner();
+      assert.ok(Date.parse(yer(p, calisan).bitis) < simdi, `çalışan işin tahmini bitişi geçmişte: ${yer(p, calisan).bitis}`);
+      assert.ok(Date.parse(yer(p, sonraki).baslangic) >= simdi - 60_000, `sonraki iş geçmişe yerleşmedi: ${yer(p, sonraki).baslangic}`);
+      assert.ok(Date.parse(yer(await planOku(p.taslak!.id), sonraki).baslangic) >= simdi - 60_000, 'okumada da');
+      await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+      await isEmriDurumu(calisan, 'bekliyor');
     });
-    const simdi = Date.now();
-    p = await taslaktaOner();
-    assert.ok(Date.parse(yer(p, calisan).bitis) < simdi, `çalışan işin tahmini bitişi geçmişte: ${yer(p, calisan).bitis}`);
-    assert.ok(Date.parse(yer(p, sonraki).baslangic) >= simdi - 60_000, `sonraki iş geçmişe yerleşmedi: ${yer(p, sonraki).baslangic}`);
-    assert.ok(Date.parse(yer(await planOku(p.taslak!.id), sonraki).baslangic) >= simdi - 60_000, 'okumada da');
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
-    await isEmriDurumu(calisan, 'bekliyor');
   });
 
   test('P5 ret: kilitli ve başlamış iş taşınmaz ve kaldırılamaz; kilit yalnız plan.kilitle ile, kilit açılınca kaldırılır', async () => {
@@ -365,7 +370,7 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
-  test('B7, 690 b: kol üstün önceki adımını, üstün birleşme adımı kolun motordaki son adımını bekler; adım kolların adediyle sürer; ek adım yerleşmemiş kalır (689 a)', async () => {
+  test('B7, 690 b, 686 a: kol üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler; adım kolların adediyle sürer; ek adım kendi süresiyle yerleşir', async () => {
     const [a, b, son] = await isEmirleriAc([yeniAdim(), yeniAdim({ kaynak: { tur: 'makine', id: makineB } }), yeniAdim()], 10);
     const satir = (id: number) => vt().tx((db) => db.tek<{ emir: number; op: number }>(
       'SELECT uretim_emri_id AS emir, op_no AS op FROM uretim_emirleri_is_emri WHERE id = $1', [id]));
@@ -379,17 +384,14 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     // Kolun rota adımı makinesiz açılır; Planı kur'da makineyi sayfa seçer (ADR 0018), burada üstün makinesi verilir.
     await vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET makine_id = $1 WHERE uretim_emri_id = $2 AND makine_id IS NULL', [makineB, altEmirId]));
     const p = await taslaktaOner();
-    const kol = p.yerlesimler.filter((y) => y.uretimEmriId === altEmirId);
-    assert.deepEqual(kol.map((y) => y.tur), ['rota'], 'kol birleşme adımını taşımaz');
-    // 689 a: ortak motor rotada olmayan ek adımı henüz yerleştirmez (686 a); ek adım türüyle, nedeniyle yerleşmemiş kalır, Planı kur durmaz.
-    const ek = p.yerlesmemis.find((y) => y.uretimEmriId === altEmirId);
-    assert.deepEqual(ek && [ek.tur, ek.neden], ['rework', 'Ek adım; ortak motor rotada olmayan adımı henüz yerleştirmiyor.']);
-    assert.ok(p.uyarilar.some((u) => /yerleşmedi; ek adım/.test(u)), p.uyarilar.join(' | '));
+    const kol = p.yerlesimler.filter((y) => y.uretimEmriId === altEmirId).sort((x, y) => x.opNo - y.opNo);
+    assert.deepEqual(kol.map((y) => y.tur), ['rota', 'rework'], 'kol birleşme adımını taşımaz; ek adım türüyle gelir (686 a)');
     const dk = (y: { baslangic: string; bitis: string }) => (Date.parse(y.bitis) - Date.parse(y.baslangic)) / 60_000;
     // Ayar + adet x birim: bölünmeden önceki ve birleşme adımı 10, üstün kalan adımı 6, kol 4 adet işler.
-    assert.deepEqual([dk(yer(p, a!)), dk(yer(p, b!)), dk(kol[0]!), dk(yer(p, son!))], [50, 42, 38, 50]);
+    assert.deepEqual([dk(yer(p, a!)), dk(yer(p, b!)), dk(kol[0]!), dk(kol[1]!), dk(yer(p, son!))], [50, 42, 38, 14, 50]);
     assert.ok(Date.parse(kol[0]!.baslangic) >= Date.parse(yer(p, a!).bitis), 'kol üstün önceki adımını bekler');
-    assert.ok(Date.parse(yer(p, son!).baslangic) >= Date.parse(kol[0]!.bitis), 'birleşme adımı kolun motordaki son adımını bekler (ek adım motorda yok)');
+    assert.ok(Date.parse(kol[1]!.baslangic) >= Date.parse(kol[0]!.bitis), 'ek adım kolun önceki adımını bekler');
+    assert.ok(Date.parse(yer(p, son!).baslangic) >= Date.parse(kol[1]!.bitis), 'birleşme adımı kolun son adımını bekler');
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 

@@ -137,6 +137,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
 const KENDILIGINDEN_YUKLENEN_DOSYALAR = [
   'GET /atolye/istasyonlar/:id/merkez-modeli',
   'GET /atolye/malzemeler/:no/merkez-modeli',
+  // 730 a (26.10.2026): terminalin arka planda cihaza indirdiği Arkon dosyası; kişinin açtığı dosya yazılmaya devam eder.
+  'GET /arkon/dosyalar/:ozet/arka-plan',
 ];
 
 test('indirme denetimi kapsamı: denetime yazılmayan dosya uçları onaylı sabit listeyle aynıdır (385 a)', async () => {

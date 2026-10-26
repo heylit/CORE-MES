@@ -68,6 +68,8 @@ describe('A2 Hazırlık ekranı', () => {
     const yayin = paketYazimi(istekler).find((p) => p.status === 'published');
     expect(yayin?.history?.length).toBe(1);
     expect(yayin?.yayinImza).toBeTruthy();
+    // Okuma ayarı pakete sabitlenir (kart #731): terminal hazır veriyi aynı anahtarla bulur.
+    expect(yayin?.readCfg).toMatchObject({ mesh: expect.any(String), ex: expect.any(Object) });
   }, 40000);
 
   it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma TMI\'ye gitmez', async () => {

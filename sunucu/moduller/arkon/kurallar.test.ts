@@ -9,6 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
+import { dosyaTuruBul } from './kurallar.ts';
 import { adimEmirDurumu, ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1044,4 +1045,15 @@ describe('paralel adım (kart 639)', () => {
     assert.equal(adimEmirDurumu('iptal', 'bekliyor'), 'iptal');
     assert.equal(adimEmirDurumu('basladi', null), 'basladi', 'emir paketi');
   });
+});
+
+test('dosya türü ilk baytlardan bulunur; tanınmayan, kısa ve boş içerik türsüz kalır (731)', () => {
+  const b = (m: string) => Buffer.from(m, 'latin1');
+  assert.equal(dosyaTuruBul(b('%PDF-1.7\n%')), 'application/pdf');
+  assert.equal(dosyaTuruBul(b('\x89PNG\r\n\x1a\n....')), 'image/png');
+  assert.equal(dosyaTuruBul(b('\xff\xd8\xff\xe0')), 'image/jpeg');
+  assert.equal(dosyaTuruBul(b('RIFF\x00\x00\x00\x00WEBPVP8 ')), 'image/webp');
+  assert.equal(dosyaTuruBul(b('glTF\x02\x00\x00\x00')), 'model/gltf-binary');
+  assert.equal(dosyaTuruBul(b('ISO-10303-21;\nHEADER;')), 'model/step');
+  for (const m of ['', '%PD', 'RIFF\x00\x00\x00\x00WAVE', 'solid parca', 'S      1', ' %PDF-1.7']) assert.equal(dosyaTuruBul(b(m)), 'application/octet-stream', JSON.stringify(m));
 });
