@@ -135,7 +135,8 @@ describe('Kabuk: ikinci menü', () => {
     ciz();
     expect(kabuk().hasAttribute('data-ikinci')).toBe(true);
     const anaMenu = screen.getByRole('navigation', { name: 'Ana menü' });
-    expect(within(anaMenu).queryByRole('button')).toBeNull();
+    // Ana menüde tek düğme masaüstü daraltmasıdır (682 a); ikinci menü ana menüye açılır grup eklemez.
+    expect(within(anaMenu).getAllByRole('button').map((d) => d.getAttribute('aria-label'))).toEqual(['Menüyü daralt']);
     fireEvent.click(within(anaMenu).getByRole('link', { name: 'Reçete ve Rota' }));
     expect(ikinciYok()).toBeNull();
     expect(kabuk().hasAttribute('data-ikinci')).toBe(false);

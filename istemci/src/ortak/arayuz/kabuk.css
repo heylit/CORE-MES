@@ -1,5 +1,5 @@
-/* Menüler açılıp kapanmaz (kullanıcı kararı, kart #172). 1024 ve üstü: ana menü solda sabit ve yazılı; 768-1023: ana menü
-   yalnız simge şeridi, ad ipucunda. İkinci menü (data-ikinci) her sayfada ve her genişlikte başlığın altında sekme şerididir
+/* 1024 ve üstü: ana menü solda yazılı; kişi onu simge şeridine daraltabilir (682 a, data-menu-dar, tarayıcıda hatırlanır).
+   768-1023: ana menü hep yalnız simge şeridi, ad ipucunda; daraltma düğmesi yoktur. İkinci menü (data-ikinci) her sayfada ve her genişlikte başlığın altında sekme şerididir
    (soru 514 1a): ana menünün yanında ikinci bir sütun açılmaz, modülün menüsü eski ekranlardaki gibi üsttedir.
    Telefon (<768) ayrı düzendir: ana menü yerine alt çubuk. */
 /* Bağlantı şeridi kabuğun üstünde akıştadır; kabuk kalan yüksekliği alır. */
@@ -115,6 +115,20 @@
   .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: center; }
   .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
   .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+}
+.tc-kabuk-daralt { color: var(--muted); }
+@media (max-width: 1023px) {
+  .tc-kabuk-daralt { display: none; }
+}
+/* Masaüstünde daraltılmış menü tabletteki şeridin aynısıdır; yeni bir görünüm çizilmez. */
+@media (min-width: 1024px) {
+  .tc-kabuk[data-menu-dar] { grid-template-columns: var(--menu-serit) minmax(0, 1fr); }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-menu { align-items: center; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-menu :is(.tc-kabuk-grup-ad, .tc-kabuk-bag-metin, .tc-kabuk-marka-metin, .tc-kabuk-surum) { display: none; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-marka-logo { max-width: var(--dokunma); }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: center; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
 }
 /* Çerçeveli modül: içerik alanını çerçeve doldurur, kaydırmayı o yapar. Taşma gizlenmez: aynı kökte açılan doğal (TS) ekranın
    kendi kaydırması yoksa içerik alanı kaydırır; tam yükseklikteki çerçeve taşmadığından ikinci kaydırma çubuğu çıkmaz. */
