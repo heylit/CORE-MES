@@ -2340,34 +2340,44 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await paketOku(ieKimligi(ie1!)), null);
   });
 
-  test('iş emri paketi: sonraki adımın paketi sırası gelmeden çalışmaz (başlatma 409 ve sıradaki adım, sayım eslenemedi, emir değişmez); ilk adım bitince ikinci adım kendi paketiyle başlar ve sayar; bitmiş adımın paketi yazmaz', async () => {
+  test('iş emri paketi (639): sonraki adımın paketi sırası gelmeden uyarıyla başlar ve sayar; önceki adım bitmeden bitmez; ilk adım bitince emir sürene geçer; bitmiş adımın paketi yazmaz', async () => {
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
-    const once = await adimliEmir(r.emirId);
-    // Reddedilen: ikinci adımın önceden hazırlanmış paketiyle başlatma kayıttan önce döner (operatör nedeni görür); sayım yazılır, eşlenmez.
+    const uyarisi = (c: { govde: unknown }, cid: string): string =>
+      ((c.govde as { uyarilar?: { cid: string; ileti: string }[] }).uyarilar ?? []).find((u) => u.cid === cid)?.ileti ?? '';
+    // 626 a: ikinci adımın paketiyle erken başlatma reddedilmez; TMI'de adım başlar, operatör uyarıyı görür.
     const erkenBasla = ieOlay(ie2!, 'running', { machine: r.ikinci });
+    const basla = await ekle(operator, 'events', erkenBasla);
+    assert.equal(basla.durum, 200, JSON.stringify(basla.govde));
+    assert.equal((await yansima(erkenBasla.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(erkenBasla.cid)));
+    assert.match(uyarisi(basla, erkenBasla.cid), /OP 10 bitmeden OP 20 başlatıldı\./);
+    // 647 a: önceki adımın teslim etmediği parça sayılır, uyarır; sayım kendi adımına düşer.
     const erkenSayim = ieSayim(ie2!, 'good', 2, { machine: r.ikinci });
-    const ret = await ekle(operator, 'events', erkenBasla);
-    assert.equal(ret.durum, 409, JSON.stringify(ret.govde));
-    assert.match(JSON.stringify(ret.govde), /Bu adımın sırası gelmedi: emrin sıradaki adımı Op 10 Adım 1\./);
-    assert.equal((await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_kayit WHERE cid = $1', [erkenBasla.cid]))!.n, 0);
-    assert.equal((await ekle(operator, 'counts', erkenSayim)).durum, 200);
-    const y = await yansima(erkenSayim.cid);
-    assert.equal(y?.sonuc, 'eslenemedi', JSON.stringify(y));
-    assert.equal(y?.neden, PAKET_ADIM_SIRASI);
-    assert.equal((await emirOku(r.emirId)).durum, 'planli');
-    assert.deepEqual(await adimliEmir(r.emirId), once);
-    // İzinli: ilk adım kendi paketiyle başlar, sayar ve biter; ikinci adım kendi paketiyle başlar ve sayar (adımın sağlamı önceki adımın sağlamını aşmaz).
-    const izinli = [['events', ieOlay(ie1!, 'running', { machine: r.ilk })], ['counts', ieSayim(ie1!, 'good', 3, { machine: r.ilk })],
-      ['events', ieOlay(ie1!, 'done', { machine: r.ilk })], ['events', ieOlay(ie2!, 'running', { machine: r.ikinci })]] as const;
-    for (const [tur, satir] of izinli) {
+    const sayim = await ekle(operator, 'counts', erkenSayim);
+    assert.equal(sayim.durum, 200);
+    assert.equal((await yansima(erkenSayim.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(erkenSayim.cid)));
+    assert.match(uyarisi(sayim, erkenSayim.cid), /2 fazla \(OP 20\)/);
+    // İlk adım kendi paketiyle başlar ve sayar; ikinci adım ilk adım bitmeden bitmez (649 a).
+    for (const [tur, satir] of [['events', ieOlay(ie1!, 'running', { machine: r.ilk })], ['counts', ieSayim(ie1!, 'good', 3, { machine: r.ilk })]] as const) {
       assert.equal((await ekle(operator, tur, satir)).durum, 200);
-      const y = await yansima(satir.cid);
-      assert.equal(y?.sonuc, 'yazildi', JSON.stringify(y));
-      assert.equal(y?.emir_id, r.emirId);
-      // İkinci adıma giren adet ilk adımın sağlamıdır; sağlam ilk parça onayıyla oluşur.
-      if (tur === 'counts') await ilkParcaOnay(r.emirId);
+      assert.equal((await yansima(satir.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(satir.cid)));
     }
+    await ilkParcaOnay(r.emirId);
+    // İki açık adım: ilk adımın paketiyle duraklatma yalnız o adımı duraklatır, ikinci adım sürer; devam yine kendi adımına gider.
+    const durak = ieOlay(ie1!, 'paused', { machine: r.ilk });
+    assert.equal((await ekle(operator, 'events', durak)).durum, 200);
+    assert.equal((await yansima(durak.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(durak.cid)));
+    assert.deepEqual((await emirOku(r.emirId)).acikAdimlar?.map((a) => [a.isEmriId, a.calisma]), [[ie1, 'durakli'], [ie2, 'calisiyor']]);
+    const devam = ieOlay(ie1!, 'running', { machine: r.ilk });
+    assert.equal((await ekle(operator, 'events', devam)).durum, 200);
+    assert.equal((await yansima(devam.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(devam.cid)));
+    assert.deepEqual((await emirOku(r.emirId)).acikAdimlar?.map((a) => a.calisma), ['calisiyor', 'calisiyor']);
+    const erkenBitir = ieOlay(ie2!, 'done', { machine: r.ikinci });
+    assert.equal((await ekle(operator, 'events', erkenBitir)).durum, 200);
+    assert.deepEqual([(await yansima(erkenBitir.cid))?.sonuc, (await yansima(erkenBitir.cid))?.neden], ['reddedildi', 'OP 10 bitmeden OP 20 bitirilemez; önce OP 10 bitirilmeli.']);
+    const ilkBitir = ieOlay(ie1!, 'done', { machine: r.ilk });
+    assert.equal((await ekle(operator, 'events', ilkBitir)).durum, 200);
+    assert.equal((await yansima(ilkBitir.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(ilkBitir.cid)));
     const s = ieSayim(ie2!, 'good', 3, { machine: r.ikinci });
     assert.equal((await ekle(operator, 'counts', s)).durum, 200);
     assert.equal((await yansima(s.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(s.cid)));

@@ -6,7 +6,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
-  AdimCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
+  AcikAdim, AdimCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
@@ -14,11 +14,13 @@ import {
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
-  ADIM_YOK, adimGirdiAsimiIhlali, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
+  ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
   adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
+  ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
+  emirEksiUyarisi, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -26,7 +28,7 @@ import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './say
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
-import type { AdimSatiri, EmirSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
+import type { AdimDurumSatiri, AdimSatiri, EmirSatiri, IsEmriSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
 interface Adlar {
   istasyon: Map<number, string>;
@@ -141,12 +143,44 @@ async function canliHaritasi(db: Db, satirlar: readonly EmirSatiri[]): Promise<M
   return sonuc;
 }
 
+interface ParalelAlanlar { acikAdimlar: AcikAdim[]; baslatilabilirAdimlar: number[] }
+const PARALELSIZ: ParalelAlanlar = { acikAdimlar: [], baslatilabilirAdimlar: [] };
+
+// Paralel adım okuması (639): açık (çalışan) adımlar ve şimdi başlatılabilecek adımlar, bütün liste için tek sorguda. Bölünmüş ya da
+// kol emirde eksik kol hesabı istediği için listede gösterilmez (null); ayrıntı ekranı adimaGiren ile okur.
+async function paralelAlanlari(db: Db, satirlar: readonly EmirSatiri[]): Promise<Map<number, ParalelAlanlar>> {
+  const sonuc = new Map<number, ParalelAlanlar>();
+  const idler = satirlar.filter((s) => s.malzemeNo !== null && (s.durum === 'planli' || s.durum === 'basladi')).map((s) => s.id);
+  if (idler.length === 0) return sonuc;
+  const emirAdimlari = new Map<number, AdimDurumSatiri[]>();
+  for (const a of await sorgular.adimDurumlariGetir(db, idler)) emirAdimlari.set(a.emirId, [...(emirAdimlari.get(a.emirId) ?? []), a]);
+  const adlar = await adlariAl(db);
+  for (const id of idler) {
+    const hepsi = emirAdimlari.get(id) ?? [];
+    const eksikler = adimEksikleri(hepsi);
+    const partili = hepsi.some((a) => a.partili);
+    const oncekiSaglam = (a: AdimDurumSatiri): number => {
+      const o = oncekiParalelAdim(hepsi, a);
+      return o === null ? 0 : o.durum === 'tamam' ? (o.saglamAdet ?? 0) : o.saglam;
+    };
+    sonuc.set(id, {
+      acikAdimlar: hepsi.filter((a) => a.durum === 'calisiyor').map((a) => ({
+        isEmriId: a.id, opNo: a.opNo, ad: a.ad, istasyon: a.istasyonId === null ? null : adli(adlar.istasyon, a.istasyonId, 'İstasyon'),
+        durum: a.durum, calisma: calismaDurumu(a.sonOlay), makineId: a.makineId, eksik: partili ? null : (eksikler.get(a.id) ?? null),
+      })),
+      baslatilabilirAdimlar: baslatilabilirAdimlar(hepsi, oncekiSaglam),
+    });
+  }
+  return sonuc;
+}
+
 // İstasyonsuz satır yalnız iş emirli emirde olur (sıradaki iş emri atanmamış ya da fason): listeler onu süzer; komut cevabı
 // işin yapıldığı istasyonu `yedekIstasyonId` ile verir.
 // Salt okunur izleme: istasyonu olmayan emir (adımları atanmamış ya da bitmiş) istasyonsuz döner.
 async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<IzlemeEmri[]> {
   const adlar = await adlariAl(db);
   const canli = await canliHaritasi(db, satirlar);
+  const paralel = await paralelAlanlari(db, satirlar);
   const adimlar = new Map<number, sorgular.IsEmriSatiri[]>();
   for (const i of await sorgular.isEmirleriGetir(db, satirlar.map((s) => s.id))) adimlar.set(i.uretimEmriId, [...(adimlar.get(i.uretimEmriId) ?? []), i]);
   return satirlar.map((s) => {
@@ -157,6 +191,7 @@ async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<I
       istasyon: istasyonId === null ? null : adli(adlar.istasyon, istasyonId, 'İstasyon'),
       acan: adli(adlar.kisi, acanId, 'Kişi'),
       canli: canli.get(s.id) ?? null,
+      ...(paralel.get(s.id) ?? PARALELSIZ),
     };
   });
 }
@@ -164,6 +199,7 @@ async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<I
 async function emirlereCevir(db: Db, satirlar: readonly EmirSatiri[], yedekIstasyonId: number | null = null): Promise<Emir[]> {
   const adlar = await adlariAl(db);
   const canli = await canliHaritasi(db, satirlar);
+  const paralel = await paralelAlanlari(db, satirlar);
   return satirlar.map((s) => {
     const { istasyonId, acanId, ...kalan } = s;
     const istasyon = istasyonId ?? yedekIstasyonId;
@@ -173,6 +209,7 @@ async function emirlereCevir(db: Db, satirlar: readonly EmirSatiri[], yedekIstas
       istasyon: adli(adlar.istasyon, istasyon, 'İstasyon'),
       acan: adli(adlar.kisi, acanId, 'Kişi'),
       canli: canli.get(s.id) ?? null,
+      ...(paralel.get(s.id) ?? PARALELSIZ),
     };
   });
 }
@@ -240,37 +277,100 @@ async function kilitliEmir(db: Db, id: number): Promise<EmirSatiri> {
   return satir;
 }
 
-// Kilit, kapsam ve (kilit altında okunan) çalışma durumu: sayım ve duruş komutlarının ortak girişi.
-async function komutBaglami(db: Db, kisiId: number, id: number) {
-  const emir = await kilitliEmir(db, id);
-  const istasyonId = istasyonu(emir);
-  await kapsaminda(db, kisiId, istasyonId);
-  const [olay] = await sorgular.sonOlaylariGetir(db, [id]);
-  return { emir, istasyonId, calisma: calismaDurumu(olay?.olay ?? null) };
+/* ---------------- paralel adım (kart 639) ---------------- */
+
+interface KomutAdimi { hepsi: IsEmriSatiri[]; adim: IsEmriSatiri | null }
+
+// Komutun adımı. Verilen adım bu emrin olmalıdır. Verilmezse emrin terminaldeki tek açık adımı, açık adım yoksa sıradaki adım kullanılır;
+// iki açık adım varsa adım sorulur. Böylece iş emirsiz eski emir ve tek adımlı akış bugünkü gibi kalır.
+async function komutAdimi(db: Db, emir: EmirSatiri, isEmriId: number | undefined): Promise<KomutAdimi> {
+  if (emir.malzemeNo === null) {
+    if (isEmriId !== undefined) throw bulunamadi(IS_EMRI_YOK);
+    return { hepsi: [], adim: null };
+  }
+  const hepsi = await sorgular.isEmirleriGetir(db, [emir.id]);
+  if (isEmriId !== undefined) {
+    const adim = hepsi.find((i) => i.id === isEmriId);
+    if (adim === undefined) throw bulunamadi(IS_EMRI_YOK);
+    return { hepsi, adim };
+  }
+  const adim = varsayilanAdim(hepsi);
+  if (adim === ADIM_SECILMELI) throw cakisma(ADIM_SECILMELI);
+  return { hepsi, adim };
 }
 
-async function sayimYetkisiniDenetle(db: Db, kisiId: number, id: number, duzeltebilir: boolean): Promise<void> {
+// Adımı verilen komutta kapsam ve kayıt adımın istasyonundadır; verilmeyende emrin istasyonunda (bugünkü kural).
+function komutIstasyonu(emir: EmirSatiri, adim: IsEmriSatiri | null, isEmriId: number | undefined): number {
+  if (isEmriId === undefined || adim === null) return istasyonu(emir);
+  if (adim.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
+  if (adim.istasyonId === null) throw cakisma(ISTASYONSUZ_ADIM);
+  return adim.istasyonId;
+}
+
+// Adımın çalışma hâli kendi olaylarından türer (646 a); iş emirsiz eski emirde emrin olaylarından.
+async function adimCalismasi(db: Db, emirId: number, adim: IsEmriSatiri | null) {
+  const olay = adim === null ? ((await sorgular.sonOlaylariGetir(db, [emirId]))[0] ?? null) : await sorgular.adimSonOlayi(db, emirId, adim.id);
+  return calismaDurumu(olay?.olay ?? null);
+}
+
+// Kilit, kapsam ve (kilit altında okunan) çalışma durumu: sayım ve duruş komutlarının ortak girişi. Adımı verilen komut çalışan adımda olur.
+async function komutBaglami(db: Db, kisiId: number, id: number, isEmriId?: number) {
+  const emir = await kilitliEmir(db, id);
+  const { hepsi, adim } = await komutAdimi(db, emir, isEmriId);
+  const istasyonId = komutIstasyonu(emir, adim, isEmriId);
+  await kapsaminda(db, kisiId, istasyonId);
+  if (isEmriId !== undefined && adim?.durum !== 'calisiyor') throw cakisma(ADIM_ACIK_DEGIL);
+  // Varsayılan adım çalışmıyorsa (emir adımlar arasında) komut emir kuralıyla reddedilir; kayıt adımsız eski yoldan gider.
+  const calisan = adim?.durum === 'calisiyor' ? adim : null;
+  return { emir, hepsi, adim: calisan, istasyonId, calisma: await adimCalismasi(db, id, calisan) };
+}
+
+async function sayimYetkisiniDenetle(db: Db, kisiId: number, id: number, duzeltebilir: boolean, isEmriId: number | null = null): Promise<void> {
   if (duzeltebilir) return;
-  const ihlal = sayimYetkiIhlali(await sorgular.adimaKatildiMi(db, id, kisiId), false);
+  const ihlal = sayimYetkiIhlali(await sorgular.adimaKatildiMi(db, id, kisiId, isEmriId), false);
   if (ihlal !== null) throw yetkiYok(ihlal);
 }
 
-async function sayaclar(db: Db, id: number): Promise<{ saglam: number; hurda: number; kararBekliyor: number }> {
-  const [sayac] = await sorgular.sayaclariGetir(db, [id]);
+// Adım verilirse o adımın, verilmezse terminal iş emrinin (iş emirsiz emirde emrin) sayaçları.
+async function sayaclar(db: Db, id: number, isEmriId: number | null = null): Promise<{ saglam: number; hurda: number; kararBekliyor: number }> {
+  const [sayac] = isEmriId === null ? await sorgular.sayaclariGetir(db, [id]) : await sorgular.adimSayaclariGetir(db, [isEmriId]);
   return { saglam: sayac?.saglam ?? 0, hurda: sayac?.hurda ?? 0, kararBekliyor: sayac?.kararBekliyor ?? 0 };
 }
 
-const saglamToplami = async (db: Db, id: number): Promise<number> => (await sayaclar(db, id)).saglam;
+// Adıma giren: ilk adımda null; bağımsız adımda emir adedi (önceki adıma bağlı değildir); öteki adımda önceki adımın sağlamı (adimaGiren).
+async function adimGirisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<number | null> {
+  if (adim.bagimlilik === 'bagimsiz') return hepsi.some((i) => i.sira < adim.sira) ? emir.adet : null;
+  return adimaGiren(db, emir.id, hepsi, adim);
+}
 
-// Denetim #31: terminal iş emrinin sağlamı ve karar bekleyeni birlikte adıma girenle sınırlıdır; iş emirsiz eski emirde sınır yoktur.
-async function adimGirdisiniDenetle(db: Db, emir: EmirSatiri, fark: number): Promise<void> {
-  if (fark <= 0 || emir.malzemeNo === null) return;
+// Denetim #31, 647 a: adımın sağlamı ve karar bekleyeni adıma girenle sınırlıdır. Aşım reddedilmez, uyarı döner; iz sayım defterindedir
+// (asimlarGetir). İş emirsiz eski emirde sınır yoktur.
+async function adimGirdisiUyarisi(db: Db, emir: EmirSatiri, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri | null, fark: number): Promise<string | null> {
+  if (fark <= 0 || adim === null) return null;
+  const sayac = await sayaclar(db, emir.id, adim.id);
+  return sayimAsimiUyarisi(await adimGirisi(db, emir, hepsi, adim), sayac.saglam + sayac.kararBekliyor, fark, adim.opNo);
+}
+
+// 654 a: adım, sonraki adımın saydığından az sağlamla biterse uyarır. Sonraki adım bağımsızsa bu adıma bağlı değildir.
+async function eksiyleBitisUyarisi(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri, kapanis: number): Promise<string | null> {
+  const sonraki = hepsi.find((i) => i.id !== adim.id && oncekiParalelAdim(hepsi, i)?.id === adim.id);
+  if (sonraki === undefined || sonraki.durum === 'bekliyor') return null;
+  const s = await sayaclar(db, sonraki.uretimEmriId, sonraki.id);
+  return eksiyleBitirmeUyarisi(kapanis, { opNo: sonraki.opNo, sayilan: s.saglam + s.kararBekliyor + s.hurda });
+}
+
+// Emir eksi bakiyeyle biterse uyarır (tasarım 639 §5): her adımın girdisi adimaGiren ile, sayılanı adım sayacından.
+async function emirEksiBitisUyarisi(db: Db, emir: EmirSatiri): Promise<string | null> {
+  if (emir.malzemeNo === null) return null;
   const hepsi = await sorgular.isEmirleriGetir(db, [emir.id]);
-  const terminal = hepsi.find((i) => i.durum === 'calisiyor') ?? siradakiIsEmri(hepsi);
-  if (terminal === null) return;
-  const sayac = await sayaclar(db, emir.id);
-  const ihlal = adimGirdiAsimiIhlali(await adimaGiren(db, emir.id, hepsi, terminal), sayac.saglam + sayac.kararBekliyor, fark);
-  if (ihlal !== null) throw cakisma(ihlal);
+  const sayac = new Map((await sorgular.adimSayaclariGetir(db, hepsi.map((i) => i.id))).map((x) => [x.isEmriId, x]));
+  const adimlar: { opNo: number; eksik: number | null }[] = [];
+  for (const i of hepsi) {
+    if (i.bagimlilik === 'bagimsiz') continue;
+    const x = sayac.get(i.id);
+    adimlar.push({ opNo: i.opNo, eksik: adimEksigi(await adimaGiren(db, emir.id, hepsi, i), (x?.saglam ?? 0) + (x?.kararBekliyor ?? 0) + (x?.hurda ?? 0)) });
+  }
+  return emirEksiUyarisi(adimlar);
 }
 
 export async function emirleriListele(db: Db, durum: EmirDurumu | undefined): Promise<{ emirler: Emir[] }> {
@@ -385,10 +485,10 @@ interface Yer {
   makineler: readonly number[];
 }
 
-// Yer doluysa 409; ayrıntı kimin hangi işi başlattığını ve devralmanın kapatacağı kullanımı söyler.
-async function yeriDenetle(db: Db, emirId: number, yer: Yer): Promise<void> {
+// Yer doluysa 409; ayrıntı kimin hangi işi başlattığını ve devralmanın kapatacağı kullanımı söyler. Aynı emrin öteki adımı da yeri doldurur.
+async function yeriDenetle(db: Db, emirId: number, yer: Yer, isEmriId: number | null = null): Promise<void> {
   const [acik] = await sorgular.acikKullanimlar(db, yer.istasyonId, yer.makineler);
-  const ihlal = makineDoluIhlali(acik?.emirId ?? null, emirId, yer.makineler.length > 0);
+  const ihlal = makineDoluIhlali(acik?.emirId ?? null, emirId, yer.makineler.length > 0, acik?.isEmriId ?? null, isEmriId);
   if (ihlal === null || acik === undefined) return;
   const makine = acik.makineId === null ? null : await makineGetir(db, acik.makineId);
   const ayrinti: MakineDoluAyrintisi = {
@@ -416,15 +516,24 @@ async function yeriTut(db: Db, emirId: number, isEmriId: number | null, yer: Yer
 
 // İş emirli emirde başlatma sıradaki iş emrini başlatır; fason iş emri operatörle başlamaz (UE3).
 // Uyarı (karar 110 b): stok girdi istasyonda yokken başlatmayı durdurmaz, eksiği iz olarak açar ve metnini döner; yoksa null.
-export async function emirBaslat(db: Db, kisiId: number, id: number, makineIdleri?: readonly number[]): Promise<{ emir: Emir; uyari: string | null }> {
+// Paralel adım (639): adım verilirse o adım başlar; emir başlamışken de bekleyen adım başlatılır. Sıra dışı başlatma reddedilmez,
+// uyarı döner (626 a); iz, adımın başlatma kaydıdır.
+export async function emirBaslat(
+  db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number,
+): Promise<{ emir: Emir; uyari: string | null }> {
   const emir = await kilitliEmir(db, id);
-  const istasyonId = istasyonu(emir);
+  const hepsi = emir.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
+  const verilen = isEmriId === undefined ? null : (hepsi.find((i) => i.id === isEmriId) ?? null);
+  if (isEmriId !== undefined && verilen === null) throw bulunamadi(IS_EMRI_YOK);
+  const isEmri = isEmriId === undefined ? (emir.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
   const yetkinlikIhlali = baslatmaYetkinlikIhlali(await yetkinMi(db, kisiId, istasyonId), await kisiBayrakliMi(db, kisiId));
   if (yetkinlikIhlali !== null) throw yetkiYok(yetkinlikIhlali);
-  const durumIhlali = baslatmaIhlali(emir.durum);
+  const paralel = isEmriId !== undefined && emir.durum === 'basladi';
+  const durumIhlali = paralel ? null : baslatmaIhlali(emir.durum);
   if (durumIhlali !== null) throw cakisma(durumIhlali);
-  const isEmri = emir.malzemeNo === null ? null : siradakiIsEmri(await sorgular.isEmirleriGetir(db, [id]));
+  if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
   if (isEmri !== null && isEmri.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
   if (isEmri !== null) {
@@ -438,31 +547,40 @@ export async function emirBaslat(db: Db, kisiId: number, id: number, makineIdler
   await secimiDenetle(db, istasyonId, makineIdleri);
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
-  await yeriDenetle(db, id, yer);
+  await yeriDenetle(db, id, yer, isEmri?.id ?? null);
+  const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, (await adimaGiren(db, id, hepsi, isEmri)) ?? 0);
   const an = await komutAni(db, id);
   await sorgular.baslamayiYaz(db, id, an);
+  // Planlı emir adımı verilerek başlarsa emir o adımın istasyonunda başlar; başlamış emrin istasyonu öncü adımda kalır.
+  if (isEmriId !== undefined && !paralel && emir.istasyonId !== istasyonId) await sorgular.emirIstasyonunuYaz(db, id, istasyonId);
   if (isEmri !== null) await sorgular.isEmriBaslat(db, isEmri.id, an);
   const ilkBaslatma = !(await sorgular.baslatmaKaydiVarMi(db, id));
-  await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'baslat', null, an);
+  await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'baslat', null, an, isEmri?.id ?? null);
   await yeriTut(db, id, isEmri?.id ?? null, yer, kisiId, an);
   await sorgular.katilimAc(db, id, isEmri?.id ?? null, kisiId, istasyonId, an);
   // Hazırlık denetiminden geçen ilk terminal başlatması; adımsız eski emir ve sonraki adımlar olay vermez.
   if (isEmri !== null && ilkBaslatma) await hazirlikTamamlandiBildir(db, { uretimEmriId: id, kisiId });
-  return { ...(await emirdenCevap(db, id)), uyari: denetim.uyarilar.length === 0 ? null : denetim.uyarilar.join(' ') };
+  return { ...(await emirdenCevap(db, id)), uyari: uyarilariBirlestir(...denetim.uyarilar, siraUyarisi) };
 }
 
 // Ayar başlamamış işte yazılır, istasyonu kilitlemez ve çalışma hâlini değiştirmez; sonraki başlatma ayarı kapatır.
-// Başlatmanın iş emri denetimleri aynen geçerlidir (sıradaki iş emri yoksa ya da fasonsa ayar yoktur).
-export async function emirAyar(db: Db, kisiId: number, id: number): Promise<{ emir: Emir }> {
+// Başlatmanın iş emri denetimleri aynen geçerlidir (sıradaki iş emri yoksa ya da fasonsa ayar yoktur). Adım verilirse o bekleyen
+// adımın ayarıdır; emir başlamışken de yazılır (paralel adım, 639).
+export async function emirAyar(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<{ emir: Emir }> {
   const emir = await kilitliEmir(db, id);
-  const istasyonId = istasyonu(emir);
+  const hepsi = emir.malzemeNo === null ? [] : await sorgular.isEmirleriGetir(db, [id]);
+  const verilen = isEmriId === undefined ? null : (hepsi.find((i) => i.id === isEmriId) ?? null);
+  if (isEmriId !== undefined && verilen === null) throw bulunamadi(IS_EMRI_YOK);
+  const isEmri = isEmriId === undefined ? (emir.malzemeNo === null ? null : siradakiIsEmri(hepsi)) : verilen;
+  const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
-  const isEmri = emir.malzemeNo === null ? null : siradakiIsEmri(await sorgular.isEmirleriGetir(db, [id]));
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
   if (isEmri !== null && isEmri.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
-  const ihlal = ayarIhlali(emir.durum, await sorgular.ayarVarMi(db, id));
+  if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
+  const durum = isEmriId !== undefined && emir.durum === 'basladi' ? 'planli' : emir.durum;
+  const ihlal = ayarIhlali(durum, await sorgular.ayarVarMi(db, id, isEmri?.id ?? null));
   if (ihlal !== null) throw cakisma(ihlal);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'ayar', null, await komutAni(db, id));
+  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'ayar', null, await komutAni(db, id), isEmri?.id ?? null);
   return emirdenCevap(db, id);
 }
 
@@ -486,22 +604,33 @@ export async function isEmriSureOzeti(db: Db, isEmriId: number, emirId?: number)
 // İş emirli emirde çalışan iş emri biter; iş emri kalırsa emir sıradakinin istasyonunda yeniden planlı olur, son iş emri
 // biterse emir biter (ilk sistemdeki gibi). Defter satırları iş emri bitmeden yazılır: kapsamları çalışan iş emridir.
 // duzeltebilir verilirse (dışarıdan gelen komut) verilen adet sayımı ezdiği için emirSayim'deki eksi sayım denetimine tabidir.
+// Paralel adım (639): akışlı ya da bekleyen adım önceki adım bitmeden bitmez (649 a). Başka adım çalışıyorsa emir başlamış kalır ve
+// istasyonu öncü adıma geçer. Emrin sağlamı en büyük sıralı adımın sağlamıdır. Eksi bakiyeyle bitiş uyarır (654 a).
 export async function emirBitir(
   db: Db, kisiId: number, id: number, saglamAdet: number | undefined, refakatPartisiId: number | null = null, duzeltebilir?: boolean,
-): Promise<{ emir: Emir }> {
+  isEmriId?: number,
+): Promise<{ emir: Emir; uyari: string | null }> {
   await ustuOnceKilitle(db, id);
   const emir = await kilitliEmir(db, id);
-  const istasyonId = istasyonu(emir);
+  const { hepsi, adim } = await komutAdimi(db, emir, isEmriId);
+  const istasyonId = komutIstasyonu(emir, adim, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
   const ihlal = bitirmeIhlali(emir.durum);
   if (ihlal !== null) throw cakisma(ihlal);
-  if (saglamAdet !== undefined && duzeltebilir !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir);
-  const calisan = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
-  if (calisan !== null) await birlesmeAdimiBiterMi(db, id, calisan);
-  const mevcut = await saglamToplami(db, id);
+  if (isEmriId !== undefined && adim?.durum !== 'calisiyor') throw cakisma(ADIM_ACIK_DEGIL);
+  const calisan = adim?.durum === 'calisiyor' ? adim : null;
+  const adimId = calisan?.id ?? null;
+  if (saglamAdet !== undefined && duzeltebilir !== undefined) await sayimYetkisiniDenetle(db, kisiId, id, duzeltebilir, adimId);
+  if (calisan !== null) {
+    const sira = oncekiBitmediIhlali(hepsi, calisan);
+    if (sira !== null) throw cakisma(sira);
+    await birlesmeAdimiBiterMi(db, id, calisan);
+  }
+  const sayac = await sayaclar(db, id, adimId);
+  const mevcut = sayac.saglam;
   // 327 a: karar bekleyen varken verilen adet onunla birlikte sayılandır; fark karar bekleyene yazılır,
   // kapanış onaylı sağlamdır ve onay bekleyeni sonradan ekler (çift sayım olmaz).
-  const bekleyen = (await sayaclar(db, id)).kararBekliyor;
+  const bekleyen = sayac.kararBekliyor;
   const onayBekler = saglamAdet !== undefined && bekleyen > 0;
   const sayilan = onayBekler ? mevcut + bekleyen : mevcut;
   const fark = (saglamAdet ?? sayilan) - sayilan;
@@ -509,37 +638,48 @@ export async function emirBitir(
   const bekleyeneFark = onayBekler ? Math.max(fark, -bekleyen) : 0;
   const saglamaFark = fark - bekleyeneFark;
   const kapanis = mevcut + saglamaFark;
-  await adimGirdisiniDenetle(db, emir, fark);
+  const uyarilar = [await adimGirdisiUyarisi(db, emir, hepsi, calisan, fark), calisan === null ? null : await eksiyleBitisUyarisi(db, hepsi, calisan, kapanis)];
   const an = await komutAni(db, id);
-  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId);
-  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId);
-  await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an);
-  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an);
-  await sorgular.emrinKatilimlariniKapat(db, id, an);
+  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId, adimId);
+  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId, adimId);
+  await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an, adimId);
+  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adimId);
+  await sorgular.emrinKatilimlariniKapat(db, id, an, adimId);
+  let emirKapanis = kapanis;
   if (calisan !== null) {
     await sorgular.isEmriBitir(db, calisan.id, kapanis, an);
-    const sonraki = siradakiIsEmri(await sorgular.isEmirleriGetir(db, [id]));
+    const guncel = await sorgular.isEmirleriGetir(db, [id]);
+    // Terminalde çalışan başka adım: emir başlamış kalır, istasyonu en küçük sıralı çalışan adıma geçer.
+    const suren = guncel.filter((i) => i.durum === 'calisiyor' && i.fasonFirmaId === null && i.istasyonId !== null).sort((a, b) => a.sira - b.sira)[0];
+    if (suren?.istasyonId != null) {
+      if (suren.istasyonId !== emir.istasyonId) await sorgular.emirIstasyonunuYaz(db, id, suren.istasyonId);
+      return { ...(await emirdenCevap(db, id, istasyonId)), uyari: uyarilariBirlestir(...uyarilar) };
+    }
+    const sonraki = siradakiIsEmri(guncel);
     if (sonraki !== null) {
       await sorgular.sonrakiIsEmrineGec(db, id, sonraki.istasyonId);
       // Sıradaki iş emri atanmamış ya da fasonsa emir terminal listelerinden çıkar; cevap, bitirildiği istasyondaki hâlidir.
-      return emirdenCevap(db, id, istasyonId);
+      return { ...(await emirdenCevap(db, id, istasyonId)), uyari: uyarilariBirlestir(...uyarilar) };
     }
     // Planlı birleşmeli kolun son iş emri: kol üstüne katılır, emir bitmez (UE-PB6c).
     const ust = await sorgular.ustEmirBul(db, id);
-    if (ust !== null && (await kolSonuysaKatil(db, ust, kisiId))) return emirdenCevap(db, id, istasyonId);
+    if (ust !== null && (await kolSonuysaKatil(db, ust, kisiId))) return { ...(await emirdenCevap(db, id, istasyonId)), uyari: uyarilariBirlestir(...uyarilar) };
+    // Son biten adım en büyük sıralı adım değilse (bağımsız adım sonra bitti) emrin sağlamı en büyük sıralı adımındır.
+    const son = [...guncel].sort((a, b) => b.sira - a.sira)[0];
+    if (son !== undefined && son.id !== calisan.id) emirKapanis = son.saglamAdet ?? 0;
   }
-  await sorgular.bitisiYaz(db, id, kapanis, an);
-  await emirBittiBildir(db, { uretimEmriId: id, saglamAdet: kapanis, kisiId });
-  return emirdenCevap(db, id);
+  await sorgular.bitisiYaz(db, id, emirKapanis, an);
+  await emirBittiBildir(db, { uretimEmriId: id, saglamAdet: emirKapanis, kisiId });
+  return { ...(await emirdenCevap(db, id)), uyari: uyarilariBirlestir(...uyarilar, await emirEksiBitisUyarisi(db, emir)) };
 }
 
 // Sağlam sayım satırı yazılır, sonra aynı işlemde dinleyicilere bildirilir (kart #1289; stok girişi). Dinleyicilerin uyarısı döner.
 async function saglamYaz(
   db: Db, emir: { id: number }, kisiId: number, istasyonId: number, adet: number, duzeltme: boolean, an: string, kararBekliyor = false,
-  refakatPartisiId: number | null = null,
+  refakatPartisiId: number | null = null, adimId: number | null = null,
 ): Promise<string | null> {
   const { isEmriId } = await sorgular.sayimEkle(db, {
-    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId,
+    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId, isEmriId: adimId,
   });
   return saglamSayimiBildir(db, {
     uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest', refakatPartisiId,
@@ -551,48 +691,50 @@ async function saglamYaz(
 // duzeltebilir verilirse (dışarıdan gelen komut) eksi sayım başkasının sayımını düşürebileceği için kişinin çalışan adıma başlamış
 // ya da katılmış olmasını, değilse düzeltme işlemini ister (185 a). Artı sayım Arkon'un kendi cihaz ve ekibinden gelir.
 export async function emirSayim(
-  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean } = {},
+  db: Db, kisiId: number, id: number, govde: SayimKaydi, secenek: { kararBekliyor?: boolean; duzeltebilir?: boolean; isEmriId?: number } = {},
 ): Promise<{ emir: Emir; uyari: string | null }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
+  const { emir, hepsi, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, secenek.isEmriId);
+  const adimId = adim?.id ?? null;
   // 327 a: ilk parçası onaylanmamış emirde sağlam sayım, hangi yoldan gelirse gelsin, karar bekler.
   // Onaysız emirde sağlam sıfırdır: eksi düzeltme de karar bekleyeni düşer.
   const kararBekliyor = govde.tur === 'saglam'
     && (secenek.kararBekliyor === true || (await sorgular.ilkParcaOnaysiz(db, id)));
   const ihlal = sayimIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
-  if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir);
+  if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir, adimId);
   const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;
+  let asimUyarisi: string | null = null;
   if (govde.tur === 'hurda' && govde.adet < 0) {
-    const eksi = hurdaToplamIhlali((await sayaclar(db, id)).hurda, govde.adet);
+    const eksi = hurdaToplamIhlali((await sayaclar(db, id, adimId)).hurda, govde.adet);
     if (eksi !== null) throw cakisma(eksi);
     // Düzeltme pasif nedene de yazılır: geri alınan hurda o nedenle girilmişti.
-    hurdaNedeniId = govde.hurdaNedeniId ?? (await sorgular.sonHurdaNedeni(db, id));
+    hurdaNedeniId = govde.hurdaNedeniId ?? (await sorgular.sonHurdaNedeni(db, id, adimId));
     if (hurdaNedeniId === null || (await hurdaNedeniGetir(db, hurdaNedeniId)) === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
   } else if (govde.tur === 'hurda') {
     const nedenIhlali = hurdaNedeniIhlali(govde.hurdaNedeniId === undefined ? null : await hurdaNedeniGetir(db, govde.hurdaNedeniId));
     if (nedenIhlali !== null || govde.hurdaNedeniId === undefined) throw dogrulama(nedenIhlali ?? HURDA_NEDENI_YOK, 'hurdaNedeniId');
     hurdaNedeniId = govde.hurdaNedeniId;
-    const asim = toplamAsimiIhlali((await sayaclar(db, id)).hurda, govde.adet);
+    const asim = toplamAsimiIhlali((await sayaclar(db, id, adimId)).hurda, govde.adet);
     if (asim !== null) throw cakisma(asim);
   } else {
-    const sayac = await sayaclar(db, id);
+    const sayac = await sayaclar(db, id, adimId);
     const mevcut = kararBekliyor ? sayac.kararBekliyor : sayac.saglam;
     const ihlalEksi = saglamToplamIhlali(mevcut, govde.adet) ?? toplamAsimiIhlali(mevcut, govde.adet);
     if (ihlalEksi !== null) throw cakisma(ihlalEksi);
-    await adimGirdisiniDenetle(db, emir, govde.adet);
+    asimUyarisi = await adimGirdisiUyarisi(db, emir, hepsi, adim, govde.adet);
   }
   let uyari: string | null = null;
   if (govde.tur === 'saglam') {
-    uyari = await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId);
+    uyari = await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId, adimId);
   } else {
     if (hurdaNedeniId === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
     const { isEmriId } = await sorgular.sayimEkle(db, {
-      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId,
+      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId, isEmriId: adimId,
     });
     await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }
-  return { ...(await emirdenCevap(db, id)), uyari };
+  return { ...(await emirdenCevap(db, id)), uyari: uyarilariBirlestir(asimUyarisi, uyari) };
 }
 
 // Emrin karar bekleyen sayımı kalite kararıyla kapanır: onayda sağlama, retde redde geçer; her iş emrinde iki düzeltme satırı yazılır
@@ -639,74 +781,81 @@ export async function kararSayaclari(db: Db, idler: readonly number[]): Promise<
   return sonuc;
 }
 
-export async function emirDuraklat(db: Db, kisiId: number, id: number): Promise<{ emir: Emir }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
+export async function emirDuraklat(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<{ emir: Emir }> {
+  const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = duraklatmaIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   const an = await komutAni(db, id);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'duraklat', null, an);
-  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an);
-  await sorgular.emrinKatilimlariniKapat(db, id, an);
+  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'duraklat', null, an, adim?.id ?? null);
+  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adim?.id ?? null);
+  await sorgular.emrinKatilimlariniKapat(db, id, an, adim?.id ?? null);
   return emirdenCevap(db, id);
 }
 
 // Duraklamış ya da durmuş iş, seçilen makinelerde; seçilmezse son durduğu makinelerde, onlar da yoksa iş emrinin makinesinde sürer.
-export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri?: readonly number[]): Promise<{ emir: Emir }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
+export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri?: readonly number[], isEmriId?: number): Promise<{ emir: Emir }> {
+  const { emir, adim: isEmri, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = devamIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   await secimiDenetle(db, istasyonId, makineIdleri);
-  const isEmri = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const son = makineIdleri === undefined ? await sorgular.sonKapananMakineler(db, id, isEmri?.id ?? null) : [];
   const yer: Yer = { istasyonId, makineler: son.length > 0 ? son : calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
-  await yeriDenetle(db, id, yer);
+  await yeriDenetle(db, id, yer, isEmri?.id ?? null);
   const an = await komutAni(db, id);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'devam', null, an);
+  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'devam', null, an, isEmri?.id ?? null);
   await yeriTut(db, id, isEmri?.id ?? null, yer, kisiId, an);
   // Devam ettiren işe döner; öteki katılımcılar kendileri katılır.
   await sorgular.katilimAc(db, id, isEmri?.id ?? null, kisiId, istasyonId, an);
   return emirdenCevap(db, id);
 }
 
-export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number): Promise<{ emir: Emir }> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
+export async function emirDurdur(db: Db, kisiId: number, id: number, durusNedeniId: number, isEmriId?: number): Promise<{ emir: Emir }> {
+  const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = durdurmaIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
   const nedenIhlali = durusNedeniIhlali(await durusNedeniGetir(db, durusNedeniId));
   if (nedenIhlali !== null) throw dogrulama(nedenIhlali, 'durusNedeniId');
   const an = await komutAni(db, id);
-  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an);
-  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an);
-  await sorgular.emrinKatilimlariniKapat(db, id, an);
+  await sorgular.olayEkle(db, id, kisiId, istasyonId, 'durdur', durusNedeniId, an, adim?.id ?? null);
+  await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adim?.id ?? null);
+  await sorgular.emrinKatilimlariniKapat(db, id, an, adim?.id ?? null);
   return emirdenCevap(db, id);
 }
 
 // Yerdeki (makine ya da makinesiz istasyon yeri) işi durdurup bu işi orada başlatır ya da devam ettirir, tek işlemde.
 // Kapatılan kullanımın kimliği dolu cevabında gösterilenle aynı olmalı: arada orada başka iş açıldıysa kişi neyi durdurduğunu
-// bilmeden devralmaz. Öteki işin başka açık kullanımı kalmazsa iş duraklatılır (duraklatma neden istemez); kalırsa orada sürer.
-export async function makineDevral(db: Db, kisiId: number, id: number, kullanimId: number): Promise<{ emir: Emir }> {
+// bilmeden devralmaz. Öteki işin (adımın) başka açık kullanımı kalmazsa iş duraklatılır (duraklatma neden istemez); kalırsa orada sürer.
+// Paralel adım (639): yer aynı emrin öteki adımındaysa da devralınır; duraklayan o adımdır.
+export async function makineDevral(db: Db, kisiId: number, id: number, kullanimId: number, isEmriId?: number): Promise<{ emir: Emir }> {
   const emir = await kilitliEmir(db, id);
-  const istasyonId = istasyonu(emir);
+  const { adim } = await komutAdimi(db, emir, isEmriId);
+  const istasyonId = komutIstasyonu(emir, adim, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
-  const [olay] = await sorgular.sonOlaylariGetir(db, [id]);
-  const baslatilacak = emir.durum === 'planli';
-  if (!baslatilacak && !(emir.durum === 'basladi' && calismaDurumu(olay?.olay ?? null) !== 'calisiyor')) throw cakisma(DEVRAL_DURUMU);
+  const baslatilacak = isEmriId === undefined ? emir.durum === 'planli' : adim?.durum === 'bekliyor';
+  if (!baslatilacak) {
+    const calisan = adim?.durum === 'calisiyor' ? adim : null;
+    const calismiyor = emir.durum === 'basladi' && (isEmriId === undefined || calisan !== null) && (await adimCalismasi(db, id, calisan)) !== 'calisiyor';
+    if (!calismiyor) throw cakisma(DEVRAL_DURUMU);
+  }
   const acik = await sorgular.kullanimBul(db, kullanimId);
   if (acik === null || acik.istasyonId !== istasyonId) throw cakisma(DEVRAL_DEGISTI);
-  if (acik.emirId === id) throw cakisma(MAKINEDE_AYNI_IS);
-  const oteki = await kilitliEmir(db, acik.emirId);
+  const adimId = adim?.id ?? null;
+  if (acik.emirId === id && (acik.isEmriId === null || adimId === null || acik.isEmriId === adimId)) throw cakisma(MAKINEDE_AYNI_IS);
+  const oteki = acik.emirId === id ? emir : await kilitliEmir(db, acik.emirId);
   const an = await komutAni(db, id);
   await sorgular.kullanimKapat(db, acik.id, kisiId, an);
-  if ((await sorgular.emrinAcikKullanimSayisi(db, oteki.id)) === 0) {
-    const [otekiOlay] = await sorgular.sonOlaylariGetir(db, [oteki.id]);
-    if (oteki.durum === 'basladi' && calismaDurumu(otekiOlay?.olay ?? null) === 'calisiyor') {
-      await sorgular.olayEkle(db, oteki.id, kisiId, oteki.istasyonId ?? istasyonId, 'duraklat', null, an);
-      await sorgular.emrinKatilimlariniKapat(db, oteki.id, an);
+  if ((await sorgular.emrinAcikKullanimSayisi(db, oteki.id, acik.isEmriId)) === 0) {
+    const otekiCalisma = acik.isEmriId === null
+      ? calismaDurumu(((await sorgular.sonOlaylariGetir(db, [oteki.id]))[0] ?? null)?.olay ?? null)
+      : calismaDurumu((await sorgular.adimSonOlayi(db, oteki.id, acik.isEmriId))?.olay ?? null);
+    if (oteki.durum === 'basladi' && otekiCalisma === 'calisiyor') {
+      await sorgular.olayEkle(db, oteki.id, kisiId, oteki.istasyonId ?? istasyonId, 'duraklat', null, an, acik.isEmriId);
+      await sorgular.emrinKatilimlariniKapat(db, oteki.id, an, acik.isEmriId);
     }
   }
   const makineler = acik.makineId === null ? [] : [acik.makineId];
-  return baslatilacak ? emirBaslat(db, kisiId, id, makineler) : emirDevam(db, kisiId, id, makineler);
+  return baslatilacak ? emirBaslat(db, kisiId, id, makineler, isEmriId) : emirDevam(db, kisiId, id, makineler, isEmriId);
 }
 
 // Sıra zorunlu değildir, işaret geri alınabilir, adımlar bitirmeyi engellemez. Aynı duruma yeniden ayarlama olay yazmaz.
@@ -770,44 +919,53 @@ async function istasyonEkibinde(db: Db, istasyonId: number, kisiId: number): Pro
 }
 
 // Kişi çalışan işe katılır ya da duraklattığı çalışmasına döner. Başka çalışan varsa uyarı döner, reddedilmez.
-export async function katil(db: Db, kisiId: number, id: number): Promise<KatilimCevabi> {
-  const { emir, istasyonId, calisma } = await komutBaglami(db, kisiId, id);
-  const son = await sorgular.sonKatilim(db, id, kisiId);
+// Katılım adım başınadır (648 a): kişi aynı emrin iki adımında aynı anda olabilir, aynı adımda bir kez.
+export async function katil(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<KatilimCevabi> {
+  const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
+  const son = await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null);
   // Kendi duraklattığı çalışmasına dönen kişi zaten bu işteydi (işi başlatan ekip denetimine girmez): ekip yalnız yeni katılımda aranır.
   const donus = son !== null && son.kapanis === 'duraklat';
   if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId))) throw yetkiYok(EKIP_DISI);
   const ihlal = katilmaIhlali(emir.durum, calisma, son !== null && son.cikis === null);
   if (ihlal !== null) throw cakisma(ihlal);
-  const calisan = emir.malzemeNo === null ? null : (await sorgular.isEmirleriGetir(db, [id])).find((i) => i.durum === 'calisiyor') ?? null;
   try {
-    await sorgular.katilimAc(db, id, calisan?.id ?? null, kisiId, istasyonId, await komutAni(db, id));
+    await sorgular.katilimAc(db, id, adim?.id ?? null, kisiId, istasyonId, await komutAni(db, id));
   } catch (hata) {
-    if (kisitIhlali(hata)?.iz.kisit === KATILIM_TEK_ACIK) throw cakisma(KATILIM_ACIK);
+    const kisit = kisitIhlali(hata)?.iz.kisit;
+    if (kisit === KATILIM_TEK_ACIK || kisit === KATILIM_TEK_ACIK_IS_EMIRSIZ) throw cakisma(KATILIM_ACIK);
     throw hata;
   }
   const adlar = (await adlariAl(db)).kisi;
   const digerleri = (await sorgular.katilimlarGetir(db, id))
-    .filter((k) => k.cikis === null && k.kisiId !== kisiId).map((k) => adlar.get(k.kisiId) ?? `#${k.kisiId}`);
+    .filter((k) => k.cikis === null && k.kisiId !== kisiId && (adim === null || k.isEmriId === adim.id)).map((k) => adlar.get(k.kisiId) ?? `#${k.kisiId}`);
   return katilimlariCevir(db, id, katilimUyarisi([...new Set(digerleri)]));
 }
 
 // Kişi yalnız kendi açık çalışmasını duraklatır; işin kendisi ve öteki katılımcılar sürer.
-export async function katilimDuraklat(db: Db, kisiId: number, id: number): Promise<KatilimCevabi> {
-  await komutBaglami(db, kisiId, id);
-  const son = await sorgular.sonKatilim(db, id, kisiId);
+export async function katilimDuraklat(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<KatilimCevabi> {
+  const { adim } = await komutBaglami(db, kisiId, id, isEmriId);
+  const son = await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null);
   if (son === null || son.cikis !== null) throw cakisma(KATILIM_YOK);
   await sorgular.katilimKapat(db, son.id, 'duraklat', await komutAni(db, id));
   return katilimlariCevir(db, id);
 }
 
 // Kişi işten ayrılır: açık çalışması kapanır, duraklattığı çalışması ayrılmış sayılır. İş öteki katılımcılarla sürer.
-export async function katilimAyril(db: Db, kisiId: number, id: number): Promise<KatilimCevabi> {
-  await komutBaglami(db, kisiId, id);
-  const son = await sorgular.sonKatilim(db, id, kisiId);
+export async function katilimAyril(db: Db, kisiId: number, id: number, isEmriId?: number): Promise<KatilimCevabi> {
+  const { adim } = await komutBaglami(db, kisiId, id, isEmriId);
+  const son = await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null);
   if (son === null || son.kapanis === 'ayril' || son.kapanis === 'emir') throw cakisma(KATILIM_YOK);
   if (son.cikis === null) await sorgular.katilimKapat(db, son.id, 'ayril', await komutAni(db, id));
   else await sorgular.katilimAyrildi(db, son.id);
   return katilimlariCevir(db, id);
+}
+
+// 647 a: adımın sayım aşımı izi (kim, kaç, hangi adım, o anki önceki adım sağlamı). İş emri başka emrin ise bulunamadı sayılır.
+export async function asimlar(db: Db, emirId: number, isEmriId: number): Promise<AsimlarCevabi> {
+  const isEmri = await sorgular.isEmriBul(db, isEmriId);
+  if (isEmri === null || isEmri.uretimEmriId !== emirId) throw bulunamadi(IS_EMRI_YOK);
+  const adlar = (await adlariAl(db)).kisi;
+  return { asimlar: (await sorgular.asimlarGetir(db, emirId, isEmriId)).map(({ kisiId, ...a }) => ({ ...a, kisi: adli(adlar, kisiId, 'Kişi') })) };
 }
 
 // Makine adı istasyonlar modülünden; pasif makine de adıyla gelir. Akış kısa olduğu için ayrı makine sayısı azdır.

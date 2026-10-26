@@ -5,14 +5,14 @@ import {
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
-  fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
+  asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import {
-  adimTamamla, anaSayfaOzeti, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
+  adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
   izlemeListesi, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
@@ -455,4 +455,68 @@ const adimliUclar = [
   }),
 ];
 
-export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari];
+// Paralel adım (kart 639): adımı yolda taşıyan komutlar, eski emir uçlarıyla aynı işlem ve kurallarla. Yolda adım verildiği için
+// emrin birden çok açık adımı olsa da komut belirsiz kalmaz. Başlatma, sayım, devam, durdurma ve bitirme terminal (Arkon) yolundadır.
+const adimKomutUclari = [
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/ayar',
+    yetki: 'terminal.uret',
+    parametre: isEmriParametresi,
+    cevap: emirCevabi,
+    isle: ({ db, kullanici, parametre }) => emirAyar(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/makine-devral',
+    yetki: 'terminal.uret',
+    parametre: isEmriParametresi,
+    govde: makineDevralGovdesi,
+    cevap: emirCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => makineDevral(db, kullanici.id, parametre.id, govde.kullanimId, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/duraklat',
+    yetki: 'terminal.uret',
+    tekrarKorumali: true,
+    parametre: isEmriParametresi,
+    cevap: emirCevabi,
+    isle: ({ db, kullanici, parametre }) => emirDuraklat(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/katil',
+    yetki: 'terminal.uret',
+    parametre: isEmriParametresi,
+    cevap: katilimCevabi,
+    isle: ({ db, kullanici, parametre }) => katil(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/katilim/duraklat',
+    yetki: 'terminal.uret',
+    parametre: isEmriParametresi,
+    cevap: katilimCevabi,
+    isle: ({ db, kullanici, parametre }) => katilimDuraklat(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/katilim/ayril',
+    yetki: 'terminal.uret',
+    parametre: isEmriParametresi,
+    cevap: katilimCevabi,
+    isle: ({ db, kullanici, parametre }) => katilimAyril(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  // 647 a: sayım aşımı izi; katılımı gören okur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/asimlar',
+    yetki: KATILIM_OKUMA,
+    parametre: isEmriParametresi,
+    cevap: asimlarCevabi,
+    isle: ({ db, parametre }) => asimlar(db, parametre.id, parametre.isEmriId),
+  }),
+];
+
+export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari];

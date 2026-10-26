@@ -855,3 +855,10 @@ Bu tur şunları varsaydı:
 - `POST /arkon/iletiler` `tekrarKorumali`: istek kimliği zorunlu, kimliksiz istek 400; aynı kimlikle yinelenen ileti ikinci satır açmaz, ilk cevabı alır.
 - Köprü (`istemci/src/moduller/arkon/baglanti.ts`) iletinin `mid` kimliği UUID ise onu istek kimliği yapar (uygulamanın aynı iletiyi yeniden göndermesi tek satır kalır); düz http'deki tablette `mid` UUID değildir, kimlik gönderim için üretilir. Sonucu bilinmeyen gönderim aynı kimlikle yinelenir.
 - Testlerde Kalite Merkezi ilk parça kararı istek kimliğiyle çağrılır (karar ucu da tekrar korumalı olur, 551 b).
+
+## Paralel adım: iş emri paketinin komutu kendi adımına (kart 639e; kararlar 626 a, 636 a, 647 a, 648 a, 649 a, 654 a)
+- `tmi-ie` paketinin kaydı TMI komutuna paketin iş emrini verir (`isEmriId`): başlat, devam, ayar, duraklat, durdur, sayım, bitir ve katılım komutları o adımda çalışır. Komut kuralları emrin değil adımın durumuyla okunur (`adimEmirDurumu`: adım bekliyorsa planlı, çalışıyorsa başlamış, bittiyse bitmiş).
+- Sıra reddi kalktı: sırası gelmemiş adımın başlatması kayıttan önce reddedilmez (`adimSirasiBaslatmaReddi` silindi), TMI'de uyarıyla başlar; uyarı kaydın uyarısı olarak operatöre döner (626 a). Bitmiş adımın paketi yine eşlenmez (`PAKET_ADIM_SIRASI`, metni "bu adım bittikten sonra"; baş kısmı aynı). Planlı adımın sayımı adım başlayana kadar ertelenir.
+- Önceki adım bitmeden bitirme TMI'de reddedilir (649 a), nedeni yansımada. Başlatma, bitirme ve hurda sayımının TMI uyarısı (sıra dışı, aşım, eksi) operatöre döner.
+- Katılım durumu adım başınadır: öteki adımdaki kişi bu adımda çalışıyor sayılmaz (648 a).
+- Emir paketi (`tmi-ue`, iş emirsiz ve rotasız emir) değişmedi. Şema, göç, uç, işlem ve rol değişmedi.

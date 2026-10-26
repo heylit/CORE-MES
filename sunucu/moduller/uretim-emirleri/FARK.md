@@ -226,3 +226,11 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - `kararliSayimiSonuclandir`: karar bekleyen sayım grubunun son kararla kapanmamış satırları üretim anlarına bölünür (eksi düzeltme en son sayılandan düşer); her an için iki satır (-n karar bekliyor, +n sağlam ya da red) o ana yazılır, kararın anı `karar_zamani`'dadır. Grup toplamı, stok olayı ve kapanış adedi değişmedi.
 - Defter (`emirAyrintisi`) ve son olaylar kararı karar anında gösterir; son olaylar imleci kararı karar anıyla süzer.
 - Yan etki (davranış): zamana göre sayım okuyan her yer onaylı ve reddedilen parçayı üretildiği ana sayar: OEE, Arkon günlük sayımı ve anomali, saat ekranı, kişi özeti. Önceden karar gününe düşüyordu. Karar beklerken gün kapanmışsa o günün sayısı karar verilince geriye dönük artar.
+
+## Paralel adım: okuma ve komutlar (kart 639c, 639d; kararlar 626 a, 646 a, 647 a, 648 a, 649 a, 654 a; dal 639c-ue-paralel)
+
+- `disari.ts` komutlarına isteğe bağlı `isEmriId`: `emirBaslat`, `emirAyar`, `emirSayim` (seçenekte), `emirDuraklat`, `emirDevam`, `emirDurdur`, `emirBitir`, `makineDevral`, `katil`, `katilimDuraklat`, `katilimAyril`. Verilmezse emrin terminaldeki tek açık adımı, yoksa sıradaki; iki açık adımda 409 "adım seçilmeli". Bugünkü çağrılar aynı çalışır. `emirBitir` artık `uyari` da döner. Yeni okuma `asimlar`.
+- Yeni uçlar (`terminal.uret`): `POST /adimli-emirler/:id/is-emirleri/:isEmriId/{ayar, makine-devral, duraklat, katil, katilim/duraklat, katilim/ayril}`; `GET .../asimlar` (`KATILIM_OKUMA`).
+- Davranış: sıra dışı başlatma uyarıyla geçer (626 a); akışlı ya da bekleyen adım önceki adım bitmeden bitmez (649 a); adıma girenden fazla sayım reddedilmez, uyarır ve iz bırakır (647 a, denetim #31'in sert sınırı kalktı); eksi bakiyeyle bitiş uyarır (654 a). Bir adım bitince başka adım çalışıyorsa emir başlamış kalır, istasyonu öncü adıma geçer; emrin sağlamı en büyük sıralı adımındır. Kullanım, katılım ve olay adım başına yazılır ve kapanır; aynı emrin öteki adımı makineyi doldurur.
+- Okumalar: `Emir.acikAdimlar`, `Emir.baslatilabilirAdimlar`, ayrıntıda `isEmirleri[].eksik`. `adimaGiren` önceki adım bitmemişse o anki sağlamını kullanır.
+- Göç yok (639b'de geldi); işlem ve rol değişmedi. Arkon terminali adım göndermediği için sıralı kalır (636 a; 639e, 639f).

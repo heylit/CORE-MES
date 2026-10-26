@@ -27,3 +27,4 @@ Koddan okunamayanlar: neden, vazgeçilen yol, tuzak. En çok 30 satır; eskiyen 
 - İş emirli emirde satır terminal kartıdır (ilk sistem): iş emirleri arasında emir yeniden `planli` olur, `baslama` silinir, istasyon
   sıradakinindir (boş olabilir). Ekran durumu iş emirlerinden türer (`gorunenDurum`). Sayaç, olay ve kontrol listesi `TERMINAL_IS_EMRI`
   kapsamında okunur; defter satırları iş emri bitmeden yazılmalıdır (kapsam çalışan iş emridir).
+- Malzeme resmi (kart #688): liste ve ayrıntı küçük resmi istemcide çizim merkezinden alır (`cizimler/disari.ts` `useKucukResimler('malzemeler', malzemeNo)`, tek istek); emir cevabı değişmez, terminalin açık emir okuması büyümez. Resim okunamazsa ekran resimsiz çalışır.

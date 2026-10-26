@@ -25,6 +25,7 @@ import {
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
+  adimEksigi,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir } from './emir-olaylari.ts';
 import type { FasonDurumu, IsEmriKaynakTuru, KolDurumu, UretimYeri } from './kurallar.ts';
@@ -491,6 +492,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
   const ad = await adlariAl(db, kendi, adaylar, bilesenler.map((b) => b.malzemeNo));
   const kisi = await kisiAdlari(db, [...hareketler.map((h) => h.kisiId), ...yerDegisimleri.map((d) => d.kisiId)]);
   const eski = e.arsiv ? await s.arsivSatiri(db, id) : null;
+  const eksikler = await adimEksikHaritasi(db, id, kendi);
   const isEmirleri: IsEmri[] = kendi.map((i) => {
     const kendiHareketleri = hareketler.filter((h) => h.isEmriId === i.id);
     const sonYer = yerDegisimleri.filter((d) => d.isEmriId === i.id).at(-1);
@@ -499,7 +501,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
       tur: i.tur, ekAciklama: i.ekAciklama,
       kaynak: kaynakAdi(ad, i), istasyon: istasyonAdi(ad, i.istasyonId), ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi, talimatSurumu: i.talimatSurumu, durum: i.durum,
-      baslama: i.baslama, bitis: i.bitis, saglamAdet: i.saglamAdet,
+      baslama: i.baslama, bitis: i.bitis, saglamAdet: i.saglamAdet, eksik: eksikler.get(i.id) ?? null,
       bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({
         malzeme: ad.malzeme.get(b.malzemeNo) ?? { id: b.malzemeNo, kod: null, ad: `#${b.malzemeNo}` }, miktar: b.miktar, fireYuzde: b.fireYuzde,
       })),
@@ -707,11 +709,27 @@ const oncekiAdim = (hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): IsEmr
   hepsi.filter((i) => i.sira < isEmri.sira).sort((a, b) => b.sira - a.sira)[0];
 
 // Adıma giren adet: önceki adımın sağlamı, bu adımda katılan kolların sağlamı, aynı sırada bölünenler düşülür. İlk adımda null.
+// Önceki adım bitmemişse (paralel adım, 639) o ana kadarki sağlamı girer.
 export async function adimaGiren(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[], isEmri: IsEmriSatiri): Promise<number | null> {
   const onceki = oncekiAdim(hepsi, isEmri);
   if (onceki === undefined) return null;
+  const oncekiSaglam = onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : ((await s.adimSayaclariGetir(db, [onceki.id]))[0]?.saglam ?? 0);
   const bolunen = dogrudanAltPartiler(await s.altPartilerGetir(db, [emirId]), emirId).filter((p) => p.bolunmeSira === isEmri.sira).reduce((t, p) => t + p.adet, 0);
-  return (onceki.saglamAdet ?? 0) + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
+  return oncekiSaglam + (await birlesenGelen(db, emirId, isEmri)) - bolunen;
+}
+
+// Adım başına eksik (paralel adım 639, acikAdimSemasi.eksik ile aynı anlam): adıma giren eksi adımda sayılan (sağlam, karar bekleyen, hurda).
+// Önceki adımı olmayan ya da bağımsız adımda null.
+async function adimEksikHaritasi(db: Db, emirId: number, hepsi: readonly IsEmriSatiri[]): Promise<Map<number, number | null>> {
+  const sonuc = new Map<number, number | null>();
+  if (hepsi.length === 0) return sonuc;
+  const sayac = new Map((await s.adimSayaclariGetir(db, hepsi.map((i) => i.id))).map((x) => [x.isEmriId, x]));
+  for (const i of hepsi) {
+    if (i.bagimlilik === 'bagimsiz') { sonuc.set(i.id, null); continue; }
+    const x = sayac.get(i.id);
+    sonuc.set(i.id, adimEksigi(await adimaGiren(db, emirId, hepsi, i), (x?.saglam ?? 0) + (x?.kararBekliyor ?? 0) + (x?.hurda ?? 0)));
+  }
+  return sonuc;
 }
 
 // Okutulan emrin sıradaki fason iş emri (kart #97): kilitlemeden okunur; gidişin kendisi `fasonGidis` ile aynı kurallarla denetlenir.

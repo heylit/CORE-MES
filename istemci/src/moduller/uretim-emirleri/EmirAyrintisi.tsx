@@ -6,6 +6,7 @@ import type { EmirAyrintiCevabi, UretimKaydi } from '#paylasilan/sozlesme/uretim
 import { AdimListesi, Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { KucukResimKutusu, useKucukResimler } from '../cizimler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
@@ -47,6 +48,8 @@ export function EmirAyrintisi() {
   const canli = emir?.canli ?? null;
   const durum = emir ? durumGosterimi(emir) : { etiket: '', ton: 'bilgi' as const };
   const adimlar = ayrinti.data?.adimlar ?? [];
+  const malzemeNo = emir?.malzemeNo ?? null;
+  const resim = useKucukResimler('malzemeler', malzemeNo === null ? [] : [malzemeNo]);
   const fark = emir && emir.durum === 'bitti' ? farkMetni(emir.adet, emir.saglamAdet) : null;
   const [iplikAcik, setIplikAcik] = useState(false);
   const [oynatma, setOynatma] = useState(0);
@@ -87,6 +90,7 @@ export function EmirAyrintisi() {
             {canli && canli.durusBaslangic !== null && <Satir ad="Duruş başlangıcı" deger={zamanMetni(canli.durusBaslangic)} />}
             <Satir ad="Parça no" deger={emir.parcaNo} />
             <Satir ad="Parça adı" deger={emir.parcaAd} />
+            {malzemeNo !== null && <Satir ad="Malzeme resmi" deger={<KucukResimKutusu resim={resim.get(malzemeNo)} ad={emir.parcaAd} boy="orta" />} />}
             <Satir ad="İstasyon" deger={emir.istasyon?.ad ?? null} />
             <Satir ad="Emir adedi" deger={emir.adet} />
             <Satir ad="Sağlam adet" deger={saglamSayisi(emir)} />

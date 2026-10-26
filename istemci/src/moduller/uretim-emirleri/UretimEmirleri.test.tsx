@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/cizimler.ts';
 import type { BitenEmirlerCevabi, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { UretimEmirleri } from './UretimEmirleri.tsx';
@@ -162,5 +163,44 @@ describe('EmirAyrintisi', () => {
     sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/99': () => json(404, { kod: 'BULUNAMADI', mesaj: 'Emir bulunamadı.' }) });
     ac(ekran, '/uretim-emirleri/99');
     expect(await screen.findByText('Emir bulunamadı.')).toBeTruthy();
+  });
+});
+
+describe('malzeme resmi (kart #688)', () => {
+  const KARTLI = { ...PLANLI, malzemeNo: 40 } satisfies Emir;
+  const KARTSIZ = { ...BASLAMIS, malzemeNo: null } satisfies Emir;
+  const resimler = (r: KucukResimlerCevabi['resimler']) => json(200, { resimler: r } satisfies KucukResimlerCevabi);
+
+  it('liste kartli emirlerin resmini tek istekte alir; resim yoksa ya da cizim merkezi okunamazsa liste yine gorunur', async () => {
+    const istekler = sunucuKur(OKUYUCU, {
+      'GET /uretim-emirleri': () => json(200, liste([KARTLI, KARTSIZ])),
+      'GET /cizimler/kucuk-resimler': () => resimler([{ hedefId: 40, belgeId: 2, revizyonId: 6, harf: 'B', kareSayisi: 1, revUyumu: false }]),
+    });
+    ac(ekran, '/uretim-emirleri');
+    const resim = await screen.findByRole('img', { name: 'Deneme mil' });
+    expect(resim.getAttribute('src')).toBe('/api/cizimler/kucuk-resim/6/0');
+    expect(screen.getByRole('img', { name: 'Revizyon uyuşmuyor' })).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/cizimler/')).map((i) => i.yol)).toEqual(['/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=40']);
+    cleanup();
+    sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([KARTLI])) });
+    ac(ekran, '/uretim-emirleri');
+    expect(await screen.findByText('EM-1')).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Deneme mil' })).toBeNull();
+  });
+
+  it('ayrinti kartli emirde malzeme resmini gosterir, kartsiz emirde satir yok ve istek atilmaz', async () => {
+    sunucuKur(OKUYUCU, {
+      'GET /uretim-emirleri/1': () => json(200, { emir: KARTLI, kayitlar: [] } satisfies EmirAyrintiCevabi),
+      'GET /cizimler/kucuk-resimler': () => resimler([{ hedefId: 40, belgeId: 2, revizyonId: 6, harf: 'A', kareSayisi: 8, revUyumu: true }]),
+    });
+    ac(ekran, '/uretim-emirleri/1');
+    expect((await screen.findByRole('img', { name: 'Deneme mil' })).getAttribute('src')).toBe('/api/cizimler/kucuk-resim/6/0');
+    expect(screen.getByText('Malzeme resmi')).toBeTruthy();
+    cleanup();
+    const istekler = sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/2': () => json(200, { emir: KARTSIZ, kayitlar: [] } satisfies EmirAyrintiCevabi) });
+    ac(ekran, '/uretim-emirleri/2');
+    expect(await screen.findByText('EM-2')).toBeTruthy();
+    expect(screen.queryByText('Malzeme resmi')).toBeNull();
+    expect(istekler.some((i) => i.yol.startsWith('/cizimler/'))).toBe(false);
   });
 });

@@ -51,10 +51,13 @@ export const baslatmaIstasyonIhlali = (durum: IstasyonDurumu): string | null => 
   return durum === 'pasif' ? ISTASYON_PASIF_BASLATMA : null;
 };
 
-// Yerde (makine ya da makinesiz istasyon yeri) açık kullanım varsa başlatma reddedilir; kilit yerdedir, kişide değil.
-export const makineDoluIhlali = (acikEmirId: number | null, emirId: number, makineli = true): string | null => {
+// Yerde (makine ya da makinesiz istasyon yeri) açık kullanım varsa başlatma reddedilir; kilit yerdedir, kişide değil. Aynı emrin başka
+// adımı yeri tutuyorsa yer doludur (paralel adım, 639); adım bilinmiyorsa aynı emir aynı iş sayılır.
+export const makineDoluIhlali = (
+  acikEmirId: number | null, emirId: number, makineli = true, acikIsEmriId: number | null = null, isEmriId: number | null = null,
+): string | null => {
   if (acikEmirId === null) return null;
-  if (acikEmirId === emirId) return MAKINEDE_AYNI_IS;
+  if (acikEmirId === emirId && (acikIsEmriId === null || isEmriId === null || acikIsEmriId === isEmriId)) return MAKINEDE_AYNI_IS;
   return makineli ? MAKINE_DOLU : ISTASYON_DOLU;
 };
 
@@ -936,4 +939,107 @@ export function kararAnlari(satirlar: readonly { zaman: string; adet: number }[]
     if (kalan > 0) anlar.push({ zaman, adet: -kalan });
   }
   return anlar.filter((a) => a.adet !== 0);
+}
+
+/* ---------------- paralel adım (kart 639; 626 a, 647 a, 649 a, 654 a) ---------------- */
+
+export const ADIM_SECILMELI = 'Bu emirde birden çok adım açık; işlemi hangi adımda yaptığınızı seçin.';
+export const ADIM_BASLAMIS = 'Bu adım zaten başlamış ya da bitmiş.';
+export const ADIM_ACIK_DEGIL = 'Bu adım çalışmıyor; önce başlatın.';
+
+export interface ParalelAdim {
+  id: number;
+  sira: number;
+  opNo: number;
+  durum: IsEmriDurumu;
+  bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
+  devirAdedi: number | null;
+}
+
+// Önceki adım sıra numarası bir küçük olan adımdır; bağımsız adımın önceki adımı yoktur (önceki adıma bağlı değildir).
+export function oncekiParalelAdim<T extends ParalelAdim>(adimlar: readonly T[], adim: T): T | null {
+  if (adim.bagimlilik === 'bagimsiz') return null;
+  return adimlar.filter((a) => a.sira < adim.sira).sort((a, b) => b.sira - a.sira)[0] ?? null;
+}
+
+// Komutun adımı verilmezse: terminalde açık (çalışan ya da duraklamış) adım tekse odur, yoksa sıradaki; birden çoksa adım sorulur.
+// Fasondaki adım terminal komutu almaz, açık sayılmaz.
+export function varsayilanAdim<T extends ParalelAdim & { fasonFirmaId: number | null }>(adimlar: readonly T[]): T | null | typeof ADIM_SECILMELI {
+  const acik = adimlar.filter((a) => a.durum === 'calisiyor' && a.fasonFirmaId === null);
+  if (acik.length > 1) return ADIM_SECILMELI;
+  return acik[0] ?? siradakiIsEmri(adimlar);
+}
+
+export const KATILIM_TEK_ACIK_IS_EMIRSIZ = 'uretim_emirleri_katilim_is_emirsiz_tek_acik';
+
+// 626 a: kuralı tutmayan başlatma reddedilmez, uyarı döner. Bekleyen adım önceki bitmeden, akışlı adım devir adedi gelmeden başlarsa uyarır.
+// oncekiSaglam: önceki adımın şu ana kadarki sağlamı (bitmişse kapanışı).
+export function siraDisiBaslatmaUyarisi(adimlar: readonly ParalelAdim[], adim: ParalelAdim, oncekiSaglam: number): string | null {
+  const onceki = oncekiParalelAdim(adimlar, adim);
+  if (onceki === null || onceki.durum === 'tamam') return null;
+  if (adim.bagimlilik === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
+  const devir = adim.devirAdedi ?? 0;
+  return oncekiSaglam >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${oncekiSaglam}.`;
+}
+
+// Kuralı tutan, şimdi başlatılabilecek adımlar: bekleyen, istasyonlu ve fason olmayan; sıra dışı uyarısı vermeyenler.
+export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: number | null; fasonFirmaId: number | null }>(
+  adimlar: readonly T[], oncekiSaglam: (adim: T) => number,
+): number[] {
+  return adimlar
+    .filter((a) => a.durum === 'bekliyor' && a.istasyonId !== null && a.fasonFirmaId === null)
+    .filter((a) => siraDisiBaslatmaUyarisi(adimlar, a, oncekiSaglam(a)) === null)
+    .map((a) => a.id);
+}
+
+// 649 a (uyarılı ret): akışlı ya da bekleyen adım, önceki adım bitmeden bitirilemez; bağımsız adım bekleme olmadan biter.
+export function oncekiBitmediIhlali(adimlar: readonly ParalelAdim[], adim: ParalelAdim): string | null {
+  const onceki = oncekiParalelAdim(adimlar, adim);
+  return onceki === null || onceki.durum === 'tamam' ? null : `OP ${onceki.opNo} bitmeden OP ${adim.opNo} bitirilemez; önce OP ${onceki.opNo} bitirilmeli.`;
+}
+
+// Adımın önceki adıma göre bakiyesi: önceki adımın sağlamı eksi bu adımda sayılan (sağlam, karar bekleyen, hurda). Artı: gelmiş, işlenmemiş;
+// eksi: önceki adımın teslim etmediği parça sayıldı (647 a), önceki adım saydıkça kapanır. Önceki adımı olmayan adımda null.
+export const adimEksigi = (giren: number | null, sayilan: number): number | null => (giren === null ? null : giren - sayilan);
+
+// 647 a: sayım sınırı reddetmez, uyarır ve iz bırakır (aşan satır sayım defterinden okunur).
+export function sayimAsimiUyarisi(giren: number | null, mevcut: number, fark: number, opNo: number | null): string | null {
+  if (giren === null || fark <= 0 || mevcut + fark <= giren) return null;
+  return `Bu adımda sayılan ${mevcut + fark}, önceki adımdan gelen ${giren}; ${mevcut + fark - giren} fazla${opNo === null ? '' : ` (OP ${opNo})`}. Önceki adımın sayımı eksik girilmiş olabilir.`;
+}
+
+// 654 a: önceki adım, sonraki adımın saydığından az sağlamla bitirilirse reddedilmez, uyarır.
+export function eksiyleBitirmeUyarisi(kapanis: number, sonraki: { opNo: number; sayilan: number } | null): string | null {
+  if (sonraki === null || sonraki.sayilan <= kapanis) return null;
+  return `OP ${sonraki.opNo}'de bu adımdan ${sonraki.sayilan - kapanis} fazla parça sayıldı; eksi ${sonraki.sayilan - kapanis} kaldı.`;
+}
+
+// Birden çok uyarı tek metne birleşir; hiçbiri yoksa null.
+export const uyarilariBirlestir = (...uyarilar: readonly (string | null)[]): string | null => {
+  const dolu = uyarilar.filter((u): u is string => u !== null && u !== '');
+  return dolu.length === 0 ? null : dolu.join(' ');
+};
+
+export interface EksikAdimi extends ParalelAdim {
+  saglamAdet: number | null;
+  saglam: number;
+  hurda: number;
+  kararBekliyor: number;
+}
+
+// Adım başına eksik (adimEksigi): önceki adım bitmişse kapanışı, bitmemişse o ana kadarki sağlamı adıma girer. Kol ve bölünme hesabı
+// istemeyen (partisiz) emir içindir; partili emirde girdi adimaGiren ile okunur.
+export function adimEksikleri(adimlar: readonly EksikAdimi[]): Map<number, number | null> {
+  return new Map(adimlar.map((a) => {
+    const onceki = oncekiParalelAdim(adimlar, a);
+    const giren = onceki === null ? null : onceki.durum === 'tamam' ? (onceki.saglamAdet ?? 0) : onceki.saglam;
+    return [a.id, adimEksigi(giren, a.saglam + a.kararBekliyor + a.hurda)];
+  }));
+}
+
+// Emir eksi bakiyeyle biterse reddedilmez, uyarır (tasarım 639 §5 "Emir bitişi"); eksi iz sayım defterinde kalır.
+export function emirEksiUyarisi(adimlar: readonly { opNo: number; eksik: number | null }[]): string | null {
+  const eksi = adimlar.filter((a) => a.eksik !== null && a.eksik < 0);
+  if (eksi.length === 0) return null;
+  return `Emir eksi bakiyeyle bitti: ${eksi.map((a) => `OP ${a.opNo}'de ${-(a.eksik ?? 0)} fazla sayıldı`).join(', ')}.`;
 }

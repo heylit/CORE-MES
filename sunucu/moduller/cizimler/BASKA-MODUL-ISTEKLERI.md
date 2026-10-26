@@ -10,4 +10,4 @@ Hepsi `cizimler/disari.ts` ile yapılır; merkez bu modülleri ithal etmez.
   `yayindakiBelgeDosyasi` ile dosyayı alır, dosya kaydında belge kimliğini tutar; yayındaki `ozet` değişince yeni revizyon uyarısı.
 - kalibrasyon (kart #301): sertifika dosyası `sertifika` türü belge olarak bağlanır (kalibrasyon NOTLAR'daki ertelenen dosya eki).
 - malzemeler (kart #688): `disari.malzemeResimAnahtarlari(db, nolar)` -> `Map<no, { resimNo, revizyon }>` (dal 688-malzemeler-resim); kartta, sihirbazda ve listede `cizimler/disari.ts` `ResimPaneli`, `malzemeBelgesiYukle`, `useKucukResimler`, `KucukResimKutusu`.
-- uretim-emirleri (kart #688, beklemede): liste ve ayrıntıda `useKucukResimler('malzemeler', kartNolar)` ve `KucukResimKutusu`; sunucu değişikliği gerekmez.
+- uretim-emirleri (kart #688, yapıldı: dal 688-uretim-emirleri-resim): liste ve ayrıntıda `useKucukResimler('malzemeler', kartNolar)` ve `KucukResimKutusu`; sunucu değişikliği gerekmez.

@@ -1652,10 +1652,14 @@ export function paketinEmri(kimlik: string, govde: unknown): number | null {
 }
 
 // TMI komutu emrin sıradaki iş emrine işler: başka adımın paketinden gelen kayıt (önceden hazırlanmış sonraki adım ya da bitmiş adım) eşlenmez.
-export const PAKET_ADIM_SIRASI = 'Paket başka adımın: bu adımın sırası gelmeden ya da bittikten sonra kaydı TMI\'ye işlenmez.';
-// Başlatma kayıttan önce sorulur (parti kuralı gibi): sırası gelmemiş adımın başlatması yazılsa terminal işi çalışıyor gösterir, TMI'de iş başlamazdı.
-export const adimSirasiBaslatmaReddi = (siradaki: { opNo: number; ad: string }): string =>
-  `Bu adımın sırası gelmedi: emrin sıradaki adımı Op ${siradaki.opNo}${siradaki.ad === '' ? '' : ' ' + siradaki.ad}. O adım bitmeden bu adım başlatılamaz.`;
+// Baş kısmı istemcinin eşleştirdiği metindir (TmiYansimalari.tsx); paralel adımla (639) yalnız bitmiş adımın kaydı eşlenmez.
+export const PAKET_ADIM_SIRASI = 'Paket başka adımın: bu adım bittikten sonra kaydı TMI\'ye işlenmez.';
+// Paralel adım (639): iş emri paketinin komut kuralları adımın durumuyla okunur. Adım bekliyorsa iş planlı, çalışıyorsa başlamış, bittiyse
+// bitmiştir; açık olmayan emir (bitmiş, iptal) kendi durumunu taşır. Sıra dışı başlatma reddedilmez, TMI uyarı döner (626 a).
+export function adimEmirDurumu(emirDurumu: string, adimDurumu: string | null): string {
+  if (adimDurumu === null || (emirDurumu !== 'planli' && emirDurumu !== 'basladi')) return emirDurumu;
+  return adimDurumu === 'bekliyor' ? 'planli' : adimDurumu === 'calisiyor' ? 'basladi' : 'bitti';
+}
 export const ROTALI_EMIR_PAKETI = 'Rotalı emrin kaydı iş emri paketinden gelir; emir paketi kayıtlı değil.';
 
 // Rotalı emir adım adım istasyon değiştirir, tmi-ue paketi ise kaydedildiği makinede kalır. TMI komutu emrin sıradaki iş emrine işlediğinden
