@@ -23,6 +23,6 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    büyük dosyada (yüz MB) dosyanın tamamını indirir; 25 MB üstü modelde kare üretilmez. VARSAYIM: atölye dosyaları çoğunlukla birkaç MB.
    Uyum: görüntüleyici büyük modelde önce kareleri gösterir, "3B aç" ile dosyayı indirir.
 9. TUTAN (kart #688). Küçük resim kareleri tarayıcıda önbelleğe girmez (C6). Uyum: çekirdek ikili cevaba önbellek seçeneği verince kare ucuna kısa ömür.
-10. TUTAN (kart #688). Üretim emirleri liste ve ayrıntısında küçük resim gösterimi bu dalda yok: `uretim-emirleri` dosyaları başka işlerde kilitli. Hazır parça: istemci `cizimler/disari.ts` `useKucukResimler('malzemeler', kartNolar)` ve `KucukResimKutusu`.
-11. TUTAN (kart #688). Kart resim no ve revizyonu malzemeler `disari.malzemeResimAnahtarlari` ile okunur; bu fonksiyon 688-malzemeler-resim dalındadır, o dal birleşmeden bu dal derlenmez.
+10. KAPANDI (kart #688). Üretim emirleri liste ve ayrıntısı küçük resmi `useKucukResimler('malzemeler', malzemeNo)` ve `KucukResimKutusu` ile gösterir (dal 688-uretim-emirleri-resim).
+11. KAPANDI (kart #688). Kart resim no ve revizyonu malzemeler `disari.malzemeResimAnahtarlari` ile okunur; fonksiyon main'de.
 12. SONRA (kart #688). PDF ve foto karesi tarayıcıda üretilir; sunucu içeriğin belgeye benzediğini denetleyemez (CZ-15 ile aynı). Kare üretmeyen eski tarayıcıda belge resimsiz kalır, "Resim üret" ile yeniden denenir.
