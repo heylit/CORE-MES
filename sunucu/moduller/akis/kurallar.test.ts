@@ -7,7 +7,8 @@ const z = (dakika: number): string => new Date(Date.UTC(2026, 0, 5, 8, 0) + daki
 const SIMDI = 10_000;
 
 const adim = (a: Partial<AkisAdimi> & { id: number; opNo: number }): AkisAdimi => ({
-  sira: a.opNo, istasyon: 'Torna 1', fason: false, terminGun: null, baslama: null, bitis: null, birimSureDk: null, ayarSuresiDk: null, ...a,
+  sira: a.opNo, istasyon: 'Torna 1', fason: false, terminGun: null, baslama: null, bitis: null, birimSureDk: null, ayarSuresiDk: null,
+  bagimlilik: 'bekleyen', devirAdedi: null, ...a,
 });
 let hid = 0;
 const hareket = (h: Partial<AkisHareketi> & { zaman: string; tur: AkisHareketi['tur']; miktar: string }): AkisHareketi => ({
@@ -125,16 +126,66 @@ describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
     assert.equal(s.olculer.akisVerimi, 0.185);
   });
 
-  test('adım ölçüleri: bekleme önceki adımın ilk sayımından (fasonda ilk dönüşten) başlar; çevrim işleme ÷ sağlam', () => {
+  test('adım ölçüleri: bekleyen adımın beklemesi önceki adımın bitişinden (fasonda bütün dönüşten) başlar; çevrim işleme ÷ sağlam', () => {
     const [op10, op20, op30] = emirAkisi(temel).adimlar;
     assert.equal(op10?.hazirlikDk, 30);
     assert.equal(op10?.islemeDk, 270);
     assert.equal(op10?.cevrimBirimDk, 27);
     assert.equal(op10?.beklemeDk, null);
-    assert.equal(op20?.beklemeDk, 300);
+    assert.equal(op20?.beklemeDk, 100, 'OP10 300. dakikada biter, fason 400. dakikada gider; ilk sayım (100) sayılmaz');
     assert.equal(op20?.fasonDk, 1200);
     assert.equal(op20?.islemeDk, null);
-    assert.equal(op30?.beklemeDk, 300);
+    assert.equal(op30?.beklemeDk, 300, 'fason 1600. dakikada tamam döner, OP30 1900. dakikada başlar');
+  });
+
+  // OP10 08:00-12:00 çalışır, parçaları tek tek sayar; OP20 13:00'te başlar. Bağımlılığa göre bekleme değişir.
+  const ikiAdim = (op20: Partial<AkisAdimi>) => girdi({
+    adimlar: [adim({ id: 1, opNo: 10, bitis: z(240) }), adim({ id: 2, opNo: 20, bitis: z(420), ...op20 })],
+    olaylar: [
+      { isEmriId: 1, zaman: z(0), olay: 'baslat' }, { isEmriId: 1, zaman: z(240), olay: 'bitir' },
+      { isEmriId: 2, zaman: z(300), olay: 'baslat' }, { isEmriId: 2, zaman: z(420), olay: 'bitir' },
+    ],
+    sayimlar: [
+      { isEmriId: 1, zaman: z(10), tur: 'saglam', adet: 1 }, { isEmriId: 1, zaman: z(60), tur: 'saglam', adet: 4 },
+      { isEmriId: 1, zaman: z(100), tur: 'saglam', adet: -1 }, { isEmriId: 1, zaman: z(120), tur: 'saglam', adet: 6 },
+    ],
+  });
+  const op20Beklemesi = (op20: Partial<AkisAdimi>) => emirAkisi(ikiAdim(op20)).adimlar[1]?.beklemeDk;
+
+  test('bekleyen adım: önceki adımın ilk sayımı beklemeyi başlatmaz, bitişi başlatır', () => {
+    assert.equal(op20Beklemesi({}), 60);
+  });
+
+  test('akışlı adım: önceki adımdan devir adedi kadar sağlam çıkınca bekleme başlar; düzeltme toplamdan düşer', () => {
+    assert.equal(op20Beklemesi({ bagimlilik: 'akisli', devirAdedi: 5 }), 240, '1 + 4 = 5 adet 60. dakikada');
+    assert.equal(op20Beklemesi({ bagimlilik: 'akisli', devirAdedi: 6 }), 180, '-1 düzeltmesiyle 6. adet 120. dakikada');
+    assert.equal(op20Beklemesi({ bagimlilik: 'akisli', devirAdedi: 50 }), 60, 'adede ulaşmadan biterse bitişten');
+    assert.equal(op20Beklemesi({ bagimlilik: 'akisli', devirAdedi: null }), 290, 'devir adedi yoksa ilk sağlam');
+  });
+
+  test('bağımsız adımda önceki adım beklenmez', () => {
+    assert.equal(op20Beklemesi({ bagimlilik: 'bagimsiz' }), null);
+  });
+
+  test('yeniden açılan adım: bitir ile yeniden başlama arası bekleme; başlamadıysa şimdiye kadar açık, iptalde yok', () => {
+    const yeniden = adim({ id: 1, opNo: 10, bitis: z(200) });
+    const olaylar = [
+      { zaman: z(0), olay: 'baslat' as const }, { zaman: z(100), olay: 'bitir' as const },
+      { zaman: z(130), olay: 'ayar' as const }, { zaman: z(150), olay: 'baslat' as const }, { zaman: z(200), olay: 'bitir' as const },
+    ];
+    assert.deepEqual(adimAraliklari(yeniden, olaylar, Date.parse(z(SIMDI))).map((s) => [s.tur, (s.bit - s.bas) / 60_000]),
+      [['isleme', 100], ['bekleme', 30], ['hazirlik', 20], ['isleme', 50]]);
+    const acik = adimAraliklari(adim({ id: 1, opNo: 10 }), olaylar.slice(0, 2), Date.parse(z(160)));
+    assert.deepEqual(acik.map((s) => [s.tur, (s.bit - s.bas) / 60_000, s.acik]), [['isleme', 100, false], ['bekleme', 60, true]]);
+    assert.deepEqual(adimAraliklari(adim({ id: 1, opNo: 10 }), olaylar.slice(0, 2), Date.parse(z(160)), false).map((s) => s.tur), ['isleme']);
+    const g = girdi({
+      adimlar: [yeniden, adim({ id: 2, opNo: 20, bitis: z(400) })],
+      olaylar: [...olaylar.map((o) => ({ ...o, isEmriId: 1 })), { isEmriId: 2, zaman: z(300), olay: 'baslat' }, { isEmriId: 2, zaman: z(400), olay: 'bitir' }],
+    });
+    const [op10, op20] = emirAkisi(g).adimlar;
+    assert.equal(op10?.beklemeDk, 30);
+    assert.equal(op10?.islemeDk, 150);
+    assert.equal(op20?.beklemeDk, 200, 'sonraki adımın beklemesi önceki adımın ilk bitişinden');
   });
 
   test('hammadde: sarf yoksa HM statüsünden çevirme kullanım sayılır; mal kabulü bilinmeyen partide bekleme uydurulmaz', () => {
