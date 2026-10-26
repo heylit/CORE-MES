@@ -105,6 +105,8 @@ export interface PlanlamaCalismasi extends ExtraAlanlar {
   w: PlanAgirliklari;
   param: PlanParametreleri;
   kapali: string[];
+  // 561 2 a: 2 ise kapali listesi kullanıcının kararıdır; daha eski çalışmada personel kısıtı kapalı sayılır (durum.ts calismaOku).
+  kisitSurum?: number;
   bedel: unknown;
   olaylar: ExtraAlanlar[];
   plan: CozulmusPlan | null;

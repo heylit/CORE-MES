@@ -16,7 +16,14 @@ describe('calismaOku', () => {
     expect(c?.bilinmeyen).toEqual({ a: 1 });
     expect(c?.w).toEqual(VARSAYILAN_AGIRLIK);
     expect(c?.param).toEqual(VARSAYILAN_PARAMETRE);
-    expect(c?.kapali).toEqual([]);
+    expect(c?.kapali).toEqual(['personel']);
+  });
+
+  // 561 2 a: personel kısıtı kullanıcı açana kadar kapalı (motor/girdi.betik kapaliKisitlar ile aynı kural).
+  it('kisitSurum 2 olmayan belgede personel kısıtı kapalı sayılır; 2 olanda liste kullanıcının kararıdır', () => {
+    expect(calismaOku(belge({ kapali: ['tatil'] }))?.kapali).toEqual(['tatil', 'personel']);
+    expect(calismaOku(belge({ kapali: ['tatil'], kisitSurum: 2 }))?.kapali).toEqual(['tatil']);
+    expect(calismaOku(belge())?.kisitSurum).toBe(2);
   });
 
   it('sürüm 2 olmayan ya da verisiz belge okunmaz (null)', () => {

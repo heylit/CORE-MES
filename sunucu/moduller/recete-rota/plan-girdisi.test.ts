@@ -67,4 +67,15 @@ describe('plan girdisi (sunucu)', () => {
   test('çalışma yoksa null', () => {
     assert.equal(planGirdisi({ calisma: null, kayit: KAYIT, kaynak: null }), null);
   });
+
+  // 561 1 b: tezgâhın operatör oranı istasyonun plan ayarıdır (bir operatör en çok N tezgâh: 1/N); 2 a: personel kısıtı açılana dek kapalı.
+  test('oran istasyondan gelir, istasyonda yoksa 1; personel kısıtı eski çalışmada kapalı, kisitSurum 2 ile kullanıcının kararı', () => {
+    const kaynak = (opPer: number | null) => ({ ...KAYNAK, durum: { ...KAYNAK.durum, stations: [{ ...KAYNAK.durum.stations[0], opPer }] } });
+    const oran = (c: Record<string, unknown>, opPer: number | null) =>
+      (planGirdisi({ calisma: c, kayit: KAYIT, kaynak: kaynak(opPer) })?.st as { D: { tezgahlar: Array<{ id: string; opOran: number }> } }).D.tezgahlar.map((m) => [m.id, m.opOran]);
+    assert.deepEqual(oran({ ...calisma(D0), kisitSurum: 2 }, 0.5), [['100', 0.5]]);
+    assert.deepEqual(oran({ ...calisma(D0), kisitSurum: 2 }, null), [['100', 1]]);
+    assert.deepEqual(oran(calisma(D0), 0.5), [['100', 0]]);
+    assert.deepEqual(oran({ ...calisma(D0), kisitSurum: 2, kapali: ['personel'] }, 0.5), [['100', 0]]);
+  });
 });
