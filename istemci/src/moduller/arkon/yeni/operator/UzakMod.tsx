@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
-import { isSatiri, malzemeSatiri, modelDosyasi, saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
+import { modelDosyasi, saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
 import type { Gorunum3B } from '../../../../ortak/cizim/model.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
@@ -16,8 +16,7 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
   const oran = is.target > 0 ? Math.min(1, is.good / is.target) : 0;
-  const satir = isSatiri(is.part, is.op);
-  const malzeme = malzemeSatiri(is.pkg, is.part);
+  const basliklar = uzakBasliklari(is);
   const siradaki = D.due.length ? `ŞİMDİ · ${D.due[0]!.nom}` : D.next ? (D.next.v === 0 ? 'Üretime dönünce' : `${D.next.v} ${D.next.u}`) : '—';
   return createPortal(
     <div ref={ref} className="tc-ay1-uzak" data-durum={durumRengi(is.state)} role="dialog" aria-label="Uzak mod" tabIndex={0}
@@ -25,18 +24,23 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
       <div className="tc-ay1-uzak-ust">
         <span className="tc-ay1-durum-adi"><i aria-hidden="true" />{durumAdi(is.state)}<span className="tc-ay1-mono" title="Bu durumda geçen süre">{sure((simdi - since) / 1000)}</span></span>
         <span className="tc-ay1-uzak-saat tc-ay1-mono">{saatMetni(simdi)}</span>
-        <span className="tc-ay1-mono">{is.no}{istasyon ? ` · ${istasyon}` : ''}</span>
+        <span className="tc-ay1-uzak-istasyon tc-ay1-mono">{istasyon}</span>
       </div>
       <div className="tc-ay1-uzak-govde">
-        {satir ? <div className="tc-ay1-uzak-parca">{satir}</div> : null}
-        {malzeme ? <div className="tc-ay1-uzak-malzeme tc-ay1-mono">{malzeme}</div> : null}
-        <UzakModel pkg={is.pkg} />
-        <div className="tc-ay1-uzak-sayi"><span>{sayi(is.good)}</span><small>/ {sayi(is.target)}</small></div>
+        {basliklar.length ? (
+          <dl className="tc-ay1-uzak-basliklar">
+            {basliklar.map(([etiket, deger]) => <div key={etiket}><dt className="tc-ay1-ust-yazi">{etiket}</dt><dd title={deger}>{deger}</dd></div>)}
+          </dl>
+        ) : null}
+        <div className="tc-ay1-uzak-orta">
+          <UzakModel pkg={is.pkg} />
+          <span className="tc-ay1-uzak-sayi">{sayi(is.good)}</span>
+          <small className="tc-ay1-uzak-hedef">/ {sayi(is.target)}</small>
+        </div>
       </div>
       <Cubuk yuzde={oran * 100} ton="run" etiket="İlerleme" />
       <div className="tc-ay1-uzak-alt">
         <div><span className="tc-ay1-ust-yazi">Hurda</span><b data-durum="durdu">{is.scrap}</b></div>
-        <div><span className="tc-ay1-ust-yazi">Kalan</span><b>{sure(Math.max(0, is.target - is.good) * (is.cycle || 30))}</b></div>
         <div><span className="tc-ay1-ust-yazi">Sıradaki kontrol</span><b>{siradaki}</b></div>
       </div>
       {gorev && !gorev.quiet ? <div className="tc-ay1-uzak-gorev" data-durum={tonDurumu(gorev.tone)}><Simge ad={gorev.icon} boyut="b" />{gorev.t}</div> : null}
@@ -44,6 +48,15 @@ export function UzakMod({ is, gorev, D, since, istasyon, uyan }: { is: Is; gorev
     </div>,
     document.body,
   );
+}
+
+// Uzak mod başlıkları kullanıcının verdiği sırayla: proje, üretim emri, op, parça no, parça adı, revizyon. Boş alan yazılmaz;
+// `pkg.proje` (proje adı) projesiz emirde boş metindir, alanı henüz taşımayan pakette yoktur.
+// `no` sunucuda üretim emrinin numarasıdır (iş emrinin ayrı numarası yok).
+export function uzakBasliklari(is: Pick<Is, 'no' | 'op' | 'part' | 'pkg'>): [string, string][] {
+  const proje = (is.pkg as { proje?: unknown } | undefined)?.proje;
+  const satirlar: [string, unknown][] = [['Proje', proje], ['Üretim emri', is.no], ['Op', is.op], ['Parça no', is.pkg?.partNo], ['Parça adı', is.part], ['Rev', is.pkg?.rev]];
+  return satirlar.flatMap(([etiket, deger]) => (typeof deger === 'string' && !['', '—'].includes(deger.trim()) ? [[etiket, deger.trim()] as [string, string]] : []));
 }
 
 // Görüntüleyici ve model işleme ağırdır (three, geometri çekirdeği): yalnız uzak modda ve model varsa yüklenir.

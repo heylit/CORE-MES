@@ -69,10 +69,13 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       S.add(yeni(T.HemisphereLight, 0xdfe8ff, 0x1a1e24, 0.9));
       const d1 = yeni(T.DirectionalLight, 0xffffff, 1.1); d1.position.set(1, 1.4, 2); S.add(d1);
       const d2 = yeni(T.DirectionalLight, 0xffd23f, 0.35); d2.position.set(-2, -1, -1); S.add(d2);
-      // Zemin ızgarası.
-      const gh = yeni(T.GridHelper, diag * 3, 30, 0x5d6675, 0x2a3038); gh.material.transparent = true; gh.material.opacity = 0.35;
-      gh.rotation.x = Math.PI / 2; gh.position.set(c[0], c[1], bb.mn[2]! - diag * 0.002);
-      S.add(gh);
+      // Zemin ızgarası; sade (uzak mod) görünümde model sayfanın zemininde döner, ızgara çizilmez.
+      const gh = sade ? null : yeni(T.GridHelper, diag * 3, 30, 0x5d6675, 0x2a3038);
+      if (gh) {
+        gh.material.transparent = true; gh.material.opacity = 0.35;
+        gh.rotation.x = Math.PI / 2; gh.position.set(c[0], c[1], bb.mn[2]! - diag * 0.002);
+        S.add(gh);
+      }
       const setView = (dir: readonly number[]) => {
         const D = diag * 2.1, v = yeni(T.Vector3, dir[0], dir[1], dir[2]).normalize();
         if (Math.abs(v.z) > 0.999) v.y -= 0.002;
@@ -86,7 +89,7 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       // Fiziksel nesnenin rengi temaya göre (eskisi gibi); sabit renkler sahne malzemesidir, ekran rengi değildir.
       const renklendir = () => {
         const koyu = document.documentElement.getAttribute('data-theme') !== 'light';
-        mat.color.set(koyu ? 0x8fa6c4 : 0xc3ccd8); emat.color.set(koyu ? 0xdfeaff : 0x12305e); gh.material.color.set(koyu ? 0x2a3038 : 0xc9cfd8);
+        mat.color.set(koyu ? 0x8fa6c4 : 0xc3ccd8); emat.color.set(koyu ? 0xdfeaff : 0x12305e); gh?.material.color.set(koyu ? 0x2a3038 : 0xc9cfd8);
       };
       renklendir();
       const boyut = () => { const w = el.clientWidth, h = el.clientHeight; R.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); };
@@ -99,7 +102,7 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       hazirYaz(true);
     })().catch((h: unknown) => { if (canli) hataYaz(h instanceof Error ? h.message : String(h)); });
     return () => { canli = false; sahne.current?.kapat(); sahne.current = null; };
-  }, [data, fa]);
+  }, [data, fa, sade]);
   useEffect(() => {
     const a = sahne.current; if (!a) return;
     const lo = data.bbox.mn[fa]!, hi = data.bbox.mx[fa]!; a.duzlem.constant = lo + (hi - lo) * kesit / 100 + 1e-3;
