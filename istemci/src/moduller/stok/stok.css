@@ -311,3 +311,19 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-okut-sonuc-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-stok-okut-sonuc-bas > button:last-child { margin-inline-start: auto; }
 .tc-stok-okutulanlar li { flex-wrap: wrap; }
+
+.tc-stok-kart-onayi {
+  display: grid;
+  gap: var(--b-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tc-stok-kart-onayi li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--b-2);
+}
+.tc-stok-kart-onayi span {
+  color: var(--muted);
+}

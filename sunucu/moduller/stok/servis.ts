@@ -61,7 +61,7 @@ import {
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, eksiKaliteEngeli, uretimGirisiEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
-  sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
+  sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
   AYRILMIS_KONUM_TURLERI,
 } from './kurallar.ts';
 import type { IstekGecisi, MalzemeTuru } from './kurallar.ts';
@@ -2059,6 +2059,7 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
       const b = await sorgular.bakiyeKilitle(db, i.malzemeId, kaynak.id, partiId, statuId);
       if (binde(b?.miktar ?? '0') < binde(miktar)) throw dogrulama(`Konumda yeterli stok yok (mevcut ${bindenMetin(binde(b?.miktar ?? '0'))}).`, 'karsilanan');
       if (i.uretimEmriId !== null) await rezerveyiAsmasin(db, i.malzemeId, statuId, i.uretimEmriId, binde(miktar));
+      await emreKartiSagla(db, k.id, { uretimEmriId: i.uretimEmriId, partiId, malzemeId: i.malzemeId, miktar }, g.kartOnayi);
       await sorgular.hareketYaz(db, hareket({
         tur: 'transfer', malzemeId: i.malzemeId, miktar, kisiId: k.id, partiId, partiSecimi: partiId === null ? null : 'kisi', kaynakKonumId: kaynak.id, hedefKonumId: hedef,
         onayliEksi: false, uretimEmriId: i.uretimEmriId, kaynakStatuId: statuId, hedefStatuId: statuId,
@@ -2690,6 +2691,7 @@ export async function isMalzemesiIste(db: Db, k: Kullanici, g: IsMalzemesiIsteGo
     const miktar = bindenMetin(a.miktar);
     const id = await korumali(async () => {
       await serbestDenetle(db, malzemeId, kaynak.konumId, a.partiId, null, miktar, 'alınamaz');
+      await emreKartiSagla(db, k.id, { uretimEmriId, partiId: a.partiId, malzemeId, miktar }, g.kartOnayi);
       return teslimYaz(db, {
         no: await belgeNo(db, 'stok.teslim-no', 'stok_teslim'), kaynakKimligi, malzemeId, miktar, partiId: a.partiId, statuId: null, kaliteDurumu: 'serbest', kaynakKonumId: kaynak.konumId, hedefKonumId: hedef,
         uretimEmriId, istekId: null, aciklama: `İş malzemesi alındı · emir ${is.emirNo} · OP ${is.opNo}`.slice(0, 200), gonderenKisiId: k.id,
@@ -2726,6 +2728,29 @@ export async function gelenTeslimSayisi(db: Db, k: Kullanici): Promise<number> {
   return (await sorgular.yoldakiGelenler(db, sinirsiz ? null : istasyonlar.map((i) => i.id), islemVarMi(k, 'stok.transfer'))).filter((t) => banaGelen(t, k.id)).length;
 }
 
+// Emre giden malzeme kartla gider (615-2 a, 632 a, 633 b): kart sessizce açılmaz. Onaysız gelen teslim ONAY_GEREKLI döner; ayrıntı
+// depocuya emri, lotu, miktarı ve kullanılacak açık kartı söyler. Onaylı (kartOnayi) yinelemede açık kart kullanılır ya da açılır.
+async function emreKartiSagla(db: Db, kisiId: number, t: { uretimEmriId: number | null; partiId: number | null; malzemeId: number; miktar: string }, onay: boolean | undefined): Promise<void> {
+  if (t.uretimEmriId === null) return;
+  const emir = await uretimEmriOzeti(db, t.uretimEmriId);
+  const lot = t.partiId === null ? null : await sorgular.partiBul(db, t.partiId);
+  const tur = kartOnayiTuru(t, lot, emir?.durum ?? null);
+  if (tur === null) return;
+  const bul = () => (tur === 'lot' ? sorgular.acikRefakatPartisi(db, t.uretimEmriId!, t.partiId!) : sorgular.acikIstisnaKarti(db, t.uretimEmriId!, t.malzemeId));
+  const acik = await bul();
+  if (!onay) {
+    const kart = acik ? (await refakatPartileriCevir(db, [acik]))[0]!.etiket : null;
+    const malzeme = (await adlar(db, [t.malzemeId])).get(t.malzemeId) ?? null;
+    const ne = tur === 'lot' ? `lot ${lot!.lotNo}` : 'lotsuz';
+    throw onayGerekli(kart === null
+      ? `Emir ${emir!.emirNo}: ${ne} malzeme refakat kartıyla gider. ${tur === 'lot' ? 'Refakat kartı' : 'Lot bekleyen istisna kartı'} açılsın mı?`
+      : `Emir ${emir!.emirNo}: ${ne} malzeme ${kart} kartına eklensin mi?`,
+    { kartOnayi: { tur, emirNo: emir!.emirNo, lotNo: lot?.lotNo ?? null, malzeme, miktar: bindenMetin(binde(t.miktar)), kart } });
+  }
+  if (acik) return;
+  if (tur === 'lot') await sorgular.refakatPartisiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: lot!.malzemeId, partiId: t.partiId!, kisiId });
+  else await sorgular.istisnaKartiAc(db, { uretimEmriId: t.uretimEmriId, malzemeId: t.malzemeId, kisiId });
+}
 // Teslim et: stok yazılmaz, kayıt "yolda" açılır; parça olduğu statü ve partiyle gider. Aynı kaynak kimliği ikinci teslim açmaz.
 export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi): Promise<TeslimCevabi> {
   const kaynakKimligi = `kisi:${k.id}:${g.kaynakKimligi}`.slice(0, 120);
@@ -2786,6 +2811,7 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi)
     await serbestDenetle(db, malzemeId, kaynak, partiId, statuId, bindenMetin(binde(g.miktar)), 'gönderilemez', kalite);
     // Karar bekleyen ve red parça rezerveye girmez (135); yalnız kullanılabilir stok başkasının ayrılmışını yiyebilir.
     if (uretimEmriId !== null && kalite === 'serbest') await rezerveyiAsmasin(db, malzemeId, statuId, uretimEmriId, binde(g.miktar));
+    if (!refakat) await emreKartiSagla(db, k.id, { uretimEmriId, partiId, malzemeId, miktar: g.miktar }, g.kartOnayi);
     return teslimYaz(db, {
       no: await belgeNo(db, 'stok.teslim-no', 'stok_teslim'), kaynakKimligi, malzemeId, miktar: g.miktar, partiId, statuId, kaliteDurumu: kalite, kaynakKonumId: kaynak, hedefKonumId: hedef,
       uretimEmriId, istekId, aciklama: birak ? (aciklama === null ? birakmaNotu(alici !== null) : `${birakmaNotu(alici !== null)} · ${aciklama}`).slice(0, 200) : aciklama,
