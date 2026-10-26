@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { merkezBagi, merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { merkezBagi, merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { Dugme, Girdi, Pencere, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useArkon } from '../veri/baglam.ts';
 import type { MerkezBelgesi } from '../veri/depo.ts';
-import './cizim.css';
+import '../../../../ortak/cizim/cizim.css';
 
 // Çizim Merkezi'nden dosya alma (cizim-merkezi.ts, kart #800). Yalnız TMI'ye bağlıyken vardır: yayındaki PDF ve 3B modeller seçilir, dosya
 // Arkon'un deposuna kopyalanır. Kayıtlı dosyanın merkezdeki yayındaki özeti değişirse "Yeni revizyon var" görünür.

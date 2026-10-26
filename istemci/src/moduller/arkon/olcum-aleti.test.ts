@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aletGecerliMi, olcumAletDamgasi, secilebilirAletler, seciliAlet } from '../../../../arkon/web/src/data/olcum-aleti.ts';
+import { aletGecerliMi, olcumAletDamgasi, secilebilirAletler, seciliAlet } from '../../ortak/cizim/cekirdek/olcum-aleti.ts';
 
 // 150 a: ölçüm ölçü aletiyle girilir; kalibrasyonu geçmiş, kayıtsız ya da kullanım dışı alet seçilemez.
 describe('ölçü aleti seçimi', () => {

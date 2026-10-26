@@ -27,7 +27,7 @@ import { APPMODE, ME, MEU, POLICY, ROLE_L, allowed, can, currentShift, downNow, 
 import { gomuluMu } from './gomulu';
 import { BlueprintM } from './teknik-resim';
 import { useMerkezUyarilari } from './cizim-merkezi';
-import { eskiCizim, eskiCizimGorevi } from '../data/cizim-merkezi';
+import { eskiCizim, eskiCizimGorevi } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import { otomatikNumuneOlculeri } from '../data/otomatik-numune';
 import { Analytics, AwayView, CallChip, CallOv, CallTrackOv, DoneOv, NextPrepOv, NumOv, MakineSecici, PlanBanner, ReasonOv, ScrapOv, TopluPanel, ShiftOv, Steps, TaskCard, beep, dueControls, firstGate, ilkParcaKalemleri, nextTask, pctS, readyCount, sampItems, sampOf, shiftCalc, shiftStart, useShiftLog } from './operator-parcalar';
 import { LVL, ToolsCard, WarnOv, nearEdge, rulesOf } from './kurallar';

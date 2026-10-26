@@ -39,6 +39,16 @@ export const BOS_SECIM: PlanlamaSecimi = { siparis: null, adim: null, tezgah: nu
 export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis', 'bugun', 'hesap'] as const;
 export type MotorEkrani = (typeof MOTOR_EKRANLARI)[number];
 export interface PlanlamaAltEkrani { ekran: MotorEkrani; bolum: string | null }
+// Planlama atölyesine istek (zz36 TP.istek): stüdyo düğmeleri (tezgâhın "Stüdyoda aç"ı) atölyeyi açar, pano isteneni açar: tezgâhta süzgeç ve
+// tezgâh günlüğü, siparişte rayda sipariş. Adresin sorgusundadır (`studio?istek=tez&v=T1`); pano işleyince sorgu silinir.
+export interface StudyoIstegi { tur: 'tez' | 'sip'; v: string }
+export function studyoIstegiOku(q: URLSearchParams): StudyoIstegi | null {
+  const t = q.get('istek'), v = q.get('v');
+  return (t === 'tez' || t === 'sip') && v ? { tur: t, v } : null;
+}
+export function studyoAdresi(i: StudyoIstegi | null): string {
+  return i ? `${gorunumAdresi('studio')}?${new URLSearchParams({ istek: i.tur, v: i.v }).toString()}` : gorunumAdresi('studio');
+}
 export const TAHTA: PlanlamaAltEkrani = { ekran: 'tahta', bolum: null };
 export function altEkranOku(q: URLSearchParams): PlanlamaAltEkrani {
   const e = MOTOR_EKRANLARI.find((x) => x === q.get('ekran'));
@@ -70,6 +80,9 @@ export interface PlanlamaEkranOzellikleri {
   // ekran düğmeleri pasif kalır (iskeletsiz çizim, testler).
   alt?: PlanlamaAltEkrani;
   altSec?: (a: PlanlamaAltEkrani) => void;
+  // Atölyeye istek ve ona geçiş; null isteği adresten siler. Verilmezse stüdyo düğmeleri pasiftir.
+  istek?: StudyoIstegi | null;
+  studyoAc?: (i: StudyoIstegi | null) => void;
 }
 
 export interface GorunumKaydi {

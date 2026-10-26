@@ -4,7 +4,7 @@ import type { DonemOlcegi, PlanlamaSecimi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYaz, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { degisken, yuzde } from '../ortak.tsx';
-import { Harita, type HaritaKomutu, type HaritaSecimi } from './Harita.tsx';
+import { Harita, type HaritaBagi, type HaritaKomutu, type HaritaSecimi, type KareDinleyicisi } from './Harita.tsx';
 import {
   bitisIzleri, gecMetin, haritaGruplari, sahneKur, seritEtiketleri, yerlesim, zamanSinirla, type Aralik,
 } from './kurallar.ts';
@@ -22,6 +22,8 @@ interface Ozellikler {
   kilavuz: boolean; ornek: string | null; kilavuzAc: (v: boolean) => void; ciftTik: (m: string) => void;
   ust: ReactNode; komut?: (k: HaritaKomutu | null) => void;
   fark?: OkunanPlan | null;
+  // Haritanın üstündeki kart katmanı (zc-tahta tkKatman); bağla birlikte kurulur.
+  katman?: (b: HaritaBagi) => ReactNode;
 }
 
 export function HaritaGorunumu(o: Ozellikler) {
@@ -53,6 +55,12 @@ export function HaritaGorunumu(o: Ozellikler) {
     return [u, a];
   }, []);
 
+  const dinleyici = useRef(new Set<KareDinleyicisi>());
+  const kare = useCallback<KareDinleyicisi>((...a) => { for (const f of dinleyici.current) f(...a); }, []);
+  const bag = useMemo((): HaritaBagi => ({
+    abone: (f) => { dinleyici.current.add(f); return () => { dinleyici.current.delete(f); }; }, komut: () => harita.current, paylar,
+  }), [paylar]);
+
   // Sona gelmiş imleç oynatınca baştan başlar; durunca imlecin yeri ortak seçime yazılır.
   const oynatDegistir = useCallback(() => {
     if (oynat) { setOynat(false); o.sec({ zaman: canli }); return; }
@@ -74,9 +82,10 @@ export function HaritaGorunumu(o: Ozellikler) {
         ref={komutKur} bicim="harita" c={c} p={p} cx={cx} olcek={o.olcek} r={r} now={now} t={t} oynat={oynat} hiz={hiz}
         secim={o.secim} mercek={o.mercek} kilavuz={o.kilavuz ? o.ornek : null} altPay={altPay} paylar={paylar}
         sec={secHarita} ciftTik={o.ciftTik} oynatDegistir={oynatDegistir} kilavuzKapat={() => o.kilavuzAc(false)}
-        zamanAkti={setCanli} oynatBitti={bitti} fark={o.fark}
+        zamanAkti={setCanli} oynatBitti={bitti} fark={o.fark} kare={kare}
         etiket="Atölye haritası: istasyonlar tezgâhlar, halkalar yedi günlük doluluk, yaylar parça akışı, noktalar akan parçalar. Tıklayarak seçin, çipleri başka istasyona sürükleyerek taşıyın."
       />
+      {o.katman?.(bag)}
       <div ref={ustEl} className="tc-pym-at-ust">{o.ust}</div>
       <div className="tc-pym-hl" data-acik={okuma ? '' : undefined}>
         <button type="button" aria-expanded={okuma} onClick={() => setOkuma((x) => !x)}><Simge ad="help" boyut="k" /><span>Haritayı okuma</span><Simge ad="down" boyut="k" /></button>

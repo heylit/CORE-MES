@@ -2,7 +2,7 @@ import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
 import { tohumla } from '../../baglanti.ts';
 import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from '../../../../../../arkon/web/src/data/anomali.ts';
 import type { CagriEkiplerim } from '../../../../../../arkon/web/src/data/cagri-ekiplerim.ts';
-import type { MerkezDurumu } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import type { MerkezDurumu } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import type { MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import type { OperatorOzeti, OzetDonemi } from '../../../../../../arkon/web/src/data/ozetim.ts';
 import type { RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';

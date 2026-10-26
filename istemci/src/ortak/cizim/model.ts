@@ -1,7 +1,7 @@
-import type { ArkonDeposu } from '../veri/depo.ts';
 import { AKStep, type OcctSonucu, type StepModeli, type StepResmi } from './cekirdek.ts';
 import { bekle, occt } from './kitaplik.ts';
 import { AG_SAPMASI, ayarImzasi, MODEL_ANAHTARLARI, type OkumaAyari } from './kurallar.ts';
+import type { CizimOnbellegi } from './ortam.tsx';
 
 // 3B model işleme (model-3b.ts): STEP, IGES, STL; görünüm verisi ve teknik resim. Önbellek kaydı eski ekranınkiyle aynı biçimdedir
 // (aynı anahtar, aynı alanlar): iki ekran birbirinin hesabını kullanır.
@@ -45,10 +45,10 @@ export interface ModelSecenegi {
   yalnizHazir?: boolean;
 }
 // Sıra: bellek, paketle gelen hazır veri, cihaz önbelleği, hesap. need '3d' iken resim çizilmez (yaklaşık yarı süre).
-export async function modelIsle(depo: Pick<ArkonDeposu, 'Cache'>, bytes: Uint8Array, name: string, adim: (i: number) => void,
+export async function modelIsle(depo: { Cache: CizimOnbellegi }, bytes: Uint8Array, name: string, adim: (i: number) => void,
   opt: ModelSecenegi & { yalnizHazir: true }): Promise<ModelKaydi | null>;
-export async function modelIsle(depo: Pick<ArkonDeposu, 'Cache'>, bytes: Uint8Array, name: string, adim: (i: number) => void, opt: ModelSecenegi): Promise<ModelKaydi>;
-export async function modelIsle(depo: Pick<ArkonDeposu, 'Cache'>, bytes: Uint8Array, name: string, adim: (i: number) => void, opt: ModelSecenegi): Promise<ModelKaydi | null> {
+export async function modelIsle(depo: { Cache: CizimOnbellegi }, bytes: Uint8Array, name: string, adim: (i: number) => void, opt: ModelSecenegi): Promise<ModelKaydi>;
+export async function modelIsle(depo: { Cache: CizimOnbellegi }, bytes: Uint8Array, name: string, adim: (i: number) => void, opt: ModelSecenegi): Promise<ModelKaydi | null> {
   const need = opt.need || 'draw', mc = opt.cfg, sig = ayarImzasi(mc, MODEL_ANAHTARLARI), h = await dosyaOzeti(bytes), key = 'model:' + h + sig;
   let rec: ModelKaydi | null | undefined = opt.fresh ? null : MODEL_BELLEGI.get(key);
   if (!tamam(rec, need) && !opt.fresh && opt.derived) { const d = opt.derived[h + sig] as ModelKaydi | undefined; if (tamam(d, need)) rec = d; }

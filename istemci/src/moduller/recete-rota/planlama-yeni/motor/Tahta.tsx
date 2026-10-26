@@ -5,6 +5,9 @@ import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts
 import { otomatikOdak, tezgahGrubu, type OdakYeri } from '../ic/odak/kurallar.ts';
 import { gecmisBolumuOku } from '../ic/gecmis/kurallar.ts';
 import { bolumOku } from '../ic/veri/kurallar.ts';
+import { KartKatmani, useKartlar, type RotaIzi } from '../ic/kartlar/index.tsx';
+import { KartGovdesi, type KartBaglami } from '../ic/kartlar/Govdeler.tsx';
+import { KART_TURLERI, kartAc as kartAcF, kartKapat as kartKapatF, kartKucult, rotaUrunu, rotaYerleri, type KartTuru } from '../ic/kartlar/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { CizelgeGorunumu } from './cizelge/CizelgeGorunumu.tsx';
 import { HaritaGorunumu } from './harita/HaritaGorunumu.tsx';
@@ -45,6 +48,9 @@ const OdakTahtasi = lazy(async () => ({ default: (await import('../ic/odak/index
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
 export const gecmisAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'gecmis', bolum: bolum ?? null }) : null);
+// Tahta kartları (577d, zc-tahta): bu teslimde gelenler; öbürleri menüde pasiftir.
+const HAZIR_KARTLAR: KartTuru[] = ['plan', 'siparis', 'kuyruk', 'kisit', 'hesap', 'etki', 'rota'];
+
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
@@ -86,6 +92,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [odak, setOdak] = useState<OdakYeri | null>(null);
   const harita = useRef<HaritaKomutu | null>(null);
   const dk = useRef<HTMLElement | null>(null);
+  const [kartlar, kartDegis] = useKartlar();
+  const [dizIstegi, setDizIstegi] = useState(false);
+  const [rotaUrun, setRotaUrun] = useState<string | null>(null);
+  const [rotaUst, setRotaUst] = useState<{ k: string | null; m: string | null }>({ k: null, m: null });
 
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
@@ -151,6 +161,10 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     const z = requestAnimationFrame(() => harita.current?.kilavuzKamera(ornek)); return () => cancelAnimationFrame(z);
   }, [ornek, gorunum]);
   const gorunumSec = useCallback((g: TahtaGorunumu) => { setMenuAcik(false); setPan(null); setOdak(null); if (g !== 'atolye' && g !== 'genel') setKilavuz(false); setGorunum(g); }, []);
+  // Kart haritanın üstüne açılır: başka görünümdeyken Harita'ya geçilir (VARSAYIM; eski sayfada kartlar yalnız tahtadaydı).
+  const tahtaKartiAc = useCallback((t: KartTuru) => { kartDegis((l) => kartAcF(l, t)); if (gorunum !== 'atolye' || odak) gorunumSec('atolye'); }, [kartDegis, gorunum, odak, gorunumSec]);
+  const kartDegistir = useCallback((t: KartTuru) => { if (kartlar.some((k) => k.tur === t)) kartDegis((l) => kartKapatF(l, t)); else tahtaKartiAc(t); }, [kartlar, kartDegis, tahtaKartiAc]);
+  const kartlariDiz = useCallback(() => { setDizIstegi(true); if (gorunum !== 'atolye' || odak) gorunumSec('atolye'); }, [gorunum, odak, gorunumSec]);
   // 'auto' en anlamlı yeri seçer (odOtomatik); açılınca menü, panel ve kılavuz kapanır.
   const odakAc = useCallback((y: OdakYeri | 'auto' | null) => {
     if (y === null) { setOdak(null); return; }
@@ -163,8 +177,9 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const { bildir } = useBildirim();
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
-  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc });
-  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc };
+  const sonKart = gorunum === 'atolye' && !odak ? kartlar[kartlar.length - 1]?.tur ?? null : null;
+  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p });
+  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -176,9 +191,13 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       // Odakta Esc önce seçimi bırakır, sonra bir seviye çıkar; O odağı açıp kapatır (zg-odak).
       if (k === 'Escape') {
         if (x.secim.siparis || x.secim.adim || x.secim.tezgah) { dur(); x.sec({ siparis: null, adim: null, tezgah: null }); return; }
-        if (x.odak) { dur(); x.odakAc(x.odak.m ? { g: x.odak.g, m: null } : null); }
+        if (x.odak) { dur(); x.odakAc(x.odak.m ? { g: x.odak.g, m: null } : null); return; }
+        // Haritada en son açılan kart kapanır (zc-tahta).
+        if (x.sonKart) { dur(); const t = x.sonKart; x.kartDegis((l) => kartKapatF(l, t)); }
         return;
       }
+      // 1-8 kartı açar ya da kapatır (zd-tam); okuyan da açar.
+      if (/^[1-8]$/.test(k) && x.plan) { const t = KART_TURLERI[Number(k) - 1]?.tur; if (t && HAZIR_KARTLAR.includes(t)) { dur(); x.kartDegistir(t); } return; }
       if (h === 'o') { dur(); x.odakAc(x.odak ? null : 'auto'); return; }
       if (h === 'f') { dur(); harita.current?.sigdir(); return; }
       if (k === '+' || k === '=') { dur(); harita.current?.yakinlas(1.25); return; }
@@ -203,9 +222,21 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
       donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
-      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), fark, farkSec: () => setFark((x) => !x), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc }} />
+      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), fark, farkSec: () => setFark((x) => !x), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc,
+        kartlar: p ? { acik: kartlar.map((k) => k.tur), hazir: HAZIR_KARTLAR, degistir: kartDegistir, diz: kartlariDiz } : null }} />
   );
   const cubuk = cubukKur(false);
+  const canliSurum = o.depo.senaryolar?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null;
+  const kb: KartBaglami | null = p && sahne ? {
+    c, p, cx, s: sahne, r, now, t: zaman, durus: durusOku(c), secim, sor, komut, planYaz: yetki.planYaz, canliSurum,
+    mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuzAc: () => kilavuzAc(true),
+    sipSec: (j) => { sipSec(j, false); harita.current?.odakla(j); }, tezSec: (m) => { tezSec(m, false); harita.current?.tezgahaUc(m); }, opSec,
+    kartAc: tahtaKartiAc, veriAc: veriAc && ((b: string) => veriAc(b)), planKur, uyar,
+    rotaUrun, rotaUrunSec: setRotaUrun, rotaUst: (x) => setRotaUst((y) => (y.k === x.k && y.m === x.m ? y : x)),
+  } : null;
+  const rotaKarti = kartlar.find((k) => k.tur === 'rota' && !k.kucuk);
+  const rotaU = rotaKarti && p ? rotaUrunu(c, secJob, rotaUrun) : null;
+  const iz: RotaIzi | null = rotaU ? { adimlar: (rotaU.rota ?? []).map((x) => ({ k: x.k, yerler: rotaYerleri(x) })), ust: rotaUst.k, ustM: rotaUst.m } : null;
 
   return (
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
@@ -223,7 +254,11 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             </>
           ) : gorunum === 'atolye' && p ? (
             <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
-              kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} fark={farkPlani} />
+              kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} fark={farkPlani}
+              katman={kb ? (bag) => (
+                <KartKatmani bag={bag} l={kartlar} degis={kartDegis} iz={iz} dizIstegi={dizIstegi} dizBitti={() => setDizIstegi(false)}
+                  kapat={(t) => kartDegis((l) => kartKapatF(l, t))} kucult={(t) => kartDegis((l) => kartKucult(l, t))} govde={(t) => <KartGovdesi tur={t} b={kb} />} />
+              ) : undefined} />
           ) : (
             <>
               {p && v && gorunum !== 'cizelge' && cubuk}
@@ -241,7 +276,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
                 <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
                   planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
-                  sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} hesapAc={sayfaAc && (() => sayfaAc('hesap'))} />
+                  sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} hesapAc={sayfaAc && (() => sayfaAc('hesap'))}
+                  tezStudyo={o.studyoAc ? (m) => o.studyoAc?.({ tur: 'tez', v: m }) : null} />
               ) : gorunum === 'kesif' ? (
                 <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
                   sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />

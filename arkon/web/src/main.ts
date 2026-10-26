@@ -3,8 +3,8 @@
 import './styles/fonts.css';
 import './styles/style.css';
 import './data/store';
-import './core/tol';
-import './core/stepdraw';
+import '../../../istemci/src/ortak/cizim/cekirdek/tol';
+import '../../../istemci/src/ortak/cizim/cekirdek/stepdraw';
 import './app/temel';
 import './app/bilesenler';
 import './app/yukleyici';

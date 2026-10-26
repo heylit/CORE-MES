@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { ALET_YOK_ILETISI, aletSecimAnahtari, secilebilirAletler, seciliAlet, type OlcumAleti } from '../../../../../../arkon/web/src/data/olcum-aleti.ts';
+import { ALET_YOK_ILETISI, aletSecimAnahtari, secilebilirAletler, seciliAlet, type OlcumAleti } from '../../../../ortak/cizim/cekirdek/olcum-aleti.ts';
 import type { Gauge } from '../../../../../../arkon/shared/model.ts';
 import { Dugme, Girdi, OnayPenceresi, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { gunAy, yerelGirdi } from '../cekirdek/bicim.ts';

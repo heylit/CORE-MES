@@ -1,5 +1,5 @@
 import { AKStore } from '../data/store';
-import { AKTol } from '../core/tol';
+import { AKTol } from '../../../../istemci/src/ortak/cizim/cekirdek/tol';
 import React from 'react';
 import { BALLS, Fragment, I, fmt, html, perf, useEffect, useMemo, useRef, useState } from './temel';
 import { Art } from './bilesenler';
@@ -13,8 +13,8 @@ import { layoutBalloons } from './balon-yerlesimi';
 import { Step3D, fileHash, isModelName, processModel } from './model-3b';
 import { beep } from './operator-parcalar';
 import { AletSecimi, olcumAletiBul, useOlcumAletleri } from './olcum-aleti-secimi';
-import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../data/olcum-aleti';
-import { ESKI_CIZIM } from '../data/cizim-merkezi';
+import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../istemci/src/ortak/cizim/cekirdek/olcum-aleti';
+import { ESKI_CIZIM } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 
 /* ── teknik resim paneli ── */
 export const SAMPLES = [

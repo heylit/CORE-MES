@@ -175,3 +175,14 @@ Varsayımlar: (1) kalan miktar da N+1..M-1 adımlarını kendisi yapar, iki par�
 - Süre sınırı 25 s'den 60 s'ye çıktı (kuyruğa girişten). Sonucu yalnız başlatan, bir kez okur; başkasına 404; okunmayan sonuç 5 dk sonra silinir.
   Hesapta çıkan ret (plan yok, sipariş yok, adet, süre) durum cevabında uçtaki hata koduyla döner. Başlatma tam denetime girer (gövde en çok
   birkaç yüz karakter).
+
+## Ortak motor Motor A'nın kurallarıyla (669 a, 671 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 625o)
+Yalnız sunucu çözümü (`motor/emirler.betik` `sunucuCozumGirdisi`) değişti. Motora eklenen üç alan (`hemen`, `sabitYer`, `ayarsiz`) sayfada kurulmadığı için sayfanın planı değişmez.
+1. Fason dönüşü (CA-2, #1424): Kuyruğa girmeyen fason adım artık "şimdi bitmiş" sayılmıyor. Öncülünün bitişinde çıkar ve rotadaki termin günü kadar sonra döner. Termin girilmemişse süre 7 gündür (uretim-emirleri `FASON_VARSAYILAN_GUN`). Ardılı bu dönüşü bekler. Motor A'dan farklar: süre adım başınadır, firmanın çıkış günü, saati ve kapasitesi beklenmez; Motor A da bunları beklemez. Termin rotanın güncel adımından okunur, Motor A ise emrin revizyonundan okur; ikisi farklıysa sonuç farklı olur.
+2. Yeri sabit iş (kilitli, dondurulmuş, bölünmüş parça; başlangıcı şimdiden ileride): Tezgâhın boş anını ilerletmez. Önüne sığan kuyruk işi önce yapılır, ardılı onun bitişini bekler (önceki davranış: tezgâh işin bitişine kadar dolu sayılıyordu). Bölünmüş işin en geç biten parçası işin yeridir, öteki parçalar tezgâhı kapatır.
+3. Sabit işin bitişi ve çalışan adımın sayım anı dakikanın sonuna yuvarlanır. Motorun ekseni dakikadır, plan ise saniyeyle denetler. Ardıl adım, planın gördüğü bitişten önce başlamaz.
+4. Kuyruktaki rota dışı makine (H3, elle seçilen makine): Makine, adımın adaylarına rotadaki ilk tezgâhın süreleriyle eklenir (verim makinenindir). Önceki davranışta iş yerleşmiyordu ve komut 409 dönüyordu.
+5. Kuyruğa konan çalışan iş (A4 3b): İstek hem çalışanlarda hem kuyrukta geçiyorsa iş sabit tutulmaz. Kalan adediyle (adım adedi eksi sağlam), sayım varsa ayarsız, kuyruktaki sırasında dizilir.
+Bu yamanın kapsamı dışında, plan modülünde kalan (625n-plan): canlıya almada önüne iş konan çalışan işin kuyruğa verilmesi, sıraya aykırı taşımanın motordan önce reddi (308 b) ve elle seçilmemiş işin rotadaki makineye dönmesi.
+Testler: `plan-cozucusu.test.ts`'e dört test eklendi (CA-2, sabit iş, rota dışı makine, 3b); dördü de eski motorda kırılıyor (DOĞRULANDI).
+Derlenmiş planlama sayfası (`cerceve/planlama-modulu.html`) yamada yok: birleştirmede `node istemci/src/moduller/recete-rota/planlama-derle.ts` ile yeniden kurulur. `planlama-derle.test.ts` o zamana kadar kırık kalır.

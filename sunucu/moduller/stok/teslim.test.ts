@@ -2147,6 +2147,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     };
     const depoOkut = await okut('depo');
     assert.deepEqual([depoOkut.refakat?.id, depoOkut.parti?.id, depoOkut.yerler.map((y) => [y.partiId, y.miktar])], [r1.id, l1!.id, [[l1!.id, '30.000']]]);
+    // 614 1a: malzeme depoda, gelen yok: ana eylem teslim et. Stok okuması olana tam çözüm aynı cevapla gelir (tek istek).
+    assert.deepEqual([depoOkut.anaEylem, depoOkut.stok?.tur === 'lot' ? depoOkut.stok.parti.id : null], ['teslim-et', l1!.id]);
     const stokCoz = kodCozCevabi.parse((await istek<KodCozCevabi>('depo', 'GET', `/stok/kod-coz?kod=RP:${r1.id}`)).govde);
     assert.deepEqual(stokCoz.tur === 'lot' ? [stokCoz.parti.id, stokCoz.refakat?.id] : null, [l1!.id, r1.id]);
 
@@ -2158,14 +2160,17 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
     assert.deepEqual([g.govde.teslim.partiId, g.govde.teslim.uretimEmriId, g.govde.teslim.durum], [l1!.id, e, 'yolda']);
 
-    // Alan kartı okutur, kendisine gelen teslim açılır; kapsamı dışındaki görmez. Liste de kalır.
-    assert.deepEqual((await okut('operator')).gelenler?.map((t) => t.id), [g.govde.teslim.id]);
+    // Alan kartı okutur, kendisine gelen teslim açılır; kapsamı dışındaki görmez. Liste de kalır. Ana eylem teslim al; stok okuması olmayana tam çözüm gelmez.
+    const opOkut = await okut('operator');
+    assert.deepEqual([opOkut.gelenler?.map((t) => t.id), opOkut.anaEylem, opOkut.stok], [[g.govde.teslim.id], 'teslim-al', undefined]);
     await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [kisiler.get('operator_kisitli'), (await istasyon()).isMerkeziId]);
     assert.deepEqual((await okut('operator_kisitli')).gelenler, []);
     assert.deepEqual((await okut('depo')).gelenler, [], 'gönderen kendi teslimini almaz');
     const al = await istek<TeslimCevabi>('operator', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '12' });
     assert.equal(al.durum, 200, JSON.stringify(al.govde));
     assert.equal((await istek<RefakatPartisiCevabi>('depo', 'GET', `/stok/refakat-partileri/${r1.id}`)).govde.refakat.verilen, '12');
+    assert.equal((await okut('operator')).anaEylem, 'isi-ac', '614 1a: malzeme okutanın istasyonunda, gelen yok: işi aç');
+    assert.equal((await okut('operator_kisitli')).anaEylem, 'teslim-et', 'kapsam dışı istasyondaki malzeme işi açtırmaz');
 
     // Aynı lotun kalanı aynı kartla: parti değişmez, verilen artar.
     const g2 = await gonder('depo', { malzemeId: hm, miktar: '3', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id }, refakatPartisiId: r1.id });

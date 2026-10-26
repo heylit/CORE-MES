@@ -6,6 +6,13 @@ import { ADRES, cerceve, expect, test } from './ortak.ts';
 // çalışan davranışı yeni yolda sınar. İskelet yalnız kabuğu sınar; bölümlerin içine bakmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
+// Tek maddelik şerit genişte durur; telefonda çizilmez, sayfa kendi başlığını taşır (618c).
+async function tekSerit(page: Page, ad: string): Promise<void> {
+  const menu = page.locator(`nav[aria-label="${ad} menüsü"]`);
+  if ((page.viewportSize()?.width ?? 0) < 768) await expect(menu).toBeHidden();
+  else await expect(menu).toBeVisible();
+}
+
 test.describe('A0 iskelet', () => {
   test('kök adres Pano\'yu açar; kabuğun şeridinden sayfa değişir; çerçeve yok, başka kökene istek yok, sayfa yatay taşmaz', async ({ page, ag, ac }) => {
     const disari: string[] = [];
@@ -173,8 +180,8 @@ test.describe('541 Kuyruk eski adreste', () => {
     await ac('/kuyruk');
     await expect(page.getByRole('region', { name: 'Kuyruk' })).toBeVisible();
     await expect(page.locator('iframe')).toHaveCount(0);
-    // Eski sayfadaki tek maddelik şerit durur (553 1 a).
-    await expect(page.getByRole('navigation', { name: 'Kuyruk menüsü' })).toBeVisible();
+    // Eski sayfadaki tek maddelik şerit durur (553 1 a); telefonda çizilmez, sayfa kendi başlığını taşır (618c).
+    await tekSerit(page, 'Kuyruk');
     await page.getByRole('button', { name: 'Hesap' }).click();
     await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
     await expect(page).toHaveURL(/\/kuyruk\/eski$/);
@@ -342,7 +349,7 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
       await ac('/uretim-terminali');
       await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
       await expect(page.locator('iframe')).toHaveCount(0);
-      await expect(page.getByRole('navigation', { name: 'Üretim Terminali menüsü' })).toBeVisible();
+      await tekSerit(page, 'Üretim Terminali');
       await gecis(page, 'Eski görünüm');
       await expect(page).toHaveURL(/\/uretim-terminali\/eski$/);
       await expect(page.locator('iframe')).toHaveCount(1);

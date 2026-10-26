@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useS
 import { Link } from 'react-router-dom';
 import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { numuneDugmeleri, numuneReddiEksigi, secinceOlcumeAlinir } from '../../../../../../arkon/web/src/data/numune.ts';
-import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../../../arkon/web/src/data/olcum-aleti.ts';
+import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../ortak/cizim/cekirdek/olcum-aleti.ts';
 import type { Meas, Pkg, PkgFile, PlanItem, Result, SampleRequest } from '../../../../../../arkon/shared/model.ts';
 import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';

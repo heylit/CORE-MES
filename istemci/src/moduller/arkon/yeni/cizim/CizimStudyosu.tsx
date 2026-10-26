@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cizimSilinir } from '../../../../../../arkon/web/src/data/cizim-silme.ts';
-import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { AcKapa, Dugme, Girdi, Rozet, Secim, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../cekirdek/bicim.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { useArkon, useBelgeler, useCakismaUyarisi } from '../veri/baglam.ts';
-import { cihazAyari, cihazAyariYaz } from './bellek.ts';
+import { cihazAyari, cihazAyariYaz } from '../../../../ortak/cizim/bellek.ts';
 import {
   anaResimSec, ayarDuzelt, BOLGE_SINIFLARI, bolgeSinifi, calismadanCikar, cizimKaydi, dosyaEtiketi, paketCalismasi, paketDegisikligi, yeniCalisma,
   type BolgeSinifi, type Calisma, type CalismaDosyasi, type KayitliCizim, type Olcum, type OkumaAyari, type PaketAktarimi, type PaketOzeti,
-} from './kurallar.ts';
+} from '../../../../ortak/cizim/kurallar.ts';
 import { MerkezRozeti, MerkezSecici, useMerkezUyarilari, useMerkezVar } from './Merkez.tsx';
-import { katla, type TaniParcasi } from './okuma.ts';
-import { TeknikResim, type ResimBelgesi, type TaniBilgisi, type TeknikResimKontrolu } from './TeknikResim.tsx';
-import './cizim.css';
+import { katla, type TaniParcasi } from '../../../../ortak/cizim/okuma.ts';
+import { TeknikResim, type ResimBelgesi, type TaniBilgisi, type TeknikResimKontrolu } from '../../../../ortak/cizim/TeknikResim.tsx';
+import '../../../../ortak/cizim/cizim.css';
 
 // Çizim stüdyosu (cizim-studyosu.ts DrawLabApp): PDF ve 3B okuma ayarlarını dene, tanı katmanıyla önizle, cihaza ya da iş paketine uygula.
 // Kaydedilen çizim (draws) Üretim Terminali Hazırlık › Dokümanlar'da kullanılır. Arkon'un kendi üst çubuğu, teması ve tanıtım verisi yoktur.
@@ -76,7 +76,7 @@ export function CizimStudyosu() {
     return () => window.removeEventListener(KAYIT_REDDI_OLAYI, f);
   }, [say]);
 
-  const [cfg, setCfg] = useState<OkumaAyari>(cihazAyari), [applied, setApplied] = useState<OkumaAyari>(cihazAyari);
+  const [cfg, setCfg] = useState<OkumaAyari>(() => cihazAyari(yerel)), [applied, setApplied] = useState<OkumaAyari>(() => cihazAyari(yerel));
   const [w, setW] = useState<Calisma>(yeni), [open, setOpen] = useState<TeknikResimKontrolu['ac']>(null), [info, setInfo] = useState<Tani | null>(null);
   const [lv, setLv] = useState<Kip>('files'), [tab, setTab] = useState<Sekme>('pdf'), [q, setQ] = useState(''), [meas, setMeas] = useState<Record<number, Olcum>>({});
   const [ov, setOv] = useState<Katman>(KATMAN_VARSAYILANI);
@@ -179,7 +179,7 @@ export function CizimStudyosu() {
     depo.Bus.send({ type: 'pkg-draft', id: p.id }); paketler.yenile(); setSend(null);
     say(p.no + ' paketine aktarıldı · Hazırlıkta yayınlayınca operatöre gider');
   };
-  const useAll = () => { cihazAyariYaz(cfg); say('Ayarlar bu cihazda tüm ekranlarda kullanılacak'); };
+  const useAll = () => { cihazAyariYaz(yerel, cfg); say('Ayarlar bu cihazda tüm ekranlarda kullanılacak'); };
   const reset = () => setCfg(ayarDuzelt({}));
 
   const C = info?.C, S = info?.dims?.stats ?? {}, M = info?.model;

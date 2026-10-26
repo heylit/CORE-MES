@@ -1,11 +1,11 @@
-import { yerel } from '../cekirdek/yerel.ts';
 import { ayarDuzelt, type OkumaAyari } from './kurallar.ts';
 import { bitPaketle, type MetinOgesi, type OkumaIstatistigi, type OkumaTanisi, type OlcuListesi } from './okuma.ts';
+import type { CizimAyarlari } from './ortam.tsx';
 
 // Okuma ayarının cihazdaki kaydı ve PDF sayfa belleği (pdf.ts RCFG, PDFMEM). Kayıtlar eski ekranınkiyle aynı anahtar ve biçimdedir:
 // cihazda 'arkon:readCfg', önbellekte 'pdf:<özet>#<sayfa><imza>'; iki ekran birbirinin okumasını kullanır.
 
-export const cihazAyari = (): OkumaAyari => ayarDuzelt(yerel.oku('readCfg'));
+export const cihazAyari = (cihaz: CizimAyarlari): OkumaAyari => ayarDuzelt(cihaz.oku('readCfg'));
 
 // Sayfa kaydı: okuma sonucu, mürekkep haritası ve renklendirilmiş görüntüler (tema ve görünüş imzasıyla).
 export interface PdfKaydi {
@@ -27,7 +27,7 @@ export function saklanacak(C: PdfKaydi): SaklananPdfKaydi {
 }
 
 // "Ayarları bu cihazda kullan": kaydedilir, bellekteki sayfalar yeni ayarla yeniden okunur.
-export function cihazAyariYaz(c: OkumaAyari): void {
-  yerel.yaz('readCfg', ayarDuzelt(c));
+export function cihazAyariYaz(cihaz: CizimAyarlari, c: OkumaAyari): void {
+  cihaz.yaz('readCfg', ayarDuzelt(c));
   PDF_BELLEGI.clear();
 }

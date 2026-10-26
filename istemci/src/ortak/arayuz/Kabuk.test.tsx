@@ -5,6 +5,7 @@ import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
+import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
   return render(
@@ -335,5 +336,24 @@ describe('Kabuk', () => {
     );
     expect(ikinci.container.querySelector('.tc-kabuk-marka-logo')?.getAttribute('src')).toBe(logo);
     expect(ikinci.container.querySelector('.tc-kabuk-marka-isaret')).toBeNull();
+  });
+
+  it('Üretim Terminali ve Kuyruk şeridi tek maddeye düşünce kabuk data-ikinci-tek taşır (telefonda şerit çizilmez); başka sayfada ve çok maddede taşımaz', async () => {
+    const madde = (anahtar: string, yol: `/${string}`, islem: string) => ({ anahtar, baslik: anahtar, yol, simge: 'list' as const, islem });
+    const menu = (kok: `/${string}`): IkinciMenu => ({ kok, baslik: 'Örnek Modül', simge: 'cube', gruplar: [{ maddeler: [madde('ana', kok, 'ornek.oku'), madde('ek', `${kok}/ek`, 'ornek.ek')] }] });
+    const tekMi = (kok: `/${string}`, islemler: string[]) => {
+      const r = render(
+        <MemoryRouter initialEntries={[kok]}>
+          <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={islemler} ikinciMenuler={[menu(kok)]}><p>icerik</p></Kabuk>
+        </MemoryRouter>,
+      );
+      const k = r.container.querySelector('.tc-kabuk');
+      const sonuc = [k?.hasAttribute('data-ikinci'), k?.hasAttribute('data-ikinci-tek')];
+      r.unmount();
+      return sonuc;
+    };
+    expect(tekMi('/kuyruk', ['ornek.oku'])).toEqual([true, true]);
+    expect(tekMi('/kuyruk', ['ornek.oku', 'ornek.ek'])).toEqual([true, false]);
+    expect(tekMi('/stok', ['ornek.oku'])).toEqual([true, false]);
   });
 });

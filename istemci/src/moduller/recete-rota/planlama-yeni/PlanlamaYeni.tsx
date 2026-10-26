@@ -7,8 +7,8 @@ import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
-  ACILIS, ACILIS_OLCEGI, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi, TAHTA,
-  type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi,
+  ACILIS, ACILIS_OLCEGI, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi, studyoAdresi,
+  studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
 import { usePlanlamaDeposu } from './veri.ts';
@@ -70,6 +70,7 @@ function PlanlamaEkrani() {
   const kaydir = useCallback((n: number): void => { olcekKur((x) => ({ ...x, kayma: n === 0 ? 0 : x.kayma + n })); }, []);
   const sec = useCallback((s: Partial<PlanlamaSecimi>): void => { secimKur((x) => ({ ...x, ...s })); }, []);
   const altSec = useCallback((a: PlanlamaAltEkrani): void => { void git(altEkranAdresi(a)); }, [git]);
+  const studyoAc = useCallback((i: StudyoIstegi | null): void => { void git(studyoAdresi(i), { replace: i === null }); }, [git]);
 
   if (oturum.isPending) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
   if (!kullanici) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Oturum bulunamadı." /></div>;
@@ -82,6 +83,7 @@ function PlanlamaEkrani() {
   const etkin = kayitlar.find((k) => k.anahtar === gorunum);
   const gec = (g: PlanlamaGorunumu): void => { void git(gorunumAdresi(g)); };
   const alt = gorunum === 'plan' ? altEkranOku(sorgu) : TAHTA;
+  const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
 
   return (
     <div className="tc-py" data-gorunum={gorunum}>
@@ -97,14 +99,14 @@ function PlanlamaEkrani() {
                 <Suspense fallback={null}>
                   <PlanSeridi
                     depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
-                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} gorunum={gorunum}
+                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
                   depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
-                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec}
+                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc}
                 />
               </Suspense>
             </>

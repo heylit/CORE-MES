@@ -1,13 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as TepkiIsaretci, type ReactNode } from 'react';
-import { ESKI_CIZIM, type EskiCizim } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
-import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet, type OlcumAleti } from '../../../../../../arkon/web/src/data/olcum-aleti.ts';
-import { Dugme, Girdi, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
-import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
-import { useTema } from '../../../../ortak/veri/tema.ts';
-import { bip } from '../cekirdek/ses.ts';
-import { yerel } from '../cekirdek/yerel.ts';
-import { Hazirlaniyor } from '../ortak/Hazirlaniyor.tsx';
-import { useArkon } from '../veri/baglam.ts';
+import { ESKI_CIZIM, type EskiCizim } from './cekirdek/cizim-merkezi.ts';
+import { ALET_ZORUNLU_ILETISI, aletSecimAnahtari, olcumAletDamgasi, seciliAlet } from './cekirdek/olcum-aleti.ts';
+import { DurumKutusu, Dugme, Girdi, Simge, useBildirim, type BildirimTonu } from '../arayuz/index.ts';
+import type { SimgeAdi } from '../tasarim/simgeler.ts';
+import { useTema } from '../veri/tema.ts';
 import { bellegeKoy, cihazAyari, PDF_BELLEGI, saklanacak, type PdfKaydi, type SaklananPdfKaydi } from './bellek.ts';
 import { AKTol } from './cekirdek.ts';
 import { bekle, tesseract } from './kitaplik.ts';
@@ -20,6 +16,7 @@ import { dosyaOzeti, modelIsle, type Gorunum3B, type ModelKaydi } from './model.
 import { Model3B } from './Model3B.tsx';
 import { ocrGoruntu, ocrPdfSayfasi } from './ocr.ts';
 import { bitAc, murekkep, olcuBirlestir, olcuOnerileri, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi, type OlcuOnerisi } from './okuma.ts';
+import { useCizimOrtami } from './ortam.tsx';
 import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renklendir, type PdfBelgesi } from './pdf.ts';
 import './cizim.css';
 
@@ -96,7 +93,8 @@ function indir(ad: string, veri: string, tur: string): void {
 }
 
 function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
-  const { depo, ayarlar } = useArkon();
+  const { onbellek, aletler, ayarlar: cihaz, ses: bip } = useCizimOrtami();
+  const depo = useMemo(() => ({ Cache: onbellek }), [onbellek]);
   const { bildir: bildirim } = useBildirim();
   const say = useCallback((m: string, renk: keyof typeof TON = 'run') => bildirim(TON[renk] ?? 'bilgi', m), [bildirim]);
   const { tema } = useTema();
@@ -105,7 +103,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   const RO = !!ctl.saltOkunur;
   const bal = ctl.balonlar, meas = ctl.olcumler;
   const setBal = ctl.balonlarYaz, setMeas = ctl.olcumlerYaz;
-  const cfgOf = useCallback((): OkumaAyari => (ctl.ayar ? ayarDuzelt(ctl.ayar) : cihazAyari()), [ctl.ayar]);
+  const cfgOf = useCallback((): OkumaAyari => (ctl.ayar ? ayarDuzelt(ctl.ayar) : cihazAyari(cihaz)), [ctl.ayar, cihaz]);
   const gorunusImzasi = ctl.ayar ? ayarImzasi(ayarDuzelt(ctl.ayar), GORUNUS_ANAHTARLARI) : '';
 
   const [doc, setDoc] = useState<ResimBelgesi>(BOS_BELGE);
@@ -465,11 +463,10 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
 
   /* ── Balonlar ── */
   const b = bal.find((x) => x.id === sel), m = b ? meas[b.id] : undefined;
-  const aletler = ayarlar.olcuAletleri as unknown as OlcumAleti[];
   const nextId = () => bal.reduce((a, x) => Math.max(a, x.id), 0) + 1;
   const saveMeasure = (forced?: 'ok' | 'nok' | null, override?: number | null) => {
     if (!b) return;
-    const alet = ctl.aletZorunlu ? seciliAlet(aletler, b.tool, yerel.oku(aletSecimAnahtari(b.tool)), Date.now()) : null;
+    const alet = ctl.aletZorunlu ? seciliAlet(aletler, b.tool, cihaz.oku(aletSecimAnahtari(b.tool)), Date.now()) : null;
     if (ctl.aletZorunlu && !alet) { bip('nok'); say(ALET_ZORUNLU_ILETISI + (b.tool ? ' · ' + b.tool : ''), 'stop'); return; }
     const k = olcumDegerlendir(b, val, forced, override);
     if (k.tur === 'yok') return;
@@ -751,7 +748,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
           )}
           <div className="tc-ay5-bilgi"><span>Ölçü aleti</span>
             {ctl.aletZorunlu && (!ctl.olcumYok || (ctl.operatorOlcer || []).includes(b.id))
-              ? (ctl.aletSecimi ? ctl.aletSecimi(b.tool) : <Hazirlaniyor />)
+              ? (ctl.aletSecimi ? ctl.aletSecimi(b.tool) : <DurumKutusu durum="bos" mesaj="Bu bölüm hazırlanıyor" />)
               : <b>{b.tool}{m && m.gno ? ' · ' + m.gno : ''}</b>}
           </div>
           <div className="tc-ay5-bilgi"><span>Ölçüm yöntemi</span>

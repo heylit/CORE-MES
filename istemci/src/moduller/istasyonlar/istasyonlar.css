@@ -23,7 +23,8 @@
 .tc-ist-renk-yok { --ist-renk: var(--edge2); }
 
 .tc-ist-bolum, .tc-ist-genel { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
-.tc-ist-kpi { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); }
+/* Dört özet kart: genişte tek satır, orta genişlikte iki, telefonda bir; biri alt satırda yalnız kalmaz. */
+.tc-ist-kpi { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr); }
 .tc-ist-arac { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); }
 .tc-ist-arac > .tc-alan { flex: 0 1 calc(var(--b-6) * 9); }
 .tc-ist-arac-sag { display: flex; flex-wrap: wrap; gap: var(--b-2); margin-left: auto; }
@@ -76,8 +77,13 @@
 .tc-ist-soluk { opacity: .6; }
 .tc-ist-satir-hata { margin: 0; padding: 0 var(--b-3) var(--b-2); font-size: var(--yazi-s); }
 .tc-ist-g-st > .tc-ist-tablo-bas, .tc-ist-g-st .tc-ist-tablo-satir {
-  grid-template-columns: var(--b-5) calc(var(--b-6) * 3.2) minmax(calc(var(--b-6) * 3.5), 1.4fr) calc(var(--b-6) * 3.6) calc(var(--b-6) * 3.4) calc(var(--b-6) * 3.2) calc(var(--b-6) * 2) calc(var(--b-6) * 2) minmax(calc(var(--b-6) * 3), 1fr) calc(var(--b-6) * 5.4);
+  grid-template-columns: var(--b-5) calc(var(--b-6) * 3.6) minmax(calc(var(--b-6) * 3.5), 1.4fr) calc(var(--b-6) * 3) calc(var(--b-6) * 3) calc(var(--b-6) * 2) calc(var(--b-6) * 2.6) minmax(calc(var(--b-6) * 2.5), 1fr) calc(var(--b-6) * 6.2);
 }
+.tc-ist-g-st .tc-ist-cip { white-space: nowrap; }
+.tc-ist-g-st .tc-ist-h { gap: var(--b-1); }
+.tc-ist-nasil > summary { display: inline-flex; align-items: center; gap: var(--b-1); cursor: pointer; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
+.tc-ist-nasil > .tc-ist-ipucu { margin: var(--b-2) 0 0; }
+.tc-ist-bag { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); }
 .tc-ist-g-mk > .tc-ist-tablo-bas, .tc-ist-g-mk .tc-ist-tablo-satir {
   grid-template-columns: var(--b-5) var(--b-3) calc(var(--b-6) * 3.2) minmax(calc(var(--b-6) * 3.5), 1.3fr) calc(var(--b-6) * 3) calc(var(--b-6) * 4) calc(var(--b-6) * 3.4) minmax(calc(var(--b-6) * 3), 1fr) calc(var(--b-6) * 5.4);
 }
@@ -111,7 +117,9 @@
 @media (min-width: 768px) {
   .tc-ist-tablo { overflow-x: auto; }
   /* Başlık ve satırlar ayrı ızgaradır; aynı genişlikte kalsınlar diye en az genişlik içerikten değil sütun toplamından gelir. */
-  .tc-ist-g-st > .tc-ist-tablo-bas, .tc-ist-g-st > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 33); }
+  .tc-ist-g-st > .tc-ist-tablo-bas, .tc-ist-g-st > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 29); }
+  .tc-ist-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tc-ist-g-st .tc-ist-tablo-satir > .tc-ist-h:nth-child(2) .tc-ist-mono { white-space: nowrap; }
   .tc-ist-g-mk > .tc-ist-tablo-bas, .tc-ist-g-mk > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 29); }
 }
 @media (max-width: 767px) {
@@ -122,7 +130,12 @@
   .tc-ist-tablo-bas { display: none; }
   .tc-ist-tablo-satir, .tc-ist-g-st .tc-ist-tablo-satir, .tc-ist-g-mk .tc-ist-tablo-satir { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .tc-ist-tablo-satir > * { grid-column: 1 / -1; }
-  .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(7), .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(8) { grid-column: auto; }
+  /* Telefonda istasyon: seçim kutusu solda, kod ve ad üst satırda, kalan alanlar iki sütunda; makineler ve işlemler tam satır. */
+  .tc-ist-g-st .tc-ist-tablo-satir { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); }
+  .tc-ist-g-st .tc-ist-tablo-satir > * { grid-column: auto; }
+  .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(4), .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(6) { grid-column: 2; }
+  .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(5), .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(7) { grid-column: 3; }
+  .tc-ist-g-st .tc-ist-tablo-satir > :nth-child(n+8) { grid-column: 2 / -1; }
   .tc-ist-g-mk .tc-ist-tablo-satir > .tc-ist-led { display: none; }
   .tc-ist-tablo-satir .tc-ist-h-baslik { display: block; }
   .tc-ist-islemler { justify-content: flex-start; }
@@ -132,6 +145,10 @@
   .tc-ist-ata-satir { display: flex; inline-size: 100%; }
   .tc-ist-matris tbody th { white-space: normal; }
   .tc-ist-arac-sag { margin-left: 0; }
+}
+
+@media (min-width: 1200px) {
+  .tc-ist-kpi { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* Kart #1296: sol ağaç, aranabilir seçici, toplu işlem çubuğu, okuma kipi. */

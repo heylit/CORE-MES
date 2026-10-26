@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Simge } from '../../../../ortak/arayuz/index.ts';
-import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
-import { useTema } from '../../../../ortak/veri/tema.ts';
+import { Simge } from '../arayuz/index.ts';
+import type { SimgeAdi } from '../tasarim/simgeler.ts';
+import { useTema } from '../veri/tema.ts';
 import { three } from './kitaplik.ts';
 import type { Gorunum3B } from './model.ts';
 import './cizim.css';
