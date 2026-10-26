@@ -247,3 +247,144 @@ export function doluKayitlar(db: Db, koleksiyon: string, kimlikler: readonly str
     [koleksiyon, [...kimlikler]],
   );
 }
+
+/* ---------------- stüdyo: resim, balon, numune planı, numune, ölçüm (595 1 b, 597 a, 600 a) ---------------- */
+
+export interface ResimSatiri {
+  id: number; malzemeNo: number; tur: 'resim' | 'model'; merkezBelgeId: number; ozet: string; ad: string; revizyon: string | null;
+  aktif: boolean; surum: number; eklendi: string;
+}
+const RESIM_SUTUNLARI = `id, malzeme_no AS "malzemeNo", tur, merkez_belge_id AS "merkezBelgeId", ozet, ad, revizyon, aktif, surum,
+  ${zamanMetni('eklendi')} AS eklendi`;
+
+export function parcaResimleri(db: Db, malzemeNo: number): Promise<ResimSatiri[]> {
+  return db.sorgu(`SELECT ${RESIM_SUTUNLARI} FROM kalite_merkezi_resim WHERE malzeme_no = $1 AND aktif ORDER BY id`, [malzemeNo]);
+}
+
+export function resim(db: Db, id: number): Promise<ResimSatiri | null> {
+  return db.tek(`SELECT ${RESIM_SUTUNLARI} FROM kalite_merkezi_resim WHERE id = $1`, [id]);
+}
+
+// Aynı parçaya aynı belgenin aynı dosyası bir kez alınır: varsa var olan satır döner (yeniden almak yinelenen satır açmaz).
+export async function resimEkle(
+  db: Db, g: { malzemeNo: number; tur: 'resim' | 'model'; merkezBelgeId: number; ozet: string; ad: string; revizyon: string | null; kisiId: number },
+): Promise<number> {
+  const yeni = await db.tek<{ id: number }>(
+    `INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, revizyon, ekleyen_id, guncelleyen_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+     ON CONFLICT ON CONSTRAINT kalite_merkezi_resim_tekil DO NOTHING RETURNING id`,
+    [g.malzemeNo, g.tur, g.merkezBelgeId, g.ozet, g.ad, g.revizyon, g.kisiId],
+  );
+  if (yeni) return yeni.id;
+  const var_ = await db.tek<{ id: number }>(
+    'SELECT id FROM kalite_merkezi_resim WHERE malzeme_no = $1 AND merkez_belge_id = $2 AND ozet = $3', [g.malzemeNo, g.merkezBelgeId, g.ozet],
+  );
+  return var_!.id;
+}
+
+export interface BalonSatiri {
+  id: number; resimId: number; malzemeNo: number; no: number; nominal: string; tolerans: string | null; alt: string | null; ust: string | null;
+  alet: string | null; siklik: string | null; kritik: boolean; yontem: 'cmm' | 'elle' | null; olcuAletiGerekir: boolean; tur: string | null;
+  sayfa: number | null; x: number | null; y: number | null; yaziKutusu: number[] | null; surum: number;
+}
+const BALON_SUTUNLARI = `b.id, b.resim_id AS "resimId", r.malzeme_no AS "malzemeNo", b.no, b.nominal, b.tolerans, b.alt::text AS alt, b.ust::text AS ust,
+  b.alet, b.siklik, b.kritik, b.yontem, b.olcu_aleti_gerekir AS "olcuAletiGerekir", b.tur, b.sayfa, b.x, b.y, b.yazi_kutusu AS "yaziKutusu", b.surum`;
+
+export function resimBalonlari(db: Db, resimIdler: readonly number[]): Promise<BalonSatiri[]> {
+  return db.sorgu(
+    `SELECT ${BALON_SUTUNLARI} FROM kalite_merkezi_balon b JOIN kalite_merkezi_resim r ON r.id = b.resim_id
+      WHERE b.resim_id = ANY($1::int[]) AND b.aktif ORDER BY b.resim_id, b.no`,
+    [resimIdler],
+  );
+}
+
+// Yalnız etkin resmin etkin balonu: kaldırılan balona ölçüm ve numune girilmez.
+export function etkinBalonlar(db: Db, idler: readonly number[]): Promise<BalonSatiri[]> {
+  return db.sorgu(
+    `SELECT ${BALON_SUTUNLARI} FROM kalite_merkezi_balon b JOIN kalite_merkezi_resim r ON r.id = b.resim_id
+      WHERE b.id = ANY($1::int[]) AND b.aktif AND r.aktif ORDER BY b.id`,
+    [idler],
+  );
+}
+
+export function numunePlanlari(db: Db, malzemeNo: number): Promise<{ opNo: number; kurallar: unknown; surum: number }[]> {
+  return db.sorgu(
+    'SELECT op_no AS "opNo", kurallar, surum FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 ORDER BY op_no', [malzemeNo],
+  );
+}
+
+export interface NumuneSatiri {
+  id: number; uretimEmriId: number; opNo: number; balonlar: number[]; kritik: boolean; neden: string; parcaSayisi: number | null;
+  isteyenId: number; istendi: string; karar: 'onay' | 'ret' | 'sapma' | null; kararNotu: string | null; kararVerenId: number | null; kararZamani: string | null;
+}
+const NUMUNE_SECIMI = `SELECT n.id::int AS id, n.uretim_emri_id AS "uretimEmriId", n.op_no AS "opNo", n.balonlar, n.kritik, n.neden,
+    n.parca_sayisi AS "parcaSayisi", n.isteyen_id AS "isteyenId", ${zamanMetni('n.istendi')} AS istendi,
+    k.karar, k."not" AS "kararNotu", k.kisi_id AS "kararVerenId", ${zamanMetni('k.zaman')} AS "kararZamani"
+  FROM kalite_merkezi_numune n LEFT JOIN kalite_merkezi_numune_karari k ON k.numune_id = n.id`;
+
+export function numune(db: Db, id: number): Promise<NumuneSatiri | null> {
+  return db.tek(`${NUMUNE_SECIMI} WHERE n.id = $1`, [id]);
+}
+
+// Kararsız numuneler eskiden yeniye; emir verilirse yalnız o emrin (kararlılar dahil) son numuneleri, yeniden eskiye.
+export function acikNumuneler(db: Db, sinir: number): Promise<NumuneSatiri[]> {
+  return db.sorgu(`${NUMUNE_SECIMI} WHERE k.numune_id IS NULL ORDER BY n.istendi, n.id LIMIT $1`, [sinir]);
+}
+export function emirNumuneleri(db: Db, uretimEmriId: number, sinir: number): Promise<NumuneSatiri[]> {
+  return db.sorgu(`${NUMUNE_SECIMI} WHERE n.uretim_emri_id = $1 ORDER BY n.istendi DESC, n.id DESC LIMIT $2`, [uretimEmriId, sinir]);
+}
+
+export async function numuneEkle(
+  db: Db, g: { uretimEmriId: number; opNo: number; balonlar: readonly number[]; kritik: boolean; neden: string; parcaSayisi: number | null; kisiId: number },
+): Promise<number> {
+  const r = await db.tek<{ id: number }>(
+    `INSERT INTO kalite_merkezi_numune (uretim_emri_id, op_no, balonlar, kritik, neden, parca_sayisi, isteyen_id)
+     VALUES ($1, $2, $3::int[], $4, $5, $6, $7) RETURNING id::int AS id`,
+    [g.uretimEmriId, g.opNo, g.balonlar, g.kritik, g.neden, g.parcaSayisi, g.kisiId],
+  );
+  return r!.id;
+}
+
+// Numune satırı kilitlenir: aynı numuneye eşzamanlı iki karar ya da kararla yarışan ölçüm sırayla işlenir.
+export async function numuneKilitle(db: Db, id: number): Promise<boolean> {
+  return (await db.tek<{ id: number }>('SELECT id::int AS id FROM kalite_merkezi_numune WHERE id = $1 FOR UPDATE', [id])) !== null;
+}
+
+// Kararı olan numunede false döner (tek karar); kısıt yarışı da yakalar.
+export async function numuneKarariYaz(db: Db, g: { numuneId: number; karar: 'onay' | 'ret' | 'sapma'; not: string | null; kisiId: number }): Promise<boolean> {
+  const r = await db.tek<{ numuneId: number }>(
+    `INSERT INTO kalite_merkezi_numune_karari (numune_id, karar, "not", kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (numune_id) DO NOTHING RETURNING numune_id::int AS "numuneId"`,
+    [g.numuneId, g.karar, g.not, g.kisiId],
+  );
+  return r !== null;
+}
+
+export interface OlcumSatiri {
+  id: number; balonId: number; uretimEmriId: number; numuneId: number | null; deger: string | null; nitel: 'gecer' | 'gecmez' | null; uygun: boolean;
+  kaynak: 'operator' | 'kalite' | 'cmm'; parcaSayisi: number | null; kisiId: number; zaman: string;
+}
+const OLCUM_SECIMI = `SELECT id::int AS id, balon_id AS "balonId", uretim_emri_id AS "uretimEmriId", numune_id::int AS "numuneId", deger::text AS deger, nitel, uygun,
+    kaynak, parca_sayisi AS "parcaSayisi", kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman FROM kalite_merkezi_olcum`;
+
+export async function olcumleriEkle(
+  db: Db, satirlar: readonly { balonId: number; uretimEmriId: number; numuneId: number | null; deger: string | null; nitel: string | null; uygun: boolean; kaynak: string; parcaSayisi: number | null; kisiId: number }[],
+): Promise<number[]> {
+  const idler: number[] = [];
+  for (const s of satirlar) {
+    const r = await db.tek<{ id: number }>(
+      `INSERT INTO kalite_merkezi_olcum (balon_id, uretim_emri_id, numune_id, deger, nitel, uygun, kaynak, parca_sayisi, kisi_id)
+       VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8, $9) RETURNING id::int AS id`,
+      [s.balonId, s.uretimEmriId, s.numuneId, s.deger, s.nitel, s.uygun, s.kaynak, s.parcaSayisi, s.kisiId],
+    );
+    idler.push(r!.id);
+  }
+  return idler;
+}
+
+export function numuneOlcumleri(db: Db, numuneIdler: readonly number[]): Promise<OlcumSatiri[]> {
+  return db.sorgu(`${OLCUM_SECIMI} WHERE numune_id = ANY($1::bigint[]) ORDER BY zaman, id`, [numuneIdler]);
+}
+export function emirOlcumleri(db: Db, uretimEmriId: number, sinir: number): Promise<OlcumSatiri[]> {
+  return db.sorgu(`${OLCUM_SECIMI} WHERE uretim_emri_id = $1 ORDER BY zaman DESC, id DESC LIMIT $2`, [uretimEmriId, sinir]);
+}

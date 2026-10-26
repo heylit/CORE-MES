@@ -63,7 +63,8 @@ SABIT KIMLIKLER (degismez)
   - satin alma katalogu malzeme kartina ZORUNLU baglidir (satin_alma_katalog.malzeme_id); kopya tutulmaz; ad, birim ve kategori malzemeden okunur; yeni kalem yalniz Malzemeler ve Hizmetler'de acilir (2026-10-09, SA2 b; OS6 degisti).
   - depo yapisi, raf ve goz: Fabrika Haritasi (atolye) tek kaynaktir; stok kendi konum tablosunu birakir, stok miktari ve hareketi stokta kalir ve dogrudan harita gozune baglanir (2026-10-12, kart #686, "Tam birlestir"; OS degisti). Malzeme lojistigi: stok.
   - Arkon kaydi operator gunlugudur; asil uretim kaydi emirdedir; Arkon bagi is emrine (emir_adimi) tasinir.
-  - bakim, kontrol plani, olcum ve numune: modul verilene kadar Arkon'da kalir.
+  - teknik resim, 3B model, balon (kontrol plani), numune plani, numune, olcum ve numune karari: Kalite Merkezi (2026-10-26, 595 1 b, 597 a, 600 a; OS degisti). Arkon kalite istasyonu ve Hazirlik bunlari salt okur; Uretim Terminali kalite istasyonu Kabul/Red verir, karar ve olcum Kalite Merkezi'nin disari.ts komutuyla Kalite Merkezi'ne yazilir. Dosyanin sahibi belge merkezidir (cizimler); Kalite Merkezi yayindaki revizyonu belge kimligi ve ozetle tutar. Eski Arkon ve Kalite Merkezi kayitlarinin tasinmasi ayri goc ve ayri onaydir (595 3 c).
+  - bakim: modul verilene kadar Arkon'da kalir.
   - planli durus: Vardiya'nindir (2026-10-11, A6, kart #519); Vardiya ekranindan ve Arkon formundan girilir, Arkon formu Vardiya'ya yazar; takvimden ve gunluk kapasiteden dusulur; eski Arkon duruslari tasinmaz.
   - ayarlar: sistem capi ve dort goz ayarlari ayarlar modulunde, modulun calisma ayarlari modulun kendisinde kalir.
   - planlama: tek plan motoru Recete ve Rota'dadir (338 a); plan sunucusu ve uretim emirleri UE serididir.

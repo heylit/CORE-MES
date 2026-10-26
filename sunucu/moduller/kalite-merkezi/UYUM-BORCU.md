@@ -130,3 +130,13 @@ Paket dosyası (`uygulama/paket.ts`) değişmedi; her şey köprü (`kopru.ts`) 
 - Cihaz geçmişi penceresinde sertifika eki bölümü (yazma yolu) gösterilmez; ekler Kalibrasyonda tutulmaz. Kalıcı yol: Kalibrasyona dosya eki (ayrı karar).
 - Yoklama yenilemesi: liste değişince 4 sn'lik eşleme akışıyla ekrana yansır; en çok ~15 sn gecikme.
 
+
+## Stüdyo sunucusu (K1; 595 1 b, 597 a, 600 a, 26.10.2026)
+- Bağlamada kapanacak: plan, balon ve resim alma yazma uçları yok; yetki kararı (603) bekleniyor. Servis işlevi `resimMerkezdenEkle` yazıldı, uçsuz.
+- Bağlamada kapanacak: Arkon `plan`, `files`, `requests`, `results`, `logMeas` ve Kalite Merkezi `cizim` kayıtlarının yeni tablolara taşınması ayrı göç ve ayrı onaydır (595 3 c). Arkon henüz yeni tabloları okumuyor.
+- Bağlamada kapanacak: eski revizyonun dosyası belge merkezinden alınamıyor (BASKA-MODUL-ISTEKLERI, cizimler).
+- VARSAYIM (geri alma ucuz): stüdyo yalnız PDF resim ile STEP, STL, IGES model alır (Arkon'un belge merkezinden aldığı türler).
+- VARSAYIM (geri alma ucuz): onay bütün balonların son ölçüsü uygunken, sapma uygunsuz ölçü varken verilir (Arkon kalite istasyonunun düğme kuralı sunucuya alındı); sapmada gerekçe zorunlu değil.
+- VARSAYIM (geri alma ucuz): numune kritik bayrağı istenen balonlardan türer; ölçüm balonun son ölçüsü geçerlidir, düzeltme yeni ölçümdür.
+- VARSAYIM (geri alma ucuz): Kalite Merkezi ucundan girilen ölçümün kaynağı `kalite`; Arkon `operator` ya da `cmm` verir.
+- Listeler sınırlı: açık numune 200, emir ölçümü 2000 satır (sayfalama yok).

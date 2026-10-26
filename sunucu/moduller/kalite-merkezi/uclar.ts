@@ -6,6 +6,11 @@ import {
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
+import {
+  kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunelerCevabi, kmOlcumGovdesi, kmOlcumlerCevabi, kmStudyoEmirParametresi,
+  kmStudyoNumuneParametresi, kmStudyoParcaCevabi, kmStudyoParcaParametresi, kmStudyoResimParametresi,
+} from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import * as studyo from './studyo.ts';
 
 // Uygulamanın yerel sunucu sözleşmesinin (sunucu.py: sync, doc, files, restore) TMI karşılığı. Okuma tek akıştan, yazma
 // kayıt başına; kural sunucudadır (değişiklik izi yalnız eklenir), kaydın içeriği uygulamanındır.
@@ -194,5 +199,85 @@ export const uclar: Uc[] = [
     parametre: kmDosyaParametresi,
     cevap: kmTamamCevabi,
     isle: ({ db, parametre, denetimEki }) => servis.dosyaSil(db, parametre.kimlik, denetimEki),
+  }),
+  // Stüdyo (595 1 b, 597 a, 600 a): resim, balon ve numune planı okunur; numune ve ölçüm Kalite Merkezi'nde yazılır. Plan, balon ve
+  // resim alma uçları yetki kararından (603) sonra gelir.
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoParcaParametresi,
+    cevap: kmStudyoParcaCevabi,
+    isle: ({ db, parametre }) => studyo.studyoParcasi(db, parametre.malzemeNo),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/dosya',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoResimParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, parametre }) => studyo.resimDosyasi(db, parametre.resimId),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/numuneler',
+    yetki: 'kalite-merkezi.oku',
+    cevap: kmNumunelerCevabi,
+    isle: async ({ db }) => ({ numuneler: await studyo.acikNumuneler(db) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/numuneler/:numuneId',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoNumuneParametresi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, parametre }) => ({ numune: await studyo.numuneOku(db, parametre.numuneId) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/emirler/:uretimEmriId/numuneler',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoEmirParametresi,
+    cevap: kmNumunelerCevabi,
+    isle: async ({ db, parametre }) => ({ numuneler: await studyo.emirNumuneleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/emirler/:uretimEmriId/olcumler',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoEmirParametresi,
+    cevap: kmOlcumlerCevabi,
+    isle: async ({ db, parametre }) => ({ olcumler: await studyo.emirOlcumleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/numuneler/iste',
+    yetki: 'kalite-merkezi.yaz',
+    // Her çağrı yeni numune açar: cevabı kaybolan isteğin yinelemesi ikinci numune açmasın.
+    tekrarKorumali: true,
+    govde: kmNumuneIsteGovdesi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ numune: await studyo.numuneIste(db, kullanici.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/olcumler/yaz',
+    yetki: 'kalite-merkezi.yaz',
+    tekrarKorumali: true,
+    govde: kmOlcumGovdesi,
+    cevap: kmOlcumlerCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ olcumler: await studyo.olcumYaz(db, kullanici.id, 'kalite', govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/numuneler/:numuneId/karar',
+    // Numune kararı kalite onayıdır (600 a): ilk parça kararıyla aynı yetki.
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoNumuneParametresi,
+    govde: kmNumuneKarariGovdesi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ numune: await studyo.numuneKarari(db, kullanici.id, parametre.numuneId, govde.karar, govde.not ?? null) }),
   }),
 ];
