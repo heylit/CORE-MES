@@ -9,7 +9,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmMerkezBelgeleriCevabi, KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -137,8 +137,8 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     return ozet;
   }
   interface MerkezBelgesi { id: number; surum: number; revizyonlar: { id: number; harf: string }[] }
-  async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla = true): Promise<number> {
-    const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur: 'teknik-resim', ozet: await merkezDosyasi(icerik), dosyaAdi });
+  async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla = true, tur = 'teknik-resim'): Promise<number> {
+    const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur, ozet: await merkezDosyasi(icerik), dosyaAdi });
     if (yayinla) await merkez(`/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/yayinla`, { surum: b.surum });
     return b.id;
   }
@@ -298,6 +298,23 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(kalite, `/kalite-merkezi/studyo/numuneler/${n.id}`)).statusCode, 200);
     assert.equal((await oku(operator, `/kalite-merkezi/studyo/emirler/${flansEmri}/olcumler`)).statusCode, 403);
     assert.equal((await oku(kalite, '/kalite-merkezi/studyo/emirler/999999/olcumler')).statusCode, 404);
+  });
+
+  test('KM-S23 resim alma seçicisi yalnız yayındaki PDF ve 3B modeli verir, adla arar; yazar ve operatör 403', async () => {
+    const yayinda = await belgeAc('Seçici flanş', pdf('secici'), 'secici.pdf');
+    const model = await belgeAc('Seçici mil', Buffer.from('ISO-10303-21;\nHEADER;\nENDSEC;\nEND-ISO-10303-21;\n'), 'secici.step', true, '3b-model');
+    const taslak = await belgeAc('Seçici taslak', pdf('secici-taslak'), 'secici-taslak.pdf', false);
+    const foto = await belgeAc('Seçici fotoğraf', png('secici'), 'secici.png');
+    const yol = `/kalite-merkezi/studyo/merkez-belgeleri?ara=${encodeURIComponent('Seçici')}`;
+    assert.equal((await oku(yazar, yol)).statusCode, 403);
+    assert.equal((await oku(operator, yol)).statusCode, 403);
+    const r = await oku(kalite, yol);
+    assert.equal(r.statusCode, 200, r.body);
+    const belgeler = (r.json() as KmMerkezBelgeleriCevabi).belgeler;
+    assert.deepEqual(belgeler.map((b) => [b.id, b.tur, b.bicim]).sort(), [[yayinda, 'resim', 'pdf'], [model, 'model', 'step']].sort());
+    assert.equal(belgeler.some((b) => b.id === taslak || b.id === foto), false);
+    const tek = (await oku(kalite, `/kalite-merkezi/studyo/merkez-belgeleri?ara=${encodeURIComponent('Seçici mil')}`)).json() as KmMerkezBelgeleriCevabi;
+    assert.deepEqual(tek.belgeler.map((b) => b.id), [model]);
   });
 
   test('KM-S16 resim alma ve kaldırma kalite onayıdır; yazar ve operatör 403; eski sürüm 409; kaldırılan resim yeniden alınınca balonlarıyla döner', async () => {
