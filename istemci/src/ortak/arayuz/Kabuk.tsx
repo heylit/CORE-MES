@@ -15,6 +15,7 @@ import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
+import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 import { gorunumGecisi, seritAdresi, YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
@@ -169,7 +170,8 @@ export function Kabuk({
   const [menuDar, menuDarYaz] = useCihazTercihi(MENU_DAR_TERCIHI);
   const konum = useLocation();
   const gezin = useNavigate();
-  const gecis = gorunumGecisi(konum.pathname);
+  // Eski ve yeni görünüm arasındaki geçiş yalnız yöneticidedir (681 a); eski adresin kapısı App.tsx'tedir.
+  const gecis = islemler.includes(YENI_EKRAN_ISLEMI) ? gorunumGecisi(konum.pathname) : null;
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);

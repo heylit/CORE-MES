@@ -6,7 +6,7 @@ import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from '../arayuz/Kabuk.tsx';
 import { modulRotalari } from './kesif.ts';
 import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
-import { gorunumGecisi, seritAdresi, TASINAN_EKRANLAR, YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
+import { eskiGorunumAdresiMi, gorunumGecisi, seritAdresi, TASINAN_EKRANLAR, YENI_EKRAN_GRUBU, YENI_EKRAN_YOLLARI, yeniEkranAdresiMi, yeniEkranBaglantilari } from './yeni-ekran-menusu.ts';
 
 function ciz(islemler: readonly string[], kapali: readonly string[] = []) {
   return render(
@@ -111,8 +111,8 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
     return screen.getAllByRole('menuitem').map((m) => m.textContent);
   };
-  // Yönetici kapısı olmayan kişi: yalnız Kuyruk sayfasının işlemi.
-  const kuyrukcu = ['sayfa.kuyruk'];
+  // Yeni ekran kapısını geçen kişi; geçiş yalnız ondadır (681 a).
+  const yonetici = ['sayfa.kuyruk', YENI_EKRAN_ISLEMI];
 
   it('yeni ve eski adres kayıtlı modül rotasıdır; eski adres sayfanın alt yoludur', () => {
     for (const t of TASINAN_EKRANLAR) {
@@ -162,16 +162,39 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     expect(gorunumGecisi('/kuyruk')).toEqual({ baslik: 'Eski görünüm', yol: '/kuyruk/eski' });
     expect(gorunumGecisi('/kuyruk/eski')).toEqual({ baslik: 'Yeni görünüm', yol: '/kuyruk' });
     expect(gorunumGecisi('/ik')).toBeNull();
-    adreste('/kuyruk', kuyrukcu);
+    adreste('/kuyruk', yonetici);
     expect(hesapMaddeleri()).toContain('Eski görünüm');
     cleanup();
-    adreste('/kuyruk/eski', kuyrukcu);
+    adreste('/kuyruk/eski', yonetici);
     expect(hesapMaddeleri()).toContain('Yeni görünüm');
     cleanup();
-    adreste('/ik', kuyrukcu);
+    adreste('/ik', yonetici);
     const maddeler = hesapMaddeleri();
     expect(maddeler).not.toContain('Eski görünüm');
     expect(maddeler).not.toContain('Yeni görünüm');
+  });
+
+  // 681 a: operatör yalnız yeni ekranı görür; geçiş maddesi yönetici kapısını geçmeyende hiçbir taşınan ekranda yoktur.
+  it('eski ve yeni gorunum gecisi yonetici kapisi olmayanin kisi menusunde yoktur', () => {
+    for (const adres of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon/pano', '/malzemeler', '/kalite-merkezi/dof', '/recete-rota/stock']) {
+      adreste(adres, ISLEMLER.filter((i) => i !== YENI_EKRAN_ISLEMI));
+      const maddeler = hesapMaddeleri();
+      expect(maddeler, adres).not.toContain('Eski görünüm');
+      expect(maddeler, adres).not.toContain('Yeni görünüm');
+      cleanup();
+    }
+  });
+
+  it('eski gorunum adresi yalniz eski ekranlarin adresidir', () => {
+    for (const t of TASINAN_EKRANLAR) {
+      expect(eskiGorunumAdresiMi(t.eski), t.eski).toBe(true);
+      expect(eskiGorunumAdresiMi(`${t.eski}/`), t.eski).toBe(true);
+      expect(eskiGorunumAdresiMi(t.yol), t.yol).toBe(false);
+    }
+    expect(eskiGorunumAdresiMi('/arkon/eski/pano/5')).toBe(true);
+    expect(eskiGorunumAdresiMi('/recete-rota/eski/plan')).toBe(false);
+    expect(eskiGorunumAdresiMi('/kuyruk/eskisi')).toBe(false);
+    expect(eskiGorunumAdresiMi('/ik')).toBe(false);
   });
 });
 

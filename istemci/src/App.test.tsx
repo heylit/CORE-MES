@@ -12,6 +12,7 @@ import type { SaglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { App } from './App.tsx';
 import { anaSayfaKartlari } from './ortak/rota/ana-sayfa.ts';
 import { modulRotalari, type ModulRotasi } from './ortak/rota/kesif.ts';
+import { YENI_EKRAN_ISLEMI } from './ortak/rota/yeni-ekran.tsx';
 import { OTURUM_BITTI, ULASILAMADI_ILETISI, api } from './ortak/veri/api.ts';
 import { baglantiSifirla } from './ortak/veri/baglanti.ts';
 
@@ -342,6 +343,26 @@ describe('App modul rotalari', () => {
 
     await ac({ ...STOK_GOREN, islemler: ['sayfa.stok', 'stok.tanim'] }, '/stok/ayarlar', ayarli);
     expect(screen.getByText('Stok ayarları')).toBeTruthy();
+  });
+
+  // 681 a: taşınan ekranın eski görünümü yalnız yöneticidedir; sayfayı gören operatör eski adreste yetki iletisi görür, yeni adres açılır.
+  it('eski gorunum adresi yalniz yoneticiye acilir; sayfayi goren baskasina yetki iletisi verir', async () => {
+    const YeniKuyruk = () => <p>Yeni kuyruk</p>;
+    const EskiKuyruk = () => <p>Eski kuyruk</p>;
+    const kuyrukRotalari = [{ yol: '/kuyruk', ekran: YeniKuyruk }, { yol: '/kuyruk/eski', ekran: EskiKuyruk }];
+    const KUYRUKCU: Kullanici = { ...OPERATOR, islemler: ['sayfa.kuyruk'] };
+
+    await ac(KUYRUKCU, '/kuyruk/eski', kuyrukRotalari);
+    expect(screen.getByRole('status').textContent).toContain('Eski görünüm yalnız yöneticiye açıktır');
+    expect(screen.queryByText('Eski kuyruk')).toBeNull();
+    cleanup();
+
+    await ac(KUYRUKCU, '/kuyruk', kuyrukRotalari);
+    expect(screen.getByText('Yeni kuyruk')).toBeTruthy();
+    cleanup();
+
+    await ac({ ...KUYRUKCU, islemler: ['sayfa.kuyruk', YENI_EKRAN_ISLEMI] }, '/kuyruk/eski/', kuyrukRotalari);
+    expect(screen.getByText('Eski kuyruk')).toBeTruthy();
   });
 
   it('rotasi olmayan kayitli sayfanin adresi gormeyene yetki iletisi verir, bulunamadi demez', async () => {
