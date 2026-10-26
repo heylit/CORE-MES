@@ -12,6 +12,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { BaglantiHazirligi } from './BaglantiHazirligi.tsx';
 import { GORUNUM_ANAHTARLARI, GorunumAyarlari } from './GorunumAyarlari.tsx';
 import { Guncelleme } from './Guncelleme.tsx';
+import { OrtakCihazlar } from './OrtakCihazlar.tsx';
 import { SayfaAyarlari } from './SayfaAyarlari.tsx';
 import { Yedekler } from './Yedekler.tsx';
 import { KurumLogosu, SurumBilgisi } from './KurumAyarlari.tsx';
@@ -337,7 +338,7 @@ function Baglantilar({ ekranlar, hazirlikGorur }: { ekranlar: readonly AyarEkran
   );
 }
 
-type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'baglanti' | 'moduller' | 'guncelleme' | 'yedek';
+type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'baglanti' | 'moduller' | 'guncelleme' | 'yedek' | 'cihazlar';
 
 const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'genel', baslik: 'Genel', simge: 'gear' },
@@ -349,6 +350,7 @@ const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'moduller', baslik: 'Modül ayarları', simge: 'grid' },
   { anahtar: 'guncelleme', baslik: 'Güncelleme', simge: 'download' },
   { anahtar: 'yedek', baslik: 'Yedekler', simge: 'box' },
+  { anahtar: 'cihazlar', baslik: 'Ortak cihazlar', simge: 'laptop' },
 ];
 
 // Sayfanın görünürlüğü yine `sayfa.ayarlar`dır; modül sekmesi yalnız modülün ayar menü maddesini gören kişiye çıkar.
@@ -364,8 +366,11 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
   const guncelleyebilir = islemler.includes('ayarlar.guncelleme-yukle');
   // Yedekler sekmesi yalnız yedek alıp indirebilene (bayraklı yönetici) çıkar.
   const yedekleyebilir = islemler.includes('ayarlar.yedek-indir');
+  // Ortak cihaz sekmesi yalnız cihaz kaydedebilene (bayraklı yönetici) çıkar.
+  const cihazKaydedebilir = islemler.includes('oturum.ortak-cihaz');
   const sekmeler = SEKMELER.filter((s) => (s.anahtar !== 'moduller' || moduller.length > 0)
-    && (s.anahtar !== 'guncelleme' || guncelleyebilir) && (s.anahtar !== 'yedek' || yedekleyebilir));
+    && (s.anahtar !== 'guncelleme' || guncelleyebilir) && (s.anahtar !== 'yedek' || yedekleyebilir)
+    && (s.anahtar !== 'cihazlar' || cihazKaydedebilir));
   const [secili, setSecili] = useState<SayfaSekmesi>('genel');
   const gecerli = sekmeler.some((s) => s.anahtar === secili) ? secili : 'genel';
   return (
@@ -398,6 +403,7 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
         {gecerli === 'moduller' && <ModulSekmeleri ekranlar={moduller} />}
         {gecerli === 'guncelleme' && <Guncelleme />}
         {gecerli === 'yedek' && <Yedekler />}
+        {gecerli === 'cihazlar' && <OrtakCihazlar />}
       </div>
     </div>
   );
