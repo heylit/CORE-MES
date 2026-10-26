@@ -362,6 +362,23 @@ function siparisKari() {
     bekleme: { tl: W.tl, fin: W.fin, saat: W.saat } };
 }
 
+/* ---------- planı kur (e-coz coz 'sifir', ISCI_KODU) ----------
+   Kural tabanlı ilk plan, kalan bütçede LNS. Dondurma bölgesi plan dengesine göre kilitlenir (dengeKilit). Bütçe çalışmanın çözüm süresidir
+   (S.w.sure sn, sabit adımlı saatle). Kayıtlı planı iyileştirme burada yok (579 b: HiGHS gelene kadar). Canlı plana göre değişim (ozet.chg)
+   burada ölçülmez: null. */
+function planKur() {
+  const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now();
+  let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx);
+  let E = evaluate(cur, st, null, true); const ilk = E.wT;
+  const lbx = lowerBound(st, cx); const lbC = {}; for (const j in lbx.C) lbC[j] = isFinite(lbx.C[j]) ? lbx.C[j] : null;
+  let seed = 17, durgun = 0;
+  while (Date.now() - t0 < ms && durgun < 4) {
+    const L = lns(st, cur, null, { ms: Math.max(250, Math.min(1500, ms - (Date.now() - t0))), seed: seed++, free: true });
+    if (cmpEv(L.e, E) > 0) { cur = L.plan; E = L.e; durgun = 0; } else durgun++;
+  }
+  return { plan: { ...planKaydi(cur, st, null), lb: lbx.wT, lbC, ilk, dataVer: S.dataVer } };
+}
+
 /* ---------- giriş ----------
    calisma, kayit ve kaynak planlama çalışması ucunun birleştirdiği girdidir (288 a); an: sunucunun şimdisi (ms); istek: sözleşmedeki tur ve alanları.
    Hata { hata: 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi' }: çağıran uygun koda çevirir. */
@@ -380,6 +397,7 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
       if (!S.plan.J[s.id] || basladiMi(s.id)) return { hata: 'basladi' };
       if (istek.adetler && (istek.adetler.reduce((a, x) => a + x, 0) !== s.adet || istek.adetler.some(x => !(x >= 1)))) return { hata: 'adet' };
     } }
+  if (istek.tur === 'plan-kur') return zarf(planKur());
   if (istek.tur === 'plan-secenekleri') return zarf(pdSecenekler(istek.sira));
   if (istek.tur === 'termin-secenekleri') return zarf(pdTeklif(istek.siparisId));
   if (istek.tur === 'termin-uzatma') return zarf(pdUzatma(istek.gun));

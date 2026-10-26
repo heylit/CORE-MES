@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
-import { DEGERLENDIRME_ACIK, type DegerlendirmeCevabi, type Degerlendirici } from './degerlendirme.ts';
+import type { DegerlendirmeCevabi, Degerlendirici } from './degerlendirme.ts';
 import { PartiBolmeKarti, PlanSecenekleriKarti, TerminUzatmaKarti } from './Degerlendirme.tsx';
 import { kayitliPlan } from './kurallar.ts';
 import { CALISMA_DEGERI, calismaKur } from './test-veri.ts';
@@ -123,8 +123,7 @@ describe('P2 Siparişler', () => {
     expect(screen.queryByRole('form', { name: 'Fiyat ve ödeme vadesi' })).toBeNull();
   }, 20000);
 
-  it('motor gereken araçlar yerinde pasif, istek gitmez; kâr tablosunda tutar yazılır, Uygula pasif', async () => {
-    expect(DEGERLENDIRME_ACIK).toBe(false);
+  it('motor gereken araçlar yerinde pasif, değerlendirme düğmeyle istenir (açılışta istek gitmez); kâr tablosunda tutar yazılır, Uygula pasif', async () => {
     const govdeler: unknown[] = [];
     const istekler = sunucuKur(YONETICI, KAYIT, { govdeler });
     ac('/recete-rota/planlama-yeni/ysiparis');
@@ -136,7 +135,8 @@ describe('P2 Siparişler', () => {
     for (const ad of ['Partiyi böl', 'Parti taraması', 'Örtüşme', 'Siparişler: maliyet ve kâr']) {
       expect(screen.getByRole('heading', { level: 2, name: ad }).querySelector('svg')).not.toBeNull();
     }
-    expect(dugme('Böl').disabled).toBe(true);
+    // Partiyi böl değerlendirme ucuyla ölçülür (576): düğme açık, basılmadıkça istek gitmez.
+    expect(dugme('Böl').disabled).toBe(false);
     expect(dugme('Tara').disabled).toBe(true);
     expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
     expect(screen.queryAllByRole('button', { name: 'Uygula' }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
@@ -283,7 +283,7 @@ describe('P2 Termin ve kâr', () => {
 describe('Değerlendirme kartı (uç açılınca)', () => {
   const cevap = (maliyetGorunur: boolean): DegerlendirmeCevabi<'plan-secenekleri'> => ({
     calismaSurumu: 9, dataVer: 3, baslangic: '2026-10-19', simdi: 7, maliyetGorunur,
-    sonuc: { secenekler: [{ denge: 25, carpan: 4, ekMesai: [], ekMesaiTl: null, geciken: 1, isSayisi: 2, gecikmeSaat: 15, netKar: maliyetGorunur ? 500 : null, eksik: 0, plan: { dataVer: 3, ops: {}, J: {} } }] },
+    sonuc: { tur: 'plan-secenekleri', secenekler: [{ denge: 25, carpan: 4, ekMesai: [], ekMesaiTl: null, geciken: 1, isSayisi: 2, gecikmeSaat: 15, netKar: maliyetGorunur ? 500 : null, eksik: 0, plan: { dataVer: 3, ops: {}, J: {} } }] },
   });
   const ciz = (d: Degerlendirici | null, komut: CalismaKomutu | null, alabilir: boolean, yenile = vi.fn()) => render(
     <BildirimSaglayici>

@@ -6,24 +6,24 @@ import type { CalismaKomutu } from '../kayit.ts';
 import { DURUM_ADI, DURUM_TONU, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import {
-  DEGERLENDIRME_ACIK, MALZEME_DURUM_AD, TERMIN_SECENEK_AD, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl,
+  MALZEME_DURUM_AD, TERMIN_SECENEK_AD, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl,
   type DegerlendirmeCevabi, type DegerlendirmeIstegi, type DegerlendirmeTuru, type Degerlendirici, type MalzemeTerminiSatiri,
   type PlanSecenegi, type TerminSecenegiSatiri, type TerminUzatmaSatiri,
 } from './degerlendirme.ts';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
   PARTI_EN_COK, darbogaz, dengeAdi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, saat,
-  katsayi, saatOku, sayi, simdi, terminAyari,
+  katsayi, saatOku, saatYaz, sayi, simdi, terminAyari,
   taramaKapsami, taramaSecenekSayisi, tl, type KayitliPlan,
 } from './kurallar.ts';
 
 // Plan motorunu isteyen kartlar (zw-denge sDenge, zz10 ebFormHtml, zz11 btKart, zv-termin sTerminler). Kart eski düzeniyle yerinde durur;
-// motor bağlanana dek (DEGERLENDIRME_ACIK) hesap düğmesi pasif, altında not (357 b, TASARIM KORUMA). Hesap pahalıdır: eski sayfadaki gibi
-// düğmeyle istenir. Çalışmaya yazan tek eylem plan seçeneğini almaktır (yalnız plan alanları); termin uzatma ve parti bölme kaynak alanını
+// hesap sunucunun değerlendirme ucundadır (576); çalışma sürümü yoksa düğme pasif, altında not (357 b, TASARIM KORUMA). Hesap pahalıdır: eski
+// sayfadaki gibi düğmeyle istenir. Çalışmaya yazan tek eylem plan seçeneğini almaktır (yalnız plan alanları); termin uzatma ve parti bölme kaynak alanını
 // yazar, yerinde pasiftir (222 a).
 
 export function gorunumDegerlendiricisi(depo: PlanlamaDeposu): Degerlendirici | null {
-  return DEGERLENDIRME_ACIK && depo.calismaSurumu !== null ? degerlendirici(depo.calismaSurumu) : null;
+  return depo.calismaSurumu !== null ? degerlendirici(depo.calismaSurumu) : null;
 }
 
 type Durum<K extends DegerlendirmeTuru> = { tur: 'bos' } | { tur: 'bekliyor' } | { tur: 'hata'; metin: string; yenile: boolean } | { tur: 'sonuc'; cevap: DegerlendirmeCevabi<K> };
@@ -108,6 +108,8 @@ export function DegerlendirmeKarti<K extends DegerlendirmeTuru>({
   );
 }
 
+// Cevabın saatleri planın ekseninde: gösterim cevabın başlangıç gününden (çalışmanınkiyle aynı).
+const eksenSaati = (c: { baslangic: string | null }, t: number | null): string => (c.baslangic === null ? '—' : saatYaz({ meta: { baslangic: c.baslangic } } as PlanVerisi, t));
 const fark = (x: number | null, bicim: (v: number) => string): string => (x == null ? '—' : `${x > 0 ? '+' : ''}${bicim(x)}`);
 const sa = (x: number | null | undefined): string => (x == null || !Number.isFinite(x) ? '—' : `${sayi(x, 1)} sa`);
 
@@ -165,7 +167,7 @@ export function TerminSecenekleri({ cevap }: { cevap: DegerlendirmeCevabi<'termi
   const enI = Math.max(...s.satirlar.map((x) => x.toplamKar ?? -Infinity));
   const sutunlar: Sutun<TerminSecenegiSatiri>[] = [
     { anahtar: 'termin', baslik: 'Termin', hucre: (x) => <><b>{TERMIN_SECENEK_AD[x.secenek]}</b><small className="tc-pys-not mono">{x.termin ?? '—'}</small></> },
-    { anahtar: 'bitis', baslik: 'Planlanan bitiş', mono: true, kirilmaz: true, hucre: (x) => x.bitis ?? '—' },
+    { anahtar: 'bitis', baslik: 'Planlanan bitiş', mono: true, kirilmaz: true, hucre: (x) => eksenSaati(cevap, x.bitis) },
     { anahtar: 'gecikme', baslik: 'Gecikme', hizala: 'sag', hucre: (x) => (x.gecikmeSaat != null && x.gecikmeSaat > 0.05 ? <span className="mono">{sa(x.gecikmeSaat)}</span> : <Rozet ton="tamam">zamanında</Rozet>) },
     ...(fg ? [
       { anahtar: 'net', baslik: 'Siparişin net kârı', hizala: 'sag' as const, mono: true, hucre: (x: TerminSecenegiSatiri) => tl(x.netKar) },
@@ -215,7 +217,7 @@ export function TerminUzatma({ cevap }: { cevap: DegerlendirmeCevabi<'termin-uza
   const sutunlar: Sutun<TerminUzatmaSatiri>[] = [
     { anahtar: 'siparis', baslik: 'Sipariş', hucre: (x) => <><b>{x.siparisId}</b><small className="tc-pys-not">{g} gün uzatma</small></> },
     { anahtar: 'simdi', baslik: 'Gecikme şimdi', hizala: 'sag', mono: true, hucre: (x) => sa(x.gecikmeSimdi) },
-    { anahtar: 'uzatinca', baslik: 'Uzatınca', hizala: 'sag', hucre: (x) => (x.gecikmeUzatinca > 0.05 ? <span className="mono">{sa(x.gecikmeUzatinca)}</span> : <Rozet ton="tamam">zamanında</Rozet>) },
+    { anahtar: 'uzatinca', baslik: 'Uzatınca', hizala: 'sag', hucre: (x) => (x.gecikmeUzatinca == null || x.gecikmeUzatinca > 0.05 ? <span className="mono">{sa(x.gecikmeUzatinca)}</span> : <Rozet ton="tamam">zamanında</Rozet>) },
     { anahtar: 'plan', baslik: 'Plandaki toplam gecikme', hizala: 'sag', hucre: (x) => (
       <><span className="mono">{x.gecikmeSaatFarki < -0.05 ? '−' : x.gecikmeSaatFarki > 0.05 ? '+' : ''}{sa(Math.abs(x.gecikmeSaatFarki))}</span>
         {x.gecikenFarki < 0 && <small className="tc-pys-not">{-x.gecikenFarki} sipariş daha zamanında</small>}</>) },
@@ -411,8 +413,8 @@ const MALZEME_TON: Record<MalzemeTerminiSatiri['durum'], 'hata' | 'uyari' | 'tam
 const BEKLEYEN_NOTU = 'Siparişi verilmemiş satıra termin girmek siparişi o terminle verir. İleri at: işin serbest bırakılma zamanını tahmini gelişe '
   + '(muayene dahil) taşır; plan yeniden çözülünce iş o tarihten önce başlamaz.';
 
-// Değerlendirme ucu kapalıyken kart Malzeme satın alma planının satırlarından dolar (zv-termin sTerminler: termini girilmemiş satırlar, gerekli
-// gelişe göre). Termin ve sipariş satın almanındır: alan ve düğme yerinde pasif (222 a).
+// Kart Malzeme satın alma planının satırlarından dolar (518 a; zv-termin sTerminler: termini girilmemiş satırlar, gerekli gelişe göre); plan
+// satırları yoksa değerlendirme ucundan. Termin ve sipariş satın almanındır: alan ve düğme yerinde pasif (222 a).
 function PlandanBekleyenler({ D, satirlar }: { D: PlanVerisi; satirlar: readonly AlimPlaniSatiri[] }) {
   const A = terminAyari(D);
   const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
@@ -442,15 +444,16 @@ function PlandanBekleyenler({ D, satirlar }: { D: PlanVerisi; satirlar: readonly
 export function MalzemeBekleyenKarti({ degerlendir, yenile, D, plandan }: {
   degerlendir: Degerlendirici | null; yenile: () => void; D: PlanVerisi; plandan: readonly AlimPlaniSatiri[] | null | undefined;
 }) {
-  const d = useDegerlendirme<'malzeme-terminleri'>({ tur: 'malzeme-terminleri' }, degerlendir);
-  if (!degerlendir && plandan) return <PlandanBekleyenler D={D} satirlar={plandan} />;
+  // undefined: satın alma planı okunuyor; null: plan satırı kurulamadı, liste uçtan istenir.
+  const d = useDegerlendirme<'malzeme-terminleri'>(plandan === null ? { tur: 'malzeme-terminleri' } : null, degerlendir);
+  if (plandan) return <PlandanBekleyenler D={D} satirlar={plandan} />;
   const satirlar = d.tur === 'sonuc' ? d.cevap.sonuc.satirlar.filter((x) => x.soz == null) : [];
   const sutunlar: Sutun<MalzemeTerminiSatiri>[] = [
     { anahtar: 'malzeme', baslik: 'Malzeme', mono: true, hucre: (x) => x.kod },
     { anahtar: 'durum', baslik: 'Durum', hucre: (x) => <Rozet ton={MALZEME_TON[x.durum]}>{MALZEME_DURUM_AD[x.durum]}</Rozet>, csv: (x) => MALZEME_DURUM_AD[x.durum] },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', mono: true, hucre: (x) => sayi(x.miktar, 0) },
-    { anahtar: 'gerekli', baslik: 'Gerekli geliş', mono: true, kirilmaz: true, hucre: (x) => x.plan ?? '—' },
-    { anahtar: 'referans', baslik: 'Referans termin', mono: true, kirilmaz: true, hucre: (x) => x.enGec ?? '—' },
+    { anahtar: 'gerekli', baslik: 'Gerekli geliş', mono: true, kirilmaz: true, hucre: (x) => gunYaz(D, x.plan) },
+    { anahtar: 'referans', baslik: 'Referans termin', mono: true, kirilmaz: true, hucre: (x) => gunYaz(D, x.enGec) },
     { anahtar: 'termin', baslik: 'Termin', hucre: (x) => <input className="tc-alan-kutu tc-pys-tarih" type="date" disabled aria-label={`${x.kod} termin`} /> },
     { anahtar: 'siparisler', baslik: 'Siparişler', mono: true, hucre: (x) => x.isler.join(', ') },
     // İleri at işin başlama tarihini yazar; o tarih Üretim emirlerindendir (222 a). Yerinde, pasif.

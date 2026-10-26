@@ -3,7 +3,7 @@ import { expect, test } from './ortak.ts';
 
 // Planlama P1a-P1c (kart #536): Planlama motoru kabuğu, plan çubuğu ve nabız, görünüm ve dönem çubuğu, Başka menüsü, Özet'in altı bölümü ve
 // Yapılacaklar. Örnek veride çözülmüş plan olabilir de olmayabilir de; test iki hali de kabul eder, yazma göndermez (genişlikler aynı
-// veritabanında paralel koşar). Motor gerektiren düğmeler yerinde ve pasiftir (357 b).
+// veritabanında paralel koşar). Motor gerektiren düğmeler yerinde ve pasiftir (357 b); Planı kur sunucudaki motorla açıktır (576).
 test.use({ hesap: 'ornek.yonetici' });
 
 const tasmaz = async (page: Page) => {
@@ -20,7 +20,15 @@ test.describe('P1a Planlama motoru', () => {
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     const ozet = page.getByRole('region', { name: 'Plan nasıl gidiyor?' });
-    if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
+    if (await page.getByText(BOS).first().isVisible()) {
+      // Planı kur sunucudaki motorla açıktır (576): çalışma varken yazabilene açık, çalışma yoksa pasif. Basılmaz (yazma göndermez).
+      // Yazma yetkisiz pasif hali birim testlerinde (Motor, Atölye): örnek veride sayfayı görüp plan yazamayan rol yok.
+      const calismaYok = await page.getByText('Planlama çalışması yok.').isVisible();
+      for (const b of await page.getByRole('button', { name: 'Planı kur' }).all()) {
+        if (calismaYok) await expect(b).toHaveAttribute('aria-disabled', 'true'); else await expect(b).toBeEnabled();
+      }
+      await tasmaz(page); return;
+    }
     await expect(ozet).toBeVisible();
     if (await ozet.isVisible()) {
       for (const ad of BOLUMLER) await expect(page.getByRole('region', { name: ad })).toBeVisible();
@@ -32,8 +40,6 @@ test.describe('P1a Planlama motoru', () => {
       await expect(page.getByRole('dialog', { name: 'Yapılacaklar' })).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Yapılacaklar' })).toHaveCount(0);
-    } else {
-      await expect(page.getByRole('button', { name: 'Planı kur' })).toHaveAttribute('aria-disabled', 'true');
     }
     await tasmaz(page);
     await page.getByRole('button', { name: /Başka/ }).click();

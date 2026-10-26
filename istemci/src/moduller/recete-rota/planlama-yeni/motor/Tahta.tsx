@@ -9,6 +9,7 @@ import type { HaritaKomutu } from './harita/Harita.tsx';
 import { KilavuzKarti } from './harita/Kilavuz.tsx';
 import { aralik, durusOku, haritaGruplari, ornekTezgah, pencereSonu, sahneKur, yerlesim, zamanSinirla } from './harita/kurallar.ts';
 import { BosCalisma, BosPlan } from './BosPlan.tsx';
+import { usePlanKur } from './coz.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
 import { MOTOR_NOTU } from './ortak.tsx';
@@ -25,7 +26,7 @@ import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
-// (357 b); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
+// (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma;
@@ -118,6 +119,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   // Klavye (zd-tam, zp-klavye, zs-olcek-ortak): yazı alanında ve açık pencerede çalışmaz.
   const { bildir } = useBildirim();
+  const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
+  const planKur = usePlanKur(o, uyar);
   const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir });
   tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir };
   useEffect(() => {
@@ -157,7 +160,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   return (
     <div className="tc-pym" data-gorunum={gorunum}>
       <Cubuk etkin="plan" planaGit={null} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
-        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} />
+        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
           {gorunum === 'atolye' && p ? (
@@ -167,7 +170,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <>
               {p && v && gorunum !== 'cizelge' && cubuk}
               {!p || !v ? (
-                <BosPlan c={c} cx={cx} />
+                <BosPlan c={c} cx={cx} planKur={planKur} />
               ) : gorunum === 'genel' ? (
                 <>
                   {kilavuz && <div className="tc-pym-oz-kilavuz"><KilavuzKarti ornek={ornek} kapat={() => kilavuzAc(false)} /></div>}

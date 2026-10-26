@@ -72,7 +72,7 @@ const sonuc = (r: Awaited<ReturnType<typeof dene>>): DegerlendirmeSonucu => dege
 describe('planlama değerlendirmesi: hesap', () => {
   test('PD-01: her tur sözleşmenin biçiminde döner; şimdi sunucunun anından (09:00), aynı girdi aynı sonucu verir', async () => {
     const istekler: DegerlendirmeIstegi[] = [
-      { tur: 'plan-secenekleri' }, { tur: 'termin-secenekleri', siparisId: 'O2' }, { tur: 'termin-uzatma', gun: 2 }, { tur: 'malzeme-terminleri' },
+      { tur: 'plan-kur' }, { tur: 'plan-secenekleri' }, { tur: 'termin-secenekleri', siparisId: 'O2' }, { tur: 'termin-uzatma', gun: 2 }, { tur: 'malzeme-terminleri' },
       { tur: 'malzeme-one-cekme' }, { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }, { tur: 'siparis-kari' },
     ];
     for (const istek of istekler) {
@@ -156,6 +156,33 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.equal(mb.sonuc?.tl, null);
     const k = sonuc(await dene({ tur: 'siparis-kari' }));
     assert.throws(() => maliyetsiz(k), /maliyeti görene/);
+  });
+
+  test('PD-18: planı kur (576): kuraldan sıfırdan kurar; iki emir yerleşir, plan çalışmanın veri sürümünde, alt sınır ve ilk gecikme kayıtta', async () => {
+    const s = sonuc(await dene({ tur: 'plan-kur' }, calismaKur()));
+    if (s.tur !== 'plan-kur') return assert.fail(s.tur);
+    const dataVer = planGirdisi({ calisma: calismaKur(), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' })?.S['dataVer'];
+    assert.equal(s.plan['dataVer'], dataVer);
+    assert.deepEqual(Object.keys(s.plan['J'] as object).sort(), ['O1', 'O2']);
+    assert.deepEqual(s.plan['fail'], []);
+    assert.equal(typeof s.plan['lb'], 'number');
+    const ozet = s.plan['ozet'] as { wT: number; n: number };
+    assert.equal(ozet.n, 2);
+    assert.ok(ozet.wT <= (s.plan['ilk'] as number) + 1e-9);
+    // kayıtlı plan yalnız dondurma bölgesinde (dengeli: şimdiden 24 saat) kullanılır: orada başlayan iş yerinde kalır (eski sayfanın dengeKilit'i)
+    const c = planli(); const eski = (c['plan'] as { ops: Record<string, { m: string; S: number }> }).ops;
+    const k = sonuc(await dene({ tur: 'plan-kur' }, c));
+    if (k.tur !== 'plan-kur') return assert.fail(k.tur);
+    const yeni = k.plan['ops'] as Record<string, { m: string; S: number }>;
+    const bolge = Object.keys(eski).filter((id) => (eski[id]?.S ?? -1) >= 9 && (eski[id]?.S ?? 99) < 33);
+    assert.ok(bolge.length > 0);
+    for (const id of bolge) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]?.m, eski[id]?.S], id);
+  });
+
+  test('PD-19: planı kur gövdesi tur dışı alan almaz (iyileştirme kipi yok, 579 b)', () => {
+    const q = (istek: unknown) => degerlendirmeGovdesi.safeParse({ surum: 3, istek }).success;
+    assert.equal(q({ tur: 'plan-kur' }), true);
+    assert.equal(q({ tur: 'plan-kur', kip: 'iyilestir' }), false);
   });
 
   test('PD-09: gövde: tur dışı alan, bilinmeyen tur, 20 üstü parti ve gövde dışı alan reddedilir', () => {
@@ -290,6 +317,34 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.ok(c.sonuc.secenekler.every((x) => x.netKar === null && x.ekMesaiTl === null));
     const y = degerlendirmeCevabi.parse((await iste(tam, surum, { tur: 'plan-secenekleri' })).json());
     assert.equal(y.maliyetGorunur, true);
+  });
+
+  // Ekran planı kendi yazma yoluyla alır ve cevabın veri sürümünü çalışmanınkiyle karşılaştırır (576): aynı kişinin okuduğu birleşmiş çalışma
+  // olduğu gibi geri yazılınca sunucu onu yeniden birleştirirken veri sürümünü artırmamalı (kaynak okuması kişinin yetkisiyledir).
+  test('PD-21: planı kur: kararlı birleşmiş çalışma geri yazılınca plan aynı veri sürümünde döner, kayıt değişmez', async () => {
+    // Kayıt çevrildikten sonraki ilk geri yazma birleşimde bir kez daha eskir (siparişin onc0 alanı; DEVIR bulgusu): kararlı duruma iki turda gelinir.
+    await calismaYaz(planli());
+    const oku = async () => {
+      const g = await app.inject({ method: 'GET', url: '/api/recete-rota/planlama-calismasi', headers: { cookie: tam } });
+      assert.equal(g.statusCode, 200, g.body);
+      return (g.json() as { calisma: { dataVer: number } }).calisma;
+    };
+    await calismaYaz(await oku());
+    const birlesik = await oku();
+    const surum = await calismaYaz(birlesik);
+    const once = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    const r = await iste(tam, surum, { tur: 'plan-kur' });
+    assert.equal(r.statusCode, 200, r.body);
+    const c = degerlendirmeCevabi.parse(r.json());
+    if (c.sonuc.tur !== 'plan-kur') return assert.fail(c.sonuc.tur);
+    assert.equal(c.dataVer, birlesik.dataVer);
+    assert.equal(c.sonuc.plan['dataVer'], birlesik.dataVer);
+    // örnek emirler veritabanında yok (PD-13 notu): kaynaktan birleşen çalışmada sipariş kalmaz, plan boş ama kayıt biçiminde
+    assert.equal(typeof c.sonuc.plan['ops'], 'object');
+    assert.ok(c.sonuc.plan['ozet']);
+    assert.deepEqual(await vt().tek('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]), once);
+    assert.equal((await iste(planlamaci, surum, { tur: 'plan-kur' })).statusCode, 200);
+    assert.equal((await iste(yalnizYazar, surum, { tur: 'plan-kur' })).statusCode, 403);
   });
 
   test('PD-11: işlemi olmayan (yalnız recete-rota.yaz) 403, oturumsuz 401; sipariş kârı maliyeti görmeyene 403, yöneticiye 200', async () => {

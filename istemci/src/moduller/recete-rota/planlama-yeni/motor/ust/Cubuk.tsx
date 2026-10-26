@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
+import { KURULUYOR, type PlanKurucu } from '../coz.ts';
 import { MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 
@@ -13,12 +14,14 @@ interface Ozellikler {
   etkin: 'plan' | 'studyo' | null; planaGit: (() => void) | null;
   studyo: () => void; ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
+  // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
+  planKur?: PlanKurucu | null;
 }
 
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'gecikme', true], ['dar', 'darboğaz', true]];
 
 export function Cubuk(o: Ozellikler) {
-  const n = o.nabiz;
+  const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null;
   return (
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
@@ -51,14 +54,19 @@ export function Cubuk(o: Ozellikler) {
               <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
             </button>
           )}
-          {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
-          {o.planYaz && <small className="tc-pym-sb-not">Motor kapalı</small>}
-          {o.planYaz && (
+          {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. Planı kur sunucudaki motorla açıktır (576). */}
+          {o.planYaz && !kur && <small className="tc-pym-sb-not">Motor kapalı</small>}
+          {o.planYaz && (kur ? (
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}
+              title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
+              <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
+            </button>
+          ) : (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
               title={`${o.plan ? 'Planı iyileştir' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Planı iyileştir' : 'Planı kur'}>
               <Simge ad="play" boyut="k" /><span>{o.plan ? 'Planı iyileştir' : 'Planı kur'}</span>
             </button>
-          )}
+          ))}
         </span>
       </div>
       {n && o.nabizAcik && <NabizPaneli {...o} n={n} />}
