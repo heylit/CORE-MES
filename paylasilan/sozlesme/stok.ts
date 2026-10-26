@@ -1193,7 +1193,7 @@ export type YerdekiStokCevabi = z.output<typeof yerdekiStokCevabi>;
 // alabileceği yerde gelir, alamadığı yerde null. Malzeme ve lotta `yerler` yalnız alabileceği yerlerin serbest stoğudur (yoldaki düşülür).
 export const okutYeri = z.object({ konumId: z.number().int(), kod: z.string(), ad: z.string().nullable(), tur: z.enum(KONUM_TURLERI), istasyonId: z.number().int().nullable() });
 export const okutCozCevabi = z.discriminatedUnion('tur', [
-  z.object({ tur: z.literal('yer'), yer: okutYeri, satirlar: yerdekiStokCevabi.shape.satirlar.nullable() }),
+  z.object({ tur: z.literal('yer'), yer: okutYeri, satirlar: yerdekiStokCevabi.shape.satirlar.nullable(), stok: kodCozCevabi.optional() }),
   z.object({
     tur: z.literal('malzeme'),
     // tur ve partinin emri (kart #95): panel Teslim et'te mamul ve yarı mamulü sevke, emri fasona yönlendirir; stok okuması gerektirmez.
@@ -1207,6 +1207,10 @@ export const okutCozCevabi = z.discriminatedUnion('tur', [
     gelenler: z.array(teslim).optional(),
     // Kartın satırları (Soru 128): kart okutulunca gelir; okutma yetkisi olan herkes görür (stok okuması gerekmez).
     kartSatirlari: z.array(refakatKartSatiri).optional(),
+    // Tek kart (614 1a): refakat kartında okutmanın ana eylemi; gelen teslim varsa al, malzeme okutanın istasyonundaysa işi aç, yoksa teslim et.
+    anaEylem: z.enum(['teslim-al', 'isi-ac', 'teslim-et']).optional(),
+    // Stok okuması olana tam çözüm aynı cevapla gelir (tek istek); okuması olmayanda yoktur.
+    stok: kodCozCevabi.optional(),
   }),
   // Kişi kodu (299 b): imzası ve süresi doğrulanmış; teslim o kişinin bulunduğu istasyona, o kişiye yazılır.
   z.object({
