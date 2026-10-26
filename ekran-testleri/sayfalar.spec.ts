@@ -45,8 +45,6 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri?gorunum=bitenler', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri/2', hesap: 'ornek.planlama', baslik: 'Üretim emri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri', hesap: 'ornek.mudur', baslik: 'Üretim Emirleri' },
-  { modul: 'plan', yol: '/cizelge', hesap: 'ornek.planlama', baslik: 'Plan Çizelgesi' },
-  { modul: 'plan', yol: '/matris', hesap: 'ornek.planlama', baslik: 'Plan Matrisi' },
   // Reçete ve Rota bölümleri yeni ekrandadır (541); eski çerçeve /recete-rota/eski altında, planlama bölümleri kendi adresinde çerçevededir.
   { modul: 'recete-rota', yol: '/recete-rota', varis: RECETE_ROTA, hesap: 'ornek.yonetici', baslik: 'Üretim emirleri' },
   { modul: 'recete-rota', yol: '/recete-rota/eski', varis: RECETE_ROTA_ESKI, hesap: 'ornek.yonetici', baslik: 'Reçete ve Rota', cerceve: true },
