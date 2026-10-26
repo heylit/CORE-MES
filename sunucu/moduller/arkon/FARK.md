@@ -873,7 +873,7 @@ Bu tur şunları varsaydı:
 - Dosya deposu temizliği (`dosya-temizligi.ts`, IndexedDB sürüm 8, yeni `blobzaman` deposu): anılmayan dosya silinir; toplam 2 GB'ı aşarsa en uzun
   süredir açılmayan silinir; açık iş ve kuyruğun dosyası hiç silinmez. Çıkışta silme (karar 102 a) değişmedi.
 - Hazırlık yayında okuma ayarını pakete sabitler, 3B modeli bir kez işler ve hazır veriyi pakete koyar (eski `hazirlik.ts` yayını gibi); PDF
-  hazır verisi ortak çizim (731 B) birleşince eklenir (731 A2).
+  hazır verisi de yayında hesaplanıp pakete konur (731 A2; `pdf-hazir.ts pdfHazirla`, ilk sayfa, şifreli PDF atlanır).
 - PDF okuyucu çalışanı (`vendor/pdfjs/pdf.worker.min.js`) kendi cevabında en dar ilkeyi alır: `default-src 'none'; script-src 'self'` (`arkon/sun.ts`).
 - Testler: `tembel-dosya.test.ts` (beş test), `sunucu/moduller/arkon/dosya-temizligi.test.ts`, `baglanti.test.ts` arka uç yolu, `sun.test.ts` PDF
   çalışanı ilkesi, `yeni/veri/depo.test.ts` yüz.
