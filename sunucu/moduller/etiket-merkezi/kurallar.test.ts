@@ -222,7 +222,7 @@ describe('etiket-merkezi kuralları', () => {
     const rp = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'UE-004512-P2' }, { lotNo: 'LT-000123', tedarikciPartiNo: null, dokumNo: 'D-01', sertifikaNo: 'S-01' }, new Date('2026-10-18T22:30:00.000Z'));
     assert.deepEqual([rp['qr'], rp['emirNo'], rp['lot'], rp['urunAd'], rp['adimlar']], ['RP:7', 'UE-004512-P2', 'Lot LT-000123 · Döküm D-01 · Sertifika S-01', 'Örnek flanş', refakatDegerleri(k, new Date())['adimlar']]);
     assert.equal(refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date())['lot'], 'Lot LT-1 · Parti P-9');
-    assert.deepEqual([kayitSablonTuru('refakat-partisi'), kayitSablonTuru('refakat'), kayitSablonTuru('mal-kabul')], ['refakat', 'refakat', 'lot']);
+    assert.deepEqual([kayitSablonTuru('refakat-partisi'), kayitSablonTuru('mal-kabul')], ['refakat', 'lot']);
     assert.equal(kayitUyumHatasi('refakat', 'refakat-partisi'), null, 'refakat partisi refakat şablonuyla basılır');
   });
 

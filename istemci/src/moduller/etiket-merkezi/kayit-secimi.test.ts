@@ -10,13 +10,13 @@ describe('kayitSecimiOku', () => {
     expect(oku('tur=konum&id=1,2,1')).toEqual({ tur: 'konum', idler: [1, 2] });
     expect(oku('tur=lot&id=7')).toEqual({ tur: 'lot', idler: [7] });
     expect(oku('tur=istasyon&id=8,9')).toEqual({ tur: 'istasyon', idler: [8, 9] });
-    expect(oku('tur=refakat&id=12')).toEqual({ tur: 'refakat', idler: [12] });
+    expect(oku('tur=refakat-partisi&id=12')).toEqual({ tur: 'refakat-partisi', idler: [12] });
     expect(oku('tur=malzeme&id=1001')).toEqual({ tur: 'malzeme', idler: [1001] });
     expect(oku('tur=mal-kabul&id=7')).toEqual({ tur: 'mal-kabul', idler: [7] });
   });
 
   it('bilinmeyen tür, boş, sayı olmayan, sıfır, sınır dışı ya da 200 üstü kimlik seçim değildir', () => {
-    for (const s of ['tur=deneme&id=1', 'tur=konum', 'tur=konum&id=', 'tur=konum&id=1,x', 'tur=konum&id=0', 'tur=konum&id=-1', 'tur=konum&id=2147483648', 'tur=konum&id=1.5']) {
+    for (const s of ['tur=deneme&id=1', 'tur=refakat&id=12', 'tur=konum', 'tur=konum&id=', 'tur=konum&id=1,x', 'tur=konum&id=0', 'tur=konum&id=-1', 'tur=konum&id=2147483648', 'tur=konum&id=1.5']) {
       expect(oku(s), s).toBeNull();
     }
     expect(oku(`tur=konum&id=${Array.from({ length: 201 }, (_, i) => i + 1).join(',')}`)).toBeNull();

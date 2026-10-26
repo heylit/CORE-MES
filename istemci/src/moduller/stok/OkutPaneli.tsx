@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, KodOkuyucu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -8,6 +8,7 @@ import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import {
   ELDEN_NOTU, OKUT_BASI, kisiHedefiMi, okutYolu, panelOkutuldu, tasimaGovdesi, teslimGovdesi, type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
 } from './okut-akisi.ts';
+import { stokKodCozAnahtari } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
 import './stok.css';
@@ -24,17 +25,25 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
 }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
-  useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); } }, [sifir]);
+  // Okutulan raf: gözleri düğme olur; seçilen göz kendi etiketi okutulmuş gibi çözülür.
+  const [raf, setRaf] = useState<Extract<OkutCozCevabi, { tur: 'raf' }> | null>(null);
+  useEffect(() => { if (sifir > 0) { setDurum(OKUT_BASI); setSonuc(null); setRaf(null); } }, [sifir]);
+  const sorgu = useQueryClient();
   const coz = useMutation({
     mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
     onSuccess: (c, kod) => {
       setSonuc(null);
+      setRaf(c.tur === 'raf' ? c : null);
+      // Stok okuması olana tam çözüm aynı cevapla gelir; Mal kabul ve Sevk bölümleri ikinci kez istemez.
+      if ((c.tur === 'malzeme' || c.tur === 'yer') && c.stok) sorgu.setQueryData(stokKodCozAnahtari(kod), c.stok);
       if (durum.adim === 'ne') okundu?.(kod, c);
       const p = panelOkutuldu(durum, c);
       if (p.tur === 'teslim-et') { setDurum(OKUT_BASI); teslimEteGec(p.hedef); } else setDurum(p.durum);
     },
   });
-  const basaDon = (metin: string | null) => { setDurum(OKUT_BASI); setSonuc(metin); };
+  const basaDon = (metin: string | null) => { setDurum(OKUT_BASI); setSonuc(metin); setRaf(null); };
+  // Tek kart (614 1a): okutmanın sonuç kartı varken "nereye" adımı ayrı adım şeridi açmaz; sonraki okutma nereyedir.
+  const tekKart = sonucKarti != null && durum.adim === 'nereye';
   const ipucu = durum.adim === 'ne' ? 'Malzeme, lot, raf ya da kişinin kodunu okut; okutmadan aşağıdaki sekmelerle de çalışılır.'
     : durum.adim === 'kaynak-sec' ? 'Ne: malzeme, lot ya da alacağın yerin etiketi.' : 'Nereye: istasyon, raf, harita kutusu ya da alacak kişinin kodu.';
   return (
@@ -44,15 +53,20 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         {durum.adim !== 'onay' && <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} />}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
+        {raf && raf.gozler.length > 0 && (
+          <ul className="tc-stok-okut-gozler" aria-label={`Raf ${raf.raf.kod} gözleri`}>
+            {raf.gozler.map((g) => <li key={g.konumId}><Dugme simge="box" disabled={coz.isPending} onClick={() => coz.mutate(`LOC:${g.kod}`)}>{g.kod}</Dugme></li>)}
+          </ul>
+        )}
         {sonucKarti}
       </div>
       {durum.adim === 'ne' ? children : (
         <div className="tc-stok-form tc-stok-okut-paneli">
-          <ol className="tc-stok-okut-adimlar" aria-label="Adımlar">
+          {!tekKart && <ol className="tc-stok-okut-adimlar" aria-label="Adımlar">
             <li aria-current={durum.adim === 'kaynak-sec' ? 'step' : undefined}>Ne</li>
             <li aria-current={durum.adim === 'nereye' ? 'step' : undefined}>Nereye</li>
             <li aria-current={durum.adim === 'onay' ? 'step' : undefined}>Onay</li>
-          </ol>
+          </ol>}
           {durum.adim === 'kaynak-sec' && <KaynakSecimi secenekler={durum.secenekler} sec={(kaynak) => setDurum({ adim: 'nereye', kaynak, ileti: null })} />}
           {(durum.adim === 'nereye' || durum.adim === 'onay') && <KaynakOzeti kaynak={durum.kaynak} />}
           {durum.adim === 'onay' && <Onay kaynak={durum.kaynak} hedef={durum.hedef} geri={() => setDurum({ adim: 'nereye', kaynak: durum.kaynak, ileti: null })} bitti={basaDon} />}

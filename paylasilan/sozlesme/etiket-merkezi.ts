@@ -19,8 +19,8 @@ export const EN_COK_ADET = 500;
 
 // Gerçek kayıttan basılan etiketin kaynağı. Stok ekranı seçili konumları adresle gönderir: /etiket-merkezi?tur=konum&id=1,2,3
 // "mal-kabul" o kabulden açılan bütün lotları lot şablonuyla basar; "raf" Fabrika Haritası'ndaki raftır (#116).
-// refakat: üretim emri kimliği; refakat-partisi: stoktaki refakat partisi (emir + lot, kart #127), refakat şablonuyla basılır.
-export const KAYIT_TURLERI = ['konum', 'raf', 'lot', 'istasyon', 'refakat', 'refakat-partisi', 'malzeme', 'mal-kabul'] as const;
+// refakat-partisi: stoktaki refakat kartı (emir + lot, kart #127), refakat şablonuyla basılır. Emirden lotsuz kart basılmaz (Soru 587 a).
+export const KAYIT_TURLERI = ['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'mal-kabul'] as const;
 export type KayitTuru = (typeof KAYIT_TURLERI)[number];
 export const EN_COK_KAYIT = 200;
 const kayitId = z.number().int().positive().max(2147483647);

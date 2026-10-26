@@ -31,11 +31,17 @@ export const OKUT_BASI: OkutDurumu = { adim: 'ne', ileti: null };
 
 // Kişiye teslim (299 b) kişinin bulunduğu istasyona ve o kişiye yazılır. Kişi kaynak olmaz; ilk okutmada panel Teslim et'i açar (panelOkutuldu).
 const KISI_ILETISI = 'Kişinin kodu kaynak olmaz; önce malzemeyi okut, kişiyi nereye adımında okut.';
+// 614 3a: emir kimliğini taşıyan eski kart teslimde geçmez; malzeme depodan verilen refakat kartıyla gider.
+export const ESKI_KART_ILETISI = 'Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.';
+// Raf stok yeri değildir: göz seçilir (panel rafın gözlerini düğme olarak gösterir) ya da gözün etiketi okutulur.
+export const RAF_ILETISI = (kod: string): string => `Raf ${kod}: gözü seç ya da gözün etiketini okut.`;
 const yerAdi = (y: OkutYeri): string => (y.ad ? `${y.ad} (${y.kod})` : y.kod);
 
 function kaynaklar(c: OkutCozCevabi): OkutKaynagi[] | string {
   if (c.tur === 'bilinmiyor') return `Kod tanınmadı: ${c.kod}`;
   if (c.tur === 'kisi') return KISI_ILETISI;
+  if (c.tur === 'eski-kart') return ESKI_KART_ILETISI;
+  if (c.tur === 'raf') return RAF_ILETISI(c.raf.kod);
   if (c.tur === 'malzeme') {
     const ad = c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;
     if (c.yerler.length === 0) {
@@ -61,6 +67,7 @@ export function okutuldu(d: OkutDurumu, c: OkutCozCevabi): OkutDurumu {
       if (kaynak.yer.istasyonId === c.istasyon.id) return { adim: 'nereye', kaynak, ileti: `Malzeme zaten ${c.istasyon.ad} istasyonunda; başka bir yer okut.` };
       return { adim: 'onay', kaynak, hedef: { alici: { kod: c.kod, ad: c.kisi.ad }, istasyon: c.istasyon } };
     }
+    if (c.tur === 'raf') return { adim: 'nereye', kaynak, ileti: RAF_ILETISI(c.raf.kod) };
     if (c.tur !== 'yer') return { adim: 'nereye', kaynak, ileti: c.tur === 'bilinmiyor' ? `Kod tanınmadı: ${c.kod}` : 'Nereye bırakılacağını okut: istasyon, raf ya da alan etiketi.' };
     if (ayniYer(kaynak.yer, c.yer)) return { adim: 'nereye', kaynak, ileti: 'Malzeme zaten burada; başka bir yer okut.' };
     return { adim: 'onay', kaynak, hedef: c.yer };
@@ -104,7 +111,9 @@ export function teslimGovdesi(kaynak: OkutKaynagi, hedef: OkutHedefi, miktar: st
 
 // Malzeme penceresinin üstündeki okuyucu (372 a): ilk okutmada kişi kodu Teslim et'i o kişiye hedefli açar; öteki her kod akışa girer.
 export type PanelOkutmasi = { tur: 'akis'; durum: OkutDurumu } | { tur: 'teslim-et'; hedef: OkutulanHedef };
+// Tek kart (614 1a): refakat kartının ana eylemi teslim al ya da işi aç ise akış başlamaz, iş sonuç kartından tek dokunuşla yapılır.
 export function panelOkutuldu(d: OkutDurumu, c: OkutCozCevabi): PanelOkutmasi {
   if (d.adim === 'ne' && c.tur === 'kisi') return { tur: 'teslim-et', hedef: { yer: { istasyonId: c.istasyon.id }, alici: { kod: c.kod, ad: c.kisi.ad } } };
+  if (d.adim === 'ne' && c.tur === 'malzeme' && (c.anaEylem === 'teslim-al' || c.anaEylem === 'isi-ac')) return { tur: 'akis', durum: OKUT_BASI };
   return { tur: 'akis', durum: okutuldu(d, c) };
 }

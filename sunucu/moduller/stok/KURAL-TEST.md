@@ -168,3 +168,5 @@ Karar: kullanıcı, 26.10.2026 (614 1a, 3a; okuma teyitli).
 |---|---|---|
 | STK-655a refakat kartı okutulunca tek ana eylem: okutana kartla yolda gelen teslim varsa Teslim al; yoksa kartın malzemesi okutanın kapsamındaki istasyondaysa (kart açık) İşi aç; yoksa Teslim et | S `kurallar.test.ts` "614 1a tek kart"; T `teslim.test.ts` "kart #123 refakat partisi" | Sürümsüz (okuma) |
 | STK-655b stok okuması olana okutma cevabı tam çözümü (`stok`) taşır, okuması olmayana taşımaz; serbest miktar yer başına sorgu atılmadan topluca hesaplanır | T `teslim.test.ts` "kart #123 refakat partisi", "QR okut" | Sürümsüz (okuma) |
+| STK-655c raf etiketi (`RAF:<kod>`) rafın açık gözlerini yer olarak döner; olmayan ya da depolar arasında tekrar eden kod tanınmaz | T `teslim.test.ts` "614 1a, 3a" | Sürümsüz (okuma) |
+| STK-655d eski refakat kartı (`UE:<emir>`) `eski-kart` döner, teslim akışına girmez; elle yazılan emir no (`UE-…`) tanınmaz | T `teslim.test.ts` "614 1a, 3a"; S `okut-akisi.test.ts` | Sürümsüz (okuma) |

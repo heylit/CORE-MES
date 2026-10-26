@@ -1,0 +1,63 @@
+/* Resim ve modeller sayfası: Arkon çizim stüdyosunun üç sütunu (labfiles, labdraw, labset); yalnız tasarım değişkenleri. */
+.km-st {
+  display: grid; grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr) var(--kuyruk-genis); gap: var(--b-3);
+  height: calc(100dvh - var(--ust-cubuk) - var(--b-6) * 5); min-height: calc(var(--pencere-genis) + var(--b-6)); min-width: 0;
+}
+.km-st-sol, .km-st-sag { display: flex; flex-direction: column; gap: var(--b-3); min-height: 0; overflow: auto; }
+.km-st-orta { display: flex; min-width: 0; min-height: 0; }
+.km-st-kart {
+  display: grid; gap: var(--b-2); padding: var(--b-3); border-radius: var(--yari-3);
+  background: var(--panel); border: var(--cizgi-ince) solid var(--edge);
+}
+.km-st-baslik { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.km-st-soluk { color: var(--muted); font-size: var(--yazi-s); }
+.km-st-parca { display: grid; gap: var(--b-1); }
+.km-st-parca span { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.km-st-kod { font-family: var(--font-mono); font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.km-st-liste { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.km-st-belge {
+  display: flex; align-items: center; gap: var(--b-2); width: 100%; min-height: var(--dugme-boy); padding: var(--b-2); border-radius: var(--yari-2);
+  border: var(--cizgi-ince) solid transparent; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.km-st-belge:hover { background: var(--panel2); border-color: var(--edge); }
+.km-st-belge.cur { border-color: color-mix(in srgb, var(--hazard) 50%, transparent); background: color-mix(in srgb, var(--hazard) 8%, transparent); }
+.km-st-belge-ad { display: grid; min-width: 0; }
+.km-st-belge-ad b { font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.km-st-belge-ad small { color: var(--muted); font-size: var(--yazi-xs); }
+.km-st-tur {
+  --c: var(--run);
+  flex: none; width: var(--dokunma-yogun); height: var(--dokunma-yogun); display: grid; place-items: center; border-radius: var(--yari-1);
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.km-st-tur-resim { --c: var(--stop); }
+.km-st-plan { display: grid; gap: var(--b-1); font-size: var(--yazi-s); }
+.km-st-plan li { color: var(--muted); }
+.km-st-numune { display: grid; gap: var(--b-1); padding: var(--b-2); border-radius: var(--yari-1); background: var(--panel2); }
+.km-st-numune-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.km-st-numune-ust b { margin-right: auto; font-size: var(--yazi-s); }
+.km-st-numune .km-st-soluk { font-size: var(--yazi-xs); }
+.km-st-mseg { display: none; }
+
+/* 768: sağ sütun alta iner. */
+@media (max-width: 1199px) {
+  .km-st { grid-template-columns: var(--kuyruk-genis) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; height: auto; }
+  .km-st-orta { min-height: calc(var(--pencere-genis) + var(--b-6) * 2); }
+  .km-st-sag { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--acilir-encok), 1fr)); overflow: visible; }
+}
+
+/* 360: tek sütun; Parça, Resim, Plan sekmeyle değişir (Arkon mseg). */
+@media (max-width: 767px) {
+  .km-st { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto; min-height: 0; }
+  .km-st-mseg {
+    display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge);
+  }
+  .km-st-mseg button {
+    flex: 1; min-height: var(--dokunma); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .km-st-mseg button.on { background: var(--hazard); color: var(--on-hazard); }
+  .km-st-sag { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
+  .km-st-orta { height: calc(100dvh - var(--ust-cubuk) - var(--alt-cubuk) - var(--b-6) * 3); min-height: var(--pencere-genis); }
+  .km-st-m-dosya .km-st-orta, .km-st-m-dosya .km-st-sag,
+  .km-st-m-resim .km-st-sol, .km-st-m-resim .km-st-sag,
+  .km-st-m-plan .km-st-sol, .km-st-m-plan .km-st-orta { display: none; }
+}
