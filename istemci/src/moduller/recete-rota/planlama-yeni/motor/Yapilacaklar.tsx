@@ -14,7 +14,7 @@ import { MOTOR_NOTU } from './ortak.tsx';
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
   komut: CalismaKomutu | null; sipSec: (j: string) => void; secim: PlanlamaSecimi;
-  pan: KbPanel | null; panAc: (v: KbPanel | null) => void; studyo: () => void;
+  pan: KbPanel | null; panAc: (v: KbPanel | null) => void; studyo: () => void; veriAc?: ((bolum: string) => void) | null;
 }
 const KISAYOLLAR: [string, [string, string][]][] = [
   ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi'],
@@ -107,8 +107,8 @@ export function Yapilacaklar(o: Ozellikler) {
   );
 }
 
-function Karar({ x, c, komut, sipSec, ac }: Ozellikler & { x: Sorun }) {
-  const e = x.eylem; const { yap, not } = eylemYapisi(e, { c, komut, sipSec });
+function Karar({ x, c, komut, sipSec, ac, veriAc }: Ozellikler & { x: Sorun }) {
+  const e = x.eylem; const { yap, not } = eylemYapisi(e, { c, komut, sipSec, veriAc });
   return (
     <li data-ton={x.ton}>
       <Simge ad={x.simge} boyut="k" />

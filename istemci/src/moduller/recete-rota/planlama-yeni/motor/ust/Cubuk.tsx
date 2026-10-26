@@ -10,8 +10,9 @@ import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from
 interface Ozellikler {
   plan: boolean; guncel: boolean; planYaz: boolean;
   nabiz: NabizDurumu | null; nabizAcik: boolean; nabizAc: (ac: boolean) => void;
-  // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi motora gider.
-  etkin: 'plan' | 'studyo' | null; planaGit: (() => void) | null;
+  // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", Veri ve kısıtlar "veri", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi
+  // motorun tahtasına gider; `veri` verilmezse Veri düğmesi pasiftir (iskeletsiz çizim).
+  etkin: 'plan' | 'studyo' | 'veri' | null; planaGit: (() => void) | null; veri?: (() => void) | null;
   studyo: () => void; ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
   // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
@@ -28,7 +29,9 @@ export function Cubuk(o: Ozellikler) {
         <nav className="tc-pym-sb-ekran" aria-label="Ekranlar">
           <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.etkin === 'plan' ? undefined : o.planaGit ?? undefined} title={o.etkin === 'plan' ? undefined : 'Plan'}><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
           <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Planlama stüdyosu"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
-          <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>
+          {o.etkin === 'veri' || o.veri
+            ? <button type="button" aria-current={o.etkin === 'veri' ? 'page' : undefined} onClick={o.etkin === 'veri' ? undefined : o.veri ?? undefined} title="Veri ve kısıtlar"><Simge ad="layers" boyut="k" /><span>Veri</span></button>
+            : <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>}
           <button type="button" aria-disabled="true" title={`Geçmiş: ${YOK_NOTU}`}><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>
         </nav>
         {n && (
