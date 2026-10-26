@@ -12,8 +12,8 @@ const KISITLAR=[
   not:'Alt sınır ve çerçeve en kısa ayarı alır. CP-SAT geçişi tezgâh sırasıyla hesaplar; geçişin uzattığı süreyi takvimsiz ekler.'},
  {id:'fai',ad:'İlk parça onayı',veri:'rota[].fai, ayarlar.faiSaat',motor:'tam',sinir:'tam',cerceve:'tam',cpsat:'tam',not:''},
  {id:'ayarci',ad:'Ayarcı sayısı',veri:'personel[].ayar, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',not:'CP-SAT ayarcıyı en kısa ayar süresince sayar.'},
- {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
-  not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz.'},
+ {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar/makineler/enCok, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
+  not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz. Kişiye makine ataması (makineler, enCok) yalnız sezgisel motordadır; CP-SAT grup düzeyinde kalır.'},
  {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'tam',not:''},
  {id:'fason',ad:'Fason çıkış günü, süre, kapasite',veri:'fasoncular',motor:'tam',sinir:'yaklasik',cerceve:'tam',cpsat:'tam',not:'Alt sınır fason kapasitesini saymaz.'},
  {id:'program',ad:'CNC programı hazır olmadan başlamaz',veri:'rota[].program, ayarlar.programSaat',motor:'tam',sinir:'tam',cerceve:'yok',cpsat:'tam',not:''},
@@ -34,7 +34,10 @@ function veriDenetimi(st,cx){
   const ayarci=new Set(D.personel.filter(p=>p.ayar).map(p=>p.vardiya));
   for(const m of D.tezgahlar){const vs=m.vardiyalar&&m.vardiyalar.length?m.vardiyalar:[...new Set(Object.values(D.calismaGunleri).flat())];
     const op=m.opOran==null?1:+m.opOran;
-    for(const v of vs){if(op>0&&!(kim[m.grup]||new Set()).has(v))bul('personel',`${m.id} ${v} vardiyasında açık ama ${m.grup} yetkinliğinde personel yok; bu vardiyadaki işler yerleşemez.`);
+    const kayitli=D.personel.filter(p=>(p.makineler||[]).includes(m.id));
+    if(op>0&&kayitli.length&&kayitli.length<Math.ceil(op-1e-9))bul('personel',`${m.id} ${op} operatör ister ama listesinde ${kayitli.length} kişi var; işleri yerleşemez.`);
+    for(const v of vs){if(op>0&&kayitli.length&&!kayitli.some(p=>p.vardiya===v))bul('personel',`${m.id} ${v} vardiyasında açık ama listesinde bu vardiyada kişi yok; bu vardiyadaki işler yerleşemez.`);
+      else if(op>0&&!kayitli.length&&!(kim[m.grup]||new Set()).has(v))bul('personel',`${m.id} ${v} vardiyasında açık ama ${m.grup} yetkinliğinde personel yok; bu vardiyadaki işler yerleşemez.`);
       if(!ayarci.has(v))bul('ayarci',`${m.id} ${v} vardiyasında ayarcı yok; ayar bu vardiyada yapılamaz.`);}}
   for(const o of cx.ops){if(!o.c.length)bul('tezgah',`${o.id}: uygun tezgâh ya da fasoncu yok.`);
     if(o.aparat&&!cx.AP[o.aparat])bul('aparat',`${o.id}: ${o.aparat} aparatı tanımlı değil.`);}
