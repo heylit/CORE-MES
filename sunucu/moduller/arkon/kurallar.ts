@@ -1826,6 +1826,18 @@ export function ilkParcaOlculeri(paket: unknown): IlkParcaOlcusu[] {
 
 const KARAR_DURUMLARI: ReadonlySet<unknown> = new Set(['approved', 'deviation', 'rejected']);
 
+// 564 5 a: kalitenin terminaldeki (ya da Arkon Kalite sayfasındaki) Kabul/Red'i, istek ilk parça kapısındaki kalite ölçüsünü taşıyorsa
+// Kalite Merkezi'nin ilk parça kararıdır; ayrıca Kalite Merkezi'nde karar verilmez. Sapma izniyle onay da onaydır. Yalnız durum
+// değişince karar doğar: aynı kararın yeniden yazılması ikinci karar değildir, kararın değişmesi (ret sonra onay) yeni karardır.
+export function ilkParcaNumuneKarari(istek: unknown, onceki: unknown, paket: unknown): 'onay' | 'ret' | null {
+  const durum = alanOku(istek, 'status');
+  if (!KARAR_DURUMLARI.has(durum) || durum === alanOku(onceki, 'status')) return null;
+  const kapi = new Set(ilkParcaOlculeri(paket).filter((o) => o.olcen === 'q').map((o) => o.id));
+  const olculer = alanOku(istek, 'items');
+  if (!Array.isArray(olculer) || !olculer.some((id) => kapi.has(String(id)))) return null;
+  return durum === 'rejected' ? 'ret' : 'onay';
+}
+
 // Terminal kural 1/5 (kullanıcı kararı): son numune RED, revizyon ya da paket içeriği (plan, adım, doküman, süre) değiştiyse yeniden başlatmada
 // ilk parça onayı kendiliğinden istenmez; plan ya da hazırlık paket üzerinde karar verir (`fpRe`). Ayar (kv/policy `fpRestart`) açıkken (varsayılan) hazırlık ekranı sorar;
 // kapalıysa soru da kapı da yoktur. Kararı yayın rolleri verir; kişi ve kararın verildiği andaki karara bağlanmış numuneler (`once`) sunucudan

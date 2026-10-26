@@ -9,7 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
-import { kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { ilkParcaNumuneKarari, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -190,6 +190,21 @@ test('ilk parça ölçüleri tabletin numune planından çıkar (B-006): eski pa
   const samp = [{ when: 'first', gate: true, who: ['op', 'q'], items: 'crit' }, { when: 'first', gate: false, items: [1] }, { when: 'every', n: 5, gate: true, items: [2] }];
   assert.deepEqual(ilkParcaOlculeri({ plan, samp }), [{ id: '3', olcen: 'op' }]);
   assert.deepEqual(ilkParcaOlculeri({ plan, samp: [{ when: 'first', gate: true, items: [2] }, { when: 'first', gate: true, who: ['op'], items: [2] }] }), [{ id: '2', olcen: 'q' }]);
+});
+
+test('564 5 a: ilk parça numunesinin Kabul/Red\'i Kalite Merkezi kararıdır; durum değişmezse, kapı dışı ölçüde ve operatör ölçüsünde karar yok', () => {
+  const paket = { plan: [{ id: 1 }, { id: 2, freq: 'Her 10 parça' }] };
+  const istek = (status: string, items: unknown = [1]) => ({ pkgId: 'p', status, items });
+  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('waiting'), paket), 'onay');
+  assert.equal(ilkParcaNumuneKarari(istek('deviation'), undefined, paket), 'onay', 'sapma izniyle onay');
+  assert.equal(ilkParcaNumuneKarari(istek('rejected'), istek('measuring'), paket), 'ret');
+  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('rejected'), paket), 'onay', 'retten sonra onay yeni karardır');
+  assert.equal(ilkParcaNumuneKarari(istek('approved'), istek('approved'), paket), null, 'aynı kararın yeniden yazılması');
+  assert.equal(ilkParcaNumuneKarari(istek('measuring'), istek('waiting'), paket), null);
+  assert.equal(ilkParcaNumuneKarari(istek('approved', [2]), istek('waiting', [2]), paket), null, 'kapı dışı ölçü');
+  assert.equal(ilkParcaNumuneKarari(istek('approved', 'x'), undefined, paket), null);
+  assert.equal(ilkParcaNumuneKarari(istek('approved'), undefined, { ...paket, rules: { q: { who: 'operator' } } }), null, 'operatörün ölçtüğü kapı');
+  assert.equal(ilkParcaNumuneKarari(istek('approved'), undefined, { ...paket, opType: 'kalite' }), null, 'talaşlı olmayan iş');
 });
 
 test('denetim #12: yeniden ilk parça kararın anından sonraki Kalite Merkezi onayıyla kapanır; ret, eski onay ve damgasız karar kapatmaz', () => {
