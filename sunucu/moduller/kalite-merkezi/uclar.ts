@@ -6,6 +6,12 @@ import {
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
+import {
+  kmBalonlarGovdesi, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
+  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoParcaCevabi,
+  kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi,
+} from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import * as studyo from './studyo.ts';
 
 // Uygulamanın yerel sunucu sözleşmesinin (sunucu.py: sync, doc, files, restore) TMI karşılığı. Okuma tek akıştan, yazma
 // kayıt başına; kural sunucudadır (değişiklik izi yalnız eklenir), kaydın içeriği uygulamanındır.
@@ -194,5 +200,126 @@ export const uclar: Uc[] = [
     parametre: kmDosyaParametresi,
     cevap: kmTamamCevabi,
     isle: ({ db, parametre, denetimEki }) => servis.dosyaSil(db, parametre.kimlik, denetimEki),
+  }),
+  // Stüdyo (595 1 b, 597 a, 600 a): resim, balon ve numune planı okunur; numune ve ölçüm Kalite Merkezi'nde yazılır. Resim alma,
+  // kontrol planı ve numune planı kalite onayıdır (603 a: kalite-merkezi.onayla).
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoParcaParametresi,
+    cevap: kmStudyoParcaCevabi,
+    isle: ({ db, parametre }) => studyo.studyoParcasi(db, parametre.malzemeNo),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/dosya',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoResimParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, parametre }) => studyo.resimDosyasi(db, parametre.resimId),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/numuneler',
+    yetki: 'kalite-merkezi.oku',
+    cevap: kmNumunelerCevabi,
+    isle: async ({ db }) => ({ numuneler: await studyo.acikNumuneler(db) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/numuneler/:numuneId',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoNumuneParametresi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, parametre }) => ({ numune: await studyo.numuneOku(db, parametre.numuneId) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/emirler/:uretimEmriId/numuneler',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoEmirParametresi,
+    cevap: kmNumunelerCevabi,
+    isle: async ({ db, parametre }) => ({ numuneler: await studyo.emirNumuneleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/studyo/emirler/:uretimEmriId/olcumler',
+    yetki: 'kalite-merkezi.oku',
+    parametre: kmStudyoEmirParametresi,
+    cevap: kmOlcumlerCevabi,
+    isle: async ({ db, parametre }) => ({ olcumler: await studyo.emirOlcumleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/al',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    govde: kmResimEkleGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ resim: await studyo.resimMerkezdenEkle(db, kullanici.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/kaldir',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmSurumGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ resim: await studyo.resimKaldir(db, kullanici.id, parametre.resimId, govde.surum) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/balonlar',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmBalonlarGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ resim: await studyo.balonPlaniYaz(db, kullanici.id, parametre.resimId, govde.surum, govde.balonlar) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo/numune-planlari/:opNo',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoPlanParametresi,
+    govde: kmNumunePlaniGovdesi,
+    cevap: kmNumunePlaniCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ plan: await studyo.numunePlaniYaz(db, kullanici.id, parametre.malzemeNo, parametre.opNo, govde.surum, govde.kurallar) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/numuneler/iste',
+    yetki: 'kalite-merkezi.yaz',
+    // Her çağrı yeni numune açar: cevabı kaybolan isteğin yinelemesi ikinci numune açmasın.
+    tekrarKorumali: true,
+    govde: kmNumuneIsteGovdesi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ numune: await studyo.numuneIste(db, kullanici.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/olcumler/yaz',
+    yetki: 'kalite-merkezi.yaz',
+    tekrarKorumali: true,
+    govde: kmOlcumGovdesi,
+    cevap: kmOlcumlerCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ olcumler: await studyo.olcumYaz(db, kullanici.id, 'kalite', govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/numuneler/:numuneId/karar',
+    // Numune kararı kalite onayıdır (600 a): ilk parça kararıyla aynı yetki.
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoNumuneParametresi,
+    govde: kmNumuneKarariGovdesi,
+    cevap: kmNumuneCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ numune: await studyo.numuneKarari(db, kullanici.id, parametre.numuneId, govde.karar, govde.not ?? null) }),
   }),
 ];

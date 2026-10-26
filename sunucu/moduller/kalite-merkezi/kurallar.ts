@@ -721,6 +721,167 @@ export function lotIstegiReddi(i: LotKarariIstegi): 'lotKaynagi' | 'lotParcasi' 
   return sayilar.some((x) => x !== null) ? null : 'lotSayisi';
 }
 
+/* ---------------- Stüdyo: teknik resim, balon, numune, ölçüm (595 1 b, 597 a, 600 a) ---------------- */
+
+export const STUDYO_ILETILER = {
+  parcaYok: 'Parça kartı bulunamadı.',
+  belgeYok: 'Belge merkezinde yayında revizyonu olan belge bulunamadı.',
+  belgeTuru: 'Stüdyo yalnız PDF resim ile STEP, STL ve IGES model açar.',
+  resimYok: 'Resim bulunamadı.',
+  revizyonDegisti: 'Belge merkezinde bu resmin yeni revizyonu yayında; alınan revizyon artık verilemiyor. Yeni revizyonu parçaya alın.',
+  emirYok: 'Üretim emri bulunamadı.',
+  numuneYok: 'Numune bulunamadı.',
+  olcumYinelenen: 'Aynı balon bir girişte bir kez ölçülür.',
+  balonEmirDisi: 'Balon bu emrin parçasının etkin resminde değil.',
+  numuneEmirDisi: 'Numune bu emrin değil.',
+  numuneKararli: 'Kararı verilmiş numuneye ölçüm girilmez.',
+  balonNumuneDisi: 'Balon bu numunede istenmedi.',
+  olcumSayisal: 'Bu ölçü sayısal değerle girilir.',
+  olcumNitel: 'Bu ölçü geçer ya da geçmez ile girilir.',
+  numuneBalonYinelenen: 'Numunede aynı balon bir kez istenir.',
+  kararVar: 'Bu numunenin kararı verilmiş.',
+  redOlcusuz: 'Red için en az bir ölçü girilmeli.',
+  redGerekcesiz: 'Red için gerekçe yazılmalı.',
+  kararEksikOlcum: 'Onay ve sapma için numunenin bütün balonları ölçülmeli.',
+  onayUygunsuz: 'Uygunsuz ölçü varken onay verilmez; sapma ile onay ya da red seçilir.',
+  sapmaGereksiz: 'Bütün ölçüler uygun; sapma değil onay verilir.',
+  surumDegisti: 'Bu kayıt siz açtıktan sonra değişti; yenileyip yeniden deneyin.',
+  resimPasif: 'Kaldırılmış resmin planı değiştirilmez.',
+  balonNoTekrar: 'Aynı balon numarası planda bir kez kullanılır.',
+  balonResimDisi: 'Balon bu resmin etkin balonu değil.',
+  balonSinirEksik: 'Alt ve üst sınır birlikte verilir ya da ikisi de boş kalır (geçer/geçmez).',
+  balonSinirTers: 'Alt sınır üst sınırdan büyük olamaz.',
+  balonKonumEksik: 'Balon konumu x ve y ile birlikte verilir.',
+  balonAcikNumunede: 'Kararı verilmemiş numunede istenen balon kaldırılamaz.',
+  kuralKimlikTekrar: 'Numune planında aynı kural kimliği bir kez kullanılır.',
+  kuralBalonYok: 'Numune kuralındaki balon numarası parçanın etkin resimlerinde yok.',
+} as const;
+export type StudyoIletisi = keyof typeof STUDYO_ILETILER;
+
+// Stüdyo PDF'i resim, STEP/STL/IGES'i model olarak açar (Arkon'un belge merkezinden aldığı türler); öteki türler stüdyoda açılmaz.
+export function studyoResimTuru(dosyaTuru: string): 'resim' | 'model' | null {
+  if (dosyaTuru === 'pdf') return 'resim';
+  return dosyaTuru === 'step' || dosyaTuru === 'stl' || dosyaTuru === 'iges' ? 'model' : null;
+}
+
+interface Ondalik { isaret: -1 | 0 | 1; tam: string; kesir: string }
+function ondalikCoz(s: string): Ondalik {
+  const m = /^(-)?(\d+)(?:\.(\d+))?$/.exec(s);
+  if (m === null) throw new Error(`Ondalık sayı değil: ${s}`);
+  const tam = m[2]!.replace(/^0+/, '');
+  const kesir = (m[3] ?? '').replace(/0+$/, '');
+  return { isaret: tam === '' && kesir === '' ? 0 : m[1] === '-' ? -1 : 1, tam, kesir };
+}
+
+// Ölçülen değer ve balon sınırı ondalık metindir (numeric): kayan nokta yuvarlaması sınırdaki değeri yanlış tarafa atmasın diye
+// basamak basamak karşılaştırılır.
+export function ondalikKarsilastir(a: string, b: string): -1 | 0 | 1 {
+  const x = ondalikCoz(a);
+  const y = ondalikCoz(b);
+  if (x.isaret !== y.isaret) return x.isaret < y.isaret ? -1 : 1;
+  let mutlak: -1 | 0 | 1 = 0;
+  if (x.tam.length !== y.tam.length) mutlak = x.tam.length < y.tam.length ? -1 : 1;
+  else if (x.tam !== y.tam) mutlak = x.tam < y.tam ? -1 : 1;
+  else {
+    const n = Math.max(x.kesir.length, y.kesir.length);
+    const xk = x.kesir.padEnd(n, '0');
+    const yk = y.kesir.padEnd(n, '0');
+    if (xk !== yk) mutlak = xk < yk ? -1 : 1;
+  }
+  return x.isaret < 0 ? (-mutlak as -1 | 0 | 1) : mutlak;
+}
+
+// Sınırı olan balon sayısal değerle, sınırı olmayan (geçer/geçmez mastarı) nitel sonuçla ölçülür; uygunluk sınırdan hesaplanır.
+export function olcumSonucu(
+  balon: { alt: string | null; ust: string | null }, girdi: { deger?: string | undefined; nitel?: 'gecer' | 'gecmez' | undefined },
+): { uygun: boolean } | { ret: StudyoIletisi } {
+  if (balon.alt !== null && balon.ust !== null) {
+    if (girdi.deger === undefined) return { ret: 'olcumSayisal' };
+    return { uygun: ondalikKarsilastir(balon.alt, girdi.deger) <= 0 && ondalikKarsilastir(girdi.deger, balon.ust) <= 0 };
+  }
+  if (girdi.nitel === undefined) return { ret: 'olcumNitel' };
+  return { uygun: girdi.nitel === 'gecer' };
+}
+
+// Ölçülen balon emrin parçasının etkin resmindedir; numuneye girilen ölçü o emrin kararsız numunesinin istenen balonudur.
+export function olcumIstegiReddi(i: {
+  uretimEmriId: number; emirMalzemeNo: number | null; istenen: readonly number[]; balonlar: readonly { id: number; malzemeNo: number }[];
+  numune: { uretimEmriId: number; balonlar: readonly number[]; karar: string | null } | null;
+}): StudyoIletisi | null {
+  if (new Set(i.istenen).size !== i.istenen.length) return 'olcumYinelenen';
+  const bulunan = new Map(i.balonlar.map((b) => [b.id, b]));
+  if (i.istenen.some((id) => bulunan.get(id)?.malzemeNo !== i.emirMalzemeNo)) return 'balonEmirDisi';
+  if (i.numune === null) return null;
+  if (i.numune.uretimEmriId !== i.uretimEmriId) return 'numuneEmirDisi';
+  if (i.numune.karar !== null) return 'numuneKararli';
+  const numunede = new Set(i.numune.balonlar);
+  return i.istenen.every((id) => numunede.has(id)) ? null : 'balonNumuneDisi';
+}
+
+export function numuneIstegiReddi(i: { emirMalzemeNo: number | null; istenen: readonly number[]; balonlar: readonly { id: number; malzemeNo: number }[] }): StudyoIletisi | null {
+  if (new Set(i.istenen).size !== i.istenen.length) return 'numuneBalonYinelenen';
+  const bulunan = new Map(i.balonlar.map((b) => [b.id, b]));
+  return i.istenen.every((id) => bulunan.get(id)?.malzemeNo === i.emirMalzemeNo) ? null : 'balonEmirDisi';
+}
+
+// Balon başına son ölçüm geçerlidir (düzeltme yeni ölçümdür); sıra zaman, eşitse kimlik.
+export function sonOlcumler<T extends { balonId: number; zaman: string; id: number }>(olcumler: readonly T[]): Map<number, T> {
+  const son = new Map<number, T>();
+  for (const o of olcumler) {
+    const onceki = son.get(o.balonId);
+    if (onceki === undefined || Date.parse(o.zaman) > Date.parse(onceki.zaman) || (o.zaman === onceki.zaman && o.id > onceki.id)) son.set(o.balonId, o);
+  }
+  return son;
+}
+
+// Arkon kalite istasyonunun düğmeleriyle aynı kural, sunucuda: red en az bir ölçü ve gerekçe ister; onay ve sapma bütün balonların
+// ölçülmesini ister; onay yalnız bütün son ölçüler uygunken, sapma yalnız uygunsuz ölçü varken verilir.
+export function numuneKarariReddi(
+  karar: 'onay' | 'ret' | 'sapma', not: string | null, balonlar: readonly number[], olcumler: readonly { balonId: number; zaman: string; id: number; uygun: boolean }[],
+): StudyoIletisi | null {
+  const son = sonOlcumler(olcumler);
+  if (karar === 'ret') {
+    if (son.size === 0) return 'redOlcusuz';
+    return (not ?? '').trim() === '' ? 'redGerekcesiz' : null;
+  }
+  if (!balonlar.every((b) => son.has(b))) return 'kararEksikOlcum';
+  const uygunsuzVar = balonlar.some((b) => son.get(b)?.uygun === false);
+  if (karar === 'onay') return uygunsuzVar ? 'onayUygunsuz' : null;
+  return uygunsuzVar ? null : 'sapmaGereksiz';
+}
+
+// Kontrol planı resim başına bütün yazılır (603 a). Kimlikli balon resmin etkin balonudur; listede olmayan etkin balon kaldırılır,
+// ama kararsız numunede istenen balon kaldırılmaz (ölçülemez kalır, numune karara bağlanamaz).
+export function balonPlaniReddi(i: {
+  girdiler: readonly { id?: number | undefined; no: number; alt?: string | null | undefined; ust?: string | null | undefined; x?: number | null | undefined; y?: number | null | undefined }[];
+  etkinler: readonly number[]; acikNumunedekiler: ReadonlySet<number>;
+}): StudyoIletisi | null {
+  const nolar = i.girdiler.map((g) => g.no);
+  if (new Set(nolar).size !== nolar.length) return 'balonNoTekrar';
+  const etkin = new Set(i.etkinler);
+  const idler = i.girdiler.flatMap((g) => (g.id === undefined ? [] : [g.id]));
+  if (new Set(idler).size !== idler.length || idler.some((id) => !etkin.has(id))) return 'balonResimDisi';
+  for (const g of i.girdiler) {
+    if ((g.alt == null) !== (g.ust == null)) return 'balonSinirEksik';
+    if (g.alt != null && g.ust != null && ondalikKarsilastir(g.alt, g.ust) > 0) return 'balonSinirTers';
+    if ((g.x == null) !== (g.y == null)) return 'balonKonumEksik';
+  }
+  const kalan = new Set(idler);
+  return i.etkinler.some((id) => !kalan.has(id) && i.acikNumunedekiler.has(id)) ? 'balonAcikNumunede' : null;
+}
+
+// Numune kuralındaki balon numaraları parçanın etkin resimlerindeki numaralardır; kural kimliği planda tekildir.
+export function numunePlaniReddi(kurallar: readonly { kimlik: string; balonlar: 'hepsi' | 'kritik' | readonly number[] }[], balonNolari: ReadonlySet<number>): StudyoIletisi | null {
+  const kimlikler = kurallar.map((k) => k.kimlik);
+  if (new Set(kimlikler).size !== kimlikler.length) return 'kuralKimlikTekrar';
+  return kurallar.every((k) => typeof k.balonlar === 'string' || k.balonlar.every((n) => balonNolari.has(n))) ? null : 'kuralBalonYok';
+}
+
+export function numuneDurumu(karar: 'onay' | 'ret' | 'sapma' | null, olcumSayisi: number): 'bekliyor' | 'olculuyor' | 'onay' | 'ret' | 'sapma' {
+  if (karar !== null) return karar;
+  return olcumSayisi > 0 ? 'olculuyor' : 'bekliyor';
+}
+
 export function siradakiLotNo(lotlar: readonly Record<string, unknown>[], yil: number): string {
   const on = `LOT-${String(yil)}-`;
   let enBuyuk = 0;
