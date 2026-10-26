@@ -431,7 +431,10 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(rc.kayitlar, [{ id: e.id, baslik: `${e.emirNo}-P1` }]);
     assert.deepEqual(rc.eksikler, [iptal, 2147483004]);
     assert.equal((rc.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `RP:${acik}`);
-    assert.match(rc.komut, new RegExp(`Lot LT-ETK-${e.id} · Parti P-9 · Döküm D-01 · Sertifika S-01`));
+    // Kart #707: lot satırı rota sütununun dar kutusunda iki satıra bölünebilir; bütün metin aynı kutudadır.
+    const lotKutusu = rc.onizleme.find((o) => o.tur === 'metin' && o.satirlar[0]?.startsWith(`Lot LT-ETK-${e.id}`));
+    assert.equal(lotKutusu?.tur === 'metin' && lotKutusu.satirlar.join(' '), `Lot LT-ETK-${e.id} · Parti P-9 · Döküm D-01 · Sertifika S-01`);
+    assert.match(rc.komut, new RegExp(`Lot LT-ETK-${e.id} · Parti P-9`));
     assert.match(rc.komut, /10 Torna/);
     assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=refakat-partisi&id=${acik}`)).statusCode, 400, 'lot şablonu refakat partisi basmaz');
 
