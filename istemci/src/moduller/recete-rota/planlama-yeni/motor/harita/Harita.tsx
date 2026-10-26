@@ -32,10 +32,10 @@ export interface HaritaOzellikleri {
 }
 export interface HaritaKomutu {
   yakinlas(oran: number): void; sigdir(): void; odakla(j: string): void; tezgahaUc(m: string): void; kilavuzKamera(m: string): void;
-  kameraKoy(k: Kamera): void; durum(): { kam: Kamera; W: number; H: number; bolge: Bolge[] } | null;
+  kameraKoy(k: Kamera): void; durum(): { kam: Kamera; W: number; H: number; bolge: Bolge[]; ist: Sahne['ist'] } | null;
 }
 // Harita görünümünün üstüne çizilen katmanın (kartlar) bağı: her kareye abone olur, kamerayı okur ve koyar, çubuk paylarını alır.
-export type KareDinleyicisi = (kam: Kamera, W: number, H: number, bolge: Bolge[]) => void;
+export type KareDinleyicisi = (kam: Kamera, W: number, H: number, bolge: Bolge[], ist: Sahne['ist']) => void;
 export interface HaritaBagi { abone(f: KareDinleyicisi): () => void; komut(): HaritaKomutu | null; paylar(): [number, number] }
 
 const az = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -113,7 +113,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
       isRenk: (j) => d.renk?.R.is[siparisRengi(p.c.D, j)] ?? [128, 128, 128], ref: d.ref,
     });
     d.kutu = sonuc.kutu;
-    p.kare?.(d.kam, W, H, s.bolge);
+    p.kare?.(d.kam, W, H, s.bolge, s.ist);
   };
   const dongu = (ts: number): void => {
     d.raf = 0; const el = cv.current; if (!el || !el.isConnected) return;
@@ -164,7 +164,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
       uc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k });
     },
     kameraKoy(k: Kamera) { uc(k); },
-    durum() { return d.kam && d.boyut && d.sahne ? { kam: { ...d.kam }, W: d.boyut[0], H: d.boyut[1], bolge: d.sahne.bolge } : null; },
+    durum() { return d.kam && d.boyut && d.sahne ? { kam: { ...d.kam }, W: d.boyut[0], H: d.boyut[1], bolge: d.sahne.bolge, ist: d.sahne.ist } : null; },
   }), []);
 
   // İşaretçi: sürükleyince kaydırır, iki parmakla yakınlaşır, dokununca seçer. Çip sürükleme motor bağlanınca açılır (459/4 a).
