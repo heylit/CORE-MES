@@ -32,6 +32,17 @@ export async function sonOlaylar(
   }));
 }
 
+// Üretim Hazırlık'ın istasyon sırası (kart 527), sıra numarasıyla: terminal bu sıradaki işi önce, sırasız işi canlı plan sırasıyla gösterir
+// (`istasyonPaketleri`). Saat "sıradaki iş"i bununla terminalin sırasını izler (3a). Satır işin bugünkü istasyonunda geçerlidir; işin
+// istasyonunu çağıran denetler (paket okumasındaki kural). Tablo açık işler kadardır, süzme burada. Yetki çağıran ucun işidir.
+export interface HazirlikSirasi { isEmriId: number; parcaNo: number; sira: number }
+export async function istasyonHazirlikSirasi(db: Db, istasyonId: number): Promise<HazirlikSirasi[]> {
+  return (await sorgular.kuyrukSiralari(db))
+    .filter((k) => k.istasyonId === istasyonId)
+    .sort((a, b) => a.sira - b.sira)
+    .map(({ isEmriId, parcaNo, sira }) => ({ isEmriId, parcaNo, sira }));
+}
+
 // Denetim #34: emrin hazırlık paketlerindeki merkez çizimlerinin durumu (toplu). İstenen her emir haritada olur; paketi ya da merkez çizimi
 // olmayan 'yok'. Yetki çağıran ucun işidir.
 export async function emirCizimDurumlari(db: Db, emirIdler: readonly number[]): Promise<Map<number, EmirCizimDurumu>> {
