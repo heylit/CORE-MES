@@ -15,7 +15,28 @@ export const AZAMI_MODEL_BAYT = 25 * 1024 * 1024;
 // Üretilmemesi hata değil karardır (cihaz, model boyu, kare boyu); iletisi kullanıcıya gösterilir.
 export class OnizlemeAtlandi extends Error {}
 
-export const onizlemeTuruMu = (tur: DosyaTuru): tur is 'step' | 'iges' => tur === 'step' || tur === 'iges';
+// Kare kaynağı (kart #688): 3B modelden dönen kareler, PDF'in ilk sayfasından ve fotodan tek kare. DXF'ten üretilmez.
+export type KareKaynagi = 'model' | 'pdf' | 'foto';
+export function kareKaynagi(tur: DosyaTuru): KareKaynagi | null {
+  if (tur === 'step' || tur === 'iges' || tur === 'stl' || tur === 'glb' || tur === 'gltf') return 'model';
+  if (tur === 'pdf') return 'pdf';
+  return tur === 'png' || tur === 'jpeg' || tur === 'webp' ? 'foto' : null;
+}
+export const onizlemeTuruMu = (tur: DosyaTuru): boolean => kareKaynagi(tur) !== null;
+
+// Tek karede biçim sırası: çizim çizgisi PNG'de küçük kalır, foto WEBP ya da JPEG ister (PNG'de 64 KiB'ı aşar). Tarayıcı
+// istenen biçimi yazamazsa PNG verir; o kare atlanır, sıradaki denenir.
+export const TEK_KARE_BICIMLERI: Readonly<Record<'pdf' | 'foto', readonly string[]>> = {
+  pdf: ['image/png', 'image/webp', 'image/jpeg'],
+  foto: ['image/webp', 'image/jpeg'],
+};
+export const KARE_KALITESI = 0.8;
+
+// Kaynağı kutuya oranını bozmadan sığdıran boyut; büyütmez.
+export function sigdir(en: number, boy: number, kutu: number): { en: number; boy: number } {
+  const oran = Math.min(1, kutu / Math.max(en, boy, 1));
+  return { en: Math.max(1, Math.round(en * oran)), boy: Math.max(1, Math.round(boy * oran)) };
+}
 
 export function webglVarMi(): boolean {
   return typeof WebGLRenderingContext !== 'undefined';

@@ -6,6 +6,7 @@ import {
   AZAMI_MODEL_BAYT, BAKIS_YUKSEKLIGI, KARE_SAYISI, OnizlemeAtlandi, kareAcisi, sinirdaKareler, webglVarMi,
 } from '../onizleme-kurallari.ts';
 import { birak, modelOku } from './model.ts';
+import type { ModelBicimi } from './model.ts';
 import { renk } from './sahne-renk.ts';
 
 export interface OnizlemeKaresi {
@@ -71,8 +72,8 @@ async function kareleriCiz(model: Object3D, cozunurluk: number): Promise<Onizlem
   }
 }
 
-// STEP/IGES dosyasından 8 PNG kare üretir. Üretilemezse `OnizlemeAtlandi` fırlar (ileti kullanıcıya gösterilir).
-export async function onizlemeKareleri(veri: Uint8Array, bicim: 'step' | 'iges'): Promise<Uint8Array[]> {
+// 3B modelden (STEP, IGES, STL, glTF) 8 PNG kare üretir. Üretilemezse `OnizlemeAtlandi` fırlar (ileti kullanıcıya gösterilir).
+export async function onizlemeKareleri(veri: Uint8Array, bicim: ModelBicimi): Promise<Uint8Array[]> {
   if (!webglVarMi()) throw new OnizlemeAtlandi('Bu cihazda üç boyutlu çizim yok; önizleme üretilmedi.');
   if (veri.length > AZAMI_MODEL_BAYT) throw new OnizlemeAtlandi('Model 25 MB sınırından büyük; önizleme üretilmedi.');
   const model = await modelOku(veri, bicim, renk(getComputedStyle(document.documentElement), '--sahne3b-celik'));
