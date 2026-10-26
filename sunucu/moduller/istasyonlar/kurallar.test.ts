@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { SecimSatiri } from './kurallar.ts';
-import { isMerkeziIzinliMi, kapasiteKaynagiCoz, kisiteEklenemeyenler, secimGruplari, sentYuzdeMetni, tekrarsiz } from './kurallar.ts';
+import { isMerkeziIzinliMi, kapasiteKaynagiCoz, kisiteEklenemeyenler, secimGruplari, sentYuzdeMetni, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikUygula } from './kurallar.ts';
 
 const satir = (id: number, kod: string, isMerkeziId: number, isMerkeziKod: string, aktif = true): SecimSatiri => ({
   id, kod, ad: `Ad ${kod}`, isMerkeziId, tip: 'talasli', aktif, isMerkeziKod, isMerkeziAd: `Merkez ${isMerkeziKod}`,
@@ -61,5 +61,16 @@ describe('istasyon kapasite kaynağı (kural, kart #1146)', () => {
     assert.equal(sentYuzdeMetni(0), '0.00');
     assert.equal(sentYuzdeMetni(15000), '150.00');
     assert.equal(sentYuzdeMetni(1205), '12.05');
+  });
+});
+
+describe('toplu yetkinlik (565 a)', () => {
+  test('değişiklik kişi başına toplanır, aynı istasyonda son değişiklik geçerli; mevcut listeye eklenir ve çıkarılır', () => {
+    const m = yetkinlikDegisiklikleri([
+      { kisiId: 1, istasyonId: 10, yetkin: true }, { kisiId: 2, istasyonId: 10, yetkin: false }, { kisiId: 1, istasyonId: 10, yetkin: false }, { kisiId: 1, istasyonId: 11, yetkin: true },
+    ]);
+    assert.deepEqual([...m.keys()], [1, 2]);
+    assert.deepEqual(yetkinlikUygula([10, 12], m.get(1)!), [12, 11]);
+    assert.deepEqual(yetkinlikUygula([10], m.get(2)!), []);
   });
 });

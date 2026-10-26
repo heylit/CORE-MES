@@ -33,7 +33,7 @@ const YENI_BOLUM_BASLIGI: Readonly<Record<string, string>> = {
 // İstasyonlar ve Vardiya bölümleri (UYUM-BORCU istasyonlar 1, vardiya V-B9, V-B10, V-B14). İstasyonlar bölüm adını kartta yinelemez:
 // başlık sayfanın adıdır; Vardiya'da bölümün ilk panel başlığıdır.
 const ISTASYONLAR_BOLUMLERI = [
-  '/istasyonlar', '/istasyonlar/is-merkezleri', '/istasyonlar/makineler', '/istasyonlar/personel', '/istasyonlar/vardiyalar', '/istasyonlar/operasyon-tipleri',
+  '/istasyonlar', '/istasyonlar/is-merkezleri', '/istasyonlar/makineler', '/istasyonlar/personel', '/istasyonlar/yetkinlik', '/istasyonlar/vardiyalar', '/istasyonlar/operasyon-tipleri',
 ] as const;
 const VARDIYA_BOLUMLERI = [
   ['/vardiya', 'Haftalık vardiya matrisi'], ['/vardiya/personel', 'Vardiya başına personel'], ['/vardiya/takvim', 'Çalışma takvimi'],

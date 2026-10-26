@@ -14,7 +14,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisil
 import type { AtamaTuru } from './kurallar.ts';
 import {
   KULLANIMDA_ILETISI, YUZDE_TAVANI_SENT, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
-  secimGruplari, sentBicimi, tekrarsiz, yetkinlikFarki, yetkinlikGecerliMi, yuzdeSente,
+  secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { YetkinlikAyrintiSatiri } from './sorgular.ts';
@@ -480,6 +480,20 @@ const kisiYetkinligi = async (db: Db, kisiId: number): Promise<KisiYetkinligi> =
 export async function yetkinlikBelirle(db: Db, verenKisiId: number, kisiId: number, istenen: readonly number[]): Promise<KisiYetkinligi> {
   if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, await kisiBayrakliMi(db, verenKisiId))) throw yetkiYok();
   return yetkinlikYaz(db, verenKisiId, kisiId, istenen);
+}
+
+// 565 a: matristen toplu değişiklik. Kişi başına mevcut liste değişiklikle birleşir ve tek kişi ucunun yolundan yazılır (aynı denetim, aynı defter);
+// biri reddedilirse transaction hepsini geri alır.
+export async function yetkinlikleriTopluBelirle(
+  db: Db, verenKisiId: number, degisiklikler: readonly { kisiId: number; istasyonId: number; yetkin: boolean }[],
+): Promise<({ kisiId: number } & KisiYetkinligi)[]> {
+  const bayrakli = await kisiBayrakliMi(db, verenKisiId);
+  for (const [kisiId, l] of yetkinlikDegisiklikleri(degisiklikler)) {
+    if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, bayrakli)) throw yetkiYok();
+    const mevcut = (await sorgular.yetkinlikAyrintilari(db, kisiId)).map((s) => s.istasyonId);
+    await yetkinlikYaz(db, verenKisiId, kisiId, yetkinlikUygula(mevcut, l));
+  }
+  return yetkinlikler(db);
 }
 
 // Örnek veri yükleyicisi bir kullanıcı adına yazmaz; kurulumdaki sorumlu kendisine de yetkinlik verir.

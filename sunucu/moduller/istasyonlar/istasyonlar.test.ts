@@ -278,6 +278,10 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       { uc: '/makineler/:id/durum', yol: `/makineler/${mk.id}/durum`, govde: { durum: 'bakim' }, basari: 200 },
       { uc: '/kisi-yetkinlikleri/:kisiId/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/belirle`, govde: { istasyonIdleri: [atamaIst.id] }, basari: 200 },
       {
+        uc: '/kisi-yetkinlikleri/toplu', yol: '/kisi-yetkinlikleri/toplu',
+        govde: { degisiklikler: [{ kisiId: operatorId, istasyonId: ist.id, yetkin: true }] }, basari: 200,
+      },
+      {
         uc: '/kisi-yetkinlikleri/:kisiId/istasyonlar/:istasyonId/ayrinti', yol: `/kisi-yetkinlikleri/${operatorId}/istasyonlar/${atamaIst.id}/ayrinti`,
         govde: { gecerlilikBitis: '2999-12-31', dayanak: 'Yetki', surum: 1 }, basari: 200,
       },
@@ -688,6 +692,32 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const red = await istek(amir, 'POST', `/kisi-is-merkezleri/${amirId}/belirle`, { isMerkeziIdleri: [im.id] });
     assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK']);
     assert.equal((await istek(amir, 'POST', `/kisi-is-merkezleri/${operatorId}/belirle`, { isMerkeziIdleri: [] })).durum, 200);
+  });
+
+  test('565 a: toplu yetkinlik kişi başına farkı yazar ve deftere geçer; biri reddedilirse hiçbiri yazılmaz; kişi kendisininkini toplu da yazamaz', async () => {
+    const im = await isMerkeziKur();
+    const a = await istasyonKur(im.id), b = await istasyonKur(im.id), pasif = await istasyonKur(im.id);
+    assert.equal((await surumluYaz(`/istasyonlar/${pasif.id}/guncelle`, { kod: pasif.kod, ad: 'Deneme Pasif', isMerkeziId: im.id, aktif: false })).durum, 200);
+    const kisinin = async (id: number) => ((await oku<{ yetkinlikler: { kisiId: number; istasyonIdleri: number[] }[] }>('/kisi-yetkinlikleri')).govde.yetkinlikler
+      .find((y) => y.kisiId === id)?.istasyonIdleri ?? []).filter((x) => [a.id, b.id, pasif.id].includes(x)).sort((x, y) => x - y);
+    const ac = await yaz('/kisi-yetkinlikleri/toplu', { degisiklikler: [
+      { kisiId: operatorId, istasyonId: a.id, yetkin: true }, { kisiId: operatorId, istasyonId: b.id, yetkin: true }, { kisiId: tesisciId, istasyonId: a.id, yetkin: true },
+    ] });
+    assert.equal(ac.durum, 200, JSON.stringify(ac.govde));
+    assert.deepEqual([await kisinin(operatorId), await kisinin(tesisciId)], [[a.id, b.id], [a.id]]);
+    const defter = await vt().sorgu<{ islem: string }>('SELECT islem FROM istasyonlar_yetkinlik_gecmisi WHERE kisi_id = $1 AND istasyon_id = ANY($2) ORDER BY id', [operatorId, [a.id, b.id]]);
+    assert.deepEqual(defter.map((x) => x.islem), ['ver', 'ver']);
+    const red = await yaz('/kisi-yetkinlikleri/toplu', { degisiklikler: [{ kisiId: operatorId, istasyonId: a.id, yetkin: false }, { kisiId: tesisciId, istasyonId: pasif.id, yetkin: true }] });
+    assert.equal(red.durum, 400);
+    assert.deepEqual([await kisinin(operatorId), await kisinin(tesisciId)], [[a.id, b.id], [a.id]]);
+    const kendi = await istek(tesisci, 'POST', '/kisi-yetkinlikleri/toplu', { degisiklikler: [{ kisiId: tesisciId, istasyonId: b.id, yetkin: true }] });
+    assert.deepEqual([kendi.durum, hataKodu(kendi)], [403, 'YETKI_YOK']);
+    const okuyan = await istek(operator, 'POST', '/kisi-yetkinlikleri/toplu', { degisiklikler: [{ kisiId: tesisciId, istasyonId: b.id, yetkin: true }] });
+    assert.equal(okuyan.durum, 403);
+    assert.equal((await yaz('/kisi-yetkinlikleri/toplu', { degisiklikler: [
+      { kisiId: operatorId, istasyonId: a.id, yetkin: false }, { kisiId: operatorId, istasyonId: b.id, yetkin: false }, { kisiId: tesisciId, istasyonId: a.id, yetkin: false },
+    ] })).durum, 200);
+    assert.deepEqual([await kisinin(operatorId), await kisinin(tesisciId)], [[], []]);
   });
 
   test('IS2d (245 a): kişi kendi yetkinliğini yazarak sınırını genişletemez; başkasınınkini yazar, yönetici kendisininkini yazar', async () => {
