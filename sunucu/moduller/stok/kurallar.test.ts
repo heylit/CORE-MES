@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
-  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli,
+  refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
@@ -703,5 +703,24 @@ describe('malzeme fişi kuralları (kart #492)', () => {
     assert.equal(malzemeFisiGonderilebilir(l('bilinmiyor', null), true), false);
     assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'elle'), false), false);
     assert.equal(malzemeFisiGonderilebilir(l('bekliyor', 'elle', '55'), false), true);
+  });
+});
+
+describe('stok kuralları: emre giden malzeme kart onayı ister (615-2 a, 632 a, 633 b)', () => {
+  test('izinli: açık emre lotlu teslim lot kartı, lotsuz teslim istisna kartı ister', () => {
+    for (const durum of ['planli', 'basladi']) {
+      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: null }, durum), 'lot', durum);
+      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: null }, null, durum), 'istisna', durum);
+    }
+  });
+  test('reddedilen: emirsiz, üretim lotu, bilinmeyen lot, kapalı ya da bilinmeyen emir kart istemez', () => {
+    assert.equal(kartOnayiTuru({ uretimEmriId: null, partiId: 2 }, { uretimEmriId: null }, 'basladi'), null);
+    assert.equal(kartOnayiTuru({ uretimEmriId: null, partiId: null }, null, 'basladi'), null);
+    assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: 9 }, 'basladi'), null);
+    assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, null, 'basladi'), null);
+    for (const durum of ['bitti', 'iptal', null]) {
+      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: 2 }, { uretimEmriId: null }, durum), null, String(durum));
+      assert.equal(kartOnayiTuru({ uretimEmriId: 1, partiId: null }, null, durum), null, String(durum));
+    }
   });
 });

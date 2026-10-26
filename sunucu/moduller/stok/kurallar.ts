@@ -946,6 +946,15 @@ export const refakatEtiketi = (emirNo: string | null, uretimEmriId: number, sira
 export function refakatLotEngeli(lot: { uretimEmriId: number | null }): string | null {
   return lot.uretimEmriId !== null ? 'Bu lot bir üretim emrinin çıktısı; refakat kartı depodan verilen lotla açılır.' : null;
 }
+// Emre giden malzeme kartla gider (615-2 a, 632 a, 633 b): lotlu teslim lotun kartını, lotsuz teslim emrin o malzemedeki lot bekleyen
+// (istisna) kartını ister. Kart sessizce açılmaz; depocu tek adımda onaylar. Üretim çıktısı partisi kendi kartını taşır; kapalı emre kart açılmaz.
+export type KartOnayiTuru = 'lot' | 'istisna';
+export function kartOnayiTuru(g: { uretimEmriId: number | null; partiId: number | null }, lot: { uretimEmriId: number | null } | null, emirDurumu: string | null): KartOnayiTuru | null {
+  if (g.uretimEmriId === null || emirDurumu === null || emirDurumu === 'bitti' || emirDurumu === 'iptal') return null;
+  if (g.partiId === null) return 'istisna';
+  if (lot === null || refakatLotEngeli(lot) !== null) return null;
+  return 'lot';
+}
 // Hiç teslimi ve sayımı olmayan parti iptal edilir; teslim ya da üretim varsa iz bozulmasın diye kalır.
 export function refakatIptalEngeli(r: { durum: 'acik' | 'iptal'; verilen: string }, uretildi = false): string | null {
   if (r.durum === 'iptal') return 'Refakat kartı zaten iptal.';

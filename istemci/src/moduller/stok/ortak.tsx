@@ -13,6 +13,8 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar, miktarMetni } from './gorunum.ts';
 import { paneliAc } from './panel-olayi.ts';
+import { KartOnayiPenceresi, kartOnayiBilgisi } from './KartOnayi.tsx';
+import type { KartOnayi } from './KartOnayi.tsx';
 
 // Sunucuda tekrar korumalı stok komutu (mal kabul, hareket yazan komutlar, sepet, toplama açma): tek kimlikle gider; cevabı
 // yitirilen gönderim aynı kimlikle yeniden denenir, komut en çok bir kez uygulanır. Denemeler sonucu bilinmeden tükenirse
@@ -87,19 +89,25 @@ export function SayfaBasi({ baslik, alt, sag }: { baslik: string; alt?: ReactNod
 }
 
 // Yetersiz stokta sunucu ONAY_GEREKLI döner (DEP-02); kullanıcı onaylarsa aynı komut `eksiOnay: true` ile yinelenir (DEP-03).
+// Emre giden malzemenin kartı (632 a) aynı yolla sorulur; onay `kartOnayi: true` ile yinelenir.
 export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<unknown>, basarili: string, sonra?: () => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [onay, setOnay] = useState<{ govde: G; mevcut: string } | null>(null);
+  const [kartOnayi, setKartOnayi] = useState<{ govde: G; bilgi: KartOnayi } | null>(null);
   const komut = useMutation({
     mutationFn: (govde: G) => (belirsizMiktarVar(govde) ? Promise.reject(new BelirsizMiktarHatasi()) : gonder(govde)),
     onSuccess: async () => {
       setOnay(null);
+      setKartOnayi(null);
       bildir('tamam', basarili);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
       sonra?.();
     },
     onError: (hata, govde) => {
+      const kart = kartOnayiBilgisi(hata);
+      if (kart) { setKartOnayi({ govde, bilgi: kart }); return; }
+      setKartOnayi(null);
       if (hata instanceof ApiHatasi && hata.govde.kod === 'ONAY_GEREKLI') {
         const ayrinti = (hata.govde as { ayrinti?: { mevcut?: string } }).ayrinti;
         setOnay({ govde, mevcut: ayrinti?.mevcut ?? '0' });
@@ -121,7 +129,11 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
       <p>Mevcut: <strong>{miktarMetni(onay?.mevcut)}</strong>. Onaylarsanız bakiye eksiye düşer ve hareket "onaylı eksi" olarak işaretlenir.</p>
     </OnayPenceresi>
   );
-  return { komut, onayPenceresi };
+  const kartPenceresi = (
+    <KartOnayiPenceresi bilgi={kartOnayi?.bilgi ?? null} yukleniyor={komut.isPending}
+      onayla={() => { if (kartOnayi) komut.mutate({ ...kartOnayi.govde, kartOnayi: true }); }} vazgec={() => setKartOnayi(null)} />
+  );
+  return { komut, onayPenceresi: <>{onayPenceresi}{kartPenceresi}</> };
 }
 
 export const hataMetni = (hata: unknown): string =>
