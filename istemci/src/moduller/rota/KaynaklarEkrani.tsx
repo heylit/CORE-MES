@@ -9,7 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { VardiyaDuzeni, useVardiyaYaz } from '../vardiya/disari.ts';
 import { MetinAlani, SayiAlani } from './Alanlar.tsx';
-import { istasyonRengi } from './gorunum.ts';
+import { istasyonRengi, operatorMetni } from './gorunum.ts';
 import { useKaynakVerisi, useKaynakYaz } from './useKaynakVerisi.ts';
 import { BolumHatasi } from './BolumHatasi.tsx';
 import './kaynak.css';
@@ -77,7 +77,7 @@ function Merkezler({ v, yaz, y }: { v: Veri; yaz: boolean; y: Yaz }) {
                     <MetinAlani etiket={`${s.kod} adı`} deger={s.ad} disabled={!yaz} kaydet={(ad) => y.mutate({ yol: `/istasyonlar/${s.id}/guncelle`, govde: iGovde(s, { ad }) })} />
                     <Link className="tc-calc" to={ISTASYON_SAYFASI} aria-label={`${s.kod} verim ${verim}, İstasyonlar'da düzenlenir`}>{verim}</Link>
                     <span className="tc-calc">{mk.length > 0 ? `${mk.length} makine` : '1 sanal makine'}</span>
-                    <Link className="tc-calc" to={ISTASYON_SAYFASI} aria-label={`${s.kod} operatör ${op}, İstasyonlar'da düzenlenir`}>{op}</Link>
+                    <Link className="tc-calc" to={ISTASYON_SAYFASI} aria-label={`${s.kod} operatör: ${operatorMetni(op)}, İstasyonlar'da düzenlenir`}>{operatorMetni(op)}</Link>
                     <button type="button" className={`tc-durum-dugme${s.aktif ? '' : ' tc-pasif'}`} disabled={!yaz} onClick={() => y.mutate({ yol: `/istasyonlar/${s.id}/guncelle`, govde: iGovde(s, { aktif: !s.aktif }) })}>{s.aktif ? 'Aktif' : 'Pasif'}</button>
                   </div>
                 );
