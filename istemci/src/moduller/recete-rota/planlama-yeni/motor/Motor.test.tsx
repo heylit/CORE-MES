@@ -8,6 +8,7 @@ import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
+import { KAYDEDILEMEDI } from './coz.ts';
 import { PlanlamaMotoru } from './index.tsx';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
 import { ornekCalisma } from './ornek.ts';
@@ -60,6 +61,26 @@ describe('PlanlamaMotoru', () => {
     for (const b of screen.getAllByRole('button', { name: 'Planı kur' })) expect(b.getAttribute('aria-disabled')).toBe('true');
     expect(screen.getByRole('button', { name: 'Veri ve kısıtlar' }).getAttribute('title')).toBe(`Veri ve kısıtlar: ${YOK_NOTU}`);
     expect(screen.queryByRole('toolbar', { name: 'Görünüm' })).toBeNull();
+  });
+
+  it('yazabilene Planı kur açık (576): çubuk ve kart sunucudaki motoru ister; çalışma kaydedilemezse iletisi gelir, plan değişmez', async () => {
+    const c = { ...ornekCalisma(), plan: null } as PlanlamaCalismasi;
+    const kaydet = vi.fn(async () => null);
+    const degistir = vi.fn(() => true);
+    ac({ c, komut: { kaydet, degistir } as unknown as CalismaKomutu });
+    const dugmeler = screen.getAllByRole('button', { name: 'Planı kur' });
+    expect(dugmeler).toHaveLength(2);
+    for (const b of dugmeler) { expect(b.getAttribute('aria-disabled')).toBeNull(); expect((b as HTMLButtonElement).disabled).toBe(false); }
+    expect(screen.queryByText('Motor kapalı')).toBeNull();
+    await act(async () => { fireEvent.click(dugmeler[0] as HTMLElement); });
+    expect(kaydet).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(KAYDEDILEMEDI)).toBeTruthy();
+    expect(degistir).not.toHaveBeenCalled();
+  });
+
+  it('plan yazma yetkisi yoksa Planı kur görünmez ya da pasif kalır', () => {
+    ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi, yaz: false, komut: { kaydet: vi.fn(), degistir: vi.fn() } as unknown as CalismaKomutu });
+    for (const b of screen.getAllByRole('button', { name: 'Planı kur' })) expect(b.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('Özet altı bölümü, haritayı ve nabzı eski sayfanın metinleriyle gösterir', () => {

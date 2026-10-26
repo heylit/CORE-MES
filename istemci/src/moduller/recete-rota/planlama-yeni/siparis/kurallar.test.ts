@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
-import { degerlendirmeAdresi, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
+import { degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
 import {
   darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
   dengeIsisi, dengeKatsayisi, elleSinir, fasonDurumu, fasonSatirlari, fasonTerminiYaz, fiyatDenetle, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
@@ -186,9 +186,10 @@ describe('Parti bölme kuralları (zz4, zz14, zz11)', () => {
 });
 
 describe('Değerlendirme ucu katmanı', () => {
-  it('istek sorgu dizisine sürümle ve kodlanmış JSON ile girer', () => {
-    expect(degerlendirmeAdresi(7, { tur: 'termin-uzatma', gun: 2 }))
-      .toBe(`/recete-rota/planlama-degerlendirmesi?surum=7&istek=${encodeURIComponent('{"tur":"termin-uzatma","gun":2}')}`);
+  it('istek açılıştaki çalışma sürümüyle başlatılır (463 a)', async () => {
+    const iste = vi.fn(async () => ({ calismaSurumu: 7, dataVer: 1, baslangic: null, simdi: 0, maliyetGorunur: false, sonuc: { tur: 'termin-uzatma' as const, gun: 2, satirlar: [] } }));
+    await degerlendirici(7, iste)({ tur: 'termin-uzatma', gun: 2 });
+    expect(iste).toHaveBeenCalledWith(7, { tur: 'termin-uzatma', gun: 2 });
   });
 
   it('409 yenileme ister, 403 istemez', () => {
@@ -210,7 +211,7 @@ describe('Değerlendirme ucu katmanı', () => {
   });
 
   const secenek: PlanSecenegi = {
-    denge: 75, carpan: 0.3, ekMesai: [{ makineId: 'M1', gun: '2026-10-24', vardiya: 'V1', tl: 100 }], ekMesaiTl: 100, geciken: 0, isSayisi: 2,
+    denge: 75, carpan: 0.3, ekMesai: [{ makineId: 'M1', gun: 5, vardiya: 'V1', tl: 100 }], ekMesaiTl: 100, geciken: 0, isSayisi: 2,
     gecikmeSaat: 0, netKar: null, eksik: 1, plan: { dataVer: 3, ops: {}, J: {} },
   };
 
@@ -218,7 +219,7 @@ describe('Değerlendirme ucu katmanı', () => {
     const c = calismaKur();
     expect(secenegiAl(c, secenek, 3, 'Deneme Kisi', 1)).toBe(true);
     expect(c.D.planDenge).toBe(75);
-    expect(c.ekMesai).toEqual([{ m: 'M1', gun: '2026-10-24', vardiya: 'V1' }]);
+    expect(c.ekMesai).toEqual([{ m: 'M1', gun: 5, vardiya: 'V1' }]);
     expect(c.plan).toMatchObject({ dataVer: 4, kaynak: 'denge', kim: 'Deneme Kisi' });
     expect(c.D.siparisler).toEqual(calismaKur().D.siparisler);
     secenegiAl(c, secenek, 3, 'Deneme Kisi', 2);

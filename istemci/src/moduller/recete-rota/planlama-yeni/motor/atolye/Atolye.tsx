@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { Simge } from '../../../../../ortak/arayuz/index.ts';
+import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { BosCalisma, BosPlan } from '../BosPlan.tsx';
+import { usePlanKur } from '../coz.ts';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { useCanliFarki } from './canli-farki.ts';
 import type { CanliFark } from './kurallar.ts';
@@ -66,10 +67,12 @@ function PlanSekmesi({ o, c, p, cf, sek, sekSec, onayda, sen, senYaz }: {
   o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi | null; p: OkunanPlan | null; cf: CanliFark | null; sek: AtolyeSekmesi; sekSec: (s: AtolyeSekmesi) => void; onayda: number;
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }) {
+  const { bildir } = useBildirim();
+  const planKur = usePlanKur(o, useCallback((ileti: string) => bildir('hata', ileti), [bildir]));
   if (!c) return <BosCalisma />;
   if (!p) {
     const emirler = o.depo.durum?.emirler ?? null;
-    return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} />;
+    return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} planKur={planKur} />;
   }
   if (sek === 'pg') return <PlanGercek o={o} c={c} p={p} canliSurum={sen?.canliSurum ?? null} />;
   return <Pano o={o} c={c} p={p} cf={cf} sekSec={sekSec} onayda={onayda} sen={sen} senYaz={senYaz} />;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PLAN_ONAY_KOMUTLARI, PlanCevabi, PlanOnayKomutu, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Kart, OnayPenceresi, Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
@@ -9,6 +9,7 @@ import { ONERILEN_IKINCI_MENU } from '../../../planlama-menusu.ts';
 import { planGuncel } from '../../durum.ts';
 import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
+import { KURULUYOR, usePlanKur } from '../coz.ts';
 import type { OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
@@ -76,6 +77,7 @@ export interface OnayOzellikleri {
 
 export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }: OnayOzellikleri) {
   const { bildir } = useBildirim();
+  const planKur = usePlanKur(o, useCallback((ileti: string) => bildir('hata', ileti), [bildir]));
   const [secim, setSecim] = useState<Secim>(null);
   const [kars, setKars] = useState<number[]>([]);
   const [notlar, setNotlar] = useState<Record<string, string>>({});
@@ -220,7 +222,10 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
           <section className="tc-pym-pa-kutu">
             <header><span><Simge ad="edit" boyut="k" /> Çalışma planı</span><Rozet ton="pasif">Plan yok</Rozet></header>
             <b className="tc-pym-pa-ad">Plan kurulmadı</b>
-            <div className="tc-pym-pa-dugmeler"><button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" disabled title="Motor bağlanınca"><Simge ad="play" boyut="k" />Planı kur</button></div>
+            <div className="tc-pym-pa-dugmeler">
+              <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" disabled={!planKur || planKur.suruyor} aria-busy={planKur?.suruyor || undefined}
+                title={!planKur ? 'Plan yazma yetkiniz yok.' : planKur.suruyor ? KURULUYOR : undefined} onClick={planKur?.kur}><Simge ad="play" boyut="k" />{planKur?.suruyor ? 'Kuruluyor' : 'Planı kur'}</button>
+            </div>
           </section>
         ) : (
           <section className="tc-pym-pa-kutu" data-ton={farkli ? 'calisma' : undefined}>

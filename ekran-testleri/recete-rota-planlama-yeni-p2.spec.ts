@@ -1,7 +1,8 @@
 import { expect, test } from './ortak.ts';
 
 // Planlama TS ekranı, P2: Siparişler, Terminler, Termin ve kâr (kart #532). Örnek veride çalışma ve plan olup olmaması sınanmaz; ısı haritası
-// ve formlar birim testindedir (siparis.test.tsx). Açılış yalnız okur; değerlendirme ucu main'e girene kadar istenmez (357 b).
+// ve formlar birim testindedir (siparis.test.tsx). Açılış kayıt yazmaz; planlı çalışmada motor kartları sunucudaki değerlendirme ucunu sorar
+// (576: başlatma POST'tur ama hesaptır, kayıt yazmaz).
 test.use({ hesap: 'ornek.yonetici' });
 
 const GORUNUMLER = [['ysiparis', 'Siparişler'], ['terminler', 'Terminler'], ['denge', 'Termin ve kâr']] as const;
@@ -9,7 +10,7 @@ const GORUNUMLER = [['ysiparis', 'Siparişler'], ['terminler', 'Terminler'], ['d
 test.describe('P2 siparişler, terminler, termin ve kâr', () => {
   // Genişlik projeden gelir (playwright.config.ts: g360, g768, g1280).
   for (const [anahtar, ad] of GORUNUMLER) {
-    test(`${ad} açılır, yazmaz, değerlendirme ucunu sormaz, yatay taşmaz`, async ({ page, ac, ag }) => {
+    test(`${ad} açılır, kayıt yazmaz, yatay taşmaz`, async ({ page, ac, ag }) => {
       await ac(`/recete-rota/planlama-yeni/${anahtar}`);
       const kap = page.locator(`[data-parca="${anahtar}"]`);
       await expect(kap).toBeVisible();
@@ -17,13 +18,14 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
       const tum = kap.locator('summary', { hasText: 'Tüm satırlar' });
       if (await tum.count()) {
         await tum.click();
-        // Plansız çalışmada motor kartları eski sayfadaki gibi "Önce plan kurulmalı" der; planlıda yerinde pasif, notuyla.
-        await expect(kap.locator('[data-kapali="motor"]').or(kap.getByText(/Önce plan kurulmalı/)).first()).toBeVisible();
+        // Plansız çalışmada motor kartları eski sayfadaki gibi "Önce plan kurulmalı" der; planlıda sunucudaki motorla açılır (576).
+        await expect(kap.locator('[data-kapali="motor"]').or(kap.getByText(/Önce plan kurulmalı/))
+          .or(kap.getByRole('heading', { name: /^(Plan seçenekleri|Malzeme: termin bekleyenler)$/ })).first()).toBeVisible();
       } else {
         await expect(kap.getByRole('button', { name: 'Planı kur' })).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar).toEqual([]);
+      expect(ag.yazmalar.filter((x) => x !== 'POST /api/recete-rota/planlama-degerlendirmesi')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
@@ -48,10 +50,11 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
       await kap.locator('button.tc-pys-h').first().click();
       await expect(kap.locator('.tc-pys-ac')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      // Tüm satırlar: kâr tablosu, parti formu ve motor kartları yerinde (pasif); dar ekranda da taşmaz. Terminler'de termin bekleyen malzeme
-      // kartı Malzeme satın alma planından dolar (518 a); plan okunana kadar motor notunu gösterir.
+      // Tüm satırlar: kâr tablosu, parti formu ve motor kartları yerinde; dar ekranda da taşmaz. Değerlendirme kartları sunucudaki motora
+      // bağlıdır (576); Terminler'de termin bekleyen malzeme kartı Malzeme satın alma planından dolar (518 a), motoru bekleyen kart notunu gösterir.
       await kap.locator('summary', { hasText: 'Tüm satırlar' }).click();
-      await expect(kap.locator('[data-kapali="motor"]').or(kap.getByRole('heading', { name: 'Malzeme: termin bekleyenler' })).first()).toBeVisible();
+      await expect(kap.locator('[data-kapali="motor"]').or(kap.getByRole('heading', { name: 'Malzeme: termin bekleyenler' }))
+        .or(kap.getByRole('heading', { name: 'Plan seçenekleri' })).first()).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     }
     // Siparişler açılımında ilk izinli form sihirbaz olarak sipariş dolu açılır; eski sayfadaki gibi başlık ve adım şeridi gizli, odak ilk alanda;

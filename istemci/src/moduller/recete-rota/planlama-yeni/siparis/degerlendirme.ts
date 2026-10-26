@@ -1,76 +1,60 @@
+import type {
+  DegerlendirmeCevabi as SunucuCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi as SunucuIstegi,
+} from '#paylasilan/sozlesme/recete-rota.ts';
+import { HATA_DURUMU } from '#paylasilan/hata.ts';
 import { ApiHatasi, api } from '../../../../ortak/veri/api.ts';
 import type { CozulmusPlan, PlanlamaCalismasi } from '../tipler.ts';
 
-// Plan değerlendirme ucu (Soru 357 a; sözleşme taslağı devir-heylit/planlama-degerlendir/SOZLESME-TASLAGI.md). Motor yalnız sunucudadır
-// (288 a, ADR 0018); ekran neyin deneneceğini gönderir, sonucu çizer. Uç main'e girene kadar kapalıdır: kartlar kilitli görünür, istek gitmez.
-// Tipler sözleşme taslağından yerel yazıldı; uç gelince paylasilan/sozlesme/recete-rota.ts'teki tiplerle değiştirilir.
-export const DEGERLENDIRME_ACIK = false;
-
+// Plan değerlendirme ucu (Soru 357 a, 463 a). Motor yalnız sunucudadır (288 a, ADR 0018); ekran neyin deneneceğini gönderir, sonucu çizer.
+// Tipler sözleşmedendir. Saatler planın ekseninde (başlangıç günü 00:00'dan saat), terminler 'GGGG-AA-GG SS:DD'.
 export const DEGERLENDIRME_YOLU = '/recete-rota/planlama-degerlendirmesi';
 
-export type DegerlendirmeIstegi =
-  | { tur: 'plan-secenekleri' }
-  | { tur: 'termin-secenekleri'; siparisId: string }
-  | { tur: 'termin-uzatma'; gun: 1 | 2 | 3 | 5 }
-  | { tur: 'malzeme-terminleri' }
-  | { tur: 'parti-bolme'; siparisId: string; dagitim: 'ayni' | 'dag'; adetler: number[] | null }
-  | { tur: 'siparis-kari' };
-
-export interface EkMesaiAdayi { makineId: string; gun: string; vardiya: string; tl: number | null }
-export interface PlanSecenegi {
-  denge: number; carpan: number; ekMesai: EkMesaiAdayi[]; ekMesaiTl: number | null; geciken: number; isSayisi: number;
-  gecikmeSaat: number; netKar: number | null; eksik: number; plan: CozulmusPlan;
-}
-export interface TerminSecenegiSatiri {
-  secenek: 'en-erken' | '3-gun' | '7-gun' | '14-gun' | 'girilen'; termin: string | null; bitis: string | null; gecikmeSaat: number | null;
-  tutar: number | null; netKar: number | null; digerKarFarki: number | null; digerGecikmeFarki: number | null; toplamKar: number | null;
-}
-export interface TerminUzatmaSatiri {
-  siparisId: string; yeniTermin: string; gecikmeSimdi: number; gecikmeUzatinca: number; netKarFarki: number | null; gecikmeSaatFarki: number; gecikenFarki: number;
-}
-export type MalzemeDurumu = 'hizlandir' | 'plan-once-istiyor' | 'ertelenebilir' | 'uygun' | 'bagli-is-yok' | 'siparis-yok';
-export interface MalzemeTerminiSatiri {
-  tur: 'siparis' | 'eksik'; satinalmaSira: string | null; kod: string; miktar: number | null; tedarikci: string | null; soz: string | null;
-  etkin: string | null; plan: string | null; enGec: string | null; farkGun: number | null; siparisEnGec: string | null; durum: MalzemeDurumu; isler: string[];
-}
-export interface PartiBolmeSonucu {
-  siparisId: string;
-  darbogaz: { adim: string; makineId: string; alternatifler: string[] } | null;
-  sonuc: {
-    partiler: { siparisId: string; adet: number; makineId: string }[]; gecikmeOnce: number; gecikmeSonra: number; bitisSonra: string | null;
-    tl: number | null; siparisler: unknown[]; plan: CozulmusPlan;
-  } | null;
-}
-export interface SiparisKariSatiri {
-  siparisId: string; planda: boolean; malzeme: number | null; talas: number | null; talasKg: number | null; isleme: number | null; ayar: number | null;
-  genelGider: number | null; ekMesai: number | null; fason: number | null; finansman: number | null; bekleme: { tl: number; ilk: number; ara: number; son: number } | null;
-  toplam: number | null; tutar: number | null; kar: number | null; net: number | null; gecikmeBedeli: number | null; gecikmeSaat: number | null;
-  erkenSaat: number | null; eksik: string[];
-}
-
-export interface DegerlendirmeSonuclari {
-  'plan-secenekleri': { secenekler: PlanSecenegi[] };
-  'termin-secenekleri': { siparisId: string; havuz: boolean; taban: 'siparissiz' | 'girilen-termin'; yerlesti: boolean; satirlar: TerminSecenegiSatiri[] };
-  'termin-uzatma': { gun: number; satirlar: TerminUzatmaSatiri[] };
-  'malzeme-terminleri': { satirlar: MalzemeTerminiSatiri[] };
-  'parti-bolme': PartiBolmeSonucu;
-  'siparis-kari': { satirlar: SiparisKariSatiri[]; bekleme: number | null };
-}
-export type DegerlendirmeTuru = keyof DegerlendirmeSonuclari;
-
-export interface DegerlendirmeCevabi<K extends DegerlendirmeTuru> {
-  calismaSurumu: number; dataVer: number; baslangic: string; simdi: number; maliyetGorunur: boolean; sonuc: DegerlendirmeSonuclari[K];
-}
+export type DegerlendirmeIstegi = SunucuIstegi;
+type Sonuclar = SunucuCevabi['sonuc'];
+export type DegerlendirmeTuru = Sonuclar['tur'];
+export type DegerlendirmeCevabi<K extends DegerlendirmeTuru> = Omit<SunucuCevabi, 'sonuc'> & { sonuc: Extract<Sonuclar, { tur: K }> };
+export type PlanSecenegi = DegerlendirmeCevabi<'plan-secenekleri'>['sonuc']['secenekler'][number];
+export type EkMesaiAdayi = PlanSecenegi['ekMesai'][number];
+export type TerminSecenegiSatiri = DegerlendirmeCevabi<'termin-secenekleri'>['sonuc']['satirlar'][number];
+export type TerminUzatmaSatiri = DegerlendirmeCevabi<'termin-uzatma'>['sonuc']['satirlar'][number];
+export type MalzemeTerminiSatiri = DegerlendirmeCevabi<'malzeme-terminleri'>['sonuc']['satirlar'][number];
+export type MalzemeDurumu = MalzemeTerminiSatiri['durum'];
+export type PartiBolmeSonucu = DegerlendirmeCevabi<'parti-bolme'>['sonuc'];
+export type SiparisKariSatiri = DegerlendirmeCevabi<'siparis-kari'>['sonuc']['satirlar'][number];
 
 export type Degerlendirici = <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => Promise<DegerlendirmeCevabi<K>>;
 
-export function degerlendirmeAdresi(surum: number, istek: DegerlendirmeIstegi): string {
-  return `${DEGERLENDIRME_YOLU}?surum=${String(surum)}&istek=${encodeURIComponent(JSON.stringify(istek))}`;
+// Sürüm açılıştaki çalışmanınkidir; ekran yazdıysa sunucu 409 döner ve ekran yenilenir (iskelet yazıcının güncel sürümünü vermiyor: DEVIR'de istek).
+export function degerlendirici(surum: number, iste: typeof degerlendirmeIste = degerlendirmeIste): Degerlendirici {
+  return async <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => (await iste(surum, istek)) as DegerlendirmeCevabi<K>;
 }
 
-// Sürüm açılıştaki çalışmanınkidir; ekran yazdıysa sunucu 409 döner ve ekran yenilenir (iskelet yazıcının güncel sürümünü vermiyor: DEVIR'de istek).
-export function degerlendirici(surum: number, o: { get: <T>(yol: string) => Promise<T> } = api): Degerlendirici {
-  return async (istek) => o.get(degerlendirmeAdresi(surum, istek));
+// Sunucunun iki adımı (463 a): başlatma iş kimliği döner, sonuç kimlikle beklenir. Hesaptaki ret (plan yok, süre, meşgul) uçtaki hatanın
+// durumuyla ApiHatasi olur; ekran onu degerlendirmeHatasi ile okur. Sunucu hesabı süre sınırında kendisi keser; bu sınır yalnız sonuç hiç gelmezse.
+export const DEGERLENDIRME_BEKLEME_MS = 400;
+const SONUC_SINIRI_MS = 120_000;
+export interface DegerlendirmeUcu {
+  post: <T>(yol: string, govde: unknown) => Promise<T>;
+  get: <T>(yol: string) => Promise<T>;
+  bekle: (ms: number) => Promise<void>;
+  simdi: () => number;
+}
+const UC: DegerlendirmeUcu = {
+  post: (yol, govde) => api.post(yol, govde, { zamanAsimiMs: 30_000 }),
+  get: (yol) => api.get(yol, { zamanAsimiMs: 30_000 }),
+  bekle: (ms) => new Promise((t) => { setTimeout(t, ms); }),
+  simdi: () => Date.now(),
+};
+export async function degerlendirmeIste(surum: number, istek: SunucuIstegi, u: DegerlendirmeUcu = UC): Promise<SunucuCevabi> {
+  const { is } = await u.post<{ is: string }>(DEGERLENDIRME_YOLU, { surum, istek });
+  const son = u.simdi() + SONUC_SINIRI_MS;
+  while (u.simdi() < son) {
+    const d = await u.get<DegerlendirmeDurumuCevabi>(`${DEGERLENDIRME_YOLU}/${is}`);
+    if (d.durum === 'bitti') return d.cevap;
+    if (d.durum === 'hata') throw new ApiHatasi(HATA_DURUMU[d.kod], { kod: d.kod, mesaj: d.mesaj });
+    await u.bekle(DEGERLENDIRME_BEKLEME_MS);
+  }
+  throw new ApiHatasi(503, { kod: 'MESGUL', mesaj: 'Sunucu hesabın sonucunu vermedi.' });
 }
 
 export function degerlendirmeHatasi(h: unknown): { metin: string; yenile: boolean } {
@@ -96,7 +80,7 @@ export function secenegiAl(t: PlanlamaCalismasi, x: PlanSecenegi, dataVer: numbe
     t.ekMesai.push(e);
   }
   const once = t.plan === null ? null : (t.plan.ozet ?? null);
-  t.plan = { ...x.plan, dataVer: t.dataVer + 1, kim, zaman, kaynak: 'denge', oncekiOzet: once, kapali: t.kapali.slice() };
+  t.plan = { ...x.plan, dataVer: t.dataVer + 1, kim, zaman, kaynak: 'denge', oncekiOzet: once, kapali: t.kapali.slice() } as CozulmusPlan;
   return true;
 }
 

@@ -363,5 +363,13 @@ describe('PlanlamaAtolyesi', () => {
     cleanup();
     ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi });
     expect(screen.getByText('Plan henüz kurulmadı')).toBeTruthy();
+    // Planı kur sunucudaki motorla açık (576): boş kartta ve Onay sekmesinin çalışma planı kutusunda
+    expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('tab', { name: 'Onay ve canlı' }));
+    expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(false);
+    cleanup();
+    ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi, yaz: false });
+    fireEvent.click(screen.getByRole('tab', { name: 'Onay ve canlı' }));
+    expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
