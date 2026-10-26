@@ -189,4 +189,45 @@ describe('oee (gerçek PostgreSQL)', () => {
     const kisitli = await cagir('kisitli');
     assert.ok(kisitli.length > 0 && kisitli.every((i) => i.isMerkeziId === merkezA));
   });
+
+  test('OE-15, OE-16: vardiya içi çalışma ve sayım OEE\'ye, vardiya dışı ayrı alana düşer; red kalite kaybıdır', async () => {
+    const sahip = ortam!.sahip;
+    const m3 = makineler[2]!;
+    const tip = (await sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('OE-T', 'Deneme tipi', 'TAL') RETURNING id"))!.id;
+    const emir = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum) VALUES ('P-OE', 'Deneme parça', 100, $1, $2, 'planli') RETURNING id",
+      [istasyonA, yoneticiId]))!.id;
+    const isEmri = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, istasyon_id, makine_id, birim_sure_dk) VALUES ($1, 1, 10, $2, 'Tornalama', $3, $4, 1.5) RETURNING id",
+      [emir, tip, istasyonA, m3]))!.id;
+    const an = (saat: string) => `${GELECEK_PAZARTESI}T${saat}:00+03:00`;
+    for (const [b, e] of [['09:00', '11:00'], ['17:00', '19:00']] as const) {
+      await sahip.sorgu(
+        `INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
+         VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $5)`, [emir, isEmri, istasyonA, m3, yoneticiId, an(b), an(e)]);
+    }
+    const hurdaNedeni = (await sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('OE-H', 'Ölçü dışı', 981) RETURNING id"))!.id;
+    const sayim = (tur: 'saglam' | 'hurda' | 'red', adet: number, saat: string) => sahip.sorgu(
+      `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9)`,
+      [emir, yoneticiId, istasyonA, tur, adet, tur === 'hurda' ? hurdaNedeni : null, tur === 'red', an(saat), isEmri]);
+    await sayim('saglam', 40, '10:00');
+    await sayim('hurda', 2, '10:30');
+    await sayim('red', 3, '10:30');
+    await sayim('saglam', 30, '18:00');
+
+    const g = await sayisal();
+    const m = g.makineler.find((x) => x.id === m3)!;
+    assert.equal(m.planliDk, 480);
+    assert.equal(m.calismaDk, 120);
+    assert.equal(m.standartDk, 60);
+    assert.deepEqual([m.saglam, m.hurda, m.red], [40, 2, 3]);
+    assert.equal(m.kalite, 0.8889);
+    assert.equal(m.oee, 0.125);
+    assert.equal(m.veriEksik, false, 'vardiya dışı çalışma makineyi veri eksik yapmaz');
+    assert.deepEqual(m.vardiyaDisi, { calismaDk: 120, standartDk: 45, saglam: 30, hurda: 0, red: 0 });
+    const ist = g.istasyonlar.find((i) => i.id === istasyonA)!;
+    assert.equal(ist.red, 3);
+    assert.equal(ist.vardiyaDisi.saglam, 30);
+  });
 });

@@ -7,7 +7,8 @@ import { Oee, OeeMakineler } from './Oee.tsx';
 
 // Biçim sunucunun cevabından (oee.test.ts, 1 kişi 3 makine): üretimsiz planlı makine ve maliyet yetkilisi.
 const olcu = (o: Partial<OeeOlcusu> = {}): OeeOlcusu => ({
-  planliDk: 480, takvimDk: 2880, calismaDk: 420, standartDk: 384, saglam: 98, hurda: 2, suresizSaglam: 0,
+  planliDk: 480, takvimDk: 2880, calismaDk: 420, standartDk: 384, saglam: 98, hurda: 2, red: 0, suresizSaglam: 0,
+  vardiyaDisi: { calismaDk: 0, standartDk: 0, saglam: 0, hurda: 0, red: 0 },
   kullanilabilirlik: 0.875, veriEksik: false, performans: 0.9329, kalite: 0.98, oee: 0.8, teep: 0.1333, kisiPayi: 0.333,
   makineMaliyeti: 4800, iscilikMaliyeti: 800, birimMaliyet: 57.14, ...o,
 });
@@ -83,6 +84,25 @@ describe('OEE ekranı', () => {
     sunucuKur(() => json(200, c));
     cizdir(<Oee />);
     expect(await screen.findByText(/1 makine veri eksik, girmedi/)).toBeTruthy();
+  });
+
+  it('red adedi rozetle, vardiya dışı çalışma ayrı kartta ve sütunda görünür; vardiya dışı yoksa kart çıkmaz', async () => {
+    const c = cevap(true);
+    c.tesis = { ...c.tesis, red: 3, vardiyaDisi: { calismaDk: 120, standartDk: 45, saglam: 30, hurda: 0, red: 0 } };
+    c.makineler[0] = { ...c.makineler[0]!, red: 3, vardiyaDisi: { calismaDk: 120, standartDk: 45, saglam: 30, hurda: 0, red: 0 } };
+    sunucuKur(() => json(200, c));
+    cizdir(<OeeMakineler />);
+    expect(await screen.findByText('Vardiya dışı', { selector: '.tc-sayi-baslik' })).toBeTruthy();
+    expect(screen.getByText("30 sağlam; OEE'ye girmez")).toBeTruthy();
+    expect(screen.getByText(/98 sağlam, 2 hurda, 3 red/)).toBeTruthy();
+    const satir = within(screen.getByRole('table', { name: 'Makineler' })).getByText('M-1').closest('tr')!;
+    expect(within(satir).getByText('3 red')).toBeTruthy();
+    expect(within(satir).getByText('2 sa · 30 adet')).toBeTruthy();
+    cleanup();
+    sunucuKur(() => json(200, cevap(true)));
+    cizdir(<Oee />);
+    expect(await screen.findByText('OEE (vardiyaya göre)')).toBeTruthy();
+    expect(screen.queryByText('Vardiya dışı', { selector: '.tc-sayi-baslik' })).toBeNull();
   });
 
   it('okuma hatasında yeniden dene kutusu çıkar', async () => {

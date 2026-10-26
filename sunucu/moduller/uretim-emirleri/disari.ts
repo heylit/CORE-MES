@@ -13,7 +13,7 @@ import type { HazirlikCozucusu } from './hazirlik.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, emirBul, emirDurumlariGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
-  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
+  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
   AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, KisiIsEmriSatiri, SayimKirilimi,
@@ -179,6 +179,48 @@ export async function makineSureleri(
   const tekil = [...new Set(makineIdleri)];
   if (tekil.length === 0) return new Map();
   return new Map((await makineSureleriGetir(db, tekil, baslangic, bitis)).map((r) => [r.id, r.saniye]));
+}
+
+// makineSureleri'nin aralıklı hâli (OEE çalışmayı vardiya takvimiyle keser): makine başına kullanımların pencereyle kesişen parçaları,
+// başlama sırasıyla; aynı makinede aynı anda tek iş olduğundan parçalar örtüşmez. Penceresinde kullanımı olmayan makine haritada yoktur.
+export async function makineKullanimAraliklari(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<Map<number, { baslangic: string; bitis: string }[]>> {
+  const tekil = [...new Set(makineIdleri)];
+  const sonuc = new Map<number, { baslangic: string; bitis: string }[]>();
+  if (tekil.length === 0) return sonuc;
+  for (const { id, ...a } of await makineKullanimAraliklariGetir(db, tekil, baslangic, bitis)) {
+    const liste = sonuc.get(id);
+    if (liste) liste.push(a);
+    else sonuc.set(id, [a]);
+  }
+  return sonuc;
+}
+
+export interface MakineSayimAni {
+  zaman: string;
+  saglam: number;
+  hurda: number;
+  // Kalite kararıyla reddedilen adet (karar bekleyen sayılmaz).
+  red: number;
+  standartSaniye: number;
+  suresizSaglam: number;
+}
+
+// Makine başına sayımlar an an (OEE vardiya içini ve dışını ayırır): aralikAdetleri ve kirilimStandartSureleri'nin makine kırılımıyla
+// aynı yere düşer, toplamları onlarınkine eşittir. Sayımı olmayan makine haritada yoktur.
+export async function makineSayimAnlari(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<Map<number, MakineSayimAni[]>> {
+  const tekil = [...new Set(makineIdleri)];
+  const sonuc = new Map<number, MakineSayimAni[]>();
+  if (tekil.length === 0) return sonuc;
+  for (const { id, ...a } of await makineSayimAnlariGetir(db, tekil, baslangic, bitis)) {
+    const liste = sonuc.get(id);
+    if (liste) liste.push(a);
+    else sonuc.set(id, [a]);
+  }
+  return sonuc;
 }
 
 /* ---------------- kişinin özeti (kart #1295, Operatör Özetim; Arkon okur, yetkiyi o denetler) ---------------- */

@@ -21,14 +21,18 @@ export const oeeOlcusuSemasi = z.object({
   planliDk: z.number().nullable(),
   // Takvim süresi: aralığın bütün saatleri (TEEP paydası).
   takvimDk: z.number(),
-  // Makinenin iş tuttuğu süre; duraklatma ve duruş kullanımı kapatır, yani duruşlar düşülmüştür.
+  // Makinenin vardiya takvimi içinde iş tuttuğu süre; duraklatma ve duruş kullanımı kapatır, yani duruşlar düşülmüştür.
   calismaDk: z.number(),
-  // Sağlam adedin standart süresi (birim süresi olan iş emirlerinden).
+  // Vardiya içinde sayılan sağlam adedin standart süresi (birim süresi olan iş emirlerinden).
   standartDk: z.number(),
   saglam: z.number().int(),
   hurda: z.number().int(),
+  // Kalite kararıyla reddedilen adet; hurda gibi kalite kaybıdır.
+  red: z.number().int(),
   // Birim süresi olmayan iş emrinde üretilen sağlam: standart süreye girmez, OEE'yi eksik gösterir.
   suresizSaglam: z.number().int(),
+  // Vardiya takvimi dışında (vardiya dışı, mola, planlı duruş) çalışma ve sayım: OEE'ye girmez, ayrıca gösterilir.
+  vardiyaDisi: z.object({ calismaDk: z.number(), standartDk: z.number(), saglam: z.number().int(), hurda: z.number().int(), red: z.number().int() }),
   kullanilabilirlik: oran,
   // Veri eksik: standart süre çalışma süresinden büyük (çalışma kaydı yok ya da az); performans, OEE ve TEEP null olur ve kayıt
   // üst düzey toplama (istasyon, iş merkezi, tesis) girmez. Üst düzeyde her zaman false.

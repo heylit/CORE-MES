@@ -26,6 +26,40 @@ export function kisiPaylari(atamalar: readonly { kisiId: number; makineId: numbe
   return sonuc;
 }
 
+export interface SayimAni { an: number; saglam: number; hurda: number; red: number; standartSaniye: number; suresizSaglam: number }
+export interface VardiyaDisi { calismaDk: number; standartDk: number; saglam: number; hurda: number; red: number }
+export interface Ayrim {
+  ici: Pick<HamOlcu, 'calismaDk' | 'standartDk' | 'saglam' | 'hurda' | 'red' | 'suresizSaglam'>;
+  disi: VardiyaDisi;
+}
+
+// Sıralı ve örtüşmeyen iki aralık listesinin kesişen süresi (ms).
+function kesisenMs(a: readonly Aralik[], b: readonly Aralik[]): number {
+  let ms = 0;
+  for (const x of a) for (const y of b) ms += Math.max(0, Math.min(x.bit, y.bit) - Math.max(x.bas, y.bas));
+  return ms;
+}
+
+// OE-16 (kullanıcı kararı 644 a): çalışma ve sayım vardiya takvimiyle kesişir; takvim dışında kalan (vardiya dışı, mola, planlı duruş)
+// OEE'ye girmez, ayrıca döner. Sayım anı aralığın iki ucu dahil içeridedir: vardiyanın son anında bitirilen parça vardiyanındır.
+// Takvim bilinmiyorsa (null) ayrılamaz: hepsi içeride sayılır, planlı süre zaten bilinmediğinden oranlar null kalır.
+export function vardiyaIleAyir(plan: readonly Aralik[] | null, kullanimlar: readonly Aralik[], sayimlar: readonly SayimAni[]): Ayrim {
+  const toplamMs = kullanimlar.reduce((t, k) => t + Math.max(0, k.bit - k.bas), 0);
+  const iciMs = plan === null ? toplamMs : kesisenMs(kullanimlar, plan);
+  const iceride = (an: number) => plan === null || plan.some((a) => an >= a.bas && an <= a.bit);
+  const ici = { calismaDk: iciMs / DK_MS, standartDk: 0, saglam: 0, hurda: 0, red: 0, suresizSaglam: 0 };
+  const disi = { calismaDk: (toplamMs - iciMs) / DK_MS, standartDk: 0, saglam: 0, hurda: 0, red: 0 };
+  for (const s of sayimlar) {
+    const h = iceride(s.an) ? ici : disi;
+    h.standartDk += s.standartSaniye / 60;
+    h.saglam += s.saglam;
+    h.hurda += s.hurda;
+    h.red += s.red;
+    if (h === ici) ici.suresizSaglam += s.suresizSaglam;
+  }
+  return { ici, disi };
+}
+
 export interface Iscilik { pay: number; mesaiDk: number | null; saatMaliyeti: number | null }
 
 export interface HamOlcu {
@@ -35,7 +69,10 @@ export interface HamOlcu {
   standartDk: number;
   saglam: number;
   hurda: number;
+  // Kalite kararıyla reddedilen adet: hurda gibi kalite kaybıdır (OE-15).
+  red: number;
   suresizSaglam: number;
+  vardiyaDisi: VardiyaDisi;
   kisiPayi: number | null;
   makineMaliyeti: number | null;
   iscilikMaliyeti: number | null;
@@ -65,19 +102,19 @@ const yuvarla = (x: number | null, basamak: number): number | null => (x === nul
 
 // OE-10 (kullanıcı kararı "Veri eksik"): sağlamın standart süresi makinenin çalışma süresinden büyükse sayım çalışma kaydıyla
 // açıklanamaz (çalışma kaydı yok ya da az, birim süre yanlış); performans sınırsız büyür. Bu kayıtta performans, OEE ve TEEP hesaplanmaz.
-// Üretimsiz makine (standart 0) eksik sayılmaz: OEE'si gerçek sıfırdır. Çalışma planlı süreden uzunsa planlı süre eksiktir (vardiyada
-// olmayan çalışma, yazılmamış fazla mesai): kullanılabilirlik %100'ü aşardı; bu kayıtta kullanılabilirlik de hesaplanmaz.
+// Üretimsiz makine (standart 0) eksik sayılmaz: OEE'si gerçek sıfırdır. Çalışma planlı süreden uzunsa kullanılabilirlik %100'ü aşardı;
+// bu kayıtta kullanılabilirlik de hesaplanmaz. Çalışma takvimle kesiştiğinden (OE-16) bu kol takvim tutarsızlığına karşı korumadır.
 const planliSureEksikMi = (h: Pick<HamOlcu, 'planliDk' | 'calismaDk'>): boolean => h.planliDk !== null && h.calismaDk > h.planliDk;
 export const veriEksikMi = (h: Pick<HamOlcu, 'planliDk' | 'calismaDk' | 'standartDk'>): boolean =>
   (h.standartDk > 0 && h.calismaDk < h.standartDk) || planliSureEksikMi(h);
 
-// OE-02: OEE = sağlam standart süre / planlı süre; kullanılabilirlik = çalışma / planlı; kalite = sağlam / (sağlam + hurda);
+// OE-02: OEE = sağlam standart süre / planlı süre; kullanılabilirlik = çalışma / planlı; kalite = sağlam / (sağlam + hurda + red) (OE-15);
 // performans = OEE / (kullanılabilirlik x kalite). TEEP aynı payın takvim süresine oranıdır (OE-03). Payda yoksa ya da sıfırsa null.
 // OE-08: birim maliyet = (makine + işçilik) / sağlam; ikisinden biri bilinmiyorsa ya da sağlam yoksa null.
 export function olcuHesapla(h: HamOlcu): OeeOlcusu {
   const veriEksik = veriEksikMi(h);
   const kullanilabilirlik = planliSureEksikMi(h) ? null : bolum(h.calismaDk, h.planliDk);
-  const kalite = bolum(h.saglam, h.saglam + h.hurda);
+  const kalite = bolum(h.saglam, h.saglam + h.hurda + h.red);
   const oee = veriEksik ? null : bolum(h.standartDk, h.planliDk);
   const performans = oee === null || kullanilabilirlik === null || kalite === null ? null : bolum(oee, kullanilabilirlik * kalite);
   const birim = h.makineMaliyeti === null || h.iscilikMaliyeti === null ? null : bolum(h.makineMaliyeti + h.iscilikMaliyeti, h.saglam);
@@ -88,7 +125,15 @@ export function olcuHesapla(h: HamOlcu): OeeOlcusu {
     standartDk: yuvarla(h.standartDk, 1)!,
     saglam: h.saglam,
     hurda: h.hurda,
+    red: h.red,
     suresizSaglam: h.suresizSaglam,
+    vardiyaDisi: {
+      calismaDk: yuvarla(h.vardiyaDisi.calismaDk, 1)!,
+      standartDk: yuvarla(h.vardiyaDisi.standartDk, 1)!,
+      saglam: h.vardiyaDisi.saglam,
+      hurda: h.vardiyaDisi.hurda,
+      red: h.vardiyaDisi.red,
+    },
     kullanilabilirlik: yuvarla(kullanilabilirlik, 4),
     veriEksik,
     performans: yuvarla(performans, 4),
@@ -119,7 +164,15 @@ export function topla(hamlar: readonly HamOlcu[]): HamOlcu {
     standartDk: sayi((h) => h.standartDk),
     saglam: sayi((h) => h.saglam),
     hurda: sayi((h) => h.hurda),
+    red: sayi((h) => h.red),
     suresizSaglam: sayi((h) => h.suresizSaglam),
+    vardiyaDisi: {
+      calismaDk: sayi((h) => h.vardiyaDisi.calismaDk),
+      standartDk: sayi((h) => h.vardiyaDisi.standartDk),
+      saglam: sayi((h) => h.vardiyaDisi.saglam),
+      hurda: sayi((h) => h.vardiyaDisi.hurda),
+      red: sayi((h) => h.vardiyaDisi.red),
+    },
     kisiPayi: paylar.length === 0 ? null : paylar.reduce((t, p) => t + p, 0),
     makineMaliyeti: hamlar.length === 0 ? null : toplaBilinen(hamlar.map((h) => h.makineMaliyeti)),
     iscilikMaliyeti: hamlar.length === 0 ? null : toplaBilinen(hamlar.map((h) => h.iscilikMaliyeti)),
