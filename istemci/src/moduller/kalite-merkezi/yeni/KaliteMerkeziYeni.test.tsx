@@ -39,11 +39,11 @@ describe('Kalite Merkezi yeni ekran kabuğu', () => {
     expect(await screen.findByText('Böyle bir görünüm yok.')).toBeTruthy();
   });
 
-  it('balonlama stüdyoda açılır (217 b)', async () => {
+  it('balonlama Resim ve modeller stüdyosunda açılır (597 a)', async () => {
     kmAc('', YONETICI);
     fireEvent.click(await screen.findByRole('button', { name: 'Yeni kayıt' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Teknik resim balonla' }));
-    expect(await screen.findByText('eski ekran')).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'Teknik resim' })).toBeTruthy();
     expect(kmAdresi()).toBe('/kalite-merkezi/resimler');
   });
 

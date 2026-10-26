@@ -8,13 +8,13 @@ import { KaliteMerkeziYeni } from './yeni/KaliteMerkeziYeni.tsx';
 const ekran = (adres: string) => matchRoutes(rotalar.map((r) => ({ path: r.yol, ekran: r.ekran })), adres)?.at(-1)?.route.ekran;
 
 describe('Kalite Merkezi geçişi (582)', () => {
-  it('menü adresleri yeni ekranı, stüdyo görünümleri (217 b) ve eski kök çerçeveyi açar', () => {
-    for (const a of ['/kalite-merkezi', '/kalite-merkezi/muayeneler', '/kalite-merkezi/ayarlar']) expect(ekran(a), a).toBe(KaliteMerkeziYeni);
-    for (const a of ['/kalite-merkezi/resimler', '/kalite-merkezi/analiz', ESKI_KOK, `${ESKI_KOK}/dof`]) {
+  it('menü adresleri ve Resim ve modeller yeni ekranı, Analiz ile eski kök çerçeveyi açar', () => {
+    for (const a of ['/kalite-merkezi', '/kalite-merkezi/muayeneler', '/kalite-merkezi/ayarlar', '/kalite-merkezi/resimler']) expect(ekran(a), a).toBe(KaliteMerkeziYeni);
+    for (const a of ['/kalite-merkezi/analiz', ESKI_KOK, `${ESKI_KOK}/dof`]) {
       expect(ekran(a), a).not.toBe(KaliteMerkeziYeni);
       expect(ekran(a), a).not.toBeUndefined();
     }
-    expect(ekran('/kalite-merkezi/resimler')).not.toBe(ekran(`${ESKI_KOK}/resimler`));
+    expect(ekran('/kalite-merkezi/analiz')).not.toBe(ekran(`${ESKI_KOK}/analiz`));
     expect(ekran(`${ESKI_KOK}/resimler`)).not.toBe(KaliteMerkeziCercevesi);
   });
 
