@@ -5174,12 +5174,19 @@ function tmiCevir(st, kaynak, D0, bugun) {
   const firmalar = k && k.durum.fasonFirms;
   if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(sk, firmalar, D, D0);
   const adet = tmiAdimAdetleri(k && k.durum, sk, D); if (adet) D.opAdet = adet;
+  if (k && Array.isArray(k.durum.stations)) tmiOperatorOrani(D.tezgahlar, k.durum.stations);
   const kp = k && k.ek && k.ek.kapasite;
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
   const sa = k && k.ek && k.ek.acikSiparisler;
   if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
   if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   return D;
+}
+/* 561 1 b: TMI'de tezgâhın operatör oranı istasyonun plan ayarıdır (çalışan bir makinenin istediği operatör; "bir operatör en çok N
+   tezgâh" 1/N yazar). Planlamada girilmez: kaynak okundukça istasyonunkiyle yazılır; istasyonu okunmayan tezgâhta oran 1 sayılır. */
+function tmiOperatorOrani(tezgahlar, istasyonlar) {
+  const O = new Map(istasyonlar.map(x => [String(x.id), x.opPer]));
+  for (const m of tezgahlar || []) { const v = O.get(String(m.grup)); m.opOran = v == null || !isFinite(+v) ? 1 : +v; }
 }
 /* 533 a: Satın Alma'nın tedarik termini malzemede durur (saTermin 'GGGG-AA-GG' ya da null; saSurum yazma ucunun sürümü). Okunamadıysa
    (null) açık çalışmadaki değer kalır; satırı olmayan malzemede alan yoktur (termin bekleniyor). */
@@ -5272,6 +5279,13 @@ const GEVSEK = {
   ayar: st => { for (const u of st.D.urunler) for (const o of u.rota) for (const t of o.tezgahlar || []) t.ayar = 0; st.D.ayarMatrisi = []; },
   malzeme: st => { st.w.mat = 'uyari'; },
 };
+/* 561 2 a: personel kısıtı (operatör oranı) kullanıcı Kısıtlar sayfasından açana kadar kapalıdır. kisitSurum 2 olan çalışmada
+   kapali listesi kullanıcının kararıdır; daha eski çalışmada listeye personel eklenir. */
+const KISIT_SURUM = 2;
+function kapaliKisitlar(S) {
+  const k = Array.isArray(S.kapali) ? S.kapali : [];
+  return (+S.kisitSurum || 0) >= KISIT_SURUM || k.includes('personel') ? k.slice() : [...k, 'personel'];
+}
 function stKur(S, ek = [], gevset = true) {
   const D = clone(S.D);
   D.ayarlar = D.ayarlar || {};
@@ -5282,7 +5296,7 @@ function stKur(S, ek = [], gevset = true) {
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
     w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
   };
-  const kapali = new Set([...(gevset ? S.kapali : []), ...ek]);
+  const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
   if (!kapali.has('ayarci') && ayarciYok(D)) { GEVSEK.ayarci(st); st.ayarciYok = true; }
@@ -5958,12 +5972,21 @@ function yeniCalisma(setId) {
   return {
     surum: 2, setId, D: clone(v.veri), down: clone(v.ariza || []), ekMesai: [], locks: {}, pref: {},
     w: { dondurma: 4, famK: 0.3, mat: 'karma', sure: 10 },
-    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: [], bedel: null,
+    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: ['personel'], kisitSurum: 2, bedel: null,
     olaylar: [], plan: null, dataVer: 1, senaryolar: [], canli: null, canliSurum: 0, tabanSurum: 0, iz: [], kullanici: (S && S.kullanici) || 'u1',
   };
 }
+/* 561 2 a: personel kısıtı kullanıcı açana kadar kapalıdır (motor/girdi.betik kapaliKisitlar); eski çalışma açılırken listeye eklenir,
+   kullanıcı bir şey değiştirmeden yazılmaz */
+function kisitSurumuKur(x) {
+  if ((+x.kisitSurum || 0) >= 2) return x;
+  x.kapali = Array.isArray(x.kapali) ? x.kapali : [];
+  if (!x.kapali.includes('personel')) x.kapali.push('personel');
+  x.kisitSurum = 2;
+  return x;
+}
 function yukle() {
-  try { const x = JSON.parse(localStorage.getItem(ANAHTAR) || 'null'); if (x && x.surum === 2 && x.D) return x; } catch (e) { /* tarayıcı belleği kapalı olabilir */ }
+  try { const x = JSON.parse(localStorage.getItem(ANAHTAR) || 'null'); if (x && x.surum === 2 && x.D) return kisitSurumuKur(x); } catch (e) { /* tarayıcı belleği kapalı olabilir */ }
   return null;
 }
 function kaydet() {
@@ -6730,7 +6753,7 @@ const TANIM = {
       { k: 'grup', ad: 'Grup', tur: 'metin', zorunlu: 1, liste: [...new Set(S.D.tezgahlar.map(t => t.grup))], ipucu: 'Personel yetkinliği bu gruba göre aranır' },
       { k: 'vardiyalar', ad: 'Çalıştığı vardiyalar', tur: 'cok', secenek: () => S.D.vardiyalar.map(v => [v.id, `${v.id} ${v.bas}-${v.bit}`]), ipucu: 'Boş: fabrikanın bütün açık vardiyaları' },
       { k: 'verim', ad: 'Verim', tur: 'sayi', min: 0.1, max: 3, adim: 0.05, vars: 1, ipucu: '1: çevrim süresi aynen; 1,2: %20 hızlı' },
-      { k: 'opOran', ad: 'Operatör oranı', tur: 'sayi', min: 0, max: 1, adim: 0.1, vars: 1, ipucu: '0,5: bir operatör iki tezgâha bakar' },
+      { k: 'opOran', ad: 'Operatör oranı', tur: 'sayi', min: 0, max: 10, adim: 0.01, vars: 1, ipucu: '0,5: bir operatör iki tezgâha bakar', salt: () => typeof TMI_ICINDE !== 'undefined' && TMI_ICINDE },
       { k: 'isiksiz', ad: 'Işıksız çalışır (vardiya dışında da işler)', tur: 'evet' },
       { k: 'ucret', ad: 'Saat ücreti (TL)', tur: 'sayi', min: 0 },
       { k: 'arizaGun', ad: 'Ortalama arıza aralığı (gün)', tur: 'sayi', min: 0 },
@@ -6827,6 +6850,8 @@ function alanHtml(a, v, yeni, T) {
   const etiket = `<span class="tc-alan-etiket">${esc(a.ad)}${a.zorunlu ? ' <span class="tc-alan-zorunlu">*</span>' : ''}</span>`;
   const alt = a.ipucu ? `<span class="tc-alan-alt">${esc(a.ipucu)}</span>` : '';
   const kilitli = !yeni && T && a.k === T.kimlik;
+  /* 561 1 b: TMI'de oran istasyonun plan ayarından gelir, burada değiştirilmez */
+  const salt = a.salt && a.salt();
   if (a.tur === 'evet') return `<label class="tc-isaret tc-form-tam"><input type="checkbox" name="${a.k}" ${v ? 'checked' : ''}> ${esc(a.ad)}</label>`;
   if (a.tur === 'cok') { const s = new Set(v || []); return `<fieldset class="tc-alan tc-form-tam" style="border:0;padding:0;margin:0"><legend class="tc-alan-etiket">${esc(a.ad)}</legend><div class="pm-secimler">${a.secenek().map(([k, ad]) => `<label><input type="checkbox" name="${a.k}" value="${esc(k)}" ${s.has(k) ? 'checked' : ''}> ${esc(ad)}</label>`).join('')}</div>${alt}</fieldset>`; }
   if (a.tur === 'secim') return `<label class="tc-alan">${etiket}<select class="tc-alan-kutu" name="${a.k}" id="${id}" ${a.sayisal ? 'data-sayisal' : ''}><option value="">Seçin</option>${a.secenek().map(([k, ad]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(ad)}</option>`).join('')}</select>${alt}</label>`;
@@ -6837,7 +6862,7 @@ function alanHtml(a, v, yeni, T) {
   const tip = a.tur === 'sayi' ? 'number' : a.tur === 'tarihsaat' ? 'datetime-local' : a.tur === 'tarih' ? 'date' : a.tur === 'saat' ? 'time' : 'text';
   const deger = a.tur === 'tarihsaat' ? girdiDT(v) : (v ?? '');
   const dl = a.liste ? `<datalist id="dl-${a.k}">${a.liste.map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : '';
-  return `<label class="tc-alan">${etiket}<input class="tc-alan-kutu" type="${tip}" name="${a.k}" id="${id}" value="${esc(deger)}" ${a.min != null ? `min="${a.min}"` : ''} ${a.max != null ? `max="${a.max}"` : ''} ${a.tur === 'sayi' ? `step="${a.adim || (a.tam ? 1 : 'any')}"` : ''} ${a.liste ? `list="dl-${a.k}"` : ''} ${kilitli ? 'readonly title="Kod değişmez; yeni kayıt açın"' : ''} ${a.ipucu && tip === 'text' ? `placeholder="${esc(a.ipucu)}"` : ''}>${alt}${dl}</label>`;
+  return `<label class="tc-alan">${etiket}<input class="tc-alan-kutu" type="${tip}" name="${a.k}" id="${id}" value="${esc(deger)}" ${a.min != null ? `min="${a.min}"` : ''} ${a.max != null ? `max="${a.max}"` : ''} ${a.tur === 'sayi' ? `step="${a.adim || (a.tam ? 1 : 'any')}"` : ''} ${a.liste ? `list="dl-${a.k}"` : ''} ${kilitli ? 'readonly title="Kod değişmez; yeni kayıt açın"' : salt ? 'readonly title="İstasyonun plan ayarından gelir (İstasyonlar)"' : ''} ${a.ipucu && tip === 'text' ? `placeholder="${esc(a.ipucu)}"` : ''}>${alt}${dl}</label>`;
 }
 function formOku(form, tur) {
   const T = TANIM[tur]; const x = {}; const hata = [];
@@ -7072,7 +7097,7 @@ const KATALOG = [
     { id: 'enerji', ad: 'Enerji ve puant saat', durum: 'yok' },
   ] },
   { grup: 'İnsan', simge: 'user', l: [
-    { id: 'personel', ad: 'Operatör sayısı', durum: 'tam', g: 1, not: 'Çalışan tezgâhların operatör oranı toplamı vardiyadaki operatörü aşamaz.', sayfa: 'personel' },
+    { id: 'personel', ad: 'Operatör sayısı', durum: 'tam', g: 1, not: 'Çalışan tezgâhların operatör oranı toplamı vardiyadaki operatörü aşamaz. Oran istasyonun plan ayarıdır (bir operatör en çok N tezgâh); başta kapalıdır, istasyonlarda oran girilince açın.', sayfa: 'personel' },
     { id: 'yetkin', ad: 'Operatör yetkinliği (tezgâh grubu)', durum: 'tam', g: 1, not: 'Kapatılırsa herkes her grupta çalışabilir sayılır.', sayfa: 'personel' },
     { id: 'devam', ad: 'Devamsızlık', durum: 'tam', g: 1, sayfa: 'personel' },
     { id: 'ayarci', ad: 'Ayarcı sayısı', durum: 'tam', g: 1, not: 'Aynı anda yapılan ayar vardiyadaki ayarcıyı aşamaz.', sayfa: 'personel' },
@@ -17060,12 +17085,18 @@ const msGece = v => { const b = hm(v.bas), e = hm(v.bit); return b >= 20 || e <=
   return h * op * s * (+m.carp[msGunTur(D, e.gun)] || 1.5) + op * (+m.kisiEk || 0);
 }; }
 const msGunKey = (D, gun) => ['paz', 'pzt', 'sal', 'car', 'per', 'cum', 'cmt'][new Date(gunTarih(gun) + 'T12:00:00Z').getUTCDay()];
+/* 570 a: aynı gün, vardiya ve gruptaki ek vardiyalar operatörü paylaşır; gereken kişi oranların toplamının yukarı yuvarlanmışıdır */
 function msAtama() {
   const D = S.D; const m = mesSis(D); const kisi = {}; for (const p of D.personel) kisi[p.id] = { p, yil: +((m.ucret || {})[p.id] || {}).yil || 0, plan: 0, gun: {} };
-  const liste = [];
+  const liste = []; const kumeler = new Map();
   for (const [i, e] of (S.ekMesai || []).map((e, i) => [i, e]).sort((a, b) => a[1].gun - b[1].gun)) {
     const t = D.tezgahlar.find(x => x.id === e.m); const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!t || !v) continue;
-    const h = ymVH(D, e.vardiya); const tur = msGunTur(D, e.gun); const gk = msGunKey(D, e.gun); const need = Math.max(1, Math.ceil(t.opOran == null ? 1 : +t.opOran));
+    const k = e.gun + '|' + e.vardiya + '|' + (t.grup || ''); if (!kumeler.has(k)) kumeler.set(k, []); kumeler.get(k).push({ i, e, t, v });
+  }
+  for (const kume of kumeler.values()) {
+    const { e, t, v } = kume[0];
+    const h = ymVH(D, e.vardiya); const tur = msGunTur(D, e.gun); const gk = msGunKey(D, e.gun);
+    const need = Math.max(1, Math.ceil(kume.reduce((a, x) => a + (x.t.opOran == null ? 1 : +x.t.opOran), 0) - 1e-9));
     const normal = p => { const cal = (D.calismaGunleri || {})[gk] || []; const izin = (D.devamsizlik || []).some(d => (d.personel || d.kisi) === p.id && d.gun === gunTarih(e.gun)); return izin ? null : tur !== 'tatil' && cal.includes(p.vardiya) ? ymVH(D, p.vardiya) : 0; };
     const aday = D.personel.filter(p => (p.gruplar || []).includes(t.grup)).map(p => { const k = kisi[p.id]; const n = normal(p); if (n == null) return null;
       const ayni = n > 0 && p.vardiya === e.vardiya; const gunTop = n + (k.gun[e.gun] || 0) + h; const neden = [];
@@ -17076,7 +17107,13 @@ function msAtama() {
     const ihlal = []; if (sec.length < need) ihlal.push(`${need - sec.length} kişi eksik: grupta uygun kişi yok`);
     for (const a of sec) for (const n of a.neden) ihlal.push(`${a.p.ad}: ${n}`);
     if (msGece(v) && h > m.geceSinir + 1e-6) ihlal.push(`gece vardiyası ${sayi(h, 1)} sa (gece sınırı ${sayi(m.geceSinir, 1)} sa)`);
-    liste.push({ i, e, t, h, tur, kisiler: sec.map(a => a.p), ihlal });
+    /* kişiler tezgâhlara sırayla, oranları kadar dağılır: 0,5 + 0,5 aynı kişiyi, 1 + 1 ayrı kişileri gösterir */
+    const ks = sec.map(a => a.p); let s = 0, bos = 1;
+    for (const x of kume) {
+      let o = x.t.opOran == null ? 1 : +x.t.opOran; const bunlar = o > 0 || !ks.length ? [] : [ks[Math.min(s, ks.length - 1)]];
+      while (o > 1e-9 && s < ks.length) { const al = Math.min(o, bos); if (!bunlar.includes(ks[s])) bunlar.push(ks[s]); o -= al; bos -= al; if (bos <= 1e-9) { s++; bos = 1; } }
+      liste.push({ i: x.i, e: x.e, t: x.t, h, tur, kisiler: bunlar, ihlal });
+    }
   }
   return { liste, kisi };
 }
