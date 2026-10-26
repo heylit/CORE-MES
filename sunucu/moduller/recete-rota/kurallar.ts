@@ -177,6 +177,7 @@ export function kisiCevir(
   istasyonId: number | undefined,
   istasyonIsMerkezi: ReadonlyMap<number, number>,
   yetkinlikler: readonly number[],
+  makine: { makineler: readonly number[]; enCok: number | null } = { makineler: [], enCok: null },
 ): NonNullable<DurumCevabi['people']>[number] {
   const istasyon = istasyonId !== undefined && istasyonIsMerkezi.has(istasyonId) ? istasyonId : yetkinlikler.find((y) => istasyonIsMerkezi.has(y));
   const merkez = istasyon === undefined ? undefined : istasyonIsMerkezi.get(istasyon);
@@ -192,6 +193,8 @@ export function kisiCevir(
     skills: yetkinlikler.map(String),
     cost: null,
     active: true,
+    machines: makine.makineler.map(String),
+    maxMachines: makine.enCok,
   };
 }
 

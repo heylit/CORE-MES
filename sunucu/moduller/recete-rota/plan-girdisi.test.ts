@@ -64,6 +64,15 @@ describe('plan girdisi (sunucu)', () => {
     assert.equal(sip.find((x) => x.id === 'O2')?.termin, '2026-10-30 17:00');
   });
 
+  test('563 c, 563 2 a: kişinin makineleri ve en çok tezgâhı motor girdisine geçer; yetkinlik kısıtı kapalıysa düşer', () => {
+    const people = [{ id: '7', name: 'Ornek Operator', code: 'S7', stationId: '10', stationAtama: true, wcId: '1', skills: ['10'], active: true, machines: ['100'], maxMachines: 2 }];
+    const kaynak = { durum: { ...KAYNAK.durum, people }, ek: null };
+    const kisi = (r: ReturnType<typeof planGirdisi>) => (r?.st as { D: { personel: Array<{ id: string; makineler?: string[]; enCok?: number | null }> } }).D.personel.find((p) => p.id === '7');
+    assert.deepEqual([kisi(planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak }))?.makineler, kisi(planGirdisi({ calisma: calisma(D0), kayit: KAYIT, kaynak }))?.enCok], [['100'], 2]);
+    const kapali = kisi(planGirdisi({ calisma: { ...calisma(D0), kapali: ['yetkin'] }, kayit: KAYIT, kaynak }));
+    assert.deepEqual([kapali?.makineler, kapali?.enCok], [undefined, undefined]);
+  });
+
   test('çalışma yoksa null', () => {
     assert.equal(planGirdisi({ calisma: null, kayit: KAYIT, kaynak: null }), null);
   });
