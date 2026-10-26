@@ -84,7 +84,11 @@ function blobBaytlari(b: Blob): Promise<Uint8Array<ArrayBuffer>> {
 }
 
 // Köprünün gördüğü son kayıt hâli: yazmada beklenen sürüm olarak gider. Uygulama sürüm tutmaz; köprü tutar.
-interface KayitHali { surum: number; dolu: boolean; guncelleme: unknown }
+// kendiTabanlari: bu köprünün kendi yazmalarıyla geride kalan "guncelleme" değerleri. Uygulama aynı açık kaydı yeniden kaydederken
+// (ölçüm oturumu, resim düzenleyicinin otomatik kaydı) nesnedeki eski değeri taban gönderir; bu değerler başka sürüm gelene kadar
+// güncel sayılır. Akıştan daha yeni sürüm gelince hâl değişir ve liste düşer.
+interface KayitHali { surum: number; dolu: boolean; guncelleme: unknown; kendiTabanlari?: readonly string[] }
+const KENDI_TABAN_SINIRI = 50;
 
 export interface Kopru {
   isle: (istek: ApiIstegi) => Promise<ApiCevabi>;
@@ -211,7 +215,7 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => 
         const govde = (typeof g.govde === 'string' ? JSON.parse(g.govde) : g.govde) as KmYazGovdesi['govde'];
         // Form açıldıktan sonra kayıt (akışla) değiştiyse formdaki hâl eskidir: köprünün son sürümüyle yazmak onu ezerdi.
         const taban = url.searchParams.get('taban');
-        if (taban !== null && hal?.dolu === true && typeof hal.guncelleme === 'string' && hal.guncelleme !== taban) {
+        if (taban !== null && hal?.dolu === true && typeof hal.guncelleme === 'string' && hal.guncelleme !== taban && hal.kendiTabanlari?.includes(taban) !== true) {
           return ret(409, ESKI_SURUM_ILETISI);
         }
         const istekGovdesi: KmYazGovdesi = { govde, surum: beklenen };
@@ -231,7 +235,12 @@ export function kopruKur(istemci: Istemci, dosyaOku: DosyaOkuyucu, simdi: () => 
           }
         };
         const { surum, uyari } = await yazVeyaOnayla();
-        hatirla(ikinci, ucuncu, { surum, dolu: true, guncelleme: guncellemesi(govde) });
+        const kendiTabanlari = [...(hal?.kendiTabanlari ?? []), ...(typeof hal?.guncelleme === 'string' ? [hal.guncelleme] : [])].slice(-KENDI_TABAN_SINIRI);
+        // Akış bu yazmayı cevaptan önce aynı sürümle getirmiş olabilir: aynı sürümde de kendi tabanları yazılır.
+        const simdiki = haller.get(anahtar(ikinci, ucuncu));
+        if (simdiki === undefined || simdiki.surum <= surum) {
+          haller.set(anahtar(ikinci, ucuncu), { surum, dolu: true, guncelleme: guncellemesi(govde), kendiTabanlari });
+        }
         // Kapanışın serbest bırakamadığı partinin nedeni ekranda tek satır gösterilir (acilis.ts KARANTINA_HEDEF_BETIGI).
         return tamam(uyari === undefined ? { version: surum } : { version: surum, uyari });
       }

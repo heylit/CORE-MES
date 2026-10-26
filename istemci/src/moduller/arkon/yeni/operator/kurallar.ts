@@ -12,6 +12,7 @@ import { SIMGELER, type SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import type { IstasyonSatiri } from '../cekirdek/tesis.ts';
 import { isKurallari, istasyonAyari, isTuru, numuneEtiketi, numuneOlculeri, numunePlani, siradakiOlcen } from '../hazirlik/index.tsx';
+import type { SeritAraligi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import type { Uyari } from '../hazirlik/tipler.ts';
 import type {
   Gorev, GorevEylemi, IlkParcaDurumu, Is, KaliteNumunesi, KontrolTakvimi, LotKarari, LotSinifi, Meas, Olcen, Pkg, PlanItem, Result, SiradakiKontrol, Ton,
@@ -76,6 +77,25 @@ export const ilkParcaKalemleri = (o: Pick<Is, 'pkg'>): PlanItem[] =>
   (o.pkg && isTuru(o.pkg) === 'cnc' ? numunePlani(o.pkg).filter((r) => r.when === 'first' && r.gate).flatMap((r) => numuneOlculeri(o.pkg!, r)) : []);
 const gecti = (m: Meas | undefined): boolean => !!(m && (m.ok || m.dev));
 export const ilkParcaKapisi = (o: Pick<Is, 'pkg' | 'meas'>): PlanItem[] => ilkParcaKalemleri(o).filter((b) => !gecti((o.meas || {})[b.id]));
+
+// Numune çizgisi (664): sayıyla tekrarlanan kuralda aralığın başından bu yana sayılan parça ve sıradaki numunenin parça sırası, süreli
+// kuralda geçen dakika. Hesap kontrolTakvimi ile aynıdır (taban: işe dönüşte sayılmış parçalar); ilk, son ve vardiya kuralında çizgi yok.
+export function numuneAraligi(
+  r: ReturnType<typeof numunePlani>[number], o: Pick<Is, 'good' | 'baseGood' | 'startedAt'>, simdi: number,
+): SeritAraligi | null {
+  if (r.when === 'every') {
+    const N = Math.max(1, r.n || 50);
+    const taban = o.baseGood ?? 0;
+    const c = Math.max(0, o.good - taban);
+    return { n: N, birim: 'parça', gecen: c % N, hedef: taban + (Math.floor(c / N) + 1) * N };
+  }
+  if (r.when === 'time') {
+    if (!o.startedAt) return null;
+    const M = Math.max(1, r.n || 60);
+    return { n: M, birim: 'dk', gecen: Math.floor(((simdi - o.startedAt) / 60000) % M), hedef: null };
+  }
+  return null;
+}
 
 type TakvimIsi = Pick<Is, 'pkg' | 'meas' | 'state' | 'pendingItems' | 'baseGood' | 'good' | 'cycle' | 'startedAt' | 'target'>;
 

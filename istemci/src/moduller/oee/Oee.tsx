@@ -47,9 +47,14 @@ function olcuSutunlari<S extends OeeOlcusu>(maliyet: boolean): Sutun<S>[] {
       hucre: (s) => (
         <span className="tc-oee-adet">
           {s.saglam.toLocaleString('tr-TR')} / {s.hurda.toLocaleString('tr-TR')}
+          {s.red > 0 && <Rozet ton="hata">{s.red} red</Rozet>}
           {s.suresizSaglam > 0 && <Rozet ton="uyari">{s.suresizSaglam} süresiz</Rozet>}
         </span>
       ),
+    },
+    {
+      anahtar: 'vardiyaDisi', baslik: 'Vardiya dışı', hizala: 'sag', mono: true, kirilmaz: true,
+      hucre: (s) => `${saat(s.vardiyaDisi.calismaDk)} · ${s.vardiyaDisi.saglam.toLocaleString('tr-TR')} adet`,
     },
     { anahtar: 'kisi', baslik: 'Kişi / makine', hizala: 'sag', mono: true, hucre: (s) => kisi(s.kisiPayi) },
   ];
@@ -73,7 +78,10 @@ function Ozet({ veri }: { veri: OeeCevabi }) {
       <SayiKarti baslik="TEEP (takvime göre)" simge="clock" metin={yuzde(t.teep)} altMetin={`Takvim ${saat(t.takvimDk)}`} />
       <SayiKarti baslik="Kullanılabilirlik" simge="play" metin={yuzde(t.kullanilabilirlik)} altMetin={`Çalışma ${saat(t.calismaDk)}`} />
       <SayiKarti baslik="Performans" simge="bolt" metin={yuzde(t.performans)} altMetin={t.performans !== null && t.performans > 1.2 ? 'Veriyi kontrol et: sayım var, makine çalışma kaydı az' : `Standart ${saat(t.standartDk)}`} />
-      <SayiKarti baslik="Kalite" simge="check" metin={yuzde(t.kalite)} altMetin={`${t.saglam.toLocaleString('tr-TR')} sağlam, ${t.hurda.toLocaleString('tr-TR')} hurda`} />
+      <SayiKarti baslik="Kalite" simge="check" metin={yuzde(t.kalite)} altMetin={`${t.saglam.toLocaleString('tr-TR')} sağlam, ${t.hurda.toLocaleString('tr-TR')} hurda${t.red > 0 ? `, ${t.red.toLocaleString('tr-TR')} red` : ''}`} />
+      {(t.vardiyaDisi.calismaDk > 0 || t.vardiyaDisi.saglam > 0) && (
+        <SayiKarti baslik="Vardiya dışı" simge="moon" metin={saat(t.vardiyaDisi.calismaDk)} altMetin={`${t.vardiyaDisi.saglam.toLocaleString('tr-TR')} sağlam; OEE'ye girmez`} />
+      )}
       {veri.maliyetGorunur && <SayiKarti baslik="Birim maliyet" simge="chart" metin={tl(t.birimMaliyet)} altMetin={`Makine ${tl(t.makineMaliyeti)}, işçilik ${tl(t.iscilikMaliyeti)}`} />}
     </div>
   );
@@ -125,7 +133,8 @@ export function Oee({ bolum = 'ozet' }: { bolum?: Bolum }) {
           )}
         </div>
         <p className="tc-oee-not">
-          OEE planlı süreye (vardiya ve fazla mesai, planlı duruşlar hariç), TEEP takvimin bütün saatlerine göre hesaplanır. Bir kişi birden çok
+          OEE planlı süreye (vardiya ve fazla mesai, planlı duruşlar hariç), TEEP takvimin bütün saatlerine göre hesaplanır. Vardiya dışındaki
+          çalışma ve üretim OEE'ye girmez, ayrı gösterilir; kalite reddi hurda gibi kalite kaybıdır. Bir kişi birden çok
           makineye bakıyorsa "Kişi / makine" sütununda payı görünür; birim maliyet makine ve işçilik saatini birlikte sayar.
         </p>
         {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
