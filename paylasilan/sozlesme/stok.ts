@@ -873,6 +873,19 @@ export type RefakatPartisiCevabi = z.output<typeof refakatPartisiCevabi>;
 // Lot bekleyen kartlar (Soru 129): lotsuz istisna kartları ve bağlanmamış lotsuz düşüm toplamı (kartın malzemesinin biriminde).
 export const lotBekleyenKartlarCevabi = z.object({ kartlar: z.array(z.object({ refakat: refakatPartisi, bekleyen: ondalikMetinSemasi })) });
 export type LotBekleyenKartlarCevabi = z.output<typeof lotBekleyenKartlarCevabi>;
+// Refakat kartları sayfası (kart #708): en yeni kart önce, emrin ürünü, adedi, termini ve adım sayısıyla. İptal kart yalnız "tümü"nde.
+// Arama gelen listede yapılır; liste sınıra dayanırsa `sinirda` söyler.
+export const REFAKAT_KARTLARI_SINIRI = 200;
+export const refakatKartlariSorgusu = z.object({ durum: z.enum(['acik', 'tumu']).default('acik') });
+export type RefakatKartlariSorgusu = z.input<typeof refakatKartlariSorgusu>;
+export const refakatKartlariCevabi = z.object({
+  kartlar: z.array(z.object({
+    refakat: refakatPartisi, urun: refakatKartiCevabi.shape.urun, adet: refakatKartiCevabi.shape.adet, teslim: refakatKartiCevabi.shape.teslim, adimSayisi: z.number().int(),
+  })),
+  sinirda: z.boolean(),
+});
+export type RefakatKartlariCevabi = z.output<typeof refakatKartlariCevabi>;
+export type RefakatKartlariSatiri = RefakatKartlariCevabi['kartlar'][number];
 // Lota bağlama: okutulan lot etiketi ya da (eksik malzeme başka kartın malzemesiyse) o refakat kartı. Lot yetmezse yeten düşümler
 // bağlanır, kalan bekler; hepsi bağlanınca kart o lotu alır ya da emrin aynı lotlu kartına birleşir.
 export const refakatLotaBaglaGovdesi = z.object({ kod: z.string().trim().min(1).max(120), surum: surumSemasi });

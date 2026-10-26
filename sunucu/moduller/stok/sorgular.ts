@@ -1368,6 +1368,9 @@ export const refakatPartileriBul = (db: Db, idler: readonly number[]): Promise<R
   db.sorgu(`${REFAKAT_SECIMI} WHERE r.id = ANY($1::int[]) ORDER BY r.id`, [idler]);
 export const acikRefakatPartisi = (db: Db, uretimEmriId: number, partiId: number): Promise<RefakatPartisiHam | null> =>
   db.tek(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 AND r.parti_id = $2 AND r.durum = 'acik'`, [uretimEmriId, partiId]);
+// Refakat kartları sayfası (kart #708): en yeni kart önce; iptal kart yalnız istenince.
+export const refakatKartlariListe = (db: Db, iptalDahil: boolean, sinir: number): Promise<RefakatPartisiHam[]> =>
+  db.sorgu(`${REFAKAT_SECIMI} WHERE ($1 OR r.durum = 'acik') ORDER BY r.kayit_zamani DESC, r.id DESC LIMIT $2`, [iptalDahil, sinir]);
 export const emrinRefakatPartileri = (db: Db, uretimEmriId: number): Promise<RefakatPartisiHam[]> =>
   db.sorgu(`${REFAKAT_SECIMI} WHERE r.uretim_emri_id = $1 ORDER BY r.sira`, [uretimEmriId]);
 // İstasyonda satırı olan kartlar: kartın lotu ya da kartla sayılmış üretim partisi istasyonun konumunda artı bakiyede.
