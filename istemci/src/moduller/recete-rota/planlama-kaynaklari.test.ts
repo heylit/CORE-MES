@@ -27,6 +27,8 @@ function duzenek(kayit: Nesne | null, kaynak: Promise<Kaynak>): Duzenek {
     function yukle() { return null; }
     function yeniCalisma(k) { return { D: VERI[k].veri, dataVer: 1, plan: null }; }
     function stOf() { return { now: 7 }; } function coz() {}
+    // Derlenmiş çalışmanın taklidi: şimdi 10:00, her tezgâh 08:00-16:00 çalışır.
+    function cxAl() { return S && S.D ? { st: { now: 10 }, D: S.D, M: Object.fromEntries((S.D.tezgahlar || []).map((m) => [m.id, { sw: [[8, 16]] }])) } : null; }
     ${planlamaMotoru()}
     ${planlamaParcasi('zz27-rr-veri')}
     ${planlamaParcasi('zz31-tmi')}
@@ -93,6 +95,16 @@ describe('planlama çerçevesi tezgâh, personel ve takvimi kaynak okumasından 
     expect(urun?.rota[0]?.tezgahlar.map((t) => t.id)).toEqual(['100', '101']);
     expect(d.S()?.dataVer).toBe(2);
     expect(d.cizim()).toBe(2);
+  });
+
+  it('651 a: arızadaki makine şimdiden vardiya sonuna oto duruş satırı alır; çalışma eskir', async () => {
+    const durum = { ...DURUM, machines: DURUM.machines.map((m) => (m.id === '100' ? { ...m, status: 'ariza' } : m)) };
+    const d = duzenek(KAYIT, Promise.resolve({ durum, ek: EK }));
+    d.ac();
+    await bekle();
+    const S = d.S() as unknown as { down: Nesne[]; arizaOto: Nesne };
+    expect(S.down).toEqual([{ m: '100', from: 10, to: 16, neden: 'arıza', oto: 1 }]);
+    expect(S.arizaOto).toEqual({ 100: 'ariza' });
   });
 
   it('okuma çalışma kurulmadan gelirse çalışma kaynakla kurulur', async () => {
