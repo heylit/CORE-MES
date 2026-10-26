@@ -1,30 +1,37 @@
 import type { IkinciMenuTanimi } from '#paylasilan/sayfa-tanimi.ts';
 
-// Planlama sayfaları ayrı çerçevededir (cerceve/planlama-modulu.html); Reçete ve Rota bölümleri kendi çerçevesinde kalır.
-// Anahtar planlama sayfasının kimliğidir; plan, studio ve kanban eski bağlantılar için kalır (plan ve kanban planlama motoruna,
+// Planlama plan modülünün sayfasıdır (658 b); eski planlama çerçevesi (cerceve/planlama-modulu.html) bir süre /plan/eski altında yalnız
+// yöneticide açılır (659 a). Çerçeve dosyası ve köprüsü burada kalır, plan modülü onu disari.ts'ten alır.
+// Anahtar planlama görünümünün kimliğidir; plan, studio ve kanban eski bağlantılar için kalır (plan ve kanban planlama motoruna,
 // studio planlama atölyesine açılır).
 export const PLANLAMA_ANAHTARLARI: readonly string[] = [
   'plan', 'studio', 'kanban', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat',
 ];
 
-// Planlama sayfalarını görme işlemi; yönetici, müdür ve planlamadadır (kullanıcı kararı 195 a, 353 a'nın yerine). Menü maddesi ve
-// planlama çerçevesinin açılışı bunu ister; sunucudaki kayıt okuması bunu bilmez (UYUM-BORCU).
-export const PLANLAMA_ISLEMI = 'recete-rota.planlama-oku';
+// Planlama sayfalarını görme işlemi; yönetici, müdür ve planlamadadır (195 a, 663 a). Planlama çerçevesinin açılışı bunu ister.
+export const PLANLAMA_ISLEMI = 'plan.planlama-oku';
 
 // Maliyet ve kâr gösteren planlama sayfaları birim maliyet okumasını da ister: planlama rolü maliyet görmez (200 a), 195 a bunu korur.
 export const MALIYET_ISLEMI = 'finans.maliyet-oku';
 export const MALIYET_ANAHTARLARI: readonly string[] = ['maliyet', 'giderler', 'denge'];
 
-// Çerçevenin bildirdiği yol planlama sayfası mı: /recete-rota/<anahtar> ya da altı.
+// Eski planlama çerçevesinin kökü; görünüm adresi `/plan/eski/<anahtar>`, kök planlama motorudur.
+export const PLANLAMA_ESKI_KOK = '/plan/eski';
+const ESKI_PLANLAMA_YOLU = /^\/plan\/eski(?:\/([a-z][a-z0-9-]*))?(?:\/|$)/;
+
+// Yol eski planlama çerçevesinin mi: /plan/eski ya da /plan/eski/<anahtar> (altıyla).
 export function planlamaYoluMu(yol: string): boolean {
-  const m = /^\/recete-rota\/([a-z][a-z0-9-]*)(?:\/|$)/.exec(yol);
-  return m !== null && PLANLAMA_ANAHTARLARI.includes(m[1] ?? '');
+  const m = ESKI_PLANLAMA_YOLU.exec(yol);
+  return m !== null && (m[1] === undefined || PLANLAMA_ANAHTARLARI.includes(m[1]));
 }
 
 export function maliyetYoluMu(yol: string): boolean {
-  const m = /^\/recete-rota\/([a-z][a-z0-9-]*)(?:\/|$)/.exec(yol);
+  const m = ESKI_PLANLAMA_YOLU.exec(yol);
   return m !== null && MALIYET_ANAHTARLARI.includes(m[1] ?? '');
 }
+
+// Planlama menüsünün adresi -> eski çerçevedeki adresi: `/plan` -> `/plan/eski`, `/plan/studio` -> `/plan/eski/studio`.
+export const planlamaEskiAdresi = (yol: string): `/${string}` => `${PLANLAMA_ESKI_KOK}${yol.slice('/plan'.length)}`;
 
 // İkinci menü önerisi (Aşama 1): menü paylasilan/sayfalar/recete-rota.ts'dedir (çekirdek şeridi); test ikisinin aynı olduğunu denetler.
 export const ONERILEN_IKINCI_MENU = {
@@ -41,21 +48,6 @@ export const ONERILEN_IKINCI_MENU = {
       { anahtar: 'sureler', baslik: 'Süreler', yol: '/recete-rota/sureler', simge: 'clock', islem: 'sayfa.recete-rota' },
       { anahtar: 'items', baslik: 'Malzemeler', yol: '/recete-rota/items', simge: 'cube', islem: 'sayfa.recete-rota' },
       { anahtar: 'res', baslik: 'Kaynaklar', yol: '/recete-rota/res', simge: 'cpu', islem: 'sayfa.recete-rota' },
-    ] },
-    { baslik: 'Planlama', maddeler: [
-      { anahtar: 'plan', baslik: 'Planlama motoru', yol: '/recete-rota/plan', simge: 'gantt', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'studio', baslik: 'Planlama atölyesi', yol: '/recete-rota/studio', simge: 'flag', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'ysiparis', baslik: 'Siparişler', yol: '/recete-rota/ysiparis', simge: 'list', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/recete-rota/maliyet', simge: 'lira', islem: MALIYET_ISLEMI },
-      { anahtar: 'giderler', baslik: 'Genel gider', yol: '/recete-rota/giderler', simge: 'layers', islem: MALIYET_ISLEMI },
-      { anahtar: 'mesaiplan', baslik: 'Ek mesai planı', yol: '/recete-rota/mesaiplan', simge: 'clock', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'fasonplan', baslik: 'Fason planı', yol: '/recete-rota/fasonplan', simge: 'truck', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'malzplan', baslik: 'Malzeme satın alma planı', yol: '/recete-rota/malzplan', simge: 'box', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'terminler', baslik: 'Terminler', yol: '/recete-rota/terminler', simge: 'flag', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'denge', baslik: 'Termin ve kâr', yol: '/recete-rota/denge', simge: 'gauge', islem: MALIYET_ISLEMI },
-      { anahtar: 'yillik', baslik: 'Yıllık plan', yol: '/recete-rota/yillik', simge: 'chart', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'ufuk', baslik: 'Ufuk', yol: '/recete-rota/ufuk', simge: 'route', islem: PLANLAMA_ISLEMI },
-      { anahtar: 'sevkiyat', baslik: 'Sevkiyat', yol: '/recete-rota/sevkiyat', simge: 'truck', islem: PLANLAMA_ISLEMI },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

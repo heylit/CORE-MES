@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DurumCevabi, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import {
   adimCarpanlari, adimDurumu, araStokHavuzu, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,

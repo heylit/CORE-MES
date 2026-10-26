@@ -1,4 +1,4 @@
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { ornekDurum } from '../test-ortak.tsx';
 
 // R1 testlerinin uydurma durumu: örnek mamulün (11) yürürlükteki Rev A rotası tek adım (OP 10 Tornalama, giren ham madde 12).

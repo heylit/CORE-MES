@@ -11,7 +11,7 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
   // Genişlik projeden gelir (playwright.config.ts: g360, g768, g1280).
   for (const [anahtar, ad] of GORUNUMLER) {
     test(`${ad} açılır, kayıt yazmaz, yatay taşmaz`, async ({ page, ac, ag }) => {
-      await ac(`/recete-rota/planlama-yeni/${anahtar}`);
+      await ac(`/plan/${anahtar}`);
       const kap = page.locator(`[data-parca="${anahtar}"]`);
       await expect(kap).toBeVisible();
       // Çalışma kaydı yoksa (boş örnek veri) Terminler ve Termin ve kâr yalnız "Planı kur"u gösterir; "Tüm satırlar" çalışmanın verisini ister.
@@ -25,26 +25,26 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
         await expect(kap.getByRole('button', { name: 'Planı kur' })).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      expect(ag.yazmalar.filter((x) => x !== 'POST /api/recete-rota/planlama-degerlendirmesi')).toEqual([]);
+      expect(ag.yazmalar.filter((x) => x !== 'POST /api/plan/planlama-degerlendirmesi' && x !== 'POST /api/plan/planlama-calismasi/olustur')).toEqual([]);
       expect(ag.hatalar).toEqual([]);
     });
   }
 
   test('şeritten P2 görünümleri açılır', async ({ page, ac }) => {
-    await ac('/recete-rota/planlama-yeni/plan');
-    const serit = page.getByRole('tablist', { name: 'Planlama görünümleri' });
+    await ac('/plan');
+    const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
     for (const [anahtar, ad] of GORUNUMLER) {
-      await serit.getByRole('tab', { name: ad, exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/recete-rota/planlama-yeni/${anahtar}$`));
+      await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/plan/${anahtar}$`));
       await expect(page.locator(`[data-parca="${anahtar}"]`)).toBeVisible();
     }
   });
 
   // Isı haritası ve açılım dar ekranda da taşmamalı: çalışma okuması uydurma çalışmayla cevaplanır (veritabanına yazılmaz). Değerler uydurmadır.
   test('planlı çalışmada ısı haritası ve açılım yatay taşmaz', async ({ page, ac }) => {
-    await page.route('**/api/recete-rota/planlama-calismasi', (r) => r.fulfill({ json: { calisma: CALISMA, surum: 1 } }));
+    await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({ json: { calisma: CALISMA, surum: 1 } }));
     for (const [anahtar] of GORUNUMLER) {
-      await ac(`/recete-rota/planlama-yeni/${anahtar}`);
+      await ac(`/plan/${anahtar}`);
       const kap = page.locator(`[data-parca="${anahtar}"]`);
       await expect(kap.locator('.tc-pys-tablo')).toBeVisible();
       await kap.locator('button.tc-pys-h').first().click();
@@ -59,7 +59,7 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
     }
     // Siparişler açılımında ilk izinli form sihirbaz olarak sipariş dolu açılır; eski sayfadaki gibi başlık ve adım şeridi gizli, odak ilk alanda;
     // Esc açılımı kapatır.
-    await ac('/recete-rota/planlama-yeni/ysiparis');
+    await ac('/plan/ysiparis');
     const hucre = page.locator('[data-parca="ysiparis"] button.tc-pys-h').first();
     await hucre.click();
     const acilim = page.locator('.tc-pys-ac');

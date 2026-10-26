@@ -22,7 +22,7 @@ iskelet sahibine istek olarak gelir.
   `git('schema', urunId)` baska bolume gecer ve secili kaydi verir (emirden urunun semasi, semadan operasyon). Baslik ve sekme seridini
   `ReceteRotaYeni` cizer; parca baslik cizmez, kendi arac cubugunu (`Tablo` araci, `Dugme`) kendisi cizer.
 - `veri.ts`:
-  - `useRrVerisi()`: `RrVerisi { durum: RrDurumu; ek: KaynakEki }`. `durum` = `GET /recete-rota/durum` (sozlesme `durumCevabi`) +
+  - `useRrVerisi()`: `RrVerisi { durum: RrDurumu; ek: KaynakEki }`. `durum` = `GET /plan/planlama-kaynagi` (sozlesme `durumCevabi`) +
     `planYerlesim` (`/plan/motor-yerlesimi`, 215 a). `ek` sahiplerin kaynak okumalarindan: makine notu, kisi gorevi, istasyon tipi,
     kapasite kaynagi, vardiya takvimi, kapasite. Okuma yetkisi olmayan dilim null'dir; sifir yazilmaz.
   - `useRrKomutu()`: `mutateAsync({ ad, govde })`. Ad `kopru.ts` `IZINLI_KOMUTLAR` tablosundandir (tabloda olmayan gitmez); govde
