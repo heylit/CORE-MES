@@ -1,8 +1,8 @@
 import { html, useNow, useState } from './temel';
 import { LS } from './yukleyici';
 import { useDocs } from './pano-planlama';
-import { ALET_YOK_ILETISI, aletSecimAnahtari, secilebilirAletler, seciliAlet } from '../data/olcum-aleti';
-import type { OlcumAleti } from '../data/olcum-aleti';
+import { ALET_YOK_ILETISI, aletSecimAnahtari, secilebilirAletler, seciliAlet } from '../../../../istemci/src/ortak/cizim/cekirdek/olcum-aleti';
+import type { OlcumAleti } from '../../../../istemci/src/ortak/cizim/cekirdek/olcum-aleti';
 
 // Seçim cihazda alet türü başına saklanır: aynı türdeki sonraki ölçüm yeniden seçim istemez.
 export function useOlcumAletleri(): OlcumAleti[] {

@@ -14,6 +14,7 @@ import { arkonGirisSayfasi } from '../ArkonCercevesi.tsx';
 import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
+import { ArkonCizimOrtami } from './cizim/ortam.tsx';
 import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar.ts';
 import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
 import type { Perm } from './cekirdek/tipler.ts';
@@ -236,6 +237,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   const Ekran = tanim?.ekran;
   return (
     <ArkonBaglamiKaynagi.Provider value={baglam}>
+      <ArkonCizimOrtami>
       <ArkonDarAlanKaynagi.Provider value={darAlan}>
       <div className="tc-ay" ref={kokYaz}>
         {!acik || Ekran === undefined || sayfa === null
@@ -260,6 +262,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
           siradakiniKapat();
         }}
       />
+      </ArkonCizimOrtami>
     </ArkonBaglamiKaynagi.Provider>
   );
 }

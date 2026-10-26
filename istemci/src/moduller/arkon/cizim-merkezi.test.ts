@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ESKI_CIZIM, MERKEZDEN_EKLENIR, eskiCizim, eskiCizimGorevi, merkezBagi, merkezDosyasiniKoy, merkezKontrolIstegi, merkezUyarilari } from '../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { ESKI_CIZIM, MERKEZDEN_EKLENIR, eskiCizim, eskiCizimGorevi, merkezBagi, merkezDosyasiniKoy, merkezKontrolIstegi, merkezUyarilari } from '../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { cevapla } from './baglanti.ts';
 import type { Istemci, IstekGirdisi } from './baglanti.ts';
 

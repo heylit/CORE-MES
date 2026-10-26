@@ -14,7 +14,7 @@ import { SpcView } from './giris-ayarlar-spc';
 import { ApprovalView, GaugeView } from './bakim-raporlar';
 import { Brand, useMob, useTheme } from './baslat';
 import { AletSecimi, olcumAletiBul, useOlcumAletleri } from './olcum-aleti-secimi';
-import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../data/olcum-aleti';
+import { ALET_ZORUNLU_ILETISI, olcumAletDamgasi } from '../../../../istemci/src/ortak/cizim/cekirdek/olcum-aleti';
 
 /* ══════════ KALİTE · ÖLÇÜM İSTASYONU ══════════ */
 export const RQ = { waiting: { l: 'Bekliyor', c: 'var(--hold)' }, measuring: { l: 'Ölçülüyor', c: 'var(--done)' }, approved: { l: 'Onaylandı', c: 'var(--run)' }, deviation: { l: 'Sapma ile onay', c: 'var(--hazard-ink)' }, rejected: { l: 'Red', c: 'var(--stop)' } };

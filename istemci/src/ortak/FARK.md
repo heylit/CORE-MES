@@ -1,3 +1,10 @@
+# FARK: ortak çizim stüdyosu, kart 617 (dal 617-ortak-cizim)
+
+- Arkon'un teknik resim ve 3B model görüntüleyicisi, PDF ve OCR okuması ve kuralları `moduller/arkon/yeni/cizim/`'den `ortak/cizim/`'e taşındı (616 b); Kalite Merkezi aynı parçayı kullanacak.
+- Ölçü ayrıştırıcısı, STEP resim üreticisi, STEP çalışanı sarmalayıcısı, ölçü aleti ve çizim merkezi kuralları `arkon/web/src/`'den `ortak/cizim/cekirdek/`'e taşındı; eski Arkon onları buradan okur (620 a). İçerik aynı.
+- Modüle ait olanlar `CizimOrtami` sağlayıcısıyla verilir; Arkon onu kendi deposundan ve `arkon:` önekli cihaz kaydından doldurur. Kayıt anahtarları değişmedi, ekran ve davranış aynı.
+- İki eski dosya istemci tip programı ve lint dışında (660 a); ayrıntı ve kapanış UYUM-BORCU'da. Şema, göç, uç, işlem, rol ve paket değişmedi.
+
 # FARK: kullanım rehberi, kitapçık ve role göre ilk tanıtım (dal claude/project-thread-eqjo0u)
 
 - Üst çubukta Yardım düğmesi (soru işareti; telefonda Hesap menüsünde; her sayfada F1). Açıldığı sayfanın tarifi en üstte; soru gibi yazılan arama

@@ -1,5 +1,5 @@
 import { AKStore } from '../data/store';
-import { AKStep } from '../core/stepdraw';
+import { AKStep } from '../../../../istemci/src/ortak/cizim/cekirdek/stepdraw';
 import { Fragment, I, html, perf, useEffect, useRef, useState } from './temel';
 import { getOcct, loadLib, tick } from './yukleyici';
 import { RCFG, cfgSig } from './pdf';

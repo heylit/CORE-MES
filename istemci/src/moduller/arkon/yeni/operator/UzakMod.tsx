@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { isSatiri, malzemeSatiri, modelDosyasi, saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
-import type { Gorunum3B } from '../cizim/model.ts';
+import type { Gorunum3B } from '../../../../ortak/cizim/model.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
@@ -60,7 +60,7 @@ function UzakModel({ pkg }: { pkg: Is['pkg'] }) {
     let canli = true;
     gorunumYaz(null);
     if (!pkg || !dosya || !bayt) return undefined;
-    void Promise.all([import('../cizim/model.ts'), import('../cizim/kurallar.ts')])
+    void Promise.all([import('../../../../ortak/cizim/model.ts'), import('../../../../ortak/cizim/kurallar.ts')])
       .then(([m, k]) => m.modelIsle(depo, bayt, dosya.name, () => undefined,
         { need: '3d', derived: (pkg.derived as Record<string, unknown> | undefined) ?? null, cfg: k.ayarDuzelt(pkg.readCfg), yalnizHazir: true }))
       .then((r) => { if (canli && r?.V) gorunumYaz({ data: r.V, fa: r.fa }); }, () => undefined);

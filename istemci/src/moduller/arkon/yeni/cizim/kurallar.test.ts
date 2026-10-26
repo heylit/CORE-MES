@@ -4,8 +4,8 @@ import {
   dosyaTuru, duzenlemeMetni, GORUNUS_ANAHTARLARI, kutuNoktasi, MODEL_ANAHTARLARI, noktaAlanlari, ocrGerekir, olcumDegerlendir, olcumRaporu,
   onerileriEkle, paketCalismasi, paketDegisikligi, PDF_ANAHTARLARI, toleransKonumu, yeniCalisma, yeniOneriler, yontem,
   type Balon, type Calisma, type CalismaDosyasi, type OkumaAyari,
-} from './kurallar.ts';
-import type { OlcuOnerisi, YaziKutusu } from './okuma.ts';
+} from '../../../../ortak/cizim/kurallar.ts';
+import type { OlcuOnerisi, YaziKutusu } from '../../../../ortak/cizim/okuma.ts';
 
 // Eski modüller (balon-yerlesimi.ts, pdf.ts, cizim-studyosu.ts, teknik-resim.ts) gerçek haliyle yüklenir; ekran ve veri bağımlılıkları sahtedir.
 const APP = '../../../../../../arkon/web/src/app/';

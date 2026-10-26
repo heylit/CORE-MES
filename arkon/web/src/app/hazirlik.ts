@@ -11,7 +11,7 @@ import type { PaketSuzgeci, SuzgecAlani } from '../data/paket-suzgec';
 import { herNParcaYap, olculeriSil } from '../data/kontrol-plani';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../data/gonderim-hatasi';
 import { araOnayNedenleri, paketImzasi } from '../data/ara-onay';
-import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../data/cizim-merkezi';
+import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import { STUDYO_KAPALI, studyoAcilir } from '../data/studyo-yonu';
 import { MerkezRozeti, MerkezSecici, merkezVar, useMerkezUyarilari } from './cizim-merkezi';
 import { Fragment, I, ST, fmt, html, pad, pl, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';

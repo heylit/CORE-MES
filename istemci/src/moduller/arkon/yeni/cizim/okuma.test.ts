@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   bitAc, bitPaketle, capIsaretiMi, duzyaziMi, glifDuzelt, kelimeAyikla, kelimeKutusu, murekkep, ocrDuzelt, olcuBirlestir, olcuOnerileri, tabloBul,
   yaziMaskele, type MetinOgesi, type OlcuListesi,
-} from './okuma.ts';
+} from '../../../../ortak/cizim/okuma.ts';
 
 // Eski okuma modülleri (pdf-okuma.ts, ocr.ts, pdf.ts) gerçek haliyle yüklenir; kitaplık yükleyicisi ve tema okuyucusu sahtedir. Girdiler
 // uydurma ölçü yazıları ve sentetik mürekkep haritasıdır (gerçek çizim yok); aynı tohumla üretilen yüzlerce sayfada çıktı birebir aynı olmalı.

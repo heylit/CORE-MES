@@ -8,5 +8,6 @@
     "types": ["vite/client", "vitest/globals", "node"],
     "paths": { "#paylasilan/*": ["../paylasilan/*"] }
   },
-  "include": ["src", "vite.config.ts", "../paylasilan", "../arkon/sun.ts", "../arkon/vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../paylasilan", "../arkon/sun.ts", "../arkon/vite.config.ts"],
+  "exclude": ["src/ortak/cizim/cekirdek/tol.ts", "src/ortak/cizim/cekirdek/stepdraw.ts"]
 }

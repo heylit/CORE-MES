@@ -1,5 +1,5 @@
 import { AKStore } from '../data/store';
-import { merkezBagi, merkezKontrolIstegi, merkezUyarilari } from '../data/cizim-merkezi';
+import { merkezBagi, merkezKontrolIstegi, merkezUyarilari } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import { I, html, useEffect, useState } from './temel';
 
 /* ══════════ Çizim Merkezi'nden dosya alma (kart #800) ══════════

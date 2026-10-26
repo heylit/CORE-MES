@@ -1,5 +1,5 @@
 import { IN_APP, perf } from './temel';
-import { calisanOkuyucu } from '../data/step-calisani';
+import { calisanOkuyucu } from '../../../../istemci/src/ortak/cizim/cekirdek/step-calisani';
 
 /* ── çevrimdışı kütüphane yükleyici ── */
 export const LIBS: Record<string, any> = {};

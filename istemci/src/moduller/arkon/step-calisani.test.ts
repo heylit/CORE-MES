@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CALISAN_ACILAMADI, calisanOkuyucu, type CalisanBenzeri } from '../../../../arkon/web/src/data/step-calisani.ts';
+import { CALISAN_ACILAMADI, calisanOkuyucu, type CalisanBenzeri } from '../../ortak/cizim/cekirdek/step-calisani.ts';
 
 // Sahte çalışan: gelen mesajları kaydeder; cevabı test verir.
 function sahteCalisan() {

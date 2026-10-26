@@ -1,4 +1,3 @@
-import type { PkgFile } from '../../../../../../arkon/shared/model.ts';
 import { AKTol } from './cekirdek.ts';
 import { olcuTuruAdi, type Ayiklama, type GuvenSeviyesi, type OlcuOnerisi, type YaziKutusu } from './okuma.ts';
 
@@ -220,7 +219,9 @@ export function toleransKonumu(b: Pick<Balon, 'gauge' | 'min' | 'max'>, v: numbe
 }
 
 /* ── Çizim stüdyosu çalışması: PDF ve 3B model birlikte (iş paketindeki gibi), ayarlar ve balonlar ── */
-export type CalismaDosyasi = PkgFile & { bytes: Uint8Array };
+// Arkon paketinin dosya kaydıyla (arkon/shared/model.ts PkgFile) aynı biçim; ortak parça Arkon'u ithal etmediği için burada yazılır.
+export interface PaketDosyasi { kind: 'pdf' | 'model' | 'img' | string; name: string; bytes?: Uint8Array; size?: number; key?: string; page?: number; merkez?: number; merkezOzet?: string; [k: string]: unknown }
+export type CalismaDosyasi = PaketDosyasi & { bytes: Uint8Array };
 export interface Calisma {
   id: string; name: string; files: CalismaDosyasi[]; primary: string | null; bal: Balon[]; rev: number; saved: boolean; from?: string;
 }
@@ -228,7 +229,7 @@ export interface KayitliCizim { id: string; name: string; files: CalismaDosyasi[
 export const yeniCalisma = (simdi: number, rastgele: string): Calisma =>
   ({ id: 'dr-' + simdi.toString(36) + rastgele, name: '', files: [], primary: null, bal: [], rev: simdi, saved: false });
 export const dosyaTuru = (n: string): 'pdf' | 'model' => (/\.pdf$/i.test(n) ? 'pdf' : 'model');
-export const dosyaEtiketi = (f: Pick<PkgFile, 'kind' | 'name'>): string => (f.kind === 'pdf' ? 'PDF' : (f.name.split('.').pop() ?? '').toUpperCase().slice(0, 4));
+export const dosyaEtiketi = (f: Pick<PaketDosyasi, 'kind' | 'name'>): string => (f.kind === 'pdf' ? 'PDF' : (f.name.split('.').pop() ?? '').toUpperCase().slice(0, 4));
 const adsiz = (ad: string) => ad.replace(/\.[^.]+$/, '');
 // Dosya çalışmaya girer: aynı türden olanın yerine geçer; PDF varsa ana resim PDF'tir. Ana resim değişince balonlar sıfırlanır.
 export function calismayaEkle(w: Calisma, f: CalismaDosyasi, simdi: number): Calisma {
