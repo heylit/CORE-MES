@@ -22,7 +22,8 @@ const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: s
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);
 
 // Eski adresine geçen yeni ekranlar (541, 527 1 a; 2. adım): deneme satırı kalkar, eski ekran bir süre `eski` adresinde kalır ve
-// kişi menüsündeki "Eski görünüm" ile açılır. Görünürlük sayfanın kendi işlemidir; `eski` sayfanın alt yolu olduğu için aynı işlemle açılır.
+// kişi menüsündeki "Eski görünüm" ile açılır. Eski görünüm yalnız yeni ekran kapısını geçene (yönetici) açıktır (681 a): operatör
+// yalnız yeni ekranı görür; başkası eski adreste "yetkiniz yok" görür (App.tsx).
 // Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
 // tam: yalnız bu adres (alt yolu değil); Reçete ve Rota'nın kök adresinin altında eski kalan Planlama sayfaları ve bölümlerin eski adresi vardır.
 // haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar, Logo gönderimi).
@@ -64,6 +65,12 @@ export function seritAdresi(adres: string): string {
   const a = temiz(adres);
   const t = TASINAN_EKRANLAR.find((e) => e.serit && eskiMi(a, e));
   return t === undefined ? adres : yenisi(a, t);
+}
+
+// Eski ekranın adresi (`/kuyruk/eski`, `/arkon/eski/pano`); sondaki `/` aynı adrestir.
+export function eskiGorunumAdresiMi(adres: string): boolean {
+  const a = temiz(adres);
+  return TASINAN_EKRANLAR.some((t) => eskiMi(a, t));
 }
 
 // Kişi menüsündeki geçiş: yeni ekrandayken eskisine, eski ekrandayken yenisine. Eskisi olmayan adreste null.

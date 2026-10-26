@@ -44,23 +44,22 @@ test.describe('R0 iskelet', () => {
   });
 
   test.describe('eski adres (541)', () => {
-    // Planlama rolü sayfayı görür, yeni ekran kapısı yoktur: eski adres ona da yeni ekranı açar; eski görünüm kişi menüsündedir.
+    // Planlama rolü sayfayı görür, yeni ekran kapısı yoktur: eski adres ona da yeni ekranı açar. Eski görünüm yalnız yöneticidedir
+    // (681 a): planlamacının kişi menüsünde geçiş yoktur, eski çerçevenin adresi ona kapalıdır.
     test.use({ hesap: 'ornek.planlama' });
-    test("Reçete ve Rota'yı gören açar; Eski görünüm çerçeveyi aynı bölümde açar, Yeni görünüm geri getirir", async ({ page, ag, ac }) => {
+    test("Reçete ve Rota'yı gören açar; eski görünüm geçişi yoktur, eski adres kapalıdır", async ({ page, ag, ac }) => {
       const bolum = page.locator('.tc-rry-icerik[data-bolum="stock"]');
       await ac('/recete-rota/stock');
       await expect(bolum.locator('[data-parca="R3"]')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('Bu ekran hazırlanıyor')).toHaveCount(0);
       await page.getByRole('button', { name: 'Hesap' }).click();
-      await page.getByRole('menuitem', { name: 'Eski görünüm' }).click();
-      await expect(page).toHaveURL(/\/recete-rota\/eski\/stock$/);
-      await expect(page.locator('main iframe[title="Reçete ve Rota"]')).toBeVisible({ timeout: 20_000 });
-      await expect(seritte(page, 'Stok')).toHaveAttribute('aria-current', 'page');
-      await page.getByRole('button', { name: 'Hesap' }).click();
-      await page.getByRole('menuitem', { name: 'Yeni görünüm' }).click();
-      await expect(page).toHaveURL(/\/recete-rota\/stock$/);
-      await expect(bolum).toBeVisible();
+      await expect(page.getByRole('menuitem').first()).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: /görünüm$/ })).toHaveCount(0);
+      await page.keyboard.press('Escape');
       expect(ag.hatalar).toEqual([]);
+      await ac('/recete-rota/eski/stock');
+      await expect(page.getByRole('heading', { name: 'Yetkiniz yok' })).toBeVisible();
+      await expect(page.locator('main iframe')).toHaveCount(0);
     });
   });
 });
