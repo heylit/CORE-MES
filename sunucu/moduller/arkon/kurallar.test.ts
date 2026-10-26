@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -391,6 +391,13 @@ const girdi = (ek: Partial<Parameters<typeof isEmrindenTaslakPaket>[0]> = {}): P
   isEmri: { id: 41, uretimEmriId: 7, emirNo: 'UE-7', malzemeNo: 900, adet: 50, teslim: '2026-11-02', oncelik: 1, opNo: 20, ad: 'Frezeleme', ayarSuresiDk: '15', birimSureDk: '1.25' },
   emir: { parcaNo: 'P-1', parcaAd: 'Parça', acan: { id: 1, ad: 'Planlamacı' }, acilma: '2026-10-01T08:00:00Z' },
   istasyon: ISTASYON, makineKodu: 'M-5', revizyon: 'C', talimat: 'Pensi kontrol et\r\n\r\n  Ofseti doğrula ', sablon: null, plan: PLANSIZ, ...ek,
+});
+
+// 664: terminal başlığında Proje; paket emrin proje adını taşır, projesizde boş. TMI alanıdır: kayıtlı pakette de her okumada yazılır.
+test('paket emrin proje adını taşır; projesiz emirde boş metin; proje TMI alanıdır', () => {
+  assert.equal(isEmrindenTaslakPaket(girdi({ proje: 'Deneme proje' }))['proje'], 'Deneme proje');
+  assert.equal(isEmrindenTaslakPaket(girdi())['proje'], '');
+  assert.ok((TMI_PAKET_ALANLARI as readonly string[]).includes('proje'));
 });
 
 // Kullanıcı kararı 16.10: talaşlı (CNC) istasyondaki her emirde hazırlık tamamlanmadıysa uyarı; kilit yok.

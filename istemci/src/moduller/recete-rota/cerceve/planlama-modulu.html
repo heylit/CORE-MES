@@ -4048,11 +4048,13 @@ function compile(st){
   const M={};
   for(const m of D.tezgahlar){
     const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
-    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    /* 650 a: haftası olan tezgâh kendi iş merkezinin gün vardiyalarıyla çalışır; tatil yine kapalıdır */
+    const gunu=d=>m.hafta?(days[d].tatil?[]:(m.hafta[days[d].wd]||[])):days[d].vard;
+    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     let rw=sw;
-    if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(days[d].vard.length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
+    if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
     const dn=(st.down||[]).filter(x=>x.m===m.id).map(x=>[x.from,x.to]);
     sw=subtract(sw,dn);rw=subtract(rw,dn);
     const pay=st.w.tampon?Math.min(.35,(m.arizaGun>0?(+m.onarimSaat||0)/(m.arizaGun*24):0)+(+st.w.acilPay||0)):0;
@@ -4879,6 +4881,11 @@ function rrCevir(st) {
   const grupOf = id => { const m = (st.machines || []).find(x => x.id === id); return m ? m.stationId : ''; };
   const opAd = id => { const d = (st.opdefs || []).find(x => x.id === id); return d ? d.name : ''; };
   const ilkVardiya = (st.cal && st.cal.shifts && st.cal.shifts[0] && st.cal.shifts[0].start) || '08:00';
+  /* 650 a: tezgâhın haftası istasyonunun iş merkezinden (gün adı -> vardiyalar); merkez haftaları okunmadıysa yok, tezgâh atölyenin takvimiyle */
+  const merkezHaftasi = m => {
+    const s = (st.stations || []).find(x => x.id === m.stationId), w = s && st.merkezHaftalari && st.merkezHaftalari[s.wcId];
+    return w ? Object.fromEntries(RR_GUN_SIRA.map(g => [g, (w[RR_GUN[g]] || []).slice()])) : undefined;
+  };
   /* makineler önce: adımların makine listesi grubu buradan bulur */
   const tezgahlar = (st.machines || []).map(m => {
     const a = m.plan || null; const y = {};
@@ -4887,6 +4894,8 @@ function rrCevir(st) {
     if (!a || a.grup !== m.stationId) y.grup = m.stationId;
     /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
     if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    const hafta = merkezHaftasi(m);
+    if (!rrEsit(a && a.hafta, hafta)) y.hafta = hafta;
     return rrKur(a, y);
   });
   const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
@@ -5050,6 +5059,9 @@ function tmiKaynakIle(st, kaynak, D) {
       }
     }
     o.wcs = [{ id: RR_WC, code: '', name: 'Atölye', week }, ...merkezler.map(w => ({ id: w.id, code: w.code, name: w.name, week: null }))];
+    /* 650 a: tezgâh kendi iş merkezinin haftasıyla çalışır (rrCevir tezgâha yazar); atölyenin tek takvimi sayfanın gün görünümüdür */
+    if (tk) o.merkezHaftalari = Object.fromEntries(merkezler.map(w => [w.id, Object.fromEntries(Array.from({ length: 7 }, (_, g) =>
+      [g, ((tk.hafta[w.id] || {})[g] || []).filter(id => sira(id) >= 0).sort((a, b) => sira(a) - sira(b))]))]));
   }
   const istasyonlar = Array.isArray(d.stations) ? d.stations.filter(x => x.aktif !== false) : null;
   if (istasyonlar) o.stations = istasyonlar.map(x => ({ id: x.id, code: x.code, name: x.name, wcId: x.wcId, cost: maliyet('istasyon', x.id), eff: x.eff, opPer: x.opPer, count: x.count }));
@@ -5407,6 +5419,43 @@ function baslangicTazele(S, an) {
   const bugun = s.slice(0, 10), g = gunFarki(S.D.meta.baslangic, bugun);
   return g != null && g >= BASLANGIC_ESIGI ? baslangicKaydir(S, bugun) : 0;
 }
+/* 651 a: arızadaki ya da bakımdaki makine (kaynak okumasının makine durumu) kendiliğinden bir duruş satırı alır: şimdiden tezgâhın
+   şimdiki (yoksa sıradaki) vardiyasının sonuna. Satır S.down'dadır ve oto işaretlidir; planlamacı onu silebilir ya da değiştirebilir.
+   S.arizaOto o duruş için satırın açıldığını tutar: silinen satır makine yeniden çalışana kadar geri gelmez. Makine çalışır olunca
+   açık oto satırı şimdide kapanır (henüz başlamamışsa düşer). makineler: durum.machines, cx: çalışmanın derlenmiş hâli. Dönen: değişti mi. */
+const ARIZA_OTO_NEDEN = { ariza: 'arıza', bakim: 'bakım' };
+function otoVardiyaSonu(cx, m, now) {
+  const M = cx.M[m]; if (!M) return null;
+  let en = null;
+  for (let d = Math.floor(now / 24) - 1; d <= Math.floor(now / 24) + 7; d++) for (const v of cx.D.vardiyalar || []) {
+    const a = d * 24 + hm(v.bas); let b = d * 24 + hm(v.bit); if (b <= a) b += 24;
+    if (b <= now || !M.sw.some(([x, y]) => x < b && y > a)) continue;
+    const k = [a > now ? 1 : 0, a > now ? a : b];
+    if (!en || k[0] < en.k[0] || (k[0] === en.k[0] && k[1] < en.k[1])) en = { k, b };
+  }
+  return en ? en.b : null;
+}
+/* derleme yalnız arızadaki makine ya da açık oto duruş varken yapılır (stTamKur çalışmaya ilk kurulum ayarlarını yazar) */
+const otoArizaGerekli = (S, makineler) => Array.isArray(makineler) && (makineler.some(x => ARIZA_OTO_NEDEN[x.status]) || Object.keys(S.arizaOto || {}).length > 0);
+function otoArizaUygula(S, makineler, cx) {
+  if (!Array.isArray(makineler) || !cx) return false;
+  const now = cx.st.now; let degisti = false;
+  const oto = Object.assign({}, S.arizaOto || {});
+  for (const x of makineler) {
+    const m = String(x.id);
+    if (ARIZA_OTO_NEDEN[x.status]) {
+      if (oto[m] || !cx.M[m]) continue;
+      const to = otoVardiyaSonu(cx, m, now);
+      S.down = [...(S.down || []), { m, from: now, to: to == null ? now + 8 : to, neden: ARIZA_OTO_NEDEN[x.status], oto: 1 }].sort((a, b) => a.from - b.from);
+      oto[m] = x.status; degisti = true;
+    } else if (oto[m]) {
+      S.down = (S.down || []).filter(d => !(d.oto && d.m === m && d.from >= now)).map(d => d.oto && d.m === m && d.to > now ? { ...d, to: now } : d);
+      delete oto[m]; degisti = true;
+    }
+  }
+  if (degisti) S.arizaOto = oto;
+  return degisti;
+}
 /* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek,
    ilk çizimde), eski kayıtta 1650 kararlarının taşınması (zz-karar-1650, çizimden sonra), kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula);
    st sayfanın stOf'uyla aynı yoldan (durum.betik stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
@@ -5427,6 +5476,7 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
   const stBitenle = () => bitenUygula(stTamKur(S), tmiBitenler((kn && kn.durum.emirler) || k, S.D));
   if (kn) {
     if (kaynakBirlestir(S.D, k, kn, bugun).length) S.dataVer = (+S.dataVer || 0) + 1;
+    if (otoArizaGerekli(S, kn.durum.machines) && otoArizaUygula(S, kn.durum.machines, compile(stBitenle()))) S.dataVer = (+S.dataVer || 0) + 1;
     if (Array.isArray(kn.durum.calisanAdimlar)) {
       const cx = compile(stBitenle());
       /* çerçevede tmiCalisanlar sunucunun emirleriyle sarılıdır (zz40 sunucuyla); burada aynı kayıt doğrudan verilir */

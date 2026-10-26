@@ -7,6 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import type { EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -14,6 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kararSayaclari, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { PLANLAMA_ANAHTARI } from '../recete-rota/disari.ts';
 import { isler } from './isler.ts';
 import { belgeSil, belgeYaz, belgeler } from './servis.ts';
 import { ALET_ONEKI, BITMIS_BITIR, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI, GIZLI_YANSIMA_TURLERI, gizliYansimaTuru, ISTEK_KILIT_BUTCESI_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, SAYIM_ERTELEME, ZATEN_CALISIYOR, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI } from './kurallar.ts';
@@ -1710,6 +1712,31 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   const plandanCikar = (isEmriId: number) => ortam!.sahip.sorgu('DELETE FROM plan_yerlesimi WHERE is_emri_id = $1', [isEmriId]);
 
   // Varsayılan: emrin bütün iş emirleri kendi makinelerinde canlı plana yerleşmiş (`plansiz` ile yerleşmez).
+  // Sunucu plan motoru (ADR 0018) emrin adımlarını ürünün yürürlükteki rotasından tanır; adımsız ya da girdisiz rota plana girmez. Kartın
+  // A revizyonuna ilk emrin adımları (aynı makine ve süreyle) yazılır, ilk adıma bir hammadde girer ve revizyon yürürlüğe alınır.
+  async function rotaAdimlariniYaz(kart: number, uretimEmriId: number): Promise<void> {
+    const sahip = ortam!.sahip;
+    const rev = (await sahip.tek<{ id: number; durum: string }>("SELECT id, durum FROM rota_revizyonu WHERE malzeme_id = $1 AND harf = 'A'", [kart]))!;
+    if (rev.durum !== 'taslak') return;
+    await sahip.sorgu(
+      `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) SELECT $1, op_no, $2 FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3
+       ON CONFLICT DO NOTHING`, [kart, rev.id, uretimEmriId]);
+    await sahip.sorgu(
+      `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, ayar_suresi_dk, birim_sure_dk, bagimlilik)
+       SELECT $1, $2, op_no, row_number() OVER (ORDER BY op_no), operasyon_tipi_id, ad, makine_id, 10, 1, 'bekleyen'
+       FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $3`, [rev.id, kart, uretimEmriId]);
+    const girdi = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'hammadde', 'YNS-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [`yns-${(sayac += 1)}`, sayac, JSON.stringify({ id: `yns-${sayac}`, com: { ad: `Girdi ${sayac}` } }), yoneticiId],
+    ))!.no;
+    await sahip.sorgu('INSERT INTO rota_bileseni (adim_id, malzeme_id, miktar) SELECT id, $2, 1 FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira LIMIT 1', [rev.id, girdi]);
+    await sahip.sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [rev.id, yoneticiId]);
+    await sahip.sorgu(
+      `UPDATE rota_revizyonu SET durum = 'yururlukte', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true, yururluge_alan_kisi_id = $2,
+       yururluge_alma = now() WHERE id = $1`, [rev.id, yoneticiId]);
+  }
+
   async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean } = {}): Promise<{
     emirId: number; ilk: string; ikinci: string; ilkId: number; ikinciId: number; kart: number; ilkMerkez: number; ikinciMerkez: number; makineKodlari: string[];
   }> {
@@ -1743,6 +1770,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const { uretimEmriId } = await vt().tx(async (db) => uretimEmriAc(db, (await kullaniciYukle(db, yoneticiId))!, {
       projeId: denemeProjeId, malzemeNo: kart, adet: 20, teslim: null, kaynakRotaRevizyonId: revizyon, isEmirleri: [adim(1, m1), adim(2, m2), ...(secenek.ucuncuIlkte ? [adim(3, m1)] : [])],
     }));
+    await rotaAdimlariniYaz(kart, uretimEmriId);
     if (!secenek.plansiz) {
       const isEmirleri = await sahip.sorgu<{ id: number; makineId: number; opNo: number }>(
         'SELECT id, makine_id AS "makineId", op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [uretimEmriId]);
@@ -1923,9 +1951,11 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const m1 = (await makinesi(ie1!)).id, m2 = (await makinesi(ie2!)).id;
+    // Bölünmüş işin yeri parçalarının zarfıdır (plan bölerken öyle yazar): sonraki adım zarfın bitişini bekler, motor da parçalarınkini.
     await ortam!.sahip.sorgu(
-      `INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet, makine_id, baslangic, bitis) VALUES
-       ($1, 1, 12, $2, now() + interval '10 minutes', now() + interval '30 minutes'), ($1, 2, 8, $3, now() + interval '12 minutes', now() + interval '25 minutes')`,
+      `WITH p AS (INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet, makine_id, baslangic, bitis) VALUES
+       ($1, 1, 12, $2, now() + interval '10 minutes', now() + interval '30 minutes'), ($1, 2, 8, $3, now() + interval '12 minutes', now() + interval '25 minutes'))
+       UPDATE plan_yerlesimi SET baslangic = now() + interval '10 minutes', bitis = now() + interval '30 minutes' WHERE is_emri_id = $1`,
       [ie1, m1, m2]);
     const p1k = `${ieKimligi(ie1!)}-p1`, p2k = `${ieKimligi(ie1!)}-p2`;
     const liste = await paketler();
@@ -2107,6 +2137,20 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
     const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
     const kaynak = await makinesi(ie1!);
+    // ADR 0018: canlıya alma sunucu motoruyla dizer; motor planlama sayfasının çalışma kaydı olmadan çözmez (409) ve vardiyası tanımsız
+    // tezgâha yer vermez (168 b). Kayıt boş yazılır, bütün iş merkezleri her gün çalışır.
+    const gunduz = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Yansima gunduz', '00:00', '23:59') RETURNING id"))!.id;
+    await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g', [gunduz]);
+    const kayit = await istek(yonetici, 'POST', '/recete-rota/kayitlar/yaz', {
+      anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
+      deger: {
+        surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+        w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+        D: { meta: { ad: 'Deneme', baslangic: tesisGunu(Date.now()) }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [],
+          tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
+      },
+    });
+    assert.equal(kayit.durum, 200, JSON.stringify(kayit.govde));
     await canliyaYerlestir(ie3!, { makine: kaynak.id }, 60);
     await canliyaYerlestir(ie2!, { makine: kaynak.id }, 100);
     await ortam!.sahip.sorgu('UPDATE plan_yerlesimi SET kilitli = true WHERE is_emri_id = $1', [ie1]);

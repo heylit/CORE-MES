@@ -186,3 +186,16 @@ Yalnız sunucu çözümü (`motor/emirler.betik` `sunucuCozumGirdisi`) değişti
 Bu yamanın kapsamı dışında, plan modülünde kalan (625n-plan): canlıya almada önüne iş konan çalışan işin kuyruğa verilmesi, sıraya aykırı taşımanın motordan önce reddi (308 b) ve elle seçilmemiş işin rotadaki makineye dönmesi.
 Testler: `plan-cozucusu.test.ts`'e dört test eklendi (CA-2, sabit iş, rota dışı makine, 3b); dördü de eski motorda kırılıyor (DOĞRULANDI).
 Derlenmiş planlama sayfası (`cerceve/planlama-modulu.html`) yamada yok: birleştirmede `node istemci/src/moduller/recete-rota/planlama-derle.ts` ile yeniden kurulur. `planlama-derle.test.ts` o zamana kadar kırık kalır.
+
+## Tezgâh takvimi ve otomatik arıza (650 a, 651 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 625g)
+1. 650 a: Tezgâh kendi iş merkezinin haftalık vardiyasıyla çalışır (`girdi.betik` `tmiKaynakIle` `merkezHaftalari`, `rrCevir` tezgâhın `hafta` alanı; `engine.betik` `compile`).
+   Önceki davranış: sayfanın tek takvimi bütün merkezlerin haftalarının birleşimiydi, her tezgâh bütün vardiyalarda açık sayılıyordu.
+   Haftasında vardiya olmayan merkezin tezgâhı artık vardiyasızdır (168 b). Tatil yine kapalıdır. Merkez haftaları okunmadıysa (kaynak yok) tezgâh eskisi gibi atölyenin takvimiyle çalışır.
+   Sayfanın planı da değişir: sayfa ve sunucu aynı derlemeyi kullanır.
+2. 651 a: Arızadaki ya da bakımdaki makine (kaynak okumasının makine durumu) kendiliğinden bir duruş satırı alır (`girdi.betik` `otoArizaUygula`, `girdiKur`).
+   Satır şimdiden başlar ve tezgâhın şimdiki (yoksa sıradaki) vardiyasının sonunda biter; vardiya bulunmazsa 8 saat sürer. Satır `S.down`'dadır ve `oto` işaretlidir.
+   `S.arizaOto` o duruş için satırın açıldığını tutar. Planlamacının sildiği satır, makine yeniden çalışana kadar geri gelmez.
+   Makine çalışır olunca açık oto satırı şimdide kapanır; henüz başlamamışsa düşer. Elle girilen duruş satırına dokunulmaz.
+   Makine durumu istasyonlar modülünün verdiğidir; istasyonlar modülü değişmedi.
+Testler: `plan-cozucusu.test.ts`'e iki test eklendi (650 a, 651 a). İkisi de değişiklik olmadan kırılıyor (DOĞRULANDI).
+Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/moduller/recete-rota/planlama-derle.ts` ile yeniden kurulur. `planlama-derle.test.ts` o zamana kadar kırık kalır.

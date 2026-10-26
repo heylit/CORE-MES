@@ -1,2 +1,8 @@
 /* Geçmiş (tc-pyg-): bugünkü sayfanın düzeni (pm-sira, kart, tablo); kartlar ve şerit Veri ve kısıtlar'ınkidir (tc-pyi-). */
 .tc-pyg-kisi { width: auto; max-width: 100%; }
+.tc-pyg-sec { width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); }
+.tc-pyg-ad { display: grid; gap: var(--b-1); justify-items: start; min-width: 0; }
+.tc-pyg-karsi th[scope="row"] { font-weight: 600; text-align: start; }
+.tc-pyi-tablo [data-ton="iyi"] { color: var(--run); }
+.tc-pyi-tablo [data-ton="kotu"] { color: var(--stop); }
+.tc-pyi-kart-govde > .tc-tablo-kap + .tc-tablo-kap, .tc-pyi-kart-govde > .tc-tablo-kap + .tc-pyi-olaylar { margin-top: var(--b-4); }
