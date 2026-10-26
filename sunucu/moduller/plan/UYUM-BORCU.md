@@ -3,7 +3,7 @@
 | No | Borç | Kapanış |
 |---|---|---|
 | P-B1 | KAPANDI (T4 B, #415): `planlanacakIsEmirleri` ve `isEmriKaynagiYaz` uretim-emirleri `disari.ts`'inden; `baglanti.ts` yalnız P-B4'ü taşır | - |
-| P-B2 | `plan_yerlesimi.is_emri_id`, `plan_senaryo_yerlesimi.is_emri_id` yabancı anahtarsız | İş emri tablosu gelince FK göçü |
+| P-B2 | KAPANDI (279 a, `20261019145500_plan_is_emri_bagi.sql`): `plan_yerlesimi` ve `plan_yerlesim_parcasi` iş emrine bağlı (silinince satır gider). Senaryo tabloları bağsız kalır: eksi kimlik deneme emridir, iş emri değil (göç satır 5). `plan_taban` geçmiş kaydıdır, bağsız | - |
 | P-B3 | KAPANDI (#441): motor vardiya modülünün çalışma takvimiyle yerleştirir (`calismaTakvimleri`); vardiyası tanımlanmamış kaynak sürekli çalışır, tatil ve kapalı günü yine düşülür, plan uyarısı alır | - |
 | P-B4 | KAPANDI (#439): `istasyonKisileri` istasyonlar `disari.ts`'inden; `baglanti.ts` kalktı | - |
 | P-B5 | Çakışma veritabanında dışlama kısıtıyla değil, servis denetimi ve plan sürümü kilidiyle (btrim_gist yok) | btree_gist eklentisi çekirdekçe açılırsa EXCLUDE kısıtı |
@@ -15,10 +15,10 @@
 
 | No | Borç | Ekrana dokunur | Kapanış |
 |---|---|---|---|
-| P-B9 | Okuma uçları `GET /plan`, `GET /plan/senaryolar` `yetki: 'oturum'`; ADR 0007 kalıbı `yetki: { biri: [...] }` | Hayır | Bağlamada rol matrisiyle |
+| P-B9 | KAPANDI (borç temizliği 625a, 26.10.2026): okuma uçları `PLAN_OKUR` (`biri: ['plan.oku', 'plan.yaz']`, `uclar.ts:18`); `plan.oku` rolleri `20261019125000_kisiler_plan_oku.sql`. `oturum`la kalan yalnız `GET /plan/surum` ve `/plan/menu-sayaclari` (sürüm ve sayaç, veri içermez) | Hayır | - |
 | P-B10 | KAPANDI (#1749): `plan_senaryo_yerlesimi_tekil` (`20261019064600_plan_anahtar_adlari.sql`, `kisit-adlari.test.ts`). Eski metin: `plan_senaryo_yerlesimi` birincil anahtarı adsız (kısıtlar adlandırılır kuralı) | - | - |
 | P-B11 | KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz; karar 41, #1645): eski rota tanım adresleri ve ana sayfa kartları Reçete ve Rota'ya gider; madde eski ekranın. `/cizelge`, `/matris` menüde gizli, `/kuyruk` Arkon kuyruğu; kalan karar B41 (rota) kontrolünde. Eski metin: Depodaki `/cizelge`, `/matris`, `/kuyruk` yer tutucu sayfaları teslimdeki Plan ve Kanban ekranlarıyla aynı işi görür; ikisi birden durur (karar PL1 c) | Evet | Aşama 2'de karar |
-| P-B12 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): planlamacıda `sayfa.rota` (`20261006092612_kisiler_roller.sql` `('planlama_proje', 'sayfa.rota')`), `plan.yaz` ve `plan.canliya-al` (P-B6'daki göçler) var; `plan.kilitle` ve `plan.studyo` dağıtımı rol matrisinde. Plan sayfası ve işlemleri Aşama 1'de yalnız yöneticide (rol x işlem yok, P-B6) | Hayır | Rol matrisi, kullanıcı onayıyla |
+| P-B12 | KAPANDI (borç temizliği 625a, 26.10.2026: rol matrisi dağıtıldı, `kurulum/yetki-matrisi.md` satır 28-37; `plan.kilitle`, `plan.studyo`, `plan.canliya-al` müdür ve planlamada, `plan.yaz` müdürde de (524/3 b, `20261025194000_kisiler_mudur_plan_yaz.sql`)). Eski metin: planlamacıda `sayfa.rota`, `plan.yaz` ve `plan.canliya-al` var; `plan.kilitle` ve `plan.studyo` dağıtımı rol matrisinde. Plan sayfası ve işlemleri Aşama 1'de yalnız yöneticide | Hayır | - |
 
 ## T4 (kart #415) bulguları
 
@@ -53,3 +53,6 @@
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /plan/canli-yerlesim`, `POST /plan/senaryolar/:id/{canliyi-al, cogalt, degisiklikleri-at}`. Senaryo uçları plan stüdyosunun sunucu yarısıdır; stüdyo bugün sunucuya bağlı değil (`degerlendirme/sistem-uyum/plan-akisi.md`).
+
+## Plan akışı bağlaması (kart 625, 26.10.2026)
+- Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, P-B27 ve P-B28 (627), ekranı olmayan uçlar.

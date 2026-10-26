@@ -205,3 +205,7 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - `disari.refakatKartiSayimlari(db, uretimEmriId, istasyonId, kartlar[{ id, malzemeNo, verilen }])` -> `Map<kartId, { sayilan, sinir }>`. Stok kartla verilen net miktarı verir; bu modül stoku okumaz (ADR 0006). Uç, göç, yetki değişmedi.
 - Adım: istasyonda çalışan iş emri, yoksa istasyonun sıradakisi, yoksa emrin terminaldeki adımı. `sayilan`: kartla o adımda sayılan bütün parça (sağlam, hurda, karar bekleyen, red).
 - `sinir`: adımın girdisi kartın malzemesiyse `floor(verilen / parça başı girdi)` (fire eklenmez, stok düşümüyle aynı miktar); değilse önceki adımda bu kartla sayılan sağlam; ilk adımda sarf yoksa null. Sınır yumuşaktır, sayımı durdurmaz (Soru 132).
+
+## Arkon paketi için iki okuma (kart 625b, plan akışı bağlaması)
+- `disari.isEmriKontrolListesi(db, isEmriIdleri)` -> `Map<isEmriId, { sira, ad, aciklama }[]>`: emir açılırken iş emrine kopyalanan kontrol listesi (`emir_adimi`); listesi olmayan iş emri haritada yoktur. Arkon BASKA-MODUL-ISTEKLERI 11.
+- `PlanIsEmri.istasyonId` (isteğe bağlı, boş olabilir): iş emrine yazılmış istasyon. Arkon BASKA-MODUL-ISTEKLERI 12. Uç, göç, yetki değişmedi; Arkon'un kullanması ayrı dalda.

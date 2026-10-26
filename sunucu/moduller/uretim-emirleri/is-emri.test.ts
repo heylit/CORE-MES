@@ -22,7 +22,7 @@ import {
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
-import { emirIptalDinle, refakatKartiSayimlari } from './disari.ts';
+import { emirIptalDinle, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
   ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
@@ -246,6 +246,13 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       adim(3, { tur: 'makine', id: m3 }, { kontrolListesi: [{ ad: 'Son kontrol', aciklama: null }, { ad: 'Paketle', aciklama: null }] }),
     ], { adet: 10 });
     const [ie1, ie2, ie3] = isEmriIdleri as [number, number, number];
+    // Arkon paketi (istek 11, 12): kontrol listesi iş emrinden, istasyon plan satırından okunur.
+    const liste = await o().vt.tx((db) => isEmriKontrolListesi(db, [ie1, ie2, ie3, ie3]));
+    assert.deepEqual([...liste.keys()].sort((x, y) => x - y), [ie1, ie3], 'listesi olmayan iş emri haritada yok');
+    assert.deepEqual(liste.get(ie3), [{ sira: 1, ad: 'Son kontrol', aciklama: null }, { sira: 2, ad: 'Paketle', aciklama: null }]);
+    assert.equal((await o().vt.tx((db) => isEmriKontrolListesi(db, []))).size, 0);
+    const planSatirlari = (await o().vt.tx((db) => planlanacakIsEmirleri(db))).filter((i) => i.uretimEmriId === id);
+    assert.deepEqual(planSatirlari.map((i) => [i.id, i.istasyonId]), [[ie1, ist1], [ie3, ist3]], 'fason plana girmez; makine adımı iş emrinin istasyonuyla');
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     const ayr1 = await istek<{ adimlar: { ad: string }[] }>('operator', 'GET', `/uretim-emirleri/${id}`);

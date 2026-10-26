@@ -39,9 +39,10 @@ export function SaatSeridi({ kisayollar = [], alt }: { kisayollar?: readonly Kis
 // Sayfa rozetinin rengi (eski PageShell `color`): yalnız durum değişkenleri; lab eski Çizim stüdyosunun moru (mavi ile kırmızının karışımı).
 export type BantRengi = 'run' | 'stop' | 'done' | 'hazard' | 'ink' | 'lab';
 
-// Eski üst bant (PageShell, PrepTop, LabTop, SettingsApp header.top, soru 497/4 a): "ÜRETİM HAZIRLIK" markası, renkli sayfa rozeti,
+// Eski üst bant (PageShell, PrepTop, LabTop, SettingsApp header.top, soru 497/4 a): renkli sayfa rozeti,
 // sayfanın araçları, sağda kısayollar, bağlantı durumu, büyük saat ve tema düğmesi; altında rozet renginde ışık çizgisi.
 // Tema TMI'nin tek temasıdır; Arkon'un ayrı teması yoktur.
+// Arkon markası (çizgili işaret ve "ÜRETİM HAZIRLIK") TMI ortak tasarımında yoktur; bant sayfa rozetiyle başlar (kart 635).
 // Dar ekranda (eski bant 360'ta yalnız marka, tema ve kullanıcıydı) bant tek satır kalır: kısayollar, tema ve `ekMenude` verilince
 // sayfanın araçları "Diğer" menüsüne girer. Görünüm seçici gibi sayfanın ana aracı menüye girmez, alt satıra iner.
 // Öğeler tek kez çizilir; geniş ekranda gruplar `display: contents` ile bandın öğesi olur.
@@ -63,8 +64,6 @@ export function ArkonBandi({ simge, baslik, renk = 'hazard', ek, ekMenude = fals
   }, [acik]);
   return (
     <header className="tc-ay-bant" data-renk={renk} data-acik={acik ? '' : undefined}>
-      <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
-      <span className="tc-ay-ayrac" aria-hidden="true" />
       <h2 className="tc-ay-rozet"><Simge ad={simge} />{baslik}</h2>
       {ek && !menudeEk ? <div className="tc-ay-bant-ek">{ek}</div> : null}
       {digerVar ? (

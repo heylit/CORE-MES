@@ -8,14 +8,14 @@
    yerleştirdiği makine ya da kişi iş emrine yazılır, terminal o kaynağı görür; komut kendi işlemini (öneri `uretim-emirleri.yaz`) ve iş
    emrinin açık olduğunu denetler. Bir kaynakta aynı anda tek çalışan iş kuralı uretim-emirleri'nde kalır.
 3. Rota teslimindeki `uretimEmriAc` (üretim emri + iş emirleri).
-Gelince `plan_yerlesimi.is_emri_id` ve `plan_senaryo_yerlesimi.is_emri_id` yabancı anahtarları eklenir.
+KARŞILANDI (279 a): `plan_yerlesimi` ve `plan_yerlesim_parcasi` iş emrine bağlı; senaryo tabloları eksi kimlikli deneme emri taşıdığı için bağsız (UYUM-BORCU P-B2).
 
 ## istasyonlar
-`istasyonKisileri(db)` (rota teslimiyle aynı istek): kişinin istasyonu; kapsam ve gruplama için. Var olanlar kullanılır: `istasyonlar`,
+KARŞILANDI (#439, P-B4): `istasyonKisileri(db)` (rota teslimiyle aynı istek): kişinin istasyonu; kapsam ve gruplama için. Var olanlar kullanılır: `istasyonlar`,
 `aktifIstasyonlar`, `istasyondakiMakineler`, `makineGetir`, `kisininIzinliIsMerkezleri`.
 
 ## vardiya, mesai (gelince)
-Çalışma takvimi: `calismaTakvimi(db, kaynak, aralik)` benzeri; gelene kadar plan sürekli çalışma varsayar (UYUM-BORCU).
+KARŞILANDI (#441): plan `calismaTakvimleri`, `takvimGunleri`, `isMerkeziKisiPaylari` okur (`servis.ts:24`); vardiyası tanımsız kaynak sürekli çalışır sayılır (P-B3).
 
 ## rota
 Var olan `revizyonGetir` (aday kaynaklar ve rotadaki kaynak; aday dışı uyarısı) kullanılır; istek yok.
@@ -23,9 +23,9 @@ Var olan `revizyonGetir` (aday kaynaklar ve rotadaki kaynak; aday dışı uyarı
 ## T4 (kart #415) sonrası kalan istekler
 Madde 1-3 karşılandı (#414). Kalanlar:
 - KARŞILANDI (#419): `isEmriKaynagiYaz` `plan.canliya-al` işlemini de kabul eder (kullanıcı kararı a).
-- uretim-emirleri: `PlanIsEmri.durum` iş emri düzeyinde başlamışı versin (bugün başladı emir düzeyinde).
+- KARŞILANDI (P-B14): iş emri düzeyinde başlamış bilgisi `PlanIsEmri.durum` ile gelir.
 - KARŞILANDI (#417): `oncelik`, `baslangic` ve `taslakDahil`.
-- uretim-emirleri: iş emrini bölme ve birleştirme komutu (PL-06, "Partiyi böl", "Parçaları birleştir").
+- KARŞILANDI (UE-B3, P-B18): bölme ve birleştirme `/adimli-emirler/:id/bol`, `/birlestir`; ekranı Reçete ve Rota'da.
 - uretim-emirleri: acil sipariş, öncelik ve teslim değişikliği komutları (stüdyo canlıya alma); istasyonlar: makine durumu komutu (arıza); vardiya: kapalı gün.
 - istasyonlar: KARŞILANDI (#409, bağlama #439).
 - vardiya: çalışma takvimi (#410; PL-03, PL-04).

@@ -510,13 +510,13 @@ describe('PlanlamaMotoru', () => {
     expect(dk().textContent).toContain('İŞ ADIMI');
     fireEvent.click(within(dk()).getByRole('button', { name: 'Kapat (Esc)' }));
     expect(screen.queryByRole('complementary', { name: 'Yan panel' })).toBeNull();
-    // Tezgâh kartı: yedi gün, Odakla yeni ekranda yok, motor hamleleri pasif; gün planı Çizelge'nin gün ölçeğine gider.
+    // Tezgâh kartı: yedi gün, Odakla tezgâhın odak tahtasını açar (577a), motor hamleleri pasif; gün planı Çizelge'nin gün ölçeğine gider.
     fireEvent.click(screen.getByRole('button', { name: 'Özet' }));
     fireEvent.click(within(screen.getByRole('region', { name: 'Hangi gün hangi tezgâh dolu?' })).getByRole('button', { name: '3' }));
     expect(within(dk()).getAllByRole('tab').map((x) => x.textContent)).toEqual(['Yön ver', 'Takvim']);
     expect(dk().textContent).toContain('TEZGÂH');
     expect(dk().querySelectorAll('.tc-pym-at-gunler button')).toHaveLength(7);
-    expect(within(dk()).getByRole('button', { name: 'Odakla' }).getAttribute('title')).toBe(`Odakla: ${YOK_NOTU}`);
+    expect(within(dk()).getByRole('button', { name: 'Odakla' }).getAttribute('aria-disabled')).toBeNull();
     expect(within(dk()).getByRole('button', { name: 'Hepsini boşalt' }).getAttribute('title')).toBe(`Hepsini boşalt: ${MOTOR_NOTU}`);
     // Takvim: vardiya verisi sahibinden girer, bakım denemesi motorla gelir; ek mesaiyi kaldırmak çalışmaya yazar.
     fireEvent.click(within(dk()).getByRole('tab', { name: 'Takvim' }));

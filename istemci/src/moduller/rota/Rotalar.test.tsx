@@ -201,12 +201,13 @@ describe('Kaynaklar ve Rota revizyonları bölümleri', () => {
     expect(postlar(istekler)).toHaveLength(2);
   });
 
-  it('R11, 240 a: eski rota tanım adresleri "Ürün ve rotalar" görünümüne, eski plan, stüdyo ve kanban Reçete ve Rota\'daki karşılığına gider', async () => {
+  it('R11, 240 a: eski rota tanım adresleri "Ürün ve rotalar" görünümüne, eski plan, stüdyo, kanban, çizelge ve matris Reçete ve Rota\'daki karşılığına gider (627 a)', async () => {
     function ReceteRotaYeri() { return <p>{`Reçete ve Rota ${useLocation().pathname}`}</p>; }
     const ekranlar = [...rotalar, ...['/recete-rota/schema', '/recete-rota/plan', '/recete-rota/studio', '/recete-rota/kanban'].map((yol) => ({ yol, ekran: ReceteRotaYeri }))];
     const hedefler: [string, string][] = [
       ['/rota', '/recete-rota/schema'], ['/rota/501', '/recete-rota/schema'], ['/rota/operasyonlar', '/recete-rota/schema'], ['/rota/sablonlar', '/recete-rota/schema'],
       ['/rota/plan', '/recete-rota/plan'], ['/rota/plan-studyosu', '/recete-rota/studio'], ['/rota/kanban', '/recete-rota/kanban'],
+      ['/cizelge', '/recete-rota/plan'], ['/matris', '/recete-rota/plan'],
     ];
     for (const [adres, hedef] of hedefler) {
       sunucuKur(PLANLAMA, { ...KAYNAK, 'GET /rota/urunler': () => json(200, LISTE) });
