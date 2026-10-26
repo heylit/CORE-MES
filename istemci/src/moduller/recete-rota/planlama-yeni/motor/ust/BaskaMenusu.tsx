@@ -13,6 +13,8 @@ interface Madde { ad: string; simge: SimgeAdi; not?: string; tus?: string; basil
 // Haritanın katmanları menüden açılır: gecikme kaynağı, kılavuz ve klavye kısayolları (P1b). Önceki planla fark canlı planla gelir.
 export interface BaskaDurumu {
   mercek: 'durum' | 'etki'; mercekSec: () => void; kilavuz: boolean; kilavuzAc: () => void; kisayolAc: () => void; planYaz: boolean;
+  // Plan ekranının sayfaları (zk-kabuk sgMenu Sayfalar); verilmezse pasif.
+  sayfaAc?: ((s: 'bugun' | 'hesap') => void) | null;
 }
 function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
   return [
@@ -26,7 +28,10 @@ function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
       b.planYaz ? { ad: 'Klavye kısayolları', simge: 'help', tus: '?', yap: b.kisayolAc, dugme: true } : { ad: 'Klavye kısayolları', simge: 'help', tus: '?', not: 'Plan yazma yetkiniz yok.' },
       { ad: 'Kartları bölgelere diz', simge: 'grid', not: HAZIRLANIYOR },
     ] },
-    { ad: 'Sayfalar', l: [{ ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU }, { ad: 'Nasıl hesaplandı', simge: 'chart', not: YOK_NOTU }] },
+    { ad: 'Sayfalar', l: [
+      { ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU },
+      b.sayfaAc ? { ad: 'Nasıl hesaplandı', simge: 'chart', yap: () => b.sayfaAc?.('hesap'), dugme: true } : { ad: 'Nasıl hesaplandı', simge: 'chart', not: YOK_NOTU },
+    ] },
   ];
 }
 

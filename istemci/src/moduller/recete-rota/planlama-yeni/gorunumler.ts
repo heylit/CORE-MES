@@ -34,9 +34,9 @@ export interface PlanlamaSecimi {
 }
 export const BOS_SECIM: PlanlamaSecimi = { siparis: null, adim: null, tezgah: null, zaman: null };
 
-// Planlama motoru sayfasının ekranları (eski b-kabuk EKRANLAR: tahta, veri, geçmiş; stüdyo ayrı görünümdür). Ekran ve bölümü adresin
-// sorgusundadır (`?ekran=veri&bolum=kisitlar`): görünüm anahtarı ikinci menünündür, ekran onun içindedir. Bölüm ekranın kendi anahtarıdır.
-export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis'] as const;
+// Planlama motoru sayfasının ekranları (eski b-kabuk EKRANLAR: tahta, veri, geçmiş; stüdyo ayrı görünümdür) ve Plan ekranının iki sayfası (zk-kabuk:
+// Bugünün kararları, Nasıl hesaplandı; Başka menüsünden açılır). Ekran ve bölümü adresin sorgusundadır (`?ekran=veri&bolum=kisitlar`): görünüm anahtarı ikinci menünündür, ekran onun içindedir. Bölüm ekranın kendi anahtarıdır.
+export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis', 'bugun', 'hesap'] as const;
 export type MotorEkrani = (typeof MOTOR_EKRANLARI)[number];
 export interface PlanlamaAltEkrani { ekran: MotorEkrani; bolum: string | null }
 export const TAHTA: PlanlamaAltEkrani = { ekran: 'tahta', bolum: null };
