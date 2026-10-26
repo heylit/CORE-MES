@@ -83,6 +83,8 @@ describe('tam st (stTamKur)', () => {
       expect(s.pay).toBe(1);
     }
     expect(st.D.tezgahlar[0]!.ucret).toBe(850);
+    // 590: personel kısıtı kapalıyken oran kapasiteden düşer, operatör ücreti TL amacında kalır
+    expect(m.stTamKur({ ...S, kapali: ['personel'] }).D.tezgahlar[0]!.ucret).toBe(850);
     expect(st.tlAmac).toMatchObject({ ac: true, birim: m.AG_BIRIM, risk: 0.5, kT: 100, chgTL: 0 });
     expect(st.w).toMatchObject({ mat: 'sert', matKarma: true });
     expect(st.wipP.erken).toEqual({ [st.D.siparisler[0]!.id]: 1 });
