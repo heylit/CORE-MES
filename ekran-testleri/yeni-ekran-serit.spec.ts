@@ -55,11 +55,14 @@ const SERITLI = [
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/eski/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
   ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'], ['/kalite-merkezi/eski/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;
+const TEK_MADDELI = new Set<string>(['Üretim Terminali', 'Kuyruk']);
 for (const [yol, menuAdi, madde] of SERITLI) {
   test(`${yol}: yeni ekranda kabuğun şeridi durur`, async ({ page, ac }) => {
     await ac(yol);
-    const menu = page.getByRole('navigation', { name: `${menuAdi} menüsü` });
-    await expect(menu, yol).toBeVisible();
+    // Telefonda tek maddelik şerit çizilmez (618c); madde DOM'da kalır, seçili madde aynıdır.
+    const menu = page.locator(`nav[aria-label="${menuAdi} menüsü"]`);
+    if (TEK_MADDELI.has(menuAdi) && (page.viewportSize()?.width ?? 0) < 768) await expect(menu, yol).toBeHidden();
+    else await expect(menu, yol).toBeVisible();
     await expect(menu.locator('[aria-current="page"]'), yol).toHaveText(new RegExp(`^${madde}`));
     await expect(page.getByRole('tablist', { name: 'Üretim Hazırlık' }), yol).toHaveCount(0);
   });

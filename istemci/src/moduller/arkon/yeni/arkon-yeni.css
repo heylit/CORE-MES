@@ -29,14 +29,6 @@
 .tc-ay-bant[data-renk="done"] { --c: var(--done); }
 .tc-ay-bant[data-renk="ink"] { --c: var(--ink); }
 .tc-ay-bant[data-renk="lab"] { --c: color-mix(in srgb, var(--done), var(--stop)); }
-.tc-ay-marka { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--ink); }
-.tc-ay-marka b { font-size: var(--yazi-m); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
-.tc-ay-marka small { align-self: flex-end; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
-.tc-ay-isaret {
-  inline-size: var(--b-5); block-size: var(--b-5); border-radius: var(--yari-2);
-  background: repeating-linear-gradient(-45deg, var(--hazard) 0 var(--b-1), var(--on-hazard) var(--b-1) var(--b-2));
-}
-.tc-ay-ayrac { inline-size: var(--cizgi-ince); block-size: var(--b-6); background: var(--edge); }
 .tc-ay-rozet {
   display: inline-flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-1) var(--b-3);
   border: var(--cizgi-ince) solid color-mix(in srgb, var(--c) 40%, transparent); border-radius: var(--yari-tam);
@@ -51,7 +43,6 @@
 .tc-ay-bant-tema { order: 3; }
 .tc-ay-diger { display: none; }
 @media (max-width: 767px) {
-  .tc-ay-marka b, .tc-ay-marka small, .tc-ay-ayrac { display: none; }
   .tc-ay-bant { gap: var(--b-2); }
   .tc-ay-bant-ek { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); order: 4; flex: 1 1 100%; min-width: 0; }
   .tc-ay-bant > .tc-ay-bosluk { display: none; }

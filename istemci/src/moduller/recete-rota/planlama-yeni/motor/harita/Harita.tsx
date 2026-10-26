@@ -6,7 +6,7 @@ import { degisken } from '../ortak.tsx';
 import { bul, ciz, type Kutu } from './ciz.ts';
 import {
   bekleme, dilimNo, durusOku, gecikmeEtkisi, gecMetin, haritaGruplari, KH, KW, sahneKur, siparisRengi, sigdir, tezgahDurumu,
-  yakinlas, yakinlikSiniri, yerlesim, type Aralik, type Kamera, type Sahne,
+  yakinlas, yakinlikSiniri, yerlesim, type Aralik, type Bolge, type Kamera, type Sahne,
 } from './kurallar.ts';
 import { renkleriOku, type HaritaRenkleri } from './renk.ts';
 import './harita.css';
@@ -27,10 +27,16 @@ export interface HaritaOzellikleri {
   etiket: string;
   // Önceki planla fark: karşılaştırılan plan (son canlı); kapalıysa verilmez.
   fark?: OkunanPlan | null;
+  // Her kareden sonra kamera ve bölgeler: haritanın üstündeki kartlar tahtayla kayar (zc-tahta tkKonumla).
+  kare?: KareDinleyicisi;
 }
 export interface HaritaKomutu {
   yakinlas(oran: number): void; sigdir(): void; odakla(j: string): void; tezgahaUc(m: string): void; kilavuzKamera(m: string): void;
+  kameraKoy(k: Kamera): void; durum(): { kam: Kamera; W: number; H: number; bolge: Bolge[]; ist: Sahne['ist'] } | null;
 }
+// Harita görünümünün üstüne çizilen katmanın (kartlar) bağı: her kareye abone olur, kamerayı okur ve koyar, çubuk paylarını alır.
+export type KareDinleyicisi = (kam: Kamera, W: number, H: number, bolge: Bolge[], ist: Sahne['ist']) => void;
+export interface HaritaBagi { abone(f: KareDinleyicisi): () => void; komut(): HaritaKomutu | null; paylar(): [number, number] }
 
 const az = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const kaba = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -107,6 +113,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
       isRenk: (j) => d.renk?.R.is[siparisRengi(p.c.D, j)] ?? [128, 128, 128], ref: d.ref,
     });
     d.kutu = sonuc.kutu;
+    p.kare?.(d.kam, W, H, s.bolge, s.ist);
   };
   const dongu = (ts: number): void => {
     d.raf = 0; const el = cv.current; if (!el || !el.isConnected) return;
@@ -156,6 +163,8 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
       const k = Math.max(0.4, Math.min(1.5, (sag - 16) / (KW + 110), (alt2 - ust2) / (KH + 70)));
       uc({ x: a.x + 10 - (sag / 2 - W / 2) / k, y: a.y - ((ust2 + alt2) / 2 - H / 2) / k, k });
     },
+    kameraKoy(k: Kamera) { uc(k); },
+    durum() { return d.kam && d.boyut && d.sahne ? { kam: { ...d.kam }, W: d.boyut[0], H: d.boyut[1], bolge: d.sahne.bolge, ist: d.sahne.ist } : null; },
   }), []);
 
   // İşaretçi: sürükleyince kaydırır, iki parmakla yakınlaşır, dokununca seçer. Çip sürükleme motor bağlanınca açılır (459/4 a).

@@ -159,3 +159,12 @@ Karar: kullanıcı, 26.10.2026 (558 okuma teyitli; 562 1 b, 562 2 b). K2 (kart #
 | STK-564a numune kalite istasyonuna (`hedefIstasyonId`) gönderilirse teslim yolda kalır, kalite Teslim al ile alır; kendi istasyonuna gönderilemez; hedef yoksa "Kalite numune" kutusu | T `teslim.test.ts` "564 1 b, 6 a: ..." ve "numune teslimi (karar 115 a, 125 a) ..." | Sürümsüz (teslim al sürümlü) |
 | STK-564b kalite istasyonunun lot reddi (`istasyonLotKarari`) emrin istasyondaki serbest parçasını en çok adet kadar redde geçirir, yoldaki ayrılanı yemez; kabul değiştirmez | T `teslim.test.ts` "564 1 b, 6 a: ..." | Sürümsüz |
 | STK-601a hurda sayımı, önceki adımın parçası istasyonda yoksa eksiye fire yazar ve uyarıyı döner (`hurdaSayimiYansitUyarili`) | T `teslim.test.ts` "iş 558: son adım ..." | Sürümsüz |
+
+## Kart #655 Tek kart okutma (614 1a, 3a)
+
+Karar: kullanıcı, 26.10.2026 (614 1a, 3a; okuma teyitli).
+
+| Kural | Bağlı olduğu | Sürüm |
+|---|---|---|
+| STK-655a refakat kartı okutulunca tek ana eylem: okutana kartla yolda gelen teslim varsa Teslim al; yoksa kartın malzemesi okutanın kapsamındaki istasyondaysa (kart açık) İşi aç; yoksa Teslim et | S `kurallar.test.ts` "614 1a tek kart"; T `teslim.test.ts` "kart #123 refakat partisi" | Sürümsüz (okuma) |
+| STK-655b stok okuması olana okutma cevabı tam çözümü (`stok`) taşır, okuması olmayana taşımaz; serbest miktar yer başına sorgu atılmadan topluca hesaplanır | T `teslim.test.ts` "kart #123 refakat partisi", "QR okut" | Sürümsüz (okuma) |

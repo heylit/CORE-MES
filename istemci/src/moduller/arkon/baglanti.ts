@@ -17,6 +17,8 @@ import { hazirlikMetni } from './kurallar.ts';
 
 // Malzeme · Teslim panelini o malzemeyle açtıran olay; panel stok modülündedir (stok/ust-eylem.tsx dinler).
 export { MALZEME_TESLIM_AC } from '../stok/disari.ts';
+// Terminalin malzeme çipi (618): işin malzeme durumu ve paneli işle açma stok modülündedir.
+export { durumMetni, isMalzemesiniAc, useIsMalzemeDurumu } from '../stok/disari.ts';
 
 // Arkon'un "sunucu adresi"; gerçek bir yol değildir, yalnız bu katman tanır.
 export const SANAL_SUNUCU = '/arkon-tmi';

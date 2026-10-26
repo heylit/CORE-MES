@@ -4,7 +4,7 @@ import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sa
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import type { CerceveSayaclari } from '../rota/cerceve-iletisi.ts';
 import { CerceveSayacBaglami, type CerceveSayacYazici } from '../rota/cerceve-sayaclari.ts';
-import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, type IkinciMenu as IkinciMenuTanimi } from '../rota/ikinci-menu.ts';
+import { IKINCI_MENU_TANIMLARI, acikIkinciMenu, menuMaddeleri, type IkinciMenu as IkinciMenuTanimi } from '../rota/ikinci-menu.ts';
 import { gecmisiSil, sonYerler, useGezinmeGecmisi } from '../rota/gezinme-gecmisi.ts';
 import { gorunenHizliIsler, type HizliIs } from '../rota/hizli-isler.ts';
 import { gorunenKomutlar, type Komut } from '../rota/komutlar.ts';
@@ -138,6 +138,9 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
     .filter((g) => g.maddeler.length > 0);
   return gruplar.length === 0 ? menu : { ...menu, gruplar };
 }
+
+// Telefonda tek maddelik şeridi çizilmeyen sayfalar: başlıkları kendi ekranlarındadır, şerit yalnız işi aşağı iter.
+const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/kuyruk']);
 
 export function Kabuk({
   sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, children,
@@ -280,6 +283,7 @@ export function Kabuk({
         ref={kok}
         className="tc-kabuk"
         data-ikinci={ikinci ? '' : undefined}
+        data-ikinci-tek={ikinci && TELEFONDA_SERITSIZ.has(ikinci.kok) && menuMaddeleri(ikinci).length === 1 ? '' : undefined}
         data-cerceveli={cerceveli ? '' : undefined}
         data-tam-ekran={tamEkranAcik ? '' : undefined}
       >

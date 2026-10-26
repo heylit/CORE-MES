@@ -1,0 +1,16 @@
+/* Tezgâh sırası aracı (w-v20 pm-v20-sira): numaralı, tutulup sürüklenen satırlar; değişen satır işaretli, sabit satır tutulmaz. */
+.tc-pys .tc-alan { display: flex; flex-direction: column; gap: var(--pay-ince); }
+.tc-pys-liste { display: flex; flex-direction: column; gap: var(--pay-ince); margin: 0; padding: 0; list-style: none; }
+.tc-pys-liste > li {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--b-1); padding: var(--pay-ince) var(--b-1);
+  border: var(--cizgi-ince) solid transparent; border-left: var(--kayma) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s);
+}
+.tc-pys-liste > li[draggable="true"] { cursor: grab; }
+.tc-pys-liste > li[data-yeni] { border-left-color: var(--sig); }
+.tc-pys-liste > li[data-sabit] { opacity: .7; }
+.tc-pys-liste > li[data-hedef] { border-color: var(--sig); }
+.tc-pys-tut { display: inline-flex; color: var(--muted); }
+.tc-pys-liste > li[data-sabit] .tc-pys-tut { visibility: hidden; }
+.tc-pys-no { min-width: var(--b-4); color: var(--muted); text-align: right; }
+.tc-pys-ic { display: flex; flex-direction: column; min-width: 0; }
+.tc-pys-ic small { overflow: hidden; color: var(--muted); font-size: var(--yazi-xs); text-overflow: ellipsis; white-space: nowrap; }
