@@ -151,6 +151,27 @@ describe('Yeni Arkon ekranı (eski düzen)', () => {
     expect(kok?.style.getPropertyValue('--tc-ay-olcek')).toBe('1');
     expect(kok?.hasAttribute('data-mobil')).toBe(true);
   }, 20000);
+
+  it('kalıcı rota sarmalayıcısında ölçüyü kutusu olan atadan alır', async () => {
+    const genislik = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-deneme-alan') ? 1280 : 0; });
+    const yukseklik = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(720);
+    const kural = document.head.appendChild(document.createElement('style'));
+    kural.textContent = '.tc-kalici-ekran { display: contents; }';
+    try {
+      sunucuKur(YONETICI);
+      arkonAc('/arkon/pano', { kalici: true });
+      await bolum('Pano');
+      const kok = document.querySelector<HTMLElement>('.tc-ay');
+      await waitFor(() => { expect(kok?.style.getPropertyValue('--tc-ay-olcek')).toBe('0.8'); });
+      expect(kok?.style.getPropertyValue('--tc-ay-vh')).toBe('900px');
+      expect(kok?.hasAttribute('data-mobil')).toBe(false);
+    } finally {
+      genislik.mockRestore();
+      yukseklik.mockRestore();
+      kural.remove();
+    }
+  }, 20000);
 });
 
 describe('Bağlantı özeti', () => {
