@@ -33,21 +33,22 @@ const LISTE: BelgeListesiCevabi = { satirlar: [SATIR], toplam: 1, sayfa: 1, sayf
 const OZET_A = 'a'.repeat(64);
 const OZET_B = 'b'.repeat(64);
 const AYRINTI: BelgeAyrintisi = {
-  id: 7, ad: 'Deneme flanş', tur: 'teknik-resim', aciklama: null, aktif: true, olusturanAd: 'Deneme Teknik',
+  id: 7, ad: 'Deneme flanş', tur: 'teknik-resim', aciklama: null, resimNo: null, aktif: true, olusturanAd: 'Deneme Teknik',
   olusturuldu: '2026-09-01T08:00:00.000Z', guncellendi: '2026-10-01T08:00:00.000Z', surum: 3,
   revizyonlar: [
     {
       id: 12, sira: 2, harf: 'B', durum: 'taslak', ozet: OZET_B, dosyaAdi: 'flans-b.pdf', dosyaTuru: 'pdf', boyut: 2048, not: 'Delik çapı',
-      yukleyenAd: 'Deneme Teknik', yuklendi: '2026-10-01T08:00:00.000Z', yayinlayanAd: null, yayinlandi: null, onizlemeKareSayisi: 0,
+      yukleyenAd: 'Deneme Teknik', yuklendi: '2026-10-01T08:00:00.000Z', yayinlayanAd: null, yayinlandi: null, onizlemeKareSayisi: 0, antetRev: null,
     },
     {
       id: 11, sira: 1, harf: 'A', durum: 'yayinda', ozet: OZET_A, dosyaAdi: 'flans-a.pdf', dosyaTuru: 'pdf', boyut: 1024, not: null,
       yukleyenAd: 'Deneme Teknik', yuklendi: '2026-09-01T08:00:00.000Z', yayinlayanAd: 'Deneme Şef', yayinlandi: '2026-09-02T08:00:00.000Z', onizlemeKareSayisi: 0,
+      antetRev: null,
     },
   ],
   baglar: [
-    { hedefModul: 'malzemeler', hedefId: 41, hedefAdi: 'MM-DNM-00001 Deneme mil', ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z' },
-    { hedefModul: 'malzemeler', hedefId: 42, hedefAdi: null, ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z' },
+    { hedefModul: 'malzemeler', hedefId: 41, hedefAdi: 'MM-DNM-00001 Deneme mil', ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z', kapak: false },
+    { hedefModul: 'malzemeler', hedefId: 42, hedefAdi: null, ekleyenAd: 'Deneme Teknik', eklendi: '2026-09-03T08:00:00.000Z', kapak: false },
   ],
 };
 

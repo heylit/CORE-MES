@@ -6,6 +6,7 @@ import { kayitHatasi, useSablonKaydet } from '../../veri.ts';
 import { useSihirbaz } from '../baglam.ts';
 import { kopyala, type Taslak } from '../durum.ts';
 import type { BenzerKart, UyumSorunu } from '../../kurallar/index.ts';
+import { ResimAlani } from '../../ortak/ResimAlani.tsx';
 import { FoyGorunumu } from '../FoyGorunumu.tsx';
 import { yeniKimlik } from '../kaydet.ts';
 import { OnayRozeti } from '../OnayRozeti.tsx';
@@ -163,7 +164,7 @@ function SablonFormu() {
 
 // Son adım (prototipte `s6` ve `gOzetHTML`).
 export function OzetAdimi() {
-  const { taslak: d, b, yetki, secim, secimYaz, adimaGec } = useSihirbaz();
+  const { taslak: d, b, yetki, secim, secimYaz, adimaGec, kartlar } = useSihirbaz();
   const genel = K.isGen(d, b);
   const kaydedildi = !!secim.sonKayit && secim.sonKayit === d.id;
   const varyantlar = genel ? [] : K.variantList(d, b);
@@ -172,6 +173,8 @@ export function OzetAdimi() {
   return (
     <>
       {kaydedildi && <KayitBandi metin="Kataloğa kaydedildi." />}
+      {/* Yeni kartın no'su kayıtla doğar: resim, PDF ve 3B model kayıttan hemen sonra buradan eklenir. */}
+      {kaydedildi && <ResimAlani tur={d.tur} no={kartlar.find((k) => k.kimlik === d.id)?.no} />}
       {!yetki.yaz && <p className="tc-my-hata">Bu katalogda değişiklik yapma iznin yok.</p>}
       {(genel ? !kaydedildi : !varyantlar.length && !kaydedildi) && <MukerrerKutusu />}
       {!genel && secim.cokluKayit && !d.id && (

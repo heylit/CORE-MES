@@ -92,7 +92,7 @@ export function BelgeSayfasi() {
   });
   const belge = sorgu.data;
   const kapat = () => { acikYaz(null); };
-  // Yayından sonra STEP/IGES revizyonun önizlemesi arka planda üretilir; karesi olan (eskiden yayında olmuş) revizyon yeniden üretilmez.
+  // Yayından sonra revizyonun önizlemesi (3B modelde dönen kareler, PDF ve fotoda küçük resim) arka planda üretilir; karesi olan (eskiden yayında olmuş) revizyon yeniden üretilmez.
   const yayinlandi = (guncel: BelgeAyrintisi, revizyonId: number) => {
     const r = guncel.revizyonlar.find((x) => x.id === revizyonId);
     if (r && onizlemeTuruMu(r.dosyaTuru) && r.onizlemeKareSayisi === 0) void onizleme.uret(guncel.id, r);
@@ -135,6 +135,7 @@ export function BelgeSayfasi() {
           <Kart baslik="Bilgi">
             <dl className="tc-cz-liste">
               <dt>Açıklama</dt><dd>{belge.aciklama ?? 'yok'}</dd>
+              <dt>Teknik resim no</dt><dd className="mono">{belge.resimNo ?? 'yok'}</dd>
               <dt>Açan</dt><dd>{belge.olusturanAd ?? 'bilinmiyor'} · <span className="mono">{zamanMetni(belge.olusturuldu)}</span></dd>
               <dt>Güncellendi</dt><dd className="mono">{zamanMetni(belge.guncellendi)}</dd>
             </dl>
@@ -146,6 +147,7 @@ export function BelgeSayfasi() {
                 <li key={r.id} className={r.id === gosterilen?.id ? 'tc-cz-secili' : undefined}>
                   <div className="tc-cz-rev-ust">
                     <b className="mono">{r.harf}</b>
+                    {r.antetRev !== null && r.antetRev !== r.harf && <span className="tc-cz-ipucu mono" title="Antet revizyonu">Antet {r.antetRev}</span>}
                     <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>
                     <span className="tc-cz-dosya">{r.dosyaAdi}</span>
                     <span className="tc-cz-ipucu mono">{r.dosyaTuru.toUpperCase()} · {boyutMetni(r.boyut)}</span>
@@ -189,7 +191,7 @@ export function BelgeSayfasi() {
                 <ul className="tc-cz-baglar">
                   {belge.baglar.map((b) => (
                     <li key={`${b.hedefModul}-${b.hedefId}`}>
-                      <span><Simge ad="tag" />{BAG_ADI[b.hedefModul]} <b className="mono">{bagHedefi(b)}</b></span>
+                      <span><Simge ad="tag" />{BAG_ADI[b.hedefModul]} <b className="mono">{bagHedefi(b)}</b>{b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}</span>
                       <span className="tc-cz-ipucu">{b.ekleyenAd ?? 'bilinmiyor'} · <span className="mono">{zamanMetni(b.eklendi)}</span></span>
                       {yazar && <Dugme simge="x" aria-label="Bağı kaldır" onClick={() => { acikYaz({ bagKaldir: b }); }} />}
                     </li>
