@@ -38,6 +38,10 @@ export type { KullanilanKaliteSatiri as KullanilanKalite } from './sorgular.ts';
 // 233 a: Rota kartın revizyonlarını veren işlevi kaydeder (Malzemeler Rota'yı ithal edemez); bağ sunucu/kablolama.ts'te.
 export type { RotaRevizyonlariCozucusu } from './servis.ts';
 export { rotaRevizyonlariCozucusuKaydet as rotaRevizyonlariCozucusu } from './servis.ts';
+// Kart #688: çizim merkezi resmi kartla teknik resim no ve revizyonla eşler. Yalnız yarı mamul ve mamulde dolu; boş ya da yalnız
+// boşluk null; olmayan kart haritada yok. Yetki denetlemez.
+export { malzemeResimAnahtarlari } from './servis.ts';
+export type { MalzemeResimAnahtari } from './servis.ts';
 // 323 b: kartın alış birimi ve katsayısı (1 alış birimi = katsayı kadar stok birimi); Satın alma siparişi tedarikçinin biriminde girer,
 // stoka kartın biriminde düşer. Yetki denetlemez.
 export { malzemeBirimDonusumleri } from './servis.ts';

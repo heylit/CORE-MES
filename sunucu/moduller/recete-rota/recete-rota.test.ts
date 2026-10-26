@@ -293,7 +293,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(d.cal.shifts.find((v) => v.name === 'RRD sabah'), {
       id: String(vardiya?.id), name: 'RRD sabah', start: '07:00', end: '15:00', breaks: [{ start: '12:00', end: '12:30' }], netDakika: 450,
     });
-    assert.deepEqual(d.cal.holidays, ['2026-05-01']);
+    assert.deepEqual(d.cal.holidays, ['2026-05-01', '2026-05-02'], '677 a: kapalı gün de tatil');
   });
 
   test('RR-14: malzeme okuması sayfa sınırında kesilir ve malzemeKesildi bunu bildirir; sınır yetiyorsa kesilmez', async () => {

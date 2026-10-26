@@ -83,6 +83,4 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Nasıl uyumlanır: Aşama 2 sahiplik listesinde tedarikçi ve aparat için sahip sorulur; sahip belli olunca liste kaynak alana geçer, ekrandaki düzenleme pasifleşir.
 
 ## Bağlamada kapanacak: tezgâh takvimi ve otomatik arıza (650 a, 651 a; kart 625g)
-- Planlama sayfası oto arıza satırını açılışta kurmaz. Bunun için `cerceve/planlama/parca/zz31-tmi.betik` `kaynakUygula`'ya `otoArizaUygula` çağrısı ayrı dalda gelecek (625g-i).
-  O gelene kadar satırı yalnız sunucu çözümü kurar, her çözümde yeniden kurar ve kaydetmez; sayfada görünmez, silinemez.
 - Sayfada duruş satırı yalnız silinip yeniden eklenerek değişir (bitiş saati yerinde düzenlenmez). Satırın nedeni ve oto işareti sayfanın tablolarında gösterilmez.

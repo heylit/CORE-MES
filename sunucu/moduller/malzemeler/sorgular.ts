@@ -284,6 +284,16 @@ export function katalogMaliyetSatirlari(db: Db, nolar: number[]): Promise<Katalo
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[])`, [nolar]);
 }
 
+export interface KatalogResimSatiri { no: number; resimNo: string | null; revizyon: string | null }
+
+// Teknik resim no ve revizyon yalnız yarı mamul ve mamulde anlamlıdır; başka türde kart null'larla döner.
+export function katalogResimSatirlari(db: Db, nolar: number[]): Promise<KatalogResimSatiri[]> {
+  return db.sorgu<KatalogResimSatiri>(
+    `SELECT k.no, CASE WHEN k.tur IN ('mamul', 'yarimamul') THEN ${KATALOG_METIN('g,resim')} END AS "resimNo",
+            CASE WHEN k.tur IN ('mamul', 'yarimamul') THEN ${KATALOG_METIN('g,rev')} END AS revizyon
+       FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[])`, [nolar]);
+}
+
 export interface KullanilanKaliteSatiri { kaliteKodu: string; aile: string | null; form: string | null; kartSayisi: number }
 
 // Aktif hammadde kartlarındaki kalite + form; kalitesi boş kart sayılmaz. Sıra: kalite, form (boş form sonda).

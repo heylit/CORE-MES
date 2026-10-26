@@ -208,6 +208,18 @@ describe('sunucu plan çözücüsü', () => {
     assert.equal(await bas(durumlu('aktif', { down: [{ m: '100', from: 10, to: 16, neden: 'arıza' }] })), '2026-10-20T05:00:00.000Z', 'elle girilen satır kalır');
   });
 
+  test('678 a: başlangıcı olmayan emir bugünün başından serbesttir; gece vardiyasında ilk vardiya saatini beklemez', async () => {
+    const d = KAYNAK.kaynak.durum;
+    const gece = { id: V, name: 'Gece', start: '00:00', end: '12:00', breaks: [] };
+    const k = { ...KAYNAK,
+      calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, vardiyalar: [{ id: V, bas: '00:00', bit: '12:00' }] } },
+      kaynak: { ...KAYNAK.kaynak, durum: { ...d, cal: { shifts: [gece], holidays: [] },
+        emirler: { ...d.emirler, orders: d.emirler.orders.map((o) => ({ ...o, start: null })) } } } };
+    // Tesiste 20.10 02:00; çalışmanın başlangıcı 19.10.
+    const r = await coz(k, istek({ simdi: new Date('2026-10-19T23:00:00Z'), kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.equal(yer(r, 'E-1|10')!.baslangic, '2026-10-19T23:00:00.000Z');
+  });
+
   test('168 b: vardiyası tanımsız tezgâhın işi vardiyasiz\'dadır, ötekiler dizilir', async () => {
     const k = { ...KAYNAK, calisma: { ...KAYNAK.calisma, D: { ...KAYNAK.calisma.D, calismaGunleri: {} } } };
     const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
