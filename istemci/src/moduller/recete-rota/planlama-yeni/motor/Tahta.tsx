@@ -3,6 +3,7 @@ import { DurumKutusu, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { otomatikOdak, tezgahGrubu, type OdakYeri } from '../ic/odak/kurallar.ts';
+import { gecmisBolumuOku } from '../ic/gecmis/kurallar.ts';
 import { bolumOku } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { CizelgeGorunumu } from './cizelge/CizelgeGorunumu.tsx';
@@ -12,6 +13,8 @@ import { KilavuzKarti } from './harita/Kilavuz.tsx';
 import { aralik, durusOku, haritaGruplari, ornekTezgah, pencereSonu, sahneKur, yerlesim, zamanSinirla } from './harita/kurallar.ts';
 import { BosCalisma, BosPlan } from './BosPlan.tsx';
 import { usePlanKur } from './coz.ts';
+import { canliPlani, useCanliPlan } from './fark.ts';
+import { FarkSeridi } from './ust/FarkSeridi.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
 import { MOTOR_NOTU } from './ortak.tsx';
@@ -36,20 +39,24 @@ const VeriVeKisitlar = lazy(async () => ({ default: (await import('../ic/veri/in
 const NasilHesaplandi = lazy(async () => ({ default: (await import('../ic/hesap/index.tsx')).NasilHesaplandi }));
 const BugununKararlari = lazy(async () => ({ default: (await import('../ic/bugun/index.tsx')).BugununKararlari }));
 // Odak tahtası (577a, zg-odak): görünümün yerinde bir bölüm ya da tek tezgâh; tezgâh kartının Odakla'sı ve O tuşu açar.
+// Geçmiş (577c, b-kabuk EKRANLAR gecmis): Senaryolar ve Değişiklik izi; plan çubuğunun Geçmiş düğmesi ve adres (`?ekran=gecmis`) açar.
+const GecmisEkrani = lazy(async () => ({ default: (await import('../ic/gecmis/index.tsx')).GecmisEkrani }));
 const OdakTahtasi = lazy(async () => ({ default: (await import('../ic/odak/index.tsx')).OdakTahtasi }));
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
+export const gecmisAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'gecmis', bolum: bolum ?? null }) : null);
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma; const veriAc = veriAcici(o);
   const ekran = o.alt?.ekran ?? 'tahta';
-  if (ekran === 'veri' || ekran === 'hesap' || ekran === 'bugun') {
+  if (ekran === 'veri' || ekran === 'hesap' || ekran === 'bugun' || ekran === 'gecmis') {
     return (
       <>
         <PlanSeridi {...o} gorunum="plan" />
         <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
           {ekran === 'veri' ? <VeriVeKisitlar {...o} bolum={bolumOku(o.alt?.bolum) ?? undefined} bolumSec={(b) => veriAc?.(b)} />
+            : ekran === 'gecmis' ? <GecmisEkrani {...o} bolum={gecmisBolumuOku(o.alt?.bolum) ?? undefined} bolumSec={(b) => gecmisAcici(o)?.(b)} />
             : ekran === 'hesap' ? <NasilHesaplandi {...o} /> : <BugununKararlari {...o} />}
         </Suspense>
       </>
@@ -71,6 +78,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [nasil, setNasil] = useState<BolgeKimligi | null>(null);
   const [acikGrup, setAcikGrup] = useState<string | null>(null);
   const [mercek, setMercek] = useState<'durum' | 'etki'>('durum');
+  const [fark, setFark] = useState(false);
   const [kilavuz, setKilavuz] = useState(false);
   const [ornek, setOrnek] = useState<string | null>(null);
   const [ks, setKs] = useState<KesifDurumu>(KESIF_ILK);
@@ -103,7 +111,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const sekSec = (x: PanelSekmesi) => setSekD({ k: psAnahtar, x });
 
   const studyo = useCallback(() => o.git('studio'), [o]);
-  const veriAc = veriAcici(o); const sayfaAc = sayfaAcici(o);
+  const veriAc = veriAcici(o); const sayfaAc = sayfaAcici(o); const gecmisAc = gecmisAcici(o);
   const nabizAc = useCallback((x: boolean) => setNbAcik(x), []);
   const menuAc = useCallback((x: boolean) => setMenuAcik(x), []);
   const ypAc = useCallback((x: boolean) => { setYpAcik(x); if (x) setPan(null); }, []);
@@ -189,20 +197,23 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   }, []);
 
   const { refSec, sabitle, sabitAd } = nabizYazmalari(c, komut, yetki, p, nabiz);
+  const canliD = useCanliPlan(fark, c, p, o.depo.senaryolar?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null);
+  const farkPlani = useMemo(() => (p && canliD.tur === 'tamam' && Object.keys(canliD.canli).length ? canliPlani(p, canliD.canli) : null), [p, canliD]);
   const d: OzetDurumu = { nasil, acikGrup, secJob, secTez: secim.tezgah, zaman };
   const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
       donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
-      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc }} />
+      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), fark, farkSec: () => setFark((x) => !x), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc }} />
   );
   const cubuk = cubukKur(false);
 
   return (
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
-      <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
+      <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} gecmis={gecmisAc && (() => gecmisAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
+          {fark && !odak && <FarkSeridi d={canliD} p={p} kapat={() => setFark(false)} />}
           {odak && p ? (
             <>
               {cubuk}
@@ -212,7 +223,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             </>
           ) : gorunum === 'atolye' && p ? (
             <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
-              kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} />
+              kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} fark={farkPlani} />
           ) : (
             <>
               {p && v && gorunum !== 'cizelge' && cubuk}
@@ -224,7 +235,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                   <Ozet c={c} p={p} cx={cx} v={v} d={d} r={r} olcek={donem} now={now} secim={secim} sec={sec} mercek={mercek} komut={komutKur} kilavuz={kilavuz ? ornek : null}
                     kilavuzKapat={() => kilavuzAc(false)}
                     tezGrup={tezGrup} nasilAc={nasilAc} grupAc={grupAc} sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} buyut={() => gorunumSec('atolye')} ciftTik={ciftTik}
-                    kartAc={ps ? kartAc : null} />
+                    kartAc={ps ? kartAc : null} fark={farkPlani} />
                 </>
               ) : gorunum === 'cizelge' ? (
                 // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.

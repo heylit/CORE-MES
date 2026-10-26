@@ -514,3 +514,12 @@
   .tc-pym-oz { grid-template-columns: minmax(0, 1fr); grid-template-areas: "oz" "ha" "yo" "be" "yu" "su" "ya"; padding: var(--b-2); }
   .tc-pym-oz-yer { height: calc(var(--b-6) * 10); }
 }
+
+/* Önceki planla fark satırı (x-resim pm-rs-fark) */
+.tc-pym-fark {
+  display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-2); padding: var(--b-1) var(--b-2) var(--b-1) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-left: var(--cizgi-kalin) solid var(--hazard); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s);
+}
+.tc-pym-fark > span { flex: 1 1 auto; min-width: 0; }
+.tc-pym-fark > .tc-simge { flex: none; color: var(--hazard-ink); }
+.tc-pym-fark[data-ton="hata"] { border-left-color: var(--stop); }

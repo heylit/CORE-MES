@@ -21,6 +21,7 @@ interface Ozellikler {
   secim: PlanlamaSecimi; sec: (s: Partial<PlanlamaSecimi>) => void; mercek: 'durum' | 'etki';
   kilavuz: boolean; ornek: string | null; kilavuzAc: (v: boolean) => void; ciftTik: (m: string) => void;
   ust: ReactNode; komut?: (k: HaritaKomutu | null) => void;
+  fark?: OkunanPlan | null;
 }
 
 export function HaritaGorunumu(o: Ozellikler) {
@@ -73,7 +74,7 @@ export function HaritaGorunumu(o: Ozellikler) {
         ref={komutKur} bicim="harita" c={c} p={p} cx={cx} olcek={o.olcek} r={r} now={now} t={t} oynat={oynat} hiz={hiz}
         secim={o.secim} mercek={o.mercek} kilavuz={o.kilavuz ? o.ornek : null} altPay={altPay} paylar={paylar}
         sec={secHarita} ciftTik={o.ciftTik} oynatDegistir={oynatDegistir} kilavuzKapat={() => o.kilavuzAc(false)}
-        zamanAkti={setCanli} oynatBitti={bitti}
+        zamanAkti={setCanli} oynatBitti={bitti} fark={o.fark}
         etiket="Atölye haritası: istasyonlar tezgâhlar, halkalar yedi günlük doluluk, yaylar parça akışı, noktalar akan parçalar. Tıklayarak seçin, çipleri başka istasyona sürükleyerek taşıyın."
       />
       <div ref={ustEl} className="tc-pym-at-ust">{o.ust}</div>

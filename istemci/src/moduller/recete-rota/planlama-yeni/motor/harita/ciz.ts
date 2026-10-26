@@ -8,7 +8,8 @@ import {
 import { rgba, type HaritaRenkleri, type Rgb } from './renk.ts';
 
 // Haritanın çizimi (y-atolye atCiz, z-komuta kmKartCiz): teknik resim zemini, bölgeler, akış yayları, seçili siparişin yolculuğu, yoldaki
-// parçalar, tezgâh kartları, yolculuk durakları ve kılavuz işaretleri. Sürükleme ve önceki planla fark bu teslimde çizilmez.
+// parçalar, tezgâh kartları, yolculuk durakları ve kılavuz işaretleri. Önceki planla fark açıkken (ref) değişen yay, doluluk ve sıra çipi
+// kesik sarı çizilir. Sürükleme bu teslimde çizilmez.
 export type Kutu =
   | { tur: 'ist'; m: string; x: number; y: number; w: number; h: number }
   | { tur: 'cip'; id: string; job: string; m: string; x: number; y: number; w: number; h: number }
@@ -22,6 +23,8 @@ export interface Cizim {
   // Saniye (animasyon), girişten beri geçen ms, plan değişince eski doluluktan geçişin oranı (0-1).
   zaman: number; giris: number; gecis: { dol: Sahne['dol']; u: number } | null;
   oynat: boolean; az: boolean; isRenk: (j: string) => Rgb;
+  // Karşılaştırılan planın (son canlı) sahnesi; kapalıysa null.
+  ref: { s: Sahne; ops: Record<string, PlanIslemi> } | null;
 }
 
 const kolay = (u: number) => 1 - Math.pow(1 - u, 3);
@@ -63,11 +66,13 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     const a = s.ist[e.a], b = s.ist[e.b]; if (!a || !b) continue; const c = yay(a, b);
     const secte = !!sj && e.j.has(sj); const ilgili = !!hvM && (e.a === hvM || e.b === hvM);
     g.globalAlpha = Math.max(0, Math.min(1, (o.giris - 500) / 600)) * (hvM && !ilgili ? 0.2 : 1);
+    const fark = !!o.ref && o.ref.s.kenar[`${e.a}>${e.b}`]?.n !== e.n;
     const genis = Math.max(1, (1 + 4 * e.n / enCok) * Math.min(1.3, k * 1.5));
     yayYol(c); g.lineWidth = genis + (ilgili ? 1.5 : 0);
-    g.strokeStyle = secte ? rgba(R.done) : ilgili ? rgba(e.a === hvM ? R.done : R.hold) : rgba(R.bp, sj ? 0.1 : 0.26);
-    g.stroke();
-    if (!sj && !o.az) {
+    g.strokeStyle = secte ? rgba(R.done) : ilgili ? rgba(e.a === hvM ? R.done : R.hold) : fark ? rgba(R.hazard) : rgba(R.bp, sj ? 0.1 : 0.26);
+    if (fark && !secte) g.setLineDash([6, 4]);
+    g.stroke(); g.setLineDash([]);
+    if (!sj && !fark && !o.az) {
       g.setLineDash([2, 14]); g.lineDashOffset = -o.zaman * (o.oynat ? 40 : 14); g.lineWidth = Math.max(1.2, genis * 0.7); g.strokeStyle = rgba(ilgili ? R.ink : R.bp, 0.55);
       yayYol(c); g.stroke(); g.setLineDash([]); g.lineDashOffset = 0;
     }
@@ -147,6 +152,8 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
         const v = dol[i]; const bx = x0 + 10 + i * sl, by = y0 + 80, bh = 24;
         g.fillStyle = rgba(R.edge2, 0.28); g.fillRect(ox(bx), oy(by - bh), (sl - 3) * k, bh * k);
         if (v != null) { const hh = Math.max(1.5, Math.min(1, v) * bh); g.fillStyle = v > 0.97 ? rgba(R.stop) : v > 0.75 ? rgba(R.hazard) : rgba(R.run, 0.8); g.fillRect(ox(bx), oy(by - hh), (sl - 3) * k, hh * k); }
+        const rf = o.ref?.s.dol[a.m]?.[i] ?? null;
+        if (rf != null && v != null && Math.abs(v - rf) > 0.05) { g.strokeStyle = rgba(R.hazard); g.lineWidth = 1.5; g.setLineDash([3, 2]); g.strokeRect(ox(bx) - 1, oy(by - bh) - 1, (sl - 3) * k + 2, bh * k + 2); g.setLineDash([]); }
         if (i === gT) { g.fillStyle = rgba(R.done); g.fillRect(ox(bx), oy(by + 2), (sl - 3) * k, 2 * k); }
         yazi(dilimAdi(o.D, o.olcek, o.r, i), ox(bx + (sl - 3) / 2), oy(by + 11), 7.5, i === gT ? R.ink : R.muted, i === gT, 'center');
       }
@@ -155,7 +162,8 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
       st.sira.forEach((r, i) => {
         const cx0 = ox(x0 + 40 + i * 22), cy0 = oy(y0 + 97), cw = 19 * k, ch = 12 * k; const secili = !!sj && r.job === sj;
         g.fillStyle = rgba(o.isRenk(r.job)); yuvarlak(g, cx0, cy0, cw, ch, 3 * k); g.fill();
-        g.lineWidth = secili ? 2 : 1; g.strokeStyle = secili ? rgba(R.done) : rgba(R.ink, 0.3); g.stroke();
+        const rr = o.ref?.ops[r.id]; const fark = !!o.ref && (!rr || !Number.isFinite(rr.S) || rr.m !== r.m || Math.abs(rr.S - r.S) > 0.25);
+        g.lineWidth = secili ? 2 : 1; g.strokeStyle = secili ? rgba(R.done) : fark ? rgba(R.hazard) : rgba(R.ink, 0.3); if (fark && !secili) g.setLineDash([3, 2]); g.stroke(); g.setLineDash([]);
         kutu.push({ tur: 'cip', id: r.id, job: r.job, m: a.m, x: cx0 - 2, y: cy0 - 3, w: cw + 4, h: ch + 6 });
       });
       if (st.bekleyen > 5) yazi(`+${st.bekleyen - 5}`, ox(x0 + 40 + 5 * 22), oy(y0 + 106), 8.5, R.muted, true);
