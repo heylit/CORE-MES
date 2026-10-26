@@ -79,7 +79,9 @@ describe('recete-rota durum çevirisi (saf)', () => {
     const i = istasyonCevir({ id: 5, kod: 'IS-5', ad: 'Tezgah', isMerkeziId: 1, tip: 'talasli', aktif: true }, { verimYuzde: '85.00', operatorIhtiyaci: '0.50' }, 2);
     assert.deepEqual(i, { id: '5', code: 'IS-5', name: 'Tezgah', wcId: '1', eff: 85, opPer: 0.5, count: 2, cost: null, aktif: true });
     const k = kisiCevir({ id: 9, ad: 'Ali', sicilNo: '100' }, 5, new Map([[5, 1]]), [5, 6]);
-    assert.deepEqual(k, { id: '9', name: 'Ali', code: '100', role: null, stationId: '5', stationAtama: true, wcId: '1', shiftId: null, skills: ['5', '6'], cost: null, active: true });
+    assert.deepEqual(k, { id: '9', name: 'Ali', code: '100', role: null, stationId: '5', stationAtama: true, wcId: '1', shiftId: null, skills: ['5', '6'], cost: null, active: true, machines: [], maxMachines: null });
+    const makineli = kisiCevir({ id: 9, ad: 'Ali', sicilNo: '100' }, 5, new Map([[5, 1]]), [5], { makineler: [20, 21], enCok: 2 });
+    assert.deepEqual([makineli.machines, makineli.maxMachines], [['20', '21'], 2]);
   });
 
   test('RR-D5: plan ayarı olmayan istasyon %100 verim ve 1 operatör; ataması olmayan kişinin iş merkezi null', () => {

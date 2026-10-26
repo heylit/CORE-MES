@@ -215,7 +215,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(bos.moves, [], 'tam yetkili kullanıcıya stok hareketi dilimi gelir; henüz hareket yok');
     assert.equal(bos.people.some((k) => k.id === String(yazarId)), true);
     assert.deepEqual(bos.people.find((k) => k.id === String(yazarId)), {
-      id: String(yazarId), name: 'Deneme yazar', code: null, role: null, stationId: null, stationAtama: false, wcId: null, shiftId: null, skills: [], cost: null, active: true,
+      id: String(yazarId), name: 'Deneme yazar', code: null, role: null, stationId: null, stationAtama: false, wcId: null, shiftId: null, skills: [], cost: null, active: true, machines: [], maxMachines: null,
     });
   });
 
@@ -270,6 +270,12 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const ist2 = await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('RRD2-2', 'İkinci', $1, true) RETURNING id", [merkez?.id]);
     await vt().sorgu("INSERT INTO istasyon_kisi (istasyon_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, '2020-01-01', 100)", [ist1?.id, yazarId]);
     await vt().sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2), ($1, $3)', [yazarId, ist1?.id, ist2?.id]);
+    // 563 c, 563 2 a: makine yetkinliği yalnız makinenin istasyonunda geçerli yetkinlikle gelir; başka istasyondaki makine gelmez.
+    const mk1 = await vt().tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('RRD2-M1', 'Birinci makine', $1) RETURNING id", [ist1?.id]);
+    const ist3 = await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('RRD2-3', 'Üçüncü', $1, true) RETURNING id", [merkez?.id]);
+    const mk3 = await vt().tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('RRD2-M3', 'Üçüncü makine', $1) RETURNING id", [ist3?.id]);
+    await vt().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $1), ($1, $3, $1)', [yazarId, mk1?.id, mk3?.id]);
+    await vt().sorgu('INSERT INTO istasyonlar_kisi_tezgah_siniri (kisi_id, en_cok, degistiren_kisi_id) VALUES ($1, 2, $1)', [yazarId]);
     const vardiya = await vt().tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('RRD sabah', '07:00', '15:00') RETURNING id");
     await vt().sorgu("INSERT INTO vardiya_molasi (vardiya_id, baslangic, bitis) VALUES ($1, '12:00', '12:30')", [vardiya?.id]);
     await vt().sorgu("INSERT INTO vardiya_takvim_gunu (tarih, tur, ad) VALUES ('2026-05-01', 'tatil', 'Emek'), ('2026-05-02', 'kapali', 'Köprü')");
@@ -283,6 +289,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal(d.units.some((b) => b.kod === 'kg' && b.aktif), true);
     const kisi = d.people.find((k) => k.id === String(yazarId));
     assert.deepEqual({ wcId: kisi?.wcId, skills: [...(kisi?.skills ?? [])].sort() }, { wcId: String(merkez?.id), skills: [String(ist1?.id), String(ist2?.id)].sort() });
+    assert.deepEqual({ machines: kisi?.machines, maxMachines: kisi?.maxMachines }, { machines: [String(mk1?.id)], maxMachines: 2 });
     assert.deepEqual(d.cal.shifts.find((v) => v.name === 'RRD sabah'), {
       id: String(vardiya?.id), name: 'RRD sabah', start: '07:00', end: '15:00', breaks: [{ start: '12:00', end: '12:30' }], netDakika: 450,
     });

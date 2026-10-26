@@ -16,7 +16,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { emirDilimi, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, makineDurumlari, operasyonTipleri, planAyarlari,
+  aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, kisiTezgahSinirlari, makineDurumlari, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
@@ -210,6 +210,8 @@ export async function durum(
   const kisiler = kisiOkur ? await kisiSecenekleri(db) : [];
   const kisiIstasyonlari = kisiOkur && istasyonOkur ? await istasyonKisileri(db) : [];
   const yetkinlikler = kisiOkur && istasyonOkur ? await istasyonYetkinlikleri(db) : [];
+  const makineYetkinlik = kisiOkur && istasyonOkur ? await makineYetkinlikleri(db) : [];
+  const tezgahSinirlari = kisiOkur && istasyonOkur ? await kisiTezgahSinirlari(db) : [];
   const maliyet = maliyetOkur
     ? maliyetCevir(
       await birimMaliyetleri(db, 'malzeme'), await birimMaliyetleri(db, 'istasyon'), await birimMaliyetleri(db, 'kisi'),
@@ -235,6 +237,9 @@ export async function durum(
   const kisiIstasyonu = new Map(kisiIstasyonlari.map((k) => [k.kisiId, k.istasyonId]));
   const kisiYetkinlikleri = new Map<number, number[]>();
   for (const y of yetkinlikler) kisiYetkinlikleri.set(y.kisiId, [...(kisiYetkinlikleri.get(y.kisiId) ?? []), y.istasyonId]);
+  const kisiMakineleri = new Map<number, number[]>();
+  for (const y of makineYetkinlik) kisiMakineleri.set(y.kisiId, [...(kisiMakineleri.get(y.kisiId) ?? []), y.makineId]);
+  const kisiSiniri = new Map(tezgahSinirlari.map((t) => [t.kisiId, t.enCok]));
 
   return {
     items: malzemeOkur ? kartlar.map((k) => malzemeCevir(k, stoklar.get(k.id))) : null,
@@ -243,7 +248,10 @@ export async function durum(
     wcs: istasyonOkur ? merkezler.map(isMerkeziCevir) : null,
     stations: istasyonOkur ? istasyonListesi.map((i) => istasyonCevir(i, ayarHaritasi.get(i.id), makineSayilari.get(i.id) ?? 0)) : null,
     machines: istasyonOkur ? makineler.map((m) => makineCevir(m, makineDurumu.get(m.id))) : null,
-    people: kisiOkur ? kisiler.map((k) => kisiCevir(k, kisiIstasyonu.get(k.id), istasyonMerkezi, kisiYetkinlikleri.get(k.id) ?? [])) : null,
+    people: kisiOkur
+      ? kisiler.map((k) => kisiCevir(k, kisiIstasyonu.get(k.id), istasyonMerkezi, kisiYetkinlikleri.get(k.id) ?? [],
+        { makineler: kisiMakineleri.get(k.id) ?? [], enCok: kisiSiniri.get(k.id) ?? null }))
+      : null,
     routes: rotaOkur ? rota.routes : null,
     routeRevs: rotaOkur ? rota.routeRevs : null,
     fasonFirms: fasonFirmalari === null ? null : fasonFirmalari.map((f) => ({ id: String(f.id), code: f.kod, name: f.ad })),
