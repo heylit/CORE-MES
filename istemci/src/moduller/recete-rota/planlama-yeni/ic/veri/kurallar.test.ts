@@ -103,10 +103,13 @@ describe('Veri ve kısıtlar hesapları', () => {
     ]);
   });
 
-  it('veri denetimi motorun denetimidir: örnek kayıtta 10 bulgu, test kaydında dört tür', () => {
+  it('veri denetimi motorun denetimidir: örnek kayıtta 10 bulgu, test kaydında dört tür; eski kısıt sürümünde personel kapalı sayılır', () => {
     const o = ornekCalisma();
     expect(veriDenetimi(o, derle(girdiKur(o, plandanBitenler(o, planOku(o)))))).toHaveLength(10);
     const c = calismaKur();
     expect(veriDenetimi(c, cxKur(c)).map((b) => b.k)).toEqual(['personel', 'ayar', 'tezgah', 'amac']);
+    const eski = calismaKur((x) => { delete (x as { kisitSurum?: number }).kisitSurum; });
+    expect(eski.kapali).toEqual(['tatil', 'personel']);
+    expect(veriDenetimi(eski, cxKur(eski)).map((b) => b.k)).toEqual(['ayar', 'tezgah', 'amac']);
   });
 });

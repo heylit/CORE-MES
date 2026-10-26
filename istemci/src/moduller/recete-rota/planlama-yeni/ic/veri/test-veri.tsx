@@ -12,7 +12,7 @@ import { yetkiKur } from '../../yetki.ts';
 import { VeriVeKisitlar } from './index.tsx';
 
 // "Veri ve kısıtlar" testlerinin uydurma çalışması. Ad, kod ve sayılar uydurmadır. Başlangıç 2026-10-19 Pazartesi 00:00.
-// Planda bütün adımlar var (plandan biten adım çıkarılmaz). Freze grubunda V1'de kimse yok (personel bulgusu), T1'de A ve B aileleri var ve B → A geçişi tanımsız, S3'ün ürünü yok ve termini yok.
+// Kısıt sürümü güncel (kisitSurum 2): kapalı liste kullanıcının kararıdır, personel kısıtı açıktır (561 2 a). Planda bütün adımlar var (plandan biten adım çıkarılmaz). Freze grubunda V1'de kimse yok (personel bulgusu), T1'de A ve B aileleri var ve B → A geçişi tanımsız, S3'ün ürünü yok ve termini yok.
 export const CALISMA_DEGERI = {
   surum: 2,
   dataVer: 3,
@@ -53,6 +53,7 @@ export const CALISMA_DEGERI = {
   down: [{ m: 'T1', from: 31, to: 39 }],
   ekMesai: [{ m: 'T2', gun: 5, vardiya: 'V1' }],
   kapali: ['tatil'],
+  kisitSurum: 2,
   bedel: { dataVer: 3, temel: { wT: 10, late: 1 }, zaman: null, liste: [{ id: 'tatil', dW: 0.2 }, { id: 'ariza', dW: 4 }] },
   plan: { dataVer: 3, ops: {
     'S1.10': { job: 'S1', m: 'T1', S: 7, C: 20 }, 'S1.20': { job: 'S1', m: 'T2', S: 20, C: 90 },
