@@ -8,11 +8,11 @@ import { saatYaz, saatYazi, type Derleme, type OkunanPlan, type PlanIslemi } fro
 import { MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
 
 // Düzenle menüsü ve Değişiklikler (zp-klavye.betik): seçilene göre numaralı komutlar; sayıya basmak komutu çalıştırır. Plana dokunan
-// komutlar motorun hamlesiyle gelir, görünür ve pasiftir (357 b); sabitlemek çalışmaya yazar (223 a). Tezgâh sırası aracı yeni ekranda yok.
-export type KbPanel = 'dz' | 'sp' | 'kl';
+// komutlar motorun hamlesiyle gelir, görünür ve pasiftir (357 b); sabitlemek çalışmaya yazar (223 a). Tezgâhın "sırasını düzenle"si Tezgâh sırası aracını açar.
+export type KbPanel = 'dz' | 'sp' | 'kl' | 'sr';
 export type KbHedef = { k: 'is' | 'sip'; r: PlanIslemi } | { k: 'tez'; m: string };
-// `alt`: komut menüyü kapatmaz, alt listeye geçer.
-export interface KbKomut { ad: string; simge: SimgeAdi; ipucu: string; yap: (() => void) | null; not: string; alt?: boolean }
+// `alt`: komut menüyü kapatmaz, alt listeye geçer. `pencere`: komut köşede kendi penceresini açar, menü onunla kapanır.
+export interface KbKomut { ad: string; simge: SimgeAdi; ipucu: string; yap: (() => void) | null; not: string; alt?: boolean; pencere?: boolean }
 
 const kbTez = (m: string) => (m.startsWith('@') ? `fason ${m.slice(1)}` : m);
 const HEDEF_AD: Record<KbHedef['k'], string> = { is: 'İş adımı', sip: 'Sipariş', tez: 'Tezgâh' };
@@ -31,7 +31,7 @@ export function kbHedefler(p: OkunanPlan, cx: Derleme, s: PlanlamaSecimi): KbHed
 }
 export const kbBaglam = (l: KbHedef[], hedef: KbHedef['k'] | null): KbHedef | null => l.find((h) => h.k === hedef) ?? l[0] ?? null;
 
-interface Baglam { c: PlanlamaCalismasi; cx: Derleme; komut: CalismaKomutu | null; altAc: () => void }
+interface Baglam { c: PlanlamaCalismasi; cx: Derleme; komut: CalismaKomutu | null; altAc: () => void; siraAc?: ((m: string) => void) | null }
 const motor = (ad: string, simge: SimgeAdi, ipucu: string): KbKomut => ({ ad, simge, ipucu, yap: null, not: MOTOR_NOTU });
 // Yapabilen tezgâhlar, süresi kısadan uzuna, en çok dokuz.
 function tasiKomutlari(o: Baglam, r: PlanIslemi): KbKomut[] {
@@ -42,7 +42,7 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
   if (!b) return [];
   if (b.k === 'tez') {
     return [
-      { ad: `${kbTez(b.m)} sırasını düzenle`, simge: 'sort', ipucu: 'sürükleyerek ya da oklarla', yap: null, not: YOK_NOTU },
+      { ad: `${kbTez(b.m)} sırasını düzenle`, simge: 'sort', ipucu: 'sürükleyerek ya da oklarla', yap: o.siraAc && !b.m.startsWith('@') ? () => o.siraAc?.(b.m) : null, not: YOK_NOTU, pencere: true },
       motor(`${kbTez(b.m)} bugün boşalt`, 'next', 'bugünkü işler yapabilen tezgâhlara'), motor(`${kbTez(b.m)} tamamen boşalt`, 'next', 'bütün bekleyen işler taşınır'),
     ];
   }
@@ -61,7 +61,7 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
     } : null,
   });
   l.push(motor(`${r.job} siparişini havuza geri al`, 'box', 'plandan çıkar, sonra yeniden yerleştirilir'));
-  l.push({ ad: `${kbTez(r.m)} sırasını düzenle`, simge: 'sort', ipucu: 'tezgâhın bütün kuyruğu', yap: null, not: YOK_NOTU });
+  l.push({ ad: `${kbTez(r.m)} sırasını düzenle`, simge: 'sort', ipucu: 'tezgâhın bütün kuyruğu', yap: o.siraAc && !r.m.startsWith('@') ? () => o.siraAc?.(r.m) : null, not: YOK_NOTU, pencere: true });
   return l;
 }
 

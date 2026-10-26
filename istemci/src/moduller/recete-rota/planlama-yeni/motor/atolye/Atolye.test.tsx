@@ -36,13 +36,13 @@ const DEPO = {
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean } = {}) {
+function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile,
+    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
@@ -66,6 +66,28 @@ const kart = () => screen.getByRole('dialog');
 const guncel = () => { const c = ornekCalisma(); if (c.plan) c.plan.dataVer = c.dataVer; return c; };
 
 describe('PlanlamaAtolyesi', () => {
+  it('stüdyo isteği: tezgâhta süzgeç ve tezgâh günlüğü, siparişte ray ve sipariş; işlenince adresten silinir; her rolde aynı', () => {
+    const gor = (yaz: boolean) => {
+      const studyoAc = vi.fn();
+      ac({ yaz, istek: { tur: 'tez', v: '1' }, studyoAc });
+      const k = screen.getByRole('dialog', { name: '1 günlüğü' });
+      expect(studyoAc).toHaveBeenCalledWith(null);
+      // Arıza bildir ve Ek mesai kartın yazan rolündeki pasif düğmeleridir; gerisi aynıdır.
+      const l = [k.getAttribute('aria-label'), ...within(k).getAllByRole('button').map((x) => x.textContent).filter((x) => x !== 'Arıza bildir' && x !== 'Ek mesai')];
+      cleanup(); return l;
+    };
+    expect(gor(false)).toEqual(gor(true));
+    const studyoAc = vi.fn();
+    ac({ istek: { tur: 'sip', v: '3' }, studyoAc });
+    expect(document.querySelector('.tc-pym-tp-govde')?.hasAttribute('data-ray')).toBe(true);
+    expect(screen.getAllByRole('button', { expanded: true }).some((b) => b.classList.contains('tc-pym-tp-sip-tus') && b.textContent?.startsWith('3'))).toBe(true);
+    expect(studyoAc).toHaveBeenCalledWith(null);
+    cleanup();
+    ac({ istek: { tur: 'tez', v: 'yok' }, studyoAc });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(studyoAc).toHaveBeenCalledTimes(2);
+  });
+
   it('kimlik satırı, üç sekme ve onay sayısı; geri düğmesi motora döner', () => {
     const { git } = ac();
     expect(screen.getByText('Canlı sürüm 3')).toBeTruthy();
@@ -328,7 +350,40 @@ describe('PlanlamaAtolyesi', () => {
     expect(yazilan.at(-1)?.w.dondurma).toBe(8);
     fireEvent.click(within(kart()).getByRole('button', { name: 'Hafta' }));
     expect(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { pressed: true }).textContent).toBe('Hafta');
-    expect(within(kart()).getByRole('button', { name: 'Atölye ekranı' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('Atölye ekranı: Diğer menüsünden açılır; canlı plan sunucudan, okunurken, canlı yokken ve varken; tezgâh durumu, sıradaki, geciken; Esc ve Çık kapatır; her rolde aynı', async () => {
+    let cevap: Promise<unknown> = new Promise(() => undefined);
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? cevap : Promise.reject(new Error('yok')))) as never);
+    const ekran = () => screen.getByRole('region', { name: 'Atölye ekranı' });
+    const ekranAc = (yaz = true) => { ac({ yaz }); fireEvent.click(screen.getByRole('button', { name: 'Diğer' })); fireEvent.click(within(kart()).getByRole('button', { name: 'Atölye ekranı' })); };
+    ekranAc();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(within(ekran()).getByText('Canlı plan okunuyor.')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Atölye ekranı' })).toBeNull();
+    cleanup();
+    cevap = Promise.resolve({ planSurumu: 0, isler: [] });
+    ekranAc();
+    await waitFor(() => expect(within(ekran()).getByText(/Henüz canlı plan yok/)).toBeTruthy());
+    cleanup();
+    const iso = (t: number) => new Date(Date.UTC(2026, 9, 19) - 3 * 3_600_000 + t * 3_600_000).toISOString();
+    const is = (k: string, m: number, S: number, C: number) => ({ k, anahtar: `E|${k}`, isEmriId: 1, uretimEmriId: 1, taban: null, canli: { kaynak: { tur: 'makine', id: m }, baslangic: iso(S), bitis: iso(C), parcalar: [] } });
+    cevap = Promise.resolve({ planSurumu: 3, isler: [is('3.10', 1, 7, 9), is('3.20', 1, 20, 400)] });
+    const gor = async (yaz: boolean) => {
+      ekranAc(yaz);
+      const t1 = await within(ekran()).findByRole('region', { name: 'Tezgâh 1' });
+      const l = ekran().textContent;
+      expect(t1.getAttribute('data-durum')).toBe('calisiyor');
+      expect(within(t1).getByText(/Sıradaki:/).textContent).toContain('3');
+      expect(within(ekran()).getByRole('region', { name: 'Tezgâh 4' }).getAttribute('data-durum')).toBe('bos');
+      expect(within(screen.getByRole('complementary', { name: 'Geciken' })).getByText(/^Geciken · \d+$/)).toBeTruthy();
+      fireEvent.click(within(ekran()).getByRole('button', { name: 'Çık' }));
+      expect(screen.queryByRole('region', { name: 'Atölye ekranı' })).toBeNull();
+      cleanup(); return l;
+    };
+    expect(await gor(false)).toEqual(await gor(true));
+    get.mockRestore();
   });
 
   it('sabah brifingi günün ilk açılışında (gün tarayıcıda); gün başı açılışta çalışmaya sessiz yazılır', () => {

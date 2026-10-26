@@ -101,7 +101,7 @@ interface SagOzellikleri {
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; secim: PlanlamaSecimi; secJob: string | null;
   sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
-  veriAc: ((bolum: string) => void) | null; hesapAc: (() => void) | null;
+  veriAc: ((bolum: string) => void) | null; hesapAc: (() => void) | null; tezStudyo: ((m: string) => void) | null;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;

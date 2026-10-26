@@ -7,11 +7,12 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { MOTOR_NOTU } from '../ortak.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
+import { AtolyeEkrani } from './AtolyeEkrani.tsx';
 import { Brif, Bugun } from './Bugun.tsx';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
+  secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 
@@ -28,7 +29,7 @@ export interface Ortam {
   opSec: (id: string, a?: Ankraj) => void; sipSec: (j: string) => void; sipGoster: (j: string) => void; opGit: (id: string) => void;
   kartAc: (k: AcikKart, a?: Ankraj) => void; kartKapat: () => void;
   olcek: AtolyeOlcegi; olcekSec: (z: AtolyeOlcegi) => void; sekSec: (s: AtolyeSekmesi) => void;
-  bugunAc: (x: boolean) => void; brifAc: () => void;
+  bugunAc: (x: boolean) => void; brifAc: () => void; atolyeAc: () => void;
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
@@ -59,6 +60,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   useEffect(() => { if (brif) brifGunuYaz(bugun); }, [brif, bugun]);
   const [kart, setKart] = useState<{ k: AcikKart; a: Ankraj | null } | null>(null);
   const [parla, setParla] = useState<string | null>(null);
+  const [atolye, setAtolye] = useState(false);
   const kap = useRef<HTMLDivElement | null>(null);
   const pano = useRef<HTMLDivElement | null>(null);
   const yaz = komut !== null && yetki.planYaz;
@@ -86,6 +88,16 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     });
   }, [p, sec]);
   useEffect(() => { if (!parla) return undefined; const z = setTimeout(() => setParla(null), 1600); return () => clearTimeout(z); }, [parla]);
+  // Başka ekrandan gelen istek (zz36 istekIsle): tezgâhta süzgeç ve tezgâh günlüğü, siparişte ray ve sipariş; işlenince adresten silinir.
+  const istek = useRef({ i: o.istek ?? null, c, cx, sipGoster, studyoAc: o.studyoAc });
+  istek.current = { i: o.istek ?? null, c, cx, sipGoster, studyoAc: o.studyoAc };
+  const istekAnahtari = o.istek ? `${o.istek.tur}|${o.istek.v}` : null;
+  useEffect(() => {
+    const x = istek.current; const i = x.i; if (!i) return;
+    if (i.tur === 'tez' && x.cx.M[i.v]) { suzSec(suzKoy(x.c.D, null, 'm', i.v)); setKart({ k: { tur: 'gunluk', m: i.v }, a: null }); }
+    else if (i.tur === 'sip' && x.cx.jobs[i.v]) x.sipGoster(i.v);
+    x.studyoAc?.(null);
+  }, [istekAnahtari]);
   const brifKapat = useCallback(() => setBrif(false), []);
   // Gün başı ve bugünün özeti çalışmaya sessiz yazılır (eski gunBasla, gunKaydet; iz, bildirim ve geri alma yok).
   useEffect(() => {
@@ -135,7 +147,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
 
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
-    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, sen, senYaz,
+    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
   };
   const ozet = p.ozet;
   const farkli = !fark || fark.farkli || !planGuncel(c);
@@ -201,6 +213,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <Bugun ort={ort} acik={bugunAcik} />
       </div>
       {kart && <KartKatmani ort={ort} kart={kart.k} ankraj={kart.a} bildir={bildir} />}
+      {atolye && <AtolyeEkrani c={c} p={p} cx={cx} now={now} canliSurum={sen?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null} kapat={() => setAtolye(false)} />}
     </div>
   );
 }

@@ -1,24 +1,26 @@
 import { useEffect, useRef } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
+import { KART_TURLERI, type KartTuru } from '../../ic/kartlar/kurallar.ts';
 import { HAZIRLANIYOR, YOK_NOTU } from '../ortak.tsx';
 
-// "Başka" menüsü (zj-gorunum sgMenu, zk-kabuk, zo-kontrol, zp-klavye): kartlar, tahtada gösterilenler, düzen ve sayfalar. Kartlar ve
-// tahtadaki katmanlar haritayla ve keşifle gelir; menü dışı sayfaların yeni ekranda karşılığı yoktur (459/5 a).
-const KARTLAR: [string, SimgeAdi][] = [
-  ['Plan', 'target'], ['Siparişler', 'list'], ['Kuyruklar', 'sort'], ['Senaryolar', 'layers'], ['Kısıt ve veri', 'gear'], ['Hesaplar', 'chart'],
-  ['Ne neyi etkiliyor', 'scan'], ['Reçete ve Rota', 'tool'],
-];
+// "Başka" menüsü (zj-gorunum sgMenu, zk-kabuk, zo-kontrol, zp-klavye): kartlar, tahtada gösterilenler, düzen ve sayfalar. Kartlar haritanın
+// üstüne açılır (577d, zc-tahta), 1-8 tuşları da açıp kapatır; menü dışı sayfaların yeni ekranda karşılığı yoktur (459/5 a).
 interface Madde { ad: string; simge: SimgeAdi; not?: string; tus?: string; basili?: boolean; yap?: () => void; dugme?: boolean }
 // Haritanın katmanları menüden açılır: önceki planla fark (son canlı plan, 577c), gecikme kaynağı, kılavuz ve klavye kısayolları (P1b).
 export interface BaskaDurumu {
   mercek: 'durum' | 'etki'; mercekSec: () => void; fark: boolean; farkSec: () => void; kilavuz: boolean; kilavuzAc: () => void; kisayolAc: () => void; planYaz: boolean;
   // Plan ekranının sayfaları (zk-kabuk sgMenu Sayfalar); verilmezse pasif.
   sayfaAc?: ((s: 'bugun' | 'hesap') => void) | null;
+  // Tahta kartları: açık olanlar, hazır olanlar (öbürleri pasif), aç-kapat ve bölgelere diz; verilmezse hepsi pasif.
+  kartlar?: { acik: KartTuru[]; hazir: KartTuru[]; degistir: (t: KartTuru) => void; diz: () => void } | null;
 }
 function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
   return [
-    { ad: 'Kartlar', l: KARTLAR.map(([ad, simge], i) => ({ ad, simge, not: HAZIRLANIYOR, tus: String(i + 1) })) },
+    { ad: 'Kartlar', l: KART_TURLERI.map(({ tur, ad, simge }, i): Madde => {
+      const k = b.kartlar; const tus = String(i + 1);
+      return k?.hazir.includes(tur) ? { ad, simge, tus, basili: k.acik.includes(tur), yap: () => k.degistir(tur) } : { ad, simge, tus, not: HAZIRLANIYOR };
+    }) },
     { ad: 'Tahtada göster', l: [
       { ad: 'Önceki planla fark', simge: 'eye', basili: b.fark, yap: b.farkSec },
       { ad: 'Gecikme kaynağı', simge: 'chart', basili: b.mercek === 'etki', yap: b.mercekSec },
@@ -26,7 +28,7 @@ function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
     ] },
     { ad: 'Düzen', l: [
       b.planYaz ? { ad: 'Klavye kısayolları', simge: 'help', tus: '?', yap: b.kisayolAc, dugme: true } : { ad: 'Klavye kısayolları', simge: 'help', tus: '?', not: 'Plan yazma yetkiniz yok.' },
-      { ad: 'Kartları bölgelere diz', simge: 'grid', not: HAZIRLANIYOR },
+      b.kartlar?.acik.length ? { ad: 'Kartları bölgelere diz', simge: 'grid', yap: b.kartlar.diz, dugme: true } : { ad: 'Kartları bölgelere diz', simge: 'grid', not: b.kartlar ? 'Açık kart yok.' : HAZIRLANIYOR },
     ] },
     { ad: 'Sayfalar', l: [
       b.sayfaAc ? { ad: 'Bugünün kararları', simge: 'check', yap: () => b.sayfaAc?.('bugun'), dugme: true } : { ad: 'Bugünün kararları', simge: 'check', not: YOK_NOTU },
