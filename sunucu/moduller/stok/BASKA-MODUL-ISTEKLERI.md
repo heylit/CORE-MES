@@ -83,3 +83,7 @@ Mal kabulde depocu kartı müşteri parça no, teknik resim no, tedarikçi kodu 
 - Kablolama: sayım uyarısı için `disari.ts uretimSayimiYansitUyarili` hazır; kablolamanın ona geçmesi Dal 11 tarafında.
 
 - Üretim Emirleri (kart #492): `disari.ts` emir no ile kimlik çözümü (`emirNoCoz(db, metin)`), malzeme fişi listesinde emir no ile arama için. Gelene kadar arama yalnız önekli fiş no ile.
+
+## uretim-emirleri: hurda sayımında stok uyarısı (iş 558)
+
+- Hurdanın payı istasyonda yoksa stok artık eksiye fire yazar; ama `hurdaSayimiYansit` `void` döner ve kablolamadaki `hurdaSayimDinle` sonuç okumaz, bu yüzden hurdada uyarı toplanmaz ve operatöre gitmez. İstenen: hurda bağı da sağlam sayımdaki gibi `{ uyari }` taşısın; stok tarafı hazırlanınca `disari.ts`'e `hurdaSayimiYansitUyarili` eklenir. Bugün aynı eksik başlatma ve sağlam sayım uyarısında görünür.

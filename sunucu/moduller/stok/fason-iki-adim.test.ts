@@ -364,7 +364,17 @@ describe('stok fason iki adım (gerçek PostgreSQL)', () => {
       const b3 = await terminal(id, 'baslat');
       assert.equal(b3.durum, 200, JSON.stringify(b3.govde));
       assert.equal((await terminal(id, 'sayim', { tur: 'saglam', adet: 3 })).durum, 200);
-      assert.equal(await hmBakiye(kabulKonumu, s20), 0, 'son adım fasondan dönen HM\'yi tüketir');
+      // 562 1 b: fasondan dönüp kabulde bekleyen parça da teslimsiz düşülmez; son adım istasyonunda eksiye düşer, teslimle kapanır.
+      const k3 = await konum(m3);
+      assert.deepEqual([await hmBakiye(kabulKonumu, s20), await hmBakiye(k3, s20)], [7.5, -7.5], 'son adım kabule dokunmaz, istasyonda eksi düşer');
+      const ist3 = (await o().sahip.tek<{ id: number }>('SELECT istasyon_id AS id FROM makine WHERE id = $1', [m3]))!.id;
+      const g = await istek<{ teslim: { id: number; surum: number } }>('depo', 'POST', '/stok/teslimler/gonder', {
+        malzemeId: hm, miktar: '7.5', statuId: s20, not: null, kaynakKimligi: randomUUID(), kaynak: { konumId: kabulKonumu }, hedef: { istasyonId: ist3 },
+      });
+      assert.equal(g.durum, 200, JSON.stringify(g.govde));
+      const al = await istek('operator', 'POST', `/stok/teslimler/${String(g.govde.teslim.id)}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '7.5' });
+      assert.equal(al.durum, 200, JSON.stringify(al.govde));
+      assert.deepEqual([await hmBakiye(kabulKonumu, s20), await hmBakiye(k3, s20)], [0, 0], 'teslim alınınca eksi kapanır: son adım fasondan dönen HM\'yi tüketmiş olur');
       assert.equal(await bakiye('k.tur', 'istasyon', id), 3, 'ürün son adımın istasyonuna girer');
     } finally {
       adimStatusuCozucusuKaydet(async () => null);
