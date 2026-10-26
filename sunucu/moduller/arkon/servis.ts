@@ -21,14 +21,14 @@ import { AZAMI_DOSYA, DOSYA_PARCASI } from '#paylasilan/sozlesme/arkon.ts';
 import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
-import { ilkParcaKarari, ilkParcaKararlari, muayenePlaniOner } from '../kalite-merkezi/disari.ts';
+import { ilkParcaKarari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner } from '../kalite-merkezi/disari.ts';
 import {
   eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
 } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, uretimGirdiUyarisi } from '../stok/disari.ts';
+import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
 import { adimEtkinSureleriToplu, gecerliTalimat, girdisiEksikRevizyonlar, revizyonGetir } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -41,7 +41,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci,
+  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -51,7 +51,7 @@ import {
   adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
-  plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
+  plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
@@ -713,7 +713,12 @@ export async function belgeYaz(
   let govde = await arizayiAcanaBagla(db, depo, guncel?.govde, kisiAlanlariniDoldur(depo, kimlik, guncel?.govde, onayOzetiDamgala(depo, yenidenKarariDamgala(depo, stokBaginiAt(depo, g.govde), guncel?.govde, Date.now(), yeniKarar ? await sorgular.paketIstekleri(db, kimlik) : [], yeniKarar ? await sorgular.parcaSaglami(db, kimlik, null) : 0), guncel?.govde, icerikOzeti), kullanici.ad));
   if (stok !== null) govde = { ...(govde as object), stokIstek: await stoktaIstekAc(db, kullanici, kimlik, stok.girdi) };
   if (depo === 'requests') govde = numuneTesliminiKoru(govde, guncel?.govde);
-  if (numune !== null) { const teslim = await numuneyiTeslimEt(db, kullanici, numune); if (teslim !== null) govde = { ...(govde as object), numuneTeslim: teslim }; }
+  if (numune !== null) {
+    const teslim = await numuneyiTeslimEt(db, kullanici, numune);
+    if (teslim.kaliteIstasyonu !== null) govde = { ...(govde as object), kaliteIstasyonu: teslim.kaliteIstasyonu };
+    if (teslim.teslim !== null) govde = { ...(govde as object), numuneTeslim: teslim.teslim };
+  }
+  if (depo === 'results') govde = await lotKarariniYaz(db, kullanici, rol, kimlik, govde, guncel?.govde);
   if (depo === 'requests') await ilkParcaKarariniYaz(db, kullanici, govde, guncel?.govde);
   await sorgular.belgeYaz(db, depo, kimlik, govde, surum, kullanici.id);
   await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: depo, id: kimlik });
@@ -790,13 +795,56 @@ async function stoktaIstekAc(db: Db, kullanici: Kullanici, kimlik: string, g: St
 
 // Teslim açılmazsa (stok atladı, istasyon bilinmiyor ya da paket iş emrine bağlı değil) numune isteği yine yazılır: numune stok yüzünden durmaz.
 // Stok iş emrini ister; üretim emri paketinde (tmi-ue) iş emri bilinmediği için teslim açılmaz.
-async function numuneyiTeslimEt(db: Db, kullanici: Kullanici, g: NumuneTeslimGirdisi): Promise<{ id: number; no: string } | null> {
-  if (g.isEmriId === null) return null;
-  const istasyon = (await istasyonlar(db, { pasiflerDahil: false })).find((i) => i.kod === g.istasyonKodu);
+// 564 1 b: emrin sonraki kalite adımı varsa numune o istasyona yolda gider (kalite "Teslim al" ile alır) ve istek o istasyonla işaretlenir.
+async function numuneyiTeslimEt(db: Db, kullanici: Kullanici, g: NumuneTeslimGirdisi): Promise<{ teslim: { id: number; no: string } | null; kaliteIstasyonu: string | null }> {
+  const yok = { teslim: null, kaliteIstasyonu: null };
+  if (g.isEmriId === null) return yok;
+  const hepsi = await istasyonlar(db, { pasiflerDahil: false });
+  const istasyon = hepsi.find((i) => i.kod === g.istasyonKodu);
   const uretimEmriId = (await isEmriOzeti(db, g.isEmriId))?.uretimEmriId ?? null;
-  if (istasyon === undefined || uretimEmriId === null) return null;
-  const sonuc = await numuneTeslimi(db, { uretimEmriId, isEmriId: g.isEmriId, istasyonId: istasyon.id, kisiId: kullanici.id, adet: g.miktar, kaynakKimligi: g.kaynakKimligi });
-  return 'teslim' in sonuc ? sonuc.teslim : null;
+  if (istasyon === undefined || uretimEmriId === null) return yok;
+  const kaliteKodu = await emrinKaliteIstasyonu(db, uretimEmriId, g.isEmriId, hepsi);
+  const hedef = kaliteKodu === null ? undefined : hepsi.find((i) => i.kod === kaliteKodu);
+  const sonuc = await numuneTeslimi(db, {
+    uretimEmriId, isEmriId: g.isEmriId, istasyonId: istasyon.id, kisiId: kullanici.id, adet: g.miktar, kaynakKimligi: g.kaynakKimligi,
+    ...(hedef === undefined ? {} : { hedefIstasyonId: hedef.id }),
+  });
+  return { teslim: 'teslim' in sonuc ? sonuc.teslim : null, kaliteIstasyonu: kaliteKodu };
+}
+async function emrinKaliteIstasyonu(db: Db, uretimEmriId: number, isEmriId: number, hepsi: readonly { id: number; kod: string; tip: string }[]): Promise<string | null> {
+  const emir = await adimliEmirAyrintisi(db, uretimEmriId).catch(() => null);
+  if (emir === null) return null;
+  const tipler = new Map(hepsi.map((i) => [i.id, i]));
+  return kaliteIstasyonuSec(emir.isEmirleri.map((a) => {
+    const ist = a.istasyon === null ? undefined : tipler.get(a.istasyon.id);
+    return { id: a.id, sira: a.sira, istasyonKodu: ist?.kod ?? null, istasyonTipi: ist?.tip ?? null };
+  }), isEmriId);
+}
+
+// 564 6 a, 600 a: kalite istasyonunun lot kararı Kalite Merkezi'nin lot kaydıdır (lotKarariYaz; kararı AQL planı ve bulunan sayılar verir,
+// terminalin Kabul/Red'i onunla tutmazsa yazım durur). Ret, emrin istasyondaki parçasını stokta redde geçirir (stok.istasyonLotKarari).
+// Lot büyüklüğü paketin hedefidir (TMI alanı); kayıt anahtarı paket ve terminalin karar anıdır, yeniden gönderim ikinci kayıt açmaz.
+async function lotKarariniYaz(db: Db, kullanici: Kullanici, rol: ArkonRolu, kimlik: string, govde: unknown, onceki: unknown): Promise<unknown> {
+  const girdi = lotKarariGirdisi(govde, onceki);
+  if (girdi === null) return lotKarariKoru(govde, onceki);
+  if (girdi === 'lotKarariVar') throw yetkiYok(ILETILER.lotKarariVar);
+  if (girdi === 'lotKarariGecersiz') throw dogrulama(ILETILER.lotKarariGecersiz, 'lotKarari');
+  if (!KALITE_KARARI_ROLLERI.includes(rol)) throw yetkiYok(ILETILER.kaliteKarari);
+  const lot = lotPaketi((await sorgular.belge(db, 'pkgs', kimlik))?.govde);
+  const isEmriId = paketIsEmri(kimlik);
+  const emirId = paketEmri(kimlik) ?? (isEmriId === null ? null : (await isEmriOzeti(db, isEmriId))?.uretimEmriId ?? null);
+  const istasyon = lot === null ? undefined : (await istasyonlar(db, { pasiflerDahil: false })).find((i) => i.kod === lot.istasyonKodu);
+  if (lot === null || emirId === null || istasyon === undefined || istasyon.tip !== 'kalite') throw dogrulama(ILETILER.lotPaketi, 'lotKarari');
+  const { N } = lot;
+  const kayit = await lotKarariYaz(db, kullanici, {
+    kaynak: 'arkon', kaynakAnahtari: `${kimlik}:${girdi.anahtar}`, uretimEmriId: emirId, parcaNo: lot.parcaNo, parcaAdi: lot.parcaAdi, N,
+    ayar: null, bulunan: girdi.bulunan, not: girdi.not,
+  });
+  if (kayit.karar !== girdi.istenen) throw dogrulama(ILETILER.lotKarariTutmadi, 'lotKarari');
+  const stoga = kayit.karar === 'Ret' && kayit.yeni
+    ? await istasyonLotKarari(db, { uretimEmriId: emirId, isEmriId, istasyonId: istasyon.id, kisiId: kullanici.id, karar: 'ret', adet: String(N), lotNo: kayit.no })
+    : null;
+  return lotKarariDamgala(govde, kullanici.ad, { no: kayit.no, karar: kayit.karar, ...(stoga === null ? {} : { redde: stoga }) });
 }
 
 // İstek formunun malzeme seçicisi: stoklanan, aktif kartlar (hizmet stoklanmaz).

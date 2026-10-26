@@ -9,7 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
-import { ilkParcaNumuneKarari, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { ilkParcaNumuneKarari, kaliteIstasyonuSec, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -203,6 +203,42 @@ test('564 2 a: kalite istasyonu lot planı Kalite Merkezi hesabından; tek Ac ma
   assert.deepEqual([t.n, t.ac, t.re, t.siddet, t.seviye, t.siniflar.length], [50, 1, 2, 'Normal', 'II', 3]);
   assert.deepEqual(tmiAqlPlani({ durduruldu: true }), { durduruldu: true });
   assert.equal(tmiAqlPlani({ gecersiz: true }), null);
+});
+
+test('564 1 b: numune emrin bu adımdan sonraki ilk kalite istasyonuna gider; önceki ya da kalite olmayan adım seçilmez', () => {
+  const a = (id: number, sira: number, istasyonKodu: string | null, istasyonTipi: string | null) => ({ id, sira, istasyonKodu, istasyonTipi });
+  const rota = [a(3, 3, 'KAL2', 'kalite'), a(1, 1, 'KAL0', 'kalite'), a(2, 2, 'TOR', 'uretim'), a(4, 4, 'KAL3', 'kalite')];
+  assert.equal(kaliteIstasyonuSec(rota, 2), 'KAL2', 'sıraya göre sonraki ilk kalite adımı');
+  assert.equal(kaliteIstasyonuSec(rota, 3), 'KAL3');
+  assert.equal(kaliteIstasyonuSec(rota, 4), null, 'son adım');
+  assert.equal(kaliteIstasyonuSec(rota, 9), null, 'rotada olmayan adım');
+  assert.equal(kaliteIstasyonuSec([a(1, 1, 'TOR', 'uretim'), a(2, 2, null, 'kalite')], 1), null, 'istasyonsuz kalite adımı');
+});
+
+test('564 6 a, 600 a: kalite istasyonu lot kararı; Red ölçü ve gerekçe ister, sayısız sınıf null, verilen karar değişmez', () => {
+  const lk = (ek: Record<string, unknown>) => ({ lotKarari: { karar: 'kabul', bulunan: { Kritik: 0, Majör: 0, Minör: null }, at: 5, ...ek } });
+  assert.deepEqual(lotKarariGirdisi(lk({}), undefined), { istenen: 'Kabul', bulunan: { Kritik: 0, Majör: 0, Minör: null }, not: null, anahtar: '5' });
+  assert.equal(lotKarariGirdisi({ meas: {} }, undefined), null, 'lot kararı yok');
+  assert.equal(lotKarariGirdisi(lk({ bulunan: { Kritik: null, Majör: null, Minör: null } }), undefined), 'lotKarariGecersiz', 'hiç sayı yok');
+  assert.equal(lotKarariGirdisi(lk({ bulunan: { Kritik: -1 } }), undefined), 'lotKarariGecersiz');
+  assert.equal(lotKarariGirdisi(lk({ bulunan: { Majör: 1.5 } }), undefined), 'lotKarariGecersiz');
+  assert.equal(lotKarariGirdisi(lk({ karar: 'belki' }), undefined), 'lotKarariGecersiz');
+  assert.equal(lotKarariGirdisi(lk({ at: undefined }), undefined), 'lotKarariGecersiz');
+  assert.equal(lotKarariGirdisi(lk({ karar: 'ret', not: 'çapak' }), undefined), 'lotKarariGecersiz', 'Red kusurlu sayısı ister');
+  assert.equal(lotKarariGirdisi(lk({ karar: 'ret', bulunan: { Majör: 3 } }), undefined), 'lotKarariGecersiz', 'Red gerekçe ister');
+  assert.deepEqual(lotKarariGirdisi(lk({ karar: 'ret', bulunan: { Majör: 3 }, not: '  çapak ' }), undefined),
+    { istenen: 'Ret', bulunan: { Kritik: null, Majör: 3, Minör: null }, not: 'çapak', anahtar: '5' });
+  const kayitli = { lotKarari: { ...lk({}).lotKarari, by: 'K', kayit: { no: 'LOT-1', karar: 'Kabul' } } };
+  assert.equal(lotKarariGirdisi(kayitli, kayitli), null, 'aynısının yeniden yazılması');
+  assert.equal(lotKarariGirdisi({ meas: {} }, kayitli), null, 'alanı taşımayan yazım');
+  assert.equal(lotKarariGirdisi(lk({ karar: 'ret', not: 'x', bulunan: { Majör: 2 } }), kayitli), 'lotKarariVar');
+  assert.deepEqual(lotKarariKoru({ meas: {} }, kayitli), { meas: {}, lotKarari: kayitli.lotKarari }, 'kayıtlı karar istemciden ezilmez');
+  assert.deepEqual(lotKarariKoru({ meas: {} }, { lotKarari: 1 }), { meas: {} });
+  assert.deepEqual(lotKarariDamgala(lk({}), 'K', { no: 'LOT-1', karar: 'Kabul' }), kayitli);
+  assert.deepEqual(lotPaketi({ target: 40, partNo: 'P', part: 'Parça', machine: 'KAL' }), { N: 40, parcaNo: 'P', parcaAdi: 'Parça', istasyonKodu: 'KAL' });
+  assert.deepEqual(lotPaketi({ target: 40, partNo: 'P', machine: 'KAL' }), { N: 40, parcaNo: 'P', parcaAdi: null, istasyonKodu: 'KAL' });
+  assert.equal(lotPaketi({ target: '40', partNo: 'P', machine: 'KAL' }), null);
+  assert.equal(lotPaketi(undefined), null);
 });
 
 test('564 5 a: ilk parça numunesinin Kabul/Red\'i Kalite Merkezi kararıdır; durum değişmezse, kapı dışı ölçüde ve operatör ölçüsünde karar yok', () => {
@@ -471,6 +507,7 @@ test('numune teslimi (115 a, 125 a): yalnız yeni bekleyen numune isteği teslim
   const bag = { id: 5, no: 'T-5' };
   assert.deepEqual(numuneTesliminiKoru({ ...istek, numuneTeslim: { id: 99 } }, undefined), istek, 'istemcinin bağı atılır');
   assert.deepEqual(numuneTesliminiKoru({ ...istek, status: 'approved' }, { ...istek, numuneTeslim: bag }), { ...istek, status: 'approved', numuneTeslim: bag });
+  assert.deepEqual(numuneTesliminiKoru({ ...istek, kaliteIstasyonu: 'SAHTE' }, { ...istek, kaliteIstasyonu: 'KAL' }), { ...istek, kaliteIstasyonu: 'KAL' }, '564 1 b: kalite istasyonu yalnız sunucudan');
 });
 
 test('131 b: kapı açıkken ilk sağlamdan sonrası karar bekler; düzeltme ve hurda beklemez; yansıma yalnız sunucunun alanını okur', () => {
