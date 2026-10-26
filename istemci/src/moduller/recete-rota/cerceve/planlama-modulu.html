@@ -4977,7 +4977,8 @@ function rrCevir(st) {
     /* teslim yoksa termin de yoktur (kural 5): "null 17:00" ya da uydurma tarih yazılmaz */
     const due = rrTarih(o.due) || null;
     if (!a || (rrTarih(a.termin) || null) !== due) y.termin = due ? due + ' ' + (rrSaat(a && a.termin) || '17:00') : null;
-    if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
+    if (!a || (rrTarih(a.serbest) || bas) !== o.start) y.serbest = o.start && o.start !== bas ? o.start + ' ' + (o.serbestSaat || rrSaat(a && a.serbest) || ilkVardiya) : (a ? a.serbest : null);
+    else if (o.serbestSaat && a.serbest && rrSaat(a.serbest) !== o.serbestSaat) y.serbest = o.start !== bas ? o.start + ' ' + o.serbestSaat : null;
     if (!a || a.oncelik !== o.priority) y.oncelik = +o.priority || 0;
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
     if (!a || (a.ad || '') !== (o.note || '')) y.ad = o.note || o.no || o.id;
@@ -5208,7 +5209,8 @@ function sunucuKaydi(kayit, durum, D0, bugun) {
     const eskiEmir = new Map((k.orders || []).map(x => [String(x.id), x]));
     k.orders = e.orders.map(x => {
       const plan = sip0(x.id) || (eskiEmir.get(x.id) || {}).plan;
-      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || null, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, plan ? { plan } : {});
+      /* 678 a: başlangıcı olmayan emir bugünün başından serbesttir; ilk vardiyanın saati (kayıtta takvim yokken 08:00) beklenmez */
+      return Object.assign({ id: x.id, no: x.no, itemId: x.itemId, qty: x.qty, start: x.start || bugun, due: x.due || null, priority: x.priority, status: x.status, note: x.note || '', sunucu: true }, x.start ? {} : { serbestSaat: '00:00' }, plan ? { plan } : {});
     });
   }
   return k;
