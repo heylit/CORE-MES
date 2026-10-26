@@ -11,9 +11,10 @@ Kullanıcı kararları 2026-10-26: 615-2 a, 632 a (yarı otomatik, tek kontroll�
 
 Kullanıcı kararı 2026-10-26: 614 1a (tek kart), 3a (eski kart uyarısı); okuma teyitli. Göç yok.
 - `GET /stok/teslim-kutusu/kod-coz`: refakat kartı cevabına `anaEylem` (`teslim-al`, `isi-ac`, `teslim-et`; kural `refakatAnaEylemi`). İşi aç koşulu başka modüle sorulmaz: kartın malzemesi okutanın kapsamındaki istasyonda; iş başka istasyondaysa terminal söyler.
+- Yeni cevap türleri: `raf` (raf etiketi, açık gözler) ve `eski-kart` (`UE:<emir>`). Önceden ikisi de `bilinmiyor` dönüyordu.
 - Stok okuması olana malzeme ve yer cevabı `stok` alanında `/stok/kod-coz` çözümünü taşır; panelin ikinci isteği istemci adımında kalkar. `/stok/kod-coz` ucu değişmedi.
 - Malzeme ve lot cevabında serbest miktar artık okutulan bakiyelerden ve tek yoldaki ayrılanlar sorgusundan (`konumlardakiYoldaAyrilanlar`) çıkar; önceden her yer için konumun bütün bakiyeleri ve yoldakileri ayrı okunuyordu. Sonuç aynı.
-- Eklenen alanlar isteğe bağlıdır; istemci değişmeden derlenir. Raf etiketi, eski kart ve tek kart ekranı istemci yamasında.
+- İstemci yaması: yeni türler ve tek kart ekranı (`okut-akisi.ts`, panel) aynı yamada girer.
 
 # FARK: stok, siparişsiz satın alma kabulü reddi (kart #99; soru 104 a)
 

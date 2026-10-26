@@ -1056,6 +1056,11 @@ export const konumdakiYoldaAyrilanlar = (db: Db, konumId: number): Promise<{ mal
 export const konumlardakiYoldaAyrilanlar = (db: Db, malzemeId: number, konumIdler: number[]): Promise<{ konumId: number; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
   konumIdler.length === 0 ? Promise.resolve([]) : db.sorgu(`SELECT kaynak_konum_id AS "konumId", parti_id AS "partiId", statu_id AS "statuId", kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar
     FROM stok_teslim WHERE durum = 'yolda' AND malzeme_id = $1 AND kaynak_konum_id = ANY($2::int[]) GROUP BY kaynak_konum_id, parti_id, statu_id, kalite_durumu`, [malzemeId, konumIdler]);
+// Raf etiketi (RAF:<kod>) rafı kodla bulur; kapalı raf okunmaz. Kod depolar arasında tekrar ederse etiket rafı ayırt etmez, null döner.
+export const rafKoduyla = async (db: Db, kod: string): Promise<{ id: number; kod: string } | null> => {
+  const r = await db.sorgu<{ id: number; kod: string }>('SELECT id, kod FROM stok_raf WHERE aktif AND kod = upper($1) ORDER BY id LIMIT 2', [kod]);
+  return r.length === 1 ? r[0]! : null;
+};
 // Teslimin stok hareketi geri alınınca teslim iptal sayılır (kart #1410): hareket bağı iz için kalır, alınan boşalır.
 export const teslimGeriAlindi = (db: Db, hareketId: number, kisiId: number): Promise<{ id: number; istekId: number | null } | null> =>
   db.tek(`UPDATE stok_teslim SET durum = 'iptal', alinan = NULL, kapatan_kisi_id = $2, kapanis = now(), surum = surum + 1
