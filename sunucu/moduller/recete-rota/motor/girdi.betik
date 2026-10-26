@@ -468,7 +468,8 @@ const GEVSEK = {
   tatil: st => { st.D.tatiller = []; },
   ariza: st => { st.down = []; },
   tampon: st => { st.w.tampon = false; },
-  personel: st => { for (const m of st.D.tezgahlar) m.opOran = 0; },
+  /* oran yalnız kapasiteden düşer; operatör ücreti (durum.betik ymUygula) asıl oranla sayılır */
+  personel: st => { for (const m of st.D.tezgahlar) { m.opMaliyet = m.opOran == null ? 1 : +m.opOran; m.opOran = 0; } },
   yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) p.gruplar = g.slice(); },
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },

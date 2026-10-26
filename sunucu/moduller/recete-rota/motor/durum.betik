@@ -111,7 +111,7 @@ function wipAyar(D = cerceveD()) { return { ...WIP0, ...((D && D.planTL && D.pla
 function ymAyar(D = cerceveD()) { return { ...YM0, ...((D && D.planTL) || {}) }; }
 function ymUygula(st, S) {
   const D = st.D; const Y = ymAyar(S.D);
-  if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opOran == null ? 1 : +m.opOran);
+  if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opMaliyet != null ? m.opMaliyet : m.opOran == null ? 1 : +m.opOran);
   const mats = Object.fromEntries((D.malzemeler || []).map(m => [m.kod, m]));
   for (const s of D.siparisler) for (const r of s.malzeme || []) { const m = mats[r.kod]; if (m && m.fire > 0) r.miktar = +r.miktar * (1 + m.fire / 100); }
   for (const f of D.fasoncular || []) if (f.tasima > 0 && f.fiyat != null) f.fiyat = +f.fiyat + +f.tasima;
