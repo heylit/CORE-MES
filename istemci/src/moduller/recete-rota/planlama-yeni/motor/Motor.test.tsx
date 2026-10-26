@@ -17,11 +17,11 @@ afterEach(cleanup);
 
 // İş emri durumu okunamamış depo: biten iş kayıtlı plandan çıkar.
 const DEPO = { durum: null } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null } = {}) {
+function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile: vi.fn(),
+    depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile: vi.fn(), ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
   };
   render(<BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici>);
@@ -321,7 +321,7 @@ describe('PlanlamaMotoru', () => {
     const dz = screen.getByRole('dialog', { name: 'Düzenle' });
     expect(within(dz).getByText('İş adımı')).toBeTruthy();
     expect(within(dz).getByRole('button', { name: /3 siparişini öne al/ }).getAttribute('title')).toContain(MOTOR_NOTU);
-    expect(within(dz).getByRole('button', { name: /sırasını düzenle/ }).getAttribute('title')).toContain(YOK_NOTU);
+    expect(within(dz).getByRole('button', { name: /sırasını düzenle/ }).getAttribute('aria-disabled')).toBeNull();
     fireEvent.keyDown(document, { key: 'ArrowRight' });
     expect(screen.getByText(`İşi kaydırmak: ${MOTOR_NOTU}`)).toBeTruthy();
     fireEvent.keyDown(document, { key: '6' });
@@ -337,6 +337,25 @@ describe('PlanlamaMotoru', () => {
     fireEvent.keyDown(ara, { key: 'Enter' });
     fireEvent.click(screen.getByRole('button', { name: /^Düzenle\s*E$/ }));
     expect(within(screen.getByRole('dialog', { name: 'Düzenle' })).getByRole('button', { name: /1 bugün boşalt/ }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Düzenle' })).getByRole('button', { name: /1 sırasını düzenle/ }));
+    expect(screen.queryByRole('dialog', { name: 'Düzenle' })).toBeNull();
+    const sr = screen.getByRole('dialog', { name: 'Tezgâh sırası' });
+    expect(within(sr).getByRole('list', { name: '1 kuyruğu' })).toBeTruthy();
+    expect((within(sr).getByRole('combobox', { name: 'Tezgâh' }) as HTMLSelectElement).value).toBe('1');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Tezgâh sırası' })).toBeNull();
+  });
+
+  it('tezgâhın Stüdyoda aç düğmesi atölyeye tezgâh isteğiyle gider', () => {
+    const studyoAc = vi.fn();
+    ac({ studyoAc });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Ayrıntı' }));
+    const ara = screen.getByRole('combobox', { name: 'Sipariş ya da tezgâh bul' });
+    fireEvent.change(ara, { target: { value: '1' } });
+    fireEvent.keyDown(ara, { key: 'Enter' });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Tezgâh 1' })).getByRole('button', { name: 'Stüdyoda aç' }));
+    expect(studyoAc).toHaveBeenCalledWith({ tur: 'tez', v: '1' });
   });
 
   it('plan yazma yetkisi yoksa sepet açılmaz, karar eylemleri yazmaz', () => {

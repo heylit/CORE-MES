@@ -11,10 +11,12 @@ import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
 
 // Ayrıntı sekmesinin seçim panelleri: iş (c-masa.betik opDenetci), sipariş (isDenetci), tezgâh (o-tahta.betik tbTezPaneli).
-// Tezgâh stüdyosu yeni ekranda yok (459/5 a). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
+// Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
 export interface DenetciOzellikleri {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; komut: CalismaKomutu | null; planYaz: boolean; planKilitle: boolean;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; mercekSec: (m: CizelgeMercegi) => void; kuyrukAc: (m: string) => void;
+  // Tezgâh stüdyosu: Planlama atölyesinin panosu tezgâhı süzer ve günlüğünü açar (zz36 istek); verilmezse pasif.
+  tezStudyo?: ((m: string) => void) | null;
 }
 
 const kisaId = (id: string) => id.slice(id.lastIndexOf('.') + 1);
@@ -195,7 +197,7 @@ export function TezgahDenetci({ m, ...o }: DenetciOzellikleri & { m: string }) {
         <dt>Doluluk</dt><dd>{u ? yuzdeYaz(u.u) : '—'}</dd>
         <dt>Sırada</dt><dd>{ops.length} iş</dd>
       </dl>
-      <div className="tc-pym-dugmeler"><Dg ad="Stüdyoda aç" simge="wrench" birincil not={YOK_NOTU} /></div>
+      <div className="tc-pym-dugmeler"><Dg ad="Stüdyoda aç" simge="wrench" birincil yap={o.tezStudyo && !fason ? () => o.tezStudyo?.(m) : null} not={YOK_NOTU} /></div>
       {yaz && !fason && (
         <>
           <div className="tc-pym-dugmeler"><Dg ad="Arıza ya da bakım ekle" simge="wrench" /><Dg ad="Kuyrukta aç" simge="sort" yap={() => o.kuyrukAc(m)} /></div>

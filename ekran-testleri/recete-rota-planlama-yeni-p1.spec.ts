@@ -423,3 +423,15 @@ test.describe('577c Geçmiş ve fark', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// 577d: Tezgâh stüdyosu atölyenin panosudur; istek adresin sorgusundadır (`studio?istek=tez&v=`), pano işleyince silinir. Örnek veride plan
+// olmayabilir; o halde pano çizilmez, istek bekler.
+test.describe('577d Tezgâh stüdyosu', () => {
+  test('Stüdyo isteği: pano isteği işler, adresten siler; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/studio?istek=tez&v=yok-boyle');
+    await expect(page.locator('.tc-pym-tp')).toBeVisible();
+    if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/studio$/);
+    await tasmaz(page);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});

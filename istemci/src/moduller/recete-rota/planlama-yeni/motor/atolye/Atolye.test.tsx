@@ -36,13 +36,13 @@ const DEPO = {
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean } = {}) {
+function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile,
+    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
@@ -66,6 +66,28 @@ const kart = () => screen.getByRole('dialog');
 const guncel = () => { const c = ornekCalisma(); if (c.plan) c.plan.dataVer = c.dataVer; return c; };
 
 describe('PlanlamaAtolyesi', () => {
+  it('stüdyo isteği: tezgâhta süzgeç ve tezgâh günlüğü, siparişte ray ve sipariş; işlenince adresten silinir; her rolde aynı', () => {
+    const gor = (yaz: boolean) => {
+      const studyoAc = vi.fn();
+      ac({ yaz, istek: { tur: 'tez', v: '1' }, studyoAc });
+      const k = screen.getByRole('dialog', { name: '1 günlüğü' });
+      expect(studyoAc).toHaveBeenCalledWith(null);
+      // Arıza bildir ve Ek mesai kartın yazan rolündeki pasif düğmeleridir; gerisi aynıdır.
+      const l = [k.getAttribute('aria-label'), ...within(k).getAllByRole('button').map((x) => x.textContent).filter((x) => x !== 'Arıza bildir' && x !== 'Ek mesai')];
+      cleanup(); return l;
+    };
+    expect(gor(false)).toEqual(gor(true));
+    const studyoAc = vi.fn();
+    ac({ istek: { tur: 'sip', v: '3' }, studyoAc });
+    expect(document.querySelector('.tc-pym-tp-govde')?.hasAttribute('data-ray')).toBe(true);
+    expect(screen.getAllByRole('button', { expanded: true }).some((b) => b.classList.contains('tc-pym-tp-sip-tus') && b.textContent?.startsWith('3'))).toBe(true);
+    expect(studyoAc).toHaveBeenCalledWith(null);
+    cleanup();
+    ac({ istek: { tur: 'tez', v: 'yok' }, studyoAc });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(studyoAc).toHaveBeenCalledTimes(2);
+  });
+
   it('kimlik satırı, üç sekme ve onay sayısı; geri düğmesi motora döner', () => {
     const { git } = ac();
     expect(screen.getByText('Canlı sürüm 3')).toBeTruthy();
