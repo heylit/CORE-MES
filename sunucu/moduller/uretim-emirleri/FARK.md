@@ -209,3 +209,9 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 ## Arkon paketi için iki okuma (kart 625b, plan akışı bağlaması)
 - `disari.isEmriKontrolListesi(db, isEmriIdleri)` -> `Map<isEmriId, { sira, ad, aciklama }[]>`: emir açılırken iş emrine kopyalanan kontrol listesi (`emir_adimi`); listesi olmayan iş emri haritada yoktur. Arkon BASKA-MODUL-ISTEKLERI 11.
 - `PlanIsEmri.istasyonId` (isteğe bağlı, boş olabilir): iş emrine yazılmış istasyon. Arkon BASKA-MODUL-ISTEKLERI 12. Uç, göç, yetki değişmedi; Arkon'un kullanması ayrı dalda.
+## Refakat kartları emir ayrıntısında (kart #588, Soru 586)
+- Eski emir kartı kalktı: "Refakat kartı bas", "Etiket Merkezi'nde bas" (`tur=refakat`) düğmeleri ve `/uretim-emirleri/:id/refakat-karti` sayfası (QR `UE:<id>`, lotsuz). Kart artık yalnız stokta, depo lotu emre ayırınca açılır (Soru 120 b, 122 a).
+- Emir ayrıntısında "Refakat kartları" bölümü (ürün kartı olan emirde, stok okuması olana): kart, malzeme, lot, verilen, durum (açık, lot bekliyor, iptal, birleşti). Açık, lotlu ve birleşmemiş kart `sayfa.etiket-merkezi` olana "Etiket Merkezi'nde bas" ile (`?tur=refakat-partisi`) refakat şablonundan basılır; yetkisi olmayanda düğme yoktur. Kart belgesi kopyalanmaz (tek sahip). Kart burada açılmaz.
+- Sunucu, uç, göç, yetki değişmedi: `GET /adimli-emirler/:id/refakat-karti` stoğun ve Etiket Merkezi'nin emir verisi olarak kalır.
+- Stok istemcisi ithal edilmez: stok bu modülün `disari.ts`'ini okur, ters ithal modül döngüsü olur (sınır kuralı f). Stok okuma listesi bu yüzden `refakat.ts`'te yazılıdır (tip denetimli).
+- Sıra: kart #589 (Etiket Merkezi'nde `tur=refakat` kalkar) aynı turda ya da sonra.

@@ -7,7 +7,7 @@ export const anahtarlar = {
   ayrinti: (id: number) => ['uretim-emirleri', 'ayrinti', id] as const,
   ozet: ['uretim-emirleri', 'ozet'] as const,
   akis: (id: number) => ['uretim-emirleri', 'akis', id] as const,
-  refakat: (id: number) => ['uretim-emirleri', 'refakat', id] as const,
+  refakatKartlari: (id: number) => ['uretim-emirleri', 'refakat-kartlari', id] as const,
   adimli: (id: number) => ['uretim-emirleri', 'adimli', id] as const,
   fasonFirmalari: ['uretim-emirleri', 'fason-firmalari'] as const,
   siradakiFason: (id: number) => ['uretim-emirleri', 'siradaki-fason', id] as const,
