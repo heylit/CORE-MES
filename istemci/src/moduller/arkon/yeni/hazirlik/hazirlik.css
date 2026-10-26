@@ -424,6 +424,8 @@ button.tc-ay2-esitleme { cursor: pointer; }
 .tc-ay2-sonuc-satir em[data-durum="red"] { color: var(--stop); }
 
 .tc-ay[data-mobil] .tc-ay2-tur-secici { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* İstasyon kodu ve adı iş türünden uzun: sabit üç sütunda telefonda kod harf harf kırılıp karttan taşıyordu; sütun sayısı genişliğe göre. */
+.tc-ay2-istasyon-secici .tc-ay2-istasyon-grubu .tc-ay2-tur-secici { grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--damga)), 1fr)); }
 
 /* tablet ve telefon: liste ile düzenleyici yer değiştirir (eski ekranın mobil düzeni) */
 @media (max-width: 1023px) {

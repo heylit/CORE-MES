@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  cagriTonu, cubukDugmeleri, durumDugmeleri, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -96,5 +96,19 @@ describe('telefon eylem çubuğu (618)', () => {
     expect(etiketler('stopped')).toEqual(['Yeniden Başlat']);
     expect(etiketler('done')).toEqual(['Sıradaki İş']);
     for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) expect(cubukDugmeleri(d).every((x) => !x.tut && x.eylem !== 'finish')).toBe(true);
+  });
+});
+
+describe('numune çizgisi aralığı (664)', () => {
+  const kural = (ek: object) => ({ id: 'k', when: 'every', n: 50, ...ek }) as unknown as Parameters<typeof numuneAraligi>[0];
+  it('sayıyla tekrarda aralıkta sayılan ve sıradaki numunenin parça sırası; taban işe dönüşte sayılmış parçalardır', () => {
+    expect(numuneAraligi(kural({}), { good: 38, baseGood: 0, startedAt: 0 }, 0)).toEqual({ n: 50, birim: 'parça', gecen: 38, hedef: 50 });
+    expect(numuneAraligi(kural({}), { good: 62, baseGood: 0, startedAt: 0 }, 0)).toEqual({ n: 50, birim: 'parça', gecen: 12, hedef: 100 });
+    expect(numuneAraligi(kural({}), { good: 15, baseGood: 10, startedAt: 0 }, 0)).toEqual({ n: 50, birim: 'parça', gecen: 5, hedef: 60 });
+  });
+  it('süreyle tekrarda geçen dakika; başlamamış işte ve ilk, son, vardiya kuralında çizgi yok', () => {
+    expect(numuneAraligi(kural({ when: 'time', n: 60 }), { good: 0, baseGood: 0, startedAt: 1000 }, 1000 + 75 * 60000)).toEqual({ n: 60, birim: 'dk', gecen: 15, hedef: null });
+    expect(numuneAraligi(kural({ when: 'time', n: 60 }), { good: 0, baseGood: 0, startedAt: 0 }, 5000)).toBeNull();
+    for (const when of ['first', 'last', 'shift']) expect(numuneAraligi(kural({ when }), { good: 10, baseGood: 0, startedAt: 1 }, 2)).toBeNull();
   });
 });

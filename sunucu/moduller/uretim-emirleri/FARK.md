@@ -215,3 +215,8 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Sunucu, uç, göç, yetki değişmedi: `GET /adimli-emirler/:id/refakat-karti` stoğun ve Etiket Merkezi'nin emir verisi olarak kalır.
 - Stok istemcisi ithal edilmez: stok bu modülün `disari.ts`'ini okur, ters ithal modül döngüsü olur (sınır kuralı f). Stok okuma listesi bu yüzden `refakat.ts`'te yazılıdır (tip denetimli).
 - Sıra: kart #589 (Etiket Merkezi'nde `tur=refakat` kalkar) aynı turda ya da sonra.
+
+## OEE için zamanlı iki okuma (kart 642, kullanıcı kararları 643 a, 644 a; dal 643-uretim-emirleri-oee-verisi)
+- `disari.makineKullanimAraliklari(db, makineIdleri, baslangic, bitis)` -> `Map<makineId, { baslangic, bitis }[]>`: makine kullanımlarının pencereyle kesişen parçaları; açık kullanım okuma anına kadar. Toplamı `makineSureleri` ile aynıdır.
+- `disari.makineSayimAnlari(db, makineIdleri, baslangic, bitis)` -> `Map<makineId, { zaman, saglam, hurda, red, standartSaniye, suresizSaglam }[]>`: makine kırılımlı sayım an an; kalite reddi ayrı sütun, karar bekleyen yok. Toplamları `aralikAdetleri` ve `kirilimStandartSureleri` ile aynıdır.
+- Ekleyici: mevcut okumalar ve çağıranları değişmedi. Uç, göç, yetki yok.

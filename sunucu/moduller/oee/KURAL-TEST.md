@@ -15,3 +15,5 @@
 | Veri eksik | Standart süre çalışmadan büyükse ya da çalışma planlı süreden uzunsa (planlı süre eksik) performans, OEE ve TEEP hesaplanmaz, ikincisinde kullanılabilirlik de; ortalamaya girmez (kodda OE-10 adıyla) | kurallar.test.ts "OE-10..." (üç test) |
 | OE-11 | Ters ya da 92 günden uzun aralık 400 | oee.test.ts "OE-11..." |
 | OE-12 | İş merkezi kısıtlı kişi yalnız kendi merkezinin makinelerini görür | oee.test.ts "OE-12..." |
+| OE-15 | Kalite reddi (karar `red`) hurda gibi kalite kaybıdır: kalite = sağlam / (sağlam + hurda + red); karar bekleyen sayılmaz (kullanıcı kararı 643 a) | kurallar.test.ts "OE-15..."; oee.test.ts "OE-15, OE-16..."; uretim-emirleri/oee-verisi.test.ts |
+| OE-16 | Çalışma ve sayım vardiya takvimiyle kesişir; takvim dışındaki (vardiya dışı, mola, planlı duruş) OEE'ye girmez, `vardiyaDisi` alanında ayrı döner; aralığın ucundaki sayım içeridedir (kullanıcı kararı 644 a) | kurallar.test.ts "OE-16..."; oee.test.ts "OE-15, OE-16..."; Oee.test.tsx "red adedi..." |

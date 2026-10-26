@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla,
+  iscilikMaliyeti, kisiPayiToplami, kisiPaylari, makineMaliyeti, maliyetsiz, olcuHesapla, ortalamayaGirenler, penceredekiDakika, topla, vardiyaIleAyir,
 } from './kurallar.ts';
 import type { HamOlcu } from './kurallar.ts';
 
 const DK = 60_000;
 const ham = (h: Partial<HamOlcu> = {}): HamOlcu => ({
-  planliDk: 450, takvimDk: 1440, calismaDk: 420, standartDk: 360, saglam: 98, hurda: 2, suresizSaglam: 0,
+  planliDk: 450, takvimDk: 1440, calismaDk: 420, standartDk: 360, saglam: 98, hurda: 2, red: 0, suresizSaglam: 0,
+  vardiyaDisi: { calismaDk: 0, standartDk: 0, saglam: 0, hurda: 0, red: 0 },
   kisiPayi: 1, makineMaliyeti: 4500, iscilikMaliyeti: 2250, ...h,
 });
 
@@ -120,5 +121,40 @@ describe('oee kuralları', () => {
     assert.equal(o.makineMaliyeti, null);
     assert.equal(o.iscilikMaliyeti, null);
     assert.equal(o.oee, 0.8);
+  });
+
+  test('OE-15: kalite reddi hurda gibi kalite kaybıdır; performans toplam adede göre düşer, OEE sağlamın standart süresidir', () => {
+    // Vardiya 450 dk, çalışma 360 dk, birim 3 dk: 100 sağlam, 5 hurda, 10 red.
+    const o = olcuHesapla(ham({ calismaDk: 360, standartDk: 300, saglam: 100, hurda: 5, red: 10 }));
+    assert.equal(o.red, 10);
+    assert.equal(o.kalite, 0.8696);
+    assert.equal(o.oee, 0.6667);
+    assert.equal(o.kullanilabilirlik, 0.8);
+    assert.equal(o.performans, 0.9583);
+    const t = topla([ham({ red: 3 }), ham({ red: 4 })]);
+    assert.equal(t.red, 7);
+  });
+
+  test('OE-16: çalışma ve sayım takvimle kesişir; vardiya dışı, mola ve planlı duruştaki ayrı döner; uçtaki sayım içeridedir', () => {
+    // Takvim 08-12 ve 13-17 (dakika ekseni); mola 12-13.
+    const plan = [{ bas: 480 * DK, bit: 720 * DK }, { bas: 780 * DK, bit: 1020 * DK }];
+    const kullanimlar = [{ bas: 420 * DK, bit: 540 * DK }, { bas: 700 * DK, bit: 800 * DK }, { bas: 1200 * DK, bit: 1320 * DK }];
+    const sayim = (dk: number, saglam: number, ek: Partial<{ hurda: number; red: number; suresizSaglam: number }> = {}) =>
+      ({ an: dk * DK, saglam, hurda: 0, red: 0, standartSaniye: saglam * 180, suresizSaglam: 0, ...ek });
+    const { ici, disi } = vardiyaIleAyir(plan, kullanimlar, [
+      sayim(450, 5), sayim(500, 10, { hurda: 1 }), sayim(720, 4), sayim(750, 2, { red: 2 }), sayim(1020, 3, { suresizSaglam: 1 }), sayim(1250, 20),
+    ]);
+    assert.deepEqual(ici, { calismaDk: 60 + 20 + 20, standartDk: 3 * (10 + 4 + 3), saglam: 17, hurda: 1, red: 0, suresizSaglam: 1 });
+    assert.deepEqual(disi, { calismaDk: 60 + 60 + 120, standartDk: 3 * (5 + 2 + 20), saglam: 27, hurda: 0, red: 2 });
+    const bilinmeyen = vardiyaIleAyir(null, kullanimlar, [sayim(450, 5), sayim(1250, 20)]);
+    assert.deepEqual(bilinmeyen.disi, { calismaDk: 0, standartDk: 0, saglam: 0, hurda: 0, red: 0 });
+    assert.equal(bilinmeyen.ici.calismaDk, 340);
+    assert.equal(bilinmeyen.ici.saglam, 25);
+    const o = olcuHesapla(ham({ ...ici, planliDk: 480, vardiyaDisi: disi }));
+    assert.equal(o.veriEksik, false, 'vardiya dışı çalışma makineyi veri eksik yapmaz');
+    assert.deepEqual(o.vardiyaDisi, { calismaDk: 240, standartDk: 81, saglam: 27, hurda: 0, red: 2 });
+    const t = topla([ham({ vardiyaDisi: disi }), ham({ vardiyaDisi: disi })]);
+    assert.equal(t.vardiyaDisi.saglam, 54);
+    assert.equal(t.vardiyaDisi.calismaDk, 480);
   });
 });

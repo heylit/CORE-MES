@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { DurumDugmeleri, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { DurumDugmeleri, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -89,5 +89,64 @@ describe('Numune planı şeridi (566)', () => {
   it('numune planı yoksa çizilmez', () => {
     const { container } = render(<NumuneSeridi girdi={{ kurallar: [], meas: {}, bekleyen: [], zamani: [], siradaki: null, ilkKarar: null }} />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('664: sayaç kadranı, numune çizgisi ve iş başlığı', () => {
+  it('kadranda "Kalan süre", "Son çevrim" ve planlı "Çevrim" yok; süre aşılınca yalnız gecikme yazar', () => {
+    const { container } = render(<SayacKadrani is={is({ state: 'running' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={{ ...olcer(5000), son: () => 28000 }} />);
+    expect(container.textContent).not.toContain('Kalan süre');
+    expect(container.textContent).not.toContain('Son çevrim');
+    expect(container.textContent).not.toMatch(/Çevrim\d|Çevrim$|\/ 30 sn/);
+    cleanup();
+    const gec = render(<SayacKadrani is={is({ state: 'running' })} etiket="İyi parça" birim="adet" duzelt={null} cevrim={olcer(40000)} />);
+    expect(gec.container.textContent).toContain('Gecikme+10 sn');
+  });
+  it('aralıklı kuralda çizgi sıradaki numuneye yaklaşmayı gösterir; son onda birde yakın, zamanı gelince dolu', () => {
+    const kural = (gecen: number) => ({ id: 'her', etiket: 'Her 50 parça', olcen: 'Kalite', ilk: false, olculer: [3], aralik: { n: 50, birim: 'parça' as const, gecen, hedef: 50 } });
+    const ciz = (gecen: number, zamani: number[] = []) => render(<NumuneSeridi girdi={{ kurallar: [kural(gecen)], meas: {}, bekleyen: [], zamani, siradaki: { olcu: 3, v: 50 - gecen, u: 'parça' }, ilkKarar: null }} />);
+    const ilk = ciz(38);
+    expect(ilk.getByRole('img', { name: 'Sıradaki numune 50. parça · 12 parça kaldı' })).toBeTruthy();
+    expect(ilk.container.querySelector('.tc-ay1-numune-cizgi-dolu')?.getAttribute('x2')).toBe('76');
+    expect(ilk.container.querySelector('.tc-ay1-numune-cizgi')?.hasAttribute('data-yakin')).toBe(false);
+    cleanup();
+    expect(ciz(46).container.querySelector('.tc-ay1-numune-cizgi')?.hasAttribute('data-yakin')).toBe(true);
+    cleanup();
+    const zamani = ciz(0, [3]);
+    expect(zamani.getByRole('img', { name: 'Numune zamanı' })).toBeTruthy();
+    expect(zamani.container.querySelector('.tc-ay1-numune-cizgi')?.hasAttribute('data-dolu')).toBe(true);
+  });
+  it('iş başlığı etiketli alanlar sırasıyla; boş alan "—"; geniş düzende emir no başlıktır', () => {
+    const o = is({ empty: false, no: 'UE-DENEME-7', part: 'Deneme parça', op: 'Op 10 · Tornalama', pkg: { partNo: 'P-DENEME', rev: 'B', proje: 'Deneme proje' } as never });
+    const { container, getByRole } = render(<IsAlanlari is={o} baslik />);
+    const alanlar = Array.from(container.querySelectorAll('.tc-ay1-is-alan')).map((a) => a.textContent);
+    expect(alanlar).toEqual(['ProjeDeneme proje', 'Üretim emriUE-DENEME-7', 'OpOp 10 · Tornalama', 'Parça noP-DENEME', 'Parça adıDeneme parça', 'RevB']);
+    expect(getByRole('heading', { name: 'UE-DENEME-7' })).toBeTruthy();
+    cleanup();
+    const bos = render(<IsAlanlari is={is({ empty: false, no: 'UE-8', part: 'X', op: '', pkg: { partNo: '', rev: '' } as never })} />);
+    expect(Array.from(bos.container.querySelectorAll('.tc-ay1-is-alan b')).map((b) => b.textContent)).toEqual(['—', 'UE-8', '—', '—', 'X', '—']);
+    expect(bos.queryByRole('heading')).toBeNull();
+    cleanup();
+    const issiz = render(<IsAlanlari is={is({})} baslik />);
+    expect(issiz.container.querySelector('.tc-ay1-is-alan')).toBeNull();
+    expect(issiz.container.textContent).toContain('Deneme');
+  });
+});
+
+describe('685: telefonda iş özeti', () => {
+  it('kapalıyken emir · op · parça no tek satır; dokununca bütün alanlar açılır', () => {
+    let acik = false;
+    const o = is({ empty: false, no: 'UE-DENEME-9', part: 'Deneme parça', op: 'Op 20', pkg: { partNo: 'P-DENEME', rev: 'C', proje: 'Deneme proje' } as never });
+    const { container, rerender, getByRole } = render(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
+    expect(container.querySelector('.tc-ay1-is-ozet-satir')?.textContent).toBe('UE-DENEME-9 · Op 20 · P-DENEME');
+    expect(container.querySelector('.tc-ay1-is-alan')).toBeNull();
+    fireEvent.click(getByRole('button', { expanded: false }));
+    rerender(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
+    expect(getByRole('button', { expanded: true })).toBeTruthy();
+    expect(container.querySelectorAll('.tc-ay1-is-alan').length).toBe(6);
+  });
+  it('işsiz istasyonda açılıp kapanmaz', () => {
+    const { container } = render(<IsOzeti is={bosIs({ l: 'Boş' })} acik={false} degistir={() => {}} />);
+    expect(container.querySelector('button')).toBeNull();
   });
 });

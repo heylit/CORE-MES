@@ -9,7 +9,8 @@ Taban: main cc1613c. Başvuru: kart #1330 ve kart #1324 kararları (OEE ayrı sa
 
 ## Hesap
 - Planlı süre = vardiya takvimi (molalar, tatiller, planlı duruşlar düşülmüş; fazla mesai #1324 ile takvime girince kendiliğinden sayılır). Takvim süresi = pencerenin bütün saatleri (TEEP).
-- OEE = sağlam parçaların standart süresi / planlı süre; A = makine çalışma / planlı; Q = sağlam / (sağlam + hurda); P = OEE / (A x Q).
+- OEE = sağlam parçaların standart süresi / planlı süre; A = makine çalışma / planlı; Q = sağlam / (sağlam + hurda + red); P = OEE / (A x Q).
+- Kart 642 (kullanıcı kararları 643 a, 644 a): kalite reddi kalite kaybıdır (OE-15); çalışma ve sayım vardiya takvimiyle kesişir, takvim dışındaki çalışma ve üretim OEE'ye girmez, "Vardiya dışı" kartında ve sütununda ayrı görünür (OE-16). Veri `uretim-emirleri` `makineKullanimAraliklari` ve `makineSayimAnlari` okumalarından gelir.
 - 1 kişi N makine: kişinin makinedeki payı = o makinedeki yüzdesi / bütün makine yüzdeleri toplamı. "Kişi / makine" sütunu bu payların toplamıdır (1:3'te 0,33; 3:1'de 3).
 - Birim maliyet = (planlı saat x istasyon saat maliyeti + kişi mesaisi x pay x kişi saat maliyeti) / sağlam; yalnız TRY tutarlar.
 - Üst düzey toplamlar ham değerlerin toplamıdır; bir makinede bilinmeyen değer üstü de bilinmez yapar (sıfır uydurulmaz).

@@ -34,6 +34,15 @@ describe('numune planı şeridi (566, 559 1)', () => {
     expect(numuneSeridi(girdi({ ilkKarar: 'onay', zamani: [1] }))[0]).toMatchObject({ durum: 'zamani' });
   });
 
+  it('aralıklı kuralda numuneye yaklaşma (664): dolan pay ve kalan; zamanı gelince ve kalitedeyken dolu; aralıksız kuralda yok', () => {
+    const aralikli = KURALLAR.map((r) => (r.id === 'her' ? { ...r, aralik: { n: 50, birim: 'parça' as const, gecen: 38, hedef: 100 } } : r));
+    const her = (ek: Partial<SeritGirdisi>) => numuneSeridi(girdi({ kurallar: aralikli, ...ek })).find((p) => p.id === 'her')!;
+    expect(her({}).ilerleme).toEqual({ oran: 0.76, kalan: 12, birim: 'parça', hedef: 100 });
+    expect(her({ zamani: [3] }).ilerleme).toMatchObject({ oran: 1, kalan: 0 });
+    expect(her({ bekleyen: [3] }).ilerleme).toMatchObject({ oran: 1, kalan: 0 });
+    expect(numuneSeridi(girdi({ kurallar: aralikli })).find((p) => p.id === 'ilk')!.ilerleme).toBeNull();
+  });
+
   it('plan yoksa şerit boştur', () => {
     expect(numuneSeridi(girdi({ kurallar: [] }))).toEqual([]);
   });

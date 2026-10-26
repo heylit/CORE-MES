@@ -1507,6 +1507,50 @@ export const katilimSureleriGetir = (db: Db, kisiIdleri: readonly number[], basl
 export const makineSureleriGetir = (db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string) =>
   kesisenSureler(db, 'uretim_emirleri_makine_kullanimi', 'makine_id', 'baslama', 'bitis', makineIdleri, baslangic, bitis);
 
+// Makine kullanımlarının [baslangic, bitis) ile kesişen parçaları, makine ve başlama sırasıyla. Açık kullanım transaction anına kadardır.
+export function makineKullanimAraliklariGetir(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<{ id: number; baslangic: string; bitis: string }[]> {
+  return db.sorgu(
+    `SELECT k.makine_id AS id, ${ISO('GREATEST(k.baslama, $2::timestamptz)')} AS baslangic,
+            ${ISO('LEAST(COALESCE(k.bitis, now()), $3::timestamptz)')} AS bitis
+       FROM uretim_emirleri_makine_kullanimi k
+      WHERE k.makine_id = ANY($1::int[]) AND k.baslama < $3::timestamptz AND COALESCE(k.bitis, now()) > $2::timestamptz
+      ORDER BY k.makine_id, k.baslama, k.id`,
+    [[...makineIdleri], baslangic, bitis],
+  );
+}
+
+export interface MakineSayimAniSatiri {
+  id: number;
+  zaman: string;
+  saglam: number;
+  hurda: number;
+  red: number;
+  standartSaniye: number;
+  suresizSaglam: number;
+}
+
+// Makine kırılımlı sayım, makine ve an başına (aralikAdetleriGetir ve standartSureleriGetir ile aynı yere düşer); kalite reddi ayrı
+// sütundur, karar bekleyen sayılmaz. Standart süre yuvarlanmaz: toplayan taraf toplamı yuvarlar.
+export function makineSayimAnlariGetir(
+  db: Db, makineIdleri: readonly number[], baslangic: string, bitis: string,
+): Promise<MakineSayimAniSatiri[]> {
+  return db.sorgu<MakineSayimAniSatiri>(
+    `SELECT s.makine_id AS id, ${ISO('s.zaman')} AS zaman,
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'saglam'), 0)::int AS saglam,
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'hurda'), 0)::int AS hurda,
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'red'), 0)::int AS red,
+            COALESCE(sum(s.adet * i.birim_sure_dk * 60) FILTER (WHERE s.tur = 'saglam' AND i.birim_sure_dk IS NOT NULL), 0)::float8 AS "standartSaniye",
+            COALESCE(sum(s.adet) FILTER (WHERE s.tur = 'saglam' AND i.birim_sure_dk IS NULL), 0)::int AS "suresizSaglam"
+       FROM ${MAKINE_SAYIMI} LEFT JOIN uretim_emirleri_is_emri i ON i.id = s.is_emri_id
+      WHERE s.makine_id = ANY($1::int[]) AND s.tur IN ('saglam', 'hurda', 'red') AND s.zaman >= $2::timestamptz AND s.zaman < $3::timestamptz
+      GROUP BY s.makine_id, s.zaman
+      ORDER BY s.makine_id, s.zaman`,
+    [[...makineIdleri], baslangic, bitis],
+  );
+}
+
 export function sonGirisleriGetir(db: Db, kirilim: SayimKirilimi, idler: readonly number[]): Promise<{ id: number; zaman: string }[]> {
   const { kimlik, kaynak } = KIRILIM[kirilim];
   return db.sorgu(

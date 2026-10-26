@@ -59,8 +59,11 @@ export function DurumSeridi({ c, simdi, duruslar, nedenAdiOku, planliMi }: {
   const sh = c.sh;
   const boy = sh.e - sh.s;
   const X = (t: number) => Math.max(0, Math.min(en, ((t - sh.s) / boy) * en));
+  // Dar şeritte saat yazıları sıkışıyordu: saat başına yaklaşık 56 px düşmüyorsa iki saatte bir yazılır; uçtaki yazı şeritten taşmaz.
+  const saatAdimi = en / Math.max(1, boy / 3600e3) < 56 ? 2 : 1;
   const saatler: number[] = [];
-  for (let t = Math.ceil(sh.s / 3600e3) * 3600e3; t <= sh.e; t += 3600e3) saatler.push(t);
+  for (let t = Math.ceil(sh.s / 3600e3) * 3600e3, i = 0; t <= sh.e; t += 3600e3, i++) if (i % saatAdimi === 0) saatler.push(t);
+  const yaslama = (x: number) => (x < 24 ? 'start' : x > en - 24 ? 'end' : 'middle');
   const top: Record<string, number> = { running: c.run, setup: c.setupMs, paused: c.pauseMs, stopped: c.stopMs };
   const ad = (k: string) => nedenAdi(k, nedenAdiOku);
   return (
@@ -84,7 +87,7 @@ export function DurumSeridi({ c, simdi, duruslar, nedenAdiOku, planliMi }: {
           );
         })}
         <line className="tc-ay1-serit-simdi" x1={X(simdi)} x2={X(simdi)} y1="0" y2="28" />
-        {saatler.map((t) => <text key={t} className="tc-ay1-serit-saat" x={X(t)} y="44" textAnchor="middle">{iki(new Date(t).getHours())}:00</text>)}
+        {saatler.map((t) => <text key={t} className="tc-ay1-serit-saat" x={X(t)} y="44" textAnchor={yaslama(X(t))}>{iki(new Date(t).getHours())}:00</text>)}
       </svg>
       <ul className="tc-ay1-serit-lejant">
         {(['running', 'setup', 'paused', 'stopped'] as const).map((k) => <li key={k} data-durum={durumRengi(k)}><i aria-hidden="true" />{k === 'stopped' ? 'Plansız duruş' : durumAdi(k)} <b>{saatDk(top[k] || 0)}</b></li>)}

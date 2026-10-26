@@ -13,6 +13,8 @@ export const rehber: readonly SayfaRehberi[] = [
       'Yalnız okur; yalnız yetkili olduğunuz iş merkezlerinin makinelerini görürsünüz.',
       'Birim maliyet ve tutarlar yalnız maliyet görme yetkisi olana görünür.',
       'OEE planlı süreye, TEEP takvimin bütün saatlerine göre hesaplanır.',
+      'Vardiya dışında (mola, planlı duruş dahil) yapılan çalışma ve üretim OEE\'ye girmez; "Vardiya dışı" sütununda ayrı görünür.',
+      'Kalite reddi edilen parça hurda gibi kalite kaybı sayılır.',
     ],
     sozcukler: ['verim', 'verimlilik', 'kullanılabilirlik', 'performans'],
   },
