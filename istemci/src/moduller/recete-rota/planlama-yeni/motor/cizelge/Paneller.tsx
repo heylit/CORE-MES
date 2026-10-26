@@ -101,7 +101,7 @@ interface SagOzellikleri {
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; secim: PlanlamaSecimi; secJob: string | null;
   sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
-  veriAc: ((bolum: string) => void) | null;
+  veriAc: ((bolum: string) => void) | null; hesapAc: (() => void) | null;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;
@@ -160,7 +160,7 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }
 
 // Teknik yardımcı (t-tekyer.betik yardimciHtml): planın altı adımı. Denge çalışmaya yazılır (plan.yaz; planın girdisi değil, plan güncel
 // kalır); sabitleri kaldırmak onayla, plan.kilitle ile. Ölçüm ve ekip çözümü motorla gelir.
-function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec, veriAc }: SagOzellikleri) {
+function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec, veriAc, hesapAc }: SagOzellikleri) {
   const { bildir } = useBildirim();
   const [sabitOnay, setSabitOnay] = useState(false);
   const dg = dengeAl(c); const el = elleSayilari(c); const kap = c.kapali.length; const nHav = c.D.siparisler.filter((s) => s.havuz).length;
@@ -226,7 +226,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
           {yaz && <div className="tc-pym-dugmeler"><Dg ad="Ekip olarak çöz" simge="play" birincil /></div>}
         </>)}
       </div>
-      <div className="tc-pym-dugmeler"><Dg ad="Çözücüler sayfası" simge="cpu" hayalet not={YOK_NOTU} /><Dg ad="Nasıl hesaplandı" simge="chart" hayalet not={YOK_NOTU} /></div>
+      <div className="tc-pym-dugmeler"><Dg ad="Çözücüler sayfası" simge="cpu" hayalet not={YOK_NOTU} /><Dg ad="Nasıl hesaplandı" simge="chart" hayalet yap={hesapAc} not={YOK_NOTU} /></div>
       <OnayPenceresi acik={sabitOnay} baslik="Sabitleri kaldır" onayla={sabitKaldir} vazgec={() => setSabitOnay(false)}>
         <p>Tek tek sabitlediğiniz işlerin sabitliği kalkar; dondurulmuş günler yerinde kalır. Plan değişmez, motor sonraki çözümde bu işleri de dizebilir.</p>
       </OnayPenceresi>

@@ -165,8 +165,11 @@ export function yetkinlikFarki(mevcut: readonly number[], istenen: readonly numb
 
 // 565 a: toplu değişiklik kişi başına toplanır; aynı kişi ve istasyonda son değişiklik geçerlidir.
 export function yetkinlikDegisiklikleri(l: readonly { kisiId: number; istasyonId: number; yetkin: boolean }[]): Map<number, Map<number, boolean>> {
+  return kisiBasinaDegisiklik(l.map((d) => ({ kisiId: d.kisiId, hedefId: d.istasyonId, yetkin: d.yetkin })));
+}
+export function kisiBasinaDegisiklik(l: readonly { kisiId: number; hedefId: number; yetkin: boolean }[]): Map<number, Map<number, boolean>> {
   const m = new Map<number, Map<number, boolean>>();
-  for (const d of l) m.set(d.kisiId, (m.get(d.kisiId) ?? new Map<number, boolean>()).set(d.istasyonId, d.yetkin));
+  for (const d of l) m.set(d.kisiId, (m.get(d.kisiId) ?? new Map<number, boolean>()).set(d.hedefId, d.yetkin));
   return m;
 }
 export function yetkinlikUygula(mevcut: readonly number[], degisiklik: ReadonlyMap<number, boolean>): number[] {
@@ -174,3 +177,15 @@ export function yetkinlikUygula(mevcut: readonly number[], degisiklik: ReadonlyM
   for (const [istasyonId, yetkin] of degisiklik) { if (yetkin) s.add(istasyonId); else s.delete(istasyonId); }
   return [...s];
 }
+
+// 563 c: makine yetkinliği yalnız kişinin yetkin olduğu istasyonun var olan, aktif makinesine verilir. Süresi dolmuş istasyon yetkinliği de
+// kayıttır (verilebilir); plan yalnız bugün geçerli olanı okur.
+export function makineYetkinligiReddi(makine: { istasyonId: number | null; aktif: boolean } | undefined, yetkinIstasyonlar: readonly number[]): string | null {
+  if (makine === undefined || !makine.aktif) return 'Makine yetkinliği yalnız var olan, aktif makineye verilir.';
+  if (makine.istasyonId === null || !yetkinIstasyonlar.includes(makine.istasyonId)) return 'Makine yetkinliği için önce makinenin istasyonunda yetkinlik verilmeli.';
+  return null;
+}
+
+// İstasyon yetkinliği kalkınca o istasyondaki makine kayıtları da kalkar.
+export const istasyonuKalkanMakineler = (kayitlar: readonly { makineId: number; istasyonId: number | null }[], kaldirilan: readonly number[]): number[] =>
+  kayitlar.filter((k) => k.istasyonId !== null && kaldirilan.includes(k.istasyonId)).map((k) => k.makineId);

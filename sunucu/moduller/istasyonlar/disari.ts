@@ -223,5 +223,13 @@ export const istasyonYetkinlikleri = async (db: Db): Promise<{ kisiId: number; i
 export const yetkinMi = async (db: Db, kisiId: number, istasyonId: number): Promise<boolean> =>
   (await sorgular.yetkinlikSatirlari(db, kisiId, tesisGunu(new Date()))).some((s) => s.istasyonId === istasyonId);
 
+// 563 c: kişinin bakabildiği makineler; yalnız makinenin bugünkü istasyonunda bugün geçerli yetkinliği olanlar döner.
+// Kaydı olmayan makine "kayıtsız"dır: plan onu istasyon yetkinliğiyle hesaplar.
+export const makineYetkinlikleri = (db: Db): Promise<{ kisiId: number; makineId: number }[]> =>
+  sorgular.gecerliMakineYetkinlikleri(db, null, tesisGunu(new Date()));
+
+// 563 2 a: kişi başına aynı anda en çok tezgâh; satırı olmayan kişi sınırsızdır (yalnız tezgâh oranlarının toplamı 1'i geçmez).
+export const kisiTezgahSinirlari = (db: Db): Promise<{ kisiId: number; enCok: number }[]> => sorgular.kisiTezgahSinirlari(db);
+
 // Bütün kişilerin kısıtı (Arkon KD-008); kısıtsız kişi (satırı yok ya da bütün işlemleri taşıyan rolü var) haritada yoktur.
 export const kisilerinIzinliIsMerkezleri = (db: Db): Promise<Map<number, number[]>> => servis.kisilerinIzinliIsMerkezleri(db);

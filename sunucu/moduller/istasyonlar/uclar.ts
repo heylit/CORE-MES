@@ -7,7 +7,7 @@ import {
   makineKaydiSemasi, makineKisiSorgusu, makineKisileriCevabi, makineSorgusu, makinelerCevabi, operasyonTipiGovdesi, operasyonTipiGuncellemeGovdesi, operasyonTipiKaydiSemasi,
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
   yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
-  makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi,
+  makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
@@ -403,7 +403,27 @@ export const uclar = [
     yetki: 'istasyonlar.yaz',
     govde: yetkinlikTopluGovdesi,
     cevap: yetkinliklerCevabi,
-    isle: async ({ db, kullanici, govde }) => ({ yetkinlikler: await servis.yetkinlikleriTopluBelirle(db, kullanici.id, govde.degisiklikler) }),
+    isle: async ({ db, kullanici, govde }) => ({ yetkinlikler: await servis.yetkinlikleriTopluBelirle(db, kullanici.id, govde.degisiklikler, govde.makineler) }),
+  }),
+  // 563 c: kişinin bakabildiği makineler (yalnız yetkin olduğu istasyonun makineleri).
+  uc({
+    yontem: 'POST',
+    yol: '/kisi-yetkinlikleri/:kisiId/makineler/belirle',
+    yetki: 'istasyonlar.yaz',
+    parametre: kisiParametresi,
+    govde: makineYetkinlikGovdesi,
+    cevap: kisiYetkinligiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.makineYetkinlikBelirle(db, kullanici.id, parametre.kisiId, govde.makineIdleri),
+  }),
+  // 563 2 a: aynı anda en çok kaç tezgâh; boş sınırsız.
+  uc({
+    yontem: 'POST',
+    yol: '/kisi-yetkinlikleri/:kisiId/tezgah-siniri',
+    yetki: 'istasyonlar.yaz',
+    parametre: kisiParametresi,
+    govde: tezgahSiniriGovdesi,
+    cevap: kisiYetkinligiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.tezgahSiniriBelirle(db, kullanici.id, parametre.kisiId, govde.enCok),
   }),
   // Karar 146 a (IS29): geçerlilik bitişi ve dayanak; okunan sürümle, deftere yazılır.
   uc({

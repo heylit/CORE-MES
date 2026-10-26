@@ -32,9 +32,11 @@ Sabit kimlik (proje talimatı): istasyon ve makine bu modülündür.
 | İstasyon plan ayarı (verim, operatör ihtiyacı) | `istasyonlar_plan_ayari` | plan (kapasite) | sahibi bu modül (#409) |
 | Makine durumu (çalışır, arıza, bakım) | `istasyonlar_makine_durumu` | plan, Arkon (arıza bildirimi bağlamada) | sahibi bu modül (#409) |
 | Kişi yetkinliği (çalışabildiği istasyonlar) | `istasyonlar_yetkinlik` | plan (personel kapasitesi), uretim-emirleri (S3 uyarısı) | sahibi bu modül (#409) |
+| Makine yetkinliği (kişinin baktığı makineler) | `istasyonlar_makine_yetkinlik`, defteri `istasyonlar_makine_yetkinlik_gecmisi` | plan (motorda kişi ataması, 569b) | sahibi bu modül (563 c) |
+| Kişinin aynı anda en çok tezgâhı | `istasyonlar_kisi_tezgah_siniri.en_cok` | plan (motor, 569b); kisiler kişi kartı | sahibi bu modül (563 2 a) |
 | Tesis kodunun geçmişi (iş merkezi, istasyon, makine) | `istasyonlar_kod_gecmisi` (`kod`, `birakildi`) | Arkon eski kayıttaki kodu `eskiKoddanKimlikCoz` ile çözer | sahibi bu modül (AG2-2) |
 
 ## Dışa açtıkları (`disari.ts`)
 
 `istasyonGetir`, `aktifIstasyonlar`, `istasyonlar`, `isMerkezleri`, `makineGetir`, `istasyondakiMakineler`, `aktifMakineler`,
-`kisininIzinliIsMerkezleri`, `isMerkeziIzinliMi`, `istasyonAdlari`, `operasyonTipleri`, `istasyondakiKisiler`, `makineKisiAtamalari`, `ekipler`, `ekipUyeleri` (#105), `istasyonKisiAtamalari` (#324), `uretimAlanlari`, `aktifUretimAlaniMi` (#368), `eskiKoddanKimlikCoz` ve `TesisDuzeyi` (#385), `planAyarlari`, `makineDurumlari`, `calisirMakineler`, `isMerkeziPersonelSayilari`, `istasyonKisileri`, `istasyonYetkinlikleri`, `yetkinMi`, `kisilerinIzinliIsMerkezleri` (#409). Tipler sürüm taşımaz.
+`kisininIzinliIsMerkezleri`, `isMerkeziIzinliMi`, `istasyonAdlari`, `operasyonTipleri`, `istasyondakiKisiler`, `makineKisiAtamalari`, `ekipler`, `ekipUyeleri` (#105), `istasyonKisiAtamalari` (#324), `uretimAlanlari`, `aktifUretimAlaniMi` (#368), `eskiKoddanKimlikCoz` ve `TesisDuzeyi` (#385), `planAyarlari`, `makineDurumlari`, `calisirMakineler`, `isMerkeziPersonelSayilari`, `istasyonKisileri`, `istasyonYetkinlikleri`, `yetkinMi`, `kisilerinIzinliIsMerkezleri` (#409), `makineYetkinlikleri`, `kisiTezgahSinirlari` (563). Tipler sürüm taşımaz.
