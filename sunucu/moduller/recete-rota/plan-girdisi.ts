@@ -54,6 +54,8 @@ export interface CozumIstegi {
   calisanlar: { anahtar: string; makineId: number | null; baslangic: string | null; sayimAni: string | null; kalanVerimliDk: number }[];
   // 512 1 a: plan taslağının kabul edilmiş ek vardiyaları (gün takvim günü); verilirse çalışmanın ek vardiyalarının yerine geçer.
   ekMesai?: { makineId: number; gun: string; vardiyaId: number }[];
+  // 690 b: emirler arası öncül (parti kolu); anahtar, oncul bitmeden başlamaz.
+  baglar?: { anahtar: string; oncul: string }[];
 }
 export interface CozumGirdisi {
   st: MotorDurumu;

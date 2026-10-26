@@ -60,6 +60,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   }
   fasonlariAdimaCevir(k, st.D);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
+  /* 690 b: emirler arası öncül (parti kolu, Motor A'nın B7 kuralı); motor öncülü yalnız rotadan, emrin içinde kurar */
+  st.ekOncul = (istek.baglar || []).map(x => [opOf[x.anahtar], opOf[x.oncul]]).filter(([a, p]) => a && p && a !== p);
   const cx = compile(st);
   const kimlik = {};
   for (const [a, id] of Object.entries(opOf)) kimlik[id] = a;

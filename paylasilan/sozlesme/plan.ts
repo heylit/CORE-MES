@@ -179,12 +179,6 @@ export const motorYerlesimiCevabi = z.object({
 // Planlama çerçevesi motorun yerleşimini çizmez, yalnız uyarısını gösterir: motor koşulmadan aynı uyarılar (motorYerlesimiCevabi.uyarilar ile eşit).
 export const motorUyarilariCevabi = z.object({ uyarilar: z.array(z.string()) });
 
-export const karsilastirmaCevabi = z.object({
-  secenekler: z.array(z.object({
-    kural: z.enum(PLAN_KURALLARI), sonBitis: zaman.nullable(), geciken: z.number().int(), darbogaz: z.string().nullable(), etkilenenEmir: z.number().int(),
-    maliyetTl: z.number().nullable().optional(),
-  })),
-});
 
 // Emir önizlemesi (prototip previewNewOrder): yeni emir yazılmadan önce plana etkisi; hiçbir şey kaydedilmez.
 // Okuma kaynağıdır (GET): girdiler sorgu dizgesinde; boş tarih verilmez.
@@ -414,7 +408,6 @@ export type PlanGostergeleri = z.output<typeof planGostergeleri>;
 export type SenaryolarCevabi = z.output<typeof senaryolarCevabi>;
 export type MotorYerlesimiCevabi = z.output<typeof motorYerlesimiCevabi>;
 export type MotorUyarilariCevabi = z.output<typeof motorUyarilariCevabi>;
-export type KarsilastirmaCevabi = z.output<typeof karsilastirmaCevabi>;
 export type KaynakGirdisi = z.input<typeof kaynakGirdisi>;
 export type TaslakGirdisi = z.input<typeof taslakGirdisi>;
 export type OnizlemeCevabi = z.output<typeof onizlemeCevabi>;

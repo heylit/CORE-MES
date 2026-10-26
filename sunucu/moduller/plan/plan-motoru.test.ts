@@ -5,8 +5,8 @@ import { planMotoruCozucusu } from './disari.ts';
 import type { PlanMotoruIstegi } from './disari.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
-// ADR 0018: ortak motor Reçete ve Rota'nındır; burada çözücü testte elle kurulur. Kayıtlıyken kuyruk yaz ve canlıya al saatleri
-// çözücüden yazar, Motor A önermez; kayıtsızken bugünkü yol (öteki plan testleri).
+// ADR 0018: ortak motor Reçete ve Rota'nındır; burada çözücü testte elle kurulur (öteki plan testleri kablolamadaki gerçek çözücüyle koşar).
+// Kayıtlıyken kuyruk yaz ve canlıya al saatleri çözücüden yazar, Motor A önermez.
 describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)', () => {
   const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, yer, taslaktaOner, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
@@ -130,6 +130,10 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
   });
 
   test('168 b: vardiyası tanımsız tezgâhın işi komutu durdurmaz; kuyruk yaz onu yazmaz, plan yerleşmemiş ve nedenini gösterir; canlıya al onu geçirmez', async () => {
+    // Ortak kurulumda merkez her gün çalışır: vardiyasız tezgâh ayrı, vardiyasız bir merkezde açılır.
+    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-VS', ad: 'Vardiyasız merkez', aciklama: null });
+    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-VSI', ad: 'Vardiyasız istasyon', isMerkeziId: merkez.id })).id;
+    const makineB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-VSM', ad: 'Vardiyasız makine', istasyonId: ist })).id;
     const kaynak = { tur: 'makine' as const, id: makineB };
     const [k1] = await isEmirleriAc([yeniAdim({ kaynak })]);
     const [k2] = await isEmirleriAc([yeniAdim({ kaynak })]);
