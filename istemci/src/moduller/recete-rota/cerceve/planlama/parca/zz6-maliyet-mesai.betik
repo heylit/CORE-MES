@@ -79,12 +79,18 @@ const msGece = v => { const b = hm(v.bas), e = hm(v.bit); return b >= 20 || e <=
   return h * op * s * (+m.carp[msGunTur(D, e.gun)] || 1.5) + op * (+m.kisiEk || 0);
 }; }
 const msGunKey = (D, gun) => ['paz', 'pzt', 'sal', 'car', 'per', 'cum', 'cmt'][new Date(gunTarih(gun) + 'T12:00:00Z').getUTCDay()];
+/* 570 a: aynı gün, vardiya ve gruptaki ek vardiyalar operatörü paylaşır; gereken kişi oranların toplamının yukarı yuvarlanmışıdır */
 function msAtama() {
   const D = S.D; const m = mesSis(D); const kisi = {}; for (const p of D.personel) kisi[p.id] = { p, yil: +((m.ucret || {})[p.id] || {}).yil || 0, plan: 0, gun: {} };
-  const liste = [];
+  const liste = []; const kumeler = new Map();
   for (const [i, e] of (S.ekMesai || []).map((e, i) => [i, e]).sort((a, b) => a[1].gun - b[1].gun)) {
     const t = D.tezgahlar.find(x => x.id === e.m); const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!t || !v) continue;
-    const h = ymVH(D, e.vardiya); const tur = msGunTur(D, e.gun); const gk = msGunKey(D, e.gun); const need = Math.max(1, Math.ceil(t.opOran == null ? 1 : +t.opOran));
+    const k = e.gun + '|' + e.vardiya + '|' + (t.grup || ''); if (!kumeler.has(k)) kumeler.set(k, []); kumeler.get(k).push({ i, e, t, v });
+  }
+  for (const kume of kumeler.values()) {
+    const { e, t, v } = kume[0];
+    const h = ymVH(D, e.vardiya); const tur = msGunTur(D, e.gun); const gk = msGunKey(D, e.gun);
+    const need = Math.max(1, Math.ceil(kume.reduce((a, x) => a + (x.t.opOran == null ? 1 : +x.t.opOran), 0) - 1e-9));
     const normal = p => { const cal = (D.calismaGunleri || {})[gk] || []; const izin = (D.devamsizlik || []).some(d => (d.personel || d.kisi) === p.id && d.gun === gunTarih(e.gun)); return izin ? null : tur !== 'tatil' && cal.includes(p.vardiya) ? ymVH(D, p.vardiya) : 0; };
     const aday = D.personel.filter(p => (p.gruplar || []).includes(t.grup)).map(p => { const k = kisi[p.id]; const n = normal(p); if (n == null) return null;
       const ayni = n > 0 && p.vardiya === e.vardiya; const gunTop = n + (k.gun[e.gun] || 0) + h; const neden = [];
@@ -95,7 +101,13 @@ function msAtama() {
     const ihlal = []; if (sec.length < need) ihlal.push(`${need - sec.length} kişi eksik: grupta uygun kişi yok`);
     for (const a of sec) for (const n of a.neden) ihlal.push(`${a.p.ad}: ${n}`);
     if (msGece(v) && h > m.geceSinir + 1e-6) ihlal.push(`gece vardiyası ${sayi(h, 1)} sa (gece sınırı ${sayi(m.geceSinir, 1)} sa)`);
-    liste.push({ i, e, t, h, tur, kisiler: sec.map(a => a.p), ihlal });
+    /* kişiler tezgâhlara sırayla, oranları kadar dağılır: 0,5 + 0,5 aynı kişiyi, 1 + 1 ayrı kişileri gösterir */
+    const ks = sec.map(a => a.p); let s = 0, bos = 1;
+    for (const x of kume) {
+      let o = x.t.opOran == null ? 1 : +x.t.opOran; const bunlar = o > 0 || !ks.length ? [] : [ks[Math.min(s, ks.length - 1)]];
+      while (o > 1e-9 && s < ks.length) { const al = Math.min(o, bos); if (!bunlar.includes(ks[s])) bunlar.push(ks[s]); o -= al; bos -= al; if (bos <= 1e-9) { s++; bos = 1; } }
+      liste.push({ i: x.i, e: x.e, t: x.t, h, tur, kisiler: bunlar, ihlal });
+    }
   }
   return { liste, kisi };
 }

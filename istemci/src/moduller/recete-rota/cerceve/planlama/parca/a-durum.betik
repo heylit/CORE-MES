@@ -11,12 +11,21 @@ function yeniCalisma(setId) {
   return {
     surum: 2, setId, D: clone(v.veri), down: clone(v.ariza || []), ekMesai: [], locks: {}, pref: {},
     w: { dondurma: 4, famK: 0.3, mat: 'karma', sure: 10 },
-    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: [], bedel: null,
+    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: ['personel'], kisitSurum: 2, bedel: null,
     olaylar: [], plan: null, dataVer: 1, senaryolar: [], canli: null, canliSurum: 0, tabanSurum: 0, iz: [], kullanici: (S && S.kullanici) || 'u1',
   };
 }
+/* 561 2 a: personel kısıtı kullanıcı açana kadar kapalıdır (motor/girdi.betik kapaliKisitlar); eski çalışma açılırken listeye eklenir,
+   kullanıcı bir şey değiştirmeden yazılmaz */
+function kisitSurumuKur(x) {
+  if ((+x.kisitSurum || 0) >= 2) return x;
+  x.kapali = Array.isArray(x.kapali) ? x.kapali : [];
+  if (!x.kapali.includes('personel')) x.kapali.push('personel');
+  x.kisitSurum = 2;
+  return x;
+}
 function yukle() {
-  try { const x = JSON.parse(localStorage.getItem(ANAHTAR) || 'null'); if (x && x.surum === 2 && x.D) return x; } catch (e) { /* tarayıcı belleği kapalı olabilir */ }
+  try { const x = JSON.parse(localStorage.getItem(ANAHTAR) || 'null'); if (x && x.surum === 2 && x.D) return kisitSurumuKur(x); } catch (e) { /* tarayıcı belleği kapalı olabilir */ }
   return null;
 }
 function kaydet() {

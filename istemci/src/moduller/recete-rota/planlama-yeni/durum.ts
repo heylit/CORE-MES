@@ -18,6 +18,9 @@ const nesneMi = (v: unknown): v is Record<string, unknown> => typeof v === 'obje
 const dizi = <T>(v: unknown, uygun: (x: unknown) => x is T): T[] => (Array.isArray(v) ? v.filter(uygun) : []);
 const kimlikli = (alan: string) => (x: unknown): x is ExtraAlanlar => nesneMi(x) && typeof x[alan] === 'string';
 const sayi = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+// 561 2 a: personel kısıtı (operatör oranı) kullanıcı açana kadar kapalıdır; motor/girdi.betik kapaliKisitlar ile aynı kural.
+export const KISIT_SURUM = 2;
+const kapaliKisitlar = (k: string[], surum: number | null): string[] => ((surum ?? 0) >= KISIT_SURUM || k.includes('personel') ? k : [...k, 'personel']);
 const izSatiriMi = (x: unknown): x is IzSatiri => nesneMi(x) && typeof x.t === 'number' && typeof x.ne === 'string';
 
 function veriOku(D: Record<string, unknown>): PlanVerisi {
@@ -44,7 +47,8 @@ export function calismaOku(deger: unknown): PlanlamaCalismasi | null {
     pref: nesneMi(c.pref) ? c.pref : {},
     w: { ...VARSAYILAN_AGIRLIK, ...(nesneMi(c.w) ? c.w : {}) } as PlanAgirliklari,
     param: { ...VARSAYILAN_PARAMETRE, ...(nesneMi(c.param) ? c.param : {}) } as PlanParametreleri,
-    kapali: dizi(c.kapali, (x): x is string => typeof x === 'string'),
+    kapali: kapaliKisitlar(dizi(c.kapali, (x): x is string => typeof x === 'string'), sayi(c.kisitSurum)),
+    kisitSurum: KISIT_SURUM,
     bedel: c.bedel ?? null,
     olaylar: dizi(c.olaylar, nesneMi),
     plan: nesneMi(c.plan) && sayi(c.plan.dataVer) !== null ? (c.plan as PlanlamaCalismasi['plan']) : null,

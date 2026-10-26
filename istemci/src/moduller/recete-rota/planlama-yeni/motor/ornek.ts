@@ -431,6 +431,7 @@ const KAYIT: Record<string, unknown> = {
   "simdi": 8,
   "surum": 2,
   "kapali": [],
+  "kisitSurum": 2,
   "dataVer": 8,
   "ekMesai": [],
   "olaylar": [],

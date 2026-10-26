@@ -377,12 +377,19 @@ function tmiCevir(st, kaynak, D0, bugun) {
   const firmalar = k && k.durum.fasonFirms;
   if (Array.isArray(firmalar)) D.fasoncular = tmiFasoncular(sk, firmalar, D, D0);
   const adet = tmiAdimAdetleri(k && k.durum, sk, D); if (adet) D.opAdet = adet;
+  if (k && Array.isArray(k.durum.stations)) tmiOperatorOrani(D.tezgahlar, k.durum.stations);
   const kp = k && k.ek && k.ek.kapasite;
   if (kp && Array.isArray(kp.kisiler)) D.devamsizlik = tmiDevamsizlik(D0 ? D0.devamsizlik : D.devamsizlik, kp.kisiler);
   const sa = k && k.ek && k.ek.acikSiparisler;
   if (Array.isArray(sa)) { const y = tmiSatinalma(D0 ? D0.satinalma : D.satinalma, sa); if (y) D.satinalma = y; }
   if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   return D;
+}
+/* 561 1 b: TMI'de tezgâhın operatör oranı istasyonun plan ayarıdır (çalışan bir makinenin istediği operatör; "bir operatör en çok N
+   tezgâh" 1/N yazar). Planlamada girilmez: kaynak okundukça istasyonunkiyle yazılır; istasyonu okunmayan tezgâhta oran 1 sayılır. */
+function tmiOperatorOrani(tezgahlar, istasyonlar) {
+  const O = new Map(istasyonlar.map(x => [String(x.id), x.opPer]));
+  for (const m of tezgahlar || []) { const v = O.get(String(m.grup)); m.opOran = v == null || !isFinite(+v) ? 1 : +v; }
 }
 /* 533 a: Satın Alma'nın tedarik termini malzemede durur (saTermin 'GGGG-AA-GG' ya da null; saSurum yazma ucunun sürümü). Okunamadıysa
    (null) açık çalışmadaki değer kalır; satırı olmayan malzemede alan yoktur (termin bekleniyor). */
@@ -475,6 +482,13 @@ const GEVSEK = {
   ayar: st => { for (const u of st.D.urunler) for (const o of u.rota) for (const t of o.tezgahlar || []) t.ayar = 0; st.D.ayarMatrisi = []; },
   malzeme: st => { st.w.mat = 'uyari'; },
 };
+/* 561 2 a: personel kısıtı (operatör oranı) kullanıcı Kısıtlar sayfasından açana kadar kapalıdır. kisitSurum 2 olan çalışmada
+   kapali listesi kullanıcının kararıdır; daha eski çalışmada listeye personel eklenir. */
+const KISIT_SURUM = 2;
+function kapaliKisitlar(S) {
+  const k = Array.isArray(S.kapali) ? S.kapali : [];
+  return (+S.kisitSurum || 0) >= KISIT_SURUM || k.includes('personel') ? k.slice() : [...k, 'personel'];
+}
 function stKur(S, ek = [], gevset = true) {
   const D = clone(S.D);
   D.ayarlar = D.ayarlar || {};
@@ -485,7 +499,7 @@ function stKur(S, ek = [], gevset = true) {
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: {},
     w: { ...clone(W0), famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta) },
   };
-  const kapali = new Set([...(gevset ? S.kapali : []), ...ek]);
+  const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
   /* Soru 159 b: vardiyası olan ayarcı yoksa ayarcı sınırı uygulanmaz (yoksa ayarlı hiçbir adım yerleşmez); motor bunu uyarıyla söyler */
   if (!kapali.has('ayarci') && ayarciYok(D)) { GEVSEK.ayarci(st); st.ayarciYok = true; }

@@ -9,7 +9,7 @@ const TANIM = {
       { k: 'grup', ad: 'Grup', tur: 'metin', zorunlu: 1, liste: [...new Set(S.D.tezgahlar.map(t => t.grup))], ipucu: 'Personel yetkinliği bu gruba göre aranır' },
       { k: 'vardiyalar', ad: 'Çalıştığı vardiyalar', tur: 'cok', secenek: () => S.D.vardiyalar.map(v => [v.id, `${v.id} ${v.bas}-${v.bit}`]), ipucu: 'Boş: fabrikanın bütün açık vardiyaları' },
       { k: 'verim', ad: 'Verim', tur: 'sayi', min: 0.1, max: 3, adim: 0.05, vars: 1, ipucu: '1: çevrim süresi aynen; 1,2: %20 hızlı' },
-      { k: 'opOran', ad: 'Operatör oranı', tur: 'sayi', min: 0, max: 1, adim: 0.1, vars: 1, ipucu: '0,5: bir operatör iki tezgâha bakar' },
+      { k: 'opOran', ad: 'Operatör oranı', tur: 'sayi', min: 0, max: 10, adim: 0.01, vars: 1, ipucu: '0,5: bir operatör iki tezgâha bakar', salt: () => typeof TMI_ICINDE !== 'undefined' && TMI_ICINDE },
       { k: 'isiksiz', ad: 'Işıksız çalışır (vardiya dışında da işler)', tur: 'evet' },
       { k: 'ucret', ad: 'Saat ücreti (TL)', tur: 'sayi', min: 0 },
       { k: 'arizaGun', ad: 'Ortalama arıza aralığı (gün)', tur: 'sayi', min: 0 },
@@ -106,6 +106,8 @@ function alanHtml(a, v, yeni, T) {
   const etiket = `<span class="tc-alan-etiket">${esc(a.ad)}${a.zorunlu ? ' <span class="tc-alan-zorunlu">*</span>' : ''}</span>`;
   const alt = a.ipucu ? `<span class="tc-alan-alt">${esc(a.ipucu)}</span>` : '';
   const kilitli = !yeni && T && a.k === T.kimlik;
+  /* 561 1 b: TMI'de oran istasyonun plan ayarından gelir, burada değiştirilmez */
+  const salt = a.salt && a.salt();
   if (a.tur === 'evet') return `<label class="tc-isaret tc-form-tam"><input type="checkbox" name="${a.k}" ${v ? 'checked' : ''}> ${esc(a.ad)}</label>`;
   if (a.tur === 'cok') { const s = new Set(v || []); return `<fieldset class="tc-alan tc-form-tam" style="border:0;padding:0;margin:0"><legend class="tc-alan-etiket">${esc(a.ad)}</legend><div class="pm-secimler">${a.secenek().map(([k, ad]) => `<label><input type="checkbox" name="${a.k}" value="${esc(k)}" ${s.has(k) ? 'checked' : ''}> ${esc(ad)}</label>`).join('')}</div>${alt}</fieldset>`; }
   if (a.tur === 'secim') return `<label class="tc-alan">${etiket}<select class="tc-alan-kutu" name="${a.k}" id="${id}" ${a.sayisal ? 'data-sayisal' : ''}><option value="">Seçin</option>${a.secenek().map(([k, ad]) => `<option value="${esc(k)}" ${String(v) === String(k) ? 'selected' : ''}>${esc(ad)}</option>`).join('')}</select>${alt}</label>`;
@@ -116,7 +118,7 @@ function alanHtml(a, v, yeni, T) {
   const tip = a.tur === 'sayi' ? 'number' : a.tur === 'tarihsaat' ? 'datetime-local' : a.tur === 'tarih' ? 'date' : a.tur === 'saat' ? 'time' : 'text';
   const deger = a.tur === 'tarihsaat' ? girdiDT(v) : (v ?? '');
   const dl = a.liste ? `<datalist id="dl-${a.k}">${a.liste.map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : '';
-  return `<label class="tc-alan">${etiket}<input class="tc-alan-kutu" type="${tip}" name="${a.k}" id="${id}" value="${esc(deger)}" ${a.min != null ? `min="${a.min}"` : ''} ${a.max != null ? `max="${a.max}"` : ''} ${a.tur === 'sayi' ? `step="${a.adim || (a.tam ? 1 : 'any')}"` : ''} ${a.liste ? `list="dl-${a.k}"` : ''} ${kilitli ? 'readonly title="Kod değişmez; yeni kayıt açın"' : ''} ${a.ipucu && tip === 'text' ? `placeholder="${esc(a.ipucu)}"` : ''}>${alt}${dl}</label>`;
+  return `<label class="tc-alan">${etiket}<input class="tc-alan-kutu" type="${tip}" name="${a.k}" id="${id}" value="${esc(deger)}" ${a.min != null ? `min="${a.min}"` : ''} ${a.max != null ? `max="${a.max}"` : ''} ${a.tur === 'sayi' ? `step="${a.adim || (a.tam ? 1 : 'any')}"` : ''} ${a.liste ? `list="dl-${a.k}"` : ''} ${kilitli ? 'readonly title="Kod değişmez; yeni kayıt açın"' : salt ? 'readonly title="İstasyonun plan ayarından gelir (İstasyonlar)"' : ''} ${a.ipucu && tip === 'text' ? `placeholder="${esc(a.ipucu)}"` : ''}>${alt}${dl}</label>`;
 }
 function formOku(form, tur) {
   const T = TANIM[tur]; const x = {}; const hata = [];

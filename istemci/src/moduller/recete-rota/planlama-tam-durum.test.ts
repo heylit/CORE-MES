@@ -47,7 +47,7 @@ const KAYNAK = {
 const CALISMA = {
   D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
   rrSavedAt: 5, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, w: { famK: 0.3, mat: 'uyari', dondurma: 4 },
-  param: { tampon: false, tamponZ: 0, acilPay: 0 }, kapali: [], olaylar: [], plan: null,
+  param: { tampon: false, tamponZ: 0, acilPay: 0 }, kapali: [], kisitSurum: 2, olaylar: [], plan: null,
 };
 
 function kur(): { m: Motor; S: Nesne & { D: Nesne }; st: St } {

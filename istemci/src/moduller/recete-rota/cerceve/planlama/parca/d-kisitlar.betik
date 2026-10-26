@@ -16,7 +16,7 @@ const KATALOG = [
     { id: 'enerji', ad: 'Enerji ve puant saat', durum: 'yok' },
   ] },
   { grup: 'İnsan', simge: 'user', l: [
-    { id: 'personel', ad: 'Operatör sayısı', durum: 'tam', g: 1, not: 'Çalışan tezgâhların operatör oranı toplamı vardiyadaki operatörü aşamaz.', sayfa: 'personel' },
+    { id: 'personel', ad: 'Operatör sayısı', durum: 'tam', g: 1, not: 'Çalışan tezgâhların operatör oranı toplamı vardiyadaki operatörü aşamaz. Oran istasyonun plan ayarıdır (bir operatör en çok N tezgâh); başta kapalıdır, istasyonlarda oran girilince açın.', sayfa: 'personel' },
     { id: 'yetkin', ad: 'Operatör yetkinliği (tezgâh grubu)', durum: 'tam', g: 1, not: 'Kapatılırsa herkes her grupta çalışabilir sayılır.', sayfa: 'personel' },
     { id: 'devam', ad: 'Devamsızlık', durum: 'tam', g: 1, sayfa: 'personel' },
     { id: 'ayarci', ad: 'Ayarcı sayısı', durum: 'tam', g: 1, not: 'Aynı anda yapılan ayar vardiyadaki ayarcıyı aşamaz.', sayfa: 'personel' },
