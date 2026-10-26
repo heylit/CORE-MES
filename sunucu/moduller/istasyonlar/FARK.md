@@ -1,3 +1,12 @@
+# FARK: istasyonlar sayfasını sadeleştirme, kart 670 (dal 670-istasyonlar)
+
+Kullanıcı kararı 672 a (a-h hepsi, prototip değişikliği onaylı). Yalnız istemci; şema, göç, uç, işlem ve rol değişmedi.
+- İş merkezleri ve istasyonlar: istasyon tablosunda "İş merkezi" sütunu kalktı (satır zaten merkezin panelinde; Reçete-Rota Kaynaklar düzeni); taşıma düzenlemede adın altında ve toplu "Taşı"da.
+- Operatör / makine hücresi kısa yazar ("1", "1 / 2 tezgâh", "Gerekmez"); uzun anlatım hücrenin ipucunda. Makine çipi kırılmaz; tablo 1280'de taşmaz.
+- Araç çubuğu tek satır; "Hepsini aç" ve "Hepsini kapat" tek değişen düğme. Sayısı sıfır olan süzgeç çipi görünmez (seçiliyse kalır).
+- Yardım metni "Nasıl çalışır" açılır ayrıntısında; grup başlığında "sa/hafta" ve ikonlu "Vardiyalar" bağlantısı.
+- 360: istasyon satırı seçim kutusu, kod ve ad üstte, kalan alanlar iki sütunda. Genel bakış: dört özet kart 1200 ve üstünde tek satır, 768'de iki, telefonda bir.
+
 # FARK: istasyonlar yönetimi kolaylaştırma, kart #1296 (dal 1296-istasyonlar-yonetim)
 
 Kullanıcı kararları (kart #1296): "Düzenle düğmesi", "Hepsi ya da hiçbiri", "Çoklu ekle" (CSV yok). Şema, göç, işlem ve rol değişmedi.
