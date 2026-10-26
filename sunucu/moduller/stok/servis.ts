@@ -2557,6 +2557,9 @@ export async function uretimHazirligi(db: Db, k: Kullanici, g: UretimHazirligiGo
   const emir = await uretimEmriOzeti(db, Number(g.uretimEmriId));
   if (!emir) throw dogrulama('Üretim emri bulunamadı.', 'uretimEmriId');
   if (emir.siradakiIsEmriId === null) return { hazir: true, eksikler: [] };
+  // Sıradaki adım bu istasyonun değilse (önceki adım bitmedi) o adımın girdisi burada aranmaz, buraya istek açılmaz;
+  // başlatmayı sıra kuralı reddeder ve operatör tek ileti görür (622).
+  if ((await isEmriOzeti(db, emir.siradakiIsEmriId))?.istasyonId !== istasyonId) return { hazir: true, eksikler: [] };
   const sonuc = await eksikIstekleriAc(db, k.id, emir, emir.siradakiIsEmriId, istasyonId, 'Üretime başlarken istasyonda yok');
   return { hazir: sonuc.length === 0, eksikler: sonuc };
 }
