@@ -68,21 +68,22 @@ test('Satın Alma grubu menüde Stok ile Kalite arasındadır; tek sayfadır, b�
   );
 });
 
-// 195 a: planlama maddeleri (eski Plan ve Plan stüdyosu dahil) planlama sayfalarını görme işlemini ister; o işlem yönetici, müdür
-// ve planlamadadır. Maliyet ve kâr gösteren üç madde birim maliyet okumasını ister (planlama rolü maliyet görmez, 200 a). Öteki
-// maddeler sayfa işlemini ister.
-test('Reçete ve Rota ikinci menüsünde planlama maddeleri recete-rota.planlama-oku, maliyet maddeleri finans.maliyet-oku, öteki maddeler sayfa işlemini ister', () => {
-  const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
+// 195 a, 658 b: Planlama plan modülünün sayfasıdır; maddeleri planlama sayfalarını görme işlemini ister (yönetici, müdür ve planlama;
+// 663 a). Maliyet ve kâr gösteren üç madde birim maliyet okumasını ister (planlama rolü maliyet görmez, 200 a). Reçete ve Rota'da
+// planlama maddesi kalmaz.
+test('Planlama ikinci menüsünde planlama maddeleri plan.planlama-oku, maliyet maddeleri finans.maliyet-oku ister; Reçete ve Rota yalnız kendi sayfasını', () => {
+  const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/plan');
   assert.ok(menu);
-  const planlama = menu.gruplar.find((g) => g.baslik === 'Planlama')?.maddeler ?? [];
-  assert.deepEqual(planlama.map((m) => m.anahtar),
+  const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
+  assert.deepEqual(maddeler.map((m) => m.anahtar),
     ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat']);
   const maliyet = ['maliyet', 'giderler', 'denge'];
-  const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
   assert.deepEqual(maddeler.filter((m) => m.islem === 'finans.maliyet-oku').map((m) => m.anahtar), maliyet);
-  assert.deepEqual(maddeler.filter((m) => m.islem === 'recete-rota.planlama-oku'), planlama.filter((m) => !maliyet.includes(m.anahtar)));
-  assert.ok(maddeler.filter((m) => !['recete-rota.planlama-oku', 'finans.maliyet-oku'].includes(m.islem)).every((m) => m.islem === 'sayfa.recete-rota'));
-  assert.ok(maddeler.every((m) => m.veya === undefined));
+  assert.ok(maddeler.filter((m) => !maliyet.includes(m.anahtar)).every((m) => m.islem === 'plan.planlama-oku'));
+  assert.ok(maddeler.every((m) => m.veya === undefined && (m.yol === '/plan' || m.yol === `/plan/${m.anahtar}`)));
+  const rr = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
+  assert.ok(rr);
+  assert.ok(rr.gruplar.flatMap((g) => g.maddeler).every((m) => m.islem === 'sayfa.recete-rota'));
 });
 
 test('İK ikinci menüsünde PDKS aktar maddesi yalnız nizamiye.pdks-aktar ister (341 a); öteki maddeler ik.oku', () => {
