@@ -67,6 +67,21 @@ export const saatCihazlariCevabi = z.object({ cihazlar: z.array(saatCihaziSemasi
 export const saatCihaziParametresi = z.object({ id: z.coerce.number().int().positive() });
 export const saatCihaziKapatCevabi = z.object({ tamam: z.literal(true) });
 
+// Ortak cihaz (kart #739, karar 738 a). Cihaz belirteci HttpOnly çerezdedir, cevaba girmez. `GET /oturum/cihaz` oturumdaki cihazın
+// ortak olup olmadığını verir; kayıtsız ya da iptal edilmiş cihaz kişiseldir (kalıcı yerel veri tutmaz).
+const ORTAK_CIHAZ_ADI = z.string().trim().min(1, 'Cihaz adı boş olamaz.').max(80, 'Cihaz adı en çok 80 karakter.');
+export const cihazDurumuCevabi = z.object({ ortak: z.boolean(), id: z.number().int().nullable(), ad: z.string().nullable() });
+export const ortakCihazSemasi = z.object({
+  id: z.number().int(), ad: z.string(), kaydedenKisiId: z.number().int(), kaydedildi: zamanSemasi, buCihaz: z.boolean(),
+});
+export const ortakCihazlarCevabi = z.object({ cihazlar: z.array(ortakCihazSemasi) });
+export const ortakCihazKaydetGovdesi = z.object({ ad: ORTAK_CIHAZ_ADI }).strict();
+export const ortakCihazKaydetCevabi = z.object({ cihaz: ortakCihazSemasi });
+export const ortakCihazParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const ortakCihazKapatCevabi = z.object({ tamam: z.literal(true) });
+export type CihazDurumu = z.output<typeof cihazDurumuCevabi>;
+export type OrtakCihaz = z.output<typeof ortakCihazSemasi>;
+
 export type GirisGovdesi = z.input<typeof girisGovdesi>;
 export type PinBelirleGovdesi = z.input<typeof pinBelirleGovdesi>;
 export type GirisCevabi = z.output<typeof girisCevabi>;

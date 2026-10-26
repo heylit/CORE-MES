@@ -3,11 +3,13 @@ import {
   cikisCevabi, girisCevabi, girisGovdesi, hesapKilidiAcCevabi, hesapKilidiParametresi, hesapKilitleriCevabi, hesapKilitleriSorgusu,
   kendiParolaGovdesi, kendiPinGovdesi, oturumCevabi, parolaCevabi, pinBelirleGovdesi, saatCihaziKapatCevabi, saatCihaziParametresi,
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
+  cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
 } from '#paylasilan/sozlesme/oturum.ts';
-import { AZAMI_SN, CEREZ_ADI } from './kurallar.ts';
+import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
 import {
   cikisYap, girisYap, hesapKilidiniAc, hesapKilitleri, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
+  cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
 
@@ -164,6 +166,53 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       cevap: saatCihaziKapatCevabi,
       isle: async ({ db, kullanici, parametre }) => {
         await saatCihaziniKapat(db, parametre.id, kullanici.id, null);
+        return { tamam: true as const };
+      },
+    }),
+    // Ortak cihaz (kart #739, karar 738 a). Cihaz çerezi oturum çerezinden ayrıdır ve çıkışta kalır; ortak cihazda Arkon dosyaları
+    // çıkışta silinmez, kayıtsız cihaz kalıcı veri tutmaz. Durum her oturumdaki kişiye açıktır: istemci yerel depolama kipini buna göre seçer.
+    uc({
+      yontem: 'GET',
+      yol: '/oturum/cihaz',
+      yetki: 'oturum',
+      cevap: cihazDurumuCevabi,
+      isle: async ({ db, istek }) => {
+        const belirtec = istek.cerez(CIHAZ_CEREZI);
+        const { bayatCerez, ...durum } = await cihazDurumu(db, belirtec);
+        if (bayatCerez) istek.cerezSil(CIHAZ_CEREZI);
+        // Kullanılan cihazın çerezi tazelenir: tarayıcının çerez ömrü dolup cihaz kendiliğinden kişisele dönmesin.
+        else if (durum.ortak && belirtec !== null) istek.cerezYaz(CIHAZ_CEREZI, belirtec, CIHAZ_CEREZ_SN);
+        return durum;
+      },
+    }),
+    uc({
+      yontem: 'GET',
+      yol: '/oturum/ortak-cihazlar',
+      yetki: 'oturum.ortak-cihaz',
+      cevap: ortakCihazlarCevabi,
+      isle: async ({ db, istek }) => ({ cihazlar: await ortakCihazlar(db, istek.cerez(CIHAZ_CEREZI)) }),
+    }),
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/ortak-cihazlar',
+      yetki: 'oturum.ortak-cihaz',
+      govde: ortakCihazKaydetGovdesi,
+      cevap: ortakCihazKaydetCevabi,
+      isle: async ({ db, kullanici, govde, istek }) => {
+        const { cihaz, belirtec } = await ortakCihazKaydet(db, kullanici.id, govde.ad, istek.cerez(CIHAZ_CEREZI));
+        istek.cerezYaz(CIHAZ_CEREZI, belirtec, CIHAZ_CEREZ_SN);
+        return { cihaz };
+      },
+    }),
+    // İptal durum komutudur: yinelenen istek açık cihaz bulamaz, 404 alır.
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/ortak-cihazlar/:id/kapat',
+      yetki: 'oturum.ortak-cihaz',
+      parametre: ortakCihazParametresi,
+      cevap: ortakCihazKapatCevabi,
+      isle: async ({ db, kullanici, parametre, istek }) => {
+        if (await ortakCihaziKapat(db, parametre.id, kullanici.id, istek.cerez(CIHAZ_CEREZI))) istek.cerezSil(CIHAZ_CEREZI);
         return { tamam: true as const };
       },
     }),

@@ -474,3 +474,49 @@ export async function kisiSaatBelirtecleriniKapat(db: Db, kisiId: number): Promi
     [kisiId],
   );
 }
+
+/* ---------------- ortak cihaz (kart #739) ---------------- */
+
+export interface OrtakCihazSatiri {
+  id: number;
+  ad: string;
+  kaydedenKisiId: number;
+  kaydedildi: string;
+  ozet: string;
+}
+
+const ORTAK_CIHAZ_ALANLARI = `id::int AS id, ad, kaydeden_kisi_id AS "kaydedenKisiId", ${zamanMetni('kaydedildi')} AS kaydedildi,
+  belirtec_ozeti AS ozet`;
+
+export function ortakCihazEkle(db: Db, ozet: string, ad: string, kisiId: number): Promise<OrtakCihazSatiri | null> {
+  return db.tek<OrtakCihazSatiri>(
+    `INSERT INTO oturum_ortak_cihaz (belirtec_ozeti, ad, kaydeden_kisi_id, kaydedildi)
+     VALUES ($1, $2, $3, now())
+     RETURNING ${ORTAK_CIHAZ_ALANLARI}`,
+    [ozet, ad, kisiId],
+  );
+}
+
+export async function acikOrtakCihazAdiVar(db: Db, ad: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM oturum_ortak_cihaz WHERE lower(ad) = lower($1) AND kapandi IS NULL', [ad])) !== null;
+}
+
+export function acikOrtakCihazBul(db: Db, ozet: string): Promise<OrtakCihazSatiri | null> {
+  return db.tek<OrtakCihazSatiri>(`SELECT ${ORTAK_CIHAZ_ALANLARI} FROM oturum_ortak_cihaz WHERE belirtec_ozeti = $1 AND kapandi IS NULL`, [ozet]);
+}
+
+export function acikOrtakCihazlar(db: Db): Promise<OrtakCihazSatiri[]> {
+  return db.sorgu<OrtakCihazSatiri>(
+    `SELECT ${ORTAK_CIHAZ_ALANLARI} FROM oturum_ortak_cihaz WHERE kapandi IS NULL ORDER BY lower(ad), id`,
+  );
+}
+
+export async function ortakCihazKapat(db: Db, id: number, kapatanKisiId: number): Promise<string | null> {
+  const satir = await db.tek<{ ozet: string }>(
+    `UPDATE oturum_ortak_cihaz SET kapandi = now(), kapatan_kisi_id = $2
+      WHERE id = $1 AND kapandi IS NULL
+      RETURNING belirtec_ozeti AS ozet`,
+    [id, kapatanKisiId],
+  );
+  return satir?.ozet ?? null;
+}

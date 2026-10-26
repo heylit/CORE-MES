@@ -3,12 +3,12 @@ import { cerezOku } from '#cekirdek/cerez.ts';
 import { vtUlasilamadi } from '#cekirdek/db.ts';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { UygulamaHatasi, bulunamadi, cokIstek, gecersiz, oturumYok, veritabaniYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bulunamadi, cakisma, cokIstek, gecersiz, oturumYok, veritabaniYok } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { Kimlik } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import type { HesapKilidi } from '#paylasilan/sozlesme/oturum.ts';
+import type { CihazDurumu, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
   girisDogrula, ilkPiniYaz, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
@@ -23,9 +23,9 @@ import {
   cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, gecerliOturumBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
-  saatIstegiOnayla, saatIstekleriniTemizleSay,
+  saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
 } from './sorgular.ts';
-import type { SaatBelirteciSatiri, Simdi } from './sorgular.ts';
+import type { OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
 
 const HATALI_GIRIS = 'Kullanıcı adı, PIN ya da parola hatalı.';
 
@@ -324,4 +324,40 @@ export async function oturumKullanicisi(
     if (vtUlasilamadi(hata)) throw veritabaniYok();
     throw hata;
   }
+}
+
+/* ---------------- ortak cihaz (kart #739, karar 738 a) ---------------- */
+
+const ortakCihaz = ({ ozet, ...satir }: OrtakCihazSatiri, buOzet: string | null): OrtakCihaz => ({ ...satir, buCihaz: ozet === buOzet });
+
+// Cihazın çerezi yoksa, bilinmiyorsa ya da cihaz iptal edildiyse cihaz kişiseldir; çağıran bayat çerezi siler.
+export async function cihazDurumu(db: Db, belirtec: string | null): Promise<CihazDurumu & { bayatCerez: boolean }> {
+  const satir = belirtec ? await acikOrtakCihazBul(db, anahtarOzeti(belirtec)) : null;
+  if (satir === null) return { ortak: false, id: null, ad: null, bayatCerez: belirtec !== null };
+  return { ortak: true, id: satir.id, ad: satir.ad, bayatCerez: false };
+}
+
+// Yönetici kaydı ortak yapılacak cihazın kendisinden yapar: belirteç bu cihazın çerezine yazılır. Zaten ortak olan cihaz yeniden kaydedilmez.
+export async function ortakCihazKaydet(db: Db, kisiId: number, ad: string, mevcutBelirtec: string | null): Promise<{ cihaz: OrtakCihaz; belirtec: string }> {
+  if (mevcutBelirtec && (await acikOrtakCihazBul(db, anahtarOzeti(mevcutBelirtec))) !== null) {
+    throw cakisma('Bu cihaz zaten ortak cihaz olarak kayıtlı.');
+  }
+  if (await acikOrtakCihazAdiVar(db, ad)) throw cakisma('Bu adla kayıtlı bir ortak cihaz var.');
+  const belirtec = randomBytes(32).toString('base64url');
+  const ozet = anahtarOzeti(belirtec);
+  const satir = await ortakCihazEkle(db, ozet, ad, kisiId);
+  if (satir === null) throw new Error('Ortak cihaz yazılamadı.');
+  return { cihaz: ortakCihaz(satir, ozet), belirtec };
+}
+
+export async function ortakCihazlar(db: Db, belirtec: string | null): Promise<OrtakCihaz[]> {
+  const buOzet = belirtec ? anahtarOzeti(belirtec) : null;
+  return (await acikOrtakCihazlar(db)).map((s) => ortakCihaz(s, buOzet));
+}
+
+// İptal edilen cihaz bir sonraki bağlantıda kişisel sayılır ve yerel verisini siler. Dönen değer: iptal edilen bu cihaz mıydı.
+export async function ortakCihaziKapat(db: Db, id: number, kapatanKisiId: number, belirtec: string | null): Promise<boolean> {
+  const ozet = await ortakCihazKapat(db, id, kapatanKisiId);
+  if (ozet === null) throw bulunamadi('Açık ortak cihaz bulunamadı.');
+  return belirtec !== null && anahtarOzeti(belirtec) === ozet;
 }
