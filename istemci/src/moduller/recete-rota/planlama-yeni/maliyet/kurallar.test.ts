@@ -120,6 +120,23 @@ describe('P3 saf hesaplar', () => {
     expect(A.liste[0]?.ihlal).toEqual([]);
   });
 
+  // 570 a: aynı gün, vardiya ve gruptaki ek vardiyalar operatörü paylaşır.
+  it('ek mesaide oranı 0,5 olan iki tezgâh tek kişiyle, oranı 1 olan iki tezgâh iki kişiyle; başka grup ayrı sayılır', () => {
+    const D = (op: number) => ({
+      tezgahlar: [
+        { id: 'T1', ad: 'Deneme torna 1', grup: 'TORNA', ucret: 100, verim: 1, opOran: op }, { id: 'T3', ad: 'Deneme torna 2', grup: 'TORNA', ucret: 100, verim: 1, opOran: op },
+        { id: 'T2', ad: 'Deneme freze', grup: 'FREZE', ucret: null, verim: 1, opOran: op },
+      ],
+      personel: [{ id: 'P1', ad: 'Deneme Bir', vardiya: 'V1', gruplar: ['TORNA', 'FREZE'] }, { id: 'P2', ad: 'Deneme Iki', vardiya: 'V1', gruplar: ['TORNA', 'FREZE'] }],
+    });
+    const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }, { m: 'T3', gun: 5, vardiya: 'V1' }, { m: 'T2', gun: 5, vardiya: 'V1' }];
+    const yarim = mesaiAtamasi(ornekCalisma({ ekMesai: ek, D: D(0.5) }));
+    expect(yarim.liste.map((a) => [a.tezgah.id, a.kisiler.map((k) => k.id), a.ihlal])).toEqual([['T1', ['P1'], []], ['T3', ['P1'], []], ['T2', ['P2'], []]]);
+    expect(yarim.plan).toEqual({ P1: 8, P2: 8 });
+    const tam = mesaiAtamasi(ornekCalisma({ ekMesai: ek, D: D(1) }));
+    expect(tam.liste.slice(0, 2).map((a) => [a.tezgah.id, a.kisiler.map((k) => k.id)])).toEqual([['T1', ['P1']], ['T3', ['P2']]]);
+  });
+
   it('fason dönüşü: termin yoksa ve iş bir hafta içinde çıkıyorsa hata; termin siparişi karşılıyorsa tamam', () => {
     const c = ornekCalisma();
     const L = fasonIsleri(c, isTanimlari(c, takvimKur(c)));

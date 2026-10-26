@@ -549,6 +549,8 @@ export function mesaiPaylari(c: PlanlamaCalismasi, T: Takvim): Record<string, nu
 }
 export interface MesaiAtamasi { i: number; e: EkMesai; tezgah: Tezgah; h: number; tur: GunTuru; kisiler: { id: string; ad: string }[]; ihlal: string[] }
 // Ek vardiyaya o grupta yetkin, o gün izinli olmayan, aynı vardiyada çalışmayan ve bu yıl en az fazla mesai yapmış kişi atanır (msAtama).
+// 570 a: aynı gün, vardiya ve gruptaki ek vardiyalar operatörü paylaşır; gereken kişi oranların toplamının yukarı yuvarlanmışıdır
+// (0,5 + 0,5 bir kişi, tek 0,5 yine bir kişi). Paylaşan tezgâhların satırı aynı kişileri gösterir.
 export function mesaiAtamasi(c: PlanlamaCalismasi): { liste: MesaiAtamasi[]; plan: Record<string, number> } {
   const D = c.D;
   const m = mesaiSistemi(D);
@@ -556,16 +558,22 @@ export function mesaiAtamasi(c: PlanlamaCalismasi): { liste: MesaiAtamasi[]; pla
   const kisi = new Map(P.map((p) => [p.id, { yil: m.ucret[p.id]?.yil ?? 0, plan: 0, gun: {} as Record<number, number> }]));
   const devam = diziOku(D.devamsizlik);
   const liste: MesaiAtamasi[] = [];
-  const sirali = ekMesailer(c).map((e, i) => ({ e, i })).sort((a, b) => a.e.gun - b.e.gun);
-  for (const { e, i } of sirali) {
+  const kumeler = new Map<string, { e: EkMesai; i: number; t: Tezgah; v: Vardiya }[]>();
+  for (const { e, i } of ekMesailer(c).map((e, i) => ({ e, i })).sort((a, b) => a.e.gun - b.e.gun)) {
     const t = D.tezgahlar.find((x) => x.id === e.m);
     const v = vardiyalar(D).find((x) => x.id === e.vardiya);
     if (!t || !v) continue;
+    const k = `${String(e.gun)}|${e.vardiya}|${t.grup ?? ''}`;
+    kumeler.set(k, [...(kumeler.get(k) ?? []), { e, i, t, v }]);
+  }
+  for (const kume of kumeler.values()) {
+    const { e, t, v } = kume[0]!;
     const h = vardiyaSaati(D, e.vardiya);
     const tur = gunTuru(D, e.gun);
     const gk = haftaGunu(D, e.gun);
     const iso = isoGun(D, e.gun);
-    const need = Math.max(1, Math.ceil(t.opOran === undefined || t.opOran === null ? 1 : t.opOran));
+    const oran = kume.reduce((a, x) => a + (x.t.opOran === undefined || x.t.opOran === null ? 1 : x.t.opOran), 0);
+    const need = Math.max(1, Math.ceil(oran - 1e-9));
     const normal = (p: (typeof P)[number]): number | null => {
       const cal = D.calismaGunleri?.[gk] ?? [];
       const izin = devam.some((d) => metin(d.personel ?? d.kisi) === p.id && metin(d.gun) === iso);
@@ -592,7 +600,20 @@ export function mesaiAtamasi(c: PlanlamaCalismasi): { liste: MesaiAtamasi[]; pla
     const b = hm(v.bas), son = hm(v.bit);
     const gece = b >= 20 || (son <= 6 && son < b);
     if (gece && h > m.geceSinir + 1e-6) ihlal.push(`gece vardiyası ${sayi(h, 1)} sa (gece sınırı ${sayi(m.geceSinir, 1)} sa)`);
-    liste.push({ i, e, tezgah: t, h, tur, kisiler: sec.map((a) => ({ id: a.p.id, ad: a.p.ad ?? a.p.id })), ihlal });
+    // Kişiler tezgâhlara sırayla, oranları kadar dağılır: 0,5 + 0,5 aynı kişiyi, 1 + 1 ayrı kişileri gösterir.
+    const kisiler = sec.map((a) => ({ id: a.p.id, ad: a.p.ad ?? a.p.id }));
+    let s = 0, bos = 1;
+    for (const x of kume) {
+      let o = x.t.opOran === undefined || x.t.opOran === null ? 1 : x.t.opOran;
+      const bunlar = o > 0 || !kisiler.length ? [] : [kisiler[Math.min(s, kisiler.length - 1)]!];
+      while (o > 1e-9 && s < kisiler.length) {
+        const al = Math.min(o, bos);
+        if (!bunlar.includes(kisiler[s]!)) bunlar.push(kisiler[s]!);
+        o -= al; bos -= al;
+        if (bos <= 1e-9) { s++; bos = 1; }
+      }
+      liste.push({ i: x.i, e: x.e, tezgah: x.t, h, tur, kisiler: bunlar, ihlal });
+    }
   }
   return { liste, plan: Object.fromEntries([...kisi].map(([id, k]) => [id, k.plan])) };
 }
