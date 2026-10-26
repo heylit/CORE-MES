@@ -61,7 +61,8 @@
 .tc-ay3-seritler { display: flex; gap: var(--b-3); overflow-x: auto; padding-bottom: var(--b-2); align-items: flex-start; }
 .tc-ay3-serit { flex: 0 0 var(--kuyruk-genis); display: grid; gap: var(--b-2); }
 .tc-ay3-serit[data-uzerinde] { outline: var(--cizgi-orta) dashed var(--hazard-ink); }
-.tc-ay3-kart { gap: var(--b-1); }
+.tc-ay3-kart { gap: var(--b-1); transition: transform var(--hareket-panel) var(--hareket-egri); }
+.tc-ay3-kart[data-kayiyor] { transform: translate(var(--kayma-x), var(--kayma-y)); transition: none; }
 .tc-ay3-kart[data-gec] { border-color: var(--stop); }
 .tc-ay3-kart[draggable="true"] { cursor: grab; }
 /* Bırakılan iş hedef kartın önüne girer: üst çizgi o yeri, soluk kart taşınan işi gösterir. */
@@ -71,6 +72,16 @@
 .tc-ay3-iki { display: flex; justify-content: space-between; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay3-gec { color: var(--stop); font-weight: 700; }
 .tc-ay3-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+/* Planla karşılaştır: şerit iki sütun, solda canlı plan (salt okunur), sağda kuyruk. */
+.tc-ay3-serit[data-karsilastir] { flex-basis: calc(2 * var(--kuyruk-genis) + var(--b-3)); }
+.tc-ay3-karsilastir { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-3); align-items: start; }
+.tc-ay3-karsilastir-sutun { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-ay3-karsilastir-bas { display: flex; gap: var(--b-1); align-items: center; font-weight: 700; }
+.tc-ay3-plan-satir { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--pay-ince) var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-ay3-plan-satir > small { grid-column: 2; }
+.tc-ay3-plan-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay3-plan-satir[data-fark="farkli"] { border-color: var(--hold); }
+.tc-ay3-plan-satir[data-fark="yeni"] { border-color: var(--grafik-2); }
 .tc-ay3-serit-alt { padding-block-start: var(--b-2); border-block-start: var(--cizgi-ince) solid var(--edge); }
 
 /* Planlı duruş: form ve haftalık şerit */
@@ -118,7 +129,8 @@ html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
   .tc-ay3-pano { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  .tc-ay3-serit { flex-basis: 85%; }
+  .tc-ay3-serit, .tc-ay3-serit[data-karsilastir] { flex-basis: 85%; }
+  .tc-ay3-karsilastir { grid-template-columns: minmax(0, 1fr); }
   .tc-ay3-kuyruk-arac .tc-ay3-secmeli { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .tc-ay3-kuyruk-arac .tc-ay3-secmeli button { flex: none; }
   .tc-ay3-hafta-satir { grid-template-columns: minmax(0, 1fr); }

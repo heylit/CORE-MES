@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react';
 import {
   PLAN_ETIKETI, SIRA_ONAYI, adimIstegi, kuyrukAdimHedefi, kuyrukIsiMi, kuyrukSirasi, kuyrukTasimaIstegi, planEtiketi, planFarkOzeti, planReferanslari, planaOneriIstekleri,
   siraOnayi, siralamaIstegi, siralamayiGonder, tmiPlani, type KuyrukIstegi, type PlanReferansTuru, type PlanReferansi, type SiralamaIstegi,
@@ -57,6 +57,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   const rs = useBelgeler<Result>('results', SONUC_ILETILERI);
   const [wc, wcYaz] = useYerelSecim('planWc', '');
   const [bitenler, bitenlerYaz] = useState(false);
+  const [karsilastir, karsilastirYaz] = useYerelSecim('planKarsilastir', false);
   const [surukle, surukleYaz] = useState<string | null>(null);
   const [uzerinde, uzerindeYaz] = useState<string | null>(null);
   const [onay, onayYaz] = useState<Onay | null>(null);
@@ -209,7 +210,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
     const dur = KART_DURUMLARI[kartDurumu(p, r)];
     const oynar = kuyrukIsiMi(p) ? kuyrukDuzenle : planDuzenle;
     return (
-      <div key={p.id} className="tc-ay3-kutu tc-ay3-kart" data-gec={gec || undefined} data-suruklenen={surukle === p.id || undefined}
+      <div key={p.id} className="tc-ay3-kutu tc-ay3-kart" data-kayma={p.id} data-gec={gec || undefined} data-suruklenen={surukle === p.id || undefined}
         data-uzerinde={(surukle && surukle !== p.id && uzerinde === p.id) || undefined}
         draggable={oynar} aria-label={`${p.no} ${p.part || 'Adsız parça'}`}
         onDragStart={(o) => { surukleYaz(p.id); o.dataTransfer.setData('text/plain', p.id); }}
@@ -260,8 +261,15 @@ function IsEmirleri({ salt }: { salt: boolean }) {
     const ozet = planFarkOzeti(refler.values());
     const hazirlikSirali = istasyonlu && sirali.some((p) => kuyrukSirasi(p) !== null);
     const oneri = istasyonlu && planDuzenle && ozet !== null && ozet.tur !== 'ayni';
+    const yanYana = istasyonlu && karsilastir;
+    const kartlar = (
+      <>
+        {sirali.map((p, i) => kart(p, id, sc[i], refler.get(p)))}
+        {!sirali.length && <small className="tc-ay3-not tc-ay3-serit-bos">{duzenle ? 'İş emri sürükle' : 'İş yok'}</small>}
+      </>
+    );
     return (
-      <section key={id} className="tc-ay3-kutu tc-ay3-serit" aria-label={`Şerit ${baslik}`} data-uzerinde={(surukle && uzerinde === `serit:${id}`) || undefined}
+      <section key={id} className="tc-ay3-kutu tc-ay3-serit" aria-label={`Şerit ${baslik}`} data-karsilastir={yanYana || undefined} data-uzerinde={(surukle && uzerinde === `serit:${id}`) || undefined}
         onDragOver={(o) => { if (surukle) { o.preventDefault(); if (uzerinde !== `serit:${id}` && !sirali.some((p) => p.id === uzerinde)) uzerindeYaz(`serit:${id}`); } }}
         onDrop={(o) => { if (istasyonlu) birak(o, id); else { o.preventDefault(); uzerindeYaz(null); } }}>
         <div className="tc-ay3-serit-bas">
@@ -270,8 +278,15 @@ function IsEmirleri({ salt }: { salt: boolean }) {
           {istasyonlu && suankiDurus(id, simdi, ayarlar.planliDuruslar, ayarlar.tesis) && <Cip renk="done">Planlı duruşta</Cip>}
           {ozet && <Cip renk={REFERANS_RENGI[ozet.tur]} simge="gantt" baslik="Kuyruk Hazırlık'ın sırasıdır; plan referanstır">{ozet.metin}</Cip>}
         </div>
-        {sirali.map((p, i) => kart(p, id, sc[i], refler.get(p)))}
-        {!sirali.length && <small className="tc-ay3-not tc-ay3-serit-bos">{duzenle ? 'İş emri sürükle' : 'İş yok'}</small>}
+        {yanYana ? (
+          <div className="tc-ay3-karsilastir">
+            <PlanSutunu istasyon={id} refler={refler} />
+            <div className="tc-ay3-karsilastir-sutun" role="group" aria-label={`Kuyruk ${baslik}`}>
+              <small className="tc-ay3-not tc-ay3-karsilastir-bas"><Simge ad="list" boyut="k" />Kuyruk</small>
+              {kartlar}
+            </div>
+          </div>
+        ) : kartlar}
         {((kuyrukDuzenle && hazirlikSirali) || oneri) && (
           <div className="tc-ay3-dugmeler tc-ay3-serit-alt">
             {kuyrukDuzenle && hazirlikSirali && <Dugme simge="rotate" onClick={() => planaDon(id)}>Plan sırasına dön</Dugme>}
@@ -283,15 +298,17 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   };
 
   const sahipsiz = isler.filter((p) => !bilinen.has(p.machine));
+  const kok = useKayma(`${karsilastir}|${wc}|${bitenler}`);
   return (
     <div className="tc-ay3-sayfa">
       <div className="tc-ay3-arac tc-ay3-kuyruk-arac">
         <IsMerkeziSuzgeci deger={wc} degistir={wcYaz} />
         <IsaretKutusu etiket="Tamamlananları göster" checked={bitenler} onChange={(o) => bitenlerYaz(o.target.checked)} />
+        <IsaretKutusu etiket="Planla karşılaştır" checked={karsilastir} onChange={(o) => karsilastirYaz(o.target.checked)} />
         <span className="tc-ay3-bosluk" />
         <small className="tc-ay3-not">Tahminler vardiya, mola ve planlı duruşlara göre · kalan adet × çevrim süresi</small>
       </div>
-      <div className="tc-ay3-seritler">
+      <div className="tc-ay3-seritler" ref={kok}>
         {sahipsiz.length > 0 && serit('-', 'Atanmamış', 'İstasyonu tanımsız', sahipsiz, false)}
         {seritler.map((s) => serit(s.id, s.id, s.name + (s.wcName ? ` · ${s.wcName}` : ''), isler.filter((p) => p.machine === s.id), true))}
       </div>
@@ -301,6 +318,60 @@ function IsEmirleri({ salt }: { salt: boolean }) {
       </OnayPenceresi>
     </div>
   );
+}
+
+// Şeridin canlı plan sırası, kuyruğun yanında salt okunur: plandaki yeri kuyruktakinden farklı ya da plana yeni girmiş iş vurgulanır.
+function PlanSutunu({ istasyon, refler }: { istasyon: string; refler: ReadonlyMap<Pkg, PlanReferansi> }) {
+  const satirlar = [...refler].filter(([, r]) => r.tur !== 'disi')
+    .map(([p, r]) => ({ p, r, d: tmiPlani(p)! }))
+    .sort((a, b) => (a.d.sira ?? 0) - (b.d.sira ?? 0) || (a.d.kaynak?.tur ?? '').localeCompare(b.d.kaynak?.tur ?? '') || (a.d.kaynak?.id ?? 0) - (b.d.kaynak?.id ?? 0));
+  return (
+    <div className="tc-ay3-karsilastir-sutun" role="group" aria-label={`Canlı plan ${istasyon}`}>
+      <small className="tc-ay3-not tc-ay3-karsilastir-bas" title="Canlı plan (referans); sıra kuyrukta değişir"><Simge ad="gantt" boyut="k" />Canlı plan</small>
+      {satirlar.map(({ p, r, d }) => (
+        <div key={p.id} className="tc-ay3-plan-satir" data-fark={r.tur === 'ayni' ? undefined : r.tur} aria-label={`${p.no} ${r.metin}`}>
+          <b className="mono">{d.sira}.</b>
+          <span className="tc-ay3-plan-ad"><span className="mono">{p.no}</span> {p.part || 'Adsız parça'}</span>
+          <small className="tc-ay3-not">{r.saat ? `${gunAySaat(Date.parse(r.saat.baslangic))} – ${gunAySaat(Date.parse(r.saat.bitis))}` : r.metin}</small>
+        </div>
+      ))}
+      {!satirlar.length && <small className="tc-ay3-not tc-ay3-serit-bos">Planda iş yok</small>}
+    </div>
+  );
+}
+
+// Sıra değişince kartlar eski yerinden yenisine kayar (FLIP): yeni yer ölçülür, kart eski yerine çekilir, sonra hareket süresiyle bırakılır.
+// Yerler şerit kabına göre tutulur, kaydırma kayma sayılmaz; düzen (karşılaştırma, süzgeç) değişince yalnız yerler yenilenir.
+function useKayma(duzen: string) {
+  const kok = useRef<HTMLDivElement>(null);
+  const once = useRef<{ duzen: string; yer: Map<string, { x: number; y: number }> } | null>(null);
+  useLayoutEffect(() => {
+    const k = kok.current;
+    if (!k) return undefined;
+    const kr = k.getBoundingClientRect();
+    const ogeler = [...k.querySelectorAll<HTMLElement>('[data-kayma]')];
+    const yer = new Map(ogeler.map((el) => {
+      const r = el.getBoundingClientRect();
+      return [el.dataset.kayma ?? '', { x: r.left - kr.left + k.scrollLeft, y: r.top - kr.top + k.scrollTop }] as const;
+    }));
+    const o = once.current;
+    once.current = { duzen, yer };
+    if (!o || o.duzen !== duzen) return undefined;
+    const kayanlar = ogeler.filter((el) => {
+      const a = o.yer.get(el.dataset.kayma ?? ''), b = yer.get(el.dataset.kayma ?? '');
+      if (!a || !b || (a.x === b.x && a.y === b.y)) return false;
+      el.style.setProperty('--kayma-x', `${a.x - b.x}px`);
+      el.style.setProperty('--kayma-y', `${a.y - b.y}px`);
+      el.setAttribute('data-kayiyor', '');
+      return true;
+    });
+    if (!kayanlar.length) return undefined;
+    void k.offsetHeight;
+    const birak = () => { for (const el of kayanlar) el.removeAttribute('data-kayiyor'); };
+    const a = requestAnimationFrame(birak);
+    return () => { cancelAnimationFrame(a); birak(); };
+  });
+  return kok;
 }
 
 const REFERANS_RENGI: Record<PlanReferansTuru, 'idle' | 'hold' | 'stop' | 'cmm'> = { ayni: 'idle', farkli: 'hold', disi: 'stop', yeni: 'cmm' };
