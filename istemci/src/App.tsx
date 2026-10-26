@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { SAYFALAR, yolKapaliMi } from '#paylasilan/sayfalar.ts';
-import { AcilisGosterisi, AnaSayfa, BildirimSaglayici, DurumKutusu, HataSiniri, Kabuk, Karsilama, Kart, useBildirim } from './ortak/arayuz/index.ts';
+import { AcilisGosterisi, AnaSayfa, BildirimSaglayici, BildirimSayfaIzleyici, DurumKutusu, HataSiniri, Kabuk, Karsilama, Kart, useBildirim } from './ortak/arayuz/index.ts';
 import { anaSayfaKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts';
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
@@ -97,6 +97,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
   const panoIslemleri = kapaliIslemler.size === 0 ? kullanici.islemler : kullanici.islemler.filter((i) => !kapaliIslemler.has(i));
   return (
     <BrowserRouter>
+      <BildirimSayfaIzleyici />
       <AcilisYonlendirmesi hedef={acilis} />
       <Karsilama kisiId={kullanici.id} ad={kullanici.ad} />
       <Kabuk

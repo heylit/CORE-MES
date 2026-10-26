@@ -1,6 +1,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { Simge } from './Simge.tsx';
 import './bildirim.css';
@@ -29,6 +30,7 @@ interface Baglam {
 }
 
 const BildirimBaglami = createContext<Baglam | null>(null);
+const SayfaDegistiBaglami = createContext<(() => void) | null>(null);
 
 const SIMGE: Record<BildirimTonu, SimgeAdi> = { tamam: 'check', bilgi: 'bell', hata: 'alert' };
 export const BILDIRIM_SURESI_MS = 4000;
@@ -56,6 +58,11 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
     if (ton !== 'hata') zamanlayicilar.current.set(no, setTimeout(() => kaldir(no), sure));
   }, [kaldir]);
 
+  // Hata, onu üreten sayfaya aittir: başka sayfada kalırsa o sayfanın hatası sanılır.
+  const sayfaDegisti = useCallback(() => {
+    kayitYaz((onceki) => (onceki.some((k) => k.ton === 'hata') ? onceki.filter((k) => k.ton !== 'hata') : onceki));
+  }, []);
+
   useEffect(() => {
     const acik = zamanlayicilar.current;
     return () => { for (const z of acik.values()) clearTimeout(z); };
@@ -65,7 +72,7 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
 
   return (
     <BildirimBaglami.Provider value={deger}>
-      {children}
+      <SayfaDegistiBaglami.Provider value={sayfaDegisti}>{children}</SayfaDegistiBaglami.Provider>
       <div className="tc-bildirimler" role="region" aria-label="Bildirimler">
         {kayitlar.map((k) => (
           <div key={k.no} className={`tc-bildirim tc-bildirim-${k.ton}`} role={k.ton === 'hata' ? 'alert' : 'status'}>
@@ -90,4 +97,22 @@ export function useBildirim(): Baglam {
   const baglam = useContext(BildirimBaglami);
   if (!baglam) throw new Error('useBildirim, BildirimSaglayici içinde kullanılmalı');
   return baglam;
+}
+
+// Adresin ilk parçası sayfadır: aynı sayfanın iç görünümleri (/kalite-merkezi/x) arasında geçiş hatayı kapatmaz.
+function sayfaParcasi(yol: string): string {
+  return yol.split('/')[1] ?? '';
+}
+
+// Yönlendirici BildirimSaglayici'nin içinde kurulduğu için sayfa değişimini yönlendiricinin içinden bu bileşen bildirir.
+export function BildirimSayfaIzleyici() {
+  const sayfaDegisti = useContext(SayfaDegistiBaglami);
+  const sayfa = sayfaParcasi(useLocation().pathname);
+  const onceki = useRef(sayfa);
+  useEffect(() => {
+    if (onceki.current === sayfa) return;
+    onceki.current = sayfa;
+    sayfaDegisti?.();
+  }, [sayfa, sayfaDegisti]);
+  return null;
 }
