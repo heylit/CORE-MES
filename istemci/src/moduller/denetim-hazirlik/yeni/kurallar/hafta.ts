@@ -32,7 +32,7 @@ export interface HaftaPlani {
   weeks: Hafta[];
   na: Denetim;
   cur: string;
-  // Programın başladığı haftanın çapası; kayıttakinden farklıysa kaydedilir (useDenetim içinde, bir kez).
+  // Programın başladığı haftanın çapası; kayıttakinden farklıysa kişinin ilk değişikliğiyle kaydedilir (baglam.tsx degistir).
   capa: Calisma['wkAnchor'];
   capaDegisti: boolean;
 }

@@ -95,6 +95,14 @@ export function yayindakiRevizyon(db: Db, belgeId: number): Promise<RevizyonKayd
   return db.tek<RevizyonKaydi>(`SELECT ${REVIZYON_SECIMI} FROM cizimler_revizyon r WHERE r.belge_id = $1 AND r.durum = 'yayinda'`, [belgeId]);
 }
 
+// Yayına girmiş (yayında ya da eski) revizyon, özetle; aynı dosya iki revizyonda varsa sonuncusu. Taslak dışarıya verilmez.
+export function yayinlanmisRevizyonOzetle(db: Db, belgeId: number, ozet: string): Promise<RevizyonKaydi | null> {
+  return db.tek<RevizyonKaydi>(
+    `SELECT ${REVIZYON_SECIMI} FROM cizimler_revizyon r WHERE r.belge_id = $1 AND r.ozet = $2 AND r.durum <> 'taslak' ORDER BY r.sira DESC LIMIT 1`,
+    [belgeId, ozet],
+  );
+}
+
 export async function sonrakiSira(db: Db, belgeId: number): Promise<number> {
   const satir = await db.tek<{ sira: number }>('SELECT COALESCE(max(sira), 0) + 1 AS sira FROM cizimler_revizyon WHERE belge_id = $1', [belgeId]);
   return satir?.sira ?? 1;
