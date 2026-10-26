@@ -1,25 +1,37 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { KAPISIZ, OKUYAN, YONETICI, kmAc } from './test-ortak.tsx';
+import { KAPISIZ, MUHENDIS, OKUYAN, YETKISIZ, YONETICI, kmAc, kmAdresi } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Kalite Merkezi yeni ekran kabuğu', () => {
-  it('kapı işlemi olmayana hazırlanıyor iletisini gösterir', async () => {
+  it('yeni ekran kapısı olmayan kalite kullanıcısına da açılır (582)', async () => {
     kmAc('', KAPISIZ);
-    expect(await screen.findByText('Bu ekran hazırlanıyor')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Yeni kayıt' })).toBeTruthy();
+    expect(screen.queryByText('Bu ekran hazırlanıyor')).toBeNull();
   });
 
-  it('bölüm sekmelerini ve yazana Yeni menüsünü gösterir', async () => {
+  it('okuma işlemi olmayana yetki iletisini gösterir', async () => {
+    kmAc('', YETKISIZ);
+    expect(await screen.findByText("Kalite Merkezi'ni görme yetkiniz yok.")).toBeTruthy();
+  });
+
+  it('bölüm sekmesi çizmez, gezinme kabuğun şeridindedir (553 1 a); yazana Yeni menüsü', async () => {
     kmAc('', YONETICI);
-    expect(await screen.findByRole('tab', { name: /Uygunsuzluk/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Yeni kayıt' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Yeni kayıt' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /Uygunsuzluk/ })).toBeNull();
   });
 
   it('yalnız okuyana Yeni menüsü çıkmaz', async () => {
     kmAc('', OKUYAN);
-    await screen.findByRole('tab', { name: /Uygunsuzluk/ });
+    expect(await screen.findByRole('button', { name: 'Atölye modu' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yeni kayıt' })).toBeNull();
+  });
+
+  it('ayar yetkisi olmayana Ayarlar açılmaz, Bugün açılır (eski sayfadaki gibi)', async () => {
+    kmAc('ayarlar', MUHENDIS);
+    expect(await screen.findByText('Bu işlem için yetkiniz yok (ayarları değiştirme).')).toBeTruthy();
+    await vi.waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi'); });
   });
 
   it('bilinmeyen görünümde iletiyi gösterir', async () => {
@@ -27,15 +39,18 @@ describe('Kalite Merkezi yeni ekran kabuğu', () => {
     expect(await screen.findByText('Böyle bir görünüm yok.')).toBeTruthy();
   });
 
-  it('eski çerçevede kalan bölüm eski yola gider (217 b)', async () => {
+  it('balonlama stüdyoda açılır (217 b)', async () => {
     kmAc('', YONETICI);
-    fireEvent.click(await screen.findByRole('tab', { name: /Resim ve modeller/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni kayıt' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Teknik resim balonla' }));
     expect(await screen.findByText('eski ekran')).toBeTruthy();
+    expect(kmAdresi()).toBe('/kalite-merkezi/resimler');
   });
 
-  it('bölüm değişince alt sekmeleri gösterir', async () => {
+  it('Yeni menüsünden kayıt görünümüne gider', async () => {
     kmAc('', YONETICI);
-    fireEvent.click(await screen.findByRole('tab', { name: /Kaynaklar/ }));
-    expect(await screen.findByRole('tab', { name: /Tedarikçiler/ })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni kayıt' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Uygunsuzluk (NCR)' }));
+    await vi.waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/uygunsuzluklar'); });
   });
 });

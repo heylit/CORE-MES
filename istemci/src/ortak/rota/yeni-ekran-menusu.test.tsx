@@ -122,7 +122,8 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
   });
 
   it('kabuğun şeridi yeni ekranda da eski adreste de durur (553 1 a; eski sayfa tek maddelik şeridi de çizer)', () => {
-    for (const yol of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon', '/arkon/pano', '/arkon/eski/pano']) {
+    for (const yol of ['/kuyruk', '/kuyruk/eski', '/uretim-terminali', '/uretim-terminali/eski', '/arkon', '/arkon/pano', '/arkon/eski/pano',
+      '/kalite-merkezi', '/kalite-merkezi/dof', '/kalite-merkezi/eski/dof', '/kalite-merkezi/resimler']) {
       expect(yeniEkranAdresiMi(yol), yol).toBe(false);
     }
   });
@@ -145,6 +146,16 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     expect(gorunumGecisi('/malzemeler/logo')).toBeNull();
     expect(seritAdresi('/malzemeler/eski/ayarlar')).toBe('/malzemeler/ayarlar');
     for (const yol of ['/malzemeler', '/malzemeler/yeni', '/malzemeler/eski']) expect(yeniEkranAdresiMi(yol), yol).toBe(false);
+  });
+
+  it('Kalite Merkezi: görünüm eski adreste aynı görünümdür; stüdyo (217 b) yalnız çerçevededir', () => {
+    expect(gorunumGecisi('/kalite-merkezi')).toEqual({ baslik: 'Eski görünüm', yol: '/kalite-merkezi/eski' });
+    expect(gorunumGecisi('/kalite-merkezi/dof')).toEqual({ baslik: 'Eski görünüm', yol: '/kalite-merkezi/eski/dof' });
+    expect(gorunumGecisi('/kalite-merkezi/eski/dof')).toEqual({ baslik: 'Yeni görünüm', yol: '/kalite-merkezi/dof' });
+    expect(gorunumGecisi('/kalite-merkezi/resimler')).toBeNull();
+    expect(gorunumGecisi('/kalite-merkezi/analiz')).toBeNull();
+    expect(seritAdresi('/kalite-merkezi/eski/dof')).toBe('/kalite-merkezi/dof');
+    expect(seritAdresi('/kalite-merkezi/eski')).toBe('/kalite-merkezi');
   });
 
   it('kişi menüsü yeni ekranda eskisini, eski ekranda yenisini açar; başka sayfada madde yoktur', () => {

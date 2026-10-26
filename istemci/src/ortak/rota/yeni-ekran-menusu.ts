@@ -10,7 +10,6 @@ export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
 const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
   { kok: '/recete-rota', yol: '/recete-rota/planlama-yeni', baslik: 'Planlama' },
-  { kok: '/kalite-merkezi', yol: '/kalite-merkezi/yeni' },
   { kok: '/finans', yol: '/finans/yeni' },
   { kok: '/ik', yol: '/ik/yeni' },
   { kok: '/ik-islemlerim', yol: '/ik-islemlerim/yeni' },
@@ -35,6 +34,8 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
   { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
   { yol: '/malzemeler', eski: '/malzemeler/eski', serit: true, haric: ['/malzemeler/logo'] },
+  // Resim ve modeller ile Analiz (217 b) yalnız çerçevededir: eskisi ve yenisi yoktur.
+  { yol: '/kalite-merkezi', eski: '/kalite-merkezi/eski', serit: true, haric: ['/kalite-merkezi/resimler', '/kalite-merkezi/analiz'] },
   ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
     yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
   })),

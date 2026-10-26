@@ -1,25 +1,27 @@
 import { vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { KmDegisiklikCevabi, KmKimlikCevabi, KmOlcuAletleriCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/Bildirim.tsx';
 import { KaliteMerkeziYeni } from './KaliteMerkeziYeni.tsx';
+import { STUDYO_YOLLARI } from './sekmeler.ts';
 import type { KmKoleksiyonu } from './tipler.ts';
 
 // Testlerin ortak kurulumu: sahte sunucu (oturum, kimlik, akış, ölçü aletleri, yazma uçları) ve yeni ekranın açılışı. Veri uydurmadır.
-const KAPI: Islem = 'kisiler.rol-yonet';
 const KM: Islem[] = ['kalite-merkezi.oku', 'kalite-merkezi.yaz', 'kalite-merkezi.onayla', 'kalite-merkezi.geri-yukle'];
 
 export interface TestKullanicisi { kullanici: Kullanici; yonetici: boolean }
-export const YONETICI: TestKullanicisi = { kullanici: { id: 1, ad: 'Deneme Yönetici', islemler: [KAPI, ...KM] }, yonetici: true };
-// Kapı yöneticide; muhendis ve muayeneci görünümleri doğrudan açılır (kmAc kapıyı atlamaz, kapisiz: true ile atlar).
-export const MUHENDIS: TestKullanicisi = { kullanici: { id: 2, ad: 'Deneme Mühendis', islemler: [KAPI, 'kalite-merkezi.oku', 'kalite-merkezi.yaz', 'kalite-merkezi.onayla'] }, yonetici: false };
-export const MUAYENECI: TestKullanicisi = { kullanici: { id: 3, ad: 'Deneme Muayeneci', islemler: [KAPI, 'kalite-merkezi.oku', 'kalite-merkezi.yaz'] }, yonetici: false };
-export const OKUYAN: TestKullanicisi = { kullanici: { id: 4, ad: 'Deneme Okuyan', islemler: [KAPI, 'kalite-merkezi.oku'] }, yonetici: false };
+export const YONETICI: TestKullanicisi = { kullanici: { id: 1, ad: 'Deneme Yönetici', islemler: KM }, yonetici: true };
+// Ekran sayfayı gören herkesindir (582): rol ayrımı yalnız Kalite Merkezi işlemlerindendir.
+export const MUHENDIS: TestKullanicisi = { kullanici: { id: 2, ad: 'Deneme Mühendis', islemler: ['kalite-merkezi.oku', 'kalite-merkezi.yaz', 'kalite-merkezi.onayla'] }, yonetici: false };
+export const MUAYENECI: TestKullanicisi = { kullanici: { id: 3, ad: 'Deneme Muayeneci', islemler: ['kalite-merkezi.oku', 'kalite-merkezi.yaz'] }, yonetici: false };
+export const OKUYAN: TestKullanicisi = { kullanici: { id: 4, ad: 'Deneme Okuyan', islemler: ['kalite-merkezi.oku'] }, yonetici: false };
+// Yeni ekran kapısı (yönetici işlemi) olmayan kalite kullanıcısı: geçişten sonra ekranı açar.
 export const KAPISIZ: TestKullanicisi = { kullanici: { id: 5, ad: 'Deneme Kapısız', islemler: KM }, yonetici: false };
+export const YETKISIZ: TestKullanicisi = { kullanici: { id: 6, ad: 'Deneme Yetkisiz', islemler: [] }, yonetici: false };
 
 export type TestKayitlari = Partial<Record<KmKoleksiyonu | 'settings', Record<string, unknown>[]>>;
 
@@ -65,18 +67,32 @@ export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, sece
   return { yazmalar, fetch: fetchSahte };
 }
 
-// Yeni ekranı verilen görünümde açar (`/kalite-merkezi/yeni/<gorunum>`; Bugün için boş).
+// Kabuğun ikinci menü şeridinin yerine: seçili görünümü adresten gösterir (ekran kendi bölüm sekmesini çizmez, 553 1 a).
+export const kmAdresi = (): string => screen.getByTestId('km-adres').textContent ?? '';
+let gezgin: NavigateFunction | null = null;
+function Adres() {
+  gezgin = useNavigate();
+  return <output data-testid="km-adres" hidden>{useLocation().pathname}</output>;
+}
+// Şeritteki maddeye tıklamanın yerine: görünümü adresle açar (ekran aynı kalır, durumu korunur).
+export function kmGit(gorunum: string): void {
+  act(() => { void gezgin?.(gorunum ? `/kalite-merkezi/${gorunum}` : '/kalite-merkezi'); });
+}
+
+// Yeni ekranı verilen görünümde açar (`/kalite-merkezi/<gorunum>`; Bugün için boş). Stüdyo görünümleri çerçevededir (217 b).
 export function kmAc(gorunum: string, k: TestKullanicisi = YONETICI, kayitlar: TestKayitlari = {}, secenek: { ret?: (yol: string) => boolean } = {}) {
   const sunucu = sunucuKur(k, kayitlar, secenek);
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const adres = gorunum ? `/kalite-merkezi/yeni/${gorunum}` : '/kalite-merkezi/yeni';
+  const adres = gorunum ? `/kalite-merkezi/${gorunum}` : '/kalite-merkezi';
   const sonuc = render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
+          <Adres />
           <Routes>
-            <Route path="/kalite-merkezi/yeni" element={<KaliteMerkeziYeni />} />
-            <Route path="/kalite-merkezi/yeni/:gorunum" element={<KaliteMerkeziYeni />} />
+            <Route path="/kalite-merkezi" element={<KaliteMerkeziYeni />} />
+            {STUDYO_YOLLARI.map((y) => <Route key={y} path={y} element={<p>eski ekran</p>} />)}
+            <Route path="/kalite-merkezi/:gorunum" element={<KaliteMerkeziYeni />} />
             <Route path="*" element={<p>eski ekran</p>} />
           </Routes>
         </MemoryRouter>
