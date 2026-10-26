@@ -350,7 +350,40 @@ describe('PlanlamaAtolyesi', () => {
     expect(yazilan.at(-1)?.w.dondurma).toBe(8);
     fireEvent.click(within(kart()).getByRole('button', { name: 'Hafta' }));
     expect(within(screen.getByRole('group', { name: 'Ölçek' })).getByRole('button', { pressed: true }).textContent).toBe('Hafta');
-    expect(within(kart()).getByRole('button', { name: 'Atölye ekranı' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('Atölye ekranı: Diğer menüsünden açılır; canlı plan sunucudan, okunurken, canlı yokken ve varken; tezgâh durumu, sıradaki, geciken; Esc ve Çık kapatır; her rolde aynı', async () => {
+    let cevap: Promise<unknown> = new Promise(() => undefined);
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? cevap : Promise.reject(new Error('yok')))) as never);
+    const ekran = () => screen.getByRole('region', { name: 'Atölye ekranı' });
+    const ekranAc = (yaz = true) => { ac({ yaz }); fireEvent.click(screen.getByRole('button', { name: 'Diğer' })); fireEvent.click(within(kart()).getByRole('button', { name: 'Atölye ekranı' })); };
+    ekranAc();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(within(ekran()).getByText('Canlı plan okunuyor.')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Atölye ekranı' })).toBeNull();
+    cleanup();
+    cevap = Promise.resolve({ planSurumu: 0, isler: [] });
+    ekranAc();
+    await waitFor(() => expect(within(ekran()).getByText(/Henüz canlı plan yok/)).toBeTruthy());
+    cleanup();
+    const iso = (t: number) => new Date(Date.UTC(2026, 9, 19) - 3 * 3_600_000 + t * 3_600_000).toISOString();
+    const is = (k: string, m: number, S: number, C: number) => ({ k, anahtar: `E|${k}`, isEmriId: 1, uretimEmriId: 1, taban: null, canli: { kaynak: { tur: 'makine', id: m }, baslangic: iso(S), bitis: iso(C), parcalar: [] } });
+    cevap = Promise.resolve({ planSurumu: 3, isler: [is('3.10', 1, 7, 9), is('3.20', 1, 20, 400)] });
+    const gor = async (yaz: boolean) => {
+      ekranAc(yaz);
+      const t1 = await within(ekran()).findByRole('region', { name: 'Tezgâh 1' });
+      const l = ekran().textContent;
+      expect(t1.getAttribute('data-durum')).toBe('calisiyor');
+      expect(within(t1).getByText(/Sıradaki:/).textContent).toContain('3');
+      expect(within(ekran()).getByRole('region', { name: 'Tezgâh 4' }).getAttribute('data-durum')).toBe('bos');
+      expect(within(screen.getByRole('complementary', { name: 'Geciken' })).getByText(/^Geciken · \d+$/)).toBeTruthy();
+      fireEvent.click(within(ekran()).getByRole('button', { name: 'Çık' }));
+      expect(screen.queryByRole('region', { name: 'Atölye ekranı' })).toBeNull();
+      cleanup(); return l;
+    };
+    expect(await gor(false)).toEqual(await gor(true));
+    get.mockRestore();
   });
 
   it('sabah brifingi günün ilk açılışında (gün tarayıcıda); gün başı açılışta çalışmaya sessiz yazılır', () => {

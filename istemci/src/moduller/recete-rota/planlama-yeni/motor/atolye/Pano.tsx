@@ -7,6 +7,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { MOTOR_NOTU } from '../ortak.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
+import { AtolyeEkrani } from './AtolyeEkrani.tsx';
 import { Brif, Bugun } from './Bugun.tsx';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
@@ -28,7 +29,7 @@ export interface Ortam {
   opSec: (id: string, a?: Ankraj) => void; sipSec: (j: string) => void; sipGoster: (j: string) => void; opGit: (id: string) => void;
   kartAc: (k: AcikKart, a?: Ankraj) => void; kartKapat: () => void;
   olcek: AtolyeOlcegi; olcekSec: (z: AtolyeOlcegi) => void; sekSec: (s: AtolyeSekmesi) => void;
-  bugunAc: (x: boolean) => void; brifAc: () => void;
+  bugunAc: (x: boolean) => void; brifAc: () => void; atolyeAc: () => void;
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
@@ -59,6 +60,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   useEffect(() => { if (brif) brifGunuYaz(bugun); }, [brif, bugun]);
   const [kart, setKart] = useState<{ k: AcikKart; a: Ankraj | null } | null>(null);
   const [parla, setParla] = useState<string | null>(null);
+  const [atolye, setAtolye] = useState(false);
   const kap = useRef<HTMLDivElement | null>(null);
   const pano = useRef<HTMLDivElement | null>(null);
   const yaz = komut !== null && yetki.planYaz;
@@ -145,7 +147,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
 
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
-    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, sen, senYaz,
+    olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
   };
   const ozet = p.ozet;
   const farkli = !fark || fark.farkli || !planGuncel(c);
@@ -211,6 +213,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <Bugun ort={ort} acik={bugunAcik} />
       </div>
       {kart && <KartKatmani ort={ort} kart={kart.k} ankraj={kart.a} bildir={bildir} />}
+      {atolye && <AtolyeEkrani c={c} p={p} cx={cx} now={now} canliSurum={sen?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null} kapat={() => setAtolye(false)} />}
     </div>
   );
 }

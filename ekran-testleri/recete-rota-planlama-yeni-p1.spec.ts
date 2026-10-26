@@ -273,7 +273,13 @@ test.describe('P1e Planlama atölyesi', () => {
     await ust.getByRole('button', { name: 'Diğer' }).click();
     await expect(page.getByRole('dialog', { name: 'Diğer' })).toBeVisible();
     await page.getByRole('dialog', { name: 'Diğer' }).getByRole('button', { name: 'Hafta' }).click();
+    // 577d: Atölye ekranı canlı planı tam ekranda gösterir; boş veritabanında canlı plan yoktur. Esc kapatır.
+    await page.getByRole('dialog', { name: 'Diğer' }).getByRole('button', { name: 'Atölye ekranı' }).click();
+    const atolye = page.getByRole('region', { name: 'Atölye ekranı' });
+    await expect(atolye.getByText(/Henüz canlı plan yok|Çalışıyor|Boş|Arıza/).first()).toBeVisible();
+    await tasmaz(page);
     await page.keyboard.press('Escape');
+    await expect(atolye).toHaveCount(0);
     await page.locator('.tc-pym-tp-bugun-bas').click();
     await expect(page.getByText('Çözülecekler')).toBeVisible();
     await tasmaz(page);
