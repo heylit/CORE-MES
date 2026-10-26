@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { DurumDugmeleri, IsAlanlari, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { DurumDugmeleri, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -130,5 +130,23 @@ describe('664: sayaç kadranı, numune çizgisi ve iş başlığı', () => {
     const issiz = render(<IsAlanlari is={is({})} baslik />);
     expect(issiz.container.querySelector('.tc-ay1-is-alan')).toBeNull();
     expect(issiz.container.textContent).toContain('Deneme');
+  });
+});
+
+describe('685: telefonda iş özeti', () => {
+  it('kapalıyken emir · op · parça no tek satır; dokununca bütün alanlar açılır', () => {
+    let acik = false;
+    const o = is({ empty: false, no: 'UE-DENEME-9', part: 'Deneme parça', op: 'Op 20', pkg: { partNo: 'P-DENEME', rev: 'C', proje: 'Deneme proje' } as never });
+    const { container, rerender, getByRole } = render(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
+    expect(container.querySelector('.tc-ay1-is-ozet-satir')?.textContent).toBe('UE-DENEME-9 · Op 20 · P-DENEME');
+    expect(container.querySelector('.tc-ay1-is-alan')).toBeNull();
+    fireEvent.click(getByRole('button', { expanded: false }));
+    rerender(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
+    expect(getByRole('button', { expanded: true })).toBeTruthy();
+    expect(container.querySelectorAll('.tc-ay1-is-alan').length).toBe(6);
+  });
+  it('işsiz istasyonda açılıp kapanmaz', () => {
+    const { container } = render(<IsOzeti is={bosIs({ l: 'Boş' })} acik={false} degistir={() => {}} />);
+    expect(container.querySelector('button')).toBeNull();
   });
 });

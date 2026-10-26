@@ -493,6 +493,18 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-is-ozet > span { display: grid; gap: var(--pay-ince); min-width: 0; }
 .tc-ay1-is-ozet b { font-family: var(--font-mono); font-size: var(--yazi-l); overflow-wrap: anywhere; }
 .tc-ay1-is-ozet small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-ay1-is-ozet .tc-ay1-is-ozet-satir { font-size: var(--yazi-m); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 685: telefonda istasyon kartı tek satır: kod ve durum düğmenin içinde alt alta, bağlantı, çağrı ve menü yanında. Üç lamba durum
+   adının noktasıyla aynı bilgiyi verir, darda gizlenir. */
+.tc-ay1-dar .tc-ay1-mobil-ust { flex-wrap: nowrap; gap: var(--b-2); }
+.tc-ay1-dar .tc-ay1-mobil-ust > * { flex: none; }
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon { display: grid; flex: 1 1 auto; gap: 0; min-inline-size: 0; }
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon b { font-size: var(--yazi-m); overflow: hidden; text-overflow: ellipsis; }
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-lambalar { display: none; }
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon { container-type: inline-size; overflow: hidden; padding-inline: var(--b-2); }
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-durum-adi { gap: var(--b-1); font-size: var(--yazi-xs); white-space: nowrap; }
+/* En dar telefonda durumda geçen süre sığmıyor, bağlantıya biniyordu: yer yoksa yalnız durum adı kalır. */
+@container (max-width: 130px) { .tc-ay1-mobil-ust .tc-ay1-durum-adi .tc-ay1-mono { display: none; } }
 /* Telefonda başlık ve alt bölge sabit (618): durum ve bağlantı sayarken görünür; ana eylemler alt gezinmenin üstünde. */
 .tc-ay1-dar .tc-ay1-mobil-ust { position: sticky; inset-block-start: 0; z-index: var(--z-ust); background: var(--panel-solid); }
 .tc-ay1-dar[data-cubuk] { padding-block-end: calc(var(--dokunma-ana) * 2 + var(--b-4) * 2); }

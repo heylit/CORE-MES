@@ -42,6 +42,18 @@ function IsEtiketleri({ is }: { is: Is }) {
 export { IsEtiketleri };
 
 /* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
+// 685: telefonda iş alanları tek satır özettir (emir · op · parça no); dokununca bütün alanlar açılır, sayaç ilk ekranda kalır.
+export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degistir: () => void }) {
+  const ust = <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>;
+  if (is.empty) return <div className="tc-ay1-is-ozet"><span>{ust}<IsAlanlari is={is} /></span></div>;
+  return (
+    <button type="button" className="tc-ay1-is-ozet" aria-expanded={acik} onClick={degistir}>
+      <span>{ust}{acik ? <IsAlanlari is={is} /> : <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo].filter(Boolean).join(' · ')}</b>}</span>
+      <Simge ad={acik ? 'up' : 'down'} boyut="k" />
+    </button>
+  );
+}
+
 export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean }) {
   const pkg = is.pkg;
   // İşsiz istasyonda alan yok: "atanmış iş yok" ve istasyon satırı eskisi gibi düz yazılır.

@@ -57,7 +57,7 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
+  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
@@ -121,6 +121,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
 
   // Telefonda terminal işle açılır (618); Özetim alt gezinmede bir dokunuşta.
   const [mv, mvYaz] = useState<Gorunum>(() => (ozetVar && !dar ? 'ozet' : 'prod'));
+  const [isAcik, isAcikYaz] = useState(false);
   const [isler, islerYaz] = useState<Is[]>([]);
   const [ai, aiYaz] = useState(0);
   const aiRef = useRef(0);
@@ -1095,18 +1096,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {gor === 'prod' ? (
             <div className="tc-ay1-uretim">
               {bantlar}
-              <button type="button" className="tc-ay1-is-ozet" onClick={() => mvYaz('queue')}>
-                <span><span className="tc-ay1-ust-yazi">Aktif iş {o.urgent ? '· ACİL' : ''}</span><IsAlanlari is={o} /></span>
-                <Simge ad="next" boyut="k" />
-              </button>
+              <IsOzeti is={o} acik={isAcik} degistir={() => isAcikYaz((x) => !x)} />
               {uyariCipi(false)}
+              {/* 685: sayaç ilk ekrandadır; görev kartı ve numune şeridi altında. */}
+              {kaliteGorunumu ?? <>{sayac}{toplu}</>}
               <IsEtiketleri is={o} />
               {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               <EtkinKart is={o} kartlar={kartlar} />
               {notlar}
               {makineSecici}
               {gorev(true)}
-              {kaliteGorunumu ?? <>{serit}{sayac}{toplu}</>}
+              {kaliteGorunumu ? null : serit}
               {durumDugmeleri(true)}
             </div>
           ) : null}
