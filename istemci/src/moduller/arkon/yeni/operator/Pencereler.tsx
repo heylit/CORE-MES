@@ -192,3 +192,25 @@ const KaliteNumunesi = lazy(async () => ({ default: (await import('../kalite/ind
 export function NumunePenceresi({ istasyon, numune, kapat }: { istasyon: string; numune: NumuneIstegi; kapat: () => void }) {
   return <Suspense fallback={null}><KaliteNumunesi st={istasyon} numune={numune} kapat={kapat} /></Suspense>;
 }
+
+// 684: başka işe geçerken çalışan iş kendiliğinden duraklatılmaz, operatöre sorulur. Devam ederse istasyonda birden çok iş açık
+// kalır; sayaç ve eylemler ekrandaki işe gider.
+export function GecisPenceresi({ calisanlar, hedef, kapat, devam, duraklat }: {
+  calisanlar: readonly string[]; hedef: string; kapat: () => void; devam: () => void; duraklat: () => void;
+}) {
+  return (
+    <Pencere
+      acik kapat={kapat} baslik="Çalışan iş ne olsun?"
+      alt={(
+        <>
+          <Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>
+          <Dugme tur="ikincil" simge="pause" onClick={duraklat}>Duraklat ve geç</Dugme>
+          <Dugme simge="play" onClick={devam}>Devam etsin, geç</Dugme>
+        </>
+      )}
+    >
+      <p>{calisanlar.join(', ')} çalışıyor; {hedef} işine geçiyorsun.</p>
+      <p className="tc-ay1-soluk">Devam ederse iki iş birlikte açık kalır. Sayaç ve düğmeler ekrandaki işe gider; öteki işe çarktan ya da İşler'den dönülür.</p>
+    </Pencere>
+  );
+}

@@ -6,7 +6,16 @@ import { birlesimSuresi, type Aralik, type DurusGerceklesmesi } from './vardiya.
 // OEE çekirdeği (ortak-ayarlar.ts oeeCalc): bir istasyonun [from, to) aralığı. Planlı süre = vardiya süresi − molalar − planlı duruşlar
 // (takvim + planlı nedenli duruşlar); planlı kayıp yalnız vardiya içinde sayılır. Vardiya penceresi yoksa planlı süre ve OEE yoktur.
 
-export interface DurumOlayi { at: number; state: string; reason?: string | null }
+export interface DurumOlayi { at: number; state: string; reason?: string | null; orderNo?: string | null }
+
+// 684: istasyonda aynı anda birden çok iş açık olabilir. İstasyonun hâli işlerin son hâllerinden çıkar: biri çalışıyorsa istasyon
+// çalışıyordur (sonra ayar, duruş, duraklatma); hiçbiri bunlardan değilse son olayın hâli. İş nosuz eski olaylar tek iş sayılır,
+// tek işte sonuç eski kuralla (son olay kazanır) aynıdır.
+const ONCELIK = ['running', 'setup', 'stopped', 'paused'];
+function istasyonHali(isler: ReadonlyMap<string, { state: string; reason?: string | null }>, son: { state: string; reason?: string | null }) {
+  for (const s of ONCELIK) for (const h of isler.values()) if (h.state === s) return h;
+  return son;
+}
 export interface SayimKaydi { kind: string; delta: number; planMs?: number | null; cycleMs?: number | null; reason?: string | null }
 export interface OeePenceresi extends Aralik { breaks?: Aralik[] }
 export interface ZamanParcasi { f: number; t: number; s: string; n: string | null | undefined }
@@ -34,9 +43,11 @@ export interface OeeSonucu {
 export function oeeHesapla(g: OeeGirdisi, o: OeeOrtami): OeeSonucu {
   const { from, to } = g;
   const ev = [...(g.ev ?? [])].sort((a, b) => a.at - b.at);
+  const isler = new Map<string, DurumOlayi>();
   let durum = 'none';
   let not: string | null | undefined = null;
-  for (const e of ev) if (e.at <= from) { durum = e.state; not = e.reason; }
+  const isle = (e: DurumOlayi) => { isler.set(e.orderNo ?? '', e); const h = istasyonHali(isler, e); durum = h.state; not = h.reason; };
+  for (const e of ev) if (e.at <= from) isle(e);
   const ham: ZamanParcasi[] = [];
   let t = from;
   const ekle = (x: number, s: string, n: string | null | undefined) => {
@@ -49,8 +60,7 @@ export function oeeHesapla(g: OeeGirdisi, o: OeeOrtami): OeeSonucu {
   for (const e of ev) {
     if (e.at <= from || e.at > to) continue;
     ekle(e.at, durum, not);
-    durum = e.state;
-    not = e.reason;
+    isle(e);
   }
   ekle(to, durum, not);
   const segs = isDegisiminiDurusSay(ham);

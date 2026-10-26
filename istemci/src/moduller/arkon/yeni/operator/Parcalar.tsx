@@ -42,6 +42,62 @@ function IsEtiketleri({ is }: { is: Is }) {
 export { IsEtiketleri };
 
 /* ── işin başlığı (664, 673 a): etiketli alanlar, terminalin her boyutunda aynı sıra; geniş düzende emir no başlıktır ── */
+export interface CarkOgesi { anahtar: string; baslik: string; alt?: string }
+
+export const isCarkOgeleri = (isler: readonly Is[]): CarkOgesi[] =>
+  isler.map((x) => ({ anahtar: x.pkg?.id ?? x.no, baslik: x.no, alt: [x.op, x.pkg?.partNo, durumAdi(x.state)].filter(Boolean).join(' · ') }));
+
+// 684: iş ve istasyon çarkı. Yalnız göz atar: düğme, yana kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandakini değiştirmez.
+// Bakılan öğe ekrandakinden farklıysa "geç" düğmesi çıkar; geçişin sorusunu çağıran sorar. Tekerlek sayfayı kaydırmasın diye
+// dinleyici edilgen değildir.
+export function Cark({ etiket, ogeler, etkin, gec, gecMetni }: {
+  etiket: string; ogeler: readonly CarkOgesi[]; etkin: number; gec: (i: number) => void; gecMetni: string;
+}) {
+  const [bak, bakYaz] = useState(etkin);
+  useEffect(() => { bakYaz(etkin); }, [etkin]);
+  const n = ogeler.length;
+  const adim = (d: number) => bakYaz((b) => Math.min(n - 1, Math.max(0, b + d)));
+  const kok = useRef<HTMLDivElement>(null);
+  const tutus = useRef<number | null>(null);
+  useEffect(() => {
+    const el = kok.current;
+    if (!el) return;
+    let son = 0;
+    const teker = (e: WheelEvent) => {
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      e.preventDefault();
+      if (Math.abs(d) < 4 || e.timeStamp - son < 250) return;
+      son = e.timeStamp;
+      bakYaz((b) => Math.min(n - 1, Math.max(0, b + (d > 0 ? 1 : -1))));
+    };
+    el.addEventListener('wheel', teker, { passive: false });
+    return () => el.removeEventListener('wheel', teker);
+  }, [n]);
+  const i = Math.min(bak, n - 1);
+  const oge = ogeler[i];
+  if (n < 2 || !oge) return null;
+  return (
+    <div
+      ref={kok} className="tc-ay1-cark" role="group" aria-roledescription="çark" aria-label={etiket} tabIndex={0} data-baska={i !== etkin || undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); adim(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); adim(1); } else if (e.key === 'Escape') bakYaz(etkin);
+      }}
+      onPointerDown={(e) => { tutus.current = e.clientX; }}
+      onPointerUp={(e) => { const x = tutus.current; tutus.current = null; if (x !== null && Math.abs(e.clientX - x) > 40) adim(e.clientX < x ? 1 : -1); }}
+      onPointerCancel={() => { tutus.current = null; }}
+    >
+      <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki ${etiket.toLocaleLowerCase('tr')}`} disabled={i <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
+      <span className="tc-ay1-cark-orta" aria-live="polite">
+        <span className="tc-ay1-ust-yazi">{etiket} {i + 1}/{n}{i === etkin ? ' · ekranda' : ''}</span>
+        <b>{oge.baslik}</b>
+        {oge.alt ? <small>{oge.alt}</small> : null}
+      </span>
+      {i !== etkin ? <Dugme simge="next" onClick={() => gec(i)}>{gecMetni}</Dugme> : null}
+      <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki ${etiket.toLocaleLowerCase('tr')}`} disabled={i >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
+    </div>
+  );
+}
+
 // 685: telefonda iş alanları tek satır özettir (emir · op · parça no); dokununca bütün alanlar açılır, sayaç ilk ekranda kalır.
 export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degistir: () => void }) {
   const ust = <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>;
