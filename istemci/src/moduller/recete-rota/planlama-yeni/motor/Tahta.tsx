@@ -29,19 +29,23 @@ import './motor.css';
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
 
-// Veri ve kısıtlar (577b) motor sayfasının ekranıdır (eski b-kabuk EKRANLAR veri): plan çubuğu üstte, bölüm adresin sorgusunda.
+// Veri ve kısıtlar (577b) motor sayfasının ekranıdır (eski b-kabuk EKRANLAR veri); Nasıl hesaplandı (577a) Plan ekranının sayfasıdır (zk-kabuk
+// Başka menüsü Sayfalar). Plan çubuğu üstte; bölüm adresin sorgusunda.
 const VeriVeKisitlar = lazy(async () => ({ default: (await import('../ic/veri/index.tsx')).VeriVeKisitlar }));
+const NasilHesaplandi = lazy(async () => ({ default: (await import('../ic/hesap/index.tsx')).NasilHesaplandi }));
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
+export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
 
 export function PlanlamaMotoru(o: PlanlamaEkranOzellikleri) {
   const c = o.calisma; const veriAc = veriAcici(o);
-  if (o.alt?.ekran === 'veri') {
+  const ekran = o.alt?.ekran ?? 'tahta';
+  if (ekran === 'veri' || ekran === 'hesap') {
     return (
       <>
         <PlanSeridi {...o} gorunum="plan" />
         <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-          <VeriVeKisitlar {...o} bolum={bolumOku(o.alt.bolum) ?? undefined} bolumSec={(b) => veriAc?.(b)} />
+          {ekran === 'veri' ? <VeriVeKisitlar {...o} bolum={bolumOku(o.alt?.bolum) ?? undefined} bolumSec={(b) => veriAc?.(b)} /> : <NasilHesaplandi {...o} />}
         </Suspense>
       </>
     );
@@ -93,7 +97,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const sekSec = (x: PanelSekmesi) => setSekD({ k: psAnahtar, x });
 
   const studyo = useCallback(() => o.git('studio'), [o]);
-  const veriAc = veriAcici(o);
+  const veriAc = veriAcici(o); const sayfaAc = sayfaAcici(o);
   const nabizAc = useCallback((x: boolean) => setNbAcik(x), []);
   const menuAc = useCallback((x: boolean) => setMenuAcik(x), []);
   const ypAc = useCallback((x: boolean) => { setYpAcik(x); if (x) setPan(null); }, []);
@@ -170,7 +174,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const cubukKur = (masa: boolean) => (
     <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
       donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
-      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz }} />
+      baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc }} />
   );
   const cubuk = cubukKur(false);
 
@@ -200,7 +204,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 // Sayfa içi kilit (günü dondur, burada sabitle) 223 a ile ortak plan.yaz'dır; planKilitle sunucudaki iş emri kilididir.
                 <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
                   planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
-                  sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} />
+                  sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} hesapAc={sayfaAc && (() => sayfaAc('hesap'))} />
               ) : gorunum === 'kesif' ? (
                 <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
                   sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />

@@ -27,7 +27,8 @@ export function Cubuk(o: Ozellikler) {
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
         <nav className="tc-pym-sb-ekran" aria-label="Ekranlar">
-          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.etkin === 'plan' ? undefined : o.planaGit ?? undefined} title={o.etkin === 'plan' ? undefined : 'Plan'}><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
+          {/* Plan ekranının sayfalarında (Bugünün kararları, Nasıl hesaplandı) Plan seçilidir ve tahtaya döner; tahtada planaGit verilmez. */}
+          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.planaGit ?? undefined} title={o.planaGit ? 'Plan' : undefined}><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
           <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Planlama stüdyosu"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
           {o.etkin === 'veri' || o.veri
             ? <button type="button" aria-current={o.etkin === 'veri' ? 'page' : undefined} onClick={o.etkin === 'veri' ? undefined : o.veri ?? undefined} title="Veri ve kısıtlar"><Simge ad="layers" boyut="k" /><span>Veri</span></button>

@@ -315,3 +315,21 @@ test.describe('577b Veri ve kısıtlar', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// 577a: Nasıl hesaplandı Plan ekranının sayfasıdır (`?ekran=hesap`); örnek veride son ekip kaydı olmayabilir, o halde boş sonuç ve bekleyen adımlar.
+test.describe('577a Nasıl hesaplandı', () => {
+  test('Nasıl hesaplandı: adresle açılır, karar masası ve ekip adımları, iki sekme; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan?ekran=hesap');
+    const kok = page.locator('[data-parca="hesap"]');
+    await expect(kok).toBeVisible();
+    await expect(kok.getByRole('list', { name: 'Ekip adımları' }).or(kok.getByText('Planlama çalışması yok'))).toBeVisible();
+    if (await kok.getByRole('tab', { name: /Akış ağı/ }).isVisible()) {
+      await tasmaz(page);
+      await kok.getByRole('tab', { name: /Akış ağı/ }).click();
+      await tasmaz(page);
+    }
+    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
+    await expect(kok).toHaveCount(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
