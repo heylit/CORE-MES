@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
-import type { KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type {
+  KmBalonlarGovdesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmStudyoParcaCevabi,
+} from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 
@@ -76,5 +78,22 @@ export function useOlcumYaz() {
       { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
     )),
     onSettled: (_c, _h, govde) => istemci.invalidateQueries({ queryKey: studyoAnahtari.emirOlcumleri(govde.uretimEmriId) }),
+  });
+}
+
+// Kontrol planı resim başına bütün yazılır (603 a); resmin sürümü başkasının aynı anda yaptığı değişikliği ezmemek içindir. Cevaptaki resim
+// parçanın önbelleğine konur: yeni sürüm sonraki yazımın sürümüdür.
+export function useBalonPlaniYaz(malzemeNo: number | null) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ resim, balonlar }: { resim: KmResim; balonlar: KmBalonlarGovdesi['balonlar'] }) => tekrarKorumaliGonder((d) => api.post<{ resim: KmResim }>(
+      `/kalite-merkezi/studyo/resimler/${String(resim.id)}/balonlar`, { surum: resim.surum, balonlar } satisfies KmBalonlarGovdesi,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ resim }) => {
+      if (malzemeNo === null) return;
+      istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(malzemeNo), (o) => o && { ...o, resimler: o.resimler.map((r) => (r.id === resim.id ? resim : r)) });
+    },
+    onError: () => { if (malzemeNo !== null) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) }); },
   });
 }

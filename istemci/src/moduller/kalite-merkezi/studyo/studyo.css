@@ -4,7 +4,13 @@
   height: calc(100dvh - var(--ust-cubuk) - var(--b-6) * 5); min-height: calc(var(--pencere-genis) + var(--b-6)); min-width: 0;
 }
 .km-st-sol, .km-st-sag { display: flex; flex-direction: column; gap: var(--b-3); min-height: 0; overflow: auto; }
-.km-st-orta { display: flex; min-width: 0; min-height: 0; }
+.km-st-orta { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; min-height: 0; }
+.km-st-orta > :last-child { flex: 1; min-height: 0; }
+.km-st-taslak {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: color-mix(in srgb, var(--hazard) 10%, var(--panel)); border: var(--cizgi-ince) solid color-mix(in srgb, var(--hazard) 50%, transparent);
+}
+.km-st-taslak span { margin-right: auto; font-size: var(--yazi-s); }
 .km-st-kart {
   display: grid; gap: var(--b-2); padding: var(--b-3); border-radius: var(--yari-3);
   background: var(--panel); border: var(--cizgi-ince) solid var(--edge);

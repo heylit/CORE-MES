@@ -3,25 +3,27 @@ import { useSearchParams } from 'react-router-dom';
 import type { KmParcaKaynagi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { DurumKutusu, Dugme, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
-import type { Olcum } from '../../../ortak/cizim/kurallar.ts';
+import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
 import type { TeknikResimKontrolu } from '../../../ortak/cizim/TeknikResim.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { tarihSaatMetni } from '../../../ortak/veri/zaman-metni.ts';
 import { useParcaKaynaklari } from '../yeni/parcalar/kaynak.ts';
 import { MalzemeSecici } from '../yeni/parcalar/MalzemeSecici.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../yeni/sekmeler.ts';
-import { cizimBalonu, cizimOlcumleri, NUMUNE_DURUMU, numuneKuraliMetni, sonOlcumler, uretimEmriKimligi, yeniOlcumler } from './kurallar.ts';
-import { useEmirNumuneleri, useEmirOlcumleri, useOlcumYaz, useResimDosyasi, useStudyoParcasi } from './veri.ts';
+import {
+  cizimBalonu, cizimOlcumleri, NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, sonOlcumler, uretimEmriKimligi, yeniOlcumler,
+} from './kurallar.ts';
+import { useBalonPlaniYaz, useEmirNumuneleri, useEmirOlcumleri, useOlcumYaz, useResimDosyasi, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
 // Resim ve modeller (597 a): Arkon çizim stüdyosunun düzeni; solda parça, resimler ve üretim emri, ortada Arkon'la ortak teknik resim
-// görüntüleyicisi (616 b), sağda numune planı ve numuneler. Plan salt okunur (düzenleme ayrı gelir); seçili emre ölçüm yazılır (603 a).
+// görüntüleyicisi (616 b), sağda numune planı ve numuneler. Kontrol planını onay yetkisi olan düzenler ve kaydeder; seçili emre ölçüm
+// yazma yetkisiyle yazılır (603 a).
 // Telefonda üç sütun sekmeyle değişir.
 type MobilGorunum = 'dosya' | 'resim' | 'plan';
 
 const TeknikResim = lazy(async () => ({ default: (await import('../../../ortak/cizim/TeknikResim.tsx')).TeknikResim }));
 const BOS_SATIR: readonly never[] = [];
-const yazilmaz = () => undefined;
 
 // Resmin dosyası gelince ortak parçaya verilir; parça dosyayı adının uzantısından (PDF, STEP, IGES, STL) tanır.
 function Resim({ resim, kontrol }: { resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim'> }) {
@@ -96,8 +98,23 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const [bekleyen, bekleyenYaz] = useState<Record<number, Olcum>>({});
   const gosterilen = useMemo(() => ({ ...kayitli, ...bekleyen }), [kayitli, bekleyen]);
   const { bildir } = useBildirim();
+
+  // Görüntüleyicideki plan değişikliği kaydedilene dek taslaktır; resim ya da sürümü değişince düşer.
+  const duzenler = yetki.onayla;
+  const [taslak, taslakYaz] = useState<Balon[] | null>(null);
+  useEffect(() => { taslakYaz(null); }, [resim?.id, resim?.surum]);
+  const planYaz = useBalonPlaniYaz(malzemeNo);
+  const planKaydet = () => {
+    if (!resim || !taslak) return;
+    planYaz.mutate({ resim, balonlar: planGirdileri(kmBalonlari, taslak) }, {
+      onSuccess: () => { taslakYaz(null); bildir('tamam', 'Kontrol planı kaydedildi.'); },
+      onError: (h) => { bildir('hata', hataIletisi(h, 'Kontrol planı kaydedilemedi.')); },
+    });
+  };
+
   const olcumYaz = useOlcumYaz();
   const olcumlerYaz = useCallback((yeni: Record<number, Olcum>) => {
+    if (taslak !== null) { bildir('bilgi', 'Ölçümden önce kontrol planını kaydedin.'); return; }
     if (uretimEmriId === null) { bildir('bilgi', 'Ölçüm yazmak için üretim emri seçin.'); return; }
     if (!yetki.yaz) { bildir('bilgi', 'Ölçüm yazma yetkiniz yok.'); return; }
     const satirlar = yeniOlcumler(kmBalonlari, gosterilen, yeni);
@@ -109,7 +126,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
       onSuccess: birak,
       onError: (h) => { birak(); bildir('hata', hataIletisi(h, 'Ölçüm kaydedilemedi.')); },
     });
-  }, [uretimEmriId, yetki.yaz, kmBalonlari, gosterilen, olcumYaz, bildir]);
+  }, [taslak, uretimEmriId, yetki.yaz, kmBalonlari, gosterilen, olcumYaz, bildir]);
   useEffect(() => { bekleyenYaz({}); }, [resim?.id, uretimEmriId]);
 
   const emirSec = (kimlik: string) => {
@@ -165,8 +182,18 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
       </aside>
 
       <section className="km-st-orta" aria-label="Teknik resim">
+        {taslak !== null ? (
+          <div className="km-st-taslak" role="status">
+            <Simge ad="edit" boyut="k" />
+            <span>Kontrol planında kaydedilmemiş değişiklik · {String(taslak.length)} nokta</span>
+            <Dugme tur="ikincil" simge="x" disabled={planYaz.isPending} onClick={() => { taslakYaz(null); }}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="check" disabled={planYaz.isPending} onClick={planKaydet}>Planı kaydet</Dugme>
+          </div>
+        ) : null}
         {resim ? (
-          <Resim resim={resim} kontrol={{ balonlar, balonlarYaz: yazilmaz, olcumler: gosterilen, olcumlerYaz, saltOkunur: true }} />
+          <Resim resim={resim} kontrol={{
+            balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !duzenler,
+          }} />
         ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
       </section>
 
