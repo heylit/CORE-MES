@@ -151,3 +151,7 @@
 .tc-pyh-dambil-once { background: var(--panel-solid); box-shadow: 0 0 0 var(--cizgi) var(--muted); }
 .tc-pyh-dambil-sonra { background: var(--grafik); box-shadow: 0 0 0 var(--cizgi) var(--panel-solid); }
 .tc-pyh-dambil-deger { font-size: var(--yazi-xs); white-space: nowrap; }
+
+/* sekme düğmesi: simge yazının yanında (bugünkü sayfa pm-seg); telefonda yalnız yazı */
+.tc-pyi[data-parca="hesap"] .tc-pyi-seg button { display: inline-flex; align-items: center; gap: var(--b-1); }
+@media (max-width: 767px) { .tc-pyi[data-parca="hesap"] .tc-pyi-seg button > .tc-simge { display: none; } }

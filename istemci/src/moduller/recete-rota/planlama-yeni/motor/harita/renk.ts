@@ -2,10 +2,12 @@
 // Değişken karışım (color-mix) taşıyabilir: önce bir öğenin hesaplanan rengi, sonra 1x1 tuvalde boyanmış nokta okunur.
 export type Rgb = [number, number, number];
 export interface HaritaRenkleri {
-  run: Rgb; idle: Rgb; stop: Rgb; hold: Rgb; hazard: Rgb; ink: Rgb; muted: Rgb; edge2: Rgb; panel: Rgb; done: Rgb; bp: Rgb;
+  run: Rgb; idle: Rgb; stop: Rgb; hold: Rgb; hazard: Rgb; ink: Rgb; muted: Rgb; edge2: Rgb; panel: Rgb; done: Rgb; bp: Rgb; grafik: Rgb; grafik2: Rgb;
+  // Saydam çizgi rengi panel zemininde karıştırılmış hâliyle (kutu ve düğüm dolgusu için; rgb'ye çözülünce saydamlık düşer).
+  cizgi: Rgb;
   is: Rgb[]; mono: string;
 }
-const ADLAR = { run: '--run', idle: '--idle', stop: '--stop', hold: '--hold', hazard: '--hazard', ink: '--ink', muted: '--muted', edge2: '--edge2', panel: '--panel-solid', done: '--done', bp: '--bp' } as const;
+const ADLAR = { run: '--run', idle: '--idle', stop: '--stop', hold: '--hold', hazard: '--hazard', ink: '--ink', muted: '--muted', edge2: '--edge2', panel: '--panel-solid', done: '--done', bp: '--bp', grafik: '--grafik', grafik2: '--grafik-2' } as const;
 
 export const rgba = (c: Rgb, a = 1): string => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
@@ -14,13 +16,15 @@ export function renkleriOku(el: HTMLElement): HaritaRenkleri | null {
   const g = nokta.getContext('2d', { willReadFrequently: true }); if (!g) return null;
   const ornek = document.createElement('i'); ornek.hidden = true; el.appendChild(ornek);
   const cs = getComputedStyle(el);
-  const coz = (ad: string): Rgb => {
-    ornek.style.setProperty('color', cs.getPropertyValue(ad).trim());
-    g.clearRect(0, 0, 1, 1); g.fillStyle = getComputedStyle(ornek).color; g.fillRect(0, 0, 1, 1);
+  const boya = (ad: string): string => { ornek.style.setProperty('color', cs.getPropertyValue(ad).trim()); return getComputedStyle(ornek).color; };
+  const coz = (ad: string, zemin?: string): Rgb => {
+    g.clearRect(0, 0, 1, 1);
+    if (zemin) { g.fillStyle = boya(zemin); g.fillRect(0, 0, 1, 1); }
+    g.fillStyle = boya(ad); g.fillRect(0, 0, 1, 1);
     const d = g.getImageData(0, 0, 1, 1).data; return [d[0] ?? 0, d[1] ?? 0, d[2] ?? 0];
   };
   try {
-    const r = Object.fromEntries(Object.entries(ADLAR).map(([k, v]) => [k, coz(v)])) as Omit<HaritaRenkleri, 'is' | 'mono'>;
-    return { ...r, is: Array.from({ length: 10 }, (_, i) => coz(`--tc-pym-is-${i}`)), mono: cs.getPropertyValue('--font-mono').trim() || 'monospace' };
+    const r = Object.fromEntries(Object.entries(ADLAR).map(([k, v]) => [k, coz(v)])) as Omit<HaritaRenkleri, 'is' | 'mono' | 'cizgi'>;
+    return { ...r, cizgi: coz('--edge2', '--panel-solid'), is: Array.from({ length: 10 }, (_, i) => coz(`--tc-pym-is-${i}`)), mono: cs.getPropertyValue('--font-mono').trim() || 'monospace' };
   } finally { ornek.remove(); }
 }
