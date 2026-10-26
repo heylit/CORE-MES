@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react';
-import { merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { kayitIlgili, seyrelt } from '../../../../../../arkon/web/src/data/log-tepki.ts';
 import type { DurumOlayi, SayimKaydi } from '../cekirdek/oee.ts';
 import { anlikVardiya, type AnlikVardiya } from '../cekirdek/vardiya.ts';

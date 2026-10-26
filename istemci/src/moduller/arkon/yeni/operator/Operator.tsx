@@ -11,7 +11,7 @@ import {
   type DurumEsitleme,
 } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
-import { eskiCizim, eskiCizimGorevi, type MerkezDosyasi } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { eskiCizim, eskiCizimGorevi, type MerkezDosyasi } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { hazirlikUyarisi } from '../../../../../../arkon/web/src/data/cnc-hazirlik.ts';
 import { durumBaslangici, durumKaydiGerekir } from '../../../../../../arkon/web/src/data/durum-kaydi.ts';
 import { IS_DEGISIMI, nedenAdi as nedenAdiYaz } from '../../../../../../arkon/web/src/data/durus-nedeni.ts';
