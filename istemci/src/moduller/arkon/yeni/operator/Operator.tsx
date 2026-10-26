@@ -1146,8 +1146,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   return (
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
       <header className="tc-ay1-ust">
-        <span className="tc-ay-marka" aria-hidden="true"><i className="tc-ay-isaret" /><b>Üretim</b><small>Hazırlık</small></span>
-        <span className="tc-ay-ayrac" aria-hidden="true" />
         <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir">
           <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
         </button>
