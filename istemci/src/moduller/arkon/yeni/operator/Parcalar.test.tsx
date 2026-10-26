@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { DurumDugmeleri, Konfeti, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { DurumDugmeleri, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -69,5 +69,25 @@ describe('Sayaç kadranı kalan ve boş istasyon', () => {
     expect(b?.disabled).toBe(false);
     fireEvent.click(b!);
     expect(eylemler.length).toBe(1);
+  });
+});
+
+describe('Numune planı şeridi (566)', () => {
+  const kurallar = [
+    { id: 'ilk', etiket: 'İlk parça', olcen: 'Kalite', ilk: true, olculer: [1] },
+    { id: 'her', etiket: 'Her 50 parça', olcen: 'Operatör', ilk: false, olculer: [2, 3] },
+  ];
+  it('kural başına bir satır; durum metinle ve renk adıyla yazılır', () => {
+    const { container, getByRole } = render(<NumuneSeridi girdi={{ kurallar, meas: { 2: { ok: true } }, bekleyen: [1], zamani: [], siradaki: { olcu: 2, v: 30, u: 'parça' }, ilkKarar: null }} />);
+    expect(getByRole('list', { name: 'Numune planı' })).toBeTruthy();
+    const satirlar = Array.from(container.querySelectorAll('.tc-ay1-numune-serit-parca'));
+    expect(satirlar.map((x) => x.getAttribute('data-durum'))).toEqual(['bitti', 'sirada']);
+    expect(satirlar[0]?.textContent).toContain('Numune kalitede');
+    expect(satirlar[1]?.textContent).toContain('Operatör · 1/2 ölçü');
+    expect(satirlar[1]?.textContent).toContain('30 parça sonra');
+  });
+  it('numune planı yoksa çizilmez', () => {
+    const { container } = render(<NumuneSeridi girdi={{ kurallar: [], meas: {}, bekleyen: [], zamani: [], siradaki: null, ilkKarar: null }} />);
+    expect(container.firstChild).toBeNull();
   });
 });
