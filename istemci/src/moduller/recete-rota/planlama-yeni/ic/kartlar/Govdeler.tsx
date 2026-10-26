@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Simge } from '../../../../../ortak/arayuz/index.ts';
+import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaSecimi } from '../../gorunumler.ts';
@@ -8,6 +9,7 @@ import { planGuncel } from '../../durum.ts';
 import type { PlanKurucu } from '../../motor/coz.ts';
 import { eylemYapisi } from '../../motor/eylem.ts';
 import { grupAdi } from '../../motor/ozet/veri.ts';
+import { GOSTERGE_SATIRLARI, gostergeFarki, SENARYO_DURUM_ADI, senaryoSirasi, senaryoZamani } from '../gecmis/kurallar.ts';
 import { ParametreGirdisi } from '../veri/Kisitlar.tsx';
 import { bedelOku, duruslar, ekMesailer, KATALOG, kisitDegistir, parametreDegeri, parametreOku, parametreYaz, type Durus, type EkMesai, type Parametre } from '../veri/kurallar.ts';
 import { useCanliPlan } from '../../motor/fark.ts';
@@ -30,6 +32,8 @@ export interface KartBaglami {
   planKur: PlanKurucu | null; uyar: (ileti: string) => void;
   // Reçete ve Rota kartının ürünü ve üstüne gelinen adım ya da makine: harita aynı ürünün rotasını yakar.
   rotaUrun: string | null; rotaUrunSec: (u: string) => void; rotaUst: (x: { k: string | null; m: string | null }) => void;
+  // Plan modülünün taslakları (221 c); okunamadıysa null. Karşılaştırma Geçmiş > Senaryolar'da, yazma Planlama atölyesinde.
+  senaryolar: SenaryolarCevabi | null; senaryolarAc: (() => void) | null; atolyeAc: () => void;
 }
 const YETKISIZ = 'Plan yazma yetkiniz yok.';
 
@@ -53,6 +57,7 @@ export function KartGovdesi({ tur, b }: { tur: KartTuru; b: KartBaglami }) {
   if (tur === 'kisit') return <KisitGovdesi b={b} />;
   if (tur === 'hesap') return <HesapGovdesi b={b} />;
   if (tur === 'rota') return <RotaGovdesi b={b} />;
+  if (tur === 'senaryo') return <SenaryoGovdesi b={b} />;
   return <p className="tc-pym-kucuk-yazi">{HAZIRLANIYOR}</p>;
 }
 
@@ -502,5 +507,46 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
       <div className="tc-pym-dugmeler"><Pasif ad="Adım ekle" simge="plus" not={VERI_NOTU} /></div>
       <p className="tc-pym-kucuk-yazi">Dolu makine adımın alternatifidir; motor en uygununu seçer. Kart açıkken bu ürünün rotası haritada yanar.</p>
     </>
+  );
+}
+
+// Senaryolar kartı (za-merkez mzSenaryo, 641 a): canlıya gitmemiş taslaklar ve canlıya göre gecikme farkı. Kart okur; yan yana karşılaştırma
+// Geçmiş > Senaryolar'da, kaydetme ve canlıya alma Planlama atölyesindedir.
+export const SENARYO_KARTI_SINIRI = 8;
+function SenaryoGovdesi({ b }: { b: KartBaglami }) {
+  const v = b.senaryolar;
+  if (!v) return <p className="tc-pym-kucuk-yazi">Senaryolar okunamadı.</p>;
+  const l = senaryoSirasi(v.senaryolar).filter((s) => s.durum === 'acik' || s.durum === 'onayda');
+  const [gec, ad] = [GOSTERGE_SATIRLARI[0], GOSTERGE_SATIRLARI[1]];
+  return (
+    <div className="tc-pyk-izgara">
+      <p className="tc-pyk-yorum"><Simge ad="flag" boyut="k" />
+        <span>{`Canlı plan sürüm ${String(v.canliSurum)}. Canlıya giden her değişiklik önce bir taslağa düşer; taslak kaydedilir, onaylanınca canlıya geçer.`}</span>
+      </p>
+      <Bolum baslik={`Açık taslaklar (${String(l.length)})`} simge="layers">
+        <ul className="tc-pyk-liste tc-pyk-senaryo">
+          {l.length ? l.slice(0, SENARYO_KARTI_SINIRI).map((s) => {
+            const f = gec && s.gostergeler ? gostergeFarki(gec.al(v.canli), gec.al(s.gostergeler), true) : null;
+            const g = ad && s.gostergeler ? ad.al(s.gostergeler) : null;
+            return (
+              <li key={s.id}>
+                <Rozet ton={SENARYO_DURUM_ADI[s.durum][1]}>{SENARYO_DURUM_ADI[s.durum][0]}</Rozet>
+                <span><b>{s.ad}</b><small>{`${s.acan ?? '—'} · ${senaryoZamani(s.acilma)} · ${String(s.degisiklikler.length)} değişiklik`}</small></span>
+                <span className="tc-pym-mono">
+                  {g === null ? '—' : `${String(g)} geç`}
+                  {f && <small data-ton={f.iyi ? 'iyi' : 'kotu'}>{` ${f.d > 0 ? '+' : '−'}${saatYazi(Math.abs(f.d))}`}</small>}
+                </span>
+              </li>
+            );
+          }) : <li className="tc-pym-kucuk-yazi">Açık taslak yok. Planlamada yapılan değişiklik bir taslağa düşer.</li>}
+        </ul>
+      </Bolum>
+      <div className="tc-pyk-arac">
+        <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" aria-disabled={b.senaryolarAc ? undefined : 'true'} onClick={() => b.senaryolarAc?.()}>
+          <Simge ad="eye" boyut="k" /><span>Yan yana karşılaştır</span>
+        </button>
+        <button type="button" className="tc-dugme tc-pym-kucuk" onClick={b.atolyeAc}><Simge ad="layers" boyut="k" /><span>Planlama atölyesi</span></button>
+      </div>
+    </div>
   );
 }
