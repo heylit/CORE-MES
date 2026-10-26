@@ -198,27 +198,41 @@ export async function ilkParcaOnaysiz(db: Db, emirId: number): Promise<boolean> 
 
 // Karar bekleyen adet iş emri, istasyon ve refakat partisi başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş
 // emrine ve aynı partiye gider.
-export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; refakatPartisiId: number | null; adet: number }
+export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; refakatPartisiId: number | null }
+export interface KararBekleyenSatir extends KararGrubu { zaman: string; adet: number }
 
-export function kararBekleyenGruplari(db: Db, emirId: number): Promise<KararGrubu[]> {
-  return db.sorgu<KararGrubu>(
-    `SELECT is_emri_id AS "isEmriId", istasyon_id AS "istasyonId", kisi_id AS "kisiId", refakat_partisi_id AS "refakatPartisiId",
-            sum(adet)::int AS adet FROM uretim_sayimi
-      WHERE emir_id = $1 AND tur = 'karar_bekliyor' GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id HAVING sum(adet) <> 0 ORDER BY min(id)`,
+// Grubun henüz karara bağlanmamış satırları, yazılış sırasıyla: her karar grubu sıfırlar, bu yüzden bekleyen, grubun kümülatif
+// toplamının son sıfır olduğu satırdan sonrakilerdir (düzeltmeler dahil). Toplamı sıfır olan grup gelmez.
+export function kararBekleyenSatirlari(db: Db, emirId: number): Promise<KararBekleyenSatir[]> {
+  return db.sorgu<KararBekleyenSatir>(
+    `WITH s AS (
+       SELECT id, is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, zaman, adet,
+              sum(adet) OVER (PARTITION BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id ORDER BY id) AS kumulatif
+         FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'karar_bekliyor'),
+     g AS (
+       SELECT is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, COALESCE(max(id) FILTER (WHERE kumulatif = 0), 0) AS sifir
+         FROM s GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id)
+     SELECT s.is_emri_id AS "isEmriId", s.istasyon_id AS "istasyonId", s.kisi_id AS "kisiId", s.refakat_partisi_id AS "refakatPartisiId",
+            ${ISO('s.zaman')} AS zaman, s.adet
+       FROM s JOIN g ON g.is_emri_id IS NOT DISTINCT FROM s.is_emri_id AND g.istasyon_id = s.istasyon_id AND g.kisi_id = s.kisi_id
+                    AND g.refakat_partisi_id IS NOT DISTINCT FROM s.refakat_partisi_id
+      WHERE s.id > g.sifir
+      ORDER BY s.id`,
     [emirId],
   );
 }
 
 // Kararın iki satırı aynı iş emrine ve sayan kişiye yazılır (terminal ya da kararı veren değil): üretim sayanın kalır (348 a).
-// Sayım kişisi operatörde kalır (348 a); kararı veren ayrı sütunda, defter onu gösterir (504 a).
+// Sayım kişisi operatörde kalır (348 a); kararı veren ayrı sütunda, defter onu gösterir (504 a). Satırlar parçanın üretildiği ana,
+// kararın anı karar_zamani'na yazılır (645 a).
 export function kararSatirlariEkle(
-  db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', an: string, kararVerenId: number,
+  db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', uretimAni: string, adet: number, kararAni: string, kararVerenId: number,
 ): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id, karar_veren_kisi_id)
-     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8, $9),
-            ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8, $9)`,
-    [emirId, g.kisiId, g.istasyonId, g.isEmriId, an, g.adet, tur, g.refakatPartisiId, kararVerenId],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id, karar_veren_kisi_id, karar_zamani)
+     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8, $9, $10::timestamptz),
+            ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8, $9, $10::timestamptz)`,
+    [emirId, g.kisiId, g.istasyonId, g.isEmriId, uretimAni, adet, tur, g.refakatPartisiId, kararVerenId, kararAni],
   );
 }
 
@@ -374,7 +388,7 @@ export function isEmriSayimlari(db: Db, isEmriId: number): Promise<SureSayimSati
 
 // Üç defter tek listede: kimlik tablo kimliğinin üç katı artı kaynak payıdır (0 kayıt, 1 olay, 2 sayım),
 // bu yüzden çakışmaz. Aynı anı taşıyan satırlarda başlatma önce, bitirme sonra gelir.
-// Kalite kararı sağlama ya da redde geçen satırdır; kişi sayandır, kararı veren ayrı gelir. Karar veren sütunundan önce
+// Kalite kararı sağlama ya da redde geçen satırdır ve karar anında görünür; kişi sayandır, kararı veren ayrı gelir. Karar veren sütunundan önce
 // yazılmış karar satırı, aynı anda aynı adedi karar bekleyenden düşen eşinden tanınır; kararı veren bilinmez.
 const KARAR_SATIRI = `(s.tur = 'red' OR (s.tur = 'saglam' AND s.duzeltme AND (s.karar_veren_kisi_id IS NOT NULL OR EXISTS (
   SELECT 1 FROM uretim_sayimi k WHERE k.emir_id = s.emir_id AND k.zaman = s.zaman AND k.tur = 'karar_bekliyor'
@@ -394,7 +408,7 @@ export function kayitlariGetir(db: Db, emirId: number): Promise<KayitSatiri[]> {
        UNION ALL
        SELECT s.id::bigint * 3 + 2, s.emir_id, s.kisi_id, s.istasyon_id,
               CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN s.karar THEN 'kalite_onay' ELSE 'duzeltme' END,
-              NULL, s.adet, NULL, s.hurda_nedeni_id, s.karar_veren_kisi_id, s.zaman, 1
+              NULL, s.adet, NULL, s.hurda_nedeni_id, s.karar_veren_kisi_id, COALESCE(s.karar_zamani, s.zaman), 1
          FROM (SELECT s.*, ${KARAR_SATIRI} AS karar
                  FROM uretim_sayimi s WHERE s.emir_id = $1 AND (s.tur IN ('hurda', 'red') OR (s.tur = 'saglam' AND s.duzeltme))) s
      ) b ORDER BY b.an, b.sira, b.id`,
@@ -1596,7 +1610,7 @@ export interface SonOlaySatiri {
   zaman: string;
 }
 
-// Üç defter bütün emirlerde tek akış; kimlik kaynak harfi ve satır kimliğidir. Süzgeç her kolda ayrıdır ki zaman dizini
+// Üç defter bütün emirlerde tek akış; kimlik kaynak harfi ve satır kimliğidir; karar satırı karar anıyla süzülür ve sıralanır. Süzgeç her kolda ayrıdır ki zaman dizini
 // kullanılabilsin. Aynı anda başlatma en eski, bitirme en yeni sayılır (emir defteriyle aynı sıra).
 export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Promise<SonOlaySatiri[]> {
   return db.sorgu<SonOlaySatiri>(
@@ -1616,8 +1630,9 @@ export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Pro
          SELECT 's' || s.id, s.emir_id, s.is_emri_id, s.istasyon_id, s.kisi_id,
                 CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN ${KARAR_SATIRI} THEN 'kalite_onay'
                      WHEN s.duzeltme THEN 'duzeltme' ELSE 'saglam' END,
-                s.adet, NULL, s.karar_veren_kisi_id, s.zaman, 1, s.id
-           FROM uretim_sayimi s WHERE s.tur IN ('saglam', 'hurda', 'red') AND ($1::timestamptz IS NULL OR s.zaman > $1::timestamptz)
+                s.adet, NULL, s.karar_veren_kisi_id, COALESCE(s.karar_zamani, s.zaman), 1, s.id
+           FROM uretim_sayimi s WHERE s.tur IN ('saglam', 'hurda', 'red')
+            AND ($1::timestamptz IS NULL OR s.zaman > $1::timestamptz OR s.karar_zamani > $1::timestamptz)
        ) b
        JOIN uretim_emri e ON e.id = b.emir_id
        LEFT JOIN uretim_emirleri_is_emri i ON i.id = b.is_emri_id

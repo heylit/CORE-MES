@@ -912,3 +912,28 @@ export function kartAdimi<T extends { sira: number; durum: IsEmriDurumu; istasyo
   const burada = istasyonId === null ? [] : isEmirleri.filter((i) => i.istasyonId === istasyonId);
   return burada.find((i) => i.durum === 'calisiyor') ?? siradakiIsEmri(burada) ?? isEmirleri.find((i) => i.durum === 'calisiyor') ?? siradakiIsEmri(isEmirleri);
 }
+
+// 645 a: karar bekleyen satırlar (yazılış sırasıyla, eksi düzeltmeler dahil) üretim anlarına bölünür; eksi düzeltme en son sayılandan
+// düşer. Aynı andaki satırlar birleşir, sıfıra inen an gelmez; toplam satırların toplamına eşittir. Önünde sayım kalmayan eksi
+// (olağan akışta olmaz) kendi anında kalır.
+export function kararAnlari(satirlar: readonly { zaman: string; adet: number }[]): { zaman: string; adet: number }[] {
+  const anlar: { zaman: string; adet: number }[] = [];
+  for (const { zaman, adet } of satirlar) {
+    if (adet > 0) {
+      const son = anlar.at(-1);
+      if (son !== undefined && son.zaman === zaman && son.adet > 0) son.adet += adet;
+      else anlar.push({ zaman, adet });
+      continue;
+    }
+    let kalan = -adet;
+    for (let i = anlar.length - 1; i >= 0 && kalan > 0; i -= 1) {
+      const a = anlar[i]!;
+      if (a.adet <= 0) continue;
+      const dus = Math.min(a.adet, kalan);
+      a.adet -= dus;
+      kalan -= dus;
+    }
+    if (kalan > 0) anlar.push({ zaman, adet: -kalan });
+  }
+  return anlar.filter((a) => a.adet !== 0);
+}

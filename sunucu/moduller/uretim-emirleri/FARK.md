@@ -220,3 +220,9 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - `disari.makineKullanimAraliklari(db, makineIdleri, baslangic, bitis)` -> `Map<makineId, { baslangic, bitis }[]>`: makine kullanımlarının pencereyle kesişen parçaları; açık kullanım okuma anına kadar. Toplamı `makineSureleri` ile aynıdır.
 - `disari.makineSayimAnlari(db, makineIdleri, baslangic, bitis)` -> `Map<makineId, { zaman, saglam, hurda, red, standartSaniye, suresizSaglam }[]>`: makine kırılımlı sayım an an; kalite reddi ayrı sütun, karar bekleyen yok. Toplamları `aralikAdetleri` ve `kirilimStandartSureleri` ile aynıdır.
 - Ekleyici: mevcut okumalar ve çağıranları değişmedi. Uç, göç, yetki yok.
+
+## Kalite kararı üretim anına (kart 642, kullanıcı kararları 645 a, 652 a; dal 645-onay-uretim-ani)
+- Göç `20261026150500`: `uretim_sayimi.karar_zamani` (boş olabilir; yalnız karar satırında, `karar_veren_kisi_id` doluyken). Dolu tabloya boş sütun; var olan satırlar değişmez, eski karar satırının zamanı karar anı olarak kalır.
+- `kararliSayimiSonuclandir`: karar bekleyen sayım grubunun son kararla kapanmamış satırları üretim anlarına bölünür (eksi düzeltme en son sayılandan düşer); her an için iki satır (-n karar bekliyor, +n sağlam ya da red) o ana yazılır, kararın anı `karar_zamani`'dadır. Grup toplamı, stok olayı ve kapanış adedi değişmedi.
+- Defter (`emirAyrintisi`) ve son olaylar kararı karar anında gösterir; son olaylar imleci kararı karar anıyla süzer.
+- Yan etki (davranış): zamana göre sayım okuyan her yer onaylı ve reddedilen parçayı üretildiği ana sayar: OEE, Arkon günlük sayımı ve anomali, saat ekranı, kişi özeti. Önceden karar gününe düşüyordu. Karar beklerken gün kapanmışsa o günün sayısı karar verilince geriye dönük artar.
