@@ -72,7 +72,7 @@ test('CZ-15 kare başına 64 KiB, toplam 512 KiB ve yalnız PNG, JPEG ya da WEBP
   assert.equal(onizlemeBoyutReddi([png(10), { tur: 'jpeg', boyut: 10 }, { tur: 'webp', boyut: 10 }]), null);
   assert.equal(onizlemeBoyutReddi([png(10), { tur: 'pdf', boyut: 10 }]), 'onizlemeKareTuru');});
 
-test('CZ-16 malzeme kartından yalnız foto doğrudan yayına girer', () => {
+test('CZ-18 malzeme kartından yalnız foto doğrudan yayına girer', () => {
   assert.equal(malzemedenYayinda('fotograf'), true);
   assert.equal(malzemedenYayinda('teknik-resim'), false);
   assert.equal(malzemedenYayinda('3b-model'), false);
@@ -86,7 +86,7 @@ test('eşleşme anahtarı boşluk ve büyük-küçük harf gözetmez; boş null 
   assert.equal(anahtarMetni(null), null);
 });
 
-describe('CZ-17/CZ-18 küçük resim seçimi', () => {
+describe('CZ-19/CZ-20 küçük resim seçimi', () => {
   const rev = (id: number, sira: number, durum: AdayRevizyon['durum'], kareSayisi = 1, antetRev: string | null = null): AdayRevizyon =>
     ({ id, sira, durum, kareSayisi, antetRev });
   const belge = (belgeId: number, tur: AdayBelge['tur'], revizyonlar: AdayRevizyon[], ek: Partial<AdayBelge> = {}): AdayBelge =>

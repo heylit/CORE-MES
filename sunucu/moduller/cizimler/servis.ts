@@ -385,7 +385,7 @@ export async function malzemeOnizlemesiYaz(
 
 /* ---------------- Küçük resim (listeler) ---------------- */
 
-// Kayıt başına küçük resim, tek sorguda (CZ-18). Malzemede kartın teknik resim numarası ve revizyonu karşılaştırılır; öbür
+// Kayıt başına küçük resim, tek sorguda (CZ-20). Malzemede kartın teknik resim numarası ve revizyonu karşılaştırılır; öbür
 // kayıtlarda karşılaştırma yoktur. Resmi olmayan kayıt haritada yer almaz.
 export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, hedefIdler: readonly number[]): Promise<Map<number, KucukResim>> {
   const sonuc = new Map<number, KucukResim>();

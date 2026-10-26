@@ -100,11 +100,11 @@ export function onizlemeBoyutReddi(dosyalar: readonly { tur: DosyaTuru; boyut: n
   return dosyalar.reduce((t, d) => t + d.boyut, 0) > ONIZLEME_SINIRLARI.toplamBayt ? 'onizlemeToplamBuyuk' : null;
 }
 
-// CZ-16: malzeme kartından açılan belge. Foto doğrudan yayına girer; teknik resim ve 3B model taslak girer, yayını
+// CZ-18: malzeme kartından açılan belge. Foto doğrudan yayına girer; teknik resim ve 3B model taslak girer, yayını
 // `cizimler.yayinla` sahibi merkezden yapar: yayındaki çizim atölyeye gider, karttan yanlış çizim doğrudan tezgaha ulaşmamalı.
 export const malzemedenYayinda = (tur: MalzemeBelgeTuru): boolean => tur === 'fotograf';
 
-// CZ-17: kapak seçilmemişse küçük resim bu öncelikle seçilir; eşitse ilk bağlanan, o da eşitse küçük belge kimliği.
+// CZ-19: kapak seçilmemişse küçük resim bu öncelikle seçilir; eşitse ilk bağlanan, o da eşitse küçük belge kimliği.
 const TUR_ONCELIGI: Readonly<Partial<Record<BelgeTuru, number>>> = { '3b-model': 0, fotograf: 1, 'teknik-resim': 2 };
 const oncelik = (tur: BelgeTuru): number => TUR_ONCELIGI[tur] ?? 3;
 
@@ -142,7 +142,7 @@ export interface KucukResimSecimi {
   revUyumu: boolean | null;
 }
 
-// CZ-18: kaydın küçük resmi. Kapak, yoksa CZ-17 sırası; ilk resmi olan belge seçilir. Belgede kartın revizyonuna uyan
+// CZ-20: kaydın küçük resmi. Kapak, yoksa CZ-19 sırası; ilk resmi olan belge seçilir. Belgede kartın revizyonuna uyan
 // yayına girmiş (yayında ya da eski) revizyon, yoksa yayındaki revizyon gösterilir; ikincisinde ve resim numarası kartınkiyle
 // çeliştiğinde revUyumu false olur (resim yine gösterilir, ekran uyarır). Kartta revizyon yoksa karşılaştırma yapılmaz (null).
 // Taslak hiçbir zaman seçilmez.
