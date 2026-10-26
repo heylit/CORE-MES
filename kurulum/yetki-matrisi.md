@@ -53,6 +53,7 @@ Hiçbir role verilmez; yalnız bayraklı yönetici yapar:
 - SmartES kod eşlemelerini düzenleme: `smartes.esleme-yaz`
 - denetim kaydının gövdesi ve bütün parametreleri: `denetim.govde-oku`
 - Güvenlik Merkezi sayfası, okuma ve yönetme: `sayfa.guvenlik` `guvenlik.oku` `guvenlik.yonet` (kullanıcı onayı 2026-10-14)
+- ortak cihaz kaydı ve iptali: `oturum.ortak-cihaz` (kart #739, karar 738 a)
 - malzeme onay akışını açıp kapatma (işlem değildir; müdür ve planlama öteki tanım ve ayarları `malzemeler.tanim-yaz` ile yazar)
 
 Tabloda hiçbir rolde geçmeyen kayıtlı işlem de yalnız yöneticidedir.
