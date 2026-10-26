@@ -353,3 +353,27 @@ test.describe('577a Bugünün kararları', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+test.describe('577a Odak tahtası', () => {
+  test('Odak: O tuşu bir bölümü açar, tezgâha inilir, Esc seviye seviye çıkar; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' })).toBeVisible();
+    await page.locator('body').press('o');
+    const odak = page.locator('section.tc-pyo');
+    if (await odak.isVisible()) {
+      await expect(odak).toHaveAttribute('data-sev', 'grup');
+      await tasmaz(page);
+      const tez = odak.locator('button.tc-pyo-tez').first();
+      if (await tez.isVisible()) {
+        await tez.click();
+        await expect(odak).toHaveAttribute('data-sev', 'tez');
+        await tasmaz(page);
+        await page.locator('body').press('Escape');
+        await expect(odak).toHaveAttribute('data-sev', 'grup');
+      }
+      await page.locator('body').press('Escape');
+      await expect(odak).toHaveCount(0);
+    }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});

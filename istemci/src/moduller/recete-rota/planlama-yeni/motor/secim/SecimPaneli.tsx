@@ -29,6 +29,8 @@ export interface Ozellikler {
   // Rota sekmesindeki seçim kutusu siparişi değiştirir, sekme Rota'da kalır (mz-rota-j).
   rotaSec: (j: string) => void;
   gunPlani: (t: number, sec: { adim?: string; tezgah?: string }) => void; hazirlikAc: () => void;
+  // Tezgâhın odak tahtasını açar (577a); verilmezse Odakla pasif.
+  odakla?: ((m: string) => void) | null;
 }
 
 const Bolum = ({ baslik, simge, children }: { baslik: string; simge: SimgeAdi; children: ReactNode }) => (
@@ -167,7 +169,7 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani }: Ozel
     </>
   );
 }
-function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani }: Ozellikler & { m: string }) {
+function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani, odakla }: Ozellikler & { m: string }) {
   const D = c.D; const st = tezgahDurumu(s, durusOku(c), m, t); const d = s.dol[m] ?? [];
   const e = gecikmeEtkisi(D, p, cx).m[m]; const L = dilimBoyu(r);
   const mesai = yaz && !m.startsWith('@') ? mesaiAdaylari(c, cx, m).slice(0, 4) : [];
@@ -193,7 +195,7 @@ function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec,
       </div>
       <Bolum baslik="Yön ver" simge="target">
         <div className="tc-pym-km-hamleler">
-          <Dg ad="Odakla" simge="zin" birincil not={YOK_NOTU} />
+          <Dg ad="Odakla" simge="zin" birincil not={YOK_NOTU} yap={odakla ? () => odakla(m) : null} ipucu="Bu tezgâhın kendi tahtasını aç: gün gün işler, kuyruk, takvim" />
           <Dg ad="Bugün boşalt" simge="upload" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
           <Dg ad="Hepsini boşalt" simge="upload" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
           <Dg ad="Sırayı düzenle" simge="sort" />

@@ -70,7 +70,7 @@ export function RotaSekmesi({ c, p, cx, j, planYaz: yaz, opSec, sipSec, rotaSec 
 
 // Takvim sekmesi (zb-merkez2 mzTakvim): tezgâhın vardiyaları, bakım denemesi, kapalı pencereler ve ek mesai. Vardiya ve kapalı pencere
 // veri sahibinden girer (222 a, 223 a); bakım denemesi motorla gelir (357 b). Ek mesai çalışmanındır, kaldırmak plan.yaz ile yazar.
-export function TakvimSekmesi({ c, cx, t, m, komut, planYaz: yaz }: Ozellikler & { m: string }) {
+export function TakvimSekmesi({ c, cx, t, m, komut, planYaz: yaz }: Pick<Ozellikler, 'c' | 'cx' | 't' | 'komut' | 'planYaz'> & { m: string }) {
   const D = c.D; const T = D.tezgahlar.find((x) => x.id === m);
   if (!T) {
     return (
