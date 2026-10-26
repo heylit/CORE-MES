@@ -204,3 +204,8 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
 - Kaynak okumasının takvimi (`durum.cal.holidays`, `kurallar.ts` `tatilTarihleri`) artık kapalı günleri de verir. Önceki davranış: yalnız `tatil`
   türü alınıyordu; Vardiya 142 b'den beri yalnız kapalı gün yazabildiği ve plan stüdyosunun kapattığı gün de kapalı olduğu için bu günler motorda çalışılıyordu.
 - Sayfanın ve sunucu çözümünün planı değişir: kapalı günde tezgâh çalışmaz (Motor A'daki gibi). RR-D7 ve RR-13 testlerinin beklentisi değişti.
+## Başlangıcı olmayan emir günün başından serbest (678 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 678)
+- Başlangıç tarihi olmayan emir bugünden başlar (değişmedi); serbest saati artık bugünün 00:00'ıdır (`girdi.betik` `sunucuKaydi` `serbestSaat`, `rrCevir`).
+  Önceki davranış: çalışmanın başlangıç günü bugün değilse emir bugünün ilk vardiya saatinde serbest kalıyordu; sunucu çözümünde kayıt takvimsiz
+  çevrildiği için bu saat 08:00'di. Gece vardiyasında planlanan iş sabaha kadar bekliyordu. Kayıtta eski saat kalmışsa düzeltilir.
+- Test: `plan-cozucusu.test.ts` 678 a; değişiklik olmadan kırılıyor (DOĞRULANDI).
