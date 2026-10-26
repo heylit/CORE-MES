@@ -10,6 +10,7 @@ import { sayi, sure } from '../cekirdek/bicim.ts';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul } from '../cekirdek/tesis.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
+import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import type { TeknikResimKontrolu } from '../cizim/index.tsx';
 import { Cip, SayfaCercevesi, Secmeli, onayBekliyor, useSoyle, useYetkiDenetimi } from '../pano/index.tsx';
 import {
@@ -25,7 +26,7 @@ import { SpcGorunumu } from './SpcGorunumu.tsx';
 // Çizim parçası (A5) ağırdır; yalnız numune seçilince yüklenir.
 const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
 // Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
-const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
+const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => baytiVar(f.bytes));
 
 type Kip = 'samples' | 'spc' | 'onay' | 'alet';
 type Gorunum = 'list' | 'draw' | 'form';
@@ -121,8 +122,12 @@ export function KaliteSayfasi() {
   }, [selId, secildi]);
 
   // Resim yalnız gösterir (eski kalite.ts ctl): balon seçimi ölçüm satırına odaklanır; resimden gelen ölçüm değişikliği numuneye yazılır.
+  // Paket listesi dosyasız gelir (kart #731): numunenin paketinin dosyaları burada baytlanır.
+  const pkgAnahtari = r && p ? r.id + ':' + p.id + ':' + p.version : '';
+  const acikDosyalar = useCozulmus(depo, r && p ? { files: p.files, derived: p.derived } : null, pkgAnahtari);
   const kontrol = useMemo((): TeknikResimKontrolu | null => (r && p ? {
-    anahtar: 'q:' + r.id, dosyalar: baytli(p.files), anaResim: p.primary, hazirVeri: p.derived ?? null, ayar: p.readCfg,
+    anahtar: 'q:' + r.id + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: p.primary,
+    hazirVeri: acikDosyalar?.derived ?? null, ayar: p.readCfg,
     balonlar: p.plan as TeknikResimKontrolu['balonlar'], balonlarYaz: () => undefined, saltOkunur: true, ozellikGizli: true,
     olcumler: results as unknown as TeknikResimKontrolu['olcumler'], odak: focus, siradaki: r.items.filter((id) => !results[id]),
     secildi: (id) => odakla(id, 30),
@@ -131,7 +136,7 @@ export function KaliteSayfasi() {
       const yeni = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { cnt: r.cnt, by: ad, ...x } as Meas]));
       void depo.DB.put('requests', { ...r, results: yeni }).then(reload);
     },
-  } : null), [r?.id, r?.results, p?.id, focus]);
+  } : null), [r?.id, r?.results, p?.id, focus, acikDosyalar]);
   const kaydet = async (b: PlanItem, secim?: number | 'ok' | 'nok') => {
     if (!r || !p || !izinli('q.meas')) return;
     const alet = olcumAletiBul(aletler, b.tool);

@@ -862,3 +862,25 @@ Bu tur şunları varsaydı:
 - Önceki adım bitmeden bitirme TMI'de reddedilir (649 a), nedeni yansımada. Başlatma, bitirme ve hurda sayımının TMI uyarısı (sıra dışı, aşım, eksi) operatöre döner.
 - Katılım durumu adım başınadır: öteki adımdaki kişi bu adımda çalışıyor sayılmaz (648 a).
 - Emir paketi (`tmi-ue`, iş emirsiz ve rotasız emir) değişmedi. Şema, göç, uç, işlem ve rol değişmedi.
+
+## Terminale dosya iletimi: tembel liste, arka plan indirmesi, dosya temizliği (kart #731 A; kararlar 726 a, 727 a, 729 a, 730 a)
+- Yeni ekran veri katmanını tembel kipte açar (`store.ts tembelKur`, `yeni/veri/depo.ts depoyuBaslat`): `pkgs` belgeleri dosyasız gelir, dosya
+  `{ $blob, t, n }` işaretiyle kalır. Açılan paket `coz` ile baytlanır (`yeni/veri/dosyalar.ts useCozulmus`): Üretim Terminali açık iş, uzak mod 3B,
+  Kalite numunesi, Hazırlık seçili paket, Çizim stüdyosu paket açma. İşaret yazmada aynen geri gider; dosya yeniden yüklenmez. Eski çerçeve kipi
+  açmaz; aynı cihaz aynasında işaretli paket görürse onu baytla çözer.
+- Arka plan indirmesi (`dosyalariIndir`): Üretim Terminali bu istasyonun işlerinin dosyalarını açık iş önce, sonra kuyruk sırasıyla cihaza indirir
+  (`GET /blob/<özet>/arka` -> `/arkon/dosyalar/<özet>/arka-plan`, indirme günlüğüne yazılmaz). Dosya belleğe alınmaz; kişi açınca cihazdan okunur.
+- Dosya deposu temizliği (`dosya-temizligi.ts`, IndexedDB sürüm 8, yeni `blobzaman` deposu): anılmayan dosya silinir; toplam 2 GB'ı aşarsa en uzun
+  süredir açılmayan silinir; açık iş ve kuyruğun dosyası hiç silinmez. Çıkışta silme (karar 102 a) değişmedi.
+- Hazırlık yayında okuma ayarını pakete sabitler, 3B modeli bir kez işler ve hazır veriyi pakete koyar (eski `hazirlik.ts` yayını gibi); PDF
+  hazır verisi ortak çizim (731 B) birleşince eklenir (731 A2).
+- PDF okuyucu çalışanı (`vendor/pdfjs/pdf.worker.min.js`) kendi cevabında en dar ilkeyi alır: `default-src 'none'; script-src 'self'` (`arkon/sun.ts`).
+- Testler: `tembel-dosya.test.ts` (beş test), `sunucu/moduller/arkon/dosya-temizligi.test.ts`, `baglanti.test.ts` arka uç yolu, `sun.test.ts` PDF
+  çalışanı ilkesi, `yeni/veri/depo.test.ts` yüz.
+
+Bu tur şunları varsaydı:
+1. Arka plan indirmesi yalnız bu istasyonun işlerini kapsar; öteki istasyonların paketleri indirilmez (sınırı aşıp silinip yeniden inmesin).
+2. Temizlik tembel kipte, indirme bittikten 30 sn sonra ve açılışta çalışır; dosyanın son açılışı ilk okumada yazılır, bellekten okumada tazelenmez.
+3. Kayıtsız eski dosyanın açılış zamanı 0 sayılır (önce silinir); boyu bir kez dosyadan okunur.
+4. Çevrimdışıyken cihazda olmayan dosya açılamaz; görüntüleyici o dosyayı atlar (önceki davranış: bütün liste beklerdi).
+5. Hazırlık yayınında 3B hazır veri baştan yazılır (eskisi gibi); önceki hazır veri korunmaz.

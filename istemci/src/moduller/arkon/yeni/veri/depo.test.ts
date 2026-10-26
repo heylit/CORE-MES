@@ -39,7 +39,7 @@ async function baslat(k: ArkonKisi, istemci: Istemci): Promise<ArkonDeposu> {
 describe('Yeni ekranın veri katmanı', () => {
   it('store.ts yüklenir ve ekranın kullandığı yüzü verir', async () => {
     const d = await depoModulu();
-    for (const ad of ['init', 'status', 'onStatus', 'tasiyiciKur', 'sha256'] as const) expect(typeof d[ad]).toBe('function');
+    for (const ad of ['init', 'status', 'onStatus', 'tasiyiciKur', 'sha256', 'tembelKur', 'coz', 'dosyalariIndir'] as const) expect(typeof d[ad]).toBe('function');
     for (const ad of ['all', 'get', 'put', 'del'] as const) expect(typeof d.DB[ad]).toBe('function');
     for (const ad of ['send', 'yerel', 'on'] as const) expect(typeof d.Bus[ad]).toBe('function');
     for (const ad of ['add', 'query', 'on'] as const) expect(typeof d.Log[ad]).toBe('function');

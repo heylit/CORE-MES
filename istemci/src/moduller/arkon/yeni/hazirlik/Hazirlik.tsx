@@ -20,6 +20,7 @@ import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/baglam.ts';
 import type { ArkonDeposu, Ileti } from '../veri/depo.ts';
+import { baytiVar, dosyaBoyu, useCozulmus } from '../veri/dosyalar.ts';
 import { Bolmeli, Cip } from './denetimler.tsx';
 import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
@@ -37,7 +38,7 @@ import './hazirlik.css';
 // Çizim parçası (A5) ağırdır; yalnız Dokümanlar ve Kontrol planı sekmesi açılınca yüklenir.
 const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
 // Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
-const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => !!f.bytes);
+const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => baytiVar(f.bytes));
 const MerkezSecici = lazy(async () => ({ default: (await import('../cizim/index.tsx')).MerkezSecici }));
 // Dosya satırındaki merkez rozeti: kendi dosyasının merkezdeki durumunu sorar ("Yeni revizyon var" ve Güncelle, eski hazirlik.ts gibi).
 const MerkezDurumu = lazy(async () => {
@@ -74,7 +75,20 @@ const oturum = {
 };
 
 const tonBildirimi = (ton: Ton): BildirimTonu => (ton === 'stop' ? 'hata' : ton === 'run' ? 'tamam' : 'bilgi');
-const dosyaBoyu = (f: PkgFile): number => (f.bytes ? f.bytes.length : f.size || 0);
+// 3B model yayında bir kez işlenir, sonuç pakete konur (eski hazirlik.ts yayını): terminal geometri çekirdeğini yüklemez, model hemen
+// açılır. Anahtar terminalin aradığıyla aynıdır (dosya özeti + model ayarı imzası, model.ts). Okunamayan model atlanır.
+async function modelHazirVerisi(depo: ArkonDeposu, n: Pkg): Promise<Record<string, unknown>> {
+  const [m, k] = await Promise.all([import('../../../../ortak/cizim/model.ts'), import('../../../../ortak/cizim/kurallar.ts')]);
+  const cfg = k.ayarDuzelt(n.readCfg), imza = k.ayarImzasi(cfg, k.MODEL_ANAHTARLARI), hazir: Record<string, unknown> = {};
+  for (const f of await depo.coz(n.files.filter((x) => x.kind === 'model'))) {
+    if (!baytiVar(f.bytes)) continue;
+    try {
+      const ana = n.primary === f.name, rec = await m.modelIsle(depo, f.bytes, f.name, () => undefined, { need: ana ? 'draw' : '3d', cfg });
+      hazir[(await m.dosyaOzeti(f.bytes)) + imza] = { kind: rec.kind, fa: rec.fa, V: rec.V, ...(ana && rec.D ? { D: rec.D } : {}) };
+    } catch (e) { console.warn(e); }
+  }
+  return hazir;
+}
 // Adımın "zorunlu" alanı kayıtta eskisi gibi true/false yazılır (modelde sayı tiplidir, okuyan ekranlar doğruluğuna bakar).
 const zorunlu = (v: boolean): Step['r'] => v as unknown as Step['r'];
 
@@ -291,6 +305,9 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     yayindaYaz(true);
     try {
       const n: Pkg = { ...p, status: p.status === 'draft' ? 'published' : p.status, version: (p.version || 0) + 1, dirty: false, publishedAt: Date.now(), updatedAt: Date.now(), apReq: null };
+      // Okuma ayarı pakete sabitlenir (eskisi gibi): terminal aynı ayarla açar, hazır verinin anahtarı tutar.
+      n.readCfg = (await import('../../../../ortak/cizim/kurallar.ts')).ayarDuzelt(p.readCfg);
+      if (n.files.some((f) => f.kind === 'model')) { soyle('3B model operatör için hazırlanıyor…', 'done'); n.derived = await modelHazirVerisi(depo, n); }
       // Ara onay (Terminal kural 1/5): sonraki değişiklik bu yayına göre bulunur.
       n.yayinImza = paketImzasi(n);
       n.history = [...(p.history || []), { v: n.version, rev: n.rev, at: Date.now(), by: ben, ap: p.approval && p.approval.ok ? p.approval.by : null, st: n.machine }].slice(-60);
@@ -298,7 +315,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
       depo.Bus.send({ type: 'pkg', id: n.id, no: n.no, rev: n.rev, version: n.version, machine: n.machine });
       let msg = n.no + ' · Rev ' + n.rev + ' operatöre gönderildi';
       if (klasor && Folder) {
-        try { if (await Folder.ready(klasor, true)) { await Folder.write(klasor, n); msg += ' · klasöre yazıldı'; } } catch { msg += ' · klasöre yazılamadı'; }
+        try { if (await Folder.ready(klasor, true)) { await Folder.write(klasor, await depo.coz(n)); msg += ' · klasöre yazıldı'; } } catch { msg += ' · klasöre yazılamadı'; }
       }
       soyle(msg, 'run');
     } finally { yayindaYaz(false); }
@@ -326,7 +343,10 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     await depo.DB.put('results', r); depo.Bus.send({ type: 'pin-resolved', id: p.id, reply }); await yenile();
     soyle('Not çözüldü · operatöre bildirildi', 'run');
   };
-  const disaAktar = () => { if (p) indir(depo.Pkg.fileName(p), depo.Pkg.toFile(p), 'application/json'); };
+  const disaAktar = async () => {
+    if (!p) return;
+    try { indir(depo.Pkg.fileName(p), depo.Pkg.toFile(await depo.coz(p)), 'application/json'); } catch (e) { soyle('Dışa aktarılamadı: ' + (e as Error).message, 'stop'); }
+  };
   const iceAl = async (f: File | undefined) => {
     if (!f) return;
     if (!duzenler) { yetkisiz(); return; }
@@ -383,13 +403,16 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Yayınla' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
+  // Paket listesi dosyasız gelir (kart #731): seçili paketin dosyaları burada baytlanır; dosya eklenip çıkınca yeniden.
+  const dosyaAnahtari = p ? p.id + ':' + p.files.map((f) => f.name + '#' + dosyaBoyu(f)).join(',') + ':' + Object.keys(p.derived ?? {}).join(',') : '';
+  const acikDosyalar = useCozulmus(depo, p ? { files: p.files, derived: p.derived } : null, dosyaAnahtari);
   const kontrol = useMemo((): TeknikResimKontrolu | null => (p && p.primary ? {
-    anahtar: p.id + ':' + p.primary + ':' + p.files.length, dosyalar: baytli(p.files), anaResim: p.primary,
-    hazirVeri: p.derived ?? null, ayar: p.readCfg, balonlar: p.plan as TeknikResimKontrolu['balonlar'],
+    anahtar: p.id + ':' + p.primary + ':' + p.files.length + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: p.primary,
+    hazirVeri: acikDosyalar?.derived ?? null, ayar: p.readCfg, balonlar: p.plan as TeknikResimKontrolu['balonlar'],
     balonlarYaz: (nb) => yama({ plan: nb.map((b) => ({ freq: 'İlk parça', crit: false, ...b }) as PlanItem) }),
     olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: !duzenler,
     notlar: (res?.pins || []) as unknown as ResimNotu[], notCoz: (id) => { void notuCoz(String(id)); },
-  } : null), [p?.id, p?.primary, p?.files.length, p?.plan, res, duzenler]);
+  } : null), [p?.id, p?.primary, p?.files.length, p?.plan, res, duzenler, acikDosyalar]);
   // Ara onay yalnız bir kez çalışmış işte sorulur: ilk çalışmada ilk parça kapısı zaten vardır.
   const calisti = !!(res && res.state && res.state !== 'queued');
   const araOnay = p && ayarlar.kurallar.fpRestart !== false && calisti ? araOnayNedenleri(p, istekler) : null;
@@ -843,7 +866,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                     </div>
                     <div className="tc-ay2-kanal">
                       <Simge ad="download" /><div><b>Paket dosyası (.arkon)</b><small>USB veya e-posta ile taşı · operatör içe aktarır</small></div>
-                      <Dugme tur="ikincil" onClick={disaAktar}>İndir</Dugme>
+                      <Dugme tur="ikincil" onClick={() => { void disaAktar(); }}>İndir</Dugme>
                     </div>
                     {p.status !== 'draft' && yayinlar ? <button type="button" className="tc-ay2-bag" data-ton="stop" onClick={() => { void geriCek(); }}>Operatörden geri çek</button> : null}
                     {siler ? (
