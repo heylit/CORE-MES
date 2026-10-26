@@ -215,7 +215,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(bos.moves, [], 'tam yetkili kullanıcıya stok hareketi dilimi gelir; henüz hareket yok');
     assert.equal(bos.people.some((k) => k.id === String(yazarId)), true);
     assert.deepEqual(bos.people.find((k) => k.id === String(yazarId)), {
-      id: String(yazarId), name: 'Deneme yazar', code: null, role: null, stationId: null, stationAtama: false, wcId: null, shiftId: null, skills: [], cost: null, active: true,
+      id: String(yazarId), name: 'Deneme yazar', code: null, role: null, stationId: null, stationAtama: false, wcId: null, shiftId: null, skills: [], cost: null, active: true, machines: [], maxMachines: null,
     });
   });
 

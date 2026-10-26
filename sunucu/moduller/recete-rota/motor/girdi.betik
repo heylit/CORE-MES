@@ -124,6 +124,9 @@ function rrCevir(st) {
     if (!a || a.ad !== p.name) y.ad = p.name;
     if (!a || a.vardiya !== p.shiftId) y.vardiya = p.shiftId;
     if (!a || !rrEsit(a.gruplar || [], p.skills || [])) y.gruplar = (p.skills || []).slice();
+    /* 563 c, 563 2 a: baktığı makineler ve aynı anda en çok tezgâh istasyonlardan gelir; sayfada değiştirilmez */
+    if (!a || !rrEsit(a.makineler || [], p.machines || [])) y.makineler = (p.machines || []).slice();
+    if (!a || (a.enCok ?? null) !== (p.maxMachines ?? null)) y.enCok = p.maxMachines ?? null;
     if (!a) y.ayar = p.role === 'Ayarcı';
     return rrKur(a, y);
   });
@@ -232,7 +235,8 @@ function tmiKaynakIle(st, kaynak, D) {
   if (Array.isArray(d.people)) {
     o.people = d.people.filter(k => k.active !== false).map(k => {
       const y = { id: k.id, name: k.name, code: k.code || '', role: (ek.kisiGorevi && ek.kisiGorevi[k.id]) || '', wcId: k.wcId || '', stationId: k.stationId || '',
-        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true };
+        shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true,
+        machines: (k.machines || []).slice(), maxMachines: k.maxMachines ?? null };
       const a = eski('personel', k.id); if (a) y.plan = a;
       return y;
     });
@@ -474,7 +478,7 @@ const GEVSEK = {
   tampon: st => { st.w.tampon = false; },
   /* oran yalnız kapasiteden düşer; operatör ücreti (durum.betik ymUygula) asıl oranla sayılır */
   personel: st => { for (const m of st.D.tezgahlar) { m.opMaliyet = m.opOran == null ? 1 : +m.opOran; m.opOran = 0; } },
-  yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) p.gruplar = g.slice(); },
+  yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) { p.gruplar = g.slice(); delete p.makineler; delete p.enCok; } },
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
   aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; },
