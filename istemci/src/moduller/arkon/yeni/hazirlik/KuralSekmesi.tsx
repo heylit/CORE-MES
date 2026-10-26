@@ -140,7 +140,7 @@ export function KuralSekmesi({ paket, yama, sonuc, kilitli }: {
         <div className="tc-ay2-alan">
           <span className="tc-ay2-ust-yazi">Kalite RED verirse</span>
           <Bolmeli
-            etiket="Kalite RED verirse" deger={R.q.nok} secenekler={[['warn', 'Sadece uyar'], ['call', 'Kaliteyi çağır'], ['stop', 'Makineyi durdur']]}
+            etiket="Kalite RED verirse" deger={R.q.nok === 'call' ? 'call' : 'warn'} secenekler={[['warn', 'Sadece uyar'], ['call', 'Kaliteyi çağır']]}
             degistir={(nok) => kaliteYaz({ nok })}
           />
         </div>

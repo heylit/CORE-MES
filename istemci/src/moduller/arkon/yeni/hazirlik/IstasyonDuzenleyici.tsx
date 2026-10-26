@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dugme, Qr, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { aqlPlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
 import { tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
 import { Anahtar, Bolmeli, KartBasligi, Sayi } from './denetimler.tsx';
 import {
@@ -204,10 +205,21 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
   }
   if (t === 'kalite') {
     const kusurEkle = () => { if (!yapistir.trim()) return; yaz({ defects: [...(c.defects || []), yapistir.trim()] }); yapistirYaz(''); };
+    // 564 2 a: kalite istasyonunun TMI paketinde lot planı Kalite Merkezi'nindir (AQL); burada yalnız gösterilir.
+    const aql = aqlPlani(paket);
     return (
       <div className="tc-ay2-kurallar">
         <section className="tc-ay2-kart" aria-label="Numune planı">
           <KartBasligi simge={<Simge ad="search" />} ton="done" baslik="Numune planı" aciklama="Ölçülecek karakteristikler “Kontrol planı” sekmesinden gelir" />
+          {aql && 'durduruldu' in aql ? (
+            <div className="tc-ay2-bilgi"><Simge ad="alert" /><span>Bu parçanın lot muayenesi Kalite Merkezi'nde durduruldu (sıkılık); düzeltici faaliyet kapanınca plan gelir.</span></div>
+          ) : aql ? (
+            <>
+              <div className="tc-ay2-bilgi"><Simge ad="lock" /><span>Lot planı Kalite Merkezi'nin AQL ayarından gelir: lot {c.lot} parça, numune {c.n} parça, kabul (Ac) {c.ac}{aql.re !== null ? `, red (Re) ${aql.re}` : ''}.</span></div>
+              <small className="tc-ay2-soluk">Lot kararı kalite istasyonunda verilir ve Kalite Merkezi'ne yazılır.</small>
+            </>
+          ) : null}
+          {aql && 'n' in aql ? null : <>
           <div className="tc-ay2-satir"><span>Lot büyüklüğü</span><Sayi deger={c.lot} ek="parça" etiket="Lot büyüklüğü" degistir={(lot) => yaz({ lot })} /></div>
           <div className="tc-ay2-satir">
             <span>Numune</span>
@@ -215,6 +227,7 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
             <span>Kabul sayısı (Ac)</span><Sayi deger={c.ac} etiket="Kabul sayısı" degistir={(ac) => yaz({ ac })} />
           </div>
           <small className="tc-ay2-soluk">Red sayısı Ac'yi geçerse lot reddedilir. Ac = 0: tek red lotu reddeder.</small>
+          </>}
         </section>
         <section className="tc-ay2-kart" aria-label="Görsel kusurlar">
           <KartBasligi simge={<Simge ad="alert" />} ton="stop" baslik="Görsel kusurlar" aciklama="Operatör işaretler · parça reddedilir" />

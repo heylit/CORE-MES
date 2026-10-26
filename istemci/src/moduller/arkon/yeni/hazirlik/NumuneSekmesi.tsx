@@ -140,7 +140,7 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
               ) : null}
             </div>
             {r.when === 'first' ? (
-              <Anahtar acik={!!r.gate} degistir={(v) => guncelle(r.id, { gate: v })} baslik="Onay gelmeden seri üretim başlamasın" aciklama="Bu ölçüler uygun çıkana kadar operatör ekranında Başlat kilitli" />
+              <Anahtar acik={!!r.gate} degistir={(v) => guncelle(r.id, { gate: v })} baslik="İlk parça kapısı" aciklama="Bu ölçüler kalitede karara bağlanana kadar sayılan parçalar karar bekler; üretim durmaz" />
             ) : null}
           </section>
         );

@@ -304,3 +304,7 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   `arkon.kuyruk-sirala` işlemini ister. İki yönlü fark: `arkon.kuyruk-sirala` taşıyıp `plan.edit` taşımayan kişi (ör. `cam`) eski ekranda düğmeyi
   görmez (yeni ekranda görür); `plan.edit` taşıyıp `arkon.kuyruk-sirala` taşımayan kişi (ör. `mudur`, plan yazma yetkisiyle) düğmeyi açık görür,
   sürükler ve sunucu 403 ile reddeder (ekranda ret iletisi). Ayrı iş açılmadı; eski ekran kalkınca kapanır.
+
+## Kalite reddi makineyi durdurmaz (564 7 a)
+- Eski ekranlar (`arkon/web/src/app/kurallar.ts`, `operator.ts`) "Makineyi durdur" seçeneğini ve durdurmayı taşır; yeni ekran kayıtlı eski
+  `stop` kuralını uyarı sayar. Eski ekran kalkınca kapanır.

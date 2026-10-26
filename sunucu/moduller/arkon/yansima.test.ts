@@ -232,7 +232,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await vt().tek<{ zaman: Date }>('SELECT zaman FROM arkon_kayit WHERE cid = $1', [basla['cid']]))?.zaman.getTime(), ileri, 'Arkon kaydı tabletin zamanını tutar');
   });
 
-  test('131 b, 229 a, denetim #12: ilk parça kararı Kalite Merkezi\'nden gelir; Arkon numunesi karar vermez; karar beklenirken sonraki sağlam bekler, ret redde, onay sağlama geçirir; ret sonrası sayım yine bekler', async () => {
+  test('131 b, 229 a, 564 5 a, denetim #12: ilk parça kararı Kalite Merkezi\'nin kaydıdır; ölçümdeki Arkon numunesi karar değildir, kalitenin Arkon Kabulü o kaydı yazar; karar beklenirken sonraki sağlam bekler, ret redde, onay sağlama geçirir; ret sonrası sayım yine bekler', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const paket = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(emir)}/yaz`, { taban: 0, govde: { id: pk(emir), status: 'draft', machine: istasyonKodu, plan: [{ id: 1 }] }, kaynak: 'y1' });
@@ -264,23 +264,21 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
       const c = await istek(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${emir}/karar`, { karar: k });
       assert.equal(c.durum, 200, JSON.stringify(c.govde));
     };
-    await numune('rq-fai-1', 'rejected', false);
-    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 }, 'Arkon numune reddi karar değildir');
-    await numune('rq-fai-2', 'approved', true);
-    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 }, 'Arkon numune onayı karar değildir');
+    await numune('rq-fai-1', 'measuring', true);
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 4, red: 0 }, 'ölçümdeki Arkon numunesi karar değildir');
     await yaz(sayim(emir, 'good', 1));
-    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 5, red: 0 }, 'ölçüler kapansa da Kalite Merkezi kararına dek bekler');
+    assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 5, red: 0 }, 'ölçüm sürerken Kalite Merkezi kararına dek bekler');
     await karar('ret');
     assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 0, red: 5 }, 'ret');
     await yaz(sayim(emir, 'good', 2));
     assert.deepEqual(await sayaclar(), { saglam: 0, kararBekliyor: 2, red: 5 }, 'ret sonrası sayım yine bekler (136 a)');
-    await karar('onay');
-    assert.deepEqual(await sayaclar(), { saglam: 2, kararBekliyor: 0, red: 5 }, 'onay');
+    await numune('rq-fai-2', 'approved', true);
+    assert.deepEqual(await sayaclar(), { saglam: 2, kararBekliyor: 0, red: 5 }, 'kalitenin Arkon Kabulü Kalite Merkezi onayıdır (564 5 a)');
     await yaz(sayim(emir, 'good', 2, { tmiKararBekliyor: 2 }));
     assert.deepEqual(await sayaclar(), { saglam: 4, kararBekliyor: 0, red: 5 }, 'onaydan sonra sağlam; istemcinin alanı sayılmaz');
   });
 
-  test('denetim #12: yeniden ilk parça kararından sonra ikinci sağlam reddedilir; Arkon numunesi kapatmaz, kararın ardından gelen Kalite Merkezi onayı kapatır', async () => {
+  test('denetim #12, 564 5 a: yeniden ilk parça kararından sonra ikinci sağlam reddedilir; ölçümdeki Arkon numunesi kapatmaz, kalitenin Arkon Kabulü Kalite Merkezi onayı olarak kapatır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const yaz = async (govde: Record<string, unknown>) => {
@@ -303,13 +301,16 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const tur = await vt().tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'");
     const alet = await istek<{ id: number }>(yonetici, 'POST', '/olcu-aletleri', { no: `YIP-${emir}`, turId: tur?.id, ilkKalibrasyon: { sonuc: 'uygun' } });
     assert.equal(alet.durum, 200, JSON.stringify(alet.govde));
-    const numune = await istek(yonetici, 'POST', `/arkon/belgeler/requests/rq-yip-${emir}/yaz`, {
-      taban: 0, govde: { id: `rq-yip-${emir}`, pkgId: pk(emir), items: [1], status: 'approved', decidedAt: Date.now(), note: 'not', results: { 1: { ok: true, v: 1, gid: `${ALET_ONEKI}${alet.govde.id}` } } }, kaynak: 'y1',
-    });
-    assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
-    assert.equal((await say()).durum, 409, 'Arkon numune onayı kapatmaz');
-    await karar();
-    assert.equal((await say()).durum, 200, 'kararın ardından gelen Kalite Merkezi onayı kapatır');
+    const numune = async (kimlik: string, status: string) => {
+      const c = await istek(yonetici, 'POST', `/arkon/belgeler/requests/${kimlik}/yaz`, {
+        taban: 0, govde: { id: kimlik, pkgId: pk(emir), items: [1], status, decidedAt: Date.now(), note: 'not', results: { 1: { ok: true, v: 1, gid: `${ALET_ONEKI}${alet.govde.id}` } } }, kaynak: 'y1',
+      });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    };
+    await numune(`rq-yip-${emir}`, 'measuring');
+    assert.equal((await say()).durum, 409, 'ölçümdeki Arkon numunesi kapatmaz');
+    await numune(`rq-yip2-${emir}`, 'approved');
+    assert.equal((await say()).durum, 200, 'kalitenin Arkon Kabulü kararın ardından gelen Kalite Merkezi onayıdır ve kapatır');
   });
 
   test('Arkon hazırlığı TMI\'de "ayar" olayıdır: planlı emirde bir kez yazılır, emri başlatmaz; yinelenen ve başlamış emirdeki hazırlık değişiklik yapmaz', async () => {
@@ -2867,8 +2868,9 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // Uçtan uca test raporu 2026-10-25 K1 ve T1 (kart 526, 521 1 a): terminal yolundan sayılan sağlam, ilk parça kararı Kalite Merkezi'nden gelene dek
-  // karar bekler; Arkon numune onayı karar değildir. Bitirilen adımın sağlamı ve sonraki adımın hedefi kararla dolar. Rol reddinde modül adı geçmez (G1).
-  test('K1, T1, 521 1 a, G1: terminal sayımı ilk parça kararına dek bekler; Arkon numunesi karar değil; Kalite Merkezi onayı bitmiş adıma ve sonraki adımın hedefine yazar; operatör karar veremez, paket yazamaz', async () => {
+  // karar bekler; ölçümü süren numune karar değildir, kalitenin Arkon'daki Kabul'ü karardır (564 5 a). Bitirilen adımın sağlamı ve sonraki adımın
+  // hedefi kararla dolar. Rol reddinde modül adı geçmez (G1).
+  test('K1, T1, 521 1 a, G1: terminal sayımı ilk parça kararına dek bekler; ölçümdeki numune karar değil; kalitenin Arkon Kabulü karardır (564 5 a), bitmiş adıma ve sonraki adımın hedefine yazar; operatör karar veremez, paket yazamaz', async () => {
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
@@ -2894,11 +2896,12 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const tur = await vt().tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'");
     const alet = await istek<{ id: number }>(yonetici, 'POST', '/olcu-aletleri', { no: `K1-${r.emirId}`, turId: tur?.id, ilkKalibrasyon: { sonuc: 'uygun' } });
     assert.equal(alet.durum, 200, JSON.stringify(alet.govde));
-    const numune = await istek(yonetici, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, {
-      taban: 0, govde: { id: `rq-k1-${r.emirId}`, pkgId: ieKimligi(ie1!), items: [1], status: 'approved', decidedAt: Date.now(), note: 'not', results: { 1: { ok: true, v: 1, gid: `${ALET_ONEKI}${alet.govde.id}` } } }, kaynak: 'y1',
+    const numuneGovdesi = (status: string) => ({
+      id: `rq-k1-${r.emirId}`, pkgId: ieKimligi(ie1!), items: [1], status, decidedAt: Date.now(), note: 'not', results: { 1: { ok: true, v: 1, gid: `${ALET_ONEKI}${alet.govde.id}` } },
     });
+    const numune = await istek<{ surum: number }>(yonetici, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, { taban: 0, govde: numuneGovdesi('measuring'), kaynak: 'y1' });
     assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
-    assert.equal((await durum()).kararBekliyor, 18, 'Arkon numune onayı ilk parça kararı değildir');
+    assert.equal((await durum()).kararBekliyor, 18, 'ölçümü süren numune ilk parça kararı değildir');
     await yaz('events', ieOlay(ie1!, 'done'));
     assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'tamam', saglam: 0 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 0 },
       'raporun gördüğü hâl: karar gelmeden bitirilen adımın sağlamı 0, sonraki adımın hedefi 0');
@@ -2910,10 +2913,16 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(paketReddi.durum, 403, JSON.stringify(paketReddi.govde));
     assert.match(JSON.stringify(paketReddi.govde), /Rolünüz bu belgeyi yazamaz ya da silemez/);
     assert.doesNotMatch(JSON.stringify(paketReddi.govde), /Üretim Hazırlık/);
-    // İzinli: Kalite Merkezi onayı karar bekleyeni bitmiş adımın sağlamına ve sonraki adımın hedefine taşır.
-    const onay = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
+    const operatorOnayi = await istek(operator, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, { taban: numune.govde.surum, govde: numuneGovdesi('approved'), kaynak: 'y1' });
+    assert.equal(operatorOnayi.durum, 403, JSON.stringify(operatorOnayi.govde));
+    assert.equal((await durum()).kararBekliyor, 18, 'operatörün numune onayı yazılmaz');
+    // İzinli (564 5 a): ilk parça numunesinin Arkon'daki Kabul'ü Kalite Merkezi'nin ilk parça kararıdır; karar bekleyeni bitmiş adımın
+    // sağlamına ve sonraki adımın hedefine taşır, Kalite Merkezi'nde ikinci onay gerekmez.
+    const onay = await istek(yonetici, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, { taban: numune.govde.surum, govde: numuneGovdesi('approved'), kaynak: 'y1' });
     assert.equal(onay.durum, 200, JSON.stringify(onay.govde));
-    assert.equal(onay.govde.adet, 18);
     assert.deepEqual(await durum(), { kararBekliyor: 0, adimlar: [{ durum: 'tamam', saglam: 18 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 18 });
+    const ikinci = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
+    assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
+    assert.equal(ikinci.govde.adet, 0, 'karar Arkon onayıyla verildi, bekleyen kalmadı');
   });
 });

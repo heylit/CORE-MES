@@ -248,7 +248,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('B-006, 129, 131 b, denetim #12: Başlat ilk parça onayını beklemez; ilk sağlam sayılır, sonrakiler Kalite Merkezi kararına kadar karar bekleyen yazılır; Arkon numunesi ve operatör ölçümü karar değildir', async () => {
+  test('B-006, 129, 131 b, 564 5 a, denetim #12: Başlat ilk parça onayını beklemez; ilk sağlam sayılır, sonrakiler Kalite Merkezi kararına kadar karar bekleyen yazılır; operatör ölçümü karar değildir; Kalite Merkezi\'ne yazılamayan Arkon kararı numuneyi de yazmaz', async () => {
     // Emir paketi: kapı paketin emrinin Kalite Merkezi kararını okur; bu emrin kararı yok (uçtan uca karar yansima.test.ts "denetim #12").
     const paket = 'tmi-ue-990006';
     let n = 0;
@@ -272,9 +272,11 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     assert.equal((await say()).govde.eklenen, 1);
     assert.equal(await bekleyen(), 1, 'sonuç belgesindeki operatör ölçümü karar değildir');
     assert.equal((await yaz('operator', 'requests', 'rq-b006-op', 0, { id: 'rq-b006-op', pkgId: paket, items: [1], status: 'approved', results: {} })).durum, 403);
-    assert.equal((await yaz('quality', 'requests', 'rq-b006', 0, { id: 'rq-b006', pkgId: paket, items: [1], status: 'approved', decidedAt: 1, results: { 1: { ok: true } } })).durum, 200);
+    // Bu paketin emri TMI'de yok: kalitenin Kabulü Kalite Merkezi'ne yazılamaz, numune kararı da yazılmaz (uçtan uca: yansima.test.ts "564 5 a").
+    assert.equal((await yaz('quality', 'requests', 'rq-b006', 0, { id: 'rq-b006', pkgId: paket, items: [1], status: 'approved', decidedAt: 1, results: { 1: { ok: true } } })).durum, 404);
+    assert.equal((await oku('admin', 'requests', 'rq-b006')).govde.belge, null);
     assert.equal((await say()).govde.eklenen, 1);
-    assert.equal(await bekleyen(), 1, 'Arkon numune onayı karar değildir; karar Kalite Merkezi ucundadır');
+    assert.equal(await bekleyen(), 1, 'karar yazılmadı');
   });
 
   // Terminal kural 1/5: son numune RED ya da paket revizyonu değiştiyse yeniden başlatma.

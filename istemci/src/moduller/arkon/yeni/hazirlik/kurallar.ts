@@ -55,7 +55,7 @@ export function sinirYakin(b: Pick<PlanItem, 'min' | 'max' | 'gauge'> | null | u
 export const parcaAilesi = (p: Pick<Pkg, 'partNo' | 'part'>): string => ((p.partNo || p.part || '').match(/^[A-Za-zÇĞİÖŞÜçğıöşü]+/) || [''])[0]!.toUpperCase();
 export const kuralOzeti = (R: IsKurallari): string => [
   R.warns.length + ' uyarı', R.prod.tools.length + ' takım', R.q.who === 'operator' ? 'operatör ölçer' : 'kalite ölçer',
-  R.q.nok === 'stop' ? 'redde dur' : R.q.nok === 'call' ? 'redde kalite çağır' : 'redde uyar',
+  R.q.nok === 'call' ? 'redde kalite çağır' : 'redde uyar',
 ].join(' · ');
 export const kurallariKopyala = (R: IsKurallari, kimlik: () => string = yeniKimlik): IsKurallari => ({
   warns: R.warns.map((w) => ({ ...w, id: kimlik() })), q: { ...R.q },

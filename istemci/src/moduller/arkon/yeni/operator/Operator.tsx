@@ -282,12 +282,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const L = live.current;
     if (rq.status === 'rejected') {
       bip('nok');
-      if (QR.nok === 'stop') {
-        islerYaz((l) => l.map((x) => (x.pkg && x.pkg.id === rq.pkgId && (x.state === 'running' || x.state === 'setup') ? { ...x, state: 'stopped' } : x)));
-        sinceYaz(Date.now());
-        segsYaz((s) => { const t = s.length ? s[s.length - 1]!.t : 0; return [...s, { f: t, t: t + 0.5, s: 'stopped', n: 'D-05' }]; });
-        say(`Kalite RED · makine durduruldu · ${kotuMetni}`, 'stop', 'stop');
-      } else if (QR.nok === 'call') {
+      // 564 7 a: kalite reddi makineyi durdurmaz; durdurmak operatörün kararıdır (eski 'stop' kuralı uyarı olur).
+      if (QR.nok === 'call') {
         const k = CAGRI_EKIPLERI.find((c) => c.k === 'kalite');
         if (k) L.startCall?.(k);
         say(`Kalite RED · kalite çağrıldı · ${kotuMetni}`, 'x', 'stop');
