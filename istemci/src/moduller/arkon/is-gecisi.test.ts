@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { anahtarliErteleyici } from '../../../../arkon/web/src/data/ertele.ts';
-import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../../../../arkon/web/src/data/is-gecisi.ts';
+import { gecisteDuraklatilacaklar, oneAlinanSuruyor, siraAnahtari, yeniOneAlinan } from '../../../../arkon/web/src/data/is-gecisi.ts';
 
 // TA1: TMI bir istasyonda tek başlamış emre izin verir; Arkon ekranı iş değiştirirken çalışan eski işi duraklatır (operator.ts isGec).
 describe('Arkon iş değiştirme', () => {
@@ -54,5 +54,21 @@ describe('Arkon sonuç kaydı ertelemesi', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// 639f: aynı emrin iki adımı aynı emir nosunu taşır; sıra ve öne alma adımın paketiyle ayırt edilir.
+describe('Aynı emrin iki adımı', () => {
+  const adim = (id: string, state: string) => ({ no: 'IE-1', pkg: { id }, state });
+  it('anahtar paket kimliğidir; paketsiz işte emir nosu', () => {
+    expect(siraAnahtari(adim('tmi-ie-10', 'queued'))).toBe('tmi-ie-10');
+    expect(siraAnahtari({ no: 'IE-2' })).toBe('IE-2');
+  });
+  it('öne alınan adım, çalışan adımla aynı emirde olsa da bulunur', () => {
+    const once = ['tmi-ie-10', 'tmi-ie-20'];
+    const sonra = [adim('tmi-ie-20', 'queued'), adim('tmi-ie-10', 'running')];
+    expect(yeniOneAlinan(once, sonra)).toBe('tmi-ie-20');
+    expect(oneAlinanSuruyor('tmi-ie-20', sonra)).toBe(true);
+    expect(oneAlinanSuruyor('tmi-ie-10', sonra)).toBe(false);
   });
 });

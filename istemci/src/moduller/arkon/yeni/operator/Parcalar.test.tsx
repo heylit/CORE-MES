@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { Cark, DurumDugmeleri, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { Cark, DurumDugmeleri, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -182,5 +182,17 @@ describe('684: çark', () => {
     cleanup();
     const tek = render(<Cark etiket="İş" ogeler={ogeler.slice(0, 1)} etkin={0} gecMetni="Bu işe geç" gec={() => {}} />);
     expect(tek.container.firstChild).toBeNull();
+  });
+});
+
+describe('Aynı emrin iki adımı kuyrukta (639f)', () => {
+  const adim = (id: string, op: string, state: string) => ({ ...is({ no: 'IE-1', op, state: state as never }), pkg: { id, rev: 'A' } as never });
+  it('iki ayrı kart; sıradaki işareti yalnız kendi adımında', () => {
+    const { container } = render(<IsKuyrugu isler={[adim('tmi-ie-10', 'Op 10', 'running'), adim('tmi-ie-20', 'Op 20', 'queued')]} aktif={0} sec={() => {}}
+      siradaki="tmi-ie-20" onde={null} kartlar={[]} kartla={null} />);
+    const kartlar = container.querySelectorAll('.tc-ay1-is');
+    expect(kartlar).toHaveLength(2);
+    expect(kartlar[0]!.textContent).not.toContain('Sıradaki');
+    expect(kartlar[1]!.textContent).toContain('Sıradaki');
   });
 });

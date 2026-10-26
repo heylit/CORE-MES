@@ -20,7 +20,7 @@ import { ILETI_GITMEDI } from '../../../../../../arkon/web/src/data/gonderim-hat
 import {
   ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kaliteMerkeziNumuneYamasi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
 } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
-import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
+import { gecisteDuraklatilacaklar, oneAlinanSuruyor, siraAnahtari, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
 import { ilkAcilis, secilebilirIstasyonlar } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
 import { elleNumuneOlculeri } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, seciliMakineler, type MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
@@ -220,9 +220,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     // Sayacı olmayan takımlar işin şimdiki sayısının ömre göre tabanıyla başlar (kayda değişiklik olarak yazılmaz).
     const takimli = (l: Is[]) => l.map((x) => { if (!x.pkg || pv) return x; const t = eksikTakimTabanlari(x, isKurallari(x.pkg).prod.tools); return t ? { ...x, toolsAt: t } : x; });
     islerYaz((prev) => {
-      const activeNo = (prev[aiRef.current] || { no: null }).no;
+      const etkin = prev[aiRef.current];
+      const etkinAnahtar = etkin ? siraAnahtari(etkin) : null;
       const nx = takimli(kmKararli(numuneli(paketleriBirlestir(prev, pk, rs, MACHINE, onizleme))));
-      const idx = pv ? 0 : nx.findIndex((x) => x.no === activeNo);
+      const idx = pv ? 0 : nx.findIndex((x) => siraAnahtari(x) === etkinAnahtar);
       if (idx >= 0 && idx !== aiRef.current) setTimeout(() => aiYaz(idx), 0);
       return nx;
     });
@@ -266,7 +267,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // Makine devralındı: TMI'deki hâl gelir, ekran ona eşitlenir; eşitleme yeni durum kaydı yazmaz.
   const onTmiDurum = (ds: DurumEsitleme) => {
     const a = live.current.o;
-    if (a && a.no === ds.orderNo && a.state !== ds.state) {
+    if (a && a.no === ds.orderNo && (!ds.pkgId || !a.pkg || a.pkg.id === ds.pkgId) && a.state !== ds.state) {
       autoRef.current.state = true;
       if (a.state === 'running' && ds.state === 'paused') say('Makine başka işe devredildi · iş duraklatıldı', 'alert', 'hazard');
     }
@@ -522,14 +523,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const nextOrder = isler.find((x, i) => i !== ai && x.state === 'queued');
   const siraRef = useRef<string[]>([]);
   const [ondeNo, ondeNoYaz] = useState<string | null>(null);
-  const siraAnahtari = isler.map((x) => `${x.no}:${x.state}`).join(',');
+  const siraDamgasi = isler.map((x) => `${siraAnahtari(x)}:${x.state}`).join(',');
   useEffect(() => {
     if (pv) return;
     const yeni = yeniOneAlinan(siraRef.current, isler);
-    siraRef.current = isler.map((x) => x.no);
+    siraRef.current = isler.map(siraAnahtari);
     ondeNoYaz((n) => yeni ?? (n && oneAlinanSuruyor(n, isler) ? n : null));
-  }, [siraAnahtari]);
-  useEffect(() => { if (ondeNo) say(`Sıradaki iş öne alındı: ${ondeNo} · geçince çalışan iş duraklatılır`, 'alert', 'hazard'); }, [ondeNo]);
+  }, [siraDamgasi]);
+  useEffect(() => {
+    const onde = ondeNo ? isler.find((x) => siraAnahtari(x) === ondeNo) : null;
+    if (onde) say(`Sıradaki iş öne alındı: ${[onde.no, onde.op].filter(Boolean).join(' · ')} · geçince çalışan iş duraklatılır`, 'alert', 'hazard');
+  }, [ondeNo]);
 
   // İlk parça kapısı (129, 131 b, denetim #12): Kalite Merkezi onaylayana dek ilk parçadan sonraki sağlam parça karar bekler; yeniden ilk
   // parça açıkken ikinci sağlam sayılmaz. Yeniden ilk parçanın tabanı hazırlık kararının damgasıdır.
@@ -612,7 +616,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   {
     const c = cycRef.current;
     const t = Date.now();
-    if (c.no !== o.no) Object.assign(c, { no: o.no, good: o.good, scrap: o.scrap, state: o.state, acc: 0, since: o.state === 'running' ? t : null, last: 0, n: c.n + 1 });
+    if (c.no !== siraAnahtari(o)) Object.assign(c, { no: siraAnahtari(o), good: o.good, scrap: o.scrap, state: o.state, acc: 0, since: o.state === 'running' ? t : null, last: 0, n: c.n + 1 });
     else {
       if (c.state !== o.state) {
         if (o.state === 'running') { if (!c.since) c.since = t; } else if (c.since) { c.acc += t - c.since; c.since = null; }
@@ -643,15 +647,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   useEffect(() => {
     if (pv || o.empty || !istasyonTableti()) return;
     const k = `lastState:${MACHINE}`;
-    const l = yerel.oku<{ no: string; state: string; at: number }>(k);
+    const anahtar = siraAnahtari(o);
+    const kayitli = yerel.oku<{ no: string; anahtar?: string; state: string; at: number }>(k);
+    const l = kayitli ? { ...kayitli, no: kayitli.anahtar ?? kayitli.no } : null;
     // Açılışta ve yenilemede ilk görülen işin durumu kayda gitmez: durum bu tablette değişmedi.
-    const ilkGorus = !gorulenIs.current.has(o.no);
-    gorulenIs.current.add(o.no);
-    if (l && l.no === o.no && l.state === o.state) return;
-    yerel.yaz(k, { no: o.no, state: o.state, at: Date.now() });
+    const ilkGorus = !gorulenIs.current.has(anahtar);
+    gorulenIs.current.add(anahtar);
+    if (l && l.no === anahtar && l.state === o.state) return;
+    yerel.yaz(k, { no: o.no, anahtar, state: o.state, at: Date.now() });
     if (ilkGorus) { autoRef.current.state = false; lastNoteRef.current = null; return; }
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
-    if (!autoRef.current.state && durumKaydiGerekir(l, o)) {
+    if (!autoRef.current.state && durumKaydiGerekir(l, { no: anahtar, state: o.state })) {
       void depo.Log.add('events', {
         machine: MACHINE, wc: ist.wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), ist.mcs, o.state),
         orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? planliMi(why) : null,
@@ -689,8 +695,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     topluRef.current = false;
     if (pv || o.empty || !istasyonTableti()) return;
     const p = prevCnt.current;
-    prevCnt.current = { no: o.no, good: o.good, scrap: o.scrap };
-    if (!p || p.no !== o.no) return;
+    prevCnt.current = { no: siraAnahtari(o), good: o.good, scrap: o.scrap };
+    if (!p || p.no !== siraAnahtari(o)) return;
     const base = {
       machine: MACHINE, wc: ist.wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, planMs: o.cycle > 0 ? Math.round(o.cycle * 1000) : null,
       state: o.state, ...sayimKartAlani(o.kart),
@@ -825,8 +831,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (a === 'start' && !hazir && !pv && tmiEmir !== null && depo.status().mode === 'server') {
       if (hazirlikta.current) return;
       hazirlikta.current = true;
-      const no = o.no;
-      const devam = (uyari: string | null) => { if (live.current.o && live.current.o.no === no) actRef.current(a, t, true, true, uyari); };
+      const anahtar = siraAnahtari(o);
+      const devam = (uyari: string | null) => { if (live.current.o && siraAnahtari(live.current.o) === anahtar) actRef.current(a, t, true, true, uyari); };
       depo.Server.uretimHazirligi(tmiEmir, MACHINE)
         .then((c) => { const uyari = baslatmaUyarisi(c); if (uyari) bip('nok'); devam(uyari); }, () => devam(null))
         .finally(() => { hazirlikta.current = false; });
@@ -984,7 +990,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     kisi: ME, istasyon: MACHINE, cevrim: o.cycle, olcumUygun: shiftRef.current.mOk, olcumRed: shiftRef.current.mNok,
     cagriSureleri: callLog.map((x) => x.ms), cagriAcik: !!call, nedenAdi: (k) => nedenAdiYaz(k, nedenAdiOku),
   });
-  const setReady = (k: string) => islerYaz((l) => l.map((x) => (nextOrder && x.no === nextOrder.no ? { ...x, ready: { ...(x.ready as Record<string, boolean> | undefined), [k]: !((x.ready as Record<string, boolean> | undefined) || {})[k] } } : x)));
+  const setReady = (k: string) => islerYaz((l) => l.map((x) => (nextOrder && siraAnahtari(x) === siraAnahtari(nextOrder) ? { ...x, ready: { ...(x.ready as Record<string, boolean> | undefined), [k]: !((x.ready as Record<string, boolean> | undefined) || {})[k] } } : x)));
   const isSec = (i: number, sonra?: () => void) => isGecIste(i, () => { islerYaz((l) => l.map((x, j) => (j === i ? { ...x, fresh: false } : x))); sonra?.(); });
   const ertele = (g: Gorev) => { if (!g.key) return; snoozeYaz((s) => ({ ...s, [g.key!]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'idle'); };
   const izinli = (a: GorevEylemi) => !YAZAN.has(a) || (uretir && (a !== 'call' || !pv));
@@ -1001,8 +1007,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
   const analiz = <Analiz c={SC} simdi={simdi} duruslar={durusPencereleri(MACHINE, SC.sh.s, SC.sh.e, ayarlar.planliDuruslar, tesis)} nedenAdiOku={nedenAdiOku} planliMi={planliMi} />;
   const resim = <div className="tc-ay1-resim"><Suspense fallback={null}><TeknikResim kontrol={resimKontrolu} /></Suspense></div>;
-  const panel = Panel ? <Panel key={o.no} api={stApi} kurallar={RL} /> : null;
-  const adimlar = <Adimlar key={o.no} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} />;
+  const panel = Panel ? <Panel key={siraAnahtari(o)} api={stApi} kurallar={RL} /> : null;
+  const adimlar = <Adimlar key={siraAnahtari(o)} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} />;
   const notlar = (
     <>
       {hazirlikUyarisi(o.pkg) ? <div className="tc-ay1-not" role="status"><Simge ad="alert" boyut="k" /><span>{hazirlikUyarisi(o.pkg)}</span></div> : null}
@@ -1037,7 +1043,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus') : tuslar} />
     </div>
   );
-  const toplu = uretir ? <TopluGiris key={o.no} kalan={o.target - o.good} kapali={kapali} kaydet={topluKaydet} nedenler={ayarlar.hurdaNedenleri} /> : null;
+  const toplu = uretir ? <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} kaydet={topluKaydet} nedenler={ayarlar.hurdaNedenleri} /> : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
     <KaliteGorunumu istasyon={MACHINE} is={o} izinli={yetkiVar('q.decide')} olc={() => git('kalite')} soyle={(m, t) => say(m, t === 'ok' ? 'check' : 'alert', t === 'ok' ? 'run' : 'stop')} />
   ) : null;
@@ -1068,7 +1074,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <Cark etiket="İstasyon" ogeler={carkIstasyonlari.map((m) => ({ anahtar: m.id, baslik: m.id, alt: m.name }))} etkin={istasyonSirasi} gecMetni="Bu istasyona geç"
       gec={(i) => { const m = carkIstasyonlari[i]; if (m) { yerel.yaz('station', m.id); yenidenKur(); } }} />
   );
-  const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradakiNo={nextOrder && nextOrder.no} ondeNo={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => isSec(i, () => { if (dar) mvYaz('prod'); })} />;
+  const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradaki={nextOrder ? siraAnahtari(nextOrder) : undefined} onde={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => isSec(i, () => { if (dar) mvYaz('prod'); })} />;
   const uyariCipi = (dur: boolean) => (uyarili ? (
     <button type="button" className="tc-ay1-uyari-cip" onClick={(e) => { if (dur) e.stopPropagation(); act('warns'); }} aria-label="Bu işin uyarıları" title="Bu işin uyarıları">
       <Simge ad="bell" boyut="k" />{RL.warns.filter((w) => w.t).length}

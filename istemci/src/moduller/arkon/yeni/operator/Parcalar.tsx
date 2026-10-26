@@ -4,6 +4,7 @@ import { Dugme, Orb, OrbGrubu, Simge, type MakineDurumu } from '../../../../orta
 import { adimTuru } from '../../../../../../arkon/web/src/data/adim-turu.ts';
 import { bitenleriAyir } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { saatMetni } from '../../../../../../arkon/web/src/data/buyuk-ekran.ts';
+import { siraAnahtari } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
 import {
   ayrimAciklamasi, ayrimEtiketi, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, type MakineAyrimlari, type SecilebilirMakine,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
@@ -277,8 +278,8 @@ function MiniHalka({ oran }: { oran: number }) {
 }
 export { MiniHalka };
 
-export function IsKuyrugu({ isler, aktif, sec, siradakiNo, ondeNo, kartlar, kartla }: {
-  isler: readonly Is[]; aktif: number; sec: (i: number) => void; siradakiNo: string | undefined; ondeNo: string | null;
+export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }: {
+  isler: readonly Is[]; aktif: number; sec: (i: number) => void; siradaki: string | undefined; onde: string | null;
   kartlar: readonly RefakatKarti[]; kartla: ((i: number, k: RefakatKarti) => void) | null;
 }) {
   const { acik, biten } = bitenleriAyir(isler);
@@ -287,7 +288,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradakiNo, ondeNo, kartlar, kart
     const at = adimTuru(o.pkg);
     const pe = parcaEtiketi(o.pkg);
     const dugme = (
-      <button key={o.no} type="button" className="tc-ay1-is" data-durum={durumRengi(o.state)} aria-pressed={i === aktif} onClick={() => sec(i)}>
+      <button key={siraAnahtari(o)} type="button" className="tc-ay1-is" data-durum={durumRengi(o.state)} aria-pressed={i === aktif} onClick={() => sec(i)}>
         <MiniHalka oran={o.target > 0 ? o.good / o.target : 0} />
         <span className="tc-ay1-is-govde">
           <span className="tc-ay1-is-no">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}{o.fresh ? <span className="tc-ay1-etiket" data-durum="ayar">Yeni</span> : null}</span>
@@ -297,15 +298,15 @@ export function IsKuyrugu({ isler, aktif, sec, siradakiNo, ondeNo, kartlar, kart
           {at ? <span className="tc-ay1-adimtur"><span className="tc-ay1-etiket">{at.etiket}</span>{at.aciklama ? <span className="tc-ay1-soluk">{at.aciklama}</span> : null}</span> : null}
           <span className="tc-ay1-is-rozetler">
             <span className="tc-ay1-cip" data-durum={durumRengi(o.state)}><i aria-hidden="true" />{durumAdi(o.state)}</span>
-            {o.no === siradakiNo ? <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />Sıradaki · hazırlık {hazirlikSayisi(o)}/4</span> : null}
-            {o.no === ondeNo ? <span className="tc-ay1-cip" data-durum="ayar"><i aria-hidden="true" />Öne alındı</span> : null}
+            {siraAnahtari(o) === siradaki ? <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />Sıradaki · hazırlık {hazirlikSayisi(o)}/4</span> : null}
+            {siraAnahtari(o) === onde ? <span className="tc-ay1-cip" data-durum="ayar"><i aria-hidden="true" />Öne alındı</span> : null}
           </span>
         </span>
       </button>
     );
     if (!liste.length || !kartla) return dugme;
     return (
-      <div key={o.no} className="tc-ay1-is-sarmal">
+      <div key={siraAnahtari(o)} className="tc-ay1-is-sarmal">
         {dugme}
         <div className="tc-ay1-kartlar" role="list" aria-label={`${o.no} refakat kartları`}>
           {liste.map((k) => {
