@@ -318,7 +318,7 @@ test.describe('577b Veri ve kısıtlar', () => {
 
 // 577a: Nasıl hesaplandı Plan ekranının sayfasıdır (`?ekran=hesap`); örnek veride son ekip kaydı olmayabilir, o halde boş sonuç ve bekleyen adımlar.
 test.describe('577a Nasıl hesaplandı', () => {
-  test('Nasıl hesaplandı: adresle açılır, karar masası ve ekip adımları, iki sekme; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+  test('Nasıl hesaplandı: adresle açılır, karar masası ve ekip adımları, iki sekme, akış ağının üç kipi; Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan?ekran=hesap');
     const kok = page.locator('[data-parca="hesap"]');
     await expect(kok).toBeVisible();
@@ -326,7 +326,18 @@ test.describe('577a Nasıl hesaplandı', () => {
     if (await kok.getByRole('tab', { name: /Akış ağı/ }).isVisible()) {
       await tasmaz(page);
       await kok.getByRole('tab', { name: /Akış ağı/ }).click();
+      const kipler = kok.getByRole('tablist', { name: 'Ağ görünümü' });
+      await expect(kipler).toBeVisible();
+      await expect(kok.getByRole('img', { name: /Sürükleyerek döndürün/ })).toBeVisible();
       await tasmaz(page);
+      for (const ad of [/Atölye akışı/, /Zaman ağı/, /Karar akışı/]) {
+        await kipler.getByRole('tab', { name: ad }).click();
+        await expect(kipler.getByRole('tab', { name: ad })).toHaveAttribute('aria-selected', 'true');
+        await expect(kok.getByRole('img', { name: /Sürükleyerek döndürün/ }).or(kok.getByText('Plan yok. Önce bir plan çözün.'))).toBeVisible();
+        await tasmaz(page);
+      }
+      await kok.getByRole('button', { name: 'Akışı adım adım göster' }).click();
+      await expect(kok.getByRole('status').filter({ hasText: '1 / 5' })).toBeVisible();
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
@@ -350,6 +361,30 @@ test.describe('577a Bugünün kararları', () => {
     }
     await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(kok).toHaveCount(0);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
+
+test.describe('577a Odak tahtası', () => {
+  test('Odak: O tuşu bir bölümü açar, tezgâha inilir, Esc seviye seviye çıkar; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' })).toBeVisible();
+    await page.locator('body').press('o');
+    const odak = page.locator('section.tc-pyo');
+    if (await odak.isVisible()) {
+      await expect(odak).toHaveAttribute('data-sev', 'grup');
+      await tasmaz(page);
+      const tez = odak.locator('button.tc-pyo-tez').first();
+      if (await tez.isVisible()) {
+        await tez.click();
+        await expect(odak).toHaveAttribute('data-sev', 'tez');
+        await tasmaz(page);
+        await page.locator('body').press('Escape');
+        await expect(odak).toHaveAttribute('data-sev', 'grup');
+      }
+      await page.locator('body').press('Escape');
+      await expect(odak).toHaveCount(0);
+    }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });

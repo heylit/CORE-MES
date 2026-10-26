@@ -1169,6 +1169,9 @@ export interface PlanIsEmri {
   opNo: number;
   ad: string;
   kaynak: AtanabilirKaynak | null;
+  // İş emrine yazılmış istasyon (sabit kimlik: istasyon iş emrinindir); Arkon paketi makine ya da kişiden türetmeden okur. Planın kendi
+  // denediği emirde yoktur.
+  istasyonId?: number | null;
   ayarSuresiDk: string | null;
   birimSureDk: string | null;
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
@@ -1246,13 +1249,23 @@ async function acikAdimlar<R extends number | null>(
       id: i.id, uretimEmriId: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, teslim: e.teslim, oncelik: e.oncelik, acilma: e.acilma, baslangic: e.baslangic,
       kaynakRotaRevizyonId: revizyon, ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, birlesmeOpNo: e.birlesmeOpNo, tur: i.tur, emirTuru: e.emirTuru,
       siparisSatiriId: e.siparisSatiriId, adimAdedi: adimAdedi.get(e.id)?.get(i.sira) ?? e.adet,
-      sira: i.sira, opNo: i.opNo, ad: i.ad, kaynak, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
+      sira: i.sira, opNo: i.opNo, ad: i.ad, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
       devirAdedi: i.devirAdedi, durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi),
       ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
       ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];
   });
+}
+
+// İş emrine kopyalanan kontrol listesi (emir açılırken rotanın talimatından); Arkon paketi rotanın bugünkü talimatı yerine bunu gösterir.
+// Listesi olmayan iş emri haritada yoktur.
+export async function isEmriKontrolListesi(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { sira: number; ad: string; aciklama: string | null }[]>> {
+  const tekil = [...new Set(isEmriIdleri)];
+  const harita = new Map<number, { sira: number; ad: string; aciklama: string | null }[]>();
+  if (tekil.length === 0) return harita;
+  for (const r of await s.kontrolListesiGetir(db, tekil)) harita.set(r.isEmriId, [...(harita.get(r.isEmriId) ?? []), { sira: r.sira, ad: r.ad, aciklama: r.aciklama }]);
+  return harita;
 }
 
 export async function emirNolari(db: Db, idler: readonly number[]): Promise<Map<number, string>> {

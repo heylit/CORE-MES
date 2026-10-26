@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
+import { lazy, Suspense, useState } from 'react';
+import { DurumKutusu, Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { sayiYaz, saatYazi } from '../../motor/kurallar.ts';
-import { degisken, HAZIRLANIYOR, MOTOR_NOTU } from '../../motor/ortak.tsx';
+import { degisken, MOTOR_NOTU } from '../../motor/ortak.tsx';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { KucukDugme, Serit, VeriKarti } from '../veri/ortak.tsx';
 import '../veri/veri.css';
@@ -16,6 +16,8 @@ import './hesap.css';
 // son ekip çözümünün grafikleri. Ekip çözümü ve kararın tek başına önizlenmesi motor ister (357 b), pasiftir; ayarlar çalışmaya komutla yazılır.
 
 type Sekme = 'karar' | 'ag';
+// Akış ağı (3B, tuval) yalnız sekmesi açılınca yüklenir.
+const AkisAgi = lazy(async () => ({ default: (await import('../ag/index.tsx')).AkisAgi }));
 const yuzde = (x: number) => `${(x * 100).toFixed(2)}%`;
 
 function Fark({ yeni, eski, basamak = 1 }: { yeni: number | null; eski: number | null; basamak?: number }) {
@@ -48,7 +50,7 @@ export function NasilHesaplandi(o: PlanlamaEkranOzellikleri) {
         ))}
       </div>
       {sekme === 'ag' ? (
-        <VeriKarti baslik="Veriden plana: akış ağı" simge="cube"><p className="tc-pyi-alt">{`Akış ağı: ${HAZIRLANIYOR}`}</p></VeriKarti>
+        <Suspense fallback={<DurumKutusu durum="yukleniyor" />}><AkisAgi o={o} c={c} /></Suspense>
       ) : (
         <>
           <VeriKarti baslik="Ekip adımları" simge="list" ek={son ? `${zamanYazi(son.zaman)} · ${sayiYaz(son.ms / 1000, 1)} sn` : undefined}><Zincir son={son} /></VeriKarti>

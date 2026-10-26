@@ -210,7 +210,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     expect(istekler.some((i) => i.yol === '/stok/teslim-kutusu/sepet/gelecek?istasyonId=2')).toBe(true);
   });
 
-  it('teslim al: istasyondaki islerin malzemeleri; terminalden gelince eksik malzeme isaretlenir (kart #1289)', async () => {
+  it('teslim al: terminalden gelince isin malzemeleri "Bu is" bolumunde, eksik malzeme isaretlenir (kart #1289, 618)', async () => {
     const liste: IsMalzemeleriCevabi = { isler: [{
       uretimEmriId: 70, emirNo: 'UE-70', opNo: 10, adimAd: 'Tornalama', calisiyor: false, kalanAdet: 10,
       malzemeler: [
@@ -223,7 +223,10 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     }] };
     const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste) }, { ...KUTU_ISTASYONLU, gelenler: [] });
     window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: 902 } }));
-    const l = await screen.findByRole('list', { name: 'İşlerin malzemeleri' });
+    const l = await screen.findByRole('list', { name: 'Bu işin malzemeleri' });
+    expect(within(screen.getByRole('region', { name: 'Bu iş' })).getByText('Bu iş · UE-70')).toBeTruthy();
+    // Aynı emir aşağıdaki listede yinelenmez.
+    expect(await screen.findByText('Bu istasyondaki işlerin stoklanan girdisi yok.')).toBeTruthy();
     const [eksik, yolda, tamam] = within(l).getAllByRole('listitem');
     expect(eksik!.getAttribute('aria-current')).toBe('true');
     expect(within(eksik!).getByText(/UE-70 · OP 10/)).toBeTruthy();
@@ -250,7 +253,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     }] };
     const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste), 'POST /stok/teslim-kutusu/is-malzemeleri/iste': () => json(200, liste) }, { ...KUTU_ISTASYONLU, gelenler: [] });
     window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: 902 } }));
-    const satir = within(await screen.findByRole('list', { name: 'İşlerin malzemeleri' })).getAllByRole('listitem')[0]!;
+    const satir = within(await screen.findByRole('list', { name: 'Bu işin malzemeleri' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/R-01 depo · emirsiz \(40\).*T1 istasyon · bu emrin \(5\).*T1 istasyon · emirsiz \(2\)/)).toBeTruthy();
     expect(within(satir).getByRole('button', { name: /T1 istasyonundan al · emirsiz/ })).toBeTruthy();
     fireEvent.click(within(satir).getByRole('button', { name: /T1 istasyonundan al · bu emrin/ }));
@@ -320,6 +323,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('teslim al: istasyondaki kisinin imzali kodu QR olarak gorunur; kisiye gelen teslim aliciyla yazilir', async () => {
     ciz({}, { ...KUTU, istasyonlar: [{ id: 2, kod: 'F2', ad: 'Freze 2' }], buradakiIstasyonId: 2, gelenler: [{ ...GELEN, aliciAd: 'Deneme Operatör' }] });
     fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Elden teslim için kodumu göster' }));
     expect(await screen.findByRole('img', { name: `QR: ${KISI_KODU}` })).toBeTruthy();
     expect(screen.getByText(/Teslim eden bu kodu okutunca malzeme hemen Freze 2 istasyonuna geçer/)).toBeTruthy();
     expect(screen.getByText('Alıcı: Deneme Operatör')).toBeTruthy();
@@ -327,6 +331,40 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Büyük göster' }));
     const buyuk = await screen.findByRole('dialog', { name: 'Elden teslim için kodum' });
     expect(within(buyuk).getByRole('img', { name: `QR: ${KISI_KODU}` })).toBeTruthy();
+  });
+
+  it('618: kisi kodu kapali gelir, acilmadan istenmez; isin malzemeleri koddan once gelir', async () => {
+    const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, { isler: [] }) }, { ...KUTU, buradakiIstasyonId: 2, gelenler: [] });
+    fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
+    const ac = await screen.findByRole('button', { name: 'Elden teslim için kodumu göster' });
+    const baslik = screen.getByRole('heading', { name: 'İşlerin malzemeleri' });
+    expect(baslik.compareDocumentPosition(ac) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(istekler.some((i) => i.yol.startsWith('/stok/teslim-kutusu/kisi-kodu'))).toBe(false);
+  });
+
+  it('618: Bu is bolumu yalniz o emrin gelenini alir, durumu rozetle soyler; Parcayi gonder Sepet sekmesine gecer', async () => {
+    const bununki: Teslim = { ...GELEN, id: 51, no: 'TS-000051', malzemeAd: 'Bu emrin cubugu', uretimEmriId: 70 };
+    const liste: IsMalzemeleriCevabi = { isler: [{
+      uretimEmriId: 70, emirNo: 'UE-70', opNo: 10, adimAd: 'Tornalama', calisiyor: true, kalanAdet: 10,
+      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, yerler: [], istek: null }],
+    }] };
+    const istekler = ciz({
+      'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste),
+      'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET),
+      'POST /stok/teslimler/51/teslim-al': () => json(200, { teslim: { ...bununki, durum: 'teslim' } }),
+    }, { ...KUTU_ISTASYONLU, gelenler: [GELEN, bununki] });
+    window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: null } }));
+    const buIs = await screen.findByRole('region', { name: 'Bu iş' });
+    expect(await within(buIs).findByText('Gelen 1')).toBeTruthy();
+    const gelenler = within(buIs).getByRole('list', { name: 'Bu işe gelenler' });
+    expect(within(gelenler).getByText(/Bu emrin cubugu/)).toBeTruthy();
+    expect(within(gelenler).queryByText(/Deneme mil/)).toBeNull();
+    // Öteki gelen aşağıda kalır.
+    expect(screen.getByText(/Deneme mil/)).toBeTruthy();
+    fireEvent.click(within(gelenler).getByRole('button', { name: 'Teslim al, 3' }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.yol).toBe('/stok/teslimler/51/teslim-al'));
+    fireEvent.click(within(buIs).getByRole('button', { name: 'Parçayı gönder' }));
+    expect((await screen.findByRole('tab', { name: 'Sepet' })).getAttribute('aria-selected')).toBe('true');
   });
 
   it('teslim al (537 a): istasyonda olmayan kisiye QR yerine etiket okutma yolu gosterilir, kod istenmez', async () => {

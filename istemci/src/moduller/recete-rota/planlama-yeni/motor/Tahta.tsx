@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { DurumKutusu, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { otomatikOdak, tezgahGrubu, type OdakYeri } from '../ic/odak/kurallar.ts';
 import { bolumOku } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { CizelgeGorunumu } from './cizelge/CizelgeGorunumu.tsx';
@@ -34,6 +35,8 @@ import './motor.css';
 const VeriVeKisitlar = lazy(async () => ({ default: (await import('../ic/veri/index.tsx')).VeriVeKisitlar }));
 const NasilHesaplandi = lazy(async () => ({ default: (await import('../ic/hesap/index.tsx')).NasilHesaplandi }));
 const BugununKararlari = lazy(async () => ({ default: (await import('../ic/bugun/index.tsx')).BugununKararlari }));
+// Odak tahtası (577a, zg-odak): görünümün yerinde bir bölüm ya da tek tezgâh; tezgâh kartının Odakla'sı ve O tuşu açar.
+const OdakTahtasi = lazy(async () => ({ default: (await import('../ic/odak/index.tsx')).OdakTahtasi }));
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
@@ -72,6 +75,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [ornek, setOrnek] = useState<string | null>(null);
   const [ks, setKs] = useState<KesifDurumu>(KESIF_ILK);
   const [sekD, setSekD] = useState<{ k: string | null; x: PanelSekmesi }>({ k: null, x: 'yon' });
+  const [odak, setOdak] = useState<OdakYeri | null>(null);
   const harita = useRef<HaritaKomutu | null>(null);
   const dk = useRef<HTMLElement | null>(null);
 
@@ -138,14 +142,21 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     if (!ornek) return undefined;
     const z = requestAnimationFrame(() => harita.current?.kilavuzKamera(ornek)); return () => cancelAnimationFrame(z);
   }, [ornek, gorunum]);
-  const gorunumSec = useCallback((g: TahtaGorunumu) => { setMenuAcik(false); setPan(null); if (g !== 'atolye' && g !== 'genel') setKilavuz(false); setGorunum(g); }, []);
+  const gorunumSec = useCallback((g: TahtaGorunumu) => { setMenuAcik(false); setPan(null); setOdak(null); if (g !== 'atolye' && g !== 'genel') setKilavuz(false); setGorunum(g); }, []);
+  // 'auto' en anlamlı yeri seçer (odOtomatik); açılınca menü, panel ve kılavuz kapanır.
+  const odakAc = useCallback((y: OdakYeri | 'auto' | null) => {
+    if (y === null) { setOdak(null); return; }
+    if (!p) return;
+    setMenuAcik(false); setPan(null); setKilavuz(false);
+    setOdak(y === 'auto' ? otomatikOdak(c, p, cx, v, secim) : y);
+  }, [c, p, cx, v, secim]);
 
   // Klavye (zd-tam, zp-klavye, zs-olcek-ortak): yazı alanında ve açık pencerede çalışmaz.
   const { bildir } = useBildirim();
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
-  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir });
-  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir };
+  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc });
+  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -154,7 +165,13 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       const x = tuslar.current; const k = e.key; const h = k.toLocaleLowerCase('tr-TR');
       const dur = () => { e.preventDefault(); e.stopPropagation(); };
       if (h === 'v') { dur(); const i = DONEM_OLCEKLERI.findIndex((d) => d[0] === x.donem); x.olcekSec(DONEM_OLCEKLERI[(i + (e.shiftKey ? DONEM_OLCEKLERI.length - 1 : 1)) % DONEM_OLCEKLERI.length]?.[0] ?? 'hafta'); return; }
-      if (k === 'Escape') { if (x.secim.siparis || x.secim.adim || x.secim.tezgah) { dur(); x.sec({ siparis: null, adim: null, tezgah: null }); } return; }
+      // Odakta Esc önce seçimi bırakır, sonra bir seviye çıkar; O odağı açıp kapatır (zg-odak).
+      if (k === 'Escape') {
+        if (x.secim.siparis || x.secim.adim || x.secim.tezgah) { dur(); x.sec({ siparis: null, adim: null, tezgah: null }); return; }
+        if (x.odak) { dur(); x.odakAc(x.odak.m ? { g: x.odak.g, m: null } : null); }
+        return;
+      }
+      if (h === 'o') { dur(); x.odakAc(x.odak ? null : 'auto'); return; }
       if (h === 'f') { dur(); harita.current?.sigdir(); return; }
       if (k === '+' || k === '=') { dur(); harita.current?.yakinlas(1.25); return; }
       if (k === '-') { dur(); harita.current?.yakinlas(0.8); return; }
@@ -181,12 +198,19 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const cubuk = cubukKur(false);
 
   return (
-    <div className="tc-pym" data-gorunum={gorunum}>
+    <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
       <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
-          {gorunum === 'atolye' && p ? (
+          {odak && p ? (
+            <>
+              {cubuk}
+              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                <OdakTahtasi c={c} p={p} cx={cx} v={v} now={now} yer={odak} ac={odakAc} secim={secim} sec={sec} komut={komut} planYaz={yetki.planYaz} />
+              </Suspense>
+            </>
+          ) : gorunum === 'atolye' && p ? (
             <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
               kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} />
           ) : (
@@ -214,11 +238,11 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             </>
           )}
         </div>
-        {ps && p && sahne && (
+        {ps && p && sahne && !odak && (
           <SecimPaneli kok={dk} c={c} p={p} cx={cx} s={sahne} r={r} olcek={donem} t={zaman} secim={ps} sek={sek} sekSec={sekSec}
             komut={komut} planYaz={yetki.planYaz} planKilitle={yetki.planYaz} kapat={secimBirak} opSec={opSec} sipSec={(j) => sipSec(j, false)}
             rotaSec={(j) => { sipSec(j, false); setSekD({ k: `siparis:${j}`, x: 'rota' }); }}
-            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} />
+            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} odakla={(m) => odakAc({ g: tezgahGrubu(c.D, m), m })} />
         )}
       </div>
       {p && yetki.planYaz && (
