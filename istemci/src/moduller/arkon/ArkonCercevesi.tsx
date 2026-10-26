@@ -8,6 +8,7 @@ import type { ArkonBenCevabi, ArkonRolu, MakineDevralGovdesi } from '#paylasilan
 import { DurumKutusu, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useEkranGorunur } from '../../ortak/rota/kalici.tsx';
+import { eskiGorunumAdresiMi } from '../../ortak/rota/yeni-ekran-menusu.ts';
 import { cikistaCalistir, useCikis, useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
 import { yerelVeriyiTemizle } from '../../../../arkon/web/src/data/yerel-temizlik.ts';
@@ -103,6 +104,8 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
   useEffect(() => { if (oturum.data === null) yerelVeriyiSil(); }, [oturum.data]);
   // Rol giriş sayfası yalnız Arkon MES'in kendisindedir; Üretim Terminali hep operatör ekranını açar.
   const girisSayfasi = cokSayfali(kok) && adresSayfasi === '';
+  // 4a (kart 723): eski görünüm (`/kuyruk/eski`, `/uretim-terminali/eski`, `/arkon/eski`) salt okunurdur; Sistem Ayarları'ndaki çerçeve (kök yok) yazar.
+  const saltOkunur = kok !== null && eskiGorunumAdresiMi(kok);
   const gezin = useNavigate();
   const cikis = useCikis();
   const ben = useQuery({ queryKey: anahtarlar.ben, queryFn: () => api.get<ArkonBenCevabi>('/arkon/ben') });
@@ -167,12 +170,13 @@ export function ArkonCercevesi({ kok = ARKON_KOKU, sabitSayfa }: { kok?: string 
         makineDolu: (red) => devralmalarYaz((l) => [...l, red]),
         uyari: (ileti) => bildirRef.current('bilgi', `TMI CORE: ${ileti}`),
         git: (yol) => { void gezinRef.current(yol); },
+        saltOkunur,
       });
     } });
     ilkAdresYaz((a) => a ?? `${ARKON_ADRESI}#${encodeURIComponent(sayfaRef.current)}`);
     hazirYaz(true);
     return kopruyuKaldir;
-  }, [kisi]);
+  }, [kisi, saltOkunur]);
 
   // Başka sayfaya geçince ve çıkışta çerçeve kalkar; olay akışı TMI penceresinde döndüğünden burada kapatılmazsa her ziyaret bir döngü daha ekler.
   useEffect(() => () => { baglantiyiKapat.current(); baglantiyiKapat.current = () => {}; }, []);
