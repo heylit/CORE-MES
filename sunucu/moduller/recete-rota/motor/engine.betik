@@ -44,11 +44,13 @@ function compile(st){
   const M={};
   for(const m of D.tezgahlar){
     const own=m.vardiyalar&&m.vardiyalar.length?new Set(m.vardiyalar):null;
-    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of days[d].vard)if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
+    /* 650 a: haftası olan tezgâh kendi iş merkezinin gün vardiyalarıyla çalışır; tatil yine kapalıdır */
+    const gunu=d=>m.hafta?(days[d].tatil?[]:(m.hafta[days[d].wd]||[])):days[d].vard;
+    let sw=[];for(let d=0;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
     let rw=sw;
-    if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(days[d].vard.length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
+    if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
     const dn=(st.down||[]).filter(x=>x.m===m.id).map(x=>[x.from,x.to]);
     sw=subtract(sw,dn);rw=subtract(rw,dn);
     const pay=st.w.tampon?Math.min(.35,(m.arizaGun>0?(+m.onarimSaat||0)/(m.arizaGun*24):0)+(+st.w.acilPay||0)):0;
