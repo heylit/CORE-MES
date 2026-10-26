@@ -138,6 +138,15 @@ describe('eski adresine geçen yeni ekran (541, 527 1 a)', () => {
     expect(seritAdresi('/arkon/eski/kalite')).toBe('/arkon/kalite');
   });
 
+  it('Malzemeler (572): bölüm eski adreste aynı alt yoldur; şerit durur; Logo gönderiminin eskisi yoktur', () => {
+    expect(gorunumGecisi('/malzemeler')).toEqual({ baslik: 'Eski görünüm', yol: '/malzemeler/eski' });
+    expect(gorunumGecisi('/malzemeler/sablonlar')).toEqual({ baslik: 'Eski görünüm', yol: '/malzemeler/eski/sablonlar' });
+    expect(gorunumGecisi('/malzemeler/eski/yeni')).toEqual({ baslik: 'Yeni görünüm', yol: '/malzemeler/yeni' });
+    expect(gorunumGecisi('/malzemeler/logo')).toBeNull();
+    expect(seritAdresi('/malzemeler/eski/ayarlar')).toBe('/malzemeler/ayarlar');
+    for (const yol of ['/malzemeler', '/malzemeler/yeni', '/malzemeler/eski']) expect(yeniEkranAdresiMi(yol), yol).toBe(false);
+  });
+
   it('kişi menüsü yeni ekranda eskisini, eski ekranda yenisini açar; başka sayfada madde yoktur', () => {
     expect(gorunumGecisi('/kuyruk')).toEqual({ baslik: 'Eski görünüm', yol: '/kuyruk/eski' });
     expect(gorunumGecisi('/kuyruk/eski')).toEqual({ baslik: 'Yeni görünüm', yol: '/kuyruk' });

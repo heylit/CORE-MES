@@ -5,7 +5,7 @@ import { OKUYAN, YONETICI, json, sunucuKur, yeniEkranAc } from '../test-ortak.ts
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const ADRES = '/malzemeler/yeni-ekran/kilavuz';
+const ADRES = '/malzemeler/kilavuz';
 
 describe('M4 Kılavuz', () => {
   test('prototipteki bölümler aynı sırayla', async () => {

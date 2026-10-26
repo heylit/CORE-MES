@@ -5,7 +5,7 @@ import { OKUYAN, YONETICI, json, sunucuKur, yeniEkranAc, type Istek } from '../t
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const KOK = '/malzemeler/yeni-ekran/ayarlar';
+const KOK = '/malzemeler/ayarlar';
 const yaz = (anahtar: string) => `POST /malzeme-katalogu-ayarlari/${anahtar}/kaydet`;
 const kayitlar = (istekler: Istek[], anahtar: string) => istekler.filter((i) => i.yontem === 'POST' && i.yol === `/malzeme-katalogu-ayarlari/${anahtar}/kaydet`);
 const tamam = () => json(200, { surum: 4 });

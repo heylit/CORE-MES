@@ -5,7 +5,7 @@ import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { ORNEK_AYAR, ORNEK_KARTLAR, ornekKayit } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, type Yanit } from '../test-ortak.tsx';
 
-const KOK = '/malzemeler/yeni-ekran';
+const KOK = '/malzemeler';
 // Onay yetkisi olan ama Etiket Merkezi'ni açamayan kullanıcı (ana veri sorumlusu).
 const SORUMLU: Kullanici = { id: 5, ad: 'Deneme Sorumlu', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler', 'malzemeler.yaz', 'malzemeler.onayla'] };
 
@@ -80,16 +80,16 @@ describe('M2 Katalog: liste ve arama', () => {
     expect(screen.getByText('Arama ve süzgeçlerle eşleşen kart yok.')).toBeTruthy();
   });
 
-  test('yazan "Yeni kart" görür ve sihirbaza gider; okuyan görmez (reddedilen)', async () => {
+  // Bölüm geçişi kabuğun şeridindedir (553 1 a); "Yeni kart" maddesinin görünürlüğü şeritte (malzemeler.yaz), burada adresi sınanır.
+  test('yazan "Yeni kart" adresinde sihirbazı açar; okuyan açamaz (reddedilen)', async () => {
     kur(YAZAN);
-    yeniEkranAc(KOK);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Yeni kart' }));
-    expect(await screen.findByRole('tab', { name: 'Yeni kart', selected: true })).toBeTruthy();
+    yeniEkranAc(`${KOK}/yeni`);
+    expect(await screen.findByRole('heading', { name: 'Malzemeler ve Hizmetler' })).toBeTruthy();
+    expect(screen.queryByText('Bu bölümü görme yetkin yok.')).toBeNull();
     cleanup();
     kur(OKUYAN);
-    yeniEkranAc(KOK);
-    await screen.findByText('HM-MET-C45-0001');
-    expect(screen.queryByRole('tab', { name: 'Yeni kart' })).toBeNull();
+    yeniEkranAc(`${KOK}/yeni`);
+    expect(await screen.findByText('Bu bölümü görme yetkin yok.')).toBeTruthy();
   });
 
   test('boş katalog "Katalog boş." der; yazana yeni malzeme düğmesi', async () => {
@@ -239,7 +239,7 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     kur(YONETICI);
     yeniEkranAc(KOK);
     fireEvent.click(within(await kartiAc('HM-MET-C45-0001')).getByRole('button', { name: 'Şablon yap' }));
-    expect(await screen.findByRole('tab', { name: 'Yeni kart', selected: true })).toBeTruthy();
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler/yeni'); });
   });
 
   test('Sil onay sorar; onaylanınca iptal ucuna gider ve pencere kapanır', async () => {

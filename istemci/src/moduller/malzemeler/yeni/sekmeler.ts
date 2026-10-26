@@ -10,8 +10,8 @@ import { YeniKart } from './sihirbaz/index.tsx';
 import type { KatalogOrtami } from './tipler.ts';
 import type { MalzemeYetkisi } from './yetki.ts';
 
-// Yeni ekranın kökü. Alımda menü yolları (`/malzemeler`, `/malzemeler/yeni` ...) bu bölümlere çevrilir; o zamana kadar ikinci yoldadır.
-export const YENI_KOK = '/malzemeler/yeni-ekran';
+// Yeni ekran menünün adresindedir (572, 527 1 a): bölüm yolları ikinci menünün yollarıdır (`/malzemeler`, `/malzemeler/yeni` ...).
+export const YENI_KOK = '/malzemeler';
 
 export interface YeniKartSecenegi { kart?: string; kopya?: string; sablon?: string; sablonYap?: string; tur?: KatalogTuru }
 export type DisSayfa = 'operasyon-tipleri' | 'rota-sablonlari' | 'urun-rotalari';
@@ -47,7 +47,7 @@ export interface BolumTanimi {
 // Sıra ve adlar ikinci menüyle aynıdır (paylasilan/sayfalar/malzemeler.ts); yeni kartı yalnız yazabilen görür.
 // Logo gönderimi prototipte yoktur, kabuğun kendi sayfasıdır (kart #232); sekmede aynı sayfa değişmeden açılır (497/6 a).
 export const BOLUMLER: readonly BolumTanimi[] = [
-  { anahtar: 'kart', baslik: 'Yeni kart', simge: 'plus', yol: 'kart', ekran: YeniKart, gorur: (y) => y.yaz },
+  { anahtar: 'kart', baslik: 'Yeni kart', simge: 'plus', yol: 'yeni', ekran: YeniKart, gorur: (y) => y.yaz },
   { anahtar: 'katalog', baslik: 'Katalog', simge: 'list', yol: '', ekran: Katalog, gorur: (y) => y.oku },
   { anahtar: 'sablonlar', baslik: 'Şablonlar', simge: 'grid', yol: 'sablonlar', ekran: Sablonlar, gorur: (y) => y.oku },
   { anahtar: 'ayarlar', baslik: 'Malzeme ayarları', simge: 'gear', yol: 'ayarlar', ekran: MalzemeAyarlari, gorur: (y) => y.oku },

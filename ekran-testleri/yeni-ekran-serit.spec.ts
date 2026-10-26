@@ -5,7 +5,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni', '/finans/yeni',
+  '/recete-rota/planlama-yeni', '/kalite-merkezi/yeni', '/finans/yeni',
   '/ik/yeni', '/ik-islemlerim/yeni', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -46,12 +46,13 @@ test('Reçete ve Rota yeni ekranında kabuğun şeridi durur, tek şerit vardır
   }
 });
 
-// Üretim Hazırlık, Üretim Terminali ve Kuyruk da öyle (553 1 a, 2): eski görünümde de seçili madde aynıdır.
-test('Üretim Hazırlık, Üretim Terminali ve Kuyruk yeni ekranında kabuğun şeridi durur', async ({ page, ac }) => {
+// Üretim Hazırlık, Üretim Terminali, Kuyruk ve Malzemeler de öyle (553 1 a, 2; 572): eski görünümde de seçili madde aynıdır.
+test('Üretim Hazırlık, Üretim Terminali, Kuyruk ve Malzemeler yeni ekranında kabuğun şeridi durur', async ({ page, ac }) => {
   const durumlar = [
     ['/arkon/pano', 'Üretim Hazırlık', 'Pano'], ['/arkon/eski/kalite', 'Üretim Hazırlık', 'Kalite'], ['/arkon/kalite', 'Üretim Hazırlık', 'Kalite'],
     ['/uretim-terminali', 'Üretim Terminali', 'Operatör'], ['/uretim-terminali/eski', 'Üretim Terminali', 'Operatör'],
     ['/kuyruk', 'Kuyruk', 'Plan Kuyruğu'], ['/kuyruk/eski', 'Kuyruk', 'Plan Kuyruğu'],
+    ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/eski/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
   ] as const;
   for (const [yol, menuAdi, madde] of durumlar) {
     await ac(yol);

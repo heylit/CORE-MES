@@ -8,7 +8,7 @@ const boy = async (l: Locator): Promise<number> => (await l.boundingBox())?.heig
 test.describe('fare', () => {
   test('ortak düğme ve işaret satırı yoğun; data-dokunmatik kök 44 px’e döner', async ({ page, ag, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
-    await ac('/malzemeler/yeni-ekran');
+    await ac('/malzemeler');
     const dugme = page.getByRole('button', { name: /^Excel/ });
     const isaret = page.locator('.tc-isaret').first();
     await expect(dugme).toBeVisible();
@@ -37,7 +37,7 @@ test.describe('fare', () => {
 test.describe('dokunmatik', () => {
   test.use({ hasTouch: true, isMobile: true });
   test('parmakla kullanılan cihazda ortak düğme ve işaret satırı 44 px kalır', async ({ page, ac }) => {
-    await ac('/malzemeler/yeni-ekran');
+    await ac('/malzemeler');
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
     const dugme = page.getByRole('button', { name: /^Excel/ });
     await expect(dugme).toBeVisible();
