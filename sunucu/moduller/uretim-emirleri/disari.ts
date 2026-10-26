@@ -295,6 +295,8 @@ export type { EmirDilimiSatiri } from './is-emri-servis.ts';
 export const planlanacakIsEmirleri = isEmri.planlanacakIsEmirleri;
 // Arkon Hazırlık (kart #1257): rotasız emrin açık adımları, plan satırı biçiminde; plana girmez.
 export const rotasizIsEmirleri = isEmri.rotasizIsEmirleri;
+// Arkon iş emri paketi (kart #199 adım 1, istek 11): iş emrine kopyalanmış kontrol listesi.
+export const isEmriKontrolListesi = isEmri.isEmriKontrolListesi;
 // Proje maliyeti (197 a): projenin iş emirleri (iptal hariç) ve gerçekleşen işleme, ayar ve katılım süreleri.
 export const projeninIsEmirleri = isEmri.projeninIsEmirleri;
 export const isEmriSureleri = isEmri.isEmriSureleri;
