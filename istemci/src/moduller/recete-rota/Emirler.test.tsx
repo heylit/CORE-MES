@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { AcilisSecenekleri, AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
@@ -63,7 +64,7 @@ function sunucuKur(s: Sunucu): void {
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [{ anahtar: ONEK, bicim: 'json', deger: BELGE, surum: 1 }] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, DURUM({ orders: s.emirler, opStatus: {}, opProg: {} }));
+    if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, DURUM({ orders: s.emirler, opStatus: {}, opProg: {} }));
     if (yontem === 'GET' && yol === '/rota/urunler/12') {
       const rev = (id: number, durum: string) => ({ id, harf: String(id), durum, surum: 1, aciklama: null, acilma: '2030-01-01T00:00:00Z', onaylama: null, yururlugeAlma: null });
       return json(200, { urun: { id: 12 }, revizyonlar: [rev(39, 'onayli'), ...(s.yururlukteYok ? [] : [rev(40, 'yururlukte')])], taslakAcilabilir: false });

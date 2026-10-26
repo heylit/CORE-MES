@@ -1,5 +1,5 @@
 // Başka modül ekranlarının ithal edebildiği tek dosya.
 
-// 542 a, 546 a: Satın Alma menüsünün malzeme satın alma planı ve fason planı sayfaları. Özellik almazlar; veriyi kendileri okur
-// (GET /recete-rota/planlama-calismasi/satin-alma), salt okunurdur.
-export { SatinAlmaFasonPlani, SatinAlmaMalzemePlani } from './planlama-yeni/satin-alma/SatinAlmaPlanlari.tsx';
+// 659 a: Planlama'nın eski çerçevesi plan modülünün `/plan/eski` adresinde bir süre yalnız yöneticide açılır. Çerçeve dosyası, köprüsü ve
+// Reçete ve Rota çerçevesiyle ortak kabuğu burada kalır; görünüm adresten seçilir (planlama-menusu.ts planlamaYoluMu).
+export { ReceteRotaCercevesi as PlanlamaEskiCercevesi } from './ReceteRotaCercevesi.tsx';

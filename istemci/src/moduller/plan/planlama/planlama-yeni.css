@@ -1,0 +1,11 @@
+/* Planlama TS ekranı iskeleti (tc-py-). Görünümler kendi önekleriyle gelir (PARCA-SOZLESMESI); ortak çizelge tc-pyc-. Ekran ikinci menünün
+   yanındaki alanı doldurur; görünüm şeridi kabuğun ikinci menüsüdür, kaydırma görünüm alanındadır. */
+.tc-py { display: grid; grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--bg); }
+.tc-py-gorunum { min-height: 0; min-width: 0; overflow: auto; }
+.tc-py-durum { padding: var(--b-5); }
+.tc-py-yer { padding: var(--b-5); }
+/* Sade sayfalar (P2-P6) eskide kabuk içeriğinin dolgusu içinde dururdu (tc-kabuk-icerik: 24px, dar ekranda 16px); motor ve atölye tam genişliktir. */
+.tc-py-gorunum > :is(.tc-pys, .tc-pyk, .tc-pyz, .tc-pyu, .tc-pyv) { margin-inline: var(--b-5); }
+@media (max-width: 767px) {
+  .tc-py-gorunum > :is(.tc-pys, .tc-pyk, .tc-pyz, .tc-pyu, .tc-pyv) { margin-inline: var(--b-4); }
+}

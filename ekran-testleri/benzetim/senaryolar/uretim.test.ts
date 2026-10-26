@@ -132,7 +132,7 @@ describe('üretim senaryosu: akış', () => {
     // Sunucu motoru için koşu başına bir vardiya, iş merkezinin yedi günü ve bir planlama çalışması kaydı.
     assert.equal(sayac(s.cagrilar, /^POST \/api\/vardiyalar$/), 1);
     assert.equal(sayac(s.cagrilar, /^POST \/api\/vardiya-matrisi\/degistir$/), 7);
-    assert.equal(sayac(s.cagrilar, /^POST \/api\/recete-rota\/kayitlar\/yaz$/), 1);
+    assert.equal(sayac(s.cagrilar, /^POST \/api\/plan\/planlama-kayitlari\/yaz$/), 1);
     assert.deepEqual(rolu(/^POST \/api\/vardiya/), ['ornek.mudur']);
     assert.deepEqual(rolu(/^POST \/api\/(plan|recete-rota)\//), ['ornek.planlama']);
     assert.equal(sayac(s.cagrilar, /\/plan\/oner/), 0);

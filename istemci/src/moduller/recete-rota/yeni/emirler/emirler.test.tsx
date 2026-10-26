@@ -135,11 +135,11 @@ describe('R3 Üretim emirleri: komutlar', () => {
     });
     rrAc();
     const b = await emirAc();
-    const okuma = istekler.filter((i) => i.yol === '/recete-rota/durum').length;
+    const okuma = istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length;
     fireEvent.click(within(b).getByRole('button', { name: 'Plana al' }));
     const uyari = await within(b).findByRole('alert');
     expect(uyari.textContent).toContain('Emir başka yerde değişti.');
-    await waitFor(() => expect(istekler.filter((i) => i.yol === '/recete-rota/durum').length).toBeGreaterThan(okuma));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length).toBeGreaterThan(okuma));
   });
 
   it('iptal onay penceresinden sonra gider', async () => {

@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { ReceteRotaYeni } from './ReceteRotaYeni.tsx';
 import { SEKMELER } from './sekmeler.ts';
@@ -73,7 +74,7 @@ export function sunucuKur(kullanici: Kullanici, s: SunucuSecenegi = {}) {
     istekler.push({ yontem, yol, govde });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yontem === 'GET') {
-      if (yol === '/recete-rota/durum') return typeof s.durum === 'function' ? s.durum() : json(200, s.durum ?? ornekDurum());
+      if (yol === '/plan/planlama-kaynagi') return typeof s.durum === 'function' ? s.durum() : json(200, s.durum ?? ornekDurum());
       if (yol === '/recete-rota/kayitlar') return json(200, { kayitlar: s.kayitlar ?? [] });
       if (yol === '/plan/motor-yerlesimi') {
         return s.motorYok ? json(403, { kod: 'YETKISIZ', mesaj: 'Yetkiniz yok.' })

@@ -20,7 +20,8 @@ function sunucu(uyarilar: string[]): void {
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, { wcs: [], stations: [], machines: [], people: [] });
+    if (yontem === 'GET' && yol === '/plan/planlama-kayitlari') return json(200, { kayitlar: [] } satisfies KayitlarCevabi);
+    if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, { wcs: [], stations: [], machines: [], people: [] });
     if (yontem === 'GET' && yol === '/plan/motor-yerlesimi') return json(200, { ekranYerlesimi: null, uyarilar });
     if (yontem === 'GET' && yol === '/plan/motor-uyarilari') return json(200, { uyarilar });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });

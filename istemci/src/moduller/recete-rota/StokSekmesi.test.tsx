@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, DurumCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { YAZAR, ac, prototipiCalistir, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -46,7 +47,7 @@ function sunucuKur(s: Stok): void {
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [{ anahtar: ONEK, bicim: 'json', deger: BELGE, surum: 1 }] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, DURUM);
+    if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, DURUM);
     if (yontem === 'GET' && yol === '/recete-rota/statuler') {
       return json(200, { statuler: [{ id: 5, malzemeNo: 'YM-0001', ad: 'OP 10 Kesim', kaynakAdim: 'p1', renk: '#123456', tur: 'yari', zaman: '2030-01-01T00:00:00Z' }] });
     }

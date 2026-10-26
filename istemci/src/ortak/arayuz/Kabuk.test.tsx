@@ -232,11 +232,14 @@ describe('Kabuk', () => {
     );
     const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
     const secili = (ad: string) => within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('link', { name: ad }).getAttribute('aria-current');
-    const { unmount: planlamaKapat } = yeniCiz('/recete-rota/planlama-yeni/plan');
-    expect(baslik()).toBe('Reçete ve Rota');
-    expect(secili('Planlama (yeni)')).toBe('page');
-    expect(secili('Reçete ve Rota')).toBeNull();
-    planlamaKapat();
+    // Planlama Reçete ve Rota'dan ayrı sayfadır (658 b); eski çerçevesi de Planlama satırındadır.
+    for (const yol of ['/plan/studio', '/plan/eski/studio']) {
+      const { unmount } = yeniCiz(yol);
+      expect(baslik()).toBe('Planlama');
+      expect(secili('Planlama')).toBe('page');
+      expect(secili('Reçete ve Rota')).toBeNull();
+      unmount();
+    }
     // Eski adresine geçen yeni ekran (541) kendi ana menü satırını seçili tutar.
     const { unmount: kuyrukKapat } = yeniCiz('/kuyruk');
     expect(baslik()).toBe('Kuyruk');

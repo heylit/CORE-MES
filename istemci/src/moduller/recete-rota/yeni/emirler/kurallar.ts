@@ -1,4 +1,5 @@
-import type { DurumCevabi, DurumEmirleri, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumEmirleri, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
 import type { EkranYerlesimi } from '../veri.ts';

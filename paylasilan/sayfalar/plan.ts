@@ -4,13 +4,13 @@ import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 // Reçete ve Rota > Planlama grubunun aynısıdır; madde anahtarı görünümün adıdır. Planlama maddeleri planlama sayfalarını görme işlemini
 // ister (yönetici, müdür ve planlama; 195 a, 663 a), maliyet ve kâr gösteren üçü birim maliyet okumasını (planlama rolü maliyet görmez, 200 a).
 export const PLAN_SAYFALARI = [
-  { yol: '/plan', islem: 'sayfa.plan', baslik: 'Planlama', simge: 'gantt', grup: 'Planlama', sira: 10 },
+  { yol: '/plan', islem: 'sayfa.plan', baslik: 'Planlama', simge: 'dash', grup: 'Planlama', sira: 10 },
 ] as const satisfies readonly SayfaTanimi[];
 
 export const PLAN_IKINCI_MENU = {
   kok: '/plan',
   baslik: 'Planlama',
-  simge: 'gantt',
+  simge: 'dash',
   gruplar: [
     { maddeler: [
       { anahtar: 'plan', baslik: 'Planlama motoru', yol: '/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
