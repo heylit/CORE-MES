@@ -18,6 +18,7 @@ import { ocrGoruntu, ocrPdfSayfasi } from './ocr.ts';
 import { bitAc, murekkep, olcuBirlestir, olcuOnerileri, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi, type OlcuOnerisi } from './okuma.ts';
 import { useCizimOrtami } from './ortam.tsx';
 import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renklendir, type PdfBelgesi } from './pdf.ts';
+import { pdfKaydiAnahtari, saklananiAc, sayfaKaydi } from './pdf-hazir.ts';
 import './cizim.css';
 
 // Teknik resim görüntüleyicisi (teknik-resim.ts Blueprint): PDF sayfası ya da 3B modelden üretilen resim, yakınlaşma ve kaydırma, ölçü
@@ -146,6 +147,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     if (ctl.odak) { setMode3d(false); setSel(ctl.odak.id); setVal(''); setEdit(null); setDrawer(null); setSuggest(null); }
   }, [ctl.odak?.n]); // odak numarası değişince açılır
   useEffect(() => { setSel(null); setEdit(null); setZ({ k: 1, x: 0, y: 0 }); }, [doc.key]);
+
+  useEffect(() => () => { void pdfRef.current?.loadingTask.destroy(); pdfRef.current = null; }, []);
 
   const askPw = (again: boolean) => new Promise<string | null>((res) => { setBusy(null); pwRef.current = res; setPwAsk({ again, v: '' }); });
   const ensurePdf = async () => {
@@ -301,7 +304,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
     try {
       if (bicim === 'pdf') {
         setBusy({ t: 'PDF açılıyor', steps: PDF_ADIMLARI, i: 0 }); await bekle(60);
-        pdfRef.current = null; imgRef.current = null; pdfSrc.current = { bytes, hash: await dosyaOzeti(bytes) };
+        // Önceki belge çalışanda da bırakılır: pdf.js ayrı çalışanda belgeyi kendisi atmaz (731).
+        void pdfRef.current?.loadingTask.destroy(); pdfRef.current = null; imgRef.current = null; pdfSrc.current = { bytes, hash: await dosyaOzeti(bytes) };
         await showPdfPage(1, name, key);
       } else if (bicim) {
         const kindName = bicim === 'stl' ? 'STL' : bicim === 'iges' ? 'IGES' : 'STEP';
@@ -326,12 +330,13 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
   };
   const showPdfPage = async (n: number, name: string, key: string) => {
     const src = pdfSrc.current; if (!src) return;
-    const cf = cfgOf(), ck = 'pdf:' + src.hash + '#' + n + ayarImzasi(cf, PDF_ANAHTARLARI);
+    const cf = cfgOf(), ck = pdfKaydiAnahtari(src.hash, n, cf);
     imgRef.current = null;
     let C = freshRef.current ? undefined : PDF_BELLEGI.get(ck);
+    // Sıra: bellek, paketle gelen hazır okuma (731), cihaz önbelleği, hesap.
     if (!C && !freshRef.current) {
-      const c = await depo.Cache.get(ck) as SaklananPdfKaydi | undefined;
-      if (c && c.inkBits) { const { inkBits, ...geri } = c; C = { ...geri, ink: bitAc(inkBits, c.w * c.h) }; bellegeKoy(ck, C); }
+      const hazir = saklananiAc(ctl.hazirVeri?.[ck]) ?? saklananiAc(await depo.Cache.get(ck));
+      if (hazir) { C = hazir; bellegeKoy(ck, C); }
     }
     if (!C) {
       setBusy((b) => ({ ...(b || { t: 'PDF açılıyor', steps: PDF_ADIMLARI }), i: 1 })); await bekle();
@@ -341,15 +346,7 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       const R = await pdfCiz(pdf, n, cf);
       setBusy((b) => b && { ...b, i: 2 }); await bekle();
       imgRef.current = R.img;
-      const ink = murekkep(R.img);
-      const textless = R.items.length < 8 || R.junk, cls = AKTol.detectClass(R.items.map((o) => o.s).join(' '));
-      const t1 = performance.now();
-      const dims: OlcuListesi = textless ? [] : olcuOnerileri(R.items, cls, { w: R.w, h: R.h, ink, ex: cf.ex, auto: cf.auto, diag: !!ctl.tani });
-      const tDims = performance.now() - t1;
-      C = {
-        w: R.w, h: R.h, pages: R.pages, scale: R.scale, items: R.items, junk: R.junk, textless, cls, dims, ...(dims.stats ? { stats: dims.stats } : {}),
-        ...(dims.diag ? { diag: dims.diag } : {}), ink, png: {}, enc: !!pdf.arkonEnc, ms: { render: Math.round(R.ms), dims: Math.round(tDims) },
-      };
+      C = sayfaKaydi(R, cf, !!pdf.arkonEnc, !!ctl.tani);
       bellegeKoy(ck, C);
     }
     const K = C;

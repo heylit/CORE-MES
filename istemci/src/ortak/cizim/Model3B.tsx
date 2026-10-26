@@ -11,12 +11,13 @@ import './cizim.css';
 
 interface Vektor { x: number; y: number; z: number; set(x: number, y: number, z: number): void; normalize(): Vektor; multiplyScalar(s: number): Vektor }
 interface Renk { set(c: number): void }
-interface Malzeme { color: Renk; visible: boolean; transparent?: boolean; opacity?: number }
-interface Nesne { position: Vektor; rotation: Vektor; add(o: Nesne): void; material: Malzeme }
-interface Geometri { setAttribute(ad: string, a: unknown): void; setIndex(a: unknown): void; computeVertexNormals(): void }
+interface Atilir { dispose(): void }
+interface Malzeme extends Atilir { color: Renk; visible: boolean; transparent?: boolean; opacity?: number }
+interface Nesne { position: Vektor; rotation: Vektor; add(o: Nesne): void; material: Malzeme; geometry: Atilir }
+interface Geometri extends Atilir { setAttribute(ad: string, a: unknown): void; setIndex(a: unknown): void; computeVertexNormals(): void }
 interface Kamera extends Nesne { up: Vektor; aspect: number; updateProjectionMatrix(): void }
-interface Denetim { target: Vektor; enableDamping: boolean; dampingFactor: number; autoRotate: boolean; autoRotateSpeed: number; enabled: boolean; update(): void }
-interface Cizici { domElement: HTMLCanvasElement; localClippingEnabled: boolean; outputEncoding: unknown; setPixelRatio(r: number): void; setSize(w: number, h: number): void; render(s: Nesne, k: Kamera): void; dispose(): void }
+interface Denetim extends Atilir { target: Vektor; enableDamping: boolean; dampingFactor: number; autoRotate: boolean; autoRotateSpeed: number; enabled: boolean; update(): void }
+interface Cizici { domElement: HTMLCanvasElement; localClippingEnabled: boolean; outputEncoding: unknown; setPixelRatio(r: number): void; setSize(w: number, h: number): void; render(s: Nesne, k: Kamera): void; dispose(): void; forceContextLoss(): void }
 interface Duzlem { constant: number }
 type Kurucu<T> = new (...a: never[]) => T;
 interface Three {
@@ -56,15 +57,17 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       const mat = yeni(T.MeshStandardMaterial, {
         color: 0x9fb3cc, metalness: 0.55, roughness: 0.38, side: T.DoubleSide, clippingPlanes: [plane], polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
       });
+      // Çizici kapanınca GPU'daki ağ ve malzeme kendiliğinden bırakılmaz: tablette her açılan model belleği büyütmesin diye kapanışta tek tek bırakılır.
+      const atilacaklar: Atilir[] = [mat, ctl];
       const grp = yeni(T.Group);
       for (const m of data.meshes) {
-        const g = yeni(T.BufferGeometry); g.setAttribute('position', yeni(T.BufferAttribute, m.p, 3));
+        const g = yeni(T.BufferGeometry); atilacaklar.push(g); g.setAttribute('position', yeni(T.BufferAttribute, m.p, 3));
         if (m.n) g.setAttribute('normal', yeni(T.BufferAttribute, m.n, 3));
         g.setIndex(yeni(T.BufferAttribute, m.i, 1)); if (!m.n) g.computeVertexNormals();
         grp.add(yeni(T.Mesh, g, mat));
       }
       const eg = yeni(T.BufferGeometry); eg.setAttribute('position', yeni(T.BufferAttribute, data.ep, 3));
-      const emat = yeni(T.LineBasicMaterial, { color: 0xffffff, clippingPlanes: [plane] }); grp.add(yeni(T.LineSegments, eg, emat));
+      const emat = yeni(T.LineBasicMaterial, { color: 0xffffff, clippingPlanes: [plane] }); atilacaklar.push(eg, emat); grp.add(yeni(T.LineSegments, eg, emat));
       S.add(grp);
       S.add(yeni(T.HemisphereLight, 0xdfe8ff, 0x1a1e24, 0.9));
       const d1 = yeni(T.DirectionalLight, 0xffffff, 1.1); d1.position.set(1, 1.4, 2); S.add(d1);
@@ -74,7 +77,7 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       if (gh) {
         gh.material.transparent = true; gh.material.opacity = 0.35;
         gh.rotation.x = Math.PI / 2; gh.position.set(c[0], c[1], bb.mn[2]! - diag * 0.002);
-        S.add(gh);
+        S.add(gh); atilacaklar.push(gh.geometry, gh.material);
       }
       const setView = (dir: readonly number[]) => {
         const D = diag * 2.1, v = yeni(T.Vector3, dir[0], dir[1], dir[2]).normalize();
@@ -97,7 +100,8 @@ export function Model3B({ data, fa, sade = false }: { data: Gorunum3B; fa: numbe
       const dongu = () => { ctl.update(); R.render(S, cam); raf = requestAnimationFrame(dongu); }; dongu();
       sahne.current = {
         gorus: (k) => setView(views[k]), denetim: ctl, duzlem: plane, malzeme: mat, renklendir,
-        kapat: () => { cancelAnimationFrame(raf); ro?.disconnect(); R.dispose(); R.domElement.remove(); },
+        // Bağlam da bırakılır: tarayıcı açık WebGL bağlamı sayısını sınırlar, sökülen tuvalin bağlamı çöp toplanana kadar yaşar.
+        kapat: () => { cancelAnimationFrame(raf); ro?.disconnect(); for (const a of atilacaklar) a.dispose(); R.dispose(); R.forceContextLoss(); R.domElement.remove(); },
       };
       hazirYaz(true);
     })().catch((h: unknown) => { if (canli) hataYaz(h instanceof Error ? h.message : String(h)); });
