@@ -316,3 +316,7 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   stok teslim durumunu taşımaz). Teslim alınmamış numune de listede görünür.
 - Lot büyüklüğü paketin hedefidir (adım adedi); parça bölünmüş pakette parçanın adedidir. Lot kararı Arkon'da düzeltilmez; düzeltme Kalite Merkezi'ndedir.
 - Paralel adım (639e): reddedilen durum kaydından sonra ekrana dönen TMI hâli (`tmidekiHal`) emir düzeyindedir; yansıma satırı iş emrini taşımaz (`sorgular.ts` kilit dışında). İki açık adımda ekran reddedilen adımın hâlini emrin özetinden görür. Ekran işi (aynı emrin iki adımı, uyarı gösterimi) 639f'de.
+
+## Terminale dosya iletimi (kart #731 A) - bağlamada kapanacak
+- Tembel kip yalnız yeni ekranda; eski çerçeve paketleri dosyalarıyla okumaya devam eder. Eski ekran kalkınca kapanır.
+- Arkon dosyaları ortak `dosya` deposuna taşınınca (kart #732) `blob` yolları ve temizlikteki anılma taraması yeniden bağlanır.

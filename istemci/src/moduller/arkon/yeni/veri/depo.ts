@@ -68,6 +68,11 @@ export interface ArkonDeposu {
   onStatus(f: (s: ArkonDurumu) => void): () => void;
   tasiyiciKur(t: Pick<Tasiyici, 'fetch' | 'EventSource'> | null): void;
   sha256(u: Uint8Array): Promise<string>;
+  // Tembel kip (kart #731): paket belgesindeki dosya `{ $blob, t, n }` işaretiyle gelir; açılacak paket `coz` ile baytlanır.
+  tembelKur(): void;
+  coz<T>(x: T): Promise<T>;
+  // Arka planda cihaza indirilecek belgeler: öncelikliler (açık iş, kuyruk) önce iner ve temizlikte silinmez.
+  dosyalariIndir(oncelikli: readonly unknown[], diger?: readonly unknown[]): void;
 }
 
 // Yalnız bu dosya store.ts'yi yükler (alımda dosya bu klasöre taşınınca yalnız bu satır değişir).
@@ -94,6 +99,7 @@ export async function depoyuBaslat(g: BaslatmaGirdisi): Promise<ArkonDeposu> {
     tohumla(g.depo ?? window.localStorage, { kokAdres: g.koken ?? window.location.origin, kisi: g.kisi, tema: g.tema });
   } catch { /* depolama kapalı: veri katmanı bellekte çalışır, oturum sunucudan okunur */ }
   const depo = await depoModulu();
+  depo.tembelKur();
   depo.tasiyiciKur(g.tasiyici);
   await depo.init();
   return depo;

@@ -5,6 +5,7 @@ import { modelDosyasi, saatMetni } from '../../../../../../arkon/web/src/data/bu
 import type { Gorunum3B } from '../../../../ortak/cizim/model.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
+import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
 import { tonDurumu } from './kurallar.ts';
 import { durumAdi, durumRengi } from './Parcalar.tsx';
@@ -67,19 +68,21 @@ const Model3B = lazy(async () => ({ default: (await import('../cizim/index.tsx')
 function UzakModel({ pkg }: { pkg: Is['pkg'] }) {
   const { depo } = useArkon();
   const [gorunum, gorunumYaz] = useState<{ data: Gorunum3B; fa: number } | null>(null);
-  const dosya = pkg ? modelDosyasi(pkg.files, pkg.primary) : null;
-  const bayt = dosya?.bytes;
+  const dosya0 = pkg ? modelDosyasi(pkg.files, pkg.primary) : null;
+  // Paket dosyasız gelir (kart #731): model dosyası ve hazır veri burada baytlanır.
+  const cozuk = useCozulmus(depo, pkg && dosya0 ? { dosya: dosya0, derived: pkg.derived } : null, pkg && dosya0 ? pkg.id + ':' + pkg.version + ':' + dosya0.name : '');
+  const bayt = cozuk && baytiVar(cozuk.dosya.bytes) ? cozuk.dosya.bytes : null;
   useEffect(() => {
     let canli = true;
     gorunumYaz(null);
-    if (!pkg || !dosya || !bayt) return undefined;
+    if (!pkg || !cozuk || !bayt) return undefined;
     void Promise.all([import('../../../../ortak/cizim/model.ts'), import('../../../../ortak/cizim/kurallar.ts')])
-      .then(([m, k]) => m.modelIsle(depo, bayt, dosya.name, () => undefined,
-        { need: '3d', derived: (pkg.derived as Record<string, unknown> | undefined) ?? null, cfg: k.ayarDuzelt(pkg.readCfg), yalnizHazir: true }))
+      .then(([m, k]) => m.modelIsle(depo, bayt, cozuk.dosya.name, () => undefined,
+        { need: '3d', derived: (cozuk.derived as Record<string, unknown> | undefined) ?? null, cfg: k.ayarDuzelt(pkg.readCfg), yalnizHazir: true }))
       .then((r) => { if (canli && r?.V) gorunumYaz({ data: r.V, fa: r.fa }); }, () => undefined);
     return () => { canli = false; };
-    // Paket sürümü ve dosya değişince yeniden okunur (eskisi gibi).
-  }, [pkg?.id, pkg?.version, dosya?.name]);
+    // Paket sürümü ve dosya değişince yeniden okunur (eskisi gibi); dosya çözülünce de.
+  }, [pkg?.id, pkg?.version, dosya0?.name, cozuk]);
   if (gorunum === null) return null;
   return <div className="tc-ay1-uzak-3b"><Suspense fallback={null}><Model3B data={gorunum.data} fa={gorunum.fa} sade /></Suspense></div>;
 }
