@@ -137,6 +137,49 @@ describe('Kalite Merkezi köprüsü (uygulamanın yerel sunucu sözleşmesi -> T
     expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/kayitlar/ncr/ncr_1/yaz', { govde: { no: 'y' }, surum: 5 });
   });
 
+  // 692: uygulama aynı açık kaydı yeniden kaydederken (ölçüm oturumu, resim düzenleyici) nesnedeki eski "guncelleme"yi taban gönderir.
+  describe('aynı açık kaydın ardışık kaydı', () => {
+    const akis = (surum: number, guncelleme: string): KmDegisiklikCevabi => ({ surum, degisiklikler: [{ koleksiyon: 'insp', kimlik: 'i_1', govde: { no: 'M-1', guncelleme }, surum }] });
+    function kurAkisli() {
+      let sonraki = akis(5, 'T0');
+      let surum = 5;
+      const get = vi.fn(async (yol: string): Promise<unknown> => (yol === OLCU_ALETI_YOLU ? { cihazlar: [] } : sonraki));
+      const post = vi.fn(async (): Promise<KmSurumCevabi> => ({ surum: ++surum }));
+      const kopru = kopruKur({ get, post } as unknown as Istemci, vi.fn(async () => null));
+      const yaz = (taban: string, guncelleme: string) =>
+        kopru.isle({ adres: `api/doc/insp/i_1?taban=${taban}`, yontem: 'PUT', govde: JSON.stringify({ no: 'M-1', guncelleme }) });
+      const esitle = async (c: KmDegisiklikCevabi) => { sonraki = c; surum = Math.max(surum, c.surum); await kopru.isle({ adres: 'api/sync?since=0', yontem: 'GET', govde: null }); };
+      return { post, yaz, esitle };
+    }
+
+    it('izinli: kendi kaydından sonra aynı tabanla ikinci ve üçüncü kayıt gider, sürüm köprünün son yazmasıdır', async () => {
+      const { post, yaz, esitle } = kurAkisli();
+      await esitle(akis(5, 'T0'));
+      expect((await yaz('T0', 'T1')).durum).toBe(200);
+      expect((await yaz('T0', 'T2')).durum).toBe(200);
+      // Akış kendi yazmasını aynı sürümle geri getirir: liste korunur.
+      await esitle(akis(7, 'T2'));
+      expect((await yaz('T0', 'T3')).durum).toBe(200);
+      expect(post.mock.calls.map((c) => (c as unknown[])[1])).toEqual([
+        { govde: { no: 'M-1', guncelleme: 'T1' }, surum: 5 },
+        { govde: { no: 'M-1', guncelleme: 'T2' }, surum: 6 },
+        { govde: { no: 'M-1', guncelleme: 'T3' }, surum: 7 },
+      ]);
+    });
+
+    it('reddedilen: kendi kaydından sonra başkası daha yeni sürüm yazdıysa eski taban yine 409 alır, yazma gönderilmez', async () => {
+      const { post, yaz, esitle } = kurAkisli();
+      await esitle(akis(5, 'T0'));
+      expect((await yaz('T0', 'T1')).durum).toBe(200);
+      await esitle(akis(9, 'B1'));
+      expect(await yaz('T0', 'T2')).toEqual({ durum: 409, json: { hata: ESKI_SURUM_ILETISI } });
+      expect(await yaz('T1', 'T2')).toEqual({ durum: 409, json: { hata: ESKI_SURUM_ILETISI } });
+      expect(post).toHaveBeenCalledTimes(1);
+      expect((await yaz('B1', 'T3')).durum).toBe(200);
+      expect(post).toHaveBeenLastCalledWith('/kalite-merkezi/kayitlar/insp/i_1/yaz', { govde: { no: 'M-1', guncelleme: 'T3' }, surum: 9 });
+    });
+  });
+
   it('sunucunun çakışma cevabı (409) iletisiyle uygulamaya döner', async () => {
     const { kopru } = kur({ post: () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: ESKI_SURUM_ILETISI }); } });
     expect(await kopru.isle({ adres: 'api/doc/ncr/ncr_1', yontem: 'PUT', govde: '{}' })).toEqual({ durum: 409, json: { hata: ESKI_SURUM_ILETISI } });
