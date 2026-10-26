@@ -122,6 +122,16 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     expect(olaylar(istekler).some((e) => e.state === 'stopped')).toBe(false);
   }, 40000);
 
+  it('menüde istasyon değiştirme var; istasyon penceresi açılır', async () => {
+    telefon();
+    sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Menü' }));
+    fireEvent.click(await screen.findByRole('button', { name: /İstasyonu değiştir/ }));
+    expect(await screen.findByRole('dialog', { name: /Hangi istasyonda/ })).toBeTruthy();
+  }, 40000);
+
   it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {
     telefon();
     sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op'] } } }]));

@@ -85,6 +85,15 @@
   display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0 var(--b-3); align-self: flex-start;
   border: var(--cizgi-ince) solid var(--hazard); border-radius: var(--yari-tam); background: color-mix(in srgb, var(--hazard) 14%, var(--panel)); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer;
 }
+.tc-ay1-malzeme-cip {
+  display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); align-self: flex-start;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-ay1-malzeme-cip span { color: var(--muted); }
+.tc-ay1-malzeme-cip[data-ton="hata"] { border-color: var(--stop); }
+.tc-ay1-malzeme-cip[data-ton="uyari"] { border-color: var(--hold); }
+.tc-ay1-malzeme-cip[data-ton="bilgi"] { border-color: var(--sig); background: color-mix(in srgb, var(--sig) 14%, var(--panel2)); }
+.tc-ay1-malzeme-cip[data-ton="tamam"] { border-color: var(--run); }
 .tc-ay1-not {
   display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
   background: color-mix(in srgb, var(--hazard) 12%, var(--panel2)); color: var(--ink); font-size: var(--yazi-s);

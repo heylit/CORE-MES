@@ -445,7 +445,7 @@ export function DurumLambasi({ durum, since }: { durum: string; since: number })
   );
 }
 
-export function Satir({ simge, baslik, alt, tikla }: { simge: 'chart' | 'user' | 'expand' | 'ruler'; baslik: string; alt: string; tikla: () => void }): ReactNode {
+export function Satir({ simge, baslik, alt, tikla }: { simge: 'chart' | 'user' | 'expand' | 'ruler' | 'cpu'; baslik: string; alt: string; tikla: () => void }): ReactNode {
   return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;
 }
 
