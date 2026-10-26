@@ -231,11 +231,11 @@ export const hurdaNedenleriniCevir = (nedenler: readonly HurdaNedeni[]) =>
 // malzeme kartıdır (bağlamada parça buna bağlanır), adımsız eski emirde null.
 export const emirPaketKimligi = (emirId: number) => `tmi-ue-${emirId}`;
 
-export function emirdenTaslakPaket(emir: Emir, istasyon: Istasyon) {
+export function emirdenTaslakPaket(emir: Emir, istasyon: Istasyon, proje = '') {
   const acilma = Date.parse(emir.acilma);
   return {
     id: emirPaketKimligi(emir.id), no: emir.emirNo, opType: TIP[istasyon.tip], st: {},
-    partNo: emir.parcaNo, malzemeNo: emir.malzemeNo ?? null, part: emir.parcaAd, rev: 'A', op: '', machine: istasyon.kod,
+    partNo: emir.parcaNo, malzemeNo: emir.malzemeNo ?? null, part: emir.parcaAd, proje, rev: 'A', op: '', machine: istasyon.kod,
     target: emir.adet, cycle: 0, due: '', priority: 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: [], status: 'draft', version: 0, dirty: true,
     createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
@@ -250,7 +250,7 @@ export const isEmriPaketKimligi = (isEmriId: number) => `tmi-ie-${isEmriId}`;
 // Elle bölünmüş işin (kart #1572) her parçası ayrı pakettir: kendi makinesi, adedi ve sırası. Kayıt ve sayım yine iş emrine yazılır.
 export const parcaPaketKimligi = (isEmriId: number, no: number) => `tmi-ie-${isEmriId}-p${no}`;
 
-export const TMI_PAKET_ALANLARI = ['no', 'partNo', 'malzemeNo', 'part', 'rev', 'op', 'machine', 'mc', 'target', 'cycle', 'setup', 'due', 'priority', 'tmi'] as const;
+export const TMI_PAKET_ALANLARI = ['no', 'partNo', 'malzemeNo', 'part', 'proje', 'rev', 'op', 'machine', 'mc', 'target', 'cycle', 'setup', 'due', 'priority', 'tmi'] as const;
 const SABLON_ALANLARI = ['files', 'primary', 'plan', 'steps', 'rules', 'samp', 'readCfg', 'derived', 'material', 'note'] as const;
 
 export interface IsEmriPaketGirdisi {
@@ -262,6 +262,8 @@ export interface IsEmriPaketGirdisi {
   };
   ekAciklama?: string | null | undefined;
   emir: Pick<Emir, 'parcaNo' | 'parcaAd' | 'acan' | 'acilma'>;
+  // Emrin projesinin adı (projeler modülü); projesiz emirde boş metin.
+  proje?: string | undefined;
   // İstasyonu bilinmeyen (kaynak seçilmemiş) iş emrinin paketi Hazırlık'ta görünür ama yayınlanamaz (`yayinEksigi`, kart #1257).
   istasyon: Istasyon | null;
   makineKodu: string | null;
@@ -334,7 +336,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
   const kopya = sablon === null ? {} : Object.fromEntries(SABLON_ALANLARI.filter((a) => a in sablon).map((a) => [a, sablon[a]]));
   return {
     id: g.parca ? parcaPaketKimligi(ie.id, g.parca.no) : isEmriPaketKimligi(ie.id), no: ie.emirNo, opType, st: sablon !== null && sablon['opType'] === opType && kayitMi(sablon['st']) ? sablon['st'] : {},
-    partNo: emir.parcaNo, malzemeNo: ie.malzemeNo, part: emir.parcaAd, rev: g.revizyon ?? '', op: `Op ${ie.opNo} · ${ie.ad}`,
+    partNo: emir.parcaNo, malzemeNo: ie.malzemeNo, part: emir.parcaAd, proje: g.proje ?? '', rev: g.revizyon ?? '', op: `Op ${ie.opNo} · ${ie.ad}`,
     machine: istasyon?.kod ?? '', mc: g.makineKodu ?? '', target: g.parca?.adet ?? ie.adimAdedi ?? ie.adet, cycle: birim === null ? null : Math.round(birim * 600) / 10, setup: ayar,
     due: ie.teslim ?? '', priority: ie.oncelik === 1 ? 'urgent' : 'normal', material: '', note: '',
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,

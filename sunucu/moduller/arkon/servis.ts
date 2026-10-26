@@ -26,6 +26,7 @@ import {
   eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
 } from '../istasyonlar/disari.ts';
+import { projeAdlari } from '../projeler/disari.ts';
 import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
@@ -41,7 +42,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi,
+  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -216,13 +217,17 @@ async function tmiTaslaklari(db: Db, kayitli: readonly KayitliPaket[], acik?: re
   const istasyonlarById = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
   const kayitliKimlik = new Set(kayitli.map((b) => b.kimlik));
   const emirler = acik ?? (await acikEmirler(db));
+  // 664: terminal başlığında Proje; adlar tek okumadır, projesiz emirde boş metin.
+  const emirProjesi = await emirlerinProjeleri(db, emirler.map((e) => e.id));
+  const projeler = await projeAdlari(db, [...emirProjesi.values()]);
+  const projeAdi = (e: Emir) => projeler.get(emirProjesi.get(e.id) ?? 0) ?? '';
   const yeni = yalniz !== undefined ? [] : emirler.flatMap((emir) => {
     const istasyon = istasyonlarById.get(emir.istasyon.id);
     if ((emir.malzemeNo ?? null) !== null || istasyon === undefined || kayitliKimlik.has(emirPaketKimligi(emir.id))) return [];
-    const govde = emirdenTaslakPaket(emir, istasyon);
+    const govde = emirdenTaslakPaket(emir, istasyon, projeAdi(emir));
     return [{ kimlik: govde.id, surum: icerikSurumu(govde), govde: govde as unknown }];
   });
-  const isEmri = await isEmriTaslaklari(db, kayitli, kayitliKimlik, emirler, istasyonlarById, yalniz);
+  const isEmri = await isEmriTaslaklari(db, kayitli, kayitliKimlik, emirler, istasyonlarById, projeAdi, yalniz);
   // Bölünmüş işin bütün paketi taslak olarak açılmaz: operatöre parçaları düşer.
   for (const [kimlik, govde] of isEmri) {
     const tmi = govde['tmi'] as { bolunmus?: boolean } | undefined;
@@ -236,7 +241,7 @@ async function tmiTaslaklari(db: Db, kayitli: readonly KayitliPaket[], acik?: re
 // durumu bütün açık rotalı iş emirleri için tek okumadır (tek paket okumasında da): sıra kaynaktaki öteki işlere göredir. Kart #1257: rotasız emrin
 // adımları da pakettir (plan durumu yok); istasyonu bilinmeyen iş emri istasyonsuz paket olur, Hazırlık nedenini gösterir ve yayınlanamaz.
 async function isEmriTaslaklari(
-  db: Db, kayitli: readonly KayitliPaket[], kayitliKimlik: ReadonlySet<string>, acik: readonly Emir[], istasyonlarById: ReadonlyMap<number, Istasyon>, yalniz?: number,
+  db: Db, kayitli: readonly KayitliPaket[], kayitliKimlik: ReadonlySet<string>, acik: readonly Emir[], istasyonlarById: ReadonlyMap<number, Istasyon>, projeAdi: (e: Emir) => string, yalniz?: number,
 ): Promise<Map<string, Record<string, unknown>>> {
   const emirler = new Map(acik.map((e) => [e.id, e]));
   const rotali = (await planlanacakIsEmirleri(db)).filter((i) => emirler.has(i.uretimEmriId));
@@ -274,7 +279,7 @@ async function isEmriTaslaklari(
     const anahtar = `${ie.malzemeNo}:${ie.opNo}`;
     if (kayitsiz && sablon === null && !talimatlar.has(anahtar)) talimatlar.set(anahtar, (await gecerliTalimat(db, ie.malzemeNo, ie.opNo))?.metin ?? null);
     const girdi: IsEmriPaketGirdisi = {
-      isEmri: ie, emir, istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(anahtar) ?? null, sablon,
+      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(anahtar) ?? null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null ? null : rotaEksik.get(revizyonId) ?? null,
     };
