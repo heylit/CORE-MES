@@ -13,7 +13,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { PLANLAMA_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
 
 export const PAROLA = 'dogru-parola-1';
 
@@ -207,7 +207,7 @@ export function planTestOrtami() {
     tamGun = (await ortam.sahip.sorgu<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('RT gun ilk yari', '00:00', '12:00'), ('RT gun son yari', '12:00', '00:00') RETURNING id")).map((x) => x.id);
     await tamGunVer(merkez.id);
     merkezId = merkez.id;
-    await tamam(c.yonetici, 'POST', '/recete-rota/kayitlar/yaz', {
+    await tamam(c.yonetici, 'POST', '/plan/planlama-kayitlari/yaz', {
       anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
       deger: {
         surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,

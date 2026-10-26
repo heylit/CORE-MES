@@ -2,6 +2,15 @@
 
 Her çekirdek çekme isteği bu dosyaya kendi satırlarını ekler: eklenen, değişen, silinen; değişen onaylı kararlar.
 
+## 731-cekirdek-gzip (kart #731; kullanıcı kararları 725-730, 26.10.2026)
+
+- Değişen: `uc.ts` ikili cevap. Sıkışan türdeki dosya (`model/step`, `model/iges`, `model/stl`, `model/gltf+json`, `image/vnd.dxf`,
+  `application/octet-stream`) 64 KiB'ı aşıyor ve istemci gzip kabul ediyorsa en hızlı gzip düzeyiyle sıkışmış gider; Content-Length
+  yazılmaz, `vary: accept-encoding` yazılır. PDF ve resim sıkıştırılmaz (içten sıkışık). Akış bildirilen boyutu tutmazsa sıkışmış
+  cevap da tamamlanmış görünmez (bağlantı kesilir ya da ilk bayttan önceyse 500).
+- Neden: terminal STEP dosyasını ağdan bütün iner; metin STEP ağda birkaç kat küçülür. Yeni paket yok (`node:zlib`).
+- Test: `uc-ikili.test.ts` üç yeni test. Göç yok. Silinen: yok. Önbellek ve denetim davranışı aynı.
+
 ## 852-projeler-rolleri (kart #852; kullanıcı onayı 12.10.2026 "Öneri")
 
 - Eklenen: göç `*_kisiler_projeler_islemleri.sql`: `sayfa.projeler` ve `projeler.oku` müdür, planlama, satın alma, kalite, depo ve

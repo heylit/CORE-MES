@@ -6,8 +6,8 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { KAPASITE_GUNU } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { DurumCevabi, KapasiteCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
+import type { DurumCevabi, KapasiteCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -210,8 +210,11 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const bos = dolu((await istek(tam, 'GET', '/recete-rota/durum')).json() as DurumCevabi);
     assert.deepEqual([bos.items, bos.wcs, bos.stations, bos.machines], [[], [], [], []]);
     assert.equal(bos.malzemeKesildi, false);
-    // Plan ayarı planın sahibinden (kart #1186): prototipin settings alan adlarıyla, canlı ayar.
-    assert.deepEqual(bos.settings, { rule: 'oncelik', dir: 'ileri', buffer: 2, freezeDays: 2, peopleLimit: false, planDrafts: false });
+    // Plan ayarı planın sahibinden (kart #1186): prototipin settings alan adlarıyla, canlı ayar. 658 b: bu modülün durumunda planın alanı
+    // yoktur; Reçete ve Rota ekranı birleşik durumu planın ucundan (aynı yetkiyle) okur.
+    assert.equal('settings' in bos || 'planCanli' in bos || 'calisanAdimlar' in bos, false);
+    const birlesik = (await istek(tam, 'GET', '/plan/planlama-kaynagi')).json() as DurumCevabi;
+    assert.deepEqual(birlesik.settings, { rule: 'oncelik', dir: 'ileri', buffer: 2, freezeDays: 2, peopleLimit: false, planDrafts: false });
     assert.deepEqual(bos.moves, [], 'tam yetkili kullanıcıya stok hareketi dilimi gelir; henüz hareket yok');
     assert.equal(bos.people.some((k) => k.id === String(yazarId)), true);
     assert.deepEqual(bos.people.find((k) => k.id === String(yazarId)), {
@@ -390,7 +393,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     await komut('/ik/izinler/leave_rrk/kaydet',
       { govde: { id: 'leave_rrk', kind: 'leave', empId: 'emp_rrk', tur: 'Ücretsiz izin', baslangic: gun(3), bitis: gun(3), gun: 1, durum: 'Onaylandı' }, surum: null });
 
-    const cevap = await istek(tam, 'GET', '/recete-rota/kapasite');
+    const cevap = await istek(tam, 'GET', '/plan/planlama-kapasitesi');
     assert.equal(cevap.statusCode, 200, cevap.body);
     const k = cevap.json() as KapasiteCevabi;
     assert.equal(k.baslangic, gun(0));
@@ -401,9 +404,9 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
       id: String(kisi), izinli: [gun(3)], fazlaMesai: [{ tarih: gun(2), dakika: 120 }], paylar: [{ wcId: String(a), pay: 0.5 }, { wcId: String(b), pay: 0.5 }],
     });
     // İstasyon ve kişi okuma yetkisi olmayana dilimler null; Reçete ve Rota okuma yetkisi olmayan okuyamaz.
-    const okurun = (await istek(okur, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
+    const okurun = (await istek(okur, 'GET', '/plan/planlama-kapasitesi')).json() as KapasiteCevabi;
     assert.deepEqual([okurun.isMerkezleri, okurun.istasyonlar, okurun.kisiler], [null, null, null]);
-    assert.equal((await istek(yetkisiz, 'GET', '/recete-rota/kapasite')).statusCode, 403);
+    assert.equal((await istek(yetkisiz, 'GET', '/plan/planlama-kapasitesi')).statusCode, 403);
   });
 
   // 13.4: makineye atanan kişi kapasite listesinde, makinenin istasyonunun iş merkezinde pay sahibidir.
@@ -419,7 +422,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: yalniz, yuzde: '60.00' })).statusCode, 200);
     assert.equal((await istek(tam, 'POST', `/makineler/${mk}/kisiler/ata`, { kisiId: ikisi, yuzde: '40.00' })).statusCode, 200);
     assert.equal((await istek(tam, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: ikisi, yuzde: '20.00' })).statusCode, 200);
-    const k = (await istek(tam, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
+    const k = (await istek(tam, 'GET', '/plan/planlama-kapasitesi')).json() as KapasiteCevabi;
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(yalniz))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
     assert.deepEqual(k.kisiler?.find((x) => x.id === String(ikisi))?.paylar, [{ wcId: String(m), pay: 0.6 }]);
   });
@@ -444,7 +447,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const kayit = ((await istek(tam, 'GET', '/kisiler')).json() as { kisiler: { id: number; surum: number }[] }).kisiler.find((k) => k.id === pasif)!;
     await yaz(`/kisiler/${pasif}/pasife-al`, { surum: kayit.surum });
 
-    const k = (await istek(tam, 'GET', '/recete-rota/kapasite')).json() as KapasiteCevabi;
+    const k = (await istek(tam, 'GET', '/plan/planlama-kapasitesi')).json() as KapasiteCevabi;
     const satir = (id: number) => k.kisiler?.find((x) => x.id === String(id));
     assert.deepEqual(satir(makineci)?.paylar, [{ wcId: String(m), pay: 0.4 }], 'yalnız makine ataması olan kişi Plan gibi sayılır');
     assert.equal(satir(pasif), undefined, 'pasif kişi kapasitede yok');

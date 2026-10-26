@@ -6,7 +6,7 @@ import { expect, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/recete-rota/planlama-yeni', '/malzemeler', '/kalite-merkezi',
+  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/plan', '/malzemeler', '/kalite-merkezi',
   '/kalite-merkezi/muayeneler', '/finans/yeni', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 

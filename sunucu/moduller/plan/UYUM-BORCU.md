@@ -56,3 +56,16 @@
 
 ## Plan akışı bağlaması (kart 625, 26.10.2026)
 - Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, P-B27 ve P-B28 (627), ekranı olmayan uçlar.
+
+## Planlamanın plan modülüne taşınması (658 c, 26.10.2026)
+- P-B29 (674 b, kullanıcı: "şimdilik kalsın, taşıma aşamasındayız"): emir önceliği ile sipariş tutarı ve müşteri sınıfı plan motoruna girmiyor. Taşıma bitince kullanıcıya yeniden sorulur.
+- P-B35: `planMotoruCozucusu` kaydı ve kablolama bağı ADR 0020'den sonra aynı modülün iki ucunu bağlar (çözücü de plan modülünde); kayıt
+  kalkıp plan servisi `sunucuPlanCozucusu`'nu doğrudan çağırabilir. 625n'in davranışına dokunulmadı.
+- P-B30: planlama kaydını yazmak hem `recete-rota.yaz` hem `plan.yaz` ister (taşımadan önceki çift denetim aynen); bağlamada tek işleme iner.
+- P-B31: Reçete ve Rota'nın bazı sunucu testleri (RR-11, RR-18/19, EMR) birleşik durumu ve kapasiteyi plan uçlarından okur; testler modül
+  sınırına göre ayrılınca plan modülüne geçer.
+- P-B32: eski planlama çerçevesinin derlemesi (`istemci/.../recete-rota/planlama-derle.ts`) motoru bu modülün klasöründen gömer; çerçeve
+  kalkınca kalkar.
+- P-B33: Reçete ve Rota ana kaydında plan ayarı alanları (settings) durur; plan bunları `planlama-kaynagi` ile okur. Ayarın sahibi bağlamada
+  plan modülüne geçer.
+- P-B34: `siparisler/disari.ts` yorumu motoru hâlâ Reçete ve Rota'ya yazar; siparişler modülüne dokunulmadı, yorum o modülün sırasında düzelir.

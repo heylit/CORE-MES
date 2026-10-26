@@ -14,7 +14,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { uretimSayimiYansit } from './servis.ts';
-import { urunSevkiYansit } from './disari.ts';
+import { refakatKartiKapsami, urunSevkiYansit } from './disari.ts';
 import type { UrunSevkSatiri } from '../sevkiyat/disari.ts';
 
 // Lot izi (refakat kartı Dal 9): lot okutulunca lotun bütün kartları (lotu taşıyan, lota bağlanırken başka karta birleşen
@@ -163,5 +163,11 @@ describe('stok: lot izi (gerçek PostgreSQL)', () => {
     assert.deepEqual(u.kartlar.map((k) => k.id), [r.id]);
     assert.deepEqual(u.ciktilar.map((c) => c.partiId), [urun.id]);
     assert.equal(u.sevkCikislari.length, 1);
+
+    // Kart #708: kartın kapsamı lotu ve kartla sayılan partiyi, lotun teslimini verir; olmayan kart null.
+    const k = (await o().vt.tx((db) => refakatKartiKapsami(db, r.id)))!;
+    assert.deepEqual([k.refakat.id, k.partiIdler], [r.id, [lot.id, urun.id]]);
+    assert.deepEqual(k.teslimler.map((t) => [t.id, t.durum, t.partiId, t.miktar, t.alinan, t.kapanis !== null]), [[g.govde.teslim.id, 'teslim', lot.id, '10.000', '10.000', true]]);
+    assert.equal(await o().vt.tx((db) => refakatKartiKapsami(db, 2147483000)), null);
   });
 });

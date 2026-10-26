@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BenCevabi, DurumCevabi, KayitlarCevabi, StatuTanimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BenCevabi, KayitlarCevabi, StatuTanimi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { CIHAZ_ANAHTARLARI, ONEK } from './ReceteRotaCercevesi.tsx';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 import { YAZAR, ac, prototipiCalistir, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
@@ -40,7 +41,7 @@ function fetchKur(s: Sunucu): void {
     if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/ben') return json(200, { kisi: { id: YAZAR.id, ad: YAZAR.ad }, yazabilir: true } satisfies BenCevabi);
     if (yontem === 'GET' && yol === '/recete-rota/kayitlar') return json(200, { kayitlar: [{ anahtar: ONEK, bicim: 'json', deger: depo(), surum: 1 }] } satisfies KayitlarCevabi);
-    if (yontem === 'GET' && yol === '/recete-rota/durum') return json(200, durumKur(s.statuses));
+    if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, durumKur(s.statuses));
     if (yontem === 'GET' && yol === '/recete-rota/statuler') return json(200, { statuler: [] });
     const m = /^\/recete-rota\/statu-tanimlari\/([^/]+)\/(kaydet|sil)$/.exec(yol);
     if (yontem === 'POST' && m) {

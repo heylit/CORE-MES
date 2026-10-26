@@ -9,7 +9,8 @@ import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
 import { highsYukle } from './highs.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
-import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -212,13 +213,17 @@ async function anlikOku(islemler: IslemListesi): Promise<{ anlik: KaynakAnlik; t
   return { anlik: anlik as unknown as KaynakAnlik, takvim: takvimHam === null ? null : takvimEki(takvimHam) };
 }
 
+// Sözleşmedeki planlamaAnahtariMi ile aynı kural (paylasilan/sozlesme/recete-rota.ts; istemci sözleşmeyi değer olarak ithal etmez).
+const PLANLAMA_ANAHTARI = /^recete-rota-motoru-v1:planlama(?:[-:]|$)/;
+const kayitKoku = (anahtar: string): string => (PLANLAMA_ANAHTARI.test(anahtar) ? '/plan/planlama-kayitlari' : '/recete-rota/kayitlar');
+
 async function kapasiteOku(): Promise<KapasiteCevabi | null> {
-  try { return await api.get<KapasiteCevabi>('/recete-rota/kapasite'); } catch { return null; }
+  try { return await api.get<KapasiteCevabi>('/plan/planlama-kapasitesi'); } catch { return null; }
 }
 const SATIN_ALMA_EKSIZ: SatinAlmaEkiCevabi = { acikSiparisler: null, tedarikTerminleri: null };
 async function satinAlmaEkiOku(): Promise<SatinAlmaEkiCevabi> {
   try {
-    const c = await api.get<Partial<SatinAlmaEkiCevabi> | null>('/recete-rota/satin-alma-eki');
+    const c = await api.get<Partial<SatinAlmaEkiCevabi> | null>('/plan/satin-alma-eki');
     return { acikSiparisler: c?.acikSiparisler ?? null, tedarikTerminleri: c?.tedarikTerminleri ?? null };
   } catch { return SATIN_ALMA_EKSIZ; }
 }
@@ -381,9 +386,10 @@ export function kopruKur(
   // Okunamazsa uyarı listesine dokunulmaz (yerleşimdeki gibi).
   const yalnizUyariOku = (): Promise<null> =>
     api.get<MotorUyarilariCevabi>('/plan/motor-uyarilari').then((c) => { motorUyarilari(c.uyarilar); return null; }, () => null);
-  // planYerlesmeyen yalnız motor bir adımı yerleştiremediyse vardır; yoksa alan da yoktur.
+  // planYerlesmeyen yalnız motor bir adımı yerleştiremediyse vardır; yoksa alan da yoktur. Durum Reçete ve Rota dilimleriyle planın alanlarını
+  // birlikte taşır; birleştiren plan modülüdür (658 b), yetkisi Reçete ve Rota'nın durum okumasınınkiyle aynıdır.
   const durumOku = (): Promise<DurumCevabi & { planYerlesim: EkranYerlesimi | null; planYerlesmeyen?: Record<string, string>; planMotoru: PlanMotoru | null }> =>
-    Promise.all([api.get<DurumCevabi>('/recete-rota/durum'), secenek.yerlesimCizilmez?.() === true ? yalnizUyariOku() : motorYerlesimiOku()])
+    Promise.all([api.get<DurumCevabi>('/plan/planlama-kaynagi'), secenek.yerlesimCizilmez?.() === true ? yalnizUyariOku() : motorYerlesimiOku()])
       .then(([d, m]) => {
         maliyetAnlik = d.maliyet;
         secenek.planVerisi?.(d.stations === null || d.machines === null || d.wcs === null);
@@ -413,17 +419,21 @@ export function kopruKur(
         } catch { /* depo kapalı ya da dolu: tercih bu sekmede kalır */ }
         return { yazildi: true };
       }
-      case 'kayit-yaz':
-        return api.post<YazCevabi>('/recete-rota/kayitlar/yaz', {
-          anahtar: metin(v['anahtar'], 'anahtar'),
+      // Planlama çalışması ve sayfa tercihleri plan modülünün kaydındadır (658 b, 662 a); öteki anahtarlar Reçete ve Rota'nın.
+      case 'kayit-yaz': {
+        const anahtar = metin(v['anahtar'], 'anahtar');
+        return api.post<YazCevabi>(`${kayitKoku(anahtar)}/yaz`, {
+          anahtar,
           bicim: v['bicim'] === 'metin' ? 'metin' : 'json',
           deger: v['deger'] ?? null,
           beklenenSurum: surum(v['beklenenSurum']),
         });
+      }
       case 'kayit-sil': {
         const beklenen = surum(v['beklenenSurum']);
         if (beklenen === null) throw new Error('Geçersiz sürüm.');
-        return api.post<SilCevabi>('/recete-rota/kayitlar/sil', { anahtar: metin(v['anahtar'], 'anahtar'), beklenenSurum: beklenen });
+        const anahtar = metin(v['anahtar'], 'anahtar');
+        return api.post<SilCevabi>(`${kayitKoku(anahtar)}/sil`, { anahtar, beklenenSurum: beklenen });
       }
       case 'durum-oku':
         return ilkDurumOku();

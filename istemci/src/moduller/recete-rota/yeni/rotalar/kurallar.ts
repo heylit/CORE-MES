@@ -1,4 +1,5 @@
-import type { DurumCevabi, DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumMalzemesi, DurumRotaAdimi, DurumRotaRevizyonu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 
 // R1 saf kuralları (205 a): bugünkü ekranın tarayıcı kuralları (rotaEksikleri, islemSuresiEksik, girdiOlur, stepFactors, matCost) ve
 // rota düzenlemesi. Veri bağlı durumun biçimidir (prototipin `st` alan adları). Kural ve yetki sahibinin ucundadır; buradakiler ekranın

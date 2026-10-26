@@ -176,6 +176,10 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     await dosyaYukle(istemci, ikinci, new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
     return tamam({ ok: true });
   }
+  // Arka plan indirmesi ayrı uçtan gider: kişi açmadığı için indirme günlüğüne yazılmaz (kart #731, karar 730 a).
+  if (ilk === 'blob' && ikinci !== undefined && ucuncu === 'arka') {
+    return { durum: 200, ham: await (istemci.ikili ?? ikiliOku)(`/arkon/dosyalar/${yolParcasi(ikinci)}/arka-plan`) };
+  }
   if (ilk === 'blob' && ikinci !== undefined) {
     return { durum: 200, ham: await (istemci.ikili ?? ikiliOku)(`/arkon/dosyalar/${yolParcasi(ikinci)}`) };
   }

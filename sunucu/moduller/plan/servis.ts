@@ -667,6 +667,32 @@ function siraIhlali(b: Baglam, yerler: readonly Yer[], uretimEmriIdleri: Readonl
   }
   return null;
 }
+const PLANI_YENIDEN_KUR = 'Planı kur\'u yeniden çalıştırıp canlıya alın.';
+
+// 737 a: makine kuyruklarındaki iş sırası (başlangıç, sonra iş emri); bölünmüş işin her parçası kendi makinesinde sayılır.
+function makineSiralari(l: readonly YerlesimSatiri[]): Map<number, { isEmriId: number; an: number }[]> {
+  const satirlar = l.flatMap((y) => (bolunmus(y) ? y.parcalar!.map((p) => ({ kaynak: p.kaynak, baslangic: p.baslangic })) : [y])
+    .flatMap((x) => (x.kaynak.tur === 'makine' ? [{ makineId: x.kaynak.id, isEmriId: y.isEmriId, an: x.baslangic.getTime() }] : [])));
+  const m = new Map<number, { isEmriId: number; an: number }[]>();
+  for (const x of satirlar.sort((p, q) => p.an - q.an || p.isEmriId - q.isEmriId)) m.set(x.makineId, [...(m.get(x.makineId) ?? []), x]);
+  return m;
+}
+// Geç başlayan iş, önündeyken arkasına geçtiği işle döner. Öne alınan iş (boşluğa sığan) sırayı bozmuş sayılmaz.
+function geriKayan(once: readonly YerlesimSatiri[], sonra: readonly YerlesimSatiri[]): { makineId: number; isEmriId: number; onundeydi: number } | null {
+  const sonraki = makineSiralari(sonra);
+  for (const [makineId, l] of makineSiralari(once)) {
+    const yeni = sonraki.get(makineId) ?? [];
+    const ilk = (x: { isEmriId: number }[], id: number) => x.findIndex((z) => z.isEmriId === id);
+    for (const [n, a] of l.entries()) {
+      const k = ilk(yeni, a.isEmriId);
+      if (k < 0 || yeni[k]!.an <= a.an) continue;
+      const gecilen = l.slice(n + 1).find((f) => f.isEmriId !== a.isEmriId && ilk(yeni, f.isEmriId) >= 0 && ilk(yeni, f.isEmriId) < k);
+      if (gecilen) return { makineId, isEmriId: a.isEmriId, onundeydi: gecilen.isEmriId };
+    }
+  }
+  return null;
+}
+
 const siraDenetle = (b: Baglam, yerler: readonly Yer[], isEmriId: number): void => {
   const e = b.isler.get(isEmriId)?.uretimEmriId;
   const ihlal = e === undefined ? null : siraIhlali(b, yerler, new Set([e]));
@@ -2067,8 +2093,11 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
       return degisebilir(y.isEmriId) && (!c || !ayniKaynak(c.kaynak, y.kaynak) || c.baslangic.getTime() !== y.baslangic.getTime());
     });
     const sira = siraIhlali(b, l.map((y) => yerOf(b, y)), new Set(degisen.map((y) => b.isler.get(y.isEmriId)?.uretimEmriId ?? 0)));
-    if (sira !== null) throw cakisma(`Taslakta sıraya aykırı adım var: ${sira} Düzeltmeden canlıya alınmaz.`);
+    if (sira === null) return;
+    if (motordan) throw cakisma(`Taslak yazıldıktan sonra zaman geçti; işler şimdiden yeniden dizilince sıra bozuluyor: ${sira} ${PLANI_YENIDEN_KUR}`);
+    throw cakisma(`Taslakta sıraya aykırı adım var: ${sira} Düzeltmeden canlıya alınmaz.`);
   };
+  let motordan = false;
   siraDenetle(taslak);
   // ADR 0018: sunucu motoru kayıtlıyken taslağın makine kuyrukları (planlı, sabit olmayan, bölünmemiş iş; sıra taslağınki) canlıya geçmeden
   // sabit kipte yeniden dizilir; önizleme taslaktaki saattir. Sıra denetimi yeni saatlerle yinelenir.
@@ -2091,7 +2120,16 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     motorFarki = m.fark;
     for (const x of m.yerlesmez) vardiyasiz.add(x);
     // 168 b: vardiyasız tezgâhtaki işin taslak yeri canlıya geçmez; canlıdaki hâli kalır.
+    const onceki = taslak;
     taslak = (await s.yerlesimler(db, id)).filter((y) => !vardiyasiz.has(y.isEmriId));
+    // 737 a: zaman geçince kilitli, dondurulmuş ya da bölünmüş işin önüne sığmayan iş arkasına geçerdi; canlı onaylanan taslaktan habersiz
+    // farklı olmasın diye canlıya alma durur.
+    const kayan = geriKayan(onceki, taslak);
+    if (kayan !== null) {
+      throw cakisma(`Taslak yazıldıktan sonra zaman geçti; ${kaynakMetni(b, { tur: 'makine', id: kayan.makineId })} kuyruğunda ${isMetni(b, kayan.isEmriId)}, `
+        + `${isMetni(b, kayan.onundeydi)} işinin önüne artık sığmıyor. ${PLANI_YENIDEN_KUR}`);
+    }
+    motordan = true;
   }
   if (planMotoru !== null) siraDenetle(taslak);
   // Yersiz bölme de canlıya geçer (taslakta ya da canlıda yalnız bölmesi olan iş).

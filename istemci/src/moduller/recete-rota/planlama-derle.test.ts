@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { IKINCI_MENU_TANIMLARI } from '../../ortak/rota/ikinci-menu.ts';
 import { ORTAK_STIL_YERI, PARCA_SIRASI, SIMGE_YERI, planlamaSayfasi, sayfaGuncelMi } from './planlama-derle.ts';
-import { MALIYET_ANAHTARLARI, MALIYET_ISLEMI, ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI, maliyetYoluMu, planlamaYoluMu } from './planlama-menusu.ts';
+import { MALIYET_ANAHTARLARI, MALIYET_ISLEMI, ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI, maliyetYoluMu, planlamaEskiAdresi, planlamaYoluMu } from './planlama-menusu.ts';
 import { planlamaSayfasiKur } from './planlama-sayfasi.ts';
 import { rotalar } from './rotalar.tsx';
 
@@ -52,38 +52,40 @@ describe('planlama çerçevesinin sayfası', () => {
 });
 
 describe('planlama menüsü', () => {
-  it('planlama yolları planlama çerçevesine, öteki yollar Reçete ve Rota çerçevesine gider', () => {
-    expect(planlamaYoluMu('/recete-rota/plan')).toBe(true);
-    expect(planlamaYoluMu('/recete-rota/terminler')).toBe(true);
-    expect(planlamaYoluMu('/recete-rota/studio/x')).toBe(true);
+  // Planlama plan modülünün sayfasıdır (658 b); eski planlama çerçevesi /plan/eski altında açılır (659 a).
+  it('eski planlama adresleri planlama çerçevesine, öteki yollar Reçete ve Rota çerçevesine gider', () => {
+    expect(planlamaYoluMu('/plan/eski')).toBe(true);
+    expect(planlamaYoluMu('/plan/eski/terminler')).toBe(true);
+    expect(planlamaYoluMu('/plan/eski/studio/x')).toBe(true);
+    expect(planlamaYoluMu('/plan/eski/schema')).toBe(false);
+    expect(planlamaYoluMu('/plan/eski/planx')).toBe(false);
+    expect(planlamaYoluMu('/plan')).toBe(false);
+    expect(planlamaYoluMu('/recete-rota/plan')).toBe(false);
     expect(planlamaYoluMu('/recete-rota')).toBe(false);
-    expect(planlamaYoluMu('/recete-rota/schema')).toBe(false);
-    expect(planlamaYoluMu('/recete-rota/planx')).toBe(false);
+    expect(planlamaEskiAdresi('/plan')).toBe('/plan/eski');
+    expect(planlamaEskiAdresi('/plan/denge')).toBe('/plan/eski/denge');
   });
 
-  it('önerilen ve bugünkü ikinci menünün her maddesinin rotası vardır', () => {
+  it('Reçete ve Rota menüsünün her maddesinin rotası vardır; eski planlama adresleri Planlama sayfasına yönlenir', () => {
     const yollar = new Set(rotalar.map((r) => r.yol));
-    const bugunku = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota');
-    expect(bugunku).toBeDefined();
-    for (const menu of [ONERILEN_IKINCI_MENU, ...(bugunku ? [bugunku] : [])]) {
-      for (const g of menu.gruplar) for (const m of g.maddeler) expect(yollar.has(m.yol), m.yol).toBe(true);
-    }
+    for (const g of ONERILEN_IKINCI_MENU.gruplar) for (const m of g.maddeler) expect(yollar.has(m.yol), m.yol).toBe(true);
     for (const a of PLANLAMA_ANAHTARLARI) expect(yollar.has(`/recete-rota/${a}`)).toBe(true);
   });
 
-  it('önerilen menü çekirdekteki menüyle aynıdır; planlama maddeleri planlama işlemini, maliyet maddeleri maliyet okumasını ister (195 a)', () => {
+  it('önerilen menü çekirdekteki menüyle aynıdır; Planlama menüsünde planlama maddeleri planlama işlemini, maliyet maddeleri maliyet okumasını ister (195 a)', () => {
     expect(IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota')).toEqual(ONERILEN_IKINCI_MENU);
-    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = ONERILEN_IKINCI_MENU.gruplar.flatMap((g) => [...g.maddeler]);
-    const planlama = maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI);
-    expect(planlama.map((m) => m.anahtar)).toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
+    const planMenusu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/plan');
+    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = planMenusu?.gruplar.flatMap((g) => [...g.maddeler]) ?? [];
+    expect(maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI).map((m) => m.anahtar))
+      .toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
     expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(MALIYET_ANAHTARLARI);
     expect(MALIYET_ANAHTARLARI.every((a) => PLANLAMA_ANAHTARLARI.includes(a))).toBe(true);
   });
 
   it('maliyet yolları planlama yollarının alt kümesidir', () => {
-    expect(maliyetYoluMu('/recete-rota/maliyet')).toBe(true);
-    expect(maliyetYoluMu('/recete-rota/denge/x')).toBe(true);
-    expect(maliyetYoluMu('/recete-rota/terminler')).toBe(false);
-    expect(maliyetYoluMu('/recete-rota/maliyetx')).toBe(false);
+    expect(maliyetYoluMu('/plan/eski/maliyet')).toBe(true);
+    expect(maliyetYoluMu('/plan/eski/denge/x')).toBe(true);
+    expect(maliyetYoluMu('/plan/eski/terminler')).toBe(false);
+    expect(maliyetYoluMu('/plan/eski/maliyetx')).toBe(false);
   });
 });

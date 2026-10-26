@@ -15,7 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kararSayaclari, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { PLANLAMA_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from '../plan/disari.ts';
 import { isler } from './isler.ts';
 import { belgeSil, belgeYaz, belgeler } from './servis.ts';
 import { ALET_ONEKI, BITMIS_BITIR, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI, GIZLI_YANSIMA_TURLERI, gizliYansimaTuru, ISTEK_KILIT_BUTCESI_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, SAYIM_ERTELEME, ZATEN_CALISIYOR, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI } from './kurallar.ts';
@@ -2141,7 +2141,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     // tezgâha yer vermez (168 b). Kayıt boş yazılır, bütün iş merkezleri her gün çalışır.
     const gunduz = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Yansima gunduz', '00:00', '23:59') RETURNING id"))!.id;
     await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g', [gunduz]);
-    const kayit = await istek(yonetici, 'POST', '/recete-rota/kayitlar/yaz', {
+    const kayit = await istek(yonetici, 'POST', '/plan/planlama-kayitlari/yaz', {
       anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
       deger: {
         surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,

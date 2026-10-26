@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { ONEK } from './ReceteRotaCercevesi.tsx';
 import { HAM, HAM_GIRDISI, YAZAR, ac, bekle, prototipiCalistir, sunucuKur, yazmaDinleyiciKapat } from './test-yardimcilari.tsx';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { kopruHatasi, kopruKur } from './kopru.ts';
 
 // Süreler bölümü ve işlem/değişim ayrımı prototipin kendi kayıtındadır. Örnek veriler uydurmadır: üç adımlı tek mamul, eski
@@ -403,7 +403,7 @@ describe('Süreler köprüsü', () => {
   const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
   const SURELER = { revizyonId: 7, makineId: null, adimlar: [] };
   const tamam = (yontem: string, yol: string): Response =>
-    yontem === 'POST' ? json(200, { ok: true }) : yol === '/recete-rota/durum' ? json(200, DURUM) : yol.startsWith('/rota/revizyonlar/7/sureler') ? json(200, SURELER) : json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
+    yontem === 'POST' ? json(200, { ok: true }) : yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : yol.startsWith('/rota/revizyonlar/7/sureler') ? json(200, SURELER) : json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
 
   it('SUK-1: süre okuması revizyonun süreler ucuna gider, makine verilirse o makinenin görünümüyle; geçersiz kimlik istek atmaz', async () => {
     const istekler = istekleriTopla(tamam);
@@ -432,7 +432,7 @@ describe('Süreler köprüsü', () => {
       { tur: 'degisim', makineId: 3, okunanId: 12, olcumId: 12 },
     ]);
     expect(postlar.every((i) => Boolean(i.baslik[ISTEK_KIMLIGI_BASLIGI]))).toBe(true);
-    expect(istekler.filter((i) => i.yol === '/recete-rota/durum')).toHaveLength(3);
+    expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(3);
   });
 
   it('SUK-3: geçersiz tür, adım, ölçüm ya da negatif süre istek atmadan 400 ile reddedilir', async () => {

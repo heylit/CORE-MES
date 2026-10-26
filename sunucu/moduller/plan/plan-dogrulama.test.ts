@@ -6,6 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { kullaniciYukle } from '../kisiler/disari.ts';
 import { emirBaslat, emirDevam } from '../uretim-emirleri/disari.ts';
 import { calisanAdimlar, canliOzeti } from './disari.ts';
+import { gunduzde } from './plan-saat.test.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde seçilen makine ve makine ayrımı (393 d)', () => {
@@ -45,36 +46,38 @@ describe('plan (gerçek PostgreSQL): başlamış emrin adımları, terminalde se
   const dakika = 60_000;
 
   test('emrin ilk adımı çalışırken başlamamış 2. ve 3. adım motorca yeniden yerleştirilir ve canlıya geçer', async () => {
-    const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-DG1', ad: 'Deneme doğrulama 1', istasyonId: istasyonB });
-    const kaynak = { tur: 'makine' as const, id: m.id };
-    const [i1, i2, i3] = await isEmirleriAc([yeniAdim({ kaynak }), yeniAdim({ kaynak }), yeniAdim({ kaynak })]);
-    const ilk = await taslaktaOner();
-    await canliyaAl(ilk);
-    const once2 = Date.parse(yer(ilk, i2!).baslangic), once3 = Date.parse(yer(ilk, i3!).baslangic);
-    // 1. adım 2 saattir çalışıyor, 10'un 9'u şimdi sayıldı: kalan 1 x 2 dk (ayar düşülür). Önceki plan 30 + 20 dk ayırmıştı.
-    await vt().tx(async (db) => {
-      await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = now() - interval '2 hours' WHERE id = $1", [i1]);
-      await db.sorgu(
-        `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
-         SELECT uretim_emri_id, id, $2, $3, 'saglam', 9, now() FROM uretim_emirleri_is_emri WHERE id = $1`,
-        [i1, operatorId, istasyonB]);
+    await gunduzde(async () => {
+      const m = await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'PL-DG1', ad: 'Deneme doğrulama 1', istasyonId: istasyonB });
+      const kaynak = { tur: 'makine' as const, id: m.id };
+      const [i1, i2, i3] = await isEmirleriAc([yeniAdim({ kaynak }), yeniAdim({ kaynak }), yeniAdim({ kaynak })]);
+      const ilk = await taslaktaOner();
+      await canliyaAl(ilk);
+      const once2 = Date.parse(yer(ilk, i2!).baslangic), once3 = Date.parse(yer(ilk, i3!).baslangic);
+      // 1. adım 2 saattir çalışıyor, 10'un 9'u şimdi sayıldı: kalan 1 x 2 dk (ayar düşülür). Önceki plan 30 + 20 dk ayırmıştı.
+      await vt().tx(async (db) => {
+        await db.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2 WHERE id = $1", [i1, new Date(Date.now() - 2 * 3600_000)]);
+        await db.sorgu(
+          `INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman)
+           SELECT uretim_emri_id, id, $2, $3, 'saglam', 9, $4 FROM uretim_emirleri_is_emri WHERE id = $1`,
+          [i1, operatorId, istasyonB, new Date()]);
+      });
+      try {
+        const p = await taslaktaOner();
+        assert.equal(yer(p, i1!).durum, 'basladi');
+        const y2 = yer(p, i2!), y3 = yer(p, i3!);
+        assert.notEqual(y2.durum, 'basladi', 'bekleyen 2. adım başlamış sayılmaz');
+        assert.notEqual(y3.durum, 'basladi', 'bekleyen 3. adım başlamış sayılmaz');
+        assert.ok(Date.parse(y2.baslangic) >= Date.parse(yer(p, i1!).bitis), '2. adım çalışan 1. adımdan sonra');
+        assert.ok(Date.parse(y2.baslangic) < once2 - 20 * dakika, `2. adım öne çekildi: önce ${new Date(once2).toISOString()}, şimdi ${y2.baslangic}`);
+        assert.ok(Date.parse(y3.baslangic) < once3 - 20 * dakika, `3. adım öne çekildi: önce ${new Date(once3).toISOString()}, şimdi ${y3.baslangic}`);
+        await canliyaAl(p);
+        const canli = await planOku();
+        assert.equal(yer(canli, i2!).baslangic, y2.baslangic, 'canlıya geçti');
+        assert.equal(yer(canli, i3!).baslangic, y3.baslangic, 'canlıya geçti');
+      } finally {
+        await isEmriDurumu(i1!, 'bekliyor');
+      }
     });
-    try {
-      const p = await taslaktaOner();
-      assert.equal(yer(p, i1!).durum, 'basladi');
-      const y2 = yer(p, i2!), y3 = yer(p, i3!);
-      assert.notEqual(y2.durum, 'basladi', 'bekleyen 2. adım başlamış sayılmaz');
-      assert.notEqual(y3.durum, 'basladi', 'bekleyen 3. adım başlamış sayılmaz');
-      assert.ok(Date.parse(y2.baslangic) >= Date.parse(yer(p, i1!).bitis), '2. adım çalışan 1. adımdan sonra');
-      assert.ok(Date.parse(y2.baslangic) < once2 - 20 * dakika, `2. adım öne çekildi: önce ${new Date(once2).toISOString()}, şimdi ${y2.baslangic}`);
-      assert.ok(Date.parse(y3.baslangic) < once3 - 20 * dakika, `3. adım öne çekildi: önce ${new Date(once3).toISOString()}, şimdi ${y3.baslangic}`);
-      await canliyaAl(p);
-      const canli = await planOku();
-      assert.equal(yer(canli, i2!).baslangic, y2.baslangic, 'canlıya geçti');
-      assert.equal(yer(canli, i3!).baslangic, y3.baslangic, 'canlıya geçti');
-    } finally {
-      await isEmriDurumu(i1!, 'bekliyor');
-    }
   });
 
   test('391 a: calisanAdimlar çalışan adımın kalanını planın gerçekleşen hesabıyla verir; çalışmayan adım yok', async () => {

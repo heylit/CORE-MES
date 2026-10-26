@@ -15,7 +15,7 @@ const acikBolum = async (ad: string) => {
   return bolge;
 };
 const seritteSec = (ad: string) => { fireEvent.click(within(screen.getByRole('navigation', { name: 'Deneme şeridi' })).getByRole('link', { name: ad })); };
-const durumOkundu = (istekler: readonly Istek[]) => waitFor(() => expect(istekler.some((i) => i.yol === '/recete-rota/durum')).toBe(true));
+const durumOkundu = (istekler: readonly Istek[]) => waitFor(() => expect(istekler.some((i) => i.yol === '/plan/planlama-kaynagi')).toBe(true));
 // Veri gelince parçanın bileşeni çizilir (yükleniyor kutusu kalkar).
 const parcaCizildi = async (bolge: HTMLElement, parca: string) => {
   await waitFor(() => expect(bolge.querySelector(`[data-parca="${parca}"]`)).not.toBeNull());
@@ -79,12 +79,12 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     const istekler = sunucuKur(OKUYAN);
     rrAc();
     await parcaCizildi(await acikBolum('Üretim emirleri'), 'R3');
-    const okuma = istekler.filter((i) => i.yol === '/recete-rota/durum').length;
+    const okuma = istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length;
     seritteSec('Ürün ve rotalar');
     await parcaCizildi(await acikBolum('Ürün ve rotalar'), 'R1');
     seritteSec('Kaynaklar');
     await parcaCizildi(await acikBolum('Kaynaklar'), 'R2');
-    expect(istekler.filter((i) => i.yol === '/recete-rota/durum')).toHaveLength(okuma);
+    expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(okuma);
   });
 
   it('rota.yaz olana ilk okumada kart taslakları bir kez açılır (bugünkü ekran gibi)', async () => {
@@ -94,7 +94,7 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     const yazmalar = istekler.filter((i) => i.yontem !== 'GET');
     expect(yazmalar.map((i) => i.yol)).toEqual(['/rota/karttan-taslaklar']);
     const taslak = istekler.findIndex((i) => i.yol === '/rota/karttan-taslaklar');
-    expect(taslak).toBeLessThan(istekler.findIndex((i) => i.yol === '/recete-rota/durum'));
+    expect(taslak).toBeLessThan(istekler.findIndex((i) => i.yol === '/plan/planlama-kaynagi'));
   });
 
   it('durum okunamazsa sunucu iletisi ve yeniden dene gösterilir; parça çizilmez', async () => {

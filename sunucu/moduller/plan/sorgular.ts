@@ -478,3 +478,51 @@ export const ekMesaiSiniri = async (db: Db): Promise<number | null> => {
   const r = await db.tek<{ s: string | null }>('SELECT ek_mesai_hafta_saat AS s FROM plan_ayari');
   return r?.s == null ? null : Number(r.s);
 };
+
+// Planlama çalışması ve sayfa tercihleri (658 b, 662 a): Reçete ve Rota'nın kayıt deposuyla aynı biçim, plan modülünün tablosunda. Sürüm
+// tek sayaçtan gelir; geçmişi tablonun tetikleyicisi yazar.
+const PLANLAMA_SUTUNLARI = 'anahtar, bicim, deger, surum';
+export interface PlanlamaKaydi { anahtar: string; bicim: 'json' | 'metin'; deger: unknown; surum: number }
+
+export async function planlamaKayitlari(db: Db): Promise<PlanlamaKaydi[]> {
+  return db.sorgu<PlanlamaKaydi>(`SELECT ${PLANLAMA_SUTUNLARI} FROM plan_planlama_kaydi ORDER BY anahtar`);
+}
+
+export async function planlamaKaydi(db: Db, anahtar: string): Promise<PlanlamaKaydi | null> {
+  return db.tek<PlanlamaKaydi>(`SELECT ${PLANLAMA_SUTUNLARI} FROM plan_planlama_kaydi WHERE anahtar = $1`, [anahtar]);
+}
+
+// Yazmadan önce satırı kilitler: aynı kayda eşzamanlı iki yazma sürüm denetiminden sırayla geçer. Kayıt yoksa ilk yazmayı birincil anahtar
+// ayırır (eşzamanlı ikinci INSERT hiçbir şey döndürmez).
+export async function planlamaSurumKilitle(db: Db, anahtar: string): Promise<number | null> {
+  return (await db.tek<{ surum: number }>('SELECT surum FROM plan_planlama_kaydi WHERE anahtar = $1 FOR UPDATE', [anahtar]))?.surum ?? null;
+}
+
+export async function planlamaKaydiEkle(db: Db, g: { anahtar: string; bicim: string; deger: unknown; kisiId: number }): Promise<PlanlamaKaydi | null> {
+  return db.tek<PlanlamaKaydi>(
+    `INSERT INTO plan_planlama_kaydi (anahtar, bicim, deger, surum, guncelleyen_kisi_id)
+     VALUES ($1, $2, $3::jsonb, nextval('plan_planlama_surum'), $4)
+     ON CONFLICT (anahtar) DO NOTHING
+     RETURNING ${PLANLAMA_SUTUNLARI}`,
+    [g.anahtar, g.bicim, JSON.stringify(g.deger), g.kisiId],
+  );
+}
+
+export async function planlamaKaydiGuncelle(db: Db, g: { anahtar: string; bicim: string; deger: unknown; kisiId: number }): Promise<PlanlamaKaydi | null> {
+  return db.tek<PlanlamaKaydi>(
+    `UPDATE plan_planlama_kaydi
+        SET bicim = $2, deger = $3::jsonb, surum = nextval('plan_planlama_surum'), guncelleyen_kisi_id = $4, guncellendi = now()
+      WHERE anahtar = $1
+      RETURNING ${PLANLAMA_SUTUNLARI}`,
+    [g.anahtar, g.bicim, JSON.stringify(g.deger), g.kisiId],
+  );
+}
+
+export async function planlamaKaydiSil(db: Db, anahtar: string): Promise<boolean> {
+  return (await db.sorgu<{ anahtar: string }>('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1 RETURNING anahtar', [anahtar])).length > 0;
+}
+
+// 508 2 a: kaydın geçmişteki son (bir önceki) sürümü; geçmiş yoksa null.
+export async function planlamaSonGecmis(db: Db, anahtar: string): Promise<{ surum: number; bicim: string; deger: unknown } | null> {
+  return db.tek('SELECT surum, bicim, deger FROM plan_planlama_kaydi_gecmisi WHERE anahtar = $1 ORDER BY id DESC LIMIT 1', [anahtar]);
+}
