@@ -12,6 +12,8 @@ const TARIH = (sutun: string) => `to_char(${sutun}, 'YYYY-MM-DD')`;
 const TERMINAL_IS_EMRI = (emir: string) => `(SELECT ie.id FROM uretim_emirleri_is_emri ie WHERE ie.uretim_emri_id = ${emir}
   ORDER BY CASE ie.durum WHEN 'calisiyor' THEN 0 WHEN 'bekliyor' THEN 1 ELSE 2 END, CASE WHEN ie.durum = 'tamam' THEN -ie.sira ELSE ie.sira END
   LIMIT 1)`;
+// Paralel adım (639): yazan komut adımı biliyorsa satır o adıma bağlanır; bilmiyorsa (eski çağrı) terminal iş emrine.
+const ADIM_IS_EMRI = (emir: string, adim: string) => `COALESCE(${adim}::int, ${TERMINAL_IS_EMRI(emir)})`;
 
 export interface EmirSatiri {
   id: number;
@@ -157,12 +159,12 @@ export async function baslatmaKaydiVarMi(db: Db, emirId: number): Promise<boolea
 
 export function kayitEkle(
   db: Db, emirId: number, kisiId: number, istasyonId: number, olay: 'baslat' | 'bitir', saglamAdet: number | null,
-  an: string,
+  an: string, isEmriId: number | null = null,
 ): Promise<unknown> {
   return db.sorgu(
     `INSERT INTO uretim_kaydi (emir_id, kisi_id, istasyon_id, olay, saglam_adet, zaman, is_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${TERMINAL_IS_EMRI('$1')})`,
-    [emirId, kisiId, istasyonId, olay, saglamAdet, an],
+     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${ADIM_IS_EMRI('$1', '$7')})`,
+    [emirId, kisiId, istasyonId, olay, saglamAdet, an, isEmriId],
   );
 }
 
@@ -176,14 +178,16 @@ export interface SayimYazisi {
   duzeltme: boolean;
   an: string;
   refakatPartisiId: number | null;
+  // Verilmezse terminal iş emri (paralel adımdan önceki çağrılar).
+  isEmriId?: number | null;
 }
 
 // Satırın bağlandığı iş emri döner (sağlam sayım stoka bu iş emriyle yansır); iş emirsiz eski emirde null.
 export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: number | null }> {
   const satir = await db.tek<{ isEmriId: number | null }>(
     `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${TERMINAL_IS_EMRI('$1')}, $9) RETURNING is_emri_id AS "isEmriId"`,
-    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId],
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${ADIM_IS_EMRI('$1', '$10')}, $9) RETURNING is_emri_id AS "isEmriId"`,
+    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId, y.isEmriId ?? null],
   );
   return { isEmriId: satir?.isEmriId ?? null };
 }
@@ -262,12 +266,12 @@ export function kararSayaclariGetir(db: Db, emirIdleri: readonly number[]): Prom
 
 export function olayEkle(
   db: Db, emirId: number, kisiId: number, istasyonId: number, olay: 'duraklat' | 'durdur' | 'devam' | 'ayar',
-  durusNedeniId: number | null, an: string,
+  durusNedeniId: number | null, an: string, isEmriId: number | null = null,
 ): Promise<unknown> {
   return db.sorgu(
     `INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, durus_nedeni_id, zaman, is_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${TERMINAL_IS_EMRI('$1')})`,
-    [emirId, kisiId, istasyonId, olay, durusNedeniId, an],
+     VALUES ($1, $2, $3, $4, $5, $6::timestamptz, ${ADIM_IS_EMRI('$1', '$7')})`,
+    [emirId, kisiId, istasyonId, olay, durusNedeniId, an, isEmriId],
   );
 }
 
@@ -330,12 +334,12 @@ export function kartliEmirHurdalari(db: Db, emirIdleri: readonly number[]): Prom
 }
 
 // Hurda düzeltmesi son hurdanın nedeniyle yazılır (kart #1194): terminal düzeltmede neden sormaz.
-export async function sonHurdaNedeni(db: Db, emirId: number): Promise<number | null> {
+export async function sonHurdaNedeni(db: Db, emirId: number, isEmriId: number | null = null): Promise<number | null> {
   const satir = await db.tek<{ id: number }>(
     `SELECT hurda_nedeni_id AS id FROM uretim_sayimi s
-      WHERE emir_id = $1 AND tur = 'hurda' AND adet > 0 AND is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('s.emir_id')}
+      WHERE emir_id = $1 AND tur = 'hurda' AND adet > 0 AND is_emri_id IS NOT DISTINCT FROM ${ADIM_IS_EMRI('s.emir_id', '$2')}
       ORDER BY id DESC LIMIT 1`,
-    [emirId],
+    [emirId, isEmriId],
   );
   return satir?.id ?? null;
 }
@@ -352,11 +356,11 @@ export function sonOlaylariGetir(db: Db, emirIdleri: readonly number[]): Promise
 }
 
 // Sıradaki işin (iş emirli emirde sıradaki iş emri) ayarı yazılmış mı.
-export async function ayarVarMi(db: Db, emirId: number): Promise<boolean> {
+export async function ayarVarMi(db: Db, emirId: number, isEmriId: number | null = null): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM uretim_olayi o WHERE o.emir_id = $1 AND o.olay = 'ayar'
-       AND o.is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('o.emir_id')}) AS var`,
-    [emirId],
+       AND o.is_emri_id IS NOT DISTINCT FROM ${ADIM_IS_EMRI('o.emir_id', '$2')}) AS var`,
+    [emirId, isEmriId],
   );
   return satir?.var ?? false;
 }
@@ -1209,7 +1213,8 @@ export function gunlukUretimGetir(db: Db, gun: number): Promise<{ gun: string; s
   );
 }
 
-// Durdurma, aynı emrin zamanca sonraki olayına (devam) ya da bitirme kaydına kadar sürer; ikisi de yoksa şimdiye kadar.
+// Durdurma, aynı emrin aynı adımındaki zamanca sonraki olayına (devam) ya da bitirme kaydına kadar sürer; ikisi de yoksa şimdiye
+// kadar. Paralel adımda (639) öteki adımın olayı bu adımın duruşunu kesmez.
 // Sıra kimlikle değil zamanla bulunur: sonradan eklenmiş geçmiş tarihli satır öncekini kısaltamaz.
 export function durusSureleriGetir(db: Db, gun: number): Promise<{ nedenId: number; adet: number; dakika: string }[]> {
   return db.sorgu(
@@ -1217,8 +1222,10 @@ export function durusSureleriGetir(db: Db, gun: number): Promise<{ nedenId: numb
             round(sum(extract(epoch FROM (d.son - d.zaman)) / 60)::numeric, 2)::text AS dakika
        FROM (SELECT o.durus_nedeni_id, o.zaman,
                     LEAST(
-                      COALESCE((SELECT min(n.zaman) FROM uretim_olayi n WHERE n.emir_id = o.emir_id AND (n.zaman, n.id) > (o.zaman, o.id) AND n.olay <> 'ayar'), 'infinity'),
-                      COALESCE((SELECT min(k.zaman) FROM uretim_kaydi k WHERE k.emir_id = o.emir_id AND k.olay = 'bitir' AND k.zaman >= o.zaman), 'infinity'),
+                      COALESCE((SELECT min(n.zaman) FROM uretim_olayi n WHERE n.emir_id = o.emir_id AND n.is_emri_id IS NOT DISTINCT FROM o.is_emri_id
+                                     AND (n.zaman, n.id) > (o.zaman, o.id) AND n.olay <> 'ayar'), 'infinity'),
+                      COALESCE((SELECT min(k.zaman) FROM uretim_kaydi k WHERE k.emir_id = o.emir_id AND k.is_emri_id IS NOT DISTINCT FROM o.is_emri_id
+                                     AND k.olay = 'bitir' AND k.zaman >= o.zaman), 'infinity'),
                       clock_timestamp()) AS son
                FROM uretim_olayi o
               WHERE o.olay = 'durdur' AND o.zaman >= (current_date - ($1::int - 1))::timestamptz) d
@@ -1254,8 +1261,10 @@ export function istasyonDurusSureleri(
             round(sum(extract(epoch FROM (LEAST(d.son, $3::timestamptz) - GREATEST(d.zaman, $2::timestamptz)))))::int AS saniye
        FROM (SELECT o.istasyon_id, o.zaman,
                     LEAST(
-                      COALESCE((SELECT min(n.zaman) FROM uretim_olayi n WHERE n.emir_id = o.emir_id AND (n.zaman, n.id) > (o.zaman, o.id) AND n.olay <> 'ayar'), 'infinity'),
-                      COALESCE((SELECT min(k.zaman) FROM uretim_kaydi k WHERE k.emir_id = o.emir_id AND k.olay = 'bitir' AND k.zaman >= o.zaman), 'infinity'),
+                      COALESCE((SELECT min(n.zaman) FROM uretim_olayi n WHERE n.emir_id = o.emir_id AND n.is_emri_id IS NOT DISTINCT FROM o.is_emri_id
+                                     AND (n.zaman, n.id) > (o.zaman, o.id) AND n.olay <> 'ayar'), 'infinity'),
+                      COALESCE((SELECT min(k.zaman) FROM uretim_kaydi k WHERE k.emir_id = o.emir_id AND k.is_emri_id IS NOT DISTINCT FROM o.is_emri_id
+                                     AND k.olay = 'bitir' AND k.zaman >= o.zaman), 'infinity'),
                       clock_timestamp()) AS son
                FROM uretim_olayi o
               WHERE o.olay = 'durdur' AND o.istasyon_id = ANY($1::int[]) AND o.zaman < $3::timestamptz) d
@@ -1330,9 +1339,10 @@ export function kullanimBul(db: Db, id: number): Promise<KullanimSatiri | null> 
   );
 }
 
-export async function emrinAcikKullanimSayisi(db: Db, emirId: number): Promise<number> {
+export async function emrinAcikKullanimSayisi(db: Db, emirId: number, isEmriId: number | null = null): Promise<number> {
   const satir = await db.tek<{ n: number }>(
-    'SELECT count(*)::int AS n FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 AND bitis IS NULL', [emirId],
+    'SELECT count(*)::int AS n FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1 AND bitis IS NULL AND ($2::int IS NULL OR is_emri_id = $2)',
+    [emirId, isEmriId],
   );
   return satir?.n ?? 0;
 }
@@ -1347,11 +1357,13 @@ export function kullanimAc(
   );
 }
 
-export function emrinKullanimlariniKapat(db: Db, emirId: number, kapatanId: number, an: string): Promise<unknown> {
+// Adım verilirse yalnız o adımın kullanımları kapanır: emrin öteki adımı kendi makinesinde sürer (639, 642). Adımsız eski satır her
+// kapanışta kapanır (eski kural).
+export function emrinKullanimlariniKapat(db: Db, emirId: number, kapatanId: number, an: string, isEmriId: number | null = null): Promise<unknown> {
   return db.sorgu(
     `UPDATE uretim_emirleri_makine_kullanimi SET bitis = GREATEST($3::timestamptz, baslama), kapatan_id = $2
-      WHERE emir_id = $1 AND bitis IS NULL`,
-    [emirId, kapatanId, an],
+      WHERE emir_id = $1 AND bitis IS NULL AND ($4::int IS NULL OR is_emri_id = $4 OR is_emri_id IS NULL)`,
+    [emirId, kapatanId, an, isEmriId],
   );
 }
 
@@ -1389,11 +1401,12 @@ export function katilimlarGetir(db: Db, emirId: number): Promise<KatilimSatiri[]
   return db.sorgu<KatilimSatiri>(`SELECT ${KATILIM} FROM uretim_emirleri_katilim k WHERE k.emir_id = $1 ORDER BY k.giris, k.id`, [emirId]);
 }
 
-// Kişinin bu emirdeki son aralığı (açık ya da kapalı), kilitli.
-export function sonKatilim(db: Db, emirId: number, kisiId: number): Promise<KatilimSatiri | null> {
+// Kişinin bu emirdeki (adım verilirse o adımdaki) son aralığı (açık ya da kapalı), kilitli.
+export function sonKatilim(db: Db, emirId: number, kisiId: number, isEmriId: number | null = null): Promise<KatilimSatiri | null> {
   return db.tek<KatilimSatiri>(
-    `SELECT ${KATILIM} FROM uretim_emirleri_katilim k WHERE k.emir_id = $1 AND k.kisi_id = $2 ORDER BY k.giris DESC, k.id DESC LIMIT 1 FOR UPDATE`,
-    [emirId, kisiId],
+    `SELECT ${KATILIM} FROM uretim_emirleri_katilim k WHERE k.emir_id = $1 AND k.kisi_id = $2 AND ($3::int IS NULL OR k.is_emri_id = $3)
+      ORDER BY k.giris DESC, k.id DESC LIMIT 1 FOR UPDATE`,
+    [emirId, kisiId, isEmriId],
   );
 }
 
@@ -1405,15 +1418,15 @@ export function katilimAc(db: Db, emirId: number, isEmriId: number | null, kisiI
 }
 
 // Kişinin emrin çalışan adımında (iş emirsiz emirde emrin kendisinde) başlatma ya da katılma aralığı var mı; aralık kapanmış olabilir.
-export async function adimaKatildiMi(db: Db, emirId: number, kisiId: number): Promise<boolean> {
+export async function adimaKatildiMi(db: Db, emirId: number, kisiId: number, isEmriId: number | null = null): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(
     `SELECT EXISTS (
        SELECT 1 FROM uretim_emirleri_katilim k
         WHERE k.emir_id = $1 AND k.kisi_id = $2
-          AND (k.is_emri_id IN (SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND durum = 'calisiyor')
+          AND (k.is_emri_id IN (SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND durum = 'calisiyor' AND ($3::int IS NULL OR id = $3))
                OR (k.is_emri_id IS NULL AND NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1)))
      ) AS var`,
-    [emirId, kisiId],
+    [emirId, kisiId, isEmriId],
   );
   return satir?.var === true;
 }
@@ -1429,9 +1442,11 @@ export function katilimAyrildi(db: Db, id: number): Promise<unknown> {
   return db.sorgu("UPDATE uretim_emirleri_katilim SET kapanis = 'ayril' WHERE id = $1 AND kapanis = 'duraklat'", [id]);
 }
 
-export function emrinKatilimlariniKapat(db: Db, emirId: number, an: string): Promise<unknown> {
+export function emrinKatilimlariniKapat(db: Db, emirId: number, an: string, isEmriId: number | null = null): Promise<unknown> {
   return db.sorgu(
-    "UPDATE uretim_emirleri_katilim SET cikis = GREATEST($2::timestamptz, giris), kapanis = 'emir' WHERE emir_id = $1 AND cikis IS NULL", [emirId, an],
+    `UPDATE uretim_emirleri_katilim SET cikis = GREATEST($2::timestamptz, giris), kapanis = 'emir'
+      WHERE emir_id = $1 AND cikis IS NULL AND ($3::int IS NULL OR is_emri_id = $3 OR is_emri_id IS NULL)`,
+    [emirId, an, isEmriId],
   );
 }
 
@@ -1992,5 +2007,107 @@ export function kartSayimlariGetir(db: Db, emirId: number, kartIdleri: readonly 
        FROM uretim_sayimi WHERE emir_id = $1 AND refakat_partisi_id = ANY($2::int[]) AND is_emri_id IS NOT NULL
       GROUP BY is_emri_id, refakat_partisi_id`,
     [emirId, [...kartIdleri]],
+  );
+}
+
+/* ---------------- paralel adım (kart 639) ---------------- */
+
+export interface AdimSayaci { isEmriId: number; saglam: number; hurda: number; kararBekliyor: number; red: number }
+
+// Adım başına net sayaç (düzeltme dahil); sayımı olmayan adım satır vermez.
+export function adimSayaclariGetir(db: Db, isEmriIdleri: readonly number[]): Promise<AdimSayaci[]> {
+  if (isEmriIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<AdimSayaci>(
+    `SELECT is_emri_id AS "isEmriId",
+            COALESCE(sum(adet) FILTER (WHERE tur = 'saglam'), 0)::int AS saglam,
+            COALESCE(sum(adet) FILTER (WHERE tur = 'hurda'), 0)::int AS hurda,
+            COALESCE(sum(adet) FILTER (WHERE tur = 'karar_bekliyor'), 0)::int AS "kararBekliyor",
+            COALESCE(sum(adet) FILTER (WHERE tur = 'red'), 0)::int AS red
+       FROM uretim_sayimi WHERE is_emri_id = ANY($1::int[]) GROUP BY is_emri_id`,
+    [[...isEmriIdleri]],
+  );
+}
+
+// Adımın son olayı (ayar hariç): adımın çalışma hâli buradan türer. İş emirsiz eski emirde adım null'dır.
+export function adimSonOlayi(db: Db, emirId: number, isEmriId: number | null): Promise<OlaySatiri | null> {
+  return db.tek<OlaySatiri>(
+    `SELECT emir_id AS "emirId", olay, durus_nedeni_id AS "durusNedeniId", ${ISO('zaman')} AS zaman
+       FROM uretim_olayi WHERE emir_id = $1 AND is_emri_id IS NOT DISTINCT FROM $2::int AND olay <> 'ayar' ORDER BY id DESC LIMIT 1`,
+    [emirId, isEmriId],
+  );
+}
+
+// Emir başlamış kalırken istasyonu öncü adıma geçer (bir adım bitti, öteki sürüyor).
+export function emirIstasyonunuYaz(db: Db, id: number, istasyonId: number): Promise<unknown> {
+  return db.sorgu('UPDATE uretim_emri SET istasyon_id = $2, surum = surum + 1 WHERE id = $1', [id, istasyonId]);
+}
+
+export interface AdimDurumSatiri {
+  id: number;
+  emirId: number;
+  sira: number;
+  opNo: number;
+  ad: string;
+  istasyonId: number | null;
+  makineId: number | null;
+  fasonFirmaId: number | null;
+  durum: 'bekliyor' | 'calisiyor' | 'tamam';
+  bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
+  devirAdedi: number | null;
+  saglamAdet: number | null;
+  saglam: number;
+  hurda: number;
+  kararBekliyor: number;
+  sonOlay: 'duraklat' | 'durdur' | 'devam' | null;
+  // Bölünmüş ya da kol emir: adıma giren parti hesabı ister, listede eksik gösterilmez.
+  partili: boolean;
+}
+
+// Emirlerin bütün adımları, sayaçları ve son olaylarıyla tek sorguda (liste okuması sorgu sayısını adım sayısıyla büyütmez).
+export function adimDurumlariGetir(db: Db, emirIdleri: readonly number[]): Promise<AdimDurumSatiri[]> {
+  if (emirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<AdimDurumSatiri>(
+    `SELECT i.id, i.uretim_emri_id AS "emirId", i.sira, i.op_no AS "opNo", i.ad, i.istasyon_id AS "istasyonId", i.makine_id AS "makineId",
+            i.fason_firma_id AS "fasonFirmaId", i.durum, i.bagimlilik, i.devir_adedi AS "devirAdedi", i.saglam_adet AS "saglamAdet",
+            COALESCE(s.saglam, 0)::int AS saglam, COALESCE(s.hurda, 0)::int AS hurda, COALESCE(s.kb, 0)::int AS "kararBekliyor",
+            (SELECT o.olay FROM uretim_olayi o WHERE o.is_emri_id = i.id AND o.olay <> 'ayar' ORDER BY o.id DESC LIMIT 1) AS "sonOlay",
+            (e.ust_emir_id IS NOT NULL OR EXISTS (SELECT 1 FROM uretim_emri a WHERE a.ust_emir_id = e.id)) AS partili
+       FROM uretim_emirleri_is_emri i
+       JOIN uretim_emri e ON e.id = i.uretim_emri_id
+       LEFT JOIN LATERAL (
+         SELECT sum(adet) FILTER (WHERE tur = 'saglam') AS saglam, sum(adet) FILTER (WHERE tur = 'hurda') AS hurda,
+                sum(adet) FILTER (WHERE tur = 'karar_bekliyor') AS kb
+           FROM uretim_sayimi WHERE is_emri_id = i.id) s ON true
+      WHERE i.uretim_emri_id = ANY($1::int[])
+      ORDER BY i.uretim_emri_id, i.sira`,
+    [[...emirIdleri]],
+  );
+}
+
+export interface AsimSatiri { sayimId: number; isEmriId: number; opNo: number; kisiId: number; adet: number; oncekiSaglam: number; zaman: string }
+
+// 647 a: adımın sayımı önceki adımın o anki sağlamını aştığında yazılmıştır; aşan satır iki adımın sayımlarının zaman sırasıyla birleşik
+// koşu toplamından okunur. Bu adımda sağlam ve karar bekleyen, önceki adımda sağlam sayılır (sonraki adıma geçen). Kalite kararı satırı
+// (karar bekleyenden sağlama geçiş) toplamı değiştirmediği için aşan satır sayılmaz. Bağımsız ve ilk adımda aşım yoktur.
+export function asimlarGetir(db: Db, emirId: number, isEmriId: number): Promise<AsimSatiri[]> {
+  return db.sorgu<AsimSatiri>(
+    `WITH adim AS (
+       SELECT id, uretim_emri_id, sira, op_no FROM uretim_emirleri_is_emri WHERE id = $2 AND uretim_emri_id = $1 AND bagimlilik <> 'bagimsiz'),
+     onceki AS (
+       SELECT i.id FROM uretim_emirleri_is_emri i JOIN adim a ON i.uretim_emri_id = a.uretim_emri_id AND i.sira < a.sira ORDER BY i.sira DESC LIMIT 1),
+     hareket AS (
+       SELECT s.id, s.zaman, s.kisi_id, s.adet, s.karar_veren_kisi_id, s.is_emri_id = (SELECT id FROM adim) AS bu
+         FROM uretim_sayimi s
+        WHERE (s.is_emri_id = (SELECT id FROM adim) AND s.tur IN ('saglam', 'karar_bekliyor'))
+           OR (s.is_emri_id = (SELECT id FROM onceki) AND s.tur = 'saglam')),
+     kosu AS (
+       SELECT h.*, sum(CASE WHEN h.bu THEN h.adet ELSE 0 END) OVER w AS bu_toplam, sum(CASE WHEN h.bu THEN 0 ELSE h.adet END) OVER w AS onceki_toplam
+         FROM hareket h WINDOW w AS (ORDER BY h.zaman, h.id))
+     SELECT k.id AS "sayimId", a.id AS "isEmriId", a.op_no AS "opNo", k.kisi_id AS "kisiId",
+            LEAST(k.adet, k.bu_toplam - k.onceki_toplam)::int AS adet, k.onceki_toplam::int AS "oncekiSaglam", ${ISO('k.zaman')} AS zaman
+       FROM kosu k CROSS JOIN adim a
+      WHERE k.bu AND k.adet > 0 AND k.karar_veren_kisi_id IS NULL AND k.bu_toplam > k.onceki_toplam AND EXISTS (SELECT 1 FROM onceki)
+      ORDER BY k.zaman, k.id`,
+    [emirId, isEmriId],
   );
 }

@@ -25,7 +25,7 @@ import {
 import { emirIptalDinle, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIMLI_IPTAL_DURUMU, ADIM_GIRDI_ASIMI, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
+  ADIMLI_IPTAL_DURUMU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -549,7 +549,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie2}/fason-gidis`, { adet: 1 }, randomUUID())).durum, 403);
   });
 
-  test('denetim #31: adımın sağlamı önceki adımın sağlamını aşamaz (sayım, ayarlama, bitirme); ilk adımda üst sınır yok', async () => {
+  test('denetim #31, 647 a: adımın sağlamı önceki adımın sağlamını aşınca uyarır, reddetmez (sayım, ayarlama, bitirme); ilk adımda üst sınır yok', async () => {
     const ist1 = await istasyonKur();
     const ist2 = await istasyonKur();
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: await makineKur(ist1) }), adim(2, { tur: 'makine', id: await makineKur(ist2) })], { adet: 10 });
@@ -559,13 +559,17 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -8 })).durum, 200);
     assert.equal((await terminal(`/${id}/bitir`, {})).durum, 200);
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    const uyari = (c: { govde: unknown }) => (c.govde as { uyari?: string | null }).uyari ?? null;
     const asim = await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 5 });
-    assert.deepEqual([asim.durum, asim.govde.mesaj], [409, ADIM_GIRDI_ASIMI], 'OP10 4 sağlam verdi');
-    assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 3 })).durum, 200);
-    assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 2 })).govde.mesaj, ADIM_GIRDI_ASIMI);
-    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 5 })).govde.mesaj, ADIM_GIRDI_ASIMI);
-    assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -1 })).durum, 200, 'düşürmek serbest');
-    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 4 })).durum, 200);
+    assert.equal(asim.durum, 200, 'OP10 4 sağlam verdi; aşım reddedilmez');
+    assert.match(uyari(asim) ?? '', /sayılan 5, önceki adımdan gelen 4; 1 fazla \(OP 20\)/);
+    assert.equal(uyari(await terminal(`/${id}/sayim`, { tur: 'saglam', adet: -3 })), null, 'düşürmek serbest ve uyarısız');
+    assert.equal(uyari(await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 2 })), null, 'sınırın içinde uyarı yok');
+    assert.match(uyari(await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 1 })) ?? '', /1 fazla/);
+    const e = await ayrinti(id);
+    assert.equal(e.isEmirleri[1]?.eksik, -1, 'eksi bakiye OP20 kartında');
+    const bitir = await terminal(`/${id}/bitir`, { saglamAdet: 4 });
+    assert.equal(bitir.durum, 200);
     assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.saglamAdet), [4, 4]);
   });
 
@@ -1078,8 +1082,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(await o().vt.tx((db) => partiKomutuReddi(db, birlesme, 'baslat')), null, 'başlamış adımda başlatma kuralı sorulmaz');
     assert.equal((await terminal(`/${kol}/bitir`, { saglamAdet: 2 })).durum, 200);
     assert.equal((await ayrinti(kol)).parti?.birlestigiEmirId, id);
-    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 7 })).govde.mesaj, ADIM_GIRDI_ASIMI, 'birleşme adımı iki taraftan gelenle (4 + 2) sınırlı');
-    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 6 })).durum, 200);
+    const fazla = await terminal(`/${id}/bitir`, { saglamAdet: 7 });
+    assert.equal(fazla.durum, 200, JSON.stringify(fazla.govde));
+    assert.match((fazla.govde as { uyari?: string }).uyari ?? '', /gelen 6; 1 fazla/, 'birleşme adımının girdisi iki taraftan gelendir (4 + 2); aşım uyarıdır (647 a)');
     assert.equal((await ayrinti(id)).durum, 'bitti');
     await assert.rejects(o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET tur = 'baska' WHERE uretim_emri_id = $1", [id]), /uretim_emirleri_is_emri_tur/);
     await assert.rejects(o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET ek_aciklama = 'x' WHERE uretim_emri_id = $1", [id]), /uretim_emirleri_is_emri_ek_aciklama_ekte/);
