@@ -9,6 +9,7 @@ export type UyariZamani = 'start' | 'every' | 'interval' | 'tool' | 'shift';
 export interface Uyari { id: string; t: string; lvl: UyariSeviyesi; when: UyariZamani; n?: number; ack?: boolean }
 
 export interface KaliteKurallari {
+  // 564 7 a: numune reddi üretimi durdurmaz; kayıtlı eski 'stop' uyarı olarak okunur.
   who: 'quality' | 'operator'; firstPiece: boolean; nok: 'warn' | 'call' | 'stop'; band: number; critTwice: boolean; autoSend: boolean;
 }
 export interface Takim { id: string; name: string; life: number; warnPct: number }

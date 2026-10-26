@@ -74,7 +74,8 @@ describe('A2 kurallar eski hesaplarla aynı', () => {
     const girdiler = [null, {}, { rules: { warns: [{ id: 'a', t: 'x', lvl: 'warn', when: 'start' }], q: { band: 60, who: 'operator' }, prod: { scrapPct: 5 } } }, { rules: { prod: { tools: [{ id: 't', name: 'T1', life: 10, warnPct: 80 }] }, q: { nok: 'stop' } } }];
     for (const g of girdiler) {
       expect(isKurallari(g)).toEqual(K.rulesOf(g));
-      expect(kuralOzeti(isKurallari(g))).toBe(K.rulesSummary(K.rulesOf(g)));
+      // 564 7 a: kalite reddi makineyi durdurmaz; eski 'stop' kuralı uyarı olarak özetlenir (bilinçli fark).
+      expect(kuralOzeti(isKurallari(g))).toBe(K.rulesSummary(K.rulesOf(g)).replace('redde dur', 'redde uyar'));
     }
     const b = { min: 9.9, max: 10.1 };
     for (const v of [9.9, 9.92, 9.98, 10, 10.05, 10.09, 10.1, 10.2, '10']) for (const band of [0, 50, 80, 95]) expect(sinirYakin(b, v, band)).toBe(K.nearEdge(b, v, band));
