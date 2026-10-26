@@ -388,3 +388,38 @@ test.describe('577a Odak tahtası', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// 577c: Geçmiş Plan ekranının sayfasıdır (`?ekran=gecmis&bolum=`); Önceki planla fark Başka menüsünde, son canlı planı okur. Örnek veride
+// canlı plan olmayabilir; o halde "Henüz canlıya alınmış plan yok" satırı kabul edilir.
+test.describe('577c Geçmiş ve fark', () => {
+  test('Geçmiş: plan çubuğundan açılır, iki bölüm gezilir, Plan tahtaya döner; fark Başka menüsünden açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
+    await cubuk.getByRole('button', { name: 'Geçmiş', exact: true }).click();
+    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan\?ekran=gecmis$/);
+    const kok = page.locator('[data-parca="gecmis"]');
+    await expect(kok).toBeVisible();
+    await expect(cubuk.getByRole('button', { name: 'Geçmiş', exact: true })).toHaveAttribute('aria-current', 'page');
+    const menu = page.getByRole('navigation', { name: 'Geçmiş' });
+    for (const b of ['Senaryolar', 'Değişiklik izi']) {
+      await menu.getByRole('button', { name: b }).click();
+      await expect(menu.getByRole('button', { name: b })).toHaveAttribute('aria-current', 'page');
+      await tasmaz(page);
+    }
+    await expect(page).toHaveURL(/ekran=gecmis&bolum=iz$/);
+    await expect(kok.getByRole('table', { name: 'Değişiklik izi' }).or(kok.getByText(/^(Kayıt yok\.|Planlama çalışması yok)$/)).first()).toBeVisible();
+    await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
+    await expect(kok).toHaveCount(0);
+    const baska = page.getByRole('button', { name: /Başka/ });
+    if (await baska.isVisible()) {
+      await baska.click();
+      await page.getByRole('menuitemcheckbox', { name: /Önceki planla fark/ }).click();
+      const satir = page.locator('.tc-pym-fark');
+      await expect(satir).toContainText(/Son canlı plan ile|Henüz canlıya alınmış plan yok|yetki/);
+      await tasmaz(page);
+      await satir.getByRole('button', { name: 'Farkı kapat' }).click();
+      await expect(satir).toHaveCount(0);
+    }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
