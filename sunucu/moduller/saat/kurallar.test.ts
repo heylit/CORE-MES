@@ -203,4 +203,19 @@ describe('saat kuralları', () => {
     assert.equal(siradakiIs(isler, yerlesimler, new Set([9])), null);
     assert.equal(siradakiIs(isler, [], new Set([7])), null);
   });
+
+  test('sıradaki iş (3a): terminalin sırası; Hazırlık sırası önce, sırasız iş makinedeki yeriyle, makineler iç içe', () => {
+    const is = (id: number) => ({ id, emirNo: `UE-${id}`, opNo: id * 10, ad: `Adım ${id}`, adet: 3, adimDurumu: 'bekliyor' as const });
+    const isler = [is(1), is(2), is(3), is(4)];
+    const y = (isEmriId: number, makineId: number, saat: number) => ({ isEmriId, makineId, baslangic: new Date(Date.UTC(2026, 9, 22, saat)) });
+    // Makine 7: 1 (01:00), 3 (05:00); makine 8: 2 (02:00), 4 (03:00). En erken 1'dir; yer eşitse küçük makine.
+    const yerlesimler = [y(1, 7, 1), y(2, 8, 2), y(4, 8, 3), y(3, 7, 5)];
+    assert.equal(siradakiIs(isler, yerlesimler, new Set([7, 8]))?.is.id, 1);
+    assert.equal(siradakiIs(isler, yerlesimler, new Set([7, 8]), new Map([[3, 2], [4, 1]]))?.is.id, 4, 'en küçük Hazırlık sırası');
+    // Makine 8'deki 2 erken başlıyor ama makine 7'nin ilk işinden sonra gelir (yer 1, makine 7 < 8): terminal yer ve makineye bakar.
+    const ic = [y(1, 7, 3), y(2, 8, 1)];
+    assert.equal(siradakiIs(isler, ic, new Set([7, 8]))?.is.id, 1);
+    // İstasyon dışındaki makinenin Hazırlık sırası işi istasyona getirmez.
+    assert.equal(siradakiIs(isler, [y(1, 7, 1), y(2, 9, 2)], new Set([7]), new Map([[2, 1]]))?.is.id, 1);
+  });
 });
