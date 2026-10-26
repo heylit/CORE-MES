@@ -14,7 +14,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisil
 import type { AtamaTuru } from './kurallar.ts';
 import {
   KULLANIMDA_ILETISI, YUZDE_TAVANI_SENT, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
-  secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
+  istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { YetkinlikAyrintiSatiri } from './sorgular.ts';
@@ -451,7 +451,7 @@ export async function makineDurumuYaz(db: Db, kullanici: Kullanici, makineId: nu
   return makineDurumlari(db);
 }
 
-type KisiYetkinligi = { istasyonIdleri: number[]; ayrintilar: YetkinlikAyrintisi[] };
+type KisiYetkinligi = { istasyonIdleri: number[]; ayrintilar: YetkinlikAyrintisi[]; makineIdleri: number[]; enCok: number | null };
 const YETKINLIK_YOK = 'Bu kişinin bu istasyonda yetkinliği yok.';
 
 function ayrintiCevabi(s: YetkinlikAyrintiSatiri, gun: string): YetkinlikAyrintisi {
@@ -460,19 +460,25 @@ function ayrintiCevabi(s: YetkinlikAyrintiSatiri, gun: string): YetkinlikAyrinti
     gecerli: yetkinlikGecerliMi(s.gecerlilikBitis, gun), surum: s.surum,
   };
 }
-const kisiCevabi = (satirlar: readonly YetkinlikAyrintiSatiri[], gun: string): KisiYetkinligi =>
-  ({ istasyonIdleri: satirlar.map((s) => s.istasyonId), ayrintilar: satirlar.map((s) => ayrintiCevabi(s, gun)) });
+const kisiCevabi = (satirlar: readonly YetkinlikAyrintiSatiri[], makineIdleri: number[], enCok: number | null, gun: string): KisiYetkinligi =>
+  ({ istasyonIdleri: satirlar.map((s) => s.istasyonId), ayrintilar: satirlar.map((s) => ayrintiCevabi(s, gun)), makineIdleri, enCok });
 
-// Süresi dolmuşlar dahil; ekran geçerliliği `gecerli` alanından okur.
+// Süresi dolmuşlar dahil; ekran geçerliliği `gecerli` alanından okur. Yalnız tezgâh sınırı olan kişi de listede yer alır.
 export async function yetkinlikler(db: Db): Promise<({ kisiId: number } & KisiYetkinligi)[]> {
   const gun = tesisGunu(new Date());
-  const kisiler = new Map<number, YetkinlikAyrintiSatiri[]>();
-  for (const s of await sorgular.yetkinlikAyrintilari(db, null)) kisiler.set(s.kisiId, [...(kisiler.get(s.kisiId) ?? []), s]);
-  return [...kisiler].map(([kisiId, satirlar]) => ({ kisiId, ...kisiCevabi(satirlar, gun) }));
+  const kisiler = new Map<number, { s: YetkinlikAyrintiSatiri[]; m: number[]; n: number | null }>();
+  const al = (kisiId: number) => kisiler.get(kisiId) ?? kisiler.set(kisiId, { s: [], m: [], n: null }).get(kisiId)!;
+  for (const s of await sorgular.yetkinlikAyrintilari(db, null)) al(s.kisiId).s.push(s);
+  for (const m of await sorgular.makineYetkinlikAyrintilari(db, null)) al(m.kisiId).m.push(m.makineId);
+  for (const t of await sorgular.kisiTezgahSinirlari(db)) al(t.kisiId).n = t.enCok;
+  return [...kisiler].sort(([a], [b]) => a - b).map(([kisiId, k]) => ({ kisiId, ...kisiCevabi(k.s, k.m, k.n, gun) }));
 }
 
-const kisiYetkinligi = async (db: Db, kisiId: number): Promise<KisiYetkinligi> =>
-  kisiCevabi(await sorgular.yetkinlikAyrintilari(db, kisiId), tesisGunu(new Date()));
+async function kisiYetkinligi(db: Db, kisiId: number): Promise<KisiYetkinligi> {
+  const makineler = (await sorgular.makineYetkinlikAyrintilari(db, kisiId)).map((m) => m.makineId);
+  const enCok = (await sorgular.kisiTezgahSinirlari(db)).find((t) => t.kisiId === kisiId)?.enCok ?? null;
+  return kisiCevabi(await sorgular.yetkinlikAyrintilari(db, kisiId), makineler, enCok, tesisGunu(new Date()));
+}
 
 // Yeni eklenen istasyon var olan ve aktif olmalı; listede zaten duran (sonradan pasife dönmüş) istasyon kalabilir. Pasif kişinin yetkinliği de yazılır.
 // IS29: yalnız fark yazılır ve deftere girer; veren ve verilme sunucudan.
@@ -486,12 +492,18 @@ export async function yetkinlikBelirle(db: Db, verenKisiId: number, kisiId: numb
 // biri reddedilirse transaction hepsini geri alır.
 export async function yetkinlikleriTopluBelirle(
   db: Db, verenKisiId: number, degisiklikler: readonly { kisiId: number; istasyonId: number; yetkin: boolean }[],
+  makineler: readonly { kisiId: number; makineId: number; yetkin: boolean }[] = [],
 ): Promise<({ kisiId: number } & KisiYetkinligi)[]> {
   const bayrakli = await kisiBayrakliMi(db, verenKisiId);
   for (const [kisiId, l] of yetkinlikDegisiklikleri(degisiklikler)) {
     if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, bayrakli)) throw yetkiYok();
     const mevcut = (await sorgular.yetkinlikAyrintilari(db, kisiId)).map((s) => s.istasyonId);
     await yetkinlikYaz(db, verenKisiId, kisiId, yetkinlikUygula(mevcut, l));
+  }
+  for (const [kisiId, l] of kisiBasinaDegisiklik(makineler.map((d) => ({ kisiId: d.kisiId, hedefId: d.makineId, yetkin: d.yetkin })))) {
+    if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, bayrakli)) throw yetkiYok();
+    const mevcut = (await sorgular.makineYetkinlikAyrintilari(db, kisiId)).map((m) => m.makineId);
+    await makineYetkinlikYaz(db, verenKisiId, kisiId, yetkinlikUygula(mevcut, l));
   }
   return yetkinlikler(db);
 }
@@ -515,6 +527,52 @@ export async function yetkinlikYaz(db: Db, verenKisiId: number, kisiId: number, 
     await sorgular.yetkinlikKaldir(db, kisiId, istasyonId);
     await sorgular.yetkinlikGecmisiYaz(db, { kisiId, istasyonId, islem: 'kaldir', gecerlilikBitis: s.gecerlilikBitis, dayanak: s.dayanak, degistirenKisiId: verenKisiId });
   }
+  if (kaldirilan.length > 0) {
+    const makineler = await sorgular.kisiMakineYetkinlikleriniKilitle(db, kisiId);
+    for (const makineId of istasyonuKalkanMakineler(makineler, kaldirilan)) {
+      await sorgular.makineYetkinlikKaldir(db, kisiId, makineId);
+      await sorgular.makineYetkinlikGecmisiYaz(db, { kisiId, makineId, islem: 'kaldir', neden: 'istasyon_yetkinligi_kalkti', degistirenKisiId: verenKisiId });
+    }
+  }
+  return kisiYetkinligi(db, kisiId);
+}
+
+// 563 c: kişi kartındaki makine listesi; istasyon yetkinliğiyle aynı yetki ilkesi.
+export async function makineYetkinlikBelirle(db: Db, verenKisiId: number, kisiId: number, istenen: readonly number[]): Promise<KisiYetkinligi> {
+  if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, await kisiBayrakliMi(db, verenKisiId))) throw yetkiYok();
+  return makineYetkinlikYaz(db, verenKisiId, kisiId, istenen);
+}
+
+// Yeni eklenen makine makineYetkinligiReddi'nden geçer; listede duran (sonradan pasife dönen ya da istasyonu değişen) makine kalabilir,
+// plan onu yalnız makinenin bugünkü istasyonunda geçerli yetkinlik varsa sayar.
+async function makineYetkinlikYaz(db: Db, verenKisiId: number, kisiId: number, istenen: readonly number[]): Promise<KisiYetkinligi> {
+  if (!(await kisiVarMi(db, kisiId))) throw bulunamadi(KISI_YOK);
+  const idler = tekrarsiz(istenen);
+  await sorgular.kisiYetkinlikleriniKilitle(db, kisiId);
+  const mevcut = (await sorgular.kisiMakineYetkinlikleriniKilitle(db, kisiId)).map((m) => m.makineId);
+  const { eklenen, kaldirilan } = yetkinlikFarki(mevcut, idler);
+  const yetkinIstasyonlar = (await sorgular.yetkinlikAyrintilari(db, kisiId)).map((s) => s.istasyonId);
+  const makineler = await sorgular.makineIstasyonlari(db, eklenen);
+  for (const makineId of eklenen) {
+    const ret = makineYetkinligiReddi(makineler.find((m) => m.id === makineId), yetkinIstasyonlar);
+    if (ret !== null) throw dogrulama(ret, 'makineIdleri');
+  }
+  for (const makineId of eklenen) {
+    await sorgular.makineYetkinlikEkle(db, kisiId, makineId, verenKisiId);
+    await sorgular.makineYetkinlikGecmisiYaz(db, { kisiId, makineId, islem: 'ver', neden: 'elle', degistirenKisiId: verenKisiId });
+  }
+  for (const makineId of kaldirilan) {
+    await sorgular.makineYetkinlikKaldir(db, kisiId, makineId);
+    await sorgular.makineYetkinlikGecmisiYaz(db, { kisiId, makineId, islem: 'kaldir', neden: 'elle', degistirenKisiId: verenKisiId });
+  }
+  return kisiYetkinligi(db, kisiId);
+}
+
+// 563 2 a: tezgâh sınırı; değişiklik ortak defterdedir (tetik).
+export async function tezgahSiniriBelirle(db: Db, verenKisiId: number, kisiId: number, enCok: number | null): Promise<KisiYetkinligi> {
+  if (!kendiKisitiniYazabilirMi(verenKisiId, kisiId, await kisiBayrakliMi(db, verenKisiId))) throw yetkiYok();
+  if (!(await kisiVarMi(db, kisiId))) throw bulunamadi(KISI_YOK);
+  await sorgular.kisiTezgahSiniriYaz(db, kisiId, enCok, verenKisiId);
   return kisiYetkinligi(db, kisiId);
 }
 
@@ -533,7 +591,7 @@ export async function yetkinlikAyrintisiYaz(db: Db, kullanici: Kullanici, kisiId
 
 export async function yetkinlikGecmisi(db: Db, kisiId: number): Promise<YetkinlikGecmisiCevabi> {
   if (!(await kisiVarMi(db, kisiId))) throw bulunamadi(KISI_YOK);
-  return { gecmis: await sorgular.yetkinlikGecmisi(db, kisiId) };
+  return { gecmis: await sorgular.yetkinlikGecmisi(db, kisiId), makineGecmis: await sorgular.makineYetkinlikGecmisi(db, kisiId) };
 }
 
 // Kişi başına tek istasyon: bugün geçerli istasyon atamalarından en büyük yüzdeli aktif istasyon; eşitlikte kodu önce gelen (P-B4, rota B6).

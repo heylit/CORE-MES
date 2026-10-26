@@ -315,9 +315,16 @@ export const panoOzetiCevabi = z.object({
 // listede kalır ama iş başlatmaz. Veren ve verilme karardan önceki satırlarda boştur.
 export const yetkinlikGovdesi = z.object({ istasyonIdleri: z.array(kimlik).max(500) });
 // 565 a: yetkinlik matrisinde toplu aç ve kapat (satır ya da sütun); her kişinin listesi tek uçtaki gibi fark olarak yazılır, hepsi ya da hiçbiri.
+// 563 c: makine sütunları da aynı uçtan gider; istasyon değişiklikleri önce uygulanır (istasyonu ve makinesi birlikte açılabilsin).
 export const yetkinlikTopluGovdesi = z.object({
-  degisiklikler: z.array(z.object({ kisiId: kimlik, istasyonId: kimlik, yetkin: z.boolean() })).min(1).max(2000),
-});
+  degisiklikler: z.array(z.object({ kisiId: kimlik, istasyonId: kimlik, yetkin: z.boolean() })).max(2000).default([]),
+  makineler: z.array(z.object({ kisiId: kimlik, makineId: kimlik, yetkin: z.boolean() })).max(2000).default([]),
+}).refine((g) => g.degisiklikler.length + g.makineler.length > 0, 'En az bir değişiklik gerekli.');
+// 563 c: kişinin bakabildiği makineler; yalnız yetkin olduğu istasyonun makineleri. Liste tümden yazılır, fark deftere girer.
+export const makineYetkinlikGovdesi = z.object({ makineIdleri: z.array(kimlik).max(500) });
+// 563 2 a: aynı anda en çok kaç tezgâh; boş sınırsızdır (yalnız tezgâh oranlarının toplamı 1'i geçmez).
+export const TEZGAH_SINIRI_EN_COK = 20;
+export const tezgahSiniriGovdesi = z.object({ enCok: z.number().int().min(1).max(TEZGAH_SINIRI_EN_COK).nullable() });
 export const yetkinlikAyrintisiSemasi = z.object({
   istasyonId: z.number().int(),
   verenKisiId: z.number().int().nullable(),
@@ -327,9 +334,15 @@ export const yetkinlikAyrintisiSemasi = z.object({
   gecerli: z.boolean(),
   surum: surumSemasi,
 });
-export const kisiYetkinligiSemasi = z.object({ kisiId: z.number().int(), istasyonIdleri: z.array(z.number().int()), ayrintilar: z.array(yetkinlikAyrintisiSemasi) });
+const kisiYetkinligiAlanlari = {
+  istasyonIdleri: z.array(z.number().int()),
+  ayrintilar: z.array(yetkinlikAyrintisiSemasi),
+  makineIdleri: z.array(z.number().int()),
+  enCok: z.number().int().nullable(),
+};
+export const kisiYetkinligiSemasi = z.object({ kisiId: z.number().int(), ...kisiYetkinligiAlanlari });
 export const yetkinliklerCevabi = z.object({ yetkinlikler: z.array(kisiYetkinligiSemasi) });
-export const kisiYetkinligiCevabi = z.object({ istasyonIdleri: z.array(z.number().int()), ayrintilar: z.array(yetkinlikAyrintisiSemasi) });
+export const kisiYetkinligiCevabi = z.object(kisiYetkinligiAlanlari);
 export const yetkinlikParametresi = z.object({ kisiId: z.coerce.number().int().positive(), istasyonId: z.coerce.number().int().positive() });
 export const yetkinlikAyrintiGovdesi = z.object({
   ...beklenenSurum,
@@ -343,6 +356,14 @@ export const yetkinlikGecmisiCevabi = z.object({
     islem: z.enum(['ver', 'degistir', 'kaldir']),
     gecerlilikBitis: tarihSemasi.nullable(),
     dayanak: z.string().nullable(),
+    degistirenKisiId: z.number().int(),
+    zaman: zamanSemasi,
+  })),
+  makineGecmis: z.array(z.object({
+    makineId: z.number().int(),
+    makineKod: z.string(),
+    islem: z.enum(['ver', 'kaldir']),
+    neden: z.enum(['elle', 'istasyon_yetkinligi_kalkti']),
     degistirenKisiId: z.number().int(),
     zaman: zamanSemasi,
   })),
@@ -437,6 +458,8 @@ export type MakineDurumlariCevabi = z.output<typeof makineDurumlariCevabi>;
 export type PanoOzetiCevabi = z.output<typeof panoOzetiCevabi>;
 export type YetkinlikGovdesi = z.input<typeof yetkinlikGovdesi>;
 export type YetkinlikTopluGovdesi = z.input<typeof yetkinlikTopluGovdesi>;
+export type MakineYetkinlikGovdesi = z.input<typeof makineYetkinlikGovdesi>;
+export type TezgahSiniriGovdesi = z.input<typeof tezgahSiniriGovdesi>;
 export type YetkinliklerCevabi = z.output<typeof yetkinliklerCevabi>;
 export type YetkinlikAyrintisi = z.output<typeof yetkinlikAyrintisiSemasi>;
 export type YetkinlikAyrintiGovdesi = z.input<typeof yetkinlikAyrintiGovdesi>;
