@@ -365,7 +365,7 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-uzak-govde { display: grid; justify-items: center; gap: var(--b-2); text-align: center; }
 .tc-ay1-uzak-parca { font-size: var(--yazi-xl); font-weight: 700; overflow-wrap: anywhere; }
 .tc-ay1-uzak-malzeme { color: var(--muted); }
-.tc-ay1-uzak-3b { width: min(34vh, 60vw); aspect-ratio: 1; pointer-events: none; }
+.tc-ay1-uzak-3b { position: relative; overflow: hidden; width: min(34vh, 60vw); aspect-ratio: 1; pointer-events: none; }
 .tc-ay1-uzak-sayi { display: flex; align-items: baseline; gap: var(--b-3); color: var(--sig-yazi); }
 .tc-ay1-uzak-sayi span { font-size: var(--yazi-3xl); font-size: min(30vw, 30vh); font-weight: 800; line-height: .9; font-variant-numeric: tabular-nums; }
 .tc-ay1-uzak-sayi small { font-size: var(--yazi-2xl); color: var(--muted); }
