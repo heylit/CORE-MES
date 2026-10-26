@@ -407,6 +407,17 @@ export async function yayindakiBelgeDosyasi(db: Db, belgeId: number): Promise<Ya
   return { ad: b.ad, tur: b.tur, ozet: r.ozet, dosyaTuru: r.dosyaTuru, dosya: await revizyonDosyasi(db, belgeId, r.id) };
 }
 
+// Başka modülün aldığı revizyon (belge kimliği ve özetle): belge sonradan yeni revizyona geçse de alınan revizyonun dosyası verilir
+// (Kalite Merkezi balonları o resmin üstündedir, 597 a). Kural yayındaki dosyayla aynıdır: arşivdeki belge ve taslak revizyon null.
+// Okuma yetkisi ve veri kapsamı çağıranın ucundadır.
+export async function alinanRevizyonDosyasi(db: Db, belgeId: number, ozet: string): Promise<YayindakiBelgeDosyasi | null> {
+  const b = await sorgular.belge(db, belgeId);
+  if (b === null || !b.aktif) return null;
+  const r = await sorgular.yayinlanmisRevizyonOzetle(db, belgeId, ozet);
+  if (r === null) return null;
+  return { ad: b.ad, tur: b.tur, ozet: r.ozet, dosyaTuru: r.dosyaTuru, dosya: await revizyonDosyasi(db, belgeId, r.id) };
+}
+
 export interface YayindakiOnizleme {
   belgeId: number;
   revizyonId: number;

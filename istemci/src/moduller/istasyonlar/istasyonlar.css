@@ -102,6 +102,10 @@
 .tc-ist-matris { border-collapse: collapse; font-size: var(--yazi-s); min-inline-size: 100%; }
 .tc-ist-matris th, .tc-ist-matris td { border-top: 1px solid var(--edge); padding: var(--b-1) var(--b-2); text-align: center; }
 .tc-ist-matris tbody th { text-align: start; white-space: nowrap; }
+/* 565 a: yetkinlik matrisinde kişi sütunu kayarken yerinde kalır; süresi dolan yetkinlik uyarı rengiyle. */
+.tc-ist-yetkinlik tbody th { position: sticky; inset-inline-start: 0; background: var(--panel-solid); z-index: 1; }
+.tc-ist-yetkinlik thead th[scope="col"] { white-space: nowrap; }
+.tc-ist-yetkinlik-dolmus { color: var(--hold); }
 
 /* Geniş tablo sığmadığında kendi içinde kayar (sayfa kaymaz); telefonda satır yığılır ve her hücre kendi başlığını gösterir. */
 @media (min-width: 768px) {

@@ -21,3 +21,4 @@
 | CZ-16 3B listesi iki sekmede: istasyona (makineye) bağlı model "Makineler 3B", geri kalanı (bağsız ve malzemeye bağlı dahil) "Malzemeler 3B"; veri değişmez, süzgeçsiz liste aynı | `CZ-16 3B listesi ...`; istemci `CZ-16: 3B bölümü ...` | aynı test: geçersiz süzgeç 400; öbür bölümlerde sekme ve süzgeç yok |
 | Ekran: okur yazma düğmesi görmez; yayınlama yalnız `cizimler.yayinla` ile; yayın sürümü taşır | `cizimler ekranları` grubu | aynı grup |
 | Ekran: parçalı yükleme, eksik olmayan dosya yeniden gönderilmez; http'de SHA-256 yazılımla | `cizimler dosya aktarımı` grubu | aynı grup: boş dosya istek atmadan reddedilir |
+| CZ-17 Başka modülün aldığı revizyon (belge ve özet) yeni revizyon yayına girse de verilir (604, 597 a); taslak revizyon ve arşivdeki belge verilmez; yetki çağıranındır | `CZ-17 alınan A revizyonu ...` (`revizyon-ozeti.test.ts`) | aynı test: taslak, başka belgenin özeti, olmayan belge ve arşivdeki belge null |
