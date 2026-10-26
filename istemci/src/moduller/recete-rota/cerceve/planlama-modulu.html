@@ -23695,7 +23695,10 @@ if (TMI_ICINDE) {
   /* Kaynaklar açık çalışmaya yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Ana kayda
      yazılmaz (sunucu zaten ayıklar); değişiklik planı eskitir. */
   const kaynakUygula = () => {
-    if (!kaynakBirlestir(S.D, rrOku(), TMI_KAYNAK.durum ? TMI_KAYNAK : null).length) return false;
+    const veri = kaynakBirlestir(S.D, rrOku(), TMI_KAYNAK.durum ? TMI_KAYNAK : null).length > 0;
+    /* 651 a: arızadaki ya da bakımdaki makine oto duruş satırı alır, makine çalışınca satır kapanır (motor/girdi.betik otoArizaUygula) */
+    const ariza = !!TMI_KAYNAK.durum && otoArizaGerekli(S, TMI_KAYNAK.durum.machines) && otoArizaUygula(S, TMI_KAYNAK.durum.machines, cxAl());
+    if (!veri && !ariza) return false;
     S.dataVer++; U.hamle = null;
     RRV.S = S; RRV.dj = JSON.stringify(S.D);
     if (S.plan) bildir('Tezgâh, personel ve takvim sunucudan alındı. Plan yeniden çözülünce güncellenir.', 'tamam');
