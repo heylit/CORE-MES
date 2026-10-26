@@ -168,6 +168,7 @@ describe('stok: lot izi (gerçek PostgreSQL)', () => {
     const k = (await o().vt.tx((db) => refakatKartiKapsami(db, r.id)))!;
     assert.deepEqual([k.refakat.id, k.partiIdler], [r.id, [lot.id, urun.id]]);
     assert.deepEqual(k.teslimler.map((t) => [t.id, t.durum, t.partiId, t.miktar, t.alinan, t.kapanis !== null]), [[g.govde.teslim.id, 'teslim', lot.id, '10.000', '10.000', true]]);
+    assert.deepEqual(k.teslimler.map((t) => [t.gonderenKisiId, t.kapatanKisiId]), [[kisiler.get('depo'), kisiler.get('operator')]], 'gönderen ve teslim alan (kart #708)');
     assert.equal(await o().vt.tx((db) => refakatKartiKapsami(db, 2147483000)), null);
   });
 });
