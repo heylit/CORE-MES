@@ -120,11 +120,17 @@ export const uretimSayimiYansitUyarili = (db: Db, g: servis.UretimSayimiYansimas
 export const kaliteKarariYansit = (db: Db, g: servis.KaliteKarariYansimasi): Promise<void> => servis.kaliteKarariYansit(db, g);
 // Hurda sayımının girdisi: hurdaya ayrılan parçanın HM'si istasyondaki emrin stoğundan fire çıkışıyla düşer; eksi fark geri alır. Yetki denetlemez.
 export type { HurdaSayimiYansimasi } from './servis.ts';
-export const hurdaSayimiYansit = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => servis.hurdaSayimiYansit(db, g);
+export const hurdaSayimiYansit = async (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => { await servis.hurdaSayimiYansit(db, g); };
+// Aynısı, sayım cevabına giden uyarıyla (601 a): önceki adımın parçası istasyonda yoksa eksiye düşüldüğü söylenir (sağlam sayımdaki gibi).
+export const hurdaSayimiYansitUyarili = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<{ uyari: string | null }> => servis.hurdaSayimiYansit(db, g);
 // Emrin istasyondan teslim edilen miktarı (yoldaki ve alınan); istasyondan hiç teslim olmadıysa null.
 // Arkon'dan operatörün gönderdiği numune (karar 115 a, 125 a): teslim kaydı; engel değildir, yazılamazsa neden döner.
 export type { NumuneTeslimi, NumuneTeslimSonucu } from './servis.ts';
 export const numuneTeslimi = (db: Db, g: servis.NumuneTeslimi): Promise<servis.NumuneTeslimSonucu> => servis.numuneTeslimi(db, g);
+// 564 6 a: kalite istasyonunun lot reddi emrin istasyondaki serbest parçasını red kalitesine geçirir (kabul değiştirmez); geçen miktar döner.
+// Çağıranın transaction'ında yürür; yetkiyi ve Kalite Merkezi lot kaydını çağıran yazar.
+export type { IstasyonLotKarari } from './servis.ts';
+export const istasyonLotKarari = (db: Db, g: servis.IstasyonLotKarari): Promise<string> => servis.istasyonLotKarari(db, g);
 export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istasyonId: number }): Promise<string | null> => servis.istasyondanTeslimEdilen(db, g);
 // Reçete ve Rota başlangıçta adımın statüsünü çözen işlevi kaydeder (stok onu ithal edemez). Son ve statüsüz adımda null döner.
 export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
