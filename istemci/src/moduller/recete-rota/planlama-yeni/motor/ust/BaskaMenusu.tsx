@@ -10,9 +10,9 @@ const KARTLAR: [string, SimgeAdi][] = [
   ['Ne neyi etkiliyor', 'scan'], ['Reçete ve Rota', 'tool'],
 ];
 interface Madde { ad: string; simge: SimgeAdi; not?: string; tus?: string; basili?: boolean; yap?: () => void; dugme?: boolean }
-// Haritanın katmanları menüden açılır: gecikme kaynağı, kılavuz ve klavye kısayolları (P1b). Önceki planla fark canlı planla gelir.
+// Haritanın katmanları menüden açılır: önceki planla fark (son canlı plan, 577c), gecikme kaynağı, kılavuz ve klavye kısayolları (P1b).
 export interface BaskaDurumu {
-  mercek: 'durum' | 'etki'; mercekSec: () => void; kilavuz: boolean; kilavuzAc: () => void; kisayolAc: () => void; planYaz: boolean;
+  mercek: 'durum' | 'etki'; mercekSec: () => void; fark: boolean; farkSec: () => void; kilavuz: boolean; kilavuzAc: () => void; kisayolAc: () => void; planYaz: boolean;
   // Plan ekranının sayfaları (zk-kabuk sgMenu Sayfalar); verilmezse pasif.
   sayfaAc?: ((s: 'bugun' | 'hesap') => void) | null;
 }
@@ -20,7 +20,7 @@ function bolumler(b: BaskaDurumu): { ad: string; l: Madde[] }[] {
   return [
     { ad: 'Kartlar', l: KARTLAR.map(([ad, simge], i) => ({ ad, simge, not: HAZIRLANIYOR, tus: String(i + 1) })) },
     { ad: 'Tahtada göster', l: [
-      { ad: 'Önceki planla fark', simge: 'eye', not: HAZIRLANIYOR },
+      { ad: 'Önceki planla fark', simge: 'eye', basili: b.fark, yap: b.farkSec },
       { ad: 'Gecikme kaynağı', simge: 'chart', basili: b.mercek === 'etki', yap: b.mercekSec },
       { ad: 'Nasıl okunur', simge: 'help', basili: b.kilavuz, yap: b.kilavuzAc },
     ] },

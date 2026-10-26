@@ -25,6 +25,8 @@ export interface HaritaOzellikleri {
   zamanAkti?: (t: number) => void; oynatBitti?: (t: number) => void; yakinlikDegisti?: (yuzde: number) => void;
   ipucuZum?: () => void;
   etiket: string;
+  // Önceki planla fark: karşılaştırılan plan (son canlı); kapalıysa verilmez.
+  fark?: OkunanPlan | null;
 }
 export interface HaritaKomutu {
   yakinlas(oran: number): void; sigdir(): void; odakla(j: string): void; tezgahaUc(m: string): void; kilavuzKamera(m: string): void;
@@ -43,7 +45,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
     kam: null as Kamera | null, kutu: [] as Kutu[], hover: null as Kutu | null, raf: 0, son: 0, t: o.t, tGelen: o.t, giris: az() ? -1 : performance.now(),
     ucus: null as { a: Kamera; b: Kamera; t0: number; d: number } | null, renk: null as { anah: string; R: HaritaRenkleri } | null,
     gecis: null as { dol: Sahne['dol']; t0: number } | null, sahne: null as Sahne | null, boyut: null as [number, number] | null, oran: 0,
-    sj: null as string | null, bek: null as Record<string, number> | null, etki: null as ReturnType<typeof gecikmeEtkisi> | null, durus: [] as ReturnType<typeof durusOku>,
+    sj: null as string | null, ref: null as { s: Sahne; ops: OkunanPlan['ops'] } | null, bek: null as Record<string, number> | null, etki: null as ReturnType<typeof gecikmeEtkisi> | null, durus: [] as ReturnType<typeof durusOku>,
   });
 
   const gruplar = useMemo(() => haritaGruplari(o.c.D, o.p, o.cx), [o.c, o.p, o.cx]);
@@ -55,6 +57,8 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
     // Yalnız oran değişince yeniden kurulur; aynı oranda boy değişikliği yerleşimi bozmaz.
   }, [gruplar, oran]);
   const sahne = useMemo(() => sahneKur(o.c.D, o.p, o.cx, yer, o.r, o.now), [o.c, o.p, o.cx, yer, o.r, o.now]);
+  const fark = o.fark ?? null;
+  const refSahne = useMemo(() => (fark ? { s: sahneKur(o.c.D, fark, o.cx, yer, o.r, o.now), ops: fark.ops } : null), [fark, o.c, o.cx, yer, o.r, o.now]);
   const durus = useMemo(() => durusOku(o.c), [o.c]);
   const sj = o.secim.adim && o.p.ops[o.secim.adim] ? o.p.ops[o.secim.adim]?.job ?? null : o.secim.siparis;
   const bek = useMemo(() => (sj ? bekleme(o.p, o.cx, sj) : null), [o.p, o.cx, sj]);
@@ -67,7 +71,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
     if (d.oran !== oran) d.kam = null;
     else if (d.sahne.J !== sahne.J && !az()) d.gecis = { dol: d.sahne.dol, t0: performance.now() };
   }
-  d.oran = oran; d.sahne = sahne; d.boyut = boyut; d.sj = sj; d.bek = bek; d.etki = etki; d.durus = durus;
+  d.oran = oran; d.sahne = sahne; d.boyut = boyut; d.sj = sj; d.bek = bek; d.etki = etki; d.durus = durus; d.ref = refSahne;
   // Dışarıdan gelen zaman (imleç, Şimdi, gün seçimi) oynatmayı geçersiz kılar; oynarken zaman tuvalde akar.
   if (o.t !== d.tGelen) { d.t = o.t; d.tGelen = o.t; }
 
@@ -100,7 +104,7 @@ export const Harita = forwardRef<HaritaKomutu, HaritaOzellikleri>(function Harit
     const sonuc = ciz(g, {
       W, H, kam: d.kam, R: d.renk.R, s, D: p.c.D, olcek: p.olcek, r: p.r, t: d.t, durus: d.durus, sj: d.sj, adim, secTez: p.secim.tezgah,
       hover: d.hover, kilavuz: p.kilavuz, bekleme: d.bek, etki: d.sj ? null : d.etki, zaman: simdi / 1000, giris, gecis, oynat: p.oynat, az: az(),
-      isRenk: (j) => d.renk?.R.is[siparisRengi(p.c.D, j)] ?? [128, 128, 128],
+      isRenk: (j) => d.renk?.R.is[siparisRengi(p.c.D, j)] ?? [128, 128, 128], ref: d.ref,
     });
     d.kutu = sonuc.kutu;
   };

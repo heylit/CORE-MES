@@ -35,7 +35,7 @@
 }
 .tc-ay1-istasyon b { font-size: var(--yazi-l); font-family: var(--font-mono); }
 .tc-ay1-istasyon small { color: var(--muted); font-size: var(--yazi-xs); overflow-wrap: anywhere; }
-.tc-ay1-mobil-ust .tc-ay1-istasyon { display: flex; align-items: center; gap: var(--b-2); flex: 1 1 auto; }
+.tc-ay1-mobil-ust .tc-ay1-istasyon { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); flex: 1 1 auto; }
 .tc-ay1-lambali { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
 .tc-ay1-lambalar { display: inline-flex; flex-direction: column; gap: var(--pay-ince); padding: var(--b-1); border-radius: var(--yari-1); background: var(--panel2); }
 .tc-ay1-lambalar i { display: block; inline-size: var(--nokta); block-size: var(--nokta); border-radius: var(--yari-tam); background: var(--edge2); opacity: var(--saydam-45); }
@@ -425,10 +425,27 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-is-ozet > span { display: grid; gap: var(--pay-ince); min-width: 0; }
 .tc-ay1-is-ozet b { font-family: var(--font-mono); font-size: var(--yazi-l); overflow-wrap: anywhere; }
 .tc-ay1-is-ozet small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
-.tc-ay1-alt-gezinme {
-  position: fixed; inset-inline: 0; inset-block-end: 0; z-index: var(--z-ust); display: flex; justify-content: space-around; gap: var(--b-1); padding: var(--b-1) var(--b-2);
+/* Telefonda başlık ve alt bölge sabit (618): durum ve bağlantı sayarken görünür; ana eylemler alt gezinmenin üstünde. */
+.tc-ay1-dar .tc-ay1-mobil-ust { position: sticky; inset-block-start: 0; z-index: var(--z-ust); background: var(--panel-solid); }
+.tc-ay1-dar[data-cubuk] { padding-block-end: calc(var(--dokunma-ana) * 2 + var(--b-4) * 2); }
+.tc-ay1-alt {
+  position: fixed; inset-inline: 0; inset-block-end: 0; z-index: var(--z-ust); display: grid;
   border-block-start: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid);
 }
+.tc-ay1-alt-gezinme { display: flex; justify-content: space-around; gap: var(--b-1); padding: var(--b-1) var(--b-2); }
+.tc-ay1-cubuk { display: flex; gap: var(--b-2); padding: var(--b-2) var(--b-2) 0; }
+.tc-ay1-cubuk-dugme {
+  display: inline-flex; flex: 1 1 0; flex-direction: column; align-items: center; justify-content: center; gap: var(--pay-ince); min-width: 0; min-block-size: var(--dokunma-ana);
+  padding: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel2); color: var(--ink);
+  font: inherit; font-size: var(--yazi-s); font-weight: 800; line-height: 1.1; white-space: nowrap; cursor: pointer;
+}
+.tc-ay1-cubuk-dugme[data-durum="calisiyor"] { border-color: var(--run); background: color-mix(in srgb, var(--run) 22%, var(--panel2)); }
+.tc-ay1-cubuk-dugme[data-durum="durdu"] { border-color: var(--stop); }
+.tc-ay1-cubuk-dugme[data-durum="ayar"] { border-color: var(--hazard); }
+.tc-ay1-cubuk-dugme[data-durum="durakli"] { border-color: var(--hold); background: color-mix(in srgb, var(--hold) 18%, var(--panel2)); }
+.tc-ay1-cubuk-dugme[data-tur="iyi"] { border-color: var(--run); }
+.tc-ay1-cubuk-dugme[data-tur="hurda"] { border-color: var(--stop); }
+.tc-ay1-cubuk-dugme:disabled { opacity: var(--saydam-50); cursor: not-allowed; }
 .tc-ay1-alt-gezinme button {
   display: grid; justify-items: center; gap: var(--pay-ince); flex: 1 1 0; min-width: 0; min-block-size: var(--dokunma-ana); padding: var(--b-1) 0;
   border: 0; border-radius: var(--yari-2); background: none; color: var(--muted); font: inherit; font-size: var(--yazi-xs); cursor: pointer;

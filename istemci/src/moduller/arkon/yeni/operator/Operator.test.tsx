@@ -93,6 +93,44 @@ describe('A1 Üretim Terminali', () => {
   }, 40000);
 });
 
+describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
+  const telefon = () => {
+    Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+  };
+  afterEach(() => { Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight'); });
+
+  it('operatör işle açılır (Özetim değil); alt eylem çubuğundaki Başlat durum kaydı yazar, sonra Durdur ve Duraklat çıkar', async () => {
+    telefon();
+    const istekler = sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    const cubuk = await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
+    expect(screen.getByRole('button', { name: /Aktif iş/ })).toBeTruthy();
+    expect(within(cubuk).getByRole('button', { name: /İyi \+1/ })).toBeTruthy();
+    expect(within(cubuk).getByRole('button', { name: /Hurda \+1/ })).toBeTruthy();
+    expect(within(cubuk).queryByRole('button', { name: /Bitir/ })).toBeNull();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(yazmalar(istekler)).toEqual([]);
+    fireEvent.click(within(cubuk).getByRole('button', { name: /İşi Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running' && e.orderNo === 'IE-DENEME-1')).toBe(true); }, { timeout: 10000 });
+    const sonra = screen.getByRole('group', { name: 'İş eylemleri' });
+    expect(within(sonra).getByRole('button', { name: /Durdur/ })).toBeTruthy();
+    expect(within(sonra).getByRole('button', { name: /Duraklat/ })).toBeTruthy();
+    // Durdur dokunuşla duruş nedenini sorar; nedensiz durdurmaz.
+    fireEvent.click(within(sonra).getByRole('button', { name: /Durdur/ }));
+    expect(await screen.findByRole('dialog', { name: 'Neden durdu?' })).toBeTruthy();
+    expect(olaylar(istekler).some((e) => e.state === 'stopped')).toBe(false);
+  }, 40000);
+
+  it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {
+    telefon();
+    sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op'] } } }]));
+    arkonAc('/uretim-terminali');
+    expect(await screen.findByText('Bu rol üretim kaydı yapamaz', undefined, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'İş eylemleri' })).toBeNull();
+  }, 40000);
+});
+
 describe('A1 Kaliteye numune penceresi (A4 NumunePenceresi)', () => {
   it('kontrol planı varsa gönderir ve kapanır; plan yoksa ya da önceki numune bekliyorsa düğme kapalı', async () => {
     const gonder = vi.fn(), kapat = vi.fn();

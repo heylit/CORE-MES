@@ -299,6 +299,11 @@ export function durumDugmeleri(durum: string): DurumDugmesi[] {
   ];
   return [{ key: 'n', eylem: 'next', simge: 'next', etiket: 'Sıradaki İş', ton: 'hazard', ana: true }];
 }
+// Telefonun alt eylem çubuğu (618, 615-1 b): durumun ana eylemi ve Durdur. Durdur dokunuşla duruş nedeni penceresini açar, orada onaylanır;
+// basılı tutulan Bitir ve ikincil eylemler (Hazırlık, Resim) aşağıdaki düğme grubunda kalır.
+export function cubukDugmeleri(durum: string): DurumDugmesi[] {
+  return durumDugmeleri(durum).filter((d) => d.ana || d.eylem === 'stop').map(({ tut: _tut, ...d }) => d);
+}
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };
 export const DURUM_SIMGESI: Readonly<Record<string, SimgeAdi>> = { pause: 'pause', setup: 'wrench' };
