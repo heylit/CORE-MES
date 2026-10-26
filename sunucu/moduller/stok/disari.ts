@@ -125,6 +125,10 @@ export const hurdaSayimiYansit = (db: Db, g: servis.HurdaSayimiYansimasi): Promi
 // Arkon'dan operatörün gönderdiği numune (karar 115 a, 125 a): teslim kaydı; engel değildir, yazılamazsa neden döner.
 export type { NumuneTeslimi, NumuneTeslimSonucu } from './servis.ts';
 export const numuneTeslimi = (db: Db, g: servis.NumuneTeslimi): Promise<servis.NumuneTeslimSonucu> => servis.numuneTeslimi(db, g);
+// 564 6 a: kalite istasyonunun lot reddi emrin istasyondaki serbest parçasını red kalitesine geçirir (kabul değiştirmez); geçen miktar döner.
+// Çağıranın transaction'ında yürür; yetkiyi ve Kalite Merkezi lot kaydını çağıran yazar.
+export type { IstasyonLotKarari } from './servis.ts';
+export const istasyonLotKarari = (db: Db, g: servis.IstasyonLotKarari): Promise<string> => servis.istasyonLotKarari(db, g);
 export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istasyonId: number }): Promise<string | null> => servis.istasyondanTeslimEdilen(db, g);
 // Reçete ve Rota başlangıçta adımın statüsünü çözen işlevi kaydeder (stok onu ithal edemez). Son ve statüsüz adımda null döner.
 export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);

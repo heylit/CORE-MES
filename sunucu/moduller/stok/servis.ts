@@ -4029,7 +4029,9 @@ export async function istasyondanTeslimEdilen(db: Db, g: { uretimEmriId: number;
 // çıktılı adımda çıktının kendisi. Parça istasyondan "Kalite numune" adlı kutuya teslim edilir; ara alan kutusunda bırakınca kapanır.
 // Teslim numuneyi durdurmaz: kutu ya da parça yoksa stok yazılmaz, neden döner (stok sonradan düzeltilir, karar 110 b ile aynı yön).
 // isEmriId null: rotasız emir; numune emrin ürünüdür (adımsız emrin sağlam sayımı gibi statüsüz).
-export interface NumuneTeslimi { uretimEmriId: number; isEmriId: number | null; istasyonId: number; kisiId: number; adet: number; kaynakKimligi: string }
+// 564 1 b: numune kalite istasyonuna gönderiliyorsa (`hedefIstasyonId`) teslim yolda kalır, kalite "Teslim al" ile alır (Teslim et ile aynı yol);
+// hedef yoksa eski davranış: "Kalite numune" kutusu.
+export interface NumuneTeslimi { uretimEmriId: number; isEmriId: number | null; istasyonId: number; kisiId: number; adet: number; kaynakKimligi: string; hedefIstasyonId?: number | null }
 export type NumuneTeslimSonucu = { teslim: { id: number; no: string } } | { atlandi: string };
 const NUMUNE_KUTUSU = 'Kalite numune';
 async function adimParcasi(db: Db, uretimEmriId: number, isEmriId: number | null, adet: bigint): Promise<{ malzemeId: number; statuId: number | null; miktar: bigint } | null> {
@@ -4072,15 +4074,45 @@ export async function kaliteKarariYansit(db: Db, g: KaliteKarariYansimasi): Prom
     }
   });
 }
-export async function numuneTeslimi(db: Db, g: NumuneTeslimi): Promise<NumuneTeslimSonucu> {
-  const kaynakKimligi = `numune:${g.kaynakKimligi}`.slice(0, 120);
-  const onceki = await sorgular.teslimKaynaktan(db, kaynakKimligi);
-  if (onceki) return { teslim: { id: onceki.id, no: onceki.no } };
+// 564 6 a: kalite istasyonunun lot kararı (Kalite Merkezi lot kaydıyla birlikte çağrılır). Ret, emrin istasyondaki serbest parçasını en çok
+// `adet` kadar (yoldaki teslime ayrılan hariç) red kalitesine geçirir; kabul parçayı olduğu gibi bırakır (zaten serbesttir). Taşınan döner.
+export interface IstasyonLotKarari { uretimEmriId: number; isEmriId: number | null; istasyonId: number; kisiId: number; karar: 'kabul' | 'ret'; adet: string; lotNo: string }
+export async function istasyonLotKarari(db: Db, g: IstasyonLotKarari): Promise<string> {
+  if (g.karar === 'kabul') return bindenMetin(0n);
+  const parca = await adimParcasi(db, g.uretimEmriId, g.isEmriId, binde(g.adet));
+  const konum = await sorgular.istasyonKonumu(db, g.istasyonId);
+  if (parca === null || konum === null || parca.miktar <= 0n) return bindenMetin(0n);
+  const emir = await uretimEmriOzeti(db, g.uretimEmriId);
+  let kalan = parca.miktar;
+  await korumali(async () => {
+    for (const b of await sorgular.istasyondakiEmirBakiyeleri(db, konum, parca.malzemeId, g.uretimEmriId)) {
+      if (kalan === 0n || b.kaliteDurumu !== 'serbest') continue;
+      const serbest = binde(b.miktar) - binde(b.ayrilan);
+      const miktar = serbest < kalan ? serbest : kalan;
+      if (miktar <= 0n) continue;
+      await kaliteDegistir(db, g.kisiId, {
+        malzemeId: parca.malzemeId, konumId: konum, partiId: b.partiId, statuId: b.statuId, kaynak: 'serbest', hedef: 'red', miktar,
+        uretimEmriId: g.uretimEmriId, aciklama: `Lot reddi ${g.lotNo} · emir ${emir?.emirNo ?? String(g.uretimEmriId)}`,
+      });
+      kalan -= miktar;
+    }
+  });
+  return bindenMetin(parca.miktar - kalan);
+}
+async function numuneKutusu(db: Db): Promise<{ id: number; tur: string } | { atlandi: string }> {
   const ad = (x: string) => x.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr');
   const kutular = (await sorgular.adiGecenKonumlar(db, 'numune')).filter((k) => ad(k.ad) === ad(NUMUNE_KUTUSU));
   if (kutular.length === 0) return { atlandi: `Fabrika Haritası'nda "${NUMUNE_KUTUSU}" kutusu yok; numunenin teslimi stoğa yazılmadı.` };
   if (kutular.length > 1) return { atlandi: `"${NUMUNE_KUTUSU}" adlı birden çok kutu var (${kutular.map((k) => k.kod).join(', ')}); numunenin teslimi stoğa yazılmadı.` };
-  const kutu = kutular[0]!;
+  return kutular[0]!;
+}
+export async function numuneTeslimi(db: Db, g: NumuneTeslimi): Promise<NumuneTeslimSonucu> {
+  const kaynakKimligi = `numune:${g.kaynakKimligi}`.slice(0, 120);
+  const onceki = await sorgular.teslimKaynaktan(db, kaynakKimligi);
+  if (onceki) return { teslim: { id: onceki.id, no: onceki.no } };
+  if (g.hedefIstasyonId === g.istasyonId) return { atlandi: 'Numune kendi istasyonuna gönderilemez; numunenin teslimi stoğa yazılmadı.' };
+  const kutu = g.hedefIstasyonId != null ? { id: await istasyonKonumuBul(db, g.hedefIstasyonId, 'hedefIstasyonId'), tur: 'istasyon' } : await numuneKutusu(db);
+  if ('atlandi' in kutu) return kutu;
   const kaynak = await sorgular.istasyonKonumu(db, g.istasyonId);
   const parca = await adimParcasi(db, g.uretimEmriId, g.isEmriId, binde(String(g.adet)));
   if (kaynak === null || parca === null) return { atlandi: 'Bu adımın parçası stokta izlenmiyor; numunenin teslimi stoğa yazılmadı.' };

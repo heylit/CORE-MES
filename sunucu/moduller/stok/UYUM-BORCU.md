@@ -64,3 +64,8 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `POST /stok/konumlar/:id/pasif-yap`, `POST /stok/raflar/:id/pasif-yap`, `GET /stok/uretim-emirleri/:id/refakat-partileri`.
+
+## Kalite istasyonu numunesi ve lot kararı (564 1 b, 6 a) - bağlamada kapanacak
+- `numuneTeslimi.hedefIstasyonId` ve `istasyonLotKarari` henüz çağrılmıyor; Arkon (kalite istasyonu terminal görünümü) bağlar. Kalite istasyonu
+  rotadan bulunur, stok bunu bilmez.
+- Lot kararının Kalite Merkezi kaydını çağıran yazar (kalite-merkezi `lotKarariYaz`); stok yalnız kalite durumunu değiştirir.
