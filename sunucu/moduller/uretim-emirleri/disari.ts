@@ -299,6 +299,8 @@ export const rotasizIsEmirleri = isEmri.rotasizIsEmirleri;
 export const isEmriKontrolListesi = isEmri.isEmriKontrolListesi;
 // Proje maliyeti (197 a): projenin iş emirleri (iptal hariç) ve gerçekleşen işleme, ayar ve katılım süreleri.
 export const projeninIsEmirleri = isEmri.projeninIsEmirleri;
+// Emrin projesi (664): kimlik başına proje kimliği, tek sorgu; projesiz emir haritada yoktur.
+export { emirlerinProjeleri } from './emir-projeleri/sorgular.ts';
 export const isEmriSureleri = isEmri.isEmriSureleri;
 export type { IsEmriSuresi, ProjeIsEmri } from './is-emri-servis.ts';
 export type { RotasizIsEmri } from './is-emri-servis.ts';
