@@ -110,6 +110,33 @@ export const emirAkisiCevabi = z.object({
   hammadde: z.array(hammaddePartisiSemasi),
 });
 
+// Refakat kartının akışı (kart #708): emir yolculuğuyla aynı hesap, kartın kapsamıyla (kartın lotu ve kartla sayılan partilerin
+// hareketleri, kartla sayılanlar). Anlar kartın her kaydıdır: hammadde kabulü, kartın açılışı, teslimler, adım olayları, kartla
+// sayımlar, fason gidiş/dönüş, sevke hazır ve sevk; zamana göre.
+export const kartParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const KART_ANI_TURLERI = [
+  'mal_kabul', 'kart_acildi', 'teslim_gonderildi', 'teslim_alindi', 'teslim_reddedildi',
+  'ayar', 'baslat', 'duraklat', 'durdur', 'devam', 'bitir', 'saglam', 'hurda', 'fason_gidis', 'fason_donus', 'sevke_hazir', 'sevk',
+] as const;
+export type KartAniTuru = (typeof KART_ANI_TURLERI)[number];
+export const kartAniSemasi = z.object({
+  zaman: zamanSemasi,
+  tur: z.enum(KART_ANI_TURLERI),
+  // Adımın anıysa adımı; değilse null.
+  isEmriId: KIMLIK.nullable(),
+  opNo: z.number().int().nullable(),
+  // Teslimde "kaynak → hedef", adımda istasyon ya da "Fason", hammaddede lot; yoksa null.
+  yer: z.string().nullable(),
+  // Teslimde gönderilen ya da alınan miktar, sayımda (kayıttaki işaretiyle) ve fasonda adet.
+  miktar: z.string().nullable(),
+});
+export const kartAkisiCevabi = emirAkisiCevabi.extend({
+  kart: z.object({ id: KIMLIK, etiket: z.string(), durum: z.string(), lotNo: z.string().nullable(), acilis: zamanSemasi }),
+  // Adım olayları emrindir (olayda kart yok): emrin başka kartı varsa anlar o kartın işini de gösterebilir.
+  olaylarEmrin: z.literal(true),
+  anlar: z.array(kartAniSemasi),
+});
+
 export const emirListesiCevabi = z.object({
   emirler: z.array(z.object({
     id: KIMLIK,
@@ -129,3 +156,5 @@ export type HammaddePartisi = z.output<typeof hammaddePartisiSemasi>;
 export type Olcu = z.output<typeof olcuSemasi>;
 export type EmirAkisiCevabi = z.output<typeof emirAkisiCevabi>;
 export type EmirListesiCevabi = z.output<typeof emirListesiCevabi>;
+export type KartAni = z.output<typeof kartAniSemasi>;
+export type KartAkisiCevabi = z.output<typeof kartAkisiCevabi>;
