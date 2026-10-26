@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import type { KmIlkParcaBekleyenCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ayEkle, bugun, isoGun } from '../kurallar.ts';
 import { KALIBRASYON_YOLU, STUDYO_YOLU } from '../sekmeler.ts';
-import { kayitYazmalari, kmAc, MUAYENECI, MUHENDIS, OKUYAN, YONETICI, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
+import { kayitYazmalari, kmAc, kmAdresi, MUAYENECI, MUHENDIS, OKUYAN, YONETICI, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
 import type { KmVerisi } from '../veri.ts';
 import { BugunSayaci } from './index.tsx';
 import { bugunGorevleri, gruplara } from './gorevler.ts';
@@ -32,7 +32,6 @@ function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkPar
   });
   return s;
 }
-const secili = (ad: RegExp) => screen.getAllByRole('tab', { name: ad }).find((t) => t.getAttribute('aria-selected') === 'true');
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
@@ -98,7 +97,7 @@ describe('Bugün ekranı', () => {
   it('görev düğmesi ilgili görünümü açar', async () => {
     ac(MUAYENECI, { capa: [{ _id: 'c1', no: 'DOF-001', baslik: 'Çapak', durum: 'Açık', termin: gunSonra(-1) }] });
     fireEvent.click(await screen.findByRole('button', { name: 'Aç' }));
-    await waitFor(() => { expect(secili(/DÖF/)).toBeTruthy(); });
+    await waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/dof'); });
   });
 
   it('form "Onayla" onay penceresini açar; karar ve not onaylayan yazılmadan gider', async () => {
@@ -125,7 +124,7 @@ describe('Bugün ekranı', () => {
   it('kısayollar yazabilene görünür ve yeni kayıt görünümünü açar; yalnız okuyan görmez', async () => {
     ac(MUAYENECI);
     fireEvent.click(await screen.findByRole('button', { name: /Uygunsuzluk bildir/ }));
-    await waitFor(() => { expect(secili(/Uygunsuzluklar/)).toBeTruthy(); });
+    await waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/uygunsuzluklar'); });
     cleanup();
     ac(OKUYAN);
     await screen.findByRole('heading', { level: 2, name: 'Merhaba Deneme' });

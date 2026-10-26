@@ -36,3 +36,11 @@ Yalnız istemci; sunucu, sözleşme ve göç değişmedi. Bütün okumalar modü
 - `disari.ts` `istasyonYetkinlikleri`, `yetkinMi` ve iş merkezi kapsamı yalnız bugün geçerli yetkinliği okur (IS29).
 - Personel sekmesi: çipte bitiş ya da "süresi doldu", düzenle düğmesiyle bitiş ve dayanak.
 
+
+## 563 c ve 563 2 a (26.10.2026, 568 ustune)
+- Göç `20261026063600_istasyonlar_makine_yetkinlik.sql`: yeni `istasyonlar_makine_yetkinlik`, defteri `istasyonlar_makine_yetkinlik_gecmisi` (yalnız ekleme, `neden`:
+  elle ya da istasyon yetkinliği kalktı) ve `istasyonlar_kisi_tezgah_siniri` (1-20, ortak değişiklik defterine bağlı). Dolu tabloya dokunmaz.
+- Makine yetkinliği yalnız kişinin yetkin olduğu istasyonun aktif makinesine verilir; istasyon yetkinliği kalkınca o istasyonun makine kayıtları da kalkar ve deftere düşer.
+- Yeni uçlar `/kisi-yetkinlikleri/:kisiId/makineler/belirle` ve `/tezgah-siniri`; toplu uca `makineler`; yetkinlik cevabına `makineIdleri`, `enCok`; geçmişe `makineGecmis`.
+- `disari.ts` `makineYetkinlikleri` (yalnız makinenin bugünkü istasyonunda bugün geçerli yetkinlikle) ve `kisiTezgahSinirlari`.
+- Personel kartında "Baktığı makineler" ve "Aynı anda en çok"; yetkinlik matrisinde "Düzey: Makine".

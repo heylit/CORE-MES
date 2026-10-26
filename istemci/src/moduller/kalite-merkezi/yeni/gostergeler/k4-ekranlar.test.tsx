@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ayEkle, bugun } from '../kurallar.ts';
-import { kayitYazmalari, kmAc, MUAYENECI, MUHENDIS, OKUYAN, YONETICI } from '../test-ortak.tsx';
+import { kayitYazmalari, kmAc, kmAdresi, kmGit, MUAYENECI, MUHENDIS, OKUYAN, YONETICI } from '../test-ortak.tsx';
 
 // K4 ekranları: görünüm ve yetkiye göre gizleme (229 a, 260 a, 261 a). Veri uydurmadır.
 // jsdom tuval çizmez; grafik kurulmaz, ekranın kendisi sınanır.
@@ -98,7 +98,7 @@ describe('Kalite göstergeleri', () => {
   it('yazana Muayene kaydet muayene ekranına gider', async () => {
     kmAc('gostergeler', MUAYENECI, {});
     fireEvent.click(await screen.findByRole('button', { name: /Muayene kaydet/ }));
-    expect(await screen.findByRole('tab', { name: /Muayeneler/, selected: true })).toBeTruthy();
+    await waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/muayeneler'); });
   });
 });
 
@@ -127,8 +127,7 @@ describe('Arşiv', () => {
   it('genel anahtar arşivlenmiş kaydı listelerde gösterir', async () => {
     kmAc('arsiv', MUHENDIS, { belge: [{ ...BELGE, arsiv: true }], sup: [TED] });
     fireEvent.click(await screen.findByLabelText('Listelerde arşivlenmiş kayıtları göster'));
-    fireEvent.click(screen.getByRole('tab', { name: /Kaynaklar/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Belgeler/ }));
+    kmGit('belgeler');
     expect((await screen.findAllByText('sertifika.pdf')).length).toBeGreaterThan(0);
   });
 

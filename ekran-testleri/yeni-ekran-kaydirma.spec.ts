@@ -6,8 +6,8 @@ import { expect, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/recete-rota/planlama-yeni', '/malzemeler', '/kalite-merkezi/yeni',
-  '/kalite-merkezi/yeni/muayeneler', '/finans/yeni', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
+  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/recete-rota/planlama-yeni', '/malzemeler', '/kalite-merkezi',
+  '/kalite-merkezi/muayeneler', '/finans/yeni', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
 // İçerik alanında alanın altına taşan ve kaydırılabilen hiçbir atasının içinde olmayan görünür öğeler: bunlara ulaşılamaz.

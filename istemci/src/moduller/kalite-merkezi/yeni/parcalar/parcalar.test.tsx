@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { kayitYazmalari, kmAc, MUAYENECI, OKUYAN, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
+import { kayitYazmalari, kmAc, kmAdresi, MUAYENECI, OKUYAN, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
 import type { Lot, Muayene } from '../tipler.ts';
 import { muayeneSatirlari, parcaKimligi } from './parca.ts';
 
@@ -18,7 +18,6 @@ const KAYITLAR: TestKayitlari = {
 };
 const ac = (k: TestKullanicisi, kayitlar = KAYITLAR) => kmAc('parcalar', k, kayitlar);
 const satir = (ad: RegExp) => screen.findByRole('row', { name: ad });
-const secili = (ad: RegExp) => screen.getAllByRole('tab', { name: ad }).find((t) => t.getAttribute('aria-selected') === 'true');
 
 // jsdom tuval çizmez; FAI paketindeki grafik kurulmaz, geri kalanı sınanır.
 beforeAll(() => { vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null); });
@@ -90,7 +89,7 @@ describe('Parça sayfası', () => {
   it('lot kabul parça bilgisiyle yeni kayıt görünümünü açar', async () => {
     await parcayiAc(MUAYENECI);
     fireEvent.click(screen.getByRole('button', { name: 'Lot kabul' }));
-    await waitFor(() => { expect(secili(/Lot kabul/)).toBeTruthy(); });
+    await waitFor(() => { expect(kmAdresi()).toBe('/kalite-merkezi/lot-kabul'); });
   });
 
   it('muayene satırı kendi görünümünü açar; yarım ölçüm stüdyoya (eski ekrana) gider', async () => {

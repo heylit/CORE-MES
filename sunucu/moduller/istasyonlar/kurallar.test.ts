@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { SecimSatiri } from './kurallar.ts';
-import { isMerkeziIzinliMi, kapasiteKaynagiCoz, kisiteEklenemeyenler, secimGruplari, sentYuzdeMetni, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikUygula } from './kurallar.ts';
+import { isMerkeziIzinliMi, istasyonuKalkanMakineler, kapasiteKaynagiCoz, kisiteEklenemeyenler, makineYetkinligiReddi, secimGruplari, sentYuzdeMetni, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikUygula } from './kurallar.ts';
 
 const satir = (id: number, kod: string, isMerkeziId: number, isMerkeziKod: string, aktif = true): SecimSatiri => ({
   id, kod, ad: `Ad ${kod}`, isMerkeziId, tip: 'talasli', aktif, isMerkeziKod, isMerkeziAd: `Merkez ${isMerkeziKod}`,
@@ -72,5 +72,19 @@ describe('toplu yetkinlik (565 a)', () => {
     assert.deepEqual([...m.keys()], [1, 2]);
     assert.deepEqual(yetkinlikUygula([10, 12], m.get(1)!), [12, 11]);
     assert.deepEqual(yetkinlikUygula([10], m.get(2)!), []);
+  });
+});
+
+describe('makine yetkinliği (563 c)', () => {
+  test('yalnız yetkin olunan istasyonun var olan, aktif makinesi; istasyonsuz makine verilmez', () => {
+    assert.equal(makineYetkinligiReddi({ istasyonId: 10, aktif: true }, [10]), null);
+    assert.match(makineYetkinligiReddi({ istasyonId: 11, aktif: true }, [10]) ?? '', /önce makinenin istasyonunda/);
+    assert.match(makineYetkinligiReddi({ istasyonId: null, aktif: true }, [10]) ?? '', /önce makinenin istasyonunda/);
+    assert.match(makineYetkinligiReddi({ istasyonId: 10, aktif: false }, [10]) ?? '', /aktif makine/);
+    assert.match(makineYetkinligiReddi(undefined, [10]) ?? '', /aktif makine/);
+  });
+
+  test('istasyon yetkinliği kalkınca yalnız o istasyondaki makine kayıtları kalkar', () => {
+    assert.deepEqual(istasyonuKalkanMakineler([{ makineId: 1, istasyonId: 10 }, { makineId: 2, istasyonId: 11 }, { makineId: 3, istasyonId: null }], [10]), [1]);
   });
 });

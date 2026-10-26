@@ -8,7 +8,7 @@
 }
 .tc-km-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); justify-content: space-between; }
 .tc-km-ust > .tc-sekmeler { flex: 1 1 auto; min-width: 0; }
-.tc-km-ust-eylem { display: flex; gap: var(--b-2); align-items: center; }
+.tc-km-ust-eylem { display: flex; gap: var(--b-2); align-items: center; margin-inline-start: auto; }
 .tc-km-govde { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); min-width: 0; }
 .tc-km-atolye { font-size: var(--yazi-l); }
 .tc-km-atolye .tc-dugme { min-height: var(--dokunma-ana); }
