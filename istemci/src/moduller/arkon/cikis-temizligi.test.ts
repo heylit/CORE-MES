@@ -6,12 +6,14 @@ const STORE_YOLU = '../../../../arkon/web/src/data/store.ts';
 const TEMIZLIK_YOLU = '../../../../arkon/web/src/data/yerel-temizlik.ts';
 interface Depo {
   init(): Promise<unknown>;
+  kipKur(k: 'ortak' | 'kisisel'): Promise<void>;
+  status(): { memory: boolean; kip: string | null };
   DB: { put(s: string, v: unknown, k?: string): Promise<void>; del(s: string, k: string): Promise<void> };
   Cache: { put(k: string, v: unknown): Promise<void> };
   Auth: { logout(): Promise<void>; login(id: string, pin: string): Promise<unknown> };
   local: { all(s: string): Promise<any[]>; get(s: string, k: string): Promise<any>; put(s: string, v: unknown, k?: string): Promise<unknown> };
 }
-interface Temizlik { yerelVeriyiTemizle(ls: Storage, idb: unknown): Promise<void> }
+interface Temizlik { yerelVeriyiTemizle(ls: Storage, idb: unknown): Promise<void>; bekleyenKuyrukVar(idb: unknown): Promise<boolean> }
 
 type Anahtar = number | string;
 interface SahteDepo { yol?: string; otomatik: boolean; sira: number; kayit: Map<Anahtar, unknown> }
@@ -44,6 +46,7 @@ function sahteIndexedDb() {
           get: (k: Anahtar) => istek(() => structuredClone(d.kayit.get(k))),
           getAll: () => istek(() => sirali().map((k) => structuredClone(d.kayit.get(k)))),
           getAllKeys: () => istek(() => sirali()),
+          count: () => istek(() => d.kayit.size),
           put: (v: unknown, k?: Anahtar) => istek(() => yaz(v, k)),
           add: (v: unknown) => istek(() => yaz(v)),
           delete: (k: Anahtar) => istek(() => { d.kayit.delete(k); }),
@@ -121,8 +124,9 @@ beforeEach(() => {
 });
 afterEach(async () => { await new Promise((r) => setTimeout(r, 30)); vi.unstubAllGlobals(); });
 
-async function depo(): Promise<Depo> {
+async function depo(kip?: 'ortak' | 'kisisel'): Promise<Depo> {
   const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+  if (kip) await AKStore.kipKur(kip);
   await AKStore.init();
   return AKStore;
 }
@@ -200,5 +204,63 @@ describe('Arkon çıkışında yerel veri temizliği', () => {
     await expect(yerelVeriyiTemizle(localStorage, sahte.indexedDB)).resolves.toBeUndefined();
     expect(sahte.varMi()).toBe(false);
     expect(ls('opName')).toBeNull();
+  });
+});
+
+describe('Cihaz kipine göre yerel veri (karar 738 a, kart #739)', () => {
+  it('ortak cihazda çıkış çizim dosyalarını ve ekran önbelleğini bırakır; kişiye ait veri yine silinir', async () => {
+    const d = await depo('ortak');
+    await d.local.put('blobs', new Uint8Array([1, 2]), 'h1');
+    await d.local.put('blobzaman', { at: 1, n: 2 }, 'h1');
+    await d.Cache.put('k', 1);
+    await d.DB.put('pkgs', { id: 'p2', no: 'eski' });
+
+    await d.Auth.logout();
+
+    expect(Array.from(await d.local.get('blobs', 'h1') as Uint8Array)).toEqual([1, 2]);
+    expect(await d.local.get('blobzaman', 'h1')).toEqual({ at: 1, n: 2 });
+    expect((await d.local.all('cache')).length).toBe(1);
+    expect(await d.local.get('pkgs', 'p2')).toBeUndefined();
+    expect(ls('session')).toBeNull();
+    expect(d.status()).toMatchObject({ kip: 'ortak', memory: false });
+  });
+
+  it('kişisel cihaz açılışta önceki veriyi (dosyalar dahil) siler ve bellekte çalışır; cihaz deposuna yazmaz', async () => {
+    sahte.hazirla(['outbox', 'pkgs', 'blobs', 'blobzaman', 'cache', 'kv']);
+    sahte.depolar.get('blobs')!.kayit.set('h1', new Uint8Array([1]));
+    sahte.depolar.get('cache')!.kayit.set('k', { v: 1, at: 1 });
+    sahte.depolar.get('pkgs')!.kayit.set('p1', { id: 'p1' });
+
+    const d = await depo('kisisel');
+    await d.DB.put('pkgs', { id: 'p3', no: 'yeni' });
+    await d.Cache.put('k2', 1);
+
+    expect(d.status()).toMatchObject({ kip: 'kisisel', memory: true });
+    for (const n of ['blobs', 'cache', 'pkgs']) expect([...sahte.depolar.get(n)!.kayit.keys()]).toEqual([]);
+    expect(ls('server')).toBe('http://sunucu.test');
+    expect(ls('opName')).toBeNull();
+  });
+
+  it('gönderilmemiş kaydı olan kişisel cihaz o oturumda cihaz deposunu açık tutar; kayıt sunucuya gider', async () => {
+    sahte.hazirla(['outbox', 'pkgs', 'blobs']);
+    sahte.depolar.get('outbox')!.kayit.set(1, { op: 'put', store: 'pkgs', id: 'p1', uid: '1' });
+    sahte.depolar.get('pkgs')!.kayit.set('p1', { id: 'p1', no: 'gonderilmemis' });
+    sahte.depolar.get('blobs')!.kayit.set('h1', new Uint8Array([1]));
+
+    const d = await depo('kisisel');
+
+    expect(d.status()).toMatchObject({ kip: 'kisisel', memory: false });
+    expect([...sahte.depolar.get('blobs')!.kayit.keys()]).toEqual([]);
+    await vi.waitFor(() => expect(istekler.some((i) => i.yontem === 'PUT' && i.yol === '/api/doc/pkgs/p1')).toBe(true));
+  });
+
+  it('kuyruk sorusu veritabanı yoksa onu yaratmaz', async () => {
+    const { bekleyenKuyrukVar } = await temizlik();
+    expect(await bekleyenKuyrukVar(sahte.indexedDB)).toBe(false);
+    expect(sahte.varMi()).toBe(false);
+    sahte.hazirla(['outbox']);
+    expect(await bekleyenKuyrukVar(sahte.indexedDB)).toBe(false);
+    sahte.depolar.get('outbox')!.kayit.set(1, { op: 'put', store: 'pkgs', id: 'p1' });
+    expect(await bekleyenKuyrukVar(sahte.indexedDB)).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ const VT_ADI = 'arkon-mes';
 /* Silinmeyen anahtarlar. Cihaz ayarı: sunucu adresi, tema, istasyon seçimi, performans ve görünüm ayarları.
    Aşağıdaki "emin olunmayan" gruplar kişiye ait olmayan ekran tercihi sayıldı; silinmesi kararı ayrıca istenir. */
 const KALAN_ANAHTARLAR: ReadonlySet<string> = new Set([
-  'server', 'theme', 'station', 'lite', 'feat', 'scale',
+  'server', 'theme', 'station', 'lite', 'feat', 'scale', 'cihazKipi',
   'readCfg', 'pvStation', 'labOpen', 'setTab', 'planTab', 'maintTab', 'repRange', 'prepGrup', 'prepSuzAcik', 'planWc', 'boardWc',
 ]);
 const KALAN_ONEKLER: readonly string[] = ['bal:', 'lastState:'];
@@ -27,6 +27,10 @@ export function anahtarKalir(depo: string, anahtar: IDBValidKey, kuyruk: readonl
   const k = String(anahtar);
   return kuyruk.some((o) => typeof o?.store === 'string' && typeof o.id === 'string' && (o.store === depo && o.id === k || o.store + '\u0000' + o.id === k));
 }
+
+/* Ortak cihazda (karar 738 a, kart #739) çizim dosyaları ve onlardan üretilen ekran önbelleği çıkışta kalır: kişiye ait değildir,
+   sonraki kişi aynı işin çizimini yeniden indirmez. Kişisel cihaz bunları da siler. */
+export const ORTAK_CIHAZDA_KALAN_DEPOLAR: ReadonlySet<string> = new Set(['blobs', 'blobzaman', 'cache']);
 
 function localStorageTemizle(ls: Storage): void {
   try {
@@ -53,7 +57,7 @@ function istek<T>(r: IDBRequest<T>): Promise<T> {
 }
 
 // Tek işlemde okunur ve silinir: kuyruğa o sırada eklenen öğe, belgesi silinmeden önce görülür.
-async function indexedDbTemizle(idb: IDBFactory): Promise<void> {
+async function indexedDbTemizle(idb: IDBFactory, kalan: ReadonlySet<string>): Promise<void> {
   const d = await ac(idb);
   if (d === null) return;
   try {
@@ -63,7 +67,7 @@ async function indexedDbTemizle(idb: IDBFactory): Promise<void> {
     const bitti = new Promise<void>((coz, red) => { t.oncomplete = () => coz(); t.onerror = () => red(t.error); });
     const kuyruk = (await istek(t.objectStore(KUYRUK).getAll())) as KuyrukOgesi[];
     for (const ad of adlar) {
-      if (ad === KUYRUK) continue;
+      if (ad === KUYRUK || kalan.has(ad)) continue;
       const depo = t.objectStore(ad);
       for (const k of await istek(depo.getAllKeys())) if (!anahtarKalir(ad, k, kuyruk)) depo.delete(k);
     }
@@ -72,7 +76,17 @@ async function indexedDbTemizle(idb: IDBFactory): Promise<void> {
 }
 
 /** Yerel mod (sunucusuz) çağırmaz: orada kaydın tek kopyası cihazdadır. */
-export async function yerelVeriyiTemizle(ls: Storage, idb: IDBFactory | undefined): Promise<void> {
+export async function yerelVeriyiTemizle(ls: Storage, idb: IDBFactory | undefined, kalan: ReadonlySet<string> = new Set()): Promise<void> {
   localStorageTemizle(ls);
-  if (idb) await indexedDbTemizle(idb);
+  if (idb) await indexedDbTemizle(idb, kalan);
+}
+
+/** Cihazda gönderilmemiş kayıt var mı; veritabanı yoksa yaratmadan hayır der. */
+export async function bekleyenKuyrukVar(idb: IDBFactory): Promise<boolean> {
+  const d = await ac(idb);
+  if (d === null) return false;
+  try {
+    if (!Array.from(d.objectStoreNames).includes(KUYRUK)) return false;
+    return (await istek(d.transaction(KUYRUK, 'readonly').objectStore(KUYRUK).count())) > 0;
+  } finally { d.close(); }
 }

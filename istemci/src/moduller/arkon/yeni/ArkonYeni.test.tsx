@@ -38,10 +38,10 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(pano.getAttribute('data-sayfa')).toBe('pano');
     expect(adres()).toBe('/arkon/pano');
     expect(screen.queryByRole('tablist', { name: 'Üretim Hazırlık' })).toBeNull();
-    // Testte cihaz deposu (IndexedDB) yoktur: veri katmanı bellekte çalışır ve üst bantta saatin yanındaki durum (soru 488 a)
-    // bunu kayıt riski olarak söyler.
-    const durum = await within(pano).findByRole('status', { name: /Cihaz deposu açılamadı/ }, { timeout: 10000 });
-    expect(durum.textContent).toContain('Kayıt riski');
+    // Testte cihaz ortak diye kayıtlı değildir: kişisel cihaz bilerek bellekte çalışır (karar 738 a); üst bantta saatin yanındaki
+    // durum (soru 488 a) bunu kayıt riski saymaz.
+    const durum = await within(pano).findByRole('status', { name: /Sunucuya bağlı/ }, { timeout: 10000 });
+    expect(durum.textContent).toContain('Bağlı');
     expect(durum.closest('.tc-ay-bant')).not.toBeNull();
   }, 20000);
 
@@ -182,5 +182,13 @@ describe('Bağlantı özeti', () => {
     expect(baglantiOzeti({ ...temel, online: false, pending: 2 }).aciklama).toContain('2 kayıt bekliyor');
     expect(baglantiOzeti({ ...temel, mode: 'local' })).toMatchObject({ ton: 'pasif', metin: 'Yerel' });
     expect(baglantiOzeti({ ...temel, memory: true })).toMatchObject({ ton: 'hata', metin: 'Kayıt riski' });
+  });
+
+  it('kişisel cihazın bellek kipi bağlıyken risk sayılmaz; kopukken bekleyen kaydın kaybolabileceğini söyler (738 a)', () => {
+    const kisisel = { ...temel, memory: true, kip: 'kisisel' as const };
+    expect(baglantiOzeti(kisisel)).toMatchObject({ ton: 'tamam', metin: 'Bağlı' });
+    expect(baglantiOzeti({ ...kisisel, online: false, pending: 2 })).toMatchObject({ ton: 'hata', metin: 'Kopuk' });
+    expect(baglantiOzeti({ ...kisisel, online: false, pending: 2 }).aciklama).toContain('sekme kapanırsa kaybolur');
+    expect(baglantiOzeti({ ...temel, memory: true, kip: 'ortak' })).toMatchObject({ ton: 'hata', metin: 'Kayıt riski' });
   });
 });
