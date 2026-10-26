@@ -1,8 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KmParcaKaynagi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { DurumKutusu, Dugme, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
+import type { KmMerkezBelgesi, KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import { DurumKutusu, Dugme, OnayPenceresi, Rozet, Secim, Simge, useBildirim } from '../../../ortak/arayuz/index.ts';
 import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
 import type { TeknikResimKontrolu } from '../../../ortak/cizim/TeknikResim.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
@@ -13,7 +13,10 @@ import type { EkranOzellikleri, KmSayaci } from '../yeni/sekmeler.ts';
 import {
   cizimBalonu, cizimOlcumleri, NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, sonOlcumler, uretimEmriKimligi, yeniOlcumler,
 } from './kurallar.ts';
-import { useBalonPlaniYaz, useEmirNumuneleri, useEmirOlcumleri, useOlcumYaz, useResimDosyasi, useStudyoParcasi } from './veri.ts';
+import { MerkezdenAl } from './MerkezdenAl.tsx';
+import {
+  useBalonPlaniYaz, useEmirNumuneleri, useEmirOlcumleri, useOlcumYaz, useResimAl, useResimDosyasi, useResimKaldir, useStudyoParcasi,
+} from './veri.ts';
 import './studyo.css';
 
 // Resim ve modeller (597 a): Arkon çizim stüdyosunun düzeni; solda parça, resimler ve üretim emri, ortada Arkon'la ortak teknik resim
@@ -30,11 +33,12 @@ function Resim({ resim, kontrol }: { resim: KmResim; kontrol: Omit<TeknikResimKo
   const dosya = useResimDosyasi(resim);
   if (dosya.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(dosya.error, 'Resim dosyası alınamadı')} yenile={() => { void dosya.refetch(); }} />;
   if (!dosya.data) return <DurumKutusu durum="yukleniyor" />;
+  const ad = dosya.data.ad ?? resim.ad;
   const tam: TeknikResimKontrolu = {
     ...kontrol,
     anahtar: `km-resim-${String(resim.id)}-${resim.ozet}`,
-    dosyalar: [{ kind: resim.tur === 'resim' ? 'pdf' : 'model', name: resim.ad, bytes: dosya.data, merkez: resim.merkezBelgeId, merkezOzet: resim.ozet }],
-    anaResim: resim.ad,
+    dosyalar: [{ kind: resim.tur === 'resim' ? 'pdf' : 'model', name: ad, bytes: dosya.data.bayt, merkez: resim.merkezBelgeId, merkezOzet: resim.ozet }],
+    anaResim: ad,
   };
   return <Suspense fallback={<DurumKutusu durum="yukleniyor" />}><TeknikResim kontrol={tam} /></Suspense>;
 }
@@ -112,6 +116,26 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
     });
   };
 
+  // Resim alma ve kaldırma kalite onayıdır (603 a).
+  const [merkez, merkezYaz] = useState(false);
+  const [kaldirilacak, kaldirilacakYaz] = useState<KmResim | null>(null);
+  const resimAl = useResimAl();
+  const resimKaldir = useResimKaldir();
+  const al = (b: KmMerkezBelgesi) => {
+    if (malzemeNo === null) return;
+    resimAl.mutate({ malzemeNo, belge: b }, {
+      onSuccess: ({ resim: r }) => { merkezYaz(false); resimIdYaz(r.id); bildir('tamam', `${r.ad} parçaya alındı.`); },
+      onError: (h) => { bildir('hata', hataIletisi(h, 'Resim alınamadı.')); },
+    });
+  };
+  const kaldir = () => {
+    if (!kaldirilacak) return;
+    resimKaldir.mutate(kaldirilacak, {
+      onSuccess: ({ resim: r }) => { kaldirilacakYaz(null); resimIdYaz(null); bildir('tamam', `${r.ad} parçadan kaldırıldı.`); },
+      onError: (h) => { kaldirilacakYaz(null); bildir('hata', hataIletisi(h, 'Resim kaldırılamadı.')); },
+    });
+  };
+
   const olcumYaz = useOlcumYaz();
   const olcumlerYaz = useCallback((yeni: Record<number, Olcum>) => {
     if (taslak !== null) { bildir('bilgi', 'Ölçümden önce kontrol planını kaydedin.'); return; }
@@ -159,14 +183,18 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
             {parca.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(parca.error, 'Resimler alınamadı')} yenile={() => { void parca.refetch(); }} />
               : resimler.length ? (
                 <ul className="km-st-liste">{resimler.map((r) => (
-                  <li key={r.id}>
+                  <li key={r.id} className="km-st-belge-satir">
                     <button type="button" className={`km-st-belge${r.id === resim?.id ? ' cur' : ''}`} aria-pressed={r.id === resim?.id} onClick={() => { resimIdYaz(r.id); mobilYaz('resim'); }}>
                       <span className={`km-st-tur km-st-tur-${r.tur}`}><Simge ad={r.tur === 'resim' ? 'file' : 'cube'} boyut="k" /></span>
                       <span className="km-st-belge-ad"><b>{r.ad}</b><small>{[r.revizyon ? `Rev ${r.revizyon}` : null, `${String(r.balonlar.length)} kontrol noktası`].filter(Boolean).join(' · ')}</small></span>
                     </button>
+                    {duzenler ? (
+                      <button type="button" className="km-st-kaldir" aria-label={`${r.ad} resmini kaldır`} onClick={() => { kaldirilacakYaz(r); }}><Simge ad="trash" boyut="k" /></button>
+                    ) : null}
                   </li>
                 ))}</ul>
               ) : <span className="km-st-soluk">{parca.isPending ? 'Yükleniyor' : 'Belge merkezinden alınmış resim yok.'}</span>}
+            {duzenler && kart ? <Dugme tur="ikincil" simge="plus" onClick={() => { merkezYaz(true); }}>Belge merkezinden al</Dugme> : null}
           </section>
         ) : null}
 
@@ -217,6 +245,13 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
         </section>
       </aside>
 
+      <MerkezdenAl acik={merkez} kapat={() => { merkezYaz(false); }} al={al} alinan={resimAl.isPending ? resimAl.variables.belge.id : null} />
+      <OnayPenceresi
+        acik={kaldirilacak !== null} baslik="Resmi parçadan kaldır" onayMetni="Kaldır" tehlikeli yukleniyor={resimKaldir.isPending}
+        onayla={kaldir} vazgec={() => { kaldirilacakYaz(null); }}
+      >
+        <p>{kaldirilacak?.ad} parçanın resimlerinden kaldırılır. Kontrol planı ve ölçümler silinmez; resim yeniden alınınca geri gelir.</p>
+      </OnayPenceresi>
       <MalzemeSecici acik={secici} kapat={() => { seciciYaz(false); }} sec={(k) => { seciciYaz(false); parcaSec(k.malzemeNo); }} />
     </div>
   );

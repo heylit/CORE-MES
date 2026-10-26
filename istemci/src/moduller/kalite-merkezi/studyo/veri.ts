@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
-  KmBalonlarGovdesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmStudyoParcaCevabi,
+  KmBalonlarGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
+  KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
@@ -12,6 +13,7 @@ export const studyoAnahtari = {
   emirOlcumleri: (emirId: number) => ['kalite-merkezi', 'studyo', 'emir-olcumleri', emirId] as const,
   emirNumuneleri: (emirId: number) => ['kalite-merkezi', 'studyo', 'emir-numuneleri', emirId] as const,
   acikNumuneler: ['kalite-merkezi', 'studyo', 'numuneler'] as const,
+  merkezBelgeleri: (ara: string) => ['kalite-merkezi', 'studyo', 'merkez-belgeleri', ara] as const,
   resimDosyasi: (resimId: number, ozet: string) => ['kalite-merkezi', 'studyo', 'resim-dosyasi', resimId, ozet] as const,
 };
 
@@ -47,7 +49,15 @@ export function useAcikNumuneler() {
 }
 
 // İkili cevap `api` ile okunmaz (JSON bekler); aynı köken, çerezli oturum ve aynı hata biçimi burada kurulur.
-export async function resimDosyasiOku(resimId: number, sinyal?: AbortSignal): Promise<Uint8Array> {
+// Dosya adı (uzantısıyla) cevabın başlığındadır: ortak görüntüleyici IGES ve STL'i uzantıdan tanır; resmin adı belge adıdır.
+export interface ResimDosyasi { bayt: Uint8Array; ad: string | null }
+export function basliktakiAd(baslik: string | null): string | null {
+  const kodlu = baslik === null ? null : /filename\*=UTF-8''([^;]+)/i.exec(baslik)?.[1];
+  if (kodlu) { try { return decodeURIComponent(kodlu); } catch { /* bozuk kodlama: düz ada bakılır */ } }
+  return (baslik === null ? null : /filename="([^"]+)"/i.exec(baslik)?.[1]) ?? null;
+}
+
+export async function resimDosyasiOku(resimId: number, sinyal?: AbortSignal): Promise<ResimDosyasi> {
   const cevap = await fetch(`/api/kalite-merkezi/studyo/resimler/${String(resimId)}/dosya`, { credentials: 'include', ...(sinyal ? { signal: sinyal } : {}) });
   if (!cevap.ok) {
     if (cevap.status === 401) window.dispatchEvent(new CustomEvent(OTURUM_BITTI));
@@ -56,7 +66,7 @@ export async function resimDosyasiOku(resimId: number, sinyal?: AbortSignal): Pr
     const hataMi = govde !== null && typeof govde === 'object' && 'kod' in govde && 'mesaj' in govde && typeof govde.mesaj === 'string';
     throw new ApiHatasi(cevap.status, hataMi ? govde as HataGovdesi : null);
   }
-  return new Uint8Array(await cevap.arrayBuffer());
+  return { bayt: new Uint8Array(await cevap.arrayBuffer()), ad: basliktakiAd(cevap.headers.get('content-disposition')) };
 }
 
 // Dosya özetiyle anahtarlanır: aynı revizyon bir kez indirilir, yeni revizyon yeni anahtardır.
@@ -95,5 +105,45 @@ export function useBalonPlaniYaz(malzemeNo: number | null) {
       istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(malzemeNo), (o) => o && { ...o, resimler: o.resimler.map((r) => (r.id === resim.id ? resim : r)) });
     },
     onError: () => { if (malzemeNo !== null) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) }); },
+  });
+}
+
+export function useMerkezBelgeleri(ara: string, acik: boolean) {
+  return useQuery({
+    queryKey: studyoAnahtari.merkezBelgeleri(ara),
+    queryFn: () => api.get<KmMerkezBelgeleriCevabi>(`/kalite-merkezi/studyo/merkez-belgeleri${ara ? `?ara=${encodeURIComponent(ara)}` : ''}`),
+    enabled: acik,
+    staleTime: 15_000,
+  });
+}
+
+const parcayaKoy = (istemci: ReturnType<typeof useQueryClient>, resim: KmResim) => {
+  istemci.setQueryData<KmStudyoParcaCevabi>(studyoAnahtari.parca(resim.malzemeNo), (o) => o && {
+    ...o, resimler: o.resimler.some((r) => r.id === resim.id) ? o.resimler.map((r) => (r.id === resim.id ? resim : r)) : [...o.resimler, resim],
+  });
+};
+
+// Belge merkezindeki yayındaki revizyon parçaya alınır (603 a); revizyon harfi belgenin yayındaki harfidir.
+export function useResimAl() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: ({ malzemeNo, belge }: { malzemeNo: number; belge: KmMerkezBelgesi }) => tekrarKorumaliGonder((d) => api.post<{ resim: KmResim }>(
+      '/kalite-merkezi/studyo/resimler/al', { malzemeNo, merkezBelgeId: belge.id, revizyon: belge.harf || null } satisfies KmResimEkleGovdesi,
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ resim }) => { parcayaKoy(istemci, resim); },
+  });
+}
+
+// Kaldırılan resim pasif kalır (balon ve ölçümleri silinmez); sürüm başkasının değişikliğini ezmemek içindir.
+export function useResimKaldir() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (resim: KmResim) => tekrarKorumaliGonder((d) => api.post<{ resim: KmResim }>(
+      `/kalite-merkezi/studyo/resimler/${String(resim.id)}/kaldir`, { surum: resim.surum },
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ resim }) => { parcayaKoy(istemci, resim); },
+    onError: (_h, resim) => istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(resim.malzemeNo) }),
   });
 }

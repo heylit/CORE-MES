@@ -27,7 +27,14 @@
 }
 .km-st-belge:hover { background: var(--panel2); border-color: var(--edge); }
 .km-st-belge.cur { border-color: color-mix(in srgb, var(--hazard) 50%, transparent); background: color-mix(in srgb, var(--hazard) 8%, transparent); }
-.km-st-belge-ad { display: grid; min-width: 0; }
+.km-st-belge-ad { display: grid; min-width: 0; margin-right: auto; }
+.km-st-belge-satir { display: flex; align-items: center; gap: var(--b-1); }
+.km-st-kaldir {
+  flex: none; display: grid; place-items: center; width: var(--dokunma); height: var(--dokunma); border: 0; border-radius: var(--yari-1);
+  background: none; color: var(--muted); cursor: pointer;
+}
+.km-st-kaldir:hover { color: var(--stop); background: color-mix(in srgb, var(--stop) 10%, transparent); }
+.km-st-secici { display: grid; gap: var(--b-3); }
 .km-st-belge-ad b { font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .km-st-belge-ad small { color: var(--muted); font-size: var(--yazi-xs); }
 .km-st-tur {
