@@ -62,9 +62,9 @@ describe('arkon (gerçek PostgreSQL)', () => {
   }
   const hataKodu = (c: Cevap): unknown => (c.govde as { kod?: unknown }).kod;
   // Dosya JSON değil, ikili cevaptır.
-  async function indir(cerez: string, ozet: string): Promise<{ durum: number; icerik: Buffer }> {
-    const cevap = await app.inject({ method: 'GET', url: `/api/arkon/dosyalar/${ozet}`, headers: { cookie: cerez } });
-    return { durum: cevap.statusCode, icerik: cevap.rawPayload };
+  async function indir(cerez: string, ozet: string, arkaPlan = false): Promise<{ durum: number; icerik: Buffer; tur: string | undefined }> {
+    const cevap = await app.inject({ method: 'GET', url: `/api/arkon/dosyalar/${ozet}${arkaPlan ? '/arka-plan' : ''}`, headers: { cookie: cerez } });
+    return { durum: cevap.statusCode, icerik: cevap.rawPayload, tur: cevap.headers['content-type'] };
   }
 
   async function girisliKisiEkle(kullaniciAdi: string, rolKodu: string): Promise<number> {
@@ -247,7 +247,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
     const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali'));
-    assert.equal(okuma.length, 15);
+    assert.equal(okuma.length, 16);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -587,13 +587,25 @@ describe('arkon (gerçek PostgreSQL)', () => {
     const okunan = await indir(operator, ozet);
     assert.equal(okunan.durum, 200);
     assert.equal(okunan.icerik.equals(icerik), true);
+    // Tür ilk baytlardan bulunur (731): STEP ağda sıkışabilir türle gider.
+    assert.equal(okunan.tur, 'model/step');
     assert.equal((await indir(yonetici, ozet)).durum, 404);
+    // Arka plan ucu aynı okuma kuralıyla: yükleyen okur, belgeyle anılmamış dosyayı başkası okuyamaz.
+    assert.equal((await indir(operator, ozet, true)).icerik.equals(icerik), true);
+    assert.equal((await indir(yonetici, ozet, true)).durum, 404);
     await vt().sorgu(
       "INSERT INTO arkon_belge (depo, kimlik, govde, surum, degistiren_id) VALUES ('draws', 'dosya-anan', $1, 1, $2)",
       [JSON.stringify({ id: 'dosya-anan', sayfalar: [{ ek: { $blob: ozet, t: 'u8', n: icerik.length } }] }), operatorId],
     );
     assert.equal((await indir(yonetici, ozet)).icerik.equals(icerik), true);
+    assert.equal((await indir(yonetici, ozet, true)).icerik.equals(icerik), true);
     assert.equal((await indir(rolsuz, ozet)).durum, 403);
+    assert.equal((await indir(rolsuz, ozet, true)).durum, 403);
+    // 730 a: kişinin açtığı dosya indirme denetimine yazılır, arka planda inen yazılmaz.
+    const indirmeler = await vt().sorgu<{ yol: string; sayi: number }>(
+      "SELECT yol, count(*)::int AS sayi FROM denetim_kaydi WHERE yol LIKE '/arkon/dosyalar/:ozet%' AND yontem = 'GET' AND parametre->>'ozet' = $1 GROUP BY yol", [ozet],
+    );
+    assert.deepEqual(indirmeler, [{ yol: '/arkon/dosyalar/:ozet', sayi: 2 }]);
     assert.deepEqual((await istek<EksikDosyaCevabi>(operator, 'POST', '/arkon/dosyalar/eksikler', { ozetler: [ozet] })).govde.eksikler, []);
 
     // Dosya içeriği denetim kaydına girmez: iki parçanın satırı vardır, gövde yerine yalnız özet taşır.
@@ -826,6 +838,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'POST', yol: '/arkon/dosyalar/eksikler', govde: { ozetler: [OZET] } },
     { yontem: 'POST', yol: `/arkon/dosyalar/${OZET}/parca`, govde: { sira: 0, toplam: 2, veri: 'QQ==' } },
     { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}` },
+    { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}/arka-plan` },
     { yontem: 'GET', yol: '/arkon/iletiler' },
     { yontem: 'POST', yol: '/arkon/iletiler', govde: { ileti: { type: 'call' }, kaynak: 'c9' } },
     { yontem: 'GET', yol: '/arkon/plan-sira/surum' },
@@ -902,7 +915,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       // Çizim Merkezi'nden alma paketi düzenleyen rolündür (operatörün değil). Kuyruk sırası ayrı işlemdir; bilinmeyen istasyon 404.
       const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral' || uc.yol.startsWith('/arkon/kuyruk-sira/');
       const kabul = await istek(yoneticiyle ? yonetici : operator, uc.yontem, uc.yol, uc.govde);
-      const bulunamaz = uc.yol === `/arkon/dosyalar/${OZET}` || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol.startsWith('/arkon/refakat-kartlari') || uc.yol.startsWith('/arkon/kuyruk-sira/');
+      const bulunamaz = uc.yol.startsWith(`/arkon/dosyalar/${OZET}`) && uc.yontem === 'GET' || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol.startsWith('/arkon/refakat-kartlari') || uc.yol.startsWith('/arkon/kuyruk-sira/');
       assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
     }
   });

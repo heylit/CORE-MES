@@ -35,13 +35,14 @@ export const sadelestir = (metin: string): string => metin.replace(/[çÇğĞı�
 export const tekSatir = (metin: string): string => metin.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
 
 // Metin satırlara sözcük sınırından bölünür; sığmayan son satır "..." ile kesilir. Harf genişliği yazının yüksekliğine oranla tahmindir.
+// SATIR_BASI zorunlu satır başıdır (refakat rotası adım başına satır basar, kart #707). Satır sonu karakteri değildir: tekSatir onu
+// atmaz, gelen veride satır sonu eskisi gibi boşluk olur.
 export const HARF_ORANI = 0.6;
-export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number): string[] {
-  const enCokHarf = Math.max(1, Math.floor(genislikMm / (yaziMm * HARF_ORANI)));
-  const enCokSatir = Math.max(1, Math.floor(yukseklikMm / (yaziMm * SATIR_ARALIGI)));
+export const SATIR_BASI = '\u2028';
+function paragrafiBol(paragraf: string, enCokHarf: number): string[] {
   const satirlar: string[] = [];
   let satir = '';
-  for (const sozcuk of metin.split(/\s+/).filter(Boolean)) {
+  for (const sozcuk of paragraf.split(/\s+/).filter(Boolean)) {
     let kalan = sozcuk;
     while (kalan.length > 0) {
       const aday = satir === '' ? kalan : `${satir} ${kalan}`;
@@ -52,6 +53,12 @@ export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: num
     }
   }
   if (satir !== '') satirlar.push(satir);
+  return satirlar;
+}
+export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number): string[] {
+  const enCokHarf = Math.max(1, Math.floor(genislikMm / (yaziMm * HARF_ORANI)));
+  const enCokSatir = Math.max(1, Math.floor(yukseklikMm / (yaziMm * SATIR_ARALIGI)));
+  const satirlar = metin.split(SATIR_BASI).flatMap((p) => paragrafiBol(p, enCokHarf));
   if (satirlar.length <= enCokSatir) return satirlar;
   const kesik = satirlar.slice(0, enCokSatir);
   const son = kesik[enCokSatir - 1] ?? '';
@@ -247,6 +254,7 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     parti: `Parti: ${parti}`,
     basim: `Basım ${gunAyYil(tesisGunu(basim))}`,
     adimlar: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(' · '),
+    rota: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(SATIR_BASI),
     lot: null,
   };
 }

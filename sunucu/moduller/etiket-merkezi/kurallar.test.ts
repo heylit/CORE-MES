@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
-import type { Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, satirlaraBol, yerlesim } from './kurallar.ts';
+import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 
@@ -78,6 +78,10 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(satirlaraBol('bir iki üç', 18, 10, 3), ['bir iki üç']);
     assert.deepEqual(satirlaraBol('bir iki üç dört beş', 9, 3.6, 3), ['bi...']);
     assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCDE', 'FGHIJ']);
+    // Kart #707: satır sonu zorunlu satır başıdır; sığmayan son satır yine kesilir.
+    assert.deepEqual(satirlaraBol(`10 Torna${SATIR_BASI}20 Freze`, 18, 10, 3), ['10 Torna', '20 Freze']);
+    assert.deepEqual(satirlaraBol(['a', 'b', 'c', 'd'].join(SATIR_BASI), 18, 7.2, 3), ['a', 'b...']);
+    assert.deepEqual(satirlaraBol('10 Torna\n20 Freze', 36, 10, 3), ['10 Torna 20 Freze'], 'satır sonu satır başı değildir');
   });
 
   test('PPLB yazı tipi istenen yüksekliği aşmaz', () => {
@@ -213,7 +217,8 @@ describe('etiket-merkezi kuralları', () => {
     };
     assert.deepEqual(refakatDegerleri(k, new Date('2026-10-18T22:30:00.000Z')), {
       qr: 'UE:4512', emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', adetTermin: 'Adet 40 · Termin 30.10.2026',
-      parti: 'Parti: Ana emir', basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol', lot: null,
+      parti: 'Parti: Ana emir', basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol',
+      rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null,
     });
     const alt = refakatDegerleri({ ...k, teslim: null, parti: { ustEmirNo: 'UE-004500', bolunmeSira: 2 }, adimlar: [] }, new Date('2026-10-19T08:00:00.000Z'));
     assert.deepEqual([alt['adetTermin'], alt['parti'], alt['adimlar']], ['Adet 40 · Termin yok', 'Parti: Alt parti 2 · üst UE-004500', null]);
@@ -224,6 +229,24 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date())['lot'], 'Lot LT-1 · Parti P-9');
     assert.deepEqual([kayitSablonTuru('refakat-partisi'), kayitSablonTuru('mal-kabul')], ['refakat', 'lot']);
     assert.equal(kayitUyumHatasi('refakat', 'refakat-partisi'), null, 'refakat partisi refakat şablonuyla basılır');
+  });
+
+  test('Kart #707: refakat şablonu rotayı adım başına satır basar; QR çevresinde dört modülden az boşluk kalmaz', () => {
+    const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'refakat-100x150')!;
+    const ogeler = yerlesim(s, ORNEK_DEGERLER.refakat, false);
+    const rota = ogeler.find((o) => o.tur === 'metin' && o.satirlar[0] === '10 Torna (Örnek tezgâh)');
+    assert.deepEqual(rota?.tur === 'metin' && rota.satirlar, ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason,', 'fason)', '30 Son kontrol']);
+    const qr = ogeler.find((o) => o.tur === 'qr');
+    assert.ok(qr?.tur === 'qr');
+    const modul = qr.boyut / (qr.kareler.length + 2 * QR_KENAR_MODUL);
+    const kenar = QR_KENAR_MODUL * modul;
+    const kutular = s.ogeler.filter((o) => o.tur !== 'qr').map((o) => ({ x: o.x, y: o.y, g: o.genislik, h: o.yukseklik }));
+    const bosluk = Math.min(qr.x, qr.y, s.genislik - qr.x - qr.boyut, s.yukseklik - qr.y - qr.boyut, ...kutular.map((k) => {
+      const dx = Math.max(k.x - (qr.x + qr.boyut), qr.x - (k.x + k.g), 0);
+      const dy = Math.max(k.y - (qr.y + qr.boyut), qr.y - (k.y + k.h), 0);
+      return Math.max(dx, dy);
+    }));
+    assert.ok(kenar + bosluk >= 4 * modul, `sessiz bölge ${((kenar + bosluk) / modul).toFixed(1)} modül`);
   });
 
   test('EM-18: malzeme etiketi kartın adını, stok kodunu ve MLZ önekli kart no QR kodunu basar (stok/Etiketler.tsx ile aynı)', () => {

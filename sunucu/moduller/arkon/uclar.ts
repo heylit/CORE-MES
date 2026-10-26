@@ -166,6 +166,17 @@ export const uclar = [
     cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => servis.dosya(db, kullanici, parametre.ozet),
   }),
+  // Terminal paketin dosyalarını açılmadan önce arka planda cihaza indirir (726 a); kişinin açmadığı dosya indirme denetimine
+  // yazılmaz (730 a). Okuma kuralı yukarıdaki uçla aynıdır; kişinin açtığı dosya o uçtan gelir ve deftere yazılır.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/dosyalar/:ozet/arka-plan',
+    yetki: ARKON_SAYFASI,
+    kendiligindenYuklenir: true,
+    parametre: dosyaParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, kullanici, parametre }) => servis.dosya(db, kullanici, parametre.ozet),
+  }),
   // Çizim Merkezi seçicisi (#800): okuma ucu sayfa yetkisiyle açılır, paket düzenleme rolü servis katmanında denetlenir.
   uc({
     yontem: 'GET',
