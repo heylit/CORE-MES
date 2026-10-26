@@ -1023,6 +1023,13 @@ export type MalzemeIstegiCevabi = z.output<typeof malzemeIstegiCevabi>;
 // Teslimde depo karşıladığı miktarı yazar; istenenden çok olabilir (tam boy çubuk gibi).
 // İstasyonsuz (kişiye) istekte malzeme verildiği konumdan kişinin istasyonuna taşınır (kart #1289): kaynak konum zorunludur;
 // istasyon verilmezse kişinin bulunduğu istasyon kullanılır.
+// Kart onayı (632 a): ONAY_GEREKLI cevabının ayrıntısı; depocuya açılacak ya da eklenecek kartı söyler.
+export const kartOnayiAyrintisi = z.object({
+  kartOnayi: z.object({
+    tur: z.enum(['lot', 'istisna']), emirNo: z.string(), lotNo: z.string().nullable(), malzeme: z.string().nullable(), miktar: z.string(), kart: z.string().nullable(),
+  }),
+});
+export type KartOnayiAyrintisi = z.infer<typeof kartOnayiAyrintisi>;
 export const istekTeslimGovdesi = z.object({
   ...beklenenSurum,
   karsilanan: miktarSemasi,
@@ -1030,6 +1037,7 @@ export const istekTeslimGovdesi = z.object({
   partiId: kimlik.nullable().optional(),
   statuId: kimlik.nullable().optional(),
   istasyonId: kimlik.nullable().optional(),
+  kartOnayi: z.boolean().optional(),
 });
 export type IstekTeslimGovdesi = z.input<typeof istekTeslimGovdesi>;
 
@@ -1102,6 +1110,8 @@ export const teslimGonderGovdesi = z.object({
   aliciKodu: z.string().trim().min(1).max(80).nullable().optional(),
   // Refakat kartıyla teslim (kart #123): lot ve emir karttan okunur; verilen parti ya da emir kartınkiyle aynı olmalıdır.
   refakatPartisiId: kimlik.nullable().optional(),
+  // Emre giden malzeme kartla gider (632 a): kartsız ilk gönderim ONAY_GEREKLI döner; depocu onaylayınca aynı gövde bununla yinelenir.
+  kartOnayi: z.boolean().optional(),
   // Bırakınca teslim (Soru 133): taşıyan varışta bırakır; teslim anında kapanır, yolda olmaz. Hedef taraf süre içinde itiraz eder.
   // Depo rafına yalnız depo bırakır; başkasının depoya bıraktığı kabul alanına düşer.
   birak: z.boolean().optional(),
@@ -1288,6 +1298,7 @@ export const isMalzemesiIsteGovdesi = z.object({
   // İstasyondan alırken yalnız bu emrin (true) ya da yalnız emirsiz (false) partisi; null ikisi.
   buEmrin: z.boolean().nullable().default(null),
   kaynakKimligi: z.string().trim().min(3).max(100),
+  kartOnayi: z.boolean().optional(),
 });
 export type IsMalzemesiIsteGovdesi = z.input<typeof isMalzemesiIsteGovdesi>;
 

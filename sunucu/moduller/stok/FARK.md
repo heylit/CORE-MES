@@ -1,3 +1,13 @@
+# FARK: stok, emre giden malzeme refakat kartıyla gider, tek onayla (kart 621; sorular 615-2 a, 632 a, 633 b)
+
+Kullanıcı kararları 2026-10-26: 615-2 a, 632 a (yarı otomatik, tek kontrollü adım), 633 b (lotsuz da onaya düşer). Göç, uç ve yetki değişmedi.
+- Emre bağlı teslim kartsız gelirse sunucu `ONAY_GEREKLI` (409) döner, teslim yazılmaz. Ayrıntı `kartOnayi`: tür (`lot` ya da `istisna`), emir no, lot no, malzeme, miktar ve kullanılacak açık kartın etiketi (yoksa boş).
+- Aynı gövde `kartOnayi: true` ile gelince: lotlu teslimde aynı emir ve lotun açık kartı kullanılır, yoksa refakat kartı açılır; lotsuz teslimde emrin o malzemedeki lot bekleyen (istisna) kartı kullanılır, yoksa açılır. Teslim aynı işlemde yazılır.
+- Yollar: `POST /stok/teslimler/gonder` (kartla gelen teslim onay istemez), istekten teslim (`/stok/malzeme-istekleri/:id/teslim-et`), iş malzemesi al (`/stok/teslim-kutusu/is-malzemeleri/iste`). Sepetten gönderim emir taşımadığı için onay istemez.
+- Onay istenmez: emirsiz teslim, üretim lotu, bitti ya da iptal emir.
+- Sözleşme: üç gövdeye `kartOnayi?: boolean`; `kartOnayiAyrintisi` (cevap ayrıntısı).
+- İstemci: `useStokKomutu` yetersiz stok onayıyla aynı yoldan kart onayını açar (`KartOnayi.tsx`): emir, malzeme, lot, miktar, kart; düğme "Refakat kartı aç ve gönder", "<kart> kartına ekle ve gönder" ya da "Lot bekleyen istisna kartı aç ve gönder". Vazgeç gönderimi bırakır.
+
 # FARK: stok, siparişsiz satın alma kabulü reddi (kart #99; soru 104 a)
 
 Kullanıcı kararı 2026-10-22: Soru 104 a, davranış değiştiren düzeltme onaylı.
