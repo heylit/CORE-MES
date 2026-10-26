@@ -178,7 +178,9 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
     };
   }, [depo, kisi, ayarlar, ayarlariYenile, saltOkunur, gezin, onizlemeYaz]);
   const [kok, kokYaz] = useState<HTMLDivElement | null>(null);
-  const darAlan = useOlcek(kok);
+  // Terminal dokunmatiktir: küçültülürse dokunma hedefi 44 pikselin altına iner; yalnız yüksekliği alana oturur. Dar düzeni de
+  // pencere genişliğine bakar (705 b): 1024 tablette menü açıkken alan 900'ün altına düşse de geniş düzen kalır.
+  const darAlan = useOlcek(kok, adres !== 'operator');
   const numune = useNumuneSayisi(depo);
   // Kalite maddesi bekleyen ve ölçülen numune sayısını taşır (eski sol menüdeki rozet, 283.25); sayı kabuğun şeridinde çizilir.
   const sayacYaz = useCerceveSayacYazici(KOK);
@@ -269,19 +271,21 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
 
 // Ekran ölçeği (eski useFit): sayfa 1600x900 tasarım alanına göre ölçeklenir. Ölçek ve ölçekli görünür yükseklik kökte değişken
 // olarak durur (arkon-yeni.css zoom; tam yükseklikli düzenler --tc-ay-vh kullanır). Kabuk alanı değişince yeniden hesaplanır.
-function useOlcek(kok: HTMLDivElement | null): boolean | null {
+function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null {
   const [mobilMi, mobilYaz] = useState<boolean | null>(null);
   useEffect(() => {
-    const alan = kok?.parentElement;
+    const alan = kutuluAta(kok);
     if (!kok || !alan) return undefined;
     const uygula = () => {
       const yukseklik = Math.max(0, window.innerHeight - Math.max(0, alan.getBoundingClientRect().top));
-      const { mobil, z } = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
+      const olcek = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
+      const mobil = olcekli ? olcek.mobil : olcekHesapla(window.innerWidth, window.innerHeight).mobil;
+      const z = olcekli ? olcek.z : 1;
       kok.style.setProperty('--tc-ay-olcek', String(z));
       kok.style.setProperty('--tc-ay-vh', `${Math.round(yukseklik / z)}px`);
       kok.toggleAttribute('data-mobil', mobil);
-      // Yerleşimi olmayan alan (genişlik 0) ölçü sayılmaz; terminal pencere genişliğine düşer.
-      mobilYaz(alan.clientWidth > 0 ? mobil : null);
+      // Ölçülemeyen alan (genişlik 0) ve terminal null verir; dar düzen kararı pencere genişliğine düşer (useDarEkran).
+      mobilYaz(olcekli && alan.clientWidth > 0 ? mobil : null);
     };
     uygula();
     const izleyici = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(uygula);
@@ -289,8 +293,16 @@ function useOlcek(kok: HTMLDivElement | null): boolean | null {
     window.addEventListener('resize', uygula);
     window.addEventListener('orientationchange', uygula);
     return () => { izleyici?.disconnect(); window.removeEventListener('resize', uygula); window.removeEventListener('orientationchange', uygula); };
-  }, [kok]);
+  }, [kok, olcekli]);
   return mobilMi;
+}
+
+// Ölçü, kutusu olan ilk atadan alınır: kalıcı rota sarmalayıcısı (Üretim Terminali) `display: contents` ya da gizliyken `none` olur;
+// kutusuz atanın genişliği ve üstü 0 okunur; alan dar ve pencere boyunda sayılır, kök şeridin altından taşar.
+function kutuluAta(kok: HTMLElement | null): HTMLElement | null {
+  let e = kok?.parentElement ?? null;
+  while (e !== null && e.parentElement !== null && /^(contents|none)$/.test(getComputedStyle(e).display)) e = e.parentElement;
+  return e;
 }
 
 // Kalitede bekleyen ya da ölçülen numune sayısı (baslat.ts nWait): numune ve sonuç iletisinde ve 20 sn'de bir yeniden sayılır.

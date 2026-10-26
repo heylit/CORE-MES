@@ -73,7 +73,9 @@ function Adres() { return <output data-testid="adres">{useLocation().pathname}</
 
 // Sayfalar arası geçiş kabuğun ikinci menü şeridindedir (553 1 a); testte yerine yalın bağlantılar. sayacYaz: kabuğun şeritteki
 // sayılar için verdiği yazıcı.
-export function arkonAc(adres: string, { sayacYaz = null }: { sayacYaz?: CerceveSayacYazici | null } = {}) {
+// `kalici`: sayfa kabuktaki gibi kalıcı rota sarmalayıcısında ve ölçülebilir bir alanın içinde açılır (sarmalayıcının
+// display: contents kuralı app.css'te; testte kendisi ekler).
+export function arkonAc(adres: string, { sayacYaz = null, kalici = false }: { sayacYaz?: CerceveSayacYazici | null; kalici?: boolean } = {}) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={istemci}><BildirimSaglayici><CerceveSayacBaglami.Provider value={sayacYaz}><MemoryRouter initialEntries={[adres]}>
@@ -81,7 +83,9 @@ export function arkonAc(adres: string, { sayacYaz = null }: { sayacYaz?: Cerceve
         {sekmeMaddeleri().map((m) => <Link key={m.anahtar} to={SAYFA_DISI[m.anahtar] ?? sayfaAdresi(m.anahtar)}>{m.baslik}</Link>)}
       </nav>
       <Routes>
-        {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}
+        {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={kalici
+          ? <div data-deneme-alan=""><div className="tc-kalici-ekran"><r.ekran /></div></div>
+          : <r.ekran />} />)}
         <Route path="*" element={<p>Başka sayfa</p>} />
       </Routes>
       <Adres />
