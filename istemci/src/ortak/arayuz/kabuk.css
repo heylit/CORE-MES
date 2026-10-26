@@ -158,6 +158,12 @@
     grid-template-rows: auto auto minmax(0, 1fr) var(--alt-cubuk);
     grid-template-areas: "ust" "ikinci" "icerik" "alt";
   }
+  /* Üretim Terminali ve Kuyruk'un tek maddelik şeridi telefonda yalnız yer kaplar (gidilecek başka sekme yok): satırı çizilmez. */
+  .tc-kabuk[data-ikinci][data-ikinci-tek] {
+    grid-template-rows: auto minmax(0, 1fr) var(--alt-cubuk);
+    grid-template-areas: "ust" "icerik" "alt";
+  }
+  .tc-kabuk[data-ikinci-tek] .tc-ikinci-kap { display: none; }
   .tc-kabuk-menu { display: none; }
   /* Telefonda düğmeler başlığa yer bırakmıyordu (360'ta ad hiç görünmüyordu): başlık düğmelerin altında kendi ince satırına iner. */
   .tc-kabuk-ust {
