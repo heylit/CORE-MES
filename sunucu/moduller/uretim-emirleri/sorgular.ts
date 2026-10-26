@@ -1809,7 +1809,8 @@ export interface AkisOlaySatiri {
   isEmriId: number | null; zaman: string; olay: 'baslat' | 'bitir' | 'duraklat' | 'durdur' | 'devam' | 'ayar';
   durusNedeniId: number | null; istasyonId: number | null;
 }
-export interface AkisSayimSatiri { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number; duzeltme: boolean }
+// Refakat kartıyla sayılmışsa kartı (kart #708: Akış Süresi kartın akışını kartla sayılanlardan ölçer); kartsız sayımda null.
+export interface AkisSayimSatiri { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number; duzeltme: boolean; refakatPartisiId: number | null }
 export interface AkisFasonSatiri { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number; hurdaAdet: number | null }
 
 export function akisEmriGetir(db: Db, emirId: number): Promise<AkisEmirSatiri | null> {
@@ -1845,7 +1846,7 @@ export function akisOlaylariGetir(db: Db, emirId: number): Promise<AkisOlaySatir
 
 export function akisSayimlariGetir(db: Db, emirId: number): Promise<AkisSayimSatiri[]> {
   return db.sorgu<AkisSayimSatiri>(
-    `SELECT s.is_emri_id AS "isEmriId", ${ISO('s.zaman')} AS zaman, s.tur, s.adet, s.duzeltme
+    `SELECT s.is_emri_id AS "isEmriId", ${ISO('s.zaman')} AS zaman, s.tur, s.adet, s.duzeltme, s.refakat_partisi_id AS "refakatPartisiId"
        FROM uretim_sayimi s WHERE s.emir_id = $1 AND s.tur IN ('saglam', 'hurda') ORDER BY s.zaman, s.id`,
     [emirId],
   );
