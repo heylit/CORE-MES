@@ -1,13 +1,12 @@
-import { before, describe, mock, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CanliYerlesimCevabi, OnizlemeCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { KomutCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { canliOzeti, canliSira } from './disari.ts';
-import { oner } from './servis.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
-  const { c, vt, istek, tamam, mamulAc, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  const { c, vt, istek, tamam, mamulAc, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, planOku, yer, tg, taslaktaOner, isEmriKomutu, tamGunMerkezi, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
   // gönderilmez.
   const gonder = async (id: number, surum: number, sahip = c.planlama) => {
@@ -21,7 +20,7 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
   let makineB = 0;
   before(() => { ({ denemeProjeId, istasyonA, makineA, makineB } = durum()); });
 
-  test('elle sıra yalnız elle işaretli işte (kullanıcı kararı): ekranın kuyruk yazımı ötekileri elle saymaz; toptan yeniden hesapta elle sıra kalır', async () => {
+  test('elle sıra yalnız elle işaretli işte (kullanıcı kararı): ekranın kuyruk yazımı ötekileri elle saymaz; Planı kurda elle sıra kalır', async () => {
     const [i1] = await isEmirleriAc([yeniAdim()]);
     const [i2] = await isEmirleriAc([yeniAdim()]);
     const [i3] = await isEmirleriAc([yeniAdim()]);
@@ -37,14 +36,12 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     });
     const taslak = await planOku(yazildi.taslak);
     assert.deepEqual([i1!, i2!, i3!].map((id) => yer(taslak, id).elleSira), [null, 2, null], 'yalnız elle işaretli iş elle sıra alır');
-    // 276 a: elle olmayan işin makinesi ve sırası motorundur.
 
-    // Toptan yeniden hesap (öner): elle iş elle sırasını korur ve kuyruğun başına geçer; ötekiler kurala göre dizilir, elle sayılmaz.
-    const oner = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(taslak) });
+    // Planı kur (ADR 0018): elle iş elle sırasını, yani kuyruktaki yerini korur; ötekiler elle sayılmaz. Motor A elle işi kuyruğun başına alıyordu.
+    const oner = await taslaktaOner(c.planlama, taslak);
     assert.deepEqual([i1!, i2!, i3!].map((id) => yer(oner, id).elleSira), [null, 2, null]);
-    const b = (id: number) => Date.parse(yer(oner, id).baslangic);
-    const ayniKaynakta = [i1!, i3!].filter((id) => yer(oner, id).kaynak.id === yer(oner, i2!).kaynak.id);
-    for (const id of ayniKaynakta) assert.ok(b(i2!) < b(id), 'elle iş aynı kaynaktaki elle olmayan işten önce');
+    const kuyrugu = oner.yerlesimler.filter((y) => y.kaynak.tur === 'makine' && y.kaynak.id === yer(oner, i2!).kaynak.id).sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic));
+    assert.equal(kuyrugu[1]?.isEmriId, i2, 'elle iş kuyruğun ikinci sırasında');
 
     // `elle` göndermeyen eski ekran: bütün işler eskisi gibi elle sayılır.
     const eski = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
@@ -52,37 +49,6 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     });
     const eskiTaslak = await planOku(eski.taslak);
     assert.deepEqual([i3!, i1!, i2!].map((id) => yer(eskiTaslak, id).elleSira), [1, 2, 3]);
-  });
-
-  test('276 a: kuyruk yazımında elle olmayan işleri motor dizer; taslak motorun önerisiyle aynıdır, elle iş sırasını korur', async () => {
-    const gun = (n: number) => new Date(Date.now() + n * 24 * 3600_000).toISOString().slice(0, 10);
-    const [gec] = await isEmirleriAc([yeniAdim()], 10, gun(40));
-    const [erken] = await isEmirleriAc([yeniAdim()], 10, gun(5));
-    const [elle] = await isEmirleriAc([yeniAdim()], 10, gun(60));
-    const canli = await planOku();
-    const isi = (id: number, e: boolean) => {
-      const y = canli.yerlesimler.find((x) => x.isEmriId === id) ?? canli.yerlesmemis.find((x) => x.isEmriId === id)!;
-      return { emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: e };
-    };
-    // Motor şimdiden sayar: iki hesap aynı ana sabitlenir (dakika sınırını geçen saat yarışı olmasın).
-    mock.timers.enable({ apis: ['Date'], now: Date.now() });
-    let p: PlanCevabi;
-    let oner: PlanCevabi;
-    const yerleri = (x: PlanCevabi) => [gec!, erken!, elle!].map((id) => [yer(x, id).kaynak, yer(x, id).baslangic, yer(x, id).bitis, yer(x, id).elleSira]);
-    try {
-      // Ekran teslimi geç olanı öne koydu; bu sıra elle değil, motor teslime göre dizer.
-      const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
-        kuyruklar: [{ kaynak: { tur: 'makine', id: makineB }, baslangic: new Date(Date.now() + 3600_000).toISOString(), isler: [isi(gec!, false), isi(elle!, true), isi(erken!, false)] }],
-      });
-      p = await planOku(yazildi.taslak);
-      oner = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-    } finally {
-      mock.timers.reset();
-    }
-    assert.deepEqual(yerleri(p), yerleri(oner), 'canlıya gidecek taslak motorun önerisidir');
-    assert.equal(yer(p, elle!).elleSira, 2, 'elle iş elle sırasını korur');
-    if (yer(p, gec!).kaynak.id === yer(p, erken!).kaynak.id) assert.ok(Date.parse(yer(p, erken!).baslangic) < Date.parse(yer(p, gec!).baslangic), 'teslimi erken olan önce');
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${oner.taslak!.id}/vazgec`, { surum: oner.taslak!.surum });
   });
 
   test('elle seçilen makine (kullanıcı onayı): toptan hesap işi o makinede tutar, yalnız saatini ayarlar; seçilmeyen iş rotadaki makineye döner', async () => {
@@ -100,10 +66,10 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
       kuyruklar: [{ kaynak: { tur: 'makine', id: makineA3 }, baslangic: new Date(Date.now() + 3600_000).toISOString(), isler: [isi(s1!, true), isi(s2!, false)] }],
     });
     let p = await planOku(yazildi.taslak);
-    // 276 a: yazımdan sonra motor önerir; elle seçilmeyen makine yazımda rotadakine döner.
+    // Elle seçilmeyen makine yazımda rotadakine döner.
     assert.deepEqual([s1!, s2!].map((id) => [yer(p, id).kaynak.id, yer(p, id).elleKaynak]), [[makineA3, true], [makineA, false]]);
 
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+    p = await taslaktaOner(c.planlama, p);
     assert.deepEqual([s1!, s2!].map((id) => [yer(p, id).kaynak.id, yer(p, id).elleKaynak]), [[makineA3, true], [makineA, false]]);
 
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
@@ -115,7 +81,7 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
   });
 
   test('elle bölme (kart #1572): parçalar ayrı makinede, her biri ayarı öder; sonraki adım hepsini bekler; öner parçaları korur; canlı ve Terminal parçaları görür', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-BOL', ad: 'Deneme bölme merkezi', aciklama: null });
+    const merkez = { id: await tamGunMerkezi('RT-BOL', 'Deneme bölme merkezi') };
     const istC = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BL', ad: 'Deneme bölme C', isMerkeziId: merkez.id })).id;
     const istD = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BM', ad: 'Deneme bölme D', isMerkeziId: merkez.id })).id;
     const c1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BL1', ad: 'Deneme C1', istasyonId: istC })).id;
@@ -155,7 +121,7 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     assert.equal(yer(p, op20!).parcalar, undefined, 'bölünmemiş işte parça alanı yok');
 
     // Öner: parçalar korunur; elle seçilen makinedeki parça orada kalır, öteki rotadaki makineye; sonraki adım yine hepsini bekler.
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+    p = await taslaktaOner(c.planlama, p);
     assert.deepEqual(parcalar(), [{ no: 1, adet: 4, makine: c1, sure: 38 }, { no: 2, adet: 6, makine: c2, sure: 42 }]);
     assert.ok(Date.parse(yer(p, op20!).baslangic) >= Math.max(...yer(p, op10!).parcalar!.map((x) => Date.parse(x.bitis))));
 
@@ -190,8 +156,8 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     await vt().tx((db) => db.sorgu('DELETE FROM plan_yerlesim_parcasi WHERE is_emri_id = $1 AND parca_no = 3', [op10]));
   });
 
-  test('elle bölme kalıcıdır (kart #1572): motor bölünmüş işi yerleştiremezse bölme durur, iş uyarıyla yerleşmemiş görünür; makine açılınca parçalarıyla yerleşir', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-BK', ad: 'Deneme kalıcı bölme merkezi', aciklama: null });
+  test('elle bölme kalıcıdır (kart #1572, 671 a): bölünmüş iş ortak motorda sabittir, makineleri kapansa da parçalarıyla yerinde kalır; yersiz bölme canlıda durur, parçalarıyla yeniden yazılır', async () => {
+    const merkez = { id: await tamGunMerkezi('RT-BK', 'Deneme kalıcı bölme merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BK', ad: 'Deneme kalıcı bölme', isMerkeziId: merkez.id })).id;
     const makine = async (kod: string) => tamam<{ id: number; surum: number }>(c.yonetici, 'POST', '/makineler', { kod, ad: `Deneme ${kod}`, istasyonId: ist });
     const m = [await makine('RT-BK1'), await makine('RT-BK2')];
@@ -209,31 +175,41 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
       isler: [{ emirNo: y0.emirNo, opNo: y0.opNo, dondurulmus: false, elle: false, parca: { no: n, adet } }] });
     const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [parca(1, 4), parca(2, 6)] });
     let p = await planOku(yazildi.taslak);
-    assert.equal(yer(p, op10!).parcalar?.length, 2);
+    const parcalar = (x: PlanCevabi) => yer(x, op10!).parcalar?.map((r) => [r.no, r.adet, r.baslangic, r.bitis]);
+    const once = parcalar(p);
+    assert.equal(once?.length, 2);
 
-    // İki makine de kapanınca motor işi yerleştiremez: bölme silinmez, iş yerleşmemiş listesinde bölmesiyle ve uyarıyla görünür.
+    // Makineler kapanır; aynı taslağa başka iş yazılır. Bölünmüş iş motora sabit gider (671 a, kural 2): parçaları yerinde kalır.
     await aktif(false);
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-    const yersiz = p.yerlesmemis.find((x) => x.isEmriId === op10);
-    assert.deepEqual(yersiz?.bolme, [{ no: 1, adet: 4 }, { no: 2, adet: 6 }]);
-    assert.ok(p.uyarilar.some((u) => u.includes(`${y0.emirNo} OP ${y0.opNo}`) && u.includes('bölme duruyor')), p.uyarilar.join(' | '));
+    const [baska] = await isEmirleriAc([yeniAdim()]);
+    const yb = p.yerlesmemis.find((x) => x.isEmriId === baska) ?? (await planOku(p.taslak!.id)).yerlesmemis.find((x) => x.isEmriId === baska)!;
+    await tamam(c.planlama, 'POST', '/plan/kuyruklari-yaz', { taslak: tg(p),
+      kuyruklar: [{ kaynak: { tur: 'makine', id: makineA }, baslangic, isler: [{ emirNo: yb.emirNo, opNo: yb.opNo, dondurulmus: false, elle: false }] }] });
+    p = await planOku(p.taslak!.id);
+    assert.deepEqual(parcalar(p), once, 'bölme yerinde');
+    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    await aktif(true);
 
-    // Canlıya alınan yersiz bölme canlıda ve canlıdan açılan taslakta da durur.
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
-    assert.deepEqual((await planOku()).yerlesmemis.find((x) => x.isEmriId === op10)?.bolme?.map((x) => x.adet), [4, 6]);
+    // Yersiz bölme (Motor A'nın yerleştiremediği bölünmüş iş; eski veride kalabilir) canlıda bölmesiyle ve nedeniyle görünür.
+    await vt().tx((db) => db.sorgu('INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet) VALUES ($1, 1, 4), ($1, 2, 6)', [op10]));
+    const yersiz = (await planOku()).yerlesmemis.find((x) => x.isEmriId === op10);
+    assert.deepEqual(yersiz?.bolme, [{ no: 1, adet: 4 }, { no: 2, adet: 6 }]);
+    assert.equal(yersiz?.neden, 'Bölünmüş; parçalar yerleşmedi, bölme duruyor.');
     const ozet = await vt().tx((db) => canliOzeti(db));
     const anahtar = `${y0.emirNo}|${y0.opNo}`;
     assert.deepEqual(ozet.yersizBolmeler?.find((x) => x.anahtar === anahtar)?.parcalar, [{ no: 1, adet: 4 }, { no: 2, adet: 6 }], 'Reçete şeridi yersiz bölmeyi görür');
     assert.equal(ozet.adetler?.[anahtar], 10, 'parça adetlerinin toplanacağı adım adedi');
-    await aktif(true);
-    p = await taslaktaOner();
-    assert.deepEqual(yer(p, op10!).parcalar!.map((x) => [x.no, x.adet]), [[1, 4], [2, 6]], 'makine açılınca parçalarıyla yerleşir');
+
+    // Parçalarıyla yeniden yazılır ve canlıya alınır.
+    const yeniden = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [parca(1, 4), parca(2, 6)] });
+    p = await planOku(yeniden.taslak);
+    assert.deepEqual(yer(p, op10!).parcalar!.map((x) => [x.no, x.adet]), [[1, 4], [2, 6]]);
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     assert.deepEqual(yer(await planOku(), op10!).parcalar!.map((x) => x.adet), [4, 6]);
   });
 
   test('elle bölme hurdalı adımda (kart #1572): parça adetleri adım adedine (önceki adımın sağlamı) eşit olur; emir adedi reddedilir; canlı özet adım adedini verir', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-BH', ad: 'Deneme hurdalı bölme merkezi', aciklama: null });
+    const merkez = { id: await tamGunMerkezi('RT-BH', 'Deneme hurdalı bölme merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BH', ad: 'Deneme hurdalı bölme', isMerkeziId: merkez.id })).id;
     const h1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BH1', ad: 'Deneme RT-BH1', istasyonId: ist })).id;
     const h2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BH2', ad: 'Deneme RT-BH2', istasyonId: ist })).id;
@@ -258,8 +234,8 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     assert.deepEqual(yer(await planOku(kabul.json<{ taslak: number }>().taslak), op20!).parcalar!.map((x) => x.adet), [3, 5]);
   });
 
-  test('elle bölme sonra hurda: önceki adım daha az sağlamla bitince parçaların süresi adım adedine oranla düşer, yazılı adetler kalır', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-BU', ad: 'Deneme bölme uzlaşma merkezi', aciklama: null });
+  test('elle bölme sonra hurda (671 a): önceki adım daha az sağlamla bitince bölünmüş iş sabit kalır; parçaların süresi ve yazılı adetleri değişmez', async () => {
+    const merkez = { id: await tamGunMerkezi('RT-BU', 'Deneme bölme uzlaşma merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BU', ad: 'Deneme bölme uzlaşma', isMerkeziId: merkez.id })).id;
     const u1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU1', ad: 'Deneme RT-BU1', istasyonId: ist })).id;
     const u2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-BU2', ad: 'Deneme RT-BU2', istasyonId: ist })).id;
@@ -277,8 +253,9 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
       "UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now() - interval '1 hour', bitis = now(), saglam_adet = 8 WHERE id = $1", [op10]));
     const p = await taslaktaOner();
     const sure = (x: { baslangic: string; bitis: string }) => (Date.parse(x.bitis) - Date.parse(x.baslangic)) / 60_000;
-    // Ayar 30 + adet x 2 dk; parça adedi 8/10 oranında: 4 -> 3,2 (36,4 dk), 6 -> 4,8 (39,6 dk). Önceden 38 ve 42 dk çıkıyordu.
-    assert.deepEqual(yer(p, op20!).parcalar!.map((x) => [x.no, x.adet, Math.round(sure(x) * 10) / 10]), [[1, 4, 36.4], [2, 6, 39.6]]);
+    // Ayar 30 + adet x 2 dk. Bölünmüş iş ortak motora sabit gider (671 a, kural 2): Planı kur parça süresini adım adedine (8/10) göre
+    // kısaltmaz (Motor A 36,4 ve 39,6 dk verirdi); parçalar yazıldıkları süre ve adetle kalır (FARK.md).
+    assert.deepEqual(yer(p, op20!).parcalar!.map((x) => [x.no, x.adet, Math.round(sure(x) * 10) / 10]), [[1, 4, 38], [2, 6, 42]]);
   });
 
   test('elle sıra rota değişince (kullanıcı kararı): aynı istasyonda makine değişirse kalır; istasyon değişir ya da adım kalkarsa düşer ve uyarılır', async () => {
@@ -318,11 +295,12 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     assert.ok(p.uyarilar.includes(`Elle sıra düştü: ${yer(p, s2!).emirNo} OP ${op(s2!)}, istasyon RT-A -> RT-B.`), p.uyarilar.join('\n'));
     assert.ok(p.uyarilar.includes('Elle sıra düştü: RT-A kuyruğundaki bir adım rotadan kalktı.'));
 
-    // Toptan yeniden hesap: düşen elle sıra motorda sayılmaz, uyarı planlamacı yeniden sıralayana dek kalır.
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+    // Planı kur (ADR 0018) kuyrukları yeniden yazar, yani yeniden sıralar: yeni kuyruğuna yazılan işin (s2) düşme kaydı kapanır; rotadan
+    // kalkan adımın kaydı (kuyrukta işi yok) planlamacı bakana dek kalır. Motor A'nın önerisi kuyruk yazmadığı için ikisi de kalıyordu.
+    p = await taslaktaOner(c.planlama, p);
     assert.equal(yer(p, s1!).elleSira, 1);
     assert.equal(yer(p, s2!).elleSira, null);
-    assert.equal(p.elleSiraDusenler?.length, 2);
+    assert.deepEqual(p.elleSiraDusenler?.map((x) => [x.isEmriId, x.neden]), [[s3, 'rotadan-kalkti']]);
 
     // Canlı özet de düşen elle sırayı elle saymaz; ekran qorder'ını buradan kurar.
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });

@@ -641,3 +641,19 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-zipla, .tc-ay1-gorev-nabiz, .tc-ay1-cagri-cip > i { animation: none; }
   .tc-ay1-cizgi, .tc-ay1-kadran-yay, .tc-ay1-halka-yay, .tc-ay1-oee-yay, .tc-ay1-is { transition: none; }
 }
+
+/* 684: iş ve istasyon çarkı. Yana kaydırma çarkındır, dikey kaydırma sayfanın. */
+.tc-ay1-cark {
+  display: flex; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-2); min-width: 0; touch-action: pan-y; user-select: none;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel);
+}
+.tc-ay1-cark:focus-visible { outline: var(--cizgi) solid var(--sig); outline-offset: var(--cizgi-ince); }
+.tc-ay1-cark[data-baska] { border-color: var(--sig); }
+.tc-ay1-cark-orta { display: grid; flex: 1 1 auto; min-width: 0; }
+.tc-ay1-cark-orta b { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-cark-orta small { color: var(--muted); font-size: var(--yazi-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-cark > * { flex: none; }
+.tc-ay1-cark > .tc-ay1-cark-orta { flex: 1 1 auto; }
+/* Dar çarkta "geç" düğmesi ortadaki yazıyı sıkıştırıyordu: alt satıra iner. */
+.tc-ay1-cark { flex-wrap: wrap; container-type: inline-size; }
+@container (max-width: 480px) { .tc-ay1-cark > .tc-dugme { order: 1; flex: 1 0 100%; } }

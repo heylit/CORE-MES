@@ -138,3 +138,36 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - Kuyruk yaz: vardiyasız işin taslaktaki yeri kalkar, yazılmaz; komut 200. Canlıya al: vardiyasız işin taslak yeri canlıya geçmez, canlıdaki hâli kalır, tabanı yazılmaz.
 - Plan cevabı: motor kayıtlıyken makinesinin takvimi olmayan yerleşmemiş işin nedeni "Tezgâhın vardiyası tanımsız."; takvimsiz uyarısı "vardiya takvimi yok; işleri yerleşmedi." Motor kayıtsızken bugünkü metin.
 - VARSAYIM: neden, işin atanmış makinesinin takvimi olup olmadığından okunur (motorun listesi saklanmaz); kuyruk yazımında taslaktaki eski yerin kalkması iş yerleşmemiş görünsün diyedir.
+
+## Ortak motor canlıda (627 a, kart 625h)
+- `sunucu/kablolama.ts` plan motoru çözücüsünü bağlar (ADR 0018 karar 5). Canlıya almada ve kuyruk yazımında taslağın makine kuyrukları (planlı, sabit olmayan, bölünmemiş makine işi) sıraları korunarak ortak motorla yeniden dizilir; vardiyası tanımsız tezgâhın işi uyarıyla boş kalır (168 b).
+- Planlama sayfasının çalışma kaydı yoksa çözücü 409 döner. Uç, göç, yetki değişmedi. `/plan/oner` ve `/plan/karsilastir` 625n'de kalktı (aşağıda).
+
+## Ortak motor tek motor (627 a, 669 a, 671 a, 677 a, 678 a, 679 b, 686 a, 687 a, 689 a, 690 b; kart 625n)
+Uçlar ve sözleşme:
+- `POST /plan/oner` ve `GET /plan/karsilastir` kalktı (`servis.ts` `oner`, `karsilastir`; sözleşme `karsilastirmaCevabi`, `KarsilastirmaCevabi`). Hiçbir ekran çağırmıyordu (DOĞRULANDI, grep).
+  Planı kur planlama sayfasındadır: sayfa kuyrukları kendi motoruyla sıralar, `POST /plan/kuyruklari-yaz` ile yazar, saatleri ortak motor verir. Defterde Planı kur `sirala`dır (eskiden `oner`).
+Sunucu kuralları (`servis.ts`):
+- Sıraya aykırı taşıma (308 b) motordan önce de denetlenir: ret motor koşmadan döner.
+- Elle seçilmemiş iş, kuyruğu rota dışı bir makinedeyse rotadaki makinesinin kuyruğuna döner (elle seçilen makine kalır, H3).
+- Bölünmüş ya da ileriye (1 dk'dan çok) sıralanmış çalışan iş motora sabit gider; yeri kayıtlı aralığıdır (671 a, kural 2 ve 5). Canlıya almada önüne iş konan çalışan iş kuyruğa verilir (A4 3b).
+Ortak motorla değişen beklentiler (Motor A'dan farklar):
+- Vardiyası tanımsız merkezin işi yerleşmez, nedeni ve uyarısı görünür (168 b, 650 a; PL-04). Tezgâh kendi iş merkezinin haftasıyla çalışır (650 a). Kapalı gün tatildir (677 a; PL-04, P-B24).
+- Başlangıcı olmayan emir günün başından serbesttir (678 a; P-B24).
+- Süre ürünün yürürlükteki rotasındandır, iş emrinin kendi süresinden değil (679 b; Z6). Rota değişikliği stüdyoda taslak olarak gelir.
+- Bölünmüş iş sabittir (671 a): hurdadan sonra parça süresi kendiliğinden kısalmaz (38/42 dk kalır); makineleri kapanan bölünmüş iş yerinde kalır, yersiz olmaz. Yersiz bölme yalnız eski veride kalır ve parçalarıyla yeniden yazılır.
+- Arızalı makineye iş yazılmaz (kuyruk yazımı reddeder); işin var olan yeri uyarıyla kalır (Motor A kaldırıyordu; #439).
+- Planın personel kısıtı ayarı ortak motora gitmez; motorun personel kısıtı planlama çalışmasının Kısıtlar ayarındadır (282 a).
+- Kişi kaynaklı adım ortak motorun girdisinde yoktur (bitmiş sayılır); Planı kur onu yerleştirmez (P1, PL-02).
+- Elle sıralı iş kuyruktaki yerini korur (Motor A kuyruğun başına alıyordu). Planı kur kuyruğu yeniden yazdığı için yeni kuyruğuna yazılan işin elle sıra düşme kaydı kapanır.
+- Alt partinin adımı makinesiz açılır; Planı kur'da makineyi sayfa seçer (#262 testi makineyi verir).
+Kalan Motor A kullanımları (ayrı kart, 625m): 220 a motor yerleşimi, emir önizleme, hızlı deneme, parçalı kuyruk yazımı (yazımdan sonra Motor A önerisi, 276 a).
+- Sıra sayfanındır (687 a). Motor A'nın sıralama kuralları sunucuda sınanmaz: 196 a, 265 a, 6a ve 6b yalnız bedel, bant, çarpan, ayar ve yetkiyi sınar
+  (bedel bandı ve sınıf eşikleri `bant` ucundan); 203 a sayfanın TL amacıyla karşılanır, testi kalktı; 276 a (taslak motorun önerisiyle aynı) kalktı.
+  Sayfanın sıralamasına para ve müşteri verisi 674 borcuyla gelir.
+- Rotada olmayan ek adım (rework vb.) ortak motora girmez; komutu durdurmaz, vardiyasız iş gibi "Ek adım; ortak motor rotada olmayan adımı henüz
+  yerleştirmiyor." nedeni ve uyarısıyla yerleşmemiş kalır, emri engellidir (689 a). 686 a (motor ek adımı emrin kendi adımından tanır) ayrı dalda
+  gelince bunun yerine geçer.
+- Parti kolu bağı (B7, `partiBaglari`) ortak motora öncül olarak gider (`PlanMotoruIstegi.baglar`, 690 b): kolun ilk adımı üstün bölünme öncesi
+  adımını, üstün birleşme adımı kolun motordaki son adımını bekler. Kolun son adımı ek adımsa motor onu tanımadığından ondan önceki rota adımı beklenir.
+Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı kur testlerde `taslaktaOner` yardımcısıdır (plan-ortak.test.ts); ortak kurulum merkeze tam gün (iki yarım vardiya) ve boş planlama kaydı verir.

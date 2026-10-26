@@ -3,11 +3,10 @@ import assert from 'node:assert/strict';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import type { PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
-import { oner } from './servis.ts';
 import { PAROLA, planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
-  const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunMerkezi, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
   // gönderilmez.
   const gonder = async (id: number, surum: number, sahip = c.planlama) => {
@@ -19,8 +18,8 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
   let makineB = 0;
   before(() => { ({ makineA, makineB } = durum()); });
 
-  test('282 a: personel kısıtı açıkken kişi-dakikası dolan güne aynı merkezde yeni iş konmaz, ertesi uygun güne kayar; kapalıyken aynı gün', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM282', ad: 'Personel merkezi', aciklama: null });
+  test('282 a (ADR 0018): planın personel kısıtı ayarı taslağa yazılır; ortak motor onu kullanmaz, iki makine yine aynı gün (fark Motor A listesinde)', async () => {
+    const merkez = { id: await tamGunMerkezi('RT-IM282', 'Personel merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-282', ad: 'Deneme 282', isMerkeziId: merkez.id })).id;
     const m1 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-M282A', ad: 'Deneme 282 A', istasyonId: ist })).id;
     const m2 = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-M282B', ad: 'Deneme 282 B', istasyonId: ist })).id;
@@ -37,8 +36,10 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
       const gun = (x: PlanCevabi, id: number) => tesisGunu(Date.parse(yer(x, id).baslangic));
       assert.equal(gun(p, i2!), gun(p, i1!), 'kısıt kapalıyken iki makine aynı gün');
       p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/ayar', { taslak: tg(p), ayar: { ...p.ayar, personelKisiti: true } });
-      p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-      assert.ok(gun(p, i2!) > gun(p, i1!), `dolu günden sonra: ${gun(p, i1!)} / ${gun(p, i2!)}`);
+      p = await taslaktaOner(c.planlama, p);
+      assert.equal(p.ayar.personelKisiti, true, 'ayar taslakta');
+      // Motor A kişi-dakikası dolan günü atlıyordu; ortak motorun personel kısıtı planlama çalışmasının Kısıtlar ayarındadır (FARK.md).
+      assert.equal(gun(p, i2!), gun(p, i1!), `ortak motor: ${gun(p, i1!)} / ${gun(p, i2!)}`);
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
     } finally {
       mock.timers.reset();
@@ -119,24 +120,30 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     await tamam(c.yonetici, 'POST', `/takvim-gunleri/${tatil}/kaldir`);
   });
 
-  test('PL-04: vardiyası tanımlanmamış kaynak sürekli çalışır, uyarı alır; tatil günü yine çalışma vermez', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM3', ad: 'Vardiyasız merkez', aciklama: null });
-    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-D', ad: 'Deneme D', isMerkeziId: merkez.id })).id;
-    const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MD', ad: 'Deneme makine D', istasyonId: ist })).id;
+  test('PL-04 (168 b, 650 a): vardiyası tanımlanmamış merkezin işi yerleşmez, nedeni ve uyarısı görünür; tam gün merkezde tatil günü çalışma vermez', async () => {
+    const vardiyasiz = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM3', ad: 'Vardiyasız merkez', aciklama: null });
+    const istV = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-D', ad: 'Deneme D', isMerkeziId: vardiyasiz.id })).id;
+    const makineV = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MD', ad: 'Deneme makine D', istasyonId: istV })).id;
+    const merkez = { id: await tamGunMerkezi('RT-IM3T', 'Tam gün merkezi') };
+    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-DT', ad: 'Deneme DT', isMerkeziId: merkez.id })).id;
+    const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MDT', ad: 'Deneme makine DT', istasyonId: ist })).id;
     const yarin = tesisGunu(tesisGunBasi(tesisGunu(Date.now())) + 36 * 3600_000);
     await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'kapali', ad: 'Deneme tatil' });
+    const [i0] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineV } })]);
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine } })], 1000);
     const p = await taslaktaOner();
+    assert.equal(p.yerlesimler.find((x) => x.isEmriId === i0), undefined, 'vardiyasız merkezin işi yerleşmez');
+    assert.equal(p.yerlesmemis.find((x) => x.isEmriId === i0)?.neden, 'Tezgâhın vardiyası tanımsız.');
+    assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; işleri yerleşmedi/.test(u)), JSON.stringify(p.uyarilar));
     const y = yer(p, i1!);
     assert.ok(Date.parse(y.baslangic) < tesisGunBasi(yarin), 'bugün başlar');
     assert.equal(Math.round((Date.parse(y.bitis) - Date.parse(y.baslangic)) / 60_000), 30 + 1000 * 2 + 24 * 60, 'tatil günü atlanır');
-    assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; sürekli çalışır sayıldı/.test(u)));
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
     await tamam(c.yonetici, 'POST', `/takvim-gunleri/${yarin}/kaldir`);
   });
 
-  test('P-B24: tesiste gece yarısı geçmiş, UTC\'de dünkü günken plan günü tesis günüdür; vardiyasız kaynağın kapalı günü tesisin 00:00\'ında başlar', async () => {
-    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM4', ad: 'Gece merkezi', aciklama: null });
+  test('P-B24: tesiste gece yarısı geçmiş, UTC\'de dünkü günken plan günü tesis günüdür; tam gün merkezin kapalı günü tesisin 00:00\'ında başlar', async () => {
+    const merkez = { id: await tamGunMerkezi('RT-IM4', 'Gece merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-E', ad: 'Deneme E', isMerkeziId: merkez.id })).id;
     const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-ME', ad: 'Deneme makine E', istasyonId: ist })).id;
     const gece = new Date().setUTCHours(21, 30, 0, 0);
@@ -166,7 +173,7 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const ileri = new Date(Date.parse(yer(p, i1!).baslangic) + 200 * 24 * 3600_000).toISOString();
     p = (await isEmriKomutu(p, i1!, 'tasi', { kaynak: { tur: 'makine', id: makineB }, baslangic: ileri })).json<PlanCevabi>();
     assert.equal(await isEmriMakinesi(i1!), makineA, 'taslak iş emrini değiştirmez');
-    assert.equal((await istek(c.mudur, 'POST', '/plan/oner', { taslak: tg(p) })).statusCode, 403, 'müdür taslağa yazamaz');
+    assert.equal((await taslagaYaz(c.mudur, tg(p), i1!)).statusCode, 403, 'müdür taslağa yazamaz');
     await tamam(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/canliya-al`, { surum: await gonder(p.taslak!.id, p.taslak!.surum), cakismalariKabul: true });
     assert.deepEqual(yer(await planOku(), i1!).kaynak, { tur: 'makine', id: makineB });
     assert.equal(await isEmriMakinesi(i1!), makineB);

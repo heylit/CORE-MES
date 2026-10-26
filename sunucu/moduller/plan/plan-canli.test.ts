@@ -5,7 +5,7 @@ import type { CanliYerlesimCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasi
 import type { AdimGirdisi } from '#paylasilan/sozlesme/rota.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { canliOzeti, canliSira, kuyruguSirala } from './disari.ts';
-import { menuSayaclari, oner } from './servis.ts';
+import { menuSayaclari } from './servis.ts';
 import type { FastifyInstance } from 'fastify';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
@@ -45,8 +45,8 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
-  test('280 a: planı, karşılaştırmayı, canlı yerleşimi ve senaryoları yalnız planı gören ya da yazan okur; sürüm oturumlu; sayaç göremeyene boş', async () => {
-    for (const yol of ['/plan', '/plan/karsilastir', '/plan/canli-yerlesim?isEmirleri=', '/plan/senaryolar']) {
+  test('280 a: planı, canlı yerleşimi ve senaryoları yalnız planı gören ya da yazan okur; sürüm oturumlu; sayaç göremeyene boş', async () => {
+    for (const yol of ['/plan', '/plan/canli-yerlesim?isEmirleri=', '/plan/senaryolar']) {
       assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403, `${yol} operatöre kapalı`);
       for (const kim of [c.cam, c.kalite, c.planlama]) assert.equal((await istek(kim, 'GET', yol)).statusCode, 200, yol);
     }
@@ -148,7 +148,7 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     // Taslağa yazma: canlı değişmez; planlamacı kendi taslağını görür.
     const taslagaYazildi = await yaz(c.cam, { kuyruklar: [{ kaynak, baslangic, isler: isler([i3!, i1!, i2!]) }] });
     assert.equal(taslagaYazildi.statusCode, 200, taslagaYazildi.body);
-    assert.deepEqual(taslagaYazildi.json(), { taslak: taslagaYazildi.json<{ taslak: number }>().taslak, canli: false, yazilan: 3, atlanan: 0 });
+    assert.deepEqual(taslagaYazildi.json(), { taslak: taslagaYazildi.json<{ taslak: number }>().taslak, canli: false, yazilan: 3, atlanan: 0, motorFarki: [] });
     const onceki = (await sira()).map((y) => y.isEmriId);
     const taslak = await planOku(taslagaYazildi.json<{ taslak: number }>().taslak, c.cam);
     assert.deepEqual([i3!, i1!, i2!].map((id) => yer(taslak, id).elleSira), [1, 2, 3]);
@@ -269,18 +269,19 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${ikinci.taslak}/vazgec`, { surum: p.taslak!.surum });
   });
 
-  test('Z6: süresi elle girilerek yerleştirilen iş öneride plandan düşmez, yerinde kalır', async () => {
-    // Rota onayı süre ister; süresi bilinmeyen iş emri (rotasız adım gibi) testte süresi silinerek kurulur.
+  test('Z6 (679 b): ortak motor süreyi rotadan okur; iş emrinin süresi silinse de iş yerleşir; elle süreyle yerleştirilen iş Planı kurdan sonra plandadır', async () => {
+    // Rota onayı süre ister; süresi bilinmeyen iş emri testte süresi silinerek kurulur. Motor A bu işi önermiyordu; ortak motor rotanın süresini kullanır.
     const [i1] = await isEmirleriAc([yeniAdim()]);
     await vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET ayar_suresi_dk = NULL, birim_sure_dk = NULL WHERE id = $1', [i1]));
     let p = await taslaktaOner();
-    assert.ok(p.yerlesmemis.some((x) => x.isEmriId === i1), 'rotada süresi olmayan iş önerilmez');
+    assert.ok(p.yerlesimler.some((x) => x.isEmriId === i1), 'rotanın süresiyle yerleşir');
+    // Planlamacı kaldırıp süresini elle vererek yerleştirebilir.
+    p = (await isEmriKomutu(p, i1!, 'kaldir')).json<PlanCevabi>();
     const baslangic = new Date(Date.now() + 2 * 24 * 3600_000).toISOString();
     p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/yerlestir', { taslak: tg(p), isEmriId: i1!, kaynak: { tur: 'makine', id: makineB }, baslangic, sureDk: 45 });
-    const once = yer(p, i1!);
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-    assert.ok(p.yerlesimler.some((x) => x.isEmriId === i1), 'öneriden sonra plandadır');
-    assert.deepEqual([yer(p, i1!).baslangic, yer(p, i1!).bitis, yer(p, i1!).kaynak], [once.baslangic, once.bitis, once.kaynak]);
+    assert.equal((Date.parse(yer(p, i1!).bitis) - Date.parse(yer(p, i1!).baslangic)) / 60_000, 45, 'elle süre taslakta');
+    p = await taslaktaOner(c.planlama, p);
+    assert.ok(p.yerlesimler.some((x) => x.isEmriId === i1), 'Planı kur\'dan sonra plandadır');
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 

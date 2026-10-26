@@ -76,6 +76,15 @@ describe('sunucu plan çözücüsü', () => {
     assert.ok(Date.parse(yer(s, 'E-1|20')!.baslangic) >= Date.parse('2026-10-19T08:00:00.000Z'));
   });
 
+  test('690 b: emirler arası bağ (parti kolu) ardılı öncülün bitişine bekletir; motorda karşılığı olmayan bağ yok sayılır', async () => {
+    const kuyruklar = [{ makineId: 100, anahtarlar: ['E-1|10'] }, { makineId: 101, anahtarlar: ['E-2|10'] }];
+    const serbest = await coz(KAYNAK, istek({ kuyruklar }));
+    assert.equal(yer(serbest, 'E-2|10')!.baslangic, '2026-10-19T05:00:00.000Z', 'bağsız iki tezgâhta aynı anda başlar');
+    const bagli = await coz(KAYNAK, istek({ kuyruklar, baglar: [{ anahtar: 'E-2|10', oncul: 'E-1|10' }, { anahtar: 'E-2|10', oncul: 'E-9|10' }] }));
+    assert.deepEqual(bagli.yerlesmeyen, []);
+    assert.ok(Date.parse(yer(bagli, 'E-2|10')!.baslangic) >= Date.parse(yer(bagli, 'E-1|10')!.bitis), 'ardıl öncülün bitişini bekler');
+  });
+
   test('motorda karşılığı olmayan sabit iş tezgâhı o aralıkta kapatır', async () => {
     const r = await coz(KAYNAK, istek({
       kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }],

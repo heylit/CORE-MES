@@ -19,7 +19,7 @@ describe('plan (gerçek PostgreSQL): canlıya alma kardeş taslakları kapatır'
     let p: PlanCevabi = await taslaktaOner();
     const a = await gecis(c.planlama, p.taslak!.id, 'onaya-gonder', { surum: p.taslak!.surum });
     const b = await ac(c.planlama, 'Deneme B');
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: { id: b.id, surum: b.surum } });
+    p = await taslaktaOner(c.planlama, b.id);
     const bOnayda = await gecis(c.planlama, b.id, 'onaya-gonder', { surum: p.taslak!.surum });
     const cAcik = await ac(c.mudur, 'Deneme C');
     assert.equal(new Set([a.tabanPlanSurumu, bOnayda.tabanPlanSurumu, cAcik.tabanPlanSurumu]).size, 1);

@@ -146,12 +146,12 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     const [ie] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineA } })]);
     let l = await tamam<SenaryolarCevabi>(c.planlama, 'POST', '/plan/senaryolar', { ad: 'Defter 379' });
     let s = l.senaryolar.find((x) => x.ad === 'Defter 379')!;
-    let p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: { id: s.id, surum: s.surum } });
+    let p = await taslaktaOner(c.planlama, s.id);
     p = await tamam<PlanCevabi>(c.planlama, 'POST', `/plan/is-emirleri/${ie!}/tasi`, {
       taslak: tg(p), kaynak: { tur: 'makine', id: makineB }, baslangic: new Date(Date.parse(yer(p, ie!).baslangic) + 24 * 3600_000).toISOString(),
     });
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === s.id)!;
-    assert.deepEqual(s.degisiklikler.map((d) => d.tur), ['oner', 'tasi']);
+    assert.deepEqual(s.degisiklikler.map((d) => d.tur), ['sirala', 'tasi'], 'Planı kur defterde sıralamadır (ADR 0018)');
     const [oner, tasi] = s.degisiklikler;
     const planlamaci = (await sahip().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'planlama'"))!.id;
     const satir = (id: number) => sahip().tek<{ kaldiran: number | null; kaldirma: string | null }>(
@@ -166,7 +166,7 @@ describe('plan (gerçek PostgreSQL): plan geçmişi silinmez', () => {
     assert.deepEqual(await satir(oner!.id), { kaldiran: null, kaldirma: null });
 
     const cogalan = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${s.id}/cogalt`)).senaryolar.find((x) => x.id !== s.id && x.ad.includes('Defter 379'))!;
-    assert.deepEqual(cogalan.degisiklikler.map((d) => d.tur), ['oner'], 'çoğaltma kaldırılanı taşımaz');
+    assert.deepEqual(cogalan.degisiklikler.map((d) => d.tur), ['sirala'], 'çoğaltma kaldırılanı taşımaz');
     assert.equal((await sahip().tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_senaryo_degisikligi WHERE senaryo_id = $1', [cogalan.id]))!.n, 1);
 
     s = (await tamam<SenaryolarCevabi>(c.planlama, 'GET', '/plan/senaryolar')).senaryolar.find((x) => x.id === s.id)!;

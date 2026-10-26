@@ -5,12 +5,12 @@ import type { SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { kullaniciYukle } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { acilSiparisOnaylandi, menuSayaclari, oner, plan as planServisi } from './servis.ts';
+import { acilSiparisOnaylandi, menuSayaclari, plan as planServisi } from './servis.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', () => {
-  const { c, vt, istek, tamam, mamulAc, yeniAdim, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum } = planTestOrtami();
+  const { c, vt, istek, tamam, mamulAc, yeniAdim, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, durum } = planTestOrtami();
   // PL-ONAY: canlıya yalnız onaydaki taslak alınır; sahibi (varsayılan planlamacı) gönderir, onaydaki sürüm döner. Zaten onaydaysa yeniden
   // gönderilmez.
   const gonder = async (id: number, surum: number, sahip = c.planlama) => {
@@ -45,8 +45,10 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     // Arıza: makine plana iş almaz; var olan yerleşim uyarı taşır.
     await tamam(c.yonetici, 'POST', `/makineler/${mak.id}/durum`, { durum: 'ariza', aciklama: null, surum: 0 });
     assert.ok(yer(await planOku(p.taslak!.id), v1!).uyarilar.some((u) => /kullanımda değil/.test(u)));
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
-    assert.equal(p.yerlesimler.some((y) => y.isEmriId === v1), false);
+    // Planı kur arızalı makineye iş yazmaz (kuyruk yazımı reddeder); işin var olan yeri uyarıyla kalır. Motor A onu yerinden kaldırıyordu (FARK.md).
+    p = await taslaktaOner(c.planlama, p);
+    assert.ok(yer(p, v1!).uyarilar.some((u) => /kullanımda değil/.test(u)));
+    p = (await isEmriKomutu(p, v1!, 'kaldir')).json<PlanCevabi>();
     assert.ok(p.yerlesmemis.some((y) => y.isEmriId === v1));
     // Elle yerleştirme ve taşıma rotadaki süreyi hedef kaynağın verimiyle alır.
     await tamam(c.yonetici, 'POST', `/makineler/${mak.id}/durum`, { durum: 'calisir', aciklama: null });
@@ -55,10 +57,10 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     assert.equal(sure(yer(p, v1!)), 40);
     p = (await isEmriKomutu(p, v1!, 'tasi', { kaynak: { tur: 'makine', id: makineA }, baslangic: uzak })).json<PlanCevabi>();
     assert.equal(sure(yer(p, v1!)), 50);
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+    p = await taslaktaOner(c.planlama, p);
     // S3: kişi rotadaki makinenin istasyonunda yetkin değilse uyarı; yetkinliği tanımlanmamış kişide uyarı yok.
     const [k1] = await isEmirleriAc([yeniAdim({ adaylar: [{ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 30, birimSureDk: 2 }] })]);
-    p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+    p = await taslaktaOner(c.planlama, p);
     const ileri = new Date(Date.parse(yer(p, k1!).baslangic) + 60 * 24 * 3600_000).toISOString();
     p = (await isEmriKomutu(p, k1!, 'tasi', { kaynak: { tur: 'kisi', id: operatorId }, baslangic: ileri })).json<PlanCevabi>();
     const yetkinlikUyarisi = (pp: PlanCevabi) => yer(pp, k1!).uyarilar.includes('Kişinin bu istasyonda yetkinliği yok.');
@@ -177,7 +179,7 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     assert.match(yz.body, /baslangic/);
     p = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/yerlestir', { taslak: tg(p), isEmriId: i1!, kaynak: y.kaynak, baslangic: y.baslangic });
 
-    const baska = await istek(c.planlama2, 'POST', '/plan/oner', { taslak: tg(p) });
+    const baska = await taslagaYaz(c.planlama2, tg(p), i1!);
     assert.equal(baska.statusCode, 403);
     assert.match(baska.body, /başka bir planlamacının taslağı/);
     const kapat = await istek(c.mudur, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
@@ -256,11 +258,12 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     }
     const zamansiz = (p: PlanCevabi) => { const { simdi, taslakAcildi, ...geri } = p; void simdi; void taslakAcildi; return geri; };
 
-    test('öner cevabı, aynı taslağın hemen ardından okunan planıyla aynıdır', async () => {
+    test('Planı kurun yazdığı taslak, hemen ardından okunan planıyla aynıdır; ikinci kurulum aynı taslakta kalır', async () => {
       await isEmirleriAc([yeniAdim(), yeniAdim({ kaynak: { tur: 'istasyon', id: istasyonB } })], 4, '2099-01-01');
       const p = await taslaktaOner();
       assert.deepEqual(zamansiz(p), zamansiz(await planOku(p.taslak!.id)));
-      const p2 = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: tg(p) });
+      const p2 = await taslaktaOner(c.planlama, p);
+      assert.equal(p2.taslak!.id, p.taslak!.id);
       assert.deepEqual(zamansiz(p2), zamansiz(await planOku(p.taslak!.id)));
       await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p2.taslak!.surum });
     });
@@ -276,7 +279,7 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
       await isEmriDurumu(calisan!, 'bekliyor');
     });
 
-    test('plan, menü sayacı ve öner: sorgu sayısı açık iş emri sayısıyla büyümez', async () => {
+    test('plan ve menü sayacı: sorgu sayısı açık iş emri sayısıyla büyümez', async () => {
       const urun = await mamulAc();
       const rev = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ kaynak: { tur: 'istasyon', id: istasyonB } })]);
       const emreKopyala = () => tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rev}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: '2099-01-01' });
@@ -284,7 +287,7 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
       await isEmriDurumu(ilk[0]!, 'calisiyor');
       const k = await planlamaci();
       const olc = async () => [
-        await sorguSay((db) => planServisi(db, k)), await sorguSay((db) => menuSayaclari(db, k)), await sorguSay((db) => oner(db, k, null)),
+        await sorguSay((db) => planServisi(db, k)), await sorguSay((db) => menuSayaclari(db, k)),
       ];
       const once = await olc();
       const ekler = [(await emreKopyala()).isEmriIdleri[0]!, (await emreKopyala()).isEmriIdleri[0]!];

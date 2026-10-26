@@ -110,6 +110,8 @@ function compile(st){
       ops.push(op);jobs[j.id].ops.push(op);}
   }
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
+  /* emirler arası öncül (st.ekOncul [işlem, öncül]; sunucu girdisi, 690 b): biten ya da planda olmayan öncül beklenmez */
+  for(const [a,p] of st.ekOncul||[])if(byId[a]&&byId[p]&&!byId[a].pr.some(([q])=>q===p))byId[a].pr.push([p,'b']);
   for(const jid in jobs){const j=jobs[jid];let v=0;for(const o of j.ops){const m=o.c.filter(c=>!c.fas);if(m.length){const p=Math.min(...m.map(c=>c.run*(1-(c.pay||0))));v+=(o.sig*p)**2;}
       else{const f=FS[(o.c[0]||{m:'@'}).m.slice(1)];if(f&&f.sapmaGun)v+=(f.sapmaGun*24)**2;}}
     j.buf=st.w.tampon?(+st.w.tamponZ||0)*Math.sqrt(v):0;j.dueB=j.due==null?null:j.due-j.buf;}
