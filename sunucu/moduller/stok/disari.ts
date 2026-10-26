@@ -120,7 +120,9 @@ export const uretimSayimiYansitUyarili = (db: Db, g: servis.UretimSayimiYansimas
 export const kaliteKarariYansit = (db: Db, g: servis.KaliteKarariYansimasi): Promise<void> => servis.kaliteKarariYansit(db, g);
 // Hurda sayımının girdisi: hurdaya ayrılan parçanın HM'si istasyondaki emrin stoğundan fire çıkışıyla düşer; eksi fark geri alır. Yetki denetlemez.
 export type { HurdaSayimiYansimasi } from './servis.ts';
-export const hurdaSayimiYansit = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => servis.hurdaSayimiYansit(db, g);
+export const hurdaSayimiYansit = async (db: Db, g: servis.HurdaSayimiYansimasi): Promise<void> => { await servis.hurdaSayimiYansit(db, g); };
+// Aynısı, sayım cevabına giden uyarıyla (601 a): önceki adımın parçası istasyonda yoksa eksiye düşüldüğü söylenir (sağlam sayımdaki gibi).
+export const hurdaSayimiYansitUyarili = (db: Db, g: servis.HurdaSayimiYansimasi): Promise<{ uyari: string | null }> => servis.hurdaSayimiYansit(db, g);
 // Emrin istasyondan teslim edilen miktarı (yoldaki ve alınan); istasyondan hiç teslim olmadıysa null.
 // Arkon'dan operatörün gönderdiği numune (karar 115 a, 125 a): teslim kaydı; engel değildir, yazılamazsa neden döner.
 export type { NumuneTeslimi, NumuneTeslimSonucu } from './servis.ts';

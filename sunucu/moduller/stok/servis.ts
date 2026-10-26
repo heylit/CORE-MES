@@ -3463,37 +3463,39 @@ export interface HurdaSayimiYansimasi {
 }
 const HURDA_ACIKLAMASI = 'Hurda sayımı';
 
-export async function hurdaSayimiYansit(db: Db, g: HurdaSayimiYansimasi): Promise<void> {
+export async function hurdaSayimiYansit(db: Db, g: HurdaSayimiYansimasi): Promise<{ uyari: string | null }> {
+  const yok = { uyari: null };
   const fark = binde(g.fark);
-  if (fark === 0n) return;
+  if (fark === 0n) return yok;
   // Mamul hurdası üretimden giriş fişinin "Hurda" satırıdır; hareket yazılmasa da fiş değişir.
   await sorgular.emirFisiDegisti(db, g.uretimEmriId, 'uretim_girisi');
-  if (g.isEmriId === null) return;
+  if (g.isEmriId === null) return yok;
   const refakat = await sayimKarti(db, g.uretimEmriId, g.refakatPartisiId);
   const emir = await uretimEmriOzeti(db, g.uretimEmriId);
-  if (!emir || emir.malzemeNo === null) return;
+  if (!emir || emir.malzemeNo === null) return yok;
   const o = await malzemeOzeti(db, emir.malzemeNo);
-  if (!o || (o.tur !== 'mamul' && o.tur !== 'yarimamul')) return;
+  if (!o || (o.tur !== 'mamul' && o.tur !== 'yarimamul')) return yok;
   const bilgi = await adimUretimBilgisi(db, g.isEmriId);
-  if (bilgi === null) return;
+  if (bilgi === null) return yok;
   const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, emir.malzemeNo, bilgi);
-  if (tasinan === null) return;
+  if (tasinan === null) return yok;
   const kart = await malzemeOzeti(db, tasinan.malzemeNo);
-  if (!stoklanirMi(kart?.tur ?? '')) return;
+  if (!stoklanirMi(kart?.tur ?? '')) return yok;
   const statuId = adimStatusu === null ? null : await adimStatusu(db, { malzemeNo: emir.malzemeNo, opNo: bilgi.opNo, uretimEmriId: g.uretimEmriId });
   const oncekiStatuId = oncekiOpNo === null || adimStatusu === null || (await cikti(oncekiOpNo)) !== null
     ? null : await adimStatusu(db, { malzemeNo: emir.malzemeNo, opNo: oncekiOpNo, uretimEmriId: g.uretimEmriId });
   const konumId = await istasyonKonumuBul(db, g.istasyonId, 'istasyonId');
   const y: UretimYazimi = {
     uretimEmriId: g.uretimEmriId, isEmriId: g.isEmriId, kisiId: g.kisiId, konumId, malzemeId: tasinan.malzemeNo, aciklama: `${HURDA_ACIKLAMASI} · emir ${emir.emirNo} · OP ${String(bilgi.opNo)}`,
-    kart: refakat,
+    kart: refakat, uyarilar: new Set(),
   };
   const miktar = adetMiktari(fark > 0n ? fark : -fark, tasinan.miktar);
-  if (miktar === 0n) return;
+  if (miktar === 0n) return yok;
   await korumali(async () => {
     if (fark > 0n) await hurdaHmDus(db, y, miktar, [...new Set([oncekiStatuId, null, statuId])]);
     else await hurdaHmGeriAl(db, y, miktar);
   });
+  return { uyari: y.uyarilar!.size === 0 ? null : [...y.uyarilar!].join(' ') };
 }
 
 async function hurdaHmDus(db: Db, y: UretimYazimi, miktar: bigint, statuAdaylari: readonly (number | null)[]): Promise<void> {

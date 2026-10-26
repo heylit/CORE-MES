@@ -69,3 +69,8 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 - `numuneTeslimi.hedefIstasyonId` ve `istasyonLotKarari` henüz çağrılmıyor; Arkon (kalite istasyonu terminal görünümü) bağlar. Kalite istasyonu
   rotadan bulunur, stok bunu bilmez.
 - Lot kararının Kalite Merkezi kaydını çağıran yazar (kalite-merkezi `lotKarariYaz`); stok yalnız kalite durumunu değiştirir.
+
+## Hurda sayımının uyarısı operatöre (601 a) - bağlamada kapanacak
+- Stok `hurdaSayimiYansitUyarili` uyarıyı döner (önceki adımın parçası istasyonda yoksa eksiye düşüldüğü). Kalan iki parça ayrı dallarda:
+  uretim-emirleri hurda sayımında bu işlevi çağırıp uyarıyı sayım cevabına koyar (sağlam sayımdaki `uretimSayimiYansitUyarili` gibi);
+  Arkon hurda komutunun cevabına ekler ve operatöre gösterir. O zamana kadar uyarı yalnız harekette ve başlatma/sağlam sayım uyarısında görünür.

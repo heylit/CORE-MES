@@ -862,8 +862,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const kb = (await istasyonKonumu(b.id))!;
     assert.match(sayim.uyari ?? '', /Önceki adımın parçası bu istasyonda yok; 5\.4 eksiye düşüldü/);
     assert.deepEqual([Number(await bakiye(hm, ka, s10)), Number(await bakiye(hm, kb, s10)), await toplam()], [6, -5.4, 94.6], 'OP 10 istasyonuna dokunulmaz');
-    // Hurdanın payı da eksiye fire yazılır.
-    await hurda(op20!, b.id, '1');
+    // Hurdanın payı da eksiye fire yazılır; uyarı sağlam sayımdaki gibi döner (601 a).
+    assert.match((await hurda(op20!, b.id, '1')).uyari ?? '', /Önceki adımın parçası bu istasyonda yok; 0\.6 eksiye düşüldü/);
     assert.deepEqual([Number(await bakiye(hm, kb, s10)), await toplam()], [-6, 94]);
     const fire = await o().vt.sorgu<{ m: string }>("SELECT miktar::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND cikis_nedeni = 'fire' AND kaynak_konum_id = $3", [e, hm, kb]);
     assert.deepEqual(fire.map((x) => Number(x.m)), [0.6]);
