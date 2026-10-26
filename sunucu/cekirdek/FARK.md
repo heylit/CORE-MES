@@ -334,3 +334,10 @@ Her çekirdek çekme isteği bu dosyaya kendi satırlarını ekler: eklenen, de�
   Stok şeridi doldurunca `.optional()` kalkar. Aynı şemadaki `fasondaEksik` (kart #1310) değişmedi.
 - Yerel doğrulama (16.10.2026): `npm run tip` temiz; `npm run sinir` 1487 dosya, 0 ihlal; eslint temiz; `test:modul -- stok` 149/149.
   Silinen: yok. Onaylı karar değişmedi.
+
+## 551d-cekirdek (kullanıcı kararı 560 b, 26.10.2026)
+
+- Eklenen: tekrar korumasız yazma ucuna `istek-kimligi` başlığı gelirse istek reddedilmez, uç adıyla günlüğe uyarı yazılır
+  ("Korumasız uca istek kimliği geldi; yineleme koruması yok"). GET, kimliksiz istek ve korumalı uç uyarı yazmaz.
+- Neden 400 değil: ölçümde (551d-OLCUM) kural 25 modülde 72 test dosyasının yardımcısını kırdı, gerçek ekran kayması bulunmadı.
+- Test: `uc-tekrar.test.ts` "korumasız yazma ucuna istek kimliği gelirse...". Göç yok. Silinen: yok. Onaylı karar 551 2 a, 560 b ile değişti.

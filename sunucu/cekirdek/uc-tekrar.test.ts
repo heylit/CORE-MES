@@ -129,3 +129,29 @@ test('istek özeti alan sırasına bakmaz; yöntem, yol, parametre, sorgu ve gö
     assert.notEqual(istekOzeti(baska), ozet, JSON.stringify(baska));
   }
 });
+
+test('korumasız yazma ucuna istek kimliği gelirse uç adıyla günlüğe uyarı yazılır, istek reddedilmez; kimliksiz istek, korumalı uç ve GET uyarı yazmaz', async () => {
+  let kosma = 0;
+  const duz = uc({ yontem: 'POST', yol: '/duz', yetki: 'oturum', cevap, isle: () => { kosma += 1; return { tamam: true }; } });
+  const korumali = uc({ yontem: 'POST', yol: '/korumali', yetki: 'oturum', tekrarKorumali: true, cevap, isle });
+  const okuma = uc({ yontem: 'GET', yol: '/oku', yetki: 'oturum', cevap, isle });
+  const satirlar: string[] = [];
+  const app = Fastify({ logger: { level: 'warn', stream: { write: (s: string) => { satirlar.push(s); } } } });
+  hataYonetiminiKur(app);
+  uclariKaydet(app, [duz, korumali, okuma], { vt: bosVt, kimlik: async () => ({ id: 7, ad: 'deneme', islemler: [] }), tekrar: bosDepo });
+  const kimlikli = { 'istek-kimligi': '6f1b2c3d-0000-4000-8000-000000000003' };
+  const uyarilar = () => satirlar
+    .map((s) => JSON.parse(s) as { level: number; msg: string; uc?: string })
+    .filter((s) => s.msg === 'Korumasız uca istek kimliği geldi; yineleme koruması yok');
+
+  assert.equal((await app.inject({ method: 'POST', url: '/api/duz', headers: kimlikli })).statusCode, 200);
+  assert.equal(kosma, 1);
+  assert.deepEqual(uyarilar().map(({ level, uc: ad }) => ({ level, ad })), [{ level: 40, ad: 'POST /duz' }]);
+
+  satirlar.length = 0;
+  assert.equal((await app.inject({ method: 'POST', url: '/api/duz' })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/korumali', headers: kimlikli })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/oku', headers: kimlikli })).statusCode, 200);
+  assert.deepEqual(uyarilar(), []);
+  await app.close();
+});
