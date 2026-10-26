@@ -1,4 +1,4 @@
-import { before, describe, test } from 'node:test';
+import { before, describe, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ESKI_SURUM_NEDENI } from '#paylasilan/hata.ts';
 import type { CanliYerlesimCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
@@ -94,27 +94,34 @@ describe('plan (gerçek PostgreSQL): canlı sıra ve kuyruk yazımı', () => {
     const yaz = (k: Awaited<ReturnType<typeof kullanici>>, idler: number[], planSurumu = once.planSurumu) =>
       vt().tx((db) => kuyruguSirala(db, k, { kaynak, isEmriIdleri: idler, planSurumu }));
 
-    const ilk = await yaz(planlamaci, [i2!, i1!]);
-    assert.equal(ilk.taslakAcildi, true);
-    assert.deepEqual((await vt().tx((db) => canliSira(db, [i1!, i2!]))).yerlesimler.map((y) => y.isEmriId), [i1, i2], 'canlı değişmez (P6)');
-    const taslak = await planOku(ilk.taslakId);
-    assert.ok(Date.parse(yer(taslak, i2!).baslangic) < Date.parse(yer(taslak, i1!).baslangic), 'taslakta yeni sıra');
-    assert.equal(yer(taslak, i2!).elleSira, 1);
-    const ikinci = await yaz(planlamaci, [i2!, i1!]);
-    assert.deepEqual(ikinci, { taslakId: ilk.taslakId, taslakAcildi: false }, 'açık taslak yeniden kullanılır');
+    // Canlıya alma kuyruğu motorla şimdiden yeniden dizer (motor dakikayı aşağı yuvarlar); sıralama ile canlıya alma arasında dakika
+    // dönerse i2 kilitli i1'in önüne sığmaz ve arkasına geçer (kart 733). Bu test sırayı sınar, geçen zamanı değil: an sabitlenir.
+    mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    try {
+      const ilk = await yaz(planlamaci, [i2!, i1!]);
+      assert.equal(ilk.taslakAcildi, true);
+      assert.deepEqual((await vt().tx((db) => canliSira(db, [i1!, i2!]))).yerlesimler.map((y) => y.isEmriId), [i1, i2], 'canlı değişmez (P6)');
+      const taslak = await planOku(ilk.taslakId);
+      assert.ok(Date.parse(yer(taslak, i2!).baslangic) < Date.parse(yer(taslak, i1!).baslangic), 'taslakta yeni sıra');
+      assert.equal(yer(taslak, i2!).elleSira, 1);
+      const ikinci = await yaz(planlamaci, [i2!, i1!]);
+      assert.deepEqual(ikinci, { taslakId: ilk.taslakId, taslakAcildi: false }, 'açık taslak yeniden kullanılır');
 
-    // Ret: plan yazma yetkisi yok, okunan canlı plan eski, boş ya da yinelenen liste, kilitli iş.
-    await assert.rejects(yaz(await kullanici(c.kalite), [i2!, i1!]), { kod: 'YETKI_YOK' });
-    await assert.rejects(yaz(planlamaci, [i2!, i1!], once.planSurumu - 1), { kod: 'CAKISMA', ayrinti: { neden: ESKI_SURUM_NEDENI } });
-    await assert.rejects(yaz(planlamaci, []), { kod: 'DOGRULAMA' });
-    await assert.rejects(yaz(planlamaci, [i1!, i1!]), { kod: 'DOGRULAMA' });
-    const t = await planOku(ilk.taslakId);
-    assert.equal((await isEmriKomutu(t, i1!, 'kilitle')).statusCode, 200);
-    await assert.rejects(yaz(planlamaci, [i1!, i2!]), { kod: 'CAKISMA' });
+      // Ret: plan yazma yetkisi yok, okunan canlı plan eski, boş ya da yinelenen liste, kilitli iş.
+      await assert.rejects(yaz(await kullanici(c.kalite), [i2!, i1!]), { kod: 'YETKI_YOK' });
+      await assert.rejects(yaz(planlamaci, [i2!, i1!], once.planSurumu - 1), { kod: 'CAKISMA', ayrinti: { neden: ESKI_SURUM_NEDENI } });
+      await assert.rejects(yaz(planlamaci, []), { kod: 'DOGRULAMA' });
+      await assert.rejects(yaz(planlamaci, [i1!, i1!]), { kod: 'DOGRULAMA' });
+      const t = await planOku(ilk.taslakId);
+      assert.equal((await isEmriKomutu(t, i1!, 'kilitle')).statusCode, 200);
+      await assert.rejects(yaz(planlamaci, [i1!, i2!]), { kod: 'CAKISMA' });
 
-    const s = await planOku(ilk.taslakId);
-    await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.taslak!.id}/canliya-al`, { surum: await gonder(s.taslak!.id, s.taslak!.surum), cakismalariKabul: true });
-    assert.deepEqual((await vt().tx((db) => canliSira(db, [i1!, i2!]))).yerlesimler.map((y) => y.isEmriId), [i2, i1], 'canlıya alınınca yeni sıra');
+      const s = await planOku(ilk.taslakId);
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${s.taslak!.id}/canliya-al`, { surum: await gonder(s.taslak!.id, s.taslak!.surum), cakismalariKabul: true });
+      assert.deepEqual((await vt().tx((db) => canliSira(db, [i1!, i2!]))).yerlesimler.map((y) => y.isEmriId), [i2, i1], 'canlıya alınınca yeni sıra');
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   test('Reçete ve Rota kuyrukları (#1186): sıra ve atama taslağa yazılır, taslak canlıya alınınca canliSira aynı sırayı verir; yetki, sabit iş ve ret', async () => {

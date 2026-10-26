@@ -146,7 +146,8 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const merkez = { id: await tamGunMerkezi('RT-IM4', 'Gece merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-E', ad: 'Deneme E', isMerkeziId: merkez.id })).id;
     const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-ME', ad: 'Deneme makine E', istasyonId: ist })).id;
-    const gece = new Date().setUTCHours(21, 30, 0, 0);
+    // Tesisin yarınki 00:30'u: bugünün gecesi geçmişte kalabilir; motor da tesiste başlangıç gününün 07:00'ından önce başlatmaz.
+    const gece = tesisGunBasi(tesisGunu(Date.now())) + 24.5 * 3600_000;
     const gun = tesisGunu(gece);
     assert.notEqual(gun, new Date(gece).toISOString().slice(0, 10), 'an UTC\'de bir gün geride');
     const yarin = tesisGunu(tesisGunBasi(gun) + 36 * 3600_000);

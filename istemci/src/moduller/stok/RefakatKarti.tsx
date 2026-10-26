@@ -23,6 +23,7 @@ export const refakatMalzemeSatiri = (r: RefakatPartisi): string =>
   [r.malzemeAd ?? `Kart ${r.malzemeId}`, r.malzemeKod, `verilen ${birimliMiktar(r.verilen, r.birim)}`].filter(Boolean).join(' · ');
 
 const kac = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+// Sessiz bölge dört modül (QR standardının istediği); ortak etiket ayarına dokunmadan bu belgede çizilir.
 function qrSvg(metin: string): string {
   const q = qrcode(0, 'M');
   q.addData(metin);
@@ -30,30 +31,50 @@ function qrSvg(metin: string): string {
   const n = q.getModuleCount();
   let d = '';
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (q.isDark(y, x)) d += `M${x} ${y}h1v1h-1z`;
-  return `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="QR: ${kac(metin)}">`
-    + `<rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return `<svg viewBox="-4 -4 ${n + 8} ${n + 8}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="QR: ${kac(metin)}">`
+    + `<rect x="-4" y="-4" width="${n + 8}" height="${n + 8}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
 }
 const tarih = (t: string | null): string => (t === null ? 'yok' : new Date(`${t}T00:00:00`).toLocaleDateString('tr-TR'));
+const SIK_ADIM = 8;
 
 // Kart kendi belgesinde basılır (100x150 mm, emrin refakat kartıyla aynı ölçü); kâğıt etiket olduğundan renk ve ölçü baskıdan gelir.
-// QR partiyi taşır (RP:<id>): okutulunca emir, lot ve teslimler açılır.
+// Düzen ekrandaki akış çizgisinin kâğıttaki karşılığıdır (kart #707, etiket B): rota yukarıdan aşağı, lottan başlar, mamul deposunda biter.
+// QR partiyi taşır (RP:<id>): okutulunca emir, lot ve teslimler açılır. Adım çoksa satırlar sıklaşır, sayfa taşmaz.
 export function refakatPartisiBelgesi({ refakat: r, kart: k }: RefakatPartisiKartiCevabi, basim: Date): string {
-  const satirlar = k.adimlar.map((a) => `<tr><td>${a.opNo}</td><td>${kac(a.ad)}</td><td>${a.yer === null ? '-' : kac(a.yer)}${a.fason ? ' (fason)' : ''}</td><td>&#9744;</td></tr>`).join('');
+  const malzeme = [r.malzemeAd ?? `Kart ${r.malzemeId}`, r.malzemeKod].filter(Boolean).join(' · ');
+  const lotIz = [r.dokumNo && `Döküm ${r.dokumNo}`, r.tedarikciPartiNo && `Parti ${r.tedarikciPartiNo}`, r.sertifikaNo && `Sertifika ${r.sertifikaNo}`].filter(Boolean).join(' · ');
+  const adimlar = k.adimlar.map((a) => '<li class="op"><span class="iz"><b class="no">' + a.opNo + '</b></span>'
+    + `<span class="is"><strong>${kac(a.ad)}</strong><small>${a.yer === null ? (a.fason ? 'Fason' : '-') : kac(a.yer) + (a.fason ? ' (fason)' : '')}</small></span><span class="kutu" aria-label="Bitti"></span></li>`).join('');
+  const zaman = basim.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
   return `<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Refakat kartı ${kac(r.etiket)}</title><style>`
     + '@page{size:100mm 150mm;margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#000}'
-    + 'body{font-family:Arial,sans-serif}.etk{width:100mm;height:150mm;padding:4mm;display:flex;flex-direction:column;overflow:hidden}'
-    + '.ust{display:flex;gap:3mm}.ust svg{width:40mm;height:40mm;flex:none}.k{font-size:8pt;line-height:1.35}.buyuk{font:800 15pt monospace;line-height:1.1;overflow-wrap:anywhere}'
-    + '.ad{font-weight:700;font-size:10pt;overflow-wrap:anywhere}.mono{font-family:monospace}.lot{margin-top:2mm;border:1px solid #000;padding:1.5mm;font-size:8pt;line-height:1.35}'
-    + 'table{width:100%;border-collapse:collapse;font-size:8pt;margin-top:3mm}'
-    + 'td,th{border-top:1px solid #000;padding:1mm;text-align:left;vertical-align:top}th{font-size:7pt}td:first-child,th:first-child{width:9mm}td:last-child,th:last-child{width:8mm;text-align:center}'
-    + '.alt{margin-top:auto;font-size:7pt;border-top:1px solid #000;padding-top:1mm;display:flex;justify-content:space-between}'
-    + '</style></head><body><div class="etk"><div class="ust">'
-    + qrSvg(r.qr)
-    + `<div><div class="k">REFAKAT KARTI</div><div class="buyuk">${kac(r.etiket)}</div><div class="ad">${kac(k.urun.ad)}</div>`
-    + `<div class="k mono">Parça no: ${kac(k.urun.kod)}</div><div class="k">Adet ${k.adet} · Termin ${tarih(k.teslim)}</div></div></div>`
-    + `<div class="lot"><strong>${kac(refakatLotSatiri(r))}</strong><br>${kac([r.malzemeAd ?? `Kart ${r.malzemeId}`, r.malzemeKod].filter(Boolean).join(' · '))}</div>`
-    + `<table><thead><tr><th>Op</th><th>İş</th><th>İstasyon</th><th>Bitti</th></tr></thead><tbody>${satirlar}</tbody></table>`
-    + `<div class="alt"><span>Basım ${basim.toLocaleDateString('tr-TR')}</span><span class="mono">${kac(r.etiket)}</span></div>`
+    + 'body{font-family:Arial,sans-serif}.etk{width:100mm;height:150mm;padding:4mm;display:flex;flex-direction:column;gap:2.5mm;overflow:hidden}'
+    + '.bas{border-bottom:0.75mm solid #000;padding-bottom:2mm}.k{font-size:7pt;font-weight:800;letter-spacing:.14em}.mono{font-family:monospace}'
+    + '.buyuk{font:700 21pt monospace;line-height:1;overflow-wrap:anywhere}.ad{font-weight:800;font-size:11pt;margin-top:1mm;overflow-wrap:anywhere}.alt-bas{font-size:8pt}'
+    + '.govde{display:flex;gap:3mm;flex:1;min-height:0}.rota{flex:1;min-width:0;list-style:none;margin:0;padding:0;display:flex;flex-direction:column}'
+    + '.rota li{display:grid;grid-template-columns:8.5mm minmax(0,1fr) auto;gap:0 2mm}.iz{display:flex;flex-direction:column;align-items:center}'
+    + '.iz::after{content:"";flex:1;min-height:2.5mm;border-left:1mm solid #000}.lot .iz::after{border-left:0.5mm dashed #000}.son .iz::after{display:none}'
+    + '.halka{width:5.5mm;height:5.5mm;border-radius:50%;border:0.5mm solid #000}.son .halka{background:#000}'
+    + '.no{width:7.5mm;height:6.5mm;border-radius:1mm;background:#000;color:#fff;font:700 9pt monospace;display:flex;align-items:center;justify-content:center;'
+    + '-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    + '.is{padding-bottom:3mm;font-size:8pt;line-height:1.3;min-width:0;overflow-wrap:anywhere}.is strong{display:block;font-size:9.5pt}.is small{display:block;font-size:8pt}'
+    + '.kutu{width:3.5mm;height:3.5mm;border:0.4mm solid #000;margin-top:0.5mm}.son .is{font-weight:700;padding-top:0.8mm}'
+    + '.sik .op .is{padding-bottom:1mm}.sik .op strong{display:inline;font-size:8pt}.sik .op small{display:inline;font-size:7pt}.sik .op small::before{content:" · "}'
+    + '.sik .no{height:5mm;font-size:8pt}.sik .iz::after{min-height:1mm}'
+    + '.yan{width:29mm;flex:none;display:flex;flex-direction:column;gap:1.5mm;align-items:center}.yan svg{width:29mm;height:29mm}'
+    + '.not{font-size:6.5pt;text-align:center}.bilgi{margin-top:auto;width:100%;border:0.25mm solid #000;padding:1.2mm;font-size:6.5pt;line-height:1.35}'
+    + '.bilgi b{display:block;font:700 8pt monospace;overflow-wrap:anywhere}'
+    + '</style></head><body><div class="etk">'
+    + `<div class="bas"><div class="k">REFAKAT KARTI</div><div class="buyuk">${kac(r.etiket)}</div><div class="ad">${kac(k.urun.ad)}</div>`
+    + `<div class="alt-bas mono">${kac(k.urun.kod)} · ${k.adet} adet · termin ${tarih(k.teslim)}</div></div>`
+    + `<div class="govde"><ol class="rota${k.adimlar.length > SIK_ADIM ? ' sik' : ''}">`
+    + `<li class="lot"><span class="iz"><span class="halka"></span></span><span class="is"><strong>${kac(r.lotNo === null ? 'Lot bekliyor (istisna kartı)' : `LOT ${r.lotNo}`)}</strong>`
+    + `<small>${kac(malzeme)}</small>${lotIz ? `<small class="mono">${kac(lotIz)}</small>` : ''}</span><span></span></li>`
+    + adimlar
+    + '<li class="son"><span class="iz"><span class="halka"></span></span><span class="is">Mamul deposu / sevk</span><span></span></li></ol>'
+    + `<div class="yan">${qrSvg(r.qr)}<div class="not">Her işlemde okutun</div><div class="bilgi">`
+    + (r.ust ? `ÜST KART<b>${kac(r.ust.etiket)}</b>` : '')
+    + `BASIM<b>${kac(zaman)}</b></div></div></div>`
     + '</div></body></html>';
 }
 

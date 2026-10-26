@@ -64,6 +64,10 @@ export function icerikIlkesi(sayfa: string): string {
 export const CALISAN_YOLU = 'vendor/occt/step-calisan.js';
 export const CALISAN_ILKE_BASLIGI = 'Content-Security-Policy';
 export const CALISAN_ILKESI = "default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'";
+// PDF okuyucu çalışanı (kart #731): URL ile yüklenince kendi cevabının ilkesini kullanır; başlıksız gelirse hiç ilkesi olmaz. Ağa çıkmaz
+// (belge baytı mesajla gelir), eval istemez: en dar ilke.
+export const PDF_CALISAN_YOLU = 'vendor/pdfjs/pdf.worker.min.js';
+export const PDF_CALISAN_ILKESI = "default-src 'none'; script-src 'self'";
 
 // Kaynaktaki en yeni dosya derlenmiş sayfadan yeniyse (ya da sayfa yoksa) derleme eskidir. Depo güncellenip `derle:arkon` unutulunca
 // bu dosyanın yeni ilkesi eski Arkon'a uygulanıyordu: eski derlemede STEP okuyucu ana sayfada koşar, zorlayıcı ilke onu durdurur, 3B açılmaz.
@@ -148,6 +152,7 @@ function araKatman(kok: string, guncelle: () => Promise<void>) {
       const sayfa = extname(yol) === '.html' ? await readFile(yol) : null;
       if (sayfa !== null) yanit.setHeader(ILKE_BASLIGI, icerikIlkesi(sayfa.toString('utf8')));
       if (yol === join(kok, CALISAN_YOLU)) yanit.setHeader(CALISAN_ILKE_BASLIGI, CALISAN_ILKESI);
+      if (yol === join(kok, PDF_CALISAN_YOLU)) yanit.setHeader(CALISAN_ILKE_BASLIGI, PDF_CALISAN_ILKESI);
       if (baslik(istek.headers, 'if-none-match').split(',').some((e) => e.trim() === etiket)) {
         yanit.statusCode = 304;
         yanit.end();

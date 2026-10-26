@@ -142,6 +142,8 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     const okunan = await cevapla({ ...istemci, ikili }, istek('GET', '/blob/abc'));
     expect(okunan.ham).toEqual(veri);
     expect(okunanYollar).toEqual(['/arkon/dosyalar/abc']);
+    expect((await cevapla({ ...istemci, ikili }, istek('GET', '/blob/abc/arka'))).ham).toEqual(veri);
+    expect(okunanYollar).toEqual(['/arkon/dosyalar/abc', '/arkon/dosyalar/abc/arka-plan']);
   });
 
   it('dosya okuma ikili cevaptır: içerik olduğu gibi döner; sunucu reddi Arkon hata biçimine çevrilir', async () => {

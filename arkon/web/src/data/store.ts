@@ -17,6 +17,8 @@ import { kuyrukGonderilir } from './kuyruk';
 import { gecikmeliRet, logRetleri } from './biten-is';
 import { oturumKisisi } from './oturum-kisisi';
 import { yerelVeriyiTemizle } from './yerel-temizlik';
+import { anilanOzetler, silinecekDosyalar } from './dosya-temizligi';
+import type { DepodakiDosya } from './dosya-temizligi';
 /* Belgeler bu katmanda biçimden bağımsız taşınır (IndexedDB ↔ sunucu); alan tipleri @shared/model'dedir.
    Uygulama tarafına dönen belge değerleri bilinçli olarak `any` bırakılır: sayfalar kendi tiplerini (Pkg, Result…) kullanır. */
 type Doc = any;
@@ -43,12 +45,12 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
 
   /* ── cihazdaki IndexedDB ── */
-  const KEYPATH = ['pkgs', 'results', 'requests', 'draws', 'downs', 'maint', 'gauges', 'logi'], OUTKEY = ['kv', 'cache', 'blobs', 'surumler'], AUTO = ['outbox', 'log_events', 'log_counts', 'log_meas', 'log_calls', 'log_audit'];
+  const KEYPATH = ['pkgs', 'results', 'requests', 'draws', 'downs', 'maint', 'gauges', 'logi'], OUTKEY = ['kv', 'cache', 'blobs', 'surumler', 'blobzaman'], AUTO = ['outbox', 'log_events', 'log_counts', 'log_meas', 'log_calls', 'log_audit'];
   let dbp: Promise<IDBDatabase | null> | null = null, useMem = false; const mem: Record<string, Map<Key, Doc>> = {}; KEYPATH.concat(OUTKEY, AUTO).forEach(s => { mem[s] = new Map(); }); let memSeq = 0;
   function open(): Promise<IDBDatabase | null> {
     if (!dbp) dbp = new Promise<IDBDatabase | null>(res => {
       try {
-        const r = indexedDB.open('arkon-mes', 7);
+        const r = indexedDB.open('arkon-mes', 8);
         r.onupgradeneeded = () => { const d = r.result, has = (n: string) => d.objectStoreNames.contains(n); KEYPATH.forEach(n => { if (!has(n)) d.createObjectStore(n, { keyPath: 'id' }); }); OUTKEY.forEach(n => { if (!has(n)) d.createObjectStore(n); }); AUTO.forEach(n => { if (!has(n)) d.createObjectStore(n, { autoIncrement: true }); }); };
         r.onsuccess = () => res(r.result); r.onerror = () => { useMem = true; res(null); setTimeout(() => emit(), 0); };
       } catch (e: any) { useMem = true; res(null); setTimeout(() => emit(), 0); }
@@ -63,6 +65,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   const isMem = async () => useMem || !(await open());
   const L = {
     async all(s: string): Promise<Doc[]> { if (await isMem()) return Array.from(mem[s].values()); return tx(s, 'readonly', o => o.getAll()); },
+    async keys(s: string): Promise<Key[]> { if (await isMem()) return Array.from(mem[s].keys()); return tx(s, 'readonly', o => o.getAllKeys()); },
     async entries(s: string): Promise<[Key, Doc][]> { if (await isMem()) return Array.from(mem[s].entries()); const keys = await tx(s, 'readonly', o => o.getAllKeys()), vals = await tx(s, 'readonly', o => o.getAll()); return keys.map((k: Key, i: number) => [k, vals[i]]); },
     async get(s: string, k: Key): Promise<Doc> { if (await isMem()) return mem[s].get(k); return tx(s, 'readonly', o => o.get(k)); },
     async put(s: string, v: Doc, k?: Key): Promise<unknown> { if (await isMem()) { mem[s].set(k !== undefined ? k : v.id, v); return; } return tx(s, 'readwrite', o => k !== undefined ? o.put(v, k) : o.put(v)); },
@@ -143,8 +146,10 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     if (bellekte) return bellekte;
     let u = await L.get('blobs', h).catch(() => null);
     if (!u) { u = await api('GET', '/blob/' + h, undefined, { raw: true, timeout: 120000 }); await L.put('blobs', u, h).catch(() => {}); }
-    known.add(h); memPutBlob(h, u); return u;
+    known.add(h); memPutBlob(h, u); zamanla(h, u.length); return u;
   }
+  // Dosyanın son açılışı ve boyu: temizlik en uzun süredir açılmayanı bunla bulur (dosyanın kendisi okunmadan).
+  const zamanla = (h: string, n: number): void => { L.put('blobzaman', { at: Date.now(), n }, h).catch(() => {}); };
   async function toWire(x: any, up: [string, Bytes][]): Promise<any> {
     if (ArrayBuffer.isView(x)) {
       const u = asBytes(x), k = taKind(x);
@@ -155,12 +160,24 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     if (x && typeof x === 'object') { if (typeof FileSystemHandle !== 'undefined' && x instanceof FileSystemHandle) return null; const o: Record<string, any> = {}; for (const k in x) o[k] = await toWire(x[k], up); return o; }
     return x;
   }
-  async function fromWire(x: any): Promise<any> {
-    if (x && x.$blob) return fromBytes(await getBlob(x.$blob), x.t);
+  // birak: dosya indirilmez, `{ $blob, t, n }` işaretiyle kalır (tembel kip). Çözülmüş tipli dizi olduğu gibi geçer.
+  async function fromWire(x: any, birak = false): Promise<any> {
+    if (ArrayBuffer.isView(x)) return x;
+    if (x && x.$blob) return birak ? { $blob: x.$blob, t: x.t, n: x.n } : fromBytes(await getBlob(x.$blob), x.t);
     if (x && x.$ta) return fromBytes(unb64(x.b), x.$ta);
-    if (Array.isArray(x)) { const o: any[] = []; for (const v of x) o.push(await fromWire(v)); return o; }
-    if (x && typeof x === 'object') { const o: Record<string, any> = {}; for (const k in x) o[k] = await fromWire(x[k]); return o; }
+    if (Array.isArray(x)) { const o: any[] = []; for (const v of x) o.push(await fromWire(v, birak)); return o; }
+    if (x && typeof x === 'object') { const o: Record<string, any> = {}; for (const k in x) o[k] = await fromWire(x[k], birak); return o; }
     return x;
+  }
+  /* Tembel kip (kart #731, karar 726 a): yeni ekranda paket belgesi dosyasız gelir; dosya işaretle kalır, açılacağı zaman `coz` ile
+     iner. Liste hemen gelir, bellekte yalnız açılan dosya durur. İşaret yazmada olduğu gibi geri gider (toWire dokunmaz). Eski çerçeve bu
+     kipi açmaz; aynı cihaz aynasında işaretli belge görürse onu baytla çözer. */
+  let tembel = false;
+  const TEMBEL_DEPOLAR = new Set(['pkgs']);
+  const belgeCoz = (s: string, d: any): Promise<any> => fromWire(d, tembel && TEMBEL_DEPOLAR.has(s));
+  async function aynaCoz(s: string, v: any): Promise<any> {
+    if (tembel || !TEMBEL_DEPOLAR.has(s) || !anilanOzetler(v).size) return v;
+    try { return await fromWire(v); } catch (e: any) { return v; }
   }
   async function uploadBlobs(up: [string, Bytes][]): Promise<void> {
     const need = up.filter(([h]) => !known.has(h)); if (!need.length) return;
@@ -247,7 +264,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     if (memo[s] && memo[s][id]) return memo[s][id];
     const r = await L.get('surumler', tabanAnahtari(s, id)).catch(() => undefined);
     if (!r) return undefined;
-    const d = await fromWire(r.d);
+    const d = await belgeCoz(s, r.d);
     return (memo[s] = memo[s] || {})[id] = { u: r.u, doc: s === 'kv' ? d.v : d };
   }
   function tabanSil(s: string, id: string): void {
@@ -274,7 +291,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
         tabanYaz(s, id, r && r.u, v, w); return v;
       } catch (e: any) {
         if (e.status !== 409 || !e.body || !e.body.cur) throw e;
-        const cur = e.body.cur, rd = await fromWire(cur.d), remote = s === 'kv' ? rd.v : rd;
+        const cur = e.body.cur, rd = await belgeCoz(s, cur.d), remote = s === 'kv' ? rd.v : rd;
         const { doc: merged, cakisan } = merge3(t ? t.doc : undefined, v, remote);
         tabanYaz(s, id, cur.u, remote, cur.d); v = merged;
         await L.put(s, merged, s === 'kv' ? id : undefined).catch(() => {});
@@ -293,41 +310,42 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
       if (e.status === 409) {
         try {
           const r = await api('GET', '/doc/' + s + '/' + encodeURIComponent(id));
-          if (r) { const d = await fromWire(r.d), doc = s === 'kv' ? d.v : d; tabanYaz(s, id, r.u, doc, r.d); await L.put(s, doc, s === 'kv' ? id : undefined).catch(() => {}); deliver({ type: '$merged', store: s, id }); }
+          if (r) { const d = await belgeCoz(s, r.d), doc = s === 'kv' ? d.v : d; tabanYaz(s, id, r.u, doc, r.d); await L.put(s, doc, s === 'kv' ? id : undefined).catch(() => {}); deliver({ type: '$merged', store: s, id }); }
         } catch (x) {}
       }
       throw e;
     }
   }
+  async function aynadanHepsi(s: string): Promise<Doc[]> { const out: Doc[] = []; for (const v of await L.all(s)) out.push(await aynaCoz(s, v)); return out; }
   const DB = {
     async all(s: string): Promise<Doc[]> {
       if (okunmaz(s)) return [];
-      if (!remoteOk(s)) return s === 'kv' ? (await L.all(s)) : L.all(s);
+      if (!remoteOk(s)) return aynadanHepsi(s);
       try {
         const rows = await api('GET', '/doc/' + s), m = memo[s] = memo[s] || {}, out: Doc[] = [], seen = new Set<Key>();
         for (const r of rows) {
           seen.add(r.id);
-          if (!(m[r.id] && m[r.id].u === r.u)) { const d = await fromWire(r.d); tabanYaz(s, r.id, r.u, s === 'kv' ? d.v : d, r.d); L.put(s, m[r.id].doc, s === 'kv' ? r.id : undefined).catch(() => {}); }
+          if (!(m[r.id] && m[r.id].u === r.u)) { const d = await belgeCoz(s, r.d); tabanYaz(s, r.id, r.u, s === 'kv' ? d.v : d, r.d); L.put(s, m[r.id].doc, s === 'kv' ? r.id : undefined).catch(() => {}); }
           out.push(m[r.id].doc);
         }
         // başka cihazda silinenleri aynadan da sil (kuyrukta bekleyen yerel yazma yoksa)
         const pend = new Set<string>((await L.all('outbox')).filter((x: OutboxItem) => 'store' in x && x.store === s).map((x: { id: string }) => x.id));
         for (const [k] of await L.entries(s)) if (!seen.has(k) && !pend.has(String(k)) && !(s === 'kv' && LOCAL_KV.has(String(k)))) { L.del(s, k).catch(() => {}); tabanSil(s, String(k)); }
-        for (const id of pend) if (!seen.has(id)) { const v = await L.get(s, id); if (v !== undefined) out.push(v); }
+        for (const id of pend) if (!seen.has(id)) { const v = await aynaCoz(s, await L.get(s, id)); if (v !== undefined) out.push(v); }
         return out;
-      } catch (e: any) { if (e.offline) return L.all(s); throw e; }
+      } catch (e: any) { if (e.offline) return aynadanHepsi(s); throw e; }
     },
     async get(s: string, k: string): Promise<Doc> {
       if (okunmaz(s)) return undefined;
-      if (!remoteOk(s, k)) return L.get(s, k);
+      if (!remoteOk(s, k)) return aynaCoz(s, await L.get(s, k));
       try {
-        const pend = (await L.all('outbox')).some((x: OutboxItem) => 'store' in x && x.store === s && x.id === k); if (pend) return L.get(s, k);
+        const pend = (await L.all('outbox')).some((x: OutboxItem) => 'store' in x && x.store === s && x.id === k); if (pend) return aynaCoz(s, await L.get(s, k));
         const r = await api('GET', '/doc/' + s + '/' + encodeURIComponent(k));
         if (r === undefined || r === null) return undefined;
         const m = memo[s] = memo[s] || {};
-        if (!(m[k] && m[k].u === r.u)) { const d = await fromWire(r.d); tabanYaz(s, k, r.u, s === 'kv' ? d.v : d, r.d); L.put(s, m[k].doc, s === 'kv' ? k : undefined).catch(() => {}); }
+        if (!(m[k] && m[k].u === r.u)) { const d = await belgeCoz(s, r.d); tabanYaz(s, k, r.u, s === 'kv' ? d.v : d, r.d); L.put(s, m[k].doc, s === 'kv' ? k : undefined).catch(() => {}); }
         return m[k].doc;
-      } catch (e: any) { if (e.offline) return L.get(s, k); throw e; }
+      } catch (e: any) { if (e.offline) return aynaCoz(s, await L.get(s, k)); throw e; }
     },
     async put(s: string, v: Doc, k?: string): Promise<void> {
       await L.put(s, v, k);
@@ -556,8 +574,63 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     sirala: (g: { istasyon: string; onceki: string[]; yeni: string[] }): Promise<{ surum: number }> => api('POST', '/kuyruk-sira', g),
     planaDon: (istasyon: string): Promise<{ silinen: number }> => api('POST', '/kuyruk-sira/plana-don', { istasyon }),
   };
+  /* Arka plan indirmesi (karar 726 a): açık iş ve kuyruk önce, sonra öteki paketler. Dosya yalnız cihaza yazılır, belleğe alınmaz;
+     her çağrı sırayı yeniler. Ayrı uç indirme günlüğüne yazılmaz (karar 730 a): kişi dosyayı açınca normal uçtan okunur. */
+  let indirmeSirasi: string[] = [], korunan = new Set<string>(), indiriyor = false;
+  function dosyalariIndir(oncelikli: readonly unknown[], diger: readonly unknown[] = []): void {
+    const once = new Set<string>(); for (const b of oncelikli) anilanOzetler(b, once);
+    const hepsi = new Set(once); for (const b of diger) anilanOzetler(b, hepsi);
+    korunan = once; indirmeSirasi = [...hepsi];
+    if (!indiriyor) void arkaPlandaIndir();
+  }
+  async function arkaPlandaIndir(): Promise<void> {
+    if (!SRV.on || !session) return;
+    indiriyor = true;
+    try {
+      const cihazda = new Set<Key>(await L.keys('blobs').catch(() => []));
+      while (indirmeSirasi.length) {
+        const h = indirmeSirasi.shift()!;
+        if (cihazda.has(h)) continue;
+        let u: Bytes;
+        try { u = await api('GET', '/blob/' + h + '/arka', undefined, { raw: true, timeout: 120000 }); }
+        catch (e: any) { if (e.offline) break; continue; }
+        await L.put('blobs', u, h).catch(() => {}); zamanla(h, u.length); known.add(h); cihazda.add(h);
+      }
+    } finally { indiriyor = false; }
+    temizlikIste();
+  }
+  /* Dosya deposu temizliği (dosya-temizligi.ts): hiçbir belgenin anmadığı dosya ve sınırı aşan en eski dosyalar silinir; açık iş ve
+     kuyruğun dosyası kalır. Belgeler kablo biçimiyle (surumler) ve tembel aynayla taranır: dosya baytı okunmaz. */
+  const TEMIZLIK_GECIKMESI = 30000;
+  let temizlikSaati: ReturnType<typeof setTimeout> | null = null;
+  function temizlikIste(): void {
+    if (!tembel || temizlikSaati) return;
+    temizlikSaati = setTimeout(() => { temizlikSaati = null; void dosyaDeposunuTemizle(); }, TEMIZLIK_GECIKMESI);
+  }
+  async function dosyaDeposunuTemizle(): Promise<string[]> {
+    try {
+      if (await isMem()) return [];
+      const anilan = new Set<string>();
+      for (const [, r] of await L.entries('surumler')) anilanOzetler(r && r.d, anilan);
+      for (const s of TEMBEL_DEPOLAR) for (const v of await L.all(s)) anilanOzetler(v, anilan);
+      for (const s of Object.keys(memo)) for (const id of Object.keys(memo[s])) anilanOzetler(memo[s][id].doc, anilan);
+      const zaman = new Map<Key, { at: number; n: number }>(await L.entries('blobzaman')), dosyalar: DepodakiDosya[] = [], kalan = new Set<Key>();
+      for (const h of await L.keys('blobs')) {
+        let z = zaman.get(h);
+        if (!z) { const u = await L.get('blobs', h); z = { at: 0, n: u ? u.length : 0 }; await L.put('blobzaman', z, h).catch(() => {}); }
+        dosyalar.push({ h: String(h), at: z.at, n: z.n }); kalan.add(h);
+      }
+      const sil = silinecekDosyalar(dosyalar, anilan, korunan);
+      await L.delMany('blobs', sil);
+      await L.delMany('blobzaman', sil.concat([...zaman.keys()].filter(k => !kalan.has(k)).map(String)));
+      return sil;
+    } catch (e: any) { console.warn('dosya deposu temizlenemedi', e); return []; }
+  }
+  // Yeni ekran init'ten önce açar. Belgedeki dosya işaretlerini baytla çözer (açılacak paket için); işaret yoksa belge olduğu gibi döner.
+  function tembelKur(): void { tembel = true; temizlikIste(); }
+  const coz = <T>(x: T): Promise<T> => fromWire(x);
   // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, TMI'de çıkıp başka
   // kişiyle girilince kuyruk öğeleri önceki kişinin adına yazılmasın (çerçeve her açılışta yeniden yüklendiği için bunu kendiliğinden yapar).
   function tasiyiciKur(t: Tasiyici | null): void { tasiyici = t; session = LS.get('session'); emit(); }
-  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
+  export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, tembelKur, coz, dosyalariIndir, dosyaDeposunuTemizle, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };
 (window as any).AKStore = AKStore;

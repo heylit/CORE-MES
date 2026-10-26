@@ -91,11 +91,14 @@ export function CizimStudyosu() {
   const pdfF = w.files.find((f) => f.kind === 'pdf'), mdlF = w.files.find((f) => f.kind === 'model');
   const fresh = () => { setInfo(null); setMeas({}); setOpen(null); setLv('view'); };
 
-  const loadPkg = useCallback((p: PaketOzeti) => {
-    setW(paketCalismasi(p, yeni()));
-    if (p.readCfg) { setCfg(ayarDuzelt(p.readCfg)); setApplied(ayarDuzelt(p.readCfg)); }
-    setPkgId(p.id); setInfo(null); setMeas({}); setOpen(null); setLv('view');
-  }, []);
+  // Paket listesi dosyasız gelir (kart #731): açılan paketin dosyaları önce baytlanır.
+  const loadPkg = useCallback((p0: PaketOzeti) => {
+    void depo.coz(p0).then((p) => {
+      setW(paketCalismasi(p, yeni()));
+      if (p.readCfg) { setCfg(ayarDuzelt(p.readCfg)); setApplied(ayarDuzelt(p.readCfg)); }
+      setPkgId(p.id); setInfo(null); setMeas({}); setOpen(null); setLv('view');
+    }, (e: unknown) => say('Paket dosyaları alınamadı: ' + (e instanceof Error ? e.message : String(e)), 'hata'));
+  }, [depo, say]);
   // Hazırlıktan "Çizim stüdyosunda düzenle" ile gelindiyse paket açılır (bir kez; işaret silinir).
   const ilk = useRef(true);
   useEffect(() => {

@@ -85,6 +85,20 @@ describe('sunucu plan çözücüsü', () => {
     assert.ok(Date.parse(yer(bagli, 'E-2|10')!.baslangic) >= Date.parse(yer(bagli, 'E-1|10')!.bitis), 'ardıl öncülün bitişini bekler');
   });
 
+  test('686 a: ek adım emrin kendi adımıdır: öncülünden sonra, ardılından önce, kendi süresiyle ve kuyruğun tezgâhında; öteki emir rotasıyla kalır', async () => {
+    const kuyruklar = [{ makineId: 100, anahtarlar: ['E-1|10', 'E-2|10'] }, { makineId: 101, anahtarlar: ['E-1|11', 'E-1|20', 'E-2|20'] }];
+    assert.deepEqual((await coz(KAYNAK, istek({ kuyruklar }))).yerlesmeyen, ['E-1|11'], 'ek adım verilmezse motor tanımaz');
+    const ekAdimlar = [{ anahtar: 'E-1|11', ad: 'Rework', oncul: 'E-1|10', ardil: 'E-1|20', ayarDk: 0, birimDk: 5, adet: 2 }];
+    const r = await coz(KAYNAK, { ...istek({ kuyruklar }), ekAdimlar });
+    assert.deepEqual(r.yerlesmeyen, []);
+    const on = yer(r, 'E-1|10')!, ek = yer(r, 'E-1|11')!, ar = yer(r, 'E-1|20')!;
+    assert.equal(ek.makineId, 101);
+    assert.equal((Date.parse(ek.bitis) - Date.parse(ek.baslangic)) / 60_000, 10, 'ayar 0 + 2 adet x 5 dk');
+    assert.ok(Date.parse(ek.baslangic) >= Date.parse(on.bitis), 'öncülünü bekler');
+    assert.ok(Date.parse(ar.baslangic) >= Date.parse(ek.bitis), 'ardılı onu bekler');
+    assert.ok(Date.parse(yer(r, 'E-2|20')!.baslangic) >= Date.parse(yer(r, 'E-2|10')!.bitis), 'öteki emir rotasıyla');
+  });
+
   test('motorda karşılığı olmayan sabit iş tezgâhı o aralıkta kapatır', async () => {
     const r = await coz(KAYNAK, istek({
       kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }],
