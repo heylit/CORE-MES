@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { KmBalon, KmOlcum } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { cizimBalonu, cizimOlcumleri, numuneKuraliMetni, sonOlcumler, uretimEmriKimligi, yeniOlcumler } from './kurallar.ts';
+import { cizimBalonu, cizimOlcumleri, numuneKuraliMetni, planGirdileri, sonOlcumler, uretimEmriKimligi, yeniOlcumler } from './kurallar.ts';
 
 // Uydurma deneme verisi.
 const balon = (o: Partial<KmBalon> = {}): KmBalon => ({
@@ -36,6 +36,20 @@ describe('stüdyo kuralları', () => {
     expect(yeniOlcumler(b, onceki, { ...onceki, 4: { v: 'Geçer', ok: true, at: 2 } })).toEqual([{ balonId: 8, nitel: 'gecer' }]);
     expect(yeniOlcumler(b, onceki, { 3: { v: 10.05, ok: true, at: 2 } })).toEqual([{ balonId: 7, deger: '10.05' }]);
     expect(yeniOlcumler(b, onceki, onceki)).toEqual([]);
+  });
+
+  it('plan geri çevirisi: eski numara kimliğini taşır, yeni nokta kimliksiz; mastar sınırsız, sınır altı ondalık metin', () => {
+    const eski = [balon({ id: 7, no: 3, olcuAletiGerekir: true, sayfa: 2 })];
+    const geri = planGirdileri(eski, [
+      { ...cizimBalonu(eski[0]!), x: 40, min: 9.95, max: 10.0500001 },
+      { id: 4, x: 1, y: 2, nom: 'M6', min: 0, max: 0, gauge: true, m: 'man' },
+    ]);
+    expect(geri).toEqual([
+      { id: 7, no: 3, nominal: 'Ø10', tolerans: '±0,1', alt: '9.95', ust: '10.05', alet: 'Kumpas', siklik: null, kritik: false, yontem: 'elle',
+        olcuAletiGerekir: true, tur: 'Çap', sayfa: 2, x: 40, y: 10, yaziKutusu: null },
+      { no: 4, nominal: 'M6', tolerans: null, alt: null, ust: null, alet: null, siklik: null, kritik: false, yontem: 'elle',
+        olcuAletiGerekir: false, tur: null, sayfa: null, x: 1, y: 2, yaziKutusu: null },
+    ]);
   });
 
   it('balon başına son ölçüm: düzeltme yeni kayıttır, aynı anda büyük kimlik sonradır', () => {
