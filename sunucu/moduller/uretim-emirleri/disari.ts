@@ -433,6 +433,9 @@ export interface EmirAkisKaydi {
   sayimlar: AkisSayimSatiri[];
   fason: AkisFasonSatiri[];
 }
+// İş emri süre özetinin saf hesabı: Akış Süresi refakat kartının adımdaki penceresini ve sayımlarını aynı kuralla ölçer (kart #708).
+export { isEmriSureOzeti as sureOzetiHesapla } from './kurallar.ts';
+export type { SureGirdisi, SureOzeti } from './kurallar.ts';
 export async function emirAkisKaydi(db: Db, emirId: number): Promise<EmirAkisKaydi | null> {
   const satir = await akisEmriGetir(db, emirId);
   if (satir === null) return null;

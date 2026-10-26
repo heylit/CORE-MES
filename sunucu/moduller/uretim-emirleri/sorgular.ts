@@ -1807,10 +1807,12 @@ export interface AkisIsEmriSatiri {
 }
 export interface AkisOlaySatiri {
   isEmriId: number | null; zaman: string; olay: 'baslat' | 'bitir' | 'duraklat' | 'durdur' | 'devam' | 'ayar';
-  durusNedeniId: number | null; istasyonId: number | null;
+  durusNedeniId: number | null; istasyonId: number | null; kisiId: number;
 }
 // Refakat kartıyla sayılmışsa kartı (kart #708: Akış Süresi kartın akışını kartla sayılanlardan ölçer); kartsız sayımda null.
-export interface AkisSayimSatiri { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number; duzeltme: boolean; refakatPartisiId: number | null }
+export interface AkisSayimSatiri {
+  isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number; duzeltme: boolean; refakatPartisiId: number | null; kisiId: number; hurdaNedeniId: number | null;
+}
 export interface AkisFasonSatiri { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number; hurdaAdet: number | null }
 
 export function akisEmriGetir(db: Db, emirId: number): Promise<AkisEmirSatiri | null> {
@@ -1834,11 +1836,11 @@ export function akisIsEmirleriGetir(db: Db, emirId: number): Promise<AkisIsEmriS
 
 export function akisOlaylariGetir(db: Db, emirId: number): Promise<AkisOlaySatiri[]> {
   return db.sorgu<AkisOlaySatiri>(
-    `SELECT "isEmriId", ${ISO('zaman')} AS zaman, olay, "durusNedeniId", "istasyonId" FROM (
-       SELECT k.is_emri_id AS "isEmriId", k.zaman, k.olay, NULL::int AS "durusNedeniId", k.istasyon_id AS "istasyonId", 0 AS defter, k.id
+    `SELECT "isEmriId", ${ISO('zaman')} AS zaman, olay, "durusNedeniId", "istasyonId", "kisiId" FROM (
+       SELECT k.is_emri_id AS "isEmriId", k.zaman, k.olay, NULL::int AS "durusNedeniId", k.istasyon_id AS "istasyonId", k.kisi_id AS "kisiId", 0 AS defter, k.id
          FROM uretim_kaydi k WHERE k.emir_id = $1
        UNION ALL
-       SELECT o.is_emri_id, o.zaman, o.olay, o.durus_nedeni_id, o.istasyon_id, 1, o.id FROM uretim_olayi o WHERE o.emir_id = $1
+       SELECT o.is_emri_id, o.zaman, o.olay, o.durus_nedeni_id, o.istasyon_id, o.kisi_id, 1, o.id FROM uretim_olayi o WHERE o.emir_id = $1
      ) t ORDER BY t.zaman, t.defter, t.id`,
     [emirId],
   );
@@ -1846,7 +1848,8 @@ export function akisOlaylariGetir(db: Db, emirId: number): Promise<AkisOlaySatir
 
 export function akisSayimlariGetir(db: Db, emirId: number): Promise<AkisSayimSatiri[]> {
   return db.sorgu<AkisSayimSatiri>(
-    `SELECT s.is_emri_id AS "isEmriId", ${ISO('s.zaman')} AS zaman, s.tur, s.adet, s.duzeltme, s.refakat_partisi_id AS "refakatPartisiId"
+    `SELECT s.is_emri_id AS "isEmriId", ${ISO('s.zaman')} AS zaman, s.tur, s.adet, s.duzeltme, s.refakat_partisi_id AS "refakatPartisiId",
+            s.kisi_id AS "kisiId", s.hurda_nedeni_id AS "hurdaNedeniId"
        FROM uretim_sayimi s WHERE s.emir_id = $1 AND s.tur IN ('saglam', 'hurda') ORDER BY s.zaman, s.id`,
     [emirId],
   );
