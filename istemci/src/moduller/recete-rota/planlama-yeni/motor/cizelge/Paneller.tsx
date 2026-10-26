@@ -101,6 +101,7 @@ interface SagOzellikleri {
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; secim: PlanlamaSecimi; secJob: string | null;
   sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
+  veriAc: ((bolum: string) => void) | null;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;
@@ -159,7 +160,7 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }
 
 // Teknik yardımcı (t-tekyer.betik yardimciHtml): planın altı adımı. Denge çalışmaya yazılır (plan.yaz; planın girdisi değil, plan güncel
 // kalır); sabitleri kaldırmak onayla, plan.kilitle ile. Ölçüm ve ekip çözümü motorla gelir.
-function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec }: SagOzellikleri) {
+function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec, veriAc }: SagOzellikleri) {
   const { bildir } = useBildirim();
   const [sabitOnay, setSabitOnay] = useState(false);
   const dg = dengeAl(c); const el = elleSayilari(c); const kap = c.kapali.length; const nHav = c.D.siparisler.filter((s) => s.havuz).length;
@@ -195,11 +196,11 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
       <div className="tc-pym-yrd-adimlar">
         {adim(1, 'target', 'Model', `${KISIT_SAYISI - kap}/${KISIT_SAYISI} kısıt açık`, kap ? 'uyari' : 'tamam', <>
           <p className="tc-pym-kucuk-yazi">Planlama modeli atölyenin kurallarıdır: tezgâh ve vardiya saatleri, rota sırası ve bağları (bitince, örtüşerek, bağımsız), ayar ve aile, operatör ve ayarcı, aparat, fason, malzeme, termin. Her çözücü aynı modeli okur.</p>
-          <div className="tc-pym-dugmeler"><Dg ad="Kısıtları aç" simge="target" not={YOK_NOTU} /></div>
+          <div className="tc-pym-dugmeler"><Dg ad="Kısıtları aç" simge="target" yap={veriAc ? () => veriAc('kisitlar') : null} not={YOK_NOTU} /></div>
         </>)}
         {adim(2, 'scan', 'Veri denetimi', bul.length ? `${bul.length} bulgu${ciddi ? `, ${ciddi} ciddi` : ''}` : 'temiz', ciddi ? 'hata' : bul.length ? 'uyari' : 'tamam', <>
           <p className="tc-pym-kucuk-yazi">Eksik süre, tezgâhı olmayan adım, personeli olmayan vardiya gibi veri hataları plan kurulmadan görünür.</p>
-          <div className="tc-pym-dugmeler"><Dg ad="Denetimi aç" simge="scan" not={YOK_NOTU} /></div>
+          <div className="tc-pym-dugmeler"><Dg ad="Denetimi aç" simge="scan" yap={veriAc ? () => veriAc('denetim') : null} not={YOK_NOTU} /></div>
         </>)}
         {adim(3, 'edit', 'Elle', elle, '', <>
           <p className="tc-pym-kucuk-yazi">Elle yaptığınız her şey motorun sabitidir: sürükleyip bıraktığınız iş o saate ve tezgâha sabitlenir, dondurduğunuz gün yerinde kalır, girdiğiniz gerçekleşen saat değişmez. Değişiklikler sepete düşer, istediğiniz adıma dönülür.</p>
@@ -235,7 +236,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
 
 // Karar paneli (n-karar.betik sorunPaneli): sorunlar önem sırasıyla, gecikmenin kaynağı, hızlı işler. Seçim varken ayrıntı gelir.
 const SOR_SIRA: Record<SorunTonu, number> = { hata: 0, uyari: 1, bilgi: 2 };
-function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapat }: SagOzellikleri) {
+function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapat, veriAc }: SagOzellikleri) {
   const l = [...sor].sort((a, b) => SOR_SIRA[a.ton] - SOR_SIRA[b.ton]);
   const kay = useMemo(() => gecikmeKaynaklari(c, p, cx).liste.slice(0, 5), [c, p, cx]); const enb = kay[0]?.v || 1;
   return (
@@ -253,7 +254,7 @@ function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapa
                 <b className="tc-pym-sor-baslik">{x.baslik}</b>
                 <p className="tc-pym-sor-metin"><MetinYaz m={x.metin} /></p>
                 <div className="tc-pym-dugmeler">
-                  {x.eylemler.map((e) => { const y = eylemYapisi(e, { c, komut, sipSec: isAc }); return <Dg key={e.ad} ad={e.ad} birincil={e.birincil} yap={y.yap} not={y.not} />; })}
+                  {x.eylemler.map((e) => { const y = eylemYapisi(e, { c, komut, sipSec: isAc, veriAc }); return <Dg key={e.ad} ad={e.ad} birincil={e.birincil} yap={y.yap} not={y.not} />; })}
                 </div>
               </div>
             </li>
