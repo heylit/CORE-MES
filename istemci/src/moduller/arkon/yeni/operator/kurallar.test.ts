@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  cagriTonu, durumDugmeleri, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  cagriTonu, cubukDugmeleri, durumDugmeleri, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -83,5 +83,18 @@ describe('600 a: kalite istasyonu', () => {
     expect(lotKarariOku({ lotKarari: { ...lk, karar: 'x' } })).toBeNull();
     expect(lotKarariOku({})).toBeNull();
     expect(lotKarariOku(null)).toBeNull();
+  });
+});
+
+describe('telefon eylem çubuğu (618)', () => {
+  it('her durumda ana eylem ve varsa Durdur; Bitir, Hazırlık ve Resim çubukta yok; hiçbiri basılı tutma istemez', () => {
+    const etiketler = (d: string) => cubukDugmeleri(d).map((x) => x.etiket);
+    expect(etiketler('queued')).toEqual(['İşi Başlat']);
+    expect(etiketler('setup')).toEqual(['Üretime Geç']);
+    expect(etiketler('running')).toEqual(['Durdur', 'Duraklat']);
+    expect(etiketler('paused')).toEqual(['Durdur', 'Devam Et']);
+    expect(etiketler('stopped')).toEqual(['Yeniden Başlat']);
+    expect(etiketler('done')).toEqual(['Sıradaki İş']);
+    for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) expect(cubukDugmeleri(d).every((x) => !x.tut && x.eylem !== 'finish')).toBe(true);
   });
 });
