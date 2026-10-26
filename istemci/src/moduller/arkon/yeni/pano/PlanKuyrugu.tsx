@@ -209,7 +209,8 @@ function IsEmirleri({ salt }: { salt: boolean }) {
     const dur = KART_DURUMLARI[kartDurumu(p, r)];
     const oynar = kuyrukIsiMi(p) ? kuyrukDuzenle : planDuzenle;
     return (
-      <div key={p.id} className="tc-ay3-kutu tc-ay3-kart" data-gec={gec || undefined} data-uzerinde={uzerinde === p.id || undefined}
+      <div key={p.id} className="tc-ay3-kutu tc-ay3-kart" data-gec={gec || undefined} data-suruklenen={surukle === p.id || undefined}
+        data-uzerinde={(surukle && surukle !== p.id && uzerinde === p.id) || undefined}
         draggable={oynar} aria-label={`${p.no} ${p.part || 'Adsız parça'}`}
         onDragStart={(o) => { surukleYaz(p.id); o.dataTransfer.setData('text/plain', p.id); }}
         onDragEnd={() => { surukleYaz(null); uzerindeYaz(null); }}

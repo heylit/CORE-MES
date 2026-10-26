@@ -63,7 +63,10 @@
 .tc-ay3-serit[data-uzerinde] { outline: var(--cizgi-orta) dashed var(--hazard-ink); }
 .tc-ay3-kart { gap: var(--b-1); }
 .tc-ay3-kart[data-gec] { border-color: var(--stop); }
-.tc-ay3-kart[data-uzerinde] { outline: var(--cizgi-orta) solid var(--hazard-ink); }
+.tc-ay3-kart[draggable="true"] { cursor: grab; }
+/* Bırakılan iş hedef kartın önüne girer: üst çizgi o yeri, soluk kart taşınan işi gösterir. */
+.tc-ay3-kart[data-suruklenen] { opacity: var(--saydam-45); }
+.tc-ay3-kart[data-uzerinde] { border-color: var(--hazard-ink); box-shadow: 0 calc(-1 * var(--cizgi-kalin)) 0 var(--hazard-ink); }
 .tc-ay3-kart-ust { display: flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; }
 .tc-ay3-iki { display: flex; justify-content: space-between; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay3-gec { color: var(--stop); font-weight: 700; }

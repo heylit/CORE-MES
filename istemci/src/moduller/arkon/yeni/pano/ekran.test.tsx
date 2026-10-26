@@ -84,6 +84,26 @@ describe('A3 sayfaları', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 30000);
 
+  it('Plan Kuyruğu sürükleme: taşınan kart soluk, hedef kartta giriş çizgisi; kartın kendi üstünde çizgi yok, bırakınca ikisi de kalkar', async () => {
+    sunucuKur(YONETICI, { belgeler });
+    arkonAc('/arkon/planlama');
+    const b = await bolum('Plan Kuyruğu');
+    const s1 = await within(b).findByRole('region', { name: 'Şerit S1' }, { timeout: 10000 });
+    const k1 = await within(s1).findByLabelText('E-1 Parça A');
+    const k2 = within(s1).getByLabelText('E-2 Parça B');
+    const dataTransfer = { setData: () => undefined, getData: () => 'p1' };
+    fireEvent.dragStart(k1, { dataTransfer });
+    await waitFor(() => { expect(k1.hasAttribute('data-suruklenen')).toBe(true); });
+    fireEvent.dragOver(k1, { dataTransfer });
+    expect(k1.hasAttribute('data-uzerinde')).toBe(false);
+    fireEvent.dragOver(k2, { dataTransfer });
+    await waitFor(() => { expect(k2.hasAttribute('data-uzerinde')).toBe(true); });
+    expect(k2.hasAttribute('data-suruklenen')).toBe(false);
+    fireEvent.dragEnd(k1, { dataTransfer });
+    await waitFor(() => { expect(k1.hasAttribute('data-suruklenen')).toBe(false); });
+    expect(k2.hasAttribute('data-uzerinde')).toBe(false);
+  }, 20000);
+
   it('Kuyruk salt okunurdur: yönetici de taşıyamaz', async () => {
     sunucuKur(YONETICI, { belgeler });
     arkonAc('/kuyruk');
