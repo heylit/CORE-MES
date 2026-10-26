@@ -225,3 +225,12 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
   bekler, makinesi kuyruğundaki tezgâhtır. Kuyrukta olmayan ek adım eklenmez. Önceki davranış: motor ek adımı tanımıyordu (yerleşmeyen; plan 689 a ile uyarıyla boş bırakıyordu).
 - Kaynak okuması ve sayfa değişmedi; alanı yalnız plan modülü verir. `plan-cozucusu.ts` alanı geçirir.
 - Test: `plan-cozucusu.test.ts` 686 a; değişiklik olmadan kırılıyor (DOĞRULANDI).
+## Durum anahtarı rotadaki yerdir (697, bozukluk düzeltmesi; kart 697)
+- `kurallar.ts` `emirleriCevir` opStatus, opProg ve opYer anahtarını (`emir|root|sıra`) iş emrinin sırasıyla yazıyordu; okuyanlar (sayfa, motor girdisi
+  `tmiBitenler`, değerlendirme) sırayı rotadaki yer sayar. Araya ek adım (rework, tamir, ek) girince sonraki rota adımları bir kayıyordu: biten ek adım
+  sonraki rota adımını bitmiş saydırıyor, motor o adımı tanımıyor ve kuyruk yazımı reddediliyordu (DOĞRULANDI, çözücü düzeyinde kırmızı deneme).
+  Şimdi anahtar, önündeki ek adımlar düşülerek rotadaki yerdir; ek adımın anahtarı yazılmaz. Kolun ayrılma ve katılma yeri (`kolCevir`) de aynı düşümle.
+  Rotasız emirde (revizyonsuz; adımları `adim-ekle` ile 'ek' türlü) sıra adımın yeridir, değişmedi.
+- İş emrinin türü `EmirKaydi.isEmirleri[].tur` ile gelir; verilmezse eski davranış. Türü uretim-emirleri `emirDilimi` verecek (697-ue, ayrı dal);
+  o girene kadar davranış değişmez.
+- Test: `emirler.test.ts` 697; değişiklik olmadan kırılıyor (DOĞRULANDI).
