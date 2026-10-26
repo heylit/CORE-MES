@@ -15,7 +15,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { KATALOG_TURLERI, type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
-import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ACIK_EMIR_DURUMLARI, type RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AcikSiparisSatirlariCevabi, BakiyeSatiri, KaliteDurumu, CikisKomutu, CikisOnerisiCevabi, DepolarCevabi, Hareket, HareketCevabi, HareketlerListesi, IsKutusuCevabi, Konum, KonumAyrintiCevabi,
   KonumlarListesi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, MalzemeAyarKomutu,
@@ -28,7 +28,7 @@ import type {
   TeslimReddetGovdesi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi, OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, SepettenKullanGovdesi, GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, SepettenCekGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { malzemeIstegiAcGirdisi, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { malzemeIstegiAcGirdisi, REFAKAT_KARTLARI_SINIRI, type ElleKonumTuru, type IstekTeslimGovdesi, type PartiBelgesi, type KartlaAlGovdesi, type LotBekleyenKartlarCevabi, type RefakatKartlariCevabi, type RefakatKartSatiri, type RefakatCiktisi, type RefakatIziCevabi, type RefakatLotaBaglaCevabi, type RefakatPartileriCevabi, type RefakatPartisi, type RefakatPartisiCevabi, type RefakatPartisiKartiCevabi, type RefakatSevki, type SiparisIrsaliyeleriCevabi, type SonParti, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { KOD_ONEKI, kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -312,7 +312,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
     okut: null, depo: null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
-    malzemeler: null, hareketler: null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
+    malzemeler: null, hareketler: null, 'refakat-kartlari': null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
   };
 }
 
@@ -4552,6 +4552,21 @@ export async function refakatPartisiOku(db: Db, id: number): Promise<RefakatPart
   const r = await sorgular.refakatPartisiBul(db, id);
   if (!r) throw bulunamadi('Refakat kartı bulunamadı.');
   return { refakat: (await refakatPartileriCevir(db, [r]))[0]! };
+}
+// Refakat kartları sayfası (kart #708): emrin kartı bir kez okunur; aynı emrin kartları ürünü paylaşır. Sırayla: işlemdeki tek bağlantıda
+// sorgular eşzamanlı koşamaz.
+export async function refakatKartlari(db: Db, durum: 'acik' | 'tumu'): Promise<RefakatKartlariCevabi> {
+  const satirlar = await sorgular.refakatKartlariListe(db, durum === 'tumu', REFAKAT_KARTLARI_SINIRI + 1);
+  const kartlar = await refakatPartileriCevir(db, satirlar.slice(0, REFAKAT_KARTLARI_SINIRI));
+  const emirler = new Map<number, RefakatKartiCevabi>();
+  for (const id of new Set(kartlar.map((k) => k.uretimEmriId))) emirler.set(id, await refakatKarti(db, id));
+  return {
+    kartlar: kartlar.map((r) => {
+      const e = emirler.get(r.uretimEmriId)!;
+      return { refakat: r, urun: e.urun, adet: e.adet, teslim: e.teslim, adimSayisi: e.adimlar.length };
+    }),
+    sinirda: satirlar.length > REFAKAT_KARTLARI_SINIRI,
+  };
 }
 export async function emrinRefakatPartileri(db: Db, uretimEmriId: number): Promise<RefakatPartileriCevabi> {
   return { partiler: await refakatPartileriCevir(db, await sorgular.emrinRefakatPartileri(db, uretimEmriId)) };
