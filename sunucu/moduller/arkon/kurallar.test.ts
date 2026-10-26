@@ -9,7 +9,7 @@ import {
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
 } from './kurallar.ts';
-import { ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
+import { adimEmirDurumu, ilkParcaNumuneKarari, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariDamgala, lotKarariGirdisi, lotKarariKoru, lotPaketi, tmiAqlPlani, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri } from './kurallar.ts';
 import type { KatilimDurumu, TmiPlanDurumu } from './kurallar.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARKON_ISLEMLERI } from '#paylasilan/islemler/arkon.ts';
@@ -1033,3 +1033,15 @@ test('plan saatleri paket kimliğiyle; kuyruk ve plan saati tmi alanına eklenir
   });
 });
 
+
+describe('paralel adım (kart 639)', () => {
+  test('adimEmirDurumu: iş emri paketinin kuralı adımın durumuyla okunur; açık olmayan emir kendi durumunu taşır', () => {
+    assert.equal(adimEmirDurumu('basladi', 'bekliyor'), 'planli');
+    assert.equal(adimEmirDurumu('planli', 'bekliyor'), 'planli');
+    assert.equal(adimEmirDurumu('basladi', 'calisiyor'), 'basladi');
+    assert.equal(adimEmirDurumu('basladi', 'tamam'), 'bitti');
+    assert.equal(adimEmirDurumu('bitti', 'tamam'), 'bitti');
+    assert.equal(adimEmirDurumu('iptal', 'bekliyor'), 'iptal');
+    assert.equal(adimEmirDurumu('basladi', null), 'basladi', 'emir paketi');
+  });
+});

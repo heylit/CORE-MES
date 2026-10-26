@@ -49,7 +49,7 @@ import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../v
 import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
-  adimSirasiBaslatmaReddi, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
+  adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
@@ -1047,16 +1047,19 @@ async function makineKodlariniCoz(db: Db, kodlar: readonly string[], onbellek: O
   return { idler };
 }
 
-// Kişinin bu işteki son katılımı ve şu an çalışan öteki kişiler (uretim-emirleri katılım okuması).
-async function katilimDurumu(db: Db, kisiId: number, emirId: number, onbellek?: OkumaOnbellegi): Promise<KatilimDurumu> {
+// Kişinin bu işteki son katılımı ve şu an çalışan öteki kişiler (uretim-emirleri katılım okuması). İş emri paketinde katılım ve çalışma
+// hâli adım başınadır (639, 648 a): aynı emrin öteki adımındaki kişi bu adımda çalışıyor sayılmaz.
+async function katilimDurumu(db: Db, kisiId: number, emirId: number, onbellek?: OkumaOnbellegi, isEmriId: number | null = null): Promise<KatilimDurumu> {
   const son = new Map<number, Katilim>();
   const katilim = onbellek === undefined ? await katilimlar(db, emirId) : await onbellek.oku(`${DURUM_ONEKI}katilimlar:${emirId}`, () => katilimlar(db, emirId));
-  for (const k of katilim.katilimlar) son.set(k.kisi.id, k);
+  for (const k of katilim.katilimlar) if (isEmriId === null || k.isEmriId === isEmriId) son.set(k.kisi.id, k);
   const benim = son.get(kisiId);
+  const acik = onbellek === undefined ? await acikEmir(db, emirId) : await acikEmirOku(db, onbellek, emirId);
+  const adim = isEmriId === null ? undefined : acik?.acikAdimlar?.find((a) => a.isEmriId === isEmriId);
   return {
     benim: benim === undefined ? 'yok' : benim.cikis === null ? 'acik' : benim.kapanis === 'duraklat' ? 'duraklamis' : 'yok',
     digerleriAcik: [...son.values()].filter((k) => k.kisi.id !== kisiId && k.cikis === null).map((k) => k.kisi.ad),
-    emirCalisiyor: (onbellek === undefined ? await acikEmir(db, emirId) : await acikEmirOku(db, onbellek, emirId))?.canli?.calisma === 'calisiyor',
+    emirCalisiyor: (adim === undefined ? acik?.canli?.calisma : adim.calisma) === 'calisiyor',
   };
 }
 
@@ -1081,10 +1084,15 @@ async function kayitAniyla<T>(db: Db, an: string, is: (an: string | undefined) =
 
 async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari, emirId: number, kayitAni: string, onbellek: OkumaOnbellegi): Promise<NonNullable<YansimaSonucu>> {
   if (karar.komut === null) return { sonuc: 'eslenemedi', neden: karar.neden ?? 'Karşılığı yok.' };
-  const emir = await emirOzetiOku(db, onbellek, emirId);
-  if (emir === null) return { sonuc: 'eslenemedi', neden: `TMI üretim emri bulunamadı: ${emirId}.` };
+  const emirSatiri = await emirOzetiOku(db, onbellek, emirId);
+  if (emirSatiri === null) return { sonuc: 'eslenemedi', neden: `TMI üretim emri bulunamadı: ${emirId}.` };
+  // Paralel adım (639): iş emri paketinin komutu kendi adımına gider; kurallar emrin değil adımın durumuyla okunur.
+  const adimKimligi = karar.isEmriId;
+  const adim = adimKimligi === null ? null : await isEmriOzetiOku(db, onbellek, adimKimligi);
+  const emir = { ...emirSatiri, durum: adimEmirDurumu(emirSatiri.durum, adim?.durum ?? null), istasyonId: adim?.istasyonId ?? emirSatiri.istasyonId };
+  const adimli = adimKimligi ?? undefined;
   // Ertelemeden önce: başka adımın ya da istasyonun paketinden gelen sayım bekletilirse sonraki adım başlayınca ona yazılırdı.
-  const ret = karar.isEmriId === null ? await emirPaketiReddi(db, emirId, emir.istasyonId, onbellek) : await adimSirasiReddi(db, emirId, karar.isEmriId, karar.komut, onbellek);
+  const ret = karar.isEmriId === null ? await emirPaketiReddi(db, emirId, emir.istasyonId, onbellek) : await adimSirasiReddi(db, karar.isEmriId, karar.komut, onbellek);
   if (ret !== null) return { sonuc: 'eslenemedi', neden: ret };
   const komut = karar.komut;
   if ((komut.komut === 'saglam' || komut.komut === 'hurda') && emir.durum === 'planli') return { sonuc: 'ertelendi', neden: null };
@@ -1092,7 +1100,7 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
   let yol: KatilimYolu = { yol: 'emir' };
   if (emir.durum === 'basladi' && (komut.komut === 'basla-ya-da-devam' || komut.komut === 'duraklat' || komut.komut === 'kuyruga-al' || komut.komut === 'durdur' || komut.komut === 'bitir')) {
     const kaynak = komut.komut === 'basla-ya-da-devam' ? ((await onbellek.oku(`istasyonKapasitesi:${emir.istasyonId}`, () => istasyonKapasitesi(db, emir.istasyonId)))?.kaynak ?? 'makine') : 'makine';
-    yol = katilimYolu(komut.komut, emir.durum, kaynak, await katilimDurumu(db, kullanici.id, emir.id));
+    yol = katilimYolu(komut.komut, emir.durum, kaynak, await katilimDurumu(db, kullanici.id, emir.id, undefined, adimKimligi));
     if (yol.yol === 'ret') return { sonuc: 'reddedildi', neden: yol.neden };
     if (yol.yol === 'degisiklik-yok') return { sonuc: 'eslenemedi', neden: ZATEN_CALISIYOR };
   }
@@ -1102,22 +1110,30 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
     // Planlı emir başlar; başlamış emir (duraklamış ya da durmuş) devam eder: çalışan emre devam TMI'de reddedilir.
     case 'basla-ya-da-devam': {
       if (yol.yol === 'katil') {
-        is = async () => { ek.uyari = (await kayitAniyla(db, kayitAni, (an) => katil(db, kullanici, emir.id, an))).uyari; };
+        is = async () => { ek.uyari = (await kayitAniyla(db, kayitAni, (an) => katil(db, kullanici, emir.id, an, adimli))).uyari; };
         break;
       }
       const secim = await makineKodlariniCoz(db, komut.makineKodlari, onbellek);
       if ('neden' in secim) return { sonuc: 'reddedildi', neden: secim.neden };
       const makineler = secim.idler.length === 0 ? undefined : secim.idler;
-      is = () => kayitAniyla<unknown>(db, kayitAni, (an) => (emir.durum === 'planli' ? emirBaslat(db, kullanici, emir.id, makineler, an) : emirDevam(db, kullanici, emir.id, makineler, an)));
+      // 626 a: sıra dışı başlatmanın uyarısı operatöre kaydın uyarısı olarak döner.
+      is = async () => {
+        if (emir.durum !== 'planli') return kayitAniyla(db, kayitAni, (an) => emirDevam(db, kullanici, emir.id, makineler, an, adimli));
+        ek.uyari = uyariBirlestir(ek.uyari, (await kayitAniyla(db, kayitAni, (an) => emirBaslat(db, kullanici, emir.id, makineler, an, adimli))).uyari);
+      };
       break;
     }
     // Başlamış işte (yeniden hazırlık) ya da ayarı zaten yazılmış işte TMI'de değişecek bir şey yoktur.
     case 'ayar':
       if (emir.durum !== 'planli') return { sonuc: 'eslenemedi', neden: HAZIRLIK_DEGISIKLIK_YOK };
-      is = () => kayitAniyla(db, kayitAni, (an) => emirAyar(db, kullanici, emir.id, an));
+      is = () => kayitAniyla(db, kayitAni, (an) => emirAyar(db, kullanici, emir.id, an, adimli));
       break;
-    case 'duraklat': case 'kuyruga-al': is = () => kayitAniyla<unknown>(db, kayitAni, (an) => (yol.yol === 'katilim-duraklat' ? katilimDuraklat(db, kullanici, emir.id, an) : emirDuraklat(db, kullanici, emir.id, an))); break;
-    case 'bitir': is = () => kayitAniyla<unknown>(db, kayitAni, (an) => (yol.yol === 'katilim-ayril' ? katilimAyril(db, kullanici, emir.id, an) : emirBitir(db, kullanici, emir.id, undefined, an))); break;
+    case 'duraklat': case 'kuyruga-al': is = () => kayitAniyla<unknown>(db, kayitAni, (an) => (yol.yol === 'katilim-duraklat' ? katilimDuraklat(db, kullanici, emir.id, an, adimli) : emirDuraklat(db, kullanici, emir.id, an, adimli))); break;
+    // 654 a: eksi bakiyeyle bitişin uyarısı operatöre döner; 649 a reddi TMI kuralıdır (önceki adım bitmeden bitmez).
+    case 'bitir': is = async () => {
+      if (yol.yol === 'katilim-ayril') return kayitAniyla(db, kayitAni, (an) => katilimAyril(db, kullanici, emir.id, an, adimli));
+      ek.uyari = uyariBirlestir(ek.uyari, (await kayitAniyla(db, kayitAni, (an) => emirBitir(db, kullanici, emir.id, undefined, an, adimli))).uyari);
+    }; break;
     case 'saglam': {
       // Karar bekleyen kısım (131 b) TMI'de ayrı satırdır; ikisi aynı kayıt noktasında yazılır, biri reddedilirse ikisi de yazılmaz.
       const kart = komut.refakatPartisiId === null ? {} : { refakatPartisiId: komut.refakatPartisiId };
@@ -1127,19 +1143,19 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
       const uyariyla = async (c: Promise<{ uyari: string | null }>) => { ek.uyari = uyariBirlestir(ek.uyari, (await c).uyari); };
       if (komut.kararBekliyor === 0 || !bekleyen.success) {
         if (!saglam.success) return { sonuc: 'reddedildi', neden: saglam.error.issues[0]?.message ?? 'Sayım geçersiz.' };
-        is = () => kayitAniyla(db, kayitAni, (an) => uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an })));
+        is = () => kayitAniyla(db, kayitAni, (an) => uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an, isEmriId: adimli })));
         break;
       }
       is = () => kayitAniyla(db, kayitAni, async (an) => {
-        if (saglam.success) await uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an }));
-        await uyariyla(emirSayim(db, kullanici, emir.id, bekleyen.data, { kararBekliyor: true, an }));
+        if (saglam.success) await uyariyla(emirSayim(db, kullanici, emir.id, saglam.data, { an, isEmriId: adimli }));
+        await uyariyla(emirSayim(db, kullanici, emir.id, bekleyen.data, { kararBekliyor: true, an, isEmriId: adimli }));
       });
       break;
     }
     case 'durdur': {
       const neden = (await onbellek.oku('durusNedenleri', () => durusNedenleriniListele(db, { yalnizAktif: false }))).find((n) => n.kod === komut.nedenKodu);
       if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Duruş nedeni TMI'de yok: ${komut.nedenKodu}.` };
-      is = () => kayitAniyla(db, kayitAni, (an) => emirDurdur(db, kullanici, emir.id, neden.id, an));
+      is = () => kayitAniyla(db, kayitAni, (an) => emirDurdur(db, kullanici, emir.id, neden.id, an, adimli));
       break;
     }
     case 'hurda': {
@@ -1149,7 +1165,8 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
         tur: 'hurda', adet: komut.adet, ...(neden === null ? {} : { hurdaNedeniId: neden.id }), ...(komut.refakatPartisiId === null ? {} : { refakatPartisiId: komut.refakatPartisiId }),
       });
       if (!govde.success) return { sonuc: 'reddedildi', neden: govde.error.issues[0]?.message ?? 'Sayım geçersiz.' };
-      is = () => kayitAniyla(db, kayitAni, (an) => emirSayim(db, kullanici, emir.id, govde.data, { an }));
+      // 647 a: adıma girenden fazla hurda sayımı da uyarır.
+      is = async () => { ek.uyari = uyariBirlestir(ek.uyari, (await kayitAniyla(db, kayitAni, (an) => emirSayim(db, kullanici, emir.id, govde.data, { an, isEmriId: adimli }))).uyari); };
       break;
     }
   }
@@ -1185,20 +1202,11 @@ async function emirPaketiReddi(db: Db, emirId: number, istasyonId: number, onbel
   return ((await acikEmirOku(db, onbellek, emirId))?.malzemeNo ?? null) === null ? null : ROTALI_EMIR_PAKETI;
 }
 
-// `tmi-ie` paketi: iş emri emrin sıradaki iş emri olmalı. Bitmiş adımın yeniden gelen bitirmesi ret değildir (BITMIS_BITIR gibi gizlenir).
-async function adimSirasiReddi(db: Db, emirId: number, isEmriId: number, komut: YansimaKarari['komut'], onbellek: OkumaOnbellegi): Promise<string | null> {
-  const sira = (await uretimEmriOzetiOku(db, onbellek, emirId))?.siradakiIsEmriId ?? null;
-  if (sira === null || sira === isEmriId) return null;
-  if (komut?.komut === 'bitir' && (await isEmriOzetiOku(db, onbellek, isEmriId))?.durum === 'tamam') return BITMIS_BITIR;
-  return PAKET_ADIM_SIRASI;
-}
-
-// Bekleyen adımın başlatması: adım emrin sıradaki adımı değilse ret (sıradaki adım adıyla).
-async function baslatmaSirasiReddi(db: Db, emirId: number, isEmriId: number, onbellek: OkumaOnbellegi): Promise<string | null> {
-  const sira = (await uretimEmriOzetiOku(db, onbellek, emirId))?.siradakiIsEmriId ?? null;
-  if (sira === null || sira === isEmriId) return null;
-  const siradaki = await isEmriOzetiOku(db, onbellek, sira);
-  return siradaki === null ? PAKET_ADIM_SIRASI : adimSirasiBaslatmaReddi(siradaki);
+// `tmi-ie` paketi: komut kendi adımına gider (639); sıra dışı başlatma TMI'de uyarıyla geçer (626 a). Yalnız bitmiş adımın kaydı eşlenmez;
+// bitmiş adımın yeniden gelen bitirmesi ret değildir (BITMIS_BITIR gibi gizlenir).
+async function adimSirasiReddi(db: Db, isEmriId: number, komut: YansimaKarari['komut'], onbellek: OkumaOnbellegi): Promise<string | null> {
+  if ((await isEmriOzetiOku(db, onbellek, isEmriId))?.durum !== 'tamam') return null;
+  return komut?.komut === 'bitir' ? BITMIS_BITIR : PAKET_ADIM_SIRASI;
 }
 
 // Kaydın emri: `tmi-ue` paketinde kimlikten, `tmi-ie` paketinde iş emrinden (istek başına iş emri başına bir okuma); bulunamayan iş emrinde null.
@@ -1711,8 +1719,6 @@ export async function kayitEkle(
     const parti = isEmriId === null ? null : partiKomutu(tur, satir);
     const partiRet = parti === null || isEmriId === null ? null : await partiKomutuReddi(db, isEmriId, parti);
     if (partiRet !== null) throw cakisma(partiRet);
-    const siraRet = isEmriId !== null && parti === 'baslat' && bag?.durum === 'bekliyor' ? await baslatmaSirasiReddi(db, bag.emirId, isEmriId, onbellek) : null;
-    if (siraRet !== null) throw cakisma(siraRet);
     if (sinir !== null) await sinir.reddet(kayitKonumu(satir));
     if (tur === 'events') await cizimRevizyonuKapisi(db, satir, onbellek);
     const kararBekleyen = tur === 'counts' ? await ilkParcaKapisi(db, satir, onbellek) : 0;
