@@ -56,7 +56,7 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 - Kıyas yapıldı (plan `plan-kiyas.test.ts`, uydurma veri): vardiyalı senaryoda 8 işin 8'i iki motorda aynı (168 b ile motor vardiya molasını düşer). Kalan farklar:
   (1) vardiyası tanımsız tezgâhın işi çözücüde `vardiyasiz` listesinde döner; plan bu alanı okumaz, iş eksik sayılır ve komut 409 olur;
   (2) sunucu iş merkezi haftasını ve kişi vardiyasını okumaz (takvim eki null): çalışma günleri sayfanın tek takviminden; 159 b ile ayarcı sınırı sunucuda uygulanmaz, uyarı plana gelmez.
-- Çözücü varsayımları: eski revizyonla açılmış ya da rotasız emrin farklı adımı yerleşmez; istekte geçmeyen adım "şimdi bitmiş" sayılır; motorda karşılığı olmayan
+- Çözücü varsayımları: eski revizyonla açılmış ya da rotasız emrin farklı adımı yerleşmez; istekte geçmeyen adım "şimdi bitmiş" sayılır (625o'dan beri fason adım hariç: termin günü kadar sonra döner); motorda karşılığı olmayan
   sabit iş tezgâhı o aralıkta kapatır; açık çalışmanın deneme parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez, kısıt gevşetmeleri girer.
 - Nasıl uyumlanır: plan `vardiyasiz`ı okur (168 b plan yaması), sonra bağ `bag('plan motoru -> plan', ...)` kurulur ve plan testlerinin saat beklentileri güncellenir;
   takvim eki sunucuda okunur.

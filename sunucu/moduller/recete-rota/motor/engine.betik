@@ -216,6 +216,8 @@ function predBound(o,cx,ctx){
 }
 function tFason(o,c,cx,ctx,b){
   const f=cx.FS[c.m.slice(1)];if(!f)return null;let r=b.s,why=b.why;
+  /* hemen çıkan fason (sunucu, CA-2): öncülün bitişinde çıkar, süresi kadar sonra döner */
+  if(f.hemen){const ret=r+(+f.sureGun||0)*24;return {id:o.id,job:o.job,m:c.m,fas:1,S:r,Su:r,C:ret,lot1:ret,su:0,run:ret-r,cost:null,why};}
   const lots=ctx.fas[f.id]||[];
   for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
     const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;
@@ -237,6 +239,8 @@ function tMach(o,c,cx,ctx,b,fast){
   const mx=cx.D.ayarMatrisi;
   if(lf!=null&&o.aile&&mx){const e=mx.find(x=>x.den===lf&&x.ye===o.aile);if(e)su=(+e.dk)/60;else if(famHit)su=c.su*w.famK;}
   else if(famHit)su=c.su*w.famK;
+  /* sunucu (A4 3b): önüne iş konan çalışan iş kaldığı yerden sürer, ayarı yapılmıştır */
+  if(st.ayarsiz&&st.ayarsiz[o.id])su=0;
   if(o.fai)su+=c.cyc+(+cx.A.faiSaat||0);
   const run=o.fai?Math.max(0,c.run-c.cyc):c.run;
   const lastLot=Math.min(run,c.tbRun);
@@ -318,6 +322,9 @@ function schedule(st,mode,base,opt={}){
   }
   pins.sort((a,b)=>a.S-b.S).forEach(r=>commit(cx,ctx,r));
   kilitler.forEach(r=>kilitKoy(cx,ctx,r));
+  /* sunucu (669 a): yeri sabit iş tam saatinde durur, tezgâhın boş anını ilerletmez (kilit gibi); ardılı bitişini bekler */
+  for(const id in st.sabitYer||{}){const a=st.sabitYer[id];if(ctx.P[id]||!cx.byId[id]||!cx.M[a.m])continue;
+    kilitKoy(cx,ctx,{id,job:cx.byId[id].job,m:a.m,S:a.S,Su:a.S,C:a.C,lot1:a.C,su:0,run:a.C-a.S,pin:1,kilit:1,why:{t:'sabit'}});}
   const U=new Set(cx.ops.filter(o=>!ctx.P[o.id]&&o.c.length).map(o=>o.id));
   const ready=o=>o.pr.every(([p])=>ctx.P[p]);
   if((mode==='sabit'||mode==='sabit-mc')&&base){
@@ -643,7 +650,7 @@ function lbHeadsTails(st,cx){
   return {head,tail,pmin,fin};
 }
 // fason kapasitesi yok sayılır, çıkış günü ve saati sayılır: gerçek dönüş bundan erken olamaz
-function fasonEarliest(cx,f,r){if(!isFinite(r))return Infinity;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
+function fasonEarliest(cx,f,r){if(!isFinite(r))return Infinity;if(f.hemen)return r+(+f.sureGun||0)*24;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
   const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;return ex+(+f.sureGun||1)*24;}return Infinity;}
 
 /* ---- değişiklik bütçesine indirme: sipariş sipariş başvuru planına geri dönülür ---- */

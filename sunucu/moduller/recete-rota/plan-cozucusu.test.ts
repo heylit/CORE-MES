@@ -173,6 +173,51 @@ describe('sunucu plan çözücüsü', () => {
     assert.deepEqual([r.yerlesimler, r.yerlesmeyen, r.vardiyasiz], [[], [], ['E-1|10']]);
   });
 
+  // 669 a, 671 a: Motor A'nın kuralları ortak motorda (her biri recete-rota/FARK.md'de).
+  test('CA-2: fason adım kuyruğa girmez; sonraki iç adım öncülünün bitişinden termin günü kadar sonra başlar, termin yoksa 7 gün', async () => {
+    const fason = (terminGun: number | null) => ({ ...adim(20, 0), stationId: null, fasonId: '9', terminGun, setup: 0, proc: 0, cycle: 0 });
+    const k = (terminGun: number | null) => ({ ...KAYNAK, kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum,
+      routes: { 50: { base: null, steps: [adim(10, 30), fason(terminGun), adim(30, 15)] } } } } });
+    const i = istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|30'] }] });
+    const r = await coz(k(2), i);
+    assert.equal(yer(r, 'E-1|20'), undefined, 'fason adım yerleşim değildir');
+    assert.equal(yer(r, 'E-1|10')!.bitis, '2026-10-19T06:00:00.000Z');
+    assert.equal(yer(r, 'E-1|30')!.baslangic, '2026-10-21T06:00:00.000Z', 'iki gün sonra, vardiya içinde');
+    assert.equal(yer(await coz(k(null), i), 'E-1|30')!.baslangic, '2026-10-26T06:00:00.000Z', 'termin yoksa yedi gün');
+  });
+
+  test('yeri sabit iş tezgâhın boş anını ilerletmez: önüne sığan kuyruk işi önce yapılır, ardılı sabit işin saniyeli bitişini bekler', async () => {
+    const r = await coz(KAYNAK, istek({
+      kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }, { makineId: 101, anahtarlar: ['E-2|20'] }],
+      sabitler: [{ anahtar: 'E-2|10', makineId: 100, baslangic: '2026-10-19T07:00:00.000Z', bitis: '2026-10-19T08:00:30.000Z' }],
+    }));
+    assert.equal(yer(r, 'E-1|10')!.baslangic, '2026-10-19T05:00:00.000Z', 'sabit işin önündeki boşlukta');
+    assert.ok(Date.parse(yer(r, 'E-2|20')!.baslangic) >= Date.parse('2026-10-19T08:00:30.000Z'), 'sabit öncülün bitişinden önce başlamaz');
+  });
+
+  test('elle seçilen rota dışı makine tutulur; süre rotadaki tezgâhınkidir', async () => {
+    const k = { ...KAYNAK, kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum,
+      stations: [...KAYNAK.kaynak.durum.stations, { id: '20', code: 'FRZ', name: 'Freze', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }],
+      machines: [...KAYNAK.kaynak.durum.machines, { id: '200', code: 'F1', name: 'Freze 1', stationId: '20', status: 'aktif', aktif: true }] } } };
+    const r = await coz(k, istek({ kuyruklar: [{ makineId: 200, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual(r.yerlesmeyen, []);
+    assert.deepEqual([yer(r, 'E-1|10')!.makineId, yer(r, 'E-1|10')!.baslangic, yer(r, 'E-1|10')!.bitis], [200, '2026-10-19T05:00:00.000Z', '2026-10-19T06:00:00.000Z']);
+  });
+
+  test('A4 3b: kuyruğa konan çalışan iş öndeki işten sonra kalan adediyle, ayarsız sürer', async () => {
+    const ayarli = { ...adim(10, 30), setup: 20 };
+    const k = { ...KAYNAK, kaynak: { ...KAYNAK.kaynak, durum: { ...KAYNAK.kaynak.durum, routes: { 50: { base: null, steps: [ayarli, adim(20, 15)] } },
+      calisanAdimlar: [{ anahtar: 'E-1|10', makineId: '100', baslangic: '2026-10-19T04:30:00.000Z', sayimAni: '2026-10-19T05:00:00.000Z', kalanVerimliDk: 30, saglam: 1, adet: 2 }] } } };
+    const r = await coz(k, istek({
+      kuyruklar: [{ makineId: 100, anahtarlar: ['E-2|10', 'E-1|10'] }],
+      calisanlar: [{ anahtar: 'E-1|10', makineId: 100, baslangic: '2026-10-19T04:30:00.000Z', sayimAni: '2026-10-19T05:00:00.000Z', kalanDk: 30, kalanVerimliDk: 30 }],
+    }));
+    const e2 = yer(r, 'E-2|10')!, e1 = yer(r, 'E-1|10')!;
+    assert.equal(e2.baslangic, '2026-10-19T05:00:00.000Z');
+    assert.equal(e1.baslangic, e2.bitis, 'öndeki işten sonra');
+    assert.equal(Date.parse(e1.bitis) - Date.parse(e1.baslangic), 30 * 60_000, 'kalan bir adet, ayarsız');
+  });
+
   test('çalışma yoksa komut reddedilir', async () => {
     await assert.rejects(coz({ ...KAYNAK, calisma: null }, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] })), /çalışma kaydı/);
   });
