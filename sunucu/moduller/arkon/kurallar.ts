@@ -595,6 +595,20 @@ export function kayitReddi(tur: ArkonKayitTuru, satir: Readonly<Record<string, u
   return satir['src'] === 'auto' ? 'makineKaynagi' : null;
 }
 
+// Arkon dosyası türsüz saklanır (özetle anılır). Tür ilk baytlardan bulunur: cevap türü ağdaki sıkıştırmayı seçer (PDF ve resim
+// zaten sıkışıktır); tanınmayan içerik (IGES, STL, hazır 3B ağı) türsüz kalır. Tarayıcı türü yorumlamaz: cevap nosniff ve sandbox'tır.
+export const DOSYA_IMZA_BAYTI = 16;
+export function dosyaTuruBul(ilk: Uint8Array): string {
+  const metin = Buffer.from(ilk.subarray(0, DOSYA_IMZA_BAYTI)).toString('latin1');
+  if (metin.startsWith('%PDF-')) return 'application/pdf';
+  if (metin.startsWith('\x89PNG\r\n\x1a\n')) return 'image/png';
+  if (metin.startsWith('\xff\xd8\xff')) return 'image/jpeg';
+  if (metin.startsWith('RIFF') && metin.slice(8, 12) === 'WEBP') return 'image/webp';
+  if (metin.startsWith('glTF')) return 'model/gltf-binary';
+  if (metin.startsWith('ISO-10303-21')) return 'model/step';
+  return 'application/octet-stream';
+}
+
 // Dosya kotası (kullanıcı kararı): tek dosya 200 MB (sözleşme AZAMI_DOSYA), kişi başına 5 açık yükleme, depo toplamı (tamamlanan dosyalar +
 // açık parçalar) 50 GB. Açık parça bayt sınırı kişi başına 1 GiB VARSAYIMDIR.
 export const DOSYA_KOTASI = { kisiAcikYukleme: 5, kisiAcikBayt: 1024 ** 3, depoBayt: 50 * 1024 ** 3 } as const;
