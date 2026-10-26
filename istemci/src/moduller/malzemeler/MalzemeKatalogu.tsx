@@ -4,7 +4,7 @@ import { DurumKutusu, YalitilmisCerceve, yalitimOnBetigi } from '../../ortak/ara
 import { ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useTema } from '../../ortak/veri/tema.ts';
-import { adrestekiGorunum, disSayfaYolu, malzemeEtiketiYolu, type KatalogGorunumu } from './gorunumler.ts';
+import { ESKI_KOK, adrestekiGorunum, disSayfaYolu, malzemeEtiketiYolu, type KatalogGorunumu } from './gorunumler.ts';
 import { BIRIM_DONUSUMU_EKI } from './birim-donusumu-eki.ts';
 import { ETIKET_MERKEZI_EKI } from './etiket-merkezi-eki.ts';
 import { kopruKur } from './kopru.ts';
@@ -90,7 +90,7 @@ export function MalzemeKatalogu() {
   const gezin = useNavigate();
   const gorunum = adrestekiGorunum(pathname);
   useEffect(() => {
-    if (gorunum === null) void gezin('/malzemeler', { replace: true });
+    if (gorunum === null) void gezin(ESKI_KOK, { replace: true });
   }, [gorunum, gezin]);
   return <KatalogCercevesi gorunum={gorunum ?? 'cat'} sinif="tc-malzeme-cerceve" />;
 }

@@ -5,7 +5,7 @@ import { SYS_TPL } from '../sabitler/index.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const ADRES = '/malzemeler/yeni-ekran/sablonlar';
+const ADRES = '/malzemeler/sablonlar';
 const hazir = SYS_TPL as { id: string; ad: string }[];
 const kayitli = (kaldirabilir: string[]) => ({
   'GET /malzeme-katalogu-sablonlari': () => json(200, {
@@ -61,7 +61,7 @@ describe('M4 Şablonlar', () => {
     sunucuKur(YONETICI, kayitli([]));
     yeniEkranAc(ADRES);
     fireEvent.click(await screen.findByRole('button', { name: /^Benim/ }));
-    expect((await screen.findByRole('tab', { name: 'Yeni kart' })).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler/yeni'); });
   });
 
   test('sil onaylanınca kaldır ucu çağrılır, bildirim çıkar, liste yenilenir; vazgeçince istek gitmez', async () => {

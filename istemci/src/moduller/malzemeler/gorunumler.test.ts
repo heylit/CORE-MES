@@ -20,6 +20,14 @@ describe('malzemeler ikinci menü', () => {
     expect(adrestekiGorunum('/malzemeler/yeni/fazla')).toBeNull();
   });
 
+  it('eski çerçevenin adresi (572): görünüm menü yolunun eski kök altındaki aynı alt yoludur', () => {
+    expect(adrestekiGorunum('/malzemeler/eski')).toBe('cat');
+    expect(adrestekiGorunum('/malzemeler/eski/sablonlar')).toBe('tpl');
+    expect(adrestekiGorunum('/malzemeler/eski/yeni')).toBe('new');
+    expect(adrestekiGorunum('/malzemeler/eskiler')).toBeNull();
+    expect(adrestekiGorunum('/malzemeler/eski/bilinmeyen')).toBeNull();
+  });
+
   it('operasyonlar görünümü yok (kart #544); dış sayfa yalnız bilinen anahtarla, istasyonların operasyon tiplerine', () => {
     expect(adrestekiGorunum('/malzemeler/operasyonlar')).toBeNull();
     expect(disSayfaYolu('operasyon-tipleri')).toBe('/istasyonlar/operasyon-tipleri');

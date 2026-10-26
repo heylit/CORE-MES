@@ -10,7 +10,6 @@ export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
 const YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
   { kok: '/recete-rota', yol: '/recete-rota/planlama-yeni', baslik: 'Planlama' },
-  { kok: '/malzemeler', yol: '/malzemeler/yeni-ekran' },
   { kok: '/kalite-merkezi', yol: '/kalite-merkezi/yeni' },
   { kok: '/finans', yol: '/finans/yeni' },
   { kok: '/ik', yol: '/ik/yeni' },
@@ -27,7 +26,7 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // kişi menüsündeki "Eski görünüm" ile açılır. Görünürlük sayfanın kendi işlemidir; `eski` sayfanın alt yolu olduğu için aynı işlemle açılır.
 // Alt yol eski adreste aynı alt yoldur (`/arkon/kalite` -> `/arkon/eski/kalite`).
 // tam: yalnız bu adres (alt yolu değil); Reçete ve Rota'nın kök adresinin altında eski kalan Planlama sayfaları ve bölümlerin eski adresi vardır.
-// haric: kökün altında olup eskisi olmayan TMI ekranı.
+// haric: kökün altında olup eskisi olmayan TMI ekranı (TMI'ye yazılamayanlar, Logo gönderimi).
 // serit: kabuğun ikinci menü şeridi yeni ekranda da durur, yeni ekran kendi sekmesini çizmez (553 1 a); yoksa aynı menüdeki eski sayfalara
 // (Reçete ve Rota'dan Planlama'ya) yol kalmaz. Tek maddelik menü de eski sayfadaki gibi şerit çizer (Kuyruk, Üretim Terminali).
 interface TasinanEkran { yol: `/${string}`; eski: `/${string}`; tam?: true; serit?: true; haric?: readonly string[] }
@@ -35,6 +34,7 @@ export const TASINAN_EKRANLAR: readonly TasinanEkran[] = [
   { yol: '/kuyruk', eski: '/kuyruk/eski', serit: true },
   { yol: '/uretim-terminali', eski: '/uretim-terminali/eski', serit: true },
   { yol: '/arkon', eski: '/arkon/eski', serit: true, haric: ['/arkon/tmi-yansimalari'] },
+  { yol: '/malzemeler', eski: '/malzemeler/eski', serit: true, haric: ['/malzemeler/logo'] },
   ...(['', '/stock', '/schema', '/ops', '/sureler', '/items', '/res'] as const).map((b): TasinanEkran => ({
     yol: `/recete-rota${b}`, eski: `/recete-rota/eski${b}`, tam: true, serit: true,
   })),

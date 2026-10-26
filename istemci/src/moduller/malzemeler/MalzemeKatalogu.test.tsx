@@ -30,11 +30,11 @@ function Gezinen() {
 function OperasyonTipleriYeri() { return <p>Operasyon tipleri sayfası</p>; }
 function EtiketMerkeziYeri() { return <p>Etiket Merkezi {useLocation().search}</p>; }
 
-async function cerceveyiAc(yollar: Parameters<typeof sunucuKur>[1] = {}, yaziDurumu = 200, adres = '/malzemeler', kullanici: Kullanici = ACAN) {
+async function cerceveyiAc(yollar: Parameters<typeof sunucuKur>[1] = {}, yaziDurumu = 200, adres = '/malzemeler/eski', kullanici: Kullanici = ACAN) {
   const istekler = sunucuKur(kullanici, yollar);
   yaziTipleriniSun(yaziDurumu);
   ac([
-    { yol: '/malzemeler', ekran: Gezinen }, { yol: '/malzemeler/:bolum', ekran: Gezinen }, { yol: '/istasyonlar/operasyon-tipleri', ekran: OperasyonTipleriYeri },
+    { yol: '/malzemeler/eski', ekran: Gezinen }, { yol: '/malzemeler/eski/:bolum', ekran: Gezinen }, { yol: '/istasyonlar/operasyon-tipleri', ekran: OperasyonTipleriYeri },
     { yol: '/etiket-merkezi', ekran: EtiketMerkeziYeri },
   ], adres);
   const cerceve = await screen.findByTitle('Malzeme Kataloğu', {}, { timeout: 5000 }) as HTMLIFrameElement;
@@ -138,17 +138,17 @@ describe('MalzemeKatalogu', () => {
   const AYARLAR = { surumler: { malzeme: null, operasyonlar: null, genel: null }, malzeme: null, operasyonlar: null, operasyonTipleri: [], genel: null, dortGoz: true, rol: 'yazar', ayarYazabilir: false };
 
   it('ikinci menu: adresin gorunumu hazir cevabiyla acilir; adres degisince cerceve yeniden yuklenmeden gorunum olayi yalniz cerceveye gider', async () => {
-    const { cerceve, pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/sablonlar');
+    const { cerceve, pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/eski/sablonlar');
     const sayfa = cerceve.getAttribute('srcdoc');
     expect(sayfa).toContain(SERIT_GIZLE);
     ilet(istek(1, 'hazir', {}), pencere);
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(1); });
     expect(gonderilen.mock.calls[0]![0]).toMatchObject({ id: 1, ok: true, veri: { gorunum: 'tpl', saltOkunur: false } });
 
-    act(() => { void gez('/malzemeler/ayarlar'); });
+    act(() => { void gez('/malzemeler/eski/ayarlar'); });
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(2); });
     expect(gonderilen.mock.calls[1]).toEqual([{ kanal: 'hammadde', yon: 'olay', tip: 'gorunum', veri: 'mayar' }, '*']);
-    act(() => { void gez('/malzemeler'); });
+    act(() => { void gez('/malzemeler/eski'); });
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(3); });
     expect(gonderilen.mock.calls[2]![0]).toMatchObject({ tip: 'gorunum', veri: 'cat' });
     expect(screen.getByTitle('Malzeme Kataloğu')).toBe(cerceve);
@@ -156,27 +156,27 @@ describe('MalzemeKatalogu', () => {
   });
 
   it('ikinci menu: tanimsiz alt adres koke (katalog) doner; gorunum olayi cerceve hazir olmadan gonderilmez', async () => {
-    const { pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/bilinmeyen');
-    act(() => { void gez('/malzemeler/kilavuz'); });
+    const { pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/eski/bilinmeyen');
+    act(() => { void gez('/malzemeler/eski/kilavuz'); });
     expect(gonderilen).not.toHaveBeenCalled();
-    act(() => { void gez('/malzemeler/bilinmeyen'); });
+    act(() => { void gez('/malzemeler/eski/bilinmeyen'); });
     ilet(istek(1, 'hazir', {}), pencere);
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(1); });
     expect(gonderilen.mock.calls[0]![0]).toMatchObject({ id: 1, ok: true, veri: { gorunum: 'cat' } });
   });
 
   it('operasyonlar istasyonlarda (kart #544): eski adres koke doner; cercevenin bilinen bagla isteği kabugu operasyon tiplerine goturur, bilinmeyen anahtar reddedilir', async () => {
-    const { pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/operasyonlar');
+    const { pencere, gonderilen } = await cerceveyiAc({ 'GET /malzeme-katalogu-ayarlari': () => json(200, AYARLAR) }, 200, '/malzemeler/eski/operasyonlar');
     ilet(istek(1, 'hazir', {}), pencere);
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(1); });
     expect(gonderilen.mock.calls[0]![0]).toMatchObject({ id: 1, ok: true, veri: { gorunum: 'cat', operasyonlar: [], operasyonKaynagi: 'İstasyonlar > Operasyon tipleri' } });
     // Çerçeve açıkken de: eski adres görünüm olayı "op" değil, kökün "cat" olayıdır.
-    act(() => { void gez('/malzemeler/sablonlar'); });
+    act(() => { void gez('/malzemeler/eski/sablonlar'); });
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(2); });
-    act(() => { void gez('/malzemeler/operasyonlar'); });
+    act(() => { void gez('/malzemeler/eski/operasyonlar'); });
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(3); });
     expect(gonderilen.mock.calls[2]).toEqual([{ kanal: 'hammadde', yon: 'olay', tip: 'gorunum', veri: 'cat' }, '*']);
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler/eski'); });
 
     ilet(istek(2, 'git', '/yonetim'), pencere);
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(4); });
@@ -199,7 +199,7 @@ describe('MalzemeKatalogu', () => {
     expect(yetkisiz.gonderilen.mock.calls[1]).toEqual([{ kanal: 'hammadde', yon: 'yanit', id: 2, ok: false, hata: 'Sayfa bulunamadı.' }, '*']);
     cleanup();
 
-    const { pencere, gonderilen } = await cerceveyiAc(yollar, 200, '/malzemeler', { ...ACAN, islemler: [...ACAN.islemler, 'sayfa.etiket-merkezi'] });
+    const { pencere, gonderilen } = await cerceveyiAc(yollar, 200, '/malzemeler/eski', { ...ACAN, islemler: [...ACAN.islemler, 'sayfa.etiket-merkezi'] });
     ilet(istek(1, 'hazir', {}), pencere);
     await waitFor(() => { expect(gonderilen).toHaveBeenCalledTimes(1); });
     expect(gonderilen.mock.calls[0]![0]).toMatchObject({ veri: { etiketMerkezi: true } });

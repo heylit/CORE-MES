@@ -8,7 +8,7 @@ import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, type Yanit } fro
 beforeEach(() => { localStorage.clear(); window.scrollTo = vi.fn(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
-const ac = (sorgu = '') => yeniEkranAc(`/malzemeler/yeni-ekran/kart${sorgu}`);
+const ac = (sorgu = '') => yeniEkranAc(`/malzemeler/yeni${sorgu}`);
 
 // Uydurma kartlar: örnek listenin üstüne, testin istediği kart eklenir.
 function kartlarYaniti(...ek: { kimlik: string; kayit: Record<string, unknown> }[]): Yanit {

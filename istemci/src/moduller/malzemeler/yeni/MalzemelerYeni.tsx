@@ -1,23 +1,18 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { DurumKutusu, Sekmeler } from '../../../ortak/arayuz/index.ts';
-import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
 import { DIS_SAYFALAR, malzemeEtiketiYolu } from '../gorunumler.ts';
 import { GenelAyarPenceresi } from './ayarlar/index.tsx';
-import { BOLUMLER, YENI_KOK, adrestekiBolum, bolumYolu, type Bolum, type Gezinti } from './sekmeler.ts';
+import { BOLUMLER, YENI_KOK, adrestekiBolum, bolumYolu, type Gezinti } from './sekmeler.ts';
 import { useBirimSistemi } from './tercihler.ts';
 import { useKatalogOrtami } from './veri.ts';
 import { useMalzemeYetkisi } from './yetki.ts';
 import './malzemeler-yeni.css';
 
-// TS geçişi (199 b): Malzeme Kataloğu'nun doğal ekranı, eski çerçevenin yanında ikinci yolda ve yalnız yöneticide.
-// İç gezinme sekmelerledir; ikinci menü alıma kadar eski ekranı açar.
+// Malzeme Kataloğu'nun doğal ekranı, menünün adresinde (572, 527 1 a): sayfayı gören herkes açar. Bölümler arası geçiş kabuğun ikinci
+// menü şeridindedir; ekran kendi sekme şeridini çizmez (553 1 a).
 export function MalzemelerYeni() {
-  return (
-    <YeniEkranKapisi>
-      <Icerik />
-    </YeniEkranKapisi>
-  );
+  return <Icerik />;
 }
 
 function useGezinti(): Gezinti {
@@ -53,18 +48,13 @@ function Icerik() {
 
   if (ortam.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (ortam.isError) return <DurumKutusu durum="hata" mesaj="Malzeme ayarları okunamadı." yenile={() => void ortam.refetch()} />;
-  if (bolum === null) return <DurumKutusu durum="bos" mesaj="Bu bölüm yok." />;
+  // Tanımsız alt adres köke döner (eski çerçevedeki gibi).
+  if (bolum === null) return <Navigate replace to={YENI_KOK} />;
 
   const gorunen = BOLUMLER.filter((b) => b.gorur(yetki));
   const tanim = gorunen.find((b) => b.anahtar === bolum);
   return (
     <div className="tc-myeni">
-      <Sekmeler<Bolum>
-        etiket="Malzemeler ve Hizmetler"
-        sekmeler={gorunen.map((b) => ({ anahtar: b.anahtar, baslik: b.baslik, simge: b.simge }))}
-        secili={bolum}
-        sec={(b) => { void yonlendir(bolumYolu(b)); }}
-      />
       <UstBas qrAc={() => { void yonlendir(`${YENI_KOK}?qr=1`); }} ayarAc={() => ayarAcikYaz(true)} />
       <div className="tc-myeni-govde">
         {tanim ? <tanim.ekran ortam={ortam.data} yetki={yetki} git={git} /> : <DurumKutusu durum="bos" mesaj="Bu bölümü görme yetkin yok." />}

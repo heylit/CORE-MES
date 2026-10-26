@@ -1,15 +1,13 @@
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
-import { LogoGonderimi } from './LogoGonderimi.tsx';
+import { ESKI_KOK } from './gorunumler.ts';
 import { MalzemeKatalogu } from './MalzemeKatalogu.tsx';
 import { MalzemelerYeni } from './yeni/MalzemelerYeni.tsx';
 
-// Prototipin görünümleri tek sayfadır: menü maddeleri aynı çerçeveye gelir, görünümü adres seçer; çerçeve yeniden yüklenmez.
-// Logo gönderimi prototipte yoktur, kendi sayfasıdır (kart #232).
+// Yeni ekran menünün adresindedir (572, 527 1 a); Logo gönderimi onun bölümüdür (kart #232, 497/6 a). Prototipin çerçevesi bir süre
+// `/malzemeler/eski` altında kalır, kişi menüsündeki "Eski görünüm" açar; görünümleri tek sayfadır, çerçeve yeniden yüklenmez.
 export const rotalar: ModulRotasi[] = [
-  { yol: '/malzemeler', ekran: MalzemeKatalogu },
-  { yol: '/malzemeler/logo', ekran: LogoGonderimi },
-  { yol: '/malzemeler/:bolum', ekran: MalzemeKatalogu },
-  // TS geçişi (199 b): doğal ekran ikinci yolda, yalnız yöneticide; `/malzemeler/yeni` Yeni kart maddesinin yolu olduğu için ayrı ad.
-  { yol: '/malzemeler/yeni-ekran', ekran: MalzemelerYeni },
-  { yol: '/malzemeler/yeni-ekran/:bolum', ekran: MalzemelerYeni },
+  { yol: '/malzemeler', ekran: MalzemelerYeni },
+  { yol: ESKI_KOK, ekran: MalzemeKatalogu },
+  { yol: `${ESKI_KOK}/:bolum`, ekran: MalzemeKatalogu },
+  { yol: '/malzemeler/:bolum', ekran: MalzemelerYeni },
 ];

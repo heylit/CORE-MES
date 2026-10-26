@@ -6,7 +6,7 @@ import { expect, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 const YENI_EKRANLAR = [
-  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/recete-rota/planlama-yeni', '/malzemeler/yeni-ekran', '/kalite-merkezi/yeni',
+  '/arkon/pano', '/arkon/raporlar', '/recete-rota', '/recete-rota/planlama-yeni', '/malzemeler', '/kalite-merkezi/yeni',
   '/kalite-merkezi/yeni/muayeneler', '/finans/yeni', '/ik/yeni/personel', '/mesaj/yeni', '/portal/yeni', '/denetim-hazirlik/yeni', '/cnc-kurulum/yeni',
 ];
 
@@ -44,7 +44,7 @@ test('yeni ekranın alanın altına taşan içeriği kaydırılarak ulaşılır'
 });
 
 test('uzun katalogda tekerlek yeni ekranı kaydırır', async ({ page, ac }) => {
-  await ac('/malzemeler/yeni-ekran');
+  await ac('/malzemeler');
   await yuklenmeyiBekle(page);
   const alan = page.locator('main.tc-kabuk-icerik');
   await expect(alan.getByRole('table').first()).toBeVisible();
@@ -56,7 +56,7 @@ test('uzun katalogda tekerlek yeni ekranı kaydırır', async ({ page, ac }) => 
 });
 
 test('eski çerçeveli sayfada içerik alanı taşmaz, kaydırma çerçevededir', async ({ page, ac }) => {
-  for (const yol of ['/malzemeler', '/recete-rota/eski', '/ik']) {
+  for (const yol of ['/malzemeler/eski', '/recete-rota/eski', '/ik']) {
     await ac(yol);
     await expect(page.locator('main.tc-kabuk-icerik iframe').first()).toBeVisible();
     const fark = await page.locator('main.tc-kabuk-icerik').evaluate((e) => e.scrollHeight - e.clientHeight);

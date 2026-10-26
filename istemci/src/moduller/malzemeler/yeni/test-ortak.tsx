@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
@@ -12,7 +12,6 @@ import { ORNEK_AYAR, ORNEK_KARTLAR, ORNEK_SABLONLAR } from './ornek-veri.ts';
 import { kartOnbelleginiBosalt } from './veri.ts';
 
 const MALZEME: Islem[] = ['sayfa.malzemeler', 'malzemeler.yaz', 'malzemeler.onayla', 'malzemeler.tanim-yaz'];
-// Yeni ekran alıma kadar yalnız kapı işlemi olanda açılır (O1).
 export const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: [YENI_EKRAN_ISLEMI, ...MALZEME, 'satin-alma.oku', 'sayfa.etiket-merkezi'] };
 export const YAZAN: Kullanici = { id: 7, ad: 'Deneme Yazan', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler', 'malzemeler.yaz'] };
 export const OKUYAN: Kullanici = { id: 9, ad: 'Deneme Okuyan', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler'] };
@@ -50,12 +49,15 @@ export function yeniIstemci(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 }
 
-// Modülün gerçek rota listesiyle açar: yeni ekranın yolu eski ekranın `/malzemeler/:bolum` yoluna düşmemeli.
+function Adres() { return <p data-testid="adres">{useLocation().pathname}</p>; }
+
+// Modülün gerçek rota listesiyle açar: eski çerçevenin `/malzemeler/eski` yolu yeni ekranın `/malzemeler/:bolum` yoluna düşmemeli.
 export function yeniEkranAc(adres: string, istemci = yeniIstemci()) {
   render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
+          <Adres />
           <Routes>
             {rotalar.map((e) => <Route key={e.yol} path={e.yol} element={<e.ekran />} />)}
             <Route path="*" element={<p>Başka sayfa</p>} />
