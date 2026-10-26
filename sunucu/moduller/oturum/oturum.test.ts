@@ -401,8 +401,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.vardiya_sorumlusu?.push('saat.oku');
   MATRIS.bakim?.push('saat.oku');
   // Ortak yetki matrisi (195 a, 23.10.2026; 353 a ve 65 a ile çelişme onaylı). Sayım düzeltmesi müdüre verilmez (185 a).
-  MATRIS.mudur?.push('recete-rota.planlama-oku');
-  MATRIS.planlama_proje?.push('recete-rota.planlama-oku');
+  MATRIS.mudur?.push('plan.planlama-oku', 'sayfa.plan');
+  MATRIS.planlama_proje?.push('plan.planlama-oku', 'sayfa.plan');
   MATRIS.kalite?.push('musteri-tedarikci.oku');
   // Sipariş listesindeki firma seçicisi (201 a, 23.10.2026).
   MATRIS.sevkiyat?.push('musteri-tedarikci.oku');

@@ -127,7 +127,7 @@ describe('satin-alma tedarik termini (533 a, gerçek PostgreSQL)', () => {
   test('534 1 a: termin ucu satın almayı yazana ve planı yazana açık; satın almayı ya da planı yalnız okuyan ve ilgisiz kişi 403; liste okuyana açık', async () => {
     const satinAlmaci = await kisiKur('termin_sa', ['satin-alma.yaz']);
     const planlamaci = await kisiKur('termin_plan', ['plan.yaz', 'plan.oku']);
-    const okuyucu = await kisiKur('termin_oku', ['satin-alma.oku', 'plan.oku', 'recete-rota.planlama-oku']);
+    const okuyucu = await kisiKur('termin_oku', ['satin-alma.oku', 'plan.oku', 'plan.planlama-oku']);
     const ilgisiz = await kisiKur('termin_yok', ['stok.oku']);
     const sonSurum = async (no: number) => (await vt().tx((db) => tedarikTerminleri(db, [no]))).get(no)?.surum ?? null;
     const kaydet = (cerez: string, no: number, termin: string | null, surum: number | null) =>
