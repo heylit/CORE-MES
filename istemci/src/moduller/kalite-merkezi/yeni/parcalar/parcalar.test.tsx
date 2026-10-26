@@ -47,18 +47,33 @@ describe('Parçalar listesi', () => {
     expect(screen.queryByRole('button', { name: /diğer işlemler/ })).toBeNull();
   });
 
-  it('parça ekleme formu parça numarasından türeyen kimlikle yazar ve parçayı açar', async () => {
-    const s = ac(MUAYENECI);
+  it('parça ekleme Malzemeler kartı ister; numara kartın stok kodu, kartta yalnız malzeme kimliği ve kalite alanları (592 B2 a)', async () => {
+    const s = kmAc('parcalar', MUAYENECI, KAYITLAR, { parcalar: [{ malzemeNo: 41, kod: 'DNM-03', ad: 'Deneme burcu', aktif: true }] });
     await satir(/DNM-01/);
     fireEvent.click(screen.getByRole('button', { name: /diğer işlemler/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Parça ekle' }));
     const pencere = await screen.findByRole('dialog', { name: 'Parça ekle' });
-    fireEvent.change(within(pencere).getByLabelText(/Parça no/), { target: { value: 'dnm-03' } });
+    expect(within(pencere).queryByLabelText(/Parça no/)).toBeNull();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect((await screen.findAllByText('Malzeme kartı seçin.')).length).toBeGreaterThan(0);
+    expect(kayitYazmalari(s.yazmalar, 'parca')).toHaveLength(0);
+    fireEvent.click(within(pencere).getByRole('button', { name: /Kart seç/ }));
+    const secici = await screen.findByRole('dialog', { name: 'Malzeme kartı seç' });
+    fireEvent.change(within(secici).getByLabelText('Kart ara'), { target: { value: 'burc' } });
+    fireEvent.click(await within(secici).findByText('DNM-03'));
+    expect(await within(pencere).findByText('Deneme burcu')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(kayitYazmalari(s.yazmalar, 'parca')).toHaveLength(1); });
     const y = kayitYazmalari(s.yazmalar, 'parca')[0];
     expect(y?.yol).toContain('/kayitlar/parca/p-DNM-03/');
-    expect(y?.govde).toMatchObject({ govde: { parcaNo: 'dnm-03' } });
+    expect(y?.govde).toMatchObject({ govde: { parcaNo: 'DNM-03', malzemeNo: 41 } });
+    expect((y?.govde as { govde: Record<string, unknown> }).govde.ad).toBeUndefined();
+  });
+
+  it('kartı Malzemeler\'e bağlı parçanın adı oradan gelir', async () => {
+    const kayitlar = { ...KAYITLAR, parca: [{ _id: parcaKimligi('DNM-01'), parcaNo: 'DNM-01', malzemeNo: 40, ad: 'Eski ad' }] };
+    kmAc('parcalar', MUAYENECI, kayitlar, { parcalar: [{ malzemeNo: 40, kod: 'DNM-01', ad: 'Kart adı', aktif: true }] });
+    expect(await satir(/DNM-01 Kart adı/)).toBeTruthy();
   });
 });
 

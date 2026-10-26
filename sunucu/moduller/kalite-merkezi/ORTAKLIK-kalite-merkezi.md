@@ -7,8 +7,8 @@ Aşağıdaki kavramlar başka modülde de vardır; Aşama 1'de bağlanmaz.
 |---|---|---|
 | Ölçüm cihazı, kalibrasyon kaydı | `dev`: kod, ad, tip, seri no, lokasyon, son/sonraki kalibrasyon, izlenebilirlik | `kalibrasyon` (olcu_aleti, olcu_aleti_turu) |
 | Tedarikçi | `sup`: ad, kod, `firmaId` (236 a), onay, sertifikalar, PPM | firma: `musteri-tedarikci` (`musteri_tedarikci_firma`, kayıt `firmaId` ile bağlanır); onay durumu: kalite-merkezi (236 a, tek sahip; satın alma `disari.ts` `tedarikciOnayDurumlari` ile okur) |
-| Parça | `parca` ve kayıtlardaki parça no, revizyon | `malzemeler` |
-| İş emri / sipariş | `emir`: no, parça no (ERP CSV aktarımı) | `uretim-emirleri`; ERP: `logo` |
+| Parça | `parca`: parça no (bağ anahtarı), `malzemeNo`, sınıf, not; kayıtlardaki parça no, revizyon | `malzemeler` (592 B2 a: numara ve ad karttan, `/kalite-merkezi/parca-kaynaklari`; eski kartta ad, malzeme, tedarikçi durur, yeni kartta yazılmaz) |
+| İş emri / sipariş | tutulmaz (592 B1 c); eski `emir` kayıtları salt okunur durur. Lot, muayene, NCR "İş emri / sipariş" alanında numara, belge bağında kaynak kimliği (`ue-`, `sa-`, `ms-`) | `uretim-emirleri` (iş emri), `satin-alma` (sipariş satırı), `siparisler` (müşteri siparişi); `/kalite-merkezi/emir-kaynaklari` |
 | Kişi, rol, PIN | `kullanici` (Muayeneci, Kalite mühendisi, Kalite yöneticisi) | `kisiler`, `oturum` |
 | Değişiklik izi | `iz` (yalnız eklenir) | `denetim` |
 | Belge, sertifika, fotoğraf | `belge`; dosyalar ortak depoda | `dosya` (bağ: modül `kalite-merkezi`) |

@@ -2,6 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import type { Uc } from '#cekirdek/uc.ts';
 import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
+  kmEmirKaynaklariCevabi, kmEslesmeSayimiCevabi, kmParcaKaynaklariCevabi, kmParcaKaynaklariSorgusu,
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
@@ -78,6 +79,31 @@ export const uclar: Uc[] = [
     yetki: 'kalite-merkezi.onayla',
     cevap: kmTedarikciFirmalariCevabi,
     isle: async ({ db }) => ({ firmalar: await servis.tedarikciFirmaSecenekleri(db) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/emir-kaynaklari',
+    // 592 B1 c: iş emri ve siparişler sahiplerinden okunur; kaydı gören herkes görür (eski kendi listesi gibi).
+    yetki: 'kalite-merkezi.oku',
+    cevap: kmEmirKaynaklariCevabi,
+    isle: ({ db }) => servis.emirKaynaklari(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/parca-kaynaklari',
+    // 592 B2 a: parça numarası ve adı Malzemeler'den; kartın kalite alanlarını yazmayan da adı görür.
+    yetki: 'kalite-merkezi.oku',
+    sorgu: kmParcaKaynaklariSorgusu,
+    cevap: kmParcaKaynaklariCevabi,
+    isle: ({ db, sorgu }) => servis.parcaKaynaklari(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/eslesme-sayimi',
+    // 592 B3 c: eşleşmeyen eski kayıtların listesi silme kararına girdidir; onay yetkisiyle açılır.
+    yetki: 'kalite-merkezi.onayla',
+    cevap: kmEslesmeSayimiCevabi,
+    isle: ({ db }) => servis.eslesmeSayimi(db),
   }),
   uc({
     yontem: 'GET',

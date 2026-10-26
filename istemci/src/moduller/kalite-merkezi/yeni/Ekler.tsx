@@ -121,6 +121,8 @@ interface EkOzellikleri {
   yetki: KmYetkisi;
   kol: string;
   kimlik: string;
+  // Aynı kaydın önceki kimlikleri (592 B1 c: eski kendi iş emri kaydı); onlara bağlı belgeler de gösterilir, yeni ek kimliğe bağlanır.
+  eskiKimlikler?: readonly string[];
   no?: string;
   parcaNo?: string;
   tur?: string;
@@ -129,14 +131,14 @@ interface EkOzellikleri {
 }
 
 // Kayda bağlı fotoğraf ve belgeler (uygulamadaki attachHTML): küçük resimler, fotoğraf çek, belge ekle.
-export function Ekler({ veri, yetki, kol, kimlik, no = '', parcaNo = '', tur, balon = null, sadeceFoto = false }: EkOzellikleri) {
+export function Ekler({ veri, yetki, kol, kimlik, eskiKimlikler = [], no = '', parcaNo = '', tur, balon = null, sadeceFoto = false }: EkOzellikleri) {
   const komut = useKmKomutu(yetki.rol);
   const { bildir } = useBildirim();
   const [bekleyen, bekleyenYaz] = useState<File | null>(null);
   const [acik, acikYaz] = useState<BelgeKaydi | null>(null);
   const foto = useRef<HTMLInputElement>(null);
   const belge = useRef<HTMLInputElement>(null);
-  const L = belgeleri(veri, kol, kimlik, balon);
+  const L = [kimlik, ...eskiKimlikler].flatMap((k) => belgeleri(veri, kol, k, balon));
   const bagli: BelgeBagi = { col: kol, id: kimlik, no, ...(parcaNo ? { parcaNo } : {}), ...(balon === null ? {} : { balon }) } as BelgeBagi;
 
   const yukle = async (dosya: File, bilgi: BelgeBilgisi, ileti: string) => {

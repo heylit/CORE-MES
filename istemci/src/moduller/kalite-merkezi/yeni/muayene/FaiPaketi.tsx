@@ -39,7 +39,7 @@ export function faiIcerigi(veri: KmVerisi, i: Muayene): FaiIcerigi {
     (b.bagli.col === 'insp' && b.bagli.id === i._id)
     || (b.bagli.col === 'parca' && parcaAnahtari((b.bagli as BelgeBagi & { parcaNo?: string }).parcaNo || b.bagli.no) === pk)
     || (b.bagli.col === 'lot' && lotlar.includes(b.bagli.id ?? ''))
-    || (!!emir && b.bagli.col === 'emir' && b.bagli.id === emir._id)));
+    || (!!emir && b.bagli.col === 'emir' && (b.bagli.id === emir._id || !!emir.eskiKimlikler?.includes(b.bagli.id)))));
   const fotograflar = veri.belge.filter((b) => b.tur === 'Fotoğraf' && b.bagli?.col === 'insp' && b.bagli.id === i._id);
   const ncrNo = veri.ncr.filter((n) => (n.tanim ?? '').includes(i.no ?? '\u0000')).map((n) => n.no ?? '');
   return { muayene: i, belgeler, fotograflar, ncrNo, resim };
