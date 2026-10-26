@@ -1,5 +1,5 @@
 import type * as PdfJs from 'pdfjs-dist';
-import { calisanOkuyucu, type OcctOkuyucu } from '../../../../../../arkon/web/src/data/step-calisani.ts';
+import { calisanOkuyucu, type OcctOkuyucu } from './cekirdek/step-calisani.ts';
 import type { OcctSonucu } from './cekirdek.ts';
 
 // Ağır kitaplıklar (pdf.js, Tesseract, OCCT, three) eski Arkon'un kullandığı dosyaların ta kendisidir: arkon/vite.config.ts onları npm

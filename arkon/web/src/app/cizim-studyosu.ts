@@ -3,7 +3,7 @@ import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../data/cakisma';
 import { AKStore } from '../data/store';
 import { cizimSilinir } from '../data/cizim-silme';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../data/gonderim-hatasi';
-import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../data/cizim-merkezi';
+import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import { MerkezRozeti, MerkezSecici, merkezVar, useMerkezUyarilari } from './cizim-merkezi';
 import { Fragment, I, fmt, html, pad, pl, useCallback, useEffect, useMemo, useNow, useState } from './temel';
 import { LS } from './yukleyici';

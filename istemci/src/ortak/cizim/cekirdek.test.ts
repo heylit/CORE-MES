@@ -3,7 +3,7 @@ import { AKStep, AKTol } from './cekirdek.ts';
 
 // Çekirdek kopyalanmaz: yüklenen nesne eski ekranın kullandığı nesnenin kendisidir.
 // Yol değişkenle verilir: tip denetimi eski çekirdeği (sıkı ayarla yazılmamış) kendi kapsamına almasın.
-const CORE = '../../../../../../arkon/web/src/core/';
+const CORE = './cekirdek/';
 
 describe('A5 çekirdek yükleyici', () => {
   it('tol ve stepdraw eski dosyanın dışa verdiği nesnedir', async () => {

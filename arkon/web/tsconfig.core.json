@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "strict": true, "noImplicitAny": true },
-  "include": ["src/core", "src/data", "src/globals.d.ts", "../shared"]
+  "include": ["src/data", "src/globals.d.ts", "../shared", "../../istemci/src/ortak/cizim/cekirdek"]
 }

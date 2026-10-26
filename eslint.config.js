@@ -56,8 +56,11 @@ export default [
   // Ajan çalışma ağaçları deponun tam kopyasıdır ve kendi yapılandırmasıyla ayrı tip programı kurar; kökten taranmaz.
   // Arkon MES arayüzü (arkon/web, arkon/shared) değiştirilmeden gömülür ve kendi kurallarıyla yazılmıştır; TMI kuralları
   // yalnız onu bağlayan dosyalara (arkon/*.ts, istemci ve sunucu modülleri) uygulanır.
+  // Arkon'un ölçü ayrıştırıcısı ve STEP resim üreticisi ortak çizim parçasına taşındı ama eski haliyle kalır (660 a): istemci tip programının
+  // dışındadır, tipleri arkon/web/tsconfig.core.json denetler.
   // deneme/ uygulamanın parçası değil: tek dosyalık tarayıcı denemeleri, birleştirilerek derlenen parçalardan oluşur.
-  { ignores: ['istemci/dist/**', '.claude/**', 'arkon/web/**', 'arkon/shared/**', 'arkon/dist/**', 'deneme/**'] },
+  { ignores: ['istemci/dist/**', '.claude/**', 'arkon/web/**', 'arkon/shared/**', 'arkon/dist/**', 'deneme/**',
+    'istemci/src/ortak/cizim/cekirdek/tol.ts', 'istemci/src/ortak/cizim/cekirdek/stepdraw.ts'] },
   // Kural yalnız yapılandırmadan kapanır; dosya içi yorum ihlali gizleyemez.
   { linterOptions: { noInlineConfig: true } },
   {

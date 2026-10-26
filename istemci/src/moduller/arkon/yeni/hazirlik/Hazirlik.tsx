@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { Dugme, Pencere, Simge, useBildirim, type BildirimTonu } from '../../../../ortak/arayuz/index.ts';
 import { KAYIT_GITMEDI, KAYIT_REDDI_OLAYI } from '../../../../../../arkon/web/src/data/gonderim-hatasi.ts';
 import { araOnayNedenleri, paketImzasi } from '../../../../../../arkon/web/src/data/ara-onay.ts';
-import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../../../arkon/web/src/data/cizim-merkezi.ts';
+import { MERKEZDEN_EKLENIR, merkezDosyasiniKoy } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import { herNParcaYap, olculeriSil } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type PaketGrubu } from '../../../../../../arkon/web/src/data/paket-grup.ts';
 import {

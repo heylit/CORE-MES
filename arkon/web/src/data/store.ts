@@ -1,7 +1,7 @@
 import type { BusMsg, HealthRes, PkgFile, Role, Session, User } from '@shared/model';
 import type { AnomaliDonemi, AnomaliIstatistigi, Anomaliler } from './anomali';
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
-import type { MerkezDurumu } from './cizim-merkezi';
+import type { MerkezDurumu } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
 import type { RefakatKarti } from './refakat-karti';
 import { cagriEkipleriniAl } from './cagri-ekiplerim';

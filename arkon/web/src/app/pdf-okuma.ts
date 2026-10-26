@@ -1,4 +1,4 @@
-import { AKTol } from '../core/tol';
+import { AKTol } from '../../../../istemci/src/ortak/cizim/cekirdek/tol';
 
 
 /* ── PDF ölçü okuma: sembol fontları, satırlar, dışlama bölgeleri (antet/tablo/pafta/notlar), güven puanı ── */

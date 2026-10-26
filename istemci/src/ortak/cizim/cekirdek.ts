@@ -1,6 +1,6 @@
-// Arkon'un ölçü ayrıştırıcısı (core/tol) ve STEP'ten teknik resim üreticisi (core/stepdraw) kopyalanmaz, olduğu gibi kullanılır.
-// İkisi Arkon'un kendi tsconfig'iyle (strict) denetlenir; istemcinin ek kuralı (noUncheckedIndexedAccess) eski dosyaya uygulanmasın diye
-// glob ile yüklenir (veri/depo.ts'deki store.ts gibi) ve ekranın kullandığı yüzü burada tiplenir. Eşliği cekirdek.test.ts gerçek modülle sınar.
+// Arkon'un ölçü ayrıştırıcısı (cekirdek/tol.ts) ve STEP'ten teknik resim üreticisi (cekirdek/stepdraw.ts) eski haliyle kalır; eski Arkon da
+// onları buradan okur. İkisi Arkon'un tsconfig.core.json'uyla (strict) denetlenir; istemcinin ek kuralı (noUncheckedIndexedAccess) eski dosyaya
+// uygulanmasın diye glob ile yüklenir (tip denetimi glob'u izlemez) ve ekranın kullandığı yüzü burada tiplenir. Eşliği cekirdek.test.ts gerçek modülle sınar.
 
 export interface TolSonucu {
   raw: string; count: number; prefix: string; nominal: number; fit: string | null; kind: string; up: number; lo: number; min: number; max: number;
@@ -34,8 +34,8 @@ export interface Step {
   frontAxis(M: StepModeli): number;
 }
 
-const TOL = import.meta.glob<Tol>('../../../../../../arkon/web/src/core/tol.ts', { eager: true, import: 'AKTol' });
-const STEP = import.meta.glob<Step>('../../../../../../arkon/web/src/core/stepdraw.ts', { eager: true, import: 'AKStep' });
+const TOL = import.meta.glob<Tol>('./cekirdek/tol.ts', { eager: true, import: 'AKTol' });
+const STEP = import.meta.glob<Step>('./cekirdek/stepdraw.ts', { eager: true, import: 'AKStep' });
 
 const tek = <T>(m: Record<string, T>, ad: string): T => {
   const d = Object.values(m)[0];
