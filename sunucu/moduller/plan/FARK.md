@@ -165,9 +165,9 @@ Kalan Motor A kullanımları (ayrı kart, 625m): 220 a motor yerleşimi, emir ö
 - Sıra sayfanındır (687 a). Motor A'nın sıralama kuralları sunucuda sınanmaz: 196 a, 265 a, 6a ve 6b yalnız bedel, bant, çarpan, ayar ve yetkiyi sınar
   (bedel bandı ve sınıf eşikleri `bant` ucundan); 203 a sayfanın TL amacıyla karşılanır, testi kalktı; 276 a (taslak motorun önerisiyle aynı) kalktı.
   Sayfanın sıralamasına para ve müşteri verisi 674 borcuyla gelir.
-- Rotada olmayan ek adım (rework vb.) ortak motora girmez; komutu durdurmaz, vardiyasız iş gibi "Ek adım; ortak motor rotada olmayan adımı henüz
-  yerleştirmiyor." nedeni ve uyarısıyla yerleşmemiş kalır, emri engellidir (689 a). 686 a (motor ek adımı emrin kendi adımından tanır) ayrı dalda
-  gelince bunun yerine geçer.
+- Rotada olmayan ek adım (rework, tamir, ek) emrin kendi adımıdır (686 a): `PlanMotoruIstegi.ekAdimlar` ile ayar ve parça başı süresi, adedi ve
+  emrin içindeki öncül ve ardılı motora gider (`servis.ts` `ekAdimlari`); motor onu öncülünden sonra, kuyruğundaki tezgâhta dizer. 689 a'nın
+  ara yolu (ek adım uyarıyla yerleşmemiş kalır) kalktı. Süresi okunamayan ek adım gönderilmez; motor yerleştiremez, komut reddedilir.
 - Parti kolu bağı (B7, `partiBaglari`) ortak motora öncül olarak gider (`PlanMotoruIstegi.baglar`, 690 b): kolun ilk adımı üstün bölünme öncesi
-  adımını, üstün birleşme adımı kolun motordaki son adımını bekler. Kolun son adımı ek adımsa motor onu tanımadığından ondan önceki rota adımı beklenir.
+  adımını, üstün birleşme adımı kolun son adımını (ek adım da olabilir) bekler.
 Testler: plan-kiyas.test.ts kalktı (Motor A ile ortak motor kıyası). Planı kur testlerde `taslaktaOner` yardımcısıdır (plan-ortak.test.ts); ortak kurulum merkeze tam gün (iki yarım vardiya) ve boş planlama kaydı verir.
