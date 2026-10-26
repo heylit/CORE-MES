@@ -745,6 +745,16 @@ export const STUDYO_ILETILER = {
   kararEksikOlcum: 'Onay ve sapma için numunenin bütün balonları ölçülmeli.',
   onayUygunsuz: 'Uygunsuz ölçü varken onay verilmez; sapma ile onay ya da red seçilir.',
   sapmaGereksiz: 'Bütün ölçüler uygun; sapma değil onay verilir.',
+  surumDegisti: 'Bu kayıt siz açtıktan sonra değişti; yenileyip yeniden deneyin.',
+  resimPasif: 'Kaldırılmış resmin planı değiştirilmez.',
+  balonNoTekrar: 'Aynı balon numarası planda bir kez kullanılır.',
+  balonResimDisi: 'Balon bu resmin etkin balonu değil.',
+  balonSinirEksik: 'Alt ve üst sınır birlikte verilir ya da ikisi de boş kalır (geçer/geçmez).',
+  balonSinirTers: 'Alt sınır üst sınırdan büyük olamaz.',
+  balonKonumEksik: 'Balon konumu x ve y ile birlikte verilir.',
+  balonAcikNumunede: 'Kararı verilmemiş numunede istenen balon kaldırılamaz.',
+  kuralKimlikTekrar: 'Numune planında aynı kural kimliği bir kez kullanılır.',
+  kuralBalonYok: 'Numune kuralındaki balon numarası parçanın etkin resimlerinde yok.',
 } as const;
 export type StudyoIletisi = keyof typeof STUDYO_ILETILER;
 
@@ -838,6 +848,33 @@ export function numuneKarariReddi(
   const uygunsuzVar = balonlar.some((b) => son.get(b)?.uygun === false);
   if (karar === 'onay') return uygunsuzVar ? 'onayUygunsuz' : null;
   return uygunsuzVar ? null : 'sapmaGereksiz';
+}
+
+// Kontrol planı resim başına bütün yazılır (603 a). Kimlikli balon resmin etkin balonudur; listede olmayan etkin balon kaldırılır,
+// ama kararsız numunede istenen balon kaldırılmaz (ölçülemez kalır, numune karara bağlanamaz).
+export function balonPlaniReddi(i: {
+  girdiler: readonly { id?: number | undefined; no: number; alt?: string | null | undefined; ust?: string | null | undefined; x?: number | null | undefined; y?: number | null | undefined }[];
+  etkinler: readonly number[]; acikNumunedekiler: ReadonlySet<number>;
+}): StudyoIletisi | null {
+  const nolar = i.girdiler.map((g) => g.no);
+  if (new Set(nolar).size !== nolar.length) return 'balonNoTekrar';
+  const etkin = new Set(i.etkinler);
+  const idler = i.girdiler.flatMap((g) => (g.id === undefined ? [] : [g.id]));
+  if (new Set(idler).size !== idler.length || idler.some((id) => !etkin.has(id))) return 'balonResimDisi';
+  for (const g of i.girdiler) {
+    if ((g.alt == null) !== (g.ust == null)) return 'balonSinirEksik';
+    if (g.alt != null && g.ust != null && ondalikKarsilastir(g.alt, g.ust) > 0) return 'balonSinirTers';
+    if ((g.x == null) !== (g.y == null)) return 'balonKonumEksik';
+  }
+  const kalan = new Set(idler);
+  return i.etkinler.some((id) => !kalan.has(id) && i.acikNumunedekiler.has(id)) ? 'balonAcikNumunede' : null;
+}
+
+// Numune kuralındaki balon numaraları parçanın etkin resimlerindeki numaralardır; kural kimliği planda tekildir.
+export function numunePlaniReddi(kurallar: readonly { kimlik: string; balonlar: 'hepsi' | 'kritik' | readonly number[] }[], balonNolari: ReadonlySet<number>): StudyoIletisi | null {
+  const kimlikler = kurallar.map((k) => k.kimlik);
+  if (new Set(kimlikler).size !== kimlikler.length) return 'kuralKimlikTekrar';
+  return kurallar.every((k) => typeof k.balonlar === 'string' || k.balonlar.every((n) => balonNolari.has(n))) ? null : 'kuralBalonYok';
 }
 
 export function numuneDurumu(karar: 'onay' | 'ret' | 'sapma' | null, olcumSayisi: number): 'bekliyor' | 'olculuyor' | 'onay' | 'ret' | 'sapma' {

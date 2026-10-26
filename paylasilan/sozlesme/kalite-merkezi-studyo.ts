@@ -68,6 +68,7 @@ export const kmNumuneKurali = z.object({
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
 export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani) });
+export const kmNumunePlaniCevabi = z.object({ plan: kmNumunePlani });
 
 // Belge merkezindeki yayındaki resim ya da model parçaya alınır; aynı belgenin aynı dosyası ikinci kez alınmaz (var olan döner).
 export const kmResimEkleGovdesi = z.object({
@@ -76,6 +77,37 @@ export const kmResimEkleGovdesi = z.object({
   revizyon: z.string().trim().min(1).max(20).nullish(),
 });
 export const kmResimCevabi = z.object({ resim: kmResim });
+// Resim parçadan kaldırılır (pasif); balonları ve ölçümleri silinmez. Sürüm, başkasının aynı anda yaptığı değişikliği ezmemek içindir.
+export const kmSurumGovdesi = z.object({ surum: z.number().int().positive().max(2147483647) });
+
+// Kontrol planı (balonlar) resim başına bütün olarak yazılır: listede olmayan etkin balon kaldırılır (pasif), kimliği olan güncellenir,
+// kimliksiz eklenir. Resmin sürümü planın sürümüdür.
+const sinirGirdisi = z.string().trim().regex(/^-?\d{1,9}([.,]\d{1,6})?$/, 'Sınır en çok altı ondalıklı bir sayı olmalı.').transform((d) => d.replace(',', '.'));
+const kisaMetin = (n: number) => z.string().trim().max(n).transform((m) => (m === '' ? null : m)).nullish();
+const sonlu = z.number().finite();
+export const kmBalonGirdisi = z.object({
+  id: kimlik.optional(),
+  no: z.number().int().positive().max(9999),
+  nominal: z.string().trim().min(1).max(80),
+  tolerans: kisaMetin(80),
+  alt: sinirGirdisi.nullish(),
+  ust: sinirGirdisi.nullish(),
+  alet: kisaMetin(80),
+  siklik: kisaMetin(80),
+  kritik: z.boolean(),
+  yontem: z.enum(KM_BALON_YONTEMLERI).nullish(),
+  olcuAletiGerekir: z.boolean(),
+  tur: kisaMetin(40),
+  sayfa: z.number().int().positive().max(9999).nullish(),
+  x: sonlu.nullish(),
+  y: sonlu.nullish(),
+  yaziKutusu: z.array(sonlu).length(5).nullish(),
+});
+export const kmBalonlarGovdesi = z.object({ surum: z.number().int().positive().max(2147483647), balonlar: z.array(kmBalonGirdisi).max(500) });
+
+// Numune planı parça ve operasyon başınadır; yeni plan sürümsüz (null), var olan planın sürümüyle yazılır.
+export const kmStudyoPlanParametresi = z.object({ malzemeNo: kimlik, opNo: kimlik });
+export const kmNumunePlaniGovdesi = z.object({ surum: z.number().int().positive().max(2147483647).nullable(), kurallar: z.array(kmNumuneKurali).max(50) });
 
 export const kmOlcum = z.object({
   id: z.number().int(),
@@ -139,6 +171,9 @@ export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;
+export type KmBalonGirdisi = z.output<typeof kmBalonGirdisi>;
+export type KmBalonlarGovdesi = z.input<typeof kmBalonlarGovdesi>;
+export type KmNumunePlaniGovdesi = z.input<typeof kmNumunePlaniGovdesi>;
 export type KmOlcum = z.output<typeof kmOlcum>;
 export type KmOlcumGovdesi = z.input<typeof kmOlcumGovdesi>;
 export type KmOlcumVerisi = z.output<typeof kmOlcumGovdesi>;

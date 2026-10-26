@@ -4,13 +4,15 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { yayindakiBelgeDosyasi } from '../cizimler/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
-import { STUDYO_ILETILER, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru } from './kurallar.ts';
+import {
+  STUDYO_ILETILER, balonPlaniReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
+} from './kurallar.ts';
 import type { StudyoIletisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -54,8 +56,61 @@ export async function resimMerkezdenEkle(
   const id = await sorgular.resimEkle(db, {
     malzemeNo: g.malzemeNo, tur, merkezBelgeId: g.merkezBelgeId, ozet: kaynak.ozet, ad: kaynak.ad, revizyon: g.revizyon ?? null, kisiId,
   });
-  const [resim] = await resimlerCevabi(db, [(await sorgular.resim(db, id))!]);
-  return resim!;
+  // Kaldırılmış aynı revizyon yeniden alınınca balonlarıyla geri gelir; yinelenen satır açılmaz.
+  await sorgular.resimEtkinlestir(db, id, kisiId);
+  return resimOku(db, id);
+}
+
+async function resimOku(db: Db, id: number): Promise<KmResim> {
+  const r = await sorgular.resim(db, id);
+  if (r === null) throw bulunamadi(STUDYO_ILETILER.resimYok);
+  return (await resimlerCevabi(db, [r]))[0]!;
+}
+
+// Resim parçadan kaldırılır (pasif): balonlar ve ölçümler kalır, stüdyoda ve Arkon'da görünmez.
+export async function resimKaldir(db: Db, kisiId: number, resimId: number, surum: number): Promise<KmResim> {
+  const r = await sorgular.resim(db, resimId);
+  if (r === null) throw bulunamadi(STUDYO_ILETILER.resimYok);
+  if (!(await sorgular.resimKaldir(db, resimId, surum, kisiId))) throw cakisma(STUDYO_ILETILER[r.aktif ? 'surumDegisti' : 'resimPasif']);
+  return resimOku(db, resimId);
+}
+
+const balonYazimi = (b: KmBalonGirdisi): sorgular.BalonYazimi => ({
+  no: b.no, nominal: b.nominal, tolerans: b.tolerans ?? null, alt: b.alt ?? null, ust: b.ust ?? null, alet: b.alet ?? null, siklik: b.siklik ?? null,
+  kritik: b.kritik, yontem: b.yontem ?? null, olcuAletiGerekir: b.olcuAletiGerekir, tur: b.tur ?? null, sayfa: b.sayfa ?? null, x: b.x ?? null, y: b.y ?? null,
+  yaziKutusu: b.yaziKutusu ?? null,
+});
+
+// Kontrol planı resim başına bütün yazılır (603 a): resmin sürümü planın sürümüdür; önce o artırılır (satır kilitlenir), sonra
+// listede olmayan etkin balon kaldırılır, kimlikli güncellenir, kimliksiz eklenir. Numara tekilliği transaction sonunda denetlenir.
+export async function balonPlaniYaz(db: Db, kisiId: number, resimId: number, surum: number, girdiler: readonly KmBalonGirdisi[]): Promise<KmResim> {
+  const r = await sorgular.resim(db, resimId);
+  if (r === null) throw bulunamadi(STUDYO_ILETILER.resimYok);
+  if (!r.aktif) throw ret('resimPasif');
+  if (!(await sorgular.resimSurumuArtir(db, resimId, surum, kisiId))) throw cakisma(STUDYO_ILETILER.surumDegisti);
+  const etkinler = (await sorgular.resimBalonlari(db, [resimId])).map((b) => b.id);
+  const acik = new Set(await sorgular.acikNumuneBalonlari(db, resimId));
+  const red = balonPlaniReddi({ girdiler, etkinler, acikNumunedekiler: acik });
+  if (red !== null) throw ret(red, 'balonlar');
+  const kalan = new Set(girdiler.flatMap((g) => (g.id === undefined ? [] : [g.id])));
+  await sorgular.balonlariKaldir(db, etkinler.filter((id) => !kalan.has(id)), kisiId);
+  for (const g of girdiler) {
+    if (g.id === undefined) await sorgular.balonEkle(db, resimId, balonYazimi(g), kisiId);
+    else await sorgular.balonGuncelle(db, g.id, balonYazimi(g), kisiId);
+  }
+  return resimOku(db, resimId);
+}
+
+// Numune planı parça ve operasyon başınadır; kuraldaki balon numaraları parçanın etkin resimlerinde olmalıdır.
+export async function numunePlaniYaz(
+  db: Db, kisiId: number, malzemeNo: number, opNo: number, surum: number | null, kurallar: KmNumunePlani['kurallar'],
+): Promise<KmNumunePlani> {
+  if ((await malzemeOzeti(db, malzemeNo)) === null) throw ret('parcaYok', 'malzemeNo');
+  const red = numunePlaniReddi(kurallar, new Set(await sorgular.parcaBalonNolari(db, malzemeNo)));
+  if (red !== null) throw ret(red, 'kurallar');
+  const p = await sorgular.numunePlaniYaz(db, { malzemeNo, opNo, kurallar, surum, kisiId });
+  if (p === null) throw cakisma(STUDYO_ILETILER.surumDegisti);
+  return { opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum };
 }
 
 // Dosyanın sahibi belge merkezidir ve yalnız yayındaki revizyonu verir: belge yeni revizyona geçtiyse alınan revizyon verilemez

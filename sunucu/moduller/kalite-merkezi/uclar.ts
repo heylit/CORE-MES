@@ -7,8 +7,9 @@ import {
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
 import {
-  kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunelerCevabi, kmOlcumGovdesi, kmOlcumlerCevabi, kmStudyoEmirParametresi,
-  kmStudyoNumuneParametresi, kmStudyoParcaCevabi, kmStudyoParcaParametresi, kmStudyoResimParametresi,
+  kmBalonlarGovdesi, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
+  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoParcaCevabi,
+  kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
 
@@ -200,8 +201,8 @@ export const uclar: Uc[] = [
     cevap: kmTamamCevabi,
     isle: ({ db, parametre, denetimEki }) => servis.dosyaSil(db, parametre.kimlik, denetimEki),
   }),
-  // Stüdyo (595 1 b, 597 a, 600 a): resim, balon ve numune planı okunur; numune ve ölçüm Kalite Merkezi'nde yazılır. Plan, balon ve
-  // resim alma uçları yetki kararından (603) sonra gelir.
+  // Stüdyo (595 1 b, 597 a, 600 a): resim, balon ve numune planı okunur; numune ve ölçüm Kalite Merkezi'nde yazılır. Resim alma,
+  // kontrol planı ve numune planı kalite onayıdır (603 a: kalite-merkezi.onayla).
   uc({
     yontem: 'GET',
     yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo',
@@ -248,6 +249,47 @@ export const uclar: Uc[] = [
     parametre: kmStudyoEmirParametresi,
     cevap: kmOlcumlerCevabi,
     isle: async ({ db, parametre }) => ({ olcumler: await studyo.emirOlcumleri(db, parametre.uretimEmriId) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/al',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    govde: kmResimEkleGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ resim: await studyo.resimMerkezdenEkle(db, kullanici.id, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/kaldir',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmSurumGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ resim: await studyo.resimKaldir(db, kullanici.id, parametre.resimId, govde.surum) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/balonlar',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmBalonlarGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ resim: await studyo.balonPlaniYaz(db, kullanici.id, parametre.resimId, govde.surum, govde.balonlar) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/parcalar/:malzemeNo/numune-planlari/:opNo',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoPlanParametresi,
+    govde: kmNumunePlaniGovdesi,
+    cevap: kmNumunePlaniCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) =>
+      ({ plan: await studyo.numunePlaniYaz(db, kullanici.id, parametre.malzemeNo, parametre.opNo, govde.surum, govde.kurallar) }),
   }),
   uc({
     yontem: 'POST',

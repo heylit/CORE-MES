@@ -9,14 +9,16 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { KmNumune, KmOlcum, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
+import type { KmNumune, KmNumunePlani, KmOlcum, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { numuneIste, olcumYaz, studyoParcasi } from './disari.ts';
-import { STUDYO_ILETILER, numuneKarariReddi, olcumSonucu, ondalikKarsilastir, sonOlcumler, studyoResimTuru } from './kurallar.ts';
+import {
+  STUDYO_ILETILER, balonPlaniReddi, numuneKarariReddi, numunePlaniReddi, olcumSonucu, ondalikKarsilastir, sonOlcumler, studyoResimTuru,
+} from './kurallar.ts';
 import { resimMerkezdenEkle } from './studyo.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -64,6 +66,24 @@ describe('Kalite Merkezi stüdyo kuralları (saf)', () => {
     assert.deepEqual([...sonOlcumler([o(1, 5, false), o(1, 4, true)]).values()].map((x) => x.id), [5]);
     assert.deepEqual(['pdf', 'step', 'stl', 'iges', 'png', 'dxf', 'glb'].map(studyoResimTuru), ['resim', 'model', 'model', 'model', null, null, null]);
   });
+
+  test('KM-S22 kontrol planı ve numune planı kuralları', () => {
+    const p = (girdiler: Parameters<typeof balonPlaniReddi>[0]['girdiler'], acik: number[] = []) =>
+      balonPlaniReddi({ girdiler, etkinler: [1, 2], acikNumunedekiler: new Set(acik) });
+    assert.equal(p([{ id: 1, no: 2 }, { id: 2, no: 1 }, { no: 3, alt: '1', ust: '1', x: 1, y: 2 }]), null);
+    assert.equal(p([{ id: 1, no: 1 }, { no: 1 }]), 'balonNoTekrar');
+    assert.equal(p([{ id: 3, no: 1 }]), 'balonResimDisi');
+    assert.equal(p([{ id: 1, no: 1 }, { id: 1, no: 2 }]), 'balonResimDisi');
+    assert.equal(p([{ no: 1, alt: '1' }]), 'balonSinirEksik');
+    assert.equal(p([{ no: 1, alt: '10.1', ust: '10.05' }]), 'balonSinirTers');
+    assert.equal(p([{ no: 1, x: 5 }]), 'balonKonumEksik');
+    assert.equal(p([{ id: 1, no: 1 }], [2]), 'balonAcikNumunede');
+    assert.equal(p([{ id: 1, no: 1 }], [1]), null);
+    const k = (kimlik: string, balonlar: 'hepsi' | 'kritik' | number[]) => ({ kimlik, balonlar });
+    assert.equal(numunePlaniReddi([k('a', 'hepsi'), k('b', [1, 2])], new Set([1, 2])), null);
+    assert.equal(numunePlaniReddi([k('a', 'hepsi'), k('a', 'kritik')], new Set([1])), 'kuralKimlikTekrar');
+    assert.equal(numunePlaniReddi([k('a', [3])], new Set([1, 2])), 'kuralBalonYok');
+  });
 });
 
 // 595 1 b, 597 a, 600 a: resim, balon, numune planı, numune ve ölçümün sahibi Kalite Merkezi'dir; Arkon disari.ts ile okur ve yazar.
@@ -76,6 +96,7 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
   let kaliteId = 0;
   let mudur = '';
   let operator = '';
+  let yazar = '';
   let flans = 0;
   let mil = 0;
   let flansEmri = 0;
@@ -145,6 +166,12 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     kaliteId = k.id;
     mudur = (await girisYap('kms-mudur', 'mudur')).cerez;
     operator = (await girisYap('kms-operator', 'operator')).cerez;
+    // Yazar: kalite kaydı girer ama onaylamaz (603 a: plan, balon ve resim alma onaydır).
+    const yazarRolu = (await o().vt.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('kms_yazar', 'Deneme yazar') RETURNING id"))!.id;
+    for (const islem of ['sayfa.kalite-merkezi', 'kalite-merkezi.oku', 'kalite-merkezi.yaz']) {
+      await o().vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [yazarRolu, islem]);
+    }
+    yazar = (await girisYap('kms-yazar', 'kms_yazar')).cerez;
 
     await o().vt.tx(async (db) => {
       flans = (await ornekMalzemeNo(db, 'flans'))!;
@@ -271,6 +298,107 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(kalite, `/kalite-merkezi/studyo/numuneler/${n.id}`)).statusCode, 200);
     assert.equal((await oku(operator, `/kalite-merkezi/studyo/emirler/${flansEmri}/olcumler`)).statusCode, 403);
     assert.equal((await oku(kalite, '/kalite-merkezi/studyo/emirler/999999/olcumler')).statusCode, 404);
+  });
+
+  test('KM-S16 resim alma ve kaldırma kalite onayıdır; yazar ve operatör 403; eski sürüm 409; kaldırılan resim yeniden alınınca balonlarıyla döner', async () => {
+    const belge = await belgeAc('Alınacak resim', pdf('al'), 'al.pdf');
+    const govde = { malzemeNo: flans, merkezBelgeId: belge, revizyon: 'A' };
+    assert.equal((await yaz(yazar, '/kalite-merkezi/studyo/resimler/al', govde)).statusCode, 403);
+    assert.equal((await yaz(operator, '/kalite-merkezi/studyo/resimler/al', govde)).statusCode, 403);
+    assert.equal((await yaz(kalite, '/kalite-merkezi/studyo/resimler/al', govde, null)).statusCode, 400);
+    const r = await yaz(kalite, '/kalite-merkezi/studyo/resimler/al', govde);
+    assert.equal(r.statusCode, 200, r.body);
+    const resim = (r.json() as { resim: KmResim }).resim;
+    assert.deepEqual([resim.ad, resim.revizyon, resim.aktif, resim.tur], ['Alınacak resim', 'A', true, 'resim']);
+    const b = await balonEkle(resim.id, 1, ['1', '2']);
+
+    const kaldirYolu = `/kalite-merkezi/studyo/resimler/${resim.id}/kaldir`;
+    assert.equal((await yaz(yazar, kaldirYolu, { surum: resim.surum })).statusCode, 403);
+    const eski = await yaz(mudur, kaldirYolu, { surum: resim.surum + 5 });
+    assert.deepEqual([eski.statusCode, ileti(eski)], [409, STUDYO_ILETILER.surumDegisti]);
+    const k = await yaz(mudur, kaldirYolu, { surum: resim.surum });
+    assert.equal(k.statusCode, 200, k.body);
+    const kaldirilan = (k.json() as { resim: KmResim }).resim;
+    assert.equal(kaldirilan.aktif, false);
+    const parca = (await oku(kalite, `/kalite-merkezi/studyo/parcalar/${flans}`)).json() as KmStudyoParcaCevabi;
+    assert.equal(parca.resimler.some((x) => x.id === resim.id), false);
+    const ikinci = await yaz(mudur, kaldirYolu, { surum: kaldirilan.surum });
+    assert.deepEqual([ikinci.statusCode, ileti(ikinci)], [409, STUDYO_ILETILER.resimPasif]);
+    assert.equal((await yaz(mudur, '/kalite-merkezi/studyo/resimler/999999/kaldir', { surum: 1 })).statusCode, 404);
+
+    const geri = await yaz(kalite, '/kalite-merkezi/studyo/resimler/al', govde);
+    const donen = (geri.json() as { resim: KmResim }).resim;
+    assert.deepEqual([donen.id, donen.aktif, donen.balonlar.map((x) => x.id)], [resim.id, true, [b]]);
+  });
+
+  test('KM-S17 kontrol planı bütün yazılır: güncelle, numara değiş, ekle, kaldır; yazar 403; eski sürüm 409; kuralsız plan 400; açık numunedeki balon kaldırılmaz', async () => {
+    const id = (await o().vt.tx(async (db) => resimMerkezdenEkle(db, yonId, { malzemeNo: flans, merkezBelgeId: await belgeAc('Plan resmi', pdf('plan'), 'plan.pdf') }))).id;
+    const b1 = await balonEkle(id, 1, ['9.9', '10.1']);
+    const b2 = await balonEkle(id, 2, null);
+    const b3 = await balonEkle(id, 3, ['5', '6']);
+    const yol = `/kalite-merkezi/studyo/resimler/${id}/balonlar`;
+    const okuResim = async () => ((await oku(kalite, `/kalite-merkezi/studyo/parcalar/${flans}`)).json() as KmStudyoParcaCevabi).resimler.find((x) => x.id === id)!;
+    const tam = (o_: { id?: number; no: number; nominal: string; alt?: string | null; ust?: string | null }) => ({
+      kritik: false, olcuAletiGerekir: false, ...o_,
+    });
+    const ilk = await okuResim();
+    const govde = {
+      surum: ilk.surum,
+      balonlar: [
+        tam({ id: b1, no: 2, nominal: 'Ø10', alt: '9,95', ust: '10.05' }),
+        tam({ id: b2, no: 1, nominal: 'Mastar' }),
+        tam({ no: 3, nominal: 'Ø6', alt: '5.9', ust: '6.1' }),
+      ],
+    };
+    assert.equal((await yaz(yazar, yol, govde)).statusCode, 403);
+    assert.equal((await yaz(operator, yol, govde)).statusCode, 403);
+    const r = await yaz(kalite, yol, govde);
+    assert.equal(r.statusCode, 200, r.body);
+    const yeni = (r.json() as { resim: KmResim }).resim;
+    assert.equal(yeni.surum, ilk.surum + 1);
+    assert.deepEqual(yeni.balonlar.map((x) => [x.no, x.nominal, x.alt, x.ust]), [[1, 'Mastar', null, null], [2, 'Ø10', '9.95', '10.05'], [3, 'Ø6', '5.9', '6.1']]);
+    assert.equal(yeni.balonlar.some((x) => x.id === b3), false, 'listede olmayan balon kaldırıldı');
+    assert.equal((await o().vt.tek<{ aktif: boolean }>('SELECT aktif FROM kalite_merkezi_balon WHERE id = $1', [b3]))?.aktif, false);
+    const eski = await yaz(kalite, yol, govde);
+    assert.deepEqual([eski.statusCode, ileti(eski)], [409, STUDYO_ILETILER.surumDegisti]);
+
+    const red = async (balonlar: unknown[], beklenen: string) => {
+      const c = await yaz(kalite, yol, { surum: (await okuResim()).surum, balonlar });
+      assert.deepEqual([c.statusCode, ileti(c)], [400, beklenen]);
+    };
+    await red([tam({ no: 1, nominal: 'a' }), tam({ no: 1, nominal: 'b' })], STUDYO_ILETILER.balonNoTekrar);
+    await red([tam({ id: baskaBalon, no: 1, nominal: 'a' })], STUDYO_ILETILER.balonResimDisi);
+    await red([tam({ no: 1, nominal: 'a', alt: '2', ust: '1' })], STUDYO_ILETILER.balonSinirTers);
+    await red([tam({ no: 1, nominal: 'a', alt: '2' })], STUDYO_ILETILER.balonSinirEksik);
+
+    const kalanlar = yeni.balonlar.map((x) => x.id);
+    await o().vt.tx((db) => numuneIste(db, yonId, { uretimEmriId: flansEmri, opNo: 30, balonlar: [kalanlar[0]!], neden: 'Plan denemesi' }));
+    await red(yeni.balonlar.slice(1).map((x) => tam({ id: x.id, no: x.no, nominal: x.nominal, alt: x.alt, ust: x.ust })), STUDYO_ILETILER.balonAcikNumunede);
+  });
+
+  test('KM-S18 numune planı kalite onayıdır; yeni plan sürümsüz, ikinci yeni 409; güncelleme sürümle; bilinmeyen balon ve yinelenen kural 400', async () => {
+    const yol = `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/40`;
+    const kurallar = [{ kimlik: 'ilk', ne: 'ilk', kim: ['kalite'], balonlar: 'hepsi', kapi: true }];
+    assert.equal((await yaz(yazar, yol, { surum: null, kurallar })).statusCode, 403);
+    assert.equal((await yaz(operator, yol, { surum: null, kurallar })).statusCode, 403);
+    const r = await yaz(kalite, yol, { surum: null, kurallar });
+    assert.equal(r.statusCode, 200, r.body);
+    const plan = (r.json() as { plan: KmNumunePlani }).plan;
+    assert.deepEqual([plan.opNo, plan.surum, plan.kurallar.length], [40, 1, 1]);
+    const ikinciYeni = await yaz(kalite, yol, { surum: null, kurallar });
+    assert.deepEqual([ikinciYeni.statusCode, ileti(ikinciYeni)], [409, STUDYO_ILETILER.surumDegisti]);
+    const g = await yaz(mudur, yol, { surum: 1, kurallar: [...kurallar, { kimlik: 'her', ne: 'her', n: 20, kim: ['operator'], balonlar: [1] }] });
+    assert.equal(g.statusCode, 200, g.body);
+    assert.equal((g.json() as { plan: KmNumunePlani }).plan.surum, 2);
+    const parca = (await oku(kalite, `/kalite-merkezi/studyo/parcalar/${flans}`)).json() as KmStudyoParcaCevabi;
+    assert.deepEqual(parca.numunePlanlari.find((p) => p.opNo === 40)?.kurallar.map((k) => k.kimlik), ['ilk', 'her']);
+
+    const yok = await yaz(kalite, yol, { surum: 2, kurallar: [{ kimlik: 'x', ne: 'son', kim: ['kalite'], balonlar: [999] }] });
+    assert.deepEqual([yok.statusCode, ileti(yok)], [400, STUDYO_ILETILER.kuralBalonYok]);
+    const tekrar = await yaz(kalite, yol, { surum: 2, kurallar: [...kurallar, ...kurallar] });
+    assert.deepEqual([tekrar.statusCode, ileti(tekrar)], [400, STUDYO_ILETILER.kuralKimlikTekrar]);
+    const kartsiz = await yaz(kalite, '/kalite-merkezi/studyo/parcalar/999999/numune-planlari/10', { surum: null, kurallar });
+    assert.deepEqual([kartsiz.statusCode, ileti(kartsiz)], [400, STUDYO_ILETILER.parcaYok]);
   });
 
   test('KM-S15 numune, karar ve ölçüm yalnız eklenir; sonsuz ya da NaN sınır yazılamaz', async () => {

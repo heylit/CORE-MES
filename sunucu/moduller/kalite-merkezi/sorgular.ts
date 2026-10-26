@@ -388,3 +388,111 @@ export function numuneOlcumleri(db: Db, numuneIdler: readonly number[]): Promise
 export function emirOlcumleri(db: Db, uretimEmriId: number, sinir: number): Promise<OlcumSatiri[]> {
   return db.sorgu(`${OLCUM_SECIMI} WHERE uretim_emri_id = $1 ORDER BY zaman DESC, id DESC LIMIT $2`, [uretimEmriId, sinir]);
 }
+
+/* ---------------- stüdyo yazma: resim alma ve kaldırma, kontrol planı, numune planı (603 a) ---------------- */
+
+// Sürüm eşitse resmi kilitler ve sürümünü artırır; değilse (başkası değiştirdi ya da resim yok) false.
+export async function resimSurumuArtir(db: Db, id: number, surum: number, kisiId: number): Promise<boolean> {
+  const r = await db.tek<{ id: number }>(
+    `UPDATE kalite_merkezi_resim SET surum = surum + 1, guncelleyen_id = $3, guncellendi = now()
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, surum, kisiId],
+  );
+  return r !== null;
+}
+
+export async function resimKaldir(db: Db, id: number, surum: number, kisiId: number): Promise<boolean> {
+  const r = await db.tek<{ id: number }>(
+    `UPDATE kalite_merkezi_resim SET aktif = false, surum = surum + 1, guncelleyen_id = $3, guncellendi = now()
+      WHERE id = $1 AND surum = $2 AND aktif RETURNING id`,
+    [id, surum, kisiId],
+  );
+  return r !== null;
+}
+
+// Kaldırılmış aynı resim yeniden alınınca etkinleşir (balonları önceki haliyle geri gelir).
+export async function resimEtkinlestir(db: Db, id: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE kalite_merkezi_resim SET aktif = true, surum = surum + 1, guncelleyen_id = $2, guncellendi = now() WHERE id = $1 AND NOT aktif`,
+    [id, kisiId],
+  );
+}
+
+// Kararı verilmemiş numunelerde istenen balonlar (resmin balonlarından).
+export async function acikNumuneBalonlari(db: Db, resimId: number): Promise<number[]> {
+  const r = await db.sorgu<{ id: number }>(
+    `SELECT DISTINCT b.id FROM kalite_merkezi_balon b
+       JOIN kalite_merkezi_numune n ON b.id = ANY(n.balonlar)
+       LEFT JOIN kalite_merkezi_numune_karari k ON k.numune_id = n.id
+      WHERE b.resim_id = $1 AND b.aktif AND k.numune_id IS NULL`,
+    [resimId],
+  );
+  return r.map((x) => x.id);
+}
+
+export interface BalonYazimi {
+  no: number; nominal: string; tolerans: string | null; alt: string | null; ust: string | null; alet: string | null; siklik: string | null;
+  kritik: boolean; yontem: 'cmm' | 'elle' | null; olcuAletiGerekir: boolean; tur: string | null; sayfa: number | null; x: number | null; y: number | null;
+  yaziKutusu: number[] | null;
+}
+const balonDegerleri = (b: BalonYazimi) => [
+  b.no, b.nominal, b.tolerans, b.alt, b.ust, b.alet, b.siklik, b.kritik, b.yontem, b.olcuAletiGerekir, b.tur, b.sayfa, b.x, b.y, b.yaziKutusu,
+];
+
+export async function balonlariKaldir(db: Db, idler: readonly number[], kisiId: number): Promise<void> {
+  if (idler.length === 0) return;
+  await db.sorgu(
+    `UPDATE kalite_merkezi_balon SET aktif = false, surum = surum + 1, guncelleyen_id = $2, guncellendi = now() WHERE id = ANY($1::int[]) AND aktif`,
+    [idler, kisiId],
+  );
+}
+
+// Yalnız değişen balonun sürümü artar.
+export async function balonGuncelle(db: Db, id: number, b: BalonYazimi, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE kalite_merkezi_balon SET no = $2, nominal = $3, tolerans = $4, alt = $5::numeric, ust = $6::numeric, alet = $7, siklik = $8, kritik = $9,
+        yontem = $10, olcu_aleti_gerekir = $11, tur = $12, sayfa = $13, x = $14, y = $15, yazi_kutusu = $16::double precision[],
+        surum = surum + 1, guncelleyen_id = $17, guncellendi = now()
+      WHERE id = $1 AND aktif AND (no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y, yazi_kutusu)
+        IS DISTINCT FROM ($2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[])`,
+    [id, ...balonDegerleri(b), kisiId],
+  );
+}
+
+export async function balonEkle(db: Db, resimId: number, b: BalonYazimi, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y,
+        yazi_kutusu, guncelleyen_id)
+     VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[], $17)`,
+    [resimId, ...balonDegerleri(b), kisiId],
+  );
+}
+
+// Parçanın etkin resimlerindeki etkin balon numaraları (numune kuralı bunlara bakar).
+export async function parcaBalonNolari(db: Db, malzemeNo: number): Promise<number[]> {
+  const r = await db.sorgu<{ no: number }>(
+    `SELECT DISTINCT b.no FROM kalite_merkezi_balon b JOIN kalite_merkezi_resim r ON r.id = b.resim_id
+      WHERE r.malzeme_no = $1 AND r.aktif AND b.aktif`,
+    [malzemeNo],
+  );
+  return r.map((x) => x.no);
+}
+
+// Yeni plan sürümsüz eklenir (aynı anda iki yeni plandan biri çakışır); var olan plan yalnız aynı sürümle güncellenir.
+export async function numunePlaniYaz(
+  db: Db, g: { malzemeNo: number; opNo: number; kurallar: unknown; surum: number | null; kisiId: number },
+): Promise<{ opNo: number; kurallar: unknown; surum: number } | null> {
+  const metin = JSON.stringify(g.kurallar);
+  if (g.surum === null) {
+    return db.tek(
+      `INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, $2, $3::jsonb, $4)
+       ON CONFLICT (malzeme_no, op_no) DO NOTHING RETURNING op_no AS "opNo", kurallar, surum`,
+      [g.malzemeNo, g.opNo, metin, g.kisiId],
+    );
+  }
+  return db.tek(
+    `UPDATE kalite_merkezi_numune_plani SET kurallar = $3::jsonb, surum = surum + 1, guncelleyen_id = $5, guncellendi = now()
+      WHERE malzeme_no = $1 AND op_no = $2 AND surum = $4 RETURNING op_no AS "opNo", kurallar, surum`,
+    [g.malzemeNo, g.opNo, metin, g.surum, g.kisiId],
+  );
+}
