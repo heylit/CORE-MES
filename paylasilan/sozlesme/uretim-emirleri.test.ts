@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   AZAMI_SAYIM, adimCevabi, adimParametresi, adimTamamlaGovdesi, canliSemasi, durdurGovdesi, emirAyrintiCevabi, emirGovdesi,
-  bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi, sonOlaylarCevabi,
+  asimlarCevabi, bitenEmirlerSorgusu, emirParametresi, emirSemasi, emirlerSorgusu, kayitSemasi, sayimGovdesi, sonOlaylarCevabi,
 } from './uretim-emirleri.ts';
 
 const GOVDE = { parcaNo: 'P-1', parcaAd: 'Deneme Parça', adet: 5, istasyonId: 3, projeId: 7 };
@@ -187,4 +187,25 @@ test('kayıt: olay defterin yedi olayından biridir; hurda ve duruş nedenini, d
     emirAyrintiCevabi.parse({ emir: { ...EMIR, hurdaAdet: 2 }, kayitlar: [{ ...KAYIT, sure: 30 }] }),
     { emir: EMIR, kayitlar: [KAYIT] },
   );
+});
+
+test('emir şeması: açık adımlar ve başlatılabilir adımlar isteğe bağlıdır; çalışma hâli ve eksik boş olabilir', () => {
+  const adim = { isEmriId: 11, opNo: 10, ad: 'Tornalama', istasyon: { id: 3, ad: 'Torna 1' }, durum: 'calisiyor', calisma: 'calisiyor', makineId: 4, eksik: null };
+  assert.equal(gecer(emirSemasi, EMIR), true);
+  assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [], baslatilabilirAdimlar: [] }), true);
+  assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [adim, { ...adim, isEmriId: 12, opNo: 20, durum: 'bekliyor', calisma: null, makineId: null, istasyon: null, eksik: 5 }] }), true);
+  assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [{ ...adim, eksik: -3 }] }), true);
+  for (const bozuk of [{ durum: 'bitti' }, { calisma: 'bekliyor' }, { eksik: 1.5 }, { isEmriId: 0 }]) {
+    assert.equal(gecer(emirSemasi, { ...EMIR, acikAdimlar: [{ ...adim, ...bozuk }] }), false, JSON.stringify(bozuk));
+  }
+  assert.equal(gecer(emirSemasi, { ...EMIR, baslatilabilirAdimlar: [0] }), false);
+});
+
+test('aşım şeması: aşan adet pozitif, önceki adım sağlamı sıfır olabilir', () => {
+  const asim = { sayimId: 1, isEmriId: 12, opNo: 20, kisi: { id: 2, ad: 'Deneme Kişi' }, adet: 3, oncekiSaglam: 0, zaman: '2026-10-26T10:00:00.000Z' };
+  assert.equal(gecer(asimlarCevabi, { asimlar: [asim] }), true);
+  assert.equal(gecer(asimlarCevabi, { asimlar: [] }), true);
+  for (const bozuk of [{ adet: 0 }, { adet: -1 }, { oncekiSaglam: -1 }, { zaman: 'dun' }]) {
+    assert.equal(gecer(asimlarCevabi, { asimlar: [{ ...asim, ...bozuk }] }), false, JSON.stringify(bozuk));
+  }
 });

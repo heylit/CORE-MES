@@ -133,6 +133,22 @@ export const canliSemasi = z.object({
   isEmri: z.object({ id: KIMLIK, opNo: z.number().int().positive(), ad: z.string(), makineId: KIMLIK.nullable() }).nullable().optional(),
 });
 
+// Paralel adım (kart 639): emrin açık adımları, her biri kendi istasyonunda ve çalışma hâlinde. Bekleyen adımlı emirde en çok biri
+// çalışır; akışlı ve bağımsız adımlar aynı anda açık olabilir. calisma yalnız çalışan adımda doludur.
+export const acikAdimSemasi = z.object({
+  isEmriId: KIMLIK,
+  opNo: z.number().int().positive(),
+  ad: z.string(),
+  istasyon: adliKayit.nullable(),
+  durum: z.lazy(() => isEmriDurumu),
+  calisma: calismaDurumu.nullable(),
+  makineId: KIMLIK.nullable(),
+  // Önceki adımın sağlamı eksi bu adımın sağlam, karar bekleyen ve hurda toplamı. Artı: adıma gelmiş, henüz işlenmemiş parça.
+  // Eksi: bu adım önceki adımın teslim etmediği parçayı saydı (647 a); önceki adımda o kadar eksi bakiye vardır, önceki adım saydıkça kapanır.
+  // Önceki adımı olmayan ya da bağımsız adımda null.
+  eksik: z.number().int().nullable(),
+});
+
 export const emirSemasi = z.object({
   id: KIMLIK,
   emirNo: z.string(),
@@ -154,6 +170,10 @@ export const emirSemasi = z.object({
   malzemeNo: KIMLIK.nullable().optional(),
   // İptal sürümle yazılır: başka ekranın arada yaptığı değişiklik ezilmez. İsteğe bağlı: önceki istemci verisi geçerli kalır.
   surum: surumSemasi.optional(),
+  // İş emirli emirde açık adımlar; iş emirsiz emirde boş. İsteğe bağlı: bu alandan önce yazılmış istemci verisi geçerli kalır.
+  acikAdimlar: z.array(acikAdimSemasi).optional(),
+  // Şu an başlatılabilecek adımlar (bekleyen adım sırası, akışlı ve bağımsız adımlar); sıra dışı olanı uyarıyla başlar (626 a).
+  baslatilabilirAdimlar: z.array(KIMLIK).optional(),
 });
 
 export const adimSemasi = z.object({
@@ -517,6 +537,8 @@ export const isEmriSemasi = z.object({
       kisi: adliKayit, zaman: zamanSemasi,
     })),
   }).nullable(),
+  // Önceki adıma göre işlenmemiş (artı) ya da önceki adımda eksi kalan (eksi) adet; anlamı acikAdimSemasi.eksik ile aynı. İsteğe bağlı: sunucu her zaman yazar.
+  eksik: z.number().int().nullable().optional(),
   // Emirde üretim yerinin son değişimi (kim, ne zaman, hangi yere); hiç değişmediyse null. İsteğe bağlı: sunucu her zaman yazar.
   uretimYeriDegisimi: z.object({ yer: z.enum(URETIM_YERLERI), kisi: adliKayit, zaman: zamanSemasi }).nullable().optional(),
 });
@@ -538,6 +560,19 @@ export const adimliOzetCevabi = z.object({
 });
 export const adimliBitenlerCevabi = listeCevapSemasi(adimliEmirOzeti);
 export const adimliEmirCevabi = z.object({ emir: adimliEmirAyrintisi });
+
+// Sayım sınırı aşımı (647 a): adımın sayımı, önceki adımın o anki sağlamını aştığında yazılır ama iz bırakır. Satır, aşımı yapan
+// sayımdır; adet sınırı geçen kısım, oncekiSaglam aşım anında önceki adımın sağlamıdır. Aşım yoksa liste boştur.
+export const asimSemasi = z.object({
+  sayimId: KIMLIK,
+  isEmriId: KIMLIK,
+  opNo: z.number().int().positive(),
+  kisi: adliKayit,
+  adet: z.number().int().positive(),
+  oncekiSaglam: z.number().int().nonnegative(),
+  zaman: zamanSemasi,
+});
+export const asimlarCevabi = z.object({ asimlar: z.array(asimSemasi) });
 
 // Süreler dakikadır; ölçülemeyen değer (sayım yok, başlamamış, ayar yok) null döner.
 export const sureOzetiCevabi = z.object({
@@ -594,6 +629,9 @@ export type HazirlikMaddesi = (typeof HAZIRLIK_MADDELERI)[number];
 export type HazirlikMuafiyetiGovdesi = z.output<typeof hazirlikMuafiyetiGovdesi>;
 export type HazirlikCevabi = z.output<typeof hazirlikCevabi>;
 export type SureOzetiCevabi = z.output<typeof sureOzetiCevabi>;
+export type AcikAdim = z.output<typeof acikAdimSemasi>;
+export type Asim = z.output<typeof asimSemasi>;
+export type AsimlarCevabi = z.output<typeof asimlarCevabi>;
 export type IsEmriDurumu = z.output<typeof isEmriDurumu>;
 export type AtanabilirKaynak = z.output<typeof atanabilirKaynak>;
 export type IsEmriKaynagi = z.output<typeof isEmriKaynagi>;
