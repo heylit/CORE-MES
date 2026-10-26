@@ -71,7 +71,7 @@ const MAKINE_DURUMLARI = {
 } satisfies MakineDurumlariCevabi;
 
 const YETKINLIKLER = {
-  yetkinlikler: [{ kisiId: 5, istasyonIdleri: [10], ayrintilar: [{ istasyonId: 10, verenKisiId: 1, verilme: '2026-10-01T07:30:00Z', gecerlilikBitis: null, dayanak: null, gecerli: true, surum: 1 }] }],
+  yetkinlikler: [{ kisiId: 5, istasyonIdleri: [10], ayrintilar: [{ istasyonId: 10, verenKisiId: 1, verilme: '2026-10-01T07:30:00Z', gecerlilikBitis: null, dayanak: null, gecerli: true, surum: 1 }], makineIdleri: [], enCok: null }],
 } satisfies YetkinliklerCevabi;
 
 const EKIPLER = {
@@ -1056,6 +1056,42 @@ describe('personel bölümü (#1109, IS25)', () => {
     expect(cagrilar.some((c) => c.yol === '/atama-iptalleri?tur=istasyon&hedefId=10&kisiId=5')).toBe(true);
   });
 
+  it('563 c, 563 2 a: yetkin olunan istasyonun makinesi karttan eklenir ve kaldırılır; aynı anda en çok tezgâh seçilir', async () => {
+    const cagrilar = sunucuKur(YONETICI, kisitlar);
+    const ortak = vi.mocked(fetch).getMockImplementation();
+    const makineli = { yetkinlikler: [{ ...YETKINLIKLER.yetkinlikler[0]!, makineIdleri: [21], enCok: 2 }] };
+    vi.mocked(fetch).mockImplementation((adres, secenek) => (String(adres).endsWith('/kisi-yetkinlikleri')
+      ? Promise.resolve(new Response(JSON.stringify(makineli), { status: 200 })) : ortak!(adres, secenek)));
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    const grup = await within(usta).findByRole('group', { name: 'Deneme Usta makine yetkinliği' });
+    expect(within(grup).getByText('M-02')).toBeTruthy();
+    // İstasyonsuz M-01 seçenek değildir; M-02 zaten seçili, eklenecek makine kalmaz.
+    expect(within(usta).queryByRole('button', { name: 'Deneme Usta için makine ekle' })).toBeNull();
+    const sinir = within(usta).getByLabelText('Deneme Usta aynı anda en çok tezgâh') as HTMLSelectElement;
+    await waitFor(() => { expect(sinir.disabled).toBe(false); });
+    expect(sinir.value).toBe('2');
+    fireEvent.change(sinir, { target: { value: '3' } });
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/tezgah-siniri', govde: { enCok: 3 } });
+    const kaldir = within(usta).getByRole('button', { name: 'Deneme Usta: M-02 makine yetkinliğini kaldır' }) as HTMLButtonElement;
+    await waitFor(() => { expect(kaldir.disabled).toBe(false); });
+    fireEvent.click(kaldir);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
+    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/makineler/belirle', govde: { makineIdleri: [] } });
+  });
+
+  it('563 c: makinesi seçilmemiş kişide yetkin istasyonun makinesi eklenebilir; istasyon yetkinliği olmayan kişide satır görünmez', async () => {
+    const cagrilar = sunucuKur(YONETICI, kisitlar);
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    const usta = await kart('Deneme Usta');
+    expect(await within(usta).findByText('Makine seçilmemiş: plan istasyon yetkinliğine bakar')).toBeTruthy();
+    await seciciSec('Deneme Usta için makine ekle', /M-02/, usta);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/makineler/belirle', govde: { makineIdleri: [21] } });
+    expect(within(await kart('Deneme Yeni')).queryByRole('group', { name: 'Deneme Yeni makine yetkinliği' })).toBeNull();
+  });
+
   it('IS29: yetkinliğin bitişi ve dayanağı çipten girilir; süresi dolan yetkinlik işaretlenir', async () => {
     const cagrilar = sunucuKur(YONETICI, kisitlar);
     const ortak = vi.mocked(fetch).getMockImplementation();
@@ -1217,6 +1253,21 @@ describe('yetkinlik matrisi', () => {
     fireEvent.click(within(tablo).getByLabelText('Deneme Usta T-01 yetkinliği'));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
     expect(POSTLAR(cagrilar)[1]?.govde).toEqual({ degisiklikler: [{ kisiId: 5, istasyonId: 10, yetkin: false }] });
+  });
+
+  it('563 c: makine düzeyinde yalnız istasyonda yetkin kişinin makine hücresi açılır; değişiklik toplu uca makine olarak gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/yetkinlik');
+    await screen.findByRole('table', { name: 'Yetkinlik matrisi' });
+    fireEvent.change(screen.getByLabelText('Yetkinlik düzeyi'), { target: { value: 'makine' } });
+    const tablo = await screen.findByRole('table', { name: 'Makine yetkinliği matrisi' });
+    expect(within(tablo).queryByText('M-01')).toBeNull();
+    expect(within(tablo).queryByLabelText('Deneme Yeni M-02 makine yetkinliği')).toBeNull();
+    const kutu = within(tablo).getByLabelText('Deneme Usta M-02 makine yetkinliği') as HTMLInputElement;
+    expect(kutu.checked).toBe(false);
+    fireEvent.click(kutu);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/toplu', govde: { makineler: [{ kisiId: 5, makineId: 21, yetkin: true }] } });
   });
 
   it('okuyan kutu görmez, yetkinliği işaretle görür', async () => {

@@ -21,6 +21,9 @@ const ATAMA_YOLU: Record<AtamaTuru, (id: number) => string> = {
   ekip: (id) => `/ekipler/${id}/uyeler`,
 };
 
+// Sözleşmedeki TEZGAH_SINIRI_EN_COK ile aynı; istemci sözleşmeden değer ithal etmez.
+const TEZGAH_SINIRI_EN_COK = 20;
+
 const basHarfler = (ad: string) => ad.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toLocaleUpperCase('tr-TR')).join('');
 
 // Kişi açma kisiler modülünün ucudur; düğme yalnız bugün kişi açabilene (kisiler.yaz) görünür, rol yetkileri değişmez
@@ -107,6 +110,12 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
     ...(v.ekipler ?? []).filter((e) => e.aktif).map((e) => ({ deger: `ekip:${e.id}`, baslik: `Ekip ${e.kod} ${e.ad}`, grup: 'Ekipler' })),
   ];
   const yetkinlikYaz = (idler: number[]) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/belirle`, govde: { istasyonIdleri: idler }, satir });
+  // 563 c: kişinin baktığı makineler yalnız yetkin olduğu istasyonlardan seçilir; istasyon yetkinliği kalkınca sunucu bunları da kaldırır.
+  const makineYetkin = yetkinlik?.makineIdleri ?? [];
+  const makineYaz = (idler: number[]) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/makineler/belirle`, govde: { makineIdleri: idler }, satir });
+  const makineSecenekleri = v.makineler.filter((m) => m.aktif && m.istasyonId !== null && yetkin.includes(m.istasyonId) && !makineYetkin.includes(m.id))
+    .map((m) => ({ deger: String(m.id), baslik: `${m.kod} ${m.ad}`, grup: v.istasyonlar.find((i) => i.id === m.istasyonId)?.kod ?? 'İstasyon' }));
+  const enCok = yetkinlik?.enCok ?? null;
   const ata = () => {
     const [tur, id] = hedef.split(':') as [AtamaTuru, string];
     y.gonder({ yol: `${ATAMA_YOLU[tur](Number(id))}/ata`, govde: { kisiId: k.id, yuzde: yuzde.replace(',', '.') }, satir });
@@ -192,6 +201,37 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
             )}
           </span>
         </div>
+        {v.yetkinlikler && (yetkin.length > 0 || makineYetkin.length > 0 || enCok !== null) && (
+          <div className="tc-ist-kisi-satir">
+            <span className="tc-ist-kisi-etiket">Baktığı makineler</span>
+            <span className="tc-ist-cipler" role="group" aria-label={`${k.ad} makine yetkinliği`}>
+              {makineYetkin.length === 0 && <small className="tc-ist-ipucu">Makine seçilmemiş: plan istasyon yetkinliğine bakar</small>}
+              {v.makineler.filter((m) => makineYetkin.includes(m.id)).map((m) => (
+                <span key={m.id} className="tc-ist-cip" title={m.ad}>
+                  <Simge ad="cpu" boyut="k" /> <span className="tc-ist-mono">{m.kod}</span>{!m.aktif && ' (pasif)'}
+                  {yazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${m.kod} makine yetkinliğini kaldır`} disabled={kapali}
+                      onClick={() => makineYaz(makineYetkin.filter((x) => x !== m.id))}>
+                      <Simge ad="x" boyut="k" />
+                    </button>
+                  )}
+                </span>
+              ))}
+              {yazabilir && makineSecenekleri.length > 0 && (
+                <AranabilirSecim etiket={`${k.ad} için makine ekle`} tur="makine" deger="" yerTutucu="+ Makine…" disabled={kapali}
+                  secenekler={makineSecenekleri} sec={(d) => { if (d !== '') makineYaz([...makineYetkin, Number(d)]); }} />
+              )}
+              <label className="tc-ist-kisi-alan">
+                <span>Aynı anda en çok</span>
+                <select className="tc-alan-kutu tc-ist-hucre" aria-label={`${k.ad} aynı anda en çok tezgâh`} value={enCok ?? ''} disabled={kapali}
+                  onChange={(o) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/tezgah-siniri`, govde: { enCok: o.target.value ? Number(o.target.value) : null }, satir })}>
+                  <option value="">Sınırsız</option>
+                  {Array.from({ length: TEZGAH_SINIRI_EN_COK }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} tezgâh</option>)}
+                </select>
+              </label>
+            </span>
+          </div>
+        )}
         {duzenlenen && (
           <div className="tc-ist-kisi-satir" role="group" aria-label={`${k.ad} yetkinlik ayrıntısı`}>
             <span className="tc-ist-kisi-etiket">{v.istasyonlar.find((i) => i.id === duzenlenen.istasyonId)?.kod ?? 'Yetkinlik'}</span>

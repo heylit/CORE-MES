@@ -7,12 +7,17 @@ import { useTopluYaz, type TesisVerisi } from './tesisVerisi.ts';
 import { SecimKutusu } from './TopluCubuk.tsx';
 
 type Degisiklik = { kisiId: number; istasyonId: number; yetkin: boolean };
+type MakineDegisikligi = { kisiId: number; makineId: number; yetkin: boolean };
+type Duzey = 'istasyon' | 'makine';
+const DUZEYLER = [{ deger: 'istasyon', baslik: 'İstasyon' }, { deger: 'makine', baslik: 'Makine' }];
 
 // 565 a: kişi ve istasyon yetkinliği tek tabloda; hücre, satır (kişi) ve sütun (istasyon) aç ve kapat. Hepsi tek toplu uçtan geçer: kişi
 // kartındaki uçla aynı kural ve defter. Geçerlilik bitişi ve dayanak kişi kartında kalır; süresi dolan yetkinlik burada işaretlidir.
+// 563 c: makine düzeyinde sütunlar istasyonun aktif makineleridir; makine hücresi yalnız kişi o istasyonda yetkinse açılır.
 export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: boolean }) {
   const [ara, araYaz] = useState('');
   const [merkez, merkezYaz] = useState('');
+  const [duzey, duzeyYaz] = useState<Duzey>('istasyon');
   const t = useTopluYaz();
   if (v.yukleniyor || v.yetkinlikler === undefined) return <DurumKutusu durum="yukleniyor" />;
   if (v.hata) return <DurumKutusu durum="hata" yenile={v.yenile} />;
@@ -29,7 +34,17 @@ export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: 
     .map((m) => ({ m, istasyonlar: v.istasyonlar.filter((i) => i.aktif && i.isMerkeziId === m.id) }))
     .filter((g) => g.istasyonlar.length > 0);
   const sutunlar = gruplar.flatMap((g) => g.istasyonlar);
+  const makineSutunlari = sutunlar.map((i) => ({ i, makineler: v.makineler.filter((m) => m.aktif && m.istasyonId === i.id) })).filter((x) => x.makineler.length > 0);
   const Y = new Map(v.yetkinlikler.map((y) => [y.kisiId, y]));
+  const makineYetkin = (kisiId: number, makineId: number) => Y.get(kisiId)?.makineIdleri.includes(makineId) ?? false;
+  const makineGonder = (l: MakineDegisikligi[]) => { if (l.length > 0 && !t.mesgul) t.gonder({ yol: '/kisi-yetkinlikleri/toplu', govde: { makineler: l } }); };
+  const makineKutusu = (etiket: string, ciftler: readonly [KisiOzeti, number][]) => {
+    const acik = ciftler.filter(([k, m]) => makineYetkin(k.id, m)).length;
+    return (
+      <SecimKutusu etiket={etiket} secili={ciftler.length > 0 && acik === ciftler.length} kismen={acik > 0 && acik < ciftler.length}
+        degistir={(d) => makineGonder(ciftler.filter(([k, m]) => makineYetkin(k.id, m) !== d).map(([k, m]) => ({ kisiId: k.id, makineId: m, yetkin: d })))} />
+    );
+  };
   const yetkin = (kisiId: number, istasyonId: number) => Y.get(kisiId)?.istasyonIdleri.includes(istasyonId) ?? false;
   const dolmus = (kisiId: number, istasyonId: number) => Y.get(kisiId)?.ayrintilar.find((a) => a.istasyonId === istasyonId)?.gecerli === false;
   const gonder = (l: Degisiklik[]) => { if (l.length > 0 && !t.mesgul) t.gonder({ yol: '/kisi-yetkinlikleri/toplu', govde: { degisiklikler: l } }); };
@@ -48,14 +63,59 @@ export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: 
         <label className="tc-alan"><span className="tc-alan-etiket">İş merkezi</span>
           <SecimHucresi etiket="İş merkezi süzgeci" deger={merkez} bos="Hepsi" secenekler={merkezSecenekleri} kaydet={merkezYaz} />
         </label>
+        <label className="tc-alan"><span className="tc-alan-etiket">Düzey</span>
+          <SecimHucresi etiket="Yetkinlik düzeyi" deger={duzey} secenekler={DUZEYLER} kaydet={(d) => duzeyYaz(d === 'makine' ? 'makine' : 'istasyon')} />
+        </label>
       </div>
       <p className="tc-ist-ipucu">
         Yetkinlik kişinin çalışabildiği istasyonlardır; plan yetkin olmadığı istasyondaki işi uyarır. Satır ve sütun başındaki kutu o kişiyi ya da istasyonu
-        topluca açar ve kapatır. Geçerlilik bitişi ve dayanak Personel'deki kişi kartında girilir.
+        topluca açar ve kapatır. Makine düzeyinde kişinin baktığı makineler seçilir; makinesi seçilmeyen istasyonda plan istasyon yetkinliğine bakar.
+        Geçerlilik bitişi, dayanak ve aynı anda en çok tezgâh Personel'deki kişi kartında girilir.
       </p>
       {t.ret && <p role="alert" className="tc-ist-hata">{t.ret.ileti}</p>}
       {kisiler.length === 0 || sutunlar.length === 0 ? (
         <DurumKutusu durum="bos" mesaj={kisiler.length === 0 ? (ara.trim() === '' ? 'Kişi yok.' : 'Aramaya uyan kişi yok.') : 'Aktif istasyon yok.'} />
+      ) : duzey === 'makine' ? (
+        makineSutunlari.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu istasyonlarda aktif makine yok." /> : (
+          <div className="tc-ist-matris-kap">
+            <table className="tc-ist-matris tc-ist-yetkinlik" aria-label="Makine yetkinliği matrisi" aria-busy={t.mesgul}>
+              <thead>
+                <tr>
+                  <th scope="col" rowSpan={2}>Kişi</th>
+                  {makineSutunlari.map(({ i, makineler }) => <th key={i.id} scope="colgroup" colSpan={makineler.length} title={i.ad}><span className="tc-ist-mono">{i.kod}</span></th>)}
+                  <th scope="col" rowSpan={2}>En çok</th>
+                </tr>
+                <tr>
+                  {makineSutunlari.flatMap(({ i, makineler }) => makineler.map((m) => (
+                    <th key={m.id} scope="col" title={m.ad}>
+                      <span className="tc-ist-mono">{m.kod}</span>
+                      {yazabilir && <>{' '}{makineKutusu(`${m.kod} sütununun hepsi`, kisiler.filter((k) => yetkin(k.id, i.id)).map((k) => [k, m.id] as [KisiOzeti, number]))}</>}
+                    </th>
+                  )))}
+                </tr>
+              </thead>
+              <tbody>
+                {kisiler.map((k) => (
+                  <tr key={k.id}>
+                    <th scope="row">{k.ad}</th>
+                    {makineSutunlari.flatMap(({ i, makineler }) => makineler.map((m) => {
+                      const acik = makineYetkin(k.id, m.id);
+                      const istasyonda = yetkin(k.id, i.id);
+                      return (
+                        <td key={m.id} title={istasyonda ? undefined : `Önce ${i.kod} istasyonunda yetkinlik verilmeli`}>
+                          {yazabilir && (istasyonda || acik)
+                            ? <SecimKutusu etiket={`${k.ad} ${m.kod} makine yetkinliği`} secili={acik} degistir={(d) => makineGonder([{ kisiId: k.id, makineId: m.id, yetkin: d }])} />
+                            : acik ? <span aria-label={`${k.ad} ${m.kod} bakar`}><Simge ad="check" boyut="k" /></span> : null}
+                        </td>
+                      );
+                    }))}
+                    <td>{Y.get(k.id)?.enCok ?? <small className="tc-ist-ipucu">sınırsız</small>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : (
         <div className="tc-ist-matris-kap">
           <table className="tc-ist-matris tc-ist-yetkinlik" aria-label="Yetkinlik matrisi" aria-busy={t.mesgul}>

@@ -610,3 +610,89 @@ export async function aktifIstasyonIdleri(db: Db, idler: readonly number[]): Pro
   );
   return satirlar.map((s) => s.id);
 }
+
+// 563 c: makine yetkinliği. Okuma, makinenin bugünkü istasyonunu taşır; istasyon yetkinliği kontrolü servistedir.
+export interface MakineYetkinligiSatiri { kisiId: number; makineId: number; istasyonId: number | null; verenKisiId: number; verilme: string }
+const MAKINE_YETKINLIK = `y.kisi_id AS "kisiId", y.makine_id AS "makineId", m.istasyon_id AS "istasyonId", y.veren_kisi_id AS "verenKisiId",
+  ${zamanMetni('y.verilme')} AS verilme`;
+
+export function makineYetkinlikAyrintilari(db: Db, kisiId: number | null): Promise<MakineYetkinligiSatiri[]> {
+  return db.sorgu<MakineYetkinligiSatiri>(
+    `SELECT ${MAKINE_YETKINLIK} FROM istasyonlar_makine_yetkinlik y JOIN makine m ON m.id = y.makine_id
+      WHERE $1::int IS NULL OR y.kisi_id = $1 ORDER BY y.kisi_id, y.makine_id`,
+    [kisiId],
+  );
+}
+
+export function kisiMakineYetkinlikleriniKilitle(db: Db, kisiId: number): Promise<MakineYetkinligiSatiri[]> {
+  return db.sorgu<MakineYetkinligiSatiri>(
+    `SELECT ${MAKINE_YETKINLIK} FROM istasyonlar_makine_yetkinlik y JOIN makine m ON m.id = y.makine_id
+      WHERE y.kisi_id = $1 ORDER BY y.makine_id FOR UPDATE OF y`,
+    [kisiId],
+  );
+}
+
+// Bugün geçerli istasyon yetkinliği olan istasyonun makineleri (plan motoru bunu okur).
+export function gecerliMakineYetkinlikleri(db: Db, kisiId: number | null, gun: string): Promise<{ kisiId: number; makineId: number }[]> {
+  return db.sorgu<{ kisiId: number; makineId: number }>(
+    `SELECT my.kisi_id AS "kisiId", my.makine_id AS "makineId"
+       FROM istasyonlar_makine_yetkinlik my JOIN makine m ON m.id = my.makine_id
+       JOIN istasyonlar_yetkinlik y ON y.kisi_id = my.kisi_id AND y.istasyon_id = m.istasyon_id
+      WHERE ($1::int IS NULL OR my.kisi_id = $1) AND ${GECERLI_YETKINLIK} ORDER BY my.kisi_id, my.makine_id`,
+    [kisiId, gun],
+  );
+}
+
+// Yeni makine yetkinliği için makinenin varlığı, aktifliği ve istasyonu.
+export function makineIstasyonlari(db: Db, idler: readonly number[]): Promise<{ id: number; istasyonId: number | null; aktif: boolean }[]> {
+  return db.sorgu<{ id: number; istasyonId: number | null; aktif: boolean }>(
+    'SELECT id, istasyon_id AS "istasyonId", aktif FROM makine WHERE id = ANY($1::int[])',
+    [[...idler]],
+  );
+}
+
+export async function makineYetkinlikEkle(db: Db, kisiId: number, makineId: number, verenKisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [kisiId, makineId, verenKisiId]);
+}
+
+export async function makineYetkinlikKaldir(db: Db, kisiId: number, makineId: number): Promise<void> {
+  await db.sorgu('DELETE FROM istasyonlar_makine_yetkinlik WHERE kisi_id = $1 AND makine_id = $2', [kisiId, makineId]);
+}
+
+export type MakineYetkinlikNedeni = 'elle' | 'istasyon_yetkinligi_kalkti';
+export async function makineYetkinlikGecmisiYaz(
+  db: Db, g: { kisiId: number; makineId: number; islem: 'ver' | 'kaldir'; neden: MakineYetkinlikNedeni; degistirenKisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO istasyonlar_makine_yetkinlik_gecmisi (kisi_id, makine_id, makine_kod, islem, neden, degistiren_kisi_id)
+       SELECT $1, $2, m.kod, $3, $4, $5 FROM makine m WHERE m.id = $2`,
+    [g.kisiId, g.makineId, g.islem, g.neden, g.degistirenKisiId],
+  );
+}
+
+export interface MakineYetkinlikGecmisSatiri { makineId: number; makineKod: string; islem: 'ver' | 'kaldir'; neden: MakineYetkinlikNedeni; degistirenKisiId: number; zaman: string }
+export function makineYetkinlikGecmisi(db: Db, kisiId: number): Promise<MakineYetkinlikGecmisSatiri[]> {
+  return db.sorgu<MakineYetkinlikGecmisSatiri>(
+    `SELECT makine_id AS "makineId", makine_kod AS "makineKod", islem, neden, degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('zaman')} AS zaman
+       FROM istasyonlar_makine_yetkinlik_gecmisi WHERE kisi_id = $1 ORDER BY zaman DESC, id DESC LIMIT 500`,
+    [kisiId],
+  );
+}
+
+// 563 2 a: kişi başına aynı anda en çok tezgâh. Satır yoksa sınır yoktur.
+export function kisiTezgahSinirlari(db: Db): Promise<{ kisiId: number; enCok: number }[]> {
+  return db.sorgu<{ kisiId: number; enCok: number }>('SELECT kisi_id AS "kisiId", en_cok AS "enCok" FROM istasyonlar_kisi_tezgah_siniri ORDER BY kisi_id');
+}
+
+export async function kisiTezgahSiniriYaz(db: Db, kisiId: number, enCok: number | null, degistirenKisiId: number): Promise<void> {
+  if (enCok === null) {
+    await db.sorgu('DELETE FROM istasyonlar_kisi_tezgah_siniri WHERE kisi_id = $1', [kisiId]);
+    return;
+  }
+  await db.sorgu(
+    `INSERT INTO istasyonlar_kisi_tezgah_siniri (kisi_id, en_cok, degistiren_kisi_id) VALUES ($1, $2, $3)
+       ON CONFLICT (kisi_id) DO UPDATE SET en_cok = EXCLUDED.en_cok, degistiren_kisi_id = EXCLUDED.degistiren_kisi_id, degisme = now()
+       WHERE istasyonlar_kisi_tezgah_siniri.en_cok IS DISTINCT FROM EXCLUDED.en_cok`,
+    [kisiId, enCok, degistirenKisiId],
+  );
+}
