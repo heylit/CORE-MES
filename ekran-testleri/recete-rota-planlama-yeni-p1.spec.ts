@@ -82,7 +82,9 @@ test.describe('P1b Tezgâh haritası', () => {
     await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
     await expect(kilavuz).toBeVisible();
     await tasmaz(page);
-    await kilavuz.getByRole('button', { name: 'Kılavuzu kapat' }).click();
+    // 598 a: dar ekranda Yapılacaklar düğmesi kartın X'inin üstüne biner (eski sayfada da böyle); orada kılavuz Anladım ile kapanır.
+    const dar = (page.viewportSize()?.width ?? 0) < 600;
+    await kilavuz.getByRole('button', { name: dar ? 'Anladım' : 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);
     await page.getByRole('button', { name: /Başka/ }).click();
     await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
