@@ -619,6 +619,9 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.ok(is0!.malzemeler[0]!.yerler.length > 0, 'bulunduğu yer');
     assert.equal(is0!.malzemeler[0]!.birim, 'kg', 'birim kartın biriminden gelir');
     assert.equal((await isMalzemesi(c.id))[0]!.malzemeler[0]!.birim, null, 'kartta birim yoksa null, uydurulmaz');
+    // 622: önceki adım bitmeden sonraki istasyonda sorulan hazırlık o adımın girdisini orada aramaz, istek açmaz; başlatmayı sıra kuralı reddeder.
+    assert.deepEqual((await istek<UretimHazirligiCevabi>('operator', 'POST', '/stok/uretim-hazirligi', { uretimEmriId: e, istasyonId: c.id })).govde, { hazir: true, eksikler: [] });
+    assert.equal((await isMalzemesi(a.id))[0]!.malzemeler[0]!.istek, null, 'OP 10 girdisi için başka istasyona istek açılmadı');
     // İstek kapanır ama girdi hâlâ eksikse bir sonraki başlatma denemesi yeni istek açar.
     const ilk = await istek<UretimHazirligiCevabi>('operator', 'POST', '/stok/uretim-hazirligi', { uretimEmriId: e, istasyonId: a.id });
     const ilkIstek = ilk.govde.eksikler[0]!.istek!;
