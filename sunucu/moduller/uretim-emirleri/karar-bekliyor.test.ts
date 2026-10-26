@@ -6,7 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import {
-  emirBaslat, emirBitir, emirSayim, kaliteKarariDinle, kararliSayimiSonuclandir, kararSayaclari, saglamSayimDinle,
+  aralikAdetleri, emirBaslat, emirBitir, emirSayim, kaliteKarariDinle, kararliSayimiSonuclandir, kararSayaclari, saglamSayimDinle,
 } from './disari.ts';
 import type { KaliteKarariOlayi, SaglamSayimOlayi } from './disari.ts';
 import { SAGLAM_EKSIYE_INER } from './kurallar.ts';
@@ -265,5 +265,43 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'))).adet, 0);
     assert.deepEqual(await satirlar(id), []);
     assert.deepEqual(kararOlaylari, []);
+  });
+
+  test('645 a: karar satırları parçanın üretildiği ana yazılır, kararın anı ayrı tutulur; defter ve son olaylar kararı karar anında gösterir', async () => {
+    const id = await baslamisEmir();
+    const { istasyon_id: ist } = (await ortam!.sahip.tek<{ istasyon_id: number }>('SELECT istasyon_id FROM uretim_emri WHERE id = $1', [id]))!;
+    const yaz = (adet: number, zaman: string) => ortam!.sahip.sorgu(
+      `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman) VALUES ($1, $2, $3, 'karar_bekliyor', $4, $4 < 0, $5::timestamptz)`,
+      [id, operator.id, ist, adet, zaman],
+    );
+    const T = (gun: number, saat: string) => `2026-03-0${gun}T${saat}:00+03:00`;
+    await yaz(5, T(2, '09:00'));
+    await yaz(3, T(2, '10:00'));
+    await yaz(-2, T(2, '11:00'));
+    const once = new Date().toISOString();
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    await yaz(4, T(3, '09:00'));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
+
+    const kararSatirlari = await vt().sorgu<{ tur: string; adet: number; zaman: Date; karar_zamani: Date | null }>(
+      'SELECT tur, adet, zaman, karar_zamani FROM uretim_sayimi WHERE emir_id = $1 AND karar_veren_kisi_id IS NOT NULL ORDER BY id', [id]);
+    assert.deepEqual(kararSatirlari.map((k) => [k.tur, k.adet, k.zaman.getTime()]), [
+      ['karar_bekliyor', -5, Date.parse(T(2, '09:00'))], ['saglam', 5, Date.parse(T(2, '09:00'))],
+      ['karar_bekliyor', -1, Date.parse(T(2, '10:00'))], ['saglam', 1, Date.parse(T(2, '10:00'))],
+      ['karar_bekliyor', -4, Date.parse(T(3, '09:00'))], ['red', 4, Date.parse(T(3, '09:00'))],
+    ], 'eksi düzeltme en son sayılandan düşer; önceki kararla kapanan satır yeniden karara girmez');
+    assert.ok(kararSatirlari.every((k) => k.karar_zamani !== null && k.karar_zamani.getTime() >= Date.parse(once)), 'kararın anı karar_zamani');
+    assert.deepEqual(await sayaclar(id), { kararBekliyor: 0, red: 4 });
+
+    const gun = await vt().tx((db) => aralikAdetleri(db, 'istasyon', [ist], T(2, '00:00'), T(3, '00:00')));
+    assert.deepEqual(gun.get(ist), { saglam: 6, hurda: 0 }, 'onaylanan parça üretildiği güne sayılır');
+
+    const { kayitlar } = await vt().tx((db) => emirAyrintisi(db, id));
+    const kararlar = kayitlar.filter((k) => k.olay === 'kalite_onay' || k.olay === 'kalite_red');
+    assert.deepEqual(kararlar.map((k) => [k.olay, k.adet]), [['kalite_onay', 5], ['kalite_onay', 1], ['kalite_red', 4]]);
+    assert.ok(kararlar.every((k) => Date.parse(k.zaman) >= Date.parse(once)), 'defter kararı karar anında gösterir');
+    const { olaylar } = await vt().tx((db) => sonOlaylar(db, T(4, '00:00'), 200));
+    assert.deepEqual(olaylar.filter((o) => o.emir.id === id && o.olay !== 'baslat').map((o) => o.olay).sort(), ['kalite_onay', 'kalite_onay', 'kalite_red'],
+      'üretim anı imleçten eski olsa da karar son olaylara düşer');
   });
 });

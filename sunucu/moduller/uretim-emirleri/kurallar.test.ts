@@ -9,7 +9,7 @@ import {
   acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
-  SAYIM_KATILIMSIZ, sayimYetkiIhlali,
+  SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari,
 } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
@@ -241,5 +241,15 @@ describe('refakat kartı sınırı (Soru 132, 136 a)', () => {
     assert.equal(kartAdimi(ie, null)?.id, 2);
     assert.equal(kartAdimi(ie, 99)?.id, 2);
     assert.equal(kartAdimi(ie.map((i) => ({ ...i, durum: 'tamam' as const })), 5), null);
+  });
+
+  test('645 a: karar bekleyen satırlar üretim anlarına bölünür; eksi düzeltme en son sayılandan düşer; toplam korunur', () => {
+    assert.deepEqual(kararAnlari([
+      { zaman: 't1', adet: 5 }, { zaman: 't2', adet: 3 }, { zaman: 't2', adet: 1 }, { zaman: 't3', adet: -2 }, { zaman: 't4', adet: 2 },
+    ]), [{ zaman: 't1', adet: 5 }, { zaman: 't2', adet: 2 }, { zaman: 't4', adet: 2 }]);
+    assert.deepEqual(kararAnlari([{ zaman: 't1', adet: 2 }, { zaman: 't2', adet: 1 }, { zaman: 't3', adet: -2 }]), [{ zaman: 't1', adet: 1 }],
+      'sıfıra inen an gelmez, düzeltme önceki ana taşar');
+    assert.deepEqual(kararAnlari([{ zaman: 't1', adet: -1 }, { zaman: 't2', adet: 3 }]), [{ zaman: 't1', adet: -1 }, { zaman: 't2', adet: 3 }]);
+    assert.deepEqual(kararAnlari([]), []);
   });
 });

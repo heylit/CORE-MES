@@ -18,7 +18,7 @@ import {
   adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
-  ilkAyrim, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
+  ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -26,7 +26,7 @@ import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './say
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
-import type { AdimSatiri, EmirSatiri, KayitSatiri } from './sorgular.ts';
+import type { AdimSatiri, EmirSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
 interface Adlar {
   istasyon: Map<number, string>;
@@ -596,21 +596,31 @@ export async function emirSayim(
 }
 
 // Emrin karar bekleyen sayımı kalite kararıyla kapanır: onayda sağlama, retde redde geçer; her iş emrinde iki düzeltme satırı yazılır
-// (-n karar bekliyor, +n sağlam ya da red). Ret sonrası sayılan yeniden karar bekler ve bir sonraki kararla kapanır (136 a).
+// (-n karar bekliyor, +n sağlam ya da red), parçanın üretildiği her an için ayrı (645 a). Ret sonrası sayılan yeniden karar bekler ve bir sonraki kararla kapanır (136 a).
 // Emir bitmiş ya da durmuş olabilir; kapsam ve kalite yetkisini çağıran denetler (Arkon numune kararı).
 export async function kararliSayimiSonuclandir(
   db: Db, kisiId: number, id: number, karar: KaliteKarari,
 ): Promise<{ emir: Emir; adet: number }> {
   await kilitliEmir(db, id);
-  const gruplar = await sorgular.kararBekleyenGruplari(db, id);
   const an = await sorgular.anAl(db);
+  const gruplar = new Map<string, { grup: KararGrubu; satirlar: { zaman: string; adet: number }[] }>();
+  for (const { zaman, adet, ...grup } of await sorgular.kararBekleyenSatirlari(db, id)) {
+    const anahtar = `${String(grup.isEmriId)}/${grup.istasyonId}/${grup.kisiId}/${String(grup.refakatPartisiId)}`;
+    const g = gruplar.get(anahtar) ?? { grup, satirlar: [] };
+    g.satirlar.push({ zaman, adet });
+    gruplar.set(anahtar, g);
+  }
   // İş emri ve refakat partisi başına toplanır: stok kararı partinin kendi bakiyesine uygular.
   const adetler = new Map<string, { isEmriId: number | null; refakatPartisiId: number | null; adet: number }>();
-  for (const g of gruplar) {
-    await sorgular.kararSatirlariEkle(db, id, g, karar === 'onay' ? 'saglam' : 'red', an, kisiId);
+  for (const { grup: g, satirlar } of gruplar.values()) {
+    let grupAdedi = 0;
+    for (const a of kararAnlari(satirlar)) {
+      await sorgular.kararSatirlariEkle(db, id, g, karar === 'onay' ? 'saglam' : 'red', a.zaman, a.adet, an, kisiId);
+      grupAdedi += a.adet;
+    }
     const anahtar = `${String(g.isEmriId)}/${String(g.refakatPartisiId)}`;
     const o = adetler.get(anahtar) ?? { isEmriId: g.isEmriId, refakatPartisiId: g.refakatPartisiId, adet: 0 };
-    adetler.set(anahtar, { ...o, adet: o.adet + g.adet });
+    adetler.set(anahtar, { ...o, adet: o.adet + grupAdedi });
   }
   let toplam = 0;
   for (const { isEmriId, refakatPartisiId, adet } of adetler.values()) {
