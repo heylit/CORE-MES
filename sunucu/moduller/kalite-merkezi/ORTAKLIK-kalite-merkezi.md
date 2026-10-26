@@ -12,7 +12,8 @@ Aşağıdaki kavramlar başka modülde de vardır; Aşama 1'de bağlanmaz.
 | Kişi, rol, PIN | `kullanici` (Muayeneci, Kalite mühendisi, Kalite yöneticisi) | `kisiler`, `oturum` |
 | Değişiklik izi | `iz` (yalnız eklenir) | `denetim` |
 | Belge, sertifika, fotoğraf | `belge`; dosyalar ortak depoda | `dosya` (bağ: modül `kalite-merkezi`) |
-| Teknik resim, model, balon | `cizim` | planlanan `cizim` (#80), Arkon çizim ekranı |
+| Teknik resim, model, balon | `cizim` (eski); stüdyo: `kalite_merkezi_resim` (malzeme_no, merkez_belge_id, ozet, revizyon), `kalite_merkezi_balon` (no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem) | kalite-merkezi (595 1 b, 597 a). Dosya: `cizimler` (`cizimler_belge`, yayındaki revizyonun özeti); parça: `malzemeler` (`malzeme_katalog_karti.no`). Arkon `plan` ve `files` kopyası taşınınca kalkar (ayrı onay) |
+| Numune planı, numune, ölçüm, numune kararı | `kalite_merkezi_numune_plani` (malzeme_no, op_no, kurallar), `kalite_merkezi_numune` (uretim_emri_id, op_no, balonlar), `kalite_merkezi_numune_karari` (karar: onay, ret, sapma), `kalite_merkezi_olcum` (deger ya da nitel, uygun, kaynak: operator, kalite, cmm) | kalite-merkezi (600 a). Emir: `uretim-emirleri` (`uretim_emri.id`); kişi: `kisiler`. Arkon `requests`, `results`, `logMeas` kopyası taşınınca kalkar (ayrı onay) |
 | Muayene, lot kabul, SPC | `insp`, `lot`, `spc` | planlanan `kalite` (#78, numune talebi), Arkon `/arkon/kalite` |
 | Uygunsuzluk, DÖF | `ncr`, `capa` | kalite-merkezi (155 a, DÖF'ün tek sahibi); denetim-hazirlik bulgudan DÖF'ü `disari.ts` `dofAc` ile açar, `dofDurumlari` ile okur. `capa` alanları: `kaynak`, `kaynakAnahtari`, `kaynakMadde`, `kaynakSeviye`, `kaynakAciklama` |
 | Form şablonu, kontrol listesi | `frm`, `tpl` | planlanan `kontrol-plani` (#74) |
