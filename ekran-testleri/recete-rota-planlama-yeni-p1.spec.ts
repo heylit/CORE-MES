@@ -441,3 +441,30 @@ test.describe('577d Tezgâh stüdyosu', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
+
+// 577d: Başka menüsünün kartları haritanın üstüne açılır; plan yoksa menüde pasiftir. Kartlar okur, yazma gitmez.
+test.describe('577d Tahta kartları', () => {
+  test('Plan, Siparişler, Kuyruklar ve Ne neyi etkiliyor açılır, bölgelere dizilir, Esc kapatır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/plan');
+    const baska = page.getByRole('button', { name: /Başka/ });
+    if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
+      await page.keyboard.press('Escape');
+      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Ne neyi etkiliyor/]) {
+        await baska.click();
+        await page.getByRole('menuitemcheckbox', { name: ad }).click();
+      }
+      await expect(page.getByRole('region', { name: 'Tezgâh haritası' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Ne neyi etkiliyor' })).toBeVisible();
+      await tasmaz(page);
+      await baska.click();
+      await page.getByRole('menuitem', { name: /Kartları bölgelere diz/ }).click();
+      await tasmaz(page);
+      await page.locator('.tc-pym-at-cv').click({ position: { x: 5, y: 5 } });
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('region', { name: 'Ne neyi etkiliyor' })).toHaveCount(0);
+      for (const t of ['1', '2', '3']) await page.keyboard.press(t);
+      await expect(page.locator('.tc-pyk-kart')).toHaveCount(0);
+    }
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});
