@@ -1,14 +1,19 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi,
-  malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi, onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
+  bagGovdesi, belgeAyrintisi, belgeGuncelleGovdesi, belgeListesiCevabi, belgeListesiSorgusu, belgeOlusturGovdesi, idParametresi, kucukResimKareParametresi,
+  kucukResimlerCevabi, kucukResimSorgusu, malzemeBelgeEkleGovdesi, malzemeBelgeleriCevabi, malzemeBelgeParametresi, malzemeBelgeSurumGovdesi,
+  malzemeParametresi, malzemeRevizyonEkleGovdesi, malzemeRevizyonParametresi, malzemeSecimiCevabi, malzemeSecimiSorgusu, onizlemeGovdesi,
+  onizlemeKareParametresi, revizyonEkleGovdesi, revizyonParametresi, surumGovdesi,
 } from '#paylasilan/sozlesme/cizimler.ts';
 import * as servis from './servis.ts';
 
 // Sayfası olan rol okur; `cizimler.oku` sayfasız okuma için ayrı verilebilir (başka ekranda belge gösteren rol).
 const OKUMA = { biri: ['sayfa.cizimler', 'cizimler.oku'] } as const;
 const OKUYAN_ISLEMLER: readonly string[] = OKUMA.biri;
+// Malzeme kartından yazma (688 a): merkezde yazan ya da malzeme kartını yazan rol; kapsam yalnız o kartın belgeleridir.
+const MALZEME_YAZMA = { biri: ['cizimler.yaz', 'malzemeler.yaz'] } as const;
+const MALZEME_OKUMA = { biri: ['sayfa.cizimler', 'cizimler.oku', 'malzemeler.yaz'] } as const;
 
 export const uclar = [
   uc({
@@ -150,5 +155,78 @@ export const uclar = [
     govde: bagGovdesi,
     cevap: belgeAyrintisi,
     isle: ({ db, parametre, govde }) => servis.bagKaldir(db, parametre.id, govde),
+  }),
+  // Küçük resim (688 a): oturum açmış herkes, yalnız bir kayda bağlı ve yayına girmiş revizyonun karesini okur.
+  uc({
+    yontem: 'GET',
+    yol: '/cizimler/kucuk-resimler',
+    yetki: 'oturum',
+    sorgu: kucukResimSorgusu,
+    cevap: kucukResimlerCevabi,
+    isle: async ({ db, sorgu }) => ({ resimler: [...(await servis.kayitlarinKucukResimleri(db, sorgu.hedefModul, sorgu.idler)).values()] }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cizimler/kucuk-resim/:revizyonId/:kare',
+    yetki: 'oturum',
+    parametre: kucukResimKareParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, parametre }) => servis.kucukResimKaresi(db, parametre.revizyonId, parametre.kare),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/cizimler/malzemeler/:no/belgeler',
+    yetki: MALZEME_OKUMA,
+    parametre: malzemeParametresi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, parametre }) => servis.malzemeBelgeleri(db, parametre.no),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/malzemeler/:no/belge-ekle',
+    yetki: MALZEME_YAZMA,
+    tekrarKorumali: true,
+    parametre: malzemeParametresi,
+    govde: malzemeBelgeEkleGovdesi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.malzemeBelgeEkle(db, kullanici, parametre.no, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/malzemeler/:no/belgeler/:id/revizyon-ekle',
+    yetki: MALZEME_YAZMA,
+    tekrarKorumali: true,
+    parametre: malzemeBelgeParametresi,
+    govde: malzemeRevizyonEkleGovdesi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.malzemeRevizyonEkle(db, kullanici, parametre.no, parametre.id, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/malzemeler/:no/belgeler/:id/kapak',
+    yetki: MALZEME_YAZMA,
+    parametre: malzemeBelgeParametresi,
+    govde: malzemeBelgeSurumGovdesi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, parametre, govde }) => servis.malzemeKapagi(db, parametre.no, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/malzemeler/:no/belgeler/:id/bagla',
+    yetki: MALZEME_YAZMA,
+    parametre: malzemeBelgeParametresi,
+    govde: malzemeBelgeSurumGovdesi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.malzemeyeOneriBagla(db, kullanici, parametre.no, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/cizimler/malzemeler/:no/belgeler/:id/revizyonlar/:revizyonId/onizleme',
+    yetki: { biri: ['cizimler.yayinla', 'malzemeler.yaz'] },
+    parametre: malzemeRevizyonParametresi,
+    govde: onizlemeGovdesi,
+    cevap: malzemeBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) =>
+      servis.malzemeOnizlemesiYaz(db, kullanici, parametre.no, parametre.id, parametre.revizyonId, govde, denetimEki),
   }),
 ];

@@ -7,6 +7,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/cizimler', ekran: () => <Belgeler /> },
   { yol: '/cizimler/teknik-resim', ekran: () => <Belgeler tur="teknik-resim" /> },
   { yol: '/cizimler/3b-model', ekran: () => <Belgeler tur="3b-model" /> },
+  { yol: '/cizimler/fotograf', ekran: () => <Belgeler tur="fotograf" /> },
   { yol: '/cizimler/makine', ekran: () => <Belgeler tur="makine" /> },
   { yol: '/cizimler/sertifika', ekran: () => <Belgeler tur="sertifika" /> },
   { yol: '/cizimler/rapor', ekran: () => <Belgeler tur="rapor" /> },

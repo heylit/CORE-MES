@@ -7,19 +7,20 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, MalzemeSecimiCevabi, OnizlemeGovdesi,
-  RevizyonEkleGovdesi,
+  BagModulu, BelgeAyrintisi, BelgeGuncelleGovdesi, BelgeListesiSuzgeci, BelgeOlusturGovdesi, BelgeSatiri, BelgeTuru, KucukResim, MalzemeBelgeEkleGovdesi,
+  MalzemeBelgeleriCevabi, MalzemeRevizyonEkleGovdesi, MalzemeSecimiCevabi, OnizlemeGovdesi, RevizyonEkleGovdesi,
 } from '#paylasilan/sozlesme/cizimler.ts';
 import { BELGE_TURLERI, ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/cizimler.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { istasyonAdlari, istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
-  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi,
-  silmeReddi, yayinReddi,
+  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi,
+  onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, silmeReddi, yayinReddi,
 } from './kurallar.ts';
+import type { AdayBelge, KartAnahtari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { BelgeKaydi } from './sorgular.ts';
 
@@ -64,21 +65,23 @@ async function dosyayiBagla(db: Db, kullanici: Kullanici, belgeId: number, tur: 
 }
 
 async function revizyonYaz(
-  db: Db, kullanici: Kullanici, b: { id: number; tur: BelgeTuru }, g: { ozet: string; dosyaAdi: string; not?: string | null | undefined },
+  db: Db, kullanici: Kullanici, b: { id: number; tur: BelgeTuru },
+  g: { ozet: string; dosyaAdi: string; not?: string | null | undefined; antetRev?: string | null | undefined },
   denetimEki: DenetimEki,
-): Promise<void> {
+): Promise<number> {
   // CZ-06: aynı dosya bir belgede iki revizyon olmaz. Bağ yazılmadan önce bakılır: bağ satırı aynı özette adı ezerdi.
   if ((await sorgular.revizyonlar(db, b.id)).some((r) => r.ozet === g.ozet)) throw dogrulama(ILETILER.ayniDosya, 'ozet');
   const bag = await dosyayiBagla(db, kullanici, b.id, b.tur, g.ozet, g.dosyaAdi);
   const sira = await sorgular.sonrakiSira(db, b.id);
-  await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonEkle(db, {
-    belgeId: b.id, sira, ozet: g.ozet, dosyaTuru: bag.tur, not: g.not ?? null, kisiId: kullanici.id,
+  const revizyonId = await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonEkle(db, {
+    belgeId: b.id, sira, ozet: g.ozet, dosyaTuru: bag.tur, not: g.not ?? null, antetRev: g.antetRev ?? null, kisiId: kullanici.id,
   }));
   denetimEki([{ ...denetimSatiri('bagla', bag), revizyon: revizyonHarfi(sira) }]);
+  return revizyonId;
 }
 
 export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlusturGovdesi, denetimEki: DenetimEki): Promise<BelgeAyrintisi> {
-  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, kisiId: kullanici.id });
+  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null, kisiId: kullanici.id });
   await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
   return belgeAyrintisi(db, id);
 }
@@ -86,7 +89,7 @@ export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlustur
 export async function belgeGuncelle(db: Db, id: number, g: BelgeGuncelleGovdesi): Promise<BelgeAyrintisi> {
   etkinOlmali(await kilitliBelge(db, id));
   await surumluGuncelle({
-    guncelle: () => sorgular.belgeGuncelle(db, id, g.surum, g.ad.trim(), g.aciklama ?? null),
+    guncelle: () => sorgular.belgeGuncelle(db, id, g.surum, { ad: g.ad.trim(), aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null }),
     varMi: () => sorgular.belgeVarMi(db, id),
   });
   return belgeAyrintisi(db, id);
@@ -153,8 +156,8 @@ export async function onizlemeYaz(
   for (const { kare, ozet } of g.kareler) {
     if (bagli.has(ozet)) continue;
     bagli.set(ozet, await dosyaTutamak.dosyaBagla(
-      db, kullanici, { ozet, kayit, ad: `onizleme-${revizyonHarfi(r.sira)}-${kare}.png`, belgeTuru: null },
-      { turler: ['png'], azamiBayt: ONIZLEME_SINIRLARI.kareBayt },
+      db, kullanici, { ozet, kayit, ad: `onizleme-${revizyonHarfi(r.sira)}-${kare}`, belgeTuru: null },
+      { turler: ONIZLEME_KARE_TURLERI, azamiBayt: ONIZLEME_SINIRLARI.kareBayt },
     ));
   }
   const boyutRet = onizlemeBoyutReddi(g.kareler.map((k) => bagli.get(k.ozet) as BagliDosya));
@@ -240,7 +243,7 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
     b.olusturanId, ...revizyonlar.flatMap((r) => [r.yukleyenId, ...(r.yayinlayanId === null ? [] : [r.yayinlayanId])]), ...baglar.map((g) => g.ekleyenId),
   ]);
   return {
-    id: b.id, ad: b.ad, tur: b.tur, aciklama: b.aciklama, aktif: b.aktif, olusturanAd: adlar.get(b.olusturanId) ?? null,
+    id: b.id, ad: b.ad, tur: b.tur, aciklama: b.aciklama, resimNo: b.resimNo, aktif: b.aktif, olusturanAd: adlar.get(b.olusturanId) ?? null,
     olusturuldu: b.olusturuldu, guncellendi: b.guncellendi, surum: b.surum,
     revizyonlar: revizyonlar.map((r) => {
       const d = dosya.get(r.ozet);
@@ -250,10 +253,12 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
         id: r.id, sira: r.sira, harf: revizyonHarfi(r.sira), durum: r.durum, ozet: r.ozet, dosyaAdi: d.ad, dosyaTuru: r.dosyaTuru,
         boyut: d.boyut, not: r.not, yukleyenAd: adlar.get(r.yukleyenId) ?? null, yuklendi: r.yuklendi,
         yayinlayanAd: r.yayinlayanId === null ? null : adlar.get(r.yayinlayanId) ?? null, yayinlandi: r.yayinlandi,
-        onizlemeKareSayisi: kareler.get(r.id) ?? 0,
+        onizlemeKareSayisi: kareler.get(r.id) ?? 0, antetRev: r.antetRev,
       };
     }),
-    baglar: baglar.map((g) => ({ hedefModul: g.hedefModul, hedefId: g.hedefId, hedefAdi: hedefAdi(g), ekleyenAd: adlar.get(g.ekleyenId) ?? null, eklendi: g.eklendi })),
+    baglar: baglar.map((g) => ({
+      hedefModul: g.hedefModul, hedefId: g.hedefId, hedefAdi: hedefAdi(g), ekleyenAd: adlar.get(g.ekleyenId) ?? null, eklendi: g.eklendi, kapak: g.kapak,
+    })),
   };
 }
 
@@ -290,6 +295,121 @@ export async function revizyonDosyasi(db: Db, id: number, revizyonId: number): P
   if (r === null) throw bulunamadi('Revizyon bulunamadı.');
   const akis = await dosyaTutamak.dosyaAkisi(db, kayitAnahtari(id), r.ozet);
   if (akis === null) throw bulunamadi('Dosya bulunamadı.');
+  return akis;
+}
+
+/* ---------------- Malzeme kartından (kart #688) ---------------- */
+
+// Malzeme ekranı bu uçlarla yalnız o kartın belgelerine yazar; merkezdeki başka belgeye dokunamaz. Malzemeler sunucusu merkezi
+// ithal edemez (merkez malzemelere bağımlı, ADR 0006): ekran bu uçları doğrudan çağırır.
+async function malzemeOlmali(db: Db, no: number): Promise<void> {
+  if (!(await malzemeOzetleri(db, [no])).has(no)) throw bulunamadi(ILETILER.malzemeYok);
+}
+
+async function malzemeBelgesiOlmali(db: Db, no: number, id: number): Promise<BelgeKaydi> {
+  const b = await kilitliBelge(db, id);
+  if (!(await sorgular.bagVarMi(db, id, 'malzemeler', no))) throw bulunamadi(ILETILER.malzemeyeBagliDegil);
+  return b;
+}
+
+async function kartAnahtari(db: Db, no: number): Promise<KartAnahtari | null> {
+  return (await malzemeResimAnahtarlari(db, [no])).get(no) ?? null;
+}
+
+export async function malzemeBelgeleri(db: Db, no: number): Promise<MalzemeBelgeleriCevabi> {
+  await malzemeOlmali(db, no);
+  const bagli = await sorgular.bagliBelgeler(db, 'malzemeler', no);
+  const belgeler: MalzemeBelgeleriCevabi['belgeler'] = [];
+  for (const s of bagli) {
+    const a = await belgeAyrintisi(db, s.id);
+    const kapak = a.baglar.some((g) => g.hedefModul === 'malzemeler' && g.hedefId === no && g.kapak);
+    belgeler.push({ id: a.id, ad: a.ad, tur: a.tur, resimNo: a.resimNo, surum: a.surum, kapak, revizyonlar: a.revizyonlar });
+  }
+  const kart = await kartAnahtari(db, no);
+  const oneriler = kart?.resimNo ? await sorgular.resimNoyaUyanBelgeler(db, kart.resimNo, 'malzemeler', no) : [];
+  return { belgeler, oneriler, kucukResim: (await kayitlarinKucukResimleri(db, 'malzemeler', [no])).get(no) ?? null };
+}
+
+export async function malzemeBelgeEkle(
+  db: Db, kullanici: Kullanici, no: number, g: MalzemeBelgeEkleGovdesi, denetimEki: DenetimEki,
+): Promise<MalzemeBelgeleriCevabi> {
+  await malzemeOlmali(db, no);
+  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: null, resimNo: g.resimNo ?? null, kisiId: kullanici.id });
+  const revizyonId = await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
+  if (malzemedenYayinda(g.tur)) await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
+  await bagYaz(db, kullanici, id, 'malzemeler', no);
+  return malzemeBelgeleri(db, no);
+}
+
+export async function malzemeRevizyonEkle(
+  db: Db, kullanici: Kullanici, no: number, id: number, g: MalzemeRevizyonEkleGovdesi, denetimEki: DenetimEki,
+): Promise<MalzemeBelgeleriCevabi> {
+  const b = await malzemeBelgesiOlmali(db, no, id);
+  etkinOlmali(b);
+  await surumuIlerlet(db, id, g.surum);
+  const revizyonId = await revizyonYaz(db, kullanici, b, g, denetimEki);
+  if (b.tur === 'fotograf') await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
+  return malzemeBelgeleri(db, no);
+}
+
+// Kapak bağın özelliğidir: aynı belge başka kayıtta kapak olmayabilir. Yayına girmiş revizyonu olmayan belge kapak olamaz.
+export async function malzemeKapagi(db: Db, no: number, id: number, surum: number): Promise<MalzemeBelgeleriCevabi> {
+  const b = await malzemeBelgesiOlmali(db, no, id);
+  etkinOlmali(b);
+  if ((await sorgular.revizyonlar(db, id)).every((r) => r.durum === 'taslak')) throw cakisma(ILETILER.kapakTaslak);
+  await surumuIlerlet(db, id, surum);
+  await sorgular.kapakYaz(db, 'malzemeler', no, id);
+  return malzemeBelgeleri(db, no);
+}
+
+// Yalnız öneri bağlanır (teknik resim numarası kartınkine uyan belge): malzeme yetkisiyle merkezdeki rastgele belge bağlanamaz.
+export async function malzemeyeOneriBagla(db: Db, kullanici: Kullanici, no: number, id: number, surum: number): Promise<MalzemeBelgeleriCevabi> {
+  await malzemeOlmali(db, no);
+  const kart = await kartAnahtari(db, no);
+  const oneriler = kart?.resimNo ? await sorgular.resimNoyaUyanBelgeler(db, kart.resimNo, 'malzemeler', no) : [];
+  if (!oneriler.some((o) => o.id === id)) throw bulunamadi(ILETILER.malzemeyeBagliDegil);
+  const b = await kilitliBelge(db, id);
+  etkinOlmali(b);
+  await surumuIlerlet(db, id, surum);
+  await bagYaz(db, kullanici, id, 'malzemeler', no);
+  return malzemeBelgeleri(db, no);
+}
+
+export async function malzemeOnizlemesiYaz(
+  db: Db, kullanici: Kullanici, no: number, id: number, revizyonId: number, g: OnizlemeGovdesi, denetimEki: DenetimEki,
+): Promise<MalzemeBelgeleriCevabi> {
+  await malzemeBelgesiOlmali(db, no, id);
+  await onizlemeYaz(db, kullanici, id, revizyonId, g, denetimEki);
+  return malzemeBelgeleri(db, no);
+}
+
+/* ---------------- Küçük resim (listeler) ---------------- */
+
+// Kayıt başına küçük resim, tek sorguda (CZ-18). Malzemede kartın teknik resim numarası ve revizyonu karşılaştırılır; öbür
+// kayıtlarda karşılaştırma yoktur. Resmi olmayan kayıt haritada yer almaz.
+export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, hedefIdler: readonly number[]): Promise<Map<number, KucukResim>> {
+  const sonuc = new Map<number, KucukResim>();
+  if (hedefIdler.length === 0) return sonuc;
+  const adaylar = await sorgular.kucukResimAdaylari(db, hedefModul, hedefIdler);
+  const kartlar = hedefModul === 'malzemeler' ? await malzemeResimAnahtarlari(db, [...new Set(adaylar.map((a) => a.hedefId))]) : new Map<number, KartAnahtari>();
+  const kayitlar = new Map<number, Map<number, AdayBelge>>();
+  for (const a of adaylar) {
+    const belgeler = kayitlar.get(a.hedefId) ?? new Map<number, AdayBelge>();
+    const b = belgeler.get(a.belgeId) ?? { belgeId: a.belgeId, tur: a.tur, resimNo: a.resimNo, kapak: a.kapak, eklendi: a.eklendi, revizyonlar: [] };
+    belgeler.set(a.belgeId, { ...b, revizyonlar: [...b.revizyonlar, { id: a.revizyonId, durum: a.durum, sira: a.sira, antetRev: a.antetRev, kareSayisi: a.kareSayisi }] });
+    kayitlar.set(a.hedefId, belgeler);
+  }
+  for (const [hedefId, belgeler] of kayitlar) {
+    const s = kucukResimSec([...belgeler.values()], kartlar.get(hedefId) ?? null);
+    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), kareSayisi: s.kareSayisi, revUyumu: s.revUyumu });
+  }
+  return sonuc;
+}
+
+export async function kucukResimKaresi(db: Db, revizyonId: number, kare: number): Promise<IkiliCevap> {
+  const k = await sorgular.kucukResimKaresi(db, revizyonId, kare);
+  const akis = k === null ? null : await dosyaTutamak.dosyaAkisi(db, onizlemeKaydi(k.belgeId, revizyonId), k.ozet);
+  if (akis === null) throw bulunamadi('Küçük resim bulunamadı.');
   return akis;
 }
 
@@ -344,11 +464,9 @@ export async function belgeAcVeBagla(
   db: Db, kullanici: Kullanici, g: { ad: string; tur: KayitBelgesiTuru; ozet: string; dosyaAdi: string },
   hedefModul: BagModulu, hedefId: number, denetimEki: DenetimEki,
 ): Promise<number> {
-  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: null, kisiId: kullanici.id });
-  await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
-  const r = (await sorgular.revizyonlar(db, id))[0];
-  if (!r) throw bulunamadi('Revizyon bulunamadı.');
-  await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, r.id, kullanici.id));
+  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: null, resimNo: null, kisiId: kullanici.id });
+  const revizyonId = await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
+  await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
   await bagYaz(db, kullanici, id, hedefModul, hedefId);
   return id;
 }

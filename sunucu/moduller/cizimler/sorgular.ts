@@ -10,6 +10,7 @@ export interface BelgeKaydi {
   ad: string;
   tur: BelgeTuru;
   aciklama: string | null;
+  resimNo: string | null;
   aktif: boolean;
   surum: number;
   olusturanId: number;
@@ -17,7 +18,7 @@ export interface BelgeKaydi {
   guncellendi: string;
 }
 
-const BELGE_SECIMI = `b.id, b.ad, b.tur, b.aciklama, b.aktif, b.surum, b.olusturan_id AS "olusturanId",
+const BELGE_SECIMI = `b.id, b.ad, b.tur, b.aciklama, b.resim_no AS "resimNo", b.aktif, b.surum, b.olusturan_id AS "olusturanId",
   ${zamanMetni('b.olusturuldu')} AS olusturuldu, ${zamanMetni('b.guncellendi')} AS guncellendi`;
 
 export function belge(db: Db, id: number): Promise<BelgeKaydi | null> {
@@ -29,10 +30,12 @@ export function belgeKilitle(db: Db, id: number): Promise<BelgeKaydi | null> {
   return db.tek<BelgeKaydi>(`SELECT ${BELGE_SECIMI} FROM cizimler_belge b WHERE b.id = $1 FOR UPDATE`, [id]);
 }
 
-export async function belgeEkle(db: Db, b: { ad: string; tur: BelgeTuru; aciklama: string | null; kisiId: number }): Promise<number> {
+export async function belgeEkle(
+  db: Db, b: { ad: string; tur: BelgeTuru; aciklama: string | null; resimNo: string | null; kisiId: number },
+): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    'INSERT INTO cizimler_belge (ad, tur, aciklama, olusturan_id) VALUES ($1, $2, $3, $4) RETURNING id',
-    [b.ad, b.tur, b.aciklama, b.kisiId],
+    'INSERT INTO cizimler_belge (ad, tur, aciklama, resim_no, olusturan_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [b.ad, b.tur, b.aciklama, b.resimNo, b.kisiId],
   );
   if (satir === null) throw new Error('Belge eklenemedi');
   return satir.id;
@@ -46,11 +49,13 @@ export function belgeSurumuArtir(db: Db, id: number, surum: number): Promise<{ i
   );
 }
 
-export function belgeGuncelle(db: Db, id: number, surum: number, ad: string, aciklama: string | null): Promise<{ id: number } | null> {
+export function belgeGuncelle(
+  db: Db, id: number, surum: number, g: { ad: string; aciklama: string | null; resimNo: string | null },
+): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
-    `UPDATE cizimler_belge SET ad = $3, aciklama = $4, surum = surum + 1, guncellendi = now()
+    `UPDATE cizimler_belge SET ad = $3, aciklama = $4, resim_no = $5, surum = surum + 1, guncellendi = now()
       WHERE id = $1 AND surum = $2 RETURNING id`,
-    [id, surum, ad, aciklama],
+    [id, surum, g.ad, g.aciklama, g.resimNo],
   );
 }
 
@@ -73,13 +78,14 @@ export interface RevizyonKaydi {
   dosyaTuru: DosyaTuru;
   durum: RevizyonDurumu;
   not: string | null;
+  antetRev: string | null;
   yukleyenId: number;
   yuklendi: string;
   yayinlayanId: number | null;
   yayinlandi: string | null;
 }
 
-const REVIZYON_SECIMI = `r.id, r.belge_id AS "belgeId", r.sira, r.ozet, r.dosya_turu AS "dosyaTuru", r.durum, r."not",
+const REVIZYON_SECIMI = `r.id, r.belge_id AS "belgeId", r.sira, r.ozet, r.dosya_turu AS "dosyaTuru", r.durum, r."not", r.antet_rev AS "antetRev",
   r.yukleyen_id AS "yukleyenId", ${zamanMetni('r.yuklendi')} AS yuklendi, r.yayinlayan_id AS "yayinlayanId",
   ${zamanMetni('r.yayinlandi')} AS yayinlandi`;
 
@@ -114,12 +120,12 @@ export async function revizyonSayisi(db: Db, belgeId: number): Promise<number> {
 }
 
 export async function revizyonEkle(
-  db: Db, r: { belgeId: number; sira: number; ozet: string; dosyaTuru: DosyaTuru; not: string | null; kisiId: number },
+  db: Db, r: { belgeId: number; sira: number; ozet: string; dosyaTuru: DosyaTuru; not: string | null; antetRev: string | null; kisiId: number },
 ): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO cizimler_revizyon (belge_id, sira, ozet, dosya_turu, "not", yukleyen_id)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [r.belgeId, r.sira, r.ozet, r.dosyaTuru, r.not, r.kisiId],
+    `INSERT INTO cizimler_revizyon (belge_id, sira, ozet, dosya_turu, "not", antet_rev, yukleyen_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [r.belgeId, r.sira, r.ozet, r.dosyaTuru, r.not, r.antetRev, r.kisiId],
   );
   if (satir === null) throw new Error('Revizyon eklenemedi');
   return satir.id;
@@ -143,11 +149,12 @@ export interface BagKaydi {
   hedefId: number;
   ekleyenId: number;
   eklendi: string;
+  kapak: boolean;
 }
 
 export function baglar(db: Db, belgeId: number): Promise<BagKaydi[]> {
   return db.sorgu<BagKaydi>(
-    `SELECT hedef_modul AS "hedefModul", hedef_id AS "hedefId", ekleyen_id AS "ekleyenId", ${zamanMetni('eklendi')} AS eklendi
+    `SELECT hedef_modul AS "hedefModul", hedef_id AS "hedefId", ekleyen_id AS "ekleyenId", ${zamanMetni('eklendi')} AS eklendi, kapak
        FROM cizimler_bag WHERE belge_id = $1 ORDER BY hedef_modul, hedef_id`,
     [belgeId],
   );
@@ -340,5 +347,70 @@ export function yayindakiOnizlemeKaresi(
        JOIN cizimler_bag g ON g.belge_id = b.id AND g.hedef_modul = $1 AND g.hedef_id = $2
       WHERE o.revizyon_id = $3 AND o.kare = $4`,
     [hedefModul, hedefId, revizyonId, kare],
+  );
+}
+
+export async function bagVarMi(db: Db, belgeId: number, hedefModul: BagModulu, hedefId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM cizimler_bag WHERE belge_id = $1 AND hedef_modul = $2 AND hedef_id = $3', [belgeId, hedefModul, hedefId])) !== null;
+}
+
+// Kayıt başına tek kapak (kısmi tekil dizin): önce kaydın kapağı kalkar, sonra seçilen işaretlenir. Tekil dizin satır satır
+// denetlendiği için ikisi tek UPDATE'te yapılmaz.
+export async function kapakYaz(db: Db, hedefModul: BagModulu, hedefId: number, belgeId: number): Promise<void> {
+  await db.sorgu('UPDATE cizimler_bag SET kapak = false WHERE hedef_modul = $1 AND hedef_id = $2 AND kapak', [hedefModul, hedefId]);
+  await db.sorgu('UPDATE cizimler_bag SET kapak = true WHERE hedef_modul = $1 AND hedef_id = $2 AND belge_id = $3', [hedefModul, hedefId, belgeId]);
+}
+
+export interface KucukResimAdayi {
+  hedefId: number;
+  belgeId: number;
+  tur: BelgeTuru;
+  resimNo: string | null;
+  kapak: boolean;
+  eklendi: string;
+  revizyonId: number;
+  durum: RevizyonDurumu;
+  sira: number;
+  antetRev: string | null;
+  kareSayisi: number;
+}
+
+// Kayıtlara bağlı etkin belgelerin yayına girmiş (taslak olmayan) revizyonları ve kare sayıları; tek sorguda.
+export function kucukResimAdaylari(db: Db, hedefModul: BagModulu, hedefIdler: readonly number[]): Promise<KucukResimAdayi[]> {
+  return db.sorgu<KucukResimAdayi>(
+    `SELECT g.hedef_id AS "hedefId", b.id AS "belgeId", b.tur, b.resim_no AS "resimNo", g.kapak, ${zamanMetni('g.eklendi')} AS eklendi,
+            r.id AS "revizyonId", r.durum, r.sira, r.antet_rev AS "antetRev",
+            (SELECT count(*)::int FROM cizimler_onizleme o WHERE o.revizyon_id = r.id) AS "kareSayisi"
+       FROM cizimler_bag g
+       JOIN cizimler_belge b ON b.id = g.belge_id AND b.aktif
+       JOIN cizimler_revizyon r ON r.belge_id = b.id AND r.durum <> 'taslak'
+      WHERE g.hedef_modul = $1 AND g.hedef_id = ANY($2::int[])
+      ORDER BY g.hedef_id, b.id, r.sira`,
+    [hedefModul, [...hedefIdler]],
+  );
+}
+
+// Küçük resim karesi: revizyon yayına girmiş, belgesi etkin ve bir kayda bağlıysa okunur. Taslağın karesi verilmez.
+export function kucukResimKaresi(db: Db, revizyonId: number, kare: number): Promise<{ belgeId: number; ozet: string } | null> {
+  return db.tek<{ belgeId: number; ozet: string }>(
+    `SELECT r.belge_id AS "belgeId", o.ozet
+       FROM cizimler_onizleme o
+       JOIN cizimler_revizyon r ON r.id = o.revizyon_id AND r.durum <> 'taslak'
+       JOIN cizimler_belge b ON b.id = r.belge_id AND b.aktif
+      WHERE o.revizyon_id = $1 AND o.kare = $2 AND EXISTS (SELECT 1 FROM cizimler_bag g WHERE g.belge_id = b.id)`,
+    [revizyonId, kare],
+  );
+}
+
+// Teknik resim numarası uyan, kayda bağlı olmayan etkin belgeler (malzeme kartının bağlama önerisi).
+export function resimNoyaUyanBelgeler(
+  db: Db, resimNo: string, hedefModul: BagModulu, hedefId: number,
+): Promise<{ id: number; ad: string; tur: BelgeTuru; surum: number }[]> {
+  return db.sorgu(
+    `SELECT b.id, b.ad, b.tur, b.surum FROM cizimler_belge b
+      WHERE b.aktif AND b.resim_no IS NOT NULL AND upper(b.resim_no) = upper($1)
+        AND NOT EXISTS (SELECT 1 FROM cizimler_bag g WHERE g.belge_id = b.id AND g.hedef_modul = $2 AND g.hedef_id = $3)
+      ORDER BY b.ad, b.id LIMIT 20`,
+    [resimNo.trim(), hedefModul, hedefId],
   );
 }
