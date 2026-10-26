@@ -3,8 +3,8 @@
 Sınıflar: TUTAN, ETKİLEYEN, SONRA.
 
 ## Bağlamada kapanacak
-1. ETKİLEYEN: altı kaynağın hepsi gerçek kayıttan basılır: konum, lot ve mal kabul (stok `konumAdlari`, `lotEtiketleri`), istasyon (stok `istasyonKonumlari` + istasyonlar `istasyonAdlari`), refakat kartı (uretim-emirleri `refakatKarti`), malzeme (malzemeler `malzemeOzetleri`, 269 a). Mal kabul seçimi kabulün bütün lotlarını basar (270 a); ekranda çip lottur, tek lot çıkarılamaz. Ekrandaki adet uyarısı seçili kabul sayısıyla hesaplanır; lot sayısıyla sınırı sunucu denetler (400).
-2. ETKİLEYEN: sahip ekranlar `/etiket-merkezi?tur=<konum|lot|istasyon|refakat|malzeme|mal-kabul>&id=…` adresini açacak (sahiplerin işi); emir ayrıntısındaki "Refakat kartı bas" bugün uretim-emirleri'nin kendi tarayıcı baskısını açar.
+1. ETKİLEYEN: altı kaynağın hepsi gerçek kayıttan basılır: konum, lot ve mal kabul (stok `konumAdlari`, `lotEtiketleri`), istasyon (stok `istasyonKonumlari` + istasyonlar `istasyonAdlari`), refakat kartı (stok `refakatPartisi` + uretim-emirleri `refakatKarti`; emirden lotsuz kart #589 ile kalktı), malzeme (malzemeler `malzemeOzetleri`, 269 a). Mal kabul seçimi kabulün bütün lotlarını basar (270 a); ekranda çip lottur, tek lot çıkarılamaz. Ekrandaki adet uyarısı seçili kabul sayısıyla hesaplanır; lot sayısıyla sınırı sunucu denetler (400).
+2. ETKİLEYEN: sahip ekranlar `/etiket-merkezi?tur=<konum|lot|istasyon|refakat-partisi|malzeme|mal-kabul>&id=…` adresini açacak (sahiplerin işi); emir ayrıntısı kartları `refakat-partisi` ile açar (kart #588).
 3. ETKİLEYEN: refakat kartı etiketinde işlem tablosu ve "Bitti" kutuları yok; işlem sırası tek metin alanında (`adimlar`) satır satır kırılır, sığmayan kesilir (EM-17). İptal emir seçimde varsa bütün baskı 409 ile durur (emrin kendi kuralı).
 
 15. SONRA: lot etiketi malzeme türü adını basar (271 a, "Kart 1001 · Hammadde"); tür adları `kurallar.ts`'te stok ekranındakinin kopyasıdır. Ortak tür adı sözlüğü çekirdek isteği (CEKIRDEK-ISTEKLERI 4).
