@@ -129,7 +129,10 @@ html.tc-ay-tv .tc-ay3-ozet-kutu b { font-size: var(--yazi-3xl); }
   .tc-ay3-pano { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  .tc-ay3-serit, .tc-ay3-serit[data-karsilastir] { flex-basis: 85%; }
+  /* Telefonda şeritler yana kaymaz, alt alta durur: işler aranmadan sırayla okunur. */
+  .tc-ay3-seritler { flex-direction: column; align-items: stretch; overflow-x: visible; }
+  .tc-ay3-serit, .tc-ay3-serit[data-karsilastir] { flex-basis: auto; }
+  .tc-ay3-kuyruk-gorunum { display: grid; gap: var(--b-2); flex: 1 1 100%; }
   .tc-ay3-karsilastir { grid-template-columns: minmax(0, 1fr); }
   .tc-ay3-kuyruk-arac .tc-ay3-secmeli { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .tc-ay3-kuyruk-arac .tc-ay3-secmeli button { flex: none; }

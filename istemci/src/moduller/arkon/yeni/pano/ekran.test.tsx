@@ -174,6 +174,36 @@ describe('A3 sayfaları', () => {
     expect(dolu.querySelector('.tc-ay3-serit-bos')).toBeNull();
   }, 20000);
 
+  it('Kuyruk telefonda (618e): görünüm seçenekleri "Görünüm" düğmesinin altında, istasyonun şeridi en üstte; genişte seçenekler açıktır', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    localStorage.setItem('arkon:station', JSON.stringify('S2'));
+    try {
+      sunucuKur(YONETICI, { belgeler });
+      arkonAc('/kuyruk');
+      const b = await bolum('Kuyruk');
+      const gorunum = await within(b).findByRole('button', { name: 'Görünüm' }, { timeout: 10000 });
+      expect(within(b).queryByRole('checkbox', { name: 'Tamamlananları göster' })).toBeNull();
+      fireEvent.click(gorunum);
+      expect(gorunum.getAttribute('aria-expanded')).toBe('true');
+      expect(within(b).getByRole('checkbox', { name: 'Tamamlananları göster' })).toBeTruthy();
+      const seritler = await within(b).findAllByRole('region', { name: /^Şerit / });
+      expect(seritler.map((s) => s.getAttribute('aria-label'))).toEqual(['Şerit S2', 'Şerit S1']);
+    } finally {
+      vi.unstubAllGlobals();
+      localStorage.clear();
+    }
+  }, 20000);
+
+  it('Kuyruk genişte: "Görünüm" düğmesi yok, seçenekler ve şerit sırası olduğu gibi', async () => {
+    sunucuKur(YONETICI, { belgeler });
+    arkonAc('/kuyruk');
+    const b = await bolum('Kuyruk');
+    expect(await within(b).findByRole('checkbox', { name: 'Tamamlananları göster' }, { timeout: 10000 })).toBeTruthy();
+    expect(within(b).queryByRole('button', { name: 'Görünüm' })).toBeNull();
+    const seritler = await within(b).findAllByRole('region', { name: /^Şerit / });
+    expect(seritler.map((s) => s.getAttribute('aria-label'))).toEqual(['Şerit S1', 'Şerit S2']);
+  }, 20000);
+
   it('bant "Diğer" düğmesi araç menüsünü açar, Escape ile kapanır', async () => {
     sunucuKur(YONETICI, { belgeler });
     arkonAc('/kuyruk');

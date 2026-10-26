@@ -9,6 +9,7 @@ import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { dakikaMetni, gunAySaat, sayi } from '../cekirdek/bicim.ts';
 import { istasyonBul, istasyonListesi } from '../cekirdek/tesis.ts';
 import { suankiDurus } from '../cekirdek/vardiya.ts';
+import { yerel } from '../cekirdek/yerel.ts';
 import { useArkon, useBelgeler, useSimdi } from '../veri/baglam.ts';
 import {
   KART_DURUMLARI, OPTYPE_ADLARI, kalanMs, kartDurumu, seritSirala, takvimle, tasimaPlani, terminCoz, tmiIsi, type Tahmin,
@@ -50,7 +51,9 @@ export function KuyrukSayfasi() {
 interface Onay { baslik: string; onayMetni: string; metin: string; devam: () => void }
 
 function IsEmirleri({ salt }: { salt: boolean }) {
-  const { depo, ayarlar, yetkiVar, saltOkunur } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, saltOkunur } = useArkon();
+  const dar = useTelefon();
+  const [gorunumAcik, gorunumAcikYaz] = useState(false);
   const izinli = useYetkiDenetimi();
   const soyle = useSoyle();
   const pk = useBelgeler<Pkg>('pkgs', PAKET_ILETILERI);
@@ -80,7 +83,10 @@ function IsEmirleri({ salt }: { salt: boolean }) {
 
   const R = Object.fromEntries(rs.liste.map((r) => [r.id, r]));
   const bitti = (p: Pkg) => R[p.id]?.state === 'done';
-  const seritler = istasyonListesi(ayarlar.tesis).filter((s) => !wc || s.wc === wc);
+  // Telefonda şeritler alt alta durur; tabletin ya da kişinin istasyonu en üstte, aranmadan görünür.
+  const kendi = dar ? (yerel.oku<string>('station') || kisi?.st || null) : null;
+  const seritler = istasyonListesi(ayarlar.tesis).filter((s) => !wc || s.wc === wc)
+    .sort((a, b) => Number(b.id === kendi) - Number(a.id === kendi));
   const bilinen = new Set(istasyonListesi(ayarlar.tesis, true).map((s) => s.id));
   const isler = pk.liste.filter((p) => bitenler || !bitti(p));
   const yeniden = () => { pk.yenile(); rs.yenile(); };
@@ -303,10 +309,19 @@ function IsEmirleri({ salt }: { salt: boolean }) {
     <div className="tc-ay3-sayfa">
       <div className="tc-ay3-arac tc-ay3-kuyruk-arac">
         <IsMerkeziSuzgeci deger={wc} degistir={wcYaz} />
-        <IsaretKutusu etiket="Tamamlananları göster" checked={bitenler} onChange={(o) => bitenlerYaz(o.target.checked)} />
-        <IsaretKutusu etiket="Planla karşılaştır" checked={karsilastir} onChange={(o) => karsilastirYaz(o.target.checked)} />
-        <span className="tc-ay3-bosluk" />
-        <small className="tc-ay3-not">Tahminler vardiya, mola ve planlı duruşlara göre · kalan adet × çevrim süresi</small>
+        {dar && (
+          <Dugme simge="eye" aria-expanded={gorunumAcik} aria-controls="tc-ay3-kuyruk-gorunum" onClick={() => gorunumAcikYaz((a) => !a)}>
+            Görünüm
+          </Dugme>
+        )}
+        {(!dar || gorunumAcik) && (
+          <div id="tc-ay3-kuyruk-gorunum" className="tc-ay3-kuyruk-gorunum">
+            <IsaretKutusu etiket="Tamamlananları göster" checked={bitenler} onChange={(o) => bitenlerYaz(o.target.checked)} />
+            <IsaretKutusu etiket="Planla karşılaştır" checked={karsilastir} onChange={(o) => karsilastirYaz(o.target.checked)} />
+            <span className="tc-ay3-bosluk" />
+            <small className="tc-ay3-not">Tahminler vardiya, mola ve planlı duruşlara göre · kalan adet × çevrim süresi</small>
+          </div>
+        )}
       </div>
       <div className="tc-ay3-seritler" ref={kok}>
         {sahipsiz.length > 0 && serit('-', 'Atanmamış', 'İstasyonu tanımsız', sahipsiz, false)}
@@ -318,6 +333,18 @@ function IsEmirleri({ salt }: { salt: boolean }) {
       </OnayPenceresi>
     </div>
   );
+}
+
+// Telefon genişliği (pano.css'teki 767 px sınırı): tablet ve masaüstü düzeni değişmez.
+const telefonMu = (): boolean => window.innerWidth < 768;
+function useTelefon(): boolean {
+  const [telefon, telefonYaz] = useState(telefonMu);
+  useEffect(() => {
+    const f = () => telefonYaz(telefonMu());
+    window.addEventListener('resize', f);
+    return () => window.removeEventListener('resize', f);
+  }, []);
+  return telefon;
 }
 
 // Şeridin canlı plan sırası, kuyruğun yanında salt okunur: plandaki yeri kuyruktakinden farklı ya da plana yeni girmiş iş vurgulanır.
