@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { adimAraliklari, emirAkisi, fasonAraligi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi } from './kurallar.ts';
+import { adimAraliklari, emirAkisi, fasonAraligi, kartAnlari, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi } from './kurallar.ts';
 
 // Saat 08:00'den dakika sayar; okunaklı örnek için.
 const z = (dakika: number): string => new Date(Date.UTC(2026, 0, 5, 8, 0) + dakika * 60_000).toISOString();
@@ -228,5 +228,37 @@ describe('AKS-7 sevk anı', () => {
     assert.deepEqual(sevkAni({ hazirZamani: z(0), kaldirildi: null, isDurumu: 'yolda', isDurumZamani: z(60), isIptalEdildi: false }), { hazir: z(0), sevk: null });
     assert.deepEqual(sevkAni({ hazirZamani: z(0), kaldirildi: z(30), isDurumu: null, isDurumZamani: null, isIptalEdildi: false }), { hazir: z(0), sevk: z(30) });
     assert.equal(sevkAni(null), null);
+  });
+
+  test('AKS-8: kartın anları zamana göre; aynı anda kabul, açılış, teslim, adım, sevk sırası; iptal teslim kapanmaz, red kapanır', () => {
+    const anlar = kartAnlari({
+      acilis: z(10),
+      hammadde: [{ partiId: 1, lotNo: 'LT-1', malKabul: z(0), kullanim: null, beklemeDk: null }, { partiId: 2, lotNo: 'LT-2', malKabul: null, kullanim: null, beklemeDk: null }],
+      teslimler: [
+        { durum: 'teslim', gonderim: z(10), kapanis: z(20), miktar: '10.000', alinan: '9.000', kaynak: 'Kabul', hedef: 'Torna 1' },
+        { durum: 'red', gonderim: z(30), kapanis: z(35), miktar: '1.000', alinan: null, kaynak: 'Kabul', hedef: 'Torna 1' },
+        { durum: 'iptal', gonderim: z(40), kapanis: z(41), miktar: '2.000', alinan: null, kaynak: 'Kabul', hedef: 'Freze 1' },
+      ],
+      adimlar: [{ id: 7, opNo: 10, istasyon: 'Torna 1', fason: false }, { id: 8, opNo: 20, istasyon: null, fason: true }],
+      olaylar: [{ isEmriId: 7, zaman: z(20), olay: 'baslat' }, { isEmriId: 99, zaman: z(50), olay: 'bitir' }],
+      sayimlar: [{ isEmriId: 7, zaman: z(45), tur: 'saglam', adet: 4 }, { isEmriId: 7, zaman: z(46), tur: 'saglam', adet: -1 }],
+      fason: [{ isEmriId: 8, yon: 'gidis', zaman: z(60), adet: 3 }],
+      sevk: { hazir: z(90), sevk: null },
+    });
+    assert.deepEqual(anlar.map((a) => [a.zaman, a.tur, a.opNo, a.yer, a.miktar]), [
+      [z(0), 'mal_kabul', null, 'LT-1', null],
+      [z(10), 'kart_acildi', null, null, null],
+      [z(10), 'teslim_gonderildi', null, 'Kabul → Torna 1', '10.000'],
+      [z(20), 'teslim_alindi', null, 'Kabul → Torna 1', '9.000'],
+      [z(20), 'baslat', 10, 'Torna 1', null],
+      [z(30), 'teslim_gonderildi', null, 'Kabul → Torna 1', '1.000'],
+      [z(35), 'teslim_reddedildi', null, 'Kabul → Torna 1', '1.000'],
+      [z(40), 'teslim_gonderildi', null, 'Kabul → Freze 1', '2.000'],
+      [z(45), 'saglam', 10, 'Torna 1', '4'],
+      [z(46), 'saglam', 10, 'Torna 1', '-1'],
+      [z(50), 'bitir', null, null, null],
+      [z(60), 'fason_gidis', 20, 'Fason', '3'],
+      [z(90), 'sevke_hazir', null, null, null],
+    ]);
   });
 });
