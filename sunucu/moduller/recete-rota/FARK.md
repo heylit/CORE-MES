@@ -234,3 +234,9 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
 - İş emrinin türü `EmirKaydi.isEmirleri[].tur` ile gelir; verilmezse eski davranış. Türü uretim-emirleri `emirDilimi` verecek (697-ue, ayrı dal);
   o girene kadar davranış değişmez.
 - Test: `emirler.test.ts` 697; değişiklik olmadan kırılıyor (DOĞRULANDI).
+## Kolun durum anahtarı rotadaki yerdir (701, davranış değiştiren düzeltme onaylı 26.10.2026; kart 701)
+- Kolun (parti kolu) iş emri sırası 1'den başlar; ilk adımı rotanın n+1. adımıdır (`kol.n`). Sayfa kolu rotanın bu yerinden kurar, motor girdisi
+  (`tmiBitenler`) anahtarı rotadaki yer sayar. Önceki davranış: kolun anahtarı kendi sırasıydı; kolun biten adımı rotanın n adım önceki adımını bitmiş
+  işaretliyordu. Sıra dışı bitişte (639 paralel adım) kuyruktaki adım bitmiş sayılıp kuyruk yazımı reddediliyordu (DOĞRULANDI, çözücü düzeyinde kırmızı deneme).
+- Şimdi kol geçerliyse (`kolCevir` boş değil) anahtar `n + sıra - önündeki ek adım` olur. Kol değilse (tam rotalı parti, katılma adımı bulunamayan) değişmez.
+- Test: `emirler.test.ts` 701; değişiklik olmadan kırılıyor (DOĞRULANDI).

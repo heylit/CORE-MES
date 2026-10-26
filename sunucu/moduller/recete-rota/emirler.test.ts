@@ -363,6 +363,25 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual(rotasiz.opStatus, { '1|root|1': 'tamam', '1|root|2': 'tamam' }, 'rotasız emrin adımları kendi sırasıyla');
   });
 
+  test('701: kolun iş emri sırası 1\'den başlar; anahtarı rotadaki yeridir (ayrıldığı yer kadar kayar, kendi ek adımı yer almaz)', () => {
+    const temel = {
+      malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, durum: 'planli' as const, emirTuru: 'seri', acilma: '2030-01-01T00:00:00Z',
+      bitis: null, birlestigiEmirId: null, surum: 1, kaynakRotaRevizyonId: 8,
+    };
+    const adim = (sira: number, opNo: number, durum: 'bekliyor' | 'tamam', tur: 'rota' | 'rework' = 'rota') => ({
+      sira, opNo, durum, saglamAdet: null, canliAdet: null, ad: 'A', operasyonTipiId: 1, istasyonId: 4, ayarSuresiDk: '5', birimSureDk: '2', tur,
+    });
+    const ana: EmirKaydi = { ...temel, id: 1, emirNo: 'A', ustEmirId: null, bolunmeSira: null, birlesmeOpNo: null,
+      isEmirleri: [adim(1, 10, 'tamam'), adim(2, 20, 'bekliyor'), adim(3, 30, 'bekliyor'), adim(4, 40, 'bekliyor')] };
+    // Kol ana emrin 2. sırasından (OP20) ayrılır, OP40'ta katılır; önde rework, sonra OP20 (bitti) ve OP30.
+    const kol: EmirKaydi = { ...temel, id: 2, emirNo: 'A/1', ustEmirId: 1, bolunmeSira: 2, birlesmeOpNo: 40,
+      isEmirleri: [adim(1, 15, 'tamam', 'rework'), adim(2, 20, 'tamam'), adim(3, 30, 'bekliyor')] };
+    const c = emirleriCevir([ana, kol]);
+    assert.deepEqual(c.orders[1]!.kol, { n: 1, m: 4 });
+    assert.deepEqual(c.opStatus, { '1|root|1': 'tamam', '2|root|2': 'tamam' }, 'kolun OP20\'si rotanın 2. adımıdır');
+    assert.deepEqual(Object.keys(c.opYer ?? {}).filter((k) => k.startsWith('2|')), ['2|root|3'], 'kolun OP30\'u rotanın 3. adımı');
+  });
+
   test('EMR-7: rotasız emir (revizyonsuz) kendi iş emirlerini adım olarak taşır; rotalı emirde alan yoktur', () => {
     const temel = {
       malzemeNo: 1, adet: 5, baslangic: null, teslim: null, oncelik: 3, aciklama: null, durum: 'planli' as const, emirTuru: 'seri', acilma: '2030-01-01T00:00:00Z',
