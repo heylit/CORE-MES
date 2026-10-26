@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
-import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu } from '#paylasilan/sozlesme/stok.ts';
+import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
 import { stokDurumu, type StokDurumu } from './kurallar.ts';
 import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
@@ -57,6 +57,21 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgu
 // sevk çıkışı) ve emrin teslimlerinin hareketleri; zamana göre, tekrarsız. Okuma yetkisini çağıran korur.
 export type { AkisHareketi } from './sorgular.ts';
 export const emrinAkisHareketleri = (db: Db, uretimEmriId: number): Promise<sorgular.AkisHareketi[]> => sorgular.emrinAkisHareketleri(db, uretimEmriId);
+// Refakat kartının kapsamı (kart #708): Akış Süresi kartın akışını bu partilerin hareketleri, kartla sayılanlar ve bu teslimlerle
+// ölçer. Kart yoksa null. Okuma yetkisini çağıran korur.
+export type { KartTeslimi } from './sorgular.ts';
+export interface RefakatKartiKapsami {
+  refakat: RefakatPartisi;
+  // Kartın lotu (istisna kartında bağlanana kadar yok) ve kartla sayılan üretim partileri.
+  partiIdler: number[];
+  teslimler: sorgular.KartTeslimi[];
+}
+export async function refakatKartiKapsami(db: Db, id: number): Promise<RefakatKartiKapsami | null> {
+  if ((await sorgular.refakatPartisiBul(db, id)) === null) return null;
+  const { refakat } = await servis.refakatPartisiOku(db, id);
+  const partiIdler = [...(refakat.partiId === null ? [] : [refakat.partiId]), ...await sorgular.refakatCiktiPartiIdleri(db, id)];
+  return { refakat, partiIdler, teslimler: partiIdler.length === 0 ? [] : await sorgular.kartTeslimleri(db, refakat.uretimEmriId, partiIdler) };
+}
 // Partinin lot numarası ve ilk mal kabul zamanı (mal kabulle girmediyse null). Olmayan parti haritada yoktur.
 export async function partiGirisZamanlari(db: Db, partiIdler: number[]): Promise<Map<number, { lotNo: string; malKabulZamani: string | null }>> {
   if (partiIdler.length === 0) return new Map();

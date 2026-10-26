@@ -721,6 +721,19 @@ export const emrinAkisHareketleri = (db: Db, emirId: number): Promise<AkisHareke
    FROM kimlikler i JOIN stok_hareketi h ON h.id = i.id
    LEFT JOIN stok_konum kk ON kk.id = h.kaynak_konum_id LEFT JOIN stok_konum hk ON hk.id = h.hedef_konum_id
    ORDER BY h.zaman, h.id`, [emirId]);
+// Refakat kartının kapsamı (kart #708, Akış Süresi): kartla sayılan üretim partileri ve kartın lotuyla ya da bu partilerle emre
+// yapılmış teslimler (kartın "verilen" hesabıyla aynı seçim). Teslim kartı ayrıca taşımaz; emir ve parti seçer.
+export const refakatCiktiPartiIdleri = async (db: Db, id: number): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>('SELECT id::int FROM stok_parti WHERE refakat_partisi_id = $1 ORDER BY id', [id])).map((x) => x.id);
+export interface KartTeslimi {
+  id: number; no: string; durum: 'yolda' | 'teslim' | 'red' | 'iptal'; partiId: number; malzemeId: number; miktar: string; alinan: string | null;
+  gonderim: string; kapanis: string | null; kaynak: string; hedef: string;
+}
+export const kartTeslimleri = (db: Db, uretimEmriId: number, partiIdler: readonly number[]): Promise<KartTeslimi[]> => db.sorgu(
+  `SELECT t.id, t.no, t.durum, t.parti_id::int AS "partiId", t.malzeme_id AS "malzemeId", t.miktar::text AS miktar, t.alinan::text AS alinan,
+     ${zamanMetni('t.gonderim')} AS gonderim, ${zamanMetni('t.kapanis')} AS kapanis, COALESCE(kk.ad, kk.kod) AS kaynak, COALESCE(hk.ad, hk.kod) AS hedef
+   FROM stok_teslim t JOIN stok_konum kk ON kk.id = t.kaynak_konum_id JOIN stok_konum hk ON hk.id = t.hedef_konum_id
+   WHERE t.uretim_emri_id = $1 AND t.parti_id = ANY($2::bigint[]) ORDER BY t.gonderim, t.id`, [uretimEmriId, partiIdler]);
 // Partinin en eski mal kabul zamanı; mal kabulle girmemiş parti (üretim partisi) null taşır.
 export const partiGirisZamanlari = (db: Db, partiIdler: number[]): Promise<{ partiId: number; lotNo: string; malKabulZamani: string | null }[]> => db.sorgu(
   `SELECT p.id::int AS "partiId", p.lot_no AS "lotNo", ${zamanMetni('min(m.zaman)')} AS "malKabulZamani"
