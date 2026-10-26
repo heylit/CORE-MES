@@ -21,7 +21,7 @@ import { AZAMI_DOSYA, DOSYA_PARCASI } from '#paylasilan/sozlesme/arkon.ts';
 import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
-import { ilkParcaKarari, ilkParcaKararlari } from '../kalite-merkezi/disari.ts';
+import { ilkParcaKarari, ilkParcaKararlari, muayenePlaniOner } from '../kalite-merkezi/disari.ts';
 import {
   eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
@@ -52,7 +52,7 @@ import {
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru,
-  icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, uyariBirlestir, guvensizCizimleriAyikla, ilkParcaNumuneKarari, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
@@ -298,9 +298,18 @@ async function isEmriTaslaklari(
   const hazirliklar = await isEmriHazirlikDurumlari(db, girdiler.flatMap((g) => (g.istasyon?.tip === 'talasli' ? [g.isEmri.id] : [])));
   const ilkParcalar = await ilkParcaKararlari(db, girdiler.map((g) => g.isEmri.uretimEmriId));
   const girenler = await adimGirenleri(db, girdiler.filter((g) => !kayitliKimlik.has(g.parca ? parcaPaketKimligi(g.isEmri.id, g.parca.no) : isEmriPaketKimligi(g.isEmri.id))));
+  // 564 2 a: kalite istasyonunun lot planı; parti paketin hedef adedidir (bölünmüş işte parçanınki), aynı parça ve adet bir kez hesaplanır.
+  const aqlPlanlari = new Map<string, ReturnType<typeof tmiAqlPlani>>();
+  for (const g of girdiler) {
+    if (g.istasyon?.tip !== 'kalite') continue;
+    const N = g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet;
+    const anahtar = `${g.emir.parcaNo}\n${String(N)}`;
+    if (!aqlPlanlari.has(anahtar)) aqlPlanlari.set(anahtar, tmiAqlPlani(await muayenePlaniOner(db, { parcaNo: g.emir.parcaNo, N, ayar: null })));
+  }
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
-    const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, ilkParca: ilkParcalar.get(g.isEmri.uretimEmriId) ?? null, girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
+    const aql = g.istasyon?.tip === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
+    const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.uretimEmriId) ?? null, girenler: girenler.get(`${g.isEmri.uretimEmriId}:${g.isEmri.opNo}`) });
     const butun = g.parca ? kayitliGovde.get(isEmriPaketKimligi(g.isEmri.id)) : undefined;
     const govde = g.sablon !== null && g.sablon === butun ? parcaYayini(taslak, butun) : taslak;
     const kimlik = String(govde['id']);

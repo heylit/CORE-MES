@@ -9,6 +9,7 @@ import { planliDurusGovdesi } from '#paylasilan/sozlesme/vardiya.ts';
 import type { PlanliDurusGirdisi, PlanliDurusKapsami, PlanliDurusTekrari } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import { svgHatasi } from './svg.ts';
+import type { MuayenePlani } from '../kalite-merkezi/disari.ts';
 
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
@@ -271,6 +272,8 @@ export interface IsEmriPaketGirdisi {
   hazirlik?: HazirlikEksigi | null | undefined;
   // Emrin Kalite Merkezi'ndeki son ilk parça kararı (denetim #12): tablet ilk parça kapısını buradan okur, sunucu kapısıyla aynı kaynak.
   ilkParca?: { karar: 'onay' | 'ret'; zaman: string } | null | undefined;
+  // Kalite istasyonunun AQL lot planı (564 2 a): Kalite Merkezi'nin hesabı; sıkılık durdurulmuşsa `durduruldu`.
+  aql?: TmiAqlPlani | null | undefined;
   // Adımın rotadaki girenleri (521 3 a): kayıtsız taslağın Malzeme alanına yazılır (`girenMetni`); kayıtlı paket ve dolu şablon değişmez.
   girenler?: readonly AdimGireni[] | undefined;
   // Bölünmüş işin parçası: paket kimliği, hedef adet ve `tmi.parca` parçadandır; istasyon ve makine parçanın kaynağıdır.
@@ -280,6 +283,24 @@ export interface IsEmriPaketGirdisi {
 }
 
 export type HazirlikEksigi = 'yok' | 'suruyor';
+
+// 564 2 a: kalite istasyonunun lot planı Kalite Merkezi'nin AQL hesabından gelir; tablet tek numune sayısı ve tek Ac kullandığı için
+// `n` örneklemeli sınıfların en büyüğü, `ac`/`re` majör sınıfınındır (VARSAYIM: istasyonun kusur listesi sınıf ayırmaz, kusur majör sayılır).
+// Sınıfların tamamı tabloyla gider, ekran gösterir.
+export type TmiAqlPlani =
+  | { durduruldu: true }
+  | { n: number; ac: number; re: number; siddet: string; seviye: string; siniflar: { sinif: string; aql: string; n: number; ac: number; re: number; yuzde100: boolean }[] };
+export function tmiAqlPlani(sonuc: { plan: MuayenePlani } | { durduruldu: true } | { gecersiz: true }): TmiAqlPlani | null {
+  if ('durduruldu' in sonuc) return { durduruldu: true };
+  if ('gecersiz' in sonuc) return null;
+  const { plan } = sonuc;
+  const majör = plan.siniflar.find((x) => x.sinif === 'Majör');
+  if (majör === undefined) return null;
+  return {
+    n: plan.n, ac: majör.ac, re: majör.re, siddet: plan.siddet, seviye: plan.ayar.seviye,
+    siniflar: plan.siniflar.map((x) => ({ sinif: x.sinif, aql: x.aql, n: x.n, ac: x.ac, re: x.re, yuzde100: x.yuzde100 })),
+  };
+}
 
 // Uyarı yalnız talaşlı (CNC) istasyonda: öteki istasyonlarda CNC kurulumu yapılmaz. Kurulumu hiç açılmamış emir de uyarı alır.
 export function hazirlikEksigi(istasyonTipi: Istasyon['tip'], durum: 'yok' | 'suruyor' | 'tamam' | undefined): HazirlikEksigi | null {
@@ -315,7 +336,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     files: [], primary: null, plan: [], steps: talimatAdimlari(g.talimat), ...kopya,
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
-    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}),
+    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.aql ? { aql: g.aql } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
 }
