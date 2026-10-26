@@ -1200,3 +1200,31 @@ describe('vardiyalar bölümü (#1109)', () => {
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-vardiyalari/5/belirle', govde: { vardiyaId: null } });
   });
 });
+
+// 565 a: yetkinlik matrisi; hücre, satır ve sütun tek toplu uçtan yazılır, okuyan yalnız görür.
+describe('yetkinlik matrisi', () => {
+  it('yazan hücreyi ve sütunu açar; değişmeyen gitmez, istek toplu uca gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/yetkinlik');
+    const tablo = await screen.findByRole('table', { name: 'Yetkinlik matrisi' });
+    expect((within(tablo).getByLabelText('Deneme Usta T-01 yetkinliği') as HTMLInputElement).checked).toBe(true);
+    expect((within(tablo).getByLabelText('Deneme Yeni T-01 yetkinliği') as HTMLInputElement).checked).toBe(false);
+    expect(within(tablo).queryByText('K-01')).toBeNull();
+    fireEvent.click(within(tablo).getByLabelText('T-01 sütununun hepsi'));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/toplu', govde: { degisiklikler: [{ kisiId: 7, istasyonId: 10, yetkin: true }] } });
+    await waitFor(() => { expect(screen.getByRole('table', { name: 'Yetkinlik matrisi' }).getAttribute('aria-busy')).toBe('false'); });
+    fireEvent.click(within(tablo).getByLabelText('Deneme Usta T-01 yetkinliği'));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
+    expect(POSTLAR(cagrilar)[1]?.govde).toEqual({ degisiklikler: [{ kisiId: 5, istasyonId: 10, yetkin: false }] });
+  });
+
+  it('okuyan kutu görmez, yetkinliği işaretle görür', async () => {
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />, '/istasyonlar/yetkinlik');
+    const tablo = await screen.findByRole('table', { name: 'Yetkinlik matrisi' });
+    expect(within(tablo).queryAllByRole('checkbox')).toHaveLength(0);
+    expect(within(tablo).getByLabelText('Deneme Usta T-01 yetkin')).toBeTruthy();
+    expect(within(tablo).queryByLabelText('Deneme Yeni T-01 yetkin')).toBeNull();
+  });
+});

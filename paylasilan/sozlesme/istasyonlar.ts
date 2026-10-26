@@ -314,6 +314,10 @@ export const panoOzetiCevabi = z.object({
 // Karar 146 a: her yetkinlik kimin ne zaman verdiğini, geçerlilik bitişini ve dayanağını taşır; süresi dolan yetkinlik (`gecerli: false`)
 // listede kalır ama iş başlatmaz. Veren ve verilme karardan önceki satırlarda boştur.
 export const yetkinlikGovdesi = z.object({ istasyonIdleri: z.array(kimlik).max(500) });
+// 565 a: yetkinlik matrisinde toplu aç ve kapat (satır ya da sütun); her kişinin listesi tek uçtaki gibi fark olarak yazılır, hepsi ya da hiçbiri.
+export const yetkinlikTopluGovdesi = z.object({
+  degisiklikler: z.array(z.object({ kisiId: kimlik, istasyonId: kimlik, yetkin: z.boolean() })).min(1).max(2000),
+});
 export const yetkinlikAyrintisiSemasi = z.object({
   istasyonId: z.number().int(),
   verenKisiId: z.number().int().nullable(),
@@ -432,6 +436,7 @@ export type MakineDurumu = z.output<typeof makineDurumuSemasi>;
 export type MakineDurumlariCevabi = z.output<typeof makineDurumlariCevabi>;
 export type PanoOzetiCevabi = z.output<typeof panoOzetiCevabi>;
 export type YetkinlikGovdesi = z.input<typeof yetkinlikGovdesi>;
+export type YetkinlikTopluGovdesi = z.input<typeof yetkinlikTopluGovdesi>;
 export type YetkinliklerCevabi = z.output<typeof yetkinliklerCevabi>;
 export type YetkinlikAyrintisi = z.output<typeof yetkinlikAyrintisiSemasi>;
 export type YetkinlikAyrintiGovdesi = z.input<typeof yetkinlikAyrintiGovdesi>;

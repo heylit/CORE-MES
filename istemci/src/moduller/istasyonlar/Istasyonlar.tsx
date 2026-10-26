@@ -10,6 +10,7 @@ import { OperasyonTipleri } from './OperasyonTipleri.tsx';
 import { PersonelSekmesi } from './PersonelSekmesi.tsx';
 import { saatMetni } from './tesis.ts';
 import { useTesisVerisi, useTesisYaz, type TesisVerisi } from './tesisVerisi.ts';
+import { YetkinlikMatrisi } from './YetkinlikMatrisi.tsx';
 import './istasyonlar.css';
 
 // Bölümler ikinci menünün maddeleridir (`paylasilan/sayfalar/istasyonlar.ts`); menüyü kabuk çizer, bölümü adres seçer.
@@ -19,7 +20,7 @@ const MENU = IKINCI_MENU_TANIMLARI.find((m) => m.kok === KOK);
 const BOLUMLER: ReadonlyMap<string, MenuMaddesi> = new Map(
   (MENU === undefined ? [] : menuMaddeleri(MENU)).map((m) => [m.yol === KOK ? 'genel' : m.yol.slice(KOK.length + 1), m]),
 );
-type Bolum = 'genel' | 'is-merkezleri' | 'makineler' | 'personel' | 'vardiyalar' | 'operasyon-tipleri';
+type Bolum = 'genel' | 'is-merkezleri' | 'makineler' | 'personel' | 'yetkinlik' | 'vardiyalar' | 'operasyon-tipleri';
 // Eski adresler (yer imi, paylaşılan bağlantı) yeni bölüme gider: ekipler ve kişi kısıtları Personel'in içindedir.
 const TASINAN: Record<string, Exclude<Bolum, 'genel'>> = { ekipler: 'personel', 'kisi-kisitlari': 'personel' };
 
@@ -86,6 +87,7 @@ export function Istasyonlar() {
         {bolum === 'personel' && (
           <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('kisiler.yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
         )}
+        {bolum === 'yetkinlik' && <YetkinlikMatrisi v={v} yazabilir={yazabilir} />}
         {bolum === 'vardiyalar' && <VardiyaBolumu v={v} sayfaVar={islemler.includes('sayfa.vardiya')} />}
         {bolum === 'operasyon-tipleri' && <OperasyonTipleri yazabilir={yazabilir} />}
       </div>
