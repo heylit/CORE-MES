@@ -21,7 +21,7 @@ import {
   ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, ilkParcaSayimReddi, kaliteMerkeziNumuneYamasi, kararBekleyenSayisi, yenidenIlkParcaAcik, yenidenIlkParcaTabani,
 } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 import { gecisteDuraklatilacaklar, oneAlinanSuruyor, yeniOneAlinan } from '../../../../../../arkon/web/src/data/is-gecisi.ts';
-import { ilkAcilis } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
+import { ilkAcilis, secilebilirIstasyonlar } from '../../../../../../arkon/web/src/data/istasyon-sec.ts';
 import { elleNumuneOlculeri } from '../../../../../../arkon/web/src/data/kontrol-plani.ts';
 import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, seciliMakineler, type MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
@@ -38,6 +38,7 @@ import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis
 import type { Perm } from '../cekirdek/tipler.ts';
 import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
+import { isMerkezinde } from '../cekirdek/yetki.ts';
 import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
 import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
 import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
@@ -57,10 +58,10 @@ import {
   type EkranSekmesi,
 } from './kurallar.ts';
 import {
-  CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
+  Cark, CagriCipi, DurumDugmeleri, DurumLambasi, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, isCarkOgeleri, Konfeti, MakineSecici, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
-import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
+import { CagriPenceresi, CagriTakibi, DurusPenceresi, GecisPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
@@ -82,7 +83,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu';
+type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -338,9 +339,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     if (onceki !== iz) saveResult(o);
   }, [o.good, o.scrap, o.state, o.acks, o.toolsAt, o.sr, o.kart, o.pkg]);
 
-  /* iş değiştirme: çalışan eski iş duraklatılır ve olayı yeni işin olaylarından önce gönderilir */
-  const isGec = (i: number) => {
-    const duraklat = gecisteDuraklatilacaklar(isler, i);
+  /* iş değiştirme (684): çalışan iş yalnız operatör "duraklat" derse duraklatılır ve olayı yeni işin olaylarından önce gönderilir;
+     "devam" derse istasyonda birden çok iş açık kalır. */
+  const isGec = (i: number, duraklatilsin = false) => {
+    const duraklat = duraklatilsin ? gecisteDuraklatilacaklar(isler, i) : [];
     for (const j of duraklat) {
       const x = isler[j]!;
       const eski: Is = { ...x, state: 'paused' };
@@ -351,6 +353,20 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     }
     if (duraklat.length) islerYaz((l) => l.map((x, j) => (duraklat.includes(j) ? { ...x, state: 'paused' } : x)));
     aiYaz(i);
+  };
+
+  const [gecis, gecisYaz] = useState<{ i: number; sonra?: () => void } | null>(null);
+  // Başka işe geçiş: başka çalışan iş varsa sorulur (684), yoksa doğrudan geçilir.
+  const isGecIste = (i: number, sonra?: () => void) => {
+    if (i === ai) { sonra?.(); return; }
+    if (!pv && gecisteDuraklatilacaklar(isler, i).length) { gecisYaz({ i, ...(sonra ? { sonra } : {}) }); ovYaz('gecis'); return; }
+    isGec(i); sinceYaz(Date.now()); sonra?.();
+  };
+  const gecisiBitir = (duraklatilsin: boolean) => {
+    const g = gecis;
+    ovYaz(null); gecisYaz(null);
+    if (!g) return;
+    isGec(g.i, duraklatilsin); sinceYaz(Date.now()); g.sonra?.();
   };
 
   // Ctrl K'den gelen emir listede varsa seçilir; çalışan başka iş varsa seçim yapılmaz ve operatöre söylenir.
@@ -367,19 +383,18 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       emirIstegi.current = null;
       kartIstegi.current = null;
       if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return; }
-      if (r.sira !== ai && o.state === 'running') { say(`Çalışan iş var · ${isler[r.sira]!.no} için önce bu işi duraklat`, 'alert', 'hazard'); return; }
-      aiYaz(r.sira);
-      mvYaz('prod');
-      islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
-      say(`İş emri açıldı: ${isler[r.sira]!.no} · refakat kartıyla`, 'check', 'run');
+      isGecIste(r.sira, () => {
+        mvYaz('prod');
+        islerYaz((l) => l.map((x, j) => (j === r.sira ? { ...x, kart, fresh: false } : x)));
+        say(`İş emri açıldı: ${isler[r.sira]!.no} · refakat kartıyla`, 'check', 'run');
+      });
       return;
     }
     const i = emirSirasi(isler, id);
     if (i < 0) { if (isler.some((x) => x.pkg)) emirIstegi.current = null; return; }
     emirIstegi.current = null;
     if (i === ai) return;
-    if (o.state === 'running') { say(`Çalışan iş var · ${isler[i]!.no} için önce bu işi duraklat`, 'alert', 'hazard'); return; }
-    aiYaz(i);
+    isGecIste(i);
   };
   const emirSecRef = useRef(emirSec);
   emirSecRef.current = emirSec;
@@ -421,10 +436,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }, [kartAnahtari, MACHINE, depo]);
   // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
   const kartlaAc = (i: number, k: RefakatKarti) => {
-    if (i !== ai) { isGec(i); sinceYaz(Date.now()); }
-    islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
-    mvYaz('prod');
-    say(`İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
+    isGecIste(i, () => {
+      islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
+      mvYaz('prod');
+      say(`İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
+    });
   };
 
   /* iş kuralları ve istasyon türü (hazırlıktan) */
@@ -786,9 +802,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       const n = isler.findIndex((x, i) => i !== ai && x.state === 'queued');
       ovYaz(null);
       if (n >= 0) {
-        isGec(n); sinceYaz(Date.now());
-        islerYaz((l) => l.map((x, j) => (j === n ? { ...x, fresh: false } : x)));
-        say(`Yüklendi: ${isler[n]!.no} · hazırlık ${hazirlikSayisi(isler[n]!)}/4`, 'next', 'hazard');
+        isGecIste(n, () => {
+          islerYaz((l) => l.map((x, j) => (j === n ? { ...x, fresh: false } : x)));
+          say(`Yüklendi: ${isler[n]!.no} · hazırlık ${hazirlikSayisi(isler[n]!)}/4`, 'next', 'hazard');
+        });
       } else say('Kuyrukta iş kalmadı', 'check');
       return;
     }
@@ -923,8 +940,18 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     sendSample, startCall, o, call,
     // Makine veri toplayıcısından (sunucu) gelen sayım ve durum: sunucuda src 'auto' olarak zaten kaydedildi.
     mcData: (m) => {
-      if (o.empty || o.state === 'done') return;
       const delta = Number(m['delta']) || 0;
+      // 684: istasyonda birden çok iş açıkken başka makinenin sayımı ekrandaki işe yazılmaz; o makinedeki açık işin satırı güncellenir.
+      const mc = m['mc'] == null ? null : String(m['mc']);
+      const ekrandakiMc = curMc();
+      if (mc && ekrandakiMc && mc !== String(ekrandakiMc)) {
+        if (m['kind'] === 'count' && delta) {
+          islerYaz((l) => l.map((x) => (!x.empty && x.state !== 'done' && x.pkg && String(x.pkg.mc) === mc
+            ? (m['ck'] === 'scrap' ? { ...x, scrap: x.scrap + delta } : { ...x, good: x.good + delta }) : x)));
+        }
+        return;
+      }
+      if (o.empty || o.state === 'done') return;
       if (m['kind'] === 'count' && delta) {
         autoRef.current.cnt = true;
         if (m['ck'] === 'scrap') patch({ scrap: o.scrap + delta });
@@ -958,7 +985,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     cagriSureleri: callLog.map((x) => x.ms), cagriAcik: !!call, nedenAdi: (k) => nedenAdiYaz(k, nedenAdiOku),
   });
   const setReady = (k: string) => islerYaz((l) => l.map((x) => (nextOrder && x.no === nextOrder.no ? { ...x, ready: { ...(x.ready as Record<string, boolean> | undefined), [k]: !((x.ready as Record<string, boolean> | undefined) || {})[k] } } : x)));
-  const isSec = (i: number) => { isGec(i); sinceYaz(Date.now()); islerYaz((l) => l.map((x, j) => (j === i ? { ...x, fresh: false } : x))); };
+  const isSec = (i: number, sonra?: () => void) => isGecIste(i, () => { islerYaz((l) => l.map((x, j) => (j === i ? { ...x, fresh: false } : x))); sonra?.(); });
   const ertele = (g: Gorev) => { if (!g.key) return; snoozeYaz((s) => ({ ...s, [g.key!]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'idle'); };
   const izinli = (a: GorevEylemi) => !YAZAN.has(a) || (uretir && (a !== 'call' || !pv));
   const planliGec = uretir ? (code: string) => undoable(`Planlı duruş · ${nedenAdiOku(code) || ''}`, 'stop', 'done', () => go('stopped', code)) : null;
@@ -1033,7 +1060,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <DurumDugmeleri durum={o.state} pasif={!!o.empty} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
   ) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
-  const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradakiNo={nextOrder && nextOrder.no} ondeNo={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => { isSec(i); if (dar) mvYaz('prod'); }} />;
+  const isCarki = <Cark etiket="İş" ogeler={isCarkOgeleri(isler)} etkin={ai} gecMetni="Bu işe geç" gec={(i) => isSec(i)} />;
+  // İstasyon çarkı seçicinin listesini gezer; geçiş seçicideki gibi terminali o istasyonla yeniden kurar.
+  const carkIstasyonlari = pv ? [] : secilebilirIstasyonlar(istasyonListesi(tesis).filter((m) => isMerkezinde(kisi, m.wc)), yetkiVar('prod.station'), kisi && kisi.sts);
+  const istasyonSirasi = carkIstasyonlari.findIndex((m) => m.id === MACHINE);
+  const istasyonCarki = istasyonSirasi < 0 ? null : (
+    <Cark etiket="İstasyon" ogeler={carkIstasyonlari.map((m) => ({ anahtar: m.id, baslik: m.id, alt: m.name }))} etkin={istasyonSirasi} gecMetni="Bu istasyona geç"
+      gec={(i) => { const m = carkIstasyonlari[i]; if (m) { yerel.yaz('station', m.id); yenidenKur(); } }} />
+  );
+  const kuyruk = <IsKuyrugu isler={isler} aktif={ai} siradakiNo={nextOrder && nextOrder.no} ondeNo={ondeNo} kartlar={kartlar} kartla={pv ? null : kartlaAc} sec={(i) => isSec(i, () => { if (dar) mvYaz('prod'); })} />;
   const uyariCipi = (dur: boolean) => (uyarili ? (
     <button type="button" className="tc-ay1-uyari-cip" onClick={(e) => { if (dur) e.stopPropagation(); act('warns'); }} aria-label="Bu işin uyarıları" title="Bu işin uyarıları">
       <Simge ad="bell" boyut="k" />{RL.warns.filter((w) => w.t).length}
@@ -1060,6 +1095,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         buyukDegisim={(v) => (Math.abs(v - o.good) > Math.max(20, o.good * 0.1) ? `Büyük değişiklik: ${sayi(o.good)} → ${sayi(v)} · doğruysa yeniden onayla` : null)}
         kapat={() => ovYaz(null)}
         onayla={(v) => { if (v > o.good && !sayimOk('prod.fix', iyiArtiNedeni(v - o.good))) return; ovYaz(null); undoable(`Sayaç güncellendi · ${sayi(v)}`, 'check', 'run', () => patch({ good: v })); }} />
+      {ov === 'gecis' && gecis ? (
+        <GecisPenceresi calisanlar={gecisteDuraklatilacaklar(isler, gecis.i).map((j) => isler[j]!.no)} hedef={isler[gecis.i]?.no ?? ''}
+          kapat={() => { ovYaz(null); gecisYaz(null); }} devam={() => gecisiBitir(false)} duraklat={() => gecisiBitir(true)} />
+      ) : null}
       {ov === 'call' ? <CagriPenceresi kapat={() => ovYaz(null)} cagir={(c) => { ovYaz(null); startCall(c); }} /> : null}
       {ov === 'calltrack' && call ? <CagriTakibi cagri={call} kapat={() => ovYaz(null)} yanitla={replyCall} bitir={endCall} /> : null}
       {ov === 'prepnext' && nextOrder ? <SonrakiHazirlik is={nextOrder} kapat={() => ovYaz(null)} degistir={setReady} /> : null}
@@ -1097,6 +1136,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {gor === 'prod' ? (
             <div className="tc-ay1-uretim">
               {bantlar}
+              {isCarki}
               <IsOzeti is={o} acik={isAcik} degistir={() => isAcikYaz((x) => !x)} />
               {uyariCipi(false)}
               {/* 685: sayaç ilk ekrandadır; görev kartı ve numune şeridi altında. */}
@@ -1113,7 +1153,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           ) : null}
           {gor === 'st' && panel ? <div className="tc-ay1-bolme">{panel}</div> : null}
           {gor === 'draw' ? resim : null}
-          {gor === 'queue' ? kuyruk : null}
+          {gor === 'queue' ? <>{istasyonCarki}{kuyruk}</> : null}
           {gor === 'steps' ? adimlar : null}
           {gor === 'ana' ? <div className="tc-ay1-bolme">{takimKarti}{analiz}</div> : null}
         </div>
@@ -1169,9 +1209,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       </header>
       {/* Eski üç sütun (.main): kuyruk, üretim, ayrıntı; sütunlar ekran yüksekliğine sığar, taşan sütun kendi içinde kayar. */}
       <div className="tc-ay1-izgara">
-        <div className="tc-ay1-sutun">{kuyruk}</div>
+        <div className="tc-ay1-sutun">{istasyonCarki}{kuyruk}</div>
         <div className="tc-ay1-orta tc-ay1-sutun">
           {bantlar}
+          {isCarki}
           <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
             <div>
               <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>

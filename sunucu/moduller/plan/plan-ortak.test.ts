@@ -6,13 +6,14 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { KuyrukYazCevabi, PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { AdimGirdisi, KomutCevabi, RevizyonAyrintisi, SeceneklerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { oner } from './servis.ts';
+import { PLANLAMA_ANAHTARI } from '../recete-rota/disari.ts';
 
 export const PAROLA = 'dogru-parola-1';
 
@@ -36,10 +37,22 @@ export function planTestOrtami() {
   let makineA = 0;
   let makineB = 0;
   let operatorId = 0;
+  let merkezId = 0;
+  let tamGun: number[] = [];
   // Onaya giden rotanın ilk adımında giren olmalı (#1372): örnek adımlar bu hammaddeyi tüketir.
   let ortakHammadde = 0;
   let sayac = 0;
 
+  // Merkeze tam gün vardiya (650 a: tezgâh kendi merkezinin haftasıyla çalışır; vardiyasız merkezin işi yerleşmez, 168 b).
+  const tamGunVer = async (merkez: number): Promise<void> => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı.');
+    await ortam.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT $1, g, v FROM generate_series(1, 7) g, unnest($2::int[]) v', [merkez, tamGun]);
+  };
+  const tamGunMerkezi = async (kod: string, ad: string): Promise<number> => {
+    const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod, ad, aciklama: null });
+    await tamGunVer(merkez.id);
+    return merkez.id;
+  };
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam.vt;
@@ -187,7 +200,23 @@ export function planTestOrtami() {
     istasyonB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-B', ad: 'Deneme B', isMerkeziId: merkez.id })).id;
     makineA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MA', ad: 'Deneme makine A', istasyonId: istasyonA })).id;
     makineB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MB', ad: 'Deneme makine B', istasyonId: istasyonB })).id;
-    operatorId = (await vt().tx((db) => db.tek<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme operator'")))!.id;    ortakHammadde = await hammaddeAc();
+    operatorId = (await vt().tx((db) => db.tek<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme operator'")))!.id;
+    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez (168 b, 650 a: tezgâh kendi merkezinin haftasıyla)
+    // ve planlama sayfasının çalışma kaydı olmadan çözmez (409): merkez her gün tam gün çalışır (Motor A'nın takvimsiz varsayımı), kayıt boştur
+    // (vardiya, tezgâh ve emir canlıdan). Tam gün iki yarımdır: vardiyanın başı ve sonu aynı saat olamaz.
+    tamGun = (await ortam.sahip.sorgu<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('RT gun ilk yari', '00:00', '12:00'), ('RT gun son yari', '12:00', '00:00') RETURNING id")).map((x) => x.id);
+    await tamGunVer(merkez.id);
+    merkezId = merkez.id;
+    await tamam(c.yonetici, 'POST', '/recete-rota/kayitlar/yaz', {
+      anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
+      deger: {
+        surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+        w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+        D: { meta: { ad: 'Deneme', baslangic: tesisGunu(Date.now()) }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [],
+          tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
+      },
+    });
+    ortakHammadde = await hammaddeAc();
   });
 
   after(async () => { await ortam?.kaldir(); });
@@ -206,11 +235,47 @@ export function planTestOrtami() {
   const yer = (p: PlanCevabi, isEmriId: number) => p.yerlesimler.find((y) => y.isEmriId === isEmriId)!;
   const tg = (p: PlanCevabi) => ({ id: p.taslak!.id, surum: p.taslak!.surum });
   // Yeni taslak açıp motora önerdirir (P6: canlıdayken yapılan işlem kullanıcıya taslak açar).
-  const taslaktaOner = (cerez = c.planlama) => tamam<PlanCevabi>(cerez, 'POST', '/plan/oner', { taslak: null });
+  // Planlama sayfasının "Planı kur"u (ADR 0018): kaldırılan Motor A önerisinin (/plan/oner) yerini tutar. Canlıda yerleşmiş, yerinden
+  // oynayabilen (planlı, kilitsiz, dondurulmamış, bölünmemiş) işler kendi makinesinde başlangıç sırasıyla, yerleşmemiş işler rotadaki makinede
+  // arkalarından kuyruğa yazılır; saatleri sunucu motoru verir, yeni taslak açılır. Taslak (cevabı ya da kimliği) verilirse plan ondan okunur
+  // ve ona yazılır. Elle sıra ve elle seçilen makine işaretiyle gider (sayfa da öyle gönderir).
+  const taslaktaOner = async (cerez = c.planlama, taslak?: PlanCevabi | number): Promise<PlanCevabi> => {
+    const id = typeof taslak === 'number' ? taslak : taslak?.taslak?.id;
+    const canli = id === undefined ? await tamam<PlanCevabi>(cerez, 'GET', '/plan') : await tamam<PlanCevabi>(cerez, 'GET', `/plan?taslak=${String(id)}`);
+    type Satir = { emirNo: string; opNo: number; elleSira?: number | null; elleKaynak?: boolean };
+    const kuyruk = new Map<number, Satir[]>();
+    // Kullanımda olmayan (arıza, pasif) makineye iş yazılmaz; sayfa da onu kuyruğa koymaz.
+    const aktif = new Set(canli.kaynaklar.filter((x) => x.tur === 'makine' && x.aktif).map((x) => x.id));
+    const ekle = (makineId: number, y: Satir) => aktif.has(makineId) && kuyruk.set(makineId, [...(kuyruk.get(makineId) ?? []), y]);
+    const oynar = canli.yerlesimler.filter((y) => y.durum === 'planli' && !y.kilitli && !y.dondurulmus && !y.parcalar?.length && y.kaynak.tur === 'makine');
+    for (const y of oynar.sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic))) ekle(y.kaynak.id, y);
+    for (const y of canli.yerlesmemis) if (y.kaynak?.tur === 'makine' && y.durum === 'planli' && !y.bolme) ekle(y.kaynak.id, y);
+    if (kuyruk.size === 0) throw new Error('Planı kur: kuyruğa yazılacak iş yok.');
+    // Elle sıralı iş kuyruktaki yerini (elle sıra numarasını) korur; ötekiler başlangıç sırasıyla aradaki yerleri doldurur.
+    const dizi = (l: Satir[]) => {
+      const elle = l.filter((y) => y.elleSira != null).sort((a, b) => a.elleSira! - b.elleSira!);
+      const diger = l.filter((y) => y.elleSira == null);
+      const r: Satir[] = [];
+      while (elle.length || diger.length) r.push(elle.length && (elle[0]!.elleSira! <= r.length + 1 || !diger.length) ? elle.shift()! : diger.shift()!);
+      return r.map((y) => ({ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: y.elleSira != null, ...(y.elleKaynak ? { elleKaynak: true } : {}) }));
+    };
+    const k = await tamam<KuyrukYazCevabi>(cerez, 'POST', '/plan/kuyruklari-yaz', {
+      kuyruklar: [...kuyruk].map(([id, isler]) => ({ kaynak: { tur: 'makine', id }, baslangic: new Date().toISOString(), isler: dizi(isler) })), planSurumu: canli.surum,
+      ...(canli.taslak ? { taslak: tg(canli) } : {}),
+    });
+    return tamam<PlanCevabi>(cerez, 'GET', `/plan?taslak=${k.taslak}`);
+  };
+  // Taslağa yazma denetimi (sahiplik, sürüm, onaydaki taslak): kaldırılan /plan/oner yerine tek işlik kuyruk yazımı.
+  const taslagaYaz = async (cerez: string, taslak: { id: number; surum: number }, isEmriId: number) => {
+    const p = await tamam<PlanCevabi>(c.planlama, 'GET', `/plan?taslak=${String(taslak.id)}`);
+    const y = p.yerlesimler.find((x) => x.isEmriId === isEmriId) ?? p.yerlesmemis.find((x) => x.isEmriId === isEmriId)!;
+    const kaynak = y.kaynak ?? { tur: 'makine' as const, id: makineA };
+    return istek(cerez, 'POST', '/plan/kuyruklari-yaz', { taslak, kuyruklar: [{ kaynak, baslangic: new Date().toISOString(), isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false }] }] });
+  };
   const isEmriKomutu = (p: PlanCevabi, isEmriId: number, ad: string, govde: Record<string, unknown> = {}, cerez = c.planlama) =>
     istek(cerez, 'POST', `/plan/is-emirleri/${isEmriId}/${ad}`, { taslak: tg(p), ...govde });
 
   // İlkel değerler before'dan sonra dolar: test dosyası kendi before'unda okur.
-  const durum = () => ({ ortam, app, yoneticiId, denemeProjeId, istasyonA, istasyonB, makineA, makineB, operatorId });
-  return { c, vt, girisCerezi, istek, tamam, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, durum };
+  const durum = () => ({ ortam, app, yoneticiId, denemeProjeId, istasyonA, istasyonB, makineA, makineB, operatorId, merkezId, tamGun });
+  return { c, vt, girisCerezi, istek, tamam, kisiEkle, kartAc, mamulAc, hammaddeAc, tip, yeniAdim, govdeye, ayrinti, taslakAc, kaydet, komut, yururlugeAlinmisRota, isEmirleriAc, isEmriDurumu, isEmriMakinesi, planOku, yer, tg, taslaktaOner, isEmriKomutu, taslagaYaz, tamGunVer, tamGunMerkezi, durum };
 }

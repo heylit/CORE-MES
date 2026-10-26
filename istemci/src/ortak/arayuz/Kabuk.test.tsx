@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
+import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 
@@ -17,6 +18,7 @@ function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => un
 
 beforeEach(() => {
   localStorage.clear();
+  cihazTercihleriniSifirla();
   document.documentElement.setAttribute('data-theme', 'light');
 });
 
@@ -355,5 +357,44 @@ describe('Kabuk', () => {
     expect(tekMi('/kuyruk', ['ornek.oku'])).toEqual([true, true]);
     expect(tekMi('/kuyruk', ['ornek.oku', 'ornek.ek'])).toEqual([true, false]);
     expect(tekMi('/stok', ['ornek.oku'])).toEqual([true, false]);
+  });
+  it('menuyu daralt dugmesi ve Ctrl+B ana menuyu simge seridine daraltir, geri acar; tercih tarayicida kalir (682 a)', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(min-width: 1024px)', media: q }));
+    try {
+      const { container, unmount } = ciz();
+      const kabuk = container.querySelector('.tc-kabuk')!;
+      const dugme = screen.getByRole('button', { name: 'Menüyü daralt' });
+      expect(dugme.getAttribute('aria-expanded')).toBe('true');
+      expect(kabuk.hasAttribute('data-menu-dar')).toBe(false);
+      fireEvent.click(dugme);
+      expect(kabuk.hasAttribute('data-menu-dar')).toBe(true);
+      expect(screen.getByRole('button', { name: 'Menüyü genişlet' }).getAttribute('aria-expanded')).toBe('false');
+      expect(localStorage.getItem(cihazTercihiAnahtari('ana-menu-dar'))).toBe('acik');
+      fireEvent.keyDown(document, { key: 'b', ctrlKey: true });
+      expect(kabuk.hasAttribute('data-menu-dar')).toBe(false);
+      fireEvent.keyDown(document, { key: 'b' });
+      fireEvent.keyDown(document, { key: 'b', ctrlKey: true, shiftKey: true });
+      expect(kabuk.hasAttribute('data-menu-dar')).toBe(false);
+      fireEvent.keyDown(document, { key: 'B', ctrlKey: true });
+      expect(kabuk.hasAttribute('data-menu-dar')).toBe(true);
+      unmount();
+      cihazTercihleriniSifirla();
+      const yeniden = ciz();
+      expect(yeniden.container.querySelector('.tc-kabuk')!.hasAttribute('data-menu-dar')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Ctrl+B masaustu genisligi altinda menuyu degistirmez', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q }));
+    try {
+      const { container } = ciz();
+      fireEvent.keyDown(document, { key: 'b', ctrlKey: true });
+      expect(container.querySelector('.tc-kabuk')!.hasAttribute('data-menu-dar')).toBe(false);
+      expect(localStorage.getItem(cihazTercihiAnahtari('ana-menu-dar'))).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

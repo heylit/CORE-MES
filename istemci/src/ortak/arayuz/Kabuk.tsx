@@ -48,6 +48,12 @@ function basHarfler(ad: string): string {
 
 const ALT_CUBUK_SAYISI = 4;
 
+const MENU_DAR_TERCIHI = 'ana-menu-dar';
+// kabuk.css'teki masaüstü sınırıyla aynı olmalı: daraltma düğmesi yalnız bu genişlikte görünür.
+function masaustuMu(): boolean {
+  try { return window.matchMedia('(min-width: 1024px)').matches; } catch { return true; }
+}
+
 // Grup sırası listedeki ilk görünüş sırasıdır.
 function grupla(sayfalar: readonly Sayfa[]) {
   return [...new Set(sayfalar.map((s) => s.grup))].map((grup) => ({
@@ -159,6 +165,8 @@ export function Kabuk({
   const [tumuAcik, tumuYaz] = useState(false);
   const [parolaAcik, parolaYaz] = useState(false);
   const [tamEkran, tamEkranYaz] = useState(false);
+  // Ana menünün daraltılmışlığı tarayıcıya aittir: aynı bilgisayarda çalışan herkes aynı genişlikte bulur (karar 682 a).
+  const [menuDar, menuDarYaz] = useCihazTercihi(MENU_DAR_TERCIHI);
   const konum = useLocation();
   const gezin = useNavigate();
   const gecis = gorunumGecisi(konum.pathname);
@@ -213,6 +221,17 @@ export function Kabuk({
     return () => { document.removeEventListener('keydown', tus); };
   }, []);
 
+  // Ctrl+B yalnız menünün daraldığı genişlikte çalışır; tablette menü zaten şerittir, telefonda yoktur.
+  useEffect(() => {
+    const tus = (o: KeyboardEvent) => {
+      if (!(o.ctrlKey || o.metaKey) || o.altKey || o.shiftKey || o.key.toLocaleLowerCase('en') !== 'b' || !masaustuMu()) return;
+      o.preventDefault();
+      menuDarYaz(!menuDar);
+    };
+    document.addEventListener('keydown', tus);
+    return () => { document.removeEventListener('keydown', tus); };
+  }, [menuDar, menuDarYaz]);
+
   useEffect(() => { tumuYaz(false); }, [konum.pathname]);
 
   // Sayfa değişince içerik bir kez girer: öznitelik kaldırılıp yeniden konunca CSS animasyonu baştan oynar (hareket.css).
@@ -255,8 +274,8 @@ export function Kabuk({
     });
   }, []);
   const sayaclar = ikinci !== null && cerceveSayaclari?.kok === ikinci.kok ? cerceveSayaclari.sayaclar : sunucuSayaclari;
-  // Menüler açılıp kapanmaz (kullanıcı kararı, kart #172): ana menü solda sabittir (1024 altında yalnız simge),
-  // ikinci menü başlığın altında sekme şerididir.
+  // Ana menü solda durur; masaüstünde kişi onu simge şeridine daraltabilir (682 a), 1024 altında hep şerittir.
+  // İkinci menü başlığın altında sekme şerididir ve kapanmaz.
   const cik = () => { gecmisiSil(); cikis(); };
 
   // Tam ekran yalnız çerçeveli sayfadadır ve hatırlanmaz: sayfa değişince kapanır.
@@ -286,6 +305,7 @@ export function Kabuk({
         data-ikinci-tek={ikinci && TELEFONDA_SERITSIZ.has(ikinci.kok) && menuMaddeleri(ikinci).length === 1 ? '' : undefined}
         data-cerceveli={cerceveli ? '' : undefined}
         data-tam-ekran={tamEkranAcik ? '' : undefined}
+        data-menu-dar={menuDar ? '' : undefined}
       >
         <nav className="tc-kabuk-menu" aria-label="Ana menü">
           {/* Klavye ve ekran okuyucu için ana sayfa bağlantısı aşağıdaki maddedir; logo yalnız fareyle tıklanan kısayoldur. */}
@@ -298,6 +318,17 @@ export function Kabuk({
           <p className="tc-kabuk-surum mono" title={`Sürüm ${DERLEME.surum}, derleme ${derlemeTarihi(DERLEME.tarih, true)}`}>
             v{DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}
           </p>
+          <button
+            type="button"
+            className="tc-kabuk-bag tc-kabuk-daralt"
+            onClick={() => menuDarYaz(!menuDar)}
+            aria-expanded={!menuDar}
+            aria-label={menuDar ? 'Menüyü genişlet' : 'Menüyü daralt'}
+            title={menuDar ? 'Menüyü genişlet (Ctrl+B)' : 'Menüyü daralt (Ctrl+B)'}
+          >
+            <Simge ad={menuDar ? 'chev-right' : 'chev-left'} />
+            <span className="tc-kabuk-bag-metin">Menüyü daralt</span>
+          </button>
           <Baglanti sayfa={anaBaglanti} tam />
           <Baglanti sayfa={PROFIL_BAGLANTISI} />
           {gruplar.map((g) => (

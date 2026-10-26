@@ -209,3 +209,13 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
   Önceki davranış: çalışmanın başlangıç günü bugün değilse emir bugünün ilk vardiya saatinde serbest kalıyordu; sunucu çözümünde kayıt takvimsiz
   çevrildiği için bu saat 08:00'di. Gece vardiyasında planlanan iş sabaha kadar bekliyordu. Kayıtta eski saat kalmışsa düzeltilir.
 - Test: `plan-cozucusu.test.ts` 678 a; değişiklik olmadan kırılıyor (DOĞRULANDI).
+## Kapalı gün motorun tatilidir (677 a, davranış değiştiren düzeltme onaylı 26.10.2026; kart 677)
+- Kaynak okumasının takvimi (`durum.cal.holidays`, `kurallar.ts` `tatilTarihleri`) artık kapalı günleri de verir. Önceki davranış: yalnız `tatil`
+  türü alınıyordu; Vardiya 142 b'den beri yalnız kapalı gün yazabildiği ve plan stüdyosunun kapattığı gün de kapalı olduğu için bu günler motorda çalışılıyordu.
+- Sayfanın ve sunucu çözümünün planı değişir: kapalı günde tezgâh çalışmaz (Motor A'daki gibi). RR-D7 ve RR-13 testlerinin beklentisi değişti.
+## Emirler arası öncül: parti kolu (690 b, davranış değiştiren düzeltme onaylı 26.10.2026; kart 625n)
+- Motor öncülü yalnız emrin rotasından, emrin içinde kurar; parti kolu ayrı emirdir. Önceki davranış: üst emrin birleşme adımı kolun bitişini
+  beklemeden yerleşiyordu (Motor A B7'de bekletiyordu). Plan modülü bağı `PlanMotoruIstegi.baglar` ile verir (`anahtar` `oncul` bitmeden başlamaz);
+  `emirler.betik` onu `st.ekOncul`'a çevirir, `engine.betik` `compile` işlemin öncüllerine ekler. Motorda karşılığı olmayan (biten, istekte geçmeyen) bağ yok sayılır.
+- Sayfa `st.ekOncul` vermez; sayfanın planı değişmez. Derlenmiş sayfa engine.betik'i taşır: `planlama-derle.ts` ile yeniden kurulur.
+- Test: `plan-cozucusu.test.ts` 690 b; değişiklik olmadan kırılıyor (DOĞRULANDI). Plan B7 de bağsız kırılıyordu (DOĞRULANDI).

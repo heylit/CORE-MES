@@ -9,7 +9,7 @@ import { planTestOrtami } from './plan-ortak.test.ts';
 
 // PL-ONAY (hedef 23.10.2026; 146, 147 a, 148 a): canlı plana tek kapı. Taslak onaya gider; onaylayan canlıya alır ya da geri gönderir.
 describe('plan (gerçek PostgreSQL): onay adımı', () => {
-  const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, taslaktaOner, durum } = planTestOrtami();
+  const { c, vt, istek, tamam, yeniAdim, isEmirleriAc, planOku, taslaktaOner, taslagaYaz, durum } = planTestOrtami();
   let ortam: TestVeritabani | undefined;
   before(() => { ({ ortam } = durum()); });
 
@@ -23,7 +23,7 @@ describe('plan (gerçek PostgreSQL): onay adımı', () => {
   const dortGoz = (deger: boolean) => tamam(c.yonetici, 'POST', '/ayarlar/plan.dort-goz/degistir', { deger });
 
   test('PL-ONAY: gönder, çek, geri gönder, canlıya al; onaydaki taslağa plan yazılmaz; açık taslak canlıya alınmaz', async () => {
-    await isEmirleriAc([yeniAdim()]);
+    const [i1] = await isEmirleriAc([yeniAdim()]);
     const p = await taslaktaOner();
     const id = p.taslak!.id;
     const canliSurum = (await planOku()).surum;
@@ -42,7 +42,7 @@ describe('plan (gerçek PostgreSQL): onay adımı', () => {
     assert.deepEqual((await oku(c.mudur, id)).yapabilir, { onayaGonder: false, onaydanCek: false, geriGonder: true, canliyaAl: true });
 
     // Onaydaki taslak donmuştur: ona yazılmaz; taslaksız yazma yeni taslak açar.
-    const yaz = await istek(c.planlama, 'POST', '/plan/oner', { taslak: { id, surum: s.surum } });
+    const yaz = await taslagaYaz(c.planlama, { id, surum: s.surum }, i1!);
     assert.equal(yaz.statusCode, 409);
     assert.match(yaz.body, /onaydan çek/);
     assert.equal((await komut(c.planlama, id, 'hizli', { tur: 'gun', surum: s.surum })).statusCode, 409);

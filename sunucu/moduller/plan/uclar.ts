@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, karsilastirmaCevabi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
+  ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi,
   planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisBandiCevabi, siparisCarpaniCevabi, siparisCarpaniTaslakGovdesi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI,
@@ -20,8 +20,6 @@ const PLAN_OKUR = { biri: ['plan.oku', 'plan.yaz'] } as const;
 export const uclar = [
   uc({ yontem: 'GET', yol: '/plan', yetki: PLAN_OKUR, sorgu: planSorgusu, cevap: planCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.plan(db, kullanici, sorgu.taslak) }),
-  uc({ yontem: 'GET', yol: '/plan/karsilastir', yetki: PLAN_OKUR, sorgu: planSorgusu, cevap: karsilastirmaCevabi,
-    isle: ({ db, kullanici, sorgu }) => servis.karsilastir(db, kullanici, sorgu.taslak) }),
   // 220 a: ekranın çizdiği motor yerleşimi; yazmaz. Plan ekranını açan (Reçete ve Rota sayfası) ya da plan yazan okur (232 a).
   uc({ yontem: 'GET', yol: '/plan/motor-yerlesimi', yetki: { biri: ['sayfa.recete-rota', 'plan.yaz'] }, sorgu: planSorgusu, cevap: motorYerlesimiCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.motorYerlesimi(db, kullanici, sorgu.taslak) }),
@@ -34,8 +32,6 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
-  uc({ yontem: 'POST', yol: '/plan/oner', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakGovdesi, cevap: planCevabi,
-    isle: ({ db, kullanici, govde }) => servis.oner(db, kullanici, govde.taslak) }),
   uc({ yontem: 'POST', yol: '/plan/yerlestir', yetki: 'plan.yaz', tekrarKorumali: true, govde: yerlestirGovdesi, cevap: planCevabi,
     isle: ({ db, kullanici, govde }) => servis.yerlestir(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/is-emirleri/:id/tasi', yetki: 'plan.yaz', tekrarKorumali: true, parametre: isEmriParametresi, govde: tasiGovdesi,

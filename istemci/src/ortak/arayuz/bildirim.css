@@ -34,3 +34,14 @@
     width: auto; max-width: none;
   }
 }
+
+/* Pencere açıkken bildirim pencerenin düğmelerini örtmemeli. Genişte sol alta geçer (alt düğmeler sağa yaslı); sağdan açılan
+   ya da tam ekran pencerede alt düğmeler dar genişlikte sola kadar uzanır, bildirim sol üste geçer. Telefonda pencere alttan açılır, bildirim üste
+   geçer ve başlıktaki kapatma düğmesinin yerini boş bırakır. */
+body:has(.tc-perde) .tc-bildirimler { right: auto; left: var(--b-5); }
+body:has(.tc-pencere-yan, .tc-pencere-tam) .tc-bildirimler { top: var(--b-5); bottom: auto; }
+@media (max-width: 767px) {
+  body:has(.tc-perde) .tc-bildirimler {
+    left: var(--b-3); right: calc(var(--dokunma) + var(--b-4) + var(--b-3)); top: var(--b-3); bottom: auto;
+  }
+}
