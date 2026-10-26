@@ -1,5 +1,5 @@
 import type {
-  AdimOlcusu, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, Olcu, Serit, StatuKalisi,
+  AdimOlcusu, Bolum, BolumTuru, EmirAkisiCevabi, HammaddePartisi, KartAni, KartKonumu, KartRotasi, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
 
 // Akış Süresi hesabı (kart #1338). Saf: veritabanı ve saat yok; "şimdi" girdidir. Kurallar AKS-<n> numarasıyla KURAL-TEST.md'dedir.
@@ -34,12 +34,15 @@ export interface AkisHareketi {
   cikisNedeni: string | null;
 }
 
+export interface AkisOlayi { isEmriId: number | null; zaman: string; olay: UretimOlayi; kisiId?: number; durusNedeniId?: number | null }
+export interface AkisSayimi { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number; kisiId?: number; hurdaNedeniId?: number | null }
+
 export interface AkisGirdisi {
   simdi: string;
   emir: { id: number; emirNo: string; malzemeNo: number | null; adet: number; durum: string; baslama: string | null; teslim: string | null };
   adimlar: readonly AkisAdimi[];
-  olaylar: readonly { isEmriId: number | null; zaman: string; olay: UretimOlayi }[];
-  sayimlar: readonly { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number }[];
+  olaylar: readonly AkisOlayi[];
+  sayimlar: readonly AkisSayimi[];
   fason: readonly { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number }[];
   hareketler: readonly AkisHareketi[];
   statuler: ReadonlyMap<number, { ad: string; tur: 'HM' | 'YM' | 'MM' | null }>;
@@ -392,12 +395,17 @@ export function sevkAni(k: SevkKaydi | null): { hazir: string | null; sevk: stri
 export interface KartAniGirdisi {
   acilis: string;
   hammadde: readonly HammaddePartisi[];
-  teslimler: readonly { durum: 'yolda' | 'teslim' | 'red' | 'iptal'; gonderim: string; kapanis: string | null; miktar: string; alinan: string | null; kaynak: string; hedef: string }[];
+  teslimler: readonly {
+    durum: 'yolda' | 'teslim' | 'red' | 'iptal'; gonderim: string; kapanis: string | null; miktar: string; alinan: string | null; kaynak: string; hedef: string;
+    gonderen?: string | null; kapatan?: string | null;
+  }[];
   adimlar: readonly { id: number; opNo: number; istasyon: string | null; fason: boolean }[];
-  olaylar: readonly { isEmriId: number | null; zaman: string; olay: UretimOlayi }[];
-  sayimlar: readonly { isEmriId: number | null; zaman: string; tur: 'saglam' | 'hurda'; adet: number }[];
+  olaylar: readonly AkisOlayi[];
+  sayimlar: readonly AkisSayimi[];
   fason: readonly { isEmriId: number; yon: 'gidis' | 'donus'; zaman: string; adet: number }[];
   sevk: { hazir: string | null; sevk: string | null } | null;
+  // Kişi, duruş nedeni ve hurda nedeni adları; haritada olmayan null yazılır.
+  adlar?: { kisi: ReadonlyMap<number, string>; durus: ReadonlyMap<number, string>; hurda: ReadonlyMap<number, string> };
 }
 
 // AKS-8 (kart #708): kartın anları zamana göre tek dizidir; aynı anda olanlar akış sırasıyla (kabul, açılış, teslim, adım, sevk)
@@ -409,25 +417,101 @@ export function kartAnlari(g: KartAniGirdisi): KartAni[] {
     const a = isEmriId === null ? undefined : adim.get(isEmriId);
     return { isEmriId: a === undefined ? null : a.id, opNo: a?.opNo ?? null, yer: a === undefined ? null : a.fason ? 'Fason' : a.istasyon };
   };
-  const bos = { isEmriId: null, opNo: null };
+  const bos = { isEmriId: null, opNo: null, kim: null, neden: null };
+  const ad = (harita: 'kisi' | 'durus' | 'hurda', id: number | null | undefined): string | null =>
+    (id == null ? null : g.adlar?.[harita].get(id) ?? null);
   const anlar: (KartAni & { sira: number })[] = [];
   for (const h of g.hammadde) if (h.malKabul !== null) anlar.push({ zaman: h.malKabul, tur: 'mal_kabul', ...bos, yer: h.lotNo, miktar: null, sira: 0 });
   anlar.push({ zaman: g.acilis, tur: 'kart_acildi', ...bos, yer: null, miktar: null, sira: 1 });
   for (const t of g.teslimler) {
     const yer = `${t.kaynak} → ${t.hedef}`;
-    anlar.push({ zaman: t.gonderim, tur: 'teslim_gonderildi', ...bos, yer, miktar: t.miktar, sira: 2 });
-    if (t.kapanis !== null && t.durum === 'teslim') anlar.push({ zaman: t.kapanis, tur: 'teslim_alindi', ...bos, yer, miktar: t.alinan, sira: 2 });
-    if (t.kapanis !== null && t.durum === 'red') anlar.push({ zaman: t.kapanis, tur: 'teslim_reddedildi', ...bos, yer, miktar: t.miktar, sira: 2 });
+    anlar.push({ zaman: t.gonderim, tur: 'teslim_gonderildi', ...bos, yer, miktar: t.miktar, kim: t.gonderen ?? null, sira: 2 });
+    if (t.kapanis !== null && t.durum === 'teslim') anlar.push({ zaman: t.kapanis, tur: 'teslim_alindi', ...bos, yer, miktar: t.alinan, kim: t.kapatan ?? null, sira: 2 });
+    if (t.kapanis !== null && t.durum === 'red') anlar.push({ zaman: t.kapanis, tur: 'teslim_reddedildi', ...bos, yer, miktar: t.miktar, kim: t.kapatan ?? null, sira: 2 });
   }
-  for (const o of g.olaylar) anlar.push({ zaman: o.zaman, tur: o.olay, ...adimli(o.isEmriId), miktar: null, sira: 3 });
+  for (const o of g.olaylar) {
+    anlar.push({ zaman: o.zaman, tur: o.olay, ...adimli(o.isEmriId), miktar: null, kim: ad('kisi', o.kisiId), neden: ad('durus', o.durusNedeniId), sira: 3 });
+  }
   for (const s of g.sayimlar) {
-    anlar.push({ zaman: s.zaman, tur: s.tur, ...adimli(s.isEmriId), miktar: String(s.adet), sira: 3 });
+    anlar.push({ zaman: s.zaman, tur: s.tur, ...adimli(s.isEmriId), miktar: String(s.adet), kim: ad('kisi', s.kisiId), neden: ad('hurda', s.hurdaNedeniId), sira: 3 });
   }
-  for (const f of g.fason) anlar.push({ zaman: f.zaman, tur: f.yon === 'gidis' ? 'fason_gidis' : 'fason_donus', ...adimli(f.isEmriId), miktar: String(f.adet), sira: 3 });
+  for (const f of g.fason) {
+    anlar.push({ zaman: f.zaman, tur: f.yon === 'gidis' ? 'fason_gidis' : 'fason_donus', ...adimli(f.isEmriId), miktar: String(f.adet), kim: null, neden: null, sira: 3 });
+  }
   if (g.sevk?.hazir != null) anlar.push({ zaman: g.sevk.hazir, tur: 'sevke_hazir', ...bos, yer: null, miktar: null, sira: 4 });
   if (g.sevk?.sevk != null) anlar.push({ zaman: g.sevk.sevk, tur: 'sevk', ...bos, yer: null, miktar: null, sira: 4 });
   return anlar
     .map((x, i) => ({ x, i }))
     .sort((a, b) => an(a.x.zaman) - an(b.x.zaman) || a.x.sira - b.x.sira || a.i - b.i)
     .map(({ x: { sira: _sira, ...k } }) => k);
+}
+
+// AKS-9 (kart #708): kartın bir adımdaki penceresi, kartın süre özeti için. Kartın o adımdaki ilk sayımından önce başka bir
+// sayım (başka kartın ya da kartsız) varsa pencere o sayımın anında, yoksa adımın başlamasında açılır; kartın son sayımından
+// sonra başka sayım varsa kartın son sayımında, yoksa adımın bitişinde (sürüyorsa null: şimdi) kapanır. Hazırlık kartın
+// sayılır yalnız pencere adımın başlamasında açılıyorsa. Kartın o adımda sayımı yoksa pencere adımın tamamıdır.
+export function kartPenceresi(
+  adim: { baslama: string | null; bitis: string | null },
+  sayimlar: readonly { zaman: string; kartin: boolean }[],
+): { baslama: string | null; bitis: string | null; hazirlikKartin: boolean } {
+  const kartin = sayimlar.filter((s) => s.kartin).map((s) => an(s.zaman));
+  if (adim.baslama === null || kartin.length === 0) return { baslama: adim.baslama, bitis: adim.bitis, hazirlikKartin: true };
+  const ilk = Math.min(...kartin);
+  const son = Math.max(...kartin);
+  const digerleri = sayimlar.filter((s) => !s.kartin).map((s) => an(s.zaman));
+  const once = enBuyuk(digerleri.filter((t) => t < ilk));
+  const sonra = digerleri.some((t) => t > son);
+  const bas = once !== null && once > an(adim.baslama) ? once : null;
+  return {
+    baslama: bas === null ? adim.baslama : metin(bas),
+    bitis: sonra ? metin(son) : adim.bitis,
+    hazirlikKartin: bas === null,
+  };
+}
+
+// AKS-10 (kart #708): kartın yeri son anından okunur; sayım anı yeri değiştirmez. Kabul ve açılış depoda, teslim gönderimi
+// yolda; teslim alındı, reddedildi, adım bitti ve fasondan dönüş bekliyor; ayar ayarda, başlat ve devam üretimde, duraklat
+// duraklatıldı, durdur durdu, fason gidişi fasonda; sevke hazır ve sevk kendi adıyla. Açık olmayan kart kapandıdır. Rotada adım
+// bittiyse geçti, kartın o adımda anı varsa şimdi, yoksa sıradadır; hurda kartın o adımdaki hurda anlarının toplamıdır. Lead karta yüklemeden sevke; sevk yoksa kapalı kartta son
+// ana, açık kartta şimdiye kadar (açık).
+export function kartKonumu(
+  kart: { durum: string; acilis: string },
+  anlar: readonly KartAni[],
+  adimlar: readonly { id: number; opNo: number; baslama: string | null; bitis: string | null }[],
+  simdi: string,
+): { konum: KartKonumu; rota: KartRotasi; lead: Olcu; sonAn: KartAni | null } {
+  const yerAnlari = anlar.filter((a) => a.tur !== 'saglam' && a.tur !== 'hurda');
+  const son = yerAnlari.at(-1) ?? null;
+  const sonAn = anlar.at(-1) ?? null;
+  const durumu: Record<KartAni['tur'], KartKonumu['durum']> = {
+    mal_kabul: 'depoda', kart_acildi: 'depoda', teslim_gonderildi: 'yolda', teslim_alindi: 'bekliyor', teslim_reddedildi: 'bekliyor',
+    ayar: 'ayarda', baslat: 'uretimde', devam: 'uretimde', duraklat: 'duraklatildi', durdur: 'durdu', bitir: 'bekliyor',
+    saglam: 'uretimde', hurda: 'uretimde', fason_gidis: 'fasonda', fason_donus: 'bekliyor', sevke_hazir: 'sevke_hazir', sevk: 'sevk_edildi',
+  };
+  const kapali = kart.durum !== 'acik';
+  const konum: KartKonumu = {
+    durum: kapali ? 'kapandi' : son === null ? 'depoda' : durumu[son.tur],
+    isEmriId: son?.isEmriId ?? null,
+    opNo: son?.opNo ?? null,
+    yer: son?.yer ?? null,
+    beri: son?.zaman ?? kart.acilis,
+  };
+  const anliAdimlar = new Set(anlar.map((a) => a.isEmriId).filter((x): x is number => x !== null));
+  const rota: KartRotasi = adimlar.map((a) => ({
+    isEmriId: a.id, opNo: a.opNo, durum: a.bitis !== null ? 'gecti' : anliAdimlar.has(a.id) ? 'simdi' : 'sirada',
+    baslama: a.baslama, bitis: a.bitis,
+    hurdaAdet: Math.max(0, anlar.filter((x) => x.isEmriId === a.id && x.tur === 'hurda').reduce((t, x) => t + Number(x.miktar ?? 0), 0)),
+  }));
+  const sevk = anlar.find((a) => a.tur === 'sevk')?.zaman ?? null;
+  const bitis = sevk ?? (kapali ? sonAn?.zaman ?? kart.acilis : null);
+  const lead = olcu(an(kart.acilis), bitis === null ? null : an(bitis), an(simdi), !kapali);
+  return { konum, rota, lead, sonAn };
+}
+
+// Kartın lotundan üretime sarf edilen miktar (binde bir hassas, numeric metin); sarf yoksa null.
+export function kartSarfi(hareketler: readonly AkisHareketi[], partiId: number | null): string | null {
+  if (partiId === null) return null;
+  const sarflar = hareketler.filter((h) => h.partiId === partiId && h.tur === 'cikis' && h.cikisNedeni === 'uretime_sarf');
+  if (sarflar.length === 0) return null;
+  return (sarflar.reduce((t, h) => t + binde(h.miktar), 0) / 1000).toFixed(3);
 }

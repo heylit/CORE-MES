@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { adimAraliklari, emirAkisi, fasonAraligi, kartAnlari, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi } from './kurallar.ts';
+import {
+  adimAraliklari, emirAkisi, fasonAraligi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi,
+} from './kurallar.ts';
 
 // Saat 08:00'den dakika sayar; okunaklı örnek için.
 const z = (dakika: number): string => new Date(Date.UTC(2026, 0, 5, 8, 0) + dakika * 60_000).toISOString();
@@ -235,17 +237,21 @@ describe('AKS-7 sevk anı', () => {
       acilis: z(10),
       hammadde: [{ partiId: 1, lotNo: 'LT-1', malKabul: z(0), kullanim: null, beklemeDk: null }, { partiId: 2, lotNo: 'LT-2', malKabul: null, kullanim: null, beklemeDk: null }],
       teslimler: [
-        { durum: 'teslim', gonderim: z(10), kapanis: z(20), miktar: '10.000', alinan: '9.000', kaynak: 'Kabul', hedef: 'Torna 1' },
+        { durum: 'teslim', gonderim: z(10), kapanis: z(20), miktar: '10.000', alinan: '9.000', kaynak: 'Kabul', hedef: 'Torna 1', gonderen: 'Depo A', kapatan: 'Operatör B' },
         { durum: 'red', gonderim: z(30), kapanis: z(35), miktar: '1.000', alinan: null, kaynak: 'Kabul', hedef: 'Torna 1' },
         { durum: 'iptal', gonderim: z(40), kapanis: z(41), miktar: '2.000', alinan: null, kaynak: 'Kabul', hedef: 'Freze 1' },
       ],
       adimlar: [{ id: 7, opNo: 10, istasyon: 'Torna 1', fason: false }, { id: 8, opNo: 20, istasyon: null, fason: true }],
-      olaylar: [{ isEmriId: 7, zaman: z(20), olay: 'baslat' }, { isEmriId: 99, zaman: z(50), olay: 'bitir' }],
-      sayimlar: [{ isEmriId: 7, zaman: z(45), tur: 'saglam', adet: 4 }, { isEmriId: 7, zaman: z(46), tur: 'saglam', adet: -1 }],
+      olaylar: [{ isEmriId: 7, zaman: z(20), olay: 'baslat', kisiId: 5 }, { isEmriId: 99, zaman: z(50), olay: 'bitir' }, { isEmriId: 7, zaman: z(47), olay: 'durdur', kisiId: 6, durusNedeniId: 3 }],
+      sayimlar: [{ isEmriId: 7, zaman: z(45), tur: 'saglam', adet: 4 }, { isEmriId: 7, zaman: z(46), tur: 'saglam', adet: -1 }, { isEmriId: 7, zaman: z(48), tur: 'hurda', adet: 1, kisiId: 5, hurdaNedeniId: 4 }],
       fason: [{ isEmriId: 8, yon: 'gidis', zaman: z(60), adet: 3 }],
       sevk: { hazir: z(90), sevk: null },
+      adlar: { kisi: new Map([[5, 'Operatör A']]), durus: new Map([[3, 'Takım değişimi']]), hurda: new Map([[4, 'Çap dışı']]) },
     });
-    assert.deepEqual(anlar.map((a) => [a.zaman, a.tur, a.opNo, a.yer, a.miktar]), [
+    assert.deepEqual(anlar.filter((a) => a.kim !== null || a.neden !== null).map((a) => [a.tur, a.kim, a.neden]), [
+      ['teslim_gonderildi', 'Depo A', null], ['teslim_alindi', 'Operatör B', null], ['baslat', 'Operatör A', null], ['durdur', null, 'Takım değişimi'], ['hurda', 'Operatör A', 'Çap dışı'],
+    ], 'kişi ve neden adı haritadan; haritada olmayan null');
+    assert.deepEqual(anlar.filter((a) => a.tur !== 'durdur' && a.tur !== 'hurda').map((a) => [a.zaman, a.tur, a.opNo, a.yer, a.miktar]), [
       [z(0), 'mal_kabul', null, 'LT-1', null],
       [z(10), 'kart_acildi', null, null, null],
       [z(10), 'teslim_gonderildi', null, 'Kabul → Torna 1', '10.000'],
@@ -260,5 +266,64 @@ describe('AKS-7 sevk anı', () => {
       [z(60), 'fason_gidis', 20, 'Fason', '3'],
       [z(90), 'sevke_hazir', null, null, null],
     ]);
+  });
+});
+
+describe('AKS-9 kartın adımdaki penceresi', () => {
+  const adimi = { baslama: z(0), bitis: z(100) };
+  test('kartın tek kartı: pencere adımın tamamı, hazırlık kartın', () => {
+    assert.deepEqual(kartPenceresi(adimi, [{ zaman: z(10), kartin: true }, { zaman: z(20), kartin: true }]), { baslama: z(0), bitis: z(100), hazirlikKartin: true });
+  });
+  test('önce başka kart sayıldıysa pencere onun son sayımında açılır, hazırlık kartın değil; sonra sayıldıysa kartın son sayımında kapanır', () => {
+    const sayimlar = [{ zaman: z(10), kartin: false }, { zaman: z(30), kartin: false }, { zaman: z(40), kartin: true }, { zaman: z(60), kartin: true }, { zaman: z(70), kartin: false }];
+    assert.deepEqual(kartPenceresi(adimi, sayimlar), { baslama: z(30), bitis: z(60), hazirlikKartin: false });
+  });
+  test('kartın sayımı yoksa ya da adım başlamadıysa adımın penceresi', () => {
+    assert.deepEqual(kartPenceresi(adimi, [{ zaman: z(10), kartin: false }]), { baslama: z(0), bitis: z(100), hazirlikKartin: true });
+    assert.deepEqual(kartPenceresi({ baslama: null, bitis: null }, [{ zaman: z(10), kartin: true }]), { baslama: null, bitis: null, hazirlikKartin: true });
+  });
+  test('sürmekte olan adımda sonra sayım yoksa bitiş açık kalır (null)', () => {
+    assert.deepEqual(kartPenceresi({ baslama: z(0), bitis: null }, [{ zaman: z(5), kartin: true }]), { baslama: z(0), bitis: null, hazirlikKartin: true });
+  });
+});
+
+describe('AKS-10 kartın yeri, rotası ve lead', () => {
+  const an = (dk: number, tur: Parameters<typeof kartKonumu>[1][number]['tur'], isEmriId: number | null = null) =>
+    ({ zaman: z(dk), tur, isEmriId, opNo: isEmriId === null ? null : isEmriId * 10, yer: isEmriId === null ? null : 'Torna 1', miktar: null, kim: null, neden: null });
+  const adimlar = [{ id: 1, opNo: 10, baslama: z(5), bitis: z(50) }, { id: 2, opNo: 20, baslama: z(60), bitis: null }, { id: 3, opNo: 30, baslama: null, bitis: null }];
+  test('son an yeri söyler; sayım yeri değiştirmez; rota geçti, şimdi, sırada; lead açılıştan şimdiye açık', () => {
+    const r = kartKonumu({ durum: 'acik', acilis: z(0) }, [an(0, 'kart_acildi'), an(5, 'baslat', 1), an(50, 'bitir', 1), an(60, 'ayar', 2), an(61, 'saglam', 2)], adimlar, z(100));
+    assert.deepEqual(r.konum, { durum: 'ayarda', isEmriId: 2, opNo: 20, yer: 'Torna 1', beri: z(60) });
+    assert.deepEqual(r.rota.map((x) => x.durum), ['gecti', 'simdi', 'sirada']);
+    assert.deepEqual(r.rota.map((x) => [x.baslama, x.bitis]), [[z(5), z(50)], [z(60), null], [null, null]]);
+    const h = kartKonumu({ durum: 'acik', acilis: z(0) }, [{ ...an(10, 'hurda', 1), miktar: '2' }, { ...an(11, 'hurda', 1), miktar: '1' }], adimlar, z(100));
+    assert.deepEqual(h.rota.map((x) => x.hurdaAdet), [3, 0, 0], 'kartın hurda anları adımına toplanır');
+    assert.deepEqual(r.lead, { dk: 100, acik: true });
+    assert.equal(r.sonAn?.tur, 'saglam');
+  });
+  test('teslim gönderimi yolda, alınması bekliyor; anı yoksa depoda', () => {
+    assert.equal(kartKonumu({ durum: 'acik', acilis: z(0) }, [an(1, 'teslim_gonderildi')], adimlar, z(10)).konum.durum, 'yolda');
+    assert.equal(kartKonumu({ durum: 'acik', acilis: z(0) }, [an(1, 'teslim_gonderildi'), an(2, 'teslim_alindi')], adimlar, z(10)).konum.durum, 'bekliyor');
+    assert.deepEqual(kartKonumu({ durum: 'acik', acilis: z(0) }, [], adimlar, z(10)).konum, { durum: 'depoda', isEmriId: null, opNo: null, yer: null, beri: z(0) });
+  });
+  test('sevk lead\'i kapatır; açık olmayan kart kapandı, lead son anına kadar', () => {
+    assert.deepEqual(kartKonumu({ durum: 'acik', acilis: z(0) }, [an(80, 'sevk')], adimlar, z(100)).lead, { dk: 80, acik: false });
+    const k = kartKonumu({ durum: 'iptal', acilis: z(0) }, [an(30, 'baslat', 1)], adimlar, z(100));
+    assert.equal(k.konum.durum, 'kapandi');
+    assert.deepEqual(k.lead, { dk: 30, acik: false });
+  });
+});
+
+describe('kartın lotundan sarf', () => {
+  test('yalnız kartın lotundan üretime sarf toplanır; yoksa null', () => {
+    const h = [
+      hareket({ zaman: z(0), tur: 'cikis', miktar: '2.500', cikisNedeni: 'uretime_sarf' }),
+      hareket({ zaman: z(1), tur: 'cikis', miktar: '1.000', cikisNedeni: 'uretime_sarf', partiId: 2 }),
+      hareket({ zaman: z(2), tur: 'cikis', miktar: '0.250', cikisNedeni: 'uretime_sarf' }),
+      hareket({ zaman: z(3), tur: 'transfer', miktar: '5.000' }),
+    ];
+    assert.equal(kartSarfi(h, 1), '2.750');
+    assert.equal(kartSarfi(h, 3), null);
+    assert.equal(kartSarfi(h, null), null);
   });
 });

@@ -67,13 +67,21 @@ describe('Refakat kartları sayfası (kart #708)', () => {
         saglamAdet: 8, cevrimBirimDk: 6.25, standartBirimDk: 5, standartHazirlikDk: 10, terminGun: null,
       }],
       statuler: [], hammadde: [],
-      kart: { id: 12, etiket: 'UE-000001-P1', durum: 'acik', lotNo: 'LT-000040', acilis: t(30) },
+      kart: {
+        id: 12, etiket: 'UE-000001-P1', durum: 'acik', lotNo: 'LT-000040', acilis: t(30), malzeme: 'HM-1 Deneme sac', birim: 'kg',
+        tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, verilen: '10', sarf: null,
+      },
+      konum: { durum: 'uretimde', isEmriId: 7, opNo: 10, yer: 'Torna 1', beri: t(90) },
+      rota: [{ isEmriId: 7, opNo: 10, durum: 'simdi', baslama: t(90), bitis: null, hurdaAdet: 0 }],
+      lead: olcu(1970, true),
+      teslimler: [],
+      sureOzetleri: [],
       olaylarEmrin: true,
       anlar: [
-        { zaman: t(0), tur: 'mal_kabul', isEmriId: null, opNo: null, yer: 'LT-000040', miktar: null },
-        { zaman: t(30), tur: 'kart_acildi', isEmriId: null, opNo: null, yer: null, miktar: null },
-        { zaman: t(90), tur: 'baslat', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: null },
-        { zaman: t(1530), tur: 'saglam', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: '8' },
+        { zaman: t(0), tur: 'mal_kabul', isEmriId: null, opNo: null, yer: 'LT-000040', miktar: null, kim: null, neden: null },
+        { zaman: t(30), tur: 'kart_acildi', isEmriId: null, opNo: null, yer: null, miktar: null, kim: null, neden: null },
+        { zaman: t(90), tur: 'baslat', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: null, kim: null, neden: null },
+        { zaman: t(1530), tur: 'saglam', isEmriId: 7, opNo: 10, yer: 'Torna 1', miktar: '8', kim: null, neden: null },
       ],
     };
     sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {

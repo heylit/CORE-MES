@@ -129,12 +129,85 @@ export const kartAniSemasi = z.object({
   yer: z.string().nullable(),
   // Teslimde gönderilen ya da alınan miktar, sayımda (kayıttaki işaretiyle) ve fasonda adet.
   miktar: z.string().nullable(),
+  // Kaydı yazan kişi (teslimde gönderen ya da kapatan); bilinmiyorsa null.
+  kim: z.string().nullable(),
+  // Duruşta duruş nedeni, hurdada hurda nedeni; yoksa null.
+  neden: z.string().nullable(),
+});
+
+// Kartın şu anki yeri, son anından: depoda (kabul ya da açılış), yolda (teslim gönderildi), bekliyor (teslim alındı, adım
+// bitti ya da fasondan döndü), ayarda, üretimde, duraklatıldı, durdu, fasonda, sevke hazır, sevk edildi; kart kapandıysa kapandı.
+export const KART_KONUMLARI = [
+  'depoda', 'yolda', 'bekliyor', 'ayarda', 'uretimde', 'duraklatildi', 'durdu', 'fasonda', 'sevke_hazir', 'sevk_edildi', 'kapandi',
+] as const;
+export type KartKonumuTuru = (typeof KART_KONUMLARI)[number];
+export const kartKonumuSemasi = z.object({
+  durum: z.enum(KART_KONUMLARI),
+  // Son an bir adımın anıysa o adım; değilse null.
+  isEmriId: KIMLIK.nullable(),
+  opNo: z.number().int().nullable(),
+  yer: z.string().nullable(),
+  // Bu duruma geçtiği an (son anın zamanı).
+  beri: zamanSemasi,
+});
+// Rotada kartın adımları: geçti (adım bitti), şimdi (adımda anı var, bitmedi), sırada (anı yok); adımın başlama ve bitişi
+// (emrin) ve kartla sayılan hurda.
+export const ROTA_DURUMLARI = ['gecti', 'simdi', 'sirada'] as const;
+export const kartRotasiSemasi = z.array(z.object({
+  isEmriId: KIMLIK, opNo: z.number().int(), durum: z.enum(ROTA_DURUMLARI),
+  baslama: zamanSemasi.nullable(), bitis: zamanSemasi.nullable(), hurdaAdet: z.number().int().nonnegative(),
+}));
+
+// Üretim emirlerindeki iş emri süre özetiyle aynı ölçüler; dakika, ölçülemeyen null.
+export const sureOzetiSemasi = z.object({
+  saglam: z.number().int(),
+  hurda: z.number().int(),
+  hazirlikDk: dakika.nullable(),
+  brutBirimDk: dakika.nullable(),
+  netBirimDk: dakika.nullable(),
+  tekliAraliklarDk: z.array(dakika),
+  tekliOrtalamaDk: dakika.nullable(),
+});
+export const kartTeslimiSemasi = z.object({
+  durum: z.enum(['yolda', 'teslim', 'red', 'iptal']),
+  gonderim: zamanSemasi,
+  kapanis: zamanSemasi.nullable(),
+  kaynak: z.string(),
+  hedef: z.string(),
+  miktar: z.string(),
+  alinan: z.string().nullable(),
+  gonderen: z.string().nullable(),
+  kapatan: z.string().nullable(),
 });
 export const kartAkisiCevabi = emirAkisiCevabi.extend({
-  kart: z.object({ id: KIMLIK, etiket: z.string(), durum: z.string(), lotNo: z.string().nullable(), acilis: zamanSemasi }),
+  kart: z.object({
+    id: KIMLIK, etiket: z.string(), durum: z.string(), lotNo: z.string().nullable(), acilis: zamanSemasi,
+    // Kartın malzemesi (verilen) ve birimi; lotun tedarikçi parti, döküm ve sertifika numarası.
+    malzeme: z.string().nullable(), birim: z.string().nullable(),
+    tedarikciPartiNo: z.string().nullable(), dokumNo: z.string().nullable(), sertifikaNo: z.string().nullable(),
+    // Kartla emre verilen ve kartın lotundan üretime sarf edilen miktar (sarf yoksa null).
+    verilen: z.string(), sarf: z.string().nullable(),
+  }),
+  konum: kartKonumuSemasi,
+  rota: kartRotasiSemasi,
+  // Karta yüklemeden (kartın açılışı) sevke; sevk edilmediyse şimdiye kadar açık, kart kapandıysa son anına kadar.
+  lead: olcuSemasi,
+  teslimler: z.array(kartTeslimiSemasi),
+  // Adım başına kartın ve emrin tamamının süre özeti (fason adımda yok).
+  sureOzetleri: z.array(z.object({ isEmriId: KIMLIK, kart: sureOzetiSemasi, emir: sureOzetiSemasi })),
   // Adım olayları emrindir (olayda kart yok): emrin başka kartı varsa anlar o kartın işini de gösterebilir.
   olaylarEmrin: z.literal(true),
   anlar: z.array(kartAniSemasi),
+});
+
+// Kart listesi için özet (en çok 50 kart): rota, son an ve lead.
+export const KART_OZETI_SINIRI = 50;
+export const kartOzetleriSorgusu = z.object({
+  idler: z.string().trim().max(600).regex(/^\d+(,\d+)*$/).transform((m) => [...new Set(m.split(',').map(Number))])
+    .pipe(z.array(KIMLIK).min(1).max(KART_OZETI_SINIRI)),
+});
+export const kartOzetleriCevabi = z.object({
+  kartlar: z.array(z.object({ id: KIMLIK, konum: kartKonumuSemasi, rota: kartRotasiSemasi, sonAn: kartAniSemasi.nullable(), lead: olcuSemasi })),
 });
 
 export const emirListesiCevabi = z.object({
@@ -158,3 +231,8 @@ export type EmirAkisiCevabi = z.output<typeof emirAkisiCevabi>;
 export type EmirListesiCevabi = z.output<typeof emirListesiCevabi>;
 export type KartAni = z.output<typeof kartAniSemasi>;
 export type KartAkisiCevabi = z.output<typeof kartAkisiCevabi>;
+export type KartKonumu = z.output<typeof kartKonumuSemasi>;
+export type KartRotasi = z.output<typeof kartRotasiSemasi>;
+export type SureOzeti = z.output<typeof sureOzetiSemasi>;
+export type KartTeslimi = z.output<typeof kartTeslimiSemasi>;
+export type KartOzetleriCevabi = z.output<typeof kartOzetleriCevabi>;
