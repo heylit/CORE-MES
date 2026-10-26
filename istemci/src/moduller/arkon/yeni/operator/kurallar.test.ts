@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
+  cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
 
@@ -96,6 +96,32 @@ describe('telefon eylem çubuğu (618)', () => {
     expect(etiketler('stopped')).toEqual(['Yeniden Başlat']);
     expect(etiketler('done')).toEqual(['Sıradaki İş']);
     for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) expect(cubukDugmeleri(d).every((x) => !x.tut && x.eylem !== 'finish')).toBe(true);
+  });
+});
+
+describe('ara numune sıklığı işin adedini aşınca (700 a)', () => {
+  const pkg = { plan: [{ id: 1, crit: false }], samp: [{ id: 'f', when: 'first', who: ['q'], items: 'all', gate: true }, { id: 'h', when: 'every', n: 50, who: ['op', 'q'], items: 'all' }] } as unknown as Is['pkg'];
+  const ilkOlcum = { 1: { ok: true, cnt: 0, at: 0, who: 'q' } } as unknown as Is['meas'];
+  const istenen = (o: Partial<Is>) => kontrolTakvimi(is({ pkg, meas: ilkOlcum, ...o }), 2, 0);
+  it('25 parçalık işte her 50 kuralı 13. parçada bir kez numune ister, sonra bir daha istemez', () => {
+    expect(istenen({ target: 25, good: 12 }).due).toEqual([]);
+    expect(istenen({ target: 25, good: 12 }).next).toMatchObject({ v: 1, u: 'parça', who: 'op' });
+    expect(istenen({ target: 25, good: 13 }).due.map((b) => b.id)).toEqual([1]);
+    expect(istenen({ target: 25, good: 13 }).why[1]).toBe('Her 50 parça · 1. numune');
+    const olculdu = { 1: { ok: true, cnt: 13, at: 1, who: 'op' } } as unknown as Is['meas'];
+    expect(istenen({ target: 25, good: 25, meas: olculdu })).toMatchObject({ due: [], next: null });
+  });
+  it('sıklık adetten küçükse eskisi gibi; işe dönüşte kalan adedin ortası', () => {
+    expect(istenen({ target: 120, good: 49 }).due).toEqual([]);
+    expect(istenen({ target: 120, good: 50 }).due.map((b) => b.id)).toEqual([1]);
+    expect(istenen({ target: 25, good: 22, baseGood: 20 }).due.map((b) => b.id)).toEqual([]);
+    expect(istenen({ target: 25, good: 23, baseGood: 20 }).due.map((b) => b.id)).toEqual([1]);
+  });
+  it('şerit sıradaki numuneyi işin ortasında gösterir, alındıktan sonra çizgi yok', () => {
+    const r = { id: 'h', when: 'every', n: 50 } as unknown as Parameters<typeof numuneAraligi>[0];
+    expect(numuneAraligi(r, { good: 5, baseGood: 0, startedAt: 0, target: 25 }, 0)).toEqual({ n: 13, birim: 'parça', gecen: 5, hedef: 13 });
+    expect(numuneAraligi(r, { good: 13, baseGood: 0, startedAt: 0, target: 25 }, 0)).toBeNull();
+    expect(numuneAraligi(r, { good: 5, baseGood: 0, startedAt: 0, target: 120 }, 0)).toEqual({ n: 50, birim: 'parça', gecen: 5, hedef: 50 });
   });
 });
 

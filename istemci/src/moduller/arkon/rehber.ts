@@ -7,7 +7,7 @@ export const rehber: readonly SayfaRehberi[] = [
     nasil: [
       'Üst karttaki önerilen düğmeye basın: "Başlat", "Hazırlığa geç", "Üretime geç", "Bitir".',
       'Parça saymak için "İyi +1" ya da "Hurda +1" (hurda nedeni sorulur); çok adet için "Toplu giriş".',
-      'Makine durunca "Neden durdu?" penceresinde nedeni seçip "Duruşu kaydet"e basın.',
+      'Makine durunca "Neden durdu?" penceresinde nedene dokunun; hemen kaydedilir, yanlışsa bildirimden "Geri al".',
       'Yardım için zil düğmesiyle "Andon çağrısı" açın; çözülünce "Çözüldü · kapat".',
       'Vardiya sonunda "Menü" > "Vardiya özeti ve devir" > "Vardiyayı devret".',
     ],

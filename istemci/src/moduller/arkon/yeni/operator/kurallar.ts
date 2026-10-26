@@ -11,7 +11,7 @@ import { istasyonPaketleri, planOnce } from '../../../../../../arkon/web/src/dat
 import { SIMGELER, type SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import type { IstasyonSatiri } from '../cekirdek/tesis.ts';
-import { isKurallari, istasyonAyari, isTuru, numuneEtiketi, numuneOlculeri, numunePlani, siradakiOlcen } from '../hazirlik/index.tsx';
+import { araNumuneSikligi, isKurallari, istasyonAyari, isTuru, numuneEtiketi, numuneOlculeri, numunePlani, siradakiOlcen } from '../hazirlik/index.tsx';
 import type { SeritAraligi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import type { Uyari } from '../hazirlik/tipler.ts';
 import type {
@@ -80,13 +80,16 @@ export const ilkParcaKapisi = (o: Pick<Is, 'pkg' | 'meas'>): PlanItem[] => ilkPa
 
 // Numune çizgisi (664): sayıyla tekrarlanan kuralda aralığın başından bu yana sayılan parça ve sıradaki numunenin parça sırası, süreli
 // kuralda geçen dakika. Hesap kontrolTakvimi ile aynıdır (taban: işe dönüşte sayılmış parçalar); ilk, son ve vardiya kuralında çizgi yok.
+// Sıklık kalan adedi aşınca (700 a) tek ara numune vardır; alındıktan sonra çizgi yok.
 export function numuneAraligi(
-  r: ReturnType<typeof numunePlani>[number], o: Pick<Is, 'good' | 'baseGood' | 'startedAt'>, simdi: number,
+  r: ReturnType<typeof numunePlani>[number], o: Pick<Is, 'good' | 'baseGood' | 'startedAt'> & Partial<Pick<Is, 'target'>>, simdi: number,
 ): SeritAraligi | null {
   if (r.when === 'every') {
-    const N = Math.max(1, r.n || 50);
     const taban = o.baseGood ?? 0;
+    const a = araNumuneSikligi(r.n, (o.target || 0) - taban);
+    const N = a.n;
     const c = Math.max(0, o.good - taban);
+    if (a.tek && c >= N) return null;
     return { n: N, birim: 'parça', gecen: c % N, hedef: taban + (Math.floor(c / N) + 1) * N };
   }
   if (r.when === 'time') {
@@ -126,13 +129,15 @@ export function kontrolTakvimi(o: TakvimIsi | null | undefined, simdi: number, v
     const L = numuneEtiketi(r);
     if (r.when === 'first') { if (aktifIs && !ilkOnayli) olculer.forEach((b) => { if (!gecti(meas[b.id])) ekle(b, siradakiOlcen(r, 0), L); }); continue; }
     if (r.when === 'every') {
-      const N = Math.max(1, r.n || 50);
       const taban = o.baseGood ?? 0;
+      // 700 a: sıklık kalan adedi aşarsa ara numune kalanın ortasında bir kez istenir.
+      const a = araNumuneSikligi(r.n, (o.target || 0) - taban);
+      const N = a.n;
       const c = o.good - taban;
-      const k = Math.floor(c / N);
+      const k = a.tek ? Math.min(1, Math.floor(c / N)) : Math.floor(c / N);
       const acik = k >= 1 ? olculer.filter((b) => { const m = meas[b.id]; return !(m && (m.cnt ?? -1) >= taban + k * N); }) : [];
       if (acik.length && calisiyor) acik.forEach((b) => ekle(b, siradakiOlcen(r, k - 1), `${L} · ${k}. numune`));
-      else if (olculer.length) dusun({ v: N - (c % N), u: 'parça', b: olculer[0]!, who: siradakiOlcen(r, k) });
+      else if (olculer.length && !(a.tek && k >= 1)) dusun({ v: N - (c % N), u: 'parça', b: olculer[0]!, who: siradakiOlcen(r, k) });
       continue;
     }
     if (r.when === 'time') {

@@ -39,32 +39,32 @@ export function HurdaPenceresi({ nedenler, kapat, sec }: { nedenler: readonly Sc
   );
 }
 
-/* ── duruş nedeni: önce duruma göre önerilenler, sonra plansız ve planlı nedenler ── */
+/* ── duruş nedeni: dokununca kaydedilir (yanlış dokunuş bildirimden geri alınır); önce duruma göre önerilenler ── */
 export function DurusPenceresi({ istasyon, nedenler, oneriler, otomatikCagri, kapat, kaydet }: {
   istasyon: string; nedenler: readonly DurusNedeni[]; oneriler: readonly { code: string; why: string }[]; otomatikCagri: boolean;
   kapat: () => void; kaydet: (r: DurusNedeni) => void;
 }) {
-  const [v, vYaz] = useState<string | null>(null);
   const one = onerileriSuz(oneriler, nedenler).filter((s, i, a) => a.findIndex((x) => x.code === s.code) === i).slice(0, 3);
-  const secili = nedenler.find((r) => r.code === v) ?? null;
-  const karo = (r: DurusNedeni, neden?: string) => (
-    <button key={r.code + (neden ? 's' : '')} type="button" role="radio" aria-checked={v === r.code} className="tc-ay1-neden" data-durum={r.durum}
-      data-onerilen={neden ? true : undefined} onClick={() => vYaz(r.code)}>
-      <span className="tc-ay1-neden-simge"><Simge ad={simgeSec(r.i, 'stop')} /></span><b>{r.l}</b>
-      {neden ? <span className="tc-ay1-neden-neden"><Simge ad="bolt" boyut="k" />{neden}</span> : <code>{r.code}</code>}
-    </button>
-  );
-  const ekip = secili && secili.team ? CAGRI_EKIPLERI.find((c) => c.k === secili.team) : null;
+  const karo = (r: DurusNedeni, neden?: string) => {
+    const ekip = r.team && otomatikCagri ? CAGRI_EKIPLERI.find((c) => c.k === r.team) : null;
+    return (
+      <button key={r.code + (neden ? 's' : '')} type="button" className="tc-ay1-neden" data-durum={r.durum}
+        data-onerilen={neden ? true : undefined} onClick={() => kaydet(r)}>
+        <span className="tc-ay1-neden-simge"><Simge ad={simgeSec(r.i, 'stop')} boyut="k" /></span>
+        <span className="tc-ay1-neden-yazi"><b>{r.l}</b>
+          {neden ? <span className="tc-ay1-neden-neden"><Simge ad="bolt" boyut="k" />{neden}</span>
+            : <code data-yalniz-kod={ekip ? undefined : true}>{r.code}{ekip ? ` · ${ekip.l} ${r.after ? `${r.after} dk sonra` : 'hemen'} çağrılır` : ''}</code>}
+        </span>
+      </button>
+    );
+  };
   return (
-    <Pencere acik kapat={kapat} baslik="Neden durdu?" alt={<>
-      <Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>
-      <Dugme tur="tehlike" simge="stop" disabled={!secili} onClick={() => { if (secili) kaydet(secili); }}>Duruşu kaydet</Dugme>
-    </>}>
-      <p className="tc-ay1-soluk">Duruş kaydı · {istasyon} · nedeni seç; süre ve kod otomatik kaydedilir.</p>
+    <Pencere acik kapat={kapat} baslik="Neden durdu?" alt={<Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>}>
+      <p className="tc-ay1-soluk">Duruş kaydı · {istasyon} · nedene dokun, kaydedilsin; yanlışsa bildirimden geri al.</p>
       {one.length ? (
         <>
           <span className="tc-ay1-ust-yazi">Duruma göre önerilen</span>
-          <div className="tc-ay1-nedenler" role="radiogroup" aria-label="Önerilen nedenler">
+          <div className="tc-ay1-nedenler tc-ay1-nedenler-kucuk tc-ay1-nedenler-durus" role="group" aria-label="Önerilen nedenler">
             {one.map((s) => { const r = nedenler.find((x) => x.code === s.code); return r ? karo(r, s.why) : null; })}
           </div>
           <span className="tc-ay1-ust-yazi">Tüm nedenler</span>
@@ -75,13 +75,10 @@ export function DurusPenceresi({ istasyon, nedenler, oneriler, otomatikCagri, ka
         return L.length ? (
           <div key={kat} className="tc-ay1-neden-grubu">
             <span className="tc-ay1-ust-yazi" data-durum={kat === 'p' ? 'bitti' : undefined}>{l}</span>
-            <div className="tc-ay1-nedenler" role="radiogroup" aria-label={l}>{L.map((r) => karo(r))}</div>
+            <div className="tc-ay1-nedenler tc-ay1-nedenler-kucuk tc-ay1-nedenler-durus" role="group" aria-label={l}>{L.map((r) => karo(r))}</div>
           </div>
         ) : null;
       })}
-      {secili && secili.team && otomatikCagri && ekip ? (
-        <small className="tc-ay1-soluk">{ekip.l} ekibi {secili.after ? `${secili.after} dk sonra` : 'hemen'} kendiliğinden çağrılır.</small>
-      ) : null}
     </Pencere>
   );
 }

@@ -228,6 +228,13 @@ export const HAZIR_NUMUNE_PLANLARI: readonly { l: string; r: readonly Omit<Numun
   { l: 'İlk parça kalite · her 25 sırayla kalite → operatör', r: [{ when: 'first', who: ['q'], items: 'all', gate: true }, { when: 'every', n: 25, who: ['q', 'op'], items: 'all' }] },
   { l: 'İlk parça kalite · kritikler saatlik operatör · vardiya başı kalite', r: [{ when: 'first', who: ['q'], items: 'all', gate: true }, { when: 'time', n: 60, who: ['op'], items: 'crit' }, { when: 'shift', who: ['q'], items: 'all' }] },
 ];
+// 700 a: sıklık işin adedine eşit ya da büyükse sayım ara numuneye hiç ulaşmaz (25 parçalık işte her 50). Kural değişmez; ara numune işin
+// ortasında bir kez istenir. Adet bilinmiyorsa kural olduğu gibi işler. Terminal sayacı ve önizleme aynı hesabı kullanır.
+export function araNumuneSikligi(n: number | undefined, adet: number): { n: number; tek: boolean } {
+  const N = Math.max(1, n || 50);
+  const T = Math.floor(adet);
+  return T >= 1 && N >= T ? { n: Math.ceil(T / 2), tek: true } : { n: N, tek: false };
+}
 export interface NumuneOlayi { at: number; ri: number; who: Olcen; k: number }
 // Numune olaylarının parça ekseninde dağılımı (önizleme); en çok 600 olay.
 export function numuneOlaylari(kurallar: readonly NumuneKurali[], hedef: number, cevrim: number): NumuneOlayi[] {
@@ -236,7 +243,8 @@ export function numuneOlaylari(kurallar: readonly NumuneKurali[], hedef: number,
     const ekle = (at: number, k: number) => { if (at >= 1 && at <= T && ev.length < 600) ev.push({ at, ri, who: siradakiOlcen(r, k), k }); };
     if (r.when === 'first') ekle(1, 0);
     else if (r.when === 'last') ekle(T, 0);
-    else if (r.when === 'every') { const N = Math.max(1, r.n || 50); for (let k = 1; k * N < T; k++) ekle(k * N, k - 1); }
+    // Terminal sıklığın tam katında numune ister, son parça da olsa; önizleme de onu gösterir.
+    else if (r.when === 'every') { const a = araNumuneSikligi(r.n, T); for (let k = 1; k * a.n <= T && (!a.tek || k === 1); k++) ekle(k * a.n, k - 1); }
     else if (r.when === 'time') { const N = Math.max(1, Math.round((r.n || 60) * 60 / cy)); for (let k = 1; k * N < T; k++) ekle(k * N, k - 1); }
     else if (r.when === 'shift') { const N = Math.max(1, Math.round(28800 / cy)); for (let k = 0; k * N < T; k++) ekle(Math.max(1, k * N), k); }
   });

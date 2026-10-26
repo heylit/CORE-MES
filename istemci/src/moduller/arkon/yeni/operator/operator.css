@@ -270,6 +270,14 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-neden code { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-ay1-neden-simge { display: inline-grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border-radius: var(--yari-2); background: color-mix(in srgb, var(--sig) 18%, transparent); color: var(--sig-yazi); }
 .tc-ay1-nedenler-kucuk .tc-ay1-neden-simge { inline-size: var(--b-6); block-size: var(--b-6); }
+/* duruş nedenleri telefonda iki sütun: bütün nedenler (planlılar dahil) ilk ekrana sığsın */
+.tc-ay1-nedenler-durus { grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--dokunma-x24) + var(--dokunma-x14)), 1fr)); }
+@media (max-width: 767px) { .tc-ay1-nedenler-durus { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px), (max-height: 900px) {
+  .tc-ay1-nedenler-durus b { font-size: var(--yazi-m); }
+  .tc-ay1-nedenler-durus code[data-yalniz-kod] { display: none; }
+}
+.tc-ay1-neden-yazi { display: grid; gap: var(--b-1); min-width: 0; }
 .tc-ay1-neden-neden { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); color: var(--sig-yazi); }
 .tc-ay1-neden-grubu { display: grid; gap: var(--b-2); }
 .tc-ay1-neden-grubu > .tc-ay1-ust-yazi[data-durum] { color: var(--sig-yazi); }

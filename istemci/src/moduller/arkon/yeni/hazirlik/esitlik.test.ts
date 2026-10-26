@@ -130,7 +130,16 @@ describe('A2 kurallar eski hesaplarla aynı', () => {
       expect(numuneOlculeri(paket(), r)).toEqual(O.sampItems(paket(), r));
       for (const k of [-1, 0, 1, 2, 7]) expect(siradakiOlcen(r, k)).toBe(O.whoAt(r, k));
     }
-    for (const [hedef, cevrim] of [[120, 40], [5000, 10], [1, 0], [0, 30]] as const) expect(numuneOlaylari(kurallar, hedef, cevrim)).toEqual(S.sampEvents(kurallar, hedef, cevrim));
+    // 700 a ile eski ekrandan bilerek ayrılır: sıklığın tam katı son parça da olsa numunedir (5000'de), sıklık adedi aşarsa ara numune
+    // işin ortasında bir kez alınır (1 parçalık işte 1. parçada). Öteki olaylar eskisiyle aynıdır.
+    const eskiArtiBir = (hedef: number, cevrim: number, at: number, k: number) => {
+      const eski = S.sampEvents(kurallar, hedef, cevrim) as { ri: number }[];
+      const yer = eski.filter((e) => e.ri <= 1).length;
+      return [...eski.slice(0, yer), { at, ri: 1, who: siradakiOlcen(kurallar[1]!, k), k }, ...eski.slice(yer)];
+    };
+    expect(numuneOlaylari(kurallar, 120, 40)).toEqual(S.sampEvents(kurallar, 120, 40));
+    expect(numuneOlaylari(kurallar, 5000, 10)).toEqual(eskiArtiBir(5000, 10, 5000, 199));
+    for (const [hedef, cevrim] of [[1, 0], [0, 30]] as const) expect(numuneOlaylari(kurallar, hedef, cevrim)).toEqual(eskiArtiBir(hedef, cevrim, 1, 0));
     expect(numunePlaniYaz(paket(), kurallar)).toEqual(S.numunePlaniYaz(paket(), kurallar));
   });
 

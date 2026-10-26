@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  kalemBitti, kodaUyanKalem, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
+  araNumuneSikligi, kalemBitti, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
 } from './kurallar.ts';
+import type { NumuneKurali } from './tipler.ts';
 import { takimKullanimi } from './TakimKarti.tsx';
 
 // İstasyon panellerinin eski ekranda satır içi olan hesapları (istasyonlar.ts DepoPanel, MontajPanel, KalitePanel; kurallar.ts ToolsCard).
@@ -51,5 +52,26 @@ describe('A2 istasyon paneli hesapları', () => {
     expect(takimKullanimi(t, { good: 90 })).toEqual({ kullanilan: 90, yuzde: 90, ton: 'hazard' });
     expect(takimKullanimi(t, { good: 150 })).toEqual({ kullanilan: 150, yuzde: 100, ton: 'stop' });
     expect(takimKullanimi(t, { good: 5, toolsAt: { t: 20 } }).kullanilan).toBe(0);
+  });
+});
+
+describe('ara numune sıklığı işin adedini aşınca (700 a)', () => {
+  it('sıklık adede eşit ya da büyükse işin ortasında bir kez; küçükse olduğu gibi; adet bilinmiyorsa olduğu gibi', () => {
+    expect(araNumuneSikligi(50, 25)).toEqual({ n: 13, tek: true });
+    expect(araNumuneSikligi(50, 49)).toEqual({ n: 25, tek: true });
+    expect(araNumuneSikligi(50, 50)).toEqual({ n: 25, tek: true });
+    expect(araNumuneSikligi(50, 51)).toEqual({ n: 50, tek: false });
+    expect(araNumuneSikligi(25, 120)).toEqual({ n: 25, tek: false });
+    expect(araNumuneSikligi(50, 1)).toEqual({ n: 1, tek: true });
+    expect(araNumuneSikligi(50, 0)).toEqual({ n: 50, tek: false });
+    expect(araNumuneSikligi(undefined, 30)).toEqual({ n: 15, tek: true });
+  });
+  it('önizleme terminalle aynı parçaları gösterir: adedi aşan sıklıkta ortada bir numune, tam katta son parça da', () => {
+    const kurallar: NumuneKurali[] = [{ id: 'a', when: 'first', who: ['q'], items: 'all', gate: true }, { id: 'b', when: 'every', n: 50, who: ['op', 'q'], items: 'all' }];
+    const ara = (hedef: number) => numuneOlaylari(kurallar, hedef, 30).filter((e) => e.ri === 1).map((e) => [e.at, e.who]);
+    expect(ara(25)).toEqual([[13, 'op']]);
+    expect(ara(50)).toEqual([[25, 'op']]);
+    expect(ara(75)).toEqual([[50, 'op']]);
+    expect(ara(100)).toEqual([[50, 'op'], [100, 'q']]);
   });
 });

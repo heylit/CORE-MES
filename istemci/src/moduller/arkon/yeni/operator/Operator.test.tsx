@@ -120,6 +120,8 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     fireEvent.click(within(sonra).getByRole('button', { name: /Durdur/ }));
     expect(await screen.findByRole('dialog', { name: 'Neden durdu?' })).toBeTruthy();
     expect(olaylar(istekler).some((e) => e.state === 'stopped')).toBe(false);
+    // Nedene tek dokunuş kaydeder; ayrı kaydet düğmesi yok (696).
+    expect(within(screen.getByRole('dialog', { name: 'Neden durdu?' })).queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
   }, 40000);
 
   it('menüde istasyon değiştirme var; istasyon penceresi açılır', async () => {

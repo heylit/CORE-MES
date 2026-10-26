@@ -2,7 +2,7 @@ import { Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../cekirdek/bicim.ts';
 import { Anahtar, Bolmeli, KartBasligi } from './denetimler.tsx';
 import {
-  HAZIR_NUMUNE_PLANLARI, OLCENLER, numuneEtiketi, numuneOlaylari, numuneOlculeri, numunePlani, numunePlaniYaz, yeniKimlik,
+  HAZIR_NUMUNE_PLANLARI, OLCENLER, araNumuneSikligi, numuneEtiketi, numuneOlaylari, numuneOlculeri, numunePlani, numunePlaniYaz, yeniKimlik,
 } from './kurallar.ts';
 import type { NumuneKurali, NumuneZamani, Pkg } from './tipler.ts';
 
@@ -20,6 +20,7 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
   const ekle = () => kaydet([...kurallar, { id: yeniKimlik(), when: 'every', n: 50, who: ['q'], items: 'all' }]);
   const sil = (id: string) => kaydet(kurallar.filter((r) => r.id !== id));
   const hedef = +paket.target || 500;
+  const adet = +paket.target || 0;
   const olaylar = numuneOlaylari(kurallar, hedef, +paket.cycle || 30);
   const nQ = olaylar.filter((e) => e.who === 'q').length;
   const nO = olaylar.filter((e) => e.who === 'op').length;
@@ -64,6 +65,7 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
       {kurallar.map((r, ri) => {
         const olculer = numuneOlculeri(paket, r);
         const kim = r.who || ['q'];
+        const ara = r.when === 'every' ? araNumuneSikligi(r.n, adet) : null;
         return (
           <section key={r.id} className="tc-ay2-kart" aria-label={(ri + 1) + '. numune kuralı'}>
             <div className="tc-ay2-kb">
@@ -91,6 +93,9 @@ export function NumuneSekmesi({ paket, yama }: { paket: Pkg; yama: (ch: Partial<
                     <button key={v} type="button" className="tc-ay2-hazir" aria-pressed={r.n === v} onClick={() => guncelle(r.id, { n: v })}>{v}</button>
                   ))}
                 </div>
+                {ara && ara.tek ? (
+                  <small className="tc-ay2-soluk">Bu iş {sayi(adet)} parça; sıklık adedi aştığı için ara numune {sayi(ara.n)}. parçada bir kez alınır.</small>
+                ) : null}
               </div>
             ) : null}
             <div className="tc-ay2-alan">
