@@ -4,14 +4,19 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaSecimi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
+import { planGuncel } from '../../durum.ts';
+import type { PlanKurucu } from '../../motor/coz.ts';
 import { eylemYapisi } from '../../motor/eylem.ts';
+import { grupAdi } from '../../motor/ozet/veri.ts';
+import { ParametreGirdisi } from '../veri/Kisitlar.tsx';
+import { bedelOku, duruslar, ekMesailer, KATALOG, kisitDegistir, parametreDegeri, parametreOku, parametreYaz, type Durus, type EkMesai, type Parametre } from '../veri/kurallar.ts';
 import { useCanliPlan } from '../../motor/fark.ts';
 import { dilimNo, gecMetin, siparisRengi, tezgahDurumu, type Aralik, type Sahne } from '../../motor/harita/kurallar.ts';
-import { KATEGORI_AD, ONCELIK_AD, saatYaz, saatYazi, type Derleme, type OkunanPlan, type Sorun } from '../../motor/kurallar.ts';
-import { degisken, HAZIRLANIYOR, MOTOR_NOTU } from '../../motor/ortak.tsx';
+import { grupDoluluk, KATEGORI_AD, ONCELIK_AD, saatYaz, saatYazi, sayiYaz, type Derleme, type OkunanPlan, type Sorun } from '../../motor/kurallar.ts';
+import { degisken, HAZIRLANIYOR, MOTOR_NOTU, VERI_NOTU } from '../../motor/ortak.tsx';
 import {
-  agYakinlari, bitisFarki, etkiAgi, KUYRUK_GOSTERIM, kuyrukGrubu, kuyrukGruplari, kuyrukListesi, planKarti, siparisSatirlari, TUR_AD,
-  type KartTuru, type SiparisSirasi, type SiparisSuzgeci,
+  agYakinlari, bitisFarki, canliOlcu, etkiAgi, GECIS_AD, gecisTuru, KUYRUK_GOSTERIM, kuyrukGrubu, kuyrukGruplari, kuyrukListesi, OLCU_SIRASI, planKarti,
+  rotaRecetesi, rotaUrunu, siparisSatirlari, simdikiOlcu, TUR_AD, type KartTuru, type OlcuAnahtari, type PlanOlcusu, type SiparisSirasi, type SiparisSuzgeci,
 } from './kurallar.ts';
 
 // Kartların gövdeleri (z-komuta kmPlan; za-merkez mzSiparis, mzKuyruk, mzAg). Okurlar; çalışmaya yazan tek yol kararların eylemidir (eylem.ts).
@@ -22,6 +27,9 @@ export interface KartBaglami {
   mercek: 'durum' | 'etki'; mercekSec: () => void; kilavuzAc: () => void;
   sipSec: (j: string) => void; tezSec: (m: string) => void; opSec: (id: string) => void; kartAc: (t: KartTuru) => void;
   veriAc: ((bolum: string) => void) | null;
+  planKur: PlanKurucu | null; uyar: (ileti: string) => void;
+  // Reçete ve Rota kartının ürünü ve üstüne gelinen adım ya da makine: harita aynı ürünün rotasını yakar.
+  rotaUrun: string | null; rotaUrunSec: (u: string) => void; rotaUst: (x: { k: string | null; m: string | null }) => void;
 }
 const YETKISIZ = 'Plan yazma yetkiniz yok.';
 
@@ -42,6 +50,9 @@ export function KartGovdesi({ tur, b }: { tur: KartTuru; b: KartBaglami }) {
   if (tur === 'siparis') return <SiparisGovdesi b={b} />;
   if (tur === 'kuyruk') return <KuyrukGovdesi b={b} />;
   if (tur === 'etki') return <EtkiGovdesi b={b} />;
+  if (tur === 'kisit') return <KisitGovdesi b={b} />;
+  if (tur === 'hesap') return <HesapGovdesi b={b} />;
+  if (tur === 'rota') return <RotaGovdesi b={b} />;
   return <p className="tc-pym-kucuk-yazi">{HAZIRLANIYOR}</p>;
 }
 
@@ -236,6 +247,260 @@ function EtkiGovdesi({ b }: { b: KartBaglami }) {
           {ag.is.map((d) => dugum(d, `${gecMetin(d.v)} geç`, true))}
         </svg>
       </div>
+    </>
+  );
+}
+
+// Plan eski veriyle kuruluysa kart başında yeniden kurma (mzKisit, rtKart pm-mz-bayat).
+function Bayat({ b, metin }: { b: KartBaglami; metin: string }) {
+  if (planGuncel(b.c)) return null;
+  return (
+    <p className="tc-pyk-bayat"><Simge ad="alert" boyut="k" /><span>{metin}</span>
+      {b.planKur ? (
+        <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" disabled={b.planKur.suruyor} onClick={b.planKur.kur}><Simge ad="play" boyut="k" /><span>Planı yeniden kur</span></button>
+      ) : <Pasif ad="Planı yeniden kur" simge="play" not={YETKISIZ} birincil />}
+    </p>
+  );
+}
+
+// Kısıt ve veri (za-merkez mzKisit, zb-merkez2 mzTakvim): motorun saydığı kurallar, takvim, ayarlar ve seçili tezgâhın takvimi. Anahtar, ayar ve
+// kaldırma çalışmaya yazar (plan.yaz, 223 a); etki ve bedel hesabı, arıza ve bakım denemesi motor ister; vardiya tezgâhın sahibindedir.
+const GOSTERIM = 8;
+function KisitGovdesi({ b }: { b: KartBaglami }) {
+  const { c } = b; const D = c.D; const yaz = b.komut && b.planYaz ? b.komut : null; const pasif = b.planYaz ? MOTOR_NOTU : YETKISIZ;
+  const bedel = bedelOku(c); const gevsek = KATALOG.flatMap((g) => g.l).filter((k) => k.g); const prm = KATALOG.flatMap((g) => g.l).flatMap((k) => k.p ?? []);
+  const ar = [...duruslar(c)].sort((x, y) => x.from - y.from); const em = ekMesailer(c);
+  const m = b.secim.tezgah; const T = m ? D.tezgahlar.find((x) => x.id === m) : null;
+  const parametre = (p: Parametre, girdi: string) => {
+    if (!yaz) return;
+    const o = parametreOku(p, girdi); if ('hata' in o) { b.uyar(o.hata); return; }
+    const once = parametreDegeri(c, p.yer, p.k); if (once === o.deger) return;
+    yaz.degistir('Parametre değişti', (t) => parametreYaz(t, p.yer, p.k, o.deger), { ayrinti: `${p.etiket}: ${String(once ?? '—')} → ${String(o.deger ?? '—')}` });
+  };
+  const ilkiniSil = <T,>(l: T[], ayni: (x: T) => boolean): T[] | false => { const i = l.findIndex(ayni); return i < 0 ? false : [...l.slice(0, i), ...l.slice(i + 1)]; };
+  const durusSil = (d: Durus) => yaz?.degistir('Arıza/bakım silindi', (t) => {
+    const l = ilkiniSil(t.down, (x) => x.m === d.m && x.from === d.from && x.to === d.to); if (!l) return false; t.down = l;
+  }, { ayrinti: `${d.m} ${saatYaz(D, d.from)}` });
+  const mesaiSil = (e: EkMesai) => yaz?.degistir('Ek mesai silindi', (t) => {
+    const l = ilkiniSil(t.ekMesai, (x) => x.m === e.m && x.gun === e.gun && x.vardiya === e.vardiya); if (!l) return false; t.ekMesai = l;
+  });
+  const sil = (ad: string, yap: () => void) => (yaz
+    ? <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label={ad} title={ad} onClick={yap}><Simge ad="trash" boyut="k" /></button>
+    : <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label={ad} aria-disabled="true" title={`${ad}: ${YETKISIZ}`}><Simge ad="trash" boyut="k" /></button>);
+  const vr = T ? (Array.isArray(T.vardiyalar) ? T.vardiyalar.map(String) : (D.vardiyalar ?? []).map((v) => String(v.id))) : [];
+  return (
+    <>
+      <Bayat b={b} metin="Veri değişti; haritadaki plan eski veriyle kurulu." />
+      <div className="tc-pyk-izgara">
+        <Bolum baslik="Motorun saydığı kurallar" simge="gear">
+          <p className="tc-pym-kucuk-yazi">Anahtar kuralı açar ya da kapatır (plan yeniden kurulur). &quot;Etkisi&quot; kuralı kaldırmadan, kalksaydı ne olurdu diye kısa bir arama yapar; yaklaşıktır.</p>
+          <ul className="tc-pyk-kisitlar">
+            {gevsek.map((k) => {
+              const kapali = c.kapali.includes(k.id); const x = bedel?.liste.find((z) => z.id === k.id);
+              return (
+                <li key={k.id} data-kapali={kapali ? '' : undefined}>
+                  <label className="tc-pyk-anahtar" title={kapali ? 'Motor bu kuralı saymıyor' : 'Motor bu kuralı uyguluyor'}>
+                    <input type="checkbox" role="switch" aria-label={k.ad} checked={!kapali} disabled={!yaz}
+                      onChange={(e) => { const ac = e.target.checked; yaz?.degistir(ac ? 'Kısıt açıldı' : 'Kısıt kapatıldı', (t) => { kisitDegistir(t, k.id, ac); }, { ayrinti: k.ad }); }} />
+                    <i aria-hidden="true" /><span className="tc-gizli-etiket">{kapali ? 'Kapalı' : 'Açık'}</span>
+                  </label>
+                  <span><b>{k.ad}</b>{x && <small className="tc-pym-mono">bedeli {saatYazi(x.dW)}</small>}</span>
+                  {!kapali && <Pasif ad="Etkisi" simge="target" not={pasif} />}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="tc-pym-dugmeler">
+            <Pasif ad={bedel ? 'Bedelleri yeniden hesapla' : 'Hepsinin bedelini hesapla'} simge="chart" not={pasif} />
+            <BagDugmesi ad="Bütün kısıtlar" b={b} bolum="kisitlar" />
+          </div>
+        </Bolum>
+        <Bolum baslik="Takvim: arıza ve ek mesai" simge="wrench">
+          <ul className="tc-pyk-liste tc-pyk-sade">
+            {ar.length ? ar.slice(0, GOSTERIM).map((d) => (
+              <li key={`${d.m}-${d.from}-${d.to}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(d.m)}>{d.m}</button><small className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</small></li>
+            )) : <li className="tc-pym-kucuk-yazi">Bilinen arıza yok.</li>}
+          </ul>
+          <ul className="tc-pyk-liste tc-pyk-sade">
+            {em.length ? em.slice(0, GOSTERIM).map((x) => (
+              <li key={`${x.m}-${x.gun}-${x.vardiya}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(x.m)}>{x.m}</button><small className="tc-pym-mono">{saatYaz(D, x.gun * 24).slice(0, 9)} {x.vardiya}</small></li>
+            )) : <li className="tc-pym-kucuk-yazi">Ek mesai yok.</li>}
+          </ul>
+          <div className="tc-pym-dugmeler">
+            {m && !m.startsWith('@') ? <Pasif ad={`${m} için 4 sa arıza dene`} simge="wrench" not={pasif} /> : <small className="tc-pym-kucuk-yazi">Arıza denemek için haritada bir tezgâh seçin.</small>}
+            <BagDugmesi ad="Takvim" b={b} bolum="takvim" />
+          </div>
+        </Bolum>
+        <Bolum baslik="Ayarlar" simge="ruler">
+          <div className="tc-pyk-paramlar">{prm.map((p) => <ParametreGirdisi key={`${p.yer}-${p.k}`} p={p} c={c} yaz={yaz ? parametre : null} />)}</div>
+          <p className="tc-pym-kucuk-yazi">Ayar değişince plan eskir; &quot;Planı yeniden kur&quot; ile yeni ayarla kurulur.</p>
+        </Bolum>
+        <Bolum baslik={T ? `${T.id} takvimi` : 'Tezgâh takvimi'} simge="clock">
+          {!T ? <p className="tc-pym-kucuk-yazi">Haritada ya da kuyrukta bir tezgâh seçin; vardiyaları ve kapalı pencereleri burada görünür.</p> : (
+            <>
+              <div className="tc-pyk-cipler" role="group" aria-label={`${T.id} vardiyaları`}>
+                {(D.vardiyalar ?? []).map((v) => (
+                  <label key={String(v.id)} className="tc-pyk-cip" title={`Vardiya: ${VERI_NOTU}`}>
+                    <input type="checkbox" checked={vr.includes(String(v.id))} disabled onChange={() => undefined} />
+                    <span>{String(v.id)} <small className="tc-pym-mono">{String(v.bas ?? '')}–{String(v.bit ?? '')}</small></span>
+                  </label>
+                ))}
+              </div>
+              <div className="tc-pym-dugmeler"><Pasif ad="Bakımı dene" simge="wrench" not={pasif} /></div>
+              <ul className="tc-pyk-liste tc-pyk-sade">
+                {ar.filter((d) => d.m === T.id).map((d) => (
+                  <li key={`${d.from}-${d.to}`}><span className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</span><small>kapalı</small>{sil('Kapalı pencereyi kaldır', () => durusSil(d))}</li>
+                ))}
+                {em.filter((x) => x.m === T.id).map((x) => (
+                  <li key={`${x.gun}-${x.vardiya}`}><span className="tc-pym-mono">{saatYaz(D, x.gun * 24).slice(0, 9)} {x.vardiya}</span><small>ek mesai</small>{sil('Ek mesaiyi kaldır', () => mesaiSil(x))}</li>
+                ))}
+                {!ar.some((d) => d.m === T.id) && !em.some((x) => x.m === T.id) && <li className="tc-pym-kucuk-yazi">Kapalı pencere ya da ek mesai yok.</li>}
+              </ul>
+              <p className="tc-pym-kucuk-yazi">Bakım denemesi önizlemedir. Vardiya tezgâhın kaydında değişir; kaldırma plan verisini değiştirir, plan yeniden kurulunca etkisi görünür.</p>
+            </>
+          )}
+        </Bolum>
+      </div>
+    </>
+  );
+}
+// Veri ve kısıtlar'ın bölümüne gider; sayfa yoksa pasif.
+function BagDugmesi({ ad, b, bolum }: { ad: string; b: KartBaglami; bolum: string }) {
+  return b.veriAc
+    ? <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={() => b.veriAc?.(bolum)}><Simge ad="edit" boyut="k" /><span>{ad}</span></button>
+    : <Pasif ad={ad} simge="edit" not={HAZIRLANIYOR} />;
+}
+
+// Hesaplar (zb-merkez2 mzHesap): göstergeler son canlı plana göre, grup doluluğu.
+const OLCU_AD: Record<OlcuAnahtari, [string, string]> = {
+  wT: ['Ağırlıklı gecikme', 'Geç kalan saatlerin öncelik ağırlığıyla toplamı'], late: ['Geciken sipariş', ''], suH: ['Toplam ayar süresi', 'Bütün ayarların toplamı'],
+  suN: ['Ayar sayısı', ''], Cmax: ['Son iş biter', 'Plandaki en son işin bitişi'], fas: ['Fason süresi', 'Fasonda geçen toplam süre'],
+  dol: ['Ortalama doluluk', 'Tezgâhların açık saatlerinde dolu oldukları pay'],
+};
+const yuzdeYaz = (v: number) => `%${sayiYaz(v * 100, 0)}`;
+function olcuYaz(b: KartBaglami, k: OlcuAnahtari, v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return '—';
+  if (k === 'late' || k === 'suN') return String(v);
+  if (k === 'Cmax') return saatYaz(b.c.D, v);
+  if (k === 'dol') return yuzdeYaz(v);
+  return saatYazi(v);
+}
+function Fark({ k, a, s }: { k: OlcuAnahtari; a: number | null; s: number | null }) {
+  if (a == null || s == null || !Number.isFinite(a) || !Number.isFinite(s)) return null;
+  const d = s - a; const esik = k === 'late' || k === 'suN' ? 0.5 : k === 'dol' ? 0.0005 : 0.05; if (Math.abs(d) < esik) return <small>aynı</small>;
+  const iyi = k === 'dol' ? d > 0 : d < 0; const isaret = d < 0 ? '−' : '+';
+  const deger = k === 'late' || k === 'suN' ? String(Math.abs(d)) : k === 'dol' ? `${sayiYaz(Math.abs(d) * 100, 0)} puan` : saatYazi(Math.abs(d));
+  return <span data-ton={iyi ? 'iyi' : 'kotu'}>{isaret}{deger}</span>;
+}
+function HesapGovdesi({ b }: { b: KartBaglami }) {
+  const { c, p, cx } = b;
+  const canli = useCanliPlan(true, c, p, b.canliSurum);
+  const s = useMemo(() => simdikiOlcu(c, p, cx), [c, p, cx]);
+  const a: PlanOlcusu | null = useMemo(() => (canli.tur === 'tamam' && Object.keys(canli.canli).length ? canliOlcu(c, p, cx, canli.canli) : null), [c, p, cx, canli]);
+  const gl = useMemo(() => grupDoluluk(c, p), [c, p]);
+  return (
+    <div className="tc-pyk-izgara">
+      <Bolum baslik={`Göstergeler${a ? ' · son canlı plan ile' : ''}`} simge="chart">
+        <div className="tc-pyk-tablo">
+          <table aria-label="Göstergeler">
+            <thead><tr><th>Gösterge</th><th>Son canlı</th><th>Şu anki</th><th>Fark</th></tr></thead>
+            <tbody>
+              {OLCU_SIRASI.map((k) => (
+                <tr key={k}><td title={OLCU_AD[k][1] || undefined}>{OLCU_AD[k][0]}</td><td className="tc-pym-mono">{olcuYaz(b, k, a?.[k] ?? null)}</td>
+                  <td className="tc-pym-mono"><b>{olcuYaz(b, k, s[k])}</b></td><td className="tc-pym-mono"><Fark k={k} a={a?.[k] ?? null} s={s[k]} /></td></tr>
+              ))}
+              <tr><td>Darboğaz</td><td className="tc-pym-mono">—</td><td className="tc-pym-mono"><b>{s.dar ? `${s.dar.m} ${yuzdeYaz(s.dar.u)}` : '—'}</b></td><td /></tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="tc-pym-kucuk-yazi">
+          {a ? 'Fark sütunu son canlı plana göredir; yeşil iyi, kırmızı kötü. Canlı planda ayar ve doluluk tutulmaz.'
+            : canli.tur === 'okunuyor' ? 'Canlı plan okunuyor.' : canli.tur === 'hata' ? canli.ileti : 'Henüz karşılaştırılacak canlı plan yok; plan canlıya alınınca fark sütunu dolar.'}
+        </p>
+      </Bolum>
+      <Bolum baslik="Grup doluluğu" simge="gauge">
+        <ul className="tc-pyk-dolu">
+          {gl.map((g) => (
+            <li key={g.ad}><span>{grupAdi(g.ad)}</span>
+              <span className="tc-pyk-bar" role="img" aria-label={`${grupAdi(g.ad)} doluluk ${yuzdeYaz(g.u)}`}><i data-ton={g.u > 0.9 ? 'hata' : undefined} ref={degisken({ '--w': `${Math.min(100, g.u * 100).toFixed(1)}%` })} /></span>
+              <small className="tc-pym-mono">{yuzdeYaz(g.u)}</small>
+            </li>
+          ))}
+        </ul>
+        <p className="tc-pym-kucuk-yazi">Doluluk: tezgâhın şimdiden son işin bitişine kadarki açık saatlerinde dolu olduğu pay.</p>
+      </Bolum>
+    </div>
+  );
+}
+
+// Reçete ve Rota (ze-rota rtKart): yukarıdan aşağı hammadde, adımlar, bitmiş ürün. Ürün ve rota Reçete ve Rota'nındır (222 a): alanlar okunur,
+// düzenleme yerinde ve pasif. Kart açıkken ürünün rotası haritada yanar; üstüne gelinen adım ya da makine öne çıkar.
+function RotaGovdesi({ b }: { b: KartBaglami }) {
+  const { c, p } = b; const D = c.D;
+  const sj = b.secim.adim ? p.ops[b.secim.adim]?.job ?? null : b.secim.siparis;
+  const u = rotaUrunu(c, sj, b.rotaUrun);
+  if (!u) return <p className="tc-pym-kucuk-yazi">Ürün yok.</p>;
+  const kul = D.siparisler.filter((x) => x.urun === u.id && !x.havuz).length; const rec = rotaRecetesi(c, u); const rota = u.rota ?? [];
+  const malz = (kod: string) => (D.malzemeler ?? []).find((x) => x.kod === kod);
+  const fason = (id: string) => (D.fasoncular ?? []).find((f) => f.id === id)?.ad ?? id;
+  const ust = (k: string | null, m: string | null) => () => b.rotaUst({ k, m });
+  const not = `Düzenlemek: ${VERI_NOTU}`;
+  return (
+    <>
+      <div className="tc-pyk-arac">
+        <label className="tc-pyk-sirala"><span>Ürün</span>
+          <select value={u.id} onChange={(e) => b.rotaUrunSec(e.target.value)}>{D.urunler.map((x) => <option key={x.id} value={x.id}>{x.id} · {x.ad ?? ''}</option>)}</select>
+        </label>
+        <small className="tc-pym-kucuk-yazi">{kul} sipariş kullanıyor</small>
+        <BagDugmesi ad="Rotalar" b={b} bolum="rotalar" />
+      </div>
+      <Bayat b={b} metin="Rota ya da reçete değişti; haritadaki plan eski." />
+      <ol className="tc-pyk-rota" aria-label={`${u.ad ?? u.id} reçete ve rotası`} onPointerLeave={ust(null, null)}>
+        <li className="tc-pyk-dugum" data-tur="ham">
+          <header><Simge ad="box" boyut="k" /><b>Reçete</b><small>hammadde ve parçalar</small></header>
+          <ul className="tc-pyk-liste tc-pyk-sade">
+            {rec.length ? rec.map((m) => (
+              <li key={m.kod}><span>{malz(m.kod)?.ad ?? m.kod}</span><small className="tc-pym-mono">{sayiYaz(m.miktar, 2)} {malz(m.kod)?.birim ?? ''}/adet</small></li>
+            )) : <li className="tc-pym-kucuk-yazi">Reçetede malzeme yok.</li>}
+          </ul>
+        </li>
+        {rota.map((o, i) => {
+          const t = gecisTuru(u, i); const sec = new Set((o.tezgahlar ?? []).map((x) => x.id));
+          const gr = [...new Set((o.tezgahlar ?? []).map((x) => D.tezgahlar.find((m) => m.id === x.id)?.grup).filter((g): g is string => !!g))];
+          const aday = o.fason ? [] : D.tezgahlar.filter((m) => (m.grup && gr.includes(m.grup)) || sec.has(m.id));
+          const bag = (o.bag ?? []).map((x) => String(x[0]));
+          const ekler = [o.aile && `Aile ${o.aile}`, typeof o.aparat === 'string' && o.aparat && `Aparat ${o.aparat}`, o.minParti && `En küçük parti ${o.minParti}`,
+            typeof o.kasa === 'number' && `Kasa ${o.kasa}`, i > 0 && o.ortusebilir && 'Örtüşebilir', o.fai === true && 'İlk parça onayı', o.program === false && 'NC programı hazır değil',
+            !o.fason && o.fasonIzin === true && 'Fasona verilebilir'].filter((x): x is string => typeof x === 'string');
+          return (
+            <li key={o.k} className="tc-pyk-adim-kap">
+              <span className="tc-pyk-ok" data-tip={t}><Simge ad={t === 'x' ? 'layers' : 'down'} boyut="k" />{i > 0 && <span>{GECIS_AD[t]}{bag.length && t !== 'x' ? ` · öncül: ${bag.join(', ')}` : ''}</span>}</span>
+              <div className="tc-pyk-dugum" data-tur="adim" data-fason={o.fason ? '' : undefined} onPointerEnter={ust(o.k, null)}>
+                <header><b className="tc-pym-mono">{o.k}</b><span>{o.ad ?? ''}</span></header>
+                <div className="tc-pyk-sat"><small>İstasyon</small><span>{o.fason ? `Fason · ${fason(o.fason)}` : gr.map(grupAdi).join(', ') || '—'}</span></div>
+                {o.fason ? <p className="tc-pym-kucuk-yazi"><Simge ad="truck" boyut="k" /> Dış tedarikçide; kapasite ve çıkış günleri Fason bölümünde.</p> : (
+                  <ul className="tc-pyk-tezler" aria-label="Makineler">
+                    {aday.map((m) => {
+                      const x = (o.tezgahlar ?? []).find((z) => z.id === m.id);
+                      return (
+                        <li key={m.id} data-on={x ? '' : undefined} onPointerEnter={ust(o.k, m.id)}>
+                          <button type="button" className="tc-pym-mono" aria-pressed={!!x} aria-disabled="true" title={not}>{m.id}</button>
+                          {x && <small className="tc-pym-mono">{x.cevrim != null ? `${sayiYaz(x.cevrim, 1)} dk` : '—'} · ayar {x.ayar != null ? sayiYaz(x.ayar, 0) : '—'}</small>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {!o.fason && !(o.tezgahlar ?? []).length && <p className="tc-pyk-uyari"><Simge ad="alert" boyut="k" /> Makine seçilmedi; bu adım planlanamaz.</p>}
+                {ekler.length > 0 && <div className="tc-pyk-cipler">{ekler.map((x) => <span key={x} className="tc-pyk-cip">{x}</span>)}</div>}
+              </div>
+            </li>
+          );
+        })}
+        <li className="tc-pyk-adim-kap"><span className="tc-pyk-ok"><Simge ad="down" boyut="k" /></span><div className="tc-pyk-dugum" data-tur="bitmis"><header><Simge ad="check" boyut="k" /><b>{u.ad ?? u.id}</b><small>bitmiş ürün</small></header></div></li>
+      </ol>
+      <div className="tc-pym-dugmeler"><Pasif ad="Adım ekle" simge="plus" not={VERI_NOTU} /></div>
+      <p className="tc-pym-kucuk-yazi">Dolu makine adımın alternatifidir; motor en uygununu seçer. Kart açıkken bu ürünün rotası haritada yanar.</p>
     </>
   );
 }

@@ -1053,6 +1053,9 @@ export const yoldaAyrilan = async (db: Db, malzemeId: number, konumId: number, p
 export const konumdakiYoldaAyrilanlar = (db: Db, konumId: number): Promise<{ malzemeId: number; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
   db.sorgu(`SELECT malzeme_id AS "malzemeId", parti_id AS "partiId", statu_id AS "statuId", kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar FROM stok_teslim
     WHERE durum = 'yolda' AND kaynak_konum_id = $1 GROUP BY malzeme_id, parti_id, statu_id, kalite_durumu`, [konumId]);
+export const konumlardakiYoldaAyrilanlar = (db: Db, malzemeId: number, konumIdler: number[]): Promise<{ konumId: number; partiId: number | null; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
+  konumIdler.length === 0 ? Promise.resolve([]) : db.sorgu(`SELECT kaynak_konum_id AS "konumId", parti_id AS "partiId", statu_id AS "statuId", kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar
+    FROM stok_teslim WHERE durum = 'yolda' AND malzeme_id = $1 AND kaynak_konum_id = ANY($2::int[]) GROUP BY kaynak_konum_id, parti_id, statu_id, kalite_durumu`, [malzemeId, konumIdler]);
 // Teslimin stok hareketi geri alınınca teslim iptal sayılır (kart #1410): hareket bağı iz için kalır, alınan boşalır.
 export const teslimGeriAlindi = (db: Db, hareketId: number, kisiId: number): Promise<{ id: number; istekId: number | null } | null> =>
   db.tek(`UPDATE stok_teslim SET durum = 'iptal', alinan = NULL, kapatan_kisi_id = $2, kapanis = now(), surum = surum + 1

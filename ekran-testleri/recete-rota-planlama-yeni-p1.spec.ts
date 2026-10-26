@@ -444,25 +444,25 @@ test.describe('577d Tezgâh stüdyosu', () => {
 
 // 577d: Başka menüsünün kartları haritanın üstüne açılır; plan yoksa menüde pasiftir. Kartlar okur, yazma gitmez.
 test.describe('577d Tahta kartları', () => {
-  test('Plan, Siparişler, Kuyruklar ve Ne neyi etkiliyor açılır, bölgelere dizilir, Esc kapatır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+  test('Yedi kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan');
     const baska = page.getByRole('button', { name: /Başka/ });
     if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
       await page.keyboard.press('Escape');
-      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Ne neyi etkiliyor/]) {
+      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) {
         await baska.click();
         await page.getByRole('menuitemcheckbox', { name: ad }).click();
       }
       await expect(page.getByRole('region', { name: 'Tezgâh haritası' })).toBeVisible();
-      await expect(page.getByRole('region', { name: 'Ne neyi etkiliyor' })).toBeVisible();
+      for (const ad of ['Ne neyi etkiliyor', 'Kısıt ve veri', 'Hesaplar', 'Reçete ve Rota']) await expect(page.getByRole('region', { name: ad })).toHaveCount(1);
       await tasmaz(page);
       await baska.click();
       await page.getByRole('menuitem', { name: /Kartları bölgelere diz/ }).click();
       await tasmaz(page);
       await page.locator('.tc-pym-at-cv').click({ position: { x: 5, y: 5 } });
       await page.keyboard.press('Escape');
-      await expect(page.getByRole('region', { name: 'Ne neyi etkiliyor' })).toHaveCount(0);
-      for (const t of ['1', '2', '3']) await page.keyboard.press(t);
+      await expect(page.getByRole('region', { name: 'Reçete ve Rota' })).toHaveCount(0);
+      for (const t of ['1', '2', '3', '5', '6', '7']) await page.keyboard.press(t);
       await expect(page.locator('.tc-pyk-kart')).toHaveCount(0);
     }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);

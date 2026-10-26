@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as IsaretOlayi, type ReactNode } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { HaritaBagi } from '../../motor/harita/Harita.tsx';
-import { ekrana, type Bolge, type Kamera } from '../../motor/harita/kurallar.ts';
+import { ekrana, KH, KW, type Bolge, type Kamera, type Sahne } from '../../motor/harita/kurallar.ts';
 import {
   atolyeKutulari, bosYer, diz, dunyaKutusu, gosterKamerasi, hepsiniSigdir, KART_ANAHTARI, kartlarOku, kartlarYaz, kartOrani, kartTanimi,
-  yerlestir, type KartKaydi, type KartTuru,
+  KREF, yerlestir, type KartKaydi, type KartTuru,
 } from './kurallar.ts';
 import './kartlar.css';
 
@@ -15,15 +15,18 @@ export function useKartlar(): [KartKaydi[], (f: (l: KartKaydi[]) => KartKaydi[])
   return [l, setL];
 }
 
+// Reçete ve Rota kartı açıkken ürünün rotası haritada yanar (ze-rota rtCiz): adımın makineleri numarasıyla, adımlar sırayla bağlı.
+export interface RotaIzi { adimlar: { k: string; yerler: string[] }[]; ust: string | null; ustM: string | null }
 interface Ozellikler {
-  bag: HaritaBagi; l: KartKaydi[]; degis: (f: (l: KartKaydi[]) => KartKaydi[]) => void;
+  bag: HaritaBagi; l: KartKaydi[]; degis: (f: (l: KartKaydi[]) => KartKaydi[]) => void; iz?: RotaIzi | null;
   // Doğruysa kartlar bölgelere dizilir ve hepsi ekrana sığar (tkToparla); dizilince `dizBitti` çağrılır. Harita ilk karesini çizmeden istenirse
   // ilk karede yapılır.
   dizIstegi: boolean; dizBitti: () => void;
   kapat: (t: KartTuru) => void; kucult: (t: KartTuru) => void;
   govde: (t: KartTuru) => ReactNode;
 }
-interface Kare { kam: Kamera; W: number; H: number; bolge: Bolge[] }
+interface Kare { kam: Kamera; W: number; H: number; bolge: Bolge[]; ist: Sahne['ist'] }
+const NS = 'http://www.w3.org/2000/svg';
 
 // Kart katmanı (zc-tahta tkKatman, tkKonumla, tkKartHtml): kartlar her karede kameraya göre yerleşir; başlıktan tutulup taşınır.
 // Telefonda (dar) yalnız son kart haritanın altından açılır, tahtayla kaymaz.
@@ -33,11 +36,39 @@ export function KartKatmani(o: Ozellikler) {
   const son = useRef<Kare | null>(null);
   const tut = useRef<{ tur: KartTuru; x: number; y: number } | null>(null);
   const lr = useRef(o.l); lr.current = o.l;
+  const izR = useRef(o.iz ?? null); izR.current = o.iz ?? null;
+  const izEl = useRef<SVGGElement>(null);
   const [dar, setDar] = useState(false);
 
   const olcu = useCallback((t: KartTuru) => el.current.get(t)?.offsetWidth || kartTanimi(t).w, []);
+  const izCiz = useCallback((k: Kare) => {
+    const g = izEl.current; if (!g) return;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    const iz = izR.current; if (!iz || k.W < 600) return;
+    const el = (ad: string, a: Record<string, string | number | boolean | null>, ust: Element = g) => {
+      const e = document.createElementNS(NS, ad);
+      for (const [n, v] of Object.entries(a)) if (v !== null && v !== false) e.setAttribute(n, v === true ? '' : String(v));
+      ust.appendChild(e); return e;
+    };
+    const kk = k.kam.k; const w = KW * kk, h = KH * kk; const merkez: ([number, number] | null)[] = [];
+    for (const a of iz.adimlar) {
+      const sonuk = !!iz.ust && iz.ust !== a.k; let ilk: [number, number] | null = null;
+      a.yerler.forEach((m, j) => {
+        const s = k.ist[m]; if (!s) return; const [x, y] = ekrana(k.kam, k.W, k.H, s.x, s.y); ilk ??= [x, y];
+        const vurgu = iz.ustM === m || iz.ust === a.k;
+        el('rect', { class: 'tc-pyk-iz-kutu', x: x - w / 2 - 6, y: y - h / 2 - 6, width: w + 12, height: h + 12, rx: 12 * kk + 6, 'data-alt': j > 0, 'data-sonuk': sonuk, 'data-vurgu': vurgu });
+        const t = el('text', { class: 'tc-pyk-iz-ad', x: x - w / 2, y: y - h / 2 - 12, 'data-alt': j > 0, 'data-sonuk': sonuk });
+        t.textContent = j ? `${a.k} alt.` : `OP ${a.k}`;
+      });
+      merkez.push(ilk);
+    }
+    for (let i = 1; i < merkez.length; i++) {
+      const a = merkez[i - 1], b = merkez[i]; if (!a || !b) continue;
+      el('path', { class: 'tc-pyk-iz-yol', d: `M${a[0]},${a[1]} Q${(a[0] + b[0]) / 2},${Math.min(a[1], b[1]) - 40 * kk} ${b[0]},${b[1]}`, 'data-sonuk': !!iz.ust });
+    }
+  }, []);
   const konumla = useCallback((k: Kare) => {
-    son.current = k; if (k.W < 600) return;
+    son.current = k; izCiz(k); if (k.W < 600) return;
     const [ust, alt] = o.bag.paylar();
     for (const c of lr.current) {
       const e = el.current.get(c.tur); if (!e || c.x === null || c.y === null) continue;
@@ -48,7 +79,15 @@ export function KartKatmani(o: Ozellikler) {
       e.style.setProperty('--x', `${Math.round(sx)}px`); e.style.setProperty('--y', `${Math.round(sy)}px`); e.style.setProperty('--o', r.toFixed(3)); e.style.setProperty('--mh', `${mh}px`);
       e.toggleAttribute('data-uzak', r < 0.55); e.toggleAttribute('data-hazir', true);
     }
-  }, [o.bag]);
+  }, [o.bag, izCiz]);
+
+  // Uzaktan bakınca kart yalnız adıyla bölge gibi görünür; basınca okunur yakınlığa gelinir (ze-rota).
+  const yaklas = (c: KartKaydi, e: IsaretOlayi) => {
+    const el0 = el.current.get(c.tur); const d = son.current; if (!el0?.hasAttribute('data-uzak') || !d || dar || c.x === null) return;
+    e.preventDefault(); e.stopPropagation();
+    const b = dunyaKutusu(c, olcu(c.tur)); const hh = Math.min(b.h * KREF, d.H * 0.8);
+    o.bag.komut()?.kameraKoy({ x: b.x + b.w / 2, y: b.y + hh / 2 / KREF, k: KREF });
+  };
 
   // Yeri olmayan kart şeridin ilk boş yerine oturur; ekranda okunur değilse kamera ona kayar (tkAc, tkGoster).
   const yerVer = useCallback((k: Kare) => {
@@ -68,7 +107,7 @@ export function KartKatmani(o: Ozellikler) {
   }, [o, olcu]);
   const dizR = useRef(o.dizIstegi); dizR.current = o.dizIstegi;
   const kare = useCallback((k: Kare) => { if (dizR.current) { dizR.current = false; dizYap(k); } else yerVer(k); konumla(k); }, [dizYap, yerVer, konumla]);
-  useEffect(() => o.bag.abone((kam, W, H, bolge) => kare({ kam, W, H, bolge })), [o.bag, kare]);
+  useEffect(() => o.bag.abone((kam, W, H, bolge, ist) => kare({ kam, W, H, bolge, ist })), [o.bag, kare]);
   useLayoutEffect(() => { const d = o.bag.komut()?.durum(); if (d) kare(d); });
 
   useEffect(() => {
@@ -99,10 +138,11 @@ export function KartKatmani(o: Ozellikler) {
   const gorunen = dar ? o.l.slice(-1) : o.l;
   return (
     <div ref={kok} className="tc-pyk" data-dar={dar ? '' : undefined}>
+      <svg className="tc-pyk-iz" aria-hidden="true"><g ref={izEl} /></svg>
       {gorunen.map((c) => {
         const t = kartTanimi(c.tur);
         return (
-          <section key={c.tur} className="tc-pyk-kart" data-tur={c.tur} data-kucuk={c.kucuk ? '' : undefined} aria-label={t.ad}
+          <section key={c.tur} className="tc-pyk-kart" data-tur={c.tur} data-kucuk={c.kucuk ? '' : undefined} aria-label={t.ad} onPointerDownCapture={(e) => yaklas(c, e)}
             ref={(e) => { if (e) el.current.set(c.tur, e); else el.current.delete(c.tur); }}>
             <header className="tc-pyk-bas" title={dar ? undefined : 'Tutup tahtada taşıyın'} onPointerDown={(e) => basla(c, e)}>
               <Simge ad={t.simge} boyut="k" /><b>{t.ad}</b><span className="tc-pym-ara" />

@@ -5,6 +5,8 @@ import { api } from '../../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../../gorunumler.ts';
+import type { CalismaKomutu } from '../../kayit.ts';
+import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
 import { PlanlamaMotoru } from '../../motor/index.tsx';
@@ -12,8 +14,8 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../../motor/kurallar.
 import { ornekCalisma } from '../../motor/ornek.ts';
 import type { Bolge } from '../../motor/harita/kurallar.ts';
 import {
-  agYakinlari, bitisFarki, diz, dunyaKutusu, etkiAgi, KART_ANAHTARI, kartAc, kartDegistir, kartKapat, kartKucult, kartlarOku, kartlarYaz, KREF,
-  kuyrukGrubu, planKarti, siparisSatirlari, yerlestir, type KartKaydi,
+  agYakinlari, bitisFarki, canliOlcu, diz, dunyaKutusu, etkiAgi, gecisTuru, KART_ANAHTARI, kartAc, kartDegistir, kartKapat, kartKucult, kartlarOku, kartlarYaz, KREF,
+  kuyrukGrubu, planKarti, rotaUrunu, siparisSatirlari, simdikiOlcu, yerlestir, type KartKaydi,
 } from './kurallar.ts';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); try { localStorage.clear(); } catch { /* yok */ } });
@@ -77,6 +79,22 @@ describe('Kart hesapları', () => {
       const t = ag.tur[0]; if (t) expect(agYakinlari(ag, t.n).bag.size).toBeGreaterThan(0);
     }
   });
+
+  it('göstergeler iki planda aynı hesapla çıkar; aynı plan fark vermez, canlıda ayar ve doluluk yok; rota geçişi ve ürünü', () => {
+    const { c, p, cx } = veri();
+    const s = simdikiOlcu(c, p, cx);
+    expect(s.late).toBe(c.D.siparisler.filter((x) => { const due = cx.jobs[x.id]?.due; const C = Math.max(...Object.values(p.ops).filter((r) => r.job === x.id && Number.isFinite(r.C)).map((r) => r.C));
+      return !x.havuz && due != null && Number.isFinite(C) && C - due > 0.05; }).length);
+    const ayni = Object.fromEntries(Object.values(p.ops).filter((r) => Number.isFinite(r.S)).map((r) => [r.id, { m: r.m, S: r.S, C: r.C, job: r.job }]));
+    const a = canliOlcu(c, p, cx, ayni);
+    expect([a.wT, a.late, a.Cmax, a.fas]).toEqual([s.wT, s.late, s.Cmax, s.fas]);
+    expect([a.suH, a.suN, a.dol, a.dar]).toEqual([null, null, null, null]);
+    const u = { id: 'U', rota: [{ k: '10' }, { k: '20', bag: [['10', 'o']] }, { k: '30', bag: [] }, { k: '40', bag: [['30', 'b']] }] };
+    expect([0, 1, 2, 3].map((i) => gecisTuru(u, i))).toEqual(['b', 'o', 'x', 'b']);
+    const ilk = c.D.siparisler[1]; if (!ilk) throw new Error('sipariş yok');
+    expect(rotaUrunu(c, ilk.id, null)?.id).toBe(ilk.urun);
+    expect(rotaUrunu(c, ilk.id, c.D.urunler[0]?.id ?? null)?.id).toBe(c.D.urunler[0]?.id);
+  });
 });
 
 const DEPO = { durum: null } as unknown as PlanlamaDeposu;
@@ -85,9 +103,9 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
   const [secim, setSecim] = useState<PlanlamaSecimi>(BOS_SECIM);
   return <PlanlamaMotoru {...oz} olcek={olcek} olcekSec={(x) => setOlcek({ olcek: x, kayma: 0 })} kaydir={() => undefined} secim={secim} sec={(x) => setSecim((y) => ({ ...y, ...x }))} />;
 }
-function ac(yaz = true) {
+function ac(yaz = true, komut: CalismaKomutu | null = null) {
   vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? Promise.resolve({ planSurumu: null, isler: [] }) : Promise.reject(new Error('yok')))) as never);
-  render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={null} git={vi.fn()} yenile={vi.fn()}
+  render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={komut} git={vi.fn()} yenile={vi.fn()}
     yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz })} /></BildirimSaglayici>);
 }
 const menudenAc = (ad: RegExp) => {
@@ -138,10 +156,35 @@ describe('Tahta kartları', () => {
     expect(kart('Siparişler')).toBeTruthy();
   });
 
+  it('Kısıt ve veri anahtarı çalışmaya yazar, motor isteyenler pasif; Hesaplar göstergeleri; Reçete ve Rota ürünü seçer, düzenleme pasif', async () => {
+    const yazilan: PlanlamaCalismasi[] = []; const c0 = ornekCalisma();
+    const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => unknown) => { const t = structuredClone(c0); fn(t); yazilan.push(t); return true; }) } as unknown as CalismaKomutu;
+    ac(true, komut);
+    menudenAc(/Kısıt ve veri/);
+    const k = kart('Kısıt ve veri');
+    const anahtar = within(k).getAllByRole('switch')[0] as HTMLInputElement;
+    expect(anahtar.checked).toBe(true);
+    fireEvent.click(anahtar);
+    expect(komut.degistir).toHaveBeenCalledWith('Kısıt kapatıldı', expect.any(Function), expect.anything());
+    expect(yazilan[0]?.kapali.length).toBe(1);
+    expect(within(k).getAllByRole('button', { name: 'Etkisi' }).every((x) => x.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(within(k).getByText('Arıza denemek için haritada bir tezgâh seçin.')).toBeTruthy();
+    menudenAc(/Hesaplar/);
+    const t = within(kart('Hesaplar')).getByRole('table', { name: 'Göstergeler' });
+    expect(within(t).getAllByRole('row').map((r) => r.firstElementChild?.textContent)).toEqual(['Gösterge', 'Ağırlıklı gecikme', 'Geciken sipariş', 'Toplam ayar süresi', 'Ayar sayısı', 'Son iş biter', 'Fason süresi', 'Ortalama doluluk', 'Darboğaz']);
+    await waitFor(() => { expect(within(kart('Hesaplar')).getByText(/Henüz karşılaştırılacak canlı plan yok/)).toBeTruthy(); });
+    menudenAc(/Reçete ve Rota/);
+    const r = kart('Reçete ve Rota'); const u = c0.D.urunler[1]; if (!u) throw new Error('ürün yok');
+    fireEvent.change(within(r).getByRole('combobox'), { target: { value: u.id } });
+    expect(within(r).getByRole('list', { name: `${u.ad ?? u.id} reçete ve rotası` })).toBeTruthy();
+    expect(within(r).getAllByRole('button', { pressed: true }).every((b) => b.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(within(r).getByRole('button', { name: 'Adım ekle' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('her rolde aynı görünüm: okuyan da yazan da aynı kartları, düğmeleri ve satırları görür', () => {
     const gor = (yaz: boolean) => {
       ac(yaz);
-      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Ne neyi etkiliyor/]) menudenAc(ad);
+      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) menudenAc(ad);
       const k = document.querySelector('.tc-pyk') as HTMLElement;
       const l = [...within(k).getAllByRole('button'), ...within(k).getAllByRole('row'), ...within(k).getAllByRole('combobox')].map((e) => e.textContent);
       cleanup(); vi.restoreAllMocks(); localStorage.clear(); return l;
