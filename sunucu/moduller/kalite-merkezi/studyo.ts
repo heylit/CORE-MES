@@ -4,9 +4,9 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { kmNumuneKurali } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
-  KmBalon, KmBalonGirdisi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoParcaCevabi,
+  KmBalon, KmBalonGirdisi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { yayindakiBelgeDosyasi } from '../cizimler/disari.ts';
+import { yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
@@ -42,6 +42,15 @@ export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyo
   // Plan yalnız Kalite Merkezi'nin kuralıyla yazılır; okunamayan plan sessizce boş sayılmaz (hata olarak görünür).
   const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo)).map((p) => ({ opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }));
   return { resimler, numunePlanlari };
+}
+
+// Alınabilecek belgeler: yalnız yayındaki PDF ve 3B model (alma kuralıyla aynı süzgeç); sayı sınırı belge merkezinin seçici sınırıdır.
+export async function merkezBelgeleri(db: Db, ara: string | null): Promise<KmMerkezBelgesi[]> {
+  return (await yayindakiBelgeler(db, ara === null ? {} : { ara })).flatMap((b) => {
+    const tur = studyoResimTuru(b.dosyaTuru);
+    if (tur === null) return [];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet }];
+  });
 }
 
 // Belge merkezindeki yayındaki revizyon parçaya alınır; içerik kopyalanmaz, belge kimliği ve revizyon özeti tutulur.
