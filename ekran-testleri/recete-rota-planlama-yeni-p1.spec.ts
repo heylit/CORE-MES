@@ -289,3 +289,29 @@ test.describe('P1e Planlama atölyesi', () => {
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum') && y !== 'POST /api/recete-rota/kayitlar/yaz')).toEqual([]);
   });
 });
+
+// 577b: Veri ve kısıtlar motor sayfasının ekranıdır (adres sorgusu `?ekran=veri&bolum=`). Plan çubuğunun Veri düğmesiyle açılır; on bölüm
+// gezilir, sayfa taşmaz, yazma gitmez. Örnek veride çalışma olmayabilir; o halde boş ekran görünür.
+const VERI_BOLUMLERI = ['Siparişler', 'Kısıtlar', 'Tezgâhlar', 'Ürün ve rota', 'Takvim', 'Personel', 'Malzeme', 'Fason ve aparat', 'Ayar matrisi', 'Veri denetimi'];
+test.describe('577b Veri ve kısıtlar', () => {
+  test('Veri: plan çubuğundan açılır, on bölüm gezilir, Plan tahtaya döner; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
+    await ac('/recete-rota/planlama-yeni/sevkiyat');
+    const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
+    await cubuk.getByRole('button', { name: /^Veri/ }).click();
+    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan\?ekran=veri$/);
+    await expect(page.locator('[data-parca="veri"]')).toBeVisible();
+    await expect(cubuk.getByRole('button', { name: /^Veri/ })).toHaveAttribute('aria-current', 'page');
+    const menu = page.getByRole('navigation', { name: 'Veri ve kısıtlar' });
+    await expect(menu.getByRole('button')).toHaveText(VERI_BOLUMLERI.map((b) => new RegExp(`^${b}`)));
+    for (const b of VERI_BOLUMLERI) {
+      await menu.getByRole('button', { name: new RegExp(`^${b}`) }).click();
+      await expect(menu.getByRole('button', { name: new RegExp(`^${b}`) })).toHaveAttribute('aria-current', 'page');
+      await tasmaz(page);
+    }
+    await expect(page).toHaveURL(/ekran=veri&bolum=denetim$/);
+    await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
+    await expect(page.locator('[data-parca="veri"]')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/recete-rota\/planlama-yeni\/plan$/);
+    expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
+  });
+});

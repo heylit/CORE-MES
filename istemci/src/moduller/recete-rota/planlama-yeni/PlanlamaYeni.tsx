@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { DurumKutusu, Sekmeler, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { YeniEkranKapisi } from '../../../ortak/rota/yeni-ekran.tsx';
@@ -7,8 +7,8 @@ import { api } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
-  ACILIS, ACILIS_OLCEGI, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi,
-  type DonemOlcegi, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi,
+  ACILIS, ACILIS_OLCEGI, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi, TAHTA,
+  type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
 import { usePlanlamaDeposu } from './veri.ts';
@@ -29,6 +29,7 @@ function PlanlamaEkrani() {
   const oturum = useOturum();
   const { gorunum: parca } = useParams<{ gorunum?: string }>();
   const git = useNavigate();
+  const [sorgu] = useSearchParams();
   const kullanici = oturum.data;
   const girebilir = kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false;
   const { durum, yenile, tazele } = usePlanlamaDeposu(girebilir);
@@ -68,6 +69,7 @@ function PlanlamaEkrani() {
   const olcekSec = useCallback((o: DonemOlcegi): void => { olcekKur({ olcek: o, kayma: 0 }); }, []);
   const kaydir = useCallback((n: number): void => { olcekKur((x) => ({ ...x, kayma: n === 0 ? 0 : x.kayma + n })); }, []);
   const sec = useCallback((s: Partial<PlanlamaSecimi>): void => { secimKur((x) => ({ ...x, ...s })); }, []);
+  const altSec = useCallback((a: PlanlamaAltEkrani): void => { void git(altEkranAdresi(a)); }, [git]);
 
   if (oturum.isPending) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
   if (!kullanici) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Oturum bulunamadı." /></div>;
@@ -79,6 +81,7 @@ function PlanlamaEkrani() {
   const kayitlar = GORUNUM_KAYITLARI.filter((k) => gorunumAcik(k.anahtar, yetki));
   const etkin = kayitlar.find((k) => k.anahtar === gorunum);
   const gec = (g: PlanlamaGorunumu): void => { void git(gorunumAdresi(g)); };
+  const alt = gorunum === 'plan' ? altEkranOku(sorgu) : TAHTA;
 
   return (
     <div className="tc-py" data-gorunum={gorunum}>
@@ -94,14 +97,14 @@ function PlanlamaEkrani() {
                 <Suspense fallback={null}>
                   <PlanSeridi
                     depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
-                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} gorunum={gorunum}
+                    olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
                   depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
-                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec}
+                  olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec}
                 />
               </Suspense>
             </>
