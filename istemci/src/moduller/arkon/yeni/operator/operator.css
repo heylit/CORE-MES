@@ -331,6 +331,8 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-resim .tc-ay5-durum { grid-area: 4 / 1; margin: 0 var(--b-2) var(--b-2); }
 }
 .tc-ay1-adimlar { display: grid; gap: var(--b-2); min-width: 0; }
+/* Ortak adım listesinin başlığı telefonda iki satıra kırılıyordu; terminalde bir kademe küçük. */
+@media (max-width: 767px) { .tc-ay1-adimlar .tc-adimlar-baslik { font-size: var(--yazi-m); font-stretch: 100%; } }
 
 /* analiz */
 .tc-ay1-analiz { display: grid; gap: var(--b-3); min-width: 0; }
