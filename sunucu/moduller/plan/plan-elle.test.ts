@@ -1,4 +1,4 @@
-import { before, describe, test } from 'node:test';
+import { before, describe, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CanliYerlesimCevabi, OnizlemeCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { KomutCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -243,11 +243,18 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     const canli = await planOku();
     const y = canli.yerlesimler.find((x) => x.isEmriId === op20) ?? canli.yerlesmemis.find((x) => x.isEmriId === op20)!;
     const baslangic = new Date(Date.now() + 3600_000).toISOString();
-    const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [
-      { kaynak: { tur: 'makine', id: u1 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 1, adet: 4 } }] },
-      { kaynak: { tur: 'makine', id: u2 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 2, adet: 6 } }] },
-    ] });
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${yazildi.taslak}/canliya-al`, { surum: await gonder(yazildi.taslak, (await planOku(yazildi.taslak)).taslak!.surum), cakismalariKabul: false });
+    // Canlıya alma OP10'u motorla şimdiden yeniden dizer (motor dakikayı aşağı yuvarlar), bölünmüş OP20 sabit kalır: yazım ile canlıya
+    // alma arasında dakika dönerse OP10 OP20'den sonra biter ve sıraya aykırı diye reddedilir (kart 733). Bu test hurdayı sınar: an sabitlenir.
+    mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    try {
+      const yazildi = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [
+        { kaynak: { tur: 'makine', id: u1 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 1, adet: 4 } }] },
+        { kaynak: { tur: 'makine', id: u2 }, baslangic, isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false, parca: { no: 2, adet: 6 } }] },
+      ] });
+      await tamam(c.planlama, 'POST', `/plan/senaryolar/${yazildi.taslak}/canliya-al`, { surum: await gonder(yazildi.taslak, (await planOku(yazildi.taslak)).taslak!.surum), cakismalariKabul: false });
+    } finally {
+      mock.timers.reset();
+    }
     // OP10 10 adetten 8 sağlamla bitti; bölme 10 adetle yazılmıştı.
     await vt().tx((db) => db.sorgu(
       "UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now() - interval '1 hour', bitis = now(), saglam_adet = 8 WHERE id = $1", [op10]));

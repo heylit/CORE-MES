@@ -365,7 +365,7 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
-  test('B7, 690 b: kol üstün önceki adımını, üstün birleşme adımı kolun motordaki son adımını bekler; adım kolların adediyle sürer; ek adım yerleşmemiş kalır (689 a)', async () => {
+  test('B7, 690 b, 686 a: kol üstün önceki adımını, üstün birleşme adımı kolun son adımını bekler; adım kolların adediyle sürer; ek adım kendi süresiyle yerleşir', async () => {
     const [a, b, son] = await isEmirleriAc([yeniAdim(), yeniAdim({ kaynak: { tur: 'makine', id: makineB } }), yeniAdim()], 10);
     const satir = (id: number) => vt().tx((db) => db.tek<{ emir: number; op: number }>(
       'SELECT uretim_emri_id AS emir, op_no AS op FROM uretim_emirleri_is_emri WHERE id = $1', [id]));
@@ -379,17 +379,14 @@ describe('plan (gerçek PostgreSQL): öner, taşıma, kilit, stüdyo', () => {
     // Kolun rota adımı makinesiz açılır; Planı kur'da makineyi sayfa seçer (ADR 0018), burada üstün makinesi verilir.
     await vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET makine_id = $1 WHERE uretim_emri_id = $2 AND makine_id IS NULL', [makineB, altEmirId]));
     const p = await taslaktaOner();
-    const kol = p.yerlesimler.filter((y) => y.uretimEmriId === altEmirId);
-    assert.deepEqual(kol.map((y) => y.tur), ['rota'], 'kol birleşme adımını taşımaz');
-    // 689 a: ortak motor rotada olmayan ek adımı henüz yerleştirmez (686 a); ek adım türüyle, nedeniyle yerleşmemiş kalır, Planı kur durmaz.
-    const ek = p.yerlesmemis.find((y) => y.uretimEmriId === altEmirId);
-    assert.deepEqual(ek && [ek.tur, ek.neden], ['rework', 'Ek adım; ortak motor rotada olmayan adımı henüz yerleştirmiyor.']);
-    assert.ok(p.uyarilar.some((u) => /yerleşmedi; ek adım/.test(u)), p.uyarilar.join(' | '));
+    const kol = p.yerlesimler.filter((y) => y.uretimEmriId === altEmirId).sort((x, y) => x.opNo - y.opNo);
+    assert.deepEqual(kol.map((y) => y.tur), ['rota', 'rework'], 'kol birleşme adımını taşımaz; ek adım türüyle gelir (686 a)');
     const dk = (y: { baslangic: string; bitis: string }) => (Date.parse(y.bitis) - Date.parse(y.baslangic)) / 60_000;
     // Ayar + adet x birim: bölünmeden önceki ve birleşme adımı 10, üstün kalan adımı 6, kol 4 adet işler.
-    assert.deepEqual([dk(yer(p, a!)), dk(yer(p, b!)), dk(kol[0]!), dk(yer(p, son!))], [50, 42, 38, 50]);
+    assert.deepEqual([dk(yer(p, a!)), dk(yer(p, b!)), dk(kol[0]!), dk(kol[1]!), dk(yer(p, son!))], [50, 42, 38, 14, 50]);
     assert.ok(Date.parse(kol[0]!.baslangic) >= Date.parse(yer(p, a!).bitis), 'kol üstün önceki adımını bekler');
-    assert.ok(Date.parse(yer(p, son!).baslangic) >= Date.parse(kol[0]!.bitis), 'birleşme adımı kolun motordaki son adımını bekler (ek adım motorda yok)');
+    assert.ok(Date.parse(kol[1]!.baslangic) >= Date.parse(kol[0]!.bitis), 'ek adım kolun önceki adımını bekler');
+    assert.ok(Date.parse(yer(p, son!).baslangic) >= Date.parse(kol[1]!.bitis), 'birleşme adımı kolun son adımını bekler');
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
   });
 
