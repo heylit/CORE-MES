@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
-import { Cark, DurumDugmeleri, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { Cark, DurumDugmeleri, GorevKarti, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -171,6 +171,15 @@ describe('684: çark', () => {
     fireEvent.click(getByRole('button', { name: 'Bu işe geç' }));
     expect(gecilen).toEqual([1]);
   });
+  it('702: ekrandaki öğede ekranın kartı çarkın ortasında; başka öğeye bakınca başlığı görünür', () => {
+    const { getByRole, getByText, queryByText } = render(
+      <Cark etiket="İş" ogeler={ogeler} etkin={0} gecMetni="Bu işe geç" gec={() => {}} ekranda={<p>İş kartı</p>} />,
+    );
+    expect(getByText('İş kartı')).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Sonraki iş' }));
+    expect(queryByText('İş kartı')).toBeNull();
+    expect(getByRole('group', { name: 'İş' }).textContent).toContain('UE-2');
+  });
   it('yana kaydırma bir adım gider; tek öğede çark yok', () => {
     // jsdom PointerEvent tanımlamaz; konumlu olay MouseEvent ile verilir.
     if (!('PointerEvent' in window)) Object.defineProperty(window, 'PointerEvent', { value: MouseEvent, configurable: true });
@@ -194,5 +203,17 @@ describe('Aynı emrin iki adımı kuyrukta (639f)', () => {
     expect(kartlar).toHaveLength(2);
     expect(kartlar[0]!.textContent).not.toContain('Sıradaki');
     expect(kartlar[1]!.textContent).toContain('Sıradaki');
+  });
+});
+
+describe('702: Şimdi şeridi', () => {
+  it('numune şeridi görev kartının içinde, başlığın altında çizilir', () => {
+    const gorev = { tone: 'run' as const, icon: 'layers' as const, t: 'Sıradaki işe hazırlan', d: 'UE-2' };
+    const { getByRole, getByText } = render(
+      <GorevKarti gorev={gorev} eylem={() => {}} ertele={() => {}} izinli={() => true} ek={<ul aria-label="Numune planı" />} />,
+    );
+    const kart = getByRole('status');
+    expect(kart.contains(getByRole('list', { name: 'Numune planı' }))).toBe(true);
+    expect(kart.contains(getByText('Sıradaki işe hazırlan'))).toBe(true);
   });
 });
