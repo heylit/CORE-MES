@@ -64,3 +64,13 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `POST /stok/konumlar/:id/pasif-yap`, `POST /stok/raflar/:id/pasif-yap`, `GET /stok/uretim-emirleri/:id/refakat-partileri`.
+
+## Kalite istasyonu numunesi ve lot kararı (564 1 b, 6 a) - bağlamada kapanacak
+- `numuneTeslimi.hedefIstasyonId` ve `istasyonLotKarari` henüz çağrılmıyor; Arkon (kalite istasyonu terminal görünümü) bağlar. Kalite istasyonu
+  rotadan bulunur, stok bunu bilmez.
+- Lot kararının Kalite Merkezi kaydını çağıran yazar (kalite-merkezi `lotKarariYaz`); stok yalnız kalite durumunu değiştirir.
+
+## Hurda sayımının uyarısı operatöre (601 a) - bağlamada kapanacak
+- Stok `hurdaSayimiYansitUyarili` uyarıyı döner (önceki adımın parçası istasyonda yoksa eksiye düşüldüğü). Kalan iki parça ayrı dallarda:
+  uretim-emirleri hurda sayımında bu işlevi çağırıp uyarıyı sayım cevabına koyar (sağlam sayımdaki `uretimSayimiYansitUyarili` gibi);
+  Arkon hurda komutunun cevabına ekler ve operatöre gösterir. O zamana kadar uyarı yalnız harekette ve başlatma/sağlam sayım uyarısında görünür.
