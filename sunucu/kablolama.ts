@@ -8,7 +8,7 @@ import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import { musteriSiniflari } from './moduller/musteri-tedarikci/disari.ts';
-import { acilSiparisOnaylandi, canliMakineAyrimlari, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, tahminiMaliyetCozucusu } from './moduller/plan/disari.ts';
+import { acilSiparisOnaylandi, canliMakineAyrimlari, malzemeMaliyetiCozucusu, musteriSinifiCozucusu, planMotoruCozucusu, tahminiMaliyetCozucusu } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, kaliteDurumuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
@@ -69,6 +69,8 @@ export function sunucununBaglari(): Bag[] {
     bag('müşteri sınıfı -> plan', musteriSinifiCozucusu, musteriSiniflari),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, receteRota.teklifDene),
+    // ADR 0018, 627 a: canlıya almada asıl planın son sözü ortak motordadır.
+    bag('plan motoru -> plan', planMotoruCozucusu, receteRota.sunucuPlanCozucusu),
     bag('stok değer grupları -> satın alma kg stok değeri', stokMiktariCozucusu, stok.degerGrubuToplamlari),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
     bag('kalite onay durumu -> satın alma siparişi', kaliteDurumuCozucusu, kaliteMerkezi.tedarikciOnayDurumlari),

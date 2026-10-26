@@ -138,3 +138,7 @@ Teslim olduğu gibi alındı; sözleşme ve işlemler önce ayrı istekte geldi 
 - Kuyruk yaz: vardiyasız işin taslaktaki yeri kalkar, yazılmaz; komut 200. Canlıya al: vardiyasız işin taslak yeri canlıya geçmez, canlıdaki hâli kalır, tabanı yazılmaz.
 - Plan cevabı: motor kayıtlıyken makinesinin takvimi olmayan yerleşmemiş işin nedeni "Tezgâhın vardiyası tanımsız."; takvimsiz uyarısı "vardiya takvimi yok; işleri yerleşmedi." Motor kayıtsızken bugünkü metin.
 - VARSAYIM: neden, işin atanmış makinesinin takvimi olup olmadığından okunur (motorun listesi saklanmaz); kuyruk yazımında taslaktaki eski yerin kalkması iş yerleşmemiş görünsün diyedir.
+
+## Ortak motor canlıda (627 a, kart 625h)
+- `sunucu/kablolama.ts` plan motoru çözücüsünü bağlar (ADR 0018 karar 5). Canlıya almada ve kuyruk yazımında taslağın makine kuyrukları (planlı, sabit olmayan, bölünmemiş makine işi) sıraları korunarak ortak motorla yeniden dizilir; vardiyası tanımsız tezgâhın işi uyarıyla boş kalır (168 b).
+- Planlama sayfasının çalışma kaydı yoksa çözücü 409 döner. Uç, göç, yetki değişmedi. `/plan/oner` ve `/plan/karsilastir` testler ve robot taşınana kadar kalır (UYUM-BORCU P-B27).

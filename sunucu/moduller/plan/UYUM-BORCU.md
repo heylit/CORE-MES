@@ -48,7 +48,7 @@
 
 | No | Borç | Ekrana dokunur | Kapanış |
 |---|---|---|---|
-| P-B27 | `planMotoruCozucusu` kablolama.ts'te bağlı değil: çözücüyü (girdiyi sunucuda kuran çevirici) Reçete ve Rota sonraki yamasında verir; o güne kadar asıl plan Motor A'da | Hayır | R&R çözücüsü gelince `bag('plan motoru -> plan', ...)` |
+| P-B27 | KAPANDI (627 a, kart 625h): `sunucu/kablolama.ts` `bag('plan motoru -> plan', planMotoruCozucusu, receteRota.sunucuPlanCozucusu)`; canlıya almada ve kuyruk yazımında makine kuyrukları ortak motorla yeniden dizilir. Kalan: `/plan/oner` ve `/plan/karsilastir` (Motor A) hiçbir ekranda çağrılmıyor ama 10 test dosyası, `akis-sagligi.test.ts` ve test robotu senaryosu bunlarla plan kuruyor; kaldırma test geçişiyle ayrı dalda. Planlama sayfasının çalışma kaydı yoksa çözücü 409 verir (canlıya alma durur, ileti sayfayı bir kez kaydetmeyi söyler) | Hayır | Motor A uçları test geçişiyle kalkar |
 | P-B28 | Çözücü kayıtlıyken parçalı ya da kişi kaynaklı kuyruk yazımı Motor A yolundan gider (çözücü cevabı parça ve kişi taşımıyor); canlıya almada bölünmüş iş ve kişi kaynaklı iş yeniden dizilmez, sabit kalır | Hayır | Çözücü parça ve kişi kaynağı verince |
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
