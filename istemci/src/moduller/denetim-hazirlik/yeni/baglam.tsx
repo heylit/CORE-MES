@@ -111,13 +111,17 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
     const p = etkinProfil(d);
     const taslak = kopya(p);
     f(taslak);
+    // Haftalık programın çapası (programın başladığı hafta) kişinin değişikliğiyle aynı yazmada kayda girer. Açılış yazmaz: aynı
+    // kaydı aynı anda açan iki ekrandan biri, kişi bir şey yapmadan sürüm çakışmasına düşer.
+    const plan = haftalariKur(kuralBaglami(taslak, program));
+    if (plan?.capaDegisti) taslak.pw[program].wkAnchor = plan.capa;
     taslak.updated = Date.now();
     if (etiket) { yigin.current.sakla(etiket, d.active, p); yiginDegisti((n) => n + 1); }
     const yeni: Depo = { ...d, data: { ...d.data, [d.active]: taslak } };
     sonDepo.current = yeni;
     depoYaz(yeni);
     if (etiket && !secenek?.sessiz) bildir(secenek?.bildirim ?? etiket, { geriAl: true });
-  }, [yetki.yazabilir, ortakBildir, depoYaz, bildir]);
+  }, [yetki.yazabilir, program, ortakBildir, depoYaz, bildir]);
 
   const depoDegistir = useCallback<DenetimBaglami['depoDegistir']>((etiket, f) => {
     if (!yetki.yazabilir) { ortakBildir('hata', YETKI_ILETISI); return; }
@@ -170,13 +174,6 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
     window.addEventListener('keydown', tus);
     return () => { window.removeEventListener('keydown', tus); };
   }, []);
-
-  // Haftalık programın çapası (programın başladığı hafta) ilk kuruluşta kayda yazılır; prototip bunu çizimde yapıyordu.
-  useEffect(() => {
-    if (!yetki.yazabilir || yazici.kayit === 'catisma') return;
-    const plan = haftalariKur(kb);
-    if (plan?.capaDegisti) degistir(null, (t) => { t.pw[program].wkAnchor = plan.capa; });
-  }, [kb, program, yetki.yazabilir, yazici.kayit, degistir]);
 
   const yenidenOku = yazici.yenidenOku;
   const deger = useMemo<DenetimBaglami>(() => ({
