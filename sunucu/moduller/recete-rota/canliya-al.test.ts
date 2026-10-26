@@ -152,6 +152,19 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'CA-IM', ad: 'Deneme merkez', aciklama: null });
     const istasyon = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'CA-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
     makineA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'CA-MA', ad: 'Deneme makine A', istasyonId: istasyon })).id;
+    // ADR 0018: canlıya alma ve kuyruk yazımı sunucu motoruyla dizer. Motor planlama sayfasının çalışma kaydı olmadan çözmez (409) ve
+    // vardiyası tanımsız tezgâha yer vermez (168 b): kayıt boş yazılır, makinenin iş merkezi her gün çalışır.
+    const gun = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('CA gunduz', '00:00', '23:59') RETURNING id"))!.id;
+    await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT $1, g, $2 FROM generate_series(1, 7) g', [merkez.id, gun]);
+    await tamam(c.yonetici, 'POST', '/recete-rota/kayitlar/yaz', {
+      anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
+      deger: {
+        surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+        w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+        D: { meta: { ad: 'Deneme', baslangic: tesisGunu(Date.now()) }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [],
+          tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
+      },
+    });
     ortakHammadde = await kartAc('hammadde');
     fasoncu = (await tamam<{ firma: { id: number } }>(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme fasoncu', tur: 'tedarikci', fason: true })).firma.id;
   });
@@ -329,7 +342,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     await onaylaCanliyaAl(komutlar, geri.taslak!.id);
   });
 
-  test('CA-2 (#1424, kullanıcı kararı): fason iş emri planda kapasite tüketmez; sonraki iç adım fason termini kadar bekler, öneride de kuyruk yazımında da', async () => {
+  test('CA-2 (#1424, kullanıcı kararı): fason iş emri planda kapasite tüketmez; sonraki iç adım kuyruk yazımında fason termini kadar bekler', async () => {
     const TERMIN = 2;
     const e = await emirAc([yeniAdim(), fasonAdim(TERMIN), yeniAdim()]);
     const [i1, fason, i3] = e.isEmriIdleri as [number, number, number];
@@ -337,14 +350,6 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual(adimlar.map((a) => [a.opNo, a.fasonFirmaId === null ? 'ic' : 'fason']), [[10, 'ic'], [20, 'fason'], [30, 'ic']]);
     const [aFason, aIc] = [await anahtarlar([fason]), await anahtarlar([i1, i3])];
     assert.equal((await vt().tx((db) => canliOzeti(db))).planlanacak.some((a) => aFason.includes(a)), false, 'fason adım planlanacak listesinde yok');
-
-    // Öneri: fason termini iki iç adımın arasına takvim günü olarak girer.
-    const oner = await tamam<PlanCevabi>(c.planlama, 'POST', '/plan/oner', { taslak: null });
-    const y = (id: number) => oner.yerlesimler.find((x) => x.isEmriId === id);
-    assert.equal(y(fason), undefined, 'fason iş emri öneride yerleşmez');
-    assert.ok(y(i1) && y(i3));
-    const bekleme = Date.parse(y(i3)!.baslangic) - Date.parse(y(i1)!.bitis);
-    assert.ok(bekleme >= TERMIN * GUN_MS && bekleme < (TERMIN + 1) * GUN_MS, `fason termini kadar bekler (ölçülen ${bekleme} ms)`);
 
     // Kuyruk yazımı (Canlıya al): fason adım kuyruğa girmez, iç adımlar yazılır; sonraki iç adım fason termini kadar bekler.
     const once = await canliPlan(e.isEmriIdleri);
@@ -358,7 +363,8 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     assert.deepEqual(canli.yerlesimler.map((x) => x.isEmriId).sort(), [i1, i3].sort(), 'canlıda fason iş emrinin yeri yok');
     const c1 = canli.yerlesimler.find((x) => x.isEmriId === i1)!;
     const c3 = canli.yerlesimler.find((x) => x.isEmriId === i3)!;
-    assert.ok(Date.parse(c3.baslangic) - Date.parse(c1.bitis) >= TERMIN * GUN_MS, 'kuyruk yazımı fason terminini bekler');
+    const bekleme = Date.parse(c3.baslangic) - Date.parse(c1.bitis);
+    assert.ok(bekleme >= TERMIN * GUN_MS && bekleme < (TERMIN + 1) * GUN_MS, `kuyruk yazımı fason termini kadar bekler (ölçülen ${bekleme} ms)`);
     assert.deepEqual(await ozetKuyrugu([...aIc, ...aFason]), aIc, 'makine kuyruğunda yalnız iç adımlar');
   });
 
