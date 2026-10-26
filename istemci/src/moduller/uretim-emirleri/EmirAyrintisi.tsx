@@ -7,11 +7,12 @@ import { AdimListesi, Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from 
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
 import { UretimYerleri } from './UretimYerleri.tsx';
 import { Iplik } from './Iplik.tsx';
 import { iplikDuraklari } from './iplik.ts';
-import { ADIMLI_OKUMA_ISLEMLERI, OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
 
 const KAYIT_SUTUNLARI: Sutun<UretimKaydi>[] = [
@@ -38,8 +39,6 @@ export function EmirAyrintisi() {
   const oturum = useOturum();
   const islemler = oturum.data?.islemler ?? [];
   const receteRotaGorur = islemler.includes('sayfa.recete-rota');
-  const kartBasabilir = ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
-  const etiketBasabilir = islemler.includes('sayfa.etiket-merkezi');
   const ayrinti = useQuery({
     queryKey: anahtarlar.ayrinti(emirId),
     queryFn: () => api.get<EmirAyrintiCevabi>(`/uretim-emirleri/${emirId}`),
@@ -71,12 +70,6 @@ export function EmirAyrintisi() {
         <div className="tc-emir-ust">
           <Dugme simge="list" onClick={() => { void yonlendir('/uretim-emirleri'); }}>Listeye dön</Dugme>
           {emir && <Dugme simge="scan" aria-pressed={iplikAcik} onClick={izle}>Parçayı izle</Dugme>}
-          {kartBasabilir && emir && emir.malzemeNo != null && emir.durum !== 'iptal' && (
-            <Dugme simge="tag" onClick={() => { void yonlendir(`/uretim-emirleri/${emirId}/refakat-karti`); }}>Refakat kartı bas</Dugme>
-          )}
-          {etiketBasabilir && emir && emir.malzemeNo != null && emir.durum !== 'iptal' && (
-            <Dugme simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat&id=${emirId}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
-          )}
           {receteRotaGorur && (
             <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da aç</Dugme>
           )}
@@ -131,6 +124,7 @@ export function EmirAyrintisi() {
             </div>
           )}
           <UretimYerleri emir={emir} />
+          {emir.malzemeNo != null && <RefakatKartlari emirId={emir.id} />}
           <StokTamamlama emir={emir} />
           <h3 className="tc-emir-bolum">Kayıt defteri</h3>
           <Tablo etiket="Kayıt defteri" sutunlar={KAYIT_SUTUNLARI} satirlar={ayrinti.data.kayitlar}

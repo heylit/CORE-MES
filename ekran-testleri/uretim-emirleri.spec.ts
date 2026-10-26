@@ -1,6 +1,6 @@
 import { expect, test } from './ortak.ts';
 
-// Kaynak: kayit/uretim-emirleri/akislar.md A1 (izleme), A5 (Fasona al penceresi), A6 (refakat kartı).
+// Kaynak: kayit/uretim-emirleri/akislar.md A1 (izleme), A5 (Fasona al penceresi), A6 (refakat kartları, Soru 586).
 test.use({ hesap: 'ornek.planlama' });
 
 test('liste: açık emirler, süzgeç ve Bitenler sekmesi', async ({ page, ag, ac }) => {
@@ -53,10 +53,17 @@ test('Fasona al penceresi açılır ve vazgeçince kayıt değişmez', async ({ 
   expect(ag.hatalar).toEqual([]);
 });
 
-test('refakat kartı sayfası açılır', async ({ page, ag, ac }) => {
-  await ac('/uretim-emirleri/2');
-  await page.getByRole('button', { name: 'Refakat kartı bas' }).click();
-  await expect(page).toHaveURL(/\/uretim-emirleri\/2\/refakat-karti$/);
-  await expect(page.getByText('MM-ORN-00002-26-10-002').first()).toBeVisible();
-  expect(ag.hatalar).toEqual([]);
+test.describe('refakat kartları', () => {
+  // Kart depoda lotla açılır (Soru 586); bölüm stok okumasıdır, emir ekranı kart açmaz ve eski emir kartını basmaz.
+  test.use({ hesap: 'ornek.yonetici' });
+  test('ayrıntıda emrin refakat kartları bölümü görünür, eski kart düğmesi yok', async ({ page, ag, ac }) => {
+    await ac('/uretim-emirleri/2');
+    const bolum = page.getByRole('region', { name: 'Refakat kartları' });
+    await expect(bolum.getByRole('heading', { name: 'Refakat kartları' })).toBeVisible();
+    // Örnek veride depo bu emre lot ayırmamıştır: bölüm kartın nerede açıldığını söyler.
+    await expect(bolum.getByText('Kart depoda, lot emre ayrılınca açılır.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Refakat kartı bas' })).toHaveCount(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar, 'kart listesi yazmaz').toEqual([]);
+  });
 });

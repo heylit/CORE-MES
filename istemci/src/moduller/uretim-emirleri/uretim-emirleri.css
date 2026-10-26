@@ -20,9 +20,6 @@
 .tc-emir-hurda { color: var(--muted); font-size: var(--yazi-s); }
 .tc-emir-bolum-adim { margin: 0 0 var(--b-4); }
 .tc-emir-ikon { min-width: var(--dokunma); }
-/* Refakat kartı önizlemesi: çerçeve kartın oranını (100x150) korur, dar ekranda küçülür. */
-.tc-refakat { display: flex; justify-content: center; }
-.tc-refakat-cerceve { inline-size: min(100%, 100mm); aspect-ratio: 2 / 3; border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }
 /* İzlenebilirlik ipliği: SVG kendi genişliğinde çizilir, dar ekranda kap yatay kayar; sayfa taşmaz. */
 .tc-emir-bolum-iplik { margin: 0 0 var(--b-4); min-width: 0; }
 .tc-emir-iplik-bas { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; justify-content: space-between; }
