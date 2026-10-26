@@ -52,7 +52,7 @@ export interface SampleRule { when: 'first' | 'every' | 'time' | 'shift' | 'last
 export interface Approval { ok: boolean; by: string; at: Ms; note?: string; version?: number }
 export interface PublishHistory { v: number; rev: string; at: Ms; by: string; ap?: string | null; st?: Id }
 export interface Pkg {
-  id: Id; no: string; opType: OpType; st: Record<string, any>; partNo: string; part: string; rev: string; op: string;
+  id: Id; no: string; opType: OpType; st: Record<string, any>; partNo: string; part: string; /** emrin projesinin adı (TMI yazar; projesizde ve Arkon paketinde boş) */ proje?: string; rev: string; op: string;
   /** istasyon kodu (eski adıyla "machine") */ machine: Id; /** belirli makine */ mc?: Id;
   target: number; cycle: number; due: string; priority: 'normal' | 'urgent'; material: string; note: string;
   files: PkgFile[]; primary: string | null; plan: PlanItem[]; steps: Step[]; rules?: any; samp?: SampleRule[]; readCfg?: any; derived?: any;

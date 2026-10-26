@@ -410,6 +410,7 @@ test.describe('577c Geçmiş ve fark', () => {
     for (const b of ['Senaryolar', 'Değişiklik izi']) {
       await menu.getByRole('button', { name: b }).click();
       await expect(menu.getByRole('button', { name: b })).toHaveAttribute('aria-current', 'page');
+      if (b === 'Senaryolar') await expect(kok.getByRole('table', { name: 'Senaryolar' }).or(kok.getByText(/^Senaryolar okunamadı\./)).first()).toBeVisible();
       await tasmaz(page);
     }
     await expect(page).toHaveURL(/ekran=gecmis&bolum=iz$/);
@@ -444,17 +445,17 @@ test.describe('577d Tezgâh stüdyosu', () => {
 
 // 577d: Başka menüsünün kartları haritanın üstüne açılır; plan yoksa menüde pasiftir. Kartlar okur, yazma gitmez.
 test.describe('577d Tahta kartları', () => {
-  test('Yedi kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
+  test('Sekiz kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
     await ac('/recete-rota/planlama-yeni/plan');
     const baska = page.getByRole('button', { name: /Başka/ });
     if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
       await page.keyboard.press('Escape');
-      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) {
+      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Senaryolar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) {
         await baska.click();
         await page.getByRole('menuitemcheckbox', { name: ad }).click();
       }
       await expect(page.getByRole('region', { name: 'Tezgâh haritası' })).toBeVisible();
-      for (const ad of ['Ne neyi etkiliyor', 'Kısıt ve veri', 'Hesaplar', 'Reçete ve Rota']) await expect(page.getByRole('region', { name: ad })).toHaveCount(1);
+      for (const ad of ['Senaryolar', 'Ne neyi etkiliyor', 'Kısıt ve veri', 'Hesaplar', 'Reçete ve Rota']) await expect(page.getByRole('region', { name: ad })).toHaveCount(1);
       await tasmaz(page);
       await baska.click();
       await page.getByRole('menuitem', { name: /Kartları bölgelere diz/ }).click();
@@ -462,7 +463,7 @@ test.describe('577d Tahta kartları', () => {
       await page.locator('.tc-pym-at-cv').click({ position: { x: 5, y: 5 } });
       await page.keyboard.press('Escape');
       await expect(page.getByRole('region', { name: 'Reçete ve Rota' })).toHaveCount(0);
-      for (const t of ['1', '2', '3', '5', '6', '7']) await page.keyboard.press(t);
+      for (const t of ['1', '2', '3', '4', '5', '6', '7']) await page.keyboard.press(t);
       await expect(page.locator('.tc-pyk-kart')).toHaveCount(0);
     }
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);

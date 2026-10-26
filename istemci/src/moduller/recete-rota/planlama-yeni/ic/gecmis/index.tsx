@@ -3,17 +3,17 @@ import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import '../../../../../ortak/arayuz/tablo.css';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { IZ_SINIRI } from '../../kayit.ts';
-import { HAZIRLANIYOR } from '../../motor/ortak.tsx';
 import type { IzSatiri, PlanlamaCalismasi } from '../../tipler.ts';
 import { VeriKarti, VeriTablosu, type Sutun } from '../veri/ortak.tsx';
 import '../veri/veri.css';
 import './gecmis.css';
+import { SenaryolarBolumu } from './Senaryolar.tsx';
 import { GECMIS_BOLUMLERI, ILK_GECMIS, izKisileri, izSuz, izZamani, type GecmisBolumu } from './kurallar.ts';
 
 export { gecmisBolumuOku, type GecmisBolumu } from './kurallar.ts';
 
 // "Geçmiş" ekranı (bugünkü sayfa b-kabuk.betik EKRANLAR gecmis; 575 a): Senaryolar ve Değişiklik izi. Bölüm adresin `bolum`'undadır.
-// Değişiklik izi planlama çalışmasının kaydındadır (her çalışma yazması bir satır ekler); ekran yalnız okur.
+// Değişiklik izi planlama çalışmasının kaydındadır (her çalışma yazması bir satır ekler); senaryolar plan modülündendir (221 c). Ekran yalnız okur.
 export interface GecmisOzellikleri extends PlanlamaEkranOzellikleri {
   bolum?: GecmisBolumu;
   bolumSec?: (b: GecmisBolumu) => void;
@@ -33,11 +33,11 @@ export function GecmisEkrani(o: GecmisOzellikleri) {
           </button>
         ))}
       </nav>
-      {!c ? (
-        <div className="tc-pyi-bos"><Simge ad="book" /><strong>Planlama çalışması yok</strong><span>Çalışma kaydı açılınca senaryolar ve değişiklik izi burada görünür.</span></div>
+      {bolum === 'iz' && !c ? (
+        <div className="tc-pyi-bos"><Simge ad="book" /><strong>Planlama çalışması yok</strong><span>Çalışma kaydı açılınca değişiklik izi burada görünür.</span></div>
       ) : (
         <section className="tc-pyi-icerik" aria-label={GECMIS_BOLUMLERI.find((x) => x[0] === bolum)?.[1]}>
-          {bolum === 'iz' ? <DegisiklikIzi c={c} /> : <VeriKarti baslik="Senaryolar" simge="flag"><p className="tc-pyi-alt">{`Senaryolar: ${HAZIRLANIYOR}`}</p></VeriKarti>}
+          {bolum === 'iz' && c ? <DegisiklikIzi c={c} /> : <SenaryolarBolumu v={o.depo.senaryolar} planlamaAc={() => { o.git('studio'); }} />}
         </section>
       )}
     </div>

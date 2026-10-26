@@ -16,7 +16,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  KOMUT_ISLEMI, acikEmirler, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirOzeti, emirSayim, kararliSayimiSonuclandir,
+  KOMUT_ISLEMI, acikEmirler, emirBaslat, emirlerinProjeleri, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirOzeti, emirSayim, kararliSayimiSonuclandir,
 } from '../uretim-emirleri/disari.ts';
 
 // Arkon'un uretim-emirleri/disari.ts'ten kullandığı her şeyin sözleşmesi (servis.ts yansıma akışı ve taslak paket).
@@ -117,6 +117,11 @@ describe('arkon <- uretim-emirleri/disari.ts sözleşmesi (gerçek PostgreSQL)',
     for (const alan of ['id', 'emirNo', 'durum', 'istasyon', 'parcaNo', 'parcaAd', 'adet', 'acan', 'acilma'] as const) assert.ok(emir[alan] !== undefined, alan);
     assert.equal(emir.istasyon.id, istasyonId);
     assert.equal(emirler.some((e) => e.id === bitecek), false);
+  });
+
+  test('emirlerinProjeleri: projeyle açılan emir projesini verir (664, terminal başlığındaki Proje)', async () => {
+    const emir = await emirAc((await istasyonKur()).istasyonId);
+    assert.deepEqual([...(await calistir((db) => emirlerinProjeleri(db, [emir, 999999])))], [[emir, projeId]]);
   });
 
   test('emirOzeti: var olan emirde {id, emirNo, durum, istasyonId}; olmayan emirde null; işlem aramaz', async () => {

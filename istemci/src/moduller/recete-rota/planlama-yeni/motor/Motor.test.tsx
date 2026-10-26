@@ -119,13 +119,13 @@ describe('PlanlamaMotoru', () => {
     expect(screen.getByRole('group', { name: /^Plan nabzı, 20\.10 Sal$/ })).toBeTruthy();
   });
 
-  it('Başka menüsü açılır; hazır kartlar açılır, ötekiler sonraki teslimde; gecikme kaynağı ve kısayollar açılır', () => {
+  it('Başka menüsü açılır; sekiz kart açılabilir; gecikme kaynağı ve kısayollar açılır', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
     const menu = screen.getByRole('menu');
     expect(within(menu).getByRole('menuitem', { name: /Bugünün kararları/ }).getAttribute('title')).toContain(YOK_NOTU);
     expect(within(menu).getByRole('menuitemcheckbox', { name: /Siparişler/ }).getAttribute('aria-checked')).toBe('false');
-    expect(within(menu).getByRole('menuitem', { name: /Senaryolar/ }).getAttribute('aria-disabled')).toBe('true');
+    expect(within(menu).getByRole('menuitemcheckbox', { name: /Senaryolar/ }).getAttribute('aria-checked')).toBe('false');
     expect(within(menu).getByRole('menuitem', { name: /Kartları bölgelere diz/ }).getAttribute('title')).toContain('Açık kart yok.');
     fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }));
     expect(screen.queryByRole('menu')).toBeNull();

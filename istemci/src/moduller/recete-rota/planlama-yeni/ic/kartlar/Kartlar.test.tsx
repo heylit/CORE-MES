@@ -13,6 +13,7 @@ import { PlanlamaMotoru } from '../../motor/index.tsx';
 import { derle, girdiKur, planOku, plandanBitenler } from '../../motor/kurallar.ts';
 import { ornekCalisma } from '../../motor/ornek.ts';
 import type { Bolge } from '../../motor/harita/kurallar.ts';
+import { SENARYOLAR } from '../gecmis/test-senaryo.ts';
 import {
   agYakinlari, bitisFarki, canliOlcu, diz, dunyaKutusu, etkiAgi, gecisTuru, KART_ANAHTARI, kartAc, kartDegistir, kartKapat, kartKucult, kartlarOku, kartlarYaz, KREF,
   kuyrukGrubu, planKarti, rotaUrunu, siparisSatirlari, simdikiOlcu, yerlestir, type KartKaydi,
@@ -97,15 +98,15 @@ describe('Kart hesapları', () => {
   });
 });
 
-const DEPO = { durum: null } as unknown as PlanlamaDeposu;
+const DEPO = { durum: null, senaryolar: SENARYOLAR } as unknown as PlanlamaDeposu;
 function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
   const [olcek, setOlcek] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
   const [secim, setSecim] = useState<PlanlamaSecimi>(BOS_SECIM);
   return <PlanlamaMotoru {...oz} olcek={olcek} olcekSec={(x) => setOlcek({ olcek: x, kayma: 0 })} kaydir={() => undefined} secim={secim} sec={(x) => setSecim((y) => ({ ...y, ...x }))} />;
 }
-function ac(yaz = true, komut: CalismaKomutu | null = null) {
+function ac(yaz = true, komut: CalismaKomutu | null = null, git = vi.fn()) {
   vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? Promise.resolve({ planSurumu: null, isler: [] }) : Promise.reject(new Error('yok')))) as never);
-  render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={komut} git={vi.fn()} yenile={vi.fn()}
+  render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={komut} git={git} yenile={vi.fn()}
     yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz })} /></BildirimSaglayici>);
 }
 const menudenAc = (ad: RegExp) => {
@@ -181,10 +182,24 @@ describe('Tahta kartları', () => {
     expect(within(r).getByRole('button', { name: 'Adım ekle' }).getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('Senaryolar açık taslakları canlıya göre farkıyla listeler; karşılaştırma Geçmiş\'e, atölye düğmesi Planlama atölyesine gider', () => {
+    const git = vi.fn(); ac(true, null, git);
+    fireEvent.keyDown(window, { key: '4' });
+    const k = kart('Senaryolar');
+    expect(k.textContent).toContain('Canlı plan sürüm 5.');
+    const l = within(k).getAllByRole('listitem');
+    expect(l.map((x) => x.querySelector('b')?.textContent)).toEqual(['Ek mesaisiz', 'Bakım ileri']);
+    expect(l[1]?.querySelector('[data-ton="iyi"]')?.textContent).toBe(' −18 sa');
+    expect(l[0]?.querySelector('[data-ton="kotu"]')?.textContent).toBe(' +21 sa');
+    fireEvent.click(within(k).getByRole('button', { name: 'Planlama atölyesi' }));
+    expect(git).toHaveBeenCalledWith('studio');
+    expect(within(k).getByRole('button', { name: 'Yan yana karşılaştır' }).getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('her rolde aynı görünüm: okuyan da yazan da aynı kartları, düğmeleri ve satırları görür', () => {
     const gor = (yaz: boolean) => {
       ac(yaz);
-      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) menudenAc(ad);
+      for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Senaryolar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) menudenAc(ad);
       const k = document.querySelector('.tc-pyk') as HTMLElement;
       const l = [...within(k).getAllByRole('button'), ...within(k).getAllByRole('row'), ...within(k).getAllByRole('combobox')].map((e) => e.textContent);
       cleanup(); vi.restoreAllMocks(); localStorage.clear(); return l;

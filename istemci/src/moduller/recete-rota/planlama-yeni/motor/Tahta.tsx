@@ -48,8 +48,8 @@ const OdakTahtasi = lazy(async () => ({ default: (await import('../ic/odak/index
 
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
 export const gecmisAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'gecmis', bolum: bolum ?? null }) : null);
-// Tahta kartları (577d, zc-tahta): bu teslimde gelenler; öbürleri menüde pasiftir.
-const HAZIR_KARTLAR: KartTuru[] = ['plan', 'siparis', 'kuyruk', 'kisit', 'hesap', 'etki', 'rota'];
+// Tahta kartları (577d, zc-tahta); listede olmayan kart menüde pasiftir.
+const HAZIR_KARTLAR: KartTuru[] = ['plan', 'siparis', 'kuyruk', 'senaryo', 'kisit', 'hesap', 'etki', 'rota'];
 
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
 
@@ -233,6 +233,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     sipSec: (j) => { sipSec(j, false); harita.current?.odakla(j); }, tezSec: (m) => { tezSec(m, false); harita.current?.tezgahaUc(m); }, opSec,
     kartAc: tahtaKartiAc, veriAc: veriAc && ((b: string) => veriAc(b)), planKur, uyar,
     rotaUrun, rotaUrunSec: setRotaUrun, rotaUst: (x) => setRotaUst((y) => (y.k === x.k && y.m === x.m ? y : x)),
+    senaryolar: o.depo.senaryolar, senaryolarAc: gecmisAc && (() => gecmisAc('senaryolar')), atolyeAc: studyo,
   } : null;
   const rotaKarti = kartlar.find((k) => k.tur === 'rota' && !k.kucuk);
   const rotaU = rotaKarti && p ? rotaUrunu(c, secJob, rotaUrun) : null;

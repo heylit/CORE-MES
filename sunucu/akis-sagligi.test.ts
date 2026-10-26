@@ -11,6 +11,7 @@ import { denetimYaz } from './moduller/denetim/disari.ts';
 import { tekrarDeposu } from './moduller/istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from './moduller/kisiler/disari.ts';
 import { kimlikCozucu } from './moduller/oturum/disari.ts';
+import { PLANLAMA_ANAHTARI } from './moduller/recete-rota/disari.ts';
 
 // Modüller arası akış sağlığı (2026-10-19 bağımsız denetimi, bölüm 2): firma -> kart -> rota -> sipariş -> proje -> emir -> satın alma ve
 // stok -> plan -> Arkon -> kalite -> sevkiyat -> finans -> iz, göçün verdiği gerçek rollerle. Her rol ayrı kişidir; veriler uydurmadır.
@@ -36,8 +37,9 @@ interface ProjeMaliyet {
   kalemler: { kalem: string; plan: number | null; gerceklesen: number | null }[];
 }
 interface PlanCevabi {
-  taslak: { surum: number } | null; gostergeler: { maliyetTl: number | null };
+  surum: number; taslak: { surum: number } | null; gostergeler: { maliyetTl: number | null };
   emirler: { uretimEmriId: number }[]; yerlesimler: { uretimEmriId: number }[];
+  yerlesmemis: { uretimEmriId: number; emirNo: string; opNo: number; kaynak: { tur: string; id: number } | null }[];
 }
 interface Yansima { sonuc: string; neden: string | null; kayit: { cid: string } }
 
@@ -165,6 +167,20 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       const mk = tamam(await yaz<{ id: number }>('mudur', '/makineler', { kod: `${kod}-M1`, ad: `Deneme tezgah ${i + 1}`, istasyonId: ist.id }));
       S.mak.push(mk.id);
     }
+    // ADR 0018: plan sunucu motoruyla dizilir. Motor vardiyası tanımsız tezgâha yer vermez ve planlama sayfasının çalışma kaydı olmadan
+    // çözmez: müdür merkezin haftasını kurar, planlamacı sayfayı bir kez kaydeder.
+    const v = tamam(await yaz<{ vardiyalar: { id: number; ad: string }[] }>('mudur', '/vardiyalar', { ad: 'E2E gunduz', baslangic: '08:00', bitis: '18:00', molalar: [], aktif: true }))
+      .vardiyalar.find((x) => x.ad === 'E2E gunduz')!;
+    for (let gun = 1; gun <= 7; gun++) tamam(await yaz('mudur', '/vardiya-matrisi/degistir', { isMerkeziId: im.id, gun, vardiyaId: v.id, acik: true }));
+    tamam(await yaz('planlama', '/recete-rota/kayitlar/yaz', {
+      anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
+      deger: {
+        surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+        w: { famK: 0.3, mat: 'uyari', dondurma: 0 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
+        D: { meta: { ad: 'Deneme', baslangic: S.bugun }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [],
+          personel: [], siparisler: [], ayarlar: {} },
+      },
+    }));
 
     const sec = tamam(await oku<{ operasyonTipleri: { id: number; kod: string }[] }>('planlama', '/rota/secenekler'));
     const tip = (kod: string): number | undefined => sec.operasyonTipleri.find((t) => t.kod === kod)?.id;
@@ -324,11 +340,23 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     try { await planAdimi(); } finally { mock.timers.reset(); }
   });
 
+  // Planlama sayfasının "Planı kur"u: yerleşmemiş adımlar makine kuyruklarına yazılır, saatleri sunucu motoru verir (ADR 0018).
+  async function sunucudaPlanKur(): Promise<{ taslak: { id: number; surum: number }; plan: PlanCevabi }> {
+    const canli = tamam(await oku<PlanCevabi>('planlama', '/plan'));
+    const kuyruk = new Map<number, { emirNo: string; opNo: number; dondurulmus: boolean }[]>();
+    for (const y of canli.yerlesmemis) if (y.kaynak?.tur === 'makine') kuyruk.set(y.kaynak.id, [...(kuyruk.get(y.kaynak.id) ?? []), { emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false }]);
+    const baslangic = new Date(Date.now() + 3_600_000).toISOString();
+    const k = tamam(await yaz<{ taslak: number }>('planlama', '/plan/kuyruklari-yaz', {
+      kuyruklar: [...kuyruk].map(([id, isler]) => ({ kaynak: { tur: 'makine', id }, baslangic, isler })), planSurumu: canli.surum,
+    }));
+    const plan = tamam(await oku<PlanCevabi>('planlama', `/plan?taslak=${k.taslak}`));
+    return { taslak: { id: k.taslak, surum: plan.taslak!.surum }, plan };
+  }
+
   async function planAdimi(): Promise<void> {
-    const o = tamam(await yaz<{ taslak: { id: number; surum: number } | null; yerlesimler: { uretimEmriId: number }[]; yerlesmemis: unknown[] }>('planlama', '/plan/oner', { taslak: null }));
-    assert.ok(o.taslak);
-    assert.deepEqual(o.yerlesmemis, []);
-    assert.equal(o.yerlesimler.filter((x) => x.uretimEmriId === S.emir).length, 2);
+    const o = await sunucudaPlanKur();
+    assert.deepEqual(o.plan.yerlesmemis, []);
+    assert.equal(o.plan.yerlesimler.filter((x) => x.uretimEmriId === S.emir).length, 2);
     const pl = tamam(await oku<PlanCevabi>('planlama', `/plan?taslak=${o.taslak.id}`));
     assert.ok(pl.emirler.some((x) => x.uretimEmriId === S.emir));
     assert.equal(pl.yerlesimler.filter((x) => x.uretimEmriId === S.emir).length, 2);
@@ -342,7 +370,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     tamam(await oku('mudur', '/plan/bedel-ayari'));
     // Canlıya yalnız onaydaki taslak alınır; dört göz varsayılan kapalı, gönderen kendisi onaylar.
     const gonderilen = tamam(await yaz<{ senaryolar: { id: number; durum: string; surum: number }[] }>('planlama', `/plan/senaryolar/${o.taslak.id}/onaya-gonder`,
-      { surum: pl.taslak?.surum ?? o.taslak.surum })).senaryolar.find((x) => x.id === o.taslak!.id)!;
+      { surum: pl.taslak?.surum ?? o.taslak.surum })).senaryolar.find((x) => x.id === o.taslak.id)!;
     assert.equal(gonderilen.durum, 'onayda');
     const ca = tamam(await yaz<{ canli: { emirSayisi: number; isEmriSayisi: number; yerlesen: number } }>('planlama', `/plan/senaryolar/${o.taslak.id}/canliya-al`,
       { surum: gonderilen.surum, cakismalariKabul: true }));
@@ -508,11 +536,10 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     do gun.setUTCDate(gun.getUTCDate() + 1); while (gun.getUTCDay() === 0 || gun.getUTCDay() === 6);
     mock.timers.enable({ apis: ['Date'], now: Date.parse(`${gun.toISOString().slice(0, 10)}T10:00:00+03:00`) });
     try {
-      const o = tamam(await yaz<{ taslak: { id: number } | null; yerlesimler: { uretimEmriId: number }[] }>('planlama', '/plan/oner', { taslak: null }));
-      assert.ok(o.taslak);
+      const o = await sunucudaPlanKur();
       // Birinci emir bitti; planda yalnız bu emrin iki işi var.
-      assert.deepEqual([...new Set(o.yerlesimler.map((x) => x.uretimEmriId))], [e.uretimEmriId]);
-      const maliyet = async (): Promise<number | null> => tamam(await oku<PlanCevabi>('mudur', `/plan?taslak=${o.taslak?.id}`)).gostergeler.maliyetTl;
+      assert.deepEqual([...new Set(o.plan.yerlesimler.map((x) => x.uretimEmriId))], [e.uretimEmriId]);
+      const maliyet = async (): Promise<number | null> => tamam(await oku<PlanCevabi>('mudur', `/plan?taslak=${o.taslak.id}`)).gostergeler.maliyetTl;
       const sinifsiz = await maliyet();
       assert.ok(sinifsiz !== null && sinifsiz > 0, `geciken siparişin plan bedeli ${String(sinifsiz)}`);
       // 265 a: A sınıfı müşteri çarpanı 1,5 (göçün varsayılanı); sınıfı Müşteri-Tedarikçi yazar, plan kablolamadan okur (#2036).
