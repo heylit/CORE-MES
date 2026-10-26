@@ -23,6 +23,7 @@ interface Ozellikler {
   kilavuz: string | null; kilavuzKapat: () => void;
   nasilAc: (id: BolgeKimligi) => void; grupAc: (g: string) => void; sipSec: (j: string, birak?: boolean) => void; tezSec: (m: string, birak?: boolean) => void;
   gunSec: (d: number) => void; buyut: () => void; kartAc: (() => void) | null;
+  fark?: OkunanPlan | null;
 }
 
 export function Ozet(o: Ozellikler) {
@@ -86,7 +87,7 @@ function HaritaHucresi(o: Ozellikler) {
         <Harita
           ref={komutKur} bicim="ozet" c={o.c} p={o.p} cx={o.cx} olcek={o.olcek} r={o.r} now={o.now} t={o.d.zaman} oynat={false} hiz={4}
           secim={o.secim} mercek={o.mercek} kilavuz={o.kilavuz} altPay={80} paylar={paylar} sec={secHarita} ciftTik={o.ciftTik}
-          oynatDegistir={() => undefined} kilavuzKapat={o.kilavuzKapat} yakinlikDegisti={setYuzde} ipucuZum={ipucuGoster}
+          oynatDegistir={() => undefined} kilavuzKapat={o.kilavuzKapat} yakinlikDegisti={setYuzde} ipucuZum={ipucuGoster} fark={o.fark}
           etiket="Atölye haritası: istasyonlar tezgâhlar, halkalar yedi günlük doluluk, yaylar parça akışı, noktalar akan parçalar. Tıklayarak seçin, çipleri başka istasyona sürükleyerek taşıyın."
         />
         <span className="tc-pym-oz-ipucu" aria-hidden="true">Yakınlaştırmak için Ctrl + tekerlek</span>

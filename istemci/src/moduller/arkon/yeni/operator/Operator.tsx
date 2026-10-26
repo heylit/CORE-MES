@@ -63,6 +63,7 @@ import {
 import { CagriPenceresi, CagriTakibi, DurusPenceresi, HurdaPenceresi, NumunePenceresi, SonrakiHazirlik, VardiyaPenceresi } from './Pencereler.tsx';
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
+import { EylemCubugu } from './EylemCubugu.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
@@ -117,7 +118,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const nedenAdiOku = useCallback((k: string) => durusNedeni(ayarlar, k)?.l ?? null, [ayarlar]);
   const planliMi = useCallback((k: string | null | undefined) => planliNedenMi(ayarlar, k), [ayarlar]);
 
-  const [mv, mvYaz] = useState<Gorunum>(() => (ozetVar ? 'ozet' : 'prod'));
+  // Telefonda terminal işle açılır (618); Özetim alt gezinmede bir dokunuşta.
+  const [mv, mvYaz] = useState<Gorunum>(() => (ozetVar && !dar ? 'ozet' : 'prod'));
   const [isler, islerYaz] = useState<Is[]>([]);
   const [ai, aiYaz] = useState(0);
   const aiRef = useRef(0);
@@ -1074,8 +1076,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   if (dar) {
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
+    const cubuk = gor === 'prod' && uretir && !kaliteGorunumu
+      ? <EylemCubugu durum={o.state} pasif={!!o.empty} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus')} />
+      : null;
     return (
-      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
+      <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>
         <header className="tc-ay1-mobil-ust">
           <button type="button" className="tc-ay1-istasyon" onClick={istasyonAc} title="İstasyonu değiştir"><b>{MACHINE}</b><DurumLambasi durum={o.state} since={since} /></button>
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
@@ -1109,13 +1114,16 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {gor === 'steps' ? adimlar : null}
           {gor === 'ana' ? <div className="tc-ay1-bolme">{takimKarti}{analiz}</div> : null}
         </div>
-        <nav className="tc-ay1-alt-gezinme" aria-label="Terminal görünümleri">
-          {MV.map((t) => (
-            <button key={t.id} type="button" aria-current={gor === t.id ? 'page' : undefined} onClick={() => mvYaz(t.id)}>
-              <span className="tc-ay1-alt-simge"><Simge ad={t.simge} />{t.n ? <em data-durum={t.id === 'draw' ? 'ayar' : undefined}>{t.n}</em> : null}</span>{t.l}
-            </button>
-          ))}
-        </nav>
+        <div className="tc-ay1-alt">
+          {cubuk}
+          <nav className="tc-ay1-alt-gezinme" aria-label="Terminal görünümleri">
+            {MV.map((t) => (
+              <button key={t.id} type="button" aria-current={gor === t.id ? 'page' : undefined} onClick={() => mvYaz(t.id)}>
+                <span className="tc-ay1-alt-simge"><Simge ad={t.simge} />{t.n ? <em data-durum={t.id === 'draw' ? 'ayar' : undefined}>{t.n}</em> : null}</span>{t.l}
+              </button>
+            ))}
+          </nav>
+        </div>
         {ov === 'menu' ? (
           <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
             <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>

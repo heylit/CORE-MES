@@ -11,8 +11,8 @@ interface Ozellikler {
   plan: boolean; guncel: boolean; planYaz: boolean;
   nabiz: NabizDurumu | null; nabizAcik: boolean; nabizAc: (ac: boolean) => void;
   // Hangi ekran düğmesi seçili: motor "plan", atölye "studyo", Veri ve kısıtlar "veri", öteki sayfalarda hiçbiri (eski pm-sb-ekran). Plan düğmesi
-  // motorun tahtasına gider; `veri` verilmezse Veri düğmesi pasiftir (iskeletsiz çizim).
-  etkin: 'plan' | 'studyo' | 'veri' | null; planaGit: (() => void) | null; veri?: (() => void) | null;
+  // motorun tahtasına gider; `veri` ve `gecmis` verilmezse o düğme pasiftir (iskeletsiz çizim).
+  etkin: 'plan' | 'studyo' | 'veri' | 'gecmis' | null; planaGit: (() => void) | null; veri?: (() => void) | null; gecmis?: (() => void) | null;
   studyo: () => void; ozeteGit: () => void;
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
   // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
@@ -33,7 +33,9 @@ export function Cubuk(o: Ozellikler) {
           {o.etkin === 'veri' || o.veri
             ? <button type="button" aria-current={o.etkin === 'veri' ? 'page' : undefined} onClick={o.etkin === 'veri' ? undefined : o.veri ?? undefined} title="Veri ve kısıtlar"><Simge ad="layers" boyut="k" /><span>Veri</span></button>
             : <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>}
-          <button type="button" aria-disabled="true" title={`Geçmiş: ${YOK_NOTU}`}><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>
+          {o.etkin === 'gecmis' || o.gecmis
+            ? <button type="button" aria-current={o.etkin === 'gecmis' ? 'page' : undefined} onClick={o.etkin === 'gecmis' ? undefined : o.gecmis ?? undefined} title="Geçmiş"><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>
+            : <button type="button" aria-disabled="true" title={`Geçmiş: ${YOK_NOTU}`}><Simge ad="book" boyut="k" /><span>Geçmiş</span></button>}
         </nav>
         {n && (
           <div className="tc-pym-sb-nb" role="group" aria-label={`Plan nabzı, ${n.donemYazi}`}>
