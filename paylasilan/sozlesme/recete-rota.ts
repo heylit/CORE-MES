@@ -194,6 +194,10 @@ export const durumKisiSemasi = z.object({
   skills: z.array(kimlikMetni),
   cost: z.null(),
   active: z.boolean(),
+  // 563 c: kişinin baktığı makineler (yalnız bugün geçerli istasyon yetkinliğiyle); alan yok ya da boş = kayıt yok. 563 2 a: aynı anda en çok
+  // tezgâh, null sınırsız.
+  machines: z.array(kimlikMetni).optional(),
+  maxMachines: z.number().int().positive().nullable().optional(),
 });
 
 export const durumVardiyaSemasi = z.object({
