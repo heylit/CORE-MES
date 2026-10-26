@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Dugme, DurumKutusu, Rozet, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { kgFmt, perM2Fmt, perMFmt, YOK } from '../bicim.ts';
-import { KatalogSimgesi } from '../ortak/KatalogSimgesi.tsx';
+import { useKucukResimler } from '../../../cizimler/disari.ts';
+import { resimliTur, SatirResmi, type KucukResimler } from '../ortak/ResimAlani.tsx';
 import { ONAY, TURLER } from '../sabitler/index.ts';
 import * as K from '../kurallar/index.ts';
 import { useKuralBaglami, type KuralBaglami } from '../kurallar/index.ts';
@@ -51,7 +52,9 @@ function agirlikAlti(x: KartKaydi, b: KuralBaglami): string {
   return K.isGen(x, b) ? TURLER[x.tur as keyof typeof TURLER]?.ad ?? '' : (b.t.FAMS[x.fam ?? 'diger'] ?? b.t.FAMS.diger)?.ad ?? '';
 }
 
-function sutunlar(b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void): Sutun<KatalogKarti>[] {
+function sutunlar(
+  b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void, resimler: KucukResimler,
+): Sutun<KatalogKarti>[] {
   return [
     {
       anahtar: 'sec', baslik: '', csv: false,
@@ -70,7 +73,7 @@ function sutunlar(b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string,
         const x = k.kayit;
         return (
           <div className="tc-mk-malzeme" data-tur={x.tur ?? 'hammadde'} data-aile={x.fam}>
-            <KatalogSimgesi yol={K.kartIkon(x, b)} />
+            <SatirResmi tur={x.tur} no={k.no} ad={`${x.com.kod} ${x.com.ad}`.trim()} simge={K.kartIkon(x, b)} resimler={resimler} />
             <div>
               <div className="tc-mk-rozetler">
                 <Rozet ton="bilgi" gorunum="cizgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>
@@ -133,6 +136,10 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const b = useKuralBaglami({ ortam, kartlar, kisi, birim, yetki });
   const kgFiyatlari = useKgFiyatlari(kartlar, yetki.kgFiyatiOkur);
   const liste = useMemo(() => suzulmus(kartlar, ara, sec, b), [kartlar, ara, sec, b]);
+  const sayfaSatirlari = useMemo(() => liste.slice((sayfa - 1) * SAYFA_BOYU, sayfa * SAYFA_BOYU), [liste, sayfa]);
+  // Küçük resim yalnız görünen sayfanın yarı mamul ve mamul kartları için tek istekle okunur.
+  const resimliNolar = useMemo(() => sayfaSatirlari.filter((k) => resimliTur(k.kayit.tur)).map((k) => k.no), [sayfaSatirlari]);
+  const resimler = useKucukResimler('malzemeler', resimliNolar);
   const metinTabani = useMemo(() => metinListesi(kartlar, ara).map((k) => k.kayit), [kartlar, ara]);
 
   useEffect(() => { seciliYaz((s) => secimiBuda(s, kartlar)); }, [kartlar]);
@@ -278,8 +285,8 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
             )}
             <Tablo
               etiket="Malzeme kataloğu"
-              sutunlar={sutunlar(b, secili, (k, acik) => seciliYaz((s0) => { const y = new Set(s0); if (acik) y.add(k); else y.delete(k); return y; }))}
-              satirlar={liste.slice((sayfa - 1) * SAYFA_BOYU, sayfa * SAYFA_BOYU)}
+              sutunlar={sutunlar(b, secili, (k, acik) => seciliYaz((s0) => { const y = new Set(s0); if (acik) y.add(k); else y.delete(k); return y; }), resimler)}
+              satirlar={sayfaSatirlari}
               satirAnahtari={(k) => k.kimlik}
               satirSec={(k) => kartAc(k.kimlik)}
               bosMesaj="Arama ve süzgeçlerle eşleşen kart yok."

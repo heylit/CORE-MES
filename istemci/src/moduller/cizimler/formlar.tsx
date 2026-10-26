@@ -49,11 +49,15 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
   const [tur, turYaz] = useState<BelgeTuru>(ilkTur);
   const [ad, adYaz] = useState('');
   const [aciklama, aciklamaYaz] = useState('');
+  const [resimNo, resimNoYaz] = useState('');
+  const [antetRev, antetRevYaz] = useState('');
   const [not, notYaz] = useState('');
   const [dosya, dosyaYaz] = useState<File | null>(null);
   const komut = useDosyaliKomut(
     '/cizimler',
-    (ozet): BelgeOlusturGovdesi => ({ ad: ad.trim() || (dosya ? adindan(dosya.name) : ''), tur, aciklama, not, ozet, dosyaAdi: dosya?.name.slice(0, 120) ?? '' }),
+    (ozet): BelgeOlusturGovdesi => ({
+      ad: ad.trim() || (dosya ? adindan(dosya.name) : ''), tur, aciklama, resimNo, antetRev, not, ozet, dosyaAdi: dosya?.name.slice(0, 120) ?? '',
+    }),
     (c) => { kapat(); void yonlendir(`/cizimler/belge/${c.id}`); },
     'Belge açılamadı',
   );
@@ -71,6 +75,8 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
         <DosyaAlani tur={tur} dosya={dosya} sec={(d) => { dosyaYaz(d); if (d && ad.trim() === '') adYaz(adindan(d.name)); }} hata={red} />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} required />
         <CokSatir etiket="Açıklama" value={aciklama} maxLength={500} onChange={(e) => { aciklamaYaz(e.target.value); }} />
+        <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Malzeme kartının teknik resim numarasıyla eşleşir." />
+        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. A ya da 00. Boşsa merkezin harfi (A) kullanılır." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="İlk revizyon (A) taslak olarak açılır; yayınlanınca kullanan ekranlarda görünür." />
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
@@ -81,10 +87,11 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
 
 export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }) {
   const [not, notYaz] = useState('');
+  const [antetRev, antetRevYaz] = useState('');
   const [dosya, dosyaYaz] = useState<File | null>(null);
   const komut = useDosyaliKomut(
     `/cizimler/${belge.id}/revizyon-ekle`,
-    (ozet): RevizyonEkleGovdesi => ({ ozet, dosyaAdi: dosya?.name.slice(0, 120) ?? '', not, surum: belge.surum }),
+    (ozet): RevizyonEkleGovdesi => ({ ozet, dosyaAdi: dosya?.name.slice(0, 120) ?? '', not, antetRev, surum: belge.surum }),
     kapat,
     'Revizyon eklenemedi',
   );
@@ -99,6 +106,7 @@ export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: (
     >
       <div className="tc-cz-form">
         <DosyaAlani tur={belge.tur} dosya={dosya} sec={dosyaYaz} hata={red} />
+        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. B ya da 01. Boşsa merkezin harfi kullanılır." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="Ne değişti? Yeni revizyon taslak açılır; yayınlanana kadar eskisi geçerlidir." />
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
@@ -110,13 +118,15 @@ export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: (
 export function BelgeDuzenle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: () => void }) {
   const [ad, adYaz] = useState(belge.ad);
   const [aciklama, aciklamaYaz] = useState(belge.aciklama ?? '');
+  const [resimNo, resimNoYaz] = useState(belge.resimNo ?? '');
   const komut = useKomut(`/cizimler/${belge.id}/guncelle`, kapat, 'Belge kaydedilemedi');
-  const govde: BelgeGuncelleGovdesi = { ad, aciklama, surum: belge.surum };
+  const govde: BelgeGuncelleGovdesi = { ad, aciklama, resimNo, surum: belge.surum };
   return (
     <Pencere acik kapat={kapat} baslik="Belgeyi düzenle" alt={<Dugme tur="birincil" simge="check" yukleniyor={komut.yukleniyor} onClick={() => { komut.gonder(govde); }}>Kaydet</Dugme>}>
       <div className="tc-cz-form">
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} required />
         <CokSatir etiket="Açıklama" value={aciklama} maxLength={500} onChange={(e) => { aciklamaYaz(e.target.value); }} />
+        <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Malzeme kartının teknik resim numarasıyla eşleşir." />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
       </div>
     </Pencere>

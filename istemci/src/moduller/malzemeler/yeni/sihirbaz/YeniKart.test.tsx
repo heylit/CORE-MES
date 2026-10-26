@@ -4,6 +4,12 @@ import type { KatalogKartlariCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ORNEK_AYAR, ORNEK_KARTLAR, ornekKayit } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, type Yanit } from '../test-ortak.tsx';
 
+// Çizim merkezinin paneli kendi testlerinde sınanır; burada yalnız hangi kart no ile ve nerede açıldığı ölçülür.
+vi.mock('../../../cizimler/disari.ts', async (asil) => ({
+  ...(await asil<Record<string, unknown>>()),
+  ResimPaneli: ({ malzemeNo }: { malzemeNo: number }) => <div data-testid="resim-paneli">{malzemeNo}</div>,
+}));
+
 // jsdom kaydırma yapmaz; adım değişince sayfanın başına dönülmesi burada sınanmaz.
 beforeEach(() => { localStorage.clear(); window.scrollTo = vi.fn(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
@@ -228,6 +234,33 @@ describe('M1 yeni kart sihirbazı', () => {
     const kopya = istekler.find((i) => i.yol === '/rota/urunler/100/kopya-iste');
     expect(kopya?.govde).toEqual({ kaynakUrunId: 7 });
     expect(istekler.indexOf(kopya!)).toBeGreaterThan(istekler.indexOf(kayit!));
+  });
+
+  test('resim paneli (688): kayıtlı yarı mamulde Tanım adımında ve kayıttan sonra Özet adımında kart no ile; hammadde kartında yok', async () => {
+    const ymKarti = {
+      ...ornekKayit('mym5', 'YM-DNM-00005', 'Deneme yarı mamul', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},
+      g: { ad: 'Deneme mil', tip: 'Talaşlı işlenmiş parça', resim: 'TR-1', rev: 'A' }, ops: [], onay: { durum: 'taslak' },
+    };
+    sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': kartlarYaniti({ kimlik: 'mym5', kayit: ymKarti }),
+      'GET /malzeme-katalogu-kartlari/mym5/rota': () => json(200, { rotali: false }),
+      'POST /malzeme-katalogu-kartlari/mym5/kaydet': () => json(200, { id: 'mym5', stok_kodu: 'YM-DNM-00005', surum: 2 }),
+    });
+    ac('?kart=mym5');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.queryByTestId('resim-paneli')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Tanım/ }));
+    expect((await screen.findByTestId('resim-paneli')).textContent).toBe('100');
+    fireEvent.click(screen.getByRole('button', { name: /Özet/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));
+    await screen.findByText('Kataloğa kaydedildi.');
+    expect(screen.getByTestId('resim-paneli').textContent).toBe('100');
+    cleanup();
+    vi.unstubAllGlobals();
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.queryByTestId('resim-paneli')).toBeNull();
   });
 
   test('kopya isteği reddedilirse kart kayıtlı kalır ve sunucunun iletisi gösterilir; hammadde kartında seçim yok', async () => {

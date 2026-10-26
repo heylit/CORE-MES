@@ -20,6 +20,7 @@ export const CIZIMLER_IKINCI_MENU = {
     { baslik: 'Türler', maddeler: [
       { anahtar: 'teknik-resim', baslik: 'Teknik resimler', yol: '/cizimler/teknik-resim', simge: 'ruler', islem: 'sayfa.cizimler' },
       { anahtar: 'model-3b', baslik: '3B modeller', yol: '/cizimler/3b-model', simge: 'cube', islem: 'sayfa.cizimler' },
+      { anahtar: 'fotograf', baslik: 'Fotoğraflar', yol: '/cizimler/fotograf', simge: 'camera', islem: 'sayfa.cizimler' },
       { anahtar: 'makine', baslik: 'Makine dosyaları', yol: '/cizimler/makine', simge: 'cpu', islem: 'sayfa.cizimler' },
       { anahtar: 'sertifika', baslik: 'Sertifikalar', yol: '/cizimler/sertifika', simge: 'check', islem: 'sayfa.cizimler' },
       { anahtar: 'rapor', baslik: 'Raporlar', yol: '/cizimler/rapor', simge: 'lab', islem: 'sayfa.cizimler' },

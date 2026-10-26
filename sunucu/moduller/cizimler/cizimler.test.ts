@@ -7,14 +7,14 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { BelgeAyrintisi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { BelgeAyrintisi, KucukResimlerCevabi, MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/cizimler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
-  yayindakiOnizleme, yayindakiOnizlemeKaresi,
+  kayitlarinKucukResimleri, yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -600,28 +600,28 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal((await oku(yonetici, `/cizimler/${baska.id}/revizyonlar/${id}/onizleme/0`)).statusCode, 404);
     });
 
-    test('taslak revizyona 409, STEP/IGES dışına 400; yayındaki PDF belgesinde de kare yazılmaz', async () => {
+    test('taslak revizyona 409; yayındaki PDF, foto ve STL revizyonuna kare yazılır (kart #688)', async () => {
       const taslak = await belgeAc(yonetici, '3b-model', step(), 'Taslak model');
       let c = await onizlemeGonder(yonetici, taslak, [png()]);
       assert.equal(c.statusCode, 409, c.body);
       assert.equal(c.json().mesaj, 'Önizleme yalnız yayındaki revizyon için üretilir.');
 
-      let resim = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Resim önizlemesiz');
+      let resim = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Resim önizlemeli');
       resim = (await gonder(yonetici, `/cizimler/${resim.id}/revizyonlar/${resim.revizyonlar[0]?.id}/yayinla`, { surum: resim.surum })).json<BelgeAyrintisi>();
       c = await onizlemeGonder(yonetici, resim, [png()]);
-      assert.equal(c.statusCode, 400, c.body);
-      assert.equal(c.json().mesaj, 'Önizleme yalnız STEP ya da IGES revizyonu için üretilir.');
+      assert.equal(c.statusCode, 200, c.body);
+      assert.equal(await kareSayisi(resim.revizyonlar[0]?.id ?? 0), 1);
 
       const stl = Buffer.alloc(84 + 50); stl.writeUInt32LE(1, 80);
       const model = await yayindaModel('STL modeli', stl);
-      assert.equal((await onizlemeGonder(yonetici, model, [png()])).statusCode, 400);
-      assert.equal(await kareSayisi(model.revizyonlar[0]?.id ?? 0), 0);
+      assert.equal((await onizlemeGonder(yonetici, model, [png(), png()])).statusCode, 200);
+      assert.equal(await kareSayisi(model.revizyonlar[0]?.id ?? 0), 2);
 
       const b = await yayindaModel('Olmayan revizyon');
       assert.equal((await onizlemeGonder(yonetici, b, [png()], 2_000_000_000)).statusCode, 404);
     });
 
-    test('PNG dışı dosya, 64 KiB üstü kare ve 512 KiB üstü toplam reddedilir; ret hiçbir kare bırakmaz', async () => {
+    test('resim dışı dosya, 64 KiB üstü kare ve 512 KiB üstü toplam reddedilir; ret hiçbir kare bırakmaz', async () => {
       const b = await yayindaModel('Sınır modeli');
       const id = b.revizyonlar[0]?.id ?? 0;
       let c = await onizlemeGonder(yonetici, b, [png(), pdf()]);
@@ -752,6 +752,208 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       await ekle(id, 15, ozet);
       await assert.rejects(ekle(id, 15, ozet), /cizimler_onizleme_pkey/);
       assert.equal(await kareSayisi(id), 1);
+    });
+  });
+
+  describe('kart #688 malzeme kartından belge ve küçük resim', () => {
+    const png = (boy = 1500): Buffer => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), randomBytes(boy - 8)]);
+    const jpeg = (boy = 1500): Buffer => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), randomBytes(boy - 4)]);
+    let malzemeci: Oturum;
+    let kartSirasi = 0;
+
+    before(async () => {
+      malzemeci = await girisYap('satin_alma', yonetici.id);
+      const islemler = await vt().sorgu<{ islem: string }>(
+        "SELECT ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = 'satin_alma' AND ri.islem LIKE ANY (ARRAY['cizimler.%', 'malzemeler.yaz'])");
+      assert.deepEqual(islemler.map((i) => i.islem), ['malzemeler.yaz'], 'deneme rolü merkezde yazamaz, malzemede yazar');
+      await ortam?.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('YM-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+    });
+
+    // Sentetik yarı mamul kartı: teknik resim no ve revizyon `kayit.g` içinde (malzeme ekranının yazdığı yer).
+    async function kartAc(g: { resim?: string; rev?: string } = {}): Promise<number> {
+      kartSirasi += 1;
+      const kimlik = `cz688-${kartSirasi}-${randomUUID().slice(0, 8)}`;
+      const satir = await ortam?.sahip.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, 'yarimamul', 'YM-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+        [kimlik, 5000 + kartSirasi, JSON.stringify({ id: kimlik, g: { ad: `Deneme parça ${kartSirasi}`, ...g }, com: { birim: 'adet' } }), yonetici.id]);
+      assert.ok(satir);
+      return satir.no;
+    }
+
+    async function malzemeBelgesiEkle(o: Oturum, no: number, tur: string, icerik: Buffer, ek: Record<string, unknown> = {}): Promise<LightMyRequestResponse> {
+      const ozet = await yukle(o, icerik);
+      return gonder(o, `/cizimler/malzemeler/${no}/belge-ekle`, { ad: `Deneme ${tur}`, tur, ozet, dosyaAdi: 'deneme.dosya', ...ek });
+    }
+
+    async function kareYaz(o: Oturum, no: number, belgeId: number, revizyonId: number, kareler: Buffer[]): Promise<LightMyRequestResponse> {
+      const govde: { kare: number; ozet: string }[] = [];
+      for (const [kare, icerik] of kareler.entries()) govde.push({ kare, ozet: await yukle(o, icerik) });
+      return gonder(o, `/cizimler/malzemeler/${no}/belgeler/${belgeId}/revizyonlar/${revizyonId}/onizleme`, { kareler: govde });
+    }
+
+    test('malzeme yazan foto açar (yayında) ve teknik resim açar (taslak); malzeme yazmayan 403 alır ve belge açılmaz', async () => {
+      const no = await kartAc();
+      const once = await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM cizimler_belge');
+      const ret = await malzemeBelgesiEkle(operator, no, 'fotograf', png());
+      assert.equal(ret.statusCode, 403, ret.body);
+      assert.deepEqual(await vt().tek('SELECT count(*)::int AS n FROM cizimler_belge'), once);
+
+      let c = await malzemeBelgesiEkle(malzemeci, no, 'fotograf', jpeg(), { resimNo: ' TR-9 ', antetRev: '00' });
+      assert.equal(c.statusCode, 200, c.body);
+      let cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.belgeler.length, 1);
+      assert.deepEqual([cevap.belgeler[0]?.tur, cevap.belgeler[0]?.resimNo, cevap.belgeler[0]?.revizyonlar[0]?.durum, cevap.belgeler[0]?.revizyonlar[0]?.antetRev],
+        ['fotograf', 'TR-9', 'yayinda', '00']);
+
+      c = await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf());
+      assert.equal(c.statusCode, 200, c.body);
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.belgeler.find((b) => b.tur === 'teknik-resim')?.revizyonlar[0]?.durum, 'taslak', 'çizim taslak girer; yayını merkez yapar');
+
+      assert.equal((await malzemeBelgesiEkle(malzemeci, 2_000_000_000, 'fotograf', png())).statusCode, 404, 'olmayan kart');
+      assert.equal((await malzemeBelgesiEkle(malzemeci, no, 'sertifika', pdf())).statusCode, 400, 'karttan yalnız foto, teknik resim, 3B model');
+      assert.equal((await malzemeBelgesiEkle(malzemeci, no, 'fotograf', pdf())).statusCode, 400, 'foto belgesine PDF girmez');
+    });
+
+    test('malzeme yazan merkezde yazamaz ve başka kartın belgesine dokunamaz; okuma ucu kart kapsamındadır', async () => {
+      const no = await kartAc();
+      const baskaNo = await kartAc();
+      const baska = (await malzemeBelgesiEkle(yonetici, baskaNo, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.ok(baska);
+      const merkez = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Merkez belgesi');
+
+      assert.equal((await gonder(malzemeci, '/cizimler', { ad: 'X', tur: 'fotograf', ozet: await yukle(malzemeci, png()), dosyaAdi: 'x.png' })).statusCode, 403);
+      assert.equal((await gonder(malzemeci, `/cizimler/${merkez.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, pdf()), dosyaAdi: 'x', surum: merkez.surum })).statusCode, 403);
+      const r = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${baska.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, png()), dosyaAdi: 'x', surum: baska.surum });
+      assert.equal(r.statusCode, 404, r.body);
+      assert.equal((await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${baska.id}/kapak`, { surum: baska.surum })).statusCode, 404);
+      assert.equal((await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${merkez.id}/bagla`, { surum: merkez.surum })).statusCode, 404, 'öneri olmayan belge bağlanmaz');
+
+      assert.equal((await oku(malzemeci, `/cizimler/malzemeler/${baskaNo}/belgeler`)).statusCode, 200);
+      assert.equal((await oku(operator, `/cizimler/malzemeler/${baskaNo}/belgeler`)).statusCode, 403, 'yalnız sayfa.malzemeler okuyamaz');
+    });
+
+    test('foto belgesine yeni revizyon yayına girer; teknik resme yeni revizyon taslak kalır; sürüm denetlenir', async () => {
+      const no = await kartAc();
+      let foto = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.ok(foto);
+      const eskiSurum = foto.surum;
+      let c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${foto.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, png()), dosyaAdi: 'b.png', antetRev: 'B', surum: foto.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      foto = c.json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id === foto?.id);
+      assert.deepEqual(foto?.revizyonlar.map((r) => [r.harf, r.durum, r.antetRev]), [['B', 'yayinda', 'B'], ['A', 'eski', null]]);
+      c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${foto?.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, png()), dosyaAdi: 'c.png', surum: eskiSurum });
+      assert.equal(c.statusCode, 409, c.body);
+
+      let resim = (await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === 'teknik-resim');
+      c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${resim?.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, pdf()), dosyaAdi: 'b.pdf', surum: resim?.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      resim = c.json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id === resim?.id);
+      assert.deepEqual(resim?.revizyonlar.map((r) => r.durum), ['taslak', 'taslak']);
+    });
+
+    test('kapak: taslak belge kapak olamaz; kayıt başına tek kapak; kapak küçük resmi belirler', async () => {
+      const no = await kartAc();
+      const foto = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      const ikinci = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id !== foto?.id);
+      const resim = (await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === 'teknik-resim');
+      assert.ok(foto && ikinci && resim);
+      for (const b of [foto, ikinci]) assert.equal((await kareYaz(malzemeci, no, b.id, b.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
+
+      let c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${resim.id}/kapak`, { surum: resim.surum });
+      assert.equal(c.statusCode, 409, c.body);
+      assert.equal(c.json().mesaj, 'Yayına girmiş revizyonu olmayan belge kapak olamaz.');
+
+      let cevap = (await oku(malzemeci, `/cizimler/malzemeler/${no}/belgeler`)).json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.kucukResim?.belgeId, foto.id, 'kapak yokken ilk bağlanan foto');
+      const ikinciGuncel = cevap.belgeler.find((b) => b.id === ikinci.id);
+      c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${ikinci.id}/kapak`, { surum: ikinciGuncel?.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual(cevap.belgeler.filter((b) => b.kapak).map((b) => b.id), [ikinci.id]);
+      assert.equal(cevap.kucukResim?.belgeId, ikinci.id);
+      const ilkGuncel = cevap.belgeler.find((b) => b.id === foto.id);
+      cevap = (await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${foto.id}/kapak`, { surum: ilkGuncel?.surum })).json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual(cevap.belgeler.filter((b) => b.kapak).map((b) => b.id), [foto.id], 'eski kapak kalkar');
+
+      await assert.rejects(vt().tx((db) => db.sorgu("UPDATE cizimler_bag SET kapak = true WHERE hedef_modul = 'malzemeler' AND hedef_id = $1", [no])), /cizimler_bag_tek_kapak/);
+    });
+
+    test('öneri: teknik resim numarası karta uyan bağsız belge önerilir ve malzeme yazan bağlar', async () => {
+      const no = await kartAc({ resim: 'TR-688-1', rev: 'A' });
+      const uyan = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Uyan resim');
+      const g = await gonder(yonetici, `/cizimler/${uyan.id}/guncelle`, { ad: uyan.ad, resimNo: 'tr-688-1', surum: uyan.surum });
+      assert.equal(g.statusCode, 200, g.body);
+      await belgeAc(yonetici, 'teknik-resim', pdf(), 'Uymayan resim');
+      let cevap = (await oku(malzemeci, `/cizimler/malzemeler/${no}/belgeler`)).json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual(cevap.oneriler.map((o) => o.id), [uyan.id]);
+      const c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${uyan.id}/bagla`, { surum: cevap.oneriler[0]?.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual(cevap.belgeler.map((b) => b.id), [uyan.id]);
+      assert.deepEqual(cevap.oneriler, []);
+    });
+
+    test('küçük resim: oturum açan herkes toplu okur; revizyon uyumu kartla karşılaştırılır; kare yalnız bağlı ve yayına girmiş revizyondan', async () => {
+      const uyumlu = await kartAc({ resim: 'TR-77', rev: 'B' });
+      const uyumsuz = await kartAc({ resim: 'TR-77', rev: 'C' });
+      const revsiz = await kartAc();
+      const resimsiz = await kartAc();
+      const kareler = [png(), png()];
+      const ilk = (await malzemeBelgesiEkle(malzemeci, uyumlu, 'fotograf', png(), { resimNo: 'TR-77', antetRev: 'A' })).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.ok(ilk);
+      const ikinci = (await gonder(malzemeci, `/cizimler/malzemeler/${uyumlu}/belgeler/${ilk.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, png()), dosyaAdi: 'b.png', antetRev: 'B', surum: ilk.surum })).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      const revB = ikinci?.revizyonlar.find((r) => r.antetRev === 'B');
+      const revA = ikinci?.revizyonlar.find((r) => r.antetRev === 'A');
+      assert.ok(revA && revB);
+      assert.equal((await kareYaz(malzemeci, uyumlu, ilk.id, revB.id, kareler)).statusCode, 200);
+      for (const no of [uyumsuz, revsiz]) {
+        const b = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png(), { resimNo: 'TR-77', antetRev: 'B' })).json<MalzemeBelgeleriCevabi>().belgeler[0];
+        assert.equal((await kareYaz(malzemeci, no, b?.id ?? 0, b?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
+      }
+
+      const c = await oku(operator, `/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=${uyumlu},${uyumsuz},${revsiz},${resimsiz}`);
+      assert.equal(c.statusCode, 200, c.body);
+      const resimler = new Map(c.json<KucukResimlerCevabi>().resimler.map((r) => [r.hedefId, r]));
+      assert.deepEqual([resimler.get(uyumlu)?.revizyonId, resimler.get(uyumlu)?.revUyumu, resimler.get(uyumlu)?.kareSayisi], [revB.id, true, 2]);
+      assert.equal(resimler.get(uyumsuz)?.revUyumu, false);
+      assert.equal(resimler.get(revsiz)?.revUyumu, null);
+      assert.equal(resimler.has(resimsiz), false);
+
+      const kare = await oku(operator, `/cizimler/kucuk-resim/${revB.id}/1`);
+      assert.equal(kare.statusCode, 200);
+      assert.equal(kare.headers['content-type'], 'image/png');
+      assert.deepEqual(kare.rawPayload, kareler[1]);
+      assert.equal((await app.inject({ method: 'GET', url: `/api/cizimler/kucuk-resim/${revB.id}/1` })).statusCode, 401, 'oturumsuz okunmaz');
+
+      const taslak = (await malzemeBelgesiEkle(malzemeci, resimsiz, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      await vt().tx((db) => db.sorgu('INSERT INTO cizimler_onizleme (revizyon_id, kare, ozet, kisi_id) VALUES ($1, 0, $2, $3)',
+        [taslak?.revizyonlar[0]?.id, ozetOf(kareler[0] as Buffer), yonetici.id]));
+      assert.equal((await oku(operator, `/cizimler/kucuk-resim/${taslak?.revizyonlar[0]?.id}/0`)).statusCode, 404, 'taslağın karesi verilmez');
+
+      const bagsiz = await belgeAc(yonetici, '3b-model', step(), 'Bağsız model');
+      const yayin = (await gonder(yonetici, `/cizimler/${bagsiz.id}/revizyonlar/${bagsiz.revizyonlar[0]?.id}/yayinla`, { surum: bagsiz.surum })).json<BelgeAyrintisi>();
+      const ozet = await yukle(yonetici, png());
+      assert.equal((await gonder(yonetici, `/cizimler/${yayin.id}/revizyonlar/${yayin.revizyonlar[0]?.id}/onizleme`, { kareler: [{ kare: 0, ozet }] })).statusCode, 200);
+      assert.equal((await oku(operator, `/cizimler/kucuk-resim/${yayin.revizyonlar[0]?.id}/0`)).statusCode, 404, 'hiçbir kayda bağlı olmayan belge');
+
+      assert.equal((await oku(operator, '/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=0')).statusCode, 400);
+      const cok = Array.from({ length: 201 }, (_, i) => i + 1).join(',');
+      assert.equal((await oku(operator, `/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=${cok}`)).statusCode, 400);
+
+      const disari = await vt().tx((db) => kayitlarinKucukResimleri(db, 'malzemeler', [uyumlu, resimsiz]));
+      assert.deepEqual([...disari.keys()], [uyumlu]);
+    });
+
+    test('malzeme yazan yalnız kartına bağlı belgenin yayındaki revizyonuna kare yazar', async () => {
+      const no = await kartAc();
+      const baskaNo = await kartAc();
+      const foto = (await malzemeBelgesiEkle(malzemeci, baskaNo, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.equal((await kareYaz(malzemeci, no, foto?.id ?? 0, foto?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 404);
+      assert.equal((await kareYaz(operator, baskaNo, foto?.id ?? 0, foto?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 403);
+      const resim = (await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.equal((await kareYaz(malzemeci, no, resim?.id ?? 0, resim?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 409, 'taslağa kare yazılmaz');
     });
   });
 });
