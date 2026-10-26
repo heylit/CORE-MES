@@ -34,6 +34,27 @@ export const saatMetni = (dakika: number): string => (dakika / 60).toLocaleStrin
 // "60.00" yerine "%60".
 export const yuzdeMetni = (yuzde: string): string => `%${Number(yuzde).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`;
 
+// 561 1 b: operatör ihtiyacı çalışan bir makinenin istediği operatördür. "Bir operatör en çok N tezgâha bakar" 1/N yazar; aşağı
+// yuvarlanır ki N tezgâhın toplamı 1'i geçmesin (6 × 0,17 = 1,02 olurdu). Planlama motoru aynı değeri okur.
+export const EN_COK_TEZGAH = 10;
+export const operatorOrani = (tezgah: number): number => Math.floor(100 / tezgah) / 100;
+export const tezgahSayisi = (oran: number): number | null => {
+  if (!(oran > 0 && oran < 1)) return null;
+  const n = Math.round(1 / oran);
+  return n >= 2 && n <= EN_COK_TEZGAH && operatorOrani(n) === oran ? n : null;
+};
+export const operatorMetni = (oran: number): string => {
+  if (oran === 0) return 'Operatör gerekmez';
+  const n = tezgahSayisi(oran);
+  return n === null ? `${oran.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} operatör/makine` : `1 operatör ${n} tezgâha bakar`;
+};
+// Seçim: operatörsüz, 1..10 tezgâha bakan bir operatör ya da makine başına 2..3 operatör; listede olmayan kayıtlı değer olduğu gibi gösterilir.
+export const operatorSecenekleri = (oran: number): { deger: string; baslik: string }[] => {
+  const l = [0, ...Array.from({ length: EN_COK_TEZGAH }, (_, i) => operatorOrani(i + 1)), 2, 3];
+  if (!l.includes(oran)) l.push(oran);
+  return l.sort((a, b) => a - b).map((x) => ({ deger: String(x), baslik: x === 1 ? '1 operatör 1 tezgâha bakar' : operatorMetni(x) }));
+};
+
 export interface KisiAtamasi {
   tur: AtamaTuru;
   hedefId: number;

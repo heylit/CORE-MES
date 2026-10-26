@@ -11,7 +11,7 @@ import { Hucre, MetinHucresi, SatirHatasi, SayiHucresi, SecimHucresi } from './H
 import { IsMerkeziFormu } from './IsMerkeziFormu.tsx';
 import { IstasyonFormu } from './IstasyonFormu.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
-import { istasyonGovdesi, merkezGovdesi, merkezRengi, saatMetni, yeniKod, yuzdeMetni } from './tesis.ts';
+import { istasyonGovdesi, merkezGovdesi, merkezRengi, operatorMetni, operatorSecenekleri, saatMetni, yeniKod, yuzdeMetni } from './tesis.ts';
 import { useTopluYaz, type TesisVerisi, type TesisYaz } from './tesisVerisi.ts';
 import { SecimKutusu, TopluCubuk } from './TopluCubuk.tsx';
 
@@ -144,8 +144,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
               </Hucre>
               <Hucre baslik="Operatör / makine">
                 {v.ayarlar === null ? planOkunamadi : (
-                  <SayiHucresi surum={a?.surum ?? 0} etiket={`${s.kod} operatör ihtiyacı`} deger={operator} enAz={0} enCok={10} disabled={kapali || v.ayarlar === undefined}
-                    kaydet={(d) => planYaz(s, verim, d)} />
+                  <SecimHucresi etiket={`${s.kod} operatör ihtiyacı`} deger={String(operator)} secenekler={operatorSecenekleri(operator)}
+                    disabled={kapali || v.ayarlar === undefined} kaydet={(d) => planYaz(s, verim, Number(d))} />
                 )}
               </Hucre>
             </>
@@ -158,7 +158,7 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
               <Hucre baslik="Kapasite">{s.kapasiteKaynagi ? <span>{KAPASITE_KAYNAGI_ADLARI[s.kapasiteKaynagi]}</span> : <span className="tc-ist-hata">Seçilmemiş</span>}</Hucre>
               <Hucre baslik="Verim %">{v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} verim`}>{yuzdeMetni(String(verim))}</span>}</Hucre>
               <Hucre baslik="Operatör / makine">
-                {v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} operatör ihtiyacı`}>{operator.toLocaleString('tr-TR')}</span>}
+                {v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} operatör ihtiyacı`}>{operatorMetni(operator)}</span>}
               </Hucre>
             </>
           )}

@@ -4,7 +4,7 @@ import type { MakineDurumu, SurumluMakine } from '#paylasilan/sozlesme/istasyonl
 import { DurumKutusu, Girdi, IsaretKutusu, Rozet, SayiKarti, Simge } from '../../ortak/arayuz/index.ts';
 import { MAKINE_DURUM_ADLARI } from './etiketler.ts';
 import { aramayaUyar } from './ListeAraclari.tsx';
-import { merkezRengi, saatMetni, yuzdeMetni } from './tesis.ts';
+import { merkezRengi, operatorMetni, saatMetni, yuzdeMetni } from './tesis.ts';
 import type { TesisVerisi } from './tesisVerisi.ts';
 
 // Makine etiketi durum rengini taşır; durum satırı olmayan makine "girilmemiş" görünür, çalışır sayılmaz.
@@ -92,7 +92,7 @@ export function GenelBakis({ v }: { v: TesisVerisi }) {
                   <div key={i.id} className="tc-ist-istasyon-blok" aria-label={`${i.kod} ${i.ad}`}>
                     <b><span className="tc-ist-mono">{i.kod}</span> {i.ad}{!i.aktif && ' (pasif)'}</b>
                     <small className="tc-ist-ipucu">
-                      {ayar ? `verim ${yuzdeMetni(ayar.verimYuzde)}, ${Number(ayar.operatorIhtiyaci).toLocaleString('tr-TR')} operatör/makine` : 'verim %100, 1 operatör/makine (varsayılan)'}
+                      {ayar ? `verim ${yuzdeMetni(ayar.verimYuzde)}, ${operatorMetni(Number(ayar.operatorIhtiyaci))}` : 'verim %100, 1 operatör/makine (varsayılan)'}
                       {i.sorumluAd ? `, sorumlu ${i.sorumluAd}` : ''}
                     </small>
                     <div className="tc-ist-cipler">

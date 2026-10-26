@@ -376,7 +376,7 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(kart.textContent).toContain('M-02Arıza');
     expect(kart.textContent).toContain('Deneme Yeni %20 (başlayacak)');
     expect(kart.textContent).toContain('Sabah Ekibi, 3 üye');
-    expect(kart.textContent).toContain('verim %85, 0,5 operatör/makine');
+    expect(kart.textContent).toContain('verim %85, 1 operatör 2 tezgâha bakar');
     expect(kart.textContent).not.toContain('Kalite Masası');
     expect(screen.getByRole('region', { name: 'İstasyona bağlı olmayanlar' }).textContent).toContain('M-01');
     expect(screen.queryByRole('region', { name: 'ESKI Eski Hat' })).toBeNull();
@@ -501,13 +501,16 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(POSTLAR(cagrilar)).toHaveLength(0);
   });
 
-  it('plan ayarı hücrede: ondalık virgül ve okunan sürüm; ayarı olmayanda varsayılan ve sürüm 0; sınır dışı gitmez', async () => {
+  it('plan ayarı hücrede: ondalık virgül, operatör seçimi ve okunan sürüm; ayarı olmayanda varsayılan ve sürüm 0; sınır dışı gitmez', async () => {
     const cagrilar = sunucuKur(YONETICI);
     goster(<Istasyonlar />);
     await duzenle('T-01');
     const verim = await screen.findByLabelText('T-01 verim') as HTMLInputElement;
     await waitFor(() => { expect(verim.value).toBe('85'); });
-    expect((screen.getByLabelText('T-01 operatör ihtiyacı') as HTMLInputElement).value).toBe('0,5');
+    expect((screen.getByLabelText('T-01 operatör ihtiyacı') as HTMLSelectElement).value).toBe('0.5');
+    // 561 1 b: "bir operatör en çok N tezgâh" 1/N yazar, aşağı yuvarlanır (3 tezgâh 0,33)
+    expect(within(screen.getByLabelText('T-01 operatör ihtiyacı')).getAllByRole('option').map((o) => o.textContent).slice(0, 4))
+      .toEqual(['Operatör gerekmez', '1 operatör 10 tezgâha bakar', '1 operatör 9 tezgâha bakar', '1 operatör 8 tezgâha bakar']);
     hucreYaz('T-01 verim', '300');
     expect(verim.value).toBe('85');
     expect(POSTLAR(cagrilar)).toEqual([]);
@@ -518,9 +521,9 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     await duzenle('K-01');
     await waitFor(() => { expect((screen.getByLabelText('K-01 operatör ihtiyacı') as HTMLInputElement).disabled).toBe(false); });
     expect((screen.getByLabelText('K-01 verim') as HTMLInputElement).value).toBe('100');
-    hucreYaz('K-01 operatör ihtiyacı', '2');
+    hucreYaz('K-01 operatör ihtiyacı', '0.33');
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
-    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/istasyonlar/11/plan-ayari', govde: { verimYuzde: 100, operatorIhtiyaci: 2, surum: 0 } });
+    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/istasyonlar/11/plan-ayari', govde: { verimYuzde: 100, operatorIhtiyaci: 0.33, surum: 0 } });
   });
 
   it('yeni iş merkezi ve istasyon tek tıkla boş kodla açılır', async () => {
