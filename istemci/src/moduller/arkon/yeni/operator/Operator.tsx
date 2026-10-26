@@ -680,7 +680,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     void depo.Log.add('events', { machine: MACHINE, wc: ist.wc || null, mc: curMc(), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: 'stopped', reason: code, planned: planliMi(code) });
     segsYaz((sg) => (sg.length ? sg.map((x, i) => (i === sg.length - 1 ? { ...x, n: code } : x)) : sg));
     schedAutoCall(code);
-    say(`Duruş nedeni kaydedildi · ${nedenAdiOku(code) || code}`, 'stop', 'stop');
+    say(`Duruş nedeni kaydedildi · ${nedenAdiOku(code) || code}`, 'stop', 'stop', { action: { l: 'Değiştir', fn: () => ovYaz('reason') } });
   };
   useEffect(() => () => clearTimeout(autoCallT.current), []);
   useEffect(() => {

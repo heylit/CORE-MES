@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
-import { VardiyaPenceresi } from './Pencereler.tsx';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { DurusNedeni } from '../cekirdek/ayarlar.ts';
+import { DurusPenceresi, VardiyaPenceresi } from './Pencereler.tsx';
 import type { VardiyaOzeti } from './kurallar.ts';
 
 afterEach(() => { cleanup(); });
@@ -27,5 +28,19 @@ describe('Vardiya özeti', () => {
     expect(metin).toContain('42 sn');
     expect(metin).toContain('2/2');
     expect(metin).toContain('%50');
+  });
+});
+
+describe('Duruş nedeni penceresi (696)', () => {
+  const nedenler = [
+    { code: 'D-01', l: 'Malzeme bekleniyor', cat: 'u', durum: 'durdu' },
+    { code: 'P-01', l: 'Mola', cat: 'p', durum: 'bitti' },
+  ] as unknown as DurusNedeni[];
+  it('nedene tek dokunuş kaydeder; kaydet düğmesi yok', () => {
+    const kayit: string[] = [];
+    render(<DurusPenceresi istasyon="ORN-1" nedenler={nedenler} oneriler={[]} otomatikCagri={false} kapat={() => {}} kaydet={(r) => kayit.push(r.code)} />);
+    expect(screen.queryByRole('button', { name: /Duruşu kaydet/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Mola/ }));
+    expect(kayit).toEqual(['P-01']);
   });
 });
