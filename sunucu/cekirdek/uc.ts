@@ -485,6 +485,10 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           cerezler.push(baslik);
         };
         const gunluk = gunlukKur(istek.log, { uc: anahtar });
+        // Reddedilmez: istemci kimliği korunduğunu sanarak yolluyor olabilir; uyarı, korumanın eksik olduğu ucu gösterir.
+        if (yazma && !tanim.tekrarKorumali && istek.headers['istek-kimligi'] !== undefined) {
+          gunluk.uyar('Korumasız uca istek kimliği geldi; yineleme koruması yok');
+        }
         const istekBilgisi: IstekBilgisi = {
           ip: istek.ip,
           tarayici: istek.headers['user-agent'] ?? null,
