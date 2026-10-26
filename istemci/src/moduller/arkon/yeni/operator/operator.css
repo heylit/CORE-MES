@@ -411,18 +411,23 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 
 /* uzak mod */
 .tc-ay1-uzak {
-  position: fixed; inset: 0; z-index: var(--z-katman); display: flex; flex-direction: column; justify-content: safe center; gap: var(--b-5); padding: var(--b-5);
+  position: fixed; inset: 0; z-index: var(--z-katman); display: flex; flex-direction: column; gap: var(--b-5); padding: var(--b-5);
   background: radial-gradient(70% 70% at 50% 55%, color-mix(in srgb, var(--sig, var(--muted)) 22%, var(--bg)), var(--bg)); color: var(--ink); cursor: pointer; overflow-y: auto;
 }
 .tc-ay1-uzak:focus { outline: none; }
 .tc-ay1-uzak-ust { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-3); }
 .tc-ay1-uzak-ust > :first-child { justify-self: start; }
 .tc-ay1-uzak-istasyon { justify-self: end; min-inline-size: 0; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-ay1-uzak-saat { font-size: var(--yazi-xl); }
-.tc-ay1-uzak-govde { display: grid; justify-items: center; gap: var(--b-4); text-align: center; }
+/* Uzak mod uzaktan okunur (664): üst şerit ekranın tepesinde kalır, gövde aradaki alanda ortalanır; durum, istasyon, alan
+   etiketleri ve kart yazıları ekran genişliğiyle büyür. */
+.tc-ay1-uzak-ust .tc-ay1-durum-adi, .tc-ay1-uzak-istasyon { font-size: clamp(var(--yazi-l), 1.8vw, var(--yazi-2xl)); }
+.tc-ay1-uzak-saat { font-size: clamp(var(--yazi-xl), 2.4vw, var(--yazi-2xl)); }
+.tc-ay1-uzak-govde { display: grid; flex: 1 0 auto; align-content: center; justify-items: center; gap: var(--b-4); text-align: center; }
+.tc-ay1-uzak-basliklar dt { font-size: clamp(var(--yazi-xs), 1.2vw, var(--yazi-l)); }
+.tc-ay1-uzak-ust .tc-ay1-durum-adi i { inline-size: .5em; block-size: .5em; }
 .tc-ay1-uzak-basliklar { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--b-3) var(--b-5); margin: 0; }
 .tc-ay1-uzak-basliklar > div { display: grid; gap: var(--b-1); min-inline-size: 0; }
-.tc-ay1-uzak-basliklar dd { margin: 0; font-size: var(--yazi-xl); font-weight: 700; overflow-wrap: anywhere; }
+.tc-ay1-uzak-basliklar dd { margin: 0; font-size: clamp(var(--yazi-xl), 1.9vw, var(--yazi-2xl)); font-weight: 700; overflow-wrap: anywhere; }
 .tc-ay1-uzak-orta { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--b-4); inline-size: 100%; }
 .tc-ay1-uzak-orta > .tc-ay1-uzak-3b { grid-column: 1; justify-self: end; }
 .tc-ay1-uzak-3b { position: relative; overflow: hidden; width: min(34vh, 60vw, 100%); aspect-ratio: 1; pointer-events: none; }
@@ -430,13 +435,14 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   grid-column: 2; color: var(--sig-yazi); font-size: var(--yazi-3xl); font-size: min(30vw, 30vh); font-weight: 800; line-height: .9; font-variant-numeric: tabular-nums;
   text-shadow: 0 0 calc(var(--b-6) * 2) color-mix(in srgb, var(--sig, var(--muted)) 45%, transparent);
 }
-.tc-ay1-uzak-hedef { grid-column: 3; justify-self: start; align-self: end; font-size: var(--yazi-2xl); color: var(--muted); }
+.tc-ay1-uzak-hedef { grid-column: 3; justify-self: start; align-self: end; font-size: clamp(var(--yazi-2xl), 4vw, var(--yazi-3xl)); color: var(--muted); }
 .tc-ay1-uzak-alt { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--damga-dar)), 1fr)); gap: var(--b-3); }
 .tc-ay1-uzak-alt > div { display: grid; gap: var(--b-1); padding: var(--b-3); border-radius: var(--yari-3); background: var(--panel); }
-.tc-ay1-uzak-alt b { font-size: var(--yazi-2xl); font-variant-numeric: tabular-nums; }
+.tc-ay1-uzak-alt .tc-ay1-ust-yazi { font-size: clamp(var(--yazi-xs), 1.2vw, var(--yazi-l)); }
+.tc-ay1-uzak-alt b { font-size: clamp(var(--yazi-2xl), 3vw, var(--yazi-3xl)); font-variant-numeric: tabular-nums; }
 .tc-ay1-uzak-alt b[data-durum] { color: var(--sig-yazi); }
 .tc-ay1-uzak-gorev { display: flex; align-items: center; gap: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--sig); border-radius: var(--yari-3); font-size: var(--yazi-xl); font-weight: 700; }
-.tc-ay1-uzak > .tc-ay1-soluk { text-align: center; }
+.tc-ay1-uzak > .tc-ay1-soluk { text-align: center; font-size: var(--yazi-m); }
 
 /* Özetim */
 .tc-ay1-ozetim { display: grid; gap: var(--b-4); min-width: 0; }
@@ -570,6 +576,11 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
   .tc-ay1-saat small, .tc-ay1-kisi small { display: none; }
   .tc-ay1-is-baslik { font-size: var(--yazi-xl); }
   .tc-ay1-uzak-orta { display: flex; flex-direction: column; align-items: center; }
+  /* Durum ve süre saatin üstüne biniyordu: telefonda saat sağda, durum solda, istasyon altta tam satır. */
+  .tc-ay1-uzak-ust { grid-template-columns: minmax(0, 1fr) auto; }
+  .tc-ay1-uzak-ust > :first-child { min-inline-size: 0; flex-wrap: wrap; }
+  .tc-ay1-uzak-saat { grid-area: 1 / 2; }
+  .tc-ay1-uzak-istasyon { grid-column: 1 / -1; justify-self: start; }
   .tc-ay1-uzak-hedef { align-self: center; }
   .tc-ay1-is-alanlari { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tc-ay1-is-alan-emir { grid-column: 1 / -1; }
