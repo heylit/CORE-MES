@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { useDenetim } from './baglam.tsx';
-import { depoOku } from './normalize.ts';
+import { depoOku, yeniDenetim } from './normalize.ts';
+import { bugunTarihi, gunEkle } from './tarih.ts';
 import { baglamlaAc, ekraniAc, ornekDepo, sahteSunucu, YONETICI } from './test-ortak.tsx';
 import { CATISMA_ILETISI, YAZMA_GECIKMESI_MS } from './veri.ts';
 import { yikiciIzinli } from './yonetim.ts';
@@ -99,6 +100,26 @@ describe('veri katmanı', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS + 10); });
     expect(screen.getByText('adsız')).toBeTruthy();
     expect(sunucu.yazilanlar[1]?.beklenenSurum).toBe(2);
+  });
+
+  it('açılış kendiliğinden yazmaz; haftalık programın çapası kişinin ilk değişikliğiyle aynı yazmada kaydedilir', async () => {
+    const depo = ornekDepo();
+    const tarih = gunEkle(bugunTarihi(), 45);
+    const profil = depo.data[depo.active];
+    profil?.audits.push(yeniDenetim({ prog: profil.prog, type: '1. gözetim', date: tarih, status: 'plan' }));
+    const sunucu = sahteSunucu({ depo });
+    await baglamlaAc(<Yazici etiket={null} />);
+    await screen.findByText('adsız');
+    vi.useFakeTimers();
+    await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS * 3); });
+    expect(sunucu.yazilanlar).toHaveLength(0);
+    expect(screen.getByText('kayitli')).toBeTruthy();
+    fireEvent.click(screen.getByText('yaz'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS + 10); });
+    expect(sunucu.yazilanlar).toHaveLength(1);
+    const yazilan = depoOku(sunucu.yazilanlar[0]?.deger ?? null).data[depo.active];
+    expect(yazilan?.profile.firma).toBe('Yeni Ad');
+    expect(yazilan?.pw[profil?.prog ?? 'iso9001'].wkAnchor.ad).toBe(tarih);
   });
 
   it('başkası yazdıysa yazma durur ve kişiye söylenir', async () => {
