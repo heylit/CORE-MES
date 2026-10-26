@@ -246,11 +246,17 @@ export interface EmirKaydi {
 // rotada yoktur ama iş emri sırası alır: rota adımının yeri, sırasından önündeki ek adımların sayısı düşülerek bulunur. Ek adımın yeri yoktur.
 // Rotasız emrin (revizyonsuz) bütün adımları kendi adımlarıdır (adim-ekle 'ek' yazar); orada sıra adımın yeridir (rotasizAdimlariCevir).
 const ekAdimMi = (i: EmirKaydi['isEmirleri'][number]): boolean => (i.tur ?? 'rota') !== 'rota';
-function rotaYeri(e: EmirKaydi, sira: number): number | null {
+// 701: kolun iş emri sırası 1'den başlar, ilk adımı ise rotanın n+1. adımıdır (n: ayrıldığı yer, kolCevir); kolun yeri n kadar kayar.
+function rotaYeri(e: EmirKaydi, sira: number, kolKaymasi = 0): number | null {
   if (e.kaynakRotaRevizyonId === null) return sira;
   const i = e.isEmirleri.find((x) => x.sira === sira);
   if (i !== undefined && ekAdimMi(i)) return null;
-  return sira - e.isEmirleri.filter((x) => x.sira < sira && ekAdimMi(x)).length;
+  return kolKaymasi + sira - e.isEmirleri.filter((x) => x.sira < sira && ekAdimMi(x)).length;
+}
+function kolAyrilmaYeri(e: EmirKaydi, ana: EmirKaydi): number {
+  // Bölünme sırası ana emrin sırasıdır; önündeki ek adımlar rotada yer tutmaz.
+  const b = e.bolunmeSira ?? 1;
+  return ana.kaynakRotaRevizyonId === null ? b - 1 : b - 1 - ana.isEmirleri.filter((x) => x.sira < b && ekAdimMi(x)).length;
 }
 
 const EMIR_DURUMU_PROTOTIP = { taslak: 'taslak', planli: 'serbest', basladi: 'uretimde', bitti: 'tamam', iptal: 'iptal' } as const;
@@ -260,9 +266,7 @@ const EMIR_DURUMU_PROTOTIP = { taslak: 'taslak', planli: 'serbest', basladi: 'ur
 // ana emrin sonuna kadar yürür (VARSAYIM: katılma adımı = adım sayısı + 1).
 export function kolCevir(e: EmirKaydi, ana: EmirKaydi | undefined): DurumEmirleri['orders'][number]['kol'] {
   if (ana === undefined || e.ustEmirId === null) return null;
-  // Bölünme sırası ana emrin sırasıdır; önündeki ek adımlar rotada yer tutmaz.
-  const b = e.bolunmeSira ?? 1;
-  const n = ana.kaynakRotaRevizyonId === null ? b - 1 : b - 1 - ana.isEmirleri.filter((x) => x.sira < b && ekAdimMi(x)).length;
+  const n = kolAyrilmaYeri(e, ana);
   if (e.birlesmeOpNo !== null) {
     const katilma = ana.isEmirleri.find((i) => i.opNo === e.birlesmeOpNo);
     const m = katilma === undefined ? null : rotaYeri(ana, katilma.sira);
@@ -318,8 +322,11 @@ export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
   const opProg: DurumEmirleri['opProg'] = {};
   const opYer: NonNullable<DurumEmirleri['opYer']> = {};
   const orders = emirler.map((e): DurumEmirleri['orders'][number] => {
+    // Sayfa kolu kol (n, m) geçerliyse rotanın n+1. adımından kurar; kol değilse emir kendi sırasıyla rotanın başından yürür.
+    const kol = kolCevir(e, e.ustEmirId === null ? undefined : kimlige.get(e.ustEmirId));
+    const kolKaymasi = kol?.n ?? 0;
     for (const i of e.isEmirleri) {
-      const yer = rotaYeri(e, i.sira);
+      const yer = rotaYeri(e, i.sira, kolKaymasi);
       if (yer === null) continue;
       const anahtar = `${String(e.id)}|root|${String(yer)}`;
       if (i.durum !== 'bekliyor') opStatus[anahtar] = i.durum;
@@ -337,7 +344,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[]): DurumEmirleri {
       id: String(e.id), kayitNo: e.id, no: e.emirNo, itemId: String(e.malzemeNo), qty: e.adet, start: e.baslangic, due: e.teslim, priority: e.oncelik,
       note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), status: EMIR_DURUMU_PROTOTIP[e.durum],
       created: Date.parse(e.acilma), doneAt: e.bitis === null ? null : Date.parse(e.bitis), tur: e.emirTuru,
-      parentId: e.ustEmirId === null ? null : String(e.ustEmirId), kol: kolCevir(e, e.ustEmirId === null ? undefined : kimlige.get(e.ustEmirId)),
+      parentId: e.ustEmirId === null ? null : String(e.ustEmirId), kol,
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,
       ...(e.kaynakRotaRevizyonId === null ? { rotasiz: true, adimlar: rotasizAdimlariCevir(e.isEmirleri) } : {}),
     };
