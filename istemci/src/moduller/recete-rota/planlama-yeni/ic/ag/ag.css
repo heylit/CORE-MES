@@ -1,0 +1,64 @@
+/* Akış ağı (tc-pya-): bugünkü sayfanın düzeni (cerceve/planlama/stil/modul.stil pm-ag-*, pm-lejant). Ölçü ve renk yalnız tasarım değişkeniyle. */
+.tc-pya { min-width: 0; }
+.tc-pya-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; justify-content: space-between; }
+.tc-pya-ust > .tc-pyi-seg { max-width: 100%; }
+.tc-pya-kap {
+  display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--dokunma) * 6.4); grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--b-2) var(--b-4); margin-block: var(--b-3);
+}
+.tc-pya-katmanlar { grid-column: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); text-align: center; }
+.tc-pya-katmanlar span[data-etkin="true"] { color: var(--ink); font-weight: 700; }
+.tc-pya-tuval { position: relative; grid-column: 1; min-width: 0; }
+.tc-pya-tuval canvas {
+  display: block; width: 100%; height: clamp(calc(var(--dokunma) * 6.8), 56vh, calc(var(--dokunma) * 12.7));
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); touch-action: none; cursor: grab;
+}
+.tc-pya-tuval canvas:active { cursor: grabbing; }
+.tc-pya-tuval canvas:focus-visible { outline: var(--cizgi-kalin) solid var(--hazard); outline-offset: var(--pay-ince); }
+.tc-pya-ipucu {
+  position: absolute; left: min(calc(var(--x) + var(--b-3)), calc(100% - var(--dokunma) * 5)); top: calc(var(--y) + var(--b-3)); z-index: 2;
+  display: grid; gap: var(--pay-ince); max-width: calc(var(--dokunma) * 5); padding: var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); box-shadow: var(--shadow);
+  font-size: var(--yazi-xs); pointer-events: none;
+}
+.tc-pya-ipucu span { color: var(--muted); }
+.tc-pya-detay {
+  grid-column: 2; grid-row: 1 / span 2; align-self: start; min-width: 0; padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-pya-detay p { margin: 0; }
+.tc-pya-sec { display: grid; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; }
+.tc-pya-bag { display: grid; gap: var(--b-1); }
+.tc-pya-bag > div { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-pya-bag .tc-pyh-fis { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pya-liste { display: grid; gap: var(--pay-ince); margin: 0; padding-left: var(--b-4); font-size: var(--yazi-xs); }
+.tc-pya-tur {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-1) var(--b-3); align-items: center; margin-top: var(--b-3); padding: var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-left: var(--cizgi-kalin) solid var(--hazard); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-pya-tur p { grid-column: 1 / -1; max-width: 70ch; margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-pya-zaman { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; margin-top: var(--b-2); }
+.tc-pya-zaman input[type="range"] { flex: 1 1 calc(var(--dokunma) * 5); min-width: 0; accent-color: var(--hazard); }
+.tc-pya-zaman [role="status"] { flex: 1 1 100%; }
+.tc-pya-lejant i[data-tur="veri"], .tc-pya-lejant i[data-tur="kisit"], .tc-pya-lejant i[data-tur="cozucu"], .tc-pya-lejant i[data-tur="zaman"] {
+  width: calc(var(--b-2) + var(--pay-ince)); border-radius: var(--yari-tam);
+}
+.tc-pya-lejant i[data-tur="veri"] { background: var(--grafik-2); }
+.tc-pya-lejant i[data-tur="kisit"] { background: var(--muted); }
+.tc-pya-lejant i[data-tur="cozucu"] { background: var(--grafik); }
+.tc-pya-lejant i[data-tur="zaman"] { background: var(--run); }
+.tc-pya-lejant i[data-tur="tezgah"] { background: var(--edge2); }
+.tc-pya-lejant i[data-tur="calisiyor"] { background: var(--run); }
+.tc-pya-lejant i[data-tur="ayarda"] { background: var(--hazard); }
+.tc-pya-lejant i[data-tur="bos"] { background: var(--edge); }
+.tc-pya-lejant i[data-tur="gec"] { background: var(--stop); }
+/* telefonda üç kip yan yana sığar: eşit sütun, yazı kırılabilir */
+@media (max-width: 767px) {
+  .tc-pya-ust > .tc-pyi-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .tc-pya-ust > .tc-pyi-seg button { justify-content: center; padding-inline: var(--b-2); white-space: normal; line-height: 1.15; }
+}
+@media (max-width: 1023px) {
+  .tc-pya-kap { grid-template-columns: minmax(0, 1fr); }
+  .tc-pya-detay { grid-column: 1; grid-row: auto; }
+  .tc-pya-tuval canvas { height: clamp(calc(var(--dokunma) * 6.4), 50vh, calc(var(--dokunma) * 10.5)); }
+}

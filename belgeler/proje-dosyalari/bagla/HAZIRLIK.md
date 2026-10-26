@@ -162,6 +162,8 @@ Gereken `disari.ts` fonksiyonlari:
 ### Akis B - Plan (is emirleri istasyona ve zamana)
 Moduller: plan, rota, istasyonlar; uretim-emirleri istek; vardiya modulu YOK.
 
+DURUM (kart 625, 26.10.2026, main fefcda9): tablo 09.10.2026 durumunu gosterir. B-1 (P-B1, P-B8), B-2 (canli plan; senaryo bagsiz kalir, P-B2), B-3 (vardiya modulu var, P-B3), B-4 (P-B4), B-7 (P-B9, P-B10, P-B12) kapandi; B-6 karar 41 ile kapandi. B-5 bu turda bakilmadi. Guncel eksik baglar ve sorular kart 625'te.
+
 | Sira | Borc | Kaynak | Isaret |
 |---|---|---|---|
 | B-1 | Plan gercek veriyle calismaz: `planlanacakIsEmirleri`, `isEmriKaynagiYaz` gecici (bos / 422) | plan P-B1, P-B8 | [E] [UE] |
