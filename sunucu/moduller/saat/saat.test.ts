@@ -588,7 +588,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     assert.equal((await istek('harita', 'GET', '/saat/vardiya')).durum, 200);
   });
 
-  test('sıradaki iş: yalnız plan okuyan rol; kapsam dışı istasyon 403; canlı planda en erken bekleyen adım', async () => {
+  test('sıradaki iş: yalnız plan okuyan rol; kapsam dışı istasyon 403; terminalin sırasında ilk bekleyen adım (Hazırlık sırası önce)', async () => {
     const im = await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('SAMP', 'Plan Merkezi') RETURNING id");
     const ist = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('SAIP', 'CNC-P', $1) RETURNING id", [im?.id]))!.id;
     const mk = (await o().sahip.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('SAKP', 'Tezgah P', $1) RETURNING id", [ist]))!.id;
@@ -624,6 +624,16 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     await yerlestir(isler[1]!, 4);
     let s = saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki;
     assert.deepEqual(s && { opNo: s.opNo, ad: s.ad, adet: s.adet, tezgah: s.tezgah }, { opNo: 10, ad: 'Adım 1', adet: 6, tezgah: 'Tezgah P' });
+
+    // 3a: terminalin sırası. Hazırlık ikinci adımı öne aldıysa saat de onu gösterir; başka istasyonun sırası sayılmaz.
+    const hazirla = (istasyon: number) => o().sahip.sorgu(
+      'INSERT INTO arkon_kuyruk_sirasi (is_emri_id, parca_no, istasyon_id, sira, surum, kisi_id) VALUES ($1, 0, $2, 1, 1, $3)', [isler[1], istasyon, yoneticiId]);
+    await hazirla(istasyonId);
+    assert.equal(saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki?.opNo, 10, 'başka istasyonun Hazırlık sırası');
+    await o().sahip.sorgu('DELETE FROM arkon_kuyruk_sirasi WHERE is_emri_id = $1', [isler[1]]);
+    await hazirla(ist);
+    assert.equal(saatSiradakiCevabi.parse((await istek('planlama_proje', 'GET', yol)).govde).siradaki?.opNo, 20, 'Hazırlık sırası plandan önce');
+    await o().sahip.sorgu('DELETE FROM arkon_kuyruk_sirasi WHERE is_emri_id = $1', [isler[1]]);
 
     // Çalışan adım sıradaki değildir: ilk adım başlayınca sıra ikinci adıma geçer.
     await o().sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi ON CONFLICT DO NOTHING', [ist]);

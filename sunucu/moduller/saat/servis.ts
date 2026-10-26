@@ -13,6 +13,7 @@ import { aktifIstasyonlar, aktifMakineler, istasyonGetir, kisininIzinliIsMerkezl
 import { stokMiktarlari, emirlerinNetSarfi } from '../stok/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { istasyonHazirlikSirasi } from '../arkon/disari.ts';
 import { canliSira } from '../plan/disari.ts';
 import { basladigiGunTakvimleri, kisiVardiyalari, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
@@ -276,10 +277,14 @@ export async function siradaki(db: Db, kullanici: Kullanici, istasyonId: number)
     id: i.id, emirNo: i.emirNo, opNo: i.opNo, ad: i.ad, adet: i.adimAdedi ?? i.adet, adimDurumu: i.adimDurumu ?? null,
   }));
   const { yerlesimler } = await canliSira(db, isler.map((i) => i.id));
+  // Terminalin sırası (3a): Hazırlık sırası önce; parçalı işte parçaların en küçüğü işin sırasıdır.
+  const hazirlik = new Map<number, number>();
+  for (const h of await istasyonHazirlikSirasi(db, istasyonId)) if (!hazirlik.has(h.isEmriId)) hazirlik.set(h.isEmriId, h.sira);
   const s = siradakiIs(
     isler,
     yerlesimler.map((y) => ({ isEmriId: y.isEmriId, makineId: y.kaynak.tur === 'makine' ? y.kaynak.id : null, baslangic: y.baslangic })),
     new Set(makineler.map((m) => m.id)),
+    hazirlik,
   );
   if (s === null) return { zaman, siradaki: null };
   return {
