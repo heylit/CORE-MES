@@ -4,6 +4,7 @@ import { DurumKutusu, Dugme, Rozet, SayfaBasligi, Tablo, type Sutun } from '../.
 import { rozetTonu, trd } from '../bicim.ts';
 import { parcaAnahtari, parcaDizini, parcaDurumu, type ParcaOzeti } from '../kurallar.ts';
 import { STUDYO_YOLU, type EkranOzellikleri, type KmSayaci } from '../sekmeler.ts';
+import { useParcaKaynaklari } from './kaynak.ts';
 import { ParcaFormu } from './ParcaFormu.tsx';
 import { ParcaSayfasi } from './ParcaSayfasi.tsx';
 import { parcaAra } from './parca.ts';
@@ -47,13 +48,17 @@ export function Parcalar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
     gecisTamam();
   }, [gecis]);
 
-  const dizin = parcaDizini(veri);
+  // 592 B2 a: kartı Malzemeler'e bağlı parçanın adı oradandır; bağsız (eski) parçada kayıtlardaki ad kalır.
+  const ham = parcaDizini(veri);
+  const kartlar = useParcaKaynaklari(ham.map((p) => p.meta?.malzemeNo));
+  const kartOf = (p: ParcaOzeti) => (p.meta?.malzemeNo === undefined ? undefined : kartlar.get(p.meta.malzemeNo));
+  const dizin = ham.map((p) => { const k = kartOf(p); return k?.ad ? { ...p, ad: k.ad } : p; });
   const acik = secili === null ? null : dizin.find((p) => p.k === secili) ?? null;
   const studyo = () => { void gezin(STUDYO_YOLU); };
 
   const formu = form !== null && (
     <ParcaFormu
-      parca={form === 'yeni' ? null : form} tedarikciler={veri.sup} rol={yetki.rol}
+      parca={form === 'yeni' ? null : form} kart={form === 'yeni' ? null : kartOf(form) ?? null} rol={yetki.rol}
       kapat={() => { formYaz(null); }}
       kaydedildi={(parcaNo) => { formYaz(null); seciliYaz(parcaAnahtari(parcaNo)); }}
     />

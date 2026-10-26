@@ -186,6 +186,13 @@ export function koleksiyonKayitlari(db: Db, koleksiyon: string): Promise<{ kimli
   );
 }
 
+export function koleksiyonlarinKayitlari(db: Db, koleksiyonlar: readonly string[]): Promise<{ koleksiyon: string; kimlik: string; govde: Record<string, unknown> }[]> {
+  return db.sorgu(
+    'SELECT koleksiyon, kimlik, govde FROM kalite_merkezi_belge WHERE koleksiyon = ANY($1::text[]) AND govde IS NOT NULL ORDER BY koleksiyon, kimlik',
+    [koleksiyonlar],
+  );
+}
+
 // Karantina defterinin bütün satırları, yazan NCR'nin bugünkü gövdesiyle (silinmiş NCR'de null).
 export async function karantinaDefteri(db: Db): Promise<{ hareketId: number; ncrKimlik: string; govde: Record<string, unknown> | null }[]> {
   const satirlar = await db.sorgu<{ hareketId: number; ncrKimlik: string; govde: Record<string, unknown> | null }>(

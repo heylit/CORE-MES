@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { KALITE_KARARLARI } from './uretim-emirleri.ts';
 
@@ -114,6 +114,48 @@ export const kmGecmisCevabi = z.object({
 // uygulamanın cihaz kaydı biçimindedir; kimlik, varsa aynı kodlu eski `dev` kaydının kimliğidir (ölçümlerin bağı kırılmaz).
 export const kmOlcuAletleriCevabi = z.object({ cihazlar: z.array(z.object({ kimlik: z.string(), govde })) });
 
+// 592 B1 c: iş emri ve siparişlerin sahibi Üretim emirleri, Satın alma ve Siparişler'dir; Kalite Merkezi onları okur, kendisi tutmaz.
+// Liste açık kayıtlar ve Kalite Merkezi kayıtlarının bağlı olduğu kayıtlardır (594 a). Kimlik kaynağın önekiyle kaynağın kimliğidir
+// (ue-12 üretim emri, sa-34 satın alma sipariş satırı, ms-5 müşteri siparişi); belge bağı bu kimlikle yazılır.
+export const KM_EMIR_TIPLERI = ['İş emri', 'Satınalma siparişi', 'Müşteri siparişi'] as const;
+export const KM_EMIR_KIMLIGI = /^(ue|sa|ms)-([1-9][0-9]{0,9})$/;
+export const kmEmirKaynagi = z.object({
+  kimlik: z.string().regex(KM_EMIR_KIMLIGI),
+  no: z.string(),
+  tip: z.enum(KM_EMIR_TIPLERI),
+  acik: z.boolean(),
+  // Parça numarası Malzemeler'in stok kodudur; satırda kart yoksa (müşteri siparişinin başlığı, kartsız kalem) null.
+  parcaNo: z.string().nullable(),
+  parcaAdi: z.string().nullable(),
+  miktar: z.number().nullable(),
+  termin: tarihSemasi.nullable(),
+  // Satın almada tedarikçi, müşteri siparişinde müşteri firması; iş emrinde null.
+  firmaId: z.number().int().nullable(),
+  firmaAd: z.string().nullable(),
+});
+export const kmEmirKaynaklariCevabi = z.object({ emirler: z.array(kmEmirKaynagi) });
+
+// 592 B2 a: parça numarası ve adı Malzemeler'dendir. Arama metniyle ya da kartın sayı kimlikleriyle (virgüllü) okunur.
+export const kmParcaKaynaklariSorgusu = z.object({
+  ara: z.string().trim().max(80).optional(),
+  idler: z.string().regex(/^\d{1,10}(,\d{1,10}){0,199}$/).optional(),
+});
+export const kmParcaKaynagi = z.object({ malzemeNo: z.number().int().positive(), kod: z.string(), ad: z.string().nullable(), aktif: z.boolean() });
+export const kmParcaKaynaklariCevabi = z.object({ parcalar: z.array(kmParcaKaynagi) });
+
+// 592 B3 c: Kalite Merkezi'nin kendi tuttuğu eski iş emri ve parça kayıtlarından sahibinde karşılığı bulunanlar ve bulunmayanlar.
+// Yalnız sayar ve listeler; silme ayrı onaydır.
+export const kmEslesmeSayimiCevabi = z.object({
+  emir: z.object({
+    eslesen: z.number().int().nonnegative(),
+    eslesmeyenler: z.array(z.object({ kimlik: z.string(), no: z.string().nullable(), tip: z.string().nullable() })),
+  }),
+  parca: z.object({
+    eslesen: z.number().int().nonnegative(),
+    eslesmeyenler: z.array(z.object({ kimlik: z.string(), parcaNo: z.string().nullable() })),
+  }),
+});
+
 export type KmDegisiklikCevabi = z.output<typeof kmDegisiklikCevabi>;
 export type KmOlcuAletleriCevabi = z.output<typeof kmOlcuAletleriCevabi>;
 export type KmYazGovdesi = z.input<typeof kmYazGovdesi>;
@@ -131,3 +173,9 @@ export type KmIlkParcaBekleyenCevabi = z.output<typeof kmIlkParcaBekleyenCevabi>
 export type KmGecmisCevabi = z.output<typeof kmGecmisCevabi>;
 export type KmIlkParcaCevabi = z.output<typeof kmIlkParcaCevabi>;
 export type KmIlkParcaGovdesi = z.input<typeof kmIlkParcaGovdesi>;
+export type KmEmirTipi = (typeof KM_EMIR_TIPLERI)[number];
+export type KmEmirKaynagi = z.output<typeof kmEmirKaynagi>;
+export type KmEmirKaynaklariCevabi = z.output<typeof kmEmirKaynaklariCevabi>;
+export type KmParcaKaynagi = z.output<typeof kmParcaKaynagi>;
+export type KmParcaKaynaklariCevabi = z.output<typeof kmParcaKaynaklariCevabi>;
+export type KmEslesmeSayimiCevabi = z.output<typeof kmEslesmeSayimiCevabi>;

@@ -1,15 +1,20 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type {
-  KmDegisiklikCevabi, KmDosyaCevabi, KmGeriYukleCevabi, KmGeriYukleGovdesi, KmKimlikCevabi, KmOlcuAletleriCevabi, KmOnayGeriAlGovdesi,
+  KmDegisiklikCevabi, KmDosyaCevabi, KmEmirKaynaklariCevabi, KmGeriYukleCevabi, KmGeriYukleGovdesi, KmKimlikCevabi, KmOlcuAletleriCevabi, KmOnayGeriAlGovdesi,
   KmOnaylaCevabi, KmOnaylaGovdesi, KmOnayReddiAlani, KmSilGovdesi, KmSurumCevabi, KmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { api, ApiHatasi } from '../../../ortak/veri/api.ts';
+import { emirSatirlari } from './emirler/kaynak.ts';
 import { izFarki, izNo } from './kurallar.ts';
-import type { IzDegisikligi, IzKaydi, KmAyarlari, KmKayit, KmKoleksiyonTipleri, KmKoleksiyonu } from './tipler.ts';
+import type { Emir, IzDegisikligi, IzKaydi, KmAyarlari, KmKayit, KmKoleksiyonTipleri, KmKoleksiyonu } from './tipler.ts';
 
 // Uygulamanın `S`i: koleksiyon başına kayıtlar (kimlik `_id`'de), ayarlar ve oturumdaki kişinin adı. Kayıt sunucuda yorumlanmaz.
-export type KmVerisi = { readonly [K in KmKoleksiyonu]: readonly KmKoleksiyonTipleri[K][] } & { ayarlar: KmAyarlari; kisi: string };
+// `emir` sahiplerinden gelen iş emri ve siparişlerdir (592 B1 c); Kalite Merkezi'nin eşleşmeyen eski kendi kayıtları `eskiEmir`dedir.
+// Kaynak okunamadıysa `emirKaynagiHatasi` doludur ve `emir` boştur: öteki görünümler çalışmaya devam eder.
+export type KmVerisi = { readonly [K in KmKoleksiyonu]: readonly KmKoleksiyonTipleri[K][] } & {
+  ayarlar: KmAyarlari; kisi: string; eskiEmir?: readonly Emir[]; emirKaynagiHatasi?: unknown;
+};
 
 const KOLEKSIYONLAR: readonly KmKoleksiyonu[] = ['ncr', 'capa', 'insp', 'dev', 'sup', 'frm', 'lot', 'tpl', 'spc', 'cizim', 'parca', 'iz', 'belge', 'emir', 'bayrak'];
 // Ölçü aletlerinin kaynağı Kalibrasyondur (329 a): akıştan değil kendi ucundan gelir, ekrandan yazılmaz.
@@ -19,6 +24,9 @@ const GENEL = 'genel';
 export const YOKLAMA_ARALIGI_MS = 15_000;
 export const KM_SORGU_ANAHTARI = ['kalite-merkezi', 'yeni', 'veri'] as const;
 export const KM_KIMLIK_ANAHTARI = ['kalite-merkezi', 'kimlik'] as const;
+export const KM_EMIR_KAYNAGI_ANAHTARI = ['kalite-merkezi', 'emir-kaynaklari'] as const;
+// Sahiplerin listesi akıştan seyrek değişir; Kalite Merkezi'nin kendi kayıtlarından daha az yoklanır.
+const EMIR_KAYNAGI_ARALIGI_MS = 60_000;
 
 type Govde = Record<string, unknown>;
 interface Hal { govde: Govde | null; surum: number }
@@ -114,8 +122,17 @@ export function useKmVerisi(): { veri: KmVerisi | undefined; hata: unknown; yukl
     },
     refetchInterval: YOKLAMA_ARALIGI_MS,
   });
-  const veri = useMemo(() => (q.data ? { ...q.data, kisi } : undefined), [q.data, kisi]);
-  return { veri, hata: q.error, yukleniyor: q.isPending };
+  const kaynak = useQuery({
+    queryKey: KM_EMIR_KAYNAGI_ANAHTARI,
+    queryFn: () => api.get<KmEmirKaynaklariCevabi>('/kalite-merkezi/emir-kaynaklari'),
+    refetchInterval: EMIR_KAYNAGI_ARALIGI_MS,
+  });
+  const veri = useMemo(() => {
+    if (!q.data) return undefined;
+    if (!kaynak.data) return { ...q.data, kisi, emir: [], eskiEmir: q.data.emir, emirKaynagiHatasi: kaynak.error ?? undefined };
+    return { ...q.data, kisi, ...emirSatirlari(kaynak.data.emirler, q.data.emir, q.data.sup) };
+  }, [q.data, kisi, kaynak.data, kaynak.error]);
+  return { veri, hata: q.error, yukleniyor: q.isPending || kaynak.isPending };
 }
 
 export const yeniKimlik = (onek: string): string => `${onek}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

@@ -1,7 +1,8 @@
 import { DOSYA_TURLERI } from '#paylasilan/sozlesme/dosya.ts';
 import { createHash } from 'node:crypto';
-import { KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KaliteMerkeziKoleksiyonu, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
@@ -739,5 +740,73 @@ export function lotGovdesi(
     bKr: i.bulunan.Kritik, bMj: i.bulunan.Majör, bMn: i.bulunan.Minör, not: metin(i.not), anahtar: lotAnahtari(i.parcaNo, ''), siddet: d.plan.siddet,
     plan: Object.fromEntries(d.plan.siniflar.map((s) => [s.sinif, { kod: s.kod, n: s.n, ac: s.ac, re: s.re, aql: s.aql }])),
     karar: d.karar, kaynak: i.kaynak, kaynakAnahtari: i.kaynakAnahtari, uretimEmriId: i.uretimEmriId,
+  };
+}
+
+/* ---------------- iş emri, sipariş ve parça kaynakları (592, 594 a) ---------------- */
+
+export const EMIR_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'emir';
+export const PARCA_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'parca';
+const BELGE_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'belge';
+export type EmirKaynagiTuru = 'ue' | 'sa' | 'ms';
+export const EMIR_TIPI: Readonly<Record<EmirKaynagiTuru, KmEmirTipi>> = { ue: 'İş emri', sa: 'Satınalma siparişi', ms: 'Müşteri siparişi' };
+// Parça kartı seçimi: üretilen ve alınıp satılan kartlar (giriş muayenesi de bunlara bakar).
+export const PARCA_TURLERI = ['mamul', 'yarimamul', 'ticari_mal'] as const satisfies readonly KatalogTuru[];
+
+export const emirKimligi = (tur: EmirKaynagiTuru, id: number): string => `${tur}-${id}`;
+export function emirKimligiCoz(kimlik: unknown): { tur: EmirKaynagiTuru; id: number } | null {
+  const m = typeof kimlik === 'string' ? KM_EMIR_KIMLIGI.exec(kimlik) : null;
+  return m ? { tur: m[1] as EmirKaynagiTuru, id: Number(m[2]) } : null;
+}
+
+const doluMetin = (v: unknown): string | null => metin(v) || null;
+export const sayiMetni = (v: string | null): number | null => {
+  if (v === null) return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
+};
+
+// Kalite Merkezi kayıtlarının iş emri ve siparişe bağları: belgenin kaynak kimliği ve lot, muayene, NCR'deki "İş emri / sipariş" metni.
+export interface EmirBaglari { kimlikler: Map<EmirKaynagiTuru, number[]>; numaralar: string[] }
+export function emirBaglari(kayitlar: { koleksiyon: string; govde: Record<string, unknown> }[]): EmirBaglari {
+  const kimlikler = new Map<EmirKaynagiTuru, number[]>();
+  const numaralar = new Set<string>();
+  for (const { koleksiyon, govde } of kayitlar) {
+    if (koleksiyon === BELGE_KOLEKSIYONU) {
+      const bag = govde.bagli as { col?: unknown; id?: unknown } | undefined;
+      const k = bag?.col === EMIR_KOLEKSIYONU ? emirKimligiCoz(bag.id) : null;
+      if (k) kimlikler.set(k.tur, [...(kimlikler.get(k.tur) ?? []), k.id]);
+      continue;
+    }
+    for (const alan of koleksiyon === 'lot' ? ['emir', 'siparis'] : ['emir']) {
+      const no = doluMetin(govde[alan]);
+      if (no) numaralar.add(no);
+    }
+  }
+  return { kimlikler, numaralar: [...numaralar].sort() };
+}
+
+// Kalite Merkezi'nin kendi eski iş emri kaydının numarası; sahibinde aynı numara varsa eşleşir (tip ayrımı yok: numara tektir).
+export const eskiEmirNo = (govde: Record<string, unknown>): string | null => doluMetin(govde.no);
+export const eskiEmirTipi = (govde: Record<string, unknown>): string | null => doluMetin(govde.tip);
+// Eski parça kartı: 592 B2 a'dan sonra kart malzeme kimliğini taşır; öncesinde yalnız parça numarası (stok kodu sayılır).
+export const parcaKartiMalzemeNo = (govde: Record<string, unknown>): number | null =>
+  typeof govde.malzemeNo === 'number' && Number.isInteger(govde.malzemeNo) && govde.malzemeNo > 0 ? govde.malzemeNo : null;
+export const parcaKartiNo = (govde: Record<string, unknown>): string | null => doluMetin(govde.parcaNo);
+
+// Termin sırası: yakın termin önce, termini olmayan sonda; eşitlikte numara.
+export function emirKaynakSirasi<T extends { termin: string | null; no: string }>(liste: readonly T[]): T[] {
+  return [...liste].sort((a, b) => (a.termin ?? '9999').localeCompare(b.termin ?? '9999') || a.no.localeCompare(b.no, 'tr'));
+}
+
+// Satın alma sipariş satırı: parça satırın katalog kartıdır; kartsız kalemde parça numarası boş, ad kalemin adı.
+export interface SatinAlmaSatiri {
+  id: number; siparisNo: string; firmaId: number | null; tedarikciAdi: string; malzemeNo: number | null; kalemAdi: string; miktar: string; beklenenTeslim: string | null;
+}
+export function satinAlmaKaynagi(r: SatinAlmaSatiri, acik: boolean, parcalar: ReadonlyMap<number, { kod: string; ad: string | null }>): KmEmirKaynagi {
+  const p = r.malzemeNo === null ? undefined : parcalar.get(r.malzemeNo);
+  return {
+    kimlik: emirKimligi('sa', r.id), no: r.siparisNo, tip: EMIR_TIPI.sa, acik, parcaNo: p?.kod ?? null, parcaAdi: p?.ad ?? r.kalemAdi,
+    miktar: sayiMetni(r.miktar), termin: r.beklenenTeslim, firmaId: r.firmaId, firmaAd: r.tedarikciAdi,
   };
 }
