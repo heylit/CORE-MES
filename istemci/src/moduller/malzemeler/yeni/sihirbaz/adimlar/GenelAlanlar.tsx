@@ -6,6 +6,7 @@ import type { Taslak } from '../durum.ts';
 import { girdiler } from '../turler.ts';
 import type { Alan, Kategori, TakvimKaydi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
+import { ResimAlani } from '../../ortak/ResimAlani.tsx';
 import { Alanlar, Cip, CipGrubu, CokSatirAlani, MetinAlani, SecenekGrubu, Yardim } from '../parcalar.tsx';
 import { Belgeler, TedarikciAlani } from './TicariAdimi.tsx';
 import { TurKartlari } from './Baslangic.tsx';
@@ -161,7 +162,7 @@ export function BakimTarihleri() {
 
 // Adım tanımına göre öteki türlerin alan adımları (prototipte `gRender`'ın alan, alis, bakim ve belge kolları).
 export function GenelAdim({ adim }: { adim: { ozel?: string; alanlar?: readonly Alan[] } }) {
-  const { taslak: d, degistir } = useSihirbaz();
+  const { taslak: d, degistir, kartlar } = useSihirbaz();
   if (adim.ozel === 'belge') {
     return (
       <>
@@ -174,6 +175,7 @@ export function GenelAdim({ adim }: { adim: { ozel?: string; alanlar?: readonly 
     <>
       {adim.ozel === 'alis' && <Alanlar><TedarikciAlani /></Alanlar>}
       <GenelAlanlar alanlar={adim.alanlar ?? []} />
+      {adim.alanlar?.some((a) => a.k === 'resim') && <ResimAlani tur={d.tur} no={kartlar.find((k) => k.kimlik === d.id)?.no} />}
       {adim.ozel === 'bakim' && <BakimTarihleri />}
     </>
   );

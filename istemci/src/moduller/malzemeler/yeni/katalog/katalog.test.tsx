@@ -5,6 +5,18 @@ import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { ORNEK_AYAR, ORNEK_KARTLAR, ornekKayit } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, type Yanit } from '../test-ortak.tsx';
 
+// Çizim merkezinin parçaları kendi testlerinde sınanır; burada hangi kart no'larıyla ve nerede çağrıldıkları ölçülür.
+const resimIstekleri = vi.hoisted(() => [] as number[][]);
+vi.mock('../../../cizimler/disari.ts', async (asil) => ({
+  ...(await asil<Record<string, unknown>>()),
+  ResimPaneli: ({ malzemeNo }: { malzemeNo: number }) => <div data-testid="resim-paneli">{malzemeNo}</div>,
+  useKucukResimler: (_m: string, idler: readonly number[]) => {
+    resimIstekleri.push([...idler]);
+    return new Map(idler.map((id) => [id, { hedefId: id, belgeId: 1, revizyonId: 2, harf: 'B', kareSayisi: 1, revUyumu: false }]));
+  },
+  KucukResimKutusu: ({ ad, resim }: { ad: string; resim: { revUyumu: boolean | null } }) => <span data-testid="kucuk-resim" data-uyum={String(resim.revUyumu)}>{ad}</span>,
+}));
+
 const KOK = '/malzemeler';
 // Onay yetkisi olan ama Etiket Merkezi'ni açamayan kullanıcı (ana veri sorumlusu).
 const SORUMLU: Kullanici = { id: 5, ad: 'Deneme Sorumlu', islemler: [YENI_EKRAN_ISLEMI, 'sayfa.malzemeler', 'malzemeler.yaz', 'malzemeler.onayla'] };
@@ -340,5 +352,34 @@ describe('M2 Katalog: etiket, saha ve seçim', () => {
 describe('M2 Katalog: kayıt yanıtı', () => {
   test('kaydet yanıtı örnek kimlikle eşleşir (test ortamı)', () => {
     expect(Object.keys(kaydetYanit())).toEqual(['POST /malzeme-katalogu-kartlari/mornek1/kaydet']);
+  });
+});
+
+describe('688: çizim merkezinin resmi katalogda', () => {
+  const ym = (kimlik: string, kod: string) => ({
+    ...ornekKayit(kimlik, kod, 'Deneme braket', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},
+    g: { ad: 'Deneme braket', tip: 'Talaşlı işlenmiş parça', resim: 'TR-1', rev: 'A' },
+  });
+
+  test('liste küçük resmi yalnız görünen yarı mamul ve mamul kartları için ister; resimli satırda küçük resim, hammaddede simge', async () => {
+    resimIstekleri.length = 0;
+    kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
+    yeniEkranAc(KOK);
+    await screen.findByText('YM-DNM-00021');
+    expect(resimIstekleri.at(-1)).toEqual([21]);
+    expect(screen.getAllByTestId('kucuk-resim').map((e) => [e.textContent, e.dataset['uyum']])).toEqual([['YM-DNM-00021 Deneme braket', 'false']]);
+  });
+
+  test('kart penceresinde panel yarı mamulde kart no ile açılır (okuyan da görür, yazmayı panel denetler); hammadde kartında yok', async () => {
+    kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
+    yeniEkranAc(KOK);
+    const pencere = await kartiAc('YM-DNM-00021');
+    expect(within(pencere).getByTestId('resim-paneli').textContent).toBe('21');
+    cleanup();
+    vi.unstubAllGlobals();
+    kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
+    yeniEkranAc(KOK);
+    const ikinci = await kartiAc('HM-DNM-00022');
+    expect(within(ikinci).queryByTestId('resim-paneli')).toBeNull();
   });
 });

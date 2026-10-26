@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dugme, OnayPenceresi, Pencere } from '../../../../ortak/arayuz/index.ts';
 import { Foy } from '../ortak/Foy.tsx';
+import { ResimAlani } from '../ortak/ResimAlani.tsx';
 import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { Gezinti } from '../sekmeler.ts';
@@ -82,6 +83,7 @@ export function KartPenceresi({
       <TalepPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => talepIslemi(x, i, n)} />
       <OnayPaneli x={x} yetki={yetki} b={b} mesgul={mesgul} islem={(i, n) => onayIslemi(x, i, n)} />
       <Foy veri={K.foyVerisi(x, b)} {...(kgFiyati !== undefined ? { kgFiyati } : {})} />
+      <ResimAlani tur={x.tur} no={kart.no} />
       <Muadiller x={x} kayitlar={kayitlar} b={b} ac={ac} />
       <Revizyonlar x={x} />
       <OnayPenceresi
