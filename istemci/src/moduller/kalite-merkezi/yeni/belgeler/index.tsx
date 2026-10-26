@@ -33,7 +33,10 @@ const varsayilanTur = (col: string): string => (col === 'dev' ? 'Kalibrasyon ser
 function BagliKayit({ veri, b }: { veri: KmVerisi; b: BelgeKaydi }) {
   const g = b.bagli;
   if (!g) return <>{YOK}</>;
-  const canli = (veri[g.col as KmKoleksiyonu] as readonly Record<string, unknown>[] | undefined)?.find((x) => x._id === g.id);
+  // İş emri bağı sahibindeki satırın ya da onunla eşleşen eski kendi kaydının kimliğidir (592 B1 c).
+  const canli = g.col === 'emir'
+    ? veri.emir.find((x) => x._id === g.id || x.eskiKimlikler?.includes(g.id)) ?? veri.eskiEmir?.find((x) => x._id === g.id)
+    : (veri[g.col as KmKoleksiyonu] as readonly Record<string, unknown>[] | undefined)?.find((x) => x._id === g.id);
   return (
     <>
       {KOL_AD[g.col as KmKoleksiyonu] ?? g.col} {(canli && izNo(canli)) || g.no || ''}

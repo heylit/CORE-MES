@@ -9,14 +9,21 @@ import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { Siparis } from '#paylasilan/sozlesme/siparisler.ts';
 import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
+import { malzemeAra, malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
+import { siparisSatirlari } from '../satin-alma/disari.ts';
+import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
-import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuclandir } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirIdleri, emirNolari, kararSayaclari, kararliSayimiSonuclandir, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
@@ -27,6 +34,9 @@ import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } fr
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
 import type { AqlSiddeti, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
+import {
+  EMIR_KOLEKSIYONU, EMIR_TIPI, PARCA_KOLEKSIYONU, satinAlmaKaynagi, PARCA_TURLERI, emirBaglari, emirKaynakSirasi, emirKimligi, eskiEmirNo, eskiEmirTipi, parcaKartiMalzemeNo, parcaKartiNo, sayiMetni,
+} from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const dosyaTutamak = dosyaTutamagi(KM_MODULU);
@@ -470,4 +480,127 @@ export async function lotKarariYaz(
   const govde = lotGovdesi(istek, { no, gun, emirNo, muayeneci: kullanici.ad, plan: sonuc.plan, karar });
   await kayitYaz(db, kullanici, LOT_KOLEKSIYONU, kimlik, govde, null, false);
   return { kimlik, no, karar, plan: sonuc.plan, yeni: true };
+}
+
+/* ---------------- iş emri, sipariş ve parça kaynakları (592 B1 c, B2 a, B3 c; 594 a) ---------------- */
+
+// Sorgular tek bağlantıda sırayla koşar (işlem içinde Promise.all yok).
+async function parcaAdlari(db: Db, malzemeNolar: readonly (number | null)[]): Promise<Map<number, { kod: string; ad: string | null }>> {
+  const idler = [...new Set(malzemeNolar.filter((n): n is number => n !== null))];
+  return new Map([...(await malzemeOzetleri(db, idler))].map(([id, m]) => [id, { kod: m.kod, ad: m.ad }]));
+}
+
+// Müşteri siparişinde parça tek kalemli siparişte kalemin kartıdır; çok kalemlide boş (hangi kalem olduğu kayıtta yok).
+async function musteriKaynagi(db: Db, s: Pick<Siparis, 'id' | 'no' | 'durum' | 'termin' | 'firmaId' | 'firmaAd'>): Promise<KmEmirKaynagi> {
+  const kalemler = await siparisinSatirOzetleri(db, s.id);
+  const tek = kalemler.length === 1 ? kalemler[0] : undefined;
+  const p = tek ? (await parcaAdlari(db, [tek.malzemeNo])).get(tek.malzemeNo) : undefined;
+  return {
+    kimlik: emirKimligi('ms', s.id), no: s.no, tip: EMIR_TIPI.ms, acik: s.durum === 'onayli', parcaNo: p?.kod ?? null, parcaAdi: p?.ad ?? null,
+    miktar: tek ? sayiMetni(tek.miktar) : null, termin: s.termin, firmaId: s.firmaId, firmaAd: s.firmaAd,
+  };
+}
+
+async function musteriSiparisleri(db: Db, g: { ara?: string; durum?: 'onayli' }): Promise<Siparis[]> {
+  const hepsi: Siparis[] = [];
+  for (let sayfa = 1; ; sayfa++) {
+    const r = await siparisListesi(db, siparisListesiSorgusu.parse({ ...g, sayfa, sayfaBoyu: 200 }));
+    hepsi.push(...r.satirlar);
+    if (r.satirlar.length < r.sayfaBoyu) return hepsi;
+  }
+}
+
+async function musteriSiparisiNodan(db: Db, no: string): Promise<Siparis | null> {
+  return (await musteriSiparisleri(db, { ara: no })).find((x) => x.no === no) ?? null;
+}
+
+async function uretimKaynagi(db: Db, id: number): Promise<KmEmirKaynagi | null> {
+  const e = await uretimEmriOzeti(db, id);
+  if (e === null) return null;
+  const p = e.malzemeNo === null ? undefined : (await parcaAdlari(db, [e.malzemeNo])).get(e.malzemeNo);
+  return {
+    kimlik: emirKimligi('ue', e.id), no: e.emirNo, tip: EMIR_TIPI.ue, acik: (ACIK_EMIR_DURUMLARI as readonly string[]).includes(e.durum),
+    parcaNo: p?.kod ?? null, parcaAdi: p?.ad ?? null, miktar: e.adet, termin: e.teslim, firmaId: null, firmaAd: null,
+  };
+}
+
+// Açık iş emirleri, açık satın alma sipariş satırları ve onaylı müşteri siparişleri; Kalite Merkezi kayıtlarının bağlı olduğu
+// kapanmışlar da (belgenin kaynak kimliği, kaydın numarası). Kapanmış satın alma siparişi numarayla bulunamaz (yalnız kimlikle).
+export async function emirKaynaklari(db: Db): Promise<KmEmirKaynaklariCevabi> {
+  const liste = new Map<string, KmEmirKaynagi>();
+  const ekle = (k: KmEmirKaynagi | null) => { if (k !== null && !liste.has(k.kimlik)) liste.set(k.kimlik, k); };
+  for (const e of await acikEmirler(db)) {
+    ekle({
+      kimlik: emirKimligi('ue', e.id), no: e.emirNo, tip: EMIR_TIPI.ue, acik: true, parcaNo: e.parcaNo || null, parcaAdi: e.parcaAd || null,
+      miktar: e.adet, termin: null, firmaId: null, firmaAd: null,
+    });
+  }
+  const acikSatinAlma = await siparisSatirlari(db);
+  const saParcalar = await parcaAdlari(db, acikSatinAlma.map((r) => r.malzemeNo));
+  for (const r of acikSatinAlma) ekle(satinAlmaKaynagi(r, true, saParcalar));
+  for (const s of await musteriSiparisleri(db, { durum: 'onayli' })) ekle(await musteriKaynagi(db, s));
+
+  const bag = emirBaglari(await sorgular.koleksiyonlarinKayitlari(db, ['belge', 'lot', 'insp', 'ncr']));
+  for (const id of bag.kimlikler.get('ue') ?? []) if (!liste.has(emirKimligi('ue', id))) ekle(await uretimKaynagi(db, id));
+  const saEksik = (bag.kimlikler.get('sa') ?? []).filter((id) => !liste.has(emirKimligi('sa', id)));
+  const saBagli = await siparisSatirlari(db, saEksik);
+  const saBagliParcalar = await parcaAdlari(db, saBagli.map((r) => r.malzemeNo));
+  for (const r of saBagli) ekle(satinAlmaKaynagi(r, false, saBagliParcalar));
+  for (const id of bag.kimlikler.get('ms') ?? []) {
+    if (liste.has(emirKimligi('ms', id))) continue;
+    try {
+      ekle(await musteriKaynagi(db, await siparisAyrintisi(db, id)));
+    } catch (e) {
+      if (!(e instanceof UygulamaHatasi && e.kod === 'BULUNAMADI')) throw e;
+    }
+  }
+  const bilinen = new Set([...liste.values()].map((k) => k.no));
+  const aranan = bag.numaralar.filter((no) => !bilinen.has(no));
+  const ueIdleri = await emirIdleri(db, aranan);
+  for (const id of ueIdleri.values()) ekle(await uretimKaynagi(db, id));
+  for (const no of aranan.filter((n) => !ueIdleri.has(n))) {
+    const s = await musteriSiparisiNodan(db, no);
+    if (s !== null) ekle(await musteriKaynagi(db, s));
+  }
+  return { emirler: emirKaynakSirasi([...liste.values()]) };
+}
+
+export async function parcaKaynaklari(db: Db, g: { ara?: string; idler?: string }): Promise<KmParcaKaynaklariCevabi> {
+  if (g.idler !== undefined) {
+    const ozet = await malzemeOzetleri(db, g.idler.split(',').map(Number));
+    return { parcalar: [...ozet.values()].map((m) => ({ malzemeNo: m.id, kod: m.kod, ad: m.ad, aktif: m.onayDurumu === 'aktif' })) };
+  }
+  const r = await malzemeAra(db, { metin: g.ara ?? null, turler: PARCA_TURLERI, yalnizAktif: true, sayfa: 1, sayfaBoyu: 50 });
+  return { parcalar: r.satirlar.map((m) => ({ malzemeNo: m.id, kod: m.kod, ad: m.ad, aktif: m.onayDurumu === 'aktif' })) };
+}
+
+// 592 B3 c: eski iş emri kaydı numarası sahibinde bulunuyorsa eşleşir; eski parça kartı malzeme kimliği ya da stok koduyla.
+export async function eslesmeSayimi(db: Db): Promise<KmEslesmeSayimiCevabi> {
+  const emirler = await sorgular.koleksiyonKayitlari(db, EMIR_KOLEKSIYONU);
+  const nolar = [...new Set(emirler.map((e) => eskiEmirNo(e.govde)).filter((n): n is string => n !== null))];
+  const ueIdleri = await emirIdleri(db, nolar);
+  const saNolari = new Set((await siparisSatirlari(db)).map((r) => r.siparisNo));
+  const bulunan = new Set<string>();
+  for (const no of nolar) if (ueIdleri.has(no) || saNolari.has(no) || (await musteriSiparisiNodan(db, no)) !== null) bulunan.add(no);
+  const emirEslesmeyen = emirler.filter((e) => { const no = eskiEmirNo(e.govde); return no === null || !bulunan.has(no); });
+
+  const parcalar = await sorgular.koleksiyonKayitlari(db, PARCA_KOLEKSIYONU);
+  const kartlar = await malzemeOzetleri(db, parcalar.map((p) => parcaKartiMalzemeNo(p.govde)).filter((n): n is number => n !== null));
+  const parcaEslesmeyen: typeof parcalar = [];
+  for (const p of parcalar) {
+    const no = parcaKartiMalzemeNo(p.govde);
+    const kod = parcaKartiNo(p.govde);
+    const var_ = no !== null ? kartlar.has(no) : kod !== null && (await malzemeNoKoddan(db, kod)) !== null;
+    if (!var_) parcaEslesmeyen.push(p);
+  }
+  return {
+    emir: {
+      eslesen: emirler.length - emirEslesmeyen.length,
+      eslesmeyenler: emirEslesmeyen.map((e) => ({ kimlik: e.kimlik, no: eskiEmirNo(e.govde), tip: eskiEmirTipi(e.govde) })),
+    },
+    parca: {
+      eslesen: parcalar.length - parcaEslesmeyen.length,
+      eslesmeyenler: parcaEslesmeyen.map((p) => ({ kimlik: p.kimlik, parcaNo: parcaKartiNo(p.govde) })),
+    },
+  };
 }

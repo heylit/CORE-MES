@@ -56,7 +56,7 @@ export interface Cihaz extends KmKayit {
 }
 
 export interface Tedarikci extends KmKayit {
-  kod?: string; ad?: string; kategori?: string; onay?: string; kritik?: string; yetkili?: string; sertBitis?: string; serts?: string[];
+  firmaId?: number | null; kod?: string; ad?: string; kategori?: string; onay?: string; kritik?: string; yetkili?: string; sertBitis?: string; serts?: string[];
   kaliteSkor?: number | null; teslimatSkor?: number | null; sonDenetim?: string; iletisim?: string; not?: string;
 }
 
@@ -76,7 +76,9 @@ export interface Resim extends KmKayit {
 }
 
 export interface ParcaKarti extends KmKayit {
-  parcaNo?: string; ad?: string; malzeme?: string; tedarikci?: string; sinif?: string; not?: string;
+  // 592 B2 a: numara ve ad Malzemeler kartındandır (malzemeNo); parça numarası kayıtların bağ anahtarı olarak kalır. Ad, malzeme ve
+  // tedarikçi eski kartlarda durur, yeni kartta yazılmaz.
+  parcaNo?: string; malzemeNo?: number; ad?: string; malzeme?: string; tedarikci?: string; sinif?: string; not?: string;
 }
 
 export interface IzDegisikligi { alan: string; eski: string; yeni: string }
@@ -95,6 +97,9 @@ export interface BelgeKaydi extends KmKayit {
 export interface Emir extends KmKayit {
   no?: string; tip?: string; durum?: string; parcaNo?: string; parcaAdi?: string; miktar?: number | null; termin?: string;
   tedarikci?: string; musteri?: string; proje?: string; not?: string;
+  // 592 B1 c: sahibinden gelen satır (Üretim emirleri, Satın alma, Siparişler); kimliği kaynağın kimliğidir (ue-12, sa-34, ms-5).
+  // Firma satın almada tedarikçi, müşteri siparişinde müşteridir. Aynı numaralı eski kendi kayıtlarının kimlikleri belge bağı içindir.
+  kaynak?: boolean; firmaId?: number | null; firmaAd?: string | null; eskiKimlikler?: readonly string[];
 }
 
 export interface Bayrak extends KmKayit {

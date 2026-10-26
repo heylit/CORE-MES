@@ -59,6 +59,12 @@
   Resim ve modeller ile Analiz çerçevede kalır (217 b). Eski çerçeve stüdyo TS'ye geçince (591) kalkar. Ekran kendi bölüm sekmesini
   çizmez (553 1 a); görünüm sayaçları (`yeni/*/index.tsx` `...Sayaci`) eski sayfadaki gibi gösterilmez (584 a), tanımları stüdyo işinde
   ya da eski çerçeve kalkarken birlikte gözden geçirilir.
+- İş emri, sipariş ve parça bağlantısı (596; 592 B1 c, B2 a, B3 c; 594 a; 26.10.2026): iş emri ve siparişler sahiplerinden okunur, Kalite
+  Merkezi eklemez, düzenlemez, CSV aktarmaz, arşivlemez. Liste açık kayıtlar ve Kalite Merkezi kayıtlarının bağlı olduğu kapanmışlardır.
+  Kapanmış satın alma siparişi numarayla bulunamaz (açık satırlarda ve belge kimliğinde var). İş emrinin termini açık listede boş
+  (`acikEmirler` taşımıyor); kapanmışta `teslim`. Müşteri siparişinde parça yalnız tek kalemli siparişte dolu. Lot, muayene ve NCR'deki
+  metin alanları (parça no, iş emri no) yerinde kalır, sahibinden numarayla çözülür. Eski `emir` ve `parca` kayıtlarından eşleşmeyenler
+  `/kalite-merkezi/eslesme-sayimi` ile sayılır; silme ayrı onaydır (B3 c). Kalan: açık iş emri sayısı büyürse liste sayfalanır.
 
 ## Sunucu kuralları
 - Kayıt içeriği sunucuda büyük ölçüde yorumlanmaz (Arkon kalıbı): zorunlu alan, NCR/DÖF kuralları uygulamadadır. Sunucu yetkiyi, koleksiyon ve

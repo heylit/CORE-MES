@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { KmDegisiklikCevabi, KmKimlikCevabi, KmOlcuAletleriCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type {
+  KmDegisiklikCevabi, KmEmirKaynagi, KmEmirKaynaklariCevabi, KmKimlikCevabi, KmOlcuAletleriCevabi, KmParcaKaynagi, KmParcaKaynaklariCevabi,
+} from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/Bildirim.tsx';
 import { KaliteMerkeziYeni } from './KaliteMerkeziYeni.tsx';
 import { STUDYO_YOLLARI } from './sekmeler.ts';
@@ -27,10 +29,13 @@ export type TestKayitlari = Partial<Record<KmKoleksiyonu | 'settings', Record<st
 
 export interface Yazma { yol: string; govde: unknown }
 
+// `emirler` sahiplerden gelen iş emri ve siparişler (null: uç hata verir), `parcalar` Malzemeler kartları (592); `ret` verilen yol 403 döner (izinsiz deneme).
+export interface SunucuSecenegi { ret?: (yol: string) => boolean; emirler?: KmEmirKaynagi[] | null; parcalar?: KmParcaKaynagi[] }
+
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-// Kayıtlar `_id` taşır; `dev` ölçü aletleri ucundan, ötekiler akıştan gelir. `ret` verilen yol 403 döner (izinsiz deneme).
-export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, secenek: { ret?: (yol: string) => boolean } = {}) {
+// Kayıtlar `_id` taşır; `dev` ölçü aletleri ucundan, ötekiler akıştan gelir.
+export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, secenek: SunucuSecenegi = {}) {
   const yazmalar: Yazma[] = [];
   let surum = 0;
   const degisiklikler: KmDegisiklikCevabi['degisiklikler'] = [];
@@ -61,6 +66,15 @@ export function sunucuKur(k: TestKullanicisi, kayitlar: TestKayitlari = {}, sece
     if (yol === '/kalite-merkezi/olcu-aletleri') return json(200, { cihazlar } satisfies KmOlcuAletleriCevabi);
     if (yol.endsWith('/gecmis')) return json(200, { surumler: [] });
     if (yol === '/kalite-merkezi/ilk-parca/bekleyenler') return json(200, { emirler: [] });
+    if (yol === '/kalite-merkezi/emir-kaynaklari' && secenek.emirler === null) return json(500, { kod: 'SUNUCU', mesaj: 'Deneme hata' });
+    if (yol === '/kalite-merkezi/emir-kaynaklari') return json(200, { emirler: secenek.emirler ?? [] } satisfies KmEmirKaynaklariCevabi);
+    if (yol.startsWith('/kalite-merkezi/parca-kaynaklari')) {
+      const q = new URL(yol, 'http://x').searchParams;
+      const idler = q.get('idler')?.split(',').map(Number);
+      const ara = (q.get('ara') ?? '').toLocaleLowerCase('tr');
+      const parcalar = (secenek.parcalar ?? []).filter((p) => (idler ? idler.includes(p.malzemeNo) : `${p.kod} ${p.ad ?? ''}`.toLocaleLowerCase('tr').includes(ara)));
+      return json(200, { parcalar } satisfies KmParcaKaynaklariCevabi);
+    }
     return json(404, { kod: 'YOK', mesaj: yol });
   });
   vi.stubGlobal('fetch', fetchSahte);
@@ -80,7 +94,7 @@ export function kmGit(gorunum: string): void {
 }
 
 // Yeni ekranı verilen görünümde açar (`/kalite-merkezi/<gorunum>`; Bugün için boş). Stüdyo görünümleri çerçevededir (217 b).
-export function kmAc(gorunum: string, k: TestKullanicisi = YONETICI, kayitlar: TestKayitlari = {}, secenek: { ret?: (yol: string) => boolean } = {}) {
+export function kmAc(gorunum: string, k: TestKullanicisi = YONETICI, kayitlar: TestKayitlari = {}, secenek: SunucuSecenegi = {}) {
   const sunucu = sunucuKur(k, kayitlar, secenek);
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const adres = gorunum ? `/kalite-merkezi/${gorunum}` : '/kalite-merkezi';

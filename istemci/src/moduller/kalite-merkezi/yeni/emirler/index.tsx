@@ -1,18 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Dugme, OnayPenceresi, Rozet, SayfaBasligi, Tablo, useBildirim, type Sutun,
-} from '../../../../ortak/arayuz/index.ts';
+import { useEffect, useState } from 'react';
+import { DurumKutusu, Dugme, Rozet, SayfaBasligi, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { trd, YOK } from '../bicim.ts';
 import { Ekler } from '../Ekler.tsx';
 import { KayitListesi } from '../KayitListesi.tsx';
 import type { EkranOzellikleri, KmGorunum, KmSayaci } from '../sekmeler.ts';
 import type { Emir } from '../tipler.ts';
-import { useKmKomutu, type KmVerisi } from '../veri.ts';
+import type { KmVerisi } from '../veri.ts';
 import type { KmYetkisi } from '../yetki.ts';
-import { EmirFormu } from './EmirFormu.tsx';
-import {
-  emirAranan, emirBaglari, emirCsvAyristir, emirSirasi, izlenebilirlik, retSayisi, type IzSatiri,
-} from './hesap.ts';
+import { emirAranan, emirBaglari, emirSirasi, izlenebilirlik, retSayisi, type IzSatiri } from './hesap.ts';
 import './emirler.css';
 
 const durumTonu = (d?: string) => (d === 'Kapalı' ? 'tamam' : 'bilgi');
@@ -22,10 +18,8 @@ const IZ_GORUNUMU: Record<IzSatiri['kol'], KmGorunum> = { lot: 'lot-kabul', insp
 // Uygulamanın ikinci menüsünde iş emri sayacı yoktur (navCounts).
 export const IsEmirleriSayaci: KmSayaci = null;
 
-type Form = { kayit: Emir | null } | null;
-
-function EmirSayfasi({ veri, yetki, emir, geri, git, duzenle }: {
-  veri: KmVerisi; yetki: KmYetkisi; emir: Emir; geri: () => void; git: EkranOzellikleri['git']; duzenle: () => void;
+function EmirSayfasi({ veri, yetki, emir, geri, git }: {
+  veri: KmVerisi; yetki: KmYetkisi; emir: Emir; geri: () => void; git: EkranOzellikleri['git'];
 }) {
   const b = emirBaglari(veri, emir.no);
   const sup = emir.tedarikci ? veri.sup.find((s) => s._id === emir.tedarikci) : undefined;
@@ -41,7 +35,7 @@ function EmirSayfasi({ veri, yetki, emir, geri, git, duzenle }: {
     `Parça ${emir.parcaNo ?? ''} ${emir.parcaAdi ?? ''}`.trim(),
     `miktar ${emir.miktar ?? YOK}`,
     `termin ${trd(emir.termin)}`,
-    sup ? sup.ad : '',
+    sup ? sup.ad : emir.musteri ? '' : emir.firmaAd ?? '',
     emir.musteri ?? '',
   ].filter(Boolean).join(' | ');
   return (
@@ -54,7 +48,6 @@ function EmirSayfasi({ veri, yetki, emir, geri, git, duzenle }: {
           etiket: 'Lot kabul', simge: 'plus',
           yap: () => { git('lot-kabul', { ac: 'yeni', on: { parcaNo: emir.parcaNo ?? '', parcaAdi: emir.parcaAdi ?? '', tedarikci: emir.tedarikci ?? '', emir: emir.no ?? '' } }); },
         } : undefined}
-        eylemler={yetki.yaz ? [{ anahtar: 'duzenle', baslik: 'Düzenle', simge: 'edit', sec: duzenle }] : []}
       />
       {emir.parcaNo && (
         <p className="tc-km2-emir-parca">
@@ -68,54 +61,38 @@ function EmirSayfasi({ veri, yetki, emir, geri, git, duzenle }: {
         bosMesaj='Bu numaraya bağlı lot, muayene veya NCR yok. Kayıtlarda "İş emri / sipariş" alanına bu numarayı yazın.'
       />
       <div className="tc-km2-ekler">
-        <Ekler veri={veri} yetki={yetki} kol="emir" kimlik={emir._id} no={emir.no} parcaNo={emir.parcaNo} tur="Uygunluk sertifikası (CoC)" />
+        <Ekler
+          veri={veri} yetki={yetki} kol="emir" kimlik={emir._id} eskiKimlikler={emir.eskiKimlikler} no={emir.no} parcaNo={emir.parcaNo}
+          tur="Uygunluk sertifikası (CoC)"
+        />
       </div>
     </div>
   );
 }
 
-export function IsEmirleri({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikleri) {
-  const komut = useKmKomutu(yetki.rol);
-  const { bildir } = useBildirim();
-  const [secili, seciliYaz] = useState<string | null>(null);
-  const [form, formYaz] = useState<Form>(null);
-  const [aktarim, aktarimYaz] = useState<{ kayitlar: Partial<Emir>[]; atlanan: number } | null>(null);
-  const [aktariliyor, aktariliyorYaz] = useState(false);
-  const dosya = useRef<HTMLInputElement>(null);
-  const yaz = yetki.yaz;
+const ESKI_SUTUNLAR: Sutun<Emir>[] = [
+  { anahtar: 'no', baslik: 'Numara', hucre: (e) => <><span className="tc-km2-kod">{e.no ?? YOK}</span><span className="tc-km2-iki">{e.tip}</span></>, kirilmaz: true },
+  { anahtar: 'parca', baslik: 'Parça', hucre: (e) => <>{e.parcaNo}<span className="tc-km2-iki">{e.parcaAdi}</span></> },
+  { anahtar: 'termin', baslik: 'Termin', hucre: (e) => trd(e.termin), kirilmaz: true },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={durumTonu(e.durum)}>{e.durum ?? YOK}</Rozet> },
+];
 
-  // Geçiş bir kez işlenir: başka görünümden gelen "aç" isteği sayfayı açar, "yeni" formu açar.
+// 592 B1 c: liste Üretim emirleri, Satın alma ve Siparişler'den gelir; burada eklenmez, düzenlenmez, CSV ile aktarılmaz.
+export function IsEmirleri({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikleri) {
+  const [secili, seciliYaz] = useState<string | null>(null);
+
+  // Geçiş bir kez işlenir: başka görünümden gelen "aç" isteği sayfayı açar.
   useEffect(() => {
     if (!gecis) return;
     gecisTamam();
-    if (gecis.ac === 'yeni') { if (yaz) formYaz({ kayit: null }); } else if (gecis.ac) seciliYaz(gecis.ac);
-  }, [gecis, yaz]);
+    if (gecis.ac && gecis.ac !== 'yeni') seciliYaz(gecis.ac);
+  }, [gecis]);
 
   const emir = secili ? veri.emir.find((x) => x._id === secili) : undefined;
 
-  const aktar = async (f: File) => {
-    const sonuc = emirCsvAyristir(await f.text(), veri.emir);
-    if ('hata' in sonuc) { bildir('hata', sonuc.hata); return; }
-    aktarimYaz(sonuc);
-  };
-  const aktarimiOnayla = async () => {
-    if (!aktarim) return;
-    aktariliyorYaz(true);
-    let n = 0;
-    try {
-      for (const k of aktarim.kayitlar) { await komut.kaydet('emir', k); n++; }
-      bildir('tamam', `${n} kayıt aktarıldı`);
-    } catch {
-      bildir('hata', `${n} kayıt aktarıldı; kalanlar kaydedilemedi.`);
-    } finally {
-      aktariliyorYaz(false);
-      aktarimYaz(null);
-    }
-  };
-
   const sutunlar: Sutun<Emir>[] = [
     { anahtar: 'no', baslik: 'Numara', hucre: (e) => <><span className="tc-km2-kod">{e.no}</span><span className="tc-km2-iki">{e.tip}</span></>, kirilmaz: true },
-    { anahtar: 'parca', baslik: 'Parça', hucre: (e) => <>{e.parcaNo}<span className="tc-km2-iki">{e.parcaAdi}</span></> },
+    { anahtar: 'parca', baslik: 'Parça', hucre: (e) => <>{e.parcaNo || YOK}<span className="tc-km2-iki">{e.parcaAdi}</span></> },
     { anahtar: 'miktar', baslik: 'Miktar', hucre: (e) => e.miktar ?? YOK, hizala: 'sag', mono: true },
     { anahtar: 'termin', baslik: 'Termin', hucre: (e) => trd(e.termin), kirilmaz: true },
     {
@@ -128,50 +105,39 @@ export function IsEmirleri({ veri, yetki, gecis, gecisTamam, git }: EkranOzellik
     { anahtar: 'durum', baslik: 'Durum', hucre: (e) => <Rozet ton={durumTonu(e.durum)}>{e.durum ?? YOK}</Rozet> },
   ];
 
-  const formu = form && <EmirFormu veri={veri} yetki={yetki} kayit={form.kayit} kapat={() => { formYaz(null); }} />;
+  if (emir) return <EmirSayfasi veri={veri} yetki={yetki} emir={emir} git={git} geri={() => { seciliYaz(null); }} />;
 
-  if (emir) {
-    return (
-      <>
-        <EmirSayfasi veri={veri} yetki={yetki} emir={emir} git={git} geri={() => { seciliYaz(null); }} duzenle={() => { formYaz({ kayit: emir }); }} />
-        {formu}
-      </>
-    );
-  }
-
+  const eskiler = veri.eskiEmir ?? [];
   return (
     <div className="tc-km2-emirler">
       <SayfaBasligi
         baslik="İş emirleri ve siparişler" simge="clipboard-check"
-        alt="Lot, muayene ve uygunsuzlukların bağlandığı iş emri ve siparişler. İzlenebilirlik zinciri buradan kurulur."
-        birincil={yaz ? { etiket: 'Ekle', simge: 'plus', yap: () => { formYaz({ kayit: null }); } } : undefined}
-        eylemler={yaz ? [{ anahtar: 'csv', baslik: "CSV'den aktar", simge: 'upload', sec: () => { dosya.current?.click(); } }] : []}
+        alt="Üretim emirleri, satın alma ve müşteri siparişlerinden gelir. Lot, muayene ve uygunsuzluklar bunlara bağlanır; izlenebilirlik zinciri buradan kurulur."
       />
-      <input
-        ref={dosya} type="file" accept=".csv,.txt" hidden aria-hidden="true" tabIndex={-1}
-        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void aktar(f); }}
-      />
-      <KayitListesi<Emir>
-        etiket="İş emirleri ve siparişler"
-        satirlar={emirSirasi(veri.emir)}
-        sutunlar={sutunlar}
-        arsivli
-        ara={emirAranan}
-        aramaYeri="Numara, parça, müşteri ara"
-        suzgec={{
-          etiket: 'Durum', ilk: 'Açık', uyar: (e, d) => e.durum === d,
-          secenekler: [{ deger: 'Açık', baslik: 'Açık' }, { deger: 'Kapalı', baslik: 'Kapalı' }, { deger: '', baslik: 'Tümü' }],
-        }}
-        ac={(e) => { seciliYaz(e._id); }}
-        bos="ERP'den iş emri ve sipariş listesini CSV olarak aktarabilir ya da tek tek ekleyebilirsiniz."
-      />
-      {formu}
-      <OnayPenceresi
-        acik={aktarim !== null} baslik="İçe aktar" onayMetni="Aktar" yukleniyor={aktariliyor}
-        onayla={() => { void aktarimiOnayla(); }} vazgec={() => { aktarimYaz(null); }}
-      >
-        {aktarim && <p>{`${aktarim.kayitlar.length} yeni kayıt aktarılacak${aktarim.atlanan ? `, ${aktarim.atlanan} satır atlandı (boş veya zaten var)` : ''}.`}</p>}
-      </OnayPenceresi>
+      {veri.emirKaynagiHatasi
+        ? <DurumKutusu durum="hata" mesaj={hataIletisi(veri.emirKaynagiHatasi, 'İş emri ve siparişler alınamadı.')} />
+        : (
+          <KayitListesi<Emir>
+            etiket="İş emirleri ve siparişler"
+            satirlar={emirSirasi(veri.emir)}
+            sutunlar={sutunlar}
+            ara={emirAranan}
+            aramaYeri="Numara, parça, müşteri ara"
+            suzgec={{
+              etiket: 'Durum', ilk: 'Açık', uyar: (e, d) => e.durum === d,
+              secenekler: [{ deger: 'Açık', baslik: 'Açık' }, { deger: 'Kapalı', baslik: 'Kapalı' }, { deger: '', baslik: 'Tümü' }],
+            }}
+            ac={(e) => { seciliYaz(e._id); }}
+            bos="Açık iş emri ya da sipariş yok. İş emirleri Üretim emirleri'nde, siparişler Satın alma ve Siparişler'de açılır."
+          />
+        )}
+      {eskiler.length > 0 && (
+        <>
+          <h3 className="tc-km2-bolum">Eşleşmeyen eski kayıtlar</h3>
+          <p className="tc-km2-emir-parca">Bu kayıtlar Kalite Merkezi'nde elle açılmıştı ve sahibinde karşılığı yok. Salt okunurdur; silinmeleri ayrı karardır.</p>
+          <Tablo etiket="Eşleşmeyen eski kayıtlar" satirlar={eskiler} sutunlar={ESKI_SUTUNLAR} satirAnahtari={(e) => e._id} />
+        </>
+      )}
     </div>
   );
 }
