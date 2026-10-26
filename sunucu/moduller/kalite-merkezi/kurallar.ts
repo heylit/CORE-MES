@@ -42,6 +42,12 @@ export const ILETILER = {
   dofKaynagi: 'DÖF kaynağı ya da kaynak anahtarı geçersiz.',
   dofBasligi: 'DÖF başlığı boş olamaz.',
   dofSeviyesi: 'DÖF açılan bulgunun seviyesi majör ya da minör olmalı.',
+  lotKaynagi: 'Lot kararının kaynağı ya da kaynak anahtarı geçersiz.',
+  lotParcasi: 'Lot kararı için parça no gerekli.',
+  lotBuyuklugu: 'Lot kararı için geçerli bir parti büyüklüğü (en az 2) gerekli.',
+  lotAyari: 'Lot planının muayene seviyesi ya da AQL değeri geçersiz.',
+  lotSayisi: 'Lot kararı için en az bir sınıfın bulunan uygunsuz sayısı gerekli; sayı 0 ile parti büyüklüğü arasında olmalı.',
+  lotDurduruldu: 'Bu parça için kabul muayenesi durduruldu; Kalite Merkezi\'nde sıkılık geçiş tablosundan yeniden başlatılmalı.',
 } as const;
 
 // Uygulamanın rolleri ve ayarları bu kayıtlardadır; giriş TMI oturumu olduğu için onları yalnız yönetici değiştirir.
@@ -185,7 +191,7 @@ export function onayliFormReddi(koleksiyon: string, onceki: Record<string, unkno
 // kuralı). Lot kararı formun hesabıdır; "yeniden başlat" (`tip: reset`) kaydı muayene değildir, kilitlenmez.
 const SONUCLU_MUAYENE: readonly string[] = ['Kabul', 'Ret'];
 export const DOF_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'capa';
-const LOT_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'lot';
+export const LOT_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'lot';
 export function kapanmisKayitMi(koleksiyon: string, govde: Record<string, unknown> | null): boolean {
   const alan = (a: string): string => (typeof govde?.[a] === 'string' ? (govde[a] as string).trim() : '');
   if (koleksiyon === UYGUNSUZLUK_KOLEKSIYONU || koleksiyon === DOF_KOLEKSIYONU) return alan('durum') === UYGUNSUZLUK_KAPALI;
@@ -521,4 +527,217 @@ export function tedarikciOnayDurumlari(kayitlar: readonly TedarikciKaydi[], firm
     for (const f of bagli) koy(f.id, d);
   }
   return sonuc;
+}
+
+// ---- AQL numune planı (564 2 a, 4 a) -------------------------------------------------------------------------------------------
+// Kabul muayenesinin planı Kalite Merkezi'nindir: Arkon kalite istasyonunun lot planı ve lot kararı buradan gelir, ekran ile sunucu aynı
+// tabloyu kullanır. ISO 2859-1 / ANSI-ASQ Z1.4 tek örneklemeli tablolar uygulamanın `yeni/aql.ts` dosyasıyla aynıdır (eşitlik testi
+// `aql.test.ts`'de). AQL yalnız lot kabul yöntemidir; tezgah içi "her N parça" sıklığı Hazırlık'ta elle kalır (564 2 a).
+export const AQL_SEVIYELERI = ['S-1', 'S-2', 'S-3', 'S-4', 'I', 'II', 'III'] as const;
+const KOD_TABLOSU: readonly (readonly [number, number, string])[] = [[2, 8, 'AAAAAAB'], [9, 15, 'AAAAABC'], [16, 25, 'AABBBCD'], [26, 50, 'ABBCCDE'],
+  [51, 90, 'BBCCCEF'], [91, 150, 'BBCDDFG'], [151, 280, 'BCDEEGH'], [281, 500, 'BCDEFHJ'], [501, 1200, 'CCEFGJK'], [1201, 3200, 'CDEGHKL'],
+  [3201, 10000, 'CDFGJLM'], [10001, 35000, 'CDFHKMN'], [35001, 150000, 'DEGJLNP'], [150001, 500000, 'DEGJMPQ'], [500001, Infinity, 'DEHKNQR']];
+const HARFLER = 'ABCDEFGHJKLMNPQRS'.split('');
+const NUMUNELER = [2, 3, 5, 8, 13, 20, 32, 50, 80, 125, 200, 315, 500, 800, 1250, 2000, 3150];
+export const AQL_DEGERLERI = ['0.010', '0.015', '0.025', '0.040', '0.065', '0.10', '0.15', '0.25', '0.40', '0.65', '1.0', '1.5', '2.5', '4.0', '6.5', '10'];
+export const AQL_YUZDE_YUZ = '%100';
+const NORMAL_DIZI: Record<number, [number, number]> = { 0: [0, 1], 3: [1, 2], 4: [2, 3], 5: [3, 4], 6: [5, 6], 7: [7, 8], 8: [10, 11], 9: [14, 15], 10: [21, 22] };
+const SIKI_DIZI: Record<number, [number, number]> = { 0: [0, 1], 2: [1, 2], 3: [2, 3], 4: [3, 4], 5: [5, 6], 6: [8, 9], 7: [12, 13], 8: [18, 19] };
+export const AQL_NORMAL = 'Normal';
+export const AQL_SIKI = 'Sıkılaştırılmış';
+export const AQL_DURDURULDU = 'Durduruldu';
+export type AqlSiddeti = typeof AQL_NORMAL | typeof AQL_SIKI;
+
+type Hucre = readonly [number, number] | '↓' | '↑' | null | undefined;
+export function aqlHucresi(i: number, j: number, siddet: string): Hucre {
+  if (siddet === AQL_SIKI) {
+    const e = i + j - 16;
+    if (e < 0 || e === 1) return '↓';
+    if (e > 8) return '↑';
+    return SIKI_DIZI[e];
+  }
+  if (i > 15) return null;
+  const d = i + j - 14;
+  if (d < 0 || d === 2) return '↓';
+  if (d === 1 || d > 10) return '↑';
+  return NORMAL_DIZI[d];
+}
+
+export function aqlKodHarfi(N: number, seviye: string): string | null {
+  const r = KOD_TABLOSU.find((x) => N >= x[0] && N <= x[1]);
+  const i = (AQL_SEVIYELERI as readonly string[]).indexOf(seviye);
+  return r && i >= 0 ? r[2][i] ?? null : null;
+}
+
+// Uygulamanın planıyla aynı alanlar: kod (tablo harfi), kodK (ok kuralından sonraki harf), numune, Ac, Re, %100 muayene ve not.
+export interface AqlPlani { kod: string; kodK: string; n: number; ac: number; re: number; yuzde100: boolean; not: string }
+export function aqlPlani(Nh: number, seviye: string, aql: string, siddet: string): AqlPlani | null {
+  const N = Math.floor(Nh);
+  if (!Number.isFinite(N) || N < 2) return null;
+  if (aql === AQL_YUZDE_YUZ) return { kod: '—', kodK: '—', n: N, ac: 0, re: 1, yuzde100: true, not: '%100 muayene, sıfır kabul' };
+  const L = aqlKodHarfi(N, seviye);
+  const j = AQL_DEGERLERI.indexOf(aql);
+  if (!L || j < 0) return null;
+  let i = HARFLER.indexOf(L);
+  const enCok = siddet === AQL_SIKI ? 16 : 15;
+  let v: Hucre;
+  let not = '';
+  for (let g = 0; g < 40; g++) {
+    v = aqlHucresi(i, j, siddet);
+    if (Array.isArray(v)) break;
+    if (v === '↓') {
+      if (i < enCok) i++;
+      else {
+        not = 'Tablo sınırı: üstteki plan kullanıldı';
+        do i--; while (i > 0 && !Array.isArray(aqlHucresi(i, j, siddet)));
+        v = aqlHucresi(i, j, siddet);
+        break;
+      }
+    } else if (i > 0) i--;
+    else {
+      i++;
+      not = 'A satırında yukarı ok: alttaki ilk plan kullanıldı';
+    }
+  }
+  if (!Array.isArray(v)) return null;
+  const hucre = v as readonly [number, number];
+  const r: AqlPlani = { kod: L, kodK: HARFLER[i] ?? L, n: NUMUNELER[i] ?? N, ac: hucre[0], re: hucre[1], yuzde100: false, not };
+  if (HARFLER[i] !== L && !not) r.not = `Ok kuralı: ${L} → ${HARFLER[i] ?? ''}`;
+  if (r.n >= N) {
+    r.yuzde100 = true;
+    r.n = N;
+    r.not = `${r.not ? `${r.not}; ` : ''}numune ≥ parti, %100 muayene`;
+  }
+  return r;
+}
+
+// Uygulamanın lot anahtarı (parça no ve tedarikçi; iç üretim `IC`) ve sıkılık geçişi: normalde 5 lotta 2 ret sıkılaştırır,
+// sıkılaştırılmışta 5 ardışık kabul normale döndürür, 5 ret durdurur; `tip: reset` sıkılaştırılmıştan başlatır, yeniden sunum sayılmaz.
+export const lotAnahtari = (parcaNo: unknown, tedarikci: unknown): string =>
+  `${(typeof parcaNo === 'string' ? parcaNo : '').trim().toLocaleUpperCase('tr')}|${typeof tedarikci === 'string' && tedarikci !== '' ? tedarikci : 'IC'}`;
+export function lotSikiligi(lotlar: readonly Record<string, unknown>[], anahtar: string): AqlSiddeti | typeof AQL_DURDURULDU {
+  const alan = (l: Record<string, unknown>, a: string): string => (typeof l[a] === 'string' ? (l[a] as string) : '');
+  const L = lotlar.filter((l) => alan(l, 'anahtar') === anahtar)
+    .sort((a, b) => alan(a, 'tarih').localeCompare(alan(b, 'tarih')) || alan(a, 'no').localeCompare(alan(b, 'no')));
+  let st: AqlSiddeti | typeof AQL_DURDURULDU = AQL_NORMAL;
+  let pencere: boolean[] = [];
+  let sKabul = 0;
+  let sRet = 0;
+  for (const l of L) {
+    if (l['tip'] === 'reset') {
+      st = AQL_SIKI;
+      sKabul = 0;
+      sRet = 0;
+      continue;
+    }
+    if (l['yenidenSunum'] === true) continue;
+    const ok = l['karar'] === 'Kabul';
+    if (st === AQL_DURDURULDU) continue;
+    if (st === AQL_NORMAL) {
+      pencere.push(ok);
+      if (pencere.length > 5) pencere.shift();
+      if (pencere.filter((x) => !x).length >= 2) {
+        st = AQL_SIKI;
+        pencere = [];
+        sKabul = 0;
+        sRet = 0;
+      }
+    } else if (ok) {
+      sKabul++;
+      if (sKabul >= 5) {
+        st = AQL_NORMAL;
+        pencere = [];
+      }
+    } else {
+      sKabul = 0;
+      sRet++;
+      if (sRet >= 5) st = AQL_DURDURULDU;
+    }
+  }
+  return st;
+}
+
+// Muayene planı: uygulamanın `settings/genel` kaydındaki varsayılan seviye ve sınıf AQL'leri (yoksa uygulamanın varsayılanları II,
+// kritik %100, majör 1.0, minör 2.5) ile parti büyüklüğünden. Arkon'un istasyon planı tek numune sayısı ister: `n` örneklemeli
+// sınıfların en büyük numunesidir (aynı numune bütün sınıflara bakılır); %100 muayeneli sınıf (varsayılanda kritik) yalnız kendi
+// özelliklerinde bütün partiye bakar ve `n`'yi büyütmez, bütün sınıflar %100 ise `n` partidir. Sıkılık durdurulmuşsa plan yoktur
+// (uygulama da yeni lotu kaydetmez).
+export const AQL_SINIFLARI = ['Kritik', 'Majör', 'Minör'] as const;
+export type AqlSinifi = (typeof AQL_SINIFLARI)[number];
+const SINIF_ALANI: Record<AqlSinifi, 'kr' | 'mj' | 'mn'> = { Kritik: 'kr', Majör: 'mj', Minör: 'mn' };
+export interface MuayeneAqlAyari { seviye: string; kr: string; mj: string; mn: string }
+export function varsayilanAqlAyari(genel: Record<string, unknown> | null): MuayeneAqlAyari {
+  const m = (a: string, v: string): string => (typeof genel?.[a] === 'string' && (genel[a] as string) !== '' ? (genel[a] as string) : v);
+  return { seviye: m('seviye', 'II'), kr: m('kritik', AQL_YUZDE_YUZ), mj: m('major', '1.0'), mn: m('minor', '2.5') };
+}
+export interface MuayenePlani {
+  N: number; ayar: MuayeneAqlAyari; siddet: AqlSiddeti; n: number;
+  siniflar: { sinif: AqlSinifi; aql: string; kod: string; n: number; ac: number; re: number; yuzde100: boolean; not: string }[];
+}
+export function muayenePlani(N: number, ayar: MuayeneAqlAyari, siddet: AqlSiddeti): MuayenePlani | null {
+  const siniflar: MuayenePlani['siniflar'] = [];
+  for (const sinif of AQL_SINIFLARI) {
+    const aql = ayar[SINIF_ALANI[sinif]];
+    const p = aqlPlani(N, ayar.seviye, aql, siddet);
+    if (p === null) return null;
+    siniflar.push({ sinif, aql, kod: p.kodK, n: p.n, ac: p.ac, re: p.re, yuzde100: p.yuzde100, not: p.not });
+  }
+  const ornekli = siniflar.filter((x) => !x.yuzde100);
+  return { N: Math.floor(N), ayar, siddet, n: ornekli.length === 0 ? Math.floor(N) : Math.max(...ornekli.map((x) => x.n)), siniflar };
+}
+
+// Lot kararı: sayısı verilen her sınıfta bulunan Ac'yi aşmıyorsa Kabul. Sayısı verilmeyen sınıf (istasyon sınıf ayırmıyorsa) null
+// yazılır, sıfır sayılmaz; en az bir sınıfın sayısı gerekir.
+export type LotBulunani = Record<AqlSinifi, number | null>;
+export function lotKarari(plan: MuayenePlani, bulunan: LotBulunani): 'Kabul' | 'Ret' | null {
+  const sayilan = plan.siniflar.filter((s) => bulunan[s.sinif] !== null);
+  if (sayilan.length === 0) return null;
+  return sayilan.every((s) => (bulunan[s.sinif] ?? 0) <= s.ac) ? 'Kabul' : 'Ret';
+}
+
+// 564 6 a: Arkon kalite istasyonunun lot kararı Kalite Merkezi'nde lot kabul kaydı olur; kayıt uygulamanın lot formundaki biçimdedir
+// (`yeni/lot/LotFormu.tsx`) ve kararı verildiği için kilitlidir (KM-K89). Kimlik kaynak anahtarının özetidir: aynı karar ikinci kaydı
+// açmaz. Numara uygulamanın `LOT-YYYY-NNNN` sırasıdır.
+export const LOT_KAYNAKLARI = ['arkon'] as const;
+export type LotKaynagi = (typeof LOT_KAYNAKLARI)[number];
+export interface LotKarariIstegi {
+  kaynak: LotKaynagi; kaynakAnahtari: string; uretimEmriId: number; parcaNo: string; parcaAdi: string | null; N: number;
+  ayar: MuayeneAqlAyari | null; bulunan: LotBulunani; not: string | null;
+}
+export const lotKimligi = (kaynak: string, kaynakAnahtari: string): string =>
+  `lot-${createHash('sha256').update(`${kaynak}\n${kaynakAnahtari}`).digest('hex').slice(0, 40)}`;
+export function lotIstegiReddi(i: LotKarariIstegi): 'lotKaynagi' | 'lotParcasi' | 'lotBuyuklugu' | 'lotAyari' | 'lotSayisi' | null {
+  if (!(LOT_KAYNAKLARI as readonly string[]).includes(i.kaynak)) return 'lotKaynagi';
+  if (typeof i.kaynakAnahtari !== 'string' || i.kaynakAnahtari === '' || i.kaynakAnahtari.length > DOF_ANAHTAR_SINIRI) return 'lotKaynagi';
+  if (metin(i.parcaNo) === '') return 'lotParcasi';
+  if (!Number.isSafeInteger(i.N) || i.N < 2) return 'lotBuyuklugu';
+  if (i.ayar !== null) {
+    if (!(AQL_SEVIYELERI as readonly string[]).includes(i.ayar.seviye)) return 'lotAyari';
+    if (![i.ayar.kr, i.ayar.mj, i.ayar.mn].every((a) => a === AQL_YUZDE_YUZ || AQL_DEGERLERI.includes(a))) return 'lotAyari';
+  }
+  const sayilar = AQL_SINIFLARI.map((s) => i.bulunan[s]);
+  if (sayilar.some((x) => x !== null && !(Number.isSafeInteger(x) && x >= 0 && x <= i.N))) return 'lotSayisi';
+  return sayilar.some((x) => x !== null) ? null : 'lotSayisi';
+}
+
+export function siradakiLotNo(lotlar: readonly Record<string, unknown>[], yil: number): string {
+  const on = `LOT-${String(yil)}-`;
+  let enBuyuk = 0;
+  for (const l of lotlar) {
+    const no = l['no'];
+    if (typeof no === 'string' && no.startsWith(on)) enBuyuk = Math.max(enBuyuk, parseInt(no.slice(on.length), 10) || 0);
+  }
+  return on + String(enBuyuk + 1).padStart(4, '0');
+}
+
+export function lotGovdesi(
+  i: LotKarariIstegi, d: { no: string; gun: string; emirNo: string | null; muayeneci: string; plan: MuayenePlani; karar: 'Kabul' | 'Ret' },
+): Record<string, unknown> {
+  return {
+    no: d.no, tarih: d.gun, parcaNo: metin(i.parcaNo), parcaAdi: metin(i.parcaAdi), tedarikci: '', lotNo: '', emir: d.emirNo ?? '', N: d.plan.N,
+    seviye: d.plan.ayar.seviye, kr: d.plan.ayar.kr, mj: d.plan.ayar.mj, mn: d.plan.ayar.mn, muayeneci: d.muayeneci, yenidenSunum: false,
+    bKr: i.bulunan.Kritik, bMj: i.bulunan.Majör, bMn: i.bulunan.Minör, not: metin(i.not), anahtar: lotAnahtari(i.parcaNo, ''), siddet: d.plan.siddet,
+    plan: Object.fromEntries(d.plan.siniflar.map((s) => [s.sinif, { kod: s.kod, n: s.n, ac: s.ac, re: s.re, aql: s.aql }])),
+    karar: d.karar, kaynak: i.kaynak, kaynakAnahtari: i.kaynakAnahtari, uretimEmriId: i.uretimEmriId,
+  };
 }

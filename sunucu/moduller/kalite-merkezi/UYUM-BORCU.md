@@ -50,6 +50,12 @@
 - Uygulamanın tarayıcıda tuttuğu küçük tercihler (atölye modu, form taslağı, oturum) opak kökende bellek içindedir; sayfa
   yenilenince sıfırlanır. Kayıtlar sunucudadır.
 
+- AQL lot planı ve lot kararı (564 2 a, 4 a, 6 a, 26.10.2026): tablo sunucu `kurallar.ts`'de ve ekranın `yeni/aql.ts`'sinde iki kopyadır
+  (istemci sunucuyu ithal edemez); eşitliği `aql.test.ts` korur. Ekranın lot formu numarayı hâlâ tarayıcıda (`siradakiNo`) verir, sunucu
+  aynı sıradan alır; ikisi aynı anda yazarsa aynı numara çıkabilir (DÖF'teki gibi Sistem Ayarları kalıbı paylasilan ayar kaydı ister,
+  ayrı iş). VARSAYIM: Arkon tek numune sayısı kullandığı için `n` örneklemeli sınıfların en büyüğüdür; %100 sınıf (varsayılan kritik) yalnız
+  kendi özelliklerinde bütün partiye bakar. Stoğun serbest/red olması stoğun ve Arkon'un işidir (K2, K3).
+
 ## Sunucu kuralları
 - Kayıt içeriği sunucuda büyük ölçüde yorumlanmaz (Arkon kalıbı): zorunlu alan, NCR/DÖF kuralları uygulamadadır. Sunucu yetkiyi, koleksiyon ve
   kimlik biçimini, gövdenin nesne olmasını, değişiklik izinin değişmezliğini ve onay alanlarını denetler. İçeriğe bakan istisnalar: ölçüm
