@@ -74,3 +74,10 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 ## Bağlamada kapanacak: bitiş tarihi akışı (455/2 a)
 - Akış yalnız `yaz` ucundan kaydedilen planda düşer. Plan başka yoldan kaydedilirse (sunucu çözücüsü, P5) o yol da `bitisAkisiEkle`yi çağırmalı.
 - Eski sayfanın `svKaydet`i (zx-sevkiyat) yeni ekran gelince kalkar; o zamana kadar ikisi aynı kuralla yazar.
+
+## Bağlamada kapanacak: yeni Planlama ekranı "Veri ve kısıtlar" (577b)
+- Sahiplik denetimi (575 a, "hepsi gelsin, sahiplerini kontrol ederiz sonra"): bugünkü sayfanın bütün iç görünümleri yeni ekrana aynen geldi. Kaynak alanlar
+  (tezgâh, personel, vardiya, çalışma günü, tatil, ürün ve rota, malzeme, sipariş, fasoncu, devamsızlık, satın alma) 222 a ile sahibinden okunur, ekranda düzenleme
+  düğmesi pasif kalır. Planlamaya özgü kalanlar çalışma komutuyla ve `plan.yaz` ile yazılır: kısıt açma ve parametreleri, `D.ayarlar`, ayar matrisi, arıza ve ek mesai,
+  tedarikçi listesi, aparat listesi. Tedarikçi (musteri-tedarikci) ve aparat (istasyonlar ya da takım) sahibi başka modül olabilecek kavramlardır; planlamada ikinci kopya olarak tutulur.
+- Nasıl uyumlanır: Aşama 2 sahiplik listesinde tedarikçi ve aparat için sahip sorulur; sahip belli olunca liste kaynak alana geçer, ekrandaki düzenleme pasifleşir.
