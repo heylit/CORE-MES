@@ -5,9 +5,9 @@ import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts
 import { otomatikOdak, tezgahGrubu, type OdakYeri } from '../ic/odak/kurallar.ts';
 import { gecmisBolumuOku } from '../ic/gecmis/kurallar.ts';
 import { bolumOku } from '../ic/veri/kurallar.ts';
-import { KartKatmani, useKartlar } from '../ic/kartlar/index.tsx';
+import { KartKatmani, useKartlar, type RotaIzi } from '../ic/kartlar/index.tsx';
 import { KartGovdesi, type KartBaglami } from '../ic/kartlar/Govdeler.tsx';
-import { KART_TURLERI, kartAc as kartAcF, kartDegistir as kartDegistirF, kartKapat as kartKapatF, kartKucult, type KartTuru } from '../ic/kartlar/kurallar.ts';
+import { KART_TURLERI, kartAc as kartAcF, kartKapat as kartKapatF, kartKucult, rotaUrunu, rotaYerleri, type KartTuru } from '../ic/kartlar/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { CizelgeGorunumu } from './cizelge/CizelgeGorunumu.tsx';
 import { HaritaGorunumu } from './harita/HaritaGorunumu.tsx';
@@ -49,7 +49,7 @@ const OdakTahtasi = lazy(async () => ({ default: (await import('../ic/odak/index
 export const veriAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'veri', bolum: bolum ?? null }) : null);
 export const gecmisAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (bolum?: string) => o.altSec?.({ ekran: 'gecmis', bolum: bolum ?? null }) : null);
 // Tahta kartları (577d, zc-tahta): bu teslimde gelenler; öbürleri menüde pasiftir.
-const HAZIR_KARTLAR: KartTuru[] = ['plan', 'siparis', 'kuyruk', 'etki'];
+const HAZIR_KARTLAR: KartTuru[] = ['plan', 'siparis', 'kuyruk', 'kisit', 'hesap', 'etki', 'rota'];
 
 export const sayfaAcici = (o: PlanlamaEkranOzellikleri) => (o.altSec ? (s: 'bugun' | 'hesap') => o.altSec?.({ ekran: s, bolum: null }) : null);
 
@@ -94,6 +94,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const dk = useRef<HTMLElement | null>(null);
   const [kartlar, kartDegis] = useKartlar();
   const [dizIstegi, setDizIstegi] = useState(false);
+  const [rotaUrun, setRotaUrun] = useState<string | null>(null);
+  const [rotaUst, setRotaUst] = useState<{ k: string | null; m: string | null }>({ k: null, m: null });
 
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
@@ -229,8 +231,12 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     c, p, cx, s: sahne, r, now, t: zaman, durus: durusOku(c), secim, sor, komut, planYaz: yetki.planYaz, canliSurum,
     mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), kilavuzAc: () => kilavuzAc(true),
     sipSec: (j) => { sipSec(j, false); harita.current?.odakla(j); }, tezSec: (m) => { tezSec(m, false); harita.current?.tezgahaUc(m); }, opSec,
-    kartAc: tahtaKartiAc, veriAc: veriAc && ((b: string) => veriAc(b)),
+    kartAc: tahtaKartiAc, veriAc: veriAc && ((b: string) => veriAc(b)), planKur, uyar,
+    rotaUrun, rotaUrunSec: setRotaUrun, rotaUst: (x) => setRotaUst((y) => (y.k === x.k && y.m === x.m ? y : x)),
   } : null;
+  const rotaKarti = kartlar.find((k) => k.tur === 'rota' && !k.kucuk);
+  const rotaU = rotaKarti && p ? rotaUrunu(c, secJob, rotaUrun) : null;
+  const iz: RotaIzi | null = rotaU ? { adimlar: (rotaU.rota ?? []).map((x) => ({ k: x.k, yerler: rotaYerleri(x) })), ust: rotaUst.k, ustM: rotaUst.m } : null;
 
   return (
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
@@ -250,7 +256,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <HaritaGorunumu c={c} p={p} cx={cx} olcek={donem} r={r} now={now} secim={secim} sec={sec} mercek={mercek}
               kilavuz={kilavuz} ornek={ornek} kilavuzAc={kilavuzAc} ciftTik={ciftTik} ust={cubuk} komut={komutKur} fark={farkPlani}
               katman={kb ? (bag) => (
-                <KartKatmani bag={bag} l={kartlar} degis={kartDegis} dizIstegi={dizIstegi} dizBitti={() => setDizIstegi(false)}
+                <KartKatmani bag={bag} l={kartlar} degis={kartDegis} iz={iz} dizIstegi={dizIstegi} dizBitti={() => setDizIstegi(false)}
                   kapat={(t) => kartDegis((l) => kartKapatF(l, t))} kucult={(t) => kartDegis((l) => kartKucult(l, t))} govde={(t) => <KartGovdesi tur={t} b={kb} />} />
               ) : undefined} />
           ) : (

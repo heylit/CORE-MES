@@ -2,7 +2,8 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PgAdim } from '../../motor/atolye/kurallar.ts';
 import type { Bolge, Kamera } from '../../motor/harita/kurallar.ts';
-import { ayristir, type Derleme, type OkunanPlan, type PlanIslemi, type SureKategorisi } from '../../motor/kurallar.ts';
+import { ayristir, isAgirligi, type Derleme, type OkunanPlan, type PlanIslemi, type SureKategorisi } from '../../motor/kurallar.ts';
+import type { RotaAdimi, Urun } from '../../tipler.ts';
 
 // Tahta kartları (zc-tahta TK_TUR, ze-rota): Başka menüsünün okumaları haritanın üstüne bırakılan kartlardır; dünya koordinatında durur,
 // haritayla kayar, tutulup taşınır, küçültülür, kapatılır. Kartın tahtadaki boyu sabit bir yakınlığa göredir (KREF): her kartın belli bir yeri olur.
@@ -233,3 +234,55 @@ export function agYakinlari(ag: EtkiAgi, n: string | null): { bag: Set<AgBagi>; 
   if (n.startsWith('t:')) for (const b of ag.bag) if (dugum.has(b.a)) bag.add(b);
   return { bag, dugum };
 }
+
+// --- Hesaplar kartı (zb-merkez2 mzOlcu, mzOlcuTablo, mzHesap): göstergeler son canlı plana göre ---
+// İki sütun aynı hesapla çıkar: gecikme siparişin son işinin bitişi ile termini arasındaki fark, öncelik ağırlıklı. Ayar ve doluluk canlı planda
+// yoktur (canlıda yalnız yer ve saat tutulur); o hücreler boş kalır.
+export interface PlanOlcusu { wT: number | null; late: number | null; Cmax: number | null; fas: number | null; suH: number | null; suN: number | null; dol: number | null; dar: { m: string; u: number } | null }
+function gecikmeOlcusu(c: PlanlamaCalismasi, cx: Derleme, C: Record<string, number>): { wT: number; late: number } {
+  let wT = 0, late = 0;
+  for (const s of c.D.siparisler) {
+    const b = C[s.id]; const due = cx.jobs[s.id]?.due; if (s.havuz || b == null || due == null) continue;
+    const T = b - due; if (T > 0.05) { late++; wT += T * isAgirligi(s); }
+  }
+  return { wT, late };
+}
+export function simdikiOlcu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): PlanOlcusu {
+  const C: Record<string, number> = {}; let fas = 0, Cmax: number | null = null;
+  for (const r of Object.values(p.ops)) {
+    if (!Number.isFinite(r.S) || !Number.isFinite(r.C)) continue;
+    C[r.job] = Math.max(C[r.job] ?? -Infinity, r.C); Cmax = Math.max(Cmax ?? -Infinity, r.C); if (r.fas) fas += r.C - r.S;
+  }
+  let busy = 0, open = 0; let dar: PlanOlcusu['dar'] = null;
+  for (const [m, u] of Object.entries(p.util)) { if (m.startsWith('@')) continue; busy += u.busy; open += u.open; if (!dar || u.u > dar.u) dar = { m, u: u.u }; }
+  return { ...gecikmeOlcusu(c, cx, C), Cmax, fas, suH: p.ozet.suH, suN: p.ozet.suN, dol: open ? busy / open : null, dar };
+}
+export function canliOlcu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, canli: Record<string, PgAdim>): PlanOlcusu {
+  const C: Record<string, number> = {}; let fas = 0, Cmax: number | null = null;
+  for (const [id, r] of Object.entries(canli)) {
+    C[r.job] = Math.max(C[r.job] ?? -Infinity, r.C); Cmax = Math.max(Cmax ?? -Infinity, r.C); if (p.ops[id]?.fas) fas += r.C - r.S;
+  }
+  return { ...gecikmeOlcusu(c, cx, C), Cmax, fas, suH: null, suN: null, dol: null, dar: null };
+}
+// Fark iyi mi kötü mü: bütün göstergelerde küçük iyidir, doluluk dışında.
+export const OLCU_SIRASI = ['wT', 'late', 'suH', 'suN', 'Cmax', 'fas', 'dol'] as const;
+export type OlcuAnahtari = (typeof OLCU_SIRASI)[number];
+
+// --- Reçete ve Rota kartı (ze-rota rtKart, rtTur, rtCiz): ürünün reçetesi ve rotası yukarıdan aşağı; veri sahibinde değişir (222 a) ---
+export type GecisTuru = 'b' | 'o' | 'x';
+export const GECIS_AD: Record<GecisTuru, string> = { b: 'bitince başlar', o: 'örtüşmeli: ilk parti bitince başlar', x: 'bağımsız: öncekini beklemez' };
+export function gecisTuru(u: Urun, i: number): GecisTuru {
+  const o = u.rota?.[i]; if (!i || !o) return 'b';
+  if (o.gecis === 'b' || o.gecis === 'o' || o.gecis === 'x') return o.gecis;
+  const bag = o.bag ?? []; if (!bag.length) return 'x';
+  return bag.some((b) => b[1] === 'o') ? 'o' : 'b';
+}
+export const rotaYerleri = (o: RotaAdimi): string[] => (o.fason ? [`@${o.fason}`] : (o.tezgahlar ?? []).map((t) => t.id));
+// Seçili siparişin ürünü, yoksa seçilen; o da yoksa ilk ürün.
+export function rotaUrunu(c: PlanlamaCalismasi, sj: string | null, secilen: string | null): Urun | null {
+  const D = c.D; const s = sj ? D.siparisler.find((x) => x.id === sj) : null;
+  return D.urunler.find((u) => u.id === secilen) ?? D.urunler.find((u) => u.id === s?.urun) ?? D.urunler[0] ?? null;
+}
+// Reçete deneme verisinde siparişlerin malzeme ihtiyacındadır (rtRecete): ürünü kullanan ilk siparişinki.
+export const rotaRecetesi = (c: PlanlamaCalismasi, u: Urun): { kod: string; miktar: number }[] =>
+  c.D.siparisler.find((x) => x.urun === u.id && x.malzeme?.length)?.malzeme ?? [];
