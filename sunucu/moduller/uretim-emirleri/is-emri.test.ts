@@ -387,6 +387,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(akis.sayimlar[0] && [akis.sayimlar[0].isEmriId, akis.sayimlar[0].tur, akis.sayimlar[0].adet, akis.sayimlar[0].duzeltme], [ie1, 'saglam', 9, true], 'ilk sayım kalite onayıyla sağlama geçer');
     assert.equal(akis.sayimlar.filter((x) => x.isEmriId === ie3 && x.tur === 'saglam').reduce((t, x) => t + x.adet, 0), 7);
     assert.deepEqual([...new Set(akis.sayimlar.map((x) => x.refakatPartisiId))], [null], 'kartsız sayımın kartı yok (kart #708)');
+    assert.ok([...akis.olaylar, ...akis.sayimlar].every((x) => Number.isInteger(x.kisiId) && x.kisiId > 0), 'her olay ve sayım yazanını taşır (kart #708)');
+    assert.ok(akis.sayimlar.every((x) => (x.tur === 'hurda') === (x.hurdaNedeniId !== null)), 'hurda sayımı nedenini taşır');
     assert.deepEqual(akis.fason.map((x) => [x.isEmriId, x.yon, x.adet, x.hurdaAdet]),
       [[ie2, 'gidis', 5, null], [ie2, 'gidis', 4, null], [ie2, 'donus', 4, 1], [ie2, 'donus', 4, 0]]);
     assert.equal(await emirAkisKaydi(o().vt, 2147483647), null);
