@@ -27,7 +27,7 @@ interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; olcek: DonemOlcegi; kayma: number; r: Aralik; now: number;
   secim: PlanlamaSecimi; sec: (s: Partial<PlanlamaSecimi>) => void; olcekSec: (o: DonemOlcegi) => void; kaydir: (n: number) => void;
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; studyo: () => void; ust: ReactNode;
-  sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null;
+  sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null; veriAc?: ((bolum: string) => void) | null;
 }
 // Eski sayfanın geniş ekran sınırı (t-tekyer sagAcikMi: innerWidth >= 1280); çerçevenin yerine görünümün genişliği.
 const GENIS = 1280;
@@ -153,7 +153,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
         {sag && (
           <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null}
             planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={mercekSec}
-            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} />
+            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} veriAc={o.veriAc ?? null} />
         )}
       </div>
     </section>

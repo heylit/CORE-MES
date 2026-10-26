@@ -162,3 +162,15 @@ export const yetkinlikGecerliMi = (gecerlilikBitis: string | null, gun: string):
 export function yetkinlikFarki(mevcut: readonly number[], istenen: readonly number[]): { eklenen: number[]; kaldirilan: number[] } {
   return { eklenen: istenen.filter((i) => !mevcut.includes(i)), kaldirilan: mevcut.filter((i) => !istenen.includes(i)) };
 }
+
+// 565 a: toplu değişiklik kişi başına toplanır; aynı kişi ve istasyonda son değişiklik geçerlidir.
+export function yetkinlikDegisiklikleri(l: readonly { kisiId: number; istasyonId: number; yetkin: boolean }[]): Map<number, Map<number, boolean>> {
+  const m = new Map<number, Map<number, boolean>>();
+  for (const d of l) m.set(d.kisiId, (m.get(d.kisiId) ?? new Map<number, boolean>()).set(d.istasyonId, d.yetkin));
+  return m;
+}
+export function yetkinlikUygula(mevcut: readonly number[], degisiklik: ReadonlyMap<number, boolean>): number[] {
+  const s = new Set(mevcut);
+  for (const [istasyonId, yetkin] of degisiklik) { if (yetkin) s.add(istasyonId); else s.delete(istasyonId); }
+  return [...s];
+}

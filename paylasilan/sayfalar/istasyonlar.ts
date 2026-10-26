@@ -15,6 +15,7 @@ export const ISTASYONLAR_IKINCI_MENU = {
       { anahtar: 'is-merkezleri', baslik: 'İş merkezleri ve istasyonlar', yol: '/istasyonlar/is-merkezleri', simge: 'layers', islem: 'sayfa.istasyonlar' },
       { anahtar: 'makineler', baslik: 'Makineler', yol: '/istasyonlar/makineler', simge: 'cpu', islem: 'sayfa.istasyonlar' },
       { anahtar: 'personel', baslik: 'Personel', yol: '/istasyonlar/personel', simge: 'user', islem: 'sayfa.istasyonlar' },
+      { anahtar: 'yetkinlik', baslik: 'Yetkinlik', yol: '/istasyonlar/yetkinlik', simge: 'clipboard-check', islem: 'sayfa.istasyonlar' },
       { anahtar: 'vardiyalar', baslik: 'Vardiyalar', yol: '/istasyonlar/vardiyalar', simge: 'clock', islem: 'sayfa.istasyonlar' },
     ] },
     { baslik: 'Yönetim', maddeler: [

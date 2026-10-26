@@ -7,7 +7,7 @@ import {
   makineKaydiSemasi, makineKisiSorgusu, makineKisileriCevabi, makineSorgusu, makinelerCevabi, operasyonTipiGovdesi, operasyonTipiGuncellemeGovdesi, operasyonTipiKaydiSemasi,
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
   yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
-  makineTopluTasiGovdesi, topluAktiflikGovdesi,
+  makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
@@ -395,6 +395,15 @@ export const uclar = [
     govde: yetkinlikGovdesi,
     cevap: kisiYetkinligiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.yetkinlikBelirle(db, kullanici.id, parametre.kisiId, govde.istasyonIdleri),
+  }),
+  // 565 a: matristen toplu aç ve kapat; tek kişi ucuyla aynı kural ve defter, tek transaction.
+  uc({
+    yontem: 'POST',
+    yol: '/kisi-yetkinlikleri/toplu',
+    yetki: 'istasyonlar.yaz',
+    govde: yetkinlikTopluGovdesi,
+    cevap: yetkinliklerCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ yetkinlikler: await servis.yetkinlikleriTopluBelirle(db, kullanici.id, govde.degisiklikler) }),
   }),
   // Karar 146 a (IS29): geçerlilik bitişi ve dayanak; okunan sürümle, deftere yazılır.
   uc({

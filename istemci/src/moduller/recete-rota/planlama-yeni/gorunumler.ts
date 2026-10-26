@@ -34,6 +34,22 @@ export interface PlanlamaSecimi {
 }
 export const BOS_SECIM: PlanlamaSecimi = { siparis: null, adim: null, tezgah: null, zaman: null };
 
+// Planlama motoru sayfasının ekranları (eski b-kabuk EKRANLAR: tahta, veri, geçmiş; stüdyo ayrı görünümdür). Ekran ve bölümü adresin
+// sorgusundadır (`?ekran=veri&bolum=kisitlar`): görünüm anahtarı ikinci menünündür, ekran onun içindedir. Bölüm ekranın kendi anahtarıdır.
+export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis'] as const;
+export type MotorEkrani = (typeof MOTOR_EKRANLARI)[number];
+export interface PlanlamaAltEkrani { ekran: MotorEkrani; bolum: string | null }
+export const TAHTA: PlanlamaAltEkrani = { ekran: 'tahta', bolum: null };
+export function altEkranOku(q: URLSearchParams): PlanlamaAltEkrani {
+  const e = MOTOR_EKRANLARI.find((x) => x === q.get('ekran'));
+  return !e || e === 'tahta' ? TAHTA : { ekran: e, bolum: q.get('bolum') };
+}
+export function altEkranAdresi(a: PlanlamaAltEkrani): string {
+  if (a.ekran === 'tahta') return gorunumAdresi('plan');
+  const q = new URLSearchParams({ ekran: a.ekran }); if (a.bolum) q.set('bolum', a.bolum);
+  return `${gorunumAdresi('plan')}?${q.toString()}`;
+}
+
 // Her görünüme verilen ortak özellikler. `git` başka görünüme geçer; `yenile` açılış okumalarını yeniden yapar. `calisma` çalışmanın güncel
 // halidir (değişiklikten sonra yenisi gelir; `depo.calisma` açılıştakidir). `komut` yazma yetkisi yoksa ya da çalışma kaydı yoksa null'dır.
 // `olcek` ve `secim` görünüm değişince korunur, sayfa yenilenince açılış haline döner (eski ekranda da kaydedilmezdi); çalışmaya yazılmaz.
@@ -50,6 +66,10 @@ export interface PlanlamaEkranOzellikleri {
   kaydir: (n: number) => void;
   secim: PlanlamaSecimi;
   sec: (s: Partial<PlanlamaSecimi>) => void;
+  // Motor sayfasının ekranı (yalnız `plan` görünümünde tahta dışı olabilir) ve ona geçiş; geçiş `plan` görünümüne gider. Verilmezse ekran tahtadır,
+  // ekran düğmeleri pasif kalır (iskeletsiz çizim, testler).
+  alt?: PlanlamaAltEkrani;
+  altSec?: (a: PlanlamaAltEkrani) => void;
 }
 
 export interface GorunumKaydi {
