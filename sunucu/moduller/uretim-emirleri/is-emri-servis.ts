@@ -456,6 +456,8 @@ export interface EmirDilimiSatiri {
     sira: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; saglamAdet: number | null; canliAdet: number | null;
     ad: string; operasyonTipiId: number; kaynak: { tur: IsEmriKaynakTuru; id: number } | null; istasyonId: number | null;
     ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null; bilesenler: { malzemeId: number; miktar: string; fireYuzde: string }[];
+    // 697: ek adım (rework, tamir, ek) rotada yer tutmaz; Reçete ve Rota durum anahtarını rotadaki yerle kurar.
+    tur: 'rota' | 'rework' | 'tamir' | 'ek';
   }[];
 }
 
@@ -476,6 +478,7 @@ export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
       sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(e.id) ?? 0 : null,
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bilesenler: bilesenler.filter((b) => b.isEmriId === i.id).map((b) => ({ malzemeId: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde })),
+      tur: i.tur,
     })),
   }]));
 }

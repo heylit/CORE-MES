@@ -961,6 +961,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     let k = await ayrinti(kol);
     assert.deepEqual(k.parti?.birlesmeOpNo, 30);
     assert.deepEqual(k.isEmirleri.map((i) => [i.sira, i.opNo, i.tur, i.ekAciklama]), [[1, 15, 'rework', 'Çapak'], [2, 20, 'rota', null]], 'kol birleşme adımına kadar taşır, rework önde');
+    // 697: Reçete ve Rota durum anahtarını rotadaki yerle kurar; ek adımı dilimdeki türden tanır.
+    const dilim = (await o().vt.tx((db) => emirDilimi(db))).find((e) => e.id === kol);
+    assert.deepEqual(dilim?.isEmirleri.map((i) => [i.sira, i.opNo, i.tur]), [[1, 15, 'rework'], [2, 20, 'rota']]);
     assert.equal(b.govde.emir.adet, 7);
     const ustNo = (await ayrinti(id)).emirNo;
     assert.equal(k.emirNo, `${ustNo}/1`, 'kol üstün numarasını ve kaçıncı kol olduğunu taşır');
