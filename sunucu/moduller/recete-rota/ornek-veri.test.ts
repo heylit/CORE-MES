@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ANAHTAR_ONEKI } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
 import { ornekBelge } from './ornek-veri.ts';
 import { durum, yaz } from './servis.ts';

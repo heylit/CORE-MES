@@ -11,7 +11,7 @@ import { denetimYaz } from './moduller/denetim/disari.ts';
 import { tekrarDeposu } from './moduller/istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from './moduller/kisiler/disari.ts';
 import { kimlikCozucu } from './moduller/oturum/disari.ts';
-import { PLANLAMA_ANAHTARI } from './moduller/recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './moduller/plan/disari.ts';
 
 // Modüller arası akış sağlığı (2026-10-19 bağımsız denetimi, bölüm 2): firma -> kart -> rota -> sipariş -> proje -> emir -> satın alma ve
 // stok -> plan -> Arkon -> kalite -> sevkiyat -> finans -> iz, göçün verdiği gerçek rollerle. Her rol ayrı kişidir; veriler uydurmadır.
@@ -172,7 +172,7 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const v = tamam(await yaz<{ vardiyalar: { id: number; ad: string }[] }>('mudur', '/vardiyalar', { ad: 'E2E gunduz', baslangic: '08:00', bitis: '18:00', molalar: [], aktif: true }))
       .vardiyalar.find((x) => x.ad === 'E2E gunduz')!;
     for (let gun = 1; gun <= 7; gun++) tamam(await yaz('mudur', '/vardiya-matrisi/degistir', { isMerkeziId: im.id, gun, vardiyaId: v.id, acik: true }));
-    tamam(await yaz('planlama', '/recete-rota/kayitlar/yaz', {
+    tamam(await yaz('planlama', '/plan/planlama-kayitlari/yaz', {
       anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
       deger: {
         surum: 2, rrSavedAt: null, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,

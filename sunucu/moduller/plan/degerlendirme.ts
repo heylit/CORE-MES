@@ -9,9 +9,9 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import type { HataKodu } from '#paylasilan/hata.ts';
-import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
-import { planlamaGirdisi } from './servis.ts';
+import { planlamaGirdisi } from './planlama-servis.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
 // (motor/kancalar.betik) ve kart hesaplarıyla (motor/degerlendir.betik) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
@@ -102,7 +102,7 @@ function temizle(simdi: number): void {
   for (const [k, i] of isler) if (i.durum !== 'suruyor' && simdi - i.bitis > SONUC_OMRU_MS) isler.delete(k);
 }
 
-// Başlatma (463 a). Akış: oturum ve recete-rota.planlama-oku uçta; burada maliyet görüşü, kişi başına tek iş, girdi ve sürüm. Girdi uç
+// Başlatma (463 a). Akış: oturum ve plan.planlama-oku uçta; burada maliyet görüşü, kişi başına tek iş, girdi ve sürüm. Girdi uç
 // transaction'ında okunur; hesap iş parçacığında koşar, sonuç bellekte kısa süre tutulur. Kayıt yazılmaz.
 export async function degerlendirmeBaslat(
   db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,

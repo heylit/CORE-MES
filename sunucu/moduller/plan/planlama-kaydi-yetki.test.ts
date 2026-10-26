@@ -8,11 +8,13 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
+import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
 // 287 a: planlama çalışmasının kaydı (`:planlama`) yalnız plan.yaz taşıyana yazılır ve silinir; öteki anahtarlar recete-rota.yaz ile kalır.
-// Müdür rolü 524/3 b ile plan.yaz da taşır; planlamayı okuyup plan.yaz taşımayan rol çalışmayı değiştiremez. Veriler uydurmadır.
+// Müdür rolü 524/3 b ile plan.yaz da taşır; planlamayı okuyup plan.yaz taşımayan rol çalışmayı değiştiremez. 658 b: planlama anahtarları plan
+// modülünün uçlarına yazılır, Reçete ve Rota'nın kayıt uçları onları reddeder. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
 
 describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)', () => {
@@ -45,13 +47,14 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
     return rolluKisi(kullaniciAdi, rol?.id ?? 0);
   }
   const istek = (cerez: string, url: string, payload: object) => app.inject({ method: 'POST', url: `/api${url}`, headers: { cookie: cerez }, payload });
+  const kok = (anahtar: string) => (anahtar.startsWith(PLANLAMA_ANAHTARI) ? '/plan/planlama-kayitlari' : '/recete-rota/kayitlar');
   const yaz = (cerez: string, anahtar: string, deger: unknown, beklenenSurum: number | null) =>
-    istek(cerez, '/recete-rota/kayitlar/yaz', { anahtar, bicim: 'json', deger, beklenenSurum });
-  const sil = (cerez: string, anahtar: string, beklenenSurum: number) => istek(cerez, '/recete-rota/kayitlar/sil', { anahtar, beklenenSurum });
-  const kayit = (anahtar: string) => vt().tx((db) => sorgular.kayitGetir(db, anahtar));
+    istek(cerez, `${kok(anahtar)}/yaz`, { anahtar, bicim: 'json', deger, beklenenSurum });
+  const sil = (cerez: string, anahtar: string, beklenenSurum: number) => istek(cerez, `${kok(anahtar)}/sil`, { anahtar, beklenenSurum });
+  const kayit = (anahtar: string) => vt().tx((db) => sorgular.planlamaKaydi(db, anahtar));
   async function calismaKur(deger: unknown): Promise<number> {
-    await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
-    const k = await vt().tx((db) => sorgular.kayitEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, kisiId: yoneticiId }));
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    const k = await vt().tx((db) => sorgular.planlamaKaydiEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, kisiId: yoneticiId }));
     return k?.surum ?? -1;
   }
 
@@ -61,7 +64,7 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     planci = await islemliKisi('planci', ['recete-rota.yaz', 'plan.yaz']);
     yalnizYazar = await islemliKisi('yazar', ['recete-rota.yaz']);
-    mudurBenzeri = await islemliKisi('mudur_benzeri', ['recete-rota.planlama-oku', 'recete-rota.yaz']);
+    mudurBenzeri = await islemliKisi('mudur_benzeri', ['plan.planlama-oku', 'recete-rota.yaz']);
     const mudurRolu = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'mudur'");
     assert.ok(mudurRolu, 'müdür rolü göçlerde yok');
     mudur = await rolluKisi('mudur_kisi', mudurRolu.id);
@@ -91,9 +94,9 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
   });
 
   test('PY-03: kayıt yokken de ilk yazma plan.yaz ister; metin biçimi de aynı denetimden geçer', async () => {
-    await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
     assert.equal((await yaz(yalnizYazar, PLANLAMA_ANAHTARI, { surum: 2 }, null)).statusCode, 403);
-    const metin = await istek(yalnizYazar, '/recete-rota/kayitlar/yaz', { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: '{"surum":2}', beklenenSurum: null });
+    const metin = await istek(yalnizYazar, '/plan/planlama-kayitlari/yaz', { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: '{"surum":2}', beklenenSurum: null });
     assert.equal(metin.statusCode, 403);
     assert.equal(await kayit(PLANLAMA_ANAHTARI), null);
   });
@@ -125,5 +128,17 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
       const surum = (yazma.json() as { kayit: { surum: number } }).kayit.surum;
       assert.equal((await sil(yalnizYazar, anahtar, surum)).statusCode, 200);
     }
+  });
+
+  test('PY-06: Reçete ve Rota kayıt uçları planlama anahtarlarını reddeder; planlama ucu öteki anahtarları reddeder', async () => {
+    const surum = await calismaKur({ surum: 2, v: 1 });
+    for (const anahtar of [PLANLAMA_ANAHTARI, `${PLANLAMA_ANAHTARI}-ui4`, `${PLANLAMA_ANAHTARI}:not`]) {
+      const yazma = await istek(planci, '/recete-rota/kayitlar/yaz', { anahtar, bicim: 'json', deger: { v: 1 }, beklenenSurum: null });
+      assert.equal(yazma.statusCode, 400, `${anahtar}: ${yazma.body}`);
+      assert.equal((await istek(planci, '/recete-rota/kayitlar/sil', { anahtar, beklenenSurum: surum })).statusCode, 400);
+    }
+    assert.deepEqual((await kayit(PLANLAMA_ANAHTARI))?.deger, { surum: 2, v: 1 }, 'eski uç planlama kaydına dokunmaz');
+    const yanlis = await istek(planci, '/plan/planlama-kayitlari/yaz', { anahtar: `${DURUM_ANAHTARI}:studio`, bicim: 'json', deger: { v: 1 }, beklenenSurum: null });
+    assert.equal(yanlis.statusCode, 400, yanlis.body);
   });
 });

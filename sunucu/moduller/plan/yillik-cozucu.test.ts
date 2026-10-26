@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { YillikCozumu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { YillikCozumu } from '#paylasilan/sozlesme/planlama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -93,8 +93,8 @@ describe('yıllık plan çözüm ucu (gerçek PostgreSQL)', () => {
     assert.equal(cevap.statusCode, 200);
     return String(cevap.headers['set-cookie']).split(';')[0] ?? '';
   }
-  const baslat = (cerez: string, payload: object) => app.inject({ method: 'POST', url: '/api/recete-rota/yillik-plan/coz', headers: { cookie: cerez }, payload });
-  const oku = (cerez: string, is: string) => app.inject({ method: 'GET', url: `/api/recete-rota/yillik-plan/coz/${is}`, headers: { cookie: cerez } });
+  const baslat = (cerez: string, payload: object) => app.inject({ method: 'POST', url: '/api/plan/yillik-plan/coz', headers: { cookie: cerez }, payload });
+  const oku = (cerez: string, is: string) => app.inject({ method: 'GET', url: `/api/plan/yillik-plan/coz/${is}`, headers: { cookie: cerez } });
   async function sonuc(cerez: string, is: string): Promise<unknown> {
     for (let k = 0; k < 200; k++) {
       const c = await oku(cerez, is);
@@ -110,8 +110,8 @@ describe('yıllık plan çözüm ucu (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('recete_rota_yillik_coz');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    planlamaci = await islemliKisi('planlamaci', ['recete-rota.planlama-oku']);
-    baskasi = await islemliKisi('baskasi', ['recete-rota.planlama-oku']);
+    planlamaci = await islemliKisi('planlamaci', ['plan.planlama-oku']);
+    baskasi = await islemliKisi('baskasi', ['plan.planlama-oku']);
     gormeyen = await islemliKisi('gormeyen', ['recete-rota.oku', 'recete-rota.yaz']);
   });
   after(async () => { await ortam?.kaldir(); });
@@ -127,7 +127,7 @@ describe('yıllık plan çözüm ucu (gerçek PostgreSQL)', () => {
     assert.deepEqual(r.cozum.val, { x: 3, y: 1 });
     assert.equal((await oku(planlamaci, is)).statusCode, 404);
     const d = await vt().sorgu<{ metin: string }>(
-      "SELECT row_to_json(d)::text AS metin FROM denetim_kaydi d WHERE yol LIKE '%/recete-rota/yillik-plan/coz' ORDER BY id DESC LIMIT 1");
+      "SELECT row_to_json(d)::text AS metin FROM denetim_kaydi d WHERE yol LIKE '%/plan/yillik-plan/coz' ORDER BY id DESC LIMIT 1");
     assert.equal(d.length, 1);
     assert.match(d[0]?.metin ?? '', /Maximize/);
   });

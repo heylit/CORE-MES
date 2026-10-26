@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
-import { taslakEkMesaisi } from './kurallar.ts';
+import { taslakEkMesaisi } from './planlama-kurallar.ts';
 import type { MotorDurumu, MotorPlani } from './plan-motoru.ts';
 
 // Planın girdisi (st) planlama çerçevesindeki kodla kurulur: motor/girdi.betik çerçeveye de gömülür (planlama-derle.ts), aynı kayıt,
@@ -13,7 +13,7 @@ const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum'] as const;
 
 let kod: string | null = null;
 function girdiKodu(): string {
-  kod ??= `${DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ girdiKur });`;
+  kod ??= `${DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ girdiKur, yeniCalismaKur });`;
   return kod;
 }
 // Sunucu çözücüsünün çevirisi (motor/emirler.betik) aynı dosyalarla aynı bağlamda yüklenir; çerçeveye de gömülür (planlamaMotoru).
@@ -44,6 +44,15 @@ export function planGirdisi(istek: GirdiIstegi, simdi: number = Date.now()): Pla
   const sonuc = girdiKur(kopya(istek.calisma), kopya(istek.kayit), kopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
   // Bağlamın nesneleri onun dizi ve nesne türlerindendir; sunucunun türlerine yapılandırılmış kopyayla geçer (sonsuz değer korunur).
   return sonuc === null ? null : structuredClone(sonuc);
+}
+
+// 657 a: kayıt yoksa sayfanın açacağı boş çalışma (çerçevenin yeniCalisma'sı); veri Reçete ve Rota kaydından ve kaynak okumasından.
+export function yeniCalisma(kayit: unknown, kaynak: KaynakOkumasi | null, bugun: string): Record<string, unknown> {
+  const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
+  const { yeniCalismaKur } = vm.runInContext(girdiKodu(), baglam, { filename: 'plan-girdisi.js' }) as {
+    yeniCalismaKur: (kayit: unknown, kaynak: KaynakOkumasi | null, bugun: string) => Record<string, unknown>;
+  };
+  return structuredClone(yeniCalismaKur(kayit === undefined ? null : structuredClone(kayit), kaynak === null ? null : structuredClone(kaynak), bugun));
 }
 
 // Asıl plana yazan komutun isteği motorun diline (ADR 0018 karar 3): anahtar "emir no|OP no", makine kimliği metin, anlar ISO.

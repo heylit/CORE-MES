@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import vm from 'node:vm';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
-import { acikSiparisSatirlari } from './kurallar.ts';
+import { acikSiparisSatirlari } from './planlama-kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorKodu, type MotorDurumu } from './plan-motoru.ts';
 

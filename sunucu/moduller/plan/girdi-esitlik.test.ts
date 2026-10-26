@@ -1,16 +1,23 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
+import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
+
+// Reçete ve Rota'nın ana kaydı (planın girdisi) doğrudan yazılır: sahibi modülün yazma yolu bu testin konusu değildir.
+const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu(
+  `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
+  [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 
 // 599: çalışma jsonb'de durur, jsonb nesne anahtarlarını kendi sırasına dizer. Birleşmiş çalışma olduğu gibi geri yazılıp okununca veri
 // sürümü artmamalı (plan bayatlamaz); gerçek veri değişikliği yine artırır. Veriler uydurmadır.
@@ -33,19 +40,19 @@ describe('planlama çalışması: yazıp okumada veri sürümü (gerçek Postgre
       personel: [], siparisler: [], ayarlar: {} },
   };
   const oku = async (): Promise<PlanlamaCalismasiCevabi> => {
-    const c = await app.inject({ method: 'GET', url: '/api/recete-rota/planlama-calismasi', headers: { cookie: cerez } });
+    const c = await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi', headers: { cookie: cerez } });
     assert.equal(c.statusCode, 200, c.body);
     return c.json() as PlanlamaCalismasiCevabi;
   };
   // Sayfanın yaptığı gibi: birleşmiş çalışma kayıt yazma ucundan, sürüm denetimiyle geri yazılır.
   const geriYaz = async (c: PlanlamaCalismasiCevabi): Promise<void> => {
-    const y = await app.inject({ method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: cerez },
+    const y = await app.inject({ method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: cerez },
       payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: c.calisma, beklenenSurum: c.surum } });
     assert.equal(y.statusCode, 200, y.body);
   };
   const kayitYaz = (deger: unknown) => vt().tx(async (db) => {
     await db.sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]);
-    await sorgular.kayitEkle(db, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, kisiId: yoneticiId });
+    await receteRotaKaydiEkle(db, deger, yoneticiId);
   });
 
   before(async () => {
@@ -61,7 +68,7 @@ describe('planlama çalışması: yazıp okumada veri sürümü (gerçek Postgre
     const vardiya = (await s.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis, aktif) VALUES ('Gunduz', '08:00', '16:00', true) RETURNING id"))!.id;
     await s.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) VALUES ($1, 1, $2), ($1, 3, $2), ($1, 7, $2)', [merkez, vardiya]);
     await kayitYaz(kayit('Ornek mil', 9));
-    await ortam.vt.tx((db) => sorgular.kayitEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: calisma, kisiId: yoneticiId }));
+    await ortam.vt.tx((db) => sorgular.planlamaKaydiEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: calisma, kisiId: yoneticiId }));
   });
   after(async () => { await ortam?.kaldir(); });
 

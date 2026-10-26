@@ -1,13 +1,20 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
-import type { PlanMotoruIstegi } from '../plan/disari.ts';
-import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
+import type { PlanMotoruIstegi } from './disari.ts';
+import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { coz, sunucuPlanCozucusu } from './plan-cozucusu.ts';
-import { planCozumKaynagi } from './servis.ts';
+import { planCozumKaynagi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
+
+// Reçete ve Rota'nın ana kaydı (planın girdisi) doğrudan yazılır: sahibi modülün yazma yolu bu testin konusu değildir.
+const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu(
+  `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
+  [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 
 // Sunucu çözücüsü (ADR 0018): plan modülünün isteği (anahtar "emir no|OP no", makine kimliği, gerçek an) sunucunun güncel emir, rota ve
 // kaynaklarıyla motora çevrilir, sabit kipte dizilir. Motorun kendisi plan-motoru.test.ts'te, girdi çevirisi plan-girdisi.test.ts'te sınanır.
@@ -314,8 +321,8 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
     const mk = await s.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id, aktif) VALUES ('PC-M1', 'Deneme torna 1', $1, true) RETURNING id", [ist!.id]);
     makineId = mk!.id;
     await ortam.vt.tx(async (db) => {
-      await sorgular.kayitEkle(db, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: KAYNAK.kayit, kisiId });
-      await sorgular.kayitEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: JSON.stringify(KAYNAK.calisma), kisiId });
+      await receteRotaKaydiEkle(db, KAYNAK.kayit, kisiId);
+      await sorgular.planlamaKaydiEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: JSON.stringify(KAYNAK.calisma), kisiId });
     });
   });
   after(async () => { await ortam?.kaldir(); });
@@ -333,7 +340,7 @@ describe('sunucu plan çözücüsü (gerçek PostgreSQL)', () => {
   });
 
   test('planlama sayfasının çalışma kaydı yoksa komut reddedilir', async () => {
-    await vt().tx((db) => sorgular.kayitSil(db, PLANLAMA_ANAHTARI));
+    await vt().tx((db) => sorgular.planlamaKaydiSil(db, PLANLAMA_ANAHTARI));
     await assert.rejects(vt().tx((db) => sunucuPlanCozucusu(db, istek({ kuyruklar: [{ makineId, anahtarlar: ['E-1|10'] }] }))), /çalışma kaydı/);
   });
 });

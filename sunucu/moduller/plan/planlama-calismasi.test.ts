@@ -1,3 +1,4 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
@@ -6,16 +7,22 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
+import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planGirdisi } from './plan-girdisi.ts';
-import { kaynakOku } from './servis.ts';
+import { kaynakOku } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
+
+// Reçete ve Rota'nın ana kaydı (planın girdisi) doğrudan yazılır: sahibi modülün yazma yolu bu testin konusu değildir.
+const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu(
+  `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
+  [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 
 // 288 a: planlama sayfası çalışmayı sunucuda birleşmiş okur. Beklenen değer aynı betiğin aynı girdiyle doğrudan çağrısıdır (eski çerçevenin
 // tarayıcıda yaptığı); takvim eki vardiya takviminden kurulur. Veriler uydurmadır.
@@ -47,7 +54,7 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     });
     return girisCerezi(kullaniciAdi);
   }
-  const oku = (cerez: string) => app.inject({ method: 'GET', url: '/api/recete-rota/planlama-calismasi', headers: { cookie: cerez } });
+  const oku = (cerez: string) => app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi', headers: { cookie: cerez } });
 
   const kayit = { version: 7, savedAt: 9, items: [{ id: '50', code: 'MM-1', name: 'Ornek mil', type: 'mamul' }], opdefs: [], machines: [], routes: {}, orders: [] };
   const calisma = (surum: number) => ({
@@ -58,8 +65,8 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
   });
   async function calismaYaz(deger: unknown): Promise<number> {
     return vt().tx(async (db) => {
-      await db.sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
-      const k = await sorgular.kayitEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, kisiId: yoneticiId });
+      await db.sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+      const k = await sorgular.planlamaKaydiEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, kisiId: yoneticiId });
       return k?.surum ?? -1;
     });
   }
@@ -69,7 +76,7 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yonetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     tam = await girisCerezi('yonetici');
-    planlamaci = await islemliKisi('planlamaci', ['recete-rota.planlama-oku']);
+    planlamaci = await islemliKisi('planlamaci', ['plan.planlama-oku']);
     yalnizYazar = await islemliKisi('yazar', ['recete-rota.yaz']);
     const s = ortam.sahip;
     isMerkeziId = (await s.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('PC-IM', 'Deneme merkezi') RETURNING id"))!.id;
@@ -77,7 +84,7 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     // Pazartesi (1) ve pazar (7): çerçevenin biçiminde pazar 0'dır.
     await s.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) VALUES ($1, 1, $2), ($1, 7, $2)', [isMerkeziId, vardiyaId]);
     await s.sorgu('INSERT INTO vardiya_kisi (kisi_id, vardiya_id) VALUES ($1, $2)', [yoneticiId, vardiyaId]);
-    await ortam.vt.tx((db) => sorgular.kayitEkle(db, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: kayit, kisiId: yoneticiId }));
+    await ortam.vt.tx((db) => receteRotaKaydiEkle(db, kayit, yoneticiId));
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -107,13 +114,13 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
   test('PC-02: okuma kaydı değiştirmez', async () => {
     const surum = await calismaYaz(calisma(2));
     assert.equal((await oku(tam)).statusCode, 200);
-    const k = await vt().tx((db) => sorgular.kayitGetir(db, PLANLAMA_ANAHTARI));
+    const k = await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI));
     assert.equal(k?.surum, surum);
     assert.deepEqual(k?.deger, calisma(2));
   });
 
   test('PC-03: çalışma kaydı yoksa çalışma ve sürüm null; biçimi eskiyse çalışma null, sürüm kaydınki', async () => {
-    await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
     assert.deepEqual((await oku(tam)).json(), { calisma: null, surum: null });
     const surum = await calismaYaz(calisma(1));
     assert.deepEqual((await oku(tam)).json(), { calisma: null, surum });
@@ -125,6 +132,34 @@ describe('planlama çalışması ucu (gerçek PostgreSQL)', () => {
     assert.equal(izinli.statusCode, 200, izinli.body);
     assert.notEqual((izinli.json() as PlanlamaCalismasiCevabi).calisma, null);
     assert.equal((await oku(yalnizYazar)).statusCode, 403);
-    assert.equal((await app.inject({ method: 'GET', url: '/api/recete-rota/planlama-calismasi' })).statusCode, 401);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi' })).statusCode, 401);
+  });
+
+  // 657 a: kayıt yoksa sayfa boş çalışmayı sunucuya kurdurur ve düzenlenebilir açılır.
+  const olustur = (cerez: string) => app.inject({ method: 'POST', url: '/api/plan/planlama-calismasi/olustur', headers: { cookie: cerez, 'istek-kimligi': crypto.randomUUID() } });
+
+  test('PC-05: kayıt yokken boş çalışma Reçete ve Rota kaydından kurulur, yazılır ve birleşmiş döner; ikinci çağrı var olana dokunmaz', async () => {
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    const cevap = await olustur(tam);
+    assert.equal(cevap.statusCode, 200, cevap.body);
+    const c = cevap.json() as PlanlamaCalismasiCevabi;
+    assert.notEqual(c.calisma, null, 'kurulan çalışma sayfanın okuduğu biçimde');
+    const k = await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI));
+    assert.equal(k?.surum, c.surum);
+    const deger = k?.deger as { surum: number; rrSavedAt: number; plan: unknown; D: { meta: { baslangic: string }; urunler: { id: string }[] } };
+    assert.equal(deger.surum, 2);
+    assert.equal(deger.plan, null);
+    assert.equal(deger.rrSavedAt, kayit.savedAt, 'kayıt okunmuş sayılır: açılışta plan eskimez');
+    assert.equal(deger.D.meta.baslangic, tesisGunu(Date.now()));
+    const ikinci = await olustur(tam);
+    assert.equal(ikinci.statusCode, 200, ikinci.body);
+    assert.equal((ikinci.json() as PlanlamaCalismasiCevabi).surum, c.surum, 'var olan kayda yazılmaz');
+  });
+
+  test('PC-06: boş çalışmayı kurmak kaydı yazmak gibidir: plan.yaz ya da recete-rota.yaz eksikse 403 ve kayıt açılmaz', async () => {
+    await vt().sorgu('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]);
+    assert.equal((await olustur(yalnizYazar)).statusCode, 403);
+    assert.equal((await olustur(planlamaci)).statusCode, 403);
+    assert.equal(await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)), null);
   });
 });

@@ -2,11 +2,11 @@ import vm from 'node:vm';
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
-import type { PlanMotoruCozucusu, PlanMotoruIstegi } from '../plan/disari.ts';
-import { planAni } from './kurallar.ts';
+import { planAni } from './planlama-kurallar.ts';
 import { cozumGirdisi, type EkAdim } from './plan-girdisi.ts';
 import { motorKodu, planCoz, type MotorDurumu } from './plan-motoru.ts';
-import { planCozumKaynagi } from './servis.ts';
+import { planCozumKaynagi } from './planlama-servis.ts';
+import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 
 // ADR 0018 karar 5: plan modülünün planMotoruCozucusu kaydının karşılığı. Girdiyi bu modül kurar (planlama sayfasının çalışması, Reçete ve
 // Rota kaydı ve sunucunun güncel emir, rota ve kaynakları); motor aramasız sabit kipte, kuyruktaki tezgâh sırasını koruyarak dizer.

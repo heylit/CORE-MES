@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { bulunamadi, cakisma } from '#cekirdek/hata.ts';
-import type { YillikCozDurumuCevabi, YillikCozGovdesi, YillikCozumu } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { YillikCozDurumuCevabi, YillikCozGovdesi, YillikCozumu } from '#paylasilan/sozlesme/planlama.ts';
 
 // Yıllık planın HiGHS çözücüsü (454/6 a): planlama sayfasının kurduğu kaba kapasite modelini (LP metni) çözer. Plan motoru değildir:
 // kayıt okumaz, yazmaz, plana dokunmaz. Paket (highs, kök package.json) ayrı iş parçacığında yüklenir; çözüm olay döngüsünü tutmaz.
@@ -63,7 +63,7 @@ export function modelCoz(istek: YillikCozGovdesi, sureMs: number = istek.sure * 
   });
 }
 
-// Çözümü başlatır ve hemen döner. Akış: oturum ve recete-rota.planlama-oku uçta; burada eşzamanlılık sınırı.
+// Çözümü başlatır ve hemen döner. Akış: oturum ve plan.planlama-oku uçta; burada eşzamanlılık sınırı.
 export function yillikCozBaslat(kisi: number, istek: YillikCozGovdesi, simdi: number = Date.now(), coz: typeof modelCoz = modelCoz): { is: string } {
   temizle(simdi);
   const suren = [...isler.values()].filter((i) => i.durum === 'suruyor');
