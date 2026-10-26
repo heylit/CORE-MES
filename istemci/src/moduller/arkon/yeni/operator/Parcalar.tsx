@@ -51,8 +51,10 @@ export const isCarkOgeleri = (isler: readonly Is[]): CarkOgesi[] =>
 // 684: iş ve istasyon çarkı. Yalnız göz atar: düğme, yana kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandakini değiştirmez.
 // Bakılan öğe ekrandakinden farklıysa "geç" düğmesi çıkar; geçişin sorusunu çağıran sorar. Tekerlek sayfayı kaydırmasın diye
 // dinleyici edilgen değildir.
-export function Cark({ etiket, ogeler, etkin, gec, gecMetni }: {
+export function Cark({ etiket, ogeler, etkin, gec, gecMetni, ekranda }: {
   etiket: string; ogeler: readonly CarkOgesi[]; etkin: number; gec: (i: number) => void; gecMetni: string;
+  // 702: verilirse ekrandaki öğe başlık yerine bu içerikle çizilir (iş kartı ya da iş özeti çarkın içinde durur).
+  ekranda?: ReactNode;
 }) {
   const [bak, bakYaz] = useState(etkin);
   useEffect(() => { bakYaz(etkin); }, [etkin]);
@@ -88,11 +90,13 @@ export function Cark({ etiket, ogeler, etkin, gec, gecMetni }: {
       onPointerCancel={() => { tutus.current = null; }}
     >
       <button type="button" className="tc-ay1-simge-dugme" aria-label={`Önceki ${etiket.toLocaleLowerCase('tr')}`} disabled={i <= 0} onClick={() => adim(-1)}><Simge ad="chev-left" /></button>
-      <span className="tc-ay1-cark-orta" aria-live="polite">
-        <span className="tc-ay1-ust-yazi">{etiket} {i + 1}/{n}{i === etkin ? ' · ekranda' : ''}</span>
-        <b>{oge.baslik}</b>
-        {oge.alt ? <small>{oge.alt}</small> : null}
-      </span>
+      {i === etkin && ekranda ? <div className="tc-ay1-cark-ekranda" aria-live="polite">{ekranda}</div> : (
+        <span className="tc-ay1-cark-orta" aria-live="polite">
+          <span className="tc-ay1-ust-yazi">{etiket} {i + 1}/{n}{i === etkin ? ' · ekranda' : ''}</span>
+          <b>{oge.baslik}</b>
+          {oge.alt ? <small>{oge.alt}</small> : null}
+        </span>
+      )}
       {i !== etkin ? <Dugme simge="next" onClick={() => gec(i)}>{gecMetni}</Dugme> : null}
       <button type="button" className="tc-ay1-simge-dugme" aria-label={`Sonraki ${etiket.toLocaleLowerCase('tr')}`} disabled={i >= n - 1} onClick={() => adim(1)}><Simge ad="chev-right" /></button>
     </div>
@@ -137,15 +141,15 @@ export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean })
 }
 
 /* ── "Şimdi" kartı ── */
-export function GorevKarti({ gorev, eylem, ertele, izinli }: {
-  gorev: Gorev | null; eylem: (a: GorevEylemi, g: Gorev) => void; ertele: (g: Gorev) => void; izinli: (a: GorevEylemi) => boolean;
+export function GorevKarti({ gorev, eylem, ertele, izinli, ek }: {
+  gorev: Gorev | null; eylem: (a: GorevEylemi, g: Gorev) => void; ertele: (g: Gorev) => void; izinli: (a: GorevEylemi) => boolean; ek?: ReactNode;
 }) {
   if (!gorev) return null;
   const sinif = ['tc-ay1-gorev', gorev.pulse && 'tc-ay1-gorev-nabiz', gorev.quiet && 'tc-ay1-gorev-sessiz'].filter(Boolean).join(' ');
   return (
     <div key={gorev.t} className={sinif} data-durum={tonDurumu(gorev.tone)} role="status">
       <span className="tc-ay1-gorev-simge"><Simge ad={gorev.icon} /></span>
-      <div className="tc-ay1-gorev-metin"><span className="tc-ay1-ust-yazi">Şimdi</span><b>{gorev.t}</b><small>{gorev.d}</small></div>
+      <div className="tc-ay1-gorev-metin"><span className="tc-ay1-ust-yazi">Şimdi</span><b>{gorev.t}</b><small>{gorev.d}</small>{ek}</div>
       {gorev.act2 && gorev.btn2 && izinli(gorev.act2) ? <Dugme tur="ikincil" onClick={() => eylem(gorev.act2!, gorev)}>{gorev.btn2}</Dugme> : null}
       {gorev.btn && gorev.act && izinli(gorev.act) ? <Dugme simge="next" onClick={() => eylem(gorev.act!, gorev)}>{gorev.btn}</Dugme> : null}
       {gorev.dismiss ? (
@@ -457,7 +461,7 @@ export function SayacKadrani({ is, etiket, birim, duzelt, cevrim }: { is: Is; et
   );
 }
 
-export interface SayimTusu { etiket: string; simge: 'plus' | 'minus' | 'trash'; ton: 'iyi' | 'hurda' | 'duz'; kapali: boolean; aria?: string; bas: () => void }
+export interface SayimTusu { etiket: string; simge: 'plus' | 'minus' | 'trash' | 'layers'; ton: 'iyi' | 'hurda' | 'duz'; kapali: boolean; aria?: string; bas: () => void }
 export function SayimTuslari({ tuslar }: { tuslar: readonly SayimTusu[] }) {
   if (!tuslar.length) return null;
   return (
