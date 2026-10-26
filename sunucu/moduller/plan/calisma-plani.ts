@@ -1,17 +1,15 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
-import type {
-  CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi,
-} from '#paylasilan/sozlesme/recete-rota.ts';
+import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { canliSira, calismaTaslagiYaz, tabanPlani, taslakYerlesimleriOku, type YerlesimSatiri } from '../plan/disari.ts';
 import { emirDilimi, isEmriPlanBilgileri, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
-import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './kurallar.ts';
+import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
+import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
-import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { planlamaGirdisi, planlamaYazmaDenetimi, yaz } from './servis.ts';
+import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
+import type { YerlesimSatiri } from './sorgular.ts';
 
 // Çalışma planı plan modülünün diliyle (499 a, 503 a, 505 a, 506 a). Çeviri sayfanınkidir (motor/calisma.betik); kaynak okuması çağıranın
 // yetkisiyledir (planlama çalışması ucundaki gibi). Okumalar yazmaz.
@@ -59,7 +57,7 @@ export async function tabanVeCanli(db: Db, kullanici: Kullanici, simdi: number =
   const { planSurumu, yerlesimler } = await canliSira(db, idler);
   const canli = new Map(yerlesimler.map((y) => [y.isEmriId, y]));
   const tabani = new Map(taban.map((t) => [t.isEmriId, t]));
-  const ters = tersKimlik(islemVarMi(kullanici, 'recete-rota.planlama-oku') ? (await calismaOku(db, kullanici, simdi)).plan : null);
+  const ters = tersKimlik(islemVarMi(kullanici, 'plan.planlama-oku') ? (await calismaOku(db, kullanici, simdi)).plan : null);
   const isler: TabanVeCanliCevabi['isler'] = [];
   for (const id of idler) {
     const b = bilgi.get(id);
@@ -105,7 +103,7 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
 export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: TaslaktanCalismayaGovdesi, simdi: number = Date.now()): Promise<TaslaktanCalismayaCevabi> {
   planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
   const t = await taslakYerlesimleriOku(db, kullanici, g.taslakId, g.taslakSurumu);
-  const kayit = await sorgular.kayitGetir(db, PLANLAMA_ANAHTARI);
+  const kayit = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   if (kayit === null || kayit.surum !== g.calismaSurumu) throw eskiSurum();
   const { plan } = await calismaOku(db, kullanici, simdi);
   const anahtarlar = new Map((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
@@ -121,7 +119,7 @@ export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: Taslak
   }
   const r = kuralTaslaktanCalismaya(kayit.deger, yerler);
   if (r === null) throw cakisma('Çalışmada plan ya da başlangıç günü yok; önce planı kurup kaydedin.');
-  const yazilan = await yaz(db, kullanici, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: r.deger, beklenenSurum: g.calismaSurumu });
+  const yazilan = await planlamaYaz(db, kullanici, { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: r.deger, beklenenSurum: g.calismaSurumu });
   return { calismaSurumu: yazilan.kayit.surum, oncekiSurum: kayit.surum, yazilan: r.yazilan, kilitli: r.kilitli, atlanan: [...atlanan, ...r.atlanan] };
 }
 
@@ -129,10 +127,10 @@ export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: Taslak
 // eski sürüm (409). Dönüş de bir yazmadır: geri alınan sürüm geçmişe düşer, ikinci geri alma onu getirir.
 export async function calismaGeriAl(db: Db, kullanici: Kullanici, calismaSurumu: number): Promise<CalismaGeriAlCevabi> {
   planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
-  const mevcut = await sorgular.surumKilitle(db, PLANLAMA_ANAHTARI);
+  const mevcut = await sorgular.planlamaSurumKilitle(db, PLANLAMA_ANAHTARI);
   if (mevcut !== calismaSurumu) throw eskiSurum();
-  const onceki = await sorgular.sonGecmis(db, PLANLAMA_ANAHTARI);
+  const onceki = await sorgular.planlamaSonGecmis(db, PLANLAMA_ANAHTARI);
   if (onceki === null) throw cakisma('Geri alınacak önceki sürüm yok.');
-  const k = await sorgular.kayitGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: onceki.deger, kisiId: kullanici.id });
+  const k = await sorgular.planlamaKaydiGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: onceki.deger, kisiId: kullanici.id });
   return { calismaSurumu: k!.surum, donulenSurum: onceki.surum };
 }

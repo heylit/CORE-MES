@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -13,7 +13,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 // 533 a: eski planlama sayfası açık sipariş gelişlerini ve tedarik terminlerini bu uçtan alır; sunucu birleştirmesiyle aynı ek.
 // Malzemeyi okuyamayan ikisini de, açık siparişi okuyamayan siparişleri null alır. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
-const YOL = '/api/recete-rota/satin-alma-eki';
+const YOL = '/api/plan/satin-alma-eki';
 
 describe('Planlama satın alma eki ucu (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;

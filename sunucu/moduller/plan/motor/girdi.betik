@@ -656,3 +656,19 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
   }
   return { S, st: stBitenle() };
 }
+
+/* 657 a: kayıt yoksa yeni Planlama sayfası boş çalışmayı sunucuya kurdurur. Değerler çerçevenin yeniCalisma'sıyla aynıdır (a-durum.betik ve
+   zz31-tmi.betik): veri Reçete ve Rota kaydından (kayıt yoksa boş kayıttan), kayıt okunmuş sayılır, 1650 kararının varsayılanı konur. */
+const BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
+function yeniCalismaKur(kayit, kaynak, bugun) {
+  const k = kayit && kayit.items ? kayit : null;
+  const D = tmiCevir(k || BOS_KAYIT, kaynak && kaynak.durum ? kaynak : null, null, bugun);
+  if (D.planDenge == null) D.planDenge = 25;
+  tmiTabanKur(D, bugun);
+  return {
+    surum: 2, setId: 'tmi', D, down: [], ekMesai: [], locks: {}, pref: {},
+    w: { dondurma: 4, famK: 0.3, mat: 'karma', sure: 10 },
+    param: { tampon: true, tamponZ: 1.28, acilPay: 0.05, maxChg: 15, chgTL: 50, bolmeKip: 'otomatik', bolmeMin: 5, bolmeMaks: 3, bolmeEsik: 1000 }, kapali: ['personel'], kisitSurum: 2, bedel: null,
+    olaylar: [], plan: null, dataVer: 1, senaryolar: [], canli: null, canliSurum: 0, tabanSurum: 0, iz: [], rrSavedAt: k && k.savedAt ? k.savedAt : 0,
+  };
+}

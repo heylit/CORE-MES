@@ -1,3 +1,4 @@
+import type { Db } from '#cekirdek/db.ts';
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -7,11 +8,17 @@ import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
-import { planAyariOku } from '../plan/disari.ts';
-import { DURUM_ANAHTARI, PLANLAMA_ANAHTARI } from './disari.ts';
-import { planAni, planSaati } from './kurallar.ts';
-import { teklifDene, type TeklifDenemeGirdisi } from './servis.ts';
+import { planAyariOku } from './disari.ts';
+import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
+import { PLANLAMA_ANAHTARI } from './disari.ts';
+import { planAni, planSaati } from './planlama-kurallar.ts';
+import { teklifDene, type TeklifDenemeGirdisi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
+
+// Reçete ve Rota'nın ana kaydı (planın girdisi) doğrudan yazılır: sahibi modülün yazma yolu bu testin konusu değildir.
+const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu(
+  `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
+  [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 
 // Teklif denemesi servisi: kayıtlar veritabanından, tezgâh ve takvim sahiplerinden okunur; saatler tesis anına çevrilir. Çözücünün
 // kendisi teklif-denemesi.test.ts'te sınanır. Veriler uydurmadır.
@@ -58,8 +65,8 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
         tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
     };
     await ortam.vt.tx(async (db) => {
-      await sorgular.kayitEkle(db, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: kayit, kisiId: yoneticiId });
-      await sorgular.kayitEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: JSON.stringify(calisma), kisiId: yoneticiId });
+      await receteRotaKaydiEkle(db, kayit, yoneticiId);
+      await sorgular.planlamaKaydiEkle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: JSON.stringify(calisma), kisiId: yoneticiId });
     });
   });
   after(async () => { await ortam?.kaldir(); });
@@ -117,7 +124,7 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
   });
 
   test('çalışma kaydı yoksa null', async () => {
-    await vt().tx((db) => sorgular.kayitSil(db, PLANLAMA_ANAHTARI));
+    await vt().tx((db) => sorgular.planlamaKaydiSil(db, PLANLAMA_ANAHTARI));
     assert.equal(await vt().tx((db) => teklifDene(db, kullanici, girdi(), SIMDI)), null);
   });
 });

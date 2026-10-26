@@ -8,7 +8,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { bitisAkisiEkle, terminSaati, type BitisSatiri } from './kurallar.ts';
+import { bitisAkisiEkle, terminSaati, type BitisSatiri } from './planlama-kurallar.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -97,9 +97,9 @@ describe('bitiş tarihi akışı: kayıt yazılırken (gerçek PostgreSQL)', () 
     return girisCerezi(kullaniciAdi);
   }
   const yaz = (cerez: string, deger: unknown, beklenenSurum: number | null) => app.inject({
-    method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: cerez }, payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, beklenenSurum },
+    method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: cerez }, payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, beklenenSurum },
   });
-  const kayit = () => vt().tx((db) => sorgular.kayitGetir(db, PLANLAMA_ANAHTARI));
+  const kayit = () => vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI));
 
   before(async () => {
     ortam = await testVeritabaniKur('recete_rota_bitis_akisi');

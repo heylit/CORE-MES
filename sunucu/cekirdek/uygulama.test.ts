@@ -127,6 +127,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
   'POST /cnc-kurulum/kayitlar/yaz govdesiz+secim',
   // Reçete ve Rota Motoru da her değişiklikte bütün durumunu yazar: aynı kalıp (paket varsayımı, 13.10.2026).
   'POST /recete-rota/kayitlar/yaz govdesiz+secim',
+  // Planlama çalışması aynı kayıttan plan modülüne taşındı (658 b, 662 a): aynı kalıp, kapsam genişlemez.
+  'POST /plan/planlama-kayitlari/yaz govdesiz+secim',
   // Kalite Merkezi kaydı fotoğraf taşır: içerik deftere girmez; kayıt adresle, sürüm ve geri yüklemenin parça bilgisi seçimle girer (kullanıcı kararı 16.10.2026, "Gövdesiz").
   'POST /kalite-merkezi/kayitlar/:koleksiyon/:kimlik/yaz govdesiz+secim',
   'POST /kalite-merkezi/geri-yukle govdesiz+secim',

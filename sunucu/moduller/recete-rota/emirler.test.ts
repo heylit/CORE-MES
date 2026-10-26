@@ -8,7 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { DurumCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -136,8 +136,9 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     return uretimEmriId;
   }
 
+  // Başlamış adımlar planın alanıdır (658 b): emir dilimiyle birlikte planın birleşik durum ucundan okunur (yetkisi durum ucununkiyle aynı).
   const durum = async (ad: string): Promise<DurumCevabi> => {
-    const c = await istek<DurumCevabi>(ad, 'GET', '/recete-rota/durum');
+    const c = await istek<DurumCevabi>(ad, 'GET', '/plan/planlama-kaynagi');
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     return c.govde;
   };

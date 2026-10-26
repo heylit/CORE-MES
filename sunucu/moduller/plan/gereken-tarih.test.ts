@@ -7,8 +7,8 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { tedarikTerminleri } from '../satin-alma/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { gerekenTarihler } from './kurallar.ts';
-import { yaz } from './servis.ts';
+import { gerekenTarihler } from './planlama-kurallar.ts';
+import { planlamaYaz as yaz } from './planlama-servis.ts';
 
 // 533 a: plan malzemenin olması gereken tarihini hesaplar ve kaydedilince Satın Alma'ya bildirir. Veriler uydurmadır.
 const calisma = (malzemeKodu: string, plan: unknown) => ({

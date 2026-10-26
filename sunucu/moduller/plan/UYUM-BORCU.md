@@ -56,3 +56,8 @@
 
 ## Plan akışı bağlaması (kart 625, 26.10.2026)
 - Bağlama planı ve açık sorular kartta (625; sorular 626-631). Bu dosyada açık kalanlar: P-B5 (631), P-B16, P-B19, P-B21, P-B27 ve P-B28 (627), ekranı olmayan uçlar.
+
+## Planlamanın plan modülüne taşınması (658 c, 26.10.2026)
+- P-B29 (674 b, kullanıcı: "şimdilik kalsın, taşıma aşamasındayız"): emir önceliği ile sipariş tutarı ve müşteri sınıfı plan motoruna girmiyor. Taşıma bitince kullanıcıya yeniden sorulur.
+- P-B35: `planMotoruCozucusu` kaydı ve kablolama bağı ADR 0020'den sonra aynı modülün iki ucunu bağlar (çözücü de plan modülünde); kayıt
+  kalkıp plan servisi `sunucuPlanCozucusu`'nu doğrudan çağırabilir. 625n'in davranışına dokunulmadı.

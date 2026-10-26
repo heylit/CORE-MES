@@ -71,7 +71,7 @@ describe('ek mesai bütçesinin kaynağı planlama çalışması (525 2 b, gerç
   });
   after(async () => { await ortam?.kaldir(); });
   const yaz = (bicim: 'json' | 'metin', deger: unknown) => ortam!.sahip.sorgu(
-    `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, $2, $3::jsonb, nextval('recete_rota_surum'), $4)
+    `INSERT INTO plan_planlama_kaydi (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, $2, $3::jsonb, nextval('plan_planlama_surum'), $4)
      ON CONFLICT (anahtar) DO UPDATE SET bicim = EXCLUDED.bicim, deger = EXCLUDED.deger`, [PLANLAMA_ANAHTARI, bicim, JSON.stringify(deger), kisi]);
   const oku = () => vt().tx((db) => ekMesaiButcesi(db));
   const calisma = (param: Record<string, unknown>) => ({ surum: 2, param, D: { meta: { baslangic: '2026-01-07' } } });
